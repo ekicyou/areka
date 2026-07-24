@@ -324,3 +324,32 @@ cdb/WinDbg 未インストールのため、切り分け実験（Phase 3）の�
 ## 波及（brief 追記㊹エスケープ条項の発動）
 
 Path B 採用により、本 spec は `crates/wintf/tests/graphics/*` のハーネス構造（共有 fixture）を**単独所有**する。後続 spec（**W4 emo-dpi-scaling**〔graphics テスト増設面〕・**W5 kero-balloon**〔areka `emo2_boot/spine.rs` 檻域〕）は本 spec 完了後に本構造へ **rebase 必須**（design.md Revalidation Triggers・brief 追記㊹）。
+
+---
+
+## 是正の実装と検証結果（実装フェーズ・Task 3–8・2026-07-24）
+
+### 実装した是正（2 輪＋回帰檻）
+1. **Path B: 共有 GPU オーナースレッド fixture**（`crates/wintf/tests/graphics/common/mod.rs`・`on_gpu_owner_thread`）。graphics スイートの Compositor 生成テスト 41 本（8 ファイル）を単一オーナースレッドへ marshal。→ **別スレッド 2 個目 Compositor＝AV を排除**。
+2. **DispatcherQueue 再利用（src・design.md G1「Path A 縮小適用」）**（`crates/wintf/src/ecs/graphics/wuc_resource.rs`）。`WucGraphicsResource::new` が当該スレッドに既存の `DispatcherQueue` があれば**再利用**（`dq_controller` を `Option` 化・`GetForCurrentThread`）。fixture がオーナースレッドに DispatcherQueueController を 1 個**常駐**。→ **同一スレッド上の controller 再生成の反復リーク＝`0x8001010E` を根絶**。
+   - 実装過程の実測知見: Path B（オーナースレッド集約）**だけ**では AV は消えるが、単一スレッド上で controller を作り直す反復が `0x8001010E`（already created）でグループ横断的に失敗した（各グループ単独は緑・~40 本合算で 15 失敗）。明示 `ShutdownQueueAsync` ドレイン（Task 3 helper）を drop に内蔵しても解消せず（窓・メッセージループの無い MTA スレッドでは shutdown が完了しない）。**controller を作り直さず既存 DQ を再利用する**方式で決定論的に解消。→ Path B と DQ 再利用の**両輪**で初めてプロセス内多重生成が成立する。
+3. **無条件ドレインヘルパ**（Task 3・`com/wuc.rs::drain_dispatcher_queue`＋純関数 `drain_step`）。有界・log-first・panic-free。決定論単体テストで全分岐網羅。※上記の知見により最終是正は DQ 再利用に依るため、本ヘルパは canonical な bounded-drain ユーティリティとして残置（回帰檻の teardown は再利用方式ゆえ明示ドレイン不要）。
+4. **回帰檻**（Task 6・`wuc_restart_regression_test.rs`）: 独立 2 `#[test]`＋単一テスト内 3 回再生成。オーナースレッド経由の再生成を正準経路とし、再発時は AV(プロセス死) or `0x8001010E` panic で必ず失敗（R5.3）。
+
+### 検証マトリクス結果（是正後・全 7 グループ＋総括）
+| # | 対象 | 是正後結果 |
+|---|---|---|
+| 1 | wintf graphics | ✅ 97 passed（91＋檻 3＋fixture 自己 3）・**並列/逐次とも exit 0**・**×5 連続 crash/flake 0**（1.1–1.4）|
+| 2 | areka bin | ✅ 357 passed（`spine_blink_smoke`→`spine_e2e_kero_blink_one_cycle_golden` の既知クラッシュペア込・**areka 本番ソース無改変**・2 回実行で決定論確認）（2.2）|
+| 3 | wintf visual | ✅ 52 passed（是正後も緑・無改修）|
+| 4 | wintf lib | ✅ 519 passed（drain helper 単体テスト＋`wuc_graphics_resource_lifecycle` 緑）|
+| 5 | areka-emo-text lib | ✅ 368 passed（無改修）|
+| 6 | areka-emo-text 統合 | ✅ 全 9 バイナリ緑（draw_readback 2 ほか・無改修）|
+| 7 | areka-emo-present | ✅ 40 passed（`--lib`・無改修）|
+| 総括 | `cargo test --workspace` | ✅ **exit 0**（i686 host-32 helper/testdll 先行ビルド後・**4046 tests passed / 0 failed / crash 0**）（2.1）|
+
+**特記**: areka bin・visual・lib・emo-text 系は**テストコード無改修**で緑化した（wintf src の DQ 再利用是正の波及）。R2.2「areka 本番ソース無変更」を満たす。areka bin の既知クラッシュ（別テスト間の GPU spine）も wintf 側 src 是正の波及のみで解消した。
+
+### 本番安全性の明文宣言（検証結果と整合）
+- **プロセス内 WUC スタック再生成は、同一 UI スレッド上で行う限り本環境で安全**（`wuc_graphics_resource_lifecycle` 緑＋回帰檻の単一テスト内 3 回再生成緑＋DQ 再利用の src 是正で実証）。ゴースト再ロード・シェル切替が単一 UI スレッド上で WUC を作り直す限り、本クラッシュ（別スレッド 2 個目 Compositor＝AV／controller 反復再生成＝`0x8001010E`）は踏まない。
+- 危険は「別スレッド上での 2 個目 Compositor 生成」に限局。本番の単一 UI スレッド構成では発生しない＝**宣言 (b) 本番実在リスク無し**と検証結果は整合する。

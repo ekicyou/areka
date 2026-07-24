@@ -98,62 +98,62 @@
   - _Requirements: 1.3, 5.2_
   - _Depends: 6.1_
 
-- [ ] 7. Validation: 検証マトリクス実測とワークスペース総括
-- [ ] 7.1 (P) wintf graphics の既定並列・逐次・×5 連続安定確認
+- [x] 7. Validation: 検証マトリクス実測とワークスペース総括
+- [x] 7.1 (P) wintf graphics の既定並列・逐次・×5 連続安定確認
   - 既定（並列）設定・`--test-threads=1` 逐次設定の両方で全テストを実行し、×5 回の連続フルスイート実行でクラッシュ・flake が 0 件であることを確認する
   - 外部 CI インフラを介さず開発機ローカルの `cargo test` のみで完結することを確認する
   - 観測可能な完了条件: 5 回分の実行ログすべてで crash 0・flake 0 が確認できる
   - _Requirements: 1.1, 1.2, 1.4, 1.5_
   - _Boundary: C6 VerificationMatrix（対象: wintf graphics）_
 
-- [ ] 7.2 (P) areka bin の実測検証
+- [x] 7.2 (P) areka bin の実測検証
   - areka bin テストスイート（対象の e2e テストを含む）を実行し、areka クレートの本番ソースコードを変更することなく成功することを確認する
   - 観測可能な完了条件: 対象テストがクラッシュなく成功したログが得られる
   - _Requirements: 2.2, 2.3_
   - _Boundary: C6 VerificationMatrix（対象: areka bin）_
 
-- [ ] 7.3 (P) wintf visual バイナリの実測検証と要是正時の委譲修正
+- [x] 7.3 (P) wintf visual バイナリの実測検証と要是正時の委譲修正
   - wintf visual テストバイナリを実行し、タスク 1 の修正前ベースラインと比較する。クラッシュが確認された場合は当該バイナリのテストコードのみを是正し再実測する（採用経路が Path A なら根因是正の波及確認を優先し、なお赤なら当該テストコードのみ是正。Path B ならタスク 5 系と同型の委譲パターンで是正）
   - 観測可能な完了条件: 最終的に当該バイナリが全テスト成功する実行ログが得られる
   - _Requirements: 2.3, 2.4_
   - _Depends: 1_
   - _Boundary: C6 VerificationMatrix（対象: wintf visual）_
 
-- [ ] 7.4 (P) wintf lib（in-source テスト）の実測検証と要是正時の委譲修正
+- [x] 7.4 (P) wintf lib（in-source テスト）の実測検証と要是正時の委譲修正
   - wintf ライブラリクレートの in-source テストを実行し、タスク 1 のベースラインと比較する。クラッシュが確認された場合は当該テストコードのみを是正し再実測する
   - 観測可能な完了条件: 最終的に `cargo test -p wintf --lib` が全テスト成功する実行ログが得られる
   - _Requirements: 2.3, 2.4_
   - _Depends: 1_
   - _Boundary: C6 VerificationMatrix（対象: wintf lib）_
 
-- [ ] 7.5 (P) areka-emo-text lib の実測検証と要是正時の委譲修正
+- [x] 7.5 (P) areka-emo-text lib の実測検証と要是正時の委譲修正
   - areka-emo-text ライブラリクレートの in-source テストを実行し、タスク 1 のベースラインと比較する。クラッシュが確認された場合は当該テストコードのみを是正し再実測する
   - 観測可能な完了条件: 最終的に `cargo test -p areka-emo-text --lib` が全テスト成功する実行ログが得られる
   - _Requirements: 2.3, 2.4_
   - _Depends: 1_
   - _Boundary: C6 VerificationMatrix（対象: areka-emo-text lib）_
 
-- [ ] 7.6 (P) areka-emo-text 統合テストバイナリ群の実測検証と要是正時の委譲修正
+- [x] 7.6 (P) areka-emo-text 統合テストバイナリ群の実測検証と要是正時の委譲修正
   - `draw_readback_test` を優先に、areka-emo-text の各統合テストバイナリを実行し、タスク 1 のベースラインと比較する。クラッシュが確認された場合は当該バイナリのテストコードのみを是正し再実測する
   - 観測可能な完了条件: 対象の統合テストバイナリすべてが全テスト成功する実行ログが得られる
   - _Requirements: 2.3, 2.4_
   - _Depends: 1_
   - _Boundary: C6 VerificationMatrix（対象: areka-emo-text 統合テスト）_
 
-- [ ] 7.7 (P) areka-emo-present の実測検証と要是正時の委譲修正
+- [x] 7.7 (P) areka-emo-present の実測検証と要是正時の委譲修正
   - areka-emo-present のテストを実行し、タスク 1 のベースラインと比較する。クラッシュが確認された場合は当該テストコードのみを是正し再実測する
   - 観測可能な完了条件: 最終的に `cargo test -p areka-emo-present` が全テスト成功する実行ログが得られる
   - _Requirements: 2.3, 2.4_
   - _Depends: 1_
   - _Boundary: C6 VerificationMatrix（対象: areka-emo-present）_
 
-- [ ] 7.8 workspace 総括: exit 0 の確認
+- [x] 7.8 workspace 総括: exit 0 の確認
   - i686 host-32 成果物のビルドを先行させたうえで `cargo test --workspace` を実行する
   - 観測可能な完了条件: `cargo test --workspace` が exit code 0 で終了する実行ログが得られる
   - _Requirements: 2.1_
   - _Depends: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7_
 
-- [ ] 8. Validation: 根本原因記録の最終化
+- [x] 8. Validation: 根本原因記録の最終化
   - タスク 2.4 の宣言・タスク 7 系の検証結果を踏まえ、research.md「根本原因記録」節を最終状態に更新し、「プロセス内 WUC スタック再生成」の本番安全性に関する明文宣言が検証結果と矛盾なく整合していることを確認する
   - 観測可能な完了条件: research.md に、証拠・宣言・選択経路・検証結果・（波及する場合は）本番設計への含意が一箇所にまとまった最終形で記載されている
   - _Requirements: 3.3_
