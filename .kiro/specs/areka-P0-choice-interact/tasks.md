@@ -71,7 +71,7 @@
   - _Depends: 2.2, 3.2_
 
 - [ ] 6. Integration: 配線結合
-- [ ] 6.1 post-spawn ハンドラ装着・資源結線・スケジュール登録
+- [x] 6.1 post-spawn ハンドラ装着・資源結線・スケジュール登録
   - 全バルーン窓へポインタハンドラ（moved／pressed）を post-spawn 装着し、NonSend 資源とチャネルを結線し、leave 追随システムを Input スケジュール（dispatch 後）へ登録する
   - Observable: bare World 統合テストで、全バルーン窓にハンドラが存在しキャラ窓のハンドラ集合は不変であること、かつスケジュールへの leave システム登録存在を assert で確認する
   - _Requirements: 4.3, 4.4, 5.5, 6.6_
