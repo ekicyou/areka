@@ -50,31 +50,50 @@ use tracing_subscriber::layer::{Context, Layer};
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::registry::LookupSpan;
 
-/// 捕捉した 1 イベント（本タスクが照合するのは target／event／level のみ）。
+/// 捕捉した 1 イベント（照合対象は target／event／outcome／message／level）。
 #[derive(Debug, Clone)]
 pub(crate) struct CapturedEvent {
     pub target: String,
     /// 構造化フィールド `event`（区別語彙）の値。未設定なら `None`。
     pub event: Option<String>,
+    /// 構造化フィールド `outcome`（リソース照会 prefetch 完了固定ログの分類値・R9.3）。未設定なら `None`。
+    pub outcome: Option<String>,
+    /// イベントメッセージ本文（固定ログ `"shiori resource prefetch done"` の照合に使う）。未設定なら `None`。
+    pub message: Option<String>,
     pub level: Level,
 }
 
-/// `event` フィールド（文字列リテラル）を取り出す訪問子。
+/// 照合対象フィールド（`event`・`outcome`）とメッセージ本文（`message`）を取り出す訪問子。
 struct EventFieldVisitor {
     event: Option<String>,
+    outcome: Option<String>,
+    message: Option<String>,
 }
 
 impl Visit for EventFieldVisitor {
     fn record_str(&mut self, field: &Field, value: &str) {
-        if field.name() == "event" {
-            self.event = Some(value.to_string());
+        match field.name() {
+            "event" => self.event = Some(value.to_string()),
+            "outcome" => self.outcome = Some(value.to_string()),
+            "message" => self.message = Some(value.to_string()),
+            _ => {}
         }
     }
 
-    // `event` は常に文字列リテラルで渡す規約だが、Debug 経路でも拾えるよう保険を掛ける。
+    // `event`／`outcome` は文字列リテラルで渡す規約だが Debug 経路でも拾えるよう保険を掛ける。
+    // メッセージ本文（tracing の `message` フィールド）は fmt::Arguments ゆえ Debug 経路で拾う。
     fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
-        if field.name() == "event" && self.event.is_none() {
-            self.event = Some(format!("{value:?}").trim_matches('"').to_string());
+        match field.name() {
+            "event" if self.event.is_none() => {
+                self.event = Some(format!("{value:?}").trim_matches('"').to_string());
+            }
+            "outcome" if self.outcome.is_none() => {
+                self.outcome = Some(format!("{value:?}").trim_matches('"').to_string());
+            }
+            "message" if self.message.is_none() => {
+                self.message = Some(format!("{value:?}"));
+            }
+            _ => {}
         }
     }
 }
@@ -89,12 +108,18 @@ where
     S: Subscriber + for<'a> LookupSpan<'a>,
 {
     fn on_event(&self, event: &Event<'_>, _ctx: Context<'_, S>) {
-        let mut visitor = EventFieldVisitor { event: None };
+        let mut visitor = EventFieldVisitor {
+            event: None,
+            outcome: None,
+            message: None,
+        };
         event.record(&mut visitor);
         let meta = event.metadata();
         self.sink.lock().unwrap().push(CapturedEvent {
             target: meta.target().to_string(),
             event: visitor.event,
+            outcome: visitor.outcome,
+            message: visitor.message,
             level: *meta.level(),
         });
     }
@@ -150,5 +175,32 @@ pub(crate) fn assert_logged(events: &[CapturedEvent], level: Level, event_name: 
     assert!(
         hit,
         "期待ログ未検出: target=\"kanade\" level={level} event=\"{event_name}\"。\n捕捉={events:#?}"
+    );
+}
+
+/// リソース照会 prefetch の完了固定ログ（R9.3 grep 証跡）が**ちょうど 1 回**発火したことを表明する。
+///
+/// 固定ログは `info!(target: "areka_kanade::resource", id = "username", outcome = <outcome_label>,
+/// "shiori resource prefetch done")`（design Postconditions・研究 §12-10）。target・level(INFO)・
+/// `outcome` フィールド値・message 本文の全一致で照合し、発火回数が 1 であることまで固定する
+/// （target が `kanade` でなく `areka_kanade::resource` ゆえ [`assert_logged`] は使えない・専用檻）。
+pub(crate) fn assert_resource_prefetch_logged_once(
+    events: &[CapturedEvent],
+    outcome_label: &str,
+) {
+    let hits = events
+        .iter()
+        .filter(|e| {
+            e.target == "areka_kanade::resource"
+                && e.level == Level::INFO
+                && e.outcome.as_deref() == Some(outcome_label)
+                && e.message.as_deref() == Some("shiori resource prefetch done")
+        })
+        .count();
+    assert_eq!(
+        hits, 1,
+        "prefetch 完了固定ログ（target=\"areka_kanade::resource\" level=INFO \
+         outcome=\"{outcome_label}\" message=\"shiori resource prefetch done\"）は\
+         ちょうど 1 回発火すべき（実際={hits}）。\n捕捉={events:#?}"
     );
 }

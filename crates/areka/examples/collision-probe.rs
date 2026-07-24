@@ -118,7 +118,7 @@ use wintf::*;
 use areka_emo_atlas::{
     AlphaParams, AtlasTable, PackConfig, SetId, SurfaceSet, UseSelfAlpha, WicDecoderArm, bake,
 };
-use areka_emo_compose::{BindSet, EmoWorld};
+use areka_emo_compose::{BindSet, EmoWorld, PatternState};
 use areka_emo_present::{EmoPresenter, PresentCommand, TargetId};
 
 /// scope→`TargetId` 写像の正本を私有 include する（`super::target_map` 解決の要ゆえクレートルート宣言）。
@@ -454,6 +454,7 @@ fn attach_show_and_resize(world: &mut World) {
             target,
             surface_id: 1000,
             binds: BindSet::from_ids(REAL_BIND_IDS),
+            pattern: PatternState::default(),
             reply: None,
         },
     );

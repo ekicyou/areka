@@ -12,8 +12,8 @@
 use super::decode::decode;
 use super::lexer::lex;
 use super::model::{
-    AliasKey, Animation, AppendTarget, Collision, CollisionName, DefRef, Element, ElementPath,
-    Interval, Pattern, Shell, SortOrder, Surface, SurfaceAlias,
+    AliasKey, Animation, AppendTarget, Collision, CollisionName, DefRef, DrawMethod, Element,
+    ElementPath, Interval, Pattern, Shell, SortOrder, Surface, SurfaceAlias,
 };
 
 /// 空入力 → 空 `Shell`・非パニック（要件 3.3）。
@@ -322,6 +322,7 @@ animation0.pattern0,overlay,100,0,0,0
             interval: Interval::Bind,
             patterns: vec![Pattern {
                 index: 0,
+                method: DrawMethod::new("overlay".to_string()),
                 surface_id: 100,
                 wait: 0,
                 x: 0,
@@ -355,6 +356,7 @@ fn animation_bind_interval_with_single_pattern() {
             interval: Interval::Bind,
             patterns: vec![Pattern {
                 index: 0,
+                method: DrawMethod::new("overlay".to_string()),
                 surface_id: 1100,
                 wait: 0,
                 x: 0,
@@ -420,6 +422,7 @@ fn negative_surface_id_is_preserved_as_sentinel() {
         shell.surfaces[0].animations[0].patterns,
         vec![Pattern {
             index: 3,
+            method: DrawMethod::new("overlay".to_string()),
             surface_id: -1,
             wait: 80,
             x: 0,
@@ -572,6 +575,7 @@ animation0.pattern0,overlay,2206,0,0,0
             interval: Interval::Random { k: 4 },
             patterns: vec![Pattern {
                 index: 0,
+                method: DrawMethod::new("overlay".to_string()),
                 surface_id: 2206,
                 wait: 0,
                 x: 0,
@@ -781,17 +785,16 @@ fn alias_with_empty_value_yields_empty_ids() {
     assert!(shell.aliases[0].ids.is_empty());
 }
 
-// --- タスク 4.6: subset 外・不正入力の寛容吸収（passthrough・既定値・非パニック） ---
+// --- タスク 4.6/1.2: subset 外・不正入力の振り分け（吸収 or 忠実転記・既定値・非パニック） ---
 //
-// 検証範囲（要件 2.3/4.5/5.7/6.3/9.2/10.4）:
-// - overlay 以外の element/pattern メソッド・3 種以外の interval・collisionex を
-//   値化せず passthrough で吸収する（モデルに materialize しない・要件 4.5/5.7/6.3/10.4）。
+// 検証範囲（要件 2.3/4.5/4.6/6.3/8.2/9.2/10.4）:
+// - element の overlay 以外のメソッド・collisionex は値化せず passthrough で吸収する
+//   （モデルに materialize しない・要件 4.5/6.3/10.4）。この 2 経路のフィルタは task 1.2 でも不変。
+// - pattern メソッド（overlay/replace 等）・未認識 interval キーワード（sometimes 等）は
+//   task 1.2 で overlay フィルタ／fallback-Bind を撤去し、吸収でなく忠実転記へ転じた
+//   （method＝field[1] verbatim・未認識 interval＝`Interval::Other(原文)`・要件 4.6/8.2）。
 // - 非数トークン・欠損フィールドを既定値（0）へ倒し、パニックしない（要件 3.3/2.3）。
 // - subset 外を含む断片が、隣接する認識可能ブロックのパースを壊さない（要件 9.2/10.4 の核心）。
-//
-// これらの寛容シームはタスク 4.2〜4.5 で既に decode.rs に作られており、本タスクは
-// それらが「値化せず・パニックせず・隣接ブロックを壊さない」ことを確定的に検証する
-// （確認テスト）。subset 外機能そのものは実装しない（吸収のみ・要件 10.4）。
 
 /// 非 overlay element メソッド（`element0,base,...`）は materialize されない一方、
 /// 同一 surface 内の overlay element は保持される（要件 4.5・passthrough 吸収）。
@@ -818,10 +821,10 @@ element1,overlay,over.png,7,8
     );
 }
 
-/// 非 overlay pattern メソッド（`pattern0,replace,...`）は materialize されない一方、
-/// 同一 animation 内の overlay pattern は保持される（要件 5.7・passthrough 吸収）。
+/// pattern メソッドは overlay も 非 overlay（`replace`）も落とさず method を忠実転記する
+/// （overlay フィルタ撤去・要件 4.6/8.4）。従来は replace 行を黙殺していた＝転記の穴の是正。
 #[test]
-fn non_overlay_pattern_method_is_absorbed_but_overlay_sibling_survives() {
+fn both_overlay_and_non_overlay_pattern_methods_are_transcribed() {
     let input = "\
 surface0
 {
@@ -832,28 +835,39 @@ animation0.pattern1,overlay,101,5,0,0
 ";
     let shell = decode(lex(input));
     assert_eq!(shell.surfaces.len(), 1);
-    // replace pattern は吸収され、overlay pattern（index 1）だけが残る。
+    // replace・overlay 双方が method を忠実転記して出現順で残る（どちらも落とさない）。
     assert_eq!(
         shell.surfaces[0].animations,
         vec![Animation {
             id: 0,
             interval: Interval::Bind,
-            patterns: vec![Pattern {
-                index: 1,
-                surface_id: 101,
-                wait: 5,
-                x: 0,
-                y: 0,
-            }],
+            patterns: vec![
+                Pattern {
+                    index: 0,
+                    method: DrawMethod::new("replace".to_string()),
+                    surface_id: 100,
+                    wait: 0,
+                    x: 0,
+                    y: 0,
+                },
+                Pattern {
+                    index: 1,
+                    method: DrawMethod::new("overlay".to_string()),
+                    surface_id: 101,
+                    wait: 5,
+                    x: 0,
+                    y: 0,
+                },
+            ],
         }]
     );
 }
 
-/// 3 種以外の interval（`interval,sometimes,5`）は正規化されず、pattern を持つ
-/// 当該 animation は既定 `Interval::Bind` へ倒れる（要件 5.7・吸収→既定）。
+/// 3 種以外の interval（`interval,sometimes,5`）は正規化されず `Interval::Other("sometimes")`
+/// へ忠実転記される（fallback-Bind 撤去・要件 8.2・討議 #1）。K は非採録（keyword のみ転記）。
 /// 併せて隣接する正当な animation（random,4）が正しく decode されることを確認する。
 #[test]
-fn non_three_kind_interval_falls_back_to_bind_and_neighbor_survives() {
+fn unrecognized_interval_becomes_other_and_neighbor_survives() {
     let input = "\
 surface0
 {
@@ -866,9 +880,12 @@ animation1.pattern0,overlay,20,0,0,0
     let shell = decode(lex(input));
     assert_eq!(shell.surfaces.len(), 1);
     assert_eq!(shell.surfaces[0].animations.len(), 2);
-    // sometimes は認識不能ゆえ既定 Bind に倒れ、pattern は失われない。
+    // sometimes は認識不能ゆえ Interval::Other へ忠実転記され、pattern は失われない。
     assert_eq!(shell.surfaces[0].animations[0].id, 0);
-    assert_eq!(shell.surfaces[0].animations[0].interval, Interval::Bind);
+    assert_eq!(
+        shell.surfaces[0].animations[0].interval,
+        Interval::Other("sometimes".into())
+    );
     assert_eq!(shell.surfaces[0].animations[0].patterns.len(), 1);
     // 隣接する正当な animation は影響を受けず random,4 として decode される。
     assert_eq!(shell.surfaces[0].animations[1].id, 1);
@@ -878,16 +895,23 @@ animation1.pattern0,overlay,20,0,0,0
     );
 }
 
-/// pattern を伴わない未知 interval のみの行は phantom animation を生まない（要件 5.7）。
-/// interval 行だけで pattern が無い場合、認識不能 interval は slot を作らず、
-/// animation は 0 個になる（既定値を捏造して空 animation を積まない）。
+/// pattern を伴わない未知 interval のみの行も忠実転記される（fallback-Bind 撤去後は
+/// interval 行が当該 ID の slot を確定させる・要件 8.2）。`interval,periodic` は
+/// `Interval::Other("periodic")` の animation を初出順で 1 個積む（pattern は空）。
+/// 認識可能 interval 単独行が既に slot を作る挙動と対称（語彙を落とさない黙らない）。
 #[test]
-fn unknown_interval_only_line_produces_no_phantom_animation() {
+fn unknown_interval_only_line_is_transcribed_as_other() {
     let input = "surface0\n{\nanimation0.interval,periodic,3\n}\n";
     let shell = decode(lex(input));
     assert_eq!(shell.surfaces.len(), 1);
-    // periodic は認識されず、pattern も無いので animation は生成されない。
-    assert!(shell.surfaces[0].animations.is_empty());
+    // periodic は Interval::Other へ転記され、pattern を持たない animation slot が立つ。
+    assert_eq!(shell.surfaces[0].animations.len(), 1);
+    assert_eq!(shell.surfaces[0].animations[0].id, 0);
+    assert_eq!(
+        shell.surfaces[0].animations[0].interval,
+        Interval::Other("periodic".into())
+    );
+    assert!(shell.surfaces[0].animations[0].patterns.is_empty());
 }
 
 /// `collisionex` 行（円/楕円/多角形）は materialize されない一方、同一ブロック内の
@@ -1016,6 +1040,7 @@ animation0.pattern0,overlay,2206,0,0,0
             interval: Interval::Bind,
             patterns: vec![Pattern {
                 index: 0,
+                method: DrawMethod::new("overlay".to_string()),
                 surface_id: 2206,
                 wait: 0,
                 x: 0,
@@ -1025,9 +1050,10 @@ animation0.pattern0,overlay,2206,0,0,0
     );
 }
 
-/// 単一 surface 内で valid 行と subset 外行を混在させても、valid 行だけが materialize
-/// され互いを壊さない（要件 9.2/10.4）。overlay element・純 collision・overlay pattern
-/// が残り、base element・collisionex・非 3 種 interval・replace pattern は吸収される。
+/// 単一 surface 内で吸収対象（element base・collisionex）と忠実転記対象（pattern method・
+/// interval）を混在させ、各々が正しく振り分けられ互いを壊さないことを確認する
+/// （要件 4.5/4.6/6.3/8.2/9.2）。overlay element・純 collision は残り、base element・
+/// collisionex は吸収される一方、replace/overlay 両 pattern と `always` interval は忠実転記される。
 #[test]
 fn mixed_valid_and_subset_out_lines_in_one_surface() {
     let input = "\
@@ -1067,19 +1093,31 @@ animation0.pattern1,overlay,901,4,0,0
             name: CollisionName::new("Head".to_string()),
         }]
     );
-    // always interval は認識不能ゆえ既定 Bind、overlay pattern のみ残る（replace 吸収）。
+    // always interval は Interval::Other へ転記、replace/overlay 双方の pattern が method を
+    // 忠実転記して出現順で残る（overlay フィルタ・fallback-Bind ともに撤去済み）。
     assert_eq!(
         s.animations,
         vec![Animation {
             id: 0,
-            interval: Interval::Bind,
-            patterns: vec![Pattern {
-                index: 1,
-                surface_id: 901,
-                wait: 4,
-                x: 0,
-                y: 0,
-            }],
+            interval: Interval::Other("always".into()),
+            patterns: vec![
+                Pattern {
+                    index: 0,
+                    method: DrawMethod::new("replace".to_string()),
+                    surface_id: 900,
+                    wait: 0,
+                    x: 0,
+                    y: 0,
+                },
+                Pattern {
+                    index: 1,
+                    method: DrawMethod::new("overlay".to_string()),
+                    surface_id: 901,
+                    wait: 4,
+                    x: 0,
+                    y: 0,
+                },
+            ],
         }]
     );
 }
@@ -1218,4 +1256,140 @@ kero.surface.alias
             DefRef::Alias(0),
         ]
     );
+}
+
+// --- タスク 1.2: pattern method 忠実転記＋interval 忠実転記（overlay フィルタ／fallback-Bind 撤去） ---
+//
+// 検証範囲（要件 4.6/7.5/8.2/8.4）:
+// - `decode_animations` の `== Some("overlay")` フィルタ撤去: 非 overlay な pattern 行
+//   （replace/base 等）を落とさず、field[1] を method として忠実転記する（要件 4.6/8.4）。
+// - overlay 行も field[1] を verbatim 転記する（従来は空文字プレースホルダだった）。
+// - `normalize_interval` の fallback-Bind 撤去: 未認識 interval キーワード（sometimes 等）を
+//   `Interval::Bind` へ倒さず `Interval::Other(原文)` へ忠実転記する（要件 8.2・討議 #1 裁定）。
+// 完全な転記マトリクス（overlay/replace/未知名/欠落 × interval 種）は タスク 1.3 の檻。
+
+/// 非 overlay pattern 行（`pattern0,replace,...`）は落とされず method を忠実転記する（要件 4.6/8.4）。
+/// 従来（overlay フィルタ）は replace 行を丸ごと落としていた＝転記の穴。
+#[test]
+fn non_overlay_pattern_row_is_transcribed_not_dropped() {
+    let input = "surface0\n{\nanimation0.interval,bind\nanimation0.pattern0,replace,100,0,0,0\n}\n";
+    let shell = decode(lex(input));
+    assert_eq!(shell.surfaces.len(), 1);
+    let patterns = &shell.surfaces[0].animations[0].patterns;
+    // replace 行が落ちずに 1 個残る（overlay フィルタ撤去の証明）。
+    assert_eq!(patterns.len(), 1);
+    assert_eq!(patterns[0].method.as_str(), "replace");
+    assert_eq!(patterns[0].surface_id, 100);
+}
+
+/// overlay pattern 行の method（field[1]）も verbatim 転記される（従来は空文字プレースホルダ・要件 4.6）。
+#[test]
+fn overlay_pattern_method_is_transcribed_verbatim() {
+    let input = "surface0\n{\nanimation0.interval,bind\nanimation0.pattern0,overlay,100,0,0,0\n}\n";
+    let shell = decode(lex(input));
+    assert_eq!(
+        shell.surfaces[0].animations[0].patterns[0].method.as_str(),
+        "overlay"
+    );
+}
+
+/// 未認識 interval キーワード（`interval,sometimes`）は `Interval::Bind` へ倒れず
+/// `Interval::Other("sometimes")` へ忠実転記される（要件 8.2・fallback-Bind 撤去の証明）。
+#[test]
+fn unrecognized_interval_keyword_becomes_other_not_bind() {
+    let input =
+        "surface0\n{\nanimation0.interval,sometimes\nanimation0.pattern0,overlay,10,0,0,0\n}\n";
+    let shell = decode(lex(input));
+    assert_eq!(shell.surfaces[0].animations.len(), 1);
+    assert_eq!(
+        shell.surfaces[0].animations[0].interval,
+        Interval::Other("sometimes".into())
+    );
+    // pattern は失われない。
+    assert_eq!(shell.surfaces[0].animations[0].patterns.len(), 1);
+}
+
+// --- タスク 1.3: method 忠実転記の完全マトリクス（overlay/replace/未知名/欠落）＋
+//     Interval::Other 転記の檻を decode 層で確定させる ---
+//
+// 検証範囲（要件 4.6/8.2/8.4）: タスク 1.2 で decode.rs が導入した 2 分岐
+// （overlay フィルタ撤去＝非 overlay も落とさない・field[1] を method へ verbatim／
+//  fallback-Bind 撤去＝未認識 interval を `Interval::Other` へ転記）を、
+// タスク 1.2 の 3 テスト（overlay/replace/sometimes）に加えて **未知名・欠落・base**
+// と **行数保存マトリクス** で網羅する。各テストは overlay フィルタ／fallback-Bind が
+// 復活すると FAIL する（＝転記分岐を直接ピンする有意テスト）。
+
+/// 未知メソッドトークン（`frobnicate`）は妥当性を判定されず method に verbatim 転記され、
+/// 行は落とされない（要件 4.6/8.4・parser は原文を運ぶだけで語彙の可否を判定しない）。
+/// overlay フィルタが復活すると `frobnicate != "overlay"` ゆえ行が落ち、len==1 が FAIL する。
+#[test]
+fn unknown_method_token_is_transcribed_verbatim_not_dropped() {
+    let input =
+        "surface0\n{\nanimation0.interval,bind\nanimation0.pattern0,frobnicate,100,0,0,0\n}\n";
+    let shell = decode(lex(input));
+    assert_eq!(shell.surfaces.len(), 1);
+    let patterns = &shell.surfaces[0].animations[0].patterns;
+    // 未知名でも落ちずに 1 個残り、method は原文どおり。
+    assert_eq!(patterns.len(), 1);
+    assert_eq!(patterns[0].method.as_str(), "frobnicate");
+    assert_eq!(patterns[0].surface_id, 100);
+}
+
+/// メソッド欄欠落（`animation0.pattern0` 単独＝field[1] 以降が無い極端に短い行）→ 行は
+/// 落とされず、method は空文字 `""`（下流 `Unknown` が吸収）へ倒れ、パニックしない
+/// （要件 4.6/8.4・3.3）。overlay フィルタが復活すると field[1]==None ≠ "overlay" で
+/// 行が落ち、len==1 が FAIL する。
+#[test]
+fn missing_method_field_yields_empty_method_string() {
+    let input = "surface0\n{\nanimation0.interval,bind\nanimation0.pattern0\n}\n";
+    let shell = decode(lex(input));
+    assert_eq!(shell.surfaces.len(), 1);
+    let patterns = &shell.surfaces[0].animations[0].patterns;
+    // 欠落行も落ちずに index を保持したまま 1 個残り、method は空文字。
+    assert_eq!(patterns.len(), 1);
+    assert_eq!(patterns[0].index, 0);
+    assert_eq!(patterns[0].method.as_str(), "");
+    // 後続フィールドも欠落ゆえ既定 0（パニックしない）。
+    assert_eq!(patterns[0].surface_id, 0);
+}
+
+/// 非 overlay の実メソッド `base` も落とされず method に verbatim 転記される（要件 4.6/8.4）。
+/// `replace` に続く 2 例目の実メソッドで overlay フィルタ撤去のマトリクスを厚くする。
+#[test]
+fn base_method_pattern_row_is_transcribed_not_dropped() {
+    let input = "surface0\n{\nanimation0.interval,bind\nanimation0.pattern0,base,100,0,0,0\n}\n";
+    let shell = decode(lex(input));
+    assert_eq!(shell.surfaces.len(), 1);
+    let patterns = &shell.surfaces[0].animations[0].patterns;
+    assert_eq!(patterns.len(), 1);
+    assert_eq!(patterns[0].method.as_str(), "base");
+}
+
+/// method 忠実転記の完全マトリクスを 1 本の animation で確定させる:
+/// overlay / replace / 未知名(frobnicate) / 欠落 の 4 行が **全て** 出現順に保持され、
+/// 各 `method.as_str()` が原文どおり（欠落は空文字）であることをアサートする（要件 4.6/8.4）。
+/// これは overlay フィルタ撤去の **行数保存の檻**でもある: フィルタが復活すると overlay 行
+/// 1 個だけが残り len==4 が FAIL する。
+#[test]
+fn full_method_matrix_all_rows_preserved_in_order() {
+    let input = "\
+surface0
+{
+animation0.interval,bind
+animation0.pattern0,overlay,100,0,0,0
+animation0.pattern1,replace,101,0,0,0
+animation0.pattern2,frobnicate,102,0,0,0
+animation0.pattern3
+}
+";
+    let shell = decode(lex(input));
+    assert_eq!(shell.surfaces.len(), 1);
+    let patterns = &shell.surfaces[0].animations[0].patterns;
+    // 4 行すべてが落ちずに出現順で残る（overlay フィルタ復活なら 1 個に激減する）。
+    assert_eq!(patterns.len(), 4);
+    let methods: Vec<&str> = patterns.iter().map(|p| p.method.as_str()).collect();
+    assert_eq!(methods, vec!["overlay", "replace", "frobnicate", ""]);
+    // index も疎を合成せず素直に保持（0..3）。
+    let indices: Vec<u32> = patterns.iter().map(|p| p.index).collect();
+    assert_eq!(indices, vec![0, 1, 2, 3]);
 }

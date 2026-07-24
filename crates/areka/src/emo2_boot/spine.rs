@@ -38,11 +38,14 @@ use areka_emo_present::{EmoPresenter, PresentCommand, TargetId};
 use areka_emo_text::actor::{spawn_emo_text, TextLayerRuntime};
 use areka_emo_text::state::TextLayerConfig;
 use areka_ghost::dispatcher::DispatcherMsg;
-use areka_ghost::{boot, GhostBootOptions, GhostRuntime, ShioriWiring, TickerMode};
+use areka_ghost::{boot, GhostBootOptions, GhostRuntime, ShioriWiring, SystemVarWiring, TickerMode};
 use areka_kanade::{CloseReason, MonotonicMs, ShioriBackend};
 use areka_parsers::charset::DefaultEncoding;
 use areka_sakura::ActorKey;
-use areka_seriko::{spawn_seriko, BindResolver, SurfaceResolver};
+use areka_seriko::{
+    spawn_seriko, AnimationTable, BindResolver, LoopRng, SerikoLoopConfig, SerikoSink,
+    SurfaceResolver,
+};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
@@ -59,7 +62,7 @@ use crate::placement::source::GhostTitles;
 use crate::placement::spawn::{spawn_ghost_windows, GhostWindows};
 
 use super::adapter::PresentBridge;
-use super::assets::{build_boot_assets, BootAssets};
+use super::assets::{build_boot_assets, BootAssets, LoopTables};
 use super::frame::{run_attach_phase, run_move_drain_phase, run_text_phase, Emo2Wiring};
 use super::move_cue::{MoveCueSink, MoveDirective};
 use super::talk_clock::{ClockedTextSink, TalkClock};
@@ -127,7 +130,22 @@ impl ScriptedShioriBackendBuilder {
 
     /// backend 本体（アクタースレッドへ move する側）と、テストが照合に使う
     /// [`ScriptedShioriHandle`] のペアを構築する。
-    fn build(self) -> (ScriptedShioriBackend, ScriptedShioriHandle) {
+    ///
+    /// # username prefetch の既定台本（task 8.2・R9.1/9.2・kanade prefetch boot 図）
+    ///
+    /// sylphya 機能（task 6.2/8.2）が正典 boot 系列へ **username SHIORI Resource GET prefetch**
+    /// （OnInitialize NOTIFY の後・OnFirstBoot GET の前）を追加した。全 boot がこの prefetch を発行
+    /// するため、テストが `username` GET を明示台本化していなければ **既定で `Ok(None)`（NoContent）**
+    /// を 1 件補う。「カスタム username 無し」＝既定 username 世界（204→既定・既定は sakura 常駐）を
+    /// faithful に再現する DRY 既定であり、将来の spine テストが username GET を毎回書かずとも
+    /// backend が panic しない（`boot_with` に手組み backend を渡す経路も同じ既定で保護される）。
+    /// テストが独自 username 応答を要すれば `.get("username", …)` で明示上書きでき、その場合は
+    /// 既に登録済みゆえ既定は補われない。
+    fn build(mut self) -> (ScriptedShioriBackend, ScriptedShioriHandle) {
+        self.get_scripts
+            .entry("username".to_string())
+            .or_insert_with(|| VecDeque::from([Ok(None)]));
+
         let calls = Arc::new(Mutex::new(Vec::new()));
         let backend = ScriptedShioriBackend {
             get_scripts: self.get_scripts,
@@ -370,6 +388,19 @@ fn count_level(logs: &[String], level: &str) -> usize {
 // SpineHarness（再利用可能な結線ハーネス・6.2/6.3 がこの上に構築する）
 // ===========================================================================
 
+/// spine ハーネスの SERIKO ループ駆動モード（task 9.4・design「結線・資産・実機経路（spine.rs）」）。
+///
+/// spine は loop ticker を**起動しない**。ループ駆動は `SerikoLoopConfig`（表＋乱数）を seriko へ値渡しで
+/// 仕込み、tick は `SerikoSink::send_tick` を直接注入して制御する（決定論・sleep 不使用・R7.2/7.3）。
+enum LoopDriver {
+    /// ループ完全不活性（`SerikoLoopConfig::disabled()` 相当＝空表・ダミー乱数）。既存 spine 全テストの
+    /// 非退行経路（設計 Testing Strategy E2E-3・Implementation Notes）。send_tick を注入してもループは
+    /// 表示中 slot の評価対象アニメが常にゼロ＝何も発行しない（従来観測どおり）。
+    Inert,
+    /// 実 emo2 表（`BootAssets.loop_tables`）＋固定注入乱数列で駆動（まばたき e2e・R7.2/7.3）。
+    Live(LoopRng),
+}
+
 /// scripted ghost boot＋実 sink 結線＋GPU World＋frame 結線状態を束ねた spine ハーネス。
 ///
 /// `wire_emo2_boot`（task 5.1・production）の結線を、headless GPU World＋合成 `GhostWindows`＋
@@ -393,29 +424,58 @@ struct SpineHarness {
     /// 文字層 UI アクター（`spawn_emo_text` の pump アクター）の生存ハンドル（drain は `pump_text`）。
     #[allow(dead_code)]
     text_pump: JoinHandle<()>,
+    /// SERIKO ループ tick の直接注入端（task 9.4）。`spawn_seriko` が返す `SerikoSink` の clone で、
+    /// `inject_seriko_tick`（`send_tick` 直接注入・loop ticker 不起動・R7.2/7.3）に使う。surface_sink 本体は
+    /// boot が sinks 第 1 要素として値消費するため、この clone をハーネスに保持する。全 clone は単一 seriko
+    /// inbox への送信端で配送意味は同一。shutdown 時に drop して inbox 切断→worker 自然終了させる。
+    tick_sink: SerikoSink,
 }
 
 impl SpineHarness {
     /// 標準台本（boot 系列＋`\s[0]\e` OnBoot＋ForceQuit close 系列）で spine ハーネスを起動する。
     ///
     /// `on_boot` は OnBoot GET が返す応答スクリプト。6.1 は最小 talk（`\s[0]\e`）を渡す。
+    /// SERIKO ループは **不活性**（`LoopDriver::Inert`）で駆動する——既存 spine 全テストの非退行経路
+    /// （設計 Testing Strategy E2E-3）。ループを実表で活性化するまばたき e2e は [`Self::boot_live`]。
     fn boot(on_boot: &str) -> SpineHarness {
-        // 標準台本: boot 系列（OnInitialize→OnFirstBoot→OnBoot→basewareversion）＋
-        // shutdown（`GhostRuntime::shutdown` は常に ForceQuit 経路＝OnClose NOTIFY→Unload・
-        // ghost spine S1 と同旨）を台本化する。OnSecondChange は kanade へ Tick を送らないため不要。
-        let (backend, shiori_handle) = ScriptedShioriBackend::builder()
+        let (backend, shiori_handle) = Self::standard_backend(on_boot);
+        Self::boot_with(backend, shiori_handle, LoopDriver::Inert)
+    }
+
+    /// 実 emo2 表＋固定注入乱数列で SERIKO ループを**活性化**して spine ハーネスを起動する（task 9.4）。
+    ///
+    /// `rng` は 1/N 抽選の固定注入列（決定論・実 entropy 非依存・R7.1/7.2）。tick は loop ticker を起動せず
+    /// [`Self::inject_seriko_tick`]（`send_tick` 直接注入）で制御する（sleep 不使用・R7.3）。まばたき e2e が
+    /// 使う（実 kero/sakura まばたき 1 周の full golden は task 10.2）。
+    fn boot_live(on_boot: &str, rng: LoopRng) -> SpineHarness {
+        let (backend, shiori_handle) = Self::standard_backend(on_boot);
+        Self::boot_with(backend, shiori_handle, LoopDriver::Live(rng))
+    }
+
+    /// 標準 scripted backend（boot 系列＋OnBoot talk＋ForceQuit close 系列）を組む。
+    ///
+    /// boot 系列（OnInitialize→[username prefetch]→OnFirstBoot→OnBoot→basewareversion）＋ shutdown
+    /// （`GhostRuntime::shutdown` は常に ForceQuit 経路＝OnClose NOTIFY→Unload・ghost spine S1 と同旨）を
+    /// 台本化する。OnSecondChange は kanade へ Tick を送らないため不要。
+    /// username prefetch GET（OnInitialize 後・OnFirstBoot 前・sylphya task 8.2・R9.1/9.2）は `build()` が
+    /// 既定 `Ok(None)`（NoContent＝カスタム username 無し）を自動補填するため明示台本化しない。
+    fn standard_backend(on_boot: &str) -> (ScriptedShioriBackend, ScriptedShioriHandle) {
+        ScriptedShioriBackend::builder()
             .notify("OnInitialize", Ok(()))
             .get("OnFirstBoot", Ok(None))
             .get("OnBoot", Ok(Some(on_boot.to_string())))
             .notify("basewareversion", Ok(()))
             .notify("OnClose", Ok(()))
             .unload(Ok(ExitKind::Clean))
-            .build();
-        Self::boot_with(backend, shiori_handle)
+            .build()
     }
 
-    /// 任意の scripted backend で spine ハーネスを起動する（6.2/6.3 が独自台本を注入するための口）。
-    fn boot_with(backend: ScriptedShioriBackend, shiori_handle: ScriptedShioriHandle) -> SpineHarness {
+    /// 任意の scripted backend＋ループ駆動モードで spine ハーネスを起動する（6.2/6.3 が独自台本を注入する口）。
+    fn boot_with(
+        backend: ScriptedShioriBackend,
+        shiori_handle: ScriptedShioriHandle,
+        driver: LoopDriver,
+    ) -> SpineHarness {
         // ── headless GPU World（MTA COM＋WARP 可・R8.4）＋合成 GhostWindows（scope [0,1]） ──
         let mut world = make_world_with_gpu();
         spawn_ghost_windows(&mut world, &two_scope_placements(), &titles());
@@ -447,11 +507,40 @@ impl SpineHarness {
             resolver,
             static_binds,
             bind_resolver,
+            loop_tables,
         } = assets;
-        // 実名前解決表（BootAssets.bind_resolver・task 7.1 が emo2 fixture の MountModel から構築）を
-        // seriko の起動へ値渡しで配線する（production wire_emo2_boot と同型・task 7.2）。
-        let (surface_sink, seriko) =
-            spawn_seriko(resolver, static_binds.clone(), bind_resolver, bridge);
+        // SERIKO ループ構成（task 9.4・design「結線・資産・実機経路（spine.rs）」）: 実 emo2 表
+        // （`BootAssets.loop_tables`＝task 9.1 が `EmoWorld` スナップショットから `from_world` で構築）＋
+        // 固定注入乱数列（`driver`）で `loop_config` を組む。既存 spine テストは Inert（`disabled()` 相当＝
+        // 空表・ダミー乱数）でループ完全不活性＝従来観測どおり非退行（設計 Testing Strategy E2E-3・
+        // Implementation Notes）。まばたき e2e（`boot_live`）のみ実表＋固定 rng で駆動する（本番 mod.rs は
+        // 実 entropy・spine は固定注入列で決定論・R7.1/7.2/7.3）。
+        let LoopTables {
+            shell: shell_table,
+            balloon: balloon_table,
+        } = loop_tables;
+        let loop_config = match driver {
+            LoopDriver::Inert => SerikoLoopConfig::disabled(),
+            LoopDriver::Live(rng) => SerikoLoopConfig {
+                shell_table,
+                balloon_table,
+                rng,
+            },
+        };
+        // 実名前解決表（BootAssets.bind_resolver・task 7.1 が emo2 fixture の MountModel から構築）＋
+        // loop_config を seriko の起動へ値渡しで配線する（production wire_emo2_boot と同型・task 7.2/9.4）。
+        let (surface_sink, seriko) = spawn_seriko(
+            resolver,
+            static_binds.clone(),
+            bind_resolver,
+            loop_config,
+            bridge,
+        );
+        // loop tick 直接注入端（task 9.4）: SerikoSink を 1 本 clone してハーネスへ保持する。surface_sink 本体は
+        // 下の boot_options が sinks 第 1 要素として値消費するため、この clone を `inject_seriko_tick`
+        // （send_tick 直接注入・loop ticker 不起動・R7.2/7.3）に使う。全 clone は単一 seriko inbox への送信端で
+        // 配送意味は同一。shutdown 時に drop して inbox 切断→worker 自然終了させる（下記 shutdown_bounded）。
+        let tick_sink = surface_sink.clone();
         let wiring_assets = BootAssets {
             shells,
             balloons,
@@ -460,6 +549,11 @@ impl SpineHarness {
             static_binds,
             // 実 bind_resolver は seriko が値消費済み（attach は bind_resolver を読まない）ため空表プレースホルダ。
             bind_resolver: BindResolver::empty(),
+            // 実 loop_tables は loop_config へ移送済み（attach は loop_tables を読まない）ため空表プレースホルダ。
+            loop_tables: LoopTables {
+                shell: AnimationTable::empty(),
+                balloon: AnimationTable::empty(),
+            },
         };
 
         // ── move channel＋実 MoveCueSink（wire_emo2_boot 手順4 と同型・S-3 形＝task 9.3） ──
@@ -481,7 +575,11 @@ impl SpineHarness {
                 Box::new(clocked_text_sink),
                 Box::new(move_sink),
             ],
-            system_vars: areka_ghost::default_system_vars(),
+            // scripted spine harness: 本番 provider 経路（FromSylphya）を忠実に再現する。boot が
+            // 内部で sylphya を起動し selfname 系／username を publish・provider を鏡像由来に据える。
+            // App スコープ root は不要（None＝App 層不在縮退・ghost/shell スコープは emo2 mount 由来）。
+            system_vars: SystemVarWiring::FromSylphya,
+            app_profile_dir: None,
             ticker: TickerMode::Disabled,
         };
         let ghost = boot(options).expect("scripted boot は解決可能な emo2 ghost_root で成功する");
@@ -492,12 +590,22 @@ impl SpineHarness {
         let wiring =
             Emo2Wiring::new(presenter, rx, move_rx, Rc::clone(&runtime), clock, wiring_assets);
 
-        SpineHarness { world, wiring, runtime, ghost, seriko, shiori_handle, text_pump }
+        SpineHarness { world, wiring, runtime, ghost, seriko, shiori_handle, text_pump, tick_sink }
     }
 
     /// 文字層 UI アクターの pending メッセージを headless に drain する（実 ClockedTextSink 経路）。
     fn pump_text(&self) {
         pump_until_idle();
+    }
+
+    /// seriko ループへ tick を 1 発直接注入する（loop ticker 不起動・`SerikoSink::send_tick`・R7.2/7.3）。
+    ///
+    /// 本番（mod.rs）は `spawn_loop_ticker` の worker スレッドが実時刻で `send_tick` するが、spine は
+    /// 決定論のため ticker を起動せず、テストスレッドから注入時刻のみで `send_tick` を直接呼ぶ（sleep 不使用）。
+    /// dispatcher 経路（`inject_dispatcher_tick`）は talk/cue clock を進めるのみで seriko ループには届かない
+    /// （ghost 側にループ結線なし）——ループ tick はこの直接注入だけが供給する。
+    fn inject_seriko_tick(&self, now_ms: u64) {
+        self.tick_sink.send_tick(now_ms);
     }
 
     /// dispatcher へ Tick を 1 発注入する（sleep 不使用・注入時刻のみで進める・R8.3）。
@@ -514,12 +622,17 @@ impl SpineHarness {
     /// join し、dispatcher が保持する `SerikoSink` クローンを drop する→seriko worker の inbox 切断→
     /// 自然終了。続けて seriko を有界 join する（ghost spine S1/S2 の後片付け技法）。
     fn shutdown_bounded(self) {
-        let SpineHarness { world, wiring, runtime, ghost, seriko, shiori_handle, text_pump } = self;
+        let SpineHarness { world, wiring, runtime, ghost, seriko, shiori_handle, text_pump, tick_sink } =
+            self;
 
         run_bounded("spine ghost shutdown", Duration::from_secs(10), move || {
             // 正規 close（DD-10 と同じ User）。ForceQuit ゆえ OnClose は NOTIFY で消化される。
             let _ = ghost.shutdown(CloseReason::User);
         });
+        // loop tick 直接注入端の clone を明示 drop（task 9.4）: ghost.shutdown が dispatcher 保持の
+        // SerikoSink クローンを drop しても、ハーネス保持の tick_sink clone が生きていると seriko inbox が
+        // 切断されず worker が終了しない。全 Sender drop で自然終了させるため seriko join の前に drop する。
+        drop(tick_sink);
         join_bounded("spine seriko join", Duration::from_secs(10), seriko)
             .expect("seriko worker should terminate once all SerikoSink clones drop after shutdown");
 
@@ -556,11 +669,12 @@ fn spine_harness_boots_scripted_ghost_and_reaches_attach_ready() {
 
     // ── (1) scripted boot 発火: boot 系列が backend へ (method,id) 順で届く ──
     // boot 系列は kanade スレッド上の同期往復のみで完走する（Tick 不要）。実スレッド境界を跨ぐため
-    // 有界スピン待機（sleep なし・yield_now のみ）で 4 呼出の到達を待ってから照合する。
+    // 有界スピン待機（sleep なし・yield_now のみ）で 5 呼出の到達を待ってから照合する。task 8.2 の
+    // username prefetch GET（OnInitialize 後・OnFirstBoot 前・R9.1/9.2）が加わり boot 系列は 5 呼出。
     let mut boot_calls = Vec::new();
     for _ in 0..100_000u32 {
         boot_calls = harness.shiori_handle.non_status_calls();
-        if boot_calls.len() >= 4 {
+        if boot_calls.len() >= 5 {
             break;
         }
         std::thread::yield_now();
@@ -575,18 +689,19 @@ fn spine_harness_boots_scripted_ghost_and_reaches_attach_ready() {
         })
         .collect();
     assert!(
-        projected.len() >= 4,
+        projected.len() >= 5,
         "scripted boot 系列が有界内に発火しない（scripted ghost を boot できていない）: {boot_calls:?}"
     );
     assert_eq!(
-        &projected[..4],
+        &projected[..5],
         &[
             ("notify", "OnInitialize"),
+            ("get", "username"),
             ("get", "OnFirstBoot"),
             ("get", "OnBoot"),
             ("notify", "basewareversion"),
         ],
-        "boot 系列が正典順序（OnInitialize→OnFirstBoot→OnBoot→basewareversion）で発火していない"
+        "boot 系列が正典順序（OnInitialize→username prefetch→OnFirstBoot→OnBoot→basewareversion）で発火していない"
     );
 
     // ── (2) Tick 注入の疎通（ghost スタック生存・sleep 不使用・R8.3） ──
@@ -833,6 +948,7 @@ fn spine_s3_balloon_face_cue_delivers_hide_then_show_in_order() {
             target,
             surface_id,
             binds,
+            pattern,
             reply,
         } => {
             assert_eq!(*target, balloon_target(0), "2 件目は balloon 表示対象の ShowSurface（\\b[0]）");
@@ -841,6 +957,12 @@ fn spine_s3_balloon_face_cue_delivers_hide_then_show_in_order() {
                 *binds,
                 BindSet::default(),
                 "binds は既定（空集合＝バルーン着せ替えなし・DD-5/R5.1）"
+            );
+            // 非退行（task 9.4・R5.4）: loop 不活性（Inert）経路の cue 由来 ShowSurface は pattern 寄与なし＝空
+            // （PatternState 拡張前と観測等価）。ループを活性化する boot_live 経路でのみ pattern が載る。
+            assert!(
+                pattern.is_empty(),
+                "loop 不活性経路の cue 由来 ShowSurface は pattern 空（従来と観測等価・R5.4）"
             );
             assert!(reply.is_none(), "reply は None（撃ちっぱなし）");
         }
@@ -1154,18 +1276,19 @@ fn spine_s5_close_handshake_consumes_onclose_and_joins_all_handles_bounded() {
     // 標準台本（OnClose NOTIFY＋Unload(Clean)）で boot。最小 OnBoot talk（\s[0]\e）。
     let harness = SpineHarness::boot(r"\s[0]\e");
 
-    // boot 系列（非 Status 4 呼出）が届くまで有界スピン（OnClose を boot ノイズと分離・sleep 不使用）。
+    // boot 系列（非 Status 5 呼出）が届くまで有界スピン（OnClose を boot ノイズと分離・sleep 不使用）。
+    // task 8.2 の username prefetch GET（OnInitialize 後・OnFirstBoot 前・R9.1/9.2）が加わり 4→5 呼出。
     let mut boot_calls = Vec::new();
     for _ in 0..100_000u32 {
         boot_calls = harness.shiori_handle.non_status_calls();
-        if boot_calls.len() >= 4 {
+        if boot_calls.len() >= 5 {
             break;
         }
         std::thread::yield_now();
     }
     assert!(
-        boot_calls.len() >= 4,
-        "S5 前提: boot 系列 4 呼出が有界内に発火する: {boot_calls:?}"
+        boot_calls.len() >= 5,
+        "S5 前提: boot 系列 5 呼出（OnInitialize/username/OnFirstBoot/OnBoot/basewareversion）が有界内に発火する: {boot_calls:?}"
     );
 
     // 分解して所有ハンドルを得る（shutdown_bounded と同型・shiori_handle は照合のため保持）。
@@ -1177,6 +1300,7 @@ fn spine_s5_close_handshake_consumes_onclose_and_joins_all_handles_bounded() {
         seriko,
         shiori_handle,
         text_pump,
+        tick_sink,
     } = harness;
 
     // (b) shutdown(User) が有界時間で Ok を返す（hang しない・ForceQuit→OnClose NOTIFY→Unload）。
@@ -1187,6 +1311,10 @@ fn spine_s5_close_handshake_consumes_onclose_and_joins_all_handles_bounded() {
             "S5: shutdown は close 握手後 Ok を返す（正規 clean shutdown）: {result:?}"
         );
     });
+
+    // loop tick 直接注入端の clone を明示 drop（task 9.4）: seriko の全 SerikoSink Sender（dispatcher 保持分は
+    // shutdown が drop 済み）を落とし切って inbox を切断し worker を自然終了させる（join 前・shutdown_bounded と同旨）。
+    drop(tick_sink);
 
     // (c) seriko worker が有界 join で完了する（timeout=panic ゆえ hang すれば test FAIL・R8.3）。
     // shutdown が ghost 一式を join→dispatcher 保持の SerikoSink クローンを drop→seriko inbox 切断→
@@ -1357,6 +1485,348 @@ fn spine_move_cue_drives_window_move_end_to_end() {
         window_position(&harness.world, target),
         Point { x: 1208, y: 1063 },
         "move channel は drain 済みで空（二重適用なし・FIFO 全件消費）"
+    );
+
+    harness.shutdown_bounded();
+}
+
+// ===========================================================================
+// task 9.4 — まばたきスモーク（direct send_tick 注入 → SERIKO ループ → pattern 搬送指令）
+//
+// 本 task の主眼はハーネスの ripple 修正（spawn_seriko arity／loop_tables／ShowSurface.pattern）＋
+// 直接 tick 注入配線（`SerikoSink::send_tick`）＋既存テスト非退行（loop 不活性経路）だが、direct
+// send_tick が実 emo2 表のループへ届き pattern を載せた表示指令を生む配線を最小スモークで裏付ける。
+// 実 kero/sakura まばたき 1 周の PresentCommand 列 golden（2106→2110→-1→ベース復帰）と R3.4 default-OFF
+// 対照は task 10.2 が本スモークの上に構築する（本 task では作らない）。
+// ===========================================================================
+
+/// 常時発火 rng（1/N 抽選で必ず 0 を返す＝毎境界で抽選通過・actor.rs／looper.rs `always_fire` と同旨）。
+///
+/// 「固定注入乱数列」の最小形（発見的 entropy 非依存・R7.1/7.2）。まばたきスモークは「発火が起きること」
+/// のみを檻に入れるため定数 0 で足りる（発火順序・回数を厳密に固定する full golden は task 10.2）。
+fn always_fire_rng() -> LoopRng {
+    Box::new(|_bound: u32| 0)
+}
+
+/// spine まばたきスモーク（R7.1/7.2/7.3・DD・task 9.4）: 実 emo2 shell 表＋固定注入乱数（常時発火）で
+/// `boot_live` し、kero まばたきの `interval,random,4` アニメ（pattern0=2106／pattern1=2110／pattern3=-1）を
+/// 持つ surface 2100 を `\s[2100]` で表示させたのち、`SerikoSink::send_tick` を**直接注入**（loop ticker
+/// 不起動・sleep 不使用）して 1000ms 絶対グリッド境界を跨がせ、seriko ループが **pattern を載せた**
+/// ShowSurface{shell_target(0),2100} を PresentBridge→rx へ発行することを固定する。direct send_tick →
+/// LoopRuntime → emit_display → adapter → rx の end-to-end 配線が spine で生きていることの最小自動檻。
+///
+/// # 表示中ゲート（loop は Show 済み slot のみ評価・R6.1/2.1）
+///
+/// ループは表示中の slot に対してのみアニメ評価する。まず `\s[2100]` cue を dispatcher tick で駆動し
+/// rx に ShowSurface{2100} が現れる（＝seriko が ScopeStates に scope0 shell=surface2100 を記録済み）まで
+/// 待ってから send_tick を注入する。dispatcher tick は talk/cue clock を進めるのみで seriko ループには
+/// 届かない（ghost 側にループ結線なし）ため、ループ発火はこの直接注入 send_tick だけが供給する。
+///
+/// # 決定論（sleep 不使用・注入時刻＋注入乱数のみ・R7.2/7.3）
+///
+/// 起動 tick（now=0・境界初期化・非跨ぎ・無発行）→ 40ms 刻みで進め、境界跨ぎ（1000/2000/…）で常時発火 rng が
+/// 抽選通過→pattern 進行。boot→talk→sink やスレッド伝播の非同期遅延は有界スピン（`yield_now` のみ）で吸収する。
+#[test]
+fn spine_blink_smoke_send_tick_drives_loop_pattern_command() {
+    // 実表＋常時発火固定 rng でループ活性化（既存テストは Inert＝非退行・本テストのみ Live）。
+    let mut harness = SpineHarness::boot_live(r"\s[2100]\e", always_fire_rng());
+
+    // surface2100（kero まばたき random,4）を表示させる: \s[2100] cue を dispatcher tick で駆動し、
+    // rx に shell ShowSurface{2100} が現れる（＝seriko が表示中 slot を記録済み）まで有界スピン。
+    let mut shown = false;
+    for now in 1u64..=200_000 {
+        harness.inject_dispatcher_tick(now);
+        for cmd in harness.wiring.drain_received() {
+            if matches!(&cmd, PresentCommand::ShowSurface { target, surface_id, .. }
+                if *target == shell_target(0) && *surface_id == 2100)
+            {
+                shown = true;
+            }
+        }
+        if shown {
+            break;
+        }
+        std::thread::yield_now();
+    }
+    assert!(
+        shown,
+        "\\s[2100]（kero まばたき surface）の初回シェル表示が有界内に rx へ現れない（表示中ゲート前提不成立）"
+    );
+
+    // send_tick を直接注入して 1000ms 絶対グリッド境界を跨がせる（loop ticker 不起動・sleep 不使用）。
+    // pattern を載せた ShowSurface{shell_target(0),2100} が現れるまで有界スピン（sub 秒進行＋境界跨ぎの双方を送る）。
+    let mut pattern_carrying = false;
+    let mut now = 0u64;
+    harness.inject_seriko_tick(now); // 起動 tick（境界初期化・非跨ぎ・無発行）
+    for _ in 0..100_000u32 {
+        now += 40; // 小刻みに進め境界跨ぎ（1000ms グリッド）と pattern 進行（sub 秒）の双方を供給
+        harness.inject_seriko_tick(now);
+        for cmd in harness.wiring.drain_received() {
+            if let PresentCommand::ShowSurface {
+                target,
+                surface_id,
+                pattern,
+                ..
+            } = &cmd
+            {
+                if *target == shell_target(0) && *surface_id == 2100 && !pattern.is_empty() {
+                    pattern_carrying = true;
+                }
+            }
+        }
+        if pattern_carrying {
+            break;
+        }
+        std::thread::yield_now();
+    }
+    assert!(
+        pattern_carrying,
+        "direct send_tick が実 emo2 ループを駆動して pattern 搬送 ShowSurface{{shell_target(0),2100}} を発行しない（send_tick→LoopRuntime→emit→adapter→rx 配線が死んでいる？）"
+    );
+
+    harness.shutdown_bounded();
+}
+
+// ===========================================================================
+// task 10.2 — 実 emo2 まばたき 1 周の PresentCommand 列 golden（kero/sakura）＋ R3.4 既定 OFF 対照
+//
+// 9.4 の `boot_live`/`inject_seriko_tick`/`always_fire_rng` の上に、実 emo2 fixture の実測アニメ
+// （kero surface2100 `interval,random,4` 2106/2110/-1・sakura surface1000 `interval,bind+random,4`
+// 1400 系 1412/1411/1410）を固定注入乱数＋scripted `send_tick` で 1 周歩かせ、発行される
+// `PresentCommand` 列の **厳密 golden**（pattern 搬送 surface id の完全一致）を檻に入れる。
+// あわせて R3.4「fixture 既定 OFF」の対照——`\![bind]` を通さない既定では always_fire でも bind
+// ゲートが抽選を塞ぎ **一切発行しない**——を負の檻として固定する（design Testing Strategy E2E-1/2）。
+//
+// 全て決定論（実 emo2 asset fixture＋固定注入 rng＋scripted send_tick・sleep 不使用・Close→join）。
+// 実 SHIORI/pasta 非依存（surface は注入 cue で表示・実機/実 DPI サインオフは task 10.3）。
+// ===========================================================================
+
+/// `cmd` が scope0 shell 宛の `ShowSurface{shown_surface}` であることを検証し、その pattern が
+/// `anim_id` に載せる現在コマ surface id を返す（コマ不在＝ベース復帰は `None`）。
+///
+/// golden の各 tick が運ぶのは常に「表示中 surface（`shown_surface`）の ShowSurface に、まばたき
+/// アニメの現在コマを `pattern` へ載せたもの」。表示対象（偶数 TargetId＝shell）と表示中 surface の
+/// 透過を都度 assert し、可変部（pattern のコマ surface id）を返して呼び手が golden 照合する。
+fn shell_pattern_frame(cmd: &PresentCommand, shown_surface: u32, anim_id: u32) -> Option<u32> {
+    match cmd {
+        PresentCommand::ShowSurface {
+            target,
+            surface_id,
+            pattern,
+            ..
+        } => {
+            assert_eq!(*target, shell_target(0), "shell 表示対象（scope0・偶数 TargetId・DD-3）");
+            assert_eq!(
+                *surface_id, shown_surface,
+                "表示中 surface（seriko 数値解決の透過・pattern はこの面のアニメに従属）"
+            );
+            pattern.get(anim_id).map(|f| f.surface_id)
+        }
+        other => panic!("ShowSurface を期待（golden の各 tick は面表示指令）: {}", variant_name(other)),
+    }
+}
+
+/// dispatcher tick で OnBoot talk を駆動し、scope0 shell が `surface_id` を表示する（必要なら binds に
+/// `require_bind` を含む）まで有界スピンする。観測できた指令は drain 済みゆえ、復帰後の rx は talk 由来
+/// 指令について空——以降 `inject_seriko_tick` が発行する loop 指令だけを純粋に観測できる（sleep 不使用）。
+///
+/// `require_bind` は `\![bind,...]` 貫通の証跡: bind 適用は表示中 scope で **binds 更新済みの Show 再発行**
+/// （`apply_bind`→`BindApplyOutcome::Changed`）を生むため、「shell surface が該当 bind id を含んで表示された」
+/// = current_binds へ当該 id が書き込まれた（＝bind ゲートが ON になった）ことの end-to-end 証跡になる。
+fn drive_shell_shown(harness: &mut SpineHarness, surface_id: u32, require_bind: Option<u32>) {
+    let mut satisfied = false;
+    for now in 1u64..=200_000 {
+        harness.inject_dispatcher_tick(now);
+        for cmd in harness.wiring.drain_received() {
+            if let PresentCommand::ShowSurface {
+                target,
+                surface_id: sid,
+                binds,
+                ..
+            } = &cmd
+            {
+                if *target == shell_target(0)
+                    && *sid == surface_id
+                    && require_bind.is_none_or(|id| binds.contains(id))
+                {
+                    satisfied = true;
+                }
+            }
+        }
+        if satisfied {
+            break;
+        }
+        std::thread::yield_now();
+    }
+    assert!(
+        satisfied,
+        "OnBoot talk が scope0 shell surface {surface_id}（require_bind={require_bind:?}）を有界内に表示しない（boot→talk→sink 経路不通 or bind 未貫通）"
+    );
+}
+
+/// `now_ms` の seriko tick を 1 発直接注入し、ちょうど 1 件の `PresentCommand` が rx へ届くまで有界
+/// スピンして返す（sleep 不使用・`yield_now` のみ）。golden の各コマ遷移 tick は変化 1 件を発行する
+/// （6.1/6.2）ため、この直列注入→1 件回収で発行列の順序と内容を決定論的に照合できる。届かなければ
+/// 件数 assert が落ちる（hang しない）。
+fn seriko_tick_expect_one(harness: &mut SpineHarness, now_ms: u64) -> PresentCommand {
+    harness.inject_seriko_tick(now_ms);
+    let mut buf: Vec<PresentCommand> = Vec::new();
+    for _ in 0..1_000_000u32 {
+        buf.extend(harness.wiring.drain_received());
+        if !buf.is_empty() {
+            break;
+        }
+        std::thread::yield_now();
+    }
+    assert_eq!(
+        buf.len(),
+        1,
+        "golden の各 tick はちょうど 1 指令を発行する（now_ms={now_ms}・実受信 {} 件・variants={:?}）",
+        buf.len(),
+        buf.iter().map(variant_name).collect::<Vec<_>>()
+    );
+    buf.into_iter().next().expect("len==1 を確認済み")
+}
+
+/// spine E2E-1（kero まばたき 1 周 golden・R7.2/7.3・design Testing Strategy E2E-1）: 実 emo2 shell 表
+/// ＋固定注入乱数（常時発火）で `boot_live` し、`\s[2100]`（kero まばたき surface・`interval,random,4`・
+/// bind 非依存）を注入 cue で表示させたのち、`SerikoSink::send_tick` を直接注入して 1000ms 絶対グリッド
+/// 境界を跨がせ 1 周を歩かせる。発行 `PresentCommand` 列の **厳密 golden**——pattern0=2106 → pattern1=2110
+/// → `-1`（ベース復帰＝空 pattern）——を実 fixture 実測値（surfaces.txt `surface.append10,2100` の
+/// `animation0` 2106(w0)/2110(w40)/-1(w80)・t=[0,40,120]）で固定する。
+///
+/// send_tick→LoopRuntime→emit_display→adapter→rx の end-to-end 配線が、実 emo2 表の実測列を
+/// 忠実に運ぶことの決定論自動檻（実 SHIORI/pasta・GUI 非依存・実機/実 DPI サインオフは task 10.3）。
+#[test]
+fn spine_e2e_kero_blink_one_cycle_golden() {
+    // 実表＋常時発火固定 rng でループ活性化（既存 spine テストは Inert＝非退行・本テストのみ Live）。
+    let mut harness = SpineHarness::boot_live(r"\s[2100]\e", always_fire_rng());
+    // 表示中ゲート前提: surface2100 を scope0 shell へ表示（seriko ScopeStates に記録）。bind 不要（Random）。
+    drive_shell_shown(&mut harness, 2100, None);
+
+    // 起動 tick（境界初期化・非跨ぎ・無発行）。以降は境界 1000 のみを跨いで 1 周を歩く（2000 未到達＝再抽選なし）。
+    harness.inject_seriko_tick(0);
+
+    // ── 1 周 golden（kero・-1 終端）: 2106 → 2110 → ベース復帰（空 pattern）。実 fixture t=[0,40,120]。 ──
+    let c1 = seriko_tick_expect_one(&mut harness, 1000); // 発火＋elapsed0 → pattern0
+    assert_eq!(
+        shell_pattern_frame(&c1, 2100, 0),
+        Some(2106),
+        "kero 1 周 pattern0=2106（実 fixture surface.append10,2100 animation0）"
+    );
+    let c2 = seriko_tick_expect_one(&mut harness, 1040); // elapsed40 → pattern1
+    assert_eq!(
+        shell_pattern_frame(&c2, 2100, 0),
+        Some(2110),
+        "kero pattern1=2110（wait40・実 fixture）"
+    );
+    let c3 = seriko_tick_expect_one(&mut harness, 1120); // elapsed120 → -1 Stopped → ベース復帰
+    assert_eq!(
+        shell_pattern_frame(&c3, 2100, 0),
+        None,
+        "kero pattern3=-1 到達でコマ除去＝ベース復帰（要件 4.3）"
+    );
+    // ベース復帰は「空 pattern の ShowSurface」——sakura の末尾残留（1410 が残る）との決定的な対照点。
+    match &c3 {
+        PresentCommand::ShowSurface { pattern, .. } => assert!(
+            pattern.is_empty(),
+            "kero の -1 ベース復帰は空 pattern（要件 4.3・sakura 残留と対照）"
+        ),
+        other => panic!("ShowSurface を期待: {}", variant_name(other)),
+    }
+
+    harness.shutdown_bounded();
+}
+
+/// spine E2E-2a（sakura まばたき 1 周 golden・bind ON 貫通・R7.2/9.2・design Testing Strategy E2E-2）: 実 emo2
+/// shell 表＋固定注入乱数（常時発火）で `boot_live` し、`\s[1000]`（sakura 着せ替え surface・`bind+random,4`
+/// のまばたき animation1400 を持つ）＋`\![bind,まばたき,通常,1]`（実 sakura bindgroup 貫通）を OnBoot talk で
+/// 流して 1400 bindgroup を **ON** にしたのち、`send_tick` 直接注入で 1 周を歩かせる。発行 `PresentCommand` 列の
+/// **厳密 golden**——pattern1=1412 → pattern2=1411 → pattern3=1410（**残留**・`-1` なし）——を実 fixture 実測値
+/// （surfaces.txt surface1000 `animation1400` 1412(w0)/1411(w150)/1410(w22)・t=[0,150,172]）で固定する。
+///
+/// `\![bind,まばたき,通常,1]` は OnBoot talk 内で sakura compile → Custom キャリア cue → broadcast →
+/// seriko `apply_bind`（`bind_resolver.resolve(Sakura,"まばたき","通常")==1400`）で current_binds へ 1400 を
+/// 書き込む実経路を通る（mayuna 成果物・read-only 参照）。`drive_shell_shown(.., Some(1400))` が binds に 1400 を
+/// 含む Show 再発行の観測で貫通を担保する。kero（`-1`→空 pattern）と対照的に末尾コマが残留する（要件 4.4）。
+#[test]
+fn spine_e2e_sakura_blink_after_bind_one_cycle_golden() {
+    // \s[1000]（sakura 着せ替え surface）＋ \![bind,まばたき,通常,1]（1400 bindgroup ON）。常時発火 rng で
+    // ループ活性化（bind ゲート ON の 1400 のみ発火・半目 1401/ジトー 1402 は OFF ゆえ非発火）。
+    let mut harness = SpineHarness::boot_live(r"\s[1000]\![bind,まばたき,通常,1]\e", always_fire_rng());
+    // 表示中＋bind ON 前提: scope0 shell surface1000 が binds に 1400 を含んで表示される
+    // （\![bind] 貫通で current_binds へ 1400 が書き込まれた end-to-end 証跡＝bind 再発行 Show）。
+    drive_shell_shown(&mut harness, 1000, Some(1400));
+
+    // 起動 tick（境界初期化）。以降は境界 1000 のみを跨ぎ 1 周を歩く（2000 未到達＝再抽選なし）。
+    harness.inject_seriko_tick(0);
+
+    // ── 1 周 golden（sakura・末尾残留）: 1412 → 1411 → 1410（残留・-1 なし）。実 fixture t=[0,150,172]。 ──
+    let c1 = seriko_tick_expect_one(&mut harness, 1000); // 発火＋elapsed0 → pattern1
+    assert_eq!(
+        shell_pattern_frame(&c1, 1000, 1400),
+        Some(1412),
+        "sakura 1 周 pattern1=1412（実 fixture surface1000 animation1400・先頭 wait0）"
+    );
+    let c2 = seriko_tick_expect_one(&mut harness, 1150); // elapsed150 → pattern2
+    assert_eq!(
+        shell_pattern_frame(&c2, 1000, 1400),
+        Some(1411),
+        "sakura pattern2=1411（wait150・実 fixture）"
+    );
+    let c3 = seriko_tick_expect_one(&mut harness, 1172); // elapsed172 → pattern3 末尾非負 → 残留
+    assert_eq!(
+        shell_pattern_frame(&c3, 1000, 1400),
+        Some(1410),
+        "sakura pattern3=1410 残留（-1 なし末尾＝FinishedResidual・要件 4.4）"
+    );
+    // 末尾は残留ゆえ空でない——kero の -1 ベース復帰（空 pattern）との決定的な対照点。
+    match &c3 {
+        PresentCommand::ShowSurface { pattern, .. } => assert!(
+            !pattern.is_empty(),
+            "sakura の末尾は最終コマ残留（空でない・要件 4.4・kero の -1 と対照）"
+        ),
+        other => panic!("ShowSurface を期待: {}", variant_name(other)),
+    }
+
+    harness.shutdown_bounded();
+}
+
+/// spine E2E-2b（R3.4「fixture 既定 OFF」の対照檻・design Testing Strategy E2E-2）: fixture 既定
+/// （`\![bind]` を **通さない**＝まばたき bindgroup 1400/1401/1402 は全 OFF）で surface1000 を表示し、
+/// 常時発火 rng で境界を複数跨いでも **一切発行しない**ことを固定する。bind ゲート（`BindRandom` は
+/// bindgroup ON のときだけ `should_fire` を呼ぶ・要件 3.1）が抽選そのものを塞ぐため、抽選 → 再生 → pattern
+/// 搬送が起きない。
+///
+/// # always_fire で「ゲートが塞ぐ」を積極証明する（R3.4 の核心）
+///
+/// 乱数を常時発火（1/N 抽選が呼ばれれば必ず通過）にしておくことで、もし bind ゲートが leak すれば
+/// 1400/1401/1402 は **必ず**発火し pattern 搬送指令が現れる。それが現れない＝発行ゼロは「抽選が呼ばれて
+/// いない（ゲートが塞いだ）」ことの証跡になる（sakura bind ON 版〔上〕が同じ rng+tick で発火するのと対照）。
+/// surface1000 のまばたきは全て `bind+random`（無条件 `random` は無い）ため、既定 OFF では何も動かない。
+#[test]
+fn spine_e2e_sakura_blink_default_off_emits_nothing() {
+    // fixture 既定（bind OFF・\![bind] なし）で surface1000 を表示。always_fire でもゲートが塞ぐ＝発行ゼロ。
+    let mut harness = SpineHarness::boot_live(r"\s[1000]\e", always_fire_rng());
+    drive_shell_shown(&mut harness, 1000, None); // bind なし＝1400/1401/1402 は全 OFF（R3.4 既定）
+
+    // 境界を複数跨ぐ seriko tick を注入し、発行が一切現れないことを固定する（起動 tick→1000/2000/…の境界跨ぎ）。
+    harness.inject_seriko_tick(0); // 起動 tick（境界初期化）
+    let mut emitted: Vec<PresentCommand> = Vec::new();
+    for now in [1000u64, 2000, 3000, 4000, 5000] {
+        harness.inject_seriko_tick(now); // 各々 1000ms 絶対グリッド境界を跨ぐ
+        // 有界 settle drain（spine_s4 の負検証と同流儀・sleep 不使用・yield_now のみ）。
+        for _ in 0..5_000 {
+            emitted.extend(harness.wiring.drain_received());
+            std::thread::yield_now();
+        }
+    }
+    // R3.4 の檻: bind ゲート OFF は always_fire でも抽選を塞ぐ＝発行ゼロ（ゲート leak なら pattern 搬送指令が漏れる）。
+    assert!(
+        emitted.is_empty(),
+        "R3.4 既定 OFF: bind ゲート OFF は always_fire でも一切発行しない（ゲート leak 検出・実受信 {} 件・variants={:?}）",
+        emitted.len(),
+        emitted.iter().map(variant_name).collect::<Vec<_>>()
     );
 
     harness.shutdown_bounded();

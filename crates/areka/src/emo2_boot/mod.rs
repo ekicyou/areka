@@ -39,16 +39,20 @@ use std::sync::Arc;
 use areka_emo_present::{EmoPresenter, PresentCommand};
 use areka_emo_text::actor::{TextLayerRuntime, spawn_emo_text};
 use areka_emo_text::state::TextLayerConfig;
-use areka_ghost::{GhostBootOptions, ShioriWiring, TickerMode};
+use areka_ghost::ticker::{LoopTickerConfig, Tick, TickerMsg, spawn_loop_ticker};
+use areka_ghost::{GhostBootOptions, ShioriWiring, SystemVarWiring, TickerMode};
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::MountError;
-use areka_seriko::{BindResolver, SerikoSink, SurfaceResolver, spawn_seriko};
+use areka_seriko::{
+    AnimationTable, BindResolver, SerikoLoopConfig, SerikoSink, SurfaceResolver, seeded_rng,
+    spawn_seriko,
+};
 use tracing::{error, info, warn};
 use wintf::WinApp;
 use wintf::ecs::FrameFinalize;
 
 use self::adapter::PresentBridge;
-use self::assets::{BootAssets, build_boot_assets};
+use self::assets::{BootAssets, LoopTables, build_boot_assets};
 use self::frame::{Emo2Wiring, emo2_frame_system};
 use self::move_cue::{MoveCueSink, MoveDirective};
 use self::talk_clock::{ClockedTextSink, TalkClock};
@@ -128,6 +132,7 @@ pub enum BootWiringError {
 /// - `ghost`: boot 成立時の [`areka_ghost::GhostRuntime`]（フォールバック時は `None`）。
 /// - `seriko`: seriko アクターの [`areka_actor::ActorHandle`]（フォールバック時は `None`）。
 /// - `wired`: 実 sink 結線が成立したか（`false` = `LogSink`×2 フォールバックへ委ねる・R7.3）。
+/// - `loop_ticker`: SERIKO ループ ticker（[`spawn_loop_ticker`]）の停止端（フォールバック時 `None`）。
 pub struct Emo2BootOutcome {
     /// boot 成立時の ghost ランタイム（フォールバック時 `None`）。
     pub ghost: Option<areka_ghost::GhostRuntime>,
@@ -135,6 +140,10 @@ pub struct Emo2BootOutcome {
     pub seriko: Option<areka_actor::ActorHandle>,
     /// 実 sink 結線が成立したか（`false` = `LogSink` フォールバック）。
     pub wired: bool,
+    /// SERIKO ループ ticker（16ms 実時計・[`spawn_loop_ticker`]）の停止端。
+    /// `main`（task 9.5）の終了処理が [`TickerMsg::Close`] を送って ticker を止める
+    /// （フォールバック時は ticker を起こさないため `None`）。
+    pub loop_ticker: Option<std::sync::mpsc::Sender<TickerMsg>>,
 }
 
 /// M-boot の scope 集合を導出する（design DD-12・line 460「placement と同じ入力から自前導出」）。
@@ -235,6 +244,7 @@ pub fn wire_emo2_boot(
             ghost: None,
             seriko: None,
             wired: false,
+            loop_ticker: None,
         }
     }
 
@@ -283,14 +293,43 @@ pub fn wire_emo2_boot(
         resolver,
         static_binds,
         bind_resolver,
+        loop_tables,
     } = assets;
+    // SERIKO ループ構成（design「本番は実時間・実 entropy 接続」・R7.4）: シェル／バルーンの 2 表は
+    // `BootAssets.loop_tables`（task 9.1 が `EmoWorld` スナップショットから `from_world` で構築）を
+    // 値移送し、乱数は実 entropy から。seed は `std::hash::RandomState`（プロセスごとにランダム鍵で
+    // 初期化される `BuildHasher`）から u64 を実現する（新規 crates.io 依存なし・design 準拠）。空書込みの
+    // `finish()` はその hasher のランダム鍵由来値を返すため、実行ごとに異なる seed が得られる。
+    let LoopTables {
+        shell: shell_table,
+        balloon: balloon_table,
+    } = loop_tables;
+    let seed: u64 = {
+        use std::hash::{BuildHasher, Hasher};
+        std::collections::hash_map::RandomState::new()
+            .build_hasher()
+            .finish()
+    };
+    // 再現可能性の観測点（R7.4/7.5）: 本番 seed を info! に出力し、同一 seed で run を再現可能にする。
+    info!(seed, "emo2-boot: SERIKO ループ乱数 seed（RandomState 由来・実 entropy・再現用）");
+    let loop_config = SerikoLoopConfig {
+        shell_table,
+        balloon_table,
+        rng: seeded_rng(seed),
+    };
     // boot は S: dola::cue::CueSink + Clone を要求する。SerikoSink は upstream `areka-seriko` で
     // `CueSink` を実装し `#[derive(Clone)]` 済み（内側 mpsc::Sender は常に Clone・全 clone は単一 inbox
     // 送信端で配送同一）ゆえ spawn_seriko の戻り値を直接 surface_sink として boot へ渡す（共有 shim は不要）。
     // `bind_resolver`（BootAssets・task 7.1 が MountModel の名前転記から構築した実名前解決表）を
     // seriko の起動へ値渡しで配線する。bind cue（`\![bind]`）の着せ替え名解決はこの実表が担う（task 7.2）。
-    let (surface_sink, seriko_handle) =
-        spawn_seriko(resolver, static_binds.clone(), bind_resolver, bridge);
+    // `loop_config`（上で組んだ実表＋実 entropy 乱数）を seriko へ値渡しし、SERIKO ループ統括器を起こす。
+    let (surface_sink, seriko_handle) = spawn_seriko(
+        resolver,
+        static_binds.clone(),
+        bind_resolver,
+        loop_config,
+        bridge,
+    );
     let wiring_assets = BootAssets {
         shells,
         balloons,
@@ -300,7 +339,17 @@ pub fn wire_emo2_boot(
         static_binds,
         // 実 bind_resolver は seriko が値消費済み（attach は bind_resolver を読まない）ため空表プレースホルダ。
         bind_resolver: BindResolver::empty(),
+        // 実 loop_tables は loop_config へ移送済み（attach は loop_tables を読まない）ため空表プレースホルダ。
+        loop_tables: LoopTables {
+            shell: AnimationTable::empty(),
+            balloon: AnimationTable::empty(),
+        },
     };
+
+    // loop ticker 用の tick 送出端: SerikoSink を 1 本 clone して保持する（surface_sink 本体は下の
+    // boot_options が値消費する）。全 clone は単一 seriko inbox への送信端で配送意味は同一（task 9.2）。
+    // boot 失敗時はこの clone が inbox を生かし続けないよう明示 drop する（worker 自然終了・下記）。
+    let tick_sink = surface_sink.clone();
 
     // 手順5: boot（実 sink 注入）。Err は既存 is_benign_boot_error 分類（R7.4）＋フォールバック。
     // sinks は broadcast 登録先で、surface（seriko）／text（ClockedTextSink）／move（MoveCueSink）の
@@ -317,7 +366,8 @@ pub fn wire_emo2_boot(
             Box::new(clocked_text_sink),
             Box::new(move_sink),
         ],
-        system_vars: areka_ghost::default_system_vars(),
+        system_vars: SystemVarWiring::FromSylphya,
+        app_profile_dir: Some(crate::default_app_profile_dir()),
         ticker: TickerMode::Real(Default::default()),
     };
     let ghost_runtime = match areka_ghost::boot(boot_options) {
@@ -335,9 +385,11 @@ pub fn wire_emo2_boot(
                     "emo2-boot: ghost boot に失敗（LogSink フォールバックへ委ねる・R7.4）"
                 );
             }
-            // spawn 済み seriko の後始末: surface_sink（唯一の Sender 保持元）は boot_options 消費で
-            // drop 済みゆえ inbox 切断→worker 自然終了する。ActorHandle は非 RAII（drop で detach）
-            // ゆえ join せず drop で打ち切る（万一 boot が dispatcher へ move 後に失敗しても hang しない）。
+            // spawn 済み seriko の後始末: surface_sink は boot_options 消費で drop 済み。ただし tick 用
+            // clone（tick_sink）はまだ生存し inbox を生かし続けるため、ここで明示 drop する。両 Sender が
+            // 消えると inbox 切断→worker 自然終了する。ActorHandle は非 RAII（drop で detach）ゆえ join
+            // せず drop で打ち切る（万一 boot が dispatcher へ move 後に失敗しても hang しない）。
+            drop(tick_sink);
             drop(seriko_handle);
             return fallback();
         }
@@ -355,14 +407,27 @@ pub fn wire_emo2_boot(
         .borrow_mut()
         .add_systems(FrameFinalize, emo2_frame_system);
 
+    // SERIKO ループ ticker 起動（design「本番は実時間・実 entropy 接続」・R7.4）: 16ms 実時計
+    // （LoopTickerConfig::default）で駆動し、各 Tick を tick_sink（SerikoSink クローン）経由で seriko
+    // へ届ける。ghost の loop ticker は seriko を一切知らず、クロージャがその継ぎ目（依存方向: areka が
+    // ghost の spawn_loop_ticker を seriko の SerikoSink へ結線・ghost→seriko 依存は張らない）。
+    // Tick.now は MonotonicMs（内側 u64・ms）ゆえ `.0` を send_tick へ渡す。
+    let (loop_ticker_stop, _loop_ticker_handle) = spawn_loop_ticker(
+        LoopTickerConfig::default(),
+        Box::new(move |tick: Tick| {
+            tick_sink.send_tick(tick.now.0);
+        }),
+    );
+
     // wire 成立マーカー（実 fixture smoke＝task 7.1 がこの info! の存在を assert する・R7.3 観測境界）。
     info!("emo2-boot: 実 sink 結線が成立しました（wire 成立）");
 
-    // 手順7: 実 sink 結線成立。ghost/seriko ハンドルを main の終了処理へ返す。
+    // 手順7: 実 sink 結線成立。ghost/seriko ハンドル＋loop ticker 停止端を main の終了処理へ返す。
     Emo2BootOutcome {
         ghost: Some(ghost_runtime),
         seriko: Some(seriko_handle),
         wired: true,
+        loop_ticker: Some(loop_ticker_stop),
     }
 }
 

@@ -42,9 +42,10 @@ use std::ops::ControlFlow;
 use areka_sakura::{cue_target_of, CueCommand, CueTarget, TalkCue};
 
 use crate::bind::{parse_bind_directive, scope_namespace, BindDirective, BindResolver};
+use crate::looper::{LoopRuntime, SerikoLoopConfig};
 use crate::output::{DisplayCommand, SurfaceOutput};
 use crate::resolve::{resolve_balloon_key, BalloonResolve, SurfaceResolver, SurfaceTarget};
-use crate::state::{ApplyOutcome, BindApplyOutcome, ScopeStates};
+use crate::state::{ApplyOutcome, BindApplyOutcome, ScopeStates, Slot};
 
 /// seriko アクターの inbox メッセージ（areka-actor inbox 規約・投函経路は inbox 一貫）。
 ///
@@ -53,6 +54,11 @@ use crate::state::{ApplyOutcome, BindApplyOutcome, ScopeStates};
 pub enum SerikoMsg {
     /// broadcast された 1 発火（`SerikoSink::emit` が橋渡しする・到着順に適用＝R1.5）。
     Cue(TalkCue),
+    /// 時間駆動ループの 1 tick（絶対時刻 ms・素の `u64`＝新規依存なし・D-1）。
+    ///
+    /// cue と同一 inbox を FIFO 共有し、`SerikoSink::send_tick` が橋渡しする。`handle_message` の
+    /// Tick 腕が `LoopRuntime::on_tick` を回し、既存 `emit_display` 単一発行点から発行する（R1.1/6.3）。
+    Tick { now_ms: u64 },
     /// kanade 由来の停止指令（areka-actor 停止規約の Close 相当・正常終了させる）。
     Close,
 }
@@ -89,6 +95,21 @@ impl SerikoSink {
     /// アクターは既に停止済み（＝目的達成）ゆえ `error!` は不要——`Ok`/`Err` を呼び手へ返す。
     pub fn close(&self) -> Result<(), std::sync::mpsc::SendError<SerikoMsg>> {
         self.tx.send(SerikoMsg::Close)
+    }
+
+    /// 時間駆動ループの 1 tick（絶対時刻 ms）を inbox へ橋渡しする（R1.1）。
+    ///
+    /// loop ticker（本番）／テストの直接注入がアクターへ tick を届ける最小 API。cue と同一 inbox を
+    /// FIFO 共有するため、tick と cue は構造的に直列化され状態競合しない。受信端消失時（アクター
+    /// 停止後）は `send` が `Err` を返すが、それは **shutdown 中の期待事象**（PresentBridge 先例）
+    /// ゆえ `error!` でなく [`tracing::debug!`] で観測して戻る（silent failure 禁止・panic しない・R7.5/6.3）。
+    pub fn send_tick(&self, now_ms: u64) {
+        if self.tx.send(SerikoMsg::Tick { now_ms }).is_err() {
+            tracing::debug!(
+                now_ms,
+                "seriko: inbox が消失; tick を配送できず破棄した（shutdown 中の期待事象・PresentBridge 先例・R7.5）"
+            );
+        }
     }
 
     /// 1 発火を inbox へ橋渡しする送出本体（infallible）——単一の出力契約
@@ -164,6 +185,7 @@ pub fn spawn_seriko<O>(
     resolver: SurfaceResolver,
     static_binds: areka_emo_compose::BindSet,
     bind_resolver: BindResolver,
+    loop_config: SerikoLoopConfig,
     out: O,
 ) -> (SerikoSink, areka_actor::ActorHandle)
 where
@@ -173,8 +195,18 @@ where
         let mut states = ScopeStates::new(static_binds);
         let mut out = out;
         let bind_resolver = bind_resolver;
+        // アクター本体が SERIKO ループ統括器を単独所有する（スレッド内・ロック不要・単一所有者）。
+        // 表・乱数は `loop_config` から構築して以後この 1 スレッドで進める（発見 C の値渡し解消）。
+        let mut loop_runtime = LoopRuntime::new(loop_config);
         areka_actor::run_inbox::<SerikoMsg, std::convert::Infallible>(rx, move |msg| {
-            Ok(handle_message(&resolver, &bind_resolver, &mut states, &mut out, msg))
+            Ok(handle_message(
+                &resolver,
+                &bind_resolver,
+                &mut states,
+                &mut loop_runtime,
+                &mut out,
+                msg,
+            ))
         });
     });
 
@@ -193,12 +225,22 @@ fn handle_message<O: SurfaceOutput>(
     resolver: &SurfaceResolver,
     bind_resolver: &BindResolver,
     states: &mut ScopeStates,
+    loop_runtime: &mut LoopRuntime,
     out: &mut O,
     msg: SerikoMsg,
 ) -> ControlFlow<()> {
     let cue = match msg {
         // 正常停止（1.4）。積み残しは run_inbox の即時 return で破棄される。
         SerikoMsg::Close => return ControlFlow::Break(()),
+        // 時間駆動ループの 1 tick（1.1/6.3）: LoopRuntime へ委譲し、返る指令列を**既存**の
+        // `emit_display` 単一発行点のみで発行する（新発行点を作らない・R6.3）。表示中 slot が 1 つも
+        // ない tick は on_tick が空を返す＝完全 no-op（無発行・2.1 の表示中ゲートの自然帰結）。
+        SerikoMsg::Tick { now_ms } => {
+            for cmd in loop_runtime.on_tick(now_ms, states) {
+                emit_display(out, cmd);
+            }
+            return ControlFlow::Continue(());
+        }
         SerikoMsg::Cue(cue) => cue,
     };
 
@@ -388,6 +430,9 @@ fn handle_message<O: SurfaceOutput>(
         // 状態更新（2.2 の鏡映）＋発行: 状態が実際に変化したときだけ単一発行点から発行する（冪等・R4.3）。
         if let ApplyOutcome::Changed(command) = states.apply_balloon(&cue.actor, target) {
             emit_display(out, command); // 単一発行点共用（R4.1/4.2/4.3）
+            // バルーン面切替／Hide でループ再生をリセット（当該 slot の playback 全除去・R2.3 表示従属）。
+            // PatternState クリアは apply_balloon の責務、playback クリアはループ統括器の責務。
+            loop_runtime.on_surface_changed(&cue.actor, Slot::Balloon);
         }
         return ControlFlow::Continue(());
     }
@@ -429,6 +474,9 @@ fn handle_message<O: SurfaceOutput>(
     // 状態更新（2.2）＋発行（2.3）: 状態が実際に変化したときだけ単一発行点から発行する（冪等ガード）。
     if let ApplyOutcome::Changed(command) = states.apply(&cue.actor, target) {
         emit_display(out, command);
+        // シェル面切替／Hide でループ再生をリセット（当該 slot の playback 全除去・R2.3 表示従属）。
+        // PatternState クリアは apply の責務、playback クリアはループ統括器の責務。
+        loop_runtime.on_surface_changed(&cue.actor, Slot::Shell);
     }
 
     ControlFlow::Continue(())
@@ -558,7 +606,13 @@ mod tests {
         let records = out.records();
 
         // アクター起動→単純な Shell 系 Emote 1 件を emit→Close→join で終了同期。
-        let (mut sink, handle) = spawn_seriko(resolver, binds.clone(), BindResolver::empty(), out);
+        let (mut sink, handle) = spawn_seriko(
+            resolver,
+            binds.clone(),
+            BindResolver::empty(),
+            SerikoLoopConfig::disabled(),
+            out,
+        );
         CueSink::emit(&mut sink, emote_cue(0.0, "0", "2100"));
         sink.close().expect("Close を送れること");
         handle.join().expect("Close で正常終了する");
@@ -572,6 +626,7 @@ mod tests {
                 scope: ActorKey::from("0"),
                 surface_id: 2100,
                 binds: BindSet::from_ids([1100, 1207]),
+                pattern: PatternState::default(),
             },
             "解決→状態確定→単一発行点発行の一本経路の結果が期待どおり"
         );
@@ -592,7 +647,7 @@ mod tests {
 
     use crate::resolve::SurfaceResolver;
     use crate::state::ScopeStates;
-    use areka_emo_compose::BindSet;
+    use areka_emo_compose::{BindSet, PatternState};
     use std::collections::{BTreeMap, BTreeSet};
 
     /// 同期 `handle_message` 用の小さな解決層（"通常"→2100 の 1 件のみ）。
@@ -605,6 +660,13 @@ mod tests {
     /// 非空の静的 bind 集合を持つ空スコープ状態。
     fn fresh_states() -> ScopeStates {
         ScopeStates::new(BindSet::from_ids([1100, 1207]))
+    }
+
+    /// 不活性なループ統括器（空表＋ダミー乱数）。cue/bind/balloon の同期 `handle_message` 檻で
+    /// tick 経路を触らない既存挙動を保つための足場（`disabled()` は on_tick 常時空・on_surface_changed
+    /// は空 playback への no-op ゆえ、既存の発行/ログ挙動と byte 同値）。
+    fn inert_runtime() -> LoopRuntime {
+        LoopRuntime::new(SerikoLoopConfig::disabled())
     }
 
     /// EntityRef 系の TalkCue（Shell 分類だが M-boot 未対応の防御枝・6.2）を組む。
@@ -659,6 +721,7 @@ mod tests {
             tiny_resolver(),
             BindSet::from_ids([1100, 1207]),
             BindResolver::empty(),
+            SerikoLoopConfig::disabled(),
             out,
         );
 
@@ -682,6 +745,7 @@ mod tests {
             tiny_resolver(),
             BindSet::from_ids([1100, 1207]),
             BindResolver::empty(),
+            SerikoLoopConfig::disabled(),
             out,
         );
 
@@ -708,6 +772,7 @@ mod tests {
         let resolver = tiny_resolver();
         let mut states = fresh_states();
         let mut out = MockSurfaceOutput::new();
+        let mut loop_runtime = inert_runtime();
         let records = out.records();
 
         let flow = capture_logs_flow(|| {
@@ -715,6 +780,7 @@ mod tests {
                 &resolver,
                 &BindResolver::empty(),
                 &mut states,
+                &mut loop_runtime,
                 &mut out,
                 SerikoMsg::Cue(entityref_cue(0.0, "0", 42)),
             )
@@ -744,7 +810,7 @@ mod tests {
         let out2 = MockSurfaceOutput::new();
         let records2 = out2.records();
         let (mut sink, handle) =
-            spawn_seriko(tiny_resolver(), BindSet::from_ids([1100, 1207]), BindResolver::empty(), out2);
+            spawn_seriko(tiny_resolver(), BindSet::from_ids([1100, 1207]), BindResolver::empty(), SerikoLoopConfig::disabled(), out2);
         CueSink::emit(&mut sink, entityref_cue(0.0, "0", 7)); // 防御枝＝skip
         CueSink::emit(&mut sink, emote_cue(1.0, "0", "2100")); // 有効
         sink.close().expect("Close を送れること");
@@ -757,6 +823,7 @@ mod tests {
                 scope: ActorKey::from("0"),
                 surface_id: 2100,
                 binds: BindSet::from_ids([1100, 1207]),
+                pattern: PatternState::default(),
             }],
             "悪 cue は skip され、後続有効 cue のみ発行＝ループ継続の observable（6.2）"
         );
@@ -774,6 +841,7 @@ mod tests {
             let resolver = tiny_resolver();
             let mut states = fresh_states();
             let mut out = MockSurfaceOutput::new();
+            let mut loop_runtime = inert_runtime();
             let records = out.records();
 
             let flow = capture_logs_flow(|| {
@@ -781,6 +849,7 @@ mod tests {
                     &resolver,
                     &BindResolver::empty(),
                     &mut states,
+                    &mut loop_runtime,
                     &mut out,
                     SerikoMsg::Cue(emote_cue(0.0, "0", bad)),
                 )
@@ -823,6 +892,7 @@ mod tests {
             tiny_resolver(),
             BindSet::from_ids([1100, 1207]),
             BindResolver::empty(),
+            SerikoLoopConfig::disabled(),
             out,
         );
 
@@ -865,12 +935,14 @@ mod tests {
         let resolver = tiny_resolver();
         let mut states = fresh_states();
         let mut out = MockSurfaceOutput::new();
+        let mut loop_runtime = inert_runtime();
         let records = out.records();
 
         let flow = handle_message(
             &resolver,
             &BindResolver::empty(),
             &mut states,
+            &mut loop_runtime,
             &mut out,
             SerikoMsg::Cue(balloon_cue(0.0, "0", "2")),
         );
@@ -882,6 +954,7 @@ mod tests {
             &[DisplayCommand::ShowBalloon {
                 scope: ActorKey::from("0"),
                 surface_id: 2,
+                pattern: PatternState::default(),
             }],
             "数値 key は ShowBalloon をちょうど 1 件発行する（単一発行点共用・4.1）"
         );
@@ -893,12 +966,14 @@ mod tests {
         let resolver = tiny_resolver();
         let mut states = fresh_states();
         let mut out = MockSurfaceOutput::new();
+        let mut loop_runtime = inert_runtime();
         let records = out.records();
 
         let flow = handle_message(
             &resolver,
             &BindResolver::empty(),
             &mut states,
+            &mut loop_runtime,
             &mut out,
             SerikoMsg::Cue(balloon_cue(0.0, "0", "-1")),
         );
@@ -924,6 +999,7 @@ mod tests {
         let resolver = tiny_resolver();
         let mut states = fresh_states();
         let mut out = MockSurfaceOutput::new();
+        let mut loop_runtime = inert_runtime();
         let records = out.records();
 
         let flow = capture_logs_flow(|| {
@@ -931,6 +1007,7 @@ mod tests {
                 &resolver,
                 &BindResolver::empty(),
                 &mut states,
+                &mut loop_runtime,
                 &mut out,
                 SerikoMsg::Cue(balloon_cue(0.0, "0", "バルーン１")),
             )
@@ -980,6 +1057,7 @@ mod tests {
             let resolver = tiny_resolver();
             let mut states = fresh_states();
             let mut out = MockSurfaceOutput::new();
+            let mut loop_runtime = inert_runtime();
             let records = out.records();
 
             let flow = capture_logs_flow(|| {
@@ -987,6 +1065,7 @@ mod tests {
                     &resolver,
                     &BindResolver::empty(),
                     &mut states,
+                    &mut loop_runtime,
                     &mut out,
                     SerikoMsg::Cue(balloon_cue(0.0, "0", bad)),
                 )
@@ -1035,12 +1114,14 @@ mod tests {
         let resolver = tiny_resolver();
         let mut states = fresh_states();
         let mut out = MockSurfaceOutput::new();
+        let mut loop_runtime = inert_runtime();
         let records = out.records();
 
         let f1 = handle_message(
             &resolver,
             &BindResolver::empty(),
             &mut states,
+            &mut loop_runtime,
             &mut out,
             SerikoMsg::Cue(balloon_cue(0.0, "0", "2")),
         );
@@ -1048,6 +1129,7 @@ mod tests {
             &resolver,
             &BindResolver::empty(),
             &mut states,
+            &mut loop_runtime,
             &mut out,
             SerikoMsg::Cue(balloon_cue(1.0, "0", "2")),
         );
@@ -1060,6 +1142,7 @@ mod tests {
             &[DisplayCommand::ShowBalloon {
                 scope: ActorKey::from("0"),
                 surface_id: 2,
+                pattern: PatternState::default(),
             }],
             "同一面の再指定は再発行しない（冪等・4.3）"
         );
@@ -1076,6 +1159,7 @@ mod tests {
         let resolver = tiny_resolver();
         let mut states = fresh_states();
         let mut out = MockSurfaceOutput::new();
+        let mut loop_runtime = inert_runtime();
         let records = out.records();
 
         // シェル面（Emote）→バルーン面（BalloonSurface）を同一 scope へ順に流す。
@@ -1083,6 +1167,7 @@ mod tests {
             &resolver,
             &BindResolver::empty(),
             &mut states,
+            &mut loop_runtime,
             &mut out,
             SerikoMsg::Cue(emote_cue(0.0, "0", "2100")),
         );
@@ -1090,6 +1175,7 @@ mod tests {
             &resolver,
             &BindResolver::empty(),
             &mut states,
+            &mut loop_runtime,
             &mut out,
             SerikoMsg::Cue(balloon_cue(1.0, "0", "2")),
         );
@@ -1104,10 +1190,12 @@ mod tests {
                     scope: ActorKey::from("0"),
                     surface_id: 2100,
                     binds: BindSet::from_ids([1100, 1207]),
+                    pattern: PatternState::default(),
                 },
                 DisplayCommand::ShowBalloon {
                     scope: ActorKey::from("0"),
                     surface_id: 2,
+                    pattern: PatternState::default(),
                 },
             ],
             "シェル面（Show+binds）とバルーン面（ShowBalloon）が独立に記録される（4.6）"
@@ -1136,6 +1224,7 @@ mod tests {
         let resolver = tiny_resolver();
         let mut states = fresh_states();
         let mut out = MockSurfaceOutput::new();
+        let mut loop_runtime = inert_runtime();
         let records = out.records();
 
         let flow = capture_logs_flow(|| {
@@ -1143,6 +1232,7 @@ mod tests {
                 &resolver,
                 &BindResolver::empty(),
                 &mut states,
+                &mut loop_runtime,
                 &mut out,
                 SerikoMsg::Cue(text_cue(0.0, "0", "アヒルやアヒル")),
             )
@@ -1188,6 +1278,7 @@ mod tests {
         let resolver = tiny_resolver();
         let mut states = fresh_states();
         let mut out = MockSurfaceOutput::new();
+        let mut loop_runtime = inert_runtime();
         let records = out.records();
 
         let flow = capture_logs_flow(|| {
@@ -1195,6 +1286,7 @@ mod tests {
                 &resolver,
                 &BindResolver::empty(),
                 &mut states,
+                &mut loop_runtime,
                 &mut out,
                 SerikoMsg::Cue(wait_cue(0.0, "0", 0.5)),
             )
@@ -1241,6 +1333,7 @@ mod tests {
             tiny_resolver(),
             BindSet::from_ids([1100, 1207]),
             BindResolver::empty(),
+            SerikoLoopConfig::disabled(),
             out,
         );
 
@@ -1257,6 +1350,7 @@ mod tests {
                 scope: ActorKey::from("0"),
                 surface_id: 2100,
                 binds: BindSet::from_ids([1100, 1207]),
+                pattern: PatternState::default(),
             }],
             "担当外（非 Shell/Wait）は skip され、担当 Emote のみ発行＝状態/タイミング不変（honor 否定的 no-op・2.2/2.3）"
         );
@@ -1345,6 +1439,7 @@ mod tests {
         states.apply(&scope, SurfaceTarget::Show(2100));
 
         let mut out = MockSurfaceOutput::new();
+        let mut loop_runtime = inert_runtime();
         let records = out.records();
 
         let flow = capture_logs_flow(|| {
@@ -1352,6 +1447,7 @@ mod tests {
                 &resolver,
                 &bind_resolver,
                 &mut states,
+                &mut loop_runtime,
                 &mut out,
                 SerikoMsg::Cue(bind_carrier_cue("0", &["腕", "伸び", "1"])),
             )
@@ -1366,6 +1462,7 @@ mod tests {
                 scope: scope.clone(),
                 surface_id: 2100,
                 binds: BindSet::from_ids([1100, 1207, 1302]),
+                pattern: PatternState::default(),
             }],
             "表示中 scope の解決可能 Apply は現 surface を新集合で再発行（R3.5・D5）"
         );
@@ -1394,6 +1491,7 @@ mod tests {
         states.apply(&scope, SurfaceTarget::Show(2100));
 
         let mut out = MockSurfaceOutput::new();
+        let mut loop_runtime = inert_runtime();
         let records = out.records();
 
         // 1 度目: 目=笑（1301）を着衣 → {1100,1207,1301}。
@@ -1401,6 +1499,7 @@ mod tests {
             &resolver,
             &bind_resolver,
             &mut states,
+            &mut loop_runtime,
             &mut out,
             SerikoMsg::Cue(bind_carrier_cue("0", &["目", "笑", "1"])),
         );
@@ -1409,6 +1508,7 @@ mod tests {
             &resolver,
             &bind_resolver,
             &mut states,
+            &mut loop_runtime,
             &mut out,
             SerikoMsg::Cue(bind_carrier_cue("0", &["目", "閉", "1"])),
         );
@@ -1421,11 +1521,13 @@ mod tests {
                     scope: scope.clone(),
                     surface_id: 2100,
                     binds: BindSet::from_ids([1100, 1207, 1301]),
+                    pattern: PatternState::default(),
                 },
                 DisplayCommand::Show {
                     scope: scope.clone(),
                     surface_id: 2100,
                     binds: BindSet::from_ids([1100, 1207, 1304]),
+                    pattern: PatternState::default(),
                 },
             ],
             "mustselect カテゴリの 2 度目着衣は旧パーツ(1301) を自動 off し新パーツ(1304) のみ有効（R4.5・D11）"
@@ -1454,12 +1556,14 @@ mod tests {
         states.apply(&scope, SurfaceTarget::Show(2100));
 
         let mut out = MockSurfaceOutput::new();
+        let mut loop_runtime = inert_runtime();
         let records = out.records();
 
         handle_message(
             &resolver,
             &bind_resolver,
             &mut states,
+            &mut loop_runtime,
             &mut out,
             SerikoMsg::Cue(bind_carrier_cue("0", &["腕", "伸び", "1"])),
         );
@@ -1467,6 +1571,7 @@ mod tests {
             &resolver,
             &bind_resolver,
             &mut states,
+            &mut loop_runtime,
             &mut out,
             SerikoMsg::Cue(bind_carrier_cue("0", &["肩", "上げ", "1"])),
         );
@@ -1496,12 +1601,14 @@ mod tests {
         states.apply(&scope, SurfaceTarget::Hide);
 
         let mut out = MockSurfaceOutput::new();
+        let mut loop_runtime = inert_runtime();
         let records = out.records();
 
         let flow = handle_message(
             &resolver,
             &bind_resolver,
             &mut states,
+            &mut loop_runtime,
             &mut out,
             SerikoMsg::Cue(bind_carrier_cue("0", &["腕", "伸び", "1"])),
         );
@@ -1521,6 +1628,7 @@ mod tests {
         let mut states = fresh_states();
         states.apply(&ActorKey::from("0"), SurfaceTarget::Show(2100));
         let mut out = MockSurfaceOutput::new();
+        let mut loop_runtime = inert_runtime();
         let records = out.records();
 
         let flow = capture_logs_flow(|| {
@@ -1528,6 +1636,7 @@ mod tests {
                 &resolver,
                 &bind_resolver,
                 &mut states,
+                &mut loop_runtime,
                 &mut out,
                 SerikoMsg::Cue(bind_carrier_cue("0", &["腕", "伸び"])),
             )
@@ -1560,6 +1669,7 @@ mod tests {
         let mut states = fresh_states();
         states.apply(&ActorKey::from("0"), SurfaceTarget::Show(2100));
         let mut out = MockSurfaceOutput::new();
+        let mut loop_runtime = inert_runtime();
         let records = out.records();
 
         let flow = capture_logs_flow(|| {
@@ -1567,6 +1677,7 @@ mod tests {
                 &resolver,
                 &bind_resolver,
                 &mut states,
+                &mut loop_runtime,
                 &mut out,
                 SerikoMsg::Cue(bind_carrier_cue("0", &["腕"])),
             )
@@ -1595,6 +1706,7 @@ mod tests {
             let mut states = fresh_states();
             states.apply(&ActorKey::from("0"), SurfaceTarget::Show(2100));
             let mut out = MockSurfaceOutput::new();
+            let mut loop_runtime = inert_runtime();
             let records = out.records();
 
             let flow = capture_logs_flow(|| {
@@ -1602,6 +1714,7 @@ mod tests {
                     &resolver,
                     &bind_resolver,
                     &mut states,
+                    &mut loop_runtime,
                     &mut out,
                     SerikoMsg::Cue(bind_carrier_cue("0", &tokens)),
                 )
@@ -1634,6 +1747,7 @@ mod tests {
         let bind_resolver = arm_bind_resolver();
         let mut states = fresh_states();
         let mut out = MockSurfaceOutput::new();
+        let mut loop_runtime = inert_runtime();
         let records = out.records();
 
         let flow = capture_logs_flow(|| {
@@ -1641,6 +1755,7 @@ mod tests {
                 &resolver,
                 &bind_resolver,
                 &mut states,
+                &mut loop_runtime,
                 &mut out,
                 SerikoMsg::Cue(bind_carrier_cue("2", &["腕", "伸び", "1"])),
             )
@@ -1667,6 +1782,7 @@ mod tests {
         let mut states = fresh_states();
         states.apply(&ActorKey::from("0"), SurfaceTarget::Show(2100));
         let mut out = MockSurfaceOutput::new();
+        let mut loop_runtime = inert_runtime();
         let records = out.records();
 
         let flow = capture_logs_flow(|| {
@@ -1674,6 +1790,7 @@ mod tests {
                 &resolver,
                 &bind_resolver,
                 &mut states,
+                &mut loop_runtime,
                 &mut out,
                 SerikoMsg::Cue(bind_carrier_cue("0", &["腕", "伸び", "1"])),
             )
@@ -1700,6 +1817,7 @@ mod tests {
         let bind_resolver = arm_bind_resolver();
         let mut states = fresh_states();
         let mut out = MockSurfaceOutput::new();
+        let mut loop_runtime = inert_runtime();
         let records = out.records();
 
         let flow = capture_logs_flow(|| {
@@ -1707,6 +1825,7 @@ mod tests {
                 &resolver,
                 &bind_resolver,
                 &mut states,
+                &mut loop_runtime,
                 &mut out,
                 SerikoMsg::Cue(named_carrier_cue("0", "move", &["-353", "", "", "0"])),
             )
@@ -1746,6 +1865,7 @@ mod tests {
             let bind_resolver = arm_bind_resolver();
             let mut states = fresh_states();
             let mut out = MockSurfaceOutput::new();
+            let mut loop_runtime = inert_runtime();
             let records = out.records();
 
             let flow = capture_logs_flow(|| {
@@ -1753,6 +1873,7 @@ mod tests {
                     &resolver,
                     &bind_resolver,
                     &mut states,
+                    &mut loop_runtime,
                     &mut out,
                     SerikoMsg::Cue(noncanonical_custom_cue("0", "bind")),
                 )
@@ -1776,6 +1897,7 @@ mod tests {
             let bind_resolver = arm_bind_resolver();
             let mut states = fresh_states();
             let mut out = MockSurfaceOutput::new();
+            let mut loop_runtime = inert_runtime();
             let records = out.records();
 
             let flow = capture_logs_flow(|| {
@@ -1783,6 +1905,7 @@ mod tests {
                     &resolver,
                     &bind_resolver,
                     &mut states,
+                    &mut loop_runtime,
                     &mut out,
                     SerikoMsg::Cue(noncanonical_custom_cue("0", "noexist")),
                 )
@@ -1856,5 +1979,353 @@ mod tests {
         tracing::subscriber::with_default(subscriber, f);
         let guard = logs.lock().unwrap();
         guard.join("\n")
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Task 6.1: Tick 経路（SerikoMsg::Tick・send_tick・handle_message Tick 腕・on_surface_changed
+    // 連動）の網羅檻（R1.1/6.1/6.3/7.1/7.5/8.3）。
+    //
+    // 檻の要点:
+    // - (A) 表示中 slot が 1 つもない Tick は完全 no-op（無発行）——on_tick が空を返す 2.1 表示中
+    //       ゲートの自然帰結。
+    // - (B) live な loop_config（実表＋注入 rng）＋表示中 slot で境界跨ぎ Tick が pattern を載せた
+    //       Show を**既存 emit_display 単一発行点**から発行する（handle_message→on_tick→emit_display
+    //       の end-to-end 配線・5.3 の直接 on_tick 檻とは別の配線証明）。
+    // - (C) アクター停止後の send_tick は debug!（shutdown 期待事象）で panic しない（7.5/6.3）。
+    // - (D) Emote の Changed で on_surface_changed が呼ばれ、切替後の Tick が旧アニメの残再生を
+    //       復活させない（playback リセット・R2.3 表示従属）。
+    //
+    // すべて Tick 直投函＋注入 rng で決定論（sleep 不使用・7.1）。表構築は looper.rs 檻と同じ
+    // from_world 実構築パスを通す。
+    // ─────────────────────────────────────────────────────────────────────
+    mod tick_loop_tests {
+        use super::*;
+        use areka_emo_compose::EmoWorld;
+        use areka_parsers::shell::{
+            Animation, AppendTarget, DefRef, DrawMethod, Interval, Pattern, Shell, Surface,
+        };
+        use crate::table::AnimationTable;
+        use crate::timeline::LoopRng;
+
+        /// コマ 1 本（overlay 固定・x/y=0）。
+        fn pat(index: u32, surface_id: i64, wait: u32) -> Pattern {
+            Pattern {
+                index,
+                method: DrawMethod::new("overlay".to_string()),
+                surface_id,
+                wait,
+                x: 0,
+                y: 0,
+            }
+        }
+
+        fn surface_with(id: u32, animations: Vec<Animation>) -> Surface {
+            Surface {
+                id,
+                targets: vec![AppendTarget::Single(id)],
+                elements: Vec::new(),
+                collisions: Vec::new(),
+                animations,
+            }
+        }
+
+        fn shell_table_of(surfaces: Vec<Surface>) -> AnimationTable {
+            let definitions = (0..surfaces.len()).map(DefRef::Surface).collect();
+            let shell = Shell {
+                surfaces,
+                appends: Vec::new(),
+                aliases: Vec::new(),
+                animation_sort: None,
+                collision_sort: None,
+                definitions,
+            };
+            AnimationTable::from_world(&EmoWorld::build(&shell))
+        }
+
+        /// 単一 anim（id/interval/frames）を持つ surface から shell 表を build する。
+        fn table_single(
+            surface_id: u32,
+            anim_id: u32,
+            interval: Interval,
+            frames: &[(i64, u32)],
+        ) -> AnimationTable {
+            let patterns = frames
+                .iter()
+                .enumerate()
+                .map(|(i, (sid, wait))| pat(i as u32, *sid, *wait))
+                .collect();
+            shell_table_of(vec![surface_with(
+                surface_id,
+                vec![Animation {
+                    id: anim_id,
+                    interval,
+                    patterns,
+                }],
+            )])
+        }
+
+        /// 実表＋注入 rng の live config（balloon 表は空）。
+        fn live_cfg(shell_table: AnimationTable, rng: LoopRng) -> SerikoLoopConfig {
+            SerikoLoopConfig {
+                shell_table,
+                balloon_table: AnimationTable::empty(),
+                rng,
+            }
+        }
+
+        /// 常に発火する rng（`should_fire` は `rng(k)==0` で発火）。
+        fn always_fire() -> LoopRng {
+            Box::new(|_bound: u32| 0)
+        }
+
+        /// 1 度だけ発火し以後発火しない rng（境界 1 回だけ抽選を通す）。
+        fn fire_once() -> LoopRng {
+            let mut calls: u32 = 0;
+            Box::new(move |_bound: u32| {
+                calls += 1;
+                if calls == 1 {
+                    0
+                } else {
+                    1
+                }
+            })
+        }
+
+        /// 表示中シェル面 surface `sid`・静的 binds{1100,1207} の scope "0" 状態を組む。
+        fn shown_shell_states(sid: u32) -> (ScopeStates, ActorKey) {
+            let mut states = ScopeStates::new(BindSet::from_ids([1100, 1207]));
+            let scope = ActorKey::from("0");
+            states.apply(&scope, SurfaceTarget::Show(sid));
+            (states, scope)
+        }
+
+        /// (A・R6.1/2.1) 表示中 slot が 1 つもない Tick は完全 no-op（無発行）。
+        ///
+        /// live な表（常時発火 rng）でも Show 前は表示中 slot ゼロ＝on_tick は評価対象なし＝空を返す。
+        /// handle_message Tick 腕は空列を回すだけで emit_display を一度も呼ばない（単一発行点の
+        /// 発火ゼロ＝MockSurfaceOutput 記録ゼロ）。
+        #[test]
+        fn tick_with_no_shown_slot_is_complete_no_op() {
+            let resolver = tiny_resolver();
+            // 表は live（surface 10 に常時発火アニメ）だが、Show していない＝表示中 slot 皆無。
+            let table = table_single(10, 0, Interval::Random { k: 4 }, &[(2106, 0)]);
+            let mut loop_runtime = LoopRuntime::new(live_cfg(table, always_fire()));
+            let mut states = ScopeStates::new(BindSet::from_ids([1100, 1207])); // Show なし
+            let mut out = MockSurfaceOutput::new();
+            let records = out.records();
+
+            // 起動 tick と境界跨ぎ tick の双方が完全 no-op（表示中 slot が無いため）。
+            for now in [0_u64, 1000, 5000] {
+                let flow = handle_message(
+                    &resolver,
+                    &BindResolver::empty(),
+                    &mut states,
+                    &mut loop_runtime,
+                    &mut out,
+                    SerikoMsg::Tick { now_ms: now },
+                );
+                assert_eq!(flow, ControlFlow::Continue(()), "Tick は常に処理継続");
+            }
+            assert!(
+                records.lock().expect("records mutex poisoned").is_empty(),
+                "表示中 slot が 1 つもない Tick は完全 no-op（emit_display 単一発行点の発火ゼロ・R6.1/2.1）"
+            );
+        }
+
+        /// (B・R1.1/6.3/7.1) 表示中 slot＋live config で境界跨ぎ Tick が pattern を載せた Show を
+        /// 既存 emit_display 単一発行点から発行する（handle_message→on_tick→emit_display の end-to-end）。
+        ///
+        /// 5.3 の直接 on_tick 檻と異なり、**Tick メッセージが handle_message を貫通**して発行に至る
+        /// 配線を固定する。注入 rng（always_fire）＋注入 Tick 列で決定論（sleep 不使用）。
+        #[test]
+        fn tick_boundary_cross_emits_show_carrying_pattern() {
+            let resolver = tiny_resolver();
+            let table = table_single(10, 0, Interval::Random { k: 4 }, &[(2106, 0)]);
+            let mut loop_runtime = LoopRuntime::new(live_cfg(table, always_fire()));
+            let (mut states, scope) = shown_shell_states(10);
+            let mut out = MockSurfaceOutput::new();
+            let records = out.records();
+
+            // 起動 tick（遅延初期化・非跨ぎ）→ 無発行。
+            let _ = handle_message(
+                &resolver,
+                &BindResolver::empty(),
+                &mut states,
+                &mut loop_runtime,
+                &mut out,
+                SerikoMsg::Tick { now_ms: 0 },
+            );
+            assert!(
+                records.lock().expect("records mutex poisoned").is_empty(),
+                "起動 tick は境界を跨がず無発行"
+            );
+
+            // 境界跨ぎ tick（1000）→ 抽選発火＋先頭コマで Show を発行。
+            let flow = handle_message(
+                &resolver,
+                &BindResolver::empty(),
+                &mut states,
+                &mut loop_runtime,
+                &mut out,
+                SerikoMsg::Tick { now_ms: 1000 },
+            );
+            assert_eq!(flow, ControlFlow::Continue(()), "Tick は処理継続");
+
+            let recorded = records.lock().expect("records mutex poisoned");
+            assert_eq!(recorded.len(), 1, "境界跨ぎ Tick で Show ちょうど 1 件");
+            match &recorded[0] {
+                DisplayCommand::Show {
+                    scope: s,
+                    surface_id,
+                    pattern,
+                    ..
+                } => {
+                    assert_eq!(s, &scope, "表示中 scope の Show");
+                    assert_eq!(*surface_id, 10, "表示中 surface は 10");
+                    let f = pattern.get(0).expect("anim0 の現在コマが pattern に載る");
+                    assert_eq!(
+                        f.surface_id, 2106,
+                        "先頭コマ 2106 が Tick 経由で単一発行点から発行される（配線証明・R6.3）"
+                    );
+                }
+                other => panic!("Show を期待（Tick→on_tick→emit_display の end-to-end）: {other:?}"),
+            }
+        }
+
+        /// (C・R7.5/6.3) アクター停止後の send_tick は debug! を残し panic しない（shutdown 期待事象）。
+        ///
+        /// spawn_seriko→close→join でアクター完全停止（inbox 受信端消失）→その後テストスレッドで
+        /// send_tick を capture_logs 直下で呼ぶ。send 失敗が debug!（error! でない）として観測でき、
+        /// send_tick が panic せず戻る（本行到達＝処理系が異常終了しない）ことを固定する。
+        #[test]
+        fn send_tick_after_actor_stopped_logs_debug_no_panic() {
+            let out = MockSurfaceOutput::new();
+            let (sink, handle) = spawn_seriko(
+                tiny_resolver(),
+                BindSet::from_ids([1100, 1207]),
+                BindResolver::empty(),
+                SerikoLoopConfig::disabled(),
+                out,
+            );
+            sink.close().expect("Close を送れること");
+            handle.join().expect("Close で正常終了する");
+
+            let logs = capture_logs(|| {
+                sink.send_tick(1234); // 停止後の tick 送出。
+            });
+            assert!(
+                logs.contains("level=DEBUG"),
+                "停止後の send_tick が送出失敗を debug! で残すこと（shutdown 期待事象・R7.5）: {logs}"
+            );
+            assert_eq!(
+                logs.matches("level=ERROR").count(),
+                0,
+                "停止後の send_tick は error! を出さない（PresentBridge 先例・shutdown 期待事象）: {logs}"
+            );
+            assert!(
+                logs.contains("target=areka_seriko"),
+                "本クレート target で発火すること: {logs}"
+            );
+            // panic せず本行へ到達したこと自体が「処理系が異常終了しない」証跡（R6.3）。
+        }
+
+        /// (D・R2.3・8.3) Emote の Changed で on_surface_changed が呼ばれ、面切替後の Tick が旧アニメの
+        /// 残再生を復活させない（playback リセット）。
+        ///
+        /// 同一 anim id 0 を surface10（コマ 500/501）と surface20（コマ 700/701）が持つ表で、
+        /// surface10 で再生開始（started_at=1000）→ Emote で surface20 へ切替 → 境界を跨がない後続 Tick。
+        /// on_surface_changed が playback を除去するため、後続 Tick は「継続再生」を surface20 上へ
+        /// 復活させず無発行。**リセットが無ければ** elapsed 継続で surface20 のコマ 700 が発行されてしまう
+        /// （本テストはその差分を檻に入れる）。
+        #[test]
+        fn emote_surface_change_resets_loop_playback() {
+            let resolver = tiny_resolver(); // 数値 key は直接解決（"20"→Show(20)）。
+            let table = shell_table_of(vec![
+                surface_with(
+                    10,
+                    vec![Animation {
+                        id: 0,
+                        interval: Interval::Random { k: 4 },
+                        patterns: vec![pat(0, 500, 0), pat(1, 501, 100)],
+                    }],
+                ),
+                surface_with(
+                    20,
+                    vec![Animation {
+                        id: 0,
+                        interval: Interval::Random { k: 4 },
+                        patterns: vec![pat(0, 700, 0), pat(1, 701, 100)],
+                    }],
+                ),
+            ]);
+            // 境界 1 回だけ発火（切替後の非跨ぎ Tick では再抽選しない）。
+            let mut loop_runtime = LoopRuntime::new(live_cfg(table, fire_once()));
+            let (mut states, _scope) = shown_shell_states(10);
+            let mut out = MockSurfaceOutput::new();
+            let records = out.records();
+
+            // 起動 tick → 境界跨ぎ tick（1000）で surface10 の anim0 が発火・elapsed0→コマ 500。
+            let _ = handle_message(
+                &resolver,
+                &BindResolver::empty(),
+                &mut states,
+                &mut loop_runtime,
+                &mut out,
+                SerikoMsg::Tick { now_ms: 0 },
+            );
+            let _ = handle_message(
+                &resolver,
+                &BindResolver::empty(),
+                &mut states,
+                &mut loop_runtime,
+                &mut out,
+                SerikoMsg::Tick { now_ms: 1000 },
+            );
+
+            // Emote で surface20 へ切替（apply Changed → emit Show{20,空} → on_surface_changed で playback 除去）。
+            let _ = handle_message(
+                &resolver,
+                &BindResolver::empty(),
+                &mut states,
+                &mut loop_runtime,
+                &mut out,
+                SerikoMsg::Cue(emote_cue(1.0, "0", "20")),
+            );
+
+            // 境界を跨がない後続 tick（1050・次境界は 2000）。playback がリセット済みなら無発行。
+            let _ = handle_message(
+                &resolver,
+                &BindResolver::empty(),
+                &mut states,
+                &mut loop_runtime,
+                &mut out,
+                SerikoMsg::Tick { now_ms: 1050 },
+            );
+
+            let recorded = records.lock().expect("records mutex poisoned");
+            // 発行列: [Show{10,コマ500}, Show{20,空}]。切替後 Tick は無発行（旧再生を復活させない）。
+            assert_eq!(
+                recorded.len(),
+                2,
+                "切替後の非跨ぎ Tick は旧アニメの残再生を復活させない（playback リセット・R2.3）: {recorded:?}"
+            );
+            match &recorded[0] {
+                DisplayCommand::Show { surface_id, pattern, .. } => {
+                    assert_eq!(*surface_id, 10, "1 件目は surface10 の発火");
+                    assert_eq!(pattern.get(0).expect("コマ").surface_id, 500, "surface10 の先頭コマ 500");
+                }
+                other => panic!("Show を期待: {other:?}"),
+            }
+            match &recorded[1] {
+                DisplayCommand::Show { surface_id, pattern, .. } => {
+                    assert_eq!(*surface_id, 20, "2 件目は surface20 への切替");
+                    assert!(
+                        pattern.get(0).is_none(),
+                        "面切替の Show は空 pattern（旧コマも新残再生も載らない・R2.3/8.3）"
+                    );
+                }
+                other => panic!("Show を期待: {other:?}"),
+            }
+        }
     }
 }

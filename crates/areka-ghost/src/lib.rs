@@ -21,7 +21,7 @@
 //! 公開 facade（design.md「File Structure Plan」の `src/lib.rs` 記載どおり）:
 //! `boot`／`GhostRuntime`／`GhostBootOptions`／`ShioriWiring`／`TickerMode`／
 //! `GhostBootError`／`GhostParts`／`GhostHandles`／`GhostShutdownError`／
-//! `SystemVarSource`／`default_system_vars` を re-export する。
+//! `SystemVarSource`／`SystemVarWiring` を re-export する。
 
 pub mod config;
 pub mod dispatcher;
@@ -30,11 +30,18 @@ pub mod runtime;
 pub mod shiori_inproc;
 pub mod shiori_wiring;
 pub mod sink;
+pub mod sylphya_wiring;
 pub mod ticker;
+
+// Task 10.1: 固定ログイベント檻の共有基盤（interest-keeper で並列負荷下の Interest::never 焼き付きを
+// 根絶・決定論檻・R9.3／R8.1）。`crate::sylphya_wiring` の provider debug 固定ログテストが
+// `crate::test_log_capture::capture` から利用する。
+#[cfg(test)]
+mod test_log_capture;
 
 pub use runtime::{
     GhostBootError, GhostBootOptions, GhostHandles, GhostParts, GhostRuntime, GhostShutdownError,
-    ShioriWiring, SystemVarSource, TickerMode, boot, default_system_vars,
+    ShioriWiring, SystemVarSource, SystemVarWiring, TickerMode, boot,
 };
 // task 2.3: InProc 結線の connect closure 構成関数（D-3・テストの Recorder 合成と M2 の直接利用に供する）。
 pub use shiori_inproc::inproc_connect;

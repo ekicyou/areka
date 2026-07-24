@@ -47,6 +47,12 @@ pub enum PresentCommand {
         surface_id: u32,
         /// 有効 bind 集合（解決済みスナップショット・bind 状態所有は seriko）。
         binds: areka_emo_compose::BindSet,
+        /// pattern 進行状態（現在コマ集合・合成入力の第一級要素・R5.1/5.2）。
+        ///
+        /// `binds` と同格の合成入力キー要素であり、seriko の pattern タイムライン評価が生産した
+        /// スナップショットを値で運ぶ（envelope 規約準拠の `Send + 'static` 所有）。空
+        /// （[`areka_emo_compose::PatternState::default`]）は pattern 寄与なし＝拡張前と観測等価（R5.4）。
+        pattern: areka_emo_compose::PatternState,
         /// 結果返信端（任意・`Some` のとき高々 1 回応答する）。
         reply: Option<areka_actor::ReplySender<PresentOutcome>>,
     },
@@ -96,7 +102,7 @@ pub enum PresentError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use areka_emo_compose::{BindSet, ComposeError};
+    use areka_emo_compose::{BindSet, ComposeError, PatternState};
 
     /// 型 `T` が `Send + 'static` であることをコンパイル時に要求するヘルパ。
     fn _assert_send_static<T: Send + 'static>() {}
@@ -124,6 +130,7 @@ mod tests {
             target,
             surface_id: 1000,
             binds: BindSet::from_ids([0u32, 5, 5, 3]),
+            pattern: PatternState::default(),
             reply: None,
         };
         let hide = PresentCommand::Hide {

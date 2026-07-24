@@ -93,7 +93,7 @@ use wintf::*;
 use areka_emo_atlas::{
     AlphaParams, AtlasTable, PackConfig, SetId, SurfaceSet, UseSelfAlpha, WicDecoderArm, bake,
 };
-use areka_emo_compose::{BindSet, EmoWorld};
+use areka_emo_compose::{BindSet, EmoWorld, PatternState};
 use areka_emo_present::{EmoPresenter, PresentCommand, TargetId, build_balloon_target};
 
 /// 窓配置機構本体（`crates/areka/src/placement/`）を example の私有モジュールとして include する。
@@ -425,6 +425,7 @@ fn boot_present_system(world: &mut World) {
                         target: t.target,
                         surface_id: t.surface_id,
                         binds: BindSet::default(),
+                        pattern: PatternState::default(),
                         reply: None,
                     },
                 );

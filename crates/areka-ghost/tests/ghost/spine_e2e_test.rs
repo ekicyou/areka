@@ -612,7 +612,7 @@ mod s1_boot_success {
     use super::*;
 
     use areka_ghost::dispatcher::DispatcherMsg;
-    use areka_ghost::{GhostBootOptions, ShioriWiring, TickerMode, boot, default_system_vars};
+    use areka_ghost::{GhostBootOptions, ShioriWiring, SystemVarWiring, TickerMode, boot};
     use areka_kanade::{KanadeConfig, MonotonicMs, ShioriCall, events};
     use areka_parsers::charset::DefaultEncoding;
 
@@ -696,6 +696,10 @@ mod s1_boot_success {
         // 不要・OnClose/Unload は本テスト末尾の shutdown() が消費する）。
         let (backend, handle) = ScriptedShioriBackend::builder()
             .notify("OnInitialize", Ok(()))
+            // task 8.2 の username prefetch（OnInitialize 後・OnFirstBoot 前・R4.1）が発行する
+            // resource GET。既定 username 前提（sylphya 未供給＝no_content）を faithful に再現するため
+            // Ok(None) を台本化する（default_system_vars 相当の「%username のみ既定」世界）。
+            .get("username", Ok(None))
             .get("OnFirstBoot", Ok(None))
             .get("OnBoot", Ok(Some(r"\s[0]hello\e".to_string())))
             .notify("basewareversion", Ok(()))
@@ -715,7 +719,8 @@ mod s1_boot_success {
                 Ok(Box::new(backend) as Box<dyn ShioriBackend>)
             })),
             sinks: vec![Box::new(surface_sink), Box::new(text_sink)],
-            system_vars: default_system_vars(),
+            system_vars: SystemVarWiring::Custom(crate::common::test_system_vars()),
+            app_profile_dir: None,
             ticker: TickerMode::Disabled,
         };
 
@@ -768,6 +773,10 @@ mod s1_boot_success {
             expected_from_shiori_call(events::on_initialize(
                 &areka_kanade::ExecutionSnapshot::INACTIVE,
             )),
+            // username prefetch GET（OnInitialize 後・OnFirstBoot 前・R4.1・DD-9 の唯一の期待値導出経路）。
+            expected_from_shiori_call(areka_kanade::resources::resource_username(
+                &areka_kanade::ExecutionSnapshot::INACTIVE,
+            )),
             expected_from_shiori_call(events::on_first_boot(
                 &areka_kanade::ExecutionSnapshot::INACTIVE,
             )),
@@ -790,7 +799,7 @@ mod s1_boot_success {
             .collect();
         assert_eq!(
             calls_without_status, expected_boot_prefix,
-            "起動系列（OnInitialize→OnFirstBoot→OnBoot→basewareversion）が正典順序で発火していない"
+            "起動系列（OnInitialize→username prefetch→OnFirstBoot→OnBoot→basewareversion）が正典順序で発火していない"
         );
 
         // ---- (b)(c) RecordingSink の発火列（broadcast・at 昇順・内容一致）----
@@ -882,8 +891,7 @@ mod s2_connect_failure {
 
     use areka_ghost::dispatcher::DispatcherMsg;
     use areka_ghost::{
-        GhostBootOptions, GhostHandles, GhostParts, ShioriWiring, TickerMode, boot,
-        default_system_vars,
+        GhostBootOptions, GhostHandles, GhostParts, ShioriWiring, SystemVarWiring, TickerMode, boot,
     };
     use areka_parsers::charset::DefaultEncoding;
 
@@ -965,7 +973,8 @@ mod s2_connect_failure {
                 Box::new(RecordingSink::new()),
                 Box::new(RecordingSink::new()),
             ],
-            system_vars: default_system_vars(),
+            system_vars: SystemVarWiring::Custom(crate::common::test_system_vars()),
+            app_profile_dir: None,
             ticker: TickerMode::Disabled,
         };
 
@@ -990,6 +999,7 @@ mod s2_connect_failure {
             start_relay: start_relay_handle,
             down_relay: down_relay_handle,
             ticker: _,
+            sylphya: _,
         } = handles;
 
         // ---- 主観測: kanade の自律終了（外部からの Close/ForceQuit を一切送らない）----
@@ -1052,8 +1062,7 @@ mod s3_helper_liveness_detected {
 
     use areka_ghost::dispatcher::DispatcherMsg;
     use areka_ghost::{
-        GhostBootOptions, GhostHandles, GhostParts, ShioriWiring, TickerMode, boot,
-        default_system_vars,
+        GhostBootOptions, GhostHandles, GhostParts, ShioriWiring, SystemVarWiring, TickerMode, boot,
     };
     use areka_kanade::{KanadeMsg, MonotonicMs};
     use areka_parsers::charset::DefaultEncoding;
@@ -1138,6 +1147,10 @@ mod s3_helper_liveness_detected {
         // 無害）。
         let (backend, handle) = ScriptedShioriBackend::builder()
             .notify("OnInitialize", Ok(()))
+            // task 8.2 の username prefetch（OnInitialize 後・OnFirstBoot 前・R4.1）が発行する
+            // resource GET。既定 username 前提（sylphya 未供給＝no_content）を faithful に再現するため
+            // Ok(None) を台本化する（default_system_vars 相当の「%username のみ既定」世界）。
+            .get("username", Ok(None))
             .get("OnFirstBoot", Ok(None))
             .get("OnBoot", Ok(Some(r"\s[0]hello\e".to_string())))
             .notify("basewareversion", Ok(()))
@@ -1157,7 +1170,8 @@ mod s3_helper_liveness_detected {
                 Ok(Box::new(backend) as Box<dyn ShioriBackend>)
             })),
             sinks: vec![Box::new(surface_sink), Box::new(text_sink)],
-            system_vars: default_system_vars(),
+            system_vars: SystemVarWiring::Custom(crate::common::test_system_vars()),
+            app_profile_dir: None,
             ticker: TickerMode::Disabled,
         };
 
@@ -1200,9 +1214,10 @@ mod s3_helper_liveness_detected {
              dispatcher's active slot within bound"
         );
 
-        // boot 系列（OnInitialize→OnFirstBoot→OnBoot→basewareversion）の 4 呼出が完了済み
-        // であること（＝kanade が Steady{None} へ既に到達済みであること）を裏付ける
-        // 間接証跡（S1 と同旨・死活監視の Status ノイズは除外して数える）。
+        // boot 系列（OnInitialize→username prefetch→OnFirstBoot→OnBoot→basewareversion）の
+        // 5 呼出が完了済みであること（＝kanade が Steady{None} へ既に到達済みであること）を
+        // 裏付ける間接証跡（S1 と同旨・死活監視の Status ノイズは除外して数える・task 8.2 の
+        // username prefetch GET が OnInitialize と OnFirstBoot の間に 1 件加わり 4→5 になる）。
         let calls_handle = handle.calls();
         let boot_prefix_len = calls_handle
             .lock()
@@ -1211,8 +1226,8 @@ mod s3_helper_liveness_detected {
             .filter(|c| !matches!(c, RecordedCall::Status))
             .count();
         assert_eq!(
-            boot_prefix_len, 4,
-            "S3: boot 系列 4 呼出（OnInitialize/OnFirstBoot/OnBoot/basewareversion）が \
+            boot_prefix_len, 5,
+            "S3: boot 系列 5 呼出（OnInitialize/username/OnFirstBoot/OnBoot/basewareversion）が \
              完了していない——kanade はまだ Steady に到達していないはず"
         );
 
@@ -1251,6 +1266,7 @@ mod s3_helper_liveness_detected {
             start_relay: start_relay_handle,
             down_relay: down_relay_handle,
             ticker: _,
+            sylphya: _,
         } = handles;
 
         join_bounded(
@@ -1344,7 +1360,7 @@ mod s4_close_handshake {
     use super::*;
 
     use areka_ghost::dispatcher::DispatcherMsg;
-    use areka_ghost::{GhostBootOptions, ShioriWiring, TickerMode, boot, default_system_vars};
+    use areka_ghost::{GhostBootOptions, ShioriWiring, SystemVarWiring, TickerMode, boot};
     use areka_kanade::{CloseReason, KanadeConfig, KanadeMsg, MonotonicMs, ShioriCall, events};
     use areka_parsers::charset::DefaultEncoding;
 
@@ -1428,6 +1444,10 @@ mod s4_close_handshake {
         // 送らないため steady pump は起こらない。
         let (backend, handle) = ScriptedShioriBackend::builder()
             .notify("OnInitialize", Ok(()))
+            // task 8.2 の username prefetch（OnInitialize 後・OnFirstBoot 前・R4.1）が発行する
+            // resource GET。既定 username 前提（sylphya 未供給＝no_content）を faithful に再現するため
+            // Ok(None) を台本化する（default_system_vars 相当の「%username のみ既定」世界）。
+            .get("username", Ok(None))
             .get("OnFirstBoot", Ok(None))
             .get("OnBoot", Ok(Some(r"\s[0]hello\e".to_string())))
             .notify("basewareversion", Ok(()))
@@ -1446,7 +1466,8 @@ mod s4_close_handshake {
                 Ok(Box::new(backend) as Box<dyn ShioriBackend>)
             })),
             sinks: vec![Box::new(surface_sink), Box::new(text_sink)],
-            system_vars: default_system_vars(),
+            system_vars: SystemVarWiring::Custom(crate::common::test_system_vars()),
+            app_profile_dir: None,
             ticker: TickerMode::Disabled,
         };
 
@@ -1531,6 +1552,10 @@ mod s4_close_handshake {
             expected_from_shiori_call(events::on_initialize(
                 &areka_kanade::ExecutionSnapshot::INACTIVE,
             )),
+            // username prefetch GET（OnInitialize 後・OnFirstBoot 前・R4.1・DD-9 の唯一の期待値導出経路）。
+            expected_from_shiori_call(areka_kanade::resources::resource_username(
+                &areka_kanade::ExecutionSnapshot::INACTIVE,
+            )),
             expected_from_shiori_call(events::on_first_boot(
                 &areka_kanade::ExecutionSnapshot::INACTIVE,
             )),
@@ -1558,7 +1583,7 @@ mod s4_close_handshake {
             .collect();
         assert_eq!(
             calls_without_status, expected_sequence,
-            "起動系列＋close 握手系列（OnInitialize→OnFirstBoot→OnBoot→basewareversion→\
+            "起動系列＋close 握手系列（OnInitialize→username prefetch→OnFirstBoot→OnBoot→basewareversion→\
              OnClose→Unload）が正典順序で発火していない"
         );
 
@@ -1629,7 +1654,7 @@ mod s5_close_deadline {
     use super::*;
 
     use areka_ghost::dispatcher::DispatcherMsg;
-    use areka_ghost::{GhostBootOptions, ShioriWiring, TickerMode, boot, default_system_vars};
+    use areka_ghost::{GhostBootOptions, ShioriWiring, SystemVarWiring, TickerMode, boot};
     use areka_kanade::{CloseReason, KanadeConfig, KanadeMsg, MonotonicMs, ShioriCall, events};
     use areka_parsers::charset::DefaultEncoding;
 
@@ -1712,6 +1737,10 @@ mod s5_close_deadline {
         // deadline 用 Tick 2 本しか送らないため steady pump は起こらない。
         let (backend, handle) = ScriptedShioriBackend::builder()
             .notify("OnInitialize", Ok(()))
+            // task 8.2 の username prefetch（OnInitialize 後・OnFirstBoot 前・R4.1）が発行する
+            // resource GET。既定 username 前提（sylphya 未供給＝no_content）を faithful に再現するため
+            // Ok(None) を台本化する（default_system_vars 相当の「%username のみ既定」世界）。
+            .get("username", Ok(None))
             .get("OnFirstBoot", Ok(None))
             .get("OnBoot", Ok(Some(r"\s[0]hello\e".to_string())))
             .notify("basewareversion", Ok(()))
@@ -1733,7 +1762,8 @@ mod s5_close_deadline {
                 Ok(Box::new(backend) as Box<dyn ShioriBackend>)
             })),
             sinks: vec![Box::new(surface_sink), Box::new(text_sink)],
-            system_vars: default_system_vars(),
+            system_vars: SystemVarWiring::Custom(crate::common::test_system_vars()),
+            app_profile_dir: None,
             ticker: TickerMode::Disabled,
         };
 
@@ -1864,6 +1894,10 @@ mod s5_close_deadline {
             expected_from_shiori_call(events::on_initialize(
                 &areka_kanade::ExecutionSnapshot::INACTIVE,
             )),
+            // username prefetch GET（OnInitialize 後・OnFirstBoot 前・R4.1・DD-9 の唯一の期待値導出経路）。
+            expected_from_shiori_call(areka_kanade::resources::resource_username(
+                &areka_kanade::ExecutionSnapshot::INACTIVE,
+            )),
             expected_from_shiori_call(events::on_first_boot(
                 &areka_kanade::ExecutionSnapshot::INACTIVE,
             )),
@@ -1891,7 +1925,7 @@ mod s5_close_deadline {
             .collect();
         assert_eq!(
             calls_without_status, expected_sequence,
-            "起動系列＋close 開始＋強制終了系列（OnInitialize→OnFirstBoot→OnBoot→\
+            "起動系列＋close 開始＋強制終了系列（OnInitialize→username prefetch→OnFirstBoot→OnBoot→\
              basewareversion→OnClose→Unload）が正典順序で発火していない"
         );
 
@@ -1951,8 +1985,7 @@ mod s6_full_disconnect {
 
     use areka_ghost::dispatcher::DispatcherMsg;
     use areka_ghost::{
-        GhostBootOptions, GhostHandles, GhostParts, ShioriWiring, TickerMode, boot,
-        default_system_vars,
+        GhostBootOptions, GhostHandles, GhostParts, ShioriWiring, SystemVarWiring, TickerMode, boot,
     };
     use areka_kanade::KanadeMsg;
     use areka_parsers::charset::DefaultEncoding;
@@ -2037,6 +2070,10 @@ mod s6_full_disconnect {
         // の `unload()` が呼ばれることはない。
         let (backend, _handle) = ScriptedShioriBackend::builder()
             .notify("OnInitialize", Ok(()))
+            // task 8.2 の username prefetch（OnInitialize 後・OnFirstBoot 前・R4.1）が発行する
+            // resource GET。既定 username 前提（sylphya 未供給＝no_content）を faithful に再現するため
+            // Ok(None) を台本化する（default_system_vars 相当の「%username のみ既定」世界）。
+            .get("username", Ok(None))
             .get("OnFirstBoot", Ok(None))
             .get("OnBoot", Ok(Some(r"\s[0]hello\e".to_string())))
             .notify("basewareversion", Ok(()))
@@ -2052,7 +2089,8 @@ mod s6_full_disconnect {
                 Box::new(RecordingSink::new()),
                 Box::new(RecordingSink::new()),
             ],
-            system_vars: default_system_vars(),
+            system_vars: SystemVarWiring::Custom(crate::common::test_system_vars()),
+            app_profile_dir: None,
             ticker: TickerMode::Disabled,
         };
 
@@ -2072,6 +2110,7 @@ mod s6_full_disconnect {
             start_relay: start_relay_handle,
             down_relay: down_relay_handle,
             ticker: _,
+            sylphya: _,
         } = handles;
 
         // ---- ①: DispatcherMsg::Close → dispatcher join ----

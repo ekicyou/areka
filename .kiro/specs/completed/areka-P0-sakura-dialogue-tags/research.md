@@ -562,4 +562,4 @@ crate コードは origin/main と同一（本ブランチの差分は `.kiro/` 
 - `\![move]` positional 正典: 一次 SSP HTML `https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html`（§9 のとおり・MCP スナップショットは引数表欠落）
 - basepos 既定: `ukadoc:descript_shell_surfaces`（point.basepos.x=幅÷2 / .y=下端）
 - 裁定メモ: [[areka-bang-commands-generic-carrier]]（\!汎用キャリア 1 本）・[[areka-sylphya-unified-property-system]]（%username=SHIORI Resource・emo2 は 204 固定）・[[prefer-clean-waves-over-max-parallelism]]（D8 の根拠）
-- sylphya 供給側契約: `.kiro/specs/areka-P0-sylphya/brief.md`「申し送り」節（W1 暫定 provider→sylphya 差替）
+- sylphya 供給側契約: `.kiro/specs/completed/areka-P0-sylphya/brief.md`「申し送り」節（W1 暫定 provider→sylphya 差替）

@@ -18,7 +18,7 @@ use shiori_abi::interface::{IShiori, IShioriFactory, IShioriHost};
 use windows_core::{AsImpl, HRESULT, HSTRING, Interface};
 
 use crate::reference_brain::{ReferenceBrain, shiori_factory};
-use crate::shiori_host::{HostMessage, ShioriHostSink};
+use crate::shiori_host::HostMessage;
 use crate::shiori_session::{SessionError, SessionRequest, ShioriSession};
 
 /// デモドライバ固有のエラー（駆動経路の失敗を型化する）。
@@ -65,7 +65,13 @@ pub fn run_demo() -> Result<(), DemoError> {
 
     // 2. host（sink）を生成し、その host を共有する脳を factory 経由で create する。
     //    脳（IShiori）で session を、脳実体（ReferenceBrain）で脳駆動を行う（同一インスタンス）。
-    let host: IShioriHost = ShioriHostSink::new().into();
+    //    プロパティ応答は App スコープのみの sylphya アクターへ委譲する（第 2 ストア撤去・R7.2/R7.3・
+    //    design.md §bin（ShioriHostSink 統合））。session 固有の `AskerId` は demo の load_dir 相当文字列
+    //    から構築する。`_sylphya_handle` は非 RAII（detach）で、アクターは sink 内包 publisher が生存
+    //    する限り生き続けるため run_demo の生存期間だけ保持すれば足りる（join は要さない）。
+    let asker = areka_sylphya::AskerId::new("C:/ghost/master");
+    let (sink, _sylphya_handle) = crate::shiori_host::spawn_app_sylphya_sink(asker);
+    let host: IShioriHost = sink.into();
     let brain: IShiori = match factory.create(
         &HSTRING::from("C:/ghost/master"),
         &HSTRING::from("reference"),

@@ -61,7 +61,8 @@ fn make_session_with_handle(timeout: Duration) -> (ShioriSession, IShiori, IShio
     let factory = unsafe { IShioriFactory::from_raw(out) };
 
     // host（sink）を明示生成し、脳と session で共有する。
-    let host: IShioriHost = ShioriHostSink::new().into();
+    // sink は sylphya 委譲済み（第 2 ストア撤去・Task 9.1/9.3）。hermetic な偽 IO sink（既知 asker）。
+    let host: IShioriHost = crate::shiori_host::spawn_test_sylphya_sink().sink.into();
     let brain = factory
         .create(&HSTRING::from(LOAD_DIR), &HSTRING::from(SHIORI_NAME), &host)
         .expect("製品脳の create は成功すること");

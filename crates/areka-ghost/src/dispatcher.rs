@@ -243,6 +243,19 @@ mod tests {
     use std::thread;
     use std::time::Duration;
 
+    /// task 8.3: 退役した `crate::runtime::default_system_vars()` の忠実な代役スタンドイン。
+    ///
+    /// `{"username": DEFAULT_USERNAME}` のみを充填した凍結スナップショットを毎回新規構築して
+    /// 返す（退役前 provider と同一挙動）。`spawn_dispatcher` の刻印点は [`SystemVarSource`] のまま
+    /// 無改変で、既存テストは従来どおり既定 username 前提の直接注入を保つ（R7.1・R9.1）。
+    fn test_system_vars() -> SystemVarSource {
+        Box::new(|| {
+            let mut snapshot = areka_sakura::contract::SystemVarSnapshot::default();
+            snapshot.insert("username", areka_sakura::sysvar::DEFAULT_USERNAME);
+            snapshot
+        })
+    }
+
     /// テスト用の有界待機ヘルパ: 別スレッドで `f` を走らせ、期限内に完了しなければ
     /// テストを失敗させる（どのテストもハングしないことを保証する・areka-actor 流儀）。
     fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: Duration, f: F) {
@@ -314,7 +327,7 @@ mod tests {
         let (tx, handle) = spawn_dispatcher(
             kanade_tx,
             vec![Box::new(surface), Box::new(text)],
-            crate::runtime::default_system_vars(),
+            test_system_vars(),
         );
 
         let talk_a = TalkId(1);
@@ -390,7 +403,7 @@ mod tests {
         let (tx, handle) = spawn_dispatcher(
             kanade_tx,
             vec![Box::new(surface), Box::new(text)],
-            crate::runtime::default_system_vars(),
+            test_system_vars(),
         );
 
         let talk_a = TalkId(11);
@@ -469,7 +482,7 @@ mod tests {
         let (tx, handle) = spawn_dispatcher(
             kanade_tx,
             vec![Box::new(surface), Box::new(text)],
-            crate::runtime::default_system_vars(),
+            test_system_vars(),
         );
 
         // 長い待ちを持つ script（Close 時点では自然完了していない）。
@@ -507,7 +520,7 @@ mod tests {
         let (tx, handle) = spawn_dispatcher(
             kanade_tx,
             vec![Box::new(surface), Box::new(text)],
-            crate::runtime::default_system_vars(),
+            test_system_vars(),
         );
 
         // \w[4]=200ms・\w[6]=300ms。D 焼き込み後の発火（broadcast ゆえ text sink も全 cue を受ける）:
@@ -608,7 +621,7 @@ mod tests {
         let (tx, handle) = spawn_dispatcher(
             kanade_tx,
             vec![Box::new(surface), Box::new(text)],
-            crate::runtime::default_system_vars(),
+            test_system_vars(),
         );
 
         let talk_c = TalkId(41);

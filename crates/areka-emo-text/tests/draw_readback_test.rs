@@ -181,6 +181,7 @@ fn show_surface(presenter: &mut EmoPresenter, world: &mut World, target: TargetI
             target,
             surface_id: 1000,
             binds: BindSet::default(),
+            pattern: areka_emo_compose::PatternState::default(),
             reply: Some(tx),
         },
     );

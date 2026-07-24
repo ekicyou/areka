@@ -355,6 +355,9 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
         static_binds: _,
         // bind_resolver は attach では未使用（seriko の actor へは task 7.2 が手渡す）。
         bind_resolver: _,
+        // loop_tables は attach では未使用（SERIKO ループ表は spawn_seriko の actor 構築＝task 9.2 が
+        // 手渡す）。attach 相はループを駆動しないため破棄する。
+        loop_tables: _,
     } = assets;
     let mut shells: Vec<_> = shells.into_iter().map(Some).collect();
     let mut balloons: Vec<_> = balloons.into_iter().map(Some).collect();
@@ -436,13 +439,15 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
             error!(scope, error = %e, "emo2 attach: バルーン target の attach に失敗（log-first・継続）");
             continue;
         }
-        // バルーン初回表示は面 0・bind なし（DD-9・R4.1 の「初回サーフェス表示＝バルーン枠表示」）。
+        // バルーン初回表示は面 0・bind なし・pattern なし（DD-9・R4.1 の「初回サーフェス表示＝
+        // バルーン枠表示」）。初回枠は SERIKO ループ非駆動ゆえ空 pattern＝拡張前と観測等価（R5.4）。
         wiring.presenter.apply(
             world,
             PresentCommand::ShowSurface {
                 target: item.balloon_target,
                 surface_id: 0,
                 binds: areka_emo_compose::BindSet::default(),
+                pattern: areka_emo_compose::PatternState::default(),
                 reply: None,
             },
         );
@@ -746,12 +751,12 @@ mod tests {
     use areka_emo_atlas::AtlasTable;
     use areka_emo_compose::{BindSet, EmoWorld};
     use areka_emo_text::state::TextLayerConfig;
-    use areka_seriko::{BindResolver, SurfaceResolver};
+    use areka_seriko::{AnimationTable, BindResolver, SurfaceResolver};
     use tracing::field::{Field, Visit};
     use tracing_subscriber::prelude::*;
 
     use super::*;
-    use crate::emo2_boot::assets::{BootAssets, ScopeAssets};
+    use crate::emo2_boot::assets::{BootAssets, LoopTables, ScopeAssets};
 
     /// throwaway な `EmoWorld`（空 shell から build・`plan_attachments` は emo_world を読まない）。
     ///
@@ -796,6 +801,11 @@ mod tests {
             static_binds: BindSet::default(),
             // plan_attachments は bind_resolver を読まない（headless 純合成）＝空表で十分。
             bind_resolver: BindResolver::empty(),
+            // plan_attachments は loop_tables を読まない（headless 純合成）＝空表で十分。
+            loop_tables: LoopTables {
+                shell: AnimationTable::empty(),
+                balloon: AnimationTable::empty(),
+            },
         }
     }
 

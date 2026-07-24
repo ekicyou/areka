@@ -18,8 +18,8 @@
 //! - alias:     `KEY,[id,...]` → `SurfaceAlias { key(opaque), ids }`・重複キーは全保持。
 
 use super::model::{
-    AliasKey, Animation, AppendTarget, Collision, CollisionName, DefRef, Element, ElementPath,
-    Interval, Pattern, Shell, Surface, SurfaceAlias, SurfaceAppend,
+    AliasKey, Animation, AppendTarget, Collision, CollisionName, DefRef, DrawMethod, Element,
+    ElementPath, Interval, Pattern, Shell, Surface, SurfaceAlias, SurfaceAppend,
 };
 use super::parse;
 
@@ -135,6 +135,7 @@ kero.surface.alias
                     interval: Interval::Bind,
                     patterns: vec![Pattern {
                         index: 0,
+                        method: DrawMethod::new("overlay".to_string()),
                         surface_id: 20,
                         wait: 100,
                         x: 0,
@@ -147,6 +148,7 @@ kero.surface.alias
                     patterns: vec![
                         Pattern {
                             index: 0,
+                            method: DrawMethod::new("overlay".to_string()),
                             surface_id: 21,
                             wait: 50,
                             x: 0,
@@ -155,6 +157,7 @@ kero.surface.alias
                         Pattern {
                             // 負 ID overlay は -1 センチネルとして i64 保持（要件 5.5）。
                             index: 1,
+                            method: DrawMethod::new("overlay".to_string()),
                             surface_id: -1,
                             wait: 80,
                             x: 0,
@@ -169,6 +172,7 @@ kero.surface.alias
                     patterns: vec![
                         Pattern {
                             index: 0,
+                            method: DrawMethod::new("overlay".to_string()),
                             surface_id: 22,
                             wait: 60,
                             x: 0,
@@ -176,6 +180,7 @@ kero.surface.alias
                         },
                         Pattern {
                             index: 2,
+                            method: DrawMethod::new("overlay".to_string()),
                             surface_id: 23,
                             wait: 60,
                             x: 0,
@@ -210,6 +215,7 @@ kero.surface.alias
                 interval: Interval::Random { k: 3 },
                 patterns: vec![Pattern {
                     index: 0,
+                    method: DrawMethod::new("overlay".to_string()),
                     surface_id: 2106,
                     wait: 0,
                     x: 0,
@@ -517,17 +523,17 @@ kero.surface.alias
     assert_eq!(key100_count, 2, "重複 alias キーが潰されている");
 }
 
-/// subset 外機能を含む emo2 風の複合断片を**公開 `parse` 経由**で通し、subset 外が
-/// 吸収され（materialize されない）、隣接する認識可能ブロックが壊れないことを検証する
-/// （要件 4.5/5.7/6.3/9.2）。
+/// subset 外機能を含む emo2 風の複合断片を**公開 `parse` 経由**で通し、要素ごとに
+/// 吸収（element/collision）と忠実転記（pattern method/interval）を区別しつつ、隣接する
+/// 認識可能ブロックが壊れないことを検証する（要件 4.5/4.6/6.3/8.2/9.2）。
 ///
 /// タスク 4.6 は同性質を decode レイヤの合成断片で検証済み。ここは**バリデーション層で
 /// 公開 facade を通す**補完で、emo2 風の実在感ある断片を用いる（重複ではない）。
 ///
 /// 断片は認識可能ブロックの「間」に subset 外を挟む:
 /// - 非 overlay element メソッド（`element1,base,...`）→ 吸収（overlay 兄弟は残る・要件 4.5）。
-/// - 非 overlay pattern メソッド（`pattern0,replace,...`）→ 吸収（overlay 兄弟は残る・要件 5.7）。
-/// - 3 種以外の interval（`sometimes` / `periodic`）→ 正規化せず既定 Bind へ倒す（要件 5.7）。
+/// - 非 overlay pattern メソッド（`pattern0,replace,...`）→ 忠実転記（method を落とさない・要件 4.6/8.4）。
+/// - 3 種以外の interval（`sometimes`）→ `Interval::Other(原文)` へ忠実転記（要件 8.2・討議 #1）。
 /// - `collisionex`（円/楕円/多角形）→ 吸収（純 collision は残る・要件 6.3）。
 #[test]
 fn subset_out_features_absorbed_via_public_parse_without_breaking_neighbors() {
@@ -554,9 +560,9 @@ element1,overlay,face.png,0,0
 collisionex0,polygon,1,2,3,4,5,6,Face
 collision0,30,40,130,240,Bust
 
-// 3 種以外の interval（sometimes）は正規化されず既定 Bind へ倒れ、pattern は失われない（要件 5.7）。
+// 3 種以外の interval（sometimes）は Interval::Other へ忠実転記される（要件 8.2）。
 animation0.interval,sometimes,5
-// 非 overlay pattern メソッド（replace）は吸収され、overlay 兄弟は残る（要件 5.7）。
+// 非 overlay pattern メソッド（replace）も落とさず method を忠実転記する（要件 4.6/8.4）。
 animation0.pattern0,replace,900,0,0,0
 animation0.pattern1,overlay,901,50,0,0
 }
@@ -614,11 +620,20 @@ element0,overlay,tail.png,7,8
     assert_eq!(s200.collisions[0].name.as_str(), "Bust");
     assert_eq!(s200.collisions[0].left, 30);
 
-    // animation: sometimes は既定 Bind へ倒れ、replace pattern は吸収・overlay pattern のみ残る。
+    // animation: sometimes は Interval::Other へ忠実転記され、replace/overlay 双方の pattern が
+    // method を落とさず残る（overlay フィルタ・fallback-Bind ともに撤去済み・要件 4.6/8.2）。
     assert_eq!(s200.animations.len(), 1);
     let a = &s200.animations[0];
-    assert_eq!(a.interval, Interval::Bind, "非 3 種 interval が正規化された");
-    assert_eq!(a.patterns.len(), 1, "非 overlay pattern が吸収されていない");
-    assert_eq!(a.patterns[0].index, 1);
-    assert_eq!(a.patterns[0].surface_id, 901);
+    assert_eq!(
+        a.interval,
+        Interval::Other("sometimes".into()),
+        "未認識 interval が Other へ転記されていない"
+    );
+    assert_eq!(a.patterns.len(), 2, "pattern method が忠実転記されていない");
+    assert_eq!(a.patterns[0].index, 0);
+    assert_eq!(a.patterns[0].method.as_str(), "replace");
+    assert_eq!(a.patterns[0].surface_id, 900);
+    assert_eq!(a.patterns[1].index, 1);
+    assert_eq!(a.patterns[1].method.as_str(), "overlay");
+    assert_eq!(a.patterns[1].surface_id, 901);
 }

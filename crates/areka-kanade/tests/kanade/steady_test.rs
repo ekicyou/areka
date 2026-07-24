@@ -63,6 +63,7 @@ use std::collections::HashSet;
 
 use areka_kanade::{
     CloseReason, ExecutionSnapshot, KanadeConfig, KanadeMsg, MonotonicMs, StartTalk, TalkId, events,
+    resources,
 };
 
 use super::common::{
@@ -715,16 +716,19 @@ fn spontaneous_talk_egress_sweep_only_allowed_ids_no_ontalk_onhour() {
     );
 
     // (3) Unload を除く全 GET/NOTIFY の id が許可集合の要素（ホワイトリストが end-to-end で成立・Req 3.1）。
+    //     submit ガードと同じく「イベント許可 ∨ リソース許可」で判定する——boot prefetch の `username`
+    //     はイベント檻とは別族のリソース許可集合（`ALLOWED_RESOURCE_IDS`・R4.1）を通る。
     for call in &driven.recorded {
         if call.method == CallMethod::Unload {
             // Unload（id="Unload"）は events 表対象外の正規終了経路ゆえ許可集合の被覆から除外する。
             continue;
         }
         assert!(
-            events::is_allowed_event_id(&call.id),
-            "記録された SHIORI イベント id={} が許可集合 {:?} に属さない: {:?}",
+            events::is_allowed_event_id(&call.id) || resources::is_allowed_resource_id(&call.id),
+            "記録された SHIORI id={} がイベント許可 {:?} にもリソース許可 {:?} にも属さない: {:?}",
             call.id,
             events::ALLOWED_EVENT_IDS,
+            resources::ALLOWED_RESOURCE_IDS,
             driven.recorded
         );
     }
@@ -746,8 +750,8 @@ fn spontaneous_talk_egress_sweep_only_allowed_ids_no_ontalk_onhour() {
     assert!(
         distinct_shiori_ids
             .iter()
-            .all(|&id| events::is_allowed_event_id(id)),
-        "記録の distinct SHIORI id は全て許可集合の部分集合であるはず（新規 ID を増やさない）: {:?}",
+            .all(|&id| events::is_allowed_event_id(id) || resources::is_allowed_resource_id(id)),
+        "記録の distinct SHIORI id は全てイベント許可∨リソース許可の部分集合であるはず（新規 ID を増やさない）: {:?}",
         distinct_shiori_ids
     );
 }

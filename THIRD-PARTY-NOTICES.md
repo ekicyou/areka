@@ -7,7 +7,7 @@ areka はバイナリ配布時に、以下の第三者パッケージのライ�
 areka 自身のライセンスは MIT です（ルートの `LICENSE-MIT` を参照）。
 
 使用ライセンス一覧:
-- MIT License (203 crate)
+- MIT License (209 crate)
 - zlib License (2 crate)
 - Apache License 2.0 (1 crate)
 - BSD 3-Clause "New" or "Revised" License (1 crate)
@@ -1532,12 +1532,17 @@ DEALINGS IN THE SOFTWARE.
 - human-panic 2.0.8
 - is_terminal_polyfill 1.70.2
 - once_cell_polyfill 1.70.2
+- serde_spanned 0.6.9
 - serde_spanned 1.1.1
+- toml 0.8.23
 - toml 1.1.3+spec-1.1.0
+- toml_datetime 0.6.11
 - toml_datetime 0.7.5+spec-1.1.0
 - toml_datetime 1.1.1+spec-1.1.0
+- toml_edit 0.22.27
 - toml_edit 0.23.10+spec-1.0.0
 - toml_parser 1.1.2+spec-1.1.0
+- toml_write 0.1.2
 - toml_writer 1.1.2+spec-1.1.0
 
 ```
@@ -1838,6 +1843,7 @@ SOFTWARE.
 - areka-parsers 0.0.1
 - areka-sakura 0.0.1
 - areka-seriko 0.0.1
+- areka-sylphya 0.0.1
 - areka-talk 0.0.1
 - dola 0.0.1
 - pilot 0.0.1

@@ -574,7 +574,13 @@ fn build_and_spawn(world: &mut World, vertical: bool, hold: bool) {
     };
 
     // 窓寸 ≔ balloon surface0 の合成原寸（物理 px・DPI 表示契約＝等倍）。
-    let (w, h) = match Composer::new().compose(&assets0.0, &assets0.1, 0, &BindSet::default()) {
+    let (w, h) = match Composer::new().compose(
+        &assets0.0,
+        &assets0.1,
+        0,
+        &BindSet::default(),
+        &areka_emo_compose::PatternState::default(),
+    ) {
         Ok(cs) => (cs.width(), cs.height()),
         Err(e) => {
             setup_abort(&format!("balloon surface0 の採寸合成に失敗: {e}"));
@@ -765,6 +771,7 @@ fn try_attach(demo: &mut Demo, world: &mut World) {
                 target,
                 surface_id: 0,
                 binds: BindSet::default(),
+                pattern: areka_emo_compose::PatternState::default(),
                 reply: Some(tx),
             },
         );

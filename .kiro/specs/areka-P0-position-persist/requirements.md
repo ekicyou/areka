@@ -1,6 +1,6 @@
 # Requirements Document
 
-> **⚠️ 申し送り（2026-07-18・`areka-P0-sylphya` discovery 帰結・W3 の `/kiro-design` 実行前に適用必須）**: 本 spec が所有を予定していた**永続ストア実体**（バージョン付き形式・原子的 IO・寛容読取・ゴースト識別キー・往復耐久）は、統一プロパティシステム `areka-P0-sylphya` の **persistent backing へ移管**される（「名前で引ける値」の関心を 3 箱〔%環境変数解決器／本 spec 専用ストア／既存 `ShioriHostSink` プロパティストア〕へ分裂させないための開発者裁定）。本 spec は「sylphya の persistent backing を**消費**して復元意味論と結線（アンカー再射影・二層分離・OnFirstBoot ゲート運行・Reference0 注入・観測点消費）を担う spec」へ再切削する。具体デルタの正本＝ [`.kiro/specs/areka-P0-sylphya/brief.md`](../areka-P0-sylphya/brief.md) 末尾「申し送り」節（R1.4〜R5 は無改変残存・R1.1-1.3／R6／R7／R8 の一部を参照形へ書換・ウェーブ配置は sylphya が本 spec の前に着地）。
+> **⚠️ 申し送り（2026-07-18・`areka-P0-sylphya` discovery 帰結・W3 の `/kiro-design` 実行前に適用必須）**: 本 spec が所有を予定していた**永続ストア実体**（バージョン付き形式・原子的 IO・寛容読取・ゴースト識別キー・往復耐久）は、統一プロパティシステム `areka-P0-sylphya` の **persistent backing へ移管**される（「名前で引ける値」の関心を 3 箱〔%環境変数解決器／本 spec 専用ストア／既存 `ShioriHostSink` プロパティストア〕へ分裂させないための開発者裁定）。本 spec は「sylphya の persistent backing を**消費**して復元意味論と結線（アンカー再射影・二層分離・OnFirstBoot ゲート運行・Reference0 注入・観測点消費）を担う spec」へ再切削する。具体デルタの正本＝ [`.kiro/specs/completed/areka-P0-sylphya/brief.md`](../completed/areka-P0-sylphya/brief.md) 末尾「申し送り」節（R1.4〜R5 は無改変残存・R1.1-1.3／R6／R7／R8 の一部を参照形へ書換・ウェーブ配置は sylphya が本 spec の前に着地）。
 
 ## Introduction
 

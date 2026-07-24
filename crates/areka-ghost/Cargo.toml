@@ -14,6 +14,9 @@ areka-talk = { path = "../areka-talk" }
 areka-actor = { path = "../areka-actor" }
 areka-kanade = { path = "../areka-kanade" }
 areka-sakura = { path = "../areka-sakura" }
+# task 8.2（sylphya 結線）: 統一プロパティシステム（掲示板モデル）の spawn／publish／reader を
+# ghost boot が起動・結線する。ghost は sylphya の上位層であり許容される path dep（新規外部依存なし）。
+areka-sylphya = { path = "../areka-sylphya" }
 areka-parsers = { path = "../areka-parsers" }
 shiori-host32-host = { path = "../shiori-host32-host" }
 shiori-host32-ipc = { path = "../shiori-host32-ipc" }
