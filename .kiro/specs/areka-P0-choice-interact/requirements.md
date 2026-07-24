@@ -28,7 +28,7 @@ emo2 のメニュー選択肢は上流 `areka-P0-choice-render`（W3・2026-07-2
 - **Adjacent expectations**:
   - 契約 API は上流 `areka-emo-text` の `TextLayerRuntime`（`choice_hit_rows`／`inject_choice_hover`／`choice_active`）を**消費のみ**とし、行ヒットジオメトリ・hover API・ハイライト描画は本仕様が所有しない（`areka-P0-choice-render` が正本）。hover 対象は emo-text 側の `ordinal` ベースで、本仕様は hit した行の `ordinal` を注入する。
   - `ChoiceHitRow.rect` はバルーン窓の**物理 px**、ポインタの client 座標も物理 px であり、hit 判定は既存ポインタ配線の**物理 px 素通し（DPI 変換を挟まない・k=1.0）規約**に整合させる（`areka-P0-input-events` の素通し規約を破らない）。
-  - バルーン窓は既に窓マーカーとドラッグ設定を備える（窓生成側で付与済み）。本仕様はこれらを**消費**し新設・改変しない。ポインタハンドラ増設が窓生成側本体の改変を要すると設計が判断した場合、当該改変は本仕様のスコープ外とし `areka-P0-position-persist`（窓生成側を単独所有）へ委ねる（エスケープ条項）。
+  - バルーン窓は既に窓マーカーとドラッグ設定を備える（窓生成側で付与済み）。本仕様はこれらを**消費**し、新たな窓ライフサイクルやドラッグ挙動は新設・改変しない。ただし選択肢表示中にバルーン窓ポインタを選択肢行へ**到達**させるために窓生成側の最小限の到達設定（`HitTest` 等）の改変が設計上必要と判明した場合、本仕様がその最小改変を負う（実機到達サインオフ〔R7〕を無条件 DoD として維持するため）。窓生成側を扱う `areka-P0-position-persist` が**同時進行中で停止できない**ため、当該改変が position-persist と衝突する場合は、委譲・先送りではなく position-persist へ **rebase/merge して統合**する（合流機構の選択＝窓 `HitTest` トグル／content `alpha_mask` 等は設計 R-1 に残す）。
   - `ChoiceSelection` の**ワイヤ形は本仕様が正本**だが、その最終配送先（受信アクター／inbox 型）と受信処理・カスケード発火は下流 `areka-P0-choice-select-events` の契約辺であり、本仕様は**発行まで**を担い `resolve_choice` を直接呼ばない。
   - 選択肢の消滅（表示・hit の原子的無効化）は `areka-P0-choice-render` が保証する契約であり、本仕様はクリック確定時に上流の**現行**行ヒットジオメトリを参照して stale 状態を作らないことで協調する。
 
@@ -80,7 +80,7 @@ emo2 のメニュー選択肢は上流 `areka-P0-choice-render`（W3・2026-07-2
 1. The 対話層 shall 行ヒットジオメトリ・hover 状態注入 API・選択肢表示中照会を上流 `areka-emo-text`（`TextLayerRuntime` の `choice_hit_rows`／`inject_choice_hover`／`choice_active`）から消費し、これら契約の再定義・自前保持・自前描画を行わない。
 2. The 対話層 shall バルーン窓ポインタの client 座標を物理 px のまま行矩形（同じくバルーン窓物理 px）と突き合わせ、DPI 変換を挟まない素通し（k=1.0）規約に整合させる。
 3. The 対話層 shall キャラ窓側のポインタ配線・hit 判定・既存メッセージ配送を変更せず、キャラ窓由来の既存挙動（ダブルクリック→メニュー等）を退行させない。
-4. The 対話層 shall バルーン窓に既存で付与されている窓マーカー・ドラッグ設定を消費し、これらを新設・改変せず、新たな窓ライフサイクルやドラッグ挙動を導入しない。
+4. The 対話層 shall バルーン窓に既存で付与されている窓マーカー・ドラッグ設定を消費し、新たな窓ライフサイクルやドラッグ挙動を導入しない（選択肢行へのポインタ到達に必要な最小限の `HitTest`／到達設定の改変はこの限りでなく、同時進行の `areka-P0-position-persist` と窓生成側で衝突する場合は rebase/merge で統合する）。
 
 ### Requirement 5: M1 取り扱い範囲と対話境界
 

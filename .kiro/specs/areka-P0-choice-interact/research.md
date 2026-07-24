@@ -159,7 +159,7 @@
 
 ## 6. 設計判断項目（要件ディスカッション／設計へ送る）
 
-1. **【最重要】バルーンポインタイベント到達経路**: `HitTest::none()`（spawn.rs:174）のバルーン窓で選択肢行のポインタ移動/クリックをどう受けるか。窓 `HitTest` 変更（spawn.rs 改変＝エスケープ条項）／content 側 `alpha_mask`（emo-text 描画面境界）／選択肢表示中トグル、のいずれか。**本 spec 単独で閉じるか**を含め裁定。
+1. **【最重要】バルーンポインタイベント到達経路**: `HitTest::none()`（spawn.rs:174）のバルーン窓で選択肢行のポインタ移動/クリックをどう受けるか。窓 `HitTest` 変更（spawn.rs 改変）／content 側 `alpha_mask`（emo-text 描画面境界）／選択肢表示中トグル、のいずれか。**〔要件ディスカッション議題1で裁定済〕**: 到達に窓生成側の最小改変が要る場合、**本 spec がその最小改変を負う**（R7 無条件 DoD 維持・委譲しない）。窓生成側を扱う `areka-P0-position-persist` は同時進行中で停止不可のため、**衝突時は position-persist へ rebase/merge して統合**（先送りしない）。**合流機構の選択（窓 `HitTest` トグル／content `alpha_mask`／表示中トグル）は本 R-1 の設計課題として残す**。
 2. **配線設置場所**: `input_events/mod.rs` 拡張（A-1・brief 事前割当に直結）か サブモジュール隔離（A-2・責務分離）か。
 3. **runtime アクセス／自前状態の器**: `Emo2Wiring` 直借用（B-1）か 新 NonSend `BalloonWiring`（B-2・自前 ordinal＋発行シンク集約）か。hover getter 不在の穴埋め（last-injected ordinal 追跡）の置き場所。
 4. **`ChoiceSelection` 発行シンク**: `Sender<ChoiceSelection>`（C-1・mpsc・donor 同型）か callback（C-2）か。**要素型 `ChoiceSelection` のフィールド確定**（id/label/scope/references＋その型——scope は `usize`?／references は `Vec<String>` 転写?）。受信 inbox 型は下流契約辺ゆえ本 spec では確定しない旨の明記。
