@@ -150,7 +150,7 @@ graph TB
 | D6 | cache×再スケール | `ComposeKey` へ scale（既約有理）参加。エントリ＝k 適用済み composed＋その bytes 由来 mask。k 変化＝ミス→再合成＋再サンプル | k 変化時 invalidate_all（キー等価で表現できるものを命令で二重化） |
 | D7 | 採寸時の初期 k₀ | primary モニタ DPI（`enumerate_monitors`）÷ author_dpi。取得不能は 96 相当＋error。窓生成後は窓 DPI が正（Changed<DPI>→reconcile が自己補正・べき等） | native 採寸＋初回表示で補正（起動時に必ず可視リサイズが走る） |
 | D8 | 動的追従 | frame `run_dpi_phase`＝`Changed<DPI>` 観測 → `refresh_scale`（保持した最終 show 入力で再表示）→ 窓寸 reconcile（char=`resize_window_to`／balloon=`resize_window_keep_position`） | 新 PresentCommand variant（DPI は UI 側事象・talk actor 経由は迂遠） |
-| D9 | テスト配置 | 純関数=各 crate in-crate／GPU readback=**emo-present in-crate（別プロセス）**／wintf tests/graphics へは wintf 自身の檻のみ（その場合 `on_gpu_owner_thread` 必須）——本仕様は wintf 新設なし | wintf graphics への集約（2 個目 Compositor 制約を不要に背負う） |
+| D9 | テスト配置 | 純関数=各 crate in-crate／GPU readback=**emo-present in-crate（別プロセス）**／wintf tests/graphics へは wintf 自身の檻のみ（その場合 `on_gpu_owner_thread` 必須）——本仕様は wintf 新設なし。安全根拠＝バイナリ間は別プロセスで無縁＋同一バイナリ内は並列スレッド Compositor 生成の既存実績（`make_world_with_gpu` 型 14+ 本が現状緑） | wintf graphics への集約（2 個目 Compositor 制約を不要に背負う） |
 | D10 | 実機観測 | 表示成立点 info ログ（k num/den・f32・author_dpi・window_dpi・native/scaled 寸）＋ 125%/200% 2 水準の有界起動（`AREKA_APP_SMOKE_EXIT_MS`）＋ RUST_LOG grep・絶対パス起動 | 目視のみ（決定論判定の欠如） |
 
 ### Technology Stack
@@ -534,6 +534,8 @@ log-first（error!/warn!＋構造化 enum・panic 禁止）の既存規律を継
 ## Testing Strategy
 
 **テスト配置の振り分け基準（R5.4 の明文化・D9）**: (a) 判断分岐・純関数は各 crate の in-crate `#[cfg(test)]`（GPU 不要・全網羅）。(b) WUC/GPU を生成する檻は **areka-emo-present の in-crate テスト**（既存 `make_world_with_gpu` 型・別テストバイナリ＝別プロセスゆえ同一プロセス 2 個目 Compositor AV と構造的に無縁・R5.3）。(c) wintf `tests/graphics`（既存テストと同一プロセスで WUC を生成する場所）へは **wintf 自身の資産を檻に入れる場合のみ**新設し、必ず `on_gpu_owner_thread` fixture 経由とする——本仕様は wintf 改造ゼロゆえ新設なし（R5.4 は基準の宣言で満たす）。
+
+追記㊺の「fixture 必須」は wintf tests/graphics（同一プロセス集約ターゲット）へスコープされる（要件ディスカッションで R5.3〔AV 非再導入の不変条件〕と R5.4〔wintf 配置時の fixture 条件〕に分離裁定済み）。emo-present テストバイナリは同一バイナリ内並列スレッドでの Compositor 生成 14+ 本が現状緑という経験的基盤を持つ。タスク化時に既存 GPU テスト群の事前フル実行を含め、この基盤を増分前に再確認する。
 
 ### Unit Tests（純関数・GPU 不要・全網羅）
 
