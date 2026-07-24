@@ -4,7 +4,7 @@
 > W4 並走契約（roadmap 追記㊵/㊹/㊺）: `crates/areka/src/placement/measure.rs`・`crates/areka/src/input_events/`・`crates/areka/src/emo2_boot/`（`consumer_ledger.rs` 含む）は本タスク群では**編集しない**。
 
 - [ ] 1. Foundation: 永続結線の純関数基盤（`placement/persist.rs`）
-- [ ] 1.1 モジュール骨格・寛容 parse・保存 entries 構築関数の実装
+- [x] 1.1 モジュール骨格・寛容 parse・保存 entries 構築関数の実装
   - `crates/areka` の `Cargo.toml` へ `areka-sylphya` への workspace 内依存を additive 追加する
   - `placement/mod.rs` に `pub mod persist;` を追加し、`prepare_never_reads_or_writes_ghost_dat` の doc コメントを現況（永続ストアは `sylphya.toml` の別系統であり prepare は引き続き永続を読まない）へ更新する
   - 文字列→i32 の寛容 parse（非数値・空文字は「値なし」として `None` を返す）と、窓位置・バルーンオフセットの保存 entries 構築関数を実装する
