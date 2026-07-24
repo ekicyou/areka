@@ -104,7 +104,7 @@
   - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6_
   - _Depends: 6.2_
 
-- [ ] 7.4 ワークスペース全体回帰確認
+- [x] 7.4 ワークスペース全体回帰確認
   - i686 host-32 成果物を事前ビルドしたうえで `cargo test --workspace` を実行し、新規テストを含め exit 0 で成功することを確認する。新規外部依存が追加されていないこと、上流契約・cue ワイヤ形・キャラ窓 DPI 素通し規約が変更されていないことを確認する
   - Observable: 全既存テスト＋新規テストが緑で exit 0
   - _Requirements: 8.1, 8.2, 8.3, 8.5, 8.6_
@@ -124,6 +124,7 @@
 ### task 7.4 workspace 回帰の実測結果（2026-07-24・自律実行）
 - **choice-interact 自体は完全に緑・非退行**: `cargo test -p areka`=405+ passed / 全 workspace 実行で areka クレート=368 passed（新規 balloon 檻すべて緑）。**新規外部依存ゼロ**（Cargo.toml/Cargo.lock 変更なし=8.2）・**上流契約不変**（areka-emo-text/wintf/spawn.rs 変更なし・新 cue variant なし=8.5）・**DPI 素通し不変**（input_events/mod.rs は `mod balloon;` の1行のみ・DD-IE-10 本文不変=8.6）・**tokio 不使用**（std::sync::mpsc のみ=8.3）。i686 host-32 成果物（shiori-host32-helper/testdll）は事前ビルド済（exit 0）。
 - **`cargo test --workspace` exit 0 は pre-existing で無関係な areka-kanade フレークにより未達**（choice-interact の欠陥ではない）: 失敗は毎回 `steady_test::talk_completion_resumes_get_pump_ref3_one_status_none`（時に `close_test::boot_greeting_talkdone_resumes_get_pump` も・失敗数1〜2で変動）＝`common/mod.rs:~1019 drive_ticks_until_disconnect` の協調ループが並列 test CPU 競合で 5s deadline を逃す。**証拠**: (a) `cargo test -p areka-kanade` **単独**（choice-interact 不関与）でも並列なら再現、(b) 単一 test 隔離=緑(4.37s)、(c) `--test-threads=1` 直列=緑(36 passed,3.36s)＝実ハングでなく競合飢餓、(d) kanade＋依存閉包の diff は main と**空**（Cargo.lock 不変）=main とバイト同一で 100% pre-existing。詳細は memory [[areka-defender-rescan-starves-cooperative-test-loops]]。他 spec 所有ゆえ choice-interact からはパッチしない（upstream ownership・[[portfolio-convergence-decided-in-separate-session]]）。**判定**: 開発者の合流/DoD ゲート（settled 環境）で `cargo test --workspace` を再走させ kanade フレークの解消を確認するか、kanade 側の deadline 頑健化を upstream で行う。注: `cargo test --workspace -- --test-threads=1` は逆に wintf GPU テストを ACCESS_VIOLATION させる別 pre-existing（完了 spec wintf-gpu-test-crash 領域）ゆえ直列回避は不可。
+- **【解決済み・2026-07-24・開発者裁定「kanade フレークを先に上流で修正」】**: `drive_ticks_until_disconnect` の `yield_now()` busy-spin を **200μs backoff sleep** へ置換し、producer が kanade worker を CPU 飢餓させる真因を除去（別コミット `0717c8a`・areka-kanade テストハーネス）。**検証: areka-kanade 5x 並列=0 failures／`cargo test --workspace`=exit 0・NO FAILURES（85 test-result・choice-interact 新規檻含む全緑）**。→ **task 7.4 の DoD ゲート `cargo test --workspace` exit 0 を真に達成**。kanade 修正は areka-kanade 所有ゆえ「1 feature=1 PR」の観点では別関心事＝PR 分割は開発者判断（現状は本ブランチに分離コミット `0717c8a` で同居）。memory [[areka-defender-rescan-starves-cooperative-test-loops]] に根治を追記済み。
 
 ### task 7.3 実機サインオフ（人間実行必須・AI 単独では宣言しない・R7.3/emo2_real_run.rs:77 準拠）
 本 spec の `choice_selected` info ログ導線（task 4.2 で実装済）＋有界 auto-exit＋grep で判定する。ポインタ追従ハイライトの**目視**と実クリック到達は人間が実機で行う（自律エージェントは目視/実クリックを捏造しない）。手順:
