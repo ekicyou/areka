@@ -204,7 +204,7 @@ fn to_baseware_version(
         let talk_id = TalkId(state.next_talk_id);
         state.next_talk_id += 1;
         tracing::info!(target: "kanade", event = "boot_talk", talk_id = talk_id.0, "起動グリーティングを再生起動");
-        actions.push(Action::StartTalk(StartTalk { talk_id, script }));
+        actions.push(Action::StartTalk(StartTalk::new(talk_id, script)));
         Some(ActiveTalk {
             talk_id,
             origin: "boot",
@@ -360,7 +360,7 @@ mod tests {
         );
         assert_eq!(actions.len(), 2);
         match &actions[0] {
-            Action::StartTalk(StartTalk { talk_id, script }) => {
+            Action::StartTalk(StartTalk { talk_id, script, .. }) => {
                 assert_eq!(*talk_id, TalkId(1), "初回 boot talk_id は 1");
                 assert_eq!(script, "greeting");
             }
@@ -446,7 +446,7 @@ mod tests {
         );
         assert_eq!(actions.len(), 2);
         match &actions[0] {
-            Action::StartTalk(StartTalk { talk_id, script }) => {
+            Action::StartTalk(StartTalk { talk_id, script, .. }) => {
                 assert_eq!(*talk_id, TalkId(1));
                 assert_eq!(script, "earlygreet");
             }

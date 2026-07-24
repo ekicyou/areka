@@ -12,11 +12,36 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TalkId(pub u64);
 
+/// 台本末尾へ付加する汎用コマンド（`\!` キャリアの typed 前段。搬送のみ・解釈しない）。
+///
+/// name で消費側が選別し、tokens は不透明な文字列列として運ぶ（この層では解釈しない）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EpilogueCommand {
+    pub name: String,
+    pub tokens: Vec<String>,
+}
+
 /// talk 起動要求（kanade → dispatcher → sakura）。reply を同梱しない。
+///
+/// `epilogue` は compile 後の CueSheet 末尾（最終 offset・duration 0）へ carrier cue として
+/// 付加される汎用コマンド列。既定は空（従来挙動）。空でない場合のみ末尾へ付く。
+/// スクリプト文字列末尾への追記ではないため、`\e` による End 切詰めでも脱落しない。
 #[derive(Debug, Clone)]
 pub struct StartTalk {
     pub talk_id: TalkId,
     pub script: String,
+    pub epilogue: Vec<EpilogueCommand>,
+}
+
+impl StartTalk {
+    /// epilogue なしの従来形コンストラクタ（構築点の機械的追随を最小化）。
+    pub fn new(talk_id: TalkId, script: impl Into<String>) -> Self {
+        Self {
+            talk_id,
+            script: script.into(),
+            epilogue: Vec::new(),
+        }
+    }
 }
 
 /// 終端理由 3 値（旧 kanade quit:bool を置換）。

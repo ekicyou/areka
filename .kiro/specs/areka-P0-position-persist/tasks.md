@@ -68,7 +68,7 @@
   - _Boundary: areka-ghost/runtime.rs_
 
 - [ ] 4. Core: 汎用プロパティ SET キュー語彙
-- [ ] 4.1 (P) `EpilogueCommand` 型と `StartTalk.epilogue` の追加
+- [x] 4.1 (P) `EpilogueCommand` 型と `StartTalk.epilogue` の追加
   - `areka-talk` に汎用コマンドを表す `EpilogueCommand { name, tokens }` を新設し、`StartTalk` へ additive フィールド `epilogue: Vec<EpilogueCommand>`（既定空）を追加する
   - 既存呼び出し点の追随を最小化する `StartTalk::new(talk_id, script)`（epilogue 空の従来形コンストラクタ）を用意する
   - 観測可能な完了条件: `StartTalk::new` で構築した値が `epilogue` 空を持ち、既存の構築点がコンパイルを保つこと

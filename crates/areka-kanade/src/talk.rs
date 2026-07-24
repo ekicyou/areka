@@ -19,10 +19,7 @@ mod tests {
     /// `areka-talk` 側が正本として保持することを確認する（Req 1.1・1.7）。
     #[test]
     fn reexported_types_are_usable_via_kanade_talk_path() {
-        let start = StartTalk {
-            talk_id: TalkId(1),
-            script: "hi".to_string(),
-        };
+        let start = StartTalk::new(TalkId(1), "hi");
         assert_eq!(start.talk_id, TalkId(1));
 
         let done = TalkDone {

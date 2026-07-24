@@ -172,7 +172,7 @@ fn on_reply(
                 state.phase = Phase::Steady {
                     talk: Some(ActiveTalk { talk_id, origin }),
                 };
-                (state, vec![Action::StartTalk(StartTalk { talk_id, script })])
+                (state, vec![Action::StartTalk(StartTalk::new(talk_id, script))])
             }
             ShioriOutcome::NoContent => {
                 // 204: talk なし（Req 2.3／4.2）。Steady{None} を維持し次 Tick で pump 再開。
@@ -198,7 +198,7 @@ fn on_reply(
                     state.phase = Phase::Steady {
                         talk: Some(ActiveTalk { talk_id, origin }),
                     };
-                    (state, vec![Action::StartTalk(StartTalk { talk_id, script })])
+                    (state, vec![Action::StartTalk(StartTalk::new(talk_id, script))])
                 }
                 // DD-6 防御破棄（非マウス origin 限定）。本アームの意味は「全 origin 防御」から
                 // **「非マウス origin 限定の防御」へ狭まった**——マウス origin は上の置換アームへ
@@ -508,7 +508,7 @@ mod tests {
         assert_eq!(s1.next_talk_id, 6, "採番カウンタが進む");
         assert_eq!(actions1.len(), 1);
         match &actions1[0] {
-            Action::StartTalk(StartTalk { talk_id, script }) => {
+            Action::StartTalk(StartTalk { talk_id, script, .. }) => {
                 assert_eq!(*talk_id, TalkId(5));
                 assert_eq!(script, "hello");
             }
@@ -628,7 +628,7 @@ mod tests {
         assert_eq!(next.next_talk_id, 6);
         assert_eq!(actions.len(), 1);
         match &actions[0] {
-            Action::StartTalk(StartTalk { talk_id, script }) => {
+            Action::StartTalk(StartTalk { talk_id, script, .. }) => {
                 assert_eq!(*talk_id, TalkId(5));
                 assert_eq!(script, "nade");
             }
@@ -660,7 +660,7 @@ mod tests {
         assert_eq!(next.next_talk_id, 7, "置換は新 talk_id を採番する");
         assert_eq!(actions.len(), 1);
         match &actions[0] {
-            Action::StartTalk(StartTalk { talk_id, script }) => {
+            Action::StartTalk(StartTalk { talk_id, script, .. }) => {
                 assert_eq!(*talk_id, TalkId(6), "StartTalk は新 talk_id（旧 talk は dispatcher が Close-then-spawn）");
                 assert_eq!(script, "menu");
             }

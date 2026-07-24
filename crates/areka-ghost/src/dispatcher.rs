@@ -335,6 +335,7 @@ mod tests {
 
         // A: 長い待ちを持つ script（差し替えまで一切 Tick を送らないので自然完了しない）。
         tx.send(DispatcherMsg::Start(StartTalk {
+            epilogue: Vec::new(),
             talk_id: talk_a,
             script: r"\s[1]A\w[50]A_END\e".to_string(),
         }))
@@ -342,6 +343,7 @@ mod tests {
 
         // B: 短い script（差し替え後にこれを完走させる）。
         tx.send(DispatcherMsg::Start(StartTalk {
+            epilogue: Vec::new(),
             talk_id: talk_b,
             script: r"\s[2]B\w[2]B_END\e".to_string(),
         }))
@@ -410,11 +412,13 @@ mod tests {
         let talk_b = TalkId(12);
 
         tx.send(DispatcherMsg::Start(StartTalk {
+            epilogue: Vec::new(),
             talk_id: talk_a,
             script: r"\s[1]A\w[50]A_END\e".to_string(),
         }))
         .expect("send Start(A)");
         tx.send(DispatcherMsg::Start(StartTalk {
+            epilogue: Vec::new(),
             talk_id: talk_b,
             script: r"\s[2]B\w[2]B_END\e".to_string(),
         }))
@@ -487,6 +491,7 @@ mod tests {
 
         // 長い待ちを持つ script（Close 時点では自然完了していない）。
         tx.send(DispatcherMsg::Start(StartTalk {
+            epilogue: Vec::new(),
             talk_id: TalkId(21),
             script: r"\s[1]X\w[50]X_END\e".to_string(),
         }))
@@ -527,6 +532,7 @@ mod tests {
         //   ClearAll@0.0・Emote{5}@0.0・FIRST@0.0 / Wait@0.25 / SECOND@0.45（FIRST の D=0.25 + \w[4]=0.20）/
         //   Wait@0.75 / THIRD@1.05（SECOND の D=0.30 + \w[6]=0.30）。占有 horizon=1.30（THIRD 再生完了）。
         tx.send(DispatcherMsg::Start(StartTalk {
+            epilogue: Vec::new(),
             talk_id: TalkId(31),
             script: r"\s[5]FIRST\w[4]SECOND\w[6]THIRD\e".to_string(),
         }))
@@ -626,6 +632,7 @@ mod tests {
 
         let talk_c = TalkId(41);
         tx.send(DispatcherMsg::Start(StartTalk {
+            epilogue: Vec::new(),
             talk_id: talk_c,
             script: r"\s[9]hello\w[2]world\e".to_string(),
         }))
@@ -654,6 +661,7 @@ mod tests {
         // slot は解放済み: 後続 Start は Close を要さず新規 talk をそのまま再生できる。
         let talk_d = TalkId(42);
         tx.send(DispatcherMsg::Start(StartTalk {
+            epilogue: Vec::new(),
             talk_id: talk_d,
             script: r"\s[8]again\e".to_string(),
         }))
@@ -766,6 +774,7 @@ mod tests {
 
         // talk 1: `%username`（→ 起動時点で凍結された provider 値 `user1` へ展開）。
         tx.send(DispatcherMsg::Start(StartTalk {
+            epilogue: Vec::new(),
             talk_id: TalkId(61),
             script: r"\s[0]%username\e".to_string(),
         }))
@@ -789,6 +798,7 @@ mod tests {
 
         // talk 2: 差し替え起動（talk 1 は Close funnel で終了）。provider の次の呼出＝`user2`。
         tx.send(DispatcherMsg::Start(StartTalk {
+            epilogue: Vec::new(),
             talk_id: TalkId(62),
             script: r"\s[0]%username\e".to_string(),
         }))

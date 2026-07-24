@@ -65,7 +65,7 @@ fn on_close_pending(mut state: State, input: Input, config: &KanadeConfig) -> (S
                 let deadline = deadline_from(state.last_now, config);
                 tracing::info!(target: "kanade", event = "close_talk_start", talk_id = talk_id.0, "OnClose 応答スクリプト——close talk を再生起動し完了を待機");
                 state.phase = Phase::CloseTalkWait { talk_id, deadline };
-                (state, vec![Action::StartTalk(StartTalk { talk_id, script })])
+                (state, vec![Action::StartTalk(StartTalk::new(talk_id, script))])
             }
             ShioriOutcome::NoContent => {
                 // 204 = 応答なし（≠拒否・DD-11）。追加イベントを発行せず無言終了へ直行する
@@ -246,7 +246,7 @@ mod tests {
         assert_eq!(s1.next_talk_id, 6, "talk_id 採番カウンタが進む");
         assert_eq!(actions1.len(), 1);
         match &actions1[0] {
-            Action::StartTalk(StartTalk { talk_id, script }) => {
+            Action::StartTalk(StartTalk { talk_id, script, .. }) => {
                 assert_eq!(*talk_id, TalkId(5));
                 assert_eq!(script, "bye");
             }
