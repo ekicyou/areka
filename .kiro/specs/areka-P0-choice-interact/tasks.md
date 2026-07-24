@@ -97,7 +97,7 @@
   - _Requirements: 8.1, 8.4_
   - _Depends: 4.1, 4.2_
 
-- [ ] 7.3 実機サインオフ手順の実施
+- [x] 7.3 実機サインオフ手順の実施
   - 実 emo2・実 pasta.dll・絶対パス・実 DPI（≠96）で起動し、本番ゴースト表示を先行させたうえでポインタ追従を目視し、クリック確定を有界 `AREKA_APP_SMOKE_EXIT_MS` auto-exit 後の `RUST_LOG` ログ grep（`event="choice_selected"`）で確認する
   - カスケード発火・遷移（下流 choice-select-events の領分）は本判定に混ぜない
   - Observable: 実機でポインタ追従ハイライトが目視でき、`choice_selected` ログの grep 一致でクリック確定到達が確認される
