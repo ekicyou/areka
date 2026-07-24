@@ -182,6 +182,59 @@
 ## 8. 設計フェーズへの推奨
 
 - **好ましいアプローチ（暫定）**: A-2（サブモジュール隔離）×B-2（新 NonSend `BalloonWiring` に自前 ordinal＋発行シンク集約）×C-1（`Sender<ChoiceSelection>` mpsc）。donor（`MouseWiring`）と最も同型で、決定論檻が mpsc 観測に乗り、hit 判定純関数を独立網羅できる。**ただし課題D（R-1）の結論が全体スコープを左右する**ため、設計は R-1 を最優先で解いてから配線形を確定すること。
-- **キャリー研究**: R-1〜R-4（特に R-1 の `HitTest::none()` 到達経路）。
+- **キャリー研究**: R-1〜R-4（特に R-1 の `HitTest::none()` 到達経路）→ **設計フェーズで全件解決済み（§9）**。
 - **境界厳守**: 上流（choice-render/emo-text）の描画・幾何・hover API・cue ワイヤ形を消費のみ（R8.5・新 cue variant 新設禁止）。spawn.rs 本体を改変せず（R4.4・改変必要ならエスケープ条項で position-persist へ）。`CuePlayer::resolve_choice` 直接呼出禁止（R2.6/R5.4）。DD-IE-10 物理 px 素通し（k=1.0）を破らない（R4.2）。
 - **次コマンド**: `/kiro-design areka-P0-choice-interact`（設計生成→検証→設計ディスカッション）。
+
+---
+
+## 9. 設計フェーズ追記（2026-07-24・kiro-spec-design 実施）
+
+> Discovery 種別: **Extension（light discovery・統合点特化）**。外部依存追加なしのため Web 調査は不要、コードベース実測のみで裁定。以下は design.md の決定の証跡。
+
+### 9.1 Research Log: R-1（最重要）——バルーンポインタ到達経路の解決
+
+- **Context**: `spawn.rs:174` の `HitTest::none()` 下でバルーン窓の選択肢行にポインタイベントが届くかが最大の未確定点だった（§4 課題D）。
+- **Sources**: `crates/wintf/src/ecs/layout/hit_test/mod.rs`（`HitTestMode`・`hit_test_entity`/`hit_test_in_window`・`AlphaMaskResource`）／`crates/wintf/src/ecs/pointer/nchittest_cache.rs`（HTCLIENT/HTTRANSPARENT）／`crates/wintf/src/ecs/window_proc/mouse_move.rs`・`mouse_click.rs`・`mouse_dblclick_wheel.rs`（hit→`PointerState` 付与）／`crates/wintf/src/ecs/pointer/dispatch/mod.rs`（Tunnel/Bubble 配信）／`crates/wintf/src/ecs/clickthrough/controller.rs`（`WS_EX_TRANSPARENT` トグル判定）／`crates/areka-emo-present/src/mount.rs:144`（surface entity＝`HitTest::alpha_mask()`＋`AlphaMaskResource`・offset (0,0)）／`crates/areka/src/emo2_boot/frame.rs:432-453`（バルーン窓へ `attach_target`＋初回 `ShowSurface` 面0）／`crates/areka/src/placement/spawn.rs`（clickthrough 登録は `GhostWindowMarker` 全窓＝バルーン含む）。
+- **Findings**:
+  1. `HitTest::none()` は**窓 entity 自身**をヒット候補から外すだけ。ヒットテストは窓サブツリーを走査し、バルーン窓には emo-present mount の **surface entity**（窓の子・offset (0,0)）が `HitTest::alpha_mask()`＋`AlphaMaskResource`（presenter `apply` ごとに合成結果から更新）で存在する。バルーン枠ビットマップ（面0）は本体不透明ゆえ選択肢行位置でヒット成立。
+  2. OS 段: clickthrough 機構はカーソル位置の `hit_test_in_window` 結果で `WS_EX_TRANSPARENT` をトグル（ヒットあり→OFF＝自窓受領）。`cached_nchittest` も同判定で HTCLIENT を返す。→ 不透明バルーン上では WM_MOUSEMOVE／WM_LBUTTONDOWN が届く。
+  3. ECS 段: WM_MOUSEMOVE はヒットした surface entity へ `PointerState` を付与（ヒット無しフォールバックは窓 entity）。`dispatch_pointer_events` が親チェーン（surface→窓）を Tunnel→Bubble で巡回し経路上の `OnPointerMoved`/`OnPointerPressed` を呼ぶ——**バルーン窓 entity にハンドラを装着すれば Bubble 相で受信できる**。
+  4. WM_MOUSELEAVE は `PointerState` 除去＋`PointerLeave` マーカー 1 フレーム付与。`OnPointerExited` は dispatch されない（Moved/Pressed のみ）。
+- **Implications（裁定）**: **窓 `HitTest` トグル／content `alpha_mask` 付与／表示中トグルのいずれも不要**。既存到達性の上にハンドラ post-spawn 装着のみで足りる。**spawn.rs 改変ゼロ＝position-persist との衝突なし（rebase/merge 条項は不発動）**。到達契約＝「presented バルーン面のα不透明領域」であり、Revalidation Trigger として design.md に明記。
+
+### 9.2 Research Log: R-2（座標原点）／R-3（発行シーム）／R-4（クリック表現）
+
+- **R-2 解決**: emo-present mount は `Arrangement.offset = (0,0)`（`mount.rs:63-72`,`:166`）＝ surface 原点はバルーン窓 client 原点に一致。`HitRectPx` は `to_window_physical`（`choice.rs:260-289`）で validrect 原点（＝TextSurface 窓内装着 offset と同源）からバルーン窓 client 物理 px へ写像済み。`PointerState.client_point`（`Point{x,y}: i32`・窓 client 物理 px）と**同一原点**。DPI 変換なし（k=1.0・DD-IE-10 整合）。
+- **R-3 解決**: M1 は `wire_balloon_choice` が std mpsc チャネルを生成し `Sender` を `BalloonWiring` へ、`Receiver` を NonSend `ChoiceSelectionInbox` へ格納（Receiver 生存で send は Err にならない・檻は `try_recv` で一度きり発行を観測）。W6 `choice-select-events` が Inbox を受信処理へ置換する seam として design.md Revalidation Triggers に明記。scope→actor 写像は既存 `ActorKey::from(scope.to_string())`（`frame.rs:461`）の消費。
+- **R-4 解決**: `PointerState` に「単一クリック」フィールドは無い。左シングルクリック＝`left_down: bool`（transfer のエッジ検出→1 dispatch のみ有効・dispatch 後クリア）。`OnPointerPressed` は left/right/middle いずれかの down で発火するためハンドラで `left_down` を選別。`double_click: DoubleClick` は WM_LBUTTONDBLCLK 由来の別表現で、DBLCLK 2 打目も `left_down=true` を伴う（donor `on_char_pointer_pressed` は `double_click` のみ参照＝単一クリックは不送出）。
+
+### 9.3 Design Decisions（DD-CI-1〜11・design.md の正本裁定）
+
+| DD | 裁定 | 根拠 |
+|----|------|------|
+| DD-CI-1 | **到達経路＝既存αマスク合流・変更ゼロ**。バルーン窓 entity へハンドラ post-spawn 装着のみ（R-1） | spawn.rs／HitTest／clickthrough／emo-text すべて不改変・position-persist 衝突なし |
+| DD-CI-2 | **A-2**: サブモジュール `input_events/balloon.rs` 隔離 | 参照資源（runtime 直読）・下流（ChoiceSelection）がキャラ窓配線と別物・mod.rs 肥大回避・brief「input_events モジュールで完結」をサブモジュールとして充足 |
+| DD-CI-3 | **B-2**: NonSend `BalloonWiring`（last-injected ordinal per scope＋`selection_tx`）。runtime は `Emo2Wiring::runtime()` 新設アクセサ（additive・`presenter()` 同型）から都度 `Rc` clone | hover getter 不在の穴埋めと発行シンクを donor `MouseWiring` 同型の 1 資源へ集約 |
+| DD-CI-4 | **C-1**: `Sender<ChoiceSelection>`（std mpsc）。`ChoiceSelection = { id: String, label: String, scope: usize, references: Vec<String> }`。**ordinal はワイヤ形に含めない**（解決キーは id・ordinal は表示層内部主キーの非漏洩） | donor の入力配信流儀と一致・mpsc 観測が檻に乗る・下流 `ResolveChoice{id}` と整合 |
+| DD-CI-5 | 重なり規則＝**逆順走査・最終一致**（`choice_hit_rows` は ordinal 昇順×行昇順→後定義が手前＝画家のアルゴリズム整合）。包含は半開区間 `[left,right)×[top,bottom)` | memory「emo当たり判定の重なりは画家のアルゴリズム」・whole-pixel 行矩形と整合 |
+| DD-CI-6 | **throttle なし**・inject は**遷移時のみ**（last-injected dedup） | hover はプロセス内状態書込のみ（kanade 非送出）で安価・`MouseMoveThrottle` の適用対象外 |
+| DD-CI-7 | env 巡回導線 `hover_inject.rs` と**共存**（不変・既定 no-op・デバッグ用）。実機サインオフは実ポインタ経路の `info!(event = "choice_selected", ...)` grep＋`AREKA_APP_SMOKE_EXIT_MS` 有界 auto-exit。両方有効時は後勝ち書込（デバッグ限定・許容） | 置換は choice-render の決定論資産を壊すリスクだけあって益なし |
+| DD-CI-8 | stale 追随＝**毎イベント現行スナップショット再読**（`choice_active`＋`choice_hit_rows`）。click は現行 rows からのみ構成。`choice_active` 偽観測時は自前 hover 状態のみ None 整合（注入しない——上流 apply_cue 原子性が正本） | §2.1 の上流原子性に完全に乗る・自前の消滅検知不要 |
+| DD-CI-9 | click 確定＝**Bubble 相かつ `left_down`**。`double_click` フィールド不参照（DBLCLK 2 打目も独立 press）。二重発行防止は dispatch のエッジ検出（構造的）＋1 dispatch＝高々 1 send | R2.1（左シングルクリック）・R2.4（同一クリック二重発行なし）を機構レベルで充足 |
+| DD-CI-10 | handled 戻り値: moved＝常に `false`（非侵襲）・pressed＝発行時のみ `true` | 既存挙動（ドラッグ等）への非干渉 |
+| DD-CI-11 | **窓外離脱の hover 解除**: `PointerLeave` マーカー（既存機構・FrameFinalize クリア）を読む排他システム `clear_balloon_hover_on_leave` を Input スケジュール（dispatch 後）へ登録。判断は `hover_action(active, None, last)` の再利用 | `OnPointerExited` 非配信＋高速離脱のエッジサンプル飛びで hover が残置し R1.3 意図／R7.1 目視を毀損するため（設計レビューゲートでの補修） |
+
+### 9.4 Synthesis 結果
+
+- **Generalization**: 過剰一般化なし。純関数核は rows スライス入力の汎用形に留め、M2（ホイール/キーボード）用の抽象は作らない。
+- **Build vs Adopt**: wintf の `OnPointer*` dispatch・`PointerLeave`・clickthrough・αマスク hit test、donor の NonSend/attach/借用分割/合成 PointerState テスト形、hover_inject の借用規律をすべて**採用**。新規外部依存ゼロ。
+- **Simplification**: throttle 撤去（DD-CI-6）・runtime mock シーム不採用（純関数分割で不要——「檻に入れるのは判断分岐のみ」）・`ChoiceSelection` は要件必須 4 フィールドのみ・`RegionSource` 型シームの複製もしない。
+
+### 9.5 Risks & Mitigations（設計後更新）
+
+- ~~課題D: ポインタ到達経路（Medium–High）~~ → **解消**（DD-CI-1・変更ゼロ）。
+- バルーン面のα不透明性への依存（Low）: 選択肢行下が透明なバルーン素材では到達しない——到達契約として design.md Revalidation Triggers に明記。emo2 バルーンは不透明本体で成立。
+- クリック押下がドラッグ Preparing も開始（Low・既存挙動）: press 時点で発行済みのため対話の正しさに影響なし。挙動改変はしない（R4.4）。
+- `AREKA_CHOICE_HOVER_INJECT` 併用時の hover 交互書込（Low・デバッグ限定）: 文書化のみ。
+- M1 で Inbox 未消費のままキュー滞留（Low）: 発行はユーザークリック頻度のみ・W6 で受信処理へ置換。
