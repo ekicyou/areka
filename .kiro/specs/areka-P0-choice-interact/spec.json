@@ -1,0 +1,22 @@
+{
+  "feature_name": "areka-P0-choice-interact",
+  "created_at": "2026-07-24T08:06:13Z",
+  "updated_at": "2026-07-24T08:14:26Z",
+  "language": "ja",
+  "phase": "requirements-generated",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": false
+    },
+    "design": {
+      "generated": false,
+      "approved": false
+    },
+    "tasks": {
+      "generated": false,
+      "approved": false
+    }
+  },
+  "ready_for_implementation": false
+}
