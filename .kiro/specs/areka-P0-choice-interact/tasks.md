@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. バルーン対話サブモジュールの雛形作成と runtime アクセサ追加
+- [x] 1. バルーン対話サブモジュールの雛形作成と runtime アクセサ追加
   - `crates/areka/src/input_events` 配下にバルーン対話専用のサブモジュールを新設し、モジュール宣言を追加する
   - `Emo2Wiring` に既存 `presenter()` アクセサと同型の runtime 読み口を additive に追加する
   - Observable: 新設サブモジュールと新アクセサを含めてクレートがビルド成功する
