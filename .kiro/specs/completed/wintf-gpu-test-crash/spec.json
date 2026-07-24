@@ -1,9 +1,9 @@
 {
   "feature_name": "wintf-gpu-test-crash",
   "created_at": "2026-07-24T03:43:40Z",
-  "updated_at": "2026-07-24T05:20:00Z",
+  "updated_at": "2026-07-24T07:55:35Z",
   "language": "ja",
-  "phase": "tasks-generated",
+  "phase": "completed",
   "approvals": {
     "requirements": {
       "generated": true,
@@ -16,6 +16,10 @@
     "tasks": {
       "generated": true,
       "approved": true
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-07-24T07:55:35Z"
     }
   },
   "ready_for_implementation": true
