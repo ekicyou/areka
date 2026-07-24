@@ -16,6 +16,8 @@
 use std::collections::HashMap;
 use std::sync::mpsc::{Receiver, Sender};
 
+use areka_emo_text::actor::ChoiceHitRow;
+
 /// 選択確定のワイヤ形（本 spec 契約正本・2.2）。
 ///
 /// 下流 W6 が表示層へ再照会せず選択解決とカスケード発火を組み立てられる自己完結データ。
@@ -112,6 +114,39 @@ impl BalloonWiring {
 /// `#[allow(dead_code)]`: M1 は seam の定義と単体観測まで。本番構築・受信は下流 W6 の範囲。
 #[allow(dead_code)]
 pub(crate) struct ChoiceSelectionInbox(pub(crate) Receiver<ChoiceSelection>);
+
+/// 点包含 hit 判定（純関数・R1.1/1.5/2.3）。
+///
+/// 包含は半開区間 `[left, right) × [top, bottom)`（whole-pixel 行矩形と整合）——
+/// `left`/`top` 辺は包含・`right`/`bottom` 辺は非包含。座標 `x`/`y`（バルーン窓 client
+/// **物理 px**・f32）を `HitRectPx` の各辺へ**そのまま**比較する（DPI 変換・スケール係数を
+/// 一切挟まない・k=1.0 素通し・R4.2／8.6・DD-IE-10 整合）。
+///
+/// 判定対象は上流が供給する選択肢行ジオメトリ（`rows`）のみ。選択肢以外のバルーン内リンク
+/// （`\_a` 等）は `rows` に含まれず本関数の対象外（R5.2）。
+///
+/// 重なり時は**逆順走査の最初の一致＝スライス最終一致**の index を返す（`choice_hit_rows` は
+/// ordinal 昇順×行昇順ゆえ「後定義が手前」＝画家のアルゴリズムと整合・DD-CI-5）。病的重なり入力
+/// でも決定的に高々 1 つの index を返す（R1.1／1.5）。非ヒットは `None`（R2.3）。空 `rows` も `None`。
+///
+/// 戻り値はスライス index（呼び手が `rows[i].ordinal` 等へ展開する）。同一入力→同一出力（純粋・
+/// 決定論・失敗経路なし）。
+///
+/// `#[allow(dead_code)]`: 本番消費（配線層 task 4.x）まで到達者なし——単体檻のみ到達（M1 暫定抑止）。
+#[allow(dead_code)]
+pub(crate) fn hit_choice_row(rows: &[ChoiceHitRow], x: f32, y: f32) -> Option<usize> {
+    // 逆順走査の最初の一致＝スライス最終一致（後定義が手前・画家のアルゴリズム・DD-CI-5）。
+    // 半開区間 [left, right) × [top, bottom)：left/top は包含・right/bottom は非包含。
+    // 座標は物理 px 素通し——スケール係数を掛けない（R4.2／8.6）。
+    rows.iter()
+        .enumerate()
+        .rev()
+        .find(|(_, row)| {
+            let r = &row.rect;
+            x >= r.left && x < r.right && y >= r.top && y < r.bottom
+        })
+        .map(|(i, _)| i)
+}
 
 #[cfg(test)]
 mod tests {
@@ -217,5 +252,148 @@ mod tests {
         wiring.set_hover(0, None);
         assert_eq!(wiring.hover(0), None, "None 上書きが反映される");
         assert_eq!(wiring.hover(1), Some(5), "他 scope は影響を受けない");
+    }
+
+    // -------------------------------------------------------------------------
+    // hit_choice_row 純関数檻（task 3.1・design「純関数判定核」／Testing Strategy item 1/4）
+    //
+    // 上流実型 `ChoiceHitRow`／`HitRectPx`（全 pub フィールド）で fixture を組み、
+    // 包含／境界（半開）／行外／空／複数行／病的重なり／座標素通し（DPI 非適用）を
+    // GPU・実窓不要で決定的に判定する（R1.1/1.5/2.3/4.2/5.2/8.6）。
+    // -------------------------------------------------------------------------
+
+    use areka_emo_text::actor::HitRectPx;
+
+    /// 窓物理 px の行矩形を持つ `ChoiceHitRow` を組む（ordinal は入力順昇順を模す）。
+    /// rect 以外のフィールドは 3.1 の判定に無関係——不透明転写の placeholder。
+    fn row(ordinal: usize, left: f32, top: f32, right: f32, bottom: f32) -> ChoiceHitRow {
+        ChoiceHitRow {
+            ordinal,
+            id: format!("q{ordinal}"),
+            label: format!("label{ordinal}"),
+            references: Vec::new(),
+            rect: HitRectPx {
+                left,
+                top,
+                right,
+                bottom,
+            },
+        }
+    }
+
+    /// 内側包含（R1.1）: 矩形の内部点はその行 index を返す。
+    #[test]
+    fn hit_inside_rect_returns_index() {
+        let rows = [row(0, 10.0, 20.0, 50.0, 40.0)];
+        assert_eq!(
+            hit_choice_row(&rows, 30.0, 30.0),
+            Some(0),
+            "矩形内部の点はヒット index を返す"
+        );
+    }
+
+    /// 空 rows（R2.3）: 判定対象が無ければ常に None。
+    #[test]
+    fn hit_empty_rows_returns_none() {
+        let rows: [ChoiceHitRow; 0] = [];
+        assert_eq!(hit_choice_row(&rows, 30.0, 30.0), None, "空 rows は None");
+    }
+
+    /// 行外（R2.3・非ヒット→None）: 矩形外の点は None。四方向すべて外側を確認。
+    #[test]
+    fn hit_outside_rect_returns_none() {
+        let rows = [row(0, 10.0, 20.0, 50.0, 40.0)];
+        assert_eq!(hit_choice_row(&rows, 5.0, 30.0), None, "左外");
+        assert_eq!(hit_choice_row(&rows, 60.0, 30.0), None, "右外");
+        assert_eq!(hit_choice_row(&rows, 30.0, 10.0), None, "上外");
+        assert_eq!(hit_choice_row(&rows, 30.0, 50.0), None, "下外");
+    }
+
+    /// 半開区間の境界（design Testing Strategy item 1）: `left`/`top` 辺は包含・
+    /// `right`/`bottom` 辺は非包含（whole-pixel 行矩形と整合）。
+    #[test]
+    fn hit_half_open_boundary_edges() {
+        let rows = [row(0, 10.0, 20.0, 50.0, 40.0)];
+
+        // left/top 辺は包含。
+        assert_eq!(hit_choice_row(&rows, 10.0, 30.0), Some(0), "left 辺は包含");
+        assert_eq!(hit_choice_row(&rows, 30.0, 20.0), Some(0), "top 辺は包含");
+        assert_eq!(hit_choice_row(&rows, 10.0, 20.0), Some(0), "左上角は包含");
+
+        // right/bottom 辺は非包含。
+        assert_eq!(hit_choice_row(&rows, 50.0, 30.0), None, "right 辺は非包含");
+        assert_eq!(hit_choice_row(&rows, 30.0, 40.0), None, "bottom 辺は非包含");
+        assert_eq!(hit_choice_row(&rows, 50.0, 40.0), None, "右下角は非包含");
+    }
+
+    /// 複数の非重複行のうち正しい行（design Testing Strategy item 1）: 点を含む行の
+    /// index が返る。各行が独立に判定される。
+    #[test]
+    fn hit_multiple_non_overlapping_rows_returns_correct_index() {
+        let rows = [
+            row(0, 0.0, 0.0, 100.0, 20.0),   // index 0
+            row(1, 0.0, 20.0, 100.0, 40.0),  // index 1
+            row(2, 0.0, 40.0, 100.0, 60.0),  // index 2
+        ];
+        assert_eq!(hit_choice_row(&rows, 50.0, 10.0), Some(0), "1 行目内");
+        assert_eq!(hit_choice_row(&rows, 50.0, 30.0), Some(1), "2 行目内");
+        assert_eq!(hit_choice_row(&rows, 50.0, 50.0), Some(2), "3 行目内");
+        assert_eq!(hit_choice_row(&rows, 50.0, 70.0), None, "全行外");
+    }
+
+    /// 病的重なり→最終一致（R1.5・DD-CI-5）: 点を含む行が複数あっても、逆順走査の最初の
+    /// 一致＝スライス**最終** index を決定的に返す（後定義が手前・画家のアルゴリズム）。
+    /// 期待 index を各行で一意にするため、重なり方を非対称にして「最初一致」なら別 index に
+    /// なる配置を用いる（最初一致=1／最終一致=2 を弁別）。
+    #[test]
+    fn hit_pathological_overlap_returns_last_match_deterministically() {
+        // 3 行が (50, 30) を共通に含む。スライス順（index 昇順）で最後の index 2 が返るべき。
+        let rows = [
+            row(0, 0.0, 0.0, 100.0, 100.0),  // index 0: 点を含む
+            row(1, 40.0, 20.0, 60.0, 40.0),  // index 1: 点を含む
+            row(2, 45.0, 25.0, 80.0, 60.0),  // index 2: 点を含む（最後定義＝手前）
+        ];
+        assert_eq!(
+            hit_choice_row(&rows, 50.0, 30.0),
+            Some(2),
+            "重なり時はスライス最終一致 index（逆順走査の最初一致）"
+        );
+
+        // 2 行重なりでも最終一致（index 1）が返る——最初一致 index 0 と弁別。
+        let two = [
+            row(0, 0.0, 0.0, 100.0, 100.0), // index 0: 点を含む
+            row(1, 10.0, 10.0, 90.0, 90.0), // index 1: 点を含む（最後定義）
+        ];
+        assert_eq!(
+            hit_choice_row(&two, 50.0, 50.0),
+            Some(1),
+            "2 行重なりでも最終一致 index を返す（最初一致 0 ではない）"
+        );
+    }
+
+    /// 座標素通し＝DPI 非適用（design Testing Strategy item 4・R4.2／8.6）: k=1.0 では
+    /// ヒットする点が、もし DPI スケール（>1）を座標へ掛けていれば矩形外へ出て miss する
+    /// 配置を用い、実際には**スケールを掛けず**ヒットすることを固定する（falsifying fixture）。
+    #[test]
+    fn hit_coordinate_passthrough_no_dpi_scaling() {
+        // 矩形は右下に離れた帯。点は k=1.0 でその内側。
+        let rows = [row(0, 100.0, 100.0, 140.0, 120.0)];
+        let (x, y) = (110.0_f32, 110.0_f32);
+
+        // k=1.0 素通し: ヒットする。
+        assert_eq!(
+            hit_choice_row(&rows, x, y),
+            Some(0),
+            "物理 px 素通し（k=1.0）ではヒットする"
+        );
+
+        // もし DPI スケール（例 1.5）を座標へ掛けていたら (165, 165) となり矩形外＝miss。
+        // 実装がスケールを掛けていないことを、スケール後座標が miss になることで補強する。
+        let scale = 1.5_f32;
+        assert_eq!(
+            hit_choice_row(&rows, x * scale, y * scale),
+            None,
+            "スケールを掛けた座標なら矩形外（＝実装はスケールを掛けていない反証 fixture）"
+        );
     }
 }
