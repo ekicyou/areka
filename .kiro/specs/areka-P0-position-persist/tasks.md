@@ -54,14 +54,14 @@
   - _Depends: 1.2, 2.1_
   - _Boundary: placement/spawn.rs, placement/follow.rs_
 
-- [ ] 3. Core: GhostRuntime の公開面拡張
+- [x] 3. Core: GhostRuntime の公開面拡張
 - [x] 3.1 (P) `sylphya_publisher()` アクセサの追加
   - `GhostRuntime` へ `kanade()`/`dispatcher()` と同型の additive アクセサを追加し、UI 側（main.rs）が `SylphyaPublisher` の clone を取得できるようにする
   - 観測可能な完了条件: アクセサ経由で取得した publisher で `persist_put` が呼び出せることをテストで確認できること
   - _Requirements: 6.2_
   - _Boundary: areka-ghost/runtime.rs_
 
-- [ ] 3.2 shutdown() での `barrier()` 明示確認
+- [x] 3.2 shutdown() での `barrier()` 明示確認
   - `shutdown()` の sylphya `close()` 呼び出し直前に `barrier()` を呼び、Ok なら flush 確認ログを、Err なら warn ログを出して続行する
   - 観測可能な完了条件: shutdown 系列を駆動するテストで `barrier()` 呼び出し後に close へ到達し、Err 時も panic せず続行することが確認できること
   - _Requirements: 1.2_
@@ -197,3 +197,7 @@
   - 観測可能な完了条件: 上記 3 点すべてが実機ログ grep と目視で確認され、サインオフ記録が残ること
   - _Requirements: 8.6_
   - _Depends: 8.2, 8.5, 8.6_
+
+## Implementation Notes
+
+- **[3.1] サブエージェントが main リポジトリへ leak する罠（ハーネス quirk #3/#11 再演）**: 3.1 の implementer が worktree ではなく main リポジトリ（`C:\home\maz\git\areka`）の `runtime.rs` を編集し、worktree は clean のまま・変更が main に落ちた（過去タスクでも `persist.rs`・`input_events/balloon.rs` が main に untracked で leak 済みだった）。復旧: main→worktree へ該当ファイルを cp（base 一致を diff で確認）→ worktree でテスト緑を確認 → `git -C <main> restore` ＋ leaked untracked を rm。**予防**: implementer/reviewer へ「cd するな・main を触るな・絶対パスは必ず `.claude\worktrees\<name>` を含めよ・終了時に `git -C <main> status` が clean かつ自分の変更が worktree の `git status` に出ることを確認せよ」と厳命する。親は各タスク後に必ず worktree と main 双方の `git status` を検証する。

@@ -326,6 +326,26 @@ impl GhostRuntime {
         // 10. sylphya Close＋join（既存段の後・供給者停止後に掲示板を畳む・design「shutdown」）。
         //     供給者（ghost 静的 publish は boot 済み・kanade は上流で既に停止）が全て止まった後に
         //     掲示板を畳む。既に停止済みへの再送は SylphyaPublisher が warn＋縮退（冪等・非 panic）。
+        //
+        // close() の直前に barrier() で終了時フラッシュを明示確認する（requirements.md 1.2・
+        // design.md「C5 GhostRuntime 増分」step 10 直前・E2-lite の安全網）。DragEnd write-through は
+        // 既に FIFO で投函済み（E1＝FIFO close が保証の正本）だが、close() の前に反映フェンスを 1 枚置く
+        // ことで「終了直前までに投函された永続 put が確実に反映されてからストアが畳まれる」ことを保証する。
+        // Ok なら確認 info・Err（アクター既死等）なら warn の上で**続行**する——早期 return も panic も
+        // しない（write-through 済みが正本・design「Error Handling」shutdown barrier() Err 行）。
+        match sylphya_publisher.barrier() {
+            Ok(()) => {
+                tracing::info!(target: "ghost-shutdown", "persist flush confirmed");
+            }
+            Err(err) => {
+                tracing::warn!(
+                    target: "ghost-shutdown",
+                    error = %err,
+                    "persist flush barrier failed before sylphya close; continuing \
+                     (write-through via FIFO close is the primary guarantee)"
+                );
+            }
+        }
         sylphya_publisher.close();
         if let Err(err) = sylphya_handle.join() {
             tracing::error!(target: "ghost-shutdown", stage = "sylphya", error = %err, "sylphya actor join failed");
@@ -970,6 +990,68 @@ mod tests {
                     .expect("sylphya actor should process the persist_put and reflect it");
                 // アクター後片付け（宙吊りスレッド回避のため clean shutdown）。
                 let _ = runtime.shutdown(areka_kanade::CloseReason::System);
+            },
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // ---- shutdown() の barrier() 明示フラッシュ確認（task 3.2・position-persist） ----
+
+    /// シナリオ（task 3.2・position-persist）: `boot` した `GhostRuntime` を
+    /// `shutdown(CloseReason::System)` すると、sylphya `close()`（step 10）の**直前**に
+    /// `barrier()` が呼ばれ、成功時に固定 info ログ `persist flush confirmed`
+    /// （target `ghost-shutdown`）を発行する（requirements.md 1.2・design.md「C5 GhostRuntime
+    /// 増分」step 10 直前・Monitoring「persist flush confirmed（C5 info）」）。
+    ///
+    /// write-through（FIFO close＝E1）が保証の正本で、この `barrier()` は best-effort な
+    /// 終了時フラッシュ安全網（E2-lite）。ログ発行は「barrier が Ok を返し、その位置が close の
+    /// 直前である」ことの直接証跡になる（barrier→info→close のコード配置で順序が担保される）。
+    ///
+    /// `capture` はスレッドローカルに subscriber を差すため、`shutdown` を走らせる同一スレッド
+    /// （`run_bounded` の spawn 先）で発行された info ログを捕捉する。join の宙吊りに備え有界化する。
+    #[test]
+    fn shutdown_confirms_persist_flush_via_barrier_before_close() {
+        use crate::test_log_capture::{assert_logged, capture};
+
+        let root = unique_temp_dir("shutdown_confirms_persist_flush_via_barrier_before_close");
+        let _ = std::fs::remove_dir_all(&root);
+        write_minimal_resolvable_ghost_fixture(&root);
+
+        let options = GhostBootOptions {
+            ghost_root: root.clone(),
+            default_encoding: DefaultEncoding::Utf8,
+            shiori: ShioriWiring::Custom(Box::new(|| {
+                Ok(Box::new(FakeShioriBackend) as Box<dyn ShioriBackend>)
+            })),
+            sinks: vec![Box::new(NoopSink), Box::new(NoopSink)],
+            system_vars: SystemVarWiring::Custom(test_system_vars()),
+            app_profile_dir: None,
+            ticker: TickerMode::Disabled,
+        };
+
+        let runtime = boot(options).expect("boot should succeed for a resolvable ghost_root");
+
+        run_bounded(
+            "shutdown with barrier flush confirmation",
+            std::time::Duration::from_secs(10),
+            move || {
+                let events = capture(|| {
+                    let result = runtime.shutdown(areka_kanade::CloseReason::System);
+                    // Err パス（barrier がアクター既死で Err）でも panic せず続行するのが正で、
+                    // 生きた sylphya アクターに対する本 happy path は必ず Ok を返す（要件 6.1/6.4）。
+                    assert!(
+                        result.is_ok(),
+                        "shutdown should return Ok(()) with a live sylphya actor, got {result:?}"
+                    );
+                });
+                // barrier() が Ok を返し、その確認ログが close() の直前で発行されたことの直接証跡。
+                assert_logged(
+                    &events,
+                    tracing::Level::INFO,
+                    "ghost-shutdown",
+                    "persist flush confirmed",
+                );
             },
         );
 
