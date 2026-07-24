@@ -503,6 +503,25 @@ pub fn boot(mut options: GhostBootOptions) -> Result<GhostRuntime, GhostBootErro
         shell: Some(crate::sylphya_wiring::profile_areka_root(&mount.shell.dir)),
         balloon: None,
     };
+
+    // 永続書込先ディレクトリの即時保証（実機初回起動サインオフで判明した恒久修正・要件 6.3）:
+    // position-persist は M1 初の永続書込を導入した——sylphya は「M1 本番経路に永続書込呼出は無い」
+    // read-only 前提で完了しており、ghost profile root（`<shiori.dir>/profile/areka/`）を作る責任者が
+    // 結線とストアの狭間に落ちていた。新規ゴーストでこの dir が無いと初回の全 Ghost スコープ commit が
+    // os error 3（NotFound）で Degraded に倒れ、位置・起動記録が保存されない。ここで先に作る
+    // （`FsPersistIo::commit` も commit 時に `create_dir_all` する二重の安全網）。失敗しても boot は
+    // 止めない（warn＋継続・log-first・6.3——FsPersistIo が commit 時に再試行する）。
+    if let Some(ghost_root) = scope_roots.ghost.as_ref() {
+        if let Err(err) = std::fs::create_dir_all(ghost_root) {
+            tracing::warn!(
+                target: "ghost-boot",
+                path = %ghost_root.display(),
+                error = %err,
+                "ghost profile root の作成に失敗——継続（FsPersistIo が commit 時に再試行する・6.3）"
+            );
+        }
+    }
+
     let areka_sylphya::SylphyaParts {
         reader: sylphya_reader,
         publisher: sylphya_publisher,

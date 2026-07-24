@@ -247,7 +247,7 @@ pub fn assemble_test_ghost(tag: &str) -> TempGhost {
 ///   とみなし作り直す。後続タスク 5.x が DLL を実ロードしても常に最新実体を掴む）。
 pub fn shared_test_ghost() -> &'static Path {
     static SHARED: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
-    SHARED
+    let root = SHARED
         .get_or_init(|| {
             let root = std::env::temp_dir().join("areka_shiori4_test_ghost_shared");
 
@@ -264,8 +264,23 @@ pub fn shared_test_ghost() -> &'static Path {
             // static に格納する PathBuf は Drop されないため temp dir は残る（上記ドキュメント参照）。
             std::mem::forget(temp);
             root
-        })
-        .as_path()
+        });
+
+    // 永続状態を**毎呼出し**でリセットする（「shared_test_ghost は永続ファイルを持たない＝常に
+    // 初回扱い」不変条件の回復・i1/i2 等が明示依存）。position-persist で永続書込が実際に効くように
+    // なったため、共有ゴーストを boot して初回挨拶を完走したテストが
+    // `<root>/ghost/master/profile/areka/sylphya.toml`（[boot] count 等）を書き込み、固定パスの
+    // リーク再利用で cargo 実行を跨いで生存する。放置すると後続 boot が「2 回目扱い」になり
+    // OnFirstBoot をスキップして挨拶列が届かず、初回挨拶を待つテストが hang する。ここで毎回
+    // areka profile ディレクトリを消して初回扱いを保証する（ゴースト構造の hardlink 再利用は温存）。
+    let persist_dir = root
+        .join("ghost")
+        .join("master")
+        .join("profile")
+        .join("areka");
+    let _ = std::fs::remove_dir_all(&persist_dir);
+
+    root.as_path()
 }
 
 /// 固定パスに残る共有ゴーストが**そのまま再利用してよいほど健全か**を判定する
