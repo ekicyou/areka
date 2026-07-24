@@ -1,4 +1,6 @@
 // tests/graphics.rs — wintf graphics domain test entry point
+#[path = "graphics/common/mod.rs"]
+mod common;
 #[path = "graphics/brushes_system_test.rs"]
 mod brushes_system_test;
 #[path = "graphics/clip_sync_system_test.rs"]
