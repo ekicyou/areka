@@ -7,7 +7,7 @@
   - _Requirements: 4.1_
   - _Boundary: input_events::balloon (skeleton), Emo2Wiring_
 
-- [ ] 2. Core: 契約型と状態配線資源
+- [x] 2. Core: 契約型と状態配線資源
 - [x] 2.1 ChoiceSelection 契約型の定義
   - id／label／scope／references の 4 フィールドを持つ選択確定ワイヤ形を定義する（ordinal は含めない）
   - Clone／Debug／PartialEq／Eq を導出し、下流が型を import して消費できる形にする
@@ -23,7 +23,7 @@
   - _Boundary: BalloonWiring, ChoiceSelectionInbox_
   - _Depends: 2.1_
 
-- [ ] 3. Core: 純関数判定核
+- [x] 3. Core: 純関数判定核
 - [x] 3.1 点包含 hit 判定と重なり規則の実装
   - 行矩形群への点包含判定を純関数として実装する（半開区間・物理 px 直接比較・DPI 変換なし）。判定対象は上流が供給する選択肢行ジオメトリのみとし、選択肢以外のバルーン内リンクは対象にしない
   - 病的重なり入力に対し決定的な単一選択規則（逆順走査・最終一致）を適用する
@@ -44,7 +44,7 @@
   - _Boundary: click_selection_
   - _Depends: 2.1, 3.1_
 
-- [ ] 4. Core: バルーンポインタハンドラ
+- [x] 4. Core: バルーンポインタハンドラ
 - [x] 4.1 移動ハンドラの実装（hover 追従駆動）
   - Bubble 相のみ処理する移動ハンドラを実装し、固定順の借用規律（共有借用→スナップショット→借用解放→可変借用で inject）に従う
   - `Emo2Wiring` 不在（boot 前／失敗）は正常縮退として `debug!` ＋ no-op（donor `presenter=None` 同型）、`BalloonWiring` 不在または `RefCell` 借用失敗は構成異常として `error!`（event = balloon_wiring_missing／balloon_runtime_borrow_failed）でログし no-op 縮退する（ログ無し失敗経路を作らない）
@@ -70,7 +70,7 @@
   - _Boundary: clear_balloon_hover_on_leave_
   - _Depends: 2.2, 3.2_
 
-- [ ] 6. Integration: 配線結合
+- [x] 6. Integration: 配線結合
 - [x] 6.1 post-spawn ハンドラ装着・資源結線・スケジュール登録
   - 全バルーン窓へポインタハンドラ（moved／pressed）を post-spawn 装着し、NonSend 資源とチャネルを結線し、leave 追随システムを Input スケジュール（dispatch 後）へ登録する
   - Observable: bare World 統合テストで、全バルーン窓にハンドラが存在しキャラ窓のハンドラ集合は不変であること、かつスケジュールへの leave システム登録存在を assert で確認する
@@ -84,7 +84,7 @@
   - _Requirements: 4.3, 5.5, 8.1_
   - _Depends: 6.1_
 
-- [ ] 7. Validation: 決定論檻・退行防止・実機サインオフ
+- [x] 7. Validation: 決定論檻・退行防止・実機サインオフ
 - [x] 7.1 貫通ポインタ列の決定論檻
   - 選択肢行 population がテストから決定論的に可能か確認したうえで、可能なら合成ポインタ列（移動→クリック）から `ChoiceSelectionInbox` 観測までの一気通貫テストを追加する。GPU 依存で不可能な場合のみ、純関数全網羅＋mpsc 観測の分解形で本要件を満たすことを明記する
   - Observable: 注入座標列に対する hover 追従と一度きりの発行、stale／非 hit での非発行が実窓・sleep 不要で観測される
