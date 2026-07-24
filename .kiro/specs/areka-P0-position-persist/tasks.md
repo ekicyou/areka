@@ -117,7 +117,7 @@
   - _Boundary: areka-kanade/schedule/boot.rs_
 
 - [ ] 6. Integration: main.rs 起動シーム結線
-- [ ] 6.1 復元マージの呼出し
+- [x] 6.1 復元マージの呼出し
   - `open_startup_window` の正常経路（snapshot 構築直後）で `load_restored_state` → `apply_restored_placements` を呼び、spawn へ渡す placements を復元値でマージ済みのものへ差し替える
   - 観測可能な完了条件: 永続状態に保存済み位置がある場合、実際に spawn される窓の初期位置が既定位置ではなく保存済み位置になることが結合テストで確認できること
   - _Requirements: 1.4, 5.1, 6.1_
