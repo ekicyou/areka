@@ -356,8 +356,27 @@ pub(crate) fn on_char_drag_end(
             let Some(anchor) = world.get::<Anchored>(entity).map(|a| a.0) else {
                 return false;
             };
-            let Some(mapped) = policy_mapped_position(world, entity, anchor, ev.position) else {
-                return false;
+            // 最終位置の第一義は DraggingState からの生座標再導出（最終 DragEvent 欠落の穴埋め・
+            // ev.position が真の最終カーソル）。ただし保存を DraggingState 依存にすると、dispatch が
+            // DragEnd 前に DraggingState を落とした場合（多窓時に observed・実 flow の穴）に、連続
+            // on_char_drag が既に最終位置へ動かした char の位置保存が丸ごと落ちる——一方 balloon 側は
+            // char の WindowPos.position を読んで offset を保存するため、balloon-offset だけが残り
+            // window が欠落する（実機 sylphya.toml の [window.0] 欠落／[balloon-offset.0] 残存）。
+            // Req1.6（位置の単一真実源はキャラ窓）を守るには「ドラッグした char は必ず保存する」が
+            // 要る。よって DraggingState 不在時は再導出済みの最終位置＝現 WindowPos.position（非 Free は
+            // on_char_drag が project_anchor 適用済み・Free は wndproc 確定位置）へ縮退して保存する。
+            let mapped = match policy_mapped_position(world, entity, anchor, ev.position) {
+                Some(mapped) => mapped,
+                None => {
+                    let Some(pos) = world.get::<WindowPos>(entity).and_then(|wp| wp.position) else {
+                        debug!(
+                            ?entity,
+                            "DraggingState も WindowPos.position も無いため位置保存を skip（防御・no-op）"
+                        );
+                        return false;
+                    };
+                    pos
+                }
             };
             if !enqueue_window_set_pos(world, entity, mapped.x, mapped.y, None) {
                 return false;
@@ -3301,6 +3320,286 @@ mod tests {
         assert_eq!(out[0].anchor, Anchor::Bottom);
 
         // 正典終了（アクター join）——temp dir は _guard の Drop が片付ける。
+        parts.publisher.close();
+        let _ = parts.handle.join();
+    }
+
+    /// 実機サインオフ再現檻（多窓・2 スコープ・Bottom）: DragEnd 時に `DraggingState` を
+    /// 失った char が位置を保存できず、相対追従のバルーンが復元でずれる欠陥を決定論再現する。
+    ///
+    /// # 背景（実機 emo2 `sylphya.toml` の観測異常）
+    ///
+    /// 4 窓（scope0/1 の char+balloon）を各々ドラッグしたにもかかわらず `[window.1]` のみ保存され
+    /// `[window.0]` が欠落（一方 `[balloon-offset.0/1]` は両方保存）。復元時 scope0(むらさき) char が
+    /// resolver 既定へスナップし、相対追従のバルーン（Req1.6: 位置の単一真実源はキャラ窓）が既定
+    /// char へ引きずられて位置がずれた。
+    ///
+    /// # 再現する根本経路（root cause）
+    ///
+    /// `on_char_drag_end` は保存位置を `policy_mapped_position`（＝`DraggingState` からの生座標
+    /// 再導出）に依存させており、`DraggingState` 不在なら `None` で**早期 return＝保存 skip** する。
+    /// しかし非 Free char は連続 `on_char_drag` が既に最終位置へ動かし済みで `WindowPos.position` が
+    /// 最終確定位置を保持している。dispatch が DragEnd 前に `DraggingState` を落とすと（多窓時に
+    /// observed・実 flow の穴）、char は動いたのに位置が保存されない——一方 `on_balloon_drag_end` は
+    /// char の `WindowPos.position` を読んで offset を保存するため balloon-offset だけが残り、実機の
+    /// 観測状態（`[window.0]` 欠落・`[balloon-offset.0]` 残存）に一致する。
+    ///
+    /// # 檻の噛み方
+    ///
+    /// - scope0 char: `DraggingState` **無し**・`WindowPos.position` は連続ドラッグが置いた最終位置。
+    ///   修正前は `on_char_drag_end` が保存 skip → `[window.0]` 欠落 → 復元で char が既定へ落ち、
+    ///   balloon が既定 char へ追従してずれる（RED）。修正後は `WindowPos.position` を最終位置として
+    ///   保存 → 復元で char/balloon とも最終確定位置へ戻る（GREEN）。
+    /// - scope1 char: `DraggingState` **有り**（正常経路の対照）。修正前後で常に保存・復元される。
+    ///
+    /// 座標は 96 の非倍数を用い（隠れた dpi/96 再スケールの副次檻）、scope 間・既定値と重ねない。
+    #[test]
+    fn dragged_char_persists_even_without_dragging_state_at_dragend() {
+        use std::path::PathBuf;
+
+        use areka_ghost::sylphya_wiring::profile_areka_root;
+        use areka_parsers::charset::DefaultEncoding;
+        use areka_sylphya::persist::FsPersistIo;
+        use areka_sylphya::{
+            Axis, PersistKey, PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya,
+        };
+
+        use super::super::persist::{
+            PersistWiring, apply_restored_placements, balloon_offset_from_persist,
+            balloon_offset_to_persist, load_restored_state,
+        };
+        use super::on_balloon_drag_end;
+        use crate::placement::resolver::ScopePlacement;
+        use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker};
+
+        struct TempGhostDir(PathBuf);
+        impl Drop for TempGhostDir {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+
+        // --- fixture: 最小解決可能ゴースト（round_trip 8.2 と同型）------------------------
+        let mut root = std::env::temp_dir();
+        root.push("areka_follow_dragend_no_dragging_state_repro");
+        let _ = std::fs::remove_dir_all(&root);
+        let _guard = TempGhostDir(root.clone());
+        let ghost_master = root.join("ghost").join("master");
+        std::fs::create_dir_all(&ghost_master).expect("create ghost/master");
+        std::fs::write(
+            ghost_master.join("descript.txt"),
+            "charset,UTF-8\nname,テスト\nsakura.name,さくら\n".as_bytes(),
+        )
+        .expect("write ghost descript");
+        std::fs::create_dir_all(root.join("shell").join("master")).expect("create shell/master");
+        let profile_root = profile_areka_root(&ghost_master);
+        std::fs::create_dir_all(&profile_root).expect("create profile/areka");
+
+        // --- save 側 sylphya（実 FsPersistIo・実 FS 往復）------------------------------
+        let roots = ScopeRoots {
+            ghost: Some(profile_root.clone()),
+            ..ScopeRoots::default()
+        };
+        let parts = spawn_sylphya(SylphyaInit {
+            roots: roots.clone(),
+            io: Box::new(FsPersistIo),
+            runtime_sink: None,
+        });
+
+        // work area 下端 1200・単一モニタ。両スコープの Bottom 吸着 y を確定する。
+        let snapshot = MonitorSnapshot {
+            work_areas: vec![rect(0, 0, 1920, 1200)],
+        };
+        let mut world = World::new();
+        world.insert_non_send_resource(PersistWiring {
+            publisher: parts.publisher.clone(),
+        });
+        world.insert_resource(MonitorSnapshot {
+            work_areas: snapshot.work_areas.clone(),
+        });
+
+        // scope0（むらさき）: char_size(434,687)→ bottom 吸着 y = 1200−687 = 513。
+        let s0_size = SizePx { w: 434, h: 687 };
+        let s0_char_final = Point { x: 1427, y: 513 };
+        let s0_balloon_final = Point { x: 1289, y: 529 };
+        // scope1（エモ）: char_size(400,600)→ bottom 吸着 y = 1200−600 = 600。
+        let s1_size = SizePx { w: 400, h: 600 };
+        let s1_char_final = Point { x: 811, y: 600 };
+        let s1_balloon_final = Point { x: 985, y: 727 };
+
+        // scope0 char: DraggingState **無し**（DragEnd 前に dispatch が落とした穴）。連続ドラッグが
+        // 既に最終位置へ動かし済みとして WindowPos.position を最終確定位置で spawn する。
+        let s0_balloon = world
+            .spawn((
+                fake_handle(0x2000),
+                window_pos_at(500, 500),
+                BalloonWindowMarker { scope: 0 },
+            ))
+            .id();
+        let s0_char = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(s0_char_final.x, s0_char_final.y, s0_size.w, s0_size.h),
+                Anchored(Anchor::Bottom),
+                CharWindowMarker { scope: 0 },
+                BalloonFollow {
+                    balloon: s0_balloon,
+                    offset: PointPx { x: 111, y: 222 },
+                },
+                // ここに dragging_state を**付けない**のが本檻の肝。
+            ))
+            .id();
+        // scope1 char: DraggingState **有り**（正常経路の対照）。raw.x=811（cursor==drag_start）。
+        let s1_balloon = world
+            .spawn((
+                fake_handle(0x4000),
+                window_pos_at(700, 700),
+                BalloonWindowMarker { scope: 1 },
+            ))
+            .id();
+        let s1_char = world
+            .spawn((
+                fake_handle(0x3000),
+                window_pos_sized(800, 650, s1_size.w, s1_size.h),
+                Anchored(Anchor::Bottom),
+                CharWindowMarker { scope: 1 },
+                BalloonFollow {
+                    balloon: s1_balloon,
+                    offset: PointPx { x: 333, y: 444 },
+                },
+                dragging_state((s1_char_final.x, 650), (1000, 1000)),
+            ))
+            .id();
+
+        // --- 実機と同じ順序で 4 回ドラッグ確定（char0 → char1 → balloon0 → balloon1）---
+        // char0 DragEnd: DraggingState 不在。修正後は WindowPos.position(1427,513) を最終位置に採る。
+        assert!(!on_char_drag_end(
+            &mut world,
+            s0_char,
+            s0_char,
+            &Phase::Bubble(drag_end_event_at(s0_char, (1000, 1000))),
+        ));
+        assert_eq!(
+            position_of(&world, s0_char),
+            s0_char_final,
+            "scope0 char は連続ドラッグ最終位置を保持（DragEnd は位置を変えない）"
+        );
+        // char1 DragEnd: raw(811,650)→Bottom mapped(811,600)。
+        assert!(!on_char_drag_end(
+            &mut world,
+            s1_char,
+            s1_char,
+            &Phase::Bubble(drag_end_event_at(s1_char, (1000, 1000))),
+        ));
+        assert_eq!(
+            position_of(&world, s1_char),
+            s1_char_final,
+            "scope1 char DragEnd 確定位置（bottom 吸着・DraggingState 経路）"
+        );
+
+        // balloon の最終確定位置を wndproc が置いたものとして明示設定（move_window=true 相当）。
+        world.get_mut::<WindowPos>(s0_balloon).unwrap().position = Some(s0_balloon_final);
+        world.get_mut::<WindowPos>(s1_balloon).unwrap().position = Some(s1_balloon_final);
+        // balloon0 DragEnd（保存）: char0 の WindowPos.position(1427,513) 基準に offset を保存。
+        assert!(!on_balloon_drag_end(
+            &mut world,
+            s0_balloon,
+            s0_balloon,
+            &Phase::Bubble(drag_end_event_at(s0_balloon, (0, 0))),
+        ));
+        // balloon1 DragEnd（保存）。
+        assert!(!on_balloon_drag_end(
+            &mut world,
+            s1_balloon,
+            s1_balloon,
+            &Phase::Bubble(drag_end_event_at(s1_balloon, (0, 0))),
+        ));
+
+        // --- barrier: put が実 FS へ確定 ---------------------------------------------
+        parts
+            .publisher
+            .barrier()
+            .expect("barrier should resolve while actor is alive");
+
+        // 実 FS を直接読み、両スコープの WindowPos が保存されていることを中間確認する
+        // （実機で欠落した [window.0] がここで存在すべき＝修正前はここで RED）。
+        let loaded = load_scope(PersistScope::Ghost, &roots, &FsPersistIo);
+        for (scope, cf) in [(0u32, s0_char_final), (1u32, s1_char_final)] {
+            assert!(
+                loaded.contains(&(
+                    PersistKey::WindowPos {
+                        scope,
+                        axis: Axis::X
+                    },
+                    cf.x.to_string()
+                )) && loaded.contains(&(
+                    PersistKey::WindowPos {
+                        scope,
+                        axis: Axis::Y
+                    },
+                    cf.y.to_string()
+                )),
+                "scope{scope} の char 位置 ({},{}) が実 FS へ保存されていない（実機 [window.{scope}] 欠落再現）: {loaded:?}",
+                cf.x,
+                cf.y
+            );
+        }
+
+        // --- restore: mount 解決経由で読み、両スコープの合成 placement を merge ----------
+        let entries = load_restored_state(&root, DefaultEncoding::Ansi);
+        let synth = |scope: usize, size: SizePx| ScopePlacement {
+            scope,
+            char_pos: PointPx { x: 100, y: 100 }, // 既定（saved と別位置＝復元優先の証明）
+            char_size: size,
+            balloon_pos: PointPx { x: 107, y: 107 },
+            balloon_size: SizePx { w: 200, h: 300 },
+            balloon_offset: PointPx { x: 7, y: 7 },
+            anchor: Anchor::Bottom,
+        };
+        let out = apply_restored_placements(
+            vec![synth(0, s0_size), synth(1, s1_size)],
+            &entries,
+            &snapshot,
+        );
+        assert_eq!(out.len(), 2);
+
+        // 期待復元値（両スコープとも saved char + balloon 最終確定位置へ戻る）。
+        for (p, cf, bf, size) in [
+            (&out[0], s0_char_final, s0_balloon_final, s0_size),
+            (&out[1], s1_char_final, s1_balloon_final, s1_size),
+        ] {
+            let cf_px = PointPx { x: cf.x, y: cf.y };
+            let bf_px = PointPx { x: bf.x, y: bf.y };
+            assert_eq!(
+                p.char_pos, cf_px,
+                "復元 char_pos が DragEnd 確定位置と値等価でない（scope{}）",
+                p.scope
+            );
+            assert_ne!(
+                p.char_pos,
+                PointPx { x: 100, y: 100 },
+                "復元 char_pos が既定へ落ちている（scope{} の window 保存欠落）",
+                p.scope
+            );
+            // balloon 往復健全性（純関数側は 8.5 で証明済み・ここは結線の確認）。
+            let offset_tl = PointPx {
+                x: bf.x - cf.x,
+                y: bf.y - cf.y,
+            };
+            let expected_persist = balloon_offset_to_persist(Anchor::Bottom, offset_tl, size);
+            assert_eq!(
+                balloon_offset_from_persist(Anchor::Bottom, expected_persist, size),
+                offset_tl,
+                "檻の前提: 下端基準⇄左上基準が現 char_size で往復恒等（scope{}）",
+                p.scope
+            );
+            assert_eq!(
+                p.balloon_pos, bf_px,
+                "復元 balloon_pos が balloon DragEnd 最終確定位置と値等価でない（scope{}）",
+                p.scope
+            );
+        }
+
         parts.publisher.close();
         let _ = parts.handle.join();
     }
