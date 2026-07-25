@@ -26,6 +26,22 @@
 //! **error! ＋ 表示不変 ＋ reply `Err`**（R3.4）、`ComposeError::EmptyComposition`（全透明退化）は
 //! **warn! ＋ Hide 縮退 ＋ reply `Ok`**（設計ディスカッション #1: 許容される正常退化・skip 解釈は採らない）、
 //! デバイス層失敗は `PresentError::Device`（HRESULT ＋文脈）で `Err`。panic は用いない。
+//!
+//! # 表示スケール k の適用漏斗（emo-dpi-scaling・要件 1.1/1.2/1.5・2.1-2.4）
+//!
+//! DPI 追従表示の係数 k は **`ShowSurface` の適用ごと**に導出する（design Flow 1「k 導出は show 適用ごと
+//! に行う」）——target へ焼き付けず、`attach` でも決めない。これにより「照会値＝実適用 k」の不変条件を
+//! 維持する点が経路上の 1 箇所（表示成立点）に閉じる。
+//!
+//! 経路は `world.get::<DPI>(target.window)` → [`derive_scale`]（政策＝[`ScalePolicy`]・縮退は log-first）
+//! → `cache.get(.., k)` → ミス時のみ `compose`（**native 原寸**）→ [`resample`]（native → k 適用）→
+//! `cache.insert(.., k, ..)` である。以降の供給面アップロード・`AlphaMaskResource` 同期・`set_bounds`・
+//! 可視制御は**既存コードのまま**で、流れる合成結果が k 適用済みになるだけで自動追従する
+//! （design 「Strategy A2＝composed 外形従属の連鎖を k 追従へ転用」）。
+//!
+//! k=1/1（窓 DPI ＝ author_dpi）は [`resample`] を**呼ばずに** native をそのまま表示資源とする——
+//! [`resample`] 自体も恒等をバイトコピーで保証するが、素通しなら「k 導入前と同一のオブジェクトが同一経路を
+//! 流れる」ことが構造で言えるため、既存 golden の不変（要件 7.2）が最も強く担保される。
 
 use std::collections::HashMap;
 use std::marker::PhantomData;
@@ -35,14 +51,18 @@ use bevy_ecs::world::World;
 
 use areka_actor::ReplySender;
 use areka_emo_atlas::AtlasTable;
-use areka_emo_compose::{BindSet, ComposeError, Composer, EmoWorld, PatternState, RegionPriority};
+use areka_emo_compose::{
+    BindSet, ComposeError, ComposedSurface, Composer, EmoWorld, PatternState, RegionPriority,
+    ScaleRatio, resample,
+};
 
-use wintf::ecs::{AlphaMaskResource, GraphicsCore, WucGraphicsResource};
+use wintf::ecs::{AlphaMaskResource, DPI, GraphicsCore, WucGraphicsResource};
 
 use crate::cache::ComposeCache;
 use crate::chain::SwapChainPresenter;
 use crate::command::{PresentCommand, PresentError, PresentOutcome, TargetId};
 use crate::mount::VisualMount;
+use crate::scale::{ScalePolicy, derive_scale};
 
 /// target ごとの表示コンテキスト（シェル・バルーンで同一機構・R5.1 の統一原則）。
 ///
@@ -74,6 +94,47 @@ struct PresentTarget {
     /// 手前で early return するため前値を保持する（`ComposeKey` からは導出しない＝`invalidate_all` で
     /// キーが消えても表示は残るため画面と乖離する）。
     current_surface_id: Option<u32>,
+    /// 拡大政策（`attach_target` で確定・以後不変・要件 1.5）。
+    ///
+    /// k は target（＝窓）ごとの `policy` と**その窓の** `DPI` component から導出されるため、DPI の
+    /// 異なる複数モニタに窓が同時に存在しても各窓が自窓の k で表示される。政策自体（author_dpi・
+    /// アプリ管理拡大率）は時間で変わらない——変わるのは窓 DPI の側である。
+    policy: ScalePolicy,
+    /// **実際に表示へ適用中の** k（照会契約の単一真実源・要件 1.2）。
+    ///
+    /// 更新は**表示成立点のみ**（失敗経路は手前で early return ＝前値保持・要件 4.4）。表示が一度も
+    /// 成立していない間は `None` で、[`EmoPresenter::text_slot_view`] もその間は `None` を返す
+    /// （「まだ何も適用していない」を 1.0 で塗り潰さない）。
+    applied: Option<ScaleRatio>,
+    /// 表示中サーフェスの **native 原寸**（k 適用**前**の合成外形・照会契約 `surface_size()` の供給源）。
+    ///
+    /// 物理寸との関係は `物理寸 == applied.scaled_extent(native_size)`（丸め権威は
+    /// [`ScaleRatio::scaled_extent`] 1 本）。供給面 `chain.size()` は k 適用**後**の物理寸を持つため、
+    /// 照会契約の native 原寸をここで別に保持する。
+    ///
+    /// **更新規則**: 更新点は `applied` と同じ表示成立点 1 箇所だが、書き込む値は「今回合成したか」に
+    /// 依らず常に [`PresentTarget::cached_native`]（＝いま表示に使ったキャッシュエントリ由来の原寸）
+    /// である。今回合成した回だけ書く実装は、`insert` 済みのまま失敗して後から**ヒットで**表示が成立した
+    /// 場合に「画面の絵と別サーフェスの原寸」あるいは `None` が残り、照会契約が壊れる。
+    native_size: Option<(u32, u32)>,
+    /// **cache スロットの現エントリに対応する native 原寸**（k 適用前の合成外形）。
+    ///
+    /// `ComposeCache` は容量 1 スロットで、挿入者は本 presenter ただ 1 箇所（`apply_show` のミス経路）
+    /// である。ゆえに `cache.insert` と同じ場所で本フィールドを書けば、**スロットの中身と本フィールドは
+    /// 常に対**になる——引き当てがヒットした回は「そのエントリを入れたときの原寸」がここに在る。
+    /// `invalidate_all`（スロット破棄）では `None` へ戻す（対を崩さない）。表示成立点はこの値を
+    /// [`PresentTarget::native_size`] へ写すだけでよく、合成の有無で分岐しない。
+    cached_native: Option<(u32, u32)>,
+    /// 最後に表示が成立した show 入力（再表示＝k 再適用のための入力保持）。
+    ///
+    /// DPI 変化時に「同じ絵を新しい k で描き直す」ための唯一の入力源であり、読み手は後続タスク 3.5 の
+    /// `refresh_scale`（本 spec タスク 3.5 の領分）である。記録点は `applied`/`native_size` と同一
+    /// （表示成立点）で、失敗経路では前値が保たれる。
+    // 読み手（`refresh_scale`）は同一 spec の後続タスクで入る。ここで `#[allow]` を付けるのは
+    // 「書くべき場所が未定」だからではなく、**書く場所は確定していて読む側だけが後続**という
+    // 一時的な非対称ゆえである（値そのものは表示成立点で常に正しく更新されている）。
+    #[allow(dead_code)]
+    last_show: Option<(u32, BindSet, PatternState)>,
 }
 
 /// 予約 text 層スロットへの読み取り専用の到達手段（emo-text-layer が消費する additive 公開増分・R9.1/9.2）。
@@ -91,9 +152,9 @@ pub struct TextSlotView {
     slot: Entity,
     /// スロットが属する装着先の窓 Entity。
     window: Entity,
-    /// バルーン/シェル surface の物理 px 原寸（取得時点のスナップショット）。
+    /// バルーン/シェル surface の **native 原寸**（k 適用前・取得時点のスナップショット）。
     surface_size: (u32, u32),
-    /// バルーン surface と同一の合成スケール k（現行の物理 1:1 表示契約では恒常 1.0）。
+    /// バルーン surface と同一の合成スケール k（**実適用値**・要件 1.2）。
     scale: f32,
 }
 
@@ -108,22 +169,26 @@ impl TextSlotView {
         self.window
     }
 
-    /// バルーン surface の物理 px 原寸。
+    /// バルーン surface の **native 原寸**（k 適用**前**の合成外形・要件 1.2 の照会契約）。
+    ///
+    /// 表示中の**物理寸ではない**。物理寸は丸め権威 [`ScaleRatio::scaled_extent`] を通した
+    /// `scaled_extent(scale(), surface_size())` である（下流の照合式
+    /// `GetClientRect ≒ surface_size × scale`・design §State Management）。k=1.0 の窓では両者が
+    /// 一致するため、k 導入前の観測値（＝供給面寸）とも等しい。
     pub fn surface_size(&self) -> (u32, u32) {
         self.surface_size
     }
 
-    /// バルーン surface と同一の合成スケール k（現行 1.0 恒常・DPI 契約の共有点）。
+    /// バルーン surface と同一の合成スケール k（**実際に表示へ適用中の値**・要件 1.2）。
     ///
-    /// 将来 emo-present が DPI スケーリング（k=モニタ DPI ÷ author_dpi）を導入したら、供給値の
-    /// 変更点はここ 1 点である（design §TextSlotView Revalidation Trigger）。
+    /// かつてはコンパイル時定数 1.0（`CURRENT_COMPOSE_SCALE`）を恒常で返していたが、DPI 追従表示の
+    /// 導入で **`PresentTarget.applied`（表示成立点でのみ更新される単一真実源）の写し**へ変わった。
+    /// 窓 DPI ＝ author_dpi なら 1.0、192dpi／author 96 なら 2.0 を返す。下流（
+    /// `collision-dpi-hittest` の ÷k・`emo-text-layer` の行寸）はこの値を実適用 k として参照してよい。
     pub fn scale(&self) -> f32 {
         self.scale
     }
 }
-
-/// 現行の物理 1:1 表示契約における合成スケール k の恒常値（design §DPI/スケール契約）。
-const CURRENT_COMPOSE_SCALE: f32 = 1.0;
 
 /// 指令適用の統括ハブ（合成・キャッシュ・表示・マスクの一点結線・UI スレッド専有）。
 ///
@@ -154,6 +219,17 @@ impl EmoPresenter {
     ///
     /// `world` は将来の system 化（`&mut World` を要する装着タイミング）へ向けた API 一貫性のために受ける
     /// が、遅延生成方針ゆえ本メソッドでは参照しない。
+    ///
+    /// # `author_dpi`（作者基準 DPI・要件 1.1/1.5）
+    ///
+    /// k の分母となる作者宣言値（shell `seriko.dpi`／balloon `dpi`・既定 [`DEFAULT_AUTHOR_DPI`]）を
+    /// target の拡大政策 [`ScalePolicy`] として確定する。**k そのものはここで導出しない**——k は窓 DPI に
+    /// 依存し、窓 DPI は時間で変わる（モニタ跨ぎ移動・表示スケール変更）ため、導出は `ShowSurface` 適用
+    /// ごとに行う（design Flow 1）。政策は target（＝窓）ごとに保持されるため、DPI の異なるモニタ上の
+    /// 複数窓がそれぞれ自窓の k で表示される（要件 1.5）。`0` は [`ScalePolicy::new`] が既定 96 へ
+    /// 正規化する（分母ゼロで表示を失わない・log-first）。
+    ///
+    /// [`DEFAULT_AUTHOR_DPI`]: crate::scale::DEFAULT_AUTHOR_DPI
     pub fn attach_target(
         &mut self,
         _world: &mut World,
@@ -161,6 +237,7 @@ impl EmoPresenter {
         window: Entity,
         emo_world: EmoWorld,
         atlas: AtlasTable,
+        author_dpi: u16,
     ) -> Result<(), PresentError> {
         self.targets.insert(
             target,
@@ -174,6 +251,12 @@ impl EmoPresenter {
                 chain: None,
                 visible: false,
                 current_surface_id: None,
+                // アプリ管理拡大率は本仕様では ONE 固定の縮退シーム（要件 1.6）。
+                policy: ScalePolicy::new(author_dpi, ScaleRatio::ONE),
+                applied: None,
+                native_size: None,
+                cached_native: None,
+                last_show: None,
             },
         );
         Ok(())
@@ -201,7 +284,10 @@ impl EmoPresenter {
 
     /// `ShowSurface` の適用（キャッシュ引き当て or 合成 → 供給面アップロード → マスク同期 → 可視化）。
     ///
-    /// 手順（design §System Flows）: (1) 未装着なら error! ＋ `Err(TargetNotAttached)`。(2) 合成入力
+    /// 手順（design §System Flows・Flow 1）: (1) 未装着なら error! ＋ `Err(TargetNotAttached)`。
+    /// (1.5) 窓の `DPI` component と target 政策から**この適用に使う k**を導出する（[`derive_scale`]・
+    /// component 不在は `None` のまま渡して要件 1.4 の縮退へ落とす）。以降 k は合成入力と同格のキー
+    /// 要素であり、ミス時は合成（native）→ [`resample`]（k 適用）を経て挿入される。(2) 合成入力
     /// （surface id＋bind 集合）が直前と完全一致するヒットなら再合成しない（R4.2）——bind 集合が
     /// 1 要素でも異なれば必ずミス＝再合成する（着せ替え・まばたきの正しさの担保）。(3) ミスなら合成し、
     /// `SurfaceNotFound` は error! ＋表示不変＋
@@ -223,10 +309,21 @@ impl EmoPresenter {
             return;
         };
 
-        // (1) 引き当て: 合成入力（id＋binds＋pattern）の完全一致のみヒット＝再合成しない（R4.2/R5.2）。
-        // ミスのみ合成する。pattern は指令が運ぶ現在コマ集合をそのまま透過する（presenter は新しい
-        // 判断を持たず輸送のみ）。空 PatternState なら拡張前と観測等価（R5.4）。
-        let cache_hit = target.cache.get(surface_id, &binds, &pattern).is_some();
+        // (0) k 導出（show 適用ごと・design Flow 1）。窓 DPI は wintf の `DPI` component から読む
+        // （consume のみ・新規依存なし）。**component 不在は `None` のまま [`derive_scale`] へ渡す**——
+        // ここで 96 を捏造すると要件 1.4 の縮退（error! ＋ k=1.0）が「正常系のふり」で通ってしまう。
+        let window = target.window;
+        let window_dpi = world.get::<DPI>(window).map(|d| (d.dpi_x, d.dpi_y));
+        let scale = derive_scale(target.policy, window_dpi);
+
+        // (1) 引き当て: 合成入力（id＋binds＋pattern）＋表示スケール k の完全一致のみヒット＝再合成
+        // しない（R4.2/R5.2・要件 2.4）。ミスのみ合成する。pattern は指令が運ぶ現在コマ集合をそのまま
+        // 透過する（presenter は新しい判断を持たず輸送のみ）。空 PatternState なら拡張前と観測等価
+        // （R5.4）。k が変われば必ずミスするため、旧 k の絵とマスクを表示に載せることはない（設計 D6）。
+        let cache_hit = target
+            .cache
+            .get(surface_id, &binds, &pattern, scale)
+            .is_some();
         if !cache_hit {
             match target
                 .composer
@@ -234,11 +331,29 @@ impl EmoPresenter {
                 .compose(&target.emo_world, &target.atlas, surface_id, &binds, &pattern)
             {
                 Ok(composed) => {
+                    // 合成は常に native 原寸（emo-compose の合成経路は k を知らない・設計 D3 の A2）。
+                    let native_extent = (composed.width(), composed.height());
+                    // k 適用（要件 2.1/2.3）: 合成済みの 1 枚（element 入れ子・SERIKO パターン・mayuna
+                    // 着せ替えが畳み込まれた結果）へ**単一の k** を掛けるため、要素間の相対配置・重なりは
+                    // 等倍時と同一の見た目関係を保つ。恒等 k は resample を呼ばず native を素通しする
+                    // （要件 7.2: 既存 golden がバイト単位で不変であることの構造保証・割り当ても増えない）。
+                    let display = if scale.is_identity() {
+                        composed
+                    } else {
+                        let mut scaled = ComposedSurface::new(0, 0);
+                        resample(&composed, scale, &mut scaled);
+                        scaled
+                    };
                     // 挿入時にマスクを 1 回だけ生成し、表示バッファと対で束ねる（R2.1/R2.4）。
-                    // pattern は binds と同格のキー要素として挿入キーへ透過する（R5.2）。
+                    // pattern は binds と同格のキー要素として挿入キーへ透過する（R5.2）。マスクは
+                    // k 適用済み bytes 由来ゆえ物理 px 契約が無修正で整合する（設計 D6）。
                     target
                         .cache
-                        .insert(surface_id, binds.clone(), pattern.clone(), composed);
+                        .insert(surface_id, binds.clone(), pattern.clone(), scale, display);
+                    // スロットの中身と対で原寸を控える（`insert` と同じ場所＝対が崩れない唯一の書き方）。
+                    // 以降この回が失敗して early return しても、後からヒットで表示が成立した時点で
+                    // 正しい原寸が照会契約へ渡る。
+                    target.cached_native = Some(native_extent);
                 }
                 Err(ComposeError::EmptyComposition(id)) => {
                     // 全透明退化（外形 0×0）: 許容される正常退化として Hide 縮退＋reply Ok（skip ではない）。
@@ -276,7 +391,7 @@ impl EmoPresenter {
             let (w, h) = {
                 let entry = target
                     .cache
-                    .get(surface_id, &binds, &pattern)
+                    .get(surface_id, &binds, &pattern, scale)
                     .expect("直前に引き当て済み");
                 (entry.composed.width(), entry.composed.height())
             };
@@ -327,7 +442,6 @@ impl EmoPresenter {
                 }
             };
 
-            let window = target.window;
             let mount = match VisualMount::attach(world, window, &surface, &compositor, (w, h)) {
                 Ok(m) => m,
                 // VisualMount::attach も内部で error! 済み（mount.rs device_err）。
@@ -344,16 +458,18 @@ impl EmoPresenter {
         // (3) 供給面アップロード ＋ マスク同期 ＋ 可視化（同一呼び出し内＝原子入替・R2.4）。
         let entry = target
             .cache
-            .get(surface_id, &binds, &pattern)
+            .get(surface_id, &binds, &pattern, scale)
             .expect("直前に引き当て済み");
-        let size = (entry.composed.width(), entry.composed.height());
-
         let chain = target.chain.as_mut().expect("直上で生成済み");
         if let Err(e) = chain.upload(&entry.composed) {
             // upload は内部で error! 済み（chain.rs）。表示は前状態を保つ（成功まで旧状態不変）。
             Self::reply(reply, Err(e));
             return;
         }
+        // 表示物理寸は**供給面の実寸**を単一真実源とする（upload が外形変化を検知して合わせ込んだ後の
+        // 値＝k 適用済み composed の外形）。エントリ外形から別途組み立てないことで、供給面・visual
+        // 境界・マスクが同一の物理寸に揃うことを構造で担保する（R3.2・k 追従は A2 の自動追従）。
+        let size = chain.size();
 
         let mount = target.mount.as_ref().expect("直上で生成済み");
         if let Some(mut mask_res) = world.get_mut::<AlphaMaskResource>(mount.surface_entity()) {
@@ -371,6 +487,13 @@ impl EmoPresenter {
         target.visible = true;
         // 表示成立＝この id が現サーフェス（全透明でも成立・α 非依存の単一真実源・R3.1/3.3・Key decisions）。
         target.current_surface_id = Some(surface_id);
+        // ここが**表示成立点**＝ k・native 原寸・再表示入力の唯一の更新点（design Flow 1 キー決定）。
+        // 手前の失敗経路はすべて early return 済みゆえ、失敗時は前 k・前表示が保たれる（要件 4.4）。
+        target.applied = Some(scale);
+        // いま表示に使ったエントリ由来の原寸をそのまま写す（合成した回か否かで分岐しない——分岐させると
+        // 「insert 済みのまま失敗 → 後からヒットで成立」の経路で照会値が画面と乖離する）。
+        target.native_size = target.cached_native;
+        target.last_show = Some((surface_id, binds, pattern));
 
         tracing::info!(
             ?target_id,
@@ -415,6 +538,10 @@ impl EmoPresenter {
         };
 
         target.cache.invalidate_all();
+        // スロットと対の原寸も落とす（対を崩さない）。表示中の `native_size` は触らない——スロットが
+        // 空でも画面には前回の絵が残っており、照会契約はその絵の原寸を返し続けるのが正しい（R4.3:
+        // キャッシュ無効化は表示を変えない）。以後は必ずミス＝再合成が走り、対が再構築される。
+        target.cached_native = None;
         tracing::debug!(?target_id, "apply(InvalidateCache): キャッシュ全破棄（表示は継続）");
         Self::reply(reply, Ok(()));
     }
@@ -424,15 +551,26 @@ impl EmoPresenter {
     /// mount（と供給面）は初回 `ShowSurface` で原寸確定後に遅延生成されるため、未登録 target・
     /// 初回表示確立前は取得不可（`None`）である。呼び手（結線側）は表示確立後に取得するか再取得を
     /// 試みる。返る値はスナップショット（読み取り専用 view）で、スロット状態は変更できない。
+    ///
+    /// # 取得条件（k 導入後・要件 1.2）
+    ///
+    /// mount／供給面の存在に加えて **表示が一度成立していること**（`applied`／`native_size` が確定
+    /// していること）を条件とする。`scale()` は実適用 k、`surface_size()` は native 原寸を返す契約で
+    /// あり、いずれも表示成立点でしか確定しないためである——供給面だけ生成できて upload に失敗した
+    /// ような中間状態で「k=1.0・供給面寸」という**実態のない値**を返さない（無言の縮退を作らない）。
     pub fn text_slot_view(&self, target: TargetId) -> Option<TextSlotView> {
         let t = self.targets.get(&target)?;
         let mount = t.mount.as_ref()?;
-        let chain = t.chain.as_ref()?;
+        // 供給面の遅延生成前は表示未確立（既存契約の維持）。
+        t.chain.as_ref()?;
+        // 実適用 k と native 原寸は表示成立点でのみ確定する（照会値＝実適用値の担保）。
+        let applied = t.applied?;
+        let surface_size = t.native_size?;
         Some(TextSlotView {
             slot: mount.text_slot(),
             window: t.window,
-            surface_size: chain.size(),
-            scale: CURRENT_COMPOSE_SCALE,
+            surface_size,
+            scale: applied.as_f32(),
         })
     }
 
@@ -449,7 +587,11 @@ impl EmoPresenter {
 
     /// 現サーフェスの当たり判定領域名を解決する（`current_surface_id` → `EmoWorld::surface` → 純関数・R4.1/4.4）。
     ///
-    /// 座標はサーフェス px（＝窓 client 物理 px・k=1.0 契約）。現サーフェス無し（未表示／`Hide`／空合成
+    /// 座標は **native サーフェス px**（k 適用前の合成座標系）で解釈される。窓 client 物理 px は k 倍
+    /// された座標系ゆえ、k≠1.0 では呼び手が渡す前に ÷k する必要がある——**その変換は本メソッドの責務
+    /// ではなく**、下流 `areka-P0-collision-dpi-hittest`（W5）の領分である（要件 7.9: 本仕様は当たり
+    /// 判定の点÷k・ヒット規約を変更しない）。k=1.0 の窓では両座標系が一致するため、本メソッドの挙動は
+    /// k 導入の前後で完全に不変である。現サーフェス無し（未表示／`Hide`／空合成
     /// 縮退／未登録 target）は `None`（R4.4）。重なりは画家のアルゴリズム（後定義が手前・[`RegionPriority::Painter`]）で
     /// 解決する。`EmoWorld` を presenter 外へ露出しない（`&SurfaceMaster` を外へ出さない）ため純関数
     /// [`areka_emo_compose::hit_region`] の呼出は本メソッド内で閉じ、戻り値の寿命は `&self` に従う
@@ -534,6 +676,70 @@ mod tests {
         world.insert_resource(core);
         world.insert_resource(wuc);
         world
+    }
+
+    /// 窓 entity を **`DPI` component 付き**で作る（design「Testing Strategy > Integration Tests」の
+    /// テスト World 前提）。
+    ///
+    /// 本番の窓生成は必ず `DPI` を付与する（wintf が `GetDpiForWindow` の実値で補正する）。テストで
+    /// component を省くと要件 1.4 の縮退（error! ＋ k=1.0）が「正常系のふり」で緑になってしまうため、
+    /// **明示挿入を規律とする**。96 挿入＝恒等 k、192 挿入＝k=2/1。縮退分岐そのものは
+    /// `show_surface_without_dpi_component_degrades_to_identity`（DPI 不在専用テスト）で檻に入れる。
+    fn spawn_window_with_dpi(world: &mut World, dpi: u16) -> Entity {
+        world.spawn(DPI::from_dpi(dpi, dpi)).id()
+    }
+
+    /// 窓 entity の `DPI` component を差し替える（モニタ跨ぎ移動・表示スケール変更の決定論的代替）。
+    fn set_window_dpi(world: &mut World, window: Entity, dpi: u16) {
+        world.entity_mut(window).insert(DPI::from_dpi(dpi, dpi));
+    }
+
+    /// `build_target_assets` と同一入力の **native 合成結果を `scale` 倍**した表示用サーフェスの
+    /// バイト列（k≠1 表示の golden）。
+    ///
+    /// presenter が辿るのと同じ `Composer::compose`（native）→ `resample`（k 適用）の 2 段を、
+    /// テスト側で独立に再現する。「readback が偶然それらしい寸法になった」ではなく
+    /// **k 適用後のバイトそのもの**を固定する。
+    fn scaled_golden(
+        emo_world: &EmoWorld,
+        atlas: &AtlasTable,
+        surface_id: u32,
+        scale: ScaleRatio,
+    ) -> (Vec<u8>, (u32, u32), (u32, u32)) {
+        let mut composer = Composer::new();
+        let native = composer
+            .compose(
+                emo_world,
+                atlas,
+                surface_id,
+                &BindSet::default(),
+                &PatternState::default(),
+            )
+            .expect("golden 用の native 合成は Ok");
+        let native_size = (native.width(), native.height());
+        let mut scaled = ComposedSurface::new(0, 0);
+        resample(&native, scale, &mut scaled);
+        let scaled_size = (scaled.width(), scaled.height());
+        (scaled.bytes().to_vec(), native_size, scaled_size)
+    }
+
+    /// 有効 `ShowSurface` を適用し、reply が `Ok(())` であることを確認する（テスト補助）。
+    fn show_ok(presenter: &mut EmoPresenter, world: &mut World, target: TargetId, surface_id: u32) {
+        let (tx, rx) = reply_channel::<PresentOutcome>();
+        presenter.apply(
+            world,
+            PresentCommand::ShowSurface {
+                target,
+                surface_id,
+                binds: BindSet::default(),
+                pattern: PatternState::default(),
+                reply: Some(tx),
+            },
+        );
+        assert!(
+            matches!(rx.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
+            "ShowSurface（surface {surface_id}）が Ok でない"
+        );
     }
 
     // ── ComposedSurface 生成補助（chain.rs テストと同技法）──────────────────────────────────
@@ -629,14 +835,14 @@ mod tests {
     #[test]
     fn golden_match_read_back_equals_direct_compose() {
         let mut world = make_world_with_gpu();
-        let window = world.spawn_empty().id();
+        let window = spawn_window_with_dpi(&mut world, 96);
 
         let (emo_world, atlas, golden) = build_target_assets(3, 2, 0x11);
         assert!(golden.iter().any(|&b| b != 0), "golden は非退化（全 0 でない）");
 
         let mut presenter = EmoPresenter::new();
         presenter
-            .attach_target(&mut world, TargetId(0), window, emo_world, atlas)
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
             .expect("attach_target 失敗");
 
         let (tx, rx) = reply_channel::<PresentOutcome>();
@@ -671,13 +877,13 @@ mod tests {
     #[test]
     fn invalid_surface_id_replies_err_and_leaves_display_unchanged() {
         let mut world = make_world_with_gpu();
-        let window = world.spawn_empty().id();
+        let window = spawn_window_with_dpi(&mut world, 96);
 
         let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x5A);
 
         let mut presenter = EmoPresenter::new();
         presenter
-            .attach_target(&mut world, TargetId(0), window, emo_world, atlas)
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
             .expect("attach_target 失敗");
 
         // まず有効 id で表示を確立（供給面生成＋表示バイト確定）。
@@ -786,13 +992,13 @@ mod tests {
     #[test]
     fn invalid_surface_skips_and_leaves_display_and_mask_unchanged() {
         let mut world = make_world_with_gpu();
-        let window = world.spawn_empty().id();
+        let window = spawn_window_with_dpi(&mut world, 96);
 
         let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x37);
 
         let mut presenter = EmoPresenter::new();
         presenter
-            .attach_target(&mut world, TargetId(0), window, emo_world, atlas)
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
             .expect("attach_target 失敗");
 
         // 有効 id で表示・マスク・hit-test を確立。
@@ -894,7 +1100,7 @@ mod tests {
     #[test]
     fn empty_composition_degrades_to_hidden_and_replies_ok() {
         let mut world = make_world_with_gpu();
-        let window = world.spawn_empty().id();
+        let window = spawn_window_with_dpi(&mut world, 96);
 
         let (emo_world, atlas) = build_assets_with_valid_and_empty(5, 4, 0x22);
 
@@ -911,7 +1117,7 @@ mod tests {
 
         let mut presenter = EmoPresenter::new();
         presenter
-            .attach_target(&mut world, TargetId(0), window, emo_world, atlas)
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
             .expect("attach_target 失敗");
 
         // 有効 1000 で mount/chain を確立し可視化。
@@ -996,7 +1202,7 @@ mod tests {
                 .get(&TargetId(0))
                 .unwrap()
                 .cache
-                .get(7000, &BindSet::default(), &PatternState::default())
+                .get(7000, &BindSet::default(), &PatternState::default(), ScaleRatio::ONE)
                 .is_none(),
             "EmptyComposition は cache へ 0×0 を挿入しない"
         );
@@ -1008,13 +1214,13 @@ mod tests {
     #[test]
     fn hide_then_reshow_recovers_display_from_cache() {
         let mut world = make_world_with_gpu();
-        let window = world.spawn_empty().id();
+        let window = spawn_window_with_dpi(&mut world, 96);
 
         let (emo_world, atlas, _golden) = build_target_assets(6, 5, 0x4D);
 
         let mut presenter = EmoPresenter::new();
         presenter
-            .attach_target(&mut world, TargetId(0), window, emo_world, atlas)
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
             .expect("attach_target 失敗");
 
         // 初回表示（可視・αマスク判定確立）。
@@ -1072,7 +1278,7 @@ mod tests {
             let target = presenter.targets.get(&TargetId(0)).unwrap();
             assert!(target.chain.is_some(), "Hide は swap chain を保持する（R3.3）");
             assert!(
-                target.cache.get(1000, &BindSet::default(), &PatternState::default()).is_some(),
+                target.cache.get(1000, &BindSet::default(), &PatternState::default(), ScaleRatio::ONE).is_some(),
                 "Hide は合成キャッシュを保持する（R3.3）"
             );
             assert!(!target.visible, "Hide 後は target.visible=false");
@@ -1126,7 +1332,7 @@ mod tests {
     #[test]
     fn text_slot_view_is_none_before_display_established() {
         let mut world = World::new();
-        let window = world.spawn_empty().id();
+        let window = spawn_window_with_dpi(&mut world, 96);
         let (emo_world, atlas, _golden) = build_target_assets(3, 2, 0x66);
 
         let mut presenter = EmoPresenter::new();
@@ -1137,7 +1343,7 @@ mod tests {
         );
 
         presenter
-            .attach_target(&mut world, TargetId(0), window, emo_world, atlas)
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
             .expect("attach_target 失敗");
         // 登録済みでも初回 ShowSurface 前（mount 未生成）は空（design: mount は遅延生成・R9.2）。
         assert!(
@@ -1153,13 +1359,13 @@ mod tests {
     #[test]
     fn text_slot_view_returns_slot_window_size_scale_after_display() {
         let mut world = make_world_with_gpu();
-        let window = world.spawn_empty().id();
+        let window = spawn_window_with_dpi(&mut world, 96);
 
         let (emo_world, atlas, _golden) = build_target_assets(3, 2, 0x77);
 
         let mut presenter = EmoPresenter::new();
         presenter
-            .attach_target(&mut world, TargetId(0), window, emo_world, atlas)
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
             .expect("attach_target 失敗");
 
         let (tx, rx) = reply_channel::<PresentOutcome>();
@@ -1300,14 +1506,14 @@ mod tests {
     #[test]
     fn bind_change_on_same_surface_updates_display() {
         let mut world = make_world_with_gpu();
-        let window = world.spawn_empty().id();
+        let window = spawn_window_with_dpi(&mut world, 96);
 
         let (emo_world, atlas, golden_plain, golden_bound) =
             build_target_assets_with_bind(4, 3, 0x2B);
 
         let mut presenter = EmoPresenter::new();
         presenter
-            .attach_target(&mut world, TargetId(0), window, emo_world, atlas)
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
             .expect("attach_target 失敗");
 
         let show = |presenter: &mut EmoPresenter, world: &mut World, binds: BindSet| {
@@ -1431,13 +1637,13 @@ mod tests {
     #[test]
     fn reshow_same_size_different_face_keeps_text_slot_stable() {
         let mut world = make_world_with_gpu();
-        let window = world.spawn_empty().id();
+        let window = spawn_window_with_dpi(&mut world, 96);
 
         let (emo_world, atlas, golden_1000, golden_3000) = build_two_face_assets(6, 5);
 
         let mut presenter = EmoPresenter::new();
         presenter
-            .attach_target(&mut world, TargetId(0), window, emo_world, atlas)
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
             .expect("attach_target 失敗");
 
         // 面 1000 を表示確立（可視・αマスク判定・供給面/装着を遅延生成）。
@@ -1629,14 +1835,14 @@ mod tests {
     #[test]
     fn show_surface_pattern_flows_through_to_compose_and_cache() {
         let mut world = make_world_with_gpu();
-        let window = world.spawn_empty().id();
+        let window = spawn_window_with_dpi(&mut world, 96);
 
         let (emo_world, atlas, golden_plain, golden_pattern) =
             build_target_assets_with_pattern(4, 3, 0x3C);
 
         let mut presenter = EmoPresenter::new();
         presenter
-            .attach_target(&mut world, TargetId(0), window, emo_world, atlas)
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
             .expect("attach_target 失敗");
 
         let show = |presenter: &mut EmoPresenter, world: &mut World, pattern: PatternState| {
@@ -1697,12 +1903,12 @@ mod tests {
     #[test]
     fn current_surface_id_is_none_before_first_show() {
         let mut world = World::new();
-        let window = world.spawn_empty().id();
+        let window = spawn_window_with_dpi(&mut world, 96);
         let (emo_world, atlas, _golden) = build_target_assets(3, 2, 0x10);
 
         let mut presenter = EmoPresenter::new();
         presenter
-            .attach_target(&mut world, TargetId(0), window, emo_world, atlas)
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
             .expect("attach_target 失敗");
 
         assert_eq!(
@@ -1722,12 +1928,12 @@ mod tests {
     #[test]
     fn current_surface_id_is_last_shown_after_display() {
         let mut world = make_world_with_gpu();
-        let window = world.spawn_empty().id();
+        let window = spawn_window_with_dpi(&mut world, 96);
         let (emo_world, atlas, _golden) = build_target_assets(3, 2, 0x11);
 
         let mut presenter = EmoPresenter::new();
         presenter
-            .attach_target(&mut world, TargetId(0), window, emo_world, atlas)
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
             .expect("attach_target 失敗");
 
         let (tx, rx) = reply_channel::<PresentOutcome>();
@@ -1758,12 +1964,12 @@ mod tests {
     #[test]
     fn current_surface_id_follows_surface_switch() {
         let mut world = make_world_with_gpu();
-        let window = world.spawn_empty().id();
+        let window = spawn_window_with_dpi(&mut world, 96);
         let (emo_world, atlas, _g1, _g3) = build_two_face_assets(6, 5);
 
         let mut presenter = EmoPresenter::new();
         presenter
-            .attach_target(&mut world, TargetId(0), window, emo_world, atlas)
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
             .expect("attach_target 失敗");
 
         let show = |presenter: &mut EmoPresenter, world: &mut World, id: u32| {
@@ -1804,12 +2010,12 @@ mod tests {
     #[test]
     fn current_surface_id_is_none_after_hide() {
         let mut world = make_world_with_gpu();
-        let window = world.spawn_empty().id();
+        let window = spawn_window_with_dpi(&mut world, 96);
         let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x13);
 
         let mut presenter = EmoPresenter::new();
         presenter
-            .attach_target(&mut world, TargetId(0), window, emo_world, atlas)
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
             .expect("attach_target 失敗");
 
         let (tx0, rx0) = reply_channel::<PresentOutcome>();
@@ -1864,12 +2070,12 @@ mod tests {
     #[test]
     fn current_surface_id_unchanged_by_invalidate_cache() {
         let mut world = make_world_with_gpu();
-        let window = world.spawn_empty().id();
+        let window = spawn_window_with_dpi(&mut world, 96);
         let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x14);
 
         let mut presenter = EmoPresenter::new();
         presenter
-            .attach_target(&mut world, TargetId(0), window, emo_world, atlas)
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
             .expect("attach_target 失敗");
 
         let (tx0, rx0) = reply_channel::<PresentOutcome>();
@@ -1925,5 +2131,602 @@ mod tests {
             None,
             "未登録 target の hit_region は None"
         );
+    }
+
+    // ── DPI 追従（k 適用の単一漏斗）: タスク 3.2／3.3 の檻 ────────────────────────────────────
+    // k は「target ごとの政策（author_dpi）× 窓ごとの実 DPI」から **show 適用ごと**に導出される。
+    // 檻は (a) 政策が窓単位で保たれること、(b) 導出 k が実際に合成結果へ掛かって表示寸・表示バイトを
+    // 変えること、(c) k がキャッシュキーへ届くこと、(d) DPI 不在が縮退分岐として独立に成立すること。
+
+    /// タスク 3.2・要件 1.5 観測完了（窓ごとの k 基底）: `attach_target` は target ごとに拡大政策を
+    /// 保持し、**別窓・別 author_dpi の 2 target が互いの政策を汚さない**。同一の窓 DPI（192）を与えて
+    /// も政策が異なれば導出 k が異なる＝政策が k の基底として実際に効いている。
+    ///
+    /// `attach_target` は skeleton 登録のみで World に触れないため GPU 不要（素の `World` で決定論固定）。
+    #[test]
+    fn attach_target_keeps_scale_policy_per_window() {
+        let mut world = World::new();
+        let win_96 = spawn_window_with_dpi(&mut world, 96);
+        let win_144 = spawn_window_with_dpi(&mut world, 144);
+        let (w0, a0, _g) = build_target_assets(3, 2, 0x91);
+        let (w1, a1, _g) = build_target_assets(3, 2, 0x92);
+
+        let mut presenter = EmoPresenter::new();
+        presenter
+            .attach_target(&mut world, TargetId(0), win_96, w0, a0, 96)
+            .expect("attach_target(0) 失敗");
+        presenter
+            .attach_target(&mut world, TargetId(1), win_144, w1, a1, 144)
+            .expect("attach_target(1) 失敗");
+
+        let p0 = presenter.targets.get(&TargetId(0)).unwrap().policy;
+        let p1 = presenter.targets.get(&TargetId(1)).unwrap().policy;
+        assert_eq!(p0.author_dpi, 96, "target 0 は自分の author_dpi を保つ");
+        assert_eq!(p1.author_dpi, 144, "target 1 は自分の author_dpi を保つ");
+        assert_eq!(
+            p0.app_scale,
+            ScaleRatio::ONE,
+            "アプリ管理拡大率は ONE 固定シーム（要件 1.6）"
+        );
+        assert_eq!(p1.app_scale, ScaleRatio::ONE);
+        assert_eq!(
+            presenter.targets.get(&TargetId(0)).unwrap().window,
+            win_96,
+            "政策は target＝窓の対応ごとに保たれる"
+        );
+
+        // 同一の窓 DPI を与えても政策が違えば k が違う（政策が k の基底＝要件 1.5 の窓ごと k）。
+        assert_eq!(
+            derive_scale(p0, Some((192, 192))),
+            ScaleRatio::new(2, 1).unwrap()
+        );
+        assert_eq!(
+            derive_scale(p1, Some((192, 192))),
+            ScaleRatio::new(4, 3).unwrap()
+        );
+
+        // 表示前は実適用 k・native 原寸とも未確定（照会は「まだ何も適用していない」を 1.0 で塗らない）。
+        for id in [TargetId(0), TargetId(1)] {
+            let t = presenter.targets.get(&id).unwrap();
+            assert_eq!(t.applied, None, "表示成立前の applied は None");
+            assert_eq!(t.native_size, None, "表示成立前の native_size は None");
+            assert!(t.last_show.is_none(), "表示成立前の last_show は None");
+            assert!(
+                presenter.text_slot_view(id).is_none(),
+                "表示成立前は照会不可"
+            );
+        }
+    }
+
+    /// タスク 3.3 の名指し受け入れ基準・要件 2.1/2.2 観測完了（k=2/1 の実拡大表示）: 窓 `DPI`=192・
+    /// author_dpi=96（k=2/1）でキャッシュミスの `ShowSurface` を適用すると——(a) 供給面寸が
+    /// `scaled_extent(2/1, native)` と一致し、(b) `read_back` のバイト長がその寸に一致し、
+    /// (c) `read_back` バイトが **native 合成 → `resample(2/1)`** の独立再現と全バイト一致する。
+    ///
+    /// k=1.0 固定の途中状態なら (a) が native 寸のまま残るため RED になる（要件 2.2 の「両水準が同一
+    /// 物理寸にならない」ことを、96 水準の既存 golden 檻と対で担保する）。
+    #[test]
+    fn show_surface_scales_display_to_scaled_extent_at_k2() {
+        let mut world = make_world_with_gpu();
+        let window = spawn_window_with_dpi(&mut world, 192);
+
+        let (emo_world, atlas, native_golden) = build_target_assets(3, 2, 0x81);
+        // 同一入力を独立に再現して k 適用後の golden を作る（presenter の内部値の追認ではない）。
+        let (probe_world, probe_atlas, _) = build_target_assets(3, 2, 0x81);
+        let k2 = ScaleRatio::new(2, 1).unwrap();
+        let (scaled_golden_bytes, native_size, scaled_size) =
+            scaled_golden(&probe_world, &probe_atlas, 1000, k2);
+        assert_eq!(native_size, (3, 2), "fixture の native 原寸");
+        assert_eq!(
+            scaled_size,
+            k2.scaled_extent(3, 2),
+            "golden の外形は丸め権威 scaled_extent に従う"
+        );
+        assert_eq!(scaled_size, (6, 4));
+
+        let mut presenter = EmoPresenter::new();
+        presenter
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
+            .expect("attach_target 失敗");
+
+        show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+
+        // (a) 供給面（swap chain）寸＝k 倍後の物理寸（既存の「composed 外形従属」連鎖が k 追従した証跡）。
+        let chain_size = presenter
+            .targets
+            .get(&TargetId(0))
+            .and_then(|t| t.chain.as_ref())
+            .expect("表示成立後は供給面が生成済み")
+            .size();
+        assert_eq!(
+            chain_size, scaled_size,
+            "供給面寸が scaled_extent(k, native) と一致しない（k が表示へ届いていない）"
+        );
+
+        // (b) readback の画素数が k 倍後の寸に一致（stride = width*4 の密配列）。
+        let rb = presenter.read_back(TargetId(0)).expect("read_back 失敗");
+        assert_eq!(
+            rb.len(),
+            (scaled_size.0 * scaled_size.1 * 4) as usize,
+            "readback の画素数が k 倍後の寸と一致しない"
+        );
+        assert_ne!(
+            rb.len(),
+            native_golden.len(),
+            "k=2/1 なのに native 寸のまま（k=1.0 固定の途中状態が残っている・要件 2.2）"
+        );
+
+        // (c) バイトそのものが native→resample(k) の独立再現と一致（寸だけ合わせた偽物を弾く）。
+        assert_eq!(
+            rb, scaled_golden_bytes,
+            "表示バイトが native 合成の k 倍リサンプル結果と一致しない"
+        );
+
+        // 実適用 k・native 原寸が表示成立点で記録される（照会契約の単一真実源）。
+        let t = presenter.targets.get(&TargetId(0)).unwrap();
+        assert_eq!(t.applied, Some(k2), "applied が実適用 k と一致しない");
+        assert_eq!(
+            t.native_size,
+            Some(native_size),
+            "native_size は k 適用前の原寸"
+        );
+        assert_eq!(
+            t.last_show.as_ref().map(|(id, _, _)| *id),
+            Some(1000),
+            "last_show は最後に成立した show 入力を保持する"
+        );
+    }
+
+    /// タスク 3.2・要件 1.2 観測完了（照会契約の更新）: k=2/1 の表示確立後、`TextSlotView::scale()` は
+    /// **実適用 k（2.0）**を返し（恒常 1.0 の廃止）、`surface_size()` は **native 原寸**を返す
+    /// （供給面が持つ k 適用後の物理寸ではない）。物理寸との関係は
+    /// `scaled_extent(scale(), surface_size()) == chain.size()` として成立する。
+    #[test]
+    fn text_slot_view_reports_applied_scale_and_native_surface_size() {
+        let mut world = make_world_with_gpu();
+        let window = spawn_window_with_dpi(&mut world, 192);
+        let (emo_world, atlas, _golden) = build_target_assets(3, 2, 0x82);
+
+        let mut presenter = EmoPresenter::new();
+        presenter
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
+            .expect("attach_target 失敗");
+        show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+
+        let view = presenter
+            .text_slot_view(TargetId(0))
+            .expect("表示確立後の text_slot_view は Some");
+        assert_eq!(
+            view.scale(),
+            2.0,
+            "scale() が実適用 k を返さない（恒常 1.0 の定数返しが残っている）"
+        );
+        assert_eq!(
+            view.surface_size(),
+            (3, 2),
+            "surface_size() は native 原寸（k 適用後の供給面寸ではない）"
+        );
+
+        // 契約式: 物理寸 == scaled_extent(k, native)。供給面の実寸で裏取りする。
+        let chain_size = presenter
+            .targets
+            .get(&TargetId(0))
+            .and_then(|t| t.chain.as_ref())
+            .unwrap()
+            .size();
+        let k = ScaleRatio::new(2, 1).unwrap();
+        assert_eq!(
+            k.scaled_extent(view.surface_size().0, view.surface_size().1),
+            chain_size,
+            "物理寸 = scaled_extent(scale(), surface_size()) の契約が成立しない"
+        );
+        assert_ne!(
+            view.surface_size(),
+            chain_size,
+            "k≠1 では native 原寸と物理寸が一致しない（供給面寸を返していれば同値になる）"
+        );
+    }
+
+    /// 要件 1.4 観測完了（DPI 取得不能の縮退・専用檻）: 窓 entity に `DPI` component が**無い**target
+    /// でも表示は成立し、k は 1.0 へ縮退する（表示を失わない）。
+    ///
+    /// # `author_dpi` に **192**（非 96）を使う理由＝縮退の**帰属可能性**
+    ///
+    /// author_dpi=96 で組むと、縮退の答（`app_scale × 1/1` ＝ 1/1）と「component 不在を 96 で捏造した
+    /// 場合の答」（`96/96` ＝ 1/1）が**数値として区別できない**。すなわち `world.get::<DPI>(..)` に
+    /// `.or(Some((96, 96)))` を足す実装ミス——本体コメントが名指しで禁じている当のもの——を素通し
+    /// させてしまい、檻が空虚になる。author_dpi=192 なら捏造時の k は `96/192 = 1/2` となり、
+    /// 適用 k・readback 寸（`scaled_extent(1/2, (4,3)) = (2,2)`）・`scale()` の 3 つがすべて外れる。
+    /// したがって本テストの緑は「縮退分岐を通った」ことに帰属する。
+    ///
+    /// 縮退時の表示は k=1.0 の等倍＝native 合成 golden と全バイト一致であり、`scale()` は 1.0 を返す。
+    /// 他テストは `DPI` を明示挿入する規律ゆえ、この分岐は本テストだけが踏む（縮退が「正常系のふり」で
+    /// 通らないことの保証）。`derive_scale` 側の `error!` 発火自体は同関数の in-crate テストが檻に入れる。
+    #[test]
+    fn show_surface_without_dpi_component_degrades_to_identity() {
+        let mut world = make_world_with_gpu();
+        // 意図的に DPI component 無しの窓（本番では起こらない＝取得不能の代替）。
+        let window = world.spawn_empty().id();
+        assert!(
+            world.get::<DPI>(window).is_none(),
+            "前提: DPI component 不在"
+        );
+
+        let (emo_world, atlas, native_golden) = build_target_assets(4, 3, 0x83);
+
+        let mut presenter = EmoPresenter::new();
+        // author_dpi=192（非 96）: 縮退の 1/1 と「96 捏造」の 96/192=1/2 を数値で弁別する（上記 doc）。
+        presenter
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 192)
+            .expect("attach_target 失敗");
+        show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+
+        let t = presenter.targets.get(&TargetId(0)).unwrap();
+        assert_eq!(
+            t.applied,
+            Some(ScaleRatio::ONE),
+            "DPI 不在は author_dpi に依らず app_scale×1/1 へ縮退する（要件 1.4）"
+        );
+        assert_eq!(t.native_size, Some((4, 3)));
+        assert!(t.visible, "縮退しても表示を失わない");
+        assert_eq!(
+            presenter.read_back(TargetId(0)).expect("read_back 失敗"),
+            native_golden,
+            "k=1.0 縮退の表示は等倍 native 合成と全バイト一致（96 捏造なら 1/2 縮小で 2×2 になる）"
+        );
+        assert_eq!(
+            presenter.text_slot_view(TargetId(0)).unwrap().scale(),
+            1.0,
+            "縮退時の照会値も実適用 k（1.0）"
+        );
+    }
+
+    /// 要件 2.4/4.1 観測完了（k のキー参加）: 同一合成入力の再 show は **キャッシュヒット**（再合成
+    /// しない）が、窓 DPI が変われば k が変わって**必ずミス**し、新しい k で再サンプルされる。
+    ///
+    /// ヒットの判定は間接推測ではなく**改竄プローブ**で行う: 表示成立後のキャッシュスロットを同一キー
+    /// のまま別の絵（面 3000 由来）で上書きし、再 show の表示がその絵になるなら presenter は確かに
+    /// キャッシュを引いた（再合成していれば面 1000 の絵に戻る）。続けて窓 DPI を 192→96 へ変えると、
+    /// k が 2/1→1/1 になりキー相違でミス＝再合成されて面 1000 の等倍 golden へ戻る。
+    #[test]
+    fn same_scale_hits_cache_and_window_dpi_change_misses_and_resamples() {
+        let mut world = make_world_with_gpu();
+        let window = spawn_window_with_dpi(&mut world, 192);
+
+        let (emo_world, atlas, golden_1000, _golden_3000) = build_two_face_assets(6, 5);
+        // 改竄プローブ用に同一 fixture を独立生成（決定論ゆえ同一資産）。
+        let (probe_world, probe_atlas, _, _) = build_two_face_assets(6, 5);
+        let k2 = ScaleRatio::new(2, 1).unwrap();
+        let (scaled_1000, native_size, scaled_size) =
+            scaled_golden(&probe_world, &probe_atlas, 1000, k2);
+
+        let mut presenter = EmoPresenter::new();
+        presenter
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
+            .expect("attach_target 失敗");
+
+        // 1 回目（ミス→合成→k=2/1 リサンプル）。
+        show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+        assert_eq!(
+            presenter.read_back(TargetId(0)).expect("read_back 失敗"),
+            scaled_1000,
+            "初回表示が k=2/1 のリサンプル結果と一致しない"
+        );
+        {
+            let t = presenter.targets.get(&TargetId(0)).unwrap();
+            assert!(
+                t.cache
+                    .get(1000, &BindSet::default(), &PatternState::default(), k2)
+                    .is_some(),
+                "導出 k がキャッシュキーへ届いていない（k=2/1 で引けない）"
+            );
+            assert!(
+                t.cache
+                    .get(
+                        1000,
+                        &BindSet::default(),
+                        &PatternState::default(),
+                        ScaleRatio::ONE
+                    )
+                    .is_none(),
+                "k=1/1 で引けてしまう（k がキー要素になっていない）"
+            );
+        }
+
+        // 改竄プローブ: 同一キーのスロットを別の絵（面 3000 の k 適用結果）で上書きする。
+        let tampered = {
+            let mut composer = Composer::new();
+            let native = composer
+                .compose(
+                    &probe_world,
+                    &probe_atlas,
+                    3000,
+                    &BindSet::default(),
+                    &PatternState::default(),
+                )
+                .expect("面 3000 の合成は Ok");
+            let mut scaled = ComposedSurface::new(0, 0);
+            resample(&native, k2, &mut scaled);
+            scaled
+        };
+        let tampered_bytes = tampered.bytes().to_vec();
+        assert_ne!(
+            tampered_bytes, scaled_1000,
+            "プローブ前提: 別の絵であること"
+        );
+        presenter
+            .targets
+            .get_mut(&TargetId(0))
+            .unwrap()
+            .cache
+            .insert(
+                1000,
+                BindSet::default(),
+                PatternState::default(),
+                k2,
+                tampered,
+            );
+
+        // 2 回目（同一入力・同一 k）: ヒットゆえ再合成せず、改竄された絵がそのまま表示される。
+        show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+        assert_eq!(
+            presenter.read_back(TargetId(0)).expect("read_back 失敗"),
+            tampered_bytes,
+            "同一入力・同一 k の再 show でキャッシュを引いていない（無駄な再合成）"
+        );
+
+        // 窓 DPI 変化（192→96）: k=1/1 へ変わりキー相違＝必ずミス→再合成→等倍 golden へ戻る。
+        set_window_dpi(&mut world, window, 96);
+        show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+        let rb = presenter.read_back(TargetId(0)).expect("read_back 失敗");
+        assert_eq!(
+            rb, golden_1000,
+            "窓 DPI 変化後も旧 k の絵が出ている（k がキーに参加していない）"
+        );
+        assert_eq!(
+            rb.len(),
+            (native_size.0 * native_size.1 * 4) as usize,
+            "k=1/1 の表示寸は native 原寸"
+        );
+        assert_ne!(
+            scaled_size, native_size,
+            "前提: 2 水準の物理寸は異なる（要件 2.2）"
+        );
+
+        let t = presenter.targets.get(&TargetId(0)).unwrap();
+        assert_eq!(
+            t.applied,
+            Some(ScaleRatio::ONE),
+            "照会値が新 k へ追随していない"
+        );
+        assert_eq!(
+            t.native_size,
+            Some(native_size),
+            "native 原寸は k に依らず不変"
+        );
+        assert!(
+            t.cache
+                .get(1000, &BindSet::default(), &PatternState::default(), k2)
+                .is_none(),
+            "容量 1 スロットは新 k のエントリへ置き換わる"
+        );
+    }
+
+    /// surface 1000（`w1×h1`）と surface 3000（`w2×h2`）＝**native 原寸が互いに異なる** 2 面を
+    /// 同一 world へ載せた `(EmoWorld, AtlasTable)`。
+    ///
+    /// `build_two_face_assets` は同寸 2 面（供給面リサイズ経路を踏まない檻）だが、こちらは
+    /// 「照会契約の native 原寸が**表示中の面**を指しているか」を弁別するために寸法を変えてある
+    /// （同寸では取り違えが観測できない）。両面とも α=255 ゆえトリムは全域を残し、合成外形は宣言どおり。
+    fn build_two_sized_face_assets(w1: u32, h1: u32, w2: u32, h2: u32) -> (EmoWorld, AtlasTable) {
+        let base = Path::new("shell/master");
+        let surfaces = vec![
+            surface(1000, vec![elem("p.png", 0, 0)]),
+            surface(3000, vec![elem("q.png", 0, 0)]),
+        ];
+
+        let gradient = |w: u32, h: u32, salt: u8| -> Vec<u8> {
+            let mut img: Vec<u8> = Vec::with_capacity((w * h * 4) as usize);
+            for y in 0..h {
+                for x in 0..w {
+                    let b = (x as u8).wrapping_mul(3).wrapping_add(salt);
+                    let g = (y as u8).wrapping_mul(5).wrapping_add(salt);
+                    let r = ((x + y) as u8).wrapping_mul(7).wrapping_add(salt);
+                    img.extend_from_slice(&[b, g, r, 0xFF]);
+                }
+            }
+            img
+        };
+
+        let mut dec = MemoryDecoder::new();
+        dec.insert(
+            base.join("p.png"),
+            w1,
+            h1,
+            w1 * 4,
+            gradient(w1, h1, 0x21),
+            true,
+        );
+        dec.insert(
+            base.join("q.png"),
+            w2,
+            h2,
+            w2 * 4,
+            gradient(w2, h2, 0x5C),
+            true,
+        );
+
+        let set = SurfaceSet {
+            surfaces: &surfaces,
+            base_dir: base,
+            alpha_params: AlphaParams {
+                use_self_alpha: UseSelfAlpha::On,
+            },
+        };
+        let baked = bake(&[set], &dec, PackConfig::default());
+        assert!(
+            baked.errors.is_empty(),
+            "atlas bake セットアップは失敗しない"
+        );
+
+        let mut world = EmoWorld::build(&shell_of(surfaces));
+        world.bind_atlas(&baked.table, SetId(0));
+        (world, baked.table)
+    }
+
+    /// 要件 1.2/4.4 観測完了（**insert 済みのまま失敗 → 後からヒットで成立**した表示でも照会契約が
+    /// 正しい）: 供給面生成に失敗した初回 show は `Err` を返すが、その回の合成結果は既にキャッシュへ
+    /// 入っている。資源が復旧した後の再 show は**キャッシュヒット**（＝今回は合成しない）でありながら
+    /// 表示が成立する——このとき native 原寸を供給できなければ、確立済みの表示に対して
+    /// `text_slot_view` が永続的に `None` を返してしまう。
+    ///
+    /// 「合成した回だけ `native_size` を書く」実装ではここが RED になる（`native_size` が `None` のまま）。
+    /// `cached_native`（cache スロットと対の原寸）を表示成立点で**無条件に**写す実装だけが緑になる。
+    ///
+    /// device 失敗は `WucGraphicsResource` を**一時的に外す**ことで再現する（2 個目の Compositor を
+    /// 生成しない＝要件 5.3 の AV 非再導入を守る）。
+    #[test]
+    fn native_size_recovers_when_failed_show_is_followed_by_cache_hit() {
+        let mut world = make_world_with_gpu();
+        let window = spawn_window_with_dpi(&mut world, 192);
+        let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x84);
+        let k2 = ScaleRatio::new(2, 1).unwrap();
+
+        let mut presenter = EmoPresenter::new();
+        presenter
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
+            .expect("attach_target 失敗");
+
+        // 供給面生成の前提資源を一時退避（合成→insert の**後**で失敗する経路へ入る）。
+        let wuc = world
+            .remove_resource::<WucGraphicsResource>()
+            .expect("前提: make_world_with_gpu が WucGraphicsResource を載せている");
+
+        let (tx, rx) = reply_channel::<PresentOutcome>();
+        presenter.apply(
+            &mut world,
+            PresentCommand::ShowSurface {
+                target: TargetId(0),
+                surface_id: 1000,
+                binds: BindSet::default(),
+                pattern: PatternState::default(),
+                reply: Some(tx),
+            },
+        );
+        let outcome = rx
+            .recv_timeout(Duration::from_secs(10))
+            .expect("reply（供給面生成失敗）を受信できない");
+        assert!(
+            matches!(
+                outcome,
+                Err(PresentError::Device {
+                    context: "WucGraphicsResource::compositor",
+                    ..
+                })
+            ),
+            "供給面生成の前提資源が無ければ Device エラー: {outcome:?}"
+        );
+
+        {
+            let t = presenter.targets.get(&TargetId(0)).unwrap();
+            assert!(
+                t.cache
+                    .get(1000, &BindSet::default(), &PatternState::default(), k2)
+                    .is_some(),
+                "失敗前に insert 済み＝次回の同一入力は必ずキャッシュヒットになる（本テストの前提）"
+            );
+            assert_eq!(
+                t.cached_native,
+                Some((4, 3)),
+                "スロットと対の native 原寸は insert と同時に控えられている"
+            );
+            assert_eq!(t.applied, None, "表示は成立していない（R4.4: 前値のまま）");
+            assert_eq!(t.native_size, None, "表示未成立ゆえ照会値も未確定");
+            assert!(
+                presenter.text_slot_view(TargetId(0)).is_none(),
+                "表示未成立の間は照会不可"
+            );
+        }
+
+        // 資源を戻して同一入力を再 show（＝キャッシュヒット経由で表示が成立する）。
+        world.insert_resource(wuc);
+        show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+
+        let view = presenter
+            .text_slot_view(TargetId(0))
+            .expect("ヒット経由で成立した表示でも照会可能でなければならない（欠陥の RED 点）");
+        assert_eq!(
+            view.surface_size(),
+            (4, 3),
+            "ヒット経由の成立でも native 原寸が正しく供給される"
+        );
+        assert_eq!(view.scale(), 2.0, "実適用 k は 2.0");
+
+        let t = presenter.targets.get(&TargetId(0)).unwrap();
+        assert_eq!(t.native_size, Some((4, 3)));
+        assert_eq!(
+            k2.scaled_extent(4, 3),
+            t.chain
+                .as_ref()
+                .expect("表示成立後は供給面が生成済み")
+                .size(),
+            "物理寸 = scaled_extent(applied, native_size) の契約が回復後も成立する"
+        );
+    }
+
+    /// 要件 1.2 観測完了（照会 native 原寸は**表示中の面**を指す）: native 原寸の異なる 2 面を切り替え
+    /// ながら表示すると、`surface_size()` は常に**いま画面に出ている面**の原寸を返し、
+    /// `scaled_extent(scale(), surface_size()) == 供給面寸` が各時点で成立する。
+    ///
+    /// 3 回目は 2 回目と同一入力＝**キャッシュヒット**であり、ヒット回でも照会値が前の面へ巻き戻ったり
+    /// 失われたりしないことを固定する（`native_size` を「合成した回だけ書く」実装が生む取り違えの檻）。
+    /// 同寸 fixture では取り違えが観測できないため、寸法の異なる 2 面を専用に用意している。
+    #[test]
+    fn native_size_tracks_displayed_surface_across_size_changing_switch() {
+        let mut world = make_world_with_gpu();
+        let window = spawn_window_with_dpi(&mut world, 192);
+        let (emo_world, atlas) = build_two_sized_face_assets(6, 5, 4, 3);
+        let k2 = ScaleRatio::new(2, 1).unwrap();
+
+        let mut presenter = EmoPresenter::new();
+        presenter
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
+            .expect("attach_target 失敗");
+
+        // 3 回目は 2 回目と同一入力＝キャッシュヒット（ヒット回の照会値を固定する）。
+        for (step, (surface_id, native)) in
+            [(1000u32, (6u32, 5u32)), (3000, (4, 3)), (3000, (4, 3))]
+                .into_iter()
+                .enumerate()
+        {
+            show_ok(&mut presenter, &mut world, TargetId(0), surface_id);
+
+            let view = presenter
+                .text_slot_view(TargetId(0))
+                .expect("表示成立後は照会可能");
+            assert_eq!(
+                view.surface_size(),
+                native,
+                "step {step}: surface_size() が表示中の面（{surface_id}）の native 原寸を指していない"
+            );
+            assert_eq!(view.scale(), 2.0, "step {step}: 実適用 k");
+
+            let chain_size = presenter
+                .targets
+                .get(&TargetId(0))
+                .and_then(|t| t.chain.as_ref())
+                .expect("表示成立後は供給面が生成済み")
+                .size();
+            assert_eq!(
+                k2.scaled_extent(native.0, native.1),
+                chain_size,
+                "step {step}: 物理寸 = scaled_extent(scale(), surface_size()) が成立しない"
+            );
+            assert_eq!(
+                presenter.current_surface_id(TargetId(0)),
+                Some(surface_id),
+                "step {step}: 現サーフェス id"
+            );
+        }
     }
 }

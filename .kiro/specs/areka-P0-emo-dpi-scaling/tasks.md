@@ -58,7 +58,7 @@
   - _Boundary: emo-present/cache.rs_
   - _Depends: 1.2_
 
-- [ ] 3.2 (P) attach_target拡張とPresentTargetフィールド追加（presenter.rs）
+- [x] 3.2 (P) attach_target拡張とPresentTargetフィールド追加（presenter.rs）
   - `PresentTarget`へ`policy`/`applied`/`native_size`/`last_show`フィールドを追加する
   - `attach_target(.., author_dpi)`へシグネチャを拡張する
   - `TextSlotView::scale()`（実適用k）・`surface_size()`（native原寸）の契約を更新する
@@ -67,7 +67,7 @@
   - _Boundary: emo-present/presenter.rs_
   - _Depends: 1.4_
 
-- [ ] 3.3 apply_showのk導出・キャッシュ統合・リサンプル実装（presenter.rs）
+- [x] 3.3 apply_showのk導出・キャッシュ統合・リサンプル実装（presenter.rs）
   - `world.get::<DPI>(target.window)` → `derive_scale` → `cache.get`（scaleキー）→ ミス時 `compose`（native）→ `resample` → `cache.insert` の流れを実装する
   - k=2/1のShowSurfaceでcacheミス時にread_back寸法がscaled_extentと一致する状態を確認できる
   - _Requirements: 1.1, 2.1, 2.3, 2.4_
@@ -161,6 +161,12 @@
 - 1.1: main同期は追加コミット不要（ブランチ == origin/main）。placement アンカーは `follow.rs` のみ行番号がずれた（`resize_window_to` :553→:786・`enqueue_window_set_pos` :729→:1009）。design.md へ差分表を記録済み。
 - 1.2: `scale_len` の中間型は design の u64 では `len≈num≈u32::MAX` で溢れるため **u128** が正。design.md を是正済み。
 - 1.2: `areka-emo-compose` の縮退経路は `tracing::warn!` 必須（steering `logging.md`）。ログ発火は `crate::log_capture::capture_logs` で檻に入れる（先例 `log_firing_tests.rs`・`plan.rs`）。純関数モジュールでも「無言縮退」はレビューで落ちる。
+- 3.2+3.3: **親判断で一括実装**（分割すると `ScaleRatio::ONE` の stand-in を挟む中間状態が不可避のため・小細工禁止の規律）。
+- 3.2+3.3: **task 3.5 への申し送り**: `last_show` の `#[allow(dead_code)]` は `refresh_scale` が読み手になった時点で除去すること。
+- 3.2+3.3: **task 5 への申し送り（範囲拡大）**: `attach_target` の破断呼び手は tasks.md が挙げる `examples/emo-present.rs` だけではない。実測＝`areka/src/emo2_boot/frame.rs:409/:450`（4.2 の領分）・`areka/examples/{emo-present.rs:620,:659, collision-probe.rs:442, window-placement.rs:419}`・**`areka-emo-text/examples/{emo-text-layer.rs:762, emo-text-typewriter-demo.rs:290}`・`areka-emo-text/tests/{attach_wiring_test.rs:156,:159, draw_readback_test.rs:306}`**。`areka-emo-text` の lib 自体は無傷。
+- 3.2+3.3: **別 spec 候補（レビュー裁定）**: `chain.upload` の失敗を注入する seam が `chain.rs` に無いため、「表示成立後に upload 失敗→後続ヒット」経路（シナリオb）は構成による証明どまりで end-to-end 駆動できていない。device-failure seam が要るなら別タスクへ。
+- 3.2+3.3: `native_size` は `cached_native`（cache スロットと対で書く私有フィールド）経由で**表示成立点に無条件コピー**。compose 経路でのみ書くと、失敗→後続キャッシュヒットで復帰した表示が `surface_size()` を永久に `None`／前サーフェス寸のまま返す（レビュー検出）。
+- 3.2+3.3: **DPI 縮退テストの罠**: `author_dpi=96` で書くと、縮退の 1.0 と `Some((96,96))` 埋めの `96/96=1` が数値的に区別できず**檻が空虚**になる。非96（192）で attach すること。
 - 3.1: **意図的な中間状態**＝このコミット時点で `areka-emo-present` はビルド不成立（`get`/`insert` 拡張により `presenter.rs:229/:241/:279/:347` が E0061）。**task 3.3 が本実装で修復する**。worktree は squash-merge 前提ゆえ main には現れない。暫定 stand-in（`ScaleRatio::ONE` 直書き）は入れていない（小細工禁止の規律）。
 - 3.1: `cache.rs` は **変更前から rustfmt 非準拠**だった（3箇所）。今回整形されたため diff に無関係hunkが混じるが、HEAD版への `rustfmt --check` が同一出力を返すことで整形のみと実証済み。
 - 3.1: 検証テクニック＝`presenter.rs` を一時パッチ（`ScaleRatio::ONE`）してテスト実行→**復元**。復元時は **mtime を更新**しないと cargo がリビルドを飛ばして**偽緑**になる罠あり。
