@@ -323,6 +323,14 @@ fn main() -> Result<()> {
         if let Some(runtime) = outcome.ghost.as_ref() {
             let sender = runtime.kanade().clone();
             input_events::wire_mouse_input(app.world().borrow_mut().world_mut(), sender);
+            // 位置永続の World 結線（task 6.2・design C4/C5・要件 1.9）: wire_mouse_input とは
+            // 別行の additive 挿入。ゴースト窓を保持する同一 World（`wire_mouse_input` と同経路）へ
+            // sylphya publisher clone を持つ PersistWiring（NonSend）を差し、DragEnd→persist_entries の
+            // write-through 導管を確立する。
+            insert_persist_wiring(
+                app.world().borrow_mut().world_mut(),
+                runtime.sylphya_publisher().clone(),
+            );
         }
         // バルーン選択肢対話配線を World へ結線（task 6.2・design「main.rs＋wire_balloon_choice」・
         // R4.3/5.5/8.1）: mpsc チャネル生成＋`BalloonWiring`／`ChoiceSelectionInbox`（NonSend）挿入＋
@@ -343,6 +351,13 @@ fn main() -> Result<()> {
         let ghost = match areka_ghost::boot(ghost_options) {
             Ok(runtime) => {
                 tracing::info!("LogSink フォールバックで起動しました（emo2-boot wire 不成立）");
+                // 位置永続の World 結線（task 6.2・design C4/C5・要件 1.9）: fallback boot でも
+                // 生きた runtime があれば wired 経路と同型に PersistWiring（NonSend）を同一 World へ
+                // 挿入する（両経路で DragEnd→persist_entries の write-through 導管を確立）。
+                insert_persist_wiring(
+                    app.world().borrow_mut().world_mut(),
+                    runtime.sylphya_publisher().clone(),
+                );
                 Some(runtime)
             }
             Err(err) => {
@@ -537,6 +552,44 @@ fn on_dummy_pressed(
     }
 }
 
+/// 復元マージのシーム抽出（task 6.1・design C4・要件 1.4/1.5/5.1/6.1）。
+///
+/// `open_startup_window` の Ok アームが `spawn_ghost_windows` へ渡す placements を、起動時に
+/// 先読みした永続 entries で差し替える（保存位置優先・毎起動 live 再射影）。`open_startup_window`
+/// は実 `WinApp` を要してテスト困難ゆえ、純粋シーム（load→apply）を本ヘルパへ抽出し単体で
+/// 檻に入れる（IO は [`placement::persist::load_restored_state`] の 1 点のみ・merge は純関数）。
+///
+/// `default_encoding` は boot 結線・`source.rs` と同一の [`areka_parsers::charset::DefaultEncoding`]
+/// を渡すこと（mount 解決の一貫性のため）。呼び出し側は `DefaultEncoding::Ansi` を渡す。
+fn restore_merged_placements(
+    ghost_root: &std::path::Path,
+    placements: Vec<placement::resolver::ScopePlacement>,
+    snapshot: &placement::follow::MonitorSnapshot,
+    default_encoding: areka_parsers::charset::DefaultEncoding,
+) -> Vec<placement::resolver::ScopePlacement> {
+    // 唯一の IO 点（design C1・A1 シーム）: mount 解決 → Ghost スコープ永続 entries 先読み。
+    let entries = placement::persist::load_restored_state(ghost_root, default_encoding);
+    // 純関数 merge（永続不書込・保存位置優先 → project_restore → balloon 導出）。
+    placement::persist::apply_restored_placements(placements, &entries, snapshot)
+}
+
+/// `PersistWiring`（NonSend）を、ゴースト窓を保持する同一 World へ挿入するシーム抽出
+/// （task 6.2・design C4/C5・要件 1.9）。
+///
+/// wired 経路（実 sink 結線成立）と fallback boot 経路（`LogSink`×2）の**両方**が、生きた
+/// ghost runtime が存在するときにこのヘルパで `runtime.sylphya_publisher().clone()` を World の
+/// NonSend リソースとして挿入する（`MouseWiring`／`Emo2Wiring` の NonSend 先例に倣う）。以降、
+/// follow.rs の DragEnd 観測点が [`placement::persist::persist_entries`] 経由でこの publisher の
+/// clone 送信端から保存 entries を write-through 投函できる（World レベルの配線導管）。
+///
+/// 生きた runtime が無い経路（wired の `None` ghost・fallback の `Err`・prepare 失敗のダミー窓）
+/// では挿入しない＝従来どおり永続結線なし（`persist_entries` は `PersistWiring` 不在で debug!＋
+/// no-op へ縮退・6.2）。挿入は純粋な World 変異ゆえ headless 単体テスト可能（`insert_non_send_resource`
+/// を薄く包み `#[cfg(test)]` の檻に入れる）。
+fn insert_persist_wiring(world: &mut World, publisher: areka_sylphya::SylphyaPublisher) {
+    world.insert_non_send_resource(placement::persist::PersistWiring { publisher });
+}
+
 /// 起動窓シーム（task 6.2・要件 1.4・design「main.rs seam」）: `prepare_ghost_windows`
 /// 成功時は本物のゴースト窓（キャラ窓＋バルーン窓）を生成し、準備失敗時は検証用
 /// ダミー窓へフォールバックする（旧 replace-me シームの差し替え本体）。
@@ -575,6 +628,19 @@ fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) {
                 placement::spawn::register_ghost_windows_click_through,
             );
 
+            // 復元マージ（design C4・要件 1.4）: snapshot 構築直後・spawn closure へ渡す前に、
+            // 永続先読み（load_restored_state）→ 純関数 merge（apply_restored_placements）で
+            // 保存位置を反映した placements を得る。`prepared` を placements/titles へ分解し、
+            // merge 済み placements（value 渡し）と titles を closure へ move する
+            // （default_encoding は boot 結線・source.rs と同一の Ansi＝mount 解決の一貫性）。
+            let placements = restore_merged_placements(
+                &cfg.ghost_root,
+                prepared.placements,
+                &snapshot,
+                areka_parsers::charset::DefaultEncoding::Ansi,
+            );
+            let titles = prepared.titles;
+
             // `EcsWorld::spawn` の async タスク → CommandSender → Input スケジュールで
             // World 適用という既存 ECS コマンド経路（ダミー窓と同型）で本物窓を組み立てる。
             app.world().borrow().spawn(|tx: CommandSender| async move {
@@ -582,8 +648,8 @@ fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) {
                     world.insert_resource(snapshot);
                     let windows = placement::spawn::spawn_ghost_windows(
                         world,
-                        &prepared.placements,
-                        &prepared.titles,
+                        &placements,
+                        &titles,
                     );
                     // マウス入力ハンドラ装着（areka-P0-input-events・依存方向 input_events→
                     // placement）: placement は `crate::` パスを持てない（example の `#[path]`
@@ -1137,5 +1203,239 @@ mod ghost_wiring_tests {
             expected: PathBuf::from("ghost/master/shell/master"),
         });
         assert!(!is_benign_boot_error(&shell_missing));
+    }
+}
+
+/// 復元マージシーム（task 6.1・design C4・要件 1.4/1.5）の headless 単体テスト。
+///
+/// `open_startup_window` は実 `WinApp`（実 UI ランタイム）を要するためテスト困難ゆえ、
+/// その Ok アームが `spawn_ghost_windows` へ渡す placements を作る純粋シーム
+/// （`restore_merged_placements`＝`load_restored_state`→`apply_restored_placements`）を
+/// 抽出して檻に入れる。植えた sylphya.toml の保存位置が既定位置に優先して merge 済み
+/// placements の char_pos へ載ること（1.4）／永続不在なら既定 placement に恒等（1.5）を
+/// 証明する（＝spawn される窓の初期位置が保存位置になる結線の証明）。
+#[cfg(test)]
+mod restore_seam_tests {
+    use super::*;
+    use areka_ghost::sylphya_wiring::profile_areka_root;
+    use areka_parsers::charset::DefaultEncoding;
+    use placement::follow::MonitorSnapshot;
+    use placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
+    use std::path::Path;
+
+    /// 復元テスト共通寸法（persist.rs の merge テストと同流儀）。
+    const CSZ: SizePx = SizePx { w: 400, h: 600 };
+    const BSZ: SizePx = SizePx { w: 200, h: 300 };
+
+    /// このテスト専用の一意な一時ディレクトリ（persist.rs の load テストと同規約・
+    /// 外部 tempfile 非依存）。
+    fn unique_temp_dir(tag: &str) -> std::path::PathBuf {
+        let mut dir = std::env::temp_dir();
+        dir.push(format!("areka_main_restore_seam_tests_{tag}"));
+        dir
+    }
+
+    /// `resolve` が成功する最小ゴーストパッケージ（persist.rs の `plant_minimal_ghost` と同型）。
+    fn plant_minimal_ghost(root: &Path) {
+        let _ = std::fs::remove_dir_all(root);
+        let ghost_master = root.join("ghost").join("master");
+        std::fs::create_dir_all(&ghost_master).expect("create ghost/master");
+        std::fs::write(
+            ghost_master.join("descript.txt"),
+            "charset,UTF-8\nname,テスト\nsakura.name,さくら\n".as_bytes(),
+        )
+        .expect("write ghost descript");
+        std::fs::create_dir_all(root.join("shell").join("master")).expect("create shell/master");
+    }
+
+    /// scope 0 の合成 placement（resolver 出力を模す。`balloon_pos ≡ char_pos + balloon_offset`
+    /// の事後条件を満たす）。既定 char_pos は saved と別位置に置く（優先の証明のため）。
+    fn synthetic_placement(default_char_pos: PointPx) -> ScopePlacement {
+        let balloon_offset = PointPx { x: -50, y: 10 };
+        ScopePlacement {
+            scope: 0,
+            char_pos: default_char_pos,
+            char_size: CSZ,
+            balloon_pos: PointPx {
+                x: default_char_pos.x + balloon_offset.x,
+                y: default_char_pos.y + balloon_offset.y,
+            },
+            balloon_size: BSZ,
+            balloon_offset,
+            anchor: Anchor::Free,
+        }
+    }
+
+    /// 1.4: 植えた保存位置が既定位置に優先して merge 済み placement の char_pos へ載る
+    /// （load→apply シームが実際に結線されている証明＝spawn される窓の初期位置が保存位置）。
+    /// saved 窓を完全に覆う work area ゆえ `project_restore` は恒等＝保存値素通し。
+    #[test]
+    fn restore_seam_prefers_saved_position_over_default() {
+        let root = unique_temp_dir("prefers_saved");
+        plant_minimal_ghost(&root);
+        // profile root = <ghost/master>/profile/areka（boot 結線と同一構築）。
+        let profile = profile_areka_root(&root.join("ghost").join("master"));
+        std::fs::create_dir_all(&profile).expect("create profile/areka");
+        std::fs::write(
+            profile.join("sylphya.toml"),
+            "format-version = 1\n[window.0]\nx = \"800\"\ny = \"300\"\n".as_bytes(),
+        )
+        .expect("plant sylphya.toml");
+
+        // 既定は saved とは別位置。saved 窓 (800,300)-(1200,900) を覆う広い work area
+        // ゆえ再射影は恒等（保存値素通し）。
+        let default_char_pos = PointPx { x: 100, y: 100 };
+        let placements = vec![synthetic_placement(default_char_pos)];
+        let snapshot = MonitorSnapshot {
+            work_areas: vec![RectPx {
+                left: 0,
+                top: 0,
+                right: 3840,
+                bottom: 2160,
+            }],
+        };
+
+        let out = restore_merged_placements(&root, placements, &snapshot, DefaultEncoding::Ansi);
+
+        assert_eq!(out.len(), 1);
+        assert_eq!(
+            out[0].char_pos,
+            PointPx { x: 800, y: 300 },
+            "植えた保存位置が既定(100,100)に優先して spawn 前 placements へ載る（1.4）"
+        );
+        // 事後条件（design C1）: 寸法・anchor は不変。
+        assert_eq!(out[0].char_size, CSZ);
+        assert_eq!(out[0].balloon_size, BSZ);
+        assert_eq!(out[0].anchor, Anchor::Free);
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// 1.5: 永続不在（sylphya.toml を植えない）→ merge は既定 placement に完全恒等
+    /// （保存位置が無ければ従来の既定位置解決のまま）。
+    #[test]
+    fn restore_seam_without_persist_is_identity_default() {
+        let root = unique_temp_dir("no_persist_default");
+        plant_minimal_ghost(&root); // resolve は成功するが sylphya.toml は植えない。
+
+        let default_char_pos = PointPx { x: 100, y: 100 };
+        let placements = vec![synthetic_placement(default_char_pos)];
+        let expected = placements.clone();
+        let snapshot = MonitorSnapshot {
+            work_areas: vec![RectPx {
+                left: 0,
+                top: 0,
+                right: 3840,
+                bottom: 2160,
+            }],
+        };
+
+        let out = restore_merged_placements(&root, placements, &snapshot, DefaultEncoding::Ansi);
+
+        assert_eq!(
+            out, expected,
+            "永続不在は既定 placement に恒等＝既定位置解決のまま（1.5）"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+}
+
+/// `PersistWiring` 挿入シーム（task 6.2・design C4/C5・要件 1.9）の headless 単体テスト。
+///
+/// wired／fallback 両経路が使う挿入ヘルパ `insert_persist_wiring` を檻に入れる。
+/// シーム結線そのもの（`main` の boot 経路分岐）は生きた `WinApp` を要するため、TDD は
+/// headless で駆動可能な挿入ヘルパで回す。実 publisher（`spawn_sylphya`＋共有 fake IO）を
+/// headless World へ挿入し、(a) NonSend リソース `PersistWiring` が存在すること、(b) その
+/// World 越しの `persist_entries` 投函が barrier 後に別ハンドルの `load_scope` で読み戻せる
+/// （＝World レベルの配線導管が正しく確立され DragEnd→file の World シームが成立している）
+/// ことを証明する。DragEnd→file の完全な end-to-end は task 8.2 が担う。
+#[cfg(test)]
+mod persist_wiring_seam_tests {
+    use super::*;
+    use areka_sylphya::persist::{FakePersistIo, PersistIo};
+    use areka_sylphya::{
+        Axis, PersistKey, PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya,
+    };
+    use placement::persist::{PersistWiring, char_pos_entries, persist_entries};
+    use placement::resolver::PointPx;
+    use std::path::Path;
+    use std::sync::Arc;
+
+    /// 共有 fake IO（アクターへ `Box<dyn PersistIo>` として移送しつつ、同一ストアを別ハンドルの
+    /// `load_scope` で観測するための newtype ラッパ。persist.rs の write-through 檻と同流儀）。
+    struct SharedFakeIo(Arc<FakePersistIo>);
+    impl PersistIo for SharedFakeIo {
+        fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
+            self.0.read(path)
+        }
+        fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
+            self.0.commit(path, content)
+        }
+    }
+
+    /// 挿入シーム檻（3.1／1.9／C4/C5）: `insert_persist_wiring` で headless World へ実 publisher を
+    /// 挿入すると、(a) NonSend `PersistWiring` が存在し、(b) その World 越しの `persist_entries` 投函が
+    /// Ghost スコープへ write-through され、barrier 後に別ハンドルの `load_scope` で読み戻せる。
+    #[test]
+    fn insert_persist_wiring_establishes_world_conduit_reaching_the_store() {
+        // 共有 fake IO（アクター Box 移送用と観測用で同一ストアを指す）。
+        let shared = Arc::new(FakePersistIo::new());
+        let roots = ScopeRoots {
+            ghost: Some(std::path::PathBuf::from("/g")),
+            ..ScopeRoots::default()
+        };
+        let parts = spawn_sylphya(SylphyaInit {
+            roots: roots.clone(),
+            io: Box::new(SharedFakeIo(shared.clone())),
+            runtime_sink: None,
+        });
+
+        // wired／fallback 両経路が使う本物の挿入ヘルパで World へ結線する。
+        let mut world = World::new();
+        insert_persist_wiring(&mut world, parts.publisher.clone());
+
+        // (a) NonSend リソース PersistWiring が World に存在する。
+        assert!(
+            world.get_non_send_resource::<PersistWiring>().is_some(),
+            "insert_persist_wiring 後、World に PersistWiring が挿入されているべき（C4/C5）"
+        );
+
+        // (b) その World 越しの persist_entries 投函がストアへ到達する（DragEnd→file の World シーム）。
+        let entries = char_pos_entries(0, PointPx { x: 1486, y: 353 });
+        persist_entries(&world, entries);
+
+        // barrier 復帰＝上記 put の write-through 保存（save_scope）まで完了（同一送信端 FIFO）。
+        parts
+            .publisher
+            .barrier()
+            .expect("barrier should resolve while actor is alive");
+
+        // アクターと同一ストアを別ハンドルの load_scope で観測（実 IO 通過＝投函の証明）。
+        let loaded = load_scope(PersistScope::Ghost, &roots, &SharedFakeIo(shared.clone()));
+        assert!(
+            loaded.contains(&(
+                PersistKey::WindowPos {
+                    scope: 0,
+                    axis: Axis::X
+                },
+                "1486".to_string()
+            )),
+            "World 導管越しの persist_entries が Ghost へ write-through していない（WindowPos.x）: {loaded:?}"
+        );
+        assert!(
+            loaded.contains(&(
+                PersistKey::WindowPos {
+                    scope: 0,
+                    axis: Axis::Y
+                },
+                "353".to_string()
+            )),
+            "World 導管越しの persist_entries が Ghost へ write-through していない（WindowPos.y）: {loaded:?}"
+        );
+
+        // 正典終了（アクター join）——テスト後始末（リーク回避・非本質）。
+        parts.publisher.close();
+        let _ = parts.handle.join();
     }
 }

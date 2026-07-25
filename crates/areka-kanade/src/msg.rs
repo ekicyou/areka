@@ -19,6 +19,7 @@
 //! 存在しないため、NOTIFY 応答から talk を生成できないことが構造的に保証される。
 
 use crate::status::ExecutionStatus;
+use crate::talk::EpilogueCommand;
 
 /// 単調ミリ秒（注入時刻）。本番結線は OS 起動からの経過 ms（GetTickCount64 相当）を
 /// 注入する想定（OnSecondChange Ref0 が正典と一致する）。テストは任意の単調値。
@@ -183,6 +184,13 @@ pub struct KanadeConfig {
     pub baseware_name: String,
     /// close talk 再生完了待ち上限（既定 30_000・DD 表参照）。
     pub close_talk_deadline_ms: u64,
+    /// 初回起動ゲート（既定 true＝現行挙動不変・値源は ghost boot の BootCount 存在判定）。
+    pub first_boot: bool,
+    /// OnFirstBoot Reference0 に渡す永続 vanish 回数（既定 0）。
+    pub vanish_count: u32,
+    /// 初回挨拶トーク末尾へ添付する汎用 epilogue（既定空＝何も添付しない）。
+    /// kanade は内容を解釈しない（不透明搬送・sylphya 非依存の維持）。
+    pub first_boot_epilogue: Vec<EpilogueCommand>,
 }
 
 impl KanadeConfig {
@@ -196,6 +204,9 @@ impl KanadeConfig {
             baseware_version: baseware_version.into(),
             baseware_name: "areka".to_string(),
             close_talk_deadline_ms: 30_000,
+            first_boot: true,
+            vanish_count: 0,
+            first_boot_epilogue: Vec::new(),
         }
     }
 }
@@ -304,6 +315,19 @@ mod tests {
         assert_eq!(config.baseware_version, "1.0.0");
         assert_eq!(config.baseware_name, "areka");
         assert_eq!(config.close_talk_deadline_ms, 30_000);
+    }
+
+    #[test]
+    fn kanade_config_new_defaults_additive_fields() {
+        // Task 5.1 / design C8: 追加3フィールドの既定は true / 0 / 空。
+        // 既定により既存 boot happy-path 檻は意味論無改変で緑（3.1）。
+        let config = KanadeConfig::new("master", "1.0.0");
+        assert!(config.first_boot, "first_boot default must be true (現行挙動不変)");
+        assert_eq!(config.vanish_count, 0, "vanish_count default must be 0 (OnFirstBoot Ref0)");
+        assert!(
+            config.first_boot_epilogue.is_empty(),
+            "first_boot_epilogue default must be empty (何も添付しない)"
+        );
     }
 
     #[test]

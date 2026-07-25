@@ -83,15 +83,16 @@ pub fn on_initialize(snapshot: &ExecutionSnapshot) -> ShioriCall {
     }
 }
 
-/// `OnFirstBoot`（GET・Ref0=`"0"` 固定）。
+/// `OnFirstBoot`（GET・Ref0=`vanish_count` 由来）。
 ///
-/// M1 は vanish count 等の永続値を持たない（永続化は position-persist の領分）ため、
-/// 起動種別イベントは毎回同一の運行として Ref0 を固定値 `"0"` で構成する（Req 1.6）。
+/// Ref0 は呼び手が渡す vanish 回数（永続状態由来・値なしは `0`）をそのまま 10 進文字列化して
+/// 構成する（Req 4.1／4.2）。永続状態に記録が無い場合や M1（vanish 発生源が未実装）では
+/// 呼び手が `0` を渡すため、従来の固定値 `"0"` と同値の運行に縮退する。
 /// この応答が 204 であれば呼び手はフォールスルーして [`on_boot`] へ進む。
-pub fn on_first_boot(snapshot: &ExecutionSnapshot) -> ShioriCall {
+pub fn on_first_boot(snapshot: &ExecutionSnapshot, vanish_count: u32) -> ShioriCall {
     ShioriCall::Get {
         id: "OnFirstBoot",
-        references: vec!["0".to_string()],
+        references: vec![vanish_count.to_string()],
         status: ExecutionStatus::derive(snapshot),
     }
 }
@@ -307,11 +308,19 @@ mod tests {
         assert!(references.is_empty());
     }
 
+    /// OnFirstBoot Ref0 は vanish 引数由来（Req 4.1／4.2）: `0` で従来の固定値 `"0"` と同値・
+    /// 非ゼロ（`7`）はそのまま Reference0 に載る（値源が呼び手へ移ったことの檻）。
     #[test]
-    fn on_first_boot_is_get_with_fixed_zero_ref0() {
-        let (id, references) = expect_get(on_first_boot(&ExecutionSnapshot::INACTIVE));
+    fn on_first_boot_ref0_is_vanish_count_argument() {
+        // vanish_count=0 → 従来値 "0" と同値（既存全サイトはこの経路で挙動不変）。
+        let (id, references) = expect_get(on_first_boot(&ExecutionSnapshot::INACTIVE, 0));
         assert_eq!(id, "OnFirstBoot");
         assert_eq!(references, vec!["0".to_string()]);
+
+        // vanish_count=7 → Reference0 は "7"（Ref0 の値源が呼び手引数であることを固定）。
+        let (id, references) = expect_get(on_first_boot(&ExecutionSnapshot::INACTIVE, 7));
+        assert_eq!(id, "OnFirstBoot");
+        assert_eq!(references, vec!["7".to_string()]);
     }
 
     #[test]
@@ -540,7 +549,7 @@ mod tests {
         let snap = ExecutionSnapshot::INACTIVE;
         let calls = [
             on_initialize(&snap),
-            on_first_boot(&snap),
+            on_first_boot(&snap, 0),
             on_boot(&cfg, &snap),
             baseware_version(&cfg, &snap),
             on_second_change(MonotonicMs(0), &snap),

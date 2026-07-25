@@ -19,6 +19,7 @@
 pub mod config;
 pub mod follow;
 pub mod measure;
+pub mod persist;
 pub mod resolver;
 pub mod source;
 pub mod spawn;
@@ -497,9 +498,17 @@ mod tests {
         );
     }
 
-    /// 位置の記憶・復元を一切行わない（2.11）:
+    /// `prepare_ghost_windows` は永続を一切読み書きしない（2.11・A1）:
     /// (a) 実行後どこにも ghost.dat を生成しない（書き込みなし）
     /// (b) 偽の保存位置を持つ ghost.dat を plant しても出力が変わらない（読み込みなし）
+    ///
+    /// 永続ストアの実体は現在、統一プロパティシステム（sylphya）の別ファイル
+    /// `sylphya.toml` にある——これは本 spec（areka-P0-position-persist）が
+    /// **消費**する別系統であり、SSP 由来の `ghost.dat` とは無関係。復元の結線は
+    /// placement シームの [`persist`] モジュール（と後続タスクの merge シーム）が担い、
+    /// `prepare_ghost_windows` 自身は依然として永続を一切読み書きしない（A1＝prepare
+    /// 不触は真のまま）。本檻は legacy な ghost.dat probe でその不触性を固定し続ける
+    /// （sylphya.toml 系統でも同じく prepare は不触）。
     #[test]
     fn prepare_never_reads_or_writes_ghost_dat() {
         with_com_initialized(|| {

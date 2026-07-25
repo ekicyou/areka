@@ -177,7 +177,11 @@ where
             return ControlFlow::Continue(());
         }
 
-        let StartTalk { script, talk_id } = start;
+        let StartTalk {
+            script,
+            talk_id,
+            epilogue,
+        } = start;
 
         // 上流パーサで Instruction 列へ変換（再パースしない・R1.2）→ 純粋コンパイル。
         let instructions = areka_parsers::sakura::parse(&script);
@@ -185,9 +189,14 @@ where
         // sakura は値源を所有せず、この凍結像だけを見る（provider 差替で本層は無改変＝差替シーム）。
         let compiled = compile(&instructions, &self.system_vars);
 
+        // epilogue を compile 後・空判定**前**に末尾 carrier cue として付加する（design C12・R3.4）。
+        // `epilogue.is_empty()` なら恒等（既存経路完全不変）。epilogue-only talk（空 script＋epilogue）は
+        // ここで 1 cue 以上の非空 sheet になり、通常再生して即時完走する（空判定を通過する）。
+        let sheet = crate::compile::append_epilogue(compiled.sheet, &epilogue);
+
         // 空 sheet: 時間軸駆動せず即終端（R1.4/R6.2）。end は Ended 固定でなく compiled.end
-        // （裸の `\-` は空 sheet＋Quit）。
-        if compiled.sheet.is_empty() {
+        // （裸の `\-` は空 sheet＋Quit）。epilogue 付加後も空なら epilogue も空（恒等）ゆえ従来挙動。
+        if sheet.is_empty() {
             self.send_done(talk_id, compiled.end);
             return ControlFlow::Break(());
         }
@@ -195,7 +204,7 @@ where
         // 非空 sheet: 刻印は初回 Tick に遅延（アンカー＝初回注入時刻）。台本を保持して継続。
         self.phase = TalkPhase::Armed {
             talk_id,
-            sheet: compiled.sheet,
+            sheet,
             end: compiled.end,
         };
         ControlFlow::Continue(())
@@ -511,6 +520,7 @@ mod tests {
         let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
         let talk_id = TalkId(7);
         let start = StartTalk {
+            epilogue: Vec::new(),
             script: String::new(), // 空 script → 空 Instruction 列 → 空 sheet。
             talk_id,
         };
@@ -548,6 +558,7 @@ mod tests {
     fn broadcast_delivers_identical_cue_stream_to_every_registered_sink() {
         let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
         let start = StartTalk {
+            epilogue: Vec::new(),
             script: r"\s[10]hello\w[2]world\e".to_string(),
             talk_id: TalkId(200),
         };
@@ -606,6 +617,7 @@ mod tests {
         fn run_with_anchor(anchor: f64) -> (bool, bool, bool) {
             let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
             let start = StartTalk {
+                epilogue: Vec::new(),
                 script: r"\s[0]hi\w[10]bye\e".to_string(),
                 talk_id: TalkId(1),
             };
@@ -721,6 +733,7 @@ mod tests {
         let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
         let talk_id = TalkId(314);
         let start = StartTalk {
+            epilogue: Vec::new(),
             script: r"\s[10]hello\w[2]probeA\w[2]probeB\w[2]world\e".to_string(),
             talk_id,
         };
@@ -809,6 +822,7 @@ mod tests {
     fn same_at_cues_preserve_script_order_fifo() {
         let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
         let start = StartTalk {
+            epilogue: Vec::new(),
             script: r"\s[10]hello\nworld\e".to_string(),
             talk_id: TalkId(41),
         };
@@ -864,6 +878,7 @@ mod tests {
         let (done_a_tx, done_a_rx) = mpsc::channel::<TalkDone>();
         let id_a = TalkId(11);
         let start_a = StartTalk {
+            epilogue: Vec::new(),
             script: r"\s[10]hello\w[2]world\e".to_string(),
             talk_id: id_a,
         };
@@ -879,6 +894,7 @@ mod tests {
         // 2 本目 Start(B)（別 script）を inbox へ。自己投函の Start(A) の後に処理され、無視される。
         let id_b = TalkId(99);
         let start_b = StartTalk {
+            epilogue: Vec::new(),
             script: r"\s[77]DIFFERENT\e".to_string(),
             talk_id: id_b,
         };
@@ -921,6 +937,7 @@ mod tests {
     fn dropped_done_receiver_at_terminal_exits_cleanly_without_panic() {
         let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
         let start = StartTalk {
+            epilogue: Vec::new(),
             script: r"\s[10]hello\w[2]world\e".to_string(),
             talk_id: TalkId(4),
         };
@@ -962,6 +979,7 @@ mod tests {
         // （`compile.rs` の SpeakerScope アーム）。ゆえに内容 cue は皆無で empty-sheet 即時 TalkDone
         // 経路を保つ（`\0` の写像先が Raw から SpeakerScope へ変わっても本檻の観測は不変）。
         let start = StartTalk {
+            epilogue: Vec::new(),
             script: r"\0".to_string(),
             talk_id,
         };
@@ -1002,6 +1020,7 @@ mod tests {
         // scope 状態更新のみ（cue 非発行）で扱う。先行内容 cue のない `\-` の empty-sheet＋Quit 経路を
         // 保つ（SpeakerScope は cue を生まず `\-` が Quit で切詰め＝空 sheet＋end=Quit）。
         let start = StartTalk {
+            epilogue: Vec::new(),
             script: r"\0\-".to_string(),
             talk_id,
         };
@@ -1051,6 +1070,7 @@ mod tests {
         let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
         let talk_id = TalkId(42);
         let start = StartTalk {
+            epilogue: Vec::new(),
             script: r"\s[10]hello\w[2]world\e".to_string(),
             talk_id,
         };
@@ -1143,6 +1163,7 @@ mod tests {
     fn duplicate_and_backward_tick_do_not_double_fire() {
         let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
         let start = StartTalk {
+            epilogue: Vec::new(),
             script: r"\s[10]hello\w[10]world\e".to_string(),
             talk_id: TalkId(1),
         };
@@ -1190,6 +1211,7 @@ mod tests {
     fn non_finite_tick_is_ignored_and_playback_survives() {
         let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
         let start = StartTalk {
+            epilogue: Vec::new(),
             script: r"\s[10]hello\w[2]world\e".to_string(),
             talk_id: TalkId(9),
         };
@@ -1233,6 +1255,7 @@ mod tests {
         let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
         let talk_id = TalkId(101);
         let start = StartTalk {
+            epilogue: Vec::new(),
             script: r"\s[10]hello\w[10]world\e".to_string(),
             talk_id,
         };
@@ -1284,6 +1307,7 @@ mod tests {
         let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
         let talk_id = TalkId(102);
         let start = StartTalk {
+            epilogue: Vec::new(),
             script: r"\s[10]hello\w[2]world\e".to_string(),
             talk_id,
         };
@@ -1330,6 +1354,7 @@ mod tests {
         let (done_a_tx, done_a_rx) = mpsc::channel::<TalkDone>();
         let id_a = TalkId(7);
         let start_a = StartTalk {
+            epilogue: Vec::new(),
             script: r"\s[10]hello\w[2]world\e".to_string(),
             talk_id: id_a,
         };
@@ -1340,6 +1365,7 @@ mod tests {
         let (done_b_tx, done_b_rx) = mpsc::channel::<TalkDone>();
         let id_b = TalkId(42);
         let start_b = StartTalk {
+            epilogue: Vec::new(),
             script: r"\s[20]bye\w[2]done\-".to_string(),
             talk_id: id_b,
         };
@@ -1440,6 +1466,7 @@ mod tests {
         fn run_once() -> (Vec<CueKey>, TalkEndReason) {
             let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
             let start = StartTalk {
+                epilogue: Vec::new(),
                 script: r"\s[10]hello\w[2]world\e".to_string(),
                 talk_id: TalkId(7),
             };
@@ -1512,6 +1539,7 @@ mod tests {
         let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
         let talk_id = TalkId(720);
         let start = StartTalk {
+            epilogue: Vec::new(),
             script: r"\s[10]hello\_w[800]\e".to_string(),
             talk_id,
         };
@@ -1580,6 +1608,7 @@ mod tests {
         let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
         let talk_id = TalkId(721);
         let start = StartTalk {
+            epilogue: Vec::new(),
             script: r"\s[10]hello\_w[500]world\e".to_string(),
             talk_id,
         };
@@ -1646,6 +1675,7 @@ mod tests {
         let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
         let talk_id = TalkId(722);
         let start = StartTalk {
+            epilogue: Vec::new(),
             script: r"\s[10]ab\_w[600]\e".to_string(),
             talk_id,
         };
@@ -1715,6 +1745,7 @@ mod tests {
         let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
         let talk_id = TalkId(723);
         let start = StartTalk {
+            epilogue: Vec::new(),
             script: script.to_string(),
             talk_id,
         };
@@ -1794,6 +1825,7 @@ mod tests {
         let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
         let (tx, rx) = mpsc::channel::<TalkCue>();
         let start = StartTalk {
+            epilogue: Vec::new(),
             script: MENU_SCRIPT.to_string(),
             talk_id: TalkId(801),
         };
@@ -1838,6 +1870,7 @@ mod tests {
         let (tx, rx) = mpsc::channel::<TalkCue>();
         let talk_id = TalkId(802);
         let start = StartTalk {
+            epilogue: Vec::new(),
             script: MENU_SCRIPT.to_string(),
             talk_id,
         };
@@ -1880,6 +1913,7 @@ mod tests {
         let (tx, rx) = mpsc::channel::<TalkCue>();
         let talk_id = TalkId(803);
         let start = StartTalk {
+            epilogue: Vec::new(),
             script: MENU_SCRIPT.to_string(),
             talk_id,
         };
@@ -1956,6 +1990,7 @@ mod tests {
         let (tx, rx) = mpsc::channel::<TalkCue>();
         let talk_id = TalkId(810);
         let start = StartTalk {
+            epilogue: Vec::new(),
             script: script.to_string(),
             talk_id,
         };
@@ -2024,6 +2059,7 @@ mod tests {
         let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
         let talk_id = TalkId(804);
         let start = StartTalk {
+            epilogue: Vec::new(),
             script: r"\s[10]hello\w[2]world\e".to_string(),
             talk_id,
         };
@@ -2230,6 +2266,7 @@ mod tests {
         // parse: `\![raise,OnBoot]`→GenericCommand{"raise",["OnBoot"]}／`\![vanish]`→GenericCommand{"vanish",[]}。
         // compile: いずれも command_carrier(name, args)（Custom キャリア）へ卒業・無音落ちしない（R8.2）。
         let start = StartTalk {
+            epilogue: Vec::new(),
             script: r"\![raise,OnBoot]hello\![vanish]world\e".to_string(),
             talk_id,
         };

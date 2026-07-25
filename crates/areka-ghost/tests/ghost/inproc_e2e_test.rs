@@ -230,6 +230,19 @@ fn expected_greeting_sequence() -> Vec<(ActorKey, CueCommand)> {
         (ActorKey::from("1"), CueCommand::Emote { key: "笑顔".to_string() }),
         (ActorKey::from("1"), CueCommand::Text("よろしくね。".to_string())),
         (ActorKey::from("1"), CueCommand::Wait),
+        // 末尾の起動記録 SET cue（position-persist task 7.1 の behavioral ripple）: 起動記録が無い
+        // 初回起動では `GhostRuntime::apply_boot_record_gate` が first_boot=true と判定し
+        // `first_boot_epilogue`（`areka.prop.set` / `areka.boot.count` / "1"）を KanadeConfig へ注入する。
+        // sakura が CueSheet 末尾（horizon・duration 0）へこのキャリア cue を付加し、挨拶再生を**完走**
+        // したときのみ broadcast されて起動記録が書かれる（要件 3.4・design C5-3/C7）。共有 fixture
+        // （shared_test_ghost）は永続ファイルを持たない＝常に初回扱いゆえ、挨拶列は必ずこの 1 件で閉じる。
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "areka.prop.set",
+                vec!["areka.boot.count".to_string(), "1".to_string()],
+            ),
+        ),
     ]
 }
 
@@ -365,8 +378,9 @@ fn i1_inproc_one_lap_records_frozen_onfirstboot_greeting_and_closes_cleanly() {
 /// 起動挨拶の broadcast cue 列を全順序照合する共有ヘルパ（I1/I2 が同一の演出出力 assert を
 /// 「同じ手口」で再演するために free 関数へ括り出す）。
 ///
-/// 期待列はハードコードした [`expected_greeting_sequence`]（実 emo2 OnFirstBoot 挨拶・117 件・
-/// 構造導出＋実 compile 観測で照合済み）。照合対象は `(actor, command)` の全順序と `at` の
+/// 期待列はハードコードした [`expected_greeting_sequence`]（実 emo2 OnFirstBoot 挨拶＋末尾の
+/// position-persist 起動記録 SET cue・118 件・構造導出＋実 compile 観測で照合済み）。照合対象は
+/// `(actor, command)` の全順序と `at` の
 /// 非減少性のみ——`at`/`duration` の float はテキスト速度チューニングが台本改変なしに壊すため
 /// 照合しない（tasks.md 6.2 I1）。broadcast ゆえ surface/text いずれの sink も同一の全順序で
 /// これを受ける（partition は演者側 relevance・凍結台本由来）。

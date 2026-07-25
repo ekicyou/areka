@@ -146,6 +146,7 @@ fn run_core(
     let (done_tx, done_rx) = std::sync::mpsc::channel::<TalkDone>();
     let talk = spawn_talk(
         StartTalk {
+            epilogue: Vec::new(),
             script: script.to_string(),
             talk_id: TalkId(8),
         },

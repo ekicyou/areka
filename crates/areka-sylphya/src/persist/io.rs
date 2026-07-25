@@ -75,6 +75,14 @@ impl PersistIo for FsPersistIo {
     }
 
     fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
+        // 宛先の親ディレクトリを保証する（新規ゴーストで `<profile>/areka/` が未作成でも書ける）。
+        // 実機初回起動の恒久修正: これが無いと `File::create` が親不在で NotFound(os error 3) を返し、
+        // 全永続書込が Degraded に倒れて位置・起動記録が保存されない。create_dir_all は既存 dir に対し
+        // 冪等（No-op）ゆえ通常経路に影響しない。
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
         let temp = Self::temp_path_for(path);
 
         // temp へ全書込→flush→fsync。失敗したら temp を掃除して Err（本体は未変更＝無傷）。
@@ -201,6 +209,35 @@ mod tests {
         path.push("areka_sylphya_persist_io_absent_never_created.toml");
         let _ = std::fs::remove_file(&path);
         assert_eq!(io.read(&path).unwrap(), None);
+    }
+
+    /// 新規ゴースト回帰: 宛先の親ディレクトリ（`<profile>/areka/`）が未作成でも commit は
+    /// 親を `create_dir_all` してから書き込み成功する（実機初回起動 os error 3 の恒久修正）。
+    /// 檻の要点: 事前に親 dir を作らない——現行 `File::create` は親不在で NotFound(os error 3)。
+    #[test]
+    fn real_commit_creates_missing_parent_dirs() {
+        let io = FsPersistIo;
+        // temp 直下に未作成の 2 段ネスト（宛先の親が存在しない状況を実 FS で再現）。
+        let mut root = std::env::temp_dir();
+        root.push(format!(
+            "areka_sylphya_missing_parent_{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root); // 前回残骸掃除（親不在を保証）
+        let path = root.join("profile").join("areka").join("sylphya.toml");
+        assert!(
+            !path.parent().unwrap().exists(),
+            "前提: 宛先の親 dir は存在しない"
+        );
+
+        io.commit(&path, "format-version = 1\n")
+            .expect("親 dir 不在でも commit は成功する（create_dir_all 済み）");
+        assert_eq!(
+            io.read(&path).unwrap().as_deref(),
+            Some("format-version = 1\n")
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     // --- 原子性の檻（fake IO・純 x64・R6.2）---

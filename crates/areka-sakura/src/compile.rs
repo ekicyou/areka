@@ -27,6 +27,7 @@
 use crate::contract::{ActorKey, BarrierKind, Cue, CueCommand, CuePayload, CueSheet, TalkEndReason};
 use crate::sysvar::SystemVarSnapshot;
 use areka_parsers::sakura::Instruction;
+use areka_talk::EpilogueCommand;
 
 /// 純粋コンパイル: `Instruction` 列 → cue ドメインの発火列＋確定終端理由（決定的・no I/O）。
 ///
@@ -263,6 +264,49 @@ fn emit_barrier(scope: u32, offset: f64, kind: BarrierKind) -> Cue {
         payload: CuePayload::Barrier(kind),
         duration: 0.0,
     }
+}
+
+/// [`compile`] 済み [`CueSheet`] の末尾へ epilogue を汎用キャリア cue として付加する
+/// （決定論・no I/O・design C12・R3.4）。
+///
+/// 各 `EpilogueCommand` は 1 個の carrier cue（`actor="0"`・`duration=0.0`・
+/// `payload=command_carrier(name, tokens)`）へ写像され、`start_time` は既存 cues の
+/// `max(start_time + duration)`（空 sheet は 0.0）＝台本の占有 horizon に一致する。zero-duration
+/// ゆえ horizon は延長されない（`TalkDone` を遅らせない）。
+///
+/// [`CueSheet::new`] の**安定ソート**で再構築するため、同一 `start_time` に既存の末尾要素
+/// （選択待ち barrier 等）があっても epilogue cue は**その後ろ**へ並ぶ＝barrier 解決後・占有
+/// horizon 到達 tick（`TalkDone` 送出前）に発火する。
+///
+/// `epilogue` が空なら**恒等**（`sheet` をそのまま返す）＝既存経路は完全に不変。
+pub fn append_epilogue(sheet: CueSheet, epilogue: &[EpilogueCommand]) -> CueSheet {
+    // 空 epilogue は恒等（アンカー刻印状態も含め sheet を一切変えない・既存経路完全不変）。
+    if epilogue.is_empty() {
+        return sheet;
+    }
+
+    // 既存 cues の占有 horizon（max(start_time + duration)・空 sheet は 0.0）を末尾 offset とする。
+    let horizon = sheet
+        .cues()
+        .iter()
+        .map(|cue| cue.start_time + cue.duration)
+        .fold(0.0_f64, f64::max);
+
+    // 既存 cues を保ったまま epilogue を末尾へ push し、CueSheet::new の安定ソートで再構築する
+    // （同一 at の既存末尾要素より後に並ぶ＝FIFO）。zero-duration ゆえ horizon は不変。
+    let mut cues: Vec<Cue> = sheet.cues().to_vec();
+    for command in epilogue {
+        cues.push(Cue {
+            actor: ActorKey::from("0".to_string()),
+            start_time: horizon,
+            payload: CuePayload::Command(CueCommand::command_carrier(
+                command.name.clone(),
+                command.tokens.clone(),
+            )),
+            duration: 0.0,
+        });
+    }
+    CueSheet::new(cues)
 }
 
 /// [`compile`] の結果。`sheet` は wintf cue パイプラインがそのまま消費できる serde 可能形
@@ -1636,5 +1680,186 @@ mod tests {
             &CueCommand::Text("%foo".into()),
             "未対応名は元の `%名前` を素通し出力（R7.5）"
         );
+    }
+
+    // ── task 4.2: append_epilogue（末尾 carrier cue 付加・純関数）の behavioral 檻 ──
+    // （design C12・Testing Strategy §5・R3.4）
+
+    use areka_talk::EpilogueCommand;
+
+    /// 台本末尾の占有 horizon（`max(start_time + duration)`）を素朴に算出するテスト用参照。
+    /// `append_epilogue` が返す carrier cue の `start_time` 期待値、および horizon 不延長の
+    /// 検証に使う（`CueSheet::absolute_end_time` はアンカー未刻印で同値だが、独立導出で固定する）。
+    fn relative_horizon(sheet: &CueSheet) -> f64 {
+        sheet
+            .cues()
+            .iter()
+            .map(|c| c.start_time + c.duration)
+            .fold(0.0_f64, f64::max)
+    }
+
+    /// 空 epilogue は恒等: 台本を一切変えない（既存経路完全不変・R3.4）。
+    /// cue 数・各 cue のフィールド等価を固定し、`epilogue.is_empty()` が perfect no-op であることを保証する。
+    #[test]
+    fn append_epilogue_empty_is_identity() {
+        let compiled = compile(&[
+            Instruction::Text("hi".into()),
+            Instruction::Surface(SurfaceArg::new("1".into())),
+        ]);
+        let before = compiled.sheet.cues().to_vec();
+        let after = append_epilogue(compiled.sheet, &[]);
+        let after_cues = after.cues();
+        assert_eq!(
+            after_cues.len(),
+            before.len(),
+            "空 epilogue は cue 数を変えない（恒等）"
+        );
+        for (i, (a, b)) in after_cues.iter().zip(before.iter()).enumerate() {
+            assert!(cue_eq(a, b), "index {i} の cue が空 epilogue で変化した: {a:?} != {b:?}");
+        }
+    }
+
+    /// 空 sheet＋単一 epilogue: `start_time=0.0`・`duration=0.0`・`actor="0"` の carrier cue 1 個
+    /// （空 sheet の horizon は 0.0・design C12）。
+    #[test]
+    fn append_epilogue_on_empty_sheet_yields_single_cue_at_zero() {
+        let empty = CueSheet::new(Vec::new());
+        assert!(empty.is_empty(), "前提: 空 sheet");
+        let epilogue = [EpilogueCommand {
+            name: "areka.prop.set".into(),
+            tokens: vec!["areka.boot.count".into(), "1".into()],
+        }];
+        let sheet = append_epilogue(empty, &epilogue);
+        let cues = sheet.cues();
+        assert_eq!(cues.len(), 1, "空 sheet＋1 epilogue → 1 cue");
+        assert_eq!(cues[0].start_time, 0.0, "空 sheet の horizon は 0.0");
+        assert_eq!(cues[0].duration, 0.0, "carrier cue は瞬時（duration 0）");
+        assert_eq!(cues[0].actor.as_str(), "0", "carrier cue の actor は \"0\"");
+        assert_eq!(
+            command_of(&cues[0]).as_command_carrier(),
+            Some(("areka.prop.set", vec!["areka.boot.count", "1"])),
+            "payload は command_carrier(name, tokens) の正準形"
+        );
+    }
+
+    /// 非空 epilogue: 末尾 offset（`max(start_time+duration)`）へ carrier cue が付加される。
+    /// `duration=0.0` かつ horizon が延長されない（zero-duration ゆえ・design C12）。
+    #[test]
+    fn append_epilogue_appends_carrier_at_tail_horizon_without_extending() {
+        let compiled = compile(&[
+            Instruction::Text("abc".into()),
+            Instruction::Wait(Duration::from_millis(800)),
+        ]);
+        let horizon_before = relative_horizon(&compiled.sheet);
+        assert!(horizon_before > 0.0, "前提: 非空台本の horizon は正");
+        let len_before = compiled.sheet.cues().len();
+
+        let epilogue = [EpilogueCommand {
+            name: "areka.prop.set".into(),
+            tokens: vec!["areka.boot.count".into(), "1".into()],
+        }];
+        let sheet = append_epilogue(compiled.sheet, &epilogue);
+        let cues = sheet.cues();
+        assert_eq!(cues.len(), len_before + 1, "carrier cue が 1 個付加される");
+
+        // 末尾の carrier cue（同時刻の既存要素の後・安定ソート FIFO）。
+        let last = cues.last().expect("非空");
+        assert_eq!(
+            last.start_time, horizon_before,
+            "carrier cue の start_time は既存 cues の max(start+duration)"
+        );
+        assert_eq!(last.duration, 0.0, "carrier cue は duration 0");
+        assert_eq!(last.actor.as_str(), "0");
+        assert_eq!(
+            command_of(last).as_command_carrier(),
+            Some(("areka.prop.set", vec!["areka.boot.count", "1"])),
+        );
+
+        // horizon 不延長: zero-duration cue は max(start+duration) を増やさない。
+        assert_eq!(
+            relative_horizon(&sheet),
+            horizon_before,
+            "zero-duration carrier cue は占有 horizon を延長しない（TalkDone を遅らせない）"
+        );
+    }
+
+    /// 同時刻（horizon と同じ `start_time`）の既存末尾要素（選択待ち barrier 等）に対し、
+    /// carrier cue は **安定ソート FIFO** で **後ろ** に並ぶ＝barrier 解決後・horizon 到達 tick で
+    /// 発火する（design C12・R3.4）。同一 `at` で既存要素が先・epilogue が後を固定する。
+    #[test]
+    fn append_epilogue_stable_sorts_after_same_time_barrier() {
+        // horizon=1.0 の台本を直接構築する: Text@0.0(duration 1.0) と barrier@1.0(duration 0.0)。
+        // horizon = max(0+1, 1+0) = 1.0。barrier の start_time が epilogue の付加時刻と同一になる。
+        let text = Cue {
+            actor: ActorKey::from("0".to_string()),
+            start_time: 0.0,
+            payload: CuePayload::Command(CueCommand::Text("hi".into())),
+            duration: 1.0,
+        };
+        let barrier = Cue {
+            actor: ActorKey::from("0".to_string()),
+            start_time: 1.0,
+            payload: CuePayload::Barrier(BarrierKind::WaitForChoice { timeout: None }),
+            duration: 0.0,
+        };
+        let sheet = CueSheet::new(vec![text, barrier]);
+        assert_eq!(relative_horizon(&sheet), 1.0, "前提: horizon=1.0");
+
+        let epilogue = [EpilogueCommand {
+            name: "areka.prop.set".into(),
+            tokens: vec!["areka.boot.count".into(), "1".into()],
+        }];
+        let sheet = append_epilogue(sheet, &epilogue);
+        let cues = sheet.cues();
+        assert_eq!(cues.len(), 3, "Text / barrier / carrier の 3 件");
+
+        // 同一 at=1.0 で barrier が先・carrier が後（安定ソート FIFO＝barrier 解決後に発火）。
+        assert_eq!(cues[1].start_time, 1.0);
+        assert!(
+            matches!(&cues[1].payload, CuePayload::Barrier(BarrierKind::WaitForChoice { .. })),
+            "同時刻群の先頭は既存 barrier（安定ソートで epilogue より前）"
+        );
+        assert_eq!(cues[2].start_time, 1.0, "carrier cue も同一 at=1.0");
+        assert_eq!(
+            command_of(&cues[2]).as_command_carrier(),
+            Some(("areka.prop.set", vec!["areka.boot.count", "1"])),
+            "carrier cue は barrier の後ろへ安定ソートされる（barrier 解決後・horizon 到達 tick で発火）"
+        );
+        // horizon は延長されない。
+        assert_eq!(relative_horizon(&sheet), 1.0);
+    }
+
+    /// 複数 epilogue コマンドは各々 1 carrier cue へ写像され、全て同一の末尾 horizon へ付加される
+    /// （記述順を保つ・design C12）。
+    #[test]
+    fn append_epilogue_maps_each_command_to_one_carrier_cue() {
+        let compiled = compile(&[Instruction::Text("x".into())]);
+        let horizon = relative_horizon(&compiled.sheet);
+        let epilogue = [
+            EpilogueCommand {
+                name: "areka.prop.set".into(),
+                tokens: vec!["areka.boot.count".into(), "1".into()],
+            },
+            EpilogueCommand {
+                name: "areka.prop.set".into(),
+                tokens: vec!["areka.vanish.count".into(), "0".into()],
+            },
+        ];
+        let sheet = append_epilogue(compiled.sheet, &epilogue);
+        let cues = sheet.cues();
+        // 末尾 2 件が記述順の carrier cue。
+        let tail = &cues[cues.len() - 2..];
+        assert_eq!(
+            command_of(&tail[0]).as_command_carrier(),
+            Some(("areka.prop.set", vec!["areka.boot.count", "1"])),
+        );
+        assert_eq!(
+            command_of(&tail[1]).as_command_carrier(),
+            Some(("areka.prop.set", vec!["areka.vanish.count", "0"])),
+        );
+        for cue in tail {
+            assert_eq!(cue.start_time, horizon, "全 carrier cue が同一末尾 horizon へ付加される");
+            assert_eq!(cue.duration, 0.0);
+        }
     }
 }

@@ -1306,6 +1306,7 @@ mod smoke {
 
         talk_tx
             .send(StartTalk {
+                epilogue: Vec::new(),
                 talk_id: TalkId(1),
                 script: FIXED_BOOT_SCRIPT.to_string(),
             })

@@ -10,14 +10,18 @@ use std::path::PathBuf;
 use std::sync::mpsc::{self, Sender};
 
 use areka_actor::ActorHandle;
-use areka_kanade::{KanadeMsg, ShioriBackend, spawn_kanade, spawn_shiori_actor};
+use areka_kanade::{KanadeConfig, KanadeMsg, ShioriBackend, spawn_kanade, spawn_shiori_actor};
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::{MountError, MountModel, resolve};
 use areka_sakura::contract::SystemVarSnapshot;
-use areka_sylphya::{SylphyaPublisher, SylphyaReader};
+use areka_sylphya::{
+    AskerContext, AskerId, DottedResolution, PersistKey, SylphyaPublisher, SylphyaReader,
+};
+use areka_talk::EpilogueCommand;
 
 use crate::config::resolve_kanade_config;
 use crate::dispatcher::{DispatcherMsg, spawn_dispatcher};
+use crate::prop_sink::{PROP_SET_CUE_NAME, PropSetCueSink};
 use crate::relay::spawn_relay;
 use crate::sink::BootCueSink;
 use crate::ticker::{TickerConfig, TickerMsg, spawn_ticker};
@@ -220,6 +224,13 @@ impl GhostRuntime {
         &self.dispatcher_tx
     }
 
+    /// sylphya（統一プロパティシステム）供給端への参照（design.md「C5 GhostRuntime 増分」・
+    /// requirements.md 6.2）。`kanade()`／`dispatcher()` と同型の additive アクセサで、main が
+    /// この clone を捕捉して `PersistWiring`（位置永続の write-through 端）を組む。
+    pub fn sylphya_publisher(&self) -> &SylphyaPublisher {
+        &self.sylphya_publisher
+    }
+
     /// 終了統括（design.md「終了（shutdown）シーケンス」・要件 6.1/6.4/6.5）。
     ///
     /// 手順: `KanadeMsg::ForceQuit(reason)` 送出 → kanade join → `DispatcherMsg::Close`
@@ -319,6 +330,26 @@ impl GhostRuntime {
         // 10. sylphya Close＋join（既存段の後・供給者停止後に掲示板を畳む・design「shutdown」）。
         //     供給者（ghost 静的 publish は boot 済み・kanade は上流で既に停止）が全て止まった後に
         //     掲示板を畳む。既に停止済みへの再送は SylphyaPublisher が warn＋縮退（冪等・非 panic）。
+        //
+        // close() の直前に barrier() で終了時フラッシュを明示確認する（requirements.md 1.2・
+        // design.md「C5 GhostRuntime 増分」step 10 直前・E2-lite の安全網）。DragEnd write-through は
+        // 既に FIFO で投函済み（E1＝FIFO close が保証の正本）だが、close() の前に反映フェンスを 1 枚置く
+        // ことで「終了直前までに投函された永続 put が確実に反映されてからストアが畳まれる」ことを保証する。
+        // Ok なら確認 info・Err（アクター既死等）なら warn の上で**続行**する——早期 return も panic も
+        // しない（write-through 済みが正本・design「Error Handling」shutdown barrier() Err 行）。
+        match sylphya_publisher.barrier() {
+            Ok(()) => {
+                tracing::info!(target: "ghost-shutdown", "persist flush confirmed");
+            }
+            Err(err) => {
+                tracing::warn!(
+                    target: "ghost-shutdown",
+                    error = %err,
+                    "persist flush barrier failed before sylphya close; continuing \
+                     (write-through via FIFO close is the primary guarantee)"
+                );
+            }
+        }
         sylphya_publisher.close();
         if let Err(err) = sylphya_handle.join() {
             tracing::error!(target: "ghost-shutdown", stage = "sylphya", error = %err, "sylphya actor join failed");
@@ -373,6 +404,68 @@ impl GhostRuntime {
     }
 }
 
+/// 起動記録ゲート（design.md「C5 GhostRuntime 増分」boot() step 1-3・要件 3.1/3.4/4.1/4.2/6.3）。
+///
+/// boot が据えた sylphya 読み口（`reader`）と ghost 自身の `ghost_asker` から永続鏡像を引き、
+/// [`KanadeConfig`] の初回起動系フィールドを解決して返す純ロジック（テスト単体で駆動可能なよう
+/// `boot()` から切り出す・記憶知見「判断分岐のみ檻に入れる」）。read のみ・**決して panic しない**
+/// （reader は panic-free・全不在は既定へ寛容縮退・要件 6.3「永続読取失敗は起動を止めない」）。
+///
+/// 手順:
+/// 1. **存在ゲート**（要件 3.1/3.4）: `areka.boot.count`（正準文字列は
+///    [`PersistKey::BootCount`] から取得＝単一権威）が鏡像に**存在**すれば `first_boot=false`
+///    （2 回目以降起動）、不在なら `true`（初回起動）。値の**数値解釈はしない**——存在の有無のみを
+///    見る（過剰実装回避・design C5-1）。
+/// 2. **vanish 寛容 parse**（要件 4.1/4.2）: `areka.vanish.count` を u32 として寛容 parse し
+///    `config.vanish_count` へ。不在→0・**非数値 present は warn の上 0**（起動は止めない・6.3）。
+/// 3. **初回起動記録 epilogue 注入**（要件 3.4）: `first_boot==true` のとき、初回挨拶トーク
+///    再生完走時に起動記録を書く汎用プロパティ SET キュー 1 件を `config.first_boot_epilogue` へ
+///    据える（`[PROP_SET_CUE_NAME, [BootCount 正準 key, "1"]]`）。kanade は正準 key を**不透明搬送**
+///    するのみで sylphya へは依存しない（依存方向規律の担保・design C5-3）。
+fn apply_boot_record_gate(
+    mut config: KanadeConfig,
+    reader: &SylphyaReader,
+    ghost_asker: &AskerId,
+) -> KanadeConfig {
+    let ctx = AskerContext {
+        asker: ghost_asker.clone(),
+    };
+
+    // step 1: 起動記録の**存在**ゲート（値は数値解釈しない・design C5-1・要件 3.1/3.4）。
+    let boot_count_key = PersistKey::BootCount.to_canonical_key();
+    config.first_boot = match reader.resolve_dotted_str(&ctx, &boot_count_key) {
+        // 記録あり（値の中身は問わない）→ 2 回目以降起動。
+        DottedResolution::Value(_) => false,
+        // 記録なし → 初回起動（既定挙動）。
+        DottedResolution::NotFound => true,
+    };
+
+    // step 2: vanish 回数の寛容 parse（不在→0・非数値→0＋warn・design C5-2・要件 4.1/4.2/6.3）。
+    let vanish_count_key = PersistKey::VanishCount.to_canonical_key();
+    config.vanish_count = match reader.resolve_dotted_str(&ctx, &vanish_count_key) {
+        DottedResolution::Value(raw) => raw.parse::<u32>().unwrap_or_else(|_| {
+            tracing::warn!(
+                target: "ghost-boot",
+                key = %vanish_count_key,
+                raw = %raw,
+                "areka.vanish.count が非数値——0 へ寛容縮退する（起動は止めない・要件 6.3）"
+            );
+            0
+        }),
+        DottedResolution::NotFound => 0,
+    };
+
+    // step 3: 初回起動なら起動記録書込 epilogue を据える（正準 key を不透明搬送・design C5-3・要件 3.4）。
+    if config.first_boot {
+        config.first_boot_epilogue = vec![EpilogueCommand {
+            name: PROP_SET_CUE_NAME.to_string(),
+            tokens: vec![boot_count_key, "1".to_string()],
+        }];
+    }
+
+    config
+}
+
 /// descript.txt 起点で全エンジンを起動順に結線する（design.md「ghost::runtime」
 /// Responsibilities & Constraints・「起動（boot）シーケンス」）。
 ///
@@ -383,7 +476,7 @@ impl GhostRuntime {
 /// マウント解決が失敗した場合、他のいかなるコンポーネントも spawn される前に
 /// `error!` の上で `Err(GhostBootError::Mount(_))` を返す（要件 2.5・後片付け
 /// 不要——何も起動していない）。
-pub fn boot(options: GhostBootOptions) -> Result<GhostRuntime, GhostBootError> {
+pub fn boot(mut options: GhostBootOptions) -> Result<GhostRuntime, GhostBootError> {
     // 1. マウント解決（失敗は即座に打ち切り・要件 2.1/2.5）。
     let mount = match resolve(&options.ghost_root, options.default_encoding) {
         Ok(mount) => mount,
@@ -410,6 +503,25 @@ pub fn boot(options: GhostBootOptions) -> Result<GhostRuntime, GhostBootError> {
         shell: Some(crate::sylphya_wiring::profile_areka_root(&mount.shell.dir)),
         balloon: None,
     };
+
+    // 永続書込先ディレクトリの即時保証（実機初回起動サインオフで判明した恒久修正・要件 6.3）:
+    // position-persist は M1 初の永続書込を導入した——sylphya は「M1 本番経路に永続書込呼出は無い」
+    // read-only 前提で完了しており、ghost profile root（`<shiori.dir>/profile/areka/`）を作る責任者が
+    // 結線とストアの狭間に落ちていた。新規ゴーストでこの dir が無いと初回の全 Ghost スコープ commit が
+    // os error 3（NotFound）で Degraded に倒れ、位置・起動記録が保存されない。ここで先に作る
+    // （`FsPersistIo::commit` も commit 時に `create_dir_all` する二重の安全網）。失敗しても boot は
+    // 止めない（warn＋継続・log-first・6.3——FsPersistIo が commit 時に再試行する）。
+    if let Some(ghost_root) = scope_roots.ghost.as_ref() {
+        if let Err(err) = std::fs::create_dir_all(ghost_root) {
+            tracing::warn!(
+                target: "ghost-boot",
+                path = %ghost_root.display(),
+                error = %err,
+                "ghost profile root の作成に失敗——継続（FsPersistIo が commit 時に再試行する・6.3）"
+            );
+        }
+    }
+
     let areka_sylphya::SylphyaParts {
         reader: sylphya_reader,
         publisher: sylphya_publisher,
@@ -418,6 +530,11 @@ pub fn boot(options: GhostBootOptions) -> Result<GhostRuntime, GhostBootError> {
 
     // ghost 自身の AskerId（MountModel.shiori.dir 由来の正準文字列・provider／prefetch sink が共有）。
     let ghost_asker = crate::sylphya_wiring::ghost_asker_id(&mount.shiori.dir);
+
+    // 2c. 起動記録ゲート（design「C5 GhostRuntime 増分」boot() step 1-3・要件 3.1/3.4/4.1/4.2/6.3）。
+    //     sylphya reader＋ghost_asker が揃った直後に永続鏡像を引き、初回起動ゲート・vanish 回数・
+    //     初回起動記録 epilogue を解決した config へ差し替える（read のみ・panic なし・不在は既定縮退）。
+    let config = apply_boot_record_gate(config, &sylphya_reader, &ghost_asker);
 
     // 静的構成層 publish: フラット（selfname 系＝derive_flat_statics）＋大域点付き（baseware 2 項・
     // version＝areka-ghost の CARGO_PKG_VERSION・R5.1）。投函のみ（反映は prefetch sink の barrier で担保）。
@@ -470,6 +587,13 @@ pub fn boot(options: GhostBootOptions) -> Result<GhostRuntime, GhostBootError> {
         }
         SystemVarWiring::Custom(src) => src,
     };
+    // 起動記録 SET sink 登録（design「C5 GhostRuntime 増分」boot() step 4・要件 3.4/6.2/7.1）。
+    //     `spawn_dispatcher` 直前の単一登録点——wired／fallback 両ブート経路が本 1 点を通るため
+    //     自動被覆する（per-path 登録にしない・emo2_boot 不触）。以後 dispatcher が talk ごとに
+    //     clone して broadcast し、`areka.prop.set`／カウンタ key を名前自己選別して write-through する。
+    options
+        .sinks
+        .push(Box::new(PropSetCueSink::new(sylphya_publisher.clone())));
     let (dispatcher_tx, dispatcher_handle) =
         spawn_dispatcher(kanade_tx.clone(), options.sinks, system_var_source);
 
@@ -910,6 +1034,127 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    // ---- sylphya_publisher() アクセサ（task 3.1・position-persist） ----
+
+    /// シナリオ（task 3.1・position-persist）: `boot` した `GhostRuntime` から
+    /// [`GhostRuntime::sylphya_publisher`] で sylphya 供給端の参照を取得し、その参照経由で
+    /// `persist_put`（永続 put の投函）が呼び出せることを確認する（requirements.md 6.2・
+    /// design.md「C5 GhostRuntime 増分」——main が `PersistWiring` を組むために公開する
+    /// `kanade()`／`dispatcher()` と同型の additive アクセサ）。
+    ///
+    /// アクセサが返すのは boot が据えた生きた sylphya アクターの供給端であることを、
+    /// `persist_put` 投函後に `barrier()` が `Ok(())` を返す（＝アクターが投函を処理して
+    /// 反映を完了できた）ことで観測する（fire-and-forget な `persist_put` 自体は戻り値を
+    /// 持たないため、直後の反映フェンスで生存を証拠づける）。
+    #[test]
+    fn sylphya_publisher_accessor_yields_live_publisher_that_accepts_persist_put() {
+        let root = unique_temp_dir(
+            "sylphya_publisher_accessor_yields_live_publisher_that_accepts_persist_put",
+        );
+        let _ = std::fs::remove_dir_all(&root);
+        write_minimal_resolvable_ghost_fixture(&root);
+
+        let options = GhostBootOptions {
+            ghost_root: root.clone(),
+            default_encoding: DefaultEncoding::Utf8,
+            shiori: ShioriWiring::Custom(Box::new(|| {
+                Ok(Box::new(FakeShioriBackend) as Box<dyn ShioriBackend>)
+            })),
+            sinks: vec![Box::new(NoopSink), Box::new(NoopSink)],
+            system_vars: SystemVarWiring::Custom(test_system_vars()),
+            app_profile_dir: None,
+            ticker: TickerMode::Disabled,
+        };
+
+        let runtime = boot(options).expect("boot should succeed for a resolvable ghost_root");
+
+        // アクセサ経由で取得した供給端で persist_put が呼び出せる（requirements.md 6.2）。
+        let publisher: &areka_sylphya::SylphyaPublisher = runtime.sylphya_publisher();
+        publisher.persist_put(
+            areka_sylphya::PersistScope::Ghost,
+            vec![(areka_sylphya::PersistKey::BootCount, "1".into())],
+        );
+
+        // 反映フェンスで、アクセサが返したのが生きた供給端であることを観測する
+        // （投函が処理され反映が完了 → sylphya アクター生存）。宙吊り防止に有界化。
+        run_bounded(
+            "barrier after persist_put via sylphya_publisher()",
+            std::time::Duration::from_secs(10),
+            move || {
+                runtime
+                    .sylphya_publisher()
+                    .barrier()
+                    .expect("sylphya actor should process the persist_put and reflect it");
+                // アクター後片付け（宙吊りスレッド回避のため clean shutdown）。
+                let _ = runtime.shutdown(areka_kanade::CloseReason::System);
+            },
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // ---- shutdown() の barrier() 明示フラッシュ確認（task 3.2・position-persist） ----
+
+    /// シナリオ（task 3.2・position-persist）: `boot` した `GhostRuntime` を
+    /// `shutdown(CloseReason::System)` すると、sylphya `close()`（step 10）の**直前**に
+    /// `barrier()` が呼ばれ、成功時に固定 info ログ `persist flush confirmed`
+    /// （target `ghost-shutdown`）を発行する（requirements.md 1.2・design.md「C5 GhostRuntime
+    /// 増分」step 10 直前・Monitoring「persist flush confirmed（C5 info）」）。
+    ///
+    /// write-through（FIFO close＝E1）が保証の正本で、この `barrier()` は best-effort な
+    /// 終了時フラッシュ安全網（E2-lite）。ログ発行は「barrier が Ok を返し、その位置が close の
+    /// 直前である」ことの直接証跡になる（barrier→info→close のコード配置で順序が担保される）。
+    ///
+    /// `capture` はスレッドローカルに subscriber を差すため、`shutdown` を走らせる同一スレッド
+    /// （`run_bounded` の spawn 先）で発行された info ログを捕捉する。join の宙吊りに備え有界化する。
+    #[test]
+    fn shutdown_confirms_persist_flush_via_barrier_before_close() {
+        use crate::test_log_capture::{assert_logged, capture};
+
+        let root = unique_temp_dir("shutdown_confirms_persist_flush_via_barrier_before_close");
+        let _ = std::fs::remove_dir_all(&root);
+        write_minimal_resolvable_ghost_fixture(&root);
+
+        let options = GhostBootOptions {
+            ghost_root: root.clone(),
+            default_encoding: DefaultEncoding::Utf8,
+            shiori: ShioriWiring::Custom(Box::new(|| {
+                Ok(Box::new(FakeShioriBackend) as Box<dyn ShioriBackend>)
+            })),
+            sinks: vec![Box::new(NoopSink), Box::new(NoopSink)],
+            system_vars: SystemVarWiring::Custom(test_system_vars()),
+            app_profile_dir: None,
+            ticker: TickerMode::Disabled,
+        };
+
+        let runtime = boot(options).expect("boot should succeed for a resolvable ghost_root");
+
+        run_bounded(
+            "shutdown with barrier flush confirmation",
+            std::time::Duration::from_secs(10),
+            move || {
+                let events = capture(|| {
+                    let result = runtime.shutdown(areka_kanade::CloseReason::System);
+                    // Err パス（barrier がアクター既死で Err）でも panic せず続行するのが正で、
+                    // 生きた sylphya アクターに対する本 happy path は必ず Ok を返す（要件 6.1/6.4）。
+                    assert!(
+                        result.is_ok(),
+                        "shutdown should return Ok(()) with a live sylphya actor, got {result:?}"
+                    );
+                });
+                // barrier() が Ok を返し、その確認ログが close() の直前で発行されたことの直接証跡。
+                assert_logged(
+                    &events,
+                    tracing::Level::INFO,
+                    "ghost-shutdown",
+                    "persist flush confirmed",
+                );
+            },
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     // ---- InProc 結線の生成〜駆動〜終了 統合テスト（task 2.4） ----
 
     use std::sync::{Arc, Mutex};
@@ -1075,6 +1320,288 @@ mod tests {
         assert!(
             !records.lock().expect("records mutex poisoned").is_empty(),
             "RecordingSink には少なくとも 1 件の TalkCue が捕捉されているべき（挨拶が InProc 境界を越えた）"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // ---- apply_boot_record_gate 単体（task 7.1・position-persist・design「C5 GhostRuntime 増分」step 1-3） ----
+
+    use areka_sylphya::persist::{FakePersistIo, PersistIo};
+    use areka_sylphya::{save_scope, spawn_sylphya, PersistScope, ScopeRoots, SylphyaInit, SylphyaParts};
+
+    /// 同一 [`FakePersistIo`] を `Arc` 共有する委譲 IO（prop_sink.rs 先例の再実装）。
+    ///
+    /// `FakePersistIo` は内部 `Mutex` で Clone 不可ゆえ、seed（`save_scope`）と spawn（`build_initial_image`
+    /// のロード）が**同一 store** を観測できるよう Arc 共有ハンドルで委譲する。
+    #[derive(Clone)]
+    struct SharedGateIo(Arc<FakePersistIo>);
+    impl PersistIo for SharedGateIo {
+        fn read(&self, path: &std::path::Path) -> std::io::Result<Option<String>> {
+            self.0.read(path)
+        }
+        fn commit(&self, path: &std::path::Path, content: &str) -> std::io::Result<()> {
+            self.0.commit(path, content)
+        }
+    }
+
+    /// Ghost スコープへ `seed` を事前保存した実 sylphya を起動し、`(parts, ghost_asker)` を返す。
+    ///
+    /// spawn 時の `build_initial_image` が seed を初期鏡像の大域点付き区画（正準 key）へ投影するため、
+    /// `parts.reader` は無待機で `resolve_dotted_str` により seed 値を観測できる（本番 boot と同型の
+    /// 「起動時に永続をロード」経路）。seed が空なら不在ケース（記録なし）を表す。
+    fn spawn_reader_seeded(seed: Vec<(PersistKey, String)>) -> (SylphyaParts, AskerId) {
+        let shared = SharedGateIo(Arc::new(FakePersistIo::new()));
+        let roots = ScopeRoots {
+            ghost: Some(PathBuf::from("/gate-ghost")),
+            ..ScopeRoots::default()
+        };
+        if !seed.is_empty() {
+            save_scope(PersistScope::Ghost, &roots, &shared, seed);
+        }
+        let parts = spawn_sylphya(SylphyaInit {
+            roots,
+            io: Box::new(shared),
+            runtime_sink: None,
+        });
+        (parts, AskerId::new("ghost/gate-asker"))
+    }
+
+    /// テスト用の素の config（gate が触る 3 フィールドのみが観測対象・他は既定）。
+    fn base_config() -> KanadeConfig {
+        KanadeConfig::new("master", "0.0.0-test")
+    }
+
+    /// step 1＋3（記録なし）: `areka.boot.count` 不在 → `first_boot=true` かつ
+    /// `first_boot_epilogue` に `areka.prop.set`/`areka.boot.count`/"1" が 1 件添付される
+    /// （design C5-1/C5-3・要件 3.1/3.4）。
+    #[test]
+    fn gate_absent_boot_record_marks_first_boot_and_injects_set_epilogue() {
+        let (parts, asker) = spawn_reader_seeded(vec![]);
+
+        let gated = apply_boot_record_gate(base_config(), &parts.reader, &asker);
+
+        assert!(
+            gated.first_boot,
+            "起動記録（areka.boot.count）不在 → 初回起動（first_boot=true）"
+        );
+        assert_eq!(
+            gated.first_boot_epilogue,
+            vec![EpilogueCommand {
+                name: PROP_SET_CUE_NAME.to_string(),
+                tokens: vec!["areka.boot.count".to_string(), "1".to_string()],
+            }],
+            "初回は areka.prop.set / areka.boot.count / \"1\" の SET epilogue を 1 件添付する"
+        );
+
+        parts.publisher.close();
+        parts.handle.join().expect("clean close joins");
+    }
+
+    /// step 1＋3（記録あり）: `areka.boot.count` 存在 → `first_boot=false` かつ epilogue 非添付
+    /// （2 回目以降起動・design C5-1/C5-3・要件 3.4）。
+    #[test]
+    fn gate_present_boot_record_marks_returning_and_no_epilogue() {
+        let (parts, asker) = spawn_reader_seeded(vec![(PersistKey::BootCount, "1".into())]);
+
+        let gated = apply_boot_record_gate(base_config(), &parts.reader, &asker);
+
+        assert!(
+            !gated.first_boot,
+            "起動記録あり → 2 回目以降起動（first_boot=false）"
+        );
+        assert!(
+            gated.first_boot_epilogue.is_empty(),
+            "非初回は起動記録 epilogue を添付しない"
+        );
+
+        parts.publisher.close();
+        parts.handle.join().expect("clean close joins");
+    }
+
+    /// step 1（存在ゲートは数値解釈しない）: `areka.boot.count="0"` でも「存在」ゆえ
+    /// `first_boot=false`（値の中身を問わない存在判定・design C5-1「数値解釈しない」）。
+    #[test]
+    fn gate_boot_record_is_existence_not_value() {
+        let (parts, asker) = spawn_reader_seeded(vec![(PersistKey::BootCount, "0".into())]);
+
+        let gated = apply_boot_record_gate(base_config(), &parts.reader, &asker);
+
+        assert!(
+            !gated.first_boot,
+            "存在ゲート: boot.count の値（\"0\"）に関わらず、存在すれば非初回"
+        );
+        assert!(gated.first_boot_epilogue.is_empty());
+
+        parts.publisher.close();
+        parts.handle.join().expect("clean close joins");
+    }
+
+    /// step 2（vanish 数値 present）: `areka.vanish.count="7"` → `vanish_count==7`（要件 4.1）。
+    #[test]
+    fn gate_vanish_count_present_numeric_is_parsed() {
+        let (parts, asker) = spawn_reader_seeded(vec![
+            (PersistKey::BootCount, "1".into()),
+            (PersistKey::VanishCount, "7".into()),
+        ]);
+
+        let gated = apply_boot_record_gate(base_config(), &parts.reader, &asker);
+
+        assert_eq!(gated.vanish_count, 7, "areka.vanish.count=\"7\" → 7 が parse される");
+
+        parts.publisher.close();
+        parts.handle.join().expect("clean close joins");
+    }
+
+    /// step 2（vanish 不在）: `areka.vanish.count` 不在 → `vanish_count==0`（既定縮退・要件 4.2）。
+    #[test]
+    fn gate_vanish_count_absent_defaults_zero() {
+        let (parts, asker) = spawn_reader_seeded(vec![]);
+
+        let gated = apply_boot_record_gate(base_config(), &parts.reader, &asker);
+
+        assert_eq!(gated.vanish_count, 0, "vanish.count 不在 → 0 縮退");
+
+        parts.publisher.close();
+        parts.handle.join().expect("clean close joins");
+    }
+
+    /// step 2（vanish 非数値）: `areka.vanish.count="abc"` → `vanish_count==0`（寛容縮退・panic せず
+    /// 起動を止めない・要件 4.2/6.3）。
+    #[test]
+    fn gate_vanish_count_non_numeric_degrades_zero() {
+        let (parts, asker) = spawn_reader_seeded(vec![
+            (PersistKey::BootCount, "1".into()),
+            (PersistKey::VanishCount, "abc".into()),
+        ]);
+
+        let gated = apply_boot_record_gate(base_config(), &parts.reader, &asker);
+
+        assert_eq!(
+            gated.vanish_count, 0,
+            "非数値 vanish.count は 0 へ寛容縮退する（起動は止めない・要件 6.3）"
+        );
+
+        parts.publisher.close();
+        parts.handle.join().expect("clean close joins");
+    }
+
+    // ---- 終了時フラッシュの統合檻（task 8.4・position-persist・design Testing Strategy「Integration
+    //      Tests §3」・要件 1.2/8.1・design 軸E: E1 write-through＋mpsc FIFO close／E2-lite 越境フェンス） ----
+
+    use areka_sylphya::persist::FsPersistIo;
+    use areka_sylphya::{load_scope, Axis};
+
+    /// シナリオ（task 8.4・position-persist）: 実 `FsPersistIo`（temp dir）上の実 sylphya アクターへ、
+    /// **`PersistWiring` の clone 送信端**（UI スレッド常駐端の代役）から `barrier` を挟まずに複数回
+    /// `persist_put` を投函し（n×DragEnd 相当・同一 scope の last-write-wins）、その後 **runtime 側の
+    /// publisher** から `barrier()`→`close()`→アクター `join` の終了系列（design「shutdown」step 10・
+    /// E2-lite）を駆動する。join 後にファイル（`<ghost root>/sylphya.toml`）を `load_scope` で読み戻し、
+    /// clone 投函の**最終値**が反映されていることを確認する。
+    ///
+    /// これは要件 1.2（正常終了時フラッシュ＝ドラッグ確定時 write-through への安全網）と 8.1（往復値
+    /// 等価の決定論檻）の統合檻であり、design 軸E の二重証明を兼ねる:
+    /// - **E1**（write-through＋mpsc FIFO close）: clone と runtime 側 publisher は同一 mpsc 送信端を
+    ///   共有する（`PersistWiring` は `{ publisher: SylphyaPublisher }` ゆえ clone した publisher が
+    ///   同一 FIFO）。clone が投函した put は、後続の `Close` 処理（Stop で積み残し破棄）より FIFO 順で
+    ///   **先に**処理されるため、close→join を経ればファイルへ確実に反映される。
+    /// - **E2-lite（越境フェンス）**: runtime 側 publisher から呼ぶ `barrier()` が、**別送信端**（clone）
+    ///   経由で enqueue 済みの put も被覆する（単一 FIFO・shutdown 時点で UI 送信は静止済み・design
+    ///   「軸E」バリデーション Issue 2 対応）。
+    ///
+    /// 判別性: 投函値は非 96 倍数の一意値（1234→1777・841→907）とし、最終値のみがファイルに現れる
+    /// （中間値 1234/841 は上書き消滅）ことを確認する——ファイルの最終値が観測できるのは、終了系列が
+    /// enqueue 済み put を処理したからに他ならない（barrier なしの clone put が確かにフラッシュされた証跡）。
+    ///
+    /// `barrier`/`join` の宙吊りに備え `run_bounded` で有界化し、temp dir は成功パスで掃除する
+    /// （`FsPersistIo.commit` は親ディレクトリを作らない＝`File::create` のみ・のため ghost scope root を
+    /// 事前作成する。本番では `profile/areka/` が既存の前提）。
+    #[test]
+    fn exit_flush_reflects_barrierless_clone_puts_after_shutdown_sequence() {
+        let root =
+            unique_temp_dir("exit_flush_reflects_barrierless_clone_puts_after_shutdown_sequence");
+        let _ = std::fs::remove_dir_all(&root);
+        // FsPersistIo.commit は親ディレクトリを作らない（`File::create` のみ）ため、ghost scope root を
+        // 事前作成する（本番では profile/areka/ が既存の前提）。未作成だと commit が Degraded になり
+        // ファイルが書かれず、この檻が意味を失う。
+        std::fs::create_dir_all(&root).expect("create ghost scope root dir");
+
+        let roots = ScopeRoots {
+            ghost: Some(root.clone()),
+            ..ScopeRoots::default()
+        };
+
+        // runtime 側 sylphya（実 FsPersistIo・実アクター・本番 boot と同一の spawn 経路）。
+        let parts = crate::sylphya_wiring::spawn_ghost_sylphya(roots.clone());
+
+        // `PersistWiring` の clone 送信端（UI スレッド常駐端の代役）。PersistWiring は
+        // `{ publisher: SylphyaPublisher }` ゆえ、clone した publisher が同一 mpsc 送信端＝同一 FIFO。
+        let ui_send_end = parts.publisher.clone();
+
+        // n×DragEnd 相当の barrier なし put（同一 scope 0・last-write-wins・非 96 倍数の判別値）。
+        ui_send_end.persist_put(
+            PersistScope::Ghost,
+            vec![
+                (PersistKey::WindowPos { scope: 0, axis: Axis::X }, "1234".into()),
+                (PersistKey::WindowPos { scope: 0, axis: Axis::Y }, "841".into()),
+            ],
+        );
+        ui_send_end.persist_put(
+            PersistScope::Ghost,
+            vec![
+                (PersistKey::WindowPos { scope: 0, axis: Axis::X }, "1777".into()),
+                (PersistKey::WindowPos { scope: 0, axis: Axis::Y }, "907".into()),
+            ],
+        );
+        // clone 送信端では barrier を一切呼ばない（＝終了時フラッシュ安全網に委ねる・要件 1.2）。
+        drop(ui_send_end);
+
+        // runtime 側 shutdown フェンス（design「shutdown」step 10 の barrier→close→join を同型で駆動）。
+        let SylphyaParts {
+            reader: _,
+            publisher,
+            handle,
+        } = parts;
+        run_bounded(
+            "runtime-side barrier -> close -> join (exit flush fence)",
+            std::time::Duration::from_secs(10),
+            move || {
+                // 越境フェンス: 別送信端（clone）経由で enqueue 済みの put も被覆する（単一 FIFO）。
+                publisher
+                    .barrier()
+                    .expect("runtime-side barrier must reflect clone-enqueued puts (live actor)");
+                publisher.close();
+                handle
+                    .join()
+                    .expect("sylphya actor joins cleanly after close");
+            },
+        );
+
+        // アクター join 後、ファイルの最終値が clone 投函の last-write-wins と値等価であること
+        // （barrier なし clone put が終了系列で確実にフラッシュされた・要件 1.2/8.1・E1＋E2-lite）。
+        let loaded = load_scope(PersistScope::Ghost, &roots, &FsPersistIo);
+        assert!(
+            loaded.contains(&(
+                PersistKey::WindowPos { scope: 0, axis: Axis::X },
+                "1777".to_string()
+            )),
+            "終了フラッシュ後、scope 0 の X はファイルへ clone 投函の最終値 1777 で反映されるべき: {loaded:?}"
+        );
+        assert!(
+            loaded.contains(&(
+                PersistKey::WindowPos { scope: 0, axis: Axis::Y },
+                "907".to_string()
+            )),
+            "終了フラッシュ後、scope 0 の Y はファイルへ clone 投函の最終値 907 で反映されるべき: {loaded:?}"
+        );
+        // 中間値が残っていないこと（last-write-wins の確認＝最終値のみが観測できるのは終了系列が
+        // enqueue 済み put を処理したから）。
+        assert!(
+            !loaded.iter().any(|(k, v)| matches!(
+                k,
+                PersistKey::WindowPos { scope: 0, axis: Axis::X }
+            ) && v == "1234"),
+            "中間値 1234 は最終値 1777 に上書きされているべき（last-write-wins）: {loaded:?}"
         );
 
         let _ = std::fs::remove_dir_all(&root);
