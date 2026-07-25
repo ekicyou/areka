@@ -169,10 +169,47 @@
   - `AREKA_APP_SMOKE_EXIT_MS`有界自動終了＋`RUST_LOG` grep（k・scaled寸・GetClientRect照合）で決定論的に判定する
   - マスコット拡大表示・窓追従・モニタ跨ぎ移動追従を人間目視で確認する
   - 2水準それぞれでログのk値（1.25/2.0）とGetClientRectが一致し、目視で拡大・追従を確認した記録が残る状態を観測できる
+  - **一次実走（2026-07-26・125%/200% デュアルディスプレイ・モニタ跨ぎ方式）実施済み**——成功: 起動時 k₀=1.25 導出・シェル 543×859（434×1.25=542.5→543 の round half away from zero 生証跡）・バルーン画像のモニタ跨ぎ追従（500×280 ⇄ 800×448・`window_dpi=(192,192)`→`k_ratio=2/1` 再導出）。**検出: バルーン文字層が k 未追従（確定欠陥→ task 7 新設・開発者裁定でスコープ拡大）**。最終サインオフは task 7 着地後に 7.4 で文字層込みの再走として判定する
   - _Requirements: 2.2, 6.1, 6.2, 6.3, 6.4_
   - _Depends: 6.4_
 
+- [ ] 7. バルーン文字層の k 再追従（スコープ拡大・開発者裁定 2026-07-26・Requirement 8／D11）
+- [ ] 7.1 emo-text: TextLayerRuntime::refresh_actor_scale シームの実装
+  - `register_actor_view` と同一の単一構築経路で binding を再構築し（R8.1）、当該 actor の `ActorRender` を破棄する（次 `present_frame` の初回解決分岐 `actor.rs:518` が新 k の物理寸で再生成＝R8.2・既存生成式の再利用）
+  - 同値 k は no-op で false（churn ガード・R8.5）。再追従時は `info!`（actor・k_old/k_new＝f32 出口ビュー・R8.7）
+  - `register_actor` が `state: TextLayerState` に触れない既存構造（`actor.rs:233-242`）により、リビール状態が保存されることを確認する（R8.3）
+  - 装着 `info!`（`actor.rs:588`）の doc 文言「actor ごと初回のみ」を「ActorRender 不在時のみ」へ改訂する（doc の事実性・design D11 ログ語彙）
+  - _Requirements: 8.1, 8.2, 8.3, 8.5, 8.7_
+  - _Boundary: crates/areka-emo-text/src_
+  - _Depends: 4.2_
+- [ ] 7.2 emo2_boot: run_dpi_phase からの文字層再追従結線
+  - `Emo2Wiring` が attach 時構築の per-scope `BalloonModel` を保持し、再追従時に再利用する（再パースしない・D11-3）
+  - `refresh_scale(balloon_target)` が Some（k 変化）の balloon 窓に対し、scope→actor（`ActorKey::from(scope.to_string())`＝attach と同一写像）で `refresh_actor_scale` を呼ぶ（D11-4）
+  - `text_slot_view` None は `warn!`＋skip（`connect_balloon_text` の R4.2 流儀・R8.6）。shell target は文字スロット不所持ゆえ静穏 skip
+  - _Requirements: 8.1, 8.5, 8.6_
+  - _Boundary: crates/areka/src/emo2_boot（frame.rs）_
+  - _Depends: 7.1_
+- [ ] 7.3 決定論檻: 再追従・状態保存・no-churn の headless テスト
+  - emo-text in-crate: 同値 k no-op／binding 再構築後の `image_size` 不変・`scale` 更新／`ActorRender` 破棄後も `TextLayerState` 保存／view None 縮退 warn!（log capture は 6.2 の probe 常駐方式を参照）
+  - frame.rs 結線: balloon target の k 変化時のみ呼ばれることを headless で檻に入れる
+  - 変異で非空虚を実証する（再追従 no-op 化／state を消す変異／同値 k でも再生成する churn 変異）。doc の「殺す変異」は排他キル／共倒れを実測で書き分ける（6.1/6.2 の教訓）
+  - `cargo test --workspace` が既存からの純増のみで全緑
+  - _Requirements: 8.3, 8.4, 8.5, 8.6, 7.1_
+  - _Depends: 7.1, 7.2_
+- [ ] 7.4 実機再検証: 文字層込みの 6.5 再走（最終サインオフ）
+  - デュアルディスプレイ（125%↔200%）モニタ跨ぎ移動後、バルーン文字が移動先 k で描画されることをログ（再追従 `info!`＋2 回目装着 `info!` の `physical_size` が新 k 寸＝300×97 → 480×156 級）と目視の双方で確認する（R8.8）
+  - 一次実走の失敗観測（バルーン 800×448・文字 300×97 のまま）が解消されていること
+  - 6.5 の残項目（200% 側の輪郭鮮明・絵の端・位置関係・縮小方向往復）と併せて人間サインオフし、6.5 を完了として閉じる
+  - _Requirements: 8.8, 6.1, 6.2, 6.3, 6.4_
+  - _Depends: 6.5, 7.3_
+
 ## Implementation Notes
+
+- 6.5(一次)/7: **実機一次実走の証跡（2026-07-26・target/signoff-6.5.log）**: 起動 125% 側で `primary_dpi=120 k_shell=1.25 k_shell_ratio=ScaleRatio{5,4}`・shell 543×859／balloon 500×280。200% 側へ移動で `window_dpi=Some((192,192)) k_ratio=ScaleRatio{2,1} k=2.0`・balloon 400×224→800×448（`refresh_scale` 実機初検証 PASS）。**文字層のみ未追従**: 装着 `info!`「テキスト供給面を予約スロットへ装着」が全走行で 2 件（actor=0/1・`physical_size=(300,97)`＝240×1.25 の起動時 k 焼き付け）のまま増えず、200% 移動後もバルーン 800×448 に対し文字 300×97＝0.625 倍。根因 3 点（`frame.rs:504` 高々1回登録／`actor.rs:518` 初回のみ生成／`run_dpi_phase`→emo-text 伝搬経路の不存在）は requirements R8 冒頭に転記済み。
+- 7: **開発者裁定の記録（2026-07-26）**: 「W5 Revalidation Trigger で消化」はウェーブの割当であって spec の割当ではなく、W5 の 4 spec のどの割当ファイル集合にも `areka-emo-text/src` が含まれない＝**担当者不在の先送り**だった。本来の持ち主 `areka-P0-emo-text-layer` は completed で消化不能。開発者が本 spec へのスコープ拡大を裁定（「誰も担当していないため今あなたが担当せよ」）。**教訓: 先送りには担当 spec の実在検証と開発者への即報告が必須——ウェーブ名は担当者ではない**。
+- 7.1: `register_actor`（`actor.rs:233-242`）は `routing`＋`layout_input` の上書きのみで `state` に触れない——再登録＝状態保存はこの既存構造が担保する。ただし「触れないまま」であることを 7.3 で檻に入れること（将来の register_actor 改変が R8.3 を静かに壊すのを防ぐ）。
+- 7.2: **balloon target→actor の写像は attach と同一の `ActorKey::from(scope.to_string())` を使うこと**。別の写像を発明すると attach と再追従で actor がずれ、silent に別 actor を再生成する。
+- 7.4: 文字供給面の新 k 期待値の目安: 起動時 (300,97)＝ceil(240×1.25)×ceil(77.6×1.25) → k=2.0 で (480,156) 級（正確な validrect 寸は実装時に `resolved.region` から確認）。grep は件数でなく `physical_size` の値で判定（5.1/5.2/6.2 の行数判定ハザードと同じ注意）。
 
 - 6.4: **通過**（`cargo test --workspace` EXIT=0・85 グループ全緑。i686 host-32 成果物 `shiori-host32-testdll` / `shiori-host32-helper` を PowerShell で事前ビルド済み）。
 - 6.4: **【先行フレーキー・本 spec 無関係・要 owner 対応】`areka-ghost --test ghost` の `spine_e2e_test::s1_boot_success::s1_boot_success_plays_greeting_and_records_expected_cue_sequence` が 17.5%（7/40）で落ちる。** 本 spec とは無関係であることの証明: (a) 本ブランチは `crates/areka-ghost` を**一度も触っていない**、(b) `cargo tree -p areka-ghost --edges normal,dev` の依存閉包に本ブランチが変更したクレート（`areka-emo-compose`／`areka-emo-present`／`areka`／`areka-emo-text`）が**1つも含まれない**、(c) `areka-ghost` と全依存のソースが `origin/main` と**バイト同一**（`git diff origin/main...HEAD` が空）。

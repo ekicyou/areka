@@ -21,7 +21,7 @@
 - 混在 DPI 窓消失バグの解消（`areka-P0-dpi-window-vanish`・W5）。
 - アプリ管理拡大率の実設定手段（UI・タグ）——本仕様は 1.0 固定の縮退シームのみ予約。
 - SSP scaling 語彙（`\![set,scaling]`・ユーザー拡大率固定・SERIKO scaling 乗算列）の輸入（2026-07-24 裁定・research.md §6）。
-- DPI追従が波及する他消費者（window-placement 窓寸・emo-text-layer 行寸・balloon 寸・choice-render）の再検証実装（各 spec の Revalidation Trigger・W5）。
+- DPI追従が波及する他消費者（window-placement 窓寸・balloon 寸・choice-render）の再検証実装（各 spec の Revalidation Trigger・W5）。**注（2026-07-26 改訂）**: emo-text 文字層の k 再追従は 6.5 一次実走で確定欠陥と判明し、開発者裁定で本仕様の In scope へ移管（Requirement 8・D11）。
 - バルーン採寸の per-scope 化（`areka-P0-kero-balloon`・W5。本仕様は席の保全のみ）。
 
 ## Boundary Commitments
@@ -67,6 +67,8 @@ W4 事前割当契約の編集面は「`measure.rs`＋emo-atlas/compose/present�
 3. `resize_window_keep_position` は position-persist の観測域（follow.rs DragEnd :319-350/:443-488）から離れた位置（ファイル末尾の公開ラッパ群）へ追記する。
 
 R7.7（W5 送り）は発動しない（直列化により衝突を回避）。
+
+**スコープ拡大裁定（2026-07-26・開発者裁定・task 6.5 一次実走起点）**: 6.5 の実機実走（125%↔200% デュアルディスプレイ・モニタ跨ぎ）で、バルーン**文字層**が k 変化に追従しない確定欠陥を検出した（バルーン画像は 500×280→800×448 へ正しく追従・文字供給面は 300×97 のまま＝装着ログが全走行で 2 件のみ）。当初 Out of scope（W5 Revalidation Trigger 送り）だったが、(a) W5 の 4 spec のどの割当ファイル集合（placement follow/spawn＋wintf／hit_region.rs＋input_events／kanade／balloon.rs＋assets.rs＋frame.rs＋measure.rs）にも `areka-emo-text/src` が含まれず**担当者が実在しない**、(b) 本来の持ち主 `areka-P0-emo-text-layer` は completed で消化不能、(c) 「再検証」でなく根因特定済みの**確定欠陥**——の 3 点により、開発者が本 spec への取り込みを裁定した。編集面に `crates/areka-emo-text/src`（Requirement 8 に限る）と `emo2_boot/frame.rs`（結線・既所有）を追加する。`spawn.rs` 不触は維持。
 
 **main 同期ゲートの実施記録（2026-07-25・タスク 1.1）**: `areka-P0-position-persist` は main へ squash マージ済み（`33aa384`）。本実装ブランチは `origin/main` と完全一致（ahead 0 / behind 0）を確認し、追加の同期コミットは不要であった。同期後の placement 系実測アンカーを再確認し、下表のとおり**行番号のみ**が変動（関数の存在・シグネチャ・責務は設計時と同一・設計判断に変更なし）:
 
@@ -548,6 +550,39 @@ pub fn run_dpi_phase(wiring: &mut Emo2Wiring, world: &mut World);
 - **窓寸 reconcile の第 2 経路（状態照合・議題 #2 裁定）**: drain フェーズが `apply_show` の scaled 寸変化報告を受けて同一フレーム内で resize（char=`resize_window_to`／balloon=`resize_window_keep_position`）を呼ぶ。`run_dpi_phase` のエッジ観測は「再表示のトリガ」に徹し、窓寸整合はエッジ消費順序に依存しない。
 - `attach_target` 呼び 2 箇所（shell/balloon）へ `BootAssets` の author_dpi を供給する（assets.rs が搬送）。
 
+### areka-emo-text / actor.rs ＋ emo2_boot / frame.rs（文字層 k 再追従・D11・Requirement 8）
+
+**追補（2026-07-26 スコープ拡大裁定）**。6.5 一次実走で特定した根因は 3 点: (a) `frame.rs:504` の `register_actor_view` が `wiring.attached` ゲートで高々 1 回＝`TextSlotBinding::from_view`（`actor.rs:264`）が装着時 k を焼き付ける、(b) `actor.rs:518` の供給面生成が `if !runtime.surfaces.contains_key(actor)` で初回のみ、(c) `run_dpi_phase` から emo-text への伝搬経路が不存在。
+
+| Field | Detail |
+|-------|--------|
+| Intent | balloon target の適用 k が変わったとき、文字層 binding を再構築し供給面を新 k で再生成する（リビール状態は保存） |
+| Requirements | 8.1〜8.8 |
+
+**Contracts**: Service [x]
+
+```rust
+// areka-emo-text / actor.rs（TextLayerRuntime へ追加）
+/// balloon target の適用 k 変化時の再追従シーム。view から binding を再構築し
+/// （register_actor_view と同一の単一構築経路——第 2 の構築流儀を作らない・R8.1）、
+/// 当該 actor の ActorRender（供給面・executor・metrics）を破棄する。次 present_frame の
+/// 初回解決フレーム分岐（actor.rs:518）が新 k の物理寸（ceil(validrect×k)/origin×k）で
+/// 再生成する（R8.2＝既存の生成式をそのまま再利用）。
+/// 同値 k は no-op で false（churn ガード・R8.5）。再追従したら info!（actor・旧/新 k・R8.7）。
+pub fn refresh_actor_scale(
+    &mut self, actor: &ActorKey, view: &TextSlotView, model: &BalloonModel,
+) -> bool;
+```
+
+**設計判断（D11）**:
+
+1. **状態保存は既存構造が担保する**: `register_actor`（`actor.rs:233-242`）は `routing`＋`layout_input` を上書きするのみで `state: TextLayerState`（リビール進行・確定行）に**触れない**。ゆえに再登録＝状態保存（R8.3）であり、`Clear`/`ClearAll`（state も描画実行部も消す・`apply_cue` 経路）とは構造的に別物。実装は「再登録が state を消さない」ことを檻に入れること。
+2. **全再描画は ActorRender 破棄が自然に導く**: 確定行 TextLayout キャッシュ・planner は `ActorRender`（描画実行部）に宿る。破棄→再生成で新規（空白）供給面＋キャッシュ空から始まるため、次 present で保存済み state から全再描画される（R8.4）。フォントサイズ・レイアウトは image px のまま、`draw.rs:828` の行列（M11/M22=k）が新 k で描く——文字はベクタ描画ゆえ新 k でも鮮明。**choice 行ジオメトリ（`choice.rs:265-267` が `contract.scale` を消費）も binding 再構築で自動的に新 k へ直る**（ヒットテスト規約の ÷k は W5 col 領分のまま・R7.9 不変）。
+3. **model の搬送**: `register_actor_view` は `&BalloonModel` を要するため、`Emo2Wiring` が attach 時に構築する per-scope `BalloonModel` を保持し、再追従時に再利用する（再パースしない）。
+4. **検出点は `run_dpi_phase`**: `refresh_scale(balloon_target)` が Some（k 変化）を返した balloon 窓に対し、scope→actor（`ActorKey::from(scope.to_string())`＝attach と同一の写像）で `refresh_actor_scale` を呼ぶ。shell target は emo2 で文字スロットを持たない（view None→静穏 skip）。`text_slot_view` None は attach 時と同じく `warn!`＋skip（次機会へ委ねる・R8.6・`connect_balloon_text` の R4.2 流儀を踏襲）。
+
+**ログ語彙（R8.7・6.5 grep 判定に接続）**: 再追従 `info!` に `actor`・`k_old`／`k_new`（f32 出口ビュー・寸法演算に不使用＝D4）・再生成後は既存の装着 `info!`（`actor.rs:588`「テキスト供給面を予約スロットへ装着した」）が**2 回目以降も**発火する——「actor ごと初回のみ」という同 doc 文言は「ActorRender 不在時のみ」へ改訂すること（doc の事実性）。
+
 ## Error Handling
 
 ### Error Strategy
@@ -563,6 +598,8 @@ log-first（error!/warn!＋構造化 enum・panic 禁止）の既存規律を継
 | refresh_scale 中の合成/デバイス失敗 | error!（既存経路） | 前 k・前表示を維持（early return） | 4.4 |
 | k 倍寸の i32 超過（採寸） | error! | PlacementError::Measure（既存流儀） | 2.5 |
 | リサンプラ | — | 純関数・失敗経路なし（0 寸は上流 EmptyComposition で先行遮断） | 2.5 |
+| 文字層再追従: text_slot_view 不能・model 不在 | warn! | 旧 k 表示を維持し skip（次の DPI 変化・次フレームへ委ねる） | 8.6 |
+| 文字層再追従: 供給面再生成のデバイス失敗 | error!（既存 present_frame 経路） | 当該フレーム skip・state は保存済みゆえ次フレーム再試行 | 8.6 |
 
 ### Monitoring
 
@@ -597,6 +634,8 @@ log-first（error!/warn!＋構造化 enum・panic 禁止）の既存規律を継
 - 実 DPI 2 水準（OS 表示スケール 125%→200% の 2 回起動）× 本番ゴースト emo2（実 pasta.dll・**絶対パス起動**・R6.4）。
 - `AREKA_APP_SMOKE_EXIT_MS` 有界自動終了＋ `RUST_LOG` grep: info ログの `k`（1.25/2.0）・`scaled` 寸・`GetClientRect` 照合（collision-probe 型）で決定論判定（R6.1/6.3）。
 - 人間サインオフ: マスコットが各水準の相当寸で表示・窓追従・モニタ跨ぎ移動での追従を目視（R6.2）。
+- **（2026-07-26 追補・R8.8）** 文字層 k 再追従: デュアルディスプレイ（125%↔200%）でのモニタ跨ぎ移動後、バルーン文字が移動先の k で描画されることをログ（再追従 `info!`＋2 回目の装着 `info!` の `physical_size` が新 k 寸）と目視の双方で確認。一次実走（2026-07-26）の失敗観測＝「バルーン 800×448・文字 300×97 のまま」が解消されていること。
+- **（2026-07-26 追補・R8 の headless 檻）** emo-text in-crate: `refresh_actor_scale` の (a) 同値 k no-op（R8.5）、(b) binding 再構築後の `image_size` 不変・`scale` 更新、(c) ActorRender 破棄→再生成で `TextLayerState` が保存される（R8.3）、(d) view None 縮退の warn!（R8.6・log capture は 6.2 の probe 常駐方式）。frame.rs 結線は headless で「balloon target の k 変化時のみ呼ばれる」ことを檻に入れる。**変異で非空虚を実証**（再追従を no-op 化／state を消す変異／同値 k でも再生成する churn 変異）。
 
 ### Regression Gate
 
