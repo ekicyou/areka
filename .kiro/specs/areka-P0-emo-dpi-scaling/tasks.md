@@ -50,7 +50,7 @@
   - _Depends: 1.2_
 
 - [ ] 3. Core: EmoPresenterのk適用単一漏斗
-- [ ] 3.1 (P) ComposeCacheキー拡張実装（cache.rs）
+- [x] 3.1 (P) ComposeCacheキー拡張実装（cache.rs）
   - `ComposeKey`へ`scale: ScaleRatio`を参加させ、get/insertシグネチャを拡張する
   - エントリ構造・挿入時マスク生成コードは変更しない
   - 同一合成入力でscaleが異なる場合に必ずキャッシュミスすることがunit testで確認できる状態にする
@@ -161,6 +161,9 @@
 - 1.1: main同期は追加コミット不要（ブランチ == origin/main）。placement アンカーは `follow.rs` のみ行番号がずれた（`resize_window_to` :553→:786・`enqueue_window_set_pos` :729→:1009）。design.md へ差分表を記録済み。
 - 1.2: `scale_len` の中間型は design の u64 では `len≈num≈u32::MAX` で溢れるため **u128** が正。design.md を是正済み。
 - 1.2: `areka-emo-compose` の縮退経路は `tracing::warn!` 必須（steering `logging.md`）。ログ発火は `crate::log_capture::capture_logs` で檻に入れる（先例 `log_firing_tests.rs`・`plan.rs`）。純関数モジュールでも「無言縮退」はレビューで落ちる。
+- 3.1: **意図的な中間状態**＝このコミット時点で `areka-emo-present` はビルド不成立（`get`/`insert` 拡張により `presenter.rs:229/:241/:279/:347` が E0061）。**task 3.3 が本実装で修復する**。worktree は squash-merge 前提ゆえ main には現れない。暫定 stand-in（`ScaleRatio::ONE` 直書き）は入れていない（小細工禁止の規律）。
+- 3.1: `cache.rs` は **変更前から rustfmt 非準拠**だった（3箇所）。今回整形されたため diff に無関係hunkが混じるが、HEAD版への `rustfmt --check` が同一出力を返すことで整形のみと実証済み。
+- 3.1: 検証テクニック＝`presenter.rs` を一時パッチ（`ScaleRatio::ONE`）してテスト実行→**復元**。復元時は **mtime を更新**しないと cargo がリビルドを飛ばして**偽緑**になる罠あり。
 - 2.3: **task 5 の一部を前倒し適用済み**（親コントローラ判断）。`placement/mod.rs:126` の `prepare_stages` が `&MeasureScaling::IDENTITY` を渡すよう追随済み（そうしないとツリーがビルド不能で 3.x/4.x の検証が全て塞がるため）。**task 5 の残件は `attach_target` 系の呼び手（`examples/emo-present.rs` ほか）のみ**。
 - 2.3: `PlacementError::Measure` の `scope` は、native 段の balloon 失敗（全スコープ共通の採寸が倒れる）が `0` 固定、**k適用段の balloon 失敗は実スコープ番号**。消費側 `main.rs:760 is_benign_placement_error` は variant のみ照合し `scope` を見ないため非互換なし（レビュー確認済み）。
 - 2.2: **task 4.2 への申し送り**: `resize_window_keep_position` は**同寸べき等 skip でも `false` を返す**（`resize_window_to` の既存慣行と一致）。呼び手は `false` を失敗と解釈してはならない（skip は `debug!`・失敗は `warn!` でログ層が分離されている）。
