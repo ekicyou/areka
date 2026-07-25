@@ -113,11 +113,19 @@
   - _Boundary: areka/main.rs_
   - _Depends: 2.1, 2.3, 4.1_
 
-- [ ] 5. Integration: 既存呼び手のシグネチャ追随
+- [x] 5. Integration: 既存呼び手のシグネチャ追随
   - `attach_target`/`measure_scope_sizes`の既存呼び出し箇所（`examples/emo-present.rs`ほか）をシグネチャ変更に追随させる（k=1相当値で挙動不変）
   - 既存呼び出し箇所がコンパイル通過し、挙動が変わらないことを確認できる状態にする
   - _Requirements: 7.1, 7.2_
   - _Depends: 3.2, 2.3_
+
+- [ ] 5.1 examples/emo-present.rs の startup golden を k 対応させる（task 5 レビューで検出）
+  - `assert_startup_golden`（:705-752）は `read_back` を **native 原寸**の直接合成とバイト比較するため、k≠1.0 の実機（例: 本開発機 125%）では**手動検証エイドが動かせない**
+  - golden を実適用 k で resample してから比較する（design「Testing Strategy > Integration Tests」が檻に課すのと同じ契約を手動エイドにも適用）
+  - **task 6.5 より前に着地させる**（6.5 は本番バイナリのみ実行するため、この破れは 6.5 では検出も解消もされない）
+  - 非96DPI環境で `cargo run -p areka --example emo-present` が完走する状態を確認できる
+  - _Requirements: 7.1, 7.2_
+  - _Depends: 5_
 
 - [ ] 6. Validation: 決定論テストと実機サインオフ
 - [ ] 6.1 (P) emo-compose scale.rs純関数テスト全網羅
@@ -161,6 +169,9 @@
 - 1.1: main同期は追加コミット不要（ブランチ == origin/main）。placement アンカーは `follow.rs` のみ行番号がずれた（`resize_window_to` :553→:786・`enqueue_window_set_pos` :729→:1009）。design.md へ差分表を記録済み。
 - 1.2: `scale_len` の中間型は design の u64 では `len≈num≈u32::MAX` で溢れるため **u128** が正。design.md を是正済み。
 - 1.2: `areka-emo-compose` の縮退経路は `tracing::warn!` 必須（steering `logging.md`）。ログ発火は `crate::log_capture::capture_logs` で檻に入れる（先例 `log_firing_tests.rs`・`plan.rs`）。純関数モジュールでも「無言縮退」はレビューで落ちる。
+- 5: **W5 `areka-P0-collision-dpi-hittest` への申し送り（完了時に roadmap へ転記すること）**: `crates/areka/examples/collision-probe.rs` の ③ アサート 2 本が**陳腐化**した。(a) `:546-553` が `GetClientRect` を `v.surface_size()`（＝native 原寸へ変更済み）と比較、(b) `:557-560` が `TextSlotView::scale() == 1.0` を hard assert。いずれも本 spec が意図的に廃した **k=1.0 ハードワイヤそのものを検査**しており、R7.9 で本 spec の領分外。当該 spec が collision-probe を書き換える際に更新すること。※(a) の方が先に発火する（実装者の申告は (b) のみで不完全だった）。
+- 5: examples は `cargo test` では**コンパイルのみ**で実行されない（実行するのは `CARGO_BIN_EXE_areka` を起動する `tests/emo2_real_run.rs`・`tests/smoke_boot_loop_exit.rs` で、これらは**本番バイナリ**）。両テストが本機 120DPI で実ゴースト窓ごと緑＝**本番の k 経路は非96DPI で健全**という積極的証拠。
+- 5: **テスト World への `DPI` 明示挿入は design の要求**（design.md:593）。`spawn_empty()` のままだと `derive_scale` が縮退分岐（error!＋k=1.0）を通り、「正常系のふり」で緑になる。`DPI::from_dpi(96,96)` 挿入後も期待値が 1 つも動かなかったことが、この変更が非挙動的である証拠。
 - 4.3: **実機 1 水準の先行観測が取れている**（本機 primary DPI=120＝125%）。有界起動＋絶対パスで `primary_dpi=120 shell_author_dpi=96 k_shell=1.25 k_shell_ratio=ScaleRatio{num:5,den:4}` → `char 543×859 / 420×500, balloon 500×280` を grep 確認し、実ゴースト窓がその寸で開いた。**434×1.25=542.5→543** が本番経路の round-half-away-from-zero の生証拠。**task 6.5 は 200% 水準の追加と目視サインオフが主眼**。
 - 4.3: k₀ の居所は `placement::prepare_stages`（tasks.md は main.rs と記すが、descript 読取と `measure_scope_sizes` 呼びが両方そこに在る）。`main.rs` は結果を `wire_emo2_boot` へ中継するのみ。**親が境界を placement/mod.rs＋emo2_boot/mod.rs＋main.rs へ拡張して裁可**。
 - 4.3: **1度の読取が2消費者へ**（Flow3 手順1）。`AuthorDpi{shell,balloon}` 名前付き型で束ね、`prepare_stages → PreparedPlacement.author_dpi → main → wire_emo2_boot → build_boot_assets_for → attach_target`。`emo2_boot` は production で descript を一切読まない（読取の二重化＝2経路が食い違う欠陥を構造で防ぐ）。

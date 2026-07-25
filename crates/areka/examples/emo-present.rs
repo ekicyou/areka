@@ -615,10 +615,12 @@ fn boot_present_system(world: &mut World) {
         // その surface を **直接合成**した ComposedSurface を golden として先に採取する。attach_target が
         // アセットを move 消費するため、合成は move の前に行う（read_back との突き合わせは表示直後）。
         let shell_golden = Composer::new().compose(&emo_world, &atlas, 0, &BindSet::default(), &PatternState::default());
-        match boot
-            .presenter
-            .attach_target(world, TargetId(0), boot.shell_window, emo_world, atlas)
-        {
+        match boot.presenter.attach_target(
+            world, TargetId(0), boot.shell_window, emo_world, atlas,
+            // 作者基準 DPI は正典既定の 96（ukadoc・D1）。本番は boot が descript の実値を
+            // 供給する（本 example は k=1.0 相当で従来と同一の表示寸・描画結果）。
+            96,
+        ) {
             Ok(()) => {
                 // 起動時 golden 検証用に surface0（bind 無し）を先に表示する（本編の巡回は surface1000 の
                 // まばたきゆえ、golden の基準となる surface0 はここで一度だけ明示表示する）。
@@ -654,10 +656,12 @@ fn boot_present_system(world: &mut World) {
         // 起動時 golden（task 5.1・R6.2/R8.2）: バルーンの初回表示は surface_id=0・bind 無し。
         // attach_target が move 消費する前に golden を採取する。
         let balloon_golden = Composer::new().compose(&emo_world, &atlas, 0, &BindSet::default(), &PatternState::default());
-        match boot
-            .presenter
-            .attach_target(world, TargetId(1), boot.balloon_window, emo_world, atlas)
-        {
+        match boot.presenter.attach_target(
+            world, TargetId(1), boot.balloon_window, emo_world, atlas,
+            // 作者基準 DPI は正典既定の 96（ukadoc・D1）。本番は boot が balloon descript の
+            // 実値を供給する（本 example は k=1.0 相当で従来と同一の表示寸・描画結果）。
+            96,
+        ) {
             Ok(()) => {
                 boot.presenter.apply(
                     world,

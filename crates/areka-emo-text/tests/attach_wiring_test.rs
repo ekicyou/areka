@@ -35,7 +35,7 @@ use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::World;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
-use wintf::ecs::{GraphicsCommandList, GraphicsCore, VisualGraphics, WucGraphicsResource};
+use wintf::ecs::{DPI, GraphicsCommandList, GraphicsCore, VisualGraphics, WucGraphicsResource};
 use wintf_winmsg_executor::{FilterResult, MessageLoop};
 
 // ── GPU/WUC フィクスチャ（emo-present presenter.rs テストと同一方針） ──────────────────
@@ -145,18 +145,23 @@ fn show_surface(presenter: &mut EmoPresenter, world: &mut World, target: TargetI
 /// sakura/kero 相当の 2 target（原寸が異なる 2 バルーン）を表示確立まで組む。
 /// 返り値: (presenter, window0, window1)。原寸は target0=(140,80)・target1=(120,60)。
 fn setup_two_targets(world: &mut World) -> (EmoPresenter, Entity, Entity) {
-    let window0 = world.spawn_empty().id();
-    let window1 = world.spawn_empty().id();
+    // 窓 entity には `DPI` component を**明示的に**載せる（areka-P0-emo-dpi-scaling task 3.2）。
+    // component 不在は `derive_scale` の縮退分岐（error! ＋ k=1.0）を通るため、不在に頼ると
+    // 縮退が正常経路になりすまして観測できない。作者基準 DPI 96 と揃えて k=1.0 を成立させる。
+    let window0 = world.spawn(DPI::from_dpi(96, 96)).id();
+    let window1 = world.spawn(DPI::from_dpi(96, 96)).id();
 
     let (emo_world0, atlas0) = build_target_assets(140, 80, 0x11);
     let (emo_world1, atlas1) = build_target_assets(120, 60, 0x22);
 
     let mut presenter = EmoPresenter::new();
     presenter
-        .attach_target(world, TargetId(0), window0, emo_world0, atlas0)
+        // 作者基準 DPI は正典既定の 96（ukadoc・D1）。本番は boot が descript の実値を
+        // 供給する（本テストは窓 DPI 96 と揃えて k=1.0＝従来と同一の表示寸・描画結果）。
+        .attach_target(world, TargetId(0), window0, emo_world0, atlas0, 96)
         .expect("attach_target(0) 失敗");
     presenter
-        .attach_target(world, TargetId(1), window1, emo_world1, atlas1)
+        .attach_target(world, TargetId(1), window1, emo_world1, atlas1, 96)
         .expect("attach_target(1) 失敗");
     show_surface(&mut presenter, world, TargetId(0));
     show_surface(&mut presenter, world, TargetId(1));
