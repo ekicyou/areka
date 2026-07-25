@@ -135,6 +135,29 @@ struct PresentTarget {
     // 一時的な非対称ゆえである（値そのものは表示成立点で常に正しく更新されている）。
     #[allow(dead_code)]
     last_show: Option<(u32, BindSet, PatternState)>,
+    /// **未消費の窓寸 reconcile 要求**（表示成立点の状態照合が積む・design Flow 1 キー決定／議題 #2 裁定）。
+    ///
+    /// 表示成立点で今回の物理寸（k 適用後の scaled 寸）を**前回適用の物理寸**と照合し、異なるときだけ
+    /// `Some(新物理寸)` を置く。呼び手（emo2_boot の frame drain フェーズ）は
+    /// [`EmoPresenter::take_pending_resize`] で取り出し、同一フレーム内で窓 client を合わせる。
+    ///
+    /// # なぜ「エッジ」ではなく「状態」なのか（議題 #2 裁定）
+    ///
+    /// 窓寸 reconcile は **表示が成立したという状態**に紐づく。`Changed<DPI>` エッジに紐づけると、
+    /// エッジが初回 show より前に消費された場合に不整合が残置する。ゆえに報告は表示成立点で積まれ、
+    /// **取り出されるまで保持される**（呼び手が或るフレームで取り出さなくても要求は失われない）。
+    ///
+    /// # 初回表示も必ず報告する（Flow 3 手順 5）
+    ///
+    /// 前回適用寸が無い（`applied`／`native_size` が `None`）初回表示は「差分あり」として扱う。窓は
+    /// 起動時の k₀ 見積もり寸で生成されており、実窓 DPI 由来の k と一致する保証がない——初回を黙らせると
+    /// k₀ と実 DPI の差分を補正する経路が永久に走らない。
+    ///
+    /// # べき等（churn を作らない）
+    ///
+    /// 同寸の再表示では**何も置かない**。`None` を書き戻して既存の未消費要求を消すこともしない
+    /// （同寸でも「まだ窓へ反映していない要求」は生きているため）。
+    pending_resize: Option<(u32, u32)>,
 }
 
 /// 予約 text 層スロットへの読み取り専用の到達手段（emo-text-layer が消費する additive 公開増分・R9.1/9.2）。
@@ -257,6 +280,7 @@ impl EmoPresenter {
                 native_size: None,
                 cached_native: None,
                 last_show: None,
+                pending_resize: None,
             },
         );
         Ok(())
@@ -489,18 +513,62 @@ impl EmoPresenter {
         target.current_surface_id = Some(surface_id);
         // ここが**表示成立点**＝ k・native 原寸・再表示入力の唯一の更新点（design Flow 1 キー決定）。
         // 手前の失敗経路はすべて early return 済みゆえ、失敗時は前 k・前表示が保たれる（要件 4.4）。
+
+        // (3.5) 状態照合＝窓寸 reconcile 要求の生成（design Flow 1 キー決定・議題 #2 裁定）。
+        //
+        // **前値を上書きする前に**前回適用の物理寸を組み立てる。組み立ては契約式
+        // `物理寸 == applied.scaled_extent(native_size)`（design §State Management）に従う——別フィールドで
+        // 物理寸を二重に持つと更新点が 2 つになり、片方だけ書かれる欠陥（本 spec で既出）を招く。両者は
+        // 表示成立点で必ず揃って更新されるため、この導出は常に「前回この経路が表示へ載せた物理寸」に一致する
+        // （`resample` の事後条件が `出力外形 == scaled_extent(入力外形)` ゆえ `chain.size()` と厳密に等しい）。
+        //
+        // 前値なし（初回表示）は `None` ≠ `Some(size)` ゆえ**必ず差分扱い**になる。これは意図した設計である
+        // ——窓は起動時 k₀ 見積もり寸で生成されており実窓 DPI 由来の k と一致する保証がないため、初回を
+        // 黙らせると Flow 3 手順 5 の補正が永久に走らない。
+        let prev_physical = target
+            .applied
+            .zip(target.native_size)
+            .map(|(k, (nw, nh))| k.scaled_extent(nw, nh));
+        let size_changed = prev_physical != Some(size);
+        if size_changed {
+            // 差分あり＝呼び手（frame drain フェーズ）へ新物理寸を報告する。同寸のときは**何も触らない**
+            // ——`None` を書き戻すと未消費の要求を殺してしまう（取りこぼしを作らない・べき等）。
+            target.pending_resize = Some(size);
+        }
+
         target.applied = Some(scale);
         // いま表示に使ったエントリ由来の原寸をそのまま写す（合成した回か否かで分岐しない——分岐させると
         // 「insert 済みのまま失敗 → 後からヒットで成立」の経路で照会値が画面と乖離する）。
         target.native_size = target.cached_native;
         target.last_show = Some((surface_id, binds, pattern));
 
+        // 表示成立点の観測ログ（設計 D10・要件 6.1/6.3 の判定素材）。実機サインオフは有界 auto-exit で
+        // 起動し `RUST_LOG` を grep してここを読むため、**`info!` レベル**であることが契約である
+        // （`debug!` へ落とすと既定の観測条件で消える）。k 導出値（`k`・`k_ratio`）と適用寸（`native_*`・
+        // `scaled_*`）が揃うことで、2 水準（125%/200%）の実行が「異なる物理寸で描かれた」ことを
+        // ログだけで決定論的に判定できる。
+        //
+        // `native_*` の供給源 `native_size` は直上で `cached_native` から写しており、スロットと対の
+        // 不変条件によりこの経路では必ず `Some` である（引き当てが成立した＝スロットに中身がある）。
+        // 万一崩れた場合の `0×0` は**実在し得ない外形**（0 外形は上流 `EmptyComposition` が先行遮断する）
+        // ゆえ、値を捏造せず「対が壊れた」ことを示す診断番兵として機能する。
+        let (native_w, native_h) = target.native_size.unwrap_or((0, 0));
         tracing::info!(
             ?target_id,
             surface_id,
             cache_hit,
-            width = size.0,
-            height = size.1,
+            // k の有理表現（既約 num/den）。`ScaleRatio` の num/den は非公開ゆえ `Debug` で出す。
+            k_ratio = ?scale,
+            k = scale.as_f32(),
+            author_dpi = target.policy.author_dpi,
+            // `None` は要件 1.4 の縮退（DPI component 不在 → k=1.0）そのものゆえ潰さずに出す。
+            window_dpi = ?window_dpi,
+            native_w,
+            native_h,
+            scaled_w = size.0,
+            scaled_h = size.1,
+            // 今回の表示成立が窓寸 reconcile 要求を積んだか（議題 #2 裁定の状態照合の観測点）。
+            size_changed,
             "apply(ShowSurface): 表示・マスクを更新"
         );
         Self::reply(reply, Ok(()));
@@ -572,6 +640,30 @@ impl EmoPresenter {
             surface_size,
             scale: applied.as_f32(),
         })
+    }
+
+    /// 表示成立点の状態照合が積んだ**窓寸 reconcile 要求**を取り出す（取り出しで消える・drain 契約）。
+    ///
+    /// `Some(新物理寸)` は「直近の表示成立で物理寸が前回適用寸から変わった（初回表示を含む）」ことを
+    /// 表す。呼び手（emo2_boot の frame drain フェーズ）は**同一フレーム内**で char 窓なら
+    /// `resize_window_to`（アンカー保存）・balloon 窓なら `resize_window_keep_position` を呼び、窓
+    /// client を新物理寸へ合わせる（design Flow 2／Flow 3 手順 5・議題 #2 裁定）。未登録 target・
+    /// 要求なしは `None`。
+    ///
+    /// # なぜ `reply`（[`PresentOutcome`]）ではなくここに置くのか
+    ///
+    /// 本番の drain 経路（`run_drain_phase`）は指令へ `reply` を**同梱しない**（撃ちっぱなし）ため、
+    /// [`PresentOutcome`] を太らせても報告は呼び手へ届かない。加えて報告は「表示が成立したという
+    /// **状態**」であり、エッジ（`Changed<DPI>`）の消費順序に依存してはならない（議題 #2 裁定）。
+    /// ゆえに target ごとの**取り出し可能な状態**として置く。
+    ///
+    /// # 取りこぼさない（未消費なら保持）
+    ///
+    /// 要求は取り出されるまで消えない。呼び手が或るフレームで取り出さなくても次に取り出した者が最新の
+    /// 物理寸を受け取るため、報告が黙って失われる経路が無い。逆に取り出した後は同寸表示を何度繰り返しても
+    /// `None` のままで、窓へ無用な書込（churn）を誘発しない。
+    pub fn take_pending_resize(&mut self, target: TargetId) -> Option<(u32, u32)> {
+        self.targets.get_mut(&target)?.pending_resize.take()
     }
 
     /// target がいま表示しているサーフェス id（CurrentSurfaceRead・R3.1-3.3）。
@@ -2728,5 +2820,396 @@ mod tests {
                 "step {step}: 現サーフェス id"
             );
         }
+    }
+
+    // ── 表示成立点の状態照合＝窓寸 reconcile 報告（タスク 3.4・議題 #2 裁定）────────────────────
+    // design Flow 1 キー決定「表示成立点で今回 scaled 寸を前回適用寸と照合し、差分があれば新物理寸を
+    // 呼び手（frame drain フェーズ）へ報告する」の檻。報告は `reply` ではなく取り出し可能な状態
+    // （`take_pending_resize`）に置かれる——本番 drain 経路が `reply: None`（撃ちっぱなし）ゆえ。
+
+    /// 要件 3.1/4.1/4.2 観測完了（**寸法変化が呼び手へ報告される**）: 同一 surface を k=1/1 で表示した
+    /// のち窓 `DPI` を 192 へ変えて再表示すると、表示成立点の状態照合が**新しい物理寸**を積み、
+    /// `take_pending_resize` がそれを返す（呼び手＝drain フェーズが同一フレームで窓寸 reconcile に使う）。
+    ///
+    /// 報告値は native 原寸ではなく **k 倍後の物理寸**であり、供給面の実寸と一致する。照合を行わない
+    /// 実装・native 寸を報告する実装のいずれでも RED になる。
+    #[test]
+    fn dpi_change_reports_new_physical_size_to_caller() {
+        let mut world = make_world_with_gpu();
+        let window = spawn_window_with_dpi(&mut world, 96);
+        let (emo_world, atlas, _golden) = build_target_assets(6, 5, 0x85);
+
+        let mut presenter = EmoPresenter::new();
+        presenter
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
+            .expect("attach_target 失敗");
+
+        // k=1/1 の初回表示（初回報告は Flow 3 手順 5 の領分ゆえ、ここでは取り出して捨てる）。
+        show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+        assert_eq!(
+            presenter.take_pending_resize(TargetId(0)),
+            Some((6, 5)),
+            "初回表示は物理寸を報告する（本テストの前提・Flow 3 手順 5）"
+        );
+        assert_eq!(
+            presenter.take_pending_resize(TargetId(0)),
+            None,
+            "取り出しで要求は消える（drain 契約）"
+        );
+
+        // モニタ跨ぎ移動・表示スケール変更の決定論的代替: 窓 DPI を 96→192（k=1/1→2/1）。
+        set_window_dpi(&mut world, window, 192);
+        show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+
+        let k2 = ScaleRatio::new(2, 1).unwrap();
+        let expected = k2.scaled_extent(6, 5);
+        assert_eq!(expected, (12, 10), "前提: k=2/1 の物理寸");
+        assert_eq!(
+            presenter.take_pending_resize(TargetId(0)),
+            Some(expected),
+            "物理寸が変わったのに新物理寸が呼び手へ報告されない（状態照合の欠落）"
+        );
+
+        // 報告値＝実際に表示へ載った物理寸（供給面の実寸）であることを裏取りする。
+        let chain_size = presenter
+            .targets
+            .get(&TargetId(0))
+            .and_then(|t| t.chain.as_ref())
+            .expect("表示成立後は供給面が生成済み")
+            .size();
+        assert_eq!(chain_size, expected, "報告値と供給面寸が乖離している");
+    }
+
+    /// 要件 4.2 観測完了（**べき等・churn を作らない**）: 物理寸が変わらない再表示は何も報告しない。
+    ///
+    /// 3 段で檻に入れる——(1) 初回表示の報告を取り出す、(2) 同一入力の再 show（**キャッシュヒット**）は
+    /// `None`、(3) 別 surface（3000・**同一 native 原寸**＝キャッシュミスで再合成）も `None`。
+    /// (3) が効くのは「合成したか否か」ではなく**物理寸そのもの**で判定していることの担保である
+    /// （表示成立ごとに無条件で `Some(size)` を積む実装は (2)(3) 双方で RED）。
+    #[test]
+    fn unchanged_physical_size_reports_nothing() {
+        let mut world = make_world_with_gpu();
+        let window = spawn_window_with_dpi(&mut world, 192);
+        // 面 1000 と 3000 は同一 native 原寸（6×5）＝合成入力は違うが物理寸は同じ。
+        let (emo_world, atlas, _g1000, _g3000) = build_two_face_assets(6, 5);
+
+        let mut presenter = EmoPresenter::new();
+        presenter
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
+            .expect("attach_target 失敗");
+
+        let k2 = ScaleRatio::new(2, 1).unwrap();
+        let physical = k2.scaled_extent(6, 5);
+        assert_eq!(physical, (12, 10), "前提: k=2/1 の物理寸");
+
+        // (1) 初回表示は報告あり（取り出して要求を空にする）。
+        show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+        assert_eq!(
+            presenter.take_pending_resize(TargetId(0)),
+            Some(physical),
+            "初回表示の報告（本テストの前提）"
+        );
+
+        // (2) 同一入力の再 show＝キャッシュヒット・同寸 → 報告なし。
+        show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+        assert_eq!(
+            presenter.take_pending_resize(TargetId(0)),
+            None,
+            "同寸のヒット再表示が窓寸 reconcile 要求を捏造している（churn の源）"
+        );
+
+        // (3) 別 surface＝キャッシュミスで再合成するが物理寸は同じ → 報告なし。
+        show_ok(&mut presenter, &mut world, TargetId(0), 3000);
+        assert_eq!(
+            presenter.current_surface_id(TargetId(0)),
+            Some(3000),
+            "前提: 面が切り替わっている（＝ミスして再合成した回）"
+        );
+        assert_eq!(
+            presenter.take_pending_resize(TargetId(0)),
+            None,
+            "再合成しただけで物理寸が同じなら報告してはならない（判定が寸法でなく合成有無になっている）"
+        );
+    }
+
+    /// 要件 3.1 観測完了（**初回表示も必ず報告する**・design Flow 3 手順 5）: 窓は起動時 k₀ 見積もり寸で
+    /// 生成されており実窓 DPI 由来の k と一致する保証がないため、**前回適用寸が無い初回表示**も差分扱いで
+    /// 物理寸を報告しなければ、k₀ と実 DPI の差分を補正する経路が永久に走らない。
+    ///
+    /// 報告値は native 原寸（4×3）ではなく k 倍後の物理寸（8×6）である。初回を黙らせる実装
+    /// （`prev.is_some() && prev != Some(size)` 条件）は本テストで RED になる。
+    #[test]
+    fn first_show_reports_physical_size_for_initial_reconcile() {
+        let mut world = make_world_with_gpu();
+        let window = spawn_window_with_dpi(&mut world, 192);
+        let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x86);
+
+        let mut presenter = EmoPresenter::new();
+        presenter
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
+            .expect("attach_target 失敗");
+
+        // 表示前は要求なし（attach しただけで窓を動かさない）。
+        assert_eq!(
+            presenter.take_pending_resize(TargetId(0)),
+            None,
+            "表示未成立の間に窓寸 reconcile 要求があってはならない"
+        );
+
+        show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+
+        let k2 = ScaleRatio::new(2, 1).unwrap();
+        let physical = k2.scaled_extent(4, 3);
+        assert_eq!(physical, (8, 6), "前提: k=2/1 の物理寸");
+        assert_ne!(physical, (4, 3), "前提: native 原寸と物理寸が弁別可能");
+        assert_eq!(
+            presenter.take_pending_resize(TargetId(0)),
+            Some(physical),
+            "初回表示が物理寸を報告しない（k₀ 見積もり窓寸との差分が補正されない・Flow 3 手順 5）"
+        );
+    }
+
+    /// 要件 4.4 観測完了（**失敗は何も報告しない・前値を維持する**）: 表示成立点より手前で early return
+    /// する失敗経路は、窓寸 reconcile 要求を積まない。
+    ///
+    /// 2 種の失敗クラスで檻に入れる——(A) 表示未成立での device 失敗（`WucGraphicsResource` 一時退避・
+    /// 2 個目の Compositor を作らない＝要件 5.3 の AV 非再導入を守る）、(C) 表示成立**後**の合成失敗
+    /// （`SurfaceNotFound`）。(C) は直前に窓 DPI を 192→96 へ変えてから失敗させるため、報告を
+    /// 表示成立点より手前（例: `derive_scale` 直後）へ置いた実装なら `Some((4,3))` が積まれて RED になる。
+    #[test]
+    fn failed_show_reports_no_resize_and_keeps_previous_values() {
+        let mut world = make_world_with_gpu();
+        let window = spawn_window_with_dpi(&mut world, 192);
+        let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x87);
+        let k2 = ScaleRatio::new(2, 1).unwrap();
+
+        let mut presenter = EmoPresenter::new();
+        presenter
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
+            .expect("attach_target 失敗");
+
+        // (A) 供給面生成の前提資源を一時退避 → 合成・insert の後、表示成立の手前で失敗する。
+        let wuc = world
+            .remove_resource::<WucGraphicsResource>()
+            .expect("前提: make_world_with_gpu が WucGraphicsResource を載せている");
+        let (tx, rx) = reply_channel::<PresentOutcome>();
+        presenter.apply(
+            &mut world,
+            PresentCommand::ShowSurface {
+                target: TargetId(0),
+                surface_id: 1000,
+                binds: BindSet::default(),
+                pattern: PatternState::default(),
+                reply: Some(tx),
+            },
+        );
+        assert!(
+            matches!(
+                rx.recv_timeout(Duration::from_secs(10)),
+                Ok(Err(PresentError::Device { .. }))
+            ),
+            "前提: 供給面生成に失敗する"
+        );
+        assert_eq!(
+            presenter.take_pending_resize(TargetId(0)),
+            None,
+            "表示が成立していない失敗が窓寸 reconcile 要求を積んでいる（要件 4.4 違反）"
+        );
+        {
+            let t = presenter.targets.get(&TargetId(0)).unwrap();
+            assert_eq!(t.applied, None, "失敗は前値（未確定）を維持する");
+            assert_eq!(t.native_size, None, "失敗は前値（未確定）を維持する");
+        }
+
+        // (B) 資源を戻して表示を成立させる（以降の「前値」を作る）。
+        world.insert_resource(wuc);
+        show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+        assert_eq!(
+            presenter.take_pending_resize(TargetId(0)),
+            Some(k2.scaled_extent(4, 3)),
+            "前提: 成立した表示は報告する"
+        );
+
+        // (C) 窓 DPI を 192→96（k=2/1→1/1・物理寸なら 8×6→4×3 相当）へ変えたうえで**合成に失敗**させる。
+        //     表示は成立しないため、k も表示も前値のまま＝報告も無い。
+        set_window_dpi(&mut world, window, 96);
+        let (tx, rx) = reply_channel::<PresentOutcome>();
+        presenter.apply(
+            &mut world,
+            PresentCommand::ShowSurface {
+                target: TargetId(0),
+                surface_id: 9999,
+                binds: BindSet::default(),
+                pattern: PatternState::default(),
+                reply: Some(tx),
+            },
+        );
+        assert!(
+            matches!(
+                rx.recv_timeout(Duration::from_secs(10)),
+                Ok(Err(PresentError::Compose(ComposeError::SurfaceNotFound(
+                    9999
+                ))))
+            ),
+            "前提: 解決不能 id は Err(SurfaceNotFound)"
+        );
+        assert_eq!(
+            presenter.take_pending_resize(TargetId(0)),
+            None,
+            "表示成立前に early return した失敗が新 k の物理寸を報告している（報告点が表示成立点より手前）"
+        );
+
+        // 前 k・前表示・照会契約はすべて据え置き（要件 4.4）。
+        let t = presenter.targets.get(&TargetId(0)).unwrap();
+        assert_eq!(t.applied, Some(k2), "失敗しても前 k を維持する");
+        assert_eq!(
+            t.native_size,
+            Some((4, 3)),
+            "失敗しても前 native 原寸を維持する"
+        );
+        assert_eq!(
+            t.chain.as_ref().expect("供給面は生成済み").size(),
+            k2.scaled_extent(4, 3),
+            "失敗しても前表示（物理寸）を維持する"
+        );
+    }
+
+    // ── 表示成立点 info ログ（設計 D10・要件 6.1/6.3）の檻 ──────────────────────────────────
+    // 実機サインオフ（R6.3）は有界 auto-exit で起動して `RUST_LOG` を grep し、**このログのフィールド名と
+    // 値**から「2 水準が異なる k・異なる物理寸で描かれた」ことを決定論的に判定する。ゆえに level が
+    // `info` であることと D10 各フィールドが正しい値で在ることは観測状態と同格の契約であり、檻に入れる。
+    //
+    // 捕捉は **`tracing` 単体**（本 crate の既存依存）で組む——`tracing-subscriber` は dev-dependency に
+    // 無く、要件 7.3（新規外部依存の禁止）ゆえ足さない。`with_default` は **スレッドローカル**の既定
+    // subscriber を差すため、並列実行される他テストのイベントを取り込まない（`set_global_default` は
+    // プロセス大域＝並列テストで混線するため使わない）。
+
+    /// 捕捉した 1 イベント（level ＋ フィールド名 → Debug 表現）。
+    #[derive(Debug, Clone)]
+    struct CapturedEvent {
+        level: tracing::Level,
+        fields: std::collections::HashMap<String, String>,
+    }
+
+    /// 全フィールドを Debug 表現で拾う visitor。
+    ///
+    /// [`tracing::field::Visit`] の `record_u64`/`record_f64`/`record_bool` 等はすべて既定実装が
+    /// `record_debug` へ転送するため、`record_debug` 1 本の実装で型を問わず全フィールドを捕捉できる。
+    struct FieldGrab(std::collections::HashMap<String, String>);
+
+    impl tracing::field::Visit for FieldGrab {
+        fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+            self.0
+                .insert(field.name().to_string(), format!("{value:?}"));
+        }
+    }
+
+    /// イベントを溜めるだけの最小 subscriber（span は使わないので new_span は固定 id を返す）。
+    #[derive(Clone, Default)]
+    struct CaptureSubscriber(std::sync::Arc<std::sync::Mutex<Vec<CapturedEvent>>>);
+
+    impl tracing::Subscriber for CaptureSubscriber {
+        fn enabled(&self, _meta: &tracing::Metadata<'_>) -> bool {
+            true
+        }
+        fn new_span(&self, _attrs: &tracing::span::Attributes<'_>) -> tracing::span::Id {
+            tracing::span::Id::from_u64(1)
+        }
+        fn record(&self, _span: &tracing::span::Id, _values: &tracing::span::Record<'_>) {}
+        fn record_follows_from(&self, _span: &tracing::span::Id, _follows: &tracing::span::Id) {}
+        fn event(&self, event: &tracing::Event<'_>) {
+            let mut grab = FieldGrab(std::collections::HashMap::new());
+            event.record(&mut grab);
+            self.0
+                .lock()
+                .expect("捕捉バッファの毒化なし")
+                .push(CapturedEvent {
+                    level: *event.metadata().level(),
+                    fields: grab.0,
+                });
+        }
+        fn enter(&self, _span: &tracing::span::Id) {}
+        fn exit(&self, _span: &tracing::span::Id) {}
+    }
+
+    /// 要件 6.1/6.3 観測完了（設計 D10 の観測ログ）: 表示成立点で **`info` レベル**のログが出て、
+    /// k 導出値（`k`・`k_ratio`）・`author_dpi`・`window_dpi`・native 寸・scaled 寸が揃う。
+    ///
+    /// k=2/1・native 4×3・物理 8×6 という**互いに弁別可能**な値で組むため、native と scaled の取り違え・
+    /// k の取り違えはすべて RED になる。`info!` を `debug!` へ落とす改変も level assert が捕まえる
+    /// （R6.3 の `RUST_LOG` grep は既定の観測条件で info を読むため、level 自体が契約である）。
+    #[test]
+    fn display_success_emits_d10_observation_log_at_info() {
+        let mut world = make_world_with_gpu();
+        let window = spawn_window_with_dpi(&mut world, 192);
+        let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x88);
+
+        let mut presenter = EmoPresenter::new();
+        presenter
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
+            .expect("attach_target 失敗");
+
+        let cap = CaptureSubscriber::default();
+        tracing::subscriber::with_default(cap.clone(), || {
+            show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+        });
+
+        let events = cap.0.lock().expect("捕捉バッファ").clone();
+        let ev = events
+            .iter()
+            .find(|e| {
+                e.fields
+                    .get("message")
+                    .is_some_and(|m| m.contains("表示・マスクを更新"))
+            })
+            .unwrap_or_else(|| panic!("表示成立点のログが出ていない: {events:?}"));
+
+        assert_eq!(
+            ev.level,
+            tracing::Level::INFO,
+            "表示成立点の観測ログが info レベルでない（R6.3 の RUST_LOG grep が既定条件で読めない）"
+        );
+
+        let field = |name: &str| -> String {
+            ev.fields
+                .get(name)
+                .unwrap_or_else(|| panic!("D10 フィールド `{name}` が無い: {:?}", ev.fields))
+                .clone()
+        };
+
+        // k 導出値: f32 の照会表現と、既約有理表現（num/den）の双方。
+        assert_eq!(field("k"), "2.0", "k（f32）が実適用値でない");
+        let k_ratio = field("k_ratio");
+        assert!(
+            k_ratio.contains("num: 2") && k_ratio.contains("den: 1"),
+            "k_ratio に既約 num/den が出ていない: {k_ratio}"
+        );
+
+        // 導出の両入力（分母＝作者基準 DPI・分子側＝窓 DPI）。
+        assert_eq!(field("author_dpi"), "96");
+        assert_eq!(
+            field("window_dpi"),
+            "Some((192, 192))",
+            "窓 DPI が出ていない（不在＝要件 1.4 縮退も None として観測できる必要がある）"
+        );
+
+        // 適用寸: native（k 適用前）と scaled（k 適用後・実際に窓へ載る物理寸）が弁別可能に揃う。
+        assert_eq!(field("native_w"), "4");
+        assert_eq!(field("native_h"), "3");
+        assert_eq!(
+            field("scaled_w"),
+            "8",
+            "scaled 寸が native のまま（k が届いていない）"
+        );
+        assert_eq!(
+            field("scaled_h"),
+            "6",
+            "scaled 寸が native のまま（k が届いていない）"
+        );
+
+        // 状態照合の結果（初回表示ゆえ差分あり＝窓寸 reconcile 要求を積んだ）。
+        assert_eq!(field("size_changed"), "true");
+        assert_eq!(field("surface_id"), "1000");
+        assert_eq!(field("target_id"), "TargetId(0)");
     }
 }

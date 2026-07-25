@@ -73,7 +73,7 @@
   - _Requirements: 1.1, 2.1, 2.3, 2.4_
   - _Depends: 3.1, 3.2, 1.3_
 
-- [ ] 3.4 apply_showの成立点記録・状態照合・観測ログ実装（presenter.rs）
+- [x] 3.4 apply_showの成立点記録・状態照合・観測ログ実装（presenter.rs）
   - 表示成立点で`applied`/`native_size`/`last_show`/`current_surface_id`を記録し、失敗経路は手前でearly returnして前値を維持する
   - 今回scaled寸が前回適用寸と異なる場合に新物理寸を呼び手へ報告する状態照合を実装する（設計ディスカッション#2裁定）
   - info log（target/k_num/k_den/k/author_dpi/window_dpi/native/scaled）を出力する
@@ -161,6 +161,11 @@
 - 1.1: main同期は追加コミット不要（ブランチ == origin/main）。placement アンカーは `follow.rs` のみ行番号がずれた（`resize_window_to` :553→:786・`enqueue_window_set_pos` :729→:1009）。design.md へ差分表を記録済み。
 - 1.2: `scale_len` の中間型は design の u64 では `len≈num≈u32::MAX` で溢れるため **u128** が正。design.md を是正済み。
 - 1.2: `areka-emo-compose` の縮退経路は `tracing::warn!` 必須（steering `logging.md`）。ログ発火は `crate::log_capture::capture_logs` で檻に入れる（先例 `log_firing_tests.rs`・`plan.rs`）。純関数モジュールでも「無言縮退」はレビューで落ちる。
+- 3.4: **状態照合の報告機構＝`PresentTarget.pending_resize` ＋ `take_pending_resize()`**（drain 可能な target 単位状態）。`PresentOutcome` の拡幅は**不可**——本番 drain 経路 `emo2_boot/frame.rs:539-551` は `reply: None` の撃ちっぱなしで報告が届かない（実コードで確認済み）。**task 4.2 はこの accessor から取り出すこと**。
+- 3.4: 報告は**初回表示でも必ず出る**（前値 `None` ≠ `Some(size)`）。Flow 3 手順5＝起動時 k₀ 見積もり窓寸と実窓 DPI 由来 k の差分補正がこれに依存するため、初回を黙らせてはならない。
+- 3.4: 未 drain の `pending_resize` を持ち越しても安全（値は常に「最後に成立した表示の物理寸」＝窓があるべき寸法。resize 側もべき等 skip）。`apply_hide` は触らない（Hide は窓寸を変えない・消すと正当な未処理要求を失う）。
+- 3.4: **design 内部矛盾を是正**: D10 は `k_num`/`k_den` を個別ログフィールドに求めるが、`ScaleRatio` の num/den は design 自身が非公開と規定。実装は `k_ratio`(Debug)＋`k`(f32) で出力し design.md を是正済み。**6.5 の RUST_LOG grep は `k=` を使うこと**。
+- 3.4: `areka-emo-present` でも**ログ発火を檻に入れられる**——`tracing` は既に通常依存ゆえ、テストモジュール内に最小 `Subscriber` を手書きし `tracing::subscriber::with_default`（スレッドローカル・並列GPUテストと混線しない）で捕捉すればよい。`tracing-subscriber` の dev 依存追加は不要（**1.4 の申し送りを上書き**）。
 - 3.2+3.3: **親判断で一括実装**（分割すると `ScaleRatio::ONE` の stand-in を挟む中間状態が不可避のため・小細工禁止の規律）。
 - 3.2+3.3: **task 3.5 への申し送り**: `last_show` の `#[allow(dead_code)]` は `refresh_scale` が読み手になった時点で除去すること。
 - 3.2+3.3: **task 5 への申し送り（範囲拡大）**: `attach_target` の破断呼び手は tasks.md が挙げる `examples/emo-present.rs` だけではない。実測＝`areka/src/emo2_boot/frame.rs:409/:450`（4.2 の領分）・`areka/examples/{emo-present.rs:620,:659, collision-probe.rs:442, window-placement.rs:419}`・**`areka-emo-text/examples/{emo-text-layer.rs:762, emo-text-typewriter-demo.rs:290}`・`areka-emo-text/tests/{attach_wiring_test.rs:156,:159, draw_readback_test.rs:306}`**。`areka-emo-text` の lib 自体は無傷。

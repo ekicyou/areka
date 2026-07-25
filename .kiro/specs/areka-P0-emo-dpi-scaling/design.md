@@ -173,6 +173,8 @@ graph TB
 | D9 | テスト配置 | 純関数=各 crate in-crate／GPU readback=**emo-present in-crate（別プロセス）**／wintf tests/graphics へは wintf 自身の檻のみ（その場合 `on_gpu_owner_thread` 必須）——本仕様は wintf 新設なし。安全根拠＝バイナリ間は別プロセスで無縁＋同一バイナリ内は並列スレッド Compositor 生成の既存実績（`make_world_with_gpu` 型 14+ 本が現状緑） | wintf graphics への集約（2 個目 Compositor 制約を不要に背負う） |
 | D10 | 実機観測 | 表示成立点 info ログ（k num/den・f32・author_dpi・window_dpi・native/scaled 寸）＋ 125%/200% 2 水準の有界起動（`AREKA_APP_SMOKE_EXIT_MS`）＋ RUST_LOG grep・絶対パス起動 | 目視のみ（決定論判定の欠如） |
 
+> **D10 の実装時是正（2026-07-25・タスク 3.4 レビュー承認）**: 本表と §Monitoring は `k_num`/`k_den` を個別ログフィールドとして記していたが、`ScaleRatio` の `num`/`den` は本設計自身が非公開と規定しており（Service Interface 参照）accessor が無い＝**設計内部の矛盾**であった。実装は `k_ratio = ?scale`（Debug 表現 `ScaleRatio { num: 2, den: 1 }`＝両値が観測可能）＋ `k`（f32）で出力する。R6.3 の条文「k 導出値・適用寸のログ出力」は f32 の `k` フィールドが直接 grep 可能な形で満たす。以降 `k_num`/`k_den` の記述は `k_ratio`＋`k` と読み替える。
+
 ### Technology Stack
 
 | Layer | Choice / Version | Role in Feature | Notes |
