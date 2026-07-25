@@ -81,7 +81,7 @@
   - _Requirements: 1.2, 2.3, 3.1, 3.2, 4.4, 6.1_
   - _Depends: 3.3_
 
-- [ ] 3.5 applied_scale・refresh_scale実装（presenter.rs）
+- [x] 3.5 applied_scale・refresh_scale実装（presenter.rs）
   - `applied_scale`照会（表示成立前はNone）を実装する
   - `refresh_scale`（窓DPIから再導出・`last_show`保持時のみ再表示・差分なければNone・失敗はerror!+前表示維持）を実装する
   - DPI差替後にrefresh_scaleを呼ぶとapplied_scaleが新k相当を返す状態を確認できる
@@ -161,6 +161,8 @@
 - 1.1: main同期は追加コミット不要（ブランチ == origin/main）。placement アンカーは `follow.rs` のみ行番号がずれた（`resize_window_to` :553→:786・`enqueue_window_set_pos` :729→:1009）。design.md へ差分表を記録済み。
 - 1.2: `scale_len` の中間型は design の u64 では `len≈num≈u32::MAX` で溢れるため **u128** が正。design.md を是正済み。
 - 1.2: `areka-emo-compose` の縮退経路は `tracing::warn!` 必須（steering `logging.md`）。ログ発火は `crate::log_capture::capture_logs` で檻に入れる（先例 `log_firing_tests.rs`・`plan.rs`）。純関数モジュールでも「無言縮退」はレビューで落ちる。
+- 3.5: **task 4.2 の最重要契約**＝`pending_resize` の消費責任は「表示成立を引き起こした者が消費する」。①`refresh_scale` が再表示に成功→自ら take して返す（drain 側は `None`＝二重 resize なし）②ゲート不成立→触らない（初回 k₀ 補正などの未消費要求を drain が拾う＝取りこぼしなし）③再表示失敗→触らない。**4.2 は `run_dpi_phase` の `refresh_scale` 戻り値と drain フェーズの `take_pending_resize` の両方を処理すること**（フェーズ順序に依存しないことはレビューで確認済み）。実装 doc の `# take_pending_resize との関係` 節が正本。
+- 3.5: `refresh_scale` の成否判定は再表示後の `applied == Some(scale)` 照合（`apply_show` が `()` を返し reply も無いため）。同時にゲート導出と `apply_show` の権威導出の一致検査も兼ねる。`EmptyComposition`→Hide 縮退は `applied` を書かないので「不成立」に正しく分類される。
 - 3.4: **状態照合の報告機構＝`PresentTarget.pending_resize` ＋ `take_pending_resize()`**（drain 可能な target 単位状態）。`PresentOutcome` の拡幅は**不可**——本番 drain 経路 `emo2_boot/frame.rs:539-551` は `reply: None` の撃ちっぱなしで報告が届かない（実コードで確認済み）。**task 4.2 はこの accessor から取り出すこと**。
 - 3.4: 報告は**初回表示でも必ず出る**（前値 `None` ≠ `Some(size)`）。Flow 3 手順5＝起動時 k₀ 見積もり窓寸と実窓 DPI 由来 k の差分補正がこれに依存するため、初回を黙らせてはならない。
 - 3.4: 未 drain の `pending_resize` を持ち越しても安全（値は常に「最後に成立した表示の物理寸」＝窓があるべき寸法。resize 側もべき等 skip）。`apply_hide` は触らない（Hide は窓寸を変えない・消すと正当な未処理要求を失う）。

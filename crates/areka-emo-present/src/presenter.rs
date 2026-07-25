@@ -127,13 +127,12 @@ struct PresentTarget {
     cached_native: Option<(u32, u32)>,
     /// 最後に表示が成立した show 入力（再表示＝k 再適用のための入力保持）。
     ///
-    /// DPI 変化時に「同じ絵を新しい k で描き直す」ための唯一の入力源であり、読み手は後続タスク 3.5 の
-    /// `refresh_scale`（本 spec タスク 3.5 の領分）である。記録点は `applied`/`native_size` と同一
-    /// （表示成立点）で、失敗経路では前値が保たれる。
-    // 読み手（`refresh_scale`）は同一 spec の後続タスクで入る。ここで `#[allow]` を付けるのは
-    // 「書くべき場所が未定」だからではなく、**書く場所は確定していて読む側だけが後続**という
-    // 一時的な非対称ゆえである（値そのものは表示成立点で常に正しく更新されている）。
-    #[allow(dead_code)]
+    /// DPI 変化時に「同じ絵を新しい k で描き直す」ための唯一の入力源であり、読み手は
+    /// [`EmoPresenter::refresh_scale`] である。記録点は `applied`/`native_size` と同一（表示成立点）で、
+    /// 失敗経路では前値が保たれる——ゆえに再表示は常に「最後に**実際に画面へ出た**入力」を描き直す。
+    ///
+    /// `Hide` では**消さない**（キャッシュ・供給面と同じく保持する）。再表示するか否かは可視ゲートが
+    /// 決めるのであって、入力を捨てて決めるのではない（`Hide` → 再 show の復帰経路を壊さない）。
     last_show: Option<(u32, BindSet, PatternState)>,
     /// **未消費の窓寸 reconcile 要求**（表示成立点の状態照合が積む・design Flow 1 キー決定／議題 #2 裁定）。
     ///
@@ -640,6 +639,133 @@ impl EmoPresenter {
             surface_size,
             scale: applied.as_f32(),
         })
+    }
+
+    /// 下流照会契約（要件 1.2）: いま**実際に表示へ適用中**の k。
+    ///
+    /// 単一真実源は [`PresentTarget::applied`] で、その更新点は表示成立点ただ 1 箇所である——ゆえに本照会が
+    /// 返す値は常に「いま画面に載っている絵に実際に掛かった k」であり、「導出したが適用に失敗した k」が
+    /// 漏れることはない（要件 4.4 の失敗経路は `applied` を書かずに early return する）。
+    ///
+    /// 表示が一度も成立していない target・未登録 target は `None`。「まだ何も適用していない」を 1.0 で
+    /// 塗り潰さない（1.0 は等倍という**適用結果**であって未確定の別名ではない）。
+    ///
+    /// 同じ値は [`TextSlotView::scale`] からも読める（あちらは text 層向けにスロット情報と束ねた
+    /// スナップショット経路）。下流 `areka-P0-collision-dpi-hittest` の点÷k はこの値を参照してよい。
+    pub fn applied_scale(&self, target: TargetId) -> Option<f32> {
+        Some(self.targets.get(&target)?.applied?.as_f32())
+    }
+
+    /// 窓 DPI 変化に伴う再スケール（要件 4.1-4.4・design Flow 2）。
+    ///
+    /// 窓の現 `DPI` から k を再導出し、**前回適用 k と異なり・可視であり・再表示入力を保持している**
+    /// ときだけ内部で `ShowSurface` を再実行する。表示物理寸が変われば `Some(新物理寸)` を返し、呼び手
+    /// （`run_dpi_phase`）が**同一フレーム・同一 UI スレッド呼出**で窓寸 reconcile（char=`resize_window_to`
+    /// ／balloon=`resize_window_keep_position`）を行う——完了後に照会値・表示寸・窓 client が揃う（要件 4.2）。
+    ///
+    /// # ゲート（いずれか不成立なら `None`・副作用なし）
+    ///
+    /// - **未登録** target。
+    /// - **k 不変**: 再導出値が `applied` と等しい。`Changed<DPI>` の初回 run が全窓にマッチする仕様
+    ///   （`SystemState::new`）はここで吸収される（`anchor_changed_system` と同じ流儀）。
+    /// - **不可視**: `Hide`／全透明退化で消えている target を再表示で**蘇らせない**。DPI 変化は
+    ///   「見えているものを描き直す」事象であって、表示を復活させる事象ではない。
+    /// - **再表示入力なし**（`last_show` が `None`）: 一度も表示が成立していない。
+    ///
+    /// # k 導出の権威は `apply_show` 側にある
+    ///
+    /// ここでの [`derive_scale`] 呼出は**ゲート判定の述語**であり、実際に適用される k は `apply_show` が
+    /// 自前で導出したものである（漏斗を二重化しない・design Flow 1「k 導出は show 適用ごと」）。両者は
+    /// 同一の純関数へ同一入力を与える（同一 UI スレッド内・間に World 変更なし）ため必ず一致し、その一致は
+    /// 再表示後の `applied` 照合で**実際に検査される**（食い違えば失敗として扱われ黙って通らない）。
+    ///
+    /// # [`Self::take_pending_resize`] との関係（二重 resize も取りこぼしもしない）
+    ///
+    /// タスク 4.2 の結線は `run_dpi_phase`（本メソッド）と drain フェーズ（`take_pending_resize`）の
+    /// **両方**を毎フレーム呼ぶため、両者の責任範囲を重ねない:
+    ///
+    /// - **再表示して成立した**場合: その表示成立が積んだ要求を本メソッドが**取り出して**返す。ゆえに
+    ///   同一フレームの drain フェーズが `take_pending_resize` を呼んでも同じ要求は二度出ない。
+    /// - **ゲート不成立で再表示しなかった**場合: `pending_resize` に**一切触れない**。未消費の要求
+    ///   （例: 初回表示が積んだ k₀ 補正）は drain フェーズがそのまま拾う。
+    /// - **再表示が失敗した**場合: 同じく触れずに `None` を返す（前 k・前表示・未消費要求すべて維持）。
+    ///
+    /// # 失敗（要件 4.4）
+    ///
+    /// 再表示が表示成立に至らなければ `error!` を出して `None` を返し、**直前の k による表示を維持**する
+    /// （`apply_show` が表示成立点より手前で early return するため前値は構造的に保たれる）。`apply_show`
+    /// 自身も失敗を error! するが、それは「合成／デバイスが失敗した」ことしか語らない——どの k からどの k
+    /// への再導出が落ちたのか・前表示を維持したのかは本メソッドでしか分からないため、専用のログを出す
+    /// （無言の失敗経路を作らない）。全透明退化（`EmptyComposition` → Hide 縮退）は設計上許容された正常
+    /// 退化ゆえ `apply_show` の `warn!` に委ね、ここでは `debug!` に留める（同一事象を二重に鳴らさない）。
+    ///
+    /// 進行中の talk 再生・SERIKO ループは presenter の**外**に状態を持つため、再表示はキャッシュミス 1 回の
+    /// コストで済み挙動を失わない（要件 4.3）。本メソッドは target 状態を一切リセットしない。
+    pub fn refresh_scale(&mut self, world: &mut World, target_id: TargetId) -> Option<(u32, u32)> {
+        // ゲート判定に要る値を先に取り出して借用を閉じる（以降 `apply_show` が `&mut self` を要する）。
+        let (window, policy, previous, visible, last_show) = {
+            let t = self.targets.get(&target_id)?;
+            (
+                t.window,
+                t.policy,
+                t.applied,
+                t.visible,
+                t.last_show.clone(),
+            )
+        };
+
+        // 窓 DPI は `apply_show` と同一経路で読む。**component 不在を 96 で捏造しない**——捏造すると
+        // 要件 1.4 の縮退（error! ＋ k=1.0）が「正常系のふり」で通る。`None` のまま渡して縮退させる。
+        let window_dpi = world.get::<DPI>(window).map(|d| (d.dpi_x, d.dpi_y));
+        let scale = derive_scale(policy, window_dpi);
+
+        if previous == Some(scale) {
+            tracing::trace!(?target_id, k_ratio = ?scale, "refresh_scale: k 不変（再表示しない）");
+            return None;
+        }
+        if !visible {
+            tracing::debug!(
+                ?target_id,
+                "refresh_scale: 不可視ゆえ再表示しない（Hide/全透明退化を蘇らせない）"
+            );
+            return None;
+        }
+        let Some((surface_id, binds, pattern)) = last_show else {
+            tracing::debug!(
+                ?target_id,
+                "refresh_scale: 再表示入力なし（表示が一度も成立していない）"
+            );
+            return None;
+        };
+
+        // 表示更新は既存の単一漏斗をそのまま通す（`reply` なし＝内部再実行・design Flow 2）。成立点の記録・
+        // 失敗時の early return・D10 ログ・状態照合報告はすべて `apply_show` 側の不変条件がそのまま効く。
+        self.apply_show(world, target_id, surface_id, binds, pattern, None);
+
+        let t = self.targets.get(&target_id)?;
+        if t.applied != Some(scale) {
+            // 表示成立に至らなかった。前 k・前表示は `apply_show` の early return が保っている（要件 4.4）。
+            if t.visible {
+                tracing::error!(
+                    ?target_id,
+                    k_ratio_from = ?previous,
+                    k_ratio_to = ?scale,
+                    window_dpi = ?window_dpi,
+                    "refresh_scale: 再表示が成立せず（直前の k による表示を維持）"
+                );
+            } else {
+                // 全透明退化（`EmptyComposition` → Hide 縮退）。`apply_show` が warn! 済みゆえ重ねない。
+                tracing::debug!(
+                    ?target_id,
+                    "refresh_scale: 再表示が全透明退化（Hide 縮退・warn は apply_show 側）"
+                );
+            }
+            return None;
+        }
+
+        // 成立: 状態照合が積んだ要求をここで消費して返す（drain フェーズと二重に出さない）。物理寸が
+        // 変わらなければ `None`＝窓寸 reconcile 不要（k だけ変わって丸め後の寸が同じ場合が実在する）。
+        self.take_pending_resize(target_id)
     }
 
     /// 表示成立点の状態照合が積んだ**窓寸 reconcile 要求**を取り出す（取り出しで消える・drain 契約）。
@@ -3211,5 +3337,514 @@ mod tests {
         assert_eq!(field("size_changed"), "true");
         assert_eq!(field("surface_id"), "1000");
         assert_eq!(field("target_id"), "TargetId(0)");
+    }
+
+    // ── applied_scale／refresh_scale（タスク 3.5・design Flow 2）───────────────────────────────
+
+    /// 捕捉イベント列に「表示成立点のログ」が在るか（＝`apply_show` が表示を成立させたか）。
+    ///
+    /// `refresh_scale` が「何もしなかった」ことの証明に使う——戻り値 `None` だけでは
+    /// 「再表示したが同寸だった」と区別できないため、表示成立そのものの有無を観測する。
+    fn has_display_success_log(events: &[CapturedEvent]) -> bool {
+        events.iter().any(|e| {
+            e.fields
+                .get("message")
+                .is_some_and(|m| m.contains("表示・マスクを更新"))
+        })
+    }
+
+    /// 要件 1.2 観測完了（照会契約 `applied_scale`）: 未登録 target と表示成立前は `None`、k≠1 の表示
+    /// 成立後は**実適用 k** を返す。
+    ///
+    /// 恒常 1.0 を返す実装・`attach` 時点で 1.0 を確定させる実装のいずれも RED になる
+    /// （表示成立前に `Some(1.0)` が出れば「まだ何も適用していない」を塗り潰している）。
+    #[test]
+    fn applied_scale_is_none_before_display_and_reports_applied_k_after() {
+        let mut world = make_world_with_gpu();
+        let window = spawn_window_with_dpi(&mut world, 192);
+        let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x90);
+
+        let mut presenter = EmoPresenter::new();
+        assert_eq!(
+            presenter.applied_scale(TargetId(7)),
+            None,
+            "未登録 target は None"
+        );
+
+        presenter
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
+            .expect("attach_target 失敗");
+        assert_eq!(
+            presenter.applied_scale(TargetId(0)),
+            None,
+            "attach しただけ（表示成立前）は None——1.0 で塗り潰さない"
+        );
+
+        show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+
+        assert_eq!(
+            presenter.applied_scale(TargetId(0)),
+            Some(2.0),
+            "表示成立後は実適用 k（192/96=2.0）を返す"
+        );
+        // 同一の単一真実源（`applied`）から出る 2 経路が一致する。
+        assert_eq!(
+            presenter.applied_scale(TargetId(0)),
+            presenter.text_slot_view(TargetId(0)).map(|v| v.scale()),
+            "applied_scale と TextSlotView::scale() が乖離している（真実源が 2 つある）"
+        );
+    }
+
+    /// タスク 3.5 の名指し受け入れ基準・要件 4.1/4.2 観測完了: k=1/1 で表示を確立したのち窓 `DPI` を
+    /// 192 へ差し替えて `refresh_scale` を呼ぶと——(a) 戻り値が `scaled_extent(2/1, native)`、
+    /// (b) `applied_scale` が 2.0、(c) readback が k=2/1 のリサンプル結果と全バイト一致する。
+    ///
+    /// さらに (d) `refresh_scale` が返した要求は**消費済み**であり、続く `take_pending_resize` は
+    /// `None` を返す——タスク 4.2 が `run_dpi_phase`（`refresh_scale`）と drain フェーズ
+    /// （`take_pending_resize`）の**両方**を呼ぶため、同一の reconcile が二度出ないことが結線契約である。
+    #[test]
+    fn refresh_scale_after_dpi_change_reapplies_new_k() {
+        let mut world = make_world_with_gpu();
+        let window = spawn_window_with_dpi(&mut world, 96);
+        let (emo_world, atlas, native_golden) = build_target_assets(6, 5, 0x91);
+        // 同一入力を独立に再現して k=2/1 の golden を作る（presenter の内部値の追認ではない）。
+        let (probe_world, probe_atlas, _) = build_target_assets(6, 5, 0x91);
+        let k2 = ScaleRatio::new(2, 1).unwrap();
+        let (scaled_bytes, native_size, scaled_size) =
+            scaled_golden(&probe_world, &probe_atlas, 1000, k2);
+        assert_eq!(native_size, (6, 5));
+        assert_eq!(scaled_size, (12, 10));
+
+        let mut presenter = EmoPresenter::new();
+        presenter
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
+            .expect("attach_target 失敗");
+
+        // k=1/1 の表示確立（初回表示が積む k₀ 補正要求は取り出して捨てる）。
+        show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+        assert_eq!(presenter.applied_scale(TargetId(0)), Some(1.0));
+        assert_eq!(
+            presenter.read_back(TargetId(0)).expect("read_back 失敗"),
+            native_golden,
+            "前提: k=1/1 の表示は等倍 native 合成"
+        );
+        assert_eq!(
+            presenter.take_pending_resize(TargetId(0)),
+            Some(native_size),
+            "前提: 初回表示の要求を取り出しておく"
+        );
+
+        // モニタ跨ぎ移動・表示スケール変更の決定論的代替（WM_DPICHANGED 相当）。
+        set_window_dpi(&mut world, window, 192);
+
+        // (a) 戻り値＝新物理寸。
+        assert_eq!(
+            presenter.refresh_scale(&mut world, TargetId(0)),
+            Some(scaled_size),
+            "DPI 変化後の refresh_scale が新物理寸を返さない（再導出・再表示が走っていない）"
+        );
+        // (b) 照会値が新 k へ追随。
+        assert_eq!(
+            presenter.applied_scale(TargetId(0)),
+            Some(2.0),
+            "refresh_scale 後も照会値が旧 k のまま（要件 4.2 の一貫更新が成立していない）"
+        );
+        // (c) 実際に画面へ載った画素が k=2/1 のリサンプル結果。
+        let rb = presenter.read_back(TargetId(0)).expect("read_back 失敗");
+        assert_eq!(
+            rb, scaled_bytes,
+            "表示バイトが k=2/1 のリサンプル結果と一致しない（照会値だけ更新して絵を更新していない）"
+        );
+        assert_ne!(rb, native_golden, "前提: 2 水準の絵は弁別可能");
+
+        // (d) 要求は refresh_scale が消費済み＝drain フェーズと二重に resize しない（タスク 4.2 の結線契約）。
+        assert_eq!(
+            presenter.take_pending_resize(TargetId(0)),
+            None,
+            "refresh_scale が返した要求が drain 側にも残っている（同一フレームで二重 resize になる）"
+        );
+    }
+
+    /// 要件 4.1 観測完了（**k 不変なら何もしない**）: DPI を変えずに `refresh_scale` を呼んでも
+    /// `None` を返し、**再表示を一切行わない**。
+    ///
+    /// 「何もしない」は戻り値だけでは証明できない（同寸再表示でも `None` になる）ため、2 つの独立した
+    /// 観測で固定する——(1) キャッシュスロットを同一キーのまま**別の絵**で改竄しておき、readback が
+    /// 改竄後の絵に**ならない**こと（再表示していればヒットして改竄画が載る）、(2) 表示成立点のログが
+    /// **1 件も出ていない**こと。
+    ///
+    /// さらに (3) 未消費の窓寸 reconcile 要求を**握り潰さない**ことを確認する——ゲート不成立時に
+    /// `pending_resize` を触る実装は、drain フェーズが拾うはずだった初回表示の要求を消してしまう。
+    #[test]
+    fn refresh_scale_without_dpi_change_does_nothing() {
+        let mut world = make_world_with_gpu();
+        let window = spawn_window_with_dpi(&mut world, 192);
+        let (emo_world, atlas, _g1000, _g3000) = build_two_face_assets(6, 5);
+        let (probe_world, probe_atlas, _, _) = build_two_face_assets(6, 5);
+        let k2 = ScaleRatio::new(2, 1).unwrap();
+        let (scaled_1000, _native, scaled_size) =
+            scaled_golden(&probe_world, &probe_atlas, 1000, k2);
+
+        let mut presenter = EmoPresenter::new();
+        presenter
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
+            .expect("attach_target 失敗");
+        show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+        assert_eq!(
+            presenter.read_back(TargetId(0)).expect("read_back 失敗"),
+            scaled_1000
+        );
+        // 初回表示の要求は**あえて取り出さない**（(3) の握り潰し検査のため）。
+
+        // 改竄プローブ: 同一キーのスロットを別の絵（面 3000 の k 適用結果）で上書きする。
+        let tampered = {
+            let mut composer = Composer::new();
+            let native = composer
+                .compose(
+                    &probe_world,
+                    &probe_atlas,
+                    3000,
+                    &BindSet::default(),
+                    &PatternState::default(),
+                )
+                .expect("面 3000 の合成は Ok");
+            let mut scaled = ComposedSurface::new(0, 0);
+            resample(&native, k2, &mut scaled);
+            scaled
+        };
+        let tampered_bytes = tampered.bytes().to_vec();
+        assert_ne!(
+            tampered_bytes, scaled_1000,
+            "プローブ前提: 別の絵であること"
+        );
+        presenter
+            .targets
+            .get_mut(&TargetId(0))
+            .unwrap()
+            .cache
+            .insert(
+                1000,
+                BindSet::default(),
+                PatternState::default(),
+                k2,
+                tampered,
+            );
+
+        // DPI は据え置き（k 不変）。
+        let cap = CaptureSubscriber::default();
+        let got = tracing::subscriber::with_default(cap.clone(), || {
+            presenter.refresh_scale(&mut world, TargetId(0))
+        });
+
+        assert_eq!(got, None, "k 不変なのに新物理寸を返している");
+        // (1) 改竄画が載っていない＝再表示していない。
+        assert_eq!(
+            presenter.read_back(TargetId(0)).expect("read_back 失敗"),
+            scaled_1000,
+            "k 不変なのに再表示している（改竄画が画面へ載った＝無駄な表示更新）"
+        );
+        // (2) 表示成立点のログが 1 件も出ていない。
+        let events = cap.0.lock().expect("捕捉バッファ").clone();
+        assert!(
+            !has_display_success_log(&events),
+            "k 不変なのに表示成立点のログが出ている（再表示が走った）: {events:?}"
+        );
+        // (3) 未消費の要求を握り潰していない（drain フェーズが拾えること）。
+        assert_eq!(
+            presenter.take_pending_resize(TargetId(0)),
+            Some(scaled_size),
+            "ゲート不成立の refresh_scale が未消費の窓寸 reconcile 要求を消している（取りこぼし）"
+        );
+    }
+
+    /// 要件 4.1 観測完了（**再表示入力が無ければ何もしない**）: 一度も表示が成立していない target は
+    /// DPI が変わっても `refresh_scale` が `None`＝副作用なしであること。
+    ///
+    /// 実際に閉じるのは**可視ゲート**である（`visible` と `last_show` はいずれも表示成立点でのみ
+    /// 真になるため、未表示 target は `visible == false` で先に弾かれる）。`last_show` ゲートは
+    /// 多層防御であり、可視ゲートを外す変異を単独で捕まえる（設計の 3 ゲート記述をそのまま保つ）。
+    ///
+    /// 未登録 target も同様に `None`（登録有無で panic しない）——こちらが本テストの非自明な檻。
+    #[test]
+    fn refresh_scale_without_last_show_input_does_nothing() {
+        let mut world = make_world_with_gpu();
+        let window = spawn_window_with_dpi(&mut world, 96);
+        let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x92);
+
+        let mut presenter = EmoPresenter::new();
+        assert_eq!(
+            presenter.refresh_scale(&mut world, TargetId(7)),
+            None,
+            "未登録 target は None（panic しない）"
+        );
+
+        presenter
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
+            .expect("attach_target 失敗");
+        // 一度も show していない状態で DPI を変える。
+        set_window_dpi(&mut world, window, 192);
+
+        let cap = CaptureSubscriber::default();
+        let got = tracing::subscriber::with_default(cap.clone(), || {
+            presenter.refresh_scale(&mut world, TargetId(0))
+        });
+
+        assert_eq!(got, None, "再表示入力が無いのに新物理寸を返している");
+        let events = cap.0.lock().expect("捕捉バッファ").clone();
+        assert!(
+            !has_display_success_log(&events),
+            "再表示入力が無いのに表示が成立している: {events:?}"
+        );
+        assert_eq!(
+            presenter.applied_scale(TargetId(0)),
+            None,
+            "表示は依然として未成立"
+        );
+        assert_eq!(presenter.current_surface_id(TargetId(0)), None);
+        assert_eq!(
+            presenter.take_pending_resize(TargetId(0)),
+            None,
+            "副作用（窓寸 reconcile 要求）が生じている"
+        );
+        assert!(
+            presenter.read_back(TargetId(0)).is_err(),
+            "供給面が生成されている（表示していないのに資源を作った）"
+        );
+    }
+
+    /// 要件 4.1/3.2 観測完了（**`Hide` 済み target を蘇らせない**）: 非表示の target は DPI が変わっても
+    /// 再表示しない——DPI 変化は「見えているものを描き直す」事象であって表示を復活させる事象ではない。
+    ///
+    /// 可視ゲートを外した実装では、`Hide` した窓が DPI 変化だけで再出現する（`current_surface_id` が
+    /// `Some` に戻る）ため RED になる。
+    #[test]
+    fn refresh_scale_does_not_resurrect_hidden_target() {
+        let mut world = make_world_with_gpu();
+        let window = spawn_window_with_dpi(&mut world, 96);
+        let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x93);
+
+        let mut presenter = EmoPresenter::new();
+        presenter
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
+            .expect("attach_target 失敗");
+        show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+        let _ = presenter.take_pending_resize(TargetId(0));
+
+        // `\s[-1]` 相当で非表示にする（キャッシュ・供給面・last_show は保持される）。
+        let (tx, rx) = reply_channel::<PresentOutcome>();
+        presenter.apply(
+            &mut world,
+            PresentCommand::Hide {
+                target: TargetId(0),
+                reply: Some(tx),
+            },
+        );
+        assert!(matches!(
+            rx.recv_timeout(Duration::from_secs(10)),
+            Ok(Ok(()))
+        ));
+        assert_eq!(
+            presenter.current_surface_id(TargetId(0)),
+            None,
+            "前提: 非表示"
+        );
+        assert!(
+            presenter
+                .targets
+                .get(&TargetId(0))
+                .unwrap()
+                .last_show
+                .is_some(),
+            "前提: Hide しても再表示入力は保持される（可視ゲートだけが再表示を止める）"
+        );
+
+        set_window_dpi(&mut world, window, 192);
+        let cap = CaptureSubscriber::default();
+        let got = tracing::subscriber::with_default(cap.clone(), || {
+            presenter.refresh_scale(&mut world, TargetId(0))
+        });
+
+        assert_eq!(got, None, "非表示 target が新物理寸を報告している");
+        let events = cap.0.lock().expect("捕捉バッファ").clone();
+        assert!(
+            !has_display_success_log(&events),
+            "非表示 target が DPI 変化だけで再表示された（蘇生）: {events:?}"
+        );
+        let t = presenter.targets.get(&TargetId(0)).unwrap();
+        assert!(!t.visible, "非表示のままでなければならない");
+        assert_eq!(
+            presenter.current_surface_id(TargetId(0)),
+            None,
+            "現サーフェスが復活している（蘇生した）"
+        );
+        assert_eq!(
+            presenter.applied_scale(TargetId(0)),
+            Some(1.0),
+            "再表示していない以上、実適用 k は前値のまま"
+        );
+        assert_eq!(
+            presenter.take_pending_resize(TargetId(0)),
+            None,
+            "副作用（窓寸 reconcile 要求）が生じている"
+        );
+    }
+
+    /// 要件 1.4/4.1 観測完了（**DPI 取得不能を 96 で捏造しない**・ゲート判定の帰属可能性）: 窓の `DPI`
+    /// component が失われても `refresh_scale` は縮退 k（`app_scale × 1/1`）を導出し、前回適用 k と等しい
+    /// ため**再表示しない**。
+    ///
+    /// # `author_dpi` に **192**（非 96）を使う理由
+    ///
+    /// `apply_show` 側の縮退テストと同じ論法である。author_dpi=96 で組むと、縮退の答（1/1）と
+    /// 「component 不在を 96 で捏造した場合の答」（96/96＝1/1）が数値として区別できず、
+    /// `world.get::<DPI>(..)` に `.or(Some((96, 96)))` を足す実装ミスを素通しさせる。author_dpi=192 なら
+    /// 捏造時の k は `96/192 = 1/2` となり、前回適用 k（1/1）と**異なる**ためゲートを通過して再表示が走り、
+    /// 戻り値が `Some((2, 2))` になる——本テストはそれを RED として捕らえる。
+    #[test]
+    fn refresh_scale_does_not_fabricate_dpi_when_component_is_absent() {
+        let mut world = make_world_with_gpu();
+        // 窓 DPI 192・author_dpi 192 ゆえ k=1/1（縮退値と一致するが、捏造値 96/192=1/2 とは一致しない）。
+        let window = spawn_window_with_dpi(&mut world, 192);
+        let (emo_world, atlas, native_golden) = build_target_assets(4, 3, 0x95);
+
+        let mut presenter = EmoPresenter::new();
+        presenter
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 192)
+            .expect("attach_target 失敗");
+        show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+        assert_eq!(
+            presenter.applied_scale(TargetId(0)),
+            Some(1.0),
+            "前提: 192/192 で k=1/1"
+        );
+        let _ = presenter.take_pending_resize(TargetId(0));
+
+        // DPI 取得不能の決定論的代替（本番では起こらない＝component を落とす）。
+        world.entity_mut(window).remove::<DPI>();
+        assert!(
+            world.get::<DPI>(window).is_none(),
+            "前提: DPI component 不在"
+        );
+
+        let cap = CaptureSubscriber::default();
+        let got = tracing::subscriber::with_default(cap.clone(), || {
+            presenter.refresh_scale(&mut world, TargetId(0))
+        });
+
+        assert_eq!(
+            got, None,
+            "DPI 不在を 96 で捏造している（k=1/2 と誤導出して再表示が走った）"
+        );
+        let events = cap.0.lock().expect("捕捉バッファ").clone();
+        assert!(
+            !has_display_success_log(&events),
+            "DPI 不在の縮退で再表示が走っている: {events:?}"
+        );
+        assert_eq!(
+            presenter.applied_scale(TargetId(0)),
+            Some(1.0),
+            "縮退後も実適用 k は 1/1 のまま"
+        );
+        assert_eq!(
+            presenter.read_back(TargetId(0)).expect("read_back 失敗"),
+            native_golden,
+            "表示が縮小されている（96 捏造で 1/2 が適用された）"
+        );
+    }
+
+    /// 要件 4.4 観測完了（**再表示の失敗は前 k・前表示を維持し、黙らない**）: `refresh_scale` の内部
+    /// 再 show が失敗しても、直前の k による表示がそのまま残る。
+    ///
+    /// 失敗は `last_show` の surface id を解決不能値へ差し替えて注入する——ゴースト再読込で
+    /// `EmoWorld` から面が消えた場合に実在する状況であり、かつ 2 個目の `Compositor` を作らない
+    /// （要件 5.3 の AV 非再導入）。供給面生成の失敗経路は初回表示でしか通らない（`chain` が既に在る）
+    /// ため、表示確立**後**の失敗を作るにはこの注入が要る。
+    ///
+    /// `apply_show` 自身も失敗を error! するが、それは「合成に失敗した」ことしか語らない。DPI 追従の
+    /// 文脈（どの k からどの k への再導出が落ちたか・前表示を維持したこと）は `refresh_scale` でしか
+    /// 分からないため、本経路は専用の error! を出す（無言の失敗経路を作らない）。
+    #[test]
+    fn refresh_scale_failure_keeps_previous_display_and_k() {
+        let mut world = make_world_with_gpu();
+        let window = spawn_window_with_dpi(&mut world, 96);
+        let (emo_world, atlas, native_golden) = build_target_assets(4, 3, 0x94);
+
+        let mut presenter = EmoPresenter::new();
+        presenter
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
+            .expect("attach_target 失敗");
+        show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+        assert_eq!(
+            presenter.take_pending_resize(TargetId(0)),
+            Some((4, 3)),
+            "前提: 初回表示の要求を取り出しておく"
+        );
+
+        // 失敗注入: 再表示入力の surface id を解決不能値へ差し替える。
+        presenter
+            .targets
+            .get_mut(&TargetId(0))
+            .unwrap()
+            .last_show
+            .as_mut()
+            .expect("前提: 表示成立済みゆえ last_show は Some")
+            .0 = 9999;
+
+        set_window_dpi(&mut world, window, 192);
+        let cap = CaptureSubscriber::default();
+        let got = tracing::subscriber::with_default(cap.clone(), || {
+            presenter.refresh_scale(&mut world, TargetId(0))
+        });
+
+        assert_eq!(
+            got, None,
+            "失敗したのに新物理寸を報告している（要件 4.4 違反）"
+        );
+
+        // 前 k・前表示・現サーフェスがすべて据え置き（表示を失わない）。
+        assert_eq!(
+            presenter.applied_scale(TargetId(0)),
+            Some(1.0),
+            "失敗したのに照会値が新 k へ動いている（前 k 維持の違反）"
+        );
+        assert_eq!(
+            presenter.read_back(TargetId(0)).expect("read_back 失敗"),
+            native_golden,
+            "失敗したのに表示が失われた／変わった（前表示維持の違反）"
+        );
+        assert_eq!(
+            presenter.current_surface_id(TargetId(0)),
+            Some(1000),
+            "失敗したのに現サーフェスが失われた"
+        );
+        assert!(
+            presenter.targets.get(&TargetId(0)).unwrap().visible,
+            "失敗で表示が消えている（表示を失わない縮退の違反）"
+        );
+        assert_eq!(
+            presenter.take_pending_resize(TargetId(0)),
+            None,
+            "失敗が窓寸 reconcile 要求を積んでいる"
+        );
+
+        // 無言の失敗経路を作らない: refresh_scale 固有の error! が出ている。
+        let events = cap.0.lock().expect("捕捉バッファ").clone();
+        let err = events
+            .iter()
+            .find(|e| {
+                e.fields
+                    .get("message")
+                    .is_some_and(|m| m.contains("refresh_scale: 再表示が成立せず"))
+            })
+            .unwrap_or_else(|| panic!("refresh_scale の失敗が無言（専用ログが無い）: {events:?}"));
+        assert_eq!(
+            err.level,
+            tracing::Level::ERROR,
+            "再表示失敗が error! でない（要件 4.4 のログ規律）"
+        );
+        assert!(
+            !has_display_success_log(&events),
+            "失敗したのに表示成立点のログが出ている: {events:?}"
+        );
     }
 }
