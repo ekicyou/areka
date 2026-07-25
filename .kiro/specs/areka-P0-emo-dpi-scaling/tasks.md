@@ -7,7 +7,7 @@
   - git logに同期コミットが記録され、アンカー行番号のずれがあれば設計への追記を済ませた状態を観測可能とする
   - _Requirements: 7.6, 7.7_
 
-- [ ] 1.2 ScaleRatio・scaled_extent実装（emo-compose scale.rs）
+- [x] 1.2 ScaleRatio・scaled_extent実装（emo-compose scale.rs）
   - 既約有理数構造体（num/den・gcd既約化・Eq/Hash厳密）を新設
   - mul（乗算合成）・is_identity・as_f32・scale_len/scaled_extent（round half away from zero・非ゼロ最小1px）を実装
   - DPI対照表（96/120/144/168/192）×代表原寸のunit testが全て決定論的に一致する状態を確認できる
@@ -155,3 +155,10 @@
   - 2水準それぞれでログのk値（1.25/2.0）とGetClientRectが一致し、目視で拡大・追従を確認した記録が残る状態を観測できる
   - _Requirements: 2.2, 6.1, 6.2, 6.3, 6.4_
   - _Depends: 6.4_
+
+## Implementation Notes
+
+- 1.1: main同期は追加コミット不要（ブランチ == origin/main）。placement アンカーは `follow.rs` のみ行番号がずれた（`resize_window_to` :553→:786・`enqueue_window_set_pos` :729→:1009）。design.md へ差分表を記録済み。
+- 1.2: `scale_len` の中間型は design の u64 では `len≈num≈u32::MAX` で溢れるため **u128** が正。design.md を是正済み。
+- 1.2: `areka-emo-compose` の縮退経路は `tracing::warn!` 必須（steering `logging.md`）。ログ発火は `crate::log_capture::capture_logs` で檻に入れる（先例 `log_firing_tests.rs`・`plan.rs`）。純関数モジュールでも「無言縮退」はレビューで落ちる。
+- 1.2: `plan.rs:334` に **既存の** clippy `collapsible_if` 警告あり（本 spec の境界外・触らない）。crate 全体に既存の `cargo fmt` 差分（import 順）もあるため、fmt は変更行のみで判定する。

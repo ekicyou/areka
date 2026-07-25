@@ -353,12 +353,20 @@ impl ScaleRatio {
     /// 0 を拒否して構築（既約化して保持）。
     pub fn new(num: u32, den: u32) -> Option<ScaleRatio>;
     /// 乗算合成（アプリ管理拡大率 × DPI 由来 k のシーム・R1.6）。桁溢れは u64 中間で既約化。
+    /// ※実装時追補（2026-07-25・タスク 1.2 レビュー承認）: 既約化後も u32 域に収まらない
+    ///   病的比は、大きい方の項を u32::MAX へピン留めして両項を同率縮小する単発の近似縮退
+    ///   （u128 中間・floor・最小 1 クランプ）とし、`warn!` を出す（log-first・無言縮退禁止）。
+    ///   比の保存ではなく近似であること・小さい方の項の相対誤差は大きくなり得ることを doc に明記する。
     pub fn mul(self, rhs: ScaleRatio) -> ScaleRatio;
     pub fn is_identity(self) -> bool;
     /// 照会契約の出口ビュー（num as f32 / den as f32）。
     pub fn as_f32(self) -> f32;
     /// 丸め単一権威: round half away from zero。len>0 なら最小 1 を保証（R2.5）。
-    /// 演算は u64（(2*len*num + den) / (2*den)）・i32 超過は呼び手が検査。
+    /// 演算は u128（(2*len*num + den) / (2*den)）・i32 超過は呼び手が検査。
+    /// ※実装時是正（2026-07-25・タスク 1.2 レビュー承認）: 当初 u64 と記したが
+    ///   len≈num≈u32::MAX で 2*len*num ≈ 3.69e19 > u64::MAX ≈ 1.84e19 となり
+    ///   debug ビルドで panic する。式は不変のまま中間型のみ u128 へ widen する。
+    ///   u32 超過は u32::MAX へ saturate（全て i32::MAX 超ゆえ呼び手の i32 検査は発火する）。
     pub fn scale_len(self, len: u32) -> u32;
     pub fn scaled_extent(self, w: u32, h: u32) -> (u32, u32);
 }
