@@ -13,7 +13,7 @@
   - DPI対照表（96/120/144/168/192）×代表原寸のunit testが全て決定論的に一致する状態を確認できる
   - _Requirements: 1.1, 1.3, 1.6, 2.2, 2.5_
 
-- [ ] 1.3 resample整数bilinearリサンプラ実装（emo-compose scale.rs）
+- [x] 1.3 resample整数bilinearリサンプラ実装（emo-compose scale.rs）
   - premultiplied BGRAドメインの完全整数bilinear補間、k=1/1は恒等バイトコピー、エッジクランプ固定
   - 恒等コピー・2倍整数k・非整数k（5/4）のgoldenテストがバイト決定論で再現する状態を確認できる
   - _Requirements: 2.1, 2.5, 7.2_
@@ -161,4 +161,6 @@
 - 1.1: main同期は追加コミット不要（ブランチ == origin/main）。placement アンカーは `follow.rs` のみ行番号がずれた（`resize_window_to` :553→:786・`enqueue_window_set_pos` :729→:1009）。design.md へ差分表を記録済み。
 - 1.2: `scale_len` の中間型は design の u64 では `len≈num≈u32::MAX` で溢れるため **u128** が正。design.md を是正済み。
 - 1.2: `areka-emo-compose` の縮退経路は `tracing::warn!` 必須（steering `logging.md`）。ログ発火は `crate::log_capture::capture_logs` で檻に入れる（先例 `log_firing_tests.rs`・`plan.rs`）。純関数モジュールでも「無言縮退」はレビューで落ちる。
+- 1.3: **task 6.1 への申し送り（レビュー非ブロッキング指摘）**: `resample` の premultiplied 検証が弱い。厳密値を主張するテストは全て α=255 で、α 可変ケースは `B,G,R ≤ A` の不変条件しか見ていないため、**非乗算化→再乗算する実装でも緑になる**。6.1 で「α 可変の厳密 golden」を1本足して締めること。
+- 1.3: 色補間の丸めは 16bit 重み量子化ゆえ厳密有理 bilinear の **tie で下側に落ちる**（k=5/4 で 71.5→71）。決定論であり D5（整数固定小数点）の規定どおり。R2.5 の「単一の丸め規約」は**寸法**（`scaled_extent`）の話で色ではない、と裁定済み。
 - 1.2: `plan.rs:334` に **既存の** clippy `collapsible_if` 警告あり（本 spec の境界外・触らない）。crate 全体に既存の `cargo fmt` 差分（import 順）もあるため、fmt は変更行のみで判定する。

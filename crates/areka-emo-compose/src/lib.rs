@@ -48,7 +48,7 @@ pub mod blit;
 pub mod hit;
 pub use hit::{hit_region, RegionPriority};
 pub mod scale;
-pub use scale::ScaleRatio;
+pub use scale::{ScaleRatio, resample};
 
 use areka_emo_atlas::AtlasTable;
 
