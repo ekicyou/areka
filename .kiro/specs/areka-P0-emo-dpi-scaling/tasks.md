@@ -33,7 +33,7 @@
   - _Requirements: 1.1_
   - _Boundary: placement/source.rs_
 
-- [ ] 2.2 (P) balloon窓位置維持リサイズラッパ実装（follow.rs）
+- [x] 2.2 (P) balloon窓位置維持リサイズラッパ実装（follow.rs）
   - 私有単一ライター経路`enqueue_window_set_pos`への薄い公開ラッパ`resize_window_keep_position`を、position-persistのDragEnd観測域（:319-350/:443-488）から離れた位置（ファイル末尾）に追加
   - 同寸呼び出し時は書込ゼロ（べき等skip）とする
   - 同寸呼び出しで書込ゼロとなることがunit testで確認される状態を観測できる
@@ -161,6 +161,9 @@
 - 1.1: main同期は追加コミット不要（ブランチ == origin/main）。placement アンカーは `follow.rs` のみ行番号がずれた（`resize_window_to` :553→:786・`enqueue_window_set_pos` :729→:1009）。design.md へ差分表を記録済み。
 - 1.2: `scale_len` の中間型は design の u64 では `len≈num≈u32::MAX` で溢れるため **u128** が正。design.md を是正済み。
 - 1.2: `areka-emo-compose` の縮退経路は `tracing::warn!` 必須（steering `logging.md`）。ログ発火は `crate::log_capture::capture_logs` で檻に入れる（先例 `log_firing_tests.rs`・`plan.rs`）。純関数モジュールでも「無言縮退」はレビューで落ちる。
+- 2.2: **task 4.2 への申し送り**: `resize_window_keep_position` は**同寸べき等 skip でも `false` を返す**（`resize_window_to` の既存慣行と一致）。呼び手は `false` を失敗と解釈してはならない（skip は `debug!`・失敗は `warn!` でログ層が分離されている）。
+- 2.2: `SetWindowPosCommand` の TLS キュー（`wintf/src/ecs/window/command.rs:124`）は**私有・件数照会APIなし**・`flush()` は偽HWNDへ実 `SetWindowPos` を撃つ。headless で「書込ゼロ」を観測するには `enqueue_window_set_pos` 内で enqueue と不可分に走る **`Arrangement.offset` 同期の sentinel 据え置き**を witness に使う（レビューで健全性確認済み）。
+- 2.2: **task 4.2 への申し送り（レビュー推奨）**: 新規テストは `Anchored`/`MonitorSnapshot` 不在の World で走るため「誤ってアンカー再射影を混入させた」変異が identity 縮退で見逃され得る。4.2 で両者同居下の位置不変ケースを足すと檻が強くなる。
 - 2.1: ukadoc 正典で D1 を裏取り済み（shell `seriko.dpi` / balloon `dpi`・ともに「推奨DPI」既定96・SSP 2.7.21〜・対照表 100%→96/125%→120/150%→144/175%→168/200%→192）。**不正値・0 の扱いは正典が規定しておらず**、design D1 の warn+96 に従った。emo2 fixture は shell/balloon とも **DPI 無宣言**＝96（既存採寸期待値に影響なし）。
 - 2.1: `placement/source.rs` は冒頭 doc で依存規約（areka-parsers＋std＋tracing のみ・emo/wintf/bevy_ecs へ依存しない）を宣言している。`DEFAULT_AUTHOR_DPI` を emo-present から import せず**ローカル定数で二重定義**したのはこの規約を守るため（レビュー承認済み）。
 - 1.4: **task 6.2 への申し送り（レビュー推奨）**: `areka-emo-present` には log-capture ハーネスが無く（emo-compose の `log_capture` は crate 私有・`tracing-subscriber` の dev 依存も無し）、`derive_scale` の縮退ログ4本は**発火が檻に入っていない**。6.2 で emo-compose 型の `log_capture` モジュール＋`tracing-subscriber` dev 依存を追加すること（workspace 既存依存の dev 追加ゆえ R7.3 抵触なし）。現状は私有 `ScaleDecision` フラグで分岐選択のみ檻に入れている。
