@@ -263,8 +263,23 @@ fn make_world_with_gpu() -> World {
 }
 
 /// emo2 fixture ルート（`CARGO_MANIFEST_DIR`＝`crates/areka` 相対・assets.rs テストと同一規約）。
+///
+/// 呼ぶたびに **ghost スコープの永続状態（`<ghost>/master/profile/areka/`）を除去**する。
+/// position-persist で永続書込が実際に効くようになったため、実機実走（8.7 サインオフ）や
+/// 過去のテスト実行が共有 fixture へ起動記録（`[boot] count`）と窓位置を書き残す。
+/// 残ると boot が「2 回目起動」と判定して **OnFirstBoot を発行しなくなり**、scripted boot 系列
+/// （OnInitialize → username → OnFirstBoot → …）を期待する spine テストが落ちる。
+/// fixture は git 追跡外（gitignore 済み）ゆえ削除は安全で、テストを実行順・実機実走から独立させる。
 fn emo2_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../pilot/examples/shiori-host-32/fixtures/emo2")
+    let root =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../pilot/examples/shiori-host-32/fixtures/emo2");
+    let persist_dir = root
+        .join("ghost")
+        .join("master")
+        .join("profile")
+        .join("areka");
+    let _ = std::fs::remove_dir_all(&persist_dir);
+    root
 }
 
 /// emo2 fixture のバルーンルート（assets.rs テストと同一規約）。
