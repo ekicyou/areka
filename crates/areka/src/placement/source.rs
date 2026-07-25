@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 use areka_parsers::charset::{decode, DefaultEncoding};
 use areka_parsers::kv::parse_kv;
 use areka_parsers::package::{resolve, GhostNames};
-use tracing::{error, warn};
+use tracing::{debug, error, warn};
 
 use super::PlacementError;
 
@@ -30,6 +30,22 @@ const DEFAULT_TITLE: &str = "areka";
 /// scope n≥2 のタイトルキー接頭辞／接尾辞（ghost descript `char{n}.name`）。
 const CHAR_PREFIX: &str = "char";
 const NAME_SUFFIX: &str = ".name";
+
+/// 作者基準 DPI の既定値（ukadoc 正典・areka-P0-emo-dpi-scaling design D1）。
+///
+/// ukadoc「seriko.dpi,推奨DPI」／「dpi,推奨DPI」がともに「何も指定しなければ Windows 標準の
+/// 96 固定」と定める（SSP 2.7.21+）。無宣言・不正・0 はすべてこの値へ縮退する。
+///
+/// `areka_emo_present::scale::DEFAULT_AUTHOR_DPI` と同値だが、本モジュールの依存規約
+/// （冒頭 doc: areka-parsers＋std＋tracing のみ・emo 系へは依存しない）を守るため
+/// 定数のためだけの依存辺は張らず、ここへ局所定義する。
+const DEFAULT_AUTHOR_DPI: u16 = 96;
+
+/// shell descript の作者基準 DPI キー（ukadoc `seriko.dpi`・SSP 2.7.21+）。
+const SHELL_DPI_KEY: &str = "seriko.dpi";
+
+/// balloon descript の作者基準 DPI キー（ukadoc `dpi`・SSP 2.7.21+）。
+const BALLOON_DPI_KEY: &str = "dpi";
 
 /// 窓タイトルの正本（Win32 識別／デバッグ観測用）。
 ///
@@ -90,6 +106,22 @@ pub struct DescriptSource {
     pub titles: GhostTitles,
 }
 
+#[allow(dead_code)] // scaffold（areka-P0-emo-dpi-scaling task 2.1）: main.rs/measure 結線（task 4）まで非テストビルドでは未使用
+impl DescriptSource {
+    /// shell descript の作者基準 DPI（ukadoc `seriko.dpi`・SSP 2.7.21+・design D1）。
+    ///
+    /// 既に読み込み済みの生 KV（[`DescriptSource::shell_kv`]）から読むだけで、
+    /// パーサ改造も再 I/O も行わない（D1「既存生 KV から読む」）。
+    /// 無宣言＝96（`debug!`）・不正／0＝96（`warn!`）——[`parse_author_dpi`] の縮退梯子に従う。
+    /// panic しない（常に有効な非ゼロ DPI を返す）。
+    pub fn shell_author_dpi(&self) -> u16 {
+        parse_author_dpi(
+            self.shell_kv.get(SHELL_DPI_KEY).map(String::as_str),
+            SHELL_DPI_KEY,
+        )
+    }
+}
+
 /// `ghost_root` から shell dir を解決し、ghost/shell descript.txt を charset
 /// 対応（既定 Ansi）で読み `DescriptSource` を返す（design「placement::source」・DD4）。
 ///
@@ -141,6 +173,69 @@ fn read_kv_lenient(path: &Path) -> BTreeMap<String, String> {
         Err(err) => {
             warn!(path = %path.display(), error = %err, "ghost descript の読み取りに失敗（空 KV で継続）");
             BTreeMap::new()
+        }
+    }
+}
+
+/// balloon descript.txt（`balloon_root/descript.txt`）の作者基準 DPI
+/// （ukadoc `dpi`・SSP 2.7.21+・design D1）。
+///
+/// balloon 側は shell と別パッケージ（`DescriptSource` の対象外）ゆえ、ここで
+/// 寛容読取（[`read_kv_lenient`]・失敗は `warn!`＋空 KV）してから同じ縮退梯子
+/// [`parse_author_dpi`] を通す。**読取器は 1 本のまま**（第 2 のリーダを発明しない）で、
+/// balloon か shell かの帰属はログの `source` フィールドで区別できる。
+///
+/// 縮退（design「Error Handling」・すべて観測可能・panic しない）:
+/// - ファイル不在・読取失敗 → `warn!`（[`read_kv_lenient`]・パス付き）＋無宣言扱い＝96
+/// - 無宣言 → `debug!`＋96 ／ 不正・0 → `warn!`＋96
+#[allow(dead_code)] // scaffold（areka-P0-emo-dpi-scaling task 2.1）: main.rs 結線（task 4）まで非テストビルドでは未使用
+pub fn load_balloon_author_dpi(balloon_root: &Path) -> u16 {
+    let path = balloon_root.join(DESCRIPT_FILE);
+    let kv = read_kv_lenient(&path);
+    parse_author_dpi(kv.get(BALLOON_DPI_KEY).map(String::as_str), BALLOON_DPI_KEY)
+}
+
+/// 作者基準 DPI の生値を解釈する単一権威（design D1・「Error Handling」の
+/// 「author_dpi 不正・0・無宣言」行）。`source` は帰属識別用のキー名（ログ専用）。
+///
+/// 縮退梯子（無言経路なし・log-first）:
+/// - `None`（無宣言） → `debug!`＋[`DEFAULT_AUTHOR_DPI`]（正典の既定＝異常ではない）
+/// - 数値化不能（非数字・負値・u16 溢れ・空文字） → `warn!`＋[`DEFAULT_AUTHOR_DPI`]
+/// - `0`（k の分母に使えない） → `warn!`＋[`DEFAULT_AUTHOR_DPI`]
+/// - それ以外 → 宣言値そのまま（ukadoc の対照表 96/120/144/168/192 に限定せず受理する。
+///   正典は「推奨 DPI 値」であって列挙ではない）
+///
+/// 返り値は常に非ゼロ（下流 `ScaleRatio` の分母としてそのまま使える）。panic しない。
+fn parse_author_dpi(raw: Option<&str>, source: &str) -> u16 {
+    let Some(raw) = raw else {
+        debug!(
+            source = %source,
+            default_dpi = DEFAULT_AUTHOR_DPI,
+            "作者基準 DPI の宣言なし: 正典の既定値を採用"
+        );
+        return DEFAULT_AUTHOR_DPI;
+    };
+
+    match raw.parse::<u16>() {
+        Ok(0) => {
+            warn!(
+                source = %source,
+                raw = %raw,
+                default_dpi = DEFAULT_AUTHOR_DPI,
+                "作者基準 DPI が 0（表示スケールの分母に使えない）: 既定値へ縮退"
+            );
+            DEFAULT_AUTHOR_DPI
+        }
+        Ok(dpi) => dpi,
+        Err(err) => {
+            warn!(
+                source = %source,
+                raw = %raw,
+                error = %err,
+                default_dpi = DEFAULT_AUTHOR_DPI,
+                "作者基準 DPI を数値として解釈できない: 既定値へ縮退"
+            );
+            DEFAULT_AUTHOR_DPI
         }
     }
 }
@@ -345,6 +440,140 @@ mod tests {
         let path = unique_temp_dir("read_kv_lenient_missing").join("descript.txt");
         let kv = read_kv_lenient(&path);
         assert!(kv.is_empty());
+    }
+
+    // ------------------------------------------------------------------
+    // author_dpi 読取（areka-P0-emo-dpi-scaling task 2.1・要件 1.1・design D1）
+    // 無宣言=96 / 宣言あり=その値 / 不正=warn+96 / 0=warn+96 の全パターン
+    // ------------------------------------------------------------------
+
+    /// shell_kv だけを差し替えた `DescriptSource`（author_dpi 読取の純関数檻用・I/O なし）。
+    fn shell_source_with(kv: &[(&str, &str)]) -> DescriptSource {
+        DescriptSource {
+            ghost_kv: BTreeMap::new(),
+            shell_kv: kv
+                .iter()
+                .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
+                .collect(),
+            shell_dir: PathBuf::from("shell"),
+            titles: GhostTitles::from_scope_titles([]),
+        }
+    }
+
+    /// balloon descript.txt を持つ一時 balloon ルートを作る（内容は呼び手指定）。
+    fn balloon_root_with(tag: &str, descript: &str) -> PathBuf {
+        let dir = unique_temp_dir(tag);
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("create balloon root");
+        fs::write(dir.join("descript.txt"), descript.as_bytes()).expect("write balloon descript");
+        dir
+    }
+
+    /// 無宣言（キー不在）は既定 96（ukadoc: 何も指定しなければ Windows 標準の 96 固定）。
+    #[test]
+    fn parse_author_dpi_absent_is_default_96() {
+        assert_eq!(parse_author_dpi(None, "test"), 96);
+    }
+
+    /// 宣言ありは宣言値そのまま（ukadoc 対照表 96/120/144/168/192）。
+    #[test]
+    fn parse_author_dpi_declared_values_pass_through() {
+        for raw in ["96", "120", "144", "168", "192"] {
+            let expected: u16 = raw.parse().expect("テスト入力は u16");
+            assert_eq!(parse_author_dpi(Some(raw), "test"), expected, "raw={raw}");
+        }
+        // 対照表外の任意値も切り捨てない（正典は「推奨 DPI 値」であり列挙ではない）
+        assert_eq!(parse_author_dpi(Some("110"), "test"), 110);
+    }
+
+    /// 不正（数値化不能・負・u16 溢れ・空）は既定 96 へ縮退（warn・panic しない）。
+    #[test]
+    fn parse_author_dpi_invalid_is_default_96() {
+        for raw in [
+            "abc", "1x2", "", " ", "-96", "999999", "96.0", "0x60", "96 120",
+        ] {
+            assert_eq!(parse_author_dpi(Some(raw), "test"), 96, "raw={raw:?}");
+        }
+    }
+
+    /// 0 は k の分母に使えない → 既定 96 へ縮退（warn）。
+    #[test]
+    fn parse_author_dpi_zero_is_default_96() {
+        assert_eq!(parse_author_dpi(Some("0"), "test"), 96);
+        assert_eq!(parse_author_dpi(Some("00"), "test"), 96);
+    }
+
+    /// `shell_author_dpi` は shell descript の `seriko.dpi` を読む（無宣言/宣言/不正/0）。
+    #[test]
+    fn shell_author_dpi_reads_seriko_dpi_all_patterns() {
+        assert_eq!(shell_source_with(&[]).shell_author_dpi(), 96);
+        assert_eq!(
+            shell_source_with(&[("seriko.dpi", "120")]).shell_author_dpi(),
+            120
+        );
+        assert_eq!(
+            shell_source_with(&[("seriko.dpi", "abc")]).shell_author_dpi(),
+            96
+        );
+        assert_eq!(
+            shell_source_with(&[("seriko.dpi", "0")]).shell_author_dpi(),
+            96
+        );
+        // balloon 側キー `dpi` は shell 側の正本ではない（キー取り違えの檻）
+        assert_eq!(shell_source_with(&[("dpi", "192")]).shell_author_dpi(), 96);
+    }
+
+    /// emo2 実フィクスチャの shell descript は `seriko.dpi` 無宣言 → 96（既存期待値不変）。
+    #[test]
+    fn shell_author_dpi_emo2_fixture_is_default_96() {
+        let src =
+            load_descript_source(&emo2_root()).expect("emo2 fixture は Ok(DescriptSource) を返す");
+        assert_eq!(src.shell_author_dpi(), 96);
+    }
+
+    /// balloon descript 不在（ファイル不在）は既定 96（lenient・panic しない）。
+    #[test]
+    fn load_balloon_author_dpi_missing_file_is_default_96() {
+        let root = unique_temp_dir("balloon_dpi_missing_file").join("no_such_balloon");
+        assert_eq!(load_balloon_author_dpi(&root), 96);
+    }
+
+    /// balloon descript の `dpi` を読む（無宣言/宣言/不正/0）。
+    #[test]
+    fn load_balloon_author_dpi_reads_dpi_all_patterns() {
+        let absent = balloon_root_with("balloon_dpi_absent", "charset,UTF-8\nname,かくかく\n");
+        assert_eq!(load_balloon_author_dpi(&absent), 96);
+        let _ = fs::remove_dir_all(&absent);
+
+        let declared = balloon_root_with("balloon_dpi_declared", "charset,UTF-8\ndpi,144\n");
+        assert_eq!(load_balloon_author_dpi(&declared), 144);
+        let _ = fs::remove_dir_all(&declared);
+
+        let invalid = balloon_root_with("balloon_dpi_invalid", "charset,UTF-8\ndpi,abc\n");
+        assert_eq!(load_balloon_author_dpi(&invalid), 96);
+        let _ = fs::remove_dir_all(&invalid);
+
+        let zero = balloon_root_with("balloon_dpi_zero", "charset,UTF-8\ndpi,0\n");
+        assert_eq!(load_balloon_author_dpi(&zero), 96);
+        let _ = fs::remove_dir_all(&zero);
+
+        // shell 側キー `seriko.dpi` は balloon 側の正本ではない（キー取り違えの檻）
+        let wrong_key =
+            balloon_root_with("balloon_dpi_wrong_key", "charset,UTF-8\nseriko.dpi,192\n");
+        assert_eq!(load_balloon_author_dpi(&wrong_key), 96);
+        let _ = fs::remove_dir_all(&wrong_key);
+    }
+
+    /// emo2 実フィクスチャの balloon（emo2-kakukaku）は `dpi` 無宣言 → 96（既存期待値不変）。
+    #[test]
+    fn load_balloon_author_dpi_emo2_fixture_is_default_96() {
+        let balloon_root = emo2_root().join("emo2-kakukaku");
+        assert!(
+            balloon_root.join("descript.txt").is_file(),
+            "emo2 balloon fixture が見つからない: {}",
+            balloon_root.display()
+        );
+        assert_eq!(load_balloon_author_dpi(&balloon_root), 96);
     }
 
     /// 寛容読取ヘルパは読めれば通常どおり decode→parse_kv する（Ansi 既定・宣言優先）。

@@ -26,7 +26,7 @@
   - _Depends: 1.2_
 
 - [ ] 2. Core: 採寸源のk対応（placement系）
-- [ ] 2.1 (P) author_dpi読取実装（source.rs）
+- [x] 2.1 (P) author_dpi読取実装（source.rs）
   - shell `seriko.dpi`・balloon `dpi`を既存の生KVから読み取るaccessorを追加
   - 無宣言=96・不正/0=warn+96の縮退を実装
   - 無宣言/宣言あり/不正/0の全パターンがunit testで緑になる状態を確認できる
@@ -161,6 +161,8 @@
 - 1.1: main同期は追加コミット不要（ブランチ == origin/main）。placement アンカーは `follow.rs` のみ行番号がずれた（`resize_window_to` :553→:786・`enqueue_window_set_pos` :729→:1009）。design.md へ差分表を記録済み。
 - 1.2: `scale_len` の中間型は design の u64 では `len≈num≈u32::MAX` で溢れるため **u128** が正。design.md を是正済み。
 - 1.2: `areka-emo-compose` の縮退経路は `tracing::warn!` 必須（steering `logging.md`）。ログ発火は `crate::log_capture::capture_logs` で檻に入れる（先例 `log_firing_tests.rs`・`plan.rs`）。純関数モジュールでも「無言縮退」はレビューで落ちる。
+- 2.1: ukadoc 正典で D1 を裏取り済み（shell `seriko.dpi` / balloon `dpi`・ともに「推奨DPI」既定96・SSP 2.7.21〜・対照表 100%→96/125%→120/150%→144/175%→168/200%→192）。**不正値・0 の扱いは正典が規定しておらず**、design D1 の warn+96 に従った。emo2 fixture は shell/balloon とも **DPI 無宣言**＝96（既存採寸期待値に影響なし）。
+- 2.1: `placement/source.rs` は冒頭 doc で依存規約（areka-parsers＋std＋tracing のみ・emo/wintf/bevy_ecs へ依存しない）を宣言している。`DEFAULT_AUTHOR_DPI` を emo-present から import せず**ローカル定数で二重定義**したのはこの規約を守るため（レビュー承認済み）。
 - 1.4: **task 6.2 への申し送り（レビュー推奨）**: `areka-emo-present` には log-capture ハーネスが無く（emo-compose の `log_capture` は crate 私有・`tracing-subscriber` の dev 依存も無し）、`derive_scale` の縮退ログ4本は**発火が檻に入っていない**。6.2 で emo-compose 型の `log_capture` モジュール＋`tracing-subscriber` dev 依存を追加すること（workspace 既存依存の dev 追加ゆえ R7.3 抵触なし）。現状は私有 `ScaleDecision` フラグで分岐選択のみ檻に入れている。
 - 1.4: **task 3.2/3.3 への申し送り**: wintf `DPI` component を `Option<(u16,u16)>` へ写像するとき、**component 不在を `Some((96,96))` で埋めてはならない**。埋めると R1.4 の縮退分岐が「正常系のふり」で素通りする（design の Integration Tests 節と同趣旨）。
 - 1.4: `cargo clippy -p areka-emo-present --all-targets` は**依存 `wintf` の deny-by-default lint**（`not_unsafe_ptr_arg_deref` × 20・`com/d2d/command_sink.rs`）で exit 101 になる既存事象。`RUSTFLAGS=--cap-lints=warn` で再走して自クレートを判定すること。
