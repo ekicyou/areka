@@ -26,12 +26,13 @@ pub mod spawn;
 
 use std::path::{Path, PathBuf};
 
+use areka_emo_compose::ScaleRatio;
 use areka_parsers::package::MountError;
-use tracing::{error, warn};
+use tracing::{error, info, warn};
 use wintf::ecs::window::monitor::{Monitor, enumerate_monitors};
 
 use self::config::PlacementConfig;
-use self::measure::MeasuredSizes;
+use self::measure::{MeasureScaling, MeasuredSizes};
 use self::resolver::{RectPx, ScopePlacement};
 use self::source::GhostTitles;
 
@@ -78,6 +79,60 @@ pub enum PlacementError {
     },
 }
 
+/// primary モニタ DPI を取得できないときに採る「96 相当」の DPI
+/// （areka-P0-emo-dpi-scaling design「Error Handling」の
+/// `primary モニタ DPI 取得不能（boot）` 行・要件 1.4）。
+///
+/// この縮退は**恒久的な情報損失ではない**——窓生成後は窓の実 DPI が正であり、
+/// `Changed<DPI>` を観測する `emo2_boot::frame::run_dpi_phase`（task 4.2）と
+/// 表示成立点の状態照合（design Flow 1／Flow 3 手順5）が k を自己補正する（D7）。
+const FALLBACK_PRIMARY_DPI: u32 = 96;
+
+/// 作者基準 DPI の既定値（ukadoc 正典・design D1）。
+///
+/// 縮退梯子（無宣言＝96 debug／不正・0＝96 warn）の単一権威は
+/// [`source`] の `parse_author_dpi` であり、ここは placement の準備自体が
+/// 成立しなかったときに [`AuthorDpi::DEFAULT`] が採る同値の既定にすぎない
+/// （読取器を二重化しない）。
+const DEFAULT_AUTHOR_DPI: u16 = 96;
+
+/// 起動時 k₀ の分母となる作者基準 DPI の対（design D1・Flow 3 手順1）。
+///
+/// descript 読取は [`prepare_stages`] で **1 度だけ**行い（shell＝
+/// `DescriptSource::shell_author_dpi()`・balloon＝[`source::load_balloon_author_dpi`]）、
+/// その値を本型に束ねて 2 つの消費者へ配る:
+///
+/// 1. 採寸の k₀（[`build_measure_scaling`] → `measure_scope_sizes`・要件 3.3）
+/// 2. attach の target 政策（[`PreparedPlacement::author_dpi`] → `main` →
+///    `emo2_boot::wire_emo2_boot` → `build_boot_assets` → `attach_target`・要件 1.1）
+///
+/// 同じ宣言が 2 経路で食い違わないこと（＝読取が 1 度であること）が本型の存在理由である。
+///
+/// shell と balloon は別々のキー（`seriko.dpi`／`dpi`）で宣言され得るうえ、
+/// 素の `u16` 2 引数は**取り違えてもコンパイルが通る**。名前付きフィールドで束ね、
+/// 呼び手に「どちらの `u16` か」を選ばせない（`emo2_boot::frame` の `AuthorDpis` と同じ防御）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AuthorDpi {
+    /// shell descript `seriko.dpi` 由来（縮退梯子適用済みの非ゼロ値）。
+    pub shell: u16,
+    /// balloon descript `dpi` 由来（同上）。
+    pub balloon: u16,
+}
+
+impl AuthorDpi {
+    /// 正典既定（96/96）——placement の準備自体が失敗して宣言値を読めなかったときの縮退値。
+    pub const DEFAULT: AuthorDpi = AuthorDpi {
+        shell: DEFAULT_AUTHOR_DPI,
+        balloon: DEFAULT_AUTHOR_DPI,
+    };
+}
+
+impl Default for AuthorDpi {
+    fn default() -> Self {
+        AuthorDpi::DEFAULT
+    }
+}
+
 /// placement 側の同期準備一括の結果（design「main.rs seam」正本）。
 ///
 /// I/O は [`prepare_ghost_windows`] までで完結し、**Send な素の値のみ**を運ぶ
@@ -89,6 +144,11 @@ pub struct PreparedPlacement {
     pub placements: Vec<ScopePlacement>,
     /// 窓タイトルの正本（spawn（task 5.1）が消費）。
     pub titles: GhostTitles,
+    /// 採寸 k₀ に使った作者基準 DPI（areka-P0-emo-dpi-scaling task 4.3）。
+    ///
+    /// 同じ読取結果を attach 側（`attach_target`）へ配るための搬送口
+    /// （[`AuthorDpi`] の doc・design Flow 3 手順1「1 度だけ読む」）。
+    pub author_dpi: AuthorDpi,
 }
 
 /// 準備パイプラインの中間結果（load→config→measure まで・work area 非依存部）。
@@ -100,6 +160,7 @@ struct PreparedStages {
     cfg: PlacementConfig,
     sizes: MeasuredSizes,
     titles: GhostTitles,
+    author_dpi: AuthorDpi,
 }
 
 impl PreparedStages {
@@ -109,8 +170,72 @@ impl PreparedStages {
         PreparedPlacement {
             placements,
             titles: self.titles,
+            author_dpi: self.author_dpi,
         }
     }
+}
+
+/// 起動時の表示スケール k₀ を導出する（design D7・Flow 3 手順2・要件 1.4/3.3）。
+///
+/// `k₀ = primary モニタ DPI ÷ 作者基準 DPI` を **shell／balloon それぞれの
+/// 作者基準 DPI で別々に**求める（2 軸は独立・要件 1.1）。丸めは一切行わない——
+/// 既約有理数 [`ScaleRatio`] のまま [`MeasureScaling`] に載せ、寸法の乗算と丸めは
+/// 単一権威 `ScaleRatio::scaled_extent`（D4）だけが行う（`as_f32` を寸法計算に使わない）。
+///
+/// # 縮退（design「Error Handling」・log-first・表示を失わない）
+///
+/// `primary_dpi` が `None`（モニタ 0 台）または 0（列挙異常）のとき、`error!` のうえ
+/// [`FALLBACK_PRIMARY_DPI`]（96 相当）から k₀ を導く。作者基準 DPI が 96 なら k₀=1/1＝
+/// 従来どおりの native 採寸であり、96 以外を宣言していればその宣言に対する 96 相当の比
+/// （例: author=192 → k₀=1/2）となる。いずれにせよ窓は生え、窓生成後に窓の実 DPI が
+/// `Changed<DPI>` → `refresh_scale`＋窓寸 reconcile（task 4.2）で k を自己補正する
+/// ——つまりこの縮退は**回復可能**であり、表示の喪失にはならない（要件 1.4/4.1）。
+fn build_measure_scaling(primary_dpi: Option<u32>, author_dpi: AuthorDpi) -> MeasureScaling {
+    let dpi = match primary_dpi {
+        Some(dpi) if dpi > 0 => dpi,
+        unobtainable => {
+            error!(
+                primary_dpi = ?unobtainable,
+                fallback_dpi = FALLBACK_PRIMARY_DPI,
+                shell_author_dpi = author_dpi.shell,
+                balloon_author_dpi = author_dpi.balloon,
+                "placement: primary モニタ DPI を取得できない——96 相当で k₀ を導いて採寸を続行する\
+                 （窓生成後に窓の実 DPI が k を自己補正するため表示は失われない・要件 1.4）"
+            );
+            FALLBACK_PRIMARY_DPI
+        }
+    };
+    // 軸ごとに自分の作者基準 DPI で割る（shell の k を balloon へ漏らさない・要件 1.1）。
+    let ratio = |author: u16, axis: &'static str| {
+        ScaleRatio::new(dpi, u32::from(author)).unwrap_or_else(|| {
+            // 到達＝上流の縮退梯子（`parse_author_dpi` は常に非ゼロを返す）が破れた場合のみ。
+            // 無言で落とさず観測可能にしたうえで恒等へ縮退する（log-first・表示を失わない）。
+            error!(
+                axis,
+                primary_dpi = dpi,
+                author_dpi = author,
+                "placement: k₀ を有理数化できない（0 を含む入力）——恒等 k=1/1 へ縮退する"
+            );
+            ScaleRatio::ONE
+        })
+    };
+    let scaling = MeasureScaling {
+        shell: ratio(author_dpi.shell, "shell"),
+        balloon: ratio(author_dpi.balloon, "balloon"),
+    };
+    // 起動時 k₀ の観測点（D10 の表示成立点ログと同じ語彙・要件 6.3 の RUST_LOG grep 対象）。
+    // `k_shell`/`k_balloon`（f32）は grep 用の出口ビューであり、寸法計算には用いない（D4）。
+    info!(
+        primary_dpi = dpi,
+        shell_author_dpi = author_dpi.shell,
+        balloon_author_dpi = author_dpi.balloon,
+        k_shell = scaling.shell.as_f32(),
+        k_balloon = scaling.balloon.as_f32(),
+        k_shell_ratio = ?scaling.shell,
+        k_balloon_ratio = ?scaling.balloon,
+        "placement: 起動時 k₀ を導出（primary モニタ DPI ÷ 作者基準 DPI・D7）"
+    );
+    scaling
 }
 
 /// 準備パイプラインの work area 非依存部を同期実行する:
@@ -119,22 +244,45 @@ impl PreparedStages {
 /// 失敗はフォールバックせず [`PlacementError`] のまま呼び手へ返す（DD14:
 /// `spawn_dummy_window` フォールバックは main.rs シームの分担）。
 /// 位置の記憶・復元（`ghost.dat` 読み書き）は一切行わない（2.11・テストで固定）。
-fn prepare_stages(ghost_root: &Path, balloon_root: &Path) -> Result<PreparedStages, PlacementError> {
+///
+/// `primary_dpi` は起動時 k₀ の分子（primary モニタ DPI・物理 DPI 値）。取得不能
+/// （モニタ 0 台等）は `None` を渡す——[`build_measure_scaling`] が `error!`＋96 相当へ
+/// 縮退させる（要件 1.4）。
+fn prepare_stages(
+    ghost_root: &Path,
+    balloon_root: &Path,
+    primary_dpi: Option<u32>,
+) -> Result<PreparedStages, PlacementError> {
     let src = source::load_descript_source(ghost_root)?;
     let cfg = config::build_placement_config(&src.ghost_kv, &src.shell_kv);
     let scope_ids: Vec<usize> = cfg.scopes.keys().copied().collect();
-    // k₀ は task 4.3（main.rs boot シーム）が primary モニタ DPI ÷ author_dpi から構築して
-    // 供給する。それまでは恒等スケール＝従来と同一の native 採寸で挙動不変（task 5・R7.2）。
-    let sizes = measure::measure_scope_sizes(
-        &src.shell_dir,
-        balloon_root,
-        &scope_ids,
-        &measure::MeasureScaling::IDENTITY,
-    )?;
+    // 作者基準 DPI（design D1・Flow 3 手順1）は**ここで 1 度だけ**読む。shell は既に
+    // 読み込み済みの生 KV（`load_descript_source` の戻り）から、balloon は別パッケージ
+    // ゆえ `load_balloon_author_dpi` の 1 回の寛容読取から得る（パーサ改造なし・再 I/O なし）。
+    // 得た値は採寸 k₀ と attach（`PreparedPlacement::author_dpi` 経由）の双方へ配られる。
+    let author_dpi = AuthorDpi {
+        shell: src.shell_author_dpi(),
+        balloon: source::load_balloon_author_dpi(balloon_root),
+    };
+    // k₀ 構築（D7）→ 採寸源へ供給（Flow 3 手順2〜3・要件 3.3）。窓寸の k 倍は
+    // ここ（採寸の源）で吸収され、`spawn.rs` は k 倍済み `SizePx` を consume するのみ
+    // ＝窓生成・窓移動の責務は不変（要件 3.4/7.6）。
+    let scaling = build_measure_scaling(primary_dpi, author_dpi);
+    let sizes = measure::measure_scope_sizes(&src.shell_dir, balloon_root, &scope_ids, &scaling)?;
+    // 起動観測点（D10・要件 6.3）: 窓生成へ渡る**k₀ 倍後の物理寸**そのものを載せる。
+    // 非 96 環境では k_shell/k_balloon が 1.0 以外になり、scopes の寸が原寸の k₀ 倍で
+    // あることを RUST_LOG の grep だけで決定論的に判定できる。
+    info!(
+        k_shell = scaling.shell.as_f32(),
+        k_balloon = scaling.balloon.as_f32(),
+        scopes = ?sizes.scopes,
+        "placement: k₀ 倍後の物理窓寸で窓を生成する（起動採寸・要件 3.3）"
+    );
     Ok(PreparedStages {
         cfg,
         sizes,
         titles: src.titles,
+        author_dpi,
     })
 }
 
@@ -154,53 +302,77 @@ pub fn prepare_ghost_windows(
     ghost_root: &Path,
     balloon_root: &Path,
 ) -> Result<PreparedPlacement, PlacementError> {
-    let stages = prepare_stages(ghost_root, balloon_root)?;
     let monitors = enumerate_monitors();
-    let work_area = primary_work_area(&monitors)?;
+    // primary モニタは **work area（2.12）と 起動 k₀ の DPI（D7）の同一の出所**である。
+    // 選択（`is_primary`／先頭代替の `warn!`）を 1 回だけ行い、両者へ配る
+    // （2 度選ぶと代替の警告も二重に出て、しかも別のモニタを指し得る）。
+    let primary = primary_monitor(&monitors);
+    let primary_dpi = primary.map(|m| m.dpi);
+    // 準備段（load→config→measure）を work area の検査より**先**に走らせる:
+    // 準備段の失敗（Mount・DescriptRead・Measure）はモニタ列挙異常より手前の事象として
+    // 報告される（既存の失敗順序＝headless でも Mount が返る契約を保つ）。
+    let stages = prepare_stages(ghost_root, balloon_root, primary_dpi)?;
+    let work_area = work_area_of(primary)?;
     Ok(stages.resolve(work_area))
 }
 
-/// [`prepare_ghost_windows`] の work area 注入版（決定論テスト用の偽装境界）。
+/// [`prepare_ghost_windows`] の**実モニタ注入版**（決定論テスト用の偽装境界）。
 ///
-/// 実モニタ列挙（`enumerate_monitors`）だけを合成 work area で置き換え、
-/// それ以外（load→config→measure→resolve）は本番と同一経路を通す
+/// 実モニタ列挙（`enumerate_monitors`）に由来する 2 つの値——work area（配置解決の
+/// 基準矩形・2.12）と primary モニタ DPI（起動 k₀ の分子・D7）——だけを合成値で
+/// 置き換え、それ以外（load→config→measure→resolve）は本番と同一経路を通す
 /// （記憶 prefer-x64-fake-boundary-tests の流儀。headless 環境でも emo2 fixture
 /// の観測可能な完了状態を決定論的に検証できる）。
+///
+/// `primary_dpi` を偽装境界に含めるのは、**テスト機の実 DPI が制御できない**ためである
+/// （実 DPI に依存すると採寸期待値が機械ごとに変わり決定論が壊れる）。既存の work area
+/// 注入と同じ「実列挙由来の値を引数で差し替える」形に揃え、新しい機構は導入しない。
+/// `None` は「primary モニタ DPI 取得不能」の縮退分岐（要件 1.4）を檻に入れるための入力。
 #[allow(dead_code)] // scaffold（task 6.1）: テスト専用の偽装境界（本番は prepare_ghost_windows）
 pub fn prepare_ghost_windows_with_work_area(
     ghost_root: &Path,
     balloon_root: &Path,
     work_area: RectPx,
+    primary_dpi: Option<u32>,
 ) -> Result<PreparedPlacement, PlacementError> {
-    Ok(prepare_stages(ghost_root, balloon_root)?.resolve(work_area))
+    Ok(prepare_stages(ghost_root, balloon_root, primary_dpi)?.resolve(work_area))
 }
 
-/// モニタ列挙結果から primary モニタの work area（物理 px）を取り出す（2.12）。
+/// モニタ列挙結果から primary モニタを選ぶ（2.12・work area と k₀ DPI の共通の出所）。
 ///
-/// - `is_primary` のモニタの `work_area`（`RECT`・物理 px）を [`RectPx`] へ
-///   **単位変換なしで忠実転写**する（U 契約: どちらも物理 px 通貨）
+/// - `is_primary` のモニタをそのまま返す
 /// - primary フラグ無し（列挙異常）: `warn!` の上で先頭モニタを代替に用いる
 ///   （窓は生やす方針・design「Error Handling」）
-/// - 0 台: `error!`＋`Err(PlacementError::Monitor)`（架空の既定矩形は発明しない・
-///   フォールバックはシームの分担）
-fn primary_work_area(monitors: &[Monitor]) -> Result<RectPx, PlacementError> {
-    let monitor = match monitors.iter().find(|m| m.is_primary) {
-        Some(primary) => primary,
-        None => match monitors.first() {
-            Some(first) => {
-                warn!(
-                    monitor_count = monitors.len(),
-                    "primary フラグを持つモニタが見つからない（列挙異常）——先頭モニタで代替する"
-                );
-                first
-            }
-            None => {
-                error!("モニタが 1 台も列挙されない——primary work area の出所がない");
-                return Err(PlacementError::Monitor {
-                    reason: "enumerate_monitors() が 0 台を返した".to_string(),
-                });
-            }
-        },
+/// - 0 台: `None`（架空の既定モニタは発明しない。work area 側の致命判定は
+///   [`work_area_of`]・DPI 側の縮退は [`build_measure_scaling`] がそれぞれ担う）
+fn primary_monitor(monitors: &[Monitor]) -> Option<&Monitor> {
+    if let Some(primary) = monitors.iter().find(|m| m.is_primary) {
+        return Some(primary);
+    }
+    match monitors.first() {
+        Some(first) => {
+            warn!(
+                monitor_count = monitors.len(),
+                "primary フラグを持つモニタが見つからない（列挙異常）——先頭モニタで代替する"
+            );
+            Some(first)
+        }
+        None => None,
+    }
+}
+
+/// [`primary_monitor`] の work area（物理 px）を [`RectPx`] へ取り出す（2.12）。
+///
+/// - `work_area`（`RECT`・物理 px）を **単位変換なしで忠実転写**する
+///   （U 契約: どちらも物理 px 通貨）
+/// - `None`（モニタ 0 台）: `error!`＋`Err(PlacementError::Monitor)`（架空の既定矩形は
+///   発明しない・フォールバックはシームの分担）
+fn work_area_of(monitor: Option<&Monitor>) -> Result<RectPx, PlacementError> {
+    let Some(monitor) = monitor else {
+        error!("モニタが 1 台も列挙されない——primary work area の出所がない");
+        return Err(PlacementError::Monitor {
+            reason: "enumerate_monitors() が 0 台を返した".to_string(),
+        });
     };
     let wa = monitor.work_area;
     Ok(RectPx {
@@ -287,6 +459,20 @@ mod tests {
         }
     }
 
+    /// emo2 fixture の native 採寸値（`measure.rs` テストの同名定数と同一の実測値）。
+    /// k₀ 適用後の期待値はこれらの `scaled_extent` 倍として書く。
+    const SCOPE0_W: i32 = 434;
+    const SCOPE0_H: i32 = 687;
+    const SCOPE1_W: i32 = 336;
+    const SCOPE1_H: i32 = 400;
+    const BALLOON_W: i32 = 400;
+    const BALLOON_H: i32 = 224;
+
+    /// 既約有理 k のテスト用短縮構築（0 入力はテストの誤りゆえ expect）。
+    fn k(num: u32, den: u32) -> ScaleRatio {
+        ScaleRatio::new(num, den).expect("テスト入力は非ゼロ")
+    }
+
     /// テスト用合成 Monitor（実 HMONITOR 不要・wintf monitor.rs テストと同流儀）。
     fn make_monitor(handle: isize, work: (i32, i32, i32, i32), is_primary: bool) -> Monitor {
         let (left, top, right, bottom) = work;
@@ -324,8 +510,10 @@ mod tests {
     #[test]
     fn prepare_emo2_returns_two_scope_placements() {
         with_com_initialized(|| {
-            let p = prepare_ghost_windows_with_work_area(&emo2_root(), &balloon_root(), WA)
-                .expect("emo2 fixture の配置準備は成功する");
+            // primary DPI 96＝emo2 の作者基準 DPI（無宣言＝96）ゆえ k₀=1/1（要件 7.2 の錨）。
+            let p =
+                prepare_ghost_windows_with_work_area(&emo2_root(), &balloon_root(), WA, Some(96))
+                    .expect("emo2 fixture の配置準備は成功する");
 
             assert_eq!(p.placements.len(), 2, "emo2 は 2 スコープ（DD6）");
 
@@ -365,11 +553,17 @@ mod tests {
                         "モニタ 0 台で Ok は誤成功（work area の出所がない）"
                     );
                     assert_eq!(p.placements.len(), 2);
-                    // 同一 work area を注入した合成経路と一致（薄いラッパは委譲のみ）
-                    let wa = primary_work_area(&monitors).expect("primary work area");
-                    let q =
-                        prepare_ghost_windows_with_work_area(&emo2_root(), &balloon_root(), wa)
-                            .expect("合成経路も成功する");
+                    // 同一 work area **と同一 primary DPI** を注入した合成経路と一致
+                    // （薄いラッパは委譲のみ・実機の DPI がそのまま k₀ の分子になる）
+                    let primary = primary_monitor(&monitors);
+                    let wa = work_area_of(primary).expect("primary work area");
+                    let q = prepare_ghost_windows_with_work_area(
+                        &emo2_root(),
+                        &balloon_root(),
+                        wa,
+                        primary.map(|m| m.dpi),
+                    )
+                    .expect("合成経路も成功する");
                     assert_eq!(p.placements, q.placements);
                 }
                 Err(PlacementError::Monitor { .. }) => {
@@ -384,13 +578,13 @@ mod tests {
     }
 
     // ------------------------------------------------------------------
-    // primary_work_area（純粋・合成 Monitor で決定論）
+    // primary_monitor／work_area_of（純粋・合成 Monitor で決定論）
     // ------------------------------------------------------------------
 
     /// モニタ 0 台は `PlacementError::Monitor`（架空の既定矩形を発明しない）。
     #[test]
     fn primary_work_area_empty_is_monitor_err() {
-        let err = primary_work_area(&[]).expect_err("0 台は Err");
+        let err = work_area_of(primary_monitor(&[])).expect_err("0 台は Err");
         assert!(
             matches!(err, PlacementError::Monitor { .. }),
             "Monitor variant 以外が返った: {err:?}"
@@ -405,7 +599,7 @@ mod tests {
             make_monitor(1, (-1920, 0, 0, 1040), false),
             make_monitor(2, (0, 0, 2560, 1400), true),
         ];
-        let wa = primary_work_area(&monitors).expect("primary あり");
+        let wa = work_area_of(primary_monitor(&monitors)).expect("primary あり");
         assert_eq!(
             wa,
             RectPx {
@@ -424,7 +618,7 @@ mod tests {
             make_monitor(1, (0, 0, 1920, 1040), false),
             make_monitor(2, (1920, 0, 3840, 1040), false),
         ];
-        let wa = primary_work_area(&monitors).expect("非空なら Ok");
+        let wa = work_area_of(primary_monitor(&monitors)).expect("非空なら Ok");
         assert_eq!(
             wa,
             RectPx {
@@ -552,7 +746,7 @@ mod tests {
             .expect("surface10.png 複写");
 
             let before =
-                prepare_ghost_windows_with_work_area(root.path(), &balloon_root(), WA)
+                prepare_ghost_windows_with_work_area(root.path(), &balloon_root(), WA, Some(96))
                     .expect("合成ゴーストの準備は成功する");
 
             // (a) 書き込みなし: ghost.dat がどこにも生成されていない
@@ -570,13 +764,370 @@ mod tests {
             fs::write(ghost_master.join("ghost.dat"), junk).expect("plant ghost ghost.dat");
 
             let after =
-                prepare_ghost_windows_with_work_area(root.path(), &balloon_root(), WA)
+                prepare_ghost_windows_with_work_area(root.path(), &balloon_root(), WA, Some(96))
                     .expect("plant 後も準備は成功する");
             assert_eq!(
                 before.placements, after.placements,
                 "ghost.dat の有無で配置が変わった（復元経路が存在する疑い・2.11 違反）"
             );
             assert_eq!(before.titles, after.titles);
+        });
+    }
+
+    // ------------------------------------------------------------------
+    // 起動時 k₀ の導出（task 4.3・design D7／Flow 3 手順2・要件 1.4/3.3）
+    // ------------------------------------------------------------------
+
+    /// k₀ = primary モニタ DPI ÷ 作者基準 DPI（既約有理・連続 k・D2/D7）。
+    ///
+    /// 整数倍（192/96=2/1）だけでなく **非整数倍**（120/96=5/4・112/96=7/6）も
+    /// 既約有理数として正しく導出されることを固定する（整数段階へ丸めない・要件 2.2）。
+    #[test]
+    fn build_measure_scaling_derives_k0_from_primary_and_author_dpi() {
+        let author = AuthorDpi::DEFAULT; // 96/96（emo2 fixture と同じ無宣言ケース）
+
+        let two = build_measure_scaling(Some(192), author);
+        assert_eq!(two.shell, k(2, 1), "192/96 は既約 2/1");
+        assert_eq!(two.balloon, k(2, 1));
+
+        let five_quarters = build_measure_scaling(Some(120), author);
+        assert_eq!(five_quarters.shell, k(5, 4), "120/96 は既約 5/4（125%）");
+
+        let seven_sixths = build_measure_scaling(Some(112), author);
+        assert_eq!(seven_sixths.shell, k(7, 6), "112/96 は既約 7/6（非整数 k）");
+
+        let identity = build_measure_scaling(Some(96), author);
+        assert_eq!(
+            identity.shell,
+            ScaleRatio::ONE,
+            "primary DPI＝作者基準 DPI は恒等 k=1/1（要件 1.3/7.2）"
+        );
+        assert_eq!(identity.balloon, ScaleRatio::ONE);
+    }
+
+    /// shell と balloon は**それぞれ自分の**作者基準 DPI で k₀ を得る（2 軸独立・要件 1.1）。
+    ///
+    /// 取り違え（shell の k をバルーンへ適用する／2 値を入れ替える）は
+    /// コンパイルを通ってしまう静かな誤表示ゆえ、両軸に**異なる**宣言値を与えて檻に入れる。
+    #[test]
+    fn build_measure_scaling_uses_each_axis_own_author_dpi() {
+        let scaling = build_measure_scaling(
+            Some(192),
+            AuthorDpi {
+                shell: 96,
+                balloon: 144,
+            },
+        );
+        assert_eq!(scaling.shell, k(2, 1), "shell は 192/96＝2/1");
+        assert_eq!(
+            scaling.balloon,
+            k(4, 3),
+            "balloon は 192/144＝4/3（shell の k ではない）"
+        );
+
+        // 入れ替え検出（同じ 2 値を逆に宣言すると k も逆になる）。
+        let swapped = build_measure_scaling(
+            Some(192),
+            AuthorDpi {
+                shell: 144,
+                balloon: 96,
+            },
+        );
+        assert_eq!(
+            swapped.shell,
+            k(4, 3),
+            "shell 宣言 144 は shell の k を決める"
+        );
+        assert_eq!(
+            swapped.balloon,
+            k(2, 1),
+            "balloon 宣言 96 は balloon の k を決める"
+        );
+    }
+
+    /// primary モニタ DPI 取得不能（`None`／0）は **96 相当**へ縮退する
+    /// （design「Error Handling」の boot 行・要件 1.4）。恒等を一律に返すのではなく、
+    /// 96 を分子として作者基準 DPI との比を取る（作者が 96 以外を宣言していれば k₀≠1）。
+    #[test]
+    fn build_measure_scaling_degrades_to_96_equivalent_when_primary_dpi_unobtainable() {
+        for missing in [None, Some(0)] {
+            let default_author = build_measure_scaling(missing, AuthorDpi::DEFAULT);
+            assert_eq!(
+                default_author.shell,
+                ScaleRatio::ONE,
+                "author 96 に対する 96 相当は恒等（従来の native 採寸・{missing:?}）"
+            );
+            assert_eq!(default_author.balloon, ScaleRatio::ONE);
+
+            let declared = build_measure_scaling(
+                missing,
+                AuthorDpi {
+                    shell: 192,
+                    balloon: 48,
+                },
+            );
+            assert_eq!(
+                declared.shell,
+                k(1, 2),
+                "96 相当 ÷ author 192＝1/2（恒等へ丸めない・{missing:?}）"
+            );
+            assert_eq!(declared.balloon, k(2, 1), "96 相当 ÷ author 48＝2/1");
+        }
+    }
+
+    /// 要件 3.3／7.2 の錨（実 fixture・偽装境界の end-to-end）: 注入した primary DPI から
+    /// 導かれた k₀ 倍後の**物理窓寸**で `ScopePlacement` が組み上がる。
+    ///
+    /// - primary 96（＝emo2 の作者基準 DPI）: 既存期待値のまま（434×687 等・要件 7.2）
+    /// - primary 192: 全寸がちょうど 2 倍
+    /// - primary 112（k=7/6・非整数）: 丸めは単一権威 `scaled_extent` に一致する。
+    ///   とくに 687×7/6 は **ちょうど 801.5** ゆえ、round half away from zero なら 802・
+    ///   切り捨て（`len*num/den`）なら 801 に分かれる（丸め規約の取り違え検出）。
+    ///   f32 近道の検出は別檻 [`prepare_k0_rounding_matches_integer_authority_not_f32`]
+    ///   が担う（本検体は f32 でも偶然 802 に一致するため判別力を持たない）。
+    #[test]
+    fn prepare_emo2_scales_window_sizes_by_k0() {
+        with_com_initialized(|| {
+            let native =
+                prepare_ghost_windows_with_work_area(&emo2_root(), &balloon_root(), WA, Some(96))
+                    .expect("k₀=1/1 の準備は成功する");
+            assert_eq!(
+                native.placements[0].char_size,
+                SizePx {
+                    w: SCOPE0_W,
+                    h: SCOPE0_H
+                },
+                "primary DPI＝作者基準 DPI では既存の native 寸のまま（要件 7.2）"
+            );
+
+            let doubled =
+                prepare_ghost_windows_with_work_area(&emo2_root(), &balloon_root(), WA, Some(192))
+                    .expect("k₀=2/1 の準備は成功する");
+            assert_eq!(
+                doubled.placements[0].char_size,
+                SizePx {
+                    w: SCOPE0_W * 2,
+                    h: SCOPE0_H * 2
+                },
+                "primary DPI 192 なら scope0 キャラ窓は物理 2 倍（要件 3.3）"
+            );
+            assert_eq!(
+                doubled.placements[1].char_size,
+                SizePx {
+                    w: SCOPE1_W * 2,
+                    h: SCOPE1_H * 2
+                }
+            );
+            for p in &doubled.placements {
+                assert_eq!(
+                    p.balloon_size,
+                    SizePx {
+                        w: BALLOON_W * 2,
+                        h: BALLOON_H * 2
+                    },
+                    "バルーン窓も自軸の k₀ で追従する"
+                );
+            }
+
+            let seven_sixths =
+                prepare_ghost_windows_with_work_area(&emo2_root(), &balloon_root(), WA, Some(112))
+                    .expect("k₀=7/6 の準備は成功する");
+            assert_eq!(
+                seven_sixths.placements[0].char_size,
+                SizePx { w: 506, h: 802 },
+                "非整数 k₀ でも丸めは scaled_extent 単一権威（687×7/6＝ちょうど 801.5→802）"
+            );
+        });
+    }
+
+    /// 要件 1.4: primary モニタ DPI が取得できなくても**採寸は成立し窓寸が得られる**
+    /// （表示を失わない縮退）。96 相当ゆえ emo2（author 96）では native 寸に一致する。
+    #[test]
+    fn prepare_emo2_without_primary_dpi_still_measures() {
+        with_com_initialized(|| {
+            let degraded =
+                prepare_ghost_windows_with_work_area(&emo2_root(), &balloon_root(), WA, None)
+                    .expect("primary DPI 不明でも準備は成功する（表示を失わない）");
+            assert_eq!(
+                degraded.placements[0].char_size,
+                SizePx {
+                    w: SCOPE0_W,
+                    h: SCOPE0_H
+                },
+                "96 相当の k₀ ＝ 従来と同じ native 採寸"
+            );
+            assert_eq!(degraded.placements.len(), 2);
+        });
+    }
+
+    /// **宣言された**作者基準 DPI が (a) 採寸 k₀ と (b) attach 搬送値の双方へ効くこと
+    /// （design Flow 3 手順1〜3・要件 1.1/3.3）。
+    ///
+    /// emo2 fixture は shell/balloon とも DPI 無宣言＝96 で、これは正典既定と**同値**ゆえ
+    /// 「宣言を読んだ」のか「既定を返した」のかを区別できない。ここでは
+    /// shell=120／balloon=144 を**実際に宣言する**合成ゴーストを組み、既定（96）とも
+    /// 互いとも異なる 3 値で檻に入れる:
+    ///
+    /// - 既定へ差し替える誤り → k が 240/96=5/2 になり寸法が落ちる
+    /// - shell/balloon の取り違え → char に 5/3・balloon に 2/1 が乗って落ちる
+    #[test]
+    fn prepare_declared_author_dpi_drives_each_axis_k0_and_attach_value() {
+        with_com_initialized(|| {
+            let root = TempDir::new();
+            // shell=120（125% 原稿）・balloon=144（150% 原稿）——既定 96 とも互いとも異なる 3 値。
+            let (ghost_root, balloon_dir) = synth_declared_dpi_ghost(&root, "120", "144");
+
+            let p = prepare_ghost_windows_with_work_area(&ghost_root, &balloon_dir, WA, Some(240))
+                .expect("宣言 DPI 付き合成ゴーストの準備は成功する");
+
+            // (a) attach 搬送値＝宣言値そのもの（既定 96 でも入れ替えでもない）。
+            assert_eq!(
+                p.author_dpi,
+                AuthorDpi {
+                    shell: 120,
+                    balloon: 144
+                },
+                "宣言された作者基準 DPI が読まれ、そのまま attach 側へ搬送される"
+            );
+
+            // (b) 採寸 k₀: char は 240/120＝2/1・balloon は 240/144＝5/3（軸ごとに別）。
+            // scope0 の合成寸は emo2 実 surface0 単体＝434×687（native 値と一致する検体）。
+            assert_eq!(
+                p.placements[0].char_size,
+                SizePx {
+                    w: SCOPE0_W * 2,
+                    h: SCOPE0_H * 2
+                },
+                "char は shell 宣言 120 由来の k=2/1（balloon の 5/3 ではない）"
+            );
+            for placement in &p.placements {
+                assert_eq!(
+                    placement.balloon_size,
+                    // 400×5/3＝666.67→667・224×5/3＝373.33→373（scaled_extent 単一権威）
+                    SizePx { w: 667, h: 373 },
+                    "balloon は balloon 宣言 144 由来の k=5/3（shell の 2/1 ではない）"
+                );
+            }
+        });
+    }
+
+    /// f32 近道の混入検出（D4・記憶 areka の丸め単一権威）: `scaled_extent` の整数演算と
+    /// `as_f32` 乗算が **1px 食い違う**検体を実経路へ通す。
+    ///
+    /// 検体: 作者基準 DPI 168・primary DPI 186 → k₀=31/28。emo2 の scope0 幅 434 に対し
+    /// - 権威（整数）: (2×434×31+28)/(2×28) = 481（真値ちょうど 480.5 → 0 から遠い側）
+    /// - `(434.0 × as_f32(31/28)).round()`: 480（31/28 の f32 表現が真値より小さい）
+    ///
+    /// k₀ の導出がどこかで f32 を経由していれば 480 になり本檻が落ちる。
+    #[test]
+    fn prepare_k0_rounding_matches_integer_authority_not_f32() {
+        with_com_initialized(|| {
+            let root = TempDir::new();
+            let (ghost_root, balloon_dir) = synth_declared_dpi_ghost(&root, "168", "96");
+
+            let p = prepare_ghost_windows_with_work_area(&ghost_root, &balloon_dir, WA, Some(186))
+                .expect("k₀=31/28 の準備は成功する");
+
+            assert_eq!(
+                p.placements[0].char_size,
+                // 434→481・687→(2×687×31+28)/56=761
+                SizePx { w: 481, h: 761 },
+                "丸めは scaled_extent（整数）の値——f32 経由なら幅が 480 になる"
+            );
+
+            // 本検体が実際に f32 と食い違うことの自己検証（檻の有効性そのものを固定する）。
+            let via_f32 = (SCOPE0_W as f32 * k(31, 28).as_f32()).round() as i32;
+            assert_eq!(via_f32, 480, "f32 経路は 480（＝この検体は判別力を持つ）");
+        });
+    }
+
+    /// 宣言 DPI 付きの最小合成ゴーストを一時ディレクトリへ組む（テスト補助）。
+    ///
+    /// `prepare_never_reads_or_writes_ghost_dat` の合成ゴーストと同型（emo2 の実 PNG を
+    /// 複写した最小 shell）に、`seriko.dpi`／balloon `dpi` の宣言を足したもの。
+    /// 返り値は `(ghost_root, balloon_root)`。
+    ///
+    /// 注意: 合成 shell の `surfaces.txt` は単一 overlay ゆえ、scope0 は emo2 実測と同じ
+    /// 434×687 になるが scope1（surface10 単体）は emo2 実 shell の合成寸（336×400）とは
+    /// 異なる——本補助を使う檻は scope0 と balloon を期待値の錨に用いる。
+    fn synth_declared_dpi_ghost(
+        root: &TempDir,
+        shell_dpi: &str,
+        balloon_dpi: &str,
+    ) -> (PathBuf, PathBuf) {
+        let ghost_master = root.path().join("ghost").join("master");
+        let shell_master = root.path().join("shell").join("master");
+        let balloon_dir = root.path().join("balloon-declared");
+        fs::create_dir_all(&ghost_master).expect("create ghost/master");
+        fs::create_dir_all(&shell_master).expect("create shell/master");
+        fs::create_dir_all(&balloon_dir).expect("create balloon dir");
+        fs::write(
+            ghost_master.join("descript.txt"),
+            "charset,UTF-8\nname,えも\nsakura.name,むらさき\nkero.name,エモ\n",
+        )
+        .expect("ghost descript");
+        fs::write(
+            shell_master.join("descript.txt"),
+            format!(
+                "charset,UTF-8\nseriko.dpi,{shell_dpi}\nseriko.alignmenttodesktop,bottom\nsakura.defaultx,0\nkero.defaultx,0\nsakura.balloon.alignment,left\nkero.balloon.alignment,right\n"
+            ),
+        )
+        .expect("shell descript");
+        fs::write(
+            shell_master.join("surfaces.txt"),
+            "surface0\n{\nelement0,overlay,surface0.png,0,0\n}\nsurface10\n{\nelement0,overlay,surface10.png,0,0\n}\n",
+        )
+        .expect("surfaces.txt");
+        for png in ["surface0.png", "surface10.png"] {
+            fs::copy(
+                emo2_root().join("shell/master").join(png),
+                shell_master.join(png),
+            )
+            .unwrap_or_else(|e| panic!("{png} 複写: {e}"));
+        }
+        fs::write(
+            balloon_dir.join("descript.txt"),
+            format!("charset,UTF-8\ndpi,{balloon_dpi}\n"),
+        )
+        .expect("balloon descript");
+        fs::copy(
+            balloon_root().join("balloons0.png"),
+            balloon_dir.join("balloons0.png"),
+        )
+        .expect("balloons0.png 複写");
+        (root.path().to_path_buf(), balloon_dir)
+    }
+
+    /// design Flow 3 手順1（**1 度だけ読む**）: 準備が読んだ作者基準 DPI が
+    /// `PreparedPlacement` に載って attach 側（`wire_emo2_boot`→`attach_target`）へ渡る。
+    ///
+    /// 単一読取の証拠は「読取器（task 2.1）を直接呼んだ値と、準備の戻り値が一致すること」。
+    /// 本番 fixture（emo2）は 96/96 ゆえ既定との区別が付かない——宣言値との区別は
+    /// [`prepare_declared_author_dpi_drives_each_axis_k0_and_attach_value`] が担う。
+    #[test]
+    fn prepare_emo2_carries_author_dpi_read_once_for_attach() {
+        with_com_initialized(|| {
+            let src = source::load_descript_source(&emo2_root()).expect("emo2 fixture は読める");
+            let expected = AuthorDpi {
+                shell: src.shell_author_dpi(),
+                balloon: source::load_balloon_author_dpi(&balloon_root()),
+            };
+            assert_eq!(
+                expected,
+                AuthorDpi {
+                    shell: 96,
+                    balloon: 96
+                },
+                "emo2 は shell/balloon とも DPI 無宣言＝正典既定 96（task 2.1 実測）"
+            );
+
+            let p =
+                prepare_ghost_windows_with_work_area(&emo2_root(), &balloon_root(), WA, Some(192))
+                    .expect("準備は成功する");
+            assert_eq!(
+                p.author_dpi, expected,
+                "採寸 k₀ に使った宣言値がそのまま attach 側へ搬送される（読取は 1 度）"
+            );
         });
     }
 }

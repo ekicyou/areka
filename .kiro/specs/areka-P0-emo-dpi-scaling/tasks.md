@@ -105,7 +105,7 @@
   - _Boundary: emo2_boot/frame.rs_
   - _Depends: 3.4, 3.5, 2.2, 4.1_
 
-- [ ] 4.3 (P) main.rs boot結線（k₀導出・MeasureScaling構築）
+- [x] 4.3 (P) main.rs boot結線（k₀導出・MeasureScaling構築）
   - author_dpi読取＋`enumerate_monitors()`でprimaryモニタDPIを取得（不能時96相当+errorログ）し`MeasureScaling`を構築する
   - `measure_scope_sizes`へ構築した`MeasureScaling`を供給する
   - 起動時にk₀倍後の物理窓寸で窓生成が行われる状態を非96環境のログで確認できる
@@ -161,6 +161,11 @@
 - 1.1: main同期は追加コミット不要（ブランチ == origin/main）。placement アンカーは `follow.rs` のみ行番号がずれた（`resize_window_to` :553→:786・`enqueue_window_set_pos` :729→:1009）。design.md へ差分表を記録済み。
 - 1.2: `scale_len` の中間型は design の u64 では `len≈num≈u32::MAX` で溢れるため **u128** が正。design.md を是正済み。
 - 1.2: `areka-emo-compose` の縮退経路は `tracing::warn!` 必須（steering `logging.md`）。ログ発火は `crate::log_capture::capture_logs` で檻に入れる（先例 `log_firing_tests.rs`・`plan.rs`）。純関数モジュールでも「無言縮退」はレビューで落ちる。
+- 4.3: **実機 1 水準の先行観測が取れている**（本機 primary DPI=120＝125%）。有界起動＋絶対パスで `primary_dpi=120 shell_author_dpi=96 k_shell=1.25 k_shell_ratio=ScaleRatio{num:5,den:4}` → `char 543×859 / 420×500, balloon 500×280` を grep 確認し、実ゴースト窓がその寸で開いた。**434×1.25=542.5→543** が本番経路の round-half-away-from-zero の生証拠。**task 6.5 は 200% 水準の追加と目視サインオフが主眼**。
+- 4.3: k₀ の居所は `placement::prepare_stages`（tasks.md は main.rs と記すが、descript 読取と `measure_scope_sizes` 呼びが両方そこに在る）。`main.rs` は結果を `wire_emo2_boot` へ中継するのみ。**親が境界を placement/mod.rs＋emo2_boot/mod.rs＋main.rs へ拡張して裁可**。
+- 4.3: **1度の読取が2消費者へ**（Flow3 手順1）。`AuthorDpi{shell,balloon}` 名前付き型で束ね、`prepare_stages → PreparedPlacement.author_dpi → main → wire_emo2_boot → build_boot_assets_for → attach_target`。`emo2_boot` は production で descript を一切読まない（読取の二重化＝2経路が食い違う欠陥を構造で防ぐ）。
+- 4.3: `primary_work_area` を `primary_monitor` + `work_area_of` へ分解。**DPI と work area を同一の Monitor 選択から配る**ため（2度選ぶと警告二重化＋別モニタ指しの危険）。
+- 4.3: boot 縮退は 96 を**DPI 分子**として代入する（author=192 なら k₀=1/2）。D7「取得不能は 96 相当」の読みであり、k=1.0 平坦返しではない。author=96（emo2 含む正典既定）では結果的に native 採寸。R1.4 の「k=1.0」は `derive_scale`（Flow1）の話。
 - 4.2: **f32 で丸めを再実装してはならない（D4 違反・実証済み1px乖離）**。`ScaleRatio::as_f32` の doc が明示するとおり寸法演算に f32 を使うと、`num/den` が f32 で非厳密なとき厳密 .5 の積が .4999… へ落ちて切り下がる。実測反例＝author_dpi=96・窓DPI=112（k=7/6）・native=27 → 権威 **32** / f32 **31**。author_dpi は任意宣言値を通し、Windows のカスタム倍率は 1% 刻みゆえ分母が 2 冪でない k は普通に発生する。結果は**恒久的な1px見切れ**（同寸判定で固着）。
 - 4.2: **境界拡張を親が裁可**＝`TextSlotView::physical_size()` と `EmoPresenter::target_physical_size()` を `presenter.rs` へ additive 追加（いずれも `applied.scaled_extent(..)` 直行）。frame.rs 側で `ScaleRatio` を組み直す案は **k 導出権威（D2）の二重化**になるため却下。design の State Management が既に「物理寸 = scaled_extent(k, surface_size)」を契約として明記しており、新設ではなく既存契約を呼べるようにしたもの。
 - 4.2: **`resnap_shell_targets` は task 3.2 の契約変更で壊れていた**（`surface_size()` が native を返すようになったため k≠1 で窓を原寸へ引き戻す）。design「Revalidation Triggers」が明記する下流トリガゆえ修理はスコープ内。消費点は `text_slot_view()` を経由せず `target_physical_size()` を直接呼ぶ形にし、**native/物理の二択そのものを消した**（`text_slot_view` へ差し替えると E0308 でコンパイル不能＝型で構造的に閉じた）。

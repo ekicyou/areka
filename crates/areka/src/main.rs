@@ -306,14 +306,35 @@ fn main() -> Result<()> {
     // （キャラ窓＋バルーン窓）を配置・生成する。準備失敗時（fixture 不在等）は
     // 検証用ダミー窓へフォールバックし、`main` 所有の `app.run()` ループに
     // heartbeat を与える骨格保証（boot→loop→exit）を維持する（DD14）。
-    open_startup_window(&app, &cfg);
+    // 戻り値は配置準備が **1 度だけ**読んだ作者基準 DPI（areka-P0-emo-dpi-scaling task 4.3・
+    // design Flow 3 手順1）。同じ値が採寸の k₀ と直下の `wire_emo2_boot`（→`attach_target`）
+    // の双方へ渡ることで、採寸と表示が別々の宣言を見る食い違いを構造的に排除する。
+    let author_dpi = open_startup_window(&app, &cfg);
 
     // emo2 統合結線（task 5.2・design「エントリポイント / main.rs＋wire_emo2_boot」・DD-7）:
     // UI 基盤・起動窓の後で完成済み 5 トラック（seriko／sakura／emo-present／emo-text／actor）を
     // 束ねる実 sink 結線を試みる。`wired=true` なら実 sink boot が成立し、ghost／seriko ハンドルを
     // 終了処理へ運ぶ。`wired=false`（asset 組立失敗・boot 失敗等）は現行の `LogSink`×2 フォール
     // バック boot へ倒し、既存 smoke 前提・非致命 boot 意味論を温存する（R7.1/7.3・DD-7）。
-    let outcome = emo2_boot::wire_emo2_boot(&app, &cfg.ghost_root, &cfg.balloon_root, &helper_exe);
+    // 配置準備が失敗した経路（fixture 不在等・上で warn!/error! 済み）は宣言値を読めていない。
+    // 正典既定（96/96）へ縮退したことを観測可能にしたうえで結線を続行する（log-first・
+    // 表示を失わない。なお準備が倒れている以上、この経路の `wire_emo2_boot` も通常は
+    // 同じ起点不在で `wired=false` へ倒れる）。
+    let author_dpi = author_dpi.unwrap_or_else(|| {
+        tracing::warn!(
+            shell_author_dpi = placement::AuthorDpi::DEFAULT.shell,
+            balloon_author_dpi = placement::AuthorDpi::DEFAULT.balloon,
+            "作者基準 DPI を配置準備から取得できません（準備失敗）——正典既定へ縮退して結線します"
+        );
+        placement::AuthorDpi::DEFAULT
+    });
+    let outcome = emo2_boot::wire_emo2_boot(
+        &app,
+        &cfg.ghost_root,
+        &cfg.balloon_root,
+        &helper_exe,
+        author_dpi,
+    );
     let (ghost_runtime, seriko_handle, loop_ticker) = if outcome.wired {
         tracing::info!("実 sink 結線で起動しました（emo2-boot wire 成立・SERIKO ループ ticker 稼働）");
         // マウス配信資源を World へ結線（task 3.1・design「main.rs＋wire_mouse_input」・
@@ -609,8 +630,13 @@ fn insert_persist_wiring(world: &mut World, publisher: areka_sylphya::SylphyaPub
 /// コマンドへ運ぶ。呼び出しスレッドは `WinApp::new()` 済みの MTA UI スレッド＝COM
 /// 初期化済み（measure の WIC 前提を満たす）。署名は `(&WinApp, &ConfigInputs)`
 /// （design の Revalidation Trigger として本タスクで変更）。
-fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) {
-    match placement::prepare_ghost_windows(&cfg.ghost_root, &cfg.balloon_root) {
+///
+/// 戻り値は準備が読んだ作者基準 DPI（`Some`＝準備成功時のみ・areka-P0-emo-dpi-scaling
+/// task 4.3）。descript 読取は準備の中で 1 度だけ行われ、その値が (a) 採寸の k₀ と
+/// (b) 呼び手（`main`）経由で `wire_emo2_boot`→`attach_target` の双方へ配られる
+/// （design Flow 3 手順1「1 度だけ読む」）。準備失敗時は `None`（呼び手が正典既定へ縮退）。
+fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) -> Option<placement::AuthorDpi> {
+    let author_dpi = match placement::prepare_ghost_windows(&cfg.ghost_root, &cfg.balloon_root) {
         Ok(prepared) => {
             // MonitorSnapshot（task 8.1・DD15 基盤）: 起動時の実モニタ work area 集合を
             // 忠実転写した Resource（物理 px・Send な純粋データ）。bottom 吸着ドラッグ
@@ -633,6 +659,8 @@ fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) {
             // 保存位置を反映した placements を得る。`prepared` を placements/titles へ分解し、
             // merge 済み placements（value 渡し）と titles を closure へ move する
             // （default_encoding は boot 結線・source.rs と同一の Ansi＝mount 解決の一貫性）。
+            // 作者基準 DPI は `prepared` 分解の前に取り出して呼び手へ返す（`Copy` 値の転記）。
+            let author_dpi = prepared.author_dpi;
             let placements = restore_merged_placements(
                 &cfg.ghost_root,
                 prepared.placements,
@@ -670,6 +698,7 @@ fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) {
                     );
                 }));
             });
+            Some(author_dpi)
         }
         Err(err) => {
             // フォールバック分類（DD14・log-first）: 起点不在（fixture 不在等の想定内）は
@@ -692,8 +721,10 @@ fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) {
                     tracing::info!("検証用ダミー窓を開きました（placement フォールバック）");
                 }));
             });
+            // 宣言値を読めていない（descript へ到達していない）——呼び手が既定へ縮退する。
+            None
         }
-    }
+    };
 
     // env ゲート付き自動 close 機構（CI smoke・task 2.3・R4.1）。
     // `AREKA_APP_SMOKE_EXIT_MS` が有効なミリ秒値のときだけ、VSync relay と同じ
@@ -728,6 +759,8 @@ fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) {
             }
         });
     }
+
+    author_dpi
 }
 
 /// smoke 自動 close の despawn 標的を despawn する（task 6.2 で
