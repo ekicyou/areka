@@ -158,7 +158,7 @@
   - _Requirements: 2.1, 2.4, 4.1, 4.2, 5.1, 5.3, 5.4, 7.2, 7.5, 7.9_
   - _Depends: 3.5, 6.1_
 
-- [ ] 6.4 workspace回帰ゲート実行
+- [x] 6.4 workspace回帰ゲート実行
   - i686 host-32成果物の事前ビルドを含む`cargo test --workspace`を実行する
   - `cargo test --workspace`がexit 0となり、既存テスト数からの純増のみで失敗ゼロである状態を確認できる
   - _Requirements: 5.5, 6.1, 7.1, 7.3, 7.4_
@@ -174,6 +174,10 @@
 
 ## Implementation Notes
 
+- 6.4: **通過**（`cargo test --workspace` EXIT=0・85 グループ全緑。i686 host-32 成果物 `shiori-host32-testdll` / `shiori-host32-helper` を PowerShell で事前ビルド済み）。
+- 6.4: **【先行フレーキー・本 spec 無関係・要 owner 対応】`areka-ghost --test ghost` の `spine_e2e_test::s1_boot_success::s1_boot_success_plays_greeting_and_records_expected_cue_sequence` が 17.5%（7/40）で落ちる。** 本 spec とは無関係であることの証明: (a) 本ブランチは `crates/areka-ghost` を**一度も触っていない**、(b) `cargo tree -p areka-ghost --edges normal,dev` の依存閉包に本ブランチが変更したクレート（`areka-emo-compose`／`areka-emo-present`／`areka`／`areka-emo-text`）が**1つも含まれない**、(c) `areka-ghost` と全依存のソースが `origin/main` と**バイト同一**（`git diff origin/main...HEAD` が空）。
+- 6.4: 上のフレーキーの**根因**（owner への申し送り）: `crates/areka-ghost/tests/ghost/spine_e2e_test.rs:821-829` の整定スピンが `if s >= expected.len() && t >= expected.len() { break }` と**下限**で抜けるのに、`:837` のアサートは `commands == expected`＝**ちょうど3件**を要求する。4件目 `Custom{ areka.prop.set, ["areka.boot.count","1"] }`（at=0.25）がスナップショット前に着くと落ちる。**その4件目を導入したのは `areka-P0-position-persist`（`33aa384`＝当該ファイルを最後に触ったコミット）**で、整定待ちとアサートの対を更新し損ねている。「陳腐化テスト」ではなく**壊れたテスト**なので更新が要る（`obsolete-vs-broken-test-policy`）。**所有者は `areka-P0-position-persist`（完了済み）の後続 or `areka-ghost` 側の別タスク。本 spec の領分外**。
+- 6.4: **DoD ゲートへの影響**: `kiro-complete` の Test Gate は 1 回の `cargo test --workspace` で判定するため、**約 17.5% の確率で偽陰性（赤）になる**。赤が出たら本項を参照し、失敗が上記 1 本のみであることを確認して再走すること。
 - 6.3: **既存 GPU 檻の真の穴は「αマスク」だった**。k≠1 の既存檻はすべて **k=2/1＝整数倍**で `scaled_extent` の丸めが一度も発火しておらず、αマスクの寸を k と突き合わせるアサートは**どこにも無かった**（既存は k=1/1 での前後不変比較のみ＝寸が一致して素通り）。内容比較は皆無。**再表示経路でマスクが旧 k 寸のまま残る欠陥は本タスク以前まったく無檻**（レビュアー独自の変異 M-C で実証）。
 - 6.3: **端数 k は 5/4 では f32 と弁別できない**。5/4 は既約分母が 2 冪ゆえ f32 で厳密（6×1.25=7.5・5×1.25=6.25 とも exact、`f32::round` も half-away-from-zero）で、`scale_len` の f32 化変異に新テストは**構造的に参加できない**。この弁別は k=7/6 の既存2本（`text_slot_view_physical_size_uses_rounding_authority_not_f32_scale` ほか）が所有。**「端数 k」と「f32 で表現できない k」は別概念**。
 - 6.3: `scaled_golden` は `resample` を本体と**同一トークンで**呼ぶ（`presenter.rs:990`）ため、`resample` 内部のバイト算法変異は golden 側も同時に動き**原理的に検出できない**。emo-present の檻は「端数 k がこの経路を通る／寸が権威に従う」までを担い、**バイト算法は emo-compose 側 task 6.1 の厳密 golden が所有**——境界として正しい。
