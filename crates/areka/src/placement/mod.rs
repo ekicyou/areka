@@ -123,7 +123,14 @@ fn prepare_stages(ghost_root: &Path, balloon_root: &Path) -> Result<PreparedStag
     let src = source::load_descript_source(ghost_root)?;
     let cfg = config::build_placement_config(&src.ghost_kv, &src.shell_kv);
     let scope_ids: Vec<usize> = cfg.scopes.keys().copied().collect();
-    let sizes = measure::measure_scope_sizes(&src.shell_dir, balloon_root, &scope_ids)?;
+    // k₀ は task 4.3（main.rs boot シーム）が primary モニタ DPI ÷ author_dpi から構築して
+    // 供給する。それまでは恒等スケール＝従来と同一の native 採寸で挙動不変（task 5・R7.2）。
+    let sizes = measure::measure_scope_sizes(
+        &src.shell_dir,
+        balloon_root,
+        &scope_ids,
+        &measure::MeasureScaling::IDENTITY,
+    )?;
     Ok(PreparedStages {
         cfg,
         sizes,

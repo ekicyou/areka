@@ -40,7 +40,7 @@
   - _Requirements: 3.1, 4.2_
   - _Boundary: placement/follow.rs_
 
-- [ ] 2.3 (P) measure_scope_sizesのk適用実装（measure.rs）
+- [x] 2.3 (P) measure_scope_sizesのk適用実装（measure.rs）
   - native採寸（既存per-scopeループ・`ScopeInput`構造を温存）→k適用の2段へ関数分解する
   - per-scope balloon席（balloon_sizeがscope別値になり得る席）を潰さない写像にする
   - i32超過を既存Measureエラー流儀でガードする
@@ -161,6 +161,8 @@
 - 1.1: main同期は追加コミット不要（ブランチ == origin/main）。placement アンカーは `follow.rs` のみ行番号がずれた（`resize_window_to` :553→:786・`enqueue_window_set_pos` :729→:1009）。design.md へ差分表を記録済み。
 - 1.2: `scale_len` の中間型は design の u64 では `len≈num≈u32::MAX` で溢れるため **u128** が正。design.md を是正済み。
 - 1.2: `areka-emo-compose` の縮退経路は `tracing::warn!` 必須（steering `logging.md`）。ログ発火は `crate::log_capture::capture_logs` で檻に入れる（先例 `log_firing_tests.rs`・`plan.rs`）。純関数モジュールでも「無言縮退」はレビューで落ちる。
+- 2.3: **task 5 の一部を前倒し適用済み**（親コントローラ判断）。`placement/mod.rs:126` の `prepare_stages` が `&MeasureScaling::IDENTITY` を渡すよう追随済み（そうしないとツリーがビルド不能で 3.x/4.x の検証が全て塞がるため）。**task 5 の残件は `attach_target` 系の呼び手（`examples/emo-present.rs` ほか）のみ**。
+- 2.3: `PlacementError::Measure` の `scope` は、native 段の balloon 失敗（全スコープ共通の採寸が倒れる）が `0` 固定、**k適用段の balloon 失敗は実スコープ番号**。消費側 `main.rs:760 is_benign_placement_error` は variant のみ照合し `scope` を見ないため非互換なし（レビュー確認済み）。
 - 2.2: **task 4.2 への申し送り**: `resize_window_keep_position` は**同寸べき等 skip でも `false` を返す**（`resize_window_to` の既存慣行と一致）。呼び手は `false` を失敗と解釈してはならない（skip は `debug!`・失敗は `warn!` でログ層が分離されている）。
 - 2.2: `SetWindowPosCommand` の TLS キュー（`wintf/src/ecs/window/command.rs:124`）は**私有・件数照会APIなし**・`flush()` は偽HWNDへ実 `SetWindowPos` を撃つ。headless で「書込ゼロ」を観測するには `enqueue_window_set_pos` 内で enqueue と不可分に走る **`Arrangement.offset` 同期の sentinel 据え置き**を witness に使う（レビューで健全性確認済み）。
 - 2.2: **task 4.2 への申し送り（レビュー推奨）**: 新規テストは `Anchored`/`MonitorSnapshot` 不在の World で走るため「誤ってアンカー再射影を混入させた」変異が identity 縮退で見逃され得る。4.2 で両者同居下の位置不変ケースを足すと檻が強くなる。
