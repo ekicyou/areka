@@ -127,7 +127,7 @@
   - _Requirements: 7.1, 7.2_
   - _Depends: 5_
 
-- [ ] 5.2 examples/emo-present.rs の窓寸を k 適用後の物理 px へ reconcile する（task 5.1 レビューで検出）
+- [x] 5.2 examples/emo-present.rs の窓寸を k 適用後の物理 px へ reconcile する（task 5.1 レビューで検出）
   - 本 example は窓を **native 原寸**で生成し `take_pending_resize` を消費しないため、k≠1.0 では「窓クライアント（native）＜ 表示内容（k 倍）」となり、125% で幅・高さとも約 20% が切り詰まって**見える**
   - golden assert は影響を受けない（`read_back` は backbuffer/`source_tex` 直読みで窓クライアント寸と独立）が、**手動検証エイドとしての目視観測が実 DPI で劣化する**：拡大表示の確認（手順 a）と、窓クライアント外が押せないことによるクリック捕捉域の切り詰め（手順 c で「透明域だと誤認」しうる）
   - `EmoPresenter::target_physical_size` を `WindowPos.size` へ反映する、または `take_pending_resize` を消費する。`placement::follow::resize_window_to` は本 example の窓が `Anchored` 欠落ゆえ**不発**（`collision-probe.rs:34` に既知記述あり）なので、`WindowPos.size` 直書きか `resize_window_keep_position` が現実的な手段
@@ -174,6 +174,11 @@
 
 ## Implementation Notes
 
+- 5.2: `take_pending_resize` の報告は**エッジではなく「取り出されるまで消えない状態」**（presenter.rs:137-159）。ゆえに 1 フレームで複数 `apply` が走っても**最新の物理寸だけが残り、末尾 1 回の消費で正しい**。消費規約「表示成功を引き起こした者が消費する」の第二の消費者は `refresh_scale` だが、example はこれを呼ばないため取り逃す第三者がいない（grep で `refresh_scale` の呼び手は `frame.rs`/`presenter.rs` のみと確認）。
+- 5.2: `world.get_mut::<WindowPos>` は **`Deref` 読みだけでは `Changed` を立てない**。同寸同位置で `DerefMut` に触れず早期 return すれば churn ゼロ（k=1.0 で挙動不変を担保する要）。`SetWindowPos` の echo（`WM_WINDOWPOSCHANGED`）は `bypass_change_detection` で書かれるためループしない。
+- 5.2: **task 6.5 への申し送り**: べき等 skip の回でも balloon 経路は `compute_balloon_pos` → `read_balloon_offset` を通り descript.txt を読んで `info!`「balloon offset 無指定 — 既定整列…」を 1 行余分に出す。5.1 の `derive_scale` 二重ログと同種で、**`RUST_LOG` grep を行数で判定すると誤読する**（値で判定すること）。
+- 5.2: **W5 `areka-P0-kero-balloon` への申し送り**: `compute_balloon_pos` は descript の `sakura.balloon.offsetx/offsety` を **k 未適用のまま**加算する。k≠1 では作者指定オフセットが相対的に縮む。emo2 fixture は両キー未指定ゆえ休眠中で、正典側のバルーンオフセット k 適用は R5.4／W5 の領分（5.2 では手を出さないのが正しい、とレビュー裁定）。
+- 5.2: `cargo clippy -p areka --examples`（deps 込み）は wintf lib の既存 deny lint 20 件で exit≠0。example 自体の判定は **`--no-deps` を付ける**か `RUSTFLAGS=--cap-lints=warn` で行うこと。
 - 5.1: `read_back` は swap chain の `source_tex`（＝k 適用後の表示面）を dense stride `w*4` で読み、`ComposedSurface::stride()` も常に `width*4` ゆえ**両者は同一レイアウト**。したがって golden は「compose → resample」を表示経路と同一トークンで通せばバイト比較が成立する（`cache.insert` も `chain.upload` も無変換）。**`read_back` は窓クライアント寸と独立**（backbuffer 直読み）——この事実が 5.2 の切り詰めと golden 一致を両立させている。
 - 5.1: `applied_scale()` は `Option<f32>` しか返さず **`ScaleRatio` を返す照会 API が存在しない**ため、example 側は `derive_scale` へ同一入力を与えて**再計算**し、`target_physical_size` との extent 一致＋`as_f32()` 一致で交差検査する構成を採った（presenter 自身が `refresh_scale` で採る既存流儀と同じ）。f32 交差検査は異なる有理数を同値と誤認しうるが、その場合も後続の full byte equality が落とすため**檻の外には出ない**。将来 `ScaleRatio` を返す照会 API が生えたら直比較へ差し替えるのが本筋。
 - 5.1: **task 6.5 への申し送り**: `derive_scale` は純関数ゆえ縮退時（`dpi==None`／`dpi_x==0`／異軸 DPI）に presenter と example で**同一メッセージが 2 行出る**。`RUST_LOG` grep 判定を**行数で**行うと誤読する（正常な非96DPI環境では発火しないため実害は小さい）。
