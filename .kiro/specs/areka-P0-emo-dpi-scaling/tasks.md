@@ -119,13 +119,21 @@
   - _Requirements: 7.1, 7.2_
   - _Depends: 3.2, 2.3_
 
-- [ ] 5.1 examples/emo-present.rs の startup golden を k 対応させる（task 5 レビューで検出）
+- [x] 5.1 examples/emo-present.rs の startup golden を k 対応させる（task 5 レビューで検出）
   - `assert_startup_golden`（:705-752）は `read_back` を **native 原寸**の直接合成とバイト比較するため、k≠1.0 の実機（例: 本開発機 125%）では**手動検証エイドが動かせない**
   - golden を実適用 k で resample してから比較する（design「Testing Strategy > Integration Tests」が檻に課すのと同じ契約を手動エイドにも適用）
   - **task 6.5 より前に着地させる**（6.5 は本番バイナリのみ実行するため、この破れは 6.5 では検出も解消もされない）
   - 非96DPI環境で `cargo run -p areka --example emo-present` が完走する状態を確認できる
   - _Requirements: 7.1, 7.2_
   - _Depends: 5_
+
+- [ ] 5.2 examples/emo-present.rs の窓寸を k 適用後の物理 px へ reconcile する（task 5.1 レビューで検出）
+  - 本 example は窓を **native 原寸**で生成し `take_pending_resize` を消費しないため、k≠1.0 では「窓クライアント（native）＜ 表示内容（k 倍）」となり、125% で幅・高さとも約 20% が切り詰まって**見える**
+  - golden assert は影響を受けない（`read_back` は backbuffer/`source_tex` 直読みで窓クライアント寸と独立）が、**手動検証エイドとしての目視観測が実 DPI で劣化する**：拡大表示の確認（手順 a）と、窓クライアント外が押せないことによるクリック捕捉域の切り詰め（手順 c で「透明域だと誤認」しうる）
+  - `EmoPresenter::target_physical_size` を `WindowPos.size` へ反映する、または `take_pending_resize` を消費する。`placement::follow::resize_window_to` は本 example の窓が `Anchored` 欠落ゆえ**不発**（`collision-probe.rs:34` に既知記述あり）なので、`WindowPos.size` 直書きか `resize_window_keep_position` が現実的な手段
+  - 非96DPI環境で `cargo run -p areka --example emo-present` の窓クライアント寸が表示内容と一致し、切り詰めが消えることを確認できる
+  - _Requirements: 7.1, 7.2_
+  - _Depends: 5.1_
 
 - [ ] 6. Validation: 決定論テストと実機サインオフ
 - [ ] 6.1 (P) emo-compose scale.rs純関数テスト全網羅
@@ -165,6 +173,11 @@
   - _Depends: 6.4_
 
 ## Implementation Notes
+
+- 5.1: `read_back` は swap chain の `source_tex`（＝k 適用後の表示面）を dense stride `w*4` で読み、`ComposedSurface::stride()` も常に `width*4` ゆえ**両者は同一レイアウト**。したがって golden は「compose → resample」を表示経路と同一トークンで通せばバイト比較が成立する（`cache.insert` も `chain.upload` も無変換）。**`read_back` は窓クライアント寸と独立**（backbuffer 直読み）——この事実が 5.2 の切り詰めと golden 一致を両立させている。
+- 5.1: `applied_scale()` は `Option<f32>` しか返さず **`ScaleRatio` を返す照会 API が存在しない**ため、example 側は `derive_scale` へ同一入力を与えて**再計算**し、`target_physical_size` との extent 一致＋`as_f32()` 一致で交差検査する構成を採った（presenter 自身が `refresh_scale` で採る既存流儀と同じ）。f32 交差検査は異なる有理数を同値と誤認しうるが、その場合も後続の full byte equality が落とすため**檻の外には出ない**。将来 `ScaleRatio` を返す照会 API が生えたら直比較へ差し替えるのが本筋。
+- 5.1: **task 6.5 への申し送り**: `derive_scale` は純関数ゆえ縮退時（`dpi==None`／`dpi_x==0`／異軸 DPI）に presenter と example で**同一メッセージが 2 行出る**。`RUST_LOG` grep 判定を**行数で**行うと誤読する（正常な非96DPI環境では発火しないため実害は小さい）。
+- 5.1: **task 6.5 への申し送り**: 手動検証エイドとして目視観測するなら **5.2 を先に着地させること**。5.2 未了のまま非96DPI で走らせると内容が切り詰まって見えるが、これは k 適用の欠陥ではなく窓寸 reconcile の未実装である。
 
 - 1.1: main同期は追加コミット不要（ブランチ == origin/main）。placement アンカーは `follow.rs` のみ行番号がずれた（`resize_window_to` :553→:786・`enqueue_window_set_pos` :729→:1009）。design.md へ差分表を記録済み。
 - 1.2: `scale_len` の中間型は design の u64 では `len≈num≈u32::MAX` で溢れるため **u128** が正。design.md を是正済み。

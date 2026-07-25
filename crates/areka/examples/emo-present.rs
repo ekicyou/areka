@@ -24,8 +24,9 @@
 //!
 //! - **起動時 golden バイト一致 assert（R6.2/R6.7/R8.2/R8.3）**: 各 target の初回 `apply(ShowSurface)`
 //!   直後に `EmoPresenter::read_back` で swap chain backbuffer を CPU 読み戻しし、その surface を
-//!   直接合成した golden `ComposedSurface::bytes()` と **完全一致**することを `assert`（不一致は loud に
-//!   panic）する。供給面が正当に未生成なら warn してスキップする。詳細は `assert_startup_golden` を参照。
+//!   **表示経路と同じ 2 段変換**（直接合成＝native 原寸 → `resample`＝実適用 k）へ通した golden
+//!   `ComposedSurface::bytes()` と **完全一致**することを `assert`（不一致は loud に panic）する。
+//!   供給面が正当に未生成なら warn してスキップする。詳細は `assert_startup_golden` を参照。
 //!
 //! task 5.2（不透明域クリック捕捉の観測）は `on_shell_pressed` の毎押下 `info!` ログを、task 5.3
 //! （実 DPI 実行）は下記「実 DPI（dpi≠96）実行手順」を、本 example がそれぞれ観測シーム／手順として
@@ -37,12 +38,21 @@
 //! ```
 //! シェルをダブルクリックすると全窓を閉じて終了する。
 //!
-//! # DPI 表示契約（R1.6・design「DPI 表示契約」）
+//! # DPI 表示契約（R1.6・design「DPI 表示契約」＋ emo-dpi-scaling による更新）
 //!
-//! emo-present が装着した窓のクライアント領域は **surface 原寸（物理 px）に一致**する。DPI による
-//! 拡縮は行わない（等倍）。ゆえに窓サイズは `BoxStyle`/taffy 論理レイアウトを経由せず、合成結果の
-//! 物理 px を `WindowPos.size` へ直接与える。**dpi≠96 のモニタ／スケーリング設定での実行確認**は
-//! task 5.3 の領分（本 example の rustdoc に手順を蓄積していく）。dpi=96 のみの確認は不十分である。
+//! 窓サイズは `BoxStyle`/taffy 論理レイアウトを経由せず、**合成結果の物理 px を `WindowPos.size` へ
+//! 直接与える**（この点は不変）。ただし「DPI による拡縮は行わない（等倍）」という当初の契約は
+//! `areka-P0-emo-dpi-scaling` が**上書き**した — 現在の表示経路は compose（native 原寸）→ resample
+//! （k＝窓 DPI ÷ author_dpi）であり、窓 DPI が author_dpi と異なれば表示は k 倍される（k=1.0 は
+//! 「窓 DPI ＝ author_dpi」という**一水準**であって恒常の契約ではない）。
+//!
+//! 本 example は窓を **k 未適用の native 原寸**で生成し、`EmoPresenter::take_pending_resize` による
+//! 窓寸 reconcile を**行わない**（それは本番 boot＝`emo2_boot` の frame drain フェーズの領分）。ゆえに
+//! k≠1.0 の環境では「窓 client（native 原寸）＜ 表示内容（k 倍）」となり見た目が切り詰まる。本 example
+//! の目的は指令適用・golden 一致・クリック捕捉の観測であり、窓寸追従の観測ではない（本番アプリで見る）。
+//!
+//! **dpi≠96 のモニタ／スケーリング設定での実行確認**は task 5.3 の領分（本 example の rustdoc に手順を
+//! 蓄積していく）。dpi=96 のみの確認は不十分である。
 //!
 //! ## 実 DPI（dpi≠96）実行手順（task 5.3・R1.6/R2.5/R6.5）
 //!
@@ -54,16 +64,20 @@
 //!    モニタへ窓を移動する。
 //! 2. **起動する**: `cargo run -p areka --example emo-present` を実行する。
 //! 3. **観測する**（3 点を確認する）:
-//!    - (a) **表示等倍（R1.6）**: シェル surface とバルーン枠が **surface 原寸の物理 px** で描かれる
-//!      （ぼやけ／アップスケール無し）。窓のクライアント領域寸は合成結果の物理 px（`WindowPos.size` へ
-//!      直接与えた値・DPI 表示契約）に一致し、スケール倍率で膨れない。
+//!    - (a) **k 追従表示**: シェル surface とバルーン枠が **k 倍された物理 px**（150% なら 3/2 倍・
+//!      200% なら 2 倍）で描かれる。`apply(ShowSurface): 表示・マスクを更新` ログの `k_ratio`／
+//!      `native_w/h`／`scaled_w/h` が実 DPI と整合することで判定できる（目視だけに頼らない）。
+//!      **既知の見た目の限界**: 本 example は窓寸 reconcile を行わない（上記「DPI 表示契約」）ため、
+//!      k>1 では窓 client が native 原寸のままで表示内容が切り詰まって見える。これは欠陥ではない。
 //!    - (b) **起動時 golden 不 panic（task 5.1・R6.2/R8.2）**: 非 96 DPI でも `assert_startup_golden`
 //!      が両 target で通る（panic せず「起動時 golden バイト一致を確認」ログが出る）。swap chain
-//!      readback は表示面の物理 px をそのまま読み戻すため、DPI に依らずバイト一致するはずである。
-//!    - (c) **クリック座標一致（R2.5）**: キャラクタの不透明域をクリックすると task 5.2 の
-//!      「不透明域クリックを捕捉」ログが発火し、透明域のクリックは背後へ透過する（ログ不発）。
-//!      当たり判定境界が実 DPI で見た目の絵柄と一致する（R2.5 の恒等変換: bounds==αマスク==surface
-//!      原寸で、DPI スケールによる座標ずれが生じない）。
+//!      readback は**表示面の物理 px＝ k 適用後**を読み戻すため、golden 側も `resample` で同じ k を
+//!      掛けてから比較する（k=1.0 なら resample を経ない素通しで従来と同一バイト）。
+//!    - (c) **クリック捕捉**: キャラクタの不透明域をクリックすると task 5.2 の「不透明域クリックを
+//!      捕捉」ログが発火し、透明域のクリックは背後へ透過する（ログ不発）。αマスクは表示バッファと
+//!      **同一 bytes 由来**（＝k 適用後）ゆえ、クリック透過の境界は実 DPI でも見た目の絵柄と一致する。
+//!      なお `hit_region`（領域名解決）の座標系は native px であり、k≠1.0 での点÷k は下流
+//!      `areka-P0-collision-dpi-hittest` の領分（本 example は領域名を引かない）。
 //! 4. **記録する**: 上記 (a)(b)(c) の結果と使用した実 DPI 値（例 dpi=144/192）を記録する。
 //!    **再掲**: dpi=96 のみは不十分 — dpi≠96 の実走記録をもって task 5.3 完了とする。
 //!
@@ -89,7 +103,7 @@ use wintf::ecs::layout::HitTest;
 use wintf::ecs::pointer::{DoubleClick, OnPointerPressed, Phase, PointerState};
 use wintf::ecs::widget::bitmap_source::CommandSender;
 use wintf::ecs::{
-    FrameFinalize, FrameTime, GraphicsCore, Point, SizeI, Window, WindowHandle, WindowPos,
+    DPI, FrameFinalize, FrameTime, GraphicsCore, Point, SizeI, Window, WindowHandle, WindowPos,
     WindowStyle, WucGraphicsResource,
 };
 use wintf::*;
@@ -97,8 +111,12 @@ use wintf::*;
 use areka_emo_atlas::{
     AlphaParams, AtlasTable, PackConfig, SetId, SurfaceSet, UseSelfAlpha, WicDecoderArm, bake,
 };
-use areka_emo_compose::{BindSet, ComposeError, ComposedSurface, Composer, EmoWorld, PatternState};
-use areka_emo_present::{EmoPresenter, PresentCommand, TargetId, build_balloon_target};
+use areka_emo_compose::{
+    BindSet, ComposeError, ComposedSurface, Composer, EmoWorld, PatternState, ScaleRatio, resample,
+};
+use areka_emo_present::{
+    EmoPresenter, PresentCommand, ScalePolicy, TargetId, build_balloon_target, derive_scale,
+};
 
 // ---------------------------------------------------------------------------
 // Constants / fixture paths
@@ -110,6 +128,14 @@ const SHELL_INITIAL_Y: i32 = 200;
 
 /// まばたき開閉の周期（秒）。この周期で目開き ⇄ 目閉じ を surface1000 上でトグルする（R6.4 の切替観測）。
 const CYCLE_INTERVAL_SECS: f64 = 2.5;
+
+/// 本 example が両 target へ与える**作者基準 DPI**（ukadoc 正典既定の 96・D1）。
+///
+/// 本番アプリは descript の実値（shell `seriko.dpi`／balloon `dpi`）を `attach_target` へ渡すが、
+/// 本 example は fixture を直接読むため正典既定を固定で与える。`assert_startup_golden` が golden へ
+/// 掛ける k を導出する際の**分母も同じ値**でなければならないため、両者を 1 つの定数に束ねる
+/// （`attach_target` 側だけ変えて golden 側が古い分母のまま残る、という食い違いを構造的に潰す）。
+const AUTHOR_DPI: u16 = 96;
 
 /// fixture ルート（emo2）を `CARGO_MANIFEST_DIR`（`crates/areka`）相対で解決する。
 /// fixtures は別クレート `crates/pilot` 配下ゆえワークスペース相対 `../pilot/...` を辿る
@@ -618,8 +644,9 @@ fn boot_present_system(world: &mut World) {
         match boot.presenter.attach_target(
             world, TargetId(0), boot.shell_window, emo_world, atlas,
             // 作者基準 DPI は正典既定の 96（ukadoc・D1）。本番は boot が descript の実値を
-            // 供給する（本 example は k=1.0 相当で従来と同一の表示寸・描画結果）。
-            96,
+            // 供給する。窓 DPI が 96 の環境では k=1.0（従来と同一の表示寸・描画結果）、
+            // 非 96 DPI ではその比が k として表示へ掛かる。
+            AUTHOR_DPI,
         ) {
             Ok(()) => {
                 // 起動時 golden 検証用に surface0（bind 無し）を先に表示する（本編の巡回は surface1000 の
@@ -635,8 +662,16 @@ fn boot_present_system(world: &mut World) {
                     },
                 );
                 // 起動時 golden バイト一致 assert（R6.2/R6.7/R8.2/R8.3）: swap chain readback ==
-                // 直接合成の golden を full byte equality で検証する（不一致は loud に panic）。
-                assert_startup_golden(&boot.presenter, TargetId(0), shell_golden, "shell surface0");
+                // 「直接合成 → 実適用 k で resample」した golden を full byte equality で検証する
+                // （不一致は loud に panic）。
+                assert_startup_golden(
+                    &boot.presenter,
+                    world,
+                    boot.shell_window,
+                    TargetId(0),
+                    shell_golden,
+                    "shell surface0",
+                );
                 // --- 手動デモ: さくらスクリプト相当の表情＋まばたきを指令切替で再現 ---
                 // \s[1000]\![bind,腕,組み,1]\![bind,紅,差し,0]\![bind,口,‥‥,1]\![bind,眉,悲しみ,1]
                 //         \![bind,目,通常,1]\![bind,まばたき,通常,1] を seriko 代役でハンドコンパイル。
@@ -659,8 +694,8 @@ fn boot_present_system(world: &mut World) {
         match boot.presenter.attach_target(
             world, TargetId(1), boot.balloon_window, emo_world, atlas,
             // 作者基準 DPI は正典既定の 96（ukadoc・D1）。本番は boot が balloon descript の
-            // 実値を供給する（本 example は k=1.0 相当で従来と同一の表示寸・描画結果）。
-            96,
+            // 実値を供給する。シェルと同一の分母を用いる（[`AUTHOR_DPI`]）。
+            AUTHOR_DPI,
         ) {
             Ok(()) => {
                 boot.presenter.apply(
@@ -674,7 +709,14 @@ fn boot_present_system(world: &mut World) {
                     },
                 );
                 // 起動時 golden バイト一致 assert（R6.2/R6.7/R8.2/R8.3）。
-                assert_startup_golden(&boot.presenter, TargetId(1), balloon_golden, "balloon surface0");
+                assert_startup_golden(
+                    &boot.presenter,
+                    world,
+                    boot.balloon_window,
+                    TargetId(1),
+                    balloon_golden,
+                    "balloon surface0",
+                );
             }
             Err(e) => tracing::error!(error = %e, "emo-present: バルーン target の attach に失敗"),
         }
@@ -685,25 +727,55 @@ fn boot_present_system(world: &mut World) {
     tracing::info!("emo-present: 2 窓へ surface0/バルーン枠を装着・表示しました");
 }
 
-/// 起動時 golden バイト一致 assert（task 5.1・R6.2/R6.7/R8.2/R8.3）。
+/// 起動時 golden バイト一致 assert（task 5.1／5.1 追補・R6.2/R6.7/R7.1/R7.2/R8.2/R8.3）。
 ///
 /// 初回表示直後に target の表示画素を `EmoPresenter::read_back`（swap chain backbuffer の CPU 読み戻し・
-/// R8.3）で取得し、その surface を **直接合成**した golden [`ComposedSurface`] のバイト列（[`ComposedSurface::bytes`]）
-/// と **完全一致**（full byte equality）することを検証する。これが「供給面（swap chain readback）と合成結果の
+/// R8.3）で取得し、その surface を **表示経路と同じ 2 段変換**（`Composer::compose`＝native 原寸 →
+/// [`resample`]＝実適用 k）に通した golden [`ComposedSurface`] のバイト列（[`ComposedSurface::bytes`]）と
+/// **完全一致**（full byte equality）することを検証する。これが「供給面（swap chain readback）と合成結果の
 /// 一致」（R8.2）を決定論的に確かめる検証シーム（R6.7）である。
+///
+/// # なぜ golden にも k を掛けるのか（task 5.1 追補）
+///
+/// `EmoPresenter::apply_show` の表示経路は **compose（native 原寸）→ resample（k 適用）→ cache → 表示**
+/// であり、swap chain backbuffer が保持するのは **k 適用後の物理 px** である。ゆえに golden を native 原寸の
+/// まま突き合わせると、k≠1.0 の実機（例: 125% ＝ dpi 120 ＝ k=5/4）では**長さの時点で必ず食い違い**、
+/// 手動検証エイドである本 example がそもそも起動できない。golden 側にも同一の変換を通すことで、檻
+/// （design「Testing Strategy > Integration Tests」）が課すのと同じ契約を手動エイドにも適用する。
+///
+/// k=1.0 では [`ScaleRatio::is_identity`] 経路で resample を**呼ばず** native を素通しする（presenter 側と
+/// 同一の素通し）ため、96 DPI 環境での比較対象は k 導入前と 1 バイトも変わらない（R7.2）。
+///
+/// # k の導出と、その一致検査
+///
+/// k は presenter と同一の純関数 [`derive_scale`] へ同一入力（target 政策＝[`AUTHOR_DPI`]／窓の `DPI`
+/// component）を与えて求める。ただしこれは**推定**であり、実際に表示へ掛かった k の単一真実源は presenter
+/// 側の `applied` である。ゆえに推定 k をそのまま信用せず、
+///
+/// - [`EmoPresenter::target_physical_size`]（＝`scaled_extent(applied, native 原寸)`・丸め単一権威）と
+///   推定 k から求めた golden の物理寸が一致すること、
+/// - [`EmoPresenter::applied_scale`]（照会契約の実適用 k）が推定 k と一致すること
+///
+/// を **assert で検査**する（食い違えば loud に落ちる＝黙って別の k で比較しない）。
 ///
 /// # 失敗を silent にしない（R6.2）
 ///
-/// バイト長・内容のいずれかが食い違えば即 `panic!`／`assert_eq!` で loud に落とす（target id・期待/実測長・
-/// 先頭相違 index を添える）。観測失敗を warn ログで握り潰さない。
+/// 寸法・バイト長・内容のいずれかが食い違えば即 `panic!`／`assert_eq!` で loud に落とす（target id・
+/// 適用 k・golden の native 原寸と変換後寸法・期待/実測長・先頭相違 index を添える）。観測失敗を warn
+/// ログで握り潰さない。
 ///
 /// # 正当な非表示のスキップ
 ///
 /// golden 合成に失敗した場合、または供給面が未生成（`read_back` が [`areka_emo_present::PresentError`] を返す・
 /// EmptyComposition degradation 等で chain 不在）の場合は、`panic` せず warn ログを出してスキップする（表示すべき
 /// ものが正当に無いだけで観測失敗ではない）。通常の emo2 fixture は両 target とも表示するため assert が走る。
+///
+/// **`read_back` が成功した後の照会 `None` はスキップ事由にしない** — 供給面が在る＝表示経路が生成点まで
+/// 到達している以上、「実適用 k が無い」は正当な非表示ではなく観測失敗（表示成立点に届かなかった）だからである。
 fn assert_startup_golden(
     presenter: &EmoPresenter,
+    world: &World,
+    window: Entity,
     target: TargetId,
     golden: std::result::Result<ComposedSurface, ComposeError>,
     label: &str,
@@ -732,31 +804,87 @@ fn assert_startup_golden(
         }
     };
 
-    let expected = golden.bytes();
+    // presenter と同一経路・同一入力で k を導出する（`DPI` component 不在は `None` のまま渡し、
+    // [`derive_scale`] 側の縮退（error! ＋ k=1.0）へ落とす＝96 を捏造しない）。
+    let window_dpi = world.get::<DPI>(window).map(|d| (d.dpi_x, d.dpi_y));
+    let scale = derive_scale(ScalePolicy::new(AUTHOR_DPI, ScaleRatio::ONE), window_dpi);
+
+    // 表示経路と同じ変換を golden へ適用する（恒等 k は resample を呼ばず native 素通し）。
+    let (native_w, native_h) = (golden.width(), golden.height());
+    let display = if scale.is_identity() {
+        golden
+    } else {
+        let mut scaled = ComposedSurface::new(0, 0);
+        resample(&golden, scale, &mut scaled);
+        scaled
+    };
+    let (scaled_w, scaled_h) = (display.width(), display.height());
+
+    // 推定 k が **実適用 k** と一致することを、丸め単一権威を通した物理寸で検査する
+    // （`as_f32` の掛け算で復元しない＝D4）。供給面が在るのに照会が `None` なら表示成立点へ
+    // 届いていない＝観測失敗ゆえ loud に落とす。
+    let applied_physical = presenter.target_physical_size(target).unwrap_or_else(|| {
+        panic!(
+            "起動時 golden 検証不能 [{label} / {target:?}]: 供給面は在る（read_back 成功）のに \
+             target_physical_size が None — 表示成立点へ到達していない（R6.2 観測失敗）"
+        )
+    });
+    assert_eq!(
+        (scaled_w, scaled_h),
+        applied_physical,
+        "起動時 golden 不一致 [{label} / {target:?}]: golden へ掛けた k={:?}（窓 DPI {:?} ÷ author {AUTHOR_DPI}）の \
+         変換後寸法 {scaled_w}x{scaled_h}（native {native_w}x{native_h}）が presenter の実適用物理寸 {:?} と不一致 \
+         — 推定 k が実適用 k と食い違う（R6.2 観測失敗）",
+        scale,
+        window_dpi,
+        applied_physical,
+    );
+    // 照会契約側の k（出口ビュー f32）とも突き合わせる（寸法演算には使わない・診断と一致検査のみ）。
+    assert_eq!(
+        presenter.applied_scale(target),
+        Some(scale.as_f32()),
+        "起動時 golden 不一致 [{label} / {target:?}]: applied_scale（照会値）が導出 k={:?} と不一致",
+        scale,
+    );
+
+    let expected = display.bytes();
 
     // まず長さで loud に落とす（相違の一次要因を明示）。
     assert_eq!(
         actual.len(),
         expected.len(),
-        "起動時 golden 不一致 [{label} / {target:?}]: read_back バイト長 {} が golden バイト長 {} と不一致 — swap chain readback が合成結果と食い違う（R6.2/R8.2 観測失敗）",
+        "起動時 golden 不一致 [{label} / {target:?}]: read_back バイト長 {} が golden バイト長 {} と不一致 \
+         — k={:?} 適用後 golden は {scaled_w}x{scaled_h}（native {native_w}x{native_h}）。swap chain readback が \
+         合成結果と食い違う（R6.2/R8.2 観測失敗）",
         actual.len(),
         expected.len(),
+        scale,
     );
 
     // full byte equality: 先頭相違 index を添えて loud に panic する。
     if let Some(idx) = actual.iter().zip(expected.iter()).position(|(a, b)| a != b) {
         panic!(
-            "起動時 golden 不一致 [{label} / {target:?}]: 先頭相違 index={idx} (read_back=0x{:02X}, golden=0x{:02X}, len={}) — swap chain readback が合成結果とバイト不一致（R6.2/R8.2/R8.3 観測失敗）",
+            "起動時 golden 不一致 [{label} / {target:?}]: 先頭相違 index={idx} (read_back=0x{:02X}, golden=0x{:02X}, len={}) \
+             — k={:?} 適用後 golden {scaled_w}x{scaled_h}（native {native_w}x{native_h}）。swap chain readback が \
+             合成結果とバイト不一致（R6.2/R8.2/R8.3 観測失敗）",
             actual[idx],
             expected[idx],
             actual.len(),
+            scale,
         );
     }
 
     tracing::info!(
         ?target,
         len = actual.len(),
-        "emo-present: 起動時 golden バイト一致を確認（{label}）"
+        k_ratio = ?scale,
+        k = scale.as_f32(),
+        window_dpi = ?window_dpi,
+        native_w,
+        native_h,
+        scaled_w,
+        scaled_h,
+        "emo-present: 起動時 golden バイト一致を確認（{label}・k 適用後の物理 px で比較）"
     );
 }
 
