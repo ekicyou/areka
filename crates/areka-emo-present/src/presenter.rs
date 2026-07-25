@@ -176,6 +176,10 @@ pub struct TextSlotView {
     window: Entity,
     /// バルーン/シェル surface の **native 原寸**（k 適用前・取得時点のスナップショット）。
     surface_size: (u32, u32),
+    /// 表示中の**物理寸**＝`scaled_extent(applied, surface_size)`（丸め権威を通した値・要件 3.1）。
+    ///
+    /// 構築時に [`ScaleRatio::scaled_extent`] で確定させる（`scale` からの再計算を呼び手に許さない）。
+    physical_size: (u32, u32),
     /// バルーン surface と同一の合成スケール k（**実適用値**・要件 1.2）。
     scale: f32,
 }
@@ -199,6 +203,25 @@ impl TextSlotView {
     /// 一致するため、k 導入前の観測値（＝供給面寸）とも等しい。
     pub fn surface_size(&self) -> (u32, u32) {
         self.surface_size
+    }
+
+    /// 表示中の**物理寸**（窓 client がこの値と一致すべき唯一の寸法・要件 3.1/4.2）。
+    ///
+    /// `scaled_extent(applied, surface_size())` を**丸め権威**
+    /// [`ScaleRatio::scaled_extent`] 経由で構築時に確定させた値である。呼び手が
+    /// [`scale`] と [`surface_size`] から掛け算で復元することを想定していない——
+    /// [`ScaleRatio::as_f32`] は照会用の出口ビューであり、その doc が明記するとおり
+    /// **寸法・画素演算に使ってはならない**。既約有理 `num/den` が f32 で非厳密になる k
+    /// （例 112dpi／author 96 ＝ 7/6）では積が端数ちょうど 0.5 の直下へ落ち、
+    /// round half away from zero が切り下がって権威と 1px 食い違う（27px → 権威 32・f32 経由 31）。
+    /// 窓 client を 1px 小さく書くとべき等 skip がその誤差を恒久化するため、消費点は必ず本値を使う。
+    ///
+    /// k=1.0 の窓では [`surface_size`] と一致する（恒等）。
+    ///
+    /// [`scale`]: Self::scale
+    /// [`surface_size`]: Self::surface_size
+    pub fn physical_size(&self) -> (u32, u32) {
+        self.physical_size
     }
 
     /// バルーン surface と同一の合成スケール k（**実際に表示へ適用中の値**・要件 1.2）。
@@ -637,8 +660,35 @@ impl EmoPresenter {
             slot: mount.text_slot(),
             window: t.window,
             surface_size,
+            // 物理寸は**丸め権威**で確定させる（`as_f32` 経由の掛け算は 1px 食い違う・D4）。
+            physical_size: applied.scaled_extent(surface_size.0, surface_size.1),
             scale: applied.as_f32(),
         })
+    }
+
+    /// target の**窓 client 物理寸**（＝実適用 k を丸め単一権威に通した値・要件 3.1/4.2）。
+    ///
+    /// `scaled_extent(applied, native_size)` を [`ScaleRatio::scaled_extent`] 経由で計算する。
+    /// 窓 client を合わせる消費点（`emo2_boot` の resnap／DPI 追従フェーズ）はこの照会だけを見れば
+    /// よく、native 原寸と物理寸を**取り違えようがない**——[`TextSlotView`] 経由だと
+    /// [`TextSlotView::surface_size`]（native）と [`TextSlotView::physical_size`]（物理）が
+    /// 隣り合って生えており、消費点での 1 トークンの取り違えが「窓が原寸へ引き戻される」
+    /// 静かな欠陥になる。本照会はその選択肢を消費点から取り除く。
+    ///
+    /// **[`applied_scale`] から掛け算で復元してはならない**——`as_f32` は照会用の出口ビューであり、
+    /// 既約分母が 2 冪でない k（例 112dpi／author 96 ＝ 7/6）では f32 の積が端数ちょうど 0.5 の
+    /// 直下へ落ち、権威と 1px 食い違う（native 27px → 権威 32・f32 経由 31）。
+    ///
+    /// 表示が一度も成立していない target・未登録 target は `None`（[`applied_scale`] と同じ規律で、
+    /// 未確定を原寸や 1.0 倍で塗り潰さない）。値は [`TextSlotView::physical_size`] と常に一致する
+    /// （同一の `applied`／`native_size` から同一の権威で導くため）。
+    ///
+    /// [`applied_scale`]: Self::applied_scale
+    pub fn target_physical_size(&self, target: TargetId) -> Option<(u32, u32)> {
+        let t = self.targets.get(&target)?;
+        let applied = t.applied?;
+        let native = t.native_size?;
+        Some(applied.scaled_extent(native.0, native.1))
     }
 
     /// 下流照会契約（要件 1.2）: いま**実際に表示へ適用中**の k。
@@ -2543,6 +2593,219 @@ mod tests {
             chain_size,
             "k≠1 では native 原寸と物理寸が一致しない（供給面寸を返していれば同値になる）"
         );
+    }
+
+    /// 要件 3.1（物理寸の照会契約・丸め権威の単一化）: `physical_size()` は
+    /// `scaled_extent(applied, surface_size())` と厳密に一致し、供給面の実寸とも一致する。
+    ///
+    /// # なぜ **7/6**（窓 DPI 112 ／ author_dpi 96）と native 27px なのか
+    ///
+    /// 既約分母が 2 冪でない k を選ぶ。`ScaleRatio::as_f32()` は `7/6` を厳密に表現できず
+    /// `1.16666662693…`（真値より下）へ丸まるため、`27 × as_f32()` は `31.4999989…` となり
+    /// round half away from zero が **31** へ切り下がる。一方、丸め権威 `scaled_extent` は整数演算
+    /// `(2·27·7 + 6) / (2·6)` で `31.5` を **32** へ正しく丸める。すなわち本ケースは
+    /// 「`as_f32()` 経由で寸法を計算した実装」と「権威経由の実装」を**数値で弁別**する
+    /// （両者が一致する 0.25 刻みの k＝分母 2 冪だけを見る檻では、この差は構造的に観測できない）。
+    #[test]
+    fn text_slot_view_physical_size_uses_rounding_authority_not_f32_scale() {
+        let mut world = make_world_with_gpu();
+        // 窓 DPI 112 ÷ author_dpi 96 = 7/6（既約分母 6＝非 2 冪・f32 で非厳密）。
+        let window = spawn_window_with_dpi(&mut world, 112);
+        let (emo_world, atlas, _golden) = build_target_assets(27, 27, 0x5B);
+
+        let mut presenter = EmoPresenter::new();
+        presenter
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
+            .expect("attach_target 失敗");
+        show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+
+        let view = presenter
+            .text_slot_view(TargetId(0))
+            .expect("表示確立後の text_slot_view は Some");
+        let k = ScaleRatio::new(112, 96).expect("非ゼロ比");
+
+        // (a) 契約: physical_size() == scaled_extent(applied, surface_size())。
+        assert_eq!(view.surface_size(), (27, 27), "前提: native 原寸");
+        assert_eq!(
+            view.physical_size(),
+            k.scaled_extent(27, 27),
+            "physical_size() は丸め権威 scaled_extent と一致しなければならない"
+        );
+        assert_eq!(
+            view.physical_size(),
+            (32, 32),
+            "27 × 7/6 = 31.5 → round half away from zero = 32（権威の検算値）"
+        );
+
+        // (b) 供給面の実寸とも一致する（照会値＝実表示の担保・要件 4.2）。
+        let chain_size = presenter
+            .targets
+            .get(&TargetId(0))
+            .and_then(|t| t.chain.as_ref())
+            .expect("表示確立後は chain がある")
+            .size();
+        assert_eq!(
+            view.physical_size(),
+            chain_size,
+            "physical_size() が実際の供給面寸と食い違う"
+        );
+
+        // (c) **非空虚性の核**: `as_f32()` から掛け算で復元した値は権威と食い違う（31 ≠ 32）。
+        //     physical_size() が `as_f32` 経由で実装されていれば (a)(b) ごと落ちる。
+        let via_f32 = (27.0f32 * view.scale()).round() as u32;
+        assert_eq!(
+            via_f32, 31,
+            "前提: as_f32 経由の掛け算はこの k で 31 へ切り下がる（弁別の前提が崩れていないこと）"
+        );
+        assert_ne!(
+            view.physical_size().0,
+            via_f32,
+            "physical_size() が as_f32 経由の掛け算と同値＝丸め権威を通っていない"
+        );
+
+        // (d) k≠1 ゆえ native 原寸とも一致しない（surface_size をそのまま返していれば落ちる）。
+        assert_ne!(
+            view.physical_size(),
+            view.surface_size(),
+            "k≠1 では物理寸と native 原寸は一致しない"
+        );
+    }
+
+    /// 要件 3.1（窓 client 物理寸の照会・消費点の単一口）: `EmoPresenter::target_physical_size` は
+    /// 丸め権威 `scaled_extent` を通した物理寸を返し、`TextSlotView::physical_size()` とも供給面の
+    /// 実寸（`chain.size()`）とも一致する。未登録・表示成立前は `None`。
+    ///
+    /// k は `TextSlotView` 側の檻と同じ **7/6**（窓 DPI 112 ／ author_dpi 96）× native 27px を使う——
+    /// `as_f32()` 経由の掛け算（31）と権威（32）が**数値で弁別**できる唯一種の k であり、
+    /// 分母が 2 冪の k（0.25 刻み）だけを見る檻では両実装の差が構造的に観測できないため。
+    #[test]
+    fn target_physical_size_uses_rounding_authority_and_matches_view_and_chain() {
+        let mut world = make_world_with_gpu();
+        let window = spawn_window_with_dpi(&mut world, 112);
+        let (emo_world, atlas, _golden) = build_target_assets(27, 27, 0x6C);
+
+        let mut presenter = EmoPresenter::new();
+        // 未登録 target は None（「まだ何も適用していない」を原寸で塗り潰さない）。
+        assert_eq!(
+            presenter.target_physical_size(TargetId(0)),
+            None,
+            "未登録 target の物理寸は None"
+        );
+
+        presenter
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
+            .expect("attach_target 失敗");
+        // 装着済みでも表示成立前（applied/native_size 未確定）は None。
+        assert_eq!(
+            presenter.target_physical_size(TargetId(0)),
+            None,
+            "初回 ShowSurface 前の物理寸は None"
+        );
+
+        show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+
+        let k = ScaleRatio::new(112, 96).expect("非ゼロ比");
+        let physical = presenter
+            .target_physical_size(TargetId(0))
+            .expect("表示確立後は Some");
+
+        // (a) 丸め権威との一致（27 × 7/6 = 31.5 → round half away from zero = 32）。
+        assert_eq!(
+            physical,
+            k.scaled_extent(27, 27),
+            "target_physical_size は丸め権威 scaled_extent と一致しなければならない"
+        );
+        assert_eq!(physical, (32, 32), "権威の検算値");
+
+        // (b) TextSlotView::physical_size() と同値（2 つの照会口が食い違わない）。
+        let view = presenter
+            .text_slot_view(TargetId(0))
+            .expect("表示確立後の text_slot_view は Some");
+        assert_eq!(
+            physical,
+            view.physical_size(),
+            "2 つの物理寸照会口が食い違う（同一の applied/native から同一権威で導くはず）"
+        );
+
+        // (c) 供給面の実寸とも一致する（照会値＝実表示・要件 4.2）。
+        let chain_size = presenter
+            .targets
+            .get(&TargetId(0))
+            .and_then(|t| t.chain.as_ref())
+            .expect("表示確立後は chain がある")
+            .size();
+        assert_eq!(physical, chain_size, "物理寸が実際の供給面寸と食い違う");
+
+        // (d) 非空虚性: native 原寸とも、`as_f32` 経由の掛け算とも異なる（両実装ミスを弾く）。
+        assert_ne!(
+            physical,
+            view.surface_size(),
+            "k≠1 では物理寸と native 原寸は一致しない（native を返していれば落ちる）"
+        );
+        let via_f32 = (27.0f32 * view.scale()).round() as u32;
+        assert_eq!(
+            via_f32, 31,
+            "前提: as_f32 経由の掛け算はこの k で 31 へ切り下がる"
+        );
+        assert_ne!(
+            physical.0, via_f32,
+            "target_physical_size が as_f32 経由の掛け算と同値＝権威を通っていない"
+        );
+    }
+
+    /// 要件 1.3/7.2（恒等 k の等価）: k=1/1 では `target_physical_size` が native 原寸と一致し、
+    /// `TextSlotView::physical_size()` とも揃う（恒等ゆえ既存挙動と等価）。
+    #[test]
+    fn target_physical_size_equals_native_at_identity_scale() {
+        let mut world = make_world_with_gpu();
+        let window = spawn_window_with_dpi(&mut world, 96);
+        let (emo_world, atlas, _golden) = build_target_assets(3, 2, 0xA4);
+
+        let mut presenter = EmoPresenter::new();
+        presenter
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
+            .expect("attach_target 失敗");
+        show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+
+        let view = presenter
+            .text_slot_view(TargetId(0))
+            .expect("表示確立後の text_slot_view は Some");
+        assert_eq!(view.scale(), 1.0, "前提: 恒等 k");
+        assert_eq!(
+            presenter.target_physical_size(TargetId(0)),
+            Some((3, 2)),
+            "k=1/1 では物理寸＝native 原寸（恒等・既存等価）"
+        );
+        assert_eq!(
+            presenter.target_physical_size(TargetId(0)),
+            Some(view.physical_size()),
+            "恒等 k でも 2 つの照会口は一致する"
+        );
+    }
+
+    /// 要件 1.3/7.2（恒等 k の等価）: k=1/1 では `physical_size()` と `surface_size()` が一致する。
+    #[test]
+    fn text_slot_view_physical_size_equals_native_at_identity_scale() {
+        let mut world = make_world_with_gpu();
+        let window = spawn_window_with_dpi(&mut world, 96);
+        let (emo_world, atlas, _golden) = build_target_assets(3, 2, 0x91);
+
+        let mut presenter = EmoPresenter::new();
+        presenter
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
+            .expect("attach_target 失敗");
+        show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+
+        let view = presenter
+            .text_slot_view(TargetId(0))
+            .expect("表示確立後の text_slot_view は Some");
+        assert_eq!(view.scale(), 1.0, "前提: 恒等 k");
+        assert_eq!(
+            view.physical_size(),
+            view.surface_size(),
+            "k=1/1 では物理寸＝native 原寸（恒等・既存等価）"
+        );
+        assert_eq!(view.physical_size(), (3, 2), "恒等ゆえ原寸そのまま");
     }
 
     /// 要件 1.4 観測完了（DPI 取得不能の縮退・専用檻）: 窓 entity に `DPI` component が**無い**target

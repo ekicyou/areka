@@ -95,7 +95,7 @@
   - _Requirements: 1.1_
   - _Depends: 2.1_
 
-- [ ] 4.2 (P) run_dpi_phase実装とemo2_frame_systemへの組込（frame.rs）
+- [x] 4.2 (P) run_dpi_phase実装とemo2_frame_systemへの組込（frame.rs）
   - `Changed<DPI>`を`Local<SystemState>`で観測し（`anchor_changed_system`先例踏襲）、対象targetの`refresh_scale`を呼ぶ
   - `refresh_scale`が新物理寸を返した場合、char窓は`resize_window_to`、balloon窓は`resize_window_keep_position`で窓寸をreconcileする
   - apply_showの状態照合報告（3.4）を受けて同一フレーム内でreconcileする第2経路も実装する（エッジ消費順序に依存しない）
@@ -161,6 +161,11 @@
 - 1.1: main同期は追加コミット不要（ブランチ == origin/main）。placement アンカーは `follow.rs` のみ行番号がずれた（`resize_window_to` :553→:786・`enqueue_window_set_pos` :729→:1009）。design.md へ差分表を記録済み。
 - 1.2: `scale_len` の中間型は design の u64 では `len≈num≈u32::MAX` で溢れるため **u128** が正。design.md を是正済み。
 - 1.2: `areka-emo-compose` の縮退経路は `tracing::warn!` 必須（steering `logging.md`）。ログ発火は `crate::log_capture::capture_logs` で檻に入れる（先例 `log_firing_tests.rs`・`plan.rs`）。純関数モジュールでも「無言縮退」はレビューで落ちる。
+- 4.2: **f32 で丸めを再実装してはならない（D4 違反・実証済み1px乖離）**。`ScaleRatio::as_f32` の doc が明示するとおり寸法演算に f32 を使うと、`num/den` が f32 で非厳密なとき厳密 .5 の積が .4999… へ落ちて切り下がる。実測反例＝author_dpi=96・窓DPI=112（k=7/6）・native=27 → 権威 **32** / f32 **31**。author_dpi は任意宣言値を通し、Windows のカスタム倍率は 1% 刻みゆえ分母が 2 冪でない k は普通に発生する。結果は**恒久的な1px見切れ**（同寸判定で固着）。
+- 4.2: **境界拡張を親が裁可**＝`TextSlotView::physical_size()` と `EmoPresenter::target_physical_size()` を `presenter.rs` へ additive 追加（いずれも `applied.scaled_extent(..)` 直行）。frame.rs 側で `ScaleRatio` を組み直す案は **k 導出権威（D2）の二重化**になるため却下。design の State Management が既に「物理寸 = scaled_extent(k, surface_size)」を契約として明記しており、新設ではなく既存契約を呼べるようにしたもの。
+- 4.2: **`resnap_shell_targets` は task 3.2 の契約変更で壊れていた**（`surface_size()` が native を返すようになったため k≠1 で窓を原寸へ引き戻す）。design「Revalidation Triggers」が明記する下流トリガゆえ修理はスコープ内。消費点は `text_slot_view()` を経由せず `target_physical_size()` を直接呼ぶ形にし、**native/物理の二択そのものを消した**（`text_slot_view` へ差し替えると E0308 でコンパイル不能＝型で構造的に閉じた）。
+- 4.2: **`/kiro-validate-impl` へ持ち上げる残課題**: `frame.rs` の resnap 呼び出しで `shell_target` → `balloon_target` の1トークン変異が**生存**する（492緑のまま）。Req4.5/DD-5「shell 限定駆動」の性質で**本 spec 以前から無檻**・resnap 資産の所有 spec 側の課題。frame.rs で檻に入れるには GPU が要り D9/R5.3 に抵触するため現配置規律では原理的に不可。消えさせないこと。
+- 4.2: **偽装交差検査の教訓**: 権威との同値テストは、標本が「必ず一致する入力（既約分母が2冪＝f32厳密）」だけだと檻にならない。乖離クラスを構造的に含む標本を選ぶこと。
 - 4.1: **タスク計画の穴（親が裁定）**: `BootAssets` への pub フィールド追加は crate 内の全 exhaustive destructure / struct literal を壊す。tasks.md が所有者を定めていたのは `frame.rs`（4.2）だけで、**`mod.rs`・`spine.rs`・`input_events/balloon.rs` は無所有**だった。親判断で 4.1 に機械的追随として同梱し、暫定 `96` の 4 箇所すべてに `// scaffold（task N）:` で所有タスクを明記した（**4.2 が frame.rs の2箇所、4.3 が mod.rs:254 を実値へ差し替える**）。`spine.rs:499` の 96 は stand-in ではなく emo2 fixture の実測真値。
 - 4.1: `BootAssets` の author_dpi は**呼び手供給**（`build_boot_assets` の末尾 2 引数）。`assets.rs` からの内部導出は不可＝`DescriptSource` が crate 外から構築不能（`GhostTitles.titles` が private・コンストラクタは `#[cfg(test)]`）かつ `parse_author_dpi` も private。加えて Flow 3 手順1 が「main が 1 度読んだ値を採寸 k₀ と attach の**双方**へ配る」ことを要求するため、内部導出は両者を別読取に載せてしまう。
 - 4.1: **4.2/4.3 レビューの必須項目**: `build_boot_assets(.., shell_author_dpi, balloon_author_dpi)` は `u16, u16` の隣接位置引数で**取り違えても型で落ちない**。関数内部の取り違えは 192/144 の相異値テストが檻に入れているが、**呼出側は未防護**。引数順の目視照合を必ず行うこと。
