@@ -184,6 +184,11 @@ pub fn project_restore(
         bottom: pos.y.saturating_add(size.h),
     };
     let Some(wa) = work_area_for_window(snapshot, window) else {
+        tracing::info!(
+            target: "areka::persist::project",
+            ?anchor, input_x = pos.x, input_y = pos.y,
+            "project_restore: work area なし→identity"
+        );
         return pos;
     };
 
@@ -192,22 +197,62 @@ pub fn project_restore(
     // project_anchor 内部の wa も同一 window 矩形から引くため補軸 clamp の wa と整合する。
     let projected = project_anchor(anchor, pos, size, Some(snapshot));
 
-    // 補軸 clamp（5.1・可視性保証）: project_anchor が固定した軸は保持し、補助軸のみ
-    // wa 内へ縮退する（Bottom/Top→x・Left/Right→y・Free→両軸）。
-    match anchor {
-        Anchor::Bottom | Anchor::Top => PointPx {
-            x: clamp_axis(projected.x, wa.left, wa.right.saturating_sub(size.w)),
-            y: projected.y,
-        },
-        Anchor::Left | Anchor::Right => PointPx {
-            x: projected.x,
-            y: clamp_axis(projected.y, wa.top, wa.bottom.saturating_sub(size.h)),
-        },
-        Anchor::Free => PointPx {
-            x: clamp_axis(projected.x, wa.left, wa.right.saturating_sub(size.w)),
-            y: clamp_axis(projected.y, wa.top, wa.bottom.saturating_sub(size.h)),
-        },
-    }
+    // 補軸 clamp は「アンカー射影後の char 矩形が work area と**全く交差しない**
+    // （＝完全に不可視）」ときのみ適用する（Req5.1: モニタ構成変化で保存位置が域外へ
+    // 落ちたときの可視化）。一部でも交差する（＝可視）なら保存位置（アンカー辺再導出のみ）を
+    // そのまま用いる（Req5.3: 収まる＝一部でも可視のとき不要な再射影をしない）。
+    //
+    // これで通常構成では復元＝保存（idempotent）を保証し、保存側（`project_anchor`／
+    // BottomSnapPolicy は補軸 x を clamp しない）との非対称による座標ずれを解消する
+    // ——実機サインオフ検出: 端付近（右端を数十 px はみ出す）へ置いた Bottom char が、
+    // 復元でだけ `wa.right − w` へ内側に寄せられて立ち位置がずれ、追従 balloon もずれた
+    // （保存 x=3493・wa.right=3840・w=434 → 復元だけが 3406 へ clamp していた）。
+    let projected_rect = RectPx {
+        left: projected.x,
+        top: projected.y,
+        right: projected.x.saturating_add(size.w),
+        bottom: projected.y.saturating_add(size.h),
+    };
+    let visible = projected_rect.left < wa.right
+        && projected_rect.right > wa.left
+        && projected_rect.top < wa.bottom
+        && projected_rect.bottom > wa.top;
+    let result = if visible {
+        // Req5.3: 一部でも可視 → 保存位置（アンカー辺再導出のみ）をそのまま用いる。
+        projected
+    } else {
+        // Req5.1: 完全に不可視（モニタ構成変化等）→ 補軸を wa 内へ寄せて可視化する。
+        match anchor {
+            Anchor::Bottom | Anchor::Top => PointPx {
+                x: clamp_axis(projected.x, wa.left, wa.right.saturating_sub(size.w)),
+                y: projected.y,
+            },
+            Anchor::Left | Anchor::Right => PointPx {
+                x: projected.x,
+                y: clamp_axis(projected.y, wa.top, wa.bottom.saturating_sub(size.h)),
+            },
+            Anchor::Free => PointPx {
+                x: clamp_axis(projected.x, wa.left, wa.right.saturating_sub(size.w)),
+                y: clamp_axis(projected.y, wa.top, wa.bottom.saturating_sub(size.h)),
+            },
+        }
+    };
+    // 復元射影の計測ログ（実機診断・保存↔復元の座標突合）: input＝保存値、projected＝
+    // アンカー辺再導出後、result＝可視性判定後。visible=false かつ input≠result なら
+    // モニタ構成変化での可視化 clamp が働いた証跡。
+    tracing::info!(
+        target: "areka::persist::project",
+        ?anchor,
+        input_x = pos.x, input_y = pos.y,
+        size_w = size.w, size_h = size.h,
+        wa_left = wa.left, wa_top = wa.top, wa_right = wa.right, wa_bottom = wa.bottom,
+        projected_x = projected.x, projected_y = projected.y,
+        visible,
+        result_x = result.x, result_y = result.y,
+        clamped = (result.x != projected.x || result.y != projected.y),
+        "project_restore"
+    );
+    result
 }
 
 /// 起動時の永続値先読み（本モジュール**唯一の IO 点**・design C1・A1 シーム）。
@@ -355,6 +400,23 @@ fn merge_scope(
         x: char_pos.x.saturating_add(balloon_offset.x),
         y: char_pos.y.saturating_add(balloon_offset.y),
     };
+
+    // 復元マージの計測ログ（実機診断・保存↔復元の座標突合）: saved_window＝保存された
+    // 窓位置（無ければ default 保持）、default_char＝resolver 既定、char_pos＝復元後の窓位置、
+    // balloon_offset（左上基準・現 char_size で逆変換済み）、balloon_pos＝最終バルーン位置。
+    tracing::info!(
+        target: "areka::persist::restore",
+        scope = placement.scope,
+        anchor = ?placement.anchor,
+        saved_win_x = ?saved_x, saved_win_y = ?saved_y,
+        default_char_x = placement.char_pos.x, default_char_y = placement.char_pos.y,
+        char_x = char_pos.x, char_y = char_pos.y,
+        char_w = placement.char_size.w, char_h = placement.char_size.h,
+        saved_off_x = ?saved_bx, saved_off_y = ?saved_by,
+        balloon_off_x = balloon_offset.x, balloon_off_y = balloon_offset.y,
+        balloon_x = balloon_pos.x, balloon_y = balloon_pos.y,
+        "merge_scope restore"
+    );
 
     ScopePlacement {
         scope: placement.scope,
@@ -775,6 +837,32 @@ mod tests {
         );
         assert_eq!(out.x + SZ.w, 1920, "右端が wa.right に一致＝域内");
         assert_eq!(out.y, 1040 - 600, "下端吸着は維持（5.2）");
+    }
+
+    /// 端付近に置いた Bottom char（右端を数十 px はみ出す＝**一部可視**）は復元で
+    /// クランプされず保存 x をそのまま用いる（Req5.3・実機サインオフ検出の恒久回帰）。
+    /// 保存側 `project_anchor`／BottomSnapPolicy は補軸 x を clamp しないため、一部可視の
+    /// 位置は復元でも同一でなければ立ち位置がずれ、追従 balloon もずれる（保存↔復元の
+    /// クランプ非対称）。実機値: 保存 x=3493・wa.right=3840・w=434（右端 3927 で 87px はみ出し）
+    /// → 修正前は 3406 へ clamp していた欠陥を固定する。
+    #[test]
+    fn project_restore_bottom_partially_visible_keeps_saved_x() {
+        let snap = snapshot_of(vec![wa_rect(0, 0, 3840, 2100)]);
+        let size = SizePx { w: 434, h: 687 };
+        // 一部可視（rect [3493,3927] が wa [0,3840] と交差）→ 保存 x を維持。
+        let out = project_restore(Anchor::Bottom, PointPx { x: 3493, y: 1553 }, size, &snap);
+        assert_eq!(
+            out.x, 3493,
+            "一部でも可視なら保存 x を維持（clamp しない・Req5.3・保存↔復元 idempotent）"
+        );
+        assert_eq!(out.y, 2100 - 687, "Bottom は下端吸着で y を再導出（5.2）");
+        // 対比: 完全に不可視（rect [4000,4434] が wa と交差なし）はクランプで可視化（Req5.1）。
+        let off = project_restore(Anchor::Bottom, PointPx { x: 4000, y: 1553 }, size, &snap);
+        assert_eq!(
+            off.x,
+            3840 - 434,
+            "完全不可視（モニタ構成変化相当）はクランプで画面内へ寄せる（Req5.1）"
+        );
     }
 
     /// 5.1/5.2: Left アンカーは x を wa.left へ固定し、補軸 y を域内へ clamp する。

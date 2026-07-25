@@ -389,6 +389,15 @@ pub(crate) fn on_char_drag_end(
             // debug＋skip（panic しない）。発火はこの DragEnd 観測点のみ（Req1.9）。
             match world.get::<CharWindowMarker>(entity).map(|m| m.scope) {
                 Some(scope) => {
+                    // 保存の計測ログ（実機診断・保存↔復元の座標突合）: この mapped が
+                    // WindowPos entries として Ghost 永続へ書かれる最終確定位置。
+                    tracing::info!(
+                        target: "areka::persist::save",
+                        scope,
+                        char_x = mapped.x, char_y = mapped.y,
+                        ?anchor,
+                        "char DragEnd 保存"
+                    );
                     let entries = char_pos_entries(
                         scope as u32,
                         PointPx {
@@ -668,6 +677,20 @@ pub(crate) fn on_balloon_drag_end(
             // アンカー辺基準へ変換（保存方向・サーフェス寸不変）→ BalloonOffset entries を
             // Ghost 永続スコープへ即時 write-through（fire-and-forget・7.1）。
             let persist = balloon_offset_to_persist(anchor, offset_tl, char_size);
+            // 保存の計測ログ（実機診断・保存↔復元の座標突合）: balloon_pos＝バルーン最終位置、
+            // char_pos＝追従元 char の最終位置、offset_tl＝左上基準差分、persist＝アンカー辺基準
+            // （BalloonOffset entries として書かれる値）、char_size＝offset 逆変換で使う寸。
+            tracing::info!(
+                target: "areka::persist::save",
+                scope,
+                balloon_x = balloon_pos.x, balloon_y = balloon_pos.y,
+                char_x = char_pos.x, char_y = char_pos.y,
+                offset_tl_x = offset_tl.x, offset_tl_y = offset_tl.y,
+                persist_x = persist.x, persist_y = persist.y,
+                char_w = char_size.w, char_h = char_size.h,
+                ?anchor,
+                "balloon DragEnd 保存"
+            );
             let entries = balloon_offset_entries(scope as u32, persist);
             persist_entries(world, entries);
             false
