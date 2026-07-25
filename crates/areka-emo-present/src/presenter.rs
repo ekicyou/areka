@@ -920,7 +920,8 @@ mod tests {
         Surface,
     };
 
-    use wintf::ecs::{GraphicsCore, HitTest, HitTestMode, Visual, WucGraphicsResource};
+    use wintf::ecs::{Arrangement, GraphicsCore, HitTest, HitTestMode, Visual, WucGraphicsResource};
+    use wintf::ecs::widget::bitmap_source::AlphaMask;
     use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 
     // ── GPU/WUC フィクスチャ（chain.rs / mount.rs / wuc_resource.rs テストと同一方針）──────────
@@ -4108,6 +4109,397 @@ mod tests {
         assert!(
             !has_display_success_log(&events),
             "失敗したのに表示成立点のログが出ている: {events:?}"
+        );
+    }
+
+    // ── task 6.3: 端数 k（5/4）の実表示・αマスクの k 寸/内容・縮小方向の自動追従 ───────────────
+    // 既存の k≠1 檻は **k=2/1**（整数倍・端数丸めが発火しない）か、k=7/6 の照会 API 群
+    // （`physical_size`／`target_physical_size`。これらは `chain.size()` との一致まで見るので
+    // 供給面寸は無檻ではない——ただし **readback バイト**は見ていない）である。ここで足すのは
+    // (A) 端数を伴う k での**実表示バイト＋供給面寸＋visual bounds**、
+    // (B) **αマスクが k 適用後バイト由来**であること（寸だけでなくビット内容）、
+    // (C) **縮小方向**の `refresh_scale`——の 3 点。なお (C) の `ResizeBuffers` 縮み追従自体は
+    // 既存 2 本と共倒れで、本テストの排他キルは**再表示経路のマスク寸・visual bounds 追従**にある。
+
+    /// target の surface entity（表示器＝visual/αマスク/bounds の宿主）を取り出す。
+    fn surface_entity_of(presenter: &EmoPresenter, target: TargetId) -> Entity {
+        presenter
+            .targets
+            .get(&target)
+            .and_then(|t| t.mount.as_ref())
+            .expect("表示成立後は mount が生成済み")
+            .surface_entity()
+    }
+
+    /// surface entity に供給済みの αマスク寸（未供給なら `None`）。
+    fn mask_dims(world: &World, surface_entity: Entity) -> Option<(u32, u32)> {
+        world
+            .get::<AlphaMaskResource>(surface_entity)
+            .and_then(|r| r.mask().map(|m| (m.width(), m.height())))
+    }
+
+    /// surface entity の `Arrangement` 寸（＝visual bounds・物理 px で直接設定される）。
+    fn arrangement_size(world: &World, surface_entity: Entity) -> Option<(u32, u32)> {
+        world
+            .get::<Arrangement>(surface_entity)
+            .map(|a| (a.size.width as u32, a.size.height as u32))
+    }
+
+    /// surface 1000 ＝ **α が画素ごとに変わる** `w×h` element の `(EmoWorld, AtlasTable)`。
+    ///
+    /// α は市松に `0xFF`（マスク hit）と `0x20`（閾値 128 未満＝非 hit）を置く。**α=0 を含まない**ため
+    /// atlas の α=0 除外トリムは全域を残し、合成外形は正確に `w×h` である。色は α を掛けた
+    /// premultiplied 値で焼く（`B,G,R ≤ A` の不変条件を崩さない）。
+    ///
+    /// 全不透明の `build_target_assets` では αマスクが**全ビット 1 の一様マスク**になり、
+    /// 「マスク内容が k 適用後バイト由来か」の検査が空虚になる（寸法しか弁別できない）。
+    fn build_alpha_varying_assets(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasTable) {
+        let base = Path::new("shell/master");
+        let surfaces = vec![surface(1000, vec![elem("p.png", 0, 0)])];
+
+        let mut dec = MemoryDecoder::new();
+        let stride = w * 4;
+        let mut img: Vec<u8> = Vec::with_capacity((stride * h) as usize);
+        for y in 0..h {
+            for x in 0..w {
+                let a: u8 = if (x + y) % 2 == 0 { 0xFF } else { 0x20 };
+                let pm = |c: u8| ((c as u16 * a as u16) / 255) as u8;
+                img.push(pm((x as u8).wrapping_mul(3).wrapping_add(salt)));
+                img.push(pm((y as u8).wrapping_mul(5).wrapping_add(salt)));
+                img.push(pm(((x + y) as u8).wrapping_mul(7).wrapping_add(salt)));
+                img.push(a);
+            }
+        }
+        dec.insert(base.join("p.png"), w, h, stride, img, true);
+
+        let set = SurfaceSet {
+            surfaces: &surfaces,
+            base_dir: base,
+            alpha_params: AlphaParams {
+                use_self_alpha: UseSelfAlpha::On,
+            },
+        };
+        let baked = bake(&[set], &dec, PackConfig::default());
+        assert!(baked.errors.is_empty(), "atlas bake セットアップは失敗しない");
+
+        let mut world = EmoWorld::build(&shell_of(surfaces));
+        world.bind_atlas(&baked.table, SetId(0));
+        (world, baked.table)
+    }
+
+    /// タスク 6.3 の名指し受け入れ基準・要件 2.1/2.5/3.1/3.2 観測完了（**端数を伴う k=5/4 の実拡大表示**）:
+    /// 窓 `DPI`=120（125%）・author_dpi=96 で `ShowSurface` を適用すると——(a) 供給面寸が
+    /// `scaled_extent(5/4, native)`、(b) `read_back` が **native 合成 → `resample(5/4)`** の独立再現と
+    /// 全バイト一致、(c) αマスク寸が k 適用後の物理寸、(d) visual bounds（`Arrangement`）も同寸、
+    /// (e) 窓寸 reconcile 要求も同寸で積まれる。
+    ///
+    /// # なぜ k=2/1 の既存檻に加えて 5/4 が要るのか
+    ///
+    /// k=2/1 は**整数倍**ゆえ `scaled_extent` の丸めが一度も発火しない。native 6×5 に 5/4 を掛けると
+    /// `7.5 → 8`・`6.25 → 6` で**両軸とも端数**になり、丸め規約（round half away from zero）を
+    /// 切り捨て実装（`7`）から数値で弁別できる。実機の常用水準（125%）そのものでもある
+    /// （Implementation Notes 4.3 の実測 `k_shell_ratio=ScaleRatio{num:5,den:4}`）。
+    #[test]
+    fn show_surface_scales_display_mask_and_bounds_at_k_five_quarters() {
+        let mut world = make_world_with_gpu();
+        let window = spawn_window_with_dpi(&mut world, 120);
+
+        let (emo_world, atlas, native_golden) = build_target_assets(6, 5, 0x71);
+        // 同一入力を独立に再現して k 適用後の golden を作る（presenter の内部値の追認ではない）。
+        let (probe_world, probe_atlas, _) = build_target_assets(6, 5, 0x71);
+        let k54 = ScaleRatio::new(5, 4).unwrap();
+        let (scaled_bytes, native_size, scaled_size) =
+            scaled_golden(&probe_world, &probe_atlas, 1000, k54);
+        assert_eq!(native_size, (6, 5), "fixture の native 原寸");
+        assert_eq!(
+            scaled_size,
+            k54.scaled_extent(6, 5),
+            "golden の外形は丸め権威 scaled_extent に従う"
+        );
+        assert_eq!(
+            scaled_size,
+            (8, 6),
+            "6×5/4=7.5→8・5×5/4=6.25→6（両軸とも端数・切り捨て実装なら 7×6 になる）"
+        );
+
+        let mut presenter = EmoPresenter::new();
+        presenter
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
+            .expect("attach_target 失敗");
+
+        show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+
+        // (a) 供給面寸＝k 倍後の物理寸。
+        let chain_size = presenter
+            .targets
+            .get(&TargetId(0))
+            .and_then(|t| t.chain.as_ref())
+            .expect("表示成立後は供給面が生成済み")
+            .size();
+        assert_eq!(
+            chain_size, scaled_size,
+            "供給面寸が scaled_extent(5/4, native) と一致しない（端数 k が表示へ届いていない）"
+        );
+
+        // (b) 表示バイトそのものが native→resample(5/4) の独立再現と一致（寸だけ合わせた偽物を弾く）。
+        let rb = presenter.read_back(TargetId(0)).expect("read_back 失敗");
+        assert_eq!(
+            rb.len(),
+            (scaled_size.0 * scaled_size.1 * 4) as usize,
+            "readback の画素数が k 倍後の寸と一致しない"
+        );
+        assert_eq!(
+            rb, scaled_bytes,
+            "表示バイトが native 合成の 5/4 リサンプル結果と一致しない"
+        );
+        assert_ne!(
+            rb, native_golden,
+            "前提: k=5/4 と等倍は弁別可能（native のまま表示していれば同値）"
+        );
+
+        // (c) αマスクは k 適用後の物理寸で供給される（native 寸のマスクを載せていれば落ちる）。
+        let surface_entity = surface_entity_of(&presenter, TargetId(0));
+        assert_eq!(
+            mask_dims(&world, surface_entity),
+            Some(scaled_size),
+            "αマスク寸が k 適用後の物理寸でない（native 寸のマスクが表示器へ載っている）"
+        );
+        assert_ne!(
+            mask_dims(&world, surface_entity),
+            Some(native_size),
+            "前提: k≠1 ゆえ native 寸とマスク寸は弁別可能"
+        );
+
+        // (d) 合成先 visual の bounds も同寸（R3.2・見切れ／余白を作らない）。
+        //     **初回表示では `VisualMount::attach` が k 適用後の外形で `Arrangement` を組む**ため、
+        //     ここは契約の明文化であって `set_bounds` 欠落変異の排他キルではない（その変異を殺すのは
+        //     再表示側の `refresh_scale_shrinks_display_mask_and_bounds_to_smaller_k`）。
+        assert_eq!(
+            arrangement_size(&world, surface_entity),
+            Some(scaled_size),
+            "visual bounds（Arrangement）が k 倍後の表示寸へ整合していない"
+        );
+
+        // (e) 照会契約・窓寸 reconcile 要求も同一の物理寸。
+        assert_eq!(presenter.applied_scale(TargetId(0)), Some(1.25));
+        assert_eq!(
+            presenter.target_physical_size(TargetId(0)),
+            Some(scaled_size),
+            "照会物理寸が供給面寸と乖離している"
+        );
+        assert_eq!(
+            presenter.take_pending_resize(TargetId(0)),
+            Some(scaled_size),
+            "初回表示が k 倍後の物理寸を報告していない"
+        );
+    }
+
+    /// 要件 2.1/2.5 観測完了（**αマスクは k 適用後バイト由来**）: α が画素ごとに変わる surface を
+    /// k=5/4 で表示すると、表示器へ供給される `AlphaMask` は——(a) 寸法が k 適用後の物理寸、
+    /// (b) **全ビットが「実際に表示されたバイト列から独立に組んだマスク」と一致**する。
+    ///
+    /// # なぜ寸法だけでは足りないのか
+    ///
+    /// `build_target_assets` は α=255 一様ゆえ、そこから作るマスクは**全ビット 1**である。寸法しか
+    /// 弁別できず、「k 適用前バイトを k 適用後の寸へ引き伸ばして作ったマスク」のような内容の誤りが
+    /// 素通りする。本テストは α に 0xFF（hit）と 0x20（閾値 128 未満＝非 hit）を市松に置き、
+    /// hit/非 hit が**両方存在すること**を前提として明示検査したうえでビット全走査する。
+    ///
+    /// マスクの**座標契約**（点÷k・ヒット規約）は本 spec の領分ではない（R7.9・W5
+    /// `areka-P0-collision-dpi-hittest`）。ここで固定するのは「表示バッファと同一 bytes・同一寸の
+    /// マスクが供給される」という emo-present 側の生成契約だけである。
+    ///
+    /// 実測の変異キル: 寸は正しいまま**内容だけ**を表示バイト由来でなくする変異（全画素 α=255 で
+    /// マスクを組む）は**本テストのみ**が落とす（他 89 本は全生存）——既存 fixture はすべて α=255
+    /// 一様ゆえ、そのマスクは元から全ビット 1 で当該変異と観測上区別できないからである。
+    #[test]
+    fn alpha_mask_bits_come_from_k_scaled_display_bytes() {
+        let mut world = make_world_with_gpu();
+        let window = spawn_window_with_dpi(&mut world, 120);
+
+        let (emo_world, atlas) = build_alpha_varying_assets(8, 6, 0x72);
+        let (probe_world, probe_atlas) = build_alpha_varying_assets(8, 6, 0x72);
+        let k54 = ScaleRatio::new(5, 4).unwrap();
+        let (scaled_bytes, native_size, scaled_size) =
+            scaled_golden(&probe_world, &probe_atlas, 1000, k54);
+        assert_eq!(native_size, (8, 6), "前提: α≠0 ゆえトリムは全域を残す");
+        assert_eq!(
+            scaled_size,
+            (10, 8),
+            "8×5/4=10・6×5/4=7.5→8（高さは端数・丸め権威）"
+        );
+
+        // 表示されるはずのバイト列から独立にマスクを組む（presenter の内部値の追認ではない）。
+        let expected = AlphaMask::from_pbgra32(
+            &scaled_bytes,
+            scaled_size.0,
+            scaled_size.1,
+            scaled_size.0 * 4,
+        );
+        // 非空虚性の前提: hit と非 hit が両方在る（全ビット 1 のマスクでは内容比較が空虚になる）。
+        let mut hits = 0usize;
+        let mut misses = 0usize;
+        for y in 0..scaled_size.1 {
+            for x in 0..scaled_size.0 {
+                if expected.is_hit(x, y) {
+                    hits += 1;
+                } else {
+                    misses += 1;
+                }
+            }
+        }
+        assert!(
+            hits > 0 && misses > 0,
+            "fixture 前提が崩れた: 期待マスクが一様（hit={hits} miss={misses}）＝内容比較が空虚"
+        );
+
+        let mut presenter = EmoPresenter::new();
+        presenter
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
+            .expect("attach_target 失敗");
+        show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+
+        // 前提: 画面に載ったバイトが k 適用後 golden そのもの（マスクの由来と同一の bytes）。
+        assert_eq!(
+            presenter.read_back(TargetId(0)).expect("read_back 失敗"),
+            scaled_bytes,
+            "表示バイトが k=5/4 のリサンプル結果と一致しない"
+        );
+
+        let surface_entity = surface_entity_of(&presenter, TargetId(0));
+        let mask_res = world
+            .get::<AlphaMaskResource>(surface_entity)
+            .expect("surface entity に AlphaMaskResource が無い");
+        let mask = mask_res.mask().expect("表示成立後は αマスクが供給済み");
+
+        // (a) 寸法が k 適用後の物理寸。
+        assert_eq!(
+            (mask.width(), mask.height()),
+            scaled_size,
+            "αマスク寸が k 適用後の物理寸でない"
+        );
+
+        // (b) 全ビット一致（k 適用前バイト由来・別解像度からの引き伸ばしをここで弾く）。
+        for y in 0..scaled_size.1 {
+            for x in 0..scaled_size.0 {
+                assert_eq!(
+                    mask.is_hit(x, y),
+                    expected.is_hit(x, y),
+                    "αマスク ({x},{y}) のビットが k 適用後の表示バイト由来でない"
+                );
+            }
+        }
+    }
+
+    /// タスク 6.3 の名指し受け入れ基準・要件 4.1/4.2 観測完了（**DPI 差替 → `refresh_scale` の縮小追従**）:
+    /// k=2/1 で表示を確立したのち窓 `DPI` を 192→120（k=2/1→5/4）へ差し替えて `refresh_scale` を呼ぶと、
+    /// 供給面が `ResizeBuffers` で**小さい物理寸へ**自動追従し、表示・αマスク・visual bounds・照会値・
+    /// 報告値がすべて新 k で揃う。
+    ///
+    /// # 既存 `refresh_scale_after_dpi_change_reapplies_new_k` との差
+    ///
+    /// 既存檻は **1/1 → 2/1（拡大方向・整数倍）** のみで、しかも観測は戻り値・照会値・readback バイトに
+    /// 閉じている。本テストは (1) **縮小方向**（`ResizeBuffers` が縮む側・source_tex/staging の再作成寸が
+    /// 縮む側）、(2) **端数を伴う遷移先 k**、(3) `refresh_scale` 経由でも **αマスクと visual bounds が
+    /// 追従すること**——を足す。
+    ///
+    /// 実測の変異キル: `set_bounds` を落とす変異は**本テストのみ**が落とす（他 89 本は全生存）——
+    /// 初回表示では `VisualMount::attach` が bounds を組むため、`set_bounds` が load-bearing なのは
+    /// 再表示経路だけだからである。`ResizeBuffers` を拡大方向のみへ落とす変異では本テストと既存 2 本
+    /// （`same_scale_hits_cache_and_window_dpi_change_misses_and_resamples`・
+    /// `native_size_tracks_displayed_surface_across_size_changing_switch`）が共倒れする。
+    #[test]
+    fn refresh_scale_shrinks_display_mask_and_bounds_to_smaller_k() {
+        let mut world = make_world_with_gpu();
+        let window = spawn_window_with_dpi(&mut world, 192);
+        let (emo_world, atlas, _native_golden) = build_target_assets(6, 5, 0x73);
+        let (probe_world, probe_atlas, _) = build_target_assets(6, 5, 0x73);
+        let k2 = ScaleRatio::new(2, 1).unwrap();
+        let k54 = ScaleRatio::new(5, 4).unwrap();
+        let (grown_bytes, native_size, grown_size) =
+            scaled_golden(&probe_world, &probe_atlas, 1000, k2);
+        let (shrunk_bytes, _, shrunk_size) = scaled_golden(&probe_world, &probe_atlas, 1000, k54);
+        assert_eq!(native_size, (6, 5));
+        assert_eq!(grown_size, (12, 10), "前提: k=2/1 の物理寸");
+        assert_eq!(
+            shrunk_size,
+            (8, 6),
+            "前提: k=5/4 の物理寸（両軸とも端数・遷移先が遷移元より小さい）"
+        );
+        assert!(
+            shrunk_size.0 < grown_size.0 && shrunk_size.1 < grown_size.1,
+            "前提: 縮小方向の遷移（ResizeBuffers の縮み追従を踏む）"
+        );
+
+        let mut presenter = EmoPresenter::new();
+        presenter
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
+            .expect("attach_target 失敗");
+
+        show_ok(&mut presenter, &mut world, TargetId(0), 1000);
+        assert_eq!(
+            presenter.read_back(TargetId(0)).expect("read_back 失敗"),
+            grown_bytes,
+            "前提: k=2/1 の表示が確立している"
+        );
+        assert_eq!(
+            presenter.take_pending_resize(TargetId(0)),
+            Some(grown_size),
+            "前提: 初回表示の要求を取り出しておく"
+        );
+
+        // モニタ跨ぎ移動（200% → 125%）の決定論的代替。
+        set_window_dpi(&mut world, window, 120);
+
+        assert_eq!(
+            presenter.refresh_scale(&mut world, TargetId(0)),
+            Some(shrunk_size),
+            "縮小方向の DPI 変化で新物理寸が返らない（再導出・再表示が走っていない）"
+        );
+
+        // 供給面が縮み側へ追従（ResizeBuffers ＋ source_tex/staging 再作成）。
+        let chain_size = presenter
+            .targets
+            .get(&TargetId(0))
+            .and_then(|t| t.chain.as_ref())
+            .expect("表示成立後は供給面が生成済み")
+            .size();
+        assert_eq!(
+            chain_size, shrunk_size,
+            "供給面が縮み側の新物理寸へ追従していない"
+        );
+
+        // 画面へ載った画素が新 k のリサンプル結果（旧 k の絵が残っていない）。
+        let rb = presenter.read_back(TargetId(0)).expect("read_back 失敗");
+        assert_eq!(
+            rb, shrunk_bytes,
+            "表示バイトが k=5/4 のリサンプル結果と一致しない"
+        );
+        assert_ne!(rb, grown_bytes, "前提: 2 水準の絵は弁別可能");
+
+        // αマスク・visual bounds も新 k へ追従（表示バッファだけ更新する実装をここで弾く）。
+        let surface_entity = surface_entity_of(&presenter, TargetId(0));
+        assert_eq!(
+            mask_dims(&world, surface_entity),
+            Some(shrunk_size),
+            "refresh_scale 後の αマスクが旧 k の寸のまま（表示だけ更新している）"
+        );
+        assert_eq!(
+            arrangement_size(&world, surface_entity),
+            Some(shrunk_size),
+            "refresh_scale 後の visual bounds が旧 k の寸のまま（余白が残る）"
+        );
+
+        // 照会契約と drain 契約。
+        assert_eq!(presenter.applied_scale(TargetId(0)), Some(1.25));
+        assert_eq!(
+            presenter.target_physical_size(TargetId(0)),
+            Some(shrunk_size)
+        );
+        assert_eq!(
+            presenter.take_pending_resize(TargetId(0)),
+            None,
+            "refresh_scale が返した要求が drain 側にも残っている（同一フレームで二重 resize になる）"
         );
     }
 }

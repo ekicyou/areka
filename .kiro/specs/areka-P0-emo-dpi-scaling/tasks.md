@@ -150,7 +150,7 @@
   - _Boundary: areka-emo-present/scale, placement_
   - _Depends: 1.4, 2.1, 2.3_
 
-- [ ] 6.3 emo-present in-crate GPU readback決定論テスト
+- [x] 6.3 emo-present in-crate GPU readback決定論テスト
   - k=2/1・k=5/4のShowSurface→read_back寸法・goldenバイト一致、DPI差替→refresh_scale→ResizeBuffers自動追従、マスクk寸検証のテストを実装する
   - k=1/1既存テスト群の期待値不変を確認する（回帰の錨）。テストWorldへDPI componentを明示挿入する規律を適用する
   - 別プロセス配置（emo-present in-crateテストバイナリ）であり、wintf tests/graphicsへの新設が無いことを確認する
@@ -174,6 +174,10 @@
 
 ## Implementation Notes
 
+- 6.3: **既存 GPU 檻の真の穴は「αマスク」だった**。k≠1 の既存檻はすべて **k=2/1＝整数倍**で `scaled_extent` の丸めが一度も発火しておらず、αマスクの寸を k と突き合わせるアサートは**どこにも無かった**（既存は k=1/1 での前後不変比較のみ＝寸が一致して素通り）。内容比較は皆無。**再表示経路でマスクが旧 k 寸のまま残る欠陥は本タスク以前まったく無檻**（レビュアー独自の変異 M-C で実証）。
+- 6.3: **端数 k は 5/4 では f32 と弁別できない**。5/4 は既約分母が 2 冪ゆえ f32 で厳密（6×1.25=7.5・5×1.25=6.25 とも exact、`f32::round` も half-away-from-zero）で、`scale_len` の f32 化変異に新テストは**構造的に参加できない**。この弁別は k=7/6 の既存2本（`text_slot_view_physical_size_uses_rounding_authority_not_f32_scale` ほか）が所有。**「端数 k」と「f32 で表現できない k」は別概念**。
+- 6.3: `scaled_golden` は `resample` を本体と**同一トークンで**呼ぶ（`presenter.rs:990`）ため、`resample` 内部のバイト算法変異は golden 側も同時に動き**原理的に検出できない**。emo-present の檻は「端数 k がこの経路を通る／寸が権威に従う」までを担い、**バイト算法は emo-compose 側 task 6.1 の厳密 golden が所有**——境界として正しい。
+- 6.3: **task 6.4 への申し送り**: 本タスクは `presenter.rs` の rustfmt 非準拠を 36 → 37 件へ増やした（`:4178`・既存 `build_target_assets` と同一の書き方）。HEAD 時点で本番域にも既存 drift があるので、fmt が DoD ゲートに入るなら crate 一括整形は別タスクの領分。
 - 6.2: **【一般教訓・レビュー承認条件】`tracing` のログ捕捉テストはプロセス大域の callsite interest キャッシュで毒される**。`tracing::subscriber::with_default` は**スレッドローカル**だが、**callsite interest キャッシュはプロセス大域かつ「最初に踏んだスレッドが勝つ」**。`DefaultCallsite::register()`（`tracing-core-0.1.36/src/callsite.rs:308-321`）は `has_just_one` が真のとき `Rebuilder::JustOne` を選び、interest を**登録スレッドの既定 subscriber**で評価する（同 :562-567）。subscriber を持たない別テストが当該 callsite を先に踏むと `NoSubscriber` → `Interest::never()` が焼き込まれ、捕捉テストがイベントを取りこぼす。**再現率は 12%（3/25・2/20）で、単体実行や `--test-threads=1` では 0/25 ＝ 素朴な検証では絶対に見つからない**。
 - 6.2: 上の対策＝**probe dispatcher を 2 個プロセス常駐**させ `has_just_one` を恒久的に偽へ落とし、捕捉窓内で `rebuild_interest_cache()` を 1 回呼ぶ（`crates/areka/src/placement/test_support.rs` が正本）。**1 個では不十分**——`register_dispatch`（`callsite.rs:551-558`）は push の**後**に `has_just_one = (len <= 1)` を書くので、1 個目の登録直後は真のまま隙間が残る。偽になれば `Rebuilder::Read`（登録済み dispatcher 全走査）へ落ち、probe が常に `Interest::sometimes()` を返す＋`Interest::and` は「異なれば必ず sometimes」（`subscriber.rs:658-664`）ゆえ**合成結果が never になることは原理的に無い**。probe は `enabled()`＝偽・`event()`＝no-op で観測に副作用なし（interest は never→sometimes へ**上げる**方向にしか動かない）。
 - 6.2: **フレーキーの証明には反復実行が要る**。「5 連続緑」は証拠にならない。修正の load-bearing 性は**アンチ変異**（対策を外して素朴実装へ戻す）で示すこと——実測で 4/50 の失敗が復活した。承認時の実測は areka bin 130 回・emo-present lib 90 回で失敗ゼロ（P(0/130) ≈ 5×10⁻⁸）。
