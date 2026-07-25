@@ -376,6 +376,10 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
         // loop_tables は attach では未使用（SERIKO ループ表は spawn_seriko の actor 構築＝task 9.2 が
         // 手渡す）。attach 相はループを駆動しないため破棄する。
         loop_tables: _,
+        // scaffold（task 4.1 搬送）: attach への供給は task 4.2 が結線する。
+        // それまでは下の `attach_target` へ既定 96 を直書きする（挙動は従来と同一）。
+        shell_author_dpi: _,
+        balloon_author_dpi: _,
     } = assets;
     let mut shells: Vec<_> = shells.into_iter().map(Some).collect();
     let mut balloons: Vec<_> = balloons.into_iter().map(Some).collect();
@@ -412,6 +416,8 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
             shell_window,
             shell_world,
             shell_atlas,
+            // scaffold（task 4.2 が `shell_author_dpi` へ差し替える）: 既定 96＝従来と同一挙動。
+            96,
         ) {
             error!(scope, error = %e, "emo2 attach: シェル target の attach に失敗（log-first・継続）");
             continue;
@@ -453,6 +459,8 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
             balloon_window,
             balloon_world,
             balloon_atlas,
+            // scaffold（task 4.2 が `balloon_author_dpi` へ差し替える）: 既定 96＝従来と同一挙動。
+            96,
         ) {
             error!(scope, error = %e, "emo2 attach: バルーン target の attach に失敗（log-first・継続）");
             continue;
@@ -824,6 +832,8 @@ mod tests {
                 shell: AnimationTable::empty(),
                 balloon: AnimationTable::empty(),
             },
+            shell_author_dpi: 96,
+            balloon_author_dpi: 96,
         }
     }
 

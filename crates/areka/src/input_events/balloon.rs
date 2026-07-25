@@ -1321,6 +1321,8 @@ mod tests {
             resolver: SurfaceResolver::new(BTreeMap::new()),
             static_binds: BindSet::default(),
             bind_resolver: BindResolver::empty(),
+            shell_author_dpi: 96,
+            balloon_author_dpi: 96,
             loop_tables: LoopTables {
                 shell: AnimationTable::empty(),
                 balloon: AnimationTable::empty(),

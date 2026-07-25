@@ -496,7 +496,8 @@ impl SpineHarness {
         spawn_ghost_windows(&mut world, &two_scope_placements(), &titles());
 
         // ── 構築入力（実 emo2 fixture・COM は make_world_with_gpu で初期化済み） ──
-        let assets = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1])
+        // 作者基準 DPI は emo2 fixture の実測既定（shell/balloon とも無宣言＝96・task 2.1）。
+        let assets = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
             .expect("emo2 fixture の BootAssets 組立は成功する");
 
         // ── presenter／文字層ランタイム／実 EmoTextSink（テストスレッド＝UI pump スレッド） ──
@@ -523,6 +524,8 @@ impl SpineHarness {
             static_binds,
             bind_resolver,
             loop_tables,
+            shell_author_dpi,
+            balloon_author_dpi,
         } = assets;
         // SERIKO ループ構成（task 9.4・design「結線・資産・実機経路（spine.rs）」）: 実 emo2 表
         // （`BootAssets.loop_tables`＝task 9.1 が `EmoWorld` スナップショットから `from_world` で構築）＋
@@ -569,6 +572,9 @@ impl SpineHarness {
                 shell: AnimationTable::empty(),
                 balloon: AnimationTable::empty(),
             },
+            // 作者基準 DPI は搬送のみ（本相は値を解釈しない）。
+            shell_author_dpi,
+            balloon_author_dpi,
         };
 
         // ── move channel＋実 MoveCueSink（wire_emo2_boot 手順4 と同型・S-3 形＝task 9.3） ──

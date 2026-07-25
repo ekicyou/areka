@@ -89,7 +89,7 @@
   - _Depends: 3.4_
 
 - [ ] 4. Integration: DPI変化の動的追従とboot結線
-- [ ] 4.1 BootAssetsへauthor_dpi搬送（assets.rs）
+- [x] 4.1 BootAssetsへauthor_dpi搬送（assets.rs）
   - `BootAssets`へ`shell_author_dpi`/`balloon_author_dpi`を追加する
   - BootAssetsからauthor_dpiが取得できる状態を確認できる
   - _Requirements: 1.1_
@@ -161,6 +161,9 @@
 - 1.1: main同期は追加コミット不要（ブランチ == origin/main）。placement アンカーは `follow.rs` のみ行番号がずれた（`resize_window_to` :553→:786・`enqueue_window_set_pos` :729→:1009）。design.md へ差分表を記録済み。
 - 1.2: `scale_len` の中間型は design の u64 では `len≈num≈u32::MAX` で溢れるため **u128** が正。design.md を是正済み。
 - 1.2: `areka-emo-compose` の縮退経路は `tracing::warn!` 必須（steering `logging.md`）。ログ発火は `crate::log_capture::capture_logs` で檻に入れる（先例 `log_firing_tests.rs`・`plan.rs`）。純関数モジュールでも「無言縮退」はレビューで落ちる。
+- 4.1: **タスク計画の穴（親が裁定）**: `BootAssets` への pub フィールド追加は crate 内の全 exhaustive destructure / struct literal を壊す。tasks.md が所有者を定めていたのは `frame.rs`（4.2）だけで、**`mod.rs`・`spine.rs`・`input_events/balloon.rs` は無所有**だった。親判断で 4.1 に機械的追随として同梱し、暫定 `96` の 4 箇所すべてに `// scaffold（task N）:` で所有タスクを明記した（**4.2 が frame.rs の2箇所、4.3 が mod.rs:254 を実値へ差し替える**）。`spine.rs:499` の 96 は stand-in ではなく emo2 fixture の実測真値。
+- 4.1: `BootAssets` の author_dpi は**呼び手供給**（`build_boot_assets` の末尾 2 引数）。`assets.rs` からの内部導出は不可＝`DescriptSource` が crate 外から構築不能（`GhostTitles.titles` が private・コンストラクタは `#[cfg(test)]`）かつ `parse_author_dpi` も private。加えて Flow 3 手順1 が「main が 1 度読んだ値を採寸 k₀ と attach の**双方**へ配る」ことを要求するため、内部導出は両者を別読取に載せてしまう。
+- 4.1: **4.2/4.3 レビューの必須項目**: `build_boot_assets(.., shell_author_dpi, balloon_author_dpi)` は `u16, u16` の隣接位置引数で**取り違えても型で落ちない**。関数内部の取り違えは 192/144 の相異値テストが檻に入れているが、**呼出側は未防護**。引数順の目視照合を必ず行うこと。
 - 3.5: **task 4.2 の最重要契約**＝`pending_resize` の消費責任は「表示成立を引き起こした者が消費する」。①`refresh_scale` が再表示に成功→自ら take して返す（drain 側は `None`＝二重 resize なし）②ゲート不成立→触らない（初回 k₀ 補正などの未消費要求を drain が拾う＝取りこぼしなし）③再表示失敗→触らない。**4.2 は `run_dpi_phase` の `refresh_scale` 戻り値と drain フェーズの `take_pending_resize` の両方を処理すること**（フェーズ順序に依存しないことはレビューで確認済み）。実装 doc の `# take_pending_resize との関係` 節が正本。
 - 3.5: `refresh_scale` の成否判定は再表示後の `applied == Some(scale)` 照合（`apply_show` が `()` を返し reply も無いため）。同時にゲート導出と `apply_show` の権威導出の一致検査も兼ねる。`EmptyComposition`→Hide 縮退は `applied` を書かないので「不成立」に正しく分類される。
 - 3.4: **状態照合の報告機構＝`PresentTarget.pending_resize` ＋ `take_pending_resize()`**（drain 可能な target 単位状態）。`PresentOutcome` の拡幅は**不可**——本番 drain 経路 `emo2_boot/frame.rs:539-551` は `reply: None` の撃ちっぱなしで報告が届かない（実コードで確認済み）。**task 4.2 はこの accessor から取り出すこと**。

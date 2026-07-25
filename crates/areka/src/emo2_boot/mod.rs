@@ -251,7 +251,8 @@ pub fn wire_emo2_boot(
     // 手順1: 構築入力の一括組立（scopes は placement と同じ入力から自前導出・DD-12）。
     // 失敗（fixture 不在等）は分類 warn/error の上 wired=false フォールバックへ倒す（R7.3）。
     let scopes = derive_scopes();
-    let assets = match build_boot_assets(ghost_root, balloon_root, &scopes) {
+    // scaffold（task 4.3 が main.rs から実 author_dpi を渡すよう結線する）: 既定 96＝従来と同一挙動。
+    let assets = match build_boot_assets(ghost_root, balloon_root, &scopes, 96, 96) {
         Ok(assets) => assets,
         Err(err) => {
             classify_wiring_error(&err);
@@ -294,6 +295,8 @@ pub fn wire_emo2_boot(
         static_binds,
         bind_resolver,
         loop_tables,
+        shell_author_dpi,
+        balloon_author_dpi,
     } = assets;
     // SERIKO ループ構成（design「本番は実時間・実 entropy 接続」・R7.4）: シェル／バルーンの 2 表は
     // `BootAssets.loop_tables`（task 9.1 が `EmoWorld` スナップショットから `from_world` で構築）を
@@ -344,6 +347,9 @@ pub fn wire_emo2_boot(
             shell: AnimationTable::empty(),
             balloon: AnimationTable::empty(),
         },
+        // 作者基準 DPI は搬送のみ（本相は値を解釈しない・attach への供給は task 4.2）。
+        shell_author_dpi,
+        balloon_author_dpi,
     };
 
     // loop ticker 用の tick 送出端: SerikoSink を 1 本 clone して保持する（surface_sink 本体は下の

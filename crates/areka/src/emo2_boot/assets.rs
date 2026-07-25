@@ -131,6 +131,15 @@ pub struct BootAssets {
     /// 既に保持する `EmoWorld` スナップショットから `AnimationTable::from_world` で構築する
     /// （新規ファイル I/O なし）。`spawn_seriko` の actor 構築へ手渡す（本タスクは起動時資産への保持のみ）。
     pub loop_tables: LoopTables,
+    /// シェル面の作者基準 DPI（ukadoc shell descript `seriko.dpi`・既定 96・areka-P0-emo-dpi-scaling D1）。
+    ///
+    /// 表示スケール k＝窓の実モニタ DPI ÷ 作者基準 DPI の**分母**。attach 相が
+    /// `attach_target(.., author_dpi)` へそのまま供給する（搬送のみ・値の解釈はしない）。
+    pub shell_author_dpi: u16,
+    /// バルーン面の作者基準 DPI（ukadoc balloon descript `dpi`・既定 96・同 D1）。
+    ///
+    /// シェルとは別パッケージ・別キーゆえ独立に保持する（両者が異なる宣言値を持ち得る）。
+    pub balloon_author_dpi: u16,
 }
 
 /// 構築入力（[`BootAssets`]）を一括組立する（tasks.md task 2.6・design「構築入力 / assets」）。
@@ -143,9 +152,20 @@ pub struct BootAssets {
 /// `SurfaceResolver` は `EmoWorld::alias_snapshot()` から、static bindset は shell descript KV の
 /// `default_bind_ids`（DD-8・task 2.3）→ `build_static_bindset` で組む。
 ///
+/// 作者基準 DPI（`shell_author_dpi`／`balloon_author_dpi`・areka-P0-emo-dpi-scaling task 4.1）は
+/// **呼び手が読んだ値をそのまま搬送する**（本関数は解釈も再読取もしない）。設計 Flow 3 手順1 が
+/// 定めるとおり、boot シームが `DescriptSource::shell_author_dpi()`／`load_balloon_author_dpi()`
+/// （placement::source・task 2.1）で **1 度だけ**読み、同じ値を採寸の k₀（`MeasureScaling`）と
+/// attach（`attach_target`）の双方へ配ることで、両者が同一の分母に載ることを保証する。
+/// ここで descript を読み直すと (a) 既に読んだファイルの二重 I/O になり、(b) 採寸と attach が
+/// 別々の読取結果に載る隙（読取間の差し替え）を作るため、内部読取は採らない。縮退梯子
+/// （無宣言=96／不正・0=warn+96）は単一権威 `placement::source::parse_author_dpi` が既に適用済みで、
+/// 本関数へ届く時点で常に有効な非ゼロ DPI である。
+///
 /// # 事前条件
 /// - 呼び出しスレッドは COM 初期化済み（`WicDecoderArm` 前提・本番は MTA UI スレッド）。
 /// - `scopes` は呼び手（`wire_emo2_boot`）が placement と同じ入力から自前導出する（DD-12）。
+/// - `shell_author_dpi`／`balloon_author_dpi` は縮退梯子適用済みの非ゼロ値（task 2.1 の読取器出力）。
 ///
 /// # 事後条件
 /// - 返る資産だけで attach フェーズが完結する（**以後ファイル I/O なし**）。全 I/O は本関数内で完結。
@@ -160,6 +180,8 @@ pub fn build_boot_assets(
     ghost_root: &Path,
     balloon_root: &Path,
     scopes: &[u32],
+    shell_author_dpi: u16,
+    balloon_author_dpi: u16,
 ) -> Result<BootAssets, BootWiringError> {
     // 実 WIC デコーダ（COM 初期化済みスレッド前提・donor build_and_spawn／placement measure と同型）。
     let decoder = WicDecoderArm::new().map_err(BootWiringError::Decoder)?;
@@ -285,6 +307,9 @@ pub fn build_boot_assets(
         static_binds,
         bind_resolver,
         loop_tables,
+        // 作者基準 DPI は呼び手が読んだ値の素通し搬送（解釈・再読取・既定差し替えをしない）。
+        shell_author_dpi,
+        balloon_author_dpi,
     })
 }
 
@@ -324,6 +349,8 @@ mod tests {
     use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 
     use super::*;
+    // 本番 boot（design Flow 3 手順1）と同じ作者基準 DPI 読取器（task 2.1）。
+    use crate::placement::source::{load_balloon_author_dpi, load_descript_source};
 
     /// `(key, value)` のスライスから shell descript KV 相当の `BTreeMap` を組む。
     fn kv(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
@@ -363,7 +390,8 @@ mod tests {
             let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
         }
 
-        let boot = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1])
+        // 作者基準 DPI は emo2 fixture の実測既定（shell/balloon とも無宣言＝96・task 2.1）。
+        let boot = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
             .expect("emo2 fixture の BootAssets 組立は成功する");
 
         // --- shells: 要求 scope に 1:1 対応・初期 surface id は DD-9（scope0=0／scope>=1=10） ---
@@ -484,7 +512,8 @@ mod tests {
             let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
         }
 
-        let boot = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1])
+        // 作者基準 DPI は emo2 fixture の実測既定（shell/balloon とも無宣言＝96・task 2.1）。
+        let boot = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
             .expect("emo2 fixture の BootAssets 組立は成功する");
 
         assert_eq!(
@@ -513,7 +542,8 @@ mod tests {
             let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
         }
 
-        let boot = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1])
+        // 作者基準 DPI は emo2 fixture の実測既定（shell/balloon とも無宣言＝96・task 2.1）。
+        let boot = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
             .expect("emo2 fixture の BootAssets 組立は成功する");
 
         // emo2 fixture の sakura.bindoption*.group,カテゴリ,mustselect（腕/口/眉/目）が起動時資産から判別できる。
@@ -536,6 +566,81 @@ mod tests {
                 .category_ids(BindNamespace::Sakura, "目")
                 .is_empty(),
             "mustselect カテゴリ `目` の ID 集合は非空（複数 id・10.3）"
+        );
+    }
+
+    /// 観測可能な完了条件（tasks.md task 4.1・要件 1.1）: 呼び手が渡した作者基準 DPI が
+    /// `BootAssets` の `shell_author_dpi`／`balloon_author_dpi` へそのまま搬送される。
+    ///
+    /// shell=192／balloon=144 という **互いに異なる非 96 値**を渡し、両フィールドが宣言値
+    /// そのままで届くことを固定する。96 固定のハードワイヤ（あるいは shell/balloon の取り違え）
+    /// はこの檻で落ちる。搬送は純粋な値移送ゆえ縮退梯子（`parse_author_dpi`・task 2.1）は
+    /// 通さない——ここで検査するのは「渡した値が変質せず attach 相まで届くこと」だけである。
+    #[test]
+    fn build_boot_assets_carries_supplied_author_dpi() {
+        // SAFETY: bake の WIC デコードに要る COM 初期化（既初期化の S_FALSE/RPC_E_CHANGED_MODE は無視）。
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        }
+
+        let boot = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 192, 144)
+            .expect("emo2 fixture の BootAssets 組立は成功する");
+
+        assert_eq!(
+            boot.shell_author_dpi, 192,
+            "shell の作者基準 DPI は渡した宣言値のまま搬送される（96 固定でない）"
+        );
+        assert_eq!(
+            boot.balloon_author_dpi, 144,
+            "balloon の作者基準 DPI は渡した宣言値のまま搬送される（shell と取り違えない）"
+        );
+    }
+
+    /// 観測可能な完了条件（tasks.md task 4.1・要件 1.1・design Flow 3 手順1）: task 2.1 の
+    /// 読取アクセサが emo2 fixture から返す値が、そのまま `BootAssets` から取り出せる。
+    ///
+    /// 本番 boot（design Flow 3）は `load_descript_source(...).shell_author_dpi()` と
+    /// `load_balloon_author_dpi(balloon_root)` で作者基準 DPI を **1 度だけ**読み、同じ値を
+    /// 採寸（`MeasureScaling` の k₀）と attach（`attach_target`）の双方へ配る。ここでは実
+    /// fixture に対しその経路を再現し、アクセサの戻り値と `BootAssets` の搬送値が一致すること
+    /// （＝搬送の途中で捏造・既定値差し替えが起きないこと）を固定する。
+    ///
+    /// emo2 fixture は shell（`seriko.dpi`）・balloon（`dpi`）とも **DPI 無宣言**ゆえ、
+    /// 正典既定の 96/96 が現実の既定ケースとなる（task 2.1 実測・既存採寸期待値に影響なし）。
+    #[test]
+    fn build_boot_assets_carries_emo2_accessor_author_dpi() {
+        // SAFETY: bake の WIC デコードに要る COM 初期化（既初期化の S_FALSE/RPC_E_CHANGED_MODE は無視）。
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        }
+
+        // 本番 boot と同じ読取器（task 2.1）で emo2 fixture の作者基準 DPI を得る。
+        let source =
+            load_descript_source(&emo2_root()).expect("emo2 fixture は Ok(DescriptSource) を返す");
+        let shell_dpi = source.shell_author_dpi();
+        let balloon_dpi = load_balloon_author_dpi(&emo2_balloon_root());
+        assert_eq!(
+            shell_dpi, 96,
+            "emo2 shell は seriko.dpi 無宣言＝正典既定 96"
+        );
+        assert_eq!(balloon_dpi, 96, "emo2 balloon は dpi 無宣言＝正典既定 96");
+
+        let boot = build_boot_assets(
+            &emo2_root(),
+            &emo2_balloon_root(),
+            &[0, 1],
+            shell_dpi,
+            balloon_dpi,
+        )
+        .expect("emo2 fixture の BootAssets 組立は成功する");
+
+        assert_eq!(
+            boot.shell_author_dpi, shell_dpi,
+            "搬送値は読取アクセサ（task 2.1）の戻り値と一致する"
+        );
+        assert_eq!(
+            boot.balloon_author_dpi, balloon_dpi,
+            "搬送値は読取アクセサ（task 2.1）の戻り値と一致する"
         );
     }
 
