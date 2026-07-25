@@ -136,7 +136,7 @@
   - _Depends: 5.1_
 
 - [ ] 6. Validation: 決定論テストと実機サインオフ
-- [ ] 6.1 (P) emo-compose scale.rs純関数テスト全網羅
+- [x] 6.1 (P) emo-compose scale.rs純関数テスト全網羅
   - 既約正準化・mul合成・is_identity・as_f32厳密値、DPI対照表境界（half丁度）・min1px・非溢れのテストを実装する
   - `cargo test -p areka-emo-compose`が新規テストを含めて全緑になる状態を確認できる
   - _Requirements: 1.3, 2.2, 2.5, 5.2_
@@ -174,6 +174,12 @@
 
 ## Implementation Notes
 
+- 6.1: **1.3 の申し送りは事実だった**——`resample` を「非乗算化→straight 補間→再乗算」へ変異させると**既存 194 本が全生存**し、新設の α 可変 golden 2 本だけが落ちる。既存 `resample_preserves_premultiplied_invariant` は名前に反して非乗算化を検出できない（`B,G,R ≤ A` は straight 経路でも成立するため）。**不変条件テストは厳密 golden の代替にならない**という一般教訓。
+- 6.1: **変異実験はリポジトリを汚さず scratchpad の隔離 crate で行うのが最善**（`scale.rs` は `composed.rs` + `log_capture.rs` にしか依存しないので写しを置ける）。リポジトリ側で変異させる場合は自前バックアップ＋`cp`＋**`touch`**（mtime 更新を忘れると cargo がリビルドを飛ばして偽緑）。`git checkout` に頼らないこと。
+- 6.1: **doc に「この変異を殺す」と書くなら排他的キルか既存との共倒れかを区別すること**。ラウンド1 は第1項の事実誤認（片側 gcd 削除は等価変異なのに「殺す」と記載）で REJECTED。新7本のうち**排他的キルを持つのは4本**（α可変 golden 2・`as_f32_is_query_view`・`scale_len_u128_intermediate`）で、残り3本は契約の明文化。
+- 6.1: **実測値を doc へ焼き込む方針の維持コスト**——439行中117行が doc で、`resample` 側を変更すると失敗テスト名の列挙が陳腐化する。spec 完了時に一度見直す価値がある（レビュー NON_BLOCKING 4）。
+- 6.1: `ScaleRatio::mul` の 2 個目 `gcd_u64`（:121）は縮退 shrink 後に非互いに素な対を作る入力でのみ意味を持つが、その witness が無く**片側 gcd 削除は等価変異**。結果は常に正準ゆえ実害なし・witness 構成の費用対効果が低いため、doc 記録をもって完了と裁定（レビュー LATENT_HAZARD_OWNER）。
+- 6.1: 未被覆の交差＝「α 可変**かつ**重みが割り切れない k」。各条件単独の檻（α可変＝新 golden 2本／量子化＝既存 `resample_five_quarters_is_deterministic_golden` が単独で担当）が実測で機能しており、交差でのみ顕在化する欠陥は構成が不自然ゆえ**追加の檻は不要**と裁定。
 - 5.2: `take_pending_resize` の報告は**エッジではなく「取り出されるまで消えない状態」**（presenter.rs:137-159）。ゆえに 1 フレームで複数 `apply` が走っても**最新の物理寸だけが残り、末尾 1 回の消費で正しい**。消費規約「表示成功を引き起こした者が消費する」の第二の消費者は `refresh_scale` だが、example はこれを呼ばないため取り逃す第三者がいない（grep で `refresh_scale` の呼び手は `frame.rs`/`presenter.rs` のみと確認）。
 - 5.2: `world.get_mut::<WindowPos>` は **`Deref` 読みだけでは `Changed` を立てない**。同寸同位置で `DerefMut` に触れず早期 return すれば churn ゼロ（k=1.0 で挙動不変を担保する要）。`SetWindowPos` の echo（`WM_WINDOWPOSCHANGED`）は `bypass_change_detection` で書かれるためループしない。
 - 5.2: **task 6.5 への申し送り**: べき等 skip の回でも balloon 経路は `compute_balloon_pos` → `read_balloon_offset` を通り descript.txt を読んで `info!`「balloon offset 無指定 — 既定整列…」を 1 行余分に出す。5.1 の `derive_scale` 二重ログと同種で、**`RUST_LOG` grep を行数で判定すると誤読する**（値で判定すること）。
