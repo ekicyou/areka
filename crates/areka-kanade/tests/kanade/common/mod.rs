@@ -1012,8 +1012,15 @@ pub fn drive_ticks_until_disconnect(
         {
             return;
         }
-        // 供給ペーシング: 送出ごとに 1 回 kanade へ処理を譲る。
-        std::thread::yield_now();
+        // 供給ペーシング: 送出ごとに短い backoff sleep で kanade ワーカースレッドへ CPU を
+        // 明け渡す。`yield_now()`（Windows: `SwitchToThread`＝同一プロセッサの ready スレッドのみに
+        // 譲る）は、`cargo test --workspace` の並列実行でコア数を超えるスレッド（多数の協調ループ檻
+        // ＋各 kanade ワーカー）が走る飽和下では kanade ワーカーへ確実に譲れず、producer の busy-spin が
+        // worker を CPU 飢餓させて `DEFAULT_TIMEOUT` を偽陽性で踏む（実ハングではなく競合飢餓＝単独/
+        // 直列では緑・並列で赤・失敗数も負荷依存で変動する非決定 flake）。短い sleep はスレッドを実際に
+        // deschedule するため飽和下でも worker が確実に前進でき、本ループの終了は少数の論理 tick で必然
+        // ゆえ総遅延は無視できる（deadline には到達しない）。
+        std::thread::sleep(Duration::from_micros(200));
         // ハング検出: deadline 超過は必ず panic（kanade 非終了の欠陥を失敗へ変換）。
         if std::time::Instant::now() >= deadline {
             panic!(

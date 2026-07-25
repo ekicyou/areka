@@ -332,6 +332,14 @@ fn main() -> Result<()> {
                 runtime.sylphya_publisher().clone(),
             );
         }
+        // バルーン選択肢対話配線を World へ結線（task 6.2・design「main.rs＋wire_balloon_choice」・
+        // R4.3/5.5/8.1）: mpsc チャネル生成＋`BalloonWiring`／`ChoiceSelectionInbox`（NonSend）挿入＋
+        // `clear_balloon_hover_on_leave` の Input スケジュール登録（`dispatch_pointer_events` 後）を
+        // 1 回・同期で行う（`wire_mouse_input` と同じ boot スロット＝schedule 実行外の World 変更ゆえ
+        // `Schedules` 変更が安全に成立する）。ハンドラ装着は `open_startup_window` の spawn 直後
+        // （`attach_balloon_pointer_handlers`）が担う。balloon ハンドラは `Emo2Wiring` を self-gate する
+        // ため wired 経路でのみ意味を持つ（`wire_mouse_input` と同じ gating・DD-IE-9 前例）。
+        input_events::balloon::wire_balloon_choice(app.world().borrow_mut().world_mut());
         (outcome.ghost, outcome.seriko, outcome.loop_ticker)
     } else {
         // フォールバック（R7.3・DD-7）: 現行の `LogSink`×2 boot を UI 基盤・起動窓の後へ
@@ -649,6 +657,12 @@ fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) {
                     // input_events 側が担う。spawn 直後の同一 World-mutation クロージャ内で
                     // 同期実行するため、キャラ窓は既に存在し async race はない。
                     input_events::attach_char_pointer_handlers(world);
+                    // バルーン窓へポインタハンドラを装着（task 6.2・`attach_char_pointer_handlers`
+                    // 直後・R4.3/5.5）: `BalloonWindowMarker` 窓へ `OnPointerMoved`／`OnPointerPressed`
+                    // を post-spawn 挿入する（標的はバルーン窓のみ＝キャラ窓配線の非退行・R4.3）。同一
+                    // `&mut World` クロージャ内で同期実行するためバルーン窓は既に存在し async race は
+                    // ない（キャラ窓ハンドラ装着と同型のタイミング契約）。
+                    input_events::balloon::attach_balloon_pointer_handlers(world);
                     let scopes: Vec<usize> = windows.scopes().collect();
                     tracing::info!(
                         ?scopes,

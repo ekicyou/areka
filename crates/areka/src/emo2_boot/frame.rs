@@ -228,6 +228,24 @@ impl Emo2Wiring {
         &self.presenter
     }
 
+    /// 文字層 runtime への共有ハンドル読み口（design「アクセサ（emo2_boot/frame.rs）」・
+    /// `Emo2Wiring::runtime()`・Req 4.1）。
+    ///
+    /// choice-interact のバルーン選択肢対話配線（`super::super::input_events::balloon`）が、この借用を
+    /// 経由して `TextLayerRuntime` を読み取り選択肢ハイライト／確定を橋渡しする。既存 [`presenter()`]
+    /// アクセサと同型の additive な読み口であり、挙動は一切変えない（`runtime` の所有・可変アクセスは
+    /// frame 相の text フェーズに閉じたまま、配線層へは read 口のみを開ける）。上流クレート
+    /// （`areka-emo-text`）には一切手を入れない（R8.5）。
+    ///
+    /// 第一 production 消費者（choice-interact の balloon 配線＝後続 task）が生えるまでは呼び出しが
+    /// 無く dead_code 警告になる（`areka` は bin crate・baseline は警告皆無）ため明示抑止する。
+    ///
+    /// [`presenter()`]: Self::presenter
+    #[allow(dead_code)]
+    pub(crate) fn runtime(&self) -> &Rc<RefCell<TextLayerRuntime>> {
+        &self.runtime
+    }
+
     /// `\![move]` 指令受信端への test-support アクセサ（task 9.1 の存在檻・9.3 の e2e で消費）。
     ///
     /// 本番の frame 相 drain（task 9.2）は `move_rx` を private に閉じて `apply_move_directive` へ
