@@ -1,7 +1,7 @@
 # Implementation Plan
 
 - [ ] 1. Foundation: main同期ゲートとスケール数学基盤
-- [ ] 1.1 position-persistマージ確認とmain同期ゲート
+- [x] 1.1 position-persistマージ確認とmain同期ゲート
   - 開発者へ`areka-P0-position-persist`のmainマージ完了を確認依頼し、本worktreeブランチへorigin/mainを同期する
   - 同期後、placement系実測アンカー（measure.rs:62、follow.rs:553/:729、source.rs:102）をdiffで再確認し、design.mdのBoundary Deviation Notesとの整合を確認する
   - git logに同期コミットが記録され、アンカー行番号のずれがあれば設計への追記を済ませた状態を観測可能とする

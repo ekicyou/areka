@@ -68,6 +68,18 @@ W4 事前割当契約の編集面は「`measure.rs`＋emo-atlas/compose/present�
 
 R7.7（W5 送り）は発動しない（直列化により衝突を回避）。
 
+**main 同期ゲートの実施記録（2026-07-25・タスク 1.1）**: `areka-P0-position-persist` は main へ squash マージ済み（`33aa384`）。本実装ブランチは `origin/main` と完全一致（ahead 0 / behind 0）を確認し、追加の同期コミットは不要であった。同期後の placement 系実測アンカーを再確認し、下表のとおり**行番号のみ**が変動（関数の存在・シグネチャ・責務は設計時と同一・設計判断に変更なし）:
+
+| 対象 | 設計時アンカー | 同期後の実測 | 差分 |
+|------|----------------|--------------|------|
+| `measure.rs` `measure_scope_sizes` | :62 | :62 | ずれなし |
+| `source.rs` `load_descript_source` | :102 | :102 | ずれなし |
+| `follow.rs` `resize_window_to` | :553 | :786 | +233 |
+| `follow.rs` `enqueue_window_set_pos`（私有単一ライター） | :729 | :1009 | +280 |
+| `follow.rs` DragEnd 観測域（position-persist 所有） | :319-350 / :443-488 | `on_char_drag_end` :340-456 / `on_balloon_drag_end` :621-721 | 拡大 |
+
+したがって `resize_window_keep_position` の追記位置は「公開 API 群の末尾＝`work_area_for_window`（:1132-1160）の直後・`#[cfg(test)] mod tests`（:1166）の直前」とする（DragEnd 観測域から十分に離れる）。
+
 ### Revalidation Triggers
 
 下流・並走 spec は次の変化で再検証を要する:
