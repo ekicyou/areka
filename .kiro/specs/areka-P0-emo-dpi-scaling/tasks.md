@@ -18,7 +18,7 @@
   - 恒等コピー・2倍整数k・非整数k（5/4）のgoldenテストがバイト決定論で再現する状態を確認できる
   - _Requirements: 2.1, 2.5, 7.2_
 
-- [ ] 1.4 ScalePolicy・derive_scale実装（emo-present scale.rs）
+- [x] 1.4 ScalePolicy・derive_scale実装（emo-present scale.rs）
   - author_dpi・app_scale（ONE固定）を保持するPolicy構造体を新設
   - derive_scale純関数（DPI不在縮退・dpi_x≠dpi_y警告・author_dpi=0正規化）を実装
   - 正常/DPI不在/dpi_x≠dpi_y/author_dpi=0の全分岐がunit testで判定される状態を確認できる
@@ -161,6 +161,9 @@
 - 1.1: main同期は追加コミット不要（ブランチ == origin/main）。placement アンカーは `follow.rs` のみ行番号がずれた（`resize_window_to` :553→:786・`enqueue_window_set_pos` :729→:1009）。design.md へ差分表を記録済み。
 - 1.2: `scale_len` の中間型は design の u64 では `len≈num≈u32::MAX` で溢れるため **u128** が正。design.md を是正済み。
 - 1.2: `areka-emo-compose` の縮退経路は `tracing::warn!` 必須（steering `logging.md`）。ログ発火は `crate::log_capture::capture_logs` で檻に入れる（先例 `log_firing_tests.rs`・`plan.rs`）。純関数モジュールでも「無言縮退」はレビューで落ちる。
+- 1.4: **task 6.2 への申し送り（レビュー推奨）**: `areka-emo-present` には log-capture ハーネスが無く（emo-compose の `log_capture` は crate 私有・`tracing-subscriber` の dev 依存も無し）、`derive_scale` の縮退ログ4本は**発火が檻に入っていない**。6.2 で emo-compose 型の `log_capture` モジュール＋`tracing-subscriber` dev 依存を追加すること（workspace 既存依存の dev 追加ゆえ R7.3 抵触なし）。現状は私有 `ScaleDecision` フラグで分岐選択のみ檻に入れている。
+- 1.4: **task 3.2/3.3 への申し送り**: wintf `DPI` component を `Option<(u16,u16)>` へ写像するとき、**component 不在を `Some((96,96))` で埋めてはならない**。埋めると R1.4 の縮退分岐が「正常系のふり」で素通りする（design の Integration Tests 節と同趣旨）。
+- 1.4: `cargo clippy -p areka-emo-present --all-targets` は**依存 `wintf` の deny-by-default lint**（`not_unsafe_ptr_arg_deref` × 20・`com/d2d/command_sink.rs`）で exit 101 になる既存事象。`RUSTFLAGS=--cap-lints=warn` で再走して自クレートを判定すること。
 - 1.3: **task 6.1 への申し送り（レビュー非ブロッキング指摘）**: `resample` の premultiplied 検証が弱い。厳密値を主張するテストは全て α=255 で、α 可変ケースは `B,G,R ≤ A` の不変条件しか見ていないため、**非乗算化→再乗算する実装でも緑になる**。6.1 で「α 可変の厳密 golden」を1本足して締めること。
 - 1.3: 色補間の丸めは 16bit 重み量子化ゆえ厳密有理 bilinear の **tie で下側に落ちる**（k=5/4 で 71.5→71）。決定論であり D5（整数固定小数点）の規定どおり。R2.5 の「単一の丸め規約」は**寸法**（`scaled_extent`）の話で色ではない、と裁定済み。
 - 1.2: `plan.rs:334` に **既存の** clippy `collapsible_if` 警告あり（本 spec の境界外・触らない）。crate 全体に既存の `cargo fmt` 差分（import 順）もあるため、fmt は変更行のみで判定する。

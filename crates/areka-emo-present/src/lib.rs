@@ -42,8 +42,12 @@ pub(crate) mod mount;
 /// 提示統括（`EmoPresenter`）。合成・キャッシュ・供給面・窓装着・マスク同期を UI スレッド上で結線する
 /// 統括ハブ。`command`/`cache`/`chain`/`mount` を消費する提示段の一点集約層。
 pub mod presenter;
+/// k の政策（`ScalePolicy`・`derive_scale`）。author_dpi・アプリ管理拡大率シーム・DPI 不在縮退を
+/// presenter の外で純関数化する層（k の**数学**は上流 `areka-emo-compose` の `scale` が担う）。
+pub mod scale;
 
 pub use balloon::build_balloon_target;
 pub use cache::{CacheEntry, ComposeCache};
 pub use command::{PresentCommand, PresentError, PresentOutcome, TargetId};
 pub use presenter::{EmoPresenter, TextSlotView};
+pub use scale::{DEFAULT_AUTHOR_DPI, ScalePolicy, derive_scale};

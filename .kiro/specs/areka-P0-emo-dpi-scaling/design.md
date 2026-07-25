@@ -410,7 +410,13 @@ pub struct ScalePolicy {
 
 /// 実適用 k を導出する（表示 show 適用ごとに呼ぶ・数命令）。
 /// - dpi None（DPI component 不在＝取得不能）: error! ＋ app_scale×1（R1.4 の k=1.0 縮退）
-/// - dpi_x != dpi_y: warn!（初回）＋ dpi_x 採用（D2）
+/// - dpi_x != dpi_y: warn!（毎回）＋ dpi_x 採用（D2）
+///   ※実装時是正（2026-07-25・タスク 1.4 レビュー承認）: 当初「初回」と記したが、
+///     抑止状態を持たせると本節 Invariants「同一入力→同一出力（純関数）」を破る。
+///     さらに module 級 once は窓ごと政策（R1.5）の下で別窓の初回警告まで握り潰す。
+///     `derive_scale` は毎フレームではなく ShowSurface 適用ごとの呼出ゆえログ量も許容。
+/// - dpi_x == 0（窓 DPI 値そのものが不正）: error! ＋ app_scale×1（追加分岐・
+///     `ScaleRatio::new(0,_)` が None ゆえ未処理だとパニックか無言縮退しか残らない）
 /// - 正常: app_scale × ScaleRatio::new(dpi_x, author_dpi)
 pub fn derive_scale(policy: ScalePolicy, dpi: Option<(u16, u16)>) -> ScaleRatio;
 ```
