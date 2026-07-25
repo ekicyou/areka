@@ -149,7 +149,7 @@
   - _Depends: 5.2_
   - _Boundary: areka-ghost tests_
 
-- [ ] 8. Validation: 決定論檻と実機サインオフ
+- [x] 8. Validation: 決定論檻と実機サインオフ
 - [x] 8.1 偽 Free アンカー DragEnd→保存値等価の檻
   - headless World に `Anchored(Anchor::Free)` のキャラ窓を合成し、DragEnd 駆動で保存 entries が wndproc 確定位置と値等価になることを固定する（emo2 は全スコープ Bottom のため実機観測不能・この檻が正本）
   - 観測可能な完了条件: Free アンカー窓の DragEnd 後、投函された entries の座標が確定位置と一致するテストが通ること
@@ -192,11 +192,16 @@
   - _Depends: 7.1, 7.2_
   - _Boundary: areka-ghost tests_
 
-- [ ] 8.7 実機サインオフ（実 emo2・実 DPI≠96・マルチモニタ）
+- [x] 8.7 実機サインオフ（実 emo2・実 DPI≠96・マルチモニタ）
   - 絶対パス起動の実 emo2＋実 pasta.dll・実 DPI（≠96）・マルチモニタ環境で、`AREKA_APP_SMOKE_EXIT_MS` の有界 auto-exit と `RUST_LOG` grep により以下を人間のサインオフで確認する: (1) ドラッグ→終了→再起動→前回位置一致（キャラ・バルーン相対）、(2) 初回起動で挨拶完走後に `prop_set_cue applied` が記録され、2 回目以降は挨拶が繰り返されず `boot_gate skip_first_boot` が記録される、(3) 保存モニタ切断構成での再起動でゴーストが画面内に出現し、構成復帰後は元位置へ戻る
   - 観測可能な完了条件: 上記 3 点すべてが実機ログ grep と目視で確認され、サインオフ記録が残ること
   - _Requirements: 8.6_
   - _Depends: 8.2, 8.5, 8.6_
+  - **サインオフ記録（2026-07-25・開発者 ekicyou 目視＋ログ grep・実 emo2＋実 pasta.dll・絶対パス起動）**
+    - (1) 位置維持: **PASS** — 両スコープのキャラ窓＋バルーンをドラッグ→終了→再起動で配置一致を目視確認。数値裏付け: 保存原点 scope0=3706／scope1=3173 に対し復元原点も 3706／3173（むらさきは surface0 434×687 ↔ surface1000 382×547 と寸法が変わるが原点不動）。`persist commit failed` 0 件・`persist flush confirmed` 記録。
+    - (2) 初回ゲート: **PASS** — 初回起動で挨拶完走＋`prop_set_cue applied key="areka.boot.count" value="1"`、2 回目以降は挨拶が繰り返されず `boot_gate skip_first_boot`／OnFirstBoot GET 非発行／`prop_set_cue applied` 非発火を確認。
+    - (3) モニタ切断構成: **未実施**（物理的なモニタ切断が必要なため見送り。開発者判断で本サインオフは (1)(2) をもって完了とする）。復元時クランプ（完全不可視時のみ画面内へ寄せる）は決定論檻 `project_restore_bottom_partially_visible_keeps_saved_x` ほかで固定済み。
+    - 本サインオフ過程で実機由来の欠陥を 5 件検出・修正（Implementation Notes ①〜⑤参照）。恒久の座標計測ログ（`areka::persist::{save,restore,project}`・info）を装備。
 
 ## Implementation Notes
 
