@@ -42,7 +42,8 @@ use wintf::ecs::window::monitor::Monitor;
 use wintf::ecs::{Point, SetWindowPosCommand, SizeI, WindowHandle, WindowPos};
 
 use super::persist::{
-    balloon_offset_entries, balloon_offset_to_persist, char_pos_entries, persist_entries,
+    balloon_offset_entries, balloon_offset_to_persist, char_pos_entries, char_pos_to_origin_x,
+    persist_entries,
 };
 use super::resolver::{Anchor, PointPx, RectPx, SizePx};
 use super::spawn::{BalloonWindowMarker, CharWindowMarker};
@@ -389,22 +390,43 @@ pub(crate) fn on_char_drag_end(
             // debug＋skip（panic しない）。発火はこの DragEnd 観測点のみ（Req1.9）。
             match world.get::<CharWindowMarker>(entity).map(|m| m.scope) {
                 Some(scope) => {
-                    // 保存の計測ログ（実機診断・保存↔復元の座標突合）: この mapped が
-                    // WindowPos entries として Ghost 永続へ書かれる最終確定位置。
+                    // 原点（下端中央）基準へ移してから保存する。左上 x のまま保存すると、
+                    // サーフェス寸が変わったとき「同じ左上」が別の中央を指し、復元で
+                    // キャラ・バルーンが横へずれる（実機: むらさき 382 で保存→434 で復元）。
+                    // 現寸が読めないときは左上のまま（防御・従来挙動）。
+                    let char_size = world
+                        .get::<WindowPos>(entity)
+                        .and_then(|wp| wp.size)
+                        .map(|s| SizePx {
+                            w: s.width,
+                            h: s.height,
+                        });
+                    let saved = match char_size {
+                        Some(size) => char_pos_to_origin_x(
+                            anchor,
+                            PointPx {
+                                x: mapped.x,
+                                y: mapped.y,
+                            },
+                            size,
+                        ),
+                        None => PointPx {
+                            x: mapped.x,
+                            y: mapped.y,
+                        },
+                    };
+                    // 保存の計測ログ（実機診断・保存↔復元の座標突合）: char_x/y は左上、
+                    // saved_x は実際に永続へ書く原点（下端中央）基準の x。
                     tracing::info!(
                         target: "areka::persist::save",
                         scope,
                         char_x = mapped.x, char_y = mapped.y,
+                        saved_x = saved.x, saved_y = saved.y,
+                        char_w = ?char_size.map(|s| s.w),
                         ?anchor,
                         "char DragEnd 保存"
                     );
-                    let entries = char_pos_entries(
-                        scope as u32,
-                        PointPx {
-                            x: mapped.x,
-                            y: mapped.y,
-                        },
-                    );
+                    let entries = char_pos_entries(scope as u32, saved);
                     persist_entries(world, entries);
                 }
                 None => {
@@ -803,8 +825,27 @@ pub fn resize_window_to(world: &mut World, char_window: Entity, new_size: SizePx
         (PointPx { x: pos.x, y: pos.y }, wp.size)
     };
 
+    // 3b. 原点＝**下端中央**の保存（伺かの立ち絵は足元中央が接地点・寸法変動で原点は動かない）。
+    //     旧寸の中央 x を求め、新寸でも同じ中央になる左上 x へ付け替えてから射影へ渡す。
+    //     これをしないと左上 x が据え置かれ、幅が変わるたびキャラの見た目の中心が横へ動き
+    //     （実機: むらさきが surface0 434 → surface1000 382 で中心が 26px ずれる）、
+    //     随伴バルーンも一緒に引きずられる。旧寸不明（窓生成直後等）は付け替えない。
+    //     対象は**下端吸着（Bottom）のみ**——Free は「位置を一切動かさない」契約、
+    //     Top/Left/Right は各アンカー辺（上端・左端・右端）が原点であって中央ではない。
+    let raw = match (anchor, current_size) {
+        (Anchor::Bottom, Some(old)) if old.width > 0 && new_size.w > 0 => {
+            let center_x = raw.x.saturating_add(old.width / 2);
+            PointPx {
+                x: center_x.saturating_sub(new_size.w / 2),
+                y: raw.y,
+            }
+        }
+        _ => raw,
+    };
+
     // 新位置 = アンカー射影 T（bottom は wa.bottom−h' 再計算・snapshot 不在は
     // project_anchor が identity 縮退）。drag と同一 T を呼び二重化しない（Req1.6）。
+    // 下端は T が再導出し、中央 x は上の付け替えで維持される＝原点（下端中央）が不動。
     let snapshot = world.get_resource::<MonitorSnapshot>();
     let new_pos = project_anchor(anchor, raw, new_size, snapshot);
 
@@ -827,7 +868,35 @@ pub fn resize_window_to(world: &mut World, char_window: Entity, new_size: SizePx
         return false;
     }
 
-    // 6. 随伴バルーン維持（Req2.6）: 確定後キャラ窓座標＋offset で追従（offset 恒等式維持）。
+    // 6. 随伴バルーン維持（Req2.6）＋**原点（下端中央）基準での相対維持**:
+    //    セッション内 `BalloonFollow.offset` は左上基準表現ゆえ、寸法が変わると
+    //    「左上からの距離」を保ったままバルーンが動いてしまう（実機: むらさきの
+    //    surface0 434x687 → surface1000 382x547 で高さ差 140px・幅差 52px ぶん
+    //    バルーンが引きずられた）。原点＝下端中央は寸法変動で動かないのだから、
+    //    バルーンの相対位置も下端中央基準で不変であるべき。旧寸・新寸から原点差
+    //    （Δ = 新原点 − 旧原点、左上基準の差分）を求め、offset をその逆方向へ
+    //    付け替えて「下端中央からの相対位置」を保存する。旧寸不明なら従来どおり。
+    //    対象は下端吸着（Bottom）のみ（他アンカーは原点が中央でないため従来どおり）。
+    if let (Anchor::Bottom, Some(old)) = (anchor, current_size)
+        && old.width > 0
+        && old.height > 0
+        && let Some(mut follow) = world.get_mut::<BalloonFollow>(char_window)
+    {
+        // offset は「char 左上からの差分」表現。原点（下端中央）からの相対を不変に保つには、
+        //   旧原点相対 = offset_old + 旧左上 − 旧原点 = offset_old − (old.w/2, old.h)
+        //   新 offset   = 旧原点相対 + 新原点 − 新左上 = 旧原点相対 + (new.w/2, new.h)
+        // ゆえに offset += ((new.w/2 − old.w/2), (new.h − old.h)) が正しい変換
+        // （原点が左上から見て遠ざかった分だけ、左上基準 offset は増える）。
+        let d_origin_x = (new_size.w / 2) - (old.width / 2);
+        let d_origin_y = new_size.h - old.height;
+        if d_origin_x != 0 || d_origin_y != 0 {
+            follow.offset = PointPx {
+                x: follow.offset.x.saturating_add(d_origin_x),
+                y: follow.offset.y.saturating_add(d_origin_y),
+            };
+        }
+    }
+    // 確定後キャラ窓座標＋（補正済み）offset で追従（offset 恒等式維持）。
     follow_balloon(
         world,
         char_window,
@@ -2211,6 +2280,7 @@ mod tests {
             .expect("barrier should resolve while actor is alive");
 
         // 別ハンドルの load_scope で scope1 の WindowPos を観測（実 IO 通過＝投函の証明）。
+        // 保存 x は**原点＝下端中央**基準（左上 1408 ＋ w/2=217 → 1625）。
         let loaded = load_scope(PersistScope::Ghost, &roots, &SharedFakeIo(shared.clone()));
         assert!(
             loaded.contains(&(
@@ -2218,7 +2288,7 @@ mod tests {
                     scope: 1,
                     axis: Axis::X
                 },
-                "1408".to_string()
+                "1625".to_string()
             )),
             "DragEnd 確定位置 X=1408 が scope1 の WindowPos として保存されていない: {loaded:?}"
         );
@@ -3251,6 +3321,7 @@ mod tests {
             .expect("barrier should resolve while actor is alive");
 
         // 実アクターと同一 roots・実 FsPersistIo で読み戻し、保存 entries を直接確認（往復の中間証拠）。
+        // 保存 x は**原点＝下端中央**基準（左上 1427 ＋ w/2=217 → 1644）。
         let loaded = load_scope(PersistScope::Ghost, &roots, &FsPersistIo);
         assert!(
             loaded.contains(&(
@@ -3258,7 +3329,7 @@ mod tests {
                     scope: 1,
                     axis: Axis::X
                 },
-                "1427".to_string()
+                "1644".to_string()
             )) && loaded.contains(&(
                 PersistKey::WindowPos {
                     scope: 1,
@@ -3546,15 +3617,16 @@ mod tests {
 
         // 実 FS を直接読み、両スコープの WindowPos が保存されていることを中間確認する
         // （実機で欠落した [window.0] がここで存在すべき＝修正前はここで RED）。
+        // 保存 x は**原点＝下端中央**基準（左上 ＋ char_w/2）。
         let loaded = load_scope(PersistScope::Ghost, &roots, &FsPersistIo);
-        for (scope, cf) in [(0u32, s0_char_final), (1u32, s1_char_final)] {
+        for (scope, cf, cw) in [(0u32, s0_char_final, 434), (1u32, s1_char_final, 400)] {
             assert!(
                 loaded.contains(&(
                     PersistKey::WindowPos {
                         scope,
                         axis: Axis::X
                     },
-                    cf.x.to_string()
+                    (cf.x + cw / 2).to_string()
                 )) && loaded.contains(&(
                     PersistKey::WindowPos {
                         scope,
@@ -3859,7 +3931,9 @@ mod tests {
 
     /// #1 一度書き＋re-snap（Req1.1/1.3/1.7/2.1）: `Anchored(Bottom)` の char 窓を
     /// 新寸へ resize すると、`WindowPos.size` が新寸・`position.y` が `wa.bottom − h'`
-    /// （X 保持）へ更新され `true`。下端・寸法とも 96 非倍数で dpi/96 再スケール混入の檻。
+    /// へ更新され `true`。**原点＝下端中央**ゆえ x は「中央を保つ」よう付け替わる
+    /// （伺かの立ち絵は足元中央が接地点＝寸法が変わっても原点は動かない）。
+    /// 下端・寸法とも 96 非倍数で dpi/96 再スケール混入の檻。
     #[test]
     fn resize_window_to_bottom_resnaps_size_and_position_once() {
         let mut world = World::new();
@@ -3872,15 +3946,16 @@ mod tests {
             ))
             .id();
 
-        // 新寸 (517×823・いずれも 96 非倍数): Y=1043−823=220・X=731 保持
+        // 新寸 (517×823・いずれも 96 非倍数): Y=1043−823=220。
+        // X は下端中央保持: 旧中央 731+434/2=948 → 新 x = 948−517/2 = 690。
         assert!(resize_window_to(&mut world, window, SizePx { w: 517, h: 823 }));
         assert_eq!(
             position_of(&world, window),
             Point {
-                x: 731,
+                x: 690,
                 y: 1043 - 823
             },
-            "X 保持・Y=wa.bottom−h'（bottom 再計算）"
+            "下端中央保持（旧中央 948 を維持）・Y=wa.bottom−h'（bottom 再計算）"
         );
         assert_eq!(size_of(&world, window), SizeI::new(517, 823));
     }
@@ -3971,11 +4046,14 @@ mod tests {
         assert_eq!(size_of(&world, window), SizeI::new(434, 687));
     }
 
-    /// #1 随伴バルーン維持（Req2.6）: `BalloonFollow` 付き char 窓を resize すると、
-    /// バルーンが `new_char_pos + offset` へ随伴し `balloon_pos − char_pos ≡ offset` が
-    /// 維持される（offset を破壊しない）。
+    /// #1 随伴バルーン維持（Req2.6）＋**原点（下端中央）基準の相対位置不変**:
+    /// `BalloonFollow` 付き Bottom char 窓を resize すると、バルーンは「キャラの
+    /// 下端中央からの相対位置」を保ったまま随伴する（左上基準 offset は原点移動ぶん
+    /// 補正される）。伺かの立ち絵は足元中央が接地点＝寸法が変わっても原点は動かないので、
+    /// バルーンも引きずられてはならない（実機回帰: むらさきが surface0 434x687 →
+    /// surface1000 382x547 でバルーンが 140px 引きずられた欠陥の恒久檻）。
     #[test]
-    fn resize_window_to_preserves_balloon_follow_offset() {
+    fn resize_window_to_keeps_balloon_relative_to_bottom_center_origin() {
         let mut world = World::new();
         world.insert_resource(single_monitor_snapshot()); // 下端 1043
         let balloon = world
@@ -3991,21 +4069,39 @@ mod tests {
             ))
             .id();
 
-        // 新寸 (517×823) → char (731, 220)・balloon (731−412, 220−25)
+        // 旧原点（下端中央）: x=731+434/2=948・y=356+687=1043。
+        // バルーンの旧絶対位置: (731−412, 356−25)=(319, 331)。
+        // 旧原点からの相対: (319−948, 331−1043)=(-629, -712)。
+        let old_origin = (731 + 434 / 2, 356 + 687);
+        let old_balloon = (731 + offset.x, 356 + offset.y);
+        let rel_to_origin = (old_balloon.0 - old_origin.0, old_balloon.1 - old_origin.1);
+
+        // 新寸 (517×823): char は下端中央保持で x=948−517/2=690・y=1043−823=220。
         assert!(resize_window_to(&mut world, window, SizePx { w: 517, h: 823 }));
         let char_pos = position_of(&world, window);
         let balloon_pos = position_of(&world, balloon);
-        assert_eq!(char_pos, Point { x: 731, y: 1043 - 823 });
+        assert_eq!(char_pos, Point { x: 690, y: 1043 - 823 });
+
+        // 新原点（下端中央）= (690+517/2, 220+823) = (948, 1043)＝**旧原点と同一**。
+        let new_origin = (char_pos.x + 517 / 2, char_pos.y + 823);
+        assert_eq!(
+            new_origin, old_origin,
+            "原点（下端中央）は寸法変動で動かない"
+        );
+        // バルーンは原点からの相対位置を保つ＝絶対位置も不変。
+        assert_eq!(
+            (balloon_pos.x - new_origin.0, balloon_pos.y - new_origin.1),
+            rel_to_origin,
+            "バルーンは下端中央原点からの相対位置を保つ（引きずられない）"
+        );
         assert_eq!(
             balloon_pos,
             Point {
-                x: 731 + offset.x,
-                y: (1043 - 823) + offset.y
-            }
+                x: old_balloon.0,
+                y: old_balloon.1
+            },
+            "原点が動かない以上、バルーンの絶対位置も動かない"
         );
-        // offset 恒等式（balloon_pos − char_pos ≡ offset）の維持
-        assert_eq!(balloon_pos.x - char_pos.x, offset.x);
-        assert_eq!(balloon_pos.y - char_pos.y, offset.y);
     }
 
     // -------------------------------------------------------------------------

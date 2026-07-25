@@ -37,6 +37,35 @@ pub fn parse_px(value: &str) -> Option<i32> {
 ///
 /// スコープ別の [`PersistKey::WindowPos`]（X/Y）へ `pos` を i32 の `Display` で
 /// 文字列化して載せる。値ドメインは物理 px・仮想スクリーン絶対 i32（負値可）。
+/// 窓位置（左上基準）を**原点＝下端中央の x** へ移す（保存方向・Bottom のみ）。
+///
+/// 伺かの立ち絵は足元中央が接地点＝原点。左上 x をそのまま保存すると、サーフェス寸が
+/// 変わったときに「同じ左上」が別の中央を指してしまい、復元でキャラとバルーンが横へずれる
+/// （実機: むらさき surface1000 382 で保存 → surface0 434 で復元し原点が 26px ずれ、
+/// バルーンが 104px ずれた）。x のみ中央基準へ移し、y は下端が work area 由来で毎起動
+/// 再導出されるため左上のまま（復元側 `project_anchor` が下端を再固定する）。
+/// Bottom 以外は原点が中央ではないため恒等（従来どおり左上基準）。
+pub fn char_pos_to_origin_x(anchor: Anchor, pos: PointPx, char_size: SizePx) -> PointPx {
+    match anchor {
+        Anchor::Bottom => PointPx {
+            x: pos.x.saturating_add(char_size.w / 2),
+            y: pos.y,
+        },
+        _ => pos,
+    }
+}
+
+/// [`char_pos_to_origin_x`] の逆（復元方向）: 原点 x から現寸の左上 x を導出する。
+pub fn char_pos_from_origin_x(anchor: Anchor, pos: PointPx, char_size: SizePx) -> PointPx {
+    match anchor {
+        Anchor::Bottom => PointPx {
+            x: pos.x.saturating_sub(char_size.w / 2),
+            y: pos.y,
+        },
+        _ => pos,
+    }
+}
+
 pub fn char_pos_entries(scope: u32, pos: PointPx) -> Vec<(PersistKey, String)> {
     vec![
         (
@@ -90,8 +119,11 @@ pub fn balloon_offset_entries(scope: u32, offset_persist: PointPx) -> Vec<(Persi
 /// - `Free`: `(0, 0)` — 左上（縮退・アンカー辺なし。往復恒等のため 0 で固定・檻固定）。
 fn anchor_edge_basis(anchor: Anchor, char_size: SizePx) -> PointPx {
     match anchor {
+        // Bottom＝**下端中央**（伺かの立ち絵は足元中央が接地点＝原点）。x も中央基準に
+        // 取ることで、サーフェス寸が変わっても（幅・高さとも）バルーンの相対位置が不変になる
+        // （Req2.2 の「寸法変動に不変な基準点」を x 軸まで徹底）。
         Anchor::Bottom => PointPx {
-            x: 0,
+            x: char_size.w / 2,
             y: char_size.h,
         },
         Anchor::Right => PointPx {
@@ -360,9 +392,11 @@ fn merge_scope(
     .and_then(parse_px);
     let char_pos = match (saved_x, saved_y) {
         // 両軸そろったときのみ保存値を採用し、毎起動 live 再射影（アンカー再解決＋域内 clamp）。
+        // 保存 x は**原点＝下端中央**基準（Bottom）ゆえ、現寸の左上へ戻してから射影へ渡す
+        // （寸法が保存時と異なっても原点が一致する＝キャラもバルーンも横へずれない）。
         (Some(x), Some(y)) => project_restore(
             placement.anchor,
-            PointPx { x, y },
+            char_pos_from_origin_x(placement.anchor, PointPx { x, y }, placement.char_size),
             placement.char_size,
             snapshot,
         ),
@@ -649,10 +683,11 @@ mod tests {
         let size = SizePx { w: 300, h: 500 };
         let offset_tl = PointPx { x: 40, y: 70 };
 
-        // Bottom: 基準 (0, h) → persist = (40−0, 70−500) = (40, -430)
+        // Bottom: 基準＝**下端中央** (w/2, h)=(150,500) → persist = (40−150, 70−500) = (-110, -430)
+        // （原点は足元中央＝寸法変動で動かない点。x も中央基準に取り Req2.2 を x 軸まで徹底）
         assert_eq!(
             balloon_offset_to_persist(Anchor::Bottom, offset_tl, size),
-            PointPx { x: 40, y: -430 }
+            PointPx { x: -110, y: -430 }
         );
         // Top: 基準 (0, 0) → persist = offset_tl
         assert_eq!(
@@ -680,9 +715,9 @@ mod tests {
     #[test]
     fn from_persist_adds_back_the_anchor_edge_basis_with_current_size() {
         let size = SizePx { w: 300, h: 500 };
-        // Bottom: persisted (40, -430) + 基準 (0, 500) = (40, 70)
+        // Bottom: persisted (-110, -430) + 基準＝下端中央 (150, 500) = (40, 70)
         assert_eq!(
-            balloon_offset_from_persist(Anchor::Bottom, PointPx { x: 40, y: -430 }, size),
+            balloon_offset_from_persist(Anchor::Bottom, PointPx { x: -110, y: -430 }, size),
             PointPx { x: 40, y: 70 }
         );
         // Right: persisted (-260, 70) + 基準 (300, 0) = (40, 70)
@@ -1158,7 +1193,8 @@ mod tests {
             PointPx { x: -50, y: 0 },
             BSZ,
         )];
-        // persisted (0, -430)（下端基準）→ from_persist(Bottom, (0,-430), h=600)=(0,170)。
+        // persisted (0, -430)（下端**中央**基準）→ from_persist(Bottom, (0,-430), 400x600)
+        // = (0+200, -430+600) = (200, 170)（基準点＝(w/2, h)＝足元中央）。
         let entries = vec![
             wp(0, Axis::X, "800"),
             wp(0, Axis::Y, "500"),
@@ -1168,11 +1204,12 @@ mod tests {
 
         let out = apply_restored_placements(placements, &entries, &snap);
 
-        assert_eq!(out[0].char_pos, PointPx { x: 800, y: 500 });
+        // 保存 x=800 は**原点（下端中央）基準**ゆえ、現寸 w=400 の左上は 800−200=600。
+        assert_eq!(out[0].char_pos, PointPx { x: 600, y: 500 });
         assert_eq!(
             out[0].balloon_offset,
-            PointPx { x: 0, y: 170 },
-            "Bottom 基準(0,h)で足し戻す: -430+600=170（2.2/2.3）"
+            PointPx { x: 200, y: 170 },
+            "Bottom 基準＝下端中央(w/2,h)で足し戻す: x=0+200・y=-430+600=170（2.2/2.3）"
         );
         assert_eq!(out[0].balloon_pos, PointPx { x: 800, y: 670 });
     }
@@ -1215,15 +1252,16 @@ mod tests {
             PointPx { x: -200, y: 0 },
             BSZ,
         )];
-        // 保存 y=2000 は域外 → 下端吸着 y=1040−600=440。x=500 は域内で保持。
+        // 保存 y=2000 は域外 → 下端吸着 y=1040−600=440。
+        // 保存 x=500 は**原点（下端中央）基準**ゆえ左上は 500−200=300（域内で保持）。
         let entries = vec![wp(0, Axis::X, "500"), wp(0, Axis::Y, "2000")];
 
         let out = apply_restored_placements(placements, &entries, &snap);
 
         assert_eq!(
             out[0].char_pos,
-            PointPx { x: 500, y: 440 },
-            "域外保存 y は Bottom 吸着で域内へ（5.1/5.2）"
+            PointPx { x: 300, y: 440 },
+            "域外保存 y は Bottom 吸着で域内へ（5.1/5.2）・x は原点基準から左上へ戻す"
         );
     }
 
