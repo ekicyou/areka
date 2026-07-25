@@ -143,7 +143,7 @@
   - _Boundary: areka-emo-compose tests_
   - _Depends: 1.2, 1.3_
 
-- [ ] 6.2 (P) emo-present/measure/source純関数テスト全網羅
+- [x] 6.2 (P) emo-present/measure/source純関数テスト全網羅
   - derive_scale全分岐、parse_author_dpi全パターン、measure k適用のper-scope写像・i32ガードのテストを実装する
   - 該当crateの`cargo test`が新規テストを含めて全緑になる状態を確認できる
   - _Requirements: 1.4, 5.2, 7.8_
@@ -174,6 +174,15 @@
 
 ## Implementation Notes
 
+- 6.2: **【一般教訓・レビュー承認条件】`tracing` のログ捕捉テストはプロセス大域の callsite interest キャッシュで毒される**。`tracing::subscriber::with_default` は**スレッドローカル**だが、**callsite interest キャッシュはプロセス大域かつ「最初に踏んだスレッドが勝つ」**。`DefaultCallsite::register()`（`tracing-core-0.1.36/src/callsite.rs:308-321`）は `has_just_one` が真のとき `Rebuilder::JustOne` を選び、interest を**登録スレッドの既定 subscriber**で評価する（同 :562-567）。subscriber を持たない別テストが当該 callsite を先に踏むと `NoSubscriber` → `Interest::never()` が焼き込まれ、捕捉テストがイベントを取りこぼす。**再現率は 12%（3/25・2/20）で、単体実行や `--test-threads=1` では 0/25 ＝ 素朴な検証では絶対に見つからない**。
+- 6.2: 上の対策＝**probe dispatcher を 2 個プロセス常駐**させ `has_just_one` を恒久的に偽へ落とし、捕捉窓内で `rebuild_interest_cache()` を 1 回呼ぶ（`crates/areka/src/placement/test_support.rs` が正本）。**1 個では不十分**——`register_dispatch`（`callsite.rs:551-558`）は push の**後**に `has_just_one = (len <= 1)` を書くので、1 個目の登録直後は真のまま隙間が残る。偽になれば `Rebuilder::Read`（登録済み dispatcher 全走査）へ落ち、probe が常に `Interest::sometimes()` を返す＋`Interest::and` は「異なれば必ず sometimes」（`subscriber.rs:658-664`）ゆえ**合成結果が never になることは原理的に無い**。probe は `enabled()`＝偽・`event()`＝no-op で観測に副作用なし（interest は never→sometimes へ**上げる**方向にしか動かない）。
+- 6.2: **フレーキーの証明には反復実行が要る**。「5 連続緑」は証拠にならない。修正の load-bearing 性は**アンチ変異**（対策を外して素朴実装へ戻す）で示すこと——実測で 4/50 の失敗が復活した。承認時の実測は areka bin 130 回・emo-present lib 90 回で失敗ゼロ（P(0/130) ≈ 5×10⁻⁸）。
+- 6.2: **areka 側に同型の毒化ハザードが 6 箇所残存**（`emo2_boot/adapter.rs`・`frame.rs`・`move_cue.rs`・`spine.rs`・`input_events/balloon.rs`・`shiori_demo.rs`）。`move_cue.rs:1605 canonical_non_move_carrier_debug_skips` は**修正前ビルドでも 1/100 で落ちる pre-existing flake**（本 diff は悪化させず、probe が先に走れば opportunistic に緩和するが保証はない）。`placement/test_support.rs` 相当へ寄せる根治は**別タスク／別 spec の領分**。
+- 6.2: `emo2_boot/spine.rs:1303 spine_s5_...` は**壁時計 deadline を持たない反復回数境界の協調スピン**（`for _ in 0..100_000 { yield_now() }`・同型が :693/1067/1172/1257/1582/1680/1700 にも点在）による pre-existing flake で tracing 無関係。`areka-defender-rescan-starves-cooperative-test-loops` と同一クラス（`Instant` deadline 化が対策）。**所有者は `emo2_boot` 側の別タスク**。
+- 6.2: **task 6.4/6.5 への申し送り**: `cargo test -p areka` を `--test-threads=1` で走らせると `emo2_boot::spine::spine_e2e_kero_blink_one_cycle_golden` が 0xC0000005（EXIT=-1073741819）。既存の GPU/COM 事情で本 spec 無関係だが、**単一スレッド実行を決定性チェックの手段に使えない**。
+- 6.2: **1.4 の申し送りは事実だった**——縮退ログ削除の変異（S1〜S5）で**新規テストのみが落ち既存 79 本は全生存**。ログ発火は本当に檻の外だった。なお 1.4 が求めた `tracing-subscriber` の dev 依存追加は**不要**（3.4 の手書き `CaptureSubscriber` 方式で足り、areka 側は `tracing-subscriber` が既に通常依存）。
+- 6.2: **ログ文言の修正は檻に入れないと守られない**。`read_kv_lenient` の帰属誤り（バルーン descript の読取失敗が「ghost descript の読み取りに失敗」と出る）を帰属中立文言へ直した際、それだけでは旧文言へ戻す変異で誰も落ちなかった。`assert!(!message.contains("ghost"))` を足して初めて排他キルになる。
+- 6.2: `derive_scale_emits_each_degradation_log_independently` は実装者が「排他キルなし・削除可」と自認したが、**レビュアーが変異 S13（縮退ログを `else if` で束ねて 1 本へ握り潰す）で 86/1 の排他キルを実測**し「残す」裁定。**自分の変異集合に無い変異は「排他キルなし」の根拠にならない**。
 - 6.1: **1.3 の申し送りは事実だった**——`resample` を「非乗算化→straight 補間→再乗算」へ変異させると**既存 194 本が全生存**し、新設の α 可変 golden 2 本だけが落ちる。既存 `resample_preserves_premultiplied_invariant` は名前に反して非乗算化を検出できない（`B,G,R ≤ A` は straight 経路でも成立するため）。**不変条件テストは厳密 golden の代替にならない**という一般教訓。
 - 6.1: **変異実験はリポジトリを汚さず scratchpad の隔離 crate で行うのが最善**（`scale.rs` は `composed.rs` + `log_capture.rs` にしか依存しないので写しを置ける）。リポジトリ側で変異させる場合は自前バックアップ＋`cp`＋**`touch`**（mtime 更新を忘れると cargo がリビルドを飛ばして偽緑）。`git checkout` に頼らないこと。
 - 6.1: **doc に「この変異を殺す」と書くなら排他的キルか既存との共倒れかを区別すること**。ラウンド1 は第1項の事実誤認（片側 gcd 削除は等価変異なのに「殺す」と記載）で REJECTED。新7本のうち**排他的キルを持つのは4本**（α可変 golden 2・`as_f32_is_query_view`・`scale_len_u128_intermediate`）で、残り3本は契約の明文化。

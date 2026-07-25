@@ -469,6 +469,7 @@ mod tests {
     use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
 
     use crate::placement::PlacementError;
+    use crate::placement::test_support::{capture_logs, expect_one};
 
     /// COM 初期化下でクロージャを実行する（`WicDecoderArm` は COM 必須・
     /// emo-atlas `wic_arm.rs` テストと同一パターン）。
@@ -921,6 +922,223 @@ mod tests {
     fn apply_scaling_empty_input_is_empty_output() {
         let out = apply_scaling(Vec::new(), &MeasureScaling::IDENTITY).expect("空入力は成功");
         assert!(out.is_empty());
+    }
+
+    /// 要件 7.8（席保全・char 軸）: char 寸も **scope ごとの写像**である。
+    ///
+    /// # 変異キルの実態（誇張しない）
+    ///
+    /// 「先頭スコープの char 寸を全スコープへ撒く」変異は、**既存**の
+    /// [`apply_scaling_maps_balloon_per_scope`]（`measure.rs:829` の char 寸アサート
+    /// 左 (434,687) / 右 (336,400)）と `apply_scaling_identity_is_passthrough`・
+    /// emo2 実採寸テスト群でも落ちる。本テストは**共倒れ**であり、char 軸の席保全は
+    /// task 2.3 時点で既に本物の檻に入っている。
+    ///
+    /// 本テストの役割は排他キルではなく、**非恒等 k（5/4）での char per-scope 写像を
+    /// 明文化する冗長な錨**——既存の per-scope 検査はいずれも shell k=1/1 か
+    /// GPU/COM を要する実 fixture 経路であり、「k≠1 のとき各スコープが自分の原寸から
+    /// 個別に k 倍される」ことを GPU 非依存の純関数層で述べた行は他に無い。
+    ///
+    /// 期待値 543×859／420×500 は task 4.3 の実機観測（primary DPI=120）と同一であり、
+    /// 434×1.25=542.5→543 が round half away from zero の生証拠でもある。
+    #[test]
+    fn apply_scaling_maps_char_per_scope() {
+        let out = apply_scaling(
+            vec![
+                scope_input(0, (SCOPE0_W, SCOPE0_H), (1, 1)),
+                scope_input(1, (SCOPE1_W, SCOPE1_H), (1, 1)),
+                scope_input(2, (8, 4), (1, 1)),
+            ],
+            &MeasureScaling {
+                shell: k(5, 4),
+                balloon: ScaleRatio::ONE,
+            },
+        )
+        .expect("k=5/4 の per-scope 適用は成功する");
+
+        assert_eq!(out.len(), 3, "スコープ数を維持する");
+        assert_eq!((out[0].char_size.w, out[0].char_size.h), (543, 859));
+        assert_eq!((out[1].char_size.w, out[1].char_size.h), (420, 500));
+        assert_eq!((out[2].char_size.w, out[2].char_size.h), (10, 5));
+
+        // 3 つとも異なる値＝先頭スコープ寸の撒き直しでは再現不能。
+        assert_ne!(out[0].char_size, out[1].char_size);
+        assert_ne!(out[1].char_size, out[2].char_size);
+        // balloon は恒等 k ゆえ原寸（軸の独立性の再確認）。
+        for s in &out {
+            assert_eq!((s.balloon_size.w, s.balloon_size.h), (1, 1));
+        }
+    }
+
+    /// 要件 2.5: i32 ガードの**厳密境界**（1px の差で Ok/Err が入れ替わる）。
+    ///
+    /// 既存の [`apply_scaling_guards_i32_overflow`] は「恒等 k で `i32::MAX` が通る」
+    /// 「`i32::MAX` の 2〜3 倍が落ちる」しか見ておらず、**k 倍後**の値に対する閾値が
+    /// `i32::MAX` ちょうどなのか 1 だけ緩い（＝`i32::MAX + 1` を wrap して受理する）のかを
+    /// 弁別しない。ここは 2_147_483_646（通る）と 2_147_483_648（落ちる）の対で
+    /// 閾値そのものを固定する——「上限側を 1 だけ緩める」変異は**本テストのみ**が落とす
+    /// （排他キル・実測済み）。
+    #[test]
+    fn apply_scaling_i32_guard_boundary_is_exact() {
+        // (i32::MAX - 1) / 2 = 1_073_741_823 → ×2 = 2_147_483_646 ≤ i32::MAX。
+        const HALF: i32 = 1_073_741_823;
+        let doubling = MeasureScaling {
+            shell: k(2, 1),
+            balloon: ScaleRatio::ONE,
+        };
+
+        let ok = apply_scaling(vec![scope_input(0, (HALF, 1), (1, 1))], &doubling)
+            .expect("2_147_483_646 は物理 px 通貨に収まる");
+        assert_eq!(ok[0].char_size.w, i32::MAX - 1);
+
+        // 1px 増やすと 2_147_483_648（= i32::MAX + 1）で通貨を溢れる。
+        let err = apply_scaling(vec![scope_input(0, (HALF + 1, 1), (1, 1))], &doubling)
+            .expect_err("1px 増えただけで i32 を超過する");
+        match err {
+            PlacementError::Measure { scope, reason } => {
+                assert_eq!(scope, 0);
+                assert!(reason.contains("i32 を超過"), "理由: {reason}");
+            }
+            other => panic!("Measure であるべき: {other:?}"),
+        }
+    }
+
+    /// 負値寸法の balloon 側は `balloon:` 接頭辞つきで**当該スコープ**に帰属する
+    /// （既存の負値テストは char 側のみ）。
+    #[test]
+    fn apply_scaling_rejects_negative_balloon_extent_with_prefix() {
+        match apply_scaling(
+            vec![
+                scope_input(0, (10, 10), (10, 10)),
+                scope_input(5, (10, 10), (10, -3)),
+            ],
+            &MeasureScaling::IDENTITY,
+        ) {
+            Ok(v) => panic!("負値で Ok は誤成功: {v:?}"),
+            Err(PlacementError::Measure { scope, reason }) => {
+                assert_eq!(scope, 5, "balloon 起因も per-scope に帰属する");
+                assert!(reason.starts_with("balloon: "), "接頭辞: {reason}");
+                assert!(reason.contains("負値"), "理由: {reason}");
+            }
+            Err(other) => panic!("Measure であるべき: {other:?}"),
+        }
+    }
+
+    // ── k 適用失敗ログの発火（steering `logging.md`「ログ無し失敗経路の禁止」）──
+    //
+    // 既存の i32 ガード／負値テストは `Err` の中身だけを見ており、design
+    // 「Error Handling」表の `k 倍寸の i32 超過（採寸）→ error!` 行は無検査だった。
+    //
+    // 捕捉は共有ハーネス [`crate::placement::test_support`]（`#[cfg(test)]` 限定）を使う。
+    // **素朴な `with_default` 捕捉は非決定的に取りこぼす**——`tracing` の callsite interest
+    // キャッシュはプロセス大域かつ「最初に踏んだスレッドが勝つ」ため、subscriber を持たない
+    // 他テスト（同じ `error!` callsite を踏む `apply_scaling_guards_i32_overflow` 等）が
+    // 先に登録すると `Interest::never()` が焼き付き、捕捉窓の内側でもイベントが捨てられる。
+    // 機構と対策は `test_support` のモジュール doc を参照。
+
+    /// design「Error Handling」: k 適用失敗は **`error!`**＋帰属情報
+    /// （`scope`／`kind`／`k`／`reason`）を残す（silent wrap の禁止）。
+    ///
+    /// char 起因は `kind=Char`、balloon 起因は `kind=Balloon` と当該スコープ番号で
+    /// 出るため、実機ログだけで「どのスコープのどの寸が溢れたか」が確定する。
+    #[test]
+    fn scale_size_px_failure_emits_error_log_with_attribution() {
+        // char 起因（scope=3・k=2/1）。
+        let (res, events) = capture_logs(|| {
+            apply_scaling(
+                vec![scope_input(3, (i32::MAX, 10), (10, 10))],
+                &MeasureScaling {
+                    shell: k(2, 1),
+                    balloon: ScaleRatio::ONE,
+                },
+            )
+        });
+        assert!(res.is_err(), "i32 超過は Err");
+        let ev = expect_one(&events, "k 適用に失敗");
+        assert_eq!(
+            ev.level,
+            tracing::Level::ERROR,
+            "採寸失敗は error 格（無言 wrap の禁止）: {ev:?}"
+        );
+        assert_eq!(ev.field("scope"), "3");
+        assert_eq!(ev.field("kind"), "Char");
+        assert_eq!(ev.field("k"), "2.0");
+        assert!(ev.field("reason").contains("i32 を超過"), "{ev:?}");
+        assert_eq!(events.len(), 1, "1 失敗 1 ログ: {events:?}");
+
+        // balloon 起因（scope=1・k=3/1）——kind と scope が balloon 軸へ切り替わる。
+        let (res, events) = capture_logs(|| {
+            apply_scaling(
+                vec![
+                    scope_input(0, (10, 10), (10, 10)),
+                    scope_input(1, (10, 10), (10, i32::MAX)),
+                ],
+                &MeasureScaling {
+                    shell: ScaleRatio::ONE,
+                    balloon: k(3, 1),
+                },
+            )
+        });
+        assert!(res.is_err());
+        let ev = expect_one(&events, "k 適用に失敗");
+        assert_eq!(ev.level, tracing::Level::ERROR, "{ev:?}");
+        assert_eq!(ev.field("scope"), "1", "先頭スコープ 0 ではない");
+        assert_eq!(ev.field("kind"), "Balloon");
+        assert_eq!(
+            ev.field("k"),
+            "3.0",
+            "balloon 軸の k が載る（shell の 1.0 ではない）"
+        );
+        assert_eq!(events.len(), 1, "{events:?}");
+    }
+
+    /// k 適用の成功経路は**無言**（`error!` を無条件発火させる変異の陰性対照）。
+    #[test]
+    fn apply_scaling_success_is_silent() {
+        let (res, events) = capture_logs(|| {
+            apply_scaling(
+                vec![
+                    scope_input(0, (SCOPE0_W, SCOPE0_H), (BALLOON_W, BALLOON_H)),
+                    scope_input(1, (SCOPE1_W, SCOPE1_H), (300, 150)),
+                ],
+                &MeasureScaling {
+                    shell: k(5, 4),
+                    balloon: k(3, 2),
+                },
+            )
+        });
+        assert!(res.is_ok(), "成功経路");
+        assert!(events.is_empty(), "成功経路は無言: {events:?}");
+    }
+
+    /// 申し送り 2.3 の檻: **native 段**の balloon 失敗は `scope: 0` **固定**で報告される
+    /// （k 適用段の per-scope 帰属とは規約が異なる）。
+    ///
+    /// 要求スコープに 0 を含めない `[1, 2]` で走らせるため、「先頭スコープ番号を載せる」
+    /// 実装との差が出る（既存の [`missing_balloon_frame_is_measure_error`] は `[0]` を
+    /// 渡すため両者を弁別できない）。
+    #[test]
+    fn native_stage_balloon_failure_reports_scope_zero() {
+        with_com_initialized(|| {
+            let empty_balloon = TempDir::new();
+
+            match measure_scope_sizes(
+                &emo2("shell/master"),
+                empty_balloon.path(),
+                &[1, 2],
+                &MeasureScaling::IDENTITY,
+            ) {
+                Ok(v) => panic!("balloon 枠不在で Ok は誤成功: {v:?}"),
+                Err(PlacementError::Measure { scope, reason }) => {
+                    assert_eq!(
+                        scope, 0,
+                        "native 段の balloon 失敗は scope0 固定（要求スコープに 0 が無くても）"
+                    );
+                    assert!(reason.starts_with("balloon: "), "接頭辞: {reason}");
+                }
+                Err(other) => panic!("Measure であるべき: {other:?}"),
+            }
+        });
     }
 
     /// 要件 3.1/3.3: 実 fixture 経路（native 採寸→k 適用）でも k≠1 が窓寸へ届く。
