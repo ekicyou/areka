@@ -2780,6 +2780,13 @@ mod runtime_tests {
         // ── R8.5（churn ガードの実効）: 同値 k の再要求は ActorRender を破棄しない ──
         // 装着済みの状態で「何もしない」ことを観測する（毎フレーム再結線＝供給面の作り直しと
         // 全再描画を毎フレーム走らせる変異は、ここで is_attached／統計が動くことで死ぬ）。
+        //
+        // **キルの排他性（実測・task 7.3 で再測）**: 「同値 k でも ActorRender を破棄する」変異は
+        // 本ケースが殺すが**排他キルではない**——task 7.3 の統合檻
+        // `attach_wiring_test::scale_refresh_logs_k_transition_and_reattach_physical_size`
+        // （同値 k のフレームで装着 `info!` が再発火しないことを見る）も同時に落ちる＝**共倒れ 2 本**。
+        // 「churn ガードそのものを撤去する（同値 k でも true を返して再構築する）」変異も
+        // 上の `refresh_actor_scale_with_same_k_is_noop_returning_false` と共倒れである。
         let stats_before = rt.draw_stats(&actor).expect("draw_stats");
         let noop = rt.refresh_actor_binding(
             &actor,
