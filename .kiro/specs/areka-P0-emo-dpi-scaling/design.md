@@ -634,7 +634,7 @@ log-first（error!/warn!＋構造化 enum・panic 禁止）の既存規律を継
 - 実 DPI 2 水準（OS 表示スケール 125%→200% の 2 回起動）× 本番ゴースト emo2（実 pasta.dll・**絶対パス起動**・R6.4）。
 - `AREKA_APP_SMOKE_EXIT_MS` 有界自動終了＋ `RUST_LOG` grep: info ログの `k`（1.25/2.0）・`scaled` 寸・`GetClientRect` 照合（collision-probe 型）で決定論判定（R6.1/6.3）。
 - 人間サインオフ: マスコットが各水準の相当寸で表示・窓追従・モニタ跨ぎ移動での追従を目視（R6.2）。
-- **（2026-07-26 追補・R8.8）** 文字層 k 再追従: デュアルディスプレイ（125%↔200%）でのモニタ跨ぎ移動後、バルーン文字が移動先の k で描画されることをログ（再追従 `info!`＋2 回目の装着 `info!` の `physical_size` が新 k 寸）と目視の双方で確認。一次実走（2026-07-26）の失敗観測＝「バルーン 800×448・文字 300×97 のまま」が解消されていること。
+- **（2026-07-26 追補・R8.8）** 文字層 k 再追従: デュアルディスプレイ（125%↔200%）でのモニタ跨ぎ移動後、バルーン文字が移動先の k で描画されることをログ（再追従 `info!` の `k_old`/`k_new`＋2 回目の装着 `info!` の `physical_size` が新 k 寸）と目視の双方で確認。一次実走（2026-07-26）の失敗観測＝「バルーン 800×448 に対し文字が旧 k 寸のまま」が解消されていること。**判定は絶対値でなく比（200% 側 ÷ 125% 側 ≈ 1.6）で行う**——task 7.1 で `TextSlotBinding::from_view` の物理寸読み取りを修理した結果、125% 側の基準値そのものが動いたため、一次実走で記録した絶対値（300×97 → 480×156）は陳腐化している。
 - **（2026-07-26 追補・R8 の headless 檻）** emo-text in-crate: `refresh_actor_scale` の (a) 同値 k no-op（R8.5）、(b) binding 再構築後の `image_size` 不変・`scale` 更新、(c) ActorRender 破棄→再生成で `TextLayerState` が保存される（R8.3）、(d) view None 縮退の warn!（R8.6・log capture は 6.2 の probe 常駐方式）。frame.rs 結線は headless で「balloon target の k 変化時のみ呼ばれる」ことを檻に入れる。**変異で非空虚を実証**（再追従を no-op 化／state を消す変異／同値 k でも再生成する churn 変異）。
 
 ### Regression Gate

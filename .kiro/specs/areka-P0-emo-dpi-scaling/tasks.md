@@ -174,7 +174,7 @@
   - _Depends: 6.4_
 
 - [ ] 7. バルーン文字層の k 再追従（スコープ拡大・開発者裁定 2026-07-26・Requirement 8／D11）
-- [ ] 7.1 emo-text: TextLayerRuntime::refresh_actor_scale シームの実装
+- [x] 7.1 emo-text: TextLayerRuntime::refresh_actor_scale シームの実装
   - `register_actor_view` と同一の単一構築経路で binding を再構築し（R8.1）、当該 actor の `ActorRender` を破棄する（次 `present_frame` の初回解決分岐 `actor.rs:518` が新 k の物理寸で再生成＝R8.2・既存生成式の再利用）
   - 同値 k は no-op で false（churn ガード・R8.5）。再追従時は `info!`（actor・k_old/k_new＝f32 出口ビュー・R8.7）
   - `register_actor` が `state: TextLayerState` に触れない既存構造（`actor.rs:233-242`）により、リビール状態が保存されることを確認する（R8.3）
@@ -191,14 +191,17 @@
   - _Depends: 7.1_
 - [ ] 7.3 決定論檻: 再追従・状態保存・no-churn の headless テスト
   - emo-text in-crate: 同値 k no-op／binding 再構築後の `image_size` 不変・`scale` 更新／`ActorRender` 破棄後も `TextLayerState` 保存／view None 縮退 warn!（log capture は 6.2 の probe 常駐方式を参照）
+  - **【7.1 レビュー指摘・必須】`TextSlotBinding::from_view` が `surface_size()`（native）ではなく `physical_size()` を読むことを檻に入れる**——7.1 で修理した production 契約だが、`TextSlotView` は私有フィールド＋公開コンストラクタ無しゆえ **in-crate からは構造的に檻に入らない**。`crates/areka-emo-text/tests/attach_wiring_test.rs` の World へ `DPI::from_dpi(192,192)`（author 96）を挿し、`from_view(&view).image_size == view.surface_size()`（native）／`binding.surface_size == view.physical_size()` を実測で檻に入れること。**現状は k=1.0 経路のみで無檻＝旧実装へ戻す変異が crate 全テストで生存することをレビュアーが実測済み**（7.1 の境界外ゆえ 7.3 へ委譲・prose でなく本項が担当の正本）
   - frame.rs 結線: balloon target の k 変化時のみ呼ばれることを headless で檻に入れる
   - 変異で非空虚を実証する（再追従 no-op 化／state を消す変異／同値 k でも再生成する churn 変異）。doc の「殺す変異」は排他キル／共倒れを実測で書き分ける（6.1/6.2 の教訓）
   - `cargo test --workspace` が既存からの純増のみで全緑
   - _Requirements: 8.3, 8.4, 8.5, 8.6, 7.1_
   - _Depends: 7.1, 7.2_
 - [ ] 7.4 実機再検証: 文字層込みの 6.5 再走（最終サインオフ）
-  - デュアルディスプレイ（125%↔200%）モニタ跨ぎ移動後、バルーン文字が移動先 k で描画されることをログ（再追従 `info!`＋2 回目装着 `info!` の `physical_size` が新 k 寸＝300×97 → 480×156 級）と目視の双方で確認する（R8.8）
-  - 一次実走の失敗観測（バルーン 800×448・文字 300×97 のまま）が解消されていること
+  - デュアルディスプレイ（125%↔200%）モニタ跨ぎ移動後、バルーン文字が移動先 k で描画されることをログ（再追従 `info!` の `k_old`/`k_new`＋2 回目装着 `info!` の `physical_size` が新 k 寸）と目視の双方で確認する（R8.8）
+  - **判定は絶対値でなく比で行う**: 200% 側の文字 `physical_size` ÷ 125% 側 ≈ **1.6**（=2.0/1.25・端数丸め分の ±1px）。**7.1 の `from_view` 修理により 125% 側の基準値そのものが動いた**ため、一次実走で観測した 300×97 → 480×156 という絶対値の見積もりは**陳腐化している**（300×97 は `image_size = native/k` の欠陥下で image 空間が 0.8 倍に縮んでいた結果＝実質 validrect の素寸）。修理後は 375×122 → 600×194 級の見込みだが、正確な値は `resolved.region` から実装時に確認すること
+  - 一次実走の失敗観測（バルーン 800×448 に対し文字が旧 k 寸のまま＝比 1.0）が解消されていること
+  - **125% 側の見た目自体が 7.1 以前から変わる**（旧実装では文字領域が約 20% 過小＝早期折り返しだった）。「回帰」と誤認しないこと
   - 6.5 の残項目（200% 側の輪郭鮮明・絵の端・位置関係・縮小方向往復）と併せて人間サインオフし、6.5 を完了として閉じる
   - _Requirements: 8.8, 6.1, 6.2, 6.3, 6.4_
   - _Depends: 6.5, 7.3_
@@ -209,7 +212,13 @@
 - 7: **開発者裁定の記録（2026-07-26）**: 「W5 Revalidation Trigger で消化」はウェーブの割当であって spec の割当ではなく、W5 の 4 spec のどの割当ファイル集合にも `areka-emo-text/src` が含まれない＝**担当者不在の先送り**だった。本来の持ち主 `areka-P0-emo-text-layer` は completed で消化不能。開発者が本 spec へのスコープ拡大を裁定（「誰も担当していないため今あなたが担当せよ」）。**教訓: 先送りには担当 spec の実在検証と開発者への即報告が必須——ウェーブ名は担当者ではない**。
 - 7.1: `register_actor`（`actor.rs:233-242`）は `routing`＋`layout_input` の上書きのみで `state` に触れない——再登録＝状態保存はこの既存構造が担保する。ただし「触れないまま」であることを 7.3 で檻に入れること（将来の register_actor 改変が R8.3 を静かに壊すのを防ぐ）。
 - 7.2: **balloon target→actor の写像は attach と同一の `ActorKey::from(scope.to_string())` を使うこと**。別の写像を発明すると attach と再追従で actor がずれ、silent に別 actor を再生成する。
-- 7.4: 文字供給面の新 k 期待値の目安: 起動時 (300,97)＝ceil(240×1.25)×ceil(77.6×1.25) → k=2.0 で (480,156) 級（正確な validrect 寸は実装時に `resolved.region` から確認）。grep は件数でなく `physical_size` の値で判定（5.1/5.2/6.2 の行数判定ハザードと同じ注意）。
+- 7.4: ~~文字供給面の新 k 期待値の目安: 起動時 (300,97) → k=2.0 で (480,156) 級~~ **【7.1 で陳腐化・是正済み】** この見積もりは `image_size = native/k` の欠陥下の観測値に基づく。7.1 の `from_view` 修理後は 375×122 → 600×194 級で、**125% 側の基準値自体が動く**。判定は絶対値でなく**比 ≈1.6**（=2.0/1.25）で行うこと。grep は件数でなく `physical_size` の値で判定（5.1/5.2/6.2 の行数判定ハザードと同じ注意）。
+- 7.1: **`TextSlotBinding::from_view` が壊れていた（task 3.2 の契約変更の取り残し）**。3.2 が `TextSlotView::surface_size()` を **native**（k 適用前）へ再定義し `physical_size()` を新設したのに、`from_view` は `TextSlotBinding::new` の第 4 引数（doc 上は**物理**原寸）へ `surface_size()` を渡し続けていた。結果 `image_size = round(native / k)` ＝ image 空間が k に反比例して縮み、`physical = ceil(region × k)` が **k 不変**になる。**この修理なしには 7.1 のシームは寸法的に空虚**（R8.2 が原理的に達成不能）ゆえスコープ内と裁定（4.2 の `resnap_shell_targets` 修理と同種——3.2 の契約変更の下流トリガ）。副作用として **k=1.25 起動時の文字領域が従来 20% 過小だった**（早期折り返し）ことも判明。k=1.0 では `physical_size()==surface_size()` ゆえ既存全経路はバイト同一。
+- 7.1: **上の修理は in-crate から構造的に檻に入らない**（`TextSlotView` は私有フィールド・唯一の構築点が `presenter.rs:659`）。レビュアーが「旧実装へ戻す変異が `cargo test -p areka-emo-text` 全ターゲットで**誰にも殺されない**」ことを実測。檻は **task 7.3 の必須項目**として明記済み（`tests/attach_wiring_test.rs` に DPI 192 の World を建てる）。prose の先送りを本項＋7.3 本文の二重記録で担保する（[[deferral-requires-verified-owner]] の規律）。
+- 7.1: **「`areka-emo-text` の lib 自体は無傷」（3.2+3.3 の申し送り）は本タスクで偽になった**。3.2 の `surface_size()` 契約変更は lib 内の `from_view` にも波及していたが、k=1.0 では観測不能だったため見逃されていた。**契約の意味変更は「呼び手のコンパイルが通るか」では検出できない**——同じ型の引数の意味だけが変わった場合、型は何も守らない（4.1 の `u16,u16` 隣接引数ハザードと同型）。
+- 7.1: 再追従は `ActorRender` のみ破棄し `state: TextLayerState` に触れない（`register_actor` の既存構造をそのまま利用）。変異実測で**排他キル 2 本**を確認: ③「同値 k でも `ActorRender` を破棄」・④「再追従で state を全消去」がいずれも `refresh_actor_scale_discards_render_and_preserves_reveal_state` 単独で落ちる。①no-op 化・②churn ガード除去は 2 本共倒れ（排他キルではない）。
+- 7.1: 未登録 actor への `refresh_actor_scale` は `debug!`＋false（`warn!` ではない）。R8.6 の `warn!` は**呼び手側**（7.2 の `text_slot_view` None 経路）の規定であり、「まだ装着されていない actor」は `connect_balloon_text` が現 k で解決する良性経路ゆえ——レビュー承認済み。
+- 7.1: `choice_snapshot`（旧 k の窓物理 px ヒット矩形）は再追従で無効化していない。design が破棄対象に挙げるのは `ActorRender` のみで、再生成フレームは全再描画ゆえ stale は 1 フレーム未満——`Clear`/`ClearAll` の原子的無効化とは混ぜない（意図的不作為・レビュー承認済み）。
 
 - 6.4: **通過**（`cargo test --workspace` EXIT=0・85 グループ全緑。i686 host-32 成果物 `shiori-host32-testdll` / `shiori-host32-helper` を PowerShell で事前ビルド済み）。
 - 6.4: **【先行フレーキー・本 spec 無関係・要 owner 対応】`areka-ghost --test ghost` の `spine_e2e_test::s1_boot_success::s1_boot_success_plays_greeting_and_records_expected_cue_sequence` が 17.5%（7/40）で落ちる。** 本 spec とは無関係であることの証明: (a) 本ブランチは `crates/areka-ghost` を**一度も触っていない**、(b) `cargo tree -p areka-ghost --edges normal,dev` の依存閉包に本ブランチが変更したクレート（`areka-emo-compose`／`areka-emo-present`／`areka`／`areka-emo-text`）が**1つも含まれない**、(c) `areka-ghost` と全依存のソースが `origin/main` と**バイト同一**（`git diff origin/main...HEAD` が空）。

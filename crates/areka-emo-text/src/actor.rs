@@ -82,15 +82,26 @@ impl TextSlotBinding {
 
     /// emo-present の読み取り専用増分 `TextSlotView` からの一点変換（結線の正準口・R9.1/R9.2）。
     ///
-    /// view の読み値（slot/window/scale/surface_size）を [`Self::new`] へ透過するだけで、
-    /// `image_size = round(surface_size / k)` の一点導出は `new` に集約されたまま変わらない
+    /// view の読み値（slot/window/scale/**physical_size**）を [`Self::new`] へ透過するだけで、
+    /// `image_size = round(物理原寸 / k)` の一点導出は `new` に集約されたまま変わらない
     /// （k の多重適用・混在の構造排除——design.md「DPI/スケール契約」）。
+    ///
+    /// # 物理寸を読む（`surface_size` ではない・R8.2）
+    ///
+    /// [`TextSlotView`] は **native 原寸**（`surface_size()`＝k 適用**前**）と**物理寸**
+    /// （`physical_size()`＝丸め権威 `scaled_extent` を通した表示寸）を隣り合わせで公開する。
+    /// 本型の第 4 引数は**物理原寸**であり、ここで `surface_size()`（native）を渡すと
+    /// `image_size = native / k` となって画像空間そのものが k に反比例して縮み、
+    /// 結果として供給面 `ceil(region × k)` が k に依らずほぼ一定になる——k を変えても文字が
+    /// 拡大されない静かな欠陥（`presenter.rs` の `physical_size` doc が警告する「消費点での
+    /// 1 トークンの取り違え」そのもの）。image px 原寸は作者画像空間＝**k 不変**でなければ
+    /// ならない（R8.2 の `ceil(validrect 寸 × k)` が k に比例する前提）。
     pub fn from_view(view: &TextSlotView) -> Self {
         TextSlotBinding::new(
             view.slot(),
             view.window(),
             view.scale(),
-            view.surface_size(),
+            view.physical_size(),
         )
     }
 }
@@ -189,7 +200,9 @@ pub struct TextLayerRuntime {
     routing: HashMap<ActorKey, TextSlotBinding>,
     /// actor → layout 入力（writing_mode/region/font の解決済み束）。routing と対で登録。
     layout_input: HashMap<ActorKey, ResolvedBalloonText>,
-    /// actor 別の描画資源（遅延生成——初回解決フレームで World 資源から構築・装着）。
+    /// actor 別の描画資源（遅延生成——`ActorRender` 不在の解決フレームで World 資源から構築・装着。
+    /// k 再追従（[`TextLayerRuntime::refresh_actor_scale`]）は本 map の当該エントリだけを破棄し、
+    /// 次フレームの再生成へ委ねる——純粋状態 `state` には触れない・R8.2/R8.3）。
     surfaces: HashMap<ActorKey, ActorRender>,
     /// 調整値（line_pitch 係数）。reveal ペースは配送 duration 由来ゆえ char_wait は持たない
     /// （本 config は `DWriteMetrics::new` の行送り算出にのみ使う）。
@@ -261,9 +274,103 @@ impl TextLayerRuntime {
         view: &TextSlotView,
         model: &BalloonModel,
     ) {
-        let binding = TextSlotBinding::from_view(view);
+        self.register_actor_binding(actor, TextSlotBinding::from_view(view), model);
+    }
+
+    /// **単一構築経路の内側**（binding 直渡し）: [`register_actor_view`](Self::register_actor_view) と
+    /// [`refresh_actor_scale`](Self::refresh_actor_scale) の双方がここへ合流する
+    /// （第 2 の構築流儀を作らない・R8.1）。view からの読み取りは呼び手側の
+    /// [`TextSlotBinding::from_view`] 一点で完結し、以降の導出（layout 入力の再解決・登録）は
+    /// 装着でも再追従でも完全に同一である。
+    fn register_actor_binding(
+        &mut self,
+        actor: ActorKey,
+        binding: TextSlotBinding,
+        model: &BalloonModel,
+    ) {
         let resolved = ResolvedBalloonText::resolve(model, binding.image_size);
         self.register_actor(actor, binding, resolved);
+    }
+
+    /// balloon target の**適用 k 変化時の再追従シーム**（R8.1/8.2/8.3/8.5/8.7・design D11）。
+    ///
+    /// 窓 DPI 変化（モニタ跨ぎ移動・表示スケール変更）で emo-present の適用 k が変わったとき、
+    /// 結線側（`emo2_boot` の DPI フェーズ）が新しい [`TextSlotView`] を携えて呼ぶ。view から
+    /// binding を再構築し（[`register_actor_view`](Self::register_actor_view) と同一の単一構築経路）、
+    /// 当該 actor の `ActorRender`（供給面・描画実行部・実測 metrics）を破棄する。次の
+    /// [`present_frame`] の初回解決分岐が**新 k の物理寸**（`ceil(validrect 寸 × k)`／
+    /// `validrect 原点 × k`）で再生成する——既存の生成式をそのまま再利用し、旧寸供給面は
+    /// 再利用しない（R8.2）。
+    ///
+    /// # リビール状態は保存される（R8.3・`Clear`/`ClearAll` と別物）
+    ///
+    /// 破棄するのは描画資源だけで、純粋状態（[`TextLayerState`]——typewriter 進行・確定行）には
+    /// 触れない（[`register_actor`](Self::register_actor) が `routing`＋`layout_input` しか
+    /// 上書きしない既存構造がこれを担保する）。確定行 TextLayout キャッシュは `ActorRender` に
+    /// 宿るため、破棄→再生成で次フレームは保存済み状態から**全再描画**される（R8.4）。
+    ///
+    /// # 戻り値（churn ガード・R8.5）
+    ///
+    /// 再追従を行ったとき `true`、行わなかったとき `false`。適用 k が同値（identity 再導出を
+    /// 含む）なら **no-op で `false`**——毎フレーム再結線・再生成を構造的に禁じる。未登録 actor
+    /// （まだ装着されていない）も `false`——装着は `register_actor_view` の領分であり、本口が
+    /// 第 2 の装着経路にならない。
+    pub fn refresh_actor_scale(
+        &mut self,
+        actor: &ActorKey,
+        view: &TextSlotView,
+        model: &BalloonModel,
+    ) -> bool {
+        self.refresh_actor_binding(actor, TextSlotBinding::from_view(view), model)
+    }
+
+    /// [`refresh_actor_scale`](Self::refresh_actor_scale) の内側（binding 直渡し・判断分岐の本体）。
+    /// `TextSlotView` は emo-present 私有フィールド型ゆえ in-crate 檻から構築できないため、
+    /// 判断分岐をこの層で檻に入れられるよう分けてある（公開口との差は view 読み取りの有無のみ）。
+    fn refresh_actor_binding(
+        &mut self,
+        actor: &ActorKey,
+        binding: TextSlotBinding,
+        model: &BalloonModel,
+    ) -> bool {
+        let Some(current) = self.routing.get(actor) else {
+            // 未装着 actor（`text_slot_view` が None のまま等）——再構築すべき binding が無い。
+            // 失敗ではなく「対象なし」の静穏 skip（装着は register_actor_view の領分）。
+            debug!(
+                actor = %actor,
+                k = binding.scale,
+                "文字層 k 再追従: 未登録 actor のため何もしない（装着は register_actor_view の領分）"
+            );
+            return false;
+        };
+        // k は双方とも ScaleContract 正規化済み（TextSlotBinding::new 経由）の同一表現ゆえ、
+        // 厳密一致で「変化なし」を判定してよい（f32 は出口ビュー——ここでは比較にのみ使い、
+        // 寸法演算には一切用いない・D4）。
+        let (k_old, k_new) = (current.scale, binding.scale);
+        if k_old == k_new {
+            debug!(
+                actor = %actor,
+                k = k_new,
+                "文字層 k 再追従: 適用 k は同値のため再結線・再生成を行わない（churn ガード・R8.5）"
+            );
+            return false;
+        }
+
+        // 装着と同一の単一構築経路で binding／layout 入力を再構築する（R8.1）。
+        // 純粋状態（TextLayerState）には触れない＝リビール進行・確定行は保存される（R8.3）。
+        self.register_actor_binding(actor.clone(), binding, model);
+        // 描画資源だけを破棄する。次 present_frame の初回解決分岐が新 k の物理寸で再生成し、
+        // 空の行 TextLayout キャッシュから保存済み状態を全再描画する（R8.2/R8.4）。
+        self.surfaces.remove(actor);
+        info!(
+            actor = %actor,
+            k_old,
+            k_new,
+            image_size = ?binding.image_size,
+            surface_size = ?binding.surface_size,
+            "文字層の k 再追従: binding を再構築し描画資源を破棄した（次フレームで新 k の物理寸へ再生成・リビール状態は保存）"
+        );
+        true
     }
 
     /// cue を actor 別の純粋状態機械へ適用する（UI ドレインの適用点・World に触れない）。
@@ -447,7 +554,9 @@ pub fn spawn_emo_text(
 /// - **未解決 actor**（binding 未登録）: 状態は蓄積のみ・描画スキップ・次フレーム再試行
 ///   （actor ごと初回 `warn!`＋以降 `debug!`——frame の `Err` にはしない）。
 /// - **初回解決フレーム**: World 資源（[`GraphicsCore`]／[`WucGraphicsResource`]）から
-///   供給面/描画実行部を構築し予約スロットへ装着する（actor ごと初回のみ・`info!`）。
+///   供給面/描画実行部を構築し予約スロットへ装着する（`ActorRender` 不在時のみ・`info!`）。
+///   通常は actor ごと初回の 1 回だが、k 再追従（[`TextLayerRuntime::refresh_actor_scale`]）で
+///   `ActorRender` を破棄した直後のフレームでも再発火する（新 k の物理寸で再生成・R8.2）。
 /// - **装着済み actor のグリフ更新**: viewbox ダーティ矩形スクロール描画→（変化ありのフレームだけ）
 ///   swapchain Present で完結し、バルーン surface 本体の再合成（emo-compose 再駆動）を要求しない（R9.3）。
 /// - **デバイス失敗**: 失敗源で `error!` 済み（log-first）。当該 actor の当該フレーム提示を
@@ -587,7 +696,7 @@ fn present_actor(
             slot = ?binding.slot,
             ?physical_size,
             wrap = ?resolved.wrap,
-            "テキスト供給面を予約スロットへ装着した（actor ごと初回のみ・以降は Present のみ）"
+            "テキスト供給面を予約スロットへ装着した（ActorRender 不在時のみ・以降は Present のみ）"
         );
     }
 
@@ -2508,5 +2617,215 @@ mod runtime_tests {
                 "集合2: 新選択肢行 {i} バンドにインクがある（描画==ヒット・7.3/7.4）"
             );
         }
+    }
+
+    // ══ task 7.1: 文字層 k 再追従シーム（R8.1/8.2/8.3/8.5/8.7・design D11） ══
+    //
+    // `TextSlotView` は emo-present の私有フィールド型で in-crate から構築できない
+    // （公開コンストラクタなし・`text_slot_view` は実 GPU 表示確立が前提）。よって本檻は
+    // 公開口 `refresh_actor_scale` が `TextSlotBinding::from_view` の直後に委譲する内側シーム
+    // `refresh_actor_binding`（binding 直渡し・以降の判断分岐は完全に同一）を駆動する。
+    // view 経由の全経路（`from_view` の物理寸読み取りを含む）は GPU 統合テストの領分（task 7.3）。
+
+    /// 代表 native 原寸（emo2 balloon 相当）と、k を通した物理寸（`scaled_extent` 相当の実値）。
+    /// k=1.25: 400×1.25=500 / 224×1.25=280。k=2: 800 / 448。
+    const NATIVE: (u32, u32) = (400, 224);
+
+    /// R8.5（churn ガード）: 同値 k の再追従要求は **false** を返し、routing／layout 入力を
+    /// 1 バイトも動かさない（毎フレーム再結線の禁止）。
+    #[test]
+    fn refresh_actor_scale_with_same_k_is_noop_returning_false() {
+        let mut world = World::new();
+        let (window, slot) = spawn_reserved_slot(&mut world);
+        let actor = ActorKey::from("0");
+        let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+        rt.register_actor_binding(
+            actor.clone(),
+            TextSlotBinding::new(slot, window, 1.25, (500, 280)),
+            &geo_model(),
+        );
+        let binding_before = rt.routing[&actor];
+        let resolved_before = rt.layout_input[&actor].clone();
+
+        let changed = rt.refresh_actor_binding(
+            &actor,
+            TextSlotBinding::new(slot, window, 1.25, (500, 280)),
+            &geo_model(),
+        );
+
+        assert!(!changed, "同値 k の再追従要求は no-op で false（R8.5）");
+        assert_eq!(rt.routing[&actor], binding_before, "binding は不変");
+        assert_eq!(
+            rt.layout_input[&actor], resolved_before,
+            "layout 入力は不変（再解決すら起きない）"
+        );
+    }
+
+    /// R8.1/R8.2: k 変化で binding が新 k へ再構築され、**image px 空間は不変**
+    /// （image_size／解決済み region が k に依らない＝作者画像空間）。物理寸が k 倍で
+    /// 伸びるのはこの不変性が前提（`physical = ceil(region × k)`）。
+    #[test]
+    fn refresh_actor_scale_rebuilds_binding_at_new_k_keeping_image_space() {
+        let mut world = World::new();
+        let (window, slot) = spawn_reserved_slot(&mut world);
+        let actor = ActorKey::from("0");
+        let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+        rt.register_actor_binding(
+            actor.clone(),
+            TextSlotBinding::new(slot, window, 1.25, (500, 280)),
+            &geo_model(),
+        );
+        assert_eq!(
+            rt.routing[&actor].image_size, NATIVE,
+            "k=1.25 の物理寸 500×280 から image px 原寸 400×224 が導出される"
+        );
+        let region_before = rt.layout_input[&actor].region;
+
+        let changed = rt.refresh_actor_binding(
+            &actor,
+            TextSlotBinding::new(slot, window, 2.0, (800, 448)),
+            &geo_model(),
+        );
+
+        assert!(changed, "k 変化の再追従は true（R8.1）");
+        let after = rt.routing[&actor];
+        assert_eq!(after.scale, 2.0, "binding の k が新 k へ更新される");
+        assert_eq!(after.surface_size, (800, 448), "物理原寸は新 k の値");
+        assert_eq!(
+            after.image_size, NATIVE,
+            "image px 原寸は k 不変（作者画像空間・R8.2 の ceil(validrect×k) が k に比例する前提）"
+        );
+        assert_eq!(
+            rt.layout_input[&actor].region, region_before,
+            "解決済み region（全値 image px）も k 不変——k は描画行列と供給面寸にだけ効く"
+        );
+    }
+
+    /// R8.1/R8.2/R8.3（COM・headless）: 再追従は `ActorRender`（供給面・executor・metrics）を
+    /// 破棄し、次 `present_frame` が **新 k の物理寸**で再生成する。その間、純粋状態
+    /// （リビール進行・確定行＝`TextLayerState`）は保存される（`Clear`/`ClearAll` と別物）。
+    #[test]
+    fn refresh_actor_scale_discards_render_and_preserves_reveal_state() {
+        let (mut world, window, slot) = com_world();
+        let actor = ActorKey::from("0");
+        let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+        rt.apply_cue(&cue("0", 0.0, CueCommand::Text("アヒル".into())));
+        // k=1.0・物理 120×60＝image 120×60（validrect 未指定＝画像全域ゆえ供給面も 120×60）。
+        rt.register_actor_binding(
+            actor.clone(),
+            TextSlotBinding::new(slot, window, 1.0, (120, 60)),
+            &geo_model(),
+        );
+        present_frame(&mut rt, &mut world, 10.0).expect("初回提示（装着）");
+        assert!(rt.is_attached(&actor), "初回提示で ActorRender が生成される");
+        assert_eq!(
+            rt.surface(&actor).expect("供給面").size(),
+            (120, 60),
+            "k=1.0 の供給面物理寸"
+        );
+        let items_before = rt
+            .state()
+            .actor_state(&actor)
+            .expect("actor 状態")
+            .items()
+            .len();
+        let visible_before = rt.state().visible_glyphs(&actor, 10.0);
+        assert!(visible_before > 0, "リビール済みグリフがある前提");
+
+        // ── k=1.0 → 2.0 の再追従（物理 240×120＝image 120×60・image 空間は不変） ──
+        let changed = rt.refresh_actor_binding(
+            &actor,
+            TextSlotBinding::new(slot, window, 2.0, (240, 120)),
+            &geo_model(),
+        );
+        assert!(changed, "k 変化の再追従は true");
+        assert!(
+            !rt.is_attached(&actor),
+            "ActorRender は破棄される（次フレームが新 k で再生成する・R8.2）"
+        );
+        // R8.3: リビール状態は破棄されない（Clear/ClearAll とは構造的に別物）。
+        assert_eq!(
+            rt.state()
+                .actor_state(&actor)
+                .expect("再追従後も actor 状態は残る")
+                .items()
+                .len(),
+            items_before,
+            "確定行・グリフ列は保存される（R8.3）"
+        );
+        assert_eq!(
+            rt.state().visible_glyphs(&actor, 10.0),
+            visible_before,
+            "リビール進行も保存される（R8.3）"
+        );
+
+        // ── 次フレーム: 新 k の物理寸で再生成され、保存済み状態から全再描画される ──
+        present_frame(&mut rt, &mut world, 10.0).expect("再追従後の提示");
+        assert!(rt.is_attached(&actor), "次フレームで再装着される");
+        assert_eq!(
+            rt.surface(&actor).expect("供給面").size(),
+            (240, 120),
+            "供給面は新 k の物理寸 ceil(region×k) で再生成される（R8.2・旧寸の再利用禁止）"
+        );
+        let bytes = rt
+            .surface(&actor)
+            .expect("供給面")
+            .read_back()
+            .expect("read_back");
+        assert!(
+            opaque_count(&bytes) > 0,
+            "保存済み状態から新 k で再描画される（空表示へ落ちない・R8.4 の前提）"
+        );
+
+        // ── R8.5（churn ガードの実効）: 同値 k の再要求は ActorRender を破棄しない ──
+        // 装着済みの状態で「何もしない」ことを観測する（毎フレーム再結線＝供給面の作り直しと
+        // 全再描画を毎フレーム走らせる変異は、ここで is_attached／統計が動くことで死ぬ）。
+        let stats_before = rt.draw_stats(&actor).expect("draw_stats");
+        let noop = rt.refresh_actor_binding(
+            &actor,
+            TextSlotBinding::new(slot, window, 2.0, (240, 120)),
+            &geo_model(),
+        );
+        assert!(!noop, "同値 k は false（R8.5）");
+        assert!(
+            rt.is_attached(&actor),
+            "同値 k は ActorRender を破棄しない（churn ガード・R8.5）"
+        );
+        let stats_after = rt.draw_stats(&actor).expect("draw_stats");
+        assert_eq!(
+            (
+                stats_after.line_layout_creations,
+                stats_after.full_clears,
+                stats_after.draw_text_layout_calls
+            ),
+            (
+                stats_before.line_layout_creations,
+                stats_before.full_clears,
+                stats_before.draw_text_layout_calls
+            ),
+            "同値 k は描画実行部にも一切触れない（行 TextLayout キャッシュを捨てない）"
+        );
+    }
+
+    /// 未登録 actor への再追従要求は no-op で false（装着は `register_actor_view` の領分——
+    /// 再追従が第 2 の装着経路にならない）。
+    #[test]
+    fn refresh_actor_scale_for_unregistered_actor_is_noop() {
+        let mut world = World::new();
+        let (window, slot) = spawn_reserved_slot(&mut world);
+        let actor = ActorKey::from("0");
+        let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+
+        let changed = rt.refresh_actor_binding(
+            &actor,
+            TextSlotBinding::new(slot, window, 2.0, (800, 448)),
+            &geo_model(),
+        );
+
+        assert!(!changed, "未登録 actor は再構築対象が無い＝false");
+        assert!(
+            !rt.routing.contains_key(&actor),
+            "再追従は装着経路ではない（routing を生やさない）"
+        );
     }
 }
