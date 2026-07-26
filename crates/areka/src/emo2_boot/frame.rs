@@ -10,6 +10,10 @@
 //!   target を `refresh_scale` で再スケールして窓寸を reconcile する（emo-dpi-scaling task 4.2・D8）。
 //! - drain: attach 完了後のみ `Receiver::try_iter` で `PresentCommand` を FIFO で `presenter.apply` へ適用し、
 //!   続けて表示成立点の状態照合報告（`take_pending_resize`）で窓寸を reconcile する（第 2 経路）。
+//! - text-scale: 装着済み balloon scope の文字層 binding を presenter の**現適用 k** へ毎フレーム
+//!   合わせ直す（`refresh_actor_scale`・emo-dpi-scaling task 7.2・D11-4・Req8）。適用 k の更新点は
+//!   1 フレームに 2 つ（dpi 相の `refresh_scale`／drain 相の `apply_show`）あるため、**両者の下流**・
+//!   text 相の**上流**に置く。
 //! - text: `TalkClock::talk_time` が `Some` のとき `present_frame` を呼ぶ（`Err` は `error!`＋継続）。
 //!
 //! `plan_attachments`（`GhostWindows::scopes()` を正とする純関数・DD-12）も本モジュールに属する。
@@ -20,6 +24,7 @@
 //! `resolve_talk_time`）・排他 system `emo2_frame_system`（remove→3 フェーズ→insert）を実装する。
 
 use std::cell::RefCell;
+use std::collections::{BTreeSet, HashMap};
 use std::rc::Rc;
 use std::sync::mpsc::Receiver;
 
@@ -186,6 +191,25 @@ pub struct Emo2Wiring {
     move_rx: Receiver<MoveDirective>,
     /// バルーン文字層ランタイム（`register_actor_view`／`present_frame` の所有・`!Send`）。
     runtime: Rc<RefCell<TextLayerRuntime>>,
+    /// scope → attach 相で装着に使った [`BalloonModel`]（文字層 k 再追従の再利用源・D11-3・R8.1）。
+    ///
+    /// `register_actor_view`（装着）と [`TextLayerRuntime::refresh_actor_scale`]（再追従）はいずれも
+    /// `&BalloonModel` を要する。装着で使ったモデルをここへ記憶しておき、文字層スケール相
+    /// （[`run_text_scale_phase`]）の再追従が
+    /// **再パースせず同一モデル**で binding を組み直せるようにする（再パースすれば「装着時と再追従時で
+    /// 別モデル」という静かな食い違いの余地が生まれる）。
+    ///
+    /// 現行 [`BootAssets::balloon_model`] は全 scope 共有の 1 本だが、キーは **scope**（W5
+    /// `kero-balloon` の per-scope バルーン採寸の席を潰さない）とする——再追従は「どの scope の
+    /// balloon 窓か」から引くのが自然であり、共有 1 本を全 scope へ配るのは現行の実装詳細に過ぎない。
+    balloon_models: HashMap<u32, BalloonModel>,
+    /// 文字層 k 追従で `text_slot_view` が `None` だった scope の警告済み集合（R8.6 のエッジガード）。
+    ///
+    /// [`run_text_scale_phase`] は毎フレーム走る。表示未確立の縮退を素朴に `warn!` すると毎フレーム
+    /// 鳴って log を溺れさせるため、**scope ごとに一度だけ**鳴らし、view が取れた時点で除去して
+    /// 再武装する（`areka-emo-text` の `unresolved_warned: BTreeSet<ActorKey>` と同型の先例）。
+    /// R8.6 が求めるのは縮退が**観測できる**ことであって毎回鳴ることではない。
+    text_scale_warned: BTreeSet<u32>,
     /// talk 起点相対秒の時刻源（task 4.2 の text フェーズで `talk_time` を引く）。
     clock: TalkClock,
     /// load-time 構築資産（attach で `take` して高々 1 回消費）。
@@ -220,6 +244,10 @@ impl Emo2Wiring {
             rx,
             move_rx,
             runtime,
+            // attach 相が装着した scope ごとに埋める（D11-3）。
+            balloon_models: HashMap::new(),
+            // 縮退警告のエッジガード（初期は未警告＝最初の縮退で 1 回鳴る）。
+            text_scale_warned: BTreeSet::new(),
             clock,
             assets: Some(assets),
             attached: false,
@@ -306,6 +334,17 @@ impl Emo2Wiring {
     #[cfg(test)]
     pub(crate) fn apply_present(&mut self, world: &mut World, cmd: PresentCommand) {
         self.presenter.apply(world, cmd);
+    }
+
+    /// 再追従用に記憶している [`BalloonModel`] の scope 集合（昇順・emo-dpi-scaling D11-3 の観測口）。
+    ///
+    /// 「attach 相が per-scope の model を実際に保持したか」は本番 attach（GPU 資源＋実資産）を
+    /// 通さないと観測できないため、spine（in-crate GPU ハーネス）から見えるだけの read を開ける。
+    #[cfg(test)]
+    pub(crate) fn balloon_model_scopes(&self) -> Vec<u32> {
+        let mut scopes: Vec<u32> = self.balloon_models.keys().copied().collect();
+        scopes.sort_unstable();
+        scopes
     }
 }
 
@@ -499,12 +538,19 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
                 reply: None,
             },
         );
+        // 文字層 k 再追従（D11-3・R8.1）の再利用源: 装着に使うモデルを scope キーで記憶する。
+        // 文字層スケール相（[`run_text_scale_phase`]）はこれを再利用して binding を組み直す（再パースしない）。
+        // 装着が `text_slot_view` None で次フレームへ委ねられた場合でもモデル自体は有効ゆえ、
+        // 接続成否に関わらず記憶する（再追従は未登録 actor を静穏 skip する・7.1 の契約）。
+        wiring.balloon_models.insert(scope, balloon_model.clone());
         // apply は同期ゆえ同一フレームで text_slot_view が Some になるのが正常経路（DD-4）。
         // None（上流の遅延化）は接続せず次フレーム再試行へ委ねる（R4.2）。
         let view = wiring.presenter.text_slot_view(item.balloon_target);
         connect_balloon_text(
             &wiring.runtime,
             view,
+            // 再追従（[`run_text_scale_phase`]）は**同一の写像**で actor を引く——
+            // ここと式が食い違うと、再追従が別 actor を作って文字だけ旧 k のまま残る。
             ActorKey::from(scope.to_string()),
             &balloon_model,
         );
@@ -782,8 +828,10 @@ fn dpi_phase_with<S: ScaleReportSource>(
             GhostWindowKind::Char => shell_target(scope),
             GhostWindowKind::Balloon => balloon_target(scope),
         };
-        // 再導出→（差分があれば）再表示。`None`＝k 不変／不可視／未表示／失敗のいずれかで、
-        // いずれも「窓寸を触らない」が正しい（前表示・前寸の維持・Req4.4）。
+        // 再導出→（差分があれば）再表示。`None` は「窓寸を触らない」が正しい（前表示・前寸の維持・
+        // Req4.4）。なお `None` は k 不変とは同義でない——不可視・未表示・失敗に加え、**k は変わった
+        // が丸め後の物理寸が同じ**場合も `None` である（`refresh_scale` の doc が明記）。ゆえに
+        // 文字層 k 追従の判断材料にはこの戻り値を使わない（[`run_text_scale_phase`] を参照）。
         if let Some(new_size) = source.refresh_scale_report(world, target) {
             reconcile_window_size(world, window, kind, new_size);
         }
@@ -807,6 +855,13 @@ fn dpi_phase_with<S: ScaleReportSource>(
 /// したという状態**に紐づき、[`run_drain_phase`] 末尾の [`reconcile_reported_sizes`] が同一
 /// フレーム内で拾う（初回表示の k₀ 補正＝Flow 3 手順 5 はこちらの経路で landing する）。両者は
 /// presenter の消費規約により二重にも取りこぼしにもならない。
+///
+/// # 文字層の k 追従は本フェーズが担わない（task 7.2・D11-4・Req8）
+///
+/// バルーンの**文字**も新 k へ追従させる必要があるが、その反映点は本フェーズではなく
+/// [`run_text_scale_phase`] である——適用 k の更新点は 1 フレームに 2 つ（本フェーズの
+/// `refresh_scale` と drain 相の `apply_show`）あり、本フェーズの戻り値だけを見ると後者を取り
+/// こぼすためである（詳細は [`run_text_scale_phase`] の doc）。
 pub fn run_dpi_phase(wiring: &mut Emo2Wiring, world: &mut World) {
     // presenter（報告源）と dpi_state（永続観測器）は互いに素なフィールドゆえ同時に借りられる。
     let Emo2Wiring {
@@ -815,6 +870,103 @@ pub fn run_dpi_phase(wiring: &mut Emo2Wiring, world: &mut World) {
         ..
     } = wiring;
     dpi_phase_with(presenter, dpi_state, world);
+}
+
+// ---------------------------------------------------------------------------
+// 文字層 k 追従フェーズ（areka-P0-emo-dpi-scaling task 7.2・design D11-3/D11-4・Req8.1/8.5/8.6）
+// ---------------------------------------------------------------------------
+
+/// 文字層 k 追従フェーズ（毎フレーム・R8.1/8.5/8.6・design D11-4）: 装着済み balloon scope の
+/// 文字層 binding を presenter の**現適用 k** へ合わせ直す。戻り値は実際に binding を再構築した
+/// scope（昇順・観測用。本番＝[`emo2_frame_system`] は捨てる）。
+///
+/// バルーンの**文字**は emo-text の binding（装着時の k を焼き付ける）に載るため、窓とバルーン画像
+/// だけを再スケールすると文字だけが旧 k の寸法に取り残される（6.5 一次実走で実測した欠陥）。本
+/// フェーズはその取り残しを構造的に消す。
+///
+/// # なぜ「イベント駆動」ではなく毎フレーム走査なのか（D11-4 の意図＝k 変化の検出）
+///
+/// 素朴には「[`run_dpi_phase`] の `refresh_scale` が `Some` を返した balloon 窓へ伝搬する」と書け
+/// るが、**`Some` と「適用 k が変わった」は同値ではない**——`refresh_scale` の doc が明記するとおり
+/// 次の 2 つで乖離する:
+///
+/// - **不可視のとき**: `refresh_scale` は再表示せず `applied` も更新せずに `None` を返す。適用 k は
+///   その後の `Show`（`apply_show`＝drain 相）で新 k へ跳ぶ——エッジは既に消費済みで二度と来ない
+///   （`\b[-1]`→`\b[0]` は本番の通常列であり、バルーンは大半の時間が不可視である）。
+/// - **k は変わったが丸め後の物理寸が同じとき**: `refresh_scale` は再表示に成功しても
+///   `take_pending_resize` が `None` ゆえ `None` を返す。文字層の供給面は
+///   `ceil(validrect 寸 × k)`（AC 8.2）と別の丸めで決まるため、こちらは寸が変わり得る。
+///
+/// ゆえに検出点は「**balloon target の適用 k が文字層 binding の k と食い違っているか**」であり、
+/// それを判定できる唯一の権威は [`TextLayerRuntime::refresh_actor_binding`]（task 7.1）である。
+/// 本フェーズは判定を自前で複製せず（第 2 のガードは本家と乖離し得る）、毎フレーム
+/// [`TextLayerRuntime::refresh_actor_scale`] へ委ねる——同値 k・未登録 actor はあちらが
+/// **再構築せず `false`** を返す（churn ガード・R8.5）。費用は balloon 1 枚あたり map 1 引きと
+/// `ScaleRatio` 1 比較。
+///
+/// # 呼ぶ位置（[`emo2_frame_system`] 内）
+///
+/// 適用 k の更新点は 1 フレームに 2 つ——[`run_dpi_phase`] の `refresh_scale` と
+/// [`run_drain_phase`] の `apply_show`。本フェーズは**両者の下流**かつ [`run_text_phase`]
+/// （`present_frame`）の**上流**に置く。こうすると、どちらの経路で k が跳ねても同一フレーム内で
+/// binding が組み直され、その直後の描画が新 k の物理寸で走る（1 フレームの旧寸残りが生じない）。
+///
+/// # 縮退（R8.6・log-first だが log spam にしない）
+///
+/// `text_slot_view` が `None`（初回 `ShowSurface` が成立していない＝表示未確立）なら再追従できず
+/// skip する。毎フレーム走査ゆえ素朴に `warn!` すると毎フレーム鳴るため、**scope ごとに一度だけ**
+/// 警告し（`text_scale_warned`・emo-text の `unresolved_warned` と同型のエッジガード）、view が
+/// 取れるようになった時点で再武装する（再度落ちれば再び 1 回鳴る）。なお `Hide` は
+/// `text_slot_view` を `None` にしない（`apply_hide` は mount／chain／`applied`／`native_size` を
+/// 保持する）ため、**不可視は本縮退経路に落ちない**——不可視の間は同値 k の no-op が続き、`Show`
+/// で `applied` が跳ねた次の走査が再追従する。
+///
+/// [`BalloonModel`] は attach 時に記憶した per-scope の同一モデルを再利用する（再パースしない・
+/// D11-3）。actor は attach と同一写像 `ActorKey::from(scope.to_string())`。shell target は emo2 で
+/// 文字スロットを持たないため走査対象に入らない（`balloon_models` が balloon 装着 scope のみを持つ）。
+/// panic しない。
+pub fn run_text_scale_phase(wiring: &mut Emo2Wiring) -> Vec<u32> {
+    // presenter（view 供給）／runtime（適用先）／balloon_models（再利用モデル）／warn ガードは
+    // 互いに素なフィールドゆえ同時に借りられる。
+    let Emo2Wiring {
+        presenter,
+        runtime,
+        balloon_models,
+        text_scale_warned,
+        ..
+    } = wiring;
+
+    let mut refreshed = Vec::new();
+    // BTreeMap ではなく HashMap ゆえ列挙順は不定。観測（戻り値）と warn 順を決定論にするため昇順化する。
+    let mut scopes: Vec<u32> = balloon_models.keys().copied().collect();
+    scopes.sort_unstable();
+
+    for scope in scopes {
+        let target = balloon_target(scope);
+        // actor 引き当ては attach（`run_attach_phase` の `connect_balloon_text` 呼び）と**同一の写像**。
+        // 別式で組むと存在しない actor を指し、7.1 の未登録 skip で静かに何も起きなくなる。
+        let actor = ActorKey::from(scope.to_string());
+        let Some(view) = presenter.text_slot_view(target) else {
+            // 表示未確立（初回 ShowSurface が成立していない）。毎フレーム走査ゆえ scope ごとに 1 回だけ鳴らす。
+            if text_scale_warned.insert(scope) {
+                warn!(
+                    scope,
+                    ?target,
+                    actor = %actor.as_str(),
+                    "text-scale: text_slot_view が None（表示未確立）→ 文字層 k 追従を skip し次機会へ委ねる（本 scope の警告は復帰まで抑止・R8.6）"
+                );
+            }
+            continue;
+        };
+        // 復帰＝次に落ちたときは再び 1 回鳴らす（エッジの再武装）。
+        text_scale_warned.remove(&scope);
+        // 判定（k 変化・未登録）は 7.1 の権威へ委ねる（本フェーズは第 2 のガードを持たない・R8.5）。
+        let model = &balloon_models[&scope];
+        if runtime.borrow_mut().refresh_actor_scale(&actor, &view, model) {
+            refreshed.push(scope);
+        }
+    }
+    refreshed
 }
 
 /// 窓寸 reconcile の第 2 経路（状態照合・design Flow 2 キー決定 (d)／Flow 3 手順 5）。
@@ -1132,6 +1284,11 @@ pub fn emo2_frame_system(world: &mut World) {
     // アンカー再適用を駆動する（適用後の実寸を読むため drain の**後**・同一 World・同一 tick 内の
     // 直接呼び・Req4.1/4.3/1.3）。text の前後とは機能的に無関係だが drain の後であることが必須。
     resnap_shell_targets(&wiring.presenter, world);
+    // 文字層 k 追従（emo-dpi-scaling task 7.2・D11-4・Req8）: 適用 k の更新点（dpi 相の `refresh_scale`
+    // ／drain 相の `apply_show`）の**両方の下流**、かつ `present_frame` の**上流**に置く。こうすると
+    // どちらの経路で k が跳ねても同一フレーム内で binding が新 k へ組み直され、直後の描画が新しい物理寸
+    // で走る（旧寸の文字が 1 フレーム残らない）。戻り値（再構築 scope）は観測用ゆえ本番は捨てる。
+    let _ = run_text_scale_phase(&mut wiring);
     run_text_phase(&mut wiring, world, None); // 本番: override なし（FrameTime＋clock で解決）。
     world.insert_non_send_resource(wiring);
 }
@@ -1365,6 +1522,10 @@ mod tests {
         assert!(
             wiring.assets.is_some(),
             "ゲート不成立では assets を take しない（次フレーム再試行のため保持）"
+        );
+        assert!(
+            wiring.balloon_model_scopes().is_empty(),
+            "ゲート不成立では per-scope BalloonModel も記憶しない（attach 相の副作用ゼロ・D11-3）"
         );
 
         // 冪等: 再試行してもゲート不成立なら未装着のまま・panic しない・資産も保持する。
@@ -2551,6 +2712,127 @@ mod tests {
             dpis.for_target(item, TargetId(9999)),
             96,
             "当該 scope のいずれの target でもない＝結線バグ → 既定 96 へ縮退（panic しない）"
+        );
+    }
+
+    // ── task 7.2: 文字層 k 追従フェーズ（run_text_scale_phase・D11-3/D11-4・R8.1/8.5/8.6） ──
+    //
+    // 本番関数をそのまま駆動する（シームを噛ませない）。`Some(view)` の適用そのもの（binding
+    // 再構築・供給面破棄・churn ガード）は GPU 装着を要するため spine（in-crate GPU ハーネス）が
+    // 実経路で檻に入れる。ここでは GPU 不要で観測できる 2 点——(a) 走査対象が balloon 装着 scope に
+    // 限られること、(b) 表示未確立の縮退が **scope ごとに一度だけ** 鳴ること——を固定する。
+
+    /// 素の結線資源（GPU/資産不要・`run_text_scale_phase` の headless 駆動用）。
+    fn headless_wiring() -> Emo2Wiring {
+        headless_wiring_with(mpsc::channel::<PresentCommand>().1, zero_clock())
+    }
+
+    /// 捕捉行のうち `level` かつ本文に `needle` を含む件数（他フェーズの警告と混ざらないよう絞る）。
+    fn count_level_containing(logs: &[String], level: &str, needle: &str) -> usize {
+        let lv = format!("level={level}");
+        logs.iter()
+            .filter(|l| l.contains(&lv) && l.contains(needle))
+            .count()
+    }
+
+    /// balloon 未装着（`balloon_models` 空）では走査対象がゼロ＝完全 no-op（警告も出さない）。
+    ///
+    /// 「毎フレーム走査」が attach 前のフレームで鳴き続けないこと（起動直後の log 汚染の禁止）と、
+    /// shell しか無い状況で文字層へ触れないことを同時に固定する。
+    #[test]
+    fn text_scale_phase_without_balloon_models_is_silent_noop() {
+        let mut wiring = headless_wiring();
+
+        let logs = capture_logs(|| {
+            assert!(
+                run_text_scale_phase(&mut wiring).is_empty(),
+                "balloon 未装着では再構築 scope なし"
+            );
+        });
+
+        assert_eq!(count_level(&logs, "WARN"), 0, "attach 前は何も鳴らさない: {logs:?}");
+        assert_eq!(count_level(&logs, "ERROR"), 0, "attach 前は何も鳴らさない: {logs:?}");
+    }
+
+    /// R8.6 縮退（log-first だが log spam にしない）: `text_slot_view` が `None`（表示未確立）の
+    /// scope は再追従せず skip し、**警告は scope ごとに一度だけ**鳴る（毎フレーム走査ゆえ素朴な
+    /// `warn!` は毎フレーム鳴ってしまう）。
+    ///
+    /// 実源（何も装着していない `EmoPresenter`＝`text_slot_view` が常に `None`）へ、attach 相と同じ
+    /// 形で per-scope の [`BalloonModel`] を記憶させた状態を作り、3 フレーム相当を走らせる。
+    #[test]
+    fn text_scale_phase_warns_once_per_scope_when_view_unavailable() {
+        let mut wiring = headless_wiring();
+        // attach 相が記憶するのと同じ形（scope→model）。presenter は未装着ゆえ view は常に None。
+        wiring
+            .balloon_models
+            .insert(0, areka_parsers::balloon::parse_str("", None));
+        wiring
+            .balloon_models
+            .insert(1, areka_parsers::balloon::parse_str("", None));
+
+        let first = capture_logs(|| {
+            assert!(
+                run_text_scale_phase(&mut wiring).is_empty(),
+                "view None では再構築しない（縮退 skip・R8.6）"
+            );
+        });
+        assert_eq!(
+            count_level(&first, "WARN"),
+            2,
+            "初回は縮退した scope ごとに 1 回ずつ鳴る（0 と 1 の 2 件・R8.6 の観測可能性）: {first:?}"
+        );
+
+        // 2・3 フレーム目: 状態が変わっていない以上、同じ警告を鳴らし直さない（log spam の禁止）。
+        let rest = capture_logs(|| {
+            run_text_scale_phase(&mut wiring);
+            run_text_scale_phase(&mut wiring);
+        });
+        assert_eq!(
+            count_level(&rest, "WARN"),
+            0,
+            "同一状態が続く間は再度鳴らさない（エッジガード）: {rest:?}"
+        );
+        assert_eq!(count_level(&rest, "ERROR"), 0, "縮退は失敗ではない: {rest:?}");
+
+        // 借用/poison を残さない（None 経路は runtime に触れない）。
+        assert!(wiring.runtime.try_borrow_mut().is_ok(), "runtime を汚さない");
+    }
+
+    /// **排他 system への組み込み**（call-site の檻）: [`emo2_frame_system`] は毎フレーム
+    /// [`run_text_scale_phase`] を駆動する。
+    ///
+    /// 関数が正しくても system から呼ばれていなければ本番では何も起きない——その 1 行の欠落を
+    /// 検出する。未装着 presenter（`text_slot_view` が常に `None`）＋ attach 相と同形の記憶済み
+    /// [`BalloonModel`] を持つ World で 1 フレーム回すと R8.6 の縮退警告がちょうど 1 回鳴り、
+    /// 2 フレーム目は鳴らない（＝呼ばれている、かつエッジガードが system 越しに効いている）。
+    #[test]
+    fn emo2_frame_system_drives_text_scale_phase_every_frame() {
+        let (mut world, _gw) = dpi_world();
+        let (_tx, rx) = mpsc::channel::<PresentCommand>();
+        let mut wiring = headless_wiring_with(rx, zero_clock());
+        // attach 相が記憶するのと同じ形（scope→model）。GPU 資源が無いため attach 相自体は空回りする。
+        wiring
+            .balloon_models
+            .insert(0, areka_parsers::balloon::parse_str("", None));
+        world.insert_non_send_resource(wiring);
+
+        let first = capture_logs(|| emo2_frame_system(&mut world));
+        assert_eq!(
+            count_level_containing(&first, "WARN", "text-scale"),
+            1,
+            "1 フレーム目で文字層 k 追従フェーズが駆動され縮退が 1 回鳴る（system 組み込みの証跡）: {first:?}"
+        );
+
+        let second = capture_logs(|| emo2_frame_system(&mut world));
+        assert_eq!(
+            count_level_containing(&second, "WARN", "text-scale"),
+            0,
+            "2 フレーム目は同一状態ゆえ鳴らない（エッジガードが system 越しに効く）: {second:?}"
+        );
+        assert!(
+            world.get_non_send_resource::<Emo2Wiring>().is_some(),
+            "wiring は remove→insert で必ず戻る"
         );
     }
 

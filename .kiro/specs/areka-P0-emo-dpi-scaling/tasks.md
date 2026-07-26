@@ -182,10 +182,11 @@
   - _Requirements: 8.1, 8.2, 8.3, 8.5, 8.7_
   - _Boundary: crates/areka-emo-text/src_
   - _Depends: 4.2_
-- [ ] 7.2 emo2_boot: run_dpi_phase からの文字層再追従結線
+- [x] 7.2 emo2_boot: 文字層再追従の結線（独立相 `run_text_scale_phase`）
   - `Emo2Wiring` が attach 時構築の per-scope `BalloonModel` を保持し、再追従時に再利用する（再パースしない・D11-3）
-  - `refresh_scale(balloon_target)` が Some（k 変化）の balloon 窓に対し、scope→actor（`ActorKey::from(scope.to_string())`＝attach と同一写像）で `refresh_actor_scale` を呼ぶ（D11-4）
-  - `text_slot_view` None は `warn!`＋skip（`connect_balloon_text` の R4.2 流儀・R8.6）。shell target は文字スロット不所持ゆえ静穏 skip
+  - ~~`refresh_scale(balloon_target)` が Some（k 変化）の balloon 窓に対し~~ **【レビューで是正・親裁定 2026-07-26】** attach 済み全 balloon scope を毎フレーム走査し、scope→actor（`ActorKey::from(scope.to_string())`＝attach と同一写像）で `refresh_actor_scale` を呼ぶ（判定は 7.1 の唯一の権威へ全面委譲・第 2 のガードを置かない・D11-4 是正版）
+  - 相の位置は `run_drain_phase` の後・`run_text_phase` の前（`applied` の 2 更新点の下流かつ描画の上流）
+  - `text_slot_view` None は `warn!`＋skip（R8.6）だが**毎フレーム走査ゆえ scope 単位のエッジガードで 1 回だけ**（view 復帰で再武装）。shell target は走査対象外ゆえ静穏 skip
   - _Requirements: 8.1, 8.5, 8.6_
   - _Boundary: crates/areka/src/emo2_boot（frame.rs）_
   - _Depends: 7.1_
@@ -212,6 +213,13 @@
 - 7: **開発者裁定の記録（2026-07-26）**: 「W5 Revalidation Trigger で消化」はウェーブの割当であって spec の割当ではなく、W5 の 4 spec のどの割当ファイル集合にも `areka-emo-text/src` が含まれない＝**担当者不在の先送り**だった。本来の持ち主 `areka-P0-emo-text-layer` は completed で消化不能。開発者が本 spec へのスコープ拡大を裁定（「誰も担当していないため今あなたが担当せよ」）。**教訓: 先送りには担当 spec の実在検証と開発者への即報告が必須——ウェーブ名は担当者ではない**。
 - 7.1: `register_actor`（`actor.rs:233-242`）は `routing`＋`layout_input` の上書きのみで `state` に触れない——再登録＝状態保存はこの既存構造が担保する。ただし「触れないまま」であることを 7.3 で檻に入れること（将来の register_actor 改変が R8.3 を静かに壊すのを防ぐ）。
 - 7.2: **balloon target→actor の写像は attach と同一の `ActorKey::from(scope.to_string())` を使うこと**。別の写像を発明すると attach と再追従で actor がずれ、silent に別 actor を再生成する。
+- 7.2: **【重要・設計の誤りをレビューが実証】`refresh_scale` の `Some` は「k 変化」と同値ではない**。k が変わっても `None` を返す経路が 2 本ある: (a) **balloon が不可視**のとき `!visible` で `applied` を更新せず早期 return（`presenter.rs:776-782`）、(b) 戻り値は `take_pending_resize` ＝ `size_changed` のときだけ立つ一方 `applied` は無条件更新（`:555-562`）で「k 変化・丸め後の窓寸同値」が実在（presenter 自身の doc に明記）。**(a) は致命的**——`HideBalloon`→DPI 変化→`Show` は `spine_s3` が檻に入れる常用系列で、バルーンは普段隠れている。当初設計どおり実装すると **R8 が潰すべき症状そのものが再現する**。
+- 7.2: 上の 2 経路の根は同一（**報告は `None` だが `applied` は新 k**）。ゆえに個別パッチではなく、**修正相が報告を引数として受け取らない**形（`run_text_scale_phase(&mut Emo2Wiring)`＝`World` も報告も取らない）にして構造的に閉塞した。**見えないものは取り違えようがない**——分岐を増やすより入力を減らすほうが強い。判定入力は `text_slot_view` のみで、`text_slot_view` は `applied` が `Some` のときしか返らないため view の `scale()` は定義上「適用 k」。
+- 7.2: **相の位置は `run_drain_phase` の後・`run_text_phase`（`present_frame`）の前**。`applied` の更新点は dpi 相の `refresh_scale` と drain 相の `apply_show` の 2 つあり、両者の下流かつ描画の上流でないと hidden→show で**旧 k の文字が 1 フレーム描かれる**。tasks.md 当初の「`run_dpi_phase` からの結線」は位置として誤り（dpi 相は drain より前）。
+- 7.2: 毎フレーム走査へ広げたので R8.6 の縮退 `warn!` は **scope 単位のエッジガード**（`text_scale_warned: BTreeSet<u32>`・view 復帰で再武装）。**log-first は「観測可能」を要求するのであって「毎フレーム反復」を要求しない**。先例は emo-text の `unresolved_warned`／`CursorWarnGuard`。ガード撤去の変異は排他キル 2 本。
+- 7.2: `apply_hide` は `mount`/`chain`/`applied`/`native_size` を**消さない**（`presenter.rs:600-620` は `set_visible(false)`・`visible=false`・`current_surface_id=None` のみ）。ゆえに**隠れている間も `text_slot_view` は `Some`** で、走査は同値 k の no-op に落ちる＝warn 経路ではない（レビュアーがコード実読で確認）。
+- 7.2: **fake 相手のテストは「配線されているか」を証明しない**。ラウンド 1 は `DpiPhaseSeam` trait の fake で緑を取っていたが、本番実装を `return false` へ骨抜きにする変異が **suite 全緑のまま生存**した（両縮退経路も `false` を返すため fake では弁別不能）。ラウンド 2 で実 GPU attach の spine 檻（実 `Some(view)`）を入れて初めて同変異が死ぬ。`refresh_actor_scale` は `bool` を返すので**ログ捕捉なしで観測できた**——「檻に入れるにはログ捕捉が要る」という当初の自己申告は誤り。
+- 7.2: 同値 k の no-op でも emo-text 側が `debug!` を出すため、毎フレーム走査ではバルーン 1 枚あたり毎フレーム 1 行（既定 `RUST_LOG=info` では出ない）。抑止には 7.1 の committed 領域を触る必要があり境界外ゆえ残置（レビュー承認済み）。
 - 7.4: ~~文字供給面の新 k 期待値の目安: 起動時 (300,97) → k=2.0 で (480,156) 級~~ **【7.1 で陳腐化・是正済み】** この見積もりは `image_size = native/k` の欠陥下の観測値に基づく。7.1 の `from_view` 修理後は 375×122 → 600×194 級で、**125% 側の基準値自体が動く**。判定は絶対値でなく**比 ≈1.6**（=2.0/1.25）で行うこと。grep は件数でなく `physical_size` の値で判定（5.1/5.2/6.2 の行数判定ハザードと同じ注意）。
 - 7.1: **`TextSlotBinding::from_view` が壊れていた（task 3.2 の契約変更の取り残し）**。3.2 が `TextSlotView::surface_size()` を **native**（k 適用前）へ再定義し `physical_size()` を新設したのに、`from_view` は `TextSlotBinding::new` の第 4 引数（doc 上は**物理**原寸）へ `surface_size()` を渡し続けていた。結果 `image_size = round(native / k)` ＝ image 空間が k に反比例して縮み、`physical = ceil(region × k)` が **k 不変**になる。**この修理なしには 7.1 のシームは寸法的に空虚**（R8.2 が原理的に達成不能）ゆえスコープ内と裁定（4.2 の `resnap_shell_targets` 修理と同種——3.2 の契約変更の下流トリガ）。副作用として **k=1.25 起動時の文字領域が従来 20% 過小だった**（早期折り返し）ことも判明。k=1.0 では `physical_size()==surface_size()` ゆえ既存全経路はバイト同一。
 - 7.1: **上の修理は in-crate から構造的に檻に入らない**（`TextSlotView` は私有フィールド・唯一の構築点が `presenter.rs:659`）。レビュアーが「旧実装へ戻す変異が `cargo test -p areka-emo-text` 全ターゲットで**誰にも殺されない**」ことを実測。檻は **task 7.3 の必須項目**として明記済み（`tests/attach_wiring_test.rs` に DPI 192 の World を建てる）。prose の先送りを本項＋7.3 本文の二重記録で担保する（[[deferral-requires-verified-owner]] の規律）。
