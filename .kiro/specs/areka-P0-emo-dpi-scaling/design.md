@@ -194,6 +194,7 @@ graph TB
 ```
 crates/areka-emo-compose/src/scale.rs   # ScaleRatio（既約有理・丸め単一権威 scaled_extent）＋整数 bilinear リサンプラ resample。純関数・in-crate 全網羅テスト
 crates/areka-emo-present/src/scale.rs   # ScalePolicy（author_dpi＋アプリ管理拡大率シーム）＋ derive_scale（DPI 不在/異軸縮退・log-first）。純関数・in-crate テスト
+crates/areka/src/placement/test_support.rs  # 【2026-07-26 追加】#[cfg(test)] 専用。tracing callsite interest 毒化に耐えるログ捕捉ハーネス（probe dispatcher 2 個常駐＋捕捉窓内 rebuild_interest_cache）の正本。task 6.2 で必要になり追加（既に所有済みの placement モジュール内・本番表面ゼロ）
 ```
 
 ### Modified Files
@@ -207,9 +208,17 @@ crates/areka-emo-present/src/scale.rs   # ScalePolicy（author_dpi＋アプリ�
 - `crates/areka/src/emo2_boot/assets.rs` — `BootAssets` へ `shell_author_dpi`/`balloon_author_dpi` 搬送。
 - `crates/areka/src/emo2_boot/frame.rs` — `run_dpi_phase()` 新設＋ `emo2_frame_system` への組込。`run_attach_phase` の `attach_target` 呼び 2 箇所へ author_dpi 供給。
 - `crates/areka/src/main.rs` — boot シーム: author_dpi 読取＋primary モニタ DPI → `MeasureScaling` 構築 → measure へ供給。
-- `crates/areka/examples/emo-present.rs` ほか `attach_target`/`measure_scope_sizes` の既存呼び手 — シグネチャ追随（機械的・k=1 相当値で挙動不変）。
+- `crates/areka/examples/emo-present.rs` ほか `attach_target`/`measure_scope_sizes` の既存呼び手 — シグネチャ追随（機械的・k=1 相当値で挙動不変）。実測の破断呼び手は `areka/examples/{emo-present.rs, collision-probe.rs, window-placement.rs}`・`areka-emo-text/examples/{emo-text-layer.rs, emo-text-typewriter-demo.rs}`・`areka-emo-text/tests/{attach_wiring_test.rs, draw_readback_test.rs}`。
 
-> `spawn.rs`・wintf 配下・emo-compose の `plan.rs`/`blit.rs`・`presenter.rs` の `hit_region` は**変更しない**。
+**【2026-07-26 追記・実装後の現況追随】** 以下は実装中に親コントローラが裁可した境界拡張で、当初の本節に無かったもの（根拠は tasks.md `## Implementation Notes` の該当項）。**authority document をコードの現況へ追随させるための追記**であり、新たな裁可ではない:
+
+- `crates/areka/src/placement/mod.rs` — **k₀ 導出の居所**（`build_measure_scaling`・`AuthorDpi` 名前付き型・`prepare_stages` からの供給）。tasks.md は task 4.3 の境界を `main.rs` と記していたが、descript 読取と `measure_scope_sizes` 呼びが両方 `prepare_stages` に在るため親が `placement/mod.rs`＋`emo2_boot/mod.rs`＋`main.rs` へ拡張して裁可（note 4.3）。`main.rs` は結果を `wire_emo2_boot` へ中継するのみ。
+- `crates/areka/src/emo2_boot/mod.rs`・`spine.rs`・`src/input_events/balloon.rs` — `BootAssets` への pub フィールド追加が crate 内の exhaustive destructure / struct literal を壊すことへの**機械的追随**（note 4.1）。`spine.rs`／`balloon.rs` の変更は `#[cfg(test)]` 域のみ。
+- `crates/areka-emo-text/src/actor.rs` — Requirement 8／D11（開発者裁定 2026-07-26・スコープ拡大）。
+- `crates/areka-emo-text/tests/attach_wiring_test.rs` — task 7.3 の必須檻（`from_view` の物理寸読み取り）。`TextSlotView` が私有型ゆえ in-crate では構造的に檻に入らず、実 presenter を建てられる統合テストが唯一の置き場（R7.10 は編集面を `crates/areka-emo-text/src` と記すが、tasks.md 7.3 が明示的に本ファイルを指定している＝実質裁可済み）。
+- `crates/areka-emo-present/src/lib.rs` — `scale` モジュール公開（新規 `scale.rs` の re-export）。
+
+> `spawn.rs`・wintf 配下・emo-compose の `plan.rs`/`blit.rs`・`presenter.rs` の `hit_region` は**変更しない**（実装後に `git diff --name-only origin/main...HEAD` で不在を機械的に確認済み・2026-07-26）。
 
 ## System Flows
 

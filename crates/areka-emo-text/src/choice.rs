@@ -248,7 +248,7 @@ pub fn derive_hit_rows(
 /// ブロック軸: phys = (region_block_origin + block) × k + committed
 /// ```
 ///
-/// - `k`＝[`ScaleContract::scale`]（×k 一点適用・現行契約 1.0 恒常・DPI 追従で k≠1.0 実供給）。
+/// - `k`＝[`ScaleContract::scale`]（×k 一点適用・**DPI 追従により k≠1.0 が実供給される**）。
 /// - `committed`＝面反映済み whole-pixel スクロール（物理 px・符号済み・`ScrollPlanner::scroll_state`）。
 ///   ブロック軸のみ加算する（行内軸は不動）。
 /// - `region_*_origin`＝validrect 原点（[`TextRegion::left`]/[`TextRegion::top`]）——TextSurface の

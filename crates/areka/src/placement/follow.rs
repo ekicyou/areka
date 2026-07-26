@@ -1189,8 +1189,8 @@ pub fn work_area_for_window(snapshot: &MonitorSnapshot, window: RectPx) -> Optio
 /// - `WindowHandle` 未付与/対象不在: [`enqueue_window_set_pos`] が `warn!`＋`false`
 ///   （判定を二重化せず委譲する）。
 ///
-/// 消費者: `emo2_boot` の DPI 追従フェーズ（`run_dpi_phase`・後続 task）。
-#[allow(dead_code)] // 結線（run_dpi_phase／emo2_boot frame）は後続 task 4.2 の領分
+/// 消費者: `emo2_boot` の DPI 追従フェーズ（`run_dpi_phase`／`reconcile_reported_sizes`・結線済み）。
+#[allow(dead_code)] // examples が #[path] include するため、本体未使用ビルドでも必要
 pub fn resize_window_keep_position(world: &mut World, window: Entity, new_size: SizePx) -> bool {
     // 1. 非正寸ガード（R3.1）: 窓寸として成立しない値は書かない。
     if new_size.w <= 0 || new_size.h <= 0 {

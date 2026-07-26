@@ -124,6 +124,16 @@ areka の基本設計は **DPI追従**（画面 DPI に追従してマスコッ�
 9. The 本増分 shall 当たり判定の点÷k・ヒット規約の変更を行わず、`areka-P0-collision-dpi-hittest`（W5）の領分として明示的に除外する。
 10. **（2026-07-26 改訂）** The 本増分の編集面 shall `crates/areka-emo-text/src`（文字層 k 再追従シーム・Requirement 8 に限る）を追加で含む。`spawn.rs` 不触（AC 7.6）は維持する。
 
+    **（2026-07-26 追記・実装後の現況追随／新たな裁可ではない）** 実装中に親コントローラが裁可した境界拡張を、authority document として本項へ転記する。根拠は tasks.md `## Implementation Notes` の該当項、および design.md「File Structure Plan」の 2026-07-26 追記:
+    - `crates/areka/src/placement/{source.rs, follow.rs, mod.rs}` — source/follow は design「Boundary Deviation Notes」で開発者承認済（2026-07-24）。`mod.rs` は k₀ 導出（`build_measure_scaling`・`AuthorDpi`）の実際の居所（note 4.3）。
+    - `crates/areka/src/placement/test_support.rs`（新規・`#[cfg(test)]` 専用） — ログ捕捉ハーネスの正本（note 6.2）。本番表面ゼロ。
+    - `crates/areka/src/emo2_boot/{assets.rs, frame.rs, mod.rs, spine.rs}`・`crates/areka/src/main.rs`・`crates/areka/src/input_events/balloon.rs` — `BootAssets` の pub フィールド追加に対する機械的追随を含む（note 4.1）。`spine.rs`／`balloon.rs` は `#[cfg(test)]` 域のみ。
+    - `crates/areka-emo-text/tests/attach_wiring_test.rs` — task 7.3 の必須檻。`TextSlotView` が私有型ゆえ in-crate では構造的に檻に入らない（実 presenter を建てられる統合テストが唯一の置き場）。
+    - `crates/areka-emo-present/src/lib.rs`・`crates/areka-emo-compose/src/lib.rs` — 新規 `scale` モジュールの re-export。
+    - `crates/areka/examples/*`・`crates/areka-emo-text/examples/*`・`crates/areka-emo-text/tests/draw_readback_test.rs` — シグネチャ追随（機械的）。
+
+    **`crates/wintf` は結果として一度も変更しなかった**（当初の編集面宣言は許容していたが不要だった）。`spawn.rs` 不触は `git diff --name-only origin/main...HEAD` で機械的に確認済み。
+
 ### Requirement 8: バルーン文字層の k 再追従（スコープ拡大・開発者裁定 2026-07-26）
 
 **Objective:** ユーザーとして、モニタ跨ぎ移動等で表示スケール k が変わったとき、バルーンの**文字**もバルーン画像・マスコットと同じ k で描き直されることを求める。これにより、非 96 DPI 環境・混在 DPI 環境で文字だけが旧 k の寸法に取り残される誤表示（6.5 一次実走で実測: 125%→200% 移動後、バルーン 800×448 に対し文字供給面 300×97＝0.625 倍のまま）が解消される。

@@ -49,15 +49,15 @@ pub struct TextSlotBinding {
     pub slot: Entity,
     /// 装着先の窓 entity。
     pub window: Entity,
-    /// 合成スケール k（`TextSlotView.scale` 由来・現行契約 1.0 恒常）。
+    /// 合成スケール k（`TextSlotView.scale` 由来・**窓 DPI 由来で 1.0 とは限らない**）。
     /// 不正値は構築時に [`ScaleContract`] の縮退規約（warn!＋1.0）で正規化済み。
     pub scale: f32,
     /// バルーン surface の物理原寸（TextSurface/swapchain の物理化に使用）。
     pub surface_size: (u32, u32),
     /// 画像座標空間の原寸（負値=反対辺解決・`TextRegion::resolve` の入力）。
     ///
-    /// **構築時に一点導出**: `image_size = round(surface_size / k)`（k=1.0 恒常の現行契約では
-    /// `surface_size` と同値）。`TextRegion::resolve` へ物理 px を渡すのはレビューエラー
+    /// **構築時に一点導出**: `image_size = round(物理原寸 / k)`（k=1.0 のときに限り
+    /// `TextSlotView::surface_size`＝native と同値）。`TextRegion::resolve` へ物理 px を渡すのはレビューエラー
     /// （2 空間モデルの綻び目をここで構造閉塞——design.md「DPI/スケール契約」）。
     pub image_size: (u32, u32),
 }
@@ -842,7 +842,7 @@ mod tests {
         assert_eq!(
             binding.image_size,
             (434, 687),
-            "k=1.0 恒常の現行契約では image_size == surface_size"
+            "k=1.0 のとき image_size == surface_size（k≠1.0 では乖離する＝本 fixture は k=1.0）"
         );
     }
 

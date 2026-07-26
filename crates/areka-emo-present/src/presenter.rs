@@ -975,21 +975,65 @@ mod tests {
         surface_id: u32,
         scale: ScaleRatio,
     ) -> (Vec<u8>, (u32, u32), (u32, u32)) {
+        let g = scaled_golden_with(
+            emo_world,
+            atlas,
+            surface_id,
+            &BindSet::default(),
+            &PatternState::default(),
+            scale,
+        );
+        (g.scaled, g.native_size, g.scaled_size)
+    }
+
+    /// [`scaled_golden_with`] の返り値（k 適用**前後**のバイトと外形）。
+    struct ScaledGolden {
+        /// k 適用後（＝表示相当）のバイト列。
+        scaled: Vec<u8>,
+        /// k 適用前（native 合成そのもの）のバイト列。
+        native: Vec<u8>,
+        /// native 外形。
+        native_size: (u32, u32),
+        /// k 適用後外形（`scaled_extent(scale, native_size)` と厳密一致する）。
+        scaled_size: (u32, u32),
+    }
+
+    /// [`scaled_golden`] の一般形（**任意の bind 集合・pattern** で合成してから k を 1 回掛ける）。
+    ///
+    /// native バイトも返すのは、「k 適用後の画素が native のどの画素に由来するか」を座標で
+    /// 突き合わせる相対配置の檻（[`show_surface_scales_layered_bind_and_pattern_content_with_single_k`]）
+    /// が要るためである。
+    fn scaled_golden_with(
+        emo_world: &EmoWorld,
+        atlas: &AtlasTable,
+        surface_id: u32,
+        binds: &BindSet,
+        pattern: &PatternState,
+        scale: ScaleRatio,
+    ) -> ScaledGolden {
         let mut composer = Composer::new();
         let native = composer
-            .compose(
-                emo_world,
-                atlas,
-                surface_id,
-                &BindSet::default(),
-                &PatternState::default(),
-            )
+            .compose(emo_world, atlas, surface_id, binds, pattern)
             .expect("golden 用の native 合成は Ok");
         let native_size = (native.width(), native.height());
+        let native_bytes = native.bytes().to_vec();
         let mut scaled = ComposedSurface::new(0, 0);
         resample(&native, scale, &mut scaled);
         let scaled_size = (scaled.width(), scaled.height());
-        (scaled.bytes().to_vec(), native_size, scaled_size)
+        ScaledGolden {
+            scaled: scaled.bytes().to_vec(),
+            native: native_bytes,
+            native_size,
+            scaled_size,
+        }
+    }
+
+    /// premultiplied BGRA 密配列（`stride = width * 4`）から 1 画素を取り出す（座標突合の読み口）。
+    fn px_at(bytes: &[u8], width: u32, x: u32, y: u32) -> [u8; 4] {
+        let i = ((y * width + x) * 4) as usize;
+        bytes[i..i + 4]
+            .try_into()
+            .expect("密配列ゆえ 4 バイト取り出せる")
     }
 
     /// 有効 `ShowSurface` を適用し、reply が `Ok(())` であることを確認する（テスト補助）。
@@ -1676,8 +1720,9 @@ mod tests {
         // (c) surface_size ＝ 合成原寸（物理 px・本 fixture は 3×2）。
         assert_eq!(view.surface_size(), (3, 2), "surface_size() が物理原寸と一致しない");
 
-        // (d) scale ＝ 現行契約の恒常値 1.0（物理 1:1・DPI 契約の共有点）。
-        assert_eq!(view.scale(), 1.0, "scale() は現行契約で恒常 1.0");
+        // (d) scale ＝ 本 fixture の窓 DPI（96）÷ author_dpi（96）＝ 1.0。
+        //     恒常値ではなく**この入力での**期待値（k≠1.0 の檻は別テストが所有）。
+        assert_eq!(view.scale(), 1.0, "窓 DPI 96 / author_dpi 96 ゆえ scale() は 1.0");
     }
 
     /// surface 1000（`w×h` 全不透明 element ＋ bind animation 2000 が surface 5000 を (0,0) に重ねる）
@@ -2079,14 +2124,22 @@ mod tests {
     /// animation `anim_id` に surface `surf` の `Overlay` 現在コマ 1 枚を持つ非空 `PatternState`。
     /// `PatternState::default()`（空）と等価でないことを保証する pattern 差分の実体。
     fn pattern_overlay(anim_id: u32, surf: u32) -> PatternState {
+        pattern_overlay_at(anim_id, surf, 0, 0)
+    }
+
+    /// [`pattern_overlay`] の一般形（現在コマの重ね位置 `(x, y)` を指定する）。
+    ///
+    /// 非ゼロ `(x, y)` は SERIKO アニメの実 pattern（`surfaces.txt` の `animationN.patternM` が持つ
+    /// 座標）と同型であり、k 追従の相対配置檻が要求する**非対称な重ね位置**を作る。
+    fn pattern_overlay_at(anim_id: u32, surf: u32, x: i64, y: i64) -> PatternState {
         let mut p = PatternState::default();
         p.set(
             anim_id,
             PatternFrame {
                 surface_id: surf,
                 method: ComposeMethod::Overlay,
-                x: 0,
-                y: 0,
+                x,
+                y,
             },
         );
         p
@@ -4501,5 +4554,285 @@ mod tests {
             None,
             "refresh_scale が返した要求が drain 側にも残っている（同一フレームで二重 resize になる）"
         );
+    }
+
+    // ── 要件 2.3（多層コンテンツの単一 k 一貫拡大）の実表示檻 ──────────────────────────────
+    //
+    // 既存の k≠1 檻は全て**単一 element** の fixture を駆動しており、「ベース surface・SERIKO アニメ
+    // パターン・mayuna 着せ替えパーツを単一の k で一貫拡大し、要素間の相対配置・重なりが等倍時と
+    // 同一の見た目関係を保つ」（要件 2.3）は *compose → 1 回だけ resample* という構造からの帰結で
+    // あって、**一度も観測されていなかった**。実 emo2 ゴーストの表情は全て bind part の重ねで作られる
+    // ため、未観測の構成こそが本番の構成である。以下の fixture／テストがその空白を閉じる。
+
+    /// bind 層 part の重ね位置（base 左上からの非対称オフセット）。
+    const LAYERED_BIND_AT: (i64, i64) = (2, 3);
+    /// pattern 層 part（SERIKO 現在コマ相当）の重ね位置（bind 層と**重なる**非対称オフセット）。
+    const LAYERED_PATTERN_AT: (i64, i64) = (5, 5);
+    /// 両 part 共通の原寸（`6×4`）。base（`16×12`）内に収まるため合成外形は base 原寸のまま。
+    const LAYERED_PART_SIZE: (u32, u32) = (6, 4);
+
+    /// surface 1000 に **3 層**（ベース element ＋ bind animation 2000 の重ね part ＋ `PatternState` が
+    /// 運ぶ現在コマ part）を**非対称位置・相互重なり**で載せた `(EmoWorld, AtlasTable)`。
+    ///
+    /// - ベース: `p.png`（`w×h` 全不透明・座標由来グラデーション）を (0,0)。
+    /// - bind 層: animation 2000（`Interval::Bind`）の pattern0 が surface 5000（`q.png` 単色）を
+    ///   [`LAYERED_BIND_AT`] へ overlay する。`BindSet::from_ids([2000])` で有効化される
+    ///   （mayuna 着せ替えパーツ相当）。
+    /// - pattern 層: `PatternState` が animation 3000 の現在コマとして surface 6000（`r.png` 単色・
+    ///   bind 層と異色）を [`LAYERED_PATTERN_AT`] へ overlay する（SERIKO アニメパターン相当）。
+    ///   surface 6000 は 1000 の animation ではないため定義層（extent 母集合）に寄与しない。
+    ///
+    /// 2 part は互いに重なり（native x∈[5,8)・y∈[5,7)）、かつ base 左上に対して非対称に置かれる。
+    /// 要素ごとに k を掛けてから合成する実装（＝要件 2.3 が禁じる形）では、各 part の拡大と
+    /// 非対称オフセットの丸めが独立に動くため、**合成後に 1 回だけ resample した** golden とは
+    /// バイトが一致しない。両 part とも base 内（`(2,3)+(6,4)=(8,7)`・`(5,5)+(6,4)=(11,9)` ≤ `(16,12)`）
+    /// ゆえ合成外形は base の `w×h` のまま——外形変化ではなく**中身の相対配置**だけを観測できる。
+    fn build_layered_assets(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasTable) {
+        let base = Path::new("shell/master");
+        let (pw, ph) = LAYERED_PART_SIZE;
+        let base_surface = Surface {
+            id: 1000,
+            targets: vec![AppendTarget::Single(1000)],
+            elements: vec![elem("p.png", 0, 0)],
+            collisions: Vec::new(),
+            animations: vec![Animation {
+                id: 2000,
+                interval: Interval::Bind,
+                patterns: vec![Pattern {
+                    index: 0,
+                    method: DrawMethod::new("overlay".to_string()),
+                    surface_id: 5000,
+                    wait: 0,
+                    x: LAYERED_BIND_AT.0,
+                    y: LAYERED_BIND_AT.1,
+                }],
+            }],
+        };
+        let surfaces = vec![
+            base_surface,
+            surface(5000, vec![elem("q.png", 0, 0)]),
+            surface(6000, vec![elem("r.png", 0, 0)]),
+        ];
+
+        let mut dec = MemoryDecoder::new();
+        let stride = w * 4;
+        let mut img: Vec<u8> = Vec::with_capacity((stride * h) as usize);
+        for y in 0..h {
+            for x in 0..w {
+                let b = (x as u8).wrapping_mul(3).wrapping_add(salt);
+                let g = (y as u8).wrapping_mul(5).wrapping_add(salt);
+                let r = ((x + y) as u8).wrapping_mul(7).wrapping_add(salt);
+                img.extend_from_slice(&[b, g, r, 0xFF]);
+            }
+        }
+        dec.insert(base.join("p.png"), w, h, stride, img, true);
+        // 2 part は単色不透明で互いに異色（重なり順と相対配置を画素で弁別できる）。α=255 ゆえ
+        // premultiplied 不変条件は自明に成立する。
+        let solid = |bgr: [u8; 3]| {
+            let mut v = Vec::with_capacity((pw * ph * 4) as usize);
+            for _ in 0..(pw * ph) {
+                v.extend_from_slice(&[bgr[0], bgr[1], bgr[2], 0xFF]);
+            }
+            v
+        };
+        dec.insert(base.join("q.png"), pw, ph, pw * 4, solid([0x11, 0x99, 0x22]), true);
+        dec.insert(base.join("r.png"), pw, ph, pw * 4, solid([0xEE, 0x33, 0xCC]), true);
+
+        let set = SurfaceSet {
+            surfaces: &surfaces,
+            base_dir: base,
+            alpha_params: AlphaParams {
+                use_self_alpha: UseSelfAlpha::On,
+            },
+        };
+        let baked = bake(&[set], &dec, PackConfig::default());
+        assert!(baked.errors.is_empty(), "atlas bake セットアップは失敗しない");
+
+        let mut world = EmoWorld::build(&shell_of(surfaces));
+        world.bind_atlas(&baked.table, SetId(0));
+        (world, baked.table)
+    }
+
+    /// 要件 2.3 観測完了（**多層コンテンツの単一 k**・k=3/2）: ベース surface ＋ mayuna 着せ替え相当の
+    /// bind part ＋ SERIKO アニメパターン相当の現在コマ part を**非対称・相互重なり**で載せた面を
+    /// k≠1 で表示すると——(a) 供給面寸が `scaled_extent(3/2, native)`、(b) `read_back` バイトが
+    /// **同一 `(binds, pattern)` で合成した native → `resample(3/2)`** の独立再現と全バイト一致し、
+    /// (c) k 適用後の各 part 画素が **native の対応画素と厳密に同値**（＝相対配置・重なりが等倍時と
+    /// 同じ関係で保たれている）。
+    ///
+    /// # なぜ既存 k≠1 檻では足りないのか
+    ///
+    /// 既存の k≠1 檻は全て単一 element の fixture を駆動する。単一 element では「要素ごとに k を
+    /// 掛けてから合成」と「合成してから 1 回 k を掛ける」が同じ絵になり得るため、要件 2.3 の
+    /// **層をまたぐ**主張は一度も観測されない。実 emo2 ゴーストの表情は bind part の重ねで構成される
+    /// ので、未観測の構成が本番の構成そのものだった。
+    ///
+    /// # (c) の座標算術（`resample` の有理逆写像から導く固定値）
+    ///
+    /// `resample` は画素中心写像 `src = (d + 1/2)·den/num − 1/2` の bilinear（エッジクランプ）。
+    /// k=3/2 では出力 d=5 → src=3.1667（隣接入力 {3,4}）・d=10 → src=6.5（隣接入力 {6,7}）。
+    /// - 出力 (5,5) の入力足跡 {3,4}×{3,4} は **bind part 単独**領域（bind: x∈[2,8) y∈[3,7)・
+    ///   pattern: x∈[5,11) y∈[5,9)）に完全に収まる → 4 サンプルが同値ゆえ結果は native (3,3) と厳密同値。
+    /// - 出力 (10,10) の入力足跡 {6,7}×{6,7} は **pattern part** 領域に完全に収まる → native (6,6) と同値。
+    ///
+    /// part ごとに k を掛けてから重ねる実装では part の拡大寸と非対称オフセットの丸めが独立に動くため、
+    /// この 2 点の色は隣接層・ベースの色へずれる。
+    ///
+    /// # (b) と (c) は独立したオラクルである
+    ///
+    /// (b) の golden は presenter と同じ `compose → resample` を辿るため、**`resample` 自身の
+    /// 幾何が壊れる変異には共倒れで盲目**である。(c) は k 適用後の画素を `resample` を通さない
+    /// **native の画素**と突き合わせるため、その盲点を埋める（下の実測がそれを示す）。
+    ///
+    /// # 実測の変異キル（2026-07-26・本ワークツリー）
+    ///
+    /// - `apply_show` が k≠1 のとき `binds`／`pattern` を既定へ落とす変異（＝層が k 経路で消える）:
+    ///   `-p areka-emo-present` 91 本中**本テストのみ**が落ちる（他 90 本生存）。`-p areka` でも
+    ///   `spine_dpi_change_during_live_seriko_loop_keeps_loop_progressing`（同時追加の spine 檻）以外は
+    ///   全生存——**本テスト追加前は、この変異を落とす檻が repo 内に 1 本も無かった**。
+    /// - `scale.rs` の `AxisWalk::new` で画素中心写像の初期分子を `den - num` → `den + num` へずらす
+    ///   幾何変異: `-p areka-emo-present` 91 本中**本テストのみ**が落ち、しかも落ちるのは **(c)** の
+    ///   座標突合である（(b) は golden も同じ変異を通るため生存）。同変異は `-p areka-emo-compose` の
+    ///   `resample` golden 6 本とは**共倒れ**（shared）——ただし emo-present 側で唯一検出できるのは本テスト。
+    #[test]
+    fn show_surface_scales_layered_bind_and_pattern_content_with_single_k() {
+        let mut world = make_world_with_gpu();
+        // 窓 DPI 144 / author_dpi 96 → k=3/2（150%・実機水準・両軸とも端数を伴う倍率）。
+        let window = spawn_window_with_dpi(&mut world, 144);
+        let k32 = ScaleRatio::new(3, 2).unwrap();
+
+        let binds = BindSet::from_ids([2000]);
+        let pattern = pattern_overlay_at(3000, 6000, LAYERED_PATTERN_AT.0, LAYERED_PATTERN_AT.1);
+
+        let (emo_world, atlas) = build_layered_assets(16, 12, 0x4D);
+        // 同一入力を独立に再現して golden を作る（presenter の内部値の追認ではない）。
+        let (probe_world, probe_atlas) = build_layered_assets(16, 12, 0x4D);
+        let ScaledGolden {
+            scaled: scaled_bytes,
+            native: native_bytes,
+            native_size,
+            scaled_size,
+        } = scaled_golden_with(&probe_world, &probe_atlas, 1000, &binds, &pattern, k32);
+        assert_eq!(
+            native_size,
+            (16, 12),
+            "前提: 2 part とも base 内ゆえ合成外形は base 原寸（外形変化ではなく中身を観測する）"
+        );
+        assert_eq!(
+            scaled_size,
+            k32.scaled_extent(16, 12),
+            "golden の外形は丸め権威 scaled_extent に従う"
+        );
+        assert_eq!(scaled_size, (24, 18));
+
+        // 前提（層の非空虚性）: k≠1 の golden は「層なし」「bind のみ」「pattern のみ」と全て区別できる。
+        // ここが縮退すると、presenter が k≠1 で層を握り潰しても (b) がすり抜けてしまう。
+        let plain = scaled_golden_with(
+            &probe_world,
+            &probe_atlas,
+            1000,
+            &BindSet::default(),
+            &PatternState::default(),
+            k32,
+        )
+        .scaled;
+        let bind_only = scaled_golden_with(
+            &probe_world,
+            &probe_atlas,
+            1000,
+            &binds,
+            &PatternState::default(),
+            k32,
+        )
+        .scaled;
+        let pattern_only = scaled_golden_with(
+            &probe_world,
+            &probe_atlas,
+            1000,
+            &BindSet::default(),
+            &pattern,
+            k32,
+        )
+        .scaled;
+        for (label, other) in [
+            ("層なし", &plain),
+            ("bind 層のみ", &bind_only),
+            ("pattern 層のみ", &pattern_only),
+        ] {
+            assert_ne!(
+                &scaled_bytes, other,
+                "fixture 前提: k≠1 の 3 層 golden が「{label}」と区別できなければ層の檻にならない"
+            );
+        }
+
+        // 前提（座標突合の非空虚性）: bind part／pattern part／ベースの 3 点が互いに異色。
+        let bind_px = px_at(&native_bytes, 16, 3, 3);
+        let pattern_px = px_at(&native_bytes, 16, 6, 6);
+        let base_px = px_at(&native_bytes, 16, 13, 10);
+        assert_ne!(bind_px, pattern_px, "前提: bind part と pattern part は異色");
+        assert_ne!(bind_px, base_px, "前提: bind part とベースは異色");
+        assert_ne!(pattern_px, base_px, "前提: pattern part とベースは異色");
+
+        let mut presenter = EmoPresenter::new();
+        presenter
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
+            .expect("attach_target 失敗");
+
+        let (tx, rx) = reply_channel::<PresentOutcome>();
+        presenter.apply(
+            &mut world,
+            PresentCommand::ShowSurface {
+                target: TargetId(0),
+                surface_id: 1000,
+                binds: binds.clone(),
+                pattern: pattern.clone(),
+                reply: Some(tx),
+            },
+        );
+        assert!(
+            matches!(rx.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
+            "3 層 ShowSurface（k=3/2）が Ok でない"
+        );
+
+        // (a) 供給面寸＝k 倍後の物理寸。
+        let chain_size = presenter
+            .targets
+            .get(&TargetId(0))
+            .and_then(|t| t.chain.as_ref())
+            .expect("表示成立後は供給面が生成済み")
+            .size();
+        assert_eq!(
+            chain_size, scaled_size,
+            "供給面寸が scaled_extent(3/2, native) と一致しない"
+        );
+
+        // (b) 表示バイトが「3 層を合成した native → resample(3/2)」と全バイト一致。
+        let rb = presenter.read_back(TargetId(0)).expect("read_back 失敗");
+        assert_eq!(
+            rb.len(),
+            (scaled_size.0 * scaled_size.1 * 4) as usize,
+            "readback の画素数が k 倍後の寸と一致しない"
+        );
+        assert_eq!(
+            rb, scaled_bytes,
+            "k≠1 の表示バイトが 3 層合成 → 単一 resample の独立再現と一致しない（層の一部が k 経路で落ちた／層ごとに k が掛かった）"
+        );
+
+        // (c) 相対配置・重なりの座標突合: k 適用後の part 内部画素が native の対応画素と厳密同値。
+        assert_eq!(
+            px_at(&rb, scaled_size.0, 5, 5),
+            bind_px,
+            "k=3/2 表示の (5,5) が bind part の色でない（bind 層の相対配置が k 適用でずれている）"
+        );
+        assert_eq!(
+            px_at(&rb, scaled_size.0, 10, 10),
+            pattern_px,
+            "k=3/2 表示の (10,10) が pattern part の色でない（pattern 層の相対配置・重なり順が k 適用でずれている）"
+        );
+
+        // 照会契約（native 原寸・実適用 k）も 3 層構成で成立する。
+        let t = presenter.targets.get(&TargetId(0)).unwrap();
+        assert_eq!(t.applied, Some(k32), "applied が実適用 k と一致しない");
+        assert_eq!(t.native_size, Some(native_size), "native_size は k 適用前の原寸");
     }
 }
