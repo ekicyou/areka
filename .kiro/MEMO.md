@@ -52,3 +52,4 @@ emo_worldの設計に整理が必要。以下の概念を中心に検討せよ�
   + command_list：描画コマンド
 
 
+## lis crateを使う
