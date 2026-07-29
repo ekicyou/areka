@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Foundation: main同期ゲートとスケール数学基盤
+- [x] 1. Foundation: main同期ゲートとスケール数学基盤
 - [x] 1.1 position-persistマージ確認とmain同期ゲート
   - 開発者へ`areka-P0-position-persist`のmainマージ完了を確認依頼し、本worktreeブランチへorigin/mainを同期する
   - 同期後、placement系実測アンカー（measure.rs:62、follow.rs:553/:729、source.rs:102）をdiffで再確認し、design.mdのBoundary Deviation Notesとの整合を確認する
@@ -25,7 +25,7 @@
   - _Requirements: 1.1, 1.4, 1.6_
   - _Depends: 1.2_
 
-- [ ] 2. Core: 採寸源のk対応（placement系）
+- [x] 2. Core: 採寸源のk対応（placement系）
 - [x] 2.1 (P) author_dpi読取実装（source.rs）
   - shell `seriko.dpi`・balloon `dpi`を既存の生KVから読み取るaccessorを追加
   - 無宣言=96・不正/0=warn+96の縮退を実装
@@ -49,7 +49,7 @@
   - _Boundary: placement/measure.rs_
   - _Depends: 1.2_
 
-- [ ] 3. Core: EmoPresenterのk適用単一漏斗
+- [x] 3. Core: EmoPresenterのk適用単一漏斗
 - [x] 3.1 (P) ComposeCacheキー拡張実装（cache.rs）
   - `ComposeKey`へ`scale: ScaleRatio`を参加させ、get/insertシグネチャを拡張する
   - エントリ構造・挿入時マスク生成コードは変更しない
@@ -88,7 +88,7 @@
   - _Requirements: 1.2, 4.1, 4.3, 4.4_
   - _Depends: 3.4_
 
-- [ ] 4. Integration: DPI変化の動的追従とboot結線
+- [x] 4. Integration: DPI変化の動的追従とboot結線
 - [x] 4.1 BootAssetsへauthor_dpi搬送（assets.rs）
   - `BootAssets`へ`shell_author_dpi`/`balloon_author_dpi`を追加する
   - BootAssetsからauthor_dpiが取得できる状態を確認できる
@@ -135,7 +135,7 @@
   - _Requirements: 7.1, 7.2_
   - _Depends: 5.1_
 
-- [ ] 6. Validation: 決定論テストと実機サインオフ
+- [x] 6. Validation: 決定論テストと実機サインオフ
 - [x] 6.1 (P) emo-compose scale.rs純関数テスト全網羅
   - 既約正準化・mul合成・is_identity・as_f32厳密値、DPI対照表境界（half丁度）・min1px・非溢れのテストを実装する
   - `cargo test -p areka-emo-compose`が新規テストを含めて全緑になる状態を確認できる
@@ -173,7 +173,7 @@
   - _Requirements: 2.2, 6.1, 6.2, 6.3, 6.4_
   - _Depends: 6.4_
 
-- [ ] 7. バルーン文字層の k 再追従（スコープ拡大・開発者裁定 2026-07-26・Requirement 8／D11）
+- [x] 7. バルーン文字層の k 再追従（スコープ拡大・開発者裁定 2026-07-26・Requirement 8／D11）
 - [x] 7.1 emo-text: TextLayerRuntime::refresh_actor_scale シームの実装
   - `register_actor_view` と同一の単一構築経路で binding を再構築し（R8.1）、当該 actor の `ActorRender` を破棄する（次 `present_frame` の初回解決分岐 `actor.rs:518` が新 k の物理寸で再生成＝R8.2・既存生成式の再利用）
   - 同値 k は no-op で false（churn ガード・R8.5）。再追従時は `info!`（actor・k_old/k_new＝f32 出口ビュー・R8.7）
