@@ -56,7 +56,8 @@ use bevy_ecs::prelude::World;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
 use wintf::ecs::{
-    Arrangement, GraphicsCommandList, GraphicsCore, Visual, VisualGraphics, WucGraphicsResource,
+    Arrangement, DPI, GraphicsCommandList, GraphicsCore, Visual, VisualGraphics,
+    WucGraphicsResource,
 };
 use wintf_winmsg_executor::{FilterResult, MessageLoop};
 
@@ -299,11 +300,16 @@ fn full_path_ink_monotonic_clear_transparent_and_contained_in_validrect() {
     let mut world = make_world_with_gpu();
 
     // ── R9.1: 実 EmoPresenter の公開経路（text_slot_view）で予約スロットへ到達する ──
-    let window = world.spawn_empty().id();
+    // 窓 entity には `DPI` component を**明示的に**載せる（areka-P0-emo-dpi-scaling task 3.2）。
+    // component 不在は `derive_scale` の縮退分岐（error! ＋ k=1.0）を通るため、不在に頼ると
+    // 縮退が正常経路になりすまして観測できない。作者基準 DPI 96 と揃えて k=1.0 を成立させる。
+    let window = world.spawn(DPI::from_dpi(96, 96)).id();
     let (emo_world, atlas) = build_target_assets(IMAGE.0, IMAGE.1);
     let mut presenter = EmoPresenter::new();
     presenter
-        .attach_target(&mut world, TargetId(0), window, emo_world, atlas)
+        // 作者基準 DPI は正典既定の 96（ukadoc・D1）。本番は boot が descript の実値を
+        // 供給する（本テストは窓 DPI 96 と揃えて k=1.0＝従来と同一の表示寸・描画結果）。
+        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
         .expect("attach_target 失敗");
     show_surface(&mut presenter, &mut world, TargetId(0));
     let view = presenter

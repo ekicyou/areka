@@ -13,7 +13,7 @@
 //! - **物理座標空間（physical px）**: text_slot・swapchain・窓の単位。`物理 = 画像 × k`。
 //!
 //! k（合成スケール）の共有点＝`TextSlotView.scale`（バルーン surface と同一の
-//! 合成スケール・現行の物理 1:1 表示契約では恒常 1.0）。k の算出は上流
+//! 合成スケール・**窓 DPI 由来ゆえ 1.0 とは限らない**）。k の算出は上流
 //! （emo-present/placement）責務——本層は消費のみ。
 //!
 //! ## 負値=反対辺基準（ukadoc 脚注 *1 正典）
@@ -93,7 +93,7 @@ impl ScaleContract {
     /// バルーン surface の物理寸から image px 原寸を一点導出する:
     /// `image_size = round(surface_size / k)`（design.md「DPI/スケール契約」）。
     ///
-    /// k=1.0 恒常の現行契約では surface_size と同値。`TextRegion::resolve` の入力は
+    /// k=1.0 のときに限り `TextSlotView::surface_size`（native）と同値。`TextRegion::resolve` の入力は
     /// 必ずこの image px 原寸（物理 px を渡すのはレビューエラー）。
     pub fn image_size(&self, surface_size: (u32, u32)) -> (u32, u32) {
         let scale = |v: u32| (v as f32 / self.scale).round() as u32;

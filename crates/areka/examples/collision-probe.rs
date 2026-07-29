@@ -437,10 +437,16 @@ fn attach_show_and_resize(world: &mut World) {
         return;
     };
 
-    if let Err(e) = boot
-        .presenter
-        .attach_target(world, target, boot.char_window, emo_world, atlas)
-    {
+    if let Err(e) = boot.presenter.attach_target(
+        world,
+        target,
+        boot.char_window,
+        emo_world,
+        atlas,
+        // 作者基準 DPI は正典既定の 96（ukadoc・D1）。本番は boot が descript の実値を
+        // 供給する（本 example は k=1.0 相当で従来と同一の表示寸・当たり判定）。
+        96,
+    ) {
         tracing::error!(error = %e, "collision-probe: scope0 char target の attach に失敗 — 中止");
         boot.phase = ProbePhase::Done;
         world.insert_non_send_resource(boot);

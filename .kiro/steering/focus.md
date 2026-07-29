@@ -1,6 +1,6 @@
 ---
 inclusion: always
-updated_at: 2026-07-17
+updated_at: 2026-07-29
 ---
 
 # Focus - ロードマップ管理
@@ -70,6 +70,7 @@ arekaアルファリリースロードマップと`.kiro/specs/`配下の仕様�
 - 棚卸しの基準実数（2026-07-17 更新⑲・**ウェーブ編成への見直し**＝開発者方針「無理に並走させない・少しでも干渉するならウェーブを分ける」）: 件数不変（完了 130／active 4／brief-only 7）。最大並列（8本同時）を却下し、干渉ペア（共有ファイル・契約辺・近接）を全てウェーブ境界で直列化した**6ウェーブ編成**へ——**着手順の正本は roadmap「M1 ウェーブ編成」表（追記㉙）**。**W1**=idle-talk∥collision-geometry∥sakura-dialogue-tags（契約正本の先鋒3本・エンジン互いに素）→**W2**=input-events∥mayuna-compose→**W3**=seriko-loop∥position-persist→**W4**=choice-render→**W5**=choice-select-events→**W6**=emo2-conformance-e2e（M1 完成宣言）。各ウェーブはフルライフサイクル完走→PR マージ後に次へ（ウェーブ内のみ並走・最大3本）。裁定㉘の順序は全て保存（ウェーブ＝裁定の写像）。正本 roadmap.md 追記㉙＋M1 ウェーブ編成表 〔→更新⑳で W3/W4 改訂＝5ウェーブ化〕
 - 棚卸しの基準実数（2026-07-17 更新⑳・**W3/W4 改訂＝5ウェーブ化**）: 開発者要望「Fable 討議2本（seriko-loop・choice-render）は同時に実施したい」を受け choice-render を **W4→W3 へ前倒し**（select-events=W4・e2e=W5 繰上げ）。W3=seriko-loop∥position-persist∥choice-render の3本は**編集面の事前割当契約**で共有ファイル 0 を維持（seriko-loop=frame.rs 単独所有／choice-render=配線モジュール側・presenter.rs additive のみ／persist=placement+ghost+kanade-boot）。エスケープ＝設計が割当を破る場合のみ後着側をウェーブ分離へ戻す。正本 roadmap.md 追記㉚
 - 棚卸しの基準実数（2026-07-25 更新㉑・**W4 `position-persist` 完了＝M-life 完走**）: 完了 **144**（`completed/` 実測ディレクトリ数）/ **active = 11**（`.kiro/specs/` 直下実測）。position-persist は sylphya 永続バッキングの消費者結線（窓位置/バルーン相対の保存・復元、OnFirstBoot 初回ゲート、vanish 読取経路）を実装し、実機サインオフ（実 emo2・実 pasta・目視＋ログ grep）で**決定論檻が構造的に隠していた欠陥 5 件**を検出・修正のうえ完了。**後続への申し送り: キャラ窓の原点は「下端中央（足元の中心）」**——保存・復元・resize・バルーン追従の四層をこの基準へ統一済み（Bottom 限定）。窓位置・バルーン相対に触る後続 spec（`emo-dpi-scaling` の窓寸 k 倍・`kero-balloon`）は左上基準で計算しないこと。座標診断は `RUST_LOG=info` の `areka::persist::{save,restore,project}` 計測ログ。正本 roadmap.md 追記㊻
+- 棚卸しの基準実数（2026-07-29 更新㉒・**W4 `emo-dpi-scaling` 完了＝W4 完走・DPI 追従基盤 M-dpi 着地**）: 完了 **146**（`completed/` 実測ディレクトリ数）/ **active = 10**（`.kiro/specs/` 直下実測: `balloon-visibility`・`bindoption-exclusivity`・`choice-select-events`・`collision-dpi-hittest`・`dpi-window-vanish`・`emo2-conformance-e2e`・`kero-balloon`・`sakura-time-directives`・`status-execution-states`・`surfaces-basepos`）。emo-dpi-scaling は k=実モニタDPI÷author_dpi の単一導出権威（`derive_scale`）＋単一丸め権威（`ScaleRatio`）＋present 段 1 回リサンプル（Strategy A2）を実装し、スコープ拡大分のバルーン文字層 k 再追従（2 空間モデル＋独立相 `run_text_scale_phase`）まで着地。実機サインオフ済（125%/200% デュアル・比 1.600 実測）。**次フロント＝W5〔`dpi-window-vanish` ∥ `collision-dpi-hittest` ∥ `choice-select-events` ∥ `kero-balloon`〕**（＋別セッション進行中の `bindoption-exclusivity`）。**未所有の残件は開発者裁定待ち**（`k<1` の 1px 往復欠陥・`spine_e2e s1` の 17.5% フレーキー・resnap 1 トークン変異生存）。正本 roadmap.md 追記㊾
 
 ## 運用上の注意
 

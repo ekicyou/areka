@@ -1160,6 +1160,86 @@ pub fn work_area_for_window(snapshot: &MonitorSnapshot, window: RectPx) -> Optio
 }
 
 // =============================================================================
+// resize_window_keep_position（areka-P0-emo-dpi-scaling task 2.2・R3.1/R4.2）
+// =============================================================================
+
+/// 現在位置を維持して窓寸のみ更新する（balloon 窓の DPI 追従用・R3.1/R4.2）。
+///
+/// 私有単一ライター経路 [`enqueue_window_set_pos`]`(.., Some(new_size))` の**薄い公開
+/// ラッパ**——DPI 変化フェーズ（design D8・Flow 2）が balloon 窓の寸を k 追従させる
+/// ための唯一の正規手段であり、単一ライター規律（`SetWindowPosCommand` 発行＋
+/// `WindowPos` bypass ミラー＋`Arrangement.offset` 同期）を迂回する第二の書込経路を
+/// 新設しない（Req1.5 の継承）。
+///
+/// [`resize_window_to`] との違いは**位置の決め方**だけである。あちらは
+/// [`Anchored`] を読んで [`project_anchor`] で位置を再導出する（キャラ窓＝接地点が
+/// アンカー辺に釘付けされる）が、こちらは `WindowPos.position` の**現在値をそのまま
+/// 据え置き**、寸法だけを差し替える。balloon 窓の位置は [`follow_balloon`] が
+/// キャラ窓＋`BalloonFollow.offset` から決める従属量であり、寸法変更の場面で
+/// 独自にアンカー射影をかけると同フレーム内で二重に位置が動くため。
+///
+/// # 縮退・失敗経路（log-first・silent failure を作らない）
+///
+/// - 非正寸（w≤0 or h≤0）: 何も書かず `warn!`＋`false`（[`resize_window_to`] の
+///   非正寸縮退と同一流儀）。
+/// - `WindowPos` 不在（窓生成前の異常系）: 現在位置を読めないため `warn!`＋`false`。
+/// - `WindowPos.position` 不在（窓生成前）: 同上 `warn!`＋`false`（panic しない）。
+/// - べき等 skip（R4.2）: 現 `WindowPos.size` が新寸と同一なら**書込を一切行わず**
+///   `false`（k 不変・同寸で窓が振動しないための檻・正常系ゆえ `debug!`）。
+/// - `WindowHandle` 未付与/対象不在: [`enqueue_window_set_pos`] が `warn!`＋`false`
+///   （判定を二重化せず委譲する）。
+///
+/// 消費者: `emo2_boot` の DPI 追従フェーズ（`run_dpi_phase`／`reconcile_reported_sizes`・結線済み）。
+#[allow(dead_code)] // examples が #[path] include するため、本体未使用ビルドでも必要
+pub fn resize_window_keep_position(world: &mut World, window: Entity, new_size: SizePx) -> bool {
+    // 1. 非正寸ガード（R3.1）: 窓寸として成立しない値は書かない。
+    if new_size.w <= 0 || new_size.h <= 0 {
+        warn!(
+            entity = ?window,
+            ?new_size,
+            "新しい窓寸法が非正のためリサイズせず現状保持"
+        );
+        return false;
+    }
+
+    // 2. 現在位置（維持する値）と現寸（べき等判定の材料）を読む。
+    //    WindowPos／position 不在は窓生成前の異常系＝log-first で no-op（panic しない）。
+    let (pos, current_size) = {
+        let Some(wp) = world.get::<WindowPos>(window) else {
+            warn!(
+                entity = ?window,
+                "WindowPos 未付与（窓生成前）のため現在位置を読めずリサイズしない"
+            );
+            return false;
+        };
+        let Some(pos) = wp.position else {
+            warn!(
+                entity = ?window,
+                "WindowPos.position 不在（窓生成前）のため現在位置を読めずリサイズしない"
+            );
+            return false;
+        };
+        (pos, wp.size)
+    };
+
+    // 3. べき等 skip（R4.2・D8）: 同寸なら書込ゼロ。位置は据え置きゆえ寸だけを見れば
+    //    十分（resize_window_to の (position, size) 一致判定の位置維持版）。
+    //    現寸不明（None＝窓生成直後）は判定が成立しないので書込へ進む。
+    if current_size == Some(SizeI::new(new_size.w, new_size.h)) {
+        debug!(
+            entity = ?window,
+            ?new_size,
+            "窓寸が現在値と同一のため書込をスキップ（べき等・振動防止）"
+        );
+        return false;
+    }
+
+    // 4. 一度書き: 現在位置＋新寸を単一ライター経路で 1 コマンド発行する。
+    //    WindowHandle 未付与/対象不在は enqueue が warn!＋false（二重に弾かない）。
+    enqueue_window_set_pos(world, window, pos.x, pos.y, Some(new_size))
+}
+
+// =============================================================================
 // Tests（TDD RED: 実装前に振る舞いを固定する）
 // =============================================================================
 
@@ -4455,5 +4535,233 @@ mod tests {
             "x=wa.left=53（左端固定）・Y=356 保持"
         );
         assert_eq!(size_of(&world, e), SizeI::new(434, 687));
+    }
+
+    // -------------------------------------------------------------------------
+    // resize_window_keep_position（balloon 窓の位置維持リサイズ・
+    // areka-P0-emo-dpi-scaling task 2.2・R3.1/R4.2・
+    // design「areka / placement > follow.rs（additive・balloon 窓の k 追従）」・D8）
+    //
+    // 「書込ゼロ」の観測境界について: `SetWindowPosCommand` の TLS キューは
+    // wintf 私有（`WINDOW_POS_COMMANDS`）で件数を覗く公開 API が無く、`flush()` は
+    // 偽 HWND に対し実 `SetWindowPos` を撃ってしまうため使えない（既存
+    // enqueue_window_set_pos 群と同じ制約）。代わりに **`Arrangement.offset` 同期**
+    // を witness に使う——この同期は `enqueue_window_set_pos` 内で enqueue と
+    // 不可分に対で走るため、「stale な sentinel offset が据え置かれたまま」＝
+    // 単一ライター経路を一度も通っていない＝enqueue 件数 0 の決定論的証拠になる
+    // （逆に通れば offset は必ず `WindowPos.position` の `as f32` 転写になる）。
+    // 寸法・座標は 96 の非倍数を使い、隠れた dpi/96 再スケールの檻とする。
+    // -------------------------------------------------------------------------
+
+    use super::resize_window_keep_position;
+
+    /// 単一ライター経路を通ったか否かの witness 用 sentinel（実位置と重ならない値）。
+    const WRITER_WITNESS: Offset = Offset { x: -1.0, y: -1.0 };
+
+    /// 経路を通っていない＝書込ゼロ（sentinel が据え置かれている）。
+    fn assert_no_write(world: &World, entity: Entity) {
+        assert_eq!(
+            arrangement_offset_of(world, entity),
+            WRITER_WITNESS,
+            "単一ライター経路を通った痕跡がある（書込ゼロのはず）"
+        );
+    }
+
+    /// べき等 skip（R4.2・D8「同寸なら書込ゼロで振動しない」）: 現寸と同じ寸を
+    /// 渡すと単一ライター経路を**一度も通らず** `false` を返し、位置・寸法とも不変。
+    #[test]
+    fn resize_window_keep_position_same_size_writes_nothing() {
+        let mut world = World::new();
+        let window = world
+            .spawn((
+                fake_handle(0x3000),
+                window_pos_sized(731, 356, 434, 687),
+                arrangement_at(WRITER_WITNESS.x, WRITER_WITNESS.y),
+            ))
+            .id();
+
+        assert!(
+            !resize_window_keep_position(&mut world, window, SizePx { w: 434, h: 687 }),
+            "同寸はべき等 skip ゆえ false"
+        );
+        assert_eq!(position_of(&world, window), Point { x: 731, y: 356 });
+        assert_eq!(size_of(&world, window), SizeI::new(434, 687));
+        assert_no_write(&world, window);
+    }
+
+    /// 異寸（R3.1/R4.2）: 位置は**現在位置のまま**・寸法だけが新寸へ更新され `true`。
+    /// `resize_window_to` と違いアンカー射影 T を再適用しない（balloon は char 窓
+    /// 追従で位置が決まるため、DPI 追従では寸だけを差し替える）。
+    #[test]
+    fn resize_window_keep_position_new_size_keeps_position_and_writes_once() {
+        let mut world = World::new();
+        let window = world
+            .spawn((
+                fake_handle(0x3000),
+                window_pos_sized(731, 356, 434, 687),
+                arrangement_at(WRITER_WITNESS.x, WRITER_WITNESS.y),
+            ))
+            .id();
+
+        assert!(resize_window_keep_position(
+            &mut world,
+            window,
+            SizePx { w: 517, h: 823 }
+        ));
+        assert_eq!(
+            position_of(&world, window),
+            Point { x: 731, y: 356 },
+            "位置は維持される（再射影しない）"
+        );
+        assert_eq!(size_of(&world, window), SizeI::new(517, 823));
+        // 単一ライター経路を通った証拠＝Arrangement.offset が現在位置の as f32 転写
+        assert_eq!(
+            arrangement_offset_of(&world, window),
+            Offset { x: 731.0, y: 356.0 }
+        );
+    }
+
+    /// 現寸不明（`WindowPos.size` が `None`＝窓生成直後）はべき等判定が成立しない
+    /// ため書込へ進む（位置維持・新寸反映）。
+    #[test]
+    fn resize_window_keep_position_with_unknown_current_size_writes() {
+        let mut world = World::new();
+        let window = world
+            .spawn((
+                fake_handle(0x3000),
+                window_pos_at(731, 356),
+                arrangement_at(WRITER_WITNESS.x, WRITER_WITNESS.y),
+            ))
+            .id();
+
+        assert!(resize_window_keep_position(
+            &mut world,
+            window,
+            SizePx { w: 517, h: 823 }
+        ));
+        assert_eq!(position_of(&world, window), Point { x: 731, y: 356 });
+        assert_eq!(size_of(&world, window), SizeI::new(517, 823));
+    }
+
+    /// `WindowPos` 未付与（窓生成前の異常系）: warn＋`false`＋書込ゼロ
+    /// （silent no-op にしない）。
+    #[test]
+    fn resize_window_keep_position_without_window_pos_returns_false() {
+        let mut world = World::new();
+        let window = world
+            .spawn((
+                fake_handle(0x3000),
+                arrangement_at(WRITER_WITNESS.x, WRITER_WITNESS.y),
+            ))
+            .id();
+
+        assert!(!resize_window_keep_position(
+            &mut world,
+            window,
+            SizePx { w: 517, h: 823 }
+        ));
+        assert_no_write(&world, window);
+    }
+
+    /// `WindowPos.position` 不在（窓生成前）: 現在位置を読めないため warn＋`false`＋
+    /// 書込ゼロ。`size` も書き換えない。
+    #[test]
+    fn resize_window_keep_position_without_position_returns_false() {
+        let mut world = World::new();
+        let window = world
+            .spawn((
+                fake_handle(0x3000),
+                WindowPos {
+                    position: None,
+                    size: Some(SizeI::new(434, 687)),
+                    ..Default::default()
+                },
+                arrangement_at(WRITER_WITNESS.x, WRITER_WITNESS.y),
+            ))
+            .id();
+
+        assert!(!resize_window_keep_position(
+            &mut world,
+            window,
+            SizePx { w: 517, h: 823 }
+        ));
+        assert!(
+            world
+                .get::<WindowPos>(window)
+                .expect("WindowPos があるはず")
+                .position
+                .is_none(),
+            "position は復活しない"
+        );
+        assert_eq!(size_of(&world, window), SizeI::new(434, 687));
+        assert_no_write(&world, window);
+    }
+
+    /// 非正寸（0・負）: warn＋`false`＋書込ゼロ（`resize_window_to` の非正寸縮退と
+    /// 同一流儀・`wa.right−w` 系の暴走を先に弾く）。
+    #[test]
+    fn resize_window_keep_position_nonpositive_size_holds_state() {
+        for bad in [
+            SizePx { w: 0, h: 687 },
+            SizePx { w: 434, h: 0 },
+            SizePx { w: 0, h: 0 },
+            SizePx { w: -517, h: 823 },
+            SizePx { w: 517, h: -823 },
+        ] {
+            let mut world = World::new();
+            let window = world
+                .spawn((
+                    fake_handle(0x3000),
+                    window_pos_sized(731, 356, 434, 687),
+                    arrangement_at(WRITER_WITNESS.x, WRITER_WITNESS.y),
+                ))
+                .id();
+
+            assert!(
+                !resize_window_keep_position(&mut world, window, bad),
+                "非正寸 {bad:?} は false"
+            );
+            assert_eq!(position_of(&world, window), Point { x: 731, y: 356 });
+            assert_eq!(size_of(&world, window), SizeI::new(434, 687));
+            assert_no_write(&world, window);
+        }
+    }
+
+    /// `WindowHandle` 未付与（窓生成前）: 判定を二重化せず `enqueue_window_set_pos`
+    /// の既存 warn 経路へ委譲し `false`＋状態不変（単一ライター規律の継承）。
+    #[test]
+    fn resize_window_keep_position_without_handle_returns_false() {
+        let mut world = World::new();
+        let window = world
+            .spawn((
+                window_pos_sized(731, 356, 434, 687),
+                arrangement_at(WRITER_WITNESS.x, WRITER_WITNESS.y),
+            ))
+            .id();
+
+        assert!(!resize_window_keep_position(
+            &mut world,
+            window,
+            SizePx { w: 517, h: 823 }
+        ));
+        assert_eq!(position_of(&world, window), Point { x: 731, y: 356 });
+        assert_eq!(size_of(&world, window), SizeI::new(434, 687));
+        assert_no_write(&world, window);
+    }
+
+    /// despawn 済み（対象不在）でも panic せず `false`。
+    #[test]
+    fn resize_window_keep_position_on_despawned_entity_returns_false() {
+        let mut world = World::new();
+        let window = world
+            .spawn((fake_handle(0x3000), window_pos_sized(731, 356, 434, 687)))
+            .id();
+        world.despawn(window);
+
+        assert!(!resize_window_keep_position(
+            &mut world,
+            window,
+            SizePx { w: 517, h: 823 }
+        ));
     }
 }

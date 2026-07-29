@@ -1,12 +1,19 @@
-//! 毎フレーム三相結線（attach／drain／text）の排他 system と NonSend 配線状態。
+//! 毎フレーム結線（attach／dpi／drain／text）の排他 system と NonSend 配線状態。
 //!
 //! `Emo2Wiring`（NonSend resource・presenter／rx／runtime／clock／assets／attached を保持）と
-//! 排他 system `emo2_frame_system(world: &mut World)`（donor パターン: remove→3 フェーズ→insert）を
-//! 所有する。三フェーズ:
+//! 排他 system `emo2_frame_system(world: &mut World)`（donor パターン: remove→各フェーズ→insert）を
+//! 所有する。各フェーズ:
 //! - attach: GPU 資源＋`GhostWindows` 到達ゲート→`plan_attachments`（DD-12）→バルーン初回 `ShowSurface`
 //!   （面0）→文字層スロット取得→`register_actor_view`（`Option::take` で高々 1 回消費）。**シェルは初回
 //!   `ShowSurface` を発行せず**最初のさくらスクリプト `\s` cue まで非表示を保つ（defect #5・実機#5）。
-//! - drain: attach 完了後のみ `Receiver::try_iter` で `PresentCommand` を FIFO で `presenter.apply` へ適用。
+//! - dpi: `Changed<DPI>` の窓を永続 `SystemState` で観測し（`anchor_changed_system` 先例）、当該窓の
+//!   target を `refresh_scale` で再スケールして窓寸を reconcile する（emo-dpi-scaling task 4.2・D8）。
+//! - drain: attach 完了後のみ `Receiver::try_iter` で `PresentCommand` を FIFO で `presenter.apply` へ適用し、
+//!   続けて表示成立点の状態照合報告（`take_pending_resize`）で窓寸を reconcile する（第 2 経路）。
+//! - text-scale: 装着済み balloon scope の文字層 binding を presenter の**現適用 k** へ毎フレーム
+//!   合わせ直す（`refresh_actor_scale`・emo-dpi-scaling task 7.2・D11-4・Req8）。適用 k の更新点は
+//!   1 フレームに 2 つ（dpi 相の `refresh_scale`／drain 相の `apply_show`）あるため、**両者の下流**・
+//!   text 相の**上流**に置く。
 //! - text: `TalkClock::talk_time` が `Some` のとき `present_frame` を呼ぶ（`Err` は `error!`＋継続）。
 //!
 //! `plan_attachments`（`GhostWindows::scopes()` を正とする純関数・DD-12）も本モジュールに属する。
@@ -17,10 +24,13 @@
 //! `resolve_talk_time`）・排他 system `emo2_frame_system`（remove→3 フェーズ→insert）を実装する。
 
 use std::cell::RefCell;
+use std::collections::{BTreeSet, HashMap};
 use std::rc::Rc;
 use std::sync::mpsc::Receiver;
 
 use bevy_ecs::entity::Entity;
+use bevy_ecs::prelude::{Changed, Query};
+use bevy_ecs::system::SystemState;
 use bevy_ecs::world::World;
 use tracing::{debug, error, info, warn};
 
@@ -28,11 +38,11 @@ use areka_emo_present::{EmoPresenter, PresentCommand, TargetId, TextSlotView};
 use areka_emo_text::actor::{present_frame, TextLayerRuntime};
 use areka_parsers::balloon::BalloonModel;
 use areka_sakura::ActorKey;
-use wintf::ecs::{FrameTime, GraphicsCore, SizeI, WindowPos, WucGraphicsResource};
+use wintf::ecs::{FrameTime, GraphicsCore, SizeI, WindowPos, WucGraphicsResource, DPI};
 
-use crate::placement::follow::resize_window_to;
+use crate::placement::follow::{resize_window_keep_position, resize_window_to};
 use crate::placement::resolver::SizePx;
-use crate::placement::spawn::GhostWindows;
+use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker, GhostWindows};
 
 use super::assets::{BootAssets, ScopeAssets};
 use super::move_cue::{apply_move_directive, MoveDirective};
@@ -181,12 +191,40 @@ pub struct Emo2Wiring {
     move_rx: Receiver<MoveDirective>,
     /// バルーン文字層ランタイム（`register_actor_view`／`present_frame` の所有・`!Send`）。
     runtime: Rc<RefCell<TextLayerRuntime>>,
+    /// scope → attach 相で装着に使った [`BalloonModel`]（文字層 k 再追従の再利用源・D11-3・R8.1）。
+    ///
+    /// `register_actor_view`（装着）と [`TextLayerRuntime::refresh_actor_scale`]（再追従）はいずれも
+    /// `&BalloonModel` を要する。装着で使ったモデルをここへ記憶しておき、文字層スケール相
+    /// （[`run_text_scale_phase`]）の再追従が
+    /// **再パースせず同一モデル**で binding を組み直せるようにする（再パースすれば「装着時と再追従時で
+    /// 別モデル」という静かな食い違いの余地が生まれる）。
+    ///
+    /// 現行 [`BootAssets::balloon_model`] は全 scope 共有の 1 本だが、キーは **scope**（W5
+    /// `kero-balloon` の per-scope バルーン採寸の席を潰さない）とする——再追従は「どの scope の
+    /// balloon 窓か」から引くのが自然であり、共有 1 本を全 scope へ配るのは現行の実装詳細に過ぎない。
+    balloon_models: HashMap<u32, BalloonModel>,
+    /// 文字層 k 追従で `text_slot_view` が `None` だった scope の警告済み集合（R8.6 のエッジガード）。
+    ///
+    /// [`run_text_scale_phase`] は毎フレーム走る。表示未確立の縮退を素朴に `warn!` すると毎フレーム
+    /// 鳴って log を溺れさせるため、**scope ごとに一度だけ**鳴らし、view が取れた時点で除去して
+    /// 再武装する（`areka-emo-text` の `unresolved_warned: BTreeSet<ActorKey>` と同型の先例）。
+    /// R8.6 が求めるのは縮退が**観測できる**ことであって毎回鳴ることではない。
+    text_scale_warned: BTreeSet<u32>,
     /// talk 起点相対秒の時刻源（task 4.2 の text フェーズで `talk_time` を引く）。
     clock: TalkClock,
     /// load-time 構築資産（attach で `take` して高々 1 回消費）。
     assets: Option<BootAssets>,
     /// attach 完了フラグ（高々 1 回のゲート・以降 no-op）。
     attached: bool,
+    /// `Changed<DPI>` 観測の**永続** [`SystemState`]（[`run_dpi_phase`]・emo-dpi-scaling task 4.2）。
+    ///
+    /// `anchor_changed_system` の `Local<Option<SystemState<..>>>` と同じ役割を担う。あちらは bevy の
+    /// system 引数として `Local` を受けられるが、本フェーズは排他 system [`emo2_frame_system`] から
+    /// 呼ばれる**素の関数**（design の署名 `run_dpi_phase(&mut Emo2Wiring, &mut World)`）ゆえ `Local`
+    /// を取れない——run を跨いで `last_run` tick を保つ器がここに要る。毎 run で `SystemState::new`
+    /// を作り直すと `last_run` が 0 のままとなり `Changed` が全窓へ誤マッチし続ける（＝毎フレーム
+    /// 全窓 refresh の churn）ため、必ず使い回す。
+    dpi_state: Option<SystemState<DpiChangedQuery>>,
 }
 
 impl Emo2Wiring {
@@ -206,9 +244,15 @@ impl Emo2Wiring {
             rx,
             move_rx,
             runtime,
+            // attach 相が装着した scope ごとに埋める（D11-3）。
+            balloon_models: HashMap::new(),
+            // 縮退警告のエッジガード（初期は未警告＝最初の縮退で 1 回鳴る）。
+            text_scale_warned: BTreeSet::new(),
             clock,
             assets: Some(assets),
             attached: false,
+            // 初回 [`run_dpi_phase`] で遅延生成する（`SystemState::new` は `&mut World` を要する）。
+            dpi_state: None,
         }
     }
 
@@ -290,6 +334,17 @@ impl Emo2Wiring {
     #[cfg(test)]
     pub(crate) fn apply_present(&mut self, world: &mut World, cmd: PresentCommand) {
         self.presenter.apply(world, cmd);
+    }
+
+    /// 再追従用に記憶している [`BalloonModel`] の scope 集合（昇順・emo-dpi-scaling D11-3 の観測口）。
+    ///
+    /// 「attach 相が per-scope の model を実際に保持したか」は本番 attach（GPU 資源＋実資産）を
+    /// 通さないと観測できないため、spine（in-crate GPU ハーネス）から見えるだけの read を開ける。
+    #[cfg(test)]
+    pub(crate) fn balloon_model_scopes(&self) -> Vec<u32> {
+        let mut scopes: Vec<u32> = self.balloon_models.keys().copied().collect();
+        scopes.sort_unstable();
+        scopes
     }
 }
 
@@ -376,7 +431,16 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
         // loop_tables は attach では未使用（SERIKO ループ表は spawn_seriko の actor 構築＝task 9.2 が
         // 手渡す）。attach 相はループを駆動しないため破棄する。
         loop_tables: _,
+        // author_dpi（D1・Req1.1）: descript 宣言由来の原稿 DPI を attach 時の target 政策として
+        // 供給する（emo-dpi-scaling task 4.2）。shell と balloon で別宣言ゆえ引き当てを取り違え
+        // ないよう [`AuthorDpis`] へ束ねる（下の `attach_target` 呼び 2 箇所が `for_target` で引く）。
+        shell_author_dpi,
+        balloon_author_dpi,
     } = assets;
+    let author_dpis = AuthorDpis {
+        shell: shell_author_dpi,
+        balloon: balloon_author_dpi,
+    };
     let mut shells: Vec<_> = shells.into_iter().map(Some).collect();
     let mut balloons: Vec<_> = balloons.into_iter().map(Some).collect();
 
@@ -412,6 +476,9 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
             shell_window,
             shell_world,
             shell_atlas,
+            // author_dpi は attach 対象 target と同じ式で引く（`item.shell_target` を両方に書く）＝
+            // shell/balloon の取り違えが 1 行の中で目視可能になる（両者 u16 で型は守ってくれない）。
+            author_dpis.for_target(item, item.shell_target),
         ) {
             error!(scope, error = %e, "emo2 attach: シェル target の attach に失敗（log-first・継続）");
             continue;
@@ -453,6 +520,8 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
             balloon_window,
             balloon_world,
             balloon_atlas,
+            // shell 側と同型: attach 対象 target と同じ式（`item.balloon_target`）で引き当てる。
+            author_dpis.for_target(item, item.balloon_target),
         ) {
             error!(scope, error = %e, "emo2 attach: バルーン target の attach に失敗（log-first・継続）");
             continue;
@@ -469,12 +538,19 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
                 reply: None,
             },
         );
+        // 文字層 k 再追従（D11-3・R8.1）の再利用源: 装着に使うモデルを scope キーで記憶する。
+        // 文字層スケール相（[`run_text_scale_phase`]）はこれを再利用して binding を組み直す（再パースしない）。
+        // 装着が `text_slot_view` None で次フレームへ委ねられた場合でもモデル自体は有効ゆえ、
+        // 接続成否に関わらず記憶する（再追従は未登録 actor を静穏 skip する・7.1 の契約）。
+        wiring.balloon_models.insert(scope, balloon_model.clone());
         // apply は同期ゆえ同一フレームで text_slot_view が Some になるのが正常経路（DD-4）。
         // None（上流の遅延化）は接続せず次フレーム再試行へ委ねる（R4.2）。
         let view = wiring.presenter.text_slot_view(item.balloon_target);
         connect_balloon_text(
             &wiring.runtime,
             view,
+            // 再追従（[`run_text_scale_phase`]）は**同一の写像**で actor を引く——
+            // ここと式が食い違うと、再追従が別 actor を作って文字だけ旧 k のまま残る。
             ActorKey::from(scope.to_string()),
             &balloon_model,
         );
@@ -520,6 +596,436 @@ fn connect_balloon_text(
 }
 
 // ---------------------------------------------------------------------------
+// DPI 追従フェーズ（areka-P0-emo-dpi-scaling task 4.2・design「areka / emo2_boot（DPI 追従
+// フェーズ）> run_dpi_phase（frame.rs）」・Flow 2／Flow 3 手順 5・D8・Req3.1/4.1/4.2/4.3/4.4）
+// ---------------------------------------------------------------------------
+
+/// 装着時に各 target へ渡す原稿 DPI の対（shell 宣言＋balloon 宣言・D1・Req1.1）。
+///
+/// shell は `seriko.dpi`・balloon は `dpi` と**別宣言**であり、どちらも `u16` ゆえ取り違えても
+/// コンパイルは通る——通ったまま「シェルだけバルーンの縮尺で描かれる」という静かな誤表示になる。
+/// ゆえに呼び手に「どちらの `u16` か」を選ばせず、**装着対象 target の同一性**で引き当てる
+/// （[`Self::for_target`]）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct AuthorDpis {
+    /// shell descript の `seriko.dpi`（無宣言・不正は上流 source.rs が 96 へ正規化済み）。
+    shell: u16,
+    /// balloon descript の `dpi`（同上）。
+    balloon: u16,
+}
+
+impl AuthorDpis {
+    /// 装着対象 `target` に対応する author_dpi を引く（shell target＝shell 宣言・balloon target＝
+    /// balloon 宣言）。
+    ///
+    /// `item` の 2 target のいずれでもない値は到達＝結線バグゆえ `warn!`＋既定 96 へ縮退する
+    /// （表示を失わない縮退・panic しない・log-first）。
+    fn for_target(self, item: &PlannedAttach, target: TargetId) -> u16 {
+        if target == item.shell_target {
+            self.shell
+        } else if target == item.balloon_target {
+            self.balloon
+        } else {
+            warn!(
+                ?target,
+                scope = item.scope,
+                "emo2 attach: 当該 scope の shell/balloon いずれの target でもない → author_dpi 既定 96 へ縮退"
+            );
+            96
+        }
+    }
+}
+
+/// ゴースト窓の種別（窓寸 reconcile の**反映口**の選択・`spawn.rs` の marker 由来）。
+///
+/// キャラ窓とバルーン窓は寸法変更時の位置の決め方が異なる（D8）——キャラ窓はアンカー辺へ
+/// 釘付けされた接地点を保つため [`resize_window_to`]、バルーン窓は位置がキャラ窓追従で決まる
+/// 従属量ゆえ [`resize_window_keep_position`]（同フレームで二重に位置が動かない）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum GhostWindowKind {
+    /// キャラ窓（`CharWindowMarker`）→ アンカー保存リサイズ。
+    Char,
+    /// バルーン窓（`BalloonWindowMarker`）→ 位置維持リサイズ。
+    Balloon,
+}
+
+/// 窓 entity の marker 照合結果（[`classify_ghost_window`] の 3 分類・純判断）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum GhostWindowClass {
+    /// ゴースト窓（scope＋種別が確定）。
+    Ghost(usize, GhostWindowKind),
+    /// ゴースト窓でない（`GhostWindowMarker` 系を持たない他の窓）＝本フェーズの対象外。
+    NotGhost,
+    /// char/balloon の marker が同居している（`spawn.rs` の排他付与に反する結線バグ）。
+    Ambiguous,
+}
+
+/// 窓に付いた marker（scope 付き）から scope と種別を判定する純関数（GPU/World 不要）。
+///
+/// `spawn_ghost_windows` は 1 窓へ `CharWindowMarker`／`BalloonWindowMarker` の**どちらか一方**
+/// だけを付ける。ゆえに両方あり＝結線バグ（[`GhostWindowClass::Ambiguous`]）、どちらも無し＝
+/// ゴースト窓ではない（[`GhostWindowClass::NotGhost`]）として呼び手が縮退できるよう 3 分類で返す。
+fn classify_ghost_window(
+    char_scope: Option<usize>,
+    balloon_scope: Option<usize>,
+) -> GhostWindowClass {
+    match (char_scope, balloon_scope) {
+        (Some(scope), None) => GhostWindowClass::Ghost(scope, GhostWindowKind::Char),
+        (None, Some(scope)) => GhostWindowClass::Ghost(scope, GhostWindowKind::Balloon),
+        (None, None) => GhostWindowClass::NotGhost,
+        (Some(_), Some(_)) => GhostWindowClass::Ambiguous,
+    }
+}
+
+/// 報告された新物理寸を窓 client へ反映する（D8 の振り分け・二経路の共通末端）。
+///
+/// 種別ごとの反映口（char＝[`resize_window_to`]／balloon＝[`resize_window_keep_position`]）へ
+/// 振り分ける。戻り値は**書込が起きたか**であり、`false` は失敗とは限らない——同寸のべき等
+/// skip（振動しない・Req4.2）も `false` を返す（ゆえに `false` を error として鳴らさない。
+/// 実失敗＝`WindowHandle` 未付与等は各反映口が `warn!` 済み）。
+///
+/// 物理寸は `u32`（表示バッファ外形）で報告されるが窓寸は `i32` 通貨ゆえ、ここで変換し
+/// 超過・0 を弾く（log-first・panic しない・Req3.4 と同流儀の二重防波堤）。
+fn reconcile_window_size(
+    world: &mut World,
+    window: Entity,
+    kind: GhostWindowKind,
+    new_size: (u32, u32),
+) -> bool {
+    let (Ok(w), Ok(h)) = (i32::try_from(new_size.0), i32::try_from(new_size.1)) else {
+        error!(
+            entity = ?window,
+            ?kind,
+            ?new_size,
+            "dpi reconcile: 報告された物理寸が i32 域を超える → 窓寸を変えない（前寸維持・log-first）"
+        );
+        return false;
+    };
+    if w == 0 || h == 0 {
+        warn!(
+            entity = ?window,
+            ?kind,
+            ?new_size,
+            "dpi reconcile: 報告された物理寸に 0 軸がある → 窓寸を変えない（前寸維持）"
+        );
+        return false;
+    }
+    let new_size = SizePx { w, h };
+    match kind {
+        // キャラ窓: アンカー射影 T を再適用して接地点（下端中央）を保つ。
+        GhostWindowKind::Char => resize_window_to(world, window, new_size),
+        // バルーン窓: 位置は追従で決まる従属量ゆえ据え置き、寸だけ差し替える。
+        GhostWindowKind::Balloon => resize_window_keep_position(world, window, new_size),
+    }
+}
+
+/// 再スケール報告の供給源（本番実装は [`EmoPresenter`]）。
+///
+/// frame 側の結線が presenter へ求めるのは 2 つの報告だけである——(1) `Changed<DPI>` エッジで
+/// 駆動する再表示の結果（[`EmoPresenter::refresh_scale`]）、(2) 表示成立点の状態照合が積んだ
+/// 未消費の窓寸要求（[`EmoPresenter::take_pending_resize`]）。両者の**責任分界**（再表示が
+/// 成立したら (1) が要求を自ら消費し、ゲート不成立なら一切触れず (2) が拾う）は presenter 側の
+/// 契約であり、そちらの檻は emo-present in-crate が所有する。
+///
+/// この最小トレイトは、**frame 側の結線**（毎フレーム両経路を呼ぶ・`Some` のみ reconcile する・
+/// 種別で反映口を振り分ける）を GPU 無しで決定論の檻へ入れるためのシームである（D9 の
+/// 振り分け基準 (a)＝判断分岐は in-crate 純テスト、GPU readback は emo-present 別プロセス）。
+trait ScaleReportSource {
+    /// 窓 DPI から k を再導出し、再表示が成立して物理寸が変わったならその新物理寸を返す。
+    fn refresh_scale_report(&mut self, world: &mut World, target: TargetId) -> Option<(u32, u32)>;
+    /// 表示成立点の状態照合が積んだ未消費の窓寸 reconcile 要求を取り出す（取り出しで消える）。
+    fn take_scale_report(&mut self, target: TargetId) -> Option<(u32, u32)>;
+}
+
+impl ScaleReportSource for EmoPresenter {
+    fn refresh_scale_report(&mut self, world: &mut World, target: TargetId) -> Option<(u32, u32)> {
+        self.refresh_scale(world, target)
+    }
+
+    fn take_scale_report(&mut self, target: TargetId) -> Option<(u32, u32)> {
+        self.take_pending_resize(target)
+    }
+}
+
+/// `Changed<DPI>` の窓と、その窓の scope/種別を引くための marker を一度に取る query 型。
+///
+/// `Changed<DPI>` フィルタは `DPI` component を持つ窓のみへ効く（本番は窓生成時に必ず付与され、
+/// `WM_DPICHANGED` と生成時の `GetDpiForWindow` 実値補正の双方で変化が発火する）。marker は
+/// `Option` で取り、ゴースト窓でない窓（どちらも `None`）を静穏に読み飛ばす。
+type DpiChangedQuery = Query<
+    'static,
+    'static,
+    (
+        Entity,
+        Option<&'static CharWindowMarker>,
+        Option<&'static BalloonWindowMarker>,
+    ),
+    Changed<DPI>,
+>;
+
+/// DPI フェーズの本体（報告源を抽象化した中核・[`run_dpi_phase`] が本番の presenter を渡す）。
+///
+/// 永続 `state` で `Changed<DPI>` を観測し（`anchor_changed_system` 先例と同じ流儀）、変化した
+/// 各ゴースト窓について対応 target の [`ScaleReportSource::refresh_scale_report`] を呼び、
+/// `Some(新物理寸)` のときだけ [`reconcile_window_size`] で窓 client を合わせる。
+///
+/// # べき等・churn なし（Flow 2 キー決定 (b)）
+///
+/// 初回 run は `SystemState::new` の仕様で全窓へマッチするが、k 差分が無ければ報告は `None`
+/// （presenter のゲート）であり、仮に報告があっても同寸なら反映口がべき等 skip する。ゆえに
+/// 初回全マッチは無害に吸収される。`Changed<DPI>` が無いフレームは query が空＝実質 no-op。
+///
+/// # 失敗（Req4.4）
+///
+/// 再導出・再表示の失敗は presenter が `error!`＋`None` で前 k・前表示を維持する。本関数は
+/// `None` で**窓寸を一切触らない**（前寸維持）。panic しない。
+fn dpi_phase_with<S: ScaleReportSource>(
+    source: &mut S,
+    state: &mut Option<SystemState<DpiChangedQuery>>,
+    world: &mut World,
+) {
+    // 永続シーム: run を跨いで同一 SystemState を使い回し `last_run` を保つ（毎 run 新規生成は
+    // `last_run` が 0 のままとなり全窓へ誤マッチし続ける＝毎フレーム再表示の churn）。
+    let state = state.get_or_insert_with(|| SystemState::new(world));
+    // 変化窓を collect して World の不変借用を即解放してから `&mut World` のループへ入る
+    // （`anchor_changed_system` と同じ collect→release→&mut ループ）。
+    let changed: Vec<(Entity, Option<usize>, Option<usize>)> = state
+        .get(world)
+        .iter()
+        .map(|(entity, char_marker, balloon_marker)| {
+            (
+                entity,
+                char_marker.map(|m| m.scope),
+                balloon_marker.map(|m| m.scope),
+            )
+        })
+        .collect();
+
+    for (window, char_scope, balloon_scope) in changed {
+        let (scope, kind) = match classify_ghost_window(char_scope, balloon_scope) {
+            GhostWindowClass::Ghost(scope, kind) => (scope, kind),
+            // ゴースト窓でない窓の DPI 変化は本フェーズの対象外（正常・静穏に読み飛ばす）。
+            GhostWindowClass::NotGhost => continue,
+            GhostWindowClass::Ambiguous => {
+                error!(
+                    entity = ?window,
+                    "dpi: char/balloon marker が同居する窓（spawn の排他付与に反する）→ 再スケールを skip"
+                );
+                continue;
+            }
+        };
+        // target 採番（DD-3: shell=2*scope／balloon=2*scope+1）は u32 域。収まらない scope は
+        // 如何なる target とも対応しない（plan_attachments の usize→u32 境界と同じ扱い）。
+        let Ok(scope) = u32::try_from(scope) else {
+            error!(
+                entity = ?window,
+                scope,
+                "dpi: scope が u32 に収まらず target を採番できない → 再スケールを skip"
+            );
+            continue;
+        };
+        let target = match kind {
+            GhostWindowKind::Char => shell_target(scope),
+            GhostWindowKind::Balloon => balloon_target(scope),
+        };
+        // 再導出→（差分があれば）再表示。`None` は「窓寸を触らない」が正しい（前表示・前寸の維持・
+        // Req4.4）。なお `None` は k 不変とは同義でない——不可視・未表示・失敗に加え、**k は変わった
+        // が丸め後の物理寸が同じ**場合も `None` である（`refresh_scale` の doc が明記）。ゆえに
+        // 文字層 k 追従の判断材料にはこの戻り値を使わない（[`run_text_scale_phase`] を参照）。
+        if let Some(new_size) = source.refresh_scale_report(world, target) {
+            reconcile_window_size(world, window, kind, new_size);
+        }
+    }
+}
+
+/// DPI 追従フェーズ（design「run_dpi_phase（frame.rs）」・D8・Req3.1/4.1/4.2/4.3）。
+///
+/// `Changed<DPI>` の窓を永続 [`SystemState`]（`anchor_changed_system` 先例）で観測し、当該窓に
+/// 対応する target の `refresh_scale` を呼ぶ。`Some(新物理寸)` なら char 窓は
+/// [`resize_window_to`]（アンカー保存）・balloon 窓は [`resize_window_keep_position`] で窓 client を
+/// 新物理寸へ reconcile する——**同一フレーム・同一 UI スレッド呼出**で完結するため、フェーズ
+/// 終了時点で照会値（`applied_scale`）・表示寸・窓 client が揃う（Req4.2）。
+///
+/// 進行中の talk 再生・SERIKO ループは presenter の**外**に状態を持つため、再表示はキャッシュ
+/// ミス 1 回のコストで済み挙動を失わない（Req4.3）。本フェーズは target 状態を一切リセットしない。
+///
+/// # 窓寸 reconcile の第 2 経路
+///
+/// エッジ（`Changed<DPI>`）観測は「再表示のトリガ」に徹する。窓寸の整合そのものは**表示が成立
+/// したという状態**に紐づき、[`run_drain_phase`] 末尾の [`reconcile_reported_sizes`] が同一
+/// フレーム内で拾う（初回表示の k₀ 補正＝Flow 3 手順 5 はこちらの経路で landing する）。両者は
+/// presenter の消費規約により二重にも取りこぼしにもならない。
+///
+/// # 文字層の k 追従は本フェーズが担わない（task 7.2・D11-4・Req8）
+///
+/// バルーンの**文字**も新 k へ追従させる必要があるが、その反映点は本フェーズではなく
+/// [`run_text_scale_phase`] である——適用 k の更新点は 1 フレームに 2 つ（本フェーズの
+/// `refresh_scale` と drain 相の `apply_show`）あり、本フェーズの戻り値だけを見ると後者を取り
+/// こぼすためである（詳細は [`run_text_scale_phase`] の doc）。
+pub fn run_dpi_phase(wiring: &mut Emo2Wiring, world: &mut World) {
+    // presenter（報告源）と dpi_state（永続観測器）は互いに素なフィールドゆえ同時に借りられる。
+    let Emo2Wiring {
+        presenter,
+        dpi_state,
+        ..
+    } = wiring;
+    dpi_phase_with(presenter, dpi_state, world);
+}
+
+// ---------------------------------------------------------------------------
+// 文字層 k 追従フェーズ（areka-P0-emo-dpi-scaling task 7.2・design D11-3/D11-4・Req8.1/8.5/8.6）
+// ---------------------------------------------------------------------------
+
+/// 文字層 k 追従フェーズ（毎フレーム・R8.1/8.5/8.6・design D11-4）: 装着済み balloon scope の
+/// 文字層 binding を presenter の**現適用 k** へ合わせ直す。戻り値は実際に binding を再構築した
+/// scope（昇順・観測用。本番＝[`emo2_frame_system`] は捨てる）。
+///
+/// バルーンの**文字**は emo-text の binding（装着時の k を焼き付ける）に載るため、窓とバルーン画像
+/// だけを再スケールすると文字だけが旧 k の寸法に取り残される（6.5 一次実走で実測した欠陥）。本
+/// フェーズはその取り残しを構造的に消す。
+///
+/// # なぜ「イベント駆動」ではなく毎フレーム走査なのか（D11-4 の意図＝k 変化の検出）
+///
+/// 素朴には「[`run_dpi_phase`] の `refresh_scale` が `Some` を返した balloon 窓へ伝搬する」と書け
+/// るが、**`Some` と「適用 k が変わった」は同値ではない**——`refresh_scale` の doc が明記するとおり
+/// 次の 2 つで乖離する:
+///
+/// - **不可視のとき**: `refresh_scale` は再表示せず `applied` も更新せずに `None` を返す。適用 k は
+///   その後の `Show`（`apply_show`＝drain 相）で新 k へ跳ぶ——エッジは既に消費済みで二度と来ない
+///   （`\b[-1]`→`\b[0]` は本番の通常列であり、バルーンは大半の時間が不可視である）。
+/// - **k は変わったが丸め後の物理寸が同じとき**: `refresh_scale` は再表示に成功しても
+///   `take_pending_resize` が `None` ゆえ `None` を返す。文字層の供給面は
+///   `ceil(validrect 寸 × k)`（AC 8.2）と別の丸めで決まるため、こちらは寸が変わり得る。
+///
+/// ゆえに検出点は「**balloon target の適用 k が文字層 binding の k と食い違っているか**」であり、
+/// それを判定できる唯一の権威は [`TextLayerRuntime::refresh_actor_binding`]（task 7.1）である。
+/// 本フェーズは判定を自前で複製せず（第 2 のガードは本家と乖離し得る）、毎フレーム
+/// [`TextLayerRuntime::refresh_actor_scale`] へ委ねる——同値 k・未登録 actor はあちらが
+/// **再構築せず `false`** を返す（churn ガード・R8.5）。費用は balloon 1 枚あたり map 1 引きと
+/// `ScaleRatio` 1 比較。
+///
+/// # 呼ぶ位置（[`emo2_frame_system`] 内）
+///
+/// 適用 k の更新点は 1 フレームに 2 つ——[`run_dpi_phase`] の `refresh_scale` と
+/// [`run_drain_phase`] の `apply_show`。本フェーズは**両者の下流**かつ [`run_text_phase`]
+/// （`present_frame`）の**上流**に置く。こうすると、どちらの経路で k が跳ねても同一フレーム内で
+/// binding が組み直され、その直後の描画が新 k の物理寸で走る（1 フレームの旧寸残りが生じない）。
+///
+/// # 縮退（R8.6・log-first だが log spam にしない）
+///
+/// `text_slot_view` が `None`（初回 `ShowSurface` が成立していない＝表示未確立）なら再追従できず
+/// skip する。毎フレーム走査ゆえ素朴に `warn!` すると毎フレーム鳴るため、**scope ごとに一度だけ**
+/// 警告し（`text_scale_warned`・emo-text の `unresolved_warned` と同型のエッジガード）、view が
+/// 取れるようになった時点で再武装する（再度落ちれば再び 1 回鳴る）。なお `Hide` は
+/// `text_slot_view` を `None` にしない（`apply_hide` は mount／chain／`applied`／`native_size` を
+/// 保持する）ため、**不可視は本縮退経路に落ちない**——不可視の間は同値 k の no-op が続き、`Show`
+/// で `applied` が跳ねた次の走査が再追従する。
+///
+/// [`BalloonModel`] は attach 時に記憶した per-scope の同一モデルを再利用する（再パースしない・
+/// D11-3）。actor は attach と同一写像 `ActorKey::from(scope.to_string())`。shell target は emo2 で
+/// 文字スロットを持たないため走査対象に入らない（`balloon_models` が balloon 装着 scope のみを持つ）。
+/// panic しない。
+pub fn run_text_scale_phase(wiring: &mut Emo2Wiring) -> Vec<u32> {
+    // presenter（view 供給）／runtime（適用先）／balloon_models（再利用モデル）／warn ガードは
+    // 互いに素なフィールドゆえ同時に借りられる。
+    let Emo2Wiring {
+        presenter,
+        runtime,
+        balloon_models,
+        text_scale_warned,
+        ..
+    } = wiring;
+
+    let mut refreshed = Vec::new();
+    // BTreeMap ではなく HashMap ゆえ列挙順は不定。観測（戻り値）と warn 順を決定論にするため昇順化する。
+    let mut scopes: Vec<u32> = balloon_models.keys().copied().collect();
+    scopes.sort_unstable();
+
+    for scope in scopes {
+        let target = balloon_target(scope);
+        // actor 引き当ては attach（`run_attach_phase` の `connect_balloon_text` 呼び）と**同一の写像**。
+        // 別式で組むと存在しない actor を指し、7.1 の未登録 skip で静かに何も起きなくなる。
+        let actor = ActorKey::from(scope.to_string());
+        let Some(view) = presenter.text_slot_view(target) else {
+            // 表示未確立（初回 ShowSurface が成立していない）。毎フレーム走査ゆえ scope ごとに 1 回だけ鳴らす。
+            if text_scale_warned.insert(scope) {
+                warn!(
+                    scope,
+                    ?target,
+                    actor = %actor.as_str(),
+                    "text-scale: text_slot_view が None（表示未確立）→ 文字層 k 追従を skip し次機会へ委ねる（本 scope の警告は復帰まで抑止・R8.6）"
+                );
+            }
+            continue;
+        };
+        // 復帰＝次に落ちたときは再び 1 回鳴らす（エッジの再武装）。
+        text_scale_warned.remove(&scope);
+        // 判定（k 変化・未登録）は 7.1 の権威へ委ねる（本フェーズは第 2 のガードを持たない・R8.5）。
+        let model = &balloon_models[&scope];
+        if runtime.borrow_mut().refresh_actor_scale(&actor, &view, model) {
+            refreshed.push(scope);
+        }
+    }
+    refreshed
+}
+
+/// 窓寸 reconcile の第 2 経路（状態照合・design Flow 2 キー決定 (d)／Flow 3 手順 5）。
+///
+/// [`GhostWindows`] の各 scope について shell／balloon 両 target の
+/// [`ScaleReportSource::take_scale_report`] を引き、`Some(新物理寸)` を
+/// [`reconcile_window_size`] で窓 client へ反映する（char＝アンカー保存／balloon＝位置維持）。
+///
+/// 報告は「表示が成立して物理寸が前回適用寸から変わった（**初回表示を含む**）」ことを表す状態で
+/// あり、`Changed<DPI>` エッジの消費順序に依存しない。ゆえに (a) エッジが初回表示より前に消費
+/// されても k₀ と実窓 DPI の差分は残置されず、(b) 既に [`run_dpi_phase`] が再表示して報告を消費
+/// 済みなら取り出しは `None` となり二重に窓を書かない。
+///
+/// [`GhostWindows`] 未挿入（窓生成前）は no-op。窓 entity が引けない scope は `warn!`＋skip
+/// （報告は既に取り出し済み＝次フレームへ持ち越さない——窓が無い以上反映先が無い）。panic しない。
+fn reconcile_reported_sizes<S: ScaleReportSource>(source: &mut S, world: &mut World) {
+    // GhostWindows は小さな Entity 写像（Clone）。target/窓の解決へ world の不変借用を跨がせない。
+    let Some(ghost_windows) = world.get_resource::<GhostWindows>().cloned() else {
+        return;
+    };
+    for scope in ghost_windows.scopes() {
+        let Ok(scope32) = u32::try_from(scope) else {
+            error!(
+                scope,
+                "dpi reconcile: scope が u32 に収まらず target を採番できない → skip"
+            );
+            continue;
+        };
+        for (target, window, kind) in [
+            (
+                shell_target(scope32),
+                ghost_windows.char_window(scope),
+                GhostWindowKind::Char,
+            ),
+            (
+                balloon_target(scope32),
+                ghost_windows.balloon_window(scope),
+                GhostWindowKind::Balloon,
+            ),
+        ] {
+            // 報告が無い（＝物理寸が変わっていない／未表示／既に消費済み）なら何もしない。
+            let Some(new_size) = source.take_scale_report(target) else {
+                continue;
+            };
+            let Some(window) = window else {
+                warn!(
+                    scope,
+                    ?target,
+                    ?new_size,
+                    "dpi reconcile: 窓 entity が無い（GhostWindows 不整合）→ 反映先が無く skip"
+                );
+                continue;
+            };
+            reconcile_window_size(world, window, kind, new_size);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // drain・text フェーズ＋排他 system（tasks.md task 4.2・design「UI 毎フレーム結線 / frame」の
 // Responsibilities フェーズ②（drain）／③（text）・Service Interface・DD-1）
 // ---------------------------------------------------------------------------
@@ -548,6 +1054,11 @@ pub fn run_drain_phase(wiring: &mut Emo2Wiring, world: &mut World) {
         // error! 済み（log-first）。撃ちっぱなしの非ブロック配送契約ゆえ本フェーズは panic しない。
         wiring.presenter.apply(world, cmd);
     }
+    // 窓寸 reconcile の第 2 経路（emo-dpi-scaling task 4.2・design Flow 2 キー決定 (d)／Flow 3 手順 5）:
+    // 本フレームの全 apply が済んだ**後**に、表示成立点の状態照合が積んだ未消費の窓寸要求を取り出して
+    // 窓 client へ反映する（同一フレーム内完結・エッジ消費順序に依存しない）。attach 相の初回
+    // ShowSurface が積む k₀ 補正もここで landing する。
+    reconcile_reported_sizes(&mut wiring.presenter, world);
 }
 
 /// move drain フェーズ（`\![move]` の末端結線・design「frame 相で drain→`apply_move_directive`」・
@@ -652,19 +1163,29 @@ fn resnap_shell_targets(presenter: &EmoPresenter, world: &mut World) {
     let mut sizes: Vec<(usize, SizePx)> = Vec::new();
     for scope in ghost_windows.scopes() {
         // shell target（偶数=2*scope）のみを読む（balloon_target は読まない＝shell 限定・Req4.5）。
-        let Some(view) = presenter.text_slot_view(shell_target(scope as u32)) else {
-            // 初回 ShowSurface 前＝未表示 → skip（no-op・遅延化への防御）。
+        // 窓 client に合わせるべき寸は **物理寸**（k 倍後）であって native 原寸ではない。両者を
+        // 選べる `text_slot_view()`（`surface_size()`／`physical_size()` が隣り合う）ではなく、
+        // **物理寸だけを返す** `target_physical_size` を引く——消費点に取り違えの選択肢を残さない
+        // （native で駆動すると k≠1 で DPI 相 reconcile と同一フレーム内で綱引きになり窓が原寸へ
+        // 引き戻される）。丸めは presenter 側が権威 `scaled_extent` で確定済みゆえ通貨変換のみ行う。
+        // 未表示（初回 ShowSurface 前）・未装着は `None` → skip（no-op・遅延化への防御）。
+        let Some((w, h)) = presenter.target_physical_size(shell_target(scope as u32)) else {
             continue;
         };
-        let (w, h) = view.surface_size(); // emo-present 適用点の実寸（Req4.1・古い寸で駆動しない）。
         // (u32,u32)→i32 変換失敗は skip（Req3.4）。
         let (Ok(w), Ok(h)) = (i32::try_from(w), i32::try_from(h)) else {
-            debug!(scope, w, h, "resnap: 実寸の i32 変換に失敗 → skip（Req3.4）");
+            debug!(
+                scope,
+                w, h, "resnap: 物理寸の i32 変換に失敗 → skip（Req3.4）"
+            );
             continue;
         };
         // 0 は skip（try_from(0)=Ok(0) ゆえ明示的に弾く・Req3.4）。負値は u32 起点ゆえ生じない。
         if w == 0 || h == 0 {
-            debug!(scope, "resnap: 実寸が 0 → skip（Req3.4・try_from(0)=Ok を明示的に弾く）");
+            debug!(
+                scope,
+                "resnap: 物理寸が 0 → skip（Req3.4・try_from(0)=Ok を明示的に弾く）"
+            );
             continue;
         }
         sizes.push((scope, SizePx { w, h }));
@@ -745,8 +1266,15 @@ pub fn emo2_frame_system(world: &mut World) {
     let Some(mut wiring) = world.remove_non_send_resource::<Emo2Wiring>() else {
         return;
     };
-    // donor 慣行: remove して &mut World を各フェーズへ排他に渡し、3 フェーズ駆動後に必ず戻す。
+    // donor 慣行: remove して &mut World を各フェーズへ排他に渡し、全フェーズ駆動後に必ず戻す。
     run_attach_phase(&mut wiring, world);
+    // DPI 追従（attach → dpi → drain …の順・design「run_dpi_phase（frame.rs）」）: attach の**後**に
+    // 置く——装着前は再スケール対象の target が無く、attach と同一フレームで窓が生えた直後の
+    // `Changed<DPI>`（生成時 GetDpiForWindow 実値補正）を同フレームで拾えるようにするため。drain の
+    // **前**に置く理由は責任分界であり順序依存ではない: エッジ駆動の再表示を先に済ませ、残った
+    // 未消費要求（初回表示の k₀ 補正）を drain 末尾の状態照合経路が拾う（両経路は presenter の
+    // 消費規約により二重にも取りこぼしにもならない＝どちらの順でも整合する）。
+    run_dpi_phase(&mut wiring, world);
     run_drain_phase(&mut wiring, world);
     // `\![move]` の末端結線: talk スレッドの MoveCueSink から届いた MoveDirective を drain し
     // apply_move_directive で実窓へ即時反映する（GhostWindows ゲート・R5・task 9.2）。present drain
@@ -756,6 +1284,11 @@ pub fn emo2_frame_system(world: &mut World) {
     // アンカー再適用を駆動する（適用後の実寸を読むため drain の**後**・同一 World・同一 tick 内の
     // 直接呼び・Req4.1/4.3/1.3）。text の前後とは機能的に無関係だが drain の後であることが必須。
     resnap_shell_targets(&wiring.presenter, world);
+    // 文字層 k 追従（emo-dpi-scaling task 7.2・D11-4・Req8）: 適用 k の更新点（dpi 相の `refresh_scale`
+    // ／drain 相の `apply_show`）の**両方の下流**、かつ `present_frame` の**上流**に置く。こうすると
+    // どちらの経路で k が跳ねても同一フレーム内で binding が新 k へ組み直され、直後の描画が新しい物理寸
+    // で走る（旧寸の文字が 1 フレーム残らない）。戻り値（再構築 scope）は観測用ゆえ本番は捨てる。
+    let _ = run_text_scale_phase(&mut wiring);
     run_text_phase(&mut wiring, world, None); // 本番: override なし（FrameTime＋clock で解決）。
     world.insert_non_send_resource(wiring);
 }
@@ -824,6 +1357,8 @@ mod tests {
                 shell: AnimationTable::empty(),
                 balloon: AnimationTable::empty(),
             },
+            shell_author_dpi: 96,
+            balloon_author_dpi: 96,
         }
     }
 
@@ -987,6 +1522,10 @@ mod tests {
         assert!(
             wiring.assets.is_some(),
             "ゲート不成立では assets を take しない（次フレーム再試行のため保持）"
+        );
+        assert!(
+            wiring.balloon_model_scopes().is_empty(),
+            "ゲート不成立では per-scope BalloonModel も記憶しない（attach 相の副作用ゼロ・D11-3）"
         );
 
         // 冪等: 再試行してもゲート不成立なら未装着のまま・panic しない・資産も保持する。
@@ -1701,5 +2240,694 @@ mod tests {
             0,
             "drain 後チャネルは空（全件消費・二重適用なし）"
         );
+    }
+
+    // ── task 4.2: DPI 追従フェーズ（run_dpi_phase／窓寸 reconcile 二経路）の檻 ──────────
+    //
+    // 判断分岐（窓種別の判定・物理寸の算出・反映口の振り分け・エッジ観測の永続性・二経路の
+    // 責任分界）を GPU 不要で決定論に固定する（design「Testing Strategy」振り分け基準 (a)・D9）。
+    // GPU readback 檻（実 k 倍表示の寸法・バイト）は emo-present in-crate＝別プロセス側の領分
+    // （R5.1/R5.3）ゆえここでは組まない——本ファイルへ 2 個目の Compositor を持ち込まない。
+    //
+    // 「書込ゼロ」の観測境界は follow.rs task 2.2 の檻と同一手法を用いる: `SetWindowPosCommand`
+    // の TLS キューは wintf 私有で件数を覗く API が無く `flush()` は偽 HWND へ実 Win32 を撃つため
+    // 使えない。代わりに **`Arrangement.offset` 同期**（`enqueue_window_set_pos` 内で enqueue と
+    // 不可分に対で走る）を witness とし、sentinel が据え置かれたまま＝単一ライター経路を一度も
+    // 通っていない＝窓書込 0 件の決定論的証拠とする。
+
+    use areka_emo_compose::ScaleRatio;
+    use wintf::ecs::layout::{Arrangement, Offset};
+    use wintf::ecs::DPI;
+
+    /// 単一ライター経路を通ったか否かの witness 用 sentinel（実位置と重ならない値）。
+    const WRITER_WITNESS: Offset = Offset { x: -1.0, y: -1.0 };
+
+    /// spawn 時 offset 付きの `Arrangement`（実 pipeline の spawn 位置を模す・follow.rs 檻と同型）。
+    fn arrangement_at(x: f32, y: f32) -> Arrangement {
+        Arrangement {
+            offset: Offset { x, y },
+            ..Default::default()
+        }
+    }
+
+    /// entity の `Arrangement.offset` を読む（未付与は panic で検出）。
+    fn arrangement_offset_of(world: &World, entity: Entity) -> Offset {
+        world
+            .get::<Arrangement>(entity)
+            .expect("Arrangement があるはず")
+            .offset
+    }
+
+    /// 単一ライター経路を通っていない＝窓書込ゼロ（sentinel が据え置かれている）。
+    fn assert_no_write(world: &World, entity: Entity, what: &str) {
+        assert_eq!(
+            arrangement_offset_of(world, entity),
+            WRITER_WITNESS,
+            "{what}: 単一ライター経路を通った痕跡がある（書込ゼロのはず）"
+        );
+    }
+
+    /// 全窓の書込 witness を sentinel へ戻す（フェーズ境界で「以降の書込」だけを見るため）。
+    fn reset_write_witness(world: &mut World, gw: &GhostWindows) {
+        for scope in gw.scopes().collect::<Vec<_>>() {
+            for e in [
+                gw.char_window(scope).expect("char 窓がある"),
+                gw.balloon_window(scope).expect("balloon 窓がある"),
+            ] {
+                world
+                    .entity_mut(e)
+                    .insert(arrangement_at(WRITER_WITNESS.x, WRITER_WITNESS.y));
+            }
+        }
+    }
+
+    /// resnap 檻の World（2 スコープ・偽 HWND・MonitorSnapshot）へ、書込 witness の
+    /// `Arrangement`（sentinel）と `DPI`（96＝author_dpi 既定と等倍）を全窓へ付与した DPI 相の檻。
+    fn dpi_world() -> (World, GhostWindows) {
+        let (mut world, gw) = resnap_world();
+        for scope in gw.scopes().collect::<Vec<_>>() {
+            for e in [
+                gw.char_window(scope).expect("char 窓がある"),
+                gw.balloon_window(scope).expect("balloon 窓がある"),
+            ] {
+                world.entity_mut(e).insert((
+                    arrangement_at(WRITER_WITNESS.x, WRITER_WITNESS.y),
+                    DPI::from_dpi(96, 96),
+                ));
+            }
+        }
+        (world, gw)
+    }
+
+    /// 決定論 fake の再スケール報告源（GPU 不要で**二経路の結線**を檻に入れる）。
+    ///
+    /// `EmoPresenter` の消費規約（`refresh_scale` が再表示成立時に自ら `pending_resize` を
+    /// take して返す／ゲート不成立なら一切触れない）を写した最小の fake。実 presenter 側の
+    /// 規約そのものは emo-present in-crate テストが所有し、ここでは **frame 側の結線**
+    /// （両経路を毎フレーム呼ぶ・`Some` のみ reconcile する）だけを見る。
+    #[derive(Default)]
+    struct FakeReports {
+        /// `refresh_scale_report` が返す報告（target 番号→物理寸・取り出しで消える）。
+        refresh: BTreeMap<u32, (u32, u32)>,
+        /// `take_scale_report` が返す未消費報告（同上）。
+        pending: BTreeMap<u32, (u32, u32)>,
+        /// 呼出記録（`("refresh"|"take", target 番号)`・呼ばれたこと自体の非空虚性検査用）。
+        calls: Vec<(&'static str, u32)>,
+    }
+
+    impl FakeReports {
+        /// 指定種別の呼出だけを target 番号の列として取り出す。
+        fn calls_of(&self, kind: &str) -> Vec<u32> {
+            self.calls
+                .iter()
+                .filter(|(k, _)| *k == kind)
+                .map(|(_, t)| *t)
+                .collect()
+        }
+    }
+
+    impl ScaleReportSource for FakeReports {
+        fn refresh_scale_report(
+            &mut self,
+            _world: &mut World,
+            target: TargetId,
+        ) -> Option<(u32, u32)> {
+            self.calls.push(("refresh", target.0));
+            let report = self.refresh.remove(&target.0);
+            if report.is_some() {
+                // presenter 規約: 再表示が成立したなら状態照合が積んだ要求は本メソッドが消費する
+                // （同一フレームの drain が二度目を拾わない）。
+                self.pending.remove(&target.0);
+            }
+            report
+        }
+
+        fn take_scale_report(&mut self, target: TargetId) -> Option<(u32, u32)> {
+            self.calls.push(("take", target.0));
+            self.pending.remove(&target.0)
+        }
+    }
+
+    /// 窓種別の判定（`spawn.rs` の marker から・純関数）: char のみ／balloon のみ／どちらでもない／
+    /// 両方同居（結線バグ）の 4 分岐を全網羅する。
+    #[test]
+    fn classify_ghost_window_covers_all_marker_combinations() {
+        assert_eq!(
+            classify_ghost_window(Some(3), None),
+            GhostWindowClass::Ghost(3, GhostWindowKind::Char),
+            "CharWindowMarker のみ → キャラ窓（scope 保持）"
+        );
+        assert_eq!(
+            classify_ghost_window(None, Some(7)),
+            GhostWindowClass::Ghost(7, GhostWindowKind::Balloon),
+            "BalloonWindowMarker のみ → バルーン窓（scope 保持）"
+        );
+        assert_eq!(
+            classify_ghost_window(None, None),
+            GhostWindowClass::NotGhost,
+            "どちらの marker も無い窓は DPI 相の対象外"
+        );
+        assert_eq!(
+            classify_ghost_window(Some(0), Some(0)),
+            GhostWindowClass::Ambiguous,
+            "両 marker 同居は spawn の排他付与に反する結線バグ（縮退させる）"
+        );
+    }
+
+    /// 反映口の振り分け（D8）: **char 窓は `resize_window_to`**（アンカー保存＝Bottom 再射影で
+    /// 位置が動く）・**balloon 窓は `resize_window_keep_position`**（位置維持）。観測可能な差
+    /// （position が動く／動かない）で振り分けを反証する。
+    #[test]
+    fn reconcile_window_size_routes_char_to_anchor_resize_and_balloon_to_keep_position() {
+        let (mut world, gw) = dpi_world();
+        let char0 = gw.char_window(0).expect("char 窓がある");
+        let balloon0 = gw.balloon_window(0).expect("balloon 窓がある");
+
+        // --- balloon を先に見る（char の resize は BalloonFollow で balloon を動かすため）---
+        assert_eq!(
+            pos_of(&world, balloon0),
+            Some(Point { x: 1071, y: 732 }),
+            "前提: balloon 初期位置"
+        );
+        assert!(
+            reconcile_window_size(&mut world, balloon0, GhostWindowKind::Balloon, (446, 316)),
+            "balloon: 異寸ゆえ書込が成立する"
+        );
+        assert_eq!(
+            size_of(&world, balloon0),
+            Some(SizeI::new(446, 316)),
+            "balloon: 新物理寸へ更新"
+        );
+        assert_eq!(
+            pos_of(&world, balloon0),
+            Some(Point { x: 1071, y: 732 }),
+            "balloon: 位置は維持される（resize_window_keep_position＝アンカー再射影しない）"
+        );
+
+        // --- char: アンカー保存リサイズ（Bottom 再射影で y と中央 x が動く）---
+        assert_eq!(
+            pos_of(&world, char0),
+            Some(Point { x: 1483, y: 757 }),
+            "前提: char 初期位置"
+        );
+        assert!(
+            reconcile_window_size(&mut world, char0, GhostWindowKind::Char, (868, 1374)),
+            "char: 異寸ゆえ書込が成立する"
+        );
+        assert_eq!(
+            size_of(&world, char0),
+            Some(SizeI::new(868, 1374)),
+            "char: 新物理寸へ更新"
+        );
+        assert_eq!(
+            pos_of(&world, char0),
+            Some(Point { x: 1266, y: 70 }),
+            "char: Bottom 再射影（y=1444−1374=70）＋下端中央保存（x=1483+217−434=1266）"
+        );
+    }
+
+    /// 縮退（log-first・panic しない）: i32 域超過・0 寸は窓へ書かない。同寸はべき等 skip で
+    /// 書込ゼロ（`false` は失敗ではない）。
+    #[test]
+    fn reconcile_window_size_guards_and_idempotent_skip_write_nothing() {
+        let (mut world, gw) = dpi_world();
+        let char0 = gw.char_window(0).expect("char 窓がある");
+        let balloon0 = gw.balloon_window(0).expect("balloon 窓がある");
+
+        // i32 域超過（u32 なら表現できるが窓寸に渡せない）→ 書かない。
+        assert!(!reconcile_window_size(
+            &mut world,
+            char0,
+            GhostWindowKind::Char,
+            (u32::MAX, 687)
+        ));
+        // 0 寸（native 0 由来の退化）→ 書かない。
+        assert!(!reconcile_window_size(
+            &mut world,
+            char0,
+            GhostWindowKind::Char,
+            (0, 687)
+        ));
+        assert!(!reconcile_window_size(
+            &mut world,
+            balloon0,
+            GhostWindowKind::Balloon,
+            (446, 0)
+        ));
+        // 同寸（k 不変で丸め後も同寸）→ べき等 skip（false は失敗でなく「書かなかった」）。
+        assert!(!reconcile_window_size(
+            &mut world,
+            char0,
+            GhostWindowKind::Char,
+            (434, 687)
+        ));
+        assert!(!reconcile_window_size(
+            &mut world,
+            balloon0,
+            GhostWindowKind::Balloon,
+            (223, 158)
+        ));
+
+        assert_eq!(size_of(&world, char0), Some(SizeI::new(434, 687)), "char 寸不変");
+        assert_eq!(
+            size_of(&world, balloon0),
+            Some(SizeI::new(223, 158)),
+            "balloon 寸不変"
+        );
+        assert_no_write(&world, char0, "縮退・べき等 skip");
+        assert_no_write(&world, balloon0, "縮退・べき等 skip");
+    }
+
+    /// **本 task の到達判定（tasks.md 4.2）**: 窓 DPI を差し替えた次のフェーズ実行で、当該窓の
+    /// client が `scaled_extent(applied, native)` と一致する。
+    ///
+    /// 96→192（k=2/1）へ `DPI` を差し替え、presenter が報告する新物理寸として
+    /// `ScaleRatio::scaled_extent(native)` を与える（実 presenter の報告値はこの丸め権威で
+    /// 作られる——emo-present in-crate が所有する契約）。`dpi_phase_with` 一回で char 窓の
+    /// `WindowPos.size` が同一の `scaled_extent` に一致することを反証する（Req3.1/4.1/4.2）。
+    #[test]
+    fn dpi_phase_reconciles_changed_window_to_scaled_extent() {
+        let (mut world, gw) = dpi_world();
+        let char0 = gw.char_window(0).expect("char 窓がある");
+        let native = (434u32, 687u32);
+        assert_eq!(
+            size_of(&world, char0),
+            Some(SizeI::new(native.0 as i32, native.1 as i32)),
+            "前提: 窓 client は k=1 相当の native 寸"
+        );
+
+        // 窓 DPI 192（k = 192/96 = 2/1）へ差し替え → Changed<DPI> 発火。
+        world.entity_mut(char0).insert(DPI::from_dpi(192, 192));
+        let k = ScaleRatio::new(192, 96).expect("非ゼロ比");
+        let scaled = k.scaled_extent(native.0, native.1);
+
+        let mut source = FakeReports::default();
+        source.refresh.insert(shell_target(0).0, scaled);
+        let mut state = None;
+        dpi_phase_with(&mut source, &mut state, &mut world);
+
+        assert_eq!(
+            size_of(&world, char0),
+            Some(SizeI::new(scaled.0 as i32, scaled.1 as i32)),
+            "DPI 差替後の同一フレームで窓 client＝scaled_extent(applied, native)"
+        );
+        assert_eq!(scaled, (868, 1374), "k=2/1・native 434×687 の検算値");
+        assert!(
+            source.calls_of("refresh").contains(&shell_target(0).0),
+            "非空虚性: 当該窓の shell target に対し refresh が呼ばれた"
+        );
+    }
+
+    /// 二経路の責任分界 (1)（**二重 resize しない**）: `refresh_scale` が再表示に成立して報告を
+    /// 返した場合、その要求は presenter 自身が消費済みであり、同一フレームの drain 相 reconcile は
+    /// **窓へ一切書かない**（sentinel をフェーズ境界で戻して「以降の書込」だけを見る）。
+    #[test]
+    fn drain_reconcile_writes_nothing_when_refresh_already_consumed_the_report() {
+        let (mut world, gw) = dpi_world();
+        let char0 = gw.char_window(0).expect("char 窓がある");
+        world.entity_mut(char0).insert(DPI::from_dpi(192, 192));
+
+        let mut source = FakeReports::default();
+        // 状態照合が積んだ要求（pending）と、再表示成立で返る報告（refresh）は**同一の 1 件**。
+        source.refresh.insert(shell_target(0).0, (868, 1374));
+        source.pending.insert(shell_target(0).0, (868, 1374));
+
+        let mut state = None;
+        dpi_phase_with(&mut source, &mut state, &mut world);
+        assert_eq!(
+            size_of(&world, char0),
+            Some(SizeI::new(868, 1374)),
+            "DPI 相で reconcile 済み（非空虚性の前提）"
+        );
+
+        // フェーズ境界: witness を戻し、以降（drain 相）の書込だけを観測する。
+        reset_write_witness(&mut world, &gw);
+        reconcile_reported_sizes(&mut source, &mut world);
+
+        assert!(
+            source.calls_of("take").contains(&shell_target(0).0),
+            "非空虚性: drain 相は take を実際に呼んでいる（呼んだ上で None だった）"
+        );
+        assert_no_write(&world, char0, "drain 相の二重 resize");
+        assert_eq!(
+            size_of(&world, char0),
+            Some(SizeI::new(868, 1374)),
+            "窓寸は DPI 相の結果のまま（二重適用なし）"
+        );
+    }
+
+    /// 二経路の責任分界 (2)（**取りこぼさない**・design Flow 3 手順 5）: `refresh_scale` の
+    /// ゲートが不成立で報告が返らなくても、表示成立点が積んだ未消費要求（初回表示の k₀ 補正）は
+    /// drain 相の reconcile が同一フレーム内で拾って窓寸へ反映する。
+    #[test]
+    fn drain_reconcile_applies_undrained_report_when_refresh_gate_fails() {
+        let (mut world, gw) = dpi_world();
+        let balloon0 = gw.balloon_window(0).expect("balloon 窓がある");
+
+        let mut source = FakeReports::default();
+        // refresh は空（k 不変等でゲート不成立＝報告なし）・pending のみ未消費で残る。
+        source.pending.insert(balloon_target(0).0, (279, 198));
+
+        let mut state = None;
+        dpi_phase_with(&mut source, &mut state, &mut world);
+        assert_no_write(&world, balloon0, "DPI 相はゲート不成立ゆえ書かない");
+
+        reconcile_reported_sizes(&mut source, &mut world);
+        assert_eq!(
+            size_of(&world, balloon0),
+            Some(SizeI::new(279, 198)),
+            "未消費の要求を drain 相が拾って窓 client へ反映（取りこぼしなし）"
+        );
+        assert_eq!(
+            pos_of(&world, balloon0),
+            Some(Point { x: 1071, y: 732 }),
+            "balloon は位置維持（resize_window_keep_position 経路）"
+        );
+    }
+
+    /// 初回 run の全窓マッチ（`SystemState::new` 仕様）は churn を生まない: 報告が無ければ
+    /// 窓書込ゼロ。ただし**全窓に対し refresh が実際に呼ばれている**ことも同時に見る（空虚な
+    /// 「何も起きなかった」で通さない）。
+    #[test]
+    fn dpi_phase_first_run_matches_all_windows_without_churn() {
+        let (mut world, gw) = dpi_world();
+        let mut source = FakeReports::default(); // 報告なし＝k 差分なし相当
+        let mut state = None;
+
+        dpi_phase_with(&mut source, &mut state, &mut world);
+
+        // 初回 run は全窓（2 スコープ×char/balloon＝4 target）へマッチする（非空虚性）。
+        let mut refreshed = source.calls_of("refresh");
+        refreshed.sort_unstable();
+        assert_eq!(
+            refreshed,
+            vec![
+                shell_target(0).0,
+                balloon_target(0).0,
+                shell_target(1).0,
+                balloon_target(1).0
+            ]
+            .into_iter()
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>(),
+            "初回 run は全ゴースト窓へマッチする（SystemState::new 仕様）"
+        );
+        // 報告が無ければ窓へは一切書かない（べき等 skip と合わせて churn ゼロ）。
+        for scope in [0usize, 1] {
+            assert_no_write(&world, gw.char_window(scope).unwrap(), "初回 run churn");
+            assert_no_write(&world, gw.balloon_window(scope).unwrap(), "初回 run churn");
+        }
+    }
+
+    /// `Changed<DPI>` が無いフレームは**仕事をしない**: 2 回目の run では refresh を一度も呼ばず
+    /// 窓書込もゼロ（永続 `SystemState` が `last_run` を跨いで保つ＝毎フレーム全マッチしない）。
+    #[test]
+    fn dpi_phase_without_dpi_change_does_no_work() {
+        let (mut world, gw) = dpi_world();
+        let mut source = FakeReports::default();
+        let mut state = None;
+
+        // 1 回目（初回 run の全マッチを消費）。
+        dpi_phase_with(&mut source, &mut state, &mut world);
+        assert!(
+            !source.calls_of("refresh").is_empty(),
+            "非空虚性: 1 回目は実際にマッチしている"
+        );
+
+        // 2 回目: DPI を一切触っていない → マッチ 0 件＝refresh 呼出ゼロ・窓書込ゼロ。
+        source.calls.clear();
+        dpi_phase_with(&mut source, &mut state, &mut world);
+        assert!(
+            source.calls_of("refresh").is_empty(),
+            "Changed<DPI> 無しのフレームは refresh を呼ばない（実質 no-op）: {:?}",
+            source.calls
+        );
+        for scope in [0usize, 1] {
+            assert_no_write(&world, gw.char_window(scope).unwrap(), "変化なしフレーム");
+            assert_no_write(
+                &world,
+                gw.balloon_window(scope).unwrap(),
+                "変化なしフレーム",
+            );
+        }
+
+        // 3 回目: 1 窓だけ DPI を差し替える → その窓だけがマッチする（検知が生きている証拠）。
+        let char1 = gw.char_window(1).expect("char 窓がある");
+        world.entity_mut(char1).insert(DPI::from_dpi(144, 144));
+        source.calls.clear();
+        dpi_phase_with(&mut source, &mut state, &mut world);
+        assert_eq!(
+            source.calls_of("refresh"),
+            vec![shell_target(1).0],
+            "変化した窓の target だけが refresh 対象"
+        );
+    }
+
+    /// author_dpi の引き当て（取り違え防止）: shell target には shell 宣言・balloon target には
+    /// balloon 宣言が渡る。両者 `u16` ゆえ取り違えてもコンパイルは通る——**異なる値**で引き当てを
+    /// 反証する（入れ替えれば必ず落ちる）。未知 target は既定 96 へ縮退する（panic しない）。
+    #[test]
+    fn author_dpis_pairs_shell_and_balloon_declarations() {
+        let assets = synth_assets(&[(0, 0)]);
+        let plan = plan_attachments(&[0usize], &assets);
+        let item = &plan.items[0];
+        // shell=120（125% 原稿）・balloon=72（意図的に異なる値・入れ替え検出用）。
+        let dpis = AuthorDpis {
+            shell: 120,
+            balloon: 72,
+        };
+
+        assert_eq!(
+            dpis.for_target(item, item.shell_target),
+            120,
+            "shell target には shell_author_dpi が渡る"
+        );
+        assert_eq!(
+            dpis.for_target(item, item.balloon_target),
+            72,
+            "balloon target には balloon_author_dpi が渡る"
+        );
+        assert_eq!(
+            dpis.for_target(item, TargetId(9999)),
+            96,
+            "当該 scope のいずれの target でもない＝結線バグ → 既定 96 へ縮退（panic しない）"
+        );
+    }
+
+    // ── task 7.2: 文字層 k 追従フェーズ（run_text_scale_phase・D11-3/D11-4・R8.1/8.5/8.6） ──
+    //
+    // 本番関数をそのまま駆動する（シームを噛ませない）。`Some(view)` の適用そのもの（binding
+    // 再構築・供給面破棄・churn ガード）は GPU 装着を要するため spine（in-crate GPU ハーネス）が
+    // 実経路で檻に入れる。ここでは GPU 不要で観測できる 2 点——(a) 走査対象が balloon 装着 scope に
+    // 限られること、(b) 表示未確立の縮退が **scope ごとに一度だけ** 鳴ること——を固定する。
+
+    /// 素の結線資源（GPU/資産不要・`run_text_scale_phase` の headless 駆動用）。
+    fn headless_wiring() -> Emo2Wiring {
+        headless_wiring_with(mpsc::channel::<PresentCommand>().1, zero_clock())
+    }
+
+    /// 捕捉行のうち `level` かつ本文に `needle` を含む件数（他フェーズの警告と混ざらないよう絞る）。
+    fn count_level_containing(logs: &[String], level: &str, needle: &str) -> usize {
+        let lv = format!("level={level}");
+        logs.iter()
+            .filter(|l| l.contains(&lv) && l.contains(needle))
+            .count()
+    }
+
+    /// balloon 未装着（`balloon_models` 空）では走査対象がゼロ＝完全 no-op（警告も出さない）。
+    ///
+    /// 「毎フレーム走査」が attach 前のフレームで鳴き続けないこと（起動直後の log 汚染の禁止）と、
+    /// shell しか無い状況で文字層へ触れないことを同時に固定する。
+    #[test]
+    fn text_scale_phase_without_balloon_models_is_silent_noop() {
+        let mut wiring = headless_wiring();
+
+        let logs = capture_logs(|| {
+            assert!(
+                run_text_scale_phase(&mut wiring).is_empty(),
+                "balloon 未装着では再構築 scope なし"
+            );
+        });
+
+        assert_eq!(count_level(&logs, "WARN"), 0, "attach 前は何も鳴らさない: {logs:?}");
+        assert_eq!(count_level(&logs, "ERROR"), 0, "attach 前は何も鳴らさない: {logs:?}");
+    }
+
+    /// R8.6 縮退（log-first だが log spam にしない）: `text_slot_view` が `None`（表示未確立）の
+    /// scope は再追従せず skip し、**警告は scope ごとに一度だけ**鳴る（毎フレーム走査ゆえ素朴な
+    /// `warn!` は毎フレーム鳴ってしまう）。
+    ///
+    /// 実源（何も装着していない `EmoPresenter`＝`text_slot_view` が常に `None`）へ、attach 相と同じ
+    /// 形で per-scope の [`BalloonModel`] を記憶させた状態を作り、3 フレーム相当を走らせる。
+    #[test]
+    fn text_scale_phase_warns_once_per_scope_when_view_unavailable() {
+        let mut wiring = headless_wiring();
+        // attach 相が記憶するのと同じ形（scope→model）。presenter は未装着ゆえ view は常に None。
+        wiring
+            .balloon_models
+            .insert(0, areka_parsers::balloon::parse_str("", None));
+        wiring
+            .balloon_models
+            .insert(1, areka_parsers::balloon::parse_str("", None));
+
+        let first = capture_logs(|| {
+            assert!(
+                run_text_scale_phase(&mut wiring).is_empty(),
+                "view None では再構築しない（縮退 skip・R8.6）"
+            );
+        });
+        assert_eq!(
+            count_level(&first, "WARN"),
+            2,
+            "初回は縮退した scope ごとに 1 回ずつ鳴る（0 と 1 の 2 件・R8.6 の観測可能性）: {first:?}"
+        );
+
+        // 2・3 フレーム目: 状態が変わっていない以上、同じ警告を鳴らし直さない（log spam の禁止）。
+        let rest = capture_logs(|| {
+            run_text_scale_phase(&mut wiring);
+            run_text_scale_phase(&mut wiring);
+        });
+        assert_eq!(
+            count_level(&rest, "WARN"),
+            0,
+            "同一状態が続く間は再度鳴らさない（エッジガード）: {rest:?}"
+        );
+        assert_eq!(count_level(&rest, "ERROR"), 0, "縮退は失敗ではない: {rest:?}");
+
+        // 借用/poison を残さない（None 経路は runtime に触れない）。
+        assert!(wiring.runtime.try_borrow_mut().is_ok(), "runtime を汚さない");
+    }
+
+    /// **排他 system への組み込み**（call-site の檻）: [`emo2_frame_system`] は毎フレーム
+    /// [`run_text_scale_phase`] を駆動する。
+    ///
+    /// 関数が正しくても system から呼ばれていなければ本番では何も起きない——その 1 行の欠落を
+    /// 検出する。未装着 presenter（`text_slot_view` が常に `None`）＋ attach 相と同形の記憶済み
+    /// [`BalloonModel`] を持つ World で 1 フレーム回すと R8.6 の縮退警告がちょうど 1 回鳴り、
+    /// 2 フレーム目は鳴らない（＝呼ばれている、かつエッジガードが system 越しに効いている）。
+    #[test]
+    fn emo2_frame_system_drives_text_scale_phase_every_frame() {
+        let (mut world, _gw) = dpi_world();
+        let (_tx, rx) = mpsc::channel::<PresentCommand>();
+        let mut wiring = headless_wiring_with(rx, zero_clock());
+        // attach 相が記憶するのと同じ形（scope→model）。GPU 資源が無いため attach 相自体は空回りする。
+        wiring
+            .balloon_models
+            .insert(0, areka_parsers::balloon::parse_str("", None));
+        world.insert_non_send_resource(wiring);
+
+        let first = capture_logs(|| emo2_frame_system(&mut world));
+        assert_eq!(
+            count_level_containing(&first, "WARN", "text-scale"),
+            1,
+            "1 フレーム目で文字層 k 追従フェーズが駆動され縮退が 1 回鳴る（system 組み込みの証跡）: {first:?}"
+        );
+
+        let second = capture_logs(|| emo2_frame_system(&mut world));
+        assert_eq!(
+            count_level_containing(&second, "WARN", "text-scale"),
+            0,
+            "2 フレーム目は同一状態ゆえ鳴らない（エッジガードが system 越しに効く）: {second:?}"
+        );
+        assert!(
+            world.get_non_send_resource::<Emo2Wiring>().is_some(),
+            "wiring は remove→insert で必ず戻る"
+        );
+    }
+
+    /// **本番経路**での `SystemState` 永続性（Flow 2 キー決定 (b)・churn 禁止）: `run_dpi_phase` は
+    /// 観測器を `Emo2Wiring.dpi_state` へ**保持**し、run を跨いで `last_run` を進める。
+    ///
+    /// `dpi_phase_with` へテスト側の state を渡す檻では「本番が wiring のフィールドを使っている」
+    /// ことを一切見ないため、ここでは `run_dpi_phase(&mut wiring, ..)` だけを叩き、その**副作用**
+    /// （`wiring.dpi_state` の生成と `last_run` の前進）を private フィールド越しに観測する。
+    ///
+    /// 非空虚性の核: 同一 World で**新規** `SystemState` を作ると全窓（4 窓）へマッチする——
+    /// すなわち「毎 run 作り直す実装」は毎フレーム全窓を refresh する churn になる。本番の
+    /// 永続観測器が 0 件であることと対にして、永続性が実際に効いていることを弁別する。
+    #[test]
+    fn run_dpi_phase_persists_system_state_across_frames_in_production_path() {
+        let (mut world, gw) = dpi_world();
+        let (_tx, rx) = mpsc::channel::<PresentCommand>();
+        let mut wiring = headless_wiring_with(rx, zero_clock());
+        assert!(
+            wiring.dpi_state.is_none(),
+            "前提: 観測器は初回 run まで未生成（SystemState::new は &mut World を要する）"
+        );
+
+        // 1 フレーム目（本番経路）: 初回 run の全窓マッチをここで消費する。
+        run_dpi_phase(&mut wiring, &mut world);
+        assert!(
+            wiring.dpi_state.is_some(),
+            "run_dpi_phase は観測器を wiring へ保持しなければならない（毎 run 作り直せば churn）"
+        );
+
+        // 1 フレーム目の直後: DPI を一切触っていないので、永続観測器のマッチは 0 件。
+        let matched_after_first = wiring
+            .dpi_state
+            .as_mut()
+            .expect("生成済み")
+            .get(&world)
+            .iter()
+            .count();
+        assert_eq!(
+            matched_after_first, 0,
+            "永続観測器は初回 run で Changed を消費済み＝以降はマッチしない"
+        );
+
+        // 非空虚性: 同一 World で新規 SystemState を作れば全 4 窓へマッチする（＝作り直し実装の churn）。
+        let mut fresh: SystemState<DpiChangedQuery> = SystemState::new(&mut world);
+        assert_eq!(
+            fresh.get(&world).iter().count(),
+            4,
+            "新規 SystemState は全窓へマッチする（この差が永続性の効果そのもの）"
+        );
+
+        // 永続観測器は「変化しなくなった」のではなく、実変化はきちんと拾う（恒久的な盲目でない）。
+        world
+            .entity_mut(gw.char_window(1).expect("char 窓がある"))
+            .insert(DPI::from_dpi(144, 144));
+        let matched_after_change = wiring
+            .dpi_state
+            .as_mut()
+            .expect("生成済み")
+            .get(&world)
+            .iter()
+            .count();
+        assert_eq!(
+            matched_after_change, 1,
+            "実際に DPI が変わった 1 窓だけを拾う（検知が生きている）"
+        );
+    }
+
+    /// 結線の疎通（run_dpi_phase／emo2_frame_system）: 実 `EmoPresenter`（未装着）と `Changed<DPI>`
+    /// のある World で `emo2_frame_system` を回しても、報告源が何も返さないため窓書込はゼロで
+    /// panic しない。フェーズが排他 system へ組み込まれていること自体を固定する。
+    #[test]
+    fn emo2_frame_system_runs_dpi_phase_without_writes_when_unattached() {
+        let (mut world, gw) = dpi_world();
+        let (_tx, rx) = mpsc::channel::<PresentCommand>();
+        world.insert_non_send_resource(headless_wiring_with(rx, zero_clock()));
+
+        // DPI 差替（Changed 発火）→ 排他 system を 2 フレーム回す。
+        world
+            .entity_mut(gw.char_window(0).unwrap())
+            .insert(DPI::from_dpi(192, 192));
+        emo2_frame_system(&mut world);
+        emo2_frame_system(&mut world);
+
+        assert!(
+            world.get_non_send_resource::<Emo2Wiring>().is_some(),
+            "wiring は remove→insert で必ず戻る"
+        );
+        for scope in [0usize, 1] {
+            assert_no_write(&world, gw.char_window(scope).unwrap(), "未装着 presenter");
+            assert_no_write(
+                &world,
+                gw.balloon_window(scope).unwrap(),
+                "未装着 presenter",
+            );
+        }
     }
 }

@@ -11,8 +11,10 @@
 //! - 時刻は常に注入（`talk_time`）・実時間 sleep 不使用（決定論）。
 
 use std::cell::RefCell;
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::rc::Rc;
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use areka_actor::reply_channel;
@@ -33,9 +35,10 @@ use areka_parsers::shell::{AppendTarget, DefRef, Element, ElementPath, Shell, Su
 use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::World;
+use tracing::subscriber::Interest;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
-use wintf::ecs::{GraphicsCommandList, GraphicsCore, VisualGraphics, WucGraphicsResource};
+use wintf::ecs::{DPI, GraphicsCommandList, GraphicsCore, VisualGraphics, WucGraphicsResource};
 use wintf_winmsg_executor::{FilterResult, MessageLoop};
 
 // ── GPU/WUC フィクスチャ（emo-present presenter.rs テストと同一方針） ──────────────────
@@ -145,22 +148,183 @@ fn show_surface(presenter: &mut EmoPresenter, world: &mut World, target: TargetI
 /// sakura/kero 相当の 2 target（原寸が異なる 2 バルーン）を表示確立まで組む。
 /// 返り値: (presenter, window0, window1)。原寸は target0=(140,80)・target1=(120,60)。
 fn setup_two_targets(world: &mut World) -> (EmoPresenter, Entity, Entity) {
-    let window0 = world.spawn_empty().id();
-    let window1 = world.spawn_empty().id();
+    // 窓 entity には `DPI` component を**明示的に**載せる（areka-P0-emo-dpi-scaling task 3.2）。
+    // component 不在は `derive_scale` の縮退分岐（error! ＋ k=1.0）を通るため、不在に頼ると
+    // 縮退が正常経路になりすまして観測できない。作者基準 DPI 96 と揃えて k=1.0 を成立させる。
+    let window0 = world.spawn(DPI::from_dpi(96, 96)).id();
+    let window1 = world.spawn(DPI::from_dpi(96, 96)).id();
 
     let (emo_world0, atlas0) = build_target_assets(140, 80, 0x11);
     let (emo_world1, atlas1) = build_target_assets(120, 60, 0x22);
 
     let mut presenter = EmoPresenter::new();
     presenter
-        .attach_target(world, TargetId(0), window0, emo_world0, atlas0)
+        // 作者基準 DPI は正典既定の 96（ukadoc・D1）。本番は boot が descript の実値を
+        // 供給する（本テストは窓 DPI 96 と揃えて k=1.0＝従来と同一の表示寸・描画結果）。
+        .attach_target(world, TargetId(0), window0, emo_world0, atlas0, 96)
         .expect("attach_target(0) 失敗");
     presenter
-        .attach_target(world, TargetId(1), window1, emo_world1, atlas1)
+        .attach_target(world, TargetId(1), window1, emo_world1, atlas1, 96)
         .expect("attach_target(1) 失敗");
     show_surface(&mut presenter, world, TargetId(0));
     show_surface(&mut presenter, world, TargetId(1));
     (presenter, window0, window1)
+}
+
+// ── k≠1 の単一 target フィクスチャ（task 7.3・R8.2 の `from_view` 檻用） ─────────────────
+
+/// k≠1 檻の native 原寸（作者画像空間・k 不変であるべき寸）。
+///
+/// 140/80 とも偶数ゆえ k=2 では `scaled_extent` が端数を作らず、`round(physical / k)` が
+/// native へ**厳密**に戻る（本檻が問うのは丸めではなく「どちらの寸を読むか」の向きゆえ、
+/// 端数を混ぜて論点をぼかさない。端数丸めの檻は in-crate `binding_derives_image_size_*` が所有）。
+const SCALED_NATIVE: (u32, u32) = (140, 80);
+
+/// 窓 DPI を指定して balloon 相当の単一 target（native 原寸 [`SCALED_NATIVE`]）を表示確立まで組む。
+///
+/// 作者基準 DPI は正典既定の 96（ukadoc・D1）ゆえ **k = window_dpi / 96**（192 → k=2）。
+/// `setup_two_targets` は k=1.0 に固定されており、k=1 では `surface_size()` と `physical_size()`
+/// が恒等で**取り違えが数値的に観測できない**——本フィクスチャはその盲点を潰すためにある。
+fn setup_scaled_target(world: &mut World, window_dpi: u16) -> (EmoPresenter, Entity) {
+    let window = world.spawn(DPI::from_dpi(window_dpi, window_dpi)).id();
+    let (emo_world, atlas) = build_target_assets(SCALED_NATIVE.0, SCALED_NATIVE.1, 0x33);
+    let mut presenter = EmoPresenter::new();
+    presenter
+        .attach_target(world, TargetId(0), window, emo_world, atlas, 96)
+        .expect("attach_target(0) 失敗");
+    show_surface(&mut presenter, world, TargetId(0));
+    (presenter, window)
+}
+
+// ── ログ捕捉ハーネス（R8.7 の檻・`crates/areka/src/placement/test_support.rs` の硬化版を移植） ──
+//
+// **素朴な `tracing::subscriber::with_default` だけでは非決定的に取りこぼす**（再現率 12%）。
+// `with_default` はスレッドローカルだが callsite の interest キャッシュは**プロセス大域**で、
+// 「最初に踏んだスレッドが勝つ」——subscriber を持たない別テストが当該 callsite を先に踏むと
+// `NoSubscriber` → `Interest::never()` が焼き付き、以後イベントが捨てられる。対策は
+// (1) probe dispatcher を **2 個**常駐させて `has_just_one` を恒久的に偽へ落とし、
+// (2) 捕捉窓の**内側**で `rebuild_interest_cache()` を 1 回叩いて焼き残りを解毒すること。
+// 単体実行や `--test-threads=1` では 0% ＝素朴な検証では絶対に見つからない毒ゆえ、
+// 先例（areka placement / emo-compose log_capture）と同一の構造をここでも採る。
+
+/// 捕捉した 1 イベント（level ＋ フィールド名 → Debug 表現）。
+#[derive(Debug, Clone)]
+struct LogEvent {
+    level: tracing::Level,
+    fields: BTreeMap<String, String>,
+}
+
+impl LogEvent {
+    /// `message` フィールド（本文）。無ければ空文字（panic しない）。
+    fn message(&self) -> &str {
+        self.fields.get("message").map(String::as_str).unwrap_or("")
+    }
+
+    /// 構造化フィールドの Debug 表現。**欠落は失敗**（フィールド名も 7.4 の判定契約のうち）。
+    fn field(&self, name: &str) -> &str {
+        self.fields
+            .get(name)
+            .unwrap_or_else(|| panic!("ログフィールド `{name}` が無い: {:?}", self.fields))
+    }
+}
+
+/// 全フィールドを Debug 表現で拾う visitor（`record_u64`／`record_f64`／`record_str` の
+/// 既定実装がすべて `record_debug` へ転送するため 1 本で型を問わず捕捉できる）。
+struct FieldGrab<'a>(&'a mut BTreeMap<String, String>);
+
+impl tracing::field::Visit for FieldGrab<'_> {
+    fn record_debug(&mut self, f: &tracing::field::Field, v: &dyn std::fmt::Debug) {
+        self.0.insert(f.name().to_string(), format!("{v:?}"));
+    }
+}
+
+/// イベントを溜めるだけの最小 subscriber。
+#[derive(Clone, Default)]
+struct CaptureSubscriber(Arc<Mutex<Vec<LogEvent>>>);
+
+impl tracing::Subscriber for CaptureSubscriber {
+    fn enabled(&self, _meta: &tracing::Metadata<'_>) -> bool {
+        true
+    }
+    fn new_span(&self, _attrs: &tracing::span::Attributes<'_>) -> tracing::span::Id {
+        tracing::span::Id::from_u64(1)
+    }
+    fn record(&self, _span: &tracing::span::Id, _values: &tracing::span::Record<'_>) {}
+    fn record_follows_from(&self, _span: &tracing::span::Id, _follows: &tracing::span::Id) {}
+    fn event(&self, event: &tracing::Event<'_>) {
+        let mut fields = BTreeMap::new();
+        event.record(&mut FieldGrab(&mut fields));
+        self.0
+            .lock()
+            .expect("捕捉バッファの毒化なし")
+            .push(LogEvent {
+                level: *event.metadata().level(),
+                fields,
+            });
+    }
+    fn enter(&self, _span: &tracing::span::Id) {}
+    fn exit(&self, _span: &tracing::span::Id) {}
+}
+
+/// interest キャッシュへ `never` を焼かせないための常駐 dispatcher
+/// （`register_callsite` が常に `sometimes` を返すことだけが仕事）。
+struct InterestProbe;
+
+impl tracing::Subscriber for InterestProbe {
+    fn register_callsite(&self, _meta: &'static tracing::Metadata<'static>) -> Interest {
+        Interest::sometimes()
+    }
+    fn enabled(&self, _meta: &tracing::Metadata<'_>) -> bool {
+        false
+    }
+    fn new_span(&self, _attrs: &tracing::span::Attributes<'_>) -> tracing::span::Id {
+        tracing::span::Id::from_u64(1)
+    }
+    fn record(&self, _span: &tracing::span::Id, _values: &tracing::span::Record<'_>) {}
+    fn record_follows_from(&self, _span: &tracing::span::Id, _follows: &tracing::span::Id) {}
+    fn event(&self, _event: &tracing::Event<'_>) {}
+    fn enter(&self, _span: &tracing::span::Id) {}
+    fn exit(&self, _span: &tracing::span::Id) {}
+}
+
+/// probe dispatcher を **2 個**プロセス寿命で常駐させる（冪等）。
+/// 2 個必要なのは `has_just_one = (len <= 1)` ゆえ——1 個では毒の経路が残る。
+fn ensure_interest_probes() {
+    static PROBES: OnceLock<(tracing::Dispatch, tracing::Dispatch)> = OnceLock::new();
+    PROBES.get_or_init(|| {
+        (
+            tracing::Dispatch::new(InterestProbe),
+            tracing::Dispatch::new(InterestProbe),
+        )
+    });
+}
+
+/// クロージャ実行中に**現在のスレッド**で発火した tracing イベントを戻り値と共に返す。
+fn capture_logs<R, F: FnOnce() -> R>(f: F) -> (R, Vec<LogEvent>) {
+    ensure_interest_probes();
+    let cap = CaptureSubscriber::default();
+    let sink = cap.0.clone();
+    let out = tracing::subscriber::with_default(cap, || {
+        // probe 常駐前に焼かれた `never` の掃き残しを、窓が開いた**後**に確定的に潰す。
+        tracing::callsite::rebuild_interest_cache();
+        f()
+    });
+    let events = sink.lock().expect("捕捉バッファの毒化なし").clone();
+    (out, events)
+}
+
+/// メッセージに `needle` を含むイベントが**ちょうど 1 件**在ることを主張して返す。
+fn expect_one<'a>(events: &'a [LogEvent], needle: &str) -> &'a LogEvent {
+    let hits: Vec<&LogEvent> = events
+        .iter()
+        .filter(|e| e.message().contains(needle))
+        .collect();
+    assert_eq!(
+        hits.len(),
+        1,
+        "`{needle}` を含むログがちょうど 1 件ではない: {events:?}"
+    );
+    hits[0]
 }
 
 // ── 共通補助 ─────────────────────────────────────────────────────────────────────────
@@ -446,5 +610,175 @@ fn unregistered_actor_accumulates_without_disturbing_registered_actor() {
     assert!(
         opaque_count(&read_back(&rt, &kero)) > 0,
         "蓄積されていた \\1 のテキストが自分のバルーンへ描画される"
+    );
+}
+
+// ══ task 7.3 ①: `TextSlotBinding::from_view` は **物理寸**を読む（native ではない・R8.2） ══
+
+/// **7.1 で修理した production 契約の檻**（7.1 レビュー指摘・本 task が担当の正本）。
+///
+/// # なぜ in-crate では檻に入らないのか
+///
+/// [`TextSlotBinding::from_view`] の入力 `TextSlotView` は emo-present の**私有フィールド型**で
+/// 公開コンストラクタを持たず、唯一の構築点が `EmoPresenter::text_slot_view`（実 GPU 表示確立が
+/// 前提）である。ゆえに `surface_size()`（native）を渡す**旧実装へ戻す変異**は
+/// `cargo test -p areka-emo-text` の全 in-crate ターゲットで誰にも殺されない（レビュアー実測）。
+/// 本ケースは実 presenter から得た本物の view でその向きを固定する。
+///
+/// # なぜ k=2（窓 DPI 192／author 96）でなければならないのか
+///
+/// k=1 では `surface_size() == physical_size()` が**恒等**であり、正しい実装と旧実装が
+/// 数値的に区別できない（＝檻が空虚になる）。既存の `setup_two_targets` は k=1.0 固定ゆえ
+/// この盲点をそのまま踏んでいた（3.2+3.3 の申し送り「lib 自体は無傷」が偽になった経緯）。
+///
+/// 檻の内容は 3 点:
+/// 1. `binding.surface_size == view.physical_size()`（物理原寸を保持する）、
+/// 2. `binding.image_size == view.surface_size()`（image px 原寸＝作者画像空間は **k 不変**）、
+/// 3. 供給面の実寸が `ceil(validrect 寸 × k)`＝native の k 倍（R8.2 の可観測な帰結）。
+///    旧実装では image 空間が 1/k へ縮み、供給面が k に依らずほぼ一定になる——「k を変えても
+///    文字が拡大されない」静かな欠陥（6.5 一次実走で実機検出された症状）そのもの。
+#[test]
+fn from_view_reads_physical_size_so_image_space_stays_k_invariant() {
+    let mut world = make_world_with_gpu();
+    let (presenter, _window) = setup_scaled_target(&mut world, 192);
+    let view = presenter
+        .text_slot_view(TargetId(0))
+        .expect("表示確立後の text_slot_view は Some");
+
+    // ── 前提の非空虚性: k=2 ゆえ native 原寸と物理寸が実際に食い違っている ──
+    assert_eq!(view.scale(), 2.0, "前提: 窓 DPI 192 ／ author 96 で k=2");
+    assert_eq!(view.surface_size(), SCALED_NATIVE, "前提: native 原寸");
+    assert_eq!(view.physical_size(), (280, 160), "前提: 物理寸＝native×2");
+    assert_ne!(
+        view.surface_size(),
+        view.physical_size(),
+        "前提: k≠1 で 2 つの寸が数値的に弁別できる（k=1 では恒等＝檻が空虚）"
+    );
+
+    // ── 檻 (1)(2): from_view が読むのは physical_size()——surface_size() ではない ──
+    let binding = TextSlotBinding::from_view(&view);
+    assert_eq!(
+        binding.surface_size,
+        view.physical_size(),
+        "TextSlotBinding::new の第 4 引数は**物理原寸**（native を渡す旧実装へ戻していないか）"
+    );
+    assert_eq!(
+        binding.image_size,
+        view.surface_size(),
+        "image px 原寸 = round(physical / k) は作者画像空間＝native と一致（k 不変）"
+    );
+
+    // ── 檻 (3): 供給面の実寸が k 倍で伸びる（R8.2 の可観測な帰結） ──
+    let model = geo_model();
+    let sakura = ActorKey::from("0");
+    let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+    rt.register_actor_view(sakura.clone(), &view, &model);
+    rt.apply_cue(&cue("0", 0.0, CueCommand::Text("アヒル".into())));
+    present_frame(&mut rt, &mut world, 1.0).expect("k=2 の初回提示（装着）");
+    assert_eq!(
+        rt.surface(&sakura).expect("装着済み供給面").size(),
+        (280, 160),
+        "供給面は ceil(validrect 寸 × k)＝native の k 倍（旧実装では k に依らず native 相当へ潰れる）"
+    );
+    assert!(
+        opaque_count(&read_back(&rt, &sakura)) > 0,
+        "k=2 の供給面へ実際に文字が描かれる（寸だけ合って空表示、を排除）"
+    );
+}
+
+// ══ task 7.3 ②: k 再追従の**ログ観測契約**（R8.7・task 7.4 実機サインオフの判定源） ══
+
+/// 再追従が決定論的に**ログで観測できる**ことを固定する（R8.7）。
+///
+/// task 7.4 の実機サインオフは、これらのフィールドを grep して判定する:
+/// - 再追従 `info!`: `actor` ／ `k_old` ／ `k_new`（k の遷移そのもの）、
+/// - 2 回目の装着 `info!`: `physical_size`（新 k の供給面寸）。
+///
+/// **判定は絶対値でなく比で行う**（7.4 本文）——ここでも `physical_size` の比が
+/// `k_new / k_old` に一致することまで固定する。フィールド名の改名・ログ削除は 7.4 の判定基準を
+/// 静かに壊すため、名前と値の双方を檻に入れる（[`LogEvent::field`] は欠落で panic する）。
+///
+/// 併せて「装着 `info!` は `ActorRender` 不在時のみ」（7.1 で doc を改訂した契約）も
+/// 実測する: 同一 actor で装着ログが**2 回**出るのは、間に再追従による破棄が挟まったときだけ。
+#[test]
+fn scale_refresh_logs_k_transition_and_reattach_physical_size() {
+    let mut world = make_world_with_gpu();
+    // k=1.0 から始めて 2.0 へ跳ばす（実機の 100%→200% モニタ跨ぎに相当）。
+    let (mut presenter, window) = setup_scaled_target(&mut world, 96);
+    let view = presenter.text_slot_view(TargetId(0)).expect("view（k=1）");
+    assert_eq!(view.scale(), 1.0, "前提: 窓 DPI 96 ／ author 96 で k=1");
+
+    let model = geo_model();
+    let sakura = ActorKey::from("0");
+    let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+    rt.register_actor_view(sakura.clone(), &view, &model);
+    rt.apply_cue(&cue("0", 0.0, CueCommand::Text("アヒル".into())));
+
+    // ── 1 回目の装着ログ: physical_size は k=1 の native 寸 ──
+    let attach_msg = "テキスト供給面を予約スロットへ装着した";
+    let (_, attach_events) =
+        capture_logs(|| present_frame(&mut rt, &mut world, 1.0).expect("初回提示（装着）"));
+    let first_attach = expect_one(&attach_events, attach_msg);
+    assert_eq!(
+        first_attach.level,
+        tracing::Level::INFO,
+        "装着は info!（既定 RUST_LOG=info で実機ログに残る水準・log-first）"
+    );
+    assert_eq!(
+        first_attach.field("physical_size"),
+        "(140, 80)",
+        "k=1 の供給面寸（7.4 の比較基準）"
+    );
+
+    // ── 窓 DPI を 192 へ（実機のモニタ跨ぎ相当）→ presenter の適用 k が 2.0 へ跳ぶ ──
+    world.entity_mut(window).insert(DPI::from_dpi(192, 192));
+    presenter
+        .refresh_scale(&mut world, TargetId(0))
+        .expect("可視 target の k 変化は新物理寸を報告する");
+    let view2 = presenter.text_slot_view(TargetId(0)).expect("view（k=2）");
+    assert_eq!(view2.scale(), 2.0, "前提: 再表示で適用 k が 2.0 へ跳ぶ");
+
+    // ── 再追従ログ: actor ／ k_old ／ k_new（R8.7 の本体） ──
+    let (refreshed, refresh_events) =
+        capture_logs(|| rt.refresh_actor_scale(&sakura, &view2, &model));
+    assert!(refreshed, "k 変化の再追従は true");
+    let refresh_log = expect_one(&refresh_events, "文字層の k 再追従");
+    assert_eq!(
+        refresh_log.level,
+        tracing::Level::INFO,
+        "再追従は info!（実機 grep の水準・R8.7）"
+    );
+    assert_eq!(refresh_log.field("actor"), "0", "actor フィールド");
+    assert_eq!(
+        refresh_log.field("k_old").parse::<f64>().ok(),
+        Some(1.0),
+        "k_old フィールド（旧 k）"
+    );
+    assert_eq!(
+        refresh_log.field("k_new").parse::<f64>().ok(),
+        Some(2.0),
+        "k_new フィールド（新 k）"
+    );
+
+    // ── 2 回目の装着ログ: physical_size が新 k 寸（比 = k_new / k_old = 2.0） ──
+    let (_, reattach_events) =
+        capture_logs(|| present_frame(&mut rt, &mut world, 1.0).expect("再追従後の提示"));
+    let second_attach = expect_one(&reattach_events, attach_msg);
+    assert_eq!(
+        second_attach.field("physical_size"),
+        "(280, 160)",
+        "再装着の供給面寸は新 k 寸——140×80 に対し比 2.0（7.4 は絶対値でなくこの比で判定する）"
+    );
+
+    // ── 装着 info! は「ActorRender 不在時のみ」——同値 k の走査では 3 回目が出ない ──
+    assert!(
+        !rt.refresh_actor_scale(&sakura, &view2, &model),
+        "同値 k の再追従は no-op（churn ガード・R8.5）"
+    );
+    let (_, idle_events) =
+        capture_logs(|| present_frame(&mut rt, &mut world, 1.0).expect("同値 k 後の提示"));
+    assert!(
+        !idle_events.iter().any(|e| e.message().contains(attach_msg)),
+        "破棄が挟まらないフレームでは装着 info! は出ない（毎フレーム再生成の禁止）: {idle_events:?}"
     );
 }

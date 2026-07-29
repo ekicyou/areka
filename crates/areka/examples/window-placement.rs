@@ -414,10 +414,12 @@ fn boot_present_system(world: &mut World) {
         let Some((emo_world, atlas)) = t.assets.take() else {
             continue;
         };
-        match boot
-            .presenter
-            .attach_target(world, t.target, t.window, emo_world, atlas)
-        {
+        match boot.presenter.attach_target(
+            world, t.target, t.window, emo_world, atlas,
+            // 作者基準 DPI は正典既定の 96（ukadoc・D1）。本番は boot が descript の実値を
+            // 供給する（本 example は k=1.0 相当で従来と同一の表示寸・配置）。
+            96,
+        ) {
             Ok(()) => {
                 boot.presenter.apply(
                     world,

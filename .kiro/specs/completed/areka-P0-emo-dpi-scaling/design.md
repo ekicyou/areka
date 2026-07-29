@@ -21,7 +21,7 @@
 - 混在 DPI 窓消失バグの解消（`areka-P0-dpi-window-vanish`・W5）。
 - アプリ管理拡大率の実設定手段（UI・タグ）——本仕様は 1.0 固定の縮退シームのみ予約。
 - SSP scaling 語彙（`\![set,scaling]`・ユーザー拡大率固定・SERIKO scaling 乗算列）の輸入（2026-07-24 裁定・research.md §6）。
-- DPI追従が波及する他消費者（window-placement 窓寸・emo-text-layer 行寸・balloon 寸・choice-render）の再検証実装（各 spec の Revalidation Trigger・W5）。
+- DPI追従が波及する他消費者（window-placement 窓寸・balloon 寸・choice-render）の再検証実装（各 spec の Revalidation Trigger・W5）。**注（2026-07-26 改訂）**: emo-text 文字層の k 再追従は 6.5 一次実走で確定欠陥と判明し、開発者裁定で本仕様の In scope へ移管（Requirement 8・D11）。
 - バルーン採寸の per-scope 化（`areka-P0-kero-balloon`・W5。本仕様は席の保全のみ）。
 
 ## Boundary Commitments
@@ -67,6 +67,20 @@ W4 事前割当契約の編集面は「`measure.rs`＋emo-atlas/compose/present�
 3. `resize_window_keep_position` は position-persist の観測域（follow.rs DragEnd :319-350/:443-488）から離れた位置（ファイル末尾の公開ラッパ群）へ追記する。
 
 R7.7（W5 送り）は発動しない（直列化により衝突を回避）。
+
+**スコープ拡大裁定（2026-07-26・開発者裁定・task 6.5 一次実走起点）**: 6.5 の実機実走（125%↔200% デュアルディスプレイ・モニタ跨ぎ）で、バルーン**文字層**が k 変化に追従しない確定欠陥を検出した（バルーン画像は 500×280→800×448 へ正しく追従・文字供給面は 300×97 のまま＝装着ログが全走行で 2 件のみ）。当初 Out of scope（W5 Revalidation Trigger 送り）だったが、(a) W5 の 4 spec のどの割当ファイル集合（placement follow/spawn＋wintf／hit_region.rs＋input_events／kanade／balloon.rs＋assets.rs＋frame.rs＋measure.rs）にも `areka-emo-text/src` が含まれず**担当者が実在しない**、(b) 本来の持ち主 `areka-P0-emo-text-layer` は completed で消化不能、(c) 「再検証」でなく根因特定済みの**確定欠陥**——の 3 点により、開発者が本 spec への取り込みを裁定した。編集面に `crates/areka-emo-text/src`（Requirement 8 に限る）と `emo2_boot/frame.rs`（結線・既所有）を追加する。`spawn.rs` 不触は維持。
+
+**main 同期ゲートの実施記録（2026-07-25・タスク 1.1）**: `areka-P0-position-persist` は main へ squash マージ済み（`33aa384`）。本実装ブランチは `origin/main` と完全一致（ahead 0 / behind 0）を確認し、追加の同期コミットは不要であった。同期後の placement 系実測アンカーを再確認し、下表のとおり**行番号のみ**が変動（関数の存在・シグネチャ・責務は設計時と同一・設計判断に変更なし）:
+
+| 対象 | 設計時アンカー | 同期後の実測 | 差分 |
+|------|----------------|--------------|------|
+| `measure.rs` `measure_scope_sizes` | :62 | :62 | ずれなし |
+| `source.rs` `load_descript_source` | :102 | :102 | ずれなし |
+| `follow.rs` `resize_window_to` | :553 | :786 | +233 |
+| `follow.rs` `enqueue_window_set_pos`（私有単一ライター） | :729 | :1009 | +280 |
+| `follow.rs` DragEnd 観測域（position-persist 所有） | :319-350 / :443-488 | `on_char_drag_end` :340-456 / `on_balloon_drag_end` :621-721 | 拡大 |
+
+したがって `resize_window_keep_position` の追記位置は「公開 API 群の末尾＝`work_area_for_window`（:1132-1160）の直後・`#[cfg(test)] mod tests`（:1166）の直前」とする（DragEnd 観測域から十分に離れる）。
 
 ### Revalidation Triggers
 
@@ -161,6 +175,8 @@ graph TB
 | D9 | テスト配置 | 純関数=各 crate in-crate／GPU readback=**emo-present in-crate（別プロセス）**／wintf tests/graphics へは wintf 自身の檻のみ（その場合 `on_gpu_owner_thread` 必須）——本仕様は wintf 新設なし。安全根拠＝バイナリ間は別プロセスで無縁＋同一バイナリ内は並列スレッド Compositor 生成の既存実績（`make_world_with_gpu` 型 14+ 本が現状緑） | wintf graphics への集約（2 個目 Compositor 制約を不要に背負う） |
 | D10 | 実機観測 | 表示成立点 info ログ（k num/den・f32・author_dpi・window_dpi・native/scaled 寸）＋ 125%/200% 2 水準の有界起動（`AREKA_APP_SMOKE_EXIT_MS`）＋ RUST_LOG grep・絶対パス起動 | 目視のみ（決定論判定の欠如） |
 
+> **D10 の実装時是正（2026-07-25・タスク 3.4 レビュー承認）**: 本表と §Monitoring は `k_num`/`k_den` を個別ログフィールドとして記していたが、`ScaleRatio` の `num`/`den` は本設計自身が非公開と規定しており（Service Interface 参照）accessor が無い＝**設計内部の矛盾**であった。実装は `k_ratio = ?scale`（Debug 表現 `ScaleRatio { num: 2, den: 1 }`＝両値が観測可能）＋ `k`（f32）で出力する。R6.3 の条文「k 導出値・適用寸のログ出力」は f32 の `k` フィールドが直接 grep 可能な形で満たす。以降 `k_num`/`k_den` の記述は `k_ratio`＋`k` と読み替える。
+
 ### Technology Stack
 
 | Layer | Choice / Version | Role in Feature | Notes |
@@ -178,6 +194,7 @@ graph TB
 ```
 crates/areka-emo-compose/src/scale.rs   # ScaleRatio（既約有理・丸め単一権威 scaled_extent）＋整数 bilinear リサンプラ resample。純関数・in-crate 全網羅テスト
 crates/areka-emo-present/src/scale.rs   # ScalePolicy（author_dpi＋アプリ管理拡大率シーム）＋ derive_scale（DPI 不在/異軸縮退・log-first）。純関数・in-crate テスト
+crates/areka/src/placement/test_support.rs  # 【2026-07-26 追加】#[cfg(test)] 専用。tracing callsite interest 毒化に耐えるログ捕捉ハーネス（probe dispatcher 2 個常駐＋捕捉窓内 rebuild_interest_cache）の正本。task 6.2 で必要になり追加（既に所有済みの placement モジュール内・本番表面ゼロ）
 ```
 
 ### Modified Files
@@ -191,9 +208,17 @@ crates/areka-emo-present/src/scale.rs   # ScalePolicy（author_dpi＋アプリ�
 - `crates/areka/src/emo2_boot/assets.rs` — `BootAssets` へ `shell_author_dpi`/`balloon_author_dpi` 搬送。
 - `crates/areka/src/emo2_boot/frame.rs` — `run_dpi_phase()` 新設＋ `emo2_frame_system` への組込。`run_attach_phase` の `attach_target` 呼び 2 箇所へ author_dpi 供給。
 - `crates/areka/src/main.rs` — boot シーム: author_dpi 読取＋primary モニタ DPI → `MeasureScaling` 構築 → measure へ供給。
-- `crates/areka/examples/emo-present.rs` ほか `attach_target`/`measure_scope_sizes` の既存呼び手 — シグネチャ追随（機械的・k=1 相当値で挙動不変）。
+- `crates/areka/examples/emo-present.rs` ほか `attach_target`/`measure_scope_sizes` の既存呼び手 — シグネチャ追随（機械的・k=1 相当値で挙動不変）。実測の破断呼び手は `areka/examples/{emo-present.rs, collision-probe.rs, window-placement.rs}`・`areka-emo-text/examples/{emo-text-layer.rs, emo-text-typewriter-demo.rs}`・`areka-emo-text/tests/{attach_wiring_test.rs, draw_readback_test.rs}`。
 
-> `spawn.rs`・wintf 配下・emo-compose の `plan.rs`/`blit.rs`・`presenter.rs` の `hit_region` は**変更しない**。
+**【2026-07-26 追記・実装後の現況追随】** 以下は実装中に親コントローラが裁可した境界拡張で、当初の本節に無かったもの（根拠は tasks.md `## Implementation Notes` の該当項）。**authority document をコードの現況へ追随させるための追記**であり、新たな裁可ではない:
+
+- `crates/areka/src/placement/mod.rs` — **k₀ 導出の居所**（`build_measure_scaling`・`AuthorDpi` 名前付き型・`prepare_stages` からの供給）。tasks.md は task 4.3 の境界を `main.rs` と記していたが、descript 読取と `measure_scope_sizes` 呼びが両方 `prepare_stages` に在るため親が `placement/mod.rs`＋`emo2_boot/mod.rs`＋`main.rs` へ拡張して裁可（note 4.3）。`main.rs` は結果を `wire_emo2_boot` へ中継するのみ。
+- `crates/areka/src/emo2_boot/mod.rs`・`spine.rs`・`src/input_events/balloon.rs` — `BootAssets` への pub フィールド追加が crate 内の exhaustive destructure / struct literal を壊すことへの**機械的追随**（note 4.1）。`spine.rs`／`balloon.rs` の変更は `#[cfg(test)]` 域のみ。
+- `crates/areka-emo-text/src/actor.rs` — Requirement 8／D11（開発者裁定 2026-07-26・スコープ拡大）。
+- `crates/areka-emo-text/tests/attach_wiring_test.rs` — task 7.3 の必須檻（`from_view` の物理寸読み取り）。`TextSlotView` が私有型ゆえ in-crate では構造的に檻に入らず、実 presenter を建てられる統合テストが唯一の置き場（R7.10 は編集面を `crates/areka-emo-text/src` と記すが、tasks.md 7.3 が明示的に本ファイルを指定している＝実質裁可済み）。
+- `crates/areka-emo-present/src/lib.rs` — `scale` モジュール公開（新規 `scale.rs` の re-export）。
+
+> `spawn.rs`・wintf 配下・emo-compose の `plan.rs`/`blit.rs`・`presenter.rs` の `hit_region` は**変更しない**（実装後に `git diff --name-only origin/main...HEAD` で不在を機械的に確認済み・2026-07-26）。
 
 ## System Flows
 
@@ -341,12 +366,20 @@ impl ScaleRatio {
     /// 0 を拒否して構築（既約化して保持）。
     pub fn new(num: u32, den: u32) -> Option<ScaleRatio>;
     /// 乗算合成（アプリ管理拡大率 × DPI 由来 k のシーム・R1.6）。桁溢れは u64 中間で既約化。
+    /// ※実装時追補（2026-07-25・タスク 1.2 レビュー承認）: 既約化後も u32 域に収まらない
+    ///   病的比は、大きい方の項を u32::MAX へピン留めして両項を同率縮小する単発の近似縮退
+    ///   （u128 中間・floor・最小 1 クランプ）とし、`warn!` を出す（log-first・無言縮退禁止）。
+    ///   比の保存ではなく近似であること・小さい方の項の相対誤差は大きくなり得ることを doc に明記する。
     pub fn mul(self, rhs: ScaleRatio) -> ScaleRatio;
     pub fn is_identity(self) -> bool;
     /// 照会契約の出口ビュー（num as f32 / den as f32）。
     pub fn as_f32(self) -> f32;
     /// 丸め単一権威: round half away from zero。len>0 なら最小 1 を保証（R2.5）。
-    /// 演算は u64（(2*len*num + den) / (2*den)）・i32 超過は呼び手が検査。
+    /// 演算は u128（(2*len*num + den) / (2*den)）・i32 超過は呼び手が検査。
+    /// ※実装時是正（2026-07-25・タスク 1.2 レビュー承認）: 当初 u64 と記したが
+    ///   len≈num≈u32::MAX で 2*len*num ≈ 3.69e19 > u64::MAX ≈ 1.84e19 となり
+    ///   debug ビルドで panic する。式は不変のまま中間型のみ u128 へ widen する。
+    ///   u32 超過は u32::MAX へ saturate（全て i32::MAX 超ゆえ呼び手の i32 検査は発火する）。
     pub fn scale_len(self, len: u32) -> u32;
     pub fn scaled_extent(self, w: u32, h: u32) -> (u32, u32);
 }
@@ -390,7 +423,13 @@ pub struct ScalePolicy {
 
 /// 実適用 k を導出する（表示 show 適用ごとに呼ぶ・数命令）。
 /// - dpi None（DPI component 不在＝取得不能）: error! ＋ app_scale×1（R1.4 の k=1.0 縮退）
-/// - dpi_x != dpi_y: warn!（初回）＋ dpi_x 採用（D2）
+/// - dpi_x != dpi_y: warn!（毎回）＋ dpi_x 採用（D2）
+///   ※実装時是正（2026-07-25・タスク 1.4 レビュー承認）: 当初「初回」と記したが、
+///     抑止状態を持たせると本節 Invariants「同一入力→同一出力（純関数）」を破る。
+///     さらに module 級 once は窓ごと政策（R1.5）の下で別窓の初回警告まで握り潰す。
+///     `derive_scale` は毎フレームではなく ShowSurface 適用ごとの呼出ゆえログ量も許容。
+/// - dpi_x == 0（窓 DPI 値そのものが不正）: error! ＋ app_scale×1（追加分岐・
+///     `ScaleRatio::new(0,_)` が None ゆえ未処理だとパニックか無言縮退しか残らない）
 /// - 正常: app_scale × ScaleRatio::new(dpi_x, author_dpi)
 pub fn derive_scale(policy: ScalePolicy, dpi: Option<(u16, u16)>) -> ScaleRatio;
 ```
@@ -520,6 +559,43 @@ pub fn run_dpi_phase(wiring: &mut Emo2Wiring, world: &mut World);
 - **窓寸 reconcile の第 2 経路（状態照合・議題 #2 裁定）**: drain フェーズが `apply_show` の scaled 寸変化報告を受けて同一フレーム内で resize（char=`resize_window_to`／balloon=`resize_window_keep_position`）を呼ぶ。`run_dpi_phase` のエッジ観測は「再表示のトリガ」に徹し、窓寸整合はエッジ消費順序に依存しない。
 - `attach_target` 呼び 2 箇所（shell/balloon）へ `BootAssets` の author_dpi を供給する（assets.rs が搬送）。
 
+### areka-emo-text / actor.rs ＋ emo2_boot / frame.rs（文字層 k 再追従・D11・Requirement 8）
+
+**追補（2026-07-26 スコープ拡大裁定）**。6.5 一次実走で特定した根因は 3 点: (a) `frame.rs:504` の `register_actor_view` が `wiring.attached` ゲートで高々 1 回＝`TextSlotBinding::from_view`（`actor.rs:264`）が装着時 k を焼き付ける、(b) `actor.rs:518` の供給面生成が `if !runtime.surfaces.contains_key(actor)` で初回のみ、(c) `run_dpi_phase` から emo-text への伝搬経路が不存在。
+
+| Field | Detail |
+|-------|--------|
+| Intent | balloon target の適用 k が変わったとき、文字層 binding を再構築し供給面を新 k で再生成する（リビール状態は保存） |
+| Requirements | 8.1〜8.8 |
+
+**Contracts**: Service [x]
+
+```rust
+// areka-emo-text / actor.rs（TextLayerRuntime へ追加）
+/// balloon target の適用 k 変化時の再追従シーム。view から binding を再構築し
+/// （register_actor_view と同一の単一構築経路——第 2 の構築流儀を作らない・R8.1）、
+/// 当該 actor の ActorRender（供給面・executor・metrics）を破棄する。次 present_frame の
+/// 初回解決フレーム分岐（actor.rs:518）が新 k の物理寸（ceil(validrect×k)/origin×k）で
+/// 再生成する（R8.2＝既存の生成式をそのまま再利用）。
+/// 同値 k は no-op で false（churn ガード・R8.5）。再追従したら info!（actor・旧/新 k・R8.7）。
+pub fn refresh_actor_scale(
+    &mut self, actor: &ActorKey, view: &TextSlotView, model: &BalloonModel,
+) -> bool;
+```
+
+**設計判断（D11）**:
+
+1. **状態保存は既存構造が担保する**: `register_actor`（`actor.rs:233-242`）は `routing`＋`layout_input` を上書きするのみで `state: TextLayerState`（リビール進行・確定行）に**触れない**。ゆえに再登録＝状態保存（R8.3）であり、`Clear`/`ClearAll`（state も描画実行部も消す・`apply_cue` 経路）とは構造的に別物。実装は「再登録が state を消さない」ことを檻に入れること。
+2. **全再描画は ActorRender 破棄が自然に導く**: 確定行 TextLayout キャッシュ・planner は `ActorRender`（描画実行部）に宿る。破棄→再生成で新規（空白）供給面＋キャッシュ空から始まるため、次 present で保存済み state から全再描画される（R8.4）。フォントサイズ・レイアウトは image px のまま、`draw.rs:828` の行列（M11/M22=k）が新 k で描く——文字はベクタ描画ゆえ新 k でも鮮明。**choice 行ジオメトリ（`choice.rs:265-267` が `contract.scale` を消費）も binding 再構築で自動的に新 k へ直る**（ヒットテスト規約の ÷k は W5 col 領分のまま・R7.9 不変）。
+3. **model の搬送**: `register_actor_view` は `&BalloonModel` を要するため、`Emo2Wiring` が attach 時に構築する per-scope `BalloonModel` を保持し、再追従時に再利用する（再パースしない）。
+4. **検出点は「適用 k の食い違い」——独立相 `run_text_scale_phase`**（**2026-07-26 是正・親裁定**）: attach 済み全 balloon scope を毎フレーム走査し、scope→actor（`ActorKey::from(scope.to_string())`＝attach と同一の写像）で `refresh_actor_scale` を呼ぶ。判定は 7.1 の唯一の権威（binding の k と `TextSlotView::scale()`＝適用 k の比較）へ全面委譲し、**第 2 のガードを置かない**。`text_slot_view` None は `warn!`＋skip だが、毎フレーム走査ゆえ **scope 単位のエッジガードで 1 回だけ**出す（view 復帰で再武装・R8.6 は「観測可能」を要求するのであって「毎フレーム反復」を要求しない・先例は emo-text の `unresolved_warned`）。shell target は走査対象外（静穏 skip）。
+
+   **当初案「`run_dpi_phase` で `refresh_scale` が `Some` を返した窓」は誤り**（task 7.2 レビューが 2 経路の反例を実証）。`refresh_scale` は **k が変わっても `None` を返す**: (a) balloon が不可視のとき `!visible` で `applied` を更新せず早期 return する（`presenter.rs:776-782`）——バルーンは通常隠れており、`HideBalloon`→DPI 変化→`Show` は `spine_s3` が檻に入れている**常用系列**で、次の `Show` の `apply_show` が新 k を適用しても再追従は起きない＝**R8 が潰すべき症状そのものが再現する**。(b) 戻り値は `take_pending_resize` で、これは `size_changed` のときだけ立つ一方 `applied` は無条件更新（`presenter.rs:555-562`）——「k は変わったが丸め後の窓物理寸が同値」は presenter 自身の doc が実在すると明記。両者の根は同一（**報告は `None` だが `applied` は新 k**）ゆえ、修正相が**報告を引数として受け取らない**形にして構造的に閉塞した。
+
+   **相の位置は `run_drain_phase` の後・`run_text_phase`（`present_frame`）の前**。`applied` の更新点は 2 つ（dpi 相の `refresh_scale`／drain 相の `apply_show`）あり、両者の下流かつ描画の上流でなければならない。`run_dpi_phase` 内へ置くと drain 由来の k 跳ね（hidden→show）を 1 フレーム取り逃し、**旧 k の文字が 1 フレーム描かれる**。
+
+**ログ語彙（R8.7・6.5 grep 判定に接続）**: 再追従 `info!` に `actor`・`k_old`／`k_new`（f32 出口ビュー・寸法演算に不使用＝D4）・再生成後は既存の装着 `info!`（`actor.rs:588`「テキスト供給面を予約スロットへ装着した」）が**2 回目以降も**発火する——「actor ごと初回のみ」という同 doc 文言は「ActorRender 不在時のみ」へ改訂すること（doc の事実性）。
+
 ## Error Handling
 
 ### Error Strategy
@@ -535,6 +611,8 @@ log-first（error!/warn!＋構造化 enum・panic 禁止）の既存規律を継
 | refresh_scale 中の合成/デバイス失敗 | error!（既存経路） | 前 k・前表示を維持（early return） | 4.4 |
 | k 倍寸の i32 超過（採寸） | error! | PlacementError::Measure（既存流儀） | 2.5 |
 | リサンプラ | — | 純関数・失敗経路なし（0 寸は上流 EmptyComposition で先行遮断） | 2.5 |
+| 文字層再追従: text_slot_view 不能・model 不在 | warn! | 旧 k 表示を維持し skip（次の DPI 変化・次フレームへ委ねる） | 8.6 |
+| 文字層再追従: 供給面再生成のデバイス失敗 | error!（既存 present_frame 経路） | 当該フレーム skip・state は保存済みゆえ次フレーム再試行 | 8.6 |
 
 ### Monitoring
 
@@ -569,6 +647,8 @@ log-first（error!/warn!＋構造化 enum・panic 禁止）の既存規律を継
 - 実 DPI 2 水準（OS 表示スケール 125%→200% の 2 回起動）× 本番ゴースト emo2（実 pasta.dll・**絶対パス起動**・R6.4）。
 - `AREKA_APP_SMOKE_EXIT_MS` 有界自動終了＋ `RUST_LOG` grep: info ログの `k`（1.25/2.0）・`scaled` 寸・`GetClientRect` 照合（collision-probe 型）で決定論判定（R6.1/6.3）。
 - 人間サインオフ: マスコットが各水準の相当寸で表示・窓追従・モニタ跨ぎ移動での追従を目視（R6.2）。
+- **（2026-07-26 追補・R8.8）** 文字層 k 再追従: デュアルディスプレイ（125%↔200%）でのモニタ跨ぎ移動後、バルーン文字が移動先の k で描画されることをログ（再追従 `info!` の `k_old`/`k_new`＋2 回目の装着 `info!` の `physical_size` が新 k 寸）と目視の双方で確認。一次実走（2026-07-26）の失敗観測＝「バルーン 800×448 に対し文字が旧 k 寸のまま」が解消されていること。**判定は絶対値でなく比（200% 側 ÷ 125% 側 ≈ 1.6）で行う**——task 7.1 で `TextSlotBinding::from_view` の物理寸読み取りを修理した結果、125% 側の基準値そのものが動いたため、一次実走で記録した絶対値（300×97 → 480×156）は陳腐化している。
+- **（2026-07-26 追補・R8 の headless 檻）** emo-text in-crate: `refresh_actor_scale` の (a) 同値 k no-op（R8.5）、(b) binding 再構築後の `image_size` 不変・`scale` 更新、(c) ActorRender 破棄→再生成で `TextLayerState` が保存される（R8.3）、(d) view None 縮退の warn!（R8.6・log capture は 6.2 の probe 常駐方式）。frame.rs 結線は headless で「balloon target の k 変化時のみ呼ばれる」ことを檻に入れる。**変異で非空虚を実証**（再追従を no-op 化／state を消す変異／同値 k でも再生成する churn 変異）。
 
 ### Regression Gate
 

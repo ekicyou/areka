@@ -757,10 +757,12 @@ fn try_attach(demo: &mut Demo, world: &mut World) {
             fail_attach(demo, world, format!("{target:?} のアセットが二重消費された（構造不変の破れ）"));
             return;
         };
-        if let Err(e) = demo
-            .presenter
-            .attach_target(world, target, window, emo_world, atlas)
-        {
+        if let Err(e) = demo.presenter.attach_target(
+            world, target, window, emo_world, atlas,
+            // 作者基準 DPI は正典既定の 96（ukadoc・D1）。本番は boot が descript の実値を
+            // 供給する（本 example は k=1.0 相当で従来と同一の表示寸・描画結果）。
+            96,
+        ) {
             fail_attach(demo, world, format!("{target:?} の attach_target に失敗: {e}"));
             return;
         }

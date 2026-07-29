@@ -51,6 +51,8 @@ use tracing::{error, info, warn};
 use wintf::WinApp;
 use wintf::ecs::FrameFinalize;
 
+use crate::placement::AuthorDpi;
+
 use self::adapter::PresentBridge;
 use self::assets::{BootAssets, LoopTables, build_boot_assets};
 use self::frame::{Emo2Wiring, emo2_frame_system};
@@ -159,6 +161,29 @@ fn derive_scopes() -> Vec<u32> {
     vec![0, 1]
 }
 
+/// [`build_boot_assets`] へ作者基準 DPI を供給する**唯一の呼び出し点**
+/// （areka-P0-emo-dpi-scaling task 4.3・design Flow 3 手順1/5）。
+///
+/// `build_boot_assets(.., shell_author_dpi, balloon_author_dpi)` は**隣接する 2 つの `u16`**
+/// を取り、入れ替えてもコンパイルが通る——通ったまま「シェルだけバルーンの縮尺で描かれる」
+/// 静かな誤表示になる（`frame::AuthorDpis` が attach 側で防ぐのと同じ罠が、こちらは
+/// 構築側にある）。名前付きフィールドを持つ [`AuthorDpi`] から**この 1 箇所だけ**で
+/// 位置引数へ落とし、その 1 箇所を檻に入れる（`wire_emo2_boot` は生の `u16` を触らない）。
+fn build_boot_assets_for(
+    ghost_root: &Path,
+    balloon_root: &Path,
+    scopes: &[u32],
+    author_dpi: AuthorDpi,
+) -> Result<BootAssets, BootWiringError> {
+    build_boot_assets(
+        ghost_root,
+        balloon_root,
+        scopes,
+        author_dpi.shell,
+        author_dpi.balloon,
+    )
+}
+
 /// [`BootWiringError`] を「起点不在（良性・`warn!`）」と「それ以外（予期しない・`error!`）」へ
 /// 分類して log-first 観測する（design「Error Categories and Responses」構築時・R7.3）。
 ///
@@ -209,8 +234,9 @@ const _: fn() = || {
 /// 結線＋二段の観測に徹する。
 ///
 /// # 7 手順（design「wire_emo2_boot の統括」）
-/// 1. [`build_boot_assets`]（`scopes` は [`derive_scopes`] で placement と同じ入力から自前導出・
-///    DD-12）。`Err` は [`classify_wiring_error`]（起点不在＝`warn!`・他＝`error!`・R7.3）の上
+/// 1. [`build_boot_assets_for`]（`scopes` は [`derive_scopes`] で placement と同じ入力から自前導出・
+///    DD-12。作者基準 DPI は引数 `author_dpi`＝placement の準備が読んだ値をそのまま搬送・
+///    task 4.3）。`Err` は [`classify_wiring_error`]（起点不在＝`warn!`・他＝`error!`・R7.3）の上
 ///    `wired=false` を返し、呼び手（`main`）の `LogSink`×2 フォールバック boot へ委ねる。
 /// 2. [`EmoPresenter::new`]／[`TextLayerRuntime::new`]（`Rc<RefCell<>>`）／[`spawn_emo_text`]
 ///    （UI スレッド前提。`Err` は [`BootWiringError::SpawnUi`] 分類＋`wired=false` フォールバック）。
@@ -237,6 +263,7 @@ pub fn wire_emo2_boot(
     ghost_root: &Path,
     balloon_root: &Path,
     helper_exe: &Path,
+    author_dpi: AuthorDpi,
 ) -> Emo2BootOutcome {
     /// 実 sink 結線を成立させないフォールバック結果（`main` の `LogSink`×2 boot へ委ねる・R7.3）。
     fn fallback() -> Emo2BootOutcome {
@@ -251,7 +278,10 @@ pub fn wire_emo2_boot(
     // 手順1: 構築入力の一括組立（scopes は placement と同じ入力から自前導出・DD-12）。
     // 失敗（fixture 不在等）は分類 warn/error の上 wired=false フォールバックへ倒す（R7.3）。
     let scopes = derive_scopes();
-    let assets = match build_boot_assets(ghost_root, balloon_root, &scopes) {
+    // 作者基準 DPI（design Flow 3 手順1）は placement の準備が **1 度だけ**読んだ値を
+    // `main` シームから受け取る（採寸 k₀ と attach が同じ宣言を見る・task 4.3）。
+    // 隣接 u16 2 引数への落とし込みは [`build_boot_assets_for`] 1 箇所に閉じる。
+    let assets = match build_boot_assets_for(ghost_root, balloon_root, &scopes, author_dpi) {
         Ok(assets) => assets,
         Err(err) => {
             classify_wiring_error(&err);
@@ -294,6 +324,8 @@ pub fn wire_emo2_boot(
         static_binds,
         bind_resolver,
         loop_tables,
+        shell_author_dpi,
+        balloon_author_dpi,
     } = assets;
     // SERIKO ループ構成（design「本番は実時間・実 entropy 接続」・R7.4）: シェル／バルーンの 2 表は
     // `BootAssets.loop_tables`（task 9.1 が `EmoWorld` スナップショットから `from_world` で構築）を
@@ -344,6 +376,9 @@ pub fn wire_emo2_boot(
             shell: AnimationTable::empty(),
             balloon: AnimationTable::empty(),
         },
+        // 作者基準 DPI は搬送のみ（本相は値を解釈しない・attach への供給は task 4.2）。
+        shell_author_dpi,
+        balloon_author_dpi,
     };
 
     // loop ticker 用の tick 送出端: SerikoSink を 1 本 clone して保持する（surface_sink 本体は下の
@@ -434,8 +469,55 @@ pub fn wire_emo2_boot(
 #[cfg(test)]
 mod wire_tests {
     use super::*;
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
+    use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
     use wintf::WinApp;
+
+    /// emo2 fixture ルート（assets.rs／placement テストと同一アンカー規約）。
+    fn emo2_root() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../pilot/examples/shiori-host-32/fixtures/emo2")
+    }
+
+    /// emo2 fixture のバルーンルート。
+    fn emo2_balloon_root() -> PathBuf {
+        emo2_root().join("emo2-kakukaku")
+    }
+
+    /// 取り違え防止の檻（task 4.3・要件 1.1）: `build_boot_assets` への隣接 `u16` 2 引数
+    /// （`shell_author_dpi`／`balloon_author_dpi`）が [`AuthorDpi`] の各フィールドと
+    /// **正しく対応**していることを、意図的に**異なる 2 値**で固定する。
+    ///
+    /// 入れ替えは型検査を通り抜けるため、この檻だけが誤りを検出できる
+    /// （192 と 144 を入れ替えると両アサーションが落ちる）。
+    /// `wire_emo2_boot` 本体は生の `u16` を触らず、この関数だけが位置引数へ落とす。
+    #[test]
+    fn build_boot_assets_for_pairs_shell_and_balloon_author_dpi() {
+        // SAFETY: bake の WIC デコードに要る COM 初期化（既初期化の S_FALSE 等は無視・assets.rs 同流儀）。
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        }
+
+        let assets = build_boot_assets_for(
+            &emo2_root(),
+            &emo2_balloon_root(),
+            &[0, 1],
+            AuthorDpi {
+                shell: 192,
+                balloon: 144,
+            },
+        )
+        .expect("emo2 fixture の BootAssets 組立は成功する");
+
+        assert_eq!(
+            assets.shell_author_dpi, 192,
+            "shell 引数には AuthorDpi::shell が渡る（balloon の 144 ではない）"
+        );
+        assert_eq!(
+            assets.balloon_author_dpi, 144,
+            "balloon 引数には AuthorDpi::balloon が渡る（shell の 192 ではない）"
+        );
+    }
 
     /// 観測可能な完了条件（tasks.md task 5.1）: 存在しない ghost_root に対し
     /// `wire_emo2_boot` は `wired=false`（`LogSink` フォールバックへ委ねる・R7.3）を返し、
@@ -452,7 +534,13 @@ mod wire_tests {
         let missing_balloon = Path::new("C:/areka-nonexistent-balloon-root-emo2boot-5v1");
         let helper = Path::new("shiori-host32-helper.exe");
 
-        let outcome = wire_emo2_boot(&app, missing_ghost, missing_balloon, helper);
+        let outcome = wire_emo2_boot(
+            &app,
+            missing_ghost,
+            missing_balloon,
+            helper,
+            AuthorDpi::DEFAULT,
+        );
 
         assert!(
             !outcome.wired,

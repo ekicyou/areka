@@ -33,7 +33,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use areka_actor::{ActorError, ActorHandle};
-use areka_emo_compose::BindSet;
+use areka_emo_compose::{BindSet, PatternState};
 use areka_emo_present::{EmoPresenter, PresentCommand, TargetId};
 use areka_emo_text::actor::{spawn_emo_text, TextLayerRuntime};
 use areka_emo_text::state::TextLayerConfig;
@@ -54,7 +54,7 @@ use tracing_subscriber::prelude::*;
 use windows::Win32::Foundation::{HINSTANCE, HWND};
 use windows::Win32::System::Com::{CoInitializeEx, COINIT_MULTITHREADED};
 use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
-use wintf::ecs::{GraphicsCore, Point, WindowHandle, WindowPos, WucGraphicsResource};
+use wintf::ecs::{GraphicsCore, Point, WindowHandle, WindowPos, WucGraphicsResource, DPI};
 use wintf::executor::{FilterResult, JoinHandle, MessageLoop};
 
 use crate::placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
@@ -63,7 +63,10 @@ use crate::placement::spawn::{spawn_ghost_windows, GhostWindows};
 
 use super::adapter::PresentBridge;
 use super::assets::{build_boot_assets, BootAssets, LoopTables};
-use super::frame::{run_attach_phase, run_move_drain_phase, run_text_phase, Emo2Wiring};
+use super::frame::{
+    run_attach_phase, run_dpi_phase, run_move_drain_phase, run_text_phase, run_text_scale_phase,
+    Emo2Wiring,
+};
 use super::move_cue::{MoveCueSink, MoveDirective};
 use super::talk_clock::{ClockedTextSink, TalkClock};
 use super::target_map::{balloon_target, shell_target};
@@ -496,7 +499,8 @@ impl SpineHarness {
         spawn_ghost_windows(&mut world, &two_scope_placements(), &titles());
 
         // ── 構築入力（実 emo2 fixture・COM は make_world_with_gpu で初期化済み） ──
-        let assets = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1])
+        // 作者基準 DPI は emo2 fixture の実測既定（shell/balloon とも無宣言＝96・task 2.1）。
+        let assets = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
             .expect("emo2 fixture の BootAssets 組立は成功する");
 
         // ── presenter／文字層ランタイム／実 EmoTextSink（テストスレッド＝UI pump スレッド） ──
@@ -523,6 +527,8 @@ impl SpineHarness {
             static_binds,
             bind_resolver,
             loop_tables,
+            shell_author_dpi,
+            balloon_author_dpi,
         } = assets;
         // SERIKO ループ構成（task 9.4・design「結線・資産・実機経路（spine.rs）」）: 実 emo2 表
         // （`BootAssets.loop_tables`＝task 9.1 が `EmoWorld` スナップショットから `from_world` で構築）＋
@@ -569,6 +575,9 @@ impl SpineHarness {
                 shell: AnimationTable::empty(),
                 balloon: AnimationTable::empty(),
             },
+            // 作者基準 DPI は搬送のみ（本相は値を解釈しない）。
+            shell_author_dpi,
+            balloon_author_dpi,
         };
 
         // ── move channel＋実 MoveCueSink（wire_emo2_boot 手順4 と同型・S-3 形＝task 9.3） ──
@@ -839,6 +848,16 @@ fn spine_s1_boot_to_display_attaches_all_targets_with_opaque_readback() {
         "attach で ERROR が発火（装着失敗・log-first）: {logs:?}"
     );
 
+    // (a-2) 文字層 k 再追従の再利用源（emo-dpi-scaling D11-3・R8.1）: attach 相は装着した各 scope の
+    //       `BalloonModel` を `Emo2Wiring` へ記憶する。文字層スケール相（`run_text_scale_phase`）はこれを再利用して
+    //       binding を組み直す——記憶が無ければ再追従は model 不在で skip され、文字だけが旧 k に
+    //       取り残される（6.5 一次実走の欠陥）。実 attach 経路で保持されることをここで固定する。
+    assert_eq!(
+        harness.wiring.balloon_model_scopes(),
+        vec![0u32, 1],
+        "attach 済み全 scope の BalloonModel が再追従用に記憶されている（D11-3）"
+    );
+
     // (b-1) シェルは初回 `\s` cue まで非表示（defect #5）: attach 直後の shell target は供給面未生成
     //       ＝`read_back` Err（合成面なし＝透過）。attach で surface0/surface10 を焼き付けない。
     for (label, target) in [
@@ -1011,6 +1030,217 @@ fn spine_s3_balloon_face_cue_delivers_hide_then_show_in_order() {
     assert_eq!(
         after_show, baseline,
         "\\b[0]→ShowSurface{{balloon,0,default}} は attach 初期面（surface0）と同一バイトを再駆動する（surface_id/binds の貫通証跡）"
+    );
+
+    harness.shutdown_bounded();
+}
+
+// ===========================================================================
+// 文字層 k 追従の実経路観測（emo-dpi-scaling task 7.2・D11-3/D11-4・R8.1/8.5/8.6）
+//
+// `run_text_scale_phase` は「presenter の現適用 k と文字層 binding の k が食い違っていれば
+// 組み直す」フェーズである。判定の権威（同値 k／未登録の no-op）は emo-text 側（task 7.1）に
+// あり、GPU 不要の判断分岐は frame.rs in-crate が持つ。ここでしか観測できないのは
+// **実 attach で `text_slot_view` が `Some` になっている本番経路**——すなわち「実際に文字層が
+// 新 k へ組み直されたか」そのものであり、以下 2 ケースがそれを実 GPU・実 fixture で固定する。
+// ===========================================================================
+
+/// バルーン窓の `DPI` を**現在値と必ず異なる値**へ差し替え、その新 DPI を返す。
+///
+/// 窓の `DPI` は wintf の `on_window_add` フックが `GetDpiForSystem()` で事前初期化するため
+/// **実行機依存**である（96 の機械もあれば 120/144/192 の機械もある）。固定値を書き込むと
+/// 「たまたま同値＝k 不変」で檻が空虚化するため、現在値を読んでから別の値を選ぶ。
+fn bump_balloon_window_dpi(harness: &mut SpineHarness, scope: usize) -> u16 {
+    let ghost_windows = harness
+        .world
+        .get_resource::<GhostWindows>()
+        .expect("spawn_ghost_windows が GhostWindows を挿入済み")
+        .clone();
+    let window = ghost_windows
+        .balloon_window(scope)
+        .expect("当該 scope の balloon 窓");
+    bump_window_dpi(harness, window)
+}
+
+/// キャラ（シェル）窓の `DPI` を**現在値と必ず異なる値**へ差し替え、その新 DPI を返す
+/// （[`bump_balloon_window_dpi`] のシェル版・非空虚性の担保は同一）。
+///
+/// SERIKO ループが載るのは**シェル**の表示スロットゆえ、ループ継続の檻（要件 4.3 の
+/// 「進行中挙動の喪失なし」）はシェル窓側の DPI を動かさなければ空虚になる。
+fn bump_char_window_dpi(harness: &mut SpineHarness, scope: usize) -> u16 {
+    let ghost_windows = harness
+        .world
+        .get_resource::<GhostWindows>()
+        .expect("spawn_ghost_windows が GhostWindows を挿入済み")
+        .clone();
+    let window = ghost_windows
+        .char_window(scope)
+        .expect("当該 scope の char 窓");
+    bump_window_dpi(harness, window)
+}
+
+/// 窓 entity の `DPI` を現在値と必ず異なる実機水準（96/192）へ差し替え、その新 DPI を返す。
+fn bump_window_dpi(harness: &mut SpineHarness, window: Entity) -> u16 {
+    let current = harness.world.get::<DPI>(window).map(|d| d.dpi_x);
+    // 実機 DPI 水準のどちらか（96=100% / 192=200%）で、現在値と必ず異なる方を選ぶ。
+    let next = if current == Some(192) { 96 } else { 192 };
+    harness
+        .world
+        .entity_mut(window)
+        .insert(DPI::from_dpi(next, next));
+    next
+}
+
+/// balloon target の適用 k（`applied_scale`）を読む短縮（`None`＝未表示は前提違反ゆえ panic）。
+fn balloon_applied_scale(harness: &SpineHarness, scope: u32) -> f32 {
+    harness
+        .wiring
+        .presenter()
+        .applied_scale(balloon_target(scope))
+        .expect("attach 初回表示済みの balloon target は適用 k を持つ")
+}
+
+/// **可視バルーンの DPI 変化**（Flow 2 の正常系・R8.1）: `Changed<DPI>` → `run_dpi_phase` で
+/// 適用 k が跳ねたあと、`run_text_scale_phase` が文字層 binding を新 k へ組み直すことを
+/// **実 attach（`text_slot_view` が `Some`）の本番経路**で固定する。
+///
+/// 併せて churn ガード（R8.5）——k が動いていないフレームでは再構築が 1 件も起きない——を
+/// 変化の前後**両方**で観測する。毎フレーム走査という cadence が「毎フレーム再生成」に
+/// 退化していないことは、この 2 点でしか区別できない。
+#[test]
+fn spine_dpi_change_refreshes_balloon_text_scale_on_real_attach() {
+    let mut harness = SpineHarness::boot(r"\s[0]\e");
+
+    let logs = capture_logs(|| run_attach_phase(&mut harness.wiring, &mut harness.world));
+    assert!(
+        logs.iter().any(|l| l.contains("attached=2")),
+        "前提: attach 完了（balloon 初回表示＝文字層 actor 登録済み）が観測できない: {logs:?}"
+    );
+
+    // 前提の非空虚性: attach で actor が登録され、balloon target は適用 k を持っている。
+    let k_before = balloon_applied_scale(&harness, 0);
+    // 前提: 本番経路の `Some(view)` が実際に成立している（`None` なら以降は縮退 skip の観測に
+    // 退化し、再構築ゼロが「正しく no-op」なのか「view が無い」のか区別できなくなる）。
+    // actor 登録そのものは `TextLayerRuntime` の読み口が無い（`is_attached` は供給面の有無＝
+    // `present_frame` 後にしか立たない）ため、後段の `vec![0]` 到達がその証跡を兼ねる。
+    assert!(
+        harness
+            .wiring
+            .presenter()
+            .text_slot_view(balloon_target(0))
+            .is_some(),
+        "前提: attach 初回表示で balloon の text_slot_view が Some になっている（本番の Some 経路）"
+    );
+    // churn ガード（変化前）: k が動いていないフレームでは 1 件も再構築しない。
+    assert!(
+        run_text_scale_phase(&mut harness.wiring).is_empty(),
+        "k 不変のフレームで文字層を組み直してはならない（R8.5）"
+    );
+
+    // DPI 変化 → dpi 相（refresh_scale で再表示・窓寸 reconcile）。
+    let new_dpi = bump_balloon_window_dpi(&mut harness, 0);
+    run_dpi_phase(&mut harness.wiring, &mut harness.world);
+    let k_after = balloon_applied_scale(&harness, 0);
+    assert_ne!(
+        k_after, k_before,
+        "前提: DPI={new_dpi} で balloon target の適用 k が実際に変わる（変わらなければ本ケースは空虚）"
+    );
+
+    // 本題: 文字層 binding が新 k へ組み直される（当該 scope のみ・k 不変の scope1 は動かない）。
+    assert_eq!(
+        run_text_scale_phase(&mut harness.wiring),
+        vec![0u32],
+        "適用 k が変わった balloon scope の文字層 binding が新 k へ組み直される（R8.1・D11-4）"
+    );
+    // churn ガード（変化後）: 直後のフレームは同値 k ゆえ再構築ゼロ。
+    assert!(
+        run_text_scale_phase(&mut harness.wiring).is_empty(),
+        "組み直した直後のフレームは同値 k ＝ no-op（毎フレーム再生成の禁止・R8.5）"
+    );
+
+    harness.shutdown_bounded();
+}
+
+/// **不可視中の DPI 変化が `Show` で着地する**（R8.1・6.5 一次実走の欠陥の本丸）:
+/// `\b[-1]`→（DPI 変化）→`\b[0]` の順で、文字層が最終的に**新 k** へ着地することを固定する。
+///
+/// # なぜこの順序が本質なのか
+///
+/// `EmoPresenter::refresh_scale` は**不可視の target を再表示で蘇らせない**（`Hide` 済みなら
+/// `applied` を更新せず `None`）。ゆえに「`refresh_scale` が `Some` を返した窓へ伝搬する」型の
+/// 結線は、この順序で**一度も発火しない**——`Changed<DPI>` のエッジは不可視のフレームで消費
+/// されて二度と来ず、適用 k は後続の `Show`（`apply_show`＝drain 相）で跳ぶからである。
+/// バルーンは大半の時間が不可視であり、`\b[-1]`→`\b[0]` は
+/// `spine_s3_balloon_face_cue_delivers_hide_then_show_in_order` が本番の通常列として既に
+/// 固定している。よって「報告駆動」は実運用でほぼ常に取りこぼす。
+///
+/// 本ケースは `run_text_scale_phase` を `refresh_scale` の戻り値から**完全に独立**させた設計
+/// （引数に報告を取らない＝構造的に参照できない）の到達判定である。同じ独立性が
+/// 「k は変わったが丸め後の物理寸が同じ」（`refresh_scale` が成功しても `None` を返す documented
+/// なケース）も同時に閉塞する——どちらも「報告 `None` だが `applied` は新 k」という同一の形だからである。
+#[test]
+fn spine_dpi_change_while_balloon_hidden_lands_on_next_show() {
+    let mut harness = SpineHarness::boot(r"\s[0]\e");
+
+    let logs = capture_logs(|| run_attach_phase(&mut harness.wiring, &mut harness.world));
+    assert!(
+        logs.iter().any(|l| l.contains("attached=2")),
+        "前提: attach 完了が観測できない: {logs:?}"
+    );
+    let k_attached = balloon_applied_scale(&harness, 0);
+    assert!(
+        run_text_scale_phase(&mut harness.wiring).is_empty(),
+        "前提: 装着直後は binding と適用 k が一致（再構築ゼロ）"
+    );
+
+    // (1) `\b[-1]` 相当（本番 adapter が DisplayCommand::HideBalloon から組む指令と同型）。
+    harness.wiring.apply_present(
+        &mut harness.world,
+        PresentCommand::Hide {
+            target: balloon_target(0),
+            reply: None,
+        },
+    );
+
+    // (2) 不可視のまま DPI 変化 → dpi 相は再表示せず適用 k も据え置き（＝報告駆動が落ちる条件）。
+    let new_dpi = bump_balloon_window_dpi(&mut harness, 0);
+    run_dpi_phase(&mut harness.wiring, &mut harness.world);
+    assert_eq!(
+        balloon_applied_scale(&harness, 0),
+        k_attached,
+        "前提: 不可視の target は再表示されず適用 k も更新されない（refresh_scale の可視ゲート）"
+    );
+    assert!(
+        run_text_scale_phase(&mut harness.wiring).is_empty(),
+        "不可視の間は文字層も動かない（適用 k がまだ旧値＝同値 k の no-op・R8.5）"
+    );
+
+    // (3) `\b[0]` 相当の再表示: ここで `apply_show` が**新 DPI**で k を導出し適用する。
+    harness.wiring.apply_present(
+        &mut harness.world,
+        PresentCommand::ShowSurface {
+            target: balloon_target(0),
+            surface_id: 0,
+            binds: BindSet::default(),
+            pattern: PatternState::default(),
+            reply: None,
+        },
+    );
+    let k_shown = balloon_applied_scale(&harness, 0);
+    assert_ne!(
+        k_shown, k_attached,
+        "前提: 再表示で DPI={new_dpi} 由来の新 k が適用される（変わらなければ本ケースは空虚）"
+    );
+
+    // (4) 本題: `Changed<DPI>` のエッジは既に消費済みでも、文字層は新 k へ着地する。
+    assert_eq!(
+        run_text_scale_phase(&mut harness.wiring),
+        vec![0u32],
+        "不可視中の DPI 変化でも、再表示後のフレームで文字層 binding が新 k へ着地する（R8.1）"
+    );
+    assert!(
+        run_text_scale_phase(&mut harness.wiring).is_empty(),
+        "着地後は同値 k ＝ no-op（R8.5）"
     );
 
     harness.shutdown_bounded();
@@ -1842,6 +2072,213 @@ fn spine_e2e_sakura_blink_default_off_emits_nothing() {
         "R3.4 既定 OFF: bind ゲート OFF は always_fire でも一切発行しない（ゲート leak 検出・実受信 {} 件・variants={:?}）",
         emitted.len(),
         emitted.iter().map(variant_name).collect::<Vec<_>>()
+    );
+
+    harness.shutdown_bounded();
+}
+
+// ===========================================================================
+// 要件 4.3（進行中挙動が DPI 変化を跨いで失われない）の実経路檻
+//
+// 既存の DPI 変化 spine 2 本（`spine_dpi_change_refreshes_balloon_text_scale_on_real_attach`／
+// `spine_dpi_change_while_balloon_hidden_lands_on_next_show`）はいずれも `SpineHarness::boot`
+// ＝`LoopDriver::Inert` で起動しており、**活性ループと DPI 変化が一度も同居していない**。
+// ゆえに要件 4.3 の 3 つの主張のうち (a) クラッシュ・表示消失なし／(b) 文字の状態保存は檻に
+// 入っていたが、(c)「SERIKO ループが DPI 変化を跨いで進行し続ける」は
+// 「ループ状態は presenter の外（seriko worker）にある」という**構造からの帰結**にとどまり、
+// 一度も観測されていなかった。以下がその空白を閉じる。
+// ===========================================================================
+
+/// シェル target の適用 k（`applied_scale`）を読む短縮（`None`＝未表示は前提違反ゆえ panic）。
+fn shell_applied_scale(harness: &SpineHarness, scope: u32) -> f32 {
+    harness
+        .wiring
+        .presenter()
+        .applied_scale(shell_target(scope))
+        .expect("表示済みの shell target は適用 k を持つ")
+}
+
+/// dispatcher tick で OnBoot talk を駆動しつつ、届いた `PresentCommand` を**実 presenter へ適用**し、
+/// scope0 shell が `surface_id` を表示する（＝実描画が成立する）まで有界スピンする。
+///
+/// [`drive_shell_shown`] は観測のみで指令を捨てるため presenter 側に表示が成立しない。ループ継続の
+/// 檻は「表示が生きていること」を readback で見るため、適用まで行うこの版が要る（sleep 不使用）。
+fn drive_shell_shown_and_presented(harness: &mut SpineHarness, surface_id: u32) {
+    let mut shown = false;
+    for now in 1u64..=200_000 {
+        harness.inject_dispatcher_tick(now);
+        for cmd in harness.wiring.drain_received() {
+            if matches!(&cmd, PresentCommand::ShowSurface { target, surface_id: sid, .. }
+                if *target == shell_target(0) && *sid == surface_id)
+            {
+                shown = true;
+            }
+            harness.wiring.apply_present(&mut harness.world, cmd);
+        }
+        if shown {
+            break;
+        }
+        std::thread::yield_now();
+    }
+    assert!(
+        shown,
+        "OnBoot talk が scope0 shell surface {surface_id} を有界内に表示しない（boot→talk→sink 経路不通）"
+    );
+}
+
+/// seriko tick を 1 発注入して 1 件の指令を回収し、**実 presenter へ適用**したうえで、その指令が
+/// 運んだ pattern の現在コマ surface id（コマ不在＝ベース復帰は `None`）と適用後の readback を返す。
+fn seriko_tick_apply_one(
+    harness: &mut SpineHarness,
+    now_ms: u64,
+    shown_surface: u32,
+    anim_id: u32,
+) -> (Option<u32>, Vec<u8>) {
+    let cmd = seriko_tick_expect_one(harness, now_ms);
+    let frame = shell_pattern_frame(&cmd, shown_surface, anim_id);
+    harness.wiring.apply_present(&mut harness.world, cmd);
+    let px = harness
+        .wiring
+        .read_back_target(shell_target(0))
+        .unwrap_or_else(|e| {
+            panic!("ループ指令適用後の shell scope0 read_back 失敗（表示が消えた・要件 4.3）: {e:?}")
+        });
+    assert!(
+        opaque_count(&px) > 0,
+        "ループ指令適用後の shell readback が全透明（表示消失・要件 4.3）: len={}",
+        px.len()
+    );
+    (frame, px)
+}
+
+/// **活性 SERIKO ループを跨ぐ DPI 変化**（要件 4.3 の残る主張 (c)・R7.2/8.1/8.2）: 実 emo2 表＋常時発火
+/// 固定 rng で `boot_live` し、kero まばたき（surface2100 `animation0`＝2106/2110/`-1`）を 1 周の**途中まで**
+/// 歩かせた状態で**シェル窓の DPI を変える**。その後——
+///
+/// 1. DPI 変化直後の再表示が**進行中のコマ（2106）を載せたまま**新 k で成立する
+///    （＝`refresh_scale` が `last_show` の pattern を捨てない＝進行中挙動を失わない）。
+/// 2. ループは**リセットも停止もせず同じ 1 周の続き**（2110 → `-1` ベース復帰）を、実 fixture 実測の
+///    golden どおりに発行し続ける（先頭 2106 へ戻らない・無発行にならない）。
+/// 3. その全区間で shell の `read_back` が成立し全透明にならない（クラッシュ・表示消失なし）。
+/// 4. DPI 変化以降の表示は一貫して**新 k の物理寸**（旧 k の絵が残らない・k 変化が実描画へ届いている）。
+///
+/// # 既存 DPI 檻との差（なぜ本ケースが要るか）
+///
+/// 既存 2 本は `LoopDriver::Inert`（ループ完全不活性）で、変化させるのも**バルーン**窓の DPI である。
+/// SERIKO ループが載るのはシェル表示スロットゆえ、活性ループ×シェル窓 DPI 変化という本番の組み合わせは
+/// どこにも存在しなかった。本ケースはその 1 点だけを足す（(a)(b) の重複観測はしない）。
+///
+/// # 決定論（sleep 不使用・注入時刻＋注入乱数のみ）
+///
+/// tick は `send_tick` 直接注入（loop ticker 不起動）、乱数は常時発火の固定注入列。DPI は
+/// [`bump_char_window_dpi`] が現在値と必ず異なる実機水準を選ぶ（「たまたま同値」で空虚化しない）。
+///
+/// # 実測の変異キル（2026-07-26・本ワークツリー）
+///
+/// - `EmoPresenter::refresh_scale` が再表示時に `last_show` の pattern を捨てて
+///   `PatternState::default()` で `apply_show` する変異（＝DPI 変化で進行中の SERIKO コマを失う）:
+///   `-p areka` 522 本中**本テストのみ**が落ち（他 521 本生存）、落ちる assert も狙いどおり
+///   「DPI 変化直後の再表示が進行中コマを失いベース面へ戻っている」である。同変異は
+///   `-p areka-emo-present`（91 本）では **1 本も落ちない**——`refresh_scale` の pattern 保存は
+///   本テスト追加前まで repo 内のどの檻も観測していなかった（exclusive）。
+/// - `apply_show` が k≠1 のとき `binds`／`pattern` を既定へ落とす変異では、本テストと
+///   `areka-emo-present` の `show_surface_scales_layered_bind_and_pattern_content_with_single_k`
+///   （要件 2.3 の同時追加檻）が**共倒れ**（shared）。既存 521 本は全生存。
+#[test]
+fn spine_dpi_change_during_live_seriko_loop_keeps_loop_progressing() {
+    // 実表＋常時発火固定 rng でループ活性化（既存 DPI 檻は Inert＝この組み合わせは本ケースが初）。
+    let mut harness = SpineHarness::boot_live(r"\s[2100]\e", always_fire_rng());
+
+    // 実 attach（供給面・視覚を本番経路で生成）→ 表示中ゲート成立まで talk を駆動して実適用する。
+    let logs = capture_logs(|| run_attach_phase(&mut harness.wiring, &mut harness.world));
+    assert!(
+        logs.iter().any(|l| l.contains("attached=2")),
+        "前提: attach 完了が観測できない: {logs:?}"
+    );
+    drive_shell_shown_and_presented(&mut harness, 2100);
+
+    let base_k0 = harness
+        .wiring
+        .read_back_target(shell_target(0))
+        .expect("前提: 初回 \\s[2100] 適用で shell 供給面が生成される");
+    assert!(
+        opaque_count(&base_k0) > 0,
+        "前提: DPI 変化前の shell が実描画されている"
+    );
+    let k_before = shell_applied_scale(&harness, 0);
+
+    // ── 1 周の途中まで歩かせる（起動 tick → 境界 1000 で発火＋elapsed0 → pattern0=2106） ──
+    harness.inject_seriko_tick(0); // 起動 tick（境界初期化・非跨ぎ・無発行）
+    let (frame1, frame1_k0) = seriko_tick_apply_one(&mut harness, 1000, 2100, 0);
+    assert_eq!(
+        frame1,
+        Some(2106),
+        "前提: DPI 変化前に kero 1 周の pattern0=2106 まで進んでいる（実 fixture animation0）"
+    );
+    assert_ne!(
+        frame1_k0, base_k0,
+        "前提: 進行中コマが実際に表示画素を変えている（変わらなければ以降の継続観測が空虚）"
+    );
+
+    // ── ここでシェル窓の DPI が変わる（モニタ跨ぎ・表示スケール変更の決定論的代替） ──
+    let new_dpi = bump_char_window_dpi(&mut harness, 0);
+    run_dpi_phase(&mut harness.wiring, &mut harness.world);
+    let k_after = shell_applied_scale(&harness, 0);
+    assert_ne!(
+        k_after, k_before,
+        "前提: DPI={new_dpi} で shell target の適用 k が実際に変わる（変わらなければ本ケースは空虚）"
+    );
+
+    // (3)(4) 表示は消えず、新 k の物理寸で載り直している。
+    let frame1_k1 = harness
+        .wiring
+        .read_back_target(shell_target(0))
+        .unwrap_or_else(|e| panic!("DPI 変化直後の shell read_back 失敗（表示消失・要件 4.3）: {e:?}"));
+    assert!(
+        opaque_count(&frame1_k1) > 0,
+        "DPI 変化直後の shell readback が全透明（表示消失・要件 4.3）: len={}",
+        frame1_k1.len()
+    );
+    assert_ne!(
+        frame1_k1.len(),
+        frame1_k0.len(),
+        "DPI 変化後も旧 k の物理寸のまま（k が実描画へ届いていない）"
+    );
+
+    // ── (2) ループは同じ 1 周の続きを歩き続ける（先頭へ戻らない・止まらない） ──
+    let (frame2, frame2_k1) = seriko_tick_apply_one(&mut harness, 1040, 2100, 0);
+    assert_eq!(
+        frame2,
+        Some(2110),
+        "DPI 変化を跨いでもループは同じ 1 周の続き（pattern1=2110）を発行する（先頭 2106 へ戻さない＝リセットなし・要件 4.3）"
+    );
+    assert_eq!(
+        frame2_k1.len(),
+        frame1_k1.len(),
+        "DPI 変化後のループ指令が旧 k の寸へ戻っている（k の一貫性が崩れた）"
+    );
+    assert_ne!(
+        frame2_k1, frame1_k1,
+        "コマ遷移が表示画素へ届いていない（ループは動いたが絵が更新されない）"
+    );
+
+    let (frame3, base_k1) = seriko_tick_apply_one(&mut harness, 1120, 2100, 0);
+    assert_eq!(
+        frame3, None,
+        "DPI 変化を跨いだ 1 周が実 fixture どおり `-1` 終端（ベース復帰）まで到達する（要件 4.3/4.3 終端）"
+    );
+    assert_eq!(
+        base_k1.len(),
+        frame1_k1.len(),
+        "ベース復帰も新 k の物理寸で成立する"
+    );
+
+    // (1) DPI 変化直後の再表示が**進行中のコマを載せたまま**だったことの決定的な対照:
+    //     同じ k のベース復帰の絵（base_k1）と異なる＝2106 のコマが再表示に生きていた。
+    //     `refresh_scale` が pattern を捨てて素の面を出す実装なら、ここで両者が一致して落ちる。
+    assert_ne!(
+        frame1_k1, base_k1,
+        "DPI 変化直後の再表示が進行中コマを失いベース面へ戻っている（進行中挙動の喪失・要件 4.3）"
     );
 
     harness.shutdown_bounded();

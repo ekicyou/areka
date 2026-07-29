@@ -19,13 +19,14 @@ areka の基本設計は **DPI追従**（画面 DPI に追従してマスコッ�
   - 窓クライアント寸・合成先（swapchain/visual）寸・窓配置採寸の k 追従。
   - 窓 DPI 変化（モニタ跨ぎ移動・表示スケール変更）時の k 再導出と表示更新。
   - 決定論 unit（オフスクリーン readback・純関数全網羅）＋実 DPI（≠96）実機観測（本番ゴースト先行）。
+  - **バルーン文字層の k 再追従**（k 変化時の binding 再構築・文字供給面の再生成・リビール状態保存。**2026-07-26 開発者裁定によるスコープ拡大**——task 6.5 一次実走で確定欠陥として検出。担当 spec が W5 のどの割当にも実在せず、本来の持ち主 `areka-P0-emo-text-layer` は完了済みで消化不能のため、本 spec が「今」担当する）。
 - **Out of scope**:
   - 当たり判定の点÷k・ヒットテスト規約の k 対応（`areka-P0-collision-dpi-hittest`・W5）。
   - 混在 DPI 環境での窓消失バグの解消（`areka-P0-dpi-window-vanish`・W5。本仕様は WM_DPICHANGED 窓追従の着地でその前提を供給する）。
   - アプリ管理拡大率の実設定手段（UI・タグ等）の導入（本仕様では 1.0 固定の縮退シームとして予約・追跡 spec/roadmap 記載の要否は別セッション棚卸しで裁定）。
   - SSP の scaling 運用の輸入（`\![set,scaling]`・ユーザー拡大率のモニタ非依存固定・SERIKO scaling 乗算列）。
   - SHIORI・撫で意味論・入力イベントの変更。
-  - DPI追従が波及する他消費者（`window-placement` 窓寸・`emo-text-layer` 行寸・balloon 寸・`choice-render`）の再検証**実装**（各 spec の Revalidation Trigger として W5 で消化）。
+  - DPI追従が波及する他消費者（`window-placement` 窓寸・balloon 寸・`choice-render`）の再検証**実装**（各 spec の Revalidation Trigger として W5 で消化）。**注（2026-07-26 改訂）**: 当初ここに含めていた `emo-text-layer` 行寸／文字層は、6.5 一次実走で「再検証」でなく**確定欠陥**（k 再追従経路の不存在）と判明し、かつ W5 のどの spec の割当ファイル集合にも入っていなかったため、開発者裁定で **In scope へ移管**（Requirement 8）。
   - バルーン採寸の per-scope 化（`areka-P0-kero-balloon`・W5）。
 - **Adjacent expectations**:
   - 窓 DPI 情報は表示基盤（wintf）の既存 DPI 機構（実値取得＋DPI 変化のライブ更新）を consume するのみで、新規の外部依存・新規の基盤改造を前提としない。
@@ -121,3 +122,31 @@ areka の基本設計は **DPI追従**（画面 DPI に追従してマスコッ�
 7. If 設計が spawn.rs 改変を要求する形に着地したとき、then the 本仕様 shall 当該部分を本仕様で実装せず W5 へ送る（事前割当契約のエスケープ条項）。
 8. When 採寸関数（scope ごとの窓寸採寸）を再構造するとき、the 本増分 shall バルーン寸法が scope 別になり得る席を潰さない関数分解とし、後続 `areka-P0-kero-balloon`（W5）の per-scope バルーン採寸改造を妨げない。
 9. The 本増分 shall 当たり判定の点÷k・ヒット規約の変更を行わず、`areka-P0-collision-dpi-hittest`（W5）の領分として明示的に除外する。
+10. **（2026-07-26 改訂）** The 本増分の編集面 shall `crates/areka-emo-text/src`（文字層 k 再追従シーム・Requirement 8 に限る）を追加で含む。`spawn.rs` 不触（AC 7.6）は維持する。
+
+    **（2026-07-26 追記・実装後の現況追随／新たな裁可ではない）** 実装中に親コントローラが裁可した境界拡張を、authority document として本項へ転記する。根拠は tasks.md `## Implementation Notes` の該当項、および design.md「File Structure Plan」の 2026-07-26 追記:
+    - `crates/areka/src/placement/{source.rs, follow.rs, mod.rs}` — source/follow は design「Boundary Deviation Notes」で開発者承認済（2026-07-24）。`mod.rs` は k₀ 導出（`build_measure_scaling`・`AuthorDpi`）の実際の居所（note 4.3）。
+    - `crates/areka/src/placement/test_support.rs`（新規・`#[cfg(test)]` 専用） — ログ捕捉ハーネスの正本（note 6.2）。本番表面ゼロ。
+    - `crates/areka/src/emo2_boot/{assets.rs, frame.rs, mod.rs, spine.rs}`・`crates/areka/src/main.rs`・`crates/areka/src/input_events/balloon.rs` — `BootAssets` の pub フィールド追加に対する機械的追随を含む（note 4.1）。`spine.rs`／`balloon.rs` は `#[cfg(test)]` 域のみ。
+    - `crates/areka-emo-text/tests/attach_wiring_test.rs` — task 7.3 の必須檻。`TextSlotView` が私有型ゆえ in-crate では構造的に檻に入らない（実 presenter を建てられる統合テストが唯一の置き場）。
+    - `crates/areka-emo-present/src/lib.rs`・`crates/areka-emo-compose/src/lib.rs` — 新規 `scale` モジュールの re-export。
+    - `crates/areka/examples/*`・`crates/areka-emo-text/examples/*`・`crates/areka-emo-text/tests/draw_readback_test.rs` — シグネチャ追随（機械的）。
+
+    **`crates/wintf` は結果として一度も変更しなかった**（当初の編集面宣言は許容していたが不要だった）。`spawn.rs` 不触は `git diff --name-only origin/main...HEAD` で機械的に確認済み。
+
+### Requirement 8: バルーン文字層の k 再追従（スコープ拡大・開発者裁定 2026-07-26）
+
+**Objective:** ユーザーとして、モニタ跨ぎ移動等で表示スケール k が変わったとき、バルーンの**文字**もバルーン画像・マスコットと同じ k で描き直されることを求める。これにより、非 96 DPI 環境・混在 DPI 環境で文字だけが旧 k の寸法に取り残される誤表示（6.5 一次実走で実測: 125%→200% 移動後、バルーン 800×448 に対し文字供給面 300×97＝0.625 倍のまま）が解消される。
+
+**根因（一次実走 2026-07-26 で特定）**: (a) `emo2_boot/frame.rs:504` の `register_actor_view` は `wiring.attached` ゲートで高々 1 回であり、`TextSlotBinding::from_view`（`areka-emo-text/src/actor.rs:264`）が装着時点の k を焼き付ける。(b) `actor.rs:518` の文字供給面生成は `if !runtime.surfaces.contains_key(actor)` で初回のみ。(c) `run_dpi_phase` は presenter の target を再スケールするが emo-text 側へ伝搬する経路が存在しない。
+
+#### Acceptance Criteria
+
+1. When 窓 DPI 変化により balloon target の適用 k が変わったとき、the 文字層 shall binding を新しい k で再構築する（`TextSlotView` 経由・既存の単一構築経路 `register_actor_view` を再利用し、第 2 の構築流儀を作らない）。
+2. When binding が再構築されたとき、the 文字層 shall 文字供給面・オフセットを新しい k で再生成する（`ceil(validrect 寸 × k)`／`validrect 原点 × k`——既存の初回生成と同一の式・旧寸供給面の再利用禁止）。
+3. The 再構築・再生成 shall リビール状態（typewriter 進行・確定行・`TextLayerState`）を破棄しない（`Clear`/`ClearAll` とは明確に区別する）。
+4. When 再生成後の最初の提示が行われるとき、the 文字層 shall 確定行および進行中行を新しい k で全再描画する（旧 k の残像・部分描画を残さない）。
+5. While 適用 k が変化していない（同値再導出・identity 含む）とき、the 文字層 shall 再結線・再生成を行わない（毎フレーム churn の禁止）。
+6. If `text_slot_view` が引けない等の縮退が起きたとき、then the 結線 shall `warn!`/`error!` を出して skip し、次機会（次の DPI 変化・次フレーム）に委ねる（silent 失敗の禁止・log-first）。
+7. The 再追従 shall ログで決定論的に観測できる（再装着 `info!` または専用 `info!` に actor・旧/新 k・新物理寸が載る——R6 の grep 判定に接続）。
+8. When 実機 2 水準（125%↔200%）でモニタ跨ぎ移動を行ったとき、the 文字 shall 移動先の k で描画され、ログと目視の双方で確認できる（6.5 の再走に統合）。
