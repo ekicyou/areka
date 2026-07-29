@@ -400,4 +400,4 @@
 2. **collision-geometry の合流/マージ**: Task 1-4.1（k=1.0 resolver＋`HitRegion` 契約）を暫定確定として先に merge（DPI追従 hit-test を新 spec で追跡）するか、`collision-dpi-hittest` 着地まで開けておくか。input-events（W2）が `HitRegion` を必要とする点が判断材料。
 3. **Strategy A（emo-compose 鮮明ラスタ・`blit.rs` リサンプラ）vs B（WUC transform・軟い/低コスト）**・**author_dpi 定義**（k の分母・ukadoc 正典）・**整数倍/連続**・**÷k 丸め**（floor/round・境界1px）・**WM_DPICHANGED ライブ再スケール**・**seriko/mayuna collision との相互作用**（各 brief の open questions）。
 
-> 正本参照: 新 spec 2 本の brief（`specs/areka-P0-emo-dpi-scaling/brief.md`・`specs/areka-P0-collision-dpi-hittest/brief.md`）／roadmap 追記㉚／[[areka-dpi-following-core-design]]。
+> 正本参照: 新 spec 2 本の brief（`specs/completed/areka-P0-emo-dpi-scaling/brief.md`・`specs/areka-P0-collision-dpi-hittest/brief.md`）／roadmap 追記㉚／[[areka-dpi-following-core-design]]。
