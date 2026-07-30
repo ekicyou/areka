@@ -1155,6 +1155,37 @@ fn resnap_from_sizes(world: &mut World, sizes: impl Iterator<Item = (usize, Size
 /// 未表示 target・未装着 presenter は全 scope skip（no-op・panic しない）。`GhostWindows` 未挿入
 /// でも安全（`resnap_from_sizes` が no-op）。
 fn resnap_shell_targets(presenter: &EmoPresenter, world: &mut World) {
+    resnap_with(presenter, world)
+}
+
+/// 表示中 target の**物理寸**（k 倍後）だけを引く最小シーム（[`EmoPresenter::target_physical_size`]
+/// の抽象）。
+///
+/// `EmoPresenter` から `Some` を得るには実 GPU で `ShowSurface` を完了させた装着済み target が
+/// 要る。ゆえに「resnap が **どの `TargetId` を読むか**」（shell か balloon か）は、素の
+/// `EmoPresenter::new()` を渡す存在チェックでは**全 target が `None` に潰れて観測できない**——
+/// `shell_target`→`balloon_target` の 1 トークン変異が檻をすり抜けていた実際の穴である
+/// （2026-07-30 是正。それ以前は「コードレビューで足りる」と散文で断っていた）。
+///
+/// 本トレイトは兄弟の [`ScaleReportSource`] と同型の意図を持つ: **frame 側の結線**を GPU 無しの
+/// 決定論檻へ入れるためのシーム（D9 の振り分け基準 (a)＝判断分岐は in-crate 純テスト）。
+trait PhysicalSizeSource {
+    /// 表示中なら適用済み k を掛けた物理寸を返す。未装着・未表示は `None`。
+    fn physical_size(&self, target: TargetId) -> Option<(u32, u32)>;
+}
+
+impl PhysicalSizeSource for EmoPresenter {
+    fn physical_size(&self, target: TargetId) -> Option<(u32, u32)> {
+        self.target_physical_size(target)
+    }
+}
+
+/// [`resnap_shell_targets`] の本体（[`PhysicalSizeSource`] 越しに寸を引く形へ一般化したもの）。
+///
+/// 本番経路は `resnap_shell_targets` が**本体を持たずここへ委譲する**だけである——実装を 2 つに
+/// 割らないことが要点で、fake 相手の檻が「本番も同じ判断をしている」ことを担保する
+/// （実装が分岐していると fake は緑のまま本番だけ壊れ得る）。
+fn resnap_with<S: PhysicalSizeSource + ?Sized>(source: &S, world: &mut World) {
     // scope 識別は GhostWindows 経由（Req4.5）。未挿入は shell 寸を引く対象が無い＝no-op。
     let Some(ghost_windows) = world.get_resource::<GhostWindows>() else {
         return;
@@ -1169,7 +1200,9 @@ fn resnap_shell_targets(presenter: &EmoPresenter, world: &mut World) {
         // （native で駆動すると k≠1 で DPI 相 reconcile と同一フレーム内で綱引きになり窓が原寸へ
         // 引き戻される）。丸めは presenter 側が権威 `scaled_extent` で確定済みゆえ通貨変換のみ行う。
         // 未表示（初回 ShowSurface 前）・未装着は `None` → skip（no-op・遅延化への防御）。
-        let Some((w, h)) = presenter.target_physical_size(shell_target(scope as u32)) else {
+        // shell/balloon の取り違えは `resnap_reads_shell_targets_only_and_ignores_balloon_geometry`
+        // と `resnap_queries_shell_targets_only` が排他的に殺す（2026-07-30 実測）。
+        let Some((w, h)) = source.physical_size(shell_target(scope as u32)) else {
             continue;
         };
         // (u32,u32)→i32 変換失敗は skip（Req3.4）。
@@ -2054,9 +2087,111 @@ mod tests {
         );
     }
 
+    /// resnap が引く物理寸を target ごとに作り分ける fake（[`PhysicalSizeSource`] の檻用実装）。
+    ///
+    /// shell（偶数 id）と balloon（奇数 id）で**異なる寸**を返し、問い合わせられた `TargetId` を
+    /// 記録する。これにより「resnap がどちらを読んだか」が窓ジオメトリと問い合わせ記録の
+    /// 二重の観測面で判別できる（実 `EmoPresenter` は装着＋`ShowSurface` 完了＝GPU が要り、
+    /// 未装着だと全 target が `None` に潰れて判別不能になる——それが変異生存の穴だった）。
+    struct FakeSizes {
+        shell: (u32, u32),
+        balloon: (u32, u32),
+        queried: std::cell::RefCell<Vec<u32>>,
+    }
+
+    impl FakeSizes {
+        fn new(shell: (u32, u32), balloon: (u32, u32)) -> Self {
+            FakeSizes {
+                shell,
+                balloon,
+                queried: std::cell::RefCell::new(Vec::new()),
+            }
+        }
+    }
+
+    impl PhysicalSizeSource for FakeSizes {
+        fn physical_size(&self, target: TargetId) -> Option<(u32, u32)> {
+            self.queried.borrow_mut().push(target.0);
+            // target_map: shell=2*scope（偶数）／balloon=2*scope+1（奇数）。
+            if target.0 % 2 == 0 {
+                Some(self.shell)
+            } else {
+                Some(self.balloon)
+            }
+        }
+    }
+
+    /// 4.5（変異檻・2026-07-30 新設）: resnap は **shell target の物理寸**で char 窓を駆動し、
+    /// balloon target のジオメトリは読まない。
+    ///
+    /// `shell_target(scope)` → `balloon_target(scope)` の 1 トークン変異を**排他的に殺す**。
+    /// shell/balloon で寸を変えてあるため、変異すると char 窓が balloon 寸（223×158）へ
+    /// 縮み、Bottom 再射影で y も 1444−158=1286 へ跳ぶ——寸法・位置の両方で判別できる。
+    #[test]
+    fn resnap_reads_shell_targets_only_and_ignores_balloon_geometry() {
+        let (mut world, gw) = resnap_world();
+        let char0 = gw.char_window(0).unwrap();
+        let char1 = gw.char_window(1).unwrap();
+        let balloon0 = gw.balloon_window(0).unwrap();
+        let balloon_size_before = size_of(&world, balloon0);
+
+        // shell=434×700（scope0 の初期寸 434×687 と異なる＝駆動される）／
+        // balloon=223×158（fixture の balloon 実寸・変異したらこちらが char へ写る）。
+        let fake = FakeSizes::new((434, 700), (223, 158));
+        resnap_with(&fake, &mut world);
+
+        assert_eq!(
+            size_of(&world, char0),
+            Some(SizeI::new(434, 700)),
+            "char0 は shell target の物理寸へ揃う（balloon 寸 223×158 なら変異）"
+        );
+        assert_eq!(
+            pos_of(&world, char0),
+            Some(Point { x: 1483, y: 744 }),
+            "Bottom 再射影は shell 寸基準: y=1444−700（balloon 寸なら 1444−158=1286）"
+        );
+        assert_eq!(
+            size_of(&world, char1),
+            Some(SizeI::new(434, 700)),
+            "char1 も shell target の物理寸で駆動される（scope 横断で同一判断）"
+        );
+        assert_eq!(
+            size_of(&world, balloon0),
+            balloon_size_before,
+            "balloon 窓自体は書かれない（scope→char_window のみ写像・Req4.5）"
+        );
+    }
+
+    /// 4.5（変異檻・2026-07-30 新設）: 問い合わせた `TargetId` 集合が shell だけであること。
+    ///
+    /// 上のジオメトリ檻と観測面を分ける——寸が偶然一致しても読み口の取り違えを捕まえる
+    /// （兄弟の `dpi_phase_first_run_matches_all_windows_without_churn` と同じ技法）。
+    #[test]
+    fn resnap_queries_shell_targets_only() {
+        let (mut world, _gw) = resnap_world();
+
+        let fake = FakeSizes::new((434, 700), (223, 158));
+        resnap_with(&fake, &mut world);
+
+        let mut queried = fake.queried.borrow().clone();
+        queried.sort_unstable();
+        assert_eq!(
+            queried,
+            vec![shell_target(0).0, shell_target(1).0],
+            "resnap が引く target は shell のみ（balloon_target {:?}/{:?} は一度も引かない）",
+            balloon_target(0),
+            balloon_target(1)
+        );
+    }
+
     /// アダプタ存在チェック: resnap_shell_targets を target 未装着の EmoPresenter::new()
-    /// （text_slot_view 全 None）で呼ぶと全 scope skip の no-op（panic しない）・GhostWindows
-    /// 未挿入でも安全。shell_target のみ読む配線は本存在チェック＋コードレビューで足りる。
+    /// （target_physical_size 全 None）で呼ぶと全 scope skip の no-op（panic しない）・
+    /// GhostWindows 未挿入でも安全。
+    ///
+    /// **注意**: 未装着 presenter は全 target が `None` ゆえ shell/balloon を判別できない
+    /// （本テストは変異を殺さない）。読み口の取り違えは
+    /// `resnap_reads_shell_targets_only_and_ignores_balloon_geometry` と
+    /// `resnap_queries_shell_targets_only` が担う。
     #[test]
     fn resnap_shell_targets_is_noop_with_unattached_presenter() {
         let (mut world, gw) = resnap_world();

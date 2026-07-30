@@ -375,7 +375,7 @@ fn real_emo2_menu_cue_sequence_renders_and_hovers_headless() {
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
     rt.register_actor(
         actor.clone(),
-        TextSlotBinding::new(slot, window, 1.0, IMAGE_SIZE),
+        TextSlotBinding::new(slot, window, 1.0, IMAGE_SIZE, IMAGE_SIZE),
         ResolvedBalloonText::resolve(&model, IMAGE_SIZE),
     );
     for cue in &talk_cues {

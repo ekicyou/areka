@@ -173,12 +173,27 @@ fn setup_two_targets(world: &mut World) -> (EmoPresenter, Entity, Entity) {
 
 // ── k≠1 の単一 target フィクスチャ（task 7.3・R8.2 の `from_view` 檻用） ─────────────────
 
-/// k≠1 檻の native 原寸（作者画像空間・k 不変であるべき寸）。
+/// k>1 檻の native 原寸（作者画像空間・k 不変であるべき寸）。
 ///
-/// 140/80 とも偶数ゆえ k=2 では `scaled_extent` が端数を作らず、`round(physical / k)` が
-/// native へ**厳密**に戻る（本檻が問うのは丸めではなく「どちらの寸を読むか」の向きゆえ、
-/// 端数を混ぜて論点をぼかさない。端数丸めの檻は in-crate `binding_derives_image_size_*` が所有）。
+/// 140/80 とも偶数ゆえ k=2 では `scaled_extent` が端数を作らない——本檻が問うのは丸めではなく
+/// 「**どちらの寸を読むか**」の向きゆえ、端数を混ぜて論点をぼかさない。
+/// 丸めそのもの（k<1 の衝突）の檻は [`SUB_UNITY_NATIVE`] 側が所有する。
 const SCALED_NATIVE: (u32, u32) = (140, 80);
+
+/// k<1 檻の native 原寸（2026-07-30）。
+///
+/// # なぜこの値か——k<1 では順写像が**単射でない**
+///
+/// 丸め権威 `scale_len` は k=4/5 で `142 → round(113.6) = 114` と `143 → round(114.4) = 114`
+/// を返す。**異なる 2 つの原寸が同一の物理寸へ潰れる**のだから、物理寸から原寸を復元する
+/// 逆写像は原理的に存在し得ない——旧導出はどちらか一方で必ず間違える。同様に 77 と 78 は
+/// ともに 62 へ潰れる。
+///
+/// k>1 でこれが起きないのは、順写像が拡大写像で異なる原寸が異なる物理寸へ分離されるからである
+/// （縮小写像である k<1 のみ鳩ノ巣で衝突する）。ゆえに「k≥1 で緑」は k<1 の証拠にならない。
+///
+/// 実測（2026-07-30）: 旧導出を復活させるとこの (142, 77) は (143, 78) を返して落ちる。
+const SUB_UNITY_NATIVE: (u32, u32) = (142, 77);
 
 /// 窓 DPI を指定して balloon 相当の単一 target（native 原寸 [`SCALED_NATIVE`]）を表示確立まで組む。
 ///
@@ -186,11 +201,25 @@ const SCALED_NATIVE: (u32, u32) = (140, 80);
 /// `setup_two_targets` は k=1.0 に固定されており、k=1 では `surface_size()` と `physical_size()`
 /// が恒等で**取り違えが数値的に観測できない**——本フィクスチャはその盲点を潰すためにある。
 fn setup_scaled_target(world: &mut World, window_dpi: u16) -> (EmoPresenter, Entity) {
+    setup_target_with_dpis(world, window_dpi, 96, SCALED_NATIVE)
+}
+
+/// 窓 DPI・作者 DPI・native 原寸を明示して単一 target を表示確立まで組む（**k<1 を作れる**版）。
+///
+/// `author_dpi > window_dpi` にすると k<1 になる（例: 作者 120／窓 96 → k=4/5）。これは本番
+/// 到達可能な構成である——`parse_author_dpi` は `dpi,120` のような宣言値を素通しするため、
+/// 120 DPI 基準で描いたゴーストを 100% 表示のモニタに出せばそのまま k=4/5 になる。
+fn setup_target_with_dpis(
+    world: &mut World,
+    window_dpi: u16,
+    author_dpi: u16,
+    native: (u32, u32),
+) -> (EmoPresenter, Entity) {
     let window = world.spawn(DPI::from_dpi(window_dpi, window_dpi)).id();
-    let (emo_world, atlas) = build_target_assets(SCALED_NATIVE.0, SCALED_NATIVE.1, 0x33);
+    let (emo_world, atlas) = build_target_assets(native.0, native.1, 0x33);
     let mut presenter = EmoPresenter::new();
     presenter
-        .attach_target(world, TargetId(0), window, emo_world, atlas, 96)
+        .attach_target(world, TargetId(0), window, emo_world, atlas, author_dpi)
         .expect("attach_target(0) 失敗");
     show_surface(&mut presenter, world, TargetId(0));
     (presenter, window)
@@ -665,7 +694,7 @@ fn from_view_reads_physical_size_so_image_space_stays_k_invariant() {
     assert_eq!(
         binding.image_size,
         view.surface_size(),
-        "image px 原寸 = round(physical / k) は作者画像空間＝native と一致（k 不変）"
+        "image px 原寸は view の native をそのまま透過する（作者画像空間＝k 不変）"
     );
 
     // ── 檻 (3): 供給面の実寸が k 倍で伸びる（R8.2 の可観測な帰結） ──
@@ -683,6 +712,66 @@ fn from_view_reads_physical_size_so_image_space_stays_k_invariant() {
     assert!(
         opaque_count(&read_back(&rt, &sakura)) > 0,
         "k=2 の供給面へ実際に文字が描かれる（寸だけ合って空表示、を排除）"
+    );
+}
+
+/// **k<1 の 1px 往復欠陥の回帰檻**（2026-07-30 新設・実 presenter 経路）。
+///
+/// # 何を守っているか
+///
+/// 旧実装は image px 原寸を `round(physical_size / k)` と**逆写像で復元**していた。しかし
+/// k<1 の順写像は**縮小写像＝単射でない**（[`SUB_UNITY_NATIVE`] の doc 参照: 142 と 143 が
+/// ともに物理 114 へ潰れる）。潰れた情報を割り算で取り戻すことはできず、旧実装はどちらか
+/// 一方の原寸で必ず 1px 間違える。k>1 で表面化しないのは拡大写像が原寸を分離するからにすぎない。
+///
+/// 本ケースは作者 DPI 120／窓 DPI 96（k=4/5）で native [`SUB_UNITY_NATIVE`]=(142,77) を通し、
+/// `binding.image_size` が **(142,77) のまま**であることを実 presenter 経由で固定する。
+/// 逆写像を復活させると (143,78) になり落ちる（＝旧実装への排他キル・2026-07-30 実測）。
+///
+/// # なぜ k>1 の兄弟檻では足りなかったか
+///
+/// `from_view_reads_physical_size_so_image_space_stays_k_invariant` は k=2 で「どちらの寸を
+/// 読むか」の**向き**を固定するが、k≥1 では逆写像も厳密に復元するため**丸めの破れは起きない**。
+/// k<1 は本 spec のどの檻も実機サインオフ（125%/200%＝k>1）も通っておらず、休眠していたのは
+/// 同梱 emo2 fixture が DPI を宣言しない（＝96）という**データ上の偶然**にすぎなかった。
+///
+/// # 本番到達性
+///
+/// `parse_author_dpi` は宣言値を素通しする（対照表外の任意値も切り捨てない）。ゆえに
+/// `dpi,120` を宣言したサードパーティ製ゴーストを 100% 表示のモニタに出せば k=4/5 になる。
+#[test]
+fn from_view_keeps_image_size_exact_at_sub_unity_scale() {
+    let mut world = make_world_with_gpu();
+    // 作者 120 / 窓 96 → k = 96/120 = 4/5。
+    let (presenter, _window) = setup_target_with_dpis(&mut world, 96, 120, SUB_UNITY_NATIVE);
+    let view = presenter
+        .text_slot_view(TargetId(0))
+        .expect("表示確立後の text_slot_view は Some");
+
+    // ── 前提の非空虚性: k<1 が実際に成立し、2 つの寸が食い違っている ──
+    assert_eq!(view.scale(), 0.8, "前提: 窓 96 ／ author 120 で k=4/5");
+    assert_eq!(view.surface_size(), SUB_UNITY_NATIVE, "前提: native 原寸");
+    assert_eq!(
+        view.physical_size(),
+        (114, 62),
+        "前提: 物理寸＝scale_len(native, 4/5)＝round(113.6)/round(61.6)"
+    );
+    assert_ne!(
+        view.surface_size(),
+        view.physical_size(),
+        "前提: k≠1 で 2 つの寸が数値的に弁別できる"
+    );
+
+    // ── 檻: image px 原寸は native そのもの（逆写像なら (142, 77) へ 1px 失う） ──
+    let binding = TextSlotBinding::from_view(&view);
+    assert_eq!(
+        binding.image_size, SUB_UNITY_NATIVE,
+        "k<1 でも image px 原寸は native と厳密一致（round(physical/k) 復活なら (143, 78)）"
+    );
+    assert_eq!(
+        binding.surface_size,
+        view.physical_size(),
+        "物理原寸は view の physical_size をそのまま保持"
     );
 }
 

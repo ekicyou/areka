@@ -193,7 +193,7 @@ fn real_pump_scroll_redraws_only_dirty_and_unchanged_frames_touch_nothing() {
 
     let actor = ActorKey::from("0");
     let model = model();
-    let binding = TextSlotBinding::new(slot, window, 1.0, IMAGE);
+    let binding = TextSlotBinding::new(slot, window, 1.0, IMAGE, IMAGE);
     let resolved = ResolvedBalloonText::resolve(&model, binding.image_size);
     let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
         TextLayerConfig::default(),

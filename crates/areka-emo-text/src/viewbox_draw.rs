@@ -862,7 +862,7 @@ mod tests {
                 (image_size.0 as f32 * k).ceil() as u32,
                 (image_size.1 as f32 * k).ceil() as u32,
             );
-            let binding = TextSlotBinding::new(slot, window, k, physical);
+            let binding = TextSlotBinding::new(slot, window, k, physical, image_size);
             TextSurface::attach(
                 &mut self.world,
                 &binding,

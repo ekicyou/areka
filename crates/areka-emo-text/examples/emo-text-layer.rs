@@ -799,7 +799,7 @@ fn try_attach(demo: &mut Demo, world: &mut World) {
         return;
     }
 
-    // image_size は binding の一点導出値（`image_size = round(surface_size / k)`・k=1.0 恒常）
+    // image_size は presenter native（`TextSlotView::surface_size`）の透過値＝作者画像空間・k 不変
     // ——検証用 layout も描画（register_actor_view 内部）と同じ入力で組む（2 空間モデル遵守）。
     let binding0 = TextSlotBinding::from_view(&view0);
     let resolved = ResolvedBalloonText::resolve(&demo.model, binding0.image_size);

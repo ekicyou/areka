@@ -281,7 +281,7 @@ fn real_font_menu_hover_render_dumps_png() {
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
     rt.register_actor(
         actor.clone(),
-        TextSlotBinding::new(slot, window, 1.0, image),
+        TextSlotBinding::new(slot, window, 1.0, image, image),
         ResolvedBalloonText::resolve(&model, image),
     );
 

@@ -1,7 +1,7 @@
 //! # scale_invariance_test — DPI/スケールの構造検証（task 10.3・R4.6/R10.4/R11.9）
 //!
-//! 合成スケール k が 1 以外（1.25・2.0）の場合の**写像**（物理寸・オフセット・
-//! 画像原寸換算）と、**レイアウト決定のスケール非依存**（design.md「DPI/スケール契約」:
+//! 合成スケール k が 1 以外（1.25・2.0・および k<1）の場合の**写像**（物理寸・オフセット・
+//! 画像原寸の透過）と、**レイアウト決定のスケール非依存**（design.md「DPI/スケール契約」:
 //! 折返し/行送り/スクロール決定はすべて画像座標空間＝k 非依存）を、実描画なし
 //! （DirectWrite/D2D/COM/GPU 不使用・[`FixedMetrics`] 注入）の headless 構造テストで檻化する
 //! （design.md「Testing Strategy > Unit Tests」6. スケール写像 が正典）。
@@ -13,8 +13,11 @@
 //!
 //! 端数檻の方針（tasks.md Implementation Notes 2.4）: round/ceil の正準式は割り切れる値
 //! だけでなく端数ケースで檻化し、floor/ceil/round の取り違え変異を殺す値を選ぶ
-//! （例 501/1.25=400.8→401 は floor 変異を、498/1.25=398.4→398 は ceil 変異を、
-//! 321×1.25=401.25→402 は round 変異を殺す）。
+//! （例 321×1.25=401.25→402 は round 変異を殺す）。
+//!
+//! **2026-07-30**: image px 原寸は `round(物理 / k)` の逆写像で復元するのをやめ、presenter の
+//! native をそのまま透過する形へ是正した（k<1 では順写像が縮小写像＝単射でなく、逆写像が
+//! 原理的に存在しないため）。旧導出の端数檻は透過檻＋k<1 の衝突檻へ置き換えてある。
 
 use areka_emo_text::actor::{ResolvedBalloonText, TextSlotBinding};
 use areka_emo_text::layout::{FixedMetrics, LayoutEngine, PositionedLine, VisibleWindow, WrapPlan};
@@ -55,10 +58,18 @@ fn model(
 }
 
 /// binding 構築ヘルパ（slot/window entity は World から採番——値は本檻の関心外）。
-fn binding(world: &mut World, k: f32, surface_size: (u32, u32)) -> TextSlotBinding {
+///
+/// `surface_size`＝物理原寸（k 適用後）／`image_size`＝作者画像空間の原寸（k 不変）。
+/// 本番では前者を `TextSlotView::physical_size()`・後者を `surface_size()`（native）が供給する。
+fn binding(
+    world: &mut World,
+    k: f32,
+    surface_size: (u32, u32),
+    image_size: (u32, u32),
+) -> TextSlotBinding {
     let slot = world.spawn_empty().id();
     let window = world.spawn_empty().id();
-    TextSlotBinding::new(slot, window, k, surface_size)
+    TextSlotBinding::new(slot, window, k, surface_size, image_size)
 }
 
 /// 画像原寸 `image` を k で物理化した surface 寸（`物理 = ceil(画像 × k)`——
@@ -143,16 +154,20 @@ fn decide_layout(
         .collect()
 }
 
-// ══ 画像原寸換算: image_size = round(surface_size / k) の一点導出（R10.4） ══
+// ══ 画像原寸: presenter native の透過（k 不変・R10.4） ══
 
 /// 同一バルーン（画像原寸 400×224）を k 別に物理化した surface からの binding 構築で、
-/// `image_size` が k によらず同一の画像原寸へ換算される（レイアウト入力の同一性の前提）。
+/// `image_size` が k によらず同一の画像原寸を保つ（レイアウト入力の同一性の前提）。
+///
+/// **k<1 を含む**（2026-07-30）: image px 原寸は逆写像で復元せず presenter の native を
+/// そのまま透過するため、k の大小に依らず厳密に一致する。旧実装（`round(物理 / k)`）は
+/// k<1 で 1px ずれた——順写像の ±0.5 物理px 誤差が k で割られて ±0.5/k 画像px へ増幅されるため。
 #[test]
-fn bindings_at_different_scales_derive_identical_image_size() {
+fn bindings_at_different_scales_keep_identical_image_size() {
     let mut world = World::new();
     for k in SCALES {
         let surface = physical_surface(IMAGE, k);
-        let b = binding(&mut world, k, surface);
+        let b = binding(&mut world, k, surface, IMAGE);
         assert_eq!(b.scale, k, "k={k}: scale は透過保持される");
         assert_eq!(
             b.surface_size, surface,
@@ -160,22 +175,54 @@ fn bindings_at_different_scales_derive_identical_image_size() {
         );
         assert_eq!(
             b.image_size, IMAGE,
-            "k={k}: image_size = round(surface/k) が同一の画像原寸へ戻る"
+            "k={k}: image px 原寸は presenter native の透過＝k 不変"
         );
     }
 }
 
-/// 割り切れない物理寸の画像原寸換算は round 正準（端数檻・Implementation Notes 2.4）:
-/// 501/1.25=400.8→**401**（floor 変異=400 を殺す）・498/1.25=398.4→**398**
-/// （ceil 変異=399 を殺す）・799/2=399.5→**400**・447/2=223.5→**224**
-/// （round half away from zero・floor 変異を殺す）。
+/// k<1 の往復欠陥回帰檻（2026-07-30 新設）: **旧導出 `image_size = round(物理 / k)` を
+/// 復活させると落ちる**値で固定する。
+///
+/// # k<1 の順写像は単射でない（＝逆写像は原理的に存在しない）
+///
+/// 丸め権威 `ScaleRatio::scale_len` は k=4/5 で `142 → round(113.6) = 114` と
+/// `143 → round(114.4) = 114` を返す——**異なる原寸が同一の物理寸へ潰れる**。潰れた情報は
+/// 割り算では戻らず、旧導出はこの 2 つのうち必ずどちらかで 1px 間違える（実測では 114 から
+/// 143 を返すため、原寸 142 側が落ちる）。同様に 77 と 78 はともに 62 へ潰れる。
+///
+/// k>1 で表面化しないのは、拡大写像が異なる原寸を異なる物理寸へ分離するからにすぎない
+/// （縮小写像である k<1 のみ鳩ノ巣で衝突する）。「k≥1 で緑」は k<1 の証拠にならない。
+///
+/// 本番到達性: `parse_author_dpi` は宣言値を素通しするため、`dpi,120` のゴーストを
+/// 96 DPI（100%）モニタで表示すれば k=96/120=4/5 になる。
 #[test]
-fn fractional_image_size_derivation_rounds_at_each_scale() {
+fn sub_unity_scale_keeps_image_size_exact_where_the_old_inverse_lost_a_pixel() {
     let mut world = World::new();
-    let quarter = binding(&mut world, 1.25, (501, 498));
-    assert_eq!(quarter.image_size, (401, 398));
-    let doubled = binding(&mut world, 2.0, (799, 447));
-    assert_eq!(doubled.image_size, (400, 224));
+    // (native, k 適用後の物理寸)＝scale_len(native, 4/5) の実値。
+    // 142→114・77→62（143→114・78→62 と衝突する側を選ぶ）。
+    const NATIVE_KLT1: (u32, u32) = (142, 77);
+    const PHYSICAL_KLT1: (u32, u32) = (114, 62);
+
+    let b = binding(&mut world, 0.8, PHYSICAL_KLT1, NATIVE_KLT1);
+    assert_eq!(
+        b.image_size, NATIVE_KLT1,
+        "k<1 でも image px 原寸は native そのもの（旧導出は (143, 78) を返して 1px ずれた）"
+    );
+    assert_eq!(b.surface_size, PHYSICAL_KLT1, "物理原寸はそのまま保持");
+}
+
+/// 最小 1px クランプとの交差（k<1・2026-07-30 新設）: native (1,1) は k=2/3 でも
+/// 物理 (1,1)（`scale_len` の min-1 クランプ）であり、image px 原寸は (1,1) のまま。
+/// 旧導出は `round(1 / (2/3))` = `round(1.5)` = **2** と原寸を水増ししていた。
+#[test]
+fn sub_unity_scale_min_one_pixel_clamp_does_not_inflate_image_size() {
+    let mut world = World::new();
+    let b = binding(&mut world, 2.0 / 3.0, (1, 1), (1, 1));
+    assert_eq!(
+        b.image_size,
+        (1, 1),
+        "min-1 クランプ後の物理寸から原寸を割り戻さない（旧導出は (2, 2) へ膨らんだ）"
+    );
 }
 
 // ══ 物理寸・オフセット写像: 物理寸=ceil(寸×k)・オフセット=画像×k（R4.6/R10.4） ══
@@ -202,7 +249,7 @@ fn physical_size_and_offset_map_from_region_at_each_scale() {
         (2.0, (640, 244), (72.0, 92.0)),
     ];
     for (k, want_size, want_offset) in expected {
-        let b = binding(&mut world, k, physical_surface(IMAGE, k));
+        let b = binding(&mut world, k, physical_surface(IMAGE, k), IMAGE);
         let resolved = ResolvedBalloonText::resolve(&m, b.image_size);
         let region = &resolved.region;
         // レイアウト決定（validrect 絶対矩形）は全 k で同一の image px。
@@ -250,7 +297,7 @@ fn physical_extent_ceils_fractional_values_killing_round_and_floor() {
         None,
     );
     let mut world = World::new();
-    let b = binding(&mut world, 1.25, physical_surface(IMAGE, 1.25));
+    let b = binding(&mut world, 1.25, physical_surface(IMAGE, 1.25), IMAGE);
     let resolved = ResolvedBalloonText::resolve(&m, b.image_size);
     let region = &resolved.region;
     assert_eq!(
@@ -312,11 +359,11 @@ fn layout_decision_is_scale_independent_for_horizontal_text() {
     let probe_times = [0.0, 1.0, 2.25, 2.75, 10.0];
 
     let mut world = World::new();
-    let baseline_binding = binding(&mut world, 1.0, physical_surface(IMAGE, 1.0));
+    let baseline_binding = binding(&mut world, 1.0, physical_surface(IMAGE, 1.0), IMAGE);
     let baseline = decide_layout(&state, &actor, &m, &baseline_binding, 40.0, &probe_times);
 
     for k in [1.25f32, 2.0] {
-        let b = binding(&mut world, k, physical_surface(IMAGE, k));
+        let b = binding(&mut world, k, physical_surface(IMAGE, k), IMAGE);
         let decisions = decide_layout(&state, &actor, &m, &b, 40.0, &probe_times);
         assert_eq!(
             decisions, baseline,
@@ -348,11 +395,10 @@ fn layout_decision_is_scale_independent_for_horizontal_text() {
 }
 
 /// レイアウト決定が依存してよいのは `image_size` だけで k そのものではない——
-/// **異なる k・異なる物理 surface** でも `image_size` が同一なら（501×498 を k=1.25 で
-/// 換算＝401×398）、直接 401×398 を k=1.0 で与えた場合とレイアウト決定がビット一致する
-/// （端数を含む換算値がそのままレイアウト入力になる経路の檻）。
+/// **異なる k・異なる物理 surface** でも `image_size` が同一なら、レイアウト決定が
+/// ビット一致する（image px 原寸だけがレイアウト入力になる経路の檻）。
 #[test]
-fn same_derived_image_size_yields_identical_layout_regardless_of_scale() {
+fn same_image_size_yields_identical_layout_regardless_of_scale() {
     let m = model(
         (Some(0), Some(0)),
         (Some(-49), Some(0)),
@@ -365,12 +411,19 @@ fn same_derived_image_size_yields_identical_layout_regardless_of_scale() {
         .collect();
 
     let mut world = World::new();
-    let via_identity = binding(&mut world, 1.0, (401, 398));
-    let via_quarter = binding(&mut world, 1.25, (501, 498));
+    // 同じ image px 原寸 401×398 を、k=1.0（物理 401×398）と k=1.25（物理 501×498）で与える。
+    // k<1 側（k=0.8・物理 321×318）も加え、k の大小が判断に混入しないことまで固定する。
+    let via_identity = binding(&mut world, 1.0, (401, 398), (401, 398));
+    let via_quarter = binding(&mut world, 1.25, (501, 498), (401, 398));
+    let via_sub_unity = binding(&mut world, 0.8, (321, 318), (401, 398));
     assert_eq!(via_identity.image_size, (401, 398));
     assert_eq!(
         via_quarter.image_size, via_identity.image_size,
-        "k=1.25 の端数換算（501/1.25→401・498/1.25→398）が同一の画像原寸へ届く"
+        "k=1.25 でも image px 原寸は同一"
+    );
+    assert_eq!(
+        via_sub_unity.image_size, via_identity.image_size,
+        "k<1 でも image px 原寸は同一（旧導出はここで 1px ずれ得た）"
     );
 
     // font 40（全角送り 40）: 開始 x=36・閾値 352 → 7 グリフ目の終端 316 の次で
@@ -438,7 +491,7 @@ fn layout_decision_is_scale_independent_for_vertical_modes() {
         );
         let mut baseline: Option<(Vec<PositionedLine>, VisibleWindow)> = None;
         for k in SCALES {
-            let b = binding(&mut world, k, physical_surface(IMAGE, k));
+            let b = binding(&mut world, k, physical_surface(IMAGE, k), IMAGE);
             let resolved = ResolvedBalloonText::resolve(&m, b.image_size);
             assert_eq!(
                 resolved.mode,

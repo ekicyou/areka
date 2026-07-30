@@ -514,7 +514,7 @@ fn vertical_rl_full_path_reveals_scrolls_horizontally_and_clears_within_validrec
 
     let actor = ActorKey::from("0");
     let model = validrect_model(Some("vertical_rl"));
-    let binding = TextSlotBinding::new(slot, window, 1.0, IMAGE);
+    let binding = TextSlotBinding::new(slot, window, 1.0, IMAGE, IMAGE);
     let resolved = ResolvedBalloonText::resolve(&model, binding.image_size);
     let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
         TextLayerConfig::default(),
