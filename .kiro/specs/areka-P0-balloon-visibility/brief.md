@@ -3,6 +3,12 @@
 > バルーン表示ライフサイクル（自然な表示・消去・再表示）。`/kiro-discovery` 2026-07-23 発。
 > 実測（コード配管・7項目）と正典（ukadoc・6項目）の二重裏取り済み。file:line は本日時点の実測。
 
+> **📌 2026-07-31 追記(52)陳腐化補正（W4 完走・本ブロックが㊹㊵以下より優先）**:
+> - **ウェーブ配置改訂=W6 は2本同居**（追記(52)裁定）: 本 spec ∥ **`bindoption-exclusivity`**（表情固着バグ・parsers＋seriko＋assets.rs:196-210）——実測でファイル単位完全に素（本 spec=frame.rs＋emo2_boot 新 module＋TalkDone UI 配線）。
+> - **hover donor は「新設要」→「既設消費」へ昇格**: W4 choice-interact が `input_events/balloon.rs`（2665行・新規）の `attach_balloon_pointer_handlers` :758／`wire_balloon_choice` :782 で**実行時装着経路を確立**（main.rs:363/:693 結線・`BalloonWiring` が scope→hover ordinal 自前追跡 :77-78/:111-119・`emo2_boot/hover_inject.rs` も実在）。spawn 時は依然 `HitTest::none()`（spawn.rs:180/:204・テスト :587-592 固定）。Open Question 1(a)「hover 配線新設の要否」は既設消費前提へ書き換え＝spawn.rs を触らずに済む公算大（触る場合のみ W5 dpi-window-vanish 後着の直列注意）。
+> - シンボル再訂正: `emo2_frame_system` は :725-743「5段」→ **:1297-1327 で 7 フェーズ**（attach→**dpi**→drain→move_drain→resnap→**text_scale**→text・W4 で dpi/text_scale 増段）。`Emo2Wiring` :170 → **:180**。主犯 ShowSurface :444-453 → **:531-540**・first-`\s` ゲート :401-408 → **:486-491**・`text_slot_view` :456 → **:548**・`connect_balloon_text` 呼出 **:549-556**／fn **:577-596**。**新規**: :545 `balloon_models` per-scope マップ（kero-balloon が per-scope 化予定＝先行改造の再突合対象はこの約25行）。adapter `map_display_command` :69-73 → **:35**・presenter `apply_hide` :387 → **:600**。seriko `apply_balloon` :243・HideBalloon :268・compile.rs `ClearAll` :225-227・steady.rs `on_talk_done` :226 は**ほぼ一致**。
+> - 「TalkDone は kanade 止まり・UI 未配線」は 2026-07-31 実測でも真（steady.rs:226 まで）＝本 spec の gap 認識の核は有効。
+
 > **📌 2026-07-24 追記㊹陳腐化補正（W3 完走＋kero-balloon 新設・本ブロックが㊵以下より優先）**:
 > - **新前提: W5 `kero-balloon`（追記㊹新設・挙動バグ）が `run_attach_phase` 末尾を先行改造**——本 spec の主犯（無条件バルーン ShowSurface）と `connect_balloon_text` は同一関数の隣接約20行（実測 :444-453 ⇄ :456-462）＝着手時に kero-balloon の per-scope BalloonModel 実形へ再突合してから。
 > - シンボル訂正: `run_emo2_frame` は実在しない——実体は **`emo2_frame_system`**（frame.rs:725-743・attach→drain→move_drain→resnap→text の**5段化**）・`Emo2Wiring` struct :170。主犯 :438-446→**:444-453**（`ShowSurface` は binds＋pattern 引数付き新形・doc :442-443）・first-`\s` ゲート :396-403→**:401-408**・`text_slot_view` :449→**:456**。

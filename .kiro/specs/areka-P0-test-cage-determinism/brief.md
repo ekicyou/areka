@@ -1,6 +1,7 @@
 # Brief: areka-P0-test-cage-determinism
 
-> **Discovery 日**: 2026-07-30 ／ **ウェーブ**: W6 の後・W7（emo2-conformance-e2e）の前 ／ **規模**: medium-large（ただし**本番ソース面はほぼゼロ**）
+> **Discovery 日**: 2026-07-30 ／ **ウェーブ**: **W6.5**（W6 の後・W7 の前・追記(51)） ／ **規模**: medium-large（ただし**本番ソース面はほぼゼロ**）
+> **📌 2026-07-31 追記(52)微補正**: ①44 呼出・スピン 13 箇所・`Instant` 0 件は 2026-07-31 再実測で**全数一致**（アンカー健在）。ただし「Tick 兼用 `for now in …` 形は 5 箇所」は実測 **6 箇所の可能性**（:807,:1288,:1704,:1782,:1883,:2108・:1288 は `1_000_000..+5_000` の変則形）＝着手時に再計数。②**W5 `choice-select-events` が `input_events/balloon.rs` に `ChoiceSelectionInbox` drain を増設予定**（同ファイルは本 spec の毒化18呼出対象）＝W5 先着・本 spec 後着 rebase。③W6 は `balloon-visibility ∥ bindoption-exclusivity` の2本へ改訂（frame.rs 衝突相手に変化なし・bindoption は seriko/parsers 面ゆえ本 spec と素）。
 > **出自**: `completed/areka-P0-emo-dpi-scaling` の `/kiro-validate-impl` ゲートが「無名の別タスク宛て＝実質未所有」として記録した 4 件（tasks.md:222）。
 > 2026-07-30 に**全件の実在を再検証**したところ 4 件とも健在で、うち 1 件は記録より**悪化**していた。担当 spec は 10 本の active spec のいずれにも存在しない。
 
