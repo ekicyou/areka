@@ -21,6 +21,48 @@ use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
 /// この壁時計値はテスト意味論に影響せず、workspace 並列負荷の飢餓による偽赤のみを防ぐ。
 const E2E_BOUND: std::time::Duration = std::time::Duration::from_secs(60);
 
+/// talk 駆動の効果（cue 発火・TalkDone・その後段の close 握手）を待つ有界スピン。
+/// **待っている間も dispatcher へ Tick を注入し続ける**のが本ヘルパの要点である。
+///
+/// # なぜ「待つ間も注入し続ける」必要があるか（2026-07-30・S1/S4/S5 の共通根因）
+///
+/// `TickerMode::Disabled` 下では仮想時刻は**注入された Tick でしか進まない**。ゆえに
+/// 「最初の cue が出たら Tick を止めて `yield_now` だけで待つ」旧形は、スレッド
+/// スケジューリング次第で**両方向に**壊れる:
+///
+/// - **注入不足**（引き渡しが速く `now` が talk horizon 未満で止まる）: 挨拶 talk
+///   （`\s[0]hello\e`＝`hello` の 0.25s）が完了せず `TalkDone` が出ない。kanade は
+///   DD-IT-12 により `Steady{talk: Some(greeting)}` で close を保留し続け、以降 Tick が
+///   来ないので**永久に握手が始まらない**（S4 の `Unload` 待ち・S5 の `OnClose` 待ちが
+///   60s 安全弁まで空転して落ちる）。
+/// - **注入過多**（引き渡しが遅く、dispatcher の**無制限** inbox に Tick が溜まる）:
+///   溜まった分を一気に drain して仮想時刻が horizon を飛び越え、初回起動 epilogue cue
+///   （`areka.prop.set`@0.25）まで発火してしまう（S1 の cue 列アサートが 3 件期待で落ちる）。
+///
+/// どちらも「仮想時刻の進み具合」を**待機の副作用**に委ねていたことが原因である。本ヘルパは
+/// 待機条件を `done` で明示的に表明させ、仮想時刻は常に単調前進させる——これにより
+/// 「何を待っているか」と「時計をどれだけ進めたか」が分離され、結果が決定的になる。
+///
+/// `send_tick` は dispatcher 宛の Tick 送出のみを行うこと（kanade 宛の Tick は
+/// `Steady` pump として消費され台本外の `OnSecondChange` NOTIFY を誘発する）。
+fn spin_pumping_ticks(
+    what: &str,
+    now: &mut u64,
+    mut send_tick: impl FnMut(u64),
+    mut done: impl FnMut() -> bool,
+) {
+    let deadline = std::time::Instant::now() + E2E_BOUND;
+    while std::time::Instant::now() < deadline {
+        if done() {
+            return;
+        }
+        send_tick(*now);
+        *now += 1;
+        std::thread::yield_now();
+    }
+    panic!("{what}（有界スピンが {E2E_BOUND:?} を超過）");
+}
+
 // ===================== ScriptedShioriBackend =====================
 
 /// backend が受領した 1 呼出の記録（照合用・要件 7.1「発火内容を蓄積して照合できる」）。
@@ -733,35 +775,27 @@ mod s1_boot_success {
         // dispatcher の active slot に talk が実際に載るタイミングはスレッドスケジューリング
         // 依存であり、単一の Tick 送出が必ず間に合う保証はない。sleep は使わず、Tick を送る
         // たびに RecordingSink を確認する再送ループ（実時間待機なし・単調増加する `now` の
-        // 注入のみ・`yield_now` で他スレッドに実行機会を譲るだけ）でこの橋渡しをする——
-        // script に `\w`（待ち）を含めていないため、dispatcher の active slot に talk が
-        // 載った直後の最初の Tick で全発火（Emote＋Text）と自然終端（TalkDone{Ended}）が
-        // 単一 Tick 内で完了する。
+        // 注入のみ・`yield_now` で他スレッドに実行機会を譲るだけ）でこの橋渡しをする。
         let mut now: u64 = 1;
-        let mut fired = false;
-        let deadline = std::time::Instant::now() + super::E2E_BOUND;
-        while std::time::Instant::now() < deadline {
-            runtime
-                .dispatcher()
+        let dispatcher = runtime.dispatcher();
+        let tick = |n: u64| {
+            dispatcher
                 .send(DispatcherMsg::Tick {
-                    now: MonotonicMs(now),
+                    now: MonotonicMs(n),
                 })
-                .expect("dispatcher actor should still be alive while probing for the boot talk");
-            now += 1;
-            if !surface_records
-                .lock()
-                .expect("records mutex poisoned")
-                .is_empty()
-            {
-                fired = true;
-                break;
-            }
-            std::thread::yield_now();
-        }
-        assert!(
-            fired,
+                .expect("dispatcher actor should still be alive while driving the boot talk");
+        };
+        super::spin_pumping_ticks(
             "S1: surface cue never fired after repeated Tick — boot talk did not reach \
-             dispatcher's active slot within bound"
+             dispatcher's active slot",
+            &mut now,
+            tick,
+            || {
+                !surface_records
+                    .lock()
+                    .expect("records mutex poisoned")
+                    .is_empty()
+            },
         );
 
         // ---- (a) 起動系列が正典順序で発火（NOTIFY／GET の別・Reference 構成込み） ----
@@ -807,39 +841,60 @@ mod s1_boot_success {
         // ---- (b)(c) RecordingSink の発火列（broadcast・at 昇順・内容一致）----
         // broadcast ゆえ surface/text の両 sink が**同一の全 cue** を受ける（中央振り分け廃止・
         // どの action を演じるかは演者側 relevance の責務）。`\s[0]hello\e` の期待 broadcast 列:
-        //   ClearAll@0（#6 全消去・task 5.2 冒頭前置）/ Emote{0}@0（\s[0]）/ Text(hello)@0
-        //   （後続 cue が無く先頭群に留まる）。発火は drive の on_tick 内で同期 broadcast されるが、
-        // probe loop の break 直後に部分列を読む競合を避けるため、両 sink が 3 件に達するまで
-        // 有界スピンで整定を待つ（sleep 不使用・yield のみ）。
-        let expected = vec![
-            CueCommand::ClearAll,
-            CueCommand::Emote {
-                key: "0".to_string(),
-            },
-            CueCommand::Text("hello".to_string()),
+        //   ClearAll@0（#6 全消去・task 5.2 冒頭前置）/ Emote{0}@0（\s[0]）/ Text(hello)@0 /
+        //   **初回起動 epilogue**（`areka.prop.set` [BootCount 正準 key, "1"]）@`hello` の再生完了時刻。
+        //
+        // 4 件目は「初回起動なら起動記録を書く」epilogue（`runtime.rs` step 3・要件 3.4）であり、
+        // 本 fixture は永続ファイルを持たない＝毎回 `first_boot=true` ゆえ**常に台本に載る**。
+        // 期待値（cue 名・key・at）は本番権威から導出し、定数の直書きを避ける——`at` は
+        // `text_playback_duration("hello")`（= 5 文字 × CHAR_NOMINAL_MS）そのものである。
+        //
+        // 整定は `spin_pumping_ticks` で行う——4 件目は仮想時刻が `hello` の horizon を越えて
+        // 初めて発火するため、**Tick を注入し続けなければ永久に届かない**（旧実装は yield のみで
+        // 待ち、horizon を越えるか否かがスケジューラ依存だった＝17.5% 偽赤の直接原因）。
+        let expected: Vec<(f64, CueCommand)> = vec![
+            (0.0, CueCommand::ClearAll),
+            (
+                0.0,
+                CueCommand::Emote {
+                    key: "0".to_string(),
+                },
+            ),
+            (0.0, CueCommand::Text("hello".to_string())),
+            (
+                areka_sakura::duration::text_playback_duration("hello"),
+                CueCommand::command_carrier(
+                    areka_ghost::prop_sink::PROP_SET_CUE_NAME,
+                    vec![
+                        areka_sylphya::persist::PersistKey::BootCount.to_canonical_key(),
+                        "1".to_string(),
+                    ],
+                ),
+            ),
         ];
-        let deadline = std::time::Instant::now() + super::E2E_BOUND;
-        while std::time::Instant::now() < deadline {
-            let s = surface_records.lock().expect("records mutex poisoned").len();
-            let t = text_records.lock().expect("records mutex poisoned").len();
-            if s >= expected.len() && t >= expected.len() {
-                break;
-            }
-            std::thread::yield_now();
-        }
+        super::spin_pumping_ticks(
+            "S1: broadcast cue 列が期待長へ整定しなかった（初回起動 epilogue まで含む全 4 件）",
+            &mut now,
+            tick,
+            || {
+                surface_records.lock().expect("records mutex poisoned").len() >= expected.len()
+                    && text_records.lock().expect("records mutex poisoned").len() >= expected.len()
+            },
+        );
         let surface = surface_records
             .lock()
             .expect("records mutex poisoned")
             .clone();
         let text = text_records.lock().expect("records mutex poisoned").clone();
         let assert_broadcast = |cues: &[TalkCue], who: &str| {
-            let commands: Vec<CueCommand> = cues.iter().map(|c| c.command.clone()).collect();
+            let observed: Vec<(f64, CueCommand)> =
+                cues.iter().map(|c| (c.at, c.command.clone())).collect();
             assert_eq!(
-                commands, expected,
-                "{who} sink は broadcast で ClearAll/Emote/hello を受ける（partition は演者側 relevance）: {cues:?}"
+                observed, expected,
+                "{who} sink は broadcast で ClearAll/Emote/hello/初回起動 epilogue を \
+                 (at, command) ごと受ける（partition は演者側 relevance）: {cues:?}"
             );
             for cue in cues {
-                assert_eq!(cue.at, 0.0, "{who} 発火は全て at=0.0");
                 assert_eq!(
                     cue.actor,
                     ActorKey::from("0"),
@@ -1483,30 +1538,25 @@ mod s4_close_handshake {
         // 既に（boot talk の再生完了を待たず）Steady へ到達済みである
         // （boot.rs「boot は常に Steady{talk: None} へ完了する」・S3 と同じ論拠）。
         let mut now: u64 = 1;
-        let mut boot_talk_fired = false;
-        let deadline = std::time::Instant::now() + super::E2E_BOUND;
-        while std::time::Instant::now() < deadline {
-            runtime
-                .dispatcher()
+        let dispatcher = runtime.dispatcher();
+        let tick = |n: u64| {
+            dispatcher
                 .send(DispatcherMsg::Tick {
-                    now: MonotonicMs(now),
+                    now: MonotonicMs(n),
                 })
-                .expect("dispatcher actor should still be alive while probing for the boot talk");
-            now += 1;
-            if !surface_records
-                .lock()
-                .expect("records mutex poisoned")
-                .is_empty()
-            {
-                boot_talk_fired = true;
-                break;
-            }
-            std::thread::yield_now();
-        }
-        assert!(
-            boot_talk_fired,
+                .expect("dispatcher actor should still be alive while driving the boot talk");
+        };
+        super::spin_pumping_ticks(
             "S4: surface cue never fired after repeated Tick — boot talk did not reach \
-             dispatcher's active slot within bound"
+             dispatcher's active slot",
+            &mut now,
+            tick,
+            || {
+                !surface_records
+                    .lock()
+                    .expect("records mutex poisoned")
+                    .is_empty()
+            },
         );
 
         // ---- 終了要求（正規/canonical）: CloseRequest を kanade へ送る ----
@@ -1519,32 +1569,33 @@ mod s4_close_handshake {
             })
             .expect("kanade actor should still be alive to receive the close request");
 
-        // ---- close 握手の完走を有界スピン待機で確認する（Tick 注入なし・sleep なし) ----
-        // OnClose GET→close talk（bare quit `\-`・空 sheet 高速経路で Tick 不要に
-        // `TalkDone{Quit}` 発行）→横断アーム Unloading{Quit}→ShioriUnload という cascade は
-        // 複数の実スレッド境界（kanade↔shiori 同期往復・start-relay・dispatcher・
-        // per-talk spawn_talk スレッド・dispatcher 自身の inbox 経由の kanade 転送）を
-        // 跨ぐため、`handle.calls()` に `RecordedCall::Unload` が現れるまで
-        // `yield_now` のみで有界にスピン待機する（実時間待機・Tick 送出のいずれも伴わない）。
-        let mut close_settled = false;
-        let deadline = std::time::Instant::now() + super::E2E_BOUND;
-        while std::time::Instant::now() < deadline {
-            let has_unload = handle
-                .calls()
-                .lock()
-                .expect("calls mutex poisoned")
-                .iter()
-                .any(|c| matches!(c, RecordedCall::Unload));
-            if has_unload {
-                close_settled = true;
-                break;
-            }
-            std::thread::yield_now();
-        }
-        assert!(
-            close_settled,
+        // ---- close 握手の完走を有界スピン待機で確認する（dispatcher Tick を注入しつつ・sleep なし) ----
+        // OnClose GET→close talk（bare quit `\-`・空 sheet 高速経路で即 `TalkDone{Quit}` 発行）→
+        // 横断アーム Unloading{Quit}→ShioriUnload という cascade は複数の実スレッド境界
+        // （kanade↔shiori 同期往復・start-relay・dispatcher・per-talk spawn_talk スレッド・
+        // dispatcher 自身の inbox 経由の kanade 転送）を跨ぐため有界スピンで待つ。
+        //
+        // **dispatcher への Tick 注入を続けること**（2026-07-30 是正）: CloseRequest 受領時に
+        // 挨拶 talk（`hello`＝0.25s）がまだ active なら kanade は DD-IT-12 により即握手せず
+        // `pending_close` を記録して `Steady{Some}` を維持し、挨拶 talk の `TalkDone` 受領時に
+        // 初めて握手を開始する。その `TalkDone` は仮想時刻が horizon を越えて初めて出るため、
+        // Tick を止めて yield だけで待つ旧実装は「引き渡しが速く `now` が 0.25s 未満で止まった
+        // 実行」で永久に握手へ進めず 60s 安全弁まで空転していた（実測フレーキー）。
+        // kanade ではなく **dispatcher** へ送るのが要点（kanade 宛 Tick は `Steady` pump として
+        // 消費され台本外の `OnSecondChange` NOTIFY を誘発する）。
+        super::spin_pumping_ticks(
             "S4: Unload was never observed after CloseRequest — regular close handshake \
-             (OnClose GET → close talk → TalkDone{{Quit}} → Unload) did not complete within bound"
+             (OnClose GET → close talk → TalkDone{Quit} → Unload) did not complete",
+            &mut now,
+            tick,
+            || {
+                handle
+                    .calls()
+                    .lock()
+                    .expect("calls mutex poisoned")
+                    .iter()
+                    .any(|c| matches!(c, RecordedCall::Unload))
+            },
         );
 
         // ---- (a) 起動系列＋close 握手系列が正典順序で発火 ----
@@ -1778,30 +1829,25 @@ mod s5_close_deadline {
         // 帳簿）ため、この loop を通しても kanade の last_now は None のまま維持される
         // （CONCERNS 参照）。
         let mut now: u64 = 1;
-        let mut boot_talk_fired = false;
-        let deadline = std::time::Instant::now() + super::E2E_BOUND;
-        while std::time::Instant::now() < deadline {
-            runtime
-                .dispatcher()
+        let dispatcher = runtime.dispatcher();
+        let tick = |n: u64| {
+            dispatcher
                 .send(DispatcherMsg::Tick {
-                    now: MonotonicMs(now),
+                    now: MonotonicMs(n),
                 })
-                .expect("dispatcher actor should still be alive while probing for the boot talk");
-            now += 1;
-            if !surface_records
-                .lock()
-                .expect("records mutex poisoned")
-                .is_empty()
-            {
-                boot_talk_fired = true;
-                break;
-            }
-            std::thread::yield_now();
-        }
-        assert!(
-            boot_talk_fired,
+                .expect("dispatcher actor should still be alive while driving the boot talk");
+        };
+        super::spin_pumping_ticks(
             "S5: surface cue never fired after repeated Tick — boot talk did not reach \
-             dispatcher's active slot within bound"
+             dispatcher's active slot",
+            &mut now,
+            tick,
+            || {
+                !surface_records
+                    .lock()
+                    .expect("records mutex poisoned")
+                    .is_empty()
+            },
         );
 
         // ---- 終了要求（正規/canonical）: CloseRequest を kanade へ送る ----
@@ -1816,35 +1862,34 @@ mod s5_close_deadline {
         // DD-IT-12: boot は挨拶 talk を追跡し `Steady{talk: Some(greeting)}` へ完了する。ゆえに
         // CloseRequest 受領時に挨拶 talk がまだ active なら kanade は即握手せず `pending_close`
         // に記録して `Steady{Some}` を維持し、挨拶 talk の TalkDone 受領時に初めて握手を開始する
-        // （steady.rs `on_close_request` / `on_talk_done`）。この間に下の deadline 用 Tick を
-        // 送ってしまうと、Tick は `Steady{Some}` の pump として消費され OnSecondChange NOTIFY を
-        // 発行してしまう（CloseTalkWait の deadline を進めない）。ゆえに OnClose GET が calls() に
-        // 現れる＝kanade が Steady を抜け ClosePending 以降へ遷移したことを確認してから deadline
-        // 用 Tick を注入する（挨拶 TalkDone の到達は dispatcher が自律的に kanade へ転送するため
-        // 追加 Tick 不要・実時間待機なし・`yield_now` のみ）。OnClose GET が現れた後の kanade は
+        // （steady.rs `on_close_request` / `on_talk_done`）。**kanade 宛**の Tick をこの間に
+        // 送ってしまうと `Steady{Some}` の pump として消費され台本外の OnSecondChange NOTIFY を
+        // 発行してしまう（CloseTalkWait の deadline も進まない）。ゆえに下の deadline 用 kanade
+        // Tick は OnClose GET の出現を確認してから注入する。OnClose GET が現れた後の kanade は
         // ClosePending か CloseTalkWait のいずれかにあり、どちらでも下の 2 Tick は last_now を
         // 起点に deadline を確定・超過させる（ClosePending の Tick は last_now 更新のみ→続く
         // Value 応答で `deadline_from(Some)` 確定／CloseTalkWait の Tick は deadline=None を
         // 起点確定・close.rs 参照）。
-        let mut handshake_reached = false;
-        let deadline = std::time::Instant::now() + super::E2E_BOUND;
-        while std::time::Instant::now() < deadline {
-            let onclose_issued = handle
-                .calls()
-                .lock()
-                .expect("calls mutex poisoned")
-                .iter()
-                .any(|c| matches!(c, RecordedCall::Get { id, .. } if id == "OnClose"));
-            if onclose_issued {
-                handshake_reached = true;
-                break;
-            }
-            std::thread::yield_now();
-        }
-        assert!(
-            handshake_reached,
+        //
+        // **一方 dispatcher 宛の Tick は注入し続けなければならない**（2026-07-30 是正）:
+        // 握手の起点である挨拶 talk の `TalkDone` は仮想時刻が `hello` の horizon（0.25s）を
+        // 越えて初めて出る。dispatcher の帳簿は kanade の `last_now` と独立ゆえ、ここで
+        // dispatcher へ Tick を送っても上記 pump 問題は起こらない。旧実装は `yield_now` だけで
+        // 待っており、「引き渡しが速く `now` が 0.25s 未満で止まった実行」では TalkDone が永久に
+        // 出ず 60s 安全弁まで空転していた（実測フレーキー）。
+        super::spin_pumping_ticks(
             "S5: OnClose GET was never issued after CloseRequest — the greeting-tracking close \
-             deferral (DD-IT-12) never resolved into a close handshake within bound"
+             deferral (DD-IT-12) never resolved into a close handshake",
+            &mut now,
+            tick,
+            || {
+                handle
+                    .calls()
+                    .lock()
+                    .expect("calls mutex poisoned")
+                    .iter()
+                    .any(|c| matches!(c, RecordedCall::Get { id, .. } if id == "OnClose"))
+            },
         );
 
         // ---- deadline 超過を Tick 2 本の注入だけで駆動する（sleep 不使用・要件 7.4) ----
