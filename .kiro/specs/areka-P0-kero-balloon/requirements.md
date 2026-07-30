@@ -25,6 +25,7 @@ areka は二人立ちゴースト（本体＝sakura／相方＝kero）を表示�
   - `\b[ID]` バルーン面切替経路の変更（`completed/areka-P0-balloon-face-cue` の完成領域・**無改変で緑維持**が受け入れ条件）。
   - `\p[2]` 以降専用系列（`balloonp{scope}def{ID}`）の解決とその 3 段フォールバック連鎖（M1 は二人立ちまで）。正典上、相方側系列 `balloonk*` が三人目以降も兼ねる。
   - バルーン面 ID の偶数／奇数＝左右向きセット意味論、および表示位置に応じた左右面の自動切替。
+  - ghost descript の `balloon.defaultsurface` / `kero.balloon.defaultsurface` / `char*.balloon.defaultsurface` による初期表示面宣言への追従（emo2 は両キー無宣言＝既定 0 で現状差が出ない。語彙は互換対応表へ記録する）。
   - バルーンの表示／非表示ライフサイクル（可視条件・talk 終了後の自動 hide・再表示）＝`areka-P0-balloon-visibility`（W6）の領分。
   - 多面バルーンの面別上書き網羅（emo2 の各系列は面 0 の 1 枚のみ）。
   - 実行時のバルーン再読込（`\![reload,balloon]` 等）による系列再解決。
@@ -53,7 +54,7 @@ areka は二人立ちゴースト（本体＝sakura／相方＝kero）を表示�
 4. Where バルーンが `balloonk*` 画像を 1 枚も含まないとき、the areka バルーン資産解決 shall 全 scope に本体側系列を割り当て、本仕様適用前と同一の面集合を得る。
 5. The areka バルーン資産解決 shall 正典でバルーン面系列と定義されていないファイル（入力ウィンドウ用 `balloonc*`・装飾用画像等）をバルーン面として採用しない。
 6. While M1 の二人立ち構成であるとき、the areka バルーン資産解決 shall scope 1 以降を相方側系列として扱い、`\p[2]` 以降専用系列（`balloonp{scope}def{ID}`）の解決は行わない。
-7. If ある scope について面 ID 0 のバルーン面が 1 つも解決できないとき、then the areka バルーン資産解決 shall 失敗理由をログに記録したうえで起動を失敗させ、無言で空のバルーンを表示しない。
+7. If ある scope について面 ID 0 のバルーン面が 1 つも解決できないとき、then the areka バルーン資産解決 shall 失敗理由をエラーレベルでログに記録したうえでエラーを返し、既存の失敗経路（バルーン未配線・ダミー窓への縮退を含む）へ伝播させ、無言で空のバルーンを表示するログ無し経路を作らない（プロセス終了ポリシー自体の変更は本仕様の対象外）。
 
 ### Requirement 2: scope 別バルーン定義（面別上書き）の適用
 
@@ -66,7 +67,7 @@ areka は二人立ちゴースト（本体＝sakura／相方＝kero）を表示�
 3. When ある scope の面が ID 単位フォールバックにより本体側画像へ解決されたとき、the areka バルーン定義 shall 同一 ID の本体側面別上書き設定を当該面の上書き層として用いる（正典は面別上書きを「対応する ID のサーフェスに対して」適用すると定めるため、本体側画像へ縮退した面には本体側の上書き層が対応する＝正典の帰結。Requirement 7.4 により解釈として対応表へ記録する）。
 4. When 採用した面に対応する面別上書きファイルが存在しないとき、the areka バルーン定義 shall バルーン既定設定の値のみを用い、その欠落を失敗として扱わない。
 5. The areka バルーン定義 shall 面別上書き設定で指定されなかった項目についてバルーン既定設定の値を継承し、指定された項目のみを上書きする。
-6. While バルーンを表示しているとき、the areka shall 各 scope のバルーンの初期表示面を当該 scope が解決した系列の面 ID 0 とする（左右向きの偶奇規約は本仕様で導入しない）。
+6. While バルーンを表示しているとき、the areka shall 各 scope のバルーンの初期表示面を当該 scope が解決した系列の面 ID 0 とする（ghost descript の `balloon.defaultsurface` / `kero.balloon.defaultsurface` 宣言への追従は Out of scope＝正典既定値 0 のみを実装し、Requirement 7.4 により語彙を対応表へ記録する。左右向きの偶奇規約は本仕様で導入しない）。
 
 ### Requirement 3: 窓配置採寸の scope 別化
 
