@@ -204,6 +204,12 @@
 9. **DD-9 R5 改訂の対象集合と completed 配下の扱い**: §2.6 の 7 箇所のうち、`specs/completed/areka-P0-collision-geometry/{design.md,acceptance-record.md}` は**完了済み spec の成果物**である。(a) completed を直接改訂する、(b) 本 spec の `acceptance-record.md` から参照・上書き宣言する、(c) 両方、のいずれか。R5.1/5.2 は「改訂する」「消化済みへ更新する」と書いており (a) 寄りだが、completed 不可侵の運用規律があるなら (b) との折衷が要る。
 10. **DD-10 W5 同居の編集面確認**（R6.7 エスケープ条項）: 本書の実測では W5 4 本と互いに素（§2.8）。ただし DD-2 で候補 D（`input_events/mod.rs` で ÷k）を採ると `choice-select-events` の隣接ファイル（`balloon.rs`）とは依然素だが、DD-3 で β を採ると `areka-emo-compose/src/scale.rs` が W6.5 `scale-exact-rational` と同一ファイルになる（後続ウェーブゆえ本 spec が先着＝許容だが**申し送り義務**）。
 
+### 6.1 要件ディスカッションでの整理（2026-07-31 追記）
+
+- **DD-2/DD-6 の前提が要件帰結として確定**: R3.1（GPU 不要・任意 k 注入）と R2.2/R2.3（境界 1px の厳密性）の連鎖により、**÷k は k を明示引数（厳密な有理値）で受ける純関数として切り出す**ことが要件からの帰結（選択ではない）。R6.1 は「k 引数の縮約純関数の新設・合成は契約に抵触しない」ことを明文化する形で明確化済み。設計フェーズに残るのは crate 着地（`areka-emo-compose` の姉妹関数 vs `areka-emo-present`）と DD-6 の粒度（÷k 単体 vs ÷k＋照合の合成。**「÷k 呼び忘れ」が本仕様の欠陥クラスそのものである以上、合成粒度が優位**）のみ。f32 経路（§4.3 α）は R2.2/R2.3 との矛盾により**要件レベルで排除済み**。
+- **DD-9 は方式選択のみ設計フェーズへ**: R5.1/5.2 が改訂の実施自体を確定済み。方式は (c) 折衷を推奨——completed 配下へは**日付付き追記注記**（履歴を書き換えず「k=1.0 契約は collision-dpi-hittest で解除済み」と指し示す）に留め、正準の座標契約はコード doc（`hit_region.rs`/`mod.rs`/`presenter.rs`/`hit.rs`）側を真実源として全面改訂する。
+- **DD-4（SHIORI 座標空間）・DD-8（バルーン側担当）は開発者裁定**（要件ディスカッション議題）。R-3 は ukadoc 実照会により確定: `OnMouseMove` Reference0/1 は「ローカル座標」とのみ記載され空間定義が正典に存在しない＝**areka 側の裁定事項**であることを確認済み。
+
 ---
 
 ## 7. Research Needed（設計フェーズで実測すべき未確定事項）
