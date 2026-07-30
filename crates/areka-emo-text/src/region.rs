@@ -96,6 +96,25 @@ impl ScaleContract {
     }
 
     /// image px の寸から物理寸を導出する: `ceil(寸 × k)`
+    ///
+    /// # ⚠️ 既知の残欠陥（2026-07-30 計測・未是正・担当 spec 不在）
+    ///
+    /// `k` は `ScaleRatio::as_f32` 由来の f32 ゆえ非二進の比では真値とわずかにずれ、積が整数に
+    /// なるはずの場合に `ceil` が **+1 されることがある**。1..1200 の全 v を有理数の厳密
+    /// `div_ceil` と突き合わせた実測:
+    ///
+    /// | k | f32 実値 | 誤り件数 / 1200 |
+    /// |---|---|---|
+    /// | 6/5（作者 120・窓 144＝150%） | 1.2000000477 | **81**（例: v=25 → 31・正 30） |
+    /// | 4/3・8/5・4/5・2/3 | — | 0 |
+    ///
+    /// 影響は**文字供給面が 1px 大きくなる**ことのみ（レイアウトは image 空間で決まり、窓寸は
+    /// 丸め権威 `scaled_extent` が別途決めるため、どちらも汚染しない）＝可視の不具合ではない。
+    /// 厳密化には `ScaleRatio` の num/den を emo-present 経由でここまで配管する必要があり、
+    /// `TextSlotBinding::new` の引数追加と `ScaleContract` の二重コンストラクタ化を招くため、
+    /// **開発者裁定待ちとして本コメントに登記**する（[[deferral-requires-verified-owner]]:
+    /// 能動的な担当 spec は実在しないため黙って先送りにしない）。
+    ///
     /// （TextSurface/swapchain/Arrangement の単位・物理 px 直接・論理 px 不在）。
     pub fn physical_extent(&self, v: ImagePx) -> u32 {
         (v.0 * self.scale).ceil() as u32
