@@ -97,3 +97,11 @@ emo_worldの設計に整理が必要。以下の概念を中心に検討せよ�
   + mat（ワールド変換した変換行列、物理スナップの影響も込みの値）
 
 
+## ダーティ管理
+これがよさげ。
+https://github.com/goliajp/rust-damage-rects/blob/master/README.ja.md
+
+
+## viewport管理
+参考になるか？
+https://github.com/forest-rs/understory/tree/main/understory_view2d
