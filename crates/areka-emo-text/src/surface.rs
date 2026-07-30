@@ -518,7 +518,7 @@ mod tests {
 
         let mut world = World::new();
         let (window, slot) = spawn_reserved_slot(&mut world);
-        let binding = TextSlotBinding::new(slot, window, 1.0, (10, 8));
+        let binding = TextSlotBinding::new(slot, window, 1.0, (10, 8), (10, 8));
 
         // 物理寸＝ceil(validrect 寸 × k)・offset＝validrect 原点 × k は呼び手（ScaleContract）の
         // 導出結果を受け取る契約——ここでは validrect (2,1)-(6,4) 相当の値を与える。
@@ -577,7 +577,7 @@ mod tests {
 
         let mut world = World::new();
         let (window, slot) = spawn_reserved_slot(&mut world);
-        let binding = TextSlotBinding::new(slot, window, 1.0, (10, 8));
+        let binding = TextSlotBinding::new(slot, window, 1.0, (10, 8), (10, 8));
 
         let (w, h) = (3u32, 2u32);
         let mut surface =
@@ -627,7 +627,7 @@ mod tests {
         let mut world = World::new();
         let (window, slot) = spawn_reserved_slot(&mut world);
         world.despawn(slot);
-        let binding = TextSlotBinding::new(slot, window, 1.0, (10, 8));
+        let binding = TextSlotBinding::new(slot, window, 1.0, (10, 8), (10, 8));
 
         let err =
             TextSurface::attach(&mut world, &binding, &compositor, &core, (4, 3), (0.0, 0.0))
@@ -692,7 +692,7 @@ mod tests {
         for &(dx, dy) in &[(0i32, 0i32), (0, 3), (0, -3), (3, 0), (-3, 0)] {
             let mut world = World::new();
             let (window, slot) = spawn_reserved_slot(&mut world);
-            let binding = TextSlotBinding::new(slot, window, 1.0, (10, 8));
+            let binding = TextSlotBinding::new(slot, window, 1.0, (10, 8), (10, 8));
             let mut surface =
                 TextSurface::attach(&mut world, &binding, &compositor, &core, (w, h), (0.0, 0.0))
                     .expect("TextSurface::attach 失敗");
@@ -745,7 +745,7 @@ mod tests {
 
         let mut world = World::new();
         let (window, slot) = spawn_reserved_slot(&mut world);
-        let binding = TextSlotBinding::new(slot, window, 1.0, (10, 8));
+        let binding = TextSlotBinding::new(slot, window, 1.0, (10, 8), (10, 8));
         let (w, h) = (4u32, 3u32);
         let mut surface =
             TextSurface::attach(&mut world, &binding, &compositor, &core, (w, h), (0.0, 0.0))

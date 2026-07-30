@@ -46,8 +46,13 @@ pub struct PhysicalPx(pub f32);
 /// |---|---|
 /// | 画像→物理 | [`to_physical`](Self::to_physical)＝`画像 × k` |
 /// | 物理→画像 | [`to_image`](Self::to_image)＝`物理 / k` |
-/// | image px 原寸の一点導出 | [`image_size`](Self::image_size)＝`round(surface_size / k)` |
 /// | 物理寸（TextSurface/swapchain/Arrangement） | [`physical_extent`](Self::physical_extent)＝`ceil(寸 × k)` |
+///
+/// **image px 原寸はここでは導出しない**。作者画像空間の原寸は emo-present が native 原寸として
+/// 正確に保持しており（`TextSlotView::surface_size`）、`TextSlotBinding::from_view` がそれを
+/// そのまま透過する。かつて `image_size = round(物理 / k)` と逆写像で復元していたが、順写像の
+/// ±0.5 物理px 誤差が k で割られて ±0.5/k 画像px へ増幅されるため **k<1 で 1px ずれた**
+/// （2026-07-30 撤去）。
 ///
 /// k の適用は TextSurface 生成寸と D2D `SetTransform(scale(k))` の一点のみ
 /// （k の多重適用・混在を構造排除・design.md 不変条件 (3)）。
@@ -88,16 +93,6 @@ impl ScaleContract {
     /// 物理座標→画像座標（`画像 = 物理 / k`）。
     pub fn to_image(&self, v: PhysicalPx) -> ImagePx {
         ImagePx(v.0 / self.scale)
-    }
-
-    /// バルーン surface の物理寸から image px 原寸を一点導出する:
-    /// `image_size = round(surface_size / k)`（design.md「DPI/スケール契約」）。
-    ///
-    /// k=1.0 のときに限り `TextSlotView::surface_size`（native）と同値。`TextRegion::resolve` の入力は
-    /// 必ずこの image px 原寸（物理 px を渡すのはレビューエラー）。
-    pub fn image_size(&self, surface_size: (u32, u32)) -> (u32, u32) {
-        let scale = |v: u32| (v as f32 / self.scale).round() as u32;
-        (scale(surface_size.0), scale(surface_size.1))
     }
 
     /// image px の寸から物理寸を導出する: `ceil(寸 × k)`
@@ -621,30 +616,25 @@ mod tests {
         let contract = ScaleContract::new(1.0, None);
         assert_eq!(contract.to_physical(ImagePx(36.0)), PhysicalPx(36.0));
         assert_eq!(contract.to_image(PhysicalPx(168.0)), ImagePx(168.0));
-        assert_eq!(contract.image_size(FIXTURE_IMAGE_SIZE), FIXTURE_IMAGE_SIZE);
         assert_eq!(contract.physical_extent(ImagePx(320.0)), 320);
     }
 
-    /// k=1.25／2.0 の写像: 物理=画像×k・画像=物理/k・image_size=round(surface/k)・
-    /// 物理寸=ceil(寸×k)。
+    /// k=1.25／2.0 の写像: 物理=画像×k・画像=物理/k・物理寸=ceil(寸×k)。
+    ///
+    /// image px 原寸の導出はここには無い（2026-07-30 撤去）——原寸は presenter の native を
+    /// `TextSlotBinding::from_view` が透過するのみで、この契約型は逆写像を持たない。
     #[test]
     fn nonunit_scale_maps_between_image_and_physical() {
         let contract = ScaleContract::new(1.25, None);
         assert_eq!(contract.to_physical(ImagePx(320.0)), PhysicalPx(400.0));
         assert_eq!(contract.to_image(PhysicalPx(400.0)), ImagePx(320.0));
-        // image px 原寸の一点導出: round(surface_size / k)。
-        assert_eq!(contract.image_size((500, 280)), (400, 224));
-        // 端数の丸め正準は round（design「DPI/スケール契約」明示正準）——両方向を檻化:
-        // 501/1.25 = 400.8 → 401（floor だと 400 で fail）・
-        // 498/1.25 = 398.4 → 398（ceil だと 399 で fail）。
-        assert_eq!(contract.image_size((501, 498)), (401, 398));
         // 物理寸 = ceil(image 寸 × k)（validrect 幅 320 → 400・端数は切上げ）。
         assert_eq!(contract.physical_extent(ImagePx(320.0)), 400);
         assert_eq!(contract.physical_extent(ImagePx(321.0)), 402); // 401.25 → 402
 
         let doubled = ScaleContract::new(2.0, None);
         assert_eq!(doubled.to_physical(ImagePx(36.0)), PhysicalPx(72.0));
-        assert_eq!(doubled.image_size((798, 446)), (399, 223));
+        assert_eq!(doubled.physical_extent(ImagePx(399.0)), 798);
     }
 
     /// 画像→物理→画像の往復が原値へ戻る（k≠1 含む）。

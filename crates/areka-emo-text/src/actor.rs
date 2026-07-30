@@ -56,52 +56,70 @@ pub struct TextSlotBinding {
     pub surface_size: (u32, u32),
     /// 画像座標空間の原寸（負値=反対辺解決・`TextRegion::resolve` の入力）。
     ///
-    /// **構築時に一点導出**: `image_size = round(物理原寸 / k)`（k=1.0 のときに限り
-    /// `TextSlotView::surface_size`＝native と同値）。`TextRegion::resolve` へ物理 px を渡すのはレビューエラー
+    /// **作者画像空間の原寸そのもの＝k 不変**。emo-present の native 原寸
+    /// （`TextSlotView::surface_size`＝k 適用**前**）を**そのまま透過**する。
+    /// `TextRegion::resolve` へ物理 px を渡すのはレビューエラー
     /// （2 空間モデルの綻び目をここで構造閉塞——design.md「DPI/スケール契約」）。
     pub image_size: (u32, u32),
 }
 
 impl TextSlotBinding {
-    /// `TextSlotView` の読み値（slot/window/scale/surface_size）から binding を構築し、
-    /// `image_size = round(surface_size / k)` をここで**一点導出**する。
+    /// `TextSlotView` の読み値（slot/window/scale/物理原寸/native 原寸）から binding を構築する。
     ///
-    /// k の正規化（0 以下・非有限→warn!＋1.0 縮退）は [`ScaleContract::new`] に委譲し、
-    /// 保持する `scale` と `image_size` の導出が常に同一の k で自己整合するようにする
-    /// （k の多重適用・混在の構造排除——design.md 不変条件 (3)）。
-    pub fn new(slot: Entity, window: Entity, scale: f32, surface_size: (u32, u32)) -> Self {
+    /// k の正規化（0 以下・非有限→warn!＋1.0 縮退）は [`ScaleContract::new`] に委譲する。
+    ///
+    /// # image px 原寸は**導出しない**（2026-07-30 是正・k<1 の 1px 往復欠陥）
+    ///
+    /// 旧実装は `image_size = round(physical_size / k)` と**逆写像で復元**していたが、これは
+    /// k<1 で厳密な逆写像にならない。順写像は丸め権威 `ScaleRatio::scale_len`（round half away
+    /// from zero）で誤差が ±0.5 **物理**px に収まるが、逆写像は k で割るためその誤差が
+    /// ±0.5/k **画像**px へ増幅される——k>1 なら 0.5 未満で `round` が厳密に復元するのに対し、
+    /// **k<1 では 0.5 を超えて 1px ずれる**（例: k=4/5・native 143 → physical 114 →
+    /// `round(114/0.8)` = 142）。k<1 は本番到達可能である（`parse_author_dpi` は任意の宣言値を
+    /// 素通しするため、`dpi,120` を宣言したゴーストを 100% モニタで表示すれば k=4/5 になる）。
+    ///
+    /// 復元しようとしていた値は presenter が**既に正確に持っている**（`TextSlotView::surface_size`
+    /// ＝native）。ゆえに逆写像そのものを廃し、native を第 5 引数で受け取って透過する——
+    /// 往復が構造ごと消滅し、k に依らず厳密になる。k≥1 では旧実装とバイト同一。
+    pub fn new(
+        slot: Entity,
+        window: Entity,
+        scale: f32,
+        surface_size: (u32, u32),
+        image_size: (u32, u32),
+    ) -> Self {
         let contract = ScaleContract::new(scale, None);
         TextSlotBinding {
             slot,
             window,
             scale: contract.scale,
             surface_size,
-            image_size: contract.image_size(surface_size),
+            image_size,
         }
     }
 
     /// emo-present の読み取り専用増分 `TextSlotView` からの一点変換（結線の正準口・R9.1/R9.2）。
     ///
-    /// view の読み値（slot/window/scale/**physical_size**）を [`Self::new`] へ透過するだけで、
-    /// `image_size = round(物理原寸 / k)` の一点導出は `new` に集約されたまま変わらない
-    /// （k の多重適用・混在の構造排除——design.md「DPI/スケール契約」）。
-    ///
-    /// # 物理寸を読む（`surface_size` ではない・R8.2）
+    /// # 2 つの寸を**両方**読む（R8.2）
     ///
     /// [`TextSlotView`] は **native 原寸**（`surface_size()`＝k 適用**前**）と**物理寸**
     /// （`physical_size()`＝丸め権威 `scaled_extent` を通した表示寸）を隣り合わせで公開する。
-    /// 本型の第 4 引数は**物理原寸**であり、ここで `surface_size()`（native）を渡すと
-    /// `image_size = native / k` となって画像空間そのものが k に反比例して縮み、
-    /// 結果として供給面 `ceil(region × k)` が k に依らずほぼ一定になる——k を変えても文字が
-    /// 拡大されない静かな欠陥（`presenter.rs` の `physical_size` doc が警告する「消費点での
-    /// 1 トークンの取り違え」そのもの）。image px 原寸は作者画像空間＝**k 不変**でなければ
-    /// ならない（R8.2 の `ceil(validrect 寸 × k)` が k に比例する前提）。
+    /// 本メソッドは前者を `image_size` へ、後者を `surface_size` へ写す:
+    ///
+    /// - `image_size` ← `surface_size()`（native）: 作者画像空間の原寸は**k 不変**でなければ
+    ///   ならない（R8.2 の供給面 `ceil(validrect 寸 × k)` が k に比例する前提）。
+    /// - `surface_size` ← `physical_size()`（k 適用後）: 診断・churn 判定用の表示寸。
+    ///
+    /// 取り違えるとどちらの向きでも静かに壊れる——`image_size` に物理寸を入れれば画像空間が
+    /// k 倍に膨らみ、`surface_size` に native を入れれば表示寸の記録が k に追随しなくなる
+    /// （`presenter.rs` の `physical_size` doc が警告する「消費点での 1 トークンの取り違え」）。
     pub fn from_view(view: &TextSlotView) -> Self {
         TextSlotBinding::new(
             view.slot(),
             view.window(),
             view.scale(),
             view.physical_size(),
+            view.surface_size(),
         )
     }
 }
@@ -834,7 +852,7 @@ mod tests {
         let slot = world.spawn_empty().id();
         let window = world.spawn_empty().id();
 
-        let binding = TextSlotBinding::new(slot, window, 1.0, (434, 687));
+        let binding = TextSlotBinding::new(slot, window, 1.0, (434, 687), (434, 687));
         assert_eq!(binding.slot, slot);
         assert_eq!(binding.window, window);
         assert_eq!(binding.scale, 1.0);
@@ -846,46 +864,56 @@ mod tests {
         );
     }
 
-    /// 一点導出 `image_size = round(surface_size / k)` の端数檻（Implementation Notes 2.4:
-    /// floor/ceil 変異を殺す値で檻化する）。
+    /// image px 原寸は**導出せず透過する**（2026-07-30・旧「`round(物理 / k)` 一点導出」の後継檻）。
     ///
-    /// k=1.25・surface=(127, 94): 127/1.25=101.6→**102**（floor 変異=101 を殺す）、
-    /// 94/1.25=75.2→**75**（ceil 変異=76 を殺す）。
+    /// k と物理寸から image px 原寸を計算し直す変異（＝旧実装の復活）を殺す。k=1.25・物理
+    /// (127, 94) に対し旧導出は (102, 75) を返したが、正しい原寸は**呼び手が渡した値**である。
+    /// 端数を含む物理寸でも原寸は 1bit も動かない——これが「作者画像空間は k 不変」の意味。
     #[test]
-    fn binding_derives_image_size_by_round_fractional() {
+    fn binding_passes_image_size_through_without_deriving_it() {
         let mut world = World::new();
         let slot = world.spawn_empty().id();
         let window = world.spawn_empty().id();
 
-        let binding = TextSlotBinding::new(slot, window, 1.25, (127, 94));
+        let binding = TextSlotBinding::new(slot, window, 1.25, (127, 94), (101, 75));
         assert_eq!(
             binding.image_size,
-            (102, 75),
-            "round(127/1.25)=102（floor では 101）・round(94/1.25)=75（ceil では 76）"
+            (101, 75),
+            "image px 原寸は透過（旧導出 round(127/1.25)=102 を復活させると落ちる）"
         );
         assert_eq!(binding.surface_size, (127, 94), "物理原寸はそのまま保持");
     }
 
-    /// k=2.0 の .5 境界: 101/2=50.5→51・51/2=25.5→26（round half away from zero）。
+    /// k<1 の透過檻（2026-07-30 新設）: k=4/5・物理 (114, 62)・原寸 (142, 77)。
+    ///
+    /// k<1 の順写像は**縮小写像＝単射でない**: `scale_len` は 142 も 143 も物理 114 へ、
+    /// 77 も 78 も 62 へ潰す。潰れた情報は割り算では戻らず、旧導出 `round(物理 / k)` は
+    /// この衝突対のどちらかで必ず 1px 間違える（実測では 114 から 143 を返すため 142 側が落ちる）。
+    /// 透過にした今は k の大小に依らず厳密。
     #[test]
-    fn binding_derives_image_size_half_boundary() {
+    fn binding_passes_image_size_through_at_sub_unity_scale() {
         let mut world = World::new();
         let slot = world.spawn_empty().id();
         let window = world.spawn_empty().id();
 
-        let binding = TextSlotBinding::new(slot, window, 2.0, (101, 51));
-        assert_eq!(binding.image_size, (51, 26));
+        let binding = TextSlotBinding::new(slot, window, 0.8, (114, 62), (142, 77));
+        assert_eq!(
+            binding.image_size,
+            (142, 77),
+            "k<1 でも原寸は透過（旧導出は (143, 78) を返して 1px ずれた）"
+        );
+        assert_eq!(binding.surface_size, (114, 62), "物理原寸はそのまま保持");
     }
 
     /// 不正な k（0 以下・非有限）は ScaleContract の縮退規約（warn!＋1.0）へ乗り、
-    /// binding の scale / image_size とも物理 1:1 で自己整合する（k の多重適用・混在の構造排除）。
+    /// binding の scale が物理 1:1 で自己整合する（k の多重適用・混在の構造排除）。
     #[test]
     fn binding_degrades_invalid_scale_to_identity() {
         let mut world = World::new();
         let slot = world.spawn_empty().id();
         let window = world.spawn_empty().id();
 
-        let binding = TextSlotBinding::new(slot, window, 0.0, (320, 240));
+        let binding = TextSlotBinding::new(slot, window, 0.0, (320, 240), (320, 240));
         assert_eq!(
             binding.scale, 1.0,
             "不正 k は 1.0 へ縮退（log-first・panic なし）"
@@ -1254,7 +1282,7 @@ mod runtime_tests {
 
         let mut world = World::new();
         let (window, slot) = spawn_reserved_slot(&mut world);
-        let binding = TextSlotBinding::new(slot, window, 1.0, (60, 40));
+        let binding = TextSlotBinding::new(slot, window, 1.0, (60, 40), (60, 40));
         rt.register_actor(
             ActorKey::from("0"),
             binding,
@@ -1305,7 +1333,7 @@ mod runtime_tests {
 
         // 登録→次フレームで再試行が成功し装着される。
         let image = (120u32, 60u32);
-        let binding = TextSlotBinding::new(slot, window, 1.0, image);
+        let binding = TextSlotBinding::new(slot, window, 1.0, image, image);
         rt.register_actor(
             actor.clone(),
             binding,
@@ -1393,7 +1421,7 @@ mod runtime_tests {
 
         rt.apply_cue(&cue("0", 0.0, CueCommand::Text("アヒル".into())));
         let image = (120u32, 60u32);
-        let binding = TextSlotBinding::new(slot, window, 1.0, image);
+        let binding = TextSlotBinding::new(slot, window, 1.0, image, image);
         rt.register_actor(
             actor.clone(),
             binding,
@@ -1490,12 +1518,12 @@ mod runtime_tests {
         let image = (120u32, 60u32);
         rt.register_actor(
             sakura.clone(),
-            TextSlotBinding::new(slot0, window0, 1.0, image),
+            TextSlotBinding::new(slot0, window0, 1.0, image, image),
             ResolvedBalloonText::resolve(&geo_model(), image),
         );
         rt.register_actor(
             kero.clone(),
-            TextSlotBinding::new(slot1, window1, 1.0, image),
+            TextSlotBinding::new(slot1, window1, 1.0, image, image),
             ResolvedBalloonText::resolve(&geo_model(), image),
         );
 
@@ -1668,7 +1696,7 @@ mod runtime_tests {
         let image = (120u32, 60u32);
         rt.register_actor(
             actor.clone(),
-            TextSlotBinding::new(slot, window, 1.0, image),
+            TextSlotBinding::new(slot, window, 1.0, image, image),
             ResolvedBalloonText::resolve(&geo_model(), image),
         );
 
@@ -1745,7 +1773,7 @@ mod runtime_tests {
         let image = (200u32, 100u32);
         rt.register_actor(
             actor.clone(),
-            TextSlotBinding::new(slot, window, 1.0, image),
+            TextSlotBinding::new(slot, window, 1.0, image, image),
             ResolvedBalloonText::resolve(&geo_model(), image),
         );
         present_frame(&mut rt, &mut world, 10.0).expect("提示フレーム");
@@ -1808,7 +1836,7 @@ mod runtime_tests {
         let image = (120u32, 60u32);
         rt.register_actor(
             actor.clone(),
-            TextSlotBinding::new(slot, window, 1.0, image),
+            TextSlotBinding::new(slot, window, 1.0, image, image),
             ResolvedBalloonText::resolve(&geo_model(), image),
         );
         present_frame(&mut rt, &mut world, 10.0).expect("提示フレーム");
@@ -1831,7 +1859,7 @@ mod runtime_tests {
         let image = (120u32, 60u32);
         rt.register_actor(
             actor.clone(),
-            TextSlotBinding::new(slot, window, 1.0, image),
+            TextSlotBinding::new(slot, window, 1.0, image, image),
             ResolvedBalloonText::resolve(&geo_model(), image),
         );
 
@@ -1884,7 +1912,7 @@ mod runtime_tests {
         let image = (200u32, 100u32);
         rt.register_actor(
             actor.clone(),
-            TextSlotBinding::new(slot, window, 1.0, image),
+            TextSlotBinding::new(slot, window, 1.0, image, image),
             // cursor.* 由来の SquareFill スタイルを運ぶバルーン（未指定 geo_model は Invert）。
             ResolvedBalloonText::resolve(&cursor_model(), image),
         );
@@ -2071,7 +2099,7 @@ mod runtime_tests {
         );
         rt.register_actor(
             actor.clone(),
-            TextSlotBinding::new(slot, window, 1.0, image),
+            TextSlotBinding::new(slot, window, 1.0, image, image),
             resolved,
         );
         let width = image.0;
@@ -2271,7 +2299,7 @@ mod runtime_tests {
         let image = (120u32, 60u32);
         rt.register_actor(
             actor.clone(),
-            TextSlotBinding::new(slot, window, 1.0, image),
+            TextSlotBinding::new(slot, window, 1.0, image, image),
             ResolvedBalloonText::resolve(&geo_model(), image),
         );
 
@@ -2356,12 +2384,12 @@ mod runtime_tests {
         rt.apply_cue(&choice_cue("1", 0.0, "Q1", "いいえ", &["r1"]));
         rt.register_actor(
             a0.clone(),
-            TextSlotBinding::new(slot0, window0, 1.0, image),
+            TextSlotBinding::new(slot0, window0, 1.0, image, image),
             ResolvedBalloonText::resolve(&geo_model(), image),
         );
         rt.register_actor(
             a1.clone(),
-            TextSlotBinding::new(slot1, window1, 1.0, image),
+            TextSlotBinding::new(slot1, window1, 1.0, image, image),
             ResolvedBalloonText::resolve(&geo_model(), image),
         );
 
@@ -2448,7 +2476,7 @@ mod runtime_tests {
         let width = image.0;
         rt.register_actor(
             actor.clone(),
-            TextSlotBinding::new(slot, window, 1.0, image),
+            TextSlotBinding::new(slot, window, 1.0, image, image),
             ResolvedBalloonText::resolve(&geo_model(), image),
         );
 
@@ -2521,7 +2549,7 @@ mod runtime_tests {
         let width = image.0;
         rt.register_actor(
             actor.clone(),
-            TextSlotBinding::new(slot, window, 1.0, image),
+            TextSlotBinding::new(slot, window, 1.0, image, image),
             ResolvedBalloonText::resolve(&geo_model(), image),
         );
 
@@ -2641,7 +2669,7 @@ mod runtime_tests {
         let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
         rt.register_actor_binding(
             actor.clone(),
-            TextSlotBinding::new(slot, window, 1.25, (500, 280)),
+            TextSlotBinding::new(slot, window, 1.25, (500, 280), NATIVE),
             &geo_model(),
         );
         let binding_before = rt.routing[&actor];
@@ -2649,7 +2677,7 @@ mod runtime_tests {
 
         let changed = rt.refresh_actor_binding(
             &actor,
-            TextSlotBinding::new(slot, window, 1.25, (500, 280)),
+            TextSlotBinding::new(slot, window, 1.25, (500, 280), NATIVE),
             &geo_model(),
         );
 
@@ -2672,7 +2700,7 @@ mod runtime_tests {
         let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
         rt.register_actor_binding(
             actor.clone(),
-            TextSlotBinding::new(slot, window, 1.25, (500, 280)),
+            TextSlotBinding::new(slot, window, 1.25, (500, 280), NATIVE),
             &geo_model(),
         );
         assert_eq!(
@@ -2683,7 +2711,7 @@ mod runtime_tests {
 
         let changed = rt.refresh_actor_binding(
             &actor,
-            TextSlotBinding::new(slot, window, 2.0, (800, 448)),
+            TextSlotBinding::new(slot, window, 2.0, (800, 448), NATIVE),
             &geo_model(),
         );
 
@@ -2713,7 +2741,7 @@ mod runtime_tests {
         // k=1.0・物理 120×60＝image 120×60（validrect 未指定＝画像全域ゆえ供給面も 120×60）。
         rt.register_actor_binding(
             actor.clone(),
-            TextSlotBinding::new(slot, window, 1.0, (120, 60)),
+            TextSlotBinding::new(slot, window, 1.0, (120, 60), (120, 60)),
             &geo_model(),
         );
         present_frame(&mut rt, &mut world, 10.0).expect("初回提示（装着）");
@@ -2735,7 +2763,7 @@ mod runtime_tests {
         // ── k=1.0 → 2.0 の再追従（物理 240×120＝image 120×60・image 空間は不変） ──
         let changed = rt.refresh_actor_binding(
             &actor,
-            TextSlotBinding::new(slot, window, 2.0, (240, 120)),
+            TextSlotBinding::new(slot, window, 2.0, (240, 120), (120, 60)),
             &geo_model(),
         );
         assert!(changed, "k 変化の再追従は true");
@@ -2790,7 +2818,7 @@ mod runtime_tests {
         let stats_before = rt.draw_stats(&actor).expect("draw_stats");
         let noop = rt.refresh_actor_binding(
             &actor,
-            TextSlotBinding::new(slot, window, 2.0, (240, 120)),
+            TextSlotBinding::new(slot, window, 2.0, (240, 120), (120, 60)),
             &geo_model(),
         );
         assert!(!noop, "同値 k は false（R8.5）");
@@ -2825,7 +2853,7 @@ mod runtime_tests {
 
         let changed = rt.refresh_actor_binding(
             &actor,
-            TextSlotBinding::new(slot, window, 2.0, (800, 448)),
+            TextSlotBinding::new(slot, window, 2.0, (800, 448), NATIVE),
             &geo_model(),
         );
 
