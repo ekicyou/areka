@@ -4,6 +4,12 @@
 > **調査日**: 2026-07-16（再入精査⑧・fixture 実物調査＋コード実態偵察＋ukadoc 裏取り）。
 > **順序（フェーズ別・2026-07-16 精密化）→ ✅ ゲート解除（2026-07-17・cue-playback 完了＝追記㉗）**: choice-render（ChoiceSelection 契約の正本）と契約先決ペア——契約が brief 間で先決済みのため**並走可**（撫でクラスタと同型）。~~cue-playback（CuePlayer/resolve_choice）完了が tasks 生成・実装フェーズの実質前提~~ **→充足済み**（`CuePlayer`/`pending_choices`/`resolve_choice` は settled シームとして main 着地済み）。着手時は settled コードを直接参照すればよい（設計を先行させた場合の `/kiro-validate-design` 再突合義務は 2026-07-17 現在未発生＝要件未着手）。**実装順注記（2026-07-17 合流裁定・roadmap 追記㉘）**: 本 spec は input-events の背骨＋idle-talk の `Status` 口＋dialogue-tags の choice cue 形＋choice-render の ChoiceSelection を消費する**実質最後尾**ユニット。
 
+> **📌 2026-07-31 追記(52)陳腐化補正（W4 完走・本ブロックが㊹㊵以下より優先）**:
+> - **ハードゲート解消＝`ChoiceSelection` は実物**: `crates/areka/src/input_events/balloon.rs:43` に `pub(crate) ChoiceSelection{id, label, scope, references}` として着地（`ordinal` 非漏洩・本文想定の `{scope,id,label,extras}` と同型）。**消費口は `ChoiceSelectionInbox`（balloon.rs:130・NonSend mpsc Receiver）**——balloon.rs:61-62 が「発行は下流が受信処理へ置換する seam へ流れる（`resolve_choice` は本 crate から呼ばない）」と明記（コメント中の「W6」は旧ウェーブ番号の陳腐化・現行は本 spec=W5 が宛先）。**＝本 spec の編集面に input_events/balloon.rs（または新 drain モジュール）が追加**（W5 内は非衝突・W6.5 test-cage-determinism の毒化18呼出と同一ファイルゆえ先着の本 spec が正・後着 cage が rebase）。
+> - **`Status: choosing` は半分実現済み**: `ExecutionState::Choosing`＋render_token "choosing" が kanade/status.rs:26/:60 に語彙として実在・constructor 0 件＝**駆動側だけが本 spec の仕事**。
+> - アンカー再実測: `KanadeMsg` **:84-99**（`Mouse` :99・選択系 variant 無しは真）・`Input::Mouse` schedule/mod.rs:49・StartTalk 棚 steady.rs **:151-175**。dola `WaitingForChoice` :75・遷移 :246・`resolve_choice` :291・contract.rs:38・drive.rs:167 は**一致**／:355 → **:350**（`on_resolve_choice`・未該当 id warn :382）。「OnChoiceSelect＝production 0 件」は依然真。
+> - **残義務2件（roadmap 追記から引き継ぎ）**: ①scope doc §1「OnChoiceSelectEx の id を Ref0」は ukadoc（**Ref0=ラベル・Ref1=ID**）と不一致＝**本 spec design が訂正**（追記㉖）。②input-events Req2.6 fail-open の申し送り（追記㉘C）。
+
 > **📌 2026-07-24 追記㊹陳腐化補正（W3 完走・本ブロックが㊵以下より優先）**:
 > - kanade アンカー実測: `KanadeMsg` msg.rs:46-61→**:83-101**（Mouse variant 追加済み・選択系 variant 無しは依然真）・`Input` schedule/mod.rs:36-45→**:40 以降**・StartTalk 棚 steady.rs:92-103→**:167-175／:195-201**。
 > - dola アンカー実測: `WaitingForChoice` variant runtime.rs:71→**:75**・遷移 :231-237→**:246**・`resolve_choice` :279-293→**:291**（機構は settled のまま）。`SakuraMsg::ResolveChoice` は実物確定（contract.rs:38・drive.rs:167/:355）。

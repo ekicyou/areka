@@ -5,6 +5,12 @@
 > **🧭 ゴール裁定を収録**: 本 brief が **M-dual（dual-surface／dual-window）の吸収・退役の正本**（2026-07-16 裁定）——M-dual は 2026-07-16 実査で「大半 M-boot 充足済み・残作業は検証と gap-fill に縮退」と確定済み（roadmap 統合点行）。独立 spec を起こさず、**本ユニットの適合検証項目として消化**する。
 > **⛔ 着手ゲート**: M1 残ユニットの全完了後（最終ユニット）。ただし**適合表の維持は今から**（下記チェックリストが M1 の「迷いの発生しないゴール」の単一定義）。
 
+> **📌 2026-07-31 追記(52)棚卸更新（W4 完走・本ブロックが㊹以下より優先）**:
+> - **completed 追補（㊹以降）**: wintf-gpu-test-crash（割込）✅・position-persist✅・choice-interact✅・emo-dpi-scaling✅＝**W4 完走**。**残ウェーブ改訂**: W5（dpi-window-vanish ∥ collision-dpi-hittest ∥ choice-select-events ∥ kero-balloon）→ **W6（balloon-visibility ∥ bindoption-exclusivity の2本・追記(52)裁定）**→ **W6.5（scale-exact-rational ∥ test-cage-determinism・追記(51)起票）**→ W7=本 spec。
+> - **上流列へ追補3本**: `bindoption-exclusivity`（表情固着バグ＝**適合 #3「着せ替え表情」の前提充足**・bindoption 3値正典準拠）・`scale-exact-rational`（**適合 #1 の DPI 検証を絶対値で書ける前提**＝画素演算の有理数化）・`test-cage-determinism`（M1 宣言を支える檻の決定性）。
+> - **着手時義務**: 本 brief の全面再監査（追記㊹時点で唯一補正無しだった経緯・調査日 2026-07-16 の実測は全面陳腐化前提で読む）・適合表へバルーン表示ライフサイクル項目追補・㉘(E)「OnFirstBoot 限定 `\![move]` の2回目起動蒸発は許容仕様」の実機判断・#7（冒頭空行＝pasta 上流未解決）は M1 完成を妨げない扱いの確認。
+> - アンカー: spawn.rs `GhostWindows` :109-130 → **:115**（`ScopeWindows` :101）・target_map.rs `shell_target` :19 不変。
+
 > **📌 2026-07-24 追記㊹棚卸更新（本ブロックが以下の本文より優先・調査日 2026-07-16 の残ユニット認識は失効）**:
 > - **completed 済み**: cue-playback-duration・mayuna-compose・seriko-loop・sakura-dialogue-tags・choice-render・input-events・idle-talk・collision-geometry・sylphya（本文の「実装中/並走中」記述は全て過去形へ読み替え）。**残ウェーブ**: 割込 `wintf-gpu-test-crash`（DoD ゲート復旧）→ W4（position-persist ∥ choice-interact ∥ emo-dpi-scaling）→ W5（dpi-window-vanish ∥ collision-dpi-hittest ∥ choice-select-events ∥ kero-balloon）→ W6（balloon-visibility）→ **W7=本 spec**。
 > - **上流列へ追補4本**: `choice-interact`（choice-render 2分割の対話半分・**`ChoiceSelection` 正本**＝適合 #7 hover の対話面と #8 の供給元）・`balloon-visibility`（M1 編入裁可済＝**本 spec 着手時に適合表へ「バルーン表示ライフサイクル」項目を追補**・roadmap W7 行登記済み）・`kero-balloon`（**#10 kero 一式の前提充足**＝kero が `balloonk*` 正典資産で表示・placement 採寸 scope 別）・`sylphya`✅（%username 実導出）。#1 の DPI 検証は DPI 追従込みへ格上げ（追記㉟裁定）。

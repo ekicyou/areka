@@ -3,6 +3,11 @@
 > **起票 2026-07-26**（`/kiro-discovery`・`areka-P0-emo-dpi-scaling` の task 7.4 実機サインオフ中に開発者が発見）。
 > 本 brief は**調査済みの根因と実測証拠を全て内包**する。別セッションはこの brief 単体で再開できる（会話ログは不要）。
 
+> **📌 2026-07-31 追記(52)ウェーブ編成（開発者裁定・本ブロックが以下の本文より優先）**:
+> - **ウェーブ配置=W6 同居**（`balloon-visibility` と2本並走）——実測でファイル単位完全に素（本 spec=parsers resolve/model＋seriko bind/state/actor＋assets.rs:196-210／vis=frame.rs＋emo2_boot 新 module＋TalkDone UI 配線）。**W5 同居は不可**＝`kero-balloon` と **assets.rs 同一ファイル異ハンク衝突**（本 spec :196-210 の `BindResolver::new` 構築 vs ker :278-300 の balloon 資産ループ）→ **W5 kero-balloon 先行着地後に本 spec が rebase**。
+> - 2026-07-31 実測: 本文の全アンカー（actor.rs:367-371 `is_mustselect` 分岐・resolve.rs:172-184・looper.rs:201・actor.rs:1546/:320-323・assets.rs:210）は **W4 マージ後も現物一致＝陳腐化なし**。補足: frame.rs:1387・spine.rs:572 は `BindResolver::empty()` 使用＝`empty()` 署名不変なら frame.rs/spine.rs は無傷（seriko 内で吸収可能）。
+> - W7 `emo2-conformance-e2e` 適合 #3（着せ替え表情）の前提充足＝本 spec が W6 で先行する。
+
 ## Problem
 
 **誰の問題か**: エンドユーザー（ゴースト利用者）と、正典準拠を掲げる areka のシェル互換性。

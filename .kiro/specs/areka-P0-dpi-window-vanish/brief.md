@@ -3,6 +3,11 @@
 > **性格**: 実機不具合の**調査先行 spec**（診断 → 根本原因確定 → 理想形修正）。憶測修正は禁止＝原因未確定のまま実装フェーズへ進まない（開発者選択 2026-07-18「診断 repro を先に」）。
 > **由来**: 2026-07-18 `areka-P0-idle-talk` Task 6 実機サインオフ直後の実機運転で開発者が報告。idle-talk 本体は「OnSecondChange 自発トーク確認＝完了」で**不変**（本事象は表示系＝idle-talk へ混ぜない・開発者裁定）。
 
+> **📌 2026-07-31 追記(52)陳腐化補正（W4 完走・本ブロックが㊹㊵以下より優先）**:
+> - **確定事実④（唯一確定の設計 gap）は W4 emo-dpi-scaling が解消済み**: WM_DPICHANGED は wintf window_proc/mod.rs:48 → window_pos.rs:274 配送 → **`run_dpi_phase`（frame.rs:865-873・doc :841-847）が `Changed<DPI>` 観測→`refresh_scale`→char 窓 `resize_window_to`（アンカー保存）／balloon 窓 `resize_window_keep_position` で同一フレーム内リサイズ**。＝旧診断ログの「窓 336x400 物理固定」は現行コードでは再現しないはず。**診断 Q1〜Q4 は新ビルド（k 追従込み実機）で再実施が必須**＝結果次第で本 spec は「再現せず・掃除のみ」へ**縮退し得る**（縮退時は GhostWindows despawn 掃除＋回帰檻のみで完了・W5 の1席は空く）。
+> - 残件は現存: `GhostWindows` despawn 未掃除（現所在 **spawn.rs:115**・`ScopeWindows` :101）・「Anchored 未付与」warn は follow.rs:559 → **:792**・終了時 `Anchored` WARN 追跡（追記㊾申し送り）。follow.rs 檻 :24-26 → **:22-25**（文言現存）・resolver.rs DPI 不変テスト :303-309 以降現存（`DPIS=[96,120,144,192]` :304）。
+> - 判定は絶対 px でなく**比**・`refresh_scale` は k 変化時でも 2 経路で None（追記㊾）＝診断時の観測点。
+
 > **📌 2026-07-24 追記㊹陳腐化補正**: W5 は **4本同居**へ改訂（`kero-balloon` 追加・実測で互いに素・本 spec の placement follow/spawn＋wintf window_proc/drag 単独所有は不変）。アンカー1件付替え——確定事実6の「`GhostWindows` despawn 未掃除（placement/mod.rs:99）」は現在 **spawn.rs:109-130（`GhostWindows` Resource 定義）**が正・「Anchored 未付与」warn は follow.rs:559 に現存（事象は真・位置のみ失効）。follow.rs:24-26 檻・resolver.rs:303-318 DPI 不変テストは 2026-07-24 実測一致。W4 の開始は割込 `wintf-gpu-test-crash` 完了後＝本 spec の修正フェーズはその分後段（診断/文書フェーズの随時先行可は不変）。
 
 > **📌 2026-07-23 追記㊵ウェーブ更新（本文の旧ウェーブ番号より優先）**: 攻め5ウェーブ再編により本 spec の実装は **W5**（`collision-dpi-hittest` ∥ `choice-select-events` と3本同居・ファイル集合は互いに素＝本 spec は placement follow/spawn＋wintf window_proc/drag を単独所有）。前提: W4 `position-persist`（follow.rs/spawn.rs 解放）＋W4 `emo-dpi-scaling`（**確定事実④「WM_DPICHANGED でも窓 336x400 物理固定」＝唯一確定の設計 gap を W4 が先に解消する**＝本 spec の診断 Q1-Q4 は dpi-scaling 着地後の実機状態で再評価してから修正フェーズへ）。診断/文書フェーズの随時先行可は不変。
