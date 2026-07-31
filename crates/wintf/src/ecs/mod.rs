@@ -6,6 +6,8 @@ pub mod drag;
 mod graphics;
 pub mod layout;
 pub mod pointer;
+#[cfg(test)]
+pub(crate) mod test_support;
 pub mod types;
 pub mod widget;
 pub mod window;

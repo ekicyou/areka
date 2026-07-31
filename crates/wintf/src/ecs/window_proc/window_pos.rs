@@ -349,11 +349,21 @@ pub(super) fn WM_DPICHANGED(
     // サイズは ECS レイアウトパイプライン（Changed<DPI> → update_arrangements_system
     // → propagate_global_arrangements → window_pos_sync_system → apply_window_pos_changes）
     // が算出するため、suggested_rect のサイズは使わない。
-    trace!(
+    // Req 1.3: 「OS 提案位置に基づく位置変更を実際に行ったか否か」は診断手順書が有効化する
+    // 水準（`wintf::ecs::window_proc=debug`）で必ず出す。旧 `trace!` は当該手順で点灯せず、
+    // 2026-07-18 の実機診断で「発生 0 回」という偽陰性を生んだ直接原因である。
+    //
+    // 本フェーズ（Phase A・観測増設）では分岐を導入しないため `applied` は恒真。
+    // 提案位置の採否分岐（`DpiSuggestedRectPolicy` / `dpi_suggested_position_decision`）は
+    // Phase C で配線され、そのとき本行が「書かなかった」も報告するようになる。
+    let applied = true;
+    debug!(
+        entity = ?entity,
         hwnd = ?hwnd,
-        x = suggested_rect.left,
-        y = suggested_rect.top,
-        "Calling guarded_set_window_pos with suggested position (SWP_NOSIZE)"
+        applied = applied,
+        suggested_left = suggested_rect.left,
+        suggested_top = suggested_rect.top,
+        "[WM_DPICHANGED] suggested position write decision"
     );
 
     let result = unsafe {
@@ -372,4 +382,160 @@ pub(super) fn WM_DPICHANGED(
     }
 
     Some(LRESULT(0))
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::ecs::test_support::capture_under_filter;
+    use crate::ecs::window::DPI;
+    use crate::ecs::world::EcsWorld;
+    use crate::executor::util::WindowMessage;
+    use bevy_ecs::prelude::Entity;
+    use std::cell::RefCell;
+    use std::rc::Rc;
+    use windows::Win32::Foundation::{HWND, LPARAM, RECT, WPARAM};
+    use windows::Win32::UI::WindowsAndMessaging::WM_DPICHANGED;
+
+    /// 診断手順書が指定する `RUST_LOG`（design.md「診断手順書」・要件 1.4/1.5）。
+    /// 観測点がこの directive で点灯することを機械的に固定するため、リテラルを共有する。
+    const PROCEDURE_DIRECTIVES: &str =
+        "info,wintf::ecs::window_proc=debug,wintf::ecs::drag=debug,areka::placement::diag=debug";
+
+    /// 位置書込の共通経路（`guarded_set_window_pos`）まで開ける directive。
+    /// `wintf::ecs::window` は前方一致ゆえ `wintf::ecs::window_proc` も併せて開く。
+    const WRITE_PATH_DIRECTIVES: &str = "info,wintf::ecs::window=debug";
+
+    /// 既定水準（`RUST_LOG` 未設定時のフォールバック＝`main.rs:262`）。
+    const DEFAULT_DIRECTIVES: &str = "info";
+
+    /// ヘッドレスに `WM_DPICHANGED` を 1 回配送する（実 HWND・メッセージループ不要）。
+    ///
+    /// `hwnd` は null ゆえ `SetWindowPos` は失敗するが、観測点はいずれも呼び出し前後に
+    /// 置かれており本檻の対象（水準とフィールド）には影響しない。
+    fn dispatch_dpichanged(new_dpi: u16, suggested: RECT) -> Entity {
+        let world = Rc::new(RefCell::new(EcsWorld::new()));
+        let entity = world
+            .borrow_mut()
+            .world_mut()
+            .spawn(DPI::from_dpi(96, 96))
+            .id();
+
+        let m = WindowMessage {
+            hwnd: HWND(std::ptr::null_mut()),
+            msg: WM_DPICHANGED,
+            wparam: WPARAM(((new_dpi as usize) << 16) | new_dpi as usize),
+            lparam: LPARAM(&suggested as *const RECT as isize),
+        };
+        let _ = crate::ecs::dispatch_window_message(&world, entity, &m);
+
+        // TLS に残る DpiChangeContext を回収し、同スレッドの後続テストへ漏らさない。
+        let _ = crate::ecs::window::DpiChangeContext::take();
+        entity
+    }
+
+    fn suggested_rect() -> RECT {
+        RECT {
+            left: 3210,
+            top: 140,
+            right: 3810,
+            bottom: 620,
+        }
+    }
+
+    /// 要件 1.3: 「提案位置に基づく位置変更を実際に行ったか否か」は、診断手順書の
+    /// directive で**必ず**点灯する水準に置かれている（旧 `trace!` は点灯せず、
+    /// 2026-07-18 の偽陰性＝「発生 0 回」の誤結論を生んだ）。
+    #[test]
+    fn suggested_position_decision_is_visible_under_procedure_directive() {
+        let out = capture_under_filter(PROCEDURE_DIRECTIVES, || {
+            dispatch_dpichanged(192, suggested_rect());
+        });
+
+        assert!(
+            out.contains("[WM_DPICHANGED] suggested position write decision"),
+            "提案位置の実施可否が診断手順の水準で観測できない（要件 1.3/1.5）: {out}"
+        );
+    }
+
+    /// 要件 1.3: 実施可否の行は「書いたか否か」と提案 left/top・entity を伴う。
+    #[test]
+    fn suggested_position_decision_carries_applied_flag_and_suggested_origin() {
+        let out = capture_under_filter(PROCEDURE_DIRECTIVES, || {
+            dispatch_dpichanged(192, suggested_rect());
+        });
+
+        let line = out
+            .lines()
+            .find(|l| l.contains("[WM_DPICHANGED] suggested position write decision"))
+            .unwrap_or_else(|| panic!("実施可否行が無い: {out}"));
+
+        assert!(line.contains("applied="), "実施可否フィールドが無い: {line}");
+        assert!(
+            line.contains("suggested_left=3210") && line.contains("suggested_top=140"),
+            "提案 left/top が復元できない: {line}"
+        );
+        assert!(
+            line.contains("entity="),
+            "表示基盤ログと areka 側レコードの結合キー `entity` が無い: {line}"
+        );
+    }
+
+    /// 要件 1.3: 新旧 DPI も同じ directive で点灯する（受理回数の 2 段 grep 計数の前提）。
+    #[test]
+    fn dpi_acceptance_line_reports_old_and_new_dpi_under_procedure_directive() {
+        let out = capture_under_filter(PROCEDURE_DIRECTIVES, || {
+            dispatch_dpichanged(192, suggested_rect());
+        });
+
+        let line = out
+            .lines()
+            .find(|l| l.contains("[WM_DPICHANGED] DPI component directly updated"))
+            .unwrap_or_else(|| panic!("DPI 受理行が無い: {out}"));
+
+        assert!(
+            line.contains("old_dpi_x=96") && line.contains("new_dpi_x=192"),
+            "新旧 DPI が同一行から復元できない（方向の機械判定が不能）: {line}"
+        );
+    }
+
+    /// 要件 1.5: 既定水準（`info`）では実施可否の行は出ない。
+    /// ＝観測点が「手順で有効化される水準」に置かれていることの対偶側の固定。
+    #[test]
+    fn suggested_position_decision_is_silent_under_default_info_filter() {
+        let out = capture_under_filter(DEFAULT_DIRECTIVES, || {
+            dispatch_dpichanged(192, suggested_rect());
+        });
+
+        assert!(
+            !out.contains("[WM_DPICHANGED] suggested position write decision"),
+            "既定 `info` で診断専用の実施可否行が漏れている: {out}"
+        );
+    }
+
+    /// 要件 1.3: 実際の窓位置書込を行う共通経路（`guarded_set_window_pos`）の実施ログも
+    /// 診断手順が有効化できる水準にある（旧 `trace!` からの是正）。
+    #[test]
+    fn window_pos_write_path_is_visible_at_debug() {
+        let out = capture_under_filter(WRITE_PATH_DIRECTIVES, || {
+            dispatch_dpichanged(192, suggested_rect());
+        });
+
+        assert!(
+            out.contains("[guarded_set_window_pos] Calling SetWindowPos"),
+            "窓位置書込の共通経路が debug 水準で観測できない（要件 1.3）: {out}"
+        );
+    }
+
+    /// 要件 1.5: 書込経路の実施ログも既定 `info` では出ない（診断専用のまま）。
+    #[test]
+    fn window_pos_write_path_is_silent_under_default_info_filter() {
+        let out = capture_under_filter(DEFAULT_DIRECTIVES, || {
+            dispatch_dpichanged(192, suggested_rect());
+        });
+
+        assert!(
+            !out.contains("[guarded_set_window_pos] Calling SetWindowPos"),
+            "既定 `info` で書込経路ログが漏れている: {out}"
+        );
+    }
 }

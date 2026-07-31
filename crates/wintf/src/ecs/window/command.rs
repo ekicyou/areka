@@ -9,7 +9,7 @@ use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::prelude::*;
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicI32, Ordering};
-use tracing::{trace, warn};
+use tracing::{debug, trace, warn};
 use windows::Win32::Foundation::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
@@ -91,7 +91,10 @@ pub unsafe fn guarded_set_window_pos(
 ) -> windows::core::Result<()> {
     let _guard = SetWindowPosGuard::new(); // Drop でカウンタ -1
 
-    trace!(
+    // Req 1.3: 実際の窓位置書込を行う共通経路の実施ログ。診断手順書が有効化する水準
+    // （`wintf::ecs::window=debug`）で「どの窓へどの座標を書いたか」が必ず残るよう、
+    // 旧 `trace!` から是正した（提案位置の実施可否と同じ水準・2026-07-18 偽陰性の是正）。
+    debug!(
         hwnd = format!("0x{:X}", hwnd.0 as usize),
         x = x, y = y, cx = cx, cy = cy,
         flags = ?flags,

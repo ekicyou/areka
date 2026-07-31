@@ -18,7 +18,7 @@
   - _Requirements: 1.1_
   - _Depends: 1.1_
 
-- [ ] 1.3 (P) 表示基盤側の観測水準是正とフィールド補強
+- [x] 1.3 (P) 表示基盤側の観測水準是正とフィールド補強
   - DPI 変化通知の受理時に「OS 提案位置に基づく位置変更を実際に行ったか否か」を出力する箇所の水準を、診断手順が有効化する水準へ引き上げる（現状は診断手順で点灯しない水準にあり、2026-07-18 の偽陰性の直接原因）
   - 実際の窓位置書込を行う共通経路の実施ログも同様に水準を是正する
   - モニタ列挙のログに work area 矩形とモニタ識別子のフィールドを追加する
@@ -209,6 +209,10 @@
 - **1.1**: `placement/diag.rs` は areka が bin crate ゆえ `pub` でも dead_code 免除されず、未配線のあいだ `#![allow(dead_code)]` を付けている。**1.2／1.4 で全 API を配線したらこの属性を外すこと**（外し忘れると以後の真の dead code を隠す）。
 - **1.1**: `WindowMoveRecord.size`／`.dpi` は `Option`（`SWP_NOSIZE` 経路・`DPI` component 未付与に対応）。値なしは `-` sentinel で**フィールド自体は落とさない**＝経路によらず grep 語が不変。**1.4 の配線では寸を伴う経路で必ず実寸を詰めること**（`None` は move-only 呼出に限る）。手順書（4.1）の判定語表には `w=-`／`dpi=-` の意味と、`w=-` が `w=-12` の接頭辞である旨（トークン境界でアンカーする）を記載すること。
 - **1.1**: 檻の実効性は「format 変異（`dpi=`→`DPI=`）で 2 件赤・水準変異（`debug!`→`info!`）で 3 件赤」でレビュアが独立再現済み。`EnvFilter` 実濾過による Req 1.7 の静穏檻は非空虚。
+- **1.3 → 4.1 への必須申し送り**: 窓位置書込の共通経路 `guarded_set_window_pos` の target は `wintf::ecs::window::command` であり、design.md:476 が記す `RUST_LOG=…,wintf::ecs::window_proc=debug,…` では **EnvFilter の文字列前方一致に掛からず点灯しない**（ミューテーションで実測確認済み）。**手順書には `wintf::ecs::window=debug` を入れること**（`window_proc` も包含する）。入れ忘れると Req 1.5 が排除しようとしている偽陰性を再生産する。
+- **1.3 → 5.1 への申し送り**: `window_pos.rs` の実施可否行の `applied` は Phase A では `let applied = true;` の定数（分岐は 5.1 の所有）。design.md:319 が挙げる `policy` フィールドも未出力＝`DpiSuggestedRectPolicy` を新設する 2.1 の後、5.1 で `applied` の分岐化と同時に追加すること。
+- **1.3**: wintf 側に `crates/wintf/src/ecs/test_support.rs`（`#[cfg(test)]` 限定・`capture_under_filter(directives, f)`）を新設済み。`tracing-subscriber` は dev-dependency のみで本番バイナリ非到達。以後の wintf 側ログ檻はこれを使うこと。
+- **1.3**（既知の既存不良・本 spec 範囲外）: `cargo clippy -p wintf` は `com/d2d/command_sink.rs:107,128,155` の `not_unsafe_ptr_arg_deref` で失敗する（本 spec 以前から）。clippy を DoD に使わないこと。
 - **1.2**: 実機出力の行書式は `[diag.monitor] index=N handle=… bounds=l,t,r,b work_area=l,t,r,b dpi=… primary=…` ／ヘッダは `[diag.monitor_snapshot] context=<tag> count=N`。呼出点タグは `monitor_snapshot`（main.rs 正典＝`MonitorSnapshot` 構築点）と `prepare_ghost_windows`（placement 列挙点）の 2 種。**タスク 1.3 の wintf 側列挙ログのフィールド名はこの書式に合わせること**（D12 の「共有語彙 grep 突合」が成立する条件）。手順書（4.1）の判定語もこれ。
 - **1.2**: `prepare_ghost_windows` の snapshot 出力は `enumerate_monitors()` 直後・`prepare_stages` より**手前**に置いてある（準備が失敗してダミー窓へ縮退した走行でもモニタ構成がログに残るため）。位置を後ろへ動かさないこと。
 - **1.2**: `MONITOR_SNAPSHOT_CONTEXT` の `#[allow(dead_code)]` は実在の理由あり——`examples/window-placement.rs:107`・`collision-probe.rs:138` が `#[path]` で `src/placement/mod.rs` を include し、example ビルドでのみ dead になる（`--force-warn dead_code` で再現確認済み）。

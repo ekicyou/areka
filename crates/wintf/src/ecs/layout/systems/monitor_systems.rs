@@ -27,6 +27,34 @@ pub fn get_virtual_desktop_bounds() -> (i32, i32, i32, i32) {
     }
 }
 
+/// モニタ列挙 1 台分のログを出力する。
+///
+/// 実モニタ列挙に依存せず檻に入れられるよう、`initialize_layout_root` の列挙ループから
+/// 切り出した出力点（挙動不変の抽出）。
+///
+/// `handle`（モニタ識別子）と `work_area`（作業領域矩形）は要件 1.1 の必須項目であり、
+/// **フィールド名は areka `placement::diag` の共有語彙**（`handle`・`work_area`）に一致させる
+/// ——診断手順書の grep 突合が両側のログを同じ語で引けることが契約。
+fn log_enumerated_monitor(monitor: &crate::ecs::Monitor) {
+    debug!(
+        handle = monitor.handle,
+        bounds_left = monitor.bounds.left,
+        bounds_top = monitor.bounds.top,
+        bounds_right = monitor.bounds.right,
+        bounds_bottom = monitor.bounds.bottom,
+        work_area = format_args!(
+            "{},{},{},{}",
+            monitor.work_area.left,
+            monitor.work_area.top,
+            monitor.work_area.right,
+            monitor.work_area.bottom
+        ),
+        dpi = monitor.dpi,
+        is_primary = monitor.is_primary,
+        "[initialize_layout_root] Creating Monitor entity"
+    );
+}
+
 /// LayoutRootとMonitor階層をワールド初期化時に作成する
 /// world.rsのEcsWorld::new()から直接呼び出される
 pub fn initialize_layout_root(world: &mut World) {
@@ -94,15 +122,7 @@ pub fn initialize_layout_root(world: &mut World) {
         let (width, height) = monitor.physical_size();
         let (left, top) = monitor.top_left();
 
-        debug!(
-            bounds_left = monitor.bounds.left,
-            bounds_top = monitor.bounds.top,
-            bounds_right = monitor.bounds.right,
-            bounds_bottom = monitor.bounds.bottom,
-            dpi = monitor.dpi,
-            is_primary = monitor.is_primary,
-            "[initialize_layout_root] Creating Monitor entity"
-        );
+        log_enumerated_monitor(&monitor);
 
         // Note: Arrangement/GlobalArrangementはMonitor::on_addフックで自動挿入される
         let monitor_entity = world
@@ -274,4 +294,84 @@ pub fn detect_display_change_system(
 
     // フラグをリセット
     app.reset_display_change();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ecs::Monitor;
+    use crate::ecs::test_support::capture_under_filter;
+    use windows::Win32::Foundation::RECT;
+
+    /// 実モニタ列挙に依存しない合成 `Monitor`（work area はタスクバー分だけ bounds より小さい）。
+    fn synthetic_monitor() -> Monitor {
+        Monitor {
+            handle: 0x1234_5678,
+            bounds: RECT {
+                left: -1920,
+                top: 0,
+                right: 0,
+                bottom: 1200,
+            },
+            work_area: RECT {
+                left: -1920,
+                top: 0,
+                right: 0,
+                bottom: 1160,
+            },
+            dpi: 192,
+            is_primary: false,
+        }
+    }
+
+    /// 要件 1.1: モニタ列挙行は `handle`（識別子）と `work_area`（作業領域矩形）を含む。
+    ///
+    /// フィールド名は areka `placement::diag` と**共有語彙**（`handle`・`work_area`）である
+    /// ことが契約——別名（`hmonitor`・`wa` 等）へ変えると診断手順書の grep 突合が壊れる。
+    /// フィールドを削れば本檻は赤になる。
+    #[test]
+    fn enumerated_monitor_line_carries_handle_and_work_area() {
+        let monitor = synthetic_monitor();
+        let out = capture_under_filter("info,wintf::ecs::layout=debug", || {
+            log_enumerated_monitor(&monitor)
+        });
+
+        assert!(
+            out.contains("[initialize_layout_root] Creating Monitor entity"),
+            "モニタ列挙行が出ていない: {out}"
+        );
+        assert!(
+            out.contains("handle="),
+            "モニタ識別子フィールド `handle` が無い（要件 1.1）: {out}"
+        );
+        assert!(
+            out.contains("work_area="),
+            "work area フィールド `work_area` が無い（要件 1.1）: {out}"
+        );
+    }
+
+    /// 要件 1.1: `work_area` は bounds と**別の実値**として復元できる（l,t,r,b 4 成分）。
+    ///
+    /// bounds を流用した表示なら赤になる（work area の下端 1160 が現れない）。
+    #[test]
+    fn enumerated_monitor_work_area_reconstructs_all_four_edges() {
+        let monitor = synthetic_monitor();
+        let out = capture_under_filter("info,wintf::ecs::layout=debug", || {
+            log_enumerated_monitor(&monitor)
+        });
+
+        assert!(
+            out.contains("work_area=-1920,0,0,1160"),
+            "work area の 4 成分（l,t,r,b）が復元できない: {out}"
+        );
+        assert!(
+            out.contains("handle=305419896"),
+            "handle の実値が復元できない: {out}"
+        );
+        // bounds 側は従来どおり残っている（既存フィールドの非退行）。
+        assert!(
+            out.contains("bounds_bottom=1200"),
+            "既存の bounds フィールドが失われている: {out}"
+        );
+    }
 }
