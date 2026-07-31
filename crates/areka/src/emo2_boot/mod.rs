@@ -320,7 +320,6 @@ pub fn wire_emo2_boot(
     let BootAssets {
         shells,
         balloons,
-        balloon_model,
         resolver,
         static_binds,
         bind_resolver,
@@ -343,7 +342,7 @@ pub fn wire_emo2_boot(
     // scope キーの写像へ変わり本箇所は素の値移送になる。
     let balloon_tables: BTreeMap<ActorKey, AnimationTable> = balloons
         .first()
-        .map(|(scope, _, _)| (ActorKey::from(scope.to_string()), balloon_table))
+        .map(|b| (ActorKey::from(b.scope.to_string()), balloon_table))
         .into_iter()
         .collect();
     let seed: u64 = {
@@ -375,7 +374,6 @@ pub fn wire_emo2_boot(
     let wiring_assets = BootAssets {
         shells,
         balloons,
-        balloon_model,
         // attach は resolver を一切読まない（Task 4.1 申し送り）ため無害なプレースホルダ。
         resolver: SurfaceResolver::new(BTreeMap::new()),
         static_binds,

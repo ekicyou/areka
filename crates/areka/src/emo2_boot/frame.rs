@@ -44,7 +44,7 @@ use crate::placement::follow::{resize_window_keep_position, resize_window_to};
 use crate::placement::resolver::SizePx;
 use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker, GhostWindows};
 
-use super::assets::{BootAssets, ScopeAssets};
+use super::assets::{BalloonScopeAssets, BootAssets, ScopeAssets};
 use super::move_cue::{apply_move_directive, MoveDirective};
 use super::talk_clock::TalkClock;
 use super::target_map::{balloon_target, shell_target};
@@ -135,7 +135,7 @@ pub fn plan_attachments(window_scopes: &[usize], assets: &BootAssets) -> AttachP
             Some(shell_index) => {
                 // balloon 資産は同 scope で引く（build_boot_assets は shell と同 scope 集合で組むが、
                 // 万一不揃いなら None として運び、attach フェーズが文字層接続を縮退できるようにする）。
-                let balloon_index = assets.balloons.iter().position(|b| b.0 == scope);
+                let balloon_index = assets.balloons.iter().position(|b| b.scope == scope);
                 items.push(PlannedAttach {
                     scope,
                     shell_target: shell_target(scope),
@@ -199,9 +199,10 @@ pub struct Emo2Wiring {
     /// **再パースせず同一モデル**で binding を組み直せるようにする（再パースすれば「装着時と再追従時で
     /// 別モデル」という静かな食い違いの余地が生まれる）。
     ///
-    /// 現行 [`BootAssets::balloon_model`] は全 scope 共有の 1 本だが、キーは **scope**（W5
-    /// `kero-balloon` の per-scope バルーン採寸の席を潰さない）とする——再追従は「どの scope の
-    /// balloon 窓か」から引くのが自然であり、共有 1 本を全 scope へ配るのは現行の実装詳細に過ぎない。
+    /// 起動時資産は [`BalloonScopeAssets`] が scope 別の定義を保持する（旧 `BootAssets.balloon_model`
+    /// の共有 1 本は撤去済み）。ゆえにキーは **scope**——再追従は「どの scope の balloon 窓か」から
+    /// 引くのが自然である。attach が実際に scope 別の定義をここへ挿すのは tasks.md task 3.3 が担い、
+    /// それまでは先頭 scope の定義 1 本を全 scope へ配る暫定形である。
     balloon_models: HashMap<u32, BalloonModel>,
     /// 文字層 k 追従で `text_slot_view` が `None` だった scope の警告済み集合（R8.6 のエッジガード）。
     ///
@@ -419,7 +420,6 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
     let BootAssets {
         shells,
         balloons,
-        balloon_model,
         // resolver は attach では未使用（seriko へは wire_emo2_boot=task 5.1 が手渡す）。
         resolver: _,
         // static_binds は attach では未使用（defect #5・2026-07-13 実機#5）: シェル初回表示を attach で
@@ -442,6 +442,11 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
         balloon: balloon_author_dpi,
     };
     let mut shells: Vec<_> = shells.into_iter().map(Some).collect();
+    // 文字層へ渡すバルーン定義は、この時点ではまだ **先頭 scope の定義 1 本を全 scope へ配る**
+    // （撤去した `BootAssets.balloon_model` と観測等価——emo2 では先頭＝scope 0 の 2 層マージ結果）。
+    // 各 scope が自身の [`BalloonScopeAssets::model`] を受け取る per-scope 供給は tasks.md task 3.3 が
+    // 担い、そこで本スタンドインは消える。
+    let shared_balloon_model = balloons.first().map(|b| b.model.clone());
     let mut balloons: Vec<_> = balloons.into_iter().map(Some).collect();
 
     let planned_count = plan.items.len();
@@ -504,8 +509,21 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
             warn!(scope, "emo2 attach: balloon_window が無い（GhostWindows 不整合）→ バルーン装着を skip");
             continue;
         };
-        let Some((_, balloon_world, balloon_atlas)) =
-            balloons.get_mut(balloon_index).and_then(|b| b.take())
+        // per-scope 供給（task 3.3）までの暫定: 先頭 scope の定義を全 scope へ配る。資産を
+        // take する前に引き当てる（不在なら資産を消費せず skip する）。`balloon_index` が
+        // 取れている以上 balloon 資産は非空ゆえ、この縮退は到達しない防衛である。
+        let Some(balloon_model) = shared_balloon_model.as_ref() else {
+            error!(
+                scope,
+                "emo2 attach: バルーン定義が 1 件も無い（balloon 資産ゼロ）→ 文字層接続なし"
+            );
+            continue;
+        };
+        let Some(BalloonScopeAssets {
+            emo_world: balloon_world,
+            atlas: balloon_atlas,
+            ..
+        }) = balloons.get_mut(balloon_index).and_then(|b| b.take())
         else {
             error!(
                 scope,
@@ -542,7 +560,9 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
         // 文字層スケール相（[`run_text_scale_phase`]）はこれを再利用して binding を組み直す（再パースしない）。
         // 装着が `text_slot_view` None で次フレームへ委ねられた場合でもモデル自体は有効ゆえ、
         // 接続成否に関わらず記憶する（再追従は未登録 actor を静穏 skip する・7.1 の契約）。
-        wiring.balloon_models.insert(scope, balloon_model.clone());
+        wiring
+            .balloon_models
+            .insert(scope, (*balloon_model).clone());
         // apply は同期ゆえ同一フレームで text_slot_view が Some になるのが正常経路（DD-4）。
         // None（上流の遅延化）は接続せず次フレーム再試行へ委ねる（R4.2）。
         let view = wiring.presenter.text_slot_view(item.balloon_target);
@@ -552,7 +572,7 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
             // 再追従（[`run_text_scale_phase`]）は**同一の写像**で actor を引く——
             // ここと式が食い違うと、再追従が別 actor を作って文字だけ旧 k のまま残る。
             ActorKey::from(scope.to_string()),
-            &balloon_model,
+            balloon_model,
         );
     }
 
@@ -1340,7 +1360,7 @@ mod tests {
     use tracing_subscriber::prelude::*;
 
     use super::*;
-    use crate::emo2_boot::assets::{BootAssets, LoopTables, ScopeAssets};
+    use crate::emo2_boot::assets::{BalloonScopeAssets, BootAssets, LoopTables, ScopeAssets};
 
     /// throwaway な `EmoWorld`（空 shell から build・`plan_attachments` は emo_world を読まない）。
     ///
@@ -1357,7 +1377,7 @@ mod tests {
     /// 合成 `BootAssets`（shell scope 集合と同一の balloon scope 集合を持つ標準形）。
     ///
     /// `plan_attachments` が実際に読むのは `shells[*].scope`／`shells[*].initial_surface_id`／
-    /// `balloons[*].0` のみ。残りのフィールド（emo_world／atlas／balloon_model／resolver／
+    /// `balloons[*].scope` のみ。残りのフィールド（emo_world／atlas／model／resolver／
     /// static_binds）は最小の headless 値で埋める（COM/GPU/fixture 不要の純合成）。
     fn synth_assets(shells: &[(u32, u32)]) -> BootAssets {
         let balloon_scopes: Vec<u32> = shells.iter().map(|&(scope, _)| scope).collect();
@@ -1378,9 +1398,13 @@ mod tests {
                 .collect(),
             balloons: balloon_scopes
                 .iter()
-                .map(|&scope| (scope, empty_world(), empty_atlas()))
+                .map(|&scope| BalloonScopeAssets {
+                    scope,
+                    emo_world: empty_world(),
+                    atlas: empty_atlas(),
+                    model: areka_parsers::balloon::parse_str("", None),
+                })
                 .collect(),
-            balloon_model: areka_parsers::balloon::parse_str("", None),
             resolver: SurfaceResolver::new(BTreeMap::new()),
             static_binds: BindSet::default(),
             // plan_attachments は bind_resolver を読まない（headless 純合成）＝空表で十分。

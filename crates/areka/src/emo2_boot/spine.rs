@@ -522,7 +522,6 @@ impl SpineHarness {
         let BootAssets {
             shells,
             balloons,
-            balloon_model,
             resolver,
             static_binds,
             bind_resolver,
@@ -545,7 +544,7 @@ impl SpineHarness {
         // （scope ごとの実導出は task 3.2 が `LoopTables.balloon` 自体を写像へ変えて行う）。
         let balloon_tables: BTreeMap<ActorKey, AnimationTable> = balloons
             .first()
-            .map(|(scope, _, _)| (ActorKey::from(scope.to_string()), balloon_table))
+            .map(|b| (ActorKey::from(b.scope.to_string()), balloon_table))
             .into_iter()
             .collect();
         let loop_config = match driver {
@@ -573,7 +572,6 @@ impl SpineHarness {
         let wiring_assets = BootAssets {
             shells,
             balloons,
-            balloon_model,
             resolver: SurfaceResolver::new(BTreeMap::new()),
             static_binds,
             // 実 bind_resolver は seriko が値消費済み（attach は bind_resolver を読まない）ため空表プレースホルダ。
