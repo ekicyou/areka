@@ -118,6 +118,7 @@ graph TB
 - **D11（採用: enum 引数配管）**: `PlacementRoute` を単一ライターへ**引数**で配管する（ラッパ乱立にしない）。route はログ語彙であると同時に遷移ガードの発火条件・warn 水準分岐の第一級入力である。
 - **D12（採用: areka 構築点を正典）**: Req 1.1 の正典出力は `MonitorSnapshot` 構築点（placement の全判断が読む権威の忠実転写点）。wintf 列挙ログはフィールド補強のみ。3 箇所の列挙は同一関数呼出ゆえ専用突合機構は新設せず、共有語彙の grep 突合で食い違いを検出可能にする。
 - **D13（採用: route 語彙の完全化 9 種・改訂 2026-07-31・タスク 1.4 実装レビュー #1 起因）**: 当初の 7 語彙は実在の書込トリガ 2 つを覆えないことが実装レビューで確定した。①`reconcile_window_size`（`frame.rs:690`）は 2 呼出元の共通末端であり、`dpi_phase_with` 経由（`frame.rs:841`・真に `Changed<DPI>` 由来）と `reconcile_reported_sizes` 経由（`frame.rs:1028`・drain 相＝「表示成立・**初回表示の k₀ 補正を含む**」で `Changed<DPI>` 非依存・`frame.rs:983` の doc が明言）の両方へ `DpiReproject` を貼ると、**DPI 変化ゼロの起動直後にも「DPI 由来」の偽レコードが毎回出る**（混在 DPI 実機でほぼ必発）＝セッション②の受理回数突合（Req 1.9）に偽陽性が混入し Req 1.2「変化を引き起こした経路」に違反する。②`\![move]` cue（`move_cue.rs:619`→`move_window_to`）の対象窓書込に対応語が無く無記録＝Q3（ドラッグ以外の経路での消失）の観測に穴。**検討 3 案**: (a) `ReportedSizeReconcile`＋`MoveCue` の 2 語追加＝全書込トリガと語彙が 1:1 で対応（解決: 偽陽性根絶・Req 1.2 全経路充足・Q3 完備）／(b) drain 語のみ追加＝`\![move]` の識別不能が恒久化／(c) `DpiReproject` の定義拡張＝1 語が 2 トリガを指し route 名での切り分けが不能に。**開発者裁定（2026-07-31 チャット）**「分かるようにログを出せばいい。あとで識別できることが重要。方法は任せる」——識別可能性を満たすのは (a) のみゆえ **(a) 採用**。帰結: ⑴遷移ガードの発火経路集合に `ReportedSizeReconcile` を追加（drain 相の書込も非ドラッグ自動配置＝S3 ガードの保護対象）、⑵`MoveCue` はガード適用外（スクリプト明示操作の尊重＝ドラッグ・Restore と同族）、⑶**requirements.md は無改変**（Req 1.2/2.4 は経路を一般語で要求しており語彙列挙は設計の所有＝要件 gap ではない）、⑷`SpawnInitial`/`Restore` が単一ライター非経由である現状は変えない（語彙のみ保持・将来の配線先として予約）。
+- **D14（採用: 同一性判定と値の変化検出の分離・追加 2026-07-31・タスク 4.5 セッション②起因＝S4 是正）**: OS 表示設定から拡大率を 7 回変更しても `WM_DPICHANGED` が 0 件・`[diag.window_move]` が 0 件・`Updating Monitor entity` が 0 件で、ゴーストは旧 DPI の寸法と旧 work area の接地点に取り残された（診断レポート §2.7 に実測登記）。**根本原因**: `impl PartialEq for Monitor`（`crates/wintf/src/ecs/window/monitor.rs:103-107`）は `handle` のみで等価判定する**同一性の意味論**であるのに、`detect_display_change_system`（`crates/wintf/src/ecs/layout/systems/monitor_systems.rs:229-236`）がその `!=` を**値の変化検出**に流用している。モニタの `handle` は拡大率を変えても不変ゆえ、更新分岐は**構造的に恒偽**——`Monitor` の `bounds`／`work_area`／`dpi` は起動時の値のまま永久に凍結する。**検討 3 案**: (a) `PartialEq` を全フィールド比較へ変更＝同一性で引く既存利用（`existing_map` の `handle` キー引き・将来の同一モニタ追跡）が壊れ、`test_partial_eq_compares_handle_only` が固定している契約も破れる（未解決: 同一性が必要な文脈が消える）／(b) 消費側で全フィールドを直接展開比較＝その場は直るが、フィールド追加時に静かに追随漏れする（未解決: 将来の漏れを構造的に防げない）／(c) **`Monitor` に値差分の述語を新設し、消費側をそれへ切り替える**＝同一性（`PartialEq`）と値の変化（新述語）が別の名前で共存し、どちらの意味論を要求しているかが呼出点で明示される。**採用: (c)**。**帰結**: ⑴`PartialEq` の実装と既存檻 `test_partial_eq_compares_handle_only`（`monitor.rs:254-264`）は**無改変**（Req 7.6）——誤りは同一性判定ではなく流用した側にある、⑵新述語は追従対象フィールドを網羅し、フィールド追加時にコンパイラが漏れを指摘できる形（構造体分解パターン）で書く、⑶更新の実施を檻で固定する（`handle` 不変・値のみ変化の探針で赤→緑・Req 7.5）、⑷モニタ表更新後に窓の DPI・寸・位置の再導出を `WM_DPICHANGED` 非依存で駆動する（Req 7.3）——`WM_DPICHANGED` が 0 件である機序は未確定であり、**それに依存しない駆動路を用意することが是正の本体**である、⑸`SetProcessDpiAwarenessContext` の戻り値が `runtime/mod.rs:111` で `let _ =` により捨てられているため設定失敗が観測できない＝Req 1.5 の直接違反ゆえログ化する（Req 7.4）。**本裁定は S1〜S3 の被検体に一切触れない**——編集面は `monitor.rs`／`monitor_systems.rs`／`runtime/mod.rs` の 3 ファイルで、S1（`window_pos.rs`）・S2（`frame.rs`）・S3（`follow.rs`）と交差しない（＝Phase B′ に置ける理由）。
 - **確定済み裁定の継承**: D1（恒久観測・専用 target・既定 OFF）、D2（挙動不変リファクタ・観測増設は Req 2.7 の「変更」外）、D4（X＝直前の areka 確定接地点の物理 X・物理 px 座標系）、D5（ガードは非ドラッグ経路のみ・`project_anchor` の外）、D10（構成食い違いは warn＋動かさない・追随は H6 確定時のみ）。
 
 ### Technology Stack
@@ -155,7 +156,10 @@ crates/areka/src/placement/
 | `crates/areka/src/placement/spawn.rs` | `GhostWindows::remove_entry_of`・`GhostWindowMarker` `on_remove` hook・ゴースト窓 2 種への `ExternalAuthority` 付与＋檻 | **W6 balloon-visibility へ申し送り** |
 | `crates/areka/src/placement/mod.rs` | `pub mod diag;` 公開・`prepare_ghost_windows` 列挙点で `log_monitor_snapshot` 呼出 | 本 spec 単独所有 |
 | `crates/areka/src/emo2_boot/frame.rs` | `dpi_phase_with` の位置/寸分離（`None` 経路の char 再射影）・`resnap_with`／`reconcile_reported_sizes` の存在確認・`reconcile_window_size` への route 引数配管（DPI 相＝`DpiReproject`／drain 相＝`ReportedSizeReconcile`・D13） | **kero-balloon と同一ファイル・異ハンク＝先着後 rebase 申し送り** |
-| `crates/areka/src/main.rs` | `MonitorSnapshot` 構築点（`main.rs:645` 近傍）で `log_monitor_snapshot` 呼出（Req 1.1 正典） | 本 spec 単独所有 |
+| `crates/areka/src/main.rs` | `MonitorSnapshot` 構築点（`main.rs:645` 近傍）で `log_monitor_snapshot` 呼出（Req 1.1 正典）・`despawn_smoke_targets`（`main.rs:795-810`）への存在確認（Req 6.2・4.5 セッション①が `TEARDOWN-SILENCE: FAIL` を実測） | 本 spec 単独所有 |
+| `crates/wintf/src/ecs/window/monitor.rs` | **値差分の述語を新設**（`PartialEq` と既存檻は無改変）＋その檻（D14・Req 7.2/7.5/7.6） | 本 spec 単独所有（S4） |
+| `crates/wintf/src/ecs/layout/systems/monitor_systems.rs` | `detect_display_change_system` の更新分岐を新述語へ切替＋モニタ表更新後の再導出駆動（D14・Req 7.1/7.3） | 本 spec 単独所有（S4） |
+| `crates/wintf/src/runtime/mod.rs` | `SetProcessDpiAwarenessContext` の戻り値ログ化（`let _ =` 撤去・D14・Req 7.4） | 本 spec 単独所有（S4） |
 
 > 依存方向（レビューで違反を検出可能にする規約）: `diag.rs` ← `follow.rs` ← `spawn.rs`・`frame.rs` ← `main.rs`。wintf → areka の import は禁止。`diag.rs` は World・wintf 型に依存しない（`Entity`・数値・文字列のみ）。
 
@@ -246,6 +250,12 @@ flowchart TB
 | 6.2 | 破棄済み窓へ警告以上のログを出さない | 消費側存在確認（debug skip） | 「不在」と「Anchored 欠落」の区別 |
 | 6.3 | 参照先不在は正常系打ち切り・他 scope 継続 | resnap_with／reconcile_reported_sizes の per-scope continue | 同上 |
 | 6.4 | 掃除前後で生存窓の位置・寸・追従不変 | hook は Resource のみ操作（component 不変） | spawn.rs 檻 |
+| 7.1 | 表示構成変更で全モニタの矩形・work_area・DPI・primary を再取得しモニタ表へ反映 | `detect_display_change_system`（wintf monitor_systems） | D14・S4 是正 |
+| 7.2 | 反映要否は**同一性**でなく**値の変化**で判定 | `Monitor::differs_in_value`（新設・`PartialEq` は不変） | D14 |
+| 7.3 | モニタ表更新後の窓 DPI・寸・位置の再導出を `WM_DPICHANGED` 非依存で駆動 | monitor_systems → placement 追従層（再スナップ相） | D14 |
+| 7.4 | DPI awareness 設定の成否をログに残す | `WinApp::new`（wintf runtime） | `let _ =` の撤去（Req 1.5 の直接適用） |
+| 7.5 | 識別子不変・値のみ変化の構成でモニタ表が更新されることの檻 | monitor_systems の in-source 檻 | 赤→緑（S4） |
+| 7.6 | 同一性判定の契約自体は変更しない | `impl PartialEq for Monitor`（無改変）＋既存檻 `test_partial_eq_compares_handle_only`（無改変） | D14 帰結⑵ |
 
 ## Components and Interfaces
 
@@ -534,5 +544,6 @@ impl GhostWindows {
 
 1. **Phase A（観測＋掃除・診断前に着手可）**: diag.rs・wintf 水準是正＋列挙ログ補強・`MonitorSnapshot` 構築点ログ・`PlacementRoute` 配管（挙動不変リファクタ）・GhostWindows 掃除（Req 6）・診断手順書。純関数抽出（decision・guard の骨組み）もここ（D2 裁定＝Req 2.7 の「変更」外）。
 2. **Phase B（実機診断）**: Phase A ビルドで 2 セッション採取 → 診断レポートへ Q1〜Q4・2.9 を登記。S1〜S3 は静的構造証跡として**先行登記済み**（Phase B の結果に依存しない）。
-3. **Phase C（是正）**: S1（D3: `ExternalAuthority`＋decision 消費）・S2（D7: `None` 経路再射影）・S3（D6: 遷移ガード配線）。Phase B が新原因を確定した場合のみ対象を追加（Req 2.7）。
+   **Phase B′（観測装置の修理・2026-07-31 追加）**: セッション②が **S4** を確定した——OS 経由の DPI 変化が全経路で無視されるため、②は受理回数下限に達し得ない。**S4 是正はこの Phase に属する**（S1〜S3 の被検体には一切触れず、`monitor.rs`／`monitor_systems.rs`／`runtime/mod.rs` のみを触る）。是正後に②を採り直して初めて Phase B が完了する。Req 2.10 が「観測装置の故障を被検体の健全性と読み替えること」を禁じている。
+3. **Phase C（是正）**: S1（D3: `ExternalAuthority`＋decision 消費）・S2（D7: `None` 経路再射影）・S3（D6: 遷移ガード配線）。Phase B が新原因を確定した場合のみ対象を追加（Req 2.7）——**S4 がこれに該当したが、被検体ではなく観測経路の欠陥ゆえ Phase B′ へ置く**。
 4. **Phase D（檻・C と交互）**: 各是正の赤→緑（Req 5.4）を是正コミットの直前後で実行記録。最終の実機再サインオフ。
