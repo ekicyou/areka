@@ -250,13 +250,13 @@ balloon_root（1 個のディレクトリ）
 - **D1（原文・記録として保存）**
   R3.2 は字義上 `windowposition` による相対位置決定を要求するが、現行 placement は `windowposition` を一切消費せず DD7 暫定規則（alignment＋offset）で決めている。選択肢 **C1（正典配置を実装・規模 L）／C2（per-scope 寸法まで・配置は DD7 据置・規模 M）／C3（数値指定のみ実装・キーワードは Out）**。C2 を採る場合は R3.2 の文言解釈（「相対位置を相方側の実寸と定義から決定する」の "定義" の射程）を要件ディスカッションで確定する必要がある。影響: `resolver.rs:181-203` の `balloon_pos` 式・`balloon_offset` 恒等式（恒久事後条件）・`persist.rs` の位置永続・W4 position-persist との相互作用。
 
-- **D2. 系列解決の単一権威をどこに置くか**
+- **D2. 系列解決の単一権威をどこに置くか** — ✅ **2026-07-31 設計フェーズで裁定済み＝(a) `areka-emo-present::balloon` に公開純関数（design.md「系列解決の単一権威」）。列挙・選択・上書き名導出・model 読込まで同居**
   現状、balloon ディレクトリの列挙は **`areka-emo-present/src/balloon.rs:50` と `measure.rs:390-409` の 2 実装**。per-scope 化で規則がずれると「採寸した窓寸 ≠ 実際に合成された枠」という実機限定の欠陥になる（4 章）。選択肢: **(a) `areka-emo-present` に公開純関数を置き `measure.rs` が消費（推奨形）／(b) `areka-parsers` 側へ置く／(c) `crates/areka` 内の共有 module／(d) 二重実装のまま規則を檻で同値固定**。
 
-- **D3. R4.4 の「変化」判定キー**
+- **D3. R4.4 の「変化」判定キー** — ✅ **2026-07-31 設計フェーズで裁定済み＝(ii)。`TextSlotBinding` 全体等値＋再解決 `ResolvedBalloonText` 等値（両型とも `PartialEq` 導出済み＝actor.rs:46/:133・追加 derive 不要。resolve は判定前に 1 回で単一構築経路維持）**
   `actor.rs:367-375` は `scale` のみ比較。拡張候補は **(i) `scale` ＋ `image_size` ＋ `surface_size`（binding 全体の等値比較）／(ii) 上記＋解決後の `TextRegion`（`ResolvedBalloonText`）の等値比較／(iii) `slot`/`window` entity も含む完全等値**。(ii) は「validrect だけが変わった」を捉えられるが `ResolvedBalloonText` に `PartialEq` が要る。churn ガード（R4.5）を壊さないことが制約。
 
-- **D4. per-scope `BalloonModel` の保持器の形**
+- **D4. per-scope `BalloonModel` の保持器の形** — ✅ **2026-07-31 設計フェーズで裁定済み＝S1（`BalloonScopeAssets` struct 新設・`BootAssets.balloon_model` 単数フィールド撤去）**
   S1（`BalloonScopeAssets` struct・`ScopeAssets` 対称）／S2（タプル 4 要素化）／S3（別マップ）。`BootAssets.balloon_model`（単数）を撤去するか温存するかで ripple 8 箇所の性質が変わる。
 
 - **D5. フォールバック時の面別上書き層（R2.3）の分類**
@@ -268,7 +268,7 @@ balloon_root（1 個のディレクトリ）
 - **D7. R1.7「起動を失敗させる」の実装上の意味**
   現行は 2 経路で挙動が違う——(a) 資産構築失敗 → `BootWiringError::Balloon` → `wire_emo2_boot` が **unwired（LogSink×2）へ縮退**（プロセスは生存）、(b) 採寸失敗 → `PlacementError::Measure` → main シームが `spawn_dummy_window` へ縮退。**どちらも「無言で空バルーンを表示」はしない**ので R1.7 の趣旨は満たすが、「起動を失敗させる」を文字どおり取るなら現行縮退では不足。要確認。
 
-- **D8. 相方側で面別上書きファイルが無いときの log レベル（R2.4/R6.2）**
+- **D8. 相方側で面別上書きファイルが無いときの log レベル（R2.4/R6.2）** — ✅ **2026-07-31 設計フェーズで裁定済み＝面別上書き層の NotFound は `debug!`（正常縮退）・その他 I/O エラーは `warn!`・基層 `descript.txt` は現行どおり `warn!`（層で使い分け）**
   現行 `assets.rs:334-339` `read_decoded_lenient` は読取失敗を一律 `warn!`。相方側は「面別ファイル不在が正常」（R2.4）なので、per-scope 化で **相方側 warn が常時鳴る**恐れがある。`debug!` へ落とすか、呼び手が層（descript／面別）で使い分けるか。
 
 - **D9. balloon `AnimationTable` の scope 別化（R5.6）** — ✅ **2026-07-31 要件ディスカッションで裁定済み＝(b) per-scope 化する（境界を `areka-seriko/src/looper.rs` へ明示拡張）**
@@ -299,7 +299,7 @@ balloon_root（1 個のディレクトリ）
 
 - **D9（原文・記録として保存）**
 
-- **D10. アプローチ選択**
+- **D10. アプローチ選択** — ✅ **2026-07-31 設計フェーズで裁定済み＝A（下流純関数へ集約）**
   A（下流純関数へ集約・推奨）／B（単一 World 合成・正典乖離ゆえ非推奨）／C（各所で個別分岐・二重実装固定化ゆえ非推奨）。
 
 ---
@@ -310,3 +310,36 @@ balloon_root（1 個のディレクトリ）
 2. 設計フェーズ着手時に **`git log -- crates/areka-emo-present/src/balloon.rs crates/areka/src/emo2_boot/assets.rs crates/areka/src/placement/measure.rs` で再度陳腐化確認**（記憶: 並走 brief は陳腐化する・design 前に rebase）。本書のアンカーは 2026-07-31 実測。
 3. 設計では **D2（単一権威）を先に固めてから** assets/measure/frame の配線を書く（4 章の (A)/(B) ずれが本仕様最大の実機限定リスク）。
 4. 実機サインオフの判定を目視だけに頼らず、**R6 のログ（scope／採用系列／採用ファイル／`windowposition`・`validrect` 実値／窓寸）を grep 可能な形で設計**する（400×224 と 288×203 の差はログで決定論的に確認できる）。
+
+---
+
+## 11. 設計フェーズ確定記録（2026-07-31・design.md 生成時）
+
+> design.md 生成に伴い、本書 9 章の未決項目（D2/D3/D4/D8/D10・D11 返却形・D9' 下位論点・D1' 下位論点）を全て裁定した。正本は design.md「確定した設計判断」表——本節はディスカバリログとしての要約と、設計統合（synthesis）の結果記録。
+
+### 裁定サマリ
+
+| 項目 | 裁定 |
+|---|---|
+| D10 | A（下流純関数へ集約） |
+| D2 | (a) `areka-emo-present::balloon` を単一権威に（列挙・選択・上書き名導出・`load_scope_balloon_model` まで同居——measure/assets/placement の 3 消費者が同一規則を呼ぶ） |
+| D11 返却形 | 族パラメタ化の表データ `SeriesFamily`＋`prefix_chain(family, scope) -> Vec<SeriesPrefix>`（tier タグ Own/KeroNamed/Default 付き・可変長候補列＝装飾族の一段深い旧名も表現可） |
+| D4 | S1（`BalloonScopeAssets` 新設・`BootAssets.balloon_model` 撤去） |
+| D3 | (ii) binding 全体等値＋再解決 `ResolvedBalloonText` 等値（両型 `PartialEq` 導出済みで追加 derive 不要） |
+| D8 | 面別上書き NotFound→`debug!`／他 I/O エラー→`warn!`／基層 descript→`warn!` 維持 |
+| D9' | 表は `LoopTables.balloon: BTreeMap<u32, AnimationTable>`（並行構造維持・per-scope 構築ループ内の単一導出点）。`BalloonScopeAssets` への同梱は**不採用**——表は spawn_seriko が attach より前に消費し、資産は attach で move 消費されるため消費タイミングが交差する。`SerikoLoopConfig.balloon_tables: BTreeMap<ActorKey, AnimationTable>`・不在 scope＝空表意味論。shell 表は単数のまま（前提注記を shell 限定へ書き直し） |
+| D1' | `windowposition` は新設 `placement/windowposition.rs`（純関数群）→`ScopeConfig.balloon_offset` 合流で供給。**`resolver.rs` P5 無改変＝エスケープ条項（W5 着手順裁定）は不発動**。符号表: Left（バルーンがキャラ左）＝画面 +x／Right＝画面 −x・y 無変換。k は符号保存＋大きさを `ScaleRatio` 権威へ委譲 |
+| D5 | 対応表には「正典整合（解釈）」と記録（正典が上書きを「対応する ID のサーフェス（画像）に対して」適用と定義するため） |
+| D7 | 要件確定文言どおり「既存 2 縮退経路への log-first 伝播」で充足（プロセス終了ポリシー不変） |
+
+### Synthesis 結果（generalization / build-vs-adopt / simplification）
+
+- **Generalization**: 系列解決は「族×scope」の 2 軸でインターフェースを一般化（`SeriesFamily`）し、実装は吹き出し族のみ（`BALLOON_FAMILY`）。scope も n≧2 を含む一般形で定義し実行時は {0,1}（要件 1.6/1.8 どおり——インターフェースを一般化し実装は現要件の範囲）。
+- **Build vs Adopt**: 新規外部依存ゼロ。パーサ（`parse_str`）・丸め権威（`ScaleRatio`）・テスト donor（`TempDir`＋`MemoryDecoder`）・log-first 流儀は全て既存資産の採用。
+- **Simplification**: 当初案の共有 model ビルダー新モジュール（`balloon_scope.rs` 案）は不採用——`areka-emo-present::balloon` が既に `areka-parsers` に依存しており、model 読込も権威へ同居させることで新モジュール 1 個を削減。`ResolvedFace` は一時値とし保持しない（規則が権威にあるため再導出可能——保持器の肥大を回避）。新規ファイルは `placement/windowposition.rs` の 1 本のみ。
+
+### 設計レビューゲート結果
+
+- 機械チェック: 要件 ID 48 件全てが design.md の Requirements Traceability に存在／Boundary 4 節・File Structure Plan 具体値・component↔file 対応を確認。
+- 判断レビュー: 符号表の内部整合（kero wp.x=−190・Right→画面 +190）・churn 檻の意味更新（R7.2 対象として明記）・W6 への Revalidation Triggers 登記を確認。
+- **1 パス目で合格（修繕 0 回）**。要件ギャップ・矛盾は検出されず。
