@@ -327,8 +327,6 @@ pub fn on_mouse_double_click(
 ///
 /// ラベル・ID・参照列はいずれも意味解釈せず逐語で転写する（トリム・正規化・空要素除去を
 /// しない・Req1.5／[[areka-surface-args-opaque-string-downstream-resolve]] と同精神）。
-// C4（タスク 4.x）が steady 調停から本構築を呼ぶまでは非テストビルドで未使用となる。
-#[allow(dead_code)]
 pub fn on_choice_select_ex(
     label: &str,
     id: &str,
@@ -351,8 +349,6 @@ pub fn on_choice_select_ex(
 ///
 /// 正典形カスケードの**後続段**（先行 `OnChoiceSelectEx` が 204 のときのみ発行・裁定 2）。
 /// Reference は常に 1 個で、付随参照列・表示ラベルは載せない（Req3.2）。
-// C4（タスク 4.x）が steady 調停から本構築を呼ぶまでは非テストビルドで未使用となる。
-#[allow(dead_code)]
 pub fn on_choice_select(id: &str, snapshot: &ExecutionSnapshot) -> ShioriCall {
     ShioriCall::Get {
         id: EventId::Static("OnChoiceSelect"),
@@ -372,8 +368,6 @@ pub fn on_choice_select(id: &str, snapshot: &ExecutionSnapshot) -> ShioriCall {
 /// - 表示ラベルと選択肢 ID は Reference に**含めない**（Req3.3。ID はイベント名側が運ぶ）。
 ///
 /// `references` が空なら Reference を 1 個も作らない（空 Vec・Req3.5）。
-// C4（タスク 4.x）が steady 調停から本構築を呼ぶまでは非テストビルドで未使用となる。
-#[allow(dead_code)]
 pub fn on_choice_named(
     id: String,
     references: &[String],

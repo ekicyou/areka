@@ -22,9 +22,14 @@
 //! 握手開始＝`OnClose` GET 発行＋`ClosePending` への遷移（ClosePending 以降は close.rs＝
 //! タスク 2.5 の責務）。
 
-use super::choice::choice_deadline;
-use super::{events, Action, ActiveTalk, ChoicePhase, ChoiceState, Input, Phase, State};
-use crate::msg::{CloseReason, KanadeConfig, MonotonicMs, MouseEventKind, MouseInput, ShioriOutcome};
+use super::choice::{choice_deadline, plan_cascade, CascadePlan};
+use super::{
+    events, Action, ActiveTalk, CascadeNext, ChoicePhase, ChoiceState, Input, Phase, State,
+};
+use crate::msg::{
+    ChoiceInput, CloseReason, KanadeConfig, MonotonicMs, MouseEventKind, MouseInput, ShioriCall,
+    ShioriOutcome,
+};
 use crate::status::ExecutionSnapshot;
 use crate::talk::{StartTalk, TalkDone, TalkId};
 
@@ -182,6 +187,311 @@ pub(super) fn on_choice_waiting(
     (state, Vec::new())
 }
 
+/// Steady での選択確定の受領検証とカスケード第 1 段の発行（設計 C4 規則 1／2）。
+///
+/// mod.rs の横断アームが Steady フェーズの [`Input::Choice`] のみを本関数へ委譲する。
+///
+/// # 受領検証（規則 1・いずれの棄却も warn 記録・状態不変・継続）
+/// 1. 選択待ち帳簿が無い（未成立・解決済み・タイムアウト済み）→ `choice_rejected_no_wait`（Req1.3）。
+/// 2. 帳簿の対象 talk が現行 talk と一致しない（トーク切替で選択肢が消滅済み・再生中でない）
+///    → `choice_rejected_no_wait`（Req1.3）。
+/// 3. 段フェーズが [`ChoicePhase::Waiting`] でない（カスケード／タイムアウト応答待ち中の二重確定）
+///    → `choice_rejected_busy`（Req1.1）。
+/// 4. 選択肢 ID が候補集合に無い → `choice_rejected_unknown_id`（Req1.4・DD-7）。
+///
+/// 棄却は**状態不変が定義**であり、既存帳簿を含めて一切書き換えない（検証で取り出した帳簿は
+/// 棄却経路で必ず戻す）。
+///
+/// # 受理（規則 2）
+/// [`plan_cascade`] が段列を一意に決める（本層で再判定しない・Req2.5）:
+/// - [`CascadePlan::Unsupported`]（`script:` 前置）→ SHIORI イベントを発行せず
+///   `choice_unsupported_category`（warn）を記録し、[`Action::ResolveChoice`] のみ発行して帳簿を
+///   消す（会話を停止させない・Req2.7・裁定 7）。
+/// - [`CascadePlan::Named`]（`On` 始まり）→ 任意名イベント **1 段のみ**を発行する
+///   （`OnChoiceSelectEx`／`OnChoiceSelect` を先行発火しない・Req2.1・裁定 1）。残段なし。
+/// - [`CascadePlan::Canonical`] → `OnChoiceSelectEx` を先行段として発行し、残段に無印 1 段
+///   （[`CascadeNext::Select`]）を積む（Req2.2）。
+///
+/// 受理は帳簿の段フェーズを [`ChoicePhase::Cascading`] へ進めるのみで [`Phase`] を触らない
+/// （DD-3）。応答の処理（次段前進・解決・起動）は [`on_reply`] の choice 先行アーム（規則 3）。
+pub(super) fn on_choice(mut state: State, input: ChoiceInput) -> (State, Vec<Action>) {
+    let active_talk_id = match &state.phase {
+        Phase::Steady { talk: Some(active) } => Some(active.talk_id),
+        _ => None,
+    };
+    // 検証のため帳簿を取り出す。棄却経路は**必ず戻して**状態不変を保つ。
+    let Some(mut ledger) = state.choice.take() else {
+        tracing::warn!(
+            target: "kanade",
+            event = "choice_rejected_no_wait",
+            reason = "no_choice_wait",
+            choice_id = %input.id,
+            scope = input.scope,
+            "選択待ちが存在しない状態の選択確定——状態不変で棄却（C4 規則 1・Req1.3）"
+        );
+        return (state, Vec::new());
+    };
+    if active_talk_id != Some(ledger.talk_id) {
+        tracing::warn!(
+            target: "kanade",
+            event = "choice_rejected_no_wait",
+            reason = if active_talk_id.is_none() { "no_active_talk" } else { "talk_id_mismatch" },
+            choice_id = %input.id,
+            scope = input.scope,
+            ledger_talk_id = ledger.talk_id.0,
+            active_talk_id = ?active_talk_id.map(|t| t.0),
+            "終了済み選択待ち宛の選択確定——状態不変で棄却（C4 規則 1・Req1.3）"
+        );
+        state.choice = Some(ledger);
+        return (state, Vec::new());
+    }
+    if !matches!(ledger.phase, ChoicePhase::Waiting) {
+        tracing::warn!(
+            target: "kanade",
+            event = "choice_rejected_busy",
+            choice_id = %input.id,
+            scope = input.scope,
+            talk_id = ledger.talk_id.0,
+            stage = choice_phase_label(&ledger.phase),
+            "段の進行中に届いた二重の選択確定——状態不変で棄却（C4 規則 1・Req1.1）"
+        );
+        state.choice = Some(ledger);
+        return (state, Vec::new());
+    }
+    if !ledger.candidates.contains(&input.id) {
+        tracing::warn!(
+            target: "kanade",
+            event = "choice_rejected_unknown_id",
+            choice_id = %input.id,
+            scope = input.scope,
+            talk_id = ledger.talk_id.0,
+            candidate_count = ledger.candidates.len(),
+            "候補集合に無い選択肢 ID——選択待ちを変えずに棄却（C4 規則 1・Req1.4）"
+        );
+        state.choice = Some(ledger);
+        return (state, Vec::new());
+    }
+
+    // --- 受理（規則 2）---
+    let talk_id = ledger.talk_id;
+    let plan = plan_cascade(&input.id);
+    tracing::info!(
+        target: "kanade",
+        event = "choice_accepted",
+        choice_id = %input.id,
+        label = %input.label,
+        scope = input.scope,
+        reference_count = input.references.len(),
+        plan = ?plan,
+        talk_id = talk_id.0,
+        "選択確定を受理——カスケードを開始（C4 規則 2）"
+    );
+    // GET の共通ヘッダは送出時点の Steady フェーズから導出する（Req3.6・DD-IT-3）。
+    let snapshot = super::snapshot_of(&state.phase);
+    let (call, next) = match plan {
+        CascadePlan::Unsupported => {
+            // M1 未対応カテゴリ（裁定 7）: イベントを発行せず解決だけ行う（Req2.7）。
+            tracing::warn!(
+                target: "kanade",
+                event = "choice_unsupported_category",
+                choice_id = %input.id,
+                talk_id = talk_id.0,
+                "M1 未対応カテゴリの選択肢 ID——イベントを発行せず選択解決のみ行う（Req2.7）"
+            );
+            return (state, vec![resolve_choice(talk_id, input.id, "unsupported")]);
+        }
+        // 任意名 1 段のみ（先行 Ex／無印を発行しない・裁定 1）。ID はイベント名側が運ぶため
+        // Reference には付随参照列のみを載せる（Req3.3）。
+        CascadePlan::Named => (
+            events::on_choice_named(input.id.clone(), &input.references, &snapshot),
+            None,
+        ),
+        // 正典形は Ex 先行・無印を残段に積む（Req2.2・裁定 2）。
+        CascadePlan::Canonical => (
+            events::on_choice_select_ex(&input.label, &input.id, &input.references, &snapshot),
+            Some(CascadeNext::Select),
+        ),
+    };
+    tracing::trace!(
+        target: "kanade",
+        event = "choice_cascade_stage",
+        choice_id = %input.id,
+        talk_id = talk_id.0,
+        stage = call_id(&call),
+        has_next = next.is_some(),
+        "カスケード段の GET を送出（C4 規則 2）"
+    );
+    ledger.phase = ChoicePhase::Cascading {
+        choice_id: input.id,
+        next,
+    };
+    state.choice = Some(ledger);
+    (state, vec![Action::ShioriRequest(call)])
+}
+
+/// カスケード応答の処理（設計 C4 規則 3・DD-4・origin 非依存）。
+///
+/// [`on_reply`] の choice 先行アームが [`ChoicePhase::Cascading`] の帳簿を分解して委譲する。
+/// **origin を見ない**——応答の出所が任意名（`"OnChoiceEvent"`）でも `OnChoiceSelectEx`／
+/// `OnChoiceSelect` でも同一に捌く（in-flight 帳簿の照合が正・DD-1）。
+///
+/// - [`ShioriOutcome::Value`] → 以降の段を発行せず（Req2.4）、新 talk_id を採番して slot を
+///   差し替え（Req4.1／4.3）、`[ResolveChoice{old}, StartTalk(new)]` を**この順**で同一バッチに
+///   載せる（DD-4・Req4.6／5.1）。旧 talk_id は 1 世代だけ `choice_prev_talk` へ保持する
+///   （遅延 `TalkDone` の info 降格に使う・遷移規則 9。消費側の防御アームはタスク 4.6）。
+/// - [`ShioriOutcome::NoContent`]／[`ShioriOutcome::Failed`]（error 記録・Req4.5）→ 残段あり:
+///   次段 GET を発行し `Cascading{next: None}` を維持（Req2.3）。残段なし: 帳簿を消し
+///   `[ResolveChoice{old}]` のみを発行する（起動なし・Req4.2／5.3）。
+/// - 構造上起こらない応答（GET に対する `Notified`／`Unloaded`）は防御的に警告し、会話を選択待ちの
+///   まま停止させないため 204 と同一に扱う（Error Strategy「選択系の失敗は会話を止めない」）。
+fn on_cascade_reply(
+    mut state: State,
+    ledger: ChoiceState,
+    outcome: ShioriOutcome,
+    origin: &'static str,
+) -> (State, Vec<Action>) {
+    let ChoiceState {
+        talk_id: old_talk_id,
+        candidates,
+        deadline,
+        phase,
+    } = ledger;
+    let (choice_id, next) = match phase {
+        ChoicePhase::Cascading { choice_id, next } => (choice_id, next),
+        // 呼び出し元が Cascading のみを委譲する（構造上到達しない）。帳簿を復元して防御する。
+        other => {
+            state.choice = Some(ChoiceState {
+                talk_id: old_talk_id,
+                candidates,
+                deadline,
+                phase: other,
+            });
+            return steady_reply_unexpected(state, "Steady{choice}", outcome);
+        }
+    };
+
+    let outcome = match outcome {
+        ShioriOutcome::Value(script) => {
+            // Value 短絡（Req2.4）: 以降の段を発行せず、解決と新トーク起動を同一バッチへ。
+            let new_talk_id = TalkId(state.next_talk_id);
+            state.next_talk_id += 1;
+            tracing::info!(
+                target: "kanade",
+                event = "steady_talk",
+                talk_id = new_talk_id.0,
+                origin = origin,
+                prev_talk_id = old_talk_id.0,
+                "選択由来の応答にスクリプト——単一 slot 調停で差し替え再生起動（Req4.1／4.3）"
+            );
+            state.phase = Phase::Steady {
+                talk: Some(ActiveTalk {
+                    talk_id: new_talk_id,
+                    origin,
+                    script: script.clone(),
+                }),
+            };
+            // choice 起因の slot 差替——旧 talk_id を 1 世代保持する（遷移規則 9・消費は 4.6）。
+            state.choice_prev_talk = Some(old_talk_id);
+            return (
+                state,
+                vec![
+                    resolve_choice(old_talk_id, choice_id, "value"),
+                    Action::StartTalk(StartTalk::new(new_talk_id, script)),
+                ],
+            );
+        }
+        ShioriOutcome::NoContent => "no_content",
+        ShioriOutcome::Failed(failure) => {
+            tracing::error!(
+                target: "kanade",
+                event = "choice_shiori_failed_as_204",
+                error = %failure,
+                choice_id = %choice_id,
+                talk_id = old_talk_id.0,
+                origin = origin,
+                "選択由来の SHIORI 呼出が失敗——無応答（204）と同じ扱いで継続（Req4.5）"
+            );
+            "failed"
+        }
+        other => {
+            // GET に対する Notified／Unloaded は構造上あり得ない。会話を選択待ちのまま停止
+            // させないため、記録の上で 204 と同一に扱う（沈黙も停止もさせない）。
+            tracing::warn!(
+                target: "kanade",
+                event = "steady_unexpected_reply",
+                phase = "Steady{Cascading}",
+                choice_id = %choice_id,
+                origin = origin,
+                "カスケード段に想定外の SHIORI 応答——204 相当で継続（会話を止めない）"
+            );
+            let _ = other;
+            "unexpected"
+        }
+    };
+
+    match next {
+        // 残段あり（正典形の無印段）→ 次段 GET（Ref0=ID・Req2.3／3.2）。
+        Some(CascadeNext::Select) => {
+            let snapshot = super::snapshot_of(&state.phase);
+            let call = events::on_choice_select(&choice_id, &snapshot);
+            tracing::trace!(
+                target: "kanade",
+                event = "choice_cascade_stage",
+                choice_id = %choice_id,
+                talk_id = old_talk_id.0,
+                stage = call_id(&call),
+                has_next = false,
+                outcome = outcome,
+                "先行段が応答を返さず次段の GET を送出（C4 規則 3・Req2.3）"
+            );
+            state.choice = Some(ChoiceState {
+                talk_id: old_talk_id,
+                candidates,
+                deadline,
+                phase: ChoicePhase::Cascading {
+                    choice_id,
+                    next: None,
+                },
+            });
+            (state, vec![Action::ShioriRequest(call)])
+        }
+        // 残段なし → トーク起動なし・選択解決のみ（Req4.2／5.3・裁定 3）。
+        None => (state, vec![resolve_choice(old_talk_id, choice_id, outcome)]),
+    }
+}
+
+/// [`Action::ResolveChoice`] を組み立て、発行を info で記録する（Req5.1・単一の発行点）。
+///
+/// 呼び出しごとにちょうど 1 つの解決指示を返すため、「1 選択＝高々 1 解決」（Req5.4）は
+/// 呼び出し点（未対応カテゴリの即時解決・カスケード終端）が排他であることで成立する。
+fn resolve_choice(talk_id: TalkId, id: String, outcome: &'static str) -> Action {
+    tracing::info!(
+        target: "kanade",
+        event = "choice_resolved",
+        talk_id = talk_id.0,
+        choice_id = %id,
+        outcome = outcome,
+        "選択待ちの解決を指示（Req5.1／5.3）"
+    );
+    Action::ResolveChoice { talk_id, id }
+}
+
+/// 送出する呼出のイベント ID（wire 形）を取り出す（カスケード段のログ観測用）。
+fn call_id(call: &ShioriCall) -> &str {
+    match call {
+        ShioriCall::Get { id, .. } | ShioriCall::Notify { id, .. } => id.as_str(),
+    }
+}
+
+/// 段フェーズの静的ラベル（ログ観測用・[`super::phase_label`] と同型の可観測性ヘルパ）。
+fn choice_phase_label(phase: &ChoicePhase) -> &'static str {
+    match phase {
+        ChoicePhase::Waiting => "Waiting",
+        ChoicePhase::Cascading { .. } => "Cascading",
+        ChoicePhase::TimeoutInFlight => "TimeoutInFlight",
+    }
+}
+
 /// Steady での Tick（pump ゲート・Req 3.1／3.4／DD-6）。
 ///
 /// まず `last_now` を必ず更新する（時刻は発行有無に依らず進む・close 期限計算の基準）。
@@ -238,6 +548,22 @@ fn on_reply(
     outcome: ShioriOutcome,
     origin: &'static str,
 ) -> (State, Vec<Action>) {
+    // === choice 先行アーム（C4 規則 3・origin 非依存）===
+    // カスケード段の応答は既存の origin 政策 match より**先に**捌く。これを落とすと選択応答が
+    // 下の DD-6 防御アーム（`steady_value_during_talk`）で warn 破棄され、選択が沈黙する
+    // （design Risks の既知の罠）。判定は origin 文字列でなく in-flight 帳簿の照合で行う（DD-1）。
+    if let Some(ledger) = state.choice.take() {
+        match ledger.phase {
+            ChoicePhase::Cascading { .. } => {
+                return on_cascade_reply(state, ledger, outcome, origin);
+            }
+            // 選択待ち（入力待ち）・タイムアウト応答待ちの帳簿は本アームの対象外。帳簿を戻して
+            // 既存の origin 政策へ委ねる（`TimeoutInFlight` の応答処理はタスク 4.5）。
+            ChoicePhase::Waiting | ChoicePhase::TimeoutInFlight => {
+                state.choice = Some(ledger);
+            }
+        }
+    }
     match state.phase {
         Phase::Steady { talk: None } => match outcome {
             ShioriOutcome::Value(script) => {
@@ -1160,6 +1486,643 @@ mod tests {
             active_script(&next.phase),
             r"\0script-b\e",
             "置換で差し替わった slot の script も新 talk のものへ更新される（DD-10）"
+        );
+    }
+
+    // ============================================================
+    // 選択確定の受領検証とカスケード駆動（タスク 4.3・C4 規則 1／2／3・DD-4）
+    // ============================================================
+
+    /// 檻用の選択確定入力（id／label／付随参照列を明示して組む・scope は 0 固定）。
+    fn choice_input_of(id: &str, label: &str, references: &[&str]) -> ChoiceInput {
+        ChoiceInput {
+            id: id.to_string(),
+            label: label.to_string(),
+            scope: 0,
+            references: references.iter().map(|s| s.to_string()).collect(),
+        }
+    }
+
+    /// 選択待ち帳簿つきの `Steady{Some(talk_id)}` を構築する（帳簿の talk は現行 talk と一致）。
+    fn steady_with_ledger(
+        talk_id: TalkId,
+        next_id: u64,
+        candidates: &[&str],
+        phase: ChoicePhase,
+    ) -> State {
+        let mut s = steady_some(talk_id, next_id);
+        s.choice = Some(ChoiceState {
+            talk_id,
+            candidates: candidates.iter().map(|c| c.to_string()).collect(),
+            deadline: Some(MonotonicMs(32_000)),
+            phase,
+        });
+        s
+    }
+
+    /// GET Action から (イベント ID の wire 形, Reference 列) を取り出す（GET 以外は panic）。
+    fn expect_get_call(action: &Action) -> (String, Vec<String>) {
+        match action {
+            Action::ShioriRequest(ShioriCall::Get {
+                id, references, ..
+            }) => (id.as_str().to_string(), references.clone()),
+            _ => panic!("expected GET ShioriRequest"),
+        }
+    }
+
+    /// 帳簿の段フェーズを取り出す（帳簿不在は panic）。
+    fn expect_ledger(state: &State) -> &ChoiceState {
+        state.choice.as_ref().expect("選択待ち帳簿が存在するはず")
+    }
+
+    // --- A. 棄却分岐（規則 1）: すべて状態不変・Action なし ---
+
+    /// Req1.3: 選択待ち帳簿が無い（解決済み・未成立）状態の選択確定は棄却する。
+    #[test]
+    fn choice_without_ledger_is_rejected_and_leaves_state_unchanged() {
+        let (next, actions) = step(
+            steady_some(TalkId(3), 6),
+            Input::Choice(choice_input_of("OnMenu", "メニュー", &[])),
+            &config(),
+        );
+        assert!(
+            matches!(next.phase, Phase::Steady { talk: Some(_) }),
+            "棄却は Phase を触らない"
+        );
+        assert!(next.choice.is_none(), "棄却は帳簿を作らない");
+        assert_eq!(next.next_talk_id, 6, "棄却は採番しない");
+        assert!(actions.is_empty(), "棄却は Action を発行しない");
+    }
+
+    /// Req1.3: 帳簿の対象 talk が現行 talk と食い違う場合は棄却する（帳簿も無傷）。
+    #[test]
+    fn choice_with_ledger_of_other_talk_is_rejected() {
+        let mut s = steady_some(TalkId(3), 6);
+        s.choice = Some(ChoiceState {
+            talk_id: TalkId(999),
+            candidates: vec!["OnMenu".to_string()],
+            deadline: None,
+            phase: ChoicePhase::Waiting,
+        });
+        let (next, actions) = step(
+            s,
+            Input::Choice(choice_input_of("OnMenu", "メニュー", &[])),
+            &config(),
+        );
+        let ledger = expect_ledger(&next);
+        assert_eq!(ledger.talk_id, TalkId(999), "既存帳簿は棄却で変わらない");
+        assert!(matches!(ledger.phase, ChoicePhase::Waiting));
+        assert!(actions.is_empty());
+    }
+
+    /// Req1.3: 再生中でない（`Steady{None}`＝トーク切替で選択肢が消滅済み）なら棄却する。
+    #[test]
+    fn choice_without_active_talk_is_rejected() {
+        let mut s = steady_none(5);
+        s.choice = Some(ChoiceState {
+            talk_id: TalkId(3),
+            candidates: vec!["OnMenu".to_string()],
+            deadline: None,
+            phase: ChoicePhase::Waiting,
+        });
+        let (next, actions) = step(
+            s,
+            Input::Choice(choice_input_of("OnMenu", "メニュー", &[])),
+            &config(),
+        );
+        assert!(matches!(next.phase, Phase::Steady { talk: None }));
+        assert!(matches!(expect_ledger(&next).phase, ChoicePhase::Waiting));
+        assert!(actions.is_empty());
+    }
+
+    /// Req1.1: 段の進行中（`Cascading`／`TimeoutInFlight`）の二重確定は棄却する。
+    #[test]
+    fn choice_during_cascade_or_timeout_is_rejected_as_busy() {
+        for phase in [
+            ChoicePhase::Cascading {
+                choice_id: "OnMenu".to_string(),
+                next: None,
+            },
+            ChoicePhase::TimeoutInFlight,
+        ] {
+            let s = steady_with_ledger(TalkId(3), 6, &["OnMenu"], phase);
+            let (next, actions) = step(
+                s,
+                Input::Choice(choice_input_of("OnMenu", "メニュー", &[])),
+                &config(),
+            );
+            assert!(
+                actions.is_empty(),
+                "in-flight 中の二重確定は Action を発行しない（Req1.1）"
+            );
+            assert_eq!(next.next_talk_id, 6, "二重確定は採番しない");
+            let ledger = expect_ledger(&next);
+            assert!(
+                !matches!(ledger.phase, ChoicePhase::Waiting),
+                "棄却は段フェーズを巻き戻さない"
+            );
+        }
+    }
+
+    /// Req1.4: 候補集合に無い ID は棄却し、選択待ち状態を変更しない。
+    #[test]
+    fn choice_with_id_outside_candidates_is_rejected() {
+        let s = steady_with_ledger(TalkId(3), 6, &["OnMenu", "choice1"], ChoicePhase::Waiting);
+        let (next, actions) = step(
+            s,
+            Input::Choice(choice_input_of("choice9", "他", &[])),
+            &config(),
+        );
+        assert!(actions.is_empty(), "候補外 ID は Action を発行しない");
+        let ledger = expect_ledger(&next);
+        assert!(
+            matches!(ledger.phase, ChoicePhase::Waiting),
+            "候補外 ID の棄却は選択待ちを継続させる"
+        );
+        assert_eq!(
+            ledger.candidates,
+            vec!["OnMenu".to_string(), "choice1".to_string()],
+            "候補列は棄却で変わらない"
+        );
+    }
+
+    // --- B. 受理とカスケード第 1 段（規則 2・裁定 1／7） ---
+
+    /// Req2.1・裁定 1: `On` 始まり ID は任意名 1 段のみ（Ex／無印を先行発火しない）。
+    #[test]
+    fn named_choice_emits_only_the_named_event() {
+        let s = steady_with_ledger(
+            TalkId(3),
+            6,
+            &["Onおしゃべり頻度メニュー"],
+            ChoicePhase::Waiting,
+        );
+        let (next, actions) = step(
+            s,
+            Input::Choice(choice_input_of(
+                "Onおしゃべり頻度メニュー",
+                "おしゃべり頻度",
+                &["a0", "a1"],
+            )),
+            &config(),
+        );
+        assert_eq!(actions.len(), 1, "第 1 段の GET を 1 件だけ発行する");
+        let (id, refs) = expect_get_call(&actions[0]);
+        assert_eq!(id, "Onおしゃべり頻度メニュー", "任意名イベントを逐語発火");
+        assert_ne!(id, "OnChoiceSelectEx", "Ex を先行発火しない（裁定 1）");
+        assert_ne!(id, "OnChoiceSelect", "無印を先行発火しない（裁定 1）");
+        assert_eq!(
+            refs,
+            vec!["a0".to_string(), "a1".to_string()],
+            "Ref0 以降＝付随参照列のみ（Req3.3）"
+        );
+        match &expect_ledger(&next).phase {
+            ChoicePhase::Cascading { choice_id, next } => {
+                assert_eq!(choice_id, "Onおしゃべり頻度メニュー");
+                assert!(next.is_none(), "任意名形に残段は無い（1 段のみ）");
+            }
+            _ => panic!("受理で Cascading へ進む"),
+        }
+        assert!(
+            matches!(next.phase, Phase::Steady { talk: Some(_) }),
+            "受理は Phase を触らない（DD-3）"
+        );
+    }
+
+    /// Req2.2／3.1: 正典形は `OnChoiceSelectEx` が先行し Reference が正典 layout で並ぶ。
+    #[test]
+    fn canonical_choice_emits_choice_select_ex_with_canonical_layout() {
+        let s = steady_with_ledger(TalkId(3), 6, &["choice1"], ChoicePhase::Waiting);
+        let (next, actions) = step(
+            s,
+            Input::Choice(choice_input_of("choice1", "ラベル", &["r0", "r1"])),
+            &config(),
+        );
+        assert_eq!(actions.len(), 1);
+        let (id, refs) = expect_get_call(&actions[0]);
+        assert_eq!(id, "OnChoiceSelectEx", "正典形は Ex が先行段（Req2.2）");
+        assert_eq!(
+            refs,
+            vec![
+                "ラベル".to_string(),
+                "choice1".to_string(),
+                "r0".to_string(),
+                "r1".to_string()
+            ],
+            "Ref0=ラベル／Ref1=ID／Ref2 以降=付随参照列（Req3.1）"
+        );
+        match &expect_ledger(&next).phase {
+            ChoicePhase::Cascading { choice_id, next } => {
+                assert_eq!(choice_id, "choice1");
+                assert!(
+                    matches!(next, Some(CascadeNext::Select)),
+                    "正典形は無印 1 段を残段に持つ（Req2.2）"
+                );
+            }
+            _ => panic!("受理で Cascading へ進む"),
+        }
+    }
+
+    /// Req2.7・裁定 7: `script:` 前置はイベントを発行せず選択解決のみを行う。
+    #[test]
+    fn unsupported_choice_resolves_without_emitting_any_event() {
+        let s = steady_with_ledger(TalkId(3), 6, &["script:\\e"], ChoicePhase::Waiting);
+        let (next, actions) = step(
+            s,
+            Input::Choice(choice_input_of("script:\\e", "実行", &[])),
+            &config(),
+        );
+        assert!(
+            !actions
+                .iter()
+                .any(|a| matches!(a, Action::ShioriRequest(_))),
+            "未対応カテゴリは SHIORI イベントを発行しない（Req2.7）"
+        );
+        match actions.as_slice() {
+            [Action::ResolveChoice { talk_id, id }] => {
+                assert_eq!(*talk_id, TalkId(3));
+                assert_eq!(id, "script:\\e");
+            }
+            _ => panic!("未対応カテゴリは ResolveChoice のみを発行する"),
+        }
+        assert!(next.choice.is_none(), "解決で帳簿は消える");
+        assert_eq!(next.next_talk_id, 6, "未対応カテゴリは talk を起動しない");
+    }
+
+    // --- C. カスケード応答（規則 3・DD-4） ---
+
+    /// Req4.3／4.6／5.1・DD-4: 応答スクリプトは `[ResolveChoice, StartTalk]` をこの順で同一バッチに載せる。
+    #[test]
+    fn cascade_value_emits_resolve_then_start_in_this_order() {
+        let s = steady_with_ledger(
+            TalkId(3),
+            6,
+            &["OnMenu"],
+            ChoicePhase::Cascading {
+                choice_id: "OnMenu".to_string(),
+                next: None,
+            },
+        );
+        let (next, actions) = step(
+            s,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Value(r"\0次のシーン\e".to_string()),
+                origin: "OnChoiceEvent",
+            },
+            &config(),
+        );
+        match actions.as_slice() {
+            [
+                Action::ResolveChoice { talk_id, id },
+                Action::StartTalk(StartTalk {
+                    talk_id: new_id,
+                    script,
+                    ..
+                }),
+            ] => {
+                assert_eq!(*talk_id, TalkId(3), "解決対象は旧 talk");
+                assert_eq!(id, "OnMenu");
+                assert_eq!(*new_id, TalkId(6), "新 talk_id を採番する（Req4.1）");
+                assert_eq!(script, r"\0次のシーン\e");
+            }
+            _ => panic!("[ResolveChoice, StartTalk] のこの順で発行されること（DD-4）"),
+        }
+        match next.phase {
+            Phase::Steady {
+                talk: Some(ActiveTalk {
+                    talk_id,
+                    origin,
+                    ref script,
+                }),
+            } => {
+                assert_eq!(talk_id, TalkId(6), "slot は新 talk へ差し替わる（Req4.3）");
+                assert_eq!(origin, "OnChoiceEvent", "応答の出所を転記する");
+                assert_eq!(script, r"\0次のシーン\e", "起動 script を保持（DD-10）");
+            }
+            _ => panic!("expected Steady{{Some}} replaced"),
+        }
+        assert_eq!(next.next_talk_id, 7);
+        assert!(next.choice.is_none(), "解決で帳簿は消える");
+        assert_eq!(
+            next.choice_prev_talk,
+            Some(TalkId(3)),
+            "choice 起因の slot 差替で旧 talk_id を 1 世代保持する（遷移規則 9）"
+        );
+    }
+
+    /// Req2.3: 204 かつ残段ありなら次段（無印・Ref0=ID）を発行する。
+    #[test]
+    fn cascade_no_content_advances_to_choice_select_stage() {
+        let s = steady_with_ledger(
+            TalkId(3),
+            6,
+            &["choice1"],
+            ChoicePhase::Cascading {
+                choice_id: "choice1".to_string(),
+                next: Some(CascadeNext::Select),
+            },
+        );
+        let (next, actions) = step(
+            s,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::NoContent,
+                origin: "OnChoiceSelectEx",
+            },
+            &config(),
+        );
+        assert_eq!(actions.len(), 1, "次段の GET を 1 件だけ発行する");
+        let (id, refs) = expect_get_call(&actions[0]);
+        assert_eq!(id, "OnChoiceSelect", "残段は無印イベント（Req2.2）");
+        assert_eq!(refs, vec!["choice1".to_string()], "Ref0=ID のみ（Req3.2）");
+        match &expect_ledger(&next).phase {
+            ChoicePhase::Cascading { choice_id, next } => {
+                assert_eq!(choice_id, "choice1");
+                assert!(next.is_none(), "無印段の後に残段は無い");
+            }
+            _ => panic!("次段発行後も Cascading を維持する"),
+        }
+        assert_eq!(next.next_talk_id, 6, "204 は採番しない");
+    }
+
+    /// Req2.3／5.3: 204 かつ残段なしなら選択解決のみ（起動なし）。
+    #[test]
+    fn cascade_no_content_at_last_stage_resolves_without_start() {
+        let s = steady_with_ledger(
+            TalkId(3),
+            6,
+            &["choice1"],
+            ChoicePhase::Cascading {
+                choice_id: "choice1".to_string(),
+                next: None,
+            },
+        );
+        let (next, actions) = step(
+            s,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::NoContent,
+                origin: "OnChoiceSelect",
+            },
+            &config(),
+        );
+        match actions.as_slice() {
+            [Action::ResolveChoice { talk_id, id }] => {
+                assert_eq!(*talk_id, TalkId(3));
+                assert_eq!(id, "choice1");
+            }
+            _ => panic!("最終段 204 は ResolveChoice のみ（DD-4・Req5.3）"),
+        }
+        assert!(
+            !actions.iter().any(|a| matches!(a, Action::StartTalk(_))),
+            "最終段 204 で talk を起動しない（Req4.2）"
+        );
+        assert!(next.choice.is_none(), "解決で帳簿は消える");
+        match next.phase {
+            Phase::Steady {
+                talk: Some(ActiveTalk { talk_id, .. }),
+            } => assert_eq!(talk_id, TalkId(3), "現行 talk は維持される"),
+            _ => panic!("expected Steady{{Some}} preserved"),
+        }
+        assert_eq!(next.next_talk_id, 6);
+    }
+
+    /// Req4.5・規則 3: 段の失敗は error 記録の上で 204 と同一遷移（残段ありなら次段）。
+    ///
+    /// mod.rs の横断 `Failed`→`Unloading{Fault}` アームの免除（DD-12）は**タスク 4.6 の担当**で
+    /// あり、本タスク時点では `step()` 経由の Failed は横断アームに先取りされる。よって本檻は
+    /// steady 側の 204 相当処理そのものを `steady::step` の直接駆動で固定する（既存檻流儀＝
+    /// ルーティング上到達しないアームは当該サブモジュール `step` を直接駆動して検証する）。
+    #[test]
+    fn cascade_failed_is_treated_as_no_content_stage_advance() {
+        let s = steady_with_ledger(
+            TalkId(3),
+            6,
+            &["choice1"],
+            ChoicePhase::Cascading {
+                choice_id: "choice1".to_string(),
+                next: Some(CascadeNext::Select),
+            },
+        );
+        let (next, actions) = super::step(
+            s,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Failed(crate::msg::ShioriFailure::Timeout(
+                    "30s".to_string(),
+                )),
+                origin: "OnChoiceSelectEx",
+            },
+            &config(),
+        );
+        assert!(
+            !matches!(next.phase, Phase::Unloading { .. }),
+            "選択由来の失敗で終了系列へ倒れない（Req4.5）"
+        );
+        assert_eq!(actions.len(), 1);
+        let (id, _) = expect_get_call(&actions[0]);
+        assert_eq!(id, "OnChoiceSelect", "失敗は 204 と同一遷移＝次段へ前進");
+    }
+
+    /// Req4.5／5.3: 最終段の失敗も 204 と同一＝選択解決のみで会話を止めない。
+    #[test]
+    fn cascade_failed_at_last_stage_resolves_without_start() {
+        let s = steady_with_ledger(
+            TalkId(3),
+            6,
+            &["choice1"],
+            ChoicePhase::Cascading {
+                choice_id: "choice1".to_string(),
+                next: None,
+            },
+        );
+        let (next, actions) = super::step(
+            s,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Failed(crate::msg::ShioriFailure::Ipc(
+                    "pipe closed".to_string(),
+                )),
+                origin: "OnChoiceSelect",
+            },
+            &config(),
+        );
+        assert!(!matches!(next.phase, Phase::Unloading { .. }));
+        match actions.as_slice() {
+            [Action::ResolveChoice { id, .. }] => assert_eq!(id, "choice1"),
+            _ => panic!("最終段の失敗は ResolveChoice のみ（Req5.3）"),
+        }
+        assert!(next.choice.is_none());
+    }
+
+    // --- D. 完了状態（一回性・Req1.1／4.6／5.4） ---
+
+    /// 1 回の選択確定は高々 1 カスケード・高々 1 選択解決・高々 1 起動要求しか生じない（任意名形）。
+    #[test]
+    fn one_choice_yields_at_most_one_cascade_resolve_and_start() {
+        let s = steady_with_ledger(TalkId(3), 6, &["OnMenu"], ChoicePhase::Waiting);
+        let (s1, a1) = step(
+            s,
+            Input::Choice(choice_input_of("OnMenu", "メニュー", &[])),
+            &config(),
+        );
+        let (s2, a2) = step(
+            s1,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Value("script".to_string()),
+                origin: "OnChoiceEvent",
+            },
+            &config(),
+        );
+        // 解決後に遅れて届く応答・遅延した選択確定はいずれも追加のカスケードを起こさない。
+        let (s3, a3) = step(
+            s2,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::NoContent,
+                origin: "OnChoiceSelect",
+            },
+            &config(),
+        );
+        let (s4, a4) = step(
+            s3,
+            Input::Choice(choice_input_of("OnMenu", "メニュー", &[])),
+            &config(),
+        );
+        let all: Vec<&Action> = a1.iter().chain(&a2).chain(&a3).chain(&a4).collect();
+        assert_eq!(
+            all.iter()
+                .filter(|a| matches!(a, Action::ShioriRequest(_)))
+                .count(),
+            1,
+            "カスケードは高々 1 回（Req1.1）"
+        );
+        assert_eq!(
+            all.iter()
+                .filter(|a| matches!(a, Action::ResolveChoice { .. }))
+                .count(),
+            1,
+            "選択解決は高々 1 回（Req5.4）"
+        );
+        assert_eq!(
+            all.iter()
+                .filter(|a| matches!(a, Action::StartTalk(_)))
+                .count(),
+            1,
+            "起動要求は高々 1 つ（Req4.6）"
+        );
+        assert!(s4.choice.is_none(), "解決後に帳簿は復活しない");
+    }
+
+    /// 正典形の 2 段が両方 204 でも、選択解決はちょうど 1 回・起動要求は 0（Req2.3／4.2／5.3）。
+    #[test]
+    fn canonical_two_stage_204_yields_single_resolve_and_no_start() {
+        let s = steady_with_ledger(TalkId(3), 6, &["choice1"], ChoicePhase::Waiting);
+        let (s1, a1) = step(
+            s,
+            Input::Choice(choice_input_of("choice1", "ラベル", &[])),
+            &config(),
+        );
+        let (s2, a2) = step(
+            s1,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::NoContent,
+                origin: "OnChoiceSelectEx",
+            },
+            &config(),
+        );
+        let (s3, a3) = step(
+            s2,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::NoContent,
+                origin: "OnChoiceSelect",
+            },
+            &config(),
+        );
+        let all: Vec<&Action> = a1.iter().chain(&a2).chain(&a3).collect();
+        let gets: Vec<String> = all
+            .iter()
+            .filter(|a| matches!(a, Action::ShioriRequest(_)))
+            .map(|a| expect_get_call(a).0)
+            .collect();
+        assert_eq!(
+            gets,
+            vec!["OnChoiceSelectEx".to_string(), "OnChoiceSelect".to_string()],
+            "Ex 先行→無印後続の 2 段（Req2.2／2.3）"
+        );
+        assert_eq!(
+            all.iter()
+                .filter(|a| matches!(a, Action::ResolveChoice { .. }))
+                .count(),
+            1,
+            "選択解決はちょうど 1 回（Req5.3／5.4）"
+        );
+        assert!(
+            !all.iter().any(|a| matches!(a, Action::StartTalk(_))),
+            "全段 204 では起動要求を生じない（Req4.2）"
+        );
+        assert!(s3.choice.is_none());
+    }
+
+    /// Req2.4: 先行段が応答スクリプトを返したら以降の段を発行しない（正典形の短絡）。
+    #[test]
+    fn canonical_value_at_first_stage_skips_the_remaining_stage() {
+        let s = steady_with_ledger(TalkId(3), 6, &["choice1"], ChoicePhase::Waiting);
+        let (s1, _) = step(
+            s,
+            Input::Choice(choice_input_of("choice1", "ラベル", &[])),
+            &config(),
+        );
+        let (s2, a2) = step(
+            s1,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Value("script".to_string()),
+                origin: "OnChoiceSelectEx",
+            },
+            &config(),
+        );
+        assert!(
+            !a2.iter().any(|a| matches!(a, Action::ShioriRequest(_))),
+            "Value を返した段の後に無印段を発行しない（Req2.4）"
+        );
+        assert!(matches!(
+            a2.as_slice(),
+            [Action::ResolveChoice { .. }, Action::StartTalk(_)]
+        ));
+        assert!(s2.choice.is_none());
+    }
+
+    // --- E. 既存挙動の保存（DD-6 防御アームへ choice 応答が到達しないこと） ---
+
+    /// C4 Implementation Notes: choice 応答は先行アームで捌かれ `steady_value_during_talk`
+    /// （DD-6 防御）へ**到達しない**。到達すると選択応答が warn 破棄で沈黙する（既知の罠）。
+    #[test]
+    fn cascade_reply_does_not_reach_the_dd6_defense_arm() {
+        let cfg = config();
+        let s = steady_with_ledger(
+            TalkId(3),
+            6,
+            &["OnMenu"],
+            ChoicePhase::Cascading {
+                choice_id: "OnMenu".to_string(),
+                next: None,
+            },
+        );
+        let mut actions = Vec::new();
+        let ev = crate::schedule::log_capture::capture(|| {
+            let (_next, a) = step(
+                s,
+                Input::ShioriReply {
+                    outcome: ShioriOutcome::Value("script".to_string()),
+                    origin: "OnChoiceEvent",
+                },
+                &cfg,
+            );
+            actions = a;
+        });
+        assert!(
+            !ev.iter()
+                .any(|e| e.event.as_deref() == Some("steady_value_during_talk")),
+            "choice 応答が DD-6 防御アームへ落ちてはならない。\n捕捉={ev:#?}"
+        );
+        assert!(
+            actions.iter().any(|a| matches!(a, Action::StartTalk(_))),
+            "choice 応答は先行アームで置換起動される"
         );
     }
 }

@@ -1204,8 +1204,9 @@ mod tests {
     //
     // drive の Action バッチ実行本体（[`execute_actions`]）を**直接**呼び、選択系 2 Action が
     // `TalkCommand::{ResolveChoice, CancelChoice}` へそのまま包まれて単一チャンネルへ出ることを
-    // 実行で観測する。発行点（タスク 4.3／4.5）はまだ無いため `step` 経由では駆動できないが、
-    // 写像を担う実コードはここで通る（檻専用の写像を別に作らない）。
+    // 実行で観測する。`ResolveChoice` の発行点は選択調停（steady・タスク 4.3）に入ったが、
+    // `CancelChoice` の発行点（タイムアウト解除・タスク 4.5）はまだ無く `step` 経由では 2 形を
+    // 揃えて駆動できない。写像を担う実コードはここで通る（檻専用の写像を別に作らない）。
 
     /// 檻用の talk 指示 3 形バッチ（投函順が下流での観測順である＝順序保存の契約）。
     fn talk_action_batch() -> Vec<Action> {

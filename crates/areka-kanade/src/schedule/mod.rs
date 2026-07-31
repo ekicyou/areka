@@ -61,8 +61,9 @@ pub(crate) enum Input {
     },
     /// 選択確定（バルーン上で確定した選択肢・UI 配線層 → kanade）。additive 増分（Req 4.4）。
     ///
-    /// 受領検証（選択待ちの有無・talk_id 突合・候補集合照合）とカスケード駆動はタスク 4.3 が
-    /// [`steady`] へ実装する。
+    /// 受領検証（選択待ちの有無・talk_id 突合・候補集合照合）とカスケード駆動は
+    /// [`steady::on_choice`]（C4 規則 1／2）が持つ。Steady のみ委譲し、他フェーズは状態を
+    /// 変えず warn 記録の上で棄却する。
     Choice(ChoiceInput),
     /// 選択待ち成立の通知（talk → dispatcher → kanade）。additive 増分（Req 4.4）。
     ///
@@ -207,7 +208,8 @@ pub(crate) enum Action {
     /// 選択待ちバリアの解決指示（→ [`TalkCommand::ResolveChoice`](crate::talk::TalkCommand)）。
     ///
     /// `talk_id` は再生層／dispatcher の stale ガード用・`id` は確定した選択肢 ID。発行点は
-    /// タスク 4.3（カスケード完了・未対応カテゴリの即時解決）。
+    /// [`steady`] の選択調停（未対応カテゴリの即時解決・カスケード終端）に単一化されている
+    /// （1 選択＝高々 1 解決・Req5.4）。
     ResolveChoice { talk_id: TalkId, id: String },
     /// 選択待ちの解除＋トーク終了指示（→ [`TalkCommand::CancelChoice`](crate::talk::TalkCommand)）。
     ///
@@ -290,24 +292,26 @@ pub(crate) fn step(state: State, input: Input, config: &KanadeConfig) -> (State,
             }
         },
 
-        // ==== 暫定アーム（タスク 4.1 の型追加に対する一時措置・恒久実装ではない）====
-        // `Input::Choice` は横断ルーティングまで到達するが、受領意味論（候補照合・カスケード
-        // 駆動）はまだ無い。**タスク 4.3 が本アームを `steady` への委譲へ置き換えること。**
-        // それまでは黙って捨てず warn! で記録し、状態不変で継続する（steering:
-        // areka-log-first-no-silent-failure）。暫定語彙 `choice_dropped_not_wired` は設計の
-        // ログ語彙表が予約する恒久語彙（`choice_rejected_*` 等）と衝突しない。
-        Input::Choice(c) => {
-            tracing::warn!(
-                target: "kanade",
-                event = "choice_dropped_not_wired",
-                choice_id = %c.id,
-                scope = c.scope,
-                reference_count = c.references.len(),
-                phase = phase_label(&state.phase),
-                "選択確定を受領したが受領意味論が未配線のため棄却——配線はタスク 4.3"
-            );
-            (state, Vec::new())
-        }
+        // Choice（C4 規則 1・Req1.1／1.3）: Steady でのみ受理し steady::on_choice へ委譲する
+        // （帳簿突合・候補照合・段列決定は委譲先の責務）。非 Steady フェーズ（boot 中・close
+        // 握手以降・終了系列）には受理すべき選択待ちが構造上存在しないため、状態を一切変えず
+        // warn 記録の上で棄却して処理を継続する（沈黙の棄却経路は作らない）。
+        Input::Choice(c) => match state.phase {
+            Phase::Steady { .. } => steady::on_choice(state, c),
+            _ => {
+                tracing::warn!(
+                    target: "kanade",
+                    event = "choice_rejected_no_wait",
+                    reason = "non_steady_phase",
+                    choice_id = %c.id,
+                    scope = c.scope,
+                    reference_count = c.references.len(),
+                    phase = phase_label(&state.phase),
+                    "非 Steady フェーズの選択確定——状態不変で棄却（C4 規則 1）"
+                );
+                (state, Vec::new())
+            }
+        },
 
         // --- 防御アーム・フェーズ固有遷移への委譲 ---
 
@@ -980,23 +984,45 @@ mod tests {
         );
     }
 
-    /// タスク 4.1 の暫定アーム: `Input::Choice` は横断ルーティングを通るが、受領意味論
-    /// （検証・カスケード駆動＝タスク 4.3）はまだ無いため状態不変・Action なしで継続する。
+    /// C4 規則 1・Req1.3: 非 Steady フェーズの選択確定は棄却する（状態不変・Action なし）。
     ///
-    /// 本檻は「暫定アームが state と Action を動かさない」ことのみを固定する（棄却の理由や
-    /// 帳簿の遷移は 4.3 が持つ）。恒久実装後は本檻を 4.3 の受領檻へ置き換える。
+    /// 受理すべき選択待ちが構造上存在しないフェーズ（boot 中・close 握手以降・終了系列）へ
+    /// 届いた選択確定は、帳簿の有無に関わらず横断アームで棄却される。棄却は既存帳簿にも
+    /// 触れない（棄却の定義＝状態不変）。
     #[test]
-    fn choice_input_is_routed_by_provisional_arm_without_changing_state() {
-        for phase in [Phase::Steady { talk: None }, Phase::Idle, Phase::BootMain] {
+    fn choice_input_in_non_steady_phases_is_rejected_without_changing_state() {
+        for phase in [
+            Phase::Idle,
+            Phase::BootMain,
+            Phase::BootVersion {
+                talk: Some(ActiveTalk {
+                    talk_id: TalkId(5),
+                    origin: "boot",
+                    script: String::new(),
+                }),
+            },
+            Phase::ClosePending {
+                reason: CloseReason::User,
+            },
+            Phase::Stopped,
+        ] {
             let before = std::mem::discriminant(&phase);
-            let (next, actions) = step(state_in(phase), Input::Choice(choice_input()), &config());
+            let mut s = state_in(phase);
+            s.choice = Some(ChoiceState {
+                talk_id: TalkId(5),
+                candidates: vec!["OnMenu".to_string()],
+                deadline: None,
+                phase: ChoicePhase::Waiting,
+            });
+            let (next, actions) = step(s, Input::Choice(choice_input()), &config());
             assert_eq!(
                 std::mem::discriminant(&next.phase),
                 before,
-                "暫定アームは phase を変えない"
+                "棄却は phase を変えない"
             );
-            assert!(next.choice.is_none(), "暫定アームは帳簿を確立しない");
-            assert!(actions.is_empty(), "暫定アームは Action を発行しない");
+            let ledger = next.choice.expect("棄却は既存帳簿にも触れない");
+            assert!(matches!(ledger.phase, ChoicePhase::Waiting));
+            assert!(actions.is_empty(), "棄却は Action を発行しない");
         }
     }
 
@@ -1562,23 +1588,174 @@ mod log_firing_tests {
     // ============================================================
 
     // ============================================================
-    // 暫定アーム（level = WARN）— `Input::Choice` の未配線記録（恒久化はタスク 4.3）
+    // 選択確定の受領検証とカスケード駆動（タスク 4.3・設計ログ語彙表）
     // ============================================================
 
+    /// 任意の `State` を捕捉付きで駆動する（帳簿を直接構成する檻用）。
+    fn run_step_state(state: State, input: Input) -> Vec<CapturedEvent> {
+        let cfg = config();
+        capture(|| {
+            let _ = step(state, input, &cfg);
+        })
+    }
+
+    /// 檻用の選択確定入力。
+    fn choice_input_of(id: &str) -> Input {
+        Input::Choice(crate::msg::ChoiceInput {
+            id: id.to_string(),
+            label: "メニュー".to_string(),
+            scope: 0,
+            references: Vec::new(),
+        })
+    }
+
+    /// 帳簿つき `Steady{Some(5)}` を構成する。
+    fn state_with_ledger(candidates: &[&str], phase: ChoicePhase) -> State {
+        let mut s = state_in(steady_with_talk(TalkId(5)));
+        s.choice = Some(ChoiceState {
+            talk_id: TalkId(5),
+            candidates: candidates.iter().map(|c| c.to_string()).collect(),
+            deadline: None,
+            phase,
+        });
+        s
+    }
+
+    /// Req1.3: 選択待ち不在・対象 talk 不一致・非 Steady の 3 経路とも warn で記録する。
     #[test]
-    fn warn_choice_dropped_not_wired_logs() {
-        // `Input::Choice` の受領意味論はタスク 4.3 が実装する。それまでは黙って捨てず
-        // warn! で記録して継続する（steering: areka-log-first-no-silent-failure）。
-        let ev = run_step(
-            Phase::Steady { talk: None },
-            Input::Choice(crate::msg::ChoiceInput {
-                id: "OnMenu".to_string(),
-                label: "メニュー".to_string(),
-                scope: 0,
-                references: Vec::new(),
-            }),
+    fn warn_choice_rejected_no_wait_logs() {
+        // 選択待ち帳簿が無い（解決済み・未成立）。
+        let ev = run_step(steady_with_talk(TalkId(5)), choice_input_of("OnMenu"));
+        assert_logged(&ev, Level::WARN, "choice_rejected_no_wait");
+
+        // 帳簿の対象 talk が現行 talk と食い違う。
+        let mut s = state_in(steady_with_talk(TalkId(5)));
+        s.choice = Some(ChoiceState {
+            talk_id: TalkId(999),
+            candidates: vec!["OnMenu".to_string()],
+            deadline: None,
+            phase: ChoicePhase::Waiting,
+        });
+        let ev = run_step_state(s, choice_input_of("OnMenu"));
+        assert_logged(&ev, Level::WARN, "choice_rejected_no_wait");
+
+        // 非 Steady フェーズ（横断アーム側）。
+        let ev = run_step(Phase::BootMain, choice_input_of("OnMenu"));
+        assert_logged(&ev, Level::WARN, "choice_rejected_no_wait");
+    }
+
+    /// Req1.4: 候補集合に無い ID の棄却は warn で記録する。
+    #[test]
+    fn warn_choice_rejected_unknown_id_logs() {
+        let ev = run_step_state(
+            state_with_ledger(&["OnMenu"], ChoicePhase::Waiting),
+            choice_input_of("choice9"),
         );
-        assert_logged(&ev, Level::WARN, "choice_dropped_not_wired");
+        assert_logged(&ev, Level::WARN, "choice_rejected_unknown_id");
+    }
+
+    /// Req1.1: 段の進行中（`Cascading`／`TimeoutInFlight`）の二重確定は warn で記録する。
+    #[test]
+    fn warn_choice_rejected_busy_logs() {
+        for phase in [
+            ChoicePhase::Cascading {
+                choice_id: "OnMenu".to_string(),
+                next: None,
+            },
+            ChoicePhase::TimeoutInFlight,
+        ] {
+            let ev = run_step_state(state_with_ledger(&["OnMenu"], phase), choice_input_of("OnMenu"));
+            assert_logged(&ev, Level::WARN, "choice_rejected_busy");
+        }
+    }
+
+    /// Req2.7: `script:` 前置の明示縮退は warn 記録の上で選択解決のみを行う。
+    #[test]
+    fn warn_choice_unsupported_category_logs() {
+        let ev = run_step_state(
+            state_with_ledger(&["script:\\e"], ChoicePhase::Waiting),
+            choice_input_of("script:\\e"),
+        );
+        assert_logged(&ev, Level::WARN, "choice_unsupported_category");
+        // 未対応カテゴリでも選択解決は実行する（会話を止めない・Req2.7）。
+        assert_logged(&ev, Level::INFO, "choice_resolved");
+    }
+
+    /// Req1.6: 受理は info で記録し、判定した段列をフィールドに載せる。
+    #[test]
+    fn info_choice_accepted_logs_plan() {
+        let ev = run_step_state(
+            state_with_ledger(&["OnMenu"], ChoicePhase::Waiting),
+            choice_input_of("OnMenu"),
+        );
+        let accepted = logged_once(&ev, Level::INFO, "choice_accepted");
+        assert_eq!(
+            accepted.fields.get("choice_id").map(String::as_str),
+            Some("OnMenu"),
+            "確定した選択肢 ID がログフィールドに載る。\n捕捉={accepted:#?}"
+        );
+        assert_eq!(
+            accepted.fields.get("plan").map(String::as_str),
+            Some("Named"),
+            "判定した段列がログフィールドに載る。\n捕捉={accepted:#?}"
+        );
+    }
+
+    /// 各段の GET 送出は trace で記録する（設計ログ語彙表）。
+    #[test]
+    fn trace_choice_cascade_stage_logs() {
+        let ev = run_step_state(
+            state_with_ledger(&["choice1"], ChoicePhase::Waiting),
+            choice_input_of("choice1"),
+        );
+        assert_logged(&ev, Level::TRACE, "choice_cascade_stage");
+    }
+
+    /// Req5.1: `ResolveChoice` 発行は info で記録する。
+    #[test]
+    fn info_choice_resolved_logs() {
+        let ev = run_step_state(
+            state_with_ledger(
+                &["choice1"],
+                ChoicePhase::Cascading {
+                    choice_id: "choice1".to_string(),
+                    next: None,
+                },
+            ),
+            Input::ShioriReply {
+                outcome: ShioriOutcome::NoContent,
+                origin: "OnChoiceSelect",
+            },
+        );
+        assert_logged(&ev, Level::INFO, "choice_resolved");
+    }
+
+    /// Req4.5: カスケード段の失敗は error で記録し 204 相当で継続する。
+    ///
+    /// mod.rs 横断 `Failed` アームの免除（DD-12）はタスク 4.6 の担当ゆえ、本タスク時点では
+    /// `step()` 経由の Failed は横断アームに先取りされる。steady 側の 204 相当処理そのものを
+    /// `steady::step` の直接駆動で固定する（既存檻流儀＝到達不能アームは直接駆動で検証）。
+    #[test]
+    fn error_choice_shiori_failed_as_204_logs() {
+        let cfg = config();
+        let s = state_with_ledger(
+            &["choice1"],
+            ChoicePhase::Cascading {
+                choice_id: "choice1".to_string(),
+                next: None,
+            },
+        );
+        let ev = capture(|| {
+            let _ = steady::step(
+                s,
+                Input::ShioriReply {
+                    outcome: ShioriOutcome::Failed(ShioriFailure::Timeout("30s".to_string())),
+                    origin: "OnChoiceSelect",
+                },
+                &cfg,
+            );
+        });
+        assert_logged(&ev, Level::ERROR, "choice_shiori_failed_as_204");
     }
 
     // ============================================================

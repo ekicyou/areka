@@ -17,8 +17,6 @@ use crate::msg::MonotonicMs;
 ///
 /// 段列の実発行は C4（steady 調停）が担い、本 enum は「どの列を辿るか」だけを表す。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-// C4（タスク 4.x）が steady 調停から本判定を呼ぶまでは非テストビルドで未使用となる。
-#[allow(dead_code)]
 pub(crate) enum CascadePlan {
     /// `On` 始まり ID → 当該 ID と同名イベントの**任意名 1 段のみ**（Req2.1）。
     ///
@@ -56,8 +54,6 @@ pub(crate) enum CascadePlan {
 ///   （`"On"` / `"script:"` はともに ASCII のみで構成される）。
 ///
 /// 外部状態を読まないため、同一 ID に対して常に同一の [`CascadePlan`] を返す（Req2.5）。
-// C4（タスク 4.x）が steady 調停から本判定を呼ぶまでは非テストビルドで未使用となる。
-#[allow(dead_code)]
 pub(crate) fn plan_cascade(id: &str) -> CascadePlan {
     if id.starts_with("script:") {
         CascadePlan::Unsupported

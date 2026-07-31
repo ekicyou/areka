@@ -103,7 +103,7 @@
   - _Requirements: 7.1, 7.6, 7.7_
   - _Depends: 4.1, 2.1_
 
-- [ ] 4.3 選択確定の受領検証とカスケード駆動を実装する
+- [x] 4.3 選択確定の受領検証とカスケード駆動を実装する
   - 選択待ち不在・対象 talk 不一致・段の進行中・候補集合に無い ID のいずれも警告記録の上で棄却し、状態を変えず処理を継続する
   - 受理時は段列を決めて第 1 段を発行し、M1 未対応カテゴリは警告記録の上でイベントを発行せず選択解決のみ行う
   - 応答が空なら次段へ前進し、残段がなければ選択解決のみを発行する。応答があれば以降の段を発行せず、選択解決と新トーク起動をこの順で同一バッチに載せる
@@ -210,3 +210,5 @@
 - 4.1: 帳簿型 `ChoiceState`/`ChoicePhase`/`CascadeNext` は design New Files 表（choice.rs）ではなく **`schedule/mod.rs` の `State` 直近**に置いた（C4 コードブロックの提示形・`ActiveTalk` の前例に合わせた）。4.2/4.3 は**どちらか一方に統一**すること（両方に散らばらせない）。
 - 4.1: `schedule/mod.rs` の `Input::{Choice, ChoiceWaiting}` は暫定アーム（`*_dropped_not_wired` warn ＋状態不変）。**4.2 が ChoiceWaiting・4.3 が Choice を `steady` 委譲へ置換**すること。置換時に檻 `warn_choice_*_not_wired_logs` と `*_is_routed_by_provisional_arm_*` を恒久檻へ差し替えること。
 - 4.2: `log_capture` に `CapturedEvent.fields`（全構造化フィールド記録）と `logged_once` を additive 追加。以降の檻はログの**フィールド値**まで突合できる。`choice_waiting_stale` には診断用 `reason`（`no_active_talk`/`talk_id_mismatch`/`non_steady_phase`）を付与。
+- 4.3: **4.4 への必須申し送り** — `steady.rs` の `on_choice` と `on_cascade_reply` の次段発行は、帳簿を `state.choice.take()` した状態で `snapshot_of(&state.phase)` を呼ぶ。4.4 が `State::snapshot(&self)` へ差し替えると**この 2 点だけ `choice_active=false` になりカスケード段 GET から `choosing` が落ちる**。帳簿を戻した後に採るか、ローカル値から導出すること。
+- 4.3: DD-12（mod.rs 横断 Failed 先行アーム）が 4.6 待ちのため、`step()` 経由のカスケード中 Failed は現在も `Unloading{Fault}` へ倒れる。steady 側の 204 相当処理は実装済みで `steady::step` 直呼びの檻で固定。**end-to-end の Failed 檻は 4.6 の担当**。
