@@ -117,19 +117,61 @@ pub enum ShioriMsg {
     Close,
 }
 
+/// 送出イベント ID（出所カテゴリを型で保持・DD-1）。
+///
+/// SHIORI へ渡る文字列表現（wire 形）は [`EventId::as_str`]（と同値の [`std::fmt::Display`]）
+/// のみが与え、出所カテゴリによって変わらない——カテゴリは egress チョークポイントが
+/// **出所別の受理規則**を適用するためだけに存在する。
+///
+/// - [`EventId::Static`]: スケジューラ起源の固定 ID。`schedule/events.rs`／`schedule/resources.rs`
+///   の構築関数のみが構成し、固定表（`ALLOWED_EVENT_IDS`／`ALLOWED_RESOURCE_IDS`）で検証される。
+/// - [`EventId::Choice`]: 選択起源の任意名イベント（`\q` の `On` 始まり ID）。ゴースト作者が
+///   書いた名前を逐語で運ぶ（事前の固定登録を要さない・Req2.6）。
+///
+/// # 不変条件
+/// [`EventId::Choice`] は選択カスケードの planner のみが構成する（`On` 始まり保証の発生源を
+/// 1 点に閉じる）。スケジューラ起源の経路が `Choice` を作ることはない。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EventId {
+    /// スケジューラ起源の固定 ID（構築関数のみが構成・固定表で検証）。
+    Static(&'static str),
+    /// 選択起源の任意名イベント（逐語・カテゴリ規則で検証）。
+    Choice(String),
+}
+
+impl EventId {
+    /// wire 形（SHIORI へ渡る文字列）を返す。出所カテゴリで表現は変わらない。
+    pub fn as_str(&self) -> &str {
+        match self {
+            EventId::Static(id) => id,
+            EventId::Choice(name) => name.as_str(),
+        }
+    }
+}
+
+impl std::fmt::Display for EventId {
+    /// [`EventId::as_str`] と同一の逐語表現（wire 形）を書き出す。
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 /// GET と NOTIFY の別を境界越しに保持する（Req 5.2）。
 ///
 /// `status` は全構築点が明示する共通ヘッダ（`Status` 実行状態集合の送出値）である。
 /// 構築点が Status を忘れられない構造（events.rs の各構築関数が snapshot から自ら導出する）
 /// にすることで、Ref3 と `Status` の不整合を発生源で排除する（DD-IT-3）。
+///
+/// `id` は出所カテゴリを型で保持する [`EventId`]（DD-1）。SHIORI へ渡る文字列は
+/// [`EventId::as_str`] が与える逐語表現のみで、カテゴリは送出可否の判定にのみ用いる。
 pub enum ShioriCall {
     Get {
-        id: &'static str,
+        id: EventId,
         references: Vec<String>,
         status: ExecutionStatus,
     },
     Notify {
-        id: &'static str,
+        id: EventId,
         references: Vec<String>,
         status: ExecutionStatus,
     },
@@ -233,6 +275,54 @@ mod tests {
         assert_send_static::<MouseInput>();
         assert_send_static::<MouseEventKind>();
         assert_send_static::<MouseButton>();
+        // 送出イベント ID の出所カテゴリ型（DD-1）も同様。
+        assert_send_static::<EventId>();
+    }
+
+    /// wire 形（SHIORI へ渡る文字列）は出所カテゴリに依らず逐語であること（DD-1・Req2.6/3.6）。
+    ///
+    /// `EventId` はチョークポイントが出所別の受理規則を適用するためだけの区別であり、
+    /// SHIORI へ出る文字列は `as_str()`（および `Display`）が与える逐語表現のみである。
+    #[test]
+    fn event_id_as_str_is_verbatim_wire_form_for_both_origins() {
+        assert_eq!(EventId::Static("OnBoot").as_str(), "OnBoot");
+        assert_eq!(EventId::Static("basewareversion").as_str(), "basewareversion");
+        // 選択起源は任意名を逐語で運ぶ（事前登録不要・Req2.6）。
+        assert_eq!(
+            EventId::Choice("OnMenuBack".to_string()).as_str(),
+            "OnMenuBack"
+        );
+        // 同一綴りなら出所が違っても wire 形は同一（表現の一字一句同一性）。
+        assert_eq!(
+            EventId::Choice("OnBoot".to_string()).as_str(),
+            EventId::Static("OnBoot").as_str()
+        );
+        // Display は as_str と一致する（`id.to_string()` の既存呼出面が wire 形を保つ）。
+        assert_eq!(EventId::Static("OnClose").to_string(), "OnClose");
+        assert_eq!(
+            EventId::Choice("OnMenuBack".to_string()).to_string(),
+            "OnMenuBack"
+        );
+    }
+
+    /// `ShioriCall` の `id` が [`EventId`] を運び、GET/NOTIFY 双方で wire 形を取り出せる。
+    #[test]
+    fn shiori_call_carries_event_id_for_both_methods() {
+        let get = ShioriCall::Get {
+            id: EventId::Static("OnBoot"),
+            references: Vec::new(),
+            status: ExecutionStatus::derive(&crate::status::ExecutionSnapshot::INACTIVE),
+        };
+        let notify = ShioriCall::Notify {
+            id: EventId::Choice("OnMenuBack".to_string()),
+            references: Vec::new(),
+            status: ExecutionStatus::derive(&crate::status::ExecutionSnapshot::INACTIVE),
+        };
+        let wire = |call: &ShioriCall| match call {
+            ShioriCall::Get { id, .. } | ShioriCall::Notify { id, .. } => id.as_str().to_string(),
+        };
+        assert_eq!(wire(&get), "OnBoot");
+        assert_eq!(wire(&notify), "OnMenuBack");
     }
 
     #[test]
@@ -342,7 +432,7 @@ mod tests {
         let (reply, receiver) = areka_actor::reply_channel::<ShioriOutcome>();
         let msg = ShioriMsg::Request {
             call: ShioriCall::Get {
-                id: "OnBoot",
+                id: EventId::Static("OnBoot"),
                 references: vec!["master".to_string()],
                 status: ExecutionStatus::derive(&crate::status::ExecutionSnapshot::INACTIVE),
             },
@@ -353,7 +443,7 @@ mod tests {
             ShioriMsg::Request { call, reply } => {
                 match call {
                     ShioriCall::Get { id, references, .. } => {
-                        assert_eq!(id, "OnBoot");
+                        assert_eq!(id.as_str(), "OnBoot");
                         assert_eq!(references, vec!["master".to_string()]);
                     }
                     ShioriCall::Notify { .. } => unreachable!("constructed Get"),
@@ -377,7 +467,7 @@ mod tests {
 
         // Notify 呼出も構築できる。
         let _notify = ShioriCall::Notify {
-            id: "OnInitialize",
+            id: EventId::Static("OnInitialize"),
             references: Vec::new(),
             status: ExecutionStatus::derive(&crate::status::ExecutionSnapshot::INACTIVE),
         };

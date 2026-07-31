@@ -499,7 +499,7 @@ mod tests {
         assert_eq!(actions.len(), 2);
         match &actions[0] {
             Action::ShioriRequest(ShioriCall::Notify { id, references, .. }) => {
-                assert_eq!(*id, "OnClose");
+                assert_eq!(id.as_str(), "OnClose");
                 assert_eq!(references, &vec!["system".to_string()]);
             }
             _ => panic!("expected first action to be Notify OnClose"),

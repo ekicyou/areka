@@ -24,7 +24,7 @@
 //! | `OnSecondChange` | GET（talk 再生可能時）／NOTIFY（talk 再生不能時） | Ref0=`now_ms / 3_600_000` の 10 進文字列・Ref1=`"0"`・Ref2=`"0"`・Ref3=`"1"`(GET)/`"0"`(NOTIFY) |
 //! | `OnClose` | GET | Ref0=`reason.as_ref_str()`（"user"/"system"・Ref1/2 省略） |
 
-use crate::msg::{CloseReason, KanadeConfig, MonotonicMs, MouseButton, ShioriCall};
+use crate::msg::{CloseReason, EventId, KanadeConfig, MonotonicMs, MouseButton, ShioriCall};
 use crate::status::{ExecutionSnapshot, ExecutionStatus};
 
 /// `OnSecondChange` Ref0 の除数（ミリ秒→時。正典: OS 連続起動時間 hour）。
@@ -52,7 +52,8 @@ pub(crate) const REF6_DEVICE_MOUSE: &str = "mouse";
 /// `OnTalk`／`OnHour` は emo2 が OnSecondChange 内部で自発生成するため**恒久的に含めない**（Req3.2）。
 ///
 /// SEAM(W5・choice-select-events): `\q[タイトル,OnID]` は実行時スクリプト由来の**任意名イベント**を
-/// 発火する（emo2 唯一の依存形・menu.pasta:15 実物）＝固定 const 表にも `&'static str` の id にも載らない。
+/// 発火する（emo2 唯一の依存形・menu.pasta:15 実物）＝固定 const 表には載らない（id 型は
+/// [`crate::msg::EventId::Choice`] が任意名を逐語で運ぶ・DD-1）。
 /// W5 での拡張は本表への ID 追加ではなく**受理規則へのカテゴリ追加**（additive）で行う——チョークポイント・
 /// 本表（正典固定 ID の部分集合）・`OnTalk`/`OnHour` 恒久禁止は不変。任意名カテゴリと Req3.2 恒久禁止の
 /// 交差（`\q[x,OnTalk]` を書くゴーストの扱い）は choice-select-events の要件フェーズで決着（research §16 申し送り）。
@@ -77,7 +78,7 @@ pub fn is_allowed_event_id(id: &str) -> bool {
 /// M1 にリロード概念がないため Ref0（正典: リロード時 `reload`）は送出せず空 Vec とする。
 pub fn on_initialize(snapshot: &ExecutionSnapshot) -> ShioriCall {
     ShioriCall::Notify {
-        id: "OnInitialize",
+        id: EventId::Static("OnInitialize"),
         references: Vec::new(),
         status: ExecutionStatus::derive(snapshot),
     }
@@ -91,7 +92,7 @@ pub fn on_initialize(snapshot: &ExecutionSnapshot) -> ShioriCall {
 /// この応答が 204 であれば呼び手はフォールスルーして [`on_boot`] へ進む。
 pub fn on_first_boot(snapshot: &ExecutionSnapshot, vanish_count: u32) -> ShioriCall {
     ShioriCall::Get {
-        id: "OnFirstBoot",
+        id: EventId::Static("OnFirstBoot"),
         references: vec![vanish_count.to_string()],
         status: ExecutionStatus::derive(snapshot),
     }
@@ -102,7 +103,7 @@ pub fn on_first_boot(snapshot: &ExecutionSnapshot, vanish_count: u32) -> ShioriC
 /// Ref6/7（前回 crash 情報・MATERIA/SSP）は crash 情報を持たない M1 では省略する。
 pub fn on_boot(config: &KanadeConfig, snapshot: &ExecutionSnapshot) -> ShioriCall {
     ShioriCall::Get {
-        id: "OnBoot",
+        id: EventId::Static("OnBoot"),
         references: vec![config.shell_name.clone()],
         status: ExecutionStatus::derive(snapshot),
     }
@@ -113,7 +114,7 @@ pub fn on_boot(config: &KanadeConfig, snapshot: &ExecutionSnapshot) -> ShioriCal
 /// Ref2（詳細数値・SSP のみ）は省略する。
 pub fn baseware_version(config: &KanadeConfig, snapshot: &ExecutionSnapshot) -> ShioriCall {
     ShioriCall::Notify {
-        id: "basewareversion",
+        id: EventId::Static("basewareversion"),
         references: vec![
             config.baseware_version.clone(),
             config.baseware_name.clone(),
@@ -149,13 +150,13 @@ pub fn on_second_change(now: MonotonicMs, snapshot: &ExecutionSnapshot) -> Shior
     let status = ExecutionStatus::derive(snapshot);
     if talk_playable {
         ShioriCall::Get {
-            id: "OnSecondChange",
+            id: EventId::Static("OnSecondChange"),
             references,
             status,
         }
     } else {
         ShioriCall::Notify {
-            id: "OnSecondChange",
+            id: EventId::Static("OnSecondChange"),
             references,
             status,
         }
@@ -167,7 +168,7 @@ pub fn on_second_change(now: MonotonicMs, snapshot: &ExecutionSnapshot) -> Shior
 /// Ref1/2（スコープ番号・SSP）は単一スコープの M1 では省略する。
 pub fn on_close(reason: CloseReason, snapshot: &ExecutionSnapshot) -> ShioriCall {
     ShioriCall::Get {
-        id: "OnClose",
+        id: EventId::Static("OnClose"),
         references: vec![reason.as_ref_str().to_string()],
         status: ExecutionStatus::derive(snapshot),
     }
@@ -181,7 +182,7 @@ pub fn on_close(reason: CloseReason, snapshot: &ExecutionSnapshot) -> ShioriCall
 /// snapshot は Unloading へ遷移後の [`ExecutionSnapshot::INACTIVE`] を渡す（DD-IT-4）。
 pub fn on_close_notify(reason: CloseReason, snapshot: &ExecutionSnapshot) -> ShioriCall {
     ShioriCall::Notify {
-        id: "OnClose",
+        id: EventId::Static("OnClose"),
         references: vec![reason.as_ref_str().to_string()],
         status: ExecutionStatus::derive(snapshot),
     }
@@ -210,7 +211,7 @@ pub fn on_mouse_move(
     snapshot: &ExecutionSnapshot,
 ) -> ShioriCall {
     ShioriCall::Get {
-        id: "OnMouseMove",
+        id: EventId::Static("OnMouseMove"),
         references: vec![
             x.to_string(),
             y.to_string(),
@@ -249,7 +250,7 @@ pub fn on_mouse_double_click(
         MouseButton::Right => "1",
     };
     ShioriCall::Get {
-        id: "OnMouseDoubleClick",
+        id: EventId::Static("OnMouseDoubleClick"),
         references: vec![
             x.to_string(),
             y.to_string(),
@@ -271,24 +272,24 @@ mod tests {
         KanadeConfig::new("master", "1.0.0")
     }
 
-    /// GET variant を分解して (id, references) を取り出す（Notify なら panic）。
-    fn expect_get(call: ShioriCall) -> (&'static str, Vec<String>) {
+    /// GET variant を分解して (id の wire 形, references) を取り出す（Notify なら panic）。
+    fn expect_get(call: ShioriCall) -> (String, Vec<String>) {
         match call {
-            ShioriCall::Get { id, references, .. } => (id, references),
+            ShioriCall::Get { id, references, .. } => (id.as_str().to_string(), references),
             ShioriCall::Notify { .. } => panic!("expected GET, got NOTIFY"),
         }
     }
 
-    /// NOTIFY variant を分解して (id, references) を取り出す（Get なら panic）。
-    fn expect_notify(call: ShioriCall) -> (&'static str, Vec<String>) {
+    /// NOTIFY variant を分解して (id の wire 形, references) を取り出す（Get なら panic）。
+    fn expect_notify(call: ShioriCall) -> (String, Vec<String>) {
         match call {
-            ShioriCall::Notify { id, references, .. } => (id, references),
+            ShioriCall::Notify { id, references, .. } => (id.as_str().to_string(), references),
             ShioriCall::Get { .. } => panic!("expected NOTIFY, got GET"),
         }
     }
 
-    /// 呼出の `id` を GET/NOTIFY 不問で取り出す（許可集合檻の被覆確認用）。
-    fn call_id(call: &ShioriCall) -> &'static str {
+    /// 呼出の `id`（出所カテゴリ込み）を GET/NOTIFY 不問で取り出す（許可集合檻の被覆確認用）。
+    fn event_id(call: &ShioriCall) -> &EventId {
         match call {
             ShioriCall::Get { id, .. } | ShioriCall::Notify { id, .. } => id,
         }
@@ -542,6 +543,36 @@ mod tests {
         assert_eq!(call_status(&dbl), Some("talking".to_string()));
     }
 
+    /// 全構築関数の返す `id` が**スケジューラ起源**（[`EventId::Static`]）であること（DD-1）。
+    ///
+    /// 選択起源（[`EventId::Choice`]）はカスケード planner のみが構成する不変条件を、構築関数側から
+    /// 固定する檻——events.rs の構築関数が任意名を作り得ないことを型の実値で観測する。
+    #[test]
+    fn every_construction_function_returns_static_event_id() {
+        let cfg = config();
+        let snap = ExecutionSnapshot::INACTIVE;
+        let calls = [
+            on_initialize(&snap),
+            on_first_boot(&snap, 0),
+            on_boot(&cfg, &snap),
+            baseware_version(&cfg, &snap),
+            on_second_change(MonotonicMs(0), &snap),
+            on_second_change(MonotonicMs(0), &ExecutionSnapshot { talk_active: true }),
+            on_close(CloseReason::User, &snap),
+            on_close_notify(CloseReason::System, &snap),
+            on_mouse_move(0, 0, 0, Some("Head"), &snap),
+            on_mouse_double_click(0, 0, 0, None, MouseButton::Left, &snap),
+        ];
+        for call in &calls {
+            let id = event_id(call);
+            assert!(
+                matches!(id, EventId::Static(_)),
+                "構築関数がスケジューラ起源でない id={} を返した",
+                id.as_str()
+            );
+        }
+    }
+
     /// 全構築関数の返す `id` が許可集合の要素であること（Service Interface Postcondition）。
     #[test]
     fn every_construction_function_returns_an_allowed_id() {
@@ -560,7 +591,7 @@ mod tests {
             on_mouse_double_click(0, 0, 0, None, MouseButton::Left, &snap),
         ];
         for call in &calls {
-            let id = call_id(call);
+            let id = event_id(call).as_str();
             assert!(
                 is_allowed_event_id(id),
                 "構築関数が許可集合外の id={id} を返した"

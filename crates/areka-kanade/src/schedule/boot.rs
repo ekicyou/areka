@@ -504,7 +504,7 @@ mod tests {
         // OnBoot GET が一切発行されていないことを確認（フォールスルー打ち切り）。
         for a in &actions {
             if let Action::ShioriRequest(crate::msg::ShioriCall::Get { id, .. }) = a {
-                assert_ne!(*id, "OnBoot", "OnBoot はスキップされるべき");
+                assert_ne!(id.as_str(), "OnBoot", "OnBoot はスキップされるべき");
             }
         }
     }
@@ -711,7 +711,7 @@ mod tests {
         fn baseware_status(actions: &[Action]) -> Option<Option<String>> {
             actions.iter().find_map(|a| match a {
                 Action::ShioriRequest(crate::msg::ShioriCall::Notify { id, status, .. })
-                    if *id == "basewareversion" =>
+                    if id.as_str() == "basewareversion" =>
                 {
                     Some(status.render())
                 }
@@ -1111,7 +1111,7 @@ mod tests {
     fn is_username_get(action: &Action) -> bool {
         matches!(
             action,
-            Action::ShioriRequest(crate::msg::ShioriCall::Get { id, .. }) if *id == "username"
+            Action::ShioriRequest(crate::msg::ShioriCall::Get { id, .. }) if id.as_str() == "username"
         )
     }
 
@@ -1119,7 +1119,7 @@ mod tests {
     fn is_onfirstboot_get(action: &Action) -> bool {
         matches!(
             action,
-            Action::ShioriRequest(crate::msg::ShioriCall::Get { id, .. }) if *id == "OnFirstBoot"
+            Action::ShioriRequest(crate::msg::ShioriCall::Get { id, .. }) if id.as_str() == "OnFirstBoot"
         )
     }
 
@@ -1127,7 +1127,7 @@ mod tests {
     fn is_onboot_get(action: &Action) -> bool {
         matches!(
             action,
-            Action::ShioriRequest(crate::msg::ShioriCall::Get { id, .. }) if *id == "OnBoot"
+            Action::ShioriRequest(crate::msg::ShioriCall::Get { id, .. }) if id.as_str() == "OnBoot"
         )
     }
 

@@ -375,7 +375,7 @@ mod tests {
                 ShioriCall::Get { id, .. } | ShioriCall::Notify { id, .. },
             ) = a
             {
-                assert_ne!(*id, "OnSecondChange", "ゲートが閉じておらず OnSecondChange を発行した");
+                assert_ne!(id.as_str(), "OnSecondChange", "ゲートが閉じておらず OnSecondChange を発行した");
             }
         }
     }

@@ -98,7 +98,7 @@ impl RecordedCall {
                 status,
             } => RecordedCall {
                 method: CallMethod::Get,
-                id: (*id).to_string(),
+                id: id.as_str().to_string(),
                 references: references.clone(),
                 status: status.render(),
             },
@@ -108,7 +108,7 @@ impl RecordedCall {
                 status,
             } => RecordedCall {
                 method: CallMethod::Notify,
-                id: (*id).to_string(),
+                id: id.as_str().to_string(),
                 references: references.clone(),
                 status: status.render(),
             },
@@ -271,7 +271,7 @@ impl FixtureState {
                 // NOTIFY は完了応答のみ（Value を運ばない＝talk 非生成の構造保証）。
                 ShioriOutcome::Notified
             }
-            ShioriCall::Get { id, .. } => match *id {
+            ShioriCall::Get { id, .. } => match id.as_str() {
                 "OnFirstBoot" => ShioriOutcome::NoContent,
                 // DD-IT-12: 挨拶ありは固定 Value（`Steady{Some}` 完了）、なしは 204（`Steady{None}` 直行）。
                 "OnBoot" => {
@@ -491,10 +491,10 @@ pub fn spawn_mock_shiori_failing(fixture: Fixture, fail_on: FailOn) -> MockShior
     }
 }
 
-/// [`ShioriCall`] のイベント id を取り出す（GET／NOTIFY 共通・失敗注入の突合用）。
-fn call_id(call: &ShioriCall) -> &'static str {
+/// [`ShioriCall`] のイベント id の wire 形を取り出す（GET／NOTIFY 共通・失敗注入の突合用）。
+fn call_id(call: &ShioriCall) -> &str {
     match call {
-        ShioriCall::Get { id, .. } | ShioriCall::Notify { id, .. } => id,
+        ShioriCall::Get { id, .. } | ShioriCall::Notify { id, .. } => id.as_str(),
     }
 }
 
@@ -520,8 +520,8 @@ impl BlockOn {
     /// この呼出が本記述子の対象か（method＋id 一致）を判定する。
     fn matches(&self, call: &ShioriCall) -> bool {
         match (self, call) {
-            (BlockOn::Get(id), ShioriCall::Get { id: cid, .. }) => cid == id,
-            (BlockOn::Notify(id), ShioriCall::Notify { id: cid, .. }) => cid == id,
+            (BlockOn::Get(id), ShioriCall::Get { id: cid, .. }) => cid.as_str() == *id,
+            (BlockOn::Notify(id), ShioriCall::Notify { id: cid, .. }) => cid.as_str() == *id,
             _ => false,
         }
     }

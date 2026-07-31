@@ -130,7 +130,8 @@ fn handle_call(backend: &mut dyn ShioriBackend, call: ShioriCall) -> ShioriOutco
     match call {
         ShioriCall::Get { id, references, status } => {
             let status_wire = status.render();
-            match backend.get(id, &references, status_wire.as_deref()) {
+            // wire 形（`as_str()`）のみを backend へ渡す——出所カテゴリは境界を跨がない（DD-1）。
+            match backend.get(id.as_str(), &references, status_wire.as_deref()) {
                 Ok(Some(value)) => ShioriOutcome::Value(value),
                 Ok(None) => ShioriOutcome::NoContent,
                 Err(e) => ShioriOutcome::Failed(map_error(e)),
@@ -138,7 +139,8 @@ fn handle_call(backend: &mut dyn ShioriBackend, call: ShioriCall) -> ShioriOutco
         }
         ShioriCall::Notify { id, references, status } => {
             let status_wire = status.render();
-            match backend.notify(id, &references, status_wire.as_deref()) {
+            // GET と同じく wire 形のみを渡す（DD-1）。
+            match backend.notify(id.as_str(), &references, status_wire.as_deref()) {
                 Ok(()) => ShioriOutcome::Notified,
                 Err(e) => ShioriOutcome::Failed(map_error(e)),
             }
@@ -279,6 +281,7 @@ pub fn spawn_shiori_actor(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::msg::EventId;
     use crate::status::{ExecutionSnapshot, ExecutionStatus};
     use areka_actor::reply_channel;
     use shiori_host32_host::{HandshakeError, ShioriError};
@@ -489,7 +492,7 @@ mod tests {
         let outcome = round_trip_via_runner(
             backend,
             ShioriCall::Get {
-                id: "OnBoot",
+                id: EventId::Static("OnBoot"),
                 references: vec!["master".to_string()],
                 status: inactive_status(),
             },
@@ -506,7 +509,7 @@ mod tests {
         let outcome = round_trip_via_runner(
             backend,
             ShioriCall::Get {
-                id: "OnFirstBoot",
+                id: EventId::Static("OnFirstBoot"),
                 references: Vec::new(),
                 status: inactive_status(),
             },
@@ -522,7 +525,7 @@ mod tests {
         // Timeout
         let outcome = round_trip_via_runner(
             fake_get(|_, _, _| Err(RequestError::Timeout)),
-            ShioriCall::Get { id: "OnBoot", references: Vec::new(), status: inactive_status() },
+            ShioriCall::Get { id: EventId::Static("OnBoot"), references: Vec::new(), status: inactive_status() },
         );
         assert!(
             matches!(outcome, ShioriOutcome::Failed(ShioriFailure::Timeout(_))),
@@ -532,7 +535,7 @@ mod tests {
         // Handshake
         let outcome = round_trip_via_runner(
             fake_get(|_, _, _| Err(RequestError::Handshake(HandshakeError::Timeout))),
-            ShioriCall::Get { id: "OnBoot", references: Vec::new(), status: inactive_status() },
+            ShioriCall::Get { id: EventId::Static("OnBoot"), references: Vec::new(), status: inactive_status() },
         );
         assert!(
             matches!(outcome, ShioriOutcome::Failed(ShioriFailure::Handshake(_))),
@@ -542,7 +545,7 @@ mod tests {
         // Ipc
         let outcome = round_trip_via_runner(
             fake_get(|_, _, _| Err(RequestError::Ipc(IpcError::SendFailed))),
-            ShioriCall::Get { id: "OnBoot", references: Vec::new(), status: inactive_status() },
+            ShioriCall::Get { id: EventId::Static("OnBoot"), references: Vec::new(), status: inactive_status() },
         );
         assert!(
             matches!(outcome, ShioriOutcome::Failed(ShioriFailure::Ipc(_))),
@@ -558,7 +561,7 @@ mod tests {
                     error_description: None,
                 }))
             }),
-            ShioriCall::Get { id: "OnBoot", references: Vec::new(), status: inactive_status() },
+            ShioriCall::Get { id: EventId::Static("OnBoot"), references: Vec::new(), status: inactive_status() },
         );
         assert!(
             matches!(outcome, ShioriOutcome::Failed(ShioriFailure::Shiori(_))),
@@ -578,7 +581,7 @@ mod tests {
         let outcome = round_trip_via_runner(
             backend,
             ShioriCall::Notify {
-                id: "OnInitialize",
+                id: EventId::Static("OnInitialize"),
                 references: Vec::new(),
                 status: inactive_status(),
             },
@@ -594,7 +597,7 @@ mod tests {
         let backend = fake_notify(|_, _, _| Err(RequestError::Ipc(IpcError::SendFailed)));
         let outcome = round_trip_via_runner(
             backend,
-            ShioriCall::Notify { id: "OnClose", references: Vec::new(), status: inactive_status() },
+            ShioriCall::Notify { id: EventId::Static("OnClose"), references: Vec::new(), status: inactive_status() },
         );
         assert!(
             matches!(outcome, ShioriOutcome::Failed(ShioriFailure::Ipc(_))),
@@ -617,7 +620,7 @@ mod tests {
         let outcome = round_trip_via_runner(
             notify_backend,
             ShioriCall::Notify {
-                id: "OnSecondChange",
+                id: EventId::Static("OnSecondChange"),
                 references: Vec::new(),
                 status: ExecutionStatus::derive(&ExecutionSnapshot { talk_active: true }),
             },
@@ -641,7 +644,7 @@ mod tests {
         let outcome = round_trip_via_runner(
             get_backend,
             ShioriCall::Get {
-                id: "OnSecondChange",
+                id: EventId::Static("OnSecondChange"),
                 references: Vec::new(),
                 status: ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE),
             },
@@ -742,7 +745,7 @@ mod tests {
         // 1 通目のメッセージ到達で死活検出される。
         let (reply1, receiver1) = reply_channel::<ShioriOutcome>();
         tx.send(ShioriMsg::Request {
-            call: ShioriCall::Get { id: "OnBoot", references: Vec::new(), status: inactive_status() },
+            call: ShioriCall::Get { id: EventId::Static("OnBoot"), references: Vec::new(), status: inactive_status() },
             reply: reply1,
         })
         .expect("send Request 1");
@@ -762,7 +765,7 @@ mod tests {
         // 2 通目のメッセージ到達でも status は Exited のままだが、再報告しない（sticky）。
         let (reply2, receiver2) = reply_channel::<ShioriOutcome>();
         tx.send(ShioriMsg::Request {
-            call: ShioriCall::Get { id: "OnBoot", references: Vec::new(), status: inactive_status() },
+            call: ShioriCall::Get { id: EventId::Static("OnBoot"), references: Vec::new(), status: inactive_status() },
             reply: reply2,
         })
         .expect("send Request 2");
@@ -876,7 +879,7 @@ mod tests {
         // 受信ループに入っていないこと: Request を送っても応答は来ない（reply が drop され Err）。
         let (reply, receiver) = reply_channel::<ShioriOutcome>();
         let _ = shiori_tx.send(ShioriMsg::Request {
-            call: ShioriCall::Get { id: "OnBoot", references: Vec::new(), status: inactive_status() },
+            call: ShioriCall::Get { id: EventId::Static("OnBoot"), references: Vec::new(), status: inactive_status() },
             reply,
         });
         assert!(

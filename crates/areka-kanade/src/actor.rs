@@ -32,7 +32,9 @@ use std::sync::mpsc::Sender;
 
 use areka_actor::{ActorHandle, ReplyError, reply_channel, run_inbox, spawn_actor};
 
-use crate::msg::{KanadeConfig, KanadeMsg, ShioriCall, ShioriFailure, ShioriMsg, ShioriOutcome};
+use crate::msg::{
+    EventId, KanadeConfig, KanadeMsg, ShioriCall, ShioriFailure, ShioriMsg, ShioriOutcome,
+};
 use crate::schedule::resources::ResourceSink;
 use crate::schedule::{Action, Input, State, step};
 use crate::talk::StartTalk;
@@ -123,8 +125,14 @@ fn drive(
                 }
                 Action::ShioriRequest(call) => {
                     // 送出前に call のイベント ID を控える（round_trip_request が call を消費するため）。
+                    // origin は `&'static str` 契約を維持する（DD-1）: スケジューラ起源は固定 ID を
+                    // そのまま転記し、選択起源（任意名・`&'static` にできない）は固定ラベル
+                    // `"OnChoiceEvent"` を載せる（ログ／防御用。選択応答のルーティングは帳簿照合が正）。
                     let origin = match &call {
-                        ShioriCall::Get { id, .. } | ShioriCall::Notify { id, .. } => *id,
+                        ShioriCall::Get { id, .. } | ShioriCall::Notify { id, .. } => match id {
+                            EventId::Static(s) => *s,
+                            EventId::Choice(_) => "OnChoiceEvent",
+                        },
                     };
                     last_reply = Some((round_trip_request(shiori, call), origin));
                 }
@@ -180,10 +188,14 @@ fn drive(
 fn round_trip_request(shiori: &Sender<ShioriMsg>, call: ShioriCall) -> ShioriOutcome {
     // 送出しようとしているイベントの Method／ID／参照値／実行状態（wire 値）を取り出す。
     // `status.render()` は `None` ⇔ Status ヘッダ行なし（Req6.2・DD-IT-5 の kanade 層観測）。
+    // `id` は wire 形（[`EventId::as_str`]）で取り出す——ガード判定もログ証跡も従来と
+    // 一字一句同一の文字列で行う（DD-1: 出所カテゴリは表現を変えない）。
     let (method, id, references, status_wire) = match &call {
-        ShioriCall::Get { id, references, status } => ("GET", *id, references, status.render()),
+        ShioriCall::Get { id, references, status } => {
+            ("GET", id.as_str(), references, status.render())
+        }
         ShioriCall::Notify { id, references, status } => {
-            ("NOTIFY", *id, references, status.render())
+            ("NOTIFY", id.as_str(), references, status.render())
         }
     };
 
@@ -328,8 +340,8 @@ mod tests {
                 match msg {
                     ShioriMsg::Request { call, reply } => {
                         let rec = match &call {
-                            ShioriCall::Get { id, .. } => Recorded::Get((*id).to_string()),
-                            ShioriCall::Notify { id, .. } => Recorded::Notify((*id).to_string()),
+                            ShioriCall::Get { id, .. } => Recorded::Get(id.as_str().to_string()),
+                            ShioriCall::Notify { id, .. } => Recorded::Notify(id.as_str().to_string()),
                         };
                         let _ = rec_tx.send(rec.clone());
                         let _ = reply.send(answer(&rec));
@@ -576,7 +588,7 @@ mod tests {
     /// テスト用 GET 呼出（round_trip_request の入力・内容は本テストで load-bearing でない）。
     fn probe_get_call() -> ShioriCall {
         ShioriCall::Get {
-            id: "OnBoot",
+            id: EventId::Static("OnBoot"),
             references: vec!["master".to_string()],
             status: ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE),
         }
@@ -689,7 +701,7 @@ mod tests {
                 outcome = Some(round_trip_request(
                     &shiori_tx,
                     ShioriCall::Get {
-                        id: forbidden,
+                        id: EventId::Static(forbidden),
                         references: vec!["master".to_string()],
                         status: ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE),
                     },
@@ -727,7 +739,7 @@ mod tests {
     /// テスト用のリソース GET 呼出（M1 リソース ID `username`）。
     fn probe_resource_call(id: &'static str) -> ShioriCall {
         ShioriCall::Get {
-            id,
+            id: EventId::Static(id),
             references: vec!["master".to_string()],
             status: ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE),
         }
