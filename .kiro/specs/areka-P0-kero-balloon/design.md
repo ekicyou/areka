@@ -495,6 +495,10 @@ pub fn to_screen_adjust(
 ) -> Option<(i32, i32)>;   // 両軸とも未指定なら None（現行と厳密同一・R3.4）
 
 /// cfg.scopes[scope].balloon_offset へ加算合流（既存 descript offset があれば加算・無ければ設定）。
+/// 注意（単位空間の混在・意図的）: 本欄は物理 px の加算欄。windowposition 由来の調整量は
+/// k 適用済み物理 px で合流するが、既存供給元 balloon.offsetx/offsety（descript）は非スケール
+/// 生値のまま加算される——後者の規約温存は Out of scope（W5 対象外）。emo2 は descript offset
+/// が None ゆえ顕在化しないが、将来の取り違えを封じるためこの doc を実装コメントにも転記する。
 pub fn apply_windowposition(
     cfg: &mut PlacementConfig, scope: usize, adjust: Option<(i32, i32)>,
 );
@@ -606,8 +610,8 @@ pub struct SerikoLoopConfig {
 
 R6 の観測点（すべて `RUST_LOG=info` で grep 可能・実機サインオフの決定論判定に使う）:
 
-1. `resolve_balloon_faces` 完了時 `info!`: scope・連鎖・採用面一覧 `(id, prefix, file)`（R6.1）。
-2. tier=Default 採用の `warn!`: scope・面 ID・採用ファイル（R6.2）。
+1. `resolve_balloon_faces` 完了時 `info!`: scope・連鎖・採用面一覧 `(id, prefix, file)`（R6.1。R6.3 と同じく placement／boot の 2 呼出点から各 1 回＝scope あたり 2 行出る——サインオフの grep は行数でなく**値の一致**で突合する）。
+2. tier=Default 採用の `warn!`: scope・面 ID・採用ファイル（R6.2。同上・2 呼出点×各 1 回）。
 3. `load_scope_balloon_model` の `info!`: scope・windowposition・validrect 実値（R6.3。placement／boot の 2 呼出点から各 1 行＝scope あたり 2 行出るが、値の一致自体が権威一元化の生き証人になる）。
 4. `prepare_stages` の `info!`: scope・wp 生値・balloon side・変換後 (dx, dy) 物理 px（R7.6 の実機突合用）。
 5. 既存: 採寸寸ログ（k₀ 倍後物理寸・mod.rs:278-283）に scope 別バルーン寸が現れる（400×224 vs 288×203 の差を grep で確認）。
@@ -623,7 +627,7 @@ R6 の観測点（すべて `RUST_LOG=info` で grep 可能・実機サインオ
 5. **非バルーン面除外**: `balloonc0.png`／`arrow0.png`／`balloonsX.png`／`balloons0.txt` がどの連鎖でも不採用（R1.5・`balloonc` を `balloonk` と誤認しない）。
 6. **上書きファイル名導出**: 採用面→`{prefix}{id}s.txt`（`balloonk0`→`balloonk0s.txt`・フォールバック面→`balloons{ID}s.txt`・R2.2/2.3）。
 7. **per-scope マージ実値**: emo2-kakukaku 実 fixture で scope0=sakura 値・scope1=kero 値（wp -190,-75／validrect 40,-70,24,-48／wordwrappoint descript 継承 -34・R2.1/2.5）。
-8. **再追従判定キー**: k 同値・`image_size` 変化→`true`（再構築）／binding・resolved 全同値→`false`（churn 維持）／未装着→`false`（R4.4/4.5/4.6）。既存檻 `:2665` の名称・意図更新。
+8. **再追従判定キー**: k 同値・`image_size` 変化→`true`（再構築）／binding・resolved 全同値→`false`（churn 維持）／未装着→`false`（R4.4/4.5/4.6）。既存檻 `:2665` の名称・意図更新（`actor.rs:2812-2817` のキル排他性コメントが同テスト名を名指ししているため、リネーム時に参照も追随させる——R7.2 の「陳腐化した注記を放置しない」の対象）。
 9. **windowposition 変換**: Left/Right × x 正負 × 片軸欠落 × k≠1 の全分岐（emo2 実値 sakura x=+266→Left で +・kero x=−190→Right で +190 相当の画面符号・R3.3/3.4/3.6）。両軸未指定→`None`＝resolver 出力が現行と同一。
 10. **scope キー表引き**: scope1 の balloon 表が scope0 と独立に引かれる／不在 scope＝不活性（乱数非消費・R5.6）。
 
