@@ -366,7 +366,7 @@ pub struct MonitorRecord {
 ```
 
 - Invariants: World・wintf 型に依存しない（`MonitorRecord` は呼出側が転写）。全出力は `debug!(target: DIAG_TARGET, ...)`＝既定 `RUST_LOG=info` では無音（Req 1.7）。
-- 窓移動レコード（Req 1.2）は `enqueue_window_set_pos` 成功時に出す: route・窓種別（char/balloon）・scope・物理位置・物理寸・当該窓 DPI。種別と scope は `CharWindowMarker`/`BalloonWindowMarker`、DPI は `DPI` component から呼出側（follow.rs）が読んで渡す。
+- 窓移動レコード（Req 1.2）は `enqueue_window_set_pos` 成功時に出す: route・**entity**・窓種別（char/balloon）・scope・物理位置・物理寸・当該窓 DPI。種別と scope は `CharWindowMarker`/`BalloonWindowMarker`、DPI は `DPI` component から呼出側（follow.rs）が読んで渡す。**entity は wintf 側ログ（entity のみを持つ）との結合キー**であり、Req 1.9 の scope 別計数はこの結合で機械化される（手順書④の 2 段 grep 規則）。
 
 **Implementation Notes**
 - Validation: レコードのフィールド組立は純関数化し in-source 檻で固定（診断 grep 語の意図せぬ変更を檻が検出）。診断手順書の grep 語はこのモジュールの出力書式と 1:1 対応（Req 1.5 を「型で」担保する D11 の趣旨）。
@@ -470,7 +470,7 @@ impl GhostWindows {
 
 ### 成果物（診断手順書・診断レポート）
 
-- **diagnosis-procedure.md**（Req 1.4/1.5/1.8/1.9/5.5）: ①起動コマンド（絶対パス・記憶〈emo2 実走は絶対パス必須〉）・`RUST_LOG=info,wintf::ecs::window_proc=debug,wintf::ecs::drag=debug,areka::placement::diag=debug`・`AREKA_APP_SMOKE_EXIT_MS`（有界終了）・ログ保存先。②観測点×target×水準の対応表（1.5＝「手順で有効化されない水準の観測点を『発生 0 回』の根拠に用いない」の制度化）。③2 セッション規定: セッション①ドラッグによるモニタ跨ぎのみ／セッション② OS 設定側 DPI 変更のみ（ドラッグ禁止）。④充足条件: `[WM_DPICHANGED] DPI component directly updated` 行の grep 計数で、キャラ窓の各 scope×各方向（低→高・高→低）×3 回＝**12 回以上の受理**。⑤合否判定語（消失痕跡: `ClampX`/`NearestFallback` warn・全 work area 非交差の突合手順）。⑥実機サインオフ（5.5）: OS が実際に提示する提案矩形・実モニタ列挙という決定論化できない 2 項の確認手順。
+- **diagnosis-procedure.md**（Req 1.4/1.5/1.8/1.9/5.5）: ①起動コマンド（絶対パス・記憶〈emo2 実走は絶対パス必須〉）・`RUST_LOG=info,wintf::ecs::window_proc=debug,wintf::ecs::drag=debug,areka::placement::diag=debug`・`AREKA_APP_SMOKE_EXIT_MS`（有界終了）・ログ保存先。②観測点×target×水準の対応表（1.5＝「手順で有効化されない水準の観測点を『発生 0 回』の根拠に用いない」の制度化）。③2 セッション規定: セッション①ドラッグによるモニタ跨ぎのみ／セッション② OS 設定側 DPI 変更のみ（ドラッグ禁止）。④充足条件: `[WM_DPICHANGED] DPI component directly updated` 行の grep 計数で、キャラ窓の各 scope×各方向（低→高・高→低）×3 回＝**12 回以上の受理**。**計数の機械化＝2 段 grep 規則**（wintf は scope を知らないため）: 第 1 段で diag レコード（entity・scope・種別を含む）から「scope→char 窓 entity」の対応表を作り、第 2 段で当該 entity の WM_DPICHANGED 受理行を数える。方向は同行の old/new DPI の大小比較で機械判定する。⑤合否判定語（消失痕跡: `ClampX`/`NearestFallback` warn・全 work area 非交差の突合手順）。⑥実機サインオフ（5.5）: OS が実際に提示する提案矩形・実モニタ列挙という決定論化できない 2 項の確認手順。
 - **diagnosis-report.md**（Req 2.1-2.6/2.8/2.9）: 確定台帳の一元化。**設計時点で S1〜S3 を「静的構造証跡」クラスとして file:line 付きで先行登記**（各項目に未充足 AC を明記・2.8）。実機採取後に Q1〜Q4 の回答（2.1）・交差判別（2.2）・追従数値（2.3）・書き手名指し（2.4・語彙は `PlacementRoute` 名＋wintf `[drag]`/提案位置書込の 2 語）・バルーン随伴（2.5）・S1〜S3 の実機痕跡有無（2.9・痕跡が無くても確定は取り消さない）を追記。再現しない場合の結論規則（2.6）: 受理回数下限を踏破した 2 セッションのみを根拠に、除外できるのは**残余仮説への追加修正のみ**（S1〜S3 是正と檻は除外しない）。
 
 ## Error Handling
@@ -500,7 +500,7 @@ impl GhostWindows {
 
 ### Unit Tests（純関数檻）
 
-1. **`dpi_suggested_position_decision`**（wintf `dpi_helpers.rs` in-source）: policy 未付与／`ApplyPosition`／`ExternalAuthority` の全分岐。**S1 の赤→緑（Req 5.4）**: 「決定結果を適用した最終 X が現接地点 X を保存する」不変条件檻を、是正前挙動（無条件 `Some(suggested)`）に対して dpi=96（提案＝現位置ゆえ通過）と 120/192（モニタ跨ぎ相当の提案 X シフトを注入して失敗）で示し、`ExternalAuthority` 決定で全水準緑にする。
+1. **`dpi_suggested_position_decision`**（wintf `dpi_helpers.rs` in-source）: policy 未付与／`ApplyPosition`／`ExternalAuthority` の全分岐。「決定結果を適用した最終 X が現接地点 X を保存する」不変条件檻を dpi=96（提案＝現位置ゆえ通過）と 120/192（モニタ跨ぎ相当の提案 X シフトを注入）で示す。**位置づけは分岐網羅の補助**——S1 の赤→緑（Req 5.4）の**正証跡は Integration Tests 5（wintf dispatch 檻）**である（是正前の欠陥は wndproc の無条件書込＝実配線に在るため、新設純関数上の模擬では「是正前のコードに対して失敗する」の証明力が足りない）。
 2. **`guard_visibility`**（follow.rs in-source）: 交差維持→Keep／交差→非交差の遷移→ClampX（X が clamp_wa 水平範囲内・Y 不変）／もともと非交差（留置）→Keep／old 不明→ClampX。混在 DPI 複数モニタ（120+192 相当の非対称 work area・負座標・3200 超座標）の合成レイアウトで（Req 5.1/5.3）。
 3. **`work_area_for_window_with_origin`**: `Contains`/`NearestFallback` の判別が既存 `work_area_for_window` の戻り値と常に一致（委譲の等価性）。
 4. **diag レコード組立**: `PlacementRoute` 表示語彙と grep 判定語の固定（手順書と 1:1）。
@@ -512,7 +512,7 @@ impl GhostWindows {
 2. **`Some` 経路の非退行**: fake `Some(新寸)` で従来どおり `reconcile_window_size` が走り、balloon 随伴恒等式 `balloon_pos − char_pos ≡ offset` が保存される（Req 4.4・resize_window_to 檻の donor 拡張）。
 3. **despawn 掃除**: hook 発火で scope エントリ除去・後追い no-op・他 scope の `WindowPos`/`BalloonFollow` 不変（Req 6.1/6.4）・掃除後の `resnap_with`/`reconcile_reported_sizes` が warn を出さず他 scope を処理し切る（Req 6.2/6.3・log 捕捉は既存 tracing テスト流儀）。
 4. **spawn 付与檻**: 全 scope×char/balloon に `ExternalAuthority` が付与される（付与漏れ＝S1 再発の穴を檻で塞ぐ）。
-5. **wintf dispatch 檻**（`window_proc/mod.rs` headless 先例の拡張）: `ExternalAuthority` 付き entity への `WM_DPICHANGED` dispatch 後、`DPI` component は更新され `DpiChangeContext` が **set されない**こと。policy 無し entity では set されること。
+5. **wintf dispatch 檻＝S1 の赤→緑の正証跡（Req 5.4）**（`window_proc/mod.rs` headless 先例の拡張）: `ExternalAuthority` 付き entity への `WM_DPICHANGED` dispatch 後、`DPI` component は更新され `DpiChangeContext` が **set されない**こと。policy 無し entity では set されること。**赤の採取**: 是正前コミット（Phase A 完了時点）に対して本檻を実行し「`DpiChangeContext` が set される＝OS 提案位置が採用される」失敗を記録、是正コミット直後に緑を記録する（Phase D の実行記録対象・tasks 生成時に赤採取のコミット位置を固定すること）。
 
 ### 実機サインオフ（Req 5.5・決定論化できない残余のみ）
 
