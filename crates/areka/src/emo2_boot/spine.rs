@@ -293,7 +293,9 @@ fn emo2_balloon_root() -> PathBuf {
 /// scope0/scope1 の 2 スコープぶんの合成配置（placement::spawn テストの emo2 相当値を踏襲）。
 ///
 /// attach フェーズは窓 `Entity` のみを消費し `WindowPos`/寸法は読まないため、位置値は attach の
-/// 成否に無関係（`GhostWindows::scopes()` が `[0,1]` を返すことだけが load-bearing）。
+/// 成否に無関係（`GhostWindows::scopes()` が `[0,1]` を返すことだけが load-bearing）。両 scope の
+/// `balloon_size` が同値なのは合成値をそのまま踏襲しているだけで、実 fixture の scope 別バルーン
+/// 採寸（scope0 と scope1 は解決する系列が異なり `validrect` も異なる）を表すものではない。
 fn two_scope_placements() -> Vec<ScopePlacement> {
     vec![
         ScopePlacement {
@@ -934,9 +936,10 @@ fn spine_s1_boot_to_display_attaches_all_targets_with_opaque_readback() {
 /// `EmoPresenter::apply_hide` は WUC visual の可視フラグを落とすのみで swap chain の供給面
 /// （`source_tex`）は破棄しない。`read_back` はその供給面を直読みするため **Hide は readback の
 /// バイトを変えない**（emo-present の `empty_composition_degrades_to_hidden_and_replies_ok` が
-/// 同事実を固定＝Hide 縮退後も `read_back` は旧供給面長のまま成立）。加えて balloon fixture は
-/// surface0 のみ・attach 初回表示も surface0 ゆえ、`\b[-1]`→`\b[0]` の前後で readback バイトは不変
-/// （両方 surface0）。よって「Hide→全透明」型のピクセル遷移は本経路では観測不能である。本テストは
+/// 同事実を固定＝Hide 縮退後も `read_back` は旧供給面長のまま成立）。加えて本ケースが見る scope0 の
+/// バルーン系列（emo2-kakukaku の `balloons0.png`）は面 0 の 1 枚のみで、attach 初回表示も面 0 ゆえ、
+/// `\b[-1]`→`\b[0]` の前後で readback バイトは不変（両方 surface0）。よって「Hide→全透明」型の
+/// ピクセル遷移は本経路では観測不能である。本テストは
 /// (1) 受信列順序（R5.4 の本質・観測完了条件）と (2) apply 後の balloon readback が非全透明かつ attach
 /// 初期面と同一（surface_id/binds が正しく貫通し実描画された証跡・R8.2）で `\b` 配送の貫通を檻に入れる。
 #[test]
@@ -1249,8 +1252,10 @@ fn spine_dpi_change_while_balloon_hidden_lands_on_next_show() {
 
 /// spine S4（`\b` なし完走・R5.5・R1 系）: `\b` を含まない OnBoot 台本が S1 経路（boot→表示）を完走し、
 /// かつ受信 `PresentCommand` 列に **balloon 表示対象（奇数 TargetId）宛の指令が一切現れない**
-/// （＝`\b` 由来の面切替が無い）ことを固定する。emo2 fixture は balloons0.png のみで OnBoot デモは
-/// バルーン面切替なしで完走する（R5.5）。`\s[0]` はシェル面指令（偶数 TargetId）を 1 件生むため、
+/// （＝`\b` 由来の面切替が無い）ことを固定する。emo2 のバルーン fixture（`emo2-kakukaku`）では scope
+/// ごとに別系列が解決され（scope0＝`balloons0.png`／scope1＝`balloonk0.png`）、いずれの系列も面 0 の
+/// 1 枚だけを持つ。加えて本ケースの OnBoot 台本自体が `\b` を含まないため、どの scope でもバルーン
+/// 面切替なしで完走する（R5.5）。`\s[0]` はシェル面指令（偶数 TargetId）を 1 件生むため、
 /// 「talk が実際に流れたが balloon 面切替は無い」を受信列で決定論的に区別できる。
 #[test]
 fn spine_s4_balloon_free_onboot_completes_without_balloon_face_switch() {
