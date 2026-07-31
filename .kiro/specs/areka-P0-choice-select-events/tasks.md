@@ -75,7 +75,7 @@
   - _Boundary: talk アクター（areka-sakura）_
   - _Depends: 1.1, 1.4, 3.1_
 
-- [ ] 3.3 (P) dispatcher の選択系 3 アームに中継意味論と時刻換算を与える
+- [x] 3.3 (P) dispatcher の選択系 3 アームに中継意味論と時刻換算を与える
   - 3 アームのいずれも現在の talk 識別子と一致する場合のみ中継し、不一致は stale として記録の上で棄却する
   - 選択解除は slot を維持したまま終了指示を転送し、talk 発の完了通知が正規経路で kanade へ届くようにする（slot 先行解放の既存ヘルパは使わない）
   - 選択待ち通知の経過秒を Tick 中継と同一の起点でミリ秒へ換算し、新しい時間基準を作らない
@@ -206,3 +206,4 @@
 - 2.3: `is_allowed_choice_event` は `lib.rs` の `events` ファサードへ未露出。統合檻（6.x）が必要とするなら 1 行 re-export を追加すること。
 - 3.1: **重要な申し送り** — `CuePlayer::stop()` → `TimedSchedule::clear()` は `horizon` を 0.0 にするが `start_time` はリセットしない。ゆえに**中断後の `occupancy_horizon()` はアンカー（過去時刻）を返す**。3.2 は `WaitingForChoice` 検出時点（停止前）で値を捕捉すること・4.x は中断済み player を照会しないこと。誤用すると deadline が即時失効して偽の `OnChoiceTimeout` を招く。
 - 3.2: `spawn_talk` の `D` 境界拡張は `areka-ghost/src/prop_sink.rs` と `areka-seriko/tests/{balloon_face,bind}_e2e.rs` にも機械的追随を強制した（design の Revalidation Trigger は sakura テストのみ列挙＝過小記述）。assert は全て不変。
+- 3.3: dispatcher の stale 棄却は design 語彙表どおり `info!`（Req1.3/5.5 の「警告」は kanade 層の `choice_rejected_no_wait` が正・dispatcher は二重防御の副）。`warn!` は `base_now == None` の防御専用。`test_log_capture.rs` に `event` フィールド照合（`assert_logged_event`）を additive 追加済み。
