@@ -57,7 +57,7 @@ areka は二人立ちゴースト（本体＝sakura／相方＝kero）を表示�
 
 #### Acceptance Criteria
 
-1. When ゴースト起動時にバルーン資産を読み込むとき、the areka バルーン資産解決 shall scope 番号から接頭辞優先連鎖を導出する。連鎖は 2 軸の直交規則で構成する——(i) **縮退する scope の順**は n → 1 → 0（n≧2）／1 → 0（scope 1）／0（scope 0）、(ii) **各 scope が出す候補**は正規名 `balloonp{s}def` を先頭に、続けて当該 scope の旧名（s=0 は `balloons`／s=1 は `balloonk`／s≧2 は旧名なし）とする。結果として scope 0 は `balloonp0def` → `balloons`、scope 1 は `balloonp1def` → `balloonk` → `balloonp0def` → `balloons`、scope n（n≧2）は `balloonp{n}def` → `balloonp1def` → `balloonk` → `balloonp0def` → `balloons` となる。
+1. When ゴースト起動時にバルーン資産を読み込むとき、the areka バルーン資産解決 shall scope 番号から接頭辞優先連鎖を導出する。連鎖は 3 段の連結で構成する——(i) **当該 scope 自身の候補**（正規名 `balloonp{s}def` を先頭に、当該 scope に旧名があれば続ける。s=0 は `balloons`／s=1 は `balloonk`／s≧2 は旧名なし）、(ii) **相方系列**（s≧2 のときのみ `balloonk`。正典が三人目以降の流用先として名指しする系列であり、scope 1 の解決へ再帰的に縮退するのではない）、(iii) **デフォルト定義**（s≧1 のときのみ `balloonp0def` → `balloons`。全連鎖の最終受け皿は scope 0 のみであり、scope 1 はデフォルトの地位を持たない）。結果として scope 0 は `balloonp0def` → `balloons`、scope 1 は `balloonp1def` → `balloonk` → `balloonp0def` → `balloons`、scope n（n≧2）は `balloonp{n}def` → `balloonk` → `balloonp0def` → `balloons` となる。
 2. When ある scope のある面 ID を解決するとき、the areka バルーン資産解決 shall 当該 scope の接頭辞連鎖を先頭から辿り、`{接頭辞}{ID}` の画像が最初に存在した接頭辞の面を採用する。
 3. The areka バルーン資産解決 shall 前項の連鎖探索を**面 ID 単位**で行い、ある ID の欠落を理由に当該 scope の系列全体を後段の接頭辞へ切り替えない（`balloonk0` があり `balloonk1` が無い場合、scope 1 の面 0 は `balloonk0`・面 1 は `balloons1` となる）。
 4. Where バルーンが連鎖の先頭側接頭辞の画像を 1 枚も含まないとき、the areka バルーン資産解決 shall 全 scope が `balloons` 系列へ解決され、本仕様適用前と同一の面集合を得る。

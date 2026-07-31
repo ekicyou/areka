@@ -282,12 +282,15 @@ balloon_root（1 個のディレクトリ）
   正典実文（`ukadoc:manual_balloon` 本日全文取得）: 「`balloonp*def*.png` 三人目以降の吹き出し。**`\p[2]` に当たるバルーンが `balloonp2def0.png` / `balloonp2def1.png` になる**。省略時は `balloonk`、さらになければ `balloons`」＝**第一の `*` が scope 番号・第二が面 ID**。さらに同一の番号正規化が族をまたいで一様に適用されている（`arrows`/`arrowk`/`arrowp{n}def`・`markers`/`markerk`/`markerp{n}def`・`sstp_new`/`sstp_newk`/`sstp_newp{n}def`・`clickwaits`/`clickwaitk`/`clickwaitp{n}def`）。
   ゆえに**本書 5 章アプローチ A の `BalloonSeries { Sakura, Kero }` enum 案は撤回**する（正典の構造を 2 値へ潰しており、`balloonp` 対応時に構造ごと作り直しになる）。正しい形は `scope → 接頭辞優先連鎖`で、面 ID ごとに連鎖を先頭から辿る。ID 単位フォールバックと多段連鎖が**同一コードで表現できる**。
 
-  **連鎖の確定形（2026-07-31 開発者裁定「正規系をベースにすべき」）** — 番号形式 `p{n}def` を**正規名**、`s`/`k` を scope 0/1 の**旧名（過去互換エイリアス）**と位置づけ、2 軸直交で構成する:
+  **連鎖の確定形（2026-07-31 開発者裁定「正規系をベースにすべき」）** — 番号形式 `p{n}def` を**正規名**、`s`/`k` を scope 0/1 の**旧名（過去互換エイリアス）**と位置づけ、3 段の連結で構成する:
   ```
-  縮退する scope の順:  n → 1 → 0 (n≧2) ／ 1 → 0 (scope 1) ／ 0 (scope 0)
-  各 scope が出す候補:  [balloonp{s}def, <s の旧名>]   旧名: s=0→balloons / s=1→balloonk / s≧2→なし
+  chain(s) = 自分の候補 ++ 相方系列(s≧2 のみ) ++ デフォルト定義(s≧1 のみ)
+    自分の候補     : s=0 → [balloonp0def, balloons] / s=1 → [balloonp1def, balloonk] / s≧2 → [balloonp{s}def]
+    相方系列       : [balloonk]
+    デフォルト定義 : [balloonp0def, balloons]
   ```
-  展開: scope 0 = `[balloonp0def, balloons]`／scope 1 = `[balloonp1def, balloonk, balloonp0def, balloons]`／scope n≧2 = `[balloonp{n}def, balloonp1def, balloonk, balloonp0def, balloons]`。
+  展開: scope 0 = `[balloonp0def, balloons]`／scope 1 = `[balloonp1def, balloonk, balloonp0def, balloons]`／scope n≧2 = `[balloonp{n}def, balloonk, balloonp0def, balloons]`。
+  **`balloonk` の役割は連鎖内の位置で異なる**（設計時に取り違えないこと）——scope 1 の連鎖では「scope 1 自身の旧名（`balloonp1def` の過去互換エイリアス）」、n≧2 の連鎖では「正典が三人目以降の流用先として**名指しした系列**」。後者は scope 1 の解決へ再帰的に縮退するのではないため、n≧2 の連鎖に `balloonp1def` は**入らない**。**デフォルト定義の地位を持つのは scope 0 のみ**（`balloons` が全連鎖の末尾に来る理由）であり、scope 1 はその地位を持たない。
   **`balloonp0def` / `balloonp1def` の先行探索は areka 裁量の正規化拡張**（正典実文は p 系列を `\p[2]` 以降としてのみ記述——`balloonp*def*` 項の「三人目以降」に加え、`arrowp2def`**以降**／`markerp2def`**以降**／`clickwaitp2def`**以降** の 3 箇所が独立に 2 始まりを述べる）。SSP が無視するファイルを areka が拾う互換乖離の可能性を提示したうえで、開発者が「正規系をベース」の方針で採用を裁定した＝要件 R1.10・R7.7(a) で対応表へ記録。
   **語彙の二系統も記録対象**（R7.7(b)）: 同一 scope をさくらスクリプトは `\0`/`\h`・`\1`/`\u`（ukadoc `list_sakura_script`「**`\0` もしくは `\h`** 本体側のスコープに移る」で確認）、ファイル名は `s`/`k` と呼ぶ。ゆえに内部表現は **scope 番号のみ**とし 2 値列挙も `h`/`u` も正準にしない（R1.9）。
   **装飾族の旧名は一段深い**（R7.7(c)）: 正典「`arrows` が本体用（**旧バージョン対応のために `arrow` で代用を推奨**）」／`markers` ⇔ `marker` も同型。吹き出し族に接尾辞なし旧名は無いが、連鎖表を「scope ごとの**可変長**候補列」にしておけば同一構造で表現できる。
