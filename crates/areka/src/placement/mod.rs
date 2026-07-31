@@ -23,6 +23,7 @@ pub mod persist;
 pub mod resolver;
 pub mod source;
 pub mod spawn;
+mod windowposition;
 /// `#[cfg(test)]` 限定のテスト共有部品（tracing ログ捕捉ハーネス）。本番バイナリには含まれない。
 #[cfg(test)]
 mod test_support;
