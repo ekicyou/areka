@@ -2083,7 +2083,7 @@ SOFTWARE.
 - ctrlc 3.5.2
 - erased-serde 0.4.10
 - event-listener-strategy 0.5.4
-- event-listener 5.4.1
+- event-listener 5.4.2
 - fastrand 2.5.0
 - futures-lite 2.6.1
 - hermit-abi 0.5.2
