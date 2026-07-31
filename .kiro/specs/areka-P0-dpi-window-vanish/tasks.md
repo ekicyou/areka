@@ -92,7 +92,7 @@
   - _Requirements: 1.4, 1.5, 1.6, 1.8, 1.9, 5.5_
   - _Depends: 1.2, 1.3, 1.4_
 
-- [ ] 4.2 診断レポートへの静的構造証跡の先行登記
+- [x] 4.2 診断レポートへの静的構造証跡の先行登記
   - 確定台帳としての診断レポートを新設し、コード読解のみで確定した位置権威の欠陥を「静的構造証跡」クラスとして file:line 引用付きで登記する
   - 登記対象は S1（接地点の X 成分を再計算せず OS 提示値を素通しする）・S2（位置の再射影が窓寸の再導出結果に条件付けられ、得られない経路で欠落する）・S3（キャラ窓の水平方向に可視性の不変条件が無く、work area 解決の最近傍フォールバックが異常を隠す）・S3′（バルーン矩形の可視性がどの経路でも検査されない）の 4 件
   - 各項目に、それが未充足にする受入基準の ID を明記する
@@ -223,6 +223,9 @@
 - **1.3 → 5.1 への申し送り**: `window_pos.rs` の実施可否行の `applied` は Phase A では `let applied = true;` の定数（分岐は 5.1 の所有）。design.md:319 が挙げる `policy` フィールドも未出力＝`DpiSuggestedRectPolicy` を新設する 2.1 の後、5.1 で `applied` の分岐化と同時に追加すること。
 - **2.1 → 5.1 への申し送り**: `dpi_suggested_position_decision`（`crates/wintf/src/ecs/window_proc/dpi_helpers.rs`・`pub(super) fn(Option<&DpiSuggestedRectPolicy>, &RECT) -> Option<(i32, i32)>`）の戻り値 `Option` は **`DpiChangeContext::set` と `guarded_set_window_pos` の双方を 1 個の `if let Some((x, y))` で束ねて分岐させる**ためのもの（D3 帰結）。**シグネチャを広げる必要はない**——レビュアが design.md:319 と突合して確認済み。配線時に同関数の `#[allow(dead_code)]`（dpi_helpers.rs:31）を外すこと。
 - **2.1**: `DpiSuggestedRectPolicy` は `crates/wintf/src/ecs/mod.rs` の curated `pub use window::{…}` へ載せてある（areka は `wintf::ecs::{…}` 経由でしか import しない＝`placement/spawn.rs:63` の流儀）。5.1 の areka 側付与は wintf を編集せずに書ける。
+- **4.2 の正本＝`diagnosis-report.md`（確定台帳）。4.3／4.4／4.5／7.1／7.4 はここへ**追記**する**——節骨格は 4.2 が作成済み（§3.1＝S1 専用・§3.2＝S2 専用で非重複・§2＝4.5 の Q1〜Q4・§4＝7.4）。他タスクの節を上書きしないこと。S1〜S3′ の 4 件は現ツリーで**現存を機械確認済み**（2.1／2.2 の是正機構はいずれも本番呼出ゼロ＝純関数が在ることは AC の充足ではない）。レビュアが 54 箇所の `file:line` を全数再測定し**誤り 0**。
+- **4.2 の載せた最重要規則（4.5 で誤読しないこと）**: 実機 2 セッションが受理回数を踏破して消失痕跡ゼロでも、除外できるのは**実機でしか確定できない残余仮説への追加修正のみ**。**静的確定分（S1〜S3′）の是正 5.1／5.2／6.1／6.2 と檻 7.1／7.2 は除外されない**（Req 2.6／2.9／5.1／5.4）。
+- **4.2（証跡の書き方）**: 「本番呼出ゼロ」の根拠に `#[allow(dead_code)]` の有無を使わないこと——同属性は本番呼出のある `follow.rs:148` `project_anchor`・`:822` `resize_window_to` にも付いている。根拠は `crates/` 全 grep で一致がすべて定義行・doc・`#[cfg(test)]` 内であること（テストモジュール開始＝`follow.rs:1587`／`dpi_helpers.rs:150`）。また「呼出点がある」と「本番スケジュールに載っている」は別物（`anchor_changed_system` は `add_systems` が全て `#[cfg(test)]` 内＝定義済み未登録）。
 - **4.1 の正本＝`diagnosis-procedure.md`（4.5／7.4 はこれに従って採取する）**。確定した `RUST_LOG`（D-BASE・レビュアが `capture_under_filter` で実濾過を独立実証）:
   `info,areka::placement::diag=debug,wintf::ecs::window=debug,wintf::ecs::layout::systems::monitor_systems=debug,wintf::ecs::drag=trace`
   handoff の 1 語に加え **2 語が実測で必要と判明**——⑴`wintf::ecs::layout::systems::monitor_systems=debug`（wintf 側モニタ列挙行は `wintf::ecs::window` 配下に**無い**＝D12 の両側 grep 突合が不成立になる）⑵`wintf::ecs::drag=`**`trace`**（毎移動の `[DragEvent] Dispatching` は `trace!`＝`debug` では暗転し Req 2.3 のマウス対窓の数値対応が測れない）。design.md:476 の例が点灯しないことも負の assert で実証済み。

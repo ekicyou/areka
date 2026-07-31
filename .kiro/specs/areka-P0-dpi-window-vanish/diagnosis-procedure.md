@@ -184,7 +184,7 @@ $env:AREKA_PROFILE_DIR       = $PROFILE_DIR
 
 | # | 判定語 | ログ target | 水準 | 備考 |
 | --- | --- | --- | --- | --- |
-| X1 | `[despawn-skip]`（追従層） | `areka::placement::follow` | `debug` | `follow.rs:839`（`resize_window_to`）・`follow.rs:1523`（`resize_window_keep_position`）。定数は `diag.rs:92` |
+| X1 | `[despawn-skip]`（追従層） | `areka::placement::follow` | `debug` | `follow.rs:839`（`resize_window_to`）・`follow.rs:1524`（`resize_window_keep_position`）。定数は `diag.rs:92` |
 | X2 | `[despawn-skip] dpi reconcile:` / `[despawn-skip] resnap:`（フレーム層） | `areka::emo2_boot::frame` | `debug` | `frame.rs:1060,1264` |
 | X3 | `placement: ゴースト窓レジストリから scope エントリを除去`（`scope=`・`char_window=`・`balloon_window=`） | `areka::placement::spawn` | `debug` | `spawn.rs:124-130`。**scope→entity 対応表の別解**（§5.2 の代替源） |
 
@@ -194,8 +194,8 @@ $env:AREKA_PROFILE_DIR       = $PROFILE_DIR
 
 | 語 | なぜ出ないか | いつ出るようになるか |
 | --- | --- | --- |
-| `ClampX` / `VisibilityVerdict` 関連の `warn!` | `guard_visibility`（`follow.rs:1416`）は**意図的に無ログ**の純関数で、まだどこからも呼ばれていない（`#[allow(dead_code)]`） | タスク **6.1**（キャラ窓）／**6.2**（バルーン窓）で配線＋`warn!` |
-| `NearestFallback` の `warn!` | `work_area_for_window_with_origin`（`follow.rs:1314`）は判別を返すが、水準昇格は消費側の責務で未配線 | タスク **6.1** |
+| `ClampX` / `VisibilityVerdict` 関連の `warn!` | `guard_visibility`（`follow.rs:1417`）は**意図的に無ログ**の純関数で、まだどこからも呼ばれていない（`#[allow(dead_code)]`） | タスク **6.1**（キャラ窓）／**6.2**（バルーン窓）で配線＋`warn!` |
+| `NearestFallback` の `warn!` | `work_area_for_window_with_origin`（`follow.rs:1315`）は判別を返すが、水準昇格は消費側の責務で未配線 | タスク **6.1** |
 | `policy=` フィールド（提案位置の採用方針） | `DpiSuggestedRectPolicy` は新設済みだが wndproc へ未配線 | タスク **5.1** |
 | `applied=false` | **`applied` は Phase A では定数**（`window_pos.rs:359` の `let applied = true;`）。分岐は未実装ゆえ**常に `applied=true` しか出ない** | タスク **5.1** |
 | `route=SpawnInitial` / `route=Restore` | 語彙のみ予約・未配線（`diag.rs:120-125`・D13 帰結⑷） | タスク **5.1**（spawn 側） |
