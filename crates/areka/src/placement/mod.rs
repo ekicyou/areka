@@ -9,6 +9,9 @@
 //! `resolver`（純粋・std のみ）← `config`（areka-parsers のみ）←
 //! `measure`（emo-atlas/compose）← `spawn`／`follow`（wintf/bevy_ecs）← main.rs シーム。
 //! 左のモジュールは右へ import しない。
+//! [`diag`]（配置観測・areka-P0-dpi-window-vanish design「Allowed Dependencies」）は
+//! この鎖の**さらに左**＝最下流に置く: 純データ＋`tracing` のみに依存し、`World`・wintf の
+//! 型を一切知らない（wintf `Monitor` からの転写は本 mod.rs・`follow` 側の仕事）。
 //!
 //! 本ファイルはサブモジュール宣言・失敗型 [`PlacementError`]（task 1）に加え、
 //! 配置準備の合成ルート [`prepare_ghost_windows`]（task 6.1・design「main.rs seam」）
@@ -17,6 +20,7 @@
 //! ここ（合成ルート）に実装する（シームの結線自体は task 6.2・main.rs 側）。
 
 pub mod config;
+pub mod diag;
 pub mod follow;
 pub mod measure;
 pub mod persist;
