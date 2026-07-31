@@ -140,6 +140,7 @@ s(v) = ⌊ ((2v + 1) · den) / (2 · num) ⌋    （⌊⌋ は Euclid 除算＝�
 - **代表値**: k=2: 100→50・101→50／k=5/4: 1→1・6→5／k=1: v→v（R3.2/R3.5 の期待値として固定）
 - **端の注意**（doc に明記）: `scaled_extent` が切り上げた最終物理画素（例 native 27・k=7/6 → 物理 32px の最終列）では s(v) が native 寸を 1 だけ超え得る。collision 矩形は native 寸内にあるため自然に None となり、定義された結果を返す（R2.5 と整合・panic なし）
 - **桁溢れ**: `(2v+1)·den` は i128 で受ける（`v: i64`・`den ≤ u32::MAX` ゆえ溢れない）。`num ≥ 1` 保証（`ScaleRatio` 不変条件）ゆえゼロ除算なし
+- **i64 への縮小規約（飽和）**: k<1（num<den・例 author_dpi 192 × 96dpi モニタ）では極値近傍の v で結果が i64 域を超え得るため、戻り値は **i64 へ飽和（saturating）縮小**する。`as` キャスト（ラップ＝単調性が破れる）と `try_into().unwrap()`（panic なし宣言が破れる）はいずれも宣言済み性質と矛盾するため、飽和が唯一の整合解。単調非減少は非飽和域で成立し、飽和域では定値。Win32 実座標は i32 域に束縛されるため実経路で飽和は発生しない（防御規約）
 
 #### DD-2 × DD-6: 着地層と檻の粒度 = 合成純関数（emo-compose）＋ presenter 薄配線【確定】
 
@@ -151,7 +152,7 @@ s(v) = ⌊ ((2v + 1) · den) / (2 · num) ⌋    （⌊⌋ は Euclid 除算＝�
 
 - 丸め権威は `ScaleRatio::unscale_coord`（emo-compose）に集中（`scaled_extent` と対）。num/den アクセサは**新設しない**（W6.5 が計画する `ratio()` との名前二重化を回避）
 - `hit_region_client` は私有 `applied: Option<ScaleRatio>` を直読——**f32 を経由しない**。公開 f32 面 `applied_scale` は照会用出口ビューとして不変
-- probe の期待ゲート用に `applied_ratio(target) -> Option<ScaleRatio>` を公開新設し、`areka-emo-present` の lib.rs から `ScaleRatio` を再輸出（既に公開署名 `derive_scale -> ScaleRatio` に現出済み・型の命名可能化のみ）。`ScaleRatio` に `PartialEq/Eq` derive が無ければ追加する（既約不変条件ゆえ構造等価＝値等価）
+- probe の期待ゲート用に `applied_ratio(target) -> Option<ScaleRatio>` を公開新設し、`areka-emo-present` の lib.rs から `ScaleRatio` を再輸出（既に公開署名 `derive_scale -> ScaleRatio` に現出済み・型の命名可能化のみ）。`ScaleRatio` は `PartialEq/Eq` derive 済み（scale.rs:43・バリデーションで現物確認——追加不要。既約不変条件ゆえ構造等価＝値等価）
 - **W6.5 への申し送り**（Adjacent expectations 履行）: 本 spec が `areka-emo-compose/src/scale.rs` へ置く公開面は `unscale_coord`（除算方向の座標縮約権威）のみ。W6.5 `scale-exact-rational` が同ファイルへ置く `ratio()` 等とは責務が重ならない。W6.5 は設計前に本 spec 着地後の `scale.rs` へ rebase すること（research.md §9 に登記）
 
 #### DD-4: SHIORI 配信座標【CLOSED・要件反映済みの実装形のみ確定】
@@ -181,6 +182,7 @@ research.md §4.4 の裁定どおり候補 A（既存改修）一択（現行 pr
 - `balloon.rs` の理由文言（:445・:481-483 および move ハンドラ側の同趣旨 :137/:154/:279/:322）を「行矩形が `to_window_physical` で既に実適用 k ×済みの窓物理 px であるため、点は無変換が正しい（k=1.0 だからではない）」へ改訂（R5.6）。「シェルは点÷k・バルーンは矩形×k の逆向き等価。バルーンへ ÷k を足すと二重縮約」を併記（R5.7）
 - 檻（R3.7）: `balloon.rs` in-source テストに、k=2.0 で `to_window_physical` により持ち上げた行矩形へ (a) **無変換の** client 物理 px 点が正しくヒットする (b) 同じ点を ÷k してしまうと外れる（二重縮約の退行検出）、を `click_selection` 純関数で固定する
 - `balloon.rs` は W5 同居 `choice-select-events` の編集面だが、本増分は**コメント改訂＋in-source テスト追加のみ**（判定挙動を変えない異ハンク）＝R6.7 例外条項の範囲内。着地順に従い後着側が rebase して吸収する
+- **conflict 解消規律**（改訂対象 :136-137 が choice-select-events の Inbox 席 :130 と diff 文脈距離で隣接するため）: rebase conflict 解消時は自分の増分＝コメント行と `#[cfg(test)]` ブロックのみを保持し、drain/status 系ハンクには一切触れない。相手 spec のハンクへの踏み込みは本 spec が最も警戒する誤一般化事故（balloon への ÷k 追加）と同根であり禁止
 
 ### Technology Stack
 
@@ -199,7 +201,7 @@ research.md §4.4 の裁定どおり候補 A（既存改修）一択（現行 pr
 
 | ファイル | 変更内容 | 要件 |
 |---|---|---|
-| `crates/areka-emo-compose/src/scale.rs` | `ScaleRatio::unscale_coord(self, v: i64) -> i64` 新設（DD-1 の式・doc に規約と端の注意）＋in-source 檻（恒等・k=2/5/4/7/6 表・負値・i64 極値）。`PartialEq, Eq` derive 追加（無い場合）。W6.5 申し送りコメント | 2.1, 2.2, 1.5 |
+| `crates/areka-emo-compose/src/scale.rs` | `ScaleRatio::unscale_coord(self, v: i64) -> i64` 新設（DD-1 の式・doc に規約・端の注意・i64 飽和縮小）＋in-source 檻（恒等・k=2/5/4/7/6 表・負値・i64 極値・k<1 飽和）。W6.5 申し送りコメント（`PartialEq/Eq` は derive 済み・追加不要） | 2.1, 2.2, 2.5, 1.5 |
 | `crates/areka-emo-compose/src/hit.rs` | `ScaledHit`／`hit_region_scaled` 新設（合成純関数）＋R3 檻（5 分岐×k≠1.0・k=1.0 恒等・丸め期待値・負値/窓外・反転矩形・決定性）。Preconditions doc（:42-44）を「呼び手が ÷k 済み座標を渡す or `hit_region_scaled` を使う」へ改訂 | 3.1-3.5, 2.3-2.6, 5.3 |
 | `crates/areka-emo-compose/src/lib.rs` | `hit_region_scaled`・`ScaledHit` の再輸出追加 | 3.1 |
 | `crates/areka-emo-present/src/presenter.rs` | `ClientHit`／`hit_region_client`／`applied_ratio` 新設。R1.6 防御分岐（warn＋ONE）＋R4.5 用 debug ログ。doc 改訂: :858-861（÷k は姉妹メソッドが吸収済みへ）・:704 隣接。in-source 檻: 私有状態で R1.6 分岐・attach のみ target の縮退 | 1.1-1.7, 4.5, 5.3 |
@@ -330,12 +332,13 @@ impl ScaleRatio {
     /// 物理画素座標 v を native 画素座標へ縮約する（除算方向の丸め権威）。
     /// 規約: resample の画素中心写像 src = (v+1/2)·den/num − 1/2 の最近傍整数。
     /// s(v) = ((2v+1)·den).div_euclid(2·num)  — i128 中間・整数のみ・panic なし。
+    /// 戻り値は i64 へ飽和縮小（k<1 の極値でのみ到達し得る防御規約・実座標では発生しない）。
     pub fn unscale_coord(self, v: i64) -> i64;
 }
 ```
 
 - Preconditions: なし（全 i64 で定義・負値可）
-- Postconditions: k=1 で `s(v)=v`。v について単調非減少。同一入力→同一出力
+- Postconditions: k=1 で `s(v)=v`。v について単調非減少（非飽和域。飽和域では定値）。同一入力→同一出力。i64 域へ飽和縮小・panic なし
 - Invariants: `num ≥ 1`・`den ≥ 1`（`ScaleRatio` 既存不変条件に依拠）
 
 #### hit_region_scaled
@@ -521,6 +524,7 @@ impl EmoPresenter {
 3. k=5/4 表: 1→1・6→5（割り切れない縮約）——R3.5
 4. k=7/6 端: `scaled_extent(27)=32` の最終物理列で native 27（範囲外側）を返す＝DD-1 端の注意の固定
 5. 単調非減少性の代表列検証（境界保存の根拠・R2.3）
+6. k<1（例 1/2）× i64 極値: 飽和縮小で panic なし・飽和域で定値（DD-1 縮小規約の檻）——R2.5
 
 ### Unit Tests（hit.rs — hit_region_scaled の合成檻）
 
