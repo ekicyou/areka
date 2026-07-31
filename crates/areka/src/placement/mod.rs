@@ -28,8 +28,11 @@ pub mod resolver;
 pub mod source;
 pub mod spawn;
 /// `#[cfg(test)]` 限定のテスト共有部品（tracing ログ捕捉ハーネス）。本番バイナリには含まれない。
+///
+/// `pub(crate)`: `main.rs` の起動シーム檻（`monitor_snapshot_seam_tests`）も同じ捕捉
+/// ハーネスを使う。areka は bin crate ゆえ crate 内可視で足り、公開面は増えない。
 #[cfg(test)]
-mod test_support;
+pub(crate) mod test_support;
 
 use std::path::{Path, PathBuf};
 
@@ -102,6 +105,49 @@ const FALLBACK_PRIMARY_DPI: u32 = 96;
 /// 成立しなかったときに [`AuthorDpi::DEFAULT`] が採る同値の既定にすぎない
 /// （読取器を二重化しない）。
 const DEFAULT_AUTHOR_DPI: u16 = 96;
+
+/// `MonitorSnapshot` 構築点（`main.rs`）の**呼出点タグ**
+/// （areka-P0-dpi-window-vanish 要件 1.1・design D12）。
+///
+/// D12 の裁定により、要件 1.1 の**正典出力点**は placement の全判断が読む権威
+/// [`follow::MonitorSnapshot`] の構築点である（列挙の忠実転写点＝以後の判断が
+/// 実際に見る値そのもの）。本タグはその出所を名乗る。
+#[allow(dead_code)] // 消費者は main.rs シーム（`#[path]` include する example には構築点が無い）
+pub const MONITOR_SNAPSHOT_CONTEXT: &str = "monitor_snapshot";
+
+/// [`prepare_ghost_windows`] のモニタ列挙点の**呼出点タグ**（要件 1.1・design D12）。
+///
+/// 同一運転内に列挙点は複数ある。同じ共有ヘルパ [`diag::log_monitor_snapshot`] を
+/// 呼びつつタグだけを違えることで、ログ上で出所を弁別でき、かつ**同じ語彙**ゆえ
+/// grep 突合で構成の食い違いを検出できる（D12: 専用の突合機構は新設しない）。
+pub const PREPARE_GHOST_WINDOWS_CONTEXT: &str = "prepare_ghost_windows";
+
+/// wintf のモニタ列挙結果を診断レコードへ**忠実転写**する純関数（要件 1.1）。
+///
+/// [`diag`] は placement の最下流であり `World`・wintf の型を知らない（design
+/// 「Allowed Dependencies」）。転写は wintf `Monitor` を既に import している本 mod.rs の
+/// 仕事であり、ここが「wintf 型 → 純データ」の唯一の境界である。
+///
+/// - 単位変換も丸めも行わない（U 契約: 配置パイプラインの座標は**物理 px 単一通貨**）
+/// - 列挙順を保つ（`index` がログ上の同定子になる）
+/// - 実モニタを要さない純関数ゆえ、混在 DPI・負座標・3200 超座標の構成を決定論檻で踏める
+pub fn monitor_records(monitors: &[Monitor]) -> Vec<diag::MonitorRecord> {
+    monitors
+        .iter()
+        .map(|m| diag::MonitorRecord {
+            handle: m.handle,
+            bounds: (m.bounds.left, m.bounds.top, m.bounds.right, m.bounds.bottom),
+            work_area: (
+                m.work_area.left,
+                m.work_area.top,
+                m.work_area.right,
+                m.work_area.bottom,
+            ),
+            dpi: m.dpi,
+            is_primary: m.is_primary,
+        })
+        .collect()
+}
 
 /// 起動時 k₀ の分母となる作者基準 DPI の対（design D1・Flow 3 手順1）。
 ///
@@ -310,6 +356,11 @@ pub fn prepare_ghost_windows(
     balloon_root: &Path,
 ) -> Result<PreparedPlacement, PlacementError> {
     let monitors = enumerate_monitors();
+    // 観測（areka-P0-dpi-window-vanish 要件 1.1）: 列挙の**直後**＝準備段の失敗より手前で
+    // 出す。fixture 不在等でダミー窓へフォールバックした運転のログからも、その運転が
+    // どのモニタ構成を見ていたかを再構成できることが事後診断の条件である。
+    // 呼出点タグで正典出力点（main.rs 構築点）と弁別する（D12）。
+    diag::log_monitor_snapshot(&monitor_records(&monitors), PREPARE_GHOST_WINDOWS_CONTEXT);
     // primary モニタは **work area（2.12）と 起動 k₀ の DPI（D7）の同一の出所**である。
     // 選択（`is_primary`／先頭代替の `warn!`）を 1 回だけ行い、両者へ配る
     // （2 度選ぶと代替の警告も二重に出て、しかも別のモニタを指し得る）。
@@ -1136,5 +1187,168 @@ mod tests {
                 "採寸 k₀ に使った宣言値がそのまま attach 側へ搬送される（読取は 1 度）"
             );
         });
+    }
+
+    // ------------------------------------------------------------------
+    // 起動時モニタスナップショット（areka-P0-dpi-window-vanish task 1.2・要件 1.1）
+    // ------------------------------------------------------------------
+
+    /// 混在 DPI マルチモニタ実機相当（96/120/192・非対称 work area・負座標・3200 超）の
+    /// 列挙結果が、識別子・bounds・work_area・DPI・primary の**全 5 フィールド**を
+    /// 単位変換も丸めもせず（物理 px そのまま）列挙順で転写される（要件 1.1）。
+    ///
+    /// 実モニタを要さない純関数ゆえ、実機で 1 度しか踏めない構成をここで全部踏む。
+    #[test]
+    fn monitor_records_transcribe_every_field_in_physical_px() {
+        let monitors = [
+            // 左隣・負座標・非対称 work area（左にタスクバー）・192dpi
+            Monitor {
+                handle: -3,
+                bounds: RECT {
+                    left: -1920,
+                    top: -40,
+                    right: 0,
+                    bottom: 1040,
+                },
+                work_area: RECT {
+                    left: -1840,
+                    top: -40,
+                    right: 0,
+                    bottom: 1000,
+                },
+                dpi: 192,
+                is_primary: false,
+            },
+            // primary・96dpi
+            Monitor {
+                handle: 65537,
+                bounds: RECT {
+                    left: 0,
+                    top: 0,
+                    right: 1920,
+                    bottom: 1080,
+                },
+                work_area: RECT {
+                    left: 0,
+                    top: 0,
+                    right: 1920,
+                    bottom: 1040,
+                },
+                dpi: 96,
+                is_primary: true,
+            },
+            // 右隣・3200 超座標（実機の消失事象と同域）・120dpi
+            Monitor {
+                handle: 65539,
+                bounds: RECT {
+                    left: 1920,
+                    top: -200,
+                    right: 5120,
+                    bottom: 1600,
+                },
+                work_area: RECT {
+                    left: 1920,
+                    top: -200,
+                    right: 5120,
+                    bottom: 1520,
+                },
+                dpi: 120,
+                is_primary: false,
+            },
+        ];
+
+        assert_eq!(
+            monitor_records(&monitors),
+            vec![
+                diag::MonitorRecord {
+                    handle: -3,
+                    bounds: (-1920, -40, 0, 1040),
+                    work_area: (-1840, -40, 0, 1000),
+                    dpi: 192,
+                    is_primary: false,
+                },
+                diag::MonitorRecord {
+                    handle: 65537,
+                    bounds: (0, 0, 1920, 1080),
+                    work_area: (0, 0, 1920, 1040),
+                    dpi: 96,
+                    is_primary: true,
+                },
+                diag::MonitorRecord {
+                    handle: 65539,
+                    bounds: (1920, -200, 5120, 1600),
+                    work_area: (1920, -200, 5120, 1520),
+                    dpi: 120,
+                    is_primary: false,
+                },
+            ],
+            "wintf Monitor → MonitorRecord は列挙順の忠実転写（単位変換・丸めなし・U 契約）"
+        );
+    }
+
+    /// 0 台（列挙異常・headless）でも panic せず空を返す——台数 0 の観測は
+    /// `log_monitor_snapshot` の `count=0` 見出しが担う（レコード不在では
+    /// 「出力が無効だった」と区別できない）。
+    #[test]
+    fn monitor_records_of_zero_monitors_is_empty() {
+        assert!(monitor_records(&[]).is_empty());
+    }
+
+    /// 呼出点タグは 2 つの列挙点で**異なる**（要件 1.1「呼出点タグで区別できる」）。
+    /// 片方をもう片方へ collapse する退行はここと各呼出点の檻で赤になる。
+    #[test]
+    fn monitor_snapshot_call_site_tags_are_distinct() {
+        assert_eq!(PREPARE_GHOST_WINDOWS_CONTEXT, "prepare_ghost_windows");
+        assert_eq!(MONITOR_SNAPSHOT_CONTEXT, "monitor_snapshot");
+        assert_ne!(
+            PREPARE_GHOST_WINDOWS_CONTEXT, MONITOR_SNAPSHOT_CONTEXT,
+            "2 つの列挙点が同じタグを名乗るとログ上で出所を弁別できない"
+        );
+    }
+
+    /// ゴースト窓配置準備のモニタ列挙点が、共有ヘルパ経由で**自分の呼出点タグ**付きの
+    /// スナップショットを出す（要件 1.1）。
+    ///
+    /// 出力は列挙の直後＝準備段の失敗より**手前**に置く。不在 root（`Mount` で落ちる
+    /// 最短経路）でもモニタ構成が残ることが、フォールバック窓へ落ちた運転のログからも
+    /// モニタ構成を再構成できる条件である。
+    #[test]
+    fn prepare_ghost_windows_logs_snapshot_with_its_own_call_site_tag() {
+        let root = std::env::temp_dir()
+            .join("areka_placement_prepare_snapshot_log")
+            .join("no_such_ghost");
+        let (result, events) =
+            crate::placement::test_support::capture_logs(|| prepare_ghost_windows(&root, &balloon_root()));
+        assert!(result.is_err(), "不在 root は Err（列挙点の出力はその手前）");
+
+        let expected = monitor_records(&enumerate_monitors());
+        let lines: Vec<&str> = events
+            .iter()
+            .map(|e| e.message())
+            .filter(|m| {
+                m.starts_with(diag::MONITOR_SNAPSHOT_TAG) || m.starts_with(diag::MONITOR_RECORD_TAG)
+            })
+            .collect();
+
+        let mut want = vec![diag::monitor_snapshot_header_line(
+            "prepare_ghost_windows",
+            expected.len(),
+        )];
+        want.extend(
+            expected
+                .iter()
+                .enumerate()
+                .map(|(i, r)| diag::monitor_record_line(r, i)),
+        );
+        assert_eq!(
+            lines,
+            want.iter().map(String::as_str).collect::<Vec<_>>(),
+            "列挙点の出力が見出し＋全モニタ 1 行ずつ・呼出点タグ prepare_ghost_windows で出ていない"
+        );
+        assert!(
+            !lines[0].contains("context=monitor_snapshot"),
+            "main.rs 構築点の呼出点タグと collapse している（弁別不能）: {}",
+            lines[0]
+        );
     }
 }

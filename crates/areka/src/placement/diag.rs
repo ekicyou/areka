@@ -36,8 +36,14 @@
 //! これが **wintf 側ログ（`entity = ?e`）との結合キー**だからで、同じ `Debug` 表現で
 //! 出すことが要件 1.9 の scope 別計数（手順書の 2 段 grep）の成立条件になる。
 
-// scaffold（task 1.1）: 本モジュールは語彙とレコード組立の住処であり、
-// 実際の呼出配管（mod.rs 列挙点・follow.rs 単一ライター）は後続タスク 1.2／1.4 が行う。
+// 配線状況（task 1.2 時点）: モニタスナップショット側（`MonitorRecord`・
+// `monitor_snapshot_header_line`／`monitor_record_line`・`log_monitor_snapshot`）は
+// **配線済み**——`main.rs` の `MonitorSnapshot` 構築点（要件 1.1 正典出力点）と
+// `placement::prepare_ghost_windows` の列挙点が呼ぶ。
+// 窓移動レコード側（`PlacementRoute`・`WindowKind`・`WindowMoveRecord`・
+// `window_move_record_line`・`log_window_move`・`WINDOW_MOVE_RECORD_TAG`）は
+// **未配線**で、follow.rs 単一ライターへの配管は task 1.4 が行う。areka は bin crate ゆえ
+// `pub` でも dead_code 免除されないため、未配線ぶんが残るあいだ本属性を残す。
 #![allow(dead_code)]
 
 use std::fmt;

@@ -11,7 +11,7 @@
   - 完了状態: 新モジュールが公開され、経路語彙とレコード組立の単体テストが緑になる。既定のログ設定では本 target の出力が 1 行も出ない
   - _Requirements: 1.2, 1.7, 2.4_
 
-- [ ] 1.2 起動時モニタスナップショットの出力
+- [x] 1.2 起動時モニタスナップショットの出力
   - placement の全判断が読む権威 Resource の構築点を Requirement 1.1 の正典出力点とし、検出した全モニタの識別子・境界矩形・work area 矩形・DPI・プライマリ標識を物理 px で 1 回出力する
   - ゴースト窓配置準備のモニタ列挙点でも同じ共有ヘルパを呼び、呼出点タグで区別できるようにする
   - 完了状態: 診断設定で起動すると、全モニタの work area を含む行が呼出点タグ付きで出力され、ログだけからモニタ構成を再構成できる
@@ -209,4 +209,7 @@
 - **1.1**: `placement/diag.rs` は areka が bin crate ゆえ `pub` でも dead_code 免除されず、未配線のあいだ `#![allow(dead_code)]` を付けている。**1.2／1.4 で全 API を配線したらこの属性を外すこと**（外し忘れると以後の真の dead code を隠す）。
 - **1.1**: `WindowMoveRecord.size`／`.dpi` は `Option`（`SWP_NOSIZE` 経路・`DPI` component 未付与に対応）。値なしは `-` sentinel で**フィールド自体は落とさない**＝経路によらず grep 語が不変。**1.4 の配線では寸を伴う経路で必ず実寸を詰めること**（`None` は move-only 呼出に限る）。手順書（4.1）の判定語表には `w=-`／`dpi=-` の意味と、`w=-` が `w=-12` の接頭辞である旨（トークン境界でアンカーする）を記載すること。
 - **1.1**: 檻の実効性は「format 変異（`dpi=`→`DPI=`）で 2 件赤・水準変異（`debug!`→`info!`）で 3 件赤」でレビュアが独立再現済み。`EnvFilter` 実濾過による Req 1.7 の静穏檻は非空虚。
+- **1.2**: 実機出力の行書式は `[diag.monitor] index=N handle=… bounds=l,t,r,b work_area=l,t,r,b dpi=… primary=…` ／ヘッダは `[diag.monitor_snapshot] context=<tag> count=N`。呼出点タグは `monitor_snapshot`（main.rs 正典＝`MonitorSnapshot` 構築点）と `prepare_ghost_windows`（placement 列挙点）の 2 種。**タスク 1.3 の wintf 側列挙ログのフィールド名はこの書式に合わせること**（D12 の「共有語彙 grep 突合」が成立する条件）。手順書（4.1）の判定語もこれ。
+- **1.2**: `prepare_ghost_windows` の snapshot 出力は `enumerate_monitors()` 直後・`prepare_stages` より**手前**に置いてある（準備が失敗してダミー窓へ縮退した走行でもモニタ構成がログに残るため）。位置を後ろへ動かさないこと。
+- **1.2**: `MONITOR_SNAPSHOT_CONTEXT` の `#[allow(dead_code)]` は実在の理由あり——`examples/window-placement.rs:107`・`collision-probe.rs:138` が `#[path]` で `src/placement/mod.rs` を include し、example ビルドでのみ dead になる（`--force-warn dead_code` で再現確認済み）。
 - **1.1**: `placement/test_support.rs` の `ensure_interest_probes` を `pub(crate)` へ昇格（`mod test_support;` は `#[cfg(test)]` 限定ゆえ本番非影響）。tracing の callsite interest キャッシュ毒化回避に必要。
