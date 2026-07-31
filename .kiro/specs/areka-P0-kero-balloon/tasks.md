@@ -161,7 +161,7 @@
   - _Requirements: 5.1, 5.2, 5.3_
   - _Depends: 3.4, 4.3_
 
-- [ ] 5.3 ワークスペース全体テストを緑にする
+- [x] 5.3 ワークスペース全体テストを緑にする
   - 前提として 32bit ヘルパの成果物を先にビルドしてから全体テストを走らせる（成果物が無いと全体テストが赤くなる）
   - 判定分岐の決定論檻が全系統そろっていることを確認する
   - 観測可能な完了状態: ワークスペース全体テストが緑
@@ -205,6 +205,7 @@
 - **6.1 実機サインオフ時の注意**: `resolve_balloon_faces` の info! は **scope あたり 3 行**（placement 内 2 ＋ boot 1・design.md の観測点 1 を実装時訂正済み）。`load_scope_balloon_model` の info! は scope あたり 2 行。**行数でなく値の一致で突合すること**。
 - **emo2 fixture の side 割当**（4.3 で実測確定）: `shell/master/descript.txt` が `sakura.balloon.alignment,left` / `kero.balloon.alignment,right` を宣言 ⇒ scope 0 = `BalloonSide::Left`（x 符号 +1）／scope 1 = `Right`（x 符号 −1）。4.1 の符号表が実機で逆と判明した場合の修正範囲は `side_x_sign` の 2 リテラル＋`placement/mod.rs` の fixture 期待値 x 成分（1352→820／−134→−666／1578→1198／526→146）。
 - **`cargo test -p areka` の単発 flake は既存**（本 spec 起因ではない）。5.1 のレビューで正体を特定＝`emo2_boot::spine::spine_s5_close_handshake_...` / `spine_s2_talk_drives_...` 系の時間境界テストで、フルスイート並列の高負荷時のみ 1/5〜2/6 の頻度で落ちる。**本 spec の追加テストを `--skip` してベースライン 549 本にしても再現**することを実測済み。5.3 のワークスペース緑ゲートでは再実行で切り分けること。
+- **5.3 実測（2026-07-31）**: i686 成果物（`shiori-host32-testdll` / `shiori-host32-helper`）を PowerShell で先にビルド → `cargo test --workspace` が **4403 passed / 0 failed / 85 テストバイナリ・exit 0**。`areka` の 551 本も全体スイート内で実走・全緑。既知の spine flake はこの回では発現せず。
 - **既知の被覆シーム（5.2 で確定・低リスク）**: 「`\b[N]` を scope≥1 に発行して scope N の系列の面 N が出る」ことを **end-to-end で通す檻は無い**。2 半分で被覆＝解決側（`build_balloon_target_composes_scope_series_on_emo2_fixture` 等）＋配送側（`spine_s3` は scope 0 の `\b[0]`）。ID は経路上どこでも接頭辞変換を受けず、唯一の取り違え地点 `balloon_index` は scope キー引き（檻あり）。end-to-end 化には多面合成バルーン fixture ＋ 実 GPU spine ハーネスが要る（emo2 の各系列は面 0 の 1 枚のみ）。**W6 `balloon-visibility` が多面シナリオを組む際の合流候補**。
 - `areka` は **bin-only crate**（`cargo test -p areka --lib` は「no library targets found」）。`--lib` を付けずに実行する。
 - ログ発火条件（warn/info の**発火判定分岐**）も判断分岐ゆえ檻に入れる。依存追加なしのログ捕捉ドナーが `crates/areka-emo-present/src/presenter.rs` のテストモジュールにある（private ゆえ複製が必要）。1.3 では R6.2 warn の 2 述語（`scope >= 1` ∧ `tier == Default`）を檻 7 として固定済み。
