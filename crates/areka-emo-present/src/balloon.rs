@@ -195,6 +195,24 @@ pub struct ResolvedFace {
     pub file_name: String,
 }
 
+impl ResolvedFace {
+    /// 採用接頭辞に対応する**面別上書きファイル名** `{採用接頭辞}{面 ID}s.txt`（R2.2/R2.3）。
+    ///
+    /// 上書き層は**採用した画像に対応するもの**を引く——scope 1 が `balloonk0` を採ったなら
+    /// `balloonk0s.txt` であり、連鎖の他の接頭辞の `balloons0s.txt` ではない（R2.2）。ID 単位
+    /// フォールバックで後段接頭辞へ落ちた面についても同様に、その後段接頭辞の同一 ID の
+    /// 上書き層が対応する（R2.3——正典が面別上書きを「対応する ID のサーフェスに対して」
+    /// 適用すると定めることの帰結）。
+    ///
+    /// 導出元は [`Self::file_name`]（実ファイル名・原形保持）ではなく **連鎖上の接頭辞**
+    /// [`Self::prefix`] である。実ファイル名の大小は資産側の都合で揺れるが、上書きファイルの
+    /// 探索名は連鎖から一意に決まる小文字正準形でなければ、採用画像と上書き層の対応が
+    /// 資産の表記揺れに左右されてしまうため。
+    pub fn override_file_name(&self) -> String {
+        format!("{}{}s.txt", self.prefix, self.surface_id)
+    }
+}
+
 /// `{prefix}{ID}.png`（大小無視）なら面 ID を返す。バルーン面でなければ `None`（R1.5）。
 ///
 /// 判定は**厳密 3 段**である——
@@ -274,6 +292,116 @@ pub fn select_faces<S: AsRef<str>>(names: &[S], chain: &[SeriesPrefix]) -> Vec<R
         });
     }
     faces
+}
+
+/// `balloon_dir` 直下のファイル名を **1 回の走査**で集める（面判定は行わない）。
+///
+/// 面判定を課さずに全名を返すのは、連鎖内の接頭辞ごとに走査を繰り返さないためである
+/// （列挙 1 回・選択は純核 [`select_faces`] が担う）。非 UTF-8 名は面のファイル名規約
+/// （ASCII の接頭辞＋数字＋拡張子）を満たし得ないためこの段で落とす。
+///
+/// ディレクトリ走査に失敗した場合は log-first で [`PresentError`] を返す（R6.4）。
+fn enumerate_file_names(balloon_dir: &Path) -> Result<Vec<String>, PresentError> {
+    let read_dir = std::fs::read_dir(balloon_dir).map_err(|e| {
+        tracing::error!(
+            balloon_dir = %balloon_dir.display(),
+            error = %e,
+            "balloon: バルーンディレクトリの走査に失敗"
+        );
+        PresentError::Compose(ComposeError::EmptyComposition(0))
+    })?;
+
+    let mut names: Vec<String> = Vec::new();
+    for entry in read_dir {
+        let entry = match entry {
+            Ok(e) => e,
+            Err(e) => {
+                // 個別エントリの取得失敗は致命ではない（他エントリ継続・log-first）。
+                tracing::warn!(error = %e, "balloon: ディレクトリエントリの取得に失敗（スキップ）");
+                continue;
+            }
+        };
+        if let Some(name) = entry.file_name().to_str() {
+            names.push(name.to_string());
+        }
+    }
+    Ok(names)
+}
+
+/// `balloon_dir` から当該 `scope` の**採用面列**を解決する（全消費者共通の単一施行点）。
+///
+/// 手順は 3 段——[`prefix_chain`] で連鎖を導出し、[`enumerate_file_names`] で
+/// ディレクトリを **1 回だけ**走査し、純核 [`select_faces`] で面 ID 単位の連鎖探索を行う
+/// （R1.2/R1.3）。面 ID は連鎖内の全接頭辞にまたがる ID 集合の和であり、戻りは
+/// **surface id 昇順**・同一入力に対し決定論的（ディレクトリ走査順に依存しない）。
+///
+/// # 面 0 必在契約（R1.7）
+///
+/// 面 ID 0 が連鎖のどの接頭辞でも解決できない場合、理由を `error!` で記録したうえで
+/// [`PresentError`] を返す。この契約を**権威側の 1 箇所**で施行することで、消費者
+/// （placement / boot）それぞれが独自に面 0 の有無を判定する必要をなくし、無言で空の
+/// バルーンを表示するログ無し経路を構造的に作らない。返した [`PresentError::Compose`]
+/// （[`ComposeError::EmptyComposition`]）は消費者側の既存の縮退経路（バルーン未配線・
+/// ダミー窓）へそのまま伝播する——プロセス終了ポリシー自体は本関数で変更しない。
+///
+/// # 観測（R6.1/R6.2）
+///
+/// - 解決完了時に `info!` で scope・連鎖・採用面一覧 `(id, prefix, file)` を記録する（R6.1）。
+/// - scope 1 以上で [`ChainTier::Default`]（デフォルト定義側＝本体側）へ縮退した面について、
+///   scope・面 ID・採用ファイルを面ごとに `warn!` で記録する（R6.2）。これは失敗ではなく
+///   正典準拠のフォールバック動作の観測であり、解決自体は成功として続行する。
+pub fn resolve_balloon_faces(
+    balloon_dir: &Path,
+    scope: u32,
+) -> Result<Vec<ResolvedFace>, PresentError> {
+    let chain = prefix_chain(&BALLOON_FAMILY, scope);
+    // 列挙は 1 回のみ（接頭辞ごとに走査を繰り返さない）。
+    let names = enumerate_file_names(balloon_dir)?;
+    let faces = select_faces(&names, &chain);
+
+    // ログ用の簡約形（連鎖＝接頭辞列・採用面＝(id, prefix, file) 列）。
+    let chain_view: Vec<&str> = chain.iter().map(|p| p.prefix.as_str()).collect();
+
+    // 面 0 必在契約（R1.7）: 施行点は本関数のみ。
+    if !faces.iter().any(|f| f.surface_id == 0) {
+        tracing::error!(
+            balloon_dir = %balloon_dir.display(),
+            scope = scope,
+            chain = ?chain_view,
+            resolved_faces = faces.len(),
+            "balloon: 面 ID 0 が連鎖のどの接頭辞でも解決できない"
+        );
+        return Err(PresentError::Compose(ComposeError::EmptyComposition(0)));
+    }
+
+    // R6.2: デフォルト定義側へ縮退した面を面ごとに記録する（scope 0 はデフォルト段を
+    // 持たない＝自身が最終受け皿ゆえ縮退の概念がない）。
+    if scope >= 1 {
+        for face in faces.iter().filter(|f| f.tier == ChainTier::Default) {
+            tracing::warn!(
+                scope = scope,
+                surface_id = face.surface_id,
+                prefix = %face.prefix,
+                file = %face.file_name,
+                "balloon: 面がデフォルト定義側（本体側）の系列へ縮退した"
+            );
+        }
+    }
+
+    // R6.1: 解決結果（どの scope がどの系列・どの面ファイルを採ったか）。
+    let faces_view: Vec<(u32, &str, &str)> = faces
+        .iter()
+        .map(|f| (f.surface_id, f.prefix.as_str(), f.file_name.as_str()))
+        .collect();
+    tracing::info!(
+        balloon_dir = %balloon_dir.display(),
+        scope = scope,
+        chain = ?chain_view,
+        faces = ?faces_view,
+        "balloon: scope 別バルーン系列の解決が完了"
+    );
+
+    Ok(faces)
 }
 
 /// `balloon_dir` から枠画像を列挙し `(surface_id, ファイル名)` を **surface id 昇順**で返す。
@@ -952,6 +1080,348 @@ mod tests {
         let b = selected(&["balloons0.png", "BALLOONS0.PNG"], 0);
         assert_eq!(a, b, "大小違い併存でも走査順に依存しない");
         assert_eq!(a.len(), 1, "同一 ID の採用面は 1 つ");
+    }
+
+    // ── 檻 6: 採用接頭辞からの面別上書きファイル名導出（R2.2/R2.3・R7.1）─────────────
+
+    /// 檻 6（R2.2/R2.3）: 面別上書きファイル名は**採用接頭辞に対応して**導出され、ID 単位
+    /// フォールバックで後段へ落ちた面ではその後段接頭辞の名前になる。scope 1 が `balloonk0`
+    /// を採ったなら `balloonk0s.txt`・面 1 が `balloons1` へ縮退したなら `balloons1s.txt`
+    /// （連鎖の他の接頭辞の上書き層を引かない）。
+    #[test]
+    fn override_file_name_follows_adopted_prefix_per_face() {
+        let names = ["balloonk0.png", "balloons0.png", "balloons1.png"];
+        let faces = select_faces(&names, &prefix_chain(&BALLOON_FAMILY, 1));
+
+        assert_eq!(faces.len(), 2, "面 0/1 の 2 面が解決される");
+        assert_eq!(
+            faces[0].override_file_name(),
+            "balloonk0s.txt",
+            "採用面 balloonk0 の上書き層は balloonk0s.txt（balloons0s.txt を引かない・R2.2）"
+        );
+        assert_eq!(
+            faces[1].override_file_name(),
+            "balloons1s.txt",
+            "デフォルト段へ縮退した面 1 の上書き層は後段接頭辞の balloons1s.txt（R2.3）"
+        );
+    }
+
+    /// 檻 6（続き・R2.2）: 正規名を採った面は正規名の上書き層を引き、実ファイル名の大小に
+    /// 依らず**連鎖上の接頭辞**（小文字正準形）から導出される。
+    #[test]
+    fn override_file_name_uses_chain_prefix_not_file_case() {
+        let faces = select_faces(&["balloonp1def2.png"], &prefix_chain(&BALLOON_FAMILY, 1));
+        assert_eq!(
+            faces[0].override_file_name(),
+            "balloonp1def2s.txt",
+            "正規名採用面は正規名の上書き層を引く"
+        );
+
+        let upper = select_faces(&["BALLOONS0.PNG"], &prefix_chain(&BALLOON_FAMILY, 0));
+        assert_eq!(
+            upper[0].file_name, "BALLOONS0.PNG",
+            "実ファイル名は原形保持（前提の再確認）"
+        );
+        assert_eq!(
+            upper[0].override_file_name(),
+            "balloons0s.txt",
+            "上書き層名は連鎖上の接頭辞から導出する（実ファイル名の大小に依らない）"
+        );
+    }
+
+    // ── 公開 API `resolve_balloon_faces`（列挙 1 回＋選択核・R1.7/6.1/6.2/6.4）─────────
+
+    /// R1.7: 面 ID 0 がどの接頭辞でも解決できないとき、log-first で `Err` を返す
+    /// （全消費者共通の単一施行点・既存縮退経路へ伝播させる）。
+    #[test]
+    fn resolve_balloon_faces_requires_face_zero() {
+        let dir = TempDir::new();
+        // 面 1/2 は在るが面 0 が無い（＝面 0 必在契約の違反）。
+        dir.touch("balloons1.png");
+        dir.touch("balloons2.png");
+
+        let err = resolve_balloon_faces(dir.path(), 0).expect_err("面 0 不在なら Err のはず");
+        assert!(
+            matches!(
+                err,
+                PresentError::Compose(ComposeError::EmptyComposition(0))
+            ),
+            "面 0 不在は既存縮退経路（EmptyComposition(0)）へ畳む: {err:?}"
+        );
+    }
+
+    /// R6.4: バルーンディレクトリの走査自体に失敗したとき、log-first で `Err` を返す。
+    #[test]
+    fn resolve_balloon_faces_errors_on_unreadable_directory() {
+        let dir = TempDir::new();
+        let missing = dir.path().join("no-such-balloon-dir");
+
+        let err = resolve_balloon_faces(&missing, 0).expect_err("走査失敗なら Err のはず");
+        assert!(
+            matches!(
+                err,
+                PresentError::Compose(ComposeError::EmptyComposition(0))
+            ),
+            "走査失敗も既存縮退経路へ畳む: {err:?}"
+        );
+    }
+
+    /// 決定論（設計 Postconditions）: 同一ディレクトリに対する解決は surface id **昇順**で、
+    /// 反復呼び出しで同一結果を返す（ディレクトリ走査順は非決定ゆえ明示ソートに依る）。
+    /// 非バルーン面は列挙段を通り抜けても選択核で落ちる。
+    #[test]
+    fn resolve_balloon_faces_is_deterministic_and_ascending() {
+        let dir = TempDir::new();
+        for name in [
+            "balloons10.png",
+            "balloons2.png",
+            "balloons0.png",
+            "balloonc0.png", // 入力ウィンドウ（面でない）
+            "arrow0.png",    // 装飾（面でない）
+        ] {
+            dir.touch(name);
+        }
+
+        let first = resolve_balloon_faces(dir.path(), 0).expect("面 0 が在るゆえ Ok");
+        let second = resolve_balloon_faces(dir.path(), 0).expect("面 0 が在るゆえ Ok");
+        assert_eq!(first, second, "同一入力に対し決定論的な解決結果を返す");
+        assert_eq!(
+            first.iter().map(|f| f.surface_id).collect::<Vec<_>>(),
+            vec![0, 2, 10],
+            "surface id 昇順（辞書順でない）・非バルーン面は含まれない"
+        );
+    }
+
+    /// R1.2/R1.3/R6.2: 実ディレクトリ経由でも ID 単位フォールバックが効き、scope 1 の面 0 は
+    /// 相方側（tier=Own）・面 1 のみデフォルト段（tier=Default＝warn 対象）へ縮退する。
+    /// 同ディレクトリを scope 0 で解決すると相方側の面を一切採らない。
+    #[test]
+    fn resolve_balloon_faces_falls_back_per_face_id_on_real_directory() {
+        let dir = TempDir::new();
+        dir.touch("balloonk0.png");
+        dir.touch("balloons0.png");
+        dir.touch("balloons1.png");
+
+        let scope1 = resolve_balloon_faces(dir.path(), 1).expect("面 0 は balloonk0 で解決する");
+        assert_eq!(
+            scope1
+                .iter()
+                .map(|f| (
+                    f.surface_id,
+                    f.prefix.as_str(),
+                    f.tier,
+                    f.override_file_name()
+                ))
+                .collect::<Vec<_>>(),
+            vec![
+                (0, "balloonk", ChainTier::Own, "balloonk0s.txt".to_string()),
+                (
+                    1,
+                    "balloons",
+                    ChainTier::Default,
+                    "balloons1s.txt".to_string()
+                ),
+            ],
+            "面 0 は相方側・面 1 のみデフォルト段へ縮退（系列一括切替でない）"
+        );
+
+        let scope0 = resolve_balloon_faces(dir.path(), 0).expect("scope 0 の面 0 は balloons0");
+        assert!(
+            scope0.iter().all(|f| f.prefix == "balloons"),
+            "scope 0 の連鎖に balloonk は無く相方側の面を採らない: {scope0:?}"
+        );
+    }
+
+    // ── 檻 7: R6.2 warn の**発火条件**（`scope >= 1` ∧ `tier == Default`・R6.2/R7.1）───────
+    //
+    // tier の割当自体は檻 1〜3 が固定しているが、warn を出すか出さないかの判断分岐そのものは
+    // 実ログを観測しなければ固定できない（両述語を同時に反転しても tier 檻は全緑のまま通る）。
+    // ここでは tracing の既定 subscriber を差し替えてイベントを捕捉し、発火条件を直に押さえる。
+    //
+    // ログ捕捉ハーネスは同 crate `presenter.rs` の tests に同型のものが在るが、あちらは
+    // test-local な private 型ゆえ本モジュールから参照できない。新規 dev-dependency を
+    // 足さない方針ゆえ、`tracing` 本体のみで最小構成を再現する。
+
+    /// 捕捉した 1 イベント（level ＋ フィールド名 → Debug 表現）。
+    #[derive(Debug, Clone)]
+    struct CapturedEvent {
+        level: tracing::Level,
+        fields: std::collections::HashMap<String, String>,
+    }
+
+    impl CapturedEvent {
+        /// フィールド値を引用符抜きで引く（`%`（Display）記録は素の文字列・`?`（Debug）記録は
+        /// 引用符付きになり得るため、両表記に依存しない比較にする）。
+        fn field(&self, name: &str) -> Option<&str> {
+            self.fields.get(name).map(|v| v.trim_matches('"'))
+        }
+    }
+
+    /// 全フィールドを Debug 表現で拾う visitor。
+    ///
+    /// [`tracing::field::Visit`] の `record_u64`/`record_str` 等はすべて既定実装が `record_debug`
+    /// へ転送するため、`record_debug` 1 本で型を問わず全フィールドを捕捉できる。
+    struct FieldGrab(std::collections::HashMap<String, String>);
+
+    impl tracing::field::Visit for FieldGrab {
+        fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+            self.0
+                .insert(field.name().to_string(), format!("{value:?}"));
+        }
+    }
+
+    /// イベントを溜めるだけの最小 subscriber（span は使わないので new_span は固定 id を返す）。
+    #[derive(Clone, Default)]
+    struct CaptureSubscriber(std::sync::Arc<std::sync::Mutex<Vec<CapturedEvent>>>);
+
+    impl tracing::Subscriber for CaptureSubscriber {
+        fn enabled(&self, _meta: &tracing::Metadata<'_>) -> bool {
+            true
+        }
+        fn new_span(&self, _attrs: &tracing::span::Attributes<'_>) -> tracing::span::Id {
+            tracing::span::Id::from_u64(1)
+        }
+        fn record(&self, _span: &tracing::span::Id, _values: &tracing::span::Record<'_>) {}
+        fn record_follows_from(&self, _span: &tracing::span::Id, _follows: &tracing::span::Id) {}
+        fn event(&self, event: &tracing::Event<'_>) {
+            let mut grab = FieldGrab(std::collections::HashMap::new());
+            event.record(&mut grab);
+            self.0
+                .lock()
+                .expect("捕捉バッファの毒化なし")
+                .push(CapturedEvent {
+                    level: *event.metadata().level(),
+                    fields: grab.0,
+                });
+        }
+        fn enter(&self, _span: &tracing::span::Id) {}
+        fn exit(&self, _span: &tracing::span::Id) {}
+    }
+
+    /// `f` の実行中に出たイベントを捕捉して `(戻り値, イベント列)` を返す。
+    fn capture_events<T>(f: impl FnOnce() -> T) -> (T, Vec<CapturedEvent>) {
+        let cap = CaptureSubscriber::default();
+        let out = tracing::subscriber::with_default(cap.clone(), f);
+        let events = cap.0.lock().expect("捕捉バッファの毒化なし").clone();
+        (out, events)
+    }
+
+    /// R6.2 の本体側縮退 warn だけを抜き出す（他の warn 経路と混同しないよう level ＋ 文言で絞る）。
+    fn default_fallback_warns(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
+        events
+            .iter()
+            .filter(|e| {
+                e.level == tracing::Level::WARN
+                    && e.fields
+                        .get("message")
+                        .is_some_and(|m| m.contains("デフォルト定義側"))
+            })
+            .collect()
+    }
+
+    /// 檻 7-a（R6.2）発火する側: scope 1 で [`ChainTier::Default`] を採った面**だけ**に warn が出て、
+    /// その 1 イベントに要求フィールド（scope・面 ID・採用ファイル）が揃う。同じ解決で
+    /// [`ChainTier::Own`] を採った面 0（`balloonk0`）には warn が出ない。
+    ///
+    /// 判定分岐の**両述語**を同時に押さえる檻である——`scope >= 1` を `scope >= 2` へ改変すれば
+    /// warn が 0 件になり、`tier == Default` を `tier == KeroNamed` へ改変すれば scope 1 の連鎖に
+    /// KeroNamed 段が無いためやはり 0 件になる（いずれも RED）。
+    #[test]
+    fn resolve_warns_only_for_default_tier_face_at_scope1() {
+        let dir = TempDir::new();
+        dir.touch("balloonk0.png");
+        dir.touch("balloons0.png");
+        dir.touch("balloons1.png");
+
+        let (result, events) = capture_events(|| resolve_balloon_faces(dir.path(), 1));
+        let faces = result.expect("面 0 は balloonk0 で解決する");
+        assert_eq!(
+            faces
+                .iter()
+                .map(|f| (f.surface_id, f.tier))
+                .collect::<Vec<_>>(),
+            vec![(0, ChainTier::Own), (1, ChainTier::Default)],
+            "前提: 面 0 は Own 採用・面 1 のみ Default 採用"
+        );
+
+        let warns = default_fallback_warns(&events);
+        assert_eq!(
+            warns.len(),
+            1,
+            "warn は Default 採用の 1 面のみ（Own 採用の面 0 には出ない）: {events:?}"
+        );
+        let warned = warns[0];
+        assert_eq!(warned.field("scope"), Some("1"), "R6.2: scope が乗る");
+        assert_eq!(
+            warned.field("surface_id"),
+            Some("1"),
+            "R6.2: 縮退した面 ID が乗る（Own 採用の面 0 ではない）"
+        );
+        assert_eq!(
+            warned.field("file"),
+            Some("balloons1.png"),
+            "R6.2: 採用ファイルが乗る"
+        );
+        assert_eq!(
+            warned.field("prefix"),
+            Some("balloons"),
+            "採用接頭辞はデフォルト段のもの"
+        );
+    }
+
+    /// 檻 7-b（R6.2）発火しない側 その 1: scope 0 は連鎖にデフォルト段を持たない（末尾の
+    /// `balloons` が自身の Own 候補）ゆえ、縮退の概念が無く warn を一切出さない。
+    #[test]
+    fn resolve_emits_no_fallback_warn_at_scope0() {
+        let dir = TempDir::new();
+        dir.touch("balloons0.png");
+        dir.touch("balloons1.png");
+
+        let (result, events) = capture_events(|| resolve_balloon_faces(dir.path(), 0));
+        let faces = result.expect("面 0 が在るゆえ Ok");
+        assert!(
+            faces.iter().all(|f| f.tier == ChainTier::Own),
+            "前提: scope 0 の採用面は全て Own（デフォルト段が存在しない）: {faces:?}"
+        );
+        assert!(
+            events.iter().all(|e| e.level != tracing::Level::WARN),
+            "scope 0 の解決は warn を一切出さない: {events:?}"
+        );
+    }
+
+    /// 檻 7-c（R6.2）発火しない側 その 2: scope 2 で [`ChainTier::KeroNamed`]（名指し相方系列
+    /// `balloonk`）を採った面には warn が出ず、同じ解決で [`ChainTier::Default`] へ落ちた面
+    /// だけに出る。tier 述語が Default 以外へずれれば面の対応が崩れて RED になる。
+    #[test]
+    fn resolve_does_not_warn_for_kero_named_tier_at_scope2() {
+        let dir = TempDir::new();
+        dir.touch("balloonk0.png");
+        dir.touch("balloons0.png");
+        dir.touch("balloons1.png");
+
+        let (result, events) = capture_events(|| resolve_balloon_faces(dir.path(), 2));
+        let faces = result.expect("面 0 は名指し相方系列 balloonk0 で解決する");
+        assert_eq!(
+            faces
+                .iter()
+                .map(|f| (f.surface_id, f.tier))
+                .collect::<Vec<_>>(),
+            vec![(0, ChainTier::KeroNamed), (1, ChainTier::Default)],
+            "前提: 面 0 は KeroNamed 採用・面 1 は Default 採用"
+        );
+
+        let warns = default_fallback_warns(&events);
+        assert_eq!(
+            warns.len(),
+            1,
+            "warn は Default 採用の面 1 のみ（KeroNamed 採用の面 0 には出ない）: {events:?}"
+        );
+        assert_eq!(
+            warns[0].field("surface_id"),
+            Some("1"),
+            "KeroNamed 採用の面 0 ではなく Default 採用の面 1 が記録される"
+        );
+        assert_eq!(warns[0].field("scope"), Some("2"), "R6.2: scope が乗る");
     }
 
     /// 枠が 1 枚も無ければ log-first で `EmptyComposition`（Hide 縮退許容）を返す。
