@@ -540,11 +540,19 @@ impl SpineHarness {
             shell: shell_table,
             balloon: balloon_table,
         } = loop_tables;
+        // バルーン表の scope キー写像（要件 5.6）。production `wire_emo2_boot` と同型で、単数の
+        // `LoopTables.balloon` を先頭 scope のキーへ載せた単一エントリの写像として渡す
+        // （scope ごとの実導出は task 3.2 が `LoopTables.balloon` 自体を写像へ変えて行う）。
+        let balloon_tables: BTreeMap<ActorKey, AnimationTable> = balloons
+            .first()
+            .map(|(scope, _, _)| (ActorKey::from(scope.to_string()), balloon_table))
+            .into_iter()
+            .collect();
         let loop_config = match driver {
             LoopDriver::Inert => SerikoLoopConfig::disabled(),
             LoopDriver::Live(rng) => SerikoLoopConfig {
                 shell_table,
-                balloon_table,
+                balloon_tables,
                 rng,
             },
         };

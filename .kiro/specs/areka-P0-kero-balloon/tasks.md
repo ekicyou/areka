@@ -47,7 +47,7 @@
 
 - [ ] 2. 下流クレートを scope 対応にする（権威に依存しない独立改修）
 
-- [ ] 2.1 (P) バルーンのアニメ定義表を scope で引ける形にする
+- [x] 2.1 (P) バルーンのアニメ定義表を scope で引ける形にする
   - ループ構成が持つバルーン表を単数から scope キーの写像へ改める
   - 表引きを scope キー参照にし、不在 scope は空表意味論（抽選対象ゼロ・乱数非消費・パニックなし）とする
   - 不活性コンストラクタは空の写像を返す
@@ -193,7 +193,8 @@
 ## Implementation Notes
 
 - worktree では `vendors/pasta` サブモジュールが未 populate ＝ cargo が manifest ロードで落ちる。着手前に `git submodule update --init --recursive vendors/pasta`（本ランで実施済み）。
-- `cargo clippy` は本ワークスペースで使えない（依存 crate `wintf` に既存のコンパイルエラー約 20 件があり clippy が対象 crate へ到達しない）。ゲートは `cargo build` / `cargo test` を用いる。
+- `cargo clippy` は `wintf` に依存する crate（`areka-emo-present` 等）では使えない（`wintf` に既存のコンパイルエラー約 20 件があり clippy が対象 crate へ到達しない）。`areka-seriko` 等の非依存 crate では動くが、既存 lint（`collapsible_if` 等）がワークスペース各所で鳴るためゲートにはしない。ゲートは `cargo build` / `cargo test`。
+- **バルーン World にアニメ定義は構造的に存在しない**: `synthetic_surfaces_txt`（balloon.rs）は `surface{id}` ブロックのみを出力し `animation*` 行を一切出さない ⇒ `AnimationTable::from_world` は常に空表。バルーン表まわりの「観測等価」判断はこの構造事実に依拠してよい（fixture 依存ではない）。
 - 本 crate は rustfmt-clean ではない（既存の未整形箇所が多数）。追加分のみ整形し、既存部の一括整形はしない（無関係な巨大差分を作らない）。
 - **`load_scope_balloon_model` の署名は `(balloon_dir, scope: u32, face0)`**（design.md の 2 引数版から実装時訂正・design.md 側も追記済み）。R6.3／観測点 3 が info! に scope を要求する一方、`ResolvedFace` から scope は逆算できない（縮退した相方の面は採用接頭辞が `balloons` ＝ scope 0 と区別不能）。3.1／placement の呼出点は scope を渡すこと。
 - テスト内のログ捕捉は `tracing` のプロセス大域 callsite interest が並列実行で `never` に焼かれて取りこぼす。同 crate `scale.rs` 由来の常駐 `InterestProbe` ＋窓内 `rebuild_interest_cache()` パターンを使う（1.4 で balloon.rs のテストハーネスへ導入済み）。

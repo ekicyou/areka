@@ -43,6 +43,7 @@ use areka_ghost::ticker::{LoopTickerConfig, Tick, TickerMsg, spawn_loop_ticker};
 use areka_ghost::{GhostBootOptions, ShioriWiring, SystemVarWiring, TickerMode};
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::MountError;
+use areka_sakura::ActorKey;
 use areka_seriko::{
     AnimationTable, BindResolver, SerikoLoopConfig, SerikoSink, SurfaceResolver, seeded_rng,
     spawn_seriko,
@@ -336,6 +337,15 @@ pub fn wire_emo2_boot(
         shell: shell_table,
         balloon: balloon_table,
     } = loop_tables;
+    // バルーン表の scope キー写像（要件 5.6）。現状 `LoopTables.balloon` は単数（先頭バルーン World
+    // 由来）ゆえ、その 1 本を先頭 scope のキーへ載せた単一エントリの写像として渡す。scope ごとに解決
+    // された系列から表を per-scope に導出するのは task 3.2 の担当で、そこで `LoopTables.balloon` 自体が
+    // scope キーの写像へ変わり本箇所は素の値移送になる。
+    let balloon_tables: BTreeMap<ActorKey, AnimationTable> = balloons
+        .first()
+        .map(|(scope, _, _)| (ActorKey::from(scope.to_string()), balloon_table))
+        .into_iter()
+        .collect();
     let seed: u64 = {
         use std::hash::{BuildHasher, Hasher};
         std::collections::hash_map::RandomState::new()
@@ -346,7 +356,7 @@ pub fn wire_emo2_boot(
     info!(seed, "emo2-boot: SERIKO ループ乱数 seed（RandomState 由来・実 entropy・再現用）");
     let loop_config = SerikoLoopConfig {
         shell_table,
-        balloon_table,
+        balloon_tables,
         rng: seeded_rng(seed),
     };
     // boot は S: dola::cue::CueSink + Clone を要求する。SerikoSink は upstream `areka-seriko` で
