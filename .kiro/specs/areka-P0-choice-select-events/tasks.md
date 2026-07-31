@@ -85,7 +85,7 @@
   - _Depends: 1.4_
 
 - [ ] 4. 中核: kanade 選択調停の状態機械
-- [ ] 4.1 選択待ち帳簿と選択系の入力・アクション・送出写像を追加する
+- [x] 4.1 選択待ち帳簿と選択系の入力・アクション・送出写像を追加する
   - Phase を変更せずに State へ選択帳簿（対象 talk 識別子・照合用候補 ID 列・期限・段フェーズ）を追加する
   - choice 起因の slot 差替で旧 talk 識別子を 1 世代保持する枠を State へ追加する
   - 起動スクリプトを現行トーク記録へ保持し、タイムアウトイベントの先頭 Reference 供給源とする
@@ -207,3 +207,5 @@
 - 3.1: **重要な申し送り** — `CuePlayer::stop()` → `TimedSchedule::clear()` は `horizon` を 0.0 にするが `start_time` はリセットしない。ゆえに**中断後の `occupancy_horizon()` はアンカー（過去時刻）を返す**。3.2 は `WaitingForChoice` 検出時点（停止前）で値を捕捉すること・4.x は中断済み player を照会しないこと。誤用すると deadline が即時失効して偽の `OnChoiceTimeout` を招く。
 - 3.2: `spawn_talk` の `D` 境界拡張は `areka-ghost/src/prop_sink.rs` と `areka-seriko/tests/{balloon_face,bind}_e2e.rs` にも機械的追随を強制した（design の Revalidation Trigger は sakura テストのみ列挙＝過小記述）。assert は全て不変。
 - 3.3: dispatcher の stale 棄却は design 語彙表どおり `info!`（Req1.3/5.5 の「警告」は kanade 層の `choice_rejected_no_wait` が正・dispatcher は二重防御の副）。`warn!` は `base_now == None` の防御専用。`test_log_capture.rs` に `event` フィールド照合（`assert_logged_event`）を additive 追加済み。
+- 4.1: 帳簿型 `ChoiceState`/`ChoicePhase`/`CascadeNext` は design New Files 表（choice.rs）ではなく **`schedule/mod.rs` の `State` 直近**に置いた（C4 コードブロックの提示形・`ActiveTalk` の前例に合わせた）。4.2/4.3 は**どちらか一方に統一**すること（両方に散らばらせない）。
+- 4.1: `schedule/mod.rs` の `Input::{Choice, ChoiceWaiting}` は暫定アーム（`*_dropped_not_wired` warn ＋状態不変）。**4.2 が ChoiceWaiting・4.3 が Choice を `steady` 委譲へ置換**すること。置換時に檻 `warn_choice_*_not_wired_logs` と `*_is_routed_by_provisional_arm_*` を恒久檻へ差し替えること。

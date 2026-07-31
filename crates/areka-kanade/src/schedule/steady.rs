@@ -168,9 +168,14 @@ fn on_reply(
                 state.next_talk_id += 1;
                 tracing::info!(target: "kanade", event = "steady_talk", talk_id = talk_id.0, origin = origin, "応答にスクリプト——再生起動");
                 // origin は応答の出所（動的化・DD-IE-3）。pump なら "OnSecondChange"、マウスなら
-                // 当該マウスイベント名がそのまま ActiveTalk のラベルに載る。
+                // 当該マウスイベント名がそのまま ActiveTalk のラベルに載る。script は起動値の
+                // 保持（DD-10・`OnChoiceTimeout` Ref0 の供給源。新しい情報源を作らない）。
                 state.phase = Phase::Steady {
-                    talk: Some(ActiveTalk { talk_id, origin }),
+                    talk: Some(ActiveTalk {
+                        talk_id,
+                        origin,
+                        script: script.clone(),
+                    }),
                 };
                 (state, vec![Action::StartTalk(StartTalk::new(talk_id, script))])
             }
@@ -196,7 +201,11 @@ fn on_reply(
                     state.next_talk_id += 1;
                     tracing::info!(target: "kanade", event = "steady_talk_replace", talk_id = talk_id.0, origin = origin, "active talk 中にマウス由来 Value——単一 slot 置換（新 talk_id 採番）");
                     state.phase = Phase::Steady {
-                        talk: Some(ActiveTalk { talk_id, origin }),
+                        talk: Some(ActiveTalk {
+                            talk_id,
+                            origin,
+                            script: script.clone(),
+                        }),
                     };
                     (state, vec![Action::StartTalk(StartTalk::new(talk_id, script))])
                 }
@@ -311,6 +320,8 @@ mod tests {
             last_now: Some(MonotonicMs(500)),
             next_talk_id: next_id,
             pending_close: None,
+            choice: None,
+            choice_prev_talk: None,
         }
     }
 
@@ -321,11 +332,14 @@ mod tests {
                 talk: Some(ActiveTalk {
                     talk_id,
                     origin: "OnSecondChange",
+                    script: String::new(),
                 }),
             },
             last_now: Some(MonotonicMs(500)),
             next_talk_id: next_id,
             pending_close: None,
+            choice: None,
+            choice_prev_talk: None,
         }
     }
 
@@ -443,6 +457,8 @@ mod tests {
             last_now: None,
             next_talk_id: 1,
             pending_close: None,
+            choice: None,
+            choice_prev_talk: None,
         };
         let (_next, actions) = step(s, Input::Tick { now: MonotonicMs(1_000) }, &config());
         // boot::step は pump を発行しない（ゲートは Steady に閉じている）。
@@ -460,6 +476,8 @@ mod tests {
             last_now: None,
             next_talk_id: 1,
             pending_close: None,
+            choice: None,
+            choice_prev_talk: None,
         };
         let (_next, actions) = step(s, Input::Tick { now: MonotonicMs(1_000) }, &config());
         // close::step は現状 stub（pump 非発行）——OnSecondChange が出ないことを検証。
@@ -476,6 +494,8 @@ mod tests {
             last_now: None,
             next_talk_id: 3,
             pending_close: None,
+            choice: None,
+            choice_prev_talk: None,
         };
         let (_next, actions) = step(s, Input::Tick { now: MonotonicMs(1_000) }, &config());
         assert_no_second_change(&actions);
@@ -498,7 +518,7 @@ mod tests {
         );
         match s1.phase {
             Phase::Steady {
-                talk: Some(ActiveTalk { talk_id, origin }),
+                talk: Some(ActiveTalk { talk_id, origin, .. }),
             } => {
                 assert_eq!(talk_id, TalkId(5));
                 assert_eq!(origin, "OnSecondChange", "origin は応答の出所を転記（pump 起動）");
@@ -618,7 +638,7 @@ mod tests {
         );
         match next.phase {
             Phase::Steady {
-                talk: Some(ActiveTalk { talk_id, origin }),
+                talk: Some(ActiveTalk { talk_id, origin, .. }),
             } => {
                 assert_eq!(talk_id, TalkId(5));
                 assert_eq!(origin, "OnMouseMove", "origin は応答の出所（マウス名）を帯びる（動的化）");
@@ -650,7 +670,7 @@ mod tests {
         );
         match next.phase {
             Phase::Steady {
-                talk: Some(ActiveTalk { talk_id, origin }),
+                talk: Some(ActiveTalk { talk_id, origin, .. }),
             } => {
                 assert_eq!(talk_id, TalkId(6), "slot は新 talk_id で上書きされる（置換）");
                 assert_eq!(origin, "OnMouseDoubleClick", "slot の origin も置換 origin へ更新");
@@ -996,5 +1016,73 @@ mod tests {
             "guard は pending_close を消費しない"
         );
         assert!(actions.is_empty(), "close 保留中はマウス GET を発行しない（close 優先）");
+    }
+
+    // === ActiveTalk.script の保持（タスク 4.1・DD-10・Req4.4） ===
+    //
+    // `OnChoiceTimeout` の Reference0 は「タイムアウトした選択肢を含むトークのスクリプト」
+    // （Req3.4）である。その供給源は **kanade が `StartTalk` で自ら作った script** であり
+    // （DD-10: 通知同梱でなく kanade 内で完結）、起動時に `ActiveTalk` へ転記して保持する。
+    // 本檻は起動 2 経路（新規起動・マウス由来の置換）を実際に `step()` で通し、`ActiveTalk.script`
+    // が発行された `StartTalk.script` と一致することを固定する（Ref0 の割付自体はタスク 4.5）。
+
+    /// 現 Phase の `ActiveTalk.script` を取り出す（Steady{Some} 以外は panic）。
+    fn active_script(phase: &Phase) -> &str {
+        match phase {
+            Phase::Steady {
+                talk: Some(active), ..
+            } => &active.script,
+            _ => panic!("expected Steady{{Some}}"),
+        }
+    }
+
+    /// 単一 StartTalk Action の script を取り出す（StartTalk 以外は panic）。
+    fn started_script(action: &Action) -> &str {
+        match action {
+            Action::StartTalk(StartTalk { script, .. }) => script,
+            _ => panic!("expected StartTalk"),
+        }
+    }
+
+    #[test]
+    fn steady_none_value_records_started_script_in_active_talk() {
+        let (next, actions) = step(
+            steady_none(5),
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Value(r"\0script-a\e".to_string()),
+                origin: "OnSecondChange",
+            },
+            &config(),
+        );
+        assert_eq!(actions.len(), 1);
+        assert_eq!(
+            started_script(&actions[0]),
+            r"\0script-a\e",
+            "発行された StartTalk の script（既存挙動）"
+        );
+        assert_eq!(
+            active_script(&next.phase),
+            r"\0script-a\e",
+            "起動した talk の script が ActiveTalk へ保持される（DD-10）"
+        );
+    }
+
+    #[test]
+    fn steady_some_mouse_replacement_records_new_script_in_active_talk() {
+        let (next, actions) = step(
+            steady_some(TalkId(3), 6),
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Value(r"\0script-b\e".to_string()),
+                origin: "OnMouseDoubleClick",
+            },
+            &config(),
+        );
+        assert_eq!(actions.len(), 1);
+        assert_eq!(started_script(&actions[0]), r"\0script-b\e");
+        assert_eq!(
+            active_script(&next.phase),
+            r"\0script-b\e",
+            "置換で差し替わった slot の script も新 talk のものへ更新される（DD-10）"
+        );
     }
 }

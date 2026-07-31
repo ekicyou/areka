@@ -232,12 +232,15 @@ fn to_baseware_version(
         tracing::info!(target: "kanade", event = "boot_talk", talk_id = talk_id.0, "起動グリーティングを再生起動");
         actions.push(Action::StartTalk(StartTalk {
             talk_id,
-            script,
+            script: script.clone(),
             epilogue: config.first_boot_epilogue.clone(),
         }));
+        // script は起動値の保持（DD-10）。boot 起動 talk も steady 起動 talk と同一の追跡 slot
+        // （[`ActiveTalk`]）に載るため、`OnChoiceTimeout` Ref0 の供給源は起動経路に依らず同一。
         Some(ActiveTalk {
             talk_id,
             origin: "boot",
+            script,
         })
     } else if !config.first_boot_epilogue.is_empty() {
         // 204 かつ epilogue 非空（初回かつ挨拶トーク皆無・204-204）: epilogue-only StartTalk
@@ -254,6 +257,8 @@ fn to_baseware_version(
         Some(ActiveTalk {
             talk_id,
             origin: "boot",
+            // epilogue-only talk の起動 script は空——保持規律は挨拶経路と同一（DD-10）。
+            script: String::new(),
         })
     } else {
         // 204 かつ epilogue 空（通常起動・既存全ケース）: StartTalk なし・BootVersion{talk: None}（不変）。
@@ -519,6 +524,8 @@ mod tests {
             last_now: None,
             next_talk_id: 1,
             pending_close: None,
+            choice: None,
+            choice_prev_talk: None,
         };
         let (s, actions) = step(
             s,
@@ -554,6 +561,8 @@ mod tests {
             last_now: None,
             next_talk_id: 1,
             pending_close: None,
+            choice: None,
+            choice_prev_talk: None,
         };
         let (s1, actions1) = step(
             s1,
@@ -576,6 +585,8 @@ mod tests {
             last_now: None,
             next_talk_id: s1.next_talk_id,
             pending_close: None,
+            choice: None,
+            choice_prev_talk: None,
         };
         let (s2, actions2) = step(
             s2,
@@ -611,6 +622,8 @@ mod tests {
                 last_now: None,
                 next_talk_id: 1,
                 pending_close: None,
+                choice: None,
+                choice_prev_talk: None,
             };
             let phase_before = std::mem::discriminant(&s.phase);
             let (s, actions) = step(
@@ -725,6 +738,8 @@ mod tests {
             last_now: None,
             next_talk_id: 1,
             pending_close: None,
+            choice: None,
+            choice_prev_talk: None,
         };
         let (_, actions) = step(
             greeting,
@@ -746,6 +761,8 @@ mod tests {
             last_now: None,
             next_talk_id: 1,
             pending_close: None,
+            choice: None,
+            choice_prev_talk: None,
         };
         let (_, actions) = step(
             no_greeting,
@@ -1260,6 +1277,8 @@ mod tests {
             last_now: None,
             next_talk_id: 1,
             pending_close: None,
+            choice: None,
+            choice_prev_talk: None,
         };
         let (_, actions) = step(s, reply(ShioriOutcome::Value("greeting".to_string())), &cfg);
         let st = start_talk_of(&actions);
@@ -1299,6 +1318,7 @@ mod tests {
                     talk: Some(ActiveTalk {
                         talk_id: TalkId(1),
                         origin: "boot",
+                        ..
                     })
                 }
             ),
@@ -1316,6 +1336,8 @@ mod tests {
             last_now: None,
             next_talk_id: 1,
             pending_close: None,
+            choice: None,
+            choice_prev_talk: None,
         };
         let (s, actions) = step(s, reply(ShioriOutcome::NoContent), &cfg);
         assert!(
@@ -1327,5 +1349,58 @@ mod tests {
             "epilogue 空の 204 は StartTalk を発行しない（既存挙動不変）"
         );
         assert_eq!(s.next_talk_id, 1, "epilogue 空の 204 は採番カウンタを進めない");
+    }
+
+    /// タスク 4.1・DD-10: boot 起動 talk も `ActiveTalk.script` に自ら作った script を保持する。
+    ///
+    /// `ActiveTalk` は boot／steady の双方が構成する単一の追跡 slot であり、`OnChoiceTimeout`
+    /// Ref0 の供給源（DD-10）は起動経路に依らず同一でなければならない。挨拶（Value）経路と
+    /// epilogue-only（204＋epilogue 非空）経路の双方で、`StartTalk.script` と一致することを固定する。
+    #[test]
+    fn boot_active_talk_records_started_script() {
+        /// `BootVersion{Some}` の `ActiveTalk.script` を取り出す。
+        fn tracked_script(phase: &Phase) -> &str {
+            match phase {
+                Phase::BootVersion {
+                    talk: Some(active), ..
+                } => &active.script,
+                _ => panic!("expected BootVersion{{Some}}"),
+            }
+        }
+
+        // 挨拶（Value）経路: StartTalk.script と ActiveTalk.script が一致する。
+        let cfg = config_with_epilogue();
+        let s = State {
+            phase: Phase::BootMain,
+            last_now: None,
+            next_talk_id: 1,
+            pending_close: None,
+            choice: None,
+            choice_prev_talk: None,
+        };
+        let (s, actions) = step(s, reply(ShioriOutcome::Value("greeting".to_string())), &cfg);
+        assert_eq!(start_talk_of(&actions).script, "greeting");
+        assert_eq!(
+            tracked_script(&s.phase),
+            "greeting",
+            "挨拶 talk の script が ActiveTalk へ保持される（DD-10）"
+        );
+
+        // epilogue-only（204）経路: script は空文字列であり、それがそのまま保持される。
+        let s = State {
+            phase: Phase::BootMain,
+            last_now: None,
+            next_talk_id: 1,
+            pending_close: None,
+            choice: None,
+            choice_prev_talk: None,
+        };
+        let (s, actions) = step(s, reply(ShioriOutcome::NoContent), &cfg);
+        assert_eq!(start_talk_of(&actions).script, "");
+        assert_eq!(
+            tracked_script(&s.phase),
+            "",
+            "epilogue-only talk の空 script も同じ規律で保持される"
+        );
     }
 }

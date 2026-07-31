@@ -202,6 +202,8 @@ mod tests {
             last_now,
             next_talk_id: next_id,
             pending_close: None,
+            choice: None,
+            choice_prev_talk: None,
         }
     }
 
@@ -217,6 +219,8 @@ mod tests {
             last_now,
             next_talk_id: next_id,
             pending_close: None,
+            choice: None,
+            choice_prev_talk: None,
         }
     }
 

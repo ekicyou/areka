@@ -86,40 +86,20 @@ pub fn spawn_kanade(
                 KanadeMsg::ForceQuit { reason } => Input::ForceQuit { reason },
                 KanadeMsg::ShioriDown { reason } => Input::ShioriDown { reason },
                 KanadeMsg::Mouse(m) => Input::Mouse(m),
-                // ==== 暫定アーム（タスク 1.3 の型追加に対する一時措置・恒久実装ではない）====
-                // 選択系 2 入力は境界型としては存在するが、状態機械側の受け皿
-                // （`Input::Choice` / `Input::ChoiceWaiting`・`State.choice` 帳簿）はまだ無い。
-                // **タスク 4.1（`Input::{Choice, ChoiceWaiting}` 追加時）に、この 2 アームを
-                // `Input` への写像へ置き換えること。** それまでは黙って捨てず warn! で記録する
-                // （steering: areka-log-first-no-silent-failure）。
-                KanadeMsg::Choice(c) => {
-                    tracing::warn!(
-                        target: "kanade",
-                        event = "choice_dropped_not_wired",
-                        choice_id = %c.id,
-                        scope = c.scope,
-                        reference_count = c.references.len(),
-                        "選択確定を受領したが状態機械へ未配線のため棄却——配線はタスク 4.1"
-                    );
-                    return Ok(ControlFlow::Continue(()));
-                }
+                // 選択系 2 入力（additive・Req 4.4）。境界型をそのまま状態機械の入力へ写す
+                // （シェルは判断しない——受領検証・帳簿確立は schedule 層の責務）。
+                KanadeMsg::Choice(c) => Input::Choice(c),
                 KanadeMsg::ChoiceWaiting {
                     talk_id,
                     choice_ids,
                     display_end,
                     timeout_directive_secs,
-                } => {
-                    tracing::warn!(
-                        target: "kanade",
-                        event = "choice_waiting_dropped_not_wired",
-                        talk_id = talk_id.0,
-                        choice_count = choice_ids.len(),
-                        display_end_ms = display_end.0,
-                        timeout_directive_secs = ?timeout_directive_secs,
-                        "選択待ち通知を受領したが状態機械へ未配線のため棄却——配線はタスク 4.1"
-                    );
-                    return Ok(ControlFlow::Continue(()));
-                }
+                } => Input::ChoiceWaiting {
+                    talk_id,
+                    choice_ids,
+                    display_end,
+                    timeout_directive_secs,
+                },
             };
             match drive(&mut state, input, &config, &shiori, &sakura, &resource_sink) {
                 Drive::Continue => Ok(ControlFlow::Continue(())),
@@ -148,51 +128,8 @@ fn drive(
     // 初回 step。以降は state を差し替えつつ actions を回す。
     let (mut st, mut actions) = step(std::mem::replace(state, State::initial()), input, config);
     loop {
-        // 直前の往復応答と、その応答が由来する呼出イベント ID（origin・DD-IE-3）を控える。
-        // reinject する `Input::ShioriReply` へ origin を転記し、後続処理が応答の出所を識別できる
-        // ようにする（マウス GET の origin 別 reply 政策はタスク 2.2）。
-        let mut last_reply: Option<(ShioriOutcome, &'static str)> = None;
-        let mut stop = false;
-        for action in actions {
-            match action {
-                Action::StartTalk(start) => {
-                    // 再生起動要求を talk 指示チャンネルへ載せて送出する（DD-5・design C6）。
-                    // 起動系も選択解決系も同一の [`TalkCommand`] 単一チャンネルを流れるため、
-                    // 状態機械が 1 バッチで並べた順序がそのまま下流で観測される（順序保存の契約）。
-                    send_talk_command(sakura, TalkCommand::Start(start));
-                }
-                Action::ShioriRequest(call) => {
-                    // 送出前に call のイベント ID を控える（round_trip_request が call を消費するため）。
-                    // origin は `&'static str` 契約を維持する（DD-1）: スケジューラ起源は固定 ID を
-                    // そのまま転記し、選択起源（任意名・`&'static` にできない）は固定ラベル
-                    // `"OnChoiceEvent"` を載せる（ログ／防御用。選択応答のルーティングは帳簿照合が正）。
-                    let origin = match &call {
-                        ShioriCall::Get { id, .. } | ShioriCall::Notify { id, .. } => match id {
-                            EventId::Static(s) => *s,
-                            EventId::Choice(_) => "OnChoiceEvent",
-                        },
-                    };
-                    last_reply = Some((round_trip_request(shiori, call), origin));
-                }
-                Action::ResourceOutcome { id, outcome } => {
-                    // リソース照会結果を注入クロージャへ**同期的に**渡す（返るまで次段へ進まない・R4.1）。
-                    // 副作用は sink 内部（ghost の publish＋barrier）——talk は生成しない（Invariant）。
-                    // last_reply は変えない（SHIORI 往復ではないため再投入対象にならない）。
-                    resource_sink(id, outcome);
-                }
-                Action::ShioriUnload => {
-                    // unload には出所イベントが無いため "Unload" を転記する（Unloading 応答は
-                    // origin を参照しないが、契約上必ず値を持たせる）。
-                    last_reply = Some((round_trip_unload(shiori), "Unload"));
-                }
-                Action::StopSelf => {
-                    // 終了系列完了: shiori へ Close を送り自身も停止する。
-                    let _ = shiori.send(ShioriMsg::Close);
-                    stop = true;
-                    break;
-                }
-            }
-        }
+        let BatchResult { last_reply, stop } =
+            execute_actions(actions, shiori, sakura, resource_sink);
         if stop {
             *state = st;
             return Drive::Stop;
@@ -210,6 +147,85 @@ fn drive(
                 return Drive::Continue;
             }
         }
+    }
+}
+
+/// Action バッチ 1 回分の実行結果（[`drive`] の反復条件）。
+struct BatchResult {
+    /// バッチ中で最後に発生した SHIORI 往復の応答と、その応答が由来する呼出イベント ID
+    /// （origin・DD-IE-3）。`None` はバッチに SHIORI 往復が無かったこと（＝再投入しない）を表す。
+    last_reply: Option<(ShioriOutcome, &'static str)>,
+    /// [`Action::StopSelf`] を実行した（以降の Action は実行しない・呼び手は停止する）。
+    stop: bool,
+}
+
+/// Action バッチを**先頭から順に全て実行**する（execute-batch/reinject-last の execute 側）。
+///
+/// [`drive`] の反復本体から切り出してあるのは、[`Action`] → [`TalkCommand`] 写像を発行点
+/// （タスク 4.3／4.5）の実装を待たずに実行で檻に入れられるようにするためである（design C6）。
+///
+/// # talk 指示 3 形の写像（design C6・DD-5・Req 5.6）
+/// [`Action::StartTalk`]／[`Action::ResolveChoice`]／[`Action::CancelChoice`] はそれぞれ
+/// [`TalkCommand::Start`]／[`TalkCommand::ResolveChoice`]／[`TalkCommand::CancelChoice`] へ
+/// **そのまま包んで**同一チャンネルへ送出する（値の解釈・書き換えをしない）。起動系と解決系を
+/// 別チャンネルへ分けないことが順序保存の契約であり、状態機械が 1 バッチで並べた順序が
+/// そのまま下流で観測される。送出失敗は [`send_talk_command`] が `error!` を残し**運行は継続**
+/// する——バッチも中断しない（design「Error Strategy」: 選択・再生の失敗でゴーストを終了させない）。
+fn execute_actions(
+    actions: Vec<Action>,
+    shiori: &Sender<ShioriMsg>,
+    sakura: &Sender<TalkCommand>,
+    resource_sink: &ResourceSink,
+) -> BatchResult {
+    let mut last_reply: Option<(ShioriOutcome, &'static str)> = None;
+    for action in actions {
+        match action {
+            Action::StartTalk(start) => {
+                send_talk_command(sakura, TalkCommand::Start(start));
+            }
+            Action::ResolveChoice { talk_id, id } => {
+                send_talk_command(sakura, TalkCommand::ResolveChoice { talk_id, id });
+            }
+            Action::CancelChoice { talk_id } => {
+                send_talk_command(sakura, TalkCommand::CancelChoice { talk_id });
+            }
+            Action::ShioriRequest(call) => {
+                // 送出前に call のイベント ID を控える（round_trip_request が call を消費するため）。
+                // origin は `&'static str` 契約を維持する（DD-1）: スケジューラ起源は固定 ID を
+                // そのまま転記し、選択起源（任意名・`&'static` にできない）は固定ラベル
+                // `"OnChoiceEvent"` を載せる（ログ／防御用。選択応答のルーティングは帳簿照合が正）。
+                let origin = match &call {
+                    ShioriCall::Get { id, .. } | ShioriCall::Notify { id, .. } => match id {
+                        EventId::Static(s) => *s,
+                        EventId::Choice(_) => "OnChoiceEvent",
+                    },
+                };
+                last_reply = Some((round_trip_request(shiori, call), origin));
+            }
+            Action::ResourceOutcome { id, outcome } => {
+                // リソース照会結果を注入クロージャへ**同期的に**渡す（返るまで次段へ進まない・R4.1）。
+                // 副作用は sink 内部（ghost の publish＋barrier）——talk は生成しない（Invariant）。
+                // last_reply は変えない（SHIORI 往復ではないため再投入対象にならない）。
+                resource_sink(id, outcome);
+            }
+            Action::ShioriUnload => {
+                // unload には出所イベントが無いため "Unload" を転記する（Unloading 応答は
+                // origin を参照しないが、契約上必ず値を持たせる）。
+                last_reply = Some((round_trip_unload(shiori), "Unload"));
+            }
+            Action::StopSelf => {
+                // 終了系列完了: shiori へ Close を送り自身も停止する。
+                let _ = shiori.send(ShioriMsg::Close);
+                return BatchResult {
+                    last_reply,
+                    stop: true,
+                };
+            }
+        }
+    }
+    BatchResult {
+        last_reply,
+        stop: false,
     }
 }
 
@@ -1182,5 +1198,119 @@ mod tests {
             drop(shiori_tx);
             drop(shiori_handle);
         }
+    }
+
+    // --- 11. Action → TalkCommand 写像（タスク 4.1・design C6・Req4.4） ---
+    //
+    // drive の Action バッチ実行本体（[`execute_actions`]）を**直接**呼び、選択系 2 Action が
+    // `TalkCommand::{ResolveChoice, CancelChoice}` へそのまま包まれて単一チャンネルへ出ることを
+    // 実行で観測する。発行点（タスク 4.3／4.5）はまだ無いため `step` 経由では駆動できないが、
+    // 写像を担う実コードはここで通る（檻専用の写像を別に作らない）。
+
+    /// 檻用の talk 指示 3 形バッチ（投函順が下流での観測順である＝順序保存の契約）。
+    fn talk_action_batch() -> Vec<Action> {
+        use crate::talk::{StartTalk, TalkId};
+        vec![
+            Action::ResolveChoice {
+                talk_id: TalkId(7),
+                id: "OnMenu".to_string(),
+            },
+            Action::StartTalk(StartTalk::new(TalkId(8), r"\0next\e")),
+            Action::CancelChoice {
+                talk_id: TalkId(8),
+            },
+        ]
+    }
+
+    #[test]
+    fn choice_actions_map_to_talk_commands_and_preserve_order() {
+        use crate::talk::TalkId;
+
+        let (shiori_tx, _rec_rx, shiori_handle) = spawn_mock_shiori(benign);
+        let (sakura_tx, sakura_rx) = mpsc::channel::<TalkCommand>();
+
+        let result = execute_actions(talk_action_batch(), &shiori_tx, &sakura_tx, &noop_sink());
+
+        assert!(
+            result.last_reply.is_none(),
+            "talk 指示は SHIORI 往復を起こさない（再投入対象にならない）"
+        );
+        assert!(!result.stop, "talk 指示は停止要求ではない");
+
+        let got: Vec<TalkCommand> = sakura_rx.try_iter().collect();
+        assert_eq!(got.len(), 3, "3 形すべてが同一チャンネルへ送出される");
+        match &got[0] {
+            TalkCommand::ResolveChoice { talk_id, id } => {
+                assert_eq!(*talk_id, TalkId(7), "ResolveChoice の talk_id をそのまま包む");
+                assert_eq!(id, "OnMenu", "ResolveChoice の id をそのまま包む");
+            }
+            other => panic!("commands[0] は ResolveChoice のはず: {other:?}"),
+        }
+        match &got[1] {
+            TalkCommand::Start(start) => {
+                assert_eq!(start.talk_id, TalkId(8), "既存 StartTalk 写像は不変");
+                assert_eq!(start.script, r"\0next\e");
+            }
+            other => panic!("commands[1] は Start のはず: {other:?}"),
+        }
+        match &got[2] {
+            TalkCommand::CancelChoice { talk_id } => {
+                assert_eq!(*talk_id, TalkId(8), "CancelChoice の talk_id をそのまま包む");
+            }
+            other => panic!("commands[2] は CancelChoice のはず: {other:?}"),
+        }
+
+        drop(shiori_tx);
+        drop(shiori_handle);
+    }
+
+    // 送出失敗（受信端 drop）でも `error!(talk_command_send_failed)` を残して**バッチ実行は継続**する
+    // （design「Error Strategy」: 選択・再生の失敗でゴーストを終了させない）。継続の証跡として、
+    // 失敗する talk 指示 2 件の**後ろ**に置いた ShioriUnload が実行され last_reply が満ちることを見る。
+    #[test]
+    fn talk_command_send_failure_does_not_abort_the_action_batch() {
+        use crate::talk::TalkId;
+
+        let (shiori_tx, _rec_rx, shiori_handle) = spawn_mock_shiori(benign);
+        let (sakura_tx, sakura_rx) = mpsc::channel::<TalkCommand>();
+        drop(sakura_rx); // talk 指示の送出は必ず Err。
+
+        let mut result: Option<BatchResult> = None;
+        let events = capture(|| {
+            result = Some(execute_actions(
+                vec![
+                    Action::ResolveChoice {
+                        talk_id: TalkId(7),
+                        id: "OnMenu".to_string(),
+                    },
+                    Action::CancelChoice {
+                        talk_id: TalkId(7),
+                    },
+                    Action::ShioriUnload,
+                ],
+                &shiori_tx,
+                &sakura_tx,
+                &noop_sink(),
+            ));
+        });
+
+        assert_logged(&events, Level::ERROR, "talk_command_send_failed");
+        assert_eq!(
+            events
+                .iter()
+                .filter(|e| e.event.as_deref() == Some("talk_command_send_failed"))
+                .count(),
+            2,
+            "選択系 2 形の送出失敗が個別に記録される（沈黙の失敗経路なし）"
+        );
+        let result = result.expect("execute_actions returns");
+        assert!(
+            matches!(result.last_reply, Some((ShioriOutcome::Unloaded, "Unload"))),
+            "送出失敗の後ろに置いた Action も実行される＝バッチは中断しない（運行継続）"
+        );
+        assert!(!result.stop);
+
+        drop(shiori_tx);
+        drop(shiori_handle);
     }
 }

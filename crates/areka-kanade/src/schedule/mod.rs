@@ -18,7 +18,9 @@
 //! 失敗経路は存在しない。panic は新規導入しない（回復不能はすべて
 //! `Unloading{Fault}`→`Stopped` の正規遷移で表現する・Req 6.4）。
 
-use crate::msg::{CloseReason, KanadeConfig, MonotonicMs, MouseInput, ShioriCall, ShioriOutcome};
+use crate::msg::{
+    ChoiceInput, CloseReason, KanadeConfig, MonotonicMs, MouseInput, ShioriCall, ShioriOutcome,
+};
 use crate::status::ExecutionSnapshot;
 use crate::talk::{StartTalk, TalkDone, TalkEndReason, TalkId};
 
@@ -57,6 +59,22 @@ pub(crate) enum Input {
         outcome: ShioriOutcome,
         origin: &'static str,
     },
+    /// 選択確定（バルーン上で確定した選択肢・UI 配線層 → kanade）。additive 増分（Req 4.4）。
+    ///
+    /// 受領検証（選択待ちの有無・talk_id 突合・候補集合照合）とカスケード駆動はタスク 4.3 が
+    /// [`steady`] へ実装する。
+    Choice(ChoiceInput),
+    /// 選択待ち成立の通知（talk → dispatcher → kanade）。additive 増分（Req 4.4）。
+    ///
+    /// `display_end` は dispatcher が `base_now` で単調 ms へ換算済み（DD-9・時間基準を新設しない）。
+    /// `timeout_directive_secs` から期限への写像（DD-8・[`choice::choice_deadline`]）と帳簿確立は
+    /// タスク 4.2 が実装する。
+    ChoiceWaiting {
+        talk_id: TalkId,
+        choice_ids: Vec<String>,
+        display_end: MonotonicMs,
+        timeout_directive_secs: Option<f64>,
+    },
 }
 
 /// 運行フェーズ（可視化は System Flows の状態機械図）。各待ち点は「直前に発行した
@@ -84,6 +102,46 @@ pub(crate) enum Phase {
 pub(crate) struct ActiveTalk {
     pub talk_id: TalkId,
     pub origin: &'static str,
+    /// 当該 talk の起動スクリプト（`OnChoiceTimeout` の Reference0 供給源・DD-10）。
+    ///
+    /// **kanade が [`StartTalk`] で自ら作った値**の保持であり、新しい情報源ではない
+    /// （通知同梱にせず kanade 内で完結させる・Req3.4）。Ref0 への割付はタスク 4.5。
+    pub script: String,
+}
+
+/// 選択待ち〜choice 系 in-flight の帳簿（DD-3）。
+///
+/// **バリア状態の複製ではなく kanade 側の配送状態**である（再生層のバリアは sakura が所有し、
+/// 解決は [`Action::ResolveChoice`] という正規入力経路でのみ行う・Req5.6）。[`Phase`] を一切
+/// 触らず [`State`] へ置くのは `pending_close` と同型の扱いであり、Req4.4「既存の決定的状態機械の
+/// 観測資産を変更しない」に最忠実な形である（DD-3）。
+pub(crate) struct ChoiceState {
+    /// 対象 talk（`ActiveTalk.talk_id` と一致することが不変条件）。
+    pub talk_id: TalkId,
+    /// 照合用の候補選択肢 ID 列（表示順を保存・DD-7）。
+    pub candidates: Vec<String>,
+    /// 選択待ちの期限（`None`＝無期限。DD-8 の写像済み値）。
+    pub deadline: Option<MonotonicMs>,
+    /// 帳簿の段フェーズ。
+    pub phase: ChoicePhase,
+}
+
+/// 選択帳簿の段フェーズ（`Cascading`／`TimeoutInFlight` は drive 内で同期完結する応答待ち）。
+pub(crate) enum ChoicePhase {
+    /// 選択確定の入力待ち。
+    Waiting,
+    /// カスケード段の SHIORI 応答待ち（`next`＝残段）。
+    Cascading {
+        choice_id: String,
+        next: Option<CascadeNext>,
+    },
+    /// `OnChoiceTimeout` の応答待ち。
+    TimeoutInFlight,
+}
+
+/// カスケードの残段（M1 は正典形の無印 1 段のみ・裁定 2）。
+pub(crate) enum CascadeNext {
+    Select,
 }
 
 /// 運行状態の全体（[`step`] の唯一の被写体）。Phase 外の帳簿はここに置く。
@@ -95,10 +153,17 @@ pub(crate) struct State {
     pub next_talk_id: u64,
     /// boot 中・active talk 中に受領した close 指示の保留（System Flows 補足遷移）。
     pub pending_close: Option<CloseReason>,
+    /// 選択待ち〜choice 系 in-flight の帳簿（`pending_close` と同型に Phase 外へ置く・DD-3）。
+    pub choice: Option<ChoiceState>,
+    /// choice 起因の slot 差替で失われた旧 talk_id を 1 世代だけ保持する枠（F1 残余レース対策）。
+    ///
+    /// 遅れて届く旧 talk の `TalkDone` を `unknown_talk_done`（error）ではなく
+    /// `talk_done_stale_choice`（info）で捌くための照合先（掃除規律はタスク 4.6）。
+    pub choice_prev_talk: Option<TalkId>,
 }
 
 impl State {
-    /// 初期運行状態（[`Phase::Idle`]・Tick 未受領・採番カウンタ 1・保留 close なし）。
+    /// 初期運行状態（[`Phase::Idle`]・Tick 未受領・採番カウンタ 1・保留 close なし・選択帳簿なし）。
     ///
     /// `next_talk_id` は 1 起点の単調増番であり、StartTalk 生成のたびにインクリメントし
     /// 再利用しない（[`crate::talk::TalkId`] の一意性契約）。
@@ -108,6 +173,8 @@ impl State {
             last_now: None,
             next_talk_id: 1,
             pending_close: None,
+            choice: None,
+            choice_prev_talk: None,
         }
     }
 }
@@ -137,6 +204,15 @@ pub(crate) enum Action {
     },
     /// 終了系列完了（シェルは shiori へ Close を送り自身も Break する）。
     StopSelf,
+    /// 選択待ちバリアの解決指示（→ [`TalkCommand::ResolveChoice`](crate::talk::TalkCommand)）。
+    ///
+    /// `talk_id` は再生層／dispatcher の stale ガード用・`id` は確定した選択肢 ID。発行点は
+    /// タスク 4.3（カスケード完了）とタスク 4.2 系の未対応カテゴリ即時解決。
+    ResolveChoice { talk_id: TalkId, id: String },
+    /// 選択待ちの解除＋トーク終了指示（→ [`TalkCommand::CancelChoice`](crate::talk::TalkCommand)）。
+    ///
+    /// タイムアウト後に SHIORI が応答を返さなかった場合の解除（Req7.5）。発行点はタスク 4.5。
+    CancelChoice { talk_id: TalkId },
 }
 
 /// 唯一の遷移入口。現在の [`State`] と [`Input`] から次の [`State`] と副作用指示
@@ -181,6 +257,44 @@ pub(crate) fn step(state: State, input: Input, config: &KanadeConfig) -> (State,
                 (state, Vec::new())
             }
         },
+
+        // ==== 暫定アーム（タスク 4.1 の型追加に対する一時措置・恒久実装ではない）====
+        // 選択系 2 入力は横断ルーティングまで到達するが、受領意味論（帳簿確立・受領検証・
+        // カスケード駆動）はまだ無い。**タスク 4.2（`ChoiceWaiting` の帳簿確立）・タスク 4.3
+        // （`Choice` の受領検証とカスケード駆動）が、この 2 アームを `steady` への委譲へ
+        // 置き換えること。** それまでは黙って捨てず warn! で記録し、状態不変で継続する
+        // （steering: areka-log-first-no-silent-failure）。暫定語彙 `*_not_wired` は
+        // 設計のログ語彙表が予約する恒久語彙（`choice_rejected_*` 等）と衝突しない。
+        Input::Choice(c) => {
+            tracing::warn!(
+                target: "kanade",
+                event = "choice_dropped_not_wired",
+                choice_id = %c.id,
+                scope = c.scope,
+                reference_count = c.references.len(),
+                phase = phase_label(&state.phase),
+                "選択確定を受領したが受領意味論が未配線のため棄却——配線はタスク 4.3"
+            );
+            (state, Vec::new())
+        }
+        Input::ChoiceWaiting {
+            talk_id,
+            choice_ids,
+            display_end,
+            timeout_directive_secs,
+        } => {
+            tracing::warn!(
+                target: "kanade",
+                event = "choice_waiting_dropped_not_wired",
+                talk_id = talk_id.0,
+                choice_count = choice_ids.len(),
+                display_end_ms = display_end.0,
+                timeout_directive_secs = ?timeout_directive_secs,
+                phase = phase_label(&state.phase),
+                "選択待ち通知を受領したが帳簿確立が未配線のため棄却——配線はタスク 4.2"
+            );
+            (state, Vec::new())
+        }
 
         // --- 防御アーム・フェーズ固有遷移への委譲 ---
 
@@ -415,6 +529,8 @@ mod tests {
             last_now: Some(MonotonicMs(1_000)),
             next_talk_id: 5,
             pending_close: None,
+            choice: None,
+            choice_prev_talk: None,
         }
     }
 
@@ -423,6 +539,7 @@ mod tests {
             talk: Some(ActiveTalk {
                 talk_id,
                 origin: "steady",
+                script: String::new(),
             }),
         }
     }
@@ -732,6 +849,165 @@ mod tests {
         );
         assert!(actions.is_empty(), "close 保留中はマウス GET を発行しない");
     }
+
+    // ============================================================
+    // 11. 選択系の additive 追加（タスク 4.1・Req4.4・DD-3／DD-10）
+    // ============================================================
+
+    /// 檻用の選択確定入力（内容は本檻で load-bearing でない＝写像・帳簿の存在のみを見る）。
+    fn choice_input() -> ChoiceInput {
+        ChoiceInput {
+            id: "OnMenu".to_string(),
+            label: "メニュー".to_string(),
+            scope: 0,
+            references: vec!["a0".to_string()],
+        }
+    }
+
+    /// 檻用の選択待ち通知入力（同上）。
+    fn choice_waiting_input() -> Input {
+        Input::ChoiceWaiting {
+            talk_id: TalkId(5),
+            choice_ids: vec!["OnMenu".to_string()],
+            display_end: MonotonicMs(2_000),
+            timeout_directive_secs: None,
+        }
+    }
+
+    /// Req4.4: 既存 `Phase` の 11 variant が無改変であること。
+    ///
+    /// 本 match は wildcard を持たないため、variant の削除・改名・形（フィールド構成）の
+    /// 変更はコンパイルを壊す。DD-3 が要求する「Phase を一切触らない」を構造で固定する
+    /// （`State.choice` は Phase の外＝`pending_close` と同型に置かれる）。
+    #[test]
+    fn existing_phase_variants_are_unchanged() {
+        fn tag(phase: &Phase) -> &'static str {
+            match phase {
+                Phase::Idle => "Idle",
+                Phase::BootInit => "BootInit",
+                Phase::BootPrefetch => "BootPrefetch",
+                Phase::BootType => "BootType",
+                Phase::BootMain => "BootMain",
+                Phase::BootVersion { .. } => "BootVersion",
+                Phase::Steady { .. } => "Steady",
+                Phase::ClosePending { .. } => "ClosePending",
+                Phase::CloseTalkWait { .. } => "CloseTalkWait",
+                Phase::Unloading { .. } => "Unloading",
+                Phase::Stopped => "Stopped",
+            }
+        }
+        assert_eq!(tag(&Phase::Idle), "Idle");
+        assert_eq!(tag(&Phase::Steady { talk: None }), "Steady");
+        assert_eq!(tag(&Phase::Stopped), "Stopped");
+    }
+
+    /// Req4.4: 既存 `Action` 5 variant が無改変で、選択系 2 variant が additive に増えたこと。
+    ///
+    /// wildcard なしの網羅 match ゆえ、既存 5 variant のいずれかが消える／改名される／
+    /// 形が変わると本檻はコンパイルできない。
+    #[test]
+    fn action_variants_are_existing_five_plus_choice_two() {
+        fn tag(action: &Action) -> &'static str {
+            match action {
+                Action::ShioriRequest(_) => "ShioriRequest",
+                Action::ShioriUnload => "ShioriUnload",
+                Action::StartTalk(_) => "StartTalk",
+                Action::ResourceOutcome { .. } => "ResourceOutcome",
+                Action::StopSelf => "StopSelf",
+                Action::ResolveChoice { .. } => "ResolveChoice",
+                Action::CancelChoice { .. } => "CancelChoice",
+            }
+        }
+        assert_eq!(tag(&Action::ShioriUnload), "ShioriUnload");
+        assert_eq!(tag(&Action::StopSelf), "StopSelf");
+        assert_eq!(
+            tag(&Action::ResolveChoice {
+                talk_id: TalkId(5),
+                id: "OnMenu".to_string(),
+            }),
+            "ResolveChoice"
+        );
+        assert_eq!(
+            tag(&Action::CancelChoice { talk_id: TalkId(5) }),
+            "CancelChoice"
+        );
+    }
+
+    /// Req4.4: 既存 `Input` 8 variant が無改変で、選択系 2 variant が additive に増えたこと。
+    #[test]
+    fn input_variants_are_existing_eight_plus_choice_two() {
+        fn tag(input: &Input) -> &'static str {
+            match input {
+                Input::Boot => "Boot",
+                Input::Tick { .. } => "Tick",
+                Input::TalkDone(_) => "TalkDone",
+                Input::CloseRequest { .. } => "CloseRequest",
+                Input::ForceQuit { .. } => "ForceQuit",
+                Input::ShioriDown { .. } => "ShioriDown",
+                Input::Mouse(_) => "Mouse",
+                Input::ShioriReply { .. } => "ShioriReply",
+                Input::Choice(_) => "Choice",
+                Input::ChoiceWaiting { .. } => "ChoiceWaiting",
+            }
+        }
+        assert_eq!(tag(&Input::Boot), "Boot");
+        assert_eq!(tag(&Input::Mouse(mouse_move())), "Mouse");
+        assert_eq!(tag(&Input::Choice(choice_input())), "Choice");
+        assert_eq!(tag(&choice_waiting_input()), "ChoiceWaiting");
+    }
+
+    /// DD-3: 選択帳簿は `State`（Phase 外）に置かれ、初期値は両方とも空である。
+    #[test]
+    fn initial_state_has_empty_choice_ledger() {
+        let s = State::initial();
+        assert!(s.choice.is_none(), "初期状態に選択待ち帳簿は無い");
+        assert!(
+            s.choice_prev_talk.is_none(),
+            "初期状態に 1 世代保持の旧 talk_id は無い"
+        );
+    }
+
+    /// タスク 4.1 の暫定アーム: `Input::Choice` は横断ルーティングを通るが、受領意味論
+    /// （検証・カスケード駆動＝タスク 4.3）はまだ無いため状態不変・Action なしで継続する。
+    ///
+    /// 本檻は「暫定アームが state と Action を動かさない」ことのみを固定する（棄却の理由や
+    /// 帳簿の遷移は 4.3 が持つ）。恒久実装後は本檻を 4.3 の受領檻へ置き換える。
+    #[test]
+    fn choice_input_is_routed_by_provisional_arm_without_changing_state() {
+        for phase in [Phase::Steady { talk: None }, Phase::Idle, Phase::BootMain] {
+            let before = std::mem::discriminant(&phase);
+            let (next, actions) = step(state_in(phase), Input::Choice(choice_input()), &config());
+            assert_eq!(
+                std::mem::discriminant(&next.phase),
+                before,
+                "暫定アームは phase を変えない"
+            );
+            assert!(next.choice.is_none(), "暫定アームは帳簿を確立しない");
+            assert!(actions.is_empty(), "暫定アームは Action を発行しない");
+        }
+    }
+
+    /// タスク 4.1 の暫定アーム: `Input::ChoiceWaiting` も同様（帳簿確立＝タスク 4.2）。
+    #[test]
+    fn choice_waiting_input_is_routed_by_provisional_arm_without_changing_state() {
+        for phase in [
+            steady_with_talk(TalkId(5)),
+            Phase::Idle,
+            Phase::ClosePending {
+                reason: CloseReason::User,
+            },
+        ] {
+            let before = std::mem::discriminant(&phase);
+            let (next, actions) = step(state_in(phase), choice_waiting_input(), &config());
+            assert_eq!(
+                std::mem::discriminant(&next.phase),
+                before,
+                "暫定アームは phase を変えない"
+            );
+            assert!(next.choice.is_none(), "暫定アームは帳簿を確立しない");
+            assert!(actions.is_empty(), "暫定アームは Action を発行しない");
+        }
+    }
 }
 
 /// タスク 6.1: 純粋 step 層の失敗・防御アームがログを発火することの実行可能検証。
@@ -763,6 +1039,8 @@ mod log_firing_tests {
             last_now: Some(MonotonicMs(1_000)),
             next_talk_id: 5,
             pending_close: None,
+            choice: None,
+            choice_prev_talk: None,
         }
     }
 
@@ -771,6 +1049,7 @@ mod log_firing_tests {
             talk: Some(ActiveTalk {
                 talk_id,
                 origin: "steady",
+                script: String::new(),
             }),
         }
     }
@@ -851,6 +1130,8 @@ mod log_firing_tests {
             last_now: Some(MonotonicMs(900)),
             next_talk_id: 8,
             pending_close: None,
+            choice: None,
+            choice_prev_talk: None,
         };
         let ev = capture(|| {
             let _ = step(s, Input::Tick { now: MonotonicMs(2_000) }, &cfg);
@@ -1087,6 +1368,41 @@ mod log_firing_tests {
     // ============================================================
     // 観測用ログ（level = INFO）— TalkEndReason::Interrupted の防御的非 quit 扱い
     // ============================================================
+
+    // ============================================================
+    // 暫定アーム（level = WARN）— タスク 4.1 の選択系未配線記録
+    // ============================================================
+
+    #[test]
+    fn warn_choice_dropped_not_wired_logs() {
+        // `Input::Choice` の受領意味論はタスク 4.3 が実装する。それまでは黙って捨てず
+        // warn! で記録して継続する（steering: areka-log-first-no-silent-failure）。
+        let ev = run_step(
+            Phase::Steady { talk: None },
+            Input::Choice(crate::msg::ChoiceInput {
+                id: "OnMenu".to_string(),
+                label: "メニュー".to_string(),
+                scope: 0,
+                references: Vec::new(),
+            }),
+        );
+        assert_logged(&ev, Level::WARN, "choice_dropped_not_wired");
+    }
+
+    #[test]
+    fn warn_choice_waiting_dropped_not_wired_logs() {
+        // `Input::ChoiceWaiting` の帳簿確立はタスク 4.2 が実装する（同上）。
+        let ev = run_step(
+            steady_with_talk(TalkId(5)),
+            Input::ChoiceWaiting {
+                talk_id: TalkId(5),
+                choice_ids: vec!["OnMenu".to_string()],
+                display_end: MonotonicMs(2_000),
+                timeout_directive_secs: None,
+            },
+        );
+        assert_logged(&ev, Level::WARN, "choice_waiting_dropped_not_wired");
+    }
 
     #[test]
     fn info_talk_done_interrupted_as_non_quit_logs() {
