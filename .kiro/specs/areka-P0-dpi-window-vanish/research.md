@@ -420,3 +420,117 @@ WM_DPICHANGED (window_pos.rs:285-375)
   実装配置（`project_anchor` の外に純関数として置く／経路タグ分岐）は設計フェーズへ（D5 を設計判断側へ移管）。
 - **D10｜裁定不要**。3.2＋Adjacent expectations で方針は完結している（警告＋不可視位置へ動かさない＝充足。
   追随実装は H6 が実機で確定した場合に限り最小範囲）。
+
+---
+
+## 9. 設計フェーズ Discovery & Synthesis（2026-07-31・kiro-spec-design）
+
+> Discovery 種別: **Light（Extension）**。外部依存は Win32 `WM_DPICHANGED` 契約のみで新規調査不要。
+> §1〜§7 のギャップ分析（同日・同ツリー）を土台に、負荷のかかる file:line を本設計セッションで再読して実測一致を確認した。
+
+### 9.1 検証ログ（設計前の実測再確認）
+
+| 検証対象 | 結果 |
+| --- | --- |
+| `window_pos.rs:284-375` WM_DPICHANGED（書き手A＝`guarded_set_window_pos(suggested.left/top, SWP_NOSIZE)`・`:359-369`／実施ログ `trace!`・`:352`） | §1.1 と一致 |
+| `frame.rs:782-839` `dpi_phase_with`（`refresh_scale` の `Some` ゲート・`:835`） | §1.1(b) と一致 |
+| `presenter.rs:754-819` `refresh_scale` の `None` 4 経路（k 不変 `:772`／不可視 `:776`／未表示 `:783`／丸め後同寸 `:818`） | §1.1(b) と一致 |
+| `follow.rs:786-910` `resize_window_to`（`raw`=`WindowPos.position`・3b 中央付替え・`project_anchor` は Y のみ再導出） | §1.1(a) と一致 |
+| `follow.rs:85-112` `BottomSnapPolicy::resolve`（X 素通し）／`follow.rs:1132-1160` `work_area_for_window`（最近傍フォールバック・観測なし） | §1.1(c) と一致 |
+| `follow.rs:1009-1080` `enqueue_window_set_pos`（成功時ログなし・bypass ミラー＝`Changed<WindowPos>` 不発） | §1.2 と一致。**bypass ミラーゆえ書き手B（`apply_window_pos_changes`）はゴースト窓では発火しない**＝書き手Aを断てば二重権威は源で消える（追加発見） |
+| `spawn.rs:95-136` `GhostWindows`/`ScopeWindows`（掃除口なし）／`main.rs:773-783` `despawn_smoke_targets`（同一 World 変異内で全ゴースト窓を一括 despawn） | §1.5 と一致。**despawn は対単位で同一クロージャ内一括**＝片割れだけ死ぬ中間状態は正準経路では生じない（D8 の裁定材料） |
+| `dpi_helpers.rs:62-113`（`BoxStyle` 不在 warn・純関数＋in-source 檻の donor） | §1.1 補足と一致 |
+| `monitor_systems.rs:85-105`（bounds/dpi/is_primary のみ・work_area/handle なし）／`main.rs:645-647`（`MonitorSnapshot` 構築点・無ログ） | §1.2 と一致 |
+| `DPI`/`DpiChangeContext` の定義位置＝`crates/wintf/src/ecs/window/dpi.rs:23`／`components.rs:33` | 新 component の併置先を確定 |
+
+### 9.2 Synthesis（3 レンズの適用結果）
+
+- **一般化**: S1/S2/S3 は「位置権威が暗黙（OS 書込への相乗り・寸導出結果への相乗り）である」という単一欠陥の 3 症状。設計は
+  ①「ゴースト窓の位置の書き手は areka placement の単一ライターのみ」②「`Changed<DPI>` の char 窓は寸導出の成否に関わらず必ず射影 T を一度通る」
+  ③「非ドラッグ経路の可視性は単一の遷移ガード純関数が保証する」の 3 不変条件へ一般化した。
+- **単純化**: 書き手Aを**源で**断つ（明示 opt-out component）と `WindowPos.position` が汚染されなくなるため、D4「直前の areka 確定接地点の物理 X 保持」は
+  **新しい永続 component を要さない**（現 `WindowPos` がそのまま確定値）。モニタ列挙 3 箇所の相互突合機構も新設しない
+  （3 箇所とも同一 `enumerate_monitors()` を呼ぶ＝共有ログ語彙で grep 突合すれば足りる）。
+- **Build vs Adopt**: 新規依存ゼロ。tracing 専用 target（`areka::persist::save` 先例）・bevy component hook（`Monitor::on_add` 先例）・
+  既存偽装境界（`MonitorSnapshot` 注入・偽 HWND World・`DPIS` パラメタ化・`ScaleReportSource`/`PhysicalSizeSource` シーム）を全面再利用。
+
+### 9.3 設計決定（OPEN だった D3/D6/D7/D8/D11/D12 の裁定）
+
+#### Decision D3: OS 推奨位置の棄却は wintf 源で・明示 opt-out component 契約
+- **選択肢**: (A) wintf 源で断つ／(B) areka 下流で必ず上書き／(C) ハイブリッド。
+- **採用**: **C（源断ち＋下流保証の両建て）**。ただし §4.2 Option A の ❌「`BoxStyle` 有無の暗黙契約」は採らず、
+  **明示 component `DpiSuggestedRectPolicy`**（既定 `ApplyPosition`＝従来挙動／`ExternalAuthority`＝OS 提案位置を書かない）を新設し、
+  areka が spawn 時にゴースト窓（char・balloon 両方）へ `ExternalAuthority` を付与する。判断は純関数
+  `dpi_suggested_position_decision(policy, suggested) -> Option<(i32,i32)>` に切り出す（`None`＝書かない・**`DpiChangeContext` も set しない**）。
+- **根拠**: S1〜S3 が静的構造証跡で確定済み（Req2.8）ゆえ「H1 のみだった場合に C は過剰」という §4.2 の懸念は消滅。
+  源断ちは (i) 汚染が起きないため D4 実装が新 component 不要へ縮退、(ii) 書き手Aの同期 echo（`WM_WINDOWPOSCHANGED` 内 tick）による
+  実行順非決定性（§6.1）ごと消える、(iii) 残置 `DpiChangeContext` を後続の areka 自身の SetWindowPos が誤消費する競合も併せて封じる。
+- **Trade-off**: wintf に窓ごとの新契約が増える（明示 component ゆえ暗黙性なし・既定値は従来挙動＝非ゴースト窓に無影響）。
+  Per-Monitor v2 の作法上 OS 提案は勧告であり、採用しない選択は契約違反でない。
+
+#### Decision D7: 位置と寸の権威分離は frame 側のみで解決（presenter 契約は不変）
+- **選択肢**: (a) frame 側だけで解決／(b) presenter に「位置再射影が要るか」を問う口を追加（クレート境界跨ぎ）。
+- **採用**: **(a)**。`dpi_phase_with` を「`Changed<DPI>` の char 窓は `refresh_scale` の戻り値に関わらず必ず射影 T を一度通す」形へ変更:
+  `Some(new_size)` → 従来どおり `reconcile_window_size`（内部で `resize_window_to`＝射影込み）／`None` → **現寸のまま**
+  `resize_window_to(world, char, 現 WindowPos.size)` を呼ぶ（同寸ゆえ 3b 中央付替えは恒等・`project_anchor` が Y を新モニタ work area へ再導出・
+  べき等 skip が無変化を吸収）。balloon 窓の `None` は位置据置き（随伴は `follow_balloon` の恒等式が担う）。
+- **根拠**: `refresh_scale` の `None` は「寸を触るな」の意味では正しく、欠けているのは位置側の独立判断のみ。presenter の戻り値契約を変えないことで
+  `areka-emo-present` クレートへの編集面拡大（W5 の kero-balloon が同クレート `balloon.rs` を所有）を回避する。
+- **Trade-off**: `None` 経路の再射影は現寸依存＝寸が古いまま位置だけ正す瞬間があり得るが、寸は `reconcile_reported_sizes`（drain 相）が
+  同一フレーム内で追い付く既存契約で閉じる。
+
+#### Decision D6: 最近傍フォールバックの観測化＋遷移ガード（D5 の実装配置を含む）
+- **選択肢**: (i) `work_area_for_window` の契約変更／(ii) フォールバック発火の観測点化＋可視性判定の別関数化。
+- **採用**: **(ii)**。`work_area_for_window` の既存契約（ドラッグ吸着に最適・最近傍で滑らかに跨ぐ）は**不変**のまま、
+  判別付き版 `work_area_for_window_with_origin -> Option<(RectPx, WorkAreaResolution::{Contains, NearestFallback})>` を追加し
+  既存関数はそれへ委譲する。可視性は**遷移ガード純関数** `guard_visibility(old_rect, proposed, snapshot) -> VisibilityVerdict` を
+  `project_anchor` の**下流・外側**（`resize_window_to` 内・D5 裁定どおり）に置く。規則:
+  proposed が全 work area と交差 → そのまま／交差せず・旧矩形は交差していた → **X を射影先 work area 内へ clamp**＋`warn!`（Req3.1）／
+  旧矩形も交差していなかった（ユーザーが明示ドラッグで留置） → 尊重してそのまま（Out of scope 条項）。
+- **根拠**: 遷移ガード形式なら「非ドラッグ要因による不可視化**への遷移**」だけを防ぎ、明示ドラッグの画面外留置と毎フレーム resnap が衝突しない
+  （clamp が毎フレームユーザー留置を引き戻す事故を規則レベルで排除）。フォールバック発火の判別が Req3.2/3.3 の「異常を異常として観測」を満たす。
+- **Trade-off**: ガードは Bottom 射影が選んだ work area を「clamp 先」として引数で受ける必要があり、`resize_window_to` 内の配線が 1 段増える。
+
+#### Decision D8: GhostWindows 掃除は scope 粒度・component hook 駆動・消費側存在確認の両建て
+- **選択肢**: 粒度＝entity 単位（`ScopeWindows` を `Option` 化）／scope 単位。駆動＝`on_remove` hook／明示呼出。
+- **採用**: **scope 粒度＋`GhostWindowMarker::on_remove` hook＋消費側存在確認（防御の二重化）**。
+  対（char+balloon）は spawn でも despawn（`despawn_smoke_targets` の同一 World 変異内一括）でも**原子的な生存単位**であり、
+  片割れだけ死ぬ中間状態は正準経路では生じない（§9.1 実測）。hook は最初の片割れの despawn で scope エントリごと除去（`debug!`）・
+  後追いの片割れは no-op（`debug!`）。消費側（`resnap_with`・`reconcile_reported_sizes`・`resize_window_to`）は
+  「entity 不在＝正常終了系・`debug!` で skip」と「entity 実在だが `Anchored` 欠落＝真の異常・`warn!`」を**区別**する（Req6.2 と log-first の両立）。
+- **根拠**: hook は将来のあらゆる despawn 経路（正準終了・クラッシュ回復等）を呼出点結合なしで拾う（`Monitor::on_add` 先例・正準ライフサイクル規律）。
+  `Option` 化は全消費者へ波及する割に正準経路で発生しない状態のための複雑化＝Simplification レンズで却下。
+- **Trade-off**: 非正準に片割れだけ despawn された場合、生存側も registry から外れ resnap 対象外になる（Req6.4 は「掃除の前後で生存窓の
+  位置・寸・追従を**変化させない**」であり、resnap 停止は位置不変＝充足。異常系は hook の debug 出力で追跡可能）。
+
+#### Decision D11: 経路タグは `PlacementRoute` enum・単一ライターへの引数配管・診断語彙と一体
+- **採用**: `crates/areka/src/placement/diag.rs`（新設）に
+  `PlacementRoute { SpawnInitial, Restore, AnchorChange, Resnap, DpiReproject, KeepPositionResize, BalloonFollow }` を定義し、
+  `enqueue_window_set_pos`（および `resize_window_to`・`move_window_to`・`resize_window_keep_position`・`follow_balloon`）へ
+  **引数追加**で配管する（ラッパ乱立ではなく単一署名）。成功時に専用 target **`areka::placement::diag`**（`debug!` 水準・既定 OFF）で
+  経路・窓種別・scope・物理位置・物理寸・当該窓 DPI を 1 レコードで出す（Req1.2）。wintf 側の語彙は既存 `[drag]`（ドラッグ）と
+  WM_DPICHANGED の決定ログ（`os-suggested` 相当）で、**診断レポートの結論語彙＝areka `PlacementRoute` 名＋wintf 2 語の合併**とする（Req2.4）。
+- **根拠**: route は D6 の遷移ガード発火条件（非ドラッグ経路のみ）と warn 水準の分岐（Req3.3 は warn・ドラッグ毎イベントは debug）にも必要＝
+  ログ用メタデータでなく**第一級引数**が正しい。D1 裁定（恒久・専用 target・既定 OFF）を `RUST_LOG` の target フィルタで実現
+  （`areka::persist::save` 先例の流儀）。
+- **Trade-off**: 既存呼出署名が変わる（同一クレート内・呼出元は有限個・挙動不変リファクタは Req2.7 の「変更」外）。
+
+#### Decision D12: Requirement 1.1 の出力は areka 構築点を正典に・wintf 列挙ログはフィールド補強のみ
+- **選択肢**: (a) wintf 列挙点に一本化／(b) areka `MonitorSnapshot` 構築点／(c) 3 箇所全出力＋相互突合機構。
+- **採用**: **(b) を正典＋(c) の軽量形**。1.1 の正典出力は `MonitorSnapshot` 構築点（`main.rs:645`）に置く——placement の全判断が読む
+  権威 Resource の忠実転写点であり、診断が再構成すべき「areka が信じた世界」そのもの。出力は diag.rs の
+  `log_monitor_snapshot(monitors, context)` 共有ヘルパ（identifier・bounds・work_area・DPI・primary を物理 px で・専用 target）とし、
+  `prepare_ghost_windows` の列挙点（`placement/mod.rs:308`）も同ヘルパを呼ぶ。wintf `monitor_systems.rs:97-105` の既存 `debug!` には
+  work_area・handle フィールドを**追加するだけ**（一本化しない）。相互の食い違いは共有語彙の grep 突合で検出可能＝**専用突合機構は新設しない**
+  （3 箇所とも同一 `enumerate_monitors()` 呼出であり、食い違いは呼出時刻差でしか生じない。H6 の実機確定時のみ D10 の最小追随を検討）。
+- **Trade-off**: 起動後のモニタ構成変化は取りこぼす（M1 セッション固定と整合・§4.1 Option C の既知制約）。
+
+### 9.4 追加リスクと緩和
+
+- **`ExternalAuthority` 付与漏れ**（新 spawn 経路が opt-out を忘れる）→ spawn.rs の檻テストで「ゴースト窓 2 種×全 scope に付与」を固定。
+- **frame.rs の kero-balloon 衝突**（同一ファイル異ハンク）→ 編集は `dpi_phase_with`／`resnap_with`／`reconcile_reported_sizes` 近傍に限定し、
+  `run_text_scale_phase`／`balloon_models` に触れない。先着後 rebase を申し送り（干渉台帳の流儀）。
+- **診断とフェーズ順序**（D2 は Req2.7 改稿で解決済み）→ 純関数抽出・観測増設は診断前に着手可。S1〜S3 是正は静的確定ゆえ実機結果を待たない
+  （縮退条項の再定義どおり）。実機 2 セッションは是正**前**のビルドで採る必要はない——観測増設後のビルドで採る（1.7 恒久観測ゆえ再現可能）。
+  ただし S1/S2 是正が入ると消失の実機再現自体が起きなくなり得るため、**診断セッションは「観測増設まで（是正未投入）」のコミット時点で採取する**
+  順序制約を design の実装順に明記する。
