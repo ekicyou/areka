@@ -396,7 +396,13 @@ pub fn build_balloon_target_from_faces(
 /// scope 別バルーン定義: descript.txt（基層・読取失敗は warn!＋空層）＋ face0 の
 /// override_file_name()（上書き層・**NotFound は debug!**・他 I/O エラーは warn!＝D8）を
 /// parse_str へ渡す 2 層マージ。確定した windowposition/validrect を info! で記録（R6.3）。
-pub fn load_scope_balloon_model(balloon_dir: &Path, face0: &ResolvedFace) -> BalloonModel;
+/// 実装時訂正（task 1.4）: `scope: u32` を第 2 引数として追加した。R6.3／観測点 3 が
+/// 本関数の info! に scope を要求する一方、`ResolvedFace` から scope は逆算できない
+/// （本体側へ縮退した相方の面は採用接頭辞が `balloons` となり scope 0 の面と区別が付かない）。
+/// 引数順は `resolve_balloon_faces(dir, scope)` に揃える。
+pub fn load_scope_balloon_model(
+    balloon_dir: &Path, scope: u32, face0: &ResolvedFace,
+) -> BalloonModel;
 ```
 
 - Preconditions: `balloon_dir` は実在ディレクトリ（走査失敗は log-first で Err）。

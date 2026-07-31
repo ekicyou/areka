@@ -28,7 +28,7 @@
   - 決定論檻: 面別上書きファイル名が採用接頭辞に対応して導出され、縮退した面ではデフォルト定義側の名前になること
   - _Requirements: 1.7, 2.2, 2.3, 6.1, 6.2, 6.4, 7.1_
 
-- [ ] 1.4 scope 別バルーン定義の 2 層マージを権威側で提供する
+- [x] 1.4 scope 別バルーン定義の 2 層マージを権威側で提供する
   - 現在は起動時資産側にある文字コード解決つきの寛容な読み取りと 2 層マージ構築を、権威クレートへ移設する（旧呼び出し元の置換と旧コードの退役は 3.1 が行う）
   - 既定設定と採用面の面別上書きを既存パーサへ渡し、scope 専用のマージ済み定義を返す（パーサ本体は改造しない）
   - 面別上書きファイルの不在は正常な縮退としてデバッグレベルで記録し、失敗として扱わない
@@ -195,4 +195,6 @@
 - worktree では `vendors/pasta` サブモジュールが未 populate ＝ cargo が manifest ロードで落ちる。着手前に `git submodule update --init --recursive vendors/pasta`（本ランで実施済み）。
 - `cargo clippy` は本ワークスペースで使えない（依存 crate `wintf` に既存のコンパイルエラー約 20 件があり clippy が対象 crate へ到達しない）。ゲートは `cargo build` / `cargo test` を用いる。
 - 本 crate は rustfmt-clean ではない（既存の未整形箇所が多数）。追加分のみ整形し、既存部の一括整形はしない（無関係な巨大差分を作らない）。
+- **`load_scope_balloon_model` の署名は `(balloon_dir, scope: u32, face0)`**（design.md の 2 引数版から実装時訂正・design.md 側も追記済み）。R6.3／観測点 3 が info! に scope を要求する一方、`ResolvedFace` から scope は逆算できない（縮退した相方の面は採用接頭辞が `balloons` ＝ scope 0 と区別不能）。3.1／placement の呼出点は scope を渡すこと。
+- テスト内のログ捕捉は `tracing` のプロセス大域 callsite interest が並列実行で `never` に焼かれて取りこぼす。同 crate `scale.rs` 由来の常駐 `InterestProbe` ＋窓内 `rebuild_interest_cache()` パターンを使う（1.4 で balloon.rs のテストハーネスへ導入済み）。
 - ログ発火条件（warn/info の**発火判定分岐**）も判断分岐ゆえ檻に入れる。依存追加なしのログ捕捉ドナーが `crates/areka-emo-present/src/presenter.rs` のテストモジュールにある（private ゆえ複製が必要）。1.3 では R6.2 warn の 2 述語（`scope >= 1` ∧ `tier == Default`）を檻 7 として固定済み。

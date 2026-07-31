@@ -33,6 +33,8 @@ use areka_emo_atlas::{
     AlphaParams, AtlasTable, ElementDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
 };
 use areka_emo_compose::{ComposeError, EmoWorld};
+use areka_parsers::balloon::BalloonModel;
+use areka_parsers::charset::{DefaultEncoding, decode};
 
 use crate::command::PresentError;
 
@@ -40,6 +42,8 @@ use crate::command::PresentError;
 const FRAME_PREFIX: &str = "balloons";
 /// 列挙対象の拡張子（小文字比較）。
 const FRAME_SUFFIX: &str = ".png";
+/// バルーン既定設定ファイル名（2 層マージの**基層**・シェル側 descript と同名別物）。
+const DESCRIPT_TXT: &str = "descript.txt";
 
 /// 系列族の定義（**表データ**・候補追加が構造改変を伴わない形・R1.9）。
 ///
@@ -404,6 +408,128 @@ pub fn resolve_balloon_faces(
     Ok(faces)
 }
 
+/// バルーン記述ファイルを文字コード解決つきで読む（既定 Ansi・宣言優先＝emo2 は `charset,UTF-8`）。
+///
+/// 戻りは **読めたテキスト**か **失敗の [`std::io::Error`]** をそのまま返す。層ごとに要求される
+/// ログレベルが異なる（D8——基層は `warn!`・上書き層の不在は `debug!`）ため、レベル判断は
+/// 呼び出し側の 2 つの薄いラッパへ委ね、本関数は判断を持たない。
+fn read_decoded(path: &Path) -> Result<String, std::io::Error> {
+    std::fs::read(path).map(|bytes| decode(&bytes, DefaultEncoding::Ansi))
+}
+
+/// **基層**（`descript.txt`）を寛容に読む。読取失敗は `warn!`＋`None`（空層で継続・D8）。
+///
+/// 基層の欠落はバルーン既定設定が丸ごと得られない事態であり、正常縮退ではない（相方側で
+/// 毎起動鳴る類の事象でもない）。ゆえに現行の `warn!` を維持し `debug!` へ降格しない。
+fn read_descript_layer(path: &Path) -> Option<String> {
+    match read_decoded(path) {
+        Ok(text) => Some(text),
+        Err(err) => {
+            tracing::warn!(
+                path = %path.display(),
+                error = %err,
+                "balloon: バルーン既定設定（descript.txt）の読取に失敗（空層で継続）"
+            );
+            None
+        }
+    }
+}
+
+/// **面別上書き層**（`{採用接頭辞}{ID}s.txt`）を寛容に読む（D8 のレベル階層）。
+///
+/// - 不在（[`std::io::ErrorKind::NotFound`]）→ `debug!`。上書き層を持たない面は正典上まったく
+///   正常であり（R2.4「欠落を失敗として扱わない」）、既定設定のみで定義が確定する。相方側の
+///   バルーンが上書き層を持たないだけで毎起動 `warn!` が鳴る事故を構造的に防ぐ。
+/// - その他の入出力エラー（権限・I/O 障害等）→ `warn!`。こちらは資産配置の異常であり、
+///   既定設定のみで継続はするが観測可能に残す。
+fn read_face_override_layer(path: &Path, scope: u32, file_name: &str) -> Option<String> {
+    match read_decoded(path) {
+        Ok(text) => Some(text),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+            tracing::debug!(
+                scope = scope,
+                file = %file_name,
+                path = %path.display(),
+                "balloon: 面別上書き設定が無いため既定設定のみを用いる（正常縮退）"
+            );
+            None
+        }
+        Err(err) => {
+            tracing::warn!(
+                scope = scope,
+                file = %file_name,
+                path = %path.display(),
+                error = %err,
+                "balloon: 面別上書き設定の読取に失敗（既定設定のみで継続）"
+            );
+            None
+        }
+    }
+}
+
+/// 当該 scope 専用の**マージ済みバルーン定義**を組む（R2.1〜R2.5・全消費者共通の単一施行点）。
+///
+/// バルーン既定設定 `descript.txt`（基層）へ、`face0` が採用した面に**対応する**面別上書き
+/// ファイル `{採用接頭辞}{ID}s.txt`（[`ResolvedFace::override_file_name`]）を重ねた 2 層を、
+/// 既存パーサ `areka_parsers::balloon::parse_str` へそのまま渡す。マージ規則（後勝ち・未指定
+/// 項目の基層継承＝R2.5）はパーサ側の既存契約であり、本関数はパーサを改造せず**層を用意する
+/// だけ**である。上書き層は採用面に対応するもの 1 つのみを引くため、ID 単位フォールバックで
+/// 後段接頭辞へ落ちた面にはその後段接頭辞の上書き層が対応する（R2.2/R2.3）。
+///
+/// # 失敗の扱い（D8・log-first）
+///
+/// `parse_str` は `Result` を返さず panic しない寛容写像ゆえ、本関数も常に [`BalloonModel`] を
+/// 返す（読取失敗は空層で継続＝欠落キーは当該スカラ `None`）。層ごとのログレベルは
+/// [`read_descript_layer`]／[`read_face_override_layer`] のとおりで、上書き層の**不在のみ**が
+/// `debug!`（正常縮退）である。
+///
+/// # scope 引数について
+///
+/// 設計の署名は `(balloon_dir, face0)` だが、観測（R6.3）は確定値を **scope とともに**記録する
+/// ことを求める。scope は [`ResolvedFace`] から逆算できない——本体側へ縮退した相方の面は採用
+/// 接頭辞が `balloons` になり、scope 0 の面と区別が付かないためである。ゆえに scope を明示的に
+/// 受け取る（列挙側 [`resolve_balloon_faces`] と同じ `(dir, scope, ...)` の引数順に揃える）。
+///
+/// # 観測（R6.3）
+///
+/// 確定した `windowposition` / `validrect` の実値を scope・採用上書きファイル名とともに `info!`
+/// で記録する。placement／boot の 2 呼出点から scope あたり 2 行出るが、**値が一致すること自体**が
+/// 権威一元化の生き証人になる。
+pub fn load_scope_balloon_model(
+    balloon_dir: &Path,
+    scope: u32,
+    face0: &ResolvedFace,
+) -> BalloonModel {
+    // 基層: バルーン既定設定（読取失敗は warn!＋空層）。
+    let descript = read_descript_layer(&balloon_dir.join(DESCRIPT_TXT)).unwrap_or_default();
+
+    // 上書き層: 採用面に対応する 1 つのみ（不在は debug! の正常縮退・D8）。
+    let override_name = face0.override_file_name();
+    let face_override =
+        read_face_override_layer(&balloon_dir.join(&override_name), scope, &override_name);
+
+    // マージ規則そのものは既存パーサの契約（後勝ち・未指定は基層継承＝R2.5）に委ねる。
+    let model = areka_parsers::balloon::parse_str(&descript, face_override.as_deref());
+
+    // R6.3: 確定した表示位置指定と文字範囲の実値を scope とともに記録する。
+    let wp = model.windowposition();
+    let vr = model.validrect();
+    tracing::info!(
+        balloon_dir = %balloon_dir.display(),
+        scope = scope,
+        file = %override_name,
+        windowposition_x = ?wp.x(),
+        windowposition_y = ?wp.y(),
+        validrect_top = ?vr.top(),
+        validrect_bottom = ?vr.bottom(),
+        validrect_left = ?vr.left(),
+        validrect_right = ?vr.right(),
+        "balloon: scope 別バルーン定義の 2 層マージが確定"
+    );
+
+    model
+}
+
 /// `balloon_dir` から枠画像を列挙し `(surface_id, ファイル名)` を **surface id 昇順**で返す。
 ///
 /// `balloons{N}.png`（N は非負整数）だけを枠として採り、`balloonc*`/`arrow*`/`marker*`/`online*`・
@@ -568,6 +694,11 @@ mod tests {
         /// 空のプレースホルダファイルを作る（MemoryDecoder 経路ゆえ中身は不問・列挙対象のため名前のみ要）。
         fn touch(&self, name: &str) {
             std::fs::File::create(self.path.join(name)).expect("プレースホルダ作成");
+        }
+
+        /// テキストファイルを UTF-8 で書く（記述ファイル 2 層の合成 fixture 用）。
+        fn write(&self, name: &str, content: &str) {
+            std::fs::write(self.path.join(name), content).expect("記述ファイル作成");
         }
     }
 
@@ -1298,10 +1429,71 @@ mod tests {
         fn exit(&self, _span: &tracing::span::Id) {}
     }
 
+    /// interest キャッシュへ `never` を焼かせないための常駐 dispatcher（同 crate `scale.rs` の
+    /// 確立した対策を本ファイル境界内へ最小複製したもの）。
+    ///
+    /// `register_callsite` が常に [`tracing::subscriber::Interest::sometimes`] を返すことだけが
+    /// 仕事で、`enabled()` は偽・`event()` は no-op（他テストの観測へ副作用を与えない）。
+    struct InterestProbe;
+
+    impl tracing::Subscriber for InterestProbe {
+        fn register_callsite(
+            &self,
+            _meta: &'static tracing::Metadata<'static>,
+        ) -> tracing::subscriber::Interest {
+            // 既定実装は `enabled()` が偽なら `never` を返してしまう。ここを `sometimes` に
+            // 固定することが本 probe の唯一の存在理由。
+            tracing::subscriber::Interest::sometimes()
+        }
+        fn enabled(&self, _meta: &tracing::Metadata<'_>) -> bool {
+            false
+        }
+        fn new_span(&self, _attrs: &tracing::span::Attributes<'_>) -> tracing::span::Id {
+            tracing::span::Id::from_u64(1)
+        }
+        fn record(&self, _span: &tracing::span::Id, _values: &tracing::span::Record<'_>) {}
+        fn record_follows_from(&self, _span: &tracing::span::Id, _follows: &tracing::span::Id) {}
+        fn event(&self, _event: &tracing::Event<'_>) {}
+        fn enter(&self, _span: &tracing::span::Id) {}
+        fn exit(&self, _span: &tracing::span::Id) {}
+    }
+
+    /// probe dispatcher を **2 個**プロセス寿命で常駐させる（冪等）。
+    ///
+    /// 2 個必要なのは tracing-core の `has_just_one = (dispatchers.len() <= 1)` ゆえ——1 個では
+    /// 登録直後も真のままとなり、interest 計算が「登録したスレッドの既定 dispatcher」
+    /// （購読者を持たないテストスレッドでは `NoSubscriber`＝`never`）を参照する毒の経路が
+    /// 生き残る。2 個目の登録で確定的に偽へ落とし、interest を「生存する登録済み dispatcher
+    /// 全体の `and`」で決めさせる。probe は常に `sometimes` を返すゆえ合成結果は決して
+    /// `never` にならない。
+    fn ensure_interest_probes() {
+        static PROBES: std::sync::OnceLock<(tracing::Dispatch, tracing::Dispatch)> =
+            std::sync::OnceLock::new();
+        PROBES.get_or_init(|| {
+            // `Dispatch::new` が callsite の登録＋全走査再計算を行う。
+            (
+                tracing::Dispatch::new(InterestProbe),
+                tracing::Dispatch::new(InterestProbe),
+            )
+        });
+    }
+
     /// `f` の実行中に出たイベントを捕捉して `(戻り値, イベント列)` を返す。
+    ///
+    /// `with_default` が差し替えるのはスレッドローカルの既定 dispatcher だが、callsite の
+    /// interest キャッシュは**プロセス大域**であり「その callsite をプロセス内で最初に踏んだ
+    /// スレッドが勝つ」。本ファイルのログ callsite は捕捉しない他テストと共有されるため、
+    /// probe 常駐（[`ensure_interest_probes`]）＋窓の内側での `rebuild_interest_cache` の
+    /// 二段で毒化を潰す。詳細な機序は同 crate `scale.rs` の `mod tests` 冒頭コメントに在る。
     fn capture_events<T>(f: impl FnOnce() -> T) -> (T, Vec<CapturedEvent>) {
+        ensure_interest_probes();
+
         let cap = CaptureSubscriber::default();
-        let out = tracing::subscriber::with_default(cap.clone(), f);
+        let out = tracing::subscriber::with_default(cap.clone(), || {
+            // probe 常駐前（プロセス起動〜初回捕捉）に焼かれた `never` の掃き残しを潰す。
+            tracing::callsite::rebuild_interest_cache();
+            f()
+        });
         let events = cap.0.lock().expect("捕捉バッファの毒化なし").clone();
         (out, events)
     }
@@ -1439,5 +1631,354 @@ mod tests {
                 "枠不在は EmptyComposition(0) へ畳む: {err:?}"
             ),
         }
+    }
+
+    // ── 檻 8: scope 別バルーン定義の 2 層マージ（`load_scope_balloon_model`・R2.1/2.2/2.3/2.4/2.5・
+    //          R6.3/6.4・D8）─────────────────────────────────────────────────────────────
+
+    /// emo2 バルーン fixture（`emo2-kakukaku`）を `CARGO_MANIFEST_DIR`（`crates/areka-emo-present`）
+    /// 相対で解決する（areka 側 placement/assets テストと同一アンカー規約）。
+    ///
+    /// 本 fixture は実資産である——`descript.txt`（基層）・`balloons0s.txt`（本体側の面別上書き層）・
+    /// `balloonk0s.txt`（相方側の面別上書き層）に加え、面画像 `balloons0.png` / `balloonk0.png` を
+    /// 併せ持つため、scope 0 / 1 が**別の面を採用し別の上書き層へ辿り着く**ことを実データで固定できる。
+    fn emo2_balloon_root() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../pilot/examples/shiori-host-32/fixtures/emo2/emo2-kakukaku")
+    }
+
+    /// 実 fixture の当該 scope の面 0 を解決するテストヘルパ（本体は権威経路そのもの）。
+    fn emo2_face0(scope: u32) -> ResolvedFace {
+        let faces = resolve_balloon_faces(&emo2_balloon_root(), scope)
+            .expect("emo2-kakukaku は面 0 を持つ");
+        faces
+            .into_iter()
+            .find(|f| f.surface_id == 0)
+            .expect("面 0 必在契約")
+    }
+
+    /// 檻 8-a（R2.1/R2.2/R2.5）per-scope マージ実値: 実 fixture `emo2-kakukaku` で、
+    /// scope 0（本体側 `balloons0s.txt`）と scope 1（相方側 `balloonk0s.txt`）が**互いに異なる実値**
+    /// へマージされる。
+    ///
+    /// - scope 0: `validrect 46,-56,36,-44` / `windowposition 266,-129`（`balloons0s.txt` 実測）
+    /// - scope 1: `validrect 40,-70,24,-48` / `windowposition -190,-75`（`balloonk0s.txt` 実測）
+    ///
+    /// 採用面の上書き層のみが効くこと（R2.2）——scope 1 が `balloonk0` を採る以上、
+    /// `balloons0s.txt` の値（266/-129・46/-56/36/-44）はどれも scope 1 の定義に現れない。
+    #[test]
+    fn load_scope_balloon_model_merges_per_scope_on_emo2_fixture() {
+        let dir = emo2_balloon_root();
+
+        let face0_sakura = emo2_face0(0);
+        assert_eq!(
+            face0_sakura.override_file_name(),
+            "balloons0s.txt",
+            "前提: scope 0 の面 0 は本体側系列を採る"
+        );
+        let sakura = load_scope_balloon_model(&dir, 0, &face0_sakura);
+
+        let face0_kero = emo2_face0(1);
+        assert_eq!(
+            face0_kero.override_file_name(),
+            "balloonk0s.txt",
+            "前提: scope 1 の面 0 は相方側系列を採る（R2.2）"
+        );
+        let kero = load_scope_balloon_model(&dir, 1, &face0_kero);
+
+        // --- scope 0（本体側）の実値 ---
+        let vr = sakura.validrect();
+        assert_eq!(
+            (vr.top(), vr.bottom(), vr.left(), vr.right()),
+            (Some(46), Some(-56), Some(36), Some(-44)),
+            "scope 0 の validrect は balloons0s.txt が descript を後勝ち上書きした値"
+        );
+        let wp = sakura.windowposition();
+        assert_eq!(
+            (wp.x(), wp.y()),
+            (Some(266), Some(-129)),
+            "scope 0 の windowposition は balloons0s.txt のみが供給する（descript に不在）"
+        );
+
+        // --- scope 1（相方側）の実値 ---
+        let vr = kero.validrect();
+        assert_eq!(
+            (vr.top(), vr.bottom(), vr.left(), vr.right()),
+            (Some(40), Some(-70), Some(24), Some(-48)),
+            "scope 1 の validrect は balloonk0s.txt の値（balloons0s.txt を引かない・R2.2）"
+        );
+        let wp = kero.windowposition();
+        assert_eq!(
+            (wp.x(), wp.y()),
+            (Some(-190), Some(-75)),
+            "scope 1 の windowposition は balloonk0s.txt の値（R2.2）"
+        );
+
+        // --- 2 scope が実際に別物であること（全 scope 共通 1 本への畳み込みの検出） ---
+        assert_ne!(
+            sakura.windowposition(),
+            kero.windowposition(),
+            "本体側と相方側の windowposition が同値＝scope 別化が効いていない"
+        );
+        assert_ne!(
+            sakura.validrect(),
+            kero.validrect(),
+            "本体側と相方側の validrect が同値＝scope 別化が効いていない"
+        );
+    }
+
+    /// 檻 8-b（R2.5）継承: 面別上書き層で**指定されなかった**項目は既定設定（`descript.txt`）から
+    /// 継承され、指定された項目のみが上書きされる。
+    ///
+    /// 実 fixture の `wordwrappoint.x` がこの 2 面性をそのまま体現する——`balloonk0s.txt` は
+    /// `wordwrappoint` を持たないゆえ scope 1 は descript の `-34` を継承し、`balloons0s.txt` は
+    /// `wordwrappoint.x,-49` を持つゆえ scope 0 はそちらで上書きされる。加えて双方の scope が
+    /// 上書き層のどちらも触れない項目（`font.name` / `origin` / `font.height`）を descript から
+    /// 等しく継承する。
+    #[test]
+    fn load_scope_balloon_model_inherits_unspecified_keys_from_descript() {
+        let dir = emo2_balloon_root();
+        let sakura = load_scope_balloon_model(&dir, 0, &emo2_face0(0));
+        let kero = load_scope_balloon_model(&dir, 1, &emo2_face0(1));
+
+        assert_eq!(
+            kero.wordwrappoint().x(),
+            Some(-34),
+            "balloonk0s.txt は wordwrappoint を指定しない＝descript の -34 を継承する（R2.5）"
+        );
+        assert_eq!(
+            sakura.wordwrappoint().x(),
+            Some(-49),
+            "balloons0s.txt は wordwrappoint.x,-49 を指定する＝そちらが後勝ちする（R2.5 の対照）"
+        );
+        // 上書き層のどちらも触れない項目は両 scope とも descript から継承される。
+        for (scope, model) in [(0u32, &sakura), (1u32, &kero)] {
+            assert_eq!(
+                model.wordwrappoint().y(),
+                Some(0),
+                "scope {scope}: wordwrappoint.y は descript 継承"
+            );
+            assert_eq!(
+                model.origin().x(),
+                Some(0),
+                "scope {scope}: origin.x は descript 継承"
+            );
+            assert_eq!(
+                model.font().name(),
+                Some("Yu Gothic UI"),
+                "scope {scope}: font.name は descript 継承（charset,UTF-8 宣言どおりデコードされる）"
+            );
+            assert_eq!(
+                model.font().height(),
+                Some(28),
+                "scope {scope}: font.height は descript 継承"
+            );
+        }
+    }
+
+    /// 檻 8-c（R2.4・D8）上書きファイル不在: 面別上書きファイルが存在しないとき、
+    /// 既定設定の値のみで正常な定義を返し、**失敗として扱わない**。ログレベルは
+    /// `debug!`（正常縮退）であって `warn!`／`error!` ではない（D8——相方側で毎起動 warn が
+    /// 鳴る事故を防ぐ）。
+    #[test]
+    fn load_scope_balloon_model_debug_logs_missing_override_and_continues() {
+        let dir = TempDir::new();
+        dir.write(
+            "descript.txt",
+            "validrect.top,7\nvalidrect.bottom,-8\nwordwrappoint.x,-34\n",
+        );
+        dir.touch("balloons0.png"); // 面 0 は在るが balloons0s.txt は置かない。
+
+        let face0 = {
+            let faces = resolve_balloon_faces(dir.path(), 0).expect("面 0 は在る");
+            faces.into_iter().find(|f| f.surface_id == 0).unwrap()
+        };
+        let (model, events) = capture_events(|| load_scope_balloon_model(dir.path(), 0, &face0));
+
+        // R2.4: 既定設定のみで正常な定義が返る（欠落は失敗でない）。
+        assert_eq!(
+            model.validrect().top(),
+            Some(7),
+            "上書き層不在でも既定設定の値がそのまま定義になる（R2.4）"
+        );
+        assert_eq!(model.validrect().bottom(), Some(-8));
+        assert_eq!(
+            model.windowposition().x(),
+            None,
+            "どちらの層にも無いキーは None（捏造しない）"
+        );
+
+        // D8: 不在は debug!。warn!／error! を出さない。
+        let missing: Vec<&CapturedEvent> = events
+            .iter()
+            .filter(|e| {
+                e.fields
+                    .get("message")
+                    .is_some_and(|m| m.contains("面別上書き"))
+            })
+            .collect();
+        assert_eq!(
+            missing.len(),
+            1,
+            "面別上書き層の不在は 1 イベントとして記録される: {events:?}"
+        );
+        assert_eq!(
+            missing[0].level,
+            tracing::Level::DEBUG,
+            "不在は正常縮退＝debug!（D8）: {:?}",
+            missing[0]
+        );
+        assert_eq!(
+            missing[0].field("file"),
+            Some("balloons0s.txt"),
+            "D8: 不在だった上書きファイル名が乗る"
+        );
+        assert!(
+            events
+                .iter()
+                .all(|e| e.level != tracing::Level::WARN && e.level != tracing::Level::ERROR),
+            "上書き層不在は warn!／error! を一切出さない（D8）: {events:?}"
+        );
+    }
+
+    /// 檻 8-c'（R2.4/R6.4・D8）上書き層のその他 I/O エラー: **不在ではない**読取失敗
+    /// （権限・I/O 障害等）は `debug!` へ降格せず `warn!` で観測可能に残し、既定設定のみで継続する。
+    ///
+    /// 「不在か否か」の判定分岐そのものを押さえる檻である——分岐を落として全失敗を `debug!` に
+    /// すればこの檻が、全失敗を `warn!` にすれば檻 8-c が RED になる。異常を決定論的に作るため、
+    /// 上書きファイル名と同名の**ディレクトリ**を置く（`std::fs::read` は NotFound 以外の
+    /// エラーを返す）。
+    #[test]
+    fn load_scope_balloon_model_warns_on_non_notfound_override_error() {
+        let dir = TempDir::new();
+        dir.write("descript.txt", "validrect.top,7\n");
+        dir.touch("balloons0.png");
+        // 上書きファイルの位置にディレクトリを置く＝不在ではない読取失敗。
+        std::fs::create_dir(dir.path().join("balloons0s.txt")).expect("同名ディレクトリ作成");
+
+        let face0 = {
+            let faces = resolve_balloon_faces(dir.path(), 0).expect("面 0 は在る");
+            faces.into_iter().find(|f| f.surface_id == 0).unwrap()
+        };
+        let (model, events) = capture_events(|| load_scope_balloon_model(dir.path(), 0, &face0));
+
+        // 既定設定のみで継続する（失敗として畳まない）。
+        assert_eq!(model.validrect().top(), Some(7), "既定設定のみで継続する");
+
+        let hits: Vec<&CapturedEvent> = events
+            .iter()
+            .filter(|e| {
+                e.fields
+                    .get("message")
+                    .is_some_and(|m| m.contains("面別上書き"))
+            })
+            .collect();
+        assert_eq!(hits.len(), 1, "面別上書き層の事象は 1 イベント: {events:?}");
+        assert_eq!(
+            hits[0].level,
+            tracing::Level::WARN,
+            "不在以外の入出力エラーは warn!（debug! へ降格しない・D8）: {:?}",
+            hits[0]
+        );
+        assert_eq!(
+            hits[0].field("scope"),
+            Some("0"),
+            "どの scope の上書き層が読めなかったかが乗る"
+        );
+    }
+
+    /// 檻 8-d（R6.4・D8）基層読取失敗: 既定設定 `descript.txt` の読取失敗は現行どおり
+    /// `warn!`＋空層継続（`debug!` へ降格しない）。両層とも欠ければ全スカラ `None` の
+    /// 定義を返す（panic しない・parsers の寛容契約に整合）。
+    #[test]
+    fn load_scope_balloon_model_warns_on_missing_descript() {
+        let dir = TempDir::new();
+        dir.touch("balloons0.png"); // descript.txt も balloons0s.txt も置かない。
+
+        let face0 = {
+            let faces = resolve_balloon_faces(dir.path(), 0).expect("面 0 は在る");
+            faces.into_iter().find(|f| f.surface_id == 0).unwrap()
+        };
+        let (model, events) = capture_events(|| load_scope_balloon_model(dir.path(), 0, &face0));
+
+        assert_eq!(
+            model.validrect().top(),
+            None,
+            "両層とも欠ければ None（空層継続）"
+        );
+        assert_eq!(model.windowposition().x(), None);
+
+        let descript_warns: Vec<&CapturedEvent> = events
+            .iter()
+            .filter(|e| {
+                e.fields
+                    .get("message")
+                    .is_some_and(|m| m.contains("バルーン既定設定"))
+            })
+            .collect();
+        assert_eq!(
+            descript_warns.len(),
+            1,
+            "基層読取失敗は 1 イベント: {events:?}"
+        );
+        assert_eq!(
+            descript_warns[0].level,
+            tracing::Level::WARN,
+            "基層 descript.txt の読取失敗は現行どおり warn!（D8）: {:?}",
+            descript_warns[0]
+        );
+    }
+
+    /// 檻 8-e（R6.3・観測点 3）確定値の記録: 2 層マージで確定した `windowposition` /
+    /// `validrect` の**実値**が scope とともに `info!` で記録される。
+    ///
+    /// scope は `ResolvedFace` に無い（採用接頭辞は縮退で `balloons` にもなり得るため接頭辞から
+    /// 逆算できない）ゆえ、この檻は引数として渡した scope がそのままログへ乗ることを固定する。
+    #[test]
+    fn load_scope_balloon_model_info_logs_scope_and_resolved_values() {
+        let dir = emo2_balloon_root();
+        let face0 = emo2_face0(1);
+        let (model, events) = capture_events(|| load_scope_balloon_model(&dir, 1, &face0));
+
+        let infos: Vec<&CapturedEvent> = events
+            .iter()
+            .filter(|e| {
+                e.level == tracing::Level::INFO
+                    && e.fields
+                        .get("message")
+                        .is_some_and(|m| m.contains("scope 別バルーン定義"))
+            })
+            .collect();
+        assert_eq!(infos.len(), 1, "確定値の info! は 1 行: {events:?}");
+        let info = infos[0];
+
+        assert_eq!(info.field("scope"), Some("1"), "R6.3: scope が乗る");
+        // 実値はモデルの確定値そのもの（ログと戻り値が乖離しないことを併せて固定する）。
+        let wp = model.windowposition();
+        let vr = model.validrect();
+        assert_eq!((wp.x(), wp.y()), (Some(-190), Some(-75)));
+        assert_eq!(
+            info.field("windowposition_x"),
+            Some("Some(-190)"),
+            "R6.3: windowposition の実値が乗る"
+        );
+        assert_eq!(info.field("windowposition_y"), Some("Some(-75)"));
+        assert_eq!(
+            (vr.top(), vr.bottom(), vr.left(), vr.right()),
+            (Some(40), Some(-70), Some(24), Some(-48))
+        );
+        assert_eq!(
+            info.field("validrect_top"),
+            Some("Some(40)"),
+            "R6.3: validrect の実値が乗る"
+        );
+        assert_eq!(info.field("validrect_bottom"), Some("Some(-70)"));
+        assert_eq!(info.field("validrect_left"), Some("Some(24)"));
+        assert_eq!(info.field("validrect_right"), Some("Some(-48)"));
+        assert_eq!(
+            info.field("file"),
+            Some("balloonk0s.txt"),
+            "どの上書き層で確定したかが乗る（scope 別化の突合点）"
+        );
     }
 }
