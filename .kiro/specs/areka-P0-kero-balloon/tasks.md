@@ -121,7 +121,7 @@
   - _Requirements: 3.2, 3.3, 3.4, 3.6, 7.1_
   - _Boundary: placement windowposition_
 
-- [ ] 4.2 バルーン採寸を scope 別にする
+- [x] 4.2 バルーン採寸を scope 別にする
   - 採寸のファイル選択を権威の消費へ置き換え、固定名の最小再実装を撤去する
   - 採寸を scope ループの外の 1 回から、各 scope が解決した面 0 の実寸へ移す
   - 採寸失敗の scope 帰属を実 scope 番号にする

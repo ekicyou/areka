@@ -4,14 +4,20 @@
 //! `areka_emo_atlas::bake` → `EmoWorld::build`＋`bind_atlas` →
 //! `Composer::compose`・donor: `crates/areka/examples/emo-present.rs` の
 //! `build_shell_target`／`build_balloon_assets`）で、各スコープの初期 surface と
-//! balloon surface0 を **bind なし合成**し、原寸（物理 px [`SizePx`]）を得る。
+//! **そのスコープが解決した**バルーン面 0 を **bind なし合成**し、原寸
+//! （物理 px [`SizePx`]）を得る。
 //!
 //! - 初期 surface id: scope0 → `0`・scope1 → `10`（ukadoc 正典: 相方既定
 //!   サーフェス）・scope n≥2 → `10`（正典既定なし・`warn!` 付き暫定）
+//! - バルーン面 0 のファイル選択は系列解決権威
+//!   [`areka_emo_present::balloon::resolve_balloon_faces`] の消費のみで行う。採寸側は
+//!   接頭辞連鎖もディレクトリ走査も持たない（列挙が 2 実装に分かれると採寸窓寸と実際に
+//!   合成される枠がずれる・design D2）
 //! - 合成失敗したスコープは scope0 の寸法で代替し `warn!`（窓自体は生やす——
 //!   寸法だけ暫定・design「Error Handling」）
-//! - scope0 の採寸自体／balloon surface0 の採寸が成立しない場合は代替の根拠が
-//!   無いため [`PlacementError::Measure`]（log-first・シームがフォールバック・DD14）
+//! - scope0 の採寸自体／いずれかのスコープのバルーン面 0 の採寸が成立しない場合は
+//!   代替の根拠が無いため [`PlacementError::Measure`]（log-first・シームが
+//!   フォールバック・DD14）
 //! - 採寸に使ったアセット（`EmoWorld`／`AtlasTable`／WIC デコーダ）は本関数の
 //!   ローカルとして採寸後に**破棄**される。戻り値は素の数値（[`ScopeInput`]）のみ
 //!   （アセット所有・装着は emo2-boot の領分＝二重ロードは M1 受容トレードオフ）
@@ -25,6 +31,9 @@ use areka_emo_atlas::{
     AlphaParams, AtlasTable, PackConfig, SetId, SurfaceSet, UseSelfAlpha, WicDecoderArm, bake,
 };
 use areka_emo_compose::{BindSet, Composer, EmoWorld, PatternState, ScaleRatio};
+use areka_emo_present::balloon::{
+    ResolvedFace, build_balloon_target_from_faces, resolve_balloon_faces,
+};
 use tracing::{error, warn};
 
 use super::PlacementError;
@@ -104,15 +113,15 @@ impl SizeKind {
 }
 
 /// 各スコープの初期 surface（scope0=id0・scope1=id10・scope n≥2=id10 暫定＋warn）と
-/// balloon surface0 を bind なし合成して原寸（物理 px）を得る（2.9 の幅供給源・
-/// 3.2 の物理 px 単一通貨・DD5）。
+/// **そのスコープが解決した**バルーン面 0 を bind なし合成して原寸（物理 px）を得る
+/// （2.9 の幅供給源・3.2 の物理 px 単一通貨・DD5）。
 ///
 /// - 合成失敗したスコープは scope0 の寸法で代替し `warn!`（窓自体は生やす）
-/// - scope0 の採寸自体（shell アセット構築含む）・balloon surface0 の採寸が
-///   成立しない場合は代替根拠が無いため `Err(PlacementError::Measure)`
+/// - scope0 の採寸自体（shell アセット構築含む）・いずれかのスコープのバルーン面 0 の
+///   採寸が成立しない場合は代替根拠が無いため `Err(PlacementError::Measure)`
 ///   （log-first・シームが `spawn_dummy_window` へフォールバック・DD14）。
-///   balloon 起因の失敗は `reason` に `balloon:` 接頭辞を付け `scope: 0` で報告する
-///   （バルーン専用 variant は持たない・task 1 の失敗型を消費）
+///   balloon 起因の失敗は `reason` に `balloon:` 接頭辞を付け、**当該スコープ番号**で
+///   報告する（バルーン専用 variant は持たない・task 1 の失敗型を消費）
 /// - 採寸に使ったアセットは本関数のローカルとして return 時に破棄される
 ///
 /// 呼び出しスレッドは COM 初期化済みであること（本番＝MTA UI スレッド）。
@@ -124,14 +133,13 @@ impl SizeKind {
 /// 2. **k 適用** [`apply_scaling`]（`scaled_extent` 経由で char=`scaling.shell`・
 ///    balloon=`scaling.balloon` を **各 `ScopeInput` へ個別に**写像）
 ///
-/// (2) は per-scope の写像として書かれており、`balloon_size` が scope 別値になり得る
-/// 席（ループ内の供給点）を潰さない（要件 7.8・`areka-P0-kero-balloon`（W5）申し送り）。
-/// `MeasureScaling::IDENTITY` 指定時は `ScaleRatio::scale_len` が素通しゆえ native 採寸の
-/// 出力と厳密に同一である（要件 7.2）。
+/// (2) は per-scope の写像であり、`balloon_size` は実際に scope 別値である
+/// （`areka-P0-emo-dpi-scaling` が要件 7.8 として保全した席を、本 spec の scope 別採寸が
+/// 使い切った形）。`MeasureScaling::IDENTITY` 指定時は `ScaleRatio::scale_len` が素通しゆえ
+/// native 採寸の出力と厳密に同一である（要件 7.2）。
 ///
-/// なお上記の「`scope: 0` で報告する」は (1) native 段（全スコープ共通の balloon 採寸が
-/// 倒れる＝帰属先が定まらない）に限る。(2) k 適用段の balloon 失敗（i32 超過）は
-/// per-scope 写像ゆえ帰属が定まるため**実スコープ番号**で報告する。
+/// 失敗の scope 帰属は (1) native 段・(2) k 適用段のいずれでも**実スコープ番号**で一貫する
+/// （バルーン採寸が scope ループ内へ移り、帰属先が定まらない状況が無くなった）。
 #[allow(dead_code)] // scaffold（task 4.1）: 結線は task 6
 pub fn measure_scope_sizes(
     shell_dir: &Path,
@@ -141,14 +149,15 @@ pub fn measure_scope_sizes(
 ) -> Result<MeasuredSizes, PlacementError> {
     // (1) native 採寸（原寸・k 非適用）。
     let natives = measure_native_scope_sizes(shell_dir, balloon_root, scope_ids)?;
-    // (2) k 適用（per-scope 写像・R7.8 席保全）。
+    // (2) k 適用（per-scope 写像）。
     let scopes = apply_scaling(natives, scaling)?;
     Ok(MeasuredSizes { scopes })
 }
 
 /// native 採寸（k 非適用の原寸・[`measure_scope_sizes`] の第 1 段）。
 ///
-/// 既存の per-scope ループと [`ScopeInput`] 構造をそのまま保つ（要件 7.8）。
+/// 1 本の per-scope ループが、当該スコープのキャラ surface と当該スコープが解決した
+/// バルーン面 0 の**双方**を採寸して [`ScopeInput`] を組む（要件 3.1）。
 /// 失敗規約・代替規約は [`measure_scope_sizes`] のドキュメントに同じ。
 fn measure_native_scope_sizes(
     shell_dir: &Path,
@@ -175,9 +184,6 @@ fn measure_native_scope_sizes(
             PlacementError::Measure { scope: 0, reason }
         },
     )?;
-
-    // balloon surface0 の採寸（全スコープ共通・失敗は hard Err）。
-    let balloon_size = measure_balloon_surface0(balloon_root, &decoder, &mut composer)?;
 
     let mut scopes = Vec::with_capacity(scope_ids.len());
     for &scope in scope_ids {
@@ -210,6 +216,9 @@ fn measure_native_scope_sizes(
                 }
             }
         };
+        // バルーンは **当該 scope が解決した系列の面 0**（全 scope 共通の 1 回へ畳まない・
+        // 要件 3.1）。失敗は代替根拠が無く hard Err で、帰属は実 scope 番号。
+        let balloon_size = measure_balloon_surface0(balloon_root, &decoder, &mut composer, scope)?;
         scopes.push(ScopeInput {
             scope,
             char_size,
@@ -224,10 +233,10 @@ fn measure_native_scope_sizes(
 /// k 適用（[`measure_scope_sizes`] の第 2 段・**per-scope 写像**）。
 ///
 /// native 採寸で得た各 [`ScopeInput`] を**1 件ずつ** [`scale_scope_input`] へ通す。
-/// バルーン寸の供給点はループ内の `input.balloon_size` であり、`kero-balloon`（W5）が
-/// scope 別バルーン採寸へ改造しても本段は構造変更を要さない（要件 7.8 の席保全）。
-/// ループ外へ「バルーンは全スコープ共通だから 1 回だけ計算する」形へ畳むことは、
-/// この席を潰すため行わない。
+/// バルーン寸の供給点はループ内の `input.balloon_size` であり、その値は
+/// [`measure_native_scope_sizes`] が scope ごとに解決した面 0 の実寸ゆえ **scope 別に異なる**
+/// （emo2 実 fixture では scope0=400×224・scope1=288×203）。ループ外へ「バルーンは全スコープ
+/// 共通だから 1 回だけ計算する」形へ畳むと、相方側の寸が本体側の寸で上書きされる。
 ///
 /// 純関数（I/O・COM 非依存）ゆえ GPU/WIC 無しの単体テストで全分岐を網羅できる。
 fn apply_scaling(
@@ -252,7 +261,7 @@ fn scale_scope_input(
     Ok(ScopeInput {
         scope: input.scope,
         char_size: scale_size_px(input.char_size, scaling.shell, input.scope, SizeKind::Char)?,
-        // per-scope のバルーン供給点（R7.8 の席）。ループ外へ畳まない。
+        // per-scope のバルーン供給点（scope 別に解決した面 0 の実寸）。ループ外へ畳まない。
         balloon_size: scale_size_px(
             input.balloon_size,
             scaling.balloon,
@@ -364,72 +373,67 @@ fn build_shell_assets(
     Ok((world, baked.table))
 }
 
-/// balloon_root の枠画像 `balloons0.png`（大小無視）を synthetic surfaces.txt へ転記し、
-/// シェルと同一の公開 API 経路（parse→bake→build＋bind→compose）で surface0 を採寸する
-/// （donor `build_balloon_target`→採寸合成の最小再実装。採寸に要るのは surface0 のみ
-/// ゆえ枠 0 番だけを転記する）。
+/// **当該 scope** が解決したバルーン系列の面 0 を採寸する（要件 3.1・design D2）。
+///
+/// # ファイル選択は権威の消費のみ
+///
+/// どのファイルが当該 scope の面 0 かは系列解決権威
+/// [`resolve_balloon_faces`]（`areka-emo-present`）だけが決める。採寸側は接頭辞連鎖も
+/// ディレクトリ走査も固定名（かつての `balloons0.png` 決め打ち）も持たない——列挙規則が
+/// 独立 2 実装へ分かれると「採寸した窓寸 ≠ 実際に合成された枠」という実機でしか現れない
+/// 欠陥になるため（design「最重要の構造リスク」）。合成も権威の
+/// [`build_balloon_target_from_faces`] をそのまま用い、synthetic surfaces.txt の書式まで
+/// 含めて実装を 1 本に保つ（起動時資産構築と採寸が同じ絵を見る保証）。
+///
+/// 採寸に要るのは面 0 のみゆえ、権威が返した採用面列から**面 0 だけ**を構築へ渡す
+/// （他の面を bake しない）。面 0 の必在は権威側の単一施行点（R1.7）であり、ここで
+/// 再判定しない——面 0 を欠く入力では `resolve_balloon_faces` が既に `error!`＋`Err` を
+/// 返しており、万一の空列も構築側の log-first ガードが受け止める。
+///
+/// # 失敗
+///
+/// `error!`＋[`PlacementError::Measure`]（`reason` に `balloon:` 接頭辞）。scope ループ内から
+/// 呼ばれるため、帰属は**実 scope 番号**である（全 scope 共通の 1 回採寸ではなくなった＝
+/// 「帰属先が定まらない」状況自体が消えた・要件 3.1）。
+///
+/// なお design の Service Interface は `scope: u32` と記すが、placement 層の scope 通貨は
+/// `usize`（[`ScopeInput::scope`]・[`PlacementError::Measure`]）である。境界変換を呼び手へ
+/// 散らさないため本関数が `usize` を受け、権威呼び出しの直前で 1 度だけ u32 へ変換する。
 fn measure_balloon_surface0(
     balloon_root: &Path,
     decoder: &WicDecoderArm,
     composer: &mut Composer,
+    scope: usize,
 ) -> Result<SizePx, PlacementError> {
     let balloon_err = |reason: String| {
         error!(
             balloon_root = %balloon_root.display(),
+            scope,
             reason = %reason,
-            "measure: balloon surface0 の採寸に失敗"
+            "measure: scope のバルーン面 0 の採寸に失敗"
         );
         PlacementError::Measure {
-            scope: 0,
+            scope,
             reason: format!("balloon: {reason}"),
         }
     };
 
-    // `balloons0.png`（大小無視・実ファイル名は原形保持＝実 WIC が実パスを読む）を探す。
-    // `balloonc*`/`balloonk*`/`arrow*` 等の非枠は名前不一致で自然に外れる（donor と同じ分類）。
-    let read_dir = std::fs::read_dir(balloon_root)
-        .map_err(|e| balloon_err(format!("枠画像ディレクトリの走査失敗: {e}")))?;
-    let mut frame0: Option<String> = None;
-    for entry in read_dir {
-        let entry = match entry {
-            Ok(e) => e,
-            Err(e) => {
-                warn!(error = %e, "measure: balloon ディレクトリエントリの取得に失敗（スキップ）");
-                continue;
-            }
-        };
-        if let Some(name) = entry.file_name().to_str()
-            && name.eq_ignore_ascii_case("balloons0.png")
-        {
-            frame0 = Some(name.to_string());
-            break;
-        }
-    }
-    let frame0 =
-        frame0.ok_or_else(|| balloon_err("枠画像 balloons0.png が見つからない".to_string()))?;
+    // 権威の scope 通貨は u32（`areka-emo-present`）。表現できない scope は無言で
+    // 切り詰めず失敗として報告する（別 scope の系列を採ってしまう事故を作らない）。
+    let scope_key = u32::try_from(scope)
+        .map_err(|_| balloon_err(format!("scope 番号が u32 に収まらない: {scope}")))?;
 
-    // synthetic surfaces.txt（surface0 に単一 overlay element・donor と同一書式）。
-    let text = format!("surface0\n{{\nelement0,overlay,{frame0},0,0\n}}\n");
-    let shell = areka_parsers::shell::parse(&text);
+    // 系列解決（連鎖の導出・ディレクトリ列挙・面 ID 単位の選択はすべて権威側の 1 箇所）。
+    let faces = resolve_balloon_faces(balloon_root, scope_key)
+        .map_err(|e| balloon_err(format!("系列解決に失敗: {e}")))?;
+    // 採寸対象は面 0 のみ（採用面列の残りは bake しない）。
+    let face0: Vec<ResolvedFace> = faces.into_iter().filter(|f| f.surface_id == 0).collect();
 
-    let set = SurfaceSet {
-        surfaces: &shell.surfaces,
-        base_dir: balloon_root,
-        alpha_params: AlphaParams {
-            use_self_alpha: UseSelfAlpha::On, // PNG α 尊重（emo2 kakukaku 実測・donor R5.2 同値）
-        },
-    };
-    let baked = bake(&[set], decoder, PackConfig::default());
-    if !baked.errors.is_empty() {
-        let reasons: Vec<String> = baked.errors.iter().map(|e| e.to_string()).collect();
-        return Err(balloon_err(format!("枠画像の bake に失敗: {}", reasons.join("; "))));
-    }
+    let (world, atlas) = build_balloon_target_from_faces(balloon_root, decoder, &face0)
+        .map_err(|e| balloon_err(format!("面 0 の採寸資産の構築に失敗: {e}")))?;
 
-    let mut world = EmoWorld::build(&shell);
-    world.bind_atlas(&baked.table, SetId(0));
-
-    compose_size(composer, &world, &baked.table, 0).map_err(balloon_err)
-    // world／baked.table はここで破棄される（採寸後破棄の契約）。
+    compose_size(composer, &world, &atlas, 0).map_err(balloon_err)
+    // world／atlas はここで破棄される（採寸後破棄の契約）。
 }
 
 /// `surface_id` を bind なし（`BindSet::default()`）で合成し原寸（物理 px）を返す。
@@ -531,9 +535,13 @@ mod tests {
     /// scope1 初期 surface（surface10 ← CityPop/surface0010.png）。
     const SCOPE1_W: i32 = 336;
     const SCOPE1_H: i32 = 400;
-    /// balloon surface0（balloons0.png）。
-    const BALLOON_W: i32 = 400;
-    const BALLOON_H: i32 = 224;
+    /// scope0 のバルーン面 0（`balloons0.png`＝本体側系列・PNG IHDR 実測）。
+    const BALLOON0_W: i32 = 400;
+    const BALLOON0_H: i32 = 224;
+    /// scope1 のバルーン面 0（`balloonk0.png`＝相方側系列・PNG IHDR 実測）。
+    /// 本体側と**異なる**寸であることが本 fixture の判別力の源である。
+    const BALLOON1_W: i32 = 288;
+    const BALLOON1_H: i32 = 203;
 
     /// 観測可能な完了状態（tasks 4.1）: emo2 fixture の shell/balloon に対し
     /// `measure_scope_sizes` が scope0・scope1・balloon の原寸（非ゼロ物理 px）を
@@ -561,10 +569,14 @@ mod tests {
             // scope1: surface10（CityPop/surface0010.png 原寸）。
             assert_eq!(out.scopes[1].char_size.w, SCOPE1_W);
             assert_eq!(out.scopes[1].char_size.h, SCOPE1_H);
-            // balloon surface0（balloons0.png 原寸）は全スコープ共通。
+            // バルーン面 0 は **scope ごとに解決した系列**の原寸（scope0=balloons0.png・
+            // scope1=balloonk0.png）。厳密値の対比は
+            // [`measure_emo2_fixture_yields_per_scope_balloon_sizes`] が担う。
+            assert_eq!(out.scopes[0].balloon_size.w, BALLOON0_W);
+            assert_eq!(out.scopes[0].balloon_size.h, BALLOON0_H);
+            assert_eq!(out.scopes[1].balloon_size.w, BALLOON1_W);
+            assert_eq!(out.scopes[1].balloon_size.h, BALLOON1_H);
             for s in &out.scopes {
-                assert_eq!(s.balloon_size.w, BALLOON_W);
-                assert_eq!(s.balloon_size.h, BALLOON_H);
                 // 要件の観測文言どおり「非ゼロ物理 px」も明示的に固定する。
                 assert!(s.char_size.w > 0 && s.char_size.h > 0, "char 原寸は非ゼロ");
                 assert!(
@@ -575,7 +587,81 @@ mod tests {
         });
     }
 
-    /// scope n≥2 は正典既定が無く id10 暫定（warn 付き）＝scope1 と同寸になる。
+    /// 観測可能な完了状態（tasks 4.2・要件 3.1）: 実 fixture で**本体側と相方側が
+    /// 異なるバルーン寸**を得る。
+    ///
+    /// emo2-kakukaku は `balloons0.png`（400×224）と `balloonk0.png`（288×203）を併せ持ち、
+    /// scope0 の接頭辞連鎖は `balloons` へ・scope1 の連鎖は `balloonk` へ解決する
+    /// （系列解決権威 `resolve_balloon_faces`）。バルーンを「全スコープ共通だから 1 回だけ」
+    /// 採る実装では scope1 も 400×224 になり、本檻が落ちる。
+    #[test]
+    fn measure_emo2_fixture_yields_per_scope_balloon_sizes() {
+        with_com_initialized(|| {
+            let out = measure_scope_sizes(
+                &emo2("shell/master"),
+                &emo2("emo2-kakukaku"),
+                &[0, 1],
+                &MeasureScaling::IDENTITY,
+            )
+            .expect("emo2 fixture の採寸は成功する");
+
+            assert_eq!(
+                (out.scopes[0].balloon_size.w, out.scopes[0].balloon_size.h),
+                (BALLOON0_W, BALLOON0_H),
+                "scope0 は本体側系列（balloons0.png）の実寸"
+            );
+            assert_eq!(
+                (out.scopes[1].balloon_size.w, out.scopes[1].balloon_size.h),
+                (BALLOON1_W, BALLOON1_H),
+                "scope1 は相方側系列（balloonk0.png）の実寸——本体側の寸ではない"
+            );
+            assert_ne!(
+                out.scopes[0].balloon_size, out.scopes[1].balloon_size,
+                "本体側と相方側のバルーン寸は互いに異なる（1 回の共通採寸では再現不能）"
+            );
+        });
+    }
+
+    /// 要件 3.6/7.2: k≠1 でも scope 別バルーン寸は**各々が自分の原寸から**k 倍される。
+    /// 丸めは既存権威 `ScaleRatio::scaled_extent` のままであり、新たな丸め規約を導入しない。
+    #[test]
+    fn measure_emo2_fixture_scales_per_scope_balloon_independently() {
+        with_com_initialized(|| {
+            let out = measure_scope_sizes(
+                &emo2("shell/master"),
+                &emo2("emo2-kakukaku"),
+                &[0, 1],
+                &MeasureScaling {
+                    shell: ScaleRatio::ONE,
+                    balloon: k(3, 2),
+                },
+            )
+            .expect("k≠1 でも emo2 fixture の採寸は成功する");
+
+            // 400×3/2=600・224×3/2=336。
+            assert_eq!(
+                (out.scopes[0].balloon_size.w, out.scopes[0].balloon_size.h),
+                (600, 336)
+            );
+            // 288×3/2=432・203×3/2=304.5→305（round half away from zero＝既存権威の規約）。
+            assert_eq!(
+                (out.scopes[1].balloon_size.w, out.scopes[1].balloon_size.h),
+                (432, 305)
+            );
+            // 丸め権威との一致（自前丸めを持ち込んでいないことの構造確認）。
+            assert_eq!(
+                (
+                    out.scopes[1].balloon_size.w as u32,
+                    out.scopes[1].balloon_size.h as u32
+                ),
+                k(3, 2).scaled_extent(BALLOON1_W as u32, BALLOON1_H as u32)
+            );
+        });
+    }
+
+    /// scope n≥2 は正典既定が無く id10 暫定（warn 付き）＝scope1 と同じキャラ寸になる。
+    /// バルーンは scope n≥2 の連鎖にも `balloonk` が載る（正典が三人目以降の流用先として
+    /// 名指しする系列）ため、emo2-kakukaku では scope1 と同じ `balloonk0.png` へ解決する。
     #[test]
     fn scope_n_ge_2_measures_interim_id10() {
         with_com_initialized(|| {
@@ -592,6 +678,11 @@ mod tests {
             assert_eq!(
                 out.scopes[2].char_size, out.scopes[1].char_size,
                 "scope n≥2 は id10 暫定＝scope1 と同寸"
+            );
+            assert_eq!(
+                (out.scopes[2].balloon_size.w, out.scopes[2].balloon_size.h),
+                (BALLOON1_W, BALLOON1_H),
+                "scope n≥2 のバルーンは連鎖上の `balloonk` へ解決（本体側 400×224 ではない）"
             );
         });
     }
@@ -654,8 +745,44 @@ mod tests {
         });
     }
 
-    /// balloon surface0 が成立しない（枠画像なし）場合も `PlacementError::Measure`
-    /// （`ScopeInput.balloon_size` の供給源が無い＝採寸全体の失敗）。
+    /// 要件 3.7/5.4（後方互換）: 相方側系列（`balloonk*`）を持たないバルーンでは
+    /// **全 scope が同一のバルーン寸**を得る——本仕様適用前の採寸結果と一致する。
+    ///
+    /// 連鎖の最終受け皿は常に本体側 `balloons` ゆえ、scope1／scope2 も `balloons0.png` へ
+    /// 収束する（scope 別化が「相方側資産がある時だけ」効くことの構造的証拠）。
+    #[test]
+    fn balloonk_absent_yields_identical_size_for_all_scopes() {
+        with_com_initialized(|| {
+            // 本体側 1 枚だけのバルーンを組む（実 PNG は emo2 fixture から複写）。
+            let balloon = TempDir::new();
+            std::fs::copy(
+                emo2("emo2-kakukaku/balloons0.png"),
+                balloon.path().join("balloons0.png"),
+            )
+            .expect("balloons0.png の複写");
+
+            let out = measure_scope_sizes(
+                &emo2("shell/master"),
+                balloon.path(),
+                &[0, 1, 2],
+                &MeasureScaling::IDENTITY,
+            )
+            .expect("本体側系列のみでも採寸は成功する");
+
+            for s in &out.scopes {
+                assert_eq!(
+                    (s.balloon_size.w, s.balloon_size.h),
+                    (BALLOON0_W, BALLOON0_H),
+                    "scope {} は本体側系列へ収束する（適用前と同一寸）",
+                    s.scope
+                );
+            }
+        });
+    }
+
+    /// バルーン面 0 が成立しない（面画像なし）場合も `PlacementError::Measure`
+    /// （`ScopeInput.balloon_size` の供給源が無い＝採寸全体の失敗）。面 0 必在の判定は
+    /// 系列解決権威の単一施行点にあり、採寸側は失敗をそのまま帰属付きで畳む。
     #[test]
     fn missing_balloon_frame_is_measure_error() {
         with_com_initialized(|| {
@@ -701,8 +828,8 @@ mod tests {
     #[test]
     fn apply_scaling_identity_is_passthrough() {
         let natives = vec![
-            scope_input(0, (SCOPE0_W, SCOPE0_H), (BALLOON_W, BALLOON_H)),
-            scope_input(1, (SCOPE1_W, SCOPE1_H), (BALLOON_W, BALLOON_H)),
+            scope_input(0, (SCOPE0_W, SCOPE0_H), (BALLOON0_W, BALLOON0_H)),
+            scope_input(1, (SCOPE1_W, SCOPE1_H), (BALLOON0_W, BALLOON0_H)),
         ];
         let out = apply_scaling(natives.clone(), &MeasureScaling::IDENTITY)
             .expect("恒等 k の適用は成功する");
@@ -730,7 +857,11 @@ mod tests {
     fn apply_scaling_scales_via_scaled_extent_rounding() {
         // k=2/1: 厳密 2 倍。
         let out = apply_scaling(
-            vec![scope_input(0, (SCOPE0_W, SCOPE0_H), (BALLOON_W, BALLOON_H))],
+            vec![scope_input(
+                0,
+                (SCOPE0_W, SCOPE0_H),
+                (BALLOON0_W, BALLOON0_H),
+            )],
             &MeasureScaling {
                 shell: k(2, 1),
                 balloon: k(2, 1),
@@ -743,7 +874,11 @@ mod tests {
         // k=5/4（120dpi 相当）: 端数は round half away from zero。
         // 434*1.25=542.5→543・687*1.25=858.75→859・400*1.25=500・224*1.25=280。
         let out = apply_scaling(
-            vec![scope_input(0, (SCOPE0_W, SCOPE0_H), (BALLOON_W, BALLOON_H))],
+            vec![scope_input(
+                0,
+                (SCOPE0_W, SCOPE0_H),
+                (BALLOON0_W, BALLOON0_H),
+            )],
             &MeasureScaling {
                 shell: k(5, 4),
                 balloon: k(5, 4),
@@ -788,12 +923,12 @@ mod tests {
         assert_ne!((out[0].balloon_size.w, out[0].balloon_size.h), (800, 448));
     }
 
-    /// 要件 7.8（席保全）: k 適用は **scope ごとの写像**であり、`balloon_size` が
-    /// scope 別値であっても各々が独立に k 倍される。
+    /// 要件 3.1: k 適用は **scope ごとの写像**であり、scope 別の `balloon_size` が
+    /// 各々独立に k 倍される（純関数層での固定——実 fixture 経路の対比は
+    /// [`measure_emo2_fixture_scales_per_scope_balloon_independently`] が担う）。
     ///
     /// バルーン計算をループ外へ畳んだ実装（「全スコープ共通だから 1 回だけ」）は
-    /// 本テストで必ず落ちる——`kero-balloon`（W5）の per-scope バルーン採寸改造の
-    /// 席が潰れていないことの構造的証拠。
+    /// 本テストで必ず落ちる。
     #[test]
     fn apply_scaling_maps_balloon_per_scope() {
         let natives = vec![
@@ -1098,7 +1233,7 @@ mod tests {
         let (res, events) = capture_logs(|| {
             apply_scaling(
                 vec![
-                    scope_input(0, (SCOPE0_W, SCOPE0_H), (BALLOON_W, BALLOON_H)),
+                    scope_input(0, (SCOPE0_W, SCOPE0_H), (BALLOON0_W, BALLOON0_H)),
                     scope_input(1, (SCOPE1_W, SCOPE1_H), (300, 150)),
                 ],
                 &MeasureScaling {
@@ -1111,14 +1246,15 @@ mod tests {
         assert!(events.is_empty(), "成功経路は無言: {events:?}");
     }
 
-    /// 申し送り 2.3 の檻: **native 段**の balloon 失敗は `scope: 0` **固定**で報告される
-    /// （k 適用段の per-scope 帰属とは規約が異なる）。
+    /// 要件 3.1 の帰属: **native 段**の balloon 失敗は**実スコープ番号**で報告される
+    /// （k 適用段と規約が一致する——採寸が scope ループ内へ移り、「帰属先が定まらない」
+    /// 状況そのものが無くなった）。
     ///
-    /// 要求スコープに 0 を含めない `[1, 2]` で走らせるため、「先頭スコープ番号を載せる」
-    /// 実装との差が出る（既存の [`missing_balloon_frame_is_measure_error`] は `[0]` を
-    /// 渡すため両者を弁別できない）。
+    /// 要求スコープに 0 を含めない `[1, 2]` で走らせるため、旧来の「scope: 0 固定」実装
+    /// との差が出る（既存の [`missing_balloon_frame_is_measure_error`] は `[0]` を渡すため
+    /// 両者を弁別できない）。
     #[test]
-    fn native_stage_balloon_failure_reports_scope_zero() {
+    fn native_stage_balloon_failure_reports_real_scope() {
         with_com_initialized(|| {
             let empty_balloon = TempDir::new();
 
@@ -1128,13 +1264,39 @@ mod tests {
                 &[1, 2],
                 &MeasureScaling::IDENTITY,
             ) {
-                Ok(v) => panic!("balloon 枠不在で Ok は誤成功: {v:?}"),
+                Ok(v) => panic!("balloon 面不在で Ok は誤成功: {v:?}"),
                 Err(PlacementError::Measure { scope, reason }) => {
                     assert_eq!(
-                        scope, 0,
-                        "native 段の balloon 失敗は scope0 固定（要求スコープに 0 が無くても）"
+                        scope, 1,
+                        "採寸ループが最初に倒れたスコープ番号を載せる（scope0 固定ではない）"
                     );
                     assert!(reason.starts_with("balloon: "), "接頭辞: {reason}");
+                }
+                Err(other) => panic!("Measure であるべき: {other:?}"),
+            }
+        });
+    }
+
+    /// 権威（`areka-emo-present`）の scope 通貨 `u32` に収まらないスコープ番号は、
+    /// **無言で切り詰めず**失敗として報告される（別 scope の系列を採る事故を作らない）。
+    ///
+    /// 64bit 限定の檻——`usize == u32` の環境では超過そのものが起こり得ない。
+    #[cfg(target_pointer_width = "64")]
+    #[test]
+    fn scope_beyond_u32_is_measure_error() {
+        with_com_initialized(|| {
+            let huge = usize::MAX;
+            match measure_scope_sizes(
+                &emo2("shell/master"),
+                &emo2("emo2-kakukaku"),
+                &[huge],
+                &MeasureScaling::IDENTITY,
+            ) {
+                Ok(v) => panic!("u32 超過 scope で Ok は誤成功（切り詰めている）: {v:?}"),
+                Err(PlacementError::Measure { scope, reason }) => {
+                    assert_eq!(scope, huge, "帰属は要求されたスコープ番号そのもの");
+                    assert!(reason.starts_with("balloon: "), "接頭辞: {reason}");
+                    assert!(reason.contains("u32 に収まらない"), "理由: {reason}");
                 }
                 Err(other) => panic!("Measure であるべき: {other:?}"),
             }
@@ -1161,11 +1323,15 @@ mod tests {
             assert_eq!(out.scopes[0].char_size.h, SCOPE0_H * 2);
             assert_eq!(out.scopes[1].char_size.w, SCOPE1_W * 2);
             assert_eq!(out.scopes[1].char_size.h, SCOPE1_H * 2);
-            // balloon k は恒等ゆえ原寸（軸の独立性が実経路でも成立）。
-            for s in &out.scopes {
-                assert_eq!(s.balloon_size.w, BALLOON_W);
-                assert_eq!(s.balloon_size.h, BALLOON_H);
-            }
+            // balloon k は恒等ゆえ各 scope の原寸のまま（軸の独立性が実経路でも成立）。
+            assert_eq!(
+                (out.scopes[0].balloon_size.w, out.scopes[0].balloon_size.h),
+                (BALLOON0_W, BALLOON0_H)
+            );
+            assert_eq!(
+                (out.scopes[1].balloon_size.w, out.scopes[1].balloon_size.h),
+                (BALLOON1_W, BALLOON1_H)
+            );
         });
     }
 }

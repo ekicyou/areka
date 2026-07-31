@@ -469,8 +469,12 @@ mod tests {
     const SCOPE0_H: i32 = 687;
     const SCOPE1_W: i32 = 336;
     const SCOPE1_H: i32 = 400;
-    const BALLOON_W: i32 = 400;
-    const BALLOON_H: i32 = 224;
+    /// バルーン面 0 は **scope ごとに解決した系列**の実寸である（要件 3.1）——
+    /// scope0＝本体側 `balloons0.png`・scope1＝相方側 `balloonk0.png`。
+    const BALLOON0_W: i32 = 400;
+    const BALLOON0_H: i32 = 224;
+    const BALLOON1_W: i32 = 288;
+    const BALLOON1_H: i32 = 203;
 
     /// 既約有理 k のテスト用短縮構築（0 入力はテストの誤りゆえ expect）。
     fn k(num: u32, den: u32) -> ScaleRatio {
@@ -508,9 +512,13 @@ mod tests {
     /// 2 スコープの `ScopePlacement`（resolver P1〜P5 の厳密値）と titles を返す。
     ///
     /// 期待値の根拠（emo2 実測: alignment=bottom・defaultx=0×2・
-    /// balloon.alignment=left/right・寸法 434×687／336×400／balloon 400×224）:
-    /// - scope0: char=(1920−434, 1040−687)=(1486,353)・balloon 左隣=(1086,353)
-    /// - scope1: char=(1486−434, 1040−400)=(1052,640)・balloon 右隣=(1388,640)
+    /// balloon.alignment=left/right・寸法 434×687／336×400・balloon は scope 別で
+    /// scope0=400×224（`balloons0.png`）／scope1=288×203（`balloonk0.png`）):
+    /// - scope0: char=(1920−434, 1040−687)=(1486,353)・balloon 左隣=(1486−400)=(1086,353)
+    /// - scope1: char=(1486−434, 1040−400)=(1052,640)・balloon 右隣=(1052+336)=(1388,640)
+    ///
+    /// バルーン寸が scope 別になっても位置が動かないのは、右置き（scope1）の基準 x が
+    /// キャラ窓の右端＝バルーン幅に依存しないためである（resolver P5 は無改変）。
     #[test]
     fn prepare_emo2_returns_two_scope_placements() {
         with_com_initialized(|| {
@@ -534,6 +542,14 @@ mod tests {
             assert_eq!(s1.char_pos, PointPx { x: 1052, y: 640 });
             assert_eq!(s1.char_size, SizePx { w: 336, h: 400 });
             assert_eq!(s1.balloon_pos, PointPx { x: 1388, y: 640 });
+            assert_eq!(
+                s1.balloon_size,
+                SizePx {
+                    w: BALLOON1_W,
+                    h: BALLOON1_H
+                },
+                "相方側は自分の系列（balloonk0.png）の寸——本体側 400×224 ではない"
+            );
             assert_eq!(s1.balloon_offset, PointPx { x: 336, y: 0 });
 
             // titles は MountModel.names 由来（source T-I5 と同値）
@@ -922,16 +938,24 @@ mod tests {
                     h: SCOPE1_H * 2
                 }
             );
-            for p in &doubled.placements {
-                assert_eq!(
-                    p.balloon_size,
-                    SizePx {
-                        w: BALLOON_W * 2,
-                        h: BALLOON_H * 2
-                    },
-                    "バルーン窓も自軸の k₀ で追従する"
-                );
-            }
+            // バルーン窓も自軸の k₀ で追従する。寸は **scope ごとに解決した系列**の
+            // 原寸の 2 倍であり、全 placement で同一ではない（要件 3.1）。
+            assert_eq!(
+                doubled.placements[0].balloon_size,
+                SizePx {
+                    w: BALLOON0_W * 2,
+                    h: BALLOON0_H * 2
+                },
+                "scope0 は本体側系列（400×224）の 2 倍"
+            );
+            assert_eq!(
+                doubled.placements[1].balloon_size,
+                SizePx {
+                    w: BALLOON1_W * 2,
+                    h: BALLOON1_H * 2
+                },
+                "scope1 は相方側系列（288×203）の 2 倍"
+            );
 
             let seven_sixths =
                 prepare_ghost_windows_with_work_area(&emo2_root(), &balloon_root(), WA, Some(112))
@@ -1004,6 +1028,8 @@ mod tests {
                 },
                 "char は shell 宣言 120 由来の k=2/1（balloon の 5/3 ではない）"
             );
+            // 本補助の合成バルーンは本体側 `balloons0.png` しか持たないため、全 scope が
+            // 本体側系列へ収束する（要件 3.7 の後方互換——`balloonk*` 不在なら全 scope 同一寸）。
             for placement in &p.placements {
                 assert_eq!(
                     placement.balloon_size,
@@ -1054,6 +1080,10 @@ mod tests {
     /// 注意: 合成 shell の `surfaces.txt` は単一 overlay ゆえ、scope0 は emo2 実測と同じ
     /// 434×687 になるが scope1（surface10 単体）は emo2 実 shell の合成寸（336×400）とは
     /// 異なる——本補助を使う檻は scope0 と balloon を期待値の錨に用いる。
+    ///
+    /// 合成バルーンへ複写するのは本体側 `balloons0.png` の 1 枚のみ（相方側 `balloonk*` を
+    /// 置かない）。ゆえに全 scope の連鎖が本体側系列へ収束し、バルーン寸は scope に依らず
+    /// 同一になる——本補助を使う檻は同時に要件 3.7（`balloonk*` 不在時の後方互換）の錨でもある。
     fn synth_declared_dpi_ghost(
         root: &TempDir,
         shell_dpi: &str,
