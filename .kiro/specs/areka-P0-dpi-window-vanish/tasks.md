@@ -27,7 +27,7 @@
   - _Requirements: 1.1, 1.3_
   - _Boundary: wintf 表示基盤（ウィンドウメッセージ・モニタ列挙）_
 
-- [ ] 1.4 経路タグの単一ライター配管と窓移動レコードの出力
+- [x] 1.4 経路タグの単一ライター配管と窓移動レコードの出力
   - 窓位置・寸法を書き込む単一ライターおよびその上流（リサイズ・移動・位置据置きリサイズ・バルーン随伴）へ経路タグを引数として配管する（挙動は一切変えない純粋なリファクタリング）
   - 書込成功時に、経路・エンティティ識別子・窓種別（キャラ／バルーン）・scope・物理位置・物理寸・当該窓の DPI を 1 レコードとして専用 target へ出力する
   - エンティティ識別子は表示基盤側ログ（scope を持たない）との結合キーとして必ず含める
@@ -210,10 +210,13 @@
 
 ## Implementation Notes
 
-- **1.4 レビュー #1（REJECTED・2026-07-31）と D13 裁定**: 独立レビューが 3 欠陥を確定——①`reconcile_window_size`（frame.rs:690）の 2 呼出元（dpi 相 frame.rs:841／drain 相 frame.rs:1028）の両方へ `DpiReproject` を貼り、**DPI 変化ゼロの起動直後にも偽の DPI レコードが毎回出る**（drain 相は初回表示 k₀ 補正を含み `Changed<DPI>` 非依存＝frame.rs:983 doc が明言）②frame.rs 側 route 割当に檻ゼロ（「境界制約で書けない」は事実誤認＝`capture_logs` は `pub(crate)` で到達可能）③`\![move]`（move_cue.rs:619→`move_window_to`）の対象窓書込が無記録。**開発者裁定**:「分かるようにログを出せばいい。あとで識別できることが重要。方法は任せる」→ 語彙を 9 種へ完全化（design.md D13 が正本・3 案の解決/未解決対比と帰結もそこに登記）。requirements.md は無改変（Req 1.2/2.4 は経路を一般語で要求＝要件 gap ではない）。**是正実装は未着手**——開発者の再開指示を待って 1.4 を再派遣すること。
+- **1.4 レビュー #1（REJECTED・2026-07-31）と D13 裁定**: 独立レビューが 3 欠陥を確定——①`reconcile_window_size`（frame.rs:690）の 2 呼出元（dpi 相 frame.rs:841／drain 相 frame.rs:1028）の両方へ `DpiReproject` を貼り、**DPI 変化ゼロの起動直後にも偽の DPI レコードが毎回出る**（drain 相は初回表示 k₀ 補正を含み `Changed<DPI>` 非依存＝frame.rs:983 doc が明言）②frame.rs 側 route 割当に檻ゼロ（「境界制約で書けない」は事実誤認＝`capture_logs` は `pub(crate)` で到達可能）③`\![move]`（move_cue.rs:619→`move_window_to`）の対象窓書込が無記録。**開発者裁定**:「分かるようにログを出せばいい。あとで識別できることが重要。方法は任せる」→ 語彙を 9 種へ完全化（design.md D13 が正本・3 案の解決/未解決対比と帰結もそこに登記）。requirements.md は無改変（Req 1.2/2.4 は経路を一般語で要求＝要件 gap ではない）。**是正済み・レビュー #2 で APPROVED**——レビュアが独立ミューテーションで 4 変異→意図した 4 檻が 1:1 で赤になることを実証（`boot_without_any_dpi_change_emits_no_dpi_reproject_record` は先に「k₀ 補正の書込自体は起きている」を固定してから `DpiReproject` 不在を主張＝非空虚）。
 - **D13 → 4.1（手順書）への申し送り**: grep 判定語の route 語彙は 9 種（`ReportedSizeReconcile`・`MoveCue` を含む）。セッション②の突合では「DPI 由来の書込＝`DpiReproject` のみ」であり `ReportedSizeReconcile` を数えないこと。`\![move]` は `MoveCue`、ドラッグは wintf `[drag]`（diag target 外）が担う——両 target の対応表を必ず載せること。
 - **D13 → 6.1 への申し送り**: 遷移ガードの発火 route 集合は `AnchorChange`/`Resnap`/`DpiReproject`/`ReportedSizeReconcile` の 4 種。`MoveCue` は適用外（スクリプト明示操作の尊重）。
-- **1.1**: `placement/diag.rs` は areka が bin crate ゆえ `pub` でも dead_code 免除されず、未配線のあいだ `#![allow(dead_code)]` を付けている。**1.2／1.4 で全 API を配線したらこの属性を外すこと**（外し忘れると以後の真の dead code を隠す）。
+- **1.4**: route の識別は「共有末端に route を**引数**で渡す」で担保する（`reconcile_window_size(…, route)` → `resize_window_to(…, route)` → `enqueue_window_set_pos(…, Some(route))`）。共有末端の内部で route を再導出・既定値埋めすると呼出元の区別が消える——それが D13 の欠陥①そのもの。**共有末端に route を書き込む設計を今後も禁じること**。
+- **1.4**: 経路割当の檻は**分岐の下流ではなく割当点のあるファイルに置く**。レビュー #1 で「境界制約で frame.rs に檻が書けない」は事実誤認と確定（`crate::placement::test_support::capture_logs` は `pub(crate)`）。以後 route を新設・変更する際は割当点ファイルに「別経路が別名で記録される」檻を必ず添えること。
+- **1.4**: 同一文言の誤りが**複数ファイルに複製されている**ことがある（レビュー #1 が起票した `frame.rs` の誤コメントと同文が `follow.rs` の `route` 引数 doc にも存在し、レビュー #2 で検出）。doc 是正時は文言を**ツリー全体 grep** で掃くこと。
+- **1.1／1.4**: `placement/diag.rs` の `#![allow(dead_code)]`（モジュール全体）は 1.4 の配線完了により**撤去済み**。残る真の dead は `PlacementRoute::SpawnInitial`／`Restore`（D13 帰結⑷＝語彙のみ予約・未配線）と `ALL`（檻専用）の 2 箇所だけで、それぞれ実在理由を書いた狭い `#[allow(dead_code)]` に置き換えた。**5.1 で spawn へ配線したら `SpawnInitial`／`Restore` の属性を外すこと**。
 - **1.1**: `WindowMoveRecord.size`／`.dpi` は `Option`（`SWP_NOSIZE` 経路・`DPI` component 未付与に対応）。値なしは `-` sentinel で**フィールド自体は落とさない**＝経路によらず grep 語が不変。**1.4 の配線では寸を伴う経路で必ず実寸を詰めること**（`None` は move-only 呼出に限る）。手順書（4.1）の判定語表には `w=-`／`dpi=-` の意味と、`w=-` が `w=-12` の接頭辞である旨（トークン境界でアンカーする）を記載すること。
 - **1.1**: 檻の実効性は「format 変異（`dpi=`→`DPI=`）で 2 件赤・水準変異（`debug!`→`info!`）で 3 件赤」でレビュアが独立再現済み。`EnvFilter` 実濾過による Req 1.7 の静穏檻は非空虚。
 - **1.3 → 4.1 への必須申し送り**: 窓位置書込の共通経路 `guarded_set_window_pos` の target は `wintf::ecs::window::command` であり、design.md:476 が記す `RUST_LOG=…,wintf::ecs::window_proc=debug,…` では **EnvFilter の文字列前方一致に掛からず点灯しない**（ミューテーションで実測確認済み）。**手順書には `wintf::ecs::window=debug` を入れること**（`window_proc` も包含する）。入れ忘れると Req 1.5 が排除しようとしている偽陰性を再生産する。

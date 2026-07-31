@@ -36,15 +36,18 @@
 //! これが **wintf 側ログ（`entity = ?e`）との結合キー**だからで、同じ `Debug` 表現で
 //! 出すことが要件 1.9 の scope 別計数（手順書の 2 段 grep）の成立条件になる。
 
-// 配線状況（task 1.2 時点）: モニタスナップショット側（`MonitorRecord`・
-// `monitor_snapshot_header_line`／`monitor_record_line`・`log_monitor_snapshot`）は
-// **配線済み**——`main.rs` の `MonitorSnapshot` 構築点（要件 1.1 正典出力点）と
-// `placement::prepare_ghost_windows` の列挙点が呼ぶ。
-// 窓移動レコード側（`PlacementRoute`・`WindowKind`・`WindowMoveRecord`・
-// `window_move_record_line`・`log_window_move`・`WINDOW_MOVE_RECORD_TAG`）は
-// **未配線**で、follow.rs 単一ライターへの配管は task 1.4 が行う。areka は bin crate ゆえ
-// `pub` でも dead_code 免除されないため、未配線ぶんが残るあいだ本属性を残す。
-#![allow(dead_code)]
+// 配線状況（task 1.4 完了時点）: 本モジュールの API は**全面配線済み**である。
+// - モニタスナップショット側（`MonitorRecord`・`monitor_snapshot_header_line`／
+//   `monitor_record_line`・`log_monitor_snapshot`）: `main.rs` の `MonitorSnapshot` 構築点
+//   （要件 1.1 正典出力点）と `placement::prepare_ghost_windows` の列挙点が呼ぶ。
+// - 窓移動レコード側（`WindowKind`・`WindowMoveRecord`・`window_move_record_line`・
+//   `log_window_move`・`WINDOW_MOVE_RECORD_TAG`）: `follow.rs` の単一ライター
+//   `enqueue_window_set_pos` が書込成功時に呼ぶ。
+//
+// ゆえに**モジュール大の `#![allow(dead_code)]` は撤去した**（残すと以後の真の dead code を
+// 隠すため・tasks.md Implementation Notes「1.4 で全 API を配線したらこの属性を外すこと」）。
+// 残る個別 `#[allow(dead_code)]` は 2 箇所だけで、いずれも実在の理由を各所へ明記してある
+// （areka は bin crate ゆえ `pub` でも dead_code 免除されない）。
 
 use std::fmt;
 
@@ -77,32 +80,64 @@ const UNKNOWN: &str = "-";
 /// 要件 2.4 の「最終位置を書き込んだ主体」を名指しするための結論語彙）。
 ///
 /// 消失の診断で最後に要るのは「どこに居たか」ではなく「**誰が最後に書いたか**」である。
-/// 位置を書ける経路は 7 つあり、ログ上でそれらが見分けられなければ書き手を名指しできない。
+/// 位置を書ける経路は 9 つあり、ログ上でそれらが見分けられなければ書き手を名指しできない。
 /// 表示語（[`PlacementRoute::as_str`]）は診断手順書の判定語そのものゆえ檻で固定する。
+///
+/// # 語彙は「実在の書込トリガ」と 1:1 でなければならない（D13）
+///
+/// 当初の 7 語彙は 2 つの実在トリガを覆えなかった——`reconcile_window_size` の drain 相
+/// 呼出（[`ReportedSizeReconcile`](Self::ReportedSizeReconcile)）と `\![move]`
+/// （[`MoveCue`](Self::MoveCue)）である。**1 語が 2 トリガを指すと route 名での切り分けが
+/// 原理的に不能になる**（DPI 変化ゼロの起動が「DPI 由来」を名乗る偽陽性が毎回出る）ため、
+/// 語彙側を完全化して 1:1 を保つ。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum PlacementRoute {
     /// spawn 初期配置（`placement::spawn` の窓生成時）。
+    // 単一ライターを通らない経路（spawn は entity 組立時に `WindowPos` を直接持たせる）ゆえ
+    // 現状どこからも構築されない。design「Service Interface」が定める 9 語の一部であり、
+    // D13 帰結⑷「語彙のみ保持・将来の配線先として予約」ゆえ削らない。
+    #[allow(dead_code)]
     SpawnInitial,
     /// 位置永続化の復元マージ（可視化保証は position-persist の所有＝可視性ガード適用外）。
+    // 同上（復元は spawn 前の `apply_restored_placements` が `ScopePlacement` をマージする）。
+    #[allow(dead_code)]
     Restore,
     /// アンカー変化トリガ（`anchor_changed_system`）。
     AnchorChange,
     /// 毎フレーム再スナップ（`resnap_from_sizes`）。
     Resnap,
-    /// DPI 変化に伴う位置の再射影（`dpi_phase`）。
+    /// DPI 変化に伴う位置の再射影（**`dpi_phase` 限定**）。
+    ///
+    /// drain 相の報告回収は [`ReportedSizeReconcile`](Self::ReportedSizeReconcile) が担い、
+    /// 本変種と混同しない（D13）——両者は `reconcile_window_size` という同一の共通末端を
+    /// 通るが、**同一の末端を通ることは同一の経路であることを意味しない**。
     DpiReproject,
     /// バルーン窓の位置据置きリサイズ（`resize_window_keep_position`）。
     KeepPositionResize,
     /// キャラ窓確定後のバルーン随伴（`follow_balloon`）。
     BalloonFollow,
+    /// drain 相の報告回収（`reconcile_reported_sizes`・**初回表示の k₀ 補正を含む**）。
+    ///
+    /// `Changed<DPI>` **非依存**＝DPI 変化ゼロでも発火し得るため
+    /// [`DpiReproject`](Self::DpiReproject) と別語にする（D13）。混同すると要件 1.9 の
+    /// 受理回数突合（セッション②）に偽陽性が混入する。
+    ReportedSizeReconcile,
+    /// `\![move]` cue によるスクリプト明示移動（`move_window_to` の**対象窓**）。
+    ///
+    /// 明示操作の尊重ゆえ遷移ガード適用外＝ドラッグ・[`Restore`](Self::Restore) と同族（D13）。
+    /// 随伴バルーン側の書込は [`BalloonFollow`](Self::BalloonFollow) を持つ。
+    MoveCue,
 }
 
 impl PlacementRoute {
     /// 全経路（檻が語彙の網羅と一意性を固定するための単一の列）。
     ///
     /// バリアントを増やしたら[`as_str`](Self::as_str) の網羅 match がコンパイルを止め、
-    /// ここへの追加漏れは檻（`placement_route_all_covers_seven_distinct_variants`）が捕まえる。
-    pub const ALL: [PlacementRoute; 7] = [
+    /// ここへの追加漏れは檻（`placement_route_all_covers_nine_distinct_variants`）が捕まえる。
+    // 消費者は in-source 檻（`#[cfg(test)]`）だけゆえ本番ビルドでは dead。檻専用の列である
+    // ことが存在理由そのもの（語彙の網羅・一意性の単一の錨）ゆえ本属性を残す。
+    #[allow(dead_code)]
+    pub const ALL: [PlacementRoute; 9] = [
         PlacementRoute::SpawnInitial,
         PlacementRoute::Restore,
         PlacementRoute::AnchorChange,
@@ -110,6 +145,8 @@ impl PlacementRoute {
         PlacementRoute::DpiReproject,
         PlacementRoute::KeepPositionResize,
         PlacementRoute::BalloonFollow,
+        PlacementRoute::ReportedSizeReconcile,
+        PlacementRoute::MoveCue,
     ];
 
     /// ログ上の表示語（診断手順書の grep 判定語と 1:1）。
@@ -122,6 +159,8 @@ impl PlacementRoute {
             PlacementRoute::DpiReproject => "DpiReproject",
             PlacementRoute::KeepPositionResize => "KeepPositionResize",
             PlacementRoute::BalloonFollow => "BalloonFollow",
+            PlacementRoute::ReportedSizeReconcile => "ReportedSizeReconcile",
+            PlacementRoute::MoveCue => "MoveCue",
         }
     }
 }
@@ -319,7 +358,7 @@ mod tests {
         assert_eq!(WINDOW_MOVE_RECORD_TAG, "[diag.window_move]");
     }
 
-    /// 経路語彙 7 種の表示語がリテラル固定されている（Req 2.4 の結論語彙）。
+    /// 経路語彙 9 種の表示語がリテラル固定されている（Req 2.4 の結論語彙・D13）。
     #[test]
     fn placement_route_vocabulary_is_fixed() {
         assert_eq!(PlacementRoute::SpawnInitial.as_str(), "SpawnInitial");
@@ -332,13 +371,22 @@ mod tests {
             "KeepPositionResize"
         );
         assert_eq!(PlacementRoute::BalloonFollow.as_str(), "BalloonFollow");
+        assert_eq!(
+            PlacementRoute::ReportedSizeReconcile.as_str(),
+            "ReportedSizeReconcile"
+        );
+        assert_eq!(PlacementRoute::MoveCue.as_str(), "MoveCue");
     }
 
-    /// `ALL` は 7 バリアント全部・重複なし（語彙が 1 つでも欠けたら落ちる）。
+    /// `ALL` は 9 バリアント全部・重複なし（語彙が 1 つでも欠けたら落ちる・D13）。
     #[test]
-    fn placement_route_all_covers_seven_distinct_variants() {
+    fn placement_route_all_covers_nine_distinct_variants() {
         let all = PlacementRoute::ALL;
-        assert_eq!(all.len(), 7, "経路語彙は 7 種（design Service Interface）");
+        assert_eq!(
+            all.len(),
+            9,
+            "経路語彙は 9 種（design Service Interface・D13）"
+        );
         for route in [
             PlacementRoute::SpawnInitial,
             PlacementRoute::Restore,
@@ -347,6 +395,8 @@ mod tests {
             PlacementRoute::DpiReproject,
             PlacementRoute::KeepPositionResize,
             PlacementRoute::BalloonFollow,
+            PlacementRoute::ReportedSizeReconcile,
+            PlacementRoute::MoveCue,
         ] {
             assert!(all.contains(&route), "ALL に {route} が無い");
         }
@@ -502,7 +552,7 @@ mod tests {
         );
     }
 
-    /// 全 7 経路が `route=<語>` として組み上がる（配管先が増えても語彙が固定される）。
+    /// 全 9 経路が `route=<語>` として組み上がる（配管先が増えても語彙が固定される）。
     #[test]
     fn window_move_record_line_renders_every_route() {
         for route in PlacementRoute::ALL {

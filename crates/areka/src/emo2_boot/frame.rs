@@ -40,6 +40,7 @@ use areka_parsers::balloon::BalloonModel;
 use areka_sakura::ActorKey;
 use wintf::ecs::{FrameTime, GraphicsCore, SizeI, WindowPos, WucGraphicsResource, DPI};
 
+use crate::placement::diag::PlacementRoute;
 use crate::placement::follow::{resize_window_keep_position, resize_window_to};
 use crate::placement::resolver::SizePx;
 use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker, GhostWindows};
@@ -686,11 +687,26 @@ fn classify_ghost_window(
 ///
 /// 物理寸は `u32`（表示バッファ外形）で報告されるが窓寸は `i32` 通貨ゆえ、ここで変換し
 /// 超過・0 を弾く（log-first・panic しない・Req3.4 と同流儀の二重防波堤）。
+///
+/// # `route` 引数（Req 1.2・design D13・task 1.4）
+///
+/// **本関数は共通末端であって経路ではない**。呼出元は 2 つあり、両者は消失診断の上で
+/// 別物である:
+///
+/// - [`dpi_phase_with`]（`Changed<DPI>` エッジ由来）→ [`PlacementRoute::DpiReproject`]
+/// - [`reconcile_reported_sizes`]（drain 相の報告回収・**初回表示の k₀ 補正を含み**
+///   `Changed<DPI>` 非依存）→ [`PlacementRoute::ReportedSizeReconcile`]
+///
+/// ゆえに route を本関数の内部で決め打ちしてはならない——決め打つと DPI 変化ゼロの起動でも
+/// 「DPI 由来」の偽レコードが毎回出て、要件 1.9 の受理回数突合（セッション②＝ドラッグ禁止・
+/// OS 側 DPI 変更のみ）が汚染される。バルーン窓は位置据置きリサイズ
+/// （[`PlacementRoute::KeepPositionResize`]）へ落ちるため route を消費しない。
 fn reconcile_window_size(
     world: &mut World,
     window: Entity,
     kind: GhostWindowKind,
     new_size: (u32, u32),
+    route: PlacementRoute,
 ) -> bool {
     let (Ok(w), Ok(h)) = (i32::try_from(new_size.0), i32::try_from(new_size.1)) else {
         error!(
@@ -713,8 +729,11 @@ fn reconcile_window_size(
     let new_size = SizePx { w, h };
     match kind {
         // キャラ窓: アンカー射影 T を再適用して接地点（下端中央）を保つ。
-        GhostWindowKind::Char => resize_window_to(world, window, new_size),
-        // バルーン窓: 位置は追従で決まる従属量ゆえ据え置き、寸だけ差し替える。
+        // 経路タグは呼出元が渡した route を透過させる（本関数は共通末端であって経路ではない
+        // ＝DPI 相と drain 相を 1 語で名乗らせない・Req 1.2／D13）。
+        GhostWindowKind::Char => resize_window_to(world, window, new_size, route),
+        // バルーン窓: 位置は追従で決まる従属量ゆえ据え置き、寸だけ差し替える
+        // （経路語彙は関数名そのもの＝KeepPositionResize ゆえ route を消費しない）。
         GhostWindowKind::Balloon => resize_window_keep_position(world, window, new_size),
     }
 }
@@ -833,7 +852,8 @@ fn dpi_phase_with<S: ScaleReportSource>(
         // が丸め後の物理寸が同じ**場合も `None` である（`refresh_scale` の doc が明記）。ゆえに
         // 文字層 k 追従の判断材料にはこの戻り値を使わない（[`run_text_scale_phase`] を参照）。
         if let Some(new_size) = source.refresh_scale_report(world, target) {
-            reconcile_window_size(world, window, kind, new_size);
+            // 経路タグ: 本フェーズは `Changed<DPI>` エッジ駆動＝真に DPI 由来（Req 1.2・D13）。
+            reconcile_window_size(world, window, kind, new_size, PlacementRoute::DpiReproject);
         }
     }
 }
@@ -1020,7 +1040,16 @@ fn reconcile_reported_sizes<S: ScaleReportSource>(source: &mut S, world: &mut Wo
                 );
                 continue;
             };
-            reconcile_window_size(world, window, kind, new_size);
+            // 経路タグ: 本経路は「表示が成立して物理寸が変わった」状態に紐づき `Changed<DPI>`
+            // に**依存しない**（初回表示の k₀ 補正もここで landing する）。DPI 由来と名乗らせ
+            // ないため DpiReproject とは別語を貼る（Req 1.2・D13）。
+            reconcile_window_size(
+                world,
+                window,
+                kind,
+                new_size,
+                PlacementRoute::ReportedSizeReconcile,
+            );
         }
     }
 }
@@ -1136,7 +1165,8 @@ fn resnap_from_sizes(world: &mut World, sizes: impl Iterator<Item = (usize, Size
             continue;
         }
         // 異寸のみ: 新寸で T 再適用→一度書き→随伴（resize_window_to が単一ライター・Req1.3）。
-        resize_window_to(world, char_window, shown_size);
+        // 経路タグは Resnap（毎フレーム再スナップ・Req 1.2／task 1.4）。
+        resize_window_to(world, char_window, shown_size, PlacementRoute::Resnap);
     }
 }
 
@@ -2545,7 +2575,13 @@ mod tests {
             "前提: balloon 初期位置"
         );
         assert!(
-            reconcile_window_size(&mut world, balloon0, GhostWindowKind::Balloon, (446, 316)),
+            reconcile_window_size(
+                &mut world,
+                balloon0,
+                GhostWindowKind::Balloon,
+                (446, 316),
+                PlacementRoute::DpiReproject
+            ),
             "balloon: 異寸ゆえ書込が成立する"
         );
         assert_eq!(
@@ -2566,7 +2602,13 @@ mod tests {
             "前提: char 初期位置"
         );
         assert!(
-            reconcile_window_size(&mut world, char0, GhostWindowKind::Char, (868, 1374)),
+            reconcile_window_size(
+                &mut world,
+                char0,
+                GhostWindowKind::Char,
+                (868, 1374),
+                PlacementRoute::DpiReproject
+            ),
             "char: 異寸ゆえ書込が成立する"
         );
         assert_eq!(
@@ -2594,33 +2636,38 @@ mod tests {
             &mut world,
             char0,
             GhostWindowKind::Char,
-            (u32::MAX, 687)
+            (u32::MAX, 687),
+            PlacementRoute::DpiReproject
         ));
         // 0 寸（native 0 由来の退化）→ 書かない。
         assert!(!reconcile_window_size(
             &mut world,
             char0,
             GhostWindowKind::Char,
-            (0, 687)
+            (0, 687),
+            PlacementRoute::DpiReproject
         ));
         assert!(!reconcile_window_size(
             &mut world,
             balloon0,
             GhostWindowKind::Balloon,
-            (446, 0)
+            (446, 0),
+            PlacementRoute::DpiReproject
         ));
         // 同寸（k 不変で丸め後も同寸）→ べき等 skip（false は失敗でなく「書かなかった」）。
         assert!(!reconcile_window_size(
             &mut world,
             char0,
             GhostWindowKind::Char,
-            (434, 687)
+            (434, 687),
+            PlacementRoute::DpiReproject
         ));
         assert!(!reconcile_window_size(
             &mut world,
             balloon0,
             GhostWindowKind::Balloon,
-            (223, 158)
+            (223, 158),
+            PlacementRoute::DpiReproject
         ));
 
         assert_eq!(size_of(&world, char0), Some(SizeI::new(434, 687)), "char 寸不変");
@@ -2816,6 +2863,141 @@ mod tests {
             source.calls_of("refresh"),
             vec![shell_target(1).0],
             "変化した窓の target だけが refresh 対象"
+        );
+    }
+
+    // ── task 1.4 是正: frame 側 route 割当の檻（Req 1.2／2.4・design D13）──────────
+    //
+    // `reconcile_window_size` は **2 呼出元の共通末端**である（DPI 相＝`dpi_phase_with`／
+    // drain 相＝`reconcile_reported_sizes`）。ここへ 1 つの route を貼り付けると、
+    // `Changed<DPI>` 非依存の drain 相（初回表示の k₀ 補正を含む）まで「DPI 由来」と
+    // 名乗ってしまい、Req 1.9 の 2 段 grep 突合（セッション②＝ドラッグ禁止・OS 側 DPI 変更のみ）
+    // に**偽陽性**が混じる。ゆえに route は呼出元ごとに別語でなければならない（D13）。
+    //
+    // 観測境界は `placement::test_support::capture_logs`（`pub(crate)`＝本モジュールから到達可能）
+    // による tracing イベント本体で、レコード書式の権威は `placement::diag` の純関数が持つ。
+
+    use crate::placement::diag::WINDOW_MOVE_RECORD_TAG;
+    use crate::placement::test_support::{LogEvent, capture_logs as capture_diag_logs};
+
+    /// 捕捉イベントから窓移動レコード行だけを抜く（他の debug ログは無視）。
+    fn window_move_lines(events: &[LogEvent]) -> Vec<String> {
+        events
+            .iter()
+            .map(|e| e.message().to_string())
+            .filter(|m| m.starts_with(WINDOW_MOVE_RECORD_TAG))
+            .collect()
+    }
+
+    /// 指定 entity の窓移動レコードから `route=` の語だけを取り出す（出現順）。
+    fn window_move_routes_of(events: &[LogEvent], entity: Entity) -> Vec<String> {
+        let key = format!("entity={entity:?} ");
+        window_move_lines(events)
+            .iter()
+            .filter(|line| line.contains(&key))
+            .filter_map(|line| {
+                line.split_whitespace()
+                    .find_map(|tok| tok.strip_prefix("route=").map(str::to_string))
+            })
+            .collect()
+    }
+
+    /// 毎フレーム再スナップ（`resnap_from_sizes`）の書込は `Resnap` として記録される。
+    #[test]
+    fn resnap_from_sizes_records_the_resnap_route() {
+        let (mut world, gw) = resnap_world();
+        let char0 = gw.char_window(0).expect("char 窓がある");
+
+        // h 687→700 の異寸（既存檻 `resnap_from_sizes_drives_resize_and_resnap_on_size_change`
+        // と同一の注入）→ 書込が起きる。
+        let (_, events) = capture_diag_logs(|| {
+            resnap_from_sizes(
+                &mut world,
+                [(0usize, SizePx { w: 434, h: 700 })].into_iter(),
+            )
+        });
+
+        assert_eq!(
+            window_move_routes_of(&events, char0),
+            vec!["Resnap"],
+            "再スナップ経由の書込が Resnap として記録されない: {:?}",
+            window_move_lines(&events)
+        );
+    }
+
+    /// **D13 の核心**: DPI 相（`Changed<DPI>` 由来）と drain 相（報告回収・エッジ非依存）は
+    /// **別々の経路名**で記録される。同一の共通末端を通ることは route の同一性を意味しない。
+    #[test]
+    fn dpi_phase_and_drain_phase_record_distinct_routes() {
+        let (mut world, gw) = dpi_world();
+        let char0 = gw.char_window(0).expect("char 窓がある");
+
+        // --- DPI 相: 窓 DPI を 96→192 へ差し替え（Changed<DPI> エッジ）---
+        world.entity_mut(char0).insert(DPI::from_dpi(192, 192));
+        let mut source = FakeReports::default();
+        source.refresh.insert(shell_target(0).0, (868, 1374));
+        let mut state = None;
+        let (_, dpi_events) =
+            capture_diag_logs(|| dpi_phase_with(&mut source, &mut state, &mut world));
+        let dpi_routes = window_move_routes_of(&dpi_events, char0);
+        assert_eq!(
+            dpi_routes,
+            vec!["DpiReproject"],
+            "DPI 相の書込が DpiReproject として記録されない: {:?}",
+            window_move_lines(&dpi_events)
+        );
+
+        // --- drain 相: `Changed<DPI>` を一切動かさずに報告だけを積む（＝表示成立由来）---
+        source.pending.insert(shell_target(0).0, (900, 1400));
+        let (_, drain_events) =
+            capture_diag_logs(|| reconcile_reported_sizes(&mut source, &mut world));
+        let drain_routes = window_move_routes_of(&drain_events, char0);
+        assert_eq!(
+            drain_routes,
+            vec!["ReportedSizeReconcile"],
+            "drain 相の書込が ReportedSizeReconcile として記録されない: {:?}",
+            window_move_lines(&drain_events)
+        );
+
+        assert_ne!(
+            dpi_routes, drain_routes,
+            "2 呼出元が同一の経路名で記録されている（D13 が禁じる偽陽性の源）"
+        );
+    }
+
+    /// **完了状態（tasks.md 1.4）**: DPI 変化ゼロの起動で `DpiReproject` レコードが 1 行も出ない。
+    ///
+    /// 初回表示の k₀ 補正は drain 相（`reconcile_reported_sizes`）で landing する
+    /// （`frame.rs` の `run_dpi_phase` doc「初回表示の k₀ 補正＝Flow 3 手順 5 はこちらの経路で
+    /// landing する」）。この走行を `DpiReproject` と名乗らせると、セッション②の受理回数突合が
+    /// 起動ごとに偽陽性を拾う。
+    #[test]
+    fn boot_without_any_dpi_change_emits_no_dpi_reproject_record() {
+        let (mut world, gw) = dpi_world(); // DPI は 96 のまま一切触らない
+        let char0 = gw.char_window(0).expect("char 窓がある");
+        let mut source = FakeReports::default();
+        // 初回表示の k₀ 補正相当（refresh 側は空＝再表示ゲート不成立）。
+        source.pending.insert(shell_target(0).0, (500, 720));
+        let mut state = None;
+
+        let (_, events) = capture_diag_logs(|| {
+            dpi_phase_with(&mut source, &mut state, &mut world);
+            reconcile_reported_sizes(&mut source, &mut world);
+        });
+
+        let lines = window_move_lines(&events);
+        assert!(
+            !lines.is_empty(),
+            "非空虚性: 起動時 k₀ 補正の書込自体は起きている（レコード 0 行では檻が空虚）"
+        );
+        assert!(
+            lines.iter().all(|l| !l.contains("route=DpiReproject")),
+            "DPI 変化ゼロの走行で DpiReproject レコードが出ている（Req 1.2 違反・D13）: {lines:?}"
+        );
+        assert_eq!(
+            window_move_routes_of(&events, char0),
+            vec!["ReportedSizeReconcile"],
+            "k₀ 補正は報告回収経路として記録されるべき: {lines:?}"
         );
     }
 

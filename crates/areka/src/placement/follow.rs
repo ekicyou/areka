@@ -39,8 +39,9 @@ use wintf::ecs::drag::{DragEndEvent, DragEvent, DraggingState};
 use wintf::ecs::layout::{Arrangement, Offset};
 use wintf::ecs::pointer::Phase;
 use wintf::ecs::window::monitor::Monitor;
-use wintf::ecs::{Point, SetWindowPosCommand, SizeI, WindowHandle, WindowPos};
+use wintf::ecs::{DPI, Point, SetWindowPosCommand, SizeI, WindowHandle, WindowPos};
 
+use super::diag::{self, PlacementRoute, WindowKind, WindowMoveRecord};
 use super::persist::{
     balloon_offset_entries, balloon_offset_to_persist, char_pos_entries, char_pos_to_origin_x,
     persist_entries,
@@ -286,7 +287,7 @@ pub(crate) fn on_char_drag(
                     else {
                         return false;
                     };
-                    if !enqueue_window_set_pos(world, entity, mapped.x, mapped.y, None) {
+                    if !enqueue_window_set_pos(world, entity, mapped.x, mapped.y, None, None) {
                         return false;
                     }
                     mapped
@@ -379,7 +380,7 @@ pub(crate) fn on_char_drag_end(
                     pos
                 }
             };
-            if !enqueue_window_set_pos(world, entity, mapped.x, mapped.y, None) {
+            if !enqueue_window_set_pos(world, entity, mapped.x, mapped.y, None, None) {
                 return false;
             }
             follow_balloon(world, entity, mapped);
@@ -496,6 +497,11 @@ fn policy_mapped_position(
 ///
 /// [`BalloonFollow`] が無ければ no-op。[`on_char_drag`]／[`on_char_drag_end`] の
 /// 共通後段。
+///
+/// 経路タグ（Req 1.2・task 1.4）は定義上つねに [`PlacementRoute::BalloonFollow`]
+/// （経路語彙が関数名そのもの）ゆえ引数で受けない。呼出元がドラッグ経路
+/// （route 語彙なし）であっても**随伴バルーンの書込は BalloonFollow として記録される**
+/// ——これは Req 2.5（バルーン消失がキャラ追従の随伴か）の判別材料そのものである。
 fn follow_balloon(world: &mut World, entity: Entity, pos: Point) {
     let Some(follow) = world.get::<BalloonFollow>(entity).copied() else {
         return;
@@ -514,6 +520,7 @@ fn follow_balloon(world: &mut World, entity: Entity, pos: Point) {
         pos.x + follow.offset.x,
         pos.y + follow.offset.y,
         None,
+        Some(PlacementRoute::BalloonFollow),
     );
 }
 
@@ -732,10 +739,18 @@ pub(crate) fn on_balloon_drag_end(
 ///
 /// 消費者: `emo2_boot::move_cue::apply_move_directive`（`\![move]` の UI スレッド適用・
 /// task 7.4）が唯一の位置ライターとして本 API を呼ぶ。
+///
+/// # 経路タグ（Req 1.2／2.4・D13・task 1.4）
+///
+/// 対象窓の書込は [`PlacementRoute::MoveCue`]・随伴バルーンは
+/// [`PlacementRoute::BalloonFollow`] として記録する。唯一の消費者が `\![move]` cue である
+/// ため route は引数で受けない（呼出側が渡せる値が 1 つしか無く、取り違えの余地だけを
+/// 増やす＝`resize_window_keep_position` と同じ判断）。**スクリプトの明示操作**ゆえ
+/// 遷移ガードは適用しない（ドラッグ・`Restore` と同族・D13 帰結⑵）。
 pub fn move_window_to(world: &mut World, window: Entity, x: i32, y: i32) -> bool {
     let follow = world.get::<BalloonFollow>(window).copied();
 
-    if !enqueue_window_set_pos(world, window, x, y, None) {
+    if !enqueue_window_set_pos(world, window, x, y, None, Some(PlacementRoute::MoveCue)) {
         return false;
     }
 
@@ -747,7 +762,14 @@ pub fn move_window_to(world: &mut World, window: Entity, x: i32, y: i32) -> bool
         );
         // バルーン側の失敗（WindowHandle 未付与等）は enqueue_window_set_pos が
         // warn! 済み。対象自身の移動は成立しているため true のまま返す。
-        enqueue_window_set_pos(world, follow.balloon, x + follow.offset.x, y + follow.offset.y, None);
+        enqueue_window_set_pos(
+            world,
+            follow.balloon,
+            x + follow.offset.x,
+            y + follow.offset.y,
+            None,
+            Some(PlacementRoute::BalloonFollow),
+        );
     }
 
     true
@@ -782,8 +804,24 @@ pub fn move_window_to(world: &mut World, window: Entity, x: i32, y: i32) -> bool
 /// 座標のみを書くため、切替・アンカー変更で窓が振動しない。書込成功後は
 /// [`follow_balloon`] が [`BalloonFollow.offset`] を保って随伴させる（Req2.6・
 /// 恒等式 `balloon_pos − char_pos ≡ offset` 維持）。
+///
+/// # `route` 引数（Req 1.2／2.4・design「PlacementRoute 配管＋guard_visibility >
+/// Integration」・task 1.4）
+///
+/// 本関数は複数の上流（[`anchor_changed_system`]＝[`PlacementRoute::AnchorChange`]・
+/// frame の毎フレーム再スナップ＝[`PlacementRoute::Resnap`]・frame の DPI 相＝
+/// [`PlacementRoute::DpiReproject`]・frame の drain 相（寸法報告回収・`Changed<DPI>` 非依存）＝
+/// [`PlacementRoute::ReportedSizeReconcile`]・D13）から呼ばれる**同一の反映口**であり、どの経路が
+/// 書いたかは呼出側しか知らない。ゆえに経路は引数で受け、[`enqueue_window_set_pos`] の
+/// 窓移動レコードへ透過させる（D11: ラッパ関数を乱立させない）。**挙動は route に
+/// 依存しない**（本 task は観測増設のみ・遷移ガードの発火条件としての消費は後続 task）。
 #[allow(dead_code)] // 呼び出し側（anchor_changed_system task 2.6・frame resnap シーム）は後続 task の領分
-pub fn resize_window_to(world: &mut World, char_window: Entity, new_size: SizePx) -> bool {
+pub fn resize_window_to(
+    world: &mut World,
+    char_window: Entity,
+    new_size: SizePx,
+    route: PlacementRoute,
+) -> bool {
     // 1. Anchored（drag／resize が読む単一真実源）を読む。char 窓は spawn で必ず
     //    付与される＝欠落は異常系ゆえ log-first で no-op（silent failure にしない）。
     let Some(Anchored(anchor)) = world.get::<Anchored>(char_window).copied() else {
@@ -864,7 +902,14 @@ pub fn resize_window_to(world: &mut World, char_window: Entity, new_size: SizePx
     // 5. 一度書き（Req1.5/1.7）: 位置＋サイズを単一ライター経路で 1 コマンド発行。
     //    WindowHandle 未付与/不在は enqueue が warn!＋false（Req3.3）——false なら
     //    随伴バルーンも動かさず false を返す（move_window_to と同じ流儀）。
-    if !enqueue_window_set_pos(world, char_window, new_pos.x, new_pos.y, Some(new_size)) {
+    if !enqueue_window_set_pos(
+        world,
+        char_window,
+        new_pos.x,
+        new_pos.y,
+        Some(new_size),
+        Some(route),
+    ) {
         return false;
     }
 
@@ -957,6 +1002,7 @@ pub fn anchor_changed_system(
             continue;
         };
         // 現寸で resize_window_to → 現在アンカー（変化後）で project_anchor を再適用。
+        // 経路タグは AnchorChange（Req 1.2 の「変化を引き起こした経路」・task 1.4）。
         resize_window_to(
             world,
             entity,
@@ -964,6 +1010,7 @@ pub fn anchor_changed_system(
                 w: size.width,
                 h: size.height,
             },
+            PlacementRoute::AnchorChange,
         );
     }
 }
@@ -1006,12 +1053,33 @@ pub fn anchor_changed_system(
 /// `GlobalArrangement.bounds` は零寸のため `window_pos_sync_system` の
 /// `width <= 0` ガードが skip し、`SetWindowPos` echo ループにはならない
 /// （donor の DragEnd 同期と同じ性質）。
+///
+/// # `route` 引数（Req 1.2／2.4・design D11「enum 引数配管」・task 1.4）
+///
+/// 位置を書いた**経路**（＝要件 2.4 の「最終位置を書き込んだ主体」の名指し語彙）を
+/// 呼出側から受け取り、**書込成功時に**窓移動レコード 1 行を専用 target
+/// （[`diag::DIAG_TARGET`]）へ出す。ラッパ関数を増やさず引数で配管するのは D11 の裁定で、
+/// route は後続タスクで遷移ガードの発火条件・warn 水準分岐の第一級入力にもなる。
+///
+/// `None` は「本 target が観測を**所有しない**書込」であり、該当するのは
+/// **ドラッグ経路のキャラ窓書込のみ**である（[`on_char_drag`]／[`on_char_drag_end`]）——
+/// design「placement::diag > Risks」の裁定どおり、ドラッグ中の観測は wintf の `[drag]`
+/// target が所有し本 target を通らない（Req 2.4 の結論語彙も「[`PlacementRoute`] 名
+/// ＋ wintf `[drag]`／提案位置書込の 2 語」と規定されている）。ドラッグに随伴する
+/// バルーン側の書込は [`PlacementRoute::BalloonFollow`] を持つ（Req 2.5 の判別材料）。
+///
+/// `\![move]` cue（[`move_window_to`] の対象窓）は **`None` ではない**——D13 で
+/// [`PlacementRoute::MoveCue`] を新設し、スクリプト明示移動を名指しできるようにした
+/// （無記録のままだと Q3「ドラッグ以外の経路での消失」の観測に穴が残る）。
+///
+/// `None` でも**挙動は完全に同一**であり、変わるのはレコードを出すか否かだけである。
 fn enqueue_window_set_pos(
     world: &mut World,
     window: Entity,
     x: i32,
     y: i32,
     size: Option<SizePx>,
+    route: Option<PlacementRoute>,
 ) -> bool {
     let Some(handle) = world.get::<WindowHandle>(window).copied() else {
         warn!(
@@ -1076,7 +1144,65 @@ fn enqueue_window_set_pos(
         }
     }
 
+    // 窓移動レコード（Req 1.2）: **書込成功時のみ** 1 レコードを専用 target へ出す。
+    // 経路語彙を持たない書込（ドラッグ・`\![move]`）は route=None ＝無記録（doc 参照）。
+    if let Some(route) = route {
+        log_window_move(world, window, route, x, y, size);
+    }
+
     true
+}
+
+/// 窓移動レコード（Req 1.2）を World から転写して組み、専用 target へ出す
+/// （[`enqueue_window_set_pos`] の書込成功時専用・design「placement::diag > Invariants」）。
+///
+/// `diag` は placement の最下流で `World`・wintf 型に依存しない契約ゆえ、
+/// **窓種別（[`CharWindowMarker`]／[`BalloonWindowMarker`]）・scope・DPI（`DPI` component）の
+/// 読み出しは呼出側である本モジュールの仕事**である。`entity` は wintf 側ログ
+/// （`entity = ?e`・scope を持たない）との**結合キー**として必ず入れる——Req 1.9 の
+/// scope 別 DPI 受理計数は、この結合による 2 段 grep で機械化される。
+///
+/// 種別 marker が無い窓（placement が生成したゴースト窓ではない）は、種別・scope を
+/// 発明せずレコードを出さない。ただし「出さなかった事実」自体は同 target へ残す
+/// （silent skip を作らない・log-first）。
+fn log_window_move(
+    world: &World,
+    window: Entity,
+    route: PlacementRoute,
+    x: i32,
+    y: i32,
+    size: Option<SizePx>,
+) {
+    let identity = world
+        .get::<CharWindowMarker>(window)
+        .map(|m| (WindowKind::Char, m.scope))
+        .or_else(|| {
+            world
+                .get::<BalloonWindowMarker>(window)
+                .map(|m| (WindowKind::Balloon, m.scope))
+        });
+    let Some((kind, scope)) = identity else {
+        debug!(
+            target: diag::DIAG_TARGET,
+            entity = ?window,
+            route = route.as_str(),
+            "窓種別 marker 不在（placement 生成のゴースト窓ではない）ゆえ窓移動レコードを出さない"
+        );
+        return;
+    };
+
+    diag::log_window_move(&WindowMoveRecord {
+        route,
+        entity: window,
+        kind,
+        scope,
+        x,
+        y,
+        // 寸を伴う経路（`Some`）は実寸を必ず詰める。`None` は移動専用（`SWP_NOSIZE`）の
+        // 書込に限り、レコード側は番兵 `-` でフィールドを落とさない（grep 語の不変）。
+        size: size.map(|s| (s.w, s.h)),
+        dpi: world.get::<DPI>(window).map(|d| d.dpi_x as u32),
+    });
 }
 
 // =============================================================================
@@ -1190,6 +1316,12 @@ pub fn work_area_for_window(snapshot: &MonitorSnapshot, window: RectPx) -> Optio
 ///   （判定を二重化せず委譲する）。
 ///
 /// 消費者: `emo2_boot` の DPI 追従フェーズ（`run_dpi_phase`／`reconcile_reported_sizes`・結線済み）。
+///
+/// # 経路タグ（Req 1.2・task 1.4）
+///
+/// 本関数の書込は定義上つねに [`PlacementRoute::KeepPositionResize`]（経路語彙が関数名
+/// そのもの）ゆえ、[`resize_window_to`] と違い route を引数で受けない——受けても
+/// 呼出側が渡せる値は 1 つしか無く、取り違えの余地だけを増やすため。
 #[allow(dead_code)] // examples が #[path] include するため、本体未使用ビルドでも必要
 pub fn resize_window_keep_position(world: &mut World, window: Entity, new_size: SizePx) -> bool {
     // 1. 非正寸ガード（R3.1）: 窓寸として成立しない値は書かない。
@@ -1236,7 +1368,14 @@ pub fn resize_window_keep_position(world: &mut World, window: Entity, new_size: 
 
     // 4. 一度書き: 現在位置＋新寸を単一ライター経路で 1 コマンド発行する。
     //    WindowHandle 未付与/対象不在は enqueue が warn!＋false（二重に弾かない）。
-    enqueue_window_set_pos(world, window, pos.x, pos.y, Some(new_size))
+    enqueue_window_set_pos(
+        world,
+        window,
+        pos.x,
+        pos.y,
+        Some(new_size),
+        Some(PlacementRoute::KeepPositionResize),
+    )
 }
 
 // =============================================================================
@@ -2615,7 +2754,12 @@ mod tests {
         );
         // 2) 自動再射影（re-snap）経路。Bottom → project_anchor で y=1043−700=343 へ再固定。
         assert!(
-            resize_window_to(&mut world, char_window, SizePx { w: 500, h: 700 }),
+            resize_window_to(
+                &mut world,
+                char_window,
+                SizePx { w: 500, h: 700 },
+                PlacementRoute::Resnap
+            ),
             "resize_window_to は成立するはず（Anchored/正寸/WindowHandle あり）"
         );
         // 3) 復元時再射影（純関数・World も永続も触れない・返り値は捨てる）。
@@ -3952,7 +4096,9 @@ mod tests {
             .spawn((fake_handle(0x1234), window_pos_sized(10, 20, 434, 687)))
             .id();
 
-        assert!(enqueue_window_set_pos(&mut world, window, 1531, 883, None));
+        assert!(enqueue_window_set_pos(
+            &mut world, window, 1531, 883, None, None
+        ));
         assert_eq!(position_of(&world, window), Point { x: 1531, y: 883 });
         // size は不変（移動専用＝寸法を書かない）
         assert_eq!(size_of(&world, window), SizeI::new(434, 687));
@@ -3972,6 +4118,7 @@ mod tests {
             907,
             1201,
             Some(SizePx { w: 517, h: 823 }),
+            None,
         ));
         assert_eq!(position_of(&world, window), Point { x: 907, y: 1201 });
         assert_eq!(size_of(&world, window), SizeI::new(517, 823));
@@ -3990,6 +4137,7 @@ mod tests {
             907,
             1201,
             Some(SizePx { w: 517, h: 823 }),
+            None,
         ));
         assert_eq!(position_of(&world, window), Point { x: 10, y: 20 });
         assert_eq!(size_of(&world, window), SizeI::new(434, 687));
@@ -4007,7 +4155,7 @@ mod tests {
     // 寸法は 96 の非倍数を使い、隠れた dpi/96 再スケールの檻とする。
     // -------------------------------------------------------------------------
 
-    use super::resize_window_to;
+    use super::{PlacementRoute, resize_window_to};
 
     /// #1 一度書き＋re-snap（Req1.1/1.3/1.7/2.1）: `Anchored(Bottom)` の char 窓を
     /// 新寸へ resize すると、`WindowPos.size` が新寸・`position.y` が `wa.bottom − h'`
@@ -4028,7 +4176,12 @@ mod tests {
 
         // 新寸 (517×823・いずれも 96 非倍数): Y=1043−823=220。
         // X は下端中央保持: 旧中央 731+434/2=948 → 新 x = 948−517/2 = 690。
-        assert!(resize_window_to(&mut world, window, SizePx { w: 517, h: 823 }));
+        assert!(resize_window_to(
+            &mut world,
+            window,
+            SizePx { w: 517, h: 823 },
+            PlacementRoute::Resnap
+        ));
         assert_eq!(
             position_of(&world, window),
             Point {
@@ -4055,7 +4208,12 @@ mod tests {
             .id();
 
         // 同寸 → 導出 (731,356)＋(434,687) は現在値と同一 → 書込なし・false
-        assert!(!resize_window_to(&mut world, window, SizePx { w: 434, h: 687 }));
+        assert!(!resize_window_to(
+            &mut world,
+            window,
+            SizePx { w: 434, h: 687 },
+            PlacementRoute::Resnap
+        ));
         assert_eq!(position_of(&world, window), Point { x: 731, y: 356 });
         assert_eq!(size_of(&world, window), SizeI::new(434, 687));
     }
@@ -4080,7 +4238,7 @@ mod tests {
             SizePx { w: -517, h: -823 },
         ] {
             assert!(
-                !resize_window_to(&mut world, window, bad),
+                !resize_window_to(&mut world, window, bad, PlacementRoute::Resnap),
                 "{bad:?}: 非正寸は false"
             );
             assert_eq!(position_of(&world, window), Point { x: 731, y: 356 });
@@ -4102,7 +4260,12 @@ mod tests {
             ))
             .id();
 
-        assert!(!resize_window_to(&mut world, window, SizePx { w: 517, h: 823 }));
+        assert!(!resize_window_to(
+            &mut world,
+            window,
+            SizePx { w: 517, h: 823 },
+            PlacementRoute::Resnap
+        ));
         assert_eq!(position_of(&world, window), Point { x: 731, y: 356 });
         assert_eq!(size_of(&world, window), SizeI::new(434, 687));
     }
@@ -4121,7 +4284,12 @@ mod tests {
             ))
             .id();
 
-        assert!(!resize_window_to(&mut world, window, SizePx { w: 517, h: 823 }));
+        assert!(!resize_window_to(
+            &mut world,
+            window,
+            SizePx { w: 517, h: 823 },
+            PlacementRoute::Resnap
+        ));
         assert_eq!(position_of(&world, window), Point { x: 731, y: 356 });
         assert_eq!(size_of(&world, window), SizeI::new(434, 687));
     }
@@ -4157,7 +4325,12 @@ mod tests {
         let rel_to_origin = (old_balloon.0 - old_origin.0, old_balloon.1 - old_origin.1);
 
         // 新寸 (517×823): char は下端中央保持で x=948−517/2=690・y=1043−823=220。
-        assert!(resize_window_to(&mut world, window, SizePx { w: 517, h: 823 }));
+        assert!(resize_window_to(
+            &mut world,
+            window,
+            SizePx { w: 517, h: 823 },
+            PlacementRoute::Resnap
+        ));
         let char_pos = position_of(&world, window);
         let balloon_pos = position_of(&world, balloon);
         assert_eq!(char_pos, Point { x: 690, y: 1043 - 823 });
@@ -4217,7 +4390,12 @@ mod tests {
             .id();
 
         // 新寸 (517×823・いずれも 96 非倍数): Y=wa.top=37・X=731 保持
-        assert!(resize_window_to(&mut world, window, SizePx { w: 517, h: 823 }));
+        assert!(resize_window_to(
+            &mut world,
+            window,
+            SizePx { w: 517, h: 823 },
+            PlacementRoute::Resnap
+        ));
         assert_eq!(
             position_of(&world, window),
             Point { x: 731, y: 37 },
@@ -4242,7 +4420,12 @@ mod tests {
             .id();
 
         // 新寸 (517×823): X=wa.left=53・Y=500 保持
-        assert!(resize_window_to(&mut world, window, SizePx { w: 517, h: 823 }));
+        assert!(resize_window_to(
+            &mut world,
+            window,
+            SizePx { w: 517, h: 823 },
+            PlacementRoute::Resnap
+        ));
         assert_eq!(
             position_of(&world, window),
             Point { x: 53, y: 500 },
@@ -4267,7 +4450,12 @@ mod tests {
             .id();
 
         // 新寸 (517×823): X = wa.right − w' = 1877 − 517 = 1360・Y=500 保持
-        assert!(resize_window_to(&mut world, window, SizePx { w: 517, h: 823 }));
+        assert!(resize_window_to(
+            &mut world,
+            window,
+            SizePx { w: 517, h: 823 },
+            PlacementRoute::Resnap
+        ));
         assert_eq!(
             position_of(&world, window),
             Point { x: 1877 - 517, y: 500 },
@@ -4293,7 +4481,12 @@ mod tests {
             .id();
 
         // Free: 射影なし＝position 不変・size のみ新寸（size 変化ゆえ冗長でなく true）
-        assert!(resize_window_to(&mut world, window, SizePx { w: 517, h: 823 }));
+        assert!(resize_window_to(
+            &mut world,
+            window,
+            SizePx { w: 517, h: 823 },
+            PlacementRoute::Resnap
+        ));
         assert_eq!(
             position_of(&world, window),
             Point { x: 731, y: 500 },
@@ -4324,7 +4517,12 @@ mod tests {
             .id();
 
         // 新寸 (517×823) → char 左端固定 (53, 500)・balloon (53−412, 500−25)
-        assert!(resize_window_to(&mut world, window, SizePx { w: 517, h: 823 }));
+        assert!(resize_window_to(
+            &mut world,
+            window,
+            SizePx { w: 517, h: 823 },
+            PlacementRoute::Resnap
+        ));
         let char_pos = position_of(&world, window);
         let balloon_pos = position_of(&world, balloon);
         assert_eq!(char_pos, Point { x: 53, y: 500 }, "左端固定・Y 保持");
@@ -4357,7 +4555,12 @@ mod tests {
             .id();
 
         // 同寸・既に左端一致 → 導出 (53,500)＋(517,823) は現在値と同一 → 書込なし・false
-        assert!(!resize_window_to(&mut world, window, SizePx { w: 517, h: 823 }));
+        assert!(!resize_window_to(
+            &mut world,
+            window,
+            SizePx { w: 517, h: 823 },
+            PlacementRoute::Resnap
+        ));
         assert_eq!(position_of(&world, window), Point { x: 53, y: 500 });
         assert_eq!(size_of(&world, window), SizeI::new(517, 823));
     }
@@ -4386,7 +4589,7 @@ mod tests {
             SizePx { w: -517, h: -823 },
         ] {
             assert!(
-                !resize_window_to(&mut world, with_handle, bad),
+                !resize_window_to(&mut world, with_handle, bad, PlacementRoute::Resnap),
                 "{bad:?}: 非正寸は false（Top でも Bottom と同一縮退）"
             );
             assert_eq!(position_of(&world, with_handle), Point { x: 731, y: 500 });
@@ -4401,7 +4604,12 @@ mod tests {
                 Anchored(Anchor::Top),
             ))
             .id();
-        assert!(!resize_window_to(&mut world, no_handle, SizePx { w: 517, h: 823 }));
+        assert!(!resize_window_to(
+            &mut world,
+            no_handle,
+            SizePx { w: 517, h: 823 },
+            PlacementRoute::Resnap
+        ));
         assert_eq!(position_of(&world, no_handle), Point { x: 731, y: 500 });
         assert_eq!(size_of(&world, no_handle), SizeI::new(434, 687));
     }
@@ -4763,5 +4971,421 @@ mod tests {
             window,
             SizePx { w: 517, h: 823 }
         ));
+    }
+
+    // -------------------------------------------------------------------------
+    // 窓移動レコード（Req 1.2／2.4・task 1.4・design「placement::diag > Invariants」
+    // ＋「PlacementRoute 配管＋guard_visibility > Integration」・D11）
+    //
+    // 単一ライター `enqueue_window_set_pos` の**書込成功時**に 1 レコードを専用 target
+    // （`areka::placement::diag`）へ出す。檻の要点:
+    //   (1) 経路名が呼出点と 1:1（route を取り違えたら赤）
+    //   (2) route・entity・種別・scope・位置・寸・DPI の**全フィールド**が揃う
+    //       （entity は wintf 側ログとの結合キーゆえ必ず入る＝Req 1.9 の 2 段 grep 条件）
+    //   (3) 書込が起きない経路（べき等 skip・`WindowHandle` 未付与）ではレコードが出ない
+    //   (4) 既定 `RUST_LOG=info` では 1 行も出ない（Req 1.7）
+    //
+    // 観測境界は tracing イベント本体（`test_support::capture_logs`）——本レコードは
+    // `WindowPos` ミラーと違い「書込が起きた事実」そのものの証跡だからである。
+    // 座標・寸・DPI は 96 の非倍数／非既定値を使い、取り違えを差で炙り出す。
+    // -------------------------------------------------------------------------
+
+    use std::sync::{Arc, Mutex};
+
+    use tracing_subscriber::EnvFilter;
+    use wintf::ecs::DPI;
+
+    use super::super::diag::WINDOW_MOVE_RECORD_TAG;
+    use super::super::spawn::{BalloonWindowMarker, CharWindowMarker};
+    use super::super::test_support::{LogEvent, capture_logs, ensure_interest_probes};
+
+    /// 捕捉イベントから窓移動レコード行だけを抜く（他の debug ログは無視）。
+    fn window_move_lines(events: &[LogEvent]) -> Vec<String> {
+        events
+            .iter()
+            .map(|e| e.message().to_string())
+            .filter(|m| m.starts_with(WINDOW_MOVE_RECORD_TAG))
+            .collect()
+    }
+
+    /// ちょうど 1 行の窓移動レコードを取り出す（0 件・複数件は落とす）。
+    fn only_window_move_line(events: &[LogEvent]) -> String {
+        let lines = window_move_lines(events);
+        assert_eq!(
+            lines.len(),
+            1,
+            "窓移動レコードがちょうど 1 行ではない: {lines:?} / all={events:?}"
+        );
+        lines.into_iter().next().expect("1 件あることは検査済み")
+    }
+
+    /// 釘付け済みキャラ窓（marker/DPI 付き）1 枚だけの World。
+    ///
+    /// `DPI` は **`WindowHandle` 付与の後**に入れる——wintf の `WindowHandle` on_add フックが
+    /// `GetDpiForWindow` を引き（偽 HWND では失敗＝96）`DPI` を上書きするため、同一 spawn の
+    /// タプルへ混ぜると意図した DPI が 96 に潰れる（混在 DPI の檻が自己整合で無力化する罠）。
+    fn char_window_world(scope: usize, dpi: u16) -> (World, Entity) {
+        let mut world = World::new();
+        world.insert_resource(single_monitor_snapshot()); // 下端 1043
+        let e = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(731, 356, 434, 687),
+                Anchored(Anchor::Bottom),
+                CharWindowMarker { scope },
+            ))
+            .id();
+        world.entity_mut(e).insert(DPI::from_dpi(dpi, dpi));
+        (world, e)
+    }
+
+    /// (2) 全フィールドの檻: 書込成功で**ちょうど 1 行**、route・entity・kind・scope・
+    /// 物理位置・物理寸・DPI が揃う（1 つでも落ちたら赤）。
+    #[test]
+    fn window_move_record_carries_route_entity_kind_scope_position_size_and_dpi() {
+        let (mut world, e) = char_window_world(1, 192);
+
+        let (ok, events) = capture_logs(|| {
+            resize_window_to(
+                &mut world,
+                e,
+                SizePx { w: 517, h: 823 },
+                PlacementRoute::DpiReproject,
+            )
+        });
+        assert!(ok, "前提: 書込は成立する");
+
+        // 期待値は resize_window_to の既存檻と同一の導出（下端中央保持 x=690・Y=1043−823）。
+        assert_eq!(
+            only_window_move_line(&events),
+            format!(
+                "[diag.window_move] route=DpiReproject entity={e:?} kind=char scope=1 \
+                 x=690 y=220 w=517 h=823 dpi=192"
+            )
+        );
+    }
+
+    /// (2) 結合キーの檻: entity は wintf 側ログ（`entity = ?e`＝`Debug` 表現・scope を
+    /// 持たない）と同一表現で出る——Req 1.9 の scope 別計数（2 段 grep）の成立条件。
+    #[test]
+    fn window_move_record_entity_matches_wintf_debug_rendering() {
+        let (mut world, e) = char_window_world(0, 120);
+
+        let (_, events) = capture_logs(|| {
+            resize_window_to(
+                &mut world,
+                e,
+                SizePx { w: 517, h: 823 },
+                PlacementRoute::Resnap,
+            )
+        });
+        let line = only_window_move_line(&events);
+        assert!(
+            line.contains(&format!("entity={e:?}")),
+            "wintf 側ログと結合できる Debug 表現になっていない: {line}"
+        );
+        assert!(line.contains("scope=0") && line.contains("kind=char"));
+    }
+
+    /// (1) 経路名は**呼出側が渡した route と 1:1**（`resize_window_to` は 3 経路の共通
+    /// 反映口ゆえ、ここを取り違えると書き手の名指し＝Req 2.4 が丸ごと嘘になる）。
+    #[test]
+    fn window_move_record_route_follows_the_argument_of_the_shared_resize_entry() {
+        for route in [
+            PlacementRoute::AnchorChange,
+            PlacementRoute::Resnap,
+            PlacementRoute::DpiReproject,
+        ] {
+            let (mut world, e) = char_window_world(0, 96);
+            let (ok, events) =
+                capture_logs(|| resize_window_to(&mut world, e, SizePx { w: 517, h: 823 }, route));
+            assert!(ok);
+            let line = only_window_move_line(&events);
+            assert!(
+                line.contains(&format!("route={}", route.as_str())),
+                "route={route} を渡したのにレコードが一致しない: {line}"
+            );
+            // 他 8 経路の語が混ざらない（取り違えの檻）。
+            for other in PlacementRoute::ALL {
+                if other == route {
+                    continue;
+                }
+                assert!(
+                    !line.contains(&format!("route={}", other.as_str())),
+                    "route={other} が混入: {line}"
+                );
+            }
+        }
+    }
+
+    /// (1) 呼出点割当の檻: アンカー変化トリガ（`anchor_changed_system`）は
+    /// `AnchorChange` を渡す（system 側の割当ミスを検出する）。
+    #[test]
+    fn anchor_changed_system_records_the_anchor_change_route() {
+        let mut world = World::new();
+        world.insert_resource(odd_edge_snapshot()); // rect(53, 37, 1877, 1043)
+        let e = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(731, 356, 434, 687),
+                Anchored(Anchor::Bottom),
+                CharWindowMarker { scope: 1 },
+            ))
+            .id();
+        world.entity_mut(e).insert(DPI::from_dpi(120, 120)); // on_add フックの後に入れる
+        let mut schedule = Schedule::default();
+        schedule.add_systems(anchor_changed_system);
+        // 初回 run はべき等 skip（＝レコードも出ない＝(3) の裏取りも兼ねる）。
+        let (_, first) = capture_logs(|| schedule.run(&mut world));
+        assert!(
+            window_move_lines(&first).is_empty(),
+            "べき等 skip でレコードが出た: {first:?}"
+        );
+
+        world.get_mut::<Anchored>(e).unwrap().0 = Anchor::Top;
+        let (_, second) = capture_logs(|| schedule.run(&mut world));
+        let line = only_window_move_line(&second);
+        assert!(
+            line.contains("route=AnchorChange"),
+            "アンカー変化の書込が AnchorChange として記録されない: {line}"
+        );
+        assert!(line.contains("y=37") && line.contains("dpi=120"), "{line}");
+    }
+
+    /// (1) 呼出点割当の檻: バルーン窓の位置据置きリサイズは `KeepPositionResize`。
+    /// 種別・scope はバルーン marker から読む（キャラと取り違えない）。
+    #[test]
+    fn resize_window_keep_position_records_the_keep_position_route() {
+        let mut world = World::new();
+        let window = world
+            .spawn((
+                fake_handle(0x3000),
+                window_pos_sized(731, 356, 434, 687),
+                BalloonWindowMarker { scope: 1 },
+            ))
+            .id();
+        world.entity_mut(window).insert(DPI::from_dpi(192, 192)); // on_add フックの後に入れる
+
+        let (ok, events) = capture_logs(|| {
+            resize_window_keep_position(&mut world, window, SizePx { w: 517, h: 823 })
+        });
+        assert!(ok);
+        assert_eq!(
+            only_window_move_line(&events),
+            format!(
+                "[diag.window_move] route=KeepPositionResize entity={window:?} kind=balloon \
+                 scope=1 x=731 y=356 w=517 h=823 dpi=192"
+            )
+        );
+    }
+
+    /// (1)(2) `\![move]` cue（[`move_window_to`]）は**対象窓を `MoveCue`**・**随伴バルーンを
+    /// `BalloonFollow`** として記録する（D13: スクリプト明示移動は固有の経路語を持つ＝Q3
+    /// 「ドラッグ以外の経路での消失」の観測穴を塞ぐ）。移動専用ゆえ寸は番兵（`w=-`／`h=-`）で
+    /// 欠落させない（フィールド語彙は経路によらず不変）。
+    #[test]
+    fn move_cue_write_is_recorded_as_move_cue_with_a_balloon_follow_companion() {
+        let mut world = World::new();
+        let balloon = world
+            .spawn((
+                fake_handle(0x2000),
+                window_pos_at(180, 383),
+                BalloonWindowMarker { scope: 0 },
+            ))
+            .id();
+        // `DPI` 未付与の窓（component 欠落の防御経路）を作る——`WindowHandle` on_add フックが
+        // 常に `DPI` を挿すため、番兵 `dpi=-` を単一ライター越しに固定するには外す必要がある。
+        world.entity_mut(balloon).remove::<DPI>();
+        let char_window = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(731, 356, 434, 687),
+                CharWindowMarker { scope: 0 },
+                BalloonFollow {
+                    balloon,
+                    offset: PointPx { x: -551, y: 27 },
+                },
+            ))
+            .id();
+        // 96 非倍数の DPI を明示付与（on_add フックの後に入れる＝96 へ潰されない）。
+        world
+            .entity_mut(char_window)
+            .insert(DPI::from_dpi(120, 120));
+
+        let (ok, events) = capture_logs(|| move_window_to(&mut world, char_window, 999, 777));
+        assert!(ok);
+        // 対象窓＝MoveCue／随伴バルーン＝BalloonFollow の 2 行（発行順＝書込順）。
+        assert_eq!(
+            window_move_lines(&events),
+            vec![
+                format!(
+                    "[diag.window_move] route=MoveCue entity={char_window:?} kind=char scope=0 \
+                     x=999 y=777 w=- h=- dpi=120"
+                ),
+                format!(
+                    "[diag.window_move] route=BalloonFollow entity={balloon:?} kind=balloon scope=0 \
+                     x=448 y=804 w=- h=- dpi=-"
+                ),
+            ]
+        );
+        // 位置自体は従来どおり両方書かれている（挙動不変の裏取り）。
+        assert_eq!(position_of(&world, char_window), Point { x: 999, y: 777 });
+        assert_eq!(position_of(&world, balloon), Point { x: 448, y: 804 });
+    }
+
+    /// (1) ドラッグ経路（連続イベント）はキャラ窓の書込を記録しない一方、随伴バルーンは
+    /// `BalloonFollow` として記録される（Req 2.5「バルーン消失は追従の随伴か」の判別材料）。
+    #[test]
+    fn drag_path_records_only_the_balloon_follow_write() {
+        let mut world = World::new();
+        world.insert_resource(single_monitor_snapshot()); // 下端 1043
+        let balloon = world
+            .spawn((
+                fake_handle(0x2000),
+                window_pos_at(180, 383),
+                BalloonWindowMarker { scope: 0 },
+            ))
+            .id();
+        let char_window = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(1207, 356, 434, 687),
+                Anchored(Anchor::Bottom),
+                CharWindowMarker { scope: 0 },
+                BalloonFollow {
+                    balloon,
+                    offset: PointPx { x: -551, y: 27 },
+                },
+                dragging_state((1207, 356), (1300, 500)),
+            ))
+            .id();
+
+        let ev = Phase::Bubble(drag_event_at(char_window, (1300, 500), (1450, 520)));
+        let (_, events) = capture_logs(|| on_char_drag(&mut world, char_window, char_window, &ev));
+
+        let lines = window_move_lines(&events);
+        assert_eq!(
+            lines.len(),
+            1,
+            "ドラッグ 1 イベントの記録は随伴 1 行: {lines:?}"
+        );
+        assert!(
+            lines[0].contains("route=BalloonFollow")
+                && lines[0].contains(&format!("entity={balloon:?}")),
+            "{lines:?}"
+        );
+        assert!(
+            !lines[0].contains(&format!("entity={char_window:?}")),
+            "ドラッグ経路のキャラ窓書込は本 target を通らない（wintf `[drag]` の所有）: {lines:?}"
+        );
+    }
+
+    /// (3) 書込が起きなければレコードも出ない: べき等 skip（同寸・同位置）と
+    /// `WindowHandle` 未付与（失敗）の双方で 0 行。
+    #[test]
+    fn no_window_move_record_when_nothing_is_written() {
+        // べき等 skip（Req3.1）
+        let (mut world, e) = char_window_world(0, 120);
+        let (wrote, events) = capture_logs(|| {
+            resize_window_to(
+                &mut world,
+                e,
+                SizePx { w: 434, h: 687 },
+                PlacementRoute::Resnap,
+            )
+        });
+        assert!(!wrote, "前提: 同寸・同位置はべき等 skip");
+        assert!(
+            window_move_lines(&events).is_empty(),
+            "書込ゼロなのにレコードが出た: {events:?}"
+        );
+
+        // WindowHandle 未付与（Req3.3・enqueue が warn＋false）
+        let mut world = World::new();
+        world.insert_resource(single_monitor_snapshot());
+        let no_handle = world
+            .spawn((
+                window_pos_sized(731, 356, 434, 687),
+                Anchored(Anchor::Bottom),
+                CharWindowMarker { scope: 0 },
+            ))
+            .id();
+        let (wrote, events) = capture_logs(|| {
+            resize_window_to(
+                &mut world,
+                no_handle,
+                SizePx { w: 517, h: 823 },
+                PlacementRoute::Resnap,
+            )
+        });
+        assert!(!wrote);
+        assert!(
+            window_move_lines(&events).is_empty(),
+            "失敗経路でレコードが出た: {events:?}"
+        );
+    }
+
+    /// 与えた `RUST_LOG` 相当 directive で実際に濾した出力を集める（diag.rs の
+    /// `emit_all_under_filter` と同型——こちらは**単一ライター経由**で点灯を確かめる）。
+    fn window_move_output_under_filter(directives: &str) -> String {
+        ensure_interest_probes();
+
+        #[derive(Clone)]
+        struct VecWriter(Arc<Mutex<Vec<u8>>>);
+        impl std::io::Write for VecWriter {
+            fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+                self.0
+                    .lock()
+                    .expect("捕捉バッファの毒化なし")
+                    .extend_from_slice(buf);
+                Ok(buf.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+
+        let buf = Arc::new(Mutex::new(Vec::<u8>::new()));
+        let sink = buf.clone();
+        let subscriber = tracing_subscriber::fmt()
+            .with_env_filter(EnvFilter::new(directives))
+            .with_ansi(false)
+            .with_writer(move || VecWriter(sink.clone()))
+            .finish();
+
+        let (mut world, e) = char_window_world(1, 192);
+        tracing::subscriber::with_default(subscriber, || {
+            tracing::callsite::rebuild_interest_cache();
+            assert!(resize_window_to(
+                &mut world,
+                e,
+                SizePx { w: 517, h: 823 },
+                PlacementRoute::DpiReproject
+            ));
+        });
+
+        String::from_utf8(buf.lock().expect("捕捉バッファの毒化なし").clone()).expect("UTF-8")
+    }
+
+    /// (4) 既定 `RUST_LOG=info`（`main.rs` のフォールバック）では窓移動レコードが
+    /// **1 行も出ない**（Req 1.7・恒久計装の既定 OFF）。
+    #[test]
+    fn window_move_records_are_silent_under_default_info_filter() {
+        let out = window_move_output_under_filter("info");
+        assert!(
+            !out.contains(WINDOW_MOVE_RECORD_TAG),
+            "既定 RUST_LOG=info で窓移動レコードが漏れている（Req 1.7 違反）: {out}"
+        );
+    }
+
+    /// (4) 手順書の directive（`areka::placement::diag=debug`）で点灯する
+    /// ＝単一ライター経由でも target が手順書と 1:1 で結ばれている（Req 1.5/1.7）。
+    #[test]
+    fn window_move_records_light_up_under_the_procedure_directive() {
+        let out = window_move_output_under_filter("info,areka::placement::diag=debug");
+        assert!(
+            out.contains(WINDOW_MOVE_RECORD_TAG) && out.contains("route=DpiReproject"),
+            "手順書の RUST_LOG で単一ライターのレコードが点灯しない: {out}"
+        );
     }
 }
