@@ -41,7 +41,7 @@
   - _Requirements: 2.1, 2.2, 2.5, 2.7, 7.6, 7.7_
   - _Boundary: kanade 選択判定モジュール_
 
-- [ ] 2.2 (P) 選択関連 4 イベントの正典 Reference 割付を実装する
+- [x] 2.2 (P) 選択関連 4 イベントの正典 Reference 割付を実装する
   - 拡張イベントはラベル・ID・付随参照列の順、無印イベントは ID のみ、任意名イベントは付随参照列のみを先頭から、タイムアウトイベントは起動スクリプトを先頭に割り付ける
   - 付随参照列が空のときは対応する Reference 位置を作らず空文字で埋めない（既存マウス系の空文字埋め規約とは非対称である旨をコメントで明記する）
   - 全構築関数が共通リクエストヘッダを必須引数として受け取り、ヘッダ欠落が構造上起こらないことを保つ
@@ -202,3 +202,4 @@
 - 1.4: dispatcher の選択系 3 アームは暫定（`*_dropped_not_wired` warn ＋ 現行 slot 参照のみ）。**タスク 3.3 で恒久語彙 `resolve_choice_stale`/`cancel_choice_stale`/`choice_waiting_stale` と実意味論へ置換すること**。
 - 1.4: `start_talk_send_failed` は design C6 に従い `talk_command_send_failed` へ改称済み。`MockSakura::started()` は `TalkCommand::Start` の射影になった（既存檻は無改変）。
 - 2.1: `schedule/choice.rs` に `plan_cascade` / `choice_deadline` を配置。設計に明文の無い 2 裁定を本層で固定＝**秒→ms は四捨五入**・**NaN は無期限へ畳む**。対応表（7.1）へ記録するか要判断。`#[allow(dead_code)]` 3 箇所は 4.x の配線で除去すること。
+- 2.2: `on_choice_*` 4 本は Reference 割付を正典どおり実装（Ex は Ref0=ラベル/Ref1=ID）。3 固定 ID は **まだ `ALLOWED_EVENT_IDS` 未登載**＝2.3 が入るまで egress ガードが拒否する。設計 C2 の「`EventId::Choice` は choice.rs の planner のみが構成」という記述は C3/タスク境界（events.rs の `on_choice_named`）と字面が衝突しており、実装は C3 に従っている。
