@@ -32,7 +32,7 @@
 - 多面バルーンの面別上書き網羅・実行時再読込（`\![reload,balloon]`）・入力ウィンドウ系列（`balloonc*`）。
 - `windowposition.x` キーワード指定（`center`/`top`/`bottom`）・`windowposition.limit`（語彙記録＋縮退シーム）。
 - 表示スケール k の導出規約・丸め権威の変更（W4 着地形の消費のみ）。
-- キャラ窓基準原点（下端中央）・バルーン位置永続化規約の変更。
+- キャラ窓基準原点（下端中央）の変更。※ **「バルーン位置永続化規約の変更」は 2026-07-31 の実機裁定で Out of Boundary から外れた**（R3.8 の実装時訂正参照）——バルーン追従・保存基準の窓相対化を本仕様が担う。
 
 ## Boundary Commitments
 
@@ -267,7 +267,7 @@ flowchart TB
 | 3.5 | 永続値優先・初期既定の供給にとどまる | persist.rs 無改変（保存値優先マージは既存規約のまま） |
 | 3.6 | k 適用は既存権威・新丸め規約なし | `scale_offset`＝符号保存＋大きさは `ScaleRatio` 権威へ委譲 |
 | 3.7 | `balloonk*` 不在時は全 scope 同一寸＝適用前と一致 | 連鎖収束（1.4 と同根）＋measure 檻で固定 |
-| 3.8 | 原点（下端中央）・保存/復元基準の不変 | resolver/persist 無改変（Out of Boundary） |
+| 3.8 | キャラ窓原点（下端中央）は不変／バルーン相対は窓（char 左上）相対へ是正 | `resolver.rs` 無改変。`follow.rs` の Bottom 限定 offset 補正を撤去＋`persist.rs` の `anchor_edge_basis`／`balloon_offset_to_persist`／`_from_persist` を撤去（実機裁定・R7.6） |
 | 4.1 | 文字層は当該 scope の定義で領域解決 | attach が `BalloonScopeAssets.model` を `connect_balloon_text` へ |
 | 4.2 | 装着と再追従で同一の scope→アクタ写像 | `ActorKey::from(scope.to_string())` 単一式（frame.rs :554/:948 既存維持） |
 | 4.3 | k 変化時の再構築 | `refresh_actor_binding` 既存経路（無改変で per-scope model が効く） |
