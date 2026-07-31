@@ -408,6 +408,18 @@ mod tests {
     /// 既定水準（`RUST_LOG` 未設定時のフォールバック＝`main.rs:262`）。
     const DEFAULT_DIRECTIVES: &str = "info";
 
+    /// `WM_DPICHANGED` メッセージを組む（LOWORD=X DPI / HIWORD=Y DPI・LPARAM=提案矩形）。
+    ///
+    /// `suggested` は呼出側が生存させる（LPARAM は生ポインタ）。
+    fn dpichanged_message(new_dpi: u16, suggested: &RECT) -> WindowMessage {
+        WindowMessage {
+            hwnd: HWND(std::ptr::null_mut()),
+            msg: WM_DPICHANGED,
+            wparam: WPARAM(((new_dpi as usize) << 16) | new_dpi as usize),
+            lparam: LPARAM(suggested as *const RECT as isize),
+        }
+    }
+
     /// ヘッドレスに `WM_DPICHANGED` を 1 回配送する（実 HWND・メッセージループ不要）。
     ///
     /// `hwnd` は null ゆえ `SetWindowPos` は失敗するが、観測点はいずれも呼び出し前後に
@@ -420,12 +432,7 @@ mod tests {
             .spawn(DPI::from_dpi(96, 96))
             .id();
 
-        let m = WindowMessage {
-            hwnd: HWND(std::ptr::null_mut()),
-            msg: WM_DPICHANGED,
-            wparam: WPARAM(((new_dpi as usize) << 16) | new_dpi as usize),
-            lparam: LPARAM(&suggested as *const RECT as isize),
-        };
+        let m = dpichanged_message(new_dpi, &suggested);
         let _ = crate::ecs::dispatch_window_message(&world, entity, &m);
 
         // TLS に残る DpiChangeContext を回収し、同スレッドの後続テストへ漏らさない。
@@ -537,5 +544,303 @@ mod tests {
             !out.contains("[guarded_set_window_pos] Calling SetWindowPos"),
             "既定 `info` で書込経路ログが漏れている: {out}"
         );
+    }
+
+    // ================================================================
+    // S1 の赤証跡＝表示基盤ディスパッチ檻（タスク 4.3・Req 5.4／4.3／4.2）
+    //
+    // design.md「Testing Strategy > Integration Tests 5」が S1 の赤→緑の
+    // **正証跡**と定める檻。是正前の欠陥は wndproc の無条件書込＝実配線に
+    // 在るため、`dpi_helpers.rs` の純関数檻（分岐網羅の補助）では
+    // 「是正前のコードに対して失敗する」の証明力が足りない。
+    //
+    // ## 何を主張しているか（是正後の契約＝D3）
+    // - `DpiSuggestedRectPolicy::ExternalAuthority` を宣言した窓:
+    //   `DPI` component は更新される／`DpiChangeContext` は **確立されない**／
+    //   位置書込も **起きない**（＝最終位置は現接地点のまま残る）
+    // - 宣言の無い窓（既定 `ApplyPosition` 相当）: 従来どおり確立され書かれる
+    //   （非ゴースト窓の後方互換・design.md「Compatibility」）
+    //
+    // ## 是正未投入のツリーでは赤である（それが本タスクの成果物）
+    // `WM_DPICHANGED`（本ファイル `:285`）は `DpiChangeContext::set`（`:343-346`）も
+    // `guarded_set_window_pos`（`:369-379`）も **窓ごとの分岐なしに** 実行し、
+    // `let applied = true;`（`:359`）はその事実の表示である。判断関数
+    // `dpi_suggested_position_decision`（`window_proc/dpi_helpers.rs:32`）は
+    // 本番から呼ばれていない（診断レポート §1.1）。配線はタスク 5.1 の所有であり、
+    // **本タスクでは投入しない**（4.5 の実機採取が是正前ビルドを要求するため）。
+    //
+    // ## 赤の檻を常時赤のまま置かない工夫（`#[ignore]` ゲート）
+    // 常時失敗するテストは以後の全タスクの検証を潰し `cargo test` を門として
+    // 無価値にする。よって赤側 4 件は `#[ignore]` で通常実行から外し、
+    // 再現コマンドを明記する（`areka-emo-atlas/src/emo2_golden.rs:228` の先例）:
+    //
+    // ```text
+    // cargo test -p wintf -- --ignored s1_red_
+    // ```
+    //
+    // **タスク 5.1 は是正配線と同時に本ブロックの `#[ignore]` を 4 件とも外し、
+    // 常時走る回帰檻へ昇格させること**（Req 5.1 の常時テスト化）。
+    //
+    // ## dpi 水準の非対称（Req 5.1／5.4 の「96 が欠陥を隠す」）
+    // 96 では OS 提案原点が現位置と一致するため、提案位置を書いても書かなくても
+    // 最終位置が変わらず **政策分岐が観測できない＝赤にならない**。120／192 では
+    // 提案原点が現位置から離れるため、無条件書込が接地点を破壊して赤になる。
+    // 水準ごとに独立した檻へ分けてあるのは、この非対称が 1 回の実行出力から
+    // そのまま読み取れるようにするためである。
+    // ================================================================
+
+    use crate::ecs::window::DpiSuggestedRectPolicy;
+
+    /// 「areka が直前に確定した接地点」の代役となる現位置（物理 px）。
+    ///
+    /// 具体値そのものに意味は無い——判定は下の `suggested_rect_for` が組む
+    /// **DPI 水準に対する比**と「現位置が保存されるか」の不変条件で表現する（Req 5.6）。
+    const CURRENT_ORIGIN: (i32, i32) = (1200, 400);
+
+    /// 提案矩形の寸（`SWP_NOSIZE` ゆえ判断には使われない・原点だけが効く）。
+    const SUGGESTED_EXTENT: (i32, i32) = (400, 300);
+
+    /// モニタ跨ぎ相当の OS 提案矩形を **比** で組む（絶対 px の直書きを避ける・Req 5.6）。
+    ///
+    /// `dpi=96` では比が 1.0 ゆえ提案原点＝現位置になる（＝欠陥が隠れる水準）。
+    fn suggested_rect_for(dpi: u16, current: (i32, i32)) -> RECT {
+        let ratio = dpi as f32 / 96.0;
+        let left = (current.0 as f32 * ratio).round() as i32;
+        let top = (current.1 as f32 * ratio).round() as i32;
+        RECT {
+            left,
+            top,
+            right: left + SUGGESTED_EXTENT.0,
+            bottom: top + SUGGESTED_EXTENT.1,
+        }
+    }
+
+    /// ディスパッチの外から観測できる 3 事実。
+    #[derive(Debug)]
+    struct DpiChangedOutcome {
+        /// dispatch 後の `DPI` component の X（是正の有無によらず更新されるべき値）。
+        dpi_x_after: u16,
+        /// `DpiChangeContext` が確立されたか（＝提案位置の書込コンテキスト）。
+        context_established: bool,
+        /// 実窓へ書かれた原点（`guarded_set_window_pos` の実施ログから復元）。
+        /// `None` = 書込が 1 度も起きていない。
+        written_origin: Option<(i32, i32)>,
+    }
+
+    impl DpiChangedOutcome {
+        /// 「書かなければ現位置が最終位置として残る」を畳んだ最終位置。
+        fn final_position(&self, current: (i32, i32)) -> (i32, i32) {
+            self.written_origin.unwrap_or(current)
+        }
+    }
+
+    /// `guarded_set_window_pos` の実施ログ 1 行から書込原点を復元する。
+    ///
+    /// トークン境界でアンカーする——`x=` は `cx=` の接尾辞であり、部分一致では
+    /// 取り違える（申し送り「`w=-` が `w=-12` の接頭辞」と同型の罠）。
+    fn parse_write_origin(out: &str) -> Option<(i32, i32)> {
+        let line = out
+            .lines()
+            .find(|l| l.contains("[guarded_set_window_pos] Calling SetWindowPos"))?;
+        let field = |name: &str| -> Option<i32> {
+            line.split_whitespace()
+                .find_map(|tok| tok.strip_prefix(name))
+                .and_then(|v| v.parse::<i32>().ok())
+        };
+        Some((field("x=")?, field("y=")?))
+    }
+
+    /// 政策 component の有無を変えて `WM_DPICHANGED` を 1 回配送し、外形を観測する。
+    fn dispatch_dpichanged_observed(
+        new_dpi: u16,
+        suggested: RECT,
+        policy: Option<DpiSuggestedRectPolicy>,
+    ) -> DpiChangedOutcome {
+        let world = Rc::new(RefCell::new(EcsWorld::new()));
+        let entity = {
+            let mut w = world.borrow_mut();
+            let mut e = w.world_mut().spawn(DPI::from_dpi(96, 96));
+            if let Some(p) = policy {
+                e.insert(p);
+            }
+            e.id()
+        };
+
+        let m = dpichanged_message(new_dpi, &suggested);
+        let out = capture_under_filter(WRITE_PATH_DIRECTIVES, || {
+            let _ = crate::ecs::dispatch_window_message(&world, entity, &m);
+        });
+
+        // TLS に残る `DpiChangeContext` を回収する。回収は観測そのものであり、
+        // 同時に同スレッドの後続テストへの漏洩も防ぐ。
+        let context_established = crate::ecs::window::DpiChangeContext::take().is_some();
+
+        let dpi_x_after = {
+            let mut w = world.borrow_mut();
+            w.world_mut()
+                .get::<DPI>(entity)
+                .copied()
+                .expect("DPI component は spawn 時に付与済み")
+                .dpi_x
+        };
+
+        DpiChangedOutcome {
+            dpi_x_after,
+            context_established,
+            written_origin: parse_write_origin(&out),
+        }
+    }
+
+    /// 水準を引数に取る S1 赤檻の本体。
+    ///
+    /// 主張は「`ExternalAuthority` 窓の最終位置＝現接地点」（Req 4.3: OS 推奨位置を
+    /// 最終位置としてそのまま残さない／Req 4.2: 最終位置が接地点規約に従う）。
+    fn assert_external_authority_preserves_anchor_at(dpi: u16) {
+        let suggested = suggested_rect_for(dpi, CURRENT_ORIGIN);
+        let outcome = dispatch_dpichanged_observed(
+            dpi,
+            suggested,
+            Some(DpiSuggestedRectPolicy::ExternalAuthority),
+        );
+
+        // S1 の是正は DPI 受理を止めるものではない（止めたら寸の再導出が死ぬ）。
+        assert_eq!(
+            outcome.dpi_x_after, dpi,
+            "dpi={dpi}: DPI component が更新されていない: {outcome:?}"
+        );
+
+        // 探針の自己検査: 96 は提案＝現位置（分岐が観測できない水準）、
+        // 96 以外は提案が現位置から離れている（＝不動点でない・記憶〈2.2 の教訓〉）。
+        if dpi == 96 {
+            assert_eq!(
+                (suggested.left, suggested.top),
+                CURRENT_ORIGIN,
+                "dpi=96 では提案原点が現位置と一致する前提（96 が欠陥を隠す性質）"
+            );
+        } else {
+            assert_ne!(
+                suggested.left, CURRENT_ORIGIN.0,
+                "dpi={dpi} では提案 X が現位置から動いている前提"
+            );
+        }
+
+        assert_eq!(
+            outcome.final_position(CURRENT_ORIGIN),
+            CURRENT_ORIGIN,
+            "dpi={dpi}: ExternalAuthority 窓の最終位置は現接地点のままであるべき\
+             （OS 提案位置が無条件に採用されている＝S1・Req 4.3/4.2）: {outcome:?}"
+        );
+    }
+
+    /// dpi=96: 提案原点＝現位置ゆえ、是正の有無にかかわらず**通過する**。
+    /// この緑が「96 の自己整合が欠陥を隠す」ことの実行証跡である（Req 5.1／5.4）。
+    #[test]
+    #[ignore = "S1 赤証跡（是正未投入では失敗する・タスク 4.3）。再現: cargo test -p wintf -- --ignored s1_red_"]
+    fn s1_red_external_authority_preserves_anchor_at_dpi96() {
+        assert_external_authority_preserves_anchor_at(96);
+    }
+
+    /// dpi=120: 提案原点が現位置から離れる → 是正未投入では**失敗する**。
+    #[test]
+    #[ignore = "S1 赤証跡（是正未投入では失敗する・タスク 4.3）。再現: cargo test -p wintf -- --ignored s1_red_"]
+    fn s1_red_external_authority_preserves_anchor_at_dpi120() {
+        assert_external_authority_preserves_anchor_at(120);
+    }
+
+    /// dpi=192: 同上（変位がさらに大きい）。
+    #[test]
+    #[ignore = "S1 赤証跡（是正未投入では失敗する・タスク 4.3）。再現: cargo test -p wintf -- --ignored s1_red_"]
+    fn s1_red_external_authority_preserves_anchor_at_dpi192() {
+        assert_external_authority_preserves_anchor_at(192);
+    }
+
+    /// D3 の構造そのもの: `ExternalAuthority` 窓では
+    /// **書込コンテキストが確立されず**、**位置書込も起きない**。
+    ///
+    /// 上の 3 件が「最終位置」という外形で主張するのに対し、こちらは
+    /// 是正が置かれるべき 2 箇所（`DpiChangeContext::set` と
+    /// `guarded_set_window_pos`）を名指しで固定する。是正未投入では両方とも
+    /// 無条件に走るため 120／192 で失敗する。
+    #[test]
+    #[ignore = "S1 赤証跡（是正未投入では失敗する・タスク 4.3）。再現: cargo test -p wintf -- --ignored s1_red_"]
+    fn s1_red_external_authority_establishes_no_write_context() {
+        for dpi in [120_u16, 192] {
+            let suggested = suggested_rect_for(dpi, CURRENT_ORIGIN);
+            let outcome = dispatch_dpichanged_observed(
+                dpi,
+                suggested,
+                Some(DpiSuggestedRectPolicy::ExternalAuthority),
+            );
+
+            assert_eq!(
+                outcome.dpi_x_after, dpi,
+                "dpi={dpi}: DPI component が更新されていない: {outcome:?}"
+            );
+            assert!(
+                !outcome.context_established,
+                "dpi={dpi}: ExternalAuthority 窓で DpiChangeContext が確立されている\
+                 （残置コンテキストが後続 WM_WINDOWPOSCHANGED を DPI echo と誤認させる・D3）: {outcome:?}"
+            );
+            assert!(
+                outcome.written_origin.is_none(),
+                "dpi={dpi}: ExternalAuthority 窓へ OS 提案位置が書き込まれている（S1）: {outcome:?}"
+            );
+        }
+    }
+
+    /// 非退行（**是正の前後いずれでも緑**・ゲート外で常時走る）:
+    /// 政策未宣言／明示 `ApplyPosition` の窓は従来どおり提案原点を書き、
+    /// `DpiChangeContext` も確立する。
+    ///
+    /// これが崩れると examples・将来の通常窓が Per-Monitor v2 の標準応答を失う
+    /// （design.md「Compatibility」）。
+    #[test]
+    fn s1_control_default_policy_windows_apply_suggested_origin() {
+        for dpi in [96_u16, 120, 192] {
+            for policy in [None, Some(DpiSuggestedRectPolicy::ApplyPosition)] {
+                let suggested = suggested_rect_for(dpi, CURRENT_ORIGIN);
+                let outcome = dispatch_dpichanged_observed(dpi, suggested, policy);
+
+                assert_eq!(
+                    outcome.dpi_x_after, dpi,
+                    "dpi={dpi} policy={policy:?}: DPI component が更新されていない: {outcome:?}"
+                );
+                assert!(
+                    outcome.context_established,
+                    "dpi={dpi} policy={policy:?}: 既定窓で DpiChangeContext が確立されない: {outcome:?}"
+                );
+                assert_eq!(
+                    outcome.written_origin,
+                    Some((suggested.left, suggested.top)),
+                    "dpi={dpi} policy={policy:?}: 既定窓へ提案原点が書かれていない: {outcome:?}"
+                );
+            }
+        }
+    }
+
+    /// D3 の帰結（2.1 → 5.1 申し送り）: `DpiChangeContext::set` と
+    /// `guarded_set_window_pos` は **1 個の `if let Some((x, y))` で束ねて分岐**する。
+    /// ゆえに「コンテキスト確立 ⇔ 位置書込」が常に成り立たねばならない。
+    ///
+    /// 是正未投入では両者とも恒真なので緑（＝本檻は赤証跡ではない）。5.1 が
+    /// 片側だけを分岐させた場合に赤になる**設計上の分割禁止**の固定である。
+    #[test]
+    fn s1_write_context_and_position_write_are_branched_together() {
+        for dpi in [96_u16, 120, 192] {
+            for policy in [
+                None,
+                Some(DpiSuggestedRectPolicy::ApplyPosition),
+                Some(DpiSuggestedRectPolicy::ExternalAuthority),
+            ] {
+                let suggested = suggested_rect_for(dpi, CURRENT_ORIGIN);
+                let outcome = dispatch_dpichanged_observed(dpi, suggested, policy);
+
+                assert_eq!(
+                    outcome.context_established,
+                    outcome.written_origin.is_some(),
+                    "dpi={dpi} policy={policy:?}: コンテキスト確立と位置書込が別々に分岐している（D3 違反）: {outcome:?}"
+                );
+            }
+        }
     }
 }

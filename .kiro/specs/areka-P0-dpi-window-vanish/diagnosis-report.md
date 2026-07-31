@@ -272,12 +272,59 @@ design.md は `follow.rs:880-907`（`follow_balloon` 経路）を挙げていた
 
 | 項目 | 内容 |
 | --- | --- |
-| 檻の所在 | _（4.3 が記入）_ |
-| 赤の採取コミット | _（4.3）_ |
-| 赤の実行出力 | _（4.3・是正前に「OS 提案位置が無条件に採用される」ことで失敗する出力）_ |
-| dpi 水準ごとの挙動 | _（4.3・96 は提案矩形が現位置と一致して通過／120・192 で失敗）_ |
+| 檻の所在 | `crates/wintf/src/ecs/window_proc/window_pos.rs:550-845`（`mod tests` 内の「S1 の赤証跡＝表示基盤ディスパッチ檻」ブロック）。赤 4 件＝`s1_red_external_authority_preserves_anchor_at_dpi96`（`:739`）／`_dpi120`（`:746`）／`_dpi192`（`:753`）／`s1_red_external_authority_establishes_no_write_context`（`:766`）。常時走る随伴 2 件＝`s1_control_default_policy_windows_apply_suggested_origin`（`:798`・非退行）／`s1_write_context_and_position_write_are_branched_together`（`:828`・D3 の分割禁止） |
+| 赤の採取コミット | **`77411c0`**（タスク 4.2 着地時点＝Phase A 完了・S1 是正未投入）に本檻のみを載せたツリー。`WM_DPICHANGED`（同ファイル `:285`）は無改変で、差分は `#[cfg(test)] mod tests` 内に閉じている |
+| 赤の再現コマンド | `cargo test -p wintf -- --ignored s1_red_`（赤 4 件は `#[ignore]` ゲート下。理由は下記「ゲート機構」） |
+| 赤の実行出力 | 下記コードブロック（実行実測・`--test-threads=1`） |
+| dpi 水準ごとの挙動 | **96 は通過・120／192 は失敗**（下記出力の 4 行が水準ごとに分かれている理由）。96 では `suggested_rect_for` が組む提案原点が現位置 `(1200,400)` と一致するため、提案位置を書いても書かなくても最終位置が変わらず政策分岐が観測できない。120 では提案原点が `(1500,500)`・192 では `(2400,800)` へ離れ、無条件書込が接地点を破壊する |
+| 判定の表現 | 絶対 px の固定値ではなく **DPI 水準に対する比**（`suggested_rect_for` が `dpi/96` で提案原点を組む）と、**「`ExternalAuthority` 窓の最終位置＝現接地点」の不変条件**で表現している（Req 5.6）。探針の自己検査として「96 では提案＝現位置」「96 以外では提案 X ≠ 現位置」を檻自身が `assert` する（不動点に落ちた空虚な緑を防ぐ・記憶〈2.2 の教訓〉） |
 | 緑の採取コミット | _（7.1）_ |
 | 緑の実行出力 | _（7.1・全水準）_ |
+
+#### 赤の実行出力（`cargo test -p wintf -- --ignored s1_red_ --test-threads=1`）
+
+```text
+running 4 tests
+test ecs::window_proc::window_pos::tests::s1_red_external_authority_establishes_no_write_context ... FAILED
+test ecs::window_proc::window_pos::tests::s1_red_external_authority_preserves_anchor_at_dpi120 ... FAILED
+test ecs::window_proc::window_pos::tests::s1_red_external_authority_preserves_anchor_at_dpi192 ... FAILED
+test ecs::window_proc::window_pos::tests::s1_red_external_authority_preserves_anchor_at_dpi96 ... ok
+
+panicked at crates\wintf\src\ecs\window_proc\window_pos.rs:727:9:
+assertion `left == right` failed: dpi=120: ExternalAuthority 窓の最終位置は現接地点のままであるべき（OS 提案位置が無条件に採用されている＝S1・Req 4.3/4.2）: DpiChangedOutcome { dpi_x_after: 120, context_established: true, written_origin: Some((1500, 500)) }
+  left: (1500, 500)
+ right: (1200, 400)
+
+panicked at crates\wintf\src\ecs\window_proc\window_pos.rs:727:9:
+assertion `left == right` failed: dpi=192: ExternalAuthority 窓の最終位置は現接地点のままであるべき（OS 提案位置が無条件に採用されている＝S1・Req 4.3/4.2）: DpiChangedOutcome { dpi_x_after: 192, context_established: true, written_origin: Some((2400, 800)) }
+  left: (2400, 800)
+ right: (1200, 400)
+
+panicked at crates\wintf\src\ecs\window_proc\window_pos.rs:779:13:
+dpi=120: ExternalAuthority 窓で DpiChangeContext が確立されている（残置コンテキストが後続 WM_WINDOWPOSCHANGED を DPI echo と誤認させる・D3）: DpiChangedOutcome { dpi_x_after: 120, context_established: true, written_origin: Some((1500, 500)) }
+
+test result: FAILED. 1 passed; 3 failed; 0 ignored; 0 measured; 537 filtered out
+```
+
+#### この赤が §1.1 の①①' を名指しで撃っていること
+
+`DpiChangedOutcome` の 3 フィールドは §1.1 の連鎖の①①'をそのまま外形化したものである:
+
+- `dpi_x_after: 120` — DPI component は更新されている（§1.1 の是正は DPI 受理を止めるものではない）
+- `context_established: true` — §1.1 ①'（`window_pos.rs:343-346` の `DpiChangeContext::set` が無条件）
+- `written_origin: Some((1500, 500))` — §1.1 ①（`window_pos.rs:369-379` の `guarded_set_window_pos` が無条件・提案原点そのもの）。値は `guarded_set_window_pos` の実施ログ（`wintf::ecs::window::command`）を `capture_under_filter` で実濾過して復元しており、宣言ではなく**実際に書かれた座標**である
+
+すなわち赤は「`ExternalAuthority` を宣言しても分岐が存在しない」ことによる失敗であって、檻の組み違いによる失敗ではない。`dpi_suggested_position_decision`（`window_proc/dpi_helpers.rs:32`）は本番から呼ばれていない（§1.1「是正機構は存在するが未配線である」）。
+
+#### ゲート機構（`#[ignore]`）と 7.1 への申し送り
+
+赤 4 件は `#[ignore = "S1 赤証跡（是正未投入では失敗する・タスク 4.3）。再現: cargo test -p wintf -- --ignored s1_red_"]` で通常実行から外してある。常時失敗する檻を置くと `cargo test` が門として無価値になり、以後の全タスクの検証を潰すためである（先例: `crates/areka-emo-atlas/src/emo2_golden.rs:228`）。`cargo test -p wintf` は本タスク着地後も**緑**（1032 → 1034・常時走る随伴 2 件の増分。赤 4 件は ignored 計上）。
+
+**タスク 5.1／7.1 は是正配線と同時に `#[ignore]` を 4 件とも外し、常時走る回帰檻へ昇格させること**（Req 5.1 の常時テスト化）。dpi96 の 1 件も外す——「96 では緑」は是正後も成立する性質であり、外して初めて非対称の記録が回帰檻として保存される。
+
+#### 緑側の先行確認（本タスクで実施・是正は投入していない）
+
+檻が是正後に緑へ反転することを、5.1 相当の分岐（entity から `DpiSuggestedRectPolicy` を読み、`dpi_suggested_position_decision` の `None` で `DpiChangeContext::set` と `guarded_set_window_pos` を**まとめて**飛ばす）を**一時的に当てて実測し、直後に完全に戻した**。結果は赤 4 件すべて `ok`・随伴 2 件も `ok`。**是正はツリーに残していない**（4.5 の実機採取が是正未投入ビルドを要求するため・§2 の冒頭注記）。これにより本檻は「今赤・是正後緑」の両側が実行で確かめられている（空虚な赤ではない）。
 
 ### 3.2 S2 の実行記録（**S2 専用節**）
 
