@@ -194,6 +194,7 @@
   - 完了状態: メニュー一周の人間サインオフとログ突合の双方が記録された状態になる
   - _Requirements: 9.3, 9.4_
   - _Depends: 5, 6.2, 6.3, 6.4_
+  - _Blocked: 人間によるメニュー一周サインオフが未実施（代行不可）。手順書 `signoff.md` は実測値で完成済み・起動スモークは exit 0 / ERROR 0 件で通過済み。開発者が signoff.md §1〜§5 を実施し記録欄を埋めれば解除。_
 
 ## Implementation Notes
 
@@ -222,3 +223,5 @@
 - 6.4: design の sakura/dispatcher/dola 3 項は 3.1/3.2/3.3 の既存檻で全充足だったため、判断分岐の穴 3 件のみ追加（sakura の通知ガード負アーム・dispatcher の Cancel Close 転送失敗／ChoiceWaiting kanade 転送失敗）。**構造上到達不能ゆえ檻に入れない 2 分岐**＝`choice_notified` リセット（M1 は talk あたり barrier 1 個）と非 `WaitForChoice` バリアの warn 防御。
 - 6.4: `cargo clippy -p dola --all-targets` は `crates/dola/tests/runtime/core_types_test.rs:287` の `approx_constant`（deny）で赤。**本 spec 以前からの既存債務**（本 spec は dola tests を触っていない）。別 spec で処理すべき。
 - 7.1: 対応表は `doc/choice-cascade-compat.md`（provenance 3 値・正典引用は research §5 から逐語転記）。**残件（境界外・未実施）**＝`doc/COMPAT_ARCHITECTURE.md` §8「沈黙ルール対応表」へ本書へのポインタ 1 行を登記すること（同 §8 は「各 spec が実装着地時に自らの裁量を追記する」と規定しているが本 spec 由来の行がまだ無い）。
+- 7.2: **実機サインオフの落とし穴** — `target/debug/shiori-host32-helper.exe` は `cargo build --workspace` のたびに **x64 で上書き**される。実 pasta.dll は **i686（PE 0x014c）** なので、実走直前に `target/i686-pc-windows-msvc/debug/` の helper を `target/debug/` へコピーし直すこと（helper パスを差す env は存在しない＝`main.rs:155` が `current_exe()` 隣を無条件解決）。
+- 7.2: emo2 の `\q[]` ID は**全て `On` 始まり**＝実機では `CascadePlan::Named` 1 段のみ。正典 2 段形（Ex→無印）は実機で観測できず 6.1 の決定論檻が担当。emo2 辞書に `OnChoiceTimeout` の応答は無いため**選択肢表示から 30 秒放置でメニューが中断する**（設計どおり）。
