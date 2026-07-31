@@ -1,11 +1,46 @@
-//! DPI 変更時の中心保持補正ヘルパー関数
+//! DPI 変更時の純粋ヘルパー関数
 //!
-//! `calculate_physical_size_from_box_style`, `calculate_center_correction`,
-//! `correct_position_for_dpi_center_preserve` の純粋関数群。
+//! - 中心保持補正: `calculate_physical_size_from_box_style`,
+//!   `calculate_center_correction`, `correct_position_for_dpi_center_preserve`
+//! - 提案位置の採否: `dpi_suggested_position_decision`
 
 use tracing::{debug, trace, warn};
+use windows::Win32::Foundation::RECT;
 
+use crate::ecs::window::DpiSuggestedRectPolicy;
 use crate::ecs::{Point, SizeI};
+
+/// `WM_DPICHANGED` で OS 提案位置を採用するかの純判断。
+///
+/// - `Some((x, y))` = 提案位置を書く（`DpiChangeContext` も set する）。
+/// - `None` = 書かない（`DpiChangeContext` も **set しない**）。
+///
+/// 「書かない」は番兵座標ではなく型上の別値で表現する。呼出側は
+/// `DpiChangeContext::set` と `guarded_set_window_pos` を戻り値でまとめて分岐でき、
+/// 残置コンテキストを後続の `WM_WINDOWPOSCHANGED` が DPI echo と誤認する競合を封じられる。
+///
+/// # Arguments
+/// * `policy` - 当該窓の [`DpiSuggestedRectPolicy`]。component 未付与は `None` で表現する。
+/// * `suggested` - `WM_DPICHANGED` の LPARAM が指す OS 提案矩形。
+///
+/// 寸は使わない（サイズは ECS レイアウトパイプラインの所管＝`SWP_NOSIZE`）ため、
+/// 参照するのは矩形の左上のみである。
+//
+// 配線（`WM_DPICHANGED` ハンドラでの消費）は Phase C（タスク 5.1）の所有。
+// 本タスク（2.1）は契約と判断関数の切り出しのみで、実行時挙動は不変に保つ。
+#[allow(dead_code)]
+pub(super) fn dpi_suggested_position_decision(
+    policy: Option<&DpiSuggestedRectPolicy>,
+    suggested: &RECT,
+) -> Option<(i32, i32)> {
+    match policy {
+        // 未付与 = 既定 = 従来挙動
+        None | Some(DpiSuggestedRectPolicy::ApplyPosition) => {
+            Some((suggested.left, suggested.top))
+        }
+        Some(DpiSuggestedRectPolicy::ExternalAuthority) => None,
+    }
+}
 
 /// BoxStyle.size と DPI スケールから物理ピクセルサイズを計算する。
 ///
@@ -264,7 +299,7 @@ mod tests {
     // ================================================================
 
     use crate::ecs::window::DpiChangeContext;
-    use windows::Win32::Foundation::RECT;
+    // `RECT` は `use super::*` 経由で可視（本体が import 済み）。
 
     fn make_box_style_px(w: f32, h: f32) -> BoxStyle {
         BoxStyle {
@@ -386,5 +421,177 @@ mod tests {
         let old_center_x = client_pos.x + client_size.width / 2;
         let new_center_x = result.x + 500 / 2;
         assert_eq!(old_center_x, new_center_x);
+    }
+
+    // ================================================================
+    // dpi_suggested_position_decision tests
+    //
+    // 位置づけ（design.md「Testing Strategy」1.）: **分岐網羅の補助**。
+    // S1（OS 提案位置の素通し）の赤→緑の正証跡は `window_proc/mod.rs` の
+    // dispatch 檻（タスク 4.3）が担う——是正前の欠陥は wndproc の無条件
+    // 書込＝実配線に在るため、新設純関数上の模擬では証明力が足りない。
+    // ここで固定するのは「判断関数の 3 分岐が仕様どおりの答えを返すこと」と
+    // 「dpi=96 では 3 分岐の区別が消える（＝96 が欠陥を隠す性質）」の 2 点。
+    // ================================================================
+
+    // `DpiSuggestedRectPolicy` は `use super::*` 経由で可視（本体が import 済み）。
+
+    /// 提案矩形を左上 `(left, top)`・寸 `(w, h)` で組む。
+    fn make_suggested_rect(left: i32, top: i32, w: i32, h: i32) -> RECT {
+        RECT {
+            left,
+            top,
+            right: left + w,
+            bottom: top + h,
+        }
+    }
+
+    /// 判断結果を「最終位置」へ畳む消費側の模擬。
+    /// `Some((x, y))` は提案位置を書く＝最終位置が提案位置になる。
+    /// `None` は書かない＝現位置が最終位置として残る（外部権威が後で決める）。
+    fn final_position(decision: Option<(i32, i32)>, current: (i32, i32)) -> (i32, i32) {
+        decision.unwrap_or(current)
+    }
+
+    #[test]
+    fn test_dpi_decision_absent_policy_applies_suggested_position() {
+        // component 未付与 = 後方互換の既定値 = 従来どおり提案位置を書く
+        let suggested = make_suggested_rect(1920, 240, 400, 300);
+        let decision = dpi_suggested_position_decision(None, &suggested);
+        assert_eq!(decision, Some((1920, 240)));
+    }
+
+    #[test]
+    fn test_dpi_decision_apply_position_applies_suggested_position() {
+        // 明示 ApplyPosition = 未付与と同一の答え
+        let suggested = make_suggested_rect(1920, 240, 400, 300);
+        let decision =
+            dpi_suggested_position_decision(Some(&DpiSuggestedRectPolicy::ApplyPosition), &suggested);
+        assert_eq!(decision, Some((1920, 240)));
+    }
+
+    #[test]
+    fn test_dpi_decision_external_authority_does_not_write() {
+        // 位置権威が外部（areka 配置システム）にある窓 = 書かない
+        // 「書かない」は番兵座標ではなく型上の別値（None）で表現される。
+        let suggested = make_suggested_rect(1920, 240, 400, 300);
+        let decision = dpi_suggested_position_decision(
+            Some(&DpiSuggestedRectPolicy::ExternalAuthority),
+            &suggested,
+        );
+        assert_eq!(decision, None);
+    }
+
+    #[test]
+    fn test_dpi_decision_default_policy_equals_absent_policy() {
+        // 既定値が ApplyPosition であること（＝未付与と付与既定が同義）を固定する。
+        // これが崩れると「未付与＝従来どおり」という後方互換の非退行保証が消える。
+        assert_eq!(
+            DpiSuggestedRectPolicy::default(),
+            DpiSuggestedRectPolicy::ApplyPosition
+        );
+
+        let suggested = make_suggested_rect(-1024, 96, 400, 300);
+        assert_eq!(
+            dpi_suggested_position_decision(Some(&DpiSuggestedRectPolicy::default()), &suggested),
+            dpi_suggested_position_decision(None, &suggested)
+        );
+    }
+
+    #[test]
+    fn test_dpi_decision_uses_rect_origin_not_extent() {
+        // 書込先は提案矩形の左上であり、右下・寸ではない。
+        // 同一原点で寸だけ違う 2 矩形が同じ答えを返すことで固定する
+        // （寸は ECS レイアウトパイプラインの所管＝SWP_NOSIZE）。
+        let small = make_suggested_rect(300, 400, 10, 10);
+        let large = make_suggested_rect(300, 400, 5000, 5000);
+        assert_eq!(
+            dpi_suggested_position_decision(None, &small),
+            Some((300, 400))
+        );
+        assert_eq!(
+            dpi_suggested_position_decision(None, &large),
+            dpi_suggested_position_decision(None, &small)
+        );
+    }
+
+    #[test]
+    fn test_dpi_decision_at_96_hides_the_branch_difference() {
+        // Req 5.1/5.4 の「96 の自己整合が欠陥を隠す」性質を檻として明示する。
+        // dpi=96 では提案位置 = 現位置（比 1.0）ゆえ、3 分岐すべてが
+        // 現接地点 X を保存してしまい、分岐の区別が観測できない。
+        let current = (1200, 400);
+        let ratio = 96.0_f32 / 96.0;
+        let suggested = make_suggested_rect(
+            (current.0 as f32 * ratio).round() as i32,
+            (current.1 as f32 * ratio).round() as i32,
+            400,
+            300,
+        );
+
+        for policy in [
+            None,
+            Some(&DpiSuggestedRectPolicy::ApplyPosition),
+            Some(&DpiSuggestedRectPolicy::ExternalAuthority),
+        ] {
+            let final_pos = final_position(
+                dpi_suggested_position_decision(policy, &suggested),
+                current,
+            );
+            assert_eq!(
+                final_pos, current,
+                "dpi=96 では policy={policy:?} でも現位置が保存されるはず"
+            );
+        }
+    }
+
+    #[test]
+    fn test_dpi_decision_at_120_and_192_separates_apply_from_external_authority() {
+        // 96 以外の水準（120・192）でモニタ跨ぎ相当の提案シフトを注入すると、
+        // 「提案位置を書く」分岐は現接地点 X を破壊し、
+        // `ExternalAuthority` だけが現接地点 X を保存する。
+        // 判定は絶対 px ではなく DPI 水準に対する比で表現する（Req 5.6）。
+        let current = (1200, 400);
+
+        for dpi in [120_u16, 192_u16] {
+            let ratio = dpi as f32 / 96.0;
+            let shifted_x = (current.0 as f32 * ratio).round() as i32;
+            let shifted_y = (current.1 as f32 * ratio).round() as i32;
+            let suggested = make_suggested_rect(shifted_x, shifted_y, 400, 300);
+            assert_ne!(
+                shifted_x, current.0,
+                "dpi={dpi} では提案 X が現位置から動いている前提"
+            );
+
+            // 未付与・ApplyPosition: 提案位置を書く = 接地点 X が保存されない
+            for policy in [None, Some(&DpiSuggestedRectPolicy::ApplyPosition)] {
+                let final_pos = final_position(
+                    dpi_suggested_position_decision(policy, &suggested),
+                    current,
+                );
+                assert_eq!(
+                    final_pos,
+                    (shifted_x, shifted_y),
+                    "dpi={dpi} policy={policy:?}: 提案位置が最終位置になるはず"
+                );
+                assert_ne!(
+                    final_pos.0, current.0,
+                    "dpi={dpi} policy={policy:?}: 接地点 X が破壊されることを明示する"
+                );
+            }
+
+            // ExternalAuthority: 書かない = 現接地点 X が保存される
+            let final_pos = final_position(
+                dpi_suggested_position_decision(
+                    Some(&DpiSuggestedRectPolicy::ExternalAuthority),
+                    &suggested,
+                ),
+                current,
+            );
+            assert_eq!(
+                final_pos, current,
+                "dpi={dpi}: ExternalAuthority は現接地点を保存するはず"
+            );
+        }
     }
 }

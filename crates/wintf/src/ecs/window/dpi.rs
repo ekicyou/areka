@@ -1,6 +1,7 @@
 //! DPI情報コンポーネント
 //!
 //! - `DPI`: ウィンドウDPI値・スケーリング変換
+//! - `DpiSuggestedRectPolicy`: `WM_DPICHANGED` の OS 提案位置を適用するかの窓ごとの宣言
 
 use bevy_ecs::prelude::*;
 use windows::Win32::Foundation::{LPARAM, WPARAM};
@@ -134,9 +135,36 @@ impl DPI {
     }
 }
 
+/// `WM_DPICHANGED` の OS 提案矩形（位置）の適用方針。
+///
+/// 未付与の窓は [`DpiSuggestedRectPolicy::ApplyPosition`] と同じ扱いになる
+/// （従来挙動・Per-Monitor v2 の標準応答）。これが後方互換の非退行保証である。
+///
+/// 純 component（データのみ）。付与の責務は窓の所有者側（配置システム）にあり、
+/// wintf は読むだけで書かない。判断は
+/// `crate::ecs::window_proc` の `dpi_suggested_position_decision` が担う。
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DpiSuggestedRectPolicy {
+    /// 既定: OS 提案位置を `SWP_NOSIZE` で適用する（従来挙動）。
+    #[default]
+    ApplyPosition,
+    /// 位置権威が外部（ECS 側の配置システム）にある窓:
+    /// OS 提案位置を書かず、`DpiChangeContext` も set しない。
+    ExternalAuthority,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_dpi_suggested_rect_policy_default_is_apply_position() {
+        // 未付与の窓と既定値付与の窓が同義であること（後方互換の要）。
+        assert_eq!(
+            DpiSuggestedRectPolicy::default(),
+            DpiSuggestedRectPolicy::ApplyPosition
+        );
+    }
 
     #[test]
     fn test_default_is_96_dpi() {

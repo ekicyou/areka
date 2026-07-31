@@ -39,7 +39,7 @@
   - _Depends: 1.1_
 
 - [ ] 2. Phase A: 判断分岐の純関数化（抽出のみ・配線しない）
-- [ ] 2.1 (P) OS 提案位置の採用可否を宣言する契約と純判断関数
+- [x] 2.1 (P) OS 提案位置の採用可否を宣言する契約と純判断関数
   - 窓ごとに「DPI 変化時の OS 提案位置を適用するか」を宣言する component を新設し、未付与＝従来どおり適用（後方互換の既定値）とする
   - 提案位置の採用可否を返す純関数を追加する（適用する場合は書込先座標を返し、外部権威の窓では「書かない」を返す）
   - 全分岐（未付与・適用・外部権威）を網羅する in-source 檻を追加する
@@ -221,6 +221,9 @@
 - **1.1**: 檻の実効性は「format 変異（`dpi=`→`DPI=`）で 2 件赤・水準変異（`debug!`→`info!`）で 3 件赤」でレビュアが独立再現済み。`EnvFilter` 実濾過による Req 1.7 の静穏檻は非空虚。
 - **1.3 → 4.1 への必須申し送り**: 窓位置書込の共通経路 `guarded_set_window_pos` の target は `wintf::ecs::window::command` であり、design.md:476 が記す `RUST_LOG=…,wintf::ecs::window_proc=debug,…` では **EnvFilter の文字列前方一致に掛からず点灯しない**（ミューテーションで実測確認済み）。**手順書には `wintf::ecs::window=debug` を入れること**（`window_proc` も包含する）。入れ忘れると Req 1.5 が排除しようとしている偽陰性を再生産する。
 - **1.3 → 5.1 への申し送り**: `window_pos.rs` の実施可否行の `applied` は Phase A では `let applied = true;` の定数（分岐は 5.1 の所有）。design.md:319 が挙げる `policy` フィールドも未出力＝`DpiSuggestedRectPolicy` を新設する 2.1 の後、5.1 で `applied` の分岐化と同時に追加すること。
+- **2.1 → 5.1 への申し送り**: `dpi_suggested_position_decision`（`crates/wintf/src/ecs/window_proc/dpi_helpers.rs`・`pub(super) fn(Option<&DpiSuggestedRectPolicy>, &RECT) -> Option<(i32, i32)>`）の戻り値 `Option` は **`DpiChangeContext::set` と `guarded_set_window_pos` の双方を 1 個の `if let Some((x, y))` で束ねて分岐させる**ためのもの（D3 帰結）。**シグネチャを広げる必要はない**——レビュアが design.md:319 と突合して確認済み。配線時に同関数の `#[allow(dead_code)]`（dpi_helpers.rs:31）を外すこと。
+- **2.1**: `DpiSuggestedRectPolicy` は `crates/wintf/src/ecs/mod.rs` の curated `pub use window::{…}` へ載せてある（areka は `wintf::ecs::{…}` 経由でしか import しない＝`placement/spawn.rs:63` の流儀）。5.1 の areka 側付与は wintf を編集せずに書ける。
+- **2.1**: dpi=96 の檻は**政策分岐に対して意図的に無差別**（`ExternalAuthority` 変異で緑のまま・座標変異で赤）。これが Req 5.1 の「96 が欠陥を隠す」性質そのもので、分岐網羅は専用 3 檻が担う。以後 96 の檻を「分岐を見ていない」と誤診して強化しないこと。
 - **1.3**: wintf 側に `crates/wintf/src/ecs/test_support.rs`（`#[cfg(test)]` 限定・`capture_under_filter(directives, f)`）を新設済み。`tracing-subscriber` は dev-dependency のみで本番バイナリ非到達。以後の wintf 側ログ檻はこれを使うこと。
 - **1.3**（既知の既存不良・本 spec 範囲外）: `cargo clippy -p wintf` は `com/d2d/command_sink.rs:107,128,155` の `not_unsafe_ptr_arg_deref` で失敗する（本 spec 以前から）。clippy を DoD に使わないこと。
 - **1.2**: 実機出力の行書式は `[diag.monitor] index=N handle=… bounds=l,t,r,b work_area=l,t,r,b dpi=… primary=…` ／ヘッダは `[diag.monitor_snapshot] context=<tag> count=N`。呼出点タグは `monitor_snapshot`（main.rs 正典＝`MonitorSnapshot` 構築点）と `prepare_ghost_windows`（placement 列挙点）の 2 種。**タスク 1.3 の wintf 側列挙ログのフィールド名はこの書式に合わせること**（D12 の「共有語彙 grep 突合」が成立する条件）。手順書（4.1）の判定語もこれ。

@@ -45,9 +45,9 @@ pub use widget::{
     TypewriterTimeline, TypewriterToken, draw_typewriters, update_typewriters,
 };
 pub use window::{
-    DPI, DpiChangeContext, SetWindowPosCommand, Window, WindowHandle, WindowPos,
-    WindowStyle, ZOrder, find_owner_window, flush_window_pos_commands, guarded_set_window_pos,
-    is_self_initiated,
+    DPI, DpiChangeContext, DpiSuggestedRectPolicy, SetWindowPosCommand, Window, WindowHandle,
+    WindowPos, WindowStyle, ZOrder, find_owner_window, flush_window_pos_commands,
+    guarded_set_window_pos, is_self_initiated,
 };
 pub(crate) use window_proc::dispatch_window_message;
 pub use world::{
