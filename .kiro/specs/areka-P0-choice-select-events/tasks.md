@@ -169,7 +169,7 @@
   - _Requirements: 9.1, 9.2, 1.1, 1.3, 1.4, 1.6_
   - _Depends: 6.1_
 
-- [ ] 6.4 (P) 上流・下流クレートの単体檻を実装する
+- [x] 6.4 (P) 上流・下流クレートの単体檻を実装する
   - talk アクターの選択待ち通知が一度だけ届き解決後に再通知されないこと、通知内容（候補 ID 列・horizon・タイムアウト指令）が正しいことを固定する
   - dispatcher の一致中継・不一致 stale 棄却・時刻換算・選択解除後の完了通知到達を固定する
   - 再生層の占有 horizon 照会の戻り値を固定する
@@ -219,3 +219,5 @@
 - 5: `ChoiceForwarder`（`Sender<KanadeMsg>` は `!Sync` ゆえ bevy `Resource` 不可＝NonSend 保持体）と `forward_all`（World を組まずに drain ループを檻へ入れる ECS 分離核）を新設。schedule 位置は `.after(dispatch_pointer_events)`（同一フレーム転送）。trace 語彙 `choice_drain_no_inbox`/`choice_drain_no_forwarder` 追加（donor `mouse_*_no_wiring` と同型）。
 - 6.1: 統合檻は `crates/areka-kanade/tests/kanade/choice_test.rs`。`Fixture::with_choice_response` で choice 応答表を注入する（**未知 GET の catch-all を経由するので、固定 4 ID など既存アームに一致する id を入れても黙って無視される**——6.2/6.3 の落とし穴）。`log_capture` は `src/schedule/` 配下ゆえ統合檻から到達不能＝ログ語彙の固定は in-source 檻の担当。
 - 6.3: **重要な罠** — `ForceQuit`／`Close` など **mock sakura を経由せず終了する檻**では `MockSakura::commands()` の並行読みが記録前スナップショットを掴む（実測 100 回中 7〜11 回失敗・**全檻並行実行時のみ露見**し単独実行では出ない）。そういう檻は `join_bounded_then_commands`（4.6 レビュー是正で追加）を使うこと。`commands()` 側に注意書きは無い。
+- 6.4: design の sakura/dispatcher/dola 3 項は 3.1/3.2/3.3 の既存檻で全充足だったため、判断分岐の穴 3 件のみ追加（sakura の通知ガード負アーム・dispatcher の Cancel Close 転送失敗／ChoiceWaiting kanade 転送失敗）。**構造上到達不能ゆえ檻に入れない 2 分岐**＝`choice_notified` リセット（M1 は talk あたり barrier 1 個）と非 `WaitForChoice` バリアの warn 防御。
+- 6.4: `cargo clippy -p dola --all-targets` は `crates/dola/tests/runtime/core_types_test.rs:287` の `approx_constant`（deny）で赤。**本 spec 以前からの既存債務**（本 spec は dola tests を触っていない）。別 spec で処理すべき。

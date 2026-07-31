@@ -2755,4 +2755,54 @@ mod tests {
             .join()
             .expect("done 受信端 drop でも body は panic せず正常終了する");
     }
+
+    /// **通知の負条件（DD-6・R5.2）**: `\q` を含まない台本は選択待ちへ入らないため
+    /// `ChoiceWaiting` を**一切**送出せず、done ポートを流れる通知は `TalkDone{Ended}` の
+    /// **ちょうど 1 通**である。
+    ///
+    /// **弁別**: 通知条件から `WaitingForChoice` 判定を落とし settle ごとに通知する実装なら、
+    /// 1 通目が `ChoiceWaiting` になってこの assert が落ちる。通算 1 通であることは
+    /// talk スレッド終了後の `Disconnected` で確定させる（負の時間窓に依存しない）。
+    #[test]
+    fn script_without_choices_never_notifies_choice_waiting() {
+        let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
+        let talk_id = TalkId(824);
+        let start = StartTalk {
+            epilogue: Vec::new(),
+            // `\q` 無し（＝compile は選択待ち barrier を発行しない・R2.5）。
+            script: r"\s[10]hello\e".to_string(),
+            talk_id,
+        };
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(NoopSink, NoopSink),
+            SystemVarSnapshot::default(),
+        );
+
+        // Tick(0.0) でアンカー刻印、Tick(1.0) で占有 horizon（hello の D＝0.25）を跨いで自然終端。
+        handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
+        handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
+
+        // 1 通目は `TalkDone{Ended}`（`recv_done` の読み飛ばしを使わず**生の 1 通目**を突合する）。
+        let first = done_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("自然終端で通知が 1 通届く");
+        assert_eq!(
+            first,
+            TalkNotice::Done(TalkDone {
+                talk_id,
+                reason: TalkEndReason::Ended
+            }),
+            "選択肢の無い台本の 1 通目は TalkDone{{Ended}}（ChoiceWaiting は出ない）"
+        );
+
+        // 2 通目は存在しない: talk スレッド終了で送信端が drop され、ポートは Disconnected になる。
+        handle.actor.join().expect("body は正常終了する");
+        assert_eq!(
+            done_rx.recv_timeout(Duration::from_secs(5)).unwrap_err(),
+            RecvTimeoutError::Disconnected,
+            "通知は通算 1 通のみ（選択待ちに入らない talk は ChoiceWaiting を送出しない）"
+        );
+    }
 }

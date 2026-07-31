@@ -1379,6 +1379,35 @@ mod tests {
         release(&mut fx.state);
     }
 
+    /// **送出失敗でも運行継続（Cancel）**: 一致していても talk が直前に消滅していた場合、Close 転送の
+    /// `send` は失敗する。dispatcher は黙って捨てず `debug` で記録し、slot を維持したまま継続する
+    /// （steering: areka-log-first-no-silent-failure）——その talk は既に自力で終端しており、
+    /// 別途届く `TalkDone` が slot を解放する（Resolve 側の同型檻と対をなす失敗経路）。
+    #[test]
+    fn cancel_choice_relay_failure_after_talk_vanished_is_recorded_at_debug_and_continues() {
+        let mut fx = state_fixture();
+        let talk_id = TalkId(909);
+        occupy(&mut fx.state, talk_id, spawn_vanished_talk());
+
+        // `feed` は `Continue`（＝送出失敗でも dispatcher を停止させない）を併せて固定する。
+        let events = capture(|| {
+            fx.feed(DispatcherMsg::CancelChoice { talk_id });
+        });
+        assert_logged(
+            &events,
+            Level::DEBUG,
+            "areka_ghost::dispatcher",
+            "dropping CancelChoice Close relay",
+        );
+        assert_eq!(
+            fx.state.current_talk_id(),
+            Some(talk_id),
+            "転送失敗でも slot は先行解放しない（解放は talk 発の TalkDone の役目・DD-11）"
+        );
+
+        release(&mut fx.state);
+    }
+
     /// **不一致棄却（Cancel）・R1.3**: `talk_id` 不一致／slot 空の `CancelChoice` は Close を
     /// 一切転送せず、`cancel_choice_stale`（info）で記録して棄却される（現行 talk を巻き添えにしない）。
     #[test]
@@ -1605,6 +1634,61 @@ mod tests {
         );
 
         release(&mut fx.state);
+    }
+
+    /// **転送失敗でも運行継続（ChoiceWaiting）**: kanade が既に停止していると転送の `send` は失敗する。
+    /// dispatcher は黙って捨てず `debug` で記録し、slot を乱さず継続する（停止経路は `Close` のみ・
+    /// steering: areka-log-first-no-silent-failure）。
+    ///
+    /// **決定性**: `kanade_rx` を投函**前**に drop するため送出は必ず `Err` になる（`is_finished`
+    /// 等のポーリングに依存しない）。`feed` を使わず [`DispatcherState::handle`] を直呼びするのは、
+    /// fixture から受信端だけを取り出して drop するためである（`Continue` の固定は同等に行う）。
+    #[test]
+    fn choice_waiting_forward_failure_after_kanade_stopped_is_recorded_at_debug_and_continues() {
+        let StateFixture {
+            mut state,
+            kanade_rx,
+            _self_rx,
+        } = state_fixture();
+        let (probe, _obs_rx) = spawn_probe_talk();
+        let talk_id = TalkId(910);
+        occupy(&mut state, talk_id, probe);
+
+        // base_now を刻印（換算アームまで到達させる＝warn 防御枝ではないことを担保）。
+        assert_eq!(
+            state.handle(DispatcherMsg::Tick {
+                now: MonotonicMs(3_000)
+            }),
+            ControlFlow::Continue(())
+        );
+        // 投函前に kanade 側を停止（以降の転送は必ず Err）。
+        drop(kanade_rx);
+
+        let events = capture(|| {
+            assert_eq!(
+                state.handle(DispatcherMsg::ChoiceWaiting(ChoiceWaiting {
+                    talk_id,
+                    choice_ids: vec!["a".to_string()],
+                    display_end_elapsed_secs: 0.5,
+                    timeout_directive_secs: None,
+                })),
+                ControlFlow::Continue(()),
+                "転送失敗は dispatcher を停止させない（停止経路は Close のみ）"
+            );
+        });
+        assert_logged(
+            &events,
+            Level::DEBUG,
+            "areka_ghost::dispatcher",
+            "dropping ChoiceWaiting forward",
+        );
+        assert_eq!(
+            state.current_talk_id(),
+            Some(talk_id),
+            "転送失敗は slot を乱さない（talk は選択待ちのまま継続する）"
+        );
+
+        release(&mut state);
     }
 
     /// **e2e（実 talk・R7.2/5.1）**: 実再生層が選択待ちバリアへ到達すると `ChoiceWaiting` が
