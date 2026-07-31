@@ -2,7 +2,7 @@
 
 ## Introduction
 
-areka は二人立ちゴースト（本体＝sakura／相方＝kero）を表示するが、**バルーン資産の選択が本体側に固定**されている。正典（ukadoc）はバルーン画像を **`balloons{ID}.png`＝本体側**・**`balloonk{ID}.png`＝相方側（三人目以降も含む）** の別系列と定め、各面には対応する面別上書き設定 `balloons{ID}s.txt` / `balloonk{ID}s.txt`（`windowposition`・`validrect` 等でバルーン既定設定 `descript.txt` を上書き）が付く。ところが現状の areka は、①バルーン画像の列挙が `balloons` 接頭辞のみを受理し、②面別上書きも本体側の面 0（`balloons0s.txt`）を 1 回だけ読んで全 scope で共有し、③窓配置採寸もバルーン面 0 を「全スコープ共通」として 1 回だけ計測する。結果、相方側 scope にも本体側バルーンの見た目・`windowposition`・寸法が適用され、**相方専用の `balloonk0.png` / `balloonk0s.txt` は実行時に一切使われない**。この欠陥は `sylphya` 実機サインオフ（2026-07-24）で、本体と相方のバルーン枠が同一形状であることとして開発者が発見した。
+areka は二人立ちゴースト（本体＝sakura／相方＝kero）を表示するが、**バルーン資産の選択が本体側に固定**されている。正典（ukadoc）はバルーン画像を **scope 番号で正規化された接頭辞体系**——`balloons{ID}`＝本体側（scope 0）・`balloonk{ID}`＝相方側（scope 1・省略時は本体側の同一 ID へ縮退）・`balloonp{n}def{ID}`＝三人目以降（`\p[2]` が `balloonp2def*`・省略時は `balloonk`、さらになければ `balloons`）——として定め、各面には対応する面別上書き設定 `{接頭辞}{ID}s.txt`（`windowposition`・`validrect` 等でバルーン既定設定 `descript.txt` を上書き）が付く。この `s` / `k` / `p{n}def` という番号正規化は吹き出しに限らず、スクロール矢印・マーカー・SSTP・クリック待ちの各族へ一様に適用されている。ところが現状の areka は、①バルーン画像の列挙が `balloons` 接頭辞のみを受理し、②面別上書きも本体側の面 0（`balloons0s.txt`）を 1 回だけ読んで全 scope で共有し、③窓配置採寸もバルーン面 0 を「全スコープ共通」として 1 回だけ計測する。結果、相方側 scope にも本体側バルーンの見た目・`windowposition`・寸法が適用され、**相方専用の `balloonk0.png` / `balloonk0s.txt` は実行時に一切使われない**。この欠陥は `sylphya` 実機サインオフ（2026-07-24）で、本体と相方のバルーン枠が同一形状であることとして開発者が発見した。
 
 症状の切り分けは discovery で完了している。疑われた「`\b[ID]` バルーン面切替の未対応」は**原因ではない**——`\b` 経路は `completed/areka-P0-balloon-face-cue` が一気通貫で実装済みかつ実描画檻で固定されている。**原因は「scope 別バルーン資産の選択が存在しないこと」**であり、バルーン定義のパーサ層は `balloonk0s.txt` のマージ解析を既に実装・檻化済み（資産は読める・配線が捨てている）。
 
@@ -13,8 +13,8 @@ areka は二人立ちゴースト（本体＝sakura／相方＝kero）を表示�
 ## Boundary Context
 
 - **In scope**:
-  - scope 別のバルーン系列解決（本体側 scope＝`balloons{ID}` 系列／相方側 scope＝`balloonk{ID}` 系列）。
-  - 正典準拠の **ID 単位フォールバック**（`balloonk{ID}` 不在時は同一 ID の `balloons{ID}` へ縮退・系列一括ではない）。
+  - scope 番号でパラメタ化されたバルーン系列解決（正典の接頭辞連鎖 `balloonp{n}def` → `balloonk` → `balloons`。2 値の固定分岐ではない）。
+  - 正典準拠の **ID 単位フォールバック**（面 ID ごとに連鎖を辿る・系列一括ではない）。
   - scope 別のバルーン定義（バルーン既定設定に面別上書き `balloonk{ID}s.txt` / `balloons{ID}s.txt` をマージした結果）の保持と適用——特に `windowposition` / `validrect`。
   - 窓配置採寸の scope 別化（各 scope が解決したバルーン面 0 の実寸を用いる・表示スケール k 追従込み）。
   - バルーン窓の**初期既定位置**を当該 scope の `windowposition`（数値指定）から決定すること（基本位置＝現行と同一・永続値があればそちらが優先）。
@@ -24,7 +24,8 @@ areka は二人立ちゴースト（本体＝sakura／相方＝kero）を表示�
   - フォールバック発生・解決結果・失敗経路の観測可能なログ。
 - **Out of scope**:
   - `\b[ID]` バルーン面切替経路の変更（`completed/areka-P0-balloon-face-cue` の完成領域・**無改変で緑維持**が受け入れ条件）。
-  - `\p[2]` 以降専用系列（`balloonp{scope}def{ID}`）の解決とその 3 段フォールバック連鎖（M1 は二人立ちまで）。正典上、相方側系列 `balloonk*` が三人目以降も兼ねる。
+  - `\p[2]` 以降のキャラ窓そのものの表示・運用（M1 は二人立ちまで）。バルーン系列の**解決規則**は scope 番号一般で定義するが（Requirement 1.6/1.8）、三人目以降のキャラ窓を実際に生成・表示することは本仕様の対象外。
+  - バルーン資産のうち吹き出し以外の族（スクロール矢印 `arrow*`・マーカー `marker*`・SSTP `sstp_new*`・クリック待ち `clickwait*`）の scope 別対応。これらも正典では同じ `s` / `k` / `p{n}def` の接尾辞体系で番号正規化されているため、本仕様の接頭辞連鎖は族名でパラメタ化できる形が望ましい（Adjacent expectations 参照）。
   - バルーン面 ID の偶数／奇数＝左右向きセット意味論、および表示位置に応じた左右面の自動切替。
   - ghost descript の `balloon.defaultsurface` / `kero.balloon.defaultsurface` / `char*.balloon.defaultsurface` による初期表示面宣言への追従（emo2 は両キー無宣言＝既定 0 で現状差が出ない。語彙は互換対応表へ記録する）。
   - バルーンの表示／非表示ライフサイクル（可視条件・talk 終了後の自動 hide・再表示）＝`areka-P0-balloon-visibility`（W6）の領分。
@@ -39,7 +40,9 @@ areka は二人立ちゴースト（本体＝sakura／相方＝kero）を表示�
 - **Adjacent expectations**:
   - バルーン定義のパース（既定設定＋面別上書きの 2 層マージ）は `areka-parsers` に実装・檻化済みであり、本仕様はそれを **どのファイルで呼ぶか** を scope 別にするだけで、パーサ自体の改造を前提としない。
   - 表示スケール k の実値・丸め権威・再追従の起点は W4 `emo-dpi-scaling` の着地形をそのまま利用する。本仕様は「k を適用する対象がバルーン寸／定義において scope 別になる」ことのみを変える。
-  - 境界候補（discovery の `Boundary Candidates`）: バルーン画像列挙（`crates/areka-emo-present/src/balloon.rs`）・起動時資産構築（`crates/areka/src/emo2_boot/assets.rs`）・表示結線（`crates/areka/src/emo2_boot/frame.rs`）・窓配置採寸（`crates/areka/src/placement/measure.rs`）・文字層再追従（`crates/areka-emo-text/src/actor.rs`）。
+  - 正典のバルーン資産は**族をまたいで同一の番号正規化**を持つ——吹き出し `balloons` / `balloonk` / `balloonp{n}def`、スクロール矢印 `arrows` / `arrowk` / `arrowp{n}def`、マーカー `markers` / `markerk` / `markerp{n}def`、SSTP `sstp_new` / `sstp_newk` / `sstp_newp{n}def`、クリック待ち `clickwaits` / `clickwaitk` / `clickwaitp{n}def`。本仕様が導入する scope→接頭辞連鎖は**族名でパラメタ化できる形**が望ましく、他族の scope 別対応（本仕様では Out of scope）が同じ機構を再利用できることを設計上の評価軸とする。
+  - シェルとバルーンは同一意味論を共有するエンジンの上に載る（`SerikoLoopConfig` の `shell_table`／`balloon_table` は「surface ID 名前空間の別であり能力の仕切りではない」と既に明文化されている）。本仕様が持ち込むのは伺かの意味論の移植であって、エンジンの対称性を崩す方向の分岐ではない。
+  - 境界候補（discovery の `Boundary Candidates`）: バルーン画像列挙（`crates/areka-emo-present/src/balloon.rs`）・起動時資産構築（`crates/areka/src/emo2_boot/assets.rs`）・表示結線（`crates/areka/src/emo2_boot/frame.rs`）・窓配置採寸（`crates/areka/src/placement/measure.rs`）・文字層再追従（`crates/areka-emo-text/src/actor.rs`）。**境界拡張（本仕様で明示的に宣言）**: SERIKO ループ構成（`crates/areka-seriko/src/looper.rs`）＝アニメ定義表を scope で引ける形へ変えるため（Requirement 5.6）。`bindoption-exclusivity`（W6）が触る `areka-seriko` の bind/state/actor とは別ハンクであり、assets.rs と同じく本仕様の先行着地後に相手が rebase する。
   - バルーン窓の初期既定位置の算出規則（基本位置＋オフセット）は既に配置解決層に存在し、そのオフセット供給欄は emo2 で未使用である。本仕様は**供給元を増やす**のであって、配置規則そのものを作り直さない。
   - **W5 同居 3 本**（`dpi-window-vanish` ∥ `collision-dpi-hittest` ∥ `choice-select-events`）とはファイル集合が互いに素であること。`dpi-window-vanish` は配置層を境界に掲げ、かつ診断やり直しにより編集集合が未確定であるため、本仕様が配置解決の中核（`placement/resolver.rs`）へ改造を要すると設計フェーズで判明した場合は、着手順を同ウェーブ内で裁定し干渉台帳へ登記する（エスケープ条項）。
   - **W6 への申し送り**: `balloon-visibility`（W6）は本仕様が確定させた scope 別バルーン定義の実形へ後着で再突合する。`bindoption-exclusivity`（W6）は同一ファイル内の別ハンクに着地するため、本仕様の先行着地後に相手が rebase する。
@@ -53,13 +56,14 @@ areka は二人立ちゴースト（本体＝sakura／相方＝kero）を表示�
 
 #### Acceptance Criteria
 
-1. When ゴースト起動時にバルーン資産を読み込むとき、the areka バルーン資産解決 shall scope ごとに第一候補の系列を割り当て、本体側 scope（`\0`）には `balloons{ID}` 系列を、相方側 scope（`\1` 以降）には `balloonk{ID}` 系列を割り当てる。
-2. When 相方側 scope のある面 ID について `balloonk{ID}` の画像が存在しないとき、the areka バルーン資産解決 shall 同一 ID の本体側画像 `balloons{ID}` を当該面の代替として採用する。
-3. The areka バルーン資産解決 shall 前項のフォールバックを**面 ID 単位**で判定し、ある ID の欠落を理由に当該 scope の系列全体を本体側へ切り替えない（`balloonk0` があり `balloonk1` が無い場合、面 0 は相方側・面 1 は本体側となる）。
-4. Where バルーンが `balloonk*` 画像を 1 枚も含まないとき、the areka バルーン資産解決 shall 全 scope に本体側系列を割り当て、本仕様適用前と同一の面集合を得る。
-5. The areka バルーン資産解決 shall 正典でバルーン面系列と定義されていないファイル（入力ウィンドウ用 `balloonc*`・装飾用画像等）をバルーン面として採用しない。
-6. While M1 の二人立ち構成であるとき、the areka バルーン資産解決 shall scope 1 以降を相方側系列として扱い、`\p[2]` 以降専用系列（`balloonp{scope}def{ID}`）の解決は行わない。
+1. When ゴースト起動時にバルーン資産を読み込むとき、the areka バルーン資産解決 shall scope 番号から正典の接頭辞優先連鎖を導出する——scope 0 は `balloons`、scope 1 は `balloonk` → `balloons`、scope n（n≧2）は `balloonp{n}def` → `balloonk` → `balloons` の順とする。
+2. When ある scope のある面 ID を解決するとき、the areka バルーン資産解決 shall 当該 scope の接頭辞連鎖を先頭から辿り、`{接頭辞}{ID}` の画像が最初に存在した接頭辞の面を採用する。
+3. The areka バルーン資産解決 shall 前項の連鎖探索を**面 ID 単位**で行い、ある ID の欠落を理由に当該 scope の系列全体を後段の接頭辞へ切り替えない（`balloonk0` があり `balloonk1` が無い場合、scope 1 の面 0 は `balloonk0`・面 1 は `balloons1` となる）。
+4. Where バルーンが連鎖の先頭側接頭辞の画像を 1 枚も含まないとき、the areka バルーン資産解決 shall 全 scope が `balloons` 系列へ解決され、本仕様適用前と同一の面集合を得る。
+5. The areka バルーン資産解決 shall 接頭辞を厳密一致で判定し、正典でバルーン面系列と定義されていないファイル（入力ウィンドウ用 `balloonc*`・装飾用画像等）をバルーン面として採用しない。
+6. While M1 の二人立ち構成であるとき、the areka shall 実行時に存在する scope を 0 と 1 に限るが、the areka バルーン資産解決 shall 解決規則自体を scope 番号一般（n≧2 を含む）で定義する。
 7. If ある scope について面 ID 0 のバルーン面が 1 つも解決できないとき、then the areka バルーン資産解決 shall 失敗理由をエラーレベルでログに記録したうえでエラーを返し、既存の失敗経路（バルーン未配線・ダミー窓への縮退を含む）へ伝播させ、無言で空のバルーンを表示するログ無し経路を作らない（プロセス終了ポリシー自体の変更は本仕様の対象外）。
+8. The areka バルーン資産解決 shall 系列解決を scope 番号でパラメタ化された接頭辞連鎖として実装し、本体／相方の 2 値固定分岐として実装しない（M1 の実行時 scope が 0 と 1 のみであることを理由に、三人目以降を表現できない構造を作らない）。
 
 ### Requirement 2: scope 別バルーン定義（面別上書き）の適用
 
@@ -68,8 +72,8 @@ areka は二人立ちゴースト（本体＝sakura／相方＝kero）を表示�
 #### Acceptance Criteria
 
 1. When scope ごとの面が解決したとき、the areka バルーン定義 shall バルーン既定設定（`descript.txt`）へ当該 scope が採用した面の面別上書き設定をマージした定義を、その scope 専用の定義として保持する。
-2. When 相方側 scope が `balloonk{ID}` を採用したとき、the areka バルーン定義 shall `balloonk{ID}s.txt` の `windowposition` および `validrect` を当該 scope へ適用し、本体側 `balloons{ID}s.txt` の値を適用しない。
-3. When ある scope の面が ID 単位フォールバックにより本体側画像へ解決されたとき、the areka バルーン定義 shall 同一 ID の本体側面別上書き設定を当該面の上書き層として用いる（正典は面別上書きを「対応する ID のサーフェスに対して」適用すると定めるため、本体側画像へ縮退した面には本体側の上書き層が対応する＝正典の帰結。Requirement 7.4 により解釈として対応表へ記録する）。
+2. When ある scope が接頭辞連鎖のある接頭辞の面を採用したとき、the areka バルーン定義 shall **その採用接頭辞に対応する**面別上書きファイル `{採用接頭辞}{ID}s.txt` の `windowposition` および `validrect` を当該 scope へ適用し、連鎖の他の接頭辞の値を適用しない（scope 1 が `balloonk0` を採用したなら `balloonk0s.txt` を用い、`balloons0s.txt` を用いない）。
+3. When ある scope の面が ID 単位フォールバックにより連鎖の後段接頭辞へ解決されたとき、the areka バルーン定義 shall その後段接頭辞の同一 ID の面別上書き設定を当該面の上書き層として用いる（正典は面別上書きを「対応する ID のサーフェスに対して」適用すると定めるため、採用した画像にはその画像の上書き層が対応する＝正典の帰結。Requirement 7.4 により解釈として対応表へ記録する）。
 4. When 採用した面に対応する面別上書きファイルが存在しないとき、the areka バルーン定義 shall バルーン既定設定の値のみを用い、その欠落を失敗として扱わない。
 5. The areka バルーン定義 shall 面別上書き設定で指定されなかった項目についてバルーン既定設定の値を継承し、指定された項目のみを上書きする。
 6. While バルーンを表示しているとき、the areka shall 各 scope のバルーンの初期表示面を当該 scope が解決した系列の面 ID 0 とする（ghost descript の `balloon.defaultsurface` / `kero.balloon.defaultsurface` 宣言への追従は Out of scope＝正典既定値 0 のみを実装し、Requirement 7.4 により語彙を対応表へ記録する。左右向きの偶奇規約は本仕様で導入しない）。
@@ -114,7 +118,7 @@ areka は二人立ちゴースト（本体＝sakura／相方＝kero）を表示�
 3. The areka shall バルーンの表示／非表示ライフサイクル（可視条件・自動 hide・再表示）を本仕様で変更しない。
 4. When バルーンが `balloonk*` 画像を含まないとき、the areka shall 表示・採寸の結果および解決される面集合を本仕様適用前と同一に保つ（初期既定位置は Requirement 3.2 による正典化の対象であり、この同一性の範囲外）。
 5. The areka shall 本体側 scope の表示・採寸・文字描画を本仕様の前後で同一に保ち、配置については永続値が存在する限り同一に保つ（本体側で変化し得るのは `windowposition` を反映した初期既定位置のみ）。
-6. The areka shall バルーン側の面テーブル（面の集合およびアニメーション／ループ定義）を各 scope が解決した系列と整合させ、ある scope のバルーンが別 scope の系列由来の定義で駆動される状態を作らない。
+6. The areka shall バルーン側の面テーブル（面の集合およびアニメーション／ループ定義）を各 scope が解決した系列と整合させ、ある scope のバルーンが別 scope の系列由来の定義で駆動される状態を作らない。当該テーブルは scope で引ける形とし、「先頭 scope の資産から 1 本組めば全 scope に足りる」という現行の前提（本仕様が系列を scope 別にすることで成立しなくなる）を、その前提を述べた注記もろとも解消する。
 
 ### Requirement 6: 解決結果とフォールバックの観測性
 
@@ -133,7 +137,7 @@ areka は二人立ちゴースト（本体＝sakura／相方＝kero）を表示�
 
 #### Acceptance Criteria
 
-1. The 開発チーム shall scope→系列選択・ID 単位フォールバック分岐・scope 別定義マージ（相方側 `windowposition` / `validrect` の実値）・scope 別採寸・文字層再追従の判定分岐を、決定論的な自動テストで網羅的に檻化する。
+1. The 開発チーム shall scope→接頭辞連鎖の導出（scope 0／1／n≧2 の各形）・ID 単位の連鎖探索分岐・非バルーン面の除外・採用接頭辞から面別上書きファイル名の導出・scope 別定義マージ（相方側 `windowposition` / `validrect` の実値）・`windowposition` の符号変換・scope 別採寸・文字層再追従の判定分岐を、決定論的な自動テストで網羅的に檻化する。scope 2 以降の連鎖は実 fixture に資産が無いため合成 fixture で檻化する。
 2. When 全 scope 共通のバルーン寸・全 scope 共通のバルーン定義を前提とする既存テストが本仕様と矛盾するとき、the 開発チーム shall 当該テストおよびその前提を述べる doc コメントを本仕様の挙動に合わせて更新する（矛盾するテスト・陳腐化した注記を放置しない）。
 3. When 実機サインオフを行うとき、the 開発チーム shall ゴースト emo2 とバルーン emo2-kakukaku を絶対パスで起動し、本体側と相方側のバルーンの枠形状および表示位置が互いに異なることを目視で確認したうえで、Requirement 6 のログにより各 scope の採用系列・採用ファイル・確定寸が相異なることを突合する。
 4. Where 正典が沈黙する箇所、または正典条文の解釈により areka の挙動を決定した箇所（`\b[ID]` を系列内 ID とみなす解釈、フォールバック時の面別上書き層の対応、未実装項目の縮退等）があるとき、the 開発チーム shall その決定と根拠区分（正典整合／areka 裁量）を互換対応表（`doc/COMPAT_ARCHITECTURE.md`）へ記録する。

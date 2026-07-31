@@ -271,8 +271,20 @@ balloon_root（1 個のディレクトリ）
 - **D8. 相方側で面別上書きファイルが無いときの log レベル（R2.4/R6.2）**
   現行 `assets.rs:334-339` `read_decoded_lenient` は読取失敗を一律 `warn!`。相方側は「面別ファイル不在が正常」（R2.4）なので、per-scope 化で **相方側 warn が常時鳴る**恐れがある。`debug!` へ落とすか、呼び手が層（descript／面別）で使い分けるか。
 
-- **D9. balloon `AnimationTable` の scope 別化（R5.6）**
-  `SerikoLoopConfig.balloon_table`（`areka-seriko/src/looper.rs:47`）は scope 非依存の 1 本。emo2 では常に空表ゆえ実害ゼロ。**(a) 現状維持＋「空だから問題にならない」を檻と doc で固定／(b) per-scope 化して `areka-seriko` の API を変える（brief の境界外へ拡張）／(c) 語彙記録のみで追跡 spec へ**。
+- **D9. balloon `AnimationTable` の scope 別化（R5.6）** — ✅ **2026-07-31 要件ディスカッションで裁定済み＝(b) per-scope 化する（境界を `areka-seriko/src/looper.rs` へ明示拡張）**
+  裁定の根拠（本書の「emo2 では常に空表ゆえ実害ゼロ」評価は判定軸ごと差し替える）:
+  (a) **本仕様自身が既存コードの前提を偽にする**——`assets.rs:287-300` は「全 scope は同一 `Shell` から build 済みゆえ**先頭 World から 1 度だけ組めば足りる**」を根拠に表を 1 本にしており、同じ論法でバルーン表も `balloons.first()`（scope 0 の World）から組んでいる。本仕様後は `balloons[0]`＝sakura 系列・`balloons[1]`＝kero 系列で**中身が異なる**ため、この根拠は成立しない。放置すれば scope 1 のバルーンが scope 0 系列のアニメ定義で駆動される＝**R5.6 が禁じる状態そのもの**であり、かつ R7.2（陳腐化した注記を放置しない）にも抵触する。
+  (b) **エンジン設計上の対称性の欠損**——`looper.rs:40-42` は「`shell_table`／`balloon_table` は **surface ID 名前空間の別であり能力の仕切りではない**（面種非依存・裁定 (a)）」と明文化しており、シェルとバルーンを同種として扱う思想が既にコードにある。シェル側は「たまたま全 scope 同一データ」ゆえ露見していないだけで、表が scope で引けないことは伺か意味論の選択肢ではなく**土台の欠損**。開発者方針「シェルとバルーンは同じ意味論を共有するエンジンとして実装し、将来バルーンへ高度なアニメーションを持ち込む」に照らすと、「今は空だから」は目的地に背を向けた判断になる。
+  (c) 規模は小（フィールド 1 つの型＋参照 1 箇所）。ウェーブ干渉は `bindoption-exclusivity`（W6）が触る `areka-seriko` の bind/state/actor とは別ハンクで、assets.rs と同じく**本仕様の先行着地後に相手が rebase** する既定順序に乗る。
+  設計へ残る下位論点（D9'）: 表の所在——`LoopTables` という並行構造を残して scope キーを付けるか、**表は導出元の World と同じ場所（scope 別のバルーン資産・D4 の保持器）へ同梱して単一真実源にするか**。後者ならシェル側も同型になり「先頭から 1 本」という前提コメント自体が不要になる。シェル側も対称に再キーするかは規模と相談。
+
+- **D11. 系列解決は scope 番号でパラメタ化する（2026-07-31 追加・要件 R1.8）**
+  正典実文（`ukadoc:manual_balloon` 本日全文取得）: 「`balloonp*def*.png` 三人目以降の吹き出し。**`\p[2]` に当たるバルーンが `balloonp2def0.png` / `balloonp2def1.png` になる**。省略時は `balloonk`、さらになければ `balloons`」＝**第一の `*` が scope 番号・第二が面 ID**。さらに同一の番号正規化が族をまたいで一様に適用されている（`arrows`/`arrowk`/`arrowp{n}def`・`markers`/`markerk`/`markerp{n}def`・`sstp_new`/`sstp_newk`/`sstp_newp{n}def`・`clickwaits`/`clickwaitk`/`clickwaitp{n}def`）。
+  ゆえに**本書 5 章アプローチ A の `BalloonSeries { Sakura, Kero }` enum 案は撤回**する（正典の構造を 2 値へ潰しており、`balloonp` 対応時に構造ごと作り直しになる）。正しい形は `scope → 接頭辞優先連鎖`（scope 0 = `[balloons]`／scope 1 = `[balloonk, balloons]`／scope n≧2 = `[balloonp{n}def, balloonk, balloons]`）で、面 ID ごとに連鎖を先頭から辿る。ID 単位フォールバックと 3 段連鎖が**同一コードで表現できる**。
+  副次利得: ① 接頭辞が厳密文字列ゆえ本書 3 章 R1.5 が警告した「`balloonc*` を相方系列と誤認する事故」が構造的に起きない。② 連鎖関数を**族名でパラメタ化**すれば `arrow*`/`marker*` 等の scope 別対応（本仕様 Out）へそのまま再利用できる。③ `balloonp` を実解決させる追加コストはほぼゼロ（連鎖が伸びるだけ）ゆえ、語彙＋シームの先送りより**素直に実装する方が安い**——先送り 4 点セットの対象から外れる。
+  設計論点: 連鎖の返却形（`Vec<String>` / iterator / 族名＋scope の 2 引数）と、`measure.rs` が消費できる粒度（本書 D2 の単一権威と併せて決める）。
+
+- **D9（原文・記録として保存）**
 
 - **D10. アプローチ選択**
   A（下流純関数へ集約・推奨）／B（単一 World 合成・正典乖離ゆえ非推奨）／C（各所で個別分岐・二重実装固定化ゆえ非推奨）。
