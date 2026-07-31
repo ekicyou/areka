@@ -208,34 +208,53 @@ Select-String -Path $log -Pattern 'primary_dpi|wire 成立|装着計画を実行
 
 ## 5. 記録欄（**このタスクの完了状態＝以下 2 つが両方埋まっていること**）
 
+> ✅ **2026-07-31 実施・両方とも記入済み＝タスク 7.2 完了。**
+
 ### 5.1 メニュー一周の人間サインオフ（Req9.3）
 
-| 項目 | 記入欄 |
+| 項目 | 記録 |
 |---|---|
-| 実施日 | |
-| 実施者 | |
-| 実行体（絶対パス・ビルド日時） | |
-| helper の PE machine（`0x014c` を確認したか） | |
-| 実 DPI（`primary_dpi=` の値） | |
-| `AREKA_APP_SMOKE_EXIT_MS` の値 | |
-| ログ保存先（絶対パス） | |
-| **結果**: §3 チェックリスト (0)〜(8) 全通過 → **一周成功 / 失敗** | |
-| 失敗した項番と症状 | |
+| 実施日 | 2026-07-31（ログのタイムスタンプ 11:35:59〜11:36:56） |
+| 実施者 | 開発者による目視確認。起動・helper ステージング・ログ突合は Claude が実施 |
+| 実行体（絶対パス） | `C:\home\maz\git\areka\.claude\worktrees\kiro-gpu-test-crash-ec3b84\target\debug\areka.exe`（コミット `4dd806d` 時点のビルド） |
+| helper の PE machine | **0x014c（i686）を実行直前に検証**。ステージング前は 0x8664 だったため i686 版をコピーして是正（§0.1 の罠を実地で踏んだ） |
+| 実 DPI | **`primary_dpi=120`**（125%・`shell_author_dpi=96`）＝ 96 でない実 DPI 条件を満たす |
+| `AREKA_APP_SMOKE_EXIT_MS` | `900000`（15 分。実際は Ctrl+左ダブルクリックで 11:36:56 に手動終了） |
+| ログ保存先 | `C:\Users\maz-o\Desktop\areka-signoff-choice.log`（522 行 / 117,187 bytes） |
+| **結果** | **一周成功**。§3 チェックリスト (0)〜(8) 全通過 |
+| 失敗した項番と症状 | なし |
+
+**実際に踏んだ経路（`choice_accepted` の実ログ 7 件・手順書 §2 の想定より広い）**:
+
+| # | choice_id | label | 候補数 |
+|---|---|---|---|
+| 1 | `Onおしゃべり頻度メニュー` | おしゃべり頻度 | 3 |
+| 2 | `Onほどよくおしゃべり` | ほどよく | 4 |
+| 3 | `Onメインメニュー` | もどる | 4 |
+| 4 | `Onエモの位置調整メニュー` | エモの位置調整 | 3 |
+| 5 | `Onエモの位置調整選択` | 調整 | 2 |
+| 6 | `Onメインメニュー` | もどる | 2 |
+| 7 | `Onメニュー閉じる` | 閉じる | 3 |
+
+（手順書 §2 が想定した 4 選択に加え、`エモの位置調整` サブメニューも実走している＝メインメニュー 2 系統の両方を通過。）
 
 ### 5.2 ログ突合（Req9.4）
 
-| 項目 | 記入欄 |
+| 項目 | 結果 |
 |---|---|
-| §4.1 系列突合（3 チェック） | |
-| §4.2 `choosing` の実機観測（3 チェック） | |
-| §4.3 **選択待ち中の自発トーク漏れなし** | |
-| §4.4 棄却・失敗ログなし | |
-| §4.5 起動・終了の健全性（5 チェック） | |
-| **ログ突合の結果**: 合格 / 不合格 | |
+| §4.1 系列突合 | ✅ **合格**。`choice_selected`=7 / `choice_accepted`=7 / `choice_cascade_stage`=7 / `choice_resolved`=**7** で完全一致（Req5.4「1 選択＝高々 1 解決」）。7 サイクルすべてが `choice_waiting_established → choice_selected → choice_accepted → choice_cascade_stage → steady_talk → choice_resolved` の正典順。`OnChoiceSelectEx`=**0** / `id=OnChoiceSelect `=**0**（emo2 は全て `On` 始まり＝任意名 1 段・`plan=Named`・§2 どおり） |
+| §4.2 `choosing` の実機観測 | ✅ **合格**。`status` に `choosing` を含む `shiori_request` が **20 件**——内訳は NOTIFY `OnSecondChange` 11 件（選択待ち中の周期 pump・**GET でなく NOTIFY**＝Req6.4 の構造充足）／カスケード段の GET 7 件（4.3 レビューが申し送った「帳簿 take 中に `choosing` が落ちる罠」が実機でも回避されている）／`OnMouseMove` GET 2 件。メニューを閉じた以降の `shiori_request` は `status=None` で **`choosing` が消えている** |
+| §4.3 **選択待ち中の自発トーク漏れなし** | ✅ **合格（Req9.4 の中核）**。`steady_talk` 9 件の origin 内訳＝`OnChoiceEvent` 7・`OnMouseDoubleClick` 1・**`OnSecondChange` 1**。唯一の自発トークは **11:36:52**＝最後の `choice_resolved`（11:36:50）の**2 秒後**で、以降に `choice_waiting_established` は無い。**全 7 回の選択待ち区間（`choice_waiting_established`〜`choice_resolved`）に自発トーク起動が 1 件も挟まっていない**＝複合 `Status` wire 下でも areka 側の調停のみで抑止が成立（Req6.5） |
+| §4.4 棄却・失敗ログなし | ✅ **合格**。`choice_rejected_*` / `choice_unsupported_category` / `choice_shiori_failed_as_204` / `choice_forward_failed` / `choice_waiting_stale` / `event_id_not_allowed` / `talk_command_send_failed` / `unknown_talk_done` / `choice_timeout_*` すべて **0 件**。**ERROR レベルの記録も 0 件**（Req1.6・タスク 4.6 完了状態「正常系のユーザー操作でエラーレベルのログが出ない」） |
+| §4.5 起動・終了の健全性 | ✅ **合格**。`primary_dpi=120`（≠96）／`wire 成立`／`emo2 attach: 装着計画を実行`／`event="boot_complete"`（実 pasta が `OnBoot` に応答＝辞書込みフルゴーストが生存）／終了は `force_quit`→`id=OnClose` NOTIFY→`unload_clean`（helper 正常終了 exit(0)）→プロセス **exit 0** |
+| **ログ突合の結果** | **合格** |
 
 ### 5.3 特記事項
 
-（想定外のログ・環境固有の事象・タイムアウト発火の有無などを記す）
+1. **30 秒タイムアウトは発火しなかった**（`choice_timeout_fired` 0 件）。11:36:27〜11:36:50 の間に 7 選択を踏んでおり、§3.1 の注意どおり迷わず操作できた。タイムアウト経路そのものは決定論檻 6.2 が固定している。
+2. **helper のアーキテクチャ罠を実地で踏んだ**。起動直前の検証で `target\debug\shiori-host32-helper.exe` が 0x8664（x64）になっており、i686 版をコピーして是正してから起動した。原因は本サインオフの前に `cargo test --workspace` を走らせたこと。§0.1 の注意書きが実際に効いた形であり、手順書の記述は正確である。
+3. **ログ上の `steady_talk` と `choice_resolved` の並び順は Action の発行順を示さない**。両者は `on_cascade_reply` の同一呼出内で記録されるため、ログにはコード上の記録順（slot 差替 → 解決 Action 構成）が出る。DD-4 が定める `[ResolveChoice, StartTalk]` の**バッチ内順序**は決定論檻 `cascade_value_emits_resolve_then_start_in_this_order`（変異注入で弁別力を実測済み）が固定しており、実機ログはその順序の証跡ではない。
+4. 実操作は手順書 §2 の想定経路（4 選択）を上回り、`エモの位置調整` 系統も含む 7 選択を踏んだ。メインメニューの 2 系統・サブメニュー・`もどる` 2 回・`閉じる` を通過している。
 
 ---
 
@@ -243,4 +262,4 @@ Select-String -Path $log -Pattern 'primary_dpi|wire 成立|装着計画を実行
 
 - **起動スモークは実測済み**（人間の操作を要さない範囲）: 上記 §1 と同じ絶対パス・同じ env（`AREKA_APP_SMOKE_EXIT_MS=12000`）で `areka.exe` を起動し、**exit 0**・`primary_dpi=120`（実 DPI ≠96）・`wire 成立`・`emo2 attach: 装着計画を実行`・`wrap=BudouxWordWrap`・`boot_start`→`boot_gate`→`boot_talk`→`boot_complete`→`steady_talk_done`→`force_quit`→`OnClose` の系列を確認済み。error レベルのログは 0 件。
   タスク 5（`wire_choice_drain`）の結線を含むビルドが**実際に起動して定常運転へ到達する**ことはこれで押さえられている。
-- **未実施（人間の担当）**: §3 のメニュー一周（ダブルクリック以降の実操作は自動化できない）と、それに伴う §4 の選択系ログの突合。
+- **✅ 実施済み（2026-07-31）**: §3 のメニュー一周を開発者が目視確認し、§4 のログ突合 5 群すべてが合格。結果は §5 に記録済み。
