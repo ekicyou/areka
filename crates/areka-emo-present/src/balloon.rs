@@ -40,6 +40,143 @@ const FRAME_PREFIX: &str = "balloons";
 /// 列挙対象の拡張子（小文字比較）。
 const FRAME_SUFFIX: &str = ".png";
 
+/// 系列族の定義（**表データ**・候補追加が構造改変を伴わない形・R1.9）。
+///
+/// 正典のバルーン資産は族をまたいで同一の scope 別接尾辞体系を持つ——吹き出し
+/// `balloons` / `balloonk` / `balloonp{n}def`、スクロール矢印 `arrows` / `arrowk` /
+/// `arrowp{n}def`、マーカー `markers` / `markerk` / `markerp{n}def`……。本構造体は
+/// その体系を **族名でパラメタ化**して保持するため、他族の scope 別対応（本仕様では
+/// 対象外）が同じ機構をそのまま再利用できる。
+///
+/// 旧名候補は **可変長**である。装飾族には旧名がもう一段深く存在する（正典「`arrows` が
+/// 本体用・旧バージョン対応のために `arrow` で代用を推奨」／`markers` に対する `marker` も
+/// 同型）ため、`scope0_legacy` に `["arrows", "arrow"]` と積めば構造改変なしに表現できる
+/// （R7.1(c) の語彙記録に対する縮退シーム）。
+#[derive(Debug, Clone, Copy)]
+pub struct SeriesFamily {
+    /// 族の基底名（吹き出し族＝`"balloon"`・正規名は `{base}p{n}def`）。
+    pub base: &'static str,
+    /// scope 0 の旧名候補列（吹き出し族＝`["balloons"]`）。
+    pub scope0_legacy: &'static [&'static str],
+    /// scope 1 の旧名候補列（吹き出し族＝`["balloonk"]`）。
+    pub scope1_legacy: &'static [&'static str],
+}
+
+/// 吹き出し族（本仕様で唯一実装する族）。
+pub const BALLOON_FAMILY: SeriesFamily = SeriesFamily {
+    base: "balloon",
+    scope0_legacy: &["balloons"],
+    scope1_legacy: &["balloonk"],
+};
+
+/// 連鎖内の 1 接頭辞（採用時の分類タグ付き）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SeriesPrefix {
+    /// 探索に用いる接頭辞（例: `"balloonp1def"` / `"balloonk"`）。
+    pub prefix: String,
+    /// この接頭辞が連鎖内で担う役割。
+    pub tier: ChainTier,
+}
+
+/// 連鎖内での役割（フォールバック分類を運ぶ——採用時の警告判定・対応表記録の区分に用いる）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChainTier {
+    /// 当該 scope 自身の候補（正規名＋当該 scope の旧名）。
+    Own,
+    /// n≧2 連鎖の**名指し**相方系列（`balloonk`）。正典が三人目以降の流用先として名指しした
+    /// 系列であり、scope 1 の解決へ再帰的に縮退するものではない。
+    KeroNamed,
+    /// デフォルト定義（`balloonp0def` → `balloons`）。全連鎖の最終受け皿は scope 0 のみが
+    /// 持つ地位であり、scope 1 はデフォルトの地位を持たない。
+    Default,
+}
+
+impl SeriesFamily {
+    /// 当該 scope の**正規名** `{base}p{scope}def`。
+    ///
+    /// 正典は p 系列を `\p[2]` 以降としてのみ記述しており、scope 0 / 1 の正規名
+    /// （`balloonp0def` / `balloonp1def`）を先行探索することは areka 裁量の正規化拡張である
+    /// （R1.10・対応表へ記録する対象）。
+    fn canonical(&self, scope: u32) -> String {
+        format!("{}p{scope}def", self.base)
+    }
+
+    /// 当該 scope の**旧名候補列**（scope 0 / 1 のみが持ち、scope 2 以上は旧名なし＝空）。
+    fn legacy(&self, scope: u32) -> &'static [&'static str] {
+        match scope {
+            0 => self.scope0_legacy,
+            1 => self.scope1_legacy,
+            _ => &[],
+        }
+    }
+}
+
+/// scope 番号から**接頭辞優先連鎖**を導出する（純関数・表データ駆動・R1.1/1.8/1.9）。
+///
+/// 連鎖は 3 段の連結である——
+///
+/// ```text
+/// chain(s) = Own(s) ++ KeroNamed(s≧2 のみ) ++ Default(s≧1 のみ)
+///   Own      : 正規名 {base}p{s}def ＋ 当該 scope の旧名候補列
+///              （s=0 → [balloonp0def, balloons] / s=1 → [balloonp1def, balloonk] / s≧2 → [balloonp{s}def]）
+///   KeroNamed: 正典が名指しする相方系列の旧名候補列（[balloonk]）
+///   Default  : 正規名 {base}p0def ＋ scope 0 の旧名候補列（[balloonp0def, balloons]）
+/// ```
+///
+/// 各段では**正規名を先頭・旧名を後続**に置く。結果として
+/// scope 0 は `balloonp0def` → `balloons`、scope 1 は `balloonp1def` → `balloonk` →
+/// `balloonp0def` → `balloons`、scope n（n≧2）は `balloonp{n}def` → `balloonk` →
+/// `balloonp0def` → `balloons` となる。
+///
+/// 相方系列の段は**正典が名指しした系列**であって scope 1 の解決へ再帰的に縮退するもの
+/// ではないため、scope 2 以上の連鎖に scope 1 の正規名 `balloonp1def` は含めない（R1.1）。
+///
+/// scope は最後まで**数値のみ**で扱う。`Sakura`/`Kero` 等の 2 値列挙も、さくらスクリプト側の
+/// 別語彙（`\h`/`\u`）も内部の正準表現としない（R1.9）。ゆえに解決規則は M1 の実行時 scope
+/// （0 と 1）に閉じず、scope 番号一般（n≧2 を含む）で定義される（R1.6）。
+pub fn prefix_chain(family: &SeriesFamily, scope: u32) -> Vec<SeriesPrefix> {
+    let mut chain: Vec<SeriesPrefix> = Vec::new();
+
+    // (i) 当該 scope 自身の候補: 正規名を先頭に、当該 scope の旧名を後続に置く。
+    chain.push(SeriesPrefix {
+        prefix: family.canonical(scope),
+        tier: ChainTier::Own,
+    });
+    for name in family.legacy(scope) {
+        chain.push(SeriesPrefix {
+            prefix: (*name).to_string(),
+            tier: ChainTier::Own,
+        });
+    }
+
+    // (ii) 相方系列（scope 2 以上のみ）: 正典が名指しした系列そのもの＝旧名候補列のみ。
+    // scope 1 の解決への再帰縮退ではないため、scope 1 の正規名はここに含めない。
+    if scope >= 2 {
+        for name in family.scope1_legacy {
+            chain.push(SeriesPrefix {
+                prefix: (*name).to_string(),
+                tier: ChainTier::KeroNamed,
+            });
+        }
+    }
+
+    // (iii) デフォルト定義（scope 1 以上のみ）: 最終受け皿は scope 0 の系列。
+    if scope >= 1 {
+        chain.push(SeriesPrefix {
+            prefix: family.canonical(0),
+            tier: ChainTier::Default,
+        });
+        for name in family.scope0_legacy {
+            chain.push(SeriesPrefix {
+                prefix: (*name).to_string(),
+                tier: ChainTier::Default,
+            });
+        }
+    }
+
+    chain
+}
+
 /// `balloon_dir` から枠画像を列挙し `(surface_id, ファイル名)` を **surface id 昇順**で返す。
 ///
 /// `balloons{N}.png`（N は非負整数）だけを枠として採り、`balloonc*`/`arrow*`/`marker*`/`online*`・
@@ -352,6 +489,133 @@ mod tests {
         assert!(world.surface(2).is_some(), "surface id 2（balloons2）が World にある");
         // 飛び番の欠番 id 1 は列挙対象に無いゆえ常駐しない（面 id=N の同一性を固定）。
         assert!(world.surface(1).is_none(), "欠番 id 1 は World に無い");
+    }
+
+    // ── 檻 1: scope→接頭辞優先連鎖の導出（R1.1/1.6/1.8/1.9/1.10・R7.1）─────────────
+
+    /// `(接頭辞, tier)` の組で連鎖を突き合わせるための簡約形（表明の可読性のため）。
+    fn chain_pairs(family: &SeriesFamily, scope: u32) -> Vec<(String, ChainTier)> {
+        prefix_chain(family, scope)
+            .into_iter()
+            .map(|p| (p.prefix, p.tier))
+            .collect()
+    }
+
+    /// R1.1: scope 0 の連鎖は `balloonp0def`（正規名）→ `balloons`（旧名）の 2 段で、
+    /// 双方とも当該 scope 自身の候補＝tier `Own`。scope 0 は相方系列段もデフォルト段も持たない。
+    #[test]
+    fn prefix_chain_scope0_is_canonical_then_legacy_all_own() {
+        assert_eq!(
+            chain_pairs(&BALLOON_FAMILY, 0),
+            vec![
+                ("balloonp0def".to_string(), ChainTier::Own),
+                ("balloons".to_string(), ChainTier::Own),
+            ],
+            "scope 0 は Own 段のみ（正規名が先頭・旧名が後続）"
+        );
+    }
+
+    /// R1.1: scope 1 の連鎖は Own（`balloonp1def` → `balloonk`）＋ Default（`balloonp0def` →
+    /// `balloons`）の 4 段。scope 1 は相方系列段を持たない（自身が相方系列そのもの）。
+    #[test]
+    fn prefix_chain_scope1_is_own_then_default() {
+        assert_eq!(
+            chain_pairs(&BALLOON_FAMILY, 1),
+            vec![
+                ("balloonp1def".to_string(), ChainTier::Own),
+                ("balloonk".to_string(), ChainTier::Own),
+                ("balloonp0def".to_string(), ChainTier::Default),
+                ("balloons".to_string(), ChainTier::Default),
+            ],
+            "scope 1 は Own 2 段＋Default 2 段（KeroNamed 段なし）"
+        );
+    }
+
+    /// R1.1/R1.6: scope 5（n≧2 の代表）の連鎖は Own（`balloonp5def` のみ＝旧名なし）＋
+    /// KeroNamed（`balloonk`）＋ Default（`balloonp0def` → `balloons`）。
+    #[test]
+    fn prefix_chain_scope5_names_kero_then_default() {
+        assert_eq!(
+            chain_pairs(&BALLOON_FAMILY, 5),
+            vec![
+                ("balloonp5def".to_string(), ChainTier::Own),
+                ("balloonk".to_string(), ChainTier::KeroNamed),
+                ("balloonp0def".to_string(), ChainTier::Default),
+                ("balloons".to_string(), ChainTier::Default),
+            ],
+            "scope 5 は Own 1 段＋KeroNamed 1 段＋Default 2 段"
+        );
+    }
+
+    /// R1.1: 相方系列の段は正典が名指しした系列（`balloonk`）であって、scope 1 の解決へ再帰的に
+    /// 縮退するものではない。ゆえに n≧2 の連鎖に scope 1 の正規名 `balloonp1def` は現れない。
+    #[test]
+    fn prefix_chain_ge2_excludes_scope1_canonical_name() {
+        for scope in 2u32..=8 {
+            let chain = prefix_chain(&BALLOON_FAMILY, scope);
+            assert!(
+                !chain.iter().any(|p| p.prefix == "balloonp1def"),
+                "scope {scope} の連鎖に scope 1 の正規名が混入している: {chain:?}"
+            );
+            // 名指し相方系列は旧名 `balloonk` 1 本で、tier は KeroNamed。
+            let kero: Vec<_> = chain
+                .iter()
+                .filter(|p| p.tier == ChainTier::KeroNamed)
+                .collect();
+            assert_eq!(kero.len(), 1, "scope {scope} の相方系列段は 1 段");
+            assert_eq!(kero[0].prefix, "balloonk", "相方系列段は正典名指しの balloonk");
+        }
+    }
+
+    /// R1.1/R1.8/R1.9: 各段は「正規名が先頭・旧名が後続」であり、scope を数値のみで扱う
+    /// （2 値列挙もさくらスクリプト語彙も内部の正準表現にしない）ことを、任意 scope の
+    /// 正規名 `balloonp{s}def` が常に連鎖先頭であることで固定する。
+    #[test]
+    fn prefix_chain_head_is_scope_canonical_name_for_any_scope() {
+        for scope in [0u32, 1, 2, 3, 7, 42, 100] {
+            let chain = prefix_chain(&BALLOON_FAMILY, scope);
+            assert_eq!(
+                chain[0],
+                SeriesPrefix {
+                    prefix: format!("balloonp{scope}def"),
+                    tier: ChainTier::Own,
+                },
+                "scope {scope} の連鎖先頭は当該 scope の正規名（tier=Own）"
+            );
+        }
+    }
+
+    /// R1.9（縮退シーム）/R7.1(c): 装飾族の**一段深い旧名**（`arrows` → `arrow`）も、
+    /// 同じ表構造（可変長の旧名候補列）で構造改変なしに表現できる。本仕様は吹き出し族のみ
+    /// 実装するが、表データが族でパラメタ化されている事実をここで固定する。
+    #[test]
+    fn series_family_table_expresses_deeper_legacy_names() {
+        const ARROW_FAMILY: SeriesFamily = SeriesFamily {
+            base: "arrow",
+            scope0_legacy: &["arrows", "arrow"],
+            scope1_legacy: &["arrowk"],
+        };
+
+        assert_eq!(
+            chain_pairs(&ARROW_FAMILY, 0),
+            vec![
+                ("arrowp0def".to_string(), ChainTier::Own),
+                ("arrows".to_string(), ChainTier::Own),
+                ("arrow".to_string(), ChainTier::Own),
+            ],
+            "scope 0 の旧名候補が 2 段でも構造改変なしに連鎖へ載る"
+        );
+        assert_eq!(
+            chain_pairs(&ARROW_FAMILY, 2),
+            vec![
+                ("arrowp2def".to_string(), ChainTier::Own),
+                ("arrowk".to_string(), ChainTier::KeroNamed),
+                ("arrowp0def".to_string(), ChainTier::Default),
+                ("arrows".to_string(), ChainTier::Default),
+                ("arrow".to_string(), ChainTier::Default),
+            ],
+            "デフォルト段にも可変長の旧名候補列がそのまま展開される"
+        );
     }
 
     /// 枠が 1 枚も無ければ log-first で `EmptyComposition`（Hide 縮退許容）を返す。
