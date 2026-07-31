@@ -2908,6 +2908,465 @@ mod tests {
         );
     }
 
+    // ── task 4.4: S2 の赤証跡＝DPI 相の位置再射影檻（Req 5.4・診断レポート §1.2／§3.2）──
+    //
+    // **S2（診断レポート §1.2 の確定）**: [`dpi_phase_with`] は
+    // `source.refresh_scale_report(world, target)` が `Some(new_size)` を返したときだけ
+    // [`reconcile_window_size`] を呼ぶ（本ファイル `dpi_phase_with` 末尾の `if let Some(..)`）。
+    // 位置の再射影（射影 T の再適用）は [`resize_window_to`] の**内部**＝そのゲートの下流に
+    // しか無いため、報告が `None` の経路では**寸を触らないだけでなく、位置の再射影ごと欠落する**。
+    // `EmoPresenter::refresh_scale`（`areka-emo-present`）が `None` を返す経路は 5 つあり、
+    // うち「不可視」「未表示」は Req 4.6 が名指しで扱う状況、「k は変わったが丸め後の物理寸が
+    // 同じ」は正常系で日常的に起こる。いずれの場合も窓の DPI は変わっている＝
+    // **接地点を保つべき work area が変わっている**のに、位置は一切再射影されない。
+    //
+    // 本ブロックは是正未投入のツリーに対して赤を採取するための檻である。赤 4 件は
+    // `#[ignore]` ゲート下に置く——常時赤い檻を置くと `cargo test -p areka` が門として無価値に
+    // なり以後の全タスクの検証を潰すため（S1 側 `window_pos.rs` の `s1_red_*` と同一の流儀）。
+    //
+    // **タスク 5.2／7.1 への申し送り（最も落としやすい）**: 是正配線と同時に `s2_red_*` 4 件の
+    // `#[ignore]` を**全て**外し、常時走る回帰檻へ昇格させること。**dpi96 の 1 件も外す**——
+    // 「96 では緑」は是正後も成立する性質であり、外して初めて 96 通過／120・192 失敗という
+    // 非対称が回帰檻として保存される（Req 5.1／5.4）。
+    //
+    // 常時走る随伴 2 件（`s2_control_*`／`s2_dpi_phase_writes_nothing_*`）は是正の前後どちらでも
+    // 緑であり、5.2 が分離を**誤って**実装した場合に赤へ落ちる前方ガードである。
+
+    use crate::placement::follow::{
+        BalloonFollow, WorkAreaResolution, work_area_for_window_with_origin,
+    };
+
+    /// S2 檻のモニタ物理下端。モニタ境界は物理量ゆえ拡大率では動かない（work area だけが動く）。
+    const S2_MONITOR_BOTTOM: i32 = 1492;
+    /// S2 檻のタスクバー**論理**高。実機のタスクバーは論理寸で宣言され `dpi/96` 倍で物理へ伸びる。
+    const S2_TASKBAR_LOGICAL_H: i32 = 48;
+
+    /// ゴーストが居るモニタの work area を **DPI 水準の関数**として組む（Req 5.6: 絶対 px を
+    /// 判定に直書きしない）。
+    ///
+    /// 拡大率が上がるとタスクバーの物理高が `dpi/96` 倍に伸び、work area 下端がその分だけ
+    /// 上がる——これが「DPI が変われば接地すべき下端が変わる」ことの機構であり、S2 が落として
+    /// いるのはまさにこの再導出である。`dpi=96` では `1492−48=1444`＝[`resnap_placements`] の
+    /// 初期配置がちょうど満たす下端であり、**96 だけが旧 Y と新 Y の自己整合で通過する**
+    /// （Req 5.1／5.4・診断レポート §1.2「なぜ dpi=96 では隠れるか」）。
+    fn s2_work_area_for_dpi(dpi: u16) -> RectPx {
+        let taskbar_px = S2_TASKBAR_LOGICAL_H * dpi as i32 / 96;
+        RectPx {
+            left: 31,
+            top: 17,
+            right: 2574,
+            bottom: S2_MONITOR_BOTTOM - taskbar_px,
+        }
+    }
+
+    /// 合成マルチモニタの隣接モニタ（負座標・3200 超座標を含む非対称レイアウト・task 2.2 と同流儀）。
+    ///
+    /// ゴースト窓の中心は決してここへ入らない。work area 解決が**帰属**（`Contains`）で決まって
+    /// いることを [`s2_resolved_work_area`] が毎回自己検査するため、単一モニタで回したときの
+    /// 「解決するモニタが 1 つしか無いから自明に当たる」退化を排除できる。
+    fn s2_neighbor_work_area() -> RectPx {
+        RectPx {
+            left: 2574,
+            top: -140,
+            right: 3874,
+            bottom: 1901,
+        }
+    }
+
+    /// 当該 DPI 水準における合成マルチモニタ snapshot（index 0＝ゴーストの居るモニタ）。
+    fn s2_snapshot(dpi: u16) -> MonitorSnapshot {
+        MonitorSnapshot {
+            work_areas: vec![s2_work_area_for_dpi(dpi), s2_neighbor_work_area()],
+        }
+    }
+
+    /// 窓の**接地点**（下端中央・物理 px）。伺かの立ち絵は足元中央が原点であり、寸法変動でも
+    /// 動かない（記憶〈キャラ窓の原点は下端中央〉・[`resize_window_to`] 手順 3b）。
+    fn s2_ground_point(world: &World, e: Entity) -> (i32, i32) {
+        let pos = pos_of(world, e).expect("WindowPos.position がある");
+        let size = size_of(world, e).expect("WindowPos.size がある");
+        (pos.x + size.width / 2, pos.y + size.height)
+    }
+
+    /// 当該窓が**今いるモニタ**の work area（射影 T が Y に用いるのと同一の解決規則）。
+    ///
+    /// 最近傍フォールバックで解決していたら合成レイアウトが退化している（窓がどのモニタにも
+    /// 属していない）ため、その場で檻を落とす——S3 の「フォールバックが異常を無観測で吸収する」
+    /// 性質をこの檻の内部に持ち込まないための自己検査である。
+    fn s2_resolved_work_area(world: &World, e: Entity) -> RectPx {
+        let pos = pos_of(world, e).expect("WindowPos.position がある");
+        let size = size_of(world, e).expect("WindowPos.size がある");
+        let rect = RectPx {
+            left: pos.x,
+            top: pos.y,
+            right: pos.x + size.width,
+            bottom: pos.y + size.height,
+        };
+        let snapshot = world
+            .get_resource::<MonitorSnapshot>()
+            .expect("MonitorSnapshot がある");
+        let (wa, origin) =
+            work_area_for_window_with_origin(snapshot, rect).expect("空 snapshot ではない");
+        assert_eq!(
+            origin,
+            WorkAreaResolution::Contains,
+            "探針の退化: 窓中心がどのモニタにも属さず最近傍フォールバックで解決された（合成レイアウトが壊れている）"
+        );
+        wa
+    }
+
+    /// [`WindowPos.position`] の Y を直接ずらす（単一ライターを経由しない＝書込 witness を汚さない）。
+    fn s2_shift_y(world: &mut World, e: Entity, dy: i32) {
+        if dy == 0 {
+            return;
+        }
+        let mut wp = world.get_mut::<WindowPos>(e).expect("WindowPos がある");
+        let pos = wp.position.expect("position がある");
+        wp.position = Some(Point {
+            x: pos.x,
+            y: pos.y + dy,
+        });
+    }
+
+    /// S2 探針の 1 窓ぶんの観測（接地点と、そのとき解決された work area 下端）。
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    struct S2Row {
+        scope: usize,
+        /// 接地点（下端中央）＝`(x + w/2, y + h)`。
+        ground: (i32, i32),
+        /// 当該窓が今いるモニタの work area 下端（接地規約が要求する Y 成分）。
+        wa_bottom: i32,
+    }
+
+    /// S2 探針の観測結果（DPI 変化の前後）。
+    struct S2Probe {
+        from_dpi: u16,
+        to_dpi: u16,
+        before: Vec<S2Row>,
+        after: Vec<S2Row>,
+        /// 変化後の DPI 相が実際に報告源を引いた target 群（非空虚性の検査用）。
+        refresh_targets: Vec<u32>,
+    }
+
+    /// 全 char 窓の観測行を scope 昇順で取る。
+    fn s2_rows(world: &World, gw: &GhostWindows, scopes: &[usize]) -> Vec<S2Row> {
+        scopes
+            .iter()
+            .map(|&scope| {
+                let e = gw.char_window(scope).expect("char 窓がある");
+                S2Row {
+                    scope,
+                    ground: s2_ground_point(world, e),
+                    wa_bottom: s2_resolved_work_area(world, e).bottom,
+                }
+            })
+            .collect()
+    }
+
+    /// **S2 探針**: `from_dpi` の work area へ接地した合成マルチモニタ World に対し、
+    /// OS 側の拡大率変更（`to_dpi`）を注入して DPI 相を 1 回回す。
+    ///
+    /// 偽ウィンドウハンドルのヘッドレス World（[`dpi_world`]＝2 scope・偽 HWND・書込 witness）・
+    /// 合成マルチモニタ（[`s2_snapshot`]）・**「再導出結果なし」固定の偽寸法報告源**
+    /// （[`FakeReports`] の空マップ＝`refresh_scale_report` が常に `None`）で組む。実 GPU・実高 DPI
+    /// モニタを要さず決定論（Req 5.2）。
+    ///
+    /// 手順:
+    /// 1. `from_dpi` の snapshot を挿し、全 char 窓を当該 work area 下端へ接地させる
+    ///    （随伴バルーンも同量ずらして追従 offset を保つ）。
+    /// 2. `from_dpi` で DPI 相を 1 回回して `SystemState::new` の初回全窓マッチを消費する
+    ///    （既に接地済みゆえ**是正後もべき等 skip で書込ゼロ**＝この run は探針を汚さない）。
+    /// 3. snapshot を `to_dpi` のものへ差し替え、全窓の `DPI` を `to_dpi` へ更新する
+    ///    （`Changed<DPI>` エッジ＝OS の拡大率変更に対応する）。
+    /// 4. DPI 相をもう 1 回回し、変化の前後の接地点を突き合わせる。
+    fn run_s2_probe(from_dpi: u16, to_dpi: u16) -> S2Probe {
+        let (mut world, gw) = dpi_world();
+        let scopes: Vec<usize> = gw.scopes().collect();
+
+        // --- 1. 変化前: from_dpi の work area と、そこへ接地した char 窓 ---
+        world.insert_resource(s2_snapshot(from_dpi));
+        let from_bottom = s2_work_area_for_dpi(from_dpi).bottom;
+        for &scope in &scopes {
+            let char_e = gw.char_window(scope).expect("char 窓がある");
+            let balloon_e = gw.balloon_window(scope).expect("balloon 窓がある");
+            let h = size_of(&world, char_e).expect("char 寸がある").height;
+            let y = pos_of(&world, char_e).expect("char 位置がある").y;
+            let dy = (from_bottom - h) - y;
+            s2_shift_y(&mut world, char_e, dy);
+            s2_shift_y(&mut world, balloon_e, dy);
+            for e in [char_e, balloon_e] {
+                world.entity_mut(e).insert(DPI::from_dpi(from_dpi, from_dpi));
+            }
+        }
+
+        // --- 2. 「再導出結果なし」固定の報告源で初回 run を消費する ---
+        let mut source = FakeReports::default();
+        let mut state = None;
+        dpi_phase_with(&mut source, &mut state, &mut world);
+        let before = s2_rows(&world, &gw, &scopes);
+
+        // --- 3. 変化: OS 側の拡大率変更（work area 下端が動く）＋窓 DPI の更新 ---
+        world.insert_resource(s2_snapshot(to_dpi));
+        for &scope in &scopes {
+            for e in [
+                gw.char_window(scope).expect("char 窓がある"),
+                gw.balloon_window(scope).expect("balloon 窓がある"),
+            ] {
+                world.entity_mut(e).insert(DPI::from_dpi(to_dpi, to_dpi));
+            }
+        }
+        reset_write_witness(&mut world, &gw);
+        source.calls.clear();
+
+        // --- 4. DPI 相をもう 1 回 ---
+        dpi_phase_with(&mut source, &mut state, &mut world);
+        let after = s2_rows(&world, &gw, &scopes);
+
+        S2Probe {
+            from_dpi,
+            to_dpi,
+            before,
+            after,
+            refresh_targets: source.calls_of("refresh"),
+        }
+    }
+
+    /// **本檻の判定＝接地点の不変条件**（Req 5.6: 絶対 px の固定値ではなく不変条件で表現する）。
+    ///
+    /// - (1) 探針の前提: 変化**前**の接地点 Y がそのときの work area 下端と一致している。
+    /// - (2) 接地点の **X 成分**（下端中央の x）が変化の前後で保存される。
+    /// - (3) 接地点の **Y 成分**が「今いるモニタの work area 下端」＝接地規約の値であり続ける。
+    ///
+    /// 「接地点を保つ」（Req 4.1）とは絶対座標の凍結ではない——足元の中心 x を保ったまま、
+    /// 足元が**その時点の work area 下端に接し続ける**ことである（design D7:「`project_anchor`
+    /// が Y を新モニタ work area 下端へ再導出」）。work area が動いた走行で旧 Y が据え置かれる
+    /// のは「保った」のではなく、タスクバーの下へ潜り込んだ状態である。
+    fn s2_assert_ground_point_invariant(probe: &S2Probe) {
+        assert!(
+            !probe.refresh_targets.is_empty(),
+            "非空虚性: 変化後の DPI 相が報告源を一度も引いていない（Changed<DPI> が発火していない＝探針の組み違い）"
+        );
+        assert_eq!(
+            probe.before.len(),
+            probe.after.len(),
+            "前後で観測窓数が違う（探針の組み違い）"
+        );
+        for (b, a) in probe.before.iter().zip(&probe.after) {
+            assert_eq!(
+                b.ground.1, b.wa_bottom,
+                "探針の前提: 変化前の char 窓 scope={} は work area 下端へ接地しているはず（before={b:?}）",
+                b.scope
+            );
+            assert_eq!(
+                a.ground.0, b.ground.0,
+                "接地点の X 成分（下端中央）が dpi {}→{} で保存されていない: scope={} before={b:?} after={a:?}",
+                probe.from_dpi, probe.to_dpi, a.scope
+            );
+            assert_eq!(
+                a.ground.1, a.wa_bottom,
+                "dpi {}→{}: 接地点 Y が変化後の work area 下端から外れている（work area が動いたのに位置が再射影されていない＝S2・Req 4.1/4.2/4.6）: scope={} before={b:?} after={a:?}",
+                probe.from_dpi, probe.to_dpi, a.scope
+            );
+        }
+    }
+
+    /// 探針の**非退化**自己検査（記憶〈2.2 の空虚性の教訓〉＝不変を主張する檻は、探針が欠陥の
+    /// 不動点に落ちていないかを自ら確かめる）。
+    ///
+    /// work area 下端が DPI 水準の間で実際に動かなければ、再射影の欠落はどの探針値でも観測
+    /// できず、檻は「何も起きないから通る」空虚な緑になる。将来 [`s2_work_area_for_dpi`] が
+    /// 編集されて退化しても、この assert が先に落ちる。
+    fn s2_assert_work_area_bottom_moves(from_dpi: u16, to_dpi: u16) {
+        let from = s2_work_area_for_dpi(from_dpi).bottom;
+        let to = s2_work_area_for_dpi(to_dpi).bottom;
+        assert_ne!(
+            from, to,
+            "探針が退化している: dpi {from_dpi}→{to_dpi} で work area 下端が動かない（この合成レイアウトでは S2 を観測できない）"
+        );
+    }
+
+    /// **S2 赤証跡（96 水準・是正前でも通過する）**: 拡大率が 96 のままなら work area 下端が
+    /// 動かず、旧 Y と「新 work area 下端 − h」が自己整合する——ゆえに**再射影の欠落が観測
+    /// されない**。本件は是正の前後いずれでも緑であり、下の 120／192 の 3 件との**非対称**
+    /// そのものが「96 の自己整合が欠陥を隠す」性質の記録である（Req 5.1／5.4）。
+    ///
+    /// 5.2 はこの 1 件も `#[ignore]` を外すこと——外して初めて非対称が回帰檻として保存される。
+    #[test]
+    #[ignore = "S2 赤証跡（是正未投入では 120/192 が失敗する・タスク 4.4）。再現: cargo test -p areka -- --ignored s2_red_"]
+    fn s2_red_ground_point_preserved_at_dpi96() {
+        let probe = run_s2_probe(96, 96);
+        assert_eq!(
+            probe.before[0].wa_bottom, probe.after[0].wa_bottom,
+            "96 水準では work area 下端が動かない（＝本件が是正前でも通過する理由そのもの）"
+        );
+        s2_assert_ground_point_invariant(&probe);
+    }
+
+    /// **S2 赤証跡（96→120）**: work area 下端が動いたのに位置が再射影されず、接地点 Y が
+    /// 旧下端に据え置かれる（＝タスクバーの下へ潜り込む）。
+    #[test]
+    #[ignore = "S2 赤証跡（是正未投入では失敗する・タスク 4.4）。再現: cargo test -p areka -- --ignored s2_red_"]
+    fn s2_red_ground_point_preserved_from_dpi96_to_dpi120() {
+        s2_assert_work_area_bottom_moves(96, 120);
+        s2_assert_ground_point_invariant(&run_s2_probe(96, 120));
+    }
+
+    /// **S2 赤証跡（96→192）**: 同上（k=2/1 相当・下端の変位が最大の水準）。
+    #[test]
+    #[ignore = "S2 赤証跡（是正未投入では失敗する・タスク 4.4）。再現: cargo test -p areka -- --ignored s2_red_"]
+    fn s2_red_ground_point_preserved_from_dpi96_to_dpi192() {
+        s2_assert_work_area_bottom_moves(96, 192);
+        s2_assert_ground_point_invariant(&run_s2_probe(96, 192));
+    }
+
+    /// **S2 赤証跡（120→192）**: 起点が 96 でない遷移でも同じ欠落が起きる（96 が特別なのは
+    /// 「自己整合して隠す」からであって、96 起点だけの問題ではない）。
+    #[test]
+    #[ignore = "S2 赤証跡（是正未投入では失敗する・タスク 4.4）。再現: cargo test -p areka -- --ignored s2_red_"]
+    fn s2_red_ground_point_preserved_from_dpi120_to_dpi192() {
+        s2_assert_work_area_bottom_moves(120, 192);
+        s2_assert_ground_point_invariant(&run_s2_probe(120, 192));
+    }
+
+    /// **常時走る随伴 (1)・非退行の対照**: 寸の再導出結果が**得られる**（`Some`）経路は S2 の
+    /// 対象外であり、タスク 5.2 の是正後も**一切変わってはならない**。DPI 相は従来どおり
+    /// [`reconcile_window_size`] を通り、char 窓は新寸で接地規約へ再射影され、随伴バルーンは
+    /// 追従恒等式（`balloon 位置 − char 位置 ≡ BalloonFollow.offset`）を保ち（Req 4.4）、
+    /// 経路語は `DpiReproject` のままである（D13）。
+    ///
+    /// 5.2 が `Some` 経路まで作り替えると本件が赤になる。
+    #[test]
+    fn s2_control_some_report_path_reprojects_and_keeps_balloon_offset() {
+        let (mut world, gw) = dpi_world();
+        world.insert_resource(s2_snapshot(96));
+        let char0 = gw.char_window(0).expect("char 窓がある");
+        let balloon0 = gw.balloon_window(0).expect("balloon 窓がある");
+        let native = size_of(&world, char0).expect("char 寸がある");
+        let ground_before = s2_ground_point(&world, char0);
+        assert_eq!(
+            ground_before.1,
+            s2_work_area_for_dpi(96).bottom,
+            "前提: 変化前は 96 の work area 下端へ接地している"
+        );
+
+        // 96→120（k=5/4）: work area 下端が動き、報告源も新物理寸を返す。
+        s2_assert_work_area_bottom_moves(96, 120);
+        world.insert_resource(s2_snapshot(120));
+        for e in [char0, balloon0] {
+            world.entity_mut(e).insert(DPI::from_dpi(120, 120));
+        }
+        let scaled = ScaleRatio::new(120, 96)
+            .expect("非ゼロ比")
+            .scaled_extent(native.width as u32, native.height as u32);
+        let mut source = FakeReports::default();
+        source.refresh.insert(shell_target(0).0, scaled);
+        let mut state = None;
+        let (_, events) =
+            capture_diag_logs(|| dpi_phase_with(&mut source, &mut state, &mut world));
+
+        assert_eq!(
+            size_of(&world, char0),
+            Some(SizeI::new(scaled.0 as i32, scaled.1 as i32)),
+            "Some 経路: 報告された新物理寸へ reconcile される"
+        );
+        assert_eq!(
+            s2_ground_point(&world, char0),
+            (ground_before.0, s2_work_area_for_dpi(120).bottom),
+            "Some 経路: 接地点の X が保存され Y が変化後の work area 下端へ再射影される"
+        );
+        // 随伴恒等式（Req 4.4）: offset は寸法変動に伴い付け替えられるが、恒等式自体は保たれる。
+        let offset = world
+            .get::<BalloonFollow>(char0)
+            .expect("char 窓は BalloonFollow を持つ")
+            .offset;
+        let cp = pos_of(&world, char0).expect("char 位置がある");
+        let bp = pos_of(&world, balloon0).expect("balloon 位置がある");
+        assert_eq!(
+            (bp.x - cp.x, bp.y - cp.y),
+            (offset.x, offset.y),
+            "随伴恒等式 balloon − char ≡ BalloonFollow.offset が崩れている（Req 4.4）"
+        );
+        assert_eq!(
+            window_move_routes_of(&events, char0),
+            vec!["DpiReproject"],
+            "Some 経路の route は DpiReproject のまま: {:?}",
+            window_move_lines(&events)
+        );
+    }
+
+    /// **常時走る随伴 (2)・5.2 の実装違いを捕まえる前方ガード**: DPI 相の書込は
+    /// **現位置が接地点規約に違反しているときだけ**起きなければならない（design「dpi_phase
+    /// 位置/寸分離 > Risks / Req 4.5 との整合」）。
+    ///
+    /// 5.2 が `None` 経路の再射影を「常に書く」形で実装すると、DPI 通知のたびに同値の再配置が
+    /// 走り Req 4.5（再導出結果が得られないなら現状維持）が壊れる——本件はそれを赤で捕まえる。
+    ///
+    /// 「書込ゼロ」の主張が空虚にならないよう、**同一ハーネスが書込を検出できること**を先に
+    /// positive witness で示す（記憶〈3.2 の空虚性・2 例目〉＝witness が壊れていても通って
+    /// しまう檻にしない）。
+    #[test]
+    fn s2_dpi_phase_writes_nothing_when_the_ground_point_already_holds() {
+        // --- positive witness: 同一ハーネスは書込を実際に検出できる ---
+        {
+            let (mut world, gw) = dpi_world();
+            world.insert_resource(s2_snapshot(96));
+            let char0 = gw.char_window(0).expect("char 窓がある");
+            let native = size_of(&world, char0).expect("char 寸がある");
+            world.entity_mut(char0).insert(DPI::from_dpi(120, 120));
+            let mut source = FakeReports::default();
+            source.refresh.insert(
+                shell_target(0).0,
+                ScaleRatio::new(120, 96)
+                    .expect("非ゼロ比")
+                    .scaled_extent(native.width as u32, native.height as u32),
+            );
+            let mut state = None;
+            dpi_phase_with(&mut source, &mut state, &mut world);
+            assert_ne!(
+                arrangement_offset_of(&world, char0),
+                WRITER_WITNESS,
+                "positive witness: 異寸報告のある DPI 相は実際に窓へ書く（書込 witness が生きている証拠）"
+            );
+        }
+
+        // --- 本題: work area が動かず既に接地している走行では書込ゼロ（Req 4.5 現状維持）---
+        let (mut world, gw) = dpi_world();
+        world.insert_resource(s2_snapshot(96));
+        let char0 = gw.char_window(0).expect("char 窓がある");
+        let balloon0 = gw.balloon_window(0).expect("balloon 窓がある");
+        assert_eq!(
+            s2_ground_point(&world, char0).1,
+            s2_work_area_for_dpi(96).bottom,
+            "前提: 既に 96 の work area 下端へ接地している"
+        );
+
+        let mut source = FakeReports::default(); // 「再導出結果なし」固定
+        let mut state = None;
+        dpi_phase_with(&mut source, &mut state, &mut world); // 初回 run（全窓マッチ）を消費
+        reset_write_witness(&mut world, &gw);
+        source.calls.clear();
+
+        // work area は不変のまま `Changed<DPI>` だけを立てる（同一水準の DPI 通知）。
+        world.entity_mut(char0).insert(DPI::from_dpi(96, 96));
+        dpi_phase_with(&mut source, &mut state, &mut world);
+
+        assert!(
+            source.calls_of("refresh").contains(&shell_target(0).0),
+            "非空虚性: DPI 相は当該窓を実際に訪れている（訪れずに書かなかったのでは檻が空虚）: {:?}",
+            source.calls
+        );
+        assert_no_write(
+            &world,
+            char0,
+            "接地済み・work area 不変の DPI 相（Req 4.5 現状維持）",
+        );
+        assert_no_write(
+            &world,
+            balloon0,
+            "接地済み・work area 不変の DPI 相（バルーンは位置据置き）",
+        );
+    }
+
     // ── task 1.4 是正: frame 側 route 割当の檻（Req 1.2／2.4・design D13）──────────
     //
     // `reconcile_window_size` は **2 呼出元の共通末端**である（DPI 相＝`dpi_phase_with`／

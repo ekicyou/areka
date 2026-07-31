@@ -333,13 +333,85 @@ test result: FAILED. 1 passed; 3 failed; 0 ignored; 0 measured; 537 filtered out
 
 | 項目 | 内容 |
 | --- | --- |
-| 檻の所在 | _（4.4 が記入）_ |
-| 赤の採取コミット | _（4.4）_ |
-| 赤の実行出力 | _（4.4・「再導出結果が得られない経路で位置が再射影されない」ことで失敗する出力）_ |
-| dpi 水準ごとの挙動 | _（4.4・96 は旧 Y と新 Y が自己整合して通過／120・192 で失敗）_ |
-| 判定の表現 | _（4.4・絶対 px ではなく接地点＝下端中央の不変条件として）_ |
+| 檻の所在 | `crates/areka/src/emo2_boot/frame.rs:2911-3368`（`mod tests` 内の「task 4.4: S2 の赤証跡＝DPI 相の位置再射影檻」ブロック）。赤 4 件＝`s2_red_ground_point_preserved_at_dpi96`（`:3196`）／`_from_dpi96_to_dpi120`（`:3209`）／`_from_dpi96_to_dpi192`（`:3217`）／`_from_dpi120_to_dpi192`（`:3226`）。常時走る随伴 2 件＝`s2_control_some_report_path_reprojects_and_keeps_balloon_offset`（`:3239`・`Some` 経路の非退行対照）／`s2_dpi_phase_writes_nothing_when_the_ground_point_already_holds`（`:3308`・Req 4.5 の書込ゼロを守る前方ガード） |
+| 檻の構成 | 偽 HWND のヘッドレス World（既存 `dpi_world()`＝2 scope×char/balloon・書込 witness 付き）×**合成マルチモニタ**（`s2_snapshot`＝ゴーストの居るモニタ＋負座標 `top=-140`／3200 超 `right=3874` の隣接モニタ）×**「再導出結果なし」固定の偽寸法報告源**（`FakeReports` の空マップ＝`refresh_scale_report` が常に `None`）×**DPI 注入**（`run_s2_probe(from,to)`・96→96／96→120／96→192／120→192）。実 GPU・実高 DPI モニタ不要の決定論（Req 5.2） |
+| 赤の採取コミット | **`db8bd1a`**（タスク 4.3 着地時点＝Phase A 完了・S1／S2 是正いずれも未投入）に本檻のみを載せたツリー。差分は `frame.rs` の `#[cfg(test)] mod tests` 内に閉じた **459 行の追加のみ**（`git diff --stat` で 1 file / +459 / −0・単一ハンク `@@ -2908,6 +2908,465 @@ mod tests`）＝本番の `dpi_phase_with` は無改変。W5 同居契約どおり `run_text_scale_phase`・`balloon_models` 写像には触れていない |
+| 赤の再現コマンド | `cargo test -p areka -- --ignored s2_red_`（赤 4 件は `#[ignore]` ゲート下。理由は下記「ゲート機構」） |
+| 赤の実行出力 | 下記コードブロック（実行実測・`--test-threads=1`・`RUST_BACKTRACE=0`） |
+| dpi 水準ごとの挙動 | **96 は通過・120／192 は失敗**。work area 下端はタスクバーの論理高（48）が `dpi/96` 倍で物理へ伸びる分だけ上がる＝`1492 − 48*dpi/96`（96→**1444**／120→**1432**／192→**1396**）。96 では変化の前後で下端が動かないため旧 Y と「新 work area 下端 − h」が自己整合し、再射影の欠落が観測されない（診断レポート §1.2「なぜ dpi=96 では隠れるか」）。120／192 では下端が 12px／48px 動くのに位置が一切書かれず、接地点 Y が旧下端 1444 に据え置かれる＝足元がタスクバーの下へ潜り込む |
+| 判定の表現 | 絶対 px の固定値ではなく **接地点（下端中央）の不変条件**で表現している（Req 5.6）——⑴変化**前**の接地点 Y ＝そのときの work area 下端（探針の前提）⑵接地点の **X 成分**が変化の前後で保存される ⑶接地点の **Y 成分**が「今いるモニタの work area 下端」であり続ける。work area 自体も絶対値を直書きせず **DPI 水準の関数**（`s2_work_area_for_dpi`）として組み、判定側は `work_area_for_window_with_origin` で**窓の実位置から解決**した値と突き合わせる。非退化の自己検査として ⒜`s2_assert_work_area_bottom_moves` が「その 2 水準で下端が実際に動く」ことを檻自身が `assert` し（不動点に落ちた空虚な緑を防ぐ・記憶〈2.2 の教訓〉）⒝`s2_resolved_work_area` が解決が `WorkAreaResolution::Contains` であること（最近傍フォールバックで解決していない＝合成レイアウトが退化していない）を毎回 `assert` する |
 | 緑の採取コミット | _（7.1）_ |
 | 緑の実行出力 | _（7.1・全水準）_ |
+
+#### 赤の実行出力（`cargo test -p areka -- --ignored s2_red_ --test-threads=1`）
+
+```text
+running 4 tests
+test emo2_boot::frame::tests::s2_red_ground_point_preserved_at_dpi96 ... ok
+test emo2_boot::frame::tests::s2_red_ground_point_preserved_from_dpi120_to_dpi192 ... FAILED
+test emo2_boot::frame::tests::s2_red_ground_point_preserved_from_dpi96_to_dpi120 ... FAILED
+test emo2_boot::frame::tests::s2_red_ground_point_preserved_from_dpi96_to_dpi192 ... FAILED
+
+failures:
+
+---- emo2_boot::frame::tests::s2_red_ground_point_preserved_from_dpi120_to_dpi192 stdout ----
+
+thread 'emo2_boot::frame::tests::s2_red_ground_point_preserved_from_dpi120_to_dpi192' panicked at crates\areka\src\emo2_boot\frame.rs:3165:13:
+assertion `left == right` failed: dpi 120→192: 接地点 Y が変化後の work area 下端から外れている（work area が動いたのに位置が再射影されていない＝S2・Req 4.1/4.2/4.6）: scope=0 before=S2Row { scope: 0, ground: (1700, 1432), wa_bottom: 1432 } after=S2Row { scope: 0, ground: (1700, 1432), wa_bottom: 1396 }
+  left: 1432
+ right: 1396
+
+---- emo2_boot::frame::tests::s2_red_ground_point_preserved_from_dpi96_to_dpi120 stdout ----
+
+thread 'emo2_boot::frame::tests::s2_red_ground_point_preserved_from_dpi96_to_dpi120' panicked at crates\areka\src\emo2_boot\frame.rs:3165:13:
+assertion `left == right` failed: dpi 96→120: 接地点 Y が変化後の work area 下端から外れている（work area が動いたのに位置が再射影されていない＝S2・Req 4.1/4.2/4.6）: scope=0 before=S2Row { scope: 0, ground: (1700, 1444), wa_bottom: 1444 } after=S2Row { scope: 0, ground: (1700, 1444), wa_bottom: 1432 }
+  left: 1444
+ right: 1432
+
+---- emo2_boot::frame::tests::s2_red_ground_point_preserved_from_dpi96_to_dpi192 stdout ----
+
+thread 'emo2_boot::frame::tests::s2_red_ground_point_preserved_from_dpi96_to_dpi192' panicked at crates\areka\src\emo2_boot\frame.rs:3165:13:
+assertion `left == right` failed: dpi 96→192: 接地点 Y が変化後の work area 下端から外れている（work area が動いたのに位置が再射影されていない＝S2・Req 4.1/4.2/4.6）: scope=0 before=S2Row { scope: 0, ground: (1700, 1444), wa_bottom: 1444 } after=S2Row { scope: 0, ground: (1700, 1444), wa_bottom: 1396 }
+  left: 1444
+ right: 1396
+
+
+failures:
+    emo2_boot::frame::tests::s2_red_ground_point_preserved_from_dpi120_to_dpi192
+    emo2_boot::frame::tests::s2_red_ground_point_preserved_from_dpi96_to_dpi120
+    emo2_boot::frame::tests::s2_red_ground_point_preserved_from_dpi96_to_dpi192
+
+test result: FAILED. 1 passed; 3 failed; 0 ignored; 0 measured; 594 filtered out; finished in 0.02s
+```
+
+#### この赤が §1.2 のゲートを名指しで撃っていること
+
+`S2Row` の 3 フィールドは §1.2 の欠陥構造をそのまま外形化したものである:
+
+- `ground: (1700, 1444)` が**変化の前後で 1 bit も動いていない** — §1.2 の「`None` のとき当該窓に対して**何もしない**——寸を触らないだけでなく、**位置の再射影も行わない**」そのもの。窓へ書込が起きていれば接地点は必ず動く
+- `wa_bottom` が `1444 → 1432`／`1444 → 1396`／`1432 → 1396` と動いている — **接地すべき下端は確かに変わっている**（＝「保つべき work area が変わっているのに位置が再射影されない」の左辺）
+- `ground.0`（下端中央の X）は全水準で `1700` のまま一致 — 失敗しているのは **Y 成分だけ**であり、S1（X 成分の汚染）とは別の欠陥であることが出力から読み取れる
+
+檻の非空虚性は `s2_assert_ground_point_invariant` 冒頭の `refresh_targets` 検査が担う（`Changed<DPI>` が発火せず DPI 相が窓を訪れてすらいなかった場合は、接地点の assert より**先に**その旨で落ちる）。すなわちこの赤は「DPI 相が当該窓を実際に訪れ、報告源を引き、`None` を受け取り、そのまま何もせずに抜けた」ことによる失敗であって、檻の組み違いによる失敗ではない。
+
+#### ゲート機構（`#[ignore]`）と 5.2／7.1 への申し送り
+
+赤 4 件は `#[ignore = "S2 赤証跡（是正未投入では失敗する・タスク 4.4）。再現: cargo test -p areka -- --ignored s2_red_"]` で通常実行から外してある（`at_dpi96` の 1 件のみ理由文が「120/192 が失敗する」形）。常時失敗する檻を置くと `cargo test` が門として無価値になり以後の全タスクの検証を潰すためである（S1 側 `window_pos.rs` の `s1_red_*` と同一の流儀・§3.1）。`cargo test -p areka` は本タスク着地後も**緑**（592 → **594**・常時走る随伴 2 件の増分。赤 4 件は ignored 計上）。
+
+**タスク 5.2／7.1 は是正配線と同時に `#[ignore]` を 4 件とも外し、常時走る回帰檻へ昇格させること**（Req 5.1 の常時テスト化）。**dpi96 の 1 件も外す**——「96 では緑」は是正後も成立する性質であり、外して初めて 96 通過／120・192 失敗という非対称の記録が回帰檻として保存される。外し忘れると 5.2 の完了状態「4.4 の檻が緑に変わる」がゲートを掛けたまま形式的にだけ満たされる。
+
+#### 常時走る随伴 2 件（5.2 が是正を**誤って**実装した場合に赤になる前方ガード）
+
+| 件名 | 何を固定するか | 5.2 のどの誤りを撃つか |
+| --- | --- | --- |
+| `s2_control_some_report_path_reprojects_and_keeps_balloon_offset`（`frame.rs:3239`） | 寸の再導出結果が**得られる**（`Some`）経路の非退行——新物理寸へ reconcile され、接地点の X が保存され Y が変化後の work area 下端へ再射影され、随伴恒等式 `balloon − char ≡ BalloonFollow.offset`（Req 4.4）が保たれ、route は `DpiReproject` のまま（D13） | 分離の実装が `Some` 経路まで作り替えた場合 |
+| `s2_dpi_phase_writes_nothing_when_the_ground_point_already_holds`（`frame.rs:3308`） | **書込が起きるのは現位置が接地点規約に違反しているときだけ**（design「dpi_phase 位置/寸分離 > Risks / Req 4.5 との整合」）。work area が動かず既に接地している走行では、`Changed<DPI>` が立っていても char／balloon とも書込ゼロ | `None` 経路の再射影を「常に書く」形で実装し、DPI 通知のたびに同値の再配置が走って Req 4.5（現状維持）を壊した場合 |
+
+後者は「書込ゼロ」の主張が空虚にならないよう、**同一ハーネスが書込を検出できること**を先に positive witness（異寸報告のある DPI 相では `Arrangement.offset` の sentinel が実際に動く）で示してから否定側を主張する（記憶〈3.2 の空虚性・2 例目〉）。
+
+#### 緑側の先行確認（本タスクで実施・是正はツリーに残していない）
+
+檻が是正後に緑へ反転することを、5.2 相当の分岐（design D7＝`refresh_scale_report` が `None` かつ char 窓なら現 `WindowPos.size` のまま `resize_window_to(..., DpiReproject)` を通す）を**一時的に当てて実測し、直後に完全に戻した**。結果は赤 4 件すべて `ok`（`4 passed; 0 failed`）・`cargo test -p areka` 全体も **594 passed / 0 failed** で随伴 2 件を含め緑のまま。**是正はツリーに残していない**（4.5 の実機採取が是正未投入ビルドを要求するため・§2 の冒頭注記）。これにより本檻は「今赤・是正後緑」の両側が実行で確かめられている（空虚な赤ではない）。
 
 ---
 
