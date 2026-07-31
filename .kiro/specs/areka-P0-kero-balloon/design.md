@@ -41,7 +41,7 @@
 - **scope→バルーン系列の解決規則**（接頭辞優先連鎖・ID 単位フォールバック・非バルーン面の除外）とその単一権威 API（`areka-emo-present/src/balloon.rs`）。
 - **scope 別バルーン定義**（2 層マージ済み `BalloonModel`）の構築規則（採用接頭辞→面別上書きファイル名の導出）と保持器（`BalloonScopeAssets`）。
 - **窓配置採寸の scope 別化**（`measure.rs` のバルーン採寸をループ内へ・同一権威消費）。
-- **`windowposition`（数値指定）→初期既定位置の調整量**の供給（符号変換・k 適用・`ScopeConfig.balloon_offset` シームへの合流）。
+- **`windowposition`（数値指定）→初期既定位置の調整量**の供給（画面座標オフセット化・k 適用・`ScopeConfig.balloon_offset` シームへの合流）。
 - **バルーン文字層の scope 別追従**（per-scope model 供給・k 同値時の寸/領域変化検知＝再追従判定キーの拡張）。
 - **バルーン側 `AnimationTable` の scope キー化**（`LoopTables.balloon` / `SerikoLoopConfig`・境界拡張として `areka-seriko/src/looper.rs` を明示編入）。
 - 解決結果・フォールバック・失敗経路の観測ログ、および互換対応表（`doc/COMPAT_ARCHITECTURE.md`）への記録。
@@ -101,7 +101,7 @@ graph TB
     subgraph Placement [areka placement]
         Prepare[prepare_stages]
         Measure[measure per-scope バルーン採寸]
-        WinPos[windowposition.rs 符号変換とk適用]
+        WinPos[windowposition.rs 画面オフセット化とk適用]
         ResolverP5[resolver.rs P5 無改変]
     end
     subgraph Boot [areka emo2_boot]
@@ -167,8 +167,9 @@ graph TB
 ```
 crates/areka/src/placement/windowposition.rs
     # windowposition（数値指定）→ 画面座標調整量の純関数群:
-    #   符号変換（シェル側正→画面符号・BalloonSide 依存）・k 適用（ScaleRatio 権威へ委譲）・
-    #   ScopeConfig.balloon_offset への合流。resolver.rs を無改変に保つ供給層。
+    #   画面オフセット化（x は素の画面座標オフセット＝置き側に依らず無反転・SSP 実測で確定）・
+    #   k 適用（ScaleRatio 権威へ委譲）・ScopeConfig.balloon_offset への合流。
+    #   resolver.rs を無改変に保つ供給層。
 ```
 
 ### Modified Files
@@ -210,7 +211,7 @@ sequenceDiagram
         Prep->>Auth: load_scope_balloon_model(dir, face0)
         Auth-->>Prep: BalloonModel（scope 別）
     end
-    Prep->>WP: windowposition→符号変換→k適用→balloon_offset 合流
+    Prep->>WP: windowposition→画面オフセット化→k適用→balloon_offset 合流
     Note over WP: resolver P5 は無改変で合流値を加算
     Main->>Assets: build_boot_assets
     loop 各 scope
@@ -261,7 +262,7 @@ flowchart TB
 | 2.6 | 初期表示面＝当該 scope 系列の面 0 | frame.rs 初回 ShowSurface(surface_id=0) 不変＋語彙記録 |
 | 3.1 | scope 別採寸（1 回へ畳まない） | `measure_balloon_surface0(scope)` をループ内へ移設 |
 | 3.2 | windowposition＝基本位置からの調整量・基本位置は現行 | `windowposition.rs`→`balloon_offset` 合流（P5 無改変） |
-| 3.3 | x はシェル側正→画面符号変換・y は無変換 | `to_screen_adjust`（BalloonSide 依存の符号表） |
+| 3.3 | x は素の画面座標オフセット（置き側で無反転・SSP 実測で確定・R7.6）・y は無変換 | `to_screen_adjust`（side 引数なし＝構造的に置き側非依存） |
 | 3.4 | 数値指定なし→既定 0＝現行と同一 | wp 無指定は合流なし（None 温存・檻で同一性固定） |
 | 3.5 | 永続値優先・初期既定の供給にとどまる | persist.rs 無改変（保存値優先マージは既存規約のまま） |
 | 3.6 | k 適用は既存権威・新丸め規約なし | `scale_offset`＝符号保存＋大きさは `ScaleRatio` 権威へ委譲 |
@@ -300,7 +301,7 @@ flowchart TB
 | BalloonScopeAssets（assets.rs） | areka/emo2_boot | per-scope バルーン資産の保持と構築 | 2.1, 5.6 | 系列解決権威（P0） | State |
 | attach/文字層供給（frame.rs） | areka/emo2_boot | per-scope model の装着・再追従写像維持 | 4.1, 4.2, 2.6 | BalloonScopeAssets（P0）・emo-text（P0） | State |
 | per-scope 採寸（measure.rs） | areka/placement | scope 別バルーン寸の供給 | 3.1, 3.6, 3.7 | 系列解決権威（P0）・ScaleRatio（P0） | Service |
-| windowposition 供給（windowposition.rs） | areka/placement | 符号変換・k 適用・balloon_offset 合流 | 3.2, 3.3, 3.4, 3.6 | ScaleRatio（P0）・config.rs（P1） | Service |
+| windowposition 供給（windowposition.rs） | areka/placement | 画面オフセット化・k 適用・balloon_offset 合流 | 3.2, 3.3, 3.4, 3.6 | ScaleRatio（P0）・config.rs（P1） | Service |
 | 再追従判定キー拡張（actor.rs） | areka-emo-text | k 同値時の寸/領域変化検知 | 4.3, 4.4, 4.5, 4.6, 4.7 | なし（in-crate） | Service |
 | scope キー表引き（looper.rs） | areka-seriko | バルーン表の scope 整合 | 5.6 | AnimationTable（P0） | State |
 
@@ -493,11 +494,16 @@ fn measure_balloon_surface0(
 
 // windowposition.rs（新設・全て純関数）
 /// windowposition 生値（作者空間・model 由来）→ 画面座標の調整量（物理 px）。
-/// x: シェル側正 → Left（バルーンがキャラ左）＝ +x／Right ＝ −x（R3.3・実機確定は R7.6）。
+/// x: 素の画面座標オフセット（正＝画面右／負＝画面左）。置き側（Left/Right）で反転しない
+///    ——**実装時訂正（task 6.1・R7.6 実機確定）**: 設計時の符号表（Left=+x／Right=−x）は
+///    SSP 実測に否定された。SSP は wp.x×k をそのまま画面 x へ加算する（sakura Left:
+///    −500+332=−168／kero Right: +420−237=+183）。反転させると kero が 475px ずれる。
+///    ゆえに `side: BalloonSide` 引数は撤去し、置き側非依存を構造で施行する。
 /// y: 下が正＝画面同符号（無変換）。
 /// k: 大きさは ScaleRatio 権威（scale_len）へ委譲し符号を保存（新丸め規約なし・R3.6）。
+///    SSP との 1px 差（332/237/93 対 333/238/94）は既存丸め権威のまま許容する（R3.6）。
 pub fn to_screen_adjust(
-    wp_x: Option<i32>, wp_y: Option<i32>, side: BalloonSide, k: ScaleRatio,
+    wp_x: Option<i32>, wp_y: Option<i32>, k: ScaleRatio,
 ) -> Option<(i32, i32)>;   // 両軸とも未指定なら None（現行と厳密同一・R3.4）
 
 /// cfg.scopes[scope].balloon_offset へ加算合流（既存 descript offset があれば加算・無ければ設定）。
@@ -515,8 +521,8 @@ pub fn apply_windowposition(
 - Invariants: 片軸のみ指定時は他軸 0 として合流（正典既定 0・R3.4 と同義）。
 
 **Implementation Notes**
-- Integration: `prepare_stages`（mod.rs:254-290）に「per-scope model 取得→`to_screen_adjust`→`apply_windowposition`」を挿入し、`info!`（scope・wp 生値・side・変換後 dx/dy）を出す——R7.6 の実機突合を grep で行うため。
-- Validation: 符号変換の全分岐（Left/Right × 正負 × 片軸欠落）と k 適用を純関数檻で網羅（檻 9）。
+- Integration: `prepare_stages`（mod.rs:254-290）に「per-scope model 取得→`to_screen_adjust`→`apply_windowposition`」を挿入し、`info!`（scope・wp 生値・side・変換後 dx/dy）を出す——R7.6 の実機突合を grep で行うため。`balloon_side` は調整量に効かなくなった後も、基本位置（Left＝`char_x − balloon_w`／Right＝`char_x + char_w`）をログだけで再構成するために記録し続ける。
+- Validation: 変換の全分岐（x 正負 × 片軸欠落 × k≠1）と k 適用を純関数檻で網羅（檻 9）。置き側非依存は配置面の対檻（`prepare_windowposition_adjust_is_identical_for_both_balloon_sides`）と SSP 実測突合檻（`prepare_emo2_matches_ssp_balloon_offsets_at_dpi_120`）が固定する。
 - Risks: W5 同居 `dpi-window-vanish` の編集集合が未確定——`resolver.rs` 無改変ゆえ着手順裁定は不要（エスケープ条項不発動）だが、`placement/mod.rs` の小ハンクは Revalidation Triggers に記載済み。
 
 ### areka-emo-text / 再追従判定キーの拡張（actor.rs）
@@ -634,7 +640,7 @@ R6 の観測点（すべて `RUST_LOG=info` で grep 可能・実機サインオ
 6. **上書きファイル名導出**: 採用面→`{prefix}{id}s.txt`（`balloonk0`→`balloonk0s.txt`・フォールバック面→`balloons{ID}s.txt`・R2.2/2.3）。
 7. **per-scope マージ実値**: emo2-kakukaku 実 fixture で scope0=sakura 値・scope1=kero 値（wp -190,-75／validrect 40,-70,24,-48／wordwrappoint descript 継承 -34・R2.1/2.5）。
 8. **再追従判定キー**: k 同値・`image_size` 変化→`true`（再構築）／binding・resolved 全同値→`false`（churn 維持）／未装着→`false`（R4.4/4.5/4.6）。既存檻 `:2665` の名称・意図更新（`actor.rs:2812-2817` のキル排他性コメントが同テスト名を名指ししているため、リネーム時に参照も追随させる——R7.2 の「陳腐化した注記を放置しない」の対象）。
-9. **windowposition 変換**: Left/Right × x 正負 × 片軸欠落 × k≠1 の全分岐（emo2 実値 sakura x=+266→Left で +・kero x=−190→Right で +190 相当の画面符号・R3.3/3.4/3.6）。両軸未指定→`None`＝resolver 出力が現行と同一。
+9. **windowposition 変換**: x 正負 × 片軸欠落 × k≠1 の全分岐（emo2 実値 sakura x=+266→+266・kero x=−190→**−190**＝置き側で反転しない画面オフセット・R3.3/3.4/3.6・R7.6 実機確定）。両軸未指定→`None`＝resolver 出力が現行と同一。置き側非依存は配置面で対檻化し（同一 wp 生値・Left/Right 両 scope の基本位置からの寄与が一致）、SSP 実測（k=5/4 で sakura offset −168／kero offset +183）との 1px 以内一致も檻で固定する。
 10. **scope キー表引き**: scope1 の balloon 表が scope0 と独立に引かれる／不在 scope＝不活性（乱数非消費・R5.6）。
 
 合成 fixture は `TempDir`＋`MemoryDecoder`（donor: balloon.rs:184-215）——実 fixture に `balloonp*` / `balloonk1` が無いため（R7.1 の明示要求）。
@@ -651,7 +657,7 @@ R6 の観測点（すべて `RUST_LOG=info` で grep 可能・実機サインオ
 - ゴースト emo2＋バルーン emo2-kakukaku を**絶対パス**で起動（`AREKA_APP_SMOKE_EXIT_MS` 有界 auto-exit＋`RUST_LOG=info`——記憶: 有界 auto-exit＋ログ grep）。
 - 目視: 本体（400×224 系）と相方（288×203 系）の枠形状・表示位置が互いに異なること。
 - ログ突合: R6 の観測点 1〜5 を grep し、scope 別の採用系列・採用ファイル・wp/validrect 実値・窓寸が相異なることを数値確認。
-- **R7.6**: `windowposition.x` の符号の向き（本設計の符号表: Left=+x／Right=−x）を実機表示で確定し、結果を対応表へ記録。想定と逆なら `to_screen_adjust` の符号表 1 箇所の修正で閉じる（構造影響なし）。
+- **R7.6**（task 6.1 で**実施済み・確定**）: `windowposition.x` の符号の向きを SSP（参照実装）の実機表示で確定した。**確定形＝左右で反転しない素の画面座標オフセット**（正＝画面右／負＝画面左）——設計時の符号表（Left=+x／Right=−x）は否定された。修正は予告どおり `to_screen_adjust` 1 箇所（side 引数の撤去）に閉じ、構造影響はない。結果は対応表 (h) へ記録する。
 
 ### DoD
 
@@ -668,4 +674,4 @@ R6 の観測点（すべて `RUST_LOG=info` で grep 可能・実機サインオ
 | (e) | `\b[ID]` の ID＝当該 scope が解決した系列内の面 ID（R5.1) | 正典整合（解釈） |
 | (f) | `balloon.defaultsurface`/`kero.balloon.defaultsurface`/`char*.balloon.defaultsurface` 非追従（既定 0 のみ・R2.6） | 語彙記録＋縮退シーム |
 | (g) | `windowposition.x` キーワード（`center`/`top`/`bottom`）・`windowposition.limit`（既定 1・現行非クランプ維持） | 語彙記録＋縮退シーム |
-| (h) | `windowposition.x` の基本位置と符号の向き（実機確定後に確定値を記入・R7.6） | 実機確定 → 正典整合／裁量を確定時に分類 |
+| (h) | `windowposition.x` の基本位置と符号の向き（task 6.1 で確定・R7.6）: 基本位置＝Left `char_x − balloon_w`／Right `char_x + char_w`、`windowposition.x` は**左右で反転しない素の画面座標オフセット**（正＝画面右）。ukadoc の文言「シェル側が+、シェルから離れる側が-」は参照実装 SSP の実挙動と kero 側で食い違い、areka は互換ベースウェアゆえ SSP 実測を正とした。丸めは既存権威のまま（SSP と 1px 差・R3.6） | 参照実装準拠（正典文言との乖離あり） |
