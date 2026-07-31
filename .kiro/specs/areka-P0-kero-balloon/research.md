@@ -238,7 +238,16 @@ balloon_root（1 個のディレクトリ）
 
 > いずれも**本書では決めない**。選択肢と影響のみ提示する。
 
-- **D1. `windowposition` を本仕様で実装するか（最大の争点）**
+- **D1. `windowposition` を本仕様で実装するか（最大の争点）** — ✅ **2026-07-31 要件ディスカッションで裁定済み＝実装する（In-scope）**
+  裁定の根拠（本書 15 行目の「規模とリスクの支配項」評価は下方修正する）:
+  (a) `persist.rs:393`/`:424` の復元マージは「保存値があれば保存値／無ければ resolver 出力」＝**DD7 は恒久規則ではなく初期既定の種**。`windowposition` の導入は恒久ルールの置換ではなく**初期既定値の正典化**にとどまる。
+  (b) `resolver.rs:112-113` が DD7 を自ら「暫定」と宣言し「**正式規則は balloon 表示系の後続へ委ねる**」と明記＝空席が用意されている。
+  (c) **基本位置は正典と現行実装が一致**——ukadoc `windowposition.y`「数値指定……バルーンとシェル画像の**上端が重なる**位置」＝ `resolver.rs:111` の `balloon_y = char_y`（上端揃え）と同一。ゆえに必要なのは基本位置の作り直しではなく**調整量の加算**のみ。
+  (d) 加算口は既存（`ScopeConfig.balloon_offset: Option<(i32,i32)>`・`config.rs:49-50`・`resolver.rs:186` が `unwrap_or((0,0))` で消費・**emo2 では `None`＝未使用**）。ghost descript の `balloon.offsetx/offsety` と `windowposition` は正典上いずれも存在し加算的であるため、供給元の追加として整合する。
+  設計へ残る下位論点（D1'）: ① **x 方向の基本位置は正典が明示していない**（y のみ明示）＝実機観測で確定し対応表へ記録（要件 R7.6）。② 符号変換（`windowposition.x` は「シェル側が正」→ バルーンの左右いずれに置くかで画面座標符号へ変換／`.y` は「下が正」＝同符号）。③ **`resolver.rs` の P5 式へ手を入れずに `balloon_offset` 供給で足りるか**——足りれば W5 同居の `dpi-window-vanish`（配置層を境界に掲げ、診断やり直しで編集集合が未確定）との互いに素が保てる。要すると判明した場合は着手順を裁定し干渉台帳へ登記（要件 Adjacent expectations のエスケープ条項）。④ k（表示スケール）は調整量にも適用する（要件 R3.6）。
+  Out へ落とした正典項目（語彙記録＋縮退シーム・要件 Out of scope へ登記済み）: `windowposition.x` のキーワード指定（`center`/`top`/`bottom`）・`windowposition.limit`（既定 1・現行はバルーン非クランプ）。
+
+- **D1（原文・記録として保存）**
   R3.2 は字義上 `windowposition` による相対位置決定を要求するが、現行 placement は `windowposition` を一切消費せず DD7 暫定規則（alignment＋offset）で決めている。選択肢 **C1（正典配置を実装・規模 L）／C2（per-scope 寸法まで・配置は DD7 据置・規模 M）／C3（数値指定のみ実装・キーワードは Out）**。C2 を採る場合は R3.2 の文言解釈（「相対位置を相方側の実寸と定義から決定する」の "定義" の射程）を要件ディスカッションで確定する必要がある。影響: `resolver.rs:181-203` の `balloon_pos` 式・`balloon_offset` 恒等式（恒久事後条件）・`persist.rs` の位置永続・W4 position-persist との相互作用。
 
 - **D2. 系列解決の単一権威をどこに置くか**
