@@ -40,7 +40,7 @@ use areka_parsers::balloon::BalloonModel;
 use areka_sakura::ActorKey;
 use wintf::ecs::{FrameTime, GraphicsCore, SizeI, WindowPos, WucGraphicsResource, DPI};
 
-use crate::placement::diag::PlacementRoute;
+use crate::placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
 use crate::placement::follow::{resize_window_keep_position, resize_window_to};
 use crate::placement::resolver::SizePx;
 use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker, GhostWindows};
@@ -1002,6 +1002,12 @@ pub fn run_text_scale_phase(wiring: &mut Emo2Wiring) -> Vec<u32> {
 ///
 /// [`GhostWindows`] 未挿入（窓生成前）は no-op。窓 entity が引けない scope は `warn!`＋skip
 /// （報告は既に取り出し済み＝次フレームへ持ち越さない——窓が無い以上反映先が無い）。panic しない。
+///
+/// # 破棄済み窓の打ち切り（要件 6.2/6.3・design D8 消費側）
+///
+/// 「登録は在るが**指す先の entity が既に despawn 済み**」は終了処理の**正常系**であり、
+/// `debug!`（[`DESPAWNED_SKIP_TAG`]）で当該 target を打ち切って**他 scope の処理を継続**する
+/// （警告以上を出さない＝要件 6.2）。上段の「登録が無い」`warn!` とは別事象である。
 fn reconcile_reported_sizes<S: ScaleReportSource>(source: &mut S, world: &mut World) {
     // GhostWindows は小さな Entity 写像（Clone）。target/窓の解決へ world の不変借用を跨がせない。
     let Some(ghost_windows) = world.get_resource::<GhostWindows>().cloned() else {
@@ -1040,6 +1046,21 @@ fn reconcile_reported_sizes<S: ScaleReportSource>(source: &mut S, world: &mut Wo
                 );
                 continue;
             };
+            // 存在確認（要件 6.2/6.3・design D8 消費側）: レジストリが指す窓が既に
+            // despawn 済み（終了処理でゴースト窓が破棄された後のフレーム）なら、**正常終了系**
+            // として debug で打ち切り、**他の scope／target の処理は続ける**。報告は上で
+            // 取り出し済みのまま持ち越さない（窓が無い以上、次フレームでも反映先は無い）。
+            // 上の `None` 腕（レジストリ不整合＝warn）とは別物である——あちらは「登録が無い」、
+            // こちらは「登録はあるが指す先が消えた」で、後者だけが終了処理の正常系。
+            if world.get_entity(window).is_err() {
+                debug!(
+                    scope,
+                    ?target,
+                    entity = ?window,
+                    "{DESPAWNED_SKIP_TAG} dpi reconcile: 窓 entity が破棄済み（despawn）→ 本 target を正常系として打ち切り（他 scope は継続）"
+                );
+                continue;
+            }
             // 経路タグ: 本経路は「表示が成立して物理寸が変わった」状態に紐づき `Changed<DPI>`
             // に**依存しない**（初回表示の k₀ 補正もここで landing する）。DPI 由来と名乗らせ
             // ないため DpiReproject とは別語を貼る（Req 1.2・D13）。
@@ -1215,6 +1236,13 @@ impl PhysicalSizeSource for EmoPresenter {
 /// 本番経路は `resnap_shell_targets` が**本体を持たずここへ委譲する**だけである——実装を 2 つに
 /// 割らないことが要点で、fake 相手の檻が「本番も同じ判断をしている」ことを担保する
 /// （実装が分岐していると fake は緑のまま本番だけ壊れ得る）。
+///
+/// # 破棄済み窓の打ち切り（要件 6.2/6.3・design D8 消費側）
+///
+/// scope ループの**冒頭**で char 窓 entity の存在を確認し、既に despawn 済みなら
+/// `debug!`（[`DESPAWNED_SKIP_TAG`]）で当該 scope を打ち切って**他 scope は処理し切る**
+/// （終了処理の正常系ゆえ警告以上を出さない）。寸の問い合わせより手前に置くのは、
+/// 破棄済み窓のために表示側へ問い合わせる意味が無いためである。
 fn resnap_with<S: PhysicalSizeSource + ?Sized>(source: &S, world: &mut World) {
     // scope 識別は GhostWindows 経由（Req4.5）。未挿入は shell 寸を引く対象が無い＝no-op。
     let Some(ghost_windows) = world.get_resource::<GhostWindows>() else {
@@ -1223,6 +1251,20 @@ fn resnap_with<S: PhysicalSizeSource + ?Sized>(source: &S, world: &mut World) {
     // presenter 借用を解いてから resnap_from_sizes（&mut World）を呼ぶため、先に collect する。
     let mut sizes: Vec<(usize, SizePx)> = Vec::new();
     for scope in ghost_windows.scopes() {
+        // 存在確認（要件 6.2/6.3・design D8 消費側）: レジストリが指す char 窓が既に
+        // despawn 済みなら **正常終了系**として debug で打ち切り、**他 scope は処理し切る**。
+        // 寸の問い合わせより手前に置く——破棄済みの窓のために表示側へ問い合わせる意味が
+        // 無いうえ、素通りさせると下流 `resize_window_to` が破棄済み窓ぶん呼ばれる。
+        if let Some(char_window) = ghost_windows.char_window(scope)
+            && world.get_entity(char_window).is_err()
+        {
+            debug!(
+                scope,
+                entity = ?char_window,
+                "{DESPAWNED_SKIP_TAG} resnap: char 窓 entity が破棄済み（despawn）→ 本 scope を正常系として打ち切り（他 scope は継続）"
+            );
+            continue;
+        }
         // shell target（偶数=2*scope）のみを読む（balloon_target は読まない＝shell 限定・Req4.5）。
         // 窓 client に合わせるべき寸は **物理寸**（k 倍後）であって native 原寸ではない。両者を
         // 選べる `text_slot_view()`（`surface_size()`／`physical_size()` が隣り合う）ではなく、
@@ -2877,7 +2919,7 @@ mod tests {
     // 観測境界は `placement::test_support::capture_logs`（`pub(crate)`＝本モジュールから到達可能）
     // による tracing イベント本体で、レコード書式の権威は `placement::diag` の純関数が持つ。
 
-    use crate::placement::diag::WINDOW_MOVE_RECORD_TAG;
+    use crate::placement::diag::{DESPAWNED_SKIP_TAG, WINDOW_MOVE_RECORD_TAG};
     use crate::placement::test_support::{LogEvent, capture_logs as capture_diag_logs};
 
     /// 捕捉イベントから窓移動レコード行だけを抜く（他の debug ログは無視）。
@@ -2998,6 +3040,208 @@ mod tests {
             window_move_routes_of(&events, char0),
             vec!["ReportedSizeReconcile"],
             "k₀ 補正は報告回収経路として記録されるべき: {lines:?}"
+        );
+    }
+
+    // ── task 3.2: フレーム層 消費側の存在確認（Req 6.2/6.3・design D8 消費側）────────
+    //
+    // 終了処理でゴースト窓が despawn されると `GhostWindowMarker` の `on_remove` hook
+    // （task 3.1）が `GhostWindows` Resource から scope エントリを落とす。だが消費側は
+    // **Resource の写しを持って回る**（`reconcile_reported_sizes` は冒頭で `.cloned()` する）
+    // ため、「レジストリの参照先の窓が既に存在しない」状態（Req 6.3 の If 節そのもの）は
+    // 構造上あり得る。以下の檻はその陳腐化レジストリを**明示的に組んで**、
+    //   (1) 破棄済み scope は warn 以上を 1 行も出さずに打ち切られること（Req 6.2）
+    //   (2) 打ち切りが**他 scope の処理を止めない**こと（Req 6.3）
+    // を固定する。掃除後の綺麗なレジストリで回しても両者は自明に成立してしまう（＝空虚な檻）
+    // ので、探針は必ず「破棄済み entity を指すレジストリ」でなければならない
+    // （tasks.md Implementation Notes 2.2 の空虚性の教訓と同型）。
+
+    /// 破棄済み entity を指したままの**陳腐化レジストリ**を作る（Req 6.3 の状態を再現）。
+    ///
+    /// `spawn_ghost_windows` の戻り値は Resource とは別の写しゆえ、hook による掃除が
+    /// 済んだ後に写しを挿し直せば「登録はあるが指す先が消えている」状態になる。
+    /// 掃除が実際に効いていること（前提の非空虚性）も併せて主張する。
+    fn despawn_scope_and_restore_stale_registry(world: &mut World, gw: &GhostWindows, scope: usize) {
+        let char_window = gw.char_window(scope).expect("char 窓がある");
+        let balloon_window = gw.balloon_window(scope).expect("balloon 窓がある");
+        world.despawn(char_window);
+        world.despawn(balloon_window);
+        assert!(
+            world
+                .get_resource::<GhostWindows>()
+                .expect("Resource は残る")
+                .char_window(scope)
+                .is_none(),
+            "前提: despawn hook（task 3.1）が scope {scope} をレジストリから落としている"
+        );
+        // 陳腐化した写しを挿し直す＝消費側の存在確認だけが防波堤になる状態。
+        world.insert_resource(gw.clone());
+        assert_eq!(
+            world
+                .get_resource::<GhostWindows>()
+                .expect("Resource がある")
+                .char_window(scope),
+            Some(char_window),
+            "前提: レジストリが破棄済み entity を指している（探針が不動点でない）"
+        );
+    }
+
+    /// warn 以上のイベントだけを抜く（`tracing::Level` の Ord は ERROR < WARN < INFO < …）。
+    fn warn_or_above(events: &[LogEvent]) -> Vec<&LogEvent> {
+        events
+            .iter()
+            .filter(|e| e.level <= tracing::Level::WARN)
+            .collect()
+    }
+
+    /// 破棄済み打ち切りの debug 行（本文に判定語を含むもの）を抜く。
+    fn despawn_skip_lines(events: &[LogEvent]) -> Vec<&LogEvent> {
+        events
+            .iter()
+            .filter(|e| e.message().contains(DESPAWNED_SKIP_TAG))
+            .collect()
+    }
+
+    /// Req 6.2/6.3（再スナップ相）: 破棄済み scope は debug で打ち切られ、**生存 scope は
+    /// 処理し切る**。打ち切りは表示側への問い合わせより手前で起きる（＝問い合わせ記録に
+    /// 破棄済み scope の target が現れない）。
+    #[test]
+    fn resnap_skips_despawned_scope_at_debug_and_processes_surviving_scopes() {
+        let (mut world, gw) = resnap_world();
+        let char1 = gw.char_window(1).expect("char 窓がある");
+        despawn_scope_and_restore_stale_registry(&mut world, &gw, 0);
+
+        // shell=434×700（scope1 の初期寸 278×357 と異なる＝生存 scope は駆動される）。
+        let fake = FakeSizes::new((434, 700), (223, 158));
+        let (_, events) = capture_diag_logs(|| resnap_with(&fake, &mut world));
+
+        assert!(
+            warn_or_above(&events).is_empty(),
+            "破棄済み窓に対して警告以上のログが出ている（Req 6.2 違反）: {:?}",
+            warn_or_above(&events)
+        );
+        assert_eq!(
+            fake.queried.borrow().clone(),
+            vec![shell_target(1).0],
+            "破棄済み scope の target は引かず、生存 scope だけを引く（フレーム層で打ち切っている証跡）"
+        );
+        assert_eq!(
+            size_of(&world, char1),
+            Some(SizeI::new(434, 700)),
+            "生存 scope は最後まで処理される（Req 6.3「他の scope の処理を継続」）"
+        );
+        let skips = despawn_skip_lines(&events);
+        assert_eq!(skips.len(), 1, "破棄済み scope の打ち切りは 1 行: {events:?}");
+        assert_eq!(skips[0].level, tracing::Level::DEBUG);
+        assert!(
+            skips[0].message().contains("resnap:"),
+            "再スナップ相が自分の相を名乗っていない: {:?}",
+            skips[0].message()
+        );
+    }
+
+    /// Req 6.2/6.3（報告回収相）: 破棄済み scope の char／balloon 両 target は debug で
+    /// 打ち切られ、生存 scope の報告は反映される。報告は**取り出したうえで**捨てる
+    /// （窓が無い以上、次フレームへ持ち越しても反映先が無い＝既存契約の維持）。
+    #[test]
+    fn drain_reconcile_skips_despawned_scope_at_debug_and_processes_surviving_scopes() {
+        let (mut world, gw) = dpi_world();
+        let char1 = gw.char_window(1).expect("char 窓がある");
+        despawn_scope_and_restore_stale_registry(&mut world, &gw, 0);
+
+        let mut source = FakeReports::default();
+        source.pending.insert(shell_target(0).0, (868, 1374)); // 破棄済み scope
+        source.pending.insert(balloon_target(0).0, (279, 198)); // 破棄済み scope
+        source.pending.insert(shell_target(1).0, (556, 714)); // 生存 scope
+
+        let (_, events) = capture_diag_logs(|| reconcile_reported_sizes(&mut source, &mut world));
+
+        assert!(
+            warn_or_above(&events).is_empty(),
+            "破棄済み窓に対して警告以上のログが出ている（Req 6.2 違反）: {:?}",
+            warn_or_above(&events)
+        );
+        assert!(
+            source.calls_of("take").contains(&shell_target(0).0),
+            "非空虚性: 破棄済み scope でも報告の取り出し自体は行われている（持ち越さない）"
+        );
+        assert_eq!(
+            size_of(&world, char1),
+            Some(SizeI::new(556, 714)),
+            "生存 scope は最後まで処理される（Req 6.3「他の scope の処理を継続」）"
+        );
+        let skips = despawn_skip_lines(&events);
+        assert_eq!(
+            skips.len(),
+            2,
+            "破棄済み scope の char／balloon 両 target が打ち切られる: {events:?}"
+        );
+        assert!(
+            skips
+                .iter()
+                .all(|e| e.level == tracing::Level::DEBUG && e.message().contains("dpi reconcile:")),
+            "報告回収相の打ち切りが debug かつ自分の相を名乗っていない: {skips:?}"
+        );
+    }
+
+    /// **完了状態（tasks.md 3.2）**: 終了処理でゴースト窓が破棄された後のフレームで、
+    /// 破棄済み窓に対する**警告以上のログが 1 行も出ない**（DPI 相・報告回収相・再スナップ相の
+    /// 3 相通し）。窓への書込も 1 件も起きない。
+    #[test]
+    fn frame_after_teardown_despawn_emits_no_warning_for_destroyed_windows() {
+        let (mut world, gw) = dpi_world();
+        despawn_scope_and_restore_stale_registry(&mut world, &gw, 0);
+        despawn_scope_and_restore_stale_registry(&mut world, &gw, 1);
+
+        // 終了処理の直前まで積まれていた報告が残っている状況（表示側は窓の破棄を知らない）。
+        let mut source = FakeReports::default();
+        for scope in [0u32, 1] {
+            source.pending.insert(shell_target(scope).0, (868, 1374));
+            source.pending.insert(balloon_target(scope).0, (279, 198));
+        }
+        let fake = FakeSizes::new((434, 700), (223, 158));
+        let mut state = None;
+
+        let (_, events) = capture_diag_logs(|| {
+            dpi_phase_with(&mut source, &mut state, &mut world);
+            reconcile_reported_sizes(&mut source, &mut world);
+            resnap_with(&fake, &mut world);
+        });
+
+        assert!(
+            warn_or_above(&events).is_empty(),
+            "破棄済み窓に対する警告以上のログが残っている（完了状態違反）: {:?}",
+            warn_or_above(&events)
+        );
+        // 非空虚性: 消費側が実際に破棄済み scope を踏んでいる（何も起きなかったのではない）。
+        // **相ごとに数える**——総数だけを見ると、フレーム層の打ち切りを外しても下流の追従層が
+        // 同じ判定語で同数の debug を出すため、総数が偶然一致して檻が空虚になる。
+        let skips = despawn_skip_lines(&events);
+        assert_eq!(
+            skips
+                .iter()
+                .filter(|e| e.message().contains("dpi reconcile:"))
+                .count(),
+            4,
+            "報告回収相は 2 scope × char/balloon の 4 件を自分の相で打ち切る: {events:?}"
+        );
+        assert_eq!(
+            skips
+                .iter()
+                .filter(|e| e.message().contains("resnap:"))
+                .count(),
+            2,
+            "再スナップ相は 2 scope を自分の相で打ち切る: {events:?}"
+        );
+        assert_eq!(
+            skips.len(),
+            6,
+            "打ち切りは上記 2 相の 6 件だけ（下流の追従層まで降りていない）: {events:?}"
+        );
+        assert!(
+            window_move_lines(&events).is_empty(),
+            "破棄済み窓へ書込が発生している: {:?}",
+            window_move_lines(&events)
         );
     }
 

@@ -41,7 +41,7 @@ use wintf::ecs::pointer::Phase;
 use wintf::ecs::window::monitor::Monitor;
 use wintf::ecs::{DPI, Point, SetWindowPosCommand, SizeI, WindowHandle, WindowPos};
 
-use super::diag::{self, PlacementRoute, WindowKind, WindowMoveRecord};
+use super::diag::{self, DESPAWNED_SKIP_TAG, PlacementRoute, WindowKind, WindowMoveRecord};
 use super::persist::{
     balloon_offset_entries, balloon_offset_to_persist, char_pos_entries, char_pos_to_origin_x,
     persist_entries,
@@ -786,6 +786,10 @@ pub fn move_window_to(world: &mut World, window: Entity, x: i32, y: i32) -> bool
 ///
 /// # 縮退・失敗経路（log-first・silent failure を作らない）
 ///
+/// - **対象 entity 不在（despawn 済み）**: 終了処理でゴースト窓が破棄された後のフレーム
+///   ＝**正常終了系**ゆえ `debug!`（[`diag::DESPAWNED_SKIP_TAG`]）＋`false`（要件 6.2/6.3）。
+///   直下の [`Anchored`] 欠落 `warn!` と**必ず区別する**——混ぜると終了時ログが良性ノイズで
+///   埋まり、本物の結線バグ（実在窓の `Anchored` 欠落）が読めなくなる。
 /// - [`Anchored`] 欠落: char 窓は spawn で必ず付与される＝異常系ゆえ `warn!`＋`false`。
 /// - 非正寸（w≤0 or h≤0）: T を再適用せず現状保持＋`warn!`＋`false`（Req3.4・
 ///   [`BottomSnapPolicy`] の非正寸縮退と整合）。
@@ -822,6 +826,21 @@ pub fn resize_window_to(
     new_size: SizePx,
     route: PlacementRoute,
 ) -> bool {
+    // 0. 存在確認（要件 6.2/6.3・design D8 消費側）: 対象が既に despawn 済みなら
+    //    **正常終了系**として debug で打ち切る。終了処理でゴースト窓が破棄された後の
+    //    フレームでも寸法の再導出は走り得るため、ここを素通りさせると下の
+    //    「Anchored 未付与」warn が破棄済み窓ぶんだけ鳴り、良性ノイズが本物の異常を
+    //    埋める。区別すべきは水準であって、打ち切ること自体ではない——
+    //    **実在する** entity の `Anchored` 欠落は下で従来どおり warn のままにする。
+    if world.get_entity(char_window).is_err() {
+        debug!(
+            entity = ?char_window,
+            ?route,
+            "{DESPAWNED_SKIP_TAG} 対象 entity は既に破棄済み（despawn）→ アンカー保存リサイズを正常系として打ち切り"
+        );
+        return false;
+    }
+
     // 1. Anchored（drag／resize が読む単一真実源）を読む。char 窓は spawn で必ず
     //    付与される＝欠落は異常系ゆえ log-first で no-op（silent failure にしない）。
     let Some(Anchored(anchor)) = world.get::<Anchored>(char_window).copied() else {
@@ -1476,6 +1495,8 @@ fn clamp_x_into(x: i32, w: i32, wa: RectPx) -> i32 {
 ///
 /// # 縮退・失敗経路（log-first・silent failure を作らない）
 ///
+/// - **対象 entity 不在（despawn 済み）**: 正常終了系ゆえ `debug!`
+///   （[`diag::DESPAWNED_SKIP_TAG`]）＋`false`（要件 6.2/6.3・[`resize_window_to`] と同一流儀）。
 /// - 非正寸（w≤0 or h≤0）: 何も書かず `warn!`＋`false`（[`resize_window_to`] の
 ///   非正寸縮退と同一流儀）。
 /// - `WindowPos` 不在（窓生成前の異常系）: 現在位置を読めないため `warn!`＋`false`。
@@ -1494,6 +1515,16 @@ fn clamp_x_into(x: i32, w: i32, wa: RectPx) -> i32 {
 /// 呼出側が渡せる値は 1 つしか無く、取り違えの余地だけを増やすため。
 #[allow(dead_code)] // examples が #[path] include するため、本体未使用ビルドでも必要
 pub fn resize_window_keep_position(world: &mut World, window: Entity, new_size: SizePx) -> bool {
+    // 0. 存在確認（要件 6.2/6.3・design D8 消費側）: 破棄済みバルーン窓は正常終了系として
+    //    debug で打ち切る（下の `WindowPos` 未付与 warn は**実在する**窓の異常に取っておく）。
+    if world.get_entity(window).is_err() {
+        debug!(
+            entity = ?window,
+            "{DESPAWNED_SKIP_TAG} 対象 entity は既に破棄済み（despawn）→ 位置据置きリサイズを正常系として打ち切り"
+        );
+        return false;
+    }
+
     // 1. 非正寸ガード（R3.1）: 窓寸として成立しない値は書かない。
     if new_size.w <= 0 || new_size.h <= 0 {
         warn!(
@@ -5696,6 +5727,134 @@ mod tests {
     }
 
     // -------------------------------------------------------------------------
+    // task 3.2: 消費側の存在確認と警告水準の区別（Req 6.2/6.3・design D8 消費側・
+    // design「guard_visibility > Implementation Notes > 消費側の区別」）
+    //
+    // 追従層の消費入口（[`resize_window_to`]／[`resize_window_keep_position`]）は
+    // **2 つの事象を混ぜてはならない**:
+    //   (a) entity 不在（既に despawn 済み）＝終了処理の正常系 → `debug!` で打ち切り
+    //   (b) entity は実在するが接地点規約の component（`Anchored`）が欠落＝真の異常 → `warn!`
+    // (a) を warn のままにすると終了時ログが良性ノイズで埋まり（Req 6.2 違反）、(b) を
+    // debug へ落とすと本物の結線バグが観測から消える。**同じ檻の中で両方**を見る。
+    // -------------------------------------------------------------------------
+
+    /// Req 6.2/6.3（追従層・キャラ窓入口）: despawn 済み entity への resize は正常終了系
+    /// として `debug!` 1 行で打ち切られ、**warn 以上を 1 行も出さない**。
+    #[test]
+    fn resize_window_to_on_despawned_entity_is_debug_only_normal_termination() {
+        let mut world = World::new();
+        world.insert_resource(single_monitor_snapshot());
+        let window = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(731, 356, 434, 687),
+                Anchored(Anchor::Bottom),
+            ))
+            .id();
+        world.despawn(window);
+
+        let (ok, events) = capture_logs(|| {
+            resize_window_to(
+                &mut world,
+                window,
+                SizePx { w: 517, h: 823 },
+                PlacementRoute::Resnap,
+            )
+        });
+
+        assert!(!ok, "破棄済み窓へは書けない（false・panic しない）");
+        // `tracing::Level` の Ord は ERROR < WARN < INFO < DEBUG < TRACE ゆえ
+        // 「INFO より verbose」＝ debug/trace のみ、が静穏性の表現になる（spawn.rs T-V1 と同型）。
+        assert!(
+            events.iter().all(|e| e.level > tracing::Level::INFO),
+            "破棄済み窓に対して警告以上のログが出ている（Req 6.2 違反）: {events:?}"
+        );
+        let skipped = expect_one(&events, DESPAWNED_SKIP_TAG);
+        assert_eq!(
+            skipped.level,
+            tracing::Level::DEBUG,
+            "破棄済みの打ち切りは debug 水準（正常終了系）"
+        );
+    }
+
+    /// Req 6.2 の裏面（真の異常を殺さない）: **生存している** entity の接地点規約 component
+    /// （`Anchored`）欠落は従来どおり `warn!`。存在確認の導入でこちらまで静穏化してはならない。
+    #[test]
+    fn resize_window_to_missing_anchored_on_living_entity_still_warns() {
+        let mut world = World::new();
+        world.insert_resource(single_monitor_snapshot());
+        let window = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(731, 356, 434, 687),
+                // Anchored なし（entity は実在する）
+            ))
+            .id();
+
+        let (ok, events) = capture_logs(|| {
+            resize_window_to(
+                &mut world,
+                window,
+                SizePx { w: 517, h: 823 },
+                PlacementRoute::Resnap,
+            )
+        });
+
+        assert!(!ok, "Anchored 欠落は書かない（false）");
+        let warned = expect_one(&events, "Anchored 未付与");
+        assert_eq!(
+            warned.level,
+            tracing::Level::WARN,
+            "実在 entity の Anchored 欠落は真の異常＝warn のまま（Req 6.2 の区別）"
+        );
+        assert!(
+            !events.iter().any(|e| e.message().contains(DESPAWNED_SKIP_TAG)),
+            "実在 entity を『破棄済み』と誤判定している: {events:?}"
+        );
+    }
+
+    /// Req 6.2/6.3（追従層・バルーン窓入口）: despawn 済み entity への位置据置きリサイズも
+    /// 正常終了系（`debug!`）として打ち切られ、warn 以上を出さない。
+    #[test]
+    fn resize_window_keep_position_on_despawned_entity_is_debug_only_normal_termination() {
+        let mut world = World::new();
+        let window = world
+            .spawn((fake_handle(0x3000), window_pos_sized(731, 356, 434, 687)))
+            .id();
+        world.despawn(window);
+
+        let (ok, events) =
+            capture_logs(|| resize_window_keep_position(&mut world, window, SizePx { w: 517, h: 823 }));
+
+        assert!(!ok, "破棄済み窓へは書けない（false・panic しない）");
+        assert!(
+            events.iter().all(|e| e.level > tracing::Level::INFO),
+            "破棄済み窓に対して警告以上のログが出ている（Req 6.2 違反）: {events:?}"
+        );
+        let skipped = expect_one(&events, DESPAWNED_SKIP_TAG);
+        assert_eq!(skipped.level, tracing::Level::DEBUG);
+    }
+
+    /// Req 6.2 の裏面（バルーン窓入口）: **生存している** entity の `WindowPos` 欠落
+    /// （窓生成前の異常系）は従来どおり `warn!`。
+    #[test]
+    fn resize_window_keep_position_missing_window_pos_on_living_entity_still_warns() {
+        let mut world = World::new();
+        let window = world.spawn(fake_handle(0x3000)).id(); // WindowPos なし・entity は実在
+
+        let (ok, events) =
+            capture_logs(|| resize_window_keep_position(&mut world, window, SizePx { w: 517, h: 823 }));
+
+        assert!(!ok);
+        let warned = expect_one(&events, "WindowPos 未付与");
+        assert_eq!(
+            warned.level,
+            tracing::Level::WARN,
+            "実在 entity の WindowPos 欠落は真の異常＝warn のまま"
+        );
+    }
+
+    // -------------------------------------------------------------------------
     // 窓移動レコード（Req 1.2／2.4・task 1.4・design「placement::diag > Invariants」
     // ＋「PlacementRoute 配管＋guard_visibility > Integration」・D11）
     //
@@ -5717,9 +5876,9 @@ mod tests {
     use tracing_subscriber::EnvFilter;
     use wintf::ecs::DPI;
 
-    use super::super::diag::WINDOW_MOVE_RECORD_TAG;
+    use super::super::diag::{DESPAWNED_SKIP_TAG, WINDOW_MOVE_RECORD_TAG};
     use super::super::spawn::{BalloonWindowMarker, CharWindowMarker};
-    use super::super::test_support::{LogEvent, capture_logs, ensure_interest_probes};
+    use super::super::test_support::{LogEvent, capture_logs, ensure_interest_probes, expect_one};
 
     /// 捕捉イベントから窓移動レコード行だけを抜く（他の debug ログは無視）。
     fn window_move_lines(events: &[LogEvent]) -> Vec<String> {

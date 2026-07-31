@@ -70,7 +70,7 @@
   - _Requirements: 6.1, 6.4_
   - _Boundary: areka placement（spawn・ゴースト窓レジストリ）_
 
-- [ ] 3.2 統合タスク: 消費側の存在確認と警告水準の区別（追従層とフレーム層をまたぐ）
+- [x] 3.2 統合タスク: 消費側の存在確認と警告水準の区別（追従層とフレーム層をまたぐ）
   - 本タスクは責務境界を意図的にまたぐ**統合タスク**である（リサイズ入口＝追従層／毎フレーム再スナップ・寸法報告の回収＝フレーム層）
   - 各消費側で処理対象エンティティの存在を確認する
   - 「エンティティ不在＝破棄済み」は正常終了系として debug 水準で打ち切り、他の scope の処理を継続する
@@ -223,6 +223,9 @@
 - **1.3 → 5.1 への申し送り**: `window_pos.rs` の実施可否行の `applied` は Phase A では `let applied = true;` の定数（分岐は 5.1 の所有）。design.md:319 が挙げる `policy` フィールドも未出力＝`DpiSuggestedRectPolicy` を新設する 2.1 の後、5.1 で `applied` の分岐化と同時に追加すること。
 - **2.1 → 5.1 への申し送り**: `dpi_suggested_position_decision`（`crates/wintf/src/ecs/window_proc/dpi_helpers.rs`・`pub(super) fn(Option<&DpiSuggestedRectPolicy>, &RECT) -> Option<(i32, i32)>`）の戻り値 `Option` は **`DpiChangeContext::set` と `guarded_set_window_pos` の双方を 1 個の `if let Some((x, y))` で束ねて分岐させる**ためのもの（D3 帰結）。**シグネチャを広げる必要はない**——レビュアが design.md:319 と突合して確認済み。配線時に同関数の `#[allow(dead_code)]`（dpi_helpers.rs:31）を外すこと。
 - **2.1**: `DpiSuggestedRectPolicy` は `crates/wintf/src/ecs/mod.rs` の curated `pub use window::{…}` へ載せてある（areka は `wintf::ecs::{…}` 経由でしか import しない＝`placement/spawn.rs:63` の流儀）。5.1 の areka 側付与は wintf を編集せずに書ける。
+- **3.2 → 5.2／7.3 への申し送り**: 消費側 4 入口（`follow.rs` の `resize_window_to`／`resize_window_keep_position`・`frame.rs` の `resnap_with`／`reconcile_reported_sizes`）に `world.get_entity()` 存在確認を敷き済み。判定語は `crate::placement::diag::DESPAWNED_SKIP_TAG` の共有定数。**frame.rs へ新しい消費点を足すときは同じ区別を敷くこと**（entity 不在＝`debug!` で打ち切り他 scope 継続／実在するが規約 component 欠落＝`warn!`）——混ぜると終了時ログの良性ノイズが本物の異常を埋める。`resnap_from_sizes` は本番呼出元が `resnap_with` のみで下流 `resize_window_to` のガードが受けるため未防護（実測確認済み）。
+- **3.2（檻の空虚性・2 例目）**: 完了状態檻の初版は**総数計数で空虚**だった——フレーム層のガードを外しても、下流の追従層が同じ判定語を同数出して総数が偶然一致する。是正版は**相ごとの計数**（`dpi reconcile:` 4 件・`resnap:` 2 件）へ強化し、さらに探針を**意図的に陳腐化したレジストリ**（破棄済み entity を指す写し）で組んでいる（3.1 の hook が掃除した綺麗なレジストリで回すと自明に緑＝空虚）。ヘルパ `despawn_scope_and_restore_stale_registry` が「hook が実際に落とした」「写しが破棄済みを指す」の両方を実行時 assert する。[[2.2 の教訓]] と同型。
+- **3.2 → W5 `kero-balloon` への干渉申し送り（`.kiro/steering/roadmap.md` 干渉台帳 `van(W5)⇄ker(W5)`）**: `emo2_boot/frame.rs` は**同一ファイル・異ハンク**。van の編集面 4 点と、触っていない ker 編集面（`run_text_scale_phase`・`balloon_models` 写像・`dpi_phase_with` 本体）を明記済み。**先着後 rebase 必須**（git が自動マージしても行番号を引いた doc・檻コメントが静かに嘘になる）。van はタスク 5.2 で `dpi_phase_with` を判断分岐ごと改造予定＝ker が同関数へ触るなら着手前に相談。
 - **3.1 → 3.2 への申し送り**: 掃除は `GhostWindowMarker` の `on_remove` hook（`crates/areka/src/placement/spawn.rs:117-138`）が駆動し、**Resource のみを触る**（`DeferredWorld` は `iter_entities` を露出すらしない＝Req 6.4 は構造的帰結）。`GhostWindows::remove_entry_of` は全域・冪等で、非登録・空・二重除去・Resource 不在のいずれも静かに `None`。本番の `remove_entry_of` 呼出は hook 1 箇所のみ＝呼出点結合なし。3.2 の消費側存在確認はこの前提の上に書くこと。
 - **3.1 → W6 `balloon-visibility` への干渉申し送り（`.kiro/steering/roadmap.md:80` の干渉台帳が正本）**: ゴースト窓の despawn は**その scope のレジストリ登録を静かに消す**。`GhostWindows` の構築点は `spawn.rs:314`（`spawn_ghost_windows` 内）ただ 1 箇所ゆえ、**hide/show を despawn/respawn で実装すると登録が復活しない**——vis の hide は可視性トグルで実装すること。5.1 が同じ spawn バンドルを再度触る（`ExternalAuthority` 付与）点も台帳に記載済み。
 - **3.1**: `placement/test_support.rs:165-183` の `capture_logs` は **EnvFilter 濾過ではなく全捕捉**（`enabled()` 常時 true）で、イベントが実際に出した metadata 水準を読む。水準 assert は非空虚（`debug!`→`warn!` 変異で赤）で design.md:524 の「既存 tracing テスト流儀」に合致。Req 1.7 の静穏檻（1.1）が使う `EnvFilter` 実濾過とは別物なので混同しないこと。

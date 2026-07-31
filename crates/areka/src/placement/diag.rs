@@ -70,6 +70,27 @@ pub const MONITOR_RECORD_TAG: &str = "[diag.monitor]";
 /// 窓移動レコード行タグ（grep 判定語・要件 1.2 の「経路」つき移動記録）。
 pub const WINDOW_MOVE_RECORD_TAG: &str = "[diag.window_move]";
 
+/// 破棄済み（despawn 済み）entity を消費側が**正常系として**打ち切ったことを表す判定語
+/// （要件 6.2／6.3・design D8 消費側）。
+///
+/// # なぜ語彙を 1 箇所に置くのか
+///
+/// この打ち切りは「entity 不在＝破棄済み（正常終了系・`debug!`）」と「entity は実在するが
+/// 接地点規約の component が欠落（真の異常・`warn!`）」を**区別**するために入れたものだが、
+/// 区別は水準だけでなく**本文でも**引けなければ終了時ログの読み手に伝わらない。消費入口は
+/// 追従層（`resize_window_to`／`resize_window_keep_position`）とフレーム層（再スナップ相・
+/// 報告回収相）に分かれて 4 箇所あり、各所が独自の文言を持つと grep 語が静かに分裂する
+/// （tasks.md Implementation Notes 1.4「同一文言の複製」の教訓）。ゆえに**共通の接頭辞だけを
+/// 本定数が持ち**、後続の説明文は各消費点が自分の相を名乗る形にする。
+///
+/// # target について（本定数だけの例外）
+///
+/// 本モジュールの**出力**はすべて [`DIAG_TARGET`] を通るが、本定数を用いる `debug!` は
+/// 各消費点の既定 target（`areka::placement::follow`／`areka::emo2_boot::frame`）へ出る——
+/// 終了時ログの静穏性（要件 6.2）は診断手順の点灯有無に依らず成立すべきものだからである。
+/// 本モジュールが持つのは語彙であって出力点ではない。
+pub const DESPAWNED_SKIP_TAG: &str = "[despawn-skip]";
+
 /// 値が取得できなかったフィールドの番兵。
 ///
 /// フィールド自体は落とさない——落とすと経路ごとに grep の当たり方が変わり、
