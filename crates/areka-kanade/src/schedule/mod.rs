@@ -23,6 +23,7 @@ use crate::status::ExecutionSnapshot;
 use crate::talk::{StartTalk, TalkDone, TalkEndReason, TalkId};
 
 pub(crate) mod boot;
+pub(crate) mod choice;
 pub(crate) mod close;
 /// タスク 6.1: 純粋 step 層の失敗・防御アームのログ発火検証（テスト専用）。
 #[cfg(test)]

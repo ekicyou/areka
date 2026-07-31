@@ -34,7 +34,7 @@
   - _Depends: 1.1_
 
 - [ ] 2. 中核: 選択判定の純関数層
-- [ ] 2.1 (P) カスケード段列の判定とタイムアウト期限の写像を純関数として実装する
+- [x] 2.1 (P) カスケード段列の判定とタイムアウト期限の写像を純関数として実装する
   - 選択肢 ID から発火段列を「任意名 1 段のみ」「正典形の 2 段」「M1 未対応カテゴリ」の 3 分岐へ一意に決める純関数を実装する
   - タイムアウト指令から期限を写す純関数を実装し、未指定は既定値加算・0 以下は無期限・正値は秒加算とする
   - 完了状態: 両純関数が副作用なしで、境界入力（`On` 単独・小文字始まり・`script:` 前置・0・負値）を含む全分岐の単体テストが緑になる
@@ -201,3 +201,4 @@
 - 1.2: `EventId` には `as_str()` に加え `Display`（`as_str()` へ委譲）がある。`areka-ghost` の spine e2e が `id.to_string()` を使うため境界保護に必要。
 - 1.4: dispatcher の選択系 3 アームは暫定（`*_dropped_not_wired` warn ＋ 現行 slot 参照のみ）。**タスク 3.3 で恒久語彙 `resolve_choice_stale`/`cancel_choice_stale`/`choice_waiting_stale` と実意味論へ置換すること**。
 - 1.4: `start_talk_send_failed` は design C6 に従い `talk_command_send_failed` へ改称済み。`MockSakura::started()` は `TalkCommand::Start` の射影になった（既存檻は無改変）。
+- 2.1: `schedule/choice.rs` に `plan_cascade` / `choice_deadline` を配置。設計に明文の無い 2 裁定を本層で固定＝**秒→ms は四捨五入**・**NaN は無期限へ畳む**。対応表（7.1）へ記録するか要判断。`#[allow(dead_code)]` 3 箇所は 4.x の配線で除去すること。
