@@ -168,7 +168,7 @@ mod tests {
     /// talk_active=true では Status: talking を snapshot から導出する（既存イベント構築子と同一規律）。
     #[test]
     fn resource_username_carries_talking_status_when_active() {
-        let call = resource_username(&ExecutionSnapshot { talk_active: true });
+        let call = resource_username(&ExecutionSnapshot { talk_active: true, choice_active: false });
         let status = match call {
             ShioriCall::Get { status, .. } => status.render(),
             ShioriCall::Notify { .. } => panic!("expected GET"),

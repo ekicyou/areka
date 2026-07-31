@@ -111,7 +111,7 @@
   - _Requirements: 1.1, 1.3, 1.4, 2.3, 2.4, 2.7, 4.1, 4.2, 4.3, 4.6, 5.1, 5.3, 5.4, 5.6_
   - _Depends: 4.2, 2.1, 2.2_
 
-- [ ] 4.4 選択待ち中の実行状態導出を実装する
+- [x] 4.4 選択待ち中の実行状態導出を実装する
   - 実行状態スナップショットへ選択待ち継続中を表す情報を追加し、その供給元を Phase 単独から State 全体へ広げる
   - 実行状態の導出表で選択待ちの行を実導出へ差し替え、連結順序・区切り・空集合時のヘッダ行省略の既存規律は変更しない
   - 完了状態: 選択待ち中の周期リクエストに再生中と選択待ちの複合値が正典順で載り、解決後に選択待ちが消えることをテストが固定する
@@ -212,3 +212,4 @@
 - 4.2: `log_capture` に `CapturedEvent.fields`（全構造化フィールド記録）と `logged_once` を additive 追加。以降の檻はログの**フィールド値**まで突合できる。`choice_waiting_stale` には診断用 `reason`（`no_active_talk`/`talk_id_mismatch`/`non_steady_phase`）を付与。
 - 4.3: **4.4 への必須申し送り** — `steady.rs` の `on_choice` と `on_cascade_reply` の次段発行は、帳簿を `state.choice.take()` した状態で `snapshot_of(&state.phase)` を呼ぶ。4.4 が `State::snapshot(&self)` へ差し替えると**この 2 点だけ `choice_active=false` になりカスケード段 GET から `choosing` が落ちる**。帳簿を戻した後に採るか、ローカル値から導出すること。
 - 4.3: DD-12（mod.rs 横断 Failed 先行アーム）が 4.6 待ちのため、`step()` 経由のカスケード中 Failed は現在も `Unloading{Fault}` へ倒れる。steady 側の 204 相当処理は実装済みで `steady::step` 直呼びの檻で固定。**end-to-end の Failed 檻は 4.6 の担当**。
+- 4.4: `State::snapshot(&self)` / `State::snapshot_with_choice(bool)` を新設し steady の 4 呼出点を差替（design の「5 呼出点」の 5 点目は **4.5 が新設する `OnChoiceTimeout` GET**）。4.5 は新設時に `snapshot_with_choice(true)` 相当（帳簿を `TimeoutInFlight` へ進めた後なら `state.snapshot()` でも可）を選ぶこと。`snapshot_of(&Phase)` は boot 系列・force_quit 専用として残置。

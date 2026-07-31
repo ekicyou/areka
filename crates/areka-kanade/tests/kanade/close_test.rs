@@ -639,7 +639,7 @@ fn boot_greeting_active_tick_emits_notify_talking() {
     // events 表から NOTIFY 期待値を導出（talk_active=true・DD-IT-3／DD-IT-12・ハードコードしない）。
     let expected_notify = expected_call(events::on_second_change(
         notify_now,
-        &ExecutionSnapshot { talk_active: true },
+        &ExecutionSnapshot { talk_active: true, choice_active: false },
     ));
 
     // NOTIFY が記録に現れる（＝Tick が `Steady{Some(挨拶)}` で処理された）まで有界 yield で待つ。
@@ -764,7 +764,7 @@ fn boot_greeting_talkdone_resumes_get_pump() {
 
     let expected_notify = expected_call(events::on_second_change(
         notify_now,
-        &ExecutionSnapshot { talk_active: true },
+        &ExecutionSnapshot { talk_active: true, choice_active: false },
     ));
     assert!(
         wait_until(
@@ -914,7 +914,7 @@ fn boot_greeting_close_during_greeting_uses_close_handshake() {
 
     let expected_notify = expected_call(events::on_second_change(
         notify_now,
-        &ExecutionSnapshot { talk_active: true },
+        &ExecutionSnapshot { talk_active: true, choice_active: false },
     ));
     assert!(
         wait_until(

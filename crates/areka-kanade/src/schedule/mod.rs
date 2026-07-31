@@ -178,6 +178,47 @@ impl State {
             choice_prev_talk: None,
         }
     }
+
+    /// 送出時点の実行状態スナップショット（運行フェーズ＋選択帳簿から導出・DD-IT-3／設計 C5）。
+    ///
+    /// [`snapshot_of`] は `Phase` しか読めず選択待ちを知れないため、**供給側の署名を `State`
+    /// 全体へ広げた**形である（`status.rs` の NOTE どおり）。広げるのは内部シグネチャだけで
+    /// あり、wire 送出契約（連結順序・区切り・空集合→ヘッダ行省略）は無改変である（Req6.3）。
+    pub(crate) fn snapshot(&self) -> ExecutionSnapshot {
+        let choice_active = self
+            .choice
+            .as_ref()
+            .is_some_and(|ledger| choice_phase_active(&ledger.phase));
+        self.snapshot_with_choice(choice_active)
+    }
+
+    /// 選択待ち継続中かを**外から与える**スナップショット導出。
+    ///
+    /// [`steady::on_choice`] と [`steady::on_cascade_reply`] は検証・分解のために帳簿を
+    /// [`Option::take`] してから呼出を組み立てるため、その最中は `self.choice` が空である。
+    /// これらの呼出点は手元の帳簿から得た真偽値をここへ渡す——[`snapshot`](State::snapshot) を
+    /// そのまま呼ぶとカスケード段の呼出から `choosing` が落ちる（設計 C5 の源は
+    /// `Waiting|Cascading|TimeoutInFlight` の全段である）。
+    pub(crate) fn snapshot_with_choice(&self, choice_active: bool) -> ExecutionSnapshot {
+        ExecutionSnapshot {
+            talk_active: snapshot_of(&self.phase).talk_active,
+            choice_active,
+        }
+    }
+}
+
+/// 選択帳簿の段フェーズが「選択待ち継続中」かを判定する（設計 C5 の源の定義）。
+///
+/// 3 段すべてが継続中である——`Cascading`／`TimeoutInFlight` は SHIORI 応答待ちであって
+/// 選択待ちの終了ではなく、選択肢は表示されたままである。選択待ちが終わるのは帳簿そのものが
+/// 消えるとき（解決・タイムアウト解除・トーク差替）だけであり、それを
+/// [`State::snapshot`] の `Option` 判定が表す（Req6.2）。
+///
+/// wildcard を置かないため、段フェーズの追加時は本表での判断がコンパイル時に要求される。
+fn choice_phase_active(phase: &ChoicePhase) -> bool {
+    match phase {
+        ChoicePhase::Waiting | ChoicePhase::Cascading { .. } | ChoicePhase::TimeoutInFlight => true,
+    }
 }
 
 /// 終了系列の起因（ログ語彙・遷移は共通）。
@@ -334,11 +375,17 @@ pub(crate) fn step(state: State, input: Input, config: &KanadeConfig) -> (State,
 
 /// 送出時点の運行フェーズから実行状態スナップショットを導出する（DD-IT-3）。
 /// アクティブな talk を運ぶ phase のみ talk_active=true。
+///
+/// 選択待ち（`choice_active`）の源は `Phase` の外（[`State::choice`]）にあるため本関数からは
+/// 知れず、常に false を返す。選択待ちを知る必要がある呼出点は [`State::snapshot`]／
+/// [`State::snapshot_with_choice`] を使う（設計 C5）。残る本関数の利用点は選択待ちが構造上
+/// 存在しない場面のみである——boot 系列（`BootVersion` の起動挨拶）と、`Unloading` へ遷移
+/// **後**に採る `force_quit` の best-effort NOTIFY（＝INACTIVE・DD-IT-4）。
 pub(crate) fn snapshot_of(phase: &Phase) -> ExecutionSnapshot {
     match phase {
         // アクティブな talk を運ぶ phase＝Steady{Some} と（挨拶追跡中の）BootVersion{Some}（DD-IT-12）。
         Phase::Steady { talk: Some(_) } | Phase::BootVersion { talk: Some(_) } => {
-            ExecutionSnapshot { talk_active: true }
+            ExecutionSnapshot { talk_active: true, choice_active: false }
         }
         _ => ExecutionSnapshot::INACTIVE,
     }
@@ -849,7 +896,7 @@ mod tests {
         assert_eq!(actions.len(), 1);
         assert_get(
             &actions[0],
-            &events::on_mouse_move(10, 20, 0, Some("head"), &ExecutionSnapshot { talk_active: true }),
+            &events::on_mouse_move(10, 20, 0, Some("head"), &ExecutionSnapshot { talk_active: true, choice_active: false }),
         );
     }
 
@@ -1225,6 +1272,91 @@ mod tests {
         assert_eq!(ledger.candidates, vec!["existing".to_string()]);
         assert_eq!(ledger.deadline, Some(MonotonicMs(9_000)));
         assert!(actions.is_empty());
+    }
+
+    // ============================================================
+    // 13. 選択待ち中の実行状態導出（タスク 4.4・Req6.1／6.2／6.4・C5・裁定 6）
+    // ============================================================
+
+    /// C5: `choice_active` の源は `State.choice` の**3 段フェーズすべて**である。
+    ///
+    /// `Cascading`／`TimeoutInFlight` は SHIORI 応答待ちであって選択待ちの終了ではない——
+    /// 段が進んでいる間も選択肢は表示されたままであり、`choosing` はアクティブであり続ける。
+    /// 併せて裁定 6／Req6.4（選択待ち中も talk slot 占有は継続＝`talking` 真）を固定する。
+    #[test]
+    fn state_snapshot_marks_choice_active_in_every_ledger_phase() {
+        for phase in [
+            ChoicePhase::Waiting,
+            ChoicePhase::Cascading {
+                choice_id: "OnMenu".to_string(),
+                next: Some(CascadeNext::Select),
+            },
+            ChoicePhase::TimeoutInFlight,
+        ] {
+            let label = match &phase {
+                ChoicePhase::Waiting => "Waiting",
+                ChoicePhase::Cascading { .. } => "Cascading",
+                ChoicePhase::TimeoutInFlight => "TimeoutInFlight",
+            };
+            let mut s = state_in(steady_with_talk(TalkId(5)));
+            s.choice = Some(ChoiceState {
+                talk_id: TalkId(5),
+                candidates: vec!["OnMenu".to_string()],
+                deadline: None,
+                phase,
+            });
+            let snapshot = s.snapshot();
+            assert!(
+                snapshot.choice_active,
+                "{label}: 3 段フェーズのいずれでも choosing はアクティブ（C5）"
+            );
+            assert!(
+                snapshot.talk_active,
+                "{label}: 選択待ち中も talk slot 占有は継続する（Req6.4・裁定 6）"
+            );
+        }
+    }
+
+    /// Req6.2: 帳簿が消えた（解決・タイムアウト終了）状態では `choosing` は非アクティブへ戻る。
+    #[test]
+    fn state_snapshot_drops_choice_active_when_ledger_is_gone() {
+        let s = state_in(steady_with_talk(TalkId(5)));
+        let snapshot = s.snapshot();
+        assert!(snapshot.talk_active, "再生自体は継続している");
+        assert!(
+            !snapshot.choice_active,
+            "帳簿不在なら choosing は非アクティブ（Req6.2）"
+        );
+    }
+
+    /// DD-IT-3: 供給側の署名を `State` 全体へ広げても **talk 軸は `snapshot_of(&Phase)` と同一**
+    /// である（choice 軸の増設が既存の talk 導出を汚さない）。
+    #[test]
+    fn state_snapshot_preserves_the_talk_axis_of_phase() {
+        for phase in [
+            Phase::Idle,
+            Phase::BootMain,
+            Phase::BootVersion { talk: None },
+            Phase::BootVersion {
+                talk: Some(ActiveTalk {
+                    talk_id: TalkId(5),
+                    origin: "boot",
+                    script: String::new(),
+                }),
+            },
+            Phase::Steady { talk: None },
+            steady_with_talk(TalkId(5)),
+            Phase::Stopped,
+        ] {
+            let expected = snapshot_of(&phase).talk_active;
+            let s = state_in(phase);
+            let snapshot = s.snapshot();
+            assert_eq!(
+                snapshot.talk_active, expected,
+                "talk 軸は Phase 由来のまま（DD-IT-3）"
+            );
+            assert!(!snapshot.choice_active, "帳簿なしでは choosing は非アクティブ");
+        }
     }
 }
 

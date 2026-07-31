@@ -622,7 +622,7 @@ mod tests {
             ShioriCall::Notify {
                 id: EventId::Static("OnSecondChange"),
                 references: Vec::new(),
-                status: ExecutionStatus::derive(&ExecutionSnapshot { talk_active: true }),
+                status: ExecutionStatus::derive(&ExecutionSnapshot { talk_active: true, choice_active: false }),
             },
         );
         assert!(

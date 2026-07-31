@@ -70,7 +70,7 @@ pub(crate) fn step(state: State, input: Input, _config: &KanadeConfig) -> (State
 ///
 /// # Status の併送（DD-IE-1）
 /// talk 再生中の Steady（`Steady{Some}`）でもマウス GET は**抑止せず常に発行**し、`Status: talking`
-/// を [`super::snapshot_of`] 由来のスナップショットから併送する（NOTIFY 化しない）。GET/NOTIFY を
+/// を [`super::State::snapshot`] 由来のスナップショットから併送する（NOTIFY 化しない）。GET/NOTIFY を
 /// 使い分ける OnSecondChange pump とは異なり、マウス系は常に GET である。
 ///
 /// いずれの経路もフェーズ遷移は起こさない（in-flight ≤ 1・GET 発行時と reply 到着時の
@@ -85,8 +85,9 @@ pub(super) fn on_mouse(state: State, input: MouseInput) -> (State, Vec<Action>) 
         );
         return (state, Vec::new());
     }
-    // 送出時点の Steady フェーズから Status を導出する（active talk 中は talking を併送・DD-IE-1）。
-    let snapshot = super::snapshot_of(&state.phase);
+    // 送出時点の運行状態から Status を導出する（active talk 中は talking を併送・DD-IE-1／
+    // 選択待ち中は choosing も併送・C5）。
+    let snapshot = state.snapshot();
     let call = match input.kind {
         MouseEventKind::Move => events::on_mouse_move(
             input.x,
@@ -286,8 +287,11 @@ pub(super) fn on_choice(mut state: State, input: ChoiceInput) -> (State, Vec<Act
         talk_id = talk_id.0,
         "選択確定を受理——カスケードを開始（C4 規則 2）"
     );
-    // GET の共通ヘッダは送出時点の Steady フェーズから導出する（Req3.6・DD-IT-3）。
-    let snapshot = super::snapshot_of(&state.phase);
+    // GET の共通ヘッダは送出時点の運行状態から導出する（Req3.6・DD-IT-3）。帳簿は検証のため
+    // 手元（`ledger`）へ取り出し済みで `state.choice` は空なので、選択待ち継続中であることを
+    // ここで明示的に与える——`State::snapshot()` をそのまま呼ぶとカスケード段の GET から
+    // `choosing` が落ちる（C5 の源は `Waiting|Cascading|TimeoutInFlight` の全段）。
+    let snapshot = state.snapshot_with_choice(true);
     let (call, next) = match plan {
         CascadePlan::Unsupported => {
             // M1 未対応カテゴリ（裁定 7）: イベントを発行せず解決だけ行う（Req2.7）。
@@ -432,7 +436,9 @@ fn on_cascade_reply(
     match next {
         // 残段あり（正典形の無印段）→ 次段 GET（Ref0=ID・Req2.3／3.2）。
         Some(CascadeNext::Select) => {
-            let snapshot = super::snapshot_of(&state.phase);
+            // 帳簿は分解済み（`state.choice` は空）だが選択待ちは継続中である——次段の GET にも
+            // `choosing` を載せるため明示的に真を与える（C5・on_choice と同じ理由）。
+            let snapshot = state.snapshot_with_choice(true);
             let call = events::on_choice_select(&choice_id, &snapshot);
             tracing::trace!(
                 target: "kanade",
@@ -501,10 +507,13 @@ fn choice_phase_label(phase: &ChoicePhase) -> &'static str {
 /// - `talk: Some` → OnSecondChange **NOTIFY**（Ref3=0・応答無視・pending_close は消化しない）。
 fn on_tick(mut state: State, now: MonotonicMs) -> (State, Vec<Action>) {
     state.last_now = Some(now);
-    // GET/NOTIFY・Ref3・Status を単一スナップショットから導出する（DD-IT-3）。snapshot_of は
+    // GET/NOTIFY・Ref3・Status を単一スナップショットから導出する（DD-IT-3）。State::snapshot は
     // Steady{None}→talk 非アクティブ（GET・Ref3=1・status 空）、Steady{Some}→talk アクティブ
-    // （NOTIFY・Ref3=0・status talking）を与える——既存の wire 挙動を保存する。
-    let snapshot = super::snapshot_of(&state.phase);
+    // （NOTIFY・Ref3=0・status talking）を与える——既存の wire 挙動を保存する。選択待ち中は
+    // これに choosing が加わり `talking,choosing` となる（Req6.1／6.4・裁定 6）。slot 占有は
+    // 継続しているため GET/NOTIFY の別と Ref3 は talk 軸のまま＝pump は NOTIFY のままである
+    // （応答スクリプトを運べない型＝自発トーク抑止が構造で成立する・Req6.5）。
+    let snapshot = state.snapshot();
     match state.phase {
         Phase::Steady { talk: None } => {
             if let Some(reason) = state.pending_close.take() {
@@ -810,7 +819,7 @@ mod tests {
         assert_eq!(next.last_now, Some(now), "last_now は Tick ごとに更新される");
         assert_eq!(actions.len(), 1);
         // GET（Ref3=1）——events:: の出力と厳密一致。
-        assert_shiori(&actions[0], &events::on_second_change(now, &ExecutionSnapshot { talk_active: false }));
+        assert_shiori(&actions[0], &events::on_second_change(now, &ExecutionSnapshot { talk_active: false, choice_active: false }));
     }
 
     // --- Steady{Some} + Tick → OnSecondChange NOTIFY（Ref3=0）・Steady{Some} ---
@@ -828,7 +837,7 @@ mod tests {
         assert_eq!(next.last_now, Some(now));
         assert_eq!(actions.len(), 1);
         // NOTIFY（Ref3=0）——events:: の出力と厳密一致。
-        assert_shiori(&actions[0], &events::on_second_change(now, &ExecutionSnapshot { talk_active: true }));
+        assert_shiori(&actions[0], &events::on_second_change(now, &ExecutionSnapshot { talk_active: true, choice_active: false }));
     }
 
     // --- Steady{None} + Tick with pending_close → OnClose GET・ClosePending・pending 消化 ---
@@ -1198,7 +1207,7 @@ mod tests {
         let (after, tick_actions) = step(next, Input::Tick { now }, &config());
         assert!(matches!(after.phase, Phase::Steady { talk: None }));
         assert_eq!(tick_actions.len(), 1);
-        assert_shiori(&tick_actions[0], &events::on_second_change(now, &ExecutionSnapshot { talk_active: false }));
+        assert_shiori(&tick_actions[0], &events::on_second_change(now, &ExecutionSnapshot { talk_active: false, choice_active: false }));
     }
 
     // --- Steady{Some(id)} + TalkDone{id, Interrupted}, pending None → 同じく Steady{None} 復帰 ---
@@ -1328,7 +1337,7 @@ mod tests {
         // Reference 完全一致は構築子と共有（talk 非アクティブ→INACTIVE・Status 行なし）。
         assert_shiori(
             &actions[0],
-            &events::on_mouse_move(10, 20, 0, Some("Head"), &ExecutionSnapshot { talk_active: false }),
+            &events::on_mouse_move(10, 20, 0, Some("Head"), &ExecutionSnapshot { talk_active: false, choice_active: false }),
         );
     }
 
@@ -1351,7 +1360,7 @@ mod tests {
                 0,
                 Some("Bust"),
                 MouseButton::Left,
-                &ExecutionSnapshot { talk_active: false },
+                &ExecutionSnapshot { talk_active: false, choice_active: false },
             ),
         );
     }
@@ -1372,13 +1381,13 @@ mod tests {
                 0,
                 Some("Bust"),
                 MouseButton::Right,
-                &ExecutionSnapshot { talk_active: false },
+                &ExecutionSnapshot { talk_active: false, choice_active: false },
             ),
         );
     }
 
     // --- Steady{Some(active)} + Move → GET は抑止せず発行・Status: talking を帯びる（DD-IE-1） ---
-    // active talk 中でもマウス GET は NOTIFY 化せず GET のまま。snapshot_of(Steady{Some}) から
+    // active talk 中でもマウス GET は NOTIFY 化せず GET のまま。State::snapshot()（Steady{Some}）から
     // talking が導出され Status ヘッダに載る。active talk は維持される。
 
     #[test]
@@ -1397,7 +1406,7 @@ mod tests {
         assert_eq!(actions.len(), 1, "active talk 中でもマウス GET を発行（抑止しない・DD-IE-1）");
         // 期待 GET は talk_active=true スナップショット由来＝Status: talking を帯びる。
         let expected =
-            events::on_mouse_move(10, 20, 0, Some("Head"), &ExecutionSnapshot { talk_active: true });
+            events::on_mouse_move(10, 20, 0, Some("Head"), &ExecutionSnapshot { talk_active: true, choice_active: false });
         assert_shiori(&actions[0], &expected);
         // GET のまま（NOTIFY 化しない）ことも明示。
         assert!(
@@ -2123,6 +2132,145 @@ mod tests {
         assert!(
             actions.iter().any(|a| matches!(a, Action::StartTalk(_))),
             "choice 応答は先行アームで置換起動される"
+        );
+    }
+
+    // ============================================================
+    // 選択待ち中の実行状態導出（タスク 4.4・Req6.1〜6.5・C5・裁定 6）
+    // ============================================================
+
+    /// ShioriRequest（GET/NOTIFY 問わず）の共通ヘッダ `Status` の wire 値を取り出す。
+    fn status_wire(action: &Action) -> Option<String> {
+        match action {
+            Action::ShioriRequest(
+                ShioriCall::Get { status, .. } | ShioriCall::Notify { status, .. },
+            ) => status.render(),
+            _ => panic!("expected ShioriRequest"),
+        }
+    }
+
+    /// Req6.1／6.3／6.4・裁定 6: 選択待ち中の周期リクエストは **NOTIFY**（Ref3=`"0"`）で送出され、
+    /// `Status` に複合値 `talking,choosing` が**正典順**で載る。
+    ///
+    /// NOTIFY は応答スクリプトを運べない型であり（[`ShioriOutcome::Notified`] のみ）、選択待ち中の
+    /// 自発トーク抑止は既存 pump 分岐の構造だけで成立する（Req6.5・新しい抑止機構を作らない）。
+    #[test]
+    fn tick_during_choice_waiting_notifies_with_talking_and_choosing() {
+        let now = MonotonicMs(1_000);
+        let s = steady_with_ledger(TalkId(3), 6, &["OnMenu"], ChoicePhase::Waiting);
+        let (next, actions) = step(s, Input::Tick { now }, &config());
+        assert_eq!(actions.len(), 1, "選択待ち中も周期イベントは 1 件発行する");
+        match &actions[0] {
+            Action::ShioriRequest(ShioriCall::Notify {
+                id,
+                references,
+                status,
+            }) => {
+                assert_eq!(id.as_str(), "OnSecondChange");
+                assert_eq!(
+                    references[3], "0",
+                    "選択待ち中も再生中扱い＝再生可否 Reference は \"0\"（Req6.4）"
+                );
+                assert_eq!(
+                    status.render(),
+                    Some("talking,choosing".to_string()),
+                    "複合値は正典順で連結される（Req6.1／6.3・裁定 6）"
+                );
+            }
+            _ => panic!("選択待ち中の周期イベントは NOTIFY で送出される（Req6.4／6.5）"),
+        }
+        assert!(
+            matches!(next.phase, Phase::Steady { talk: Some(_) }),
+            "選択待ち中も slot 占有（Steady{{Some}}）が維持される（Req6.4）"
+        );
+        assert!(
+            matches!(expect_ledger(&next).phase, ChoicePhase::Waiting),
+            "pump は選択帳簿を触らない"
+        );
+    }
+
+    /// Req6.2: 選択が解決して帳簿が消えた後の周期リクエストからは `choosing` が消える。
+    ///
+    /// 実解決経路（カスケード最終段 204 → `ResolveChoice` 発行・帳簿消去）を通してから pump を
+    /// 採る——帳簿を手で消すのではなく、解決の実装が `choosing` を落とすことを固定する。
+    #[test]
+    fn tick_after_choice_resolution_drops_choosing() {
+        let cfg = config();
+        let s = steady_with_ledger(
+            TalkId(3),
+            6,
+            &["OnMenu"],
+            ChoicePhase::Cascading {
+                choice_id: "OnMenu".to_string(),
+                next: None,
+            },
+        );
+        let (resolved, actions) = step(
+            s,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::NoContent,
+                origin: "OnChoiceEvent",
+            },
+            &cfg,
+        );
+        assert!(
+            actions
+                .iter()
+                .any(|a| matches!(a, Action::ResolveChoice { .. })),
+            "最終段 204 は選択解決を発行する"
+        );
+        assert!(resolved.choice.is_none(), "解決で帳簿が消える（Req6.2 の源）");
+        let (_next, tick_actions) = step(
+            resolved,
+            Input::Tick {
+                now: MonotonicMs(1_000),
+            },
+            &cfg,
+        );
+        assert_eq!(
+            status_wire(&tick_actions[0]),
+            Some("talking".to_string()),
+            "解決後は choosing が消え talking のみが残る（Req6.2）"
+        );
+    }
+
+    /// Req6.1・C5: **カスケード各段の GET も** 選択待ち継続中として `choosing` を帯びる。
+    ///
+    /// `on_choice`／`on_cascade_reply` は検証・分解のため帳簿を `State` から取り出した状態で
+    /// スナップショットを採る。`State::snapshot` をそのまま呼ぶと当該 2 点だけ `choosing` が
+    /// 落ちるため、両段の wire 値を実値で突合して固定する。
+    #[test]
+    fn cascade_stage_gets_carry_choosing() {
+        let cfg = config();
+        // 第 1 段（on_choice: 帳簿を take 済みの状態で採るスナップショット）。
+        let s = steady_with_ledger(TalkId(3), 6, &["choice1"], ChoicePhase::Waiting);
+        let (next, stage1) = step(
+            s,
+            Input::Choice(choice_input_of("choice1", "ラベル", &[])),
+            &cfg,
+        );
+        let (stage1_id, _) = expect_get_call(&stage1[0]);
+        assert_eq!(stage1_id, "OnChoiceSelectEx", "正典形の先行段");
+        assert_eq!(
+            status_wire(&stage1[0]),
+            Some("talking,choosing".to_string()),
+            "第 1 段の GET に choosing が載る（C5）"
+        );
+        // 第 2 段（on_cascade_reply: 帳簿を分解済みの状態で採るスナップショット）。
+        let (_next2, stage2) = step(
+            next,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::NoContent,
+                origin: "OnChoiceSelectEx",
+            },
+            &cfg,
+        );
+        let (stage2_id, _) = expect_get_call(&stage2[0]);
+        assert_eq!(stage2_id, "OnChoiceSelect", "残段（無印）へ前進している");
+        assert_eq!(
+            status_wire(&stage2[0]),
+            Some("talking,choosing".to_string()),
+            "次段の GET にも choosing が載る（C5）"
         );
     }
 }

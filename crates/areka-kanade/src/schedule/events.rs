@@ -473,7 +473,7 @@ mod tests {
     #[test]
     fn on_second_change_playable_is_get_ref3_one() {
         // 7_200_000 ms = 2 hours。talk_active=false（再生可能）→ GET・Ref3=1・status 空（DD-IT-3）。
-        let call = on_second_change(MonotonicMs(7_200_000), &ExecutionSnapshot { talk_active: false });
+        let call = on_second_change(MonotonicMs(7_200_000), &ExecutionSnapshot { talk_active: false, choice_active: false });
         assert_eq!(
             call_status(&call),
             None,
@@ -495,7 +495,7 @@ mod tests {
     #[test]
     fn on_second_change_not_playable_is_notify_ref3_zero() {
         // 3_600_000 ms = 1 hour。talk_active=true（再生中）→ NOTIFY・Ref3=0・status talking（DD-IT-3）。
-        let call = on_second_change(MonotonicMs(3_600_000), &ExecutionSnapshot { talk_active: true });
+        let call = on_second_change(MonotonicMs(3_600_000), &ExecutionSnapshot { talk_active: true, choice_active: false });
         assert_eq!(
             call_status(&call),
             Some("talking".to_string()),
@@ -519,7 +519,7 @@ mod tests {
         // 端数（1 時間未満）は切り捨てて "0"（3_599_999 ms < 1 hour）。
         let (_, references) = expect_get(on_second_change(
             MonotonicMs(3_599_999),
-            &ExecutionSnapshot { talk_active: false },
+            &ExecutionSnapshot { talk_active: false, choice_active: false },
         ));
         assert_eq!(references[0], "0");
     }
@@ -727,7 +727,7 @@ mod tests {
     /// talk_active=true では両構築子が `Status: talking` を snapshot から導出する（DD-IT-3）。
     #[test]
     fn mouse_constructors_carry_talking_status_when_active() {
-        let active = ExecutionSnapshot { talk_active: true };
+        let active = ExecutionSnapshot { talk_active: true, choice_active: false };
         let mv = on_mouse_move(0, 0, 0, Some("Head"), &active);
         assert_eq!(call_status(&mv), Some("talking".to_string()));
         let dbl = on_mouse_double_click(0, 0, 0, None, MouseButton::Left, &active);
@@ -752,7 +752,7 @@ mod tests {
             on_boot(&cfg, &snap),
             baseware_version(&cfg, &snap),
             on_second_change(MonotonicMs(0), &snap),
-            on_second_change(MonotonicMs(0), &ExecutionSnapshot { talk_active: true }),
+            on_second_change(MonotonicMs(0), &ExecutionSnapshot { talk_active: true, choice_active: false }),
             on_close(CloseReason::User, &snap),
             on_close_notify(CloseReason::System, &snap),
             on_mouse_move(0, 0, 0, Some("Head"), &snap),
@@ -784,7 +784,7 @@ mod tests {
             on_boot(&cfg, &snap),
             baseware_version(&cfg, &snap),
             on_second_change(MonotonicMs(0), &snap),
-            on_second_change(MonotonicMs(0), &ExecutionSnapshot { talk_active: true }),
+            on_second_change(MonotonicMs(0), &ExecutionSnapshot { talk_active: true, choice_active: false }),
             on_close(CloseReason::User, &snap),
             on_close_notify(CloseReason::System, &snap),
             on_mouse_move(0, 0, 0, Some("Head"), &snap),
@@ -918,7 +918,7 @@ mod tests {
     #[test]
     fn choice_constructors_carry_the_common_request_header() {
         let refs = opaque_references();
-        let active = ExecutionSnapshot { talk_active: true };
+        let active = ExecutionSnapshot { talk_active: true, choice_active: false };
         let idle = ExecutionSnapshot::INACTIVE;
 
         let active_calls = [
