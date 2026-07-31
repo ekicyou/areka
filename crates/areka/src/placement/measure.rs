@@ -780,6 +780,56 @@ mod tests {
         });
     }
 
+    /// 要件 5.5（tasks 5.1）本体側 scope の採寸非回帰: 相方側系列を**持つ**実 fixture でも、
+    /// scope0 の採寸結果は本仕様適用前と同一である。
+    ///
+    /// 適用前（merge-base 969a9b3 の `measure_balloon_surface0`）は、バルーンディレクトリから
+    /// **固定名 `balloons0.png`**（大小無視）だけを探して 1 度採寸し、その 1 値を全 scope へ配って
+    /// いた。適用後の scope0 の連鎖は `balloonp0def` → `balloons` であり、emo2-kakukaku は
+    /// `balloonp0def*` を持たないため面 0 は同じ `balloons0.png` へ解決する。
+    ///
+    /// 檻の作りは「同一採寸器を、本体側 1 枚だけを置いた対照ディレクトリへも通し、実 fixture の
+    /// scope0 と一致することを見る」——対照ディレクトリでは相方側が存在し得ないため、その採寸は
+    /// 定義上**適用前の固定名採寸そのもの**である。scope0 の連鎖に相方側が紛れ込めば落ちる。
+    #[test]
+    fn scope0_balloon_size_matches_pre_spec_fixed_name_measurement() {
+        with_com_initialized(|| {
+            // 対照: 本体側 1 枚だけのバルーン（＝適用前の固定名採寸と同値になる検体）。
+            let control_dir = TempDir::new();
+            std::fs::copy(
+                emo2("emo2-kakukaku/balloons0.png"),
+                control_dir.path().join("balloons0.png"),
+            )
+            .expect("balloons0.png の複写");
+            let control = measure_scope_sizes(
+                &emo2("shell/master"),
+                control_dir.path(),
+                &[0],
+                &MeasureScaling::IDENTITY,
+            )
+            .expect("対照ディレクトリの採寸は成功する");
+
+            // 実 fixture（相方側 `balloonk0.png` を併せ持つ）。
+            let actual = measure_scope_sizes(
+                &emo2("shell/master"),
+                &emo2("emo2-kakukaku"),
+                &[0, 1],
+                &MeasureScaling::IDENTITY,
+            )
+            .expect("emo2 fixture の採寸は成功する");
+
+            assert_eq!(
+                actual.scopes[0].balloon_size, control.scopes[0].balloon_size,
+                "scope0 の採寸は適用前の固定名 balloons0.png 採寸と同一（要件 5.5）"
+            );
+            // 判別力（この等式が空虚でないことの自己検証）: 相方側 scope は別寸を得ている。
+            assert_ne!(
+                actual.scopes[1].balloon_size, control.scopes[0].balloon_size,
+                "相方側まで同寸なら本 fixture は判別力を持たない"
+            );
+        });
+    }
+
     /// バルーン面 0 が成立しない（面画像なし）場合も `PlacementError::Measure`
     /// （`ScopeInput.balloon_size` の供給源が無い＝採寸全体の失敗）。面 0 必在の判定は
     /// 系列解決権威の単一施行点にあり、採寸側は失敗をそのまま帰属付きで畳む。

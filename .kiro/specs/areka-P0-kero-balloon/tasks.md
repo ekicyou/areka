@@ -145,7 +145,7 @@
 
 - [ ] 5. 非回帰と全体検証
 
-- [ ] 5.1 後方互換と本体側同一性を檻で固定する
+- [x] 5.1 後方互換と本体側同一性を檻で固定する
   - 相方側系列を持たないバルーンで、表示・採寸・解決される面集合が本仕様適用前と同一になることを固定する
   - 本体側 scope の表示・採寸・文字描画が前後で同一であることを固定する（初期既定位置のみ正典化の対象として除く）
   - 表示位置指定が無い場合に配置出力が現行と同一であることを固定する
@@ -185,6 +185,7 @@
   - 装飾族に接尾辞なしの旧名がもう一段存在する事実（未実装・縮退シームの所在）
   - 縮退時の面別上書き層が採用画像に対応することの正典整合解釈
   - 面切替 ID を系列内 ID とみなす解釈
+  - 面 ID 判定の厳格化（旧実装は `stem.parse::<u32>()` ゆえ先頭 `+` を受理し得たが、現行は全数字明示検査で `balloons+0.png` を弾く）。正典の面 ID 表記は符号を持たないため実害なしだが、適用前後で字義上唯一非同一の点
   - 初期表示面の宣言追従を行わないこと、および位置指定のキーワード指定と画面内維持の未実装
   - 実機で確定した x 方向の基本位置と符号の向き（符号表の唯一の所在＝`placement/windowposition.rs` の `side_x_sign`。反転は 2 リテラルの入替で閉じる）
   - `ScaleRatio::scale_len` の「非ゼロ長は最小 1px」規約を windowposition 調整量にも継承した事実（R3.6 が新丸め規約の導入を禁じるため。|wp|=1 は k 縮小時も 0 にならない）
@@ -203,5 +204,6 @@
 - `build_balloon_target_from_faces`（1.5 新設の直接入口）の `faces.is_empty()` ガードは、`build_balloon_target` 経由では `resolve_balloon_faces` の面 0 必在契約が先に効くため到達不能＝現時点で無檻。**消費者が現れる 3.1／4.2 で檻に入れること**（決定論網羅の取りこぼし防止）。
 - **6.1 実機サインオフ時の注意**: `resolve_balloon_faces` の info! は **scope あたり 3 行**（placement 内 2 ＋ boot 1・design.md の観測点 1 を実装時訂正済み）。`load_scope_balloon_model` の info! は scope あたり 2 行。**行数でなく値の一致で突合すること**。
 - **emo2 fixture の side 割当**（4.3 で実測確定）: `shell/master/descript.txt` が `sakura.balloon.alignment,left` / `kero.balloon.alignment,right` を宣言 ⇒ scope 0 = `BalloonSide::Left`（x 符号 +1）／scope 1 = `Right`（x 符号 −1）。4.1 の符号表が実機で逆と判明した場合の修正範囲は `side_x_sign` の 2 リテラル＋`placement/mod.rs` の fixture 期待値 x 成分（1352→820／−134→−666／1578→1198／526→146）。
-- `cargo test -p areka` に**再現しない単発 flake**の目撃が 2 回（1.5 と 4.3 のレビュー時・いずれもテスト名未捕捉・直後の連続実行は全緑）。既知の時間境界 spine/smoke テスト由来と推定。赤を見たら再実行で切り分ける。
+- **`cargo test -p areka` の単発 flake は既存**（本 spec 起因ではない）。5.1 のレビューで正体を特定＝`emo2_boot::spine::spine_s5_close_handshake_...` / `spine_s2_talk_drives_...` 系の時間境界テストで、フルスイート並列の高負荷時のみ 1/5〜2/6 の頻度で落ちる。**本 spec の追加テストを `--skip` してベースライン 549 本にしても再現**することを実測済み。5.3 のワークスペース緑ゲートでは再実行で切り分けること。
+- `areka` は **bin-only crate**（`cargo test -p areka --lib` は「no library targets found」）。`--lib` を付けずに実行する。
 - ログ発火条件（warn/info の**発火判定分岐**）も判断分岐ゆえ檻に入れる。依存追加なしのログ捕捉ドナーが `crates/areka-emo-present/src/presenter.rs` のテストモジュールにある（private ゆえ複製が必要）。1.3 では R6.2 warn の 2 述語（`scope >= 1` ∧ `tier == Default`）を檻 7 として固定済み。

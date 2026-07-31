@@ -407,6 +407,7 @@ pub fn build_boot_assets(
 mod tests {
     use std::path::PathBuf;
 
+    use areka_emo_text::actor::ResolvedBalloonText;
     use areka_seriko::{BindNamespace, SurfaceTarget};
     use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 
@@ -812,6 +813,90 @@ mod tests {
             scope1.wordwrappoint().x(),
             Some(-34),
             "scope1 は balloonk0s.txt に宣言が無く descript 基層 -34 を継承"
+        );
+    }
+
+    /// 本仕様適用**前**の 2 層マージを再現する神託（tasks 5.1・R5.5）。
+    ///
+    /// merge-base（969a9b3）の `build_balloon_model` は **固定名** `descript.txt`（基層）＋
+    /// `balloons0s.txt`（面別上書き層）を `areka_parsers::balloon::parse_str` へ渡すだけの
+    /// 関数であり、その結果を単一の [`BalloonModel`] として全 scope で共有していた
+    /// （`BALLOON_FACE0_TXT` 定数）。読取は `decode(bytes, DefaultEncoding::Ansi)`・
+    /// 読取失敗は空層で継続——現行 `load_scope_balloon_model` の層構成と同じ規約である。
+    ///
+    /// 適用前のバイナリは手元に残らないが、規則は数行で再現できる。手書き期待値ではなく
+    /// **適用前の規則そのもの**と突き合わせることで、非回帰の主張を規則同士の等式として固定する。
+    fn pre_spec_balloon_model(balloon_root: &Path) -> BalloonModel {
+        let read = |name: &str| {
+            std::fs::read(balloon_root.join(name))
+                .ok()
+                .map(|bytes| decode(&bytes, DefaultEncoding::Ansi))
+        };
+        let descript = read("descript.txt").unwrap_or_default();
+        let face0 = read("balloons0s.txt");
+        areka_parsers::balloon::parse_str(&descript, face0.as_deref())
+    }
+
+    /// R5.5（tasks 5.1）本体側 scope の非回帰: 本体側 scope（scope 0）の**バルーン定義**と、
+    /// そこから解決される**文字描画領域**が本仕様適用前と同一である。
+    ///
+    /// 成立の理由（適用前後の経路が同じ 2 ファイルへ落ちること）:
+    /// - 適用前は固定名 `balloons0s.txt` を上書き層として読んでいた。
+    /// - 適用後の scope 0 の連鎖は `balloonp0def` → `balloons` であり、emo2-kakukaku は
+    ///   `balloonp0def*` を持たないため面 0 は `balloons0.png` へ解決し、対応する上書き層は
+    ///   `balloons0s.txt` になる。
+    ///
+    /// ゆえに両者は**同一の 2 層**をマージしており、モデルは bit 同値でなければならない。
+    /// 文字描画領域は [`ResolvedBalloonText::resolve`] にモデルと**バルーン面の image px 原寸**
+    /// （scope 0 は `balloons0.png` の 400×224＝適用前の固定名採寸が返していた値そのもの）を
+    /// 与えて解決する——`validrect` 由来の領域・折返し閾値・描画開始点までを含む同一性の檻。
+    ///
+    /// 判別力: scope 1 の定義（`balloonk0s.txt` 由来）から解決した領域は別値になる。もし
+    /// 全 scope が 1 本のモデルへ畳み戻れば、あるいは scope 0 の上書き層が相方側へずれれば落ちる。
+    #[test]
+    fn scope0_balloon_model_and_text_region_match_pre_spec_fixed_name_merge() {
+        // SAFETY: bake の WIC デコードに要る COM 初期化（既初期化の S_FALSE/RPC_E_CHANGED_MODE は無視）。
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        }
+
+        /// scope 0 のバルーン面 0（`balloons0.png`）の image px 原寸——適用前の固定名採寸が
+        /// 返していた値と同一（`placement::measure` テストの `BALLOON0_W`/`BALLOON0_H`）。
+        const SAKURA_FACE0: (u32, u32) = (400, 224);
+
+        let boot = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
+            .expect("emo2 fixture の BootAssets 組立は成功する");
+
+        let oracle = pre_spec_balloon_model(&emo2_balloon_root());
+        // 神託が空虚でないこと（実ファイルが読めており、面別層が実際に効いている）。
+        assert_eq!(
+            (oracle.windowposition().x(), oracle.windowposition().y()),
+            (Some(266), Some(-129)),
+            "神託の前提: 適用前は balloons0s.txt を上書き層として読んでいた"
+        );
+
+        assert_eq!(
+            boot.balloons[0].model, oracle,
+            "本体側 scope の定義は適用前の固定名 2 層マージと同一（R5.5）"
+        );
+
+        // 文字描画領域（`validrect` 絶対矩形・描画開始点・折返し閾値）まで同一である。
+        let now = ResolvedBalloonText::resolve(&boot.balloons[0].model, SAKURA_FACE0);
+        assert_eq!(
+            now,
+            ResolvedBalloonText::resolve(&oracle, SAKURA_FACE0),
+            "本体側 scope の文字描画領域は適用前と同一（R5.5）"
+        );
+
+        // 判別力: 相方側 scope の定義から解決すると別領域になる（＝上の等式は空虚でない）。
+        assert_ne!(
+            boot.balloons[1].model, oracle,
+            "相方側まで神託と一致するなら本 fixture は判別力を持たない"
+        );
+        assert_ne!(
+            ResolvedBalloonText::resolve(&boot.balloons[1].model, SAKURA_FACE0),
+            now,
+            "相方側 scope の validrect は別値ゆえ文字描画領域も別になる"
         );
     }
 
