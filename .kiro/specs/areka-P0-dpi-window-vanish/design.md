@@ -42,6 +42,7 @@
 - 復元時（起動時）の可視化保証＝ `position-persist`（完了済み）の所有。本 spec は**運転中に不可視位置を作らない**側のみを受け持ち、`Restore` 経路には遷移ガードを適用しない。
 - `presenter.rs`（`areka-emo-present`）の `refresh_scale` 戻り値契約＝**不変**。位置と寸の分離は frame 側だけで解決する（D7）。
 - ドラッグ経路（`BottomSnapPolicy::resolve`・wintf drag 配送）の挙動変更。ドラッグは明示操作＝ガード適用外（D5 裁定）。
+- バルーン配置の**美観政策**（画面端での左右反転・SSP 互換の配置切替等）＝ M2 SSP 互換へ先送り。本 spec が持つのは「完全不可視への遷移を防ぐ安全網」（S3′ の遷移ガード＋warn）まで——warn 観測がこの先送りの縮退シームである（記憶〈先送りは完全語彙＋縮退シーム＋追跡明記〉）。
 - SHIORI・talk・当たり判定・採寸・アトラス等、配置と表示基盤のウィンドウメッセージ以外の全系。
 
 ### Allowed Dependencies
@@ -74,6 +75,7 @@
 | S1 | Bottom 射影が Y のみ再計算し、書き手Aが書いた OS 提案 X が最終位置に残る | `follow.rs:810-826`（`raw`=`WindowPos.position`）＋`follow.rs:85-112`（X 素通し）＋`window_pos.rs:359-369` | 4.3 |
 | S2 | 位置再射影が `refresh_scale` の `Some` に条件付けられ、`None` 4 経路で位置再射影ごと欠落 | `frame.rs:835`・`presenter.rs:772-818` | 4.1・4.2・4.6 |
 | S3 | X 軸に可視性不変条件が無く、`work_area_for_window` の最近傍フォールバックが「どのモニタにも属さない」を無観測で吸収 | `frame.rs:1157-1228`・`follow.rs:1132-1160` | 3.1 |
+| S3′ | バルーン矩形はどの経路でも可視性を検査されない——`follow_balloon` は offset 恒等式（キャラの近くに置く）のみを適用し、バルーン矩形×work area の交差はどこにも不変条件が無い（キャラが端で clamp された合成でバルーンのみ完全不可視になり得る） | `follow.rs:880-907`（follow_balloon 経路） | 3.4 |
 
 ### アーキテクチャ・パターンと境界マップ
 
@@ -183,7 +185,7 @@ sequenceDiagram
     FO->>FO: project_anchor Y 再導出 X は確定値保持
     FO->>FO: guard_visibility 遷移ガード 非交差への遷移のみ clamp と warn
     FO->>FO: enqueue_window_set_pos 単一ライター diag レコード出力
-    FO->>FO: follow_balloon 恒等式 offset 維持
+    FO->>FO: follow_balloon 恒等式 offset 維持 バルーン矩形にも遷移ガード適用
 ```
 
 フロー上の決定: 非ゴースト窓（policy 既定値）は従来どおり提案位置を書き `DpiChangeContext` を set する＝完全な後方互換。ゴースト窓では書き手Aと echo 連鎖（`WM_WINDOWPOSCHANGED` 内 tick の実行順非決定性）が消える。
@@ -226,7 +228,7 @@ flowchart TB
 | 3.1 | 非ドラッグ要因で全 work area 非交差にしない | guard_visibility（follow） | 遷移ガード・route 条件 |
 | 3.2 | 構成食い違いは warn し不可視位置へ動かさない | work_area_for_window_with_origin＋ガード warn | D10・D12（共有語彙 grep 突合） |
 | 3.3 | 入力欠落時は現状維持＋警告 | follow 縮退群（既存）＋非ドラッグ経路の warn 昇格 | route 条件の水準分岐 |
-| 3.4 | 混在 DPI 跨ぎで両窓を不可視化しない | ガード＋D7 再射影＋follow_balloon 恒等式 | WM_DPICHANGED フロー |
+| 3.4 | 混在 DPI 跨ぎで両窓を不可視化しない | キャラ＝ガード＋D7 再射影／バルーン＝follow_balloon 恒等式＋**バルーン矩形への遷移ガード（S3′ 是正）** | WM_DPICHANGED フロー |
 | 4.1 | DPI 変化前後で接地点（下端中央）保持 | dpi_phase 分離（frame）＋resize_window_to 3b | S2 是正 |
 | 4.2 | 処理完了時の最終位置＝接地点規約準拠 | 同上＋単一ライター | 同一フレーム完結 |
 | 4.3 | OS 提案位置を最終位置として残さない | DpiSuggestedRectPolicy＋decision 純関数（wintf） | S1 是正・D3/D4 |
@@ -418,6 +420,7 @@ pub fn guard_visibility(
 
 **Implementation Notes**
 - Integration: `resize_window_to(world, char_window, new_size, route: PlacementRoute)` へ署名変更。手順 3b（中央付替え）→ `project_anchor`（不変）→ **`guard_visibility`（route が非ドラッグ配置系＝`AnchorChange`/`Resnap`/`DpiReproject` のときのみ）** → べき等 skip → `enqueue_window_set_pos(.., route)`。`Restore` はガード適用外（position-persist の所有・Boundary）。ドラッグ経路（`policy_mapped_position`→`BottomSnapPolicy`）は**一切触らない**。
+- **バルーン適用（S3′ 是正・Req 3.4 の構造的充足）**: `follow_balloon` は offset 恒等式で提案位置を出した**後**、同じ `guard_visibility` を**バルーン矩形**（旧矩形＝現 `WindowPos`・提案位置＋現寸）に適用する。`ClampX` 時は X のみ clamp＋`warn!`（完全不可視への遷移だけを防ぐ安全網）・既に非交差（ユーザー留置）は Keep で尊重——キャラ窓と完全に同一の遷移規則・同一の純関数（新規機構ゼロ）。clamp でバルーンがキャラと部分重なりし得るが、*見えない会話*より*重なった会話*を優先する（ユーザー目線裁定 2026-07-31）。画面端での左右反転等の**美観配置政策は M2 SSP 互換へ先送り**（本ガード＋warn がその縮退シーム）。
 - Validation: `ClampX` 発火時は `warn!`（Req 3.1/3.2 の観測・非ドラッグ経路ゆえ spam しない）。`NearestFallback` 発火は非ドラッグ経路で `warn!`・ドラッグ経路は従来 `debug!` のまま（Req 3.3 の水準分岐＝route が第一級引数である理由）。
 - 消費側の区別（Req 6.2/6.3）: `resize_window_to` 冒頭に `world.get_entity(char_window)` の存在確認を足し、**不在は `debug!` で skip（正常終了系）**・実在するが `Anchored` 欠落は従来どおり `warn!`（真の異常）。
 - Risks: `clamp_wa` は Bottom 射影が選んだ work area（`work_area_for_window_with_origin` の戻り値）を貫通させる配線が要る＝`project_anchor` の内部変更ではなく `resize_window_to` 側で同じ wa を引いて渡す（`project_anchor` 契約は不変）。
@@ -471,7 +474,7 @@ impl GhostWindows {
 ### 成果物（診断手順書・診断レポート）
 
 - **diagnosis-procedure.md**（Req 1.4/1.5/1.8/1.9/5.5）: ①起動コマンド（絶対パス・記憶〈emo2 実走は絶対パス必須〉）・`RUST_LOG=info,wintf::ecs::window_proc=debug,wintf::ecs::drag=debug,areka::placement::diag=debug`・`AREKA_APP_SMOKE_EXIT_MS`（有界終了）・ログ保存先。②観測点×target×水準の対応表（1.5＝「手順で有効化されない水準の観測点を『発生 0 回』の根拠に用いない」の制度化）。③2 セッション規定: セッション①ドラッグによるモニタ跨ぎのみ／セッション② OS 設定側 DPI 変更のみ（ドラッグ禁止）。④充足条件: `[WM_DPICHANGED] DPI component directly updated` 行の grep 計数で、キャラ窓の各 scope×各方向（低→高・高→低）×3 回＝**12 回以上の受理**。**計数の機械化＝2 段 grep 規則**（wintf は scope を知らないため）: 第 1 段で diag レコード（entity・scope・種別を含む）から「scope→char 窓 entity」の対応表を作り、第 2 段で当該 entity の WM_DPICHANGED 受理行を数える。方向は同行の old/new DPI の大小比較で機械判定する。⑤合否判定語（消失痕跡: `ClampX`/`NearestFallback` warn・全 work area 非交差の突合手順）。⑥実機サインオフ（5.5）: OS が実際に提示する提案矩形・実モニタ列挙という決定論化できない 2 項の確認手順。
-- **diagnosis-report.md**（Req 2.1-2.6/2.8/2.9）: 確定台帳の一元化。**設計時点で S1〜S3 を「静的構造証跡」クラスとして file:line 付きで先行登記**（各項目に未充足 AC を明記・2.8）。実機採取後に Q1〜Q4 の回答（2.1）・交差判別（2.2）・追従数値（2.3）・書き手名指し（2.4・語彙は `PlacementRoute` 名＋wintf `[drag]`/提案位置書込の 2 語）・バルーン随伴（2.5）・S1〜S3 の実機痕跡有無（2.9・痕跡が無くても確定は取り消さない）を追記。再現しない場合の結論規則（2.6）: 受理回数下限を踏破した 2 セッションのみを根拠に、除外できるのは**残余仮説への追加修正のみ**（S1〜S3 是正と檻は除外しない）。
+- **diagnosis-report.md**（Req 2.1-2.6/2.8/2.9）: 確定台帳の一元化。**設計時点で S1〜S3＋S3′（バルーン矩形の可視性不変条件の不在・Req 3.4 未充足・`follow.rs:880-907`）を「静的構造証跡」クラスとして file:line 付きで先行登記**（各項目に未充足 AC を明記・2.8 は「少なくとも S1〜S3」ゆえ S3′ の追加登記は要件改稿不要）。実機採取後に Q1〜Q4 の回答（2.1）・交差判別（2.2）・追従数値（2.3）・書き手名指し（2.4・語彙は `PlacementRoute` 名＋wintf `[drag]`/提案位置書込の 2 語）・バルーン随伴（2.5）・S1〜S3 の実機痕跡有無（2.9・痕跡が無くても確定は取り消さない）を追記。再現しない場合の結論規則（2.6）: 受理回数下限を踏破した 2 セッションのみを根拠に、除外できるのは**残余仮説への追加修正のみ**（S1〜S3 是正と檻は除外しない）。
 
 ## Error Handling
 
@@ -501,7 +504,7 @@ impl GhostWindows {
 ### Unit Tests（純関数檻）
 
 1. **`dpi_suggested_position_decision`**（wintf `dpi_helpers.rs` in-source）: policy 未付与／`ApplyPosition`／`ExternalAuthority` の全分岐。「決定結果を適用した最終 X が現接地点 X を保存する」不変条件檻を dpi=96（提案＝現位置ゆえ通過）と 120/192（モニタ跨ぎ相当の提案 X シフトを注入）で示す。**位置づけは分岐網羅の補助**——S1 の赤→緑（Req 5.4）の**正証跡は Integration Tests 5（wintf dispatch 檻）**である（是正前の欠陥は wndproc の無条件書込＝実配線に在るため、新設純関数上の模擬では「是正前のコードに対して失敗する」の証明力が足りない）。
-2. **`guard_visibility`**（follow.rs in-source）: 交差維持→Keep／交差→非交差の遷移→ClampX（X が clamp_wa 水平範囲内・Y 不変）／もともと非交差（留置）→Keep／old 不明→ClampX。混在 DPI 複数モニタ（120+192 相当の非対称 work area・負座標・3200 超座標）の合成レイアウトで（Req 5.1/5.3）。
+2. **`guard_visibility`**（follow.rs in-source）: 交差維持→Keep／交差→非交差の遷移→ClampX（X が clamp_wa 水平範囲内・Y 不変）／もともと非交差（留置）→Keep／old 不明→ClampX。混在 DPI 複数モニタ（120+192 相当の非対称 work area・負座標・3200 超座標）の合成レイアウトで（Req 5.1/5.3）。**バルーン矩形ケース（S3′）**: キャラが端で clamp された合成でバルーンのみ非交差へ遷移→ClampX・ユーザー留置バルーン→Keep・clamp 後のバルーン矩形が work area と交差する事後条件（Req 3.4/5.3）。
 3. **`work_area_for_window_with_origin`**: `Contains`/`NearestFallback` の判別が既存 `work_area_for_window` の戻り値と常に一致（委譲の等価性）。
 4. **diag レコード組立**: `PlacementRoute` 表示語彙と grep 判定語の固定（手順書と 1:1）。
 5. **`GhostWindows::remove_entry_of`**: char 一致・balloon 一致・不一致 no-op・二重除去 no-op。
