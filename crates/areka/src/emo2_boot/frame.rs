@@ -201,8 +201,8 @@ pub struct Emo2Wiring {
     ///
     /// 起動時資産は [`BalloonScopeAssets`] が scope 別の定義を保持する（旧 `BootAssets.balloon_model`
     /// の共有 1 本は撤去済み）。ゆえにキーは **scope**——再追従は「どの scope の balloon 窓か」から
-    /// 引くのが自然である。attach が実際に scope 別の定義をここへ挿すのは tasks.md task 3.3 が担い、
-    /// それまでは先頭 scope の定義 1 本を全 scope へ配る暫定形である。
+    /// 引くのが自然である。attach（[`run_attach_phase`]）は当該 scope の資産から取り出した定義を
+    /// **ここと文字層結線（[`connect_balloon_text`]）の双方へ同一値で**挿す（Req 4.1/4.2）。
     balloon_models: HashMap<u32, BalloonModel>,
     /// 文字層 k 追従で `text_slot_view` が `None` だった scope の警告済み集合（R8.6 のエッジガード）。
     ///
@@ -442,11 +442,9 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
         balloon: balloon_author_dpi,
     };
     let mut shells: Vec<_> = shells.into_iter().map(Some).collect();
-    // 文字層へ渡すバルーン定義は、この時点ではまだ **先頭 scope の定義 1 本を全 scope へ配る**
-    // （撤去した `BootAssets.balloon_model` と観測等価——emo2 では先頭＝scope 0 の 2 層マージ結果）。
-    // 各 scope が自身の [`BalloonScopeAssets::model`] を受け取る per-scope 供給は tasks.md task 3.3 が
-    // 担い、そこで本スタンドインは消える。
-    let shared_balloon_model = balloons.first().map(|b| b.model.clone());
+    // 文字層へ渡すバルーン定義は各 scope 自身の [`BalloonScopeAssets::model`]（scope 別 2 層マージ
+    // 済み・Req 2.1）。World／アトラスと**同一の資産 1 件から**取り出すため、ある scope のバルーンが
+    // 別 scope の系列由来の定義で駆動される取り違えが構造的に起こり得ない（Req 4.1）。
     let mut balloons: Vec<_> = balloons.into_iter().map(Some).collect();
 
     let planned_count = plan.items.len();
@@ -509,19 +507,12 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
             warn!(scope, "emo2 attach: balloon_window が無い（GhostWindows 不整合）→ バルーン装着を skip");
             continue;
         };
-        // per-scope 供給（task 3.3）までの暫定: 先頭 scope の定義を全 scope へ配る。資産を
-        // take する前に引き当てる（不在なら資産を消費せず skip する）。`balloon_index` が
-        // 取れている以上 balloon 資産は非空ゆえ、この縮退は到達しない防衛である。
-        let Some(balloon_model) = shared_balloon_model.as_ref() else {
-            error!(
-                scope,
-                "emo2 attach: バルーン定義が 1 件も無い（balloon 資産ゼロ）→ 文字層接続なし"
-            );
-            continue;
-        };
+        // 当該 scope の資産 1 件を take で消費する（World／アトラス／定義は同一資産から取り出す
+        // ＝別 scope の系列由来の定義が混ざり得ない・Req 4.1）。
         let Some(BalloonScopeAssets {
             emo_world: balloon_world,
             atlas: balloon_atlas,
+            model: balloon_model,
             ..
         }) = balloons.get_mut(balloon_index).and_then(|b| b.take())
         else {
@@ -556,13 +547,6 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
                 reply: None,
             },
         );
-        // 文字層 k 再追従（D11-3・R8.1）の再利用源: 装着に使うモデルを scope キーで記憶する。
-        // 文字層スケール相（[`run_text_scale_phase`]）はこれを再利用して binding を組み直す（再パースしない）。
-        // 装着が `text_slot_view` None で次フレームへ委ねられた場合でもモデル自体は有効ゆえ、
-        // 接続成否に関わらず記憶する（再追従は未登録 actor を静穏 skip する・7.1 の契約）。
-        wiring
-            .balloon_models
-            .insert(scope, (*balloon_model).clone());
         // apply は同期ゆえ同一フレームで text_slot_view が Some になるのが正常経路（DD-4）。
         // None（上流の遅延化）は接続せず次フレーム再試行へ委ねる（R4.2）。
         let view = wiring.presenter.text_slot_view(item.balloon_target);
@@ -572,8 +556,15 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
             // 再追従（[`run_text_scale_phase`]）は**同一の写像**で actor を引く——
             // ここと式が食い違うと、再追従が別 actor を作って文字だけ旧 k のまま残る。
             ActorKey::from(scope.to_string()),
-            balloon_model,
+            &balloon_model,
         );
+        // 文字層 k 再追従（D11-3・R8.1）の再利用源: **いま文字層へ渡したのと同一の**モデルを
+        // scope キーで記憶する（借用→move の 1 値ゆえ二つの供給先が別値になり得ない——別値になると
+        // 「装着時と再追従時で別定義」という静かな食い違いが生まれる・R4.1/4.2）。文字層スケール相
+        // （[`run_text_scale_phase`]）はこれを再利用して binding を組み直す（再パースしない）。
+        // 装着が `text_slot_view` None で次フレームへ委ねられた場合でもモデル自体は有効ゆえ、
+        // 接続成否に関わらず記憶する（再追従は未登録 actor を静穏 skip する・7.1 の契約）。
+        wiring.balloon_models.insert(scope, balloon_model);
     }
 
     info!(
@@ -904,7 +895,7 @@ pub fn run_dpi_phase(wiring: &mut Emo2Wiring, world: &mut World) {
 /// だけを再スケールすると文字だけが旧 k の寸法に取り残される（6.5 一次実走で実測した欠陥）。本
 /// フェーズはその取り残しを構造的に消す。
 ///
-/// # なぜ「イベント駆動」ではなく毎フレーム走査なのか（D11-4 の意図＝k 変化の検出）
+/// # なぜ「イベント駆動」ではなく毎フレーム走査なのか（D11-4 の意図＝binding 変化の検出）
 ///
 /// 素朴には「[`run_dpi_phase`] の `refresh_scale` が `Some` を返した balloon 窓へ伝搬する」と書け
 /// るが、**`Some` と「適用 k が変わった」は同値ではない**——`refresh_scale` の doc が明記するとおり
@@ -917,12 +908,18 @@ pub fn run_dpi_phase(wiring: &mut Emo2Wiring, world: &mut World) {
 ///   `take_pending_resize` が `None` ゆえ `None` を返す。文字層の供給面は
 ///   `ceil(validrect 寸 × k)`（AC 8.2）と別の丸めで決まるため、こちらは寸が変わり得る。
 ///
-/// ゆえに検出点は「**balloon target の適用 k が文字層 binding の k と食い違っているか**」であり、
-/// それを判定できる唯一の権威は [`TextLayerRuntime::refresh_actor_binding`]（task 7.1）である。
-/// 本フェーズは判定を自前で複製せず（第 2 のガードは本家と乖離し得る）、毎フレーム
-/// [`TextLayerRuntime::refresh_actor_scale`] へ委ねる——同値 k・未登録 actor はあちらが
-/// **再構築せず `false`** を返す（churn ガード・R8.5）。費用は balloon 1 枚あたり map 1 引きと
-/// `ScaleRatio` 1 比較。
+/// ゆえに検出点は「**presenter の現状態から組み直した文字層 binding が、当該 actor の現 binding と
+/// 食い違っているか**」であり、それを判定できる唯一の権威は
+/// [`TextLayerRuntime::refresh_actor_binding`] である。本フェーズは判定を自前で複製せず（第 2 の
+/// ガードは本家と乖離し得る）、毎フレーム [`TextLayerRuntime::refresh_actor_scale`] へ委ねる。
+///
+/// あちらの判定キーは **binding 全体（k・物理寸・image 原寸・slot・window）と、その image 原寸で
+/// モデルから解き直した `ResolvedBalloonText`（文字描画領域を含む）の連言**であり、すべて同値なら
+/// **再構築せず `false`** を返す（churn ガード・R4.5/R8.5）。未登録 actor も `false`（装着は
+/// `register_actor_view` の領分）。**k が同値でも面実寸や当該 scope の `validrect` が違えば再構築
+/// する**——k の同値のみを根拠に省略しない（R4.4。scope 別バルーン定義が当事者であり、旧契約
+/// 「同値 k なら再構築しない」では相方側の領域変化を取りこぼす）。費用は balloon 1 枚あたり
+/// `ResolvedBalloonText` の再解決 1 回と、binding／解決済み領域の 2 構造体比較。
 ///
 /// # 呼ぶ位置（[`emo2_frame_system`] 内）
 ///
@@ -938,8 +935,8 @@ pub fn run_dpi_phase(wiring: &mut Emo2Wiring, world: &mut World) {
 /// 警告し（`text_scale_warned`・emo-text の `unresolved_warned` と同型のエッジガード）、view が
 /// 取れるようになった時点で再武装する（再度落ちれば再び 1 回鳴る）。なお `Hide` は
 /// `text_slot_view` を `None` にしない（`apply_hide` は mount／chain／`applied`／`native_size` を
-/// 保持する）ため、**不可視は本縮退経路に落ちない**——不可視の間は同値 k の no-op が続き、`Show`
-/// で `applied` が跳ねた次の走査が再追従する。
+/// 保持する）ため、**不可視は本縮退経路に落ちない**——不可視の間は判定キーが同値のまま no-op が
+/// 続き、`Show` で `applied` が跳ねた次の走査が再追従する。
 ///
 /// [`BalloonModel`] は attach 時に記憶した per-scope の同一モデルを再利用する（再パースしない・
 /// D11-3）。actor は attach と同一写像 `ActorKey::from(scope.to_string())`。shell target は emo2 で
@@ -1349,6 +1346,7 @@ pub fn emo2_frame_system(world: &mut World) {
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
+    use std::path::PathBuf;
     use std::sync::mpsc::Receiver;
     use std::sync::{mpsc, Arc, Mutex};
 
@@ -1360,7 +1358,9 @@ mod tests {
     use tracing_subscriber::prelude::*;
 
     use super::*;
-    use crate::emo2_boot::assets::{BalloonScopeAssets, BootAssets, LoopTables, ScopeAssets};
+    use crate::emo2_boot::assets::{
+        build_boot_assets, BalloonScopeAssets, BootAssets, LoopTables, ScopeAssets,
+    };
 
     /// throwaway な `EmoWorld`（空 shell から build・`plan_attachments` は emo_world を読まない）。
     ///
@@ -1589,6 +1589,138 @@ mod tests {
         run_attach_phase(&mut wiring, &mut world);
         assert!(!wiring.attached, "再試行でもゲート不成立なら未装着");
         assert!(wiring.assets.is_some(), "再試行でも assets を保持");
+    }
+
+    // ── task 3.3: attach が scope 別バルーン定義を文字層へ供給する（R2.6/4.1/4.2） ──────
+    //
+    // 実 emo2 fixture（`emo2-kakukaku`）では scope0 が `balloons0.png`／scope1 が `balloonk0.png`
+    // を採用し、面別上書き（`balloons0s.txt`／`balloonk0s.txt`）の `validrect`／`windowposition`
+    // が互いに異なる。ゆえに「先頭 scope の定義を全 scope へ配る」実装はこの檻で必ず落ちる。
+    // attach は GPU 資源ゲート越しにしか走らないため、檻も headless GPU（WARP 可・MTA）で
+    // 本番 [`run_attach_phase`] をそのまま駆動する（シームを噛ませない）。
+
+    /// emo2 fixture ルート（`CARGO_MANIFEST_DIR`＝`crates/areka` 相対・assets.rs テストと同一規約）。
+    fn emo2_root() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../pilot/examples/shiori-host-32/fixtures/emo2")
+    }
+
+    /// emo2 fixture のバルーンルート（assets.rs テストと同一規約）。
+    fn emo2_balloon_root() -> PathBuf {
+        emo2_root().join("emo2-kakukaku")
+    }
+
+    /// [`resnap_world`]（2 スコープ窓＋偽 `WindowHandle`）へ実 GPU 資源を載せた attach 檻の World。
+    ///
+    /// attach ゲートは `GhostWindows`＋`GraphicsCore`＋`WucGraphicsResource::is_valid()` の連言ゆえ、
+    /// 本番 attach を駆動するにはこの 3 点が要る。本番 UI スレッドと同じ MTA で COM を初期化する
+    /// （記憶: areka WUC は MTA スレッドで動く）。WARP 可（`GraphicsCore::new()`）。
+    fn gpu_attach_world() -> (World, GhostWindows) {
+        // SAFETY: WIC デコード／D3D に要る COM の MTA 初期化
+        // （既初期化の S_FALSE／RPC_E_CHANGED_MODE は無視——テストスレッド毎）。
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        }
+        let (mut world, gw) = resnap_world();
+        let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
+        let d2d = core.d2d_device().expect("GraphicsCore::d2d_device が None");
+        let wuc = WucGraphicsResource::new(d2d).expect("WucGraphicsResource::new 失敗");
+        world.insert_resource(core);
+        world.insert_resource(wuc);
+        (world, gw)
+    }
+
+    /// 観測可能な完了条件（tasks.md task 3.3・R4.1/4.2）: **相方側 scope の文字描画領域が相方側
+    /// 定義から解決される**。実 emo2 fixture＋実 GPU で本番 attach を駆動し、per-scope の
+    /// [`BalloonModel`] が
+    /// (a) 再追従の記憶写像 `balloon_models`、(b) 文字層結線 [`connect_balloon_text`]
+    /// の**双方へ同一値**で届くことを固定する。
+    ///
+    /// (b) の観測は `refresh_actor_scale` の判定契約を利用する——装着直後の同一 view に対し、
+    /// **相方側定義**で再追従を求めると「binding・文字描画領域とも同値」で `false`（no-op）に
+    /// なり、**本体側定義**なら `validrect` 差により `true`（再構築）になる。すなわち
+    /// `false`/`true` の対が「装着時にどちらの定義で領域を解決したか」を弁別する。
+    ///
+    /// 先頭 scope の定義を全 scope へ配る実装では (a) が相方側で本体側の値を返し、(b) は
+    /// 相方側定義に対して `true`（＝装着が別定義だった証跡）を返して落ちる。
+    #[test]
+    fn attach_supplies_each_scope_its_own_balloon_model_to_map_and_text_layer() {
+        let (mut world, _gw) = gpu_attach_world();
+        let assets = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
+            .expect("emo2 fixture の BootAssets 組立は成功する");
+        assert_eq!(
+            assets.balloons.iter().map(|b| b.scope).collect::<Vec<_>>(),
+            vec![0u32, 1],
+            "前提: balloon 資産は scope 昇順 [0,1]（添字＝scope の対応）"
+        );
+        // 期待値は資産そのものから取る（fixture 実値との突き合わせは assets.rs の檻が所有するが、
+        // 非空虚性のため両 scope の実値が実際に異なることをここでも 1 点だけ固定する）。
+        let sakura = assets.balloons[0].model.clone();
+        let kero = assets.balloons[1].model.clone();
+        assert_eq!(
+            (sakura.validrect().top(), kero.validrect().top()),
+            (Some(46), Some(40)),
+            "前提: 本体側／相方側の validrect が実際に異なる（同値なら本檻は何も弁別しない）"
+        );
+
+        let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default())));
+        let mut wiring = Emo2Wiring::new(
+            EmoPresenter::new(),
+            mpsc::channel::<PresentCommand>().1,
+            mpsc::channel::<MoveDirective>().1,
+            Rc::clone(&runtime),
+            zero_clock(),
+            assets,
+        );
+
+        run_attach_phase(&mut wiring, &mut world);
+        assert!(
+            wiring.attached,
+            "前提: GhostWindows＋GPU 資源のゲート成立で attach が走る"
+        );
+        assert_eq!(
+            wiring.balloon_model_scopes(),
+            vec![0u32, 1],
+            "前提: 両 scope の balloon 装着が成立している"
+        );
+
+        // (a) 再追従の記憶写像（D11-3）: scope ごとに **その scope の** 定義が入る（R4.1）。
+        assert_eq!(
+            wiring.balloon_models[&0].validrect().top(),
+            sakura.validrect().top(),
+            "本体側 scope には本体側定義が入る"
+        );
+        assert_eq!(
+            wiring.balloon_models[&1].validrect().top(),
+            kero.validrect().top(),
+            "相方側 scope には相方側定義が入る（先頭 scope の配り回しではない・R4.1）"
+        );
+        assert_eq!(
+            wiring.balloon_models[&1].windowposition().x(),
+            Some(-190),
+            "相方側 scope の windowposition も相方側定義由来（balloonk0s.txt 実値）"
+        );
+
+        // (b) 文字層結線へ届いた値: 装着と同一の scope→アクタ写像（R4.2）で登録済みの binding は、
+        //     相方側定義で解決済み＝相方側定義での再追従は no-op（false）になる。
+        let view = wiring
+            .presenter
+            .text_slot_view(balloon_target(1))
+            .expect("前提: attach 初回 ShowSurface で相方側バルーンの文字層スロットが成立する");
+        assert!(
+            !runtime
+                .borrow_mut()
+                .refresh_actor_scale(&ActorKey::from("1"), &view, &kero),
+            "相方側 scope の文字描画領域は相方側定義から解決済み（同値ゆえ再構築しない・R4.1）"
+        );
+        // 非空虚性: 本体側定義なら validrect 差で必ず再構築が要る＝上の false は「何を渡しても
+        // false」ではない（弁別が生きている）。
+        assert!(
+            runtime
+                .borrow_mut()
+                .refresh_actor_scale(&ActorKey::from("1"), &view, &sakura),
+            "本体側定義は相方側 scope の解決済み領域と異なる（この差が上の no-op を意味あるものにする）"
+        );
     }
 
     /// task 2.5（Req 1.3）: UI 配線層（`Emo2Wiring`）の presenter 読み口から collision-geometry の
@@ -1933,6 +2065,7 @@ mod tests {
 
     use bevy_ecs::prelude::Entity;
     use windows::Win32::Foundation::{HINSTANCE, HWND};
+    use windows::Win32::System::Com::{CoInitializeEx, COINIT_MULTITHREADED};
 
     use crate::placement::follow::MonitorSnapshot;
     use crate::placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
