@@ -45,13 +45,14 @@
 - **バルーン文字層の scope 別追従**（per-scope model 供給・k 同値時の寸/領域変化検知＝再追従判定キーの拡張）。
 - **バルーン側 `AnimationTable` の scope キー化**（`LoopTables.balloon` / `SerikoLoopConfig`・境界拡張として `areka-seriko/src/looper.rs` を明示編入）。
 - 解決結果・フォールバック・失敗経路の観測ログ、および互換対応表（`doc/COMPAT_ARCHITECTURE.md`）への記録。
+- **バルーン相対位置の基準**（2026-07-31 の実機裁定で編入・R3.8）——runtime（`placement/follow.rs::resize_window_to`）と保存（`placement/persist.rs`）の双方で「キャラ窓の左上（窓相対）」に統一する。**キャラ窓位置そのものの原点（下端中央）は非所有・無改変**。
 
 ### Out of Boundary
 
 - `\b` cue 経路（decode→compile→cue→seriko→adapter→PresentCommand・spine S3/S4 檻域の assert 本体）。
 - バルーン可視ライフサイクル（`frame.rs` の無条件 ShowSurface `:531-540` は W6 `balloon-visibility` の領分・本仕様は触れない）。
 - `placement/resolver.rs` の配置式 P1〜P5（**本設計は P5 を無改変**——`balloon_offset` 供給欄への合流で足りることを確認済み。エスケープ条項は発動しない）。
-- `placement/persist.rs` の保存・復元マージ規約（永続値優先はそのまま）。
+- `placement/persist.rs` の**保存値優先マージの順位**（永続値があれば永続値＝そのまま無改変）。※ **バルーン offset の基準変換は 2026-07-31 の実機裁定で Out of Boundary から外れた**（R3.8）——`anchor_edge_basis`／`balloon_offset_to_persist`／`balloon_offset_from_persist` は撤去済み。キャラ窓位置の下端中央符号化（`char_pos_to_origin_x` 系）は引き続き Out of Boundary・無改変。
 - `areka-parsers::balloon` のパーサ本体（2 層マージは実装・檻化済み・呼ぶファイルを変えるのみ）。
 - `areka-seriko` の bind/state/actor（W6 `bindoption-exclusivity` の編集面・looper.rs の表引き以外は触れない）。
 - 表示スケール k の導出・丸め権威（`ScaleRatio` は消費のみ）。
@@ -70,6 +71,7 @@
 - **`SerikoLoopConfig` の形**（`balloon_table` 単数→scope キー化。`areka-seriko` を触る後続はこの形を前提にする）。
 - **`refresh_actor_binding` の no-op 判定キー**（「k 同値なら false」から「k・寸・領域すべて同値なら false」へ意味が変わる。W6.5 `test-cage-determinism` は新しい意味を前提にする）。
 - **placement の `prepare_stages`**（windowposition 供給の追加。W5 同居 `dpi-window-vanish` の編集集合が確定した時点で `placement/mod.rs` / `windowposition.rs` との互いに素を再確認する——`resolver.rs` 無改変ゆえ着手順裁定は不要だが、mod.rs の小ハンク追加は台帳注記対象）。
+- **`follow.rs::resize_window_to` のバルーン追従セマンティクス／`persist.rs` のバルーン offset 基準**（2026-07-31 の境界改訂で追加・R3.8）。Bottom 限定 offset 補正と基準変換 3 関数を撤去し、全アンカーで `balloon_pos − char_pos ≡ offset` 不変へ。**W5 同居 `dpi-window-vanish`（placement 層を境界に掲げる）は `follow.rs`／`persist.rs` が改変済みである前提で rebase すること**。**W6.5 `test-cage-determinism`** は、この改訂で position-persist 由来の檻 5 本が撤去され後継 7 本（`follow.rs` 2・`persist.rs` 5）へ入れ替わったことを前提にする。
 
 ## Architecture
 
@@ -186,9 +188,12 @@ crates/areka/src/placement/windowposition.rs
 | `crates/areka/src/placement/mod.rs` | `mod windowposition;` 宣言追加。`prepare_stages`（`:254-290`）: 採寸後に per-scope model（単一権威経由）から windowposition を取り、`windowposition.rs` の純関数で `cfg` の `balloon_offset` へ合流。観測 info ログ追加。**同ファイル内の fixture 実走テストも更新対象**——全 placement が同一バルーン寸であることを主張する箇所（`:924-933`・定数 `:471-472`）は per-scope 期待値へ、バルーン位置・相対オフセットの実値を主張する箇所（`:513-542`）は windowposition 反映後の期待値へ（R7.2）。 |
 | `crates/areka-emo-text/src/actor.rs` | `refresh_actor_binding`（`:348-375`）の no-op 判定を「binding 全体等値 ∧ 再解決 `ResolvedBalloonText` 等値」へ拡張（resolve は 1 回・単一構築経路維持）。テスト `:2665` の名称と意図を更新＋「k 同値・寸違い→true」の新檻。 |
 | `crates/areka-seriko/src/looper.rs` | `SerikoLoopConfig.balloon_table` → `balloon_tables: BTreeMap<ActorKey, AnimationTable>`・表引き（`:180/:236`）を scope キー lookup へ（不在 scope＝空表意味論）・`disabled()` は空マップ。既存テスト ripple（`:478/:735`・`actor.rs:2071`・`tests/loop_integration.rs:195`）。 |
-| `doc/COMPAT_ARCHITECTURE.md` | R7.4/R7.7 の記録追加（後述 Error Handling 後の記録一覧）。 |
+| `crates/areka/src/placement/follow.rs` | **境界改訂で追加（2026-07-31・R3.8）**: `resize_window_to` の Bottom 限定 offset 補正（step 6）を撤去し、全アンカーで `BalloonFollow.offset` を書き換えない＝窓相対追従へ統一。矛盾していた doc を是正。檻: 旧「下端中央原点相対を保つ」を意味反転して `resize_window_to_bottom_preserves_balloon_follow_offset` へ、実機実測系の SSP オラクル檻 `resize_window_to_bottom_keeps_ssp_window_relative_balloon_offset` を新設。 |
+| `crates/areka/src/placement/persist.rs` | **境界改訂で追加（2026-07-31・R3.8）**: `anchor_edge_basis`／`balloon_offset_to_persist`／`balloon_offset_from_persist` を撤去（全アンカーで恒等になったため）。バルーン offset は生値（char 左上相対）で保存・復元する。**保存値優先マージの順位と `char_pos_to_origin_x`／`_from_origin_x` は無改変**。檻 5 本を純関数往復から実経路（`balloon_offset_entries` → `apply_restored_placements`）へ移して意味変更。 |
+| `doc/COMPAT_ARCHITECTURE.md` | R7.4/R7.7 の記録追加（後述 Error Handling 後の記録一覧）＋ R3.8 のバルーン追従基準の記録。 |
 
-> `crates/areka/src/placement/resolver.rs`・`persist.rs`・`areka-parsers` 配下・`areka-seriko` の bind/state/actor は**無改変**（Out of Boundary）。
+> `crates/areka/src/placement/resolver.rs`・`areka-parsers` 配下・`areka-seriko` の bind/state/actor は**無改変**（Out of Boundary）。
+> **実装時訂正（2026-07-31・R3.8 の実機裁定）**: `placement/follow.rs` と `placement/persist.rs` は**当初 Out of Boundary だったが編集した**（開発者の明示命令による境界改訂）。`follow.rs::resize_window_to` の Bottom 限定 offset 補正を撤去し、`persist.rs` の `anchor_edge_basis`／`balloon_offset_to_persist`／`balloon_offset_from_persist` を撤去して、バルーン相対を runtime・保存の双方で窓（char 左上）基準へ統一した。`persist.rs` の**保存値優先マージの順位は無改変**。`char_pos_to_origin_x`／`_from_origin_x`（キャラ窓位置の下端中央符号化）も無改変。
 
 ## System Flows
 
@@ -264,7 +269,7 @@ flowchart TB
 | 3.2 | windowposition＝基本位置からの調整量・基本位置は現行 | `windowposition.rs`→`balloon_offset` 合流（P5 無改変） |
 | 3.3 | x は素の画面座標オフセット（置き側で無反転・SSP 実測で確定・R7.6）・y は無変換 | `to_screen_adjust`（side 引数なし＝構造的に置き側非依存） |
 | 3.4 | 数値指定なし→既定 0＝現行と同一 | wp 無指定は合流なし（None 温存・檻で同一性固定） |
-| 3.5 | 永続値優先・初期既定の供給にとどまる | persist.rs 無改変（保存値優先マージは既存規約のまま） |
+| 3.5 | 永続値優先・初期既定の供給にとどまる | **保存値優先マージの順位は無改変**（`persist.rs::merge_scope`）。※ 2026-07-31 の実機裁定でバルーン offset の**基準**（アンカー辺→char 左上）は変更した＝R3.8。優先順位と基準は別事項 |
 | 3.6 | k 適用は既存権威・新丸め規約なし | `scale_offset`＝符号保存＋大きさは `ScaleRatio` 権威へ委譲 |
 | 3.7 | `balloonk*` 不在時は全 scope 同一寸＝適用前と一致 | 連鎖収束（1.4 と同根）＋measure 檻で固定 |
 | 3.8 | キャラ窓原点（下端中央）は不変／バルーン相対は窓（char 左上）相対へ是正 | `resolver.rs` 無改変。`follow.rs` の Bottom 限定 offset 補正を撤去＋`persist.rs` の `anchor_edge_basis`／`balloon_offset_to_persist`／`_from_persist` を撤去（実機裁定・R7.6） |
@@ -279,7 +284,7 @@ flowchart TB
 | 5.2 | spine S3/S4 檻の緑維持 | assert 本体無改変（S4 doc のみ事実更新） |
 | 5.3 | 可視ライフサイクル不変 | 無条件 ShowSurface 域に触れない（W6 領分） |
 | 5.4 | `balloonk*` 不在時の表示・採寸・面集合同一 | 1.4/3.7 の檻＋後方互換テスト |
-| 5.5 | 本体側 scope の同一性（初期既定位置のみ 3.2 対象） | scope0 連鎖は末尾 `balloons`＝現行等価（檻で固定） |
+| 5.5 | 本体側 scope の同一性（初期既定位置のみ 3.2 対象・**サーフェス切替後のバルーン位置は 3.8 対象**） | scope0 連鎖は末尾 `balloons`＝現行等価（檻で固定）。**表示・採寸・文字描画の同一性は無傷**（該当経路は無改変）。※ 2026-07-31 の実機裁定により、**サーフェス切替後のバルーン位置**は本体側でも前後で変わる（それが是正の目的）ため、本条の同一性主張の範囲外＝R3.8 が担う。旧基準で書かれた既存永続値も同一キーのまま意味が変わる（dev fixture のみ） |
 | 5.6 | バルーン面テーブルの scope 整合 | `LoopTables.balloon` マップ化＋`SerikoLoopConfig.balloon_tables`＋前提注記解消 |
 | 6.1 | 採用系列・面 ID の解決結果ログ | `resolve_balloon_faces` の info!（scope・faces 一覧） |
 | 6.2 | 本体側縮退の warn（scope・面 ID・採用ファイル） | tier=Default 採用時の warn!（scope≧1） |
@@ -478,7 +483,7 @@ pub struct BootAssets {
 - 採寸のファイル選択は権威（`resolve_balloon_faces`）の消費のみ——`measure.rs:390-409` の固定名最小再実装は撤去。
 - `resolver.rs` P1〜P5 は**無改変**。windowposition は `ScopeConfig.balloon_offset`（config.rs:50・emo2 は現行 None＝未使用）への合流で供給する。
 - 恒等式 `balloon_offset ≡ balloon_pos − char_pos`（resolver.rs:77-81 の恒久事後条件）は P5 の加算入力を変えるだけなので自動的に保たれる。
-- 永続値優先（3.5）: `persist.rs` のマージ（保存値があれば保存値）は無改変——本供給は「保存値が無いときの resolver 出力」だけを正典化する。
+- 永続値優先（3.5）: `persist.rs` の**マージ順位**（保存値があれば保存値）は無改変——本供給は「保存値が無いときの resolver 出力」だけを正典化する。※ ファイルとしての `persist.rs` は 2026-07-31 の境界改訂（R3.8）で編集済み（バルーン offset の**基準変換**を撤去）。順位と基準は別事項。
 
 **Contracts**: Service [x]
 
@@ -651,6 +656,13 @@ R6 の観測点（すべて `RUST_LOG=info` で grep 可能・実機サインオ
 - **BootAssets 構築**: `balloons` が scope 別 model を持ち `balloon_model` 単数が存在しないこと（assets テスト :439-449 の per-scope 分解）。
 - **spine S3/S4**: assert 無改変で緑（R5.1/5.2 の受け入れ条件）。S4 doc（:1249-1253）の陳腐化記述のみ更新。
 - **attach→文字層**: per-scope model が `balloon_models` マップと `connect_balloon_text` の双方へ同一値で届くこと（frame ハーネス）。
+
+### バルーン追従基準の檻（R3.8・2026-07-31 の境界改訂で追加）
+
+position-persist 由来の檻 5 本（`resize_window_to_keeps_balloon_relative_to_bottom_center_origin` ほか、撤去した基準変換関数と心中したもの）を、後継 7 本へ入れ替えた。**削除ではなく意味変更**であり、同性質を実経路で固定する。
+
+- `follow.rs`: `resize_window_to_bottom_preserves_balloon_follow_offset`（旧檻の意味反転＝resize 後も `balloon_pos − char_pos ≡ offset`。char の下端中央原点不動は別 assert で維持）／`resize_window_to_bottom_keeps_ssp_window_relative_balloon_offset`（**実機実測系の SSP オラクル**＝543×859 → 478×684・下端 2100 固定で balloon が窓相対 (3162,1255) へ追随し、欠陥時の (3130,1080) に貼り付かないこと）
+- `persist.rs`: 保存 entries が生 offset であること／全アンカーで復元値がそのまま採用されること／往復恒等（**保存時と復元時で寸が違っても**）／同一寸で厳密復元かつ異寸でも窓相対／Bottom でも保存値は char 左上基準（同一檻内で char_pos は下端中央基準のまま assert し 2 基準の独立を弁別）
 
 ### 実機サインオフ（R7.3/R7.6）
 

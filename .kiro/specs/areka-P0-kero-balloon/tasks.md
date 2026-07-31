@@ -160,6 +160,7 @@
   - 観測可能な完了状態: 完成領域の檻が無改変で緑
   - _Requirements: 5.1, 5.2, 5.3_
   - _Depends: 3.4, 4.3_
+  - **確認は `d0f1870` 時点で実施済**（S3/S4 の assert 本体は merge-base と byte 同一・cue 経路の檻ホームは全て blob 同一）。**その後 `ba3e7d6`（バルーン追従の境界改訂）で `completed/areka-P0-position-persist` 由来の檻 5 本を撤去した**——撤去した基準変換関数（`anchor_edge_basis` ほか）と心中したものであり、同性質を後継 7 本（`follow.rs` 2・`persist.rs` 5）が**実経路で**固定している（純関数往復の檻は関数撤去後トートロジー化するため、実経路檻の方が強い）。**本タスクが守る「完成領域」＝`\b` 面切替回帰檻（R5.2）とバルーン可視ライフサイクル（R5.3）は `ba3e7d6` でも無改変**で、`ba3e7d6` 後の全体テストでも緑を維持している。
 
 - [x] 5.3 ワークスペース全体テストを緑にする
   - 前提として 32bit ヘルパの成果物を先にビルドしてから全体テストを走らせる（成果物が無いと全体テストが赤くなる）
@@ -199,7 +200,14 @@
     - 1px 差は丸め規約（SSP 332.5→332 の切り捨て寄り／areka は `ScaleRatio::scale_len` の round half away from zero で 333）。**R3.6 が新丸め規約の導入を禁じるため SSP へ合わせ込まない**。
     - **ukadoc 文言との乖離**: 正典は「数値指定の場合シェル側が+、シェルから離れる側が-」と記すが参照実装は左右非反転。互換ベースウェアとして **SSP 実挙動を正**とした（対応表へ記録＝6.2）。
     - この裁定により requirements.md **R3.3** を実装時訂正、design.md の符号表を書き換え、`side_x_sign` を撤去（`to_screen_adjust` の `side` 引数ごと消滅）。
-  - 実機ログ（是正後・確定版）は `real-run-signoff-2026-07-31.log`。是正前ログは誤値 `adjust_dx=+238` を含み誤読を招くため破棄済み。
+  - 実機ログ（符号是正後・確定版）は `real-run-signoff-2026-07-31.log`。是正前ログは誤値 `adjust_dx=+238` を含み誤読を招くため破棄済み。
+  - **バルーン追従是正（`ba3e7d6`）後の実機実測**（初回起動・無操作・実 DPI 120・サーフェス切替**後**の状態）:
+    | 窓 | 是正前 | **是正後** | SSP 実測 |
+    |---|---|---|---|
+    | むらさきキャラ | 478×684 @ (3329,1416) | 同左 | 477×683 @ (3363,1417) |
+    | **むらさきバルーン** | (3130,1080) ＝ offset (−199,**−336**) | **(3162,1255) ＝ offset (−167,−161)** | (3195,1256) ＝ (−168,−161) |
+    | **エモバルーン** | (3187,1506) ＝ offset (+182,−94) | 同左 | (3189,1507) ＝ (+183,−93) |
+    切替後の状態で**両 scope とも SSP と 1px 以内**。1px 差は丸め権威由来（R3.6 が新丸め規約を禁じるため許容）。
 
 - [x] 6.2 互換対応表へ正典整合と裁量の記録を追加する
   - 正規名の先行探索が areka 裁量の正規化拡張であること（正典は当該系列を三人目以降として記述している）
@@ -230,7 +238,12 @@
   - **W6 `bindoption-exclusivity`** — 本 spec が (a) `emo2_boot/assets.rs` のバルーン構築ループを全面書き換え（`BalloonScopeAssets` 新設・`BootAssets.balloon_model` 型ごと撤去・`LoopTables.balloon` を `BTreeMap<u32, AnimationTable>` へ）、(b) `areka-seriko` の `SerikoLoopConfig.balloon_table` を `balloon_tables: BTreeMap<ActorKey, AnimationTable>` へ改めた。**先着した本 spec の形を前提に rebase すること**。`areka-seriko` の bind/state/actor の**ロジックは無改変**なので異ハンク性は保たれている（`actor.rs` の変更はテスト構築 2 行のみ）。
   - **W6 `balloon-visibility`** — per-scope `BalloonModel` の実形（`BalloonScopeAssets.model`・attach で `balloon_models: HashMap<u32, BalloonModel>` へ記憶）へ後着で再突合すること。バルーンの表示／非表示ライフサイクル（`frame.rs` の無条件 ShowSurface 域）は本 spec で**無改変**。
   - **W6.5 `test-cage-determinism`** — `areka-emo-text::refresh_actor_binding` の no-op 判定が「適用 k が同値なら false」から「**`TextSlotBinding` 全体等値 ∧ 再解決 `ResolvedBalloonText` 等値の連言**」へ意味が変わった。旧意味論を前提とする檻を書かないこと。
-  - **W5 同居 `dpi-window-vanish`** — 本 spec は `placement/mod.rs` に小ハンク（`mod windowposition;` 宣言・`prepare_stages` への供給挿入）を加えた。`placement/resolver.rs` と `persist.rs` は**byte-unchanged**（blob ハッシュで確認済み）。
+  - **W5 同居 `dpi-window-vanish`** — 本 spec の `placement` 編集面は次の 4 ファイル。**rebase 前に必ず読むこと**。
+    - `placement/mod.rs`: 小ハンク（`mod windowposition;` 宣言・`prepare_stages` への windowposition 供給挿入）
+    - `placement/windowposition.rs`: **新設**
+    - `placement/measure.rs`: バルーン採寸の per-scope 化（権威消費・固定名再実装の撤去）
+    - **`placement/follow.rs` と `placement/persist.rs`: 2026-07-31 の境界改訂で編集した**（当初は無改変宣言だったが実機裁定で覆った・下の「バルーン追従基準の是正」節を参照）。`follow.rs::resize_window_to` の Bottom 限定 offset 補正を撤去、`persist.rs` の `anchor_edge_basis`／`balloon_offset_to_persist`／`balloon_offset_from_persist` を撤去。**`persist.rs` は約 350 行の改変があり byte-unchanged ではない**。
+    - **byte-unchanged が今も真なのは `placement/resolver.rs`・`spawn.rs`・`config.rs` のみ**（blob ハッシュで確認済み）。
 - **バルーン追従基準の是正（2026-07-31・開発者命令による境界改訂）**: 実機サインオフの目視で「サーフェス切替後にバルーンだけ旧位置へ取り残される」（むらさきの頭上 336px・正 161px）を検出し是正した。
   - **根因**: `placement/follow.rs::resize_window_to` の Bottom 限定 offset 補正。completed `areka-P0-position-persist` が実機サインオフ最終盤に **SSP 突合なしの直観**で導入（要件・設計に記載なし・commit 9d5c8bd）し、先行 completed `areka-P0-surface-resize-resnap` の **Req2.6「随伴バルーン窓の追従 offset を維持し」＝窓相対契約を檻ごと反転**させていた。Bottom 限定ゆえ Free/Top/Left/Right とセマンティクスが分裂していた。
   - **是正**: 当該補正と `persist.rs` の `anchor_edge_basis` / `balloon_offset_to_persist` / `balloon_offset_from_persist` を撤去。runtime・保存の双方でバルーン相対を**窓（char 左上）基準**に統一（全アンカーで `balloon_pos − char_pos ≡ offset` 不変）。**キャラ窓位置の下端中央符号化（`char_pos_to_origin_x` 系・step 3b）は無改変**。
