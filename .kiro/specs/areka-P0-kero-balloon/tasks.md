@@ -178,6 +178,21 @@
   - 観測可能な完了状態: 目視とログ突合の双方で scope 別解決が確認され、x 方向の基本位置が確定している
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 7.3, 7.6_
   - _Depends: 5.3_
+  - **ログ突合の半分は完了（2026-07-31・実 DPI 120＝k=1.25・exit 0）**。実走ログ全文は scratchpad `areka_signoff.txt`。値の突合結果:
+    | 観測点 | scope 0 | scope 1 |
+    |---|---|---|
+    | 採用面（R6.1） | `balloons0.png`（tier=Own） | **`balloonk0.png`**（tier=Own） |
+    | 連鎖（R6.1） | `[balloonp0def, balloons]` | `[balloonp1def, balloonk, balloonp0def, balloons]` |
+    | 上書き層（R2.2） | `balloons0s.txt` | **`balloonk0s.txt`** |
+    | `windowposition`（R6.3） | (266, −129) | **(−190, −75)** |
+    | `validrect`（R6.3） | (46,−56,36,−44) | **(40,−70,24,−48)** |
+    | バルーン窓寸（R3.1） | 500×280 | **360×254** |
+    | side / 調整量（観測点 4） | Left / (+333, −161) | Right / (+238, −94) |
+    - R6.2 の縮退 warn は**バルーン由来ゼロ**＝両 scope とも自系列の面 0 を保持（正しい姿）。他の WARN は shell bake の既知 KeyColor・teardown 由来で無関係。
+    - `resolve_balloon_faces` の info! は実測でも **scope あたり 3 行**（design.md 観測点 1 の実装時訂正どおり）。
+  - **未完（人の判断が要る 2 点）**: ①本体側と相方側の枠形状・表示位置が互いに異なることの**目視**確認（R7.3）、②`windowposition.x` の基本位置と符号の向きの**実機確定**（R7.6）。目視用の起動コマンド（自動終了なし）:
+    `RUST_LOG=info target/debug/areka.exe <abs emo2> <abs emo2/emo2-kakukaku>`
+    実走前に必ず `Copy-Item target\i686-pc-windows-msvc\debug\shiori-host32-helper.exe target\debug\shiori-host32-helper.exe -Force`（workspace ビルドが x64 版を置くため）。
 
 - [ ] 6.2 互換対応表へ正典整合と裁量の記録を追加する
   - 正規名の先行探索が areka 裁量の正規化拡張であること（正典は当該系列を三人目以降として記述している）
