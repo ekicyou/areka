@@ -199,7 +199,9 @@ design.md は `follow.rs:880-907`（`follow_balloon` 経路）を挙げていた
 
 ## 2. 実機採取記録（Phase B・**タスク 4.5 が記入する**）
 
-> **本節は空である。** 埋めるのはタスク 4.5（開発者が実機で実行するゲートタスク）であり、**推測や代替で埋めてはならない**。採取は `diagnosis-procedure.md` の手順に厳密に従い、**Phase A 完了・S1/S2 是正未投入のビルド**で行う（是正投入後は消失の実機再現自体が起きなくなり、Q1〜Q4 の確定材料が永久に失われる）。
+> **本節はセッション①のみ記入済み（2026-07-31）。セッション②は未採取。** 埋めるのはタスク 4.5（開発者が実機で実行するゲートタスク）であり、**推測や代替で埋めてはならない**。採取は `diagnosis-procedure.md` の手順に厳密に従い、**Phase A 完了・S1/S2 是正未投入のビルド**で行う（是正投入後は消失の実機再現自体が起きなくなり、Q1〜Q4 の確定材料が永久に失われる）。
+>
+> **タスク 4.5 は未完である**——2 セッション採取が完了条件であり、①だけでは Req 2.4（ドラッグ**以外**の経路で消失した場合の主体名指し）を単独観測できない。②未採取のまま 4.5 を `[x]` にしてはならない。
 >
 > 本節の結果がどうであれ、**§1 の 4 件の確定と是正は取り消されない**（§0.2）。
 
@@ -207,30 +209,142 @@ design.md は `follow.rs:880-907`（`follow_balloon` 経路）を挙げていた
 
 | 項目 | 値 |
 | --- | --- |
-| 採取ビルドのコミット SHA | _（4.5 が記入）_ |
-| ビルドプロファイル | _（4.5）_ |
-| モニタ構成（台数・拡大率・座標） | _（4.5・`[diag.monitor]` の全行を引用）_ |
-| OS ビルド／採取日時 | _（4.5）_ |
-| 生ログの保存パス（リポジトリ外） | _（4.5）_ |
+| 採取ビルドのコミット SHA | `0db483e`（Phase A 完了・S1/S2/S3/S3′ 是正未投入） |
+| ビルドプロファイル | **release**（手順書 §1.2 は dev を指定するが、dev では描画スレッドが 1 コアの 45.3% を消費し手動ドラッグが困難だったため変更。release 実測 13.4%。§0.1 の絶対条件「是正未投入のビルド」は満たしており、`tracing` は release でも落ちない） |
+| モニタ構成 | 2 台・混在 DPI・負座標あり（下表） |
+| OS ビルド／採取日時 | Microsoft Windows 11 Pro build 26200／2026-07-31T16:35:44+09:00 |
+| 生ログの保存パス（リポジトリ外） | `%LOCALAPPDATA%\areka-diag\20260731-163422-rel\session1-drag.log`（6,953,820 B・31,460 行） |
+| 有界自動終了 | `AREKA_APP_SMOKE_EXIT_MS=1800000`（30 分）・実際の走行 07:34:22Z〜08:04:22Z |
+
+モニタ構成（`[diag.monitor]` 全行の引用）:
+
+```
+[diag.monitor] index=0 handle=1574999 bounds=0,0,2880,1800     work_area=0,0,2880,1704     dpi=192 primary=true
+[diag.monitor] index=1 handle=264283  bounds=-2560,195,0,1795  work_area=-2560,195,0,1795  dpi=144 primary=false
+```
+
+手順書 §1.3 の観測条件（混在 DPI・負座標・非対称 work area）をすべて充足している。monitor0 は下端 96px がタスクバー（1800→1704）、monitor1 は全面が work area（1795）で、**両者の下端が 91px 異なる**——この 91 が以下 §2.3／§2.5 の判定に繰り返し現れる定数である。
 
 ### 2.2 セッション充足（Req 1.9）
 
 | セッション | `SESSION-QUOTA` | scope 別 `low2high` / `high2low` / `total` | 備考 |
 | --- | --- | --- | --- |
-| ①ドラッグのみ | _（4.5）_ | _（4.5）_ | — |
-| ②ドラッグ禁止・OS 設定変更のみ | _（4.5）_ | _（4.5）_ | `SESSION2-NO-DRAG` の判定も併記 |
+| ①ドラッグのみ | **PASS** | scope0: 12 / 12 / 24　scope1: 10 / 10 / 20（キャラ窓のみ・下限は各 3） | 下限 12 に対し実績 **44**。手順書 §5 の 2 段 grep をそのまま適用 |
+| ②ドラッグ禁止・OS 設定変更のみ | **未採取** | — | `SESSION2-NO-DRAG` の判定も併記すること |
+
+2 段 grep の実行結果（第 1 段＝`[diag.window_move]` からの `scope`→`entity` 対応表、第 2 段＝当該 `entity=` の受理行計数）:
+
+```
+scope->char   : {'0': ['4v0'], '1': ['6v0']}
+scope->balloon: {'0': ['3v0'], '1': ['5v0']}
+
+entity=4v0 kind=char    scope=0  low2high=12 high2low=12 total=24
+entity=6v0 kind=char    scope=1  low2high=10 high2low=10 total=20
+entity=3v0 kind=balloon scope=0  low2high=11 high2low=11 total=22
+entity=5v0 kind=balloon scope=1  low2high=9  high2low=9  total=18
+                                            全 entity 合計 = 84
+SESSION-QUOTA: PASS  (44 / 12)
+```
+
+方向は同行の `old_dpi_x` と `new_dpi_x` の比較で判定した（192↔144 の往復のみ）。**全 entity で low2high と high2low が厳密に等しい**——ドラッグでモニタ間を往復した操作と整合し、受理の取りこぼしが無いことの傍証になる。
+
+`[diag.window_move]` の route 内訳（総 4,296 件）:
+
+| route | 件数 | 読み |
+| --- | --- | --- |
+| `BalloonFollow` | 4,211 | ドラッグ中の毎フレーム随伴（大半） |
+| `DpiReproject` | 44 | **キャラ窓の DPI 受理 44 回と厳密に一致**＝全受理で射影が走った |
+| `KeepPositionResize` | 40 | 位置据置きリサイズ |
+| `ReportedSizeReconcile` | 1 | 起動直後の k₀ 補正 1 回のみ |
+
+**D13（route 語彙 9 種化）の実機的正当性がここで確認された**——`ReportedSizeReconcile` は起動時 1 回だけ立ち、`DpiReproject` は DPI 受理と 1:1 である。1.4 是正前の実装（両者に `DpiReproject` を貼る）であれば、DPI 変化ゼロの起動直後に偽の `DpiReproject` が 1 件混入し、この 44:44 の一致が崩れて突合が成立しなかった。
 
 ### 2.3 Q1〜Q4 の回答（Req 2.1〜2.5・実機ログの該当行を引用）
 
-| 問い | 対応 AC | 回答 | 引用行 |
+| 問い | 対応 AC | 回答（セッション①） | 根拠 |
 | --- | --- | --- | --- |
-| **Q1** 窓追従は暴走か操作どおりか | 2.3 | _（4.5）_ | _（マウス移動量と窓移動量の数値対応）_ |
-| **Q2** 消失時の所在は真の不可視か可視領域内の見落としか | 2.2 | _（4.5）_ | _（矩形 × 全 work area の突合結論）_ |
-| **Q3** 消失はドラッグ以外の経路か（最終位置を書いた主体） | 2.4 | _（4.5）_ | _（`route=` 語 or drag or os-suggested で名指し）_ |
-| **Q4** バルーン消失はキャラ随伴か独立か | 2.5 | _（4.5）_ | _（相対位置の保存の実測）_ |
+| **Q1** 窓追従は暴走か操作どおりか | 2.3 | **操作どおり（暴走なし）** | 窓移動量／マウス移動量の比が中央値 1.000・p05=p95=1.000。\|比\|>3 は **0 / 3,488 組** |
+| **Q2** 消失時の所在は真の不可視か可視領域内の見落としか | 2.2 | **消失そのものが発生せず**（判定不能ではなく、判定対象がゼロ） | `VANISH-TRACE: NONE`（4,098 件全数突合・全 work area 非交差はゼロ） |
+| **Q3** 消失はドラッグ以外の経路か（最終位置を書いた主体） | 2.4 | **該当なし**（消失ゼロゆえ）。ただし**書込主体が 2 者いる事実は確認**——下記「二重ライターの実機確認」 | `applied=true` 84/84 → 直後に areka `DpiReproject` が上書き |
+| **Q4** バルーン消失はキャラ随伴か独立か | 2.5 | **該当なし**（消失ゼロゆえ） | — |
 
-消失痕跡の判定語（両セッション分）: _（4.5・`VANISH-TRACE: NONE` または `FOUND …`）_
-終了時静穏（Req 6.2/6.3）: _（4.5・`TEARDOWN-SILENCE`）_
+消失痕跡の判定語（セッション①）: **`VANISH-TRACE: NONE`**（②は未採取）
+終了時静穏（Req 6.2/6.3）: **`TEARDOWN-SILENCE: FAIL`**（下記 §2.3.4）
+
+#### 2.3.1 Q1 の実測（Req 2.3・暴走の否定）
+
+`wintf::ecs::drag` の `[DragEvent] Dispatching`（`trace` 水準・手順書 §3.1 O10）を 4,156 件採取し、各イベント直後の `[guarded_set_window_pos]` と対応付けて、マウスの水平移動量に対する窓の水平移動量の比を求めた。
+
+```
+DragEvent 件数: 4156   （entity=4v0: 2243 / entity=6v0: 1913）
+マウス→窓 の対応が取れた組: 4156
+窓移動量/マウス移動量 の比: n=3488
+  median=1.000  p05=1.000  p95=1.000  min=-1.455  max=1.065
+  |比|>3（暴走候補）の件数: 0 / 3488
+```
+
+**分布が 1.000 に集中し外れ値が存在しない**——ドラッグ経路そのものは 1:1 で追従しており、消失の原因ではない。`min=-1.455` はモニタ跨ぎ直後の 1 フレームに現れる符号反転で、DPI 受理と同時刻に集中する（Q3 の二重ライターの帰結であり、ドラッグ経路の暴走ではない）。
+
+#### 2.3.2 Q2 の実測（Req 2.2・幾何突合）
+
+`[diag.window_move]` の全レコードに対し、寸法を持たないレコード（`w=-`／`h=-`＝`SWP_NOSIZE` 経路）は同 entity の直前の実寸を引き継ぐ規則で矩形を復元し、§2.1 の 2 つの work area と交差判定した。
+
+```
+判定した窓移動レコード: 4,098 件
+全 work area と非交差だったもの: 0 件
+VANISH-TRACE: NONE
+```
+
+**セッション①では「真の不可視」も「可視領域内の見落とし」も発生していない。** ただし採取中、開発者は目視で**バルーンが見えなくなる**現象を報告している。上記のとおり幾何的には常に可視領域内にあったため、これは**位置の問題ではなく Z オーダーの問題**である（シェルが前面へ上がってもバルーンの Z オーダーが追随せず他アプリ窓の背後へ潜る）。本 spec の担当外として `.kiro/specs/areka-P0-ghost-window-zorder/` へ切り出し済み。**Req 2.2 の「可視領域内の見落とし」の実例が Z オーダー起因で存在した**という事実を、本 spec の結論の一部として記録する。
+
+#### 2.3.3 二重ライターの実機確認（Q3 の副産物・S1 の直接証跡）
+
+消失は起きなかったが、**位置を書く主体が 1 回の DPI 変化につき 2 者いる**ことが実機で確定した。
+
+```
+[WM_DPICHANGED] suggested position write decision : 84 件
+  applied= の内訳 : {'true': 84}      ← false は 1 件も無い
+```
+
+wintf 側が OS 提案位置を **84/84 で無条件に窓へ書き**、その直後に areka 側の `DpiReproject` が自身の確定値で上書きしている。両者の差は小さくない:
+
+```
+OS提案=(-430, 701)  → 直後 areka DpiReproject 書込=(-361, 974)   dx=+69   dy=+273
+OS提案=(-468, 701)  → 直後 areka DpiReproject 書込=(-829, 974)   dx=-361  dy=+273
+OS提案=( 59,1104)  → 直後 areka DpiReproject 書込=(-368,1195)   dx=-427  dy=+91
+```
+
+**Y 差は常に +273 または ±91 の定数**（＝ DPI 比と work area 下端差から決まる射影量）である一方、**X 差は −861〜+861 の範囲でばらつく**。この非対称は §1.1（S1＝X を再計算せず OS 提示値を素通し）と §1.2（S2＝Y の再射影がゲートされる）の**出力上の指紋**そのもので、静的構造証跡の 2 件が実機で別々の症状として現れることを裏づける。
+
+セッション①で消失に至らなかったのは、**キャラ窓の DPI 受理 44 回すべてで `DpiReproject` の上書きが後続したため**（§2.2 の route 内訳が 44:44 で一致）。この上書きが走らない経路——`reconcile_window_size` が再導出結果を返さない経路（§1.2）——が実在すれば、OS 提案位置がそのまま残る。**セッション②（ドラッグ禁止・OS 設定変更のみ）はまさにその経路を単独で叩く採取であり、①の結果では代替できない。**
+
+#### 2.3.4 `TEARDOWN-SILENCE: FAIL`（Req 6.2/6.3・タスク 3.2 の穴）
+
+終了処理で `WARN` が 3 件残った。
+
+```
+DEBUG wintf::ecs::window::window_handle: Entity being removed, sending WM_CLOSE entity=5v0 …
+DEBUG …                                                                        entity=3v0 …
+DEBUG …                                                                        entity=6v0 …
+DEBUG …                                                                        entity=4v0 …
+INFO  wintf::ecs::app: [App] Last window closed.
+INFO  areka: smoke 自動 close: 起動窓（ダミー窓／ゴースト窓）を despawn しました count=4
+WARN  bevy_ecs::world: Could not despawn entity: … ID 5v0 is invalid; its index now has generation 1.
+WARN  bevy_ecs::world: Could not despawn entity: … ID 3v0 is invalid; …
+WARN  bevy_ecs::world: Could not despawn entity: … ID 6v0 is invalid; …
+```
+
+**原因は特定済み**: `despawn_smoke_targets`（`crates/areka/src/main.rs:795-810`）が query で 4 体を集めてからループで `world.despawn(e)` を呼ぶが、**1 体目の despawn が連鎖して残り 3 体も破棄する**ため、ループの後半が既に無効な entity を叩いている。存在確認が無い。
+
+これは**タスク 3.2 と同一の欠陥クラス**（「entity 不在＝破棄済みは正常終了系」）だが、3.2 は**消費側 4 入口**（`follow.rs` の `resize_window_to`／`resize_window_keep_position`・`frame.rs` の `resnap_with`／`reconcile_reported_sizes`）にガードを敷いたのに対し、**despawn の呼出点そのもの**は範囲外だった。Req 6.2 の完了状態「破棄済み窓に対する警告以上のログが 1 行も出ない」は現状**未達**である。→ タスク 7.3 の担当範囲として申し送る（§5 参照）。
+
+#### 2.3.5 参考: 本 spec 範囲外だが実機で確認された事象
+
+| 事象 | 件数 | 扱い |
+| --- | --- | --- |
+| `[WM_WINDOWPOSCHANGED] DPI center correction skipped: BoxStyle not found`（`wintf::ecs::window_proc::dpi_helpers`） | **84**（＝DPI 受理と同数） | **全 DPI 変化で center correction が不発**している。位置権威の是正（5.1）で当該経路ごと不要になる可能性が高いため、5.1 実装時に到達性を再確認すること |
+| `kanade: Steady 待ち点で想定外の SHIORI 応答` | 79 | 本 spec 範囲外（SHIORI 応答系） |
+| `atlas 未束縛 element: resolve 失敗 … purple/a/null.png` | 3 | 既知の α 無し `null.png`・表示無害 |
 
 ### 2.4 「再現しない」と結論する場合の適用範囲（Req 2.6）
 
@@ -240,23 +354,73 @@ design.md は `follow.rs:880-907`（`follow_balloon` 経路）を挙げていた
 - **除外するのは「実機でしか確定できない残余仮説に対する追加修正」のみ**であることの明記（§0.2）
 - 受理回数が下限に満たないセッションは「再現しない」の根拠に用いていないことの確認
 
+**現時点（セッション①のみ）では本条を適用できない。** ①は `SESSION-QUOTA: PASS` かつ `VANISH-TRACE: NONE` だが、②が未採取であり、しかも §2.3.3 で示したとおり**①が消失に至らなかった機構的理由は「`DpiReproject` の上書きが 44/44 で後続したこと」**である。その上書きが走らない経路（§1.2 の S2 ゲート）は②が叩く対象であり、①の結果は②の代替にならない。
+
+なお②が `VANISH-TRACE: NONE` であっても、**§1 の S1〜S3′ の確定と是正 5.1／5.2／6.1／6.2、檻 7.1／7.2 は除外されない**（§0.2・Req 2.6／2.9／5.1／5.4）。とりわけ S1 は §2.5 のとおり**実機で 84/84 の陽性痕跡**を残しており、「再現しない」の対象ですらない。
+
 ### 2.5 S1〜S3′ の実機痕跡の有無（Req 2.9）
 
 > **痕跡が観測されなくても §1 の確定は取り消さない**（Req 2.9 の明文）。本表は因果の確認であって確定の関門ではない。
 
-| ID | 実機ログ上の痕跡 | 根拠行 |
+| ID | 実機ログ上の痕跡（セッション①） | 根拠行 |
 | --- | --- | --- |
-| S1 | _（4.5・`diagnosis-procedure.md` §7.1 の残余 A 手順で「提案位置が実際に窓へ書かれた」ことを確認する）_ | _（4.5）_ |
-| S2 | _（4.5）_ | _（4.5）_ |
-| S3 | _（4.5・Phase A では `NearestFallback` warn が未実装ゆえ幾何突合で判定する）_ | _（4.5）_ |
-| S3′ | _（4.5・同上）_ | _（4.5）_ |
+| S1 | **陽性・決定的**。OS 提案位置が **84 回中 84 回**そのまま窓へ書かれた（`applied=false` はゼロ）。書かれた X は areka の権威 X と最大 861px 乖離する | `[WM_DPICHANGED] suggested position write decision entity=4v0 hwnd=HWND(0xbe0bb4) applied=true suggested_left=-430 suggested_top=701`（line 3902 ほか計 84 行） |
+| S2 | **陽性・1 件**。キャラ窓の全書込 45 件のうち **1 件で接地点規約が破れた**（下記 §2.5.1） | `[diag.window_move] route=DpiReproject entity=4v0 kind=char scope=0 x=-287 y=883 w=573 h=821 dpi=144`（line 7968） |
+| S3 | **陰性**（4,098 件すべて work area と交差・`VANISH-TRACE: NONE`）。§1.3 の確定は取り消さない（Req 2.9） | — |
+| S3′ | **幾何的には陰性**。ただし**目視ではバルーンが消失**した——原因は Z オーダーであり位置ではない（§2.3.2） | — |
+
+#### 2.5.1 S2 の実機痕跡（接地点規約の破れ・全数検査）
+
+キャラ窓の寸法つき書込 45 件すべてについて、接地点 `ground = (x + w/2, y + h)` が**当該窓が乗るモニタの `work_area.bottom` と一致するか**を検査した（§0 の接地点規約＝下端中央）。
+
+```
+規約に合致 : 44 件
+規約が破れ :  1 件
+
+line7968  route=DpiReproject entity=4v0 scope=0 dpi=144
+          rect=(-287, 883, 573x821)  ground=(-1, 1704)
+          → 接地先は monitor1（x=-1 は monitor1 の領域）・その work_area.bottom=1795
+          → ずれ = -91px（キャラが接地面から 91px 浮いている）
+```
+
+`ground_y` の全分布は以下のとおりで、**破れは分布上の単独の外れ値として現れる**:
+
+| `ground_y` | `dpi` | 件数 | 判定 |
+| --- | --- | --- | --- |
+| 1704 | 192 | 23 | 正常（monitor0 の下端） |
+| 1795 | 144 | 21 | 正常（monitor1 の下端） |
+| **1704** | **144** | **1** | **破れ**——dpi=144 の窓が monitor1 上にありながら monitor0 の下端に接地している |
+
+ずれ量 −91px は §2.1 で述べた**2 モニタの work area 下端差そのもの**であり、「変化後の DPI に対応する work area で射影し直されなかった」ことを意味する。これは §1.2 の S2（位置の再射影が窓寸の再導出結果に条件付けられ、得られない経路で欠落する）が**実機で 1 回顕在化した**ものである。
+
+**1 件でも十分な証跡である**理由: この破れが起きるには「DPI は変化したが再導出結果が得られない」という条件が必要で、①のようにドラッグで能動的にモニタを跨ぐ操作では寸法報告がほぼ毎回間に合う。**セッション②（OS 設定側から拡大率を変える）はこの条件を系統的に発生させる**と予想され、②で件数が増えるか否かが S2 の実機的な重大度の指標になる。
+
+なお破れた行の直前の決定行は `applied=true suggested_left=-383 suggested_top=701` で、書かれた `y=883` とは一致しない——**この破れは OS 提案の直接転写ではなく、areka 側の射影が古い work area で走った結果**である。S1（X の素通し）とは独立した欠陥であることが出力から区別できる。
 
 ### 2.6 決定論化できない残余のサインオフ（Req 5.5）
 
 | 残余 | 判定語 | 実値 |
 | --- | --- | --- |
-| A: OS が実際に提示する提案矩形 | _（4.5・`RESIDUE-A-SUGGESTED-RECT`）_ | _（4.5・提案矩形の実値 1 例）_ |
-| B: 実モニタ列挙 | _（4.5・`RESIDUE-B-MONITOR-ENUM`）_ | _（4.5）_ |
+| A: OS が実際に提示する提案矩形 | **`RESIDUE-A-SUGGESTED-RECT: PASS`**（84 件観測・すべて `applied=true`） | `entity=4v0 hwnd=HWND(0xbe0bb4) applied=true suggested_left=-430 suggested_top=701`（line 3902）／`entity=6v0 … suggested_left=59 suggested_top=1104`（line 15013・OS が正の X を提示した例） |
+| B: 実モニタ列挙 | **`RESIDUE-B-MONITOR-ENUM: PASS`**（wintf 側・areka 側が完全一致） | 下記 |
+
+残余 B の両側突合（D12 の「共有語彙 grep 突合」が実機で成立することの確認）:
+
+```
+wintf : [initialize_layout_root] Creating Monitor entity handle=1574999
+        bounds_left=0 bounds_top=0 bounds_right=2880 bounds_bottom=1800
+        work_area=0,0,2880,1704 dpi=192 is_primary=true
+areka : [diag.monitor] index=0 handle=1574999
+        bounds=0,0,2880,1800 work_area=0,0,2880,1704 dpi=192 primary=true
+
+wintf : [initialize_layout_root] Creating Monitor entity handle=264283
+        bounds_left=-2560 bounds_top=195 bounds_right=0 bounds_bottom=1795
+        work_area=-2560,195,0,1795 dpi=144 is_primary=false
+areka : [diag.monitor] index=1 handle=264283
+        bounds=-2560,195,0,1795 work_area=-2560,195,0,1795 dpi=144 primary=false
+```
+
+`handle`・`bounds`・`work_area`・`dpi`・`primary` の 5 フィールドすべてが両側で一致した。**タスク 1.2／1.3 が揃えたフィールド名規約と、タスク 4.1 が追加した `wintf::ecs::layout::systems::monitor_systems=debug` の必要性が、ここで実機により裏づけられた**（この 1 語が無ければ wintf 側の行が暗転し、本突合は成立しなかった）。
 
 ---
 
@@ -438,8 +602,15 @@ test result: FAILED. 1 passed; 3 failed; 0 ignored; 0 measured; 594 filtered out
 | §0・§1 | **4.2（完了）** | 規約と静的構造証跡 4 件の先行登記 |
 | §3.1 | 4.3（赤）→ 7.1（緑） | S1 専用の実行記録 |
 | §3.2 | 4.4（赤）→ 7.1（緑） | S2 専用の実行記録 |
-| §2 | 4.5 | 実機 2 セッションの採取結果・Q1〜Q4・S1〜S3′ の痕跡 |
+| §2 | 4.5（**セッション①のみ記入済み・②未採取**） | 実機 2 セッションの採取結果・Q1〜Q4・S1〜S3′ の痕跡 |
 | §4 | 7.4 | 是正後の実機再サインオフ |
+
+**§2 の未了分**（タスク 4.5 が②採取後に追記する）:
+
+- §2.2 の②行（`SESSION-QUOTA` と `SESSION2-NO-DRAG`）
+- §2.3 の Q1〜Q4 に②の結果を併記（①で「該当なし」とした Q3／Q4 は、②で消失が起きれば実答が入る）
+- §2.4 の「再現しない」判定（**①だけでは適用不可**）
+- §2.5 の S1〜S3′ に②の痕跡を併記（とくに **S2 の破れ件数が②で増えるか**が重大度の指標）
 
 **メンテ規約**:
 

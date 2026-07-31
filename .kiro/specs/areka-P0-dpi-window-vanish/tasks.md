@@ -130,6 +130,8 @@
   - 完了状態: 診断レポートに Q1〜Q4 の回答が実機ログの該当行引用付きで並び、受理回数の充足が数値で示されている
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.9_
   - _Depends: 4.1, 4.2, 4.3, 4.4_
+  - _進捗（2026-07-31）_: **セッション①（ドラッグ）採取・分析完了**——`SESSION-QUOTA: PASS`（44/12）・`VANISH-TRACE: NONE`（4,098 件）・**S1 陽性 84/84**・**S2 陽性 1/45**・`RESIDUE-A/B: PASS`・`TEARDOWN-SILENCE: FAIL`。`diagnosis-report.md` §2.1〜§2.6 へ登記済み。生ログ＝`%LOCALAPPDATA%\areka-diag\20260731-163422-rel\session1-drag.log`（commit `0db483e`・release）
+  - _残（開発者ゲート）_: **セッション②（ドラッグ禁止・OS 表示設定から拡大率のみ変更）が未採取**。①が消失に至らなかった機構的理由は「`DpiReproject` の上書きが 44/44 で後続したこと」であり、その上書きが走らない S2 ゲート経路は②でしか叩けない＝**①は②の代替にならない**。②採取まで本タスクを `[x]` にしないこと
 
 - [ ] 5. Phase C: 位置権威の是正
 - [ ] 5.1 S1 是正: OS 提案位置の源断ちとゴースト窓への外部権威宣言
@@ -198,7 +200,8 @@
 - [ ] 7.3 レジストリ掃除の回帰檻（despawn 消費側の檻を単独所有）
   - despawn フック発火で該当 scope が除去されること・後追いの片割れが no-op になること・掃除の前後で他 scope の位置・寸法・追従関係が不変であることを檻で固定する
   - 掃除後に再スナップと寸法報告の回収が走っても警告が出ず、他の scope を処理し切ることをログ捕捉で確認する
-  - 完了状態: 掃除に関する檻一式が緑になり、終了時ログから良性の警告が消えたことがテストで固定される
+  - _追加（2026-07-31・4.5 セッション①で実測）_: **`despawn_smoke_targets`（`crates/areka/src/main.rs:795-810`）に存在確認を敷く**——query で 4 体を集めてからループで `world.despawn(e)` を呼ぶが、1 体目の despawn が連鎖して残りも破棄するため、後半 3 回が既に無効な entity を叩き `bevy_ecs::world: Could not despawn entity` の `WARN` が 3 件出る（`TEARDOWN-SILENCE: FAIL` の唯一の原因）。3.2 が敷いた**消費側 4 入口**のガードは despawn の**呼出点そのもの**を覆っていなかった。3.2 と同じ区別（entity 不在＝正常終了系／規約 component 欠落＝真の異常）をここにも適用し、檻で固定する
+  - 完了状態: 掃除に関する檻一式が緑になり、終了時ログから良性の警告が消えたことがテストで固定される。**`despawn_smoke_targets` 由来の `Could not despawn entity` が 0 件になる**
   - _Requirements: 6.1, 6.2, 6.3, 6.4_
   - _Depends: 3.2_
   - （再スナップ・回収相の檻を 7.2 と同じテストモジュールへ書くため、7.2 との並行は不可＝despawn 消費側の檻は本タスクが単独所有）
@@ -213,6 +216,11 @@
 
 ## Implementation Notes
 
+- **4.5 セッション①（2026-07-31）→ 5.1／5.2／6.1／7.3 への必須申し送り**: 実機で**S1 が 84/84 の陽性**（`applied=true` のみ・`false` ゼロ）、**S2 が 45 件中 1 件の陽性**（接地点 −91px）。消失（`VANISH-TRACE`）は NONE だが、**その理由は「キャラ窓の DPI 受理 44 回すべてで `DpiReproject` の上書きが後続したから」**であって欠陥が無いからではない（route 内訳が 44:44 で一致）。**「再現しなかった」を 5.1／5.2 の縮小根拠に使ってはならない**（§0.2）。
+- **4.5 セッション①（S1/S2 の出力上の指紋）**: 二重ライターの差分は **Y が定数（±91 / ±273）・X が可変（−861〜+861）**という非対称を示す。Y の定数性＝S2（射影量が固定量として欠落）、X の可変性＝S1（OS 提示値の素通し）。**5.1 是正後は X 差が消え、5.2 是正後は §2.5.1 の `ground_y=1704 dpi=144` の外れ値が消える**——7.4 の再サインオフはこの 2 点を判定語にできる。
+- **4.5 セッション①（D13 の実機的裏づけ）**: `ReportedSizeReconcile` は起動直後 **1 件のみ**、`DpiReproject` は **44 件＝キャラ窓 DPI 受理と 1:1**。1.4 是正前の実装（両者に `DpiReproject`）なら起動時の 1 件が偽の DPI レコードとして混入し、この 44:44 の一致が崩れて突合そのものが成立しなかった。**語彙完全化が診断の前提条件だったことが実測で確認された**。
+- **4.5 セッション①（4.1 手順書の 2 語が実機で効いた）**: `wintf::ecs::layout::systems::monitor_systems=debug` が無ければ残余 B（両側モニタ列挙突合）が成立せず、`wintf::ecs::drag=`**`trace`** が無ければ Req 2.3 の比（4,156 件）が測れなかった。**design.md:476 の例のままなら両方とも欠落していた**。
+- **4.5 セッション①（本 spec 範囲外の発見 2 件）**: ⑴目視のバルーン消失は**幾何ではなく Z オーダー**が原因（4,098 件すべて work area と交差）→ `areka-P0-ghost-window-zorder` へ切り出し済み。⑵`[WM_WINDOWPOSCHANGED] DPI center correction skipped: BoxStyle not found` が **84 件＝DPI 受理と同数**＝全 DPI 変化で center correction が不発。**5.1 で当該経路を触るため、実装時に到達性を再確認すること**（不要になるなら削除、必要なら `BoxStyle` 前提の是正）。
 - **1.4 レビュー #1（REJECTED・2026-07-31）と D13 裁定**: 独立レビューが 3 欠陥を確定——①`reconcile_window_size`（frame.rs:690）の 2 呼出元（dpi 相 frame.rs:841／drain 相 frame.rs:1028）の両方へ `DpiReproject` を貼り、**DPI 変化ゼロの起動直後にも偽の DPI レコードが毎回出る**（drain 相は初回表示 k₀ 補正を含み `Changed<DPI>` 非依存＝frame.rs:983 doc が明言）②frame.rs 側 route 割当に檻ゼロ（「境界制約で書けない」は事実誤認＝`capture_logs` は `pub(crate)` で到達可能）③`\![move]`（move_cue.rs:619→`move_window_to`）の対象窓書込が無記録。**開発者裁定**:「分かるようにログを出せばいい。あとで識別できることが重要。方法は任せる」→ 語彙を 9 種へ完全化（design.md D13 が正本・3 案の解決/未解決対比と帰結もそこに登記）。requirements.md は無改変（Req 1.2/2.4 は経路を一般語で要求＝要件 gap ではない）。**是正済み・レビュー #2 で APPROVED**——レビュアが独立ミューテーションで 4 変異→意図した 4 檻が 1:1 で赤になることを実証（`boot_without_any_dpi_change_emits_no_dpi_reproject_record` は先に「k₀ 補正の書込自体は起きている」を固定してから `DpiReproject` 不在を主張＝非空虚）。
 - **D13 → 4.1（手順書）への申し送り**: grep 判定語の route 語彙は 9 種（`ReportedSizeReconcile`・`MoveCue` を含む）。セッション②の突合では「DPI 由来の書込＝`DpiReproject` のみ」であり `ReportedSizeReconcile` を数えないこと。`\![move]` は `MoveCue`、ドラッグは wintf `[drag]`（diag target 外）が担う——両 target の対応表を必ず載せること。
 - **D13 → 6.1 への申し送り**: 遷移ガードの発火 route 集合は `AnchorChange`/`Resnap`/`DpiReproject`/`ReportedSizeReconcile` の 4 種。`MoveCue` は適用外（スクリプト明示操作の尊重）。
