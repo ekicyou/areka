@@ -127,7 +127,7 @@
   - _Requirements: 7.3, 7.4, 7.5_
   - _Depends: 4.2_
 
-- [ ] 4.6 帳簿の掃除・1 世代 stale 防御・選択起因の失敗例外を実装する
+- [x] 4.6 帳簿の掃除・1 世代 stale 防御・選択起因の失敗例外を実装する
   - 対象トークの完了・slot 置換・終了系遷移で選択帳簿を消去し、帳簿の対象と現行トークが食い違う状態を残さない
   - choice 差替直後の遅延完了通知は 1 世代保持した旧識別子と照合して情報レベルで棄却し、未知識別子のエラー記録を真の欠陥専用に保つ
   - 選択系の応答待ち中の送出失敗は横断的な終了系遷移より先に捌き、エラー記録の上で無応答と同じ扱いで継続する
@@ -214,3 +214,5 @@
 - 4.3: DD-12（mod.rs 横断 Failed 先行アーム）が 4.6 待ちのため、`step()` 経由のカスケード中 Failed は現在も `Unloading{Fault}` へ倒れる。steady 側の 204 相当処理は実装済みで `steady::step` 直呼びの檻で固定。**end-to-end の Failed 檻は 4.6 の担当**。
 - 4.4: `State::snapshot(&self)` / `State::snapshot_with_choice(bool)` を新設し steady の 4 呼出点を差替（design の「5 呼出点」の 5 点目は **4.5 が新設する `OnChoiceTimeout` GET**）。4.5 は新設時に `snapshot_with_choice(true)` 相当（帳簿を `TimeoutInFlight` へ進めた後なら `state.snapshot()` でも可）を選ぶこと。`snapshot_of(&Phase)` は boot 系列・force_quit 専用として残置。
 - 4.5: 新規 trace 語彙 `choice_timeout_ledger_stale`（design ログ表に無い・帳簿と現行 talk の不一致時の非発火ガード）。**4.6 の帳簿掃除（規則 7）が入れば到達不能になる**——4.6 実装後にガードが冗長化していないか確認すること。
+- 4.6: 規則 7 の「close 系遷移」は **ClosePending への実遷移**と解した（active talk 中の `CloseRequest` 受領＝`pending_close` 記録のみでは掃除しない）。受領時に消すと選択解決もタイムアウトも脱出路を失い close がデッドロックするため（レビューで実測確認済み）。
+- 4.6: 新規 trace 語彙 `choice_ledger_cleared`（design ログ表に未記載）。`choice_timeout_ledger_stale` は**残置が正**（規則 1 の棄却 3 経路が不一致帳簿を明示復元するため掃除点を通らない経路が規約上実在）。**7.1 の対応表へ両語彙を記録するか要判断**。

@@ -195,6 +195,32 @@ pub(crate) fn assert_logged(events: &[CapturedEvent], level: Level, event_name: 
     );
 }
 
+/// 捕捉列に `target="kanade"`・`event=event_name` のイベントが**存在しない**ことを表明する。
+///
+/// [`assert_logged`] の否定側。「この経路では当該語彙が発火してはならない」ことが要求である檻
+/// （例: 1 世代 stale 防御が効いているとき `unknown_talk_done` は発火しない・C4 規則 9）で使う。
+pub(crate) fn assert_not_logged(events: &[CapturedEvent], event_name: &str) {
+    assert!(
+        !events
+            .iter()
+            .any(|e| e.target == "kanade" && e.event.as_deref() == Some(event_name)),
+        "発火してはならないログを検出: target=\"kanade\" event=\"{event_name}\"。\n捕捉={events:#?}"
+    );
+}
+
+/// 捕捉列に ERROR レベルのイベントが 1 件も無いことを表明する。
+///
+/// 「正常系のユーザー操作で error レベルのログが出ない」ことが完了状態そのものである檻
+/// （選択の happy path・タスク 4.6）で使う。target は限定しない——正常系で error を出す層は
+/// 存在してはならないためである。
+pub(crate) fn assert_no_error_logs(events: &[CapturedEvent]) {
+    let errors: Vec<_> = events.iter().filter(|e| e.level == Level::ERROR).collect();
+    assert!(
+        errors.is_empty(),
+        "正常系の操作で error レベルのログが出てはならない。\n検出={errors:#?}"
+    );
+}
+
 /// 捕捉列から `target="kanade"`・`event=event_name`・`level` のイベントを 1 件取り出す。
 ///
 /// [`assert_logged`] が「発火したこと」だけを固定するのに対し、本関数は**フィールド値まで

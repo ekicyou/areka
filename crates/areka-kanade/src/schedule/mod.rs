@@ -159,7 +159,11 @@ pub(crate) struct State {
     /// choice 起因の slot 差替で失われた旧 talk_id を 1 世代だけ保持する枠（F1 残余レース対策）。
     ///
     /// 遅れて届く旧 talk の `TalkDone` を `unknown_talk_done`（error）ではなく
-    /// `talk_done_stale_choice`（info）で捌くための照合先（掃除規律はタスク 4.6）。
+    /// `talk_done_stale_choice`（info）で捌くための照合先（[`on_talk_done`] の防御アーム）。
+    ///
+    /// 保持は**ちょうど 1 世代**である（C4 規則 9）: 書き込み点は choice 起因の slot 差替
+    /// （カスケード Value・タイムアウト Value）、消去点は現 talk の `TalkDone` 到達と
+    /// 次の slot 差替（マウス由来の置換を含む）である。
     pub choice_prev_talk: Option<TalkId>,
 }
 
@@ -218,6 +222,43 @@ impl State {
 fn choice_phase_active(phase: &ChoicePhase) -> bool {
     match phase {
         ChoicePhase::Waiting | ChoicePhase::Cascading { .. } | ChoicePhase::TimeoutInFlight => true,
+    }
+}
+
+/// 選択帳簿が **choice in-flight**（選択由来の SHIORI 呼出の応答待ち）かを判定する（DD-12）。
+///
+/// [`choice_phase_active`]（＝選択待ち継続中・`choosing` の源）とは別軸である: `Waiting` は
+/// 選択待ち継続中だが in-flight ではない。横断 `Failed`→`Unloading{Fault}` の免除
+/// （[`on_shiori_reply`] の先行アーム・C4 規則 8）は in-flight のときだけ効かせる——選択待ち中に
+/// 届く `Failed` は pump／マウス由来であり、免除すれば SHIORI 失敗の終了規律（Req6.1）が壊れる。
+///
+/// wildcard を置かないため、段フェーズの追加時は本表での判断がコンパイル時に要求される。
+fn choice_in_flight(phase: &ChoicePhase) -> bool {
+    match phase {
+        ChoicePhase::Cascading { .. } | ChoicePhase::TimeoutInFlight => true,
+        ChoicePhase::Waiting => false,
+    }
+}
+
+/// 選択帳簿を消去する単一の掃除ヘルパ（C4 規則 7・Req1.3／6.2）。
+///
+/// 規則 7 の不変条件は「帳簿の対象 talk ≠ 現行 talk なら即 `None`」である。その不変条件が破れる
+/// 遷移点——**対象トークの完了・slot 置換（マウス由来を含む）・close 系遷移**——で本関数を呼び、
+/// 帳簿の対象と現行トークが食い違う状態を残さない。掃除は状態遷移であって失敗ではないため
+/// `trace!` で観測する（沈黙で捨てる経路は作らない・log-first）。`at` は掃除点の識別子である。
+///
+/// 棄却経路（規則 1 の受領検証）からは呼ばない——棄却の定義は**状態不変**であり、既存帳簿を
+/// 含めて一切書き換えないことが規則 1 の要求だからである。
+pub(super) fn clear_choice_ledger(state: &mut State, at: &'static str) {
+    if let Some(ledger) = state.choice.take() {
+        tracing::trace!(
+            target: "kanade",
+            event = "choice_ledger_cleared",
+            at = at,
+            talk_id = ledger.talk_id.0,
+            stage = steady::choice_phase_label(&ledger.phase),
+            "選択帳簿を消去——帳簿の対象と現行トークの食い違いを残さない（C4 規則 7）"
+        );
     }
 }
 
@@ -419,6 +460,8 @@ fn force_quit(mut state: State, reason: CloseReason) -> (State, Vec<Action>) {
     state.phase = Phase::Unloading {
         cause: TermCause::Forced,
     };
+    // close 系遷移の掃除点（C4 規則 7）: 現行トークは失われるため選択帳簿を残さない。
+    clear_choice_ledger(&mut state, "force_quit");
     let notify =
         Action::ShioriRequest(events::on_close_notify(reason, &snapshot_of(&state.phase)));
     (state, vec![notify, Action::ShioriUnload])
@@ -429,6 +472,9 @@ fn to_unloading_fault(mut state: State) -> (State, Vec<Action>) {
     state.phase = Phase::Unloading {
         cause: TermCause::Fault,
     };
+    // close 系遷移の掃除点（C4 規則 7）。なお choice in-flight の `Failed` は本経路へ来ない
+    // ——[`on_shiori_reply`] の先行アーム（DD-12）が steady へ委譲するためである。
+    clear_choice_ledger(&mut state, "unloading_fault");
     (state, vec![Action::ShioriUnload])
 }
 
@@ -439,34 +485,55 @@ fn to_unloading_fault(mut state: State) -> (State, Vec<Action>) {
 /// dispatcher の slot 差替に伴う `Interrupted` は dispatcher が stale として破棄するため、
 /// `Interrupted` が kanade まで到達することは想定されない。到達した場合も専用状態は起こさず
 /// `Ended` と同一経路（非 quit）へ防御的に委譲し、`info!` でどの reason だったかを観測する。
-fn on_talk_done(state: State, done: TalkDone, config: &KanadeConfig) -> (State, Vec<Action>) {
+fn on_talk_done(mut state: State, done: TalkDone, config: &KanadeConfig) -> (State, Vec<Action>) {
     match current_talk_id(&state.phase) {
-        Some(active) if active == done.talk_id => match done.reason {
-            TalkEndReason::Quit => {
-                // 既知 talk の Quit → 終了系列（Quit）へ直行（Req 4.3）。
-                let mut state = state;
-                tracing::info!(target: "kanade", event = "talk_done_quit", talk_id = done.talk_id.0, "reason=Quit——終了系列（Quit）へ");
-                state.phase = Phase::Unloading {
-                    cause: TermCause::Quit,
-                };
-                (state, vec![Action::ShioriUnload])
+        Some(active) if active == done.talk_id => {
+            // 現 talk の完了に到達した時点で 1 世代 stale 帳簿の役目は終わる（C4 規則 9）。
+            // 保持を延長すると「1 世代のみ」の契約が壊れ、真に未知の id まで info へ降格し得る。
+            state.choice_prev_talk = None;
+            match done.reason {
+                TalkEndReason::Quit => {
+                    // 既知 talk の Quit → 終了系列（Quit）へ直行（Req 4.3）。
+                    tracing::info!(target: "kanade", event = "talk_done_quit", talk_id = done.talk_id.0, "reason=Quit——終了系列（Quit）へ");
+                    state.phase = Phase::Unloading {
+                        cause: TermCause::Quit,
+                    };
+                    // 対象トークの完了かつ close 系遷移の掃除点（C4 規則 7）。
+                    clear_choice_ledger(&mut state, "talk_done_quit");
+                    (state, vec![Action::ShioriUnload])
+                }
+                TalkEndReason::Interrupted => {
+                    // 非 quit 扱い（観測用ログ）。本アームは元々「M1 では到達しない想定」の防御で
+                    // あったが、**選択タイムアウトの解除経路により正規の到達点になった**（DD-11）:
+                    // タイムアウト 204 → [`Action::CancelChoice`] → dispatcher が slot を維持したまま
+                    // `Close` を転送 → talk が `TalkDone{Interrupted}` を正規送出 → ここへ到達 →
+                    // フェーズ固有遷移（steady）が `Steady{None}` へ復帰させる（Req7.5）。
+                    // 遷移・ログ語彙・レベルはいずれも無改変である（意味づけのみが変わった）。
+                    tracing::info!(target: "kanade", event = "talk_done_interrupted_as_non_quit", talk_id = done.talk_id.0, "reason=Interrupted——非 quit 扱い・フェーズ固有遷移へ委譲（選択解除の正規到達点・DD-11）");
+                    dispatch_phase(state, Input::TalkDone(done), config)
+                }
+                TalkEndReason::Ended => {
+                    // Ended（定常復帰・close talk 完了）はフェーズ固有遷移へ委譲。
+                    dispatch_phase(state, Input::TalkDone(done), config)
+                }
             }
-            TalkEndReason::Interrupted => {
-                // 非 quit 扱い（観測用ログ）。本アームは元々「M1 では到達しない想定」の防御で
-                // あったが、**選択タイムアウトの解除経路により正規の到達点になった**（DD-11）:
-                // タイムアウト 204 → [`Action::CancelChoice`] → dispatcher が slot を維持したまま
-                // `Close` を転送 → talk が `TalkDone{Interrupted}` を正規送出 → ここへ到達 →
-                // フェーズ固有遷移（steady）が `Steady{None}` へ復帰させる（Req7.5）。
-                // 遷移・ログ語彙・レベルはいずれも無改変である（意味づけのみが変わった）。
-                tracing::info!(target: "kanade", event = "talk_done_interrupted_as_non_quit", talk_id = done.talk_id.0, "reason=Interrupted——非 quit 扱い・フェーズ固有遷移へ委譲（選択解除の正規到達点・DD-11）");
-                dispatch_phase(state, Input::TalkDone(done), config)
-            }
-            TalkEndReason::Ended => {
-                // Ended（定常復帰・close talk 完了）はフェーズ固有遷移へ委譲。
-                dispatch_phase(state, Input::TalkDone(done), config)
-            }
-        },
+        }
         Some(_) | None => {
+            // 1 世代 stale 防御（C4 規則 9・F1 残余レース・Req1.6）: choice 起因の slot 差替直後は、
+            // 旧 talk の即時 `Done{Ended}`（再生層の即 settle）が dispatcher の slot 差替より前に
+            // 投函され得る——この遅延 `Done` は**欠陥ではなく既知の順序レース**である。よって
+            // 1 世代保持した旧 talk_id と照合し、一致するものは info で棄却して
+            // `unknown_talk_done`（error）を真に未知の id 専用に保つ（正常系で error を出さない）。
+            // 保持は消さない——消去点は現 talk の `TalkDone` 到達と次の slot 差替である（規則 9）。
+            if state.choice_prev_talk == Some(done.talk_id) {
+                tracing::info!(
+                    target: "kanade",
+                    event = "talk_done_stale_choice",
+                    talk_id = done.talk_id.0,
+                    "選択差替で置き換えた旧 talk の遅延完了通知——状態を変えず棄却（C4 規則 9・F1）"
+                );
+                return (state, Vec::new());
+            }
             // 未知 talk_id の TalkDone → error!＋現 Phase 維持（Req 2.5・6.2）。
             tracing::error!(target: "kanade", event = "unknown_talk_done", talk_id = done.talk_id.0, "未知 talk_id の再生完了通知——現 Phase 維持で継続");
             (state, Vec::new())
@@ -496,6 +563,23 @@ fn on_shiori_reply(
     // 指示＋完了固定ログを添えて OnFirstBoot へ続行する。Failed の Fault 化を封じるため横断判定より先に捌く。
     if matches!(state.phase, Phase::BootPrefetch) {
         return boot::step(state, Input::ShioriReply { outcome, origin }, config);
+    }
+
+    // choice in-flight（カスケード段／タイムアウト GET の応答待ち）の応答は横断 Failed→Fault 経路に
+    // 載せない（選択の失敗でゴーストを終了させない・Req4.5／DD-12・C4 規則 8）。prefetch の先行アームと
+    // **同型**に、横断判定より先に steady へ委譲する。委譲先（steady の choice 先行アーム）が Failed を
+    // `choice_shiori_failed_as_204`（error）記録の上で 204 と同一に扱い、会話を止めずに継続させる。
+    //
+    // 条件を `Steady` かつ in-flight（`Cascading|TimeoutInFlight`）に限るのが要点である: 選択待ち
+    // （`Waiting`）中に届く Failed は pump／マウス由来であり、免除すると SHIORI 失敗時の終了規律
+    // （Req6.1）が非 choice 経路まで緩む。非 choice 経路は無改変で従来どおり Unloading{Fault} へ倒れる。
+    if matches!(state.phase, Phase::Steady { .. })
+        && state
+            .choice
+            .as_ref()
+            .is_some_and(|ledger| choice_in_flight(&ledger.phase))
+    {
+        return steady::step(state, Input::ShioriReply { outcome, origin }, config);
     }
 
     // 応答待ちフェーズでの Failed は横断的に Unloading{Fault} へ（Req 6.1）。
@@ -585,8 +669,10 @@ fn current_talk_id(phase: &Phase) -> Option<TalkId> {
 
 #[cfg(test)]
 mod tests {
+    use super::log_capture::{assert_logged, assert_not_logged, capture};
     use super::*;
     use crate::msg::ShioriFailure;
+    use tracing::Level;
 
     fn config() -> KanadeConfig {
         KanadeConfig::new("master", "1.0.0")
@@ -1362,6 +1448,108 @@ mod tests {
             );
             assert!(!snapshot.choice_active, "帳簿なしでは choosing は非アクティブ");
         }
+    }
+
+    // ============================================================
+    // 1 世代 stale 防御（タスク 4.6・C4 規則 9・F1 残余レース・Req1.6）
+    // ============================================================
+    //
+    // choice 起因の slot 差替直後は、旧 talk の即時 `Done{Ended}`（drive.rs の即 settle）が
+    // dispatcher の slot 差替より前に投函され得る（design F1「順序の決定性と残余レース」）。
+    // 到着した遅延 `TalkDone` は `choice_prev_talk` と照合して `talk_done_stale_choice`（info）
+    // で棄却し、`unknown_talk_done`（error）を**真に未知の id 専用**に保つ。
+
+    /// `choice_prev_talk` を仕込んだ `Steady{Some(active)}` を組む。
+    fn state_with_prev_talk(active: TalkId, prev: TalkId) -> State {
+        let mut s = state_in(steady_with_talk(active));
+        s.choice_prev_talk = Some(prev);
+        s
+    }
+
+    /// 規則 9: 1 世代保持した旧 talk_id の遅延 `TalkDone` は info で棄却し、状態を壊さない。
+    #[test]
+    fn stale_choice_talk_done_is_demoted_to_info_and_keeps_state() {
+        let cfg = config();
+        let mut out = None;
+        let ev = capture(|| {
+            out = Some(step(
+                state_with_prev_talk(TalkId(9), TalkId(3)),
+                Input::TalkDone(TalkDone {
+                    talk_id: TalkId(3),
+                    reason: TalkEndReason::Ended,
+                }),
+                &cfg,
+            ));
+        });
+        let (next, actions) = out.expect("step は必ず結果を返す");
+        match next.phase {
+            Phase::Steady {
+                talk: Some(ActiveTalk { talk_id, .. }),
+            } => assert_eq!(talk_id, TalkId(9), "遅延 Done は現行 slot を壊さない"),
+            _ => panic!("expected Steady{{Some}} preserved"),
+        }
+        assert!(actions.is_empty(), "遅延 Done は Action を発行しない");
+        assert_logged(&ev, Level::INFO, "talk_done_stale_choice");
+        assert_not_logged(&ev, "unknown_talk_done");
+        assert_eq!(
+            next.choice_prev_talk,
+            Some(TalkId(3)),
+            "stale 帳簿は現 talk の TalkDone 到達まで保持する（1 世代・規則 9）"
+        );
+    }
+
+    /// 規則 9: `unknown_talk_done`（error）は**真に未知の id 専用**のまま保つ。
+    #[test]
+    fn truly_unknown_talk_done_still_logs_error() {
+        let cfg = config();
+        let mut out = None;
+        let ev = capture(|| {
+            out = Some(step(
+                state_with_prev_talk(TalkId(9), TalkId(3)),
+                Input::TalkDone(TalkDone {
+                    talk_id: TalkId(777),
+                    reason: TalkEndReason::Ended,
+                }),
+                &cfg,
+            ));
+        });
+        let (next, actions) = out.expect("step は必ず結果を返す");
+        assert_logged(&ev, Level::ERROR, "unknown_talk_done");
+        assert_not_logged(&ev, "talk_done_stale_choice");
+        assert!(actions.is_empty());
+        assert!(matches!(next.phase, Phase::Steady { talk: Some(_) }));
+    }
+
+    /// 規則 9: 現 talk の `TalkDone` 到達で 1 世代保持は消え、以後の同 id は真に未知へ戻る。
+    #[test]
+    fn current_talk_done_clears_the_one_generation_stale_slot() {
+        let cfg = config();
+        let (after_current, _) = step(
+            state_with_prev_talk(TalkId(9), TalkId(3)),
+            Input::TalkDone(TalkDone {
+                talk_id: TalkId(9),
+                reason: TalkEndReason::Ended,
+            }),
+            &cfg,
+        );
+        assert!(
+            after_current.choice_prev_talk.is_none(),
+            "現 talk の TalkDone 到達で 1 世代保持を消去する（規則 9）"
+        );
+        // 消去後に届く旧 id は真に未知＝error へ戻る（保持は 1 世代のみ）。
+        let mut out = None;
+        let ev = capture(|| {
+            out = Some(step(
+                after_current,
+                Input::TalkDone(TalkDone {
+                    talk_id: TalkId(3),
+                    reason: TalkEndReason::Ended,
+                }),
+                &cfg,
+            ));
+        });
+        let _ = out.expect("step は必ず結果を返す");
+        assert_logged(&ev, Level::ERROR, "unknown_talk_done");
     }
 }
 
