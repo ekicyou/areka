@@ -49,7 +49,7 @@
   - _Requirements: 4.3, 5.1_
   - _Boundary: wintf 表示基盤（DPI component・ウィンドウメッセージ補助関数）_
 
-- [ ] 2.2 (P) work area 解決の判別付き版と可視性の遷移ガード純関数
+- [x] 2.2 (P) work area 解決の判別付き版と可視性の遷移ガード純関数
   - 既存の work area 解決関数の契約を変えないまま、「窓中心がモニタに帰属したか／どのモニタにも属さず最近傍フォールバックが発火したか」を判別して返す版を追加し、既存関数はそれへ委譲する
   - 可視性の遷移ガードを純関数として追加する。規則は「提案矩形がいずれかの work area と交差→そのまま／交差せず旧矩形は交差していた→X のみ clamp／旧矩形も交差していなかった（ユーザーの明示留置）→尊重してそのまま／旧矩形不明→安全側に clamp」
   - 判定は絶対 px の固定値ではなく交差・不変条件で表現し、Y は一切変更しない（Y は射影の所有）
@@ -223,6 +223,9 @@
 - **1.3 → 5.1 への申し送り**: `window_pos.rs` の実施可否行の `applied` は Phase A では `let applied = true;` の定数（分岐は 5.1 の所有）。design.md:319 が挙げる `policy` フィールドも未出力＝`DpiSuggestedRectPolicy` を新設する 2.1 の後、5.1 で `applied` の分岐化と同時に追加すること。
 - **2.1 → 5.1 への申し送り**: `dpi_suggested_position_decision`（`crates/wintf/src/ecs/window_proc/dpi_helpers.rs`・`pub(super) fn(Option<&DpiSuggestedRectPolicy>, &RECT) -> Option<(i32, i32)>`）の戻り値 `Option` は **`DpiChangeContext::set` と `guarded_set_window_pos` の双方を 1 個の `if let Some((x, y))` で束ねて分岐させる**ためのもの（D3 帰結）。**シグネチャを広げる必要はない**——レビュアが design.md:319 と突合して確認済み。配線時に同関数の `#[allow(dead_code)]`（dpi_helpers.rs:31）を外すこと。
 - **2.1**: `DpiSuggestedRectPolicy` は `crates/wintf/src/ecs/mod.rs` の curated `pub use window::{…}` へ載せてある（areka は `wintf::ecs::{…}` 経由でしか import しない＝`placement/spawn.rs:63` の流儀）。5.1 の areka 側付与は wintf を編集せずに書ける。
+- **2.2 → 6.1／6.2 への申し送り**: `guard_visibility`（`crates/areka/src/placement/follow.rs:1397`）は**意図的に無ログ**——`ClampX`／`NearestFallback` の warn は route で分岐する（Req 3.3・D13 帰結⑴・design.md:432）ため純関数層では書けない。**配線側で `warn!` を必ず出すこと**（出さなければ Req 3.1/3.2 の観測が欠落する）。`clamp_wa` は引数ゆえシグネチャ拡張は不要だが、**射影が Y に用いたのと同じ work area を渡すこと**（別モニタの矩形を渡すと事後条件が崩れる・follow.rs:1373-1376 に明記）。配線時に `#[allow(dead_code)]` 3 箇所（`:1334`／`:1345`／`:1396`）を外すこと。
+- **2.2（檻の空虚性の教訓・重要）**: 「不変を主張する檻」は**変異が不動点に落ちないか**を確かめること。初版の Y 不変檻は全探針の Y が `wa.bottom - h`（＝work area Y clamp の不動点）だったため、ガードが Y も clamp する変異を入れても 578 件全緑＝**空虚**だった（`y + 1` のような粗い変異だけ捕まえていた）。是正版は clamp 範囲**外**の Y を探針に加え、さらに「探針 Y が不動点でないこと」自体を `assert!` で自己検査し、分岐識別（`matches!(verdict, ClampX(_))`）も同時に固定している。以後 X/Y/寸の不変を主張する檻は同じ形で書くこと。
+- **2.2**: 委譲等価性の檻（`follow.rs:2010` 付近）は委譲が成立する限り構造上失敗し得ない**同語反復**であり、将来の乖離ガードとしてのみ保持。「既存関数の戻り値が不変」の実証は既存 5 檻（`:1748`／`:1771`／`:1785`／`:1806`／`:1826`）が担う。等価性檻を証跡として数えないこと。
 - **2.1**: dpi=96 の檻は**政策分岐に対して意図的に無差別**（`ExternalAuthority` 変異で緑のまま・座標変異で赤）。これが Req 5.1 の「96 が欠陥を隠す」性質そのもので、分岐網羅は専用 3 檻が担う。以後 96 の檻を「分岐を見ていない」と誤診して強化しないこと。
 - **1.3**: wintf 側に `crates/wintf/src/ecs/test_support.rs`（`#[cfg(test)]` 限定・`capture_under_filter(directives, f)`）を新設済み。`tracing-subscriber` は dev-dependency のみで本番バイナリ非到達。以後の wintf 側ログ檻はこれを使うこと。
 - **1.3**（既知の既存不良・本 spec 範囲外）: `cargo clippy -p wintf` は `com/d2d/command_sink.rs:107,128,155` の `not_unsafe_ptr_arg_deref` で失敗する（本 spec 以前から）。clippy を DoD に使わないこと。

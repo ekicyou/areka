@@ -1255,7 +1255,47 @@ impl MonitorSnapshot {
 ///
 /// 距離は i128 で自乗和を取り、極端な仮想スクリーン座標でも溢れない
 /// （panic しない契約・resolver の saturating 演算と同じ防波堤）。
+///
+/// # 判別付き版への委譲（task 2.2・D6）
+///
+/// 本関数は [`work_area_for_window_with_origin`] の**戻り値から判別を落とすだけ**の
+/// 薄いラッパである（契約不変＝既存呼出元の挙動は 1 bit も変わらない。等価性は
+/// `work_area_for_window_delegates_to_with_origin` が檻で固定する）。
 pub fn work_area_for_window(snapshot: &MonitorSnapshot, window: RectPx) -> Option<RectPx> {
+    work_area_for_window_with_origin(snapshot, window).map(|(wa, _)| wa)
+}
+
+// =============================================================================
+// 可視性の遷移ガード＋work area 解決の判別（task 2.2・D6/S3′・Req 3.1/3.2/5.3）
+// =============================================================================
+
+/// [`work_area_for_window_with_origin`] が work area を決めた**規則**（D6・Req 3.2）。
+///
+/// 最近傍フォールバックは「どのモニタにも属さない」＝モニタ構成情報と実画面の
+/// 食い違い／窓が可視領域外という**異常の兆候**でありながら、[`work_area_for_window`]
+/// の戻り値だけでは正常な帰属と区別できない（S3 の後半＝「最近傍フォールバックが
+/// 異常を無観測で吸収する」）。本 enum はその区別を呼出側へ返すためだけに在る。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WorkAreaResolution {
+    /// 窓中心がその work area に帰属した（half-open 判定・正常）。
+    Contains,
+    /// どのモニタにも属さず、最近傍フォールバックで選ばれた（Req 3.2 の観測点）。
+    NearestFallback,
+}
+
+/// [`work_area_for_window`] の判別付き版（D6・Req 3.2）。
+///
+/// 解決規則そのものは [`work_area_for_window`] の doc が定める決定論規則と**完全に
+/// 同一**（中心の半開帰属・昇順 index 先勝ち・最近傍は clamp 点自乗距離最小・空
+/// snapshot は `None`）。違いは「どちらの規則で決まったか」を
+/// [`WorkAreaResolution`] として併せて返す点だけである。
+///
+/// 消費側（task 6.1 で配線）は `NearestFallback` を非ドラッグ経路でのみ `warn!` へ
+/// 昇格させる（ドラッグ経路は毎イベント発火ゆえ従来 `debug!` 水準を維持・Req 3.3）。
+pub fn work_area_for_window_with_origin(
+    snapshot: &MonitorSnapshot,
+    window: RectPx,
+) -> Option<(RectPx, WorkAreaResolution)> {
     let cx = (window.left as i64 + window.right as i64) / 2;
     let cy = (window.top as i64 + window.bottom as i64) / 2;
 
@@ -1266,7 +1306,7 @@ pub fn work_area_for_window(snapshot: &MonitorSnapshot, window: RectPx) -> Optio
             && (wa.top as i64) <= cy
             && cy < (wa.bottom as i64)
     }) {
-        return Some(*wa);
+        return Some((*wa, WorkAreaResolution::Contains));
     }
 
     // どこにも属さない → 最近傍（clamp 点との自乗距離最小・等距離は先勝ち）
@@ -1283,6 +1323,136 @@ pub fn work_area_for_window(snapshot: &MonitorSnapshot, window: RectPx) -> Optio
             dx * dx + dy * dy
         })
         .copied()
+        .map(|wa| (wa, WorkAreaResolution::NearestFallback))
+}
+
+/// [`guard_visibility`] の判定（D6・S3/S3′）。
+///
+/// いずれの腕も**最終位置そのもの**を持つ（呼出側が「clamp されたか」を見て warn
+/// 水準を分岐しつつ、位置は腕を問わず [`VisibilityVerdict::position`] で取れる）。
+#[allow(dead_code)] // 配線は task 6.1（キャラ窓）／6.2（バルーン窓）＝Phase C の領分
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VisibilityVerdict {
+    /// 提案位置をそのまま採る（交差維持・またはユーザーの明示留置の尊重）。
+    Keep(PointPx),
+    /// 交差→非交差の遷移を検出し、X のみ `clamp_wa` の水平範囲へ引き戻した。
+    ClampX(PointPx),
+}
+
+impl VisibilityVerdict {
+    /// 判定によらず最終位置を取り出す。
+    #[allow(dead_code)] // 配線は task 6.1／6.2（Phase C）
+    pub fn position(self) -> PointPx {
+        match self {
+            VisibilityVerdict::Keep(p) | VisibilityVerdict::ClampX(p) => p,
+        }
+    }
+}
+
+/// 可視性の**遷移**ガード（純関数・非ドラッグ経路専用・D5/D6・Req 3.1/3.2/3.4）。
+///
+/// S3／S3′ が登記する欠陥は「キャラ窓・バルーン窓の水平方向に可視性の不変条件が
+/// 存在しない」ことである。本関数はその不変条件を**遷移**として定義する——静的な
+/// 「常に可視領域内」ではない。ユーザーが自ら画面外へ運んだ窓を引き戻すのは
+/// 明示操作の否定であり本 spec の Out of scope だからである。
+///
+/// # 判定規則（4 分岐・すべて交差の有無で表現＝絶対 px の閾値を持たない・Req 5.6）
+///
+/// | 提案矩形が work area 集合と交差 | 旧矩形 | 判定 |
+/// | --- | --- | --- |
+/// | する | 問わない | [`Keep`](VisibilityVerdict::Keep)（素通し） |
+/// | しない | 交差していた | [`ClampX`](VisibilityVerdict::ClampX)（可視→不可視の遷移を阻止） |
+/// | しない | 交差していなかった | [`Keep`](VisibilityVerdict::Keep)（ユーザーの明示留置を尊重） |
+/// | しない | `None`（不明） | [`ClampX`](VisibilityVerdict::ClampX)（安全側） |
+///
+/// # 引数
+///
+/// - `old_rect`: 書込**前**の窓矩形（現 `WindowPos` の position＋size）。窓生成直後等で
+///   読めない場合は `None`＝安全側 clamp。
+/// - `proposed_pos`／`size`: 射影 T が出した提案位置と、その位置に置く窓の寸。
+/// - `clamp_wa`: clamp 先の work area。**射影が Y に用いたのと同じ矩形**を呼出側が
+///   貫通させる（task 6.1 が [`work_area_for_window_with_origin`] の戻り値を渡す）。
+///   ガード内で引き直さないのは、Y と X が別モニタを基準にする不整合を作らないため。
+/// - `snapshot`: 交差判定に用いる全 work area 集合。
+///
+/// # 事後条件・不変条件
+///
+/// - **Y は一切変更しない**（Y は射影 T の所有・D6）。`Keep`／`ClampX` のいずれでも
+///   `verdict.position().y == proposed_pos.y`。
+/// - `ClampX` の X は `clamp_wa.left ..= clamp_wa.right − size.w` の範囲へ入る
+///   （`saturating` 演算・逆転区間でも panic しない `min`/`max` 流儀）。窓幅が
+///   work area より広い場合は `left` が勝つ＝左端合わせで**必ず水平に重なる**。
+/// - 正寸かつ `proposed_pos` の Y 範囲が `clamp_wa` と重なるとき（＝射影 T が Y を
+///   決めた正常系）、`ClampX` 後の矩形は `clamp_wa` と交差する＝完全不可視が消える。
+/// - World 非依存・副作用なし・panic しない。ログは出さない——`ClampX`／
+///   `NearestFallback` の `warn!` は route（経路タグ）で水準が変わる呼出側の責務
+///   （Req 3.3・ドラッグ経路 spam 回避の水準分岐は route を持つ層でしか書けない）。
+///
+/// # 縮退
+///
+/// 空 snapshot では何も交差しないため、`old_rect` が `Some`（＝同じく非交差）なら
+/// `Keep`＝現状維持。架空の可視領域を発明しない（resolver／`work_area_for_window`
+/// と同方針）。
+#[allow(dead_code)] // 配線は task 6.1（キャラ窓）／6.2（バルーン窓）＝Phase C の領分
+pub fn guard_visibility(
+    old_rect: Option<RectPx>,
+    proposed_pos: PointPx,
+    size: SizePx,
+    clamp_wa: RectPx,
+    snapshot: &MonitorSnapshot,
+) -> VisibilityVerdict {
+    // 1. 提案矩形がどれかの work area と交差していれば可視性は失われていない。
+    if intersects_any_work_area(snapshot, rect_at(proposed_pos, size)) {
+        return VisibilityVerdict::Keep(proposed_pos);
+    }
+
+    // 2. 旧矩形も非交差だった＝ユーザーが自ら画面外へ留置した窓（Out of scope）。
+    //    旧矩形不明（`None`）はここに含めない＝安全側で clamp する。
+    let was_already_off_screen = match old_rect {
+        Some(old) => !intersects_any_work_area(snapshot, old),
+        None => false,
+    };
+    if was_already_off_screen {
+        return VisibilityVerdict::Keep(proposed_pos);
+    }
+
+    // 3. 交差→非交差の遷移（または旧矩形不明）＝X のみ引き戻す。Y は射影の所有。
+    VisibilityVerdict::ClampX(PointPx {
+        x: clamp_x_into(proposed_pos.x, size.w, clamp_wa),
+        y: proposed_pos.y,
+    })
+}
+
+/// 位置＋寸から窓矩形を作る（`right`/`bottom` は排他側・`saturating` で溢れない）。
+fn rect_at(pos: PointPx, size: SizePx) -> RectPx {
+    RectPx {
+        left: pos.x,
+        top: pos.y,
+        right: pos.x.saturating_add(size.w),
+        bottom: pos.y.saturating_add(size.h),
+    }
+}
+
+/// 2 矩形が**面積を持って**重なるか（半開区間・接触のみは交差としない）。
+fn rects_intersect(a: RectPx, b: RectPx) -> bool {
+    (a.left as i64) < (b.right as i64)
+        && (b.left as i64) < (a.right as i64)
+        && (a.top as i64) < (b.bottom as i64)
+        && (b.top as i64) < (a.bottom as i64)
+}
+
+/// いずれかの work area と交差するか（空 snapshot は常に `false`）。
+fn intersects_any_work_area(snapshot: &MonitorSnapshot, window: RectPx) -> bool {
+    snapshot
+        .work_areas
+        .iter()
+        .any(|wa| rects_intersect(window, *wa))
+}
+
+/// X を `wa.left ..= wa.right − w` へ引き戻す（`i32::clamp` は逆転区間で panic する
+/// ため min/max 流儀・`work_area_for_window` の最近傍 clamp と同型の防波堤）。
+fn clamp_x_into(x: i32, w: i32, wa: RectPx) -> i32 {
+    x.min(wa.right.saturating_sub(w)).max(wa.left)
 }
 
 // =============================================================================
@@ -1656,6 +1826,558 @@ mod tests {
     fn work_area_for_window_empty_snapshot_is_none() {
         let snapshot = MonitorSnapshot { work_areas: vec![] };
         assert_eq!(work_area_for_window(&snapshot, rect(0, 0, 100, 100)), None);
+    }
+
+    // -------------------------------------------------------------------------
+    // work_area_for_window_with_origin ／ guard_visibility
+    // （task 2.2・D6/S3・S3′・Req 3.1/3.2/5.1/5.3/5.6）
+    //
+    // 共通規約: 判定は絶対 px の固定値ではなく**交差・不変条件**で書く（Req 5.6）。
+    // 座標は 96/120/192 の各水準へスケールした合成レイアウト上で構築し、96 の
+    // 自己整合（k=1 で恒等写像に退化して欠陥を隠す性質・Req 5.1）に依存しない。
+    // -------------------------------------------------------------------------
+
+    use super::{
+        VisibilityVerdict, WorkAreaResolution, guard_visibility, work_area_for_window_with_origin,
+    };
+
+    /// DPI 水準（Req 5.1: 96 のほかに 120・192 を必ず含む）。
+    const DPIS: [i32; 3] = [96, 120, 192];
+
+    /// 論理基準値 → 各 DPI の物理 px（整数演算のみ・厳密整除を強制。
+    /// `resolver.rs` の `px()` が donor・Req 5.6）。
+    fn px(logical: i32, dpi: i32) -> i32 {
+        assert_eq!(
+            (logical * dpi) % 96,
+            0,
+            "テスト入力は厳密整除になる論理値（4 の倍数）で構築する"
+        );
+        logical * dpi / 96
+    }
+
+    /// 混在 DPI マルチモニタの合成レイアウト（Req 5.1/5.3）。
+    ///
+    /// - index 0: 96 水準の左モニタ。**負座標**（`-1920..0`）・上端 40px の
+    ///   非対称 work area（`top = -40`）
+    /// - index 1: `dpi` 水準の右モニタ。左端に 64 論理 px のタスクバー＝
+    ///   **非対称 work area**（`left = px(64)`）。192 では右端 3840＝**3200 超座標**
+    ///
+    /// 2 面のあいだ（`0 ..= px(64)`）はどの work area にも属さない帯であり、
+    /// 最近傍フォールバックの発火面として使う。
+    fn mixed_layout(dpi: i32) -> MonitorSnapshot {
+        MonitorSnapshot {
+            work_areas: vec![left_wa(), right_wa(dpi)],
+        }
+    }
+
+    /// 左モニタ（96 水準・負座標）の work area。
+    fn left_wa() -> RectPx {
+        rect(-1920, -40, 0, 1000)
+    }
+
+    /// 右モニタ（`dpi` 水準・非対称）の work area。192 で right=3840（>3200）。
+    fn right_wa(dpi: i32) -> RectPx {
+        rect(px(64, dpi), 0, px(1920, dpi), px(1040, dpi))
+    }
+
+    /// キャラ窓の寸（論理 300x400）。
+    fn char_size(dpi: i32) -> SizePx {
+        SizePx {
+            w: px(300, dpi),
+            h: px(400, dpi),
+        }
+    }
+
+    /// バルーン窓の寸（論理 500x300）。
+    fn balloon_size(dpi: i32) -> SizePx {
+        SizePx {
+            w: px(500, dpi),
+            h: px(300, dpi),
+        }
+    }
+
+    fn point(x: i32, y: i32) -> PointPx {
+        PointPx { x, y }
+    }
+
+    /// 位置＋寸 → 窓矩形（テスト側の独立実装＝実装の `rect_at` を再利用しない）。
+    fn win(pos: PointPx, size: SizePx) -> RectPx {
+        rect(pos.x, pos.y, pos.x + size.w, pos.y + size.h)
+    }
+
+    /// 面積を持つ重なりの独立実装（実装の `rects_intersect` とは別式で書く）。
+    fn overlaps(a: RectPx, b: RectPx) -> bool {
+        a.left.max(b.left) < a.right.min(b.right) && a.top.max(b.top) < a.bottom.min(b.bottom)
+    }
+
+    /// キャラ窓の Bottom 接地位置（射影 T が出す Y＝`wa.bottom − h`）。
+    fn grounded_y(wa: RectPx, size: SizePx) -> i32 {
+        wa.bottom - size.h
+    }
+
+    // --- work_area_for_window_with_origin -------------------------------------
+
+    /// 中心が帰属するときは `Contains` を返す（左右どちらのモニタでも・全水準）。
+    #[test]
+    fn with_origin_reports_contains_when_center_belongs() {
+        for dpi in DPIS {
+            let snapshot = mixed_layout(dpi);
+            let size = char_size(dpi);
+
+            // 右モニタの中央付近
+            let pos = point(px(800, dpi), grounded_y(right_wa(dpi), size));
+            assert_eq!(
+                work_area_for_window_with_origin(&snapshot, win(pos, size)),
+                Some((right_wa(dpi), WorkAreaResolution::Contains)),
+                "dpi={dpi}: 右モニタ内の窓は Contains"
+            );
+
+            // 左モニタ（負座標）の中央付近
+            let pos = point(-1200, grounded_y(left_wa(), size));
+            assert_eq!(
+                work_area_for_window_with_origin(&snapshot, win(pos, size)),
+                Some((left_wa(), WorkAreaResolution::Contains)),
+                "dpi={dpi}: 左モニタ（負座標）内の窓は Contains"
+            );
+        }
+    }
+
+    /// どのモニタにも属さない中心は `NearestFallback` として判別される
+    /// （S3 後半＝最近傍フォールバックが異常を無観測で吸収する性質の是正・Req 3.2）。
+    #[test]
+    fn with_origin_reports_nearest_fallback_when_center_belongs_nowhere() {
+        for dpi in DPIS {
+            let snapshot = mixed_layout(dpi);
+            let size = char_size(dpi);
+
+            // ① 右モニタの右外（192 では 3200 超座標）
+            let far_right = point(
+                px(1920, dpi) + px(400, dpi),
+                grounded_y(right_wa(dpi), size),
+            );
+            let (wa, origin) = work_area_for_window_with_origin(&snapshot, win(far_right, size))
+                .expect("非空 snapshot ゆえ Some");
+            assert_eq!(
+                origin,
+                WorkAreaResolution::NearestFallback,
+                "dpi={dpi}: 右外の窓は最近傍フォールバック"
+            );
+            assert_eq!(wa, right_wa(dpi), "dpi={dpi}: 最近傍は右モニタ");
+
+            // ② 左モニタの左外（負座標側）
+            let far_left = point(-4000, 400);
+            let (wa, origin) = work_area_for_window_with_origin(&snapshot, win(far_left, size))
+                .expect("非空 snapshot ゆえ Some");
+            assert_eq!(
+                origin,
+                WorkAreaResolution::NearestFallback,
+                "dpi={dpi}: 左外の窓は最近傍フォールバック"
+            );
+            assert_eq!(wa, left_wa(), "dpi={dpi}: 最近傍は左モニタ");
+
+            // ③ 2 面のあいだの帯（右モニタのタスクバー上・非対称 work area 由来）
+            //    幅 px(60) の窓を帯へ完全に収め、中心を帯の中へ落とす
+            let strip_size = SizePx {
+                w: px(40, dpi),
+                h: px(40, dpi),
+            };
+            let strip = point(px(12, dpi), px(400, dpi));
+            let (_, origin) = work_area_for_window_with_origin(&snapshot, win(strip, strip_size))
+                .expect("非空 snapshot ゆえ Some");
+            assert_eq!(
+                origin,
+                WorkAreaResolution::NearestFallback,
+                "dpi={dpi}: 非対称 work area の帯（タスクバー上）は帰属なし"
+            );
+        }
+    }
+
+    /// 空 snapshot は判別付き版でも `None`（架空の既定矩形を発明しない）。
+    #[test]
+    fn with_origin_empty_snapshot_is_none() {
+        let snapshot = MonitorSnapshot { work_areas: vec![] };
+        assert_eq!(
+            work_area_for_window_with_origin(&snapshot, rect(0, 0, 100, 100)),
+            None
+        );
+    }
+
+    /// **委譲の等価性**（task 2.2 完了条件）: 既存 `work_area_for_window` の戻り値は
+    /// 判別付き版の第 1 要素と常に一致する＝既存呼出元の挙動が 1 bit も変わらない。
+    ///
+    /// 帰属・最近傍・境界・重複・空 snapshot の全経路を同一の probe 集合で走らせる。
+    #[test]
+    fn work_area_for_window_delegates_to_with_origin() {
+        for dpi in DPIS {
+            let size = char_size(dpi);
+            let snapshots = [
+                mixed_layout(dpi),
+                // 重複（先勝ち）と共有辺（half-open）を含む合成
+                MonitorSnapshot {
+                    work_areas: vec![
+                        rect(0, 0, px(1920, dpi), px(1040, dpi)),
+                        rect(px(1920, dpi), 0, px(3840, dpi), px(1040, dpi)),
+                        rect(-40, -40, px(2000, dpi), px(1100, dpi)),
+                    ],
+                },
+                MonitorSnapshot { work_areas: vec![] },
+            ];
+            let probes = [
+                point(px(800, dpi), grounded_y(right_wa(dpi), size)),
+                point(-1200, 400),
+                point(px(1920, dpi) + px(400, dpi), 100),
+                point(-4000, 2000),
+                point(px(12, dpi), px(400, dpi)),
+                // 共有辺ちょうどに中心が来る位置（half-open の分岐点）
+                point(px(1920, dpi) - size.w / 2, px(500, dpi)),
+            ];
+            for snapshot in &snapshots {
+                for pos in probes {
+                    let window = win(pos, size);
+                    assert_eq!(
+                        work_area_for_window(snapshot, window),
+                        work_area_for_window_with_origin(snapshot, window).map(|(wa, _)| wa),
+                        "dpi={dpi}: 委譲の等価性が崩れた（pos={pos:?}）"
+                    );
+                }
+            }
+        }
+    }
+
+    // --- guard_visibility: キャラ矩形 -----------------------------------------
+
+    /// 提案矩形がいずれかの work area と交差していれば素通し（`Keep`）。
+    /// clamp 先 work area の水平範囲外であっても、交差している限り触らない。
+    #[test]
+    fn guard_keeps_position_while_still_intersecting() {
+        for dpi in DPIS {
+            let snapshot = mixed_layout(dpi);
+            let size = char_size(dpi);
+            let wa = right_wa(dpi);
+            let old = win(point(px(800, dpi), grounded_y(wa, size)), size);
+
+            // 右モニタ内の別位置（交差維持）
+            let proposed = point(px(1200, dpi), grounded_y(wa, size));
+            assert_eq!(
+                guard_visibility(Some(old), proposed, size, wa, &snapshot),
+                VisibilityVerdict::Keep(proposed),
+                "dpi={dpi}: 交差維持は素通し"
+            );
+
+            // 右端から半分はみ出した位置（部分可視＝交差あり）でも素通し
+            let half_out = point(wa.right - size.w / 2, grounded_y(wa, size));
+            assert!(overlaps(win(half_out, size), wa), "前提: 部分可視である");
+            assert_eq!(
+                guard_visibility(Some(old), half_out, size, wa, &snapshot),
+                VisibilityVerdict::Keep(half_out),
+                "dpi={dpi}: 部分可視は clamp しない（美観政策は本 spec 非所有）"
+            );
+        }
+    }
+
+    /// 交差→非交差の**遷移**は X のみ clamp（Y は射影の所有＝不変）。
+    /// clamp 後は clamp 先 work area と交差する＝完全不可視が消える。
+    #[test]
+    fn guard_clamps_x_on_transition_to_invisible() {
+        for dpi in DPIS {
+            let snapshot = mixed_layout(dpi);
+            let size = char_size(dpi);
+            let wa = right_wa(dpi);
+            let y = grounded_y(wa, size);
+            let old = win(point(px(800, dpi), y), size);
+            assert!(overlaps(old, wa), "前提: 旧矩形は可視だった");
+
+            // ① 右外へ吹き飛んだ提案（192 では 4000 超＝3200 超座標）
+            let proposed = point(wa.right + px(600, dpi), y);
+            assert!(
+                !overlaps(win(proposed, size), wa) && !overlaps(win(proposed, size), left_wa()),
+                "前提: 提案矩形はどの work area とも交差しない"
+            );
+            let verdict = guard_visibility(Some(old), proposed, size, wa, &snapshot);
+            let VisibilityVerdict::ClampX(got) = verdict else {
+                panic!("dpi={dpi}: 交差→非交差の遷移は ClampX（got {verdict:?}）");
+            };
+            assert_eq!(got.y, proposed.y, "dpi={dpi}: Y は一切変更しない");
+            assert!(
+                got.x >= wa.left && got.x <= wa.right - size.w,
+                "dpi={dpi}: X は clamp_wa の水平範囲内（got.x={}）",
+                got.x
+            );
+            assert!(
+                overlaps(win(got, size), wa),
+                "dpi={dpi}: clamp 後は clamp 先 work area と交差する"
+            );
+
+            // ② 左外（負座標側）へ吹き飛んだ提案でも同じ規則
+            let proposed = point(left_wa().left - px(2000, dpi), y);
+            assert!(
+                !overlaps(win(proposed, size), wa) && !overlaps(win(proposed, size), left_wa()),
+                "前提: 提案矩形はどの work area とも交差しない"
+            );
+            let verdict = guard_visibility(Some(old), proposed, size, wa, &snapshot);
+            let VisibilityVerdict::ClampX(got) = verdict else {
+                panic!("dpi={dpi}: 左外への遷移も ClampX（got {verdict:?}）");
+            };
+            assert_eq!(got.y, proposed.y, "dpi={dpi}: Y は一切変更しない");
+            assert_eq!(
+                got.x, wa.left,
+                "dpi={dpi}: 左方向の逸脱は clamp_wa.left へ引き戻す"
+            );
+            assert!(overlaps(win(got, size), wa), "dpi={dpi}: 交差が回復する");
+        }
+    }
+
+    /// 旧矩形も非交差だった（ユーザーが自ら画面外へ留置した窓）＝尊重して素通し。
+    /// 本 spec の Out of scope「明示ドラッグでの画面外運搬」を型で守る腕。
+    #[test]
+    fn guard_respects_window_already_parked_off_screen() {
+        for dpi in DPIS {
+            let snapshot = mixed_layout(dpi);
+            let size = char_size(dpi);
+            let wa = right_wa(dpi);
+            let y = grounded_y(wa, size);
+
+            let old = win(point(wa.right + px(400, dpi), y), size);
+            assert!(
+                !overlaps(old, wa) && !overlaps(old, left_wa()),
+                "前提: 旧矩形は既に全 work area と非交差（ユーザー留置）"
+            );
+            let proposed = point(wa.right + px(800, dpi), y);
+            assert_eq!(
+                guard_visibility(Some(old), proposed, size, wa, &snapshot),
+                VisibilityVerdict::Keep(proposed),
+                "dpi={dpi}: 既に非交差なら引き戻さない"
+            );
+        }
+    }
+
+    /// 旧矩形が不明（`None`＝窓生成直後等）は安全側で clamp する。
+    #[test]
+    fn guard_clamps_when_old_rect_is_unknown() {
+        for dpi in DPIS {
+            let snapshot = mixed_layout(dpi);
+            let size = char_size(dpi);
+            let wa = right_wa(dpi);
+            let y = grounded_y(wa, size);
+            let proposed = point(wa.right + px(600, dpi), y);
+
+            let verdict = guard_visibility(None, proposed, size, wa, &snapshot);
+            let VisibilityVerdict::ClampX(got) = verdict else {
+                panic!("dpi={dpi}: 旧矩形不明は安全側 clamp（got {verdict:?}）");
+            };
+            assert_eq!(got.y, proposed.y, "dpi={dpi}: Y は一切変更しない");
+            assert!(
+                overlaps(win(got, size), wa),
+                "dpi={dpi}: clamp 後は clamp 先 work area と交差する"
+            );
+
+            // 旧矩形不明でも、提案が交差しているなら素通し（clamp は遷移時のみ）
+            let inside = point(px(800, dpi), y);
+            assert_eq!(
+                guard_visibility(None, inside, size, wa, &snapshot),
+                VisibilityVerdict::Keep(inside),
+                "dpi={dpi}: 交差している提案は old 不明でも素通し"
+            );
+        }
+    }
+
+    /// 窓幅が clamp 先 work area より広い退化ケース: 左端合わせで必ず水平に重なる
+    /// （`i32::clamp` の逆転区間 panic を踏まない・非 panic 契約）。
+    #[test]
+    fn guard_clamp_handles_window_wider_than_work_area() {
+        for dpi in DPIS {
+            let snapshot = mixed_layout(dpi);
+            let wa = right_wa(dpi);
+            let size = SizePx {
+                w: (wa.right - wa.left) + px(400, dpi),
+                h: px(400, dpi),
+            };
+            let y = grounded_y(wa, size);
+            let old = win(point(wa.left, y), size);
+            let proposed = point(wa.right + px(1200, dpi), y);
+
+            let verdict = guard_visibility(Some(old), proposed, size, wa, &snapshot);
+            let VisibilityVerdict::ClampX(got) = verdict else {
+                panic!("dpi={dpi}: 遷移は ClampX（got {verdict:?}）");
+            };
+            assert_eq!(got.x, wa.left, "dpi={dpi}: 幅超過は left 合わせ");
+            assert!(overlaps(win(got, size), wa), "dpi={dpi}: 交差が回復する");
+        }
+    }
+
+    /// 空 snapshot（縮退）: 何も交差しないため、旧矩形が読めるなら現状維持。
+    /// 架空の可視領域を発明しない。
+    #[test]
+    fn guard_empty_snapshot_keeps_position() {
+        for dpi in DPIS {
+            let snapshot = MonitorSnapshot { work_areas: vec![] };
+            let size = char_size(dpi);
+            let wa = right_wa(dpi);
+            let proposed = point(px(800, dpi), px(600, dpi));
+            let old = win(point(px(700, dpi), px(600, dpi)), size);
+            assert_eq!(
+                guard_visibility(Some(old), proposed, size, wa, &snapshot),
+                VisibilityVerdict::Keep(proposed),
+                "dpi={dpi}: 空 snapshot は現状維持"
+            );
+        }
+    }
+
+    // --- guard_visibility: バルーン矩形（S3′・Req 3.4） -----------------------
+    //
+    // バルーンは**別規則を持たない**——キャラ窓とまったく同一の純関数・同一の
+    // 遷移規則へ、バルーン矩形（`char_pos + offset` と バルーン寸）を渡すだけ。
+
+    /// キャラ窓が右端で clamp された合成で、offset 恒等式が出したバルーン提案位置
+    /// だけが全 work area と非交差になるケース → バルーン矩形も ClampX で救われる。
+    #[test]
+    fn guard_clamps_balloon_rect_that_alone_becomes_invisible() {
+        for dpi in DPIS {
+            let snapshot = mixed_layout(dpi);
+            let wa = right_wa(dpi);
+            let c_size = char_size(dpi);
+            let b_size = balloon_size(dpi);
+
+            // キャラ窓は右端ぎりぎりに clamp 済み（可視）
+            let char_pos = point(wa.right - c_size.w, grounded_y(wa, c_size));
+            assert!(overlaps(win(char_pos, c_size), wa), "前提: キャラは可視");
+
+            // offset 恒等式（キャラの右上へ出す）が work area の外を指す
+            let offset = point(px(320, dpi), -px(200, dpi));
+            let proposed = point(char_pos.x + offset.x, char_pos.y + offset.y);
+            let old_balloon = win(point(px(800, dpi), proposed.y), b_size);
+            assert!(overlaps(old_balloon, wa), "前提: 旧バルーンは可視だった");
+            assert!(
+                !overlaps(win(proposed, b_size), wa) && !overlaps(win(proposed, b_size), left_wa()),
+                "前提: 提案バルーン矩形はどの work area とも交差しない"
+            );
+
+            let verdict = guard_visibility(Some(old_balloon), proposed, b_size, wa, &snapshot);
+            let VisibilityVerdict::ClampX(got) = verdict else {
+                panic!("dpi={dpi}: バルーンも同一規則で ClampX（got {verdict:?}）");
+            };
+            assert_eq!(got.y, proposed.y, "dpi={dpi}: バルーンの Y も変更しない");
+            assert!(
+                got.x >= wa.left && got.x <= wa.right - b_size.w,
+                "dpi={dpi}: バルーン X も clamp_wa の水平範囲内"
+            );
+            assert!(
+                overlaps(win(got, b_size), wa),
+                "dpi={dpi}: clamp 後のバルーン矩形は work area と交差する（Req 3.4）"
+            );
+            // clamp によりキャラと部分的に重なり得る＝許容（見えない会話より重なった会話）
+        }
+    }
+
+    /// バルーンが交差を保っているあいだは素通し（キャラと同一規則）。
+    #[test]
+    fn guard_keeps_balloon_rect_while_intersecting() {
+        for dpi in DPIS {
+            let snapshot = mixed_layout(dpi);
+            let wa = right_wa(dpi);
+            let b_size = balloon_size(dpi);
+            let proposed = point(px(600, dpi), px(200, dpi));
+            let old = win(point(px(500, dpi), px(200, dpi)), b_size);
+            assert_eq!(
+                guard_visibility(Some(old), proposed, b_size, wa, &snapshot),
+                VisibilityVerdict::Keep(proposed),
+                "dpi={dpi}: 交差維持のバルーンは素通し"
+            );
+        }
+    }
+
+    /// ユーザーが画面外へ留置したバルーンは引き戻さない（キャラと同一規則）。
+    #[test]
+    fn guard_respects_balloon_parked_off_screen() {
+        for dpi in DPIS {
+            let snapshot = mixed_layout(dpi);
+            let wa = right_wa(dpi);
+            let b_size = balloon_size(dpi);
+            let old = win(point(wa.right + px(200, dpi), px(200, dpi)), b_size);
+            assert!(
+                !overlaps(old, wa) && !overlaps(old, left_wa()),
+                "前提: 旧バルーンは既に非交差（ユーザー留置）"
+            );
+            let proposed = point(wa.right + px(600, dpi), px(200, dpi));
+            assert_eq!(
+                guard_visibility(Some(old), proposed, b_size, wa, &snapshot),
+                VisibilityVerdict::Keep(proposed),
+                "dpi={dpi}: 留置バルーンは尊重する"
+            );
+        }
+    }
+
+    /// Y 不変の横断檻: 全分岐・キャラ／バルーン両寸で `position().y == proposed.y`
+    /// （Y は射影 T の所有・D6）。分岐の識別（Keep か ClampX か）も同時に固定する。
+    ///
+    /// # 檻の非空虚性の要（レビュー #1・2026-07-31 の指摘に対する是正）
+    ///
+    /// 提案 Y に射影 T 由来の接地値（`wa.bottom − h`）だけを与えると、その Y は
+    /// **work area の Y clamp の不動点**であるため「ガードが Y も clamp する」という
+    /// 実在しやすい退行（`y: proposed.y.min(wa.bottom − h).max(wa.top)`）と正しい実装が
+    /// 区別できず、檻が空虚になる。よって各分岐へ
+    /// `[clamp_wa.top, clamp_wa.bottom − h]` の**範囲外**の Y を必ず通す。
+    ///
+    /// 範囲外 Y の投入は契約上も正当である——`guard_visibility` の前提条件は正寸のみ
+    /// であり（design.md:425）、Y の値域は射影 T の関心であってガードの前提ではない。
+    #[test]
+    fn guard_never_modifies_y_in_any_branch() {
+        for dpi in DPIS {
+            let snapshot = mixed_layout(dpi);
+            let wa = right_wa(dpi);
+            for size in [char_size(dpi), balloon_size(dpi)] {
+                // Y clamp の**不動点**（射影 T が出す接地 Y）＝従来の網羅を維持する側
+                let y_fixed = grounded_y(wa, size);
+                // Y clamp の不動点**ではない** Y ＝ clamp が入れば必ず動く側
+                let y_above = wa.top - px(300, dpi); // 上端より上
+                let y_below = wa.bottom + px(200, dpi); // 下端より下
+                let y_partial = wa.top - size.h / 2; // 上端を跨ぐ（水平内なら交差は保つ）
+                for y in [y_above, y_below, y_partial] {
+                    assert!(
+                        y < wa.top || y > wa.bottom - size.h,
+                        "前提: {y} は work area Y clamp の不動点であってはならない\
+                         （dpi={dpi} size={size:?}）"
+                    );
+                }
+
+                let x_in = px(800, dpi);
+                let x_far = wa.right + px(900, dpi);
+                let old_visible = Some(win(point(px(700, dpi), y_fixed), size));
+                let old_parked = Some(win(point(wa.right + px(500, dpi), y_fixed), size));
+                let in_partial = point(x_in, y_partial);
+                let far_above = point(x_far, y_above);
+                let far_below = point(x_far, y_below);
+                let in_fixed = point(x_in, y_fixed);
+                let far_fixed = point(x_far, y_fixed);
+
+                for (label, old, proposed, expect_clamped) in [
+                    // --- 範囲外 Y（Y clamp 退行を必ず捕まえる側）---
+                    ("Keep 交差維持", old_visible, in_partial, false),
+                    ("ClampX 遷移", old_visible, far_above, true),
+                    ("Keep 留置尊重", old_parked, far_below, false),
+                    ("ClampX 安全側", None, far_below, true),
+                    // --- 不動点 Y（射影 T の実出力に相当する正常系）---
+                    ("Keep 交差維持@接地Y", old_visible, in_fixed, false),
+                    ("ClampX 遷移@接地Y", old_visible, far_fixed, true),
+                    ("Keep 留置尊重@接地Y", old_parked, far_fixed, false),
+                    ("ClampX 安全側@接地Y", None, far_fixed, true),
+                ] {
+                    let verdict = guard_visibility(old, proposed, size, wa, &snapshot);
+                    assert_eq!(
+                        matches!(verdict, VisibilityVerdict::ClampX(_)),
+                        expect_clamped,
+                        "dpi={dpi} {label}: 分岐の識別が想定と違う\
+                         （size={size:?} proposed={proposed:?} verdict={verdict:?}）"
+                    );
+                    assert_eq!(
+                        verdict.position().y,
+                        proposed.y,
+                        "dpi={dpi} {label}: Y は全分岐で不変\
+                         （size={size:?} proposed={proposed:?}）"
+                    );
+                }
+            }
+        }
     }
 
     // -------------------------------------------------------------------------
