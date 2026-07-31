@@ -121,7 +121,7 @@ graph TB
 | DD-1 | `ShioriCall.id` を `EventId { Static(&'static str), Choice(String) }` へ。`origin` は `&'static str` 維持（`Static`→id 転記・`Choice`→固定ラベル `"OnChoiceEvent"`）。応答ルーティングは origin 文字列でなく **`State` の choice in-flight 帳簿照合を先行**させる | 出所（スケジューラ起源／選択起源）を**型で**運び、チョークポイントがカテゴリ別ガードを適用できる（`Cow` 案は出所が消える・`GetDynamic` variant 案より match 波及が小さい）。既存 8 ID・構築関数・檻は `Static` のまま機械的適応のみ |
 | DD-2 | ✅要件確定済（Req2.9）。実装形: `EventId::Choice` は `is_allowed_choice_event`（`On` 接頭・逐語・`OnTalk` も発火）で検証。固定 3 ID（`OnChoiceSelectEx`/`OnChoiceSelect`/`OnChoiceTimeout`）は `ALLOWED_EVENT_IDS` へ追加（マウス 2 イベント追加と同じ前例・「表＝正典固定 ID の部分集合」の性質は不変） | スケジューラ起源の檻（固定表）と選択起源の受理規則（カテゴリ）が**型で分離**され、`OnTalk` 恒久禁止（スケジューラ側）と逐語発火（choice 側）が両立する |
 | DD-3 | `State.choice: Option<ChoiceState>`（Phase 不変・`pending_close` と同型） | Req4.4「既存の決定的状態機械の観測資産を変更しない」に最忠実。Phase の網羅 match 全点が無傷 |
-| DD-4 | **カスケード完了後に解決**。最終段が Value → 同一バッチで `[Action::ResolveChoice, Action::StartTalk]`（この順）。最終段 204／失敗 → `[Action::ResolveChoice]` のみ。両 Action は**同一チャンネル**（`TalkCommand`）を流れ FIFO 順序が保存される | 解決先行だと旧 talk の `TalkDone{Ended}` が slot 差替と競合し、kanade が正常系で `unknown_talk_done`（error!）を観測し得る。カスケード後発なら dispatcher 単一 inbox の FIFO＋同期 join により全順序が決定的（後述 System Flows） |
+| DD-4 | **カスケード完了後に解決**。最終段が Value → 同一バッチで `[Action::ResolveChoice, Action::StartTalk]`（この順）。最終段 204／失敗 → `[Action::ResolveChoice]` のみ。両 Action は**同一チャンネル**（`TalkCommand`）を流れ FIFO 順序が保存される | 解決先行だと旧 talk の `TalkDone{Ended}` が slot 差替と恒常的に競合する。カスケード後発なら dispatcher 単一 inbox の FIFO＋同期 join で概ね決定的——唯一の残余レース（resolve 起因の即時 `Done{Ended}` が `Start` を追い越す）は kanade の 1 世代 stale 帳簿 `choice_prev_talk` で info 降格して吸収する（F1 注記・遷移規則 9） |
 | DD-5 | G3-a。kanade の outbound を `Sender<TalkCommand>` へ差替（`TalkCommand { Start, ResolveChoice, CancelChoice }`・物理定義は areka-talk）。ghost start-relay は `From<TalkCommand> for DispatcherMsg`、dispatcher に `ResolveChoice`/`CancelChoice` アーム追加 | 単一調停・順序保存（DD-4 前提）・`deferral` なしの単一真実源。波及（MockSakura 等）は機械的 |
 | DD-6 | G4-a。talk アクターが `WaitingForChoice` 遷移時に `ChoiceWaiting` 通知（候補 id 列・表示完了時刻・タイムアウト指令同梱）を done ポートへ送出 | 真実源＝再生層（duration 権威直結・Req7.2）。brief 4 の方針（kanade は自分の配送状態を保持）と Req9.1（mock のみで決定論）に整合。UI 監視案（G4-b）は責務三分と決定論檻に反するため却下 |
 | DD-7 | (a) 通知に候補 id 集合を同梱し kanade が照合（id のみで足りる——references は `ChoiceSelection` 自身が運ぶ）。talk 側 `resolve_choice` の照合は二重防御として温存 | 往復追加（案 b）なし・上流依存のみ（案 c）は Req1.4 と衝突 |
@@ -213,7 +213,7 @@ sequenceDiagram
     Note over DP: 新 talk spawn 後 Done Ended old は stale 棄却
 ```
 
-- **順序の決定性**: `ResolveChoice`→`Start` は同一 `TalkCommand` チャンネル＋単一 relay ＋ dispatcher 単一 inbox で FIFO 保存。dispatcher は `Start` 処理内で旧 talk を同期 join するため、旧 talk の `Done` は必ず `Start` より後に dispatcher inbox へ並び、slot 差替済みゆえ stale 棄却される——kanade に旧 talk の `TalkDone` は届かない（`unknown_talk_done` error が正常系で発火しない）。
+- **順序の決定性と残余レース**: `ResolveChoice`→`Start` は同一 `TalkCommand` チャンネル＋単一 relay ＋ dispatcher 単一 inbox で FIFO 保存。Close 起因の `Done{Interrupted}` は `Start` 処理内の同期 join より前に enqueue 済みのため slot 差替後に stale 棄却される。ただし **resolve 起因の即時 `Done{Ended}`**（drive.rs:372-376 の即 settle）は talk アクタースレッドから投函されるため、relay が `ResolveChoice` と `Start` の 2 send の間で停滞すると inbox 順が `[ResolveChoice, Done{Ended,old}, Start]` になり得る——このとき dispatcher は slot 未差替ゆえ転送する。kanade は **1 世代 stale 帳簿 `choice_prev_talk`**（遷移規則 9）で当該 id の遅延 `Done` を `talk_done_stale_choice`（info）へ降格して棄却し、`unknown_talk_done`（error）を真に未知の id 専用に保つ（正常系で error が発火しない保証は帳簿側で成立）。
 - カスケード全段（正典形の Ex→204→無印を含む）は kanade の drive ループ内で**同期完結**する（execute-batch/reinject-last）。段の途中に Tick や別の選択確定が割り込むことは構造的にない。
 
 ### F2: 正典形カスケードと最終 204
@@ -522,6 +522,8 @@ pub(crate) struct State {
     /* 既存 4 フィールド不変 */
     /// 選択待ち〜choice 系 in-flight の帳簿（バリア状態の複製でなく kanade の配送状態）。
     pub choice: Option<ChoiceState>,
+    /// choice 起因 slot 差替の旧 talk_id を 1 世代保持（遅延 TalkDone の info 降格用・F1 残余レース対策）。
+    pub choice_prev_talk: Option<TalkId>,
 }
 pub(crate) struct ChoiceState {
     pub talk_id: TalkId,                 // 対象 talk（ActiveTalk と一致が不変条件）
@@ -565,6 +567,7 @@ pub(crate) enum Input {
 6. **タイムアウト応答**: `Value` → 置換起動（新 talk_id・`choice=None`・Req7.4）。`NoContent`/`Failed` → `choice=None`・`[CancelChoice{talk_id}]`（Req7.5・F3）。
 7. **帳簿の掃除（不変条件: `choice.talk_id` ≠ active talk → 即 `None`）**: `TalkDone`（当該 talk）・slot 置換（マウス由来含む）・close 系遷移で `choice=None`（Req1.3/6.2）。
 8. **mod.rs 横断 Failed アームの免除（DD-12）**: `on_shiori_reply` で `state.choice` が `Cascading|TimeoutInFlight` かつ `Steady` の場合、prefetch と同型に横断 `Failed`→Fault より先へ steady へ委譲。
+9. **1 世代 stale 防御（F1 残余レース）**: choice 起因の slot 差替（カスケード Value・タイムアウト Value）で旧 `talk_id` を `choice_prev_talk` へ保持。当該 id の遅延 `TalkDone` は `talk_done_stale_choice`（info）で棄却し、現 talk の `TalkDone` 到達または次の slot 差替で消去する。`unknown_talk_done`（error）は真に未知の id 専用のまま保つ（Req1.6・log-first 規律）。
 
 **Implementation Notes**
 - Integration: `snapshot_of(&Phase)` は選択待ちを知れないため、**供給側の署名を広げる**（status.rs:209-219 の NOTE どおり）: `State::snapshot(&self) -> ExecutionSnapshot`（phase＋choice から導出）を新設し、steady.rs の 5 呼出点を差し替える。
@@ -689,6 +692,7 @@ impl From<ChoiceWaiting> for DispatcherMsg { .. }
 | `choice_timeout_fired` | info | OnChoiceTimeout 発行 | 7.3 |
 | `choice_timeout_cancelled` | info | 204→CancelChoice 発行 | 7.5 |
 | `talk_command_send_failed` | error | actor 送出失敗（継続） | 1.6 |
+| `talk_done_stale_choice` | info | choice 差替後 1 世代の遅延 TalkDone 棄却（F1 残余レース） | 1.6, 4.3 |
 | `resolve_choice_stale` / `cancel_choice_stale` / `choice_waiting_stale`（dispatcher） | info/warn | stale 棄却・防御 | 1.3, 5.5 |
 
 - 既存語彙の意味変更: `talk_done_interrupted_as_non_quit`（info）は CancelChoice 経路の**正規到達点**になる（コメント更新・檻は既存のまま緑）。
@@ -717,6 +721,7 @@ impl From<ChoiceWaiting> for DispatcherMsg { .. }
 - **(c) choosing**: `ChoiceWaiting` 確立後の Tick pump が NOTIFY・`Status: talking,choosing`／解決後の pump から `choosing` が消える（`shiori_request` 記録の status 検証）。
 - **(d) タイムアウト**: 注入 Tick で deadline 到達→`OnChoiceTimeout`（Ref0=起動 script）GET→204→`TalkCommand::Cancel` 記録→（`TalkDone{Interrupted}` 注入で）`Steady{None}` 復帰→以降の `Choice` 注入が warn 棄却。Value 側は置換 StartTalk。
 - **(e) 一回性**: 1 注入=1 カスケード＋1 Resolve・カスケード中の二重注入棄却・解決後の遅延注入棄却・候補外 id 棄却（log_capture で warn 語彙も固定）。
+- **(e) 補足（in-flight 分岐の檻方式）**: カスケード／タイムアウト in-flight は 1 drive 内で同期完結し `Harness` 注入ではメッセージ境界を跨いで観測できないため、`choice_rejected_busy` 分岐は **`step()` 直呼びの純関数檻**（`State` に `ChoicePhase::Cascading`／`TimeoutInFlight` を直接構成して `Input::Choice` を注入）で固定する。`talk_done_stale_choice`（遷移規則 9 の 1 世代 stale 防御）も同様に `step()` 直呼びで固定する（既存檻流儀＝判断分岐のみ檻・配線は再テストしない、と一致）。
 - **DD-12 檻**: 段 GET を Failed で返し、`Unloading{Fault}` へ**倒れず** 204 相当遷移すること＋既存 `failure_test.rs` の非 choice 経路が不変であること。
 - **sakura 檻（drive）**: `\q` 台本＋注入 Tick で `ChoiceWaiting` が一度だけ届く（id 列・horizon・timeout=None）・resolve 後の再バリアなし・通知後の Close/resolve 順序。
 - **dispatcher 檻**: Resolve/Cancel/ChoiceWaiting の一致中継・不一致 stale 棄却・Cancel→Close 転送→`Done{Interrupted}` が kanade へ届く（slot 維持の直接検証）・換算（base_now+秒×1000）。
