@@ -96,7 +96,7 @@
   - _Boundary: kanade 状態機械, kanade シェル_
   - _Depends: 1.3, 1.4_
 
-- [ ] 4.2 選択待ち通知の受領と帳簿確立を実装する
+- [x] 4.2 選択待ち通知の受領と帳簿確立を実装する
   - 現行トークと識別子が一致する通知のみ受理し、不一致は警告記録の上で棄却する
   - タイムアウト指令を期限へ写して帳簿を確立し、確立を情報レベルで記録する
   - 完了状態: 通知受領後に選択確定が受理可能な状態となり、不一致通知では帳簿が確立されないことをテストが固定する
@@ -209,3 +209,4 @@
 - 3.3: dispatcher の stale 棄却は design 語彙表どおり `info!`（Req1.3/5.5 の「警告」は kanade 層の `choice_rejected_no_wait` が正・dispatcher は二重防御の副）。`warn!` は `base_now == None` の防御専用。`test_log_capture.rs` に `event` フィールド照合（`assert_logged_event`）を additive 追加済み。
 - 4.1: 帳簿型 `ChoiceState`/`ChoicePhase`/`CascadeNext` は design New Files 表（choice.rs）ではなく **`schedule/mod.rs` の `State` 直近**に置いた（C4 コードブロックの提示形・`ActiveTalk` の前例に合わせた）。4.2/4.3 は**どちらか一方に統一**すること（両方に散らばらせない）。
 - 4.1: `schedule/mod.rs` の `Input::{Choice, ChoiceWaiting}` は暫定アーム（`*_dropped_not_wired` warn ＋状態不変）。**4.2 が ChoiceWaiting・4.3 が Choice を `steady` 委譲へ置換**すること。置換時に檻 `warn_choice_*_not_wired_logs` と `*_is_routed_by_provisional_arm_*` を恒久檻へ差し替えること。
+- 4.2: `log_capture` に `CapturedEvent.fields`（全構造化フィールド記録）と `logged_once` を additive 追加。以降の檻はログの**フィールド値**まで突合できる。`choice_waiting_stale` には診断用 `reason`（`no_active_talk`/`talk_id_mismatch`/`non_steady_phase`）を付与。

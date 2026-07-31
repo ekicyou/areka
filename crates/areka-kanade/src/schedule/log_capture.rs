@@ -42,6 +42,7 @@
 //! `with_default` の thread-local subscriber が global を shadow する（`dispatcher.rs:379-398`）
 //! ため thread-local のみへ配送され、捕捉列が相互に混在しない。
 
+use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use tracing::field::{Field, Visit};
@@ -61,17 +62,26 @@ pub(crate) struct CapturedEvent {
     /// イベントメッセージ本文（固定ログ `"shiori resource prefetch done"` の照合に使う）。未設定なら `None`。
     pub message: Option<String>,
     pub level: Level,
+    /// 構造化フィールドの全記録（フィールド名 → 値の文字列表現）。
+    ///
+    /// 文字列フィールドは素の値、それ以外（数値・`?expr` の Debug 記録）は `Debug` 表現が入る。
+    /// 「ログに載っていること」自体が要求である値（例: 選択待ち帳簿確立の候補数・期限）を
+    /// 檻から突合するために使う。
+    pub fields: BTreeMap<String, String>,
 }
 
-/// 照合対象フィールド（`event`・`outcome`）とメッセージ本文（`message`）を取り出す訪問子。
+/// 照合対象フィールド（`event`・`outcome`）とメッセージ本文（`message`）を取り出しつつ、
+/// 全フィールドを [`CapturedEvent::fields`] へ記録する訪問子。
 struct EventFieldVisitor {
     event: Option<String>,
     outcome: Option<String>,
     message: Option<String>,
+    fields: BTreeMap<String, String>,
 }
 
 impl Visit for EventFieldVisitor {
     fn record_str(&mut self, field: &Field, value: &str) {
+        self.fields.insert(field.name().to_string(), value.to_string());
         match field.name() {
             "event" => self.event = Some(value.to_string()),
             "outcome" => self.outcome = Some(value.to_string()),
@@ -82,7 +92,12 @@ impl Visit for EventFieldVisitor {
 
     // `event`／`outcome` は文字列リテラルで渡す規約だが Debug 経路でも拾えるよう保険を掛ける。
     // メッセージ本文（tracing の `message` フィールド）は fmt::Arguments ゆえ Debug 経路で拾う。
+    // 数値・`?expr` など非文字列のフィールドも `Visit` の既定実装が本経路へ落ちるため、
+    // ここで全フィールドを記録すれば取りこぼしがない。
     fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+        self.fields
+            .entry(field.name().to_string())
+            .or_insert_with(|| format!("{value:?}"));
         match field.name() {
             "event" if self.event.is_none() => {
                 self.event = Some(format!("{value:?}").trim_matches('"').to_string());
@@ -112,6 +127,7 @@ where
             event: None,
             outcome: None,
             message: None,
+            fields: BTreeMap::new(),
         };
         event.record(&mut visitor);
         let meta = event.metadata();
@@ -121,6 +137,7 @@ where
             outcome: visitor.outcome,
             message: visitor.message,
             level: *meta.level(),
+            fields: visitor.fields,
         });
     }
 }
@@ -176,6 +193,31 @@ pub(crate) fn assert_logged(events: &[CapturedEvent], level: Level, event_name: 
         hit,
         "期待ログ未検出: target=\"kanade\" level={level} event=\"{event_name}\"。\n捕捉={events:#?}"
     );
+}
+
+/// 捕捉列から `target="kanade"`・`event=event_name`・`level` のイベントを 1 件取り出す。
+///
+/// [`assert_logged`] が「発火したこと」だけを固定するのに対し、本関数は**フィールド値まで
+/// 突合する檻**（ログに載っていること自体が要求である値の検証）のために本体を返す。
+/// 該当が 0 件、または複数件のときは panic する（1 発火であることも同時に固定する）。
+pub(crate) fn logged_once<'a>(
+    events: &'a [CapturedEvent],
+    level: Level,
+    event_name: &str,
+) -> &'a CapturedEvent {
+    let mut hits = events.iter().filter(|e| {
+        e.target == "kanade" && e.level == level && e.event.as_deref() == Some(event_name)
+    });
+    let first = hits.next().unwrap_or_else(|| {
+        panic!(
+            "期待ログ未検出: target=\"kanade\" level={level} event=\"{event_name}\"。\n捕捉={events:#?}"
+        )
+    });
+    assert!(
+        hits.next().is_none(),
+        "期待ログは 1 回だけ発火すべき: target=\"kanade\" level={level} event=\"{event_name}\"。\n捕捉={events:#?}"
+    );
+    first
 }
 
 /// リソース照会 prefetch の完了固定ログ（R9.3 grep 証跡）が**ちょうど 1 回**発火したことを表明する。

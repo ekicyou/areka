@@ -95,8 +95,6 @@ pub(crate) fn plan_cascade(id: &str) -> CascadePlan {
 /// - `f64::NAN` は DD-8 の 3 値語彙の外にあるため、無効化と同じ無期限（`None`）へ畳む。
 ///   NaN は `v <= 0.0` にも `v > 0.0` にも一致しない（順序が部分的）ため、
 ///   [`f64::is_nan`] による明示判定を無効化アームへ併記して決定論を構造で固定する。
-// C4（タスク 4.x）が steady 調停から本写像を呼ぶまでは非テストビルドで未使用となる。
-#[allow(dead_code)]
 pub(crate) fn choice_deadline(
     display_end: MonotonicMs,
     timeout_directive_secs: Option<f64>,

@@ -2,7 +2,9 @@
 //!
 //! 本モジュールは [`Phase::Steady`] における Tick pump（OnSecondChange GET/NOTIFY の
 //! 使い分け）・talk 調停（Value→StartTalk）・boot 中／active talk 中に受領した close
-//! 指示の保留処理を担う。
+//! 指示の保留処理を担う。加えて選択系の受領（[`on_choice_waiting`] の選択待ち帳簿確立）も
+//! 本層に置く——選択待ちは active talk に紐づく状態であり、受理条件が Steady に閉じるため
+//! （設計 C4）。
 //!
 //! # pump ゲート（Req 3.1・3.4・DD-6）
 //! 定常運転でのみ毎秒 pump を発行する（boot 中・close 握手中以降・終了系列では発行しない
@@ -20,7 +22,8 @@
 //! 握手開始＝`OnClose` GET 発行＋`ClosePending` への遷移（ClosePending 以降は close.rs＝
 //! タスク 2.5 の責務）。
 
-use super::{events, Action, ActiveTalk, Input, Phase, State};
+use super::choice::choice_deadline;
+use super::{events, Action, ActiveTalk, ChoicePhase, ChoiceState, Input, Phase, State};
 use crate::msg::{CloseReason, KanadeConfig, MonotonicMs, MouseEventKind, MouseInput, ShioriOutcome};
 use crate::status::ExecutionSnapshot;
 use crate::talk::{StartTalk, TalkDone, TalkId};
@@ -103,6 +106,80 @@ pub(super) fn on_mouse(state: State, input: MouseInput) -> (State, Vec<Action>) 
         "Steady のマウス入力受理——正典イベント GET を発行（DD-IE-1・フェーズ遷移なし）"
     );
     (state, vec![Action::ShioriRequest(call)])
+}
+
+/// Steady での選択待ち成立通知の受領と帳簿確立（設計 C4 規則 4・Req7.1／7.6／7.7）。
+///
+/// mod.rs の横断アームが Steady フェーズの [`Input::ChoiceWaiting`] のみを本関数へ委譲する。
+///
+/// # 受理条件（一致のみ受理・他は棄却）
+/// `Steady{talk: Some(active)}` かつ `active.talk_id == talk_id` のときだけ受理する。再生中で
+/// ない（`talk: None`）／識別子が現行トークと一致しない通知は、既に終わったトーク宛の遅延通知か
+/// 別トーク宛の誤配であり、帳簿を確立せず `choice_waiting_stale`（warn）で記録して棄却する
+/// （状態は既存帳簿を含めて一切変えない・Req1.3 の二重防御の kanade 側）。
+///
+/// # 期限の確定（DD-8・Req7.6／7.7）
+/// タイムアウト指令から期限への写像は [`choice_deadline`] が単一の入口として持つ（本層で
+/// 再実装しない）。`None`＝未指定は `config.choice_timeout_default_ms` へ委譲し、`v <= 0.0` は
+/// 無効化＝無期限（`deadline: None`）、`v > 0.0` は明示秒指定である。無効化でも**帳簿自体は
+/// 確立する**——計測を開始しないだけで選択待ちは無期限に継続する（Req7.6）。
+///
+/// # 確立後の状態
+/// 帳簿は [`ChoicePhase::Waiting`]（入力待ち）で確立し、候補 ID 列を通知どおりの表示順で保持する
+/// （DD-7）。これがタスク 4.3 の受領検証（候補集合照合・talk_id 突合）と、タスク 4.5 の deadline
+/// 到達判定が読む前提になる。[`Phase`] は一切触らない（DD-3）。Action は発行しない
+/// （通知は kanade 内部の帳簿確立のみで完結する）。
+pub(super) fn on_choice_waiting(
+    mut state: State,
+    talk_id: TalkId,
+    choice_ids: Vec<String>,
+    display_end: MonotonicMs,
+    timeout_directive_secs: Option<f64>,
+    config: &KanadeConfig,
+) -> (State, Vec<Action>) {
+    let active_talk_id = match &state.phase {
+        Phase::Steady { talk: Some(active) } => Some(active.talk_id),
+        _ => None,
+    };
+    if active_talk_id != Some(talk_id) {
+        let reason = if active_talk_id.is_none() {
+            "no_active_talk"
+        } else {
+            "talk_id_mismatch"
+        };
+        tracing::warn!(
+            target: "kanade",
+            event = "choice_waiting_stale",
+            reason,
+            talk_id = talk_id.0,
+            active_talk_id = ?active_talk_id.map(|t| t.0),
+            choice_count = choice_ids.len(),
+            "現行トークと一致しない選択待ち通知——帳簿を確立せず棄却（C4 規則 4）"
+        );
+        return (state, Vec::new());
+    }
+    let deadline = choice_deadline(
+        display_end,
+        timeout_directive_secs,
+        config.choice_timeout_default_ms,
+    );
+    tracing::info!(
+        target: "kanade",
+        event = "choice_waiting_established",
+        talk_id = talk_id.0,
+        choice_count = choice_ids.len(),
+        deadline_ms = ?deadline.map(|d| d.0),
+        display_end_ms = display_end.0,
+        timeout_directive_secs = ?timeout_directive_secs,
+        "選択待ち帳簿を確立——以降の選択確定を受理可能（C4 規則 4・期限写像は DD-8）"
+    );
+    state.choice = Some(ChoiceState {
+        talk_id,
+        candidates: choice_ids,
+        deadline,
+        phase: ChoicePhase::Waiting,
+    });
+    (state, Vec::new())
 }
 
 /// Steady での Tick（pump ゲート・Req 3.1／3.4／DD-6）。
