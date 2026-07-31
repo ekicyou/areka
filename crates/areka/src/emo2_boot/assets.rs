@@ -279,7 +279,7 @@ pub fn build_boot_assets(
     // balloon_model は面 0 の 2 層マージで **1 回**組み全 scope 共有する。
     let mut balloons = Vec::with_capacity(scopes.len());
     for &scope in scopes {
-        let (b_world, b_atlas) = build_balloon_target(balloon_root, &decoder)?;
+        let (b_world, b_atlas) = build_balloon_target(balloon_root, &decoder, scope)?;
         balloons.push((scope, b_world, b_atlas));
     }
     let balloon_model = build_balloon_model(balloon_root);

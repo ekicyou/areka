@@ -38,7 +38,7 @@
   - 決定論檻: 実 fixture で本体側 scope と相方側 scope が異なる実値へマージされ、上書きで指定されなかった項目が既定設定から継承されること
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 6.3, 6.4, 7.1_
 
-- [ ] 1.5 表示 World 構築を scope 対応にし、単一接頭辞固定の実装を退役させる
+- [x] 1.5 表示 World 構築を scope 対応にし、単一接頭辞固定の実装を退役させる
   - World とアトラスの構築入口に scope を受ける形を用意し、解決済み面列から構築する形も併せて提供する
   - 単一接頭辞固定の定数・旧列挙・旧面判定を連鎖版へ置換する
   - 相方側ファイルを常に非採用としていた既存テストを、系列を明示した判定へ意味を変えて更新する
@@ -197,4 +197,5 @@
 - 本 crate は rustfmt-clean ではない（既存の未整形箇所が多数）。追加分のみ整形し、既存部の一括整形はしない（無関係な巨大差分を作らない）。
 - **`load_scope_balloon_model` の署名は `(balloon_dir, scope: u32, face0)`**（design.md の 2 引数版から実装時訂正・design.md 側も追記済み）。R6.3／観測点 3 が info! に scope を要求する一方、`ResolvedFace` から scope は逆算できない（縮退した相方の面は採用接頭辞が `balloons` ＝ scope 0 と区別不能）。3.1／placement の呼出点は scope を渡すこと。
 - テスト内のログ捕捉は `tracing` のプロセス大域 callsite interest が並列実行で `never` に焼かれて取りこぼす。同 crate `scale.rs` 由来の常駐 `InterestProbe` ＋窓内 `rebuild_interest_cache()` パターンを使う（1.4 で balloon.rs のテストハーネスへ導入済み）。
+- `build_balloon_target_from_faces`（1.5 新設の直接入口）の `faces.is_empty()` ガードは、`build_balloon_target` 経由では `resolve_balloon_faces` の面 0 必在契約が先に効くため到達不能＝現時点で無檻。**消費者が現れる 3.1／4.2 で檻に入れること**（決定論網羅の取りこぼし防止）。
 - ログ発火条件（warn/info の**発火判定分岐**）も判断分岐ゆえ檻に入れる。依存追加なしのログ捕捉ドナーが `crates/areka-emo-present/src/presenter.rs` のテストモジュールにある（private ゆえ複製が必要）。1.3 では R6.2 warn の 2 述語（`scope >= 1` ∧ `tier == Default`）を檻 7 として固定済み。

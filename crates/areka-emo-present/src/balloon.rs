@@ -1,23 +1,26 @@
 //! `BalloonFrameSource`（balloon.rs）: バルーン枠画像を **シェルと同一の** compose/present 経路へ
 //! 載せる入力適合層（R5.1）。
 //!
-//! M-boot のバルーンは fixture の枠画像（`balloons{N}.png`）だけを入力とする。本モジュールは
-//! それらを列挙し、**synthetic surfaces.txt テキスト**（`surface{N}` に単一 overlay element
-//! `balloons{N}.png`）を生成 → `areka_parsers::shell::parse` → `areka_emo_atlas::bake` →
-//! `EmoWorld::build`＋`bind_atlas` と、シェルが辿るのと**寸分違わぬ公開 API 経路**で
-//! `(EmoWorld, AtlasTable)` を組み上げる。直 WIC バイパスは設けない（R5.1）。
+//! バルーンの入力は **scope 別に解決した面画像**である（R1.1/R1.2）。本モジュールは scope 番号から
+//! 接頭辞優先連鎖（[`prefix_chain`]）を導出し、面 ID 単位で連鎖を辿って採用面列
+//! （[`ResolvedFace`]）を決め、そこから **synthetic surfaces.txt テキスト**（`surface{ID}` に単一
+//! overlay element＝採用面の実ファイル名）を生成 → `areka_parsers::shell::parse` →
+//! `areka_emo_atlas::bake` → `EmoWorld::build`＋`bind_atlas` と、シェルが辿るのと**寸分違わぬ
+//! 公開 API 経路**で `(EmoWorld, AtlasTable)` を組み上げる。直 WIC バイパスは設けない（R5.1）。
 //!
 //! # 正典整理（本モジュールが従う分類）
 //!
-//! - **枠画像のみ入力**（R5.3）: 列挙対象は `balloons{N}.png` に限る。`balloonc*`（入力ボックス）・
-//!   `arrow*`（スクロール矢印）・`marker`（`\![*]` マーカー）・`online*`（受信アニメ）・相方側
-//!   `balloonk*` は列挙しない。
+//! - **面画像のみ入力**（R5.3）: 列挙対象は当該 scope の連鎖に載る接頭辞の `{接頭辞}{ID}.png` に
+//!   限る（scope 0 は `balloonp0def`/`balloons`、scope 1 はそれらに先立つ `balloonp1def`/`balloonk`）。
+//!   `balloonc*`（入力ボックス）・`arrow*`（スクロール矢印）・`marker`（`\![*]` マーカー）・
+//!   `online*`（受信アニメ）はどの連鎖にも載らず列挙されない。相方側 `balloonk*` は
+//!   **scope 1 以上でのみ**採用される正規の面系列であり、scope 0 の連鎖には現れない。
 //! - **PNG α 尊重**（R5.2）: `use_self_alpha,1` 相当＝[`UseSelfAlpha::On`] で bake する。emo2 kakukaku は
 //!   `.pna` 無し・PNG α のみ（fixture 実測）で、`.pna` 対応は [`ElementDecoder::probe_pna`] の既存
 //!   seam に委ね本 spec では追加しない。
-//! - **surface id = N**（`balloons{N}` の N をそのまま採用）。`balloon.defaultsurface` 既定 0 と整合。
+//! - **surface id = ID**（`{接頭辞}{ID}` の ID をそのまま採用）。`balloon.defaultsurface` 既定 0 と整合。
 //!
-//! 失敗経路は log-first（`tracing::error!`＋`Err`・silent failure 禁止）。枠が 1 枚も無い／bake が
+//! 失敗経路は log-first（`tracing::error!`＋`Err`・silent failure 禁止）。面 0 が解決できない／bake が
 //! エラーを産んだ場合は、真因をログへ出したうえで [`PresentError::Compose`]
 //! （[`ComposeError::EmptyComposition`]）へ畳む。EmptyComposition は下流で Hide 縮退として許容される
 //! ため（設計ディスカッション #1）、バルーン構築失敗はゴーストごと殺さず穏当に縮退する。
@@ -38,9 +41,7 @@ use areka_parsers::charset::{DefaultEncoding, decode};
 
 use crate::command::PresentError;
 
-/// 列挙されるバルーン枠画像のファイル名接頭辞（本体側吹き出し・相方側 `balloonk*` は対象外）。
-const FRAME_PREFIX: &str = "balloons";
-/// 列挙対象の拡張子（小文字比較）。
+/// 面画像の拡張子（小文字比較）。接頭辞は scope 番号から連鎖として導出するため定数を持たない。
 const FRAME_SUFFIX: &str = ".png";
 /// バルーン既定設定ファイル名（2 層マージの**基層**・シェル側 descript と同名別物）。
 const DESCRIPT_TXT: &str = "descript.txt";
@@ -530,67 +531,18 @@ pub fn load_scope_balloon_model(
     model
 }
 
-/// `balloon_dir` から枠画像を列挙し `(surface_id, ファイル名)` を **surface id 昇順**で返す。
+/// 採用面列から synthetic surfaces.txt テキストを生成する（転記層の流儀）。
 ///
-/// `balloons{N}.png`（N は非負整数）だけを枠として採り、`balloonc*`/`arrow*`/`marker*`/`online*`・
-/// 相方側 `balloonk*` は名前段で除外する（R5.3）。ファイル名の大小は無視して判定するが、element
-/// path として使う値は **実ファイル名を原形のまま**保持する（実 WIC デコードが実パスを読むため）。
-///
-/// ディレクトリ走査に失敗した場合は log-first で [`PresentError`] を返す。
-fn enumerate_frames(balloon_dir: &Path) -> Result<Vec<(u32, String)>, PresentError> {
-    let read_dir = std::fs::read_dir(balloon_dir).map_err(|e| {
-        tracing::error!(
-            balloon_dir = %balloon_dir.display(),
-            error = %e,
-            "balloon: 枠画像ディレクトリの走査に失敗"
-        );
-        PresentError::Compose(ComposeError::EmptyComposition(0))
-    })?;
-
-    let mut frames: Vec<(u32, String)> = Vec::new();
-    for entry in read_dir {
-        let entry = match entry {
-            Ok(e) => e,
-            Err(e) => {
-                // 個別エントリの取得失敗は致命ではない（他エントリ継続・log-first）。
-                tracing::warn!(error = %e, "balloon: ディレクトリエントリの取得に失敗（スキップ）");
-                continue;
-            }
-        };
-        let file_name = entry.file_name();
-        let name = match file_name.to_str() {
-            Some(n) => n,
-            None => continue, // 非 UTF-8 名は枠画像規約外＝スキップ。
-        };
-        if let Some(id) = frame_id(name) {
-            frames.push((id, name.to_string()));
-        }
-    }
-
-    // surface id 昇順で決定化（ディレクトリ走査順は非決定ゆえ明示ソート）。
-    frames.sort_unstable_by_key(|(id, _)| *id);
-    Ok(frames)
-}
-
-/// `balloons{N}.png`（大小無視）なら surface id `N` を返す。枠画像でなければ `None`。
-///
-/// 接頭辞は `balloons` 固定ゆえ `balloonc*`/`balloonk*`（8 文字目が `s` でない）は自然に外れる。
-fn frame_id(name: &str) -> Option<u32> {
-    let lower = name.to_ascii_lowercase();
-    let stem = lower.strip_prefix(FRAME_PREFIX)?.strip_suffix(FRAME_SUFFIX)?;
-    // 接頭辞と拡張子の間は 10 進整数のみ（空・非数字は枠画像でない）。
-    stem.parse::<u32>().ok()
-}
-
-/// 枠 `(surface_id, ファイル名)` 列から synthetic surfaces.txt テキストを生成する（転記層の流儀）。
-///
-/// 各枠は `surface{N}` ブロックに単一 overlay element（`element0,overlay,{ファイル名},0,0`）として
+/// 各面は `surface{ID}` ブロックに単一 overlay element（`element0,overlay,{実ファイル名},0,0`）として
 /// 転記する。`areka_parsers::shell::parse` が受理する surfaces.txt 文法に忠実で、独自構文は発明
-/// しない（surface ヘッダ→`{`→element 行→`}` の登場順ストリーム）。
-fn synthetic_surfaces_txt(frames: &[(u32, String)]) -> String {
+/// しない（surface ヘッダ→`{`→element 行→`}` の登場順ストリーム）。element path に用いるのは
+/// [`ResolvedFace::file_name`]（原形保持の実ファイル名）であり、連鎖上の接頭辞ではない——
+/// bake が `base_dir.join(rel)` で実パスを開くため。
+fn synthetic_surfaces_txt(faces: &[ResolvedFace]) -> String {
     let mut text = String::new();
-    for (id, file_name) in frames {
-        // `surface{N}` ブロック・単一 overlay element（layer 0・オフセット 0,0）。
+    for face in faces {
+        // `surface{ID}` ブロック・単一 overlay element（layer 0・オフセット 0,0）。
+        let (id, file_name) = (face.surface_id, &face.file_name);
         text.push_str(&format!(
             "surface{id}\n{{\nelement0,overlay,{file_name},0,0\n}}\n\n"
         ));
@@ -598,30 +550,53 @@ fn synthetic_surfaces_txt(frames: &[(u32, String)]) -> String {
     text
 }
 
-/// バルーン枠画像を **シェルと同一の** compose/present 経路へ載せ `(EmoWorld, AtlasTable)` を返す。
+/// 当該 `scope` のバルーン面を **シェルと同一の** compose/present 経路へ載せ
+/// `(EmoWorld, AtlasTable)` を返す。
 ///
-/// `balloon_dir` 内の `balloons{N}.png` を枠として列挙（R5.3）→ synthetic surfaces.txt →
-/// `shell::parse` → `bake`（PNG α 尊重＝[`UseSelfAlpha::On`]・R5.2）→ `EmoWorld::build`＋`bind_atlas`
-/// と、直 WIC バイパス無しでシェルと同一機構に載せる（R5.1）。得た組を `attach_target` に渡すだけで
-/// バルーン target がシェルと同じ提示経路へ乗る。
+/// 系列解決（[`resolve_balloon_faces`]・R1.1/R1.2/R1.3）を内包する薄いラッパであり、構築本体は
+/// [`build_balloon_target_from_faces`] が担う。ゆえに **World の面は当該 scope が解決した系列の
+/// 面**であり、全 scope が本体側 `balloons` 系列へ畳み込まれることはない（scope 1 が
+/// `balloonk0.png` を採ったなら World の面 0 はその画像である）。
 ///
-/// 枠が 1 枚も無い／bake がエラーを産んだ場合は log-first で真因をログし
+/// 解決済み面列を既に手元へ持つ消費者（起動時資産構築・窓配置採寸）は、二重列挙を避けるため
+/// [`build_balloon_target_from_faces`] を直接呼べる。
+///
+/// 失敗（面 0 不在・ディレクトリ走査失敗・bake 脱落）は log-first で真因をログしたうえで
 /// [`PresentError::Compose`]（[`ComposeError::EmptyComposition`]・Hide 縮退許容）を返す。
 pub fn build_balloon_target(
     balloon_dir: &Path,
     decoder: &impl ElementDecoder,
+    scope: u32,
 ) -> Result<(EmoWorld, AtlasTable), PresentError> {
-    let frames = enumerate_frames(balloon_dir)?;
-    if frames.is_empty() {
+    let faces = resolve_balloon_faces(balloon_dir, scope)?;
+    build_balloon_target_from_faces(balloon_dir, decoder, &faces)
+}
+
+/// 解決済み面列から `(EmoWorld, AtlasTable)` を組む（構築本体・R5.1/R5.2/R5.3）。
+///
+/// 採用面列 → synthetic surfaces.txt → `shell::parse` → `bake`（PNG α 尊重＝
+/// [`UseSelfAlpha::On`]・R5.2）→ `EmoWorld::build`＋`bind_atlas` と、直 WIC バイパス無しで
+/// シェルと同一機構に載せる（R5.1）。得た組を `attach_target` に渡すだけでバルーン target が
+/// シェルと同じ提示経路へ乗る。
+///
+/// 系列解決を引数として受け取るため、**どの scope の面列であるかは呼び出し側が決める**。
+/// 面列が空／bake がエラーを産んだ場合は log-first で真因をログし
+/// [`PresentError::Compose`]（[`ComposeError::EmptyComposition`]）を返す。
+pub fn build_balloon_target_from_faces(
+    balloon_dir: &Path,
+    decoder: &impl ElementDecoder,
+    faces: &[ResolvedFace],
+) -> Result<(EmoWorld, AtlasTable), PresentError> {
+    if faces.is_empty() {
         tracing::error!(
             balloon_dir = %balloon_dir.display(),
-            "balloon: 枠画像（balloons{{N}}.png）が 1 枚も見つからない"
+            "balloon: 採用面列が空（構築する面が 1 枚も無い）"
         );
         return Err(PresentError::Compose(ComposeError::EmptyComposition(0)));
     }
 
     // synthetic surfaces.txt をシェルと同一の parser で解釈する（転記層・R5.1）。
-    let text = synthetic_surfaces_txt(&frames);
+    let text = synthetic_surfaces_txt(faces);
     let shell = areka_parsers::shell::parse(&text);
 
     // PNG α 尊重（use_self_alpha,1 相当・R5.2）で bake。base_dir は balloon_dir（実パスは
@@ -636,13 +611,13 @@ pub fn build_balloon_target(
     let baked = bake(&[set], decoder, PackConfig::default());
 
     // bake の脱落（decode/normalize 失敗）は log-first で真因を出し、構築失敗として畳む。
-    // M-boot の枠は固定小集合ゆえ全枚デコード成功が前提＝脱落は制作者ミス/配置不備の兆候。
+    // 採用面は解決済みの固定小集合ゆえ全枚デコード成功が前提＝脱落は制作者ミス/配置不備の兆候。
     if !baked.errors.is_empty() {
         for err in &baked.errors {
             tracing::error!(
                 balloon_dir = %balloon_dir.display(),
                 error = %err,
-                "balloon: 枠画像の bake に失敗"
+                "balloon: 面画像の bake に失敗"
             );
         }
         return Err(PresentError::Compose(ComposeError::EmptyComposition(0)));
@@ -714,69 +689,114 @@ mod tests {
     }
 
     /// R5.1/R5.3 転記一致（観測完了基準）: synthetic surfaces.txt → `shell::parse` の往復で、
-    /// 各枠の surface id（`{N}`）と element path（`balloons{N}.png`）が転記一致する。
+    /// 各面の surface id（`{ID}`）と element path（採用面の**実ファイル名**）が転記一致する。
     ///
+    /// 系列が scope 別になったため、転記される element path は接頭辞固定ではない——ここでは
+    /// 相方側系列の面（`balloonk0.png`）が採用面としてそのまま転記されることを併せて固定する。
     /// これはファイルシステム/デコードを一切要さない純粋な転記層の檻。
     #[test]
-    fn synthetic_text_transcribes_frame_id_and_path() {
-        let frames = vec![
-            (0u32, "balloons0.png".to_string()),
-            (1u32, "balloons1.png".to_string()),
+    fn synthetic_text_transcribes_face_id_and_path() {
+        let faces = vec![
+            ResolvedFace {
+                surface_id: 0,
+                prefix: "balloonk".to_string(),
+                tier: ChainTier::Own,
+                file_name: "balloonk0.png".to_string(),
+            },
+            ResolvedFace {
+                surface_id: 1,
+                prefix: "balloons".to_string(),
+                tier: ChainTier::Default,
+                file_name: "balloons1.png".to_string(),
+            },
         ];
-        let text = synthetic_surfaces_txt(&frames);
+        let text = synthetic_surfaces_txt(&faces);
         let shell = parse(&text);
 
-        assert_eq!(shell.surfaces.len(), 2, "2 枠 → 2 surface");
-        for (n, file_name) in &frames {
+        assert_eq!(shell.surfaces.len(), 2, "2 面 → 2 surface");
+        for face in &faces {
             let surface = shell
                 .surfaces
                 .iter()
-                .find(|s| s.id == *n)
-                .unwrap_or_else(|| panic!("surface id {n} が転記されていない"));
+                .find(|s| s.id == face.surface_id)
+                .unwrap_or_else(|| panic!("surface id {} が転記されていない", face.surface_id));
             assert_eq!(
                 surface.elements.len(),
                 1,
-                "各枠は単一 overlay element へ転記される"
+                "各面は単一 overlay element へ転記される"
             );
             assert_eq!(
                 surface.elements[0].path.as_str(),
-                file_name,
-                "element path が balloons{{N}}.png へ転記一致しない"
+                face.file_name,
+                "element path が採用面の実ファイル名へ転記一致しない"
             );
             assert_eq!(surface.elements[0].layer, 0, "layer 0（element0）へ転記");
         }
     }
 
-    /// 大小無視の枠判定と非枠除外（R5.3）: `frame_id` が `balloons{N}.png` からのみ N を得て、
-    /// `balloonc*`/`balloonk*`/`arrow*`/`marker*`/`online*`・非数字・非 png を弾く。
+    /// R1.5/R7.2 系列を明示した面判定: 面であるか否かは **どの系列（scope）で見るか**に依存する。
+    ///
+    /// 単一接頭辞固定時代の「`balloonk0.png` は枠でない」という無条件の判定を、系列を明示した
+    /// 判定へ**意味を変えて**更新したもの（design.md「Implementation Notes / Integration」）——
+    /// scope 0 の連鎖では `balloonk0.png` を採用せず、scope 1 の連鎖では面 0 として採用する。
+    /// 一方、正典でバルーン面系列と定義されていないファイル（`balloonc*`/`arrow*`/`marker*`/
+    /// `online*`・非数字・非 png）はどの系列から見ても面でない。
     #[test]
-    fn frame_id_matches_only_balloon_frames() {
-        assert_eq!(frame_id("balloons0.png"), Some(0));
-        assert_eq!(frame_id("balloons12.png"), Some(12));
-        assert_eq!(frame_id("BALLOONS3.PNG"), Some(3), "大小無視");
-        // 非枠（列挙対象外・R5.3）。
-        assert_eq!(frame_id("balloonc0.png"), None, "入力ボックスは枠でない");
-        assert_eq!(frame_id("balloonk0.png"), None, "相方側は枠でない");
-        assert_eq!(frame_id("arrow0.png"), None);
-        assert_eq!(frame_id("marker.png"), None);
-        assert_eq!(frame_id("online0.png"), None);
-        assert_eq!(frame_id("balloons.png"), None, "数字が無ければ枠でない");
-        assert_eq!(frame_id("balloonsX.png"), None, "非数字は枠でない");
-        assert_eq!(frame_id("balloons0.txt"), None, "非 png は枠でない");
+    fn face_judgment_is_series_explicit_not_fixed_prefix() {
+        // 相方側の面: scope 0 の連鎖では採用されず、scope 1 の連鎖では面 0 になる。
+        assert!(
+            selected(&["balloonk0.png", "balloons0.png"], 0)
+                .iter()
+                .all(|f| f.3 != "balloonk0.png"),
+            "scope 0 の連鎖に balloonk は無く相方側の面を採用しない"
+        );
+        assert_eq!(
+            selected(&["balloonk0.png"], 1),
+            vec![(
+                0,
+                "balloonk".to_string(),
+                ChainTier::Own,
+                "balloonk0.png".to_string()
+            )],
+            "scope 1 の連鎖では balloonk0.png が面 0 として採用される"
+        );
+        // 本体側の面と大小無視（系列を明示しても判定 3 段そのものは不変）。
+        assert_eq!(face_id_of("balloons", "balloons0.png"), Some(0));
+        assert_eq!(face_id_of("balloons", "balloons12.png"), Some(12));
+        assert_eq!(face_id_of("balloons", "BALLOONS3.PNG"), Some(3), "大小無視");
+        // 非バルーン面（どの系列から見ても面でない・R5.3）。
+        for prefix in ["balloons", "balloonk", "balloonp0def", "balloonp1def"] {
+            for name in [
+                "balloonc0.png", // 入力ボックス
+                "arrow0.png",    // スクロール矢印
+                "marker.png",    // マーカー
+                "online0.png",   // 受信アニメ
+                "balloons.png",  // 数字が無い
+                "balloonsX.png", // 非数字
+                "balloons0.txt", // 非 png
+            ] {
+                assert_eq!(
+                    face_id_of(prefix, name),
+                    None,
+                    "系列 {prefix} が非バルーン面 {name} を採用した"
+                );
+            }
+        }
     }
 
-    /// R5.1/R5.2/R5.3 full build: `build_balloon_target` が枠のみを列挙し、シェルと同一の
-    /// parse→bake→World 経路で `(EmoWorld, AtlasTable)` を返す。非枠ファイルは列挙されず
-    /// アトラスにも World にも現れない。MemoryDecoder ゆえ実 PNG 不要で決定論。
+    /// R5.1/R5.2/R5.3 full build: `build_balloon_target` が当該 scope の連鎖に属する面のみを
+    /// 列挙し、シェルと同一の parse→bake→World 経路で `(EmoWorld, AtlasTable)` を返す。
+    /// 非面ファイルは列挙されずアトラスにも World にも現れない。
+    /// MemoryDecoder ゆえ実 PNG 不要で決定論。
     #[test]
     fn build_balloon_target_end_to_end_frames_only() {
         let dir = TempDir::new();
-        // 枠 2 枚 ＋ 非枠 3 種を同ディレクトリへ配置。
+        // 面 2 枚 ＋ 非面 3 種を同ディレクトリへ配置。
         dir.touch("balloons0.png");
         dir.touch("balloons1.png");
-        dir.touch("balloonc0.png"); // 入力ボックス（非枠）
-        dir.touch("arrow0.png"); // スクロール矢印（非枠）
-        dir.touch("marker.png"); // マーカー（非枠）
+        dir.touch("balloonc0.png"); // 入力ボックス（非面）
+        dir.touch("arrow0.png"); // スクロール矢印（非面）
+        dir.touch("marker.png"); // マーカー（非面）
 
         // 枠のみデコーダへ登録（非枠は登録しない＝もし列挙されれば decode 失敗で露見する）。
         let mut dec = MemoryDecoder::new();
@@ -785,7 +805,7 @@ mod tests {
         dec.insert(dir.path().join("balloons1.png"), w, h, stride, bytes, has_alpha);
 
         let (world, table) =
-            build_balloon_target(dir.path(), &dec).expect("枠 2 枚から Ok が返る");
+            build_balloon_target(dir.path(), &dec, 0).expect("枠 2 枚から Ok が返る");
 
         // アトラスに枠 2 枚のエントリがあり placement を持つ（PNG α 尊重で焼かれる・R5.2）。
         for rel in ["balloons0.png", "balloons1.png"] {
@@ -828,7 +848,7 @@ mod tests {
         dec.insert(dir.path().join("balloons2.png"), w, h, stride, bytes, has_alpha);
 
         let (world, table) =
-            build_balloon_target(dir.path(), &dec).expect("偶数 id 2 面から Ok が返る");
+            build_balloon_target(dir.path(), &dec, 0).expect("偶数 id 2 面から Ok が返る");
 
         // アトラスに 2 面が解決され placement を持つ（PNG α 尊重で焼かれる）。
         for rel in ["balloons0.png", "balloons2.png"] {
@@ -847,6 +867,63 @@ mod tests {
         assert!(world.surface(2).is_some(), "surface id 2（balloons2）が World にある");
         // 飛び番の欠番 id 1 は列挙対象に無いゆえ常駐しない（面 id=N の同一性を固定）。
         assert!(world.surface(1).is_none(), "欠番 id 1 は World に無い");
+    }
+
+    /// R1.1/R1.2/R7.2（本タスクの観測可能な完了状態）: 実 fixture `emo2-kakukaku` は本体側
+    /// `balloons0.png` と相方側 `balloonk0.png` を**両方**持つ。`build_balloon_target` に
+    /// scope を渡すと、**scope 1 の構築 World は相方側系列の面から成り**・scope 0 の構築 World は
+    /// 本体側系列の面から成る。
+    ///
+    /// 全 scope が同一枠へ畳み込まれていれば scope 1 でも `balloons0.png` がアトラスへ載るため、
+    /// この檻は「単一接頭辞固定」の残存をそのまま検出する。デコードは MemoryDecoder（実 PNG
+    /// デコード不要・決定論）だが**列挙は実ディレクトリを走る**ゆえ、どの scope がどのファイルを
+    /// 採るかという主張そのものが檻になる。
+    #[test]
+    fn build_balloon_target_composes_scope_series_on_emo2_fixture() {
+        let dir = emo2_balloon_root();
+
+        // 実 fixture の面画像 2 枚をデコーダへ登録する（列挙が採った面だけがアトラスへ載る）。
+        let mut dec = MemoryDecoder::new();
+        let (w, h, stride, bytes, has_alpha) = opaque_1x1();
+        for name in ["balloons0.png", "balloonk0.png"] {
+            dec.insert(dir.join(name), w, h, stride, bytes.clone(), has_alpha);
+        }
+
+        // --- scope 1（相方側）: World は相方側系列の面から成る ---
+        let (kero_world, kero_table) =
+            build_balloon_target(&dir, &dec, 1).expect("scope 1 の面 0 は balloonk0 で解決する");
+        assert!(
+            kero_table.resolve(SetId(0), "balloonk0.png").is_some(),
+            "scope 1 のアトラスは相方側系列の面 balloonk0.png から成る"
+        );
+        assert_eq!(
+            kero_table.resolve(SetId(0), "balloons0.png"),
+            None,
+            "scope 1 は面 0 を相方側で解決済みゆえ本体側系列の面を採らない"
+        );
+        assert_eq!(kero_table.len(), 1, "解決された面は 1 枚（面 0）のみ");
+        assert!(
+            kero_world.surface(0).is_some(),
+            "面 0 が World に常駐する（初期表示面・R2.6）"
+        );
+
+        // --- scope 0（本体側）: 同一ディレクトリでも本体側系列の面から成る ---
+        let (sakura_world, sakura_table) =
+            build_balloon_target(&dir, &dec, 0).expect("scope 0 の面 0 は balloons0 で解決する");
+        assert!(
+            sakura_table.resolve(SetId(0), "balloons0.png").is_some(),
+            "scope 0 のアトラスは本体側系列の面 balloons0.png から成る"
+        );
+        assert_eq!(
+            sakura_table.resolve(SetId(0), "balloonk0.png"),
+            None,
+            "scope 0 の連鎖に balloonk は無く相方側の面を採らない"
+        );
+        assert_eq!(sakura_table.len(), 1, "解決された面は 1 枚（面 0）のみ");
+        assert!(
+            sakura_world.surface(0).is_some(),
+            "面 0 が World に常駐する"
+        );
     }
 
     // ── 檻 1: scope→接頭辞優先連鎖の導出（R1.1/1.6/1.8/1.9/1.10・R7.1）─────────────
@@ -1616,15 +1693,16 @@ mod tests {
         assert_eq!(warns[0].field("scope"), Some("2"), "R6.2: scope が乗る");
     }
 
-    /// 枠が 1 枚も無ければ log-first で `EmptyComposition`（Hide 縮退許容）を返す。
+    /// 面が 1 枚も解決できなければ log-first で `EmptyComposition`（Hide 縮退許容）を返す
+    /// （施行点は [`resolve_balloon_faces`] の面 0 必在契約＝R1.7）。
     #[test]
     fn no_frames_returns_empty_composition() {
         let dir = TempDir::new();
-        dir.touch("balloonc0.png"); // 非枠のみ配置。
+        dir.touch("balloonc0.png"); // 非バルーン面のみ配置。
         let dec = MemoryDecoder::new();
 
         // `(EmoWorld, AtlasTable)` は Debug 非実装ゆえ expect_err を使わず match で判定する。
-        match build_balloon_target(dir.path(), &dec) {
+        match build_balloon_target(dir.path(), &dec, 0) {
             Ok(_) => panic!("枠 0 枚なら Err のはず"),
             Err(err) => assert!(
                 matches!(err, PresentError::Compose(ComposeError::EmptyComposition(0))),

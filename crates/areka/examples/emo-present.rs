@@ -436,7 +436,7 @@ fn build_shell_target(decoder: &WicDecoderArm) -> Option<(EmoWorld, AtlasTable, 
 /// surface 0 の合成外形（物理 px）を添えて返す。失敗時は log-first で `None`。
 fn build_balloon_assets(decoder: &WicDecoderArm) -> Option<(EmoWorld, AtlasTable, u32, u32)> {
     let dir = emo2("emo2-kakukaku");
-    let (emo_world, atlas) = match build_balloon_target(&dir, decoder) {
+    let (emo_world, atlas) = match build_balloon_target(&dir, decoder, 0) {
         Ok(pair) => pair,
         Err(e) => {
             // build_balloon_target は内部で error! 済み（枠なし／bake 脱落）。ここは文脈を添えるのみ。
