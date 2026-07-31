@@ -61,7 +61,6 @@ fn scale_signed(v: i32, k: ScaleRatio) -> i32 {
 /// **両軸とも未指定なら `None`** を返す（R3.4）。呼び手はこれを
 /// [`apply_windowposition`] へそのまま渡すことで `balloon_offset` を一切触らず、
 /// resolver 出力を本仕様適用前と厳密同一に保つ。
-#[allow(dead_code)] // scaffold（task 4.1）: prepare_stages への結線は task 4.3
 pub fn to_screen_adjust(
     wp_x: Option<i32>,
     wp_y: Option<i32>,
@@ -90,7 +89,6 @@ pub fn to_screen_adjust(
 /// **非スケールの生値**のまま加算される——後者の規約温存は本仕様の Out of scope（W5 対象外）。
 /// emo2 は descript offset が `None` ゆえ顕在化しないが、将来の取り違えを封じるため
 /// ここに明記する（design Service Interface の同注記の転記）。
-#[allow(dead_code)] // scaffold（task 4.1）: prepare_stages への結線は task 4.3
 pub fn apply_windowposition(cfg: &mut PlacementConfig, scope: usize, adjust: Option<(i32, i32)>) {
     let Some((dx, dy)) = adjust else {
         // 調整量なし＝`balloon_offset` を触らない（現行と bit 同一・R3.4）。

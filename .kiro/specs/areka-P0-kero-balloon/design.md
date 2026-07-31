@@ -616,7 +616,7 @@ pub struct SerikoLoopConfig {
 
 R6 の観測点（すべて `RUST_LOG=info` で grep 可能・実機サインオフの決定論判定に使う）:
 
-1. `resolve_balloon_faces` 完了時 `info!`: scope・連鎖・採用面一覧 `(id, prefix, file)`（R6.1。R6.3 と同じく placement／boot の 2 呼出点から各 1 回＝scope あたり 2 行出る——サインオフの grep は行数でなく**値の一致**で突合する）。
+1. `resolve_balloon_faces` 完了時 `info!`: scope・連鎖・採用面一覧 `(id, prefix, file)`（R6.1）。**実装時訂正（task 4.3）**: 呼出点は placement 内 2 箇所（`measure.rs` の採寸・`mod.rs` の windowposition 取得）＋ boot 1 箇所＝**scope あたり 3 行**出る（4.2 の `MeasuredSizes` が「戻りは素の数値のみ」という契約を型で担保しており、採寸側の解決結果を placement 内で使い回せないため）。同一 `(dir, scope)` に対する純関数ゆえ 3 行は構造的に同値。サインオフの grep は行数でなく**値の一致**で突合する。
 2. tier=Default 採用の `warn!`: scope・面 ID・採用ファイル（R6.2。同上・2 呼出点×各 1 回）。
 3. `load_scope_balloon_model` の `info!`: scope・windowposition・validrect 実値（R6.3。placement／boot の 2 呼出点から各 1 行＝scope あたり 2 行出るが、値の一致自体が権威一元化の生き証人になる）。
 4. `prepare_stages` の `info!`: scope・wp 生値・balloon side・変換後 (dx, dy) 物理 px（R7.6 の実機突合用）。

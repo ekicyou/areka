@@ -132,7 +132,7 @@
   - _Requirements: 3.1, 3.6, 3.7, 7.1, 7.2_
   - _Depends: 1.3, 4.1_
 
-- [ ] 4.3 表示位置指定を初期既定位置へ結線する
+- [x] 4.3 表示位置指定を初期既定位置へ結線する
   - 採寸後に scope ごとの定義を権威から取得し、変換した調整量を配置構成の調整量欄へ合流させる
   - 配置解決の式そのものには手を入れない（供給元を増やすのみ）
   - 永続値がある場合は永続値が優先される既存の復元規約に手を入れない
@@ -201,4 +201,7 @@
 - **`load_scope_balloon_model` の署名は `(balloon_dir, scope: u32, face0)`**（design.md の 2 引数版から実装時訂正・design.md 側も追記済み）。R6.3／観測点 3 が info! に scope を要求する一方、`ResolvedFace` から scope は逆算できない（縮退した相方の面は採用接頭辞が `balloons` ＝ scope 0 と区別不能）。3.1／placement の呼出点は scope を渡すこと。
 - テスト内のログ捕捉は `tracing` のプロセス大域 callsite interest が並列実行で `never` に焼かれて取りこぼす。同 crate `scale.rs` 由来の常駐 `InterestProbe` ＋窓内 `rebuild_interest_cache()` パターンを使う（1.4 で balloon.rs のテストハーネスへ導入済み）。
 - `build_balloon_target_from_faces`（1.5 新設の直接入口）の `faces.is_empty()` ガードは、`build_balloon_target` 経由では `resolve_balloon_faces` の面 0 必在契約が先に効くため到達不能＝現時点で無檻。**消費者が現れる 3.1／4.2 で檻に入れること**（決定論網羅の取りこぼし防止）。
+- **6.1 実機サインオフ時の注意**: `resolve_balloon_faces` の info! は **scope あたり 3 行**（placement 内 2 ＋ boot 1・design.md の観測点 1 を実装時訂正済み）。`load_scope_balloon_model` の info! は scope あたり 2 行。**行数でなく値の一致で突合すること**。
+- **emo2 fixture の side 割当**（4.3 で実測確定）: `shell/master/descript.txt` が `sakura.balloon.alignment,left` / `kero.balloon.alignment,right` を宣言 ⇒ scope 0 = `BalloonSide::Left`（x 符号 +1）／scope 1 = `Right`（x 符号 −1）。4.1 の符号表が実機で逆と判明した場合の修正範囲は `side_x_sign` の 2 リテラル＋`placement/mod.rs` の fixture 期待値 x 成分（1352→820／−134→−666／1578→1198／526→146）。
+- `cargo test -p areka` に**再現しない単発 flake**の目撃が 2 回（1.5 と 4.3 のレビュー時・いずれもテスト名未捕捉・直後の連続実行は全緑）。既知の時間境界 spine/smoke テスト由来と推定。赤を見たら再実行で切り分ける。
 - ログ発火条件（warn/info の**発火判定分岐**）も判断分岐ゆえ檻に入れる。依存追加なしのログ捕捉ドナーが `crates/areka-emo-present/src/presenter.rs` のテストモジュールにある（private ゆえ複製が必要）。1.3 では R6.2 warn の 2 述語（`scope >= 1` ∧ `tier == Default`）を檻 7 として固定済み。
