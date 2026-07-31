@@ -230,7 +230,7 @@ design.md は `follow.rs:880-907`（`follow_balloon` 経路）を挙げていた
 | セッション | `SESSION-QUOTA` | scope 別 `low2high` / `high2low` / `total` | 備考 |
 | --- | --- | --- | --- |
 | ①ドラッグのみ | **PASS** | scope0: 12 / 12 / 24　scope1: 10 / 10 / 20（キャラ窓のみ・下限は各 3） | 下限 12 に対し実績 **44**。手順書 §5 の 2 段 grep をそのまま適用 |
-| ②ドラッグ禁止・OS 設定変更のみ | **未採取** | — | `SESSION2-NO-DRAG` の判定も併記すること |
+| ②ドラッグ禁止・OS 設定変更のみ | **FAIL (0 / 6)** | scope0: 0 / 0 / 0（本走行は scope 0 の 1 体のみ＝下限は 6） | `SESSION2-NO-DRAG: **PASS**`（`[start_preparing]` 0 件・`[DragEvent]` 0 件）。**採取の失敗ではなく Req 2.4 への回答**——拡大率を 7 回変更しても `WM_DPICHANGED` が 1 度も届かない。**§2.7（S4）が原因を確定** |
 
 2 段 grep の実行結果（第 1 段＝`[diag.window_move]` からの `scope`→`entity` 対応表、第 2 段＝当該 `entity=` の受理行計数）:
 
@@ -354,7 +354,13 @@ WARN  bevy_ecs::world: Could not despawn entity: … ID 6v0 is invalid; …
 - **除外するのは「実機でしか確定できない残余仮説に対する追加修正」のみ**であることの明記（§0.2）
 - 受理回数が下限に満たないセッションは「再現しない」の根拠に用いていないことの確認
 
-**現時点（セッション①のみ）では本条を適用できない。** ①は `SESSION-QUOTA: PASS` かつ `VANISH-TRACE: NONE` だが、②が未採取であり、しかも §2.3.3 で示したとおり**①が消失に至らなかった機構的理由は「`DpiReproject` の上書きが 44/44 で後続したこと」**である。その上書きが走らない経路（§1.2 の S2 ゲート）は②が叩く対象であり、①の結果は②の代替にならない。
+**本条は適用できない（適用の前提が崩れた）。** ②の `SESSION-QUOTA` は `FAIL (0/6)` であり、**受理回数の下限に満たないセッションを「再現しない」の根拠に用いてはならない**（Req 1.9・本条 3 番目の確認項目）。
+
+さらに②が下限に達しなかった理由自体が欠陥である（§2.7・S4＝OS 経由の DPI 変化が全経路で無視される）。**「DPI 変化が届かないので消失も観測されない」を「再現しない」と読んではならない。** これは観測装置が壊れているのであって、被検体が健全なのではない。
+
+①についても、`SESSION-QUOTA: PASS` かつ `VANISH-TRACE: NONE` だが、§2.3.3 で示したとおり**消失に至らなかった機構的理由は「`DpiReproject` の上書きが 44/44 で後続したこと」**である。その上書きが走らない経路（§1.2 の S2 ゲート）を叩くには②が必要で、①の結果は②の代替にならない。
+
+**結論: 本 spec は「再現しない」と結論しない。** S1〜S3′ の是正（5.1／5.2／6.1／6.2）と檻（7.1／7.2）は全て実施する。加えて S4 の是正タスクを新設する（§5）。S4 是正後は**②を採り直して初めて**「ドラッグ以外の経路」の観測が成立する。
 
 なお②が `VANISH-TRACE: NONE` であっても、**§1 の S1〜S3′ の確定と是正 5.1／5.2／6.1／6.2、檻 7.1／7.2 は除外されない**（§0.2・Req 2.6／2.9／5.1／5.4）。とりわけ S1 は §2.5 のとおり**実機で 84/84 の陽性痕跡**を残しており、「再現しない」の対象ですらない。
 
@@ -421,6 +427,101 @@ areka : [diag.monitor] index=1 handle=264283
 ```
 
 `handle`・`bounds`・`work_area`・`dpi`・`primary` の 5 フィールドすべてが両側で一致した。**タスク 1.2／1.3 が揃えたフィールド名規約と、タスク 4.1 が追加した `wintf::ecs::layout::systems::monitor_systems=debug` の必要性が、ここで実機により裏づけられた**（この 1 語が無ければ wintf 側の行が暗転し、本突合は成立しなかった）。
+
+### 2.7 **S4（新規・セッション②で発見）: OS 表示設定経由の DPI 変化が全経路で無視される**
+
+> 本項はタスク 4.5 のセッション②が発見した**新規の欠陥**である。§1 の S1〜S3′ とは独立で、既存の是正タスク 5.1／5.2／6.1／6.2 のいずれも**これを直さない**。担当タスクの新設が必要（§5 参照）。
+
+#### 採取条件
+
+| 項目 | 値 |
+| --- | --- |
+| コミット | `0db483e`（`crates/` は HEAD `3498623` と差分ゼロ＝docs のみ）・release |
+| 生ログ | `%LOCALAPPDATA%\areka-diag\20260731-session2\session2-osdpi.log` |
+| モニタ | index0 `bounds=-2880,365,0,2165 dpi=192`／index1 `bounds=0,0,3840,2160 work_area=0,0,3840,2100 dpi=120 primary=true` |
+| ゴースト所在 | index1（primary・125%）・scope 0 のみ（`entity=4v0` char／`3v0` balloon） |
+| 操作 | **プライマリの拡大率を 125%↔200% で 7 回変更**（ドラッグ一切なし） |
+
+#### 観測結果
+
+```
+[start_preparing]（ドラッグ痕跡）        :  0 件   → SESSION2-NO-DRAG: PASS
+[DragEvent]                             :  0 件
+[App] Display configuration changed     : 28 件（7 回 × 4）
+[detect_display_change_system] …updating:  7 件   ← 検知はしている
+[detect_display_change_system] Found monitors count=2 : 7 件
+[detect_display_change_system] Updating Monitor entity:  0 件   ← ★ 一度も更新されない
+WM_DPICHANGED（受信・O6）               :  0 件   ← ★ 一度も届かない
+DPI component directly updated（O7）     :  0 件
+[diag.window_move]（拡大率変更後）        :  0 件   ← ★ 窓は一切動かない・寸も変わらない
+presenter の window_dpi（変更後）        : Some((120,120)) のまま（実モニタは 192）
+```
+
+**開発者による目視**: 拡大率を 200% にしてもゴーストの表示サイズが変わらない。DPI 追従が起きていれば大きくならなければならない。
+
+`SESSION-QUOTA: FAIL (0 / 6)` である。**これは採取の失敗ではなく、Req 2.4 への回答そのもの**——「ドラッグ以外の経路」には**そもそも書き手が存在しない**。
+
+#### 根本原因（静的構造証跡・file:line で確定）
+
+`Monitor` の `PartialEq` が **`handle` のみ**で等価判定する:
+
+```rust
+// crates/wintf/src/ecs/window/monitor.rs:103-107
+impl PartialEq for Monitor {
+    fn eq(&self, other: &Self) -> bool {
+        self.handle == other.handle          // bounds・work_area・dpi・is_primary を見ない
+    }
+}
+```
+
+一方その消費側は `!=` を**値の変化検出**に使っている:
+
+```rust
+// crates/wintf/src/ecs/layout/systems/monitor_systems.rs:229-236
+if existing_monitor != new_monitor {                      // ← handle は不変ゆえ恒偽
+    debug!(entity = ?entity, "[…] Updating Monitor entity");
+    if let Ok((_, mut monitor)) = existing_monitors.get_mut(entity) {
+        *monitor = new_monitor;                            // ← 到達しない
+    }
+}
+```
+
+**同一性の意味論（`handle` 一致）を、値の変化検出に使っている。** モニタの `handle` は拡大率を変えても不変なので、この分岐は**構造的に恒偽**である。結果、`Monitor` エンティティの `bounds`／`work_area`／`dpi` は**起動時の値のまま永久に凍結**する。
+
+しかもこの誤りは**檻で固定されている**:
+
+```rust
+// crates/wintf/src/ecs/window/monitor.rs:254-264
+#[test]
+fn test_partial_eq_compares_handle_only() {
+    // PartialEq は handle のみで等価判定する（bounds/dpi/is_primary は無視）。
+    let a = make_monitor(42, 0, 0, 800, 600);
+    let mut b = make_monitor(42, 100, 100, 1920, 1080);
+    b.dpi = 144;
+    assert_eq!(a, b, "handle が同一なら他フィールドが異なっても等価");
+}
+```
+
+**檻は `PartialEq` の実装を正しく固定しているが、消費側がその意味論を誤用していることは誰も見ていない。** 「檻が緑でも欠陥は成立する」典型例であり、[[test-only-decision-branches-not-proven-wiring]]（配線は再テストしない）の裏面に当たる——**意味論の異なる 2 箇所を結ぶ配線こそ檻が要る**。
+
+#### 帰結（なぜこれが「消失」の機構になるか）
+
+OS 側で拡大率を変えると、areka の 2 つの位置権威が**同時に凍結**する:
+
+| 権威 | 更新経路 | セッション②での実測 |
+| --- | --- | --- |
+| 窓の `DPI` component | `WM_DPICHANGED` ハンドラのみ | **0 件**＝旧 DPI のまま |
+| `Monitor` の `work_area`／`dpi` | `detect_display_change_system` の更新分岐 | **恒偽**＝起動時のまま |
+
+両方が凍結するため、**射影も遷移ガードも「正しい値で間違った答え」を出し続ける**。ユーザーが拡大率を大きく変えれば、旧 work area 基準の接地点は新しい可視領域の外へ出得るが、**それを検出して引き戻す経路が 1 本も無い**。S3（可視性の不変条件が無い）が最も危険な形で顕在化する条件である。
+
+なお `WM_DPICHANGED` が 0 件である理由は本セッションでは未確定（プロセスの DPI awareness 問い合わせは `PER_MONITOR_DPI_AWARE`＝レガシー API では v1/v2 を区別できない）。`SetProcessDpiAwarenessContext` の戻り値が [`runtime/mod.rs:111`](../../../crates/wintf/src/runtime/mod.rs) で `let _ =` により**捨てられている**ため、設定失敗が起きていても観測できない。**担当タスクはまずこの戻り値をログ化すること**（Req 1.5 の「点灯しない観測点を根拠に使わない」の直接適用）。
+
+#### 未充足にする受入基準
+
+- **Req 2.4**（消失がドラッグ以外の経路で起きた場合の主体名指し）——書き手が不在という形で回答
+- **Req 3.1／3.2**（可視性の不変条件）——凍結した work area では判定自体が無意味になる
+- **Req 4.1／4.2**（DPI 変化時の寸と位置の再導出）——OS 経路では一度も走らない
 
 ---
 
@@ -605,12 +706,27 @@ test result: FAILED. 1 passed; 3 failed; 0 ignored; 0 measured; 594 filtered out
 | §2 | 4.5（**セッション①のみ記入済み・②未採取**） | 実機 2 セッションの採取結果・Q1〜Q4・S1〜S3′ の痕跡 |
 | §4 | 7.4 | 是正後の実機再サインオフ |
 
-**§2 の未了分**（タスク 4.5 が②採取後に追記する）:
+**§2 は 2 セッションとも採取済み**（①=2026-07-31 16:35／②=同 21:02）。ただし②は S4（§2.7）により **DPI 変化が 1 度も届かず** `SESSION-QUOTA: FAIL (0/6)`。**S4 是正後に②を採り直すこと**——それまで「ドラッグ以外の経路」は未観測のままである。
 
-- §2.2 の②行（`SESSION-QUOTA` と `SESSION2-NO-DRAG`）
-- §2.3 の Q1〜Q4 に②の結果を併記（①で「該当なし」とした Q3／Q4 は、②で消失が起きれば実答が入る）
-- §2.4 の「再現しない」判定（**①だけでは適用不可**）
-- §2.5 の S1〜S3′ に②の痕跡を併記（とくに **S2 の破れ件数が②で増えるか**が重大度の指標）
+### 5.1 S4 の是正タスク新設が必要（tasks.md への申し送り）
+
+§2.7 の S4 は**既存タスクのどれにも属さない**:
+
+| 既存タスク | S4 を直すか | 理由 |
+| --- | --- | --- |
+| 5.1（S1 是正） | ✗ | `WM_DPICHANGED` ハンドラ内の分岐が対象。**メッセージが来ない**問題は範囲外 |
+| 5.2（S2 是正） | ✗ | DPI 相の射影ゲートが対象。DPI 相が**起動されない**問題は範囲外 |
+| 6.1／6.2（S3／S3′ 是正） | ✗ | 遷移ガードの配線が対象。ガードが読む work area が**凍結している**問題は範囲外 |
+
+新設タスクが最低限満たすべきこと:
+
+1. `Monitor` の**値の変化検出**を `PartialEq` から分離する（`handle` 同一性の意味論は維持したまま、`bounds`／`work_area`／`dpi`／`is_primary` の差分判定を別途用意する）。**既存檻 `test_partial_eq_compares_handle_only` は正しいので壊さない**——誤りは消費側にある
+2. `detect_display_change_system` が実際に `Monitor` を更新することを檻で固定する（handle 不変・値だけ変わる探針で赤→緑）
+3. `SetProcessDpiAwarenessContext` の戻り値をログ化する（[`runtime/mod.rs:111`](../../../crates/wintf/src/runtime/mod.rs) の `let _ =` を撤去）
+4. モニタ表更新後に**窓の DPI・寸・位置を再導出する経路**を通す（`WM_DPICHANGED` に依存しない側の駆動）
+5. S4 是正後にセッション②を採り直し、本書 §2.2／§2.3／§2.5 の②列を埋める
+
+**順序**: S4 是正は 5.1／5.2 と**独立に着手できる**（触るファイルが `monitor.rs`／`monitor_systems.rs`／`runtime/mod.rs` で重ならない）が、**②の採り直しは 5.1／5.2 の投入より前**に行うこと（§0.1 の絶対制約——是正投入後は実機再現が失われる）。
 
 **メンテ規約**:
 
