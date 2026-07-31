@@ -204,7 +204,8 @@ pub fn compile(instructions: &[Instruction], vars: &SystemVarSnapshot) -> Compil
     }
 
     // 選択待ち barrier 発行（R2.1/2.2/2.5/2.6）: 走査終了（End/Quit 切詰め後の出力）に対し、choice
-    // cue が 1 個以上あれば選択待ち barrier `WaitForChoice{timeout:None}`（M1 無期限）を最終 offset へ
+    // cue が 1 個以上あれば選択待ち barrier `WaitForChoice{timeout:None}`（`None`＝未指定＝下流の
+    // 既定値へ委譲する・DD-8。台本からの時間指定は追跡 spec の領分ゆえ本層は値を供給しない）を最終 offset へ
     // ちょうど 1 個 append する。同一 at の FIFO 挿入により全 cue より後に配送される（全 choice cue の
     // 後・R2.2）。`\q` の無い台本は barrier を発行せず既存完了挙動を変えない（R2.5）。barrier は
     // presentation でなく `emit`（CueCommand 専用）とは別の Barrier 用発行ヘルパで組む。
@@ -1274,7 +1275,8 @@ mod tests {
     }
 
     /// `\q` を 1 個以上含む台本には選択待ち barrier をちょうど 1 個、全 choice cue より後（最終
-    /// offset）へ発行する（R2.1/2.2/2.6）。タイムアウトは指定しない（`timeout:None`・M1 無期限）。
+    /// offset）へ発行する（R2.1/2.2/2.6）。タイムアウトは指定しない（`timeout:None`＝未指定＝
+    /// 下流の既定値へ委譲・DD-8）。
     #[test]
     fn talk_with_choice_appends_single_barrier_after_all_choices() {
         use areka_parsers::sakura::Choice;
@@ -1526,7 +1528,7 @@ mod tests {
         assert_eq!(
             barrier_of(&cues[cues.len() - 1]),
             &BarrierKind::WaitForChoice { timeout: None },
-            "末尾 barrier は WaitForChoice{{timeout:None}}（M1 無期限）"
+            "末尾 barrier は WaitForChoice{{timeout:None}}（未指定＝下流の既定値へ委譲・DD-8）"
         );
     }
 

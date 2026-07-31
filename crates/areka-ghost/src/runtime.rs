@@ -546,7 +546,11 @@ pub fn boot(mut options: GhostBootOptions) -> Result<GhostRuntime, GhostBootErro
     );
 
     // 3. 循環解消用の素の中継チャンネル（design.md「結線トポロジの要点」）。
-    let (start_tx, start_rx) = mpsc::channel::<areka_kanade::StartTalk>();
+    //    kanade → talk 再生系は [`TalkCommand`] の**単一チャンネル**（DD-5）——起動・選択解決・
+    //    選択解除の 3 形が同一チャンネル＋単一 relay ＋ dispatcher 単一 inbox を流れることで
+    //    FIFO 順序が保存される（`areka-talk` の `TalkCommand` doc に契約として明記）。
+    //    結線トポロジ自体は不変（relay は従来どおり 1 本）。
+    let (start_tx, start_rx) = mpsc::channel::<areka_kanade::TalkCommand>();
     let (down_tx, down_rx) = mpsc::channel::<KanadeMsg>();
 
     // 4. connect closure の構成（Helper＝本番・Custom＝spine e2e 等の注入）。
@@ -598,7 +602,7 @@ pub fn boot(mut options: GhostBootOptions) -> Result<GhostRuntime, GhostBootErro
         spawn_dispatcher(kanade_tx.clone(), options.sinks, system_var_source);
 
     // 8. relay 2 本（循環解消・design.md 参照）。
-    let start_relay_handle = spawn_relay::<areka_kanade::StartTalk, DispatcherMsg>(
+    let start_relay_handle = spawn_relay::<areka_kanade::TalkCommand, DispatcherMsg>(
         "start-relay",
         start_rx,
         dispatcher_tx.clone(),

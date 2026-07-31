@@ -224,3 +224,214 @@ fn talk_done_supports_equality() {
     assert_eq!(a, b);
     assert_ne!(a, c);
 }
+
+// ── TalkCommand（Requirements 5.1, 5.6・design C7・DD-4/DD-5/DD-11） ──
+
+/// `Start` は既存の `StartTalk` を情報無損失で包む（talk_id・script・epilogue の全点）。
+#[test]
+fn talk_command_start_wraps_start_talk_without_loss() {
+    let start = StartTalk {
+        talk_id: TalkId(21),
+        script: r"\0えらんで\q[はい,yes]\e".to_string(),
+        epilogue: vec![EpilogueCommand {
+            name: "SET".to_string(),
+            tokens: vec!["k".to_string(), "v".to_string()],
+        }],
+    };
+    let cmd = TalkCommand::Start(start.clone());
+
+    let TalkCommand::Start(inner) = &cmd else {
+        panic!("Start でなければならない");
+    };
+    assert_eq!(inner.talk_id, start.talk_id);
+    assert_eq!(inner.script, start.script);
+    assert_eq!(inner.epilogue, start.epilogue);
+}
+
+/// `ResolveChoice` は stale ガード用 talk_id と選択肢 ID を保持する（Req5.1）。
+#[test]
+fn talk_command_resolve_choice_carries_talk_id_and_choice_id() {
+    let cmd = TalkCommand::ResolveChoice {
+        talk_id: TalkId(30),
+        id: "yes".to_string(),
+    };
+    let TalkCommand::ResolveChoice { talk_id, id } = &cmd else {
+        panic!("ResolveChoice でなければならない");
+    };
+    assert_eq!(*talk_id, TalkId(30));
+    assert_eq!(id, "yes");
+}
+
+/// `CancelChoice` は talk_id のみを保持する（DD-11・Close funnel へ写像される）。
+#[test]
+fn talk_command_cancel_choice_carries_talk_id() {
+    let cmd = TalkCommand::CancelChoice {
+        talk_id: TalkId(31),
+    };
+    let TalkCommand::CancelChoice { talk_id } = &cmd else {
+        panic!("CancelChoice でなければならない");
+    };
+    assert_eq!(*talk_id, TalkId(31));
+}
+
+/// 3 形を catch-all なしで網羅 match でき、新 variant 追加時に再検討が強制される。
+#[test]
+fn talk_command_exhaustive_match_covers_three_forms() {
+    fn label(cmd: &TalkCommand) -> &'static str {
+        match cmd {
+            TalkCommand::Start(_) => "start",
+            TalkCommand::ResolveChoice { .. } => "resolve",
+            TalkCommand::CancelChoice { .. } => "cancel",
+        }
+    }
+
+    assert_eq!(
+        label(&TalkCommand::Start(StartTalk::new(TalkId(1), "x"))),
+        "start"
+    );
+    assert_eq!(
+        label(&TalkCommand::ResolveChoice {
+            talk_id: TalkId(1),
+            id: "a".to_string(),
+        }),
+        "resolve"
+    );
+    assert_eq!(
+        label(&TalkCommand::CancelChoice { talk_id: TalkId(1) }),
+        "cancel"
+    );
+}
+
+/// 3 形が**単一型**であることで単一チャンネルを流れ、DD-4 の
+/// `[ResolveChoice, Start]` バッチ順序がそのまま保存される（Req5.6・順序保存契約）。
+#[test]
+fn talk_command_single_stream_preserves_batch_order() {
+    fn labels(stream: &[TalkCommand]) -> Vec<&'static str> {
+        stream
+            .iter()
+            .map(|cmd| match cmd {
+                TalkCommand::Start(_) => "start",
+                TalkCommand::ResolveChoice { .. } => "resolve",
+                TalkCommand::CancelChoice { .. } => "cancel",
+            })
+            .collect()
+    }
+
+    // DD-4: 最終段が Value のとき、同一バッチで解決 → 起動の順に流れる。
+    let batch = vec![
+        TalkCommand::ResolveChoice {
+            talk_id: TalkId(40),
+            id: "menu".to_string(),
+        },
+        TalkCommand::Start(StartTalk::new(TalkId(41), r"\0つづき\e")),
+    ];
+    assert_eq!(labels(&batch), vec!["resolve", "start"]);
+}
+
+/// `TalkCommand` は Clone 可能（送出前の記録・複製が壊れないこと）。
+#[test]
+fn talk_command_is_cloneable() {
+    let cmd = TalkCommand::ResolveChoice {
+        talk_id: TalkId(50),
+        id: "id".to_string(),
+    };
+    let cloned = cmd.clone();
+    let TalkCommand::ResolveChoice { talk_id, id } = cloned else {
+        panic!("ResolveChoice でなければならない");
+    };
+    assert_eq!(talk_id, TalkId(50));
+    assert_eq!(id, "id");
+    // Debug が使えること。
+    let _ = format!("{cmd:?}");
+}
+
+// ── ChoiceWaiting（Requirements 7.1・design C7・DD-6/DD-7/DD-8） ──
+
+/// 3 情報（候補 id 列・表示完了時刻・タイムアウト指令）＋ talk_id を保持する。
+#[test]
+fn choice_waiting_carries_ids_display_end_and_timeout_directive() {
+    let waiting = ChoiceWaiting {
+        talk_id: TalkId(60),
+        choice_ids: vec!["a".to_string(), "b".to_string()],
+        display_end_elapsed_secs: 1.5,
+        timeout_directive_secs: Some(10.0),
+    };
+    assert_eq!(waiting.talk_id, TalkId(60));
+    assert_eq!(waiting.choice_ids, vec!["a".to_string(), "b".to_string()]);
+    assert_eq!(waiting.display_end_elapsed_secs, 1.5);
+    assert_eq!(waiting.timeout_directive_secs, Some(10.0));
+}
+
+/// 候補 id 列は表示順のまま保存される（DD-7 の照合が順序を壊さない前提）。
+#[test]
+fn choice_waiting_preserves_choice_id_order() {
+    let ids = vec![
+        "first".to_string(),
+        "second".to_string(),
+        "third".to_string(),
+    ];
+    let waiting = ChoiceWaiting {
+        talk_id: TalkId(61),
+        choice_ids: ids.clone(),
+        display_end_elapsed_secs: 0.0,
+        timeout_directive_secs: None,
+    };
+    assert_eq!(waiting.choice_ids, ids);
+}
+
+/// DD-8 のタイムアウト指令語彙 3 値（未指定／無効化／明示秒）が
+/// `Option<f64>` の規約として表現できる（下流の写像はここでは行わない）。
+#[test]
+fn choice_waiting_timeout_directive_vocabulary_is_representable() {
+    /// doc に明記した語彙をテスト側で写して固定する（DD-8）。
+    fn vocabulary(directive: Option<f64>) -> &'static str {
+        match directive {
+            None => "unspecified",
+            Some(v) if v <= 0.0 => "disabled",
+            Some(_) => "explicit",
+        }
+    }
+
+    let make = |directive: Option<f64>| ChoiceWaiting {
+        talk_id: TalkId(62),
+        choice_ids: vec!["x".to_string()],
+        display_end_elapsed_secs: 2.0,
+        timeout_directive_secs: directive,
+    };
+
+    assert_eq!(vocabulary(make(None).timeout_directive_secs), "unspecified");
+    assert_eq!(
+        vocabulary(make(Some(0.0)).timeout_directive_secs),
+        "disabled"
+    );
+    assert_eq!(
+        vocabulary(make(Some(-1.0)).timeout_directive_secs),
+        "disabled"
+    );
+    assert_eq!(
+        vocabulary(make(Some(30.0)).timeout_directive_secs),
+        "explicit"
+    );
+}
+
+/// `ChoiceWaiting` は Clone / PartialEq / Debug を備える（檻での到着記録・突合用）。
+#[test]
+fn choice_waiting_is_cloneable_and_comparable() {
+    let waiting = ChoiceWaiting {
+        talk_id: TalkId(63),
+        choice_ids: vec!["a".to_string()],
+        display_end_elapsed_secs: 3.25,
+        timeout_directive_secs: None,
+    };
+    let cloned = waiting.clone();
+    assert_eq!(waiting, cloned);
+
+    let other = ChoiceWaiting {
+        talk_id: TalkId(63),
+        choice_ids: vec!["a".to_string()],
+        display_end_elapsed_secs: 3.5,
+        timeout_directive_secs: None,
+    };
+    assert_ne!(waiting, other);
+    let _ = format!("{waiting:?}");
+}

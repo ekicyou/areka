@@ -202,6 +202,8 @@ mod tests {
             last_now,
             next_talk_id: next_id,
             pending_close: None,
+            choice: None,
+            choice_prev_talk: None,
         }
     }
 
@@ -217,6 +219,8 @@ mod tests {
             last_now,
             next_talk_id: next_id,
             pending_close: None,
+            choice: None,
+            choice_prev_talk: None,
         }
     }
 
@@ -302,7 +306,7 @@ mod tests {
         assert_eq!(actions3.len(), 1);
         match &actions3[0] {
             Action::ShioriRequest(ShioriCall::Get { id, .. }) => {
-                assert_eq!(*id, "OnSecondChange", "定常復帰後に pump が再開する");
+                assert_eq!(id.as_str(), "OnSecondChange", "定常復帰後に pump が再開する");
             }
             _ => panic!("expected OnSecondChange GET after resume"),
         }

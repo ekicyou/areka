@@ -21,7 +21,7 @@
   - `OnBoot`（初回 `OnFirstBoot`）— 起動挨拶
   - `OnSecondChange` — **最重要・心臓部**。毎秒。これが OnTalk/OnHour/コールバック/kick を内部駆動する
   - `OnMouseDoubleClick` — メニュー
-  - `OnChoiceSelectEx` — メニュー選択肢確定（`\q[title,id]` の id を Reference0）
+  - `OnChoiceSelectEx` — メニュー選択肢確定（Reference0=選択肢ラベル・Reference1=`\q[title,id]` の id・Reference2 以降=拡張引数）
   - `OnMouseMove` — 撫で反応（areka が collision 解決して actor/region を Reference に載せる）
   - `OnClose` — 終了挨拶＋`\-`
 - **送ってはいけない**: `OnTalk`/`OnHour`（emo2 が OnSecondChange 内で内部生成。二重発火になる）。

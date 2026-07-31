@@ -30,7 +30,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use areka_actor::{ActorError, ActorHandle};
 use areka_emo_compose::{BindSet, PatternState};
@@ -246,6 +246,74 @@ impl ScriptedShioriHandle {
 // ===========================================================================
 // GPU / fixture / 有界待機ヘルパ（draw_readback_test／ghost spine 定石の踏襲）
 // ===========================================================================
+
+/// **別スレッドの進行を待つ**有界スピンの猶予（sleep 不使用・`yield_now` のみで回す協調ループ用）。
+///
+/// # 反復回数で打ち切ってはならない
+///
+/// `yield_now()` のビジーウェイトでは **反復回数が経過時間の代理にならない**。CPU 競合下
+/// （`cargo test --workspace` の並行実行・ウイルス対策の再スキャン等）では、待っている相手スレッドが
+/// 一度も走らないまま数十万回の yield が尽きうる（steering
+/// `areka-defender-rescan-starves-cooperative-test-loops`）。実測では旧 `for _ in 0..100_000u32` 形が
+/// 並行実行時に**約 6%**（単独実行 30 回中 2 回）で待機に失敗し、`boot_calls` が空のまま照合へ落ちていた。
+///
+/// # 適用範囲
+///
+/// - **対象**: 待機対象が別スレッドの進行であり、各反復が**何も進めない**純粋なポーリング
+///   （`non_status_calls()` / `drain_received()` を読むだけのループ）。必ず本猶予で打ち切ること。
+/// - **非対象**: 各反復が `inject_dispatcher_tick` / `inject_seriko_tick` で**系そのものを進める**
+///   ループ。そこでは反復回数が注入 Tick 列＝仕事量を表すため、時刻で打ち切ると注入列が短くなり
+///   意味が変わる（`tick_and_collect` 等）。
+///
+/// 猶予は通常経路（マイクロ秒〜ミリ秒）に対して桁違いに大きく取る。期限切れは呼び手の assert が
+/// 落として原因を名指しするので hang しない。
+const SPIN_WAIT: Duration = Duration::from_secs(30);
+
+/// `yield_now()` の密スピンを続ける上限反復数。これを超えたら [`BACKOFF_SLEEP`] へ落とす。
+///
+/// # なぜ純 yield のままではいけないか
+/// `yield_now()` の密ループは **1 コアを占有し続ける**。反復上限だけで打ち切っていた旧実装は
+/// 早々に諦めるためこれが顕在化しなかったが、時刻期限（[`SPIN_WAIT`]）へ変えると失敗経路が
+/// 数十秒フルにコアを焼き、**同一バイナリで並走する他テストを飢餓させて別の flake を生む**
+/// （実測: 純 yield ＋ 30 秒期限で 50 回中 5 回・無関係な 3 テストが巻き添えで失敗し、総所要が
+/// 230 秒→1490 秒へ悪化した）。待機は「速い経路を邪魔しない」と同時に「長引いたら CPU を返す」
+/// 必要がある。
+///
+/// # 予算を旧実装の上限に揃える理由
+/// 予算を小さく取る（実測: 10_000）と、**正常でも数百 ms 待つ呼出点**が [`BACKOFF_SLEEP`] の
+/// 1ms 粒度に律速され、通常経路が 1 回 4.4 秒 → 10.3 秒へ倍増した。旧実装の最大予算（1_000_000）
+/// をそのまま踏襲すれば、**成功する待機は旧実装と完全に同じ密スピンで完了**し、予算を使い切った
+/// ——旧実装なら諦めて assert を落としていた——場合にのみ sleep へ落ちる。すなわち本ヘルパは
+/// 「旧挙動 ＋ 諦めずに時刻期限まで CPU を返しながら待つ」の純増であり、通常経路を一切遅くしない。
+const SPIN_YIELD_BUDGET: u32 = 1_000_000;
+
+/// 密スピンを使い切った後の 1 回あたり待機。CPU を明け渡し、相手スレッドに実行機会を与える。
+const BACKOFF_SLEEP: Duration = Duration::from_millis(1);
+
+/// `cond` が真になるまで [`SPIN_WAIT`] の範囲で待つ。真になったら `true`、期限切れなら `false`。
+///
+/// 速い経路（通常はマイクロ秒）は `yield_now()` の密スピンで待ち time-to-detect を犠牲にしない。
+/// [`SPIN_YIELD_BUDGET`] を超えたら [`BACKOFF_SLEEP`] の短い sleep へ落として**コア占有をやめる**。
+/// 本ファイルの「sleep 不使用」規律は *系を進める* Tick 注入ループの決定論を守るためのものであり、
+/// 別スレッドの進行を待つだけの本ヘルパには当たらない（待機は観測内容を変えない）。
+fn spin_wait_until(mut cond: impl FnMut() -> bool) -> bool {
+    let deadline = Instant::now() + SPIN_WAIT;
+    let mut spun = 0u32;
+    loop {
+        if cond() {
+            return true;
+        }
+        if Instant::now() >= deadline {
+            return false;
+        }
+        if spun < SPIN_YIELD_BUDGET {
+            spun += 1;
+            std::thread::yield_now();
+        } else {
+            std::thread::sleep(BACKOFF_SLEEP);
+        }
+    }
+}
 
 /// `GraphicsCore`＋`WucGraphicsResource` を実資源として載せた wintf World（headless GPU・R8.4）。
 ///
@@ -695,14 +763,12 @@ fn spine_harness_boots_scripted_ghost_and_reaches_attach_ready() {
     // boot 系列は kanade スレッド上の同期往復のみで完走する（Tick 不要）。実スレッド境界を跨ぐため
     // 有界スピン待機（sleep なし・yield_now のみ）で 5 呼出の到達を待ってから照合する。task 8.2 の
     // username prefetch GET（OnInitialize 後・OnFirstBoot 前・R9.1/9.2）が加わり boot 系列は 5 呼出。
+    // 打ち切りは反復回数でなく [`spin_wait_until`] の時刻期限（反復は経過時間の代理にならない）。
     let mut boot_calls = Vec::new();
-    for _ in 0..100_000u32 {
+    spin_wait_until(|| {
         boot_calls = harness.shiori_handle.non_status_calls();
-        if boot_calls.len() >= 5 {
-            break;
-        }
-        std::thread::yield_now();
-    }
+        boot_calls.len() >= 5
+    });
     let projected: Vec<(&str, &str)> = boot_calls
         .iter()
         .map(|c| match c {
@@ -1523,14 +1589,12 @@ fn spine_s5_close_handshake_consumes_onclose_and_joins_all_handles_bounded() {
 
     // boot 系列（非 Status 5 呼出）が届くまで有界スピン（OnClose を boot ノイズと分離・sleep 不使用）。
     // task 8.2 の username prefetch GET（OnInitialize 後・OnFirstBoot 前・R9.1/9.2）が加わり 4→5 呼出。
+    // 打ち切りは反復回数でなく [`spin_wait_until`] の時刻期限（反復は経過時間の代理にならない）。
     let mut boot_calls = Vec::new();
-    for _ in 0..100_000u32 {
+    spin_wait_until(|| {
         boot_calls = harness.shiori_handle.non_status_calls();
-        if boot_calls.len() >= 5 {
-            break;
-        }
-        std::thread::yield_now();
-    }
+        boot_calls.len() >= 5
+    });
     assert!(
         boot_calls.len() >= 5,
         "S5 前提: boot 系列 5 呼出（OnInitialize/username/OnFirstBoot/OnBoot/basewareversion）が有界内に発火する: {boot_calls:?}"
@@ -1912,17 +1976,15 @@ fn drive_shell_shown(harness: &mut SpineHarness, surface_id: u32, require_bind: 
 /// `now_ms` の seriko tick を 1 発直接注入し、ちょうど 1 件の `PresentCommand` が rx へ届くまで有界
 /// スピンして返す（sleep 不使用・`yield_now` のみ）。golden の各コマ遷移 tick は変化 1 件を発行する
 /// （6.1/6.2）ため、この直列注入→1 件回収で発行列の順序と内容を決定論的に照合できる。届かなければ
-/// 件数 assert が落ちる（hang しない）。
+/// 件数 assert が落ちる（hang しない）。打ち切りは反復回数でなく [`spin_wait_until`] の時刻期限
+/// （注入は 1 発のみで各反復は系を進めない純粋なポーリング＝反復は経過時間の代理にならない）。
 fn seriko_tick_expect_one(harness: &mut SpineHarness, now_ms: u64) -> PresentCommand {
     harness.inject_seriko_tick(now_ms);
     let mut buf: Vec<PresentCommand> = Vec::new();
-    for _ in 0..1_000_000u32 {
+    spin_wait_until(|| {
         buf.extend(harness.wiring.drain_received());
-        if !buf.is_empty() {
-            break;
-        }
-        std::thread::yield_now();
-    }
+        !buf.is_empty()
+    });
     assert_eq!(
         buf.len(),
         1,

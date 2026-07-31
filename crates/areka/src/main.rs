@@ -361,6 +361,17 @@ fn main() -> Result<()> {
         // （`attach_balloon_pointer_handlers`）が担う。balloon ハンドラは `Emo2Wiring` を self-gate する
         // ため wired 経路でのみ意味を持つ（`wire_mouse_input` と同じ gating・DD-IE-9 前例）。
         input_events::balloon::wire_balloon_choice(app.world().borrow_mut().world_mut());
+        // 選択確定通知の受信結線（areka-P0-choice-select-events task 5・design C1 ChoiceDrain・
+        // Req1.1/1.2/1.5/1.6/3.7）: 直上 `wire_balloon_choice` が挿入した `ChoiceSelectionInbox`
+        // （precondition）を毎フレーム drain し kanade へ全件転送する排他システムを登録する。
+        // 位置・様式は `wire_mouse_input`（上方の同 boot スロット）と同型——kanade Sender クローンを
+        // 持つ NonSend 資源挿入＋schedule 実行外の 1 回・同期呼出。
+        if let Some(runtime) = outcome.ghost.as_ref() {
+            input_events::choice_drain::wire_choice_drain(
+                app.world().borrow_mut().world_mut(),
+                runtime.kanade().clone(),
+            );
+        }
         (outcome.ghost, outcome.seriko, outcome.loop_ticker)
     } else {
         // フォールバック（R7.3・DD-7）: 現行の `LogSink`×2 boot を UI 基盤・起動窓の後へ
