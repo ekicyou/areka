@@ -49,7 +49,7 @@
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6_
   - _Boundary: kanade Reference 構築_
 
-- [ ] 2.3 統合: 任意名イベントの受理カテゴリと SHIORI 出口ガードのカテゴリ分岐を実装する
+- [x] 2.3 統合: 任意名イベントの受理カテゴリと SHIORI 出口ガードのカテゴリ分岐を実装する
   - 固定 ID 表に選択関連 3 イベントを追加し、表が正典固定 ID の部分集合である性質を保つ
   - 選択起源の任意名は `On` 接頭のみを受理する規則として追加し、スケジューラ起源の恒久禁止（自発生成と二重駆動する ID）を選択起源へ適用しない
   - SHIORI 出口の単一チョークポイントを出所カテゴリ別の分岐へ変更し、違反は従来どおり送出せずエラー記録する
@@ -203,3 +203,4 @@
 - 1.4: `start_talk_send_failed` は design C6 に従い `talk_command_send_failed` へ改称済み。`MockSakura::started()` は `TalkCommand::Start` の射影になった（既存檻は無改変）。
 - 2.1: `schedule/choice.rs` に `plan_cascade` / `choice_deadline` を配置。設計に明文の無い 2 裁定を本層で固定＝**秒→ms は四捨五入**・**NaN は無期限へ畳む**。対応表（7.1）へ記録するか要判断。`#[allow(dead_code)]` 3 箇所は 4.x の配線で除去すること。
 - 2.2: `on_choice_*` 4 本は Reference 割付を正典どおり実装（Ex は Ref0=ラベル/Ref1=ID）。3 固定 ID は **まだ `ALLOWED_EVENT_IDS` 未登載**＝2.3 が入るまで egress ガードが拒否する。設計 C2 の「`EventId::Choice` は choice.rs の planner のみが構成」という記述は C3/タスク境界（events.rs の `on_choice_named`）と字面が衝突しており、実装は C3 に従っている。
+- 2.3: `is_allowed_choice_event` は `lib.rs` の `events` ファサードへ未露出。統合檻（6.x）が必要とするなら 1 行 re-export を追加すること。

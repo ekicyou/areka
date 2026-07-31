@@ -214,35 +214,43 @@ fn drive(
 }
 
 /// GET／NOTIFY の同期往復。SHIORI へ出る**唯一の実行点**であり（本番・mock 双方が必ず通る・
-/// DD-IT-7）、送出前に送出イベント ID がホワイトリストの要素であることを検証する egress
-/// チョークポイントである（Req3.1）。
+/// DD-IT-7）、送出前に送出イベント ID が**出所カテゴリごとの受理規則**を満たすことを検証する
+/// egress チョークポイントである（Req2.6／2.9／3.1・design C6・DD-2）。
 ///
-/// - 許可集合外（`OnTalk`／`OnHour` 等・Req3.2）: SHIORI へ**送出せず** `error!`（event=
-///   `event_id_not_allowed`）を残し、内部規律違反の失敗語彙 `ShioriOutcome::Failed(ShioriFailure::
-///   Internal(..))` を返す（DD-IT-11・状態機械は既存の fault 経路で処理＝檻専用の応答を発明しない・
-///   panic しない・宙吊りにしない）。
+/// - 受理されない ID（スケジューラ起源の `OnTalk`／`OnHour` 等・Req3.2、選択起源の `On` 非接頭・
+///   Req2.6）: SHIORI へ**送出せず** `error!`（event=`event_id_not_allowed`）を残し、内部規律違反の
+///   失敗語彙 `ShioriOutcome::Failed(ShioriFailure::Internal(..))` を返す（DD-IT-11・状態機械は
+///   既存の fault 経路で処理＝檻専用の応答を発明しない・panic しない・宙吊りにしない）。
 /// - 許可集合内: 送出前に Method・イベント ID・参照値・実行状態の wire 証跡を `trace!`（event=
 ///   `shiori_request`）で残して送出する（Req6.2）。往復失敗は error!＋`Failed(Ipc)` へ写像（宙吊りなし）。
 fn round_trip_request(shiori: &Sender<ShioriMsg>, call: ShioriCall) -> ShioriOutcome {
-    // 送出しようとしているイベントの Method／ID／参照値／実行状態（wire 値）を取り出す。
+    // 送出しようとしているイベントの Method／ID（出所カテゴリ込み）／参照値／実行状態を取り出す。
     // `status.render()` は `None` ⇔ Status ヘッダ行なし（Req6.2・DD-IT-5 の kanade 層観測）。
-    // `id` は wire 形（[`EventId::as_str`]）で取り出す——ガード判定もログ証跡も従来と
-    // 一字一句同一の文字列で行う（DD-1: 出所カテゴリは表現を変えない）。
-    let (method, id, references, status_wire) = match &call {
-        ShioriCall::Get { id, references, status } => {
-            ("GET", id.as_str(), references, status.render())
-        }
+    let (method, event_id, references, status_wire) = match &call {
+        ShioriCall::Get { id, references, status } => ("GET", id, references, status.render()),
         ShioriCall::Notify { id, references, status } => {
-            ("NOTIFY", id.as_str(), references, status.render())
+            ("NOTIFY", id, references, status.render())
         }
     };
+    // ログ証跡は wire 形（[`EventId::as_str`]）で残す——出所カテゴリは表現を変えない（DD-1）。
+    let id = event_id.as_str();
 
-    // ID ホワイトリスト檻（Req3.1/3.2/4.1・DD-IT-7/DD-IT-11）: 許可集合外は送出せず内部規律違反
-    // として失敗させる。送出可否は「イベント許可 ∨ リソース許可」の論理和で判定する——イベント檻
-    // （`ALLOWED_EVENT_IDS`・8 ID）とは別族のリソース許可集合（`ALLOWED_RESOURCE_IDS`・M1: username）を
-    // additive に OR する（既存イベント許可路・許可外拒否は無改変・design 論点1）。
-    let allowed = crate::schedule::events::is_allowed_event_id(id)
-        || crate::schedule::resources::is_allowed_resource_id(id);
+    // ID 受理檻（Req2.6/2.9/3.1/3.2/4.1・design C6・DD-2・DD-IT-7/DD-IT-11）: 受理されない ID は
+    // 送出せず内部規律違反として失敗させる。送出可否は**出所カテゴリ別**に判定する。
+    //
+    // - スケジューラ起源（`Static`）: 従来どおり「イベント許可 ∨ リソース許可」の論理和——固定表
+    //   （`ALLOWED_EVENT_IDS`）と別族のリソース許可集合（`ALLOWED_RESOURCE_IDS`・M1: username）。
+    //   `OnTalk`／`OnHour` の恒久禁止（自発生成との二重駆動）はこちら側で**不変**（Req3.2）。
+    // - 選択起源（`Choice`）: `is_allowed_choice_event`（`On` 接頭のみ）。作者が `\q` の ID に書いた
+    //   名前を事前登録なしに逐語で発火するため固定表を要求せず、スケジューラ起源の恒久禁止も
+    //   適用しない（Req2.9・裁定 8＝両禁止規則は非交差）。
+    let allowed = match event_id {
+        EventId::Static(s) => {
+            crate::schedule::events::is_allowed_event_id(s)
+                || crate::schedule::resources::is_allowed_resource_id(s)
+        }
+        EventId::Choice(name) => crate::schedule::events::is_allowed_choice_event(name),
+    };
     if !allowed {
         tracing::error!(
             target: "kanade",
@@ -999,5 +1007,180 @@ mod tests {
         );
 
         drop(shiori_handle);
+    }
+
+    // --- 10. egress ガードの出所カテゴリ分岐（タスク 2.3・Req 2.6／2.9・design C6／DD-2／裁定 8） ---
+    //
+    // submit ガードが `EventId` の出所カテゴリ別 match へ変わったことを、両カテゴリの実送出パスから
+    // 檻に入れる。スケジューラ起源（`Static`）は固定表 ∨ リソース表で従来どおり——`OnTalk`／`OnHour`
+    // の恒久禁止は不変（セクション 7 (b) が保存）——選択起源（`Choice`）は `On` 接頭のみで受理し、
+    // 恒久禁止 ID であっても逐語で送出される（Req2.9・恒久禁止の根拠は選択起源に該当しない）。
+
+    /// テスト用の選択起源 GET 呼出（任意名イベント・[`EventId::Choice`]）。
+    fn probe_choice_call(id: &str) -> ShioriCall {
+        ShioriCall::Get {
+            id: EventId::Choice(id.to_string()),
+            references: Vec::new(),
+            status: ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE),
+        }
+    }
+
+    // (a) 選択起源の恒久禁止 ID（OnTalk／OnHour）→ ガードを通過して逐語で送出される（Req2.9）。
+    //     同じ ID がスケジューラ起源では拒否されること（セクション 7 (b) の既存檻）と対になる、
+    //     完了状態が要求する「両方向」の許可側。
+    #[test]
+    fn choice_origin_scheduler_forbidden_ids_are_sent_verbatim() {
+        for forbidden_for_scheduler in ["OnTalk", "OnHour"] {
+            let (shiori_tx, rec_rx, shiori_handle) = spawn_mock_shiori(benign);
+
+            let outcome = round_trip_request(&shiori_tx, probe_choice_call(forbidden_for_scheduler));
+
+            assert!(
+                matches!(outcome, ShioriOutcome::NoContent),
+                "{forbidden_for_scheduler} は選択起源なら送出され mock の良性応答が返るべき（Req2.9）"
+            );
+            // wire へ載る ID は逐語（イベント名の書き換え・別 ID への写像をしない・Req2.6）。
+            assert_eq!(
+                rec_rx
+                    .recv_timeout(Duration::from_secs(5))
+                    .expect("選択起源の許可 ID はチャネルへ送出され mock が受領するはず"),
+                Recorded::Get(forbidden_for_scheduler.to_string())
+            );
+
+            drop(shiori_tx);
+            drop(shiori_handle);
+        }
+    }
+
+    // (a') 対の拒否側（Req2.9 の非交差を 1 テスト内で明示）: 同じ `OnTalk` でもスケジューラ起源は
+    //      従来どおり送出されず `event_id_not_allowed` を記録して Failed(Internal) へ写像される。
+    #[test]
+    fn same_id_is_allowed_from_choice_origin_and_rejected_from_scheduler_origin() {
+        // 選択起源: 送出される。
+        let (choice_tx, choice_rx, choice_handle) = spawn_mock_shiori(benign);
+        let choice_outcome = round_trip_request(&choice_tx, probe_choice_call("OnTalk"));
+        assert!(
+            matches!(choice_outcome, ShioriOutcome::NoContent),
+            "OnTalk は選択起源なら送出されるべき（Req2.9）"
+        );
+        assert_eq!(
+            choice_rx
+                .recv_timeout(Duration::from_secs(5))
+                .expect("選択起源 OnTalk はチャネルへ送出されるはず"),
+            Recorded::Get("OnTalk".to_string())
+        );
+        drop(choice_tx);
+        drop(choice_handle);
+
+        // スケジューラ起源: 送出されず error!＋Failed(Internal)（恒久禁止は Static 側で不変）。
+        let (static_tx, static_rx, static_handle) = spawn_mock_shiori(benign);
+        let mut static_outcome: Option<ShioriOutcome> = None;
+        let events = capture(|| {
+            static_outcome = Some(round_trip_request(
+                &static_tx,
+                ShioriCall::Get {
+                    id: EventId::Static("OnTalk"),
+                    references: Vec::new(),
+                    status: ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE),
+                },
+            ));
+        });
+        assert!(
+            matches!(
+                static_outcome,
+                Some(ShioriOutcome::Failed(ShioriFailure::Internal(_)))
+            ),
+            "OnTalk はスケジューラ起源では従来どおり Failed(Internal) へ写像されるべき（Req3.2）"
+        );
+        assert_logged(&events, Level::ERROR, "event_id_not_allowed");
+        assert!(
+            static_rx.try_recv().is_err(),
+            "スケジューラ起源 OnTalk はチャネルへ送出されてはならない（Req3.2）"
+        );
+        drop(static_tx);
+        drop(static_handle);
+    }
+
+    // (b) 選択起源の `On` 非接頭 ID → 送出されず `event_id_not_allowed` を記録して
+    //     Failed(Internal) へ写像される（受理規則違反も従来どおりの拒否語彙・design C6）。
+    #[test]
+    fn choice_origin_without_on_prefix_is_not_sent_and_logs_error() {
+        for rejected in ["foo", "on", ""] {
+            let (shiori_tx, rec_rx, shiori_handle) = spawn_mock_shiori(benign);
+
+            let mut outcome: Option<ShioriOutcome> = None;
+            let events = capture(|| {
+                outcome = Some(round_trip_request(&shiori_tx, probe_choice_call(rejected)));
+            });
+
+            assert!(
+                matches!(
+                    outcome,
+                    Some(ShioriOutcome::Failed(ShioriFailure::Internal(_)))
+                ),
+                "{rejected:?} は On 接頭でないゆえ送出せず Failed(Internal) へ写像されるべき"
+            );
+            assert_logged(&events, Level::ERROR, "event_id_not_allowed");
+            assert!(
+                rec_rx.try_recv().is_err(),
+                "{rejected:?} はチャネルへ送出されてはならない"
+            );
+
+            drop(shiori_tx);
+            drop(shiori_handle);
+        }
+    }
+
+    // (c) 境界入力: 選択起源の `"On"` 単独は受理され送出される（接頭辞判定ただ 1 条件の境界）。
+    #[test]
+    fn choice_origin_bare_on_is_accepted_and_sent() {
+        let (shiori_tx, rec_rx, shiori_handle) = spawn_mock_shiori(benign);
+
+        let outcome = round_trip_request(&shiori_tx, probe_choice_call("On"));
+
+        assert!(
+            matches!(outcome, ShioriOutcome::NoContent),
+            "\"On\" 単独は On 接頭ゆえ受理され送出されるべき（境界入力）"
+        );
+        assert_eq!(
+            rec_rx
+                .recv_timeout(Duration::from_secs(5))
+                .expect("\"On\" はチャネルへ送出され mock が受領するはず"),
+            Recorded::Get("On".to_string())
+        );
+
+        drop(shiori_tx);
+        drop(shiori_handle);
+    }
+
+    // (d) 選択関連の固定 3 ID は**スケジューラ起源**（`Static`）として送出される（DD-2 の表追加）。
+    #[test]
+    fn choice_fixed_ids_pass_the_static_guard_and_are_sent() {
+        for id in ["OnChoiceSelectEx", "OnChoiceSelect", "OnChoiceTimeout"] {
+            let (shiori_tx, rec_rx, shiori_handle) = spawn_mock_shiori(benign);
+
+            let outcome = round_trip_request(
+                &shiori_tx,
+                ShioriCall::Get {
+                    id: EventId::Static(id),
+                    references: vec!["ID".to_string()],
+                    status: ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE),
+                },
+            );
+
+            assert!(
+                matches!(outcome, ShioriOutcome::NoContent),
+                "{id} は許可表に載ったため Static ガードを通過して送出されるべき（DD-2）"
+            );
+            assert_eq!(
+                rec_rx
+                    .recv_timeout(Duration::from_secs(5))
+                    .expect("固定 3 ID はチャネルへ送出され mock が受領するはず"),
+                Recorded::Get(id.to_string())
+            );
+
+            drop(shiori_tx);
+            drop(shiori_handle);
+        }
     }
 }

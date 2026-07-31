@@ -52,15 +52,21 @@ pub(crate) const REF2_WHEEL_M1: &str = "0";
 /// M2 のシーム（呼び手がデバイス種を渡す形へ）として残す。
 pub(crate) const REF6_DEVICE_MOUSE: &str = "mouse";
 
-/// 送出し得るイベント ID の確定ホワイトリスト（Req3.1）。
+/// **スケジューラ起源**（[`crate::msg::EventId::Static`]）で送出し得るイベント ID の
+/// 確定ホワイトリスト（Req3.1）。
+///
+/// 本表は**正典（ukadoc）固定 ID の部分集合**である——載る ID はすべて正典に実在する固定名で、
+/// 実行時に生成される任意名は 1 つも載らない（この性質は表への追加が起きても不変）。
 /// `OnTalk`／`OnHour` は emo2 が OnSecondChange 内部で自発生成するため**恒久的に含めない**（Req3.2）。
 ///
-/// SEAM(W5・choice-select-events): `\q[タイトル,OnID]` は実行時スクリプト由来の**任意名イベント**を
-/// 発火する（emo2 唯一の依存形・menu.pasta:15 実物）＝固定 const 表には載らない（id 型は
-/// [`crate::msg::EventId::Choice`] が任意名を逐語で運ぶ・DD-1）。
-/// W5 での拡張は本表への ID 追加ではなく**受理規則へのカテゴリ追加**（additive）で行う——チョークポイント・
-/// 本表（正典固定 ID の部分集合）・`OnTalk`/`OnHour` 恒久禁止は不変。任意名カテゴリと Req3.2 恒久禁止の
-/// 交差（`\q[x,OnTalk]` を書くゴーストの扱い）は choice-select-events の要件フェーズで決着（research §16 申し送り）。
+/// 選択関連の固定 3 ID（`OnChoiceSelectEx`／`OnChoiceSelect`／`OnChoiceTimeout`）は
+/// choice-select-events（DD-2）で additive 追加した——いずれも正典固定 ID であり、マウス系 2 種の
+/// 追加と同じ前例に従う。一方 `\q[タイトル,OnID]` 由来の**任意名イベント**（emo2 唯一の依存形・
+/// menu.pasta:15 実物）は固定 const 表には載らず、[`is_allowed_choice_event`] という
+/// **出所別の受理規則**で検証する（DD-1／DD-2・id 型は [`crate::msg::EventId::Choice`] が
+/// 任意名を逐語で運ぶ）。ゆえに本表の恒久禁止（`OnTalk`／`OnHour`）は選択起源へ波及しない
+/// （禁止の根拠＝自発生成との二重駆動は、作者が明示的に書いた 1 クリック 1 回の発火に該当しない・
+/// Req2.9・裁定 8）。
 pub const ALLOWED_EVENT_IDS: &[&str] = &[
     "OnInitialize",
     "OnFirstBoot",
@@ -70,11 +76,32 @@ pub const ALLOWED_EVENT_IDS: &[&str] = &[
     "OnClose",
     "OnMouseMove",
     "OnMouseDoubleClick",
+    "OnChoiceSelectEx",
+    "OnChoiceSelect",
+    "OnChoiceTimeout",
 ];
 
 /// `id` が送出許可集合（[`ALLOWED_EVENT_IDS`]）に属するかを判定する（Req3.1）。
+///
+/// **スケジューラ起源専用**の判定である。選択起源（[`crate::msg::EventId::Choice`]）は
+/// 本判定ではなく [`is_allowed_choice_event`] を用いる（DD-2）。
 pub fn is_allowed_event_id(id: &str) -> bool {
     ALLOWED_EVENT_IDS.contains(&id)
+}
+
+/// **選択起源**（[`crate::msg::EventId::Choice`]）の任意名イベント受理規則（Req2.6／2.9・DD-2）。
+///
+/// ゴースト作者が `\q` の ID に書いた名前を**事前の固定登録なしに逐語で**発火するため、判定は
+/// 「`On` 接頭であること」ただ 1 条件とする（[`ALLOWED_EVENT_IDS`] への登録は要求しない）。
+///
+/// スケジューラ起源の恒久禁止（`OnTalk`／`OnHour`）は本規則へ**適用しない**——禁止の根拠は
+/// 「ベースウェアが自発的に周期発火すると消費側ゴーストの自発生成と二重駆動する」ことであり、
+/// 作者が選択肢へ明示的に書いた 1 クリック = 1 回の発火はこの根拠に該当しないため、
+/// `OnTalk` も選択起源なら発火できる（Req2.9・裁定 8）。
+///
+/// 大小文字の揺れ（`on`／`ONMENU`）は正典の書式ではないため補正せず拒否する（逐語判定）。
+pub fn is_allowed_choice_event(id: &str) -> bool {
+    id.starts_with("On")
 }
 
 /// `OnInitialize`（NOTIFY・References なし）。
@@ -532,11 +559,14 @@ mod tests {
         assert_eq!(references, vec!["system".to_string()]);
     }
 
-    /// 許可 ID 檻（Req3.1/3.2/7.1・DD-IT-8・DD-IE-11）: 表が期待8集合と完全一致し
+    /// 許可 ID 檻（Req3.1/3.2/7.1・DD-IT-8・DD-IE-11・DD-2）: 表が期待11集合と完全一致し
     /// `OnTalk`/`OnHour` を含まない。マウス系2種（OnMouseMove/OnMouseDoubleClick）は
-    /// Task 2.1 で additive 追加された（whitelist が意図的に6→8へ増えたための更新）。
+    /// Task 2.1 で additive 追加され、選択関連の固定 3 ID（OnChoiceSelectEx/OnChoiceSelect/
+    /// OnChoiceTimeout）は choice-select-events 2.3 で同じ前例に倣い additive 追加された
+    /// （whitelist が意図的に 6→8→11 へ増えたための更新）。3 ID はいずれも正典（ukadoc）の
+    /// 固定イベント ID であり、「表＝正典固定 ID の部分集合」の性質は保たれる。
     #[test]
-    fn allowed_event_ids_are_exactly_the_eight_and_exclude_ontalk_onhour() {
+    fn allowed_event_ids_are_exactly_the_eleven_and_exclude_ontalk_onhour() {
         assert_eq!(
             ALLOWED_EVENT_IDS,
             &[
@@ -548,6 +578,9 @@ mod tests {
                 "OnClose",
                 "OnMouseMove",
                 "OnMouseDoubleClick",
+                "OnChoiceSelectEx",
+                "OnChoiceSelect",
+                "OnChoiceTimeout",
             ]
         );
         assert!(is_allowed_event_id("OnMouseMove"), "OnMouseMove は許可集合に属する（Req7.1）");
@@ -555,11 +588,65 @@ mod tests {
             is_allowed_event_id("OnMouseDoubleClick"),
             "OnMouseDoubleClick は許可集合に属する（Req7.1）"
         );
+        for id in ["OnChoiceSelectEx", "OnChoiceSelect", "OnChoiceTimeout"] {
+            assert!(
+                is_allowed_event_id(id),
+                "{id} は選択関連の正典固定 ID ゆえ許可集合に属する（DD-2）"
+            );
+        }
         assert!(!is_allowed_event_id("OnTalk"), "OnTalk は恒久的に許可しない（Req3.2）");
         assert!(!is_allowed_event_id("OnHour"), "OnHour は恒久的に許可しない（Req3.2）");
         // 表の全要素が許可判定を通ること。
         for id in ALLOWED_EVENT_IDS {
             assert!(is_allowed_event_id(id), "{id} は表にあるのに許可されない");
+        }
+    }
+
+    /// 選択起源の受理規則（Req2.6・DD-2）: `On` 接頭のみを受理し、事前の固定登録を要さない。
+    ///
+    /// 判定は接頭辞ただ 1 条件——ゴースト作者が `\q` の ID に書いた名前を逐語で受理するため、
+    /// 固定表（[`ALLOWED_EVENT_IDS`]）への登録有無・大小文字の揺れの補正はいずれも行わない。
+    #[test]
+    fn is_allowed_choice_event_accepts_only_on_prefixed_names_verbatim() {
+        // 受理: 未登録の任意名・境界入力（"On" 単独）・正典固定 ID の逐語形。
+        for id in [
+            "On",
+            "OnMenu",
+            "Onおしゃべり頻度メニュー",
+            "OnChoiceSelect",
+            "On ",
+        ] {
+            assert!(
+                is_allowed_choice_event(id),
+                "{id} は On 接頭ゆえ選択起源として受理される（Req2.6）"
+            );
+        }
+        // 拒否: On 接頭でない形（空文字・小文字・大文字・部分一致・接頭でない位置）。
+        for id in ["", "foo", "on", "onMenu", "ONMENU", "MenuOn", " OnMenu"] {
+            assert!(
+                !is_allowed_choice_event(id),
+                "{id:?} は On 接頭でないゆえ選択起源として受理されない（Req2.6）"
+            );
+        }
+    }
+
+    /// 裁定 8（Req2.9）: スケジューラ起源の恒久禁止と choice 起源の逐語発火が**交差しない**。
+    ///
+    /// `OnTalk`／`OnHour` は「ベースウェアが自発的に周期発火すると消費側ゴーストの自発生成と
+    /// 二重駆動する」ことを根拠に固定表から恒久的に除外されるが、この根拠はゴースト作者が
+    /// 選択肢へ明示的に書いた 1 クリック = 1 回の発火には該当しない。ゆえに同じ ID が
+    /// スケジューラ起源では拒否・選択起源では受理される（両方向をこの 1 檻で固定する）。
+    #[test]
+    fn scheduler_forbidden_ids_are_still_fireable_from_choice_origin() {
+        for id in ["OnTalk", "OnHour"] {
+            assert!(
+                !is_allowed_event_id(id),
+                "{id} はスケジューラ起源では恒久的に禁止（Req3.2・自発生成との二重駆動）"
+            );
+            assert!(
+                is_allowed_choice_event(id),
+                "{id} は選択起源なら逐語で発火できる（Req2.9・恒久禁止を適用しない）"
+            );
         }
     }
 
@@ -689,8 +776,10 @@ mod tests {
 
     /// 全構築関数の返す `id` が許可集合の要素であること（Service Interface Postcondition）。
     ///
-    /// 対象は**スケジューラ起源**（[`EventId::Static`]）の構築関数のみ。選択起源の構築関数
-    /// （`on_choice_*`）は固定表ではなく出所別の受理規則で検証されるため、本檻の被覆対象外である。
+    /// 対象は [`EventId::Static`] を返す構築関数——固定 3 ID を許可表へ載せた（DD-2）ことにより
+    /// `on_choice_select_ex`／`on_choice_select`／`on_choice_timeout` も本檻の被覆対象に入る。
+    /// 選択起源の任意名 `on_choice_named`（[`EventId::Choice`]）だけは固定表ではなく出所別の
+    /// 受理規則（`is_allowed_choice_event`）で検証されるため、本檻の被覆対象外である。
     #[test]
     fn every_construction_function_returns_an_allowed_id() {
         let cfg = config();
@@ -706,6 +795,9 @@ mod tests {
             on_close_notify(CloseReason::System, &snap),
             on_mouse_move(0, 0, 0, Some("Head"), &snap),
             on_mouse_double_click(0, 0, 0, None, MouseButton::Left, &snap),
+            on_choice_select_ex("ラベル", "ID", &[], &snap),
+            on_choice_select("ID", &snap),
+            on_choice_timeout("\\e", &snap),
         ];
         for call in &calls {
             let id = event_id(call).as_str();
