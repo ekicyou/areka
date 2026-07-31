@@ -498,15 +498,178 @@ fn choice_phase_label(phase: &ChoicePhase) -> &'static str {
     }
 }
 
-/// Steady での Tick（pump ゲート・Req 3.1／3.4／DD-6）。
+/// 選択待ちの期限到達を判定し、到達していれば `OnChoiceTimeout` を発行する（C4 規則 5・Req7.3）。
+///
+/// [`on_tick`] が既存 pump 処理に**先行して**呼ぶ。発行した場合は [`Some`]（発行 Action 列）を返し、
+/// 呼び手はその Tick の pump を発行しない（規則 5「この Tick は pump を発行しない・次 Tick から
+/// 再開」）。発行しない場合は [`None`] を返し、Tick は通常どおり進む。
+///
+/// # 発行条件（すべて満たすときのみ・時刻は注入値のみで判定する）
+/// 1. 選択待ち帳簿があり段フェーズが [`ChoicePhase::Waiting`]（入力待ち）である
+///    ——[`ChoicePhase::Cascading`]／[`ChoicePhase::TimeoutInFlight`] は既に SHIORI 応答待ちであり、
+///    ここから二重に発火させない。
+/// 2. 期限が確定している（`deadline: Some`）——`None`＝無効化指令の写り（`0`／`-1`）は**計測を
+///    開始しない**という意味であり、選択待ちを無期限に継続する（Req7.6・DD-8）。
+/// 3. `now >= deadline`（期限ちょうども到達・時刻の比較のみで判定し実時間を読まない）。
+/// 4. 帳簿の対象 talk が現行 talk と一致する——Ref0 の供給源が当該トークの起動スクリプト
+///    （`ActiveTalk.script`・DD-10）だからである。
+///
+/// 条件 4 が破れた帳簿（slot 差替・トーク完了で置き去りになった帳簿）は本来「帳簿の掃除」
+/// （C4 規則 7・タスク 4.6）が消す状態であり、本層は発火せず trace で観測して通常 Tick へ譲る
+/// （沈黙で捨てない・log-first）。
+fn fire_choice_timeout_if_due(state: &mut State, now: MonotonicMs) -> Option<Vec<Action>> {
+    let ledger = state.choice.as_ref()?;
+    if !matches!(ledger.phase, ChoicePhase::Waiting) {
+        return None;
+    }
+    // 無期限（`None`）は計測を開始しない（Req7.6）。期限つきは `>=` で到達判定（Req7.3）。
+    let deadline = ledger.deadline?;
+    if now.0 < deadline.0 {
+        return None;
+    }
+    let ledger_talk_id = ledger.talk_id;
+    let script = match &state.phase {
+        Phase::Steady { talk: Some(active) } if active.talk_id == ledger_talk_id => {
+            active.script.clone()
+        }
+        _ => {
+            tracing::trace!(
+                target: "kanade",
+                event = "choice_timeout_ledger_stale",
+                talk_id = ledger_talk_id.0,
+                deadline_ms = deadline.0,
+                now_ms = now.0,
+                "現行トークと一致しない選択待ち帳簿——タイムアウトを発火せず通常 Tick へ（掃除は C4 規則 7）"
+            );
+            return None;
+        }
+    };
+    // 帳簿を応答待ちへ進めてからスナップショットを採る——`TimeoutInFlight` も選択待ち継続中
+    // であり（C5 の源は 3 段すべて）、`OnChoiceTimeout` GET の Status には `choosing` が載る。
+    // 再取得するのは借用の都合のみ（上の判定で存在を確認済みであり、間に帳簿を消す処理は無い。
+    // 万一空なら帳簿自体が不在であり、次 Tick は冒頭の帳簿判定で即座に非発火となる）。
+    if let Some(ledger) = state.choice.as_mut() {
+        ledger.phase = ChoicePhase::TimeoutInFlight;
+    }
+    tracing::info!(
+        target: "kanade",
+        event = "choice_timeout_fired",
+        talk_id = ledger_talk_id.0,
+        deadline_ms = deadline.0,
+        now_ms = now.0,
+        "選択待ちが期限に到達——OnChoiceTimeout を発行し当該周期の pump を止める（C4 規則 5・Req7.3）"
+    );
+    let snapshot = state.snapshot();
+    Some(vec![Action::ShioriRequest(events::on_choice_timeout(
+        &script, &snapshot,
+    ))])
+}
+
+/// タイムアウト応答の処理（設計 C4 規則 6・F3・Req7.4／7.5）。
+///
+/// [`on_reply`] の choice 先行アームが [`ChoicePhase::TimeoutInFlight`] の帳簿を渡して委譲する
+/// （カスケード応答と同じく **origin を見ない**——in-flight 帳簿の照合が正・DD-1）。
+///
+/// - [`ShioriOutcome::Value`] → **既存の起動経路**で置換再生する（新 talk_id 採番・slot 差替・
+///   帳簿消去・Req7.4）。旧トークの終了は dispatcher の Close-then-spawn が担うため、ここで
+///   解決指示（[`Action::ResolveChoice`]）は発行しない（F3）。旧 talk_id は 1 世代だけ
+///   `choice_prev_talk` へ保持する（遷移規則 9・消費側の防御アームはタスク 4.6）。
+/// - [`ShioriOutcome::NoContent`]／[`ShioriOutcome::Failed`]（error 記録・Req4.5）→ 帳簿を消し
+///   [`Action::CancelChoice`] を発行する（Req7.5）。これは **Close funnel の正規の入口**であり
+///   （DD-11）、dispatcher が slot を維持したまま `Close` を転送し、talk が返す
+///   `TalkDone{Interrupted}` で `Steady{None}` へ復帰する——独自のバリア状態や `skip_barrier` の
+///   外部到達口は作らない（steering `canonical-not-minimal-lifecycle`）。帳簿が消えるため、
+///   以降に到着する当該選択待ち宛の選択確定は [`on_choice`] の受領検証で棄却される（Req7.5）。
+/// - 構造上起こらない応答（GET に対する `Notified`／`Unloaded`）は警告のうえ 204 と同一に扱う
+///   （会話を選択待ちのまま停止させない）。
+fn on_timeout_reply(
+    mut state: State,
+    ledger: ChoiceState,
+    outcome: ShioriOutcome,
+    origin: &'static str,
+) -> (State, Vec<Action>) {
+    let talk_id = ledger.talk_id;
+    let outcome = match outcome {
+        ShioriOutcome::Value(script) => {
+            // 置換起動（Req7.4）: 既存の起動経路（採番＋slot 上書き＋StartTalk）をそのまま使う。
+            let new_talk_id = TalkId(state.next_talk_id);
+            state.next_talk_id += 1;
+            tracing::info!(
+                target: "kanade",
+                event = "steady_talk",
+                talk_id = new_talk_id.0,
+                origin = origin,
+                prev_talk_id = talk_id.0,
+                "タイムアウト応答にスクリプト——既存の起動経路で置換再生（Req7.4）"
+            );
+            state.phase = Phase::Steady {
+                talk: Some(ActiveTalk {
+                    talk_id: new_talk_id,
+                    origin,
+                    script: script.clone(),
+                }),
+            };
+            // choice 起因の slot 差替——旧 talk_id を 1 世代保持する（遷移規則 9・消費は 4.6）。
+            state.choice_prev_talk = Some(talk_id);
+            return (
+                state,
+                vec![Action::StartTalk(StartTalk::new(new_talk_id, script))],
+            );
+        }
+        ShioriOutcome::NoContent => "no_content",
+        ShioriOutcome::Failed(failure) => {
+            tracing::error!(
+                target: "kanade",
+                event = "choice_shiori_failed_as_204",
+                error = %failure,
+                talk_id = talk_id.0,
+                origin = origin,
+                stage = "timeout",
+                "タイムアウト GET が失敗——無応答（204）と同じ扱いで継続（Req4.5）"
+            );
+            "failed"
+        }
+        other => {
+            // GET に対する Notified／Unloaded は構造上あり得ない。会話を選択待ちのまま停止
+            // させないため、記録の上で 204 と同一に扱う（沈黙も停止もさせない）。
+            tracing::warn!(
+                target: "kanade",
+                event = "steady_unexpected_reply",
+                phase = "Steady{TimeoutInFlight}",
+                talk_id = talk_id.0,
+                origin = origin,
+                "タイムアウト応答に想定外の SHIORI 応答——204 相当で継続（会話を止めない）"
+            );
+            let _ = other;
+            "unexpected"
+        }
+    };
+    // 204 相当（Req7.5）: 選択待ちを解除し、Close funnel の正規入口へ倒す（DD-11）。
+    tracing::info!(
+        target: "kanade",
+        event = "choice_timeout_cancelled",
+        talk_id = talk_id.0,
+        outcome = outcome,
+        "タイムアウト後に応答なし——選択待ちを解除しトークを終了させる（Req7.5・DD-11）"
+    );
+    (state, vec![Action::CancelChoice { talk_id }])
+}
+
+/// Steady での Tick（pump ゲート・Req 3.1／3.4／DD-6・選択タイムアウト先行判定）。
 ///
 /// まず `last_now` を必ず更新する（時刻は発行有無に依らず進む・close 期限計算の基準）。
-/// その上で:
+/// 次に選択待ちの期限到達を**既存 pump 処理に先行して**判定する（C4 規則 5・Req7.3）——到達
+/// していれば `OnChoiceTimeout` を発行し、その周期の pump は発行しない（次 Tick から再開）。
+/// 期限に達していなければ（無期限指定を含む）通常の pump へ進む:
 /// - `talk: None` かつ `pending_close` あり → close 握手開始（OnClose GET・ClosePending へ）。
 /// - `talk: None` かつ `pending_close` なし → OnSecondChange **GET**（Ref3=1・pump 問い合わせ）。
 /// - `talk: Some` → OnSecondChange **NOTIFY**（Ref3=0・応答無視・pending_close は消化しない）。
 fn on_tick(mut state: State, now: MonotonicMs) -> (State, Vec<Action>) {
     state.last_now = Some(now);
+    // 選択タイムアウトは pump に先行する（C4 規則 5）。発火した周期は pump を発行しない。
+    if let Some(actions) = fire_choice_timeout_if_due(&mut state, now) {
+        return (state, actions);
+    }
     // GET/NOTIFY・Ref3・Status を単一スナップショットから導出する（DD-IT-3）。State::snapshot は
     // Steady{None}→talk 非アクティブ（GET・Ref3=1・status 空）、Steady{Some}→talk アクティブ
     // （NOTIFY・Ref3=0・status talking）を与える——既存の wire 挙動を保存する。選択待ち中は
@@ -566,9 +729,13 @@ fn on_reply(
             ChoicePhase::Cascading { .. } => {
                 return on_cascade_reply(state, ledger, outcome, origin);
             }
-            // 選択待ち（入力待ち）・タイムアウト応答待ちの帳簿は本アームの対象外。帳簿を戻して
-            // 既存の origin 政策へ委ねる（`TimeoutInFlight` の応答処理はタスク 4.5）。
-            ChoicePhase::Waiting | ChoicePhase::TimeoutInFlight => {
+            // タイムアウト GET の応答も同じく先行して捌く（C4 規則 6・Req7.4／7.5）。
+            ChoicePhase::TimeoutInFlight => {
+                return on_timeout_reply(state, ledger, outcome, origin);
+            }
+            // 選択待ち（入力待ち）中の応答は本アームの対象外——in-flight な choice 呼出が無い
+            // 以上、当該応答は pump／マウス由来である。帳簿を戻して既存の origin 政策へ委ねる。
+            ChoicePhase::Waiting => {
                 state.choice = Some(ledger);
             }
         }
@@ -2271,6 +2438,439 @@ mod tests {
             status_wire(&stage2[0]),
             Some("talking,choosing".to_string()),
             "次段の GET にも choosing が載る（C5）"
+        );
+    }
+
+    // ============================================================
+    // 選択肢タイムアウト（タスク 4.5・C4 規則 5／6・Req7.3〜7.5・DD-10／DD-11）
+    // ============================================================
+    //
+    // 完了状態の要求は「**注入時刻のみ**で期限到達・イベント発行・空応答時の解除までが再現し、
+    // 実時間待機に依存しない」ことである。よって本群は一切スリープせず、`Input::Tick { now }` の
+    // 注入値と帳簿の `deadline` の比較だけで全分岐を踏む（`deterministic-test-coverage-mandate`）。
+
+    use crate::schedule::log_capture::{assert_logged, capture, logged_once};
+    use tracing::Level;
+
+    /// 選択待ち（`Waiting`）帳簿つきの `Steady{Some}` を、起動スクリプトと期限を指定して構築する。
+    ///
+    /// `deadline: None` は無期限（`0`／`-1` 指令が [`choice_deadline`] で写った形・Req7.6）。
+    fn steady_waiting(
+        talk_id: TalkId,
+        next_id: u64,
+        script: &str,
+        deadline: Option<MonotonicMs>,
+    ) -> State {
+        let mut s = steady_some(talk_id, next_id);
+        match &mut s.phase {
+            Phase::Steady { talk: Some(active) } => active.script = script.to_string(),
+            _ => unreachable!("steady_some は Steady{{Some}} を返す"),
+        }
+        s.choice = Some(ChoiceState {
+            talk_id,
+            candidates: vec!["OnMenu".to_string()],
+            deadline,
+            phase: ChoicePhase::Waiting,
+        });
+        s
+    }
+
+    /// `step` を捕捉つきで駆動する（遷移結果と捕捉ログを同時に取る）。
+    fn step_capturing(
+        state: State,
+        input: Input,
+        config: &KanadeConfig,
+    ) -> (State, Vec<Action>, Vec<crate::schedule::log_capture::CapturedEvent>) {
+        let mut out = None;
+        let ev = capture(|| {
+            out = Some(step(state, input, config));
+        });
+        let (next, actions) = out.expect("step は必ず結果を返す");
+        (next, actions, ev)
+    }
+
+    // --- A. 期限到達（規則 5・Req7.3） ---
+
+    /// Req7.3・DD-10: 注入時刻が期限**ちょうど**（`now == deadline`）で到達し、`OnChoiceTimeout` を
+    /// Ref0＝起動スクリプトで発行する。帳簿は `TimeoutInFlight` へ進み、当該 Tick は pump を出さない。
+    #[test]
+    fn choice_timeout_fires_at_deadline_with_script_ref0_and_suppresses_pump() {
+        let script = r"\0えらんでね\q[はい,OnMenu]\e";
+        let s = steady_waiting(TalkId(3), 6, script, Some(MonotonicMs(32_000)));
+        let (next, actions, ev) = step_capturing(
+            s,
+            Input::Tick {
+                now: MonotonicMs(32_000),
+            },
+            &config(),
+        );
+        assert_eq!(actions.len(), 1, "期限到達 Tick は GET を 1 件だけ発行する");
+        let (id, refs) = expect_get_call(&actions[0]);
+        assert_eq!(id, "OnChoiceTimeout", "期限到達で OnChoiceTimeout を発行（Req7.3）");
+        assert_eq!(
+            refs,
+            vec![script.to_string()],
+            "Ref0＝タイムアウトした選択肢を含むトークの起動スクリプト（Req3.4・DD-10）"
+        );
+        // 当該周期では通常の周期送出を行わない（規則 5）。
+        assert_no_second_change(&actions);
+        assert!(
+            matches!(expect_ledger(&next).phase, ChoicePhase::TimeoutInFlight),
+            "期限到達で帳簿は TimeoutInFlight へ進む"
+        );
+        assert!(
+            matches!(next.phase, Phase::Steady { talk: Some(_) }),
+            "タイムアウト発行は Phase を触らない（DD-3）"
+        );
+        assert_eq!(
+            next.last_now,
+            Some(MonotonicMs(32_000)),
+            "発行有無に依らず last_now は進む（既存規律）"
+        );
+        // 4.4 申し送り: 5 番目の呼出点にも choosing が載る（TimeoutInFlight も選択待ち継続中）。
+        assert_eq!(
+            status_wire(&actions[0]),
+            Some("talking,choosing".to_string()),
+            "OnChoiceTimeout GET の Status に choosing が載る（C5・裁定 6）"
+        );
+        let fired = logged_once(&ev, Level::INFO, "choice_timeout_fired");
+        assert_eq!(
+            fired.fields.get("talk_id").map(String::as_str),
+            Some("3"),
+            "発火ログは対象 talk_id を載せる。\n捕捉={ev:#?}"
+        );
+    }
+
+    /// 境界: `now > deadline`（Tick が期限を跨いだ）でも到達（`>=` 判定）。
+    #[test]
+    fn choice_timeout_fires_when_tick_overshoots_deadline() {
+        let s = steady_waiting(TalkId(3), 6, r"\e", Some(MonotonicMs(32_000)));
+        let (next, actions) = step(
+            s,
+            Input::Tick {
+                now: MonotonicMs(33_000),
+            },
+            &config(),
+        );
+        let (id, _) = expect_get_call(&actions[0]);
+        assert_eq!(id, "OnChoiceTimeout");
+        assert!(matches!(
+            expect_ledger(&next).phase,
+            ChoicePhase::TimeoutInFlight
+        ));
+    }
+
+    /// 境界: `now < deadline`（1ms 手前）では発行せず、通常の周期送出を続ける。
+    #[test]
+    fn choice_timeout_does_not_fire_before_deadline() {
+        let s = steady_waiting(TalkId(3), 6, r"\e", Some(MonotonicMs(32_000)));
+        let (next, actions) = step(
+            s,
+            Input::Tick {
+                now: MonotonicMs(31_999),
+            },
+            &config(),
+        );
+        assert_eq!(actions.len(), 1);
+        match &actions[0] {
+            Action::ShioriRequest(ShioriCall::Notify { id, .. }) => {
+                assert_eq!(id.as_str(), "OnSecondChange", "期限前は通常の周期送出（NOTIFY）")
+            }
+            _ => panic!("期限前は選択待ち中の通常 pump（NOTIFY）が出る"),
+        }
+        assert!(
+            matches!(expect_ledger(&next).phase, ChoicePhase::Waiting),
+            "期限前は選択待ちのまま"
+        );
+    }
+
+    /// Req7.6: 無期限（`deadline == None`）は計測を開始せず、どれだけ時刻が進んでも発行しない。
+    /// 選択待ちは継続し、pump は通常どおり発行される。
+    #[test]
+    fn choice_timeout_never_fires_for_indefinite_deadline() {
+        let cfg = config();
+        let mut s = steady_waiting(TalkId(3), 6, r"\e", None);
+        for now in [1_000_u64, 60_000, u64::MAX] {
+            let (next, actions) = step(
+                s,
+                Input::Tick {
+                    now: MonotonicMs(now),
+                },
+                &cfg,
+            );
+            assert_eq!(actions.len(), 1, "無期限でも周期送出は続く（Req7.6）");
+            match &actions[0] {
+                Action::ShioriRequest(ShioriCall::Notify { id, status, .. }) => {
+                    assert_eq!(id.as_str(), "OnSecondChange");
+                    assert_eq!(
+                        status.render(),
+                        Some("talking,choosing".to_string()),
+                        "無期限の選択待ちは継続する（choosing が載り続ける）"
+                    );
+                }
+                _ => panic!("無期限では OnChoiceTimeout を発行しない（Req7.6）"),
+            }
+            assert!(matches!(expect_ledger(&next).phase, ChoicePhase::Waiting));
+            s = next;
+        }
+    }
+
+    /// 規則 5: 発行した Tick でのみ pump を止める——**次 Tick からは再開**する
+    /// （応答待ち中も slot 占有は継続＝NOTIFY・choosing 継続）。
+    #[test]
+    fn pump_resumes_on_the_tick_after_choice_timeout_fired() {
+        let cfg = config();
+        let s = steady_waiting(TalkId(3), 6, r"\e", Some(MonotonicMs(32_000)));
+        let (fired, actions) = step(
+            s,
+            Input::Tick {
+                now: MonotonicMs(32_000),
+            },
+            &cfg,
+        );
+        assert_eq!(expect_get_call(&actions[0]).0, "OnChoiceTimeout");
+        let (next, resumed) = step(
+            fired,
+            Input::Tick {
+                now: MonotonicMs(33_000),
+            },
+            &cfg,
+        );
+        assert_eq!(resumed.len(), 1, "次 Tick から周期送出が再開する（規則 5）");
+        match &resumed[0] {
+            Action::ShioriRequest(ShioriCall::Notify { id, status, .. }) => {
+                assert_eq!(id.as_str(), "OnSecondChange");
+                assert_eq!(
+                    status.render(),
+                    Some("talking,choosing".to_string()),
+                    "応答待ち（TimeoutInFlight）中も選択待ちは継続中（C5）"
+                );
+            }
+            _ => panic!("次 Tick は通常の pump（NOTIFY）"),
+        }
+        assert!(
+            matches!(expect_ledger(&next).phase, ChoicePhase::TimeoutInFlight),
+            "再開した pump は帳簿を触らない（二重発行もしない）"
+        );
+        assert_eq!(
+            resumed
+                .iter()
+                .filter(|a| matches!(
+                    a,
+                    Action::ShioriRequest(ShioriCall::Get { .. })
+                ))
+                .count(),
+            0,
+            "OnChoiceTimeout を二重発行しない"
+        );
+    }
+
+    // --- B. タイムアウト応答（規則 6・Req7.4／7.5） ---
+
+    /// Req7.4: 応答スクリプトは**既存の起動経路**で置換再生する（新 talk_id 採番・slot 差替・
+    /// 旧 talk_id は 1 世代保持）。解決指示（`ResolveChoice`）は発行しない——旧トークは
+    /// dispatcher の Close-then-spawn で終了する（F3）。
+    #[test]
+    fn choice_timeout_value_replaces_talk_via_existing_start_path() {
+        let s = steady_with_ledger(TalkId(3), 6, &["OnMenu"], ChoicePhase::TimeoutInFlight);
+        let (next, actions) = step(
+            s,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Value(r"\0時間切れ\e".to_string()),
+                origin: "OnChoiceTimeout",
+            },
+            &config(),
+        );
+        match actions.as_slice() {
+            [Action::StartTalk(StartTalk {
+                talk_id, script, ..
+            })] => {
+                assert_eq!(*talk_id, TalkId(6), "新 talk_id を採番する（Req7.4／4.1）");
+                assert_eq!(script, r"\0時間切れ\e");
+            }
+            _ => panic!("タイムアウト Value は StartTalk のみを発行する（F3）"),
+        }
+        match next.phase {
+            Phase::Steady {
+                talk: Some(ActiveTalk {
+                    talk_id,
+                    origin,
+                    ref script,
+                }),
+            } => {
+                assert_eq!(talk_id, TalkId(6), "slot は新 talk へ差し替わる");
+                assert_eq!(origin, "OnChoiceTimeout", "応答の出所を転記する");
+                assert_eq!(script, r"\0時間切れ\e", "起動 script を保持（DD-10）");
+            }
+            _ => panic!("expected Steady{{Some}} replaced"),
+        }
+        assert_eq!(next.next_talk_id, 7);
+        assert!(next.choice.is_none(), "置換起動で帳簿は消える（Req7.4）");
+        assert_eq!(
+            next.choice_prev_talk,
+            Some(TalkId(3)),
+            "タイムアウト Value も choice 起因の slot 差替＝旧 talk_id を 1 世代保持（遷移規則 9）"
+        );
+    }
+
+    /// Req7.5・DD-11: 204 は選択待ちを解除し `CancelChoice` を発行する（Close funnel の入口）。
+    /// 独自のバリア状態・小細工（skip_barrier 等）は使わない——発行するのは正規の型付き指示のみ。
+    #[test]
+    fn choice_timeout_no_content_cancels_choice() {
+        let s = steady_with_ledger(TalkId(3), 6, &["OnMenu"], ChoicePhase::TimeoutInFlight);
+        let (next, actions, ev) = step_capturing(
+            s,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::NoContent,
+                origin: "OnChoiceTimeout",
+            },
+            &config(),
+        );
+        match actions.as_slice() {
+            [Action::CancelChoice { talk_id }] => {
+                assert_eq!(*talk_id, TalkId(3), "解除対象は選択待ちの talk（Req7.5）")
+            }
+            _ => panic!("204 は CancelChoice のみを発行する（DD-11・F3）"),
+        }
+        assert!(
+            !actions
+                .iter()
+                .any(|a| matches!(a, Action::StartTalk(_) | Action::ResolveChoice { .. })),
+            "204 は起動も解決も行わない（解除して終了させる・Req7.5）"
+        );
+        assert!(next.choice.is_none(), "解除で帳簿は消える（Req6.2／7.5）");
+        assert_eq!(next.next_talk_id, 6, "204 は採番しない");
+        match next.phase {
+            Phase::Steady {
+                talk: Some(ActiveTalk { talk_id, .. }),
+            } => assert_eq!(
+                talk_id,
+                TalkId(3),
+                "slot は維持したまま Close funnel の完了（TalkDone{{Interrupted}}）を待つ（DD-11）"
+            ),
+            _ => panic!("expected Steady{{Some}} preserved"),
+        }
+        assert_logged(&ev, Level::INFO, "choice_timeout_cancelled");
+    }
+
+    /// Req4.5／7.5: タイムアウト GET の失敗も 204 と同一＝解除で継続（終了系列へ倒れない）。
+    ///
+    /// mod.rs 横断 `Failed`→`Unloading{Fault}` アームの免除（DD-12）は**タスク 4.6 の担当**で
+    /// あり、本タスク時点では `step()` 経由の `Failed` は横断アームに先取りされる。よって
+    /// カスケード段の檻（4.3）と同じく `steady::step` の直接駆動で steady 側の処理を固定する。
+    #[test]
+    fn choice_timeout_failed_is_treated_as_no_content_cancel() {
+        let s = steady_with_ledger(TalkId(3), 6, &["OnMenu"], ChoicePhase::TimeoutInFlight);
+        let mut out = None;
+        let ev = capture(|| {
+            out = Some(super::step(
+                s,
+                Input::ShioriReply {
+                    outcome: ShioriOutcome::Failed(crate::msg::ShioriFailure::Timeout(
+                        "30s".to_string(),
+                    )),
+                    origin: "OnChoiceTimeout",
+                },
+                &config(),
+            ));
+        });
+        let (next, actions) = out.expect("step は必ず結果を返す");
+        assert!(
+            !matches!(next.phase, Phase::Unloading { .. }),
+            "選択由来の失敗で終了系列へ倒れない（Req4.5）"
+        );
+        match actions.as_slice() {
+            [Action::CancelChoice { talk_id }] => assert_eq!(*talk_id, TalkId(3)),
+            _ => panic!("失敗は 204 と同一＝CancelChoice のみ（Req7.5）"),
+        }
+        assert!(next.choice.is_none());
+        assert_logged(&ev, Level::ERROR, "choice_shiori_failed_as_204");
+        assert_logged(&ev, Level::INFO, "choice_timeout_cancelled");
+    }
+
+    // --- C. 解除後の棄却（Req7.5 後半・DD-11 の正規到達点） ---
+
+    /// Req7.5: 解除後に到着する当該選択待ち宛の選択確定は棄却する。
+    ///
+    /// 経路は正規（小細工なし）: 期限到達 → `OnChoiceTimeout` → 204 → `CancelChoice` →
+    /// （dispatcher が Close を転送し talk が返す）`TalkDone{Interrupted}` → `Steady{None}` 復帰。
+    /// この `Interrupted` こそ DD-11 が本設計で**正規到達点**にした経路である（mod.rs 防御アーム）。
+    #[test]
+    fn choice_after_timeout_cancel_is_rejected() {
+        let cfg = config();
+        // 1) 期限到達 → OnChoiceTimeout。
+        let s = steady_waiting(TalkId(3), 6, r"\e", Some(MonotonicMs(32_000)));
+        let (s1, fired) = step(
+            s,
+            Input::Tick {
+                now: MonotonicMs(32_000),
+            },
+            &cfg,
+        );
+        assert_eq!(expect_get_call(&fired[0]).0, "OnChoiceTimeout");
+        // 2) 204 → CancelChoice（選択待ち解除）。
+        let (s2, cancelled) = step(
+            s1,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::NoContent,
+                origin: "OnChoiceTimeout",
+            },
+            &cfg,
+        );
+        assert!(matches!(
+            cancelled.as_slice(),
+            [Action::CancelChoice { .. }]
+        ));
+        // 3) Close funnel の完了通知（正規の TalkDone{Interrupted}）→ Steady{None} 復帰。
+        let (s3, done_actions, ev) = step_capturing(
+            s2,
+            Input::TalkDone(TalkDone {
+                talk_id: TalkId(3),
+                reason: TalkEndReason::Interrupted,
+            }),
+            &cfg,
+        );
+        assert_logged(&ev, Level::INFO, "talk_done_interrupted_as_non_quit");
+        assert!(
+            matches!(s3.phase, Phase::Steady { talk: None }),
+            "CancelChoice→Close→Interrupted で Steady{{None}} へ復帰する（DD-11）"
+        );
+        assert!(done_actions.is_empty());
+        // 4) 以降に届く当該選択待ち宛の選択確定は棄却される（Req7.5）。
+        let (s4, late, ev2) = step_capturing(
+            s3,
+            Input::Choice(choice_input_of("OnMenu", "メニュー", &[])),
+            &cfg,
+        );
+        assert!(late.is_empty(), "解除後の選択確定は Action を発行しない（Req7.5）");
+        assert!(s4.choice.is_none(), "棄却は帳簿を復活させない");
+        assert_logged(&ev2, Level::WARN, "choice_rejected_no_wait");
+    }
+
+    /// 選択待ち中の周期送出（choosing）が、解除後の pump からは消える（Req6.2 のタイムアウト側）。
+    #[test]
+    fn tick_after_timeout_cancel_drops_choosing() {
+        let cfg = config();
+        let s = steady_with_ledger(TalkId(3), 6, &["OnMenu"], ChoicePhase::TimeoutInFlight);
+        let (cancelled, _) = step(
+            s,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::NoContent,
+                origin: "OnChoiceTimeout",
+            },
+            &cfg,
+        );
+        let (_next, tick_actions) = step(
+            cancelled,
+            Input::Tick {
+                now: MonotonicMs(40_000),
+            },
+            &cfg,
+        );
+        assert_eq!(
+            status_wire(&tick_actions[0]),
+            Some("talking".to_string()),
+            "解除後は choosing が消える（Req6.2）"
         );
     }
 }

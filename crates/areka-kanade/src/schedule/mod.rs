@@ -452,8 +452,13 @@ fn on_talk_done(state: State, done: TalkDone, config: &KanadeConfig) -> (State, 
                 (state, vec![Action::ShioriUnload])
             }
             TalkEndReason::Interrupted => {
-                // 防御的に非 quit 扱い（M1 では到達しない想定・観測用ログ）。
-                tracing::info!(target: "kanade", event = "talk_done_interrupted_as_non_quit", talk_id = done.talk_id.0, "reason=Interrupted——防御的に非 quit 扱い・フェーズ固有遷移へ委譲");
+                // 非 quit 扱い（観測用ログ）。本アームは元々「M1 では到達しない想定」の防御で
+                // あったが、**選択タイムアウトの解除経路により正規の到達点になった**（DD-11）:
+                // タイムアウト 204 → [`Action::CancelChoice`] → dispatcher が slot を維持したまま
+                // `Close` を転送 → talk が `TalkDone{Interrupted}` を正規送出 → ここへ到達 →
+                // フェーズ固有遷移（steady）が `Steady{None}` へ復帰させる（Req7.5）。
+                // 遷移・ログ語彙・レベルはいずれも無改変である（意味づけのみが変わった）。
+                tracing::info!(target: "kanade", event = "talk_done_interrupted_as_non_quit", talk_id = done.talk_id.0, "reason=Interrupted——非 quit 扱い・フェーズ固有遷移へ委譲（選択解除の正規到達点・DD-11）");
                 dispatch_phase(state, Input::TalkDone(done), config)
             }
             TalkEndReason::Ended => {

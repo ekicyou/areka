@@ -385,8 +385,7 @@ pub fn on_choice_named(
 ///
 /// Reference は常に 1 個。`script` は選択肢を含むトークの起動スクリプト（`ActiveTalk.script`・
 /// DD-10）を不透明転写する（Req3.4）。
-// C4（タスク 4.x）が steady 調停から本構築を呼ぶまでは非テストビルドで未使用となる。
-#[allow(dead_code)]
+// 消費点は steady 調停の期限到達アーム（`fire_choice_timeout_if_due`・C4 規則 5）。
 pub fn on_choice_timeout(script: &str, snapshot: &ExecutionSnapshot) -> ShioriCall {
     ShioriCall::Get {
         id: EventId::Static("OnChoiceTimeout"),

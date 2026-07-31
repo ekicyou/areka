@@ -118,7 +118,7 @@
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
   - _Depends: 4.2_
 
-- [ ] 4.5 タイムアウト計測とタイムアウトイベントを実装する
+- [x] 4.5 タイムアウト計測とタイムアウトイベントを実装する
   - 周期処理に先行して期限到達を判定し、到達時はタイムアウトイベントを起動スクリプトを先頭 Reference として発行する（当該周期では通常の周期送出を行わない）
   - 期限が無期限の場合は計測を開始せず選択待ちを継続する
   - 応答があれば既存の起動経路で置換再生し、応答が空または失敗なら選択解除指示を発行して以降の選択確定を棄却する
@@ -213,3 +213,4 @@
 - 4.3: **4.4 への必須申し送り** — `steady.rs` の `on_choice` と `on_cascade_reply` の次段発行は、帳簿を `state.choice.take()` した状態で `snapshot_of(&state.phase)` を呼ぶ。4.4 が `State::snapshot(&self)` へ差し替えると**この 2 点だけ `choice_active=false` になりカスケード段 GET から `choosing` が落ちる**。帳簿を戻した後に採るか、ローカル値から導出すること。
 - 4.3: DD-12（mod.rs 横断 Failed 先行アーム）が 4.6 待ちのため、`step()` 経由のカスケード中 Failed は現在も `Unloading{Fault}` へ倒れる。steady 側の 204 相当処理は実装済みで `steady::step` 直呼びの檻で固定。**end-to-end の Failed 檻は 4.6 の担当**。
 - 4.4: `State::snapshot(&self)` / `State::snapshot_with_choice(bool)` を新設し steady の 4 呼出点を差替（design の「5 呼出点」の 5 点目は **4.5 が新設する `OnChoiceTimeout` GET**）。4.5 は新設時に `snapshot_with_choice(true)` 相当（帳簿を `TimeoutInFlight` へ進めた後なら `state.snapshot()` でも可）を選ぶこと。`snapshot_of(&Phase)` は boot 系列・force_quit 専用として残置。
+- 4.5: 新規 trace 語彙 `choice_timeout_ledger_stale`（design ログ表に無い・帳簿と現行 talk の不一致時の非発火ガード）。**4.6 の帳簿掃除（規則 7）が入れば到達不能になる**——4.6 実装後にガードが冗長化していないか確認すること。
