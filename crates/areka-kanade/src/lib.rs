@@ -39,7 +39,7 @@ pub use msg::{
 };
 pub use shiori::{ShioriBackend, ShioriConnection, spawn_shiori_actor};
 pub use status::{ExecutionSnapshot, ExecutionState, ExecutionStatus};
-pub use talk::{StartTalk, TalkDone, TalkEndReason, TalkId};
+pub use talk::{ChoiceWaiting, StartTalk, TalkCommand, TalkDone, TalkEndReason, TalkId};
 
 /// ukadoc Reference 表の実装正本（純粋関数群）を露出する公開ファサード（DD-9 例外）。
 ///

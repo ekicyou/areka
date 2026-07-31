@@ -23,7 +23,7 @@
   - _Requirements: 2.6, 3.7, 7.8_
   - _Boundary: kanade 契約層_
 
-- [ ] 1.4 統合: kanade から talk 再生系への指示チャンネルと dispatcher メッセージ契約を差し替える
+- [x] 1.4 統合: kanade から talk 再生系への指示チャンネルと dispatcher メッセージ契約を差し替える
   - kanade アクターの送出口を起動専用チャンネルから新指示型チャンネルへ差し替え、ghost 側の結線とリレーの型引数を追随させる
   - dispatcher の受信メッセージへ選択解決・選択解除・選択待ち通知の 3 アームと、指示型・通知型からの網羅的な変換を追加し、各アームが現行 slot を引くところまでの経路を通す（stale 判定・終了指示転送・時刻換算の意味論は 3.3 が与える）
   - 決定論檻の talk モックを新指示型の到着順記録へ更新し、既存の起動検証が意味不変で通るようにする
@@ -199,3 +199,5 @@
 
 - 1.3: `actor.rs` の `KanadeMsg::{Choice, ChoiceWaiting}` は暫定アーム（warn ログ＋継続・`Input` へ未写像）。**タスク 4.1 で `Input::{Choice, ChoiceWaiting}` 写像へ必ず置換すること**。
 - 1.2: `EventId` には `as_str()` に加え `Display`（`as_str()` へ委譲）がある。`areka-ghost` の spine e2e が `id.to_string()` を使うため境界保護に必要。
+- 1.4: dispatcher の選択系 3 アームは暫定（`*_dropped_not_wired` warn ＋ 現行 slot 参照のみ）。**タスク 3.3 で恒久語彙 `resolve_choice_stale`/`cancel_choice_stale`/`choice_waiting_stale` と実意味論へ置換すること**。
+- 1.4: `start_talk_send_failed` は design C6 に従い `talk_command_send_failed` へ改称済み。`MockSakura::started()` は `TalkCommand::Start` の射影になった（既存檻は無改変）。

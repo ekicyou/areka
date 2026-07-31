@@ -10,9 +10,9 @@
 //! - 配送エンベロープ [`TalkCue`] の物理定義は **dola**（`dola::cue::TalkCue`）にあり、
 //!   本層は re-export のみを行う（cue 再生の"制御"＝配送は dola の責務・二重定義しない）。
 //!   下流の import パス（`areka_sakura::contract::TalkCue`）は不変に保つ。
-//! - [`TalkId`]/[`StartTalk`]/[`TalkDone`]/[`TalkEndReason`] は正本 `areka-talk` からの
-//!   re-export（DD-1 解消・kanade↔sakura 授受契約の唯一の物理定義は `areka-talk`）。
-//!   下流の import パス（`areka_sakura::contract::*`）は不変に保つ。
+//! - [`TalkId`]/[`StartTalk`]/[`TalkDone`]/[`TalkEndReason`]／[`TalkCommand`]/[`ChoiceWaiting`]
+//!   は正本 `areka-talk` からの re-export（DD-1 解消・kanade↔sakura 授受契約の唯一の物理定義は
+//!   `areka-talk`）。下流の import パス（`areka_sakura::contract::*`）は不変に保つ。
 //! - `SakuraMsg`/`TalkHandle` は sakura 固有（kanade↔sakura 契約の外）ゆえ本層に物理定義
 //!   のまま残す。
 //! - dola cue 型・parsers 値型は re-export し二重定義しない。
@@ -48,7 +48,7 @@ pub struct TalkHandle {
 
 // ── kanade との授受（正本=areka-talk・re-export） ──
 
-pub use areka_talk::{StartTalk, TalkDone, TalkEndReason, TalkId};
+pub use areka_talk::{ChoiceWaiting, StartTalk, TalkCommand, TalkDone, TalkEndReason, TalkId};
 
 // ── 再輸出（二重定義しない） ──
 //

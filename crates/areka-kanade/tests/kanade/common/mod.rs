@@ -7,7 +7,7 @@
 //! - [`spawn_mock_shiori`]: real と**同一の [`areka_kanade::ShioriMsg`] 型**を受け、
 //!   [`Fixture`] 表に従い同梱 `reply` へ**即時**応答する mock shiori アクター
 //!   （trait 不要＝Req 5.1 の型レベル差し替え）。受理呼出を [`RecordedCall`] 列へ蓄積。
-//! - [`spawn_mock_sakura`]: [`StartTalk`] を受領・記録し、シナリオ指示（quit true/false・
+//! - [`spawn_mock_sakura`]: [`TalkCommand`] を到着順に受領・記録し、`Start` についてシナリオ指示（quit true/false・
 //!   遅延なし）どおり [`KanadeMsg::TalkDone`] を kanade inbox へ返す mock 再生系宛先。
 //! - [`expected_call`]: `areka_kanade::events::*` の [`ShioriCall`] を [`RecordedCall`] へ
 //!   変換する導出関数（fixture・検証・実装が単一の正本＝events 表を共有・Req 7.1）。
@@ -33,7 +33,7 @@ use std::time::Duration;
 use areka_actor::{ActorError, ActorHandle, spawn_actor};
 use areka_kanade::{
     KanadeConfig, KanadeMsg, MonotonicMs, ShioriCall, ShioriFailure, ShioriMsg, ShioriOutcome,
-    StartTalk, TalkDone, TalkEndReason, spawn_kanade,
+    StartTalk, TalkCommand, TalkDone, TalkEndReason, spawn_kanade,
 };
 
 /// 期限付き待機の既定上限（mock は即応ゆえ十分に余裕を持たせた保険値）。
@@ -677,23 +677,43 @@ pub fn spawn_mock_shiori_blocking(fixture: Fixture, block_on: BlockOn) -> (MockS
 // mock sakura sink
 // ============================================================================
 
-/// mock sakura sink のハンドル群（join ハンドル・受領 talk のアクセサ）。
+/// mock sakura sink のハンドル群（join ハンドル・受領 talk 指示のアクセサ）。
 ///
-/// sink は別スレッドで [`StartTalk`] を読み、受領を記録した上でシナリオ指示（quit 真偽）に
-/// 応じて [`KanadeMsg::TalkDone`] を kanade inbox へ返す。sink スレッドは `StartTalk` の
-/// 全 Sender drop（＝kanade 停止）で自然終了する。
+/// sink は別スレッドで [`TalkCommand`] を読み、**到着順**に記録した上で、`Start` についてのみ
+/// シナリオ指示（quit 真偽）に応じた [`KanadeMsg::TalkDone`] を kanade inbox へ返す。sink
+/// スレッドは `TalkCommand` の全 Sender drop（＝kanade 停止）で自然終了する。
+///
+/// # 観測面（design C7 Ordering / delivery・Testing Strategy）
+/// - [`commands`](Self::commands): 3 形（`Start`/`ResolveChoice`/`CancelChoice`）の**到着順**の
+///   記録列。`TalkCommand` が単一チャンネルを流れることによる FIFO 順序保存（DD-4 の前提）を
+///   観測する面である。
+/// - [`started`](Self::started): 記録列のうち `TalkCommand::Start` の射影。既存の起動系檻は
+///   本アクセサを従来どおり使い続け、意味は不変である。
 pub struct MockSakura {
     join: thread::JoinHandle<()>,
-    started: Arc<Mutex<Vec<StartTalk>>>,
+    commands: Arc<Mutex<Vec<TalkCommand>>>,
 }
 
 impl MockSakura {
-    /// 受領した [`StartTalk`] の記録スナップショットを返す。
-    pub fn started(&self) -> Vec<StartTalk> {
-        self.started.lock().expect("mock sakura mutex").clone()
+    /// 受領した [`TalkCommand`] の記録スナップショットを**到着順**で返す。
+    pub fn commands(&self) -> Vec<TalkCommand> {
+        self.commands.lock().expect("mock sakura mutex").clone()
     }
 
-    /// sink スレッドの終了を待つ（`StartTalk` 送信端が全て drop された後に完了する）。
+    /// 受領した [`StartTalk`] の記録スナップショットを返す（記録列の `Start` 射影）。
+    pub fn started(&self) -> Vec<StartTalk> {
+        self.commands
+            .lock()
+            .expect("mock sakura mutex")
+            .iter()
+            .filter_map(|command| match command {
+                TalkCommand::Start(start) => Some(start.clone()),
+                TalkCommand::ResolveChoice { .. } | TalkCommand::CancelChoice { .. } => None,
+            })
+            .collect()
+    }
+
+    /// sink スレッドの終了を待つ（`TalkCommand` 送信端が全て drop された後に完了する）。
     pub fn join_bounded(self, what: &str, timeout: Duration) {
         let MockSakura { join, .. } = self;
         run_join_bounded(what, timeout, move || {
@@ -734,28 +754,41 @@ impl QuitPolicy {
 
 /// mock sakura sink を起動する。
 ///
-/// `talk_rx`（kanade→sakura の [`StartTalk`] 受信端）を別スレッドで読み、各受領を記録した
-/// 上で `quit_policy` に従った [`TalkDone`] を `kanade_tx` 経由で kanade inbox へ返す
-/// （遅延なし・即時）。`kanade_tx` は TalkDone 返送のためだけに保持するクローンでよい。
+/// `talk_rx`（kanade→sakura の [`TalkCommand`] 受信端）を別スレッドで読み、各受領を**到着順**に
+/// 記録した上で、`Start` については `quit_policy` に従った [`TalkDone`] を `kanade_tx` 経由で
+/// kanade inbox へ返す（遅延なし・即時）。`kanade_tx` は TalkDone 返送のためだけに保持する
+/// クローンでよい。
+///
+/// `ResolveChoice`/`CancelChoice` は**記録のみ**行う——本 mock は再生層を持たないため解決も
+/// 中断も起こせず、`quit_policy` の index（＝何本目の talk か）も前進させない。到着順の記録は
+/// [`MockSakura::commands`] で観測でき、起動系檻が使う [`MockSakura::started`] の意味は不変。
 pub fn spawn_mock_sakura(
-    talk_rx: Receiver<StartTalk>,
+    talk_rx: Receiver<TalkCommand>,
     kanade_tx: Sender<KanadeMsg>,
     quit_policy: QuitPolicy,
 ) -> MockSakura {
-    let started: Arc<Mutex<Vec<StartTalk>>> = Arc::new(Mutex::new(Vec::new()));
-    let started_body = Arc::clone(&started);
+    let commands: Arc<Mutex<Vec<TalkCommand>>> = Arc::new(Mutex::new(Vec::new()));
+    let commands_body = Arc::clone(&commands);
 
     let join = thread::Builder::new()
         .name("mock-sakura".to_string())
         .spawn(move || {
             let mut index = 0usize;
-            // 全 StartTalk Sender drop（kanade 停止）で recv が Err→ループ終了。
-            while let Ok(start) = talk_rx.recv() {
-                let talk_id = start.talk_id;
-                started_body
+            // 全 TalkCommand Sender drop（kanade 停止）で recv が Err→ループ終了。
+            while let Ok(command) = talk_rx.recv() {
+                // 到着順の記録は 3 形共通（記録より先に副作用を起こさない）。
+                let start_talk_id = match &command {
+                    TalkCommand::Start(start) => Some(start.talk_id),
+                    TalkCommand::ResolveChoice { .. } | TalkCommand::CancelChoice { .. } => None,
+                };
+                commands_body
                     .lock()
                     .expect("mock sakura mutex")
-                    .push(start);
+                    .push(command);
+                let Some(talk_id) = start_talk_id else {
+                    // 選択解決／解除は記録のみ（再生層を持たない mock は TalkDone を作れない）。
+                    continue;
+                };
                 let reason = quit_policy.reason_for(index);
                 index += 1;
                 // TalkDone 返送。kanade 停止済みで送れなくても無害（続行）。
@@ -764,7 +797,7 @@ pub fn spawn_mock_sakura(
         })
         .expect("spawn mock-sakura thread");
 
-    MockSakura { join, started }
+    MockSakura { join, commands }
 }
 
 // ============================================================================
@@ -845,13 +878,13 @@ impl SakuraGate {
 /// する。テストは Sender drop の前に `release_all` を呼ぶ契約（それにより pattern 3 の
 /// `Steady{None}` 復帰→close 握手が駆動される）。
 pub fn spawn_mock_sakura_gated(
-    talk_rx: Receiver<StartTalk>,
+    talk_rx: Receiver<TalkCommand>,
     kanade_tx: Sender<KanadeMsg>,
     quit_policy: QuitPolicy,
     hold_indices: Vec<usize>,
 ) -> (MockSakura, SakuraGate) {
-    let started: Arc<Mutex<Vec<StartTalk>>> = Arc::new(Mutex::new(Vec::new()));
-    let started_body = Arc::clone(&started);
+    let commands: Arc<Mutex<Vec<TalkCommand>>> = Arc::new(Mutex::new(Vec::new()));
+    let commands_body = Arc::clone(&commands);
 
     let expected_holds = hold_indices.len();
     let shared = Arc::new(GateShared {
@@ -901,13 +934,21 @@ pub fn spawn_mock_sakura_gated(
         .name("mock-sakura-gated".to_string())
         .spawn(move || {
             let mut index = 0usize;
-            // 全 StartTalk Sender drop（kanade 停止）で recv が Err→ループ終了。
-            while let Ok(start) = talk_rx.recv() {
-                let talk_id = start.talk_id;
-                started_body
+            // 全 TalkCommand Sender drop（kanade 停止）で recv が Err→ループ終了。
+            while let Ok(command) = talk_rx.recv() {
+                // 到着順の記録は 3 形共通（記録より先に副作用を起こさない）。
+                let start_talk_id = match &command {
+                    TalkCommand::Start(start) => Some(start.talk_id),
+                    TalkCommand::ResolveChoice { .. } | TalkCommand::CancelChoice { .. } => None,
+                };
+                commands_body
                     .lock()
                     .expect("mock sakura mutex")
-                    .push(start);
+                    .push(command);
+                let Some(talk_id) = start_talk_id else {
+                    // 選択解決／解除は記録のみ（保留対象でもない＝index を前進させない）。
+                    continue;
+                };
                 let reason = quit_policy.reason_for(index);
                 let this_index = index;
                 index += 1;
@@ -935,7 +976,7 @@ pub fn spawn_mock_sakura_gated(
         })
         .expect("spawn mock-sakura-gated thread");
 
-    (MockSakura { join, started }, SakuraGate { shared })
+    (MockSakura { join, commands }, SakuraGate { shared })
 }
 
 // ============================================================================
@@ -1062,8 +1103,8 @@ pub struct Harness {
 pub fn spawn_harness(config: KanadeConfig, fixture: Fixture, quit_policy: QuitPolicy) -> Harness {
     let shiori = spawn_mock_shiori(fixture);
 
-    // kanade→sakura の StartTalk チャンネルを 1 本張る。
-    let (talk_tx, talk_rx) = std::sync::mpsc::channel::<StartTalk>();
+    // kanade→sakura の TalkCommand チャンネルを 1 本張る（DD-5・起動と選択解決が同一チャンネル）。
+    let (talk_tx, talk_rx) = std::sync::mpsc::channel::<TalkCommand>();
 
     // kanade を起動（inbox 送信端を得る）。boot prefetch（username 照会・R4.1）は駆動されるが、
     // ハーネスは照会結果を消費しないため no-op sink を注入する（Implementation Notes）。
@@ -1098,8 +1139,8 @@ pub fn spawn_harness_gated(
 ) -> (Harness, SakuraGate) {
     let shiori = spawn_mock_shiori(fixture);
 
-    // kanade→sakura の StartTalk チャンネルを 1 本張る。
-    let (talk_tx, talk_rx) = std::sync::mpsc::channel::<StartTalk>();
+    // kanade→sakura の TalkCommand チャンネルを 1 本張る（DD-5・起動と選択解決が同一チャンネル）。
+    let (talk_tx, talk_rx) = std::sync::mpsc::channel::<TalkCommand>();
 
     // kanade を起動（inbox 送信端を得る）。boot prefetch（username 照会・R4.1）は駆動されるが、
     // ハーネスは照会結果を消費しないため no-op sink を注入する（Implementation Notes）。
@@ -1134,8 +1175,8 @@ pub fn spawn_harness_failing(
 ) -> Harness {
     let shiori = spawn_mock_shiori_failing(fixture, fail_on);
 
-    // kanade→sakura の StartTalk チャンネルを 1 本張る。
-    let (talk_tx, talk_rx) = std::sync::mpsc::channel::<StartTalk>();
+    // kanade→sakura の TalkCommand チャンネルを 1 本張る（DD-5・起動と選択解決が同一チャンネル）。
+    let (talk_tx, talk_rx) = std::sync::mpsc::channel::<TalkCommand>();
 
     // kanade を起動（inbox 送信端を得る）。boot prefetch（username 照会・R4.1）は駆動されるが、
     // ハーネスは照会結果を消費しないため no-op sink を注入する（Implementation Notes）。
@@ -1169,8 +1210,8 @@ pub fn spawn_harness_blocking(
 ) -> (Harness, ShioriGate) {
     let (shiori, gate) = spawn_mock_shiori_blocking(fixture, block_on);
 
-    // kanade→sakura の StartTalk チャンネルを 1 本張る。
-    let (talk_tx, talk_rx) = std::sync::mpsc::channel::<StartTalk>();
+    // kanade→sakura の TalkCommand チャンネルを 1 本張る（DD-5・起動と選択解決が同一チャンネル）。
+    let (talk_tx, talk_rx) = std::sync::mpsc::channel::<TalkCommand>();
 
     // kanade を起動（inbox 送信端を得る）。boot prefetch（username 照会・R4.1）は駆動されるが、
     // ハーネスは照会結果を消費しないため no-op sink を注入する（Implementation Notes）。
@@ -1210,9 +1251,9 @@ pub struct SinklessHarness {
     pub kanade: ActorHandle,
     /// mock shiori（停止用送信端・記録アクセサ）。
     pub shiori: MockShiori,
-    /// kanade→sakura の StartTalk 受信端（保持のみ・sink スレッドは起動しない）。
+    /// kanade→sakura の [`TalkCommand`] 受信端（保持のみ・sink スレッドは起動しない）。
     /// kanade inbox のクローンを一切生まないため、`sender` drop で inbox を切断できる。
-    pub talk_rx: Receiver<StartTalk>,
+    pub talk_rx: Receiver<TalkCommand>,
 }
 
 /// sakura sink を持たない駆動ハーネスを組み立てる（4.6 case 4 専用）。
@@ -1224,8 +1265,9 @@ pub struct SinklessHarness {
 pub fn spawn_harness_no_sink(config: KanadeConfig, fixture: Fixture) -> SinklessHarness {
     let shiori = spawn_mock_shiori(fixture);
 
-    // kanade→sakura の StartTalk チャンネルを 1 本張る（受信端は sink を起動せず保持する）。
-    let (talk_tx, talk_rx) = std::sync::mpsc::channel::<StartTalk>();
+    // kanade→sakura の TalkCommand チャンネルを 1 本張る（DD-5・起動と選択解決が同一チャンネル。
+    // 受信端は sink を起動せず保持する）。
+    let (talk_tx, talk_rx) = std::sync::mpsc::channel::<TalkCommand>();
 
     // kanade を起動（inbox 送信端を得る・クローンは作らない）。boot prefetch（R4.1）は駆動されるが
     // 照会結果を消費しないため no-op sink を注入する。
@@ -1294,23 +1336,25 @@ mod smoke {
             .expect("mock shiori body completes normally");
     }
 
-    /// mock sakura sink 単独駆動: [`StartTalk`] を受領・記録し、シナリオ指示どおり
+    /// mock sakura sink 単独駆動: [`TalkCommand::Start`] を受領・記録し、シナリオ指示どおり
     /// [`KanadeMsg::TalkDone`] を返す。
     #[test]
     fn mock_sakura_records_and_returns_talkdone() {
-        let (talk_tx, talk_rx) = std::sync::mpsc::channel::<StartTalk>();
+        use areka_kanade::talk::TalkCommand;
+
+        let (talk_tx, talk_rx) = std::sync::mpsc::channel::<TalkCommand>();
         // sink → TalkDone を受け取るための疑似 kanade inbox。
         let (kanade_tx, kanade_rx) = std::sync::mpsc::channel::<KanadeMsg>();
 
         let sakura = spawn_mock_sakura(talk_rx, kanade_tx, QuitPolicy::Fixed(true));
 
         talk_tx
-            .send(StartTalk {
+            .send(TalkCommand::Start(StartTalk {
                 epilogue: Vec::new(),
                 talk_id: TalkId(1),
                 script: FIXED_BOOT_SCRIPT.to_string(),
-            })
-            .expect("send StartTalk to mock sakura");
+            }))
+            .expect("send TalkCommand::Start to mock sakura");
 
         // TalkDone が即時に返る（期限付き・ハングしない）。
         let msg = kanade_rx
@@ -1334,7 +1378,96 @@ mod smoke {
         assert_eq!(started[0].talk_id, TalkId(1));
         assert_eq!(started[0].script, FIXED_BOOT_SCRIPT);
 
-        // StartTalk 送信端を drop → sink スレッドは自然終了（期限付き join）。
+        // TalkCommand 送信端を drop → sink スレッドは自然終了（期限付き join）。
+        drop(talk_tx);
+        sakura.join_bounded("mock-sakura join", DEFAULT_TIMEOUT);
+    }
+
+    /// task 1.4（design Testing Strategy 冒頭・C7 Ordering / delivery）: mock sakura sink が
+    /// [`TalkCommand`] 3 形の**到着順**を記録する。
+    ///
+    /// `TalkCommand` は単一チャンネルを流れることで FIFO 順序保存が契約（DD-4 の前提）であり、
+    /// その観測面が本記録列である。ここでは Start→Resolve→Cancel→Start を投函し、記録列が
+    /// **投函順そのまま**であること（＝解決系と起動系が別扱いされず 1 本の順序に載ること）を固定する。
+    /// `started()` は `TalkCommand::Start` の射影であり、既存檻の意味は不変であることも併せて確認する。
+    #[test]
+    fn mock_sakura_records_talk_command_arrival_order() {
+        use areka_kanade::talk::TalkCommand;
+
+        let (talk_tx, talk_rx) = std::sync::mpsc::channel::<TalkCommand>();
+        let (kanade_tx, kanade_rx) = std::sync::mpsc::channel::<KanadeMsg>();
+
+        let sakura = spawn_mock_sakura(talk_rx, kanade_tx, QuitPolicy::Fixed(false));
+
+        talk_tx
+            .send(TalkCommand::Start(StartTalk::new(TalkId(1), "first")))
+            .expect("send Start(1)");
+        // Start の TalkDone を受けてから次を送る（記録スレッドの前進を確定させる barrier）。
+        match kanade_rx
+            .recv_timeout(DEFAULT_TIMEOUT)
+            .expect("Start(1) の TalkDone が返るはず")
+        {
+            KanadeMsg::TalkDone(done) => assert_eq!(done.talk_id, TalkId(1)),
+            _ => panic!("expected TalkDone from mock sakura"),
+        }
+
+        talk_tx
+            .send(TalkCommand::ResolveChoice {
+                talk_id: TalkId(1),
+                id: "pick".to_string(),
+            })
+            .expect("send ResolveChoice");
+        talk_tx
+            .send(TalkCommand::CancelChoice {
+                talk_id: TalkId(1),
+            })
+            .expect("send CancelChoice");
+        talk_tx
+            .send(TalkCommand::Start(StartTalk::new(TalkId(2), "second")))
+            .expect("send Start(2)");
+        match kanade_rx
+            .recv_timeout(DEFAULT_TIMEOUT)
+            .expect("Start(2) の TalkDone が返るはず")
+        {
+            KanadeMsg::TalkDone(done) => assert_eq!(done.talk_id, TalkId(2)),
+            _ => panic!("expected TalkDone from mock sakura"),
+        }
+
+        // 到着順の記録（投函順そのまま・解決系と起動系が同一の順序列に載る）。
+        let commands = sakura.commands();
+        assert_eq!(commands.len(), 4, "4 件すべてが記録されるべき: {commands:?}");
+        match &commands[0] {
+            TalkCommand::Start(s) => {
+                assert_eq!(s.talk_id, TalkId(1));
+                assert_eq!(s.script, "first");
+            }
+            other => panic!("commands[0] は Start(1) のはず: {other:?}"),
+        }
+        match &commands[1] {
+            TalkCommand::ResolveChoice { talk_id, id } => {
+                assert_eq!(*talk_id, TalkId(1));
+                assert_eq!(id, "pick");
+            }
+            other => panic!("commands[1] は ResolveChoice のはず: {other:?}"),
+        }
+        match &commands[2] {
+            TalkCommand::CancelChoice { talk_id } => assert_eq!(*talk_id, TalkId(1)),
+            other => panic!("commands[2] は CancelChoice のはず: {other:?}"),
+        }
+        match &commands[3] {
+            TalkCommand::Start(s) => {
+                assert_eq!(s.talk_id, TalkId(2));
+                assert_eq!(s.script, "second");
+            }
+            other => panic!("commands[3] は Start(2) のはず: {other:?}"),
+        }
+
+        // `started()` は Start の射影（既存檻の意味不変・Resolve/Cancel は現れない）。
+        let started = sakura.started();
+        assert_eq!(started.len(), 2);
+        assert_eq!(started[0].talk_id, TalkId(1));
+        assert_eq!(started[1].talk_id, TalkId(2));
+
         drop(talk_tx);
         sakura.join_bounded("mock-sakura join", DEFAULT_TIMEOUT);
     }

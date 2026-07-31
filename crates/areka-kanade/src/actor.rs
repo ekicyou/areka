@@ -23,8 +23,9 @@
 //!
 //! # 失敗経路のログ規律（steering: areka-log-first-no-silent-failure）
 //! SHIORI 送出失敗・応答 oneshot 切断は `error!` の上で `ShioriOutcome::Failed(Ipc)` へ写像し
-//! 再投入する（→ Unloading{Fault}・宙吊りなし）。StartTalk 送出失敗は `error!` の上で運行を
-//! 継続する（当該 talk は不成立・TalkDone は来ないが M1 は許容）。沈黙の失敗経路は存在しない。
+//! 再投入する（→ Unloading{Fault}・宙吊りなし）。talk 指示（[`TalkCommand`]）の送出失敗は
+//! `error!` の上で運行を継続する（当該指示は不成立・TalkDone は来ないが M1 は許容）。
+//! 沈黙の失敗経路は存在しない。
 
 use std::convert::Infallible;
 use std::ops::ControlFlow;
@@ -37,7 +38,7 @@ use crate::msg::{
 };
 use crate::schedule::resources::ResourceSink;
 use crate::schedule::{Action, Input, State, step};
-use crate::talk::StartTalk;
+use crate::talk::TalkCommand;
 
 /// kanade アクターを起動する（areka-actor 規約: スレッド名 "kanade"）。
 ///
@@ -45,6 +46,13 @@ use crate::talk::StartTalk;
 /// [`State::initial`] から運行状態機械を駆動する。`shiori`／`sakura` は**送出先**の送信端であり
 /// （body が保持するのは outbound のみ・自身の inbox Sender は保持しない）、これらと結線側が
 /// 全て drop されると inbox が切断され body は正常終了する（Req 4.9）。
+///
+/// # talk 再生系への送出口（DD-5・design C6・Req 5.6）
+/// `sakura` は [`TalkCommand`]（`Start` / `ResolveChoice` / `CancelChoice`）の単一チャンネルである。
+/// 起動系と選択解決系を別チャンネルへ分けないことが順序保存の契約であり（`areka-talk` の
+/// [`TalkCommand`] doc・DD-4 の前提）、kanade が投函した順序が relay ＋ dispatcher 単一 inbox を
+/// 経て FIFO で下流へ届く。選択待ちの解決を再生層の正規入力経路で行う（kanade 側にバリア状態・
+/// 再生状態を持たない）という Req 5.6 は、この単一送出口によって構造的に成立する。
 ///
 /// # 運用規約（デッドロック注意・Req 4.8）
 /// 停止は `KanadeMsg::Close` 送信・`Action::StopSelf`（終了系列完了）・全 `Sender<KanadeMsg>` drop の
@@ -59,7 +67,7 @@ use crate::talk::StartTalk;
 pub fn spawn_kanade(
     config: KanadeConfig,
     shiori: Sender<ShioriMsg>,
-    sakura: Sender<StartTalk>,
+    sakura: Sender<TalkCommand>,
     resource_sink: ResourceSink,
 ) -> (Sender<KanadeMsg>, ActorHandle) {
     spawn_actor("kanade", move |rx| {
@@ -134,7 +142,7 @@ fn drive(
     input: Input,
     config: &KanadeConfig,
     shiori: &Sender<ShioriMsg>,
-    sakura: &Sender<StartTalk>,
+    sakura: &Sender<TalkCommand>,
     resource_sink: &ResourceSink,
 ) -> Drive {
     // 初回 step。以降は state を差し替えつつ actions を回す。
@@ -148,14 +156,10 @@ fn drive(
         for action in actions {
             match action {
                 Action::StartTalk(start) => {
-                    // 再生起動要求を sakura へ送出。切断時は error!＋運行継続（当該 talk 不成立）。
-                    if sakura.send(start).is_err() {
-                        tracing::error!(
-                            target: "kanade",
-                            event = "start_talk_send_failed",
-                            "再生起動要求の送出に失敗（sakura 切断）——当該 talk は不成立・運行は継続"
-                        );
-                    }
+                    // 再生起動要求を talk 指示チャンネルへ載せて送出する（DD-5・design C6）。
+                    // 起動系も選択解決系も同一の [`TalkCommand`] 単一チャンネルを流れるため、
+                    // 状態機械が 1 バッチで並べた順序がそのまま下流で観測される（順序保存の契約）。
+                    send_talk_command(sakura, TalkCommand::Start(start));
                 }
                 Action::ShioriRequest(call) => {
                     // 送出前に call のイベント ID を控える（round_trip_request が call を消費するため）。
@@ -315,6 +319,31 @@ fn send_shiori(shiori: &Sender<ShioriMsg>, msg: ShioriMsg) -> Result<(), ShioriM
     shiori.send(msg).map_err(|e| e.0)
 }
 
+/// talk 再生系へ [`TalkCommand`] を送出する**唯一の実行点**（design C6・Req 5.6）。
+///
+/// 送出失敗（sakura／中継の切断）は `error!`（event=`talk_command_send_failed`）を残したうえで
+/// **運行を継続する**——当該指示は不成立（起動なら talk が起きず TalkDone も来ない・解決なら
+/// バリアが解けない）だが、選択・再生の失敗でゴーストを終了させないという既存の起動失敗規律と
+/// 同一の扱いである（design「Error Strategy」・steering: areka-log-first-no-silent-failure）。
+/// 種別は `kind` フィールドで区別でき、沈黙の失敗経路は持たない。
+fn send_talk_command(sakura: &Sender<TalkCommand>, command: TalkCommand) {
+    // ログ用の種別ラベル（送出で command が消費されるため先に取り出す）。
+    let (kind, talk_id) = match &command {
+        TalkCommand::Start(start) => ("start", start.talk_id.0),
+        TalkCommand::ResolveChoice { talk_id, .. } => ("resolve_choice", talk_id.0),
+        TalkCommand::CancelChoice { talk_id } => ("cancel_choice", talk_id.0),
+    };
+    if sakura.send(command).is_err() {
+        tracing::error!(
+            target: "kanade",
+            event = "talk_command_send_failed",
+            kind = %kind,
+            talk_id = talk_id,
+            "talk 指示の送出に失敗（再生系切断）——当該指示は不成立・運行は継続"
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -409,7 +438,7 @@ mod tests {
     #[test]
     fn close_message_terminates_and_join_succeeds() {
         let (shiori_tx, _rec_rx, shiori_handle) = spawn_mock_shiori(benign);
-        let (sakura_tx, _sakura_rx) = mpsc::channel::<StartTalk>();
+        let (sakura_tx, _sakura_rx) = mpsc::channel::<TalkCommand>();
 
         let (kanade_tx, kanade_handle) = spawn_kanade(config(), shiori_tx, sakura_tx, noop_sink());
 
@@ -430,7 +459,7 @@ mod tests {
     #[test]
     fn all_senders_dropped_terminates_normally() {
         let (shiori_tx, _rec_rx, shiori_handle) = spawn_mock_shiori(benign);
-        let (sakura_tx, _sakura_rx) = mpsc::channel::<StartTalk>();
+        let (sakura_tx, _sakura_rx) = mpsc::channel::<TalkCommand>();
 
         let (kanade_tx, kanade_handle) = spawn_kanade(config(), shiori_tx, sakura_tx, noop_sink());
 
@@ -456,7 +485,7 @@ mod tests {
         // mock shiori を spawn せず、Receiver を即 drop して送出を失敗させる。
         let (shiori_tx, shiori_rx) = mpsc::channel::<ShioriMsg>();
         drop(shiori_rx); // 送出は必ず Err になる。
-        let (sakura_tx, _sakura_rx) = mpsc::channel::<StartTalk>();
+        let (sakura_tx, _sakura_rx) = mpsc::channel::<TalkCommand>();
 
         let (kanade_tx, kanade_handle) = spawn_kanade(config(), shiori_tx, sakura_tx, noop_sink());
 
@@ -476,11 +505,11 @@ mod tests {
         );
     }
 
-    // --- 3b. sakura 切断: StartTalk 送出失敗 → error!＋運行継続（終了しない）→ Close で停止 ---
+    // --- 3b. sakura 切断: `TalkCommand::Start` 送出失敗 → error!＋運行継続（終了しない）→ Close で停止 ---
 
     #[test]
     fn sakura_disconnected_start_talk_failure_continues_run() {
-        // OnBoot（BootMain の GET）に Value を返す mock shiori: これで StartTalk が発行される。
+        // OnBoot（BootMain の GET）に Value を返す mock shiori: これで起動指示が発行される。
         let (shiori_tx, _rec_rx, shiori_handle) = spawn_mock_shiori(|rec| match rec {
             Recorded::Notify(_) => ShioriOutcome::Notified,
             Recorded::Unload => ShioriOutcome::Unloaded,
@@ -490,13 +519,13 @@ mod tests {
             Recorded::Close => ShioriOutcome::Notified,
         });
 
-        // sakura の Receiver を即 drop → StartTalk 送出は必ず失敗する。
-        let (sakura_tx, sakura_rx) = mpsc::channel::<StartTalk>();
+        // sakura の Receiver を即 drop → talk 指示の送出は必ず失敗する。
+        let (sakura_tx, sakura_rx) = mpsc::channel::<TalkCommand>();
         drop(sakura_rx);
 
         let (kanade_tx, kanade_handle) = spawn_kanade(config(), shiori_tx, sakura_tx, noop_sink());
 
-        // Boot → boot 系列を最後まで駆動（OnBoot Value で StartTalk 送出失敗するが継続）。
+        // Boot → boot 系列を最後まで駆動（OnBoot Value で起動指示の送出が失敗するが継続）。
         kanade_tx.send(KanadeMsg::Boot).expect("send Boot");
         // 運行が継続していることを確認するため、Close で明示的に停止させる。
         kanade_tx.send(KanadeMsg::Close).expect("send Close");
@@ -508,7 +537,7 @@ mod tests {
             move || {
                 kanade_handle
                     .join()
-                    .expect("kanade continues past StartTalk failure, then stops on Close");
+                    .expect("kanade continues past TalkCommand send failure, then stops on Close");
             },
         );
         drop(shiori_handle);
@@ -522,7 +551,7 @@ mod tests {
         use crate::msg::{MouseButton, MouseEventKind, MouseInput};
 
         let (shiori_tx, rec_rx, shiori_handle) = spawn_mock_shiori(benign);
-        let (sakura_tx, _sakura_rx) = mpsc::channel::<StartTalk>();
+        let (sakura_tx, _sakura_rx) = mpsc::channel::<TalkCommand>();
 
         let (kanade_tx, kanade_handle) = spawn_kanade(config(), shiori_tx, sakura_tx, noop_sink());
 
@@ -561,7 +590,7 @@ mod tests {
     #[test]
     fn force_quit_emits_onclose_notify_then_unload_then_close_in_order() {
         let (shiori_tx, rec_rx, shiori_handle) = spawn_mock_shiori(benign);
-        let (sakura_tx, _sakura_rx) = mpsc::channel::<StartTalk>();
+        let (sakura_tx, _sakura_rx) = mpsc::channel::<TalkCommand>();
 
         let (kanade_tx, kanade_handle) = spawn_kanade(config(), shiori_tx, sakura_tx, noop_sink());
 
@@ -686,6 +715,54 @@ mod tests {
             "reply-drop helper が期限内に受領を完了すべき（possible hang）"
         );
         helper.join().expect("reply-drop helper joins cleanly");
+    }
+
+    // --- 6. talk 指示送出の失敗ログ＋運行継続（タスク 1.4・Req 4.4／5.6・design C6） ---
+    //
+    // talk 再生系へ出る唯一の実行点 `send_talk_command` を**直接**呼び、受信端が切断された
+    // 状態で (i) 規約の `error!`（event=talk_command_send_failed）を発火し、(ii) 返り値も
+    // panic も持たず呼び手が運行を継続できる（＝既存の起動失敗規律と同一の扱い）ことを固定する。
+    // ヘルパは同期関数ゆえログはテストスレッドで発行され log_capture で確実に捕捉される。
+
+    #[test]
+    fn talk_command_send_failure_logs_error_and_continues() {
+        use crate::talk::{StartTalk, TalkId};
+
+        let (sakura_tx, sakura_rx) = mpsc::channel::<TalkCommand>();
+        drop(sakura_rx); // 送出は必ず Err。
+
+        let events = capture(|| {
+            // 3 形すべてが同一の失敗規律（error! ＋継続）を通る。
+            send_talk_command(
+                &sakura_tx,
+                TalkCommand::Start(StartTalk::new(TalkId(1), r"\e")),
+            );
+            send_talk_command(
+                &sakura_tx,
+                TalkCommand::ResolveChoice {
+                    talk_id: TalkId(1),
+                    id: "x".to_string(),
+                },
+            );
+            send_talk_command(
+                &sakura_tx,
+                TalkCommand::CancelChoice {
+                    talk_id: TalkId(1),
+                },
+            );
+        });
+
+        // 規約の error! 発火（削除・語彙変更・レベル変更で失敗する回帰檻）。
+        assert_logged(&events, Level::ERROR, "talk_command_send_failed");
+        // 3 回とも記録される（黙って捨てる経路が 1 本も無い・log-first）。
+        assert_eq!(
+            events
+                .iter()
+                .filter(|e| e.event.as_deref() == Some("talk_command_send_failed"))
+                .count(),
+            3,
+            "3 形すべての送出失敗が個別に記録されるべき（沈黙の失敗経路なし）"
+        );
     }
 
     // --- 7. egress チョークポイント判断分岐檻（タスク 2.5・Req 3.1／3.2／6.2・DD-IT-7／DD-IT-11） ---
@@ -875,7 +952,7 @@ mod tests {
             Recorded::Get(_) => ShioriOutcome::NoContent,
             Recorded::Close => ShioriOutcome::Notified,
         });
-        let (sakura_tx, _sakura_rx) = mpsc::channel::<StartTalk>();
+        let (sakura_tx, _sakura_rx) = mpsc::channel::<TalkCommand>();
 
         // 記録 sink: 呼出 (id, outcome) を蓄積する（同期呼出・別スレッドから）。
         let seen: Arc<Mutex<Vec<(&'static str, ResourceOutcome)>>> = Arc::new(Mutex::new(Vec::new()));

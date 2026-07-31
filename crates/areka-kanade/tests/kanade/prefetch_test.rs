@@ -35,7 +35,7 @@
 use std::sync::{Arc, Mutex};
 
 use areka_kanade::resources::{ResourceOutcome, ResourceSink};
-use areka_kanade::{CloseReason, KanadeConfig, KanadeMsg, StartTalk, spawn_kanade};
+use areka_kanade::{CloseReason, KanadeConfig, KanadeMsg, TalkCommand, spawn_kanade};
 
 use super::common::{
     CallMethod, DEFAULT_TIMEOUT, FailKind, FailOn, Fixture, MockShiori, QuitPolicy, RecordedCall,
@@ -59,8 +59,8 @@ fn drive_prefetch(
     let sink: ResourceSink =
         Box::new(move |id, outcome| seen_body.lock().expect("sink mutex").push((id, outcome)));
 
-    // kanade→sakura の StartTalk チャンネルを 1 本張り、kanade を記録 sink 付きで起動する。
-    let (talk_tx, talk_rx) = std::sync::mpsc::channel::<StartTalk>();
+    // kanade→sakura の TalkCommand チャンネルを 1 本張り、kanade を記録 sink 付きで起動する。
+    let (talk_tx, talk_rx) = std::sync::mpsc::channel::<TalkCommand>();
     let (kanade_tx, kanade_handle) = spawn_kanade(
         KanadeConfig::new("master", "1.0.0"),
         shiori.sender.clone(),
