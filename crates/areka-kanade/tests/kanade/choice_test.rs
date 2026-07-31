@@ -1,5 +1,6 @@
-//! 選択確定カスケードの統合檻（Req9.1／9.2(a)(b)・Req4.5 — 設計 Testing Strategy
-//! 「Integration Tests（kanade 檻 `choice_test.rs`）」の (a)／(b)／DD-12 檻）。
+//! 選択確定カスケードの統合檻（Req9.1／9.2(a)(b)(c)(d)・Req4.5・Req6.1・Req7.3〜7.5 —
+//! 設計 Testing Strategy 「Integration Tests（kanade 檻 `choice_test.rs`）」の
+//! (a)／(b)／(c)／(d)／DD-12 檻）。
 //!
 //! mock shiori＋mock sakura sink を kanade に結線し（`super::common` のハーネス）、注入
 //! `ChoiceWaiting`／`Choice`／`Tick` のみで選択確定の全帰結を観測する。実時間 sleep も実時刻も
@@ -28,6 +29,19 @@
 //!    ない** GET の `Failed` は従来どおり `Unloading{Fault}` へ倒れる（DD-12 免除が非 choice 経路へ
 //!    漏れていないこと＝既存 `failure_test.rs` の規律が不変であることの境界固定）。
 //!
+//! **群 4（Req9.2(c)・Req6.1／6.2／6.4・実行状態表示）**
+//! 6. [`choosing_rides_pump_status_while_waiting_then_clears_after_resolution`]: 選択待ち確立後の
+//!    周期リクエストが **NOTIFY**（Ref3="0"）で `Status: talking,choosing` を帯び、解決後の周期
+//!    リクエストからは `choosing` が消えて `talking` 単独へ戻る。
+//!
+//! **群 5（Req9.2(d)・Req7.3／7.4／7.5・タイムアウト）**
+//! 7. [`choice_timeout_fires_then_204_cancels_and_rejects_later_choice`]: 注入 Tick のみで期限へ
+//!    到達し、`OnChoiceTimeout`（Ref0=起動スクリプト）GET が発行され、204 で `TalkCommand::Cancel`
+//!    が届き、注入した `TalkDone{Interrupted}` で `Steady{None}` へ復帰し、以降の `Choice` 注入が
+//!    棄却される。
+//! 8. [`choice_timeout_value_replaces_talk_via_existing_start_path`]: タイムアウト応答が Value なら
+//!    既存の起動経路で置換再生される（新 talk_id・解決／解除指示は発行しない）。
+//!
 //! # 決定性（Req9.1）と同期イディオム
 //! steady_test.rs／mouse_test.rs と同じ枠組み: 挨拶なし boot（`without_boot_greeting`）で
 //! `Steady{None}` へ直行させ、Tick1 の `OnSecondChange` Value で steady talk（id=1）を起こし、
@@ -37,16 +51,19 @@
 //! 1 メッセージ処理内に完結するため、段の途中に Tick も別の選択確定も割り込まない。終了は末尾 talk を
 //! quit:true にして駆動し、kanade の期限付き join 成功をもって全記録の確定点とする。
 //!
-//! # タイムアウトを踏まない構成
-//! 注入する `ChoiceWaiting` は `timeout_directive_secs: None`（＝既定値 30_000ms へ委譲）で、起点は
-//! `display_end = 1_000ms` ゆえ期限は 31_000ms である。本ファイルが注入する Tick は 1_000ms のみ
-//! なので、タイムアウト経路（`OnChoiceTimeout`）には構造上到達しない（タイムアウト自体の檻は 6.2）。
+//! # 期限（deadline）の作り方——実時刻を一切読まない
+//! 注入する `ChoiceWaiting` は `timeout_directive_secs: None`（＝既定値
+//! [`CHOICE_TIMEOUT_DEFAULT_MS`] へ委譲）で、起点は `display_end = `[`CHOICE_DISPLAY_END_MS`] ゆえ
+//! 期限は [`CHOICE_DEADLINE_MS`] である。したがって**注入 Tick の `now` を選ぶだけ**で期限の手前／
+//! 到達を作り分けられる（実時間待機も `Instant` 読み取りも一切ない・Req9.1／7.3）。
+//! 群 1〜4 は期限より手前の Tick しか注入しないためタイムアウト経路へは構造上到達せず、群 5 が
+//! 期限手前 → 期限到達の 2 点を注入してタイムアウトのみを踏む。
 
 use std::sync::mpsc::Sender;
 
 use areka_kanade::{
     ChoiceInput, CloseReason, ExecutionSnapshot, KanadeConfig, KanadeMsg, MonotonicMs, MouseButton,
-    MouseEventKind, MouseInput, TalkCommand, TalkId, events,
+    MouseEventKind, MouseInput, TalkCommand, TalkDone, TalkEndReason, TalkId, events,
 };
 
 use super::common::{
@@ -73,11 +90,35 @@ fn choice_references() -> Vec<String> {
     vec!["ref-a".to_string(), "ref-b".to_string()]
 }
 
-/// カスケード段の GET が帯びる運行状態（active talk＋選択待ち継続中＝`talking,choosing`）。
+/// 注入 `ChoiceWaiting` の表示完了時刻（[`establish_choice_wait`] が投函する値）。
+const CHOICE_DISPLAY_END_MS: u64 = 1_000;
+
+/// 選択肢タイムアウトの既定値（`KanadeConfig::choice_timeout_default_ms`・裁定 5・Req7.8）。
+///
+/// `timeout_directive_secs: None`（未指定）のとき kanade が加算する値の**期待値**である。
+/// 檻はこの値を config から読まず独立に置く——実装側の既定値が動けば群 5 の 2 点注入
+/// （期限手前で非発火・期限到達で発火）が両方向とも落ちる（値そのものの固定・Req7.8）。
+const CHOICE_TIMEOUT_DEFAULT_MS: u64 = 30_000;
+
+/// 注入 `ChoiceWaiting` から導かれる期限（`display_end + 既定値`・DD-8 写像の未指定分岐）。
+const CHOICE_DEADLINE_MS: u64 = CHOICE_DISPLAY_END_MS + CHOICE_TIMEOUT_DEFAULT_MS;
+
+/// カスケード段・タイムアウト GET が帯びる運行状態（active talk＋選択待ち継続中＝`talking,choosing`）。
+///
+/// C5 の `choice_active` の源は帳簿の 3 段すべて（`Waiting`／`Cascading`／`TimeoutInFlight`）ゆえ、
+/// カスケード段 GET と `OnChoiceTimeout` GET は同一の複合スナップショットを帯びる（裁定 6）。
 fn cascading_snapshot() -> ExecutionSnapshot {
     ExecutionSnapshot {
         talk_active: true,
         choice_active: true,
+    }
+}
+
+/// active talk のみ（選択待ちは終了済み）の運行状態＝`talking` 単独。
+fn talking_only_snapshot() -> ExecutionSnapshot {
+    ExecutionSnapshot {
+        talk_active: true,
+        choice_active: false,
     }
 }
 
@@ -107,8 +148,8 @@ fn establish_choice_wait(sender: &Sender<KanadeMsg>, candidates: &[&str]) {
         .send(KanadeMsg::ChoiceWaiting {
             talk_id: TalkId(1),
             choice_ids: candidates.iter().map(|s| s.to_string()).collect(),
-            display_end: MonotonicMs(1_000),
-            // 未指定＝既定 30_000ms へ委譲（期限 31_000ms・本檻の Tick は 1_000ms のみ）。
+            display_end: MonotonicMs(CHOICE_DISPLAY_END_MS),
+            // 未指定＝既定値へ委譲（期限は CHOICE_DEADLINE_MS・DD-8 の未指定分岐）。
             timeout_directive_secs: None,
         })
         .expect("send ChoiceWaiting");
@@ -135,6 +176,22 @@ fn choice_get_ids(recorded: &[RecordedCall]) -> Vec<&str> {
         .into_iter()
         .map(|c| c.id.as_str())
         .collect()
+}
+
+/// 記録列から周期リクエスト（`OnSecondChange`）のみを処理順に抽出する（GET・NOTIFY 双方）。
+fn pumps(recorded: &[RecordedCall]) -> Vec<&RecordedCall> {
+    recorded
+        .iter()
+        .filter(|c| c.id == "OnSecondChange")
+        .collect()
+}
+
+/// 記録列における最初の一致位置（処理順の前後関係を突合するための索引）。
+fn position_of(recorded: &[RecordedCall], method: CallMethod, id: &str) -> usize {
+    recorded
+        .iter()
+        .position(|c| c.method == method && c.id == id)
+        .unwrap_or_else(|| panic!("{method:?} {id} が記録されているはず: {recorded:?}"))
 }
 
 /// [`TalkCommand`] 到着順を可読なタグ列へ写す（`Start`／`Resolve`／`Cancel` の順序観測面）。
@@ -717,5 +774,494 @@ fn non_choice_failure_during_choice_wait_still_faults() {
     assert!(
         !recorded.iter().any(|c| c.id == "OnClose"),
         "Fault 終了は close 握手（OnClose）を経ないはず: {recorded:?}"
+    );
+}
+
+// ============================================================================
+// 群 4: Req9.2(c) — 選択待ち中の周期リクエストに `choosing` が載り、解決後に消える
+// ============================================================================
+
+/// 選択待ち確立後の周期リクエストが **NOTIFY**（Ref3="0"）で `Status: talking,choosing` を帯び、
+/// 選択解決後の周期リクエストからは `choosing` が消えて `talking` 単独へ戻る
+/// （Req9.2(c)・6.1／6.2／6.4・C5・裁定 6）。
+///
+/// # 駆動（決定的・sleep なし）
+/// 挨拶なし boot →`Steady{None}` 直行 → Tick1（`OnSecondChange` GET Value）で steady talk（id=1）を
+/// 起こし、保留ハーネス（`hold_indices=[0]`）でその `TalkDone` を park して active talk 窓を保つ。
+/// `ChoiceWaiting` を確立してから **Tick2** を注入し（選択待ち中の pump）、`Choice` を注入して
+/// 正典形カスケードを 204／204 で走らせ（＝解決のみ・帳簿消去）、続けて **Tick3** を注入する
+/// （解決後の pump）。終了は `CloseRequest`＋保留解放（`TalkDone{Ended}`→close 握手→別れ talk
+/// quit:true）で駆動する。注入 Tick はいずれも期限 [`CHOICE_DEADLINE_MS`] より手前ゆえ、
+/// タイムアウト経路は踏まない。
+///
+/// # 非空虚性・discriminative 性
+/// - 周期リクエストのうち **NOTIFY はちょうど 2 件**（Tick2／Tick3）であり、それぞれの `status` を
+///   **wire 実値**（`"talking,choosing"` ／ `"talking"`）で突合する。`choosing` の導出が入って
+///   いなければ 1 件目が `"talking"` になり落ち、解決時の帳簿消去が漏れていれば 2 件目が
+///   `"talking,choosing"` のまま残って落ちる（両方向の退行を弁別する）。
+/// - 連結順序（正典順 `talking,choosing`）も実値突合に含まれる——順序が逆（`choosing,talking`）に
+///   なる退行はここで落ちる（Req6.3 の既存規律が複合値でも保たれること）。
+/// - 両件が **NOTIFY・Ref3="0"** であること（GET でないこと）を明示確認する＝選択待ち中も slot
+///   占有継続として扱われ、応答スクリプトを運べない型で送出される（Req6.4／6.5 の構造充足）。
+/// - 記録位置の前後（Tick2 の NOTIFY < カスケード段 GET < Tick3 の NOTIFY）を突合し、2 件目が
+///   確かに**解決後**の pump であることを固定する（空虚な合格を防ぐ）。
+#[test]
+fn choosing_rides_pump_status_while_waiting_then_clears_after_resolution() {
+    // quitting: close 握手が別れ talk（Value）を返す。選択由来 GET は未注入＝両段とも 204
+    // （＝解決のみ・StartTalk なし）で、解決後の pump を同一 talk 窓のまま観測できる。
+    let fixture = Fixture::quitting()
+        .without_boot_greeting()
+        .with_steady_value_indices([0]);
+
+    // quit_flags: index0（steady talk）=false（Ended→pending_close 消化）・index1（close talk）=true。
+    let (harness, gate) = spawn_harness_gated(
+        KanadeConfig::new("master", "1.0.0"),
+        fixture,
+        QuitPolicy::PerTalk(vec![false, true]),
+        vec![0],
+    );
+
+    establish_choice_wait(&harness.sender, &[CANONICAL_CHOICE_ID]);
+    // Tick2: 選択待ち中の周期リクエスト（期限 CHOICE_DEADLINE_MS より手前）。
+    harness
+        .sender
+        .send(KanadeMsg::Tick {
+            now: MonotonicMs(2_000),
+        })
+        .expect("send Tick 2 (choosing)");
+    harness
+        .sender
+        .send(KanadeMsg::Choice(choice_input(CANONICAL_CHOICE_ID)))
+        .expect("send Choice");
+    // Tick3: 解決後の周期リクエスト（同じ active talk 窓・choosing だけが消えているはず）。
+    harness
+        .sender
+        .send(KanadeMsg::Tick {
+            now: MonotonicMs(3_000),
+        })
+        .expect("send Tick 3 (resolved)");
+    harness
+        .sender
+        .send(KanadeMsg::CloseRequest {
+            reason: CloseReason::User,
+        })
+        .expect("send CloseRequest");
+    // 保留解放は全注入の後——保留 TalkDone は CloseRequest の後ろに並ぶ（FIFO・決定的）。
+    gate.release_all();
+
+    let Harness {
+        sender,
+        kanade,
+        shiori,
+        sakura,
+    } = harness;
+
+    join_bounded("kanade choosing-status join", DEFAULT_TIMEOUT, kanade)
+        .expect("kanade terminates via the driven close (farewell talk quit:true)");
+    drop(sender);
+    sakura.join_bounded("mock-sakura choosing-status join", DEFAULT_TIMEOUT);
+    let recorded = shiori.recorded();
+
+    // (1) 周期リクエストのうち NOTIFY はちょうど 2 件（Tick2／Tick3）——active talk 窓が両 Tick で
+    //     維持されている（GET へ落ちていない）ことの直接確認。
+    let notifies: Vec<&RecordedCall> = pumps(&recorded)
+        .into_iter()
+        .filter(|c| c.method == CallMethod::Notify)
+        .collect();
+    assert_eq!(
+        notifies.len(),
+        2,
+        "active talk 窓で注入した 2 本の Tick は NOTIFY pump を 1 件ずつ発行するはず: {recorded:?}"
+    );
+
+    // (2) 選択待ち中の pump: NOTIFY・Ref3="0"・Status は複合値 `talking,choosing`（Req6.1／6.4・裁定 6）。
+    let expected_choosing = expected_call(events::on_second_change(
+        MonotonicMs(2_000),
+        &cascading_snapshot(),
+    ));
+    assert_eq!(
+        *notifies[0], expected_choosing,
+        "選択待ち中の pump は events 表導出（NOTIFY・Ref3=0・複合 Status）と一致するはず: {recorded:?}"
+    );
+    assert_eq!(
+        notifies[0].status,
+        Some("talking,choosing".to_string()),
+        "選択待ち中の Status wire は正典順の複合値 `talking,choosing`（Req6.1／6.3・裁定 6）"
+    );
+    assert_eq!(
+        notifies[0].references[3], "0",
+        "選択待ち中も slot 占有継続＝Ref3 は \"0\"（応答スクリプトを再生しない・Req6.4）"
+    );
+
+    // (3) 解決後の pump: 同じ active talk 窓のまま `choosing` だけが消える（Req6.2）。
+    let expected_resolved = expected_call(events::on_second_change(
+        MonotonicMs(3_000),
+        &talking_only_snapshot(),
+    ));
+    assert_eq!(
+        *notifies[1], expected_resolved,
+        "解決後の pump は events 表導出（NOTIFY・Ref3=0・talking 単独）と一致するはず: {recorded:?}"
+    );
+    assert_eq!(
+        notifies[1].status,
+        Some("talking".to_string()),
+        "解決後の Status wire から choosing が消え talking 単独へ戻るはず（Req6.2）"
+    );
+    assert_eq!(
+        notifies[1].references[3], "0",
+        "解決後も同じ active talk 窓＝Ref3 は \"0\" のまま（talk 軸は不変）"
+    );
+
+    // (4) 非空虚性: 2 件目が確かに「解決後」の pump である（カスケード段が両 NOTIFY の間にある）。
+    let first_notify_pos = recorded
+        .iter()
+        .position(|c| *c == expected_choosing)
+        .expect("選択待ち中の NOTIFY が記録されているはず");
+    let last_notify_pos = recorded
+        .iter()
+        .position(|c| *c == expected_resolved)
+        .expect("解決後の NOTIFY が記録されているはず");
+    let ex_pos = position_of(&recorded, CallMethod::Get, "OnChoiceSelectEx");
+    let select_pos = position_of(&recorded, CallMethod::Get, "OnChoiceSelect");
+    assert!(
+        first_notify_pos < ex_pos && ex_pos < select_pos && select_pos < last_notify_pos,
+        "記録順は [choosing pump] → Ex → 無印 → [解決後 pump] のはず（2 件目が解決後である証拠）: {recorded:?}"
+    );
+
+    // (5) 段列は正典形 2 段のみ（タイムアウト経路を踏んでいないことの裏取り）。
+    assert_eq!(
+        choice_get_ids(&recorded),
+        vec!["OnChoiceSelectEx", "OnChoiceSelect"],
+        "本檻の Tick は期限手前のみ＝OnChoiceTimeout は発行されないはず: {recorded:?}"
+    );
+
+    // (6) 終了系列を完走した（末尾 Unload）。
+    assert_eq!(
+        recorded.last().expect("記録列は空でない"),
+        &expected_unload(),
+        "末尾は Unload（driven close→別れ talk quit:true 由来）"
+    );
+}
+
+// ============================================================================
+// 群 5: Req9.2(d) — タイムアウト（期限到達・204 解除・以降棄却／Value 置換再生）
+// ============================================================================
+
+/// 注入 Tick のみで期限へ到達し、`OnChoiceTimeout`（Ref0=起動スクリプト）GET が発行され、204 で
+/// `TalkCommand::CancelChoice` が届き、`TalkDone{Interrupted}` の注入で `Steady{None}` へ復帰し、
+/// **解除後に到着する `Choice` が棄却される**（Req9.2(d)・7.3／7.5・C4 規則 5／6・DD-11・F3）。
+///
+/// # 駆動（決定的・sleep なし・実時刻を読まない）
+/// active talk 窓（id=1・保留）で `ChoiceWaiting` を確立すると期限は [`CHOICE_DEADLINE_MS`] になる。
+/// 注入する Tick は次の 4 本だけで、いずれも `now` は檻が与える論理値である:
+///
+/// 1. `Tick(CHOICE_DISPLAY_END_MS)`（[`establish_choice_wait`] 内）: steady talk を起こす。
+/// 2. `Tick(CHOICE_DEADLINE_MS - 1_000)`: **期限手前**——タイムアウトは発火せず通常 pump（NOTIFY）。
+/// 3. `Tick(CHOICE_DEADLINE_MS)`: **期限到達**——`OnChoiceTimeout` GET を発行し、この周期は pump を
+///    発行しない（C4 規則 5）。mock は当該 id へ未注入ゆえ 204 を返し、`CancelChoice` が発行される。
+/// 4. `Tick(CHOICE_DEADLINE_MS + 1_000)`: `TalkDone{Interrupted}` 注入後の pump——`Steady{None}` へ
+///    復帰していれば **GET**（Ref3="1"・Status ヘッダなし）になる。
+///
+/// mock sakura は再生層を持たず `CancelChoice` を記録するだけなので、Close funnel の帰結である
+/// `TalkDone{Interrupted}` は檻が直接注入する（設計 Testing Strategy (d) の明文どおり）。終了は
+/// `Steady{None}` 復帰後の `CloseRequest`（→別れ talk quit:true）で駆動する。保留は解放しない。
+///
+/// # 非空虚性・discriminative 性
+/// - **期限の両側**を注入して既定値 [`CHOICE_TIMEOUT_DEFAULT_MS`] そのものを固定する:
+///   手前（2）では発火せず `talking,choosing` の NOTIFY pump が出る・到達（3）で初めて発火する。
+///   既定値が大きくなれば (3) でも発火せず `OnChoiceTimeout` が現れない。小さくなれば (2) で
+///   発火し、**記録順が `OnChoiceTimeout` → NOTIFY pump へ逆転**したうえ (2) の pump から
+///   `choosing` が消えるため、順序突合と Status 突合の両方で落ちる（**両方向**を弁別する。
+///   単に「段列と pump 件数」を数えるだけでは早期発火を見逃す——実測で確認済み）。
+/// - `OnChoiceTimeout` GET を events 表導出と完全一致で突合し、Ref0 が **当該トークの起動
+///   スクリプト**（`FIXED_STEADY_SCRIPT`＝ActiveTalk.script・DD-10）であることを実値で確認する。
+///   Ref0 に選択肢 ID やラベルを載せる退行はここで落ちる。
+/// - `OnSecondChange` の総数が 3 件（GET 2・NOTIFY 1）であること＝**発火した周期は pump を出して
+///   いない**こと（C4 規則 5）。pump を止め損ねる退行は 4 件になって落ちる。
+/// - `TalkCommand` 到着順が `Start(1)`→`Cancel(1)`→`Start(2)` であること。`ResolveChoice` が混じる
+///   （タイムアウトを解決扱いする退行）／`Cancel` が落ちる（Req7.5 の破れ）のいずれでも落ちる。
+/// - 復帰後の pump が `Steady{None}` の GET（Ref3="1"・Status ヘッダなし）であること＝
+///   `TalkDone{Interrupted}` が非 quit 扱いで定常復帰する正規到達点（DD-11）を通ったこと。
+/// - 選択由来 GET が `OnChoiceTimeout` **ただ 1 件**であること＝解除後に注入した `Choice` 2 本が
+///   いずれもカスケードを起こしていない（棄却された）こと。棄却が漏れれば Ex／無印が現れて落ちる。
+///   2 本の注入点は意図的に分けてある——1 本目は**解除直後（現行トークはまだ active）**であり
+///   解除側の帳簿消去だけで棄却されねばならず、2 本目は `Steady{None}` 復帰後の遅延通知である。
+///   1 本目が無いと、解除で帳簿を消し損ねる退行を `TalkDone{Interrupted}` の掃除（C4 規則 7）が
+///   覆い隠して素通りする（実測で確認済み）。
+#[test]
+fn choice_timeout_fires_then_204_cancels_and_rejects_later_choice() {
+    // quitting: 復帰後の driven close が別れ talk（Value）を返す。OnChoiceTimeout は未注入＝204。
+    let fixture = Fixture::quitting()
+        .without_boot_greeting()
+        .with_steady_value_indices([0]);
+
+    // hold_indices=[0]: steady talk（id=1）の TalkDone を park（解放しない——終了は driven close）。
+    // quit_flags: index0（steady talk）=false・index1（close talk）=true（終了駆動）。
+    let (harness, _gate) = spawn_harness_gated(
+        KanadeConfig::new("master", "1.0.0"),
+        fixture,
+        QuitPolicy::PerTalk(vec![false, true]),
+        vec![0],
+    );
+
+    establish_choice_wait(&harness.sender, &[CANONICAL_CHOICE_ID]);
+
+    // (2) 期限手前の Tick——発火しない（既定値の下限を固定する）。
+    harness
+        .sender
+        .send(KanadeMsg::Tick {
+            now: MonotonicMs(CHOICE_DEADLINE_MS - 1_000),
+        })
+        .expect("send Tick just before the deadline");
+    // (3) 期限到達の Tick——OnChoiceTimeout GET を発行し pump は出さない。
+    harness
+        .sender
+        .send(KanadeMsg::Tick {
+            now: MonotonicMs(CHOICE_DEADLINE_MS),
+        })
+        .expect("send Tick at the deadline");
+    // 解除直後（現行トークはまだ active）の選択確定——解除側の掃除点だけで棄却されるはず（Req7.5）。
+    // この 1 本目は `TalkDone{Interrupted}` の掃除（C4 規則 7）に**先行する**ため、解除で帳簿を
+    // 消し損ねる退行を単独で弁別する（後述の 2 本目だけでは 2 つの掃除点が互いを覆い隠す）。
+    harness
+        .sender
+        .send(KanadeMsg::Choice(choice_input(CANONICAL_CHOICE_ID)))
+        .expect("send Choice right after cancellation (talk still active)");
+    // Close funnel の帰結（dispatcher が Close を転送し talk が返す通知）を檻が直接注入する。
+    harness
+        .sender
+        .send(KanadeMsg::TalkDone(TalkDone {
+            talk_id: TalkId(1),
+            reason: TalkEndReason::Interrupted,
+        }))
+        .expect("send TalkDone{Interrupted} (Close funnel の完了通知)");
+    // (4) 復帰後の pump——Steady{None} なら GET（Ref3=1）になる。
+    harness
+        .sender
+        .send(KanadeMsg::Tick {
+            now: MonotonicMs(CHOICE_DEADLINE_MS + 1_000),
+        })
+        .expect("send Tick after the interrupted recovery");
+    // 2 本目の選択確定——`Steady{None}` 復帰後に到着する遅延通知（同じく棄却されるはず・Req7.5）。
+    harness
+        .sender
+        .send(KanadeMsg::Choice(choice_input(CANONICAL_CHOICE_ID)))
+        .expect("send Choice after the interrupted recovery");
+    harness
+        .sender
+        .send(KanadeMsg::CloseRequest {
+            reason: CloseReason::User,
+        })
+        .expect("send CloseRequest");
+
+    let Harness {
+        sender,
+        kanade,
+        shiori,
+        sakura,
+    } = harness;
+
+    join_bounded("kanade choice-timeout join", DEFAULT_TIMEOUT, kanade)
+        .expect("kanade terminates via the driven close after the interrupted recovery");
+    drop(sender);
+    let commands = sakura.commands();
+    sakura.join_bounded("mock-sakura choice-timeout join", DEFAULT_TIMEOUT);
+    let recorded = shiori.recorded();
+
+    // (1) 選択由来 GET は OnChoiceTimeout ただ 1 件（期限手前で非発火・解除後の Choice は棄却）。
+    assert_eq!(
+        choice_get_ids(&recorded),
+        vec!["OnChoiceTimeout"],
+        "期限到達でのみタイムアウトが発火し、解除後の Choice はカスケードを起こさないはず: {recorded:?}"
+    );
+
+    // (2) OnChoiceTimeout の layout（Ref0=当該トークの起動スクリプト・Status は複合値・Req3.4／DD-10）。
+    let expected_timeout = expected_call(events::on_choice_timeout(
+        FIXED_STEADY_SCRIPT,
+        &cascading_snapshot(),
+    ));
+    let timeout_get = choice_gets(&recorded);
+    assert_eq!(
+        *timeout_get[0], expected_timeout,
+        "OnChoiceTimeout は events 表導出（Ref0=起動スクリプト・Status）と一致するはず: {recorded:?}"
+    );
+    assert_eq!(
+        timeout_get[0].references,
+        vec![FIXED_STEADY_SCRIPT.to_string()],
+        "Ref0 は当該トークの起動スクリプトそのもの（ActiveTalk.script・DD-10）"
+    );
+    assert_eq!(
+        timeout_get[0].status,
+        Some("talking,choosing".to_string()),
+        "タイムアウト GET も選択待ち継続中（TimeoutInFlight）＝複合 Status を帯びる（裁定 6）"
+    );
+
+    // (3) 発火した周期は pump を出していない（C4 規則 5）——OnSecondChange は GET 2・NOTIFY 1 の計 3 件。
+    let pump_calls = pumps(&recorded);
+    let pump_methods: Vec<&CallMethod> = pump_calls.iter().map(|c| &c.method).collect();
+    assert_eq!(
+        pump_methods,
+        vec![
+            &CallMethod::Get,    // Tick(display_end): Steady{None} の pump 問い合わせ
+            &CallMethod::Notify, // 期限手前の Tick: active talk 窓の NOTIFY
+            &CallMethod::Get,    // 復帰後の Tick: Steady{None} の pump 問い合わせ
+        ],
+        "期限到達の Tick は pump を発行しない（規則 5）＝周期リクエストは 3 件のみのはず: {recorded:?}"
+    );
+
+    // (3') 既定値そのものの固定（Req7.8）: 期限**手前**の Tick では発火していない。
+    //      観測面は 2 点——(i) その pump がまだ `talking,choosing` を帯びる（帳簿が Waiting のまま）、
+    //      (ii) 記録順が [手前の NOTIFY pump] → [OnChoiceTimeout] である。既定値が
+    //      CHOICE_TIMEOUT_DEFAULT_MS より小さければ手前の Tick で発火し、この 2 点が両方とも破れる。
+    assert_eq!(
+        pump_calls[1].status,
+        Some("talking,choosing".to_string()),
+        "期限手前の pump はまだ選択待ち継続中＝複合 Status を帯びるはず（既定値が短ければ落ちる）: {recorded:?}"
+    );
+    let before_deadline_pump_pos = recorded
+        .iter()
+        .position(|c| *c == *pump_calls[1])
+        .expect("期限手前の NOTIFY pump が記録されているはず");
+    let timeout_get_pos = position_of(&recorded, CallMethod::Get, "OnChoiceTimeout");
+    assert!(
+        before_deadline_pump_pos < timeout_get_pos,
+        "タイムアウトは期限手前の Tick より後（期限到達の Tick）で初めて発火するはず: {recorded:?}"
+    );
+
+    // (4) 204 で選択待ちが解除された（Cancel が届き、Resolve は混じらない・Req7.5・F3）。
+    assert_eq!(
+        command_tags(&commands),
+        vec![
+            "Start(1)".to_string(),
+            "Cancel(1)".to_string(),
+            "Start(2)".to_string(),
+        ],
+        "タイムアウト 204 は解決ではなく解除指示を出すはず（その後の起動は close talk のみ）: {commands:?}"
+    );
+
+    // (5) `TalkDone{Interrupted}` で `Steady{None}` へ復帰した——復帰後の pump が GET（Ref3=1・
+    //     Status ヘッダなし）であることが観測面（DD-11 の正規到達点）。
+    let expected_resumed = expected_call(events::on_second_change(
+        MonotonicMs(CHOICE_DEADLINE_MS + 1_000),
+        &ExecutionSnapshot::INACTIVE,
+    ));
+    assert_eq!(
+        *pump_calls[2], expected_resumed,
+        "解除後の pump は Steady{{None}} の GET（Ref3=1・Status ヘッダなし）のはず: {recorded:?}"
+    );
+    assert_eq!(
+        pump_calls[2].references[3], "1",
+        "Steady{{None}} 復帰の Ref3 は \"1\"（再生可能＝応答スクリプトを再生できる）"
+    );
+    assert_eq!(
+        pump_calls[2].status, None,
+        "復帰後は実行状態が空＝Status ヘッダ行そのものが省略される（Req6.3 の既存規律）"
+    );
+
+    // (6) 終了は driven close 由来（末尾 Unload・タイムアウトはゴーストを終了させない）。
+    let close_pos = position_of(&recorded, CallMethod::Get, "OnClose");
+    assert!(
+        timeout_get_pos < close_pos,
+        "close 握手はタイムアウト解除の後に走るはず（順序の退行検出）: {recorded:?}"
+    );
+    assert_eq!(
+        recorded.last().expect("記録列は空でない"),
+        &expected_unload(),
+        "末尾は Unload（driven close→別れ talk quit:true 由来）"
+    );
+}
+
+/// タイムアウト応答が Value なら **既存の起動経路**で置換再生される（新 talk_id・Req9.2(d) 後段・
+/// 7.4・C4 規則 6・F3）。
+///
+/// # 非空虚性・discriminative 性
+/// [`choice_timeout_fires_then_204_cancels_and_rejects_later_choice`] と**同一の期限・同一の注入
+/// Tick** で応答だけを Value に替えた対の檻である。
+/// - `TalkCommand` 到着順が `Start(1)`→`Start(2)` であること＝置換起動は解決指示（`Resolve`）も
+///   解除指示（`Cancel`）も伴わない（F3 の Value 分岐）。どちらかが混じれば落ちる。
+/// - 起動された talk が **新 talk_id=2**・**タイムアウト応答のスクリプト**であること＝旧 id の
+///   再利用や応答の取り違えを検出する。
+/// - 選択由来 GET が `OnChoiceTimeout` 1 件のみであること＝Value 応答が更なる段を撃たないこと。
+#[test]
+fn choice_timeout_value_replaces_talk_via_existing_start_path() {
+    let fixture = Fixture::default()
+        .without_boot_greeting()
+        .with_steady_value_indices([0])
+        .with_choice_response(
+            "OnChoiceTimeout",
+            ChoiceResponse::Script(FIXED_CHOICE_SCRIPT.to_string()),
+        );
+
+    // quit_flags: index0（steady talk・保留）=false・index1（タイムアウト由来 talk）=true（終了駆動）。
+    let (harness, _gate) = spawn_harness_gated(
+        KanadeConfig::new("master", "1.0.0"),
+        fixture,
+        QuitPolicy::PerTalk(vec![false, true]),
+        vec![0],
+    );
+
+    establish_choice_wait(&harness.sender, &[CANONICAL_CHOICE_ID]);
+    harness
+        .sender
+        .send(KanadeMsg::Tick {
+            now: MonotonicMs(CHOICE_DEADLINE_MS),
+        })
+        .expect("send Tick at the deadline");
+
+    let Harness {
+        sender,
+        kanade,
+        shiori,
+        sakura,
+    } = harness;
+
+    join_bounded("kanade timeout-value join", DEFAULT_TIMEOUT, kanade)
+        .expect("kanade terminates via the timeout-derived talk (quit:true)");
+    drop(sender);
+    let commands = sakura.commands();
+    sakura.join_bounded("mock-sakura timeout-value join", DEFAULT_TIMEOUT);
+    let recorded = shiori.recorded();
+
+    // (1) 段列はタイムアウト 1 件のみ（Value が更なる段を撃たない）。
+    assert_eq!(
+        choice_get_ids(&recorded),
+        vec!["OnChoiceTimeout"],
+        "タイムアウト GET は 1 件のみのはず: {recorded:?}"
+    );
+
+    // (2) 置換起動は解決も解除も伴わない（F3 の Value 分岐・Req7.4）。
+    assert_eq!(
+        command_tags(&commands),
+        vec!["Start(1)".to_string(), "Start(2)".to_string()],
+        "タイムアウト Value は置換起動のみを起こすはず（Resolve／Cancel を伴わない）: {commands:?}"
+    );
+
+    // (3) 起動は新 talk_id・タイムアウト応答のスクリプト（既存の起動棚に載った）。
+    let started: Vec<_> = commands
+        .iter()
+        .filter_map(|c| match c {
+            TalkCommand::Start(s) => Some(s),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        started[0].script, FIXED_STEADY_SCRIPT,
+        "1 本目は steady talk"
+    );
+    assert_eq!(
+        started[1].script, FIXED_CHOICE_SCRIPT,
+        "2 本目はタイムアウト応答のスクリプト由来の talk"
+    );
+    assert_eq!(
+        started[1].talk_id,
+        TalkId(2),
+        "置換再生は新 talk_id=2（旧 id=1 を再利用しない・Req4.1）"
+    );
+
+    // (4) 終了系列を完走した（末尾 Unload）。
+    assert_eq!(
+        recorded.last().expect("記録列は空でない"),
+        &expected_unload(),
+        "末尾は Unload（タイムアウト由来 talk quit:true→Unloading{{Quit}}→Unload）"
     );
 }
