@@ -65,7 +65,7 @@
   - _Requirements: 7.2_
   - _Boundary: 再生層（dola）_
 
-- [ ] 3.2 talk アクターの選択待ち成立を検出して通知を送出する
+- [x] 3.2 talk アクターの選択待ち成立を検出して通知を送出する
   - 選択待ちバリアへの遷移を一度きり検出し、候補選択肢 ID 列・占有 horizon・バリアのタイムアウト指令を集めて完了通知ポートへ送出する
   - 選択解決の成功時に検出フラグを戻し、1 トークあたり複数バリアへの将来拡張をシームとして残す
   - 既存の即時完了（残台本なしのメニュー形）・不一致時の記録・誤投函の警告は無改変で保つ
@@ -205,3 +205,4 @@
 - 2.2: `on_choice_*` 4 本は Reference 割付を正典どおり実装（Ex は Ref0=ラベル/Ref1=ID）。3 固定 ID は **まだ `ALLOWED_EVENT_IDS` 未登載**＝2.3 が入るまで egress ガードが拒否する。設計 C2 の「`EventId::Choice` は choice.rs の planner のみが構成」という記述は C3/タスク境界（events.rs の `on_choice_named`）と字面が衝突しており、実装は C3 に従っている。
 - 2.3: `is_allowed_choice_event` は `lib.rs` の `events` ファサードへ未露出。統合檻（6.x）が必要とするなら 1 行 re-export を追加すること。
 - 3.1: **重要な申し送り** — `CuePlayer::stop()` → `TimedSchedule::clear()` は `horizon` を 0.0 にするが `start_time` はリセットしない。ゆえに**中断後の `occupancy_horizon()` はアンカー（過去時刻）を返す**。3.2 は `WaitingForChoice` 検出時点（停止前）で値を捕捉すること・4.x は中断済み player を照会しないこと。誤用すると deadline が即時失効して偽の `OnChoiceTimeout` を招く。
+- 3.2: `spawn_talk` の `D` 境界拡張は `areka-ghost/src/prop_sink.rs` と `areka-seriko/tests/{balloon_face,bind}_e2e.rs` にも機械的追随を強制した（design の Revalidation Trigger は sakura テストのみ列挙＝過小記述）。assert は全て不変。

@@ -25,14 +25,32 @@
 
 use areka_emo_compose::{BindSet, PatternState};
 use areka_sakura::{
-    spawn_talk, ActorKey, CueSink, SakuraMsg, StartTalk, SystemVarSnapshot, TalkCue, TalkDone,
-    TalkEndReason, TalkId,
+    spawn_talk, ActorKey, ChoiceWaiting, CueSink, SakuraMsg, StartTalk, SystemVarSnapshot, TalkCue,
+    TalkDone, TalkEndReason, TalkId,
 };
 use areka_seriko::{
     spawn_seriko, BindResolver, DisplayCommand, MockSurfaceOutput, SerikoLoopConfig, SurfaceResolver,
 };
 use std::collections::BTreeMap;
 use std::time::Duration;
+
+/// `spawn_talk` の done ポート境界（`D: From<TalkDone> + From<ChoiceWaiting>`）を満たす
+/// test-local な合流 enum。両通知は同一ポートを流れる（DD-6）が、本 E2E の fixture に選択肢
+/// （`\q`）は無く `ChoiceWaiting` は発生しない——境界充足のためだけの受け皿である。
+enum TalkNotice {
+    Done(TalkDone),
+    ChoiceWaiting(ChoiceWaiting),
+}
+impl From<TalkDone> for TalkNotice {
+    fn from(done: TalkDone) -> Self {
+        TalkNotice::Done(done)
+    }
+}
+impl From<ChoiceWaiting> for TalkNotice {
+    fn from(waiting: ChoiceWaiting) -> Self {
+        TalkNotice::ChoiceWaiting(waiting)
+    }
+}
 
 /// text 系（→emo text-layer⑥）に相当する broadcast の 2 つ目のスロットを破棄する test-local sink。
 ///
@@ -69,7 +87,7 @@ fn run_scenario(script: &str, ticks: &[f64]) -> Vec<DisplayCommand> {
     // ── talk アクター（fixture script 直入力）──
     // seriko_sink（＝seriko inbox の唯一の Sender）を surface_sink へ move する。clone を残さない
     // ことで、talk スレッド終了時の drop が seriko inbox を disconnect させる（同期チェーンの要）。
-    let (done_tx, done_rx) = std::sync::mpsc::channel::<TalkDone>();
+    let (done_tx, done_rx) = std::sync::mpsc::channel::<TalkNotice>();
     let talk = spawn_talk(
         StartTalk {
             epilogue: Vec::new(),
@@ -90,9 +108,12 @@ fn run_scenario(script: &str, ticks: &[f64]) -> Vec<DisplayCommand> {
 
     // ── 同期チェーン ──
     // (1) TalkDone 受領（talk 自然終端＝`\e`）。fixture は全て `\e` 終端ゆえ Ended。
-    let done = done_rx
+    let TalkNotice::Done(done) = done_rx
         .recv_timeout(Duration::from_secs(5))
-        .expect("fixture script は `\\e` で自然終端し TalkDone を返すべき");
+        .expect("fixture script は `\\e` で自然終端し TalkDone を返すべき")
+    else {
+        panic!("選択肢を含まない fixture では ChoiceWaiting は流れない（TalkDone のみ）");
+    };
     assert_eq!(done.reason, TalkEndReason::Ended, "`\\e` は Ended で終端する");
 
     // (2) talk スレッド終了→move 済み SerikoSink（唯一の Sender）drop→seriko inbox disconnect。
