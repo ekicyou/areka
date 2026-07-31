@@ -135,7 +135,7 @@
   - _Requirements: 1.3, 1.6, 4.5, 5.5, 6.2_
   - _Depends: 4.3, 4.5_
 
-- [ ] 5. 統合: 選択確定通知の受信処理を UI 層へ結線する
+- [x] 5. 統合: 選択確定通知の受信処理を UI 層へ結線する
   - UI スレッドの選択確定受信口を毎フレーム排他システムで drain し、到着順に全件を kanade へ転送する（判断・フィルタ・重複排除は行わない）
   - 受信値から kanade 入力への写像を純関数として実装し、ラベルと付随参照列を改変せず転写し、発生元 scope は記録と検証にのみ用いて Reference へ載せない
   - 転送失敗は警告記録の上で継続する
@@ -216,3 +216,4 @@
 - 4.5: 新規 trace 語彙 `choice_timeout_ledger_stale`（design ログ表に無い・帳簿と現行 talk の不一致時の非発火ガード）。**4.6 の帳簿掃除（規則 7）が入れば到達不能になる**——4.6 実装後にガードが冗長化していないか確認すること。
 - 4.6: 規則 7 の「close 系遷移」は **ClosePending への実遷移**と解した（active talk 中の `CloseRequest` 受領＝`pending_close` 記録のみでは掃除しない）。受領時に消すと選択解決もタイムアウトも脱出路を失い close がデッドロックするため（レビューで実測確認済み）。
 - 4.6: 新規 trace 語彙 `choice_ledger_cleared`（design ログ表に未記載）。`choice_timeout_ledger_stale` は**残置が正**（規則 1 の棄却 3 経路が不一致帳簿を明示復元するため掃除点を通らない経路が規約上実在）。**7.1 の対応表へ両語彙を記録するか要判断**。
+- 5: `ChoiceForwarder`（`Sender<KanadeMsg>` は `!Sync` ゆえ bevy `Resource` 不可＝NonSend 保持体）と `forward_all`（World を組まずに drain ループを檻へ入れる ECS 分離核）を新設。schedule 位置は `.after(dispatch_pointer_events)`（同一フレーム転送）。trace 語彙 `choice_drain_no_inbox`/`choice_drain_no_forwarder` 追加（donor `mouse_*_no_wiring` と同型）。
