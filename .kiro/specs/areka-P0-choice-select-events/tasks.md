@@ -179,7 +179,7 @@
   - _Depends: 3.1, 3.2, 3.3_
 
 - [ ] 7. 検証: 互換記録と実機サインオフ
-- [ ] 7.1 (P) 互換対応表を新設し適合スコープ文書の誤記を訂正する
+- [x] 7.1 (P) 互換対応表を新設し適合スコープ文書の誤記を訂正する
   - 選択関連イベントの Reference 割付・カスケード順序・既定タイムアウト値・M1 非対応カテゴリの裁定を、正典引用と反証を併記した表として記録する
   - 各行を正典由来・二次情報由来・areka 裁量の 3 値で区別可能に記録する
   - 適合スコープ文書の拡張イベントの Reference 割付が正典と逆に書かれている記述を、正典に一致するよう訂正する
@@ -221,3 +221,4 @@
 - 6.3: **重要な罠** — `ForceQuit`／`Close` など **mock sakura を経由せず終了する檻**では `MockSakura::commands()` の並行読みが記録前スナップショットを掴む（実測 100 回中 7〜11 回失敗・**全檻並行実行時のみ露見**し単独実行では出ない）。そういう檻は `join_bounded_then_commands`（4.6 レビュー是正で追加）を使うこと。`commands()` 側に注意書きは無い。
 - 6.4: design の sakura/dispatcher/dola 3 項は 3.1/3.2/3.3 の既存檻で全充足だったため、判断分岐の穴 3 件のみ追加（sakura の通知ガード負アーム・dispatcher の Cancel Close 転送失敗／ChoiceWaiting kanade 転送失敗）。**構造上到達不能ゆえ檻に入れない 2 分岐**＝`choice_notified` リセット（M1 は talk あたり barrier 1 個）と非 `WaitForChoice` バリアの warn 防御。
 - 6.4: `cargo clippy -p dola --all-targets` は `crates/dola/tests/runtime/core_types_test.rs:287` の `approx_constant`（deny）で赤。**本 spec 以前からの既存債務**（本 spec は dola tests を触っていない）。別 spec で処理すべき。
+- 7.1: 対応表は `doc/choice-cascade-compat.md`（provenance 3 値・正典引用は research §5 から逐語転記）。**残件（境界外・未実施）**＝`doc/COMPAT_ARCHITECTURE.md` §8「沈黙ルール対応表」へ本書へのポインタ 1 行を登記すること（同 §8 は「各 spec が実装着地時に自らの裁量を追記する」と規定しているが本 spec 由来の行がまだ無い）。
