@@ -246,11 +246,25 @@ $env:AREKA_PROFILE_DIR       = $PROFILE_DIR
 
 ## 5. 充足条件と 2 段 grep 規則（要件 1.9）
 
-### 5.1 充足条件は経過時間ではなく**受理回数**
+### 5.1 充足条件は経過時間ではなく**DPI 遷移回数**
 
-各セッションについて、**キャラ窓の各 scope（sakura=0・kero=1）× 各方向（低 DPI→高 DPI・高 DPI→低 DPI）× 3 回以上**、合計 **12 回以上**の DPI 変化通知の受理をログから数えられること。
+各セッションについて、**キャラ窓の各 scope × 各方向（低 DPI→高 DPI・高 DPI→低 DPI）× 3 回以上**の DPI 遷移をログから数えられること。合計の下限は **キャラ窓の実在数 × 2 方向 × 3**（キャラ 2 体なら 12・1 体なら 6）。
 
-- 計数対象行は **O7**（`[WM_DPICHANGED] DPI component directly updated`）**のみ**。
+> **改訂（2026-07-31・タスク 4.6 着地に伴う・Req 1.9 改訂）**: 改訂前は計数対象を **O7 のみ**（`WM_DPICHANGED` の受理）としていた。しかしセッション② 1 回目の実機採取で、**OS 表示設定からの拡大率変更では `WM_DPICHANGED` が 1 度も届かない**ことが判明し（S4・`diagnosis-report.md` §2.7）、この定義では下限が**構造的に到達不能**だった。タスク 4.6 は `WM_DPICHANGED` 非依存の再導出駆動路を通したので、**計数は「キャラ窓の DPI が実際に遷移したこと」を経路によらず数える**形へ改める。セッション①の判定（`PASS` 44/12）はこの改訂でも変わらない（O7 のみで下限を超えているため）。
+
+- 計数対象行は次の **2 種の和**である。同一の遷移が両方に現れることはない（4.6 の等値ガードにより、`WM_DPICHANGED` で更新済みなら再導出は書込ゼロで抜ける）。
+
+| # | 判定語 | 経路 | ログ target |
+| --- | --- | --- | --- |
+| **O7** | `[WM_DPICHANGED] DPI component directly updated`（`entity=`・`old_dpi_x=`・`new_dpi_x=`） | OS からの DPI 変化通知（ドラッグでのモニタ跨ぎ等） | `wintf::ecs::window_proc::window_pos` |
+| **O16** | `[detect_display_change_system] Redriving window DPI from updated Monitor (no WM_DPICHANGED required)`（`entity=`・`handle=`・`center=`・`old_dpi_x=`・`old_dpi_y=`・`new_dpi_x=`・`new_dpi_y=`） | 表示構成変更を契機とする再導出（Req 7.3・タスク 4.6 新設） | `wintf::ecs::layout::systems::monitor_systems`（`:476`） |
+
+  両方とも **D-BASE の `RUST_LOG` で点灯する**（O16 の target は既収録＝追加語不要）。**両方のフィールド名が `entity=`・`old_dpi_x=`・`new_dpi_x=` で揃えてある**ため、第 2 段の正規表現は 1 本で両方を拾える。
+
+- **セッション②では併せて次の 2 語を必ず確認すること**（充足条件ではないが、`0/6` だったときの切り分けに要る）:
+  - `[SetProcessDpiAwarenessContext] DPI awareness set`（成功・`info!`）／`... failed`（失敗・`warn!`）——target `wintf::runtime`・D-BASE の大域 `info` で点灯。**`WM_DPICHANGED` が 0 件である機序の第一次切り分けはここでしかできない**（Req 7.4）
+  - `[detect_display_change_system] Display configuration change applied` の **`windows_redriven=N`**——「モニタ表は更新されたが窓が 1 つも駆動されなかった」を 1 行で切り分けられる
+- **`[detect_display_change_system] Updating Monitor entity` に `old_dpi=`／`new_dpi=`／`old_work_area=`／`new_work_area=`／`old_bounds=`／`new_bounds=`／`old_primary=`／`new_primary=` が載る**（4.6 新設）。モニタ表が実際に何を反映したかを実機ログだけで復元できる。
 - 対象は**キャラ窓の entity のみ**。バルーン窓（`kind=balloon`）の受理を混ぜると計数が壊れる。
 - 方向は**同一行の `old_dpi_x` と `new_dpi_x` の大小比較**で機械判定する（`new > old` = 低→高、`new < old` = 高→低、`new == old` = **どちらにも数えない**）。
 - 「15 分回した」「何回もまたいだ」は充足の根拠にならない。**数えた数字だけが根拠である。**
@@ -282,10 +296,10 @@ $map | Format-Table -AutoSize
 ### 5.3 第 2 段: 当該 entity の受理行を数え、同行の新旧 DPI で方向を決める
 
 ```powershell
-$acc = Select-String -Path $log -SimpleMatch '[WM_DPICHANGED] DPI component directly updated' |
+$acc = Select-String -Path $log -Pattern 'DPI component directly updated|Redriving window DPI from updated Monitor' |
   ForEach-Object { $_.Line } |
   ForEach-Object {
-    if ($_ -match 'entity=(\d+v\d+) old_dpi_x=(\d+) old_dpi_y=\d+ new_dpi_x=(\d+)') {
+    if ($_ -match 'entity=(\d+v\d+).*?old_dpi_x=(\d+).*?new_dpi_x=(\d+)') {
       [pscustomobject]@{ entity = $Matches[1]; old = [int]$Matches[2]; new = [int]$Matches[3] }
     }
   }
