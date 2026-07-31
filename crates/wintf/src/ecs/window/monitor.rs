@@ -149,6 +149,64 @@ impl Monitor {
     pub fn top_left(&self) -> (f32, f32) {
         (self.bounds.left as f32, self.bounds.top as f32)
     }
+
+    /// **追従対象フィールドの値**が異なるかを判定する（Req 7.2・設計決定 D14）。
+    ///
+    /// # [`PartialEq`] とは別物である
+    ///
+    /// [`PartialEq`]（`monitor.rs` 本ファイル）は `handle` のみを比較する**同一性**の
+    /// 意味論で、「同じモニタか」を答える。本メソッドは「値が変わったか」を答える
+    /// **変化検出**の意味論で、`handle` は**意図的に見ない**（同一モニタ同士を比べる
+    /// 前提のため）。この 2 つを取り違えると、拡大率変更のように識別子が不変のまま
+    /// 値だけが変わる表示構成変更で更新分岐が構造的に恒偽となる——実際にそれが
+    /// 起きていた（診断レポート §2.7 の欠陥 S4）。呼出点はどちらの意味論を要求して
+    /// いるのかを名前で明示すること。
+    ///
+    /// # フィールド追加時の漏れ防止
+    ///
+    /// 本体は構造体分解パターンで書いてある。`Monitor` にフィールドを追加すると
+    /// パターンが網羅でなくなりコンパイルエラーになる——追随漏れが静かに起きない
+    /// ことが D14 帰結⑵ の要求である。`handle` を無視することも `handle: _` として
+    /// 明示的に記述する（省略ではなく宣言）。
+    ///
+    /// # 例
+    /// ```
+    /// # use wintf::ecs::Monitor;
+    /// # use windows::Win32::Foundation::RECT;
+    /// let a = Monitor {
+    ///     handle: 1,
+    ///     bounds: RECT { left: 0, top: 0, right: 3840, bottom: 2160 },
+    ///     work_area: RECT { left: 0, top: 0, right: 3840, bottom: 2100 },
+    ///     dpi: 120,
+    ///     is_primary: true,
+    /// };
+    /// let mut b = a.clone();
+    /// b.dpi = 192;
+    /// // 同一性では等価（handle が同じ）だが、値は異なる。
+    /// assert_eq!(a, b);
+    /// assert!(a.differs_in_value(&b));
+    /// ```
+    pub fn differs_in_value(&self, other: &Self) -> bool {
+        let Monitor {
+            handle: _,
+            bounds,
+            work_area,
+            dpi,
+            is_primary,
+        } = self;
+        let Monitor {
+            handle: _,
+            bounds: other_bounds,
+            work_area: other_work_area,
+            dpi: other_dpi,
+            is_primary: other_is_primary,
+        } = other;
+
+        bounds != other_bounds
+            || work_area != other_work_area
+            || dpi != other_dpi
+            || is_primary != other_is_primary
+    }
 }
 
 /// モニター関連エラー
@@ -262,6 +320,74 @@ mod tests {
 
         let c = make_monitor(99, 0, 0, 800, 600); // 同一 bounds, 異なる handle
         assert_ne!(a, c, "handle が異なれば非等価");
+    }
+
+    /// Req 7.2: 値差分の述語は同一性（`handle`）を**見ない**。
+    ///
+    /// `handle` だけが違う同値のモニタは「値の変化なし」。これが `PartialEq` との
+    /// 意味論の分離そのものであり、本メソッドを `handle` 比較へ変異させれば赤になる。
+    #[test]
+    fn test_differs_in_value_ignores_handle() {
+        let a = make_monitor(42, 0, 0, 800, 600);
+        let b = make_monitor(99, 0, 0, 800, 600); // handle だけ違う
+        assert!(
+            !a.differs_in_value(&b),
+            "handle は追従対象フィールドではない"
+        );
+        // 一方 PartialEq（同一性）は別モニタとみなす——2 つの意味論が独立していること。
+        assert_ne!(a, b);
+    }
+
+    /// Req 7.2: 追従対象フィールド（bounds／work_area／dpi／is_primary）を**網羅**する。
+    ///
+    /// どれか 1 つでも比較から落とせば、対応する探針が赤になる。
+    #[test]
+    fn test_differs_in_value_covers_every_tracked_field() {
+        let base = make_monitor(42, 0, 0, 800, 600);
+
+        // 同一値なら差分なし（探針が不動点でないことの土台）。
+        assert!(!base.differs_in_value(&base.clone()), "同一値で差分ありは誤り");
+
+        let mut bounds_changed = base.clone();
+        bounds_changed.bounds.right = 1920;
+        assert!(
+            base.differs_in_value(&bounds_changed),
+            "bounds の変化を検出できない"
+        );
+
+        let mut work_area_changed = base.clone();
+        work_area_changed.work_area.bottom -= 20;
+        assert!(
+            base.differs_in_value(&work_area_changed),
+            "work_area の変化を検出できない"
+        );
+
+        let mut dpi_changed = base.clone();
+        dpi_changed.dpi = 192;
+        assert!(base.differs_in_value(&dpi_changed), "dpi の変化を検出できない");
+
+        let mut primary_changed = base.clone();
+        primary_changed.is_primary = !base.is_primary;
+        assert!(
+            base.differs_in_value(&primary_changed),
+            "is_primary の変化を検出できない"
+        );
+    }
+
+    /// S4 の核心: 実機セッション②と同型（識別子・bounds 不変／work_area・dpi のみ変化）の
+    /// 構成で、同一性は「等価」・値差分は「変化あり」と**逆の答え**を返す。
+    #[test]
+    fn test_scale_change_is_identical_but_differs_in_value() {
+        let before = make_monitor(0xABCD, 0, 0, 3840, 2160);
+        let mut after = before.clone();
+        after.work_area.bottom -= 36; // タスクバーが物理的に太る
+        after.dpi = 192; // 125% → 200%
+
+        assert_eq!(before, after, "同一性: 同じモニタである");
+        assert!(
+            before.differs_in_value(&after),
+            "値の変化: 追従対象フィールドが動いている"
+        );
     }
 
     #[test]

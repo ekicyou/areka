@@ -680,6 +680,97 @@ test result: FAILED. 1 passed; 3 failed; 0 ignored; 0 measured; 594 filtered out
 
 ---
 
+### 3.3 S4 の実行記録（**S4 専用節**）
+
+> **記入担当**: 赤・緑とも**タスク 4.6**（Phase B′＝観測装置の修理）。`#[ignore]` の解除は **7.1**。
+> **本節は 3.1 節（S1）・3.2 節（S2）と重ならない。**
+
+| 項目 | 内容 |
+| --- | --- |
+| 檻の所在 | `crates/wintf/src/ecs/layout/systems/monitor_systems.rs` の `mod tests`。赤 2 件＝`s4_red_monitor_table_updates_when_only_values_change`（`:715`）／`s4_red_window_dpi_redriven_without_wm_dpichanged`（`:754`）。**常時走る随伴 9 件**＝`value_only_change_updates_monitor_and_reports_old_and_new`（`:778`）／`updated_monitor_redrives_window_dpi_and_reports_it`（`:812`）／`identical_snapshot_updates_nothing`（`:841`）／`window_outside_updated_monitor_is_not_redriven`（`:871`）／`window_with_cw_usedefault_is_skipped_before_overflow`（`:900`）／`window_without_position_is_skipped_at_debug_level`（`:934`）／純関数 3 件＝`window_center_requires_both_position_and_size`（`:963`）・`window_center_treats_cw_usedefault_as_undetermined`（`:993`）・`monitor_containing_uses_half_open_bounds`（`:1028`）。述語側の随伴 3 件は `crates/wintf/src/ecs/window/monitor.rs` の `test_differs_in_value_ignores_handle`（`:330`）／`test_differs_in_value_covers_every_tracked_field`（`:345`）／`test_scale_change_is_identical_but_differs_in_value`（`:380`） |
+| 檻の構成 | 実 OS 列挙（`enumerate_monitors`）を通らないよう、反映本体を `apply_monitor_snapshot`（`monitor_systems.rs:253`）へ**挙動不変で抽出**し、檻は合成モニタ表を `InjectedMonitors` Resource で注入する。檻専用システム `apply_injected_monitors` は**本番と同一の query 構成**で `apply_monitor_snapshot` を呼ぶ（別配線にすると本番経路を見ていないことになる）。探針は実機セッション②と同型——`handle=0xABCD`・`bounds=0,0,3840,2160` は不変で、`work_area` 下端 `2100→2064`・`dpi 120→192` だけが動く |
+| 赤の再現コマンド | `cargo test -p wintf -- --ignored s4_red_` |
+| 赤の採取ツリー | 抽出リファクタのみを当てた状態（更新判定は従来どおり `existing_monitor != new_monitor`＝`PartialEq`）。`Monitor::differs_in_value` は未導入 |
+| 赤の実行出力 | 下記コードブロック（実行実測） |
+| 判定の表現 | 総数や `handle` 一致では主張していない——**更新後の実値**（`work_area.bottom == 2064`・`dpi == 192`）と、`apply_monitor_snapshot` の戻り値（再導出を駆動した窓の数・`== 1` / `== 0`）を assert する。加えて `assert_probe_is_not_a_fixed_point`（`:650`）が探針の非退化を檻自身で自己検査する: ⑴`handle` が前後で不変 ⑵`work_area.bottom` が実際に動いている ⑶`dpi` が実際に動いている ⑷**`PartialEq` では等価に見える**（`assert_eq!(before, after)`）——⑷が「探針が S4 の意味論ギャップを確かに踏んでいる」ことの証拠であり、これが崩れた探針で赤を採っても S4 の証跡にならない |
+| 緑の採取 | `Monitor::differs_in_value`（`monitor.rs:189`）を新設し、`apply_monitor_snapshot` 内の更新分岐（`monitor_systems.rs:279`）を切り替えた直後に実行。赤 2 件とも `ok`（下記）。`cargo test -p wintf` 全体は **1047 passed / 0 failed / 32 ignored**（うち lib 549 passed・ignored 6＝既存 4 ＋ 本節の `s4_red_` 2） |
+| ゲート機構 | 赤 2 件は `#[ignore = "S4 赤証跡（是正前の失敗を保存する）。再現: cargo test -p wintf -- --ignored s4_red_"]`。**解除はタスク 7.1**（S1／S2 と同一の流儀・§3.1／§3.2）。ただし赤 2 件と同じ主張は**システム層の常時檻 6 件**（上表 9 件のうち純関数 3 件を除く分）が `#[ignore]` 無しで担っているため、通常の `cargo test -p wintf` でも S4 の回帰は検出される |
+
+#### 赤の実行出力（`cargo test -p wintf -- --ignored s4_red_`・是正未投入）
+
+> 下記は**是正未投入ツリーの逐語転記**であり、ブロック内の `monitor_systems.rs:650` / `:685` は
+> **その時点の行番号**である（現ツリーの行番号ではない）。§0.3 のメンテ契約が更新を求めるのは
+> 本文の引用であって、実行記録そのものの改竄ではない——実行出力は採取時のまま保存する。
+
+```text
+running 2 tests
+test ecs::layout::systems::monitor_systems::tests::s4_red_monitor_table_updates_when_only_values_change ... FAILED
+test ecs::layout::systems::monitor_systems::tests::s4_red_window_dpi_redriven_without_wm_dpichanged ... FAILED
+
+---- ecs::layout::systems::monitor_systems::tests::s4_red_monitor_table_updates_when_only_values_change stdout ----
+panicked at crates\wintf\src\ecs\layout\systems\monitor_systems.rs:650:9:
+assertion `left == right` failed: work area が起動時の値のまま凍結している（S4）: Monitor { handle: 43981, bounds: (0,0,3840,2160), work_area: (0,0,3840,2100), dpi: 120, is_primary: true }
+  left: 2100
+ right: 2064
+
+---- ecs::layout::systems::monitor_systems::tests::s4_red_window_dpi_redriven_without_wm_dpichanged stdout ----
+panicked at crates\wintf\src\ecs\layout\systems\monitor_systems.rs:685:9:
+assertion `left == right` failed: モニタ表が更新されても窓 DPI が再導出されない（S4・Req 7.3）: DPI { dpi_x: 120, dpi_y: 120 }
+  left: DPI { dpi_x: 120, dpi_y: 120 }
+ right: DPI { dpi_x: 192, dpi_y: 192 }
+
+failures:
+    ecs::layout::systems::monitor_systems::tests::s4_red_monitor_table_updates_when_only_values_change
+    ecs::layout::systems::monitor_systems::tests::s4_red_window_dpi_redriven_without_wm_dpichanged
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 548 filtered out; finished in 0.48s
+```
+
+**この赤の読み方**: 実機で観測された `Monitor { … work_area: (0,0,3840,2100), dpi: 120 … }` の**凍結がそのまま檻の出力に現れている**。しかも自己検査（探針が `PartialEq` で等価に見えること）を**通過したうえで**失敗している——すなわち「同一性では等価・値は変化あり」という構成に対して更新分岐が到達しないことを、実行で名指ししている。
+
+#### 緑の実行出力（`differs_in_value` 導入後）
+
+```text
+running 2 tests
+test ecs::layout::systems::monitor_systems::tests::s4_red_monitor_table_updates_when_only_values_change ... ok
+test ecs::layout::systems::monitor_systems::tests::s4_red_window_dpi_redriven_without_wm_dpichanged ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 551 filtered out; finished in 0.00s
+```
+
+#### 檻の非空虚性（実装者が独立に当てたミューテーション 6 種）
+
+| ミューテーション | 赤になった檻 | 何を証明するか |
+| --- | --- | --- |
+| ⑴`differs_in_value` を常に `false` へ | 常時 6 件（`value_only_change…`／`updated_monitor_redrives…`／`window_outside_updated…`／`window_without_position…`／`test_differs_in_value_covers_every_tracked_field`／`test_scale_change_is_identical_but_differs_in_value`）＋赤証跡 2 件 | 更新分岐が述語に実際に依存している（＝S4 そのものの再導入が検出される） |
+| ⑵更新判定を `if true` へ（無条件更新） | `identical_snapshot_updates_nothing` **のみ** | 「常に更新する」実装で他の檻が緑になる空虚を塞いでいる |
+| ⑶`redrive_window_dpi_for_updated_monitors` の呼出を削除 | 再導出側 3 件＋`s4_red_window_dpi_redriven…` **のみ**（`s4_red_monitor_table_updates…` は緑のまま） | モニタ表更新（Req 7.1/7.2）と再導出駆動（Req 7.3）が**別々の檻に 1:1 で対応**している |
+| ⑷`monitor_containing` を「常に先頭を返す」へ | `monitor_containing_uses_half_open_bounds`／`window_outside_updated_monitor_is_not_redriven` | 帰属判定が実際に幾何で行われている（更新モニタ外の窓を巻き込まない） |
+| ⑸`window_center` の `CW_USEDEFAULT` ガードを撤去 | `window_center_treats_cw_usedefault_as_undetermined`／`window_with_cw_usedefault_is_skipped_before_overflow`（**dev・release の両プロファイルで赤**） | センチネル規約の遵守が檻で保たれている（下記「レビュー #1 の是正」） |
+| ⑹`redrive_window_dpi_for_updated_monitors` の計数 `rewritten += 1` を削除 | `updated_monitor_redrives_window_dpi_and_reports_it` **のみ** | 戻り値が実際に判定語として効いている（死んだ戻り値ではない） |
+
+#### レビュー #1（REJECTED・2026-07-31）の是正
+
+独立レビューは中核設計（意味論分離・`WM_DPICHANGED` 非依存の駆動路・Req 7.4 のログ化・Req 7.6 の無改変）を本物と認定したうえで 4 点の是正を求めた。うち **Critical 2 件は同一の欠陥**である:
+
+**`window_center` が `CW_USEDEFAULT` センチネルを守らず、本番経路へ整数桁溢れを新設していた。** doc は「位置または寸が未確定なら `None`」と約束していたが、判定していたのは `Option::None` だけで、wintf の正典の未確定表現である `CW_USEDEFAULT`（`== i32::MIN`）を素通ししていた。到達性は本番コードで確定している——`Window` component の `on_window_add` フック（`crates/wintf/src/ecs/window/components.rs:167-209`）が **`WindowPos::default()`（CW_USEDEFAULT）と `DPI` を揃えて自動挿入**し、これは新設 query `(Entity, &WindowPos, &mut DPI)` に**そのまま一致する**。実座標が入るのは `WM_WINDOWPOSCHANGED` の書き戻し以降であり（`apply_window_pos_changes` は CW_USEDEFAULT を明示スキップする）、表示構成変更は非同期 OS イベントゆえ、この状態の窓と同時に存在し得る。
+
+同 crate には同じセンチネルを明示的に守る先例が 3 箇所ある（`graphics/systems/window_pos.rs` の `apply_window_pos_changes`／`layout/systems/window_pos_systems.rs` の `sync_window_arrangement_from_window_pos`／`window_pos/mod.rs` の `WindowPos::to_window_rect`）。**新設コードだけが規約を外していた**ため、既存 3 箇所と同一の判定語（`position.x == CW_USEDEFAULT || size.width == CW_USEDEFAULT`）へ揃えた（`monitor_systems.rs:407-410`）。
+
+檻は**両プロファイルで欠陥を捕まえる**ように書いてある: dev ではガード撤去で `attempt to add with overflow` の panic により赤、release では wrap した中心が偶然どのモニタ矩形にも入らず「DPI は書き換わらないが打ち切りログも出ない」形で赤になる。すなわち「たまたま助かっている」状態を緑と誤認しない。
+
+**教訓（本 spec 4 度目の檻の空虚性・型は新しい）**: これまでの 3 例（2.2／3.2／4.4）は「檻が主張を確かめていない」型だったが、本件は**「doc が約束した契約を実装が満たしておらず、檻が doc ではなく実装をなぞっていた」**型である。純関数の doc に「〜なら `None`」と書いたら、**その語（未確定・無効・既定）がその crate で何を指すかを既存実装から確認する**こと——`Option` だけが未確定とは限らない。
+
+#### 実装の要点（§5.1 の是正項目 1〜4 に対応する）
+
+- **`impl PartialEq for Monitor`（`monitor.rs:103-107`）と既存檻 `test_partial_eq_compares_handle_only`（`:313`）は無改変**（Req 7.6・D14 帰結⑴）
+- `differs_in_value` は**構造体分解パターン**で書いてあり、`Monitor` にフィールドを追加するとパターンが網羅でなくなりコンパイルエラーになる（D14 帰結⑵）。`handle` を見ないことも `handle: _` として明示している
+- Req 7.3 の駆動路は `redrive_window_dpi_for_updated_monitors`（`monitor_systems.rs:438`）——**更新されたモニタ上の窓の `DPI` component を書き換えて `Changed<DPI>` を立てる**。`WM_DPICHANGED` の受理有無に一切依存しない。`WM_DPICHANGED` が届く環境では同値のため差分ゼロで抜ける（二重駆動しない）。帰属判定は純関数 `window_center`（`monitor_systems.rs:403`）と `monitor_containing`（`:416`）が担い、戻り値（駆動した窓の数）は `apply_monitor_snapshot` を通って呼出点の `debug!`（`windows_redriven=`）と檻の判定語の双方で消費される
+- Req 7.4: `SetProcessDpiAwarenessContext` の `let _ =`（旧 `runtime/mod.rs:111`）を撤去し、成功＝`info!`／失敗＝`warn!` で**必ず 1 行残す**（現 `runtime/mod.rs:116-128`・`WinApp::new` 内）。プロセス起動は従来どおり止めない
+- **`WM_DPICHANGED` が実機で 0 件である機序は依然未確定**である。本節が示すのは「それに依存しない駆動路が実行で成立している」ことまでであり、機序の解明はタスク 4.7 の実機再採取（awareness ログを含む）が担う
+
+---
+
 ## 4. 是正後の実機再サインオフ（**タスク 7.4 が記入する**）
 
 > 是正投入後のビルドで `diagnosis-procedure.md` と**同一手順**の 2 セッションを再実行する。
@@ -703,6 +794,7 @@ test result: FAILED. 1 passed; 3 failed; 0 ignored; 0 measured; 594 filtered out
 | §0・§1 | **4.2（完了）** | 規約と静的構造証跡 4 件の先行登記 |
 | §3.1 | 4.3（赤）→ 7.1（緑） | S1 専用の実行記録 |
 | §3.2 | 4.4（赤）→ 7.1（緑） | S2 専用の実行記録 |
+| §3.3 | **4.6（赤・緑とも採取済み）→ 7.1（ゲート解除）** | S4 専用の実行記録。赤 `s4_red_` 2 件の `#[ignore]` 解除は 7.1 の完了状態「ゲートされた赤証跡が 1 件も残っていない」が掃く |
 | §2 | 4.5（**セッション①のみ記入済み・②未採取**） | 実機 2 セッションの採取結果・Q1〜Q4・S1〜S3′ の痕跡 |
 | §4 | 7.4 | 是正後の実機再サインオフ |
 

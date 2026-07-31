@@ -138,7 +138,7 @@
     - Q1〜Q4・S1〜S3′ の痕跡・残余 A/B は §2.3〜§2.6 に登記済み
   - _申し送り_: **②は S4 是正後に採り直す**（タスク 4.7）。Req 2.10 により、S4 是正前の②を「消失は起きない」の根拠に用いてはならない
 
-- [ ] 4.6 **S4 是正: 同一性判定と値の変化検出の分離（Phase B′＝観測装置の修理）**
+- [x] 4.6 **S4 是正: 同一性判定と値の変化検出の分離（Phase B′＝観測装置の修理）**
   - 本タスクは **S1〜S3′ の被検体に一切触れない**。編集面は `crates/wintf/src/ecs/window/monitor.rs`／`.../layout/systems/monitor_systems.rs`／`crates/wintf/src/runtime/mod.rs` の 3 ファイルのみで、S1（`window_pos.rs`）・S2（`frame.rs`）・S3（`follow.rs`）と交差しない。ゆえに「是正未投入のビルドで採取する」絶対制約（tasks.md 冒頭）を破らない
   - モニタの**値の変化**を判定する述語を `Monitor` へ新設する。**`impl PartialEq for Monitor` と既存檻 `test_partial_eq_compares_handle_only`（`monitor.rs:254-264`）は無改変**（Req 7.6・D14 帰結⑴）——誤りは同一性判定ではなく、それを変化検出に流用した消費側にある
   - 新述語は追従対象フィールド（境界矩形・work area 矩形・DPI・プライマリ標識）を網羅し、**フィールド追加時にコンパイラが漏れを指摘できる形**（構造体分解パターン）で書く（D14 帰結⑵）
@@ -246,6 +246,12 @@
 
 ## Implementation Notes
 
+- **4.6（檻の空虚性・4 例目だが型が新しい）**: 過去 3 例（2.2／3.2／4.4）は「檻が主張を確かめていない」型だったが、本件は**「doc が約束した契約を実装が満たしておらず、檻が doc ではなく実装をなぞっていた」**型。新設 `window_center` の doc は「位置または寸が未確定なら `None`」と約束していたのに、判定していたのは `Option::None` だけで wintf 正典の未確定表現 `CW_USEDEFAULT`（`== i32::MIN`）を素通しし、**本番経路に整数桁溢れ panic を新設**していた（レビュアが一時プローブで実測再現）。**純関数の doc に「未確定・無効・既定」と書いたら、その語がその crate で何を指すかを既存実装から確認すること**——`Option` だけが未確定とは限らない。同 crate に先例が 3 箇所（`graphics/systems/window_pos.rs:41`／`layout/systems/window_pos_systems.rs:147`／`window_pos/mod.rs:378`）ありながら新設コードだけが規約を外していた。
+- **4.6（dev で緑・release で緑は同義ではない）**: `CW_USEDEFAULT` ガード撤去の変異は **dev では panic**（`attempt to add with overflow`）、**release では wrap して「たまたま全モニタ矩形外へ落ち黙って skip」**——機序が違う。是正版の檻は「打ち切りログが出ていること」を assert しているため両プロファイルで赤化する（レビュアが `cargo test -p wintf --lib --release` で独立実測）。`Cargo.toml:95-103` に `overflow-checks` の上書きが無いことも確認済み。**桁溢れを含む檻は release でも走らせて確認すること**。
+- **4.6 → wintf 側ログ檻を書く全タスクへの必須申し送り**: bevy の既定 `Schedule` は多スレッド実行器でシステムを別スレッドへ流すため、`capture_under_filter`（スレッドローカル dispatcher 差替）が**1 行も捕捉できず、否定 assert が空出力で自明に緑になる**。`Schedule` を回すログ檻では **`ExecutorKind::SingleThreaded` を明示**すること。`crates/wintf/src/ecs/test_support.rs` の module doc には無い落とし穴で、4.6 で実際に踏みかけた。
+- **4.6 → 4.7 への判定語の申し送り**（`diagnosis-procedure.md` 側の管轄・レポートのメンテ規約 3）: 新設の実機 grep 語は 3 つ。⑴`[detect_display_change_system] Updating Monitor entity`（**同行に `old_dpi=`／`new_dpi=`／`old_work_area=`／`new_work_area=`／`old_bounds=`／`new_bounds=`／`old_primary=`／`new_primary=` が載る**＝何が変わったかを実機ログだけで復元できる）⑵`Redriving window DPI from updated Monitor`（同行に `entity=`／`handle=`／`center=`／`old_dpi_x=`／`new_dpi_x=`）⑶`[detect_display_change_system] Display configuration change applied` の **`windows_redriven=N`**（「モニタ表は更新されたが窓が 1 つも駆動されなかった」を 1 行で切り分けられる）。①〜③はいずれも target が `wintf::ecs::layout::systems::monitor_systems`＝**D-BASE に既収録ゆえ追加語不要**。加えて ⑷`[SetProcessDpiAwarenessContext] DPI awareness set`（成功・`info!`）／`... failed`（失敗・`warn!`）は target `wintf::runtime`＝D-BASE の大域 `info` に載る。**②の再採取では必ず ⑷ を先に確認すること**——`WM_DPICHANGED` 0 件の機序（per-monitor v2 が実際に効いているか）の第一次切り分けがここで初めて可能になる。
+- **4.6 → 4.7 の判定基準に関する未解決事項（開発者の裁定が要る）**: `SESSION-QUOTA` は `diagnosis-procedure.md` §5 で **`WM_DPICHANGED` の受理回数**として定義されているが、4.6 の是正は**`WM_DPICHANGED` 非依存の駆動路**を通すものである。したがって `WM_DPICHANGED` が 0 件のままでも追従は成立し得て、その場合 4.7 で `SESSION-QUOTA` が永久に踏破できず、4.7 のタスク文「踏破しなければ 4.6 へ差し戻す」と噛み合わない。**判定基準を「モニタ表更新（⑴）＋DPI 再導出（⑵⑶）の 2 判定語」へ拡張する必要がある**。4.7 の採取前に手順書 §5 を改訂すること。
+- **4.6（`WM_DPICHANGED` 0 件の機序は未確定のまま）**: 本タスクが成立させたのは「それに依存しない駆動路」であって、なぜ OS が `WM_DPICHANGED` を送らないかの解明ではない。⑷のログが実機で `set`（成功）を示すなら per-monitor v2 は効いており、別の機序（WUC/`WS_EX_NOREDIRECTIONBITMAP` 窓の特性等）を疑うことになる。**4.7 で ⑷ を確認するまで推測で結論を書かないこと**（Req 1.5）。
 - **4.5 セッション①（2026-07-31）→ 5.1／5.2／6.1／7.3 への必須申し送り**: 実機で**S1 が 84/84 の陽性**（`applied=true` のみ・`false` ゼロ）、**S2 が 45 件中 1 件の陽性**（接地点 −91px）。消失（`VANISH-TRACE`）は NONE だが、**その理由は「キャラ窓の DPI 受理 44 回すべてで `DpiReproject` の上書きが後続したから」**であって欠陥が無いからではない（route 内訳が 44:44 で一致）。**「再現しなかった」を 5.1／5.2 の縮小根拠に使ってはならない**（§0.2）。
 - **4.5 セッション①（S1/S2 の出力上の指紋）**: 二重ライターの差分は **Y が定数（±91 / ±273）・X が可変（−861〜+861）**という非対称を示す。Y の定数性＝S2（射影量が固定量として欠落）、X の可変性＝S1（OS 提示値の素通し）。**5.1 是正後は X 差が消え、5.2 是正後は §2.5.1 の `ground_y=1704 dpi=144` の外れ値が消える**——7.4 の再サインオフはこの 2 点を判定語にできる。
 - **4.5 セッション①（D13 の実機的裏づけ）**: `ReportedSizeReconcile` は起動直後 **1 件のみ**、`DpiReproject` は **44 件＝キャラ窓 DPI 受理と 1:1**。1.4 是正前の実装（両者に `DpiReproject`）なら起動時の 1 件が偽の DPI レコードとして混入し、この 44:44 の一致が崩れて突合そのものが成立しなかった。**語彙完全化が診断の前提条件だったことが実測で確認された**。
