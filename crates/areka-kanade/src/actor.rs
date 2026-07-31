@@ -78,6 +78,40 @@ pub fn spawn_kanade(
                 KanadeMsg::ForceQuit { reason } => Input::ForceQuit { reason },
                 KanadeMsg::ShioriDown { reason } => Input::ShioriDown { reason },
                 KanadeMsg::Mouse(m) => Input::Mouse(m),
+                // ==== 暫定アーム（タスク 1.3 の型追加に対する一時措置・恒久実装ではない）====
+                // 選択系 2 入力は境界型としては存在するが、状態機械側の受け皿
+                // （`Input::Choice` / `Input::ChoiceWaiting`・`State.choice` 帳簿）はまだ無い。
+                // **タスク 4.1（`Input::{Choice, ChoiceWaiting}` 追加時）に、この 2 アームを
+                // `Input` への写像へ置き換えること。** それまでは黙って捨てず warn! で記録する
+                // （steering: areka-log-first-no-silent-failure）。
+                KanadeMsg::Choice(c) => {
+                    tracing::warn!(
+                        target: "kanade",
+                        event = "choice_dropped_not_wired",
+                        choice_id = %c.id,
+                        scope = c.scope,
+                        reference_count = c.references.len(),
+                        "選択確定を受領したが状態機械へ未配線のため棄却——配線はタスク 4.1"
+                    );
+                    return Ok(ControlFlow::Continue(()));
+                }
+                KanadeMsg::ChoiceWaiting {
+                    talk_id,
+                    choice_ids,
+                    display_end,
+                    timeout_directive_secs,
+                } => {
+                    tracing::warn!(
+                        target: "kanade",
+                        event = "choice_waiting_dropped_not_wired",
+                        talk_id = talk_id.0,
+                        choice_count = choice_ids.len(),
+                        display_end_ms = display_end.0,
+                        timeout_directive_secs = ?timeout_directive_secs,
+                        "選択待ち通知を受領したが状態機械へ未配線のため棄却——配線はタスク 4.1"
+                    );
+                    return Ok(ControlFlow::Continue(()));
+                }
             };
             match drive(&mut state, input, &config, &shiori, &sakura, &resource_sink) {
                 Drive::Continue => Ok(ControlFlow::Continue(())),

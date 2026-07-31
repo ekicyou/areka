@@ -34,8 +34,8 @@ pub mod talk;
 
 pub use actor::spawn_kanade;
 pub use msg::{
-    CloseReason, EventId, KanadeConfig, KanadeMsg, MonotonicMs, MouseButton, MouseEventKind,
-    MouseInput, ShioriCall, ShioriFailure, ShioriMsg, ShioriOutcome,
+    ChoiceInput, CloseReason, EventId, KanadeConfig, KanadeMsg, MonotonicMs, MouseButton,
+    MouseEventKind, MouseInput, ShioriCall, ShioriFailure, ShioriMsg, ShioriOutcome,
 };
 pub use shiori::{ShioriBackend, ShioriConnection, spawn_shiori_actor};
 pub use status::{ExecutionSnapshot, ExecutionState, ExecutionStatus};

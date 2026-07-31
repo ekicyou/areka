@@ -78,6 +78,27 @@ pub enum MouseButton {
     Right,
 }
 
+/// 選択確定入力（UI 配線層 → kanade の境界メッセージ・[`MouseInput`] と同型の値オブジェクト）。
+///
+/// UI 配線層が選択確定通知を destructure して詰める値オブジェクト（同一性なし）。kanade は
+/// `id` / `label` / `references` を意味解釈せず**不透明転写**する（Req 1.5・
+/// [[areka-surface-args-opaque-string-downstream-resolve]] と同精神）。参照列は記述順を保存する。
+///
+/// # `scope` の用途限定（Req 3.7・DD-13）
+/// `scope` は**検証・ログにのみ**用い、SHIORI の Reference には載せない。M1 の talk は単一 slot
+/// ゆえ解決対象を特定する実需はないが、将来の per-scope 化のシームとして搬送のみ維持する。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChoiceInput {
+    /// 選択肢 ID（不透明・`On` 始まりならその名の任意名イベントを指す・Req2.6）。
+    pub id: String,
+    /// 表示ラベル（不透明・`OnChoiceSelectEx` Ref0 へ転写される・Req3.1）。
+    pub label: String,
+    /// 発生元 scope（本体 0／相方 1）。検証・ログのみ・Reference 非搬送（Req3.7・DD-13）。
+    pub scope: u32,
+    /// 付随参照列（不透明・記述順を保存）。
+    pub references: Vec<String>,
+}
+
 /// kanade アクター inbox（inbox 規約: 1 アクター 1 enum）。
 /// shiori 応答は inbox を経由しない（oneshot 往復・DD-2）ため variant を持たない＝
 /// 外部から偽の SHIORI 応答を注入できない構造。
@@ -99,6 +120,25 @@ pub enum KanadeMsg {
     Mouse(MouseInput),
     /// 停止規約の Close（即時停止・非常口。正規終了は運行表経由）。
     Close,
+    /// 選択確定（UI 配線層 → kanade）。additive 増分（Req 4.4）。
+    Choice(ChoiceInput),
+    /// 選択待ち成立の通知（talk → dispatcher → kanade）。additive 増分（Req 4.4）。
+    ///
+    /// 真実源は再生層（duration 権威直結・Req7.2）だが、**dispatcher が `base_now` で
+    /// 経過秒 → 単調 ms へ換算済み**の値を投函する（DD-9・時間基準を新設しない）。
+    /// deadline 写像（`timeout_directive_secs` の 3 値語彙 → 期限）は kanade の領分であり
+    /// この境界では行わない（DD-8）。
+    ChoiceWaiting {
+        /// 選択待ちに入った talk（stale ガード用）。
+        talk_id: crate::talk::TalkId,
+        /// 候補選択肢 ID 列（照合用・表示順を保存する・DD-7）。
+        choice_ids: Vec<String>,
+        /// トーク表示完了時刻。dispatcher が `base_now` で ms へ換算済み（DD-9）。
+        display_end: MonotonicMs,
+        /// バリアのタイムアウト指令（秒・3 値語彙）。`None`＝未指定（既定値へ委譲）・
+        /// `Some(v <= 0.0)`＝無効化・`Some(v > 0.0)`＝明示秒指定。写像は kanade（DD-8）。
+        timeout_directive_secs: Option<f64>,
+    },
 }
 
 /// shiori アクター inbox（real／mock が同一型を受ける＝Req 5.1 の差し替え面）。
@@ -233,12 +273,18 @@ pub struct KanadeConfig {
     /// 初回挨拶トーク末尾へ添付する汎用 epilogue（既定空＝何も添付しない）。
     /// kanade は内容を解釈しない（不透明搬送・sylphya 非依存の維持）。
     pub first_boot_epilogue: Vec<EpilogueCommand>,
+    /// 選択肢タイムアウト既定値 ms（既定 30_000・Req7.8・DD-8）。
+    ///
+    /// バリアの `timeout_directive_secs` が `None`（未指定）のときに委譲される単一の既定値。
+    /// 正典（ukadoc）は数値を規定していないため areka 裁量で定め、対応表へ記録する（裁定 5）。
+    pub choice_timeout_default_ms: u64,
 }
 
 impl KanadeConfig {
     /// 既定値つき構成を生成する。
     ///
-    /// `baseware_name` は `"areka"`・`close_talk_deadline_ms` は `30_000`（DD 表）。
+    /// `baseware_name` は `"areka"`・`close_talk_deadline_ms` は `30_000`（DD 表）・
+    /// `choice_timeout_default_ms` は `30_000`（Req7.8・DD-8）。
     /// `shell_name` / `baseware_version` は結線側固有ゆえ引数で受ける。
     pub fn new(shell_name: impl Into<String>, baseware_version: impl Into<String>) -> Self {
         KanadeConfig {
@@ -249,6 +295,7 @@ impl KanadeConfig {
             first_boot: true,
             vanish_count: 0,
             first_boot_epilogue: Vec::new(),
+            choice_timeout_default_ms: 30_000,
         }
     }
 }
@@ -277,6 +324,161 @@ mod tests {
         assert_send_static::<MouseButton>();
         // 送出イベント ID の出所カテゴリ型（DD-1）も同様。
         assert_send_static::<EventId>();
+        // 選択確定入力（Task 1.3・C2 契約増分）も Send + 'static な所有データのみ。
+        assert_send_static::<ChoiceInput>();
+    }
+
+    /// [`ChoiceInput`] が 4 情報（id／label／scope／references）を**無改変**で保持すること。
+    ///
+    /// kanade は選択肢 ID・表示ラベル・付随参照列のいずれも意味解釈せず不透明転写する
+    /// （Req 1.5 の前提・[[areka-surface-args-opaque-string-downstream-resolve]] と同精神）。
+    /// 参照列は記述順を保存する（Req 3.1／3.3 の Reference 割付が順序に依存する）。
+    #[test]
+    fn choice_input_transcribes_four_fields_verbatim() {
+        let input = ChoiceInput {
+            id: "Onおしゃべり頻度メニュー".to_string(),
+            label: r"\![*]おしゃべり頻度".to_string(),
+            scope: 1,
+            references: vec![
+                "arg0".to_string(),
+                String::new(),
+                "arg2 with spaces".to_string(),
+            ],
+        };
+        // 4 情報が構築時の値のまま観測できる（正規化・trim・空要素の除去をしない）。
+        assert_eq!(input.id, "Onおしゃべり頻度メニュー");
+        assert_eq!(input.label, r"\![*]おしゃべり頻度");
+        assert_eq!(input.scope, 1);
+        assert_eq!(
+            input.references,
+            vec![
+                "arg0".to_string(),
+                String::new(),
+                "arg2 with spaces".to_string()
+            ]
+        );
+        // clone は値等価（値オブジェクト＝同一性なし・MouseInput と同型）。
+        assert_eq!(input.clone(), input);
+        // KanadeMsg::Choice variant が ChoiceInput を運ぶ（additive）。
+        let _ = KanadeMsg::Choice(input);
+    }
+
+    /// [`KanadeMsg::ChoiceWaiting`] は dispatcher が `base_now` で ms 換算済みの値を運ぶ（DD-9）。
+    ///
+    /// `display_end` は [`MonotonicMs`]（換算済み）であり、talk 層の経過秒ではない。
+    /// `timeout_directive_secs` は指令のまま搬送し、deadline 写像（DD-8）は kanade の領分
+    /// （本タスクでは写像を行わない＝タスク 2.1 の担当）。
+    #[test]
+    fn choice_waiting_msg_carries_converted_display_end_and_raw_directive() {
+        let msg = KanadeMsg::ChoiceWaiting {
+            talk_id: crate::talk::TalkId(7),
+            choice_ids: vec!["a".to_string(), "b".to_string()],
+            display_end: MonotonicMs(12_345),
+            timeout_directive_secs: None,
+        };
+        match msg {
+            KanadeMsg::ChoiceWaiting {
+                talk_id,
+                choice_ids,
+                display_end,
+                timeout_directive_secs,
+            } => {
+                assert_eq!(talk_id, crate::talk::TalkId(7));
+                assert_eq!(choice_ids, vec!["a".to_string(), "b".to_string()]);
+                assert_eq!(display_end, MonotonicMs(12_345));
+                // 未指定は None のまま届く（既定値の適用はこの境界では行われない・DD-8）。
+                assert!(timeout_directive_secs.is_none());
+            }
+            _ => unreachable!("constructed ChoiceWaiting"),
+        }
+        // 無効化指令・明示秒指定も逐語で運べる（完全語彙 3 値・DD-8）。
+        let disabled = KanadeMsg::ChoiceWaiting {
+            talk_id: crate::talk::TalkId(8),
+            choice_ids: Vec::new(),
+            display_end: MonotonicMs(0),
+            timeout_directive_secs: Some(-1.0),
+        };
+        let explicit = KanadeMsg::ChoiceWaiting {
+            talk_id: crate::talk::TalkId(9),
+            choice_ids: Vec::new(),
+            display_end: MonotonicMs(0),
+            timeout_directive_secs: Some(45.0),
+        };
+        let directive = |m: &KanadeMsg| match m {
+            KanadeMsg::ChoiceWaiting {
+                timeout_directive_secs,
+                ..
+            } => *timeout_directive_secs,
+            _ => unreachable!("constructed ChoiceWaiting"),
+        };
+        assert_eq!(directive(&disabled), Some(-1.0));
+        assert_eq!(directive(&explicit), Some(45.0));
+    }
+
+    /// 既存 8 variant が無改変のままであること（Req 4.4 の additive 規律）。
+    ///
+    /// 網羅 match は漏れをコンパイラが強制するため、既存 variant の綴り・保持データを
+    /// 変更するとこのテストのコンパイルが壊れる。新 2 variant は末尾に additive 追加され、
+    /// 既存 8 種の判別結果を一切変えない。
+    #[test]
+    fn existing_eight_kanade_msg_variants_are_unchanged_by_additive_growth() {
+        fn label(msg: &KanadeMsg) -> &'static str {
+            match msg {
+                KanadeMsg::Boot => "Boot",
+                KanadeMsg::Tick { now: _ } => "Tick",
+                KanadeMsg::TalkDone(_) => "TalkDone",
+                KanadeMsg::CloseRequest { reason: _ } => "CloseRequest",
+                KanadeMsg::ForceQuit { reason: _ } => "ForceQuit",
+                KanadeMsg::ShioriDown { reason: _ } => "ShioriDown",
+                KanadeMsg::Mouse(_) => "Mouse",
+                KanadeMsg::Close => "Close",
+                // 新 2 variant（Task 1.3）。
+                KanadeMsg::Choice(_) => "Choice",
+                KanadeMsg::ChoiceWaiting { .. } => "ChoiceWaiting",
+            }
+        }
+        let existing = [
+            KanadeMsg::Boot,
+            KanadeMsg::Tick {
+                now: MonotonicMs(1),
+            },
+            KanadeMsg::TalkDone(crate::talk::TalkDone {
+                talk_id: crate::talk::TalkId(1),
+                reason: crate::talk::TalkEndReason::Ended,
+            }),
+            KanadeMsg::CloseRequest {
+                reason: CloseReason::User,
+            },
+            KanadeMsg::ForceQuit {
+                reason: CloseReason::System,
+            },
+            KanadeMsg::ShioriDown {
+                reason: "pipe closed".to_string(),
+            },
+            KanadeMsg::Mouse(MouseInput {
+                scope: 0,
+                x: 0,
+                y: 0,
+                region: None,
+                kind: MouseEventKind::Move,
+            }),
+            KanadeMsg::Close,
+        ];
+        let labels: Vec<&'static str> = existing.iter().map(label).collect();
+        assert_eq!(
+            labels,
+            vec![
+                "Boot",
+                "Tick",
+                "TalkDone",
+                "CloseRequest",
+                "ForceQuit",
+                "ShioriDown",
+                "Mouse",
+                "Close",
+            ],
+            "既存 8 variant は additive 追加後も同一の判別結果を保つ"
+        );
     }
 
     /// wire 形（SHIORI へ渡る文字列）は出所カテゴリに依らず逐語であること（DD-1・Req2.6/3.6）。
@@ -405,6 +607,19 @@ mod tests {
         assert_eq!(config.baseware_version, "1.0.0");
         assert_eq!(config.baseware_name, "areka");
         assert_eq!(config.close_talk_deadline_ms, 30_000);
+    }
+
+    /// 選択肢タイムアウト既定値は 30_000 ms（Req 7.8・DD-8・裁定 5）。
+    ///
+    /// 正典（ukadoc）は数値を規定していないため areka 裁量で単一の値を定め、対応表へ記録する。
+    /// 既定は `KanadeConfig::new`（既定構築経路）から観測できる。
+    #[test]
+    fn kanade_config_new_supplies_choice_timeout_default_of_30s() {
+        let config = KanadeConfig::new("master", "1.0.0");
+        assert_eq!(
+            config.choice_timeout_default_ms, 30_000,
+            "choice_timeout_default_ms default must be 30_000 (Req 7.8・DD-8)"
+        );
     }
 
     #[test]

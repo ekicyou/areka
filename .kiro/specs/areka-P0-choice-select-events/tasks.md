@@ -15,7 +15,7 @@
   - _Requirements: 2.6, 3.6, 4.4_
   - _Boundary: kanade 契約層_
 
-- [ ] 1.3 選択入力・選択待ち通知・タイムアウト既定値の境界型を追加する
+- [x] 1.3 選択入力・選択待ち通知・タイムアウト既定値の境界型を追加する
   - 選択確定入力（選択肢 ID・表示ラベル・発生元 scope・付随参照列）を kanade の入力値オブジェクトとして追加する
   - kanade のメッセージ境界に選択確定と選択待ち通知の 2 入力を additive に追加する
   - 実行時設定に選択肢タイムアウト既定値を追加し、既定 30000 ミリ秒を与える
@@ -194,3 +194,8 @@
   - 完了状態: メニュー一周の人間サインオフとログ突合の双方が記録された状態になる
   - _Requirements: 9.3, 9.4_
   - _Depends: 5, 6.2, 6.3, 6.4_
+
+## Implementation Notes
+
+- 1.3: `actor.rs` の `KanadeMsg::{Choice, ChoiceWaiting}` は暫定アーム（warn ログ＋継続・`Input` へ未写像）。**タスク 4.1 で `Input::{Choice, ChoiceWaiting}` 写像へ必ず置換すること**。
+- 1.2: `EventId` には `as_str()` に加え `Display`（`as_str()` へ委譲）がある。`areka-ghost` の spine e2e が `id.to_string()` を使うため境界保護に必要。
