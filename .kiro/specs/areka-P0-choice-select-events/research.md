@@ -288,3 +288,47 @@ MCP `ukadoc` で再取得した一次記述（2026-07-31 実測）:
 14. **DD-14 対応表（Req2.8/8.1/8.2）の住処と書式**: `doc/` 新規 md か `COMPAT_ARCHITECTURE.md` 追記か。`doc/shiori/fragments/` は生成物ゆえ**手編集不可**（ファイル冒頭に明記）。区別語彙は `provenance = ukadoc | ssp_secondary | areka_discretion` を採るか。
 15. **DD-15 CROW 複数 ID 形の縮退明示**: `\q[t,ID1,ID2,ID3]` はワイヤ形で Ex 形と区別不能（§5-d）。M1 非対応として対応表へ記録するか、要件本文に無いため design 裁量とするか。
 16. **DD-16 段階実装（Option C）の採否と縮退宣言**: G4/G5 を後段へ隔離する場合、`defer-canon-with-full-vocabulary-and-tracking-spec` の 4 点セット（完全語彙＋縮退シーム＋追跡 spec＋roadmap 明記）をどこまで前倒しで用意するか。特に「タイムアウトは実装するが emo2 では 204 経路のみ通る」＝実機で検証できない領域の受け入れ条件（Req9.3 は「メニュー一周」のみを実機に課しており、タイムアウトは檻のみが根拠）。
+
+---
+
+## 10. 設計フェーズ追記（2026-07-31・design 生成）
+
+### 10.1 ディスカバリ（light・Extension）
+
+- 種別: **Extension**（既存 5 クレートへの additive 増分が支配的）→ light discovery。§2 の実測アンカーを本ワークツリー HEAD で**同日再検証**し、全て一致を確認した（`ChoiceSelection` balloon.rs:43／`ChoiceSelectionInbox` :130／`SakuraMsg::ResolveChoice` contract.rs:38／`on_resolve_choice` drive.rs:350-419／`ExecutionState::Choosing` status.rs:26,60／`ALLOWED_EVENT_IDS` events.rs:59-68／steady origin match :190-212／`DispatcherMsg` dispatcher.rs:30-39／`WaitForChoice{timeout:None}` compile.rs:207-222／scope doc :24）。
+- **設計フェーズの新規発見**: `TimedSchedule` に**バリア自動解除 seam**（`barrier_timeout_offset`・`dola/src/cue/schedule.rs:60-61,171-181,215-221`）が既存する。ただし `CuePlayer::tick` は `WaitingForChoice` で早期 return（runtime.rs:183-187）するため choice バリアには**到達不能（死んだ seam）**であり、かつ自動解除は「無条件再開」で正典（`OnChoiceTimeout` GET→204 で解除）と一致しない。→ タイムアウト権威は kanade へ一本化し、schedule 側 seam は不使用と設計・対応表に明記（二重権威の禁止）。
+- kanade↔sakura 授受契約の物理定義は `crates/areka-talk/src/lib.rs`（`StartTalk`:30・`TalkDone`:60）＝ `TalkCommand`/`ChoiceWaiting` の追加先を確定。
+- 外部調査: 追加なし（ukadoc 証跡は §5 で採取済み・SSP 実挙動の裏取りは得られないため §8-1/8-2 は areka 裁量として対応表で閉じる）。
+
+### 10.2 DD 裁定（design.md「設計裁定一覧」が正本・ここは要約）
+
+- **DD-1**: `EventId { Static(&'static str), Choice(String) }` を `ShioriCall.id` へ（Cow 案・GetDynamic 案は却下——出所を型で保持しチョークポイントのカテゴリ別ガードを可能にする）。origin は `&'static str` 維持（Choice→固定ラベル `"OnChoiceEvent"`）。**応答ルーティングは origin 文字列でなく `State.choice` 帳簿照合を先行**。
+- **DD-2（実装形）**: 固定 3 ID（Ex/無印/Timeout）は `ALLOWED_EVENT_IDS` へ追加（マウス前例）・任意名は `is_allowed_choice_event`（`On` 接頭・逐語・`OnTalk` も choice 起源なら発火）。
+- **DD-3**: `State.choice: Option<ChoiceState>`（Phase 不変・`pending_close` 同型）。
+- **DD-4**: **カスケード完了後に解決**。Value→同一バッチ `[ResolveChoice, StartTalk]`（同一 `TalkCommand` チャンネルで FIFO 保存）・最終 204/Failed→`[ResolveChoice]` のみ。解決先行案は旧 talk `TalkDone{Ended}` と slot 差替の競合で正常系に `unknown_talk_done`(error) が出るため却下。
+- **DD-5**: G3-a（`TalkCommand{Start,ResolveChoice,CancelChoice}`・areka-talk 定義・dispatcher へ 3 アーム）。
+- **DD-6**: G4-a（talk アクター発 `ChoiceWaiting`・done ポート境界を `D: From<TalkDone> + From<ChoiceWaiting>` へ拡張）。
+- **DD-7**: (a) 通知に候補 id 列同梱・kanade 照合（id のみで足りる）＋talk 側照合を二重防御で温存。
+- **DD-8**: `BarrierKind::WaitForChoice{timeout: Option<f64>}` の意味論確定＝`None`=未指定（既定へ委譲）・`Some(v<=0)`=無効化・`Some(v>0)`=明示秒。既定値 `KanadeConfig.choice_timeout_default_ms = 30_000`（**areka_discretion**・正典は数値を規定しない・Req7.8）。compile は無改変（コメント 1 行のみ更新）。
+- **DD-9**: 計測は kanade（注入 `MonotonicMs`）。起点＝talk 通知の占有 horizon（duration 権威）を dispatcher が `base_now` で ms 換算（Tick 中継の逆写像＝時間基準を新設しない）。
+- **DD-10**: `ActiveTalk.script: String` 保持（additive）→ `OnChoiceTimeout` Ref0。
+- **DD-11**: R7.5 は **Close funnel**（`TalkCommand::CancelChoice`→dispatcher が **slot 維持のまま** `SakuraMsg::Close` 転送→`TalkDone{Interrupted}` 正規到達→`Steady{None}`）。`skip_barrier` 外部口は新設しない（`areka-interrupt-single-close-funnel`）。`close_active_if_any` 流用は Done が stale 化し kanade が復帰不能になるため不可。
+- **DD-12**: choice in-flight の Failed は mod.rs 横断 Fault 化より先行して steady へ委譲（prefetch mod.rs:313-315 と同型）・204 相当で継続。
+- **DD-13**: scope は検証/ログのみ（単一 slot）・`ChoiceInput` に搬送維持（per-scope 将来シーム）・Reference 非搬送。
+- **DD-14**: `doc/choice-cascade-compat.md` 新設・`provenance = ukadoc | ssp_secondary | areka_discretion`。
+- **DD-15**: CROW 複数 ID 形は M1 非対応の明示縮退として対応表記録。
+- **DD-16**: 単一 spec 内で全要件実装（追加縮退・追跡 spec 不要）。tasks は 3 段順序（①カスケード＋解決＝一周成立→②ChoiceWaiting/choosing/候補照合→③タイムアウト）。
+- **正典裁定（Req2.8 対象）**: OnID 形は Ex/無印を先行させない（areka_discretion）・204 ゲート採用（ukadoc・反証併記）・最終 204 は解決実行（areka_discretion）・解決後の選択肢集合は破棄（areka_discretion＝現行 `resolve_choice` 実装）。詳細は design.md「カスケード則の正典裁定」1〜8。
+
+### 10.3 シンセシス（generalize / build-vs-adopt / simplify）
+
+- **一般化**: 「kanade→talk への指示」を `TalkCommand` へ一般化（Start/Resolve/Cancel を単一チャンネルに載せることで**順序保存が契約になり** DD-4 の決定性が導出される）。「talk→kanade の事象」も TalkDone と同一 done ポートへ一般化（因果順保存）。実装は現要件分のみ（インターフェイスの一般化・実装の最小化）。
+- **adopt（既存資産の採用・新造却下）**: 多段カスケードの器＝既存 execute-batch/reinject-last ループ（新しい多段機構を作らない）。slot 調停＝dispatcher Close-then-spawn＋stale 棄却（新調停なし）。解決の即 settle＝既存 `on_resolve_choice`（無改変消費）。`choosing` 送出＝既存 `status.rs` 送出契約（書式定義ゼロ）。タイムアウト中断＝既存 Close funnel。
+- **簡素化**: G4-b（UI 監視）・G3-b（二経路投函）・G3-c（dispatcher 集約）・schedule 自動解除の再利用・`skip_barrier` 外部口・`Origin` enum 昇格（origin の役割が帳簿照合の後退でログ主体に縮んだため不要）を却下。dola への変更は getter 1 本（`occupancy_horizon`）のみに絞った。
+
+### 10.4 リスク・申し送り（tasks/実装フェーズへ）
+
+- `steady.rs` choice 先行アームの入れ忘れ＝選択応答の沈黙破棄（warn は出るが talk 不起動）。檻 9.2(a)(b) が直接固定する（§7 の既知の罠）。
+- `EventId` 化・`Sender<TalkCommand>` 化は kanade 檻・MockSakura・real.rs の**機械的**適応を伴う（意味論のアサーションは不変・Req4.4）。
+- `TalkDone{Interrupted}` が kanade へ正規到達する初の経路（CancelChoice）＝mod.rs の防御コメント更新（挙動は既存の非 quit 委譲のまま）。
+- design 前 rebase 突合: 本ワークツリーは main 相当 HEAD で全アンカー一致（並走 brief 陳腐化補正は追記(52) 済み・追加補正不要）。W6.5 `test-cage-determinism` と `input_events/` 同域＝先着の本 spec が正・後着 cage が rebase。
