@@ -1329,7 +1329,7 @@ mod tests {
             balloon_author_dpi: 96,
             loop_tables: LoopTables {
                 shell: AnimationTable::empty(),
-                balloon: AnimationTable::empty(),
+                balloon: BTreeMap::new(),
             },
         }
     }

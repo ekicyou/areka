@@ -1412,7 +1412,7 @@ mod tests {
             // plan_attachments は loop_tables を読まない（headless 純合成）＝空表で十分。
             loop_tables: LoopTables {
                 shell: AnimationTable::empty(),
-                balloon: AnimationTable::empty(),
+                balloon: BTreeMap::new(),
             },
             shell_author_dpi: 96,
             balloon_author_dpi: 96,

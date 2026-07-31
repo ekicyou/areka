@@ -62,7 +62,7 @@ use crate::placement::source::GhostTitles;
 use crate::placement::spawn::{spawn_ghost_windows, GhostWindows};
 
 use super::adapter::PresentBridge;
-use super::assets::{build_boot_assets, BootAssets, LoopTables};
+use super::assets::{actor_keyed_balloon_tables, build_boot_assets, BootAssets, LoopTables};
 use super::frame::{
     run_attach_phase, run_dpi_phase, run_move_drain_phase, run_text_phase, run_text_scale_phase,
     Emo2Wiring,
@@ -537,16 +537,11 @@ impl SpineHarness {
         // 実 entropy・spine は固定注入列で決定論・R7.1/7.2/7.3）。
         let LoopTables {
             shell: shell_table,
-            balloon: balloon_table,
+            balloon: balloon_scope_tables,
         } = loop_tables;
-        // バルーン表の scope キー写像（要件 5.6）。production `wire_emo2_boot` と同型で、単数の
-        // `LoopTables.balloon` を先頭 scope のキーへ載せた単一エントリの写像として渡す
-        // （scope ごとの実導出は task 3.2 が `LoopTables.balloon` 自体を写像へ変えて行う）。
-        let balloon_tables: BTreeMap<ActorKey, AnimationTable> = balloons
-            .first()
-            .map(|b| (ActorKey::from(b.scope.to_string()), balloon_table))
-            .into_iter()
-            .collect();
+        // バルーン表の転送（要件 5.6）: production `wire_emo2_boot` と同型で、`build_boot_assets` が
+        // scope ごとに導出済みの写像を、scope キーだけアクタ鍵語彙へ写して渡す（値移送）。
+        let balloon_tables = actor_keyed_balloon_tables(balloon_scope_tables);
         let loop_config = match driver {
             LoopDriver::Inert => SerikoLoopConfig::disabled(),
             LoopDriver::Live(rng) => SerikoLoopConfig {
@@ -579,7 +574,7 @@ impl SpineHarness {
             // 実 loop_tables は loop_config へ移送済み（attach は loop_tables を読まない）ため空表プレースホルダ。
             loop_tables: LoopTables {
                 shell: AnimationTable::empty(),
-                balloon: AnimationTable::empty(),
+                balloon: BTreeMap::new(),
             },
             // 作者基準 DPI は搬送のみ（本相は値を解釈しない）。
             shell_author_dpi,

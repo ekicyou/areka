@@ -43,7 +43,6 @@ use areka_ghost::ticker::{LoopTickerConfig, Tick, TickerMsg, spawn_loop_ticker};
 use areka_ghost::{GhostBootOptions, ShioriWiring, SystemVarWiring, TickerMode};
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::MountError;
-use areka_sakura::ActorKey;
 use areka_seriko::{
     AnimationTable, BindResolver, SerikoLoopConfig, SerikoSink, SurfaceResolver, seeded_rng,
     spawn_seriko,
@@ -55,7 +54,7 @@ use wintf::ecs::FrameFinalize;
 use crate::placement::AuthorDpi;
 
 use self::adapter::PresentBridge;
-use self::assets::{BootAssets, LoopTables, build_boot_assets};
+use self::assets::{BootAssets, LoopTables, actor_keyed_balloon_tables, build_boot_assets};
 use self::frame::{Emo2Wiring, emo2_frame_system};
 use self::move_cue::{MoveCueSink, MoveDirective};
 use self::talk_clock::{ClockedTextSink, TalkClock};
@@ -334,17 +333,11 @@ pub fn wire_emo2_boot(
     // `finish()` はその hasher のランダム鍵由来値を返すため、実行ごとに異なる seed が得られる。
     let LoopTables {
         shell: shell_table,
-        balloon: balloon_table,
+        balloon: balloon_scope_tables,
     } = loop_tables;
-    // バルーン表の scope キー写像（要件 5.6）。現状 `LoopTables.balloon` は単数（先頭バルーン World
-    // 由来）ゆえ、その 1 本を先頭 scope のキーへ載せた単一エントリの写像として渡す。scope ごとに解決
-    // された系列から表を per-scope に導出するのは task 3.2 の担当で、そこで `LoopTables.balloon` 自体が
-    // scope キーの写像へ変わり本箇所は素の値移送になる。
-    let balloon_tables: BTreeMap<ActorKey, AnimationTable> = balloons
-        .first()
-        .map(|b| (ActorKey::from(b.scope.to_string()), balloon_table))
-        .into_iter()
-        .collect();
+    // バルーン表の転送（要件 5.6）: `LoopTables.balloon` は既に scope 別の写像（`build_boot_assets` の
+    // 構築ループ内で単一導出済み）ゆえ、ここは scope キーをアクタ鍵語彙へ写す値移送だけを行う。
+    let balloon_tables = actor_keyed_balloon_tables(balloon_scope_tables);
     let seed: u64 = {
         use std::hash::{BuildHasher, Hasher};
         std::collections::hash_map::RandomState::new()
@@ -382,7 +375,7 @@ pub fn wire_emo2_boot(
         // 実 loop_tables は loop_config へ移送済み（attach は loop_tables を読まない）ため空表プレースホルダ。
         loop_tables: LoopTables {
             shell: AnimationTable::empty(),
-            balloon: AnimationTable::empty(),
+            balloon: BTreeMap::new(),
         },
         // 作者基準 DPI は搬送のみ（本相は値を解釈しない・attach への供給は task 4.2）。
         shell_author_dpi,
