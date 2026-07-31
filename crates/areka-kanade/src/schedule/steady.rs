@@ -516,13 +516,15 @@ pub(super) fn choice_phase_label(phase: &ChoicePhase) -> &'static str {
 ///    （`ActiveTalk.script`・DD-10）だからである。
 ///
 /// # 条件 4 の防御を残す理由（`choice_timeout_ledger_stale`）
-/// 掃除規律（C4 規則 7・[`super::clear_choice_ledger`]）が入った今、slot 差替・トーク完了・
-/// close 系遷移で置き去りの帳簿は生じない。それでも本ガードは**冗長ではない**——規則 1 の棄却は
-/// 「状態不変」が定義であり、対象 talk が食い違う帳簿を**敢えてそのまま残す**（`on_choice` の
-/// `talk_id_mismatch` 棄却・`on_choice_waiting` の stale 棄却）。掃除点を通らずに不一致帳簿が
-/// 手元へ届く経路が規約上存在する以上、Ref0 の供給源（`ActiveTalk.script`）を他トークのもので
-/// 埋めないための最終防御としてここに残す。発火せず trace で観測して通常 Tick へ譲る
-/// （沈黙で捨てない・log-first）。
+/// **現状この分岐は構造上到達不能である**——帳簿は対象 talk 一致時にしか確立されず
+/// （`on_choice_waiting`）、slot 差替・トーク完了・close 系遷移のすべてで掃除規律
+/// （C4 規則 7・[`super::clear_choice_ledger`]）が帳簿を落とすため、不一致のまま Tick へ
+/// 到達する経路を静的に構成できない。実際、檻は 1 件も存在しない。
+///
+/// それでも除去せず残すのは、これが破れたときの帰結が「`OnChoiceTimeout` の Ref0 に**他トークの
+/// 起動スクリプト**が載る」＝正典違反の送出であり、不変条件（帳簿の対象＝現行 talk）が将来の
+/// 改修で崩れた瞬間に無言で誤送出しないための最終防御だからである。発火せず trace で観測して
+/// 通常 Tick へ譲る（沈黙で捨てない・log-first）。到達したら不変条件の破れを意味する。
 fn fire_choice_timeout_if_due(state: &mut State, now: MonotonicMs) -> Option<Vec<Action>> {
     let ledger = state.choice.as_ref()?;
     if !matches!(ledger.phase, ChoicePhase::Waiting) {

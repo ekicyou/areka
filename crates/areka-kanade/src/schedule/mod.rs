@@ -2057,9 +2057,10 @@ mod log_firing_tests {
 
     /// Req4.5: カスケード段の失敗は error で記録し 204 相当で継続する。
     ///
-    /// mod.rs 横断 `Failed` アームの免除（DD-12）はタスク 4.6 の担当ゆえ、本タスク時点では
-    /// `step()` 経由の Failed は横断アームに先取りされる。steady 側の 204 相当処理そのものを
-    /// `steady::step` の直接駆動で固定する（既存檻流儀＝到達不能アームは直接駆動で検証）。
+    /// 本檻は steady 側の 204 相当処理と error 語彙**そのもの**を層局所に固定するため
+    /// `steady::step` を直接駆動する。`step()` 経由の end-to-end（横断 `Failed` アームの免除＝
+    /// DD-12 が実際に効き `Unloading{Fault}` へ倒れないこと）は
+    /// `tests/kanade/choice_test.rs` の統合檻が免除の正・非 choice 経路の負の両方向で固定する。
     #[test]
     fn error_choice_shiori_failed_as_204_logs() {
         let cfg = config();

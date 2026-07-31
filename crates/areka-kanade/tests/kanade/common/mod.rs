@@ -734,6 +734,16 @@ pub struct MockSakura {
 
 impl MockSakura {
     /// 受領した [`TalkCommand`] の記録スナップショットを**到着順**で返す。
+    ///
+    /// # ⚠️ 並行読みの罠——`ForceQuit`／`Close` で終了する檻では使わないこと
+    /// 本メソッドは recv ループと**同期しない**。kanade の終了が mock sakura を経由する檻
+    /// （quit フラグ付き `TalkDone` の往復がある形）では、その往復が記録の消費を強制するため
+    /// 安全に読める。しかし `KanadeMsg::ForceQuit` や `Close` で終了を駆動する檻では kanade が
+    /// mock を経由せず終了でき、**記録前のスナップショットを掴む**。実測で檻バイナリ 100 回中
+    /// 7〜11 回失敗し、しかも**全檻並行実行時にしか露見しない**（`--exact` 単独実行では出ない）。
+    ///
+    /// そういう檻では [`MockSakura::join_bounded_then_commands`] を使うこと——join 完了が
+    /// 全記録に happens-before を張る。
     pub fn commands(&self) -> Vec<TalkCommand> {
         self.commands.lock().expect("mock sakura mutex").clone()
     }

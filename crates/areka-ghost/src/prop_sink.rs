@@ -355,7 +355,10 @@ mod tests {
         /// （`\q`）は無く `ChoiceWaiting` は発生しない——境界充足のためだけの受け皿である。
         enum TalkNotice {
             Done(TalkDone),
-            ChoiceWaiting(ChoiceWaiting),
+            /// 本 e2e は選択待ち通知を観測しないが、`spawn_talk` の `D` 境界
+        /// （`From<TalkDone> + From<ChoiceWaiting>`）を満たすため受け口だけ用意する。
+        #[allow(dead_code)]
+        ChoiceWaiting(ChoiceWaiting),
         }
         impl From<TalkDone> for TalkNotice {
             fn from(done: TalkDone) -> Self {

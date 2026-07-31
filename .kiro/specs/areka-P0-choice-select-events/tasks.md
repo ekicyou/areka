@@ -225,3 +225,9 @@
 - 7.1: 対応表は `doc/choice-cascade-compat.md`（provenance 3 値・正典引用は research §5 から逐語転記）。**残件（境界外・未実施）**＝`doc/COMPAT_ARCHITECTURE.md` §8「沈黙ルール対応表」へ本書へのポインタ 1 行を登記すること（同 §8 は「各 spec が実装着地時に自らの裁量を追記する」と規定しているが本 spec 由来の行がまだ無い）。
 - 7.2: **実機サインオフの落とし穴** — `target/debug/shiori-host32-helper.exe` は `cargo build --workspace` のたびに **x64 で上書き**される。実 pasta.dll は **i686（PE 0x014c）** なので、実走直前に `target/i686-pc-windows-msvc/debug/` の helper を `target/debug/` へコピーし直すこと（helper パスを差す env は存在しない＝`main.rs:155` が `current_exe()` 隣を無条件解決）。
 - 7.2: emo2 の `\q[]` ID は**全て `On` 始まり**＝実機では `CascadePlan::Named` 1 段のみ。正典 2 段形（Ex→無印）は実機で観測できず 6.1 の決定論檻が担当。emo2 辞書に `OnChoiceTimeout` の応答は無いため**選択肢表示から 30 秒放置でメニューが中断する**（設計どおり）。
+
+## Feature 検証（kiro-validate-impl）の是正記録
+
+- 監査指摘の是正: (a) `mod.rs` の DD-12 檻コメントの陳腐化を訂正、(b) `choice_timeout_ledger_stale` の残置根拠を「**構造上到達不能な最終防御**」へ正直に書き直し、(c) `MockSakura::commands()` に並行読みの罠の警告 doc を追加、(d) `is_allowed_choice_event` を `events` ファサードへ re-export（DD-2 の対概念の公開面を対称化）、(e) `TalkNotice::ChoiceWaiting` の dead_code 警告 3 件を理由コメント付き `#[allow]` で解消、(f) `doc/COMPAT_ARCHITECTURE.md` §8 へ本 spec 行（詳細台帳 `doc/choice-cascade-compat.md` へのポインタ）を登記。
+- **判断の記録（未記録だった「要判断」の解消）**: 新規 trace 語彙 `choice_ledger_cleared` / `choice_timeout_ledger_stale` は**互換対応表へ記録しない**。対応表は「正典が沈黙する**挙動**分岐」を provenance 3 値で記録する台帳であり、内部の可観測性語彙はその対象物ではないため（Req2.8 の対象外）。
+- **未解決の申し送り（本 spec の境界外・開発者判断）**: Revalidation Trigger 4（`BarrierKind::WaitForChoice{timeout}` の DD-8 写像規則）について、受け手 `areka-P0-sakura-time-directives` の `brief.md` に写像規則も `doc/choice-cascade-compat.md` へのポインタも記載が無い。同 spec は brief のみの未着地状態ゆえ現時点の破綻は無いが、**申し送りの到達が保証されていない**。同 spec の起票時に §5b を参照させること。

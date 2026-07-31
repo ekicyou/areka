@@ -51,9 +51,10 @@ pub use talk::{ChoiceWaiting, StartTalk, TalkCommand, TalkDone, TalkEndReason, T
 /// `pub(crate)` のまま非公開に保つ。
 pub mod events {
     pub use crate::schedule::events::{
-        ALLOWED_EVENT_IDS, baseware_version, is_allowed_event_id, on_boot, on_choice_named,
-        on_choice_select, on_choice_select_ex, on_choice_timeout, on_close, on_close_notify,
-        on_first_boot, on_initialize, on_mouse_double_click, on_mouse_move, on_second_change,
+        ALLOWED_EVENT_IDS, baseware_version, is_allowed_choice_event, is_allowed_event_id, on_boot,
+        on_choice_named, on_choice_select, on_choice_select_ex, on_choice_timeout, on_close,
+        on_close_notify, on_first_boot, on_initialize, on_mouse_double_click, on_mouse_move,
+        on_second_change,
     };
 }
 
