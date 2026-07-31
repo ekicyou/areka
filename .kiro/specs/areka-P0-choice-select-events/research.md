@@ -272,7 +272,8 @@ MCP `ukadoc` で再取得した一次記述（2026-07-31 実測）:
 > いずれも本ギャップ分析では**決定しない**。選択肢と根拠のみを提示する。
 
 1. **DD-1 任意名イベントの型表現**: `ShioriCall.id` を `Cow<'static, str>` にするか、`GetDynamic` variant を additive 追加するか。あわせて `origin` を `Cow` 化するか **`Origin` enum へ昇格**するか（`steady.rs:189` の「wildcard にしない」設計意図を型で保てるのは後者）。
-2. **DD-2 許可規則のカテゴリ追加と恒久禁止の交差**: `is_allowed_choice_event(id)` の定義。`\q[x,OnTalk]` / `\q[x,OnHour]` を書くゴーストの扱い——(a) 恒久禁止が勝つ（送出せず warn・`events.rs:54-58` の申し送りが想定する形）／(b) 任意名カテゴリが勝つ（正典どおり発火）／(c) 禁止＋対応表記録。**`events.rs` の SEAM コメントが本 spec の要件フェーズでの決着を明示的に要求している**。
+2. **DD-2 許可規則のカテゴリ追加と恒久禁止の交差** — **✅ 要件フェーズで決着済み（2026-07-31 要件ディスカッション → Req2.9）**。裁定 = **交差は存在しない**。`ALLOWED_EVENT_IDS` の `OnTalk`/`OnHour` 恒久禁止は「areka が**スケジューラ起源で自発送出する**イベント」の確定表であり、`\q` の ID に書かれた任意名イベントは管轄外。禁止の根拠（ベースウェアの周期発火が消費側の自発生成と二重駆動する）は、作者が明示的に書いた 1 クリック = 1 回の発火には該当しない。よって choice 起源は**逐語発火**（`\q[x,OnTalk]` も発火する）。`events.rs:54-58` の SEAM が要求した決着はこれで充足。design に残るのは受理規則の実装形（`is_allowed_choice_event` を別カテゴリとして足す・チョークポイントと固定表とスケジューラ側禁止は不変）のみ。
+   - 正典再確認（2026-07-31・ukadoc MCP 実引用）: `\q[タイトル,OnID,r0,r1,...]`＝「IDが"On"で始まっている場合は、選択後、SHIORIイベントOnID(書いた通りのイベント)が開始される。それパラメータはr0,r1,...の順番にReference0以降に格納される。」／`\_a[OnID,r0,r1...]` も同一規則を明記。**`On` 接頭辞は名前の制約ではなく Ex 形と任意名形を分けるディスパッチ判定子**であり、areka の禁止リストとは意味論の層が異なる。
 3. **DD-3 カスケード段の保持場所**: `State.pending_cascade`（Phase 不変・`pending_close` と同型）か `Phase::Steady` の拡張か。Req4.4「既存の決定的状態機械の観測資産を変更しない」に最も忠実なのは前者。
 4. **DD-4 カスケードと barrier 解決の順序・独立性**: (a) 解決を先に投函してからカスケード開始／(b) カスケード完了（Value か最終 204）を待って解決／(c) 同一 step 内で両 Action を並べる。Req5.3（204/失敗でも解決を取りやめない）と Req4.6（高々 1 StartTalk）と Req5.4（解決高々 1 回）が同時に成立する順序はどれか。`on_resolve_choice` が **その場で `TalkDone` を送り得る**（`drive.rs:370-375`）ため、解決を先行させると `Steady{Some}`→`Steady{None}` 遷移がカスケード応答より先に届き得る（＝`steady.rs:166-176` の talk 起動アームが変わる）点に注意。
 5. **DD-5 kanade→talk の到達経路**: G3-a（`Action::ResolveChoice` ＋ sakura channel の enum 化 ＋ `DispatcherMsg::ResolveChoice`）か G3-b（UI drain が dispatcher へ直行）。単一調停 vs 波及最小のトレードオフ。
