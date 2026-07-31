@@ -1164,7 +1164,8 @@ fn enqueue_window_set_pos(
     }
 
     // 窓移動レコード（Req 1.2）: **書込成功時のみ** 1 レコードを専用 target へ出す。
-    // 経路語彙を持たない書込（ドラッグ・`\![move]`）は route=None ＝無記録（doc 参照）。
+    // 経路語彙を持たない書込（ドラッグ）は route=None ＝無記録（doc 参照）。
+    // `\![move]` は D13 で `MoveCue` を得たので記録される（:753 で `Some` を渡す）。
     if let Some(route) = route {
         log_window_move(world, window, route, x, y, size);
     }

@@ -82,7 +82,7 @@
   - _Depends: 3.1_
 
 - [ ] 4. Phase A/B: 診断手順書・確定台帳・是正前の赤証跡採取
-- [ ] 4.1 診断手順書の作成
+- [x] 4.1 診断手順書の作成
   - 起動コマンド（絶対パス）・有効化するログ設定・有界自動終了の設定・ログ保存先を、第三者が同一手順を再実行できる粒度で記述する
   - 観測点 × ログ target × 水準の対応表を載せ、「手順で有効化されない水準にある観測点を『発生 0 回』の根拠に用いない」ことを明文化する
   - 実機採取を 2 セッション（①ドラッグによるモニタ跨ぎのみ ②ドラッグ禁止・OS 設定側から DPI 変更のみ）として規定し、ログを別々に保存する手順を書く
@@ -223,6 +223,12 @@
 - **1.3 → 5.1 への申し送り**: `window_pos.rs` の実施可否行の `applied` は Phase A では `let applied = true;` の定数（分岐は 5.1 の所有）。design.md:319 が挙げる `policy` フィールドも未出力＝`DpiSuggestedRectPolicy` を新設する 2.1 の後、5.1 で `applied` の分岐化と同時に追加すること。
 - **2.1 → 5.1 への申し送り**: `dpi_suggested_position_decision`（`crates/wintf/src/ecs/window_proc/dpi_helpers.rs`・`pub(super) fn(Option<&DpiSuggestedRectPolicy>, &RECT) -> Option<(i32, i32)>`）の戻り値 `Option` は **`DpiChangeContext::set` と `guarded_set_window_pos` の双方を 1 個の `if let Some((x, y))` で束ねて分岐させる**ためのもの（D3 帰結）。**シグネチャを広げる必要はない**——レビュアが design.md:319 と突合して確認済み。配線時に同関数の `#[allow(dead_code)]`（dpi_helpers.rs:31）を外すこと。
 - **2.1**: `DpiSuggestedRectPolicy` は `crates/wintf/src/ecs/mod.rs` の curated `pub use window::{…}` へ載せてある（areka は `wintf::ecs::{…}` 経由でしか import しない＝`placement/spawn.rs:63` の流儀）。5.1 の areka 側付与は wintf を編集せずに書ける。
+- **4.1 の正本＝`diagnosis-procedure.md`（4.5／7.4 はこれに従って採取する）**。確定した `RUST_LOG`（D-BASE・レビュアが `capture_under_filter` で実濾過を独立実証）:
+  `info,areka::placement::diag=debug,wintf::ecs::window=debug,wintf::ecs::layout::systems::monitor_systems=debug,wintf::ecs::drag=trace`
+  handoff の 1 語に加え **2 語が実測で必要と判明**——⑴`wintf::ecs::layout::systems::monitor_systems=debug`（wintf 側モニタ列挙行は `wintf::ecs::window` 配下に**無い**＝D12 の両側 grep 突合が不成立になる）⑵`wintf::ecs::drag=`**`trace`**（毎移動の `[DragEvent] Dispatching` は `trace!`＝`debug` では暗転し Req 2.3 のマウス対窓の数値対応が測れない）。design.md:476 の例が点灯しないことも負の assert で実証済み。
+- **4.1 → 5.1／6.1 への申し送り（design の判定語が Phase A で存在しない）**: design.md:484 の⑤合否判定語が挙げる `ClampX`／`NearestFallback` の warn は **6.1/6.2 で初めて配線**される（`guard_visibility` は無ログ）。Phase A/B のセッションでこれを判定語に使うと**確実に偽陰性**になるため、手順書は幾何突合（`[diag.monitor]` の work area × `[diag.window_move]` の矩形）へ置き換えてある。6.1/6.2 着地後に手順書 §6.3 を warn 判定語へ戻すか併記すること。
+- **4.1（実機採取時に確認したい未検証点）**: `[guarded_set_window_pos]` の `x/y` は `SetWindowPos` へ渡す窓座標、`[diag.window_move]` の `x/y` は `WindowPos`（クライアント座標のミラー）。`enqueue_window_set_pos` は同一値を双方へ入れており枠なしゴースト窓では一致するはずだが**実機未確認**。4.5 で系統的ずれを観測したらレポートへ事実として記録すること。
+- **4.1**: 2 段 grep の結合キーは **`entity=`**（`{index}v{generation}` 形式）。`hwnd` は target ごとに書式が違う（`command.rs`／drag は `"0x{:X}"` の引用符付き大文字・`window_pos.rs` は Debug の `HWND(0x…)` 小文字）ため、`hwnd` で突合すると**静かにゼロ件**になる。
 - **3.2 → 5.2／7.3 への申し送り**: 消費側 4 入口（`follow.rs` の `resize_window_to`／`resize_window_keep_position`・`frame.rs` の `resnap_with`／`reconcile_reported_sizes`）に `world.get_entity()` 存在確認を敷き済み。判定語は `crate::placement::diag::DESPAWNED_SKIP_TAG` の共有定数。**frame.rs へ新しい消費点を足すときは同じ区別を敷くこと**（entity 不在＝`debug!` で打ち切り他 scope 継続／実在するが規約 component 欠落＝`warn!`）——混ぜると終了時ログの良性ノイズが本物の異常を埋める。`resnap_from_sizes` は本番呼出元が `resnap_with` のみで下流 `resize_window_to` のガードが受けるため未防護（実測確認済み）。
 - **3.2（檻の空虚性・2 例目）**: 完了状態檻の初版は**総数計数で空虚**だった——フレーム層のガードを外しても、下流の追従層が同じ判定語を同数出して総数が偶然一致する。是正版は**相ごとの計数**（`dpi reconcile:` 4 件・`resnap:` 2 件）へ強化し、さらに探針を**意図的に陳腐化したレジストリ**（破棄済み entity を指す写し）で組んでいる（3.1 の hook が掃除した綺麗なレジストリで回すと自明に緑＝空虚）。ヘルパ `despawn_scope_and_restore_stale_registry` が「hook が実際に落とした」「写しが破棄済みを指す」の両方を実行時 assert する。[[2.2 の教訓]] と同型。
 - **3.2 → W5 `kero-balloon` への干渉申し送り（`.kiro/steering/roadmap.md` 干渉台帳 `van(W5)⇄ker(W5)`）**: `emo2_boot/frame.rs` は**同一ファイル・異ハンク**。van の編集面 4 点と、触っていない ker 編集面（`run_text_scale_phase`・`balloon_models` 写像・`dpi_phase_with` 本体）を明記済み。**先着後 rebase 必須**（git が自動マージしても行番号を引いた doc・檻コメントが静かに嘘になる）。van はタスク 5.2 で `dpi_phase_with` を判断分岐ごと改造予定＝ker が同関数へ触るなら着手前に相談。
