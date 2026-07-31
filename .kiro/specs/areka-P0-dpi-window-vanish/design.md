@@ -117,6 +117,7 @@ graph TB
 - **D8（採用: scope 粒度＋hook＋消費側存在確認）**: 対（char+balloon）は spawn/despawn とも原子的な生存単位（実測: `despawn_smoke_targets` は同一 World 変異内で一括）。`GhostWindowMarker` の `on_remove` hook が最初の片割れで scope エントリごと除去し、消費側は「entity 不在＝debug skip」と「実在するが `Anchored` 欠落＝warn」を区別する。
 - **D11（採用: enum 引数配管）**: `PlacementRoute` を単一ライターへ**引数**で配管する（ラッパ乱立にしない）。route はログ語彙であると同時に遷移ガードの発火条件・warn 水準分岐の第一級入力である。
 - **D12（採用: areka 構築点を正典）**: Req 1.1 の正典出力は `MonitorSnapshot` 構築点（placement の全判断が読む権威の忠実転写点）。wintf 列挙ログはフィールド補強のみ。3 箇所の列挙は同一関数呼出ゆえ専用突合機構は新設せず、共有語彙の grep 突合で食い違いを検出可能にする。
+- **D13（採用: route 語彙の完全化 9 種・改訂 2026-07-31・タスク 1.4 実装レビュー #1 起因）**: 当初の 7 語彙は実在の書込トリガ 2 つを覆えないことが実装レビューで確定した。①`reconcile_window_size`（`frame.rs:690`）は 2 呼出元の共通末端であり、`dpi_phase_with` 経由（`frame.rs:841`・真に `Changed<DPI>` 由来）と `reconcile_reported_sizes` 経由（`frame.rs:1028`・drain 相＝「表示成立・**初回表示の k₀ 補正を含む**」で `Changed<DPI>` 非依存・`frame.rs:983` の doc が明言）の両方へ `DpiReproject` を貼ると、**DPI 変化ゼロの起動直後にも「DPI 由来」の偽レコードが毎回出る**（混在 DPI 実機でほぼ必発）＝セッション②の受理回数突合（Req 1.9）に偽陽性が混入し Req 1.2「変化を引き起こした経路」に違反する。②`\![move]` cue（`move_cue.rs:619`→`move_window_to`）の対象窓書込に対応語が無く無記録＝Q3（ドラッグ以外の経路での消失）の観測に穴。**検討 3 案**: (a) `ReportedSizeReconcile`＋`MoveCue` の 2 語追加＝全書込トリガと語彙が 1:1 で対応（解決: 偽陽性根絶・Req 1.2 全経路充足・Q3 完備）／(b) drain 語のみ追加＝`\![move]` の識別不能が恒久化／(c) `DpiReproject` の定義拡張＝1 語が 2 トリガを指し route 名での切り分けが不能に。**開発者裁定（2026-07-31 チャット）**「分かるようにログを出せばいい。あとで識別できることが重要。方法は任せる」——識別可能性を満たすのは (a) のみゆえ **(a) 採用**。帰結: ⑴遷移ガードの発火経路集合に `ReportedSizeReconcile` を追加（drain 相の書込も非ドラッグ自動配置＝S3 ガードの保護対象）、⑵`MoveCue` はガード適用外（スクリプト明示操作の尊重＝ドラッグ・Restore と同族）、⑶**requirements.md は無改変**（Req 1.2/2.4 は経路を一般語で要求しており語彙列挙は設計の所有＝要件 gap ではない）、⑷`SpawnInitial`/`Restore` が単一ライター非経由である現状は変えない（語彙のみ保持・将来の配線先として予約）。
 - **確定済み裁定の継承**: D1（恒久観測・専用 target・既定 OFF）、D2（挙動不変リファクタ・観測増設は Req 2.7 の「変更」外）、D4（X＝直前の areka 確定接地点の物理 X・物理 px 座標系）、D5（ガードは非ドラッグ経路のみ・`project_anchor` の外）、D10（構成食い違いは warn＋動かさない・追随は H6 確定時のみ）。
 
 ### Technology Stack
@@ -153,7 +154,7 @@ crates/areka/src/placement/
 | `crates/areka/src/placement/follow.rs` | `PlacementRoute` 引数配管・`guard_visibility`／`work_area_for_window_with_origin`／`VisibilityVerdict` 追加・`enqueue_window_set_pos` 成功時 diag レコード・「entity 不在」と「`Anchored` 欠落」の区別 | 本 spec 単独所有 |
 | `crates/areka/src/placement/spawn.rs` | `GhostWindows::remove_entry_of`・`GhostWindowMarker` `on_remove` hook・ゴースト窓 2 種への `ExternalAuthority` 付与＋檻 | **W6 balloon-visibility へ申し送り** |
 | `crates/areka/src/placement/mod.rs` | `pub mod diag;` 公開・`prepare_ghost_windows` 列挙点で `log_monitor_snapshot` 呼出 | 本 spec 単独所有 |
-| `crates/areka/src/emo2_boot/frame.rs` | `dpi_phase_with` の位置/寸分離（`None` 経路の char 再射影）・`resnap_with`／`reconcile_reported_sizes` の存在確認 | **kero-balloon と同一ファイル・異ハンク＝先着後 rebase 申し送り** |
+| `crates/areka/src/emo2_boot/frame.rs` | `dpi_phase_with` の位置/寸分離（`None` 経路の char 再射影）・`resnap_with`／`reconcile_reported_sizes` の存在確認・`reconcile_window_size` への route 引数配管（DPI 相＝`DpiReproject`／drain 相＝`ReportedSizeReconcile`・D13） | **kero-balloon と同一ファイル・異ハンク＝先着後 rebase 申し送り** |
 | `crates/areka/src/main.rs` | `MonitorSnapshot` 構築点（`main.rs:645` 近傍）で `log_monitor_snapshot` 呼出（Req 1.1 正典） | 本 spec 単独所有 |
 
 > 依存方向（レビューで違反を検出可能にする規約）: `diag.rs` ← `follow.rs` ← `spawn.rs`・`frame.rs` ← `main.rs`。wintf → areka の import は禁止。`diag.rs` は World・wintf 型に依存しない（`Entity`・数値・文字列のみ）。
@@ -219,7 +220,7 @@ flowchart TB
 | 2.1 | Q1〜Q4 の実機ログ引用回答 | diagnosis-report.md | 2 セッションのログ | 
 | 2.2 | 消失時矩形×全 work area の交差判別 | diagnosis-report.md | 1.1/1.2 の出力突合 |
 | 2.3 | ドラッグ追従の数値評価 | diagnosis-report.md | 既存 `[drag]` ログ |
-| 2.4 | 最終位置の書き手を名指しで記録 | diagnosis-report.md・PlacementRoute 語彙 | D11（結論語彙＝route 名＋wintf 2 語） |
+| 2.4 | 最終位置の書き手を名指しで記録 | diagnosis-report.md・PlacementRoute 語彙 | D11・D13（結論語彙＝route 名 9 種＋wintf 2 語） |
 | 2.5 | バルーン随伴の実測確認 | diagnosis-report.md | `balloon_pos − char_pos ≡ offset` 恒等式 |
 | 2.6 | 「再現しない」結論の条件と除外範囲 | diagnosis-report.md | 受理回数下限＋縮退条項（残余仮説のみ除外） |
 | 2.7 | 確定した機構以外を変更しない | 本設計の Phase 構成・Boundary | 挙動不変リファクタ・観測増設は対象外（D2） |
@@ -345,12 +346,19 @@ pub enum PlacementRoute {
     AnchorChange,
     /// 毎フレーム resnap（resnap_from_sizes）
     Resnap,
-    /// DPI 変化の位置再射影（dpi_phase・S2 是正で新設される None 経路を含む）
+    /// DPI 変化の位置再射影（**dpi_phase 限定**・S2 是正で新設される None 経路を含む。
+    /// drain 相の報告回収は ReportedSizeReconcile が担い、本変種と混同しない＝D13）
     DpiReproject,
     /// balloon 窓の位置据置きリサイズ（resize_window_keep_position）
     KeepPositionResize,
     /// キャラ窓確定後のバルーン随伴（follow_balloon）
     BalloonFollow,
+    /// drain 相の報告回収（reconcile_reported_sizes・初回表示の k₀ 補正を含む・
+    /// `Changed<DPI>` 非依存＝DPI 変化ゼロでも発火し得るため DpiReproject と別語＝D13）
+    ReportedSizeReconcile,
+    /// `\![move]` cue によるスクリプト明示移動（move_window_to の対象窓。
+    /// 明示操作の尊重ゆえ遷移ガード適用外＝ドラッグ・Restore と同族＝D13）
+    MoveCue,
 }
 
 /// 起動時モニタスナップショット出力（Req 1.1 正典・物理 px）。
@@ -419,7 +427,7 @@ pub fn guard_visibility(
 - Invariants: World 非依存・panic しない（既存 `BottomSnapPolicy` と同じ `saturating` 流儀）。
 
 **Implementation Notes**
-- Integration: `resize_window_to(world, char_window, new_size, route: PlacementRoute)` へ署名変更。手順 3b（中央付替え）→ `project_anchor`（不変）→ **`guard_visibility`（route が非ドラッグ配置系＝`AnchorChange`/`Resnap`/`DpiReproject` のときのみ）** → べき等 skip → `enqueue_window_set_pos(.., route)`。`Restore` はガード適用外（position-persist の所有・Boundary）。ドラッグ経路（`policy_mapped_position`→`BottomSnapPolicy`）は**一切触らない**。
+- Integration: `resize_window_to(world, char_window, new_size, route: PlacementRoute)` へ署名変更。手順 3b（中央付替え）→ `project_anchor`（不変）→ **`guard_visibility`（route が非ドラッグ配置系＝`AnchorChange`/`Resnap`/`DpiReproject`/`ReportedSizeReconcile` のときのみ・D13）** → べき等 skip → `enqueue_window_set_pos(.., route)`。`Restore` はガード適用外（position-persist の所有・Boundary）。`MoveCue` もガード適用外（スクリプト明示操作の尊重・D13）。ドラッグ経路（`policy_mapped_position`→`BottomSnapPolicy`）は**一切触らない**。
 - **バルーン適用（S3′ 是正・Req 3.4 の構造的充足）**: `follow_balloon` は offset 恒等式で提案位置を出した**後**、同じ `guard_visibility` を**バルーン矩形**（旧矩形＝現 `WindowPos`・提案位置＋現寸）に適用する。`ClampX` 時は X のみ clamp＋`warn!`（完全不可視への遷移だけを防ぐ安全網）・既に非交差（ユーザー留置）は Keep で尊重——キャラ窓と完全に同一の遷移規則・同一の純関数（新規機構ゼロ）。clamp でバルーンがキャラと部分重なりし得るが、*見えない会話*より*重なった会話*を優先する（ユーザー目線裁定 2026-07-31）。画面端での左右反転等の**美観配置政策は M2 SSP 互換へ先送り**（本ガード＋warn がその縮退シーム）。
 - Validation: `ClampX` 発火時は `warn!`（Req 3.1/3.2 の観測・非ドラッグ経路ゆえ spam しない）。`NearestFallback` 発火は非ドラッグ経路で `warn!`・ドラッグ経路は従来 `debug!` のまま（Req 3.3 の水準分岐＝route が第一級引数である理由）。
 - 消費側の区別（Req 6.2/6.3）: `resize_window_to` 冒頭に `world.get_entity(char_window)` の存在確認を足し、**不在は `debug!` で skip（正常終了系）**・実在するが `Anchored` 欠落は従来どおり `warn!`（真の異常）。
