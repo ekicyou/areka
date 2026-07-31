@@ -259,11 +259,21 @@ impl ScriptedShioriHandle {
 ///
 /// # 適用範囲
 ///
-/// - **対象**: 待機対象が別スレッドの進行であり、各反復が**何も進めない**純粋なポーリング
-///   （`non_status_calls()` / `drain_received()` を読むだけのループ）。必ず本猶予で打ち切ること。
-/// - **非対象**: 各反復が `inject_dispatcher_tick` / `inject_seriko_tick` で**系そのものを進める**
-///   ループ。そこでは反復回数が注入 Tick 列＝仕事量を表すため、時刻で打ち切ると注入列が短くなり
-///   意味が変わる（`tick_and_collect` 等）。
+/// 分類の軸は「Tick を注入するか」ではなく **「別スレッドの進行を待っているか」** である。
+///
+/// - **対象（[`spin_wait_until`] を使う）**: 待機対象が別スレッドの進行であり、各反復が**何も進めない**
+///   純粋なポーリング（`non_status_calls()` / `drain_received()` を読むだけのループ）。
+/// - **対象（本猶予の期限だけを借りる。ただし期限は十分条件ではない）**: 各反復で
+///   `inject_dispatcher_tick` により**系を進めつつ**、同じ反復で `drain_received()` 等により
+///   **別スレッドの結果も待つ**ハイブリッドのループ（[`spin_wait_until`] は純粋ポーリング専用ゆえ
+///   流用しない）。ここでは打ち切りを時刻期限にするだけでは足りず、**注入する simulated time が
+///   待っている観測を追い越さない**ことを構造で保証しなければならない。追い越しうる時刻には必ず
+///   上限（頭打ち）を置くこと。実測: S2 Phase 1 は毎反復 `now += 5` が 210 反復（実時間 ~0.6 秒）で
+///   Clear cue の時刻を跨ぎ、リビール観測が間に合わないと**待っている条件そのものが破壊**されて
+///   永久に不成立になる——並行実行時に約 2% 失敗し、期限を 30 秒に延ばしても 50 回中 3 回失敗した。
+///   期限は「壊れていない条件を待つ」ためのものであり、条件が壊れるレースは期限では直らない。
+/// - **非対象**: 別スレッドの進行を待たず、注入 Tick 列そのものが仕事量であるループ。時刻で打ち切ると
+///   注入列が短くなり意味が変わる。
 ///
 /// 猶予は通常経路（マイクロ秒〜ミリ秒）に対して桁違いに大きく取る。期限切れは呼び手の assert が
 /// 落として原因を名指しするので hang しない。
@@ -1459,14 +1469,47 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
     let mut show_cmds: Vec<PresentCommand> = Vec::new();
     let mut now = 0u64;
     let mut text_reached = false;
-    for _ in 0..100_000u32 {
-        now += 5; // 小刻みで進め、テキスト到達（at=0.05）直後に打ち切る（Clear=at1.05 へ到達しない）
+    // ── 注入 elapsed は「観測を追い越してはならない」（flake の根因・約 2%） ───────────────────
+    //
+    // 旧形（`for _ in 0..100_000u32` で毎反復 `now += 5`）は 210 反復＝実時間 ~0.6 秒で elapsed が
+    // Clear（at=1.05）を跨ぐ。CPU 競合下でパイプライン（dispatcher→sakura→seriko→present→text
+    // sink→GPU 合成）のリビールがそれに間に合わないと、**Clear が配送されて text バッファが全消去**
+    // され、`text_surface_opaque > 0` は以後**永久に成立しない**。すなわち反復上限を時刻期限へ替えても
+    // 直らない（実測: 30 秒期限版でも 50 回中 3 回失敗・いずれも期限を使い切っての不成立）。
+    //
+    // 是正は 2 段:
+    //  (1) **talk 起動を観測するまで `now` を進めない**。dispatcher の `base_now` は「talk が active に
+    //      なった後の初回 Tick」で確定する（areka-ghost `dispatcher.rs::on_tick`）ため、観測前に進めた
+    //      分は base に呑まれて無意味な一方、観測が遅れたときだけ elapsed を余計に進めてしまう。
+    //      `\s[2100]` は Emote@0.0＝elapsed 0.0 で due ゆえ、`now` 据え置きのまま必ず到達する。
+    //  (2) 観測後は従来どおり 5ms/反復で進めるが **[`S2_PHASE1_ELAPSED_CAP_MS`] で頭打ち**にする。
+    //      Text（at=0.05）は確実に解放され、Clear（at=1.05）へは**構造的に到達しない**ので、リビール
+    //      観測がどれだけ遅れても条件が不成立へ倒れない＝レースが消える。
+    //
+    // 打ち切りは反復回数でなく [`SPIN_WAIT`] の時刻期限（頭打ち後は反復が仕事量を表さないため）。
+    // Phase 1 で dispatcher elapsed を進める上限 [ms]。Text（at=0.05）を確実に解放し、Clear
+    // （at=1.05）へは決して届かない中間点。
+    const S2_PHASE1_ELAPSED_CAP_MS: u64 = 500;
+    let mut talk_started = false;
+    let deadline = Instant::now() + SPIN_WAIT;
+    while Instant::now() < deadline {
+        if talk_started {
+            // 小刻みに進め、テキスト到達（at=0.05）を解放する（頭打ちゆえ Clear=at1.05 へ届かない）。
+            now = (now + 5).min(S2_PHASE1_ELAPSED_CAP_MS);
+        }
         harness.inject_dispatcher_tick(now);
         show_cmds.extend(harness.wiring.drain_received());
+        if !talk_started {
+            // この talk 由来の Emote@0.0 が present まで抜けた＝base_now は据え置き値で確定済み。
+            talk_started = show_cmds.iter().any(|c| {
+                matches!(c, PresentCommand::ShowSurface { target, surface_id, .. }
+                    if *target == shell_target(0) && *surface_id == 2100)
+            });
+        }
         harness.pump_text();
         // テキスト cue 到達確認: 完全リビール域 t=0.30 で非透明になれば runtime へ流入済み。
         run_text_phase(&mut harness.wiring, &mut harness.world, Some(0.30));
-        if !show_cmds.is_empty() && text_surface_opaque(&harness, &actor) > 0 {
+        if talk_started && text_surface_opaque(&harness, &actor) > 0 {
             text_reached = true;
             break;
         }
@@ -1544,7 +1587,9 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
     //    どの注入 talk_time でも text 供給面が全域透明（premultiplied 全 0）へ戻る。配送前は
     //    present_frame(2.0)＝全リビール（非透明）ゆえ、0 への遷移が Clear 到達の観測点になる。 ──
     let mut clear_reached = false;
-    for _ in 0..100_000u32 {
+    // Phase 1 と同型のハイブリッド（Tick 注入＋別スレッド結果の観測）ゆえ、打ち切りは同じく時刻期限。
+    let deadline = Instant::now() + SPIN_WAIT;
+    while Instant::now() < deadline {
         now += 50; // 大きめに進め Clear（at=1.05s）を配送させる
         harness.inject_dispatcher_tick(now);
         harness.pump_text();
