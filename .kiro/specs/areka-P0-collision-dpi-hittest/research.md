@@ -248,3 +248,44 @@
 - **k の厳密性は放棄しないことを推奨**（β/γ）。`presenter.rs:678-684` の実測警告と W6.5 の存在は、f32 経路が「1px 食い違う」ことを**既に証明済み**である。境界 1px が判定を決める本 spec で α を採ると、R2.2/R2.3 の主張が実質的に空証明になる。
 - **檻は「÷k を引数 k で受ける純関数」を最小単位に置くこと**（R3.1 が GPU 不要・実窓不要を要求する以上、これは選択ではなく制約）。そのうえで DD-6 で照合まで含めるかを決める。
 - **probe は「2 水準で物理寸が異なること」を hard assert に含めることを推奨**（R4.1 の証跡要求を機械化でき、k=1.0 への静かな退行を人手判断に委ねない）。
+
+---
+
+## 9. 設計フェーズ記録（2026-07-31・design.md 生成時）
+
+> ディスカバリ種別: **light**（既存システム拡張・外部依存なし）。§1〜§8 の実測を土台に、設計直前の現物再検証と R-1 の静的解決を追加実施した。以下の裁定の正本は `design.md`（本節は経緯ログ）。
+
+### 9.1 追加実測（設計前検証・全て現物確認）
+
+- §2 の全アンカー（`applied_scale` :705／`applied` :108／`hit_region` :867・doc :858-861／`target_physical_size` :687／f32 警告 :678-681／`ScaleRatio` 公開面／`hit.rs` :57・:72・檻 :102-211／`resolve_hit_region` :69-73／DD-IE-10 各所／`to_window_physical` :260・k=2 檻／probe 各所）は**現物と一致**（ドリフトなし）。
+- `hit.rs` の既存檻は 9 本（§2.4 の記載より多い）: `closed_interval_edges_and_corners` が境界内外 1px を単独で網羅しており、R3.3 の k 空間版はこれと 1:1 対応で設計した。
+- `areka-emo-present/src/lib.rs:53` は `ScaleRatio` を再輸出していない（`derive_scale` の戻り型として公開署名には現出済み）→ 設計で再輸出を追加（型の命名可能化のみ・新 API ではない）。
+
+### 9.2 R-1〜R-4 の決着
+
+- **R-1（probe が実 k を得られるか）= 静的実測で解決（YES）**: wintf は窓生成時に `DPI` component を実モニタ値で初期化する。①`on_window_add`（`crates/wintf/src/ecs/window/components.rs:190-208`）が `CreateWindowExW` 前に `GetDpiForSystem()` で事前設定 ②`on_window_handle_add`（`crates/wintf/src/ecs/window/window_handle.rs:207-245`）が生成直後に `GetDpiForWindow(hwnd)` で補正（差分時のみ挿入）。`apply_show` は show 時点の component を読むため、120dpi モニタ上では初回表示から k=5/4。**probe に DPI 追従駆動（`run_dpi_phase` 相当）は不要**＝1 実行 1 水準・2 回実行方式を採用。傍証: `emo2_boot/spine.rs:1050-1052`・`frame.rs:1306`（`Changed<DPI>` は生成時補正も同フレームで拾う）。系: 現行 probe の `assert_eq!(scale, 1.0)` は**既に実行機依存で落ち得る**（改修必須の追加根拠）。初回実機実行時のログ確認を残余検証として design のサインオフ手順に組込み。
+- **R-2（本番 shell の実 k ログ実測）**: 設計で手順化（`hit_region_client` の debug ログ＋有界 auto-exit＋grep）。acceptance-record の実施項目。
+- **R-3**: 要件ディスカッションで決着済み（DD-4 CLOSED・§6.1）。
+- **R-4（125% で割り切れない縮約）**: probe の期待ゲート（`AREKA_COLLISION_PROBE_EXPECT_K="5/4"`）実測で充足確認する形に設計へ組込み。
+
+### 9.3 設計判断の最終裁定（正本は design.md）
+
+| DD | 裁定 |
+|---|---|
+| DD-1 | **候補 B 確定**: `s(v) = ((2v+1)·den).div_euclid(2·num)`（resample 画素中心写像の最近傍逆・i128 中間・Euclid 除算）。R2.2「上流の寸法丸め規約と整合」= resample 実写像との整合と解釈確定。A は k>1 系統的半画素ずれ・C は整数倍 k で半画素ずれのため棄却 |
+| DD-2 | 合成純関数 `hit_region_scaled` を `areka-emo-compose/src/hit.rs` に姉妹新設＋production は `EmoPresenter::hit_region_client` 新設→`resolve_hit_region` 1 行切替。brief Approach 1（既存 hit_region 内÷k）は W4 doc 契約と衝突のため不採用（doc は「正準の呼び手＝hit_region_client」へ改訂・R5.3 範囲） |
+| DD-3 | β/γ 折衷: 丸め権威 `ScaleRatio::unscale_coord`（emo-compose）＋presenter は私有 `applied` 直読（f32 非経由）。probe 用に `applied_ratio -> Option<ScaleRatio>` 公開・`ScaleRatio` を emo-present から再輸出。num/den アクセサは新設せず（W6.5 `ratio()` との名前二重化回避）。**W6.5 への申し送り**: scale.rs へ置く公開面は `unscale_coord` のみ・W6.5 は設計前に着地後 scale.rs へ rebase |
+| DD-4 | CLOSED（§6.1）。実装形: `ScaledHit.surface_point` → `HitRegion.surface_point` 追加 → `MouseInput{x,y}` 生成 2 箇所切替。throttle は client px 維持（throttle.rs 無変更） |
+| DD-5 | (b)+(c): 防御分岐（warn＋ONE）＋presenter in-source 私有状態檻（GPU 不要）＋「現行公開 API では到達不能」を doc 明記 |
+| DD-6 | **合成粒度**（÷k＋照合）を檻の最小単位に確定（「÷k 呼び忘れ」が本欠陥クラスゆえ）。加えて unscale_coord 単体の丸め檻も併設 |
+| DD-7 | 既存 probe 改修 6 点: ①resize 先 `target_physical_size` ②anchor 物理写像（描画証跡と明記） ③k=1.0 assert → env 期待ゲート `AREKA_COLLISION_PROBE_EXPECT_K` ④`GetClientRect == physical` ⑤DPI 駆動追加なし（R-1 解決） ⑥陳腐化コメント改訂 |
+| DD-8 | VOID（§6.1・バルーンに欠陥なし） |
+| DD-9 | (c) 折衷確定: completed 配下は日付付き追記のみ・正準契約はコード doc 5 ファイル（対象 9 箇所の一覧は design.md Supporting References） |
+| DD-10 | 実測どおり W5 同居と互いに素を維持（mod.rs は choice-select-events の編集面外・balloon.rs はコメント＋テスト異ハンクのみ＝R6.7 例外条項内）。W6.5 とは scale.rs 先着＝申し送り済み |
+| DD-11 | balloon.rs コメント改訂（k=1.0 理由全廃）＋in-source 檻 2 本（無変換ヒット固定＋÷k 退行検出）。f32 1px と無関係に成立するよう檻座標は境界から 2px 以上離す |
+
+### 9.4 シンセシス所見
+
+- **一般化**: 除算方向の丸めを「当たり判定専用」でなく `ScaleRatio` の座標縮約権威として置く（`scaled_extent` と対）。インターフェイスのみ一般化・実装は本要件の範囲に限定。
+- **build vs adopt**: 外部採用なし（std 整数演算で閉じる・R6.6 の新規依存禁止とも整合）。既存資産の最大再利用: 照合・画家則・閉区間は既存 `hit_region` へ完全委譲、物理寸は `target_physical_size`、行矩形持ち上げは既存 `to_window_physical`。
+- **単純化**: probe 新設（§4.4 候補 B）棄却・DPI 追従駆動の probe 組込み棄却（R-1 解決で不要）・num/den アクセサ棄却・`HitRegion` の別型新設でなくフィールド追加。縮約実行点は正常経路 1 箇所＋縮退経路 1 箇所に限定し二重縮約を構造排除。
