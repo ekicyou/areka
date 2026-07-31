@@ -26,6 +26,7 @@
 //! [`ElementDecoder::probe_pna`]: areka_emo_atlas::ElementDecoder::probe_pna
 //! [`ComposeError::EmptyComposition`]: areka_emo_compose::ComposeError::EmptyComposition
 
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use areka_emo_atlas::{
@@ -175,6 +176,104 @@ pub fn prefix_chain(family: &SeriesFamily, scope: u32) -> Vec<SeriesPrefix> {
     }
 
     chain
+}
+
+/// 解決済みの 1 面（連鎖探索の採用結果）。
+///
+/// 解決の**一時値**であり、構築後に保持する必要はない——採用面から上書きファイル名を導出する
+/// 規則は本モジュール（系列解決の単一権威）にあり、いつでも再導出できるため。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolvedFace {
+    /// 面 ID（`{接頭辞}{ID}.png` の `{ID}` ＝ surface id）。
+    pub surface_id: u32,
+    /// 採用接頭辞（連鎖内で最初に画像が存在したもの）。
+    pub prefix: String,
+    /// 採用接頭辞が連鎖内で担っていた役割（scope≧1 での [`ChainTier::Default`] 採用＝
+    /// 本体側への縮退であり、警告記録の判定に用いる）。
+    pub tier: ChainTier,
+    /// 実ファイル名（**原形保持**——実 WIC デコードが実パスを読むため大小を正規化しない）。
+    pub file_name: String,
+}
+
+/// `{prefix}{ID}.png`（大小無視）なら面 ID を返す。バルーン面でなければ `None`（R1.5）。
+///
+/// 判定は**厳密 3 段**である——
+///
+/// 1. **接頭辞の完全一致 strip**（大小無視）
+/// 2. **`.png` の strip**
+/// 3. **残余の全数字化**（空でなく、すべて ASCII 数字であること）
+///
+/// 接頭辞は完全一致ゆえ、入力ウィンドウ用 `balloonc0.png` を `balloonk` の面と誤認する事故は
+/// 構造的に起こり得ない。装飾用の `arrow*` / `marker*` / `online*` も吹き出し族のどの接頭辞にも
+/// 一致しない。3 段目を `u32::parse` 任せにせず全数字を明示検査するのは、`parse` が符号
+/// （`balloons+0.png` の `+0`）を受理してしまうためで、正典の面 ID 表記は符号を持たない。
+fn face_id_of(prefix: &str, name: &str) -> Option<u32> {
+    let lower = name.to_ascii_lowercase();
+    // (1) 接頭辞 strip（大小無視）→ (2) 拡張子 strip。
+    let digits = lower
+        .strip_prefix(prefix.to_ascii_lowercase().as_str())?
+        .strip_suffix(FRAME_SUFFIX)?;
+    // (3) 残余の全数字化（空・非数字・符号付きは面でない）。
+    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    digits.parse::<u32>().ok()
+}
+
+/// ファイル名リストと接頭辞連鎖から採用面列を決める**純核**（fs 非依存・R1.2/1.3/1.4/1.5）。
+///
+/// 手順は 2 段である——
+///
+/// 1. **面 ID 集合の和**: 連鎖内の**全**接頭辞にまたがって面 ID を集める。ある接頭辞にしか
+///    存在しない ID も候補に入り、先頭接頭辞の ID 集合には閉じない。
+/// 2. **ID 単位の連鎖走査**: 各 ID について連鎖を**先頭から**辿り、最初に画像が存在した
+///    接頭辞の面を採用する（R1.2）。ある ID の欠落は当該 ID の採用先を後段へずらすだけで、
+///    当該 scope の系列全体を後段の接頭辞へ切り替えない（R1.3——`balloonk0` があり
+///    `balloonk1` が無ければ、scope 1 の面 0 は `balloonk0`・面 1 は `balloons1`）。
+///
+/// 連鎖の末尾は常に族の scope 0 旧名（吹き出し族＝`balloons`）ゆえ、先頭側接頭辞の画像を
+/// 1 枚も含まないバルーンでは全 scope が `balloons` 系列へ収束し、本仕様適用前と同一の
+/// 面集合を得る（R1.4）。
+///
+/// 戻りは **surface id 昇順**——`(面 ID, 連鎖位置)` をキーとする [`BTreeMap`] の順序で決定化して
+/// おり、入力（ディレクトリ走査順）に依存しない。走査順は非決定ゆえ、同一 (ID, 接頭辞) に大小
+/// 違いの複数ファイルが併存する病的入力では**ファイル名の辞書順最小**を採り、ここでも走査順に
+/// 結果を左右させない。
+pub fn select_faces<S: AsRef<str>>(names: &[S], chain: &[SeriesPrefix]) -> Vec<ResolvedFace> {
+    // (面 ID, 連鎖位置) → 実ファイル名。BTreeMap のキー順が「ID 昇順・連鎖先頭優先」と
+    // 一致するため、和の構築と ID 単位走査を 1 本の走査で両立できる。
+    let mut hits: BTreeMap<(u32, usize), String> = BTreeMap::new();
+    for name in names {
+        let name = name.as_ref();
+        // 1 つの名前が複数の接頭辞に一致し得る（族の旧名が入れ子な場合）ため全段を見る。
+        for (index, candidate) in chain.iter().enumerate() {
+            let Some(id) = face_id_of(&candidate.prefix, name) else {
+                continue;
+            };
+            hits.entry((id, index))
+                .and_modify(|adopted| {
+                    if name < adopted.as_str() {
+                        *adopted = name.to_string();
+                    }
+                })
+                .or_insert_with(|| name.to_string());
+        }
+    }
+
+    let mut faces: Vec<ResolvedFace> = Vec::new();
+    for ((surface_id, index), file_name) in hits {
+        // 同一 ID の 2 件目以降は連鎖のより後段＝不採用（先頭から最初の一致のみを採る）。
+        if faces.last().is_some_and(|f| f.surface_id == surface_id) {
+            continue;
+        }
+        faces.push(ResolvedFace {
+            surface_id,
+            prefix: chain[index].prefix.clone(),
+            tier: chain[index].tier,
+            file_name,
+        });
+    }
+    faces
 }
 
 /// `balloon_dir` から枠画像を列挙し `(surface_id, ファイル名)` を **surface id 昇順**で返す。
@@ -616,6 +715,243 @@ mod tests {
             ],
             "デフォルト段にも可変長の旧名候補列がそのまま展開される"
         );
+    }
+
+    // ── 檻 2-5: 面 ID 単位の連鎖探索（純核 `select_faces`・R1.2/1.3/1.4/1.5・R7.1）─────
+
+    /// `(surface_id, 採用接頭辞, tier, ファイル名)` の簡約形（表明の可読性のため）。
+    fn selected(names: &[&str], scope: u32) -> Vec<(u32, String, ChainTier, String)> {
+        let chain = prefix_chain(&BALLOON_FAMILY, scope);
+        select_faces(names, &chain)
+            .into_iter()
+            .map(|f| (f.surface_id, f.prefix, f.tier, f.file_name))
+            .collect()
+    }
+
+    /// 檻 2（R1.2/R1.10）正規名優先: 正規名 `{base}p{s}def{ID}` と旧名が併存する場合、
+    /// 連鎖先頭の正規名が採られる（scope 0 の `balloonp0def`・scope 1 の `balloonp1def` とも）。
+    #[test]
+    fn select_faces_prefers_canonical_name_over_legacy() {
+        assert_eq!(
+            selected(&["balloons0.png", "balloonp0def0.png"], 0),
+            vec![(
+                0,
+                "balloonp0def".to_string(),
+                ChainTier::Own,
+                "balloonp0def0.png".to_string()
+            )],
+            "scope 0: 正規名 balloonp0def0.png が旧名 balloons0.png に優先する"
+        );
+        assert_eq!(
+            selected(&["balloons0.png", "balloonk0.png", "balloonp1def0.png"], 1),
+            vec![(
+                0,
+                "balloonp1def".to_string(),
+                ChainTier::Own,
+                "balloonp1def0.png".to_string()
+            )],
+            "scope 1: 正規名 balloonp1def0.png が旧名 balloonk0.png にも Default 段にも優先する"
+        );
+    }
+
+    /// 檻 3（R1.3）ID 単位フォールバック: `balloonk0` があり `balloonk1` が無いとき、
+    /// scope 1 の面 0 は `balloonk0`（tier=Own）・面 1 は `balloons1`（tier=Default）。
+    /// ある ID の欠落を理由に系列全体を後段の接頭辞へ切り替えない。
+    #[test]
+    fn select_faces_falls_back_per_face_id_not_per_series() {
+        let names = ["balloonk0.png", "balloons0.png", "balloons1.png"];
+        assert_eq!(
+            selected(&names, 1),
+            vec![
+                (
+                    0,
+                    "balloonk".to_string(),
+                    ChainTier::Own,
+                    "balloonk0.png".to_string()
+                ),
+                (
+                    1,
+                    "balloons".to_string(),
+                    ChainTier::Default,
+                    "balloons1.png".to_string()
+                ),
+            ],
+            "面 0 は相方側・面 1 のみデフォルト段へ縮退する（系列一括切替でない）"
+        );
+        assert_eq!(
+            selected(&names, 0),
+            vec![
+                (
+                    0,
+                    "balloons".to_string(),
+                    ChainTier::Own,
+                    "balloons0.png".to_string()
+                ),
+                (
+                    1,
+                    "balloons".to_string(),
+                    ChainTier::Own,
+                    "balloons1.png".to_string()
+                ),
+            ],
+            "scope 0 の連鎖に balloonk は無く、相方側の面を一切採らない"
+        );
+    }
+
+    /// R1.3（ID 集合の和）: 面 ID は連鎖内の**全**接頭辞にまたがる和であり、先頭接頭辞の
+    /// ID 集合に閉じない。先頭にしか無い ID も後段にしか無い ID も双方が採られる。
+    #[test]
+    fn select_faces_unions_face_ids_across_all_prefixes() {
+        assert_eq!(
+            selected(&["balloonp1def2.png", "balloons0.png"], 1),
+            vec![
+                (
+                    0,
+                    "balloons".to_string(),
+                    ChainTier::Default,
+                    "balloons0.png".to_string()
+                ),
+                (
+                    2,
+                    "balloonp1def".to_string(),
+                    ChainTier::Own,
+                    "balloonp1def2.png".to_string()
+                ),
+            ],
+            "後段にしか無い ID 0 と先頭にしか無い ID 2 の双方が面集合に入る"
+        );
+    }
+
+    /// 檻 4（R1.4）後方互換収束: 連鎖の先頭側接頭辞の画像を 1 枚も含まないバルーンでは、
+    /// 全 scope が `balloons` 系列へ解決され、同一の面集合（ID と採用ファイル）を得る。
+    /// tier は連鎖上の地位ゆえ scope で異なる（scope 0 は Own・scope≧1 は Default）。
+    #[test]
+    fn select_faces_converges_to_legacy_series_for_all_scopes() {
+        let names = ["balloons0.png", "balloons1.png", "balloons2.png"];
+        let faces_of = |scope: u32| -> Vec<(u32, String, String)> {
+            select_faces(&names, &prefix_chain(&BALLOON_FAMILY, scope))
+                .into_iter()
+                .map(|f| (f.surface_id, f.prefix, f.file_name))
+                .collect()
+        };
+
+        let scope0 = faces_of(0);
+        assert_eq!(scope0.len(), 3, "balloons 3 枚がそのまま面集合になる");
+        for scope in [1u32, 2, 7] {
+            assert_eq!(
+                faces_of(scope),
+                scope0,
+                "scope {scope} の面集合が scope 0 と一致しない（後方互換収束の破れ）"
+            );
+        }
+    }
+
+    /// 檻 5（R1.5）非バルーン面除外: 入力ウィンドウ用 `balloonc*`・装飾用 `arrow*`/`marker*`/
+    /// `online*`・非数字・非 png はどの連鎖でも採用されない。接頭辞は完全一致ゆえ
+    /// `balloonc0.png` を `balloonk` の面と誤認する事故は構造的に起こり得ない。
+    #[test]
+    fn select_faces_rejects_non_balloon_faces() {
+        let names = [
+            "balloonc0.png", // 入力ウィンドウ（バルーン面でない）
+            "balloonc1.png", // 同上
+            "arrow0.png",    // スクロール矢印（装飾）
+            "arrows0.png",   // 同上
+            "marker.png",    // マーカー（装飾）
+            "online0.png",   // 受信アニメ（装飾）
+            "balloonsX.png", // 残余が非数字
+            "balloons0.txt", // 非 png
+            "balloons.png",  // 残余が空
+            "balloonk.png",  // 残余が空（相方側）
+        ];
+        for scope in [0u32, 1, 5] {
+            assert!(
+                selected(&names, scope).is_empty(),
+                "scope {scope} の連鎖が非バルーン面を採用した: {:?}",
+                selected(&names, scope)
+            );
+        }
+        assert_eq!(
+            face_id_of("balloonk", "balloonc0.png"),
+            None,
+            "balloonc を balloonk と誤認しない（接頭辞完全一致）"
+        );
+    }
+
+    /// R1.5（判定 3 段）: 接頭辞 strip（大小無視）→ `.png` strip → 残余の全数字化。
+    /// いずれか 1 段でも満たさなければ面でない。
+    #[test]
+    fn face_id_of_is_strict_three_stage_predicate() {
+        assert_eq!(face_id_of("balloons", "balloons0.png"), Some(0));
+        assert_eq!(face_id_of("balloons", "balloons12.png"), Some(12));
+        assert_eq!(face_id_of("balloonk", "balloonk1.png"), Some(1));
+        assert_eq!(
+            face_id_of("balloonp0def", "BalloonP0Def3.PNG"),
+            Some(3),
+            "大小無視で判定する"
+        );
+        assert_eq!(
+            face_id_of("balloons", "balloonk0.png"),
+            None,
+            "接頭辞は完全一致（部分一致で拾わない）"
+        );
+        assert_eq!(face_id_of("balloons", "balloons.png"), None, "残余が空");
+        assert_eq!(
+            face_id_of("balloons", "balloonsX.png"),
+            None,
+            "残余が非数字"
+        );
+        assert_eq!(face_id_of("balloons", "balloons0.txt"), None, "非 png");
+        assert_eq!(
+            face_id_of("balloons", "balloons+0.png"),
+            None,
+            "符号付きは全数字でない"
+        );
+    }
+
+    /// 決定論（設計 Postconditions）: 戻りは surface id **昇順**であり、入力（ディレクトリ
+    /// 走査順）に依存しない。辞書順ではなく数値順である（`balloons10` は `balloons2` の後）。
+    #[test]
+    fn select_faces_is_deterministic_regardless_of_input_order() {
+        let ascending = [
+            "balloons0.png",
+            "balloons1.png",
+            "balloons2.png",
+            "balloons10.png",
+        ];
+        let shuffled = [
+            "balloons10.png",
+            "balloons2.png",
+            "balloons0.png",
+            "balloons1.png",
+        ];
+        let a = selected(&ascending, 0);
+        assert_eq!(a, selected(&shuffled, 0), "入力順に結果が依存しない");
+        assert_eq!(
+            a.iter().map(|f| f.0).collect::<Vec<_>>(),
+            vec![0, 1, 2, 10],
+            "surface id 昇順（辞書順でない）"
+        );
+    }
+
+    /// ファイル名は**原形保持**（実 WIC デコードが実パスを読むため大小を正規化しない）。
+    /// 同一 (ID, 接頭辞) に大小違いが併存する病的入力では辞書順最小を採り、走査順に
+    /// 結果を左右させない。
+    #[test]
+    fn select_faces_preserves_original_file_name_case() {
+        assert_eq!(
+            selected(&["BALLOONS0.PNG"], 0),
+            vec![(
+                0,
+                "balloons".to_string(),
+                ChainTier::Own,
+                "BALLOONS0.PNG".to_string()
+            )],
+            "採用ファイル名は原形のまま保持される"
+        );
+        let a = selected(&["BALLOONS0.PNG", "balloons0.png"], 0);
+        let b = selected(&["balloons0.png", "BALLOONS0.PNG"], 0);
+        assert_eq!(a, b, "大小違い併存でも走査順に依存しない");
+        assert_eq!(a.len(), 1, "同一 ID の採用面は 1 つ");
     }
 
     /// 枠が 1 枚も無ければ log-first で `EmptyComposition`（Hide 縮退許容）を返す。
