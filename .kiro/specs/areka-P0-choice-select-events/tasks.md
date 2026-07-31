@@ -145,7 +145,7 @@
   - _Depends: 1.3, 4.3_
 
 - [ ] 6. 検証: 決定論檻
-- [ ] 6.1 カスケード 2 形と選択起因失敗の統合檻を実装する
+- [x] 6.1 カスケード 2 形と選択起因失敗の統合檻を実装する
   - 任意名形は任意名イベントのみが発行され拡張・無印が発行されないこと、応答から起動と選択解決が行われることを固定する
   - 正典形は拡張イベントが正典 Reference 並びで先行し、空応答で無印へ前進し、最終段が空なら選択解決のみで起動が生じないことを固定する
   - 段の送出失敗が終了系列へ倒れず無応答相当で継続すること、および既存の失敗系テストが不変であることを固定する
@@ -217,3 +217,4 @@
 - 4.6: 規則 7 の「close 系遷移」は **ClosePending への実遷移**と解した（active talk 中の `CloseRequest` 受領＝`pending_close` 記録のみでは掃除しない）。受領時に消すと選択解決もタイムアウトも脱出路を失い close がデッドロックするため（レビューで実測確認済み）。
 - 4.6: 新規 trace 語彙 `choice_ledger_cleared`（design ログ表に未記載）。`choice_timeout_ledger_stale` は**残置が正**（規則 1 の棄却 3 経路が不一致帳簿を明示復元するため掃除点を通らない経路が規約上実在）。**7.1 の対応表へ両語彙を記録するか要判断**。
 - 5: `ChoiceForwarder`（`Sender<KanadeMsg>` は `!Sync` ゆえ bevy `Resource` 不可＝NonSend 保持体）と `forward_all`（World を組まずに drain ループを檻へ入れる ECS 分離核）を新設。schedule 位置は `.after(dispatch_pointer_events)`（同一フレーム転送）。trace 語彙 `choice_drain_no_inbox`/`choice_drain_no_forwarder` 追加（donor `mouse_*_no_wiring` と同型）。
+- 6.1: 統合檻は `crates/areka-kanade/tests/kanade/choice_test.rs`。`Fixture::with_choice_response` で choice 応答表を注入する（**未知 GET の catch-all を経由するので、固定 4 ID など既存アームに一致する id を入れても黙って無視される**——6.2/6.3 の落とし穴）。`log_capture` は `src/schedule/` 配下ゆえ統合檻から到達不能＝ログ語彙の固定は in-source 檻の担当。

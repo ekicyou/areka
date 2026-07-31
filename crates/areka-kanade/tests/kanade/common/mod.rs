@@ -158,6 +158,21 @@ pub enum MouseResponse {
     NoContent,
 }
 
+/// 選択由来 GET（任意名イベント／`OnChoiceSelectEx`／`OnChoiceSelect`／`OnChoiceTimeout`）へ
+/// 注入する応答パターン（6.1）。
+///
+/// [`MouseResponse`] と同型の 2 値語彙だが、注入先が別表（[`Fixture::choice_responses`]）である
+/// ことを型で区別する。カスケードの各段はイベント id で識別されるため、段ごとに script／204 を
+/// 打ち分けられる（正典形の「Ex が 204 → 無印へ前進」「Ex が Value → 無印を発行しない」の
+/// 両分岐を同一器で作れる）。
+#[derive(Debug, Clone)]
+pub enum ChoiceResponse {
+    /// talk スクリプト Value を返す（カスケードを短絡させ StartTalk を起こす）。
+    Script(String),
+    /// 204 / NoContent を返す（無応答＝次段へ前進、または最終段なら解決のみ）。
+    NoContent,
+}
+
 /// mock shiori の応答表（Req 7.1）。シナリオごとに構成する。
 ///
 /// 基調は fixture 表どおり（OnInitialize→Notified／OnFirstBoot→204／OnBoot→固定 Value／
@@ -197,6 +212,12 @@ pub struct Fixture {
     /// 同値ゆえ additive（既存 consumer は mouse GET を発しないので無影響）。4.2／4.3 の檻が
     /// [`Fixture::with_mouse_response`] でイベント別に script／204 を注入する。
     pub mouse_responses: HashMap<&'static str, MouseResponse>,
+    /// 選択由来 GET のイベント id → 注入応答の対応（6.1）。
+    ///
+    /// キーは wire 形のイベント id（`"OnChoiceSelectEx"`／`"OnChoiceSelect"`／`"OnChoiceTimeout"`
+    /// および `\q` の `On` 始まり任意名 ID そのもの）。含まれない id は 204（`NoContent`）——
+    /// 未注入既定は従来の catch-all（未知 GET＝204）と同値ゆえ additive である。
+    pub choice_responses: HashMap<&'static str, ChoiceResponse>,
 }
 
 impl Default for Fixture {
@@ -210,6 +231,7 @@ impl Default for Fixture {
             close_quits: false,
             farewell_script: FIXED_FAREWELL_SCRIPT.to_string(),
             mouse_responses: HashMap::new(),
+            choice_responses: HashMap::new(),
         }
     }
 }
@@ -246,6 +268,16 @@ impl Fixture {
     /// Integration #1「Value→StartTalk」）。
     pub fn with_mouse_response(mut self, id: &'static str, response: MouseResponse) -> Self {
         self.mouse_responses.insert(id, response);
+        self
+    }
+
+    /// 選択由来 GET のイベント id へ注入応答（script Value ／ 204）を設定する（6.1・連鎖記法）。
+    ///
+    /// `id` は wire 形のイベント id（任意名 ID・`"OnChoiceSelectEx"`・`"OnChoiceSelect"`・
+    /// `"OnChoiceTimeout"`）。同一 id への再指定は後勝ちで上書きする。未設定の id は 204
+    /// （`NoContent`）のまま——カスケードの段ごとに応答を打ち分ける唯一の口である。
+    pub fn with_choice_response(mut self, id: &'static str, response: ChoiceResponse) -> Self {
+        self.choice_responses.insert(id, response);
         self
     }
 }
@@ -307,8 +339,14 @@ impl FixtureState {
                         Some(MouseResponse::NoContent) | None => ShioriOutcome::NoContent,
                     }
                 }
-                // 未知 GET は 204（保守的既定・M1 の対象イベントは上記で網羅）。
-                _ => ShioriOutcome::NoContent,
+                // 選択由来 GET は fixture の注入表を引く（未注入は 204・6.1）。任意名イベントは
+                // ゴースト作者が書いた名前がそのまま id になるため、固定パターンでは受けられず
+                // catch-all の手前で表引きする（表に無い id は従来どおり 204 へ落ちる）。
+                other => match self.fixture.choice_responses.get(other) {
+                    Some(ChoiceResponse::Script(script)) => ShioriOutcome::Value(script.clone()),
+                    // 未注入の選択由来 GET・未知 GET はいずれも 204（保守的既定）。
+                    Some(ChoiceResponse::NoContent) | None => ShioriOutcome::NoContent,
+                },
             },
         }
     }
@@ -1192,6 +1230,49 @@ pub fn spawn_harness_failing(
         shiori,
         sakura,
     }
+}
+
+/// 保留 sakura ＋失敗注入 shiori の駆動ハーネスを組み立てる（6.1 専用・両派生の合成）。
+///
+/// [`spawn_harness_gated`]（保留機能付き sink）と [`spawn_harness_failing`]（失敗注入 shiori）を
+/// 同時に効かせる。選択系の失敗経路（DD-12）を統合層で踏むには**両方**が要る:
+///
+/// - 選択待ち帳簿は「現行 talk と一致する `ChoiceWaiting`」でしか確立しないため、talk を active に
+///   保つ保留窓（`hold_indices`）が要る（即応 sink では TalkDone が先着し `Steady{None}` に落ちる）。
+/// - その窓で発行される選択由来 GET を語彙付きで失敗させるために失敗注入 shiori が要る。
+///
+/// `fail_on` の意味論は [`spawn_mock_shiori_failing`] と同一（一致する**最初の**呼出のみ失敗・
+/// 以降は良性応答表へ戻る）。
+pub fn spawn_harness_gated_failing(
+    config: KanadeConfig,
+    fixture: Fixture,
+    quit_policy: QuitPolicy,
+    hold_indices: Vec<usize>,
+    fail_on: FailOn,
+) -> (Harness, SakuraGate) {
+    let shiori = spawn_mock_shiori_failing(fixture, fail_on);
+
+    // kanade→sakura の TalkCommand チャンネルを 1 本張る（DD-5・起動と選択解決が同一チャンネル）。
+    let (talk_tx, talk_rx) = std::sync::mpsc::channel::<TalkCommand>();
+
+    // kanade を起動（inbox 送信端を得る）。boot prefetch（username 照会・R4.1）は駆動されるが、
+    // ハーネスは照会結果を消費しないため no-op sink を注入する（Implementation Notes）。
+    let (kanade_tx, kanade_handle) =
+        spawn_kanade(config, shiori.sender.clone(), talk_tx, Box::new(|_, _| {}));
+
+    // sink には TalkDone 返送用に kanade inbox 送信端のクローンを渡す（保留機能付き）。
+    let (sakura, gate) =
+        spawn_mock_sakura_gated(talk_rx, kanade_tx.clone(), quit_policy, hold_indices);
+
+    (
+        Harness {
+            sender: kanade_tx,
+            kanade: kanade_handle,
+            shiori,
+            sakura,
+        },
+        gate,
+    )
 }
 
 /// ブロッキング mock shiori 付き駆動ハーネスを組み立てる（6.3 専用・[`spawn_harness`] の派生）。
