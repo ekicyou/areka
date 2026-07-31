@@ -303,3 +303,18 @@ impl<T: Clone + Debug> TimedSchedule<T> {
         self.horizon = 0.0;
     }
 }
+
+/// ペイロード型 T に依存しない照会（エントリを触らないため `Clone + Debug` 境界を要さない）。
+impl<T> TimedSchedule<T> {
+    /// 占有終了 horizon の**絶対時刻** = アンカー `start_time` ＋ 相対 horizon。
+    ///
+    /// [`is_completed`](Self::is_completed) が閾値として見ている占有区間の終端を、
+    /// 上位層が絶対時刻として照会するための口（R7.2）。値は [`tick`](Self::tick) の
+    /// 進行では変化せず、台本 1 枚から復元される
+    /// [`CueSheet::absolute_end_time`](crate::cue::CueSheet::absolute_end_time) と一致する
+    /// （duration 権威は canonical 変換 [`crate::cue::to_talk_schedule`] が焼き込んだ
+    /// この horizon のみ——照会側で別の時間基準を組み立てない）。
+    pub fn occupancy_horizon(&self) -> f64 {
+        self.start_time + self.horizon
+    }
+}

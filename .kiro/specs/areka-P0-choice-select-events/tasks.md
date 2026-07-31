@@ -59,7 +59,7 @@
   - _Depends: 1.2, 2.2_
 
 - [ ] 3. 中核: 選択待ちの事実を kanade へ届ける搬送経路
-- [ ] 3.1 (P) 再生層に占有 horizon の照会口を追加する
+- [x] 3.1 (P) 再生層に占有 horizon の照会口を追加する
   - トークの絶対終了時刻（アンカー＋相対 horizon）を返す照会関数を再生層へ additive に追加する
   - 完了状態: 照会関数がアンカーと相対 horizon の和を返すことを単体テストが固定し、既存の再生層 API は無改変である
   - _Requirements: 7.2_
@@ -204,3 +204,4 @@
 - 2.1: `schedule/choice.rs` に `plan_cascade` / `choice_deadline` を配置。設計に明文の無い 2 裁定を本層で固定＝**秒→ms は四捨五入**・**NaN は無期限へ畳む**。対応表（7.1）へ記録するか要判断。`#[allow(dead_code)]` 3 箇所は 4.x の配線で除去すること。
 - 2.2: `on_choice_*` 4 本は Reference 割付を正典どおり実装（Ex は Ref0=ラベル/Ref1=ID）。3 固定 ID は **まだ `ALLOWED_EVENT_IDS` 未登載**＝2.3 が入るまで egress ガードが拒否する。設計 C2 の「`EventId::Choice` は choice.rs の planner のみが構成」という記述は C3/タスク境界（events.rs の `on_choice_named`）と字面が衝突しており、実装は C3 に従っている。
 - 2.3: `is_allowed_choice_event` は `lib.rs` の `events` ファサードへ未露出。統合檻（6.x）が必要とするなら 1 行 re-export を追加すること。
+- 3.1: **重要な申し送り** — `CuePlayer::stop()` → `TimedSchedule::clear()` は `horizon` を 0.0 にするが `start_time` はリセットしない。ゆえに**中断後の `occupancy_horizon()` はアンカー（過去時刻）を返す**。3.2 は `WaitingForChoice` 検出時点（停止前）で値を捕捉すること・4.x は中断済み player を照会しないこと。誤用すると deadline が即時失効して偽の `OnChoiceTimeout` を招く。
