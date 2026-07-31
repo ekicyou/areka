@@ -758,6 +758,28 @@ impl MockSakura {
             let _ = join.join();
         });
     }
+
+    /// sink スレッドの終了を待ってから、記録スナップショットを**到着順**で返す。
+    ///
+    /// # なぜ [`commands`](Self::commands) と別に要るのか（読み出しの happens-before）
+    /// `commands()` は recv ループと**並行に**ロックを取るだけなので、「kanade が停止した」ことは
+    /// 「mock がチャンネルに残った [`TalkCommand`] を取り出して記録し終えた」ことを意味しない。
+    /// kanade の終了が `TalkDone` の往復を介さない檻——`ForceQuit` で終了系列へ直行する形——では
+    /// この差が実際に露見し、記録列が**空のまま**読まれ得る（実測: 100 回中 11 回）。
+    ///
+    /// quit フラグ付き `TalkDone` の往復で終わる檻（既存の群 1〜5）は、その往復自体が mock の
+    /// 消費を強制するため `commands()` で足りる——本変種は既存檻の意味を変えないよう**追加**であり、
+    /// `commands()` は従来どおり使い続けてよい。
+    ///
+    /// 本変種は recv ループスレッドの `join` 完了後にロックするため、記録の全書き込みに対して
+    /// happens-before が張られる（スレッド終了 → join のメモリ順序）。
+    pub fn join_bounded_then_commands(self, what: &str, timeout: Duration) -> Vec<TalkCommand> {
+        let MockSakura { join, commands } = self;
+        run_join_bounded(what, timeout, move || {
+            let _ = join.join();
+        });
+        commands.lock().expect("mock sakura mutex").clone()
+    }
 }
 
 /// quit フラグの決定方式（シナリオ指示）。

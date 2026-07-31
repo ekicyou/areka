@@ -161,7 +161,7 @@
   - _Requirements: 9.1, 9.2, 6.1, 7.3, 7.4, 7.5_
   - _Depends: 4.4, 4.5, 6.1_
 
-- [ ] 6.3 一回性と棄却分岐の檻を実装する
+- [x] 6.3 一回性と棄却分岐の檻を実装する
   - 1 注入が高々 1 カスケードと高々 1 選択解決しか起こさないこと、解決後の遅延注入・候補外 ID の注入が棄却されることを固定する
   - 段の進行中の二重注入棄却と 1 世代 stale 防御は、カスケードが単一の駆動呼出内で同期完結しメッセージ境界を跨いで観測できないため、状態を直接構成する純関数呼び出しの檻で固定する
   - 棄却時の警告語彙をログ捕捉で固定する
@@ -218,3 +218,4 @@
 - 4.6: 新規 trace 語彙 `choice_ledger_cleared`（design ログ表に未記載）。`choice_timeout_ledger_stale` は**残置が正**（規則 1 の棄却 3 経路が不一致帳簿を明示復元するため掃除点を通らない経路が規約上実在）。**7.1 の対応表へ両語彙を記録するか要判断**。
 - 5: `ChoiceForwarder`（`Sender<KanadeMsg>` は `!Sync` ゆえ bevy `Resource` 不可＝NonSend 保持体）と `forward_all`（World を組まずに drain ループを檻へ入れる ECS 分離核）を新設。schedule 位置は `.after(dispatch_pointer_events)`（同一フレーム転送）。trace 語彙 `choice_drain_no_inbox`/`choice_drain_no_forwarder` 追加（donor `mouse_*_no_wiring` と同型）。
 - 6.1: 統合檻は `crates/areka-kanade/tests/kanade/choice_test.rs`。`Fixture::with_choice_response` で choice 応答表を注入する（**未知 GET の catch-all を経由するので、固定 4 ID など既存アームに一致する id を入れても黙って無視される**——6.2/6.3 の落とし穴）。`log_capture` は `src/schedule/` 配下ゆえ統合檻から到達不能＝ログ語彙の固定は in-source 檻の担当。
+- 6.3: **重要な罠** — `ForceQuit`／`Close` など **mock sakura を経由せず終了する檻**では `MockSakura::commands()` の並行読みが記録前スナップショットを掴む（実測 100 回中 7〜11 回失敗・**全檻並行実行時のみ露見**し単独実行では出ない）。そういう檻は `join_bounded_then_commands`（4.6 レビュー是正で追加）を使うこと。`commands()` 側に注意書きは無い。
