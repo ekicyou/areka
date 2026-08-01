@@ -3,6 +3,7 @@
 > **種別**: 既知ギャップの正規登記（**宙に浮いていた申し送りの救済**）。⓪ghost（placement）帰属。
 > **源**: `kero-balloon` tasks.md の申し送り「DPI 変化時に `BalloonFollow.offset` を k 倍する処理はどこにも実装が無い……要否判断は後続（W5 `dpi-window-vanish` **ほか**窓位置に触る spec）へ」——2026-08-01 棚卸で**規律違反**と判定: 「ほか」は複数条件付きのウェーブ型申し送りであり担当 spec ではない。しかも `dpi-window-vanish` の brief は DPI 追従の全面実装を明示的に **Out** に置き、同 spec 自体が「再現せず・掃除のみ」へ縮退し得る＝**申し送りが黙って死ぬ構造**だった。本起票で担当を確定する。
 > **着手ゲート**: `dpi-window-vanish` 着地後（同 spec が `follow.rs` を触る）＋ `dpi-transition-atomicity`（起票済・配置未確定）の再観測結果と突合してから。**着手ゲートが同一なので合流セッションで transition-atomicity との統合も検討対象**。
+> **📌 2026-08-01 追記(58)補正（棚卸⑤）**: 着手ゲート半充足——van 着地済み（PR#98）・残りは atom の第1段再観測のみ（**再観測は今すぐ実施可能になった**）。**roadmap 追記(58) の既定路線: atom が「+36px＋檻」へ縮退した場合は本 spec と統合して 1 spec 化**（follow.rs 共有・W6.75 配置）。atom が縮退しない場合は atom 先着→本 spec が rebase。アンカードリフト: U4「再スケールなし」follow.rs:262 → **:265**（:686/:762 にも同契約明文・van +4049 行でも U4 契約は不変）・windowposition.rs 単位混在 doc :91-97 → **:93-94**。exact（丸め権威）先行必須は不変。
 
 ## Problem
 
