@@ -48,8 +48,8 @@ Req 5.1 も同じ側から支える——「Requirement 2.8 の S1〜S3 は本�
 | --- | --- | --- | --- | --- | --- |
 | **S1** | DPI 変化後のキャラ窓位置の再射影が、接地点規約の **X 成分を再計算せず OS 提示値を素通しさせる** | **4.3**（波及: 4.2） | `WM_DPICHANGED`（wintf）＋ `BottomSnapPolicy::resolve`（areka） | 5.1 | 4.3 → 7.1 |
 | **S2** | 位置の再射影が**窓寸の再導出結果に条件付けられて**おり、再導出結果が得られない経路で位置の再射影ごと欠落する | **4.1・4.2・4.6** | `dpi_phase_with` の `Some` ゲート | 5.2 | 4.4 → 7.1 |
-| **S3** | キャラ窓の**水平方向に可視性の不変条件が無く**、work area 解決の最近傍フォールバックが「どのモニタにも属さない」を無観測で吸収する | **3.1**（波及: 3.2） | `resize_window_to` ／ `work_area_for_window` | 6.1 | 7.2 |
-| **S3′** | **バルーン矩形の可視性がどの経路でも検査されない**（追従は offset 恒等式のみを適用する） | **3.4** | `follow_balloon` ほかバルーン書込 3 経路 | 6.2 | 7.2 |
+| **S3** | キャラ窓の**水平方向に可視性の不変条件が無く**、work area 解決の最近傍フォールバックが「どのモニタにも属さない」を無観測で吸収する | **3.1**（波及: 3.2） | `resize_window_to` ／ `work_area_for_window` | 6.1（**着地済み 2026-08-01**・§1.3／§3.4） | §3.4 → 7.2 |
+| **S3′** | **バルーン矩形の可視性がどの経路でも検査されない**（追従は offset 恒等式のみを適用する） | **3.4** | `follow_balloon` ほかバルーン書込 3 経路 | 6.2（**着地済み 2026-08-01**・§1.4／§3.5） | §3.5 → 7.2 |
 
 「未充足にする受入基準」の欄は、**Req 2.8 が明記している対応**を太字で載せている（S3′ は Req 2.8 が「少なくとも S1〜S3」と定めた枠外の追加登記であり、対応 AC は design.md「既存アーキテクチャ分析（欠陥の構造）」の表と「成果物 > diagnosis-report.md」が 3.4 と定める）。「波及」は本タスクの読解で併せて未充足と判断したもので、Req 2.8 の明文ではない——各項目の本文で根拠を示す。
 
@@ -182,7 +182,7 @@ design.md は `frame.rs:835`・`presenter.rs:772-818` を挙げていた。`fram
 
 **`NearestFallback` の判定対象は「射影が決めた位置」である**（`follow.rs:1643-1644` `let decided = …(rect_at(proposed, size))`）。射影の**入力**（`raw`）で判定すると、下端吸着の前段では窓中心が work area 下端より下にあることが珍しくないため、「射影が正しく接地させて可視域へ収めた窓」まで食い違いとして報告する偽陽性になる（`frame.rs` の既存檻 `drain_reconcile_skips_despawned_scope_...` の合成 fixture で実際に発生することを実測）。Req 3.2 が言うのは「窓位置を**決めた**とき」の食い違いである。**`clamp_wa` は引き続き射影の入力側から引く**（両者を混ぜると `guard_visibility` の事後条件が崩れる）。
 
-**バルーン矩形（§1.4 の S3′）は未是正のまま**——タスク 6.2 の領分であり、6.1 はキャラ窓経路のみを配線した。
+**バルーン矩形（§1.4 の S3′）は 6.1 時点で未是正だった**——6.1 はキャラ窓経路のみを配線した。**タスク 6.2 が着地して是正済み**（§1.4「是正状況」・§3.5）。本節（§1.3）が記す S3 の是正状況は 6.1 のもので、6.2 は本節の表を書き換えていない。
 
 #### 引用の再測定
 
@@ -198,7 +198,7 @@ Req 2.8 は「少なくとも S1〜S3」を登記対象と定めており、S3�
 
 バルーン窓の位置を書く経路は 3 本あり、**いずれも可視性を検査しない**:
 
-| 経路 | 所在（`file:line`） | 構造名 | 位置の決め方 |
+| 経路 | 所在（`file:line`・**6.2 着地前**） | 構造名 | 位置の決め方 |
 | --- | --- | --- | --- |
 | キャラ確定後の随伴 | `crates/areka/src/placement/follow.rs:505-525`（書込は `:517-524`） | `follow_balloon` | `pos + BalloonFollow.offset` の**恒等式のみ**。矩形 × work area の交差は見ない |
 | `\![move]` の随伴 | `crates/areka/src/placement/follow.rs:765-772` | `move_window_to` のバルーン分岐 | 同上（`x + offset.x, y + offset.y`） |
@@ -208,15 +208,34 @@ Req 2.8 は「少なくとも S1〜S3」を登記対象と定めており、S3�
 
 #### 是正機構は存在するが未配線である（S3 と同一の純関数）
 
-`guard_visibility`（`follow.rs:1417`）はバルーン矩形にもそのまま適用できる設計であり、**バルーン矩形ケースの檻も既に書かれている**（`follow.rs:2258` 以降の「`guard_visibility`: バルーン矩形（S3′・Req 3.4）」ブロック）。しかし本番配線は無い——§1.3 と同じく `crates/` 全 grep で一致がすべて定義行・doc・`#[cfg(test)]` 内（`follow.rs` のテストモジュールは `:1587` 以降）であることが根拠であり、`#[allow(dead_code)]` の有無は根拠にしない。配線はタスク 6.2 が担う。
+`guard_visibility`（`follow.rs:1417`）はバルーン矩形にもそのまま適用できる設計であり、**バルーン矩形ケースの檻も既に書かれている**（`follow.rs:2258` 以降の「`guard_visibility`: バルーン矩形（S3′・Req 3.4）」ブロック）。しかし本番配線は無かった——§1.3 と同じく `crates/` 全 grep で一致がすべて定義行・doc・`#[cfg(test)]` 内（`follow.rs` のテストモジュールは `:1587` 以降）であることが根拠であり、`#[allow(dead_code)]` の有無は根拠にしない。配線はタスク 6.2 が担った（下記）。
+
+#### 是正状況（**タスク 6.2 着地・2026-08-01**・S3′ の第 1 経路のみ）
+
+**キャラ確定後の随伴（`follow_balloon`）は配線済み＝Req 3.4 が構造的に成立した。** 行番号は 6.2 着地後の現ツリー実値:
+
+| 是正 | 所在（`file:line`・構造名） | 内容 |
+| --- | --- | --- |
+| 引き金の語彙 | `follow.rs:518` `enum BalloonFollowTrigger` | `Drag`／`Placement(PlacementRoute)` の 2 腕。**書込自身の route（つねに `BalloonFollow`）では発火可否を決められない**——なぜバルーンが動いたのかを復元できないため。引き金は呼出元しか知らない |
+| 発火判定 | `follow.rs:529-535` `BalloonFollowTrigger::applies_visibility_guard` | 網羅 `match`。`Drag`＝偽（明示操作の尊重）／`Placement(route)`＝**キャラ窓と同じ表** `route_applies_visibility_guard`（`follow.rs:1722`）を引く。既定腕を置かないので引き金が増えればコンパイラが判断を要求する |
+| 引き金の配管 | `follow.rs:307`（`on_char_drag`＝`Drag`）・`:390`（`on_char_drag_end`＝`Drag`）・`:1168-1176`（`resize_window_to` 手順 7＝`Placement(route)`） | `follow_balloon` の呼出元は 3 箇所。ドラッグ 2 本と配置系 1 本が引き金で分かれる |
+| 配線本体 | `follow.rs:619` `guard_balloon_position` | 旧矩形＝**現在位置 × 現寸**（`follow_balloon` は移動専用ゆえ寸は不変）・`raw`（clamp 先の引き元）＝**提案位置そのもの**（バルーンには射影段が無い） |
+| 評価と観測の共有 | `follow.rs:1798` `evaluate_visibility_guard` | 6.1 の `apply_visibility_guard`（`:1771`）から**発火判定だけを外へ出した**残りの本体。キャラ窓とバルーン窓が同一の評価規則・同一の 3 語の観測を共有する（新規機構ゼロ・6.1 の挙動は無改変） |
+| 未確定表現のガード | `follow.rs:631-653`（寸）・`:662-665`（位置） | 寸は `s.width > 0 && s.height > 0`、位置は `p.x != CW_USEDEFAULT && p.y != CW_USEDEFAULT`。**`WindowPos::default()` は position・size の両方を `CW_USEDEFAULT`（`i32::MIN`）で持つ**（`crates/wintf/src/ecs/window/window_pos/mod.rs:76-88` の `Default`）。素通しすると逆転矩形になり「もともと画面外に留置されていた」と誤判定して安全側の腕が死ぬ |
+| 破棄済みの区別 | `follow.rs:620-627` | 随伴先バルーンが despawn 済みなら `DESPAWNED_SKIP_TAG` の `debug!` で打ち切る（Req 6.2/6.3・タスク 3.2 と同じ区別）。ここを `warn!` にすると終了時ログの良性ノイズが本物の異常を埋める |
+| 観測フィールドの契約 | `follow.rs:646-651`（良性＝`entity`／`route`／`proposed`）・`:1808-1812`／`:1817-1821`（装置異常＝`entity`／`route` のみ） | `WorkAreaUnresolved` は「バルーン寸未確定（良性）」と「観測装置異常（`MonitorSnapshot` 不在・モニタ 0 台）」の双方から出て、**どちらも `route=BalloonFollow` を名乗り得る**。実機の判別子は `route=` ではなく**同行の `proposed=` の有無**であり、フィールド集合を檻 `balloon_undetermined_size_*`／`missing_monitor_snapshot_*` が両方向に固定する（`diagnosis-procedure.md` §6.3 が正本） |
+
+**残り 2 経路（`\![move]` の随伴・位置据置きリサイズ）は意図的に未配線**である。`\![move]` はスクリプトの明示操作ゆえ D13 帰結⑵で適用外、位置据置きリサイズは**位置を一切変えない**（現在位置をそのまま書き戻す）ため「可視→不可視への**遷移**」を作らない。すなわち S3′ が言う「offset 恒等式が窓を画面外へ運ぶ」機構を持つのは第 1 経路だけである。
 
 #### 縮退シームの明示（先送りの記録）
 
-画面端での左右反転など**バルーン配置の美観政策は本 spec の対象外**（M2 SSP 互換へ先送り）。本 spec が持つのは「完全不可視への遷移を防ぐ安全網」までであり、clamp によりバルーンがキャラと部分的に重なり得ることを許容する（*見えない会話*より*重なった会話*を優先する裁定・design.md「バルーン適用（S3′ 是正）」）。**`ClampX` 発火時の `warn!` がこの先送りの縮退シームである**。
+画面端での左右反転など**バルーン配置の美観政策は本 spec の対象外**（M2 SSP 互換へ先送り）。本 spec が持つのは「完全不可視への遷移を防ぐ安全網」までであり、clamp によりバルーンがキャラと部分的に重なり得ることを許容する（*見えない会話*より*重なった会話*を優先する裁定・design.md「バルーン適用（S3′ 是正）」）。**`ClampX` 発火時の `warn!` がこの先送りの縮退シームである**——6.2 着地後は `route=BalloonFollow` を持つ O17 行がそれに当たり（`diagnosis-procedure.md` §3.1）、実機で件数が多ければ M2 の優先度の材料になる。
+
+**先送りの 4 点セット**（[[defer-canon-with-full-vocabulary-and-tracking-spec]]・§5.2 が本書自身に課している規律）は次のとおり充足している——⑴完全語彙＝「画面端での左右反転をはじめとする SSP 互換の美観配置政策」⑵縮退シーム＝上記 `ClampX` の `warn!`（実体を伴い水準を檻が固定）⑶**追跡先の実在**＝`.kiro/steering/roadmap.md:108`「## M2 以降」節へ**「バルーン美観配置政策の予約」として登記**（M1 では spec を起票せず M2 解禁時に spec 化する旨と「それまでの担当は本節」を明記）⑷roadmap 明記＝同上。**「M2 SSP 互換」はマイルストーン名であって担当者ではない**（[[deferral-requires-verified-owner]]）ため、節として実在させたうえで名指ししている。
 
 #### 引用の再測定
 
-design.md は `follow.rs:880-907`（`follow_balloon` 経路）を挙げていた。タスク 1.4 の route 配管で移動しており、現ツリーの実値は `follow.rs:505-525` である。
+design.md は `follow.rs:880-907`（`follow_balloon` 経路）を挙げていた。タスク 1.4 の route 配管で移動しており、**赤の採取時点**（6.2 着地前）の実値は `follow.rs:505-525` である。上の「欠陥の構造」表は当該時点の値を保存し、「是正状況」表が 6.2 着地後の現ツリー実値を持つ。
 
 ---
 
@@ -1086,8 +1105,104 @@ test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 603 filtered out
 #### 6.1 が**解消しないもの**（境界の明示）
 
 - **§2.5.3 の +36px（S5 候補）は解消しない**。根拠は §5.2 の表に登記した。
-- **バルーン矩形（§1.4 の S3′）は未着手**（タスク 6.2 の領分）。
+- ~~**バルーン矩形（§1.4 の S3′）は未着手**（タスク 6.2 の領分）。~~ **タスク 6.2 着地（2026-08-01）で解消**——§1.4「是正状況」と §3.5 が正本。本行は 6.1 時点の境界の記録として取り消し線で残す。
 - **ガードの保護範囲には上限がある（7.4 で読み違えないこと）**: 交差判定は `MonitorSnapshot` の work area 集合に対して行われるが、同 Resource は**起動時に 1 回書かれるのみで更新経路が存在しない**（本番の書込は `crates/areka/src/main.rs:703` ただ 1 箇所・独立レビューが全 grep で確認）。ゆえにセッション中にモニタが物理的に外れた場合、「凍結 snapshot 上は可視／実画面では不可視」を `Keep` と判定し得る。これは DD15 が M1 として明示受容した制約（`follow.rs:1283`「セッション内固定＝M1 受容」）であり **6.1 の不足ではない**。7.4 の実機再サインオフで「ガードが効かない残余ケース」を 6.1 の欠陥と読み違えないこと。
+
+### 3.5 S3′ の実行記録（**S3′ 専用節**・タスク 6.2）
+
+> **本節は §3.1（S1）・§3.2（S2）・§3.3（S4）・§3.4（S3）と重ならない。**
+
+#### 赤の採り方（6.1 と同じ・`#[ignore]` を要さない）
+
+是正（配線）と檻の新設が**同一タスク 6.2** に属するので、赤は「配線前のツリーで新設檻を走らせる」ことで同一セッション内に採れる（§3.4 と同じ理由）。配線前の状態は `BalloonFollowTrigger::applies_visibility_guard` を**恒偽**にすることで再現した——`follow_balloon` が提案位置をそのまま書く 6.2 着地前の挙動と**完全に等価**である（ガード呼出そのものが消える）。`grep -rn '#\[ignore' crates/areka/src` は引き続き**一致ゼロ**。
+
+#### 赤の実行出力（配線前・`cargo test -p areka --bins -- --test-threads=1 placement::follow::tests::balloon_ placement::follow::tests::missing_monitor_snapshot`）
+
+```text
+running 9 tests
+test placement::follow::tests::balloon_despawned_skips_guard_without_warning ... FAILED
+test placement::follow::tests::balloon_drag_trigger_neither_clamps_nor_warns ... ok
+test placement::follow::tests::balloon_follow_trigger_table_mirrors_the_char_window_table ... FAILED
+test placement::follow::tests::balloon_parked_off_screen_is_respected_on_placement_trigger ... ok
+test placement::follow::tests::balloon_undetermined_position_is_treated_as_unknown_rect_and_clamps ... FAILED
+test placement::follow::tests::balloon_undetermined_size_holds_proposed_position_and_warns ... FAILED
+test placement::follow::tests::balloon_visibility_guard_clamps_x_on_non_drag_placement_triggers ... FAILED
+test placement::follow::tests::balloon_visibility_guard_does_not_fire_on_explicit_or_non_placement_triggers ... ok
+test placement::follow::tests::missing_monitor_snapshot_warns_for_both_windows_without_the_proposed_field ... FAILED
+
+---- balloon_visibility_guard_clamps_x_on_non_drag_placement_triggers stdout ----
+panicked at cratesreka\src\placementollow.rs:7267:17:
+dpi=96 route=AnchorChange: Req 3.4 違反——バルーン PointPx { x: 2000, y: 240 } が全 work area と非交差
+
+---- balloon_undetermined_position_is_treated_as_unknown_rect_and_clamps stdout ----
+panicked at cratesreka\src\placementollow.rs:7578:13:
+dpi=96: 位置未確定（センチネル）を『留置』と誤読して clamp を見送っている
+
+---- balloon_undetermined_size_holds_proposed_position_and_warns stdout ----
+`[visibility-guard] WorkAreaUnresolved` を含むログがちょうど 1 件ではない: [ … ] left: 0 right: 1
+
+---- balloon_despawned_skips_guard_without_warning stdout ----
+`[despawn-skip]` を含むログがちょうど 1 件ではない: [ … ] left: 0 right: 1
+
+---- balloon_follow_trigger_table_mirrors_the_char_window_table stdout ----
+route=AnchorChange の引き金判定がキャラ窓の表と食い違う  left: false  right: true
+
+test result: FAILED. 3 passed; 6 failed; 0 ignored; 0 measured; 611 filtered out
+```
+
+**この赤は §1.4 を名指しで撃っている。** 1 件目の出力 `バルーン PointPx { x: 2000, y: 240 } が全 work area と非交差` が、§1.4 の欠陥そのもの——**キャラ窓は右モニタ内に留まったまま**（同檻の `point_of(char_window) == char_settled_pos` が先に通っている）、offset 恒等式が出したバルーンだけが `right_wa.right` の外へ丸ごと出た状態＝「キャラは見えているのに会話が読めない」である。
+
+**配線前でも緑だった 3 件は非退行側**である——「ドラッグ随伴では動かない」「適用外 route では動かない」「留置バルーンは尊重する」は*何も起きない*ことを主張する檻ゆえ、配線前に緑なのが正しい（配線後も緑であり続けることが D13 帰結⑵ と Req 3.1 の実証になる）。**この 3 件を「赤が採れていない」と読まないこと。**
+
+#### 緑の実行出力（配線後・同コマンド）
+
+```text
+running 9 tests
+test placement::follow::tests::balloon_despawned_skips_guard_without_warning ... ok
+test placement::follow::tests::balloon_drag_trigger_neither_clamps_nor_warns ... ok
+test placement::follow::tests::balloon_follow_trigger_table_mirrors_the_char_window_table ... ok
+test placement::follow::tests::balloon_parked_off_screen_is_respected_on_placement_trigger ... ok
+test placement::follow::tests::balloon_undetermined_position_is_treated_as_unknown_rect_and_clamps ... ok
+test placement::follow::tests::balloon_undetermined_size_holds_proposed_position_and_warns ... ok
+test placement::follow::tests::balloon_visibility_guard_clamps_x_on_non_drag_placement_triggers ... ok
+test placement::follow::tests::balloon_visibility_guard_does_not_fire_on_explicit_or_non_placement_triggers ... ok
+test placement::follow::tests::missing_monitor_snapshot_warns_for_both_windows_without_the_proposed_field ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 611 filtered out
+```
+
+全体は `cargo test -p areka` **620 passed / 0 failed / 0 ignored**（基準 611 ＋ 新設 9）・`cargo test -p wintf` **1,057 passed / lib ignored 2**（非退行・無改変）。
+
+#### 檻の非空虚性（実装者が独立に当てたミューテーション 6 種）
+
+| # | 変異 | 赤になった檻 |
+| --- | --- | --- |
+| M1 | **`BalloonFollowTrigger::Drag => true`**（ドラッグ随伴でも発火＝申し送りが警告した誤り） | `balloon_drag_trigger_neither_clamps_nor_warns`（**位置 assert** が先に発火・実測 `left: PointPx { x: 1420, y: 240 } right: PointPx { x: 2100, y: 240 }`）／`balloon_follow_trigger_table_mirrors_the_char_window_table` |
+| M2 | `BalloonFollowTrigger::Placement(_) => false`（＝6.2 着地前の挙動） | 上記「赤の実行出力」の 5 件 |
+| M3 | 寸のセンチネル判定 `s.width > 0 && s.height > 0` を外す | `balloon_undetermined_size_holds_proposed_position_and_warns`（**位置 assert**・実測 `left: PointPx { x: -1920, y: 240 } right: PointPx { x: -3000, y: 240 }`） |
+| M4 | 位置のセンチネル判定 `p.x != CW_USEDEFAULT && p.y != CW_USEDEFAULT` を外す | `balloon_undetermined_position_is_treated_as_unknown_rect_and_clamps`（位置 assert） |
+| M5 | 破棄済みバルーンの `debug!` 打ち切りを外す | `balloon_despawned_skips_guard_without_warning`（Req 6.2 の良性ノイズ禁止） |
+| M6 | ガードの戻り値を捨てて `proposed` を書く（配線したが消費しない） | `balloon_visibility_guard_clamps_x_on_non_drag_placement_triggers`／`balloon_undetermined_position_is_treated_as_unknown_rect_and_clamps`（いずれも位置 assert・ログは出たままなので**ログ檻だけでは無検出**） |
+| **M7** | バルーン寸未確定 `warn!` から **`route` フィールドを落とす**（レビュー指摘 1 の是正対象） | `balloon_undetermined_size_holds_proposed_position_and_warns`（`ログフィールド route が無い` で赤） |
+| **M8** | 装置異常 `warn!`（`MonitorSnapshot` 未挿入）へ **`proposed` フィールドを足す**（＝判別子を潰す） | `missing_monitor_snapshot_warns_for_both_windows_without_the_proposed_field`（`装置異常の行が proposed を持っている＝§6.3 の判別子が壊れる`） |
+
+**M7・M8 は独立レビューの指摘 1（Critical）への是正で追加した檻**である。`WorkAreaUnresolved` は「バルーン窓の寸未確定（良性）」と「観測装置異常（セッション無効）」の双方から出て、**どちらも `route=BalloonFollow` を名乗り得る**（装置異常がバルーン随伴で起きた場合）。ゆえに実機判定の判別子は `route=` ではなく**同行の `proposed=` の有無**であり、初版はこのフィールド集合を檻で固定していなかった＝5.1 の申し送りが名指しした「**判定語に使っているのに檻が無い**」型だった。是正版は良性側（`route`＋`proposed` を literal で固定）と致命側（両窓とも `proposed` を持たないこと）を別々の檻で固定し、両方向の変異で赤化することを実測した。手順書側（`diagnosis-procedure.md` §3.1・§6.3）も同じコミットで書き直してある（同書 L467 の自己規約）。
+
+**M1 と M3 が本節の要点**である。
+
+- **M1** は 6.1 → 6.2 の申し送りが名指しで警告した誤り（「無条件適用するとドラッグ随伴でバルーンが引き戻されて Req 3.1 を壊す」）そのものであり、**位置 assert が第一の守り**として先に落ちることを実測した（[[5.2 の教訓＝空虚性 6 例目]]「不変量がログ側にしか無いと別ファイルの水準変更で守りが消える」への対処）。
+- **M3** は檻の初版で**空虚だった**——初版は探針を「位置は既知・寸だけセンチネル」で組んでいたため、変異を当てても `old_rect` が逆転矩形として「もともと画面外に留置されていた」と読まれて `Keep` に落ち、**位置が 1 bit も変わらず**ログ assert だけが赤になった。是正版は探針を `WindowPos::default()`（**position・size の両方がセンチネル**という実表現）へ改め、変異時に安全側 `ClampX` が走って `clamp_x_into(x, i32::MIN, wa)` が `wa.left` を返す配置（提案 X を `left_wa().left` より左に置く）にしてある。**「未確定」を主張する檻は、誤実装が同じ結果を別の理由で作らないかを必ず確かめること**（[[2.2 の教訓]] の再来を実測で 1 度踏んで是正した）。
+
+各檻は「素の恒等式が本当に不可視へ落ちる」「旧バルーン矩形が本当に可視である」「キャラ窓が clamp されていない」を実行時 `assert!` で自己検査しており、探針が不動点へ落ちた瞬間に檻自身が落ちる（[[2.2 の教訓]]）。
+
+#### 6.2 が**解消しないもの**（境界の明示）
+
+- **バルーン配置の美観政策（画面端での左右反転等）は解消しない**——M2 SSP 互換の領分であり、`ClampX` の `warn!`（`route=BalloonFollow` の O17）がその縮退シームである（§1.4）。
+- **`\![move]` の随伴・位置据置きリサイズ**は配線しない（§1.4 の是正状況表の末尾に理由）。
+- **§2.5.3 の +36px（S5 候補）は解消しない**（§3.4 の 6.1 と同じ・`MonitorSnapshot` の更新経路不在が機序）。
+- **ガードの保護範囲の上限は 6.1 と同一**である（凍結 `MonitorSnapshot` に対する交差判定）。7.4 はこれを 6.2 の不足と読み違えないこと。
+
+---
 
 ---
 
@@ -1116,6 +1231,7 @@ test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 603 filtered out
 | §3.2 | **4.4（赤）→ 5.2（緑・ゲート解除・是正の実体・ミューテーション記録）→ 7.1（最終確認）** | S2 専用の実行記録 |
 | §3.3 | **4.6（赤・緑とも採取済み）→ 7.1（ゲート解除）** | S4 専用の実行記録。赤 `s4_red_` 2 件の `#[ignore]` 解除は 7.1 の完了状態「ゲートされた赤証跡が 1 件も残っていない」が掃く |
 | §3.4 | **6.1（赤・緑・ミューテーション記録とも採取済み）** | S3 専用の実行記録。配線と檻が同一タスクゆえ `#[ignore]` ゲートは発生していない |
+| §3.5 | **6.2（赤・緑・ミューテーション記録とも採取済み）** | S3′ 専用の実行記録。§3.4 と同じく配線と檻が同一タスクゆえ `#[ignore]` ゲートは発生していない |
 | §2 | 4.5（**セッション①のみ記入済み・②未採取**） | 実機 2 セッションの採取結果・Q1〜Q4・S1〜S3′ の痕跡 |
 | §4 | 7.4 | 是正後の実機再サインオフ |
 

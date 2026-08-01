@@ -34,7 +34,9 @@
 use bevy_ecs::prelude::*;
 use bevy_ecs::system::SystemState;
 use tracing::{debug, warn};
-use windows::Win32::UI::WindowsAndMessaging::{SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER};
+use windows::Win32::UI::WindowsAndMessaging::{
+    CW_USEDEFAULT, SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER,
+};
 use wintf::ecs::drag::{DragEndEvent, DragEvent, DraggingState};
 use wintf::ecs::layout::{Arrangement, Offset};
 use wintf::ecs::pointer::Phase;
@@ -301,7 +303,8 @@ pub(crate) fn on_char_drag(
                 }
             };
 
-            follow_balloon(world, entity, pos);
+            // 引き金はユーザーの明示的なドラッグ＝遷移ガード適用外（task 6.2・Req 3.1）。
+            follow_balloon(world, entity, pos, BalloonFollowTrigger::Drag);
             false
         }
     }
@@ -383,7 +386,8 @@ pub(crate) fn on_char_drag_end(
             if !enqueue_window_set_pos(world, entity, mapped.x, mapped.y, None, None) {
                 return false;
             }
-            follow_balloon(world, entity, mapped);
+            // 引き金はユーザーの明示的なドラッグ＝遷移ガード適用外（task 6.2・Req 3.1）。
+            follow_balloon(world, entity, mapped, BalloonFollowTrigger::Drag);
 
             // 保存フック（1.1/1.9/7.1・design C2）: mapped 確定後に当該スコープの
             // WindowPos entries を Ghost 永続スコープへ即時 write-through 投函する。
@@ -493,16 +497,62 @@ fn policy_mapped_position(
     })
 }
 
+/// 随伴バルーンの**引き金**（task 6.2・S3′ 是正・Req 3.4）。
+///
+/// # なぜ「書込自身の route」では決められないのか
+///
+/// [`follow_balloon`] の書込は定義上つねに [`PlacementRoute::BalloonFollow`] であり、
+/// その語からは「なぜバルーンが動いたのか」——ユーザーがキャラをドラッグしたのか、
+/// 配置系（DPI 再射影・再スナップ等）が勝手に動かしたのか——を復元できない。しかし
+/// 遷移ガードの発火可否はまさにそこで反転する（Req 3.1 の「ユーザーの明示的なドラッグ
+/// 以外の要因」）。ゆえに引き金は**呼出元しか知らない情報**であり、引数で配管するほか
+/// ない（[`route_applies_visibility_guard`] を `BalloonFollow` に当てると常に偽＝
+/// バルーンのガードが恒久的に無効になり、逆に無条件適用するとドラッグ随伴でバルーンが
+/// 引き戻されて明示操作の尊重が壊れる）。
+///
+/// # 網羅 `match` で書く理由
+///
+/// [`route_applies_visibility_guard`] と同じ流儀。引き金の種類が増えたとき、既定腕が
+/// あると新しい引き金が黙って片側へ倒れる（D14 帰結⑵）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BalloonFollowTrigger {
+    /// ユーザーの明示的なドラッグ（[`on_char_drag`]／[`on_char_drag_end`]）。
+    /// 引き戻しは明示操作の否定ゆえ**ガード適用外**（requirements.md Boundary Context）。
+    Drag,
+    /// 配置系の書込（[`resize_window_to`]）に随伴した。内包する route は**キャラ窓を
+    /// 動かした経路**であり、適用可否はキャラ窓と同じ表（D13 帰結⑴⑵）で決まる。
+    Placement(PlacementRoute),
+}
+
+impl BalloonFollowTrigger {
+    /// この引き金の随伴でバルーン矩形へ遷移ガードを適用するか。
+    fn applies_visibility_guard(self) -> bool {
+        match self {
+            BalloonFollowTrigger::Drag => false,
+            BalloonFollowTrigger::Placement(route) => route_applies_visibility_guard(route),
+        }
+    }
+}
+
 /// 確定済みキャラ窓座標 `pos` を基準に随伴バルーンを追従させる（4.2・U4）。
 ///
-/// [`BalloonFollow`] が無ければ no-op。[`on_char_drag`]／[`on_char_drag_end`] の
-/// 共通後段。
+/// [`BalloonFollow`] が無ければ no-op。[`on_char_drag`]／[`on_char_drag_end`]／
+/// [`resize_window_to`] の共通後段。
 ///
 /// 経路タグ（Req 1.2・task 1.4）は定義上つねに [`PlacementRoute::BalloonFollow`]
 /// （経路語彙が関数名そのもの）ゆえ引数で受けない。呼出元がドラッグ経路
 /// （route 語彙なし）であっても**随伴バルーンの書込は BalloonFollow として記録される**
 /// ——これは Req 2.5（バルーン消失がキャラ追従の随伴か）の判別材料そのものである。
-fn follow_balloon(world: &mut World, entity: Entity, pos: Point) {
+///
+/// # 可視性の遷移ガード（S3′ 是正・task 6.2・Req 3.4）
+///
+/// offset 恒等式（`pos + offset`）が出した提案位置は、キャラ窓が可視のままでも
+/// offset ぶん外側のバルーンだけを全 work area 非交差へ落とし得る——「キャラは見えて
+/// いるのに会話が読めない」状態であり、Req 3.4 が名指しで防ぐものである。よって恒等式の
+/// **後**に、キャラ窓とまったく同一の純関数（[`guard_visibility`]）・同一の遷移規則を
+/// バルーン矩形へ適用する（[`guard_balloon_position`]）。発火可否は書込自身の route では
+/// なく `trigger`（随伴の引き金）が決める。
+fn follow_balloon(world: &mut World, entity: Entity, pos: Point, trigger: BalloonFollowTrigger) {
     let Some(follow) = world.get::<BalloonFollow>(entity).copied() else {
         return;
     };
@@ -514,14 +564,116 @@ fn follow_balloon(world: &mut World, entity: Entity, pos: Point) {
         "char window position out of virtual-screen range: {pos:?} + {:?}",
         follow.offset
     );
+    // 相対位置の恒等式（4.4: `balloon_pos − char_pos ≡ offset`）が出す提案位置。
+    let proposed = PointPx {
+        x: pos.x + follow.offset.x,
+        y: pos.y + follow.offset.y,
+    };
+    // 遷移ガード（S3′ 是正）。適用外の引き金では 1 bit も触らない。
+    let decided = if trigger.applies_visibility_guard() {
+        guard_balloon_position(world, follow.balloon, proposed)
+    } else {
+        proposed
+    };
     enqueue_window_set_pos(
         world,
         follow.balloon,
-        pos.x + follow.offset.x,
-        pos.y + follow.offset.y,
+        decided.x,
+        decided.y,
         None,
         Some(PlacementRoute::BalloonFollow),
     );
+}
+
+/// バルーン矩形へ可視性の遷移ガードを適用する（task 6.2・S3′ 是正・Req 3.4）。
+///
+/// キャラ窓側（[`resize_window_to`] 手順 3a／3c）と**完全に同一の規則・同一の純関数**で
+/// あり、違うのは矩形の組み方だけである——バルーンには射影 T が無く、位置は offset 恒等式
+/// が決める従属量ゆえ:
+///
+/// - **旧矩形** = 現在位置（`WindowPos.position`）× 現寸。[`follow_balloon`] は移動専用
+///   （`SWP_NOSIZE`）で寸を変えないため、新旧で同じ寸を使うのが正しい。
+/// - **`raw`（clamp 先の引き元）** = 提案位置そのもの。キャラ窓では「射影 T が Y に用いた
+///   矩形」を貫通させる必要があるが、バルーンには射影段が無く、提案位置以外に clamp 先を
+///   決める基準が存在しない（別の矩形から引き直すと [`guard_visibility`] の事後条件が崩れる）。
+///
+/// # 縮退（log-first・Req 3.3／6.2/6.3）
+///
+/// - **バルーン entity 破棄済み**: 終了処理でゴースト窓が破棄された後のフレームでも随伴は
+///   走り得る＝**正常終了系**ゆえ [`DESPAWNED_SKIP_TAG`] の `debug!` で打ち切り、提案位置を
+///   そのまま返す（task 3.2 と同じ区別。ここを `warn!` にすると良性ノイズが本物の異常を埋める）。
+/// - **寸が未確定**: 矩形を組めず交差判定が成立しないため、位置には**一切手を入れず**
+///   `warn!` を残す。未確定は `Option::None` **だけではない**——`WindowPos::default()` は
+///   寸を `Some(SizeI { CW_USEDEFAULT, .. })`（`i32::MIN` センチネル）で持ち、素の矩形として
+///   交差判定へ入れると `saturating_add` で逆転矩形になって判定が丸ごと意味を失う
+///   （[[4.6 の教訓]]・キャラ窓側の手順 3a と同型のガード）。
+///
+/// # 縮退シーム（美観配置政策の先送り・Req 3.4 の範囲）
+///
+/// 本ガードが持つのは「完全不可視への遷移を防ぐ安全網」までである。clamp によりバルーンが
+/// キャラと部分的に重なり得ることは**許容する**（*見えない会話*より*重なった会話*を優先する
+/// 裁定・design「バルーン適用（S3′ 是正）」）。画面端での左右反転など SSP 互換の美観配置政策は
+/// 本 spec の対象外（M2）であり、**`ClampX` の `warn!` がその先送りの縮退シーム**である
+/// ——「安全網が働いた＝本来なら美観政策が要る局面」を実機ログに残す
+/// （diagnosis-report.md §1.4「縮退シームの明示」）。
+fn guard_balloon_position(world: &World, balloon: Entity, proposed: PointPx) -> PointPx {
+    if world.get_entity(balloon).is_err() {
+        debug!(
+            entity = ?balloon,
+            "{DESPAWNED_SKIP_TAG} 随伴バルーンは既に破棄済み（despawn）→ 可視性の遷移ガードを正常系として打ち切り"
+        );
+        return proposed;
+    }
+
+    let window_pos = world.get::<WindowPos>(balloon);
+    // 非正寸（`None` と `CW_USEDEFAULT` センチネル＝`i32::MIN` の双方）は
+    // 「寸が未確定」＝矩形を組めない＝判定不能。
+    let Some(size) = window_pos
+        .and_then(|wp| wp.size)
+        .filter(|s| s.width > 0 && s.height > 0)
+        .map(|s| SizePx {
+            w: s.width,
+            h: s.height,
+        })
+    else {
+        // `route` は [`evaluate_visibility_guard`] が出す同タグ行と**同じフィールド名**で
+        // 載せる（実機では 3 語を接頭辞で一括 grep してから `route=` で窓種別へ振り分ける
+        // ＝`diagnosis-procedure.md` §3.1「件数の読み方」）。落とすと当該行だけが
+        // 「route を持たない行」になり、手順書の振り分け規則が静かに嘘になる。
+        // **`proposed` の有無が本行（良性の判定不能）と装置異常（`MonitorSnapshot`
+        // 不在・モニタ 0 台）を分ける唯一の判別子**であり、フィールド集合は檻
+        // `balloon_undetermined_size_*`／`missing_monitor_snapshot_*` が固定している。
+        warn!(
+            entity = ?balloon,
+            route = ?PlacementRoute::BalloonFollow,
+            ?proposed,
+            "{VISIBILITY_UNRESOLVED_TAG} バルーン窓の寸が未確定（窓生成前／CW_USEDEFAULT センチネル）のため可視性を判定できない → 提案位置を変更しない"
+        );
+        return proposed;
+    };
+
+    // 旧矩形＝**現在位置** × 現寸。位置が未確定なら旧矩形不明＝安全側 clamp。
+    // 負座標は正当（左モニタは `-1920..0`）ゆえ、位置の未確定は符号ではなく
+    // wintf 正典のセンチネル `CW_USEDEFAULT` そのもので判定する
+    // （`crates/wintf/src/ecs/graphics/systems/window_pos.rs:41`
+    //   ／`crates/wintf/src/ecs/layout/systems/monitor_systems.rs:408`
+    // と同じ式。素通しすると `WindowPos::default()` 由来の窓が
+    // 「もともと画面外に留置されていた」と誤判定され安全側の腕が死ぬ）。
+    let old_rect = window_pos
+        .and_then(|wp| wp.position)
+        .filter(|p| p.x != CW_USEDEFAULT && p.y != CW_USEDEFAULT)
+        .map(|p| rect_at(PointPx { x: p.x, y: p.y }, size));
+
+    evaluate_visibility_guard(
+        balloon,
+        PlacementRoute::BalloonFollow,
+        world.get_resource::<MonitorSnapshot>(),
+        old_rect,
+        // バルーンには射影段が無く、clamp 先は提案位置からしか引けない（doc 参照）。
+        proposed,
+        proposed,
+        size,
+    )
 }
 
 /// `OnDrag` ハンドラ: バルーン窓単独ドラッグの相対位置記憶（4.8・DD16・task 8.3）。
@@ -826,6 +978,10 @@ pub fn move_window_to(world: &mut World, window: Entity, x: i32, y: i32) -> bool
 /// [`ReportedSizeReconcile`](PlacementRoute::ReportedSizeReconcile)）でのみ発火する
 /// （D13 帰結⑴。同じ幾何でも由来が明示操作なら引き戻さない＝Req 3.1 の「ユーザーの
 /// 明示的なドラッグ以外の要因」）。
+///
+/// **task 6.2 以後、route は随伴バルーンの発火条件でもある**——手順 7 の
+/// [`follow_balloon`] へ [`BalloonFollowTrigger::Placement`]`(route)` として渡され、
+/// バルーン矩形への遷移ガード（S3′・Req 3.4）が同じ 4 経路でのみ発火する。
 #[allow(dead_code)] // 呼び出し側（anchor_changed_system task 2.6・frame resnap シーム）は後続 task の領分
 pub fn resize_window_to(
     world: &mut World,
@@ -1006,7 +1162,10 @@ pub fn resize_window_to(
             };
         }
     }
-    // 確定後キャラ窓座標＋（補正済み）offset で追従（offset 恒等式維持）。
+    // 7. 確定後キャラ窓座標＋（補正済み）offset で追従（offset 恒等式維持）。
+    //    引き金はキャラ窓を動かした route そのもの——バルーン矩形への遷移ガード
+    //    （task 6.2・S3′）はこれで発火可否が決まる（書込自身の `BalloonFollow` では
+    //    決められない・[`BalloonFollowTrigger`] の doc 参照）。
     follow_balloon(
         world,
         char_window,
@@ -1014,6 +1173,7 @@ pub fn resize_window_to(
             x: new_pos.x,
             y: new_pos.y,
         },
+        BalloonFollowTrigger::Placement(route),
     );
 
     true
@@ -1556,6 +1716,9 @@ const VISIBILITY_UNRESOLVED_TAG: &str = "[visibility-guard] WorkAreaUnresolved";
 ///   **本述語をそのままバルーン適用（task 6.2）の発火条件に流用しないこと**——
 ///   バルーンの適用可否は「随伴の**引き金**がドラッグだったか配置系だったか」で決まり、
 ///   `follow_balloon` の呼出元が持つ情報である（本述語の入力は書込自身の route）。
+///   task 6.2 は [`BalloonFollowTrigger`] を新設して**引き金**を配管し、その
+///   [`Placement`](BalloonFollowTrigger::Placement) 腕が**引き金の route** に対して
+///   本述語を引く形にした（本述語へ `BalloonFollow` を渡す形にはしていない）。
 fn route_applies_visibility_guard(route: PlacementRoute) -> bool {
     match route {
         // 非ドラッグの自動配置（S3 の保護対象・D13 帰結⑴）
@@ -1617,7 +1780,30 @@ fn apply_visibility_guard(
     if !route_applies_visibility_guard(route) {
         return proposed;
     }
+    evaluate_visibility_guard(entity, route, snapshot, old_rect, raw, proposed, size)
+}
 
+/// 発火可否の判定が**済んだ後**の本体（評価＋観測）。
+///
+/// キャラ窓（[`apply_visibility_guard`]＝書込自身の route で発火判定）とバルーン窓
+/// （[`guard_balloon_position`]＝随伴の**引き金**で発火判定・task 6.2）が共有する。
+/// 発火判定だけを外へ出したのは、両者で判定の**入力が違う**（書込の route ⇔ 引き金の
+/// route）一方、評価規則・clamp 先の引き方・3 語の観測は**完全に同一**だからである
+/// （design「バルーン適用（S3′ 是正）」＝新規機構ゼロ）。
+///
+/// `route` は**ログに載る経路名**であり、発火判定には用いない——バルーン随伴の書込は
+/// [`PlacementRoute::BalloonFollow`] として記録される（[`enqueue_window_set_pos`] が出す
+/// `[diag.window_move]` レコードと同じ語）ので、警告行とレコード行が同じ route 名で
+/// 突合できる。
+fn evaluate_visibility_guard(
+    entity: Entity,
+    route: PlacementRoute,
+    snapshot: Option<&MonitorSnapshot>,
+    old_rect: Option<RectPx>,
+    raw: PointPx,
+    proposed: PointPx,
+    size: SizePx,
+) -> PointPx {
     let Some(snapshot) = snapshot else {
         warn!(
             entity = ?entity,
@@ -6936,6 +7122,577 @@ mod tests {
                 "dpi={dpi}: 寸未確定（センチネル）を『留置』と誤読して clamp を見送っている"
             );
             expect_one(&events, CLAMP_TAG);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // バルーン矩形への遷移ガード配線（task 6.2・S3′ 是正・Req 3.4・D6）
+    //
+    // task 2.2 は `guard_visibility` のバルーン矩形ケース（純関数）を、task 6.1 は
+    // キャラ窓経路の配線を固めた。本節が檻に入れるのは**バルーン随伴で実際に走るか・
+    // どの引き金で走るか**である（diagnosis-report.md §1.4「純関数が在ることは S3′ の
+    // 充足ではない」）。
+    //
+    // 檻の要点（空虚化を避けるための自己検査を各檻が持つ）:
+    //   (1) 探針の自己検査——ガード**無し**のバルーン提案が本当に全 work area 非交差で
+    //       あること／旧バルーン矩形は可視であること（どちらかが崩れると ClampX 腕へ
+    //       入らず「緑」が何も意味しない・[[2.2 の教訓]]）
+    //   (2) **キャラ窓は clamp されない**こと——キャラ側のガードが動かした結果を
+    //       バルーンの成果と読み違えない（S3 と S3′ の分離）
+    //   (3) 引き金による発火条件——**ドラッグ随伴では位置が素の恒等式と 1 bit も違わない**。
+    //       ログ側の否定 assert だけに依存しない（[[5.2 の教訓＝空虚性 6 例目]]:
+    //       不変量がログ側にしか無いと別ファイルの水準変更で守りが消える）
+    //   (4) 判定語のリテラル——`CLAMP_TAG`／`NEAREST_TAG`／`UNRESOLVED_TAG` を檻側にも持つ
+    //
+    // 座標はすべて論理値 × DPI（96/120/192）で構築し、絶対 px の固定値を持たない（Req 5.6）。
+    // -------------------------------------------------------------------------
+
+    use super::BalloonFollowTrigger;
+
+    /// キャラ窓の初期位置（**接地していない** Y）。同寸の [`resize_window_to`] でも
+    /// 射影 T が Y を `wa.bottom − h` へ動かす＝手順 4 のべき等 skip に落ちない。
+    fn char_start_pos(dpi: i32) -> PointPx {
+        point(px(1500, dpi), px(100, dpi))
+    }
+
+    /// 射影 T 適用後のキャラ窓確定位置（右モニタへ接地・**可視のまま**）。
+    fn char_settled_pos(dpi: i32) -> PointPx {
+        point(px(1500, dpi), grounded_y(right_wa(dpi), char_size(dpi)))
+    }
+
+    /// 全 work area の外を指す追従 offset（キャラの右上へ px(500)／−px(400)）。
+    ///
+    /// キャラ窓（右端 `px(1800)`）は右モニタ内に留まる一方、バルーン（幅 `px(500)`）は
+    /// `px(2000)` 以降＝`right_wa.right = px(1920)` の外側へ丸ごと出る。左モニタは負座標
+    /// ゆえ交差し得ない＝**バルーンだけが完全不可視**になる S3′ の合成そのもの。
+    fn far_out_offset(dpi: i32) -> PointPx {
+        point(px(500, dpi), -px(400, dpi))
+    }
+
+    /// 旧バルーン位置（右モニタ内＝**可視**。ゆえに「可視→不可視の遷移」になる）。
+    fn visible_balloon_pos(dpi: i32) -> PointPx {
+        point(px(800, dpi), px(240, dpi))
+    }
+
+    /// 「キャラ窓は可視のまま・offset 恒等式の提案位置だけが全 work area 非交差」へ
+    /// 落ちる合成 World を組む（S3′＝*キャラは見えているのに会話が読めない*）。
+    fn char_with_far_balloon_world(
+        dpi: i32,
+        balloon_pos: PointPx,
+        offset: PointPx,
+    ) -> (World, Entity, Entity) {
+        let c = char_size(dpi);
+        let b = balloon_size(dpi);
+        let start = char_start_pos(dpi);
+        let mut world = World::new();
+        world.insert_resource(mixed_layout(dpi));
+        let balloon = world
+            .spawn((
+                fake_handle(0x2000),
+                window_pos_sized(balloon_pos.x, balloon_pos.y, b.w, b.h),
+            ))
+            .id();
+        let char_window = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(start.x, start.y, c.w, c.h),
+                Anchored(Anchor::Bottom),
+                BalloonFollow { balloon, offset },
+            ))
+            .id();
+        (world, char_window, balloon)
+    }
+
+    /// 引き金の表（D13 帰結⑴⑵ の**キャラ窓と同一の表**）を固定する。
+    ///
+    /// バルーンは別規則を持たない——違うのは「何を入力に引くか」だけで、引くのは
+    /// キャラ窓と同じ [`route_applies_visibility_guard`] である。ドラッグ腕が真へ倒れる
+    /// 変異（＝明示操作の尊重の破壊）は挙動檻
+    /// [`balloon_drag_trigger_neither_clamps_nor_warns`] が第一の守りとして捕まえる。
+    #[test]
+    fn balloon_follow_trigger_table_mirrors_the_char_window_table() {
+        assert!(
+            !BalloonFollowTrigger::Drag.applies_visibility_guard(),
+            "ドラッグ随伴でガードが発火する（明示操作の尊重が壊れている・Req 3.1）"
+        );
+        for route in PlacementRoute::ALL {
+            assert_eq!(
+                BalloonFollowTrigger::Placement(route).applies_visibility_guard(),
+                route_applies_visibility_guard(route),
+                "route={route} の引き金判定がキャラ窓の表と食い違う"
+            );
+        }
+        // 表が「全部真」「全部偽」へ潰れていないこと（自明な述語への退化の検出）。
+        let fired = PlacementRoute::ALL
+            .into_iter()
+            .filter(|r| BalloonFollowTrigger::Placement(*r).applies_visibility_guard())
+            .count();
+        assert_eq!(fired, 4, "発火する引き金が 4 種でない（表が潰れている）");
+    }
+
+    /// **Req 3.4 の本体**: 非ドラッグの配置系 4 経路が引き金のとき、offset 恒等式が出した
+    /// バルーン提案位置が全 work area 非交差へ落ちるなら、X の clamp で救われる。
+    ///
+    /// キャラ窓は終始可視（clamp されない）＝救われたのは**バルーンだけ**である。
+    #[test]
+    fn balloon_visibility_guard_clamps_x_on_non_drag_placement_triggers() {
+        for dpi in DPIS {
+            let layout = mixed_layout(dpi);
+            let b_size = balloon_size(dpi);
+            let offset = far_out_offset(dpi);
+            let old_pos = visible_balloon_pos(dpi);
+            for route in [
+                PlacementRoute::AnchorChange,
+                PlacementRoute::Resnap,
+                PlacementRoute::DpiReproject,
+                PlacementRoute::ReportedSizeReconcile,
+            ] {
+                let (mut world, char_window, balloon) =
+                    char_with_far_balloon_world(dpi, old_pos, offset);
+
+                // (1) 探針の自己検査: 恒等式の素の提案は**本当に**全 work area 非交差／
+                //     旧バルーン矩形は可視。どちらかが崩れると ClampX 腕へ入らず空虚になる。
+                let settled = char_settled_pos(dpi);
+                let bare = point(settled.x + offset.x, settled.y + offset.y);
+                assert!(
+                    !visible_in(&layout, bare, b_size),
+                    "dpi={dpi}: 探針が不動点——素のバルーン提案 {bare:?} が既に可視"
+                );
+                assert!(
+                    visible_in(&layout, old_pos, b_size),
+                    "dpi={dpi}: 旧バルーンが非交差では『遷移』でなく留置＝Keep が正解になる"
+                );
+
+                let (ok, events) = capture_logs(|| {
+                    resize_window_to(&mut world, char_window, char_size(dpi), route)
+                });
+                assert!(ok, "dpi={dpi} route={route}: 書込は成立する前提");
+
+                // (2) キャラ窓は clamp されていない＝救われたのはバルーンだけである。
+                assert_eq!(
+                    point_of(&world, char_window),
+                    settled,
+                    "dpi={dpi} route={route}: キャラ窓が動いた＝S3′ ではなく S3 の檻になっている"
+                );
+
+                // Req 3.4: 書かれたバルーン矩形はいずれかの work area と交差する。
+                let pos = point_of(&world, balloon);
+                assert!(
+                    visible_in(&layout, pos, b_size),
+                    "dpi={dpi} route={route}: Req 3.4 違反——バルーン {pos:?} が全 work area と非交差"
+                );
+                assert_eq!(
+                    pos.y, bare.y,
+                    "dpi={dpi} route={route}: バルーンの Y は恒等式の所有＝ガードが触ってはならない"
+                );
+                assert_ne!(
+                    pos.x, bare.x,
+                    "dpi={dpi} route={route}: バルーンの X が引き戻されていない（ガード未発火）"
+                );
+                let wa = right_wa(dpi);
+                assert!(
+                    wa.left <= pos.x && pos.x <= wa.right - b_size.w,
+                    "dpi={dpi} route={route}: clamp 先が work area {wa:?} の外: {pos:?}"
+                );
+
+                // (4) 判定語: ClampX の warn が 1 行・水準は WARN（縮退シームの記録）。
+                let clamped = expect_one(&events, CLAMP_TAG);
+                assert_eq!(
+                    clamped.level,
+                    tracing::Level::WARN,
+                    "dpi={dpi} route={route}: バルーンの clamp が warn 水準でない"
+                );
+                // 提案位置の中心はどの work area にも属さない＝食い違いの兆候も 1 行残る。
+                assert_eq!(
+                    expect_one(&events, NEAREST_TAG).level,
+                    tracing::Level::WARN,
+                    "dpi={dpi} route={route}: 最近傍フォールバックが warn へ昇格していない"
+                );
+            }
+        }
+    }
+
+    /// **Req 3.1 の裏面**: 明示操作系・非配置系の引き金では、バルーン位置が素の offset
+    /// 恒等式と 1 bit も違わず、ガードのログも 1 行も出ない。
+    #[test]
+    fn balloon_visibility_guard_does_not_fire_on_explicit_or_non_placement_triggers() {
+        for dpi in DPIS {
+            let layout = mixed_layout(dpi);
+            let b_size = balloon_size(dpi);
+            let offset = far_out_offset(dpi);
+            let old_pos = visible_balloon_pos(dpi);
+            for route in [
+                PlacementRoute::SpawnInitial,
+                PlacementRoute::Restore,
+                PlacementRoute::KeepPositionResize,
+                PlacementRoute::BalloonFollow,
+                PlacementRoute::MoveCue,
+            ] {
+                let (mut world, char_window, balloon) =
+                    char_with_far_balloon_world(dpi, old_pos, offset);
+                let settled = char_settled_pos(dpi);
+                let bare = point(settled.x + offset.x, settled.y + offset.y);
+                // 探針の自己検査: 発火条件は揃っている（引き金だけが違う）。
+                assert!(
+                    !visible_in(&layout, bare, b_size),
+                    "dpi={dpi}: 探針が不動点——発火条件が揃っていない"
+                );
+
+                let (ok, events) = capture_logs(|| {
+                    resize_window_to(&mut world, char_window, char_size(dpi), route)
+                });
+                assert!(ok, "dpi={dpi} route={route}: 書込は成立する前提");
+
+                assert_eq!(
+                    point_of(&world, balloon),
+                    bare,
+                    "dpi={dpi} route={route}: 適用外の引き金でバルーンが動いた（明示操作の尊重が壊れている）"
+                );
+                assert!(
+                    guard_events(&events, GUARD_TAG_PREFIX).is_empty(),
+                    "dpi={dpi} route={route}: 適用外の引き金でガードが喋っている: {events:?}"
+                );
+            }
+        }
+    }
+
+    /// **本タスクの中核の守り（[[6.1 → 6.2 の申し送り]]）**: ドラッグ随伴では発火しない。
+    ///
+    /// `follow_balloon` は配置系（[`resize_window_to`]）とドラッグ
+    /// （[`on_char_drag`]／[`on_char_drag_end`]）の**双方**から呼ばれる。無条件適用すると
+    /// ユーザーがキャラを画面端へ運んだときにバルーンだけが引き戻され、Req 3.1 の
+    /// 「明示操作の尊重」が壊れる——その変異を**位置 assert**で捕まえる（ログ側の否定
+    /// assert だけに依存しない・[[5.2 の教訓]]）。
+    #[test]
+    fn balloon_drag_trigger_neither_clamps_nor_warns() {
+        for dpi in DPIS {
+            let layout = mixed_layout(dpi);
+            let c_size = char_size(dpi);
+            let b_size = balloon_size(dpi);
+            let offset = far_out_offset(dpi);
+            let old_pos = visible_balloon_pos(dpi);
+            let start = char_start_pos(dpi);
+            let cursor = (px(800, dpi), px(400, dpi));
+            // カーソルを右へ px(100) 動かす＝生ドラッグ x は px(1600)。
+            let moved = (cursor.0 + px(100, dpi), cursor.1);
+            // 射影 T 適用後のキャラ確定位置（下端接地・X は素通し）。
+            let settled = point(px(1600, dpi), grounded_y(right_wa(dpi), c_size));
+            let bare = point(settled.x + offset.x, settled.y + offset.y);
+
+            // 探針の自己検査: ドラッグ随伴の提案は**本当に**全 work area 非交差
+            //（＝ガードが配線されていれば必ず clamp する状況である）。旧矩形は可視。
+            assert!(
+                !visible_in(&layout, bare, b_size),
+                "dpi={dpi}: 探針が不動点——ドラッグ随伴の提案 {bare:?} が可視のまま"
+            );
+            assert!(
+                visible_in(&layout, old_pos, b_size),
+                "dpi={dpi}: 旧バルーンが非交差では『留置の尊重』と区別が付かない"
+            );
+
+            for entry in ["on_char_drag", "on_char_drag_end"] {
+                let (mut world, char_window, balloon) =
+                    char_with_far_balloon_world(dpi, old_pos, offset);
+                world
+                    .entity_mut(char_window)
+                    .insert(dragging_state((start.x, start.y), cursor));
+
+                let (_, events) = capture_logs(|| match entry {
+                    "on_char_drag" => {
+                        let ev = Phase::Bubble(drag_event_at(char_window, cursor, moved));
+                        on_char_drag(&mut world, char_window, char_window, &ev)
+                    }
+                    _ => {
+                        let ev = Phase::Bubble(drag_end_event_at(char_window, moved));
+                        on_char_drag_end(&mut world, char_window, char_window, &ev)
+                    }
+                });
+
+                assert_eq!(
+                    point_of(&world, char_window),
+                    settled,
+                    "dpi={dpi} {entry}: 前提——ドラッグの確定位置が想定と違う"
+                );
+                assert_eq!(
+                    point_of(&world, balloon),
+                    bare,
+                    "dpi={dpi} {entry}: ドラッグ随伴でバルーンが引き戻された（Req 3.1 違反）"
+                );
+                assert!(
+                    guard_events(&events, GUARD_TAG_PREFIX).is_empty(),
+                    "dpi={dpi} {entry}: ドラッグ随伴でガードが喋っている（spam・水準分岐の破壊）: {events:?}"
+                );
+            }
+        }
+    }
+
+    /// ユーザーが画面外へ留置したバルーンは、配置系の引き金でも引き戻さない
+    /// （キャラ窓と完全に同一の規則＝`Keep` 腕・Req 3.1 の「明示操作の尊重」）。
+    #[test]
+    fn balloon_parked_off_screen_is_respected_on_placement_trigger() {
+        for dpi in DPIS {
+            let layout = mixed_layout(dpi);
+            let b_size = balloon_size(dpi);
+            let offset = far_out_offset(dpi);
+            // 旧バルーンは既に全 work area の外（ユーザー留置）。
+            let parked = point(px(2400, dpi), px(240, dpi));
+            assert!(
+                !visible_in(&layout, parked, b_size),
+                "dpi={dpi}: 前提——旧バルーンは既に非交差（留置）"
+            );
+
+            let (mut world, char_window, balloon) =
+                char_with_far_balloon_world(dpi, parked, offset);
+            let settled = char_settled_pos(dpi);
+            let bare = point(settled.x + offset.x, settled.y + offset.y);
+            assert!(
+                !visible_in(&layout, bare, b_size),
+                "dpi={dpi}: 前提——提案も非交差（`Keep` 腕を通る条件）"
+            );
+
+            let (ok, events) = capture_logs(|| {
+                resize_window_to(
+                    &mut world,
+                    char_window,
+                    char_size(dpi),
+                    PlacementRoute::DpiReproject,
+                )
+            });
+            assert!(ok);
+            assert_eq!(
+                point_of(&world, balloon),
+                bare,
+                "dpi={dpi}: 留置バルーンが引き戻された（Keep 腕が効いていない）"
+            );
+            assert!(
+                guard_events(&events, CLAMP_TAG).is_empty(),
+                "dpi={dpi}: 留置バルーンに ClampX が出ている: {events:?}"
+            );
+        }
+    }
+
+    /// 任意の `WindowPos` を持つバルーンで [`char_with_far_balloon_world`] 相当を組む
+    /// （未確定表現の探針用）。
+    fn char_with_balloon_window_pos(
+        dpi: i32,
+        balloon_pos: WindowPos,
+        offset: PointPx,
+    ) -> (World, Entity, Entity) {
+        let c = char_size(dpi);
+        let start = char_start_pos(dpi);
+        let mut world = World::new();
+        world.insert_resource(mixed_layout(dpi));
+        let balloon = world.spawn((fake_handle(0x2000), balloon_pos)).id();
+        let char_window = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(start.x, start.y, c.w, c.h),
+                Anchored(Anchor::Bottom),
+                BalloonFollow { balloon, offset },
+            ))
+            .id();
+        (world, char_window, balloon)
+    }
+
+    /// **バルーン寸の未確定は `Option::None` だけではない**（[[4.6 の教訓]]・6.1 の
+    /// `old_rect` 導出と同型の罠）: `WindowPos::default()` は position・size の**両方**を
+    /// `CW_USEDEFAULT`（`i32::MIN` センチネル）で持つ。
+    ///
+    /// センチネルを素の矩形として交差判定へ入れると `saturating_add` で逆転矩形になり、
+    /// 判定そのものが意味を失う。是正版は**寸が未確定なら位置に一切手を入れず** `warn!` を残す。
+    ///
+    /// # 檻の非空虚性（[[5.2 の教訓]]＝ログ側だけの守りにしない）
+    ///
+    /// 寸フィルタを外す変異では、位置センチネルが `old_rect = None`（不明）へ落ちるため
+    /// 安全側 `ClampX` が走り、`clamp_x_into(x, i32::MIN, wa)` が `wa.left` を返す
+    /// ＝**提案位置と違う座標が書かれる**。提案 X を `left_wa().left` より左へ置いてあるのは
+    /// そのためで、位置 assert が第一の守りになる。
+    #[test]
+    fn balloon_undetermined_size_holds_proposed_position_and_warns() {
+        for dpi in DPIS {
+            // 提案 X は左モニタ work area の左端よりさらに左（センチネル素通し変異で
+            // 必ず `left_wa().left` へ引き戻される位置）。
+            let offset = point(-px(4500, dpi), -px(400, dpi));
+            let settled = char_settled_pos(dpi);
+            let bare = point(settled.x + offset.x, settled.y + offset.y);
+            assert!(
+                bare.x < left_wa().left,
+                "dpi={dpi}: 探針が不動点——センチネル素通し変異でも X が動かない配置になっている"
+            );
+
+            // 窓生成直後の実表現（position・size ともに CW_USEDEFAULT センチネル）。
+            let (mut world, char_window, balloon) =
+                char_with_balloon_window_pos(dpi, WindowPos::default(), offset);
+
+            let (ok, events) = capture_logs(|| {
+                resize_window_to(
+                    &mut world,
+                    char_window,
+                    char_size(dpi),
+                    PlacementRoute::ReportedSizeReconcile,
+                )
+            });
+            assert!(ok);
+            assert_eq!(
+                point_of(&world, balloon),
+                bare,
+                "dpi={dpi}: 寸未確定（センチネル）なのに位置へ手が入った"
+            );
+            let warned = expect_one(&events, UNRESOLVED_TAG);
+            assert_eq!(
+                warned.level,
+                tracing::Level::WARN,
+                "dpi={dpi}: 判定不能が warn として残っていない（Req 3.3）"
+            );
+            // **フィールド集合の固定**（`diagnosis-procedure.md` §3.1／§6.3 の振り分け規則が
+            // これに依存する）: `route=BalloonFollow` で窓種別が引け、**`proposed` の有無**が
+            // 本行（良性の判定不能）と装置異常（`MonitorSnapshot` 不在・モニタ 0 台）を分ける。
+            // どちらを落としても実機判定が反転するので、literal で固定する
+            // （[[5.1 → 7.2 の申し送り＝判定語に使っているのに檻が無い型]] の再発防止）。
+            assert_eq!(
+                warned.field("route"),
+                "BalloonFollow",
+                "dpi={dpi}: 判定不能行が窓種別を名乗っていない（§3.1 の振り分けが成立しない）"
+            );
+            assert_eq!(
+                warned.field("proposed"),
+                format!("{bare:?}"),
+                "dpi={dpi}: 判定不能行の `proposed` が提案位置と違う（§6.3 の判別子）"
+            );
+            assert!(
+                guard_events(&events, CLAMP_TAG).is_empty(),
+                "dpi={dpi}: 寸が読めないのに clamp している: {events:?}"
+            );
+        }
+    }
+
+    /// **§6.3 の判別子の裏面**: 真の観測装置異常（`MonitorSnapshot` 不在）はキャラ窓・
+    /// バルーン窓の**双方**から `WorkAreaUnresolved` を出すが、いずれも **`proposed` を
+    /// 持たない**。
+    ///
+    /// 手順書はこの 1 点で「良性の判定不能（バルーン寸未確定）」と「セッション全体を
+    /// 無効にする装置異常」を分ける。`route=` だけでは分けられない——装置異常も
+    /// バルーン随伴で起きれば `route=BalloonFollow` を名乗るからである。
+    #[test]
+    fn missing_monitor_snapshot_warns_for_both_windows_without_the_proposed_field() {
+        for dpi in DPIS {
+            let (mut world, char_window, _balloon) = char_with_far_balloon_world(
+                dpi,
+                visible_balloon_pos(dpi),
+                far_out_offset(dpi),
+            );
+            world.remove_resource::<MonitorSnapshot>();
+            // 射影が identity へ縮退しても書込が起きるよう、寸を変える（高さのみ＝
+            // 手順 3b の x 付替えを避ける）。同寸だとべき等 skip で随伴まで届かない。
+            let new = SizePx {
+                w: char_size(dpi).w,
+                h: px(200, dpi),
+            };
+
+            let (ok, events) =
+                capture_logs(|| resize_window_to(&mut world, char_window, new, PlacementRoute::Resnap));
+            assert!(ok, "dpi={dpi}: 寸の反映自体は従来どおり成立する");
+
+            let warned = guard_events(&events, UNRESOLVED_TAG);
+            assert_eq!(
+                warned.len(),
+                2,
+                "dpi={dpi}: 装置異常はキャラ窓とバルーン窓の双方から出るはず: {events:?}"
+            );
+            let routes: Vec<&str> = warned.iter().map(|e| e.field("route")).collect();
+            assert!(
+                routes.contains(&"Resnap") && routes.contains(&"BalloonFollow"),
+                "dpi={dpi}: 2 行の route が {routes:?}（キャラ窓＋バルーン窓の対になっていない）"
+            );
+            for e in &warned {
+                assert_eq!(e.level, tracing::Level::WARN, "dpi={dpi}: 水準が warn でない");
+                assert!(
+                    !e.fields.contains_key("proposed"),
+                    "dpi={dpi}: 装置異常の行が `proposed` を持っている＝§6.3 の判別子が壊れる: {:?}",
+                    e.fields
+                );
+            }
+            assert!(
+                guard_events(&events, CLAMP_TAG).is_empty(),
+                "dpi={dpi}: work area 不明なのに clamp している: {events:?}"
+            );
+        }
+    }
+
+    /// **旧位置の未確定も `Option::None` だけではない**: 寸だけ確定して位置が
+    /// `CW_USEDEFAULT` のままの窓は、素通しすると矩形が `i32::MIN` 近傍へ落ちて
+    /// 「もともと画面外に留置されていた」と誤判定され、**安全側 clamp の腕が丸ごと死ぬ**
+    /// （6.1 が寸について踏んだのと同型の罠を、位置について踏まないための檻）。
+    ///
+    /// 負座標そのものは正当（左モニタは `-1920..0`）ゆえ、判定は符号ではなく
+    /// wintf 正典のセンチネル一致で行う。
+    #[test]
+    fn balloon_undetermined_position_is_treated_as_unknown_rect_and_clamps() {
+        for dpi in DPIS {
+            let layout = mixed_layout(dpi);
+            let b_size = balloon_size(dpi);
+            let offset = far_out_offset(dpi);
+            let settled = char_settled_pos(dpi);
+            let bare = point(settled.x + offset.x, settled.y + offset.y);
+            assert!(
+                !visible_in(&layout, bare, b_size),
+                "dpi={dpi}: 探針が不動点——提案が既に可視で安全側 clamp の腕へ入らない"
+            );
+
+            // 寸は確定済み・位置だけ CW_USEDEFAULT（wintf 正典の未確定表現）。
+            let window_pos = WindowPos {
+                size: Some(SizeI::new(b_size.w, b_size.h)),
+                ..Default::default()
+            };
+            let (mut world, char_window, balloon) =
+                char_with_balloon_window_pos(dpi, window_pos, offset);
+
+            let (ok, events) = capture_logs(|| {
+                resize_window_to(
+                    &mut world,
+                    char_window,
+                    char_size(dpi),
+                    PlacementRoute::DpiReproject,
+                )
+            });
+            assert!(ok);
+            assert!(
+                visible_in(&layout, point_of(&world, balloon), b_size),
+                "dpi={dpi}: 位置未確定（センチネル）を『留置』と誤読して clamp を見送っている"
+            );
+            expect_one(&events, CLAMP_TAG);
+        }
+    }
+
+    /// 破棄済みバルーンへの随伴は**正常終了系**として `debug!` で打ち切る（Req 6.2/6.3・
+    /// task 3.2 と同じ区別）。ここを `warn!` にすると終了時ログが良性ノイズで埋まり、
+    /// 本物の異常（実在窓の寸未確定）が読めなくなる。
+    #[test]
+    fn balloon_despawned_skips_guard_without_warning() {
+        for dpi in DPIS {
+            let (mut world, char_window, balloon) =
+                char_with_far_balloon_world(dpi, visible_balloon_pos(dpi), far_out_offset(dpi));
+            world.despawn(balloon);
+
+            let (_, events) = capture_logs(|| {
+                resize_window_to(
+                    &mut world,
+                    char_window,
+                    char_size(dpi),
+                    PlacementRoute::Resnap,
+                )
+            });
+
+            assert!(
+                guard_events(&events, GUARD_TAG_PREFIX).is_empty(),
+                "dpi={dpi}: 破棄済みバルーンに対してガードが喋っている（Req 6.2 違反）: {events:?}"
+            );
+            let skipped = expect_one(&events, DESPAWNED_SKIP_TAG);
+            assert_eq!(
+                skipped.level,
+                tracing::Level::DEBUG,
+                "dpi={dpi}: 破棄済み打ち切りが debug 水準でない"
+            );
         }
     }
 }

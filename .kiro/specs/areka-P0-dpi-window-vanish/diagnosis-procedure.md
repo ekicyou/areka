@@ -180,19 +180,26 @@ $env:AREKA_PROFILE_DIR       = $PROFILE_DIR
 | O14 | `[DragEvent] Dispatching`（`start_x/y`・`current_x/y`・`delta_x/y`） | `wintf::ecs::drag::dispatch` | **`trace`** | `drag/dispatch.rs:357-365` ＝ **要件 2.3 の数値源** |
 | O15 | `[DragStartEvent] Dispatching` / `[DragEnd] Direct Arrangement.offset sync` | 同上 | `info` | `drag/dispatch.rs:190,301` |
 | O16 | `dpi reproject: WindowPos.size 未確定（窓生成前）`（`entity=`） | `areka::emo2_boot::frame` | **`warn`** | `frame.rs:923-926`（**タスク 5.2 着地後**。DPI 相の位置再射影が現寸を読めず打ち切った縮退＝1 行でも出たら当該窓の接地点は保証されない） |
-| O17 | **`[visibility-guard] ClampX`**（`entity=`・`route=`・`old_rect=`・`proposed=`・`clamped=`・`size=`・`clamp_wa=`） | `areka::placement::follow` | **`warn`** | `follow.rs:1667`（`apply_visibility_guard`・`:1608`）＝**タスク 6.1 着地後**。可視 → 全 work area 非交差への遷移を検出し X を引き戻した（Req 3.1） |
-| O18 | **`[visibility-guard] NearestFallback`**（`entity=`・`route=`・`proposed=`・`size=`・`clamp_wa=`） | 同上 | **`warn`** | `follow.rs:1651`（同上）＝**タスク 6.1 着地後**。**決めた位置**の窓中心がどの work area にも属さない＝モニタ構成情報と実画面の食い違いの兆候（Req 3.2） |
-| O19 | **`[visibility-guard] WorkAreaUnresolved`**（`entity=`・`route=`） | 同上 | **`warn`** | `follow.rs:1625,1634`（同上）＝**タスク 6.1 着地後**。`MonitorSnapshot` 不在／モニタ 0 台で可視性を判定できず位置を現状維持した（Req 3.3） |
+| O17 | **`[visibility-guard] ClampX`**（`entity=`・`route=`・`old_rect=`・`proposed=`・`clamped=`・`size=`・`clamp_wa=`） | `areka::placement::follow` | **`warn`** | `follow.rs:1853`（`evaluate_visibility_guard`・`:1798`。キャラ窓は `apply_visibility_guard`・`:1771` 経由／バルーン窓は `guard_balloon_position`・`:619` 経由）＝**タスク 6.1／6.2 着地後**。可視 → 全 work area 非交差への遷移を検出し X を引き戻した（Req 3.1） |
+| O18 | **`[visibility-guard] NearestFallback`**（`entity=`・`route=`・`proposed=`・`size=`・`clamp_wa=`） | 同上 | **`warn`** | `follow.rs:1837`（同上）＝**タスク 6.1／6.2 着地後**。**決めた位置**の窓中心がどの work area にも属さない＝モニタ構成情報と実画面の食い違いの兆候（Req 3.2） |
+| O19 | **`[visibility-guard] WorkAreaUnresolved`**（`entity=`・`route=`。**バルーン窓の寸未確定の行だけが `proposed=` を持つ**＝タスク 6.2・下記「判別子」） | 同上 | **`warn`** | `follow.rs:1811,1820`（`evaluate_visibility_guard`・キャラ窓／バルーン窓の共通経路）／`follow.rs:650`（`guard_balloon_position`・**タスク 6.2 着地後**）。`MonitorSnapshot` 不在／モニタ 0 台／**バルーン窓の寸が未確定**で可視性を判定できず位置を現状維持した（Req 3.3） |
 
 > **O17〜O19 は D-BASE の大域 `info` に載る**（`warn` ゆえ target 追加は不要）。3 語は接頭辞 `[visibility-guard]` を共有するので、「ガードが何か言ったか」は 1 回の `Select-String -SimpleMatch '[visibility-guard]'` で引ける。
 >
-> **発火 route は 4 種に限られる**（`AnchorChange`／`Resnap`／`DpiReproject`／`ReportedSizeReconcile`＝D13 帰結⑴）。**ドラッグ・`MoveCue`・`Restore`・バルーン窓側の書込では 0 行が正常**であり、これを「配線漏れ」と読まないこと（明示操作の尊重＝Req 3.1 の「ユーザーの明示的なドラッグ以外の要因」）。判定語のリテラルと発火 route の表は in-source 檻（`follow.rs` の `visibility_guard_*`／`nearest_fallback_warns_*`／`drag_path_neither_*`）が固定している。
+> **件数の読み方（タスク 6.2 着地で改訂・2026-08-01）**: 3 語はキャラ窓とバルーン窓の**双方**から出る。窓種別は `route=` で判別する——**`route=BalloonFollow` の行はすべてバルーン窓由来**（`follow_balloon` の書込は定義上つねに `BalloonFollow`）であり、それ以外の 4 語（下記）はキャラ窓由来である。`entity=` は `[diag.window_move]` レコードとの結合キーなので、`kind=Balloon`／`kind=Char` で裏取りできる。
+>
+> - **キャラ窓由来の発火 route は 4 種に限られる**（`AnchorChange`／`Resnap`／`DpiReproject`／`ReportedSizeReconcile`＝D13 帰結⑴）。**`MoveCue`・`Restore`・`SpawnInitial`・`KeepPositionResize` では 0 行が正常**。
+> - **バルーン窓由来の行は必ず `route=BalloonFollow`** だが、**出るのは配置系（上記 4 種）を引き金とする随伴のときだけ**である（タスク 6.2 は「随伴の引き金」を `follow_balloon` へ配管した）。**ドラッグ随伴（`on_char_drag`／`on_char_drag_end`）では 0 行が正常**——`route=BalloonFollow` の 0 行を「配線漏れ」と読まないこと。引き金はログ行に載らないので、判別が要るときは**直前のキャラ窓 `[diag.window_move]` レコードの `route=`** を見る（ドラッグ随伴ならキャラ側にレコードが無い＝`route=None` で無記録・§4）。
+> - ゆえに **1 回の DPI 再射影で最大 2 系統（キャラ 1 行＋バルーン 1 行）** が出得る。「ClampX が 2 件」を二重発火と読まないこと。
+> - **O19 だけは `route=` で良性／致命を分けてはならない**——`WorkAreaUnresolved` は「バルーン寸未確定（良性）」と「観測装置異常（セッション無効）」の双方から出て、**どちらも `route=BalloonFollow` を名乗り得る**。判別子は同行の **`proposed=` の有無**である（§6.3 の表が正本）。
+>
+> 判定語のリテラル・フィールド集合・発火 route の表は in-source 檻（`follow.rs` の `visibility_guard_*`／`nearest_fallback_warns_*`／`drag_path_neither_*`／**`balloon_visibility_guard_*`・`balloon_drag_trigger_neither_clamps_nor_warns`・`balloon_follow_trigger_table_mirrors_the_char_window_table`・`balloon_undetermined_size_holds_proposed_position_and_warns`・`missing_monitor_snapshot_warns_for_both_windows_without_the_proposed_field`**）が固定している。
 
 ### 3.2 D-BASE では**消灯する**観測点（D-TEARDOWN で点灯）
 
 | # | 判定語 | ログ target | 水準 | 備考 |
 | --- | --- | --- | --- | --- |
-| X1 | `[despawn-skip]`（追従層） | `areka::placement::follow` | `debug` | `follow.rs:839`（`resize_window_to`）・`follow.rs:1524`（`resize_window_keep_position`）。定数は `diag.rs:92` |
+| X1 | `[despawn-skip]`（追従層） | `areka::placement::follow` | `debug` | `follow.rs:1002`（`resize_window_to`）・`follow.rs:1905`（`resize_window_keep_position`）・**`follow.rs:623`（`guard_balloon_position`＝タスク 6.2 着地後・随伴バルーンが破棄済み）**。定数は `diag.rs:92` |
 | X2 | `[despawn-skip] dpi reconcile:` / `[despawn-skip] resnap:` / **`[despawn-skip] dpi reproject:`**（フレーム層） | `areka::emo2_boot::frame` | `debug` | `frame.rs:1140,1344,920`（3 つ目は**タスク 5.2 着地後**＝DPI 相の位置再射影の消費点。O16 と対で読む——同じ「寸が読めない」でも破棄済みは正常終了系ゆえ `debug`、実在窓は真の異常ゆえ `warn`） |
 | X3 | `placement: ゴースト窓レジストリから scope エントリを除去`（`scope=`・`char_window=`・`balloon_window=`） | `areka::placement::spawn` | `debug` | `spawn.rs:124-130`。**scope→entity 対応表の別解**（§5.2 の代替源） |
 
@@ -202,7 +209,7 @@ $env:AREKA_PROFILE_DIR       = $PROFILE_DIR
 
 | 語 | なぜ出ないか | いつ出るようになるか |
 | --- | --- | --- |
-| ~~`ClampX` / `VisibilityVerdict` 関連の `warn!`~~ | ~~`guard_visibility` は意図的に無ログの純関数で、まだどこからも呼ばれていない~~ | **タスク 6.1 でキャラ窓経路へ配線済み＝本表から退役**（現在は **O17**。`guard_visibility`（`follow.rs:1460`）が無ログである点は不変で、`warn!` は配線側 `apply_visibility_guard`（`follow.rs:1608`）が出す）。**バルーン矩形への適用は 6.2 の領分**ゆえ、6.2 着地までバルーン窓由来の O17 は出ない |
+| ~~`ClampX` / `VisibilityVerdict` 関連の `warn!`~~ | ~~`guard_visibility` は意図的に無ログの純関数で、まだどこからも呼ばれていない~~ | **タスク 6.1（キャラ窓）・6.2（バルーン窓）で配線済み＝本表から退役**（現在は **O17**。`guard_visibility`（`follow.rs:1620`）が無ログである点は不変で、`warn!` は配線側 `evaluate_visibility_guard`（`follow.rs:1798`）が出す）。**バルーン窓由来の O17 も 6.2 着地後は出る**（`route=BalloonFollow`・§3.1 の「件数の読み方」） |
 | ~~`NearestFallback` の `warn!`~~ | ~~判別を返すが水準昇格は消費側の責務で未配線~~ | **タスク 6.1 で配線済み＝本表から退役**（現在は **O18**） |
 | ~~`policy=` フィールド~~ | ~~未配線~~ | **タスク 5.1 で配線済み＝本表から退役**（現在は O8 に必ず載る。値語彙は §3.4） |
 | ~~`applied=false`~~ | ~~`applied` は定数~~ | **タスク 5.1 で分岐化済み＝本表から退役**（ゴースト窓では `false`・非ゴースト窓では `true`。§3.4） |
@@ -411,10 +418,17 @@ $verdict = if ((@($result | Where-Object { -not $_.ok }).Count -eq 0) -and $sum 
 > **採取ビルドで判定材料が変わる（必ず先に確定すること）**
 >
 > - **タスク 6.1 着地前（Phase A/B・セッション①および②-b）**: `ClampX`／`NearestFallback` の `warn!` は**コード上に存在しない**。判定語に使うと確実に偽陰性になる（旧 §3.3）。下の幾何突合のみを用いる。
-> - **タスク 6.1 着地後**: **O17〜O19**（§3.1）が判定材料として**併用**できる。ただし**代替ではなく補助**である——ガードは非ドラッグの配置系 4 経路にしか掛からないので、ドラッグ・`MoveCue`・OS 直書き由来の消失は O17 に現れない。`VANISH-TRACE` の合否は下の幾何突合で出し、O17〜O19 は「**ガードが実際に働いた／食い違いを検出した**」の肯定側証跡として併記する（Req 3.1／3.2 の実機成立の裏づけ）。
->   - `[visibility-guard] ClampX` が 1 行でもあれば、**非ドラッグ要因で不可視へ落ちかけた**（そして防いだ）ことの実機証跡である。同行の `route=` が引き金を名指しする。
+> - **タスク 6.1／6.2 着地後**: **O17〜O19**（§3.1）が判定材料として**併用**できる。ただし**代替ではなく補助**である——ガードは非ドラッグの配置系 4 経路（およびそれを引き金とするバルーン随伴）にしか掛からないので、ドラッグ・`MoveCue`・OS 直書き由来の消失は O17 に現れない。`VANISH-TRACE` の合否は下の幾何突合で出し、O17〜O19 は「**ガードが実際に働いた／食い違いを検出した**」の肯定側証跡として併記する（Req 3.1／3.2／3.4 の実機成立の裏づけ）。
+>   - `[visibility-guard] ClampX` が 1 行でもあれば、**非ドラッグ要因で不可視へ落ちかけた**（そして防いだ）ことの実機証跡である。同行の `route=` が窓種別を名指しする（`BalloonFollow`＝バルーン窓・それ以外＝キャラ窓。§3.1 の「件数の読み方」）。**`route=BalloonFollow` の ClampX は Req 3.4 の実機成立そのもの**——「キャラは見えているのに会話だけが画面外へ出かけた」を防いだ記録であり、同時に**美観配置政策（画面端での左右反転・M2）を先送りしている縮退シーム**でもある（`diagnosis-report.md` §1.4）。件数が多いなら M2 の優先度の材料になる。
 >   - `[visibility-guard] NearestFallback` は「決めた位置の窓中心がどのモニタにも属さない」＝モニタ構成情報の陳腐化か、窓が既に可視領域外かのどちらか。§7.2 の残余 B（両側モニタ列挙突合）と対で読む。
->   - `[visibility-guard] WorkAreaUnresolved` は観測装置側の異常（`MonitorSnapshot` 不在・モニタ 0 台）。1 行でも出たらそのセッションの幾何突合は根拠にならない。
+>   - `[visibility-guard] WorkAreaUnresolved` は判定不能を意味するが、**良性と致命が混在する**。**判別子は `route=` ではなく同行の `proposed=` の有無**である（下表・タスク 6.2 が実ログ書式から確定）。**`route=` で判別してはならない**——装置異常もバルーン随伴で起きれば `route=BalloonFollow` を名乗り、良性行も `route=BalloonFollow` を名乗るため、両方向に誤判定する。
+>
+>     | 同行の `proposed=` | 意味 | セッションへの影響 |
+>     | --- | --- | --- |
+>     | **有り**（かつ `route=BalloonFollow`） | **バルーン窓の寸が未確定**（窓生成前／`CW_USEDEFAULT`）＝良性。当該随伴 1 回ぶんガードが評価されなかっただけ | 幾何突合は有効。件数だけ記録する |
+>     | **無し**（`route=` はキャラ窓経路でも `BalloonFollow` でもあり得る） | **観測装置側の異常**（`MonitorSnapshot` 不在・モニタ 0 台） | **1 行でもあればそのセッションの幾何突合は根拠にならない** |
+>
+>     このフィールド集合は in-source 檻が固定している（`follow.rs` の `balloon_undetermined_size_holds_proposed_position_and_warns`＝良性側の `route`＋`proposed` を literal で、`missing_monitor_snapshot_warns_for_both_windows_without_the_proposed_field`＝装置異常側の `proposed` 不在を両窓について）。
 
 1. `[diag.monitor]`（O3・`context=monitor_snapshot` の組）から work area 矩形の集合を作る。
 2. `[diag.window_move]`（O4）の各行から `(x, y, w, h)` を取る。`w=-`／`h=-` の行は**移動専用書込**ゆえ、同一 entity の直近の既知寸を持ち越す。

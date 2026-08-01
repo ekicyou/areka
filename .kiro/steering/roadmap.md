@@ -105,6 +105,8 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 
 **emo テキスト進化の予約（M2 候補）**: ①回転テキストの実挙動（M1 で行列変換領域を内部表現として持ち込み済み）②ポップアート級の文字装飾（text effects——1枚物自前合成ゆえ文字も合成レイヤ）。
 
+**バルーン美観配置政策の予約（M2・2026-08-01 `dpi-window-vanish` task 6.2 が先送り登記）**: 画面端でのバルーン**左右反転**をはじめとする SSP 互換の美観配置政策。M1 が持つのは `dpi-window-vanish` の遷移ガードによる「**完全不可視への遷移を防ぐ安全網**」までで、clamp によりバルーンがキャラと部分的に重なり得ることは許容する（*見えない会話*より*重なった会話*を優先する裁定）。**縮退シーム＝`[visibility-guard] ClampX` の `warn!`**（`route=BalloonFollow` の行・`diagnosis-procedure.md` §3.1 の O17）——安全網が働いた回数がそのまま「本来なら美観政策が要った局面」の実機計数になるので、M2 着手時の優先度判断はこの件数を根拠にする。**M1 では起票しない**（M2 解禁時に spec 化する。それまでの担当は本節）。
+
 **M2 解禁ゲートの spec（brief 済・M1 では着手しない）**: `areka-P0-surfaces-basepos`・`areka-P0-sakura-time-directives`（互換拡充時に解禁）／`areka-P0-status-execution-states`（残状態の源サブシステム着地時に just-in-time・台帳）。
 
 ---
