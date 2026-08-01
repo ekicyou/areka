@@ -817,8 +817,15 @@ pub fn move_window_to(world: &mut World, window: Entity, x: i32, y: i32) -> bool
 /// [`PlacementRoute::DpiReproject`]・frame の drain 相（寸法報告回収・`Changed<DPI>` 非依存）＝
 /// [`PlacementRoute::ReportedSizeReconcile`]・D13）から呼ばれる**同一の反映口**であり、どの経路が
 /// 書いたかは呼出側しか知らない。ゆえに経路は引数で受け、[`enqueue_window_set_pos`] の
-/// 窓移動レコードへ透過させる（D11: ラッパ関数を乱立させない）。**挙動は route に
-/// 依存しない**（本 task は観測増設のみ・遷移ガードの発火条件としての消費は後続 task）。
+/// 窓移動レコードへ透過させる（D11: ラッパ関数を乱立させない）。
+///
+/// **task 6.1 以後、route は観測語彙であると同時に挙動の入力でもある**——可視性の遷移
+/// ガード（手順 3c・[`apply_visibility_guard`]）は非ドラッグの配置系 4 経路
+/// （[`AnchorChange`](PlacementRoute::AnchorChange)／[`Resnap`](PlacementRoute::Resnap)／
+/// [`DpiReproject`](PlacementRoute::DpiReproject)／
+/// [`ReportedSizeReconcile`](PlacementRoute::ReportedSizeReconcile)）でのみ発火する
+/// （D13 帰結⑴。同じ幾何でも由来が明示操作なら引き戻さない＝Req 3.1 の「ユーザーの
+/// 明示的なドラッグ以外の要因」）。
 #[allow(dead_code)] // 呼び出し側（anchor_changed_system task 2.6・frame resnap シーム）は後続 task の領分
 pub fn resize_window_to(
     world: &mut World,
@@ -882,6 +889,28 @@ pub fn resize_window_to(
         (PointPx { x: pos.x, y: pos.y }, wp.size)
     };
 
+    // 3a. 旧矩形（書込**前**の窓矩形）＝遷移ガードが「もともと見えていたか」を判定する入力
+    //     （task 6.1・S3 是正）。手順 3b の付替えより**前**の生位置で組むこと——3b 後の
+    //     値は「これから書こうとしている位置」であって旧矩形ではない。
+    //
+    //     寸が未確定のときは `None`＝**旧矩形不明**として扱い、ガードを安全側 clamp へ
+    //     倒す。ここで注意すべきは、wintf の未確定表現が `Option::None` **だけではない**
+    //     ことである——`WindowPos::default()` は `Some(SizeI { CW_USEDEFAULT, .. })`
+    //     （`i32::MIN` センチネル）を持つ（`wintf::ecs::window::window_pos::WindowPos`
+    //     の `Default`）。素の矩形として交差判定へ入れると `saturating_add` で逆転矩形に
+    //     なり、「もともと画面外に留置されていた」と誤判定して尊重側（Keep）へ倒れる
+    //     ＝安全側の腕が丸ごと死ぬ（4.6 で同型の見落としが本番 panic を新設した教訓）。
+    let old_rect = match current_size {
+        Some(s) if s.width > 0 && s.height > 0 => Some(rect_at(
+            raw,
+            SizePx {
+                w: s.width,
+                h: s.height,
+            },
+        )),
+        _ => None,
+    };
+
     // 3b. 原点＝**下端中央**の保存（伺かの立ち絵は足元中央が接地点・寸法変動で原点は動かない）。
     //     旧寸の中央 x を求め、新寸でも同じ中央になる左上 x へ付け替えてから射影へ渡す。
     //     これをしないと左上 x が据え置かれ、幅が変わるたびキャラの見た目の中心が横へ動き
@@ -905,6 +934,23 @@ pub fn resize_window_to(
     // 下端は T が再導出し、中央 x は上の付け替えで維持される＝原点（下端中央）が不動。
     let snapshot = world.get_resource::<MonitorSnapshot>();
     let new_pos = project_anchor(anchor, raw, new_size, snapshot);
+
+    // 3c. 可視性の遷移ガード（S3 是正・task 6.1・D5/D6・Req 3.1/3.2/3.3）: 射影 T の
+    //     **下流・外側**で、非ドラッグの配置系 route のときだけ「可視 → 全 work area
+    //     非交差」の遷移を X の clamp で阻止する（Y は射影の所有ゆえ不変）。射影関数
+    //     自体の契約は変えない——`project_anchor` は幾何しか知らず、発火条件である
+    //     route（＝書込の由来）を持たないためここでしか判定できない。
+    //     べき等 skip より**前**に置くのは、clamp 結果が現在値と一致した走行で冗長な
+    //     書込を出さないため（design Integration の手順どおり）。
+    let new_pos = apply_visibility_guard(
+        char_window,
+        route,
+        snapshot,
+        old_rect,
+        raw,
+        new_pos,
+        new_size,
+    );
 
     // 4. べき等 skip（Req3.1）: 導出 (position, size) が現 WindowPos と同一なら書かない
     //    （冗長な再配置を避ける・こちらは正常系ゆえ debug!）。
@@ -1350,7 +1396,6 @@ pub fn work_area_for_window_with_origin(
 ///
 /// いずれの腕も**最終位置そのもの**を持つ（呼出側が「clamp されたか」を見て warn
 /// 水準を分岐しつつ、位置は腕を問わず [`VisibilityVerdict::position`] で取れる）。
-#[allow(dead_code)] // 配線は task 6.1（キャラ窓）／6.2（バルーン窓）＝Phase C の領分
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VisibilityVerdict {
     /// 提案位置をそのまま採る（交差維持・またはユーザーの明示留置の尊重）。
@@ -1361,7 +1406,6 @@ pub enum VisibilityVerdict {
 
 impl VisibilityVerdict {
     /// 判定によらず最終位置を取り出す。
-    #[allow(dead_code)] // 配線は task 6.1／6.2（Phase C）
     pub fn position(self) -> PointPx {
         match self {
             VisibilityVerdict::Keep(p) | VisibilityVerdict::ClampX(p) => p,
@@ -1413,7 +1457,6 @@ impl VisibilityVerdict {
 /// 空 snapshot では何も交差しないため、`old_rect` が `Some`（＝同じく非交差）なら
 /// `Keep`＝現状維持。架空の可視領域を発明しない（resolver／`work_area_for_window`
 /// と同方針）。
-#[allow(dead_code)] // 配線は task 6.1（キャラ窓）／6.2（バルーン窓）＝Phase C の領分
 pub fn guard_visibility(
     old_rect: Option<RectPx>,
     proposed_pos: PointPx,
@@ -1473,6 +1516,158 @@ fn intersects_any_work_area(snapshot: &MonitorSnapshot, window: RectPx) -> bool 
 /// ため min/max 流儀・`work_area_for_window` の最近傍 clamp と同型の防波堤）。
 fn clamp_x_into(x: i32, w: i32, wa: RectPx) -> i32 {
     x.min(wa.right.saturating_sub(w)).max(wa.left)
+}
+
+// =============================================================================
+// 遷移ガードの配線（task 6.1・S3 是正・D5/D6/D13・Req 3.1/3.2/3.3）
+// =============================================================================
+
+/// 遷移ガードが X を引き戻したことを表す判定語（`diagnosis-procedure.md` §3.3）。
+const VISIBILITY_CLAMP_TAG: &str = "[visibility-guard] ClampX";
+
+/// work area 解決が最近傍フォールバックへ落ちたことを表す判定語（同上・Req 3.2）。
+const VISIBILITY_NEAREST_FALLBACK_TAG: &str = "[visibility-guard] NearestFallback";
+
+/// work area が解決できずガードを評価できなかったことを表す判定語（同上・Req 3.3）。
+const VISIBILITY_UNRESOLVED_TAG: &str = "[visibility-guard] WorkAreaUnresolved";
+
+/// この `route` の書込が**非ドラッグの自動配置**か（＝遷移ガードの発火対象・D13 帰結⑴）。
+///
+/// # なぜ route が第一級の入力なのか
+///
+/// S3 が防ぐのは「**ユーザーが意図せず**窓を見失う」経路だけである（requirements.md
+/// Boundary Context「ユーザーが自らドラッグして運んだ結果の不可視化」は Out of scope）。
+/// 明示操作（ドラッグ・`\![move]`）とスクリプト／永続化が決めた位置を引き戻すのは
+/// その否定であり、**同じ矩形・同じ幾何でも判定が反転する**。ゆえに発火条件は幾何では
+/// 表現できず、書込の由来＝route を見るしかない。
+///
+/// # 網羅 `match` で書く理由
+///
+/// 既定腕（`_ => false` 等）を置くと、[`PlacementRoute`] へ語彙が増えたとき新経路が
+/// 黙って片側へ倒れる。網羅 `match` ならコンパイラが判断を要求する（D14 帰結⑵と同じ流儀）。
+///
+/// # 適用外の内訳
+///
+/// - [`SpawnInitial`](PlacementRoute::SpawnInitial)／[`Restore`](PlacementRoute::Restore):
+///   復元時の可視化保証は `areka-P0-position-persist` の所有（design Boundary）。
+/// - [`MoveCue`](PlacementRoute::MoveCue): `\![move]` はスクリプトの明示操作（D13 帰結⑵）。
+/// - [`KeepPositionResize`](PlacementRoute::KeepPositionResize)／
+///   [`BalloonFollow`](PlacementRoute::BalloonFollow): バルーン窓側の書込。
+///   **本述語をそのままバルーン適用（task 6.2）の発火条件に流用しないこと**——
+///   バルーンの適用可否は「随伴の**引き金**がドラッグだったか配置系だったか」で決まり、
+///   `follow_balloon` の呼出元が持つ情報である（本述語の入力は書込自身の route）。
+fn route_applies_visibility_guard(route: PlacementRoute) -> bool {
+    match route {
+        // 非ドラッグの自動配置（S3 の保護対象・D13 帰結⑴）
+        PlacementRoute::AnchorChange
+        | PlacementRoute::Resnap
+        | PlacementRoute::DpiReproject
+        | PlacementRoute::ReportedSizeReconcile => true,
+        // 明示操作・別 spec 所有・バルーン窓側（上記 doc の内訳）
+        PlacementRoute::SpawnInitial
+        | PlacementRoute::Restore
+        | PlacementRoute::KeepPositionResize
+        | PlacementRoute::BalloonFollow
+        | PlacementRoute::MoveCue => false,
+    }
+}
+
+/// 射影 T の**下流・外側**で可視性の遷移ガードを適用する（D5: `project_anchor` の
+/// 内部は変更しない）。
+///
+/// # 引数
+///
+/// - `route`: 発火条件（[`route_applies_visibility_guard`]）。適用外なら `proposed` を素通す。
+/// - `snapshot`／`raw`: 射影 T が work area を選んだのと**同一の入力**。
+/// - `old_rect`: 書込**前**の窓矩形。`None`＝不明で安全側 clamp（[`guard_visibility`]）。
+///
+/// # 2 つの解決を引き分ける（同じ純関数を 2 回引くのは意図的）
+///
+/// - **clamp 先**（`clamp_wa`）は射影 T が Y に用いたのと同じ矩形（`raw` × `size`）から
+///   引く。ここを別の矩形で引き直すと Y と X が別モニタを基準にして
+///   [`guard_visibility`] の事後条件（clamp 後に `clamp_wa` と交差する）が崩れる
+///   （design Risks・[`guard_visibility`] doc の `clamp_wa` 項）。
+/// - **食い違いの観測**（Req 3.2）は**射影 T が決めた位置**（`proposed` × `size`）の帰属で
+///   判定する。要件が言う「窓位置を**決めた**とき」の位置がこれであり、射影の入力 `raw`
+///   は下端吸着より前の一時状態にすぎない——`raw` で判定すると「射影が正しく接地させて
+///   可視域へ収めた窓」まで食い違いとして報告する偽陽性になる（下端吸着では
+///   `raw` の中心が work area 下端より下にあることは珍しくない）。
+///
+/// # ログ（Req 3.1/3.2/3.3・[[2.2 → 6.1 の申し送り]]）
+///
+/// [`guard_visibility`] は**意図的に無ログ**の純関数で、水準の分岐（非ドラッグ経路は
+/// `warn!`／ドラッグ経路は従来 `debug!` のまま）は route を持つ本層でしか書けない。
+/// ゆえに観測は本関数の責務である——ここで出さなければ Req 3.1/3.2 の観測が丸ごと欠落する。
+///
+/// # 縮退（Req 3.3）
+///
+/// `MonitorSnapshot` 不在／空 snapshot では work area が 1 つも無く、clamp 先を決められない。
+/// このとき**位置には一切手を入れず** `warn!` を残す（架空の可視領域を発明しない＝
+/// `work_area_for_window` と同方針）。この場合の `proposed` は射影 T 自身が同じ入力欠落で
+/// identity へ縮退した値＝現在位置であり、「現状維持」がそのまま成立する。
+fn apply_visibility_guard(
+    entity: Entity,
+    route: PlacementRoute,
+    snapshot: Option<&MonitorSnapshot>,
+    old_rect: Option<RectPx>,
+    raw: PointPx,
+    proposed: PointPx,
+    size: SizePx,
+) -> PointPx {
+    if !route_applies_visibility_guard(route) {
+        return proposed;
+    }
+
+    let Some(snapshot) = snapshot else {
+        warn!(
+            entity = ?entity,
+            ?route,
+            "{VISIBILITY_UNRESOLVED_TAG} MonitorSnapshot 未挿入のため可視性を判定できない → 位置は現状維持"
+        );
+        return proposed;
+    };
+    // 射影が Y に用いたのと同じ矩形（raw × 新寸）から引き直す＝clamp 先の貫通。
+    let Some((clamp_wa, _)) = work_area_for_window_with_origin(snapshot, rect_at(raw, size)) else {
+        warn!(
+            entity = ?entity,
+            ?route,
+            "{VISIBILITY_UNRESOLVED_TAG} モニタ 0 台（空 snapshot）のため可視性を判定できない → 位置は現状維持"
+        );
+        return proposed;
+    };
+
+    // 最近傍フォールバック＝**決めた位置**の窓中心がどのモニタにも属さない＝モニタ構成
+    // 情報と実画面の食い違い、あるいは窓が既に可視領域外という異常の兆候（Req 3.2・
+    // S3 後段「最近傍フォールバックが異常を無観測で吸収する」）。ドラッグ経路は毎イベント
+    // 発火ゆえ従来 `debug!` のまま（本関数を通らない＝水準分岐が route で成立する）。
+    let decided = work_area_for_window_with_origin(snapshot, rect_at(proposed, size));
+    if matches!(decided, Some((_, WorkAreaResolution::NearestFallback))) {
+        warn!(
+            entity = ?entity,
+            ?route,
+            ?proposed,
+            ?size,
+            ?clamp_wa,
+            "{VISIBILITY_NEAREST_FALLBACK_TAG} 決めた位置の窓中心がどの work area にも属さず最近傍で解決した（モニタ構成情報と実画面の食い違いの兆候）"
+        );
+    }
+
+    // 判定は「腕を見て warn 水準を分岐する」ためだけに使い、位置は腕を問わず
+    // [`VisibilityVerdict::position`] で取る（同 enum の doc が定める消費の形）。
+    let verdict = guard_visibility(old_rect, proposed, size, clamp_wa, snapshot);
+    if let VisibilityVerdict::ClampX(clamped) = verdict {
+        warn!(
+            entity = ?entity,
+            ?route,
+            ?old_rect,
+            ?proposed,
+            clamped = ?clamped,
+            ?size,
+            ?clamp_wa,
+            "{VISIBILITY_CLAMP_TAG} 全 work area 非交差への遷移を検出し X を引き戻した（Y は射影の所有ゆえ不変）"
+        );
+    }
+    verdict.position()
 }
 
 // =============================================================================
@@ -6269,5 +6464,478 @@ mod tests {
             out.contains(WINDOW_MOVE_RECORD_TAG) && out.contains("route=DpiReproject"),
             "手順書の RUST_LOG で単一ライターのレコードが点灯しない: {out}"
         );
+    }
+
+    // -------------------------------------------------------------------------
+    // 遷移ガードの**配線**（task 6.1・S3 是正・Req 3.1/3.2/3.3・D5/D6/D13）
+    //
+    // task 2.2 は `guard_visibility`／`work_area_for_window_with_origin` を純関数として
+    // 用意したが**本番呼出はゼロ**だった（diagnosis-report.md §1.3「純関数が在ることは
+    // S3 の充足ではない」）。本節が檻に入れるのは純関数の判定規則ではなく、
+    // **`resize_window_to` の中でそれが実際に走るか・どの route で走るか**である。
+    //
+    // 檻の要点（空虚化を避けるための自己検査を各檻が持つ）:
+    //   (1) 探針の自己検査——ガード**無し**の提案が本当に全 work area 非交差であること
+    //       （交差する探針では ClampX 腕へ一度も入らず「緑」が何も意味しない・[[2.2 の教訓]]）
+    //   (2) 位置の不変条件——clamp 後の矩形がいずれかの work area と交差する（Req 3.1）
+    //   (3) route による発火条件——適用外 route（`MoveCue`／`Restore` 等）とドラッグ経路
+    //       では**位置が素の射影と 1 bit も違わない**こと。ログ側の否定 assert だけに
+    //       依存しない（[[5.2 の教訓＝空虚性 6 例目]]: 不変量がログ側にしか無いと
+    //       別ファイルの水準変更で守りが消える）
+    //   (4) 判定語のリテラル——手順書 §3.3 の grep 語を檻側にも literal で持つ
+    //       （[[5.1 → 7.2 の申し送り]]「判定語に使っているのに檻が無い」型の再発防止）
+    //
+    // 座標はすべて論理値 × DPI（96/120/192）で構築し、絶対 px の固定値を持たない（Req 5.6）。
+    // -------------------------------------------------------------------------
+
+    use super::route_applies_visibility_guard;
+
+    /// 手順書 §3.3 の grep 判定語（**本体の定数とは独立にここへ literal で置く**）。
+    const CLAMP_TAG: &str = "[visibility-guard] ClampX";
+    /// 同上（最近傍フォールバックの非ドラッグ経路 warn 昇格・Req 3.2）。
+    const NEAREST_TAG: &str = "[visibility-guard] NearestFallback";
+    /// 同上（work area を解決できず判定不能・Req 3.3）。
+    const UNRESOLVED_TAG: &str = "[visibility-guard] WorkAreaUnresolved";
+    /// 3 語に共通の接頭辞（「ガードが何かを言った」ことの一括検出）。
+    const GUARD_TAG_PREFIX: &str = "[visibility-guard]";
+
+    /// 幅広のキャラ窓寸（論理 320×400）。論理 320／32 はいずれも 8 の倍数ゆえ、
+    /// 96/120/192 のどの水準でも物理 px が偶数＝手順 3b の `w/2` が切り捨てで狂わない。
+    fn wide_char_size(dpi: i32) -> SizePx {
+        SizePx {
+            w: px(320, dpi),
+            h: px(400, dpi),
+        }
+    }
+
+    /// 「どの work area にも属さない帯」（`0 ..= px(64)`）より**狭い**新寸。
+    fn narrow_char_size(dpi: i32) -> SizePx {
+        SizePx {
+            w: px(32, dpi),
+            h: px(400, dpi),
+        }
+    }
+
+    /// 帯の中で**右モニタが一意に最近傍になる**中心 x（帯の中点 `px(32)` は左右等距離で
+    /// 先勝ちに依存するため使わない）。
+    fn gap_center_x(dpi: i32) -> i32 {
+        px(40, dpi)
+    }
+
+    /// 「旧矩形は可視・新提案は全 work area 非交差」へ落ちるキャラ窓 World を組む。
+    ///
+    /// 旧寸 [`wide_char_size`] の窓を、下端中央付替え（`resize_window_to` 手順 3b）後の
+    /// 中心が帯へ落ちる位置に置く。新寸 [`narrow_char_size`] は帯より狭いので、射影 T が
+    /// 出す提案矩形は帯へ収まり **どの work area とも交差しない**——S3 が言う
+    /// 「非ドラッグ要因で不可視へ遷移する」状態そのものを合成する。
+    fn gap_bound_char_world(dpi: i32) -> (World, Entity, PointPx) {
+        let old = wide_char_size(dpi);
+        let old_pos = PointPx {
+            x: gap_center_x(dpi) - old.w / 2,
+            y: left_wa().bottom - old.h,
+        };
+        let mut world = World::new();
+        world.insert_resource(mixed_layout(dpi));
+        let e = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(old_pos.x, old_pos.y, old.w, old.h),
+                Anchored(Anchor::Bottom),
+            ))
+            .id();
+        (world, e, old_pos)
+    }
+
+    /// ガードを通さない**素の**射影結果（＝本タスク以前の挙動）。手順 3b と
+    /// [`project_anchor`] を檻側で独立に再現し、本体の実装を呼び直さない。
+    fn unguarded_projection(dpi: i32, old_pos: PointPx, new: SizePx) -> PointPx {
+        let old = wide_char_size(dpi);
+        let raw = PointPx {
+            x: old_pos.x + old.w / 2 - new.w / 2,
+            y: old_pos.y,
+        };
+        project_anchor(Anchor::Bottom, raw, new, Some(&mixed_layout(dpi)))
+    }
+
+    /// 窓矩形がいずれかの work area と交差するか（檻側の独立実装 [`overlaps`] で判定）。
+    fn visible_in(layout: &MonitorSnapshot, pos: PointPx, size: SizePx) -> bool {
+        layout
+            .work_areas
+            .iter()
+            .any(|wa| overlaps(win(pos, size), *wa))
+    }
+
+    /// 現在位置を [`PointPx`] で読む（檻の比較単位を射影の単位へ揃える）。
+    fn point_of(world: &World, entity: Entity) -> PointPx {
+        let p = position_of(world, entity);
+        PointPx { x: p.x, y: p.y }
+    }
+
+    /// `[visibility-guard]` を名乗るイベントだけを抜く。
+    fn guard_events<'a>(events: &'a [LogEvent], needle: &str) -> Vec<&'a LogEvent> {
+        events
+            .iter()
+            .filter(|e| e.message().contains(needle))
+            .collect()
+    }
+
+    /// 発火条件の**表そのもの**を固定する（D13 帰結⑴⑵）。挙動側の檻（下 2 件）と
+    /// 二段構えにしてあるのは、語彙が 9 種あるのに `resize_window_to` を実際に通るのは
+    /// 現状 4 種だけで、残り 5 種の判定が挙動檻だけでは**合成でしか**検査できないため。
+    /// [`PlacementRoute::ALL`] を回すので、語彙が増えたら本檻も落ちる。
+    #[test]
+    fn visibility_guard_route_table_matches_the_d13_decision() {
+        for route in PlacementRoute::ALL {
+            let expected = matches!(
+                route,
+                PlacementRoute::AnchorChange
+                    | PlacementRoute::Resnap
+                    | PlacementRoute::DpiReproject
+                    | PlacementRoute::ReportedSizeReconcile
+            );
+            assert_eq!(
+                route_applies_visibility_guard(route),
+                expected,
+                "route={route} の発火判定が D13 帰結⑴⑵ と食い違う"
+            );
+        }
+        // 表が「全部真」「全部偽」へ潰れていないこと（自明な述語への退化の検出）。
+        let fired = PlacementRoute::ALL
+            .into_iter()
+            .filter(|r| route_applies_visibility_guard(*r))
+            .count();
+        assert_eq!(fired, 4, "発火 route が 4 種でない（表が潰れている）");
+    }
+
+    /// **Req 3.1 の本体**: 非ドラッグの配置系 4 経路（D13 帰結⑴）では、全 work area
+    /// 非交差への遷移が X の clamp で阻止され、`warn!` が 1 行残る。
+    ///
+    /// Y は射影 T の所有ゆえ 1 bit も動かない（[`guard_visibility`] の事後条件）。
+    #[test]
+    fn visibility_guard_clamps_x_on_non_drag_placement_routes() {
+        for dpi in DPIS {
+            let layout = mixed_layout(dpi);
+            let new = narrow_char_size(dpi);
+            for route in [
+                PlacementRoute::AnchorChange,
+                PlacementRoute::Resnap,
+                PlacementRoute::DpiReproject,
+                PlacementRoute::ReportedSizeReconcile,
+            ] {
+                let (mut world, e, old_pos) = gap_bound_char_world(dpi);
+
+                // (1) 探針の自己検査: 素の射影は**本当に**不可視へ落ちる／旧矩形は可視。
+                //     どちらかが崩れると ClampX 腕に入らず、この檻は空虚になる。
+                let bare = unguarded_projection(dpi, old_pos, new);
+                assert!(
+                    !visible_in(&layout, bare, new),
+                    "dpi={dpi}: 探針が不動点——ガード無しの提案 {bare:?} が既に可視で ClampX 腕へ入らない"
+                );
+                assert!(
+                    visible_in(&layout, old_pos, wide_char_size(dpi)),
+                    "dpi={dpi}: 旧矩形が非交差では『遷移』でなく留置＝Keep が正解になってしまう"
+                );
+
+                let (ok, events) = capture_logs(|| resize_window_to(&mut world, e, new, route));
+                assert!(ok, "dpi={dpi} route={route}: 書込は成立する前提");
+
+                // (2) 位置の不変条件（Req 3.1）: 書かれた矩形はどこかの work area と交差する。
+                let pos = point_of(&world, e);
+                assert!(
+                    visible_in(&layout, pos, new),
+                    "dpi={dpi} route={route}: Req 3.1 違反——{pos:?} は全 work area と非交差"
+                );
+                assert_eq!(
+                    pos.y, bare.y,
+                    "dpi={dpi} route={route}: Y は射影 T の所有＝ガードが触ってはならない"
+                );
+                assert_ne!(
+                    pos.x, bare.x,
+                    "dpi={dpi} route={route}: X が引き戻されていない（ガード未発火）"
+                );
+                // clamp 先は射影が Y に用いた work area（右モニタ）の水平範囲内。
+                let wa = right_wa(dpi);
+                assert!(
+                    wa.left <= pos.x && pos.x <= wa.right - new.w,
+                    "dpi={dpi} route={route}: clamp 先が射影の work area {wa:?} の外: {pos:?}"
+                );
+
+                // (4) 判定語: ClampX の warn が 1 行・水準は WARN（Req 3.1/3.2 の観測）。
+                let clamped = expect_one(&events, CLAMP_TAG);
+                assert_eq!(
+                    clamped.level,
+                    tracing::Level::WARN,
+                    "dpi={dpi} route={route}: clamp の記録が warn 水準でない"
+                );
+            }
+        }
+    }
+
+    /// **Req 3.1 の裏面（D13 帰結⑵）**: 明示操作系・非配置系の route では、位置が素の
+    /// 射影と 1 bit も違わず、ガードのログも 1 行も出ない。
+    ///
+    /// `MoveCue`（`\![move]`）と `Restore`（位置復元）を引き戻すのは、スクリプト／
+    /// 永続化が決めた位置の否定であり本 spec の Out of scope である。**ここが緑のまま
+    /// 「常に発火」へ変異させられると S3 是正が明示操作の尊重を壊す**ため、位置側の
+    /// assert（ログではなく挙動）を第一の守りに置く。
+    #[test]
+    fn visibility_guard_does_not_fire_on_explicit_or_non_placement_routes() {
+        for dpi in DPIS {
+            let layout = mixed_layout(dpi);
+            let new = narrow_char_size(dpi);
+            for route in [
+                PlacementRoute::SpawnInitial,
+                PlacementRoute::Restore,
+                PlacementRoute::KeepPositionResize,
+                PlacementRoute::BalloonFollow,
+                PlacementRoute::MoveCue,
+            ] {
+                let (mut world, e, old_pos) = gap_bound_char_world(dpi);
+                let bare = unguarded_projection(dpi, old_pos, new);
+                // 探針の自己検査: ガードが**発火する条件は揃っている**（route だけが違う）。
+                assert!(
+                    !visible_in(&layout, bare, new),
+                    "dpi={dpi}: 探針が不動点——発火条件が揃っていない"
+                );
+
+                let (ok, events) = capture_logs(|| resize_window_to(&mut world, e, new, route));
+                assert!(ok, "dpi={dpi} route={route}: 書込は成立する前提");
+
+                assert_eq!(
+                    point_of(&world, e),
+                    bare,
+                    "dpi={dpi} route={route}: 適用外 route で位置が動いた（明示操作の尊重が壊れている）"
+                );
+                assert!(
+                    guard_events(&events, GUARD_TAG_PREFIX).is_empty(),
+                    "dpi={dpi} route={route}: 適用外 route でガードが喋っている: {events:?}"
+                );
+            }
+        }
+    }
+
+    /// **ドラッグ経路は従来の水準のまま**（Req 3.3 の水準分岐・D5）: ユーザーが自分で
+    /// 帯へ運んだ窓は引き戻されず、毎イベント発火する経路に `warn!` を増やさない。
+    #[test]
+    fn drag_path_neither_clamps_nor_warns_when_leaving_every_work_area() {
+        for dpi in DPIS {
+            let layout = mixed_layout(dpi);
+            let size = narrow_char_size(dpi);
+            // 開始位置は右モニタ上（可視）・接地済み。
+            let start_pos = PointPx {
+                x: px(200, dpi),
+                y: right_wa(dpi).bottom - size.h,
+            };
+            assert!(
+                visible_in(&layout, start_pos, size),
+                "dpi={dpi}: 前提——ドラッグ開始位置は可視"
+            );
+
+            let mut world = World::new();
+            world.insert_resource(mixed_layout(dpi));
+            let cursor = (px(800, dpi), px(400, dpi));
+            let window = world
+                .spawn((
+                    fake_handle(0x1000),
+                    window_pos_sized(start_pos.x, start_pos.y, size.w, size.h),
+                    Anchored(Anchor::Bottom),
+                    dragging_state((start_pos.x, start_pos.y), cursor),
+                ))
+                .id();
+
+            // カーソルを帯へ運ぶ: 生ドラッグ x = px(24) ＝ 帯の内側。
+            let moved = (cursor.0 - (px(200, dpi) - px(24, dpi)), cursor.1);
+            let ev = Phase::Bubble(drag_event_at(window, cursor, moved));
+            let (consumed, events) = capture_logs(|| on_char_drag(&mut world, window, window, &ev));
+            assert!(!consumed);
+
+            let pos = point_of(&world, window);
+            // 自己検査: ドラッグは**実際に**窓を全 work area の外へ運んだ（＝ガードが
+            // 配線されていれば必ず clamp する状況である）。
+            assert!(
+                !visible_in(&layout, pos, size),
+                "dpi={dpi}: 探針が不動点——ドラッグ先が可視のままでは『引き戻さない』を検査していない"
+            );
+            assert_eq!(
+                pos.x,
+                px(24, dpi),
+                "dpi={dpi}: ドラッグの X は素通し（明示操作の尊重）"
+            );
+            assert!(
+                guard_events(&events, GUARD_TAG_PREFIX).is_empty(),
+                "dpi={dpi}: ドラッグ経路でガードが喋っている（spam・水準分岐の破壊）: {events:?}"
+            );
+        }
+    }
+
+    /// **Req 3.2**: 最近傍フォールバック（窓中心がどのモニタにも属さない＝モニタ構成
+    /// 情報と実画面の食い違いの兆候）は、非ドラッグ経路で `warn!` へ昇格する。
+    ///
+    /// この探針は **clamp を伴わない**（提案矩形は work area と交差したまま）——
+    /// `NearestFallback` の観測が `ClampX` の副産物ではなく独立に成立することを示す。
+    #[test]
+    fn nearest_fallback_warns_on_non_drag_route_even_without_clamping() {
+        for dpi in DPIS {
+            let layout = mixed_layout(dpi);
+            let old = wide_char_size(dpi);
+            // 幅は据置き・高さだけ変える＝手順 3b で x は動かず、中心は帯に留まる。
+            let new = SizePx {
+                w: old.w,
+                h: px(200, dpi),
+            };
+            let (mut world, e, old_pos) = gap_bound_char_world(dpi);
+
+            // 探針の自己検査: **決めた位置**の work area 解決が本当に最近傍へ落ちる
+            // （`Contains` なら昇格の腕へ入らず空虚になる）。かつ提案矩形は交差したまま
+            // ＝clamp しない（`NearestFallback` が `ClampX` の副産物でないことの担保）。
+            let bare = unguarded_projection(dpi, old_pos, new);
+            let (_, resolution) = work_area_for_window_with_origin(&layout, win(bare, new))
+                .expect("合成レイアウトは空でない");
+            assert_eq!(
+                resolution,
+                WorkAreaResolution::NearestFallback,
+                "dpi={dpi}: 探針が `Contains` に落ちている＝昇格の腕を検査していない"
+            );
+            assert!(
+                visible_in(&layout, bare, new),
+                "dpi={dpi}: 探針が clamp を伴っている＝`NearestFallback` 単独の檻になっていない"
+            );
+
+            let (ok, events) =
+                capture_logs(|| resize_window_to(&mut world, e, new, PlacementRoute::Resnap));
+            assert!(ok);
+            assert_eq!(
+                point_of(&world, e),
+                bare,
+                "dpi={dpi}: Keep 腕で位置が動いた"
+            );
+
+            let warned = expect_one(&events, NEAREST_TAG);
+            assert_eq!(
+                warned.level,
+                tracing::Level::WARN,
+                "dpi={dpi}: 最近傍フォールバックが非ドラッグ経路で warn へ昇格していない"
+            );
+            assert!(
+                guard_events(&events, CLAMP_TAG).is_empty(),
+                "dpi={dpi}: clamp していないのに ClampX が出ている: {events:?}"
+            );
+        }
+    }
+
+    /// **Req 3.3**: 位置決定に必要な入力（モニタ work area）が取得できない場合は、
+    /// 位置を変更せず現状のまま `warn!` を残す（架空の可視領域を発明しない）。
+    ///
+    /// `MonitorSnapshot` 不在／空 snapshot のいずれでも、射影 T は identity へ縮退
+    /// 済みである＝ガードが位置へ手を入れないことが「現状維持」の内容になる。
+    #[test]
+    fn missing_work_area_holds_position_and_warns_on_non_drag_route() {
+        for dpi in DPIS {
+            for (label, snapshot) in [
+                ("resource 不在", None),
+                ("空 snapshot", Some(MonitorSnapshot { work_areas: vec![] })),
+            ] {
+                let new = narrow_char_size(dpi);
+                let (mut world, e, old_pos) = gap_bound_char_world(dpi);
+                world.remove_resource::<MonitorSnapshot>();
+                if let Some(s) = snapshot {
+                    world.insert_resource(s);
+                }
+                // work area が無いときの射影は identity ＝ 手順 3b 後の raw そのもの。
+                let old = wide_char_size(dpi);
+                let identity = PointPx {
+                    x: old_pos.x + old.w / 2 - new.w / 2,
+                    y: old_pos.y,
+                };
+
+                let (ok, events) =
+                    capture_logs(|| resize_window_to(&mut world, e, new, PlacementRoute::Resnap));
+                assert!(ok, "dpi={dpi} {label}: 寸の反映自体は従来どおり成立する");
+                assert_eq!(
+                    point_of(&world, e),
+                    identity,
+                    "dpi={dpi} {label}: ガードが位置を動かした（現状維持の違反）"
+                );
+
+                let warned = expect_one(&events, UNRESOLVED_TAG);
+                assert_eq!(
+                    warned.level,
+                    tracing::Level::WARN,
+                    "dpi={dpi} {label}: 入力欠落が warn として残っていない（Req 3.3）"
+                );
+                assert!(
+                    guard_events(&events, CLAMP_TAG).is_empty(),
+                    "dpi={dpi} {label}: work area 不明なのに clamp している: {events:?}"
+                );
+            }
+        }
+    }
+
+    /// 適用外 route では、work area 不明であってもガードは 1 行も喋らない
+    /// （警告の出所が route 条件の**内側**にあることの檻）。
+    #[test]
+    fn missing_work_area_stays_silent_on_guard_exempt_routes() {
+        for dpi in DPIS {
+            let (mut world, e, _) = gap_bound_char_world(dpi);
+            world.remove_resource::<MonitorSnapshot>();
+            let (_, events) = capture_logs(|| {
+                resize_window_to(
+                    &mut world,
+                    e,
+                    narrow_char_size(dpi),
+                    PlacementRoute::MoveCue,
+                )
+            });
+            assert!(
+                guard_events(&events, GUARD_TAG_PREFIX).is_empty(),
+                "dpi={dpi}: 適用外 route でガードが喋っている: {events:?}"
+            );
+        }
+    }
+
+    /// **旧矩形『不明』は `Option::None` だけではない**（[[4.6 の教訓]]）: wintf の
+    /// [`WindowPos::default`] は寸を `Some(CW_USEDEFAULT)`（＝`i32::MIN` センチネル）で
+    /// 持つ。これを素の矩形として交差判定へ入れると退化矩形が「もともと画面外に
+    /// 留置されていた」と誤判定され、**安全側 clamp の腕が丸ごと死ぬ**。
+    #[test]
+    fn undetermined_old_size_is_treated_as_unknown_rect_and_clamps() {
+        for dpi in DPIS {
+            let layout = mixed_layout(dpi);
+            let new = narrow_char_size(dpi);
+            // 手順 3b は旧寸が非正のとき付替えを行わない＝raw は現在位置そのもの。
+            let raw = PointPx {
+                x: gap_center_x(dpi) - new.w / 2,
+                y: left_wa().bottom - new.h,
+            };
+            let mut world = World::new();
+            world.insert_resource(mixed_layout(dpi));
+            let e = world
+                .spawn((
+                    fake_handle(0x1000),
+                    // 寸は `CW_USEDEFAULT` センチネルのまま（窓生成直後の実表現）。
+                    WindowPos {
+                        position: Some(Point { x: raw.x, y: raw.y }),
+                        ..Default::default()
+                    },
+                    Anchored(Anchor::Bottom),
+                ))
+                .id();
+
+            // 探針の自己検査: 素の射影は不可視へ落ちる（＝安全側 clamp が要る状況）。
+            let bare = project_anchor(Anchor::Bottom, raw, new, Some(&layout));
+            assert!(
+                !visible_in(&layout, bare, new),
+                "dpi={dpi}: 探針が不動点——素の射影が既に可視"
+            );
+
+            let (ok, events) =
+                capture_logs(|| resize_window_to(&mut world, e, new, PlacementRoute::Resnap));
+            assert!(ok);
+            assert!(
+                visible_in(&layout, point_of(&world, e), new),
+                "dpi={dpi}: 寸未確定（センチネル）を『留置』と誤読して clamp を見送っている"
+            );
+            expect_one(&events, CLAMP_TAG);
+        }
     }
 }

@@ -180,6 +180,13 @@ $env:AREKA_PROFILE_DIR       = $PROFILE_DIR
 | O14 | `[DragEvent] Dispatching`（`start_x/y`・`current_x/y`・`delta_x/y`） | `wintf::ecs::drag::dispatch` | **`trace`** | `drag/dispatch.rs:357-365` ＝ **要件 2.3 の数値源** |
 | O15 | `[DragStartEvent] Dispatching` / `[DragEnd] Direct Arrangement.offset sync` | 同上 | `info` | `drag/dispatch.rs:190,301` |
 | O16 | `dpi reproject: WindowPos.size 未確定（窓生成前）`（`entity=`） | `areka::emo2_boot::frame` | **`warn`** | `frame.rs:923-926`（**タスク 5.2 着地後**。DPI 相の位置再射影が現寸を読めず打ち切った縮退＝1 行でも出たら当該窓の接地点は保証されない） |
+| O17 | **`[visibility-guard] ClampX`**（`entity=`・`route=`・`old_rect=`・`proposed=`・`clamped=`・`size=`・`clamp_wa=`） | `areka::placement::follow` | **`warn`** | `follow.rs:1667`（`apply_visibility_guard`・`:1608`）＝**タスク 6.1 着地後**。可視 → 全 work area 非交差への遷移を検出し X を引き戻した（Req 3.1） |
+| O18 | **`[visibility-guard] NearestFallback`**（`entity=`・`route=`・`proposed=`・`size=`・`clamp_wa=`） | 同上 | **`warn`** | `follow.rs:1651`（同上）＝**タスク 6.1 着地後**。**決めた位置**の窓中心がどの work area にも属さない＝モニタ構成情報と実画面の食い違いの兆候（Req 3.2） |
+| O19 | **`[visibility-guard] WorkAreaUnresolved`**（`entity=`・`route=`） | 同上 | **`warn`** | `follow.rs:1625,1634`（同上）＝**タスク 6.1 着地後**。`MonitorSnapshot` 不在／モニタ 0 台で可視性を判定できず位置を現状維持した（Req 3.3） |
+
+> **O17〜O19 は D-BASE の大域 `info` に載る**（`warn` ゆえ target 追加は不要）。3 語は接頭辞 `[visibility-guard]` を共有するので、「ガードが何か言ったか」は 1 回の `Select-String -SimpleMatch '[visibility-guard]'` で引ける。
+>
+> **発火 route は 4 種に限られる**（`AnchorChange`／`Resnap`／`DpiReproject`／`ReportedSizeReconcile`＝D13 帰結⑴）。**ドラッグ・`MoveCue`・`Restore`・バルーン窓側の書込では 0 行が正常**であり、これを「配線漏れ」と読まないこと（明示操作の尊重＝Req 3.1 の「ユーザーの明示的なドラッグ以外の要因」）。判定語のリテラルと発火 route の表は in-source 檻（`follow.rs` の `visibility_guard_*`／`nearest_fallback_warns_*`／`drag_path_neither_*`）が固定している。
 
 ### 3.2 D-BASE では**消灯する**観測点（D-TEARDOWN で点灯）
 
@@ -195,8 +202,8 @@ $env:AREKA_PROFILE_DIR       = $PROFILE_DIR
 
 | 語 | なぜ出ないか | いつ出るようになるか |
 | --- | --- | --- |
-| `ClampX` / `VisibilityVerdict` 関連の `warn!` | `guard_visibility`（`follow.rs:1417`）は**意図的に無ログ**の純関数で、まだどこからも呼ばれていない（`#[allow(dead_code)]`） | タスク **6.1**（キャラ窓）／**6.2**（バルーン窓）で配線＋`warn!` |
-| `NearestFallback` の `warn!` | `work_area_for_window_with_origin`（`follow.rs:1315`）は判別を返すが、水準昇格は消費側の責務で未配線 | タスク **6.1** |
+| ~~`ClampX` / `VisibilityVerdict` 関連の `warn!`~~ | ~~`guard_visibility` は意図的に無ログの純関数で、まだどこからも呼ばれていない~~ | **タスク 6.1 でキャラ窓経路へ配線済み＝本表から退役**（現在は **O17**。`guard_visibility`（`follow.rs:1460`）が無ログである点は不変で、`warn!` は配線側 `apply_visibility_guard`（`follow.rs:1608`）が出す）。**バルーン矩形への適用は 6.2 の領分**ゆえ、6.2 着地までバルーン窓由来の O17 は出ない |
+| ~~`NearestFallback` の `warn!`~~ | ~~判別を返すが水準昇格は消費側の責務で未配線~~ | **タスク 6.1 で配線済み＝本表から退役**（現在は **O18**） |
 | ~~`policy=` フィールド~~ | ~~未配線~~ | **タスク 5.1 で配線済み＝本表から退役**（現在は O8 に必ず載る。値語彙は §3.4） |
 | ~~`applied=false`~~ | ~~`applied` は定数~~ | **タスク 5.1 で分岐化済み＝本表から退役**（ゴースト窓では `false`・非ゴースト窓では `true`。§3.4） |
 | `route=SpawnInitial` / `route=Restore` | 語彙のみ予約・未配線（`diag.rs:120-125`・D13 帰結⑷） | **未定**——5.1 は spawn へ `ExternalAuthority` を付与しただけで **route の配線は行わなかった**（spawn は単一ライター `enqueue_window_set_pos` を通らず entity 組立時に `WindowPos` を直接持たせるため。`diag.rs` の `#[allow(dead_code)]` も存置）。位置復元（`Restore`）は position-persist spec の所有。**本 spec では出ないままである**——0 行を「配線漏れ」と読まないこと |
@@ -399,7 +406,15 @@ $verdict = if ((@($result | Where-Object { -not $_.ok }).Count -eq 0) -and $sum 
 
 ### 6.3 消失痕跡の判定（両セッション共通）
 
-§3.3 のとおり **`ClampX`／`NearestFallback` の `warn!` は Phase A のビルドにまだ存在しない**。したがって消失痕跡は、**幾何の事後突合**で判定する（これは Phase C 以後も有効な、より原理的な判定である）。
+**幾何の事後突合を正本とする**（採取ビルドが Phase A でも Phase C 以後でも成立する、より原理的な判定であるため）。
+
+> **採取ビルドで判定材料が変わる（必ず先に確定すること）**
+>
+> - **タスク 6.1 着地前（Phase A/B・セッション①および②-b）**: `ClampX`／`NearestFallback` の `warn!` は**コード上に存在しない**。判定語に使うと確実に偽陰性になる（旧 §3.3）。下の幾何突合のみを用いる。
+> - **タスク 6.1 着地後**: **O17〜O19**（§3.1）が判定材料として**併用**できる。ただし**代替ではなく補助**である——ガードは非ドラッグの配置系 4 経路にしか掛からないので、ドラッグ・`MoveCue`・OS 直書き由来の消失は O17 に現れない。`VANISH-TRACE` の合否は下の幾何突合で出し、O17〜O19 は「**ガードが実際に働いた／食い違いを検出した**」の肯定側証跡として併記する（Req 3.1／3.2 の実機成立の裏づけ）。
+>   - `[visibility-guard] ClampX` が 1 行でもあれば、**非ドラッグ要因で不可視へ落ちかけた**（そして防いだ）ことの実機証跡である。同行の `route=` が引き金を名指しする。
+>   - `[visibility-guard] NearestFallback` は「決めた位置の窓中心がどのモニタにも属さない」＝モニタ構成情報の陳腐化か、窓が既に可視領域外かのどちらか。§7.2 の残余 B（両側モニタ列挙突合）と対で読む。
+>   - `[visibility-guard] WorkAreaUnresolved` は観測装置側の異常（`MonitorSnapshot` 不在・モニタ 0 台）。1 行でも出たらそのセッションの幾何突合は根拠にならない。
 
 1. `[diag.monitor]`（O3・`context=monitor_snapshot` の組）から work area 矩形の集合を作る。
 2. `[diag.window_move]`（O4）の各行から `(x, y, w, h)` を取る。`w=-`／`h=-` の行は**移動専用書込**ゆえ、同一 entity の直近の既知寸を持ち越す。
@@ -515,7 +530,17 @@ TRACE wintf::ecs::drag::dispatch 相当: [DragEvent] … （trace 水準の点�
 >
 > `policy=` の値に**引用符が付かない**ことも檻が固定している（`format_args!` 経由。素の `&str` として渡すと `policy="unset"` になり、同行の他フィールドと grep の当たり方が変わる＝§5.4 のトークン境界の罠と同型）。
 
-> **本書のメンテ規約**: 出力書式は in-source 檻がリテラル固定している（`diag.rs` の `record_tags_are_fixed`・`monitor_record_line_carries_every_field`・`window_move_record_line_carries_every_field` ほか）。書式を変えれば檻が赤になる。**檻を直すときは本書の判定語も同じコミットで直すこと**——直さなければ本書が静かに嘘になる。
+> **O17〜O19（タスク 6.1 着地・2026-08-01）の実測書式**。`EnvFilter` を **`info` 単独**（大域既定＝診断 directive を一切足さない状態）にして実際に濾したうえで転記した——3 語はいずれも `warn!` ゆえ、**D-BASE でなくても必ず載る**ことの確認を兼ねている。
+>
+> ```
+>  WARN areka::placement::follow: [visibility-guard] NearestFallback 決めた位置の窓中心がどの work area にも属さず最近傍で解決した（モニタ構成情報と実画面の食い違いの兆候） entity=0v0 route=DpiReproject proposed=PointPx { x: 30, y: 800 } size=SizePx { w: 40, h: 500 } clamp_wa=RectPx { left: 80, top: 0, right: 2400, bottom: 1300 }
+>  WARN areka::placement::follow: [visibility-guard] ClampX 全 work area 非交差への遷移を検出し X を引き戻した（Y は射影の所有ゆえ不変） entity=0v0 route=DpiReproject old_rect=Some(RectPx { left: -150, top: 500, right: 250, bottom: 1000 }) proposed=PointPx { x: 30, y: 800 } clamped=PointPx { x: 80, y: 800 } size=SizePx { w: 40, h: 500 } clamp_wa=RectPx { left: 80, top: 0, right: 2400, bottom: 1300 }
+>  WARN areka::placement::follow: [visibility-guard] WorkAreaUnresolved MonitorSnapshot 未挿入のため可視性を判定できない → 位置は現状維持 entity=0v0 route=Resnap
+> ```
+>
+> **読み方**: `proposed` は射影 T が決めた位置・`clamped` はガードが引き戻した位置で、**`y` は両者で必ず一致する**（Y は射影の所有＝`guard_visibility` の事後条件）。`old_rect=None` は「旧矩形不明（窓生成直後・寸が `CW_USEDEFAULT` センチネル）」＝安全側 clamp の腕であり、`Some(...)` の行とは意味が違う。`clamp_wa` は**射影が Y に用いた work area**であって最寄りの何かではない。判定語の literal・発火 route の表・`warn` 水準はいずれも in-source 檻（`follow.rs` の `visibility_guard_clamps_x_on_non_drag_placement_routes`／`visibility_guard_does_not_fire_on_explicit_or_non_placement_routes`／`visibility_guard_route_table_matches_the_d13_decision`／`nearest_fallback_warns_on_non_drag_route_even_without_clamping`／`missing_work_area_holds_position_and_warns_on_non_drag_route`／`drag_path_neither_clamps_nor_warns_when_leaving_every_work_area`）が固定している。
+
+> **本書のメンテ規約**: 出力書式は in-source 檻がリテラル固定している（`diag.rs` の `record_tags_are_fixed`・`monitor_record_line_carries_every_field`・`window_move_record_line_carries_every_field`・`follow.rs` の `visibility_guard_*` ほか）。書式を変えれば檻が赤になる。**檻を直すときは本書の判定語も同じコミットで直すこと**——直さなければ本書が静かに嘘になる。
 
 ---
 

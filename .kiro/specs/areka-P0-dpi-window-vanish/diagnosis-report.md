@@ -156,15 +156,33 @@ design.md は `frame.rs:835`・`presenter.rs:772-818` を挙げていた。`fram
 
 判別を落とされる先が `crates/areka/src/placement/follow.rs:1332-1347` の最近傍フォールバック（`min_by_key` で clamp 点自乗距離最小）であり、**ログを 1 行も出さない**。したがって「窓中心がどのモニタにも属していない」＝モニタ構成情報と実画面の食い違い、あるいは窓が既に可視領域外、という**異常の兆候が、正常な帰属と区別されないまま吸収される**。
 
-#### 是正機構は存在するが**未配線**である
+#### 是正機構は存在するが**未配線**である（〜タスク 6.1 着地前）
 
-タスク 2.2 が純関数を新設済みだが、`crates/` 全 grep で**本番呼出はゼロ**（一致はすべて定義行・doc・`#[cfg(test)]` 内）:
+タスク 2.2 が純関数を新設済みだが、`crates/` 全 grep で**本番呼出はゼロ**（一致はすべて定義行・doc・`#[cfg(test)]` 内）だった:
 
 - `crates/areka/src/placement/follow.rs:1417` `guard_visibility`（直上 `:1416` に `#[allow(dead_code)]`）
 - `crates/areka/src/placement/follow.rs:1315` `work_area_for_window_with_origin`（判別を返すが、返り値の `WorkAreaResolution`（`:1299`）を消費する本番コードが無い）
 - `crates/areka/src/placement/follow.rs:1355` `VisibilityVerdict`（`:1353` に `#[allow(dead_code)]`）
 
-**純関数が在ることは S3 の充足ではない。** 配線（タスク 6.1）が入るまで、上記 4 経路は依然として無検査で書き込む。`diagnosis-procedure.md` §3.3 が「`ClampX`／`NearestFallback` の `warn!` はどの directive でも 0 行」と記載しているのは、この未配線の帰結である——**Phase A/B のログでこれらを判定語に使うと確実に偽陰性になる**。
+**純関数が在ることは S3 の充足ではない。** 配線（タスク 6.1）が入るまで、上記 5 経路は依然として無検査で書き込んでいた。`diagnosis-procedure.md` の旧 §3.3 が「`ClampX`／`NearestFallback` の `warn!` はどの directive でも 0 行」と記載していたのは、この未配線の帰結である——**Phase A/B のログ（セッション①・②-b）でこれらを判定語に使うと確実に偽陰性になる**。
+
+#### 是正状況（**タスク 6.1 着地・2026-08-01**・キャラ窓経路のみ）
+
+**キャラ窓側は配線済み＝S3 の前段・後段とも成立した。** 行番号は 6.1 着地後の現ツリー実値:
+
+| 是正 | 所在（`file:line`・構造名） | 内容 |
+| --- | --- | --- |
+| 発火条件（route 判定） | `follow.rs:1559` `route_applies_visibility_guard` | 網羅 `match`。真＝`AnchorChange`／`Resnap`／`DpiReproject`／`ReportedSizeReconcile` の 4 種（D13 帰結⑴）、偽＝`SpawnInitial`／`Restore`／`KeepPositionResize`／`BalloonFollow`／`MoveCue`（同⑵）。既定腕を置かないので語彙が増えればコンパイラが判断を要求する |
+| 配線本体 | `follow.rs:1608` `apply_visibility_guard` | 射影の**下流・外側**。`clamp_wa` は射影が Y に用いたのと同じ矩形（`raw` × 新寸）から `work_area_for_window_with_origin` を引き直して貫通させる（`project_anchor` の契約は無改変） |
+| 呼出点 | `follow.rs:938-953`（手順 3c・`resize_window_to` 内） | `project_anchor`（`:936`）の直後・べき等 skip（`:955` 以降）の直前。**5 経路すべてがこの 1 箇所を通る**ため配線点は 1 つで足りる |
+| 旧矩形の導出 | `follow.rs:903-912`（`old_rect` の導出） | 手順 3b の付替え**前**の生位置で組む。寸が `CW_USEDEFAULT` センチネル（`WindowPos::default()` の実表現＝`Some` だが `i32::MIN`）のときは `None`＝旧矩形不明として安全側 clamp へ倒す |
+| 観測（S3 後段） | `follow.rs:1651`（`NearestFallback`）・`:1667`（`ClampX`）・`:1625,1634`（`WorkAreaUnresolved`） | いずれも `warn!`・target は `areka::placement::follow`。`guard_visibility` が無ログである点は**不変**（水準分岐は route を持つ層でしか書けない・2.2 の申し送り） |
+
+`#[allow(dead_code)]` は 3 箇所とも撤去した（旧 `:1353`／`:1364`／`:1416` ＝ `VisibilityVerdict`・`VisibilityVerdict::position`・`guard_visibility`。現ツリーでは `:1400`／`:1409`／`:1460`）。`VisibilityVerdict::position` は `apply_visibility_guard` が実際に消費する（`follow.rs:1670`）。
+
+**`NearestFallback` の判定対象は「射影が決めた位置」である**（`follow.rs:1643-1644` `let decided = …(rect_at(proposed, size))`）。射影の**入力**（`raw`）で判定すると、下端吸着の前段では窓中心が work area 下端より下にあることが珍しくないため、「射影が正しく接地させて可視域へ収めた窓」まで食い違いとして報告する偽陽性になる（`frame.rs` の既存檻 `drain_reconcile_skips_despawned_scope_...` の合成 fixture で実際に発生することを実測）。Req 3.2 が言うのは「窓位置を**決めた**とき」の食い違いである。**`clamp_wa` は引き続き射影の入力側から引く**（両者を混ぜると `guard_visibility` の事後条件が崩れる）。
+
+**バルーン矩形（§1.4 の S3′）は未是正のまま**——タスク 6.2 の領分であり、6.1 はキャラ窓経路のみを配線した。
 
 #### 引用の再測定
 
@@ -1011,6 +1029,66 @@ test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 551 filtered out; fi
 - Req 7.4: `SetProcessDpiAwarenessContext` の `let _ =`（旧 `runtime/mod.rs:111`）を撤去し、成功＝`info!`／失敗＝`warn!` で**必ず 1 行残す**（現 `runtime/mod.rs:116-128`・`WinApp::new` 内）。プロセス起動は従来どおり止めない
 - **`WM_DPICHANGED` が実機で 0 件である機序は依然未確定**である。本節が示すのは「それに依存しない駆動路が実行で成立している」ことまでであり、機序の解明はタスク 4.7 の実機再採取（awareness ログを含む）が担う
 
+### 3.4 S3 の実行記録（**S3 専用節**・タスク 6.1）
+
+#### 赤の採り方が S1／S2 と違う理由
+
+S1（§3.1）・S2（§3.2）・S4（§3.3）は「是正未投入のビルドで赤を採り、後続タスクが緑へ変える」ため `#[ignore]` ゲートを要した。**S3 は要さない**——是正（配線）と檻の新設が**同一タスク 6.1** に属するので、赤は「配線前のツリーで新設檻を走らせる」ことで同一セッション内に採れる。ゆえに永久に赤いスイートも `#[ignore]` も発生していない（`grep -rn '#\[ignore' crates/areka/src` は引き続き**一致ゼロ**）。
+
+#### 赤の実行出力（配線前・`cargo test -p areka --bins -- --test-threads=1 <新設檻>`）
+
+```
+test placement::follow::tests::visibility_guard_clamps_x_on_non_drag_placement_routes ... FAILED
+  dpi=96 route=AnchorChange: Req 3.1 違反——PointPx { x: 24, y: 640 } は全 work area と非交差
+test placement::follow::tests::nearest_fallback_warns_on_non_drag_route_even_without_clamping ... FAILED
+  `[visibility-guard] NearestFallback` を含むログがちょうど 1 件ではない: [ … ] left: 0 right: 1
+test placement::follow::tests::missing_work_area_holds_position_and_warns_on_non_drag_route ... FAILED
+  `[visibility-guard] WorkAreaUnresolved` を含むログがちょうど 1 件ではない: [ … ] left: 0 right: 1
+test placement::follow::tests::undetermined_old_size_is_treated_as_unknown_rect_and_clamps ... FAILED
+  dpi=96: 寸未確定（センチネル）を『留置』と誤読して clamp を見送っている
+test placement::follow::tests::visibility_guard_does_not_fire_on_explicit_or_non_placement_routes ... ok
+test placement::follow::tests::drag_path_neither_clamps_nor_warns_when_leaving_every_work_area ... ok
+```
+
+**この赤は §1.3 の前段・後段を名指しで撃っている。** 1 件目が前段（「5 経路のいずれも、書き込む矩形がどれかの work area と交差するかを検査しない」）、2 件目が後段（「最近傍フォールバックがログを 1 行も出さない」）である。**配線前でも緑だった 2 件は非退行側**——適用外 route とドラッグ経路で*何も起きない*ことを主張する檻ゆえ、配線前に緑なのが正しい（配線後も緑であり続けることが D13 帰結⑵ の実証になる）。
+
+#### 緑の実行出力（配線後・同コマンド）
+
+```
+running 8 tests
+test placement::follow::tests::drag_path_neither_clamps_nor_warns_when_leaving_every_work_area ... ok
+test placement::follow::tests::missing_work_area_holds_position_and_warns_on_non_drag_route ... ok
+test placement::follow::tests::missing_work_area_stays_silent_on_guard_exempt_routes ... ok
+test placement::follow::tests::nearest_fallback_warns_on_non_drag_route_even_without_clamping ... ok
+test placement::follow::tests::undetermined_old_size_is_treated_as_unknown_rect_and_clamps ... ok
+test placement::follow::tests::visibility_guard_clamps_x_on_non_drag_placement_routes ... ok
+test placement::follow::tests::visibility_guard_does_not_fire_on_explicit_or_non_placement_routes ... ok
+test placement::follow::tests::visibility_guard_route_table_matches_the_d13_decision ... ok
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 603 filtered out
+```
+
+全体は `cargo test -p areka` **611 passed / 0 failed / 0 ignored**（基準 603＋新設 8）・`cargo test -p wintf` **1,057 passed / lib ignored 2**（非退行）。
+
+#### 檻の非空虚性（実装者が独立に当てたミューテーション 7 種）
+
+| # | 変異 | 赤になった檻 |
+| --- | --- | --- |
+| M1 | `route_applies_visibility_guard` の `MoveCue` を発火側へ移す | `visibility_guard_does_not_fire_on_explicit_or_non_placement_routes`（**位置 assert**）／`visibility_guard_route_table_matches_the_d13_decision`／`missing_work_area_stays_silent_on_guard_exempt_routes` |
+| M2 | ドラッグ経路（`on_char_drag` の `policy_mapped_position` 直後）へガードを配線する | `drag_path_neither_clamps_nor_warns_when_leaving_every_work_area`（**探針の自己検査**が先に発火＝clamp されて可視に戻ったことを検出） |
+| M3 | `old_rect` 導出から `s.width > 0 && s.height > 0` を外す | `undetermined_old_size_is_treated_as_unknown_rect_and_clamps` |
+| M4 | `ClampX` の `warn!` を `debug!` へ降格 | `visibility_guard_clamps_x_on_non_drag_placement_routes`（水準 assert） |
+| M5 | 判定語 `ClampX` を `ClampedX` へ改名 | 同上／`undetermined_old_size_...`（literal assert） |
+| M6 | `clamp_wa` を「射影が用いた work area」ではなく `work_areas[0]` から取る | `visibility_guard_clamps_x_on_non_drag_placement_routes`（`clamp 先が射影の work area の外` assert・実測 `x=-32` が右モニタ範囲 `64..` の外。`DPIS`（`follow.rs:2072`）は 96 から回るので基準値は dpi=96 の `px(64,96)=64` である——`80` は dpi=120 の値で誤り・**独立レビューが再現時に実測して訂正**） |
+| M7 | `NearestFallback` の `warn!` を落とす | `nearest_fallback_warns_on_non_drag_route_even_without_clamping` |
+
+**M1 と M2 が本節の要点**である（[[5.2 の教訓＝空虚性 6 例目]]「不変量がログ側にしか無いと別ファイルの水準変更で守りが消える」への対処）。route による発火条件は判断分岐そのものなので、ログの否定 assert ではなく**位置が素の射影と 1 bit も違わないこと**を第一の守りに置き、両変異ともログ以外の assert で赤化することを実測した。また各檻は「素の射影が本当に不可視へ落ちる」「旧矩形が本当に可視である」を実行時 `assert!` で自己検査しており、探針が不動点へ落ちた瞬間に檻自身が落ちる（[[2.2 の教訓]]）。
+
+#### 6.1 が**解消しないもの**（境界の明示）
+
+- **§2.5.3 の +36px（S5 候補）は解消しない**。根拠は §5.2 の表に登記した。
+- **バルーン矩形（§1.4 の S3′）は未着手**（タスク 6.2 の領分）。
+- **ガードの保護範囲には上限がある（7.4 で読み違えないこと）**: 交差判定は `MonitorSnapshot` の work area 集合に対して行われるが、同 Resource は**起動時に 1 回書かれるのみで更新経路が存在しない**（本番の書込は `crates/areka/src/main.rs:703` ただ 1 箇所・独立レビューが全 grep で確認）。ゆえにセッション中にモニタが物理的に外れた場合、「凍結 snapshot 上は可視／実画面では不可視」を `Keep` と判定し得る。これは DD15 が M1 として明示受容した制約（`follow.rs:1283`「セッション内固定＝M1 受容」）であり **6.1 の不足ではない**。7.4 の実機再サインオフで「ガードが効かない残余ケース」を 6.1 の欠陥と読み違えないこと。
+
 ---
 
 ## 4. 是正後の実機再サインオフ（**タスク 7.4 が記入する**）
@@ -1037,6 +1115,7 @@ test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 551 filtered out; fi
 | §3.1 | 4.3（赤）→ 7.1（緑） | S1 専用の実行記録 |
 | §3.2 | **4.4（赤）→ 5.2（緑・ゲート解除・是正の実体・ミューテーション記録）→ 7.1（最終確認）** | S2 専用の実行記録 |
 | §3.3 | **4.6（赤・緑とも採取済み）→ 7.1（ゲート解除）** | S4 専用の実行記録。赤 `s4_red_` 2 件の `#[ignore]` 解除は 7.1 の完了状態「ゲートされた赤証跡が 1 件も残っていない」が掃く |
+| §3.4 | **6.1（赤・緑・ミューテーション記録とも採取済み）** | S3 専用の実行記録。配線と檻が同一タスクゆえ `#[ignore]` ゲートは発生していない |
 | §2 | 4.5（**セッション①のみ記入済み・②未採取**） | 実機 2 セッションの採取結果・Q1〜Q4・S1〜S3′ の痕跡 |
 | §4 | 7.4 | 是正後の実機再サインオフ |
 
@@ -1052,8 +1131,20 @@ test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 551 filtered out; fi
 
 | 観測 | 性質 | 想定される所有 |
 | --- | --- | --- |
-| **+36px の work area 非追随** | 位置権威の問題。`Resnap` が work area 変化を契機に発火しないこと | **本 spec の射程内**（6.1 の遷移ガード配線で自然に解消し得る——ガードは「提案矩形が work area と交差するか」を見るため、はみ出しは検出されない可能性もある。6.1 着手時に要確認） |
+| **+36px の work area 非追随** | 位置権威の問題。`Resnap` が work area 変化を契機に発火しないこと | **本 spec では解消しない＝`areka-P0-dpi-transition-atomicity` の所有**（下記「6.1 のコード確認」で確定・開発者裁定 2026-08-01 は `.kiro/steering/roadmap.md` の未着手 spec 表に登記済み＝「+36px の work area 非追随も本 spec が持つ」） |
 | **切り替え時の「ガクッ」** | 体感品質。窓寸と描画内容の更新が同一フレームで揃わない可能性（**機序未確定**） | emo 合成側の題材で本 spec と境界が違う。切り出す場合は追跡 spec が要る |
+
+#### +36px についての **6.1 のコード確認**（2026-08-01・タスク 6.1 実施時）
+
+§2.5.3 が 6.1 へ課した「遷移ガードで解消するのか」への回答は **NO** である。理由は 3 つあり、いずれも現ツリーのコードで確認した。
+
+1. **ガードは Y を一切変えない。** `guard_visibility`（`crates/areka/src/placement/follow.rs:1460`）の `ClampX` 腕は `y: proposed_pos.y` をそのまま返す（`:1483-1486`）。+36px は **Y のはみ出し**なので、原理的に守備範囲外である。既存檻 `guard_never_modifies_y_in_any_branch`（`follow.rs:2551`）がこの性質を全分岐で固定している。
+2. **そもそも `ClampX` 腕に入らない。** ②-b の実測値（scope0: `y=1006 h=1094` → 矩形の Y 範囲 1006..2100）は、**旧 work area（下端 2100）とも新 work area（下端 2064）とも交差する**。ガードの第 1 分岐（`follow.rs:1468` `intersects_any_work_area`）が真になり `Keep` で素通る。「交差はしているが下端からはみ出している」は交差判定では検出できない——§2.5.3 の予測どおりである。
+3. **`NearestFallback` としても観測されない。** 判定は窓**中心**の帰属（`work_area_for_window_with_origin`・`follow.rs:1361`）で、当該矩形の中心 Y は 1553 ＝ 旧 work area（0,0,3840,2100）の内側なので `Contains` を返す。6.1 が新設した O18 の `warn!` も 0 行のままになる。
+
+**機序も改めて確認した（本 spec では直さない）**: placement の全判断が読む権威 `MonitorSnapshot` は **`crates/areka/src/main.rs:703` の `world.insert_resource(snapshot)` ただ 1 箇所**でしか書かれず、更新経路が存在しない（`crates/areka/src` 全 grep で本番の `insert_resource`／`ResMut<MonitorSnapshot>`／`resource_mut::<MonitorSnapshot>` は同行のみ。他の一致はすべて `#[cfg(test)]` 内）。タスク 4.6 が是正したのは **wintf 側の `Monitor` エンティティ表**（`monitor_systems.rs`）であって、areka のこの Resource ではない。ゆえに射影は起動時の work area 下端（2100）を永久に読み続け、`ground_y` が 2100 に凍る——§2.5.3 が「射影が古い work area を読んだ」と推定した機序が **file:line で確定した**。
+
+**Req 2.7 により本 spec は手を入れない**（S5 は「確定した欠陥」ではなく要件が要求していない品質・§2.5.3）。所有先 `areka-P0-dpi-transition-atomicity` は `.kiro/specs/areka-P0-dpi-transition-atomicity/`（brief 起票済み）として**実在を確認済み**であり、`.kiro/steering/roadmap.md` の未着手 spec 表に「**+36px の work area 非追随も本 spec が持つ**（開発者裁定「スコープを広めに・必ず解決すること」・2026-08-01）」と明記されている。
 
 ### 5.1 S4 の是正タスク新設が必要（tasks.md への申し送り）
 
