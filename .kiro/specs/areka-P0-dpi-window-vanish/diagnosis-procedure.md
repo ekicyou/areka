@@ -120,11 +120,13 @@ design.md「成果物 > diagnosis-procedure.md ①」が例示する
 
 環境変数 **`AREKA_APP_SMOKE_EXIT_MS`**（`crates/areka/src/main.rs:830` の `SMOKE_EXIT_ENV`）。値はミリ秒の非負整数。指定 ms 後に起動窓（ダミー窓／ゴースト窓）を `despawn` して終了する（`main.rs:757-790`）。空・非数値・負値は**ゲート OFF**（自動終了しない）。
 
-手動セッションでは **`900000`（15 分）** を既定とする。理由:
+手動セッションでは **`900000`（15 分）** を既定とする（**上限でも必須値でもない**）。理由:
 
 - 受理回数の下限（§5）を人手の操作で踏破するには数分を要する。
 - 番犬を持たない直接起動ゆえ、`emo2_real_run.rs` の `SMOKE_EXIT_MS`（3000）や番犬締切（120s）とは**別物**である。混同しない。
 - 自動終了は `GhostWindowMarker` の despawn を通るため、**終了時ログ（要件 6.2/6.3）を決定論的に発生させる**という副次的な利点がある。
+
+> **値は 15 分である必要はない（2026-08-01・タスク 7.4 の実測に基づく追記）**: 2026-08-01 の再サインオフ採取は **`300000`（5 分）** で §5 の下限を余裕をもって踏破した（実操作は約 1 分・`diagnosis-report.md` §4.3）。`900000` は「人手の操作が途中で打ち切られない」ための安全側の既定値であって、下限でも必須値でもない。**セッション②では自動終了が唯一の正規終了経路である**（§6.2 手順 7）ため、操作に要する時間を上回る値であれば足りる。
 
 ### 2.5 ログ保存先
 
@@ -184,7 +186,15 @@ $env:AREKA_PROFILE_DIR       = $PROFILE_DIR
 | O18 | **`[visibility-guard] NearestFallback`**（`entity=`・`route=`・`proposed=`・`size=`・`clamp_wa=`） | 同上 | **`warn`** | `follow.rs:1837`（同上）＝**タスク 6.1／6.2 着地後**。**決めた位置**の窓中心がどの work area にも属さない＝モニタ構成情報と実画面の食い違いの兆候（Req 3.2） |
 | O19 | **`[visibility-guard] WorkAreaUnresolved`**（`entity=`・`route=`。**バルーン窓の寸未確定の行だけが `proposed=` を持つ**＝タスク 6.2・下記「判別子」） | 同上 | **`warn`** | `follow.rs:1811,1820`（`evaluate_visibility_guard`・キャラ窓／バルーン窓の共通経路）／`follow.rs:650`（`guard_balloon_position`・**タスク 6.2 着地後**）。`MonitorSnapshot` 不在／モニタ 0 台／**バルーン窓の寸が未確定**で可視性を判定できず位置を現状維持した（Req 3.3） |
 
+| O20 | **`[detect_display_change_system] Redriving window DPI from updated Monitor (no WM_DPICHANGED required)`**（`entity=`・`handle=`・`center=`・`old_dpi_x=`・`old_dpi_y=`・`new_dpi_x=`・`new_dpi_y=`） | `wintf::ecs::layout::systems::monitor_systems` | `debug` | `monitor_systems.rs:476`（**タスク 4.6 新設**）＝ **§5.1 の受理計数の対象行**（O7 との和）。**旧称 `O16`**（識別子二重割当の是正・下記注記） |
+| O21 | `[detect_display_change_system] Updating Monitor entity`（`entity=`・`handle=`・`old_bounds=`／`new_bounds=`・`old_work_area=`／`new_work_area=`・`old_dpi=`／`new_dpi=`・`old_primary=`／`new_primary=`） | 同上 | `debug` | `monitor_systems.rs:315`（**タスク 4.6 新設**）。モニタ表が実際に何を反映したかを実機ログだけで復元できる（§5.1） |
+| O22 | `[detect_display_change_system] Display configuration change applied`（**`windows_redriven=N`**） | 同上 | `debug` | `monitor_systems.rs:234`（**タスク 4.6 新設**）。「モニタ表は更新されたが窓が 1 つも駆動されなかった」を 1 行で切り分ける（§5.1） |
+
 > **O17〜O19 は D-BASE の大域 `info` に載る**（`warn` ゆえ target 追加は不要）。3 語は接頭辞 `[visibility-guard]` を共有するので、「ガードが何か言ったか」は 1 回の `Select-String -SimpleMatch '[visibility-guard]'` で引ける。
+>
+> **O20〜O22 は `debug` ゆえ D-BASE の `wintf::ecs::layout::systems::monitor_systems=debug` セグメントが要る**（§2.1）。このセグメントを省くと 3 語とも暗転し、「表示構成変更が処理されていない」と「観測点が消えている」が区別できなくなる（§0.3 の禁止規則の直接適用）。
+>
+> **識別子 `O16` の二重割当を是正した（2026-08-01）**: 旧版は本表 `O16`（`dpi reproject: WindowPos.size 未確定`・target `areka::emo2_boot::frame`・`warn`）と §5.1 の再導出行（target `monitor_systems`・`debug`）の**双方**に `O16` を与えていた。**先に採番されていた本表側を `O16` のまま残し**、再導出行を **`O20`** へ振り直した。`diagnosis-report.md` の §2.2／§2.2.1／§2.3／§4.1 が「O16」と書いているのは**すべて再導出行＝現 `O20`** である（本書の O16 ではない）。
 >
 > **件数の読み方（タスク 6.2 着地で改訂・2026-08-01）**: 3 語はキャラ窓とバルーン窓の**双方**から出る。窓種別は `route=` で判別する——**`route=BalloonFollow` の行はすべてバルーン窓由来**（`follow_balloon` の書込は定義上つねに `BalloonFollow`）であり、それ以外の 4 語（下記）はキャラ窓由来である。`entity=` は `[diag.window_move]` レコードとの結合キーなので、`kind=Balloon`／`kind=Char` で裏取りできる。
 >
@@ -290,14 +300,14 @@ $env:AREKA_PROFILE_DIR       = $PROFILE_DIR
 | # | 判定語 | 経路 | ログ target |
 | --- | --- | --- | --- |
 | **O7** | `[WM_DPICHANGED] DPI component directly updated`（`entity=`・`old_dpi_x=`・`new_dpi_x=`） | OS からの DPI 変化通知（ドラッグでのモニタ跨ぎ等） | `wintf::ecs::window_proc::window_pos` |
-| **O16** | `[detect_display_change_system] Redriving window DPI from updated Monitor (no WM_DPICHANGED required)`（`entity=`・`handle=`・`center=`・`old_dpi_x=`・`old_dpi_y=`・`new_dpi_x=`・`new_dpi_y=`） | 表示構成変更を契機とする再導出（Req 7.3・タスク 4.6 新設） | `wintf::ecs::layout::systems::monitor_systems`（`:476`） |
+| **O20**（旧称 `O16`・§3.1 の注記） | `[detect_display_change_system] Redriving window DPI from updated Monitor (no WM_DPICHANGED required)`（`entity=`・`handle=`・`center=`・`old_dpi_x=`・`old_dpi_y=`・`new_dpi_x=`・`new_dpi_y=`） | 表示構成変更を契機とする再導出（Req 7.3・タスク 4.6 新設） | `wintf::ecs::layout::systems::monitor_systems`（`:476`） |
 
-  両方とも **D-BASE の `RUST_LOG` で点灯する**（O16 の target は既収録＝追加語不要）。**両方のフィールド名が `entity=`・`old_dpi_x=`・`new_dpi_x=` で揃えてある**ため、第 2 段の正規表現は 1 本で両方を拾える。
+  両方とも **D-BASE の `RUST_LOG` で点灯する**（O20 の target は既収録＝追加語不要）。**両方のフィールド名が `entity=`・`old_dpi_x=`・`new_dpi_x=` で揃えてある**ため、第 2 段の正規表現は 1 本で両方を拾える。
 
 - **セッション②では併せて次の 2 語を必ず確認すること**（充足条件ではないが、`0/6` だったときの切り分けに要る）:
   - `[SetProcessDpiAwarenessContext] DPI awareness set`（成功・`info!`）／`... failed`（失敗・`warn!`）——target `wintf::runtime`・D-BASE の大域 `info` で点灯。**`WM_DPICHANGED` が 0 件である機序の第一次切り分けはここでしかできない**（Req 7.4）
-  - `[detect_display_change_system] Display configuration change applied` の **`windows_redriven=N`**——「モニタ表は更新されたが窓が 1 つも駆動されなかった」を 1 行で切り分けられる
-- **`[detect_display_change_system] Updating Monitor entity` に `old_dpi=`／`new_dpi=`／`old_work_area=`／`new_work_area=`／`old_bounds=`／`new_bounds=`／`old_primary=`／`new_primary=` が載る**（4.6 新設）。モニタ表が実際に何を反映したかを実機ログだけで復元できる。
+  - **O22**＝`[detect_display_change_system] Display configuration change applied` の **`windows_redriven=N`**（target `wintf::ecs::layout::systems::monitor_systems`・`debug`・§3.1）——「モニタ表は更新されたが窓が 1 つも駆動されなかった」を 1 行で切り分けられる
+- **O21**＝`[detect_display_change_system] Updating Monitor entity`（target `wintf::ecs::layout::systems::monitor_systems`・`debug`・§3.1）に `old_dpi=`／`new_dpi=`／`old_work_area=`／`new_work_area=`／`old_bounds=`／`new_bounds=`／`old_primary=`／`new_primary=` が載る（4.6 新設）。モニタ表が実際に何を反映したかを実機ログだけで復元できる。
 - 対象は**キャラ窓の entity のみ**。バルーン窓（`kind=balloon`）の受理を混ぜると計数が壊れる。
 - 方向は**同一行の `old_dpi_x` と `new_dpi_x` の大小比較**で機械判定する（`new > old` = 低→高、`new < old` = 高→低、`new == old` = **どちらにも数えない**）。
 - 「15 分回した」「何回もまたいだ」は充足の根拠にならない。**数えた数字だけが根拠である。**
@@ -392,7 +402,7 @@ $verdict = if ((@($result | Where-Object { -not $_.ok }).Count -eq 0) -and $sum 
 4. scope 0 のキャラ窓を掴んで、**拡大率の異なるモニタ境界を跨いで**移動する。低 DPI→高 DPI と高 DPI→低 DPI を**各 3 往復以上**。
 5. scope 1 のキャラ窓についても同じ操作を行う。
 6. ドラッグ中はバルーンが随伴していることを目視し、**消えた瞬間があればその時刻を `meta.txt` へ秒単位で記録**する（ログの突合起点になる）。
-7. 自動終了を待つ（または全キャラ窓を閉じる）。**プロセスを強制終了しない**——終了時ログ（要件 6.2）が採れなくなる。
+7. 自動終了を待つ（**または全キャラ窓を閉じる——この選択肢はセッション①限定である**。理由は §6.2 手順 7 の注記）。**プロセスを強制終了しない**——終了時ログ（要件 6.2）が採れなくなる。
 8. §5 の 2 段 grep を実行し、`SESSION-QUOTA:` を記録する。
 
 **このセッションでのみ観測できるもの**: O11〜O15（ドラッグ）。要件 2.3 は O14 の `delta_x`/`delta_y`（カーソル移動量）と、直後の O9 の `x=`/`y=`（窓の実移動量）を `hwnd` で結合して数値比較する。
@@ -407,9 +417,13 @@ $verdict = if ((@($result | Where-Object { -not $_.ok }).Count -eq 0) -and $sum 
    - 両 scope が同一モニタに載っていれば、1 回の変更で両 scope の窓が同時に `WM_DPICHANGED` を受理する＝往復 3 回で 12 回の受理に達する。
    - scope が別モニタに分かれている場合は、**両方のモニタで**往復 3 回ずつ行う。
 4. 各変更のあと、キャラとバルーンが見えているかを目視し、消えたら時刻を `meta.txt` へ記録する。
-5. 自動終了を待つ。
+5. **`AREKA_APP_SMOKE_EXIT_MS` の自動終了を待つ。これがセッション②の唯一の正規終了経路である**（§2.4）。**窓を閉じる操作で終えてはならない**——下記注記のとおり手順 7 の判定を必ず `FAIL` させる。
 6. §5 の 2 段 grep を実行し、`SESSION-QUOTA:` を記録する。
 7. **無効化チェック**: `Select-String -Path $log -SimpleMatch '[start_preparing]'` が 0 行であることを確認する。判定語 `SESSION2-NO-DRAG: PASS` / `FAIL`。
+
+> **是正（2026-08-01・タスク 7.4 が発見した構造的到達不能の解消）**: 旧版は手順 5 を「自動終了を待つ」とだけ記し、§6.1 手順 7 が併記する「**または全キャラ窓を閉じる**」がセッション②にも適用できると読めた。しかし areka のゴーストは**クリック（ダブルクリック）で閉じる**設計（`crates/areka/src/main.rs:566`）であり、押下の瞬間に `handle_button_message` が `start_preparing` を呼ぶ（ドラッグか単クリックかは離すまで確定しない）。ゆえに窓を閉じて終えると `[start_preparing]` は**必ず 1 件以上**出て、**手順 7 の判定は構造的に到達不能**だった（実測 2 回・`diagnosis-report.md` §4.3）。
+>
+> **判定基準は緩めていない**（Req 2.10 が禁じる「観測装置を被検体に合わせて曲げる」行為に当たるため）。代わりに**基準を満たせる終了経路を唯一の正規経路として固定した**——それが上の手順 5 である。併せて §6.1 手順 7 の「または全キャラ窓を閉じる」を**セッション①限定**と明記した。
 
 ### 6.3 消失痕跡の判定（両セッション共通）
 

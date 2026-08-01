@@ -163,6 +163,13 @@ crates/areka/src/placement/
 | `crates/wintf/src/ecs/layout/systems/monitor_systems.rs` | `detect_display_change_system` の更新分岐を新述語へ切替＋モニタ表更新後の再導出駆動（D14・Req 7.1/7.3） | 本 spec 単独所有（S4） |
 | `crates/wintf/src/runtime/mod.rs` | `SetProcessDpiAwarenessContext` の戻り値ログ化（`let _ =` 撤去・D14・Req 7.4） | 本 spec 単独所有（S4） |
 | `crates/wintf/src/ecs/window_proc/lifecycle.rs` | `WM_CLOSE` ハンドラ（`:62-73`）の `despawn` 呼出点へ存在確認を敷く（D16・Req 6.2/6.3・タスク 7.5） | 本 spec 単独所有（`TEARDOWN-SILENCE`） |
+| `crates/wintf/src/ecs/window/command.rs` | `guarded_set_window_pos` の実施ログを `trace!`→`debug!`（Req 1.3 の観測増設・D2 の「変更」外）。**この target が `wintf::ecs::window::command` であることが手順書 §2.2 の `RUST_LOG` 設計の根拠**（タスク 1.3 が実測確認） | 本 spec 単独所有 |
+| `crates/wintf/src/ecs/mod.rs` | `test_support` モジュール宣言＋`DpiSuggestedRectPolicy` の curated 再エクスポート（areka は `wintf::ecs::{…}` 経由でのみ import する規約に従うため） | 機械的 |
+| `crates/wintf/src/ecs/test_support.rs` | **新規**。wintf 側ログ檻の捕捉ハーネス（`capture_under_filter` ほか）。Req 5.1/5.2 の決定論判定に要る | 本 spec 単独所有 |
+| `crates/areka/src/placement/test_support.rs` | `capture_logs` を `pub(crate)` へ（frame.rs 側に route 割当の檻を置くため＝D13 起因の可視性のみの変更） | 本 spec 単独所有 |
+| `crates/areka/examples/collision-probe.rs` | `resize_window_to` のシグネチャ変更（`PlacementRoute` 引数追加・D11）に伴う呼出元追随のみ | 機械的 |
+
+> **表の維持義務（Req 2.7 の突合台帳）**: 本表は Req 2.7「確定した機構以外を変更しない」を**事後に突合するための台帳**であり、`git diff --name-only <分岐点>...HEAD -- crates/` の結果と**一致していなければならない**。上記 6 行はタスク 7.4 後の feature-level 検証で「実際の編集面が表からはみ出している」と検出されて追記されたものである（いずれも Req 2.7 の除外条項＝観測増設・挙動不変リファクタ・機械的追随の内側だが、**表が実態を表していない状態そのものが台帳の欠陥**）。**以後、ファイルを 1 つでも触ったら同時に本表へ行を足すこと。**
 
 > 依存方向（レビューで違反を検出可能にする規約）: `diag.rs` ← `follow.rs` ← `spawn.rs`・`frame.rs` ← `main.rs`。wintf → areka の import は禁止。`diag.rs` は World・wintf 型に依存しない（`Entity`・数値・文字列のみ）。
 
