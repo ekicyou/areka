@@ -45,6 +45,7 @@
 - **バルーン文字層の scope 別追従**（per-scope model 供給・k 同値時の寸/領域変化検知＝再追従判定キーの拡張）。
 - **バルーン側 `AnimationTable` の scope キー化**（`LoopTables.balloon` / `SerikoLoopConfig`・境界拡張として `areka-seriko/src/looper.rs` を明示編入）。
 - 解決結果・フォールバック・失敗経路の観測ログ、および互換対応表（`doc/COMPAT_ARCHITECTURE.md`）への記録。
+- **`spine.rs` S2 の駆動ループの時刻注入規律**（2026-07-31 に編入・R7.8）——注入した模擬時刻を観測窓（Clear@1.05s）で頭打ちにする。**アサート本体は非所有・無改変**（S2/S3/S4 の判定は引き続き完成領域の契約）。
 - **バルーン相対位置の基準**（2026-07-31 の実機裁定で編入・R3.8）——runtime（`placement/follow.rs::resize_window_to`）と保存（`placement/persist.rs`）の双方で「キャラ窓の左上（窓相対）」に統一する。**キャラ窓位置そのものの原点（下端中央）は非所有・無改変**。
 
 ### Out of Boundary
@@ -656,6 +657,12 @@ R6 の観測点（すべて `RUST_LOG=info` で grep 可能・実機サインオ
 - **BootAssets 構築**: `balloons` が scope 別 model を持ち `balloon_model` 単数が存在しないこと（assets テスト :439-449 の per-scope 分解）。
 - **spine S3/S4**: assert 無改変で緑（R5.1/5.2 の受け入れ条件）。S4 doc（:1249-1253）の陳腐化記述のみ更新。
 - **attach→文字層**: per-scope model が `balloon_models` マップと `connect_balloon_text` の双方へ同一値で届くこと（frame ハーネス）。
+
+### テスト決定性の是正（R7.8・2026-07-31 追加）
+
+`spine_s2_talk_drives_surface_switch_and_typewriter_reveal` の駆動ループは、注入模擬時刻 `now` を毎反復 5ms ずつ**無条件に**進めながら、break 条件（テキストが runtime へ到達したか）は**実 async の進捗**に依存する。dispatcher は `elapsed=(now−base)/1000` で cue を解放するため、並列負荷で実 async が 210 反復（1.05s÷5ms）以内に間に合わないと **Clear@1.05 が解放されてテキストバッファを消去**し、以後どれだけ回しても条件が成立しない（残り 99,790 反復を空回りして 400〜550 秒を消費し失敗）。
+
+**是正方針**: `now` を Clear 境界の手前で**頭打ち**にする。頭打ち後は仮想時刻を据え置いたまま実 async をポンプし続けるので、ループの上限は「何回ポンプするか」だけを意味し、仮想時刻が観測窓を追い越すことがなくなる。**壁時計の延長・反復上限の拡大では直らない**（時刻が進む限り条件が壊れるため）。**アサート本体は無改変**——駆動ループのみを是正する。
 
 ### バルーン追従基準の檻（R3.8・2026-07-31 の境界改訂で追加）
 
