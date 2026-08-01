@@ -622,6 +622,32 @@ fn insert_persist_wiring(world: &mut World, publisher: areka_sylphya::SylphyaPub
     world.insert_non_send_resource(placement::persist::PersistWiring { publisher });
 }
 
+/// 起動時モニタスナップショットの構築＋出力シーム（areka-P0-dpi-window-vanish task 1.2・
+/// 要件 1.1・design D12「areka 構築点を正典」）。
+///
+/// [`placement::follow::MonitorSnapshot`] は **placement の全判断が読む権威**（work area
+/// 解決・アンカー射影・可視性判定がすべてこの Resource を引く）である。したがって
+/// 要件 1.1 の正典出力点はこの構築点——ここで観測した値だけが「以後の判断が実際に見た値」
+/// であり、他所で列挙し直した値ではない（D12）。
+///
+/// 出力は共有ヘルパ [`placement::diag::log_monitor_snapshot`] 1 本で、呼出点タグ
+/// [`placement::MONITOR_SNAPSHOT_CONTEXT`] を名乗る。`prepare_ghost_windows` の列挙点も
+/// 同じヘルパを別タグで呼ぶため、語彙は共有したままログ上で出所を弁別でき、
+/// 両者の食い違いは grep 突合で検出できる（D12: 専用の突合機構は新設しない）。
+///
+/// 観測を足すだけで snapshot の中身は一切変えない（D2: 観測増設は Req 2.7 の
+/// 「変更」に数えない）。生きた `WinApp` を要する `open_startup_window` から切り出した
+/// シームゆえ、合成モニタで headless 檻に入る。
+fn boot_monitor_snapshot(
+    monitors: &[wintf::ecs::window::monitor::Monitor],
+) -> placement::follow::MonitorSnapshot {
+    placement::diag::log_monitor_snapshot(
+        &placement::monitor_records(monitors),
+        placement::MONITOR_SNAPSHOT_CONTEXT,
+    );
+    placement::follow::MonitorSnapshot::from_monitors(monitors)
+}
+
 /// 起動窓シーム（task 6.2・要件 1.4・design「main.rs seam」）: `prepare_ghost_windows`
 /// 成功時は本物のゴースト窓（キャラ窓＋バルーン窓）を生成し、準備失敗時は検証用
 /// ダミー窓へフォールバックする（旧 replace-me シームの差し替え本体）。
@@ -653,9 +679,10 @@ fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) -> Option<placement::Au
             // 忠実転写した Resource（物理 px・Send な純粋データ）。bottom 吸着ドラッグ
             // （4.7・task 8.2）が消費する。セッション内固定＝M1 受容
             // （WM_DISPLAYCHANGE 追随は後続・DD15）。
-            let snapshot = placement::follow::MonitorSnapshot::from_monitors(
-                &wintf::ecs::window::monitor::enumerate_monitors(),
-            );
+            // 構築と同時に全モニタの観測を 1 回出す（areka-P0-dpi-window-vanish 要件 1.1 の
+            // **正典出力点**・D12）。既定 OFF・診断 `RUST_LOG` でのみ点灯する。
+            let snapshot =
+                boot_monitor_snapshot(&wintf::ecs::window::monitor::enumerate_monitors());
 
             // clickthrough 登録 system を FrameFinalize へ結線（task 5.2 の donor slot・
             // emo-present と同位置）。`Added<WindowHandle>` 駆動のため窓 spawn より先に
@@ -779,8 +806,26 @@ fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) -> Option<placement::Au
 ///
 /// ダミー窓（フォールバック経路）と本物のゴースト窓（placement 経路）のどちらの構成でも
 /// CI smoke（`AREKA_APP_SMOKE_EXIT_MS`）が完走できるよう、両 marker を単一 query で狙う。
-/// despawn 件数を返す（標的なしは 0・no-op 安全）。bare `World` だけで動き headless
+/// 標的として拾った件数を返す（標的なしは 0・no-op 安全）。bare `World` だけで動き headless
 /// 単体テスト可能（`seam_tests`）。
+///
+/// # 存在確認（task 7.3・Req 6.2/6.3・design「変更ファイル > main.rs」）
+///
+/// query で集めた標的は**ループ実行中に**破棄済みへ変わり得る——bevy の連鎖 despawn
+/// （`Children` は `LINKED_SPAWN` の関係対象＝親の despawn が子孫へ再帰する）を先行の
+/// 1 体が引き起こせば、後続のイテレーションは既に無効な `Entity` を叩く。`World::despawn`
+/// はその場合 `log` の `warn!`（`Could not despawn entity: …`）を出す（`bevy_ecs-0.18.1`
+/// `src/world/mod.rs:1462-1469`）。**これは終了処理の正常終了系**であり、警告として残すと
+/// 良性ノイズが本物の異常を埋める（Req 6.2）。
+///
+/// task 3.2 が消費側 4 入口（`follow.rs` の `resize_window_to`／`resize_window_keep_position`・
+/// `frame.rs` の `resnap_with`／`reconcile_reported_sizes`）へ敷いたのと**同じ区別**を
+/// despawn の**呼出点そのもの**へも敷く: entity 不在＝正常終了系ゆえ
+/// [`DESPAWNED_SKIP_TAG`](placement::diag::DESPAWNED_SKIP_TAG) の `debug!` で当該標的を
+/// 打ち切り、**残りの標的は処理し切る**（Req 6.3）。
+///
+/// 戻り値の意味は「標的として拾った件数」のまま変えない——連鎖で消えた標的も掃除後には
+/// 存在しないため、`smoke 自動 close` の `count=` が示す「消えた起動窓の数」は不変である。
 fn despawn_smoke_targets(world: &mut World) -> usize {
     let targets: Vec<Entity> = world
         .query_filtered::<Entity, Or<(With<DummyWindowMarker>, With<placement::spawn::GhostWindowMarker>)>>()
@@ -788,6 +833,15 @@ fn despawn_smoke_targets(world: &mut World) -> usize {
         .collect();
     let count = targets.len();
     for e in targets {
+        if world.get_entity(e).is_err() {
+            tracing::debug!(
+                entity = ?e,
+                "{} smoke 自動 close: 標的 entity は既に破棄済み（despawn・連鎖破棄）→ \
+                 正常系として打ち切り（残りの標的は継続）",
+                placement::diag::DESPAWNED_SKIP_TAG
+            );
+            continue;
+        }
         world.despawn(e);
     }
     count
@@ -1096,6 +1150,144 @@ mod seam_tests {
         let other = world.spawn_empty().id();
         assert_eq!(despawn_smoke_targets(&mut world), 0);
         assert!(world.get_entity(other).is_ok());
+    }
+
+    /// **Req 6.2/6.3（despawn の呼出点そのもの・task 7.3）**: 標的の一部が**ループ実行中に**
+    /// 破棄済みへ変わっても、`World::despawn` の `Could not despawn entity`（`bevy_ecs::world`
+    /// の `warn!`）を 1 件も出さず、正常終了系（`debug!`）として打ち切って**残りの標的を
+    /// 処理し切る**。
+    ///
+    /// # 探針の作り方（不動点にしないために）
+    ///
+    /// 「先に despawn しておく」では本条件は作れない——query は生存 entity しか返さないため
+    /// 標的リストにそもそも載らず、打ち切り経路へ入らない（＝不動点の檻になる）。標的が
+    /// **ループ中に**破棄済みへ変わる機構は bevy では連鎖 despawn ただ 1 つ（`Children` は
+    /// `LINKED_SPAWN` の関係対象＝親の despawn が子孫へ再帰する）ゆえ、標的同士を親子で
+    /// 吊るす。
+    ///
+    /// ただし**2 段（親・子）では不動点になる**——`add_children` は先に子へ `ChildOf` を
+    /// 挿してから親へ `Children` を挿すので、子の archetype が先に生まれ、query は子を先に
+    /// 返す（子を先に消してから親を消す＝連鎖を踏まない）。そこで **root → mid → leaf の
+    /// 3 段**にする: archetype 生成順は `{marker,ChildOf}`（leaf）→ `{marker,Children}`
+    /// （root）→ `{marker,ChildOf,Children}`（mid）となり、処理順が **leaf → root → mid**
+    /// ＝ root の despawn が mid を連鎖破棄した**後**に mid が処理される。この順序前提は
+    /// テスト内で明示的に自己検査する（bevy 側の順序が変われば檻は緑のまま空虚化せず、
+    /// 前提 assert が赤くなって気づける）。
+    ///
+    /// 本番ツリーの窓 entity 同士に現在この連鎖は**無い**（`spawn_ghost_windows` はキャラ窓・
+    /// バルーン窓を top-level で spawn し、リポジトリ内にカスタム関係型も無い）。それでも
+    /// 呼出点に存在確認が無いこと自体が構造的な穴であり（3.2 の消費側 4 入口は呼出点を
+    /// 覆っていない）、本檻はその穴を塞いだことを固定する——将来の到達に対する保険という
+    /// 位置づけは task 6.3 の 3 檻と同じである。
+    ///
+    /// # 「警告ゼロ」を tracing 捕捉だけで主張してはならない（本檻の対照アームの理由）
+    ///
+    /// `bevy_ecs` は **`log` クレート**の `warn!` を使う（`bevy_ecs-0.18.1` の
+    /// `src/world/mod.rs:71` が `use log::warn;`・`World::despawn` は同 :1462-1469 で
+    /// 失敗時に `warn!("{error}")`＋`false`）。本番プロセスでこの行が
+    /// `WARN bevy_ecs::world: Could not despawn entity` として見えるのは
+    /// `tracing_subscriber` が `log`→`tracing` ブリッジを張るからであって、
+    /// テストの捕捉ハーネス（[`capture_logs`]＝素の thread-local dispatcher）には
+    /// **原理的に 1 件も届かない**。ゆえに「捕捉イベントに warn が無い」は bevy の警告に
+    /// 関しては**恒真**であり、それだけを根拠にすると檻が空虚化する。
+    ///
+    /// そこで**対照アーム**を置く: 同じ探針 World で存在確認**無し**のループを走らせ、
+    /// `World::despawn` が `mid` に対して `false` を返すことを実測する。上記の実装から
+    /// `false` は「`Could not despawn entity` の警告を 1 件出した」と**同値**であり、
+    /// これが本檻の非空虚性の証明である。捕捉側の `warn` ゼロ主張は areka 自身の出力
+    /// （`enqueue`/`Arrangement` 等）に対してのみ意味を持つ。
+    #[test]
+    fn despawn_smoke_targets_skips_cascade_despawned_target_without_warning() {
+        use placement::diag::DESPAWNED_SKIP_TAG;
+        use placement::test_support::{capture_logs, expect_one};
+
+        /// 探針 World: `root → mid → leaf` の連鎖 ＋ 連鎖に無関係な後続標的 `later`。
+        /// 戻り値は `(world, root, mid, leaf, later)`。
+        fn probe() -> (World, Entity, Entity, Entity, Entity) {
+            let mut world = World::new();
+            let root = world.spawn(GhostWindowMarker).id();
+            let mid = world.spawn(GhostWindowMarker).id();
+            let leaf = world.spawn(GhostWindowMarker).id();
+            world.entity_mut(root).add_children(&[mid]);
+            world.entity_mut(mid).add_children(&[leaf]);
+            let later = world.spawn(DummyWindowMarker).id();
+            (world, root, mid, leaf, later)
+        }
+
+        /// 本体と**同一の query**で標的を集める（順序前提と対照アームの両方が本体と
+        /// 同じ列を見ていることを構造で保証する）。
+        fn targets_of(world: &mut World) -> Vec<Entity> {
+            world
+                .query_filtered::<Entity, Or<(With<DummyWindowMarker>, With<GhostWindowMarker>)>>()
+                .iter(world)
+                .collect()
+        }
+
+        // ── 対照アーム（非空虚性の証明）: 存在確認**無し**のループは無効 entity を叩く ──
+        let (mut world, root, mid, leaf, later) = probe();
+        let order = targets_of(&mut world);
+        let at = |e: Entity| {
+            order
+                .iter()
+                .position(|x| *x == e)
+                .expect("標的として拾われている")
+        };
+        // 前提（探針が不動点でないことの自己検査）: 連鎖の親 `root` が子孫 `mid` より
+        // **先に**処理され、`later` が `mid` より**後**であること。前者が崩れると連鎖破棄を
+        // 踏まず、後者が崩れると「打ち切りは後続を止めない」の主張が空虚になる。
+        assert!(
+            at(root) < at(mid) && at(mid) < at(later),
+            "探針前提: 処理順は root → mid → later を満たさねばならない（order={order:?}\
+             ・root={root:?} mid={mid:?} leaf={leaf:?} later={later:?}）"
+        );
+        let failed: Vec<Entity> = order
+            .iter()
+            .filter(|e| !world.despawn(**e))
+            .copied()
+            .collect();
+        assert_eq!(
+            failed,
+            vec![mid],
+            "対照アーム: 存在確認が無ければ `mid` へ無効 despawn が飛ぶ\
+             （＝`Could not despawn entity` の警告 1 件）。ここが空なら本檻は恒真の空虚檻である"
+        );
+
+        // ── 本体アーム: 同じ探針で、警告を出さず debug 1 行で打ち切り後続も処理し切る ──
+        let (mut world, root, mid, leaf, later) = probe();
+        let (count, events) = capture_logs(|| despawn_smoke_targets(&mut world));
+
+        assert_eq!(
+            count, 4,
+            "標的として拾った 4 体を報告する（掃除後は 4 体とも消える）"
+        );
+        assert!(world.get_entity(root).is_err());
+        assert!(
+            world.get_entity(mid).is_err(),
+            "探針前提: root の despawn が mid へ連鎖している"
+        );
+        assert!(world.get_entity(leaf).is_err());
+        assert!(
+            world.get_entity(later).is_err(),
+            "打ち切りは後続の標的を止めない（Req 6.3「他の scope の処理を継続」）"
+        );
+        // `tracing::Level` の Ord は ERROR < WARN < INFO < DEBUG < TRACE ゆえ
+        // 「INFO より verbose」＝ debug/trace のみ、が静穏性の表現（follow.rs 3.2 檻と同型）。
+        // ここが見ているのは areka 自身の出力である（bevy の `log` 経由 warn は対照アーム担当）。
+        assert!(
+            events.iter().all(|e| e.level > tracing::Level::INFO),
+            "破棄済み標的に対して警告以上のログが出ている（Req 6.2 違反）: {events:?}"
+        );
+        let skipped = expect_one(&events, DESPAWNED_SKIP_TAG);
+        assert_eq!(
+            skipped.level,
+            tracing::Level::DEBUG,
+            "破棄済みの打ち切りは debug 水準（正常終了系）"
+        );
+        assert!(
+            skipped.message().contains("smoke 自動 close"),
+            "打ち切り行が自分の相を名乗っていない: {:?}",
+            skipped.message()
+        );
     }
 }
 
@@ -1481,5 +1673,170 @@ mod persist_wiring_seam_tests {
         // 正典終了（アクター join）——テスト後始末（リーク回避・非本質）。
         parts.publisher.close();
         let _ = parts.handle.join();
+    }
+}
+
+/// 起動時モニタスナップショット出力シーム（areka-P0-dpi-window-vanish task 1.2・
+/// 要件 1.1・design D12「areka 構築点を正典」）の headless 単体テスト。
+///
+/// `open_startup_window` は生きた `WinApp` を要してテスト困難ゆえ、その Ok アームが
+/// `MonitorSnapshot` を組む点＝**placement の全判断が読む権威の構築点**を
+/// [`boot_monitor_snapshot`] へ抽出し、合成モニタ（混在 DPI・負座標・3200 超）で檻に入れる。
+/// 実モニタも実 GPU も要さない。
+#[cfg(test)]
+mod monitor_snapshot_seam_tests {
+    use super::*;
+    use placement::diag::{
+        MONITOR_RECORD_TAG, MONITOR_SNAPSHOT_TAG, MonitorRecord, monitor_record_line,
+        monitor_snapshot_header_line,
+    };
+    use placement::follow::MonitorSnapshot;
+    use placement::test_support::capture_logs;
+    use windows::Win32::Foundation::RECT;
+    use wintf::ecs::window::monitor::Monitor;
+
+    /// 実機の消失事象と同域の合成構成（混在 DPI 96/120/192・非対称 work area・
+    /// 負座標・3200 超座標）。実 HMONITOR 不要（placement/mod.rs テストと同流儀）。
+    fn synthetic_monitors() -> Vec<Monitor> {
+        vec![
+            Monitor {
+                handle: 65537,
+                bounds: RECT {
+                    left: 0,
+                    top: 0,
+                    right: 1920,
+                    bottom: 1080,
+                },
+                work_area: RECT {
+                    left: 0,
+                    top: 0,
+                    right: 1920,
+                    bottom: 1040,
+                },
+                dpi: 120,
+                is_primary: true,
+            },
+            Monitor {
+                handle: -3,
+                bounds: RECT {
+                    left: -1920,
+                    top: -40,
+                    right: 0,
+                    bottom: 1040,
+                },
+                work_area: RECT {
+                    left: -1840,
+                    top: -40,
+                    right: 0,
+                    bottom: 1000,
+                },
+                dpi: 192,
+                is_primary: false,
+            },
+            Monitor {
+                handle: 65539,
+                bounds: RECT {
+                    left: 1920,
+                    top: -200,
+                    right: 5120,
+                    bottom: 1600,
+                },
+                work_area: RECT {
+                    left: 1920,
+                    top: -200,
+                    right: 5120,
+                    bottom: 1520,
+                },
+                dpi: 96,
+                is_primary: false,
+            },
+        ]
+    }
+
+    /// `[diag.*]` 行だけを抜き出す（同時に走る他の観測ログを混ぜない）。
+    fn diag_lines(events: &[placement::test_support::LogEvent]) -> Vec<String> {
+        events
+            .iter()
+            .map(|e| e.message().to_string())
+            .filter(|m| m.starts_with(MONITOR_SNAPSHOT_TAG) || m.starts_with(MONITOR_RECORD_TAG))
+            .collect()
+    }
+
+    /// 要件 1.1 正典出力点: 構築点で全モニタの識別子・bounds・work_area・DPI・primary が
+    /// 物理 px で 1 回出力され、行は呼出点タグ `monitor_snapshot` を名乗る。
+    /// ログだけからモニタ構成（台数・各台の全 5 フィールド）を再構成できる。
+    #[test]
+    fn boot_snapshot_logs_every_monitor_with_the_canonical_call_site_tag() {
+        let monitors = synthetic_monitors();
+        let (_, events) = capture_logs(|| boot_monitor_snapshot(&monitors));
+
+        let expected: Vec<MonitorRecord> = placement::monitor_records(&monitors);
+        let mut want = vec![monitor_snapshot_header_line("monitor_snapshot", 3)];
+        want.extend(
+            expected
+                .iter()
+                .enumerate()
+                .map(|(i, r)| monitor_record_line(r, i)),
+        );
+        assert_eq!(
+            diag_lines(&events),
+            want,
+            "構築点の出力が見出し＋全モニタ 1 行ずつ・呼出点タグ monitor_snapshot で出ていない"
+        );
+
+        // ログだけからモニタ構成を再構成できる（work area・DPI・primary が実値で読める）。
+        let lines = diag_lines(&events);
+        assert!(lines[1].contains("work_area=0,0,1920,1040") && lines[1].contains("dpi=120"));
+        assert!(lines[2].contains("work_area=-1840,-40,0,1000") && lines[2].contains("dpi=192"));
+        assert!(lines[3].contains("work_area=1920,-200,5120,1520") && lines[3].contains("dpi=96"));
+        assert_eq!(
+            lines.iter().filter(|l| l.contains("primary=true")).count(),
+            1,
+            "primary 標識が 1 台ぶんだけ立つ: {lines:?}"
+        );
+    }
+
+    /// 呼出点タグは列挙点（`prepare_ghost_windows`）と**別**でなければならない
+    /// （要件 1.1「呼出点タグで区別できる」）。構築点をもう一方のタグへ collapse する
+    /// 退行はここで赤になる。
+    #[test]
+    fn boot_snapshot_tag_differs_from_the_prepare_call_site_tag() {
+        let (_, events) = capture_logs(|| boot_monitor_snapshot(&synthetic_monitors()));
+        let header = diag_lines(&events).remove(0);
+        assert!(
+            header.contains("context=monitor_snapshot"),
+            "構築点の呼出点タグが正典値でない: {header}"
+        );
+        assert!(
+            !header.contains(&format!(
+                "context={}",
+                placement::PREPARE_GHOST_WINDOWS_CONTEXT
+            )),
+            "構築点が列挙点の呼出点タグを名乗っている（弁別不能）: {header}"
+        );
+    }
+
+    /// シームは観測を足すだけで、`MonitorSnapshot` の中身（placement の全判断が読む権威）を
+    /// 一切変えない（D2: 観測増設は挙動変更に数えない）。
+    #[test]
+    fn boot_snapshot_returns_the_same_authority_resource_as_before() {
+        let monitors = synthetic_monitors();
+        assert_eq!(
+            boot_monitor_snapshot(&monitors),
+            MonitorSnapshot::from_monitors(&monitors),
+            "観測増設が権威 Resource の中身を変えている"
+        );
+    }
+
+    /// モニタ 0 台（列挙異常）でも panic せず `count=0` の見出しが出る
+    /// （レコード不在では「出力が無効だった」と区別できない）。
+    #[test]
+    fn boot_snapshot_with_no_monitors_still_reports_count_zero() {
+        let (snapshot, events) = capture_logs(|| boot_monitor_snapshot(&[]));
+        assert!(snapshot.work_areas.is_empty());
+        assert_eq!(
+            diag_lines(&events),
+            vec!["[diag.monitor_snapshot] context=monitor_snapshot count=0"]
+        );
     }
 }

@@ -12,7 +12,7 @@ use std::cell::RefCell;
 use std::future::Future;
 use std::rc::Rc;
 
-use tracing::debug;
+use tracing::{debug, info, warn};
 use windows::Win32::Foundation::*;
 use windows::Win32::System::Com::*;
 use windows::Win32::UI::HiDpi::*;
@@ -106,9 +106,25 @@ impl WinApp {
 
         // SAFETY: Win32 境界。SetProcessDpiAwarenessContext はプロセスグローバルな
         // DPI awareness をスレッドセーフに設定する。既に設定済み／不可の場合はエラーを
-        // 返すが、レガシー同様に無視する（致命的ではない）。
+        // 返すが、レガシー同様にプロセス起動は止めない（致命的ではない）。
+        //
+        // Req 7.4: **戻り値を握り潰さない**。旧実装は `let _ =` で捨てていたため、
+        // per-monitor v2 の設定が失敗していても観測できず、`WM_DPICHANGED` が
+        // 実機で 0 件だった機序（診断レポート §2.7）の切り分けができなかった。
+        // 成否のどちらも必ず 1 行残す——「点灯しない観測点を『発生 0 回』の根拠に
+        // 用いない」（Req 1.5）の直接適用である。
         unsafe {
-            let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+            match SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) {
+                Ok(()) => info!(
+                    context = "PER_MONITOR_AWARE_V2",
+                    "[SetProcessDpiAwarenessContext] DPI awareness set"
+                ),
+                Err(e) => warn!(
+                    context = "PER_MONITOR_AWARE_V2",
+                    error = ?e,
+                    "[SetProcessDpiAwarenessContext] failed (process continues with the inherited awareness)"
+                ),
+            }
         }
 
         let world = Rc::new(RefCell::new(EcsWorld::new()));

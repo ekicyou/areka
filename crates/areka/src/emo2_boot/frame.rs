@@ -40,6 +40,7 @@ use areka_parsers::balloon::BalloonModel;
 use areka_sakura::ActorKey;
 use wintf::ecs::{FrameTime, GraphicsCore, SizeI, WindowPos, WucGraphicsResource, DPI};
 
+use crate::placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
 use crate::placement::follow::{resize_window_keep_position, resize_window_to};
 use crate::placement::resolver::SizePx;
 use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker, GhostWindows};
@@ -697,11 +698,26 @@ fn classify_ghost_window(
 ///
 /// 物理寸は `u32`（表示バッファ外形）で報告されるが窓寸は `i32` 通貨ゆえ、ここで変換し
 /// 超過・0 を弾く（log-first・panic しない・Req3.4 と同流儀の二重防波堤）。
+///
+/// # `route` 引数（Req 1.2・design D13・task 1.4）
+///
+/// **本関数は共通末端であって経路ではない**。呼出元は 2 つあり、両者は消失診断の上で
+/// 別物である:
+///
+/// - [`dpi_phase_with`]（`Changed<DPI>` エッジ由来）→ [`PlacementRoute::DpiReproject`]
+/// - [`reconcile_reported_sizes`]（drain 相の報告回収・**初回表示の k₀ 補正を含み**
+///   `Changed<DPI>` 非依存）→ [`PlacementRoute::ReportedSizeReconcile`]
+///
+/// ゆえに route を本関数の内部で決め打ちしてはならない——決め打つと DPI 変化ゼロの起動でも
+/// 「DPI 由来」の偽レコードが毎回出て、要件 1.9 の受理回数突合（セッション②＝ドラッグ禁止・
+/// OS 側 DPI 変更のみ）が汚染される。バルーン窓は位置据置きリサイズ
+/// （[`PlacementRoute::KeepPositionResize`]）へ落ちるため route を消費しない。
 fn reconcile_window_size(
     world: &mut World,
     window: Entity,
     kind: GhostWindowKind,
     new_size: (u32, u32),
+    route: PlacementRoute,
 ) -> bool {
     let (Ok(w), Ok(h)) = (i32::try_from(new_size.0), i32::try_from(new_size.1)) else {
         error!(
@@ -724,8 +740,11 @@ fn reconcile_window_size(
     let new_size = SizePx { w, h };
     match kind {
         // キャラ窓: アンカー射影 T を再適用して接地点（下端中央）を保つ。
-        GhostWindowKind::Char => resize_window_to(world, window, new_size),
-        // バルーン窓: 位置は追従で決まる従属量ゆえ据え置き、寸だけ差し替える。
+        // 経路タグは呼出元が渡した route を透過させる（本関数は共通末端であって経路ではない
+        // ＝DPI 相と drain 相を 1 語で名乗らせない・Req 1.2／D13）。
+        GhostWindowKind::Char => resize_window_to(world, window, new_size, route),
+        // バルーン窓: 位置は追従で決まる従属量ゆえ据え置き、寸だけ差し替える
+        // （経路語彙は関数名そのもの＝KeepPositionResize ゆえ route を消費しない）。
         GhostWindowKind::Balloon => resize_window_keep_position(world, window, new_size),
     }
 }
@@ -777,8 +796,17 @@ type DpiChangedQuery = Query<
 /// DPI フェーズの本体（報告源を抽象化した中核・[`run_dpi_phase`] が本番の presenter を渡す）。
 ///
 /// 永続 `state` で `Changed<DPI>` を観測し（`anchor_changed_system` 先例と同じ流儀）、変化した
-/// 各ゴースト窓について対応 target の [`ScaleReportSource::refresh_scale_report`] を呼び、
-/// `Some(新物理寸)` のときだけ [`reconcile_window_size`] で窓 client を合わせる。
+/// 各ゴースト窓について対応 target の [`ScaleReportSource::refresh_scale_report`] を呼ぶ。
+///
+/// # 位置の権威と寸の権威の分離（S2 是正・design D7・Req 4.1／4.2／4.5／4.6）
+///
+/// **窓寸**を合わせるのは報告が `Some(新物理寸)` のときだけ（[`reconcile_window_size`]）だが、
+/// **位置**はその成否に条件付けない——`None` のキャラ窓は
+/// [`reproject_char_window_at_current_size`] で**現寸のまま**射影 T を一度通す。位置の再射影が
+/// [`resize_window_to`] の内部にしかない以上、`Some` ゲートの下流に置くと「再導出結果が得られ
+/// ない経路で位置の再射影ごと欠落する」（診断レポート §1.2 の S2）。正常系は同寸・同 work area
+/// ゆえべき等 skip で書込ゼロ＝ Req 4.5 はそのまま成立する。バルーン窓の `None` は位置据置き
+/// （位置は従属量ゆえキャラ窓確定後の追従が随伴させる）。
 ///
 /// # べき等・churn なし（Flow 2 キー決定 (b)）
 ///
@@ -789,7 +817,9 @@ type DpiChangedQuery = Query<
 /// # 失敗（Req4.4）
 ///
 /// 再導出・再表示の失敗は presenter が `error!`＋`None` で前 k・前表示を維持する。本関数は
-/// `None` で**窓寸を一切触らない**（前寸維持）。panic しない。
+/// `None` で**窓寸を一切触らない**（前寸維持）——位置だけは上記のとおり現寸で射影を通す
+/// （寸が古いまま位置だけ正す瞬間は同一フレームの drain 相 reconcile が閉じる・D7）。
+/// panic しない。
 fn dpi_phase_with<S: ScaleReportSource>(
     source: &mut S,
     state: &mut Option<SystemState<DpiChangedQuery>>,
@@ -839,14 +869,84 @@ fn dpi_phase_with<S: ScaleReportSource>(
             GhostWindowKind::Char => shell_target(scope),
             GhostWindowKind::Balloon => balloon_target(scope),
         };
-        // 再導出→（差分があれば）再表示。`None` は「窓寸を触らない」が正しい（前表示・前寸の維持・
-        // Req4.4）。なお `None` は k 不変とは同義でない——不可視・未表示・失敗に加え、**k は変わった
-        // が丸め後の物理寸が同じ**場合も `None` である（`refresh_scale` の doc が明記）。ゆえに
-        // 文字層 k 追従の判断材料にはこの戻り値を使わない（[`run_text_scale_phase`] を参照）。
-        if let Some(new_size) = source.refresh_scale_report(world, target) {
-            reconcile_window_size(world, window, kind, new_size);
+        // 再導出→（差分があれば）再表示。`None` は「**窓寸**を触らない」が正しい（前表示・前寸の
+        // 維持・Req4.4）。なお `None` は k 不変とは同義でない——不可視・未表示・失敗に加え、**k は
+        // 変わったが丸め後の物理寸が同じ**場合も `None` である（`refresh_scale` の doc が明記）。
+        // ゆえに文字層 k 追従の判断材料にはこの戻り値を使わない（[`run_text_scale_phase`] を参照）。
+        //
+        // **位置**は寸の再導出結果に条件付けない（S2 是正・D7・下の `None` 腕）。
+        match source.refresh_scale_report(world, target) {
+            // 経路タグ: 本フェーズは `Changed<DPI>` エッジ駆動＝真に DPI 由来（Req 1.2・D13）。
+            Some(new_size) => {
+                reconcile_window_size(world, window, kind, new_size, PlacementRoute::DpiReproject);
+            }
+            // 再導出結果なし: 寸は触らないが、**位置は現寸のまま射影 T を一度通す**。
+            // バルーン窓は位置据置きのまま（位置は従属量ゆえ、キャラ窓確定後の
+            // [`follow_balloon`]＝`resize_window_to` 手順 6/7 が随伴させる）。
+            None => match kind {
+                GhostWindowKind::Char => {
+                    reproject_char_window_at_current_size(world, window);
+                }
+                GhostWindowKind::Balloon => {}
+            },
         }
     }
+}
+
+/// 窓寸の再導出結果が得られなかったキャラ窓を、**現在の寸のまま**射影 T へ通す（S2 是正・
+/// design D7・Req 4.1／4.2／4.5／4.6・診断レポート §1.2）。
+///
+/// # なぜ必要か（位置の権威と寸の権威の分離）
+///
+/// 位置の再射影は [`resize_window_to`] の**内部**にしかないため、`refresh_scale_report` の
+/// `Some` ゲートの下流に置くと「再導出結果が得られない経路では位置の再射影ごと欠落する」。
+/// `None` を返す経路には**不可視**・**未表示**（いずれも Req 4.6 が名指しで扱う状況）と
+/// 「k は変わったが丸め後の物理寸が同じ」（正常系で日常的に起こる）が含まれ、いずれも
+/// **窓の DPI は変わっている＝接地すべき work area が変わっている**。ゆえに寸の成否に
+/// 関わらず射影を一度通す。
+///
+/// # Req 4.5（現状維持）との関係——正常系は書込ゼロで抜ける
+///
+/// 現寸をそのまま渡すので手順 3b（下端中央の付け替え）は恒等、[`project_anchor`] が Y を
+/// **変化後の** work area 下端から再導出する。同寸・同 work area なら導出値が現在値と一致し
+/// [`resize_window_to`] のべき等 skip が書込ゼロで抜ける。書込が起きるのは**現位置が接地点
+/// 規約に違反しているとき**だけであり、それは Req 4.1／4.2 が要求する保全そのものである
+/// （design「dpi_phase 位置/寸分離 > Risks / Req 4.5 との整合」＝矛盾ではなく優先順位）。
+///
+/// # 縮退（log-first・要件 6.2/6.3 の区別を踏襲）
+///
+/// 窓寸が引けない場合は現状維持のまま打ち切る。水準は 2 分される（[`reconcile_reported_sizes`]
+/// と同じ区別・混ぜると終了時ログの良性ノイズが本物の異常を埋める）:
+///
+/// - **entity 破棄済み**: 終了処理の**正常終了系**ゆえ `debug!`（[`DESPAWNED_SKIP_TAG`]）。
+/// - **実在するが `WindowPos.size` 不在**（窓生成前）: 真の異常ゆえ `warn!`。
+///
+/// 戻り値は**窓へ書込が起きたか**（`false` はべき等 skip・縮退の双方を含み、失敗とは限らない
+/// ＝[`reconcile_window_size`] と同じ流儀）。panic しない。
+fn reproject_char_window_at_current_size(world: &mut World, window: Entity) -> bool {
+    let Some(current) = world.get::<WindowPos>(window).and_then(|wp| wp.size) else {
+        if world.get_entity(window).is_err() {
+            debug!(
+                entity = ?window,
+                "{DESPAWNED_SKIP_TAG} dpi reproject: 窓 entity が破棄済み（despawn）→ 位置再射影を正常系として打ち切り"
+            );
+        } else {
+            warn!(
+                entity = ?window,
+                "dpi reproject: WindowPos.size 未確定（窓生成前）のため現寸を読めず、位置を再射影せず現状維持"
+            );
+        }
+        return false;
+    };
+    resize_window_to(
+        world,
+        window,
+        SizePx {
+            w: current.width,
+            h: current.height,
+        },
+        PlacementRoute::DpiReproject,
+    )
 }
 
 /// DPI 追従フェーズ（design「run_dpi_phase（frame.rs）」・D8・Req3.1/4.1/4.2/4.3）。
@@ -999,6 +1099,12 @@ pub fn run_text_scale_phase(wiring: &mut Emo2Wiring) -> Vec<u32> {
 ///
 /// [`GhostWindows`] 未挿入（窓生成前）は no-op。窓 entity が引けない scope は `warn!`＋skip
 /// （報告は既に取り出し済み＝次フレームへ持ち越さない——窓が無い以上反映先が無い）。panic しない。
+///
+/// # 破棄済み窓の打ち切り（要件 6.2/6.3・design D8 消費側）
+///
+/// 「登録は在るが**指す先の entity が既に despawn 済み**」は終了処理の**正常系**であり、
+/// `debug!`（[`DESPAWNED_SKIP_TAG`]）で当該 target を打ち切って**他 scope の処理を継続**する
+/// （警告以上を出さない＝要件 6.2）。上段の「登録が無い」`warn!` とは別事象である。
 fn reconcile_reported_sizes<S: ScaleReportSource>(source: &mut S, world: &mut World) {
     // GhostWindows は小さな Entity 写像（Clone）。target/窓の解決へ world の不変借用を跨がせない。
     let Some(ghost_windows) = world.get_resource::<GhostWindows>().cloned() else {
@@ -1037,7 +1143,31 @@ fn reconcile_reported_sizes<S: ScaleReportSource>(source: &mut S, world: &mut Wo
                 );
                 continue;
             };
-            reconcile_window_size(world, window, kind, new_size);
+            // 存在確認（要件 6.2/6.3・design D8 消費側）: レジストリが指す窓が既に
+            // despawn 済み（終了処理でゴースト窓が破棄された後のフレーム）なら、**正常終了系**
+            // として debug で打ち切り、**他の scope／target の処理は続ける**。報告は上で
+            // 取り出し済みのまま持ち越さない（窓が無い以上、次フレームでも反映先は無い）。
+            // 上の `None` 腕（レジストリ不整合＝warn）とは別物である——あちらは「登録が無い」、
+            // こちらは「登録はあるが指す先が消えた」で、後者だけが終了処理の正常系。
+            if world.get_entity(window).is_err() {
+                debug!(
+                    scope,
+                    ?target,
+                    entity = ?window,
+                    "{DESPAWNED_SKIP_TAG} dpi reconcile: 窓 entity が破棄済み（despawn）→ 本 target を正常系として打ち切り（他 scope は継続）"
+                );
+                continue;
+            }
+            // 経路タグ: 本経路は「表示が成立して物理寸が変わった」状態に紐づき `Changed<DPI>`
+            // に**依存しない**（初回表示の k₀ 補正もここで landing する）。DPI 由来と名乗らせ
+            // ないため DpiReproject とは別語を貼る（Req 1.2・D13）。
+            reconcile_window_size(
+                world,
+                window,
+                kind,
+                new_size,
+                PlacementRoute::ReportedSizeReconcile,
+            );
         }
     }
 }
@@ -1153,7 +1283,8 @@ fn resnap_from_sizes(world: &mut World, sizes: impl Iterator<Item = (usize, Size
             continue;
         }
         // 異寸のみ: 新寸で T 再適用→一度書き→随伴（resize_window_to が単一ライター・Req1.3）。
-        resize_window_to(world, char_window, shown_size);
+        // 経路タグは Resnap（毎フレーム再スナップ・Req 1.2／task 1.4）。
+        resize_window_to(world, char_window, shown_size, PlacementRoute::Resnap);
     }
 }
 
@@ -1202,6 +1333,13 @@ impl PhysicalSizeSource for EmoPresenter {
 /// 本番経路は `resnap_shell_targets` が**本体を持たずここへ委譲する**だけである——実装を 2 つに
 /// 割らないことが要点で、fake 相手の檻が「本番も同じ判断をしている」ことを担保する
 /// （実装が分岐していると fake は緑のまま本番だけ壊れ得る）。
+///
+/// # 破棄済み窓の打ち切り（要件 6.2/6.3・design D8 消費側）
+///
+/// scope ループの**冒頭**で char 窓 entity の存在を確認し、既に despawn 済みなら
+/// `debug!`（[`DESPAWNED_SKIP_TAG`]）で当該 scope を打ち切って**他 scope は処理し切る**
+/// （終了処理の正常系ゆえ警告以上を出さない）。寸の問い合わせより手前に置くのは、
+/// 破棄済み窓のために表示側へ問い合わせる意味が無いためである。
 fn resnap_with<S: PhysicalSizeSource + ?Sized>(source: &S, world: &mut World) {
     // scope 識別は GhostWindows 経由（Req4.5）。未挿入は shell 寸を引く対象が無い＝no-op。
     let Some(ghost_windows) = world.get_resource::<GhostWindows>() else {
@@ -1210,6 +1348,20 @@ fn resnap_with<S: PhysicalSizeSource + ?Sized>(source: &S, world: &mut World) {
     // presenter 借用を解いてから resnap_from_sizes（&mut World）を呼ぶため、先に collect する。
     let mut sizes: Vec<(usize, SizePx)> = Vec::new();
     for scope in ghost_windows.scopes() {
+        // 存在確認（要件 6.2/6.3・design D8 消費側）: レジストリが指す char 窓が既に
+        // despawn 済みなら **正常終了系**として debug で打ち切り、**他 scope は処理し切る**。
+        // 寸の問い合わせより手前に置く——破棄済みの窓のために表示側へ問い合わせる意味が
+        // 無いうえ、素通りさせると下流 `resize_window_to` が破棄済み窓ぶん呼ばれる。
+        if let Some(char_window) = ghost_windows.char_window(scope)
+            && world.get_entity(char_window).is_err()
+        {
+            debug!(
+                scope,
+                entity = ?char_window,
+                "{DESPAWNED_SKIP_TAG} resnap: char 窓 entity が破棄済み（despawn）→ 本 scope を正常系として打ち切り（他 scope は継続）"
+            );
+            continue;
+        }
         // shell target（偶数=2*scope）のみを読む（balloon_target は読まない＝shell 限定・Req4.5）。
         // 窓 client に合わせるべき寸は **物理寸**（k 倍後）であって native 原寸ではない。両者を
         // 選べる `text_slot_view()`（`surface_size()`／`physical_size()` が隣り合う）ではなく、
@@ -2702,7 +2854,13 @@ mod tests {
             "前提: balloon 初期位置"
         );
         assert!(
-            reconcile_window_size(&mut world, balloon0, GhostWindowKind::Balloon, (446, 316)),
+            reconcile_window_size(
+                &mut world,
+                balloon0,
+                GhostWindowKind::Balloon,
+                (446, 316),
+                PlacementRoute::DpiReproject
+            ),
             "balloon: 異寸ゆえ書込が成立する"
         );
         assert_eq!(
@@ -2723,7 +2881,13 @@ mod tests {
             "前提: char 初期位置"
         );
         assert!(
-            reconcile_window_size(&mut world, char0, GhostWindowKind::Char, (868, 1374)),
+            reconcile_window_size(
+                &mut world,
+                char0,
+                GhostWindowKind::Char,
+                (868, 1374),
+                PlacementRoute::DpiReproject
+            ),
             "char: 異寸ゆえ書込が成立する"
         );
         assert_eq!(
@@ -2751,33 +2915,38 @@ mod tests {
             &mut world,
             char0,
             GhostWindowKind::Char,
-            (u32::MAX, 687)
+            (u32::MAX, 687),
+            PlacementRoute::DpiReproject
         ));
         // 0 寸（native 0 由来の退化）→ 書かない。
         assert!(!reconcile_window_size(
             &mut world,
             char0,
             GhostWindowKind::Char,
-            (0, 687)
+            (0, 687),
+            PlacementRoute::DpiReproject
         ));
         assert!(!reconcile_window_size(
             &mut world,
             balloon0,
             GhostWindowKind::Balloon,
-            (446, 0)
+            (446, 0),
+            PlacementRoute::DpiReproject
         ));
         // 同寸（k 不変で丸め後も同寸）→ べき等 skip（false は失敗でなく「書かなかった」）。
         assert!(!reconcile_window_size(
             &mut world,
             char0,
             GhostWindowKind::Char,
-            (434, 687)
+            (434, 687),
+            PlacementRoute::DpiReproject
         ));
         assert!(!reconcile_window_size(
             &mut world,
             balloon0,
             GhostWindowKind::Balloon,
-            (223, 158)
+            (223, 158),
+            PlacementRoute::DpiReproject
         ));
 
         assert_eq!(size_of(&world, char0), Some(SizeI::new(434, 687)), "char 寸不変");
@@ -2973,6 +3142,1271 @@ mod tests {
             source.calls_of("refresh"),
             vec![shell_target(1).0],
             "変化した窓の target だけが refresh 対象"
+        );
+    }
+
+    // ── task 4.4: S2 の赤証跡＝DPI 相の位置再射影檻（Req 5.4・診断レポート §1.2／§3.2）──
+    //
+    // **S2（診断レポート §1.2 の確定・是正前の構造）**: [`dpi_phase_with`] は
+    // `source.refresh_scale_report(world, target)` が `Some(new_size)` を返したときだけ
+    // [`reconcile_window_size`] を呼んでいた。位置の再射影（射影 T の再適用）は
+    // [`resize_window_to`] の**内部**＝そのゲートの下流にしか無いため、報告が `None` の経路では
+    // **寸を触らないだけでなく、位置の再射影ごと欠落していた**。
+    // `EmoPresenter::refresh_scale`（`areka-emo-present`）が `None` を返す経路は 5 つあり、
+    // うち「不可視」「未表示」は Req 4.6 が名指しで扱う状況、「k は変わったが丸め後の物理寸が
+    // 同じ」は正常系で日常的に起こる。いずれの場合も窓の DPI は変わっている＝
+    // **接地点を保つべき work area が変わっている**のに、位置は一切再射影されなかった。
+    //
+    // **タスク 5.2（是正）着地後の現在の位置づけ**: 赤 4 件は無視属性を撤去して**常時走る回帰檻**
+    // へ昇格済み。**dpi96 の 1 件も残してある**——「96 では緑」は是正後も成立する性質であり、
+    // 4 件が揃って初めて「96 通過／120・192 は是正前なら失敗」という非対称が回帰檻として保存
+    // される（Req 5.1／5.4）。是正の実体は [`reproject_char_window_at_current_size`]。
+    //
+    // 常時走る随伴 2 件（`s2_control_*`／`s2_dpi_phase_writes_nothing_*`）は是正の前後どちらでも
+    // 緑であり、5.2 が分離を**誤って**実装した場合に赤へ落ちる前方ガードである（実測: 5.2 が当てた
+    // 変異 M3＝`Some` 経路を据置きへ流す／M6＝現寸でなく別寸で射影する、でそれぞれ赤化した）。
+
+    use crate::placement::follow::{
+        BalloonFollow, WorkAreaResolution, work_area_for_window_with_origin,
+    };
+
+    /// S2 檻のモニタ物理下端。モニタ境界は物理量ゆえ拡大率では動かない（work area だけが動く）。
+    const S2_MONITOR_BOTTOM: i32 = 1492;
+    /// S2 檻のタスクバー**論理**高。実機のタスクバーは論理寸で宣言され `dpi/96` 倍で物理へ伸びる。
+    const S2_TASKBAR_LOGICAL_H: i32 = 48;
+
+    /// ゴーストが居るモニタの work area を **DPI 水準の関数**として組む（Req 5.6: 絶対 px を
+    /// 判定に直書きしない）。
+    ///
+    /// 拡大率が上がるとタスクバーの物理高が `dpi/96` 倍に伸び、work area 下端がその分だけ
+    /// 上がる——これが「DPI が変われば接地すべき下端が変わる」ことの機構であり、S2 が落として
+    /// いるのはまさにこの再導出である。`dpi=96` では `1492−48=1444`＝[`resnap_placements`] の
+    /// 初期配置がちょうど満たす下端であり、**96 だけが旧 Y と新 Y の自己整合で通過する**
+    /// （Req 5.1／5.4・診断レポート §1.2「なぜ dpi=96 では隠れるか」）。
+    fn s2_work_area_for_dpi(dpi: u16) -> RectPx {
+        let taskbar_px = S2_TASKBAR_LOGICAL_H * dpi as i32 / 96;
+        RectPx {
+            left: 31,
+            top: 17,
+            right: 2574,
+            bottom: S2_MONITOR_BOTTOM - taskbar_px,
+        }
+    }
+
+    /// 合成マルチモニタの隣接モニタ（負座標・3200 超座標を含む非対称レイアウト・task 2.2 と同流儀）。
+    ///
+    /// ゴースト窓の中心は決してここへ入らない。work area 解決が**帰属**（`Contains`）で決まって
+    /// いることを [`s2_resolved_work_area`] が毎回自己検査するため、単一モニタで回したときの
+    /// 「解決するモニタが 1 つしか無いから自明に当たる」退化を排除できる。
+    fn s2_neighbor_work_area() -> RectPx {
+        RectPx {
+            left: 2574,
+            top: -140,
+            right: 3874,
+            bottom: 1901,
+        }
+    }
+
+    /// 当該 DPI 水準における合成マルチモニタ snapshot（index 0＝ゴーストの居るモニタ）。
+    fn s2_snapshot(dpi: u16) -> MonitorSnapshot {
+        MonitorSnapshot {
+            work_areas: vec![s2_work_area_for_dpi(dpi), s2_neighbor_work_area()],
+        }
+    }
+
+    /// 窓の**接地点**（下端中央・物理 px）。伺かの立ち絵は足元中央が原点であり、寸法変動でも
+    /// 動かない（記憶〈キャラ窓の原点は下端中央〉・[`resize_window_to`] 手順 3b）。
+    fn s2_ground_point(world: &World, e: Entity) -> (i32, i32) {
+        let pos = pos_of(world, e).expect("WindowPos.position がある");
+        let size = size_of(world, e).expect("WindowPos.size がある");
+        (pos.x + size.width / 2, pos.y + size.height)
+    }
+
+    /// 当該窓が**今いるモニタ**の work area（射影 T が Y に用いるのと同一の解決規則）。
+    ///
+    /// 最近傍フォールバックで解決していたら合成レイアウトが退化している（窓がどのモニタにも
+    /// 属していない）ため、その場で檻を落とす——S3 の「フォールバックが異常を無観測で吸収する」
+    /// 性質をこの檻の内部に持ち込まないための自己検査である。
+    fn s2_resolved_work_area(world: &World, e: Entity) -> RectPx {
+        let pos = pos_of(world, e).expect("WindowPos.position がある");
+        let size = size_of(world, e).expect("WindowPos.size がある");
+        let rect = RectPx {
+            left: pos.x,
+            top: pos.y,
+            right: pos.x + size.width,
+            bottom: pos.y + size.height,
+        };
+        let snapshot = world
+            .get_resource::<MonitorSnapshot>()
+            .expect("MonitorSnapshot がある");
+        let (wa, origin) =
+            work_area_for_window_with_origin(snapshot, rect).expect("空 snapshot ではない");
+        assert_eq!(
+            origin,
+            WorkAreaResolution::Contains,
+            "探針の退化: 窓中心がどのモニタにも属さず最近傍フォールバックで解決された（合成レイアウトが壊れている）"
+        );
+        wa
+    }
+
+    /// [`WindowPos.position`] の Y を直接ずらす（単一ライターを経由しない＝書込 witness を汚さない）。
+    fn s2_shift_y(world: &mut World, e: Entity, dy: i32) {
+        if dy == 0 {
+            return;
+        }
+        let mut wp = world.get_mut::<WindowPos>(e).expect("WindowPos がある");
+        let pos = wp.position.expect("position がある");
+        wp.position = Some(Point {
+            x: pos.x,
+            y: pos.y + dy,
+        });
+    }
+
+    /// S2 探針の 1 窓ぶんの観測（接地点と、そのとき解決された work area 下端）。
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    struct S2Row {
+        scope: usize,
+        /// 接地点（下端中央）＝`(x + w/2, y + h)`。
+        ground: (i32, i32),
+        /// 当該窓が今いるモニタの work area 下端（接地規約が要求する Y 成分）。
+        wa_bottom: i32,
+    }
+
+    /// S2 探針の観測結果（DPI 変化の前後）。
+    struct S2Probe {
+        from_dpi: u16,
+        to_dpi: u16,
+        before: Vec<S2Row>,
+        after: Vec<S2Row>,
+        /// 変化後の DPI 相が実際に報告源を引いた target 群（非空虚性の検査用）。
+        refresh_targets: Vec<u32>,
+    }
+
+    /// 全 char 窓の観測行を scope 昇順で取る。
+    fn s2_rows(world: &World, gw: &GhostWindows, scopes: &[usize]) -> Vec<S2Row> {
+        scopes
+            .iter()
+            .map(|&scope| {
+                let e = gw.char_window(scope).expect("char 窓がある");
+                S2Row {
+                    scope,
+                    ground: s2_ground_point(world, e),
+                    wa_bottom: s2_resolved_work_area(world, e).bottom,
+                }
+            })
+            .collect()
+    }
+
+    /// **S2 探針**: `from_dpi` の work area へ接地した合成マルチモニタ World に対し、
+    /// OS 側の拡大率変更（`to_dpi`）を注入して DPI 相を 1 回回す。
+    ///
+    /// 偽ウィンドウハンドルのヘッドレス World（[`dpi_world`]＝2 scope・偽 HWND・書込 witness）・
+    /// 合成マルチモニタ（[`s2_snapshot`]）・**「再導出結果なし」固定の偽寸法報告源**
+    /// （[`FakeReports`] の空マップ＝`refresh_scale_report` が常に `None`）で組む。実 GPU・実高 DPI
+    /// モニタを要さず決定論（Req 5.2）。
+    ///
+    /// 手順:
+    /// 1. `from_dpi` の snapshot を挿し、全 char 窓を当該 work area 下端へ接地させる
+    ///    （随伴バルーンも同量ずらして追従 offset を保つ）。
+    /// 2. `from_dpi` で DPI 相を 1 回回して `SystemState::new` の初回全窓マッチを消費する
+    ///    （既に接地済みゆえ**是正後もべき等 skip で書込ゼロ**＝この run は探針を汚さない）。
+    /// 3. snapshot を `to_dpi` のものへ差し替え、全窓の `DPI` を `to_dpi` へ更新する
+    ///    （`Changed<DPI>` エッジ＝OS の拡大率変更に対応する）。
+    /// 4. DPI 相をもう 1 回回し、変化の前後の接地点を突き合わせる。
+    fn run_s2_probe(from_dpi: u16, to_dpi: u16) -> S2Probe {
+        let (mut world, gw) = dpi_world();
+        let scopes: Vec<usize> = gw.scopes().collect();
+
+        // --- 1. 変化前: from_dpi の work area と、そこへ接地した char 窓 ---
+        world.insert_resource(s2_snapshot(from_dpi));
+        let from_bottom = s2_work_area_for_dpi(from_dpi).bottom;
+        for &scope in &scopes {
+            let char_e = gw.char_window(scope).expect("char 窓がある");
+            let balloon_e = gw.balloon_window(scope).expect("balloon 窓がある");
+            let h = size_of(&world, char_e).expect("char 寸がある").height;
+            let y = pos_of(&world, char_e).expect("char 位置がある").y;
+            let dy = (from_bottom - h) - y;
+            s2_shift_y(&mut world, char_e, dy);
+            s2_shift_y(&mut world, balloon_e, dy);
+            for e in [char_e, balloon_e] {
+                world.entity_mut(e).insert(DPI::from_dpi(from_dpi, from_dpi));
+            }
+        }
+
+        // --- 2. 「再導出結果なし」固定の報告源で初回 run を消費する ---
+        let mut source = FakeReports::default();
+        let mut state = None;
+        dpi_phase_with(&mut source, &mut state, &mut world);
+        let before = s2_rows(&world, &gw, &scopes);
+
+        // --- 3. 変化: OS 側の拡大率変更（work area 下端が動く）＋窓 DPI の更新 ---
+        world.insert_resource(s2_snapshot(to_dpi));
+        for &scope in &scopes {
+            for e in [
+                gw.char_window(scope).expect("char 窓がある"),
+                gw.balloon_window(scope).expect("balloon 窓がある"),
+            ] {
+                world.entity_mut(e).insert(DPI::from_dpi(to_dpi, to_dpi));
+            }
+        }
+        reset_write_witness(&mut world, &gw);
+        source.calls.clear();
+
+        // --- 4. DPI 相をもう 1 回 ---
+        dpi_phase_with(&mut source, &mut state, &mut world);
+        let after = s2_rows(&world, &gw, &scopes);
+
+        S2Probe {
+            from_dpi,
+            to_dpi,
+            before,
+            after,
+            refresh_targets: source.calls_of("refresh"),
+        }
+    }
+
+    /// **本檻の判定＝接地点の不変条件**（Req 5.6: 絶対 px の固定値ではなく不変条件で表現する）。
+    ///
+    /// - (1) 探針の前提: 変化**前**の接地点 Y がそのときの work area 下端と一致している。
+    /// - (2) 接地点の **X 成分**（下端中央の x）が変化の前後で保存される。
+    /// - (3) 接地点の **Y 成分**が「今いるモニタの work area 下端」＝接地規約の値であり続ける。
+    ///
+    /// 「接地点を保つ」（Req 4.1）とは絶対座標の凍結ではない——足元の中心 x を保ったまま、
+    /// 足元が**その時点の work area 下端に接し続ける**ことである（design D7:「`project_anchor`
+    /// が Y を新モニタ work area 下端へ再導出」）。work area が動いた走行で旧 Y が据え置かれる
+    /// のは「保った」のではなく、タスクバーの下へ潜り込んだ状態である。
+    fn s2_assert_ground_point_invariant(probe: &S2Probe) {
+        assert!(
+            !probe.refresh_targets.is_empty(),
+            "非空虚性: 変化後の DPI 相が報告源を一度も引いていない（Changed<DPI> が発火していない＝探針の組み違い）"
+        );
+        assert_eq!(
+            probe.before.len(),
+            probe.after.len(),
+            "前後で観測窓数が違う（探針の組み違い）"
+        );
+        for (b, a) in probe.before.iter().zip(&probe.after) {
+            assert_eq!(
+                b.ground.1, b.wa_bottom,
+                "探針の前提: 変化前の char 窓 scope={} は work area 下端へ接地しているはず（before={b:?}）",
+                b.scope
+            );
+            assert_eq!(
+                a.ground.0, b.ground.0,
+                "接地点の X 成分（下端中央）が dpi {}→{} で保存されていない: scope={} before={b:?} after={a:?}",
+                probe.from_dpi, probe.to_dpi, a.scope
+            );
+            assert_eq!(
+                a.ground.1, a.wa_bottom,
+                "dpi {}→{}: 接地点 Y が変化後の work area 下端から外れている（work area が動いたのに位置が再射影されていない＝S2・Req 4.1/4.2/4.6）: scope={} before={b:?} after={a:?}",
+                probe.from_dpi, probe.to_dpi, a.scope
+            );
+        }
+    }
+
+    /// 探針の**非退化**自己検査（記憶〈2.2 の空虚性の教訓〉＝不変を主張する檻は、探針が欠陥の
+    /// 不動点に落ちていないかを自ら確かめる）。
+    ///
+    /// work area 下端が DPI 水準の間で実際に動かなければ、再射影の欠落はどの探針値でも観測
+    /// できず、檻は「何も起きないから通る」空虚な緑になる。将来 [`s2_work_area_for_dpi`] が
+    /// 編集されて退化しても、この assert が先に落ちる。
+    fn s2_assert_work_area_bottom_moves(from_dpi: u16, to_dpi: u16) {
+        let from = s2_work_area_for_dpi(from_dpi).bottom;
+        let to = s2_work_area_for_dpi(to_dpi).bottom;
+        assert_ne!(
+            from, to,
+            "探針が退化している: dpi {from_dpi}→{to_dpi} で work area 下端が動かない（この合成レイアウトでは S2 を観測できない）"
+        );
+    }
+
+    /// **S2 赤証跡（96 水準・是正前でも通過する）**: 拡大率が 96 のままなら work area 下端が
+    /// 動かず、旧 Y と「新 work area 下端 − h」が自己整合する——ゆえに**再射影の欠落が観測
+    /// されない**。本件は是正の前後いずれでも緑であり、下の 120／192 の 3 件との**非対称**
+    /// そのものが「96 の自己整合が欠陥を隠す」性質の記録である（Req 5.1／5.4）。
+    ///
+    /// 5.2 はこの 1 件も無視属性を外して常時走らせている——4 件が揃って初めて非対称が回帰檻
+    /// として保存される。
+    #[test]
+    fn s2_red_ground_point_preserved_at_dpi96() {
+        let probe = run_s2_probe(96, 96);
+        assert_eq!(
+            probe.before[0].wa_bottom, probe.after[0].wa_bottom,
+            "96 水準では work area 下端が動かない（＝本件が是正前でも通過する理由そのもの）"
+        );
+        s2_assert_ground_point_invariant(&probe);
+    }
+
+    /// **S2 赤証跡（96→120）**: work area 下端が動いたのに位置が再射影されず、接地点 Y が
+    /// 旧下端に据え置かれる（＝タスクバーの下へ潜り込む）。
+    #[test]
+    fn s2_red_ground_point_preserved_from_dpi96_to_dpi120() {
+        s2_assert_work_area_bottom_moves(96, 120);
+        s2_assert_ground_point_invariant(&run_s2_probe(96, 120));
+    }
+
+    /// **S2 赤証跡（96→192）**: 同上（k=2/1 相当・下端の変位が最大の水準）。
+    #[test]
+    fn s2_red_ground_point_preserved_from_dpi96_to_dpi192() {
+        s2_assert_work_area_bottom_moves(96, 192);
+        s2_assert_ground_point_invariant(&run_s2_probe(96, 192));
+    }
+
+    /// **S2 赤証跡（120→192）**: 起点が 96 でない遷移でも同じ欠落が起きる（96 が特別なのは
+    /// 「自己整合して隠す」からであって、96 起点だけの問題ではない）。
+    #[test]
+    fn s2_red_ground_point_preserved_from_dpi120_to_dpi192() {
+        s2_assert_work_area_bottom_moves(120, 192);
+        s2_assert_ground_point_invariant(&run_s2_probe(120, 192));
+    }
+
+    /// **常時走る随伴 (1)・非退行の対照**: 寸の再導出結果が**得られる**（`Some`）経路は S2 の
+    /// 対象外であり、タスク 5.2 の是正後も**一切変わってはならない**。DPI 相は従来どおり
+    /// [`reconcile_window_size`] を通り、char 窓は新寸で接地規約へ再射影され、随伴バルーンは
+    /// 追従恒等式（`balloon 位置 − char 位置 ≡ BalloonFollow.offset`）を保ち（Req 4.4）、
+    /// 経路語は `DpiReproject` のままである（D13）。
+    ///
+    /// 5.2 が `Some` 経路まで作り替えると本件が赤になる。
+    #[test]
+    fn s2_control_some_report_path_reprojects_and_keeps_balloon_offset() {
+        let (mut world, gw) = dpi_world();
+        world.insert_resource(s2_snapshot(96));
+        let char0 = gw.char_window(0).expect("char 窓がある");
+        let balloon0 = gw.balloon_window(0).expect("balloon 窓がある");
+        let native = size_of(&world, char0).expect("char 寸がある");
+        let ground_before = s2_ground_point(&world, char0);
+        assert_eq!(
+            ground_before.1,
+            s2_work_area_for_dpi(96).bottom,
+            "前提: 変化前は 96 の work area 下端へ接地している"
+        );
+
+        // 96→120（k=5/4）: work area 下端が動き、報告源も新物理寸を返す。
+        s2_assert_work_area_bottom_moves(96, 120);
+        world.insert_resource(s2_snapshot(120));
+        for e in [char0, balloon0] {
+            world.entity_mut(e).insert(DPI::from_dpi(120, 120));
+        }
+        let scaled = ScaleRatio::new(120, 96)
+            .expect("非ゼロ比")
+            .scaled_extent(native.width as u32, native.height as u32);
+        let mut source = FakeReports::default();
+        source.refresh.insert(shell_target(0).0, scaled);
+        let mut state = None;
+        let (_, events) =
+            capture_diag_logs(|| dpi_phase_with(&mut source, &mut state, &mut world));
+
+        assert_eq!(
+            size_of(&world, char0),
+            Some(SizeI::new(scaled.0 as i32, scaled.1 as i32)),
+            "Some 経路: 報告された新物理寸へ reconcile される"
+        );
+        assert_eq!(
+            s2_ground_point(&world, char0),
+            (ground_before.0, s2_work_area_for_dpi(120).bottom),
+            "Some 経路: 接地点の X が保存され Y が変化後の work area 下端へ再射影される"
+        );
+        // 随伴恒等式（Req 4.4）: offset は寸法変動に伴い付け替えられるが、恒等式自体は保たれる。
+        let offset = world
+            .get::<BalloonFollow>(char0)
+            .expect("char 窓は BalloonFollow を持つ")
+            .offset;
+        let cp = pos_of(&world, char0).expect("char 位置がある");
+        let bp = pos_of(&world, balloon0).expect("balloon 位置がある");
+        assert_eq!(
+            (bp.x - cp.x, bp.y - cp.y),
+            (offset.x, offset.y),
+            "随伴恒等式 balloon − char ≡ BalloonFollow.offset が崩れている（Req 4.4）"
+        );
+        assert_eq!(
+            window_move_routes_of(&events, char0),
+            vec!["DpiReproject"],
+            "Some 経路の route は DpiReproject のまま: {:?}",
+            window_move_lines(&events)
+        );
+    }
+
+    // ── task 7.2: 再導出結果が得られた経路の非退行を混在 DPI 全水準へ拡充 ──
+    //
+    // 上の `s2_control_*` は `Some` 経路の非退行を **96→120・scope 0** の 1 点でしか
+    // 見ておらず、しかも随伴の主張が「**書込後**に world から読んだ `offset`」に対する
+    // `balloon − char ≡ offset` である。この式は [`follow_balloon`] が
+    // 「バルーン位置 ← キャラ位置 ＋ offset」と書いていることの**恒真の言い換え**であり、
+    // `offset` が書込の途中で付け替えられても成立し続ける——[[5.2 の教訓＝空虚性
+    // 6 例目「不動点」型]]／[[7.2 の空虚性 8 例目＝「恒等式を、それを作った当人に問う」型]]
+    // の配置である。
+    //
+    // 本檻は同じ恒等式を**空虚でない形**へ書き直す。すなわち `offset` を書込の**前**に
+    // 読み、書込の**後**に
+    //   (a) `BalloonFollow.offset` の値自体が 1 bit も変わっていないこと
+    //   (b) `balloon − char` が**その前読み値**と一致すること
+    // を主張する。offset を付け替える実装（かつて Bottom だけに存在し、2026-07-31 の
+    // 実機 SSP 裁定で欠陥と確定して撤去された「原点＝下端中央基準への付替え」）は
+    // (a) と (b) の両方を落とす。正典は窓（char 左上）相対＝
+    // `balloon_pos − char_pos ≡ offset` が**全アンカーで不変**であること
+    // （`.kiro/steering/roadmap.md`「DPI 追従が基本設計」・
+    //   檻 `resize_window_to_bottom_keeps_ssp_window_relative_balloon_offset`）。
+    //
+    // 併せて 96/120/192 の 3 遷移 × 全 scope へ拡充する。判定は絶対 px ではなく
+    // 「変化の前後で保存される差分ベクトル」＝不変条件である（Req 5.6）。
+    //
+    // 非空虚性の自己検査を 3 段で持つ:
+    //   (1) work area 下端が実際に動く（[`s2_assert_work_area_bottom_moves`]）
+    //   (2) 報告寸が現寸と**異なる**＝`Some` 経路が実際に reconcile を走らせる
+    //   (3) バルーンの**絶対位置は動く**＝「相対不変」が「何も起きなかった」の
+    //       言い換えに退化していない
+
+    /// 追従 offset（`BalloonFollow.offset`）を読む。
+    ///
+    /// **書込の前**に読んだ値と**後**の状態を突き合わせるために使う——後読み値だけで
+    /// 恒等式を問うと、恒等式を作った当人に問い返す恒真形になる（上のコメント参照）。
+    fn s2_follow_offset(world: &World, char_e: Entity) -> (i32, i32) {
+        let offset = world
+            .get::<BalloonFollow>(char_e)
+            .expect("char 窓は BalloonFollow を持つ")
+            .offset;
+        (offset.x, offset.y)
+    }
+
+    /// **task 7.2**: 寸の再導出結果が**得られる**（`Some`）経路の非退行を、混在 DPI の
+    /// 3 遷移（96→120・96→192・120→192）× 全 scope で固定する。
+    ///
+    /// 主張は 4 つ:
+    /// - 従来経路が走る（報告された新物理寸へ `reconcile_window_size` が反映する）
+    /// - 接地点の X が保存され、Y は**変化後の** work area 下端へ再射影される（Req 4.1/4.2）
+    /// - **窓相対の追従 offset が値ごと不変で、バルーンはその前読み値どおりに追従する**
+    ///   （Req 4.4 の非恒真形・2026-07-31 実機 SSP 裁定の契約）
+    /// - 経路語は `DpiReproject` のまま（D13）
+    #[test]
+    fn s2_some_report_path_preserves_the_balloon_ground_anchor_across_mixed_dpi_levels() {
+        for (from_dpi, to_dpi) in [(96u16, 120u16), (96, 192), (120, 192)] {
+            // (1) 非空虚性: この 2 水準のあいだで work area 下端が実際に動く。
+            s2_assert_work_area_bottom_moves(from_dpi, to_dpi);
+
+            let (mut world, gw) = dpi_world();
+            let scopes: Vec<usize> = gw.scopes().collect();
+            assert!(
+                scopes.len() >= 2,
+                "探針の退化: 複数 scope でなければ「全 scope で保存」は主張になっていない"
+            );
+
+            // --- 変化前: from_dpi の work area へ全 char 窓を接地させる ---
+            world.insert_resource(s2_snapshot(from_dpi));
+            let from_bottom = s2_work_area_for_dpi(from_dpi).bottom;
+            for &scope in &scopes {
+                let char_e = gw.char_window(scope).expect("char 窓がある");
+                let balloon_e = gw.balloon_window(scope).expect("balloon 窓がある");
+                let h = size_of(&world, char_e).expect("char 寸がある").height;
+                let y = pos_of(&world, char_e).expect("char 位置がある").y;
+                let dy = (from_bottom - h) - y;
+                s2_shift_y(&mut world, char_e, dy);
+                s2_shift_y(&mut world, balloon_e, dy);
+                for e in [char_e, balloon_e] {
+                    world.entity_mut(e).insert(DPI::from_dpi(from_dpi, from_dpi));
+                }
+            }
+
+            // `SystemState::new` の初回全窓マッチを「報告なし」で消費する（既に接地済み
+            // ＝べき等 skip で書込ゼロ＝以降の観測を汚さない）。
+            let mut source = FakeReports::default();
+            let mut state = None;
+            dpi_phase_with(&mut source, &mut state, &mut world);
+
+            // --- 変化前の観測 ---
+            let before: Vec<((i32, i32), (i32, i32), (i32, i32), SizeI)> = scopes
+                .iter()
+                .map(|&scope| {
+                    let char_e = gw.char_window(scope).expect("char 窓がある");
+                    let balloon_e = gw.balloon_window(scope).expect("balloon 窓がある");
+                    let bp = pos_of(&world, balloon_e).expect("balloon 位置がある");
+                    (
+                        s2_ground_point(&world, char_e),
+                        // **書込の前**に読む追従 offset（恒真化の回避・上のコメント参照）。
+                        s2_follow_offset(&world, char_e),
+                        (bp.x, bp.y),
+                        size_of(&world, char_e).expect("char 寸がある"),
+                    )
+                })
+                .collect();
+            for (i, &scope) in scopes.iter().enumerate() {
+                assert_eq!(
+                    before[i].0.1, from_bottom,
+                    "探針の前提: scope={scope} は変化前 work area 下端へ接地している"
+                );
+            }
+
+            // --- 変化: work area・DPI・報告寸をまとめて to_dpi 相当へ ---
+            world.insert_resource(s2_snapshot(to_dpi));
+            let ratio = ScaleRatio::new(to_dpi.into(), from_dpi.into()).expect("非ゼロ比");
+            let mut source = FakeReports::default();
+            for (i, &scope) in scopes.iter().enumerate() {
+                for e in [
+                    gw.char_window(scope).expect("char 窓がある"),
+                    gw.balloon_window(scope).expect("balloon 窓がある"),
+                ] {
+                    world.entity_mut(e).insert(DPI::from_dpi(to_dpi, to_dpi));
+                }
+                let native = before[i].3;
+                let scaled = ratio.scaled_extent(native.width as u32, native.height as u32);
+                // (2) 非空虚性: 報告寸が現寸と違う＝`Some` 経路が実際に reconcile を走らせる。
+                assert_ne!(
+                    SizeI::new(scaled.0 as i32, scaled.1 as i32),
+                    native,
+                    "探針が不動点: dpi {from_dpi}→{to_dpi} scope={scope} で報告寸が現寸と同じ"
+                );
+                source.refresh.insert(shell_target(scope as u32).0, scaled);
+            }
+            reset_write_witness(&mut world, &gw);
+
+            let (_, events) =
+                capture_diag_logs(|| dpi_phase_with(&mut source, &mut state, &mut world));
+
+            // --- 判定 ---
+            let to_bottom = s2_work_area_for_dpi(to_dpi).bottom;
+            for (i, &scope) in scopes.iter().enumerate() {
+                let char_e = gw.char_window(scope).expect("char 窓がある");
+                let balloon_e = gw.balloon_window(scope).expect("balloon 窓がある");
+                let native = before[i].3;
+                let scaled = ratio.scaled_extent(native.width as u32, native.height as u32);
+
+                assert_eq!(
+                    size_of(&world, char_e),
+                    Some(SizeI::new(scaled.0 as i32, scaled.1 as i32)),
+                    "dpi {from_dpi}→{to_dpi} scope={scope}: 従来経路（Some）が新物理寸を反映していない"
+                );
+                let ground_after = s2_ground_point(&world, char_e);
+                assert_eq!(
+                    ground_after.0, before[i].0.0,
+                    "dpi {from_dpi}→{to_dpi} scope={scope}: 接地点の X が保存されていない"
+                );
+                assert_eq!(
+                    ground_after.1, to_bottom,
+                    "dpi {from_dpi}→{to_dpi} scope={scope}: 接地点 Y が変化後の work area 下端でない"
+                );
+
+                // (3) 非空虚性: バルーンの**絶対位置は動く**（相対不変が「無変化」の
+                //     言い換えではないことの witness）。
+                let bp = pos_of(&world, balloon_e).expect("balloon 位置がある");
+                assert_ne!(
+                    (bp.x, bp.y),
+                    before[i].2,
+                    "探針が不動点: dpi {from_dpi}→{to_dpi} scope={scope} でバルーンが 1 bit も動かない\
+                     （『相対が保たれた』が『何も起きなかった』と区別できない）"
+                );
+
+                // 本題 (a)（Req 4.4）: 追従 offset は**値ごと**不変（窓相対契約）。
+                // 寸法・DPI・work area がまとめて変わっても 1 bit も書き換わらない
+                // ——Bottom だけを原点（下端中央）基準へ付け替える実装はここで落ちる。
+                assert_eq!(
+                    s2_follow_offset(&world, char_e),
+                    before[i].1,
+                    "dpi {from_dpi}→{to_dpi} scope={scope}: BalloonFollow.offset が書き換わった\
+                     （窓相対契約＝リサイズで offset を補正しない・2026-07-31 実機 SSP 裁定）"
+                );
+                // 本題 (b): バルーンは**前読み**の offset どおりに追従している。
+                // 比較相手が前読み値ゆえ、付替えが起きればここも同時に落ちる（恒真でない）。
+                let cp = pos_of(&world, char_e).expect("char 位置がある");
+                assert_eq!(
+                    (bp.x - cp.x, bp.y - cp.y),
+                    before[i].1,
+                    "dpi {from_dpi}→{to_dpi} scope={scope}: 追従恒等式 balloon − char ≡ offset\
+                     （書込**前**に読んだ offset）が崩れている・Req 4.4"
+                );
+
+                assert_eq!(
+                    window_move_routes_of(&events, char_e),
+                    vec!["DpiReproject"],
+                    "dpi {from_dpi}→{to_dpi} scope={scope}: 経路語が DpiReproject でない: {:?}",
+                    window_move_lines(&events)
+                );
+            }
+        }
+    }
+
+    /// **常時走る随伴 (2)・5.2 の実装違いを捕まえる前方ガード**: DPI 相の書込は
+    /// **現位置が接地点規約に違反しているときだけ**起きなければならない（design「dpi_phase
+    /// 位置/寸分離 > Risks / Req 4.5 との整合」）。
+    ///
+    /// 5.2 が `None` 経路の再射影を「常に書く」形で実装すると、DPI 通知のたびに同値の再配置が
+    /// 走り Req 4.5（再導出結果が得られないなら現状維持）が壊れる——本件はそれを赤で捕まえる。
+    ///
+    /// 「書込ゼロ」の主張が空虚にならないよう、**同一ハーネスが書込を検出できること**を先に
+    /// positive witness で示す（記憶〈3.2 の空虚性・2 例目〉＝witness が壊れていても通って
+    /// しまう檻にしない）。
+    #[test]
+    fn s2_dpi_phase_writes_nothing_when_the_ground_point_already_holds() {
+        // --- positive witness: 同一ハーネスは書込を実際に検出できる ---
+        {
+            let (mut world, gw) = dpi_world();
+            world.insert_resource(s2_snapshot(96));
+            let char0 = gw.char_window(0).expect("char 窓がある");
+            let native = size_of(&world, char0).expect("char 寸がある");
+            world.entity_mut(char0).insert(DPI::from_dpi(120, 120));
+            let mut source = FakeReports::default();
+            source.refresh.insert(
+                shell_target(0).0,
+                ScaleRatio::new(120, 96)
+                    .expect("非ゼロ比")
+                    .scaled_extent(native.width as u32, native.height as u32),
+            );
+            let mut state = None;
+            dpi_phase_with(&mut source, &mut state, &mut world);
+            assert_ne!(
+                arrangement_offset_of(&world, char0),
+                WRITER_WITNESS,
+                "positive witness: 異寸報告のある DPI 相は実際に窓へ書く（書込 witness が生きている証拠）"
+            );
+        }
+
+        // --- 本題: work area が動かず既に接地している走行では書込ゼロ（Req 4.5 現状維持）---
+        let (mut world, gw) = dpi_world();
+        world.insert_resource(s2_snapshot(96));
+        let char0 = gw.char_window(0).expect("char 窓がある");
+        let balloon0 = gw.balloon_window(0).expect("balloon 窓がある");
+        assert_eq!(
+            s2_ground_point(&world, char0).1,
+            s2_work_area_for_dpi(96).bottom,
+            "前提: 既に 96 の work area 下端へ接地している"
+        );
+
+        let mut source = FakeReports::default(); // 「再導出結果なし」固定
+        let mut state = None;
+        dpi_phase_with(&mut source, &mut state, &mut world); // 初回 run（全窓マッチ）を消費
+        reset_write_witness(&mut world, &gw);
+        source.calls.clear();
+
+        // work area は不変のまま `Changed<DPI>` だけを立てる（同一水準の DPI 通知）。
+        world.entity_mut(char0).insert(DPI::from_dpi(96, 96));
+        dpi_phase_with(&mut source, &mut state, &mut world);
+
+        assert!(
+            source.calls_of("refresh").contains(&shell_target(0).0),
+            "非空虚性: DPI 相は当該窓を実際に訪れている（訪れずに書かなかったのでは檻が空虚）: {:?}",
+            source.calls
+        );
+        assert_no_write(
+            &world,
+            char0,
+            "接地済み・work area 不変の DPI 相（Req 4.5 現状維持）",
+        );
+        assert_no_write(
+            &world,
+            balloon0,
+            "接地済み・work area 不変の DPI 相（バルーンは位置据置き）",
+        );
+    }
+
+    // ── task 5.2: S2 是正（位置の権威と寸の権威の分離）の檻 ──────────────────────
+    //
+    // 上の `s2_red_*` 4 件が「接地点が保たれる」ことを結果として主張するのに対し、本ブロックは
+    // **分離そのもの**（寸を触らずに位置だけが射影を通ること・バルーンは自分では動かないこと・
+    // 入力が欠けたら現状維持でログを残すこと）を個別に固定する。
+
+    /// **分離の本体**: 再導出結果が得られない（`None`）走行で、**窓寸は一切変わらず**位置だけが
+    /// 変化後の work area へ再射影される（S2 是正・design D7・Req 4.1／4.2／4.6）。
+    ///
+    /// 併せて Req 4.5 の**裏面**を固定する——`s2_dpi_phase_writes_nothing_*` が「接地点が成立して
+    /// いれば書かない」を主張するのに対し、本件は「**現位置が接地点規約に違反していれば書く**」を
+    /// 主張する。両者が対で初めて「書込が起きるのは規約違反のときだけ」が檻になる。
+    ///
+    /// 随伴（Req 4.4）も同時に固定する: バルーン窓は自分の `None` 経路では動かず、
+    /// **キャラ窓確定後の追従**（`route=BalloonFollow`）だけが動かし、恒等式
+    /// `balloon − char ≡ BalloonFollow.offset` が保たれる。
+    #[test]
+    fn s2_none_report_path_reprojects_position_without_touching_size() {
+        let (mut world, gw) = dpi_world();
+        world.insert_resource(s2_snapshot(96));
+        let char0 = gw.char_window(0).expect("char 窓がある");
+        let balloon0 = gw.balloon_window(0).expect("balloon 窓がある");
+        let size_before = size_of(&world, char0).expect("char 寸がある");
+        let ground_before = s2_ground_point(&world, char0);
+        let balloon_before = pos_of(&world, balloon0).expect("balloon 位置がある");
+        assert_eq!(
+            ground_before.1,
+            s2_work_area_for_dpi(96).bottom,
+            "前提: 変化前は 96 の work area 下端へ接地している"
+        );
+
+        // 初回 run（`SystemState::new` の全窓マッチ）を「再導出結果なし」固定の報告源で消費する。
+        let mut source = FakeReports::default();
+        let mut state = None;
+        dpi_phase_with(&mut source, &mut state, &mut world);
+        reset_write_witness(&mut world, &gw);
+        source.calls.clear();
+
+        // 96→192: work area 下端が動き、窓 DPI も変わる。**寸の再導出結果は無いまま**。
+        s2_assert_work_area_bottom_moves(96, 192);
+        world.insert_resource(s2_snapshot(192));
+        for e in [char0, balloon0] {
+            world.entity_mut(e).insert(DPI::from_dpi(192, 192));
+        }
+        let (_, events) =
+            capture_diag_logs(|| dpi_phase_with(&mut source, &mut state, &mut world));
+
+        // 非空虚性: 両 target を実際に訪れ、いずれも `None` を受け取っている（空マップゆえ）。
+        let refreshed = source.calls_of("refresh");
+        assert!(
+            refreshed.contains(&shell_target(0).0) && refreshed.contains(&balloon_target(0).0),
+            "非空虚性: DPI 相が char／balloon の両 target を訪れていない: {refreshed:?}"
+        );
+
+        // 寸の権威は触られていない（分離の片側）。
+        assert_eq!(
+            size_of(&world, char0),
+            Some(size_before),
+            "None 経路では窓寸を変えない（前寸維持・Req 4.5 の寸側）"
+        );
+        // 位置の権威は独立に働く（分離のもう片側）。
+        assert_eq!(
+            s2_ground_point(&world, char0),
+            (ground_before.0, s2_work_area_for_dpi(192).bottom),
+            "None 経路でも接地点の X が保存され Y が変化後の work area 下端へ再射影される"
+        );
+        assert_eq!(
+            window_move_routes_of(&events, char0),
+            vec!["DpiReproject"],
+            "None 経路の書込はちょうど 1 回・経路語は DpiReproject: {:?}",
+            window_move_lines(&events)
+        );
+
+        // 随伴: バルーンは自分の None 経路では動かず、キャラ確定後の追従だけが動かす。
+        assert_eq!(
+            window_move_routes_of(&events, balloon0),
+            vec!["BalloonFollow"],
+            "バルーンを動かすのはキャラ窓確定後の追従のみ: {:?}",
+            window_move_lines(&events)
+        );
+        let balloon_after = pos_of(&world, balloon0).expect("balloon 位置がある");
+        assert_ne!(
+            balloon_after, balloon_before,
+            "非空虚性: 随伴でバルーンが実際に動いている（動かないなら恒等式は自明に成立する）"
+        );
+        let offset = world
+            .get::<BalloonFollow>(char0)
+            .expect("char 窓は BalloonFollow を持つ")
+            .offset;
+        let cp = pos_of(&world, char0).expect("char 位置がある");
+        assert_eq!(
+            (balloon_after.x - cp.x, balloon_after.y - cp.y),
+            (offset.x, offset.y),
+            "随伴恒等式 balloon − char ≡ BalloonFollow.offset が崩れている（Req 4.4）"
+        );
+    }
+
+    /// **バルーン窓の `None` は位置据置き**（tasks 5.2 の明示制約・design D7）。
+    ///
+    /// バルーンの位置は従属量ゆえ、バルーン自身の DPI 変化で位置を動かしてはならない
+    /// （動かすとキャラ確定前の位置へ一度飛び、同フレームの追従で再び動く＝二重書込）。
+    ///
+    /// 「動かない」の主張が不動点に落ちないよう、⑴同一ハーネスがバルーンの書込を検出できること
+    /// を positive witness で先に示し、⑵**警告以上のログが 1 行も出ないこと**も併せて主張する
+    /// （`resize_window_to` へ流す誤実装はバルーンに `Anchored` が無いため `warn!` を出す＝
+    /// 書込ゼロだけを見ていると素通ししてしまう・記憶〈2.2 の空虚性の教訓〉）。
+    #[test]
+    fn s2_none_report_path_leaves_the_balloon_in_place() {
+        // --- positive witness: 同一ハーネスはバルーンの書込を実際に検出できる ---
+        {
+            let (mut world, gw) = dpi_world();
+            world.insert_resource(s2_snapshot(96));
+            let balloon0 = gw.balloon_window(0).expect("balloon 窓がある");
+            let native = size_of(&world, balloon0).expect("balloon 寸がある");
+            world.entity_mut(balloon0).insert(DPI::from_dpi(192, 192));
+            let mut source = FakeReports::default();
+            source.refresh.insert(
+                balloon_target(0).0,
+                ScaleRatio::new(192, 96)
+                    .expect("非ゼロ比")
+                    .scaled_extent(native.width as u32, native.height as u32),
+            );
+            let mut state = None;
+            dpi_phase_with(&mut source, &mut state, &mut world);
+            assert_ne!(
+                arrangement_offset_of(&world, balloon0),
+                WRITER_WITNESS,
+                "positive witness: 異寸報告のあるバルーンは実際に書かれる（書込 witness が生きている証拠）"
+            );
+        }
+
+        // --- 本題: work area が動いてもバルーン単独の None 経路では書かない ---
+        let (mut world, gw) = dpi_world();
+        world.insert_resource(s2_snapshot(96));
+        let char0 = gw.char_window(0).expect("char 窓がある");
+        let balloon0 = gw.balloon_window(0).expect("balloon 窓がある");
+        let balloon_before = pos_of(&world, balloon0).expect("balloon 位置がある");
+
+        let mut source = FakeReports::default(); // 「再導出結果なし」固定
+        let mut state = None;
+        dpi_phase_with(&mut source, &mut state, &mut world); // 初回 run（全窓マッチ）を消費
+        reset_write_witness(&mut world, &gw);
+        source.calls.clear();
+
+        // work area を動かし、**バルーンだけ**の DPI を変える（char は Changed<DPI> にしない）。
+        s2_assert_work_area_bottom_moves(96, 192);
+        world.insert_resource(s2_snapshot(192));
+        world.entity_mut(balloon0).insert(DPI::from_dpi(192, 192));
+        let (_, events) =
+            capture_diag_logs(|| dpi_phase_with(&mut source, &mut state, &mut world));
+
+        assert_eq!(
+            source.calls_of("refresh"),
+            vec![balloon_target(0).0],
+            "非空虚性: DPI 相はバルーン窓だけを訪れている（char は Changed<DPI> でない）: {:?}",
+            source.calls
+        );
+        assert_no_write(&world, balloon0, "バルーン単独の None 経路（位置据置き）");
+        assert_eq!(
+            pos_of(&world, balloon0),
+            Some(balloon_before),
+            "バルーン位置は据え置かれる（随伴はキャラ窓確定後の追従が担う）"
+        );
+        assert_no_write(&world, char0, "Changed<DPI> でない char 窓");
+        assert!(
+            events.iter().all(|e| e.level > tracing::Level::INFO),
+            "バルーンの位置据置きは正常系であり警告以上を出さない（`Anchored` 欠落 warn が出るなら射影経路へ流している）: {events:?}"
+        );
+    }
+
+    /// **窓寸が未確定（窓生成前）なら現状維持のまま打ち切り、その事実をログに残す**
+    /// （tasks 5.2 の明示制約・記憶〈ログ無し失敗経路の禁止〉）。
+    ///
+    /// 現寸が読めなければ「現寸のまま射影する」という是正そのものが成立しないため、位置を
+    /// 一切触らずに `warn!` で打ち切る（実在 entity ゆえ真の異常＝debug で黙らせない）。
+    /// 「書かない」の主張が空虚にならないよう、**同一条件で寸が読めれば書かれる**ことを
+    /// positive witness で先に示す。
+    #[test]
+    fn s2_none_report_path_holds_state_and_warns_when_the_window_size_is_undetermined() {
+        /// 96 へ接地した World の初回 run を「再導出結果なし」で消費し、96→192 の変化を注入する。
+        fn arm(
+            world: &mut World,
+            gw: &GhostWindows,
+            char0: Entity,
+        ) -> (FakeReports, Option<SystemState<DpiChangedQuery>>) {
+            let mut source = FakeReports::default();
+            let mut state = None;
+            dpi_phase_with(&mut source, &mut state, world);
+            // 初回 run（`SystemState::new` の全窓マッチ）は既に接地済みゆえべき等 skip で
+            // 書込ゼロ——この前提が崩れると下の「現状維持」比較が別の理由で動いてしまう。
+            assert_no_write(world, char0, "初回 run（既に 96 へ接地済み）");
+            reset_write_witness(world, gw);
+            source.calls.clear();
+            world.insert_resource(s2_snapshot(192));
+            world.entity_mut(char0).insert(DPI::from_dpi(192, 192));
+            (source, state)
+        }
+
+        s2_assert_work_area_bottom_moves(96, 192);
+
+        // --- positive witness: 寸が読める同一条件では実際に書かれる ---
+        {
+            let (mut world, gw) = dpi_world();
+            world.insert_resource(s2_snapshot(96));
+            let char0 = gw.char_window(0).expect("char 窓がある");
+            let (mut source, mut state) = arm(&mut world, &gw, char0);
+            dpi_phase_with(&mut source, &mut state, &mut world);
+            assert_ne!(
+                arrangement_offset_of(&world, char0),
+                WRITER_WITNESS,
+                "positive witness: 寸が読めれば None 経路でも位置は書かれる（この探針が書込を検出できる証拠）"
+            );
+        }
+
+        // --- 本題: WindowPos.size が未確定なら現状維持＋warn ---
+        let (mut world, gw) = dpi_world();
+        world.insert_resource(s2_snapshot(96));
+        let char0 = gw.char_window(0).expect("char 窓がある");
+        let pos_before = pos_of(&world, char0).expect("char 位置がある");
+        let (mut source, mut state) = arm(&mut world, &gw, char0);
+        // 窓生成前の状態（位置はあるが寸が未確定）を作る。
+        world
+            .get_mut::<WindowPos>(char0)
+            .expect("WindowPos がある")
+            .size = None;
+
+        let (_, events) =
+            capture_diag_logs(|| dpi_phase_with(&mut source, &mut state, &mut world));
+
+        assert!(
+            source.calls_of("refresh").contains(&shell_target(0).0),
+            "非空虚性: DPI 相は当該窓を実際に訪れている: {:?}",
+            source.calls
+        );
+        assert_no_write(&world, char0, "窓寸が未確定の DPI 相（現状維持）");
+        assert_eq!(
+            pos_of(&world, char0),
+            Some(pos_before),
+            "窓寸が未確定なら位置も変えない（現状維持）"
+        );
+        let held = expect_one(&events, "WindowPos.size 未確定");
+        assert_eq!(
+            held.level,
+            tracing::Level::WARN,
+            "実在 entity の寸未確定は真の異常＝warn 水準（破棄済みの debug 打ち切りと混ぜない）"
+        );
+    }
+
+    /// **破棄済み窓は正常終了系**（要件 6.2/6.3・3.2 が敷いた区別を新しい消費点へも適用する）。
+    ///
+    /// 終了処理でゴースト窓が破棄された後のフレームでも DPI 相は走り得る。ここで
+    /// 「寸が読めない」を一律 `warn!` にすると終了時ログが良性ノイズで埋まり、上の
+    /// 「実在するが寸未確定」（真の異常）が読めなくなる。
+    #[test]
+    fn s2_reproject_on_despawned_entity_is_debug_only_normal_termination() {
+        let (mut world, gw) = dpi_world();
+        world.insert_resource(s2_snapshot(96));
+        let char0 = gw.char_window(0).expect("char 窓がある");
+        world.despawn(char0);
+
+        let (wrote, events) =
+            capture_diag_logs(|| reproject_char_window_at_current_size(&mut world, char0));
+
+        assert!(!wrote, "破棄済み窓へは書けない（false・panic しない）");
+        // `tracing::Level` の Ord は ERROR < WARN < INFO < DEBUG < TRACE ゆえ
+        // 「INFO より verbose」＝ debug/trace のみ、が静穏性の表現（follow.rs の同型檻と同じ流儀）。
+        assert!(
+            events.iter().all(|e| e.level > tracing::Level::INFO),
+            "破棄済み窓に対して警告以上のログが出ている（Req 6.2 違反）: {events:?}"
+        );
+        let skipped = expect_one(&events, DESPAWNED_SKIP_TAG);
+        assert_eq!(
+            skipped.level,
+            tracing::Level::DEBUG,
+            "破棄済みの打ち切りは debug 水準（正常終了系）"
+        );
+    }
+
+    // ── task 1.4 是正: frame 側 route 割当の檻（Req 1.2／2.4・design D13）──────────
+    //
+    // `reconcile_window_size` は **2 呼出元の共通末端**である（DPI 相＝`dpi_phase_with`／
+    // drain 相＝`reconcile_reported_sizes`）。ここへ 1 つの route を貼り付けると、
+    // `Changed<DPI>` 非依存の drain 相（初回表示の k₀ 補正を含む）まで「DPI 由来」と
+    // 名乗ってしまい、Req 1.9 の 2 段 grep 突合（セッション②＝ドラッグ禁止・OS 側 DPI 変更のみ）
+    // に**偽陽性**が混じる。ゆえに route は呼出元ごとに別語でなければならない（D13）。
+    //
+    // 観測境界は `placement::test_support::capture_logs`（`pub(crate)`＝本モジュールから到達可能）
+    // による tracing イベント本体で、レコード書式の権威は `placement::diag` の純関数が持つ。
+
+    use crate::placement::diag::{DESPAWNED_SKIP_TAG, WINDOW_MOVE_RECORD_TAG};
+    use crate::placement::test_support::{LogEvent, capture_logs as capture_diag_logs, expect_one};
+
+    /// 捕捉イベントから窓移動レコード行だけを抜く（他の debug ログは無視）。
+    fn window_move_lines(events: &[LogEvent]) -> Vec<String> {
+        events
+            .iter()
+            .map(|e| e.message().to_string())
+            .filter(|m| m.starts_with(WINDOW_MOVE_RECORD_TAG))
+            .collect()
+    }
+
+    /// 指定 entity の窓移動レコードから `route=` の語だけを取り出す（出現順）。
+    fn window_move_routes_of(events: &[LogEvent], entity: Entity) -> Vec<String> {
+        let key = format!("entity={entity:?} ");
+        window_move_lines(events)
+            .iter()
+            .filter(|line| line.contains(&key))
+            .filter_map(|line| {
+                line.split_whitespace()
+                    .find_map(|tok| tok.strip_prefix("route=").map(str::to_string))
+            })
+            .collect()
+    }
+
+    /// 毎フレーム再スナップ（`resnap_from_sizes`）の書込は `Resnap` として記録される。
+    #[test]
+    fn resnap_from_sizes_records_the_resnap_route() {
+        let (mut world, gw) = resnap_world();
+        let char0 = gw.char_window(0).expect("char 窓がある");
+
+        // h 687→700 の異寸（既存檻 `resnap_from_sizes_drives_resize_and_resnap_on_size_change`
+        // と同一の注入）→ 書込が起きる。
+        let (_, events) = capture_diag_logs(|| {
+            resnap_from_sizes(
+                &mut world,
+                [(0usize, SizePx { w: 434, h: 700 })].into_iter(),
+            )
+        });
+
+        assert_eq!(
+            window_move_routes_of(&events, char0),
+            vec!["Resnap"],
+            "再スナップ経由の書込が Resnap として記録されない: {:?}",
+            window_move_lines(&events)
+        );
+    }
+
+    /// **D13 の核心**: DPI 相（`Changed<DPI>` 由来）と drain 相（報告回収・エッジ非依存）は
+    /// **別々の経路名**で記録される。同一の共通末端を通ることは route の同一性を意味しない。
+    #[test]
+    fn dpi_phase_and_drain_phase_record_distinct_routes() {
+        let (mut world, gw) = dpi_world();
+        let char0 = gw.char_window(0).expect("char 窓がある");
+
+        // --- DPI 相: 窓 DPI を 96→192 へ差し替え（Changed<DPI> エッジ）---
+        world.entity_mut(char0).insert(DPI::from_dpi(192, 192));
+        let mut source = FakeReports::default();
+        source.refresh.insert(shell_target(0).0, (868, 1374));
+        let mut state = None;
+        let (_, dpi_events) =
+            capture_diag_logs(|| dpi_phase_with(&mut source, &mut state, &mut world));
+        let dpi_routes = window_move_routes_of(&dpi_events, char0);
+        assert_eq!(
+            dpi_routes,
+            vec!["DpiReproject"],
+            "DPI 相の書込が DpiReproject として記録されない: {:?}",
+            window_move_lines(&dpi_events)
+        );
+
+        // --- drain 相: `Changed<DPI>` を一切動かさずに報告だけを積む（＝表示成立由来）---
+        source.pending.insert(shell_target(0).0, (900, 1400));
+        let (_, drain_events) =
+            capture_diag_logs(|| reconcile_reported_sizes(&mut source, &mut world));
+        let drain_routes = window_move_routes_of(&drain_events, char0);
+        assert_eq!(
+            drain_routes,
+            vec!["ReportedSizeReconcile"],
+            "drain 相の書込が ReportedSizeReconcile として記録されない: {:?}",
+            window_move_lines(&drain_events)
+        );
+
+        assert_ne!(
+            dpi_routes, drain_routes,
+            "2 呼出元が同一の経路名で記録されている（D13 が禁じる偽陽性の源）"
+        );
+    }
+
+    /// **完了状態（tasks.md 1.4）**: DPI 変化ゼロの起動で `DpiReproject` レコードが 1 行も出ない。
+    ///
+    /// 初回表示の k₀ 補正は drain 相（`reconcile_reported_sizes`）で landing する
+    /// （`frame.rs` の `run_dpi_phase` doc「初回表示の k₀ 補正＝Flow 3 手順 5 はこちらの経路で
+    /// landing する」）。この走行を `DpiReproject` と名乗らせると、セッション②の受理回数突合が
+    /// 起動ごとに偽陽性を拾う。
+    #[test]
+    fn boot_without_any_dpi_change_emits_no_dpi_reproject_record() {
+        let (mut world, gw) = dpi_world(); // DPI は 96 のまま一切触らない
+        let char0 = gw.char_window(0).expect("char 窓がある");
+        let mut source = FakeReports::default();
+        // 初回表示の k₀ 補正相当（refresh 側は空＝再表示ゲート不成立）。
+        source.pending.insert(shell_target(0).0, (500, 720));
+        let mut state = None;
+
+        let (_, events) = capture_diag_logs(|| {
+            dpi_phase_with(&mut source, &mut state, &mut world);
+            reconcile_reported_sizes(&mut source, &mut world);
+        });
+
+        let lines = window_move_lines(&events);
+        assert!(
+            !lines.is_empty(),
+            "非空虚性: 起動時 k₀ 補正の書込自体は起きている（レコード 0 行では檻が空虚）"
+        );
+        assert!(
+            lines.iter().all(|l| !l.contains("route=DpiReproject")),
+            "DPI 変化ゼロの走行で DpiReproject レコードが出ている（Req 1.2 違反・D13）: {lines:?}"
+        );
+        assert_eq!(
+            window_move_routes_of(&events, char0),
+            vec!["ReportedSizeReconcile"],
+            "k₀ 補正は報告回収経路として記録されるべき: {lines:?}"
+        );
+    }
+
+    // ── task 3.2: フレーム層 消費側の存在確認（Req 6.2/6.3・design D8 消費側）────────
+    //
+    // 終了処理でゴースト窓が despawn されると `GhostWindowMarker` の `on_remove` hook
+    // （task 3.1）が `GhostWindows` Resource から scope エントリを落とす。だが消費側は
+    // **Resource の写しを持って回る**（`reconcile_reported_sizes` は冒頭で `.cloned()` する）
+    // ため、「レジストリの参照先の窓が既に存在しない」状態（Req 6.3 の If 節そのもの）は
+    // 構造上あり得る。以下の檻はその陳腐化レジストリを**明示的に組んで**、
+    //   (1) 破棄済み scope は warn 以上を 1 行も出さずに打ち切られること（Req 6.2）
+    //   (2) 打ち切りが**他 scope の処理を止めない**こと（Req 6.3）
+    // を固定する。掃除後の綺麗なレジストリで回しても両者は自明に成立してしまう（＝空虚な檻）
+    // ので、探針は必ず「破棄済み entity を指すレジストリ」でなければならない
+    // （tasks.md Implementation Notes 2.2 の空虚性の教訓と同型）。
+
+    /// 破棄済み entity を指したままの**陳腐化レジストリ**を作る（Req 6.3 の状態を再現）。
+    ///
+    /// `spawn_ghost_windows` の戻り値は Resource とは別の写しゆえ、hook による掃除が
+    /// 済んだ後に写しを挿し直せば「登録はあるが指す先が消えている」状態になる。
+    /// 掃除が実際に効いていること（前提の非空虚性）も併せて主張する。
+    fn despawn_scope_and_restore_stale_registry(world: &mut World, gw: &GhostWindows, scope: usize) {
+        let char_window = gw.char_window(scope).expect("char 窓がある");
+        let balloon_window = gw.balloon_window(scope).expect("balloon 窓がある");
+        world.despawn(char_window);
+        world.despawn(balloon_window);
+        assert!(
+            world
+                .get_resource::<GhostWindows>()
+                .expect("Resource は残る")
+                .char_window(scope)
+                .is_none(),
+            "前提: despawn hook（task 3.1）が scope {scope} をレジストリから落としている"
+        );
+        // 陳腐化した写しを挿し直す＝消費側の存在確認だけが防波堤になる状態。
+        world.insert_resource(gw.clone());
+        assert_eq!(
+            world
+                .get_resource::<GhostWindows>()
+                .expect("Resource がある")
+                .char_window(scope),
+            Some(char_window),
+            "前提: レジストリが破棄済み entity を指している（探針が不動点でない）"
+        );
+    }
+
+    /// warn 以上のイベントだけを抜く（`tracing::Level` の Ord は ERROR < WARN < INFO < …）。
+    fn warn_or_above(events: &[LogEvent]) -> Vec<&LogEvent> {
+        events
+            .iter()
+            .filter(|e| e.level <= tracing::Level::WARN)
+            .collect()
+    }
+
+    /// 破棄済み打ち切りの debug 行（本文に判定語を含むもの）を抜く。
+    fn despawn_skip_lines(events: &[LogEvent]) -> Vec<&LogEvent> {
+        events
+            .iter()
+            .filter(|e| e.message().contains(DESPAWNED_SKIP_TAG))
+            .collect()
+    }
+
+    /// Req 6.2/6.3（再スナップ相）: 破棄済み scope は debug で打ち切られ、**生存 scope は
+    /// 処理し切る**。打ち切りは表示側への問い合わせより手前で起きる（＝問い合わせ記録に
+    /// 破棄済み scope の target が現れない）。
+    #[test]
+    fn resnap_skips_despawned_scope_at_debug_and_processes_surviving_scopes() {
+        let (mut world, gw) = resnap_world();
+        let char1 = gw.char_window(1).expect("char 窓がある");
+        despawn_scope_and_restore_stale_registry(&mut world, &gw, 0);
+
+        // shell=434×700（scope1 の初期寸 278×357 と異なる＝生存 scope は駆動される）。
+        let fake = FakeSizes::new((434, 700), (223, 158));
+        let (_, events) = capture_diag_logs(|| resnap_with(&fake, &mut world));
+
+        assert!(
+            warn_or_above(&events).is_empty(),
+            "破棄済み窓に対して警告以上のログが出ている（Req 6.2 違反）: {:?}",
+            warn_or_above(&events)
+        );
+        assert_eq!(
+            fake.queried.borrow().clone(),
+            vec![shell_target(1).0],
+            "破棄済み scope の target は引かず、生存 scope だけを引く（フレーム層で打ち切っている証跡）"
+        );
+        assert_eq!(
+            size_of(&world, char1),
+            Some(SizeI::new(434, 700)),
+            "生存 scope は最後まで処理される（Req 6.3「他の scope の処理を継続」）"
+        );
+        let skips = despawn_skip_lines(&events);
+        assert_eq!(skips.len(), 1, "破棄済み scope の打ち切りは 1 行: {events:?}");
+        assert_eq!(skips[0].level, tracing::Level::DEBUG);
+        assert!(
+            skips[0].message().contains("resnap:"),
+            "再スナップ相が自分の相を名乗っていない: {:?}",
+            skips[0].message()
+        );
+    }
+
+    /// Req 6.2/6.3（報告回収相）: 破棄済み scope の char／balloon 両 target は debug で
+    /// 打ち切られ、生存 scope の報告は反映される。報告は**取り出したうえで**捨てる
+    /// （窓が無い以上、次フレームへ持ち越しても反映先が無い＝既存契約の維持）。
+    #[test]
+    fn drain_reconcile_skips_despawned_scope_at_debug_and_processes_surviving_scopes() {
+        let (mut world, gw) = dpi_world();
+        let char1 = gw.char_window(1).expect("char 窓がある");
+        despawn_scope_and_restore_stale_registry(&mut world, &gw, 0);
+
+        let mut source = FakeReports::default();
+        source.pending.insert(shell_target(0).0, (868, 1374)); // 破棄済み scope
+        source.pending.insert(balloon_target(0).0, (279, 198)); // 破棄済み scope
+        source.pending.insert(shell_target(1).0, (556, 714)); // 生存 scope
+
+        let (_, events) = capture_diag_logs(|| reconcile_reported_sizes(&mut source, &mut world));
+
+        assert!(
+            warn_or_above(&events).is_empty(),
+            "破棄済み窓に対して警告以上のログが出ている（Req 6.2 違反）: {:?}",
+            warn_or_above(&events)
+        );
+        assert!(
+            source.calls_of("take").contains(&shell_target(0).0),
+            "非空虚性: 破棄済み scope でも報告の取り出し自体は行われている（持ち越さない）"
+        );
+        assert_eq!(
+            size_of(&world, char1),
+            Some(SizeI::new(556, 714)),
+            "生存 scope は最後まで処理される（Req 6.3「他の scope の処理を継続」）"
+        );
+        let skips = despawn_skip_lines(&events);
+        assert_eq!(
+            skips.len(),
+            2,
+            "破棄済み scope の char／balloon 両 target が打ち切られる: {events:?}"
+        );
+        assert!(
+            skips
+                .iter()
+                .all(|e| e.level == tracing::Level::DEBUG && e.message().contains("dpi reconcile:")),
+            "報告回収相の打ち切りが debug かつ自分の相を名乗っていない: {skips:?}"
+        );
+    }
+
+    /// **完了状態（tasks.md 3.2）**: 終了処理でゴースト窓が破棄された後のフレームで、
+    /// 破棄済み窓に対する**警告以上のログが 1 行も出ない**（DPI 相・報告回収相・再スナップ相の
+    /// 3 相通し）。窓への書込も 1 件も起きない。
+    #[test]
+    fn frame_after_teardown_despawn_emits_no_warning_for_destroyed_windows() {
+        let (mut world, gw) = dpi_world();
+        despawn_scope_and_restore_stale_registry(&mut world, &gw, 0);
+        despawn_scope_and_restore_stale_registry(&mut world, &gw, 1);
+
+        // 終了処理の直前まで積まれていた報告が残っている状況（表示側は窓の破棄を知らない）。
+        let mut source = FakeReports::default();
+        for scope in [0u32, 1] {
+            source.pending.insert(shell_target(scope).0, (868, 1374));
+            source.pending.insert(balloon_target(scope).0, (279, 198));
+        }
+        let fake = FakeSizes::new((434, 700), (223, 158));
+        let mut state = None;
+
+        let (_, events) = capture_diag_logs(|| {
+            dpi_phase_with(&mut source, &mut state, &mut world);
+            reconcile_reported_sizes(&mut source, &mut world);
+            resnap_with(&fake, &mut world);
+        });
+
+        assert!(
+            warn_or_above(&events).is_empty(),
+            "破棄済み窓に対する警告以上のログが残っている（完了状態違反）: {:?}",
+            warn_or_above(&events)
+        );
+        // 非空虚性: 消費側が実際に破棄済み scope を踏んでいる（何も起きなかったのではない）。
+        // **相ごとに数える**——総数だけを見ると、フレーム層の打ち切りを外しても下流の追従層が
+        // 同じ判定語で同数の debug を出すため、総数が偶然一致して檻が空虚になる。
+        let skips = despawn_skip_lines(&events);
+        assert_eq!(
+            skips
+                .iter()
+                .filter(|e| e.message().contains("dpi reconcile:"))
+                .count(),
+            4,
+            "報告回収相は 2 scope × char/balloon の 4 件を自分の相で打ち切る: {events:?}"
+        );
+        assert_eq!(
+            skips
+                .iter()
+                .filter(|e| e.message().contains("resnap:"))
+                .count(),
+            2,
+            "再スナップ相は 2 scope を自分の相で打ち切る: {events:?}"
+        );
+        assert_eq!(
+            skips.len(),
+            6,
+            "打ち切りは上記 2 相の 6 件だけ（下流の追従層まで降りていない）: {events:?}"
+        );
+        assert!(
+            window_move_lines(&events).is_empty(),
+            "破棄済み窓へ書込が発生している: {:?}",
+            window_move_lines(&events)
         );
     }
 
