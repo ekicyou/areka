@@ -34,12 +34,12 @@ pub mod talk;
 
 pub use actor::spawn_kanade;
 pub use msg::{
-    CloseReason, KanadeConfig, KanadeMsg, MonotonicMs, MouseButton, MouseEventKind, MouseInput,
-    ShioriCall, ShioriFailure, ShioriMsg, ShioriOutcome,
+    ChoiceInput, CloseReason, EventId, KanadeConfig, KanadeMsg, MonotonicMs, MouseButton,
+    MouseEventKind, MouseInput, ShioriCall, ShioriFailure, ShioriMsg, ShioriOutcome,
 };
 pub use shiori::{ShioriBackend, ShioriConnection, spawn_shiori_actor};
 pub use status::{ExecutionSnapshot, ExecutionState, ExecutionStatus};
-pub use talk::{StartTalk, TalkDone, TalkEndReason, TalkId};
+pub use talk::{ChoiceWaiting, StartTalk, TalkCommand, TalkDone, TalkEndReason, TalkId};
 
 /// ukadoc Reference 表の実装正本（純粋関数群）を露出する公開ファサード（DD-9 例外）。
 ///
@@ -51,7 +51,8 @@ pub use talk::{StartTalk, TalkDone, TalkEndReason, TalkId};
 /// `pub(crate)` のまま非公開に保つ。
 pub mod events {
     pub use crate::schedule::events::{
-        ALLOWED_EVENT_IDS, baseware_version, is_allowed_event_id, on_boot, on_close,
+        ALLOWED_EVENT_IDS, baseware_version, is_allowed_choice_event, is_allowed_event_id, on_boot,
+        on_choice_named, on_choice_select, on_choice_select_ex, on_choice_timeout, on_close,
         on_close_notify, on_first_boot, on_initialize, on_mouse_double_click, on_mouse_move,
         on_second_change,
     };

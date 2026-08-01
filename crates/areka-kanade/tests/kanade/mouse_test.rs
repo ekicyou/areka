@@ -812,7 +812,7 @@ fn active_talk_mouse_value_replaces_with_new_talk_id() {
         scope,
         Some("Head"),
         // active talk 中＝talk_active:true スナップショット由来＝Status: talking。
-        &ExecutionSnapshot { talk_active: true },
+        &ExecutionSnapshot { talk_active: true, choice_active: false },
     ));
     assert_eq!(
         *gets[0], expected_talking,
@@ -946,7 +946,7 @@ fn active_talk_non_mouse_pump_is_notify_no_replacement_dd6_preserved() {
     //     （非マウス pump は再生中に GET でなく NOTIFY＝Value を運べない＝置換不能・DD-6 保存の構造前提）。
     let expected_notify = expected_call(events::on_second_change(
         MonotonicMs(2_000),
-        &ExecutionSnapshot { talk_active: true },
+        &ExecutionSnapshot { talk_active: true, choice_active: false },
     ));
     assert_eq!(expected_notify.method, CallMethod::Notify, "再生中の pump は NOTIFY");
     assert_eq!(

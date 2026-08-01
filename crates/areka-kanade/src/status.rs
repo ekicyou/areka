@@ -18,7 +18,8 @@
 
 /// ukadoc `Status [SSP拡張]` の実行状態語彙（正典全10状態を第一級保持）。
 ///
-/// M1 で実導出するのは `Talking` のみ。残9状態は語彙に留め、非アクティブへ縮退する（Req2.5）。
+/// M1 で実導出するのは `Talking`（idle-talk）と `Choosing`（choice-select-events）の 2 状態。
+/// 残8状態は語彙に留め、非アクティブへ縮退する（Req2.5）。
 /// variant の宣言順は正典の語彙定義順（Data Model の正典順）そのものである。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExecutionState {
@@ -154,7 +155,7 @@ impl ExecutionStatus {
         ExecutionStatus { states }
     }
 
-    /// 単一の導出表（正典順の10行）。M1 は 1 行のみ実導出、残9行は非アクティブ確定＋シーム注記。
+    /// 単一の導出表（正典順の10行）。M1 は 2 行を実導出し、残8行は非アクティブ確定＋シーム注記。
     /// スナップショットのみに依存する純関数（時刻・IO・グローバル状態を読まない）。
     pub fn derive(snapshot: &ExecutionSnapshot) -> ExecutionStatus {
         let mut states: Vec<ExecutionState> = Vec::new();
@@ -167,7 +168,10 @@ impl ExecutionStatus {
         if snapshot.talk_active {
             states.push(ExecutionState::Talking);
         }
-        //  1. choosing     ← SEAM(Req2.5): 源 areka-P0-choice-select-events。M1 非アクティブ確定。
+        //  1. choosing     ← snapshot.choice_active（実導出・areka-P0-choice-select-events Req6.1/6.2）
+        if snapshot.choice_active {
+            states.push(ExecutionState::Choosing);
+        }
         //  2. minimizing   ← SEAM(Req2.5): 源 areka-P0-status-execution-states（台帳）。M1 非アクティブ確定。
         //  3. induction    ← SEAM(Req2.5): 源 areka-P0-status-execution-states（台帳）。M1 非アクティブ確定。
         //  4. passive      ← SEAM(Req2.5): 源 areka-P0-status-execution-states（台帳）。M1 非アクティブ確定。
@@ -204,10 +208,15 @@ pub struct ExecutionSnapshot {
     /// トーク再生中か。源＝運行状態 `Phase::Steady{talk: Some(_)}`（Req2.4）。
     /// `Status: talking`（Req2.4/2.7）と Reference3（Req1.4/1.5）の双方を駆動する。
     pub talk_active: bool,
+    /// 選択待ちが継続中か。源＝kanade の選択帳簿 `State.choice`——その 3 段フェーズ
+    /// （`Waiting`／`Cascading`／`TimeoutInFlight`）の**いずれでも継続中**である
+    /// （`Cascading`／`TimeoutInFlight` は SHIORI 応答待ちであって選択待ちの終了ではない）。
+    /// `Status: choosing`（Req6.1/6.2）を駆動する。talk slot の占有は選択待ち中も継続する
+    /// ため、`talk_active` と同時に真になり複合値 `talking,choosing` を成す（裁定 6）。
+    pub choice_active: bool,
     // SEAM(Req1.6): 見切れ／重なりの実測供給時に `offscreen`／`overlapping` を追加する。
     //   源＝窓 geometry（UI スレッド）・運搬＝Tick 付帯。所有＝将来増分（本 spec 外）。
     // SEAM(Req2.5/2.6): 各実行状態の源が着地したらフィールドを 1 本追加し、導出表の該当行を差し替える。
-    //   choosing        → areka-P0-choice-select-events
     //   balloon/minimizing/induction/passive/timecritical/nouserbreak/online/opening
     //                   → areka-P0-status-execution-states（台帳）
     //
@@ -217,11 +226,14 @@ pub struct ExecutionSnapshot {
     //   （将来形 `snapshot_of(&Phase, &TickExtras)`）ことがシームに含まれる。
     //   Req1.6/2.6 が不変を保証するのは **wire 送出契約**（カンマ連結書式・ヘッダ位置・
     //   空集合→行省略・Reference 連番）であって内部シグネチャではない。
+    //   `choice_active` はこの NOTE の**最初の実例**である: 源（選択帳簿）は `Phase` の外に
+    //   あるため、供給側は `State::snapshot(&self)`（`schedule/mod.rs`）へ広がった。
+    //   送出契約（連結順序・区切り・空集合→行省略）は無改変のままである（Req6.3）。
 }
 
 impl ExecutionSnapshot {
     /// 全実行状態が非アクティブなスナップショット（boot 系列・close 系列・ForceQuit 後）。
-    pub const INACTIVE: ExecutionSnapshot = ExecutionSnapshot { talk_active: false };
+    pub const INACTIVE: ExecutionSnapshot = ExecutionSnapshot { talk_active: false, choice_active: false };
 }
 
 #[cfg(test)]
@@ -296,16 +308,17 @@ mod tests {
         assert_eq!(empty.render(), None);
     }
 
-    /// Unit Test #3（Req2.4/2.5/2.7）: `derive` の全入力空間（bool 1 本）を網羅。
-    /// `talk_active=false` → 空（非 M1 状態は決して現れない）／`true` → `[Talking]` のみ。
+    /// Unit Test #3（Req2.4/2.5/2.7）: `derive` の talk 軸（`choice_active=false` 断面）を網羅。
+    /// `talk_active=false` → 空（choosing 以外の非導出状態は決して現れない）／`true` → `[Talking]` のみ。
+    /// choice 軸を含む全入力空間は [`derive_covers_the_full_two_bool_input_space`] が固定する。
     #[test]
     fn derive_covers_the_entire_bool_input_space() {
-        // talk_active=false → 空集合（Req2.5 の非導出9状態は現れない）→ 行省略（Req2.3）。
+        // talk_active=false → 空集合（choosing は choice_active=false・残8状態は非導出）→ 行省略（Req2.3）。
         let idle = ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE);
         assert_eq!(idle.render(), None);
 
         // talk_active=true → `[Talking]` のみ（Req2.4/2.7）。
-        let talking = ExecutionStatus::derive(&ExecutionSnapshot { talk_active: true });
+        let talking = ExecutionStatus::derive(&ExecutionSnapshot { talk_active: true, choice_active: false });
         assert_eq!(talking.render(), Some("talking".to_string()));
 
         // design 明記の Postconditions を明示的に固定する。
@@ -314,8 +327,55 @@ mod tests {
             None
         );
         assert_eq!(
-            ExecutionStatus::derive(&ExecutionSnapshot { talk_active: true }).render(),
+            ExecutionStatus::derive(&ExecutionSnapshot { talk_active: true, choice_active: false }).render(),
             Some("talking".to_string())
+        );
+    }
+
+    /// Unit Test #4（Req6.1/6.2/6.3・C5）: `derive` の全入力空間（bool 2 本）を網羅する。
+    ///
+    /// choosing 行の実導出後も**送出契約は無改変**である——複合値は既存 `canonical_index` の
+    /// 順序どおり `talking,choosing` で連結され（Req6.3）、両方非アクティブなら
+    /// `render() == None`＝ヘッダ行そのものを省略する（Req2.3 の規律を choice 軸が壊さない）。
+    #[test]
+    fn derive_covers_the_full_two_bool_input_space() {
+        let cases: [(bool, bool, Option<&str>); 4] = [
+            (false, false, None),
+            (true, false, Some("talking")),
+            (false, true, Some("choosing")),
+            (true, true, Some("talking,choosing")),
+        ];
+        for (talk_active, choice_active, expected) in cases {
+            let rendered = ExecutionStatus::derive(&ExecutionSnapshot {
+                talk_active,
+                choice_active,
+            })
+            .render();
+            assert_eq!(
+                rendered.as_deref(),
+                expected,
+                "talk_active={talk_active} choice_active={choice_active} の導出が正典と不一致"
+            );
+        }
+    }
+
+    /// C5: `INACTIVE` は**全ての源が false**（choosing の源を足しても非アクティブのまま）。
+    /// boot 系列・close 系列・ForceQuit 後がこの定数で送出する以上、源の増設で
+    /// 既定値が汚れないことを固定する。
+    #[test]
+    fn inactive_snapshot_has_every_source_false() {
+        // 網羅的な構造体リテラルとの比較で固定する——源が 1 本増えたときは本行が
+        // コンパイルエラーになり、既定値の判断が必ず要求される。
+        assert_eq!(
+            ExecutionSnapshot::INACTIVE,
+            ExecutionSnapshot {
+                talk_active: false,
+                choice_active: false,
+            }
+        );
+        assert_eq!(
+            ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE).render(),
+            None
         );
     }
 }

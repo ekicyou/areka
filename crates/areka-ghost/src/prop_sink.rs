@@ -341,14 +341,35 @@ mod tests {
     mod completion_only_records_integration {
         use super::*;
         use areka_sakura::contract::{
-            CueSink, SakuraMsg, StartTalk, SystemVarSnapshot, TalkCue, TalkDone, TalkEndReason,
-            TalkId,
+            ChoiceWaiting, CueSink, SakuraMsg, StartTalk, SystemVarSnapshot, TalkCue, TalkDone,
+            TalkEndReason, TalkId,
         };
         use areka_sakura::spawn_talk;
         use areka_talk::EpilogueCommand;
         use std::sync::mpsc;
         use std::sync::Mutex;
         use std::time::Duration;
+
+        /// `spawn_talk` の done ポート境界（`D: From<TalkDone> + From<ChoiceWaiting>`）を満たす
+        /// test-local な合流 enum。両通知は同一ポートを流れる（DD-6）が、本檻の台本に選択肢
+        /// （`\q`）は無く `ChoiceWaiting` は発生しない——境界充足のためだけの受け皿である。
+        enum TalkNotice {
+            Done(TalkDone),
+            /// 本 e2e は選択待ち通知を観測しないが、`spawn_talk` の `D` 境界
+        /// （`From<TalkDone> + From<ChoiceWaiting>`）を満たすため受け口だけ用意する。
+        #[allow(dead_code)]
+        ChoiceWaiting(ChoiceWaiting),
+        }
+        impl From<TalkDone> for TalkNotice {
+            fn from(done: TalkDone) -> Self {
+                TalkNotice::Done(done)
+            }
+        }
+        impl From<ChoiceWaiting> for TalkNotice {
+            fn from(waiting: ChoiceWaiting) -> Self {
+                TalkNotice::ChoiceWaiting(waiting)
+            }
+        }
 
         /// broadcast で届いた全 cue を蓄積する観測 sink（cue レベルの弁別に使う・`Clone` で観測ハンドル取得）。
         #[derive(Clone)]
@@ -409,7 +430,7 @@ mod tests {
             let prop_sink = PropSetCueSink::new(parts.publisher.clone());
             let (observer, observed) = ObservingSink::new();
 
-            let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+            let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
             let sinks: Vec<Box<dyn CueSink + Send>> =
                 vec![Box::new(prop_sink), Box::new(observer)];
             let handle = spawn_talk(
@@ -424,9 +445,12 @@ mod tests {
             // horizon(0.1) を跨ぐ Tick で末尾 SET cue が発火し占有 horizon 到達＝自然終端（完走）。
             handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
 
-            let done = done_rx
+            let TalkNotice::Done(done) = done_rx
                 .recv_timeout(Duration::from_secs(5))
-                .expect("horizon 到達で TalkDone（完走）");
+                .expect("horizon 到達で TalkDone（完走）")
+            else {
+                panic!("選択肢を含まない台本では ChoiceWaiting は流れない（TalkDone のみ）");
+            };
             assert_eq!(
                 done.reason,
                 TalkEndReason::Ended,
@@ -465,7 +489,7 @@ mod tests {
             let prop_sink = PropSetCueSink::new(parts.publisher.clone());
             let (observer, observed) = ObservingSink::new();
 
-            let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+            let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
             let sinks: Vec<Box<dyn CueSink + Send>> =
                 vec![Box::new(prop_sink), Box::new(observer)];
             let handle = spawn_talk(
@@ -480,9 +504,12 @@ mod tests {
             // horizon 到達前に Close: CuePlayer::stop() が残 cue（保留中の SET）を破棄する。
             handle.inbox.send(SakuraMsg::Close).unwrap();
 
-            let done = done_rx
+            let TalkNotice::Done(done) = done_rx
                 .recv_timeout(Duration::from_secs(5))
-                .expect("Close で中断 TalkDone");
+                .expect("Close で中断 TalkDone")
+            else {
+                panic!("選択肢を含まない台本では ChoiceWaiting は流れない（TalkDone のみ）");
+            };
             assert_eq!(
                 done.reason,
                 TalkEndReason::Interrupted,

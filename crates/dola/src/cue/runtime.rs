@@ -363,6 +363,21 @@ impl CuePlayer {
         matches!(self.state, CuePlayerState::Completed)
     }
 
+    /// 占有 horizon の**絶対時刻**（アンカー ＋ 相対 horizon・duration 権威）。
+    ///
+    /// 内部 [`TimedSchedule::occupancy_horizon`] へ委譲する照会口であり、
+    /// [`is_completed`](Self::is_completed) が閾値として見ているのと**同一**の horizon を返す
+    /// （＝トークの絶対終了時刻）。選択待ちのタイムアウト計測はこの値を起点として上位層
+    /// （kanade）が行い、再生層の外に独自の時間基準を持ち込まない（R7.2）。
+    ///
+    /// 値は [`tick`](Self::tick) の進行では変化しない（配送位置でなく占有区間の終端を指す）。
+    /// 選択肢バリアで停止中（`WaitingForChoice`）でも照会できる。
+    /// なお [`stop`](Self::stop) は schedule を clear する（相対 horizon が 0.0 へ落ちる）ため、
+    /// 中断後はアンカーそのものを返す——中断終端の talk に占有区間は残らない。
+    pub fn occupancy_horizon(&self) -> f64 {
+        self.schedule.occupancy_horizon()
+    }
+
     /// 先積みされた選択肢データ（`WaitForChoice` バリアの手前で蓄積されたもの）。
     pub fn pending_choices(&self) -> &[PendingChoice] {
         &self.pending_choices

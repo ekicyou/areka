@@ -23,8 +23,12 @@
 //! | `basewareversion` | NOTIFY | Ref0=`config.baseware_version`・Ref1=`config.baseware_name`（Ref2 省略） |
 //! | `OnSecondChange` | GET（talk 再生可能時）／NOTIFY（talk 再生不能時） | Ref0=`now_ms / 3_600_000` の 10 進文字列・Ref1=`"0"`・Ref2=`"0"`・Ref3=`"1"`(GET)/`"0"`(NOTIFY) |
 //! | `OnClose` | GET | Ref0=`reason.as_ref_str()`（"user"/"system"・Ref1/2 省略） |
+//! | `OnChoiceSelectEx` | GET | Ref0=ラベル・Ref1=選択肢 ID・Ref2 以降=付随参照列（空なら位置なし・Req3.1/3.5） |
+//! | `OnChoiceSelect` | GET | Ref0=選択肢 ID（Req3.2） |
+//! | 任意名（`\q` の `On` 始まり ID） | GET | Ref0 以降=付随参照列のみ（空なら References なし・Req3.3/3.5） |
+//! | `OnChoiceTimeout` | GET | Ref0=タイムアウトした選択肢を含むトークの起動スクリプト（Req3.4） |
 
-use crate::msg::{CloseReason, KanadeConfig, MonotonicMs, MouseButton, ShioriCall};
+use crate::msg::{CloseReason, EventId, KanadeConfig, MonotonicMs, MouseButton, ShioriCall};
 use crate::status::{ExecutionSnapshot, ExecutionStatus};
 
 /// `OnSecondChange` Ref0 の除数（ミリ秒→時。正典: OS 連続起動時間 hour）。
@@ -48,14 +52,21 @@ pub(crate) const REF2_WHEEL_M1: &str = "0";
 /// M2 のシーム（呼び手がデバイス種を渡す形へ）として残す。
 pub(crate) const REF6_DEVICE_MOUSE: &str = "mouse";
 
-/// 送出し得るイベント ID の確定ホワイトリスト（Req3.1）。
+/// **スケジューラ起源**（[`crate::msg::EventId::Static`]）で送出し得るイベント ID の
+/// 確定ホワイトリスト（Req3.1）。
+///
+/// 本表は**正典（ukadoc）固定 ID の部分集合**である——載る ID はすべて正典に実在する固定名で、
+/// 実行時に生成される任意名は 1 つも載らない（この性質は表への追加が起きても不変）。
 /// `OnTalk`／`OnHour` は emo2 が OnSecondChange 内部で自発生成するため**恒久的に含めない**（Req3.2）。
 ///
-/// SEAM(W5・choice-select-events): `\q[タイトル,OnID]` は実行時スクリプト由来の**任意名イベント**を
-/// 発火する（emo2 唯一の依存形・menu.pasta:15 実物）＝固定 const 表にも `&'static str` の id にも載らない。
-/// W5 での拡張は本表への ID 追加ではなく**受理規則へのカテゴリ追加**（additive）で行う——チョークポイント・
-/// 本表（正典固定 ID の部分集合）・`OnTalk`/`OnHour` 恒久禁止は不変。任意名カテゴリと Req3.2 恒久禁止の
-/// 交差（`\q[x,OnTalk]` を書くゴーストの扱い）は choice-select-events の要件フェーズで決着（research §16 申し送り）。
+/// 選択関連の固定 3 ID（`OnChoiceSelectEx`／`OnChoiceSelect`／`OnChoiceTimeout`）は
+/// choice-select-events（DD-2）で additive 追加した——いずれも正典固定 ID であり、マウス系 2 種の
+/// 追加と同じ前例に従う。一方 `\q[タイトル,OnID]` 由来の**任意名イベント**（emo2 唯一の依存形・
+/// menu.pasta:15 実物）は固定 const 表には載らず、[`is_allowed_choice_event`] という
+/// **出所別の受理規則**で検証する（DD-1／DD-2・id 型は [`crate::msg::EventId::Choice`] が
+/// 任意名を逐語で運ぶ）。ゆえに本表の恒久禁止（`OnTalk`／`OnHour`）は選択起源へ波及しない
+/// （禁止の根拠＝自発生成との二重駆動は、作者が明示的に書いた 1 クリック 1 回の発火に該当しない・
+/// Req2.9・裁定 8）。
 pub const ALLOWED_EVENT_IDS: &[&str] = &[
     "OnInitialize",
     "OnFirstBoot",
@@ -65,11 +76,32 @@ pub const ALLOWED_EVENT_IDS: &[&str] = &[
     "OnClose",
     "OnMouseMove",
     "OnMouseDoubleClick",
+    "OnChoiceSelectEx",
+    "OnChoiceSelect",
+    "OnChoiceTimeout",
 ];
 
 /// `id` が送出許可集合（[`ALLOWED_EVENT_IDS`]）に属するかを判定する（Req3.1）。
+///
+/// **スケジューラ起源専用**の判定である。選択起源（[`crate::msg::EventId::Choice`]）は
+/// 本判定ではなく [`is_allowed_choice_event`] を用いる（DD-2）。
 pub fn is_allowed_event_id(id: &str) -> bool {
     ALLOWED_EVENT_IDS.contains(&id)
+}
+
+/// **選択起源**（[`crate::msg::EventId::Choice`]）の任意名イベント受理規則（Req2.6／2.9・DD-2）。
+///
+/// ゴースト作者が `\q` の ID に書いた名前を**事前の固定登録なしに逐語で**発火するため、判定は
+/// 「`On` 接頭であること」ただ 1 条件とする（[`ALLOWED_EVENT_IDS`] への登録は要求しない）。
+///
+/// スケジューラ起源の恒久禁止（`OnTalk`／`OnHour`）は本規則へ**適用しない**——禁止の根拠は
+/// 「ベースウェアが自発的に周期発火すると消費側ゴーストの自発生成と二重駆動する」ことであり、
+/// 作者が選択肢へ明示的に書いた 1 クリック = 1 回の発火はこの根拠に該当しないため、
+/// `OnTalk` も選択起源なら発火できる（Req2.9・裁定 8）。
+///
+/// 大小文字の揺れ（`on`／`ONMENU`）は正典の書式ではないため補正せず拒否する（逐語判定）。
+pub fn is_allowed_choice_event(id: &str) -> bool {
+    id.starts_with("On")
 }
 
 /// `OnInitialize`（NOTIFY・References なし）。
@@ -77,7 +109,7 @@ pub fn is_allowed_event_id(id: &str) -> bool {
 /// M1 にリロード概念がないため Ref0（正典: リロード時 `reload`）は送出せず空 Vec とする。
 pub fn on_initialize(snapshot: &ExecutionSnapshot) -> ShioriCall {
     ShioriCall::Notify {
-        id: "OnInitialize",
+        id: EventId::Static("OnInitialize"),
         references: Vec::new(),
         status: ExecutionStatus::derive(snapshot),
     }
@@ -91,7 +123,7 @@ pub fn on_initialize(snapshot: &ExecutionSnapshot) -> ShioriCall {
 /// この応答が 204 であれば呼び手はフォールスルーして [`on_boot`] へ進む。
 pub fn on_first_boot(snapshot: &ExecutionSnapshot, vanish_count: u32) -> ShioriCall {
     ShioriCall::Get {
-        id: "OnFirstBoot",
+        id: EventId::Static("OnFirstBoot"),
         references: vec![vanish_count.to_string()],
         status: ExecutionStatus::derive(snapshot),
     }
@@ -102,7 +134,7 @@ pub fn on_first_boot(snapshot: &ExecutionSnapshot, vanish_count: u32) -> ShioriC
 /// Ref6/7（前回 crash 情報・MATERIA/SSP）は crash 情報を持たない M1 では省略する。
 pub fn on_boot(config: &KanadeConfig, snapshot: &ExecutionSnapshot) -> ShioriCall {
     ShioriCall::Get {
-        id: "OnBoot",
+        id: EventId::Static("OnBoot"),
         references: vec![config.shell_name.clone()],
         status: ExecutionStatus::derive(snapshot),
     }
@@ -113,7 +145,7 @@ pub fn on_boot(config: &KanadeConfig, snapshot: &ExecutionSnapshot) -> ShioriCal
 /// Ref2（詳細数値・SSP のみ）は省略する。
 pub fn baseware_version(config: &KanadeConfig, snapshot: &ExecutionSnapshot) -> ShioriCall {
     ShioriCall::Notify {
-        id: "basewareversion",
+        id: EventId::Static("basewareversion"),
         references: vec![
             config.baseware_version.clone(),
             config.baseware_name.clone(),
@@ -149,13 +181,13 @@ pub fn on_second_change(now: MonotonicMs, snapshot: &ExecutionSnapshot) -> Shior
     let status = ExecutionStatus::derive(snapshot);
     if talk_playable {
         ShioriCall::Get {
-            id: "OnSecondChange",
+            id: EventId::Static("OnSecondChange"),
             references,
             status,
         }
     } else {
         ShioriCall::Notify {
-            id: "OnSecondChange",
+            id: EventId::Static("OnSecondChange"),
             references,
             status,
         }
@@ -167,7 +199,7 @@ pub fn on_second_change(now: MonotonicMs, snapshot: &ExecutionSnapshot) -> Shior
 /// Ref1/2（スコープ番号・SSP）は単一スコープの M1 では省略する。
 pub fn on_close(reason: CloseReason, snapshot: &ExecutionSnapshot) -> ShioriCall {
     ShioriCall::Get {
-        id: "OnClose",
+        id: EventId::Static("OnClose"),
         references: vec![reason.as_ref_str().to_string()],
         status: ExecutionStatus::derive(snapshot),
     }
@@ -181,7 +213,7 @@ pub fn on_close(reason: CloseReason, snapshot: &ExecutionSnapshot) -> ShioriCall
 /// snapshot は Unloading へ遷移後の [`ExecutionSnapshot::INACTIVE`] を渡す（DD-IT-4）。
 pub fn on_close_notify(reason: CloseReason, snapshot: &ExecutionSnapshot) -> ShioriCall {
     ShioriCall::Notify {
-        id: "OnClose",
+        id: EventId::Static("OnClose"),
         references: vec![reason.as_ref_str().to_string()],
         status: ExecutionStatus::derive(snapshot),
     }
@@ -210,7 +242,7 @@ pub fn on_mouse_move(
     snapshot: &ExecutionSnapshot,
 ) -> ShioriCall {
     ShioriCall::Get {
-        id: "OnMouseMove",
+        id: EventId::Static("OnMouseMove"),
         references: vec![
             x.to_string(),
             y.to_string(),
@@ -249,7 +281,7 @@ pub fn on_mouse_double_click(
         MouseButton::Right => "1",
     };
     ShioriCall::Get {
-        id: "OnMouseDoubleClick",
+        id: EventId::Static("OnMouseDoubleClick"),
         references: vec![
             x.to_string(),
             y.to_string(),
@@ -263,6 +295,105 @@ pub fn on_mouse_double_click(
     }
 }
 
+// ---------------------------------------------------------------------------
+// 選択関連イベント（`\q` 選択確定の 4 構築関数・設計 C3・Req3.1〜3.6）
+// ---------------------------------------------------------------------------
+//
+// # 空参照列の規約（マウス系とは**非対称**・Req3.5）
+//
+// 付随参照列が空のときは、対応する Reference **位置そのものを作らない**（空文字で埋めない）。
+// これは [`on_mouse_move`]／[`on_mouse_double_click`] の Ref4（`region: None` → `""` と
+// 転写し**位置は保持**する）とは**逆**の規約である。マウス系は正典 layout が固定長で後続
+// Reference（Ref5/Ref6）が続くため位置を維持せねばならないのに対し、選択関連の付随参照列は
+// 末尾可変長であり、正典では「位置ごと存在しない」形が定義であるため（Req3.5）。
+// 両者が同一ファイルに同居する以上、この非対称は意図であって漏れではない。
+//
+// # 共通リクエストヘッダ（Req3.6）
+//
+// 4 関数すべてが `snapshot: &ExecutionSnapshot` を**必須引数**として受け取り、
+// [`ExecutionStatus::derive`] で自ら共通ヘッダを構成する（既存構築関数と同一規律・DD-IT-3）。
+// ヘッダ欠落は「引数を渡さない」という書き方が存在しないため構造上起こらない。
+
+/// `OnChoiceSelectEx`（GET・Ref0=ラベル／Ref1=ID／Ref2 以降＝付随参照列）。
+///
+/// 正典形（`On` 始まりでない選択肢 ID）カスケードの**先行段**（設計 C3・裁定 2）。
+///
+/// - Ref0=`label`（表示ラベル・不透明転写・Req3.1）。
+/// - Ref1=`id`（選択肢 ID・不透明転写・Req3.1）。
+/// - Ref2..=`references`（付随参照列を**記述順**のまま・Req3.1）。
+///
+/// `references` が空なら Ref2 以降の位置を作らず、Reference は Ref0/Ref1 の 2 個で終わる
+/// （空文字で埋めない・Req3.5。上記「空参照列の規約」を参照）。
+///
+/// ラベル・ID・参照列はいずれも意味解釈せず逐語で転写する（トリム・正規化・空要素除去を
+/// しない・Req1.5／[[areka-surface-args-opaque-string-downstream-resolve]] と同精神）。
+pub fn on_choice_select_ex(
+    label: &str,
+    id: &str,
+    references: &[String],
+    snapshot: &ExecutionSnapshot,
+) -> ShioriCall {
+    let mut refs = Vec::with_capacity(2 + references.len());
+    refs.push(label.to_string());
+    refs.push(id.to_string());
+    // 空参照列なら extend は 1 要素も足さない＝Ref2 以降の位置が生えない（Req3.5）。
+    refs.extend(references.iter().cloned());
+    ShioriCall::Get {
+        id: EventId::Static("OnChoiceSelectEx"),
+        references: refs,
+        status: ExecutionStatus::derive(snapshot),
+    }
+}
+
+/// `OnChoiceSelect`（GET・Ref0=選択肢 ID のみ）。
+///
+/// 正典形カスケードの**後続段**（先行 `OnChoiceSelectEx` が 204 のときのみ発行・裁定 2）。
+/// Reference は常に 1 個で、付随参照列・表示ラベルは載せない（Req3.2）。
+pub fn on_choice_select(id: &str, snapshot: &ExecutionSnapshot) -> ShioriCall {
+    ShioriCall::Get {
+        id: EventId::Static("OnChoiceSelect"),
+        references: vec![id.to_string()],
+        status: ExecutionStatus::derive(snapshot),
+    }
+}
+
+/// 任意名イベント（GET・イベント名＝選択肢 ID 逐語・Ref0 以降＝付随参照列のみ）。
+///
+/// `On` 始まり選択肢 ID の**直接発火 1 段のみ**（先行 Ex／無印を発行しない・裁定 1）。
+/// `id` は [`EventId::Choice`] として運ぶ——ゴースト作者が書いた名前を事前登録なしで逐語発火
+/// する選択起源カテゴリであり、スケジューラ起源の固定表（[`ALLOWED_EVENT_IDS`]）には載らない
+/// （DD-1・Req2.6）。本関数は `EventId::Choice` を構成する events.rs 側の唯一点である。
+///
+/// - Ref0..=`references`（付随参照列を**記述順**のまま・Req3.3）。
+/// - 表示ラベルと選択肢 ID は Reference に**含めない**（Req3.3。ID はイベント名側が運ぶ）。
+///
+/// `references` が空なら Reference を 1 個も作らない（空 Vec・Req3.5）。
+pub fn on_choice_named(
+    id: String,
+    references: &[String],
+    snapshot: &ExecutionSnapshot,
+) -> ShioriCall {
+    ShioriCall::Get {
+        id: EventId::Choice(id),
+        // 空参照列なら空 Vec のまま＝Reference 位置を 1 個も作らない（Req3.5）。
+        references: references.to_vec(),
+        status: ExecutionStatus::derive(snapshot),
+    }
+}
+
+/// `OnChoiceTimeout`（GET・Ref0=タイムアウトした選択肢を含むトークの起動スクリプト）。
+///
+/// Reference は常に 1 個。`script` は選択肢を含むトークの起動スクリプト（`ActiveTalk.script`・
+/// DD-10）を不透明転写する（Req3.4）。
+// 消費点は steady 調停の期限到達アーム（`fire_choice_timeout_if_due`・C4 規則 5）。
+pub fn on_choice_timeout(script: &str, snapshot: &ExecutionSnapshot) -> ShioriCall {
+    ShioriCall::Get {
+        id: EventId::Static("OnChoiceTimeout"),
+        references: vec![script.to_string()],
+        status: ExecutionStatus::derive(snapshot),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -271,24 +402,24 @@ mod tests {
         KanadeConfig::new("master", "1.0.0")
     }
 
-    /// GET variant を分解して (id, references) を取り出す（Notify なら panic）。
-    fn expect_get(call: ShioriCall) -> (&'static str, Vec<String>) {
+    /// GET variant を分解して (id の wire 形, references) を取り出す（Notify なら panic）。
+    fn expect_get(call: ShioriCall) -> (String, Vec<String>) {
         match call {
-            ShioriCall::Get { id, references, .. } => (id, references),
+            ShioriCall::Get { id, references, .. } => (id.as_str().to_string(), references),
             ShioriCall::Notify { .. } => panic!("expected GET, got NOTIFY"),
         }
     }
 
-    /// NOTIFY variant を分解して (id, references) を取り出す（Get なら panic）。
-    fn expect_notify(call: ShioriCall) -> (&'static str, Vec<String>) {
+    /// NOTIFY variant を分解して (id の wire 形, references) を取り出す（Get なら panic）。
+    fn expect_notify(call: ShioriCall) -> (String, Vec<String>) {
         match call {
-            ShioriCall::Notify { id, references, .. } => (id, references),
+            ShioriCall::Notify { id, references, .. } => (id.as_str().to_string(), references),
             ShioriCall::Get { .. } => panic!("expected NOTIFY, got GET"),
         }
     }
 
-    /// 呼出の `id` を GET/NOTIFY 不問で取り出す（許可集合檻の被覆確認用）。
-    fn call_id(call: &ShioriCall) -> &'static str {
+    /// 呼出の `id`（出所カテゴリ込み）を GET/NOTIFY 不問で取り出す（許可集合檻の被覆確認用）。
+    fn event_id(call: &ShioriCall) -> &EventId {
         match call {
             ShioriCall::Get { id, .. } | ShioriCall::Notify { id, .. } => id,
         }
@@ -341,7 +472,7 @@ mod tests {
     #[test]
     fn on_second_change_playable_is_get_ref3_one() {
         // 7_200_000 ms = 2 hours。talk_active=false（再生可能）→ GET・Ref3=1・status 空（DD-IT-3）。
-        let call = on_second_change(MonotonicMs(7_200_000), &ExecutionSnapshot { talk_active: false });
+        let call = on_second_change(MonotonicMs(7_200_000), &ExecutionSnapshot { talk_active: false, choice_active: false });
         assert_eq!(
             call_status(&call),
             None,
@@ -363,7 +494,7 @@ mod tests {
     #[test]
     fn on_second_change_not_playable_is_notify_ref3_zero() {
         // 3_600_000 ms = 1 hour。talk_active=true（再生中）→ NOTIFY・Ref3=0・status talking（DD-IT-3）。
-        let call = on_second_change(MonotonicMs(3_600_000), &ExecutionSnapshot { talk_active: true });
+        let call = on_second_change(MonotonicMs(3_600_000), &ExecutionSnapshot { talk_active: true, choice_active: false });
         assert_eq!(
             call_status(&call),
             Some("talking".to_string()),
@@ -387,7 +518,7 @@ mod tests {
         // 端数（1 時間未満）は切り捨てて "0"（3_599_999 ms < 1 hour）。
         let (_, references) = expect_get(on_second_change(
             MonotonicMs(3_599_999),
-            &ExecutionSnapshot { talk_active: false },
+            &ExecutionSnapshot { talk_active: false, choice_active: false },
         ));
         assert_eq!(references[0], "0");
     }
@@ -421,11 +552,14 @@ mod tests {
         assert_eq!(references, vec!["system".to_string()]);
     }
 
-    /// 許可 ID 檻（Req3.1/3.2/7.1・DD-IT-8・DD-IE-11）: 表が期待8集合と完全一致し
+    /// 許可 ID 檻（Req3.1/3.2/7.1・DD-IT-8・DD-IE-11・DD-2）: 表が期待11集合と完全一致し
     /// `OnTalk`/`OnHour` を含まない。マウス系2種（OnMouseMove/OnMouseDoubleClick）は
-    /// Task 2.1 で additive 追加された（whitelist が意図的に6→8へ増えたための更新）。
+    /// Task 2.1 で additive 追加され、選択関連の固定 3 ID（OnChoiceSelectEx/OnChoiceSelect/
+    /// OnChoiceTimeout）は choice-select-events 2.3 で同じ前例に倣い additive 追加された
+    /// （whitelist が意図的に 6→8→11 へ増えたための更新）。3 ID はいずれも正典（ukadoc）の
+    /// 固定イベント ID であり、「表＝正典固定 ID の部分集合」の性質は保たれる。
     #[test]
-    fn allowed_event_ids_are_exactly_the_eight_and_exclude_ontalk_onhour() {
+    fn allowed_event_ids_are_exactly_the_eleven_and_exclude_ontalk_onhour() {
         assert_eq!(
             ALLOWED_EVENT_IDS,
             &[
@@ -437,6 +571,9 @@ mod tests {
                 "OnClose",
                 "OnMouseMove",
                 "OnMouseDoubleClick",
+                "OnChoiceSelectEx",
+                "OnChoiceSelect",
+                "OnChoiceTimeout",
             ]
         );
         assert!(is_allowed_event_id("OnMouseMove"), "OnMouseMove は許可集合に属する（Req7.1）");
@@ -444,11 +581,65 @@ mod tests {
             is_allowed_event_id("OnMouseDoubleClick"),
             "OnMouseDoubleClick は許可集合に属する（Req7.1）"
         );
+        for id in ["OnChoiceSelectEx", "OnChoiceSelect", "OnChoiceTimeout"] {
+            assert!(
+                is_allowed_event_id(id),
+                "{id} は選択関連の正典固定 ID ゆえ許可集合に属する（DD-2）"
+            );
+        }
         assert!(!is_allowed_event_id("OnTalk"), "OnTalk は恒久的に許可しない（Req3.2）");
         assert!(!is_allowed_event_id("OnHour"), "OnHour は恒久的に許可しない（Req3.2）");
         // 表の全要素が許可判定を通ること。
         for id in ALLOWED_EVENT_IDS {
             assert!(is_allowed_event_id(id), "{id} は表にあるのに許可されない");
+        }
+    }
+
+    /// 選択起源の受理規則（Req2.6・DD-2）: `On` 接頭のみを受理し、事前の固定登録を要さない。
+    ///
+    /// 判定は接頭辞ただ 1 条件——ゴースト作者が `\q` の ID に書いた名前を逐語で受理するため、
+    /// 固定表（[`ALLOWED_EVENT_IDS`]）への登録有無・大小文字の揺れの補正はいずれも行わない。
+    #[test]
+    fn is_allowed_choice_event_accepts_only_on_prefixed_names_verbatim() {
+        // 受理: 未登録の任意名・境界入力（"On" 単独）・正典固定 ID の逐語形。
+        for id in [
+            "On",
+            "OnMenu",
+            "Onおしゃべり頻度メニュー",
+            "OnChoiceSelect",
+            "On ",
+        ] {
+            assert!(
+                is_allowed_choice_event(id),
+                "{id} は On 接頭ゆえ選択起源として受理される（Req2.6）"
+            );
+        }
+        // 拒否: On 接頭でない形（空文字・小文字・大文字・部分一致・接頭でない位置）。
+        for id in ["", "foo", "on", "onMenu", "ONMENU", "MenuOn", " OnMenu"] {
+            assert!(
+                !is_allowed_choice_event(id),
+                "{id:?} は On 接頭でないゆえ選択起源として受理されない（Req2.6）"
+            );
+        }
+    }
+
+    /// 裁定 8（Req2.9）: スケジューラ起源の恒久禁止と choice 起源の逐語発火が**交差しない**。
+    ///
+    /// `OnTalk`／`OnHour` は「ベースウェアが自発的に周期発火すると消費側ゴーストの自発生成と
+    /// 二重駆動する」ことを根拠に固定表から恒久的に除外されるが、この根拠はゴースト作者が
+    /// 選択肢へ明示的に書いた 1 クリック = 1 回の発火には該当しない。ゆえに同じ ID が
+    /// スケジューラ起源では拒否・選択起源では受理される（両方向をこの 1 檻で固定する）。
+    #[test]
+    fn scheduler_forbidden_ids_are_still_fireable_from_choice_origin() {
+        for id in ["OnTalk", "OnHour"] {
+            assert!(
+                !is_allowed_event_id(id),
+                "{id} はスケジューラ起源では恒久的に禁止（Req3.2・自発生成との二重駆動）"
+            );
+            assert!(
+                is_allowed_choice_event(id),
+                "{id} は選択起源なら逐語で発火できる（Req2.9・恒久禁止を適用しない）"
+            );
         }
     }
 
@@ -535,14 +726,53 @@ mod tests {
     /// talk_active=true では両構築子が `Status: talking` を snapshot から導出する（DD-IT-3）。
     #[test]
     fn mouse_constructors_carry_talking_status_when_active() {
-        let active = ExecutionSnapshot { talk_active: true };
+        let active = ExecutionSnapshot { talk_active: true, choice_active: false };
         let mv = on_mouse_move(0, 0, 0, Some("Head"), &active);
         assert_eq!(call_status(&mv), Some("talking".to_string()));
         let dbl = on_mouse_double_click(0, 0, 0, None, MouseButton::Left, &active);
         assert_eq!(call_status(&dbl), Some("talking".to_string()));
     }
 
+    /// 全構築関数の返す `id` が**スケジューラ起源**（[`EventId::Static`]）であること（DD-1）。
+    ///
+    /// 選択起源（[`EventId::Choice`]）はカスケード planner のみが構成する不変条件を、構築関数側から
+    /// 固定する檻——events.rs の構築関数が任意名を作り得ないことを型の実値で観測する。
+    ///
+    /// 対象は**スケジューラ起源**の構築関数のみ。選択起源の [`on_choice_named`] は設計どおり
+    /// [`EventId::Choice`] を返すため本檻の被覆対象ではなく、
+    /// `choice_constructors_split_event_id_category_by_origin` が別途カテゴリを固定する。
+    #[test]
+    fn every_construction_function_returns_static_event_id() {
+        let cfg = config();
+        let snap = ExecutionSnapshot::INACTIVE;
+        let calls = [
+            on_initialize(&snap),
+            on_first_boot(&snap, 0),
+            on_boot(&cfg, &snap),
+            baseware_version(&cfg, &snap),
+            on_second_change(MonotonicMs(0), &snap),
+            on_second_change(MonotonicMs(0), &ExecutionSnapshot { talk_active: true, choice_active: false }),
+            on_close(CloseReason::User, &snap),
+            on_close_notify(CloseReason::System, &snap),
+            on_mouse_move(0, 0, 0, Some("Head"), &snap),
+            on_mouse_double_click(0, 0, 0, None, MouseButton::Left, &snap),
+        ];
+        for call in &calls {
+            let id = event_id(call);
+            assert!(
+                matches!(id, EventId::Static(_)),
+                "構築関数がスケジューラ起源でない id={} を返した",
+                id.as_str()
+            );
+        }
+    }
+
     /// 全構築関数の返す `id` が許可集合の要素であること（Service Interface Postcondition）。
+    ///
+    /// 対象は [`EventId::Static`] を返す構築関数——固定 3 ID を許可表へ載せた（DD-2）ことにより
+    /// `on_choice_select_ex`／`on_choice_select`／`on_choice_timeout` も本檻の被覆対象に入る。
+    /// 選択起源の任意名 `on_choice_named`（[`EventId::Choice`]）だけは固定表ではなく出所別の
+    /// 受理規則（`is_allowed_choice_event`）で検証されるため、本檻の被覆対象外である。
     #[test]
     fn every_construction_function_returns_an_allowed_id() {
         let cfg = config();
@@ -553,17 +783,196 @@ mod tests {
             on_boot(&cfg, &snap),
             baseware_version(&cfg, &snap),
             on_second_change(MonotonicMs(0), &snap),
-            on_second_change(MonotonicMs(0), &ExecutionSnapshot { talk_active: true }),
+            on_second_change(MonotonicMs(0), &ExecutionSnapshot { talk_active: true, choice_active: false }),
             on_close(CloseReason::User, &snap),
             on_close_notify(CloseReason::System, &snap),
             on_mouse_move(0, 0, 0, Some("Head"), &snap),
             on_mouse_double_click(0, 0, 0, None, MouseButton::Left, &snap),
+            on_choice_select_ex("ラベル", "ID", &[], &snap),
+            on_choice_select("ID", &snap),
+            on_choice_timeout("\\e", &snap),
         ];
         for call in &calls {
-            let id = call_id(call);
+            let id = event_id(call).as_str();
             assert!(
                 is_allowed_event_id(id),
                 "構築関数が許可集合外の id={id} を返した"
+            );
+        }
+    }
+
+    /// テスト用の付随参照列（不透明転写の檻に使う「加工されたら壊れる」値の並び）。
+    ///
+    /// 非 ASCII・前後空白・空文字要素・記号（カンマ／バックスラッシュ）を含み、トリム・
+    /// 正規化・空要素除去のいずれかが混入すれば必ず不一致になる。
+    fn opaque_references() -> Vec<String> {
+        vec![
+            " 頻度  ".to_string(),
+            String::new(),
+            "a,b".to_string(),
+            "\\q[x,y]".to_string(),
+        ]
+    }
+
+    /// `OnChoiceSelectEx` 正典 layout（Req3.1）:
+    /// Ref0=ラベル／Ref1=ID／Ref2 以降が付随参照列の記述順であること（位置と値の実値突合）。
+    #[test]
+    fn on_choice_select_ex_builds_label_id_then_references() {
+        let references = opaque_references();
+        let call = on_choice_select_ex(
+            "おしゃべり頻度",
+            "Choice頻度",
+            &references,
+            &ExecutionSnapshot::INACTIVE,
+        );
+        let (id, refs) = expect_get(call);
+        assert_eq!(id, "OnChoiceSelectEx");
+        assert_eq!(
+            refs,
+            vec![
+                "おしゃべり頻度".to_string(), // Ref0=表示ラベル（Req3.1）
+                "Choice頻度".to_string(),     // Ref1=選択肢 ID（Req3.1）
+                " 頻度  ".to_string(),        // Ref2 以降＝付随参照列を記述順（不透明転写）
+                String::new(),
+                "a,b".to_string(),
+                "\\q[x,y]".to_string(),
+            ]
+        );
+        assert_eq!(refs.len(), 2 + references.len(), "Reference 数は 2＋付随参照列長");
+    }
+
+    /// 空参照列で Ref2 以降の位置が生えないこと（Req3.5）: Reference は Ref0/Ref1 の**2 個のみ**。
+    ///
+    /// 既存マウス系の `None→""`（位置保持）とは**非対称**な規約であることを実値で固定する。
+    #[test]
+    fn on_choice_select_ex_with_empty_references_stops_at_ref1() {
+        let (id, refs) = expect_get(on_choice_select_ex(
+            "ラベル",
+            "ID",
+            &[],
+            &ExecutionSnapshot::INACTIVE,
+        ));
+        assert_eq!(id, "OnChoiceSelectEx");
+        assert_eq!(refs, vec!["ラベル".to_string(), "ID".to_string()]);
+        assert_eq!(refs.len(), 2, "空参照列は Ref2 以降の位置を作らない（空文字で埋めない）");
+    }
+
+    /// `OnChoiceSelect` 正典 layout（Req3.2）: Ref0=選択肢 ID の**1 個のみ**。
+    #[test]
+    fn on_choice_select_builds_id_only_ref0() {
+        let (id, refs) = expect_get(on_choice_select("Choice頻度", &ExecutionSnapshot::INACTIVE));
+        assert_eq!(id, "OnChoiceSelect");
+        assert_eq!(refs, vec!["Choice頻度".to_string()]);
+        assert_eq!(refs.len(), 1, "無印は常に Ref0=ID の 1 個のみ");
+    }
+
+    /// 任意名イベント正典 layout（Req3.3）: Ref0 以降が付随参照列のみで、
+    /// 表示ラベルと選択肢 ID を Reference に**含めない**こと。
+    #[test]
+    fn on_choice_named_builds_references_from_ref0_without_label_or_id() {
+        let references = opaque_references();
+        let call = on_choice_named(
+            "Onおしゃべり頻度メニュー".to_string(),
+            &references,
+            &ExecutionSnapshot::INACTIVE,
+        );
+        let (id, refs) = expect_get(call);
+        assert_eq!(id, "Onおしゃべり頻度メニュー", "任意名は逐語で wire へ載る");
+        assert_eq!(refs, references, "Ref0 以降＝付随参照列そのもの（記述順・不透明転写）");
+        assert!(
+            !refs.contains(&"Onおしゃべり頻度メニュー".to_string()),
+            "任意名イベントの Reference に選択肢 ID を含めない（Req3.3）"
+        );
+    }
+
+    /// 空参照列で Reference が 1 個も生えないこと（Req3.3/3.5）: References は空 Vec。
+    #[test]
+    fn on_choice_named_with_empty_references_builds_no_reference() {
+        let (id, refs) = expect_get(on_choice_named(
+            "OnMenu".to_string(),
+            &[],
+            &ExecutionSnapshot::INACTIVE,
+        ));
+        assert_eq!(id, "OnMenu");
+        assert!(
+            refs.is_empty(),
+            "空参照列は Reference 位置を 1 個も作らない（空文字で埋めない・Req3.5）"
+        );
+    }
+
+    /// `OnChoiceTimeout` 正典 layout（Req3.4）: Ref0=起動スクリプトの**1 個のみ**・不透明転写。
+    #[test]
+    fn on_choice_timeout_builds_script_ref0() {
+        let script = "\\0\\s[0]選んで\\q[はい,Onはい]\\q[いいえ,Onいいえ]\\e";
+        let (id, refs) = expect_get(on_choice_timeout(script, &ExecutionSnapshot::INACTIVE));
+        assert_eq!(id, "OnChoiceTimeout");
+        assert_eq!(refs, vec![script.to_string()]);
+        assert_eq!(refs.len(), 1, "Timeout は常に Ref0=script の 1 個のみ");
+    }
+
+    /// 共通リクエストヘッダ（実行状態スナップショット）が 4 構築関数すべてに載ること（Req3.6）。
+    ///
+    /// snapshot が必須引数であるため欠落は構造上起こらない。実値としても、
+    /// INACTIVE→ヘッダ行なし（`None`）／talk_active=true→`talking` の双方向を固定する。
+    #[test]
+    fn choice_constructors_carry_the_common_request_header() {
+        let refs = opaque_references();
+        let active = ExecutionSnapshot { talk_active: true, choice_active: false };
+        let idle = ExecutionSnapshot::INACTIVE;
+
+        let active_calls = [
+            on_choice_select_ex("ラベル", "ID", &refs, &active),
+            on_choice_select("ID", &active),
+            on_choice_named("OnMenu".to_string(), &refs, &active),
+            on_choice_timeout("\\e", &active),
+        ];
+        for call in &active_calls {
+            assert_eq!(
+                call_status(call),
+                Some("talking".to_string()),
+                "選択関連イベントも共通ヘッダを snapshot から導出する（Req3.6）: id={}",
+                event_id(call).as_str()
+            );
+        }
+
+        let idle_calls = [
+            on_choice_select_ex("ラベル", "ID", &refs, &idle),
+            on_choice_select("ID", &idle),
+            on_choice_named("OnMenu".to_string(), &refs, &idle),
+            on_choice_timeout("\\e", &idle),
+        ];
+        for call in &idle_calls {
+            assert_eq!(
+                call_status(call),
+                None,
+                "非アクティブ snapshot は Status ヘッダ行を出さない: id={}",
+                event_id(call).as_str()
+            );
+        }
+    }
+
+    /// 出所カテゴリの型分離（DD-1）: 任意名イベントのみ [`EventId::Choice`]、
+    /// 固定 ID 3 種は [`EventId::Static`]。
+    #[test]
+    fn choice_constructors_split_event_id_category_by_origin() {
+        let snap = ExecutionSnapshot::INACTIVE;
+        let named = on_choice_named("OnMenu".to_string(), &[], &snap);
+        assert!(
+            matches!(event_id(&named), EventId::Choice(_)),
+            "任意名イベントは選択起源（EventId::Choice）"
+        );
+
+        let statics = [
+            on_choice_select_ex("ラベル", "ID", &[], &snap),
+            on_choice_select("ID", &snap),
+            on_choice_timeout("\\e", &snap),
+        ];
+        for call in &statics {
+            let id = event_id(call);
+            assert!(
+                matches!(id, EventId::Static(_)),
+                "固定 ID の選択関連イベントはスケジューラ起源の型を保つ id={}",
+                id.as_str()
             );
         }
     }

@@ -335,7 +335,7 @@ fn sporadic_value_starts_unique_talk() {
         id: "OnSecondChange".to_string(),
         references: match events::on_second_change(
             MonotonicMs(1_000),
-            &ExecutionSnapshot { talk_active: false },
+            &ExecutionSnapshot { talk_active: false, choice_active: false },
         ) {
             areka_kanade::ShioriCall::Get { references, .. } => references,
             _ => panic!("on_second_change（talk 非アクティブ）は GET を返すはず"),
@@ -454,7 +454,7 @@ fn active_talk_tick_emits_notify_ref3_zero() {
         id: "OnSecondChange".to_string(),
         references: match events::on_second_change(
             MonotonicMs(2_000),
-            &ExecutionSnapshot { talk_active: true },
+            &ExecutionSnapshot { talk_active: true, choice_active: false },
         ) {
             areka_kanade::ShioriCall::Notify { references, .. } => references,
             _ => panic!("on_second_change（talk アクティブ）は NOTIFY を返すはず"),
@@ -606,7 +606,7 @@ fn blocking_call_ticks_catch_up_in_order_without_loss_or_duplication() {
             id: "OnSecondChange".to_string(),
             references: match events::on_second_change(
                 tick_now,
-                &ExecutionSnapshot { talk_active: false },
+                &ExecutionSnapshot { talk_active: false, choice_active: false },
             ) {
                 areka_kanade::ShioriCall::Get { references, .. } => references,
                 _ => panic!("on_second_change（talk 非アクティブ）は GET を返すはず"),
@@ -634,7 +634,7 @@ fn blocking_call_ticks_catch_up_in_order_without_loss_or_duplication() {
             id: "OnSecondChange".to_string(),
             references: match events::on_second_change(
                 n,
-                &ExecutionSnapshot { talk_active: false },
+                &ExecutionSnapshot { talk_active: false, choice_active: false },
             ) {
                 areka_kanade::ShioriCall::Get { references, .. } => references,
                 _ => panic!("on_second_change（talk 非アクティブ）は GET を返すはず"),
