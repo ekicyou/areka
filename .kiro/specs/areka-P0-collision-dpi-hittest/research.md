@@ -289,3 +289,33 @@
 - **一般化**: 除算方向の丸めを「当たり判定専用」でなく `ScaleRatio` の座標縮約権威として置く（`scaled_extent` と対）。インターフェイスのみ一般化・実装は本要件の範囲に限定。
 - **build vs adopt**: 外部採用なし（std 整数演算で閉じる・R6.6 の新規依存禁止とも整合）。既存資産の最大再利用: 照合・画家則・閉区間は既存 `hit_region` へ完全委譲、物理寸は `target_physical_size`、行矩形持ち上げは既存 `to_window_physical`。
 - **単純化**: probe 新設（§4.4 候補 B）棄却・DPI 追従駆動の probe 組込み棄却（R-1 解決で不要）・num/den アクセサ棄却・`HitRegion` の別型新設でなくフィールド追加。縮約実行点は正常経路 1 箇所＋縮退経路 1 箇所に限定し二重縮約を構造排除。
+
+---
+
+## 10. main マージ後の再突合と実装ブロック条件の判定（2026-08-01）
+
+> 契機: `origin/main` を本ブランチへマージ（clean・conflict ゼロ）。取り込んだのは
+> `a591448 feat(areka-P0-choice-select-events)`（W5 同居相手の着地）と `3c89b7e fix(areka): spine S2 flake 是正`。
+> [[parallel-worktree-brief-staleness-rebase-before-design]] の規律により、設計時アンカーを**全て現物で再検証**した。
+
+### 10.1 実装ブロック条件の判定結果 = **ブロックなし（実装着手可）**
+
+| # | ブロック候補 | 判定 | 根拠（実測） |
+|---|---|---|---|
+| 1 | W5 同居 `choice-select-events` との `balloon.rs` 衝突（design-validation Issue 2） | **消滅** | 同 spec は drain を新規ファイル `input_events/choice_drain.rs` に置き、**`balloon.rs` を 1 行も変更していない**（`git diff` で空）。`mod.rs` への `pub(crate) mod choice_drain;` 1 行追加のみ。本 spec は balloon.rs の単独編集者となり R6.7 例外条項は発動不要 |
+| 2 | 上流 W4 `emo-dpi-scaling`（k の供給面） | **充足済** | `PresentTarget.applied`（presenter.rs:108）・`applied_scale`（:705）・`hit_region`（:867）すべて設計記載と同一行で実在 |
+| 3 | 設計アンカーのドリフト | **軽微・非ブロック** | `input_events/mod.rs` のみ +1 ドリフト（DD-IE-10 が :97/:104-105/:135/:174-175/:287-288 → :98/:106/:136/:176/:288）。他（presenter.rs・hit_region.rs:55-56・choice.rs:260・collision-probe.rs:448/:558-561・balloon.rs 全 6 箇所）は**完全一致**。design の改訂リストへ反映済み |
+| 4 | バルーン逆向き整合の前提（DD-8 VOID の根拠） | **不変** | `to_window_physical`（choice.rs:260-289）は `contract: &ScaleContract` を受け `* k` を維持。マージによる変更なし。「点は無変換が正しい」の前提は健在 |
+| 5 | ベースラインのビルド健全性 | **緑** | `cargo check --workspace --all-targets` exit 0（警告は既存 dead_code のみ） |
+| 6 | `choice_drain` と本 spec の配信経路の干渉 | **非干渉** | `choice_drain.rs` は `MouseInput`／`client_point`／`hit_region`／`scale` のいずれにも触れない（grep 空）。R1.8 の配信座標切替と独立 |
+| 7 | 残存 W5 同居（`dpi-window-vanish` / `kero-balloon`） | **非干渉（継続監視）** | 編集面は §2.8 の実測どおり互いに素。ただし `kero-balloon` は `emo-text/actor.rs` を射程に持ち、同ファイルは `ChoiceHitRow` の定義元＝Revalidation Trigger 4（バルーン行矩形の空間変更）の監視対象として残る |
+
+### 10.2 再突合で得た追加所見（design へ反映済み）
+
+1. **balloon.rs の陳腐化コメントが 2 箇所追加で見つかった**: テスト側の `:1029-1031`（doc）と `:2302`（注入点列コメント）も「k=1.0 素通し」を理由として記述している。R5.6（k=1.0 を理由とする記述を残さない）の対象集合へ追加。
+2. **既存の falsifying fixture が実在する**: `balloon.rs:1029-1042` は「スケールを掛けていれば miss する配置で、掛けずにヒットすることを固定する」テストを既に持つ。R3.7 の檻は**新規並置ではなく、この既存 fixture を k≠1.0（行矩形を実 k で持ち上げた条件）へ強化する形**で実装し、同義の檻を重複させない。
+
+### 10.3 実装開始前に残る前提（ブロックではない運用条件）
+
+- **R4 実機サインオフ**は実装完了後のゲート（tasks 8.2）。OS 表示スケール 125%／200% の 2 水準を実機で切り替えられることが条件で、実装着手の前提ではない。
+- **R-2/R-4** はサインオフ手順内で消化する（tasks 8.2 に内包済み）。

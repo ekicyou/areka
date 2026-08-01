@@ -179,10 +179,11 @@ research.md §4.4 の裁定どおり候補 A（既存改修）一択（現行 pr
 
 #### DD-11: バルーン逆向き整合の明文化＋檻【確定】
 
-- `balloon.rs` の理由文言（:445・:481-483 および move ハンドラ側の同趣旨 :137/:154/:279/:322）を「行矩形が `to_window_physical` で既に実適用 k ×済みの窓物理 px であるため、点は無変換が正しい（k=1.0 だからではない）」へ改訂（R5.6）。「シェルは点÷k・バルーンは矩形×k の逆向き等価。バルーンへ ÷k を足すと二重縮約」を併記（R5.7）
+- `balloon.rs` の理由文言（:445・:481-483 および move ハンドラ側の同趣旨 :137/:154/:279/:322、**加えてテスト側の :1029-1031 doc・:2302 コメント**——2026-08-01 の main マージ後再実測で追加検出）を「行矩形が `to_window_physical` で既に実適用 k ×済みの窓物理 px であるため、点は無変換が正しい（k=1.0 だからではない）」へ改訂（R5.6）。「シェルは点÷k・バルーンは矩形×k の逆向き等価。バルーンへ ÷k を足すと二重縮約」を併記（R5.7）
 - 檻（R3.7）: `balloon.rs` in-source テストに、k=2.0 で `to_window_physical` により持ち上げた行矩形へ (a) **無変換の** client 物理 px 点が正しくヒットする (b) 同じ点を ÷k してしまうと外れる（二重縮約の退行検出）、を `click_selection` 純関数で固定する
+- **既存 falsifying fixture の活用**（2026-08-01 追加実測）: `balloon.rs:1029-1042` に既に「スケールを掛けていれば miss する配置で、掛けずにヒットすることを固定する」テストが存在する。ただし k=1.0 の素通しを理由として記述しており、行矩形を実 k で持ち上げた条件は含まない。R3.7 の檻は**この既存 fixture を k≠1.0 へ強化する形**で実装し（新規並置ではなく理由の是正＋条件の拡張）、重複した意味の檻を増やさない
 - `balloon.rs` は W5 同居 `choice-select-events` の編集面だが、本増分は**コメント改訂＋in-source テスト追加のみ**（判定挙動を変えない異ハンク）＝R6.7 例外条項の範囲内。着地順に従い後着側が rebase して吸収する
-- **conflict 解消規律**（改訂対象 :136-137 が choice-select-events の Inbox 席 :130 と diff 文脈距離で隣接するため）: rebase conflict 解消時は自分の増分＝コメント行と `#[cfg(test)]` ブロックのみを保持し、drain/status 系ハンクには一切触れない。相手 spec のハンクへの踏み込みは本 spec が最も警戒する誤一般化事故（balloon への ÷k 追加）と同根であり禁止
+- **conflict 解消規律 → 2026-08-01 に消滅（解決済み）**: `choice-select-events` が main へ着地（`a591448`）した結果を実測したところ、同 spec は drain を**新規ファイル `input_events/choice_drain.rs` に置き `balloon.rs` を 1 行も変更しなかった**（`mod.rs` への `pub(crate) mod choice_drain;` 1 行追加のみ）。よって balloon.rs の同居衝突リスクは**発生せずに消滅**し、本 spec は balloon.rs の単独編集者となる。R6.7 の例外条項は発動不要（記録として残置）
 
 ### Technology Stack
 
@@ -563,9 +564,9 @@ impl EmoPresenter {
 | 1 | `completed/areka-P0-collision-geometry/design.md` :40/:50（C9） | 日付付き追記「k=1.0 限定契約は本 spec で解除・点÷k 実装済み」 | 5.1 |
 | 2 | 同 design.md :86 Revalidation Trigger 2 | 日付付き追記「消化済み（areka-P0-collision-dpi-hittest）」 | 5.2 |
 | 3 | `emo2_boot/hit_region.rs` :54-56 | 新契約へ全面改訂（R5.4 の集約記述点） | 5.3, 5.4, 5.5 |
-| 4 | `input_events/mod.rs` :97/:104-105/:135/:174-175/:287-288 | DD-IE-10 を「resolver が ÷k 吸収・配信 surface px・throttle client px」へ | 5.3 |
+| 4 | `input_events/mod.rs` :98/:106/:136/:176/:288（2026-08-01 の main マージで `mod choice_drain;` 1 行増により全体 +1 ドリフト。実装時は `DD-IE-10` を grep して特定すること） | DD-IE-10 を「resolver が ÷k 吸収・配信 surface px・throttle client px」へ | 5.3 |
 | 5 | `presenter.rs` :858-861（＋:704 隣接） | 「÷k の正準の呼び手は hit_region_client（実装済み）」へ | 5.3 |
 | 6 | `hit.rs` :42-44 Preconditions | 「呼び手が ÷k 済み座標を渡す（or hit_region_scaled 使用）」へ | 5.3 |
-| 7 | `input_events/balloon.rs` :137/:154/:279/:322/:445/:481-483 | k=1.0 理由の全廃→「行矩形×k 済みゆえ点は無変換が正しい」＋逆向き等価と二重縮約禁止 | 5.6, 5.7 |
+| 7 | `input_events/balloon.rs` :137/:154/:279/:322/:445/:481-483 ＋テスト側 :1029-1031/:2302 | k=1.0 理由の全廃→「行矩形×k 済みゆえ点は無変換が正しい」＋逆向き等価と二重縮約禁止 | 5.6, 5.7 |
 | 8 | `completed/areka-P0-collision-geometry/acceptance-record.md` | 日付付き追記「DPI追従下の受け入れは本 spec の記録を参照」 | 5.1 |
 | 9 | `examples/collision-probe.rs` :446-447 | 「実行機 DPI 依存で k が決まる」へ | 4.1（付随） |
