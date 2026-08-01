@@ -450,7 +450,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 対象 crate:
-- either 1.16.0
+- either 1.17.0
 - itertools 0.10.5
 
 ```
@@ -1535,13 +1535,13 @@ DEALINGS IN THE SOFTWARE.
 - serde_spanned 0.6.9
 - serde_spanned 1.1.1
 - toml 0.8.23
-- toml 1.1.3+spec-1.1.0
+- toml 1.1.4+spec-1.1.0
 - toml_datetime 0.6.11
 - toml_datetime 0.7.5+spec-1.1.0
 - toml_datetime 1.1.1+spec-1.1.0
 - toml_edit 0.22.27
 - toml_edit 0.23.10+spec-1.0.0
-- toml_parser 1.1.2+spec-1.1.0
+- toml_parser 1.1.3+spec-1.1.0
 - toml_write 0.1.2
 - toml_writer 1.1.2+spec-1.1.0
 
@@ -2083,7 +2083,7 @@ SOFTWARE.
 - ctrlc 3.5.2
 - erased-serde 0.4.10
 - event-listener-strategy 0.5.4
-- event-listener 5.4.1
+- event-listener 5.4.2
 - fastrand 2.5.0
 - futures-lite 2.6.1
 - hermit-abi 0.5.2
