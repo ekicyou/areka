@@ -666,6 +666,25 @@ R6 の観測点（すべて `RUST_LOG=info` で grep 可能・実機サインオ
 
 **是正方針**: `now` を Clear 境界の手前で**頭打ち**にする。頭打ち後は仮想時刻を据え置いたまま実 async をポンプし続けるので、ループの上限は「何回ポンプするか」だけを意味し、仮想時刻が観測窓を追い越すことがなくなる。**壁時計の延長・反復上限の拡大では直らない**（時刻が進む限り条件が壊れるため）。**アサート本体は無改変**——駆動ループのみを是正する。
 
+### 純粋待機ループの有界性（R7.9・2026-07-31 追加）——R7.8 と**別クラス**
+
+`drive_shell_shown`（`spine.rs:1906`・`for now in 1u64..=200_000` ＋ `yield_now`）と同型の `drive_shell_shown_and_presented` は、**実 async の到着をラッチで待つ純粋な待機ループ**である。R7.8（注入時刻の追い越し）とは処方が異なる:
+
+| | R7.8（S2） | **R7.9（本節）** |
+|---|---|---|
+| 観測 | 生きた状態への問い合わせ（Clear が破壊） | **ラッチ**（後続 cue に壊されない） |
+| 1 反復のコスト | 高い（`pump_text`＋`run_text_phase`） | 極めて安価（tick＋drain＋yield） |
+| 症状 | 空回りで 400〜550 秒 | 200,000 反復が**数 ms で尽きる** |
+| 処方 | 注入時刻の頭打ち | **壁時計 deadline ＋ poll-backoff sleep** |
+
+判別根拠: 呼出点 4 箇所（`:1975`/`:2029`/`:2081`/`:2223`）の台本はいずれも `\s[...]\e` 系で `\w`／`\c` を含まず**全 cue が `at=0.0`** ＝観測を壊す後続 cue が構造的に存在しない。
+
+**是正方針**（repo の既知知見と同型・`areka-ghost` 起動プローブ／`areka-kanade` `drive_ticks_until_disconnect` で開発者裁定により根治済み）:
+1. 有界性を**反復回数から `Instant` deadline へ**（`run_bounded`/`join_bounded` の `recv_timeout` と同イディオム）
+2. 譲歩を `yield_now()` から**短い `sleep` の poll-backoff** へ——Windows の `yield_now` は `SwitchToThread`＝同一プロセッサにしか譲らず、飽和下で別コアの worker を飢餓させる。決定論檻の「no sleep」原則に対する**明示例外**（競合飢餓の根治には必須）
+
+**台本・アサート・poll 条件は無改変**とする。
+
 ### バルーン追従基準の檻（R3.8・2026-07-31 の境界改訂で追加）
 
 position-persist 由来の檻 5 本（`resize_window_to_keeps_balloon_relative_to_bottom_center_origin` ほか、撤去した基準変換関数と心中したもの）を、後継 7 本へ入れ替えた。**削除ではなく意味変更**であり、同性質を実経路で固定する。
