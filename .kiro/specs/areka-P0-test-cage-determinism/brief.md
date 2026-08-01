@@ -2,6 +2,13 @@
 
 > **Discovery 日**: 2026-07-30 ／ **ウェーブ**: **W6.5**（W6 の後・W7 の前・追記(51)） ／ **規模**: medium-large（ただし**本番ソース面はほぼゼロ**）
 > **📌 2026-07-31 追記(52)微補正**: ①44 呼出・スピン 13 箇所・`Instant` 0 件は 2026-07-31 再実測で**全数一致**（アンカー健在）。ただし「Tick 兼用 `for now in …` 形は 5 箇所」は実測 **6 箇所の可能性**（:807,:1288,:1704,:1782,:1883,:2108・:1288 は `1_000_000..+5_000` の変則形）＝着手時に再計数。②**W5 `choice-select-events` が `input_events/balloon.rs` に `ChoiceSelectionInbox` drain を増設予定**（同ファイルは本 spec の毒化18呼出対象）＝W5 先着・本 spec 後着 rebase。③W6 は `balloon-visibility ∥ bindoption-exclusivity` の2本へ改訂（frame.rs 衝突相手に変化なし・bindoption は seriko/parsers 面ゆえ本 spec と素）。
+> **📌 2026-08-01 追記(58)数値全面更新（棚卸⑤・W5 3本マージ後の実測・本ブロックが(52)微補正と以下の本文の数値より優先）**:
+> - **② spine.rs スピン: 13 → 残 2 箇所**。`Instant`/壁時計 deadline なしの反復固定スピンは (i) **:1395-1398** `for now in 1_000_000u64..1_000_000+5_000`（Tick 兼用変則形）・(ii) **:2273-2275** `for _ in 0..5_000`（settle drain 内・負検証・doc :22 で意図的温存の明文あり）のみ。**ker が 11 箇所を `SPIN_WAIT` 壁時計 deadline＋200µs poll-backoff へ先行消化済み**（:328/:908/:1540/:1647/:1876/:1963/:1993/:2089/:2322 等）＝残作業は検収＋温存 2 箇所の裁定のみ。
+> - **① tracing 毒化: 44 呼出/6 モジュール → 45 呼出/7 モジュール**。既存 6 箇所は全数不変、**新規: `input_events/choice_drain.rs` の `capture_logs`（:182/:186・se 由来）**。「最小複製」自認コメントが choice_drain.rs:161 へさらに伝播＝**「否認が残ると再発する」の実証・cage を後ろへ置くほどコピーが増える構造も実証**（W5 で 1 増）。
+> - **se rebase 前提は消化済み**: drain は balloon.rs でなく新ファイル `choice_drain.rs` へ着地（balloon.rs は +12 行のみ）＝rebase 負担ほぼゼロ。
+> - **③ の新事実**: van が frame.rs:4088 で正典ハーネス（`placement/test_support.rs`）を消費開始＝**frame.rs 内に probe 方式と局所 `capture_logs` が同居**——一本化裁定の材料が増えた。frame.rs の helper は :1990 へドリフト。
+> - **規模: medium-large → medium へ縮小**。配置＝**W6.9**（追記(58)裁定: vis 先着必達〔frame.rs テスト域〕＋presenter.rs `apply_show` 鎖〔col→exact→budget→atom④〕の最後尾。④を `#[cfg(test)]` fault フラグ小案に縮めれば presenter.rs 衝突は :510 の 1 呼出に縮退）。553/1 単発赤の監視は継続。
+>
 > **出自**: `completed/areka-P0-emo-dpi-scaling` の `/kiro-validate-impl` ゲートが「無名の別タスク宛て＝実質未所有」として記録した 4 件（tasks.md:222）。
 > 2026-07-30 に**全件の実在を再検証**したところ 4 件とも健在で、うち 1 件は記録より**悪化**していた。担当 spec は 10 本の active spec のいずれにも存在しない。
 

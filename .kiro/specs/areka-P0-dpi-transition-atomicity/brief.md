@@ -4,6 +4,14 @@
 > 本 brief は**実測証跡・踏査結果・所有権判断を全て内包**する。別セッションはこの brief 単体で再開できる（会話ログは不要）。
 > **機序は未確定である。** 本 brief は仮説を仮説として書く。断定している箇所は実測引用を必ず添えてある。
 
+> **📌 2026-08-01 追記(58)陳腐化補正（棚卸⑤・W5 3本マージ後の実測・本ブロックが以下の本文より優先）**:
+> - **着手ゲート開放**: van（`dpi-window-vanish`）マージ済（PR#98・main `ec9687c`）＝「van 5.1/5.2 着地後に再観測」の待ち条件が**充足**。**第1段再観測は本 spec の requirements フェーズの research として実施する**（spec 外の作業経路は本プロジェクトに存在しない）。`/kiro-start` は要件討議まででコードに触れないため **W6 の 5 本と文書フェーズで同居可能**——**design 以降は W6.75 まで進めないこと**（presenter.rs `apply_show`・frame.rs dpi 相で col/vis と衝突）。
+> - **S1 是正着地で実測①②の前提が動いた**: window_pos.rs の WM_DPICHANGED は `dpi_suggested_position_decision`＋`ExternalAuthority`（:288-290/:388-389）で **OS 提案位置を書かなくなった**＝実測①の 8 回中 4 回（flags=21 の S1 書込 ②④⑥⑧）は現行コードで発生しない見込み。「859ms・SetWindowPos 8 回」は**全面再採取が必要**。実測②「applied=true 素通し」は是正済みの過去形として読むこと。
+> - **+36px（work area 非追随）スコープは有効なまま**: `resnap_shell_targets` が新設された（frame.rs:1305・:1488 で毎フレーム駆動）が、これは**シェルサーフェス寸変化駆動**であり work area 変化駆動の再スナップは依然存在しない。S5 担当＝本 spec は追記(57)⑴で確定済み（`MonitorSnapshot`＝main.rs:703 の 1 箇所・dpi=144 で 24px 浮き実測・**要件はこの実測から書き起こせる＝S5 側の再観測は不要**）。
+> - アンカードリフト: frame.rs 経路 B :801-859 → **:796-950 帯**（`run_dpi_phase` :976）・`emo2_frame_system` :1369-1399 → **:1466-1496**・window_pos.rs :285-385 → **:284-419**（決定関数化で中身も書き換わった）・`flush_window_pos_commands` は command.rs **:210**。exact 一致: command.rs `enqueue` :155-167・tick_bridge.rs :200・chain.rs ResizeBuffers :177-188・presenter.rs `take_pending_resize` :841・world/mod.rs tick_order :587。
+> - **縮退・分割規定（過積載対策）**: 再観測で「859ms・多段適用」が消えていれば本 spec は **「+36px work-area 追随＋檻」へ縮退し `balloon-offset-dpi` と統合**（着手ゲート同一・follow.rs 共有＝roadmap 追記(58) の既定路線）。残存した場合は (a) フレーム単位観測基盤＋機序確定／(b) 原子性是正／(c) work-area resnap の 3 分割を要件フェーズで検討すること（brief 194 行・3 関心は単一 spec の上限）。
+> - 干渉: presenter.rs `apply_show` 域で `recompose-budget`・`test-cage-determinism`④と**同ハンク級**＝budget 着地後に 859ms を再測すると合成コスト（1 合成 ≒143ms）の帰着切り分けが最良。
+
 ## Problem
 
 **誰の問題か**: エンドユーザー（ゴーストを常駐させる利用者）。

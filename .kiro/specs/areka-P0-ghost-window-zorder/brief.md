@@ -3,6 +3,13 @@
 > **起票 2026-07-31**（`/kiro-discovery` 再入・`areka-P0-dpi-window-vanish` の task 4.5 実機セッション中に開発者が発見）。
 > 本 brief は**実測証拠と正典語彙を全て内包**する。別セッションはこの brief 単体で再開できる（会話ログは不要）。
 
+> **📌 2026-08-01 追記(58)陳腐化補正＋配置確定（棚卸⑤・本ブロックが以下の本文より優先）**:
+> - **ウェーブ配置確定＝W6 編入**（col ∥ vis ∥ bind ∥ 本 spec ∥ scg の 5 本並走・実測全ペア素）。vis は本 spec の「各バルーンが自分のシェルより手前」保証を前提にする（相互登記）＝本 spec が W6 より後ろへ落ちることは不可。
+> - **「van 着地後に rebase」条項は消化済み**: van マージ済（PR#98）で spawn.rs は `ExternalAuthority` 付与（:353-354・バンドル :245/:273）＋despawn hook まで着地した現物＝本 spec は現物に owner／z-order を積むだけ。
+> - **追い風**: `SetWindowPosCommand` は `hwnd_insert_after: Option<HWND>` を搬送可能（wintf `ecs/window/command.rs` :124/:141）＝案 B（`ZOrder` 明示維持）の配線コストが起票時想定より低い。案 A（Win32 owner）の WUC/クリックスルー/`NOREDIRECTIONBITMAP` 共存実機検証が最初のタスクである点は不変。
+> - **混同予防**: `zorder_raw`（`placement/config.rs:72`）は descript `seriko.zorder`（SERIKO レイヤ順）の生文字列で**本 spec の窓 z-order とは別概念**。grep で引っかかっても編集対象ではない。
+> - アンカーは全一致を再確認（`ZOrder` :25-38・ビルダー :119/:131/:156・keyboard.rs WM_ACTIVATE :119・window_factory.rs :152・`NoChange` 以外の本番指定ゼロ）。
+
 ## Problem
 
 **誰の問題か**: エンドユーザー（ゴーストを常駐させる利用者）。
