@@ -123,6 +123,8 @@ Req 4.5 は「再導出結果が得られない場合は窓位置と窓寸を変
 
 design.md は `frame.rs:835`・`presenter.rs:772-818` を挙げていた。`frame.rs` 側は 1.4／3.2 の着地で `:854-857` へ移動。`presenter.rs` 側は**当時の範囲がそのまま有効**（`:772` が k 不変ゲート、`:818` が `take_pending_resize`）——本 spec は当該ファイルを編集していないため。
 
+**タスク 5.2 着地後の追記（§0.3 の引用更新規約）**: 上表の 1 行目（`frame.rs:854-857` の `if let Some(..)` ゲート）は**5.2 の是正で改変された**。本表は**赤の採取時点の構造**を保存する台帳ゆえ書き換えない——是正後の所在（`:867` の `match`／`:869-871` の `Some` 腕＝従来経路／`:875-880` の `None` 腕／`:915` `reproject_char_window_at_current_size`）と対応関係は **§3.2「5.2 の是正の実体」**が表で持つ。上表 2 行目の `reconcile_window_size` は `:704-739` のまま**無改変**（共通末端の契約は変えていない＝D7「presenter の戻り値契約は不変」と同じ趣旨で、寸の反映口には手を入れていない）。`presenter.rs` 側も 5.2 は編集していないため引用は現ツリーでも有効である。`refresh_scale` の doc への参照（本節本文の `frame.rs:850-853`）は `:861-864` へ移動した。
+
 ### 1.3 S3: キャラ窓の水平方向に可視性の不変条件が無く、最近傍フォールバックが異常を隠す
 
 **未充足 AC: 3.1**（ユーザーの明示的なドラッグ以外の要因で、キャラ窓の矩形がいずれのモニタ work area とも交差しない状態になることを防ぐ）
@@ -136,16 +138,17 @@ design.md は `frame.rs:835`・`presenter.rs:772-818` を挙げていた。`fram
 - `:906-907` `let new_pos = project_anchor(anchor, raw, new_size, snapshot);`
 - `:909-919` べき等 skip → `:924-933` `enqueue_window_set_pos(...)`（単一ライターへの書込）
 
-この関数へ**非ドラッグの配置系経路が 4 本**入る（いずれも `PlacementRoute` を引数で受ける・タスク 1.4／D13）:
+この関数へ**非ドラッグの配置系経路が 5 本**入る（いずれも `PlacementRoute` を引数で受ける・タスク 1.4／D13。**タスク 5.2 着地で DPI 相が 2 本へ分岐した**——`6.1` はガードを `resize_window_to` の内側に置くか route 条件で発火させるため、経路が増えても配線点は 1 箇所のままだが、**新設の `None` 経路も `DpiReproject` を名乗る**ことは 6.1 で必ず意識すること）:
 
 | 経路 | 呼出点（`file:line`） | route |
 | --- | --- | --- |
 | アンカー変化 | `crates/areka/src/placement/follow.rs:1025-1033`（`anchor_changed_system`・`:1009`）**※定義済みだが本番スケジュール未登録**（`add_systems(anchor_changed_system)` は `follow.rs:5406/5453/5487/6019`＝すべて `#[cfg(test)]` 内）。S3 は下の 3 本の生きた経路だけで成立する | `AnchorChange` |
-| 毎フレーム再スナップ | `crates/areka/src/emo2_boot/frame.rs:1190`（`resnap_from_sizes`・`:1162`） | `Resnap` |
-| DPI 相の再射影 | `crates/areka/src/emo2_boot/frame.rs:856`（`dpi_phase_with`） | `DpiReproject` |
-| 報告回収（drain 相） | `crates/areka/src/emo2_boot/frame.rs:1067-1073`（`reconcile_reported_sizes`・`:1011`） | `ReportedSizeReconcile` |
+| 毎フレーム再スナップ | `crates/areka/src/emo2_boot/frame.rs:1270`（`resnap_from_sizes`・`:1242`） | `Resnap` |
+| DPI 相の再射影（寸の再導出結果あり） | `crates/areka/src/emo2_boot/frame.rs:870`（`dpi_phase_with`・`:812`） | `DpiReproject` |
+| **DPI 相の再射影（寸の再導出結果なし・タスク 5.2 が新設）** | `crates/areka/src/emo2_boot/frame.rs:937`（`reproject_char_window_at_current_size`・`:915` ← `dpi_phase_with` の `None` 腕 `:876-878`） | `DpiReproject` |
+| 報告回収（drain 相） | `crates/areka/src/emo2_boot/frame.rs:1147-1153`（`reconcile_reported_sizes`・`:1091`） | `ReportedSizeReconcile` |
 
-**4 本のいずれも、書き込む矩形がどれかの work area と交差するかを検査しない。** ユーザーが触っていなくても、射影の入力（`raw`＝S1 で汚染され得る／モニタ構成情報が陳腐化している）次第で全 work area 非交差の位置が書かれ得る。
+**5 本のいずれも、書き込む矩形がどれかの work area と交差するかを検査しない。** ユーザーが触っていなくても、射影の入力（`raw`＝S1 で汚染され得る／モニタ構成情報が陳腐化している）次第で全 work area 非交差の位置が書かれ得る。
 
 #### 欠陥の構造（後段: 異常が観測されない）
 
@@ -165,7 +168,7 @@ design.md は `frame.rs:835`・`presenter.rs:772-818` を挙げていた。`fram
 
 #### 引用の再測定
 
-design.md は `frame.rs:1157-1228`・`follow.rs:1132-1160` を挙げていた。タスク 2.2／3.1／3.2 の着地で全て移動しており、現ツリーの実値は上記のとおり。
+design.md は `frame.rs:1157-1228`・`follow.rs:1132-1160` を挙げていた。タスク 2.2／3.1／3.2 の着地で全て移動しており、現ツリーの実値は上記のとおり。**タスク 5.2 着地（2026-08-01）で `frame.rs` 側の行がさらに移動し、DPI 相の呼出点が 2 本に増えたため、上表を再測定して更新済み**（S3 は未是正ゆえ本節は「赤の採取時点の保存」ではなく**現ツリーの実値**を保つ——6.1 が直接これを読んで配線するため）。`follow.rs` 側は 5.2 が編集していないため無改変。
 
 ### 1.4 S3′: バルーン矩形の可視性がどの経路でも検査されない
 
@@ -768,15 +771,16 @@ test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 549 filtered out; f
 
 | 項目 | 内容 |
 | --- | --- |
-| 檻の所在 | `crates/areka/src/emo2_boot/frame.rs:2911-3368`（`mod tests` 内の「task 4.4: S2 の赤証跡＝DPI 相の位置再射影檻」ブロック）。赤 4 件＝`s2_red_ground_point_preserved_at_dpi96`（`:3196`）／`_from_dpi96_to_dpi120`（`:3209`）／`_from_dpi96_to_dpi192`（`:3217`）／`_from_dpi120_to_dpi192`（`:3226`）。常時走る随伴 2 件＝`s2_control_some_report_path_reprojects_and_keeps_balloon_offset`（`:3239`・`Some` 経路の非退行対照）／`s2_dpi_phase_writes_nothing_when_the_ground_point_already_holds`（`:3308`・Req 4.5 の書込ゼロを守る前方ガード） |
+| 檻の所在（赤の採取時点） | `crates/areka/src/emo2_boot/frame.rs:2911-3368`（`mod tests` 内の「task 4.4: S2 の赤証跡＝DPI 相の位置再射影檻」ブロック）。赤 4 件＝`s2_red_ground_point_preserved_at_dpi96`（`:3196`）／`_from_dpi96_to_dpi120`（`:3209`）／`_from_dpi96_to_dpi192`（`:3217`）／`_from_dpi120_to_dpi192`（`:3226`）。常時走る随伴 2 件＝`s2_control_some_report_path_reprojects_and_keeps_balloon_offset`（`:3239`・`Some` 経路の非退行対照）／`s2_dpi_phase_writes_nothing_when_the_ground_point_already_holds`（`:3308`・Req 4.5 の書込ゼロを守る前方ガード） |
+| 檻の所在（**5.2 着地後の実測**） | 同ファイル `:3273`（`_at_dpi96`）／`:3285`（`_from_dpi96_to_dpi120`）／`:3292`（`_from_dpi96_to_dpi192`）／`:3300`（`_from_dpi120_to_dpi192`）——**無視属性は撤去済み**（4 件とも常時走る回帰檻へ昇格）。随伴 2 件は `:3313`（`s2_control_*`）／`:3382`（`s2_dpi_phase_writes_nothing_*`）。5.2 が追加した 4 件は `:3444-3721` の「task 5.2: S2 是正（位置の権威と寸の権威の分離）の檻」ブロック＝`:3461` `s2_none_report_path_reprojects_position_without_touching_size`／`:3551` `s2_none_report_path_leaves_the_balloon_in_place`／`:3622` `s2_none_report_path_holds_state_and_warns_when_the_window_size_is_undetermined`／`:3698` `s2_reproject_on_despawned_entity_is_debug_only_normal_termination` |
 | 檻の構成 | 偽 HWND のヘッドレス World（既存 `dpi_world()`＝2 scope×char/balloon・書込 witness 付き）×**合成マルチモニタ**（`s2_snapshot`＝ゴーストの居るモニタ＋負座標 `top=-140`／3200 超 `right=3874` の隣接モニタ）×**「再導出結果なし」固定の偽寸法報告源**（`FakeReports` の空マップ＝`refresh_scale_report` が常に `None`）×**DPI 注入**（`run_s2_probe(from,to)`・96→96／96→120／96→192／120→192）。実 GPU・実高 DPI モニタ不要の決定論（Req 5.2） |
 | 赤の採取コミット | **`db8bd1a`**（タスク 4.3 着地時点＝Phase A 完了・S1／S2 是正いずれも未投入）に本檻のみを載せたツリー。差分は `frame.rs` の `#[cfg(test)] mod tests` 内に閉じた **459 行の追加のみ**（`git diff --stat` で 1 file / +459 / −0・単一ハンク `@@ -2908,6 +2908,465 @@ mod tests`）＝本番の `dpi_phase_with` は無改変。W5 同居契約どおり `run_text_scale_phase`・`balloon_models` 写像には触れていない |
 | 赤の再現コマンド | `cargo test -p areka -- --ignored s2_red_`（赤 4 件は `#[ignore]` ゲート下。理由は下記「ゲート機構」） |
 | 赤の実行出力 | 下記コードブロック（実行実測・`--test-threads=1`・`RUST_BACKTRACE=0`） |
 | dpi 水準ごとの挙動 | **96 は通過・120／192 は失敗**。work area 下端はタスクバーの論理高（48）が `dpi/96` 倍で物理へ伸びる分だけ上がる＝`1492 − 48*dpi/96`（96→**1444**／120→**1432**／192→**1396**）。96 では変化の前後で下端が動かないため旧 Y と「新 work area 下端 − h」が自己整合し、再射影の欠落が観測されない（診断レポート §1.2「なぜ dpi=96 では隠れるか」）。120／192 では下端が 12px／48px 動くのに位置が一切書かれず、接地点 Y が旧下端 1444 に据え置かれる＝足元がタスクバーの下へ潜り込む |
 | 判定の表現 | 絶対 px の固定値ではなく **接地点（下端中央）の不変条件**で表現している（Req 5.6）——⑴変化**前**の接地点 Y ＝そのときの work area 下端（探針の前提）⑵接地点の **X 成分**が変化の前後で保存される ⑶接地点の **Y 成分**が「今いるモニタの work area 下端」であり続ける。work area 自体も絶対値を直書きせず **DPI 水準の関数**（`s2_work_area_for_dpi`）として組み、判定側は `work_area_for_window_with_origin` で**窓の実位置から解決**した値と突き合わせる。非退化の自己検査として ⒜`s2_assert_work_area_bottom_moves` が「その 2 水準で下端が実際に動く」ことを檻自身が `assert` し（不動点に落ちた空虚な緑を防ぐ・記憶〈2.2 の教訓〉）⒝`s2_resolved_work_area` が解決が `WorkAreaResolution::Contains` であること（最近傍フォールバックで解決していない＝合成レイアウトが退化していない）を毎回 `assert` する |
-| 緑の採取コミット | _（7.1）_ |
-| 緑の実行出力 | _（7.1・全水準）_ |
+| 緑の採取コミット | **タスク 5.2 の是正投入直後**（基底＝5.1 着地時点。是正差分は `crates/areka/src/emo2_boot/frame.rs` **1 ファイルのみ**——W5 同居契約どおり `run_text_scale_phase`・`balloon_models` 写像は無改変）。7.1 は S1 側の緑と合わせて最終確認する |
+| 緑の実行出力 | 下記コードブロック（実行実測・`cargo test -p areka --bins s2_ -- --test-threads=1`・**無視属性ゼロ**＝ゲートを掛けたままの見かけの緑ではない） |
 
 #### 赤の実行出力（`cargo test -p areka -- --ignored s2_red_ --test-threads=1`）
 
@@ -835,6 +839,8 @@ test result: FAILED. 1 passed; 3 failed; 0 ignored; 0 measured; 594 filtered out
 
 **タスク 5.2／7.1 は是正配線と同時に `#[ignore]` を 4 件とも外し、常時走る回帰檻へ昇格させること**（Req 5.1 の常時テスト化）。**dpi96 の 1 件も外す**——「96 では緑」は是正後も成立する性質であり、外して初めて 96 通過／120・192 失敗という非対称の記録が回帰檻として保存される。外し忘れると 5.2 の完了状態「4.4 の檻が緑に変わる」がゲートを掛けたまま形式的にだけ満たされる。
 
+> **タスク 5.2 で実施済み（2026-08-01）**: 4 件とも無視属性を撤去した（dpi96 を含む）。機械的な確認は `grep -n '#\[ignore' crates/areka/src/emo2_boot/frame.rs` の**実属性が 0 件**——注記文からも当該字面を排除したため（本節の「5.2 はこの 1 件も外すこと」等）、`crates/areka/src` 全体の grep も一致 0 件になっている（5.1 が `window_pos.rs` で採ったのと同じ流儀）。
+
 #### 常時走る随伴 2 件（5.2 が是正を**誤って**実装した場合に赤になる前方ガード）
 
 | 件名 | 何を固定するか | 5.2 のどの誤りを撃つか |
@@ -847,6 +853,72 @@ test result: FAILED. 1 passed; 3 failed; 0 ignored; 0 measured; 594 filtered out
 #### 緑側の先行確認（本タスクで実施・是正はツリーに残していない）
 
 檻が是正後に緑へ反転することを、5.2 相当の分岐（design D7＝`refresh_scale_report` が `None` かつ char 窓なら現 `WindowPos.size` のまま `resize_window_to(..., DpiReproject)` を通す）を**一時的に当てて実測し、直後に完全に戻した**。結果は赤 4 件すべて `ok`（`4 passed; 0 failed`）・`cargo test -p areka` 全体も **594 passed / 0 failed** で随伴 2 件を含め緑のまま。**是正はツリーに残していない**（4.5 の実機採取が是正未投入ビルドを要求するため・§2 の冒頭注記）。これにより本檻は「今赤・是正後緑」の両側が実行で確かめられている（空虚な赤ではない）。
+
+#### 緑の実行出力（**タスク 5.2 の是正投入後**・`cargo test -p areka --bins s2_ -- --test-threads=1`）
+
+```text
+running 11 tests
+test emo2_boot::frame::tests::s2_control_some_report_path_reprojects_and_keeps_balloon_offset ... ok
+test emo2_boot::frame::tests::s2_dpi_phase_writes_nothing_when_the_ground_point_already_holds ... ok
+test emo2_boot::frame::tests::s2_none_report_path_holds_state_and_warns_when_the_window_size_is_undetermined ... ok
+test emo2_boot::frame::tests::s2_none_report_path_leaves_the_balloon_in_place ... ok
+test emo2_boot::frame::tests::s2_none_report_path_reprojects_position_without_touching_size ... ok
+test emo2_boot::frame::tests::s2_red_ground_point_preserved_at_dpi96 ... ok
+test emo2_boot::frame::tests::s2_red_ground_point_preserved_from_dpi120_to_dpi192 ... ok
+test emo2_boot::frame::tests::s2_red_ground_point_preserved_from_dpi96_to_dpi120 ... ok
+test emo2_boot::frame::tests::s2_red_ground_point_preserved_from_dpi96_to_dpi192 ... ok
+test emo2_boot::frame::tests::s2_reproject_on_despawned_entity_is_debug_only_normal_termination ... ok
+test emo2_boot::spine::spine_s2_talk_drives_surface_switch_and_typewriter_reveal ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 592 filtered out; finished in 0.42s
+```
+
+> `spine_s2_talk_*` はフィルタ `s2_` に名前が引っ掛かっただけの無関係な檻である（S2 とは別件）。
+
+**`0 ignored` が本節の要点である**——赤 4 件（dpi96 を含む）は無視属性を撤去して常時走っており、ゲートを掛けたままの見かけの緑ではない。スイート全体は `cargo test -p areka` が **603 passed / 0 failed / 0 ignored**（5.1 着地時点の 595 passed / 4 ignored に対し、+4＝旧赤の常時化・+4＝5.2 が新設した檻）、`cargo test -p wintf` が **1,057 passed / 0 failed / lib ignored 2**（残る 2 件は 4.6 が置いた `s4_red_`＝本節の対象外・非退行）。
+
+赤（上掲）と緑（本節）の対比で Req 5.1／5.4 の非対称がそのまま読める——**dpi96 は赤の時点から一貫して `ok`**（work area 下端が動かず旧 Y と新 Y が自己整合する水準）、**120／192 は赤で `FAILED`・緑で `ok`**。
+
+#### 5.2 の是正の実体（§1.2 のゲートを断った場所）
+
+| §1.2 の段 | 是正後の所在（`file:line`・構造名） | 何が変わったか |
+| --- | --- | --- |
+| 位置の再射影が `Some` に条件付けられていた | `crates/areka/src/emo2_boot/frame.rs:867` `match source.refresh_scale_report(world, target)`（`dpi_phase_with`・`:812`） | `if let Some(..)` を網羅 `match` へ替え、`None` 腕（`:875-880`）を新設した。腕が増えればコンパイラが指摘する形になっている |
+| `Some`（従来経路） | 同 `:869-871` `reconcile_window_size(world, window, kind, new_size, PlacementRoute::DpiReproject)` | **無改変**。寸の反映口（char＝`resize_window_to`／balloon＝`resize_window_keep_position`）も route 語も従来どおり |
+| `None`（新設・S2 の是正本体） | 同 `:876-878` → `:915` `reproject_char_window_at_current_size`（→ `:930-938` `resize_window_to(world, window, 現寸, PlacementRoute::DpiReproject)`） | **キャラ窓は寸の成否に関わらず射影 T を一度通る**。現寸をそのまま渡すため手順 3b（下端中央の付け替え）は恒等で、`project_anchor` が Y を**変化後の** work area 下端から再導出する |
+| `None`（バルーン窓） | 同 `:879` `GhostWindowKind::Balloon => {}` | **位置据置き**（明示的な空腕）。随伴はキャラ窓確定後の `follow_balloon`（`resize_window_to` 手順 6/7）が担う＝同フレームで二重に位置が動かない |
+| 窓寸が未確定のとき | 同 `:916-929`（`WindowPos.size` が引けない縮退） | 現状維持のまま打ち切り、**事実をログに残す**（記憶〈ログ無し失敗経路の禁止〉）。水準は 2 分——破棄済み entity は `debug!`＋`DESPAWNED_SKIP_TAG`（正常終了系・Req 6.2）、実在するが寸未確定は `warn!`（真の異常）。タスク 3.2 が消費側 4 入口へ敷いた区別を、新設の消費点へも同じ形で適用したもの |
+| 表示側クレートの契約 | `crates/areka-emo-present/src/presenter.rs` — **無編集** | D7 の「presenter の戻り値契約は不変・分離は frame 側だけで解決する」をそのまま守った（`refresh_scale` の `None` 経路 5 種はいずれも従来どおり） |
+
+**Req 4.5（現状維持）との整合は「べき等 skip」で成立している**——同寸・同 work area なら `resize_window_to` の導出値が現在値と一致し、`crates/areka/src/placement/follow.rs:909-919`（手順 4 のべき等 skip）が書込ゼロで抜ける。書込が起きるのは**現位置が接地点規約に違反しているとき**だけであり、それは Req 4.1／4.2 が要求する保全そのものである（§1.2「Req 4.5 との関係（矛盾ではなく優先順位）」）。この性質を檻で押さえているのが `s2_dpi_phase_writes_nothing_when_the_ground_point_already_holds`（否定側）と `s2_none_report_path_reprojects_position_without_touching_size`（肯定側）の**対**である。
+
+#### 5.2 が新設した檻 4 件
+
+| 件名（`frame.rs:`） | 何を固定するか |
+| --- | --- |
+| `s2_none_report_path_reprojects_position_without_touching_size`（`:3461`） | **分離そのもの**——`None` 走行で窓寸は 1 bit も変わらず、位置だけが変化後の work area へ再射影される。route はちょうど 1 件の `DpiReproject`。バルーンは `BalloonFollow` でのみ動き、恒等式 `balloon − char ≡ offset` が保たれる（Req 4.4）。非空虚性: 両 target を実際に訪れたこと・バルーンが実際に動いたことを併せて `assert` する |
+| `s2_none_report_path_leaves_the_balloon_in_place`（`:3551`） | **バルーンの `None` は位置据置き**。work area が動いてもバルーン単独の DPI 変化では書かない。**「書込ゼロ」だけでは不動点に落ちる**（誤実装が `resize_window_to` へ流しても `Anchored` 欠落で書けず結果は同じ）ため、**警告以上のログが 1 行も出ないこと**を併せて主張する。非空虚性: 異寸報告のあるバルーンでは witness が動くことを positive witness で先に示す |
+| `s2_none_report_path_holds_state_and_warns_when_the_window_size_is_undetermined`（`:3622`） | **窓寸が未確定なら現状維持＋`warn!`**。位置も寸も動かず、縮退の事実がログに残る。非空虚性: 同一条件で寸が読めれば書かれることを positive witness で先に示し、さらに補助関数 `arm` が「初回 run は既に接地済みゆえ書込ゼロ」を `assert` して前提の退化を防ぐ |
+| `s2_reproject_on_despawned_entity_is_debug_only_normal_termination`（`:3698`） | **破棄済み窓は正常終了系**（`debug!` のみ・警告以上ゼロ＝Req 6.2）。上の件と対で「同じ『寸が読めない』でも水準が分かれる」ことを固定する |
+
+#### 檻の非空虚性（実装者が独立に当てたミューテーション 6 種）
+
+> すべて `Edit` で本番コードへ変異を入れ、`cargo test -p areka --bins s2_ -- --test-threads=1` を実行し、`Edit` で戻した（記憶〈`Copy-Item` 復元は mtime ごと複製され再ビルドが省かれる〉の罠を避けるため退避ファイルを使っていない）。
+
+| # | 変異 | 赤になった檻 |
+| --- | --- | --- |
+| M1 | **是正の撤去**（`None` 腕を no-op へ戻す＝赤の採取時点と同じ構造） | 旧赤 3 件（`_from_dpi96_to_dpi120`／`_from_dpi96_to_dpi192`／`_from_dpi120_to_dpi192`）＋`s2_none_report_path_reprojects_position_without_touching_size`＋`s2_none_report_path_holds_state_and_warns_*`（positive witness 側）の計 **5 件**。**dpi96 は緑のまま**＝「96 が欠陥を隠す」性質が是正後の檻でも再現する |
+| M2 | **バルーンも射影経路へ流す**（`Balloon => {}` を `reproject_char_window_at_current_size` 呼出へ） | `s2_none_report_path_leaves_the_balloon_in_place` の **1 件のみ**。落ちたのは**警告 assert**（`Anchored 未付与（char 窓は spawn で必ず付与）のため resize しない` が `Warn` で 1 行）——**書込ゼロの assert は緑のまま通った**。バルーンに `Anchored` が無いため誤実装でも窓は動かず、「動かない」だけを見る檻は**この変異に対して不動点**だったことの実測である（記憶〈2.2 の空虚性の教訓〉がそのまま再現した） |
+| M3 | **`Some` 経路を据置きへ流す**（従来経路を潰し、`Some` でも現寸で再射影する） | `s2_control_some_report_path_reprojects_and_keeps_balloon_offset`（4.4 が置いた前方ガード）＋新設 2 件の positive witness 側の計 **3 件** |
+| M4 | **寸未確定の縮退を `warn!`→`debug!` へ下げる**（縮退を静穏化する） | `s2_none_report_path_holds_state_and_warns_when_the_window_size_is_undetermined` の **1 件のみ**（水準 assert）。**自分で「真の異常ゆえ warn」と宣言した分岐を、その宣言を裏切る変異で検査した**（5.1 の教訓＝「load-bearing と自称した分岐が無検査」の 5 例目への対処） |
+| M5 | **破棄済みと寸未確定を混ぜて一律 `warn!` にする**（3.2 が敷いた区別の破壊） | `s2_reproject_on_despawned_entity_is_debug_only_normal_termination` の **1 件のみ** |
+| M6 | **現寸ではなく別寸で射影する**（`w+1`／`h+1`＝寸の権威を侵す） | `s2_none_report_path_reprojects_position_without_touching_size`（寸不変 assert）＋`s2_dpi_phase_writes_nothing_when_the_ground_point_already_holds`（Req 4.5 の書込ゼロ）＋`s2_none_report_path_holds_state_and_warns_*`（初回 run のべき等前提）の計 **3 件** |
+
+M2 が**書込 assert ではなくログ assert だけで**捕まったこと、M4／M5 が**それぞれ 1 件だけ**を赤にすることが、縮退梯子（`debug` と `warn` の別）が独立に固定されている証跡である。M1 と M3 が別々の檻集合を赤にすることは、`None` 経路の新設と `Some` 経路の非退行が独立に固定されていることの証跡である。
+
+#### 検証中に観測した既知の非決定（**本 spec 範囲外・W6.5 `test-cage-determinism` の所有**）
+
+5.1 が §3.1 に記録した `emo2_boot::spine::*` の散発失敗（有界スピンの踏破失敗）は、**5.2 の検証走行では 1 度も発生しなかった**（`cargo test -p areka` = 603 passed / 0 failed）。非決定ゆえ「解消した」とは読まないこと——所有は W6.5 のままである。
 
 ---
 
@@ -963,7 +1035,7 @@ test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 551 filtered out; fi
 | --- | --- | --- |
 | §0・§1 | **4.2（完了）** | 規約と静的構造証跡 4 件の先行登記 |
 | §3.1 | 4.3（赤）→ 7.1（緑） | S1 専用の実行記録 |
-| §3.2 | 4.4（赤）→ 7.1（緑） | S2 専用の実行記録 |
+| §3.2 | **4.4（赤）→ 5.2（緑・ゲート解除・是正の実体・ミューテーション記録）→ 7.1（最終確認）** | S2 専用の実行記録 |
 | §3.3 | **4.6（赤・緑とも採取済み）→ 7.1（ゲート解除）** | S4 専用の実行記録。赤 `s4_red_` 2 件の `#[ignore]` 解除は 7.1 の完了状態「ゲートされた赤証跡が 1 件も残っていない」が掃く |
 | §2 | 4.5（**セッション①のみ記入済み・②未採取**） | 実機 2 セッションの採取結果・Q1〜Q4・S1〜S3′ の痕跡 |
 | §4 | 7.4 | 是正後の実機再サインオフ |

@@ -179,13 +179,14 @@ $env:AREKA_PROFILE_DIR       = $PROFILE_DIR
 | O13 | `[drag] Dragging started` / `[drag] Dragging ended` / `[drag] Dragging cancelled` | 同上 | `debug` | `drag/state/mod.rs:274,427,480` |
 | O14 | `[DragEvent] Dispatching`（`start_x/y`・`current_x/y`・`delta_x/y`） | `wintf::ecs::drag::dispatch` | **`trace`** | `drag/dispatch.rs:357-365` ＝ **要件 2.3 の数値源** |
 | O15 | `[DragStartEvent] Dispatching` / `[DragEnd] Direct Arrangement.offset sync` | 同上 | `info` | `drag/dispatch.rs:190,301` |
+| O16 | `dpi reproject: WindowPos.size 未確定（窓生成前）`（`entity=`） | `areka::emo2_boot::frame` | **`warn`** | `frame.rs:923-926`（**タスク 5.2 着地後**。DPI 相の位置再射影が現寸を読めず打ち切った縮退＝1 行でも出たら当該窓の接地点は保証されない） |
 
 ### 3.2 D-BASE では**消灯する**観測点（D-TEARDOWN で点灯）
 
 | # | 判定語 | ログ target | 水準 | 備考 |
 | --- | --- | --- | --- | --- |
 | X1 | `[despawn-skip]`（追従層） | `areka::placement::follow` | `debug` | `follow.rs:839`（`resize_window_to`）・`follow.rs:1524`（`resize_window_keep_position`）。定数は `diag.rs:92` |
-| X2 | `[despawn-skip] dpi reconcile:` / `[despawn-skip] resnap:`（フレーム層） | `areka::emo2_boot::frame` | `debug` | `frame.rs:1060,1264` |
+| X2 | `[despawn-skip] dpi reconcile:` / `[despawn-skip] resnap:` / **`[despawn-skip] dpi reproject:`**（フレーム層） | `areka::emo2_boot::frame` | `debug` | `frame.rs:1140,1344,920`（3 つ目は**タスク 5.2 着地後**＝DPI 相の位置再射影の消費点。O16 と対で読む——同じ「寸が読めない」でも破棄済みは正常終了系ゆえ `debug`、実在窓は真の異常ゆえ `warn`） |
 | X3 | `placement: ゴースト窓レジストリから scope エントリを除去`（`scope=`・`char_window=`・`balloon_window=`） | `areka::placement::spawn` | `debug` | `spawn.rs:124-130`。**scope→entity 対応表の別解**（§5.2 の代替源） |
 
 > **規則の適用**: D-BASE のみで採ったログについて「`[despawn-skip]` が 0 行だった」と書いてはならない（**消灯しているだけ**）。要件 6.2 の判定は「`warn!` 以上が 0 行」という**否定側**で行う（`warn` は `info` で通る＝D-BASE で観測可能）。
@@ -230,9 +231,9 @@ $env:AREKA_PROFILE_DIR       = $PROFILE_DIR
 | spawn 初期配置 | （**未配線**・`SpawnInitial` 予約） | O9 | — |
 | 位置永続の復元 | （**未配線**・`Restore` 予約） | O9 | — |
 | アンカー変化 | `route=AnchorChange` | O9 | `follow.rs:1032` |
-| 毎フレーム再スナップ | `route=Resnap` | O9 | `frame.rs:1190` |
-| **DPI 変化の位置再射影（`dpi_phase` 限定）** | `route=DpiReproject` | O6/O7/O8 ＋ O9 | `frame.rs:856` |
-| **報告回収（drain 相・初回表示の k₀ 補正を含む）** | `route=ReportedSizeReconcile` | O9 | `frame.rs:1072` |
+| 毎フレーム再スナップ | `route=Resnap` | O9 | `frame.rs:1270` |
+| **DPI 変化の位置再射影（`dpi_phase` 限定）** | `route=DpiReproject` | O6/O7/O8 ＋ O9 | `frame.rs:870`（寸の再導出結果あり）／`frame.rs:937`（**タスク 5.2 着地後**＝再導出結果なしで**現寸のまま位置だけ**再射影する経路。`reproject_char_window_at_current_size`） |
+| **報告回収（drain 相・初回表示の k₀ 補正を含む）** | `route=ReportedSizeReconcile` | O9 | `frame.rs:1152` |
 | バルーン位置据置きリサイズ | `route=KeepPositionResize` | O9 | `follow.rs:1578` |
 | バルーン随伴 | `route=BalloonFollow` | O9 | `follow.rs:523,771` |
 | `\![move]` スクリプト明示移動 | `route=MoveCue` | O9 | `follow.rs:753` |
@@ -241,9 +242,11 @@ $env:AREKA_PROFILE_DIR       = $PROFILE_DIR
 
 ### 4.1 セッション②で「DPI 由来」と数えてよいのは `DpiReproject` **だけ**（D13）
 
-`ReportedSizeReconcile` は drain 相の報告回収であり、**`Changed<DPI>` に依存しない**（初回表示の k₀ 補正がここに landing する＝`frame.rs:1064-1066`・`diag.rs:140-145`）。DPI 変化ゼロの起動でも出る。これを DPI 由来と数えると、セッション②の突合に偽陽性が丸ごと混入する。
+`ReportedSizeReconcile` は drain 相の報告回収であり、**`Changed<DPI>` に依存しない**（初回表示の k₀ 補正がここに landing する＝`frame.rs:1144-1146`・`diag.rs:140-145`）。DPI 変化ゼロの起動でも出る。これを DPI 由来と数えると、セッション②の突合に偽陽性が丸ごと混入する。
 
 同様に `MoveCue`（`\![move]`）・`BalloonFollow`（キャラ確定後の随伴）は DPI 由来ではない。
+
+> **タスク 5.2 着地後の読み替え（`DpiReproject` の件数は増え得る）**: 5.2 の是正で、`Changed<DPI>` のキャラ窓は**寸の再導出結果が得られなかった走行でも**位置の射影を一度通るようになった（`frame.rs:937`）。ゆえに `route=DpiReproject` のレコードは「**寸を伴う書込**」（従来経路）と「**寸は前寸のまま位置だけ直した書込**」の 2 種を含む。**書式は変わらない**（`w=`／`h=` には常に実寸が載る＝`w=-` にはならない）ため §5 の計数規則・トークン境界は無改変だが、①（5.1 以前のビルド）との件数比較を「悪化」と読まないこと。5.2 以後に増えた分は**接地点規約の復元**であって新たな暴走ではない。判別が要る場合は、同一 entity の直前レコードと `w=`／`h=` が一致していれば後者（位置のみの是正）である。
 
 ### 4.2 target をまたぐ結合キー
 
