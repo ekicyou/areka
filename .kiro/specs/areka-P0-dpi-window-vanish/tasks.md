@@ -213,7 +213,7 @@
   - （6.1 と同一ファイル・同一関数群を触るため並行不可）
   - _完了（2026-08-01）_: 編集面は `crates/areka/src/placement/follow.rs` **1 ファイルのみ**。`BalloonFollowTrigger`（`follow.rs:518`）で**随伴の引き金**を配管し（ドラッグ 2 呼出元＝`:307`／`:390`・配置系 1 呼出元＝`:1168-1176`）、`guard_balloon_position`（`:619`）がバルーン矩形へ 6.1 と**同一の純関数**を適用する。6.1 の `apply_visibility_guard`（`:1771`）からは**発火判定だけを外へ出し**（`evaluate_visibility_guard`・`:1798`）、キャラ窓側の挙動は無改変。檻 **9 件**を新設し赤 6／緑 9 を採取（`diagnosis-report.md` **§3.5**）。`cargo test -p areka` **620 passed / 0 ignored**・`cargo test -p wintf` **1,057 passed**（非退行）
 
-- [ ] 6.3 S3 補: 位置の未確定表現（`CW_USEDEFAULT`）をキャラ窓経路でも旧矩形不明として扱う
+- [x] 6.3 S3 補: 位置の未確定表現（`CW_USEDEFAULT`）をキャラ窓経路でも旧矩形不明として扱う
   - **本タスクは 6.2 のレビューが「差し戻し先の担当者検証」を求めた結果として新設された**（[[deferral-requires-verified-owner]]＝ウェーブ名・タスク番号は担当者ではない）。当初 6.2 は 7.2 へ申し送ったが、7.2 の `_Boundary:_` は**檻のみ**で `resize_window_to` の挙動を変える権限を持たないため、挙動変更を許す Phase C に担当を立て直した
   - `resize_window_to` の `raw` 導出（`follow.rs:1030-1045`）と `old_rect` 導出（`:1059-1067`）は `WindowPos.position` の `Option::None` しか見ておらず、wintf 正典の未確定表現 `CW_USEDEFAULT`（`== i32::MIN`）を素通しする。位置がセンチネルの窓が入ると射影 T の入力も旧矩形も `i32::MIN` 近傍になり、`guard_visibility` が「もともと画面外に留置されていた」と読んで `Keep` へ落ちる＝**6.1 が敷いた安全側 clamp の腕が死ぬ**
   - 6.2 は**バルーン側だけ**を塞いだ（`guard_balloon_position`・`follow.rs:662-665`）。キャラ窓側を塞ぐと 6.1 の挙動が変わるため 6.2 の制約（「6.1 が配線したガードの挙動を変えないこと」）に触れ、同タスク内では実施できなかった
@@ -231,6 +231,7 @@
   - _Boundary: areka placement（`resize_window_to` の入力導出・遷移ガードの入力）_
   - _Depends: 6.1, 6.2_
   - （**7.2 より前に着地させること**——7.2 が書く混在 DPI 回帰檻の期待値が本タスクで変わる）
+  - _完了（2026-08-01）_: 編集面は `crates/areka/src/placement/follow.rs` **1 ファイル・2 ハンクのみ**（**298 挿入／0 削除**＝D15 帰結⑴⑷の「無改変」が diff で証明される形）。センチネル打ち切りは手順 3 の `Option::None` 縮退の直後（`follow.rs:1045-1068`）に置き、`raw`・`old_rect` の導出より**前**で断つ＝①`old_rect` 汚染と②手順 3b／射影 T の入力汚染を 1 箇所で同時に塞ぐ。檻 3 件を新設（`undetermined_position_aborts_resize_without_writing`・`negative_real_position_is_not_aborted_and_still_resizes`・`single_axis_position_sentinel_also_aborts`）。`cargo test -p areka` **623 passed / 0 ignored**・`cargo test -p wintf` **1,057 passed**（非退行）・`cargo build` / `--release` 双方成功
 
 - [ ] 7. Phase D: 回帰檻の完成と最終検証
 - [ ] 7.1 赤→緑の実行記録の確定
@@ -269,6 +270,10 @@
   - _Depends: 7.1, 7.2, 7.3_
 
 ## Implementation Notes
+
+- **6.3（「書込ゼロ」の檻を機械的に非空虚と示す手順＝本 spec で初めて成立）**: 打ち切り系の檻は `!ok`（戻り値）の assert が**先に**発火するため、その後段にある「`WindowPos` がバイト不変」の assert は**一度も評価されずに緑**になり得る——[[5.2 の教訓＝空虚性 6 例目]] の「不動点」型が最も潜みやすい配置である。レビュアは**`!ok` の assert を一時的に無効化したうえで**ガード撤去の変異を当て、`WindowPos == before` の行が**単独で赤くなる**ことを実測した（`enqueue_window_set_pos`・`follow.rs:1359-1368` が `bypass_change_detection` で position・size を書き戻すため、ガードが無ければ実際に書かれる）。**「戻り値」と「副作用不在」を同一テストで主張する檻は、前段の assert を外して後段が単独で赤くなることを確かめること**——さもなくば後段は装飾に過ぎない。
+- **6.3（センチネル判定は wintf 正典と「同型」であって「同式」ではない）**: wintf 正典（`crates/wintf/src/ecs/graphics/systems/window_pos.rs:41`／`crates/wintf/src/ecs/layout/systems/monitor_systems.rs:408`）が見るのは `position.x` と `size.width` の 2 つで、6.3 が置いたのは `pos.x || pos.y`（位置の**両軸**）。D15 が明示的にこの式を指定しており、`y == i32::MIN` は到達可能な実座標ではないので偽陽性の risk が無い＝**正典より厳しいのは意図的**。初版のコメントは「同式」と書いており、[[4.6 の教訓＝doc が実装より強い約束をする]] の再来になるためレビュー指摘を容れて「同型（正典が見るのは `position.x` と `size.width`・ここは位置の両軸）」へ是正した。**正典を引用するコメントは、引用元と自分の差分まで書くこと。**
+- **6.3 → 7.2 への申し送り（本番到達性はゼロのまま・障壁は `Anchored` 1 個）**: 6.3 は入口を塞いだが、センチネル位置の窓が `resize_window_to` に**到達しない**状況自体は変わっていない（`main.rs:480` `spawn_dummy_window` が生む `position = CW_USEDEFAULT` の窓は手順 1 の `Anchored` ゲート・`follow.rs:1009` で先に返る）。ゆえに 6.3 の 3 檻は**将来の到達に対する保険**であり、7.2 が混在 DPI 回帰檻を書く際に「センチネル窓は打ち切られる」を前提にしてよい。`undetermined_old_size_is_treated_as_unknown_rect_and_clamps`（位置実値・寸のみセンチネル＝clamp 腕）との**非対称は意図的**（D15 帰結⑴）——7.2 が両者を混同して片方の期待値へ寄せないこと。
 
 - **6.2（引き金の配管＝本タスクの設計上の核心）**: `follow_balloon` は配置系（`resize_window_to`）とドラッグ（`on_char_drag`／`on_char_drag_end`）の**双方**から呼ばれ、書込自身の route はつねに `BalloonFollow` ゆえ「なぜ動いたか」を復元できない。`BalloonFollowTrigger { Drag, Placement(PlacementRoute) }` を新設して**呼出元が引き金を渡す**形にし、`Placement` 腕が**引き金の route** に対して既存の `route_applies_visibility_guard` を引く（＝キャラ窓と同じ表を共有する。同述語に `BalloonFollow` を渡す形にはしていない）。`route_applies_visibility_guard` の doc（`follow.rs:1719-1721`）に着地形を追記済み。
 - **6.2（`apply_visibility_guard` の分割＝6.1 の挙動は無改変）**: 「発火可否の判定」と「評価＋観測」を分けた（`apply_visibility_guard`＝route で判定して `evaluate_visibility_guard` へ委譲）。両者で**判定の入力が違う**（書込の route ⇔ 引き金の route）一方、評価規則・clamp 先の引き方・3 語の観測は完全に同一だからである。ログに載る `route=` は**書込自身の経路**（バルーンは `BalloonFollow`）で、`[diag.window_move]` レコードと同じ語で突合できる。

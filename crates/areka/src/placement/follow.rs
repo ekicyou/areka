@@ -1042,6 +1042,31 @@ pub fn resize_window_to(
             );
             return false;
         };
+        // wintf の未確定表現は `Option::None` **だけではない**（D15・task 6.3）:
+        // `WindowPos::default()` は position を `CW_USEDEFAULT`（`i32::MIN` センチネル）で
+        // 持ち、`on_window_add` フックがそれを実際に挿す。素通しすると
+        //   ① 手順 3a の `old_rect` が `i32::MIN` 近傍の全 work area 非交差矩形になり、
+        //      `guard_visibility` が「もともと画面外に留置されていた」と誤読して `Keep`
+        //      ＝**6.1 が敷いた安全側 clamp の腕が黙って死ぬ**
+        //   ② 手順 3b の中央付替えと射影 T の入力（raw）も同時に汚染され、位置権威の
+        //      無い窓へ clamp 由来の任意 X を書く＝位置権威の僭称
+        // 位置未確定は「保存すべき接地点が存在しない」状態ゆえ、上の `Option::None` と
+        // 同じ腕へ合流させて打ち切る（Req 3.3「必要な入力が取得できない場合は現状維持＋
+        // 警告」）。**寸センチネルとの非対称は意図的**（D15 帰結⑴）——寸未確定は接地点が
+        // 実在するので resize に意味があり、手順 3a の `old_rect` 不明＝安全側 clamp で扱う。
+        //
+        // 判定は**センチネル一致**で行う（wintf 正典 `window_pos.rs:41`／
+        // `monitor_systems.rs:408` と同型——正典が見るのは `position.x` と `size.width`
+        // で、ここは位置の両軸を見る点だけが異なる）。負座標そのものは正当（実機の左隣
+        // モニタは負の X を持つ）ゆえ、符号や大きさの閾値で判定してはならない。
+        if pos.x == CW_USEDEFAULT || pos.y == CW_USEDEFAULT {
+            warn!(
+                entity = ?char_window,
+                position = ?pos,
+                "WindowPos.position がセンチネル（位置未確定）＝窓生成前のため raw を導出できず resize しない"
+            );
+            return false;
+        }
         (PointPx { x: pos.x, y: pos.y }, wp.size)
     };
 
@@ -7693,6 +7718,280 @@ mod tests {
                 tracing::Level::DEBUG,
                 "dpi={dpi}: 破棄済み打ち切りが debug 水準でない"
             );
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // 位置の未確定表現（`CW_USEDEFAULT`）をキャラ窓経路でも打ち切る
+    // （task 6.3・S3 補・D15・Req 3.1/3.3）
+    //
+    // `resize_window_to` 手順 3 は `WindowPos.position` の `Option::None` しか縮退させて
+    // おらず、wintf 正典の**もう一つの未確定表現**（`CW_USEDEFAULT` ＝ `i32::MIN`・
+    // `WindowPos::default()` が position に持つ）を素通ししていた。素通しすると
+    //   ① 手順 3a の `old_rect` が `i32::MIN` 近傍の全 work area 非交差矩形になり、
+    //      `guard_visibility` が「もともと留置されていた」と誤読して `Keep` へ落ちる
+    //      ＝**6.1 が敷いた安全側 clamp の腕が黙って死ぬ**
+    //   ② 手順 3b の中央付替えと射影 T の入力（raw）も同時に汚染される
+    // D15 は (b) **resize 打ち切り**を採る——位置未確定は「保存すべき接地点が存在しない」
+    // ゆえ、`Option::None` と同じ腕（`warn!`＋`false`）へ合流させて①②を一括で断つ。
+    //
+    // 檻の要点（空虚化を避けるための自己検査を各檻が持つ）:
+    //   (1) 打ち切り檻の自己検査——**位置だけを実値に替えた対照窓**が同じ route・同じ寸で
+    //       確実に書込まで進むこと（進まないなら「打ち切れた」は何も意味しない）
+    //   (2) 書込ゼロの直接観測——`WindowPos` が呼出前後で**完全一致**（`PartialEq`）
+    //   (3) `warn!` ちょうど 1 件——ログ側の守りを位置 assert と二段構えにする
+    //       （[[5.2 の教訓＝空虚性 6 例目]]／[[6.2 の教訓＝檻の空虚性]]）
+    //   (4) **符号判定への変異の検出**——左モニタは `-1920..0` ＝負座標そのものは正当。
+    //       実在する負座標の窓が打ち切られないことを独立の檻で固定する
+    //
+    // なお寸センチネルとの**非対称は意図的**（D15 帰結⑴）: 寸未確定は接地点（位置）が
+    // 実在するので resize に意味があり、`old_rect` 不明の安全側 clamp で扱う
+    // （既存檻 `undetermined_old_size_is_treated_as_unknown_rect_and_clamps` が無改変で
+    // 緑のまま＝その非対称の檻を兼ねる）。
+    // -------------------------------------------------------------------------
+
+    /// wintf 正典の未確定センチネル（`== i32::MIN`）。**本体の import とは独立に**
+    /// 定義元から直接引き、判定式が正典と同式であることを檻側でも固定する
+    /// （`window_pos.rs:41`／`monitor_systems.rs:408` と同じ値）。
+    use windows::Win32::UI::WindowsAndMessaging::CW_USEDEFAULT as SENTINEL;
+
+    /// 手順 3 の位置センチネル打ち切りが名乗る語（**本体の文言とは独立に literal で置く**）。
+    const POSITION_SENTINEL_TAG: &str = "センチネル（位置未確定）";
+
+    /// 位置・寸を明示した単独キャラ窓の World（混在 DPI 合成レイアウト付き）。
+    fn char_world_with_window_pos(dpi: i32, position: Point, size: Option<SizeI>) -> (World, Entity) {
+        let mut world = World::new();
+        world.insert_resource(mixed_layout(dpi));
+        let e = world
+            .spawn((
+                fake_handle(0x1000),
+                WindowPos {
+                    position: Some(position),
+                    size,
+                    ..Default::default()
+                },
+                Anchored(Anchor::Bottom),
+            ))
+            .id();
+        (world, e)
+    }
+
+    /// 旧寸（[`wide_char_size`] の `SizeI` 表現）。
+    fn old_size_i(dpi: i32) -> SizeI {
+        let s = wide_char_size(dpi);
+        SizeI::new(s.w, s.h)
+    }
+
+    /// 左モニタ（**負座標** `-1920..0`）内の**実在する**接地位置。
+    ///
+    /// 符号（`x < 0`）や大きさの閾値で未確定判定をすると、この正当な位置が巻き添えで
+    /// 打ち切られる＝檻 [`negative_real_position_is_not_aborted_and_still_resizes`] の被検体。
+    fn negative_real_pos(dpi: i32) -> Point {
+        Point {
+            x: left_wa().left / 2,
+            y: left_wa().bottom - old_size_i(dpi).height,
+        }
+    }
+
+    /// **探針の自己検査**: 位置**だけ**を実値に替えた対照窓は、同じ route・同じ新寸で
+    /// 必ず書込まで進む。これが崩れていると打ち切り檻の「何も起きなかった」は
+    /// センチネルの成果ではなく入力の不備になる（不動点の検出）。
+    fn assert_control_position_writes(dpi: i32, new: SizePx) {
+        let (mut world, e) =
+            char_world_with_window_pos(dpi, negative_real_pos(dpi), Some(old_size_i(dpi)));
+        let before = *world.get::<WindowPos>(e).expect("WindowPos があるはず");
+        assert!(
+            resize_window_to(&mut world, e, new, PlacementRoute::Resnap),
+            "dpi={dpi}: 探針が不動点——位置が実値の対照でも resize が成立しない"
+        );
+        assert_ne!(
+            *world.get::<WindowPos>(e).expect("WindowPos があるはず"),
+            before,
+            "dpi={dpi}: 探針が不動点——対照でも WindowPos が 1 bit も変わらない"
+        );
+    }
+
+    /// **位置がセンチネルの窓は log-first で打ち切る**（D15 採用案 (b)）: 戻り値 `false`・
+    /// `WindowPos` 書込ゼロ・`warn!` ちょうど 1 件。
+    ///
+    /// 是正前はここで安全側 `ClampX` が走り、`clamp_x_into(i32::MIN, .., wa)` が返す
+    /// `wa.left` が**位置権威の無い窓へ書き込まれて**いた（＝位置権威の僭称）。
+    #[test]
+    fn undetermined_position_aborts_resize_without_writing() {
+        for dpi in DPIS {
+            let new = narrow_char_size(dpi);
+            assert_control_position_writes(dpi, new);
+
+            for (label, size) in [
+                // `on_window_add` が挿す実表現そのもの（位置・寸とも未確定）。
+                ("窓生成直後（位置・寸ともセンチネル）", None),
+                // 寸だけ確定した窓＝汚染されるのは位置の側だけ、という切り分け。
+                ("寸のみ確定・位置センチネル", Some(old_size_i(dpi))),
+            ] {
+                let position = Point {
+                    x: SENTINEL,
+                    y: SENTINEL,
+                };
+                let (mut world, e) = char_world_with_window_pos(dpi, position, size);
+                // 探針の前提: 被検体が本当にセンチネルを持っている。
+                assert_eq!(
+                    world
+                        .get::<WindowPos>(e)
+                        .expect("WindowPos があるはず")
+                        .position,
+                    Some(position),
+                    "dpi={dpi} {label}: 探針がセンチネルを持っていない"
+                );
+                let before = *world.get::<WindowPos>(e).expect("WindowPos があるはず");
+
+                let (ok, events) =
+                    capture_logs(|| resize_window_to(&mut world, e, new, PlacementRoute::Resnap));
+
+                assert!(
+                    !ok,
+                    "dpi={dpi} {label}: 位置未確定（センチネル）なのに resize が成立している"
+                );
+                assert_eq!(
+                    *world.get::<WindowPos>(e).expect("WindowPos があるはず"),
+                    before,
+                    "dpi={dpi} {label}: 打ち切りのはずが WindowPos へ書き込まれている（Req 3.3 の現状維持違反）"
+                );
+                let warned = expect_one(&events, POSITION_SENTINEL_TAG);
+                assert_eq!(
+                    warned.level,
+                    tracing::Level::WARN,
+                    "dpi={dpi} {label}: 打ち切りが warn として残っていない（log-first 違反）"
+                );
+                assert_eq!(
+                    warned.field("entity"),
+                    format!("{e:?}"),
+                    "dpi={dpi} {label}: 警告行が対象 entity を名乗っていない"
+                );
+                assert_eq!(
+                    warned.field("position"),
+                    format!("{position:?}"),
+                    "dpi={dpi} {label}: 警告行が問題の位置を載せていない"
+                );
+                assert!(
+                    guard_events(&events, GUARD_TAG_PREFIX).is_empty(),
+                    "dpi={dpi} {label}: 打ち切ったのにガードが喋っている（射影 T の入力が汚染されている）: {events:?}"
+                );
+            }
+        }
+    }
+
+    /// **負座標そのものは正当**（合成レイアウトの左モニタは `-1920..0`）。
+    ///
+    /// 判定を符号（`x < 0`）や大きさの閾値へ変異させると、この実在位置の窓まで打ち切られる。
+    /// ゆえに本檻は「打ち切られない」ことを**位置の実値**で固定する（従来経路の非退行）。
+    #[test]
+    fn negative_real_position_is_not_aborted_and_still_resizes() {
+        for dpi in DPIS {
+            let start = negative_real_pos(dpi);
+            let new = narrow_char_size(dpi);
+            let layout = mixed_layout(dpi);
+            // 探針の自己検査: ①本当に負座標であり ②センチネルではなく
+            // ③旧矩形が実際に可視（＝「もともと留置」腕へ落ちない通常経路の入力）。
+            assert!(start.x < 0, "dpi={dpi}: 探針が負座標になっていない");
+            assert_ne!(start.x, SENTINEL, "dpi={dpi}: 探針がセンチネルと衝突している");
+            assert!(
+                visible_in(
+                    &layout,
+                    PointPx {
+                        x: start.x,
+                        y: start.y
+                    },
+                    wide_char_size(dpi)
+                ),
+                "dpi={dpi}: 探針の旧矩形が既に不可視——通常経路を通らない"
+            );
+
+            let (mut world, e) = char_world_with_window_pos(dpi, start, Some(old_size_i(dpi)));
+            let (ok, events) =
+                capture_logs(|| resize_window_to(&mut world, e, new, PlacementRoute::Resnap));
+
+            assert!(
+                ok,
+                "dpi={dpi}: 正当な負座標が打ち切られた（符号での未確定判定＝D15 が禁じた式）"
+            );
+            assert_eq!(
+                point_of(&world, e),
+                unguarded_projection(
+                    dpi,
+                    PointPx {
+                        x: start.x,
+                        y: start.y
+                    },
+                    new
+                ),
+                "dpi={dpi}: 負座標の従来経路（手順 3b＋射影 T）が退行している"
+            );
+            assert!(
+                guard_events(&events, POSITION_SENTINEL_TAG).is_empty(),
+                "dpi={dpi}: 正当な負座標に対してセンチネル警告が出ている: {events:?}"
+            );
+            assert!(
+                guard_events(&events, GUARD_TAG_PREFIX).is_empty(),
+                "dpi={dpi}: 可視 → 可視の遷移でガードが喋っている: {events:?}"
+            );
+        }
+    }
+
+    /// **片軸だけ**のセンチネルも打ち切る（`pos.x == SENTINEL || pos.y == SENTINEL`）。
+    ///
+    /// `&&` への変異（両軸そろったときだけ打ち切る）を検出する。y のみのセンチネルは
+    /// wintf 正典の `window_center` が見ていない軸であり、`||` にしてある理由が
+    /// 「接地点（下端中央）は x・y の**両方**が揃って初めて意味を持つ」ことである。
+    #[test]
+    fn single_axis_position_sentinel_also_aborts() {
+        for dpi in DPIS {
+            let new = narrow_char_size(dpi);
+            let real = negative_real_pos(dpi);
+            assert_control_position_writes(dpi, new);
+
+            for (label, position) in [
+                (
+                    "x のみセンチネル",
+                    Point {
+                        x: SENTINEL,
+                        y: real.y,
+                    },
+                ),
+                (
+                    "y のみセンチネル",
+                    Point {
+                        x: real.x,
+                        y: SENTINEL,
+                    },
+                ),
+            ] {
+                let (mut world, e) =
+                    char_world_with_window_pos(dpi, position, Some(old_size_i(dpi)));
+                let before = *world.get::<WindowPos>(e).expect("WindowPos があるはず");
+
+                let (ok, events) =
+                    capture_logs(|| resize_window_to(&mut world, e, new, PlacementRoute::Resnap));
+
+                assert!(
+                    !ok,
+                    "dpi={dpi} {label}: 片軸センチネルが打ち切られていない"
+                );
+                assert_eq!(
+                    *world.get::<WindowPos>(e).expect("WindowPos があるはず"),
+                    before,
+                    "dpi={dpi} {label}: 打ち切りのはずが WindowPos へ書き込まれている"
+                );
+                let warned = expect_one(&events, POSITION_SENTINEL_TAG);
+                assert_eq!(
+                    warned.level,
+                    tracing::Level::WARN,
+                    "dpi={dpi} {label}: 打ち切りが warn として残っていない"
+                );
+                assert!(
+                    guard_events(&events, GUARD_TAG_PREFIX).is_empty(),
+                    "dpi={dpi} {label}: 打ち切ったのにガードが喋っている: {events:?}"
+                );
+            }
         }
     }
 }
