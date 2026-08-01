@@ -117,7 +117,7 @@
   - 表示スケールは大きさのみ既存の丸め権威へ委譲し、符号を保存する
   - 両軸とも未指定なら調整量なしを返し、片軸のみ指定なら他軸を正典既定値 0 として扱う
   - 既存の調整量欄へ合流させる手段を用意し、別供給元の既存値があれば加算する。この欄が物理 px の加算欄であり別供給元は非スケールの生値である旨を実装コメントに明記する
-  - 決定論檻: 左右 × 正負 × 片軸欠落 × 表示スケール非 1 の全分岐、および両軸未指定時に調整量なしを返すこと
+  - 決定論檻: 正負 × 片軸欠落 × 表示スケール非 1 の全分岐、および両軸未指定時に調整量なしを返すこと。**「左右」は分岐ではない**——R7.6 の実機裁定で side 引数そのものを廃したため、檻が固定するのは「左右いずれでも変換結果が同一」という **side 非依存**である（`to_screen_adjust_is_side_independent_across_missing_axis_and_scale_matrix` ＋ 配置面の対檻 `prepare_windowposition_adjust_is_identical_for_both_balloon_sides`）
   - _Requirements: 3.2, 3.3, 3.4, 3.6, 7.1_
   - _Boundary: placement windowposition_
 
@@ -223,7 +223,7 @@
   - _Requirements: 1.10, 2.6, 5.1, 7.4, 7.7_
   - _Depends: 6.1_
 
-- [ ] 7. テスト決定性の是正
+- [x] 7. テスト決定性の是正
 
 - [x] 7.1 骨格 S2 の注入模擬時刻を観測窓で頭打ちにする
   - 駆動ループが注入模擬時刻を無条件に進めるため、実 async の進捗が遅れると観測窓（Clear 解放境界）を追い越し、観測条件が破壊されて残りの反復を空回りする。これを、注入時刻を観測窓の手前で頭打ちにする形へ是正する
@@ -250,6 +250,11 @@
 
 ## Implementation Notes
 
+- **最終検証ゲート（2026-08-01・task 7.1/7.2 と境界改訂の landed 後に再走）**: 判定 **GO**。機械検査＝`cargo test --workspace` **4406 passed / 0 failed / exit 0**、境界内 TBD/TODO/FIXME **0 件**、秘密文字列 **0 件**、実 liveness＝`skeleton_boots_with_real_ghost_windows_and_exits_zero`（実 emo2 fixture で `areka.exe` を実起動し scopes=[0,1] の実ゴースト窓構成で exit 0 ＋ wire 成立マーカー）**緑**。判断検査＝要件被覆 **GAP 0**（44 COVERED／CODE_ONLY 4＝R2.6・R7.2・R7.8・R7.9／DOC_ONLY 4 は設計上そうあるべきもの）・境界 **CLEAN**（`resolver.rs`／`spawn.rs`／`config.rs` は blob ハッシュで `main` と同一を再確認）・単一列挙権威 **本番 `read_dir` はちょうど 1 箇所**（`balloon.rs:310`。他は test-only オラクルと無関係 crate）・依存方向 **上向き import 0**・統合シーム **6/6 整合**。
+  - **決定性の再実測**: `cargo test -p areka` を**無負荷 10 回＋CPU バーナー 12 本併走 5 回＝計 15 回**、いずれも **557 passed / 0 failed**（今回はすべてログ保存済み）。前サイクルで捕捉できなかった 1 件の赤は**再現せず**——ただし当時テスト名を採れていない以上「是正済みクラスの取りこぼしではない」と断定はできない。R7.5/R7.8 の「全体テストの緑は決定論的」は**反復観測に基づく主張**であって証明ではない、と限定して読むこと。
+  - **本ゲートで是正した記述欠陥 6 件**（いずれもコード変更を伴わない・前サイクルで 5 件の陳腐化記述を出した同じクラスの再発）: ①R3.5 の「`persist.rs::merge_scope` に変更はない」＝**偽**（保存値採用分岐の中身が基準変換→素の採用へ変わっている・無改変なのは*順位*だけ）②R5.5 の「本体側で変化し得るのは初期既定位置のみ／永続値があれば同一」＝**両方とも偽**（R3.8 の是正対象はまさに本体側 scope 0 であり、永続値は同一キーのまま基準の意味が変わった）③R7.1／task 4.1 の「符号変換」「左右 ×」＝R7.6 の裁定で side 引数ごと廃止済みの死語（檻が固定するのは *side 非依存*）④design.md の `measure_balloon_surface0` 署名が `u32`＝実装は `usize`⑤design.md の File Structure Plan に呼出点 ripple 6 ファイル未記載⑥design.md Boundary Commitments が R7.9 の待機ループ拡張（11 本）を未反映・Clear 時刻も 1.05 のまま。**教訓: 実装時訂正を入れたら requirements／design／tasks／COMPAT の 4 面すべてに伝播したか毎回確認すること**（今回は R3.8 の伝播漏れが requirements 側に 2 件残っていた）。
+  - **非ブロッキングの観測（後続への申し送り）**: (a) バルーンの `AnimationTable` は `synthetic_surfaces_txt` が `animation*` 行を出さないため**構造的に常に空**＝`balloon_tables` の scope キー写像は現時点で**静的証跡でしか検証できない**（実行時に取り違えても観測されない）。W6 `balloon-visibility` が多面シナリオを組む際に実効化する。(b) `emo2_boot/mod.rs:160 derive_scopes()` の `vec![0, 1]` 固定は**本 spec 以前から**（DD-12 の M1 割切り・`main` と byte 同一）で、placement の動的 `detect_scopes` と二重管理になっている。
+
 - **7.2 の実測記録と残る不確かさ（正直な記録）**: 是正後の観測は——実装者の再リンクサイクル 14/14 緑・レビュアーの 9/9 緑（うち 4 回は CPU バーナー 11 本併走）・親の 8/8 緑、`cargo test --workspace` は各段で 3 連緑（4406/0）。**ただし親の検証中に `cargo test -p areka` が 1 回だけ 553/1 で赤になった**（13 秒・S2 の空回りパターンではない）。**ログを保存しておらずテスト名を捕捉できなかった**ため、是正済みクラスの取りこぼしか別要因かは**未確定**。直後の再走および上記 8 サイクルはすべて緑。今後赤を見たら**必ずログを保存してテスト名を採ること**（`Tee-Object` 等）。
 - **R7.8 の欠陥クラスは S2 だけではない（2 件目＝task 7.2 で是正）**: `spine.rs::drive_shell_shown`（`:1906-1935`・`for now in 1u64..=200_000` で注入模擬時刻を無条件に 1ms/反復進める）も同型で、`spine_e2e_sakura_blink_default_off_emits_nothing`（アサートは `:1931`）が**大規模再ビルド直後（新規リンク成果物の Defender 再スキャン圧）に 12 回中 2 回**落ちる。呼出元は 3 箇所（`:1975`/`:2029`/`:2081`）、同型の `drive_shell_shown_and_presented`（`:2131`・呼出元 `:2223`）も同構造。**ただし根因が S2 と同一（観測窓の追い越し）か、別物（反復予算の枯渇＝ラッチ型観測ゆえ時刻頭打ちでは直らない）かは未確定**——S2 のレビュアーは「他ループはラッチ型で後続 cue が観測を破壊しない」と抜き取り検証しており、こちらは予算枯渇の可能性がある。**診断してから是正方針を決めること**（時刻頭打ちで直る欠陥と、予算・待機設計の欠陥は処方が異なる）。R7.8 の「全体テストの緑は決定論的」はこの 2 件目が残る限り完全には満たされない。
 
@@ -262,7 +267,7 @@
 - `build_balloon_target_from_faces`（1.5 新設の直接入口）の `faces.is_empty()` ガードは、`build_balloon_target` 経由では `resolve_balloon_faces` の面 0 必在契約が先に効くため到達不能＝現時点で無檻。**消費者が現れる 3.1／4.2 で檻に入れること**（決定論網羅の取りこぼし防止）。
 - **6.1 実機サインオフ時の注意**: `resolve_balloon_faces` の info! は **scope あたり 3 行**（placement 内 2 ＋ boot 1・design.md の観測点 1 を実装時訂正済み）。`load_scope_balloon_model` の info! は scope あたり 2 行。**行数でなく値の一致で突合すること**。
 - **emo2 fixture の side 割当**: `shell/master/descript.txt` が `sakura.balloon.alignment,left` / `kero.balloon.alignment,right` を宣言 ⇒ scope 0 のバルーンはキャラ左隣、scope 1 は右隣が**基本位置**。ただし **`windowposition.x` の符号は side に依らない**（6.1 の実機裁定・下記参照）ので、side は基本位置の決定にのみ効く。
-- **後続 spec への申し送り（Revalidation Triggers の着地形・5 件すべて発火）**:
+- **後続 spec への申し送り（Revalidation Triggers の着地形・6 件すべて発火）**（当初 5 件と記していたのは誤り——2026-07-31 の境界改訂で 6 件目 `follow.rs`／`persist.rs` のバルーン追従基準〔design.md `:76`〕が追加されている。下の「バルーン追従基準の是正」節がその着地形にあたる）:
   - **W6 `bindoption-exclusivity`** — 本 spec が (a) `emo2_boot/assets.rs` のバルーン構築ループを全面書き換え（`BalloonScopeAssets` 新設・`BootAssets.balloon_model` 型ごと撤去・`LoopTables.balloon` を `BTreeMap<u32, AnimationTable>` へ）、(b) `areka-seriko` の `SerikoLoopConfig.balloon_table` を `balloon_tables: BTreeMap<ActorKey, AnimationTable>` へ改めた。**先着した本 spec の形を前提に rebase すること**。`areka-seriko` の bind/state/actor の**ロジックは無改変**なので異ハンク性は保たれている（`actor.rs` の変更はテスト構築 2 行のみ）。
   - **W6 `balloon-visibility`** — per-scope `BalloonModel` の実形（`BalloonScopeAssets.model`・attach で `balloon_models: HashMap<u32, BalloonModel>` へ記憶）へ後着で再突合すること。バルーンの表示／非表示ライフサイクル（`frame.rs` の無条件 ShowSurface 域）は本 spec で**無改変**。
   - **W6.5 `test-cage-determinism`** — `areka-emo-text::refresh_actor_binding` の no-op 判定が「適用 k が同値なら false」から「**`TextSlotBinding` 全体等値 ∧ 再解決 `ResolvedBalloonText` 等値の連言**」へ意味が変わった。旧意味論を前提とする檻を書かないこと。

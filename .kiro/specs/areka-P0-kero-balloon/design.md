@@ -45,7 +45,8 @@
 - **バルーン文字層の scope 別追従**（per-scope model 供給・k 同値時の寸/領域変化検知＝再追従判定キーの拡張）。
 - **バルーン側 `AnimationTable` の scope キー化**（`LoopTables.balloon` / `SerikoLoopConfig`・境界拡張として `areka-seriko/src/looper.rs` を明示編入）。
 - 解決結果・フォールバック・失敗経路の観測ログ、および互換対応表（`doc/COMPAT_ARCHITECTURE.md`）への記録。
-- **`spine.rs` S2 の駆動ループの時刻注入規律**（2026-07-31 に編入・R7.8）——注入した模擬時刻を観測窓（Clear@1.05s）で頭打ちにする。**アサート本体は非所有・無改変**（S2/S3/S4 の判定は引き続き完成領域の契約）。
+- **`spine.rs` S2 の駆動ループの時刻注入規律**（2026-07-31 に編入・R7.8）——注入した模擬時刻を観測窓（Clear@1.40s）で頭打ちにする。**アサート本体は非所有・無改変**（S2/S3/S4 の判定は引き続き完成領域の契約）。
+- **`spine.rs` の純粋待機ループの有界性**（2026-07-31 に境界拡張・R7.9）——反復回数のみで区切られた待機ループを**壁時計 `Instant` deadline（10 秒）＋200µs poll-backoff sleep** へ改める。R7.8 とは**別クラス**（ラッチ型観測ゆえ時刻頭打ちでは直らない・予算枯渇が真因）。対象は同クラス 11 本（`:702`/`:810`/`:1418`/`:1506`/`:1552`/`:1729`/`:1807`/`:1831`＋`drive_shell_shown`／`drive_shell_shown_and_presented`）。**台本・アサート・観測述語は非所有・無改変**。負検証の settle drain（「尽きるのが正常」）は `yield_now` のまま意図的に温存。
 - **バルーン相対位置の基準**（2026-07-31 の実機裁定で編入・R3.8）——runtime（`placement/follow.rs::resize_window_to`）と保存（`placement/persist.rs`）の双方で「キャラ窓の左上（窓相対）」に統一する。**キャラ窓位置そのものの原点（下端中央）は非所有・無改変**。
 
 ### Out of Boundary
@@ -194,6 +195,14 @@ crates/areka/src/placement/windowposition.rs
 | `doc/COMPAT_ARCHITECTURE.md` | R7.4/R7.7 の記録追加（後述 Error Handling 後の記録一覧）＋ R3.8 のバルーン追従基準の記録。 |
 
 > `crates/areka/src/placement/resolver.rs`・`areka-parsers` 配下・`areka-seriko` の bind/state/actor は**無改変**（Out of Boundary）。
+
+**呼出点 ripple（2026-08-01 の検証ゲートで追記・当初の計画表に未記載だった機械的追随）**——いずれも本 spec が所有する公開 API（`build_balloon_target` の `scope` 引数追加）と所有ログ文字列の変更に対する追随のみで、Out of Boundary 宣言のファイルには到達しない。
+
+| ファイル | 変更 |
+|---|---|
+| `crates/areka-emo-present/src/lib.rs` | モジュール doc を per-scope 解決の実形へ更新＋`pub use balloon::build_balloon_target_from_faces`（1.5 新設入口の公開）。 |
+| `crates/areka/examples/window-placement.rs`（`:317`）・`crates/areka/examples/emo-present.rs`（`:439`）・`crates/areka-emo-text/examples/emo-text-typewriter-demo.rs`（`:170`）・`crates/areka-emo-text/examples/emo-text-layer.rs`（`:570-571`） | `build_balloon_target(dir, decoder, 0)` の引数追随のみ（**リテラル scope 0 のまま**＝examples は単一スコープのデモ・per-scope 化は非対象）。 |
+| `crates/areka-emo-text/tests/attach_wiring_test.rs`（`:834`/`:862`/`:865`） | `actor.rs` の所有ログ文字列変更（「文字層の k 再追従」→「文字層の再追従」・再追従判定キーが k 単独でなくなったため）に対するアサート文言の追随。 |
 > **実装時訂正（2026-07-31・R3.8 の実機裁定）**: `placement/follow.rs` と `placement/persist.rs` は**当初 Out of Boundary だったが編集した**（開発者の明示命令による境界改訂）。`follow.rs::resize_window_to` の Bottom 限定 offset 補正を撤去し、`persist.rs` の `anchor_edge_basis`／`balloon_offset_to_persist`／`balloon_offset_from_persist` を撤去して、バルーン相対を runtime・保存の双方で窓（char 左上）基準へ統一した。`persist.rs` の**保存値優先マージの順位は無改変**。`char_pos_to_origin_x`／`_from_origin_x`（キャラ窓位置の下端中央符号化）も無改変。
 
 ## System Flows
@@ -494,8 +503,12 @@ pub struct BootAssets {
 // measure.rs（変更）
 /// scope の系列の面 0 を採寸する（採用ファイル名は resolve_balloon_faces から得る・D2）。
 /// scope ループ内で呼ばれ、失敗の scope 帰属は実 scope 番号（per-scope 化の帰結）。
+/// **実装時訂正（2026-08-01・検証ゲート）**: `scope` は `u32` ではなく **`usize`**。
+/// placement 層の通貨は `usize`（`cfg.scopes` のキー・`scope_ids`）であり、権威側の `u32` への
+/// 変換は呼出直前に `u32::try_from` で 1 回だけ行う（`measure.rs:426`・失敗は log-first で
+/// `PlacementError` へ・黙って切り詰めない）。境界での検査付き恒等変換に統一するため。
 fn measure_balloon_surface0(
-    balloon_root: &Path, decoder: &WicDecoderArm, composer: &mut Composer, scope: u32,
+    balloon_root: &Path, decoder: &WicDecoderArm, composer: &mut Composer, scope: usize,
 ) -> Result<SizePx, PlacementError>;
 
 // windowposition.rs（新設・全て純関数）
