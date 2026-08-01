@@ -709,9 +709,9 @@ mod tests {
     /// 是正未投入（`existing_monitor != new_monitor` を更新判定に使う版）では
     /// `PartialEq` が `handle` しか見ないため更新分岐が恒偽になり、**赤**になる。
     ///
-    /// 再現: `cargo test -p wintf -- --ignored s4_red_`
+    /// 是正（`differs_in_value`）投入後は常時走る回帰檻である（タスク 7.1 でゲート解除済み。
+    /// 赤の実行出力は `diagnosis-report.md` §3.3 に保存してある）。
     #[test]
-    #[ignore = "S4 赤証跡（是正前の失敗を保存する）。再現: cargo test -p wintf -- --ignored s4_red_"]
     fn s4_red_monitor_table_updates_when_only_values_change() {
         let before = probe_monitor_before();
         let after = probe_monitor_after();
@@ -748,9 +748,9 @@ mod tests {
     ///
     /// 是正未投入では上流（モニタ表の更新）が恒偽なので当然ここも駆動されず、**赤**になる。
     ///
-    /// 再現: `cargo test -p wintf -- --ignored s4_red_`
+    /// 是正（`differs_in_value`）投入後は常時走る回帰檻である（タスク 7.1 でゲート解除済み。
+    /// 赤の実行出力は `diagnosis-report.md` §3.3 に保存してある）。
     #[test]
-    #[ignore = "S4 赤証跡（是正前の失敗を保存する）。再現: cargo test -p wintf -- --ignored s4_red_"]
     fn s4_red_window_dpi_redriven_without_wm_dpichanged() {
         assert_probe_is_not_a_fixed_point(&probe_monitor_before(), &probe_monitor_after());
 

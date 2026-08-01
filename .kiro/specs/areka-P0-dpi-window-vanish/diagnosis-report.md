@@ -1017,6 +1017,8 @@ test ecs::layout::systems::monitor_systems::tests::s4_red_window_dpi_redriven_wi
 test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 551 filtered out; finished in 0.00s
 ```
 
+> **タスク 7.1 で実施済み（2026-08-01）**: 上表「ゲート機構」が 7.1 へ申し送った `#[ignore]` **2 件を撤去した**。撤去**前**に `cargo test -p wintf --lib -- --ignored s4_red_ --test-threads=1` で**ゲートを外した状態の緑を先に実測**し（`2 passed; 0 failed`）、それを確かめてから属性を落としている——「数を 0 にするために檻を殺す」逆順を踏んでいない。実行出力と機械確認は **§3.6** が正本。撤去後の当該 2 件の所在は `crates/wintf/src/ecs/layout/systems/monitor_systems.rs:715`（`s4_red_monitor_table_updates_when_only_values_change`）／`:754`（`s4_red_window_dpi_redriven_without_wm_dpichanged`）で、**行番号は撤去前と同一である**（doc の「再現: …--ignored…」1 行を「7.1 でゲート解除済み」2 行へ差し替え、`#[ignore]` 1 行を落としたため 3 行→3 行で相殺した）。
+
 #### 檻の非空虚性（実装者が独立に当てたミューテーション 6 種）
 
 | ミューテーション | 赤になった檻 | 何を証明するか |
@@ -1202,6 +1204,159 @@ test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 611 filtered out
 - **§2.5.3 の +36px（S5 候補）は解消しない**（§3.4 の 6.1 と同じ・`MonitorSnapshot` の更新経路不在が機序）。
 - **ガードの保護範囲の上限は 6.1 と同一**である（凍結 `MonitorSnapshot` に対する交差判定）。7.4 はこれを 6.2 の不足と読み違えないこと。
 
+### 3.6 赤→緑の確定（**タスク 7.1**・Phase C 完了後の現ツリーでの再実行とゲート全解除）
+
+> **本節は §3.1〜§3.5 を上書きしない**（§5 規約 2）。各節が採取時に保存した記録はそのまま残し、本節は**⑴ 緑側が「Phase C 完了後の現ツリー」でも成立すること ⑵ ゲートされた赤証跡が 1 件も残っていないこと ⑶「96 の自己整合が欠陥を隠す」性質が檻水準で明示されていること**の 3 点だけを確定する。
+>
+> **赤側は再実行していない・できない**（§3 冒頭の規約どおり）。赤は是正未投入コミット（S1＝`77411c0`／S2＝`db8bd1a`／S4＝抽出リファクタのみの版／S3・S3′＝配線前の同一セッション内ツリー）に対して採取済みで、現ツリーには是正が入っているため定義上再現しない。本節が確定するのは**緑側と非対称の保存**である。
+
+#### 3.6.1 確定の基準
+
+| 項目 | 内容 |
+| --- | --- |
+| 確定日 | **2026-08-01** |
+| 確定基準ツリー | `d301de9`（タスク 6.3 着地＝**Phase C 完了**）＋ 本タスクのゲート撤去差分 |
+| §3.1〜§3.5 との差 | §3.1 の緑は 5.1 着地時点・§3.2 は 5.2 着地時点・§3.3 は 4.6 時点・§3.4 は 6.1 時点・§3.5 は 6.2 時点で採取されている。**そのいずれもが現ツリー（6.3 着地後）ではない**ため、5 節すべての緑側を本タスクで**採り直した** |
+| 本タスクの編集面 | `crates/wintf/src/ecs/layout/systems/monitor_systems.rs`（**`#[ignore]` 2 件の撤去と当該 doc 行のみ**・檻の本体・assert・本番コードは無改変）＋ 本書 |
+
+#### 3.6.2 §3.1〜§3.5 の緑を現ツリーで再実行した結果
+
+| 節 | 対象 | 再実行コマンド | 結果 |
+| --- | --- | --- | --- |
+| §3.1（S1） | `s1_*` 12 件 | `cargo test -p wintf --lib s1_ -- --test-threads=1` | **12 passed / 0 failed / 0 ignored** |
+| §3.2（S2） | `s2_*` 11 件（1 件は無関係な `spine_s2_talk_*`） | `cargo test -p areka --bins s2_ -- --test-threads=1` | **11 passed / 0 failed / 0 ignored** |
+| §3.3（S4） | `s4_red_*` 2 件（**ゲート撤去後**） | `cargo test -p wintf --lib s4_ -- --test-threads=1` | **2 passed / 0 failed / 0 ignored** |
+| §3.4（S3） | 遷移ガードの檻 | `cargo test -p areka --bins -- --test-threads=1 placement::follow::tests::visibility_guard placement::follow::tests::missing_work_area placement::follow::tests::nearest_fallback placement::follow::tests::undetermined_old_size placement::follow::tests::drag_path` | **9 passed / 0 failed / 0 ignored** |
+| §3.5（S3′） | バルーン側の檻 9 件 | `cargo test -p areka --bins -- --test-threads=1 placement::follow::tests::balloon_ placement::follow::tests::missing_monitor_snapshot` | **9 passed / 0 failed / 0 ignored** |
+
+> §3.4 の再実行が **9 件**なのは、本節が使ったフィルタ（`…::drag_path`）が 6.1 当時の 8 件に加えて `drag_path_records_only_the_balloon_follow_write` を拾うためである。**6.1 が採った 8 件は全て含まれており緑**——件数の差は檻の増減ではなくフィルタの広さの差である。
+
+##### §3.1（S1）の再実行出力
+
+```text
+running 12 tests
+test ecs::window_proc::window_pos::tests::s1_control_default_policy_windows_apply_suggested_origin ... ok
+test ecs::window_proc::window_pos::tests::s1_decision_line_reports_apply_position_as_its_own_label ... ok
+test ecs::window_proc::window_pos::tests::s1_decision_line_reports_external_authority_and_applied_false ... ok
+test ecs::window_proc::window_pos::tests::s1_decision_line_reports_unreachable_when_policy_cannot_be_read ... ok
+test ecs::window_proc::window_pos::tests::s1_decision_line_reports_unset_policy_and_applied_true ... ok
+test ecs::window_proc::window_pos::tests::s1_default_policy_windows_also_report_the_message_as_handled ... ok
+test ecs::window_proc::window_pos::tests::s1_external_authority_handles_the_message_instead_of_delegating_to_defwindowproc ... ok
+test ecs::window_proc::window_pos::tests::s1_red_external_authority_establishes_no_write_context ... ok
+test ecs::window_proc::window_pos::tests::s1_red_external_authority_preserves_anchor_at_dpi120 ... ok
+test ecs::window_proc::window_pos::tests::s1_red_external_authority_preserves_anchor_at_dpi192 ... ok
+test ecs::window_proc::window_pos::tests::s1_red_external_authority_preserves_anchor_at_dpi96 ... ok
+test ecs::window_proc::window_pos::tests::s1_write_context_and_position_write_are_branched_together ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 549 filtered out; finished in 0.12s
+```
+
+##### §3.2（S2）の再実行出力
+
+```text
+running 11 tests
+test emo2_boot::frame::tests::s2_control_some_report_path_reprojects_and_keeps_balloon_offset ... ok
+test emo2_boot::frame::tests::s2_dpi_phase_writes_nothing_when_the_ground_point_already_holds ... ok
+test emo2_boot::frame::tests::s2_none_report_path_holds_state_and_warns_when_the_window_size_is_undetermined ... ok
+test emo2_boot::frame::tests::s2_none_report_path_leaves_the_balloon_in_place ... ok
+test emo2_boot::frame::tests::s2_none_report_path_reprojects_position_without_touching_size ... ok
+test emo2_boot::frame::tests::s2_red_ground_point_preserved_at_dpi96 ... ok
+test emo2_boot::frame::tests::s2_red_ground_point_preserved_from_dpi120_to_dpi192 ... ok
+test emo2_boot::frame::tests::s2_red_ground_point_preserved_from_dpi96_to_dpi120 ... ok
+test emo2_boot::frame::tests::s2_red_ground_point_preserved_from_dpi96_to_dpi192 ... ok
+test emo2_boot::frame::tests::s2_reproject_on_despawned_entity_is_debug_only_normal_termination ... ok
+test emo2_boot::spine::spine_s2_talk_drives_surface_switch_and_typewriter_reveal ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 612 filtered out; finished in 0.88s
+```
+
+##### §3.4（S3）の再実行出力
+
+```text
+running 9 tests
+test placement::follow::tests::drag_path_neither_clamps_nor_warns_when_leaving_every_work_area ... ok
+test placement::follow::tests::drag_path_records_only_the_balloon_follow_write ... ok
+test placement::follow::tests::missing_work_area_holds_position_and_warns_on_non_drag_route ... ok
+test placement::follow::tests::missing_work_area_stays_silent_on_guard_exempt_routes ... ok
+test placement::follow::tests::nearest_fallback_warns_on_non_drag_route_even_without_clamping ... ok
+test placement::follow::tests::undetermined_old_size_is_treated_as_unknown_rect_and_clamps ... ok
+test placement::follow::tests::visibility_guard_clamps_x_on_non_drag_placement_routes ... ok
+test placement::follow::tests::visibility_guard_does_not_fire_on_explicit_or_non_placement_routes ... ok
+test placement::follow::tests::visibility_guard_route_table_matches_the_d13_decision ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 614 filtered out; finished in 0.01s
+```
+
+##### §3.5（S3′）の再実行出力
+
+```text
+running 9 tests
+test placement::follow::tests::balloon_despawned_skips_guard_without_warning ... ok
+test placement::follow::tests::balloon_drag_trigger_neither_clamps_nor_warns ... ok
+test placement::follow::tests::balloon_follow_trigger_table_mirrors_the_char_window_table ... ok
+test placement::follow::tests::balloon_parked_off_screen_is_respected_on_placement_trigger ... ok
+test placement::follow::tests::balloon_undetermined_position_is_treated_as_unknown_rect_and_clamps ... ok
+test placement::follow::tests::balloon_undetermined_size_holds_proposed_position_and_warns ... ok
+test placement::follow::tests::balloon_visibility_guard_clamps_x_on_non_drag_placement_triggers ... ok
+test placement::follow::tests::balloon_visibility_guard_does_not_fire_on_explicit_or_non_placement_triggers ... ok
+test placement::follow::tests::missing_monitor_snapshot_warns_for_both_windows_without_the_proposed_field ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 614 filtered out; finished in 0.01s
+```
+
+#### 3.6.3 ゲートの全解除（完了状態「ゲートされた赤証跡が 1 件も残っていない」の機械確認）
+
+本タスク着手時点で残っていたゲートは **wintf の `s4_red_*` 2 件のみ**であった（areka 側は 5.2 が撤去済み・§3.2 の追記）。**撤去する前に、ゲートを外した状態で実際に緑になることを先に実測した**——順序が逆だと「数を 0 にするために檻を殺した」ことになる（[[deterministic-test-coverage-mandate]]・タスク文の明示制約）。
+
+**⑴ 撤去前の状態**（`grep -rn '#\[ignore' crates/areka/src crates/wintf/src`）:
+
+```text
+crates/wintf/src/ecs/layout/systems/monitor_systems.rs:714:    #[ignore = "S4 赤証跡（是正前の失敗を保存する）。再現: cargo test -p wintf -- --ignored s4_red_"]
+crates/wintf/src/ecs/layout/systems/monitor_systems.rs:753:    #[ignore = "S4 赤証跡（是正前の失敗を保存する）。再現: cargo test -p wintf -- --ignored s4_red_"]
+```
+
+**⑵ 撤去前・ゲートを外した状態の緑**（`cargo test -p wintf --lib -- --ignored s4_red_ --test-threads=1`。**この時点でまだ `#[ignore]` はツリーに在る**）:
+
+```text
+running 2 tests
+test ecs::layout::systems::monitor_systems::tests::s4_red_monitor_table_updates_when_only_values_change ... ok
+test ecs::layout::systems::monitor_systems::tests::s4_red_window_dpi_redriven_without_wm_dpichanged ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 559 filtered out; finished in 0.00s
+```
+
+**⑶ 撤去後の機械確認**（`grep -rn '#\[ignore' crates/areka/src crates/wintf/src`）: **一致 0 件**（出力なし）。S1（`window_pos.rs`）・S2（`frame.rs`）・S4（`monitor_systems.rs`）のいずれにもゲートは残っていない。
+
+**⑷ 撤去後のスイート全体**:
+
+| コマンド | 結果 | 基準との差 |
+| --- | --- | --- |
+| `cargo test -p areka` | **623 passed / 0 failed / 0 ignored**（bins 623＋tests 1＋2） | 6.3 着地時点と同一（本タスクは areka を触っていない） |
+| `cargo test -p wintf` | **合計 1,059 passed / 0 failed**・**lib 561 passed / lib ignored 0** | 6.3 着地時点は 1,057 passed / lib ignored 2。**+2 は旧ゲート 2 件の常時化そのもの**であり、新設檻はゼロ |
+| `cargo build` / `cargo build --release` | 双方成功 | — |
+
+> **doc-test の `26 ignored` は `#[ignore]` 属性ではない**。`cargo test -p wintf` の doc-test ターゲット（`10 passed; 26 ignored`）が数えているのは ` ```text ` 等**非 Rust のコードフェンス**であり、基準（1,057）にも同数が含まれている。完了状態の機械的な判定は `grep -rn '#\[ignore'` の 0 件（上記⑶）が正本で、`ignored` の語だけを数えないこと。
+
+#### 3.6.4 「96 の自己整合が欠陥を隠す」性質が**檻として**明示されていること
+
+Req 5.4 が要求するのはこの性質の**檻水準での明示**であり、本書の散文だけでは充足しない（散文は編集で静かに嘘になる）。**S1・S2 の双方で、⑴ 96 水準を独立の `#[test]` として持ち ⑵ 96 で欠陥が隠れる理由そのものを実行時 `assert` で自己検査している**ことを、現ツリーの `file:line` で確定した。
+
+| 症状 | 96 水準の檻（独立 `#[test]`） | 「96 が隠す」を名指しする檻内 `assert` | 何を主張しているか |
+| --- | --- | --- | --- |
+| **S1** | `crates/wintf/src/ecs/window_proc/window_pos.rs:835` `s1_red_external_authority_preserves_anchor_at_dpi96` | 同ファイル `:811-822`（共通ヘルパ `assert_external_authority_preserves_anchor_at`（`:795`）内の `if dpi == 96 { assert_eq!(…, "dpi=96 では提案原点が現位置と一致する前提（96 が欠陥を隠す性質）") } else { assert_ne!(…) }`） | **96 では OS 提案原点＝現位置**ゆえ、提案位置を書いても書かなくても最終位置が変わらない＝政策分岐が観測できない。120／192 では提案 X が現位置から離れることを `else` 腕が併せて `assert` する（＝探針が不動点でない） |
+| **S2** | `crates/areka/src/emo2_boot/frame.rs:3273` `s2_red_ground_point_preserved_at_dpi96` | 同 `:3275-3278`（`assert_eq!(probe.before[0].wa_bottom, probe.after[0].wa_bottom, "96 水準では work area 下端が動かない（＝本件が是正前でも通過する理由そのもの）")`）／対になる非退化検査 `s2_assert_work_area_bottom_moves`（`:3256`）を 120／192 の 3 件が呼ぶ | **96 では work area 下端が動かない**ゆえ、旧 Y と「新下端 − h」が自己整合し再射影の欠落が観測されない。120／192 側は「下端が実際に動く」ことを檻自身が `assert` する（動かない探針で緑になる空虚を塞ぐ） |
+
+**非対称そのものが回帰檻として保存されている**——96 の 1 件は §3.1／§3.2 の赤の実行出力で `ok`、120／192 の 3 件は `FAILED`。是正後は 4 件とも `ok`（上記 3.6.2）。**4 件が揃って常時走っていること**が「非対称が保存されている」の実体であり、96 の 1 件をゲート下に残したり削除したりすれば、この記録は檻から消える。5.1／5.2 が dpi96 の 1 件も含めて撤去したのはこのためである。
+
+さらに、この性質は**是正後の檻に対する変異でも再現する**ことが実測済みである（本タスクの新規測定ではなく既存記録の参照）——S1 のミューテーション 4（政策の読み取りを落とす）で 120／192 が赤・**96 は緑のまま**（§3.1）、S2 のミューテーション M1（`None` 腕を no-op へ戻す）で 120／192 が赤・**96 は緑のまま**（§3.2）。
+
+#### 3.6.5 本節が確定**しない**もの（境界の明示）
+
+- **赤側の再採取は行っていない**（§3 冒頭の規約どおり是正投入後は原理的に再現しない）。§3.1〜§3.5 に保存された赤の実行出力は**採取時ツリーの逐語転記**であり、そこに現れる行番号は当時のものである（§3.3 の注記と同じ扱い）。本タスクはそれらを改竄していない。
+- **S3（§3.4）・S3′（§3.5）にはそもそもゲートが存在しない**（配線と檻が同一タスクゆえ・両節の「赤の採り方」）。本節が両者について確定したのは緑側の現ツリー再実行だけである。
+- **実機側は 7.4 の領分**である。本節は決定論的な檻の記録のみを扱う（§4 は空のまま）。
+- **`emo2_boot::spine::*` の散発失敗**（§3.1／§3.2 が記録した有界スピンの踏破失敗）は本タスクの走行では発生しなかったが、非決定ゆえ「解消した」とは読まないこと——所有は W6.5 `test-cage-determinism` のままである。
+
 ---
 
 ---
@@ -1232,6 +1387,7 @@ test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 611 filtered out
 | §3.3 | **4.6（赤・緑とも採取済み）→ 7.1（ゲート解除）** | S4 専用の実行記録。赤 `s4_red_` 2 件の `#[ignore]` 解除は 7.1 の完了状態「ゲートされた赤証跡が 1 件も残っていない」が掃く |
 | §3.4 | **6.1（赤・緑・ミューテーション記録とも採取済み）** | S3 専用の実行記録。配線と檻が同一タスクゆえ `#[ignore]` ゲートは発生していない |
 | §3.5 | **6.2（赤・緑・ミューテーション記録とも採取済み）** | S3′ 専用の実行記録。§3.4 と同じく配線と檻が同一タスクゆえ `#[ignore]` ゲートは発生していない |
+| §3.6 | **7.1（完了・2026-08-01）** | 赤→緑の**確定**。§3.1〜§3.5 の緑を Phase C 完了後の現ツリー（`d301de9`）で再実行・**ゲート全解除の機械確認**（`grep -rn '#\[ignore' crates/areka/src crates/wintf/src` が 0 件）・「96 の自己整合が欠陥を隠す」性質の**檻水準での明示**（S1／S2 の `file:line`）。**§3.1〜§3.5 は上書きしていない**（規約 2） |
 | §2 | 4.5（**セッション①のみ記入済み・②未採取**） | 実機 2 セッションの採取結果・Q1〜Q4・S1〜S3′ の痕跡 |
 | §4 | 7.4 | 是正後の実機再サインオフ |
 
