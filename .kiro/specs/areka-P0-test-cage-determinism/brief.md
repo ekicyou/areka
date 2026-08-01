@@ -110,3 +110,8 @@ probe 方式（3 コピー・意味論はバイト等価で命名と prose だ�
 - 共有化の実現方法は要設計: `src` の `mod tests` 内・統合テスト・別 crate と**配置がバラバラ**なため、単なる移動では済まない（dev-dependency 用の支援 crate か `#[cfg(feature = "test-support")]` 公開かの判断）。
 - [[areka-bin-crate-internal-tests-in-crate]]: `crates/areka` は bin crate ゆえ内部到達テストは in-crate 配置が必須（`tests/` はバイナリ起動型専用）。共有化の形はこの制約を満たすこと。
 - 検証は**反復実行**で行う（フレーキーは単発の緑では証明できない）。②は負荷下・並列で最低数十走。
+
+---
+
+**2026-08-01 追補（kero-balloon task 7.1/7.2 の先行消化・roadmap 追記(56)）**: 本 brief の②「spine.rs 協調スピン 13 箇所」は **kero-balloon が 11 箇所を先行是正済み**（R7.8＝S2 注入時刻の観測窓頭打ち〔Clear@1.40s・導出式は同 spec requirements R7.8〕・R7.9＝壁時計 `Instant` deadline 10s＋200µs poll-backoff sleep×11 本）。残作業＝(a) 是正形の検収（台本・アサート無改変の確認）、(b) 意図的に `yield_now` のまま温存した **settle drain 2 箇所**（負検証「尽きるのが正常」）の扱い裁定、(c) 着手時に spine.rs を実測して取りこぼし確認。**②の規模見積りは縮む**。
+**監視項目の引き継ぎ**: kero-balloon 検証中に `cargo test -p areka` が **1 回だけ 553/1 で赤**（13 秒・S2 空回りパターンではない・**ログ未保存でテスト名不明**）。以後 15 回以上連続緑で再現せず。本 spec の反復検証（②は負荷下で数十走）中に赤を見たら**必ずログを tee してテスト名を採る**こと——これが正体不明のまま残っている唯一の非決定性候補。
