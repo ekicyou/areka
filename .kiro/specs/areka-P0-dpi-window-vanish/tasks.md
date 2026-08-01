@@ -267,7 +267,7 @@
   - _完了（2026-08-01・`b777b6c`）_: 檻の Part 1 は 3.2／6.1 が設置済みで全緑を確認。`despawn_smoke_targets`（`main.rs`）と `enqueue_window_set_pos`（`follow.rs`）へ 3.2 の区別を適用し、檻 2 件新設・1 件強化（変異 M1〜M3 が各 sole failure・レビュアが独立再現）。**本番語彙は `DESPAWNED_SKIP_TAG` の再利用のみで新語彙ゼロ**。`cargo test -p areka` **628 passed / 0 ignored**
   - _本タスクが確定させた最大の成果は「確定原因の誤りの発見」である_: 実機 3 件が `despawn_smoke_targets` 由来ではないことを ⑴**順序**（`WARN` は `INFO … count=4`＝ループ返却後より**後**・別 spec の実機ログがμ秒精度で再現・`lifecycle.rs:65` の `try_borrow_mut` が順序を強制）⑵**構造**（`#[relationship]` が `crates` 全体で **0 件**＝連鎖不能）⑶**真の出所**（`lifecycle.rs:70` が `window_handle.rs:279` の非同期 `PostMessageW(WM_CLOSE)` 経由で陳腐化 id を despawn）の 3 点で確定。開発者裁定（2026-08-01）を得て `diagnosis-report.md` §2.3.4 を訂正・design **D16** と **Phase D′** を新設・**タスク 7.5** を担当として立てた
 
-- [ ] 7.5 Phase D′: 表示基盤側 despawn 呼出点の終了時静穏（`TEARDOWN-SILENCE` の真の出所）
+- [x] 7.5 Phase D′: 表示基盤側 despawn 呼出点の終了時静穏（`TEARDOWN-SILENCE` の真の出所）
   - **本タスクは 7.3 の実装が `TEARDOWN-SILENCE: FAIL` の確定原因の誤りを発見した結果として新設された**（開発者裁定 2026-08-01）。正本は `diagnosis-report.md` **§2.3.4 の訂正ブロック**と design **D16**・**Phase D′**
   - `crates/wintf/src/ecs/window_proc/lifecycle.rs:62-73` の `WM_CLOSE` ハンドラは `:70` で `w.world_mut().despawn(entity)` を呼ぶが、この `entity` は `window_handle.rs:279` の**非同期** `PostMessageW(hwnd, WM_CLOSE)` を経て届くため、ポンプが回る時点で**既に破棄済み**になり得る。`bevy_ecs` が `Could not despawn entity` の `WARN` を出す（実機 3 件・`TEARDOWN-SILENCE: FAIL` の**真の**出所）
   - 3.2／7.3 と**同一の区別**を適用する（entity 不在＝正常終了系の `debug!`／実在するが規約違反＝真の異常の `warn!`）。語彙も既存のものを再利用し新設しないこと——ただし `DESPAWNED_SKIP_TAG` は areka の `placement::diag` にあり **wintf からは import 禁止**（design の依存方向規約「wintf → areka の import は禁止」）なので、wintf 側の既存語彙を用いるか同等の定数を wintf 内に置くこと。**どちらにせよ areka 側の定数を参照してはならない**
@@ -278,6 +278,8 @@
   - _Boundary: wintf 表示基盤（`lifecycle.rs` の `WM_CLOSE` 呼出点＋その檻のみ）_
   - _Depends: 7.3_
   - （**7.4 より前に着地させること**——7.4 は `TEARDOWN-SILENCE` を主体非依存の全件判定で読むため、未着地なら必ず `FAIL` する）
+  - _完了（2026-08-01）_: 編集面は `crates/wintf/src/ecs/window_proc/lifecycle.rs` **1 ファイルのみ**。本番は `WM_CLOSE` 内の 9 行（`get_entity(entity).is_err()` → `debug!` 打ち切り／それ以外は従来どおり `despawn`）。**投函契約・正準シグナル・wndproc 戻り値 `Some(LRESULT(0))` はいずれも無改変**（レビュアが `window_handle.rs:279`・`clickthrough/controller.rs:90` の無変更を diff で確認・5.1 で踏んだ「戻り値が黙って OS 挙動を変える」罠の再来を回避）。檻は**三アーム構成**（⑴対照＝`World::despawn` の `false`／⑵本体＝打ち切り行の存在と DEBUG 水準／⑶自己証明＝ハーネスが同一呼出点の WARN を見られること）で空虚性 9 例目を回避。変異 M1（ガード撤去）・M3（水準）が各 sole failure、M2（述語反転）が新設 2 件＋**既存 `wm_close_despawns_target_entity` も**赤＝生存経路の破壊を検出。`cargo test -p wintf` **1,062 passed / lib ignored 0**・`cargo test -p areka` **628 passed**（非退行）
+  - _残る危険（機械的に塞げない）_: `DESPAWNED_SKIP_TAG` は areka（`placement/diag.rs`）と wintf（`lifecycle.rs`）に**同一文字列で二重定義**されている（依存方向規約により定数共有は不可・wintf 側は `pub(crate)` ゆえ crate 跨ぎの等値 assert も書けない）。相互参照の doc は **wintf 側にのみ**あり、areka 側から文字列を変えると終了時ログの grep 語が静かに分裂する。areka 側への注記追加は 7.5 の `_Boundary:_` 外ゆえ本タスクでは行っていない
 
 - [ ] 7.4 是正後の実機再サインオフ
   - 是正投入後のビルドで診断手順書と同一手順の 2 セッションを再実行し、受理回数の下限を踏破したうえで消失痕跡がゼロであることを判定語で確認する
@@ -289,6 +291,8 @@
 
 ## Implementation Notes
 
+- **7.5（空虚性 9 例目の正確な機序＝「ブリッジは在る。大域に立っていないだけ」）**: 7.3 は「`crates` 内に `tracing_log`／`LogTracer` が存在しない」ことを理由に挙げたが、これは**source 参照としては真でも依存グラフとしては誤り**——`tracing-log` は `tracing-subscriber` の既定 feature 経由でグラフに入っており、本番は `areka` の `main.rs` が `.init()` を呼ぶことで**大域ブリッジを実際に立てている**（実機ログに bevy の 3 件が載ったのはそのため）。捕捉が見えない真の理由は `capture_under_filter` が **`with_default`（スレッドローカル差替え）であって大域ブリッジを立てない**ことである。結論（`log` 発の記録は檻に届かない）は変わらないが、**理由を取り違えると「本番でも出ないはず」と誤読する**ため lifecycle.rs の檻 doc で機序を正した（レビュア指摘）。
+- **7.5（「無いこと」の陰性主張を救うのは自己証明アーム）**: 捕捉に対する陰性主張（`!out.contains("WARN")`）は、**同じハーネス・同じ filter・同じ module path で WARN が『在るとき』に見えること**を先に示す**自己証明アーム**を添えて初めて非空虚になる。7.5 の檻は⑴対照（警告と同一分岐の観測可能量）⑵本体（自前の打ち切り行が**在る**こと）⑶自己証明の三アームで構成し、変異 M3（`debug!`→`warn!`）が自己証明アームの妥当性を**実測で**裏づけた。
 - **7.3（檻の空虚性・9 例目＝「捕捉ハーネスが原理的に見えない語を『無い』と主張する」型）**: `bevy_ecs` は `log::warn!` を使う（`bevy_ecs-0.18.1/src/world/mod.rs:71` が `use log::warn;`・`World::despawn` は `:1462-1469` で失敗時に `warn!`＋`false` を**同一分岐で**返す）。実機で `WARN bevy_ecs::world: Could not despawn entity` が見えるのは `tracing_subscriber` の log→tracing ブリッジ経由であり、テストの `capture_logs`（素の thread-local `tracing` dispatcher・`test_support.rs:166`・`crates` 内に `tracing_log`／`LogTracer` は**存在しない**）には**原理的に 1 件も届かない**。ゆえに「捕捉に警告が無い」は bevy の警告について**恒真**＝檻として空虚。是正は対照アーム——存在確認なしのループで `World::despawn` が `false` を返すことを主張する（**警告と同一分岐**ゆえ代替として厳密）。**「無いこと」を主張する檻は、ハーネスがその語を『在るとき』に見られることを先に証明すること。**
 - **7.3（全体件数の檻は相ごとに数える）**: 変異 M2（随伴書込の存在確認を無効化）は遷移ガード相の `[despawn-skip]` 行を**そのまま残す**ため、素朴な総件数 assert は**緑のまま**通り抜ける（3.2 が踏んだ空虚性 2 例目と同型＝下流が同じ語を出して総数を覆い隠す）。檻は打ち切り行を**相ごとに**（遷移ガード相 1／随伴書込相 1）計数して初めて赤くなる。
 - **7.2（檻の空虚性・8 例目＝「恒等式を、それを作った当人に問う」型）**: 既存檻 `s2_control_some_report_path_reprojects_and_keeps_balloon_offset` は `balloon − char ≡ offset` を主張していたが、**`offset` を書込の後に world から読んで**いた。`follow_balloon` は同じ component から `balloon = char + offset` を計算して書くので、これは**書いた当人に「そう書いたか」を尋ねる同語反復**である。`resize_window_to` 手順 6 の原点付替え量を 0 へ潰す変異（M4）を当てても**緑のまま**——DPI 相は Req 4.4 に対して実質無検査だった。是正は「**接地点（下端中央）から見た**バルーンの相対位置が不変」への言い換え——接地点は `follow_balloon` が参照しない独立量ゆえ同語反復にならない（レビュアが M4 で新旧の赤／緑を対比実測）。**恒等式を檻にするときは、その等式の両辺が被検体の外で独立に決まるかを確かめること。**
