@@ -150,7 +150,7 @@ impl tracing::Subscriber for InterestProbe {
 /// 2 個必要なのは `has_just_one = (dispatchers.len() <= 1)` ゆえ——1 個では
 /// 登録直後に `has_just_one` が真のままとなり、次の `register_dispatch` までの隙間で
 /// `Rebuilder::JustOne`（毒の経路）が生き残る。2 個目の登録で確定的に偽へ落とす。
-fn ensure_interest_probes() {
+pub(crate) fn ensure_interest_probes() {
     static PROBES: OnceLock<(tracing::Dispatch, tracing::Dispatch)> = OnceLock::new();
     PROBES.get_or_init(|| {
         // `Dispatch::new` が `callsite::register_dispatch` を呼ぶ（＝登録＋全走査再計算）。

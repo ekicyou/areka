@@ -567,8 +567,8 @@ fn build_and_spawn(world: &mut World, vertical: bool, hold: bool) {
     // バルーン枠アセット×2（\0/\1 target）: 共有 fixture をシェルと同一経路で構築。
     let balloon_dir = shared_balloon_dir();
     let (Ok(assets0), Ok(assets1)) = (
-        build_balloon_target(&balloon_dir, &decoder),
-        build_balloon_target(&balloon_dir, &decoder),
+        build_balloon_target(&balloon_dir, &decoder, 0),
+        build_balloon_target(&balloon_dir, &decoder, 0),
     ) else {
         setup_abort("バルーン枠アセットの構築に失敗（共有 fixture の配置を確認）");
     };

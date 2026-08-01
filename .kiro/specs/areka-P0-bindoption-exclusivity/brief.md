@@ -3,6 +3,12 @@
 > **起票 2026-07-26**（`/kiro-discovery`・`areka-P0-emo-dpi-scaling` の task 7.4 実機サインオフ中に開発者が発見）。
 > 本 brief は**調査済みの根因と実測証拠を全て内包**する。別セッションはこの brief 単体で再開できる（会話ログは不要）。
 
+> **📌 2026-08-01 追記(58)陳腐化補正（棚卸⑤・W5 3本マージ後の実測・本ブロックが(52)より優先）**:
+> - **着手ゲート開放**: kero-balloon マージ済（PR#97）＝「assets.rs 異ハンク衝突ゆえ W5 不可・ker 先着後に rebase」は**充足**。今から着手可。ウェーブは **W6 の 5 本並走**（col ∥ vis ∥ 本 spec ∥ zorder ∥ scg・追記(58)裁定）で不変同居。
+> - アンカードリフト（シンボル実在・軽微）: looper.rs bind ゲート :196-201 → **:215**・assets.rs `BindResolver::new` :196-210 → **:267**（ker の balloon 資産ループ +563 行が上に挿入・ker 側は :336-370 で両ハンクの距離はむしろ開いた）・frame.rs `BindResolver::empty` :1387 → **:1563**・spine.rs :572 → **:671**。
+> - **`empty()` 呼出元が 2 件増**: `input_events/balloon.rs:1327`・`emo2_boot/mod.rs:374`（いずれも se/W5 由来）＝「`empty()` 署名不変なら無傷」条件の監視対象は計 4 箇所へ。
+> - 核心アンカーは現物一致を再確認: actor.rs:367 `is_mustselect` 分岐・:1546 檻・:320-323 未実導出 warn・resolve.rs:173-184（multiple 破棄）。requirements 前の `areka_seriko=debug` 直接観測義務は不変。
+>
 > **📌 2026-07-31 追記(52)ウェーブ編成（開発者裁定・本ブロックが以下の本文より優先）**:
 > - **ウェーブ配置=W6 同居**（`balloon-visibility` と2本並走）——実測でファイル単位完全に素（本 spec=parsers resolve/model＋seriko bind/state/actor＋assets.rs:196-210／vis=frame.rs＋emo2_boot 新 module＋TalkDone UI 配線）。**W5 同居は不可**＝`kero-balloon` と **assets.rs 同一ファイル異ハンク衝突**（本 spec :196-210 の `BindResolver::new` 構築 vs ker :278-300 の balloon 資産ループ）→ **W5 kero-balloon 先行着地後に本 spec が rebase**。
 > - 2026-07-31 実測: 本文の全アンカー（actor.rs:367-371 `is_mustselect` 分岐・resolve.rs:172-184・looper.rs:201・actor.rs:1546/:320-323・assets.rs:210）は **W4 マージ後も現物一致＝陳腐化なし**。補足: frame.rs:1387・spine.rs:572 は `BindResolver::empty()` 使用＝`empty()` 署名不変なら frame.rs/spine.rs は無傷（seriko 内で吸収可能）。

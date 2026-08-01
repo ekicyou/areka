@@ -5,6 +5,11 @@
 > **🧭 ゴール裁定を収録**: 本 brief が **M-dual（dual-surface／dual-window）の吸収・退役の正本**（2026-07-16 裁定）——M-dual は 2026-07-16 実査で「大半 M-boot 充足済み・残作業は検証と gap-fill に縮退」と確定済み（roadmap 統合点行）。独立 spec を起こさず、**本ユニットの適合検証項目として消化**する。
 > **⛔ 着手ゲート**: M1 残ユニットの全完了後（最終ユニット）。ただし**適合表の維持は今から**（下記チェックリストが M1 の「迷いの発生しないゴール」の単一定義）。
 
+> **📌 2026-08-01 追記(58)棚卸更新（棚卸⑤・本ブロックが(52)㊹より優先）**:
+> - **W5 は 3/4 着地**（choice-select-events✅・kero-balloon✅・dpi-window-vanish✅）・残＝collision-dpi-hittest は **W6 へ編入**。残ウェーブ改訂＝**W6（col ∥ vis ∥ bind ∥ zorder ∥ scg の5本）→ W6.5（exact ∥ wpl）→ W6.75（budget ∥ atom+bod〔縮退時統合〕）→ W6.9（cage）→ W7=本 spec**（正本は roadmap 追記(58)）。
+> - **上流列へ追補 5 本**: `ghost-window-zorder`（バルーン埋もれ＝一周走行の可視性前提）・`scope-chain-gap`（P2 幅差隙間・SSP 実測正典）・`windowposition-limit`（バルーン画面外はみ出し）・`recompose-budget`（アイドル CPU 税＝e2e 実機走行の観測品質前提）・`dpi-transition-atomicity`（適合 #1 DPI 検証時の跳ね解消・+36px 追随）。
+> - アンカー: spawn.rs `GhostWindows` :115 → **:164**・`ScopeWindows` :101 → **:150**（van の despawn hook 挿入）。target_map.rs `shell_target` :19 不変。
+>
 > **📌 2026-07-31 追記(52)棚卸更新（W4 完走・本ブロックが㊹以下より優先）**:
 > - **completed 追補（㊹以降）**: wintf-gpu-test-crash（割込）✅・position-persist✅・choice-interact✅・emo-dpi-scaling✅＝**W4 完走**。**残ウェーブ改訂**: W5（dpi-window-vanish ∥ collision-dpi-hittest ∥ choice-select-events ∥ kero-balloon）→ **W6（balloon-visibility ∥ bindoption-exclusivity の2本・追記(52)裁定）**→ **W6.5（scale-exact-rational ∥ test-cage-determinism・追記(51)起票）**→ W7=本 spec。
 > - **上流列へ追補3本**: `bindoption-exclusivity`（表情固着バグ＝**適合 #3「着せ替え表情」の前提充足**・bindoption 3値正典準拠）・`scale-exact-rational`（**適合 #1 の DPI 検証を絶対値で書ける前提**＝画素演算の有理数化）・`test-cage-determinism`（M1 宣言を支える檻の決定性）。

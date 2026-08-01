@@ -28,8 +28,11 @@
 //! 供給面（`chain`・`pub(crate)`）・窓装着（`mount`・`pub(crate)`）・提示統括（[`presenter`]）を備える。
 //! [`presenter::EmoPresenter`] が上流部品を束ね、[`command::PresentCommand`] を UI スレッド上で適用する。
 
-/// バルーン枠画像を **シェルと同一の** compose/present 経路へ載せる入力適合層（`BalloonFrameSource`）。
-/// `build_balloon_target` を公開し、`attach_target` へ渡す `(EmoWorld, AtlasTable)` を組み上げる。
+/// scope 別バルーン系列解決の**単一権威**であり、解決した面画像を **シェルと同一の**
+/// compose/present 経路へ載せる入力適合層（`BalloonFrameSource`）。scope 番号→接頭辞優先連鎖
+/// （`prefix_chain`）・面 ID 単位の連鎖探索（`resolve_balloon_faces`）・scope 別バルーン定義の
+/// 2 層マージ（`load_scope_balloon_model`）を公開し、`build_balloon_target` が
+/// `attach_target` へ渡す `(EmoWorld, AtlasTable)` を組み上げる。
 pub mod balloon;
 pub mod cache;
 /// swap chain 供給面（`SwapChainPresenter`）。`pub(crate)` 内部モジュール（公開 API ではない）。
@@ -46,7 +49,7 @@ pub mod presenter;
 /// presenter の外で純関数化する層（k の**数学**は上流 `areka-emo-compose` の `scale` が担う）。
 pub mod scale;
 
-pub use balloon::build_balloon_target;
+pub use balloon::{build_balloon_target, build_balloon_target_from_faces};
 pub use cache::{CacheEntry, ComposeCache};
 pub use command::{PresentCommand, PresentError, PresentOutcome, TargetId};
 pub use presenter::{EmoPresenter, TextSlotView};

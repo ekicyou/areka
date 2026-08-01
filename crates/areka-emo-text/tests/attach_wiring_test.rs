@@ -831,7 +831,7 @@ fn scale_refresh_logs_k_transition_and_reattach_physical_size() {
     let (refreshed, refresh_events) =
         capture_logs(|| rt.refresh_actor_scale(&sakura, &view2, &model));
     assert!(refreshed, "k 変化の再追従は true");
-    let refresh_log = expect_one(&refresh_events, "文字層の k 再追従");
+    let refresh_log = expect_one(&refresh_events, "文字層の再追従");
     assert_eq!(
         refresh_log.level,
         tracing::Level::INFO,
@@ -859,10 +859,10 @@ fn scale_refresh_logs_k_transition_and_reattach_physical_size() {
         "再装着の供給面寸は新 k 寸——140×80 に対し比 2.0（7.4 は絶対値でなくこの比で判定する）"
     );
 
-    // ── 装着 info! は「ActorRender 不在時のみ」——同値 k の走査では 3 回目が出ない ──
+    // ── 装着 info! は「ActorRender 不在時のみ」——判定キー全同値の走査では 3 回目が出ない ──
     assert!(
         !rt.refresh_actor_scale(&sakura, &view2, &model),
-        "同値 k の再追従は no-op（churn ガード・R8.5）"
+        "k・面実寸・文字描画領域が全同値の再追従は no-op（churn ガード・R4.5/R8.5）"
     );
     let (_, idle_events) =
         capture_logs(|| present_frame(&mut rt, &mut world, 1.0).expect("同値 k 後の提示"));

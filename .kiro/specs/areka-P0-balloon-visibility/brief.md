@@ -3,6 +3,12 @@
 > バルーン表示ライフサイクル（自然な表示・消去・再表示）。`/kiro-discovery` 2026-07-23 発。
 > 実測（コード配管・7項目）と正典（ukadoc・6項目）の二重裏取り済み。file:line は本日時点の実測。
 
+> **📌 2026-08-01 追記(58)陳腐化補正（棚卸⑤・W5 3本マージ後の実測・本ブロックが(52)㊹㊵より優先）**:
+> - **W5 前提は全て完了形へ**: ①kero-balloon の per-scope 化は**着地済み**（`balloon_models` は `Emo2Wiring` フィールド :207＋insert :568・消費は `run_text_scale_phase` :1045）＝「先行改造への再突合」条件は充足・実形確定。②「ChoiceSelectionInbox は下流 seam」→ se の `choice_drain::wire_choice_drain`（main.rs:370・新ファイル `input_events/choice_drain.rs`）が**消費済み**。③van の spawn.rs 大改修着地＝「触る場合のみ van 後着の直列注意」は解消（触るなら `GhostWindowMarker` despawn hook ハンクを避けるのみ）。**van 申し送りの転記: hide は despawn でなく可視性切替で実装**（despawn すると `GhostWindows` から scope が自動で消え respawn しない）。
+> - アンカードリフト: `emo2_frame_system` :1297-1327 → **:1466-1496**（7 フェーズ構成は一致・resnap 実体は `resnap_shell_targets` :1488）。主犯 ShowSurface :531-540 → **:541-550**（surface_id:0・無条件のまま健在＝gap 認識有効）・first-`\s` ゲート → **:490-497**・`connect_balloon_text` fn → **:589**・`text_slot_view` → **:553**・`Emo2Wiring` → **:181**・spawn.rs `HitTest::none()` → **:245/:273**・檻 → **:862-882**。
+> - steady.rs `on_talk_done` :226 → **:827**（se が steady.rs +2338 行・schedule/mod.rs:488 にも同名 fn あり＝配線先特定時に両方確認）。**`TalkDone` は crates/areka/src に出現ゼロ＝「kanade 止まり・UI 未配線」は 2026-08-01 実測でも真**＝本 spec の gap 核は有効。
+> - ウェーブ改訂: **W6 は 5 本並走**（col ∥ 本 spec ∥ bind ∥ zorder ∥ scg・追記(58)裁定・実測全ペア素）。**本 spec の「再表示時に手前に出る」は同ウェーブの `ghost-window-zorder` の保証に乗ってよい**（相互登記済み）。後続: cage が本 spec 着地後に frame.rs テスト域を rebase（本 spec 先着で確定）。
+>
 > **📌 2026-07-31 追記(52)陳腐化補正（W4 完走・本ブロックが㊹㊵以下より優先）**:
 > - **ウェーブ配置改訂=W6 は2本同居**（追記(52)裁定）: 本 spec ∥ **`bindoption-exclusivity`**（表情固着バグ・parsers＋seriko＋assets.rs:196-210）——実測でファイル単位完全に素（本 spec=frame.rs＋emo2_boot 新 module＋TalkDone UI 配線）。
 > - **hover donor は「新設要」→「既設消費」へ昇格**: W4 choice-interact が `input_events/balloon.rs`（2665行・新規）の `attach_balloon_pointer_handlers` :758／`wire_balloon_choice` :782 で**実行時装着経路を確立**（main.rs:363/:693 結線・`BalloonWiring` が scope→hover ordinal 自前追跡 :77-78/:111-119・`emo2_boot/hover_inject.rs` も実在）。spawn 時は依然 `HitTest::none()`（spawn.rs:180/:204・テスト :587-592 固定）。Open Question 1(a)「hover 配線新設の要否」は既設消費前提へ書き換え＝spawn.rs を触らずに済む公算大（触る場合のみ W5 dpi-window-vanish 後着の直列注意）。
@@ -162,3 +168,12 @@
 
 - 本 brief と roadmap 追記㊲は **branch `claude/areka-ghost-balloon-behavior-28c177`**（collision-geometry worktree 転用）に commit `3d520542`＋追補 commit として存在し、**main 未着地**。
 - 別セッションで継続する場合: このブランチを拾う（同 worktree 続行 or main へ PR 着地させてから新 worktree）こと。**main から新 worktree を切ると本 brief が見えない**——input-events 完了時の「brief は main に存在」前提と異なる点に注意。
+
+---
+
+**2026-08-01 追補（kero-balloon 検証ゲート＋未登記先送り棚卸より・roadmap 追記(56)）**: 要件フェーズで以下 2 件の**吸収可否を裁定**すること（拒否した場合の受け皿は `areka-P0-balloon-canon-residue`〔同日起票〕と序列確定済み——黙殺は不可）。
+
+1. **`\b[N]`@scope≥1 の end-to-end 檻**: kero-balloon は解決半分（`build_balloon_target_composes_scope_series_on_emo2_fixture`）＋配送半分（`spine_s3`＝scope0）で被覆したが、scope≥1 の `\b[N]` を実面切替まで通す檻が無い（同 tasks.md 既知シーム）。多面バルーン fixture＋実 GPU spine ハーネスが要る＝本 spec が多面シナリオを組むなら合流が最安。
+2. **バルーン `AnimationTable` の scope 写像の実効化**: `synthetic_surfaces_txt` が `animation*` 行を出さないため balloon 側の表は**構造的に常に空**＝`balloon_tables` の scope キー写像（assets.rs `actor_keyed_balloon_tables`→looper.rs lookup）は現状**静的証跡でしか検証できない**（実行時に取り違えても無観測）。多面＋アニメ付き fixture を作るならこの写像が初めて実行時に効く。
+
+なお本 brief 末尾の「継続時の所在」節は陳腐化済み（本 brief は現在 origin/main に存在する）——着手時の settled main 再突合はその節の教訓どおり必須。

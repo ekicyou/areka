@@ -1,0 +1,26 @@
+{
+  "feature_name": "areka-P0-dpi-window-vanish",
+  "created_at": "2026-07-30T23:27:55Z",
+  "updated_at": "2026-08-01T08:55:00Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-08-01T08:55:00Z"
+    }
+  },
+  "ready_for_implementation": true
+}

@@ -1,13 +1,13 @@
 ---
 inclusion: manual
-updated_at: 2026-07-31
+updated_at: 2026-08-01
 ---
 
 # Roadmap — areka M1（最小 SSP 互換ベースウェア）
 
 > **このロードマップは M1 のみを扱う。** M2 以降は **M1 完成後に実物を見て組み直す**（憶測で先に書かない）。
 > 正本配置: 本ファイルが M1 ロードマップ正本（`.kiro/steering/roadmap.md`）。`focus.md`（`inclusion: always`）から辿る。設計判断の正本は [doc/COMPAT_ARCHITECTURE.md](../../doc/COMPAT_ARCHITECTURE.md)。M1 実物スコープは [doc/emo2-conformance-scope.md](../../doc/emo2-conformance-scope.md)。
-> **履歴**: 2026-07-31 棚卸④（追記(52)）で旧全文（413行）を [roadmap-history.md](roadmap-history.md) へ凍結退避し、本体を残工程中心へ書き直した。追記①〜(51)・M-boot 23ユニット完了詳報・実機サインオフ発見7件・解除済み時限ゲート・DPI追従クラスタ経緯・wintf 先進坑2節の全文は history が正本（追記㊻の番号衝突など既知の記録欠陥も history 冒頭に注記）。完了ユニットの実装詳細は各 `completed/` spec が正本。
+> **履歴**: 追記①〜(51)・M-boot 完了詳報等は 2026-07-31 棚卸④で、W5 完了詳報・旧ウェーブ表・旧干渉台帳・追記(53)(54)(56)(57) 全文は 2026-08-01 棚卸⑤で、いずれも [roadmap-history.md](roadmap-history.md) へ退避（history が全文正本・既知の記録欠陥〔㊻番号衝突・**(55) 欠番**〕も history 冒頭と棚卸⑤節に注記）。完了ユニットの実装詳細は各 `completed/` spec が正本。
 
 ## M1 ゴール
 
@@ -24,6 +24,7 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 - **最小実装＋薄い拡張シーム**: emo2 が使う分だけ実装し、拡張は型/レジストリの口だけ残す。抽象は「2例目の実物」が要求してから。
 - **動く資産から建てる**: ゼロから再アーキテクトしない。
 - **粒度基準**: 1ユニット＝単一 pass/fail の独立観測。純粋層は fixture/mock 直入力で切る。**UI 位置決め・座標系は逆＝本番ゴースト（実 emo2）＋実 DPI（≠96）が観測条件**（dpi=96 の自己整合が欠陥を隠す・記憶 areka-placement-real-ghost-first）。
+- **⚠️ 語彙完備・配線ゼロの追跡**: 語彙先送りの規律は効いているが配線の追跡が弱い（実例 5 件: `compose_into`・`ZOrder`・`PlacementRoute::SpawnInitial`/`Restore`・`capture_logs` 複製増殖）。先送りシームには狭い `#[allow(dead_code)]`＋実在理由の doc を義務付け、消費者ゼロの検出は棚卸の定期監査項目とする。
 
 ## アーキテクチャ横断原則（要約・詳細は history＋記憶＋completed spec）
 
@@ -31,7 +32,7 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 - **アニメエンジンは2つ**: ①さくらスクリプト再生（talk timeline・sakura）＋②SERIKO ループ（seriko）。両者とも dola（絶対時刻台本・duration 権威・CuePlayer/CueSink）上。テキストは①から emo-text へ直接。
 - **並行モデル**: 各エンジン＝チャンネル通信のアクター＋独立スレッド。**render/window は UI スレッド固定**。機構=areka-actor／経路=kanade／結線=ghost の責務三分。
 - **emo 合成**: 自前コンポジタ（アトラス→1枚物ビットマップ合成→wintf へ完成品のみ）。emo=UI 層全般（合成・マウス/さわり・バルーン文字・選択肢）＝「見える・触れる」の窓口。
-- **DPI 追従が基本設計**: k=monitorDPI÷author_dpi で全表示経路がスケール（W4 で実装済み・SSP と別思想・k=1.0 は途中状態）。**キャラ窓の原点は下端中央（足元の中心）**——保存/復元/resize/バルーン追従の四層で統一済み（Bottom 限定）・左上基準で計算しないこと。
+- **DPI 追従が基本設計**: k=monitorDPI÷author_dpi で全表示経路がスケール（W4 で実装済み・SSP と別思想・k=1.0 は途中状態）。**キャラ窓の原点は下端中央（足元の中心）**——**キャラ窓位置の保存/復元/resize の三層**で統一済み（Bottom 限定）・左上基準で計算しないこと。**⚠️ バルーン追従は例外＝「窓（char 左上）相対」**（2026-07-31 実機裁定・`kero-balloon`）——全アンカーで `balloon_pos − char_pos ≡ offset` 不変・リサイズで offset を補正しない・保存も生 offset。旧記述「四層で統一」は誤り（詳細は history）。
 
 **エンジン固有名**（コード/spec/会話の参照はこの名で統一・詳細は記憶 areka-engine-names）:
 
@@ -42,47 +43,69 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 | ② | parser/loader | `parsers` | ⑥ | render（surface 合成＋UI 層） | `emo` |
 | ③ | conductor（SHIORI イベント循環） | `kanade` | | | |
 
-## 完了サマリ（2026-07-31 時点・詳細は completed spec ＋ history）
+## 完了サマリ（2026-08-01 時点・詳細は completed spec ＋ history）
 
 - **耐力壁突破**（2026-07-01 `pilot-shiori-host-32`）: x64→32bit pasta.dll 駆動 GO。
 - **M-boot 23/23 完了**（2026-07-13 `emo2-boot`）: 起動→表示→talk→close の可視一周。①shiori・②parsers トラック全完了。
-- **増分ウェーブ W1〜W4＋割込 全完走**: W1（idle-talk∥collision-geometry∥sakura-dialogue-tags）→ W2（input-events∥mayuna-compose）→ W3（sylphya∥seriko-loop∥choice-render）→ 割込（wintf-gpu-test-crash＝workspace テストゲート復旧）→ W4（position-persist∥choice-interact∥emo-dpi-scaling＝DPI 追従 k の全表示経路適用）。横断: cue-playback-duration・surface-resize-resnap・balloon-face-cue・emo-text-viewbox ✅。
+- **増分ウェーブ W1〜W4＋割込 全完走**: W1〜W3（idle-talk／collision-geometry／sakura-dialogue-tags／input-events／mayuna-compose／sylphya／seriko-loop／choice-render）→ 割込（wintf-gpu-test-crash）→ W4（position-persist ∥ choice-interact ∥ emo-dpi-scaling＝DPI 追従 k の全表示経路適用）。横断: cue-playback-duration・surface-resize-resnap・balloon-face-cue・emo-text-viewbox ✅。
+- **W5 完了 3/4**（残 1 本 `collision-dpi-hittest` は W6 へ編入）:
+  - `choice-select-events` ✅（2026-07-31）＝**M-dialogue 4/4 完走**。メニュー一周を実 emo2・実 DPI(120) で人間サインオフ。
+  - `kero-balloon` ✅（2026-08-01・PR#97）＝kero が正典どおり `balloonk*`・採寸 per-scope。**SSP 裁定 2 件**（`windowposition.x` 符号非反転／**バルーン追従は窓相対**＝position-persist の Bottom 限定補正を撤去）。
+  - `dpi-window-vanish` ✅（2026-08-01・PR#98）＝混在 DPI 窓消失の決着（S1〜S4 是正・実機全判定 PASS・`S1-SOURCE-CUT` 84/84 陽性→0 へ反転・`ground_y` 定数）。`TEARDOWN-SILENCE` 確定原因の誤りを裁定経由で訂正（確定台帳の訂正運用が実例確立）。マージ時の ker との意味的衝突は **ker の裁定済み正典（窓相対）を採用**。
 - **実機サインオフ発見 7件中 #1〜#6 解決済み**。**#7（冒頭空行）のみ pasta 上流（`ekicyou/pasta` 起票済み）＝areka スコープ外・未解決**。
-- **W5 進行中（1/4 着地）**: `choice-select-events` ✅完了（2026-07-31・PR squash マージ）＝**M-dialogue 4/4 完走**。メニュー一周が実 emo2・実 pasta・実 DPI(120) で人間サインオフ済み（選択 7 回・1 選択＝1 解決・選択待ち中の自発トーク漏れ 0）。残 3 本＝`dpi-window-vanish` ∥ `collision-dpi-hittest` ∥ `kero-balloon`。
-- 完了 spec = 148（`.kiro/specs/completed/`）。
+- 完了 spec = **150**（`.kiro/specs/completed/`）。
 
-## M1 残工程ゴール表
+## M1 残工程ゴール表（2026-08-01 棚卸⑤・全配置確定）
 
-| マイルストーン | ゴール（単一文） | ユニット | ウェーブ |
+| 種別 | ゴール（単一文） | ユニット | ウェーブ |
 |---|---|---|---|
-| ~~M-dialogue（残1）~~ **✅完了** | メニュー一周のカスケード確定（OnChoiceSelectEx→任意名イベント）＋`Status: choosing` | `completed/choice-select-events` | W5（2026-07-31 着地） |
-| M-dpi（残2） | DPI 追従下の当たり判定 ÷k ＋混在 DPI 窓消失の決着 | `collision-dpi-hittest` ∥ `dpi-window-vanish` | W5 |
-| （挙動バグ） | kero（scope1）バルーンが正典どおり `balloonk*` 資産・採寸 per-scope | `kero-balloon` | W5 |
-| （横断） | バルーンが可視コンテンツ駆動 show／talk 終了+30s+無フォーカス hide／再表示 | `balloon-visibility` | W6 |
-| （挙動バグ） | 表情固着解消＝bindoption 3値正典（mustselect/非宣言=高々1/multiple）準拠 | `bindoption-exclusivity` | W6（追記(52)裁定） |
-| （基盤） | 画素演算の f32 排除＝`ScaleRatio` 有理数を text 層まで配管 | `scale-exact-rational` | W6.5 |
-| （基盤） | 檻の決定性（tracing 毒化44呼出・スピン13箇所・ハーネス2設計の一本化） | `test-cage-determinism` | W6.5 |
-| M-e2e | 適合14項目一周＋DoD＝**M1 完成宣言** | `emo2-conformance-e2e` | W7（最終） |
+| 挙動バグ（M-dpi 残1） | DPI 追従下の当たり判定 ÷k | `collision-dpi-hittest` | **W6**（W5 から編入） |
+| 横断 | バルーンが可視コンテンツ駆動 show／talk 終了+30s+無フォーカス hide／再表示 | `balloon-visibility` | **W6** |
+| 挙動バグ | 表情固着解消＝bindoption 3値正典（mustselect/非宣言=高々1/multiple）準拠 | `bindoption-exclusivity` | **W6** |
+| 挙動バグ | バルーンが他アプリ窓の背後へ埋もれない＝各バルーンを自シェルの直前へ維持 | `ghost-window-zorder` | **W6**（確定） |
+| 挙動バグ | P2 連鎖の幅差隙間（実機 123px）解消＝SSP 実測で正典確定 | `scope-chain-gap` | **W6**（確定） |
+| 基盤 | 画素演算の f32 排除＝`ScaleRatio` 有理数を text 層まで配管 | `scale-exact-rational` | **W6.5** |
+| 挙動バグ | `windowposition.limit` 正典既定 1 実装＝バルーン画面外はみ出し解消 | `windowposition-limit` | **W6.5**（確定・scg 檻へ rebase） |
+| 挙動バグ | 常駐アイドルの CPU 消費＝毎フレーム全再合成のアロケーション予算是正 | `recompose-budget` | **W6.75**（確定） |
+| 挙動バグ | 拡大率切替時の跳ね＝遷移の原子性＋work area 追随（+36px/24px 浮き） | `dpi-transition-atomicity` | **W6.75**（確定・再観測は W6 中） |
+| 挙動バグ | DPI 遷移時の `BalloonFollow.offset` スケール意味論確定 | `balloon-offset-dpi` | **W6.75**（atom 縮退時は atom と統合） |
+| 基盤 | 檻の決定性（毒化 45 呼出/7 モジュール・ハーネス 2 設計の一本化・注入シーム） | `test-cage-determinism` | **W6.9**（W6.5 から改訂） |
+| M-e2e | 適合14項目一周＋DoD＝**M1 完成宣言** | `emo2-conformance-e2e` | **W7**（最終） |
 
-> 完了済みマイルストーン（M-boot・M-mayuna・M-life・M-dialogue 3/4・横断 cue/sylphya・割込）は history のゴール表参照。M-dual は退役＝e2e 適合 #10 へ吸収。
+> 完了済みマイルストーンのゴール表は history 参照。M-dual は退役＝e2e 適合 #10 へ吸収。
 
-## ウェーブ編成（着手順の正本・2026-07-31 追記(52) 改訂）
+## ウェーブ編成（着手順の正本・2026-08-01 追記(58) 改訂）
 
-> 各ウェーブは**フルライフサイクル**（要件→設計→タスク→実装→`/kiro-complete`＝PR squash マージ）を完走してから次へ。並走はウェーブ内のみ（1 spec = 1 worktree = 1 PR）。同居は**実測で共有ファイル 0**が原則（潜在近接のみ事前割当契約＋エスケープ条項）。文書フェーズ（要件・設計）は先行可＝先行 spec はウェーブ開始時に settled main へ再突合。
+> 各ウェーブは**フルライフサイクル**（要件→設計→タスク→実装→`/kiro-complete`＝PR squash マージ）を完走してから次へ。並走はウェーブ内のみ（1 spec = 1 worktree = 1 PR）。同居は**実測で共有ファイル 0**が原則。文書フェーズ（要件・設計）は先行可＝先行 spec はウェーブ開始時に settled main へ再突合。優先順位: **挙動バグ → 依存ツリーが長く早期着手が効くもの → その他**。詳細な申し送りは各 brief の追記(58)ブロックが正本（roadmap は編成と条件のみ持つ）。
 
-| Wave | ユニット | 開始コマンド | 上流充足・申し送り |
+| Wave | ユニット | 開始コマンド | 編成根拠・条件 |
 |---|---|---|---|
-| W1〜W4・割込 ✅ | （全完走・完了サマリ参照） | — | 詳細は history のウェーブ表 |
-| **W5**（1/4 着地） | `dpi-window-vanish` ∥ `collision-dpi-hittest` ∥ ~~`choice-select-events`~~ **✅完了 2026-07-31** ∥ `kero-balloon`（4本） | `/kiro-start areka-P0-dpi-window-vanish`・`/kiro-start areka-P0-collision-dpi-hittest`・`/kiro-start areka-P0-choice-select-events`・`/kiro-start areka-P0-kero-balloon` | 4本のファイル集合は **W4 着地後の再実測（2026-07-31）でも互いに素**。**van**: W4 が確定事実④（WM_DPICHANGED 窓固定）を解消済み（`run_dpi_phase` frame.rs:865-873）＝診断 Q1〜Q4 は新ビルドで再実施→「再現せず・掃除のみ」へ縮退し得る・`GhostWindows` despawn 掃除＋終了時 `Anchored` WARN（follow.rs:792）は残。**col**: W4 が `applied_scale`（presenter.rs:706）で ÷k の席を名指し予約済み（:232/:704/:4361）＝W5 内最小 spec。**se**: `ChoiceSelection` 実物＝`input_events/balloon.rs:43`・消費口 `ChoiceSelectionInbox` :130 の drain が編集面に追加（W5 内は非衝突）・`ExecutionState::Choosing` 語彙実在（status.rs:26/:60）＝駆動側のみ・**ukadoc 訂正義務**（Ref0=ラベル/Ref1=ID・scope doc §1 が逆）・Req2.6 fail-open 申し送り。**ker**: W4 が per-scope の席を意図的に保全済み（measure.rs:127-128/:227-229 の申し送りコメント）＋`balloon_models` マップ（frame.rs:545）＝足場半分完成・**`refresh_actor_binding`（actor.rs:348）＋`run_text_scale_phase`（frame.rs:928）の同一 ActorKey 写像義務**（frame.rs:552-554）・binding 比較の穴（追記㊾）も担当。**rebase 条項（gpu-test-crash エスケープ FIRED）**: spine.rs S3/S4 檻域で**新規 GPU world テスト追加時のみ**オーナースレッド委譲へ乗せる（素の別スレッド Compositor は AV）。**全員**: 窓寸は原点=下端中央基準・判定は絶対 px でなく比 |
-| **W6** | `balloon-visibility` ∥ `bindoption-exclusivity`（**2本・2026-07-31 追記(52)裁定**） | `/kiro-start areka-P0-balloon-visibility`・`/kiro-start areka-P0-bindoption-exclusivity` | 2本は実測で素（vis=frame.rs＋emo2_boot 新 module＋TalkDone UI 配線／bind=parsers resolve/model＋seriko bind/state/actor＋assets.rs:196-210）。**vis** ← W5 kero-balloon（`run_attach_phase` 末尾＝無条件 ShowSurface **:531-540**・`connect_balloon_text` **:549-556**／fn **:577-596** の同一関数域を先行改造＝per-scope BalloonModel の実形へ再突合してから着手）・hover donor は**既設消費へ昇格**（`attach_balloon_pointer_handlers` balloon.rs:758・main.rs:363/:693 結線）・TalkDone は kanade 止まり（steady.rs:226）のまま真・`emo2_frame_system` は **7フェーズ**（frame.rs:1297-1327）・討議7点は brief Open Questions 正本。**bind** ← 表情固着（非宣言カテゴリ「まばたき」加算飽和→1400/1402 並行発火→ジト目永久被覆・`Unchanged` 無言握り潰し）＝**挙動バグ**・3値正典へ述語反転＋parsers に multiple 集合・**禁じ手=z-order 変更/ゴースト fixture 修正**・W5 kero-balloon の assets.rs 先行着地後に rebase（:196-210 vs :278-300 異ハンク）・requirements 前に `areka_seriko=debug` で握り潰し直接観測 |
-| **W6.5** | `scale-exact-rational` ∥ `test-cage-determinism`（2026-07-30 追記(51) 起票） | `/kiro-start areka-P0-scale-exact-rational`・`/kiro-start areka-P0-test-cage-determinism` | 残件消化ウェーブ。**exact** ← `physical_extent` の `ceil(v×k_f32)` が k=6/5 で 81/1200 件 +1＝「画素演算で f32 禁止」が文字層で破れ→`ScaleRatio` num/den を emo-compose→present→text へ配管。**cage** ← tracing 毒化 6 モジュール/44 呼出・spine.rs 協調スピン 13 箇所（`spin_pumping_ticks` が donor）・ログ捕捉ハーネス競合 2 設計の一本化・`chain.upload` 失敗注入シーム。**W5/W6 と同居不可**: cage は frame.rs＋measure.rs（W5 ker・W6 vis と衝突）＋balloon.rs 18 呼出（W5 se の drain 増設と衝突）。**2本の相互衝突**: `areka-emo-present/src/scale.rs` の `mod tests` 同一ファイル異ハンク＝**着手順の裁定が要る**（両 brief 登記済み） |
-| **W7** | `emo2-conformance-e2e`（最終） | `/kiro-start areka-P0-emo2-conformance-e2e` | 全ユニット完了後＝適合14項目（#1 DPI 検証は追従込み・バルーン表示ライフサイクル追補・#10 kero 一式は W5 ker が前提充足・**#3 着せ替え表情は W6 bind が前提充足**）の一周走行→**M1 完成宣言**。着手時義務: brief 再監査（追記㊹で唯一補正無しだった＋上流3本追補済み）・㉘(E)「OnFirstBoot 限定 move の2回目起動蒸発は許容仕様」の実機判断・#7（pasta 上流）は M1 完成を妨げない扱いの確認 |
+| W1〜W5 ✅ | （W5 は 3/4 着地・完了サマリ参照・col は W6 へ編入） | — | 詳細は history |
+| **W6**（5本） | `collision-dpi-hittest` ∥ `balloon-visibility` ∥ `bindoption-exclusivity` ∥ `ghost-window-zorder` ∥ `scope-chain-gap` | `/kiro-start areka-P0-collision-dpi-hittest` ほか各 spec | **実測で全 10 ペア素**（2026-08-01 干渉再測定）。全て挙動バグ級＋vis は W7 前提の最長依存（vis→cage→e2e）。編成面の条件: ⑴**vis の hover は既設消費**（spawn.rs 非接触・触るなら despawn hook ハンク回避）⑵**bind は `BindResolver::empty()` 署名維持**（呼出元 4 箇所）⑶**zorder は案 A（owner）の WUC 共存実機検証が最初のタスク**・vis は zorder の「自シェルより手前」保証を前提にしてよい⑷**scg は要件前に SSP 実測必須**（brief 登記済み）⑸col は presenter.rs :867 域＝同ファイル他 spec（exact/budget/atom/cage④）は全て後続ウェーブ。**⑹`dpi-transition-atomicity` を文書フェーズ限定で同居**（6 本目・下行）——観測は spec の外では実施できない（本プロジェクトに spec 外の作業経路は無い）ため、**第 1 段再観測は atom 自身の requirements フェーズの research として行う**。`/kiro-start` は要件討議まででコードに触れないので W6 の 5 本と衝突しない。design 以降は W6.75 まで進めないこと（settled main へ再突合してから） |
+| **W6 併走（文書のみ）** | `dpi-transition-atomicity`（**requirements フェーズまで**） | `/kiro-start areka-P0-dpi-transition-atomicity` | 第 1 段再観測＝要件の土台。S1 是正で実測①（859ms・`SetWindowPos` 8 回のうち 4 回）が失効しているため、**再採取しないと要件が書けない**。観測結果で W6.75 の形が決まる（縮退→bod と統合／残存→3 分割検討）。**⛔ design 以降は W6.75 で**（presenter.rs `apply_show`・frame.rs dpi 相で col/vis と衝突するため） |
+| **W6.5**（2本） | `scale-exact-rational` ∥ `windowposition-limit` | `/kiro-start areka-P0-scale-exact-rational`・`/kiro-start areka-P0-windowposition-limit` | 実測で素。**wpl は scg 着地後必達**（resolver.rs 同一関数 `resolve` :131-190 内 P2/P5 が 30 行差＋mod.rs fixture 檻共有＝scg の新期待値へ rebase。逆順だと limit クランプ後の値へ scg が二重補正）。exact は presenter.rs :665 域＝col の実形へ rebase。**exact は bod の前提**（丸め権威）ゆえ W6.75 より先 |
+| **W6.75** | `recompose-budget` ∥ `dpi-transition-atomicity`（＋`balloon-offset-dpi`） | `/kiro-start areka-P0-recompose-budget`・`/kiro-start areka-P0-dpi-transition-atomicity` | **分岐は W6 中の atom 再観測結果で確定**: ⑴**縮退時（859ms/8 回が S1 是正で消滅）**＝atom は「+36px work-area 追随＋檻」へ縮退し **bod と統合して 1 spec 化**（follow.rs/persist.rs 系）→ budget（presenter.rs/cache.rs 系）と**並走可**。⑵**残存時**＝atom は presenter.rs apply_show 域へ広がるため **budget 先行→atom 直列**（budget 着地後に 859ms を再測すると合成コスト ≒143ms の帰着切り分けが最良）・bod は atom に従う。いずれでも bind 着地済み（W6）ゆえ budget の CPU 単調上昇の (a)bind 同根/(b)活性集合の切り分けが可能 |
+| **W6.9** | `test-cage-determinism` | `/kiro-start areka-P0-test-cage-determinism` | presenter.rs `apply_show` 鎖（col→exact→budget→atom④）の**最後尾**＋vis 先着必達（frame.rs テスト域）。着手時に vis/exact/budget/atom の実形へ rebase・毒化 45 呼出の再計数（後置するほどコピーが増える構造が実証済み＝**これ以上後ろへ置かない**）。④は `#[cfg(test)]` fault フラグ小案を第一候補（presenter.rs 衝突が :510 の 1 呼出へ縮退） |
+| **W7** | `emo2-conformance-e2e`（最終） | `/kiro-start areka-P0-emo2-conformance-e2e` | 全ユニット完了後＝適合14項目（#1 DPI 検証は追従込み・バルーン表示ライフサイクル追補・#3 は bind・#10 は ker が前提充足）の一周走行→**M1 完成宣言**。着手時義務: brief 全面再監査・㉘(E) の実機判断・#7（pasta 上流）は M1 完成を妨げない扱いの確認 |
 
-**干渉台帳（残ペアのみ・2026-07-31 再実測）**: **ker(W5)⇄vis(W6)**〔frame.rs `run_attach_phase` 末尾同一関数域〕／**ker(W5)⇄bind(W6)**〔assets.rs 異ハンク :278-300 vs :196-210〕／**ker(W5)⇄cage(W6.5)**〔frame.rs＋measure.rs〕／**se(W5)⇄cage(W6.5)**〔input_events/balloon.rs（毒化18呼出 vs drain 増設）〕／**vis(W6)⇄cage(W6.5)**〔frame.rs〕／**exact⇄cage（W6.5 内）**〔present scale.rs `mod tests` 異ハンク＝着手順裁定要〕／van(W5)⇄vis(W6)〔spawn.rs=vis が触るかは design 次第・hover donor 既設ゆえ触らぬ公算大〕。W5 4本の相互素・bind×W6.5 素・exact×W5 素は実測確認済み。`status-execution-states`=台帳 spec（着手しない・源着地時に just-in-time）・`surfaces-basepos`／`sakura-time-directives`=**M2 解禁ゲート**（M1 では着手しない）。
+**干渉台帳（生存ペアのみ・2026-08-01 実測再構築・退役分は history）**:
+- **scg⇄wpl**〔**同ハンク級・直列必達（scg 先）**: resolver.rs `resolve`（:131-190）内 P2 :151-159／P5 :182-188 ＝30 行差＋mod.rs fixture 檻（:711 位置期待値）共有〕
+- **budget⇄atom**〔**同ハンク＋因果**: presenter.rs `apply_show`（:343-600）同一関数内。859ms が合成コスト帰着なら budget へ差し戻し＝budget 先着後の再測が切り分け最良。atom 縮退時は解消〕
+- **cage⇄budget／cage⇄atom**〔apply_show 鎖: cage④ :510-514 が budget :377-392・atom 観測点と近接。④小案で縮退可。cage は W6.9 最後尾で解決〕
+- **cage⇄vis**〔frame.rs: vis が本体 :369-596＋テスト大幅書換・cage①は同ファイル capture_logs :1990＋8 呼出＝**vis 先着必達**〕
+- **atom⇄bod**〔follow.rs 共有＝**統合候補（縮退時は統合が既定路線）**。分離時は atom 先着→bod rebase〕
+- **atom⇄vis**〔frame.rs 異ハンク（vis=attach 相 :369-596／atom=dpi 相 :796-1000・resnap :1286）。`emo2_frame_system` フェーズ列 :1466-1496 に両者が触る場合のみ直列注意〕
+- **atom⇄wpl**〔wpl の limit クランプが follow 側に落ちた場合のみ衝突＝wpl の SSP 観測（適用時点）確定後に再判定〕
+- **atom⇄zorder**〔`SetWindowPos` flags 別ビットゆえ素の見込み。atom が flush 経路（tick_bridge/command.rs）を改造する場合のみ着手時再突合〕
+- **wpl⇄bod**〔windowposition.rs（331 行）異ハンク: wpl=:39 変換域／bod=:93-94 合流欄。小ファイルゆえ先着後 rebase〕
+- **presenter.rs 直列鎖**〔col(:867)→exact(:665)→budget(:377-392)→atom(apply_show)→cage④(:510)＝**全て別関数・異ハンクだが同一ファイル**。ウェーブ順がそのまま先着順＝各後続は先行の実形へ rebase〕
+- **因果のみ（コードは素）**: bind→budget（CPU 上昇の切り分け）・exact→bod（丸め権威）・zorder→vis（手前保証の前提）・vis⇄scg/wpl（balloon 位置は char 従属・hide 中の limit 補正は無意味＝順序自由）
+- **軽微**: cage③の test_support 共有化で placement 系（scg/wpl/bod）の import 行が追随＝実質共存可
+- `status-execution-states`=台帳 spec（着手しない・源着地時に just-in-time）・`surfaces-basepos`／`sakura-time-directives`／`balloon-canon-residue`=**M2 解禁ゲート**（M1 では着手しない）
 
 ## 着手手順
 
-> **brief 全数完備体制**（2026-07-16 開発者指示以降）: M1 残ユニットは全て brief 済み＝着手は該当 brief を読んで `/kiro-start <unit>` へ直行。新規課題の起票は `/kiro-discovery`（再入）で brief just-in-time 生成。`/kiro-spec-batch` は使わない（一括＝工場化）。ウェーブ跨ぎの合流判断は別セッションで一括（記憶 portfolio-convergence-decided-in-separate-session）。
+> **brief 全数完備体制**: M1 残ユニットは全て brief 済み（12 本・2026-08-01 棚卸⑤で全 brief へ追記(58) 補正適用済み）＝着手は該当 brief を読んで `/kiro-start <unit>` へ直行。新規課題の起票は `/kiro-discovery`（再入）で brief just-in-time 生成。`/kiro-spec-batch` は使わない（一括＝工場化）。ウェーブ跨ぎの合流判断は別セッションで一括（記憶 portfolio-convergence-decided-in-separate-session）。
 
 ## 制約
 
@@ -100,8 +123,12 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 
 **emo テキスト進化の予約（M2 候補）**: ①回転テキストの実挙動（M1 で行列変換領域を内部表現として持ち込み済み）②ポップアート級の文字装飾（text effects——1枚物自前合成ゆえ文字も合成レイヤ）。
 
-**M2 解禁ゲートの spec（brief 済・M1 では着手しない）**: `areka-P0-surfaces-basepos`・`areka-P0-sakura-time-directives`（互換拡充時に解禁）／`areka-P0-status-execution-states`（残状態の源サブシステム着地時に just-in-time・台帳）。
+**バルーン美観配置政策の予約（M2・2026-08-01 `dpi-window-vanish` task 6.2 が先送り登記）**: 画面端でのバルーン**左右反転**をはじめとする SSP 互換の美観配置政策。M1 が持つのは遷移ガードによる「完全不可視への遷移を防ぐ安全網」まで（*見えない会話*より*重なった会話*を優先する裁定）。**縮退シーム＝`[visibility-guard] ClampX` の `warn!`**（`route=BalloonFollow` 行）——安全網の発火回数が M2 着手時の優先度根拠。**M1 では起票しない**。
+
+**M2 解禁ゲートの spec（brief 済・M1 では着手しない）**: `areka-P0-surfaces-basepos`・`areka-P0-sakura-time-directives`（互換拡充時に解禁）／`areka-P0-status-execution-states`（残状態の源サブシステム着地時に just-in-time・台帳）／`areka-P0-balloon-canon-residue`（balloon 正典残語彙 6 項目の受け皿）。
 
 ---
 
-**2026-07-31 追記(52)（棚卸④＝本書き直しの由来）**: W4 完走＋残件2件起票（追記㊿(51)）後の `/kiro-discovery` 再入。①brief 無し spec=0 を確認（全12本完備）。②サブエージェント2体の実測監査——(a) roadmap 構造監査＝413行中 ~65% が純履歴・追記㊻番号衝突等の記録欠陥検出→**履歴を roadmap-history.md へ凍結退避し本体を書き直し**（開発者裁定）。(b) 残9 brief の陳腐化＋干渉再実測＝W4 着地で kero-balloon の per-scope 席保全・collision-dpi-hittest の ÷k 席予約・choice-select-events の `ChoiceSelection` 実物化・dpi-window-vanish の確定 gap 解消（診断やり直し）を確認し、brief 7本へ補正ブロック適用。③**bindoption-exclusivity を W6 同居へ編成**（開発者裁定＝balloon-visibility と実測で素・W5 は kero-balloon と assets.rs 異ハンク衝突ゆえ不可・W7 適合 #3 の前提）。④過積載なし（分割不要）・dpi-window-vanish は縮退可能性あり。次フロント＝**W5 の4本**。
+**追記台帳（要約・全文は history）**: (51) W6.5 残件 2 spec 起票（07-30）／(52) 棚卸④＝roadmap 履歴分離・W6 に bind 編入・brief 補正 8 本（07-31）／(53) `recompose-budget` 起票＝`compose_into` 本番未配線・アイドル 1 コア 13〜22%（07-31）／(54) `ghost-window-zorder` 起票＝owner 無し・全 `SWP_NOZORDER`・「語彙完備・配線ゼロ」3 例目（07-31）／**(55) 欠番**（atom 起票の本体がマージで脱落・内容は atom brief＋(57)⑴ が正本）／(56) 未登記先送り棚卸＝孤児 17 件・新規 brief 4 本起票（08-01）／(57) van 完了＝S5 担当が atom で確定・確定台帳の裁定付き訂正運用が確立・檻の空虚性通算 9 例（08-01）。
+
+**2026-08-01 追記(58)（棚卸⑤＝W5 3本マージ後の全面棚卸・本改訂の由来）**: `/kiro-discovery` 再入（開発者指示: roadmap 棚卸＋brief 精査＋肥大化対処＋ウェーブ再編）。サブエージェント 2 体で実測——(a) **brief 陳腐化監査**（12 本全数・main `ec9687c` 突合）: 重大 1（atom＝着手ゲート開放・S1 是正で実測①②の前提失効・+36px スコープは有効のまま）・数値全面更新 1（cage＝スピン 13→残 2・毒化 44/6→45/7・medium へ縮小）・要補正 4（vis/bind/zorder/e2e＝W5 前提の完了形化）・軽微 6。**7 本へ追記(58) 補正ブロック適用済み**。(b) **干渉行列再構築**（11 spec・55 ペア）: 生存衝突 12 ペア＋因果 4 ペア・素 26 ペア。**新発見**: scg⇄wpl は resolver.rs 同一関数内 30 行差＝同ハンク級へ格上げ。①**brief 無し spec=0 を確認**（roadmap 登記 16 本全てに brief 実在）。②**全配置確定**（従来の配置裁定待ち 6 本を一括裁定）: W6=5 本並走（col 編入・zorder/scg 編入）・wpl=W6.5・budget/atom/bod=W6.75（atom 縮退時は bod と統合）・cage=W6.9 へ後送（apply_show 鎖の最後尾・ただしこれ以上は後送しない）。③**過積載 1 件**: atom は 3 関心（観測基盤/原子性/work-area 追随）で分割規定を brief へ登記——ただし分割判断は W6 中の再観測（コード非接触・即実施可能）を待つ。④roadmap 減量: W5 詳報・旧ウェーブ表・旧干渉台帳・追記(53)(54)(56)(57) 全文を history へ退避し、干渉台帳を生存ペアのみへ再構築・**(55) 欠番を正式裁定**（㊻の教訓どおり注記のみ・追記順序の乱れ〔(57) が (56) より先〕も要約台帳化で解消）。⑤「語彙完備・配線ゼロ」通算 5 例を受け、実装規律へ定期監査項目として昇格。
