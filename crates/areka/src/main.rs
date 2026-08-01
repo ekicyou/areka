@@ -795,8 +795,26 @@ fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) -> Option<placement::Au
 ///
 /// ダミー窓（フォールバック経路）と本物のゴースト窓（placement 経路）のどちらの構成でも
 /// CI smoke（`AREKA_APP_SMOKE_EXIT_MS`）が完走できるよう、両 marker を単一 query で狙う。
-/// despawn 件数を返す（標的なしは 0・no-op 安全）。bare `World` だけで動き headless
+/// 標的として拾った件数を返す（標的なしは 0・no-op 安全）。bare `World` だけで動き headless
 /// 単体テスト可能（`seam_tests`）。
+///
+/// # 存在確認（task 7.3・Req 6.2/6.3・design「変更ファイル > main.rs」）
+///
+/// query で集めた標的は**ループ実行中に**破棄済みへ変わり得る——bevy の連鎖 despawn
+/// （`Children` は `LINKED_SPAWN` の関係対象＝親の despawn が子孫へ再帰する）を先行の
+/// 1 体が引き起こせば、後続のイテレーションは既に無効な `Entity` を叩く。`World::despawn`
+/// はその場合 `log` の `warn!`（`Could not despawn entity: …`）を出す（`bevy_ecs-0.18.1`
+/// `src/world/mod.rs:1462-1469`）。**これは終了処理の正常終了系**であり、警告として残すと
+/// 良性ノイズが本物の異常を埋める（Req 6.2）。
+///
+/// task 3.2 が消費側 4 入口（`follow.rs` の `resize_window_to`／`resize_window_keep_position`・
+/// `frame.rs` の `resnap_with`／`reconcile_reported_sizes`）へ敷いたのと**同じ区別**を
+/// despawn の**呼出点そのもの**へも敷く: entity 不在＝正常終了系ゆえ
+/// [`DESPAWNED_SKIP_TAG`](placement::diag::DESPAWNED_SKIP_TAG) の `debug!` で当該標的を
+/// 打ち切り、**残りの標的は処理し切る**（Req 6.3）。
+///
+/// 戻り値の意味は「標的として拾った件数」のまま変えない——連鎖で消えた標的も掃除後には
+/// 存在しないため、`smoke 自動 close` の `count=` が示す「消えた起動窓の数」は不変である。
 fn despawn_smoke_targets(world: &mut World) -> usize {
     let targets: Vec<Entity> = world
         .query_filtered::<Entity, Or<(With<DummyWindowMarker>, With<placement::spawn::GhostWindowMarker>)>>()
@@ -804,6 +822,15 @@ fn despawn_smoke_targets(world: &mut World) -> usize {
         .collect();
     let count = targets.len();
     for e in targets {
+        if world.get_entity(e).is_err() {
+            tracing::debug!(
+                entity = ?e,
+                "{} smoke 自動 close: 標的 entity は既に破棄済み（despawn・連鎖破棄）→ \
+                 正常系として打ち切り（残りの標的は継続）",
+                placement::diag::DESPAWNED_SKIP_TAG
+            );
+            continue;
+        }
         world.despawn(e);
     }
     count
@@ -1112,6 +1139,144 @@ mod seam_tests {
         let other = world.spawn_empty().id();
         assert_eq!(despawn_smoke_targets(&mut world), 0);
         assert!(world.get_entity(other).is_ok());
+    }
+
+    /// **Req 6.2/6.3（despawn の呼出点そのもの・task 7.3）**: 標的の一部が**ループ実行中に**
+    /// 破棄済みへ変わっても、`World::despawn` の `Could not despawn entity`（`bevy_ecs::world`
+    /// の `warn!`）を 1 件も出さず、正常終了系（`debug!`）として打ち切って**残りの標的を
+    /// 処理し切る**。
+    ///
+    /// # 探針の作り方（不動点にしないために）
+    ///
+    /// 「先に despawn しておく」では本条件は作れない——query は生存 entity しか返さないため
+    /// 標的リストにそもそも載らず、打ち切り経路へ入らない（＝不動点の檻になる）。標的が
+    /// **ループ中に**破棄済みへ変わる機構は bevy では連鎖 despawn ただ 1 つ（`Children` は
+    /// `LINKED_SPAWN` の関係対象＝親の despawn が子孫へ再帰する）ゆえ、標的同士を親子で
+    /// 吊るす。
+    ///
+    /// ただし**2 段（親・子）では不動点になる**——`add_children` は先に子へ `ChildOf` を
+    /// 挿してから親へ `Children` を挿すので、子の archetype が先に生まれ、query は子を先に
+    /// 返す（子を先に消してから親を消す＝連鎖を踏まない）。そこで **root → mid → leaf の
+    /// 3 段**にする: archetype 生成順は `{marker,ChildOf}`（leaf）→ `{marker,Children}`
+    /// （root）→ `{marker,ChildOf,Children}`（mid）となり、処理順が **leaf → root → mid**
+    /// ＝ root の despawn が mid を連鎖破棄した**後**に mid が処理される。この順序前提は
+    /// テスト内で明示的に自己検査する（bevy 側の順序が変われば檻は緑のまま空虚化せず、
+    /// 前提 assert が赤くなって気づける）。
+    ///
+    /// 本番ツリーの窓 entity 同士に現在この連鎖は**無い**（`spawn_ghost_windows` はキャラ窓・
+    /// バルーン窓を top-level で spawn し、リポジトリ内にカスタム関係型も無い）。それでも
+    /// 呼出点に存在確認が無いこと自体が構造的な穴であり（3.2 の消費側 4 入口は呼出点を
+    /// 覆っていない）、本檻はその穴を塞いだことを固定する——将来の到達に対する保険という
+    /// 位置づけは task 6.3 の 3 檻と同じである。
+    ///
+    /// # 「警告ゼロ」を tracing 捕捉だけで主張してはならない（本檻の対照アームの理由）
+    ///
+    /// `bevy_ecs` は **`log` クレート**の `warn!` を使う（`bevy_ecs-0.18.1` の
+    /// `src/world/mod.rs:71` が `use log::warn;`・`World::despawn` は同 :1462-1469 で
+    /// 失敗時に `warn!("{error}")`＋`false`）。本番プロセスでこの行が
+    /// `WARN bevy_ecs::world: Could not despawn entity` として見えるのは
+    /// `tracing_subscriber` が `log`→`tracing` ブリッジを張るからであって、
+    /// テストの捕捉ハーネス（[`capture_logs`]＝素の thread-local dispatcher）には
+    /// **原理的に 1 件も届かない**。ゆえに「捕捉イベントに warn が無い」は bevy の警告に
+    /// 関しては**恒真**であり、それだけを根拠にすると檻が空虚化する。
+    ///
+    /// そこで**対照アーム**を置く: 同じ探針 World で存在確認**無し**のループを走らせ、
+    /// `World::despawn` が `mid` に対して `false` を返すことを実測する。上記の実装から
+    /// `false` は「`Could not despawn entity` の警告を 1 件出した」と**同値**であり、
+    /// これが本檻の非空虚性の証明である。捕捉側の `warn` ゼロ主張は areka 自身の出力
+    /// （`enqueue`/`Arrangement` 等）に対してのみ意味を持つ。
+    #[test]
+    fn despawn_smoke_targets_skips_cascade_despawned_target_without_warning() {
+        use placement::diag::DESPAWNED_SKIP_TAG;
+        use placement::test_support::{capture_logs, expect_one};
+
+        /// 探針 World: `root → mid → leaf` の連鎖 ＋ 連鎖に無関係な後続標的 `later`。
+        /// 戻り値は `(world, root, mid, leaf, later)`。
+        fn probe() -> (World, Entity, Entity, Entity, Entity) {
+            let mut world = World::new();
+            let root = world.spawn(GhostWindowMarker).id();
+            let mid = world.spawn(GhostWindowMarker).id();
+            let leaf = world.spawn(GhostWindowMarker).id();
+            world.entity_mut(root).add_children(&[mid]);
+            world.entity_mut(mid).add_children(&[leaf]);
+            let later = world.spawn(DummyWindowMarker).id();
+            (world, root, mid, leaf, later)
+        }
+
+        /// 本体と**同一の query**で標的を集める（順序前提と対照アームの両方が本体と
+        /// 同じ列を見ていることを構造で保証する）。
+        fn targets_of(world: &mut World) -> Vec<Entity> {
+            world
+                .query_filtered::<Entity, Or<(With<DummyWindowMarker>, With<GhostWindowMarker>)>>()
+                .iter(world)
+                .collect()
+        }
+
+        // ── 対照アーム（非空虚性の証明）: 存在確認**無し**のループは無効 entity を叩く ──
+        let (mut world, root, mid, leaf, later) = probe();
+        let order = targets_of(&mut world);
+        let at = |e: Entity| {
+            order
+                .iter()
+                .position(|x| *x == e)
+                .expect("標的として拾われている")
+        };
+        // 前提（探針が不動点でないことの自己検査）: 連鎖の親 `root` が子孫 `mid` より
+        // **先に**処理され、`later` が `mid` より**後**であること。前者が崩れると連鎖破棄を
+        // 踏まず、後者が崩れると「打ち切りは後続を止めない」の主張が空虚になる。
+        assert!(
+            at(root) < at(mid) && at(mid) < at(later),
+            "探針前提: 処理順は root → mid → later を満たさねばならない（order={order:?}\
+             ・root={root:?} mid={mid:?} leaf={leaf:?} later={later:?}）"
+        );
+        let failed: Vec<Entity> = order
+            .iter()
+            .filter(|e| !world.despawn(**e))
+            .copied()
+            .collect();
+        assert_eq!(
+            failed,
+            vec![mid],
+            "対照アーム: 存在確認が無ければ `mid` へ無効 despawn が飛ぶ\
+             （＝`Could not despawn entity` の警告 1 件）。ここが空なら本檻は恒真の空虚檻である"
+        );
+
+        // ── 本体アーム: 同じ探針で、警告を出さず debug 1 行で打ち切り後続も処理し切る ──
+        let (mut world, root, mid, leaf, later) = probe();
+        let (count, events) = capture_logs(|| despawn_smoke_targets(&mut world));
+
+        assert_eq!(
+            count, 4,
+            "標的として拾った 4 体を報告する（掃除後は 4 体とも消える）"
+        );
+        assert!(world.get_entity(root).is_err());
+        assert!(
+            world.get_entity(mid).is_err(),
+            "探針前提: root の despawn が mid へ連鎖している"
+        );
+        assert!(world.get_entity(leaf).is_err());
+        assert!(
+            world.get_entity(later).is_err(),
+            "打ち切りは後続の標的を止めない（Req 6.3「他の scope の処理を継続」）"
+        );
+        // `tracing::Level` の Ord は ERROR < WARN < INFO < DEBUG < TRACE ゆえ
+        // 「INFO より verbose」＝ debug/trace のみ、が静穏性の表現（follow.rs 3.2 檻と同型）。
+        // ここが見ているのは areka 自身の出力である（bevy の `log` 経由 warn は対照アーム担当）。
+        assert!(
+            events.iter().all(|e| e.level > tracing::Level::INFO),
+            "破棄済み標的に対して警告以上のログが出ている（Req 6.2 違反）: {events:?}"
+        );
+        let skipped = expect_one(&events, DESPAWNED_SKIP_TAG);
+        assert_eq!(
+            skipped.level,
+            tracing::Level::DEBUG,
+            "破棄済みの打ち切りは debug 水準（正常終了系）"
+        );
+        assert!(
+            skipped.message().contains("smoke 自動 close"),
+            "打ち切り行が自分の相を名乗っていない: {:?}",
+            skipped.message()
+        );
     }
 }
 

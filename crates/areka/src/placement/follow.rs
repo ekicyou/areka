@@ -884,8 +884,9 @@ pub(crate) fn on_balloon_drag_end(
 /// - 移動は `SetWindowPosCommand`（`SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE`）経由。
 ///   座標は物理 px 素通し（U4・再スケールなし）
 /// - 対象が [`BalloonFollow`] を持つ場合はバルーン窓も offset 維持で随伴移動する
-/// - 対象不在／`WindowHandle` 未付与（窓生成前）は `warn!` して `false` を返す
-///   （silent no-op にしない）。このとき随伴バルーンも動かさない
+/// - `WindowHandle` 未付与（窓生成前）は `warn!` して `false` を返す（silent no-op に
+///   しない）。対象が既に破棄済み（entity 不在）なら**正常終了系**ゆえ `debug!` で
+///   打ち切って `false`（task 7.3・Req 6.2）。いずれも随伴バルーンは動かさない
 /// - 随伴バルーン側の `WindowHandle` 未付与は `warn!` のみ（対象自身の移動は成立
 ///   しているため戻り値は `true`）
 ///
@@ -1331,11 +1332,24 @@ fn enqueue_window_set_pos(
     size: Option<SizePx>,
     route: Option<PlacementRoute>,
 ) -> bool {
+    // 「entity 不在＝破棄済み」と「実在するが `WindowHandle` 未付与＝窓生成前」を混ぜない
+    // （task 7.3・Req 6.2/6.3・task 3.2 が消費側 4 入口へ敷いたのと同じ区別）。前者は終了
+    // 処理の**正常終了系**——終了処理でゴースト窓が破棄された後も随伴書込（`follow_balloon`）
+    // は走り得るため、`warn!` のままにすると終了時ログが良性ノイズで埋まって本物の異常が
+    // 読めなくなる（6.2 → 7.3 の申し送り）。後者は結線の異常ゆえ `warn!` を保つ。
+    if world.get_entity(window).is_err() {
+        debug!(
+            entity = ?window,
+            x, y,
+            "{DESPAWNED_SKIP_TAG} 移動対象窓は既に破棄済み（despawn）→ 窓移動を正常系として打ち切り"
+        );
+        return false;
+    }
     let Some(handle) = world.get::<WindowHandle>(window).copied() else {
         warn!(
             entity = ?window,
             x, y,
-            "移動対象窓が不在か WindowHandle 未付与（生成前）のため移動しない"
+            "移動対象窓の WindowHandle 未付与（窓生成前）のため移動しない"
         );
         return false;
     };
@@ -7712,13 +7726,80 @@ mod tests {
                 guard_events(&events, GUARD_TAG_PREFIX).is_empty(),
                 "dpi={dpi}: 破棄済みバルーンに対してガードが喋っている（Req 6.2 違反）: {events:?}"
             );
-            let skipped = expect_one(&events, DESPAWNED_SKIP_TAG);
+            // **task 7.3 で強化**: 6.2 が固定していたのは「ガードが喋らない」だけで、
+            // 随伴書込そのもの（`enqueue_window_set_pos`）が破棄済みバルーンに対して
+            // `warn!` を出していた（6.2 → 7.3 の申し送り）。終了時静穏（Req 6.2）は
+            // **経路全体**の主張ゆえ、ここで警告以上ゼロを丸ごと見る。
+            assert!(
+                events.iter().all(|e| e.level > tracing::Level::INFO),
+                "dpi={dpi}: 破棄済みバルーンに対して警告以上のログが出ている（Req 6.2 違反）: {events:?}"
+            );
+            // **相ごとに数える**——総数で数えると、片方の打ち切りを外しても他方が同じ
+            // 判定語を出して総数が偶然一致し、檻が空虚になる（3.2 の教訓と同型）。
+            let skips = despawn_skip_lines(&events);
+            assert!(
+                skips.iter().all(|e| e.level == tracing::Level::DEBUG),
+                "dpi={dpi}: 破棄済み打ち切りが debug 水準でない: {skips:?}"
+            );
             assert_eq!(
-                skipped.level,
-                tracing::Level::DEBUG,
-                "dpi={dpi}: 破棄済み打ち切りが debug 水準でない"
+                skips
+                    .iter()
+                    .filter(|e| e.message().contains("可視性の遷移ガード"))
+                    .count(),
+                1,
+                "dpi={dpi}: 遷移ガード相の打ち切りが 1 行でない: {events:?}"
+            );
+            assert_eq!(
+                skips
+                    .iter()
+                    .filter(|e| e.message().contains("窓移動"))
+                    .count(),
+                1,
+                "dpi={dpi}: 随伴書込相の打ち切りが 1 行でない: {events:?}"
             );
         }
+    }
+
+    /// 破棄済み判定語（[`DESPAWNED_SKIP_TAG`]）を含む行を抜く（相ごとの計数用）。
+    fn despawn_skip_lines(events: &[LogEvent]) -> Vec<&LogEvent> {
+        events
+            .iter()
+            .filter(|e| e.message().contains(DESPAWNED_SKIP_TAG))
+            .collect()
+    }
+
+    /// Req 6.2 の裏面（真の異常を殺さない・随伴書込相）: **生存している** entity の
+    /// `WindowHandle` 欠落（窓生成前）は従来どおり `warn!`。存在確認の導入でこちらまで
+    /// 静穏化してはならない——「窓がまだ無い」は結線の異常であって終了系ではない。
+    #[test]
+    fn balloon_without_handle_on_living_entity_still_warns_on_follow_write() {
+        let dpi = 96;
+        let (mut world, char_window, balloon) =
+            char_with_far_balloon_world(dpi, visible_balloon_pos(dpi), far_out_offset(dpi));
+        // entity は実在させたまま `WindowHandle` だけを剥がす（窓生成前と同じ状態）。
+        world.entity_mut(balloon).remove::<WindowHandle>();
+
+        let (_, events) = capture_logs(|| {
+            resize_window_to(
+                &mut world,
+                char_window,
+                char_size(dpi),
+                PlacementRoute::Resnap,
+            )
+        });
+
+        let warned = expect_one(&events, "WindowHandle 未付与");
+        assert_eq!(
+            warned.level,
+            tracing::Level::WARN,
+            "実在 entity の WindowHandle 欠落は真の異常＝warn のまま（Req 6.2 の区別）"
+        );
+        assert!(
+            !despawn_skip_lines(&events)
+                .iter()
+                .any(|e| e.message().contains("窓移動")),
+            "実在 entity を『破棄済み』と誤判定している: {events:?}"
+        );
     }
 
     // -------------------------------------------------------------------------
