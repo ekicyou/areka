@@ -48,14 +48,18 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 - **M-boot 23/23 完了**（2026-07-13 `emo2-boot`）: 起動→表示→talk→close の可視一周。①shiori・②parsers トラック全完了。
 - **増分ウェーブ W1〜W4＋割込 全完走**: W1（idle-talk∥collision-geometry∥sakura-dialogue-tags）→ W2（input-events∥mayuna-compose）→ W3（sylphya∥seriko-loop∥choice-render）→ 割込（wintf-gpu-test-crash＝workspace テストゲート復旧）→ W4（position-persist∥choice-interact∥emo-dpi-scaling＝DPI 追従 k の全表示経路適用）。横断: cue-playback-duration・surface-resize-resnap・balloon-face-cue・emo-text-viewbox ✅。
 - **実機サインオフ発見 7件中 #1〜#6 解決済み**。**#7（冒頭空行）のみ pasta 上流（`ekicyou/pasta` 起票済み）＝areka スコープ外・未解決**。
-- 完了 spec = 147（`.kiro/specs/completed/`）。
+- 完了 spec = **148**（`.kiro/specs/completed/`）。
+- **W5 2/4 着地**（2026-08-01）: `kero-balloon`（PR#97）・**`dpi-window-vanish`**（本日）。残＝`collision-dpi-hittest` ∥ `choice-select-events`。
+  - **`dpi-window-vanish` の到達点**: S1（OS 提案位置の素通し）・S2（射影の欠落）・S3/S3′（可視性の遷移ガード不在）・**S4**（`Monitor` の `PartialEq` を値の変化検出に流用＝モニタ表の永久凍結）を是正。実機再サインオフ全判定 PASS——`S1-SOURCE-CUT` は**是正前 84/84 陽性から `external=24/24, boxstyle_warn=0, x_divergence=0` へ反転**、`ground_y` は DPI 遷移を通じて定数。
+  - **副産物**: `TEARDOWN-SILENCE: FAIL` の確定原因が誤りだったことを実装中に発見（真の出所＝`lifecycle.rs:70` の非同期 `WM_CLOSE` 経由の陳腐化 id）。開発者裁定で診断レポートを訂正し **D16／タスク 7.5** で是正。診断手順書の `SESSION2-NO-DRAG` が**構造的に到達不能**だった件も是正済み（自動終了が唯一の正規終了経路）。
 
 ## M1 残工程ゴール表
 
 | マイルストーン | ゴール（単一文） | ユニット | ウェーブ |
 |---|---|---|---|
 | M-dialogue（残1） | メニュー一周のカスケード確定（OnChoiceSelectEx→任意名イベント）＋`Status: choosing` | `choice-select-events` | W5 |
-| M-dpi（残2） | DPI 追従下の当たり判定 ÷k ＋混在 DPI 窓消失の決着 | `collision-dpi-hittest` ∥ `dpi-window-vanish` | W5 |
+| M-dpi（残1） | DPI 追従下の当たり判定 ÷k | `collision-dpi-hittest` | W5 |
+| ~~M-dpi 混在 DPI 窓消失~~ | ~~混在 DPI 窓消失の決着~~ | `completed/dpi-window-vanish` | ✅ **完了**（2026-08-01） |
 | （挙動バグ） | kero（scope1）バルーンが正典どおり `balloonk*` 資産・採寸 per-scope | `kero-balloon` | W5 |
 | （横断） | バルーンが可視コンテンツ駆動 show／talk 終了+30s+無フォーカス hide／再表示 | `balloon-visibility` | W6 |
 | （挙動バグ） | 表情固着解消＝bindoption 3値正典（mustselect/非宣言=高々1/multiple）準拠 | `bindoption-exclusivity` | W6（追記(52)裁定） |
@@ -63,7 +67,7 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 | （基盤） | 檻の決定性（tracing 毒化44呼出・スピン13箇所・ハーネス2設計の一本化） | `test-cage-determinism` | W6.5 |
 | （挙動バグ） | 常駐アイドルの CPU 消費＝毎フレーム全再合成のアロケーション予算是正 | `recompose-budget` | W6.5 提案（**配置裁定待ち**・追記(53)） |
 | （挙動バグ） | バルーンが他アプリ窓の背後へ埋もれる＝バルーンをシェルの直前へ維持 | `ghost-window-zorder` | W6 提案（**配置裁定待ち**・追記(54)） |
-| （挙動バグ） | 拡大率切替時にキャラが跳ねる＝遷移の原子性＋遷移後の work area 追随 | `dpi-transition-atomicity` | **未確定**（van の 5.1/5.2 着地後に再観測して決める・追記(55)） |
+| （挙動バグ） | 拡大率切替時にキャラが跳ねる＝遷移の原子性＋遷移後の work area 追随 | `dpi-transition-atomicity` | **未確定**（配置裁定待ち・追記(55)(56)） |
 | M-e2e | 適合14項目一周＋DoD＝**M1 完成宣言** | `emo2-conformance-e2e` | W7（最終） |
 
 > 完了済みマイルストーン（M-boot・M-mayuna・M-life・M-dialogue 3/4・横断 cue/sylphya・割込）は history のゴール表参照。M-dual は退役＝e2e 適合 #10 へ吸収。
@@ -116,3 +120,5 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 **2026-07-31 追記(53)（`recompose-budget` 起票）**: `dpi-window-vanish` の task 4.5 実機セッション中に開発者が「アイドルで CPU を食う・描画が重い」と発見→`/kiro-discovery` 再入。**Path C（新規単一 spec）と判定**。判定根拠: ①ドメインが van と別（窓の位置権威 vs 合成の実行予算）・van は 3 フェーズ承認済みで実装中ゆえ合流不可 ②所有者 `emo-compose`／`emo-present` は **completed で消化不能**（[[deferral-requires-verified-owner]]）③キャッシュ容量 1 は emo-present **R4.1 の承認済み要件**＝変更には spec ライフサイクルが要る。確定原因＝`compose_into`（毎フレーム用・要件 10.3）が**本番未配線**で確保版 `compose` を毎コマ呼んでいる。実測: アイドル 1 コア 13〜22%（dev 45%）・1 合成 ≒143ms・`cache_hit=true` **0 件**・`loop ticker catch-up` 発生・リークなし（WS/ハンドル/GDI 横ばい）。**未解明**＝時間で上昇する機序（bind 蓄積説は `bindoption-exclusivity` と同根の可能性）。**配置は裁定待ち**（W6.5 同居 vs 前倒し）。証跡ログ＝`%LOCALAPPDATA%\areka-diag\20260731-163422-rel\`（release）／`...\20260731-162340\`（dev 24分）。
 
 **2026-07-31 追記(54)（`ghost-window-zorder` 起票）**: 追記(53) と同じ `dpi-window-vanish` task 4.5 実機セッションで開発者が発見——キャラをドラッグで別ディスプレイへ移すとバルーンが他アプリ窓の背後へ埋もれる。**`/kiro-discovery` 再入で Path C（新規単一 spec）と判定**。判定根拠: ①**位置の問題ではない**ことを 4 系統で実測確認（全 work area 非交差 0/1185・`Hide` 0・`EmptyComposition` 0・`ShowWindow` 系 0）＝van の要件 2.2 でいう「可視領域内の見落とし」ゆえ、幾何限定の van 要件 3.1 では**是正できない**（van は承認済み実装中でもあり合流不可。ただし**観測結果は task 4.5 の成果として `diagnosis-report.md` に記録される**）②所有者候補（`window-placement`・`click-through`・`emo2-boot`）は全て completed で消化不能 ③`balloon-visibility` へ畳む案は**不採用**——vis は show/hide の状態機械、本 spec は窓の重なり関係で別レイヤ・混ぜると失敗の切り分けが効かなくなる。機序＝ゴースト窓に owner 関係が無く（`window_factory.rs:152`）配置経路は全て `SWP_NOZORDER`（4242/4242）で areka 側に z-order 設定ゼロ。**`ZOrder` 語彙は完備・配線ゼロ＝本セッション 3 例目**（他: `compose_into`／`PlacementRoute::SpawnInitial`・`Restore`）——語彙先送りの規律は効いているが**配線の追跡が弱い**ことの示唆。正典（ukadoc `\v`）は「スコープごとの重なりはユーザの操作次第」と明文＝sakura⇄kero の強制は禁止。`windowstate` 一族は emo2 消費者ゼロで先送り・語彙は brief に完全収録。**配置は裁定待ち**（W6 同居 vs W5 直後の単独割込）。
+
+**2026-08-01 追記(56)（`dpi-window-vanish` 完了・S5 の担当確定）**: W5 の 2 本目が着地（完了 spec 148）。実機再サインオフは 2 台混在 DPI（192／144・左モニタ負座標）で**全判定 PASS**。⑴**S5（work area 非追随）の担当が `dpi-transition-atomicity` で確定**——実測で「モニタ表は追随する（`work_area` 1704↔1728）が `ground_y` は起動時値のまま＝`dpi=144` で **24px 浮く**」ことを確認し、機序も `MonitorSnapshot`（`main.rs:703` の 1 箇所のみ・更新経路なし）と特定済み。van の Req 4.1/4.2 は「変化の**前後**で接地点を保つ」であり `ground_y` 定数で成立ゆえ**van の不足ではない**（「新下端への追随」は van の Non-Goals）。**atom の要件はこの実測から書き起こせる**（再観測は不要）。⑵**「語彙は完備・配線ゼロ」が本 spec でも 2 例**（`PlacementRoute::SpawnInitial`／`Restore`）——追記(54) の指摘（配線の追跡が弱い）は van 内でも再現し、`diag.rs` の狭い `#[allow(dead_code)]` に実在理由を書く形で明示的先送りとした。⑶**確定原因の誤りが実装中に発覚した 2 例目**（1 例目＝タスク 1.4 の route 語彙）。今回は `TEARDOWN-SILENCE` の帰属で、静的構造証跡（`#[relationship]` が `crates` 全体 0 件＝連鎖不能）とログ順序で反証。**Req 2.7 が確定機構外の変更を禁じるため開発者裁定を経て診断レポートを訂正**し、D16／Phase D′／タスク 7.5 を新設して是正した——**確定台帳は訂正可能だが、訂正には裁定が要る**という運用が実例で確立した。⑷檻の空虚性は通算 **9 例**（本 spec で 8・9 例目を追加）。9 例目＝`bevy_ecs` が `log::warn!` を使うため tracing 捕捉には**原理的に届かず**「警告が無い」の主張が恒真になる型。対策は**同一分岐の観測可能量**（`World::despawn` の戻り値）＋**自己証明アーム**（ハーネスがその水準を見られることを先に示す）。
