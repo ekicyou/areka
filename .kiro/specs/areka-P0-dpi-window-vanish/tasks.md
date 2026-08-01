@@ -217,14 +217,16 @@
   - **本タスクは 6.2 のレビューが「差し戻し先の担当者検証」を求めた結果として新設された**（[[deferral-requires-verified-owner]]＝ウェーブ名・タスク番号は担当者ではない）。当初 6.2 は 7.2 へ申し送ったが、7.2 の `_Boundary:_` は**檻のみ**で `resize_window_to` の挙動を変える権限を持たないため、挙動変更を許す Phase C に担当を立て直した
   - `resize_window_to` の `raw` 導出（`follow.rs:1030-1045`）と `old_rect` 導出（`:1059-1067`）は `WindowPos.position` の `Option::None` しか見ておらず、wintf 正典の未確定表現 `CW_USEDEFAULT`（`== i32::MIN`）を素通しする。位置がセンチネルの窓が入ると射影 T の入力も旧矩形も `i32::MIN` 近傍になり、`guard_visibility` が「もともと画面外に留置されていた」と読んで `Keep` へ落ちる＝**6.1 が敷いた安全側 clamp の腕が死ぬ**
   - 6.2 は**バルーン側だけ**を塞いだ（`guard_balloon_position`・`follow.rs:662-665`）。キャラ窓側を塞ぐと 6.1 の挙動が変わるため 6.2 の制約（「6.1 が配線したガードの挙動を変えないこと」）に触れ、同タスク内では実施できなかった
-  - 判定はセンチネル一致で行うこと——**負座標そのものは正当**（合成レイアウトの左モニタは `-1920..0`）ゆえ符号で判定してはならない。式は wintf 正典（`crates/wintf/src/ecs/graphics/systems/window_pos.rs:41`／`crates/wintf/src/ecs/layout/systems/monitor_systems.rs:408`）に合わせる
-  - **旧矩形不明（安全側 clamp）へ倒すのか、`resize_window_to` 自体を打ち切る（log-first の `warn!`＋`false`）のかを先に決めること**——後者なら射影 T の入力汚染も同時に断てるが、`WindowPos.position` が `None` のときの既存縮退（`:1037-1043` の `warn!`＋`false`）と語彙を揃える必要がある
-  - **6.1 の檻の期待値更新を含む**（`undetermined_old_size_is_treated_as_unknown_rect_and_clamps` ほか、`WindowPos::default()` を探針に使っている檻）。変更後は 6.2 の檻一式（`balloon_*`）が非退行であることも確認する
+  - **裁定済み（D15・2026-08-01・開発者承認「基本的に本 spec で塞ぐ」）: `resize_window_to` の打ち切りを採用**——position センチネルを `Option::None` と同じ「窓生成前／位置未確定」状態として、既存縮退（`:1038-1043` の `warn!`＋`false`）と同じ腕へ合流させる。3 案の solve/not-solve 対比・寸センチネルとの非対称が意図的である理由・requirements.md 無改変の判断は design.md **D15** が正本
+  - 実装: 手順 3 の `wp.position` 縮退の**直後**にセンチネル一致判定を追加する（`pos.x == CW_USEDEFAULT || pos.y == CW_USEDEFAULT` → `warn!`＋`return false`）。**負座標そのものは正当**（合成レイアウトの左モニタは `-1920..0`）ゆえ符号で判定してはならない。式は wintf 正典（`crates/wintf/src/ecs/graphics/systems/window_pos.rs:41`／`crates/wintf/src/ecs/layout/systems/monitor_systems.rs:408`）に合わせる。warn 文言は `:1041`（「WindowPos.position 不在（窓生成前）のため raw を導出できず resize しない」）と同族の語彙で「センチネル（位置未確定）」を明示する
+  - 新設檻（最低 3 系統・全て `DPIS` 横断）: ①位置センチネル窓 → 戻り値 `false`・書込ゼロ（`WindowPos` 不変）・warn ちょうど 1 件、②**負の実座標**（左モニタ `-1920..0` 内の実位置）は打ち切られず従来どおり動く＝符号判定への変異を検出、③片軸のみセンチネル（x のみ／y のみ）も打ち切り。探針の自己検査（不動点でないこと）を 6.1/6.2 の檻の流儀で入れる
+  - 既存檻の期待値: `undetermined_old_size_is_treated_as_unknown_rect_and_clamps`（`follow.rs:7087`）は**位置が実値・寸のみセンチネル**の探針ゆえ D15 帰結⑴の非対称により**無改変で緑のまま**（当初「期待値更新を含む」と書いたのは裁定前の両論併記であり、打ち切り裁定の下では更新不要が正）。6.2 の檻一式（`balloon_*`）も無改変で非退行を確認する
+  - 検証: `cargo test -p areka`（既存 620＋新設が全緑・`#[ignore]` 0 件）・`cargo test -p wintf` 非退行・`cargo build` / `cargo build --release` 成功
   - **本番到達性は現状ゼロ。ただし「component 1 個ぶんの距離」であって構造的な不可能ではない**（6.2 レビュー ラウンド 2 が独立に再評価）:
     - **センチネル位置の窓は本番プロセスに実在する**——`crates/areka/src/main.rs:480` の `spawn_dummy_window` は `WindowPos` を**明示挿入しない**（`Name`／`DummyWindowMarker`／`Window`／`WindowStyle`／`BoxStyle`／`OnPointerPressed` のみ）ため、wintf の `on_window_add` フックが `WindowPos::default()`＝`position = CW_USEDEFAULT` を挿す。これは檻の中の話ではなく**実在**である（wintf 側も `crates/wintf/src/ecs/layout/systems/monitor_systems.rs:891-893` で同旨を明記）
     - **届かない唯一の理由は `resize_window_to` の手順 1 の `Anchored` ゲート**（`follow.rs:1009`）——dummy 窓は `Anchored` を持たないので先に `warn!`＋`false` で返る。`anchor_changed_system`（`follow.rs:1215`）は `#[allow(dead_code)]` で schedule 未結線、他の本番呼出元（`frame.rs:734,930,1270`）はゴーストレジストリ経由で `placement/spawn.rs:358` が実位置・実寸を詰める
     - ゆえに「原理的に起きない」とは言えない。**`Anchored` を持つ窓が 1 つでも増えれば到達する**
-  - 完了状態: 位置がセンチネルの窓に対して 6.1 のガードが安全側へ倒れる（または経路が打ち切られる）ことが檻で固定され、6.1／6.2 の既存檻が全て緑のまま
+  - 完了状態: 位置がセンチネルの窓に対して `resize_window_to` が log-first で打ち切られる（書込ゼロ・warn・`false`）ことと、負の実座標が打ち切られないことが檻で固定され、6.1／6.2 の既存檻が全て無改変で緑のまま
   - _Requirements: 3.1, 3.3_
   - _Boundary: areka placement（`resize_window_to` の入力導出・遷移ガードの入力）_
   - _Depends: 6.1, 6.2_
