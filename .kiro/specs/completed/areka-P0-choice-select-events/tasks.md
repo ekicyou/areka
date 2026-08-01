@@ -1,0 +1,233 @@
+# Implementation Plan
+
+- [x] 1. 基盤: 授受契約型と横断リプル
+- [x] 1.1 talk 授受契約に選択系の指示型と選択待ち通知型を追加する
+  - kanade から talk 再生系へ渡す指示を「起動／選択解決／選択解除」の 3 形を持つ単一型として定義し、順序保存が契約であることを型の doc に明記する
+  - talk から kanade へ返す選択待ち通知を、候補選択肢 ID 列・表示完了時刻（経過秒）・タイムアウト指令の 3 情報を持つ型として定義する
+  - 完了状態: 両型が契約クレートに存在し、既存の起動指示型が新指示型の一形として包まれた状態でワークスペースがビルドされる
+  - _Requirements: 5.1, 5.6, 7.1_
+  - _Boundary: talk 契約層_
+
+- [x] 1.2 送出イベント ID を出所カテゴリ付きの型へ移行する
+  - SHIORI 送出呼び出しのイベント ID を「スケジューラ起源の固定 ID」と「選択起源の任意名」を区別できる型へ置き換える
+  - 既存の全構築関数・実 SHIORI バックエンド・mock・既存テストを固定 ID 側へ機械的に適応させ、SHIORI へ渡る文字列表現は従来と一字一句同一に保つ
+  - 完了状態: 既存 kanade テスト群が挙動不変のまま緑で通り、任意名を表現できる型が用意された状態になる
+  - _Requirements: 2.6, 3.6, 4.4_
+  - _Boundary: kanade 契約層_
+
+- [x] 1.3 選択入力・選択待ち通知・タイムアウト既定値の境界型を追加する
+  - 選択確定入力（選択肢 ID・表示ラベル・発生元 scope・付随参照列）を kanade の入力値オブジェクトとして追加する
+  - kanade のメッセージ境界に選択確定と選択待ち通知の 2 入力を additive に追加する
+  - 実行時設定に選択肢タイムアウト既定値を追加し、既定 30000 ミリ秒を与える
+  - 完了状態: 新しい入力型・設定値が境界に存在し、既存 8 種のメッセージ variant が無改変のままビルドが通る
+  - _Requirements: 2.6, 3.7, 7.8_
+  - _Boundary: kanade 契約層_
+
+- [x] 1.4 統合: kanade から talk 再生系への指示チャンネルと dispatcher メッセージ契約を差し替える
+  - kanade アクターの送出口を起動専用チャンネルから新指示型チャンネルへ差し替え、ghost 側の結線とリレーの型引数を追随させる
+  - dispatcher の受信メッセージへ選択解決・選択解除・選択待ち通知の 3 アームと、指示型・通知型からの網羅的な変換を追加し、各アームが現行 slot を引くところまでの経路を通す（stale 判定・終了指示転送・時刻換算の意味論は 3.3 が与える）
+  - 決定論檻の talk モックを新指示型の到着順記録へ更新し、既存の起動検証が意味不変で通るようにする
+  - 送出失敗はエラー記録の上で運行継続とし、既存の起動失敗規律と同一の扱いにする
+  - 完了状態: kanade・ghost・檻モックの 3 点が新型で結線され、既存の起動系テストと spine 系テストが緑で通る
+  - _Requirements: 4.4, 5.6_
+  - _Boundary: kanade シェル, ghost 結線・dispatcher 契約, 檻モック_
+  - _Depends: 1.1_
+
+- [x] 2. 中核: 選択判定の純関数層
+- [x] 2.1 (P) カスケード段列の判定とタイムアウト期限の写像を純関数として実装する
+  - 選択肢 ID から発火段列を「任意名 1 段のみ」「正典形の 2 段」「M1 未対応カテゴリ」の 3 分岐へ一意に決める純関数を実装する
+  - タイムアウト指令から期限を写す純関数を実装し、未指定は既定値加算・0 以下は無期限・正値は秒加算とする
+  - 完了状態: 両純関数が副作用なしで、境界入力（`On` 単独・小文字始まり・`script:` 前置・0・負値）を含む全分岐の単体テストが緑になる
+  - _Requirements: 2.1, 2.2, 2.5, 2.7, 7.6, 7.7_
+  - _Boundary: kanade 選択判定モジュール_
+
+- [x] 2.2 (P) 選択関連 4 イベントの正典 Reference 割付を実装する
+  - 拡張イベントはラベル・ID・付随参照列の順、無印イベントは ID のみ、任意名イベントは付随参照列のみを先頭から、タイムアウトイベントは起動スクリプトを先頭に割り付ける
+  - 付随参照列が空のときは対応する Reference 位置を作らず空文字で埋めない（既存マウス系の空文字埋め規約とは非対称である旨をコメントで明記する）
+  - 全構築関数が共通リクエストヘッダを必須引数として受け取り、ヘッダ欠落が構造上起こらないことを保つ
+  - 完了状態: 4 構築関数の Reference 列が正典 layout と完全一致し、空参照列で位置が生えないことを単体テストが固定する
+  - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6_
+  - _Boundary: kanade Reference 構築_
+
+- [x] 2.3 統合: 任意名イベントの受理カテゴリと SHIORI 出口ガードのカテゴリ分岐を実装する
+  - 固定 ID 表に選択関連 3 イベントを追加し、表が正典固定 ID の部分集合である性質を保つ
+  - 選択起源の任意名は `On` 接頭のみを受理する規則として追加し、スケジューラ起源の恒久禁止（自発生成と二重駆動する ID）を選択起源へ適用しない
+  - SHIORI 出口の単一チョークポイントを出所カテゴリ別の分岐へ変更し、違反は従来どおり送出せずエラー記録する
+  - 完了状態: 選択起源の禁止対象 ID が発火でき、スケジューラ起源の同 ID は従来どおり拒否されることを単体テストが両方向で固定する
+  - _Requirements: 2.6, 2.9_
+  - _Boundary: kanade 契約層, kanade シェル_
+  - _Depends: 1.2, 2.2_
+
+- [x] 3. 中核: 選択待ちの事実を kanade へ届ける搬送経路
+- [x] 3.1 (P) 再生層に占有 horizon の照会口を追加する
+  - トークの絶対終了時刻（アンカー＋相対 horizon）を返す照会関数を再生層へ additive に追加する
+  - 完了状態: 照会関数がアンカーと相対 horizon の和を返すことを単体テストが固定し、既存の再生層 API は無改変である
+  - _Requirements: 7.2_
+  - _Boundary: 再生層（dola）_
+
+- [x] 3.2 talk アクターの選択待ち成立を検出して通知を送出する
+  - 選択待ちバリアへの遷移を一度きり検出し、候補選択肢 ID 列・占有 horizon・バリアのタイムアウト指令を集めて完了通知ポートへ送出する
+  - 選択解決の成功時に検出フラグを戻し、1 トークあたり複数バリアへの将来拡張をシームとして残す
+  - 既存の即時完了（残台本なしのメニュー形）・不一致時の記録・誤投函の警告は無改変で保つ
+  - 台本コンパイル側のタイムアウト無指定を「M1 無期限」から「未指定＝下流の既定値へ委譲」へコメントのみ改める（コードは変更しない）
+  - 完了状態: 選択肢を含む台本と注入 Tick で通知がちょうど 1 回届き、解決後に再通知されないことをテストが固定する
+  - _Requirements: 5.2, 7.1, 7.2_
+  - _Boundary: talk アクター（areka-sakura）_
+  - _Depends: 1.1, 1.4, 3.1_
+
+- [x] 3.3 (P) dispatcher の選択系 3 アームに中継意味論と時刻換算を与える
+  - 3 アームのいずれも現在の talk 識別子と一致する場合のみ中継し、不一致は stale として記録の上で棄却する
+  - 選択解除は slot を維持したまま終了指示を転送し、talk 発の完了通知が正規経路で kanade へ届くようにする（slot 先行解放の既存ヘルパは使わない）
+  - 選択待ち通知の経過秒を Tick 中継と同一の起点でミリ秒へ換算し、新しい時間基準を作らない
+  - 完了状態: 一致中継・不一致棄却・換算値・選択解除後に完了通知が kanade へ到達することの 4 点をテストが固定する
+  - _Requirements: 1.3, 5.5, 7.2, 7.5_
+  - _Boundary: dispatcher（areka-ghost）_
+  - _Depends: 1.4_
+
+- [x] 4. 中核: kanade 選択調停の状態機械
+- [x] 4.1 選択待ち帳簿と選択系の入力・アクション・送出写像を追加する
+  - Phase を変更せずに State へ選択帳簿（対象 talk 識別子・照合用候補 ID 列・期限・段フェーズ）を追加する
+  - choice 起因の slot 差替で旧 talk 識別子を 1 世代保持する枠を State へ追加する
+  - 起動スクリプトを現行トーク記録へ保持し、タイムアウトイベントの先頭 Reference 供給源とする
+  - 選択解決・選択解除の 2 アクションと、選択確定・選択待ち通知の 2 入力を additive に追加する
+  - アクター側の実行ループで新 2 アクションを talk 指示型の送出へ写し、送出失敗をエラー記録の上で運行継続とする
+  - 完了状態: 既存 Phase・既存アクション variant が無改変のままビルドが通り、既存の状態機械テストが緑で通る
+  - _Requirements: 4.4_
+  - _Boundary: kanade 状態機械, kanade シェル_
+  - _Depends: 1.3, 1.4_
+
+- [x] 4.2 選択待ち通知の受領と帳簿確立を実装する
+  - 現行トークと識別子が一致する通知のみ受理し、不一致は警告記録の上で棄却する
+  - タイムアウト指令を期限へ写して帳簿を確立し、確立を情報レベルで記録する
+  - 完了状態: 通知受領後に選択確定が受理可能な状態となり、不一致通知では帳簿が確立されないことをテストが固定する
+  - _Requirements: 7.1, 7.6, 7.7_
+  - _Depends: 4.1, 2.1_
+
+- [x] 4.3 選択確定の受領検証とカスケード駆動を実装する
+  - 選択待ち不在・対象 talk 不一致・段の進行中・候補集合に無い ID のいずれも警告記録の上で棄却し、状態を変えず処理を継続する
+  - 受理時は段列を決めて第 1 段を発行し、M1 未対応カテゴリは警告記録の上でイベントを発行せず選択解決のみ行う
+  - 応答が空なら次段へ前進し、残段がなければ選択解決のみを発行する。応答があれば以降の段を発行せず、選択解決と新トーク起動をこの順で同一バッチに載せる
+  - 完了状態: 1 回の選択確定が高々 1 回のカスケードと高々 1 回の選択解決と高々 1 つの起動要求しか生じないことをテストが固定する
+  - _Requirements: 1.1, 1.3, 1.4, 2.3, 2.4, 2.7, 4.1, 4.2, 4.3, 4.6, 5.1, 5.3, 5.4, 5.6_
+  - _Depends: 4.2, 2.1, 2.2_
+
+- [x] 4.4 選択待ち中の実行状態導出を実装する
+  - 実行状態スナップショットへ選択待ち継続中を表す情報を追加し、その供給元を Phase 単独から State 全体へ広げる
+  - 実行状態の導出表で選択待ちの行を実導出へ差し替え、連結順序・区切り・空集合時のヘッダ行省略の既存規律は変更しない
+  - 完了状態: 選択待ち中の周期リクエストに再生中と選択待ちの複合値が正典順で載り、解決後に選択待ちが消えることをテストが固定する
+  - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
+  - _Depends: 4.2_
+
+- [x] 4.5 タイムアウト計測とタイムアウトイベントを実装する
+  - 周期処理に先行して期限到達を判定し、到達時はタイムアウトイベントを起動スクリプトを先頭 Reference として発行する（当該周期では通常の周期送出を行わない）
+  - 期限が無期限の場合は計測を開始せず選択待ちを継続する
+  - 応答があれば既存の起動経路で置換再生し、応答が空または失敗なら選択解除指示を発行して以降の選択確定を棄却する
+  - 中断完了を非終了として扱う既存アームのコメントを、選択解除経路により正規の到達点となった旨へ更新する
+  - 完了状態: 注入時刻のみで期限到達・イベント発行・空応答時の解除までが再現し、実時間待機に依存しないことをテストが固定する
+  - _Requirements: 7.3, 7.4, 7.5_
+  - _Depends: 4.2_
+
+- [x] 4.6 帳簿の掃除・1 世代 stale 防御・選択起因の失敗例外を実装する
+  - 対象トークの完了・slot 置換・終了系遷移で選択帳簿を消去し、帳簿の対象と現行トークが食い違う状態を残さない
+  - choice 差替直後の遅延完了通知は 1 世代保持した旧識別子と照合して情報レベルで棄却し、未知識別子のエラー記録を真の欠陥専用に保つ
+  - 選択系の応答待ち中の送出失敗は横断的な終了系遷移より先に捌き、エラー記録の上で無応答と同じ扱いで継続する
+  - 完了状態: 選択由来の SHIORI 失敗で終了系列へ倒れないこと、および正常系のユーザー操作でエラーレベルのログが出ないことをテストが固定する
+  - _Requirements: 1.3, 1.6, 4.5, 5.5, 6.2_
+  - _Depends: 4.3, 4.5_
+
+- [x] 5. 統合: 選択確定通知の受信処理を UI 層へ結線する
+  - UI スレッドの選択確定受信口を毎フレーム排他システムで drain し、到着順に全件を kanade へ転送する（判断・フィルタ・重複排除は行わない）
+  - 受信値から kanade 入力への写像を純関数として実装し、ラベルと付随参照列を改変せず転写し、発生元 scope は記録と検証にのみ用いて Reference へ載せない
+  - 転送失敗は警告記録の上で継続する
+  - 既存の押下ハンドラ群は無改変とし、結線は既存のマウス入力結線と同型の位置へ追加する
+  - 完了状態: 写像純関数の不透明転写と転送失敗分岐の単体テストが緑になり、結線を含むアプリケーションがビルドされる（実行時の到達確認は 7.2 が担う）
+  - _Requirements: 1.1, 1.2, 1.5, 1.6, 3.7_
+  - _Depends: 1.3, 4.3_
+
+- [x] 6. 検証: 決定論檻
+- [x] 6.1 カスケード 2 形と選択起因失敗の統合檻を実装する
+  - 任意名形は任意名イベントのみが発行され拡張・無印が発行されないこと、応答から起動と選択解決が行われることを固定する
+  - 正典形は拡張イベントが正典 Reference 並びで先行し、空応答で無印へ前進し、最終段が空なら選択解決のみで起動が生じないことを固定する
+  - 段の送出失敗が終了系列へ倒れず無応答相当で継続すること、および既存の失敗系テストが不変であることを固定する
+  - 完了状態: mock SHIORI と注入通知のみで 3 群が単一 pass/fail として通る
+  - _Requirements: 9.1, 9.2, 4.5_
+  - _Depends: 1.4, 4.2, 4.3, 4.6_
+
+- [x] 6.2 実行状態表示とタイムアウトの統合檻を実装する
+  - 選択待ち確立後の周期リクエストに複合実行状態が載り、解決後に選択待ちが消えることを固定する
+  - 注入時刻で期限到達させ、タイムアウトイベントが起動スクリプトを先頭 Reference として発行され、空応答で選択解除指示が出て現行トークが終了することを固定する
+  - 応答がある場合の置換再生と、解除後に到着する選択確定が棄却されることを固定する
+  - 完了状態: 実時間待機なしに 2 群が単一 pass/fail として通る
+  - _Requirements: 9.1, 9.2, 6.1, 7.3, 7.4, 7.5_
+  - _Depends: 4.4, 4.5, 6.1_
+
+- [x] 6.3 一回性と棄却分岐の檻を実装する
+  - 1 注入が高々 1 カスケードと高々 1 選択解決しか起こさないこと、解決後の遅延注入・候補外 ID の注入が棄却されることを固定する
+  - 段の進行中の二重注入棄却と 1 世代 stale 防御は、カスケードが単一の駆動呼出内で同期完結しメッセージ境界を跨いで観測できないため、状態を直接構成する純関数呼び出しの檻で固定する
+  - 棄却時の警告語彙をログ捕捉で固定する
+  - 完了状態: 全棄却分岐が実行検証され、判断分岐の網羅に穴が残らない
+  - _Requirements: 9.1, 9.2, 1.1, 1.3, 1.4, 1.6_
+  - _Depends: 6.1_
+
+- [x] 6.4 (P) 上流・下流クレートの単体檻を実装する
+  - talk アクターの選択待ち通知が一度だけ届き解決後に再通知されないこと、通知内容（候補 ID 列・horizon・タイムアウト指令）が正しいことを固定する
+  - dispatcher の一致中継・不一致 stale 棄却・時刻換算・選択解除後の完了通知到達を固定する
+  - 再生層の占有 horizon 照会の戻り値を固定する
+  - 完了状態: 3 クレートの檻が kanade 檻とは独立に緑で通る
+  - _Requirements: 9.1, 5.2, 5.5, 7.1, 7.2_
+  - _Boundary: areka-sakura, areka-ghost, dola_
+  - _Depends: 3.1, 3.2, 3.3_
+
+- [x] 7. 検証: 互換記録と実機サインオフ
+- [x] 7.1 (P) 互換対応表を新設し適合スコープ文書の誤記を訂正する
+  - 選択関連イベントの Reference 割付・カスケード順序・既定タイムアウト値・M1 非対応カテゴリの裁定を、正典引用と反証を併記した表として記録する
+  - 各行を正典由来・二次情報由来・areka 裁量の 3 値で区別可能に記録する
+  - 適合スコープ文書の拡張イベントの Reference 割付が正典と逆に書かれている記述を、正典に一致するよう訂正する
+  - 完了状態: 対応表に設計で確定した全裁定項目が 3 値の出所付きで並び、スコープ文書の記述が正典と一致する
+  - _Requirements: 2.8, 8.1, 8.2, 8.3_
+  - _Boundary: 互換記録文書_
+
+- [x] 7.2 実機サインオフを実施する
+  - 実ゴースト・実 SHIORI・実 DPI 環境を絶対パスで起動し、有界の自動終了とログ収集を設定する
+  - メニュー一周（ダブルクリック→メニュー→項目選択→サブメニュー→もどる→閉じる）を人間が確認する
+  - 受理・段送出・起動・選択解決のログ系列を突合し、選択待ち中に自発トーク起動のログが現れないことを確認する
+  - 完了状態: メニュー一周の人間サインオフとログ突合の双方が記録された状態になる
+  - _Requirements: 9.3, 9.4_
+  - _Depends: 5, 6.2, 6.3, 6.4_
+
+## Implementation Notes
+
+- 1.3: `actor.rs` の `KanadeMsg::{Choice, ChoiceWaiting}` は暫定アーム（warn ログ＋継続・`Input` へ未写像）。**タスク 4.1 で `Input::{Choice, ChoiceWaiting}` 写像へ必ず置換すること**。
+- 1.2: `EventId` には `as_str()` に加え `Display`（`as_str()` へ委譲）がある。`areka-ghost` の spine e2e が `id.to_string()` を使うため境界保護に必要。
+- 1.4: dispatcher の選択系 3 アームは暫定（`*_dropped_not_wired` warn ＋ 現行 slot 参照のみ）。**タスク 3.3 で恒久語彙 `resolve_choice_stale`/`cancel_choice_stale`/`choice_waiting_stale` と実意味論へ置換すること**。
+- 1.4: `start_talk_send_failed` は design C6 に従い `talk_command_send_failed` へ改称済み。`MockSakura::started()` は `TalkCommand::Start` の射影になった（既存檻は無改変）。
+- 2.1: `schedule/choice.rs` に `plan_cascade` / `choice_deadline` を配置。設計に明文の無い 2 裁定を本層で固定＝**秒→ms は四捨五入**・**NaN は無期限へ畳む**。対応表（7.1）へ記録するか要判断。`#[allow(dead_code)]` 3 箇所は 4.x の配線で除去すること。
+- 2.2: `on_choice_*` 4 本は Reference 割付を正典どおり実装（Ex は Ref0=ラベル/Ref1=ID）。3 固定 ID は **まだ `ALLOWED_EVENT_IDS` 未登載**＝2.3 が入るまで egress ガードが拒否する。設計 C2 の「`EventId::Choice` は choice.rs の planner のみが構成」という記述は C3/タスク境界（events.rs の `on_choice_named`）と字面が衝突しており、実装は C3 に従っている。
+- 2.3: `is_allowed_choice_event` は `lib.rs` の `events` ファサードへ未露出。統合檻（6.x）が必要とするなら 1 行 re-export を追加すること。
+- 3.1: **重要な申し送り** — `CuePlayer::stop()` → `TimedSchedule::clear()` は `horizon` を 0.0 にするが `start_time` はリセットしない。ゆえに**中断後の `occupancy_horizon()` はアンカー（過去時刻）を返す**。3.2 は `WaitingForChoice` 検出時点（停止前）で値を捕捉すること・4.x は中断済み player を照会しないこと。誤用すると deadline が即時失効して偽の `OnChoiceTimeout` を招く。
+- 3.2: `spawn_talk` の `D` 境界拡張は `areka-ghost/src/prop_sink.rs` と `areka-seriko/tests/{balloon_face,bind}_e2e.rs` にも機械的追随を強制した（design の Revalidation Trigger は sakura テストのみ列挙＝過小記述）。assert は全て不変。
+- 3.3: dispatcher の stale 棄却は design 語彙表どおり `info!`（Req1.3/5.5 の「警告」は kanade 層の `choice_rejected_no_wait` が正・dispatcher は二重防御の副）。`warn!` は `base_now == None` の防御専用。`test_log_capture.rs` に `event` フィールド照合（`assert_logged_event`）を additive 追加済み。
+- 4.1: 帳簿型 `ChoiceState`/`ChoicePhase`/`CascadeNext` は design New Files 表（choice.rs）ではなく **`schedule/mod.rs` の `State` 直近**に置いた（C4 コードブロックの提示形・`ActiveTalk` の前例に合わせた）。4.2/4.3 は**どちらか一方に統一**すること（両方に散らばらせない）。
+- 4.1: `schedule/mod.rs` の `Input::{Choice, ChoiceWaiting}` は暫定アーム（`*_dropped_not_wired` warn ＋状態不変）。**4.2 が ChoiceWaiting・4.3 が Choice を `steady` 委譲へ置換**すること。置換時に檻 `warn_choice_*_not_wired_logs` と `*_is_routed_by_provisional_arm_*` を恒久檻へ差し替えること。
+- 4.2: `log_capture` に `CapturedEvent.fields`（全構造化フィールド記録）と `logged_once` を additive 追加。以降の檻はログの**フィールド値**まで突合できる。`choice_waiting_stale` には診断用 `reason`（`no_active_talk`/`talk_id_mismatch`/`non_steady_phase`）を付与。
+- 4.3: **4.4 への必須申し送り** — `steady.rs` の `on_choice` と `on_cascade_reply` の次段発行は、帳簿を `state.choice.take()` した状態で `snapshot_of(&state.phase)` を呼ぶ。4.4 が `State::snapshot(&self)` へ差し替えると**この 2 点だけ `choice_active=false` になりカスケード段 GET から `choosing` が落ちる**。帳簿を戻した後に採るか、ローカル値から導出すること。
+- 4.3: DD-12（mod.rs 横断 Failed 先行アーム）が 4.6 待ちのため、`step()` 経由のカスケード中 Failed は現在も `Unloading{Fault}` へ倒れる。steady 側の 204 相当処理は実装済みで `steady::step` 直呼びの檻で固定。**end-to-end の Failed 檻は 4.6 の担当**。
+- 4.4: `State::snapshot(&self)` / `State::snapshot_with_choice(bool)` を新設し steady の 4 呼出点を差替（design の「5 呼出点」の 5 点目は **4.5 が新設する `OnChoiceTimeout` GET**）。4.5 は新設時に `snapshot_with_choice(true)` 相当（帳簿を `TimeoutInFlight` へ進めた後なら `state.snapshot()` でも可）を選ぶこと。`snapshot_of(&Phase)` は boot 系列・force_quit 専用として残置。
+- 4.5: 新規 trace 語彙 `choice_timeout_ledger_stale`（design ログ表に無い・帳簿と現行 talk の不一致時の非発火ガード）。**4.6 の帳簿掃除（規則 7）が入れば到達不能になる**——4.6 実装後にガードが冗長化していないか確認すること。
+- 4.6: 規則 7 の「close 系遷移」は **ClosePending への実遷移**と解した（active talk 中の `CloseRequest` 受領＝`pending_close` 記録のみでは掃除しない）。受領時に消すと選択解決もタイムアウトも脱出路を失い close がデッドロックするため（レビューで実測確認済み）。
+- 4.6: 新規 trace 語彙 `choice_ledger_cleared`（design ログ表に未記載）。`choice_timeout_ledger_stale` は**残置が正**（規則 1 の棄却 3 経路が不一致帳簿を明示復元するため掃除点を通らない経路が規約上実在）。**7.1 の対応表へ両語彙を記録するか要判断**。
+- 5: `ChoiceForwarder`（`Sender<KanadeMsg>` は `!Sync` ゆえ bevy `Resource` 不可＝NonSend 保持体）と `forward_all`（World を組まずに drain ループを檻へ入れる ECS 分離核）を新設。schedule 位置は `.after(dispatch_pointer_events)`（同一フレーム転送）。trace 語彙 `choice_drain_no_inbox`/`choice_drain_no_forwarder` 追加（donor `mouse_*_no_wiring` と同型）。
+- 6.1: 統合檻は `crates/areka-kanade/tests/kanade/choice_test.rs`。`Fixture::with_choice_response` で choice 応答表を注入する（**未知 GET の catch-all を経由するので、固定 4 ID など既存アームに一致する id を入れても黙って無視される**——6.2/6.3 の落とし穴）。`log_capture` は `src/schedule/` 配下ゆえ統合檻から到達不能＝ログ語彙の固定は in-source 檻の担当。
+- 6.3: **重要な罠** — `ForceQuit`／`Close` など **mock sakura を経由せず終了する檻**では `MockSakura::commands()` の並行読みが記録前スナップショットを掴む（実測 100 回中 7〜11 回失敗・**全檻並行実行時のみ露見**し単独実行では出ない）。そういう檻は `join_bounded_then_commands`（4.6 レビュー是正で追加）を使うこと。`commands()` 側に注意書きは無い。
+- 6.4: design の sakura/dispatcher/dola 3 項は 3.1/3.2/3.3 の既存檻で全充足だったため、判断分岐の穴 3 件のみ追加（sakura の通知ガード負アーム・dispatcher の Cancel Close 転送失敗／ChoiceWaiting kanade 転送失敗）。**構造上到達不能ゆえ檻に入れない 2 分岐**＝`choice_notified` リセット（M1 は talk あたり barrier 1 個）と非 `WaitForChoice` バリアの warn 防御。
+- 6.4: `cargo clippy -p dola --all-targets` は `crates/dola/tests/runtime/core_types_test.rs:287` の `approx_constant`（deny）で赤。**本 spec 以前からの既存債務**（本 spec は dola tests を触っていない）。別 spec で処理すべき。
+- 7.1: 対応表は `doc/choice-cascade-compat.md`（provenance 3 値・正典引用は research §5 から逐語転記）。**残件（境界外・未実施）**＝`doc/COMPAT_ARCHITECTURE.md` §8「沈黙ルール対応表」へ本書へのポインタ 1 行を登記すること（同 §8 は「各 spec が実装着地時に自らの裁量を追記する」と規定しているが本 spec 由来の行がまだ無い）。
+- 7.2: **実機サインオフの落とし穴** — `target/debug/shiori-host32-helper.exe` は `cargo build --workspace` のたびに **x64 で上書き**される。実 pasta.dll は **i686（PE 0x014c）** なので、実走直前に `target/i686-pc-windows-msvc/debug/` の helper を `target/debug/` へコピーし直すこと（helper パスを差す env は存在しない＝`main.rs:155` が `current_exe()` 隣を無条件解決）。
+- 7.2: emo2 の `\q[]` ID は**全て `On` 始まり**＝実機では `CascadePlan::Named` 1 段のみ。正典 2 段形（Ex→無印）は実機で観測できず 6.1 の決定論檻が担当。emo2 辞書に `OnChoiceTimeout` の応答は無いため**選択肢表示から 30 秒放置でメニューが中断する**（設計どおり）。
+
+## Feature 検証（kiro-validate-impl）の是正記録
+
+- 監査指摘の是正: (a) `mod.rs` の DD-12 檻コメントの陳腐化を訂正、(b) `choice_timeout_ledger_stale` の残置根拠を「**構造上到達不能な最終防御**」へ正直に書き直し、(c) `MockSakura::commands()` に並行読みの罠の警告 doc を追加、(d) `is_allowed_choice_event` を `events` ファサードへ re-export（DD-2 の対概念の公開面を対称化）、(e) `TalkNotice::ChoiceWaiting` の dead_code 警告 3 件を理由コメント付き `#[allow]` で解消、(f) `doc/COMPAT_ARCHITECTURE.md` §8 へ本 spec 行（詳細台帳 `doc/choice-cascade-compat.md` へのポインタ）を登記。
+- **判断の記録（未記録だった「要判断」の解消）**: 新規 trace 語彙 `choice_ledger_cleared` / `choice_timeout_ledger_stale` は**互換対応表へ記録しない**。対応表は「正典が沈黙する**挙動**分岐」を provenance 3 値で記録する台帳であり、内部の可観測性語彙はその対象物ではないため（Req2.8 の対象外）。
+- **未解決の申し送り（本 spec の境界外・開発者判断）**: Revalidation Trigger 4（`BarrierKind::WaitForChoice{timeout}` の DD-8 写像規則）について、受け手 `areka-P0-sakura-time-directives` の `brief.md` に写像規則も `doc/choice-cascade-compat.md` へのポインタも記載が無い。同 spec は brief のみの未着地状態ゆえ現時点の破綻は無いが、**申し送りの到達が保証されていない**。同 spec の起票時に §5b を参照させること。
+- **検証中に発見した上流欠陥（本 spec の帰責外・別タスクへ起票済み）**: `crates/areka/src/emo2_boot/spine.rs` の `spine_harness_boots_scripted_ghost_and_reaches_attach_ready` が並行実行時に**約 6%（実測 30 回中 2 回）**で失敗する。待機ループが `for _ in 0..100_000u32` の**反復回数**で打ち切っており、CPU 競合下で kanade の boot 往復完了より先に尽きる（`boot_calls: []`）。是正は `Instant` 期限化（steering `areka-defender-rescan-starves-cooperative-test-loops` が正本）。**本 spec は `crates/areka/src/emo2_boot/` を無改変**・当該テストの最終更新は `b161fc1`（areka-P0-emo-dpi-scaling / PR#91・本ブランチ点より前）。

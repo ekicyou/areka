@@ -13,6 +13,8 @@ mod prefetch_test;
 mod steady_test;
 #[path = "kanade/mouse_test.rs"]
 mod mouse_test;
+#[path = "kanade/choice_test.rs"]
+mod choice_test;
 #[path = "kanade/close_test.rs"]
 mod close_test;
 #[path = "kanade/failure_test.rs"]

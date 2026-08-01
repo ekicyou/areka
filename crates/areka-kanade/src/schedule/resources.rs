@@ -18,7 +18,7 @@
 //! [`ResourceSink`]（boot 系列 prefetch から呼ばれる）を持つ。prefetch 段そのものの挿入は
 //! `boot.rs`（OnInitialize 後・OnFirstBoot 前）が担う。
 
-use crate::msg::ShioriCall;
+use crate::msg::{EventId, ShioriCall};
 use crate::status::{ExecutionSnapshot, ExecutionStatus};
 
 /// SHIORI Resource 照会で送出し得るリソース ID の確定ホワイトリスト（M1: `username` 1 件・Req4.1）。
@@ -50,11 +50,11 @@ pub fn is_allowed_resource_id(id: &str) -> bool {
 ///
 /// SEAM(M2・159 項目汎用化): `id` は M1 ではリテラル `&'static str` の `"username"` に据え置く。
 /// SHIORI Resource は正典で 159 項目あるが、159 項目の String 汎用化（任意リソース名への一般化）は
-/// M2 のシームであり、[`ShioriCall`] の `id: &'static str` 契約と `ALLOWED_RESOURCE_IDS` への ID 追加
-/// （additive）で段階的に拡張する。
+/// M2 のシームであり、[`ShioriCall`] の `id: EventId::Static(&'static str)` 契約（スケジューラ起源・
+/// DD-1）と `ALLOWED_RESOURCE_IDS` への ID 追加（additive）で段階的に拡張する。
 pub fn resource_username(snapshot: &ExecutionSnapshot) -> ShioriCall {
     ShioriCall::Get {
-        id: "username",
+        id: EventId::Static("username"),
         references: Vec::new(),
         status: ExecutionStatus::derive(snapshot),
     }
@@ -145,14 +145,21 @@ mod tests {
                 references,
                 status,
             } => {
-                assert_eq!(id, "username", "リソース照会 id は username リテラル（M1）");
+                assert_eq!(
+                    id,
+                    EventId::Static("username"),
+                    "リソース照会 id はスケジューラ起源の username リテラル（M1・DD-1）"
+                );
                 assert!(references.is_empty(), "Resource GET は References を持たない");
                 assert_eq!(
                     status.render(),
                     None,
                     "INACTIVE スナップショットは Status ヘッダを出さない"
                 );
-                assert!(is_allowed_resource_id(id), "username は送出許可集合を通る");
+                assert!(
+                    is_allowed_resource_id(id.as_str()),
+                    "username は送出許可集合を通る"
+                );
             }
             ShioriCall::Notify { .. } => panic!("resource_username は GET を返すべき"),
         }
@@ -161,7 +168,7 @@ mod tests {
     /// talk_active=true では Status: talking を snapshot から導出する（既存イベント構築子と同一規律）。
     #[test]
     fn resource_username_carries_talking_status_when_active() {
-        let call = resource_username(&ExecutionSnapshot { talk_active: true });
+        let call = resource_username(&ExecutionSnapshot { talk_active: true, choice_active: false });
         let status = match call {
             ShioriCall::Get { status, .. } => status.render(),
             ShioriCall::Notify { .. } => panic!("expected GET"),
