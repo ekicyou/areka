@@ -2,6 +2,14 @@
 //!
 //! `cargo test --workspace`（外部 CI 無し・ローカル DoD ゲート）で常設観測する、起動〜発話〜
 //! 終了の全経路を **sleep 不使用**・**注入 Tick のみ**・**headless GPU（WARP・MTA）** で通す
+//!
+//! **「sleep 不使用」の射程（R7.9・2026-07-31 に明確化）**: 本ファイルで言う sleep 不使用とは
+//! **時刻を進めるために sleep しない**ことであり（時刻前進は注入 Tick のみ＝決定論の源）、
+//! **有界待機の poll-backoff に用いる短い sleep は明示例外**である。実 async の到着をラッチで
+//! 待つループは壁時計 deadline（10 秒）＋`sleep(200µs)` で有界化してある——反復回数のみの
+//! 上限は CPU 競合下で数 ms で尽き、製品コードが正常でも偽陽性の赤を出すため。詳細な根拠は
+//! [`drive_shell_shown`] の doc を参照。負検証の settle drain（「尽きるのが正常」）だけは
+//! 従来どおり `yield_now` のみで回す。
 //! 決定論 spine の**土台**。本 task（6.1）はハーネス（scripted `ShioriBackend`＋実 sink 結線＋
 //! GPU World＋frame フェーズ直接駆動）と、boot→Tick→attach 到達をスモークレベルで固定する
 //! `#[test]` を所有する。豊富な観測（S1 ピクセル readback・S2 typewriter・S3 `\b` 配送・
@@ -696,15 +704,19 @@ fn spine_harness_boots_scripted_ghost_and_reaches_attach_ready() {
 
     // ── (1) scripted boot 発火: boot 系列が backend へ (method,id) 順で届く ──
     // boot 系列は kanade スレッド上の同期往復のみで完走する（Tick 不要）。実スレッド境界を跨ぐため
-    // 有界スピン待機（sleep なし・yield_now のみ）で 5 呼出の到達を待ってから照合する。task 8.2 の
-    // username prefetch GET（OnInitialize 後・OnFirstBoot 前・R9.1/9.2）が加わり boot 系列は 5 呼出。
+    // 到達を待ってから照合する。task 8.2 の username prefetch GET（OnInitialize 後・OnFirstBoot 前・
+    // R9.1/9.2）が加わり boot 系列は 5 呼出。
+    //
+    // 有界性は壁時計 deadline（10 秒）＋200µs poll-backoff sleep（R7.9・根拠は `drive_shell_shown` の doc）。
+    // 観測 `non_status_calls()` は記録の累積＝ラッチ（時刻注入なし＝R7.8 の追い越しは構造的に無い）。
     let mut boot_calls = Vec::new();
-    for _ in 0..100_000u32 {
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    loop {
         boot_calls = harness.shiori_handle.non_status_calls();
-        if boot_calls.len() >= 5 {
+        if boot_calls.len() >= 5 || std::time::Instant::now() >= deadline {
             break;
         }
-        std::thread::yield_now();
+        std::thread::sleep(Duration::from_micros(200));
     }
     let projected: Vec<(&str, &str)> = boot_calls
         .iter()
@@ -802,18 +814,25 @@ fn variant_name(cmd: &PresentCommand) -> &'static str {
 ///
 /// scripted OnBoot talk（`ghost`→`sakura`→`seriko`→`PresentBridge`→rx）は別スレッド群を跨いで
 /// 非同期に流れるため、Tick 注入（`DispatcherMsg::Tick`）と `try_iter` drain を有界ループで交互に
-/// 回し、必要件数が揃うか反復上限に達するまで進める（sleep 不使用・`yield_now` のみ・R8.3）。全 cue
-/// が `at=0.0`（`\w` なし）ゆえ最初の有効 Tick で発火し切るが、talk 起動・スレッド伝播の遅延を有界
-/// スピンで吸収する。揃わなければ短い Vec を返す（呼び手が件数を assert＝hang しない）。
+/// 回し、必要件数が揃うか有界時間が尽きるまで進める（R8.3）。全 cue が `at=0.0`（`\w` なし）ゆえ最初の
+/// 有効 Tick で発火し切るが、talk 起動・スレッド伝播の遅延を有界待機で吸収する。揃わなければ短い Vec を
+/// 返す（呼び手が件数を assert＝hang しない）。
+///
+/// 有界性は壁時計 deadline（10 秒）＋200µs poll-backoff sleep（R7.9・根拠は [`drive_shell_shown`] の doc）。
+/// 観測 `received` は累積＝ラッチであり、呼出点の台本はいずれも `\w`／`\c` を含まない（全 cue `at=0.0`）
+/// ため、注入時刻の前進が観測を壊すクラス（R7.8）ではない。
 fn tick_and_collect(harness: &mut SpineHarness, want: usize) -> Vec<PresentCommand> {
     let mut received: Vec<PresentCommand> = Vec::new();
-    for now in 1u64..=200_000 {
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    let mut now = 0u64;
+    loop {
+        now += 1;
         harness.inject_dispatcher_tick(now);
         received.extend(harness.wiring.drain_received());
-        if received.len() >= want {
+        if received.len() >= want || std::time::Instant::now() >= deadline {
             break;
         }
-        std::thread::yield_now();
+        std::thread::sleep(Duration::from_micros(200));
     }
     received
 }
@@ -1412,10 +1431,14 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
     // 観測窓の手前）。**警告**: 台本のテキスト長を変えると Clear 時刻が 0.05+文字数×0.05+1.00 で動くので、
     // 頭打ち値を再計算すること。
     const TICK_MAX_MS: u64 = 1_040;
+    // ポンプ回数の上限は壁時計 deadline（10 秒）＋200µs poll-backoff sleep で与える（R7.9・根拠は
+    // [`drive_shell_shown`] の doc）。観測を壊す Clear の解放は上記 TICK_MAX_MS の頭打ちが防いでおり
+    // （R7.8 の是正は適用済み）、待機時間の延長は観測に有利にしか働かない。
     let mut show_cmds: Vec<PresentCommand> = Vec::new();
     let mut now = TICK_BASE_MS;
     let mut text_reached = false;
-    for _ in 0..100_000u32 {
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    loop {
         harness.inject_dispatcher_tick(now);
         show_cmds.extend(harness.wiring.drain_received());
         harness.pump_text();
@@ -1429,6 +1452,10 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
             // talk 起動を観測してから小刻みに進め、TICK_MAX_MS で頭打ちにする（Clear 域へ到達しない）。
             now = (now + 5).min(TICK_MAX_MS);
         }
+        if std::time::Instant::now() >= deadline {
+            break;
+        }
+        std::thread::sleep(Duration::from_micros(200));
     }
     assert!(
         text_reached,
@@ -1502,8 +1529,11 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
     //    配送する。Clear は配送即時にバッファを全消去する（state.rs apply_cue）ため、Clear 配送後は
     //    どの注入 talk_time でも text 供給面が全域透明（premultiplied 全 0）へ戻る。配送前は
     //    present_frame(2.0)＝全リビール（非透明）ゆえ、0 への遷移が Clear 到達の観測点になる。 ──
+    //    有界性は壁時計 deadline（10 秒）＋200µs poll-backoff sleep（R7.9・根拠は [`drive_shell_shown`]
+    //    の doc）。Clear 後に全域透明を覆す cue は台本に無い（`\c` が最終 cue）＝観測はラッチ。 ──
     let mut clear_reached = false;
-    for _ in 0..100_000u32 {
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    loop {
         now += 50; // 大きめに進め Clear（at=1.05s）を配送させる
         harness.inject_dispatcher_tick(now);
         harness.pump_text();
@@ -1512,6 +1542,10 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
             clear_reached = true;
             break;
         }
+        if std::time::Instant::now() >= deadline {
+            break;
+        }
+        std::thread::sleep(Duration::from_micros(200));
     }
     assert!(
         clear_reached,
@@ -1546,15 +1580,19 @@ fn spine_s5_close_handshake_consumes_onclose_and_joins_all_handles_bounded() {
     // 標準台本（OnClose NOTIFY＋Unload(Clean)）で boot。最小 OnBoot talk（\s[0]\e）。
     let harness = SpineHarness::boot(r"\s[0]\e");
 
-    // boot 系列（非 Status 5 呼出）が届くまで有界スピン（OnClose を boot ノイズと分離・sleep 不使用）。
-    // task 8.2 の username prefetch GET（OnInitialize 後・OnFirstBoot 前・R9.1/9.2）が加わり 4→5 呼出。
+    // boot 系列（非 Status 5 呼出）が届くまで有界待機（OnClose を boot ノイズと分離）。task 8.2 の
+    // username prefetch GET（OnInitialize 後・OnFirstBoot 前・R9.1/9.2）が加わり 4→5 呼出。
+    //
+    // 有界性は壁時計 deadline（10 秒）＋200µs poll-backoff sleep（R7.9・根拠は `drive_shell_shown` の doc）。
+    // 観測 `non_status_calls()` は記録の累積＝ラッチ（時刻注入なし＝R7.8 の追い越しは構造的に無い）。
     let mut boot_calls = Vec::new();
-    for _ in 0..100_000u32 {
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    loop {
         boot_calls = harness.shiori_handle.non_status_calls();
-        if boot_calls.len() >= 5 {
+        if boot_calls.len() >= 5 || std::time::Instant::now() >= deadline {
             break;
         }
-        std::thread::yield_now();
+        std::thread::sleep(Duration::from_micros(200));
     }
     assert!(
         boot_calls.len() >= 5,
@@ -1724,9 +1762,15 @@ fn spine_move_cue_drives_window_move_end_to_end() {
 
     // OnBoot talk を Tick 注入で駆動し、各反復で実 frame 相 move drain を回す。move cue は at=0.0 ゆえ talk
     // 起動後の最初の有効 Tick で発火するが、boot→compile→dispatch→broadcast はスレッド群を跨いで非同期に
-    // 流れるため、窓が動く（channel→drain→apply 完了）まで有界スピン（sleep 不使用・yield_now のみ）で待つ。
+    // 流れるため、窓が動く（channel→drain→apply 完了）まで有界待機する。有界性は壁時計 deadline（10 秒）
+    // ＋200µs poll-backoff sleep（R7.9・根拠は `drive_shell_shown` の doc）。観測「初期位置からの変位」は
+    // move cue が 1 発のみ＝以降動かない＝ラッチであり、台本は `\w`／`\c` なし（全 cue `at=0.0`）ゆえ
+    // 注入時刻の前進が観測を壊すクラス（R7.8）ではない。
     let mut moved = false;
-    for now in 1u64..=200_000 {
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    let mut now = 0u64;
+    loop {
+        now += 1;
         harness.inject_dispatcher_tick(now);
         // 実 frame 相 drain（task 9.2）: move channel を try_iter し apply_move_directive で即時反映。
         run_move_drain_phase(&harness.wiring, &mut harness.world);
@@ -1734,7 +1778,10 @@ fn spine_move_cue_drives_window_move_end_to_end() {
             moved = true;
             break;
         }
-        std::thread::yield_now();
+        if std::time::Instant::now() >= deadline {
+            break;
+        }
+        std::thread::sleep(Duration::from_micros(200));
     }
     assert!(
         moved,
@@ -1792,19 +1839,25 @@ fn always_fire_rng() -> LoopRng {
 /// 待ってから send_tick を注入する。dispatcher tick は talk/cue clock を進めるのみで seriko ループには
 /// 届かない（ghost 側にループ結線なし）ため、ループ発火はこの直接注入 send_tick だけが供給する。
 ///
-/// # 決定論（sleep 不使用・注入時刻＋注入乱数のみ・R7.2/7.3）
+/// # 決定論（注入時刻＋注入乱数のみ・R7.2/7.3）
 ///
 /// 起動 tick（now=0・境界初期化・非跨ぎ・無発行）→ 40ms 刻みで進め、境界跨ぎ（1000/2000/…）で常時発火 rng が
-/// 抽選通過→pattern 進行。boot→talk→sink やスレッド伝播の非同期遅延は有界スピン（`yield_now` のみ）で吸収する。
+/// 抽選通過→pattern 進行。boot→talk→sink やスレッド伝播の非同期遅延は有界待機（deadline＋poll-backoff
+/// sleep・R7.9）で吸収する（時刻源は注入のみ＝壁時計は有界性にしか使わない）。
 #[test]
 fn spine_blink_smoke_send_tick_drives_loop_pattern_command() {
     // 実表＋常時発火固定 rng でループ活性化（既存テストは Inert＝非退行・本テストのみ Live）。
     let mut harness = SpineHarness::boot_live(r"\s[2100]\e", always_fire_rng());
 
     // surface2100（kero まばたき random,4）を表示させる: \s[2100] cue を dispatcher tick で駆動し、
-    // rx に shell ShowSurface{2100} が現れる（＝seriko が表示中 slot を記録済み）まで有界スピン。
+    // rx に shell ShowSurface{2100} が現れる（＝seriko が表示中 slot を記録済み）まで有界待機。
+    // 有界性は壁時計 deadline（10 秒）＋200µs poll-backoff sleep（R7.9・根拠は `drive_shell_shown` の doc）。
+    // 観測 `shown` はラッチ・台本 `\s[2100]\e` は全 cue `at=0.0`＝観測を壊す後続 cue なし（R7.8 非該当）。
     let mut shown = false;
-    for now in 1u64..=200_000 {
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    let mut now = 0u64;
+    loop {
+        now += 1;
         harness.inject_dispatcher_tick(now);
         for cmd in harness.wiring.drain_received() {
             if matches!(&cmd, PresentCommand::ShowSurface { target, surface_id, .. }
@@ -1813,22 +1866,26 @@ fn spine_blink_smoke_send_tick_drives_loop_pattern_command() {
                 shown = true;
             }
         }
-        if shown {
+        if shown || std::time::Instant::now() >= deadline {
             break;
         }
-        std::thread::yield_now();
+        std::thread::sleep(Duration::from_micros(200));
     }
     assert!(
         shown,
         "\\s[2100]（kero まばたき surface）の初回シェル表示が有界内に rx へ現れない（表示中ゲート前提不成立）"
     );
 
-    // send_tick を直接注入して 1000ms 絶対グリッド境界を跨がせる（loop ticker 不起動・sleep 不使用）。
-    // pattern を載せた ShowSurface{shell_target(0),2100} が現れるまで有界スピン（sub 秒進行＋境界跨ぎの双方を送る）。
+    // send_tick を直接注入して 1000ms 絶対グリッド境界を跨がせる（loop ticker 不起動・**時刻前進は
+    // 注入 Tick のみ**＝この意味で sleep 不使用。待機の poll-backoff sleep は R7.9 の明示例外）。
+    // pattern を載せた ShowSurface{shell_target(0),2100} が現れるまで有界待機（sub 秒進行＋境界跨ぎの双方を送る）。
+    // 有界性は壁時計 deadline（10 秒）＋200µs poll-backoff sleep（R7.9・根拠は `drive_shell_shown` の doc）。
+    // 観測 `pattern_carrying` はラッチ（seriko tick の時刻前進は発火機会を増やすのみ＝R7.8 非該当）。
     let mut pattern_carrying = false;
     let mut now = 0u64;
     harness.inject_seriko_tick(now); // 起動 tick（境界初期化・非跨ぎ・無発行）
-    for _ in 0..100_000u32 {
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    loop {
         now += 40; // 小刻みに進め境界跨ぎ（1000ms グリッド）と pattern 進行（sub 秒）の双方を供給
         harness.inject_seriko_tick(now);
         for cmd in harness.wiring.drain_received() {
@@ -1844,10 +1901,10 @@ fn spine_blink_smoke_send_tick_drives_loop_pattern_command() {
                 }
             }
         }
-        if pattern_carrying {
+        if pattern_carrying || std::time::Instant::now() >= deadline {
             break;
         }
-        std::thread::yield_now();
+        std::thread::sleep(Duration::from_micros(200));
     }
     assert!(
         pattern_carrying,
@@ -1898,14 +1955,36 @@ fn shell_pattern_frame(cmd: &PresentCommand, shown_surface: u32, anim_id: u32) -
 
 /// dispatcher tick で OnBoot talk を駆動し、scope0 shell が `surface_id` を表示する（必要なら binds に
 /// `require_bind` を含む）まで有界スピンする。観測できた指令は drain 済みゆえ、復帰後の rx は talk 由来
-/// 指令について空——以降 `inject_seriko_tick` が発行する loop 指令だけを純粋に観測できる（sleep 不使用）。
+/// 指令について空——以降 `inject_seriko_tick` が発行する loop 指令だけを純粋に観測できる。
 ///
 /// `require_bind` は `\![bind,...]` 貫通の証跡: bind 適用は表示中 scope で **binds 更新済みの Show 再発行**
 /// （`apply_bind`→`BindApplyOutcome::Changed`）を生むため、「shell surface が該当 bind id を含んで表示された」
 /// = current_binds へ当該 id が書き込まれた（＝bind ゲートが ON になった）ことの end-to-end 証跡になる。
+///
+/// # 有界性は壁時計 deadline ＋ poll-backoff sleep（R7.9）
+///
+/// 本関数は**実 async（SHIORI/pasta アクタ→seriko→[`PresentBridge`]）の到着をラッチで待つ純粋な待機
+/// ループ**である。1 反復は「tick 注入＋drain」だけで極めて安価ゆえ、反復回数の上限は CPU 競合下
+/// （大規模再ビルド直後の再スキャン圧など）で**数 ms で尽き**、製品コードが正常でも早合点で赤になる
+/// （偽陽性）。ゆえに有界性は [`std::time::Instant`] deadline で与える（長さは同ファイルの
+/// `run_bounded`／`join_bounded` 呼出と同じ 10 秒）。
+///
+/// **R7.8（注入模擬時刻が観測窓を追い越して観測条件を壊すクラス）とは別クラス**であり、時刻の頭打ちでは
+/// 直らない。判別根拠は 2 点——(a) 観測 `satisfied` は**ラッチ**で、一度成立したら後続 cue に壊されない。
+/// (b) 本関数の呼出点の台本はいずれも `\s[...]\e` 系で `\w`／`\c` を含まず**全 cue が `at=0.0`** ＝観測を
+/// 壊す後続 cue が構造的に存在しない。ゆえに注入時刻の前進は観測に有利にしか働かず、頭打ちは不要。
+///
+/// 譲歩は `std::thread::yield_now()` ではなく**短い `sleep` の poll-backoff** とする。Windows の
+/// `yield_now` は `SwitchToThread`＝**同一プロセッサ**の ready スレッドにしか譲らず、飽和下では別コアの
+/// worker へ譲れずに busy-spin が worker を CPU 飢餓させる。値 200µs は `areka-kanade` の
+/// `drive_ticks_until_disconnect` で開発者裁定により根治として採用されているものと同じ。決定論檻の
+/// 「no sleep」原則に対する**明示例外**（競合飢餓の根治には必須）。
 fn drive_shell_shown(harness: &mut SpineHarness, surface_id: u32, require_bind: Option<u32>) {
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
     let mut satisfied = false;
-    for now in 1u64..=200_000 {
+    let mut now = 0u64;
+    loop {
+        now += 1;
         harness.inject_dispatcher_tick(now);
         for cmd in harness.wiring.drain_received() {
             if let PresentCommand::ShowSurface {
@@ -1923,10 +2002,10 @@ fn drive_shell_shown(harness: &mut SpineHarness, surface_id: u32, require_bind: 
                 }
             }
         }
-        if satisfied {
+        if satisfied || std::time::Instant::now() >= deadline {
             break;
         }
-        std::thread::yield_now();
+        std::thread::sleep(Duration::from_micros(200));
     }
     assert!(
         satisfied,
@@ -1935,18 +2014,22 @@ fn drive_shell_shown(harness: &mut SpineHarness, surface_id: u32, require_bind: 
 }
 
 /// `now_ms` の seriko tick を 1 発直接注入し、ちょうど 1 件の `PresentCommand` が rx へ届くまで有界
-/// スピンして返す（sleep 不使用・`yield_now` のみ）。golden の各コマ遷移 tick は変化 1 件を発行する
-/// （6.1/6.2）ため、この直列注入→1 件回収で発行列の順序と内容を決定論的に照合できる。届かなければ
-/// 件数 assert が落ちる（hang しない）。
+/// 待機して返す。golden の各コマ遷移 tick は変化 1 件を発行する（6.1/6.2）ため、この直列注入→1 件回収で
+/// 発行列の順序と内容を決定論的に照合できる。届かなければ件数 assert が落ちる（hang しない）。
+///
+/// 有界性は壁時計 deadline（10 秒）＋200µs poll-backoff sleep（R7.9・根拠は [`drive_shell_shown`] の doc）。
+/// 本関数も**実 async（seriko worker→adapter→rx）の到着をラッチ（`buf` は累積）で待つ純粋な待機ループ**で
+/// あり、ループ内で時刻を注入しない（tick はループ前に 1 発だけ）ゆえ R7.8 の追い越しは構造的に無い。
 fn seriko_tick_expect_one(harness: &mut SpineHarness, now_ms: u64) -> PresentCommand {
     harness.inject_seriko_tick(now_ms);
     let mut buf: Vec<PresentCommand> = Vec::new();
-    for _ in 0..1_000_000u32 {
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    loop {
         buf.extend(harness.wiring.drain_received());
-        if !buf.is_empty() {
+        if !buf.is_empty() || std::time::Instant::now() >= deadline {
             break;
         }
-        std::thread::yield_now();
+        std::thread::sleep(Duration::from_micros(200));
     }
     assert_eq!(
         buf.len(),
@@ -2127,10 +2210,19 @@ fn shell_applied_scale(harness: &SpineHarness, scope: u32) -> f32 {
 /// scope0 shell が `surface_id` を表示する（＝実描画が成立する）まで有界スピンする。
 ///
 /// [`drive_shell_shown`] は観測のみで指令を捨てるため presenter 側に表示が成立しない。ループ継続の
-/// 檻は「表示が生きていること」を readback で見るため、適用まで行うこの版が要る（sleep 不使用）。
+/// 檻は「表示が生きていること」を readback で見るため、適用まで行うこの版が要る。
+///
+/// 有界性は [`drive_shell_shown`] と同じく**壁時計 deadline（10 秒）＋ 200µs poll-backoff sleep**（R7.9）。
+/// 反復回数上限が CPU 競合下で数 ms で尽きる偽陽性、R7.8 との判別根拠（観測 `shown` はラッチ・呼出点の
+/// 台本は全 cue `at=0.0` ＝観測を壊す後続 cue が無い）、`yield_now`（Windows では `SwitchToThread` ＝同一
+/// プロセッサにしか譲らない）を避ける理由、および「no sleep」原則への明示例外である旨は
+/// [`drive_shell_shown`] の doc を参照。
 fn drive_shell_shown_and_presented(harness: &mut SpineHarness, surface_id: u32) {
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
     let mut shown = false;
-    for now in 1u64..=200_000 {
+    let mut now = 0u64;
+    loop {
+        now += 1;
         harness.inject_dispatcher_tick(now);
         for cmd in harness.wiring.drain_received() {
             if matches!(&cmd, PresentCommand::ShowSurface { target, surface_id: sid, .. }
@@ -2140,10 +2232,10 @@ fn drive_shell_shown_and_presented(harness: &mut SpineHarness, surface_id: u32) 
             }
             harness.wiring.apply_present(&mut harness.world, cmd);
         }
-        if shown {
+        if shown || std::time::Instant::now() >= deadline {
             break;
         }
-        std::thread::yield_now();
+        std::thread::sleep(Duration::from_micros(200));
     }
     assert!(
         shown,
