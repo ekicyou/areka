@@ -354,7 +354,9 @@ SESSION-QUOTA: PASS  (44 / 12)
 消失痕跡の判定語: **① `VANISH-TRACE: NONE`／②-b `VANISH-TRACE: NONE`**
 終了時静穏（Req 6.2/6.3）: **① `TEARDOWN-SILENCE: FAIL`（下記 §2.3.4）／②-b `TEARDOWN-SILENCE: PASS`**
 
-> **②-b の PASS は①の FAIL を打ち消さない。** ②-b は開発者が窓を閉じて終了したため `WM_CLOSE` → 通常の shutdown 系列を通り、**欠陥のある `despawn_smoke_targets`（`AREKA_APP_SMOKE_EXIT_MS` の自動終了経路）を通っていない**。①の FAIL が示す欠陥は現存する（7.3 が担当）。**終了経路が 2 系統あり、片方だけが欠陥を持つ**ことが両セッションの対比で確定した。
+> **②-b の PASS は①の FAIL を打ち消さない。** ②-b は開発者が窓を閉じて終了したため、`WM_CLOSE` が**先に**届き `lifecycle.rs:70` が**生きている** entity を despawn する——陳腐化 id を叩かないので警告が出ない。対して①（`AREKA_APP_SMOKE_EXIT_MS` の自動終了経路）は `despawn_smoke_targets` が**先に** entity を破棄し、その副作用として `window_handle.rs:279` が投函した `WM_CLOSE` が**後から**届くため、`lifecycle.rs:70` が陳腐化 id を叩く。**終了経路が 2 系統あり、despawn と `WM_CLOSE` の到達順序が逆**であることが両セッションの対比で確定した。①の FAIL が示す欠陥は現存する（**7.5** が担当）。
+>
+> _（2026-08-01 訂正）_ 本注記は当初この非対称を「`despawn_smoke_targets` 自体の欠陥」と帰属していたが、§2.3.4 の訂正ブロックのとおり誤りである。**訂正後の機序は同じ非対称をより良く説明する**——欠陥は片方の関数にあるのではなく、**despawn が `WM_CLOSE` に先行する経路**でのみ露出する。
 
 #### 2.3.5 Q3 の補足: ②-b で観測された書込の連鎖（Req 2.4 の完全回答）
 
@@ -435,9 +437,21 @@ WARN  bevy_ecs::world: Could not despawn entity: … ID 3v0 is invalid; …
 WARN  bevy_ecs::world: Could not despawn entity: … ID 6v0 is invalid; …
 ```
 
-**原因は特定済み**: `despawn_smoke_targets`（`crates/areka/src/main.rs:795-810`）が query で 4 体を集めてからループで `world.despawn(e)` を呼ぶが、**1 体目の despawn が連鎖して残り 3 体も破棄する**ため、ループの後半が既に無効な entity を叩いている。存在確認が無い。
+> **⚠ 訂正（2026-08-01・タスク 7.3 実装時・実装者とレビュアが独立に確定）**
+>
+> 本節が当初「原因は特定済み」として記していた機序——**`despawn_smoke_targets`（`main.rs`）の 1 体目の despawn が連鎖して残り 3 体も破棄し、ループ後半が無効 entity を叩く**——は**誤りである**。上の観測記録（3 件の `WARN`）は事実として保存するが、その解釈のみを以下へ差し替える。本訂正は §0.1 の**静的構造証跡**（file:line で再検証可能な欠陥は実機再現を待たない）に基づき、実機の採り直しを要しない。
+>
+> **旧解釈が成立しない理由（3 点・いずれも独立に検証済み）**
+>
+> ⑴ **順序**——3 件の `WARN` は `INFO areka: smoke 自動 close … count=4` **より後**に出ている。この `INFO` は `main.rs:781-786`＝`despawn_smoke_targets` の**返却後**に置かれており、ループ内で連鎖＋3 回失敗が起きたなら `WARN` は `INFO` **より前**に出るはずである。別 spec の実機ログ（`.kiro/specs/completed/areka-P0-kero-balloon/real-run-signoff-2026-07-31.log:116-121`）が同一現象をμ秒精度で再現しており、`INFO` が `11:05:43.735806`・3 件の `WARN` が `.736069/.736324/.736542` と **263µs 後**に続く。さらに `lifecycle.rs:65` が `try_borrow_mut` を用いる一方、despawn ループと当該 `INFO` はいずれも保持された `world.borrow_mut()` の内側で走るため、**この順序は偶然ではなく強制される**。
+>
+> ⑵ **構造**——ゴースト窓の連鎖 despawn は**構造的に不可能**である。`#[relationship]` の定義はリポジトリの `crates` ツリー全体で **0 件**であり、`spawn.rs:235`／`:263` は char 窓と balloon 窓を**独立に top-level で** spawn する。`GhostWindowMarker` の `on_remove` フック（`spawn.rs:122-143`）は Resource しか触らない。本番に存在する唯一の親子関係（`main.rs:533` の `ChildOf(dummy)`）がぶら下げるのは窓マーカを持たない `Rectangle` ゆえ query 対象にならない。したがって**ループ内の 4 回はすべて成功している**（4 本の `Entity being removed, sending WM_CLOSE` DEBUG と `[App] Last window closed.` が `count=4` より前に出ていることと整合する）。
+>
+> ⑶ **真の出所**——`on_window_handle_remove`（`crates/wintf/src/ecs/window/window_handle.rs:258-282`・`:279` が `PostMessageW(hwnd, WM_CLOSE)`）が 4 窓ぶんの `WM_CLOSE` を**非同期に**投函し、ループ返却後にメッセージポンプが `crates/wintf/src/ecs/window_proc/lifecycle.rs:62-73` を回す。その `:70` の `w.world_mut().despawn(entity)` が**先に破棄済みの id** を叩いている。終了処理で陳腐化した id を despawn する本番経路は**ここだけ**である（他の本番 despawn＝`main.rs:566`・`main.rs:834`・`input_events/mod.rs:359` はいずれも query から生きた entity を都度集める）。
+>
+> **帰結**——`diagnosis-procedure.md` §6.4 の `TEARDOWN-SILENCE` は**主体を問わない全件判定**（「破棄済み窓に対する `WARN`／`ERROR` が 0 行」）であるため、`despawn_smoke_targets` 側だけを是正しても本判定は `FAIL` のままである。是正の担当は**タスク 7.5**（`lifecycle.rs:70` の存在確認・design 変更ファイル表に追加済み）。
 
-これは**タスク 3.2 と同一の欠陥クラス**（「entity 不在＝破棄済みは正常終了系」）だが、3.2 は**消費側 4 入口**（`follow.rs` の `resize_window_to`／`resize_window_keep_position`・`frame.rs` の `resnap_with`／`reconcile_reported_sizes`）にガードを敷いたのに対し、**despawn の呼出点そのもの**は範囲外だった。Req 6.2 の完了状態「破棄済み窓に対する警告以上のログが 1 行も出ない」は現状**未達**である。→ タスク 7.3 の担当範囲として申し送る（§5 参照）。
+**欠陥クラス**: これは**タスク 3.2 と同一の欠陥クラス**（「entity 不在＝破棄済みは正常終了系／規約 component 欠落＝真の異常」）である。3.2 は**消費側 4 入口**（`follow.rs` の `resize_window_to`／`resize_window_keep_position`・`frame.rs` の `resnap_with`／`reconcile_reported_sizes`）にガードを敷いたが、**despawn の呼出点そのもの**は範囲外だった。タスク 7.3 が areka 側の 2 入口（`despawn_smoke_targets`＝`main.rs`・`enqueue_window_set_pos`＝`follow.rs`）を、**タスク 7.5** が表示基盤側の呼出点（`lifecycle.rs:70`）を担う。Req 6.2 の完了状態「破棄済み窓に対する警告以上のログが 1 行も出ない」は 7.5 の着地をもって達成される。
 
 #### 2.3.5 参考: 本 spec 範囲外だが実機で確認された事象
 

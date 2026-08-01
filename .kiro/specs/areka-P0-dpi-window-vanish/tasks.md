@@ -255,16 +255,29 @@
   - _完了（2026-08-01）_: **644 挿入／0 削除**・追加行は**全て `#[cfg(test)] mod tests` の内側**（本番 0 行＝檻専用タスクの最難制約をレビュアが機械的に確認）。檻 **4 件**を新設——⑴`both_windows_survive_a_single_write_onto_different_monitors`（1 回の書込で両窓が同時に非交差へ落ち、**別々のモニタへ**救出される合成＝Req 3.4 の**連言**。既存檻は各連言肢を「もう一方が自明に安全な世界」でしか見ていなかった）⑵`balloon_follows_the_guarded_char_position_not_the_raw_projection`（追従先がガード**適用後**の位置であること）⑶`s2_some_report_path_preserves_the_balloon_ground_anchor_across_mixed_dpi_levels`（96→120／96→192／120→192 × 全 scope）⑷`box_style_not_found_fallback_keeps_its_literal_and_warn_level`（Debt A）。**Debt B は既に充足済みと判明**（`follow.rs:6211-6216` が literal と水準の双方を固定・M5/M6 で実測）ゆえ新設せず。`cargo test -p areka` **626 passed / 0 ignored**・`cargo test -p wintf` **1,060 passed**
   - _Debt A の境界裁定（レビュアが独立に APPROVED）_: `dpi_helpers.rs` は 7.2 の `_Boundary:_` の字面には無いが、**design.md:244（Traceability 5.1 が檻の設置先として `dpi_helpers` を名指し）と design.md:153（File Structure Plan が同ファイルを本 spec 単独所有・「in-source 檻」と明記）**が設計上の境界を定めている。6.2→6.3 の判例は「7.2 は `resize_window_to` の**挙動**を変える権限が無い」ことに立脚しており、**本番 0 行の檻追加には及ばない**。(iii) の担当者移譲は tasks.md 内に wintf 境界を持つ未着手タスクが**実在しない**ため [[deferral-requires-verified-owner]] 違反になる。なお `_Boundary:_` の字面が design より狭かったのは**spec 記述の不精確**であり実装上の欠陥ではない
 
-- [ ] 7.3 レジストリ掃除の回帰檻（despawn 消費側の檻を単独所有）
+- [x] 7.3 レジストリ掃除の回帰檻（despawn 消費側の檻を単独所有）
   - despawn フック発火で該当 scope が除去されること・後追いの片割れが no-op になること・掃除の前後で他 scope の位置・寸法・追従関係が不変であることを檻で固定する
   - 掃除後に再スナップと寸法報告の回収が走っても警告が出ず、他の scope を処理し切ることをログ捕捉で確認する
-  - _追加（2026-07-31・4.5 セッション①で実測）_: **`despawn_smoke_targets`（`crates/areka/src/main.rs:795-810`）に存在確認を敷く**——query で 4 体を集めてからループで `world.despawn(e)` を呼ぶが、1 体目の despawn が連鎖して残りも破棄するため、後半 3 回が既に無効な entity を叩き `bevy_ecs::world: Could not despawn entity` の `WARN` が 3 件出る（`TEARDOWN-SILENCE: FAIL` の唯一の原因）。3.2 が敷いた**消費側 4 入口**のガードは despawn の**呼出点そのもの**を覆っていなかった。3.2 と同じ区別（entity 不在＝正常終了系／規約 component 欠落＝真の異常）をここにも適用し、檻で固定する
-  - 完了状態: 掃除に関する檻一式が緑になり、終了時ログから良性の警告が消えたことがテストで固定される。**`despawn_smoke_targets` 由来の `Could not despawn entity` が 0 件になる**
+  - _追加（2026-07-31・4.5 セッション①で実測）_: **areka 側の despawn 呼出点に存在確認を敷く**——3.2 が敷いた**消費側 4 入口**のガードは despawn の**呼出点そのもの**を覆っていなかった。3.2 と同じ区別（entity 不在＝正常終了系／規約 component 欠落＝真の異常）をここにも適用し、檻で固定する。対象は `despawn_smoke_targets`（`crates/areka/src/main.rs`）と `enqueue_window_set_pos`（`crates/areka/src/placement/follow.rs`・6.2 からの申し送り）
+  - _訂正（2026-08-01・本タスク実装時に確定）_: 当初この節は実機の `Could not despawn entity` × 3 を「`despawn_smoke_targets` の連鎖 despawn が唯一の原因」と記していたが、**この機序は成立しない**（連鎖は構造的に不可能・`WARN` はループ返却後の `INFO` より後に出る）。真の出所は `lifecycle.rs:70`＝**タスク 7.5 の担当**。正本は `diagnosis-report.md` §2.3.4 の訂正ブロックと design **D16**
+  - 完了状態: 掃除に関する檻一式が緑になり、**areka 側の despawn 呼出点 2 箇所**が破棄済み entity に対して警告以上のログを出さないことがテストで固定される（終了処理**全体**での 0 件は 7.5 と併せて達成される）
   - _Requirements: 6.1, 6.2, 6.3, 6.4_
   - _Depends: 3.2_
   - （再スナップ・回収相の檻を 7.2 と同じテストモジュールへ書くため、7.2 との並行は不可＝despawn 消費側の檻は本タスクが単独所有）
-  - _部分着地（2026-08-01・`b777b6c`）_: 檻の Part 1 は 3.2／6.1 が設置済みで全緑を確認。`despawn_smoke_targets`（`main.rs`）と `enqueue_window_set_pos`（`follow.rs`）へ 3.2 の区別を適用し、檻 2 件新設・1 件強化（変異 M1〜M3 が各 sole failure・レビュアが独立再現）。**本番語彙は `DESPAWNED_SKIP_TAG` の再利用のみで新語彙ゼロ**。`cargo test -p areka` **628 passed / 0 ignored**
-  - _Blocked: 完了状態の主張「`despawn_smoke_targets` 由来の `Could not despawn entity` が 0 件」は**空虚に充足**されている——実機 3 件は当該関数由来ではないことが独立に確定した。⑴**順序**: 3 件の WARN は `INFO areka: smoke 自動 close … count=4`（`main.rs:781-786`＝ループ**返却後**）より**後**に出る（別 spec の実機ログ `…/completed/areka-P0-kero-balloon/real-run-signoff-2026-07-31.log:116-121` が μ秒精度で再現・`lifecycle.rs:65` の `try_borrow_mut` が握られた `borrow_mut()` 下でこの順序を**強制**する）⑵**構造**: 連鎖 despawn は不可能（`#[relationship]` が `crates` 全体で **0 件**・`spawn.rs:235,263` は char/balloon を独立に top-level spawn・唯一の本番 `ChildOf`＝`main.rs:533` は窓マーカを持たない `Rectangle`）⑶**真の出所**: 終了処理で**陳腐化した id** を despawn する本番経路は `lifecycle.rs:70` ただ 1 つ（`window_handle.rs:279` の `PostMessageW(WM_CLOSE)` が非同期投函）。`diagnosis-procedure.md` §6.4 の `TEARDOWN-SILENCE` は主体を問わない全件判定ゆえ、**7.4 は現状のままなら再び FAIL する**。是正は 1 行だが、`lifecycle.rs` は design 変更ファイル表に無く・Req 6 の主体は Placement サブシステムであり・**Req 2.7 が「診断レポートで確定した機構以外を変更しない」と定めている**ため、確定記載（`diagnosis-report.md` §2.3.4）の訂正と担当の新設は開発者裁定を要する_
+  - _完了（2026-08-01・`b777b6c`）_: 檻の Part 1 は 3.2／6.1 が設置済みで全緑を確認。`despawn_smoke_targets`（`main.rs`）と `enqueue_window_set_pos`（`follow.rs`）へ 3.2 の区別を適用し、檻 2 件新設・1 件強化（変異 M1〜M3 が各 sole failure・レビュアが独立再現）。**本番語彙は `DESPAWNED_SKIP_TAG` の再利用のみで新語彙ゼロ**。`cargo test -p areka` **628 passed / 0 ignored**
+  - _本タスクが確定させた最大の成果は「確定原因の誤りの発見」である_: 実機 3 件が `despawn_smoke_targets` 由来ではないことを ⑴**順序**（`WARN` は `INFO … count=4`＝ループ返却後より**後**・別 spec の実機ログがμ秒精度で再現・`lifecycle.rs:65` の `try_borrow_mut` が順序を強制）⑵**構造**（`#[relationship]` が `crates` 全体で **0 件**＝連鎖不能）⑶**真の出所**（`lifecycle.rs:70` が `window_handle.rs:279` の非同期 `PostMessageW(WM_CLOSE)` 経由で陳腐化 id を despawn）の 3 点で確定。開発者裁定（2026-08-01）を得て `diagnosis-report.md` §2.3.4 を訂正・design **D16** と **Phase D′** を新設・**タスク 7.5** を担当として立てた
+
+- [ ] 7.5 Phase D′: 表示基盤側 despawn 呼出点の終了時静穏（`TEARDOWN-SILENCE` の真の出所）
+  - **本タスクは 7.3 の実装が `TEARDOWN-SILENCE: FAIL` の確定原因の誤りを発見した結果として新設された**（開発者裁定 2026-08-01）。正本は `diagnosis-report.md` **§2.3.4 の訂正ブロック**と design **D16**・**Phase D′**
+  - `crates/wintf/src/ecs/window_proc/lifecycle.rs:62-73` の `WM_CLOSE` ハンドラは `:70` で `w.world_mut().despawn(entity)` を呼ぶが、この `entity` は `window_handle.rs:279` の**非同期** `PostMessageW(hwnd, WM_CLOSE)` を経て届くため、ポンプが回る時点で**既に破棄済み**になり得る。`bevy_ecs` が `Could not despawn entity` の `WARN` を出す（実機 3 件・`TEARDOWN-SILENCE: FAIL` の**真の**出所）
+  - 3.2／7.3 と**同一の区別**を適用する（entity 不在＝正常終了系の `debug!`／実在するが規約違反＝真の異常の `warn!`）。語彙も既存のものを再利用し新設しないこと——ただし `DESPAWNED_SKIP_TAG` は areka の `placement::diag` にあり **wintf からは import 禁止**（design の依存方向規約「wintf → areka の import は禁止」）なので、wintf 側の既存語彙を用いるか同等の定数を wintf 内に置くこと。**どちらにせよ areka 側の定数を参照してはならない**
+  - **`WM_CLOSE` の投函契約・窓破棄の正準シグナルは変更しない**（D16 帰結⑶）——変えるのは受け手が陳腐化 id をどう報告するかだけ。`clickthrough/controller.rs:90` が「`world.despawn(entity)` が窓破棄の正準シグナル」と明記しており、これを組み替えるのは Req 2.7 違反
+  - 檻は **wintf 側 in-source** に置く（D16 帰結⑷・areka からは当該経路へ到達できない）。**`bevy_ecs` の警告は `log::warn!` ゆえ tracing 捕捉に原理的に届かない**（7.3 が確定・空虚性 9 例目）ので、「警告が出ない」を捕捉で主張してはならない——`World::despawn` の戻り値（`false`）など**警告と同一分岐にある観測可能量**か、自前の `debug!` 打ち切り行の存在で主張すること
+  - 完了状態: 陳腐化した id に対する `WM_CLOSE` 処理が正常系として打ち切られ、`bevy_ecs` の `Could not despawn entity` が出ないことが檻で固定される。**終了処理全体で `TEARDOWN-SILENCE` が `PASS` になる見込みが立つ**（実機での確認は 7.4）
+  - _Requirements: 6.2, 6.3_
+  - _Boundary: wintf 表示基盤（`lifecycle.rs` の `WM_CLOSE` 呼出点＋その檻のみ）_
+  - _Depends: 7.3_
+  - （**7.4 より前に着地させること**——7.4 は `TEARDOWN-SILENCE` を主体非依存の全件判定で読むため、未着地なら必ず `FAIL` する）
 
 - [ ] 7.4 是正後の実機再サインオフ
   - 是正投入後のビルドで診断手順書と同一手順の 2 セッションを再実行し、受理回数の下限を踏破したうえで消失痕跡がゼロであることを判定語で確認する
@@ -272,7 +285,7 @@
   - S1〜S3′ の各項目について是正後の実機挙動を診断レポートへ追記する
   - 完了状態: 診断レポートに是正後セッションの受理回数・消失痕跡ゼロ・接地点保存の実測が記録され、実機サインオフが成立する
   - _Requirements: 2.9, 5.5_
-  - _Depends: 7.1, 7.2, 7.3_
+  - _Depends: 7.1, 7.2, 7.3, 7.5_
 
 ## Implementation Notes
 
