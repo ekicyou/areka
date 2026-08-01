@@ -423,6 +423,156 @@ mod tests {
     }
 
     // ================================================================
+    // `BoxStyle not found` 判定語の literal・水準の固定（task 7.2）
+    //
+    // タスク 5.1 は本 warn の文言を `diagnosis-procedure.md` §6.5（`S1-SOURCE-CUT`）の
+    // **判定語**へ昇格させた——実機サインオフの合否は
+    // `S1-SOURCE-CUT: PASS (external=N/N, boxstyle_warn=0, x_divergence=0)` で読む。
+    // ところが同 literal を固定する in-source 檻はリポジトリ全体で 0 件であり
+    // （`grep -rn "BoxStyle not found" crates --include=*.rs` の一致は本ファイルの
+    // 定義のみ）、同書のメンテ規約が謳う「出力書式は in-source 檻がリテラル固定して
+    // いる」の体裁から外れていた。書式か**水準**が変われば `boxstyle_warn=0` は
+    // 「欠陥が無い」ではなく「grep が当たらない」「その水準が手順書の `RUST_LOG` で
+    // 有効化されていない」ことの記録に変わり、手順書が静かに嘘になる（Req 1.5 が
+    // 名指しで禁じている「手順で有効化されない水準にある観測点を『発生 0 回』の
+    // 根拠に用いる」形そのもの）。
+    //
+    // 本節が固定するのは 2 点だけである:
+    //   (1) 判定語の literal（本体の文言とは**独立に**ここへ置く）
+    //   (2) 水準が `warn!` であること——同関数の兄弟フォールバック
+    //       （`BoxStyle.size not Px`／`no size change`）は `trace!` であり、
+    //       ここだけが warn である非対称が §6.5 の読み方の前提になっている
+    //
+    // 陰性側（`BoxStyle` があるとき／`dpi_context` が無いときは 1 行も出ない）を
+    // 対にして置くのは、陽性の 1 行が**当該分岐の成果**であることを示すためである
+    // （[[檻の空虚性]]: 常に出るログを「分岐が働いた証拠」と読まない）。
+    // ================================================================
+
+    use std::sync::{Arc, Mutex};
+
+    /// 手順書 §6.5 の grep 判定語（`boxstyle_warn`）。**本体の文言とは独立の literal**。
+    const BOX_STYLE_NOT_FOUND_TAG: &str =
+        "[WM_WINDOWPOSCHANGED] DPI center correction skipped: BoxStyle not found";
+
+    /// イベントを `level=… message=…` の 1 行へ整形して溜める最小 Layer
+    /// （`crates/areka-emo-compose/src/log_capture.rs` の実証済みパターン）。
+    #[derive(Clone, Default)]
+    struct Capture(Arc<Mutex<Vec<String>>>);
+
+    impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Capture {
+        fn on_event(&self, ev: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
+            let mut line = format!("level={}", ev.metadata().level());
+            struct V<'a>(&'a mut String);
+            impl tracing::field::Visit for V<'_> {
+                fn record_debug(&mut self, f: &tracing::field::Field, v: &dyn std::fmt::Debug) {
+                    use std::fmt::Write;
+                    let _ = write!(self.0, " {}={:?}", f.name(), v);
+                }
+            }
+            ev.record(&mut V(&mut line));
+            self.0.lock().expect("捕捉バッファの毒化なし").push(line);
+        }
+    }
+
+    /// クロージャ実行中に**現在のスレッド**で発火した tracing イベントを行として返す。
+    /// `set_global_default`（プロセス全体・並行テストを壊す）は使わない。
+    fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
+        use tracing_subscriber::layer::SubscriberExt;
+        let cap = Capture::default();
+        let logs = cap.0.clone();
+        tracing::subscriber::with_default(tracing_subscriber::registry().with(cap), f);
+        let guard = logs.lock().expect("捕捉バッファの毒化なし");
+        guard.clone()
+    }
+
+    /// `BoxStyle` 欠落フォールバックの**判定語と水準**を固定する（task 7.2・Req 1.5/5.1）。
+    ///
+    /// 96 以外の水準（120・192）でも同一の語・同一の水準であることを併せて見る——
+    /// §6.5 の合否は混在 DPI の実機セッションで読むため、水準依存の分岐が入り込めば
+    /// そこで判定語が消える。
+    #[test]
+    fn box_style_not_found_fallback_keeps_its_literal_and_warn_level() {
+        let client_pos = Point { x: 50, y: 75 };
+        let client_size = SizeI {
+            width: 800,
+            height: 600,
+        };
+
+        for dpi_value in [96u16, 120, 192] {
+            let dpi = DPI::from_dpi(dpi_value, dpi_value);
+            let ctx = Some(make_dpi_context(dpi));
+
+            // --- 陽性: BoxStyle 欠落 → 判定語がちょうど 1 行・水準は WARN ---
+            let lines = capture_logs(|| {
+                let out = correct_position_for_dpi_center_preserve(
+                    client_pos,
+                    client_size,
+                    &ctx,
+                    None,
+                    &dpi,
+                );
+                assert_eq!(
+                    (out.x, out.y),
+                    (client_pos.x, client_pos.y),
+                    "dpi={dpi_value}: BoxStyle 欠落は client_pos 素通し（フォールバック）"
+                );
+            });
+            let hits: Vec<&String> = lines
+                .iter()
+                .filter(|l| l.contains(BOX_STYLE_NOT_FOUND_TAG))
+                .collect();
+            assert_eq!(
+                hits.len(),
+                1,
+                "dpi={dpi_value}: 判定語 `{BOX_STYLE_NOT_FOUND_TAG}` がちょうど 1 行でない: {lines:?}"
+            );
+            assert!(
+                hits[0].starts_with("level=WARN"),
+                "dpi={dpi_value}: 判定語の水準が WARN でない\
+                 （手順書 §6.5 の `boxstyle_warn` は warn として計数される）: {}",
+                hits[0]
+            );
+
+            // --- 陰性 1: BoxStyle があれば同じ語は出ない（陽性が分岐の成果である証拠）---
+            let bs = make_box_style_px(400.0, 300.0);
+            let lines = capture_logs(|| {
+                correct_position_for_dpi_center_preserve(
+                    client_pos,
+                    client_size,
+                    &ctx,
+                    Some(&bs),
+                    &dpi,
+                );
+            });
+            assert!(
+                !lines.iter().any(|l| l.contains(BOX_STYLE_NOT_FOUND_TAG)),
+                "dpi={dpi_value}: BoxStyle があるのに判定語が出ている: {lines:?}"
+            );
+            // ハーネスの健全性（陰性 assert が「捕捉が死んでいる」で通らないこと）:
+            // BoxStyle 経路は補正適用（debug）か no-change（trace）を必ず 1 行出す。
+            assert!(
+                !lines.is_empty(),
+                "dpi={dpi_value}: 捕捉ハーネスが 1 行も拾っていない（陰性 assert が空虚）"
+            );
+
+            // --- 陰性 2: DPI 変更コンテキストが無ければ分岐へ到達しない（無音）---
+            let lines = capture_logs(|| {
+                correct_position_for_dpi_center_preserve(
+                    client_pos,
+                    client_size,
+                    &None,
+                    None,
+                    &dpi,
+                );
+            });
+            assert!(
+                lines.is_empty(),
+                "dpi={dpi_value}: dpi_context 無しの早期 return が喋っている: {lines:?}"
+            );
+        }
+    }
+
+    // ================================================================
     // dpi_suggested_position_decision tests
     //
     // 位置づけ（design.md「Testing Strategy」1.）: **分岐網羅の補助**。

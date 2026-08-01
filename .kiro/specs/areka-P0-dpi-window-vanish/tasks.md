@@ -243,7 +243,7 @@
   - _Depends: 5.1, 5.2_
   - _完了（2026-08-01）_: 診断レポートに **§3.6**（新設・**156 挿入／0 削除**＝§0.3／§5 のメンテ契約「既存の確定を取り消さない」が diff で証明される形）を追加し、S1〜S3′ の緑を**現ツリー `d301de9` で採り直して**記録（S1 12／S2 11／S4 2／S3 9／S3′ 9・レビュアが `filtered out` 件数まで含め独立再現）。**ゲートは全解除**——最後まで残っていた wintf の `s4_red_` 2 件（`monitor_systems.rs:714`／`:753`）を、**先に無ゲートで緑を採ってから**撤去（檻の本体・assert は無改変＝diff 8 行 2 ハンク）。`grep -rn '#\[ignore' crates/areka/src crates/wintf/src` → **0 件**。「96 の自己整合が欠陥を隠す」は**実行可能な assert として実在**することを確認（S1＝`window_pos.rs:811-822` の `if dpi == 96` 分岐・S2＝`frame.rs:3275-3278` ＋非退化検査 `s2_assert_work_area_bottom_moves`・`:3256`）。`cargo test -p wintf` **1,059 passed / lib ignored 0**（+2＝解除した 2 件ちょうど）
 
-- [ ] 7.2 (P) 混在 DPI・複数モニタ回帰檻の拡充
+- [x] 7.2 (P) 混在 DPI・複数モニタ回帰檻の拡充
   - 再導出結果が得られた経路の非退行を檻で固定する（従来経路が走り、バルーンとキャラの相対位置の恒等式が保存される）
   - キャラ窓・バルーン窓のいずれも全 work area 非交差にならないことを、混在 DPI（120・192 を含む）と複数モニタ work area を注入した合成レイアウトで検証する
   - 実 GPU・実高 DPI モニタを要さず決定論的に成否が判定されることを確認する
@@ -252,6 +252,8 @@
   - _Requirements: 4.4, 5.1, 5.2, 5.3, 5.6_
   - _Boundary: areka placement（追従・遷移ガードの檻）＋ emo2_boot（DPI 相の檻のみ）_
   - _Depends: 6.2_
+  - _完了（2026-08-01）_: **644 挿入／0 削除**・追加行は**全て `#[cfg(test)] mod tests` の内側**（本番 0 行＝檻専用タスクの最難制約をレビュアが機械的に確認）。檻 **4 件**を新設——⑴`both_windows_survive_a_single_write_onto_different_monitors`（1 回の書込で両窓が同時に非交差へ落ち、**別々のモニタへ**救出される合成＝Req 3.4 の**連言**。既存檻は各連言肢を「もう一方が自明に安全な世界」でしか見ていなかった）⑵`balloon_follows_the_guarded_char_position_not_the_raw_projection`（追従先がガード**適用後**の位置であること）⑶`s2_some_report_path_preserves_the_balloon_ground_anchor_across_mixed_dpi_levels`（96→120／96→192／120→192 × 全 scope）⑷`box_style_not_found_fallback_keeps_its_literal_and_warn_level`（Debt A）。**Debt B は既に充足済みと判明**（`follow.rs:6211-6216` が literal と水準の双方を固定・M5/M6 で実測）ゆえ新設せず。`cargo test -p areka` **626 passed / 0 ignored**・`cargo test -p wintf` **1,060 passed**
+  - _Debt A の境界裁定（レビュアが独立に APPROVED）_: `dpi_helpers.rs` は 7.2 の `_Boundary:_` の字面には無いが、**design.md:244（Traceability 5.1 が檻の設置先として `dpi_helpers` を名指し）と design.md:153（File Structure Plan が同ファイルを本 spec 単独所有・「in-source 檻」と明記）**が設計上の境界を定めている。6.2→6.3 の判例は「7.2 は `resize_window_to` の**挙動**を変える権限が無い」ことに立脚しており、**本番 0 行の檻追加には及ばない**。(iii) の担当者移譲は tasks.md 内に wintf 境界を持つ未着手タスクが**実在しない**ため [[deferral-requires-verified-owner]] 違反になる。なお `_Boundary:_` の字面が design より狭かったのは**spec 記述の不精確**であり実装上の欠陥ではない
 
 - [ ] 7.3 レジストリ掃除の回帰檻（despawn 消費側の檻を単独所有）
   - despawn フック発火で該当 scope が除去されること・後追いの片割れが no-op になること・掃除の前後で他 scope の位置・寸法・追従関係が不変であることを檻で固定する
@@ -272,6 +274,9 @@
 
 ## Implementation Notes
 
+- **7.2（檻の空虚性・8 例目＝「恒等式を、それを作った当人に問う」型）**: 既存檻 `s2_control_some_report_path_reprojects_and_keeps_balloon_offset` は `balloon − char ≡ offset` を主張していたが、**`offset` を書込の後に world から読んで**いた。`follow_balloon` は同じ component から `balloon = char + offset` を計算して書くので、これは**書いた当人に「そう書いたか」を尋ねる同語反復**である。`resize_window_to` 手順 6 の原点付替え量を 0 へ潰す変異（M4）を当てても**緑のまま**——DPI 相は Req 4.4 に対して実質無検査だった。是正は「**接地点（下端中央）から見た**バルーンの相対位置が不変」への言い換え——接地点は `follow_balloon` が参照しない独立量ゆえ同語反復にならない（レビュアが M4 で新旧の赤／緑を対比実測）。**恒等式を檻にするときは、その等式の両辺が被検体の外で独立に決まるかを確かめること。**
+- **7.2（「唯一の失敗」は非重複の決定的証明）**: 新設檻が既存 corpus と重複していないことは、変異を当てて **626 件中その 1 件だけが赤**になることで示せる（M1・M2 がいずれも sole failure）。逆に M4 は新設 frame.rs 檻と既存 `resize_window_to_keeps_balloon_relative_to_bottom_center_origin`（`follow.rs:5464`）の**両方**を赤にしたため、後者との関係は「重複」ではなく「拡充」——既存は dpi=96・単一モニタ・絶対 px 直書き（731/356/434/687）で Req 5.1/5.6 を満たさず、新設は DPI 相の入口 × 3 遷移 × 全 scope を覆う。**空虚性 8 例目の主張は `s2_control_*` に限る**——「DPI 相の offset 付替えが完全に無検査だった」と過大に読まないこと（レビュア指摘）。
+- **7.2（Req 5.6「絶対 px でなく比・不変条件」の判定線）**: 失敗メッセージに具体座標が出るのは**違反ではない**（観測値の補間）。違反になるのは **assert の期待値側**に px 定数が座ること。新設檻の期待値は全て不変条件（`before[i].1`）・記号的な端（`left_wa().left`）・`ScaleRatio` の積のいずれかである。
 - **7.1（記録タスクの検査は「読む」ではなく「引き直す」）**: 実行記録の欠陥は fabrication（どのコマンドも出していない数字）か staleness（古いツリーの出力を現在として提示）で現れ、**読んでも判別できない**。レビュアは §3.6 の 5 系統を全て自分で引き直し、`passed` だけでなく **`filtered out` の件数まで一致**することを確認した（後者は整合的に捏造するのが難しく、記録の真正性の指標になる）。加えて `git show HEAD` から**撤去前の grep 出力が逐語で再現できる**ことを示し、記録が事後再構成でないことを裏づけた。**数字を書くタスクのレビューでは、数字を引き直すこと。**
 - **7.1（ゲート撤去は「先に無ゲートで緑」が順序として必須）**: `#[ignore]` を外してから走らせると、赤いまま撤去した場合に**撤去が原因なのか元から赤なのか**が切り分けられない。7.1 は属性が残ったままで `cargo test -p wintf --lib -- --ignored s4_red_` を走らせて緑を採り、**その後で**撤去した。また「0 件にする」ことだけが目的化すると檻の削除・`#[cfg]` による除外という抜け道が生じるため、レビュアは diff から `#[test]` の削除と `#[cfg]` の追加が無いことを機械的に確認している（削除行は doc 2 行＋属性 2 行のみ）。
 - **7.1（`cargo test` の `ignored` はゲート数ではない）**: wintf の doc-test target は `26 ignored` を常時報告するが、これは ` ```text ` 等の**非 Rust コードフェンス**であって `#[ignore]` 属性ではない（baseline から同数）。完了状態「ゲートされた赤証跡が 1 件も残っていない」の判定は**必ず `grep -rn '#\[ignore'`** で行うこと——テスト出力の語で判定すると永久に 0 にならない。

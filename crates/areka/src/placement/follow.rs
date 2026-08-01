@@ -7994,4 +7994,315 @@ mod tests {
             }
         }
     }
+
+    // -------------------------------------------------------------------------
+    // 混在 DPI・複数モニタ回帰檻の拡充（task 7.2・Req 3.4/4.4/5.1/5.2/5.3/5.6）
+    //
+    // task 6.1 は**キャラ窓だけ**が不可視へ落ちる合成を、task 6.2 は**バルーンだけ**が
+    // 落ちる合成（キャラは終始可視だと明示的に assert する）を固めた。どちらの檻も
+    // 「もう一方の窓は自明に安全」な世界で 1 つの連言肢を証明しており、Req 3.4 が
+    // 要求する **連言**——「キャラ窓とバルーン窓の *どちらも* 不可視状態に遷移させない」
+    // ——を 1 回の書込の中で見た檻は存在しない。本節が足すのはその連言と、
+    // 2 つのガードが**互いの結果に依存する**接続点である。
+    //
+    //   (A) 1 回の [`resize_window_to`] で**両窓が同時に**全 work area 非交差へ落ちる
+    //       合成。しかも救出先の work area が**別々のモニタ**になる配置で組むので、
+    //       clamp 先の解決が窓ごとに独立であること（キャラの clamp_wa を流用していない
+    //       こと）まで座標で固定される。
+    //   (B) バルーンが追従するのは **ガード適用後**のキャラ位置であること。手順 7 が
+    //       `new_pos` ではなく素の射影（`raw`／ガード前）を渡す変異は、6.2 の檻では
+    //       **不動点**になる（あちらはキャラが clamp されない合成ゆえ両者が同値）。
+    //       ここでは clamp 前後で px(40) ずれるので、恒等式の主張が実際に効く。
+    //
+    // 座標はすべて論理値 × DPI（96/120/192）で構築し、絶対 px の固定値を持たない
+    // （Req 5.6）。実 GPU・実高 DPI モニタを要さず決定論（Req 5.2）。
+    // -------------------------------------------------------------------------
+
+    /// 下端中央原点の移動量（左上基準 offset の付替え量・[`resize_window_to`] 手順 6 の
+    /// **檻側の独立実装**）。本体の式を呼び直さない。
+    fn origin_delta(old: SizePx, new: SizePx) -> PointPx {
+        point(new.w / 2 - old.w / 2, new.h - old.h)
+    }
+
+    /// [`gap_bound_char_world`] に随伴バルーンを足した World。
+    ///
+    /// `offset` は **spawn 時点**の左上基準 offset。手順 6 が原点移動ぶんを付け替えるため、
+    /// 追従に実際に使われるのは `offset + origin_delta(wide, narrow)` である。
+    fn gap_bound_char_world_with_balloon(
+        dpi: i32,
+        balloon_size: SizePx,
+        balloon_pos: PointPx,
+        offset: PointPx,
+    ) -> (World, Entity, Entity, PointPx) {
+        let old = wide_char_size(dpi);
+        let old_pos = PointPx {
+            x: gap_center_x(dpi) - old.w / 2,
+            y: left_wa().bottom - old.h,
+        };
+        let mut world = World::new();
+        world.insert_resource(mixed_layout(dpi));
+        let balloon = world
+            .spawn((
+                fake_handle(0x2000),
+                window_pos_sized(
+                    balloon_pos.x,
+                    balloon_pos.y,
+                    balloon_size.w,
+                    balloon_size.h,
+                ),
+            ))
+            .id();
+        let char_window = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(old_pos.x, old_pos.y, old.w, old.h),
+                Anchored(Anchor::Bottom),
+                BalloonFollow { balloon, offset },
+            ))
+            .id();
+        (world, char_window, balloon, old_pos)
+    }
+
+    /// **Req 3.4／5.3 の連言**: 1 回の非ドラッグ配置書込で、キャラ窓とバルーン窓の
+    /// **どちらも**全 work area 非交差にならない。しかも救出先は**別々のモニタ**である。
+    ///
+    /// 合成の骨格（混在 DPI・複数モニタ・負座標・192 で 3200 超座標）:
+    /// - キャラ窓は帯（`0 ..= px(64)`＝どの work area にも属さない）へ落ちる幅の新寸を
+    ///   受け取り、**右モニタ**へ引き戻される（[`gap_bound_char_world`] と同じ機序）。
+    /// - 随伴 offset は救出後のキャラ位置から見て遥か左（`-px(2600)`）を指すので、
+    ///   バルーン提案矩形は**左モニタよりさらに左**の完全不可視域へ出る。最近傍は
+    ///   左モニタゆえ **`left_wa().left` へ**引き戻される。
+    ///
+    /// ゆえに 2 つの clamp 先が別モニタになる——キャラの `clamp_wa` を流用する実装は
+    /// バルーンを右モニタへ引き戻してしまい、`balloon.x == left_wa().left` の assert が
+    /// 落ちる。6.1／6.2 の単窓檻はどちらもこの取り違えに対して不動点である
+    /// （両窓の clamp 先が同じ右モニタになる合成しか持っていない）。
+    #[test]
+    fn both_windows_survive_a_single_write_onto_different_monitors() {
+        for dpi in DPIS {
+            let layout = mixed_layout(dpi);
+            let new = narrow_char_size(dpi);
+            let b_size = balloon_size(dpi);
+            // 追従に実際に使われる offset（手順 6 の付替え後）と、spawn 時点の offset。
+            let applied_offset = point(-px(2600, dpi), -px(600, dpi));
+            let d_origin = origin_delta(wide_char_size(dpi), new);
+            let spawn_offset = point(
+                applied_offset.x - d_origin.x,
+                applied_offset.y - d_origin.y,
+            );
+            // 旧バルーンは**左モニタ内**で可視（＝「遷移」であって留置ではない）。
+            // 座標は左モニタ左端からの論理オフセット×DPI で組む（絶対 px を置かない・Req 5.6）。
+            let old_balloon = point(left_wa().left + px(360, dpi), px(200, dpi));
+
+            for route in [
+                PlacementRoute::AnchorChange,
+                PlacementRoute::Resnap,
+                PlacementRoute::DpiReproject,
+                PlacementRoute::ReportedSizeReconcile,
+            ] {
+                let (mut world, char_window, balloon, old_pos) =
+                    gap_bound_char_world_with_balloon(dpi, b_size, old_balloon, spawn_offset);
+
+                // --- (1) 探針の自己検査（[[2.2 の教訓]]）---
+                let char_bare = unguarded_projection(dpi, old_pos, new);
+                let char_saved = point(right_wa(dpi).left, char_bare.y);
+                let balloon_bare = point(
+                    char_saved.x + applied_offset.x,
+                    char_saved.y + applied_offset.y,
+                );
+                assert!(
+                    visible_in(&layout, old_pos, wide_char_size(dpi)),
+                    "dpi={dpi}: 旧キャラ矩形が非交差では『遷移』にならない"
+                );
+                assert!(
+                    visible_in(&layout, old_balloon, b_size),
+                    "dpi={dpi}: 旧バルーン矩形が非交差では『遷移』にならない"
+                );
+                assert!(
+                    !visible_in(&layout, char_bare, new),
+                    "dpi={dpi}: 探針が不動点——ガード無しのキャラ提案 {char_bare:?} が既に可視"
+                );
+                assert!(
+                    !visible_in(&layout, balloon_bare, b_size),
+                    "dpi={dpi}: 探針が不動点——ガード無しのバルーン提案 {balloon_bare:?} が既に可視"
+                );
+
+                let (ok, events) = capture_logs(|| {
+                    resize_window_to(&mut world, char_window, new, route)
+                });
+                assert!(ok, "dpi={dpi} route={route}: 書込は成立する前提");
+
+                let char_pos = point_of(&world, char_window);
+                let balloon_pos = point_of(&world, balloon);
+
+                // --- (2) 連言そのもの（Req 3.4）: どちらも全 work area 非交差ではない ---
+                assert!(
+                    visible_in(&layout, char_pos, new),
+                    "dpi={dpi} route={route}: キャラ窓 {char_pos:?} が全 work area と非交差"
+                );
+                assert!(
+                    visible_in(&layout, balloon_pos, b_size),
+                    "dpi={dpi} route={route}: バルーン窓 {balloon_pos:?} が全 work area と非交差"
+                );
+
+                // --- (3) 救出先は**別々のモニタ**（clamp 先の解決が窓ごとに独立）---
+                assert_eq!(
+                    char_pos, char_saved,
+                    "dpi={dpi} route={route}: キャラは右モニタ左端へ引き戻されるはず"
+                );
+                assert_eq!(
+                    balloon_pos.x,
+                    left_wa().left,
+                    "dpi={dpi} route={route}: バルーンの clamp 先が左モニタでない\
+                     （キャラの clamp_wa を流用している疑い）: {balloon_pos:?}"
+                );
+
+                // --- (4) Y は両窓とも射影／恒等式の所有＝ガードは触らない ---
+                assert_eq!(
+                    char_pos.y, char_bare.y,
+                    "dpi={dpi} route={route}: キャラの Y が動いた"
+                );
+                assert_eq!(
+                    balloon_pos.y, balloon_bare.y,
+                    "dpi={dpi} route={route}: バルーンの Y が動いた"
+                );
+
+                // --- (5) 判定語: ClampX が**ちょうど 2 行**（両窓ぶん）・水準は WARN ---
+                let clamps = guard_events(&events, CLAMP_TAG);
+                assert_eq!(
+                    clamps.len(),
+                    2,
+                    "dpi={dpi} route={route}: ClampX が両窓ぶん 2 行でない: {events:?}"
+                );
+                for ev in clamps {
+                    assert_eq!(
+                        ev.level,
+                        tracing::Level::WARN,
+                        "dpi={dpi} route={route}: clamp の記録が warn 水準でない"
+                    );
+                }
+            }
+        }
+    }
+
+    /// **Req 4.4 の恒等式は「ガード適用後のキャラ位置」に対して成立する**。
+    ///
+    /// [`resize_window_to`] 手順 7 は確定位置（`new_pos`＝遷移ガード適用**後**）で
+    /// [`follow_balloon`] を呼ぶ。ここを素の射影（ガード前）へ差し替える変異は、
+    /// 6.2 の檻ではキャラが clamp されない合成ゆえ**不動点**になる。
+    ///
+    /// 本檻はキャラだけが clamp される合成（clamp 前後で X が `px(40)` ずれる）を組み、
+    /// バルーンの追従先が**ずれた後**の位置であることを座標で固定する。バルーン自身は
+    /// clamp されない（＝救われたのはキャラだけ・`ClampX` はちょうど 1 行）ので、
+    /// 「バルーンが偶然どこかへ clamp されて結果が一致した」逃げ道も塞がる。
+    #[test]
+    fn balloon_follows_the_guarded_char_position_not_the_raw_projection() {
+        for dpi in DPIS {
+            let layout = mixed_layout(dpi);
+            let new = narrow_char_size(dpi);
+            // 帯（`0 ..= px(64)`）より**狭い**バルーン＝帯の中へ丸ごと収まり得る。
+            let b_size = SizePx {
+                w: px(48, dpi),
+                h: px(300, dpi),
+            };
+            let applied_offset = point(-px(12, dpi), -px(600, dpi));
+            let d_origin = origin_delta(wide_char_size(dpi), new);
+            let spawn_offset = point(
+                applied_offset.x - d_origin.x,
+                applied_offset.y - d_origin.y,
+            );
+            let old_balloon = visible_balloon_pos(dpi);
+
+            for route in [
+                PlacementRoute::AnchorChange,
+                PlacementRoute::Resnap,
+                PlacementRoute::DpiReproject,
+                PlacementRoute::ReportedSizeReconcile,
+            ] {
+                let (mut world, char_window, balloon, old_pos) =
+                    gap_bound_char_world_with_balloon(dpi, b_size, old_balloon, spawn_offset);
+
+                let char_bare = unguarded_projection(dpi, old_pos, new);
+                let char_saved = point(right_wa(dpi).left, char_bare.y);
+                let follows_guarded = point(
+                    char_saved.x + applied_offset.x,
+                    char_saved.y + applied_offset.y,
+                );
+                let follows_raw = point(
+                    char_bare.x + applied_offset.x,
+                    char_bare.y + applied_offset.y,
+                );
+
+                // --- 探針の自己検査: 2 つの追従先が**区別できる**こと ---
+                assert_ne!(
+                    follows_guarded.x, follows_raw.x,
+                    "dpi={dpi}: 探針が不動点——ガード前後でキャラ X が動いていない"
+                );
+                assert!(
+                    !visible_in(&layout, char_bare, new),
+                    "dpi={dpi}: 探針が不動点——ガード無しのキャラ提案が既に可視"
+                );
+                assert!(
+                    visible_in(&layout, follows_guarded, b_size),
+                    "dpi={dpi}: 救出後のキャラに追従したバルーンは可視のはず（clamp 不要）"
+                );
+                assert!(
+                    !visible_in(&layout, follows_raw, b_size),
+                    "dpi={dpi}: 素の射影に追従したバルーン {follows_raw:?} が可視では変異を区別できない"
+                );
+
+                let (ok, events) = capture_logs(|| {
+                    resize_window_to(&mut world, char_window, new, route)
+                });
+                assert!(ok, "dpi={dpi} route={route}: 書込は成立する前提");
+
+                assert_eq!(
+                    point_of(&world, char_window),
+                    char_saved,
+                    "dpi={dpi} route={route}: キャラが右モニタ左端へ救出されていない"
+                );
+                assert_eq!(
+                    point_of(&world, balloon),
+                    follows_guarded,
+                    "dpi={dpi} route={route}: バルーンが**ガード適用後**のキャラ位置に追従していない\
+                     （素の射影に追従した場合は {follows_raw:?}）"
+                );
+                assert!(
+                    visible_in(&layout, point_of(&world, balloon), b_size),
+                    "dpi={dpi} route={route}: 追従先のバルーンが全 work area と非交差"
+                );
+
+                // 恒等式（Req 4.4）: `balloon − char ≡ BalloonFollow.offset`（付替え後）。
+                let offset = world
+                    .get::<BalloonFollow>(char_window)
+                    .expect("char 窓は BalloonFollow を持つ")
+                    .offset;
+                assert_eq!(
+                    offset, applied_offset,
+                    "dpi={dpi} route={route}: 原点（下端中央）基準の offset 付替えが崩れている"
+                );
+                let c = point_of(&world, char_window);
+                let b = point_of(&world, balloon);
+                assert_eq!(
+                    point(b.x - c.x, b.y - c.y),
+                    offset,
+                    "dpi={dpi} route={route}: 追従恒等式が崩れている"
+                );
+
+                // 救われたのは**キャラだけ**＝`ClampX` はちょうど 1 行。
+                let clamps = guard_events(&events, CLAMP_TAG);
+                assert_eq!(
+                    clamps.len(),
+                    1,
+                    "dpi={dpi} route={route}: ClampX がキャラぶん 1 行でない\
+                     （バルーンまで clamp されているなら追従先が偶然一致しただけ）: {events:?}"
+                );
+                assert_eq!(
+                    clamps[0].level,
+                    tracing::Level::WARN,
+                    "dpi={dpi} route={route}: clamp の記録が warn 水準でない"
+                );
+            }
+        }
+    }
 }

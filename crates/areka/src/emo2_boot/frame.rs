@@ -3368,6 +3368,189 @@ mod tests {
         );
     }
 
+    // ── task 7.2: 再導出結果が得られた経路の非退行を混在 DPI 全水準へ拡充 ──
+    //
+    // 上の `s2_control_*` は `Some` 経路の非退行を **96→120・scope 0** の 1 点でしか
+    // 見ておらず、しかも随伴の主張が `balloon − char ≡ offset` である。この式は
+    // [`follow_balloon`] が「バルーン位置 ← キャラ位置 ＋ offset」と書いていることの
+    // **恒真の言い換え**であって、`offset` の付替え（[`resize_window_to`] 手順 6）が
+    // 壊れても成立し続ける——[[5.2 の教訓＝空虚性 6 例目「不動点」型]] の配置である
+    // （実測: 手順 6 の原点移動量を 0 へ潰す変異で `s2_control_*` は緑のまま）。
+    //
+    // 本檻は Req 4.4 の「相対位置」を**接地点（下端中央）からの相対**として書き直し、
+    // 96/120/192 の 3 遷移 × 全 scope で固定する。判定は絶対 px ではなく
+    // 「変化の前後で保存される差分ベクトル」＝不変条件である（Req 5.6）。
+    //
+    // 非空虚性の自己検査を 3 段で持つ:
+    //   (1) work area 下端が実際に動く（[`s2_assert_work_area_bottom_moves`]）
+    //   (2) 報告寸が現寸と**異なる**＝`Some` 経路が実際に reconcile を走らせる
+    //   (3) バルーンの**絶対位置は動く**＝「相対不変」が「何も起きなかった」の
+    //       言い換えに退化していない
+
+    /// 窓の**接地点**（下端中央）から見たバルーン左上の相対ベクトル。
+    ///
+    /// 接地点は寸法変動で動かない原点であり（記憶〈キャラ窓の原点は下端中央〉）、
+    /// [`resize_window_to`] 手順 6 が `BalloonFollow.offset` を付け替えるのは
+    /// **この相対ベクトルを不変に保つため**である。
+    fn s2_balloon_relative_to_ground(world: &World, char_e: Entity, balloon_e: Entity) -> (i32, i32) {
+        let (gx, gy) = s2_ground_point(world, char_e);
+        let bp = pos_of(world, balloon_e).expect("balloon 位置がある");
+        (bp.x - gx, bp.y - gy)
+    }
+
+    /// **task 7.2**: 寸の再導出結果が**得られる**（`Some`）経路の非退行を、混在 DPI の
+    /// 3 遷移（96→120・96→192・120→192）× 全 scope で固定する。
+    ///
+    /// 主張は 4 つ:
+    /// - 従来経路が走る（報告された新物理寸へ `reconcile_window_size` が反映する）
+    /// - 接地点の X が保存され、Y は**変化後の** work area 下端へ再射影される（Req 4.1/4.2）
+    /// - **バルーンの接地点相対位置が保存される**（Req 4.4 の非恒真形）
+    /// - 経路語は `DpiReproject` のまま（D13）
+    #[test]
+    fn s2_some_report_path_preserves_the_balloon_ground_anchor_across_mixed_dpi_levels() {
+        for (from_dpi, to_dpi) in [(96u16, 120u16), (96, 192), (120, 192)] {
+            // (1) 非空虚性: この 2 水準のあいだで work area 下端が実際に動く。
+            s2_assert_work_area_bottom_moves(from_dpi, to_dpi);
+
+            let (mut world, gw) = dpi_world();
+            let scopes: Vec<usize> = gw.scopes().collect();
+            assert!(
+                scopes.len() >= 2,
+                "探針の退化: 複数 scope でなければ「全 scope で保存」は主張になっていない"
+            );
+
+            // --- 変化前: from_dpi の work area へ全 char 窓を接地させる ---
+            world.insert_resource(s2_snapshot(from_dpi));
+            let from_bottom = s2_work_area_for_dpi(from_dpi).bottom;
+            for &scope in &scopes {
+                let char_e = gw.char_window(scope).expect("char 窓がある");
+                let balloon_e = gw.balloon_window(scope).expect("balloon 窓がある");
+                let h = size_of(&world, char_e).expect("char 寸がある").height;
+                let y = pos_of(&world, char_e).expect("char 位置がある").y;
+                let dy = (from_bottom - h) - y;
+                s2_shift_y(&mut world, char_e, dy);
+                s2_shift_y(&mut world, balloon_e, dy);
+                for e in [char_e, balloon_e] {
+                    world.entity_mut(e).insert(DPI::from_dpi(from_dpi, from_dpi));
+                }
+            }
+
+            // `SystemState::new` の初回全窓マッチを「報告なし」で消費する（既に接地済み
+            // ＝べき等 skip で書込ゼロ＝以降の観測を汚さない）。
+            let mut source = FakeReports::default();
+            let mut state = None;
+            dpi_phase_with(&mut source, &mut state, &mut world);
+
+            // --- 変化前の観測 ---
+            let before: Vec<((i32, i32), (i32, i32), (i32, i32), SizeI)> = scopes
+                .iter()
+                .map(|&scope| {
+                    let char_e = gw.char_window(scope).expect("char 窓がある");
+                    let balloon_e = gw.balloon_window(scope).expect("balloon 窓がある");
+                    let bp = pos_of(&world, balloon_e).expect("balloon 位置がある");
+                    (
+                        s2_ground_point(&world, char_e),
+                        s2_balloon_relative_to_ground(&world, char_e, balloon_e),
+                        (bp.x, bp.y),
+                        size_of(&world, char_e).expect("char 寸がある"),
+                    )
+                })
+                .collect();
+            for (i, &scope) in scopes.iter().enumerate() {
+                assert_eq!(
+                    before[i].0.1, from_bottom,
+                    "探針の前提: scope={scope} は変化前 work area 下端へ接地している"
+                );
+            }
+
+            // --- 変化: work area・DPI・報告寸をまとめて to_dpi 相当へ ---
+            world.insert_resource(s2_snapshot(to_dpi));
+            let ratio = ScaleRatio::new(to_dpi.into(), from_dpi.into()).expect("非ゼロ比");
+            let mut source = FakeReports::default();
+            for (i, &scope) in scopes.iter().enumerate() {
+                for e in [
+                    gw.char_window(scope).expect("char 窓がある"),
+                    gw.balloon_window(scope).expect("balloon 窓がある"),
+                ] {
+                    world.entity_mut(e).insert(DPI::from_dpi(to_dpi, to_dpi));
+                }
+                let native = before[i].3;
+                let scaled = ratio.scaled_extent(native.width as u32, native.height as u32);
+                // (2) 非空虚性: 報告寸が現寸と違う＝`Some` 経路が実際に reconcile を走らせる。
+                assert_ne!(
+                    SizeI::new(scaled.0 as i32, scaled.1 as i32),
+                    native,
+                    "探針が不動点: dpi {from_dpi}→{to_dpi} scope={scope} で報告寸が現寸と同じ"
+                );
+                source.refresh.insert(shell_target(scope as u32).0, scaled);
+            }
+            reset_write_witness(&mut world, &gw);
+
+            let (_, events) =
+                capture_diag_logs(|| dpi_phase_with(&mut source, &mut state, &mut world));
+
+            // --- 判定 ---
+            let to_bottom = s2_work_area_for_dpi(to_dpi).bottom;
+            for (i, &scope) in scopes.iter().enumerate() {
+                let char_e = gw.char_window(scope).expect("char 窓がある");
+                let balloon_e = gw.balloon_window(scope).expect("balloon 窓がある");
+                let native = before[i].3;
+                let scaled = ratio.scaled_extent(native.width as u32, native.height as u32);
+
+                assert_eq!(
+                    size_of(&world, char_e),
+                    Some(SizeI::new(scaled.0 as i32, scaled.1 as i32)),
+                    "dpi {from_dpi}→{to_dpi} scope={scope}: 従来経路（Some）が新物理寸を反映していない"
+                );
+                let ground_after = s2_ground_point(&world, char_e);
+                assert_eq!(
+                    ground_after.0, before[i].0.0,
+                    "dpi {from_dpi}→{to_dpi} scope={scope}: 接地点の X が保存されていない"
+                );
+                assert_eq!(
+                    ground_after.1, to_bottom,
+                    "dpi {from_dpi}→{to_dpi} scope={scope}: 接地点 Y が変化後の work area 下端でない"
+                );
+
+                // (3) 非空虚性: バルーンの**絶対位置は動く**（相対不変が「無変化」の
+                //     言い換えではないことの witness）。
+                let bp = pos_of(&world, balloon_e).expect("balloon 位置がある");
+                assert_ne!(
+                    (bp.x, bp.y),
+                    before[i].2,
+                    "探針が不動点: dpi {from_dpi}→{to_dpi} scope={scope} でバルーンが 1 bit も動かない\
+                     （『相対が保たれた』が『何も起きなかった』と区別できない）"
+                );
+
+                // 本題（Req 4.4）: 接地点から見たバルーンの相対位置は保存される。
+                assert_eq!(
+                    s2_balloon_relative_to_ground(&world, char_e, balloon_e),
+                    before[i].1,
+                    "dpi {from_dpi}→{to_dpi} scope={scope}: 接地点（下端中央）から見た\
+                     バルーンの相対位置が保存されていない（手順 6 の offset 付替えが崩れている・Req 4.4）"
+                );
+                // 従属する恒等式（offset は付替え後の値で成立し続ける）。
+                let offset = world
+                    .get::<BalloonFollow>(char_e)
+                    .expect("char 窓は BalloonFollow を持つ")
+                    .offset;
+                let cp = pos_of(&world, char_e).expect("char 位置がある");
+                assert_eq!(
+                    (bp.x - cp.x, bp.y - cp.y),
+                    (offset.x, offset.y),
+                    "dpi {from_dpi}→{to_dpi} scope={scope}: 追従恒等式が崩れている"
+                );
+
+                assert_eq!(
+                    window_move_routes_of(&events, char_e),
+                    vec!["DpiReproject"],
+                    "dpi {from_dpi}→{to_dpi} scope={scope}: 経路語が DpiReproject でない: {:?}",
+                    window_move_lines(&events)
+                );
+            }
+        }
+    }
+
     /// **常時走る随伴 (2)・5.2 の実装違いを捕まえる前方ガード**: DPI 相の書込は
     /// **現位置が接地点規約に違反しているときだけ**起きなければならない（design「dpi_phase
     /// 位置/寸分離 > Risks / Req 4.5 との整合」）。
