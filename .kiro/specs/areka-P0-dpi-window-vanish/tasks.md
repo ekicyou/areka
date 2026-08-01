@@ -263,6 +263,8 @@
   - _Requirements: 6.1, 6.2, 6.3, 6.4_
   - _Depends: 3.2_
   - （再スナップ・回収相の檻を 7.2 と同じテストモジュールへ書くため、7.2 との並行は不可＝despawn 消費側の檻は本タスクが単独所有）
+  - _部分着地（2026-08-01・`b777b6c`）_: 檻の Part 1 は 3.2／6.1 が設置済みで全緑を確認。`despawn_smoke_targets`（`main.rs`）と `enqueue_window_set_pos`（`follow.rs`）へ 3.2 の区別を適用し、檻 2 件新設・1 件強化（変異 M1〜M3 が各 sole failure・レビュアが独立再現）。**本番語彙は `DESPAWNED_SKIP_TAG` の再利用のみで新語彙ゼロ**。`cargo test -p areka` **628 passed / 0 ignored**
+  - _Blocked: 完了状態の主張「`despawn_smoke_targets` 由来の `Could not despawn entity` が 0 件」は**空虚に充足**されている——実機 3 件は当該関数由来ではないことが独立に確定した。⑴**順序**: 3 件の WARN は `INFO areka: smoke 自動 close … count=4`（`main.rs:781-786`＝ループ**返却後**）より**後**に出る（別 spec の実機ログ `…/completed/areka-P0-kero-balloon/real-run-signoff-2026-07-31.log:116-121` が μ秒精度で再現・`lifecycle.rs:65` の `try_borrow_mut` が握られた `borrow_mut()` 下でこの順序を**強制**する）⑵**構造**: 連鎖 despawn は不可能（`#[relationship]` が `crates` 全体で **0 件**・`spawn.rs:235,263` は char/balloon を独立に top-level spawn・唯一の本番 `ChildOf`＝`main.rs:533` は窓マーカを持たない `Rectangle`）⑶**真の出所**: 終了処理で**陳腐化した id** を despawn する本番経路は `lifecycle.rs:70` ただ 1 つ（`window_handle.rs:279` の `PostMessageW(WM_CLOSE)` が非同期投函）。`diagnosis-procedure.md` §6.4 の `TEARDOWN-SILENCE` は主体を問わない全件判定ゆえ、**7.4 は現状のままなら再び FAIL する**。是正は 1 行だが、`lifecycle.rs` は design 変更ファイル表に無く・Req 6 の主体は Placement サブシステムであり・**Req 2.7 が「診断レポートで確定した機構以外を変更しない」と定めている**ため、確定記載（`diagnosis-report.md` §2.3.4）の訂正と担当の新設は開発者裁定を要する_
 
 - [ ] 7.4 是正後の実機再サインオフ
   - 是正投入後のビルドで診断手順書と同一手順の 2 セッションを再実行し、受理回数の下限を踏破したうえで消失痕跡がゼロであることを判定語で確認する
@@ -274,6 +276,8 @@
 
 ## Implementation Notes
 
+- **7.3（檻の空虚性・9 例目＝「捕捉ハーネスが原理的に見えない語を『無い』と主張する」型）**: `bevy_ecs` は `log::warn!` を使う（`bevy_ecs-0.18.1/src/world/mod.rs:71` が `use log::warn;`・`World::despawn` は `:1462-1469` で失敗時に `warn!`＋`false` を**同一分岐で**返す）。実機で `WARN bevy_ecs::world: Could not despawn entity` が見えるのは `tracing_subscriber` の log→tracing ブリッジ経由であり、テストの `capture_logs`（素の thread-local `tracing` dispatcher・`test_support.rs:166`・`crates` 内に `tracing_log`／`LogTracer` は**存在しない**）には**原理的に 1 件も届かない**。ゆえに「捕捉に警告が無い」は bevy の警告について**恒真**＝檻として空虚。是正は対照アーム——存在確認なしのループで `World::despawn` が `false` を返すことを主張する（**警告と同一分岐**ゆえ代替として厳密）。**「無いこと」を主張する檻は、ハーネスがその語を『在るとき』に見られることを先に証明すること。**
+- **7.3（全体件数の檻は相ごとに数える）**: 変異 M2（随伴書込の存在確認を無効化）は遷移ガード相の `[despawn-skip]` 行を**そのまま残す**ため、素朴な総件数 assert は**緑のまま**通り抜ける（3.2 が踏んだ空虚性 2 例目と同型＝下流が同じ語を出して総数を覆い隠す）。檻は打ち切り行を**相ごとに**（遷移ガード相 1／随伴書込相 1）計数して初めて赤くなる。
 - **7.2（檻の空虚性・8 例目＝「恒等式を、それを作った当人に問う」型）**: 既存檻 `s2_control_some_report_path_reprojects_and_keeps_balloon_offset` は `balloon − char ≡ offset` を主張していたが、**`offset` を書込の後に world から読んで**いた。`follow_balloon` は同じ component から `balloon = char + offset` を計算して書くので、これは**書いた当人に「そう書いたか」を尋ねる同語反復**である。`resize_window_to` 手順 6 の原点付替え量を 0 へ潰す変異（M4）を当てても**緑のまま**——DPI 相は Req 4.4 に対して実質無検査だった。是正は「**接地点（下端中央）から見た**バルーンの相対位置が不変」への言い換え——接地点は `follow_balloon` が参照しない独立量ゆえ同語反復にならない（レビュアが M4 で新旧の赤／緑を対比実測）。**恒等式を檻にするときは、その等式の両辺が被検体の外で独立に決まるかを確かめること。**
 - **7.2（「唯一の失敗」は非重複の決定的証明）**: 新設檻が既存 corpus と重複していないことは、変異を当てて **626 件中その 1 件だけが赤**になることで示せる（M1・M2 がいずれも sole failure）。逆に M4 は新設 frame.rs 檻と既存 `resize_window_to_keeps_balloon_relative_to_bottom_center_origin`（`follow.rs:5464`）の**両方**を赤にしたため、後者との関係は「重複」ではなく「拡充」——既存は dpi=96・単一モニタ・絶対 px 直書き（731/356/434/687）で Req 5.1/5.6 を満たさず、新設は DPI 相の入口 × 3 遷移 × 全 scope を覆う。**空虚性 8 例目の主張は `s2_control_*` に限る**——「DPI 相の offset 付替えが完全に無検査だった」と過大に読まないこと（レビュア指摘）。
 - **7.2（Req 5.6「絶対 px でなく比・不変条件」の判定線）**: 失敗メッセージに具体座標が出るのは**違反ではない**（観測値の補間）。違反になるのは **assert の期待値側**に px 定数が座ること。新設檻の期待値は全て不変条件（`before[i].1`）・記号的な端（`left_wa().left`）・`ScaleRatio` の積のいずれかである。
