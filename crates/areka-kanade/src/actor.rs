@@ -23,8 +23,9 @@
 //!
 //! # 失敗経路のログ規律（steering: areka-log-first-no-silent-failure）
 //! SHIORI 送出失敗・応答 oneshot 切断は `error!` の上で `ShioriOutcome::Failed(Ipc)` へ写像し
-//! 再投入する（→ Unloading{Fault}・宙吊りなし）。StartTalk 送出失敗は `error!` の上で運行を
-//! 継続する（当該 talk は不成立・TalkDone は来ないが M1 は許容）。沈黙の失敗経路は存在しない。
+//! 再投入する（→ Unloading{Fault}・宙吊りなし）。talk 指示（[`TalkCommand`]）の送出失敗は
+//! `error!` の上で運行を継続する（当該指示は不成立・TalkDone は来ないが M1 は許容）。
+//! 沈黙の失敗経路は存在しない。
 
 use std::convert::Infallible;
 use std::ops::ControlFlow;
@@ -32,10 +33,12 @@ use std::sync::mpsc::Sender;
 
 use areka_actor::{ActorHandle, ReplyError, reply_channel, run_inbox, spawn_actor};
 
-use crate::msg::{KanadeConfig, KanadeMsg, ShioriCall, ShioriFailure, ShioriMsg, ShioriOutcome};
+use crate::msg::{
+    EventId, KanadeConfig, KanadeMsg, ShioriCall, ShioriFailure, ShioriMsg, ShioriOutcome,
+};
 use crate::schedule::resources::ResourceSink;
 use crate::schedule::{Action, Input, State, step};
-use crate::talk::StartTalk;
+use crate::talk::TalkCommand;
 
 /// kanade アクターを起動する（areka-actor 規約: スレッド名 "kanade"）。
 ///
@@ -43,6 +46,13 @@ use crate::talk::StartTalk;
 /// [`State::initial`] から運行状態機械を駆動する。`shiori`／`sakura` は**送出先**の送信端であり
 /// （body が保持するのは outbound のみ・自身の inbox Sender は保持しない）、これらと結線側が
 /// 全て drop されると inbox が切断され body は正常終了する（Req 4.9）。
+///
+/// # talk 再生系への送出口（DD-5・design C6・Req 5.6）
+/// `sakura` は [`TalkCommand`]（`Start` / `ResolveChoice` / `CancelChoice`）の単一チャンネルである。
+/// 起動系と選択解決系を別チャンネルへ分けないことが順序保存の契約であり（`areka-talk` の
+/// [`TalkCommand`] doc・DD-4 の前提）、kanade が投函した順序が relay ＋ dispatcher 単一 inbox を
+/// 経て FIFO で下流へ届く。選択待ちの解決を再生層の正規入力経路で行う（kanade 側にバリア状態・
+/// 再生状態を持たない）という Req 5.6 は、この単一送出口によって構造的に成立する。
 ///
 /// # 運用規約（デッドロック注意・Req 4.8）
 /// 停止は `KanadeMsg::Close` 送信・`Action::StopSelf`（終了系列完了）・全 `Sender<KanadeMsg>` drop の
@@ -57,7 +67,7 @@ use crate::talk::StartTalk;
 pub fn spawn_kanade(
     config: KanadeConfig,
     shiori: Sender<ShioriMsg>,
-    sakura: Sender<StartTalk>,
+    sakura: Sender<TalkCommand>,
     resource_sink: ResourceSink,
 ) -> (Sender<KanadeMsg>, ActorHandle) {
     spawn_actor("kanade", move |rx| {
@@ -76,6 +86,20 @@ pub fn spawn_kanade(
                 KanadeMsg::ForceQuit { reason } => Input::ForceQuit { reason },
                 KanadeMsg::ShioriDown { reason } => Input::ShioriDown { reason },
                 KanadeMsg::Mouse(m) => Input::Mouse(m),
+                // 選択系 2 入力（additive・Req 4.4）。境界型をそのまま状態機械の入力へ写す
+                // （シェルは判断しない——受領検証・帳簿確立は schedule 層の責務）。
+                KanadeMsg::Choice(c) => Input::Choice(c),
+                KanadeMsg::ChoiceWaiting {
+                    talk_id,
+                    choice_ids,
+                    display_end,
+                    timeout_directive_secs,
+                } => Input::ChoiceWaiting {
+                    talk_id,
+                    choice_ids,
+                    display_end,
+                    timeout_directive_secs,
+                },
             };
             match drive(&mut state, input, &config, &shiori, &sakura, &resource_sink) {
                 Drive::Continue => Ok(ControlFlow::Continue(())),
@@ -98,55 +122,14 @@ fn drive(
     input: Input,
     config: &KanadeConfig,
     shiori: &Sender<ShioriMsg>,
-    sakura: &Sender<StartTalk>,
+    sakura: &Sender<TalkCommand>,
     resource_sink: &ResourceSink,
 ) -> Drive {
     // 初回 step。以降は state を差し替えつつ actions を回す。
     let (mut st, mut actions) = step(std::mem::replace(state, State::initial()), input, config);
     loop {
-        // 直前の往復応答と、その応答が由来する呼出イベント ID（origin・DD-IE-3）を控える。
-        // reinject する `Input::ShioriReply` へ origin を転記し、後続処理が応答の出所を識別できる
-        // ようにする（マウス GET の origin 別 reply 政策はタスク 2.2）。
-        let mut last_reply: Option<(ShioriOutcome, &'static str)> = None;
-        let mut stop = false;
-        for action in actions {
-            match action {
-                Action::StartTalk(start) => {
-                    // 再生起動要求を sakura へ送出。切断時は error!＋運行継続（当該 talk 不成立）。
-                    if sakura.send(start).is_err() {
-                        tracing::error!(
-                            target: "kanade",
-                            event = "start_talk_send_failed",
-                            "再生起動要求の送出に失敗（sakura 切断）——当該 talk は不成立・運行は継続"
-                        );
-                    }
-                }
-                Action::ShioriRequest(call) => {
-                    // 送出前に call のイベント ID を控える（round_trip_request が call を消費するため）。
-                    let origin = match &call {
-                        ShioriCall::Get { id, .. } | ShioriCall::Notify { id, .. } => *id,
-                    };
-                    last_reply = Some((round_trip_request(shiori, call), origin));
-                }
-                Action::ResourceOutcome { id, outcome } => {
-                    // リソース照会結果を注入クロージャへ**同期的に**渡す（返るまで次段へ進まない・R4.1）。
-                    // 副作用は sink 内部（ghost の publish＋barrier）——talk は生成しない（Invariant）。
-                    // last_reply は変えない（SHIORI 往復ではないため再投入対象にならない）。
-                    resource_sink(id, outcome);
-                }
-                Action::ShioriUnload => {
-                    // unload には出所イベントが無いため "Unload" を転記する（Unloading 応答は
-                    // origin を参照しないが、契約上必ず値を持たせる）。
-                    last_reply = Some((round_trip_unload(shiori), "Unload"));
-                }
-                Action::StopSelf => {
-                    // 終了系列完了: shiori へ Close を送り自身も停止する。
-                    let _ = shiori.send(ShioriMsg::Close);
-                    stop = true;
-                    break;
-                }
-            }
-        }
+        let BatchResult { last_reply, stop } =
+            execute_actions(actions, shiori, sakura, resource_sink);
         if stop {
             *state = st;
             return Drive::Stop;
@@ -167,32 +150,123 @@ fn drive(
     }
 }
 
-/// GET／NOTIFY の同期往復。SHIORI へ出る**唯一の実行点**であり（本番・mock 双方が必ず通る・
-/// DD-IT-7）、送出前に送出イベント ID がホワイトリストの要素であることを検証する egress
-/// チョークポイントである（Req3.1）。
+/// Action バッチ 1 回分の実行結果（[`drive`] の反復条件）。
+struct BatchResult {
+    /// バッチ中で最後に発生した SHIORI 往復の応答と、その応答が由来する呼出イベント ID
+    /// （origin・DD-IE-3）。`None` はバッチに SHIORI 往復が無かったこと（＝再投入しない）を表す。
+    last_reply: Option<(ShioriOutcome, &'static str)>,
+    /// [`Action::StopSelf`] を実行した（以降の Action は実行しない・呼び手は停止する）。
+    stop: bool,
+}
+
+/// Action バッチを**先頭から順に全て実行**する（execute-batch/reinject-last の execute 側）。
 ///
-/// - 許可集合外（`OnTalk`／`OnHour` 等・Req3.2）: SHIORI へ**送出せず** `error!`（event=
-///   `event_id_not_allowed`）を残し、内部規律違反の失敗語彙 `ShioriOutcome::Failed(ShioriFailure::
-///   Internal(..))` を返す（DD-IT-11・状態機械は既存の fault 経路で処理＝檻専用の応答を発明しない・
-///   panic しない・宙吊りにしない）。
+/// [`drive`] の反復本体から切り出してあるのは、[`Action`] → [`TalkCommand`] 写像を発行点
+/// （タスク 4.3／4.5）の実装を待たずに実行で檻に入れられるようにするためである（design C6）。
+///
+/// # talk 指示 3 形の写像（design C6・DD-5・Req 5.6）
+/// [`Action::StartTalk`]／[`Action::ResolveChoice`]／[`Action::CancelChoice`] はそれぞれ
+/// [`TalkCommand::Start`]／[`TalkCommand::ResolveChoice`]／[`TalkCommand::CancelChoice`] へ
+/// **そのまま包んで**同一チャンネルへ送出する（値の解釈・書き換えをしない）。起動系と解決系を
+/// 別チャンネルへ分けないことが順序保存の契約であり、状態機械が 1 バッチで並べた順序が
+/// そのまま下流で観測される。送出失敗は [`send_talk_command`] が `error!` を残し**運行は継続**
+/// する——バッチも中断しない（design「Error Strategy」: 選択・再生の失敗でゴーストを終了させない）。
+fn execute_actions(
+    actions: Vec<Action>,
+    shiori: &Sender<ShioriMsg>,
+    sakura: &Sender<TalkCommand>,
+    resource_sink: &ResourceSink,
+) -> BatchResult {
+    let mut last_reply: Option<(ShioriOutcome, &'static str)> = None;
+    for action in actions {
+        match action {
+            Action::StartTalk(start) => {
+                send_talk_command(sakura, TalkCommand::Start(start));
+            }
+            Action::ResolveChoice { talk_id, id } => {
+                send_talk_command(sakura, TalkCommand::ResolveChoice { talk_id, id });
+            }
+            Action::CancelChoice { talk_id } => {
+                send_talk_command(sakura, TalkCommand::CancelChoice { talk_id });
+            }
+            Action::ShioriRequest(call) => {
+                // 送出前に call のイベント ID を控える（round_trip_request が call を消費するため）。
+                // origin は `&'static str` 契約を維持する（DD-1）: スケジューラ起源は固定 ID を
+                // そのまま転記し、選択起源（任意名・`&'static` にできない）は固定ラベル
+                // `"OnChoiceEvent"` を載せる（ログ／防御用。選択応答のルーティングは帳簿照合が正）。
+                let origin = match &call {
+                    ShioriCall::Get { id, .. } | ShioriCall::Notify { id, .. } => match id {
+                        EventId::Static(s) => *s,
+                        EventId::Choice(_) => "OnChoiceEvent",
+                    },
+                };
+                last_reply = Some((round_trip_request(shiori, call), origin));
+            }
+            Action::ResourceOutcome { id, outcome } => {
+                // リソース照会結果を注入クロージャへ**同期的に**渡す（返るまで次段へ進まない・R4.1）。
+                // 副作用は sink 内部（ghost の publish＋barrier）——talk は生成しない（Invariant）。
+                // last_reply は変えない（SHIORI 往復ではないため再投入対象にならない）。
+                resource_sink(id, outcome);
+            }
+            Action::ShioriUnload => {
+                // unload には出所イベントが無いため "Unload" を転記する（Unloading 応答は
+                // origin を参照しないが、契約上必ず値を持たせる）。
+                last_reply = Some((round_trip_unload(shiori), "Unload"));
+            }
+            Action::StopSelf => {
+                // 終了系列完了: shiori へ Close を送り自身も停止する。
+                let _ = shiori.send(ShioriMsg::Close);
+                return BatchResult {
+                    last_reply,
+                    stop: true,
+                };
+            }
+        }
+    }
+    BatchResult {
+        last_reply,
+        stop: false,
+    }
+}
+
+/// GET／NOTIFY の同期往復。SHIORI へ出る**唯一の実行点**であり（本番・mock 双方が必ず通る・
+/// DD-IT-7）、送出前に送出イベント ID が**出所カテゴリごとの受理規則**を満たすことを検証する
+/// egress チョークポイントである（Req2.6／2.9／3.1・design C6・DD-2）。
+///
+/// - 受理されない ID（スケジューラ起源の `OnTalk`／`OnHour` 等・Req3.2、選択起源の `On` 非接頭・
+///   Req2.6）: SHIORI へ**送出せず** `error!`（event=`event_id_not_allowed`）を残し、内部規律違反の
+///   失敗語彙 `ShioriOutcome::Failed(ShioriFailure::Internal(..))` を返す（DD-IT-11・状態機械は
+///   既存の fault 経路で処理＝檻専用の応答を発明しない・panic しない・宙吊りにしない）。
 /// - 許可集合内: 送出前に Method・イベント ID・参照値・実行状態の wire 証跡を `trace!`（event=
 ///   `shiori_request`）で残して送出する（Req6.2）。往復失敗は error!＋`Failed(Ipc)` へ写像（宙吊りなし）。
 fn round_trip_request(shiori: &Sender<ShioriMsg>, call: ShioriCall) -> ShioriOutcome {
-    // 送出しようとしているイベントの Method／ID／参照値／実行状態（wire 値）を取り出す。
+    // 送出しようとしているイベントの Method／ID（出所カテゴリ込み）／参照値／実行状態を取り出す。
     // `status.render()` は `None` ⇔ Status ヘッダ行なし（Req6.2・DD-IT-5 の kanade 層観測）。
-    let (method, id, references, status_wire) = match &call {
-        ShioriCall::Get { id, references, status } => ("GET", *id, references, status.render()),
+    let (method, event_id, references, status_wire) = match &call {
+        ShioriCall::Get { id, references, status } => ("GET", id, references, status.render()),
         ShioriCall::Notify { id, references, status } => {
-            ("NOTIFY", *id, references, status.render())
+            ("NOTIFY", id, references, status.render())
         }
     };
+    // ログ証跡は wire 形（[`EventId::as_str`]）で残す——出所カテゴリは表現を変えない（DD-1）。
+    let id = event_id.as_str();
 
-    // ID ホワイトリスト檻（Req3.1/3.2/4.1・DD-IT-7/DD-IT-11）: 許可集合外は送出せず内部規律違反
-    // として失敗させる。送出可否は「イベント許可 ∨ リソース許可」の論理和で判定する——イベント檻
-    // （`ALLOWED_EVENT_IDS`・8 ID）とは別族のリソース許可集合（`ALLOWED_RESOURCE_IDS`・M1: username）を
-    // additive に OR する（既存イベント許可路・許可外拒否は無改変・design 論点1）。
-    let allowed = crate::schedule::events::is_allowed_event_id(id)
-        || crate::schedule::resources::is_allowed_resource_id(id);
+    // ID 受理檻（Req2.6/2.9/3.1/3.2/4.1・design C6・DD-2・DD-IT-7/DD-IT-11）: 受理されない ID は
+    // 送出せず内部規律違反として失敗させる。送出可否は**出所カテゴリ別**に判定する。
+    //
+    // - スケジューラ起源（`Static`）: 従来どおり「イベント許可 ∨ リソース許可」の論理和——固定表
+    //   （`ALLOWED_EVENT_IDS`）と別族のリソース許可集合（`ALLOWED_RESOURCE_IDS`・M1: username）。
+    //   `OnTalk`／`OnHour` の恒久禁止（自発生成との二重駆動）はこちら側で**不変**（Req3.2）。
+    // - 選択起源（`Choice`）: `is_allowed_choice_event`（`On` 接頭のみ）。作者が `\q` の ID に書いた
+    //   名前を事前登録なしに逐語で発火するため固定表を要求せず、スケジューラ起源の恒久禁止も
+    //   適用しない（Req2.9・裁定 8＝両禁止規則は非交差）。
+    let allowed = match event_id {
+        EventId::Static(s) => {
+            crate::schedule::events::is_allowed_event_id(s)
+                || crate::schedule::resources::is_allowed_resource_id(s)
+        }
+        EventId::Choice(name) => crate::schedule::events::is_allowed_choice_event(name),
+    };
     if !allowed {
         tracing::error!(
             target: "kanade",
@@ -269,6 +343,31 @@ fn send_shiori(shiori: &Sender<ShioriMsg>, msg: ShioriMsg) -> Result<(), ShioriM
     shiori.send(msg).map_err(|e| e.0)
 }
 
+/// talk 再生系へ [`TalkCommand`] を送出する**唯一の実行点**（design C6・Req 5.6）。
+///
+/// 送出失敗（sakura／中継の切断）は `error!`（event=`talk_command_send_failed`）を残したうえで
+/// **運行を継続する**——当該指示は不成立（起動なら talk が起きず TalkDone も来ない・解決なら
+/// バリアが解けない）だが、選択・再生の失敗でゴーストを終了させないという既存の起動失敗規律と
+/// 同一の扱いである（design「Error Strategy」・steering: areka-log-first-no-silent-failure）。
+/// 種別は `kind` フィールドで区別でき、沈黙の失敗経路は持たない。
+fn send_talk_command(sakura: &Sender<TalkCommand>, command: TalkCommand) {
+    // ログ用の種別ラベル（送出で command が消費されるため先に取り出す）。
+    let (kind, talk_id) = match &command {
+        TalkCommand::Start(start) => ("start", start.talk_id.0),
+        TalkCommand::ResolveChoice { talk_id, .. } => ("resolve_choice", talk_id.0),
+        TalkCommand::CancelChoice { talk_id } => ("cancel_choice", talk_id.0),
+    };
+    if sakura.send(command).is_err() {
+        tracing::error!(
+            target: "kanade",
+            event = "talk_command_send_failed",
+            kind = %kind,
+            talk_id = talk_id,
+            "talk 指示の送出に失敗（再生系切断）——当該指示は不成立・運行は継続"
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -328,8 +427,8 @@ mod tests {
                 match msg {
                     ShioriMsg::Request { call, reply } => {
                         let rec = match &call {
-                            ShioriCall::Get { id, .. } => Recorded::Get((*id).to_string()),
-                            ShioriCall::Notify { id, .. } => Recorded::Notify((*id).to_string()),
+                            ShioriCall::Get { id, .. } => Recorded::Get(id.as_str().to_string()),
+                            ShioriCall::Notify { id, .. } => Recorded::Notify(id.as_str().to_string()),
                         };
                         let _ = rec_tx.send(rec.clone());
                         let _ = reply.send(answer(&rec));
@@ -363,7 +462,7 @@ mod tests {
     #[test]
     fn close_message_terminates_and_join_succeeds() {
         let (shiori_tx, _rec_rx, shiori_handle) = spawn_mock_shiori(benign);
-        let (sakura_tx, _sakura_rx) = mpsc::channel::<StartTalk>();
+        let (sakura_tx, _sakura_rx) = mpsc::channel::<TalkCommand>();
 
         let (kanade_tx, kanade_handle) = spawn_kanade(config(), shiori_tx, sakura_tx, noop_sink());
 
@@ -384,7 +483,7 @@ mod tests {
     #[test]
     fn all_senders_dropped_terminates_normally() {
         let (shiori_tx, _rec_rx, shiori_handle) = spawn_mock_shiori(benign);
-        let (sakura_tx, _sakura_rx) = mpsc::channel::<StartTalk>();
+        let (sakura_tx, _sakura_rx) = mpsc::channel::<TalkCommand>();
 
         let (kanade_tx, kanade_handle) = spawn_kanade(config(), shiori_tx, sakura_tx, noop_sink());
 
@@ -410,7 +509,7 @@ mod tests {
         // mock shiori を spawn せず、Receiver を即 drop して送出を失敗させる。
         let (shiori_tx, shiori_rx) = mpsc::channel::<ShioriMsg>();
         drop(shiori_rx); // 送出は必ず Err になる。
-        let (sakura_tx, _sakura_rx) = mpsc::channel::<StartTalk>();
+        let (sakura_tx, _sakura_rx) = mpsc::channel::<TalkCommand>();
 
         let (kanade_tx, kanade_handle) = spawn_kanade(config(), shiori_tx, sakura_tx, noop_sink());
 
@@ -430,11 +529,11 @@ mod tests {
         );
     }
 
-    // --- 3b. sakura 切断: StartTalk 送出失敗 → error!＋運行継続（終了しない）→ Close で停止 ---
+    // --- 3b. sakura 切断: `TalkCommand::Start` 送出失敗 → error!＋運行継続（終了しない）→ Close で停止 ---
 
     #[test]
     fn sakura_disconnected_start_talk_failure_continues_run() {
-        // OnBoot（BootMain の GET）に Value を返す mock shiori: これで StartTalk が発行される。
+        // OnBoot（BootMain の GET）に Value を返す mock shiori: これで起動指示が発行される。
         let (shiori_tx, _rec_rx, shiori_handle) = spawn_mock_shiori(|rec| match rec {
             Recorded::Notify(_) => ShioriOutcome::Notified,
             Recorded::Unload => ShioriOutcome::Unloaded,
@@ -444,13 +543,13 @@ mod tests {
             Recorded::Close => ShioriOutcome::Notified,
         });
 
-        // sakura の Receiver を即 drop → StartTalk 送出は必ず失敗する。
-        let (sakura_tx, sakura_rx) = mpsc::channel::<StartTalk>();
+        // sakura の Receiver を即 drop → talk 指示の送出は必ず失敗する。
+        let (sakura_tx, sakura_rx) = mpsc::channel::<TalkCommand>();
         drop(sakura_rx);
 
         let (kanade_tx, kanade_handle) = spawn_kanade(config(), shiori_tx, sakura_tx, noop_sink());
 
-        // Boot → boot 系列を最後まで駆動（OnBoot Value で StartTalk 送出失敗するが継続）。
+        // Boot → boot 系列を最後まで駆動（OnBoot Value で起動指示の送出が失敗するが継続）。
         kanade_tx.send(KanadeMsg::Boot).expect("send Boot");
         // 運行が継続していることを確認するため、Close で明示的に停止させる。
         kanade_tx.send(KanadeMsg::Close).expect("send Close");
@@ -462,7 +561,7 @@ mod tests {
             move || {
                 kanade_handle
                     .join()
-                    .expect("kanade continues past StartTalk failure, then stops on Close");
+                    .expect("kanade continues past TalkCommand send failure, then stops on Close");
             },
         );
         drop(shiori_handle);
@@ -476,7 +575,7 @@ mod tests {
         use crate::msg::{MouseButton, MouseEventKind, MouseInput};
 
         let (shiori_tx, rec_rx, shiori_handle) = spawn_mock_shiori(benign);
-        let (sakura_tx, _sakura_rx) = mpsc::channel::<StartTalk>();
+        let (sakura_tx, _sakura_rx) = mpsc::channel::<TalkCommand>();
 
         let (kanade_tx, kanade_handle) = spawn_kanade(config(), shiori_tx, sakura_tx, noop_sink());
 
@@ -515,7 +614,7 @@ mod tests {
     #[test]
     fn force_quit_emits_onclose_notify_then_unload_then_close_in_order() {
         let (shiori_tx, rec_rx, shiori_handle) = spawn_mock_shiori(benign);
-        let (sakura_tx, _sakura_rx) = mpsc::channel::<StartTalk>();
+        let (sakura_tx, _sakura_rx) = mpsc::channel::<TalkCommand>();
 
         let (kanade_tx, kanade_handle) = spawn_kanade(config(), shiori_tx, sakura_tx, noop_sink());
 
@@ -576,7 +675,7 @@ mod tests {
     /// テスト用 GET 呼出（round_trip_request の入力・内容は本テストで load-bearing でない）。
     fn probe_get_call() -> ShioriCall {
         ShioriCall::Get {
-            id: "OnBoot",
+            id: EventId::Static("OnBoot"),
             references: vec!["master".to_string()],
             status: ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE),
         }
@@ -642,6 +741,54 @@ mod tests {
         helper.join().expect("reply-drop helper joins cleanly");
     }
 
+    // --- 6. talk 指示送出の失敗ログ＋運行継続（タスク 1.4・Req 4.4／5.6・design C6） ---
+    //
+    // talk 再生系へ出る唯一の実行点 `send_talk_command` を**直接**呼び、受信端が切断された
+    // 状態で (i) 規約の `error!`（event=talk_command_send_failed）を発火し、(ii) 返り値も
+    // panic も持たず呼び手が運行を継続できる（＝既存の起動失敗規律と同一の扱い）ことを固定する。
+    // ヘルパは同期関数ゆえログはテストスレッドで発行され log_capture で確実に捕捉される。
+
+    #[test]
+    fn talk_command_send_failure_logs_error_and_continues() {
+        use crate::talk::{StartTalk, TalkId};
+
+        let (sakura_tx, sakura_rx) = mpsc::channel::<TalkCommand>();
+        drop(sakura_rx); // 送出は必ず Err。
+
+        let events = capture(|| {
+            // 3 形すべてが同一の失敗規律（error! ＋継続）を通る。
+            send_talk_command(
+                &sakura_tx,
+                TalkCommand::Start(StartTalk::new(TalkId(1), r"\e")),
+            );
+            send_talk_command(
+                &sakura_tx,
+                TalkCommand::ResolveChoice {
+                    talk_id: TalkId(1),
+                    id: "x".to_string(),
+                },
+            );
+            send_talk_command(
+                &sakura_tx,
+                TalkCommand::CancelChoice {
+                    talk_id: TalkId(1),
+                },
+            );
+        });
+
+        // 規約の error! 発火（削除・語彙変更・レベル変更で失敗する回帰檻）。
+        assert_logged(&events, Level::ERROR, "talk_command_send_failed");
+        // 3 回とも記録される（黙って捨てる経路が 1 本も無い・log-first）。
+        assert_eq!(
+            events
+                .iter()
+                .filter(|e| e.event.as_deref() == Some("talk_command_send_failed"))
+                .count(),
+            3,
+            "3 形すべての送出失敗が個別に記録されるべき（沈黙の失敗経路なし）"
+        );
+    }
+
     // --- 7. egress チョークポイント判断分岐檻（タスク 2.5・Req 3.1／3.2／6.2・DD-IT-7／DD-IT-11） ---
     //
     // SHIORI へ出る唯一の実行点 `round_trip_request` を**直接**呼び、送出 ID の許可判定という
@@ -689,7 +836,7 @@ mod tests {
                 outcome = Some(round_trip_request(
                     &shiori_tx,
                     ShioriCall::Get {
-                        id: forbidden,
+                        id: EventId::Static(forbidden),
                         references: vec!["master".to_string()],
                         status: ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE),
                     },
@@ -727,7 +874,7 @@ mod tests {
     /// テスト用のリソース GET 呼出（M1 リソース ID `username`）。
     fn probe_resource_call(id: &'static str) -> ShioriCall {
         ShioriCall::Get {
-            id,
+            id: EventId::Static(id),
             references: vec!["master".to_string()],
             status: ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE),
         }
@@ -829,7 +976,7 @@ mod tests {
             Recorded::Get(_) => ShioriOutcome::NoContent,
             Recorded::Close => ShioriOutcome::Notified,
         });
-        let (sakura_tx, _sakura_rx) = mpsc::channel::<StartTalk>();
+        let (sakura_tx, _sakura_rx) = mpsc::channel::<TalkCommand>();
 
         // 記録 sink: 呼出 (id, outcome) を蓄積する（同期呼出・別スレッドから）。
         let seen: Arc<Mutex<Vec<(&'static str, ResourceOutcome)>>> = Arc::new(Mutex::new(Vec::new()));
@@ -875,6 +1022,297 @@ mod tests {
             "ResourceSink は ('username', Value(\"bob\")) でちょうど 1 回呼ばれるべき（R4.1）"
         );
 
+        drop(shiori_handle);
+    }
+
+    // --- 10. egress ガードの出所カテゴリ分岐（タスク 2.3・Req 2.6／2.9・design C6／DD-2／裁定 8） ---
+    //
+    // submit ガードが `EventId` の出所カテゴリ別 match へ変わったことを、両カテゴリの実送出パスから
+    // 檻に入れる。スケジューラ起源（`Static`）は固定表 ∨ リソース表で従来どおり——`OnTalk`／`OnHour`
+    // の恒久禁止は不変（セクション 7 (b) が保存）——選択起源（`Choice`）は `On` 接頭のみで受理し、
+    // 恒久禁止 ID であっても逐語で送出される（Req2.9・恒久禁止の根拠は選択起源に該当しない）。
+
+    /// テスト用の選択起源 GET 呼出（任意名イベント・[`EventId::Choice`]）。
+    fn probe_choice_call(id: &str) -> ShioriCall {
+        ShioriCall::Get {
+            id: EventId::Choice(id.to_string()),
+            references: Vec::new(),
+            status: ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE),
+        }
+    }
+
+    // (a) 選択起源の恒久禁止 ID（OnTalk／OnHour）→ ガードを通過して逐語で送出される（Req2.9）。
+    //     同じ ID がスケジューラ起源では拒否されること（セクション 7 (b) の既存檻）と対になる、
+    //     完了状態が要求する「両方向」の許可側。
+    #[test]
+    fn choice_origin_scheduler_forbidden_ids_are_sent_verbatim() {
+        for forbidden_for_scheduler in ["OnTalk", "OnHour"] {
+            let (shiori_tx, rec_rx, shiori_handle) = spawn_mock_shiori(benign);
+
+            let outcome = round_trip_request(&shiori_tx, probe_choice_call(forbidden_for_scheduler));
+
+            assert!(
+                matches!(outcome, ShioriOutcome::NoContent),
+                "{forbidden_for_scheduler} は選択起源なら送出され mock の良性応答が返るべき（Req2.9）"
+            );
+            // wire へ載る ID は逐語（イベント名の書き換え・別 ID への写像をしない・Req2.6）。
+            assert_eq!(
+                rec_rx
+                    .recv_timeout(Duration::from_secs(5))
+                    .expect("選択起源の許可 ID はチャネルへ送出され mock が受領するはず"),
+                Recorded::Get(forbidden_for_scheduler.to_string())
+            );
+
+            drop(shiori_tx);
+            drop(shiori_handle);
+        }
+    }
+
+    // (a') 対の拒否側（Req2.9 の非交差を 1 テスト内で明示）: 同じ `OnTalk` でもスケジューラ起源は
+    //      従来どおり送出されず `event_id_not_allowed` を記録して Failed(Internal) へ写像される。
+    #[test]
+    fn same_id_is_allowed_from_choice_origin_and_rejected_from_scheduler_origin() {
+        // 選択起源: 送出される。
+        let (choice_tx, choice_rx, choice_handle) = spawn_mock_shiori(benign);
+        let choice_outcome = round_trip_request(&choice_tx, probe_choice_call("OnTalk"));
+        assert!(
+            matches!(choice_outcome, ShioriOutcome::NoContent),
+            "OnTalk は選択起源なら送出されるべき（Req2.9）"
+        );
+        assert_eq!(
+            choice_rx
+                .recv_timeout(Duration::from_secs(5))
+                .expect("選択起源 OnTalk はチャネルへ送出されるはず"),
+            Recorded::Get("OnTalk".to_string())
+        );
+        drop(choice_tx);
+        drop(choice_handle);
+
+        // スケジューラ起源: 送出されず error!＋Failed(Internal)（恒久禁止は Static 側で不変）。
+        let (static_tx, static_rx, static_handle) = spawn_mock_shiori(benign);
+        let mut static_outcome: Option<ShioriOutcome> = None;
+        let events = capture(|| {
+            static_outcome = Some(round_trip_request(
+                &static_tx,
+                ShioriCall::Get {
+                    id: EventId::Static("OnTalk"),
+                    references: Vec::new(),
+                    status: ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE),
+                },
+            ));
+        });
+        assert!(
+            matches!(
+                static_outcome,
+                Some(ShioriOutcome::Failed(ShioriFailure::Internal(_)))
+            ),
+            "OnTalk はスケジューラ起源では従来どおり Failed(Internal) へ写像されるべき（Req3.2）"
+        );
+        assert_logged(&events, Level::ERROR, "event_id_not_allowed");
+        assert!(
+            static_rx.try_recv().is_err(),
+            "スケジューラ起源 OnTalk はチャネルへ送出されてはならない（Req3.2）"
+        );
+        drop(static_tx);
+        drop(static_handle);
+    }
+
+    // (b) 選択起源の `On` 非接頭 ID → 送出されず `event_id_not_allowed` を記録して
+    //     Failed(Internal) へ写像される（受理規則違反も従来どおりの拒否語彙・design C6）。
+    #[test]
+    fn choice_origin_without_on_prefix_is_not_sent_and_logs_error() {
+        for rejected in ["foo", "on", ""] {
+            let (shiori_tx, rec_rx, shiori_handle) = spawn_mock_shiori(benign);
+
+            let mut outcome: Option<ShioriOutcome> = None;
+            let events = capture(|| {
+                outcome = Some(round_trip_request(&shiori_tx, probe_choice_call(rejected)));
+            });
+
+            assert!(
+                matches!(
+                    outcome,
+                    Some(ShioriOutcome::Failed(ShioriFailure::Internal(_)))
+                ),
+                "{rejected:?} は On 接頭でないゆえ送出せず Failed(Internal) へ写像されるべき"
+            );
+            assert_logged(&events, Level::ERROR, "event_id_not_allowed");
+            assert!(
+                rec_rx.try_recv().is_err(),
+                "{rejected:?} はチャネルへ送出されてはならない"
+            );
+
+            drop(shiori_tx);
+            drop(shiori_handle);
+        }
+    }
+
+    // (c) 境界入力: 選択起源の `"On"` 単独は受理され送出される（接頭辞判定ただ 1 条件の境界）。
+    #[test]
+    fn choice_origin_bare_on_is_accepted_and_sent() {
+        let (shiori_tx, rec_rx, shiori_handle) = spawn_mock_shiori(benign);
+
+        let outcome = round_trip_request(&shiori_tx, probe_choice_call("On"));
+
+        assert!(
+            matches!(outcome, ShioriOutcome::NoContent),
+            "\"On\" 単独は On 接頭ゆえ受理され送出されるべき（境界入力）"
+        );
+        assert_eq!(
+            rec_rx
+                .recv_timeout(Duration::from_secs(5))
+                .expect("\"On\" はチャネルへ送出され mock が受領するはず"),
+            Recorded::Get("On".to_string())
+        );
+
+        drop(shiori_tx);
+        drop(shiori_handle);
+    }
+
+    // (d) 選択関連の固定 3 ID は**スケジューラ起源**（`Static`）として送出される（DD-2 の表追加）。
+    #[test]
+    fn choice_fixed_ids_pass_the_static_guard_and_are_sent() {
+        for id in ["OnChoiceSelectEx", "OnChoiceSelect", "OnChoiceTimeout"] {
+            let (shiori_tx, rec_rx, shiori_handle) = spawn_mock_shiori(benign);
+
+            let outcome = round_trip_request(
+                &shiori_tx,
+                ShioriCall::Get {
+                    id: EventId::Static(id),
+                    references: vec!["ID".to_string()],
+                    status: ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE),
+                },
+            );
+
+            assert!(
+                matches!(outcome, ShioriOutcome::NoContent),
+                "{id} は許可表に載ったため Static ガードを通過して送出されるべき（DD-2）"
+            );
+            assert_eq!(
+                rec_rx
+                    .recv_timeout(Duration::from_secs(5))
+                    .expect("固定 3 ID はチャネルへ送出され mock が受領するはず"),
+                Recorded::Get(id.to_string())
+            );
+
+            drop(shiori_tx);
+            drop(shiori_handle);
+        }
+    }
+
+    // --- 11. Action → TalkCommand 写像（タスク 4.1・design C6・Req4.4） ---
+    //
+    // drive の Action バッチ実行本体（[`execute_actions`]）を**直接**呼び、選択系 2 Action が
+    // `TalkCommand::{ResolveChoice, CancelChoice}` へそのまま包まれて単一チャンネルへ出ることを
+    // 実行で観測する。発行点は `ResolveChoice`＝選択調停（steady・タスク 4.3）・`CancelChoice`
+    // ＝タイムアウト解除（steady・タスク 4.5）と別々の入力に分かれており、`step` 経由では 3 形を
+    // 1 バッチに揃えて駆動できない（順序保存の契約は 1 バッチでしか観測できない）。写像を担う
+    // 実コードはここで通る（檻専用の写像を別に作らない）。
+
+    /// 檻用の talk 指示 3 形バッチ（投函順が下流での観測順である＝順序保存の契約）。
+    fn talk_action_batch() -> Vec<Action> {
+        use crate::talk::{StartTalk, TalkId};
+        vec![
+            Action::ResolveChoice {
+                talk_id: TalkId(7),
+                id: "OnMenu".to_string(),
+            },
+            Action::StartTalk(StartTalk::new(TalkId(8), r"\0next\e")),
+            Action::CancelChoice {
+                talk_id: TalkId(8),
+            },
+        ]
+    }
+
+    #[test]
+    fn choice_actions_map_to_talk_commands_and_preserve_order() {
+        use crate::talk::TalkId;
+
+        let (shiori_tx, _rec_rx, shiori_handle) = spawn_mock_shiori(benign);
+        let (sakura_tx, sakura_rx) = mpsc::channel::<TalkCommand>();
+
+        let result = execute_actions(talk_action_batch(), &shiori_tx, &sakura_tx, &noop_sink());
+
+        assert!(
+            result.last_reply.is_none(),
+            "talk 指示は SHIORI 往復を起こさない（再投入対象にならない）"
+        );
+        assert!(!result.stop, "talk 指示は停止要求ではない");
+
+        let got: Vec<TalkCommand> = sakura_rx.try_iter().collect();
+        assert_eq!(got.len(), 3, "3 形すべてが同一チャンネルへ送出される");
+        match &got[0] {
+            TalkCommand::ResolveChoice { talk_id, id } => {
+                assert_eq!(*talk_id, TalkId(7), "ResolveChoice の talk_id をそのまま包む");
+                assert_eq!(id, "OnMenu", "ResolveChoice の id をそのまま包む");
+            }
+            other => panic!("commands[0] は ResolveChoice のはず: {other:?}"),
+        }
+        match &got[1] {
+            TalkCommand::Start(start) => {
+                assert_eq!(start.talk_id, TalkId(8), "既存 StartTalk 写像は不変");
+                assert_eq!(start.script, r"\0next\e");
+            }
+            other => panic!("commands[1] は Start のはず: {other:?}"),
+        }
+        match &got[2] {
+            TalkCommand::CancelChoice { talk_id } => {
+                assert_eq!(*talk_id, TalkId(8), "CancelChoice の talk_id をそのまま包む");
+            }
+            other => panic!("commands[2] は CancelChoice のはず: {other:?}"),
+        }
+
+        drop(shiori_tx);
+        drop(shiori_handle);
+    }
+
+    // 送出失敗（受信端 drop）でも `error!(talk_command_send_failed)` を残して**バッチ実行は継続**する
+    // （design「Error Strategy」: 選択・再生の失敗でゴーストを終了させない）。継続の証跡として、
+    // 失敗する talk 指示 2 件の**後ろ**に置いた ShioriUnload が実行され last_reply が満ちることを見る。
+    #[test]
+    fn talk_command_send_failure_does_not_abort_the_action_batch() {
+        use crate::talk::TalkId;
+
+        let (shiori_tx, _rec_rx, shiori_handle) = spawn_mock_shiori(benign);
+        let (sakura_tx, sakura_rx) = mpsc::channel::<TalkCommand>();
+        drop(sakura_rx); // talk 指示の送出は必ず Err。
+
+        let mut result: Option<BatchResult> = None;
+        let events = capture(|| {
+            result = Some(execute_actions(
+                vec![
+                    Action::ResolveChoice {
+                        talk_id: TalkId(7),
+                        id: "OnMenu".to_string(),
+                    },
+                    Action::CancelChoice {
+                        talk_id: TalkId(7),
+                    },
+                    Action::ShioriUnload,
+                ],
+                &shiori_tx,
+                &sakura_tx,
+                &noop_sink(),
+            ));
+        });
+
+        assert_logged(&events, Level::ERROR, "talk_command_send_failed");
+        assert_eq!(
+            events
+                .iter()
+                .filter(|e| e.event.as_deref() == Some("talk_command_send_failed"))
+                .count(),
+            2,
+            "選択系 2 形の送出失敗が個別に記録される（沈黙の失敗経路なし）"
+        );
+        let result = result.expect("execute_actions returns");
+        assert!(
+            matches!(result.last_reply, Some((ShioriOutcome::Unloaded, "Unload"))),
+            "送出失敗の後ろに置いた Action も実行される＝バッチは中断しない（運行継続）"
+        );
+        assert!(!result.stop);
+
+        drop(shiori_tx);
         drop(shiori_handle);
     }
 }

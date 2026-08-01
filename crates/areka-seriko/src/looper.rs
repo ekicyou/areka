@@ -25,7 +25,7 @@
 //!
 //! bind の書込 API（`apply_bind` 等）は一切呼ばない（read-only 参照のみ・要件 3.3）。
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use areka_emo_compose::PatternFrame;
 use areka_sakura::ActorKey;
@@ -35,16 +35,26 @@ use crate::state::{PatternApplyOutcome, ScopeStates, Slot};
 use crate::table::{AnimationTable, LoopFrame, LoopTrigger};
 use crate::timeline::{frame_at, seeded_rng, should_fire, FrameStatus, LoopRng, LotteryBoundary};
 
-/// SERIKO ループ構成（表 2 面＋乱数注入シーム）。boot 時に組み立てて [`LoopRuntime`] へ値渡しする。
+/// SERIKO ループ構成（シェル表 1 面＋scope 別バルーン表＋乱数注入シーム）。boot 時に組み立てて
+/// [`LoopRuntime`] へ値渡しする。
 ///
-/// `shell_table`／`balloon_table` は **surface ID 名前空間の別**であり能力の仕切りではない
-/// （面種非依存・裁定 (a)）。emo2 は `balloon_table` が空（データ事実）。`rng` はコンストラクタ注入で、
-/// 評価経路に実 entropy への直接依存を持たない（要件 7.1）。
+/// `shell_table`／`balloon_tables` は **surface ID 名前空間の別**であり能力の仕切りではない
+/// （面種非依存・裁定 (a)）。emo2 は `balloon_tables` が全 scope 空（データ事実）。`rng` は
+/// コンストラクタ注入で、評価経路に実 entropy への直接依存を持たない（要件 7.1）。
+///
+/// バルーン表だけが scope キーの写像である理由: シェル面は全 scope が同一 `Shell` から build される
+/// ゆえ表の内容が scope 非依存（単数で足りる）。対してバルーン面は scope ごとに解決される系列
+/// （`balloons*`／`balloonk*` 等）が異なるため、ある scope のバルーンが別 scope の系列由来の定義で
+/// 駆動されないことを型で禁じる（要件 5.6）。
 pub struct SerikoLoopConfig {
-    /// シェル表示エントリ用のアニメ表（surface ID 名前空間: shell）。
+    /// シェル表示エントリ用のアニメ表（surface ID 名前空間: shell・全 scope 共通）。
     pub shell_table: AnimationTable,
-    /// バルーン表示エントリ用のアニメ表（surface ID 名前空間: balloon）。emo2 は空。
-    pub balloon_table: AnimationTable,
+    /// バルーン表示エントリ用の scope 別アニメ表（surface ID 名前空間: balloon・要件 5.6）。
+    ///
+    /// キーは `ActorKey`（boot 側の `u32` scope は転送時に `ActorKey::from(scope.to_string())` で
+    /// 変換する＝attach／再追従と同一の既存写像語彙）。**不在 scope は空表意味論**（抽選対象ゼロ・
+    /// 乱数非消費・panic なし）。emo2 は全 scope 空。
+    pub balloon_tables: BTreeMap<ActorKey, AnimationTable>,
     /// 1/N 抽選の乱数注入シーム（本番は `seeded_rng(seed)`・テストは注入列）。
     pub rng: LoopRng,
 }
@@ -52,12 +62,12 @@ pub struct SerikoLoopConfig {
 impl SerikoLoopConfig {
     /// 空表＋ダミー乱数（ループ完全不活性）。既存テスト・非 emo2 経路の非退行用。
     ///
-    /// 表が空ゆえ抽選対象アニメが常にゼロ＝[`should_fire`] は決して呼ばれず乱数は消費されない
-    /// （ダミー種は観測に現れない）。`on_tick` は常に空を返す（非退行）。
+    /// シェル表が空・バルーン表の写像も空ゆえ抽選対象アニメが常にゼロ＝[`should_fire`] は決して
+    /// 呼ばれず乱数は消費されない（ダミー種は観測に現れない）。`on_tick` は常に空を返す（非退行）。
     pub fn disabled() -> Self {
         Self {
             shell_table: AnimationTable::empty(),
-            balloon_table: AnimationTable::empty(),
+            balloon_tables: BTreeMap::new(),
             rng: seeded_rng(0),
         }
     }
@@ -164,9 +174,12 @@ impl LoopRuntime {
         } = self;
         let SerikoLoopConfig {
             shell_table,
-            balloon_table,
+            balloon_tables,
             rng,
         } = config;
+        // 不在 scope へ貸す空表（抽選対象ゼロ・乱数非消費・panic なし＝`disabled()` と同じ不活性・
+        // 要件 5.6）。`BTreeMap::new()` は確保を伴わないため tick ごとの構築コストは無い。
+        let empty_balloon_table = AnimationTable::empty();
 
         // 表示中 slot を列挙し、固定消費順（scope 昇順→Shell→Balloon）へ整列する（D-7）。
         let mut shown = states.shown_slots();
@@ -177,7 +190,8 @@ impl LoopRuntime {
             for (scope, slot, sid) in &shown {
                 let table: &AnimationTable = match slot {
                     Slot::Shell => &*shell_table,
-                    Slot::Balloon => &*balloon_table,
+                    // scope キー表引き（要件 5.6）。不在 scope は空表＝抽選対象ゼロ・乱数非消費。
+                    Slot::Balloon => balloon_tables.get(scope).unwrap_or(&empty_balloon_table),
                 };
                 // animation id 昇順で消費（固定順・D-7）。
                 let mut anims: Vec<&crate::table::LoopAnimation> =
@@ -233,7 +247,9 @@ impl LoopRuntime {
             }
             let table: &AnimationTable = match slot {
                 Slot::Shell => &*shell_table,
-                Slot::Balloon => &*balloon_table,
+                // 抽選相と同一の scope キー表引き（要件 5.6）。不在 scope は空表ゆえ下の
+                // 「表に無い」防御腕へ落ち、playback とコマが除去される（panic なし）。
+                Slot::Balloon => balloon_tables.get(scope).unwrap_or(&empty_balloon_table),
             };
 
             // 残留（非再生アニメのコマ）を保つため現 PatternState から開始し、再生中アニメのみを更新する。
@@ -472,10 +488,11 @@ mod tests {
         (states, scope)
     }
 
+    /// shell 表＋注入乱数から config を組む（バルーン表の写像は空＝全 scope 不活性）。
     fn cfg(shell_table: AnimationTable, rng: LoopRng) -> SerikoLoopConfig {
         SerikoLoopConfig {
             shell_table,
-            balloon_table: AnimationTable::empty(),
+            balloon_tables: BTreeMap::new(),
             rng,
         }
     }
@@ -730,13 +747,13 @@ mod tests {
         let balloon_t = table_single(20, 1, Interval::Random { k: 4 }, &[(3000, 0)]);
         // 消費列 [0, 1]: Shell(先) 発火・Balloon(後) 非発火。
         let (rng, probe) = counting_rng(&[0, 1]);
+        let scope = ActorKey::from("0");
         let mut rt = LoopRuntime::new(SerikoLoopConfig {
             shell_table: shell_t,
-            balloon_table: balloon_t,
+            balloon_tables: BTreeMap::from([(scope.clone(), balloon_t)]),
             rng,
         });
         let mut states = ScopeStates::new(BindSet::from_ids([]));
-        let scope = ActorKey::from("0");
         states.apply(&scope, SurfaceTarget::Show(10)); // Shell shown surface 10
         states.apply_balloon(&scope, SurfaceTarget::Show(20)); // Balloon shown surface 20
 
@@ -748,6 +765,85 @@ mod tests {
             matches!(&cmds[0], DisplayCommand::Show { .. }),
             "発火したのは Shell（Show）＝Shell が Balloon より先に消費（D-7）"
         );
+    }
+
+    // ── scope キー表引き（バルーン表・檻 10・要件 5.6） ──────────────────────
+
+    /// バルーン表は scope ごとに独立に引かれる（要件 5.6）。同一 surface id・同一 animation id でも、
+    /// scope 0 は自 scope の表のコマ、scope 1 は自 scope の表のコマで駆動される
+    /// （ある scope が別 scope の系列由来の定義で駆動されないことの反証）。
+    #[test]
+    fn balloon_tables_are_looked_up_per_scope() {
+        // 同じ surface 20・同じ anim id 1 でありながら、コマの surface_id が表ごとに異なる。
+        let t0 = table_single(20, 1, Interval::Random { k: 4 }, &[(3000, 0)]);
+        let t1 = table_single(20, 1, Interval::Random { k: 4 }, &[(4000, 0)]);
+        let mut rt = LoopRuntime::new(SerikoLoopConfig {
+            shell_table: AnimationTable::empty(),
+            balloon_tables: BTreeMap::from([(ActorKey::from("0"), t0), (ActorKey::from("1"), t1)]),
+            rng: always_fire(),
+        });
+        let mut states = ScopeStates::new(BindSet::from_ids([]));
+        let s0 = ActorKey::from("0");
+        let s1 = ActorKey::from("1");
+        states.apply_balloon(&s0, SurfaceTarget::Show(20));
+        states.apply_balloon(&s1, SurfaceTarget::Show(20));
+
+        rt.on_tick(0, &mut states);
+        let cmds = rt.on_tick(1000, &mut states);
+        assert_eq!(cmds.len(), 2, "両 scope が自 scope の表で発火（scope 昇順）");
+        match &cmds[0] {
+            DisplayCommand::ShowBalloon { scope, pattern, .. } => {
+                assert_eq!(scope, &s0);
+                assert_eq!(
+                    pattern.get(1).expect("scope0 anim1 の現在コマ").surface_id,
+                    3000,
+                    "scope0 は scope0 の表のコマ（要件 5.6）"
+                );
+            }
+            other => panic!("ShowBalloon を期待: {other:?}"),
+        }
+        match &cmds[1] {
+            DisplayCommand::ShowBalloon { scope, pattern, .. } => {
+                assert_eq!(scope, &s1);
+                assert_eq!(
+                    pattern.get(1).expect("scope1 anim1 の現在コマ").surface_id,
+                    4000,
+                    "scope1 は scope1 の表のコマ＝scope0 の表とは独立に引かれる（要件 5.6）"
+                );
+            }
+            other => panic!("ShowBalloon を期待: {other:?}"),
+        }
+    }
+
+    /// 表を持たない scope のバルーンは**空表意味論＝不活性**（抽選対象ゼロ・**乱数非消費**・panic なし・
+    /// 要件 5.6）。他 scope が表を持っていても、その表が不在 scope へ流用されることはない。
+    #[test]
+    fn absent_scope_balloon_table_is_inert() {
+        // 表は scope "0" だけが持ち、表示するのは表を持たない scope "1" のバルーンのみ。
+        let t0 = table_single(20, 1, Interval::Random { k: 4 }, &[(3000, 0)]);
+        let (rng, probe) = counting_rng(&[0, 0]); // もし引かれれば発火してしまう値
+        let mut rt = LoopRuntime::new(SerikoLoopConfig {
+            shell_table: AnimationTable::empty(),
+            balloon_tables: BTreeMap::from([(ActorKey::from("0"), t0)]),
+            rng,
+        });
+        let mut states = ScopeStates::new(BindSet::from_ids([]));
+        let s1 = ActorKey::from("1");
+        states.apply_balloon(&s1, SurfaceTarget::Show(20));
+
+        rt.on_tick(0, &mut states);
+        assert!(
+            rt.on_tick(1000, &mut states).is_empty(),
+            "不在 scope は抽選対象ゼロ＝無発行（要件 5.6）"
+        );
+        assert_eq!(
+            probe.lock().unwrap().calls,
+            0,
+            "不在 scope は乱数を消費しない（空表意味論・要件 5.6）"
+        );
+        // さらに境界を跨いでも不活性のまま（panic せず無発行・非消費）。
+        assert!(rt.on_tick(2000, &mut states).is_empty());
+        assert_eq!(probe.lock().unwrap().calls, 0);
     }
 
     // ── on_surface_changed / 単調性ガード ──────────────────────────────────

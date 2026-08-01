@@ -100,7 +100,7 @@ fn drive_full_run() {
         expected_call(events::on_boot(&config, &ExecutionSnapshot::INACTIVE)), // GET →Value
         expected_call(events::baseware_version(
             &config,
-            &ExecutionSnapshot { talk_active: true },
+            &ExecutionSnapshot { talk_active: true, choice_active: false },
         )), // NOTIFY（Status: talking）
     ];
     assert!(

@@ -188,11 +188,11 @@ fn table_single(surface_id: u32, anim_id: u32, interval: Interval, frames: &[(i6
     shell_table(vec![surface_with(surface_id, vec![anim(anim_id, interval, frames)])])
 }
 
-/// shell 表＋注入乱数から config を組む（balloon 表は空＝emo2 データ事実）。
+/// shell 表＋注入乱数から config を組む（バルーン表の写像は空＝emo2 データ事実・全 scope 不活性）。
 fn cfg(shell_table: AnimationTable, rng: LoopRng) -> SerikoLoopConfig {
     SerikoLoopConfig {
         shell_table,
-        balloon_table: AnimationTable::empty(),
+        balloon_tables: BTreeMap::new(),
         rng,
     }
 }

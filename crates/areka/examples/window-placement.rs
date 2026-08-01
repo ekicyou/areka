@@ -314,7 +314,7 @@ fn build_and_spawn(world: &mut World) {
 
         // バルーン窓 target（TargetId = 2*scope+1・balloon surface0＝balloons0.png）。
         if let Some(balloon_e) = windows.balloon_window(scope) {
-            match build_balloon_target(&balloon_dir, &decoder) {
+            match build_balloon_target(&balloon_dir, &decoder, 0) {
                 Ok((b_world, b_table)) => pending.push(PendingTarget {
                     target: TargetId((scope as u32) * 2 + 1),
                     window: balloon_e,

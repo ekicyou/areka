@@ -18,11 +18,14 @@
 //! 失敗経路は存在しない。panic は新規導入しない（回復不能はすべて
 //! `Unloading{Fault}`→`Stopped` の正規遷移で表現する・Req 6.4）。
 
-use crate::msg::{CloseReason, KanadeConfig, MonotonicMs, MouseInput, ShioriCall, ShioriOutcome};
+use crate::msg::{
+    ChoiceInput, CloseReason, KanadeConfig, MonotonicMs, MouseInput, ShioriCall, ShioriOutcome,
+};
 use crate::status::ExecutionSnapshot;
 use crate::talk::{StartTalk, TalkDone, TalkEndReason, TalkId};
 
 pub(crate) mod boot;
+pub(crate) mod choice;
 pub(crate) mod close;
 /// タスク 6.1: 純粋 step 層の失敗・防御アームのログ発火検証（テスト専用）。
 #[cfg(test)]
@@ -56,6 +59,23 @@ pub(crate) enum Input {
         outcome: ShioriOutcome,
         origin: &'static str,
     },
+    /// 選択確定（バルーン上で確定した選択肢・UI 配線層 → kanade）。additive 増分（Req 4.4）。
+    ///
+    /// 受領検証（選択待ちの有無・talk_id 突合・候補集合照合）とカスケード駆動は
+    /// [`steady::on_choice`]（C4 規則 1／2）が持つ。Steady のみ委譲し、他フェーズは状態を
+    /// 変えず warn 記録の上で棄却する。
+    Choice(ChoiceInput),
+    /// 選択待ち成立の通知（talk → dispatcher → kanade）。additive 増分（Req 4.4）。
+    ///
+    /// `display_end` は dispatcher が `base_now` で単調 ms へ換算済み（DD-9・時間基準を新設しない）。
+    /// `timeout_directive_secs` から期限への写像は [`choice::choice_deadline`]（DD-8）が担い、
+    /// 帳簿確立は [`steady::on_choice_waiting`]（C4 規則 4）が行う。
+    ChoiceWaiting {
+        talk_id: TalkId,
+        choice_ids: Vec<String>,
+        display_end: MonotonicMs,
+        timeout_directive_secs: Option<f64>,
+    },
 }
 
 /// 運行フェーズ（可視化は System Flows の状態機械図）。各待ち点は「直前に発行した
@@ -83,6 +103,46 @@ pub(crate) enum Phase {
 pub(crate) struct ActiveTalk {
     pub talk_id: TalkId,
     pub origin: &'static str,
+    /// 当該 talk の起動スクリプト（`OnChoiceTimeout` の Reference0 供給源・DD-10）。
+    ///
+    /// **kanade が [`StartTalk`] で自ら作った値**の保持であり、新しい情報源ではない
+    /// （通知同梱にせず kanade 内で完結させる・Req3.4）。Ref0 への割付はタスク 4.5。
+    pub script: String,
+}
+
+/// 選択待ち〜choice 系 in-flight の帳簿（DD-3）。
+///
+/// **バリア状態の複製ではなく kanade 側の配送状態**である（再生層のバリアは sakura が所有し、
+/// 解決は [`Action::ResolveChoice`] という正規入力経路でのみ行う・Req5.6）。[`Phase`] を一切
+/// 触らず [`State`] へ置くのは `pending_close` と同型の扱いであり、Req4.4「既存の決定的状態機械の
+/// 観測資産を変更しない」に最忠実な形である（DD-3）。
+pub(crate) struct ChoiceState {
+    /// 対象 talk（`ActiveTalk.talk_id` と一致することが不変条件）。
+    pub talk_id: TalkId,
+    /// 照合用の候補選択肢 ID 列（表示順を保存・DD-7）。
+    pub candidates: Vec<String>,
+    /// 選択待ちの期限（`None`＝無期限。DD-8 の写像済み値）。
+    pub deadline: Option<MonotonicMs>,
+    /// 帳簿の段フェーズ。
+    pub phase: ChoicePhase,
+}
+
+/// 選択帳簿の段フェーズ（`Cascading`／`TimeoutInFlight` は drive 内で同期完結する応答待ち）。
+pub(crate) enum ChoicePhase {
+    /// 選択確定の入力待ち。
+    Waiting,
+    /// カスケード段の SHIORI 応答待ち（`next`＝残段）。
+    Cascading {
+        choice_id: String,
+        next: Option<CascadeNext>,
+    },
+    /// `OnChoiceTimeout` の応答待ち。
+    TimeoutInFlight,
+}
+
+/// カスケードの残段（M1 は正典形の無印 1 段のみ・裁定 2）。
+pub(crate) enum CascadeNext {
+    Select,
 }
 
 /// 運行状態の全体（[`step`] の唯一の被写体）。Phase 外の帳簿はここに置く。
@@ -94,10 +154,21 @@ pub(crate) struct State {
     pub next_talk_id: u64,
     /// boot 中・active talk 中に受領した close 指示の保留（System Flows 補足遷移）。
     pub pending_close: Option<CloseReason>,
+    /// 選択待ち〜choice 系 in-flight の帳簿（`pending_close` と同型に Phase 外へ置く・DD-3）。
+    pub choice: Option<ChoiceState>,
+    /// choice 起因の slot 差替で失われた旧 talk_id を 1 世代だけ保持する枠（F1 残余レース対策）。
+    ///
+    /// 遅れて届く旧 talk の `TalkDone` を `unknown_talk_done`（error）ではなく
+    /// `talk_done_stale_choice`（info）で捌くための照合先（[`on_talk_done`] の防御アーム）。
+    ///
+    /// 保持は**ちょうど 1 世代**である（C4 規則 9）: 書き込み点は choice 起因の slot 差替
+    /// （カスケード Value・タイムアウト Value）、消去点は現 talk の `TalkDone` 到達と
+    /// 次の slot 差替（マウス由来の置換を含む）である。
+    pub choice_prev_talk: Option<TalkId>,
 }
 
 impl State {
-    /// 初期運行状態（[`Phase::Idle`]・Tick 未受領・採番カウンタ 1・保留 close なし）。
+    /// 初期運行状態（[`Phase::Idle`]・Tick 未受領・採番カウンタ 1・保留 close なし・選択帳簿なし）。
     ///
     /// `next_talk_id` は 1 起点の単調増番であり、StartTalk 生成のたびにインクリメントし
     /// 再利用しない（[`crate::talk::TalkId`] の一意性契約）。
@@ -107,7 +178,87 @@ impl State {
             last_now: None,
             next_talk_id: 1,
             pending_close: None,
+            choice: None,
+            choice_prev_talk: None,
         }
+    }
+
+    /// 送出時点の実行状態スナップショット（運行フェーズ＋選択帳簿から導出・DD-IT-3／設計 C5）。
+    ///
+    /// [`snapshot_of`] は `Phase` しか読めず選択待ちを知れないため、**供給側の署名を `State`
+    /// 全体へ広げた**形である（`status.rs` の NOTE どおり）。広げるのは内部シグネチャだけで
+    /// あり、wire 送出契約（連結順序・区切り・空集合→ヘッダ行省略）は無改変である（Req6.3）。
+    pub(crate) fn snapshot(&self) -> ExecutionSnapshot {
+        let choice_active = self
+            .choice
+            .as_ref()
+            .is_some_and(|ledger| choice_phase_active(&ledger.phase));
+        self.snapshot_with_choice(choice_active)
+    }
+
+    /// 選択待ち継続中かを**外から与える**スナップショット導出。
+    ///
+    /// [`steady::on_choice`] と [`steady::on_cascade_reply`] は検証・分解のために帳簿を
+    /// [`Option::take`] してから呼出を組み立てるため、その最中は `self.choice` が空である。
+    /// これらの呼出点は手元の帳簿から得た真偽値をここへ渡す——[`snapshot`](State::snapshot) を
+    /// そのまま呼ぶとカスケード段の呼出から `choosing` が落ちる（設計 C5 の源は
+    /// `Waiting|Cascading|TimeoutInFlight` の全段である）。
+    pub(crate) fn snapshot_with_choice(&self, choice_active: bool) -> ExecutionSnapshot {
+        ExecutionSnapshot {
+            talk_active: snapshot_of(&self.phase).talk_active,
+            choice_active,
+        }
+    }
+}
+
+/// 選択帳簿の段フェーズが「選択待ち継続中」かを判定する（設計 C5 の源の定義）。
+///
+/// 3 段すべてが継続中である——`Cascading`／`TimeoutInFlight` は SHIORI 応答待ちであって
+/// 選択待ちの終了ではなく、選択肢は表示されたままである。選択待ちが終わるのは帳簿そのものが
+/// 消えるとき（解決・タイムアウト解除・トーク差替）だけであり、それを
+/// [`State::snapshot`] の `Option` 判定が表す（Req6.2）。
+///
+/// wildcard を置かないため、段フェーズの追加時は本表での判断がコンパイル時に要求される。
+fn choice_phase_active(phase: &ChoicePhase) -> bool {
+    match phase {
+        ChoicePhase::Waiting | ChoicePhase::Cascading { .. } | ChoicePhase::TimeoutInFlight => true,
+    }
+}
+
+/// 選択帳簿が **choice in-flight**（選択由来の SHIORI 呼出の応答待ち）かを判定する（DD-12）。
+///
+/// [`choice_phase_active`]（＝選択待ち継続中・`choosing` の源）とは別軸である: `Waiting` は
+/// 選択待ち継続中だが in-flight ではない。横断 `Failed`→`Unloading{Fault}` の免除
+/// （[`on_shiori_reply`] の先行アーム・C4 規則 8）は in-flight のときだけ効かせる——選択待ち中に
+/// 届く `Failed` は pump／マウス由来であり、免除すれば SHIORI 失敗の終了規律（Req6.1）が壊れる。
+///
+/// wildcard を置かないため、段フェーズの追加時は本表での判断がコンパイル時に要求される。
+fn choice_in_flight(phase: &ChoicePhase) -> bool {
+    match phase {
+        ChoicePhase::Cascading { .. } | ChoicePhase::TimeoutInFlight => true,
+        ChoicePhase::Waiting => false,
+    }
+}
+
+/// 選択帳簿を消去する単一の掃除ヘルパ（C4 規則 7・Req1.3／6.2）。
+///
+/// 規則 7 の不変条件は「帳簿の対象 talk ≠ 現行 talk なら即 `None`」である。その不変条件が破れる
+/// 遷移点——**対象トークの完了・slot 置換（マウス由来を含む）・close 系遷移**——で本関数を呼び、
+/// 帳簿の対象と現行トークが食い違う状態を残さない。掃除は状態遷移であって失敗ではないため
+/// `trace!` で観測する（沈黙で捨てる経路は作らない・log-first）。`at` は掃除点の識別子である。
+///
+/// 棄却経路（規則 1 の受領検証）からは呼ばない——棄却の定義は**状態不変**であり、既存帳簿を
+/// 含めて一切書き換えないことが規則 1 の要求だからである。
+pub(super) fn clear_choice_ledger(state: &mut State, at: &'static str) {
+    if let Some(ledger) = state.choice.take() {
+        tracing::trace!(
+            target: "kanade",
+            event = "choice_ledger_cleared",
+            at = at,
+            talk_id = ledger.talk_id.0,
+            stage = steady::choice_phase_label(&ledger.phase),
+            "選択帳簿を消去——帳簿の対象と現行トークの食い違いを残さない（C4 規則 7）"
+        );
     }
 }
 
@@ -136,6 +287,16 @@ pub(crate) enum Action {
     },
     /// 終了系列完了（シェルは shiori へ Close を送り自身も Break する）。
     StopSelf,
+    /// 選択待ちバリアの解決指示（→ [`TalkCommand::ResolveChoice`](crate::talk::TalkCommand)）。
+    ///
+    /// `talk_id` は再生層／dispatcher の stale ガード用・`id` は確定した選択肢 ID。発行点は
+    /// [`steady`] の選択調停（未対応カテゴリの即時解決・カスケード終端）に単一化されている
+    /// （1 選択＝高々 1 解決・Req5.4）。
+    ResolveChoice { talk_id: TalkId, id: String },
+    /// 選択待ちの解除＋トーク終了指示（→ [`TalkCommand::CancelChoice`](crate::talk::TalkCommand)）。
+    ///
+    /// タイムアウト後に SHIORI が応答を返さなかった場合の解除（Req7.5）。発行点はタスク 4.5。
+    CancelChoice { talk_id: TalkId },
 }
 
 /// 唯一の遷移入口。現在の [`State`] と [`Input`] から次の [`State`] と副作用指示
@@ -181,6 +342,59 @@ pub(crate) fn step(state: State, input: Input, config: &KanadeConfig) -> (State,
             }
         },
 
+        // ChoiceWaiting（C4 規則 4・Req7.1）: Steady でのみ受理し steady::on_choice_waiting へ
+        // 委譲する（現行トークとの識別子突合・DD-8 の期限写像・帳簿確立は委譲先の責務）。
+        // 非 Steady フェーズ（boot 中・close 握手以降・終了系列）には受理すべき選択待ちが
+        // 構造上存在しないため、帳簿を確立せず warn 記録の上で棄却する（状態不変）。
+        Input::ChoiceWaiting {
+            talk_id,
+            choice_ids,
+            display_end,
+            timeout_directive_secs,
+        } => match state.phase {
+            Phase::Steady { .. } => steady::on_choice_waiting(
+                state,
+                talk_id,
+                choice_ids,
+                display_end,
+                timeout_directive_secs,
+                config,
+            ),
+            _ => {
+                tracing::warn!(
+                    target: "kanade",
+                    event = "choice_waiting_stale",
+                    reason = "non_steady_phase",
+                    talk_id = talk_id.0,
+                    choice_count = choice_ids.len(),
+                    phase = phase_label(&state.phase),
+                    "非 Steady フェーズの選択待ち通知——帳簿を確立せず棄却（C4 規則 4）"
+                );
+                (state, Vec::new())
+            }
+        },
+
+        // Choice（C4 規則 1・Req1.1／1.3）: Steady でのみ受理し steady::on_choice へ委譲する
+        // （帳簿突合・候補照合・段列決定は委譲先の責務）。非 Steady フェーズ（boot 中・close
+        // 握手以降・終了系列）には受理すべき選択待ちが構造上存在しないため、状態を一切変えず
+        // warn 記録の上で棄却して処理を継続する（沈黙の棄却経路は作らない）。
+        Input::Choice(c) => match state.phase {
+            Phase::Steady { .. } => steady::on_choice(state, c),
+            _ => {
+                tracing::warn!(
+                    target: "kanade",
+                    event = "choice_rejected_no_wait",
+                    reason = "non_steady_phase",
+                    choice_id = %c.id,
+                    scope = c.scope,
+                    reference_count = c.references.len(),
+                    phase = phase_label(&state.phase),
+                    "非 Steady フェーズの選択確定——状態不変で棄却（C4 規則 1）"
+                );
+                (state, Vec::new())
+            }
+        },
+
         // --- 防御アーム・フェーズ固有遷移への委譲 ---
 
         // Idle 以外での Boot は不整合（warn!＋現 Phase 維持・Req 6.2）。Idle のみ boot へ委譲。
@@ -202,11 +416,17 @@ pub(crate) fn step(state: State, input: Input, config: &KanadeConfig) -> (State,
 
 /// 送出時点の運行フェーズから実行状態スナップショットを導出する（DD-IT-3）。
 /// アクティブな talk を運ぶ phase のみ talk_active=true。
+///
+/// 選択待ち（`choice_active`）の源は `Phase` の外（[`State::choice`]）にあるため本関数からは
+/// 知れず、常に false を返す。選択待ちを知る必要がある呼出点は [`State::snapshot`]／
+/// [`State::snapshot_with_choice`] を使う（設計 C5）。残る本関数の利用点は選択待ちが構造上
+/// 存在しない場面のみである——boot 系列（`BootVersion` の起動挨拶）と、`Unloading` へ遷移
+/// **後**に採る `force_quit` の best-effort NOTIFY（＝INACTIVE・DD-IT-4）。
 pub(crate) fn snapshot_of(phase: &Phase) -> ExecutionSnapshot {
     match phase {
         // アクティブな talk を運ぶ phase＝Steady{Some} と（挨拶追跡中の）BootVersion{Some}（DD-IT-12）。
         Phase::Steady { talk: Some(_) } | Phase::BootVersion { talk: Some(_) } => {
-            ExecutionSnapshot { talk_active: true }
+            ExecutionSnapshot { talk_active: true, choice_active: false }
         }
         _ => ExecutionSnapshot::INACTIVE,
     }
@@ -240,6 +460,8 @@ fn force_quit(mut state: State, reason: CloseReason) -> (State, Vec<Action>) {
     state.phase = Phase::Unloading {
         cause: TermCause::Forced,
     };
+    // close 系遷移の掃除点（C4 規則 7）: 現行トークは失われるため選択帳簿を残さない。
+    clear_choice_ledger(&mut state, "force_quit");
     let notify =
         Action::ShioriRequest(events::on_close_notify(reason, &snapshot_of(&state.phase)));
     (state, vec![notify, Action::ShioriUnload])
@@ -250,6 +472,9 @@ fn to_unloading_fault(mut state: State) -> (State, Vec<Action>) {
     state.phase = Phase::Unloading {
         cause: TermCause::Fault,
     };
+    // close 系遷移の掃除点（C4 規則 7）。なお choice in-flight の `Failed` は本経路へ来ない
+    // ——[`on_shiori_reply`] の先行アーム（DD-12）が steady へ委譲するためである。
+    clear_choice_ledger(&mut state, "unloading_fault");
     (state, vec![Action::ShioriUnload])
 }
 
@@ -260,29 +485,55 @@ fn to_unloading_fault(mut state: State) -> (State, Vec<Action>) {
 /// dispatcher の slot 差替に伴う `Interrupted` は dispatcher が stale として破棄するため、
 /// `Interrupted` が kanade まで到達することは想定されない。到達した場合も専用状態は起こさず
 /// `Ended` と同一経路（非 quit）へ防御的に委譲し、`info!` でどの reason だったかを観測する。
-fn on_talk_done(state: State, done: TalkDone, config: &KanadeConfig) -> (State, Vec<Action>) {
+fn on_talk_done(mut state: State, done: TalkDone, config: &KanadeConfig) -> (State, Vec<Action>) {
     match current_talk_id(&state.phase) {
-        Some(active) if active == done.talk_id => match done.reason {
-            TalkEndReason::Quit => {
-                // 既知 talk の Quit → 終了系列（Quit）へ直行（Req 4.3）。
-                let mut state = state;
-                tracing::info!(target: "kanade", event = "talk_done_quit", talk_id = done.talk_id.0, "reason=Quit——終了系列（Quit）へ");
-                state.phase = Phase::Unloading {
-                    cause: TermCause::Quit,
-                };
-                (state, vec![Action::ShioriUnload])
+        Some(active) if active == done.talk_id => {
+            // 現 talk の完了に到達した時点で 1 世代 stale 帳簿の役目は終わる（C4 規則 9）。
+            // 保持を延長すると「1 世代のみ」の契約が壊れ、真に未知の id まで info へ降格し得る。
+            state.choice_prev_talk = None;
+            match done.reason {
+                TalkEndReason::Quit => {
+                    // 既知 talk の Quit → 終了系列（Quit）へ直行（Req 4.3）。
+                    tracing::info!(target: "kanade", event = "talk_done_quit", talk_id = done.talk_id.0, "reason=Quit——終了系列（Quit）へ");
+                    state.phase = Phase::Unloading {
+                        cause: TermCause::Quit,
+                    };
+                    // 対象トークの完了かつ close 系遷移の掃除点（C4 規則 7）。
+                    clear_choice_ledger(&mut state, "talk_done_quit");
+                    (state, vec![Action::ShioriUnload])
+                }
+                TalkEndReason::Interrupted => {
+                    // 非 quit 扱い（観測用ログ）。本アームは元々「M1 では到達しない想定」の防御で
+                    // あったが、**選択タイムアウトの解除経路により正規の到達点になった**（DD-11）:
+                    // タイムアウト 204 → [`Action::CancelChoice`] → dispatcher が slot を維持したまま
+                    // `Close` を転送 → talk が `TalkDone{Interrupted}` を正規送出 → ここへ到達 →
+                    // フェーズ固有遷移（steady）が `Steady{None}` へ復帰させる（Req7.5）。
+                    // 遷移・ログ語彙・レベルはいずれも無改変である（意味づけのみが変わった）。
+                    tracing::info!(target: "kanade", event = "talk_done_interrupted_as_non_quit", talk_id = done.talk_id.0, "reason=Interrupted——非 quit 扱い・フェーズ固有遷移へ委譲（選択解除の正規到達点・DD-11）");
+                    dispatch_phase(state, Input::TalkDone(done), config)
+                }
+                TalkEndReason::Ended => {
+                    // Ended（定常復帰・close talk 完了）はフェーズ固有遷移へ委譲。
+                    dispatch_phase(state, Input::TalkDone(done), config)
+                }
             }
-            TalkEndReason::Interrupted => {
-                // 防御的に非 quit 扱い（M1 では到達しない想定・観測用ログ）。
-                tracing::info!(target: "kanade", event = "talk_done_interrupted_as_non_quit", talk_id = done.talk_id.0, "reason=Interrupted——防御的に非 quit 扱い・フェーズ固有遷移へ委譲");
-                dispatch_phase(state, Input::TalkDone(done), config)
-            }
-            TalkEndReason::Ended => {
-                // Ended（定常復帰・close talk 完了）はフェーズ固有遷移へ委譲。
-                dispatch_phase(state, Input::TalkDone(done), config)
-            }
-        },
+        }
         Some(_) | None => {
+            // 1 世代 stale 防御（C4 規則 9・F1 残余レース・Req1.6）: choice 起因の slot 差替直後は、
+            // 旧 talk の即時 `Done{Ended}`（再生層の即 settle）が dispatcher の slot 差替より前に
+            // 投函され得る——この遅延 `Done` は**欠陥ではなく既知の順序レース**である。よって
+            // 1 世代保持した旧 talk_id と照合し、一致するものは info で棄却して
+            // `unknown_talk_done`（error）を真に未知の id 専用に保つ（正常系で error を出さない）。
+            // 保持は消さない——消去点は現 talk の `TalkDone` 到達と次の slot 差替である（規則 9）。
+            if state.choice_prev_talk == Some(done.talk_id) {
+                tracing::info!(
+                    target: "kanade",
+                    event = "talk_done_stale_choice",
+                    talk_id = done.talk_id.0,
+                    "選択差替で置き換えた旧 talk の遅延完了通知——状態を変えず棄却（C4 規則 9・F1）"
+                );
+                return (state, Vec::new());
+            }
             // 未知 talk_id の TalkDone → error!＋現 Phase 維持（Req 2.5・6.2）。
             tracing::error!(target: "kanade", event = "unknown_talk_done", talk_id = done.talk_id.0, "未知 talk_id の再生完了通知——現 Phase 維持で継続");
             (state, Vec::new())
@@ -312,6 +563,23 @@ fn on_shiori_reply(
     // 指示＋完了固定ログを添えて OnFirstBoot へ続行する。Failed の Fault 化を封じるため横断判定より先に捌く。
     if matches!(state.phase, Phase::BootPrefetch) {
         return boot::step(state, Input::ShioriReply { outcome, origin }, config);
+    }
+
+    // choice in-flight（カスケード段／タイムアウト GET の応答待ち）の応答は横断 Failed→Fault 経路に
+    // 載せない（選択の失敗でゴーストを終了させない・Req4.5／DD-12・C4 規則 8）。prefetch の先行アームと
+    // **同型**に、横断判定より先に steady へ委譲する。委譲先（steady の choice 先行アーム）が Failed を
+    // `choice_shiori_failed_as_204`（error）記録の上で 204 と同一に扱い、会話を止めずに継続させる。
+    //
+    // 条件を `Steady` かつ in-flight（`Cascading|TimeoutInFlight`）に限るのが要点である: 選択待ち
+    // （`Waiting`）中に届く Failed は pump／マウス由来であり、免除すると SHIORI 失敗時の終了規律
+    // （Req6.1）が非 choice 経路まで緩む。非 choice 経路は無改変で従来どおり Unloading{Fault} へ倒れる。
+    if matches!(state.phase, Phase::Steady { .. })
+        && state
+            .choice
+            .as_ref()
+            .is_some_and(|ledger| choice_in_flight(&ledger.phase))
+    {
+        return steady::step(state, Input::ShioriReply { outcome, origin }, config);
     }
 
     // 応答待ちフェーズでの Failed は横断的に Unloading{Fault} へ（Req 6.1）。
@@ -401,8 +669,10 @@ fn current_talk_id(phase: &Phase) -> Option<TalkId> {
 
 #[cfg(test)]
 mod tests {
+    use super::log_capture::{assert_logged, assert_not_logged, capture};
     use super::*;
     use crate::msg::ShioriFailure;
+    use tracing::Level;
 
     fn config() -> KanadeConfig {
         KanadeConfig::new("master", "1.0.0")
@@ -414,6 +684,8 @@ mod tests {
             last_now: Some(MonotonicMs(1_000)),
             next_talk_id: 5,
             pending_close: None,
+            choice: None,
+            choice_prev_talk: None,
         }
     }
 
@@ -422,6 +694,7 @@ mod tests {
             talk: Some(ActiveTalk {
                 talk_id,
                 origin: "steady",
+                script: String::new(),
             }),
         }
     }
@@ -499,7 +772,7 @@ mod tests {
         assert_eq!(actions.len(), 2);
         match &actions[0] {
             Action::ShioriRequest(ShioriCall::Notify { id, references, .. }) => {
-                assert_eq!(*id, "OnClose");
+                assert_eq!(id.as_str(), "OnClose");
                 assert_eq!(references, &vec!["system".to_string()]);
             }
             _ => panic!("expected first action to be Notify OnClose"),
@@ -714,7 +987,7 @@ mod tests {
         assert_eq!(actions.len(), 1);
         assert_get(
             &actions[0],
-            &events::on_mouse_move(10, 20, 0, Some("head"), &ExecutionSnapshot { talk_active: true }),
+            &events::on_mouse_move(10, 20, 0, Some("head"), &ExecutionSnapshot { talk_active: true, choice_active: false }),
         );
     }
 
@@ -731,6 +1004,553 @@ mod tests {
         );
         assert!(actions.is_empty(), "close 保留中はマウス GET を発行しない");
     }
+
+    // ============================================================
+    // 11. 選択系の additive 追加（タスク 4.1・Req4.4・DD-3／DD-10）
+    // ============================================================
+
+    /// 檻用の選択確定入力（内容は本檻で load-bearing でない＝写像・帳簿の存在のみを見る）。
+    fn choice_input() -> ChoiceInput {
+        ChoiceInput {
+            id: "OnMenu".to_string(),
+            label: "メニュー".to_string(),
+            scope: 0,
+            references: vec!["a0".to_string()],
+        }
+    }
+
+    /// 檻用の選択待ち通知入力（同上）。
+    fn choice_waiting_input() -> Input {
+        Input::ChoiceWaiting {
+            talk_id: TalkId(5),
+            choice_ids: vec!["OnMenu".to_string()],
+            display_end: MonotonicMs(2_000),
+            timeout_directive_secs: None,
+        }
+    }
+
+    /// Req4.4: 既存 `Phase` の 11 variant が無改変であること。
+    ///
+    /// 本 match は wildcard を持たないため、variant の削除・改名・形（フィールド構成）の
+    /// 変更はコンパイルを壊す。DD-3 が要求する「Phase を一切触らない」を構造で固定する
+    /// （`State.choice` は Phase の外＝`pending_close` と同型に置かれる）。
+    #[test]
+    fn existing_phase_variants_are_unchanged() {
+        fn tag(phase: &Phase) -> &'static str {
+            match phase {
+                Phase::Idle => "Idle",
+                Phase::BootInit => "BootInit",
+                Phase::BootPrefetch => "BootPrefetch",
+                Phase::BootType => "BootType",
+                Phase::BootMain => "BootMain",
+                Phase::BootVersion { .. } => "BootVersion",
+                Phase::Steady { .. } => "Steady",
+                Phase::ClosePending { .. } => "ClosePending",
+                Phase::CloseTalkWait { .. } => "CloseTalkWait",
+                Phase::Unloading { .. } => "Unloading",
+                Phase::Stopped => "Stopped",
+            }
+        }
+        assert_eq!(tag(&Phase::Idle), "Idle");
+        assert_eq!(tag(&Phase::Steady { talk: None }), "Steady");
+        assert_eq!(tag(&Phase::Stopped), "Stopped");
+    }
+
+    /// Req4.4: 既存 `Action` 5 variant が無改変で、選択系 2 variant が additive に増えたこと。
+    ///
+    /// wildcard なしの網羅 match ゆえ、既存 5 variant のいずれかが消える／改名される／
+    /// 形が変わると本檻はコンパイルできない。
+    #[test]
+    fn action_variants_are_existing_five_plus_choice_two() {
+        fn tag(action: &Action) -> &'static str {
+            match action {
+                Action::ShioriRequest(_) => "ShioriRequest",
+                Action::ShioriUnload => "ShioriUnload",
+                Action::StartTalk(_) => "StartTalk",
+                Action::ResourceOutcome { .. } => "ResourceOutcome",
+                Action::StopSelf => "StopSelf",
+                Action::ResolveChoice { .. } => "ResolveChoice",
+                Action::CancelChoice { .. } => "CancelChoice",
+            }
+        }
+        assert_eq!(tag(&Action::ShioriUnload), "ShioriUnload");
+        assert_eq!(tag(&Action::StopSelf), "StopSelf");
+        assert_eq!(
+            tag(&Action::ResolveChoice {
+                talk_id: TalkId(5),
+                id: "OnMenu".to_string(),
+            }),
+            "ResolveChoice"
+        );
+        assert_eq!(
+            tag(&Action::CancelChoice { talk_id: TalkId(5) }),
+            "CancelChoice"
+        );
+    }
+
+    /// Req4.4: 既存 `Input` 8 variant が無改変で、選択系 2 variant が additive に増えたこと。
+    #[test]
+    fn input_variants_are_existing_eight_plus_choice_two() {
+        fn tag(input: &Input) -> &'static str {
+            match input {
+                Input::Boot => "Boot",
+                Input::Tick { .. } => "Tick",
+                Input::TalkDone(_) => "TalkDone",
+                Input::CloseRequest { .. } => "CloseRequest",
+                Input::ForceQuit { .. } => "ForceQuit",
+                Input::ShioriDown { .. } => "ShioriDown",
+                Input::Mouse(_) => "Mouse",
+                Input::ShioriReply { .. } => "ShioriReply",
+                Input::Choice(_) => "Choice",
+                Input::ChoiceWaiting { .. } => "ChoiceWaiting",
+            }
+        }
+        assert_eq!(tag(&Input::Boot), "Boot");
+        assert_eq!(tag(&Input::Mouse(mouse_move())), "Mouse");
+        assert_eq!(tag(&Input::Choice(choice_input())), "Choice");
+        assert_eq!(tag(&choice_waiting_input()), "ChoiceWaiting");
+    }
+
+    /// DD-3: 選択帳簿は `State`（Phase 外）に置かれ、初期値は両方とも空である。
+    #[test]
+    fn initial_state_has_empty_choice_ledger() {
+        let s = State::initial();
+        assert!(s.choice.is_none(), "初期状態に選択待ち帳簿は無い");
+        assert!(
+            s.choice_prev_talk.is_none(),
+            "初期状態に 1 世代保持の旧 talk_id は無い"
+        );
+    }
+
+    /// C4 規則 1・Req1.3: 非 Steady フェーズの選択確定は棄却する（状態不変・Action なし）。
+    ///
+    /// 受理すべき選択待ちが構造上存在しないフェーズ（boot 中・close 握手以降・終了系列）へ
+    /// 届いた選択確定は、帳簿の有無に関わらず横断アームで棄却される。棄却は既存帳簿にも
+    /// 触れない（棄却の定義＝状態不変）。
+    #[test]
+    fn choice_input_in_non_steady_phases_is_rejected_without_changing_state() {
+        for phase in [
+            Phase::Idle,
+            Phase::BootMain,
+            Phase::BootVersion {
+                talk: Some(ActiveTalk {
+                    talk_id: TalkId(5),
+                    origin: "boot",
+                    script: String::new(),
+                }),
+            },
+            Phase::ClosePending {
+                reason: CloseReason::User,
+            },
+            Phase::Stopped,
+        ] {
+            let before = std::mem::discriminant(&phase);
+            let mut s = state_in(phase);
+            s.choice = Some(ChoiceState {
+                talk_id: TalkId(5),
+                candidates: vec!["OnMenu".to_string()],
+                deadline: None,
+                phase: ChoicePhase::Waiting,
+            });
+            let (next, actions) = step(s, Input::Choice(choice_input()), &config());
+            assert_eq!(
+                std::mem::discriminant(&next.phase),
+                before,
+                "棄却は phase を変えない"
+            );
+            let ledger = next.choice.expect("棄却は既存帳簿にも触れない");
+            assert!(matches!(ledger.phase, ChoicePhase::Waiting));
+            assert!(actions.is_empty(), "棄却は Action を発行しない");
+        }
+    }
+
+    // ============================================================
+    // 12. 選択待ち通知の受領と帳簿確立（タスク 4.2・Req7.1／7.6／7.7・C4 規則 4・DD-8）
+    // ============================================================
+
+    /// 檻用の選択待ち通知（候補列・起点・指令を明示して組む）。
+    fn choice_waiting_of(
+        talk_id: TalkId,
+        choice_ids: &[&str],
+        display_end: MonotonicMs,
+        timeout_directive_secs: Option<f64>,
+    ) -> Input {
+        Input::ChoiceWaiting {
+            talk_id,
+            choice_ids: choice_ids.iter().map(|s| s.to_string()).collect(),
+            display_end,
+            timeout_directive_secs,
+        }
+    }
+
+    /// C4 規則 4・Req7.1: 現行トークと識別子が一致する通知は帳簿を確立する。
+    ///
+    /// 確立された帳簿は通知の候補列を表示順のまま保持し、期限は DD-8 写像済みの値
+    /// （未指定→起点＋既定 30_000ms）を持ち、段フェーズは `Waiting` である。`Phase` は
+    /// 一切触らない（DD-3）。
+    #[test]
+    fn choice_waiting_matching_talk_id_establishes_waiting_ledger() {
+        let (next, actions) = step(
+            state_in(steady_with_talk(TalkId(5))),
+            choice_waiting_of(
+                TalkId(5),
+                &["OnMenu", "choice1"],
+                MonotonicMs(2_000),
+                None,
+            ),
+            &config(),
+        );
+        assert!(
+            matches!(next.phase, Phase::Steady { talk: Some(_) }),
+            "帳簿確立は Phase を触らない（DD-3）"
+        );
+        let ledger = next.choice.expect("一致通知は帳簿を確立する");
+        assert_eq!(ledger.talk_id, TalkId(5));
+        assert_eq!(
+            ledger.candidates,
+            vec!["OnMenu".to_string(), "choice1".to_string()],
+            "候補列は通知どおり（表示順を保存・DD-7）"
+        );
+        assert_eq!(
+            ledger.deadline,
+            Some(MonotonicMs(32_000)),
+            "未指定は既定 30_000ms を起点へ加算（DD-8）"
+        );
+        assert!(matches!(ledger.phase, ChoicePhase::Waiting));
+        assert!(actions.is_empty(), "帳簿確立は Action を発行しない");
+    }
+
+    /// Req7.1: 通知受領後の帳簿が「選択確定を受理できる」前提を満たす。
+    ///
+    /// 受理判定そのものはタスク 4.3 の担当であり、本檻はその判定が読む 3 条件——段フェーズが
+    /// `Waiting`・候補列が照合可能な形で保持されている・帳簿の `talk_id` が**現行 talk と一致**
+    /// （`ChoiceState` の不変条件）——を状態で固定する。
+    #[test]
+    fn established_ledger_satisfies_preconditions_for_choice_acceptance() {
+        let (next, _) = step(
+            state_in(steady_with_talk(TalkId(5))),
+            choice_waiting_of(TalkId(5), &["OnMenu", "choice1"], MonotonicMs(2_000), None),
+            &config(),
+        );
+        let active_talk_id = current_talk_id(&next.phase).expect("active talk は維持される");
+        let ledger = next.choice.expect("一致通知は帳簿を確立する");
+        assert!(
+            matches!(ledger.phase, ChoicePhase::Waiting),
+            "受理可能な段フェーズ（入力待ち）である"
+        );
+        assert_eq!(
+            ledger.talk_id, active_talk_id,
+            "帳簿の talk_id は現行 talk と一致する（ChoiceState の不変条件）"
+        );
+        assert!(
+            ledger.candidates.iter().any(|c| c == "choice1"),
+            "候補 ID は照合可能な形で保持される（4.3 の候補集合照合の前提）"
+        );
+    }
+
+    /// DD-8・Req7.6／7.7: 期限は指令 3 値語彙どおりに写る（実値で突合）。
+    ///
+    /// 既定値以外の明示秒指定も同一規律で写る（Req7.7）。無効化（0／-1）は期限なし＝無期限
+    /// であり、帳簿自体は確立される（Req7.6：計測を開始しないだけで選択待ちは継続する）。
+    #[test]
+    fn choice_waiting_deadline_follows_dd8_directive_mapping() {
+        let display_end = MonotonicMs(2_000);
+        let cases: [(Option<f64>, Option<MonotonicMs>); 5] = [
+            // 未指定＝既定へ委譲（config.choice_timeout_default_ms = 30_000）。
+            (None, Some(MonotonicMs(32_000))),
+            // 無効化＝無期限（Req7.6）。
+            (Some(0.0), None),
+            (Some(-1.0), None),
+            // 明示秒指定（Req7.7・既定値は関与しない）。
+            (Some(5.0), Some(MonotonicMs(7_000))),
+            (Some(2.5), Some(MonotonicMs(4_500))),
+        ];
+        for (directive, expected) in cases {
+            let (next, _) = step(
+                state_in(steady_with_talk(TalkId(5))),
+                choice_waiting_of(TalkId(5), &["OnMenu"], display_end, directive),
+                &config(),
+            );
+            let ledger = next
+                .choice
+                .unwrap_or_else(|| panic!("指令 {directive:?} でも帳簿は確立される"));
+            assert_eq!(
+                ledger.deadline, expected,
+                "指令 {directive:?} の期限写像が DD-8 と一致しない"
+            );
+        }
+    }
+
+    /// C4 規則 4・Req7.1: 識別子が現行トークと一致しない通知は帳簿を確立しない。
+    #[test]
+    fn choice_waiting_with_mismatched_talk_id_does_not_establish_ledger() {
+        let (next, actions) = step(
+            state_in(steady_with_talk(TalkId(5))),
+            choice_waiting_of(TalkId(999), &["OnMenu"], MonotonicMs(2_000), None),
+            &config(),
+        );
+        assert!(
+            matches!(next.phase, Phase::Steady { talk: Some(_) }),
+            "棄却は Phase を触らない"
+        );
+        assert!(next.choice.is_none(), "不一致通知は帳簿を確立しない");
+        assert!(actions.is_empty(), "棄却は Action を発行しない");
+    }
+
+    /// C4 規則 4: 再生中でない Steady（`Steady{None}`）の通知は受理しない。
+    #[test]
+    fn choice_waiting_without_active_talk_does_not_establish_ledger() {
+        let (next, actions) = step(
+            state_in(Phase::Steady { talk: None }),
+            choice_waiting_of(TalkId(5), &["OnMenu"], MonotonicMs(2_000), None),
+            &config(),
+        );
+        assert!(matches!(next.phase, Phase::Steady { talk: None }));
+        assert!(next.choice.is_none(), "active talk 不在では帳簿を確立しない");
+        assert!(actions.is_empty());
+    }
+
+    /// C4 規則 4: 非 Steady フェーズの通知は受理しない（挨拶追跡中の `BootVersion{Some}` も含む）。
+    #[test]
+    fn choice_waiting_in_non_steady_phase_does_not_establish_ledger() {
+        for phase in [
+            Phase::Idle,
+            Phase::BootMain,
+            Phase::BootVersion {
+                talk: Some(ActiveTalk {
+                    talk_id: TalkId(5),
+                    origin: "boot",
+                    script: String::new(),
+                }),
+            },
+            Phase::ClosePending {
+                reason: CloseReason::User,
+            },
+        ] {
+            let before = std::mem::discriminant(&phase);
+            let (next, actions) = step(
+                state_in(phase),
+                choice_waiting_of(TalkId(5), &["OnMenu"], MonotonicMs(2_000), None),
+                &config(),
+            );
+            assert_eq!(
+                std::mem::discriminant(&next.phase),
+                before,
+                "棄却は phase を変えない"
+            );
+            assert!(next.choice.is_none(), "非 Steady では帳簿を確立しない");
+            assert!(actions.is_empty());
+        }
+    }
+
+    /// C4 規則 4: 棄却は**既存の帳簿にも触れない**（状態不変が棄却の定義）。
+    #[test]
+    fn stale_choice_waiting_leaves_existing_ledger_untouched() {
+        let mut s = state_in(steady_with_talk(TalkId(5)));
+        s.choice = Some(ChoiceState {
+            talk_id: TalkId(5),
+            candidates: vec!["existing".to_string()],
+            deadline: Some(MonotonicMs(9_000)),
+            phase: ChoicePhase::Waiting,
+        });
+        let (next, actions) = step(
+            s,
+            choice_waiting_of(TalkId(999), &["OnMenu"], MonotonicMs(2_000), None),
+            &config(),
+        );
+        let ledger = next.choice.expect("既存帳簿は棄却で消えない");
+        assert_eq!(ledger.talk_id, TalkId(5));
+        assert_eq!(ledger.candidates, vec!["existing".to_string()]);
+        assert_eq!(ledger.deadline, Some(MonotonicMs(9_000)));
+        assert!(actions.is_empty());
+    }
+
+    // ============================================================
+    // 13. 選択待ち中の実行状態導出（タスク 4.4・Req6.1／6.2／6.4・C5・裁定 6）
+    // ============================================================
+
+    /// C5: `choice_active` の源は `State.choice` の**3 段フェーズすべて**である。
+    ///
+    /// `Cascading`／`TimeoutInFlight` は SHIORI 応答待ちであって選択待ちの終了ではない——
+    /// 段が進んでいる間も選択肢は表示されたままであり、`choosing` はアクティブであり続ける。
+    /// 併せて裁定 6／Req6.4（選択待ち中も talk slot 占有は継続＝`talking` 真）を固定する。
+    #[test]
+    fn state_snapshot_marks_choice_active_in_every_ledger_phase() {
+        for phase in [
+            ChoicePhase::Waiting,
+            ChoicePhase::Cascading {
+                choice_id: "OnMenu".to_string(),
+                next: Some(CascadeNext::Select),
+            },
+            ChoicePhase::TimeoutInFlight,
+        ] {
+            let label = match &phase {
+                ChoicePhase::Waiting => "Waiting",
+                ChoicePhase::Cascading { .. } => "Cascading",
+                ChoicePhase::TimeoutInFlight => "TimeoutInFlight",
+            };
+            let mut s = state_in(steady_with_talk(TalkId(5)));
+            s.choice = Some(ChoiceState {
+                talk_id: TalkId(5),
+                candidates: vec!["OnMenu".to_string()],
+                deadline: None,
+                phase,
+            });
+            let snapshot = s.snapshot();
+            assert!(
+                snapshot.choice_active,
+                "{label}: 3 段フェーズのいずれでも choosing はアクティブ（C5）"
+            );
+            assert!(
+                snapshot.talk_active,
+                "{label}: 選択待ち中も talk slot 占有は継続する（Req6.4・裁定 6）"
+            );
+        }
+    }
+
+    /// Req6.2: 帳簿が消えた（解決・タイムアウト終了）状態では `choosing` は非アクティブへ戻る。
+    #[test]
+    fn state_snapshot_drops_choice_active_when_ledger_is_gone() {
+        let s = state_in(steady_with_talk(TalkId(5)));
+        let snapshot = s.snapshot();
+        assert!(snapshot.talk_active, "再生自体は継続している");
+        assert!(
+            !snapshot.choice_active,
+            "帳簿不在なら choosing は非アクティブ（Req6.2）"
+        );
+    }
+
+    /// DD-IT-3: 供給側の署名を `State` 全体へ広げても **talk 軸は `snapshot_of(&Phase)` と同一**
+    /// である（choice 軸の増設が既存の talk 導出を汚さない）。
+    #[test]
+    fn state_snapshot_preserves_the_talk_axis_of_phase() {
+        for phase in [
+            Phase::Idle,
+            Phase::BootMain,
+            Phase::BootVersion { talk: None },
+            Phase::BootVersion {
+                talk: Some(ActiveTalk {
+                    talk_id: TalkId(5),
+                    origin: "boot",
+                    script: String::new(),
+                }),
+            },
+            Phase::Steady { talk: None },
+            steady_with_talk(TalkId(5)),
+            Phase::Stopped,
+        ] {
+            let expected = snapshot_of(&phase).talk_active;
+            let s = state_in(phase);
+            let snapshot = s.snapshot();
+            assert_eq!(
+                snapshot.talk_active, expected,
+                "talk 軸は Phase 由来のまま（DD-IT-3）"
+            );
+            assert!(!snapshot.choice_active, "帳簿なしでは choosing は非アクティブ");
+        }
+    }
+
+    // ============================================================
+    // 1 世代 stale 防御（タスク 4.6・C4 規則 9・F1 残余レース・Req1.6）
+    // ============================================================
+    //
+    // choice 起因の slot 差替直後は、旧 talk の即時 `Done{Ended}`（drive.rs の即 settle）が
+    // dispatcher の slot 差替より前に投函され得る（design F1「順序の決定性と残余レース」）。
+    // 到着した遅延 `TalkDone` は `choice_prev_talk` と照合して `talk_done_stale_choice`（info）
+    // で棄却し、`unknown_talk_done`（error）を**真に未知の id 専用**に保つ。
+
+    /// `choice_prev_talk` を仕込んだ `Steady{Some(active)}` を組む。
+    fn state_with_prev_talk(active: TalkId, prev: TalkId) -> State {
+        let mut s = state_in(steady_with_talk(active));
+        s.choice_prev_talk = Some(prev);
+        s
+    }
+
+    /// 規則 9: 1 世代保持した旧 talk_id の遅延 `TalkDone` は info で棄却し、状態を壊さない。
+    #[test]
+    fn stale_choice_talk_done_is_demoted_to_info_and_keeps_state() {
+        let cfg = config();
+        let mut out = None;
+        let ev = capture(|| {
+            out = Some(step(
+                state_with_prev_talk(TalkId(9), TalkId(3)),
+                Input::TalkDone(TalkDone {
+                    talk_id: TalkId(3),
+                    reason: TalkEndReason::Ended,
+                }),
+                &cfg,
+            ));
+        });
+        let (next, actions) = out.expect("step は必ず結果を返す");
+        match next.phase {
+            Phase::Steady {
+                talk: Some(ActiveTalk { talk_id, .. }),
+            } => assert_eq!(talk_id, TalkId(9), "遅延 Done は現行 slot を壊さない"),
+            _ => panic!("expected Steady{{Some}} preserved"),
+        }
+        assert!(actions.is_empty(), "遅延 Done は Action を発行しない");
+        assert_logged(&ev, Level::INFO, "talk_done_stale_choice");
+        assert_not_logged(&ev, "unknown_talk_done");
+        assert_eq!(
+            next.choice_prev_talk,
+            Some(TalkId(3)),
+            "stale 帳簿は現 talk の TalkDone 到達まで保持する（1 世代・規則 9）"
+        );
+    }
+
+    /// 規則 9: `unknown_talk_done`（error）は**真に未知の id 専用**のまま保つ。
+    #[test]
+    fn truly_unknown_talk_done_still_logs_error() {
+        let cfg = config();
+        let mut out = None;
+        let ev = capture(|| {
+            out = Some(step(
+                state_with_prev_talk(TalkId(9), TalkId(3)),
+                Input::TalkDone(TalkDone {
+                    talk_id: TalkId(777),
+                    reason: TalkEndReason::Ended,
+                }),
+                &cfg,
+            ));
+        });
+        let (next, actions) = out.expect("step は必ず結果を返す");
+        assert_logged(&ev, Level::ERROR, "unknown_talk_done");
+        assert_not_logged(&ev, "talk_done_stale_choice");
+        assert!(actions.is_empty());
+        assert!(matches!(next.phase, Phase::Steady { talk: Some(_) }));
+    }
+
+    /// 規則 9: 現 talk の `TalkDone` 到達で 1 世代保持は消え、以後の同 id は真に未知へ戻る。
+    #[test]
+    fn current_talk_done_clears_the_one_generation_stale_slot() {
+        let cfg = config();
+        let (after_current, _) = step(
+            state_with_prev_talk(TalkId(9), TalkId(3)),
+            Input::TalkDone(TalkDone {
+                talk_id: TalkId(9),
+                reason: TalkEndReason::Ended,
+            }),
+            &cfg,
+        );
+        assert!(
+            after_current.choice_prev_talk.is_none(),
+            "現 talk の TalkDone 到達で 1 世代保持を消去する（規則 9）"
+        );
+        // 消去後に届く旧 id は真に未知＝error へ戻る（保持は 1 世代のみ）。
+        let mut out = None;
+        let ev = capture(|| {
+            out = Some(step(
+                after_current,
+                Input::TalkDone(TalkDone {
+                    talk_id: TalkId(3),
+                    reason: TalkEndReason::Ended,
+                }),
+                &cfg,
+            ));
+        });
+        let _ = out.expect("step は必ず結果を返す");
+        assert_logged(&ev, Level::ERROR, "unknown_talk_done");
+    }
 }
 
 /// タスク 6.1: 純粋 step 層の失敗・防御アームがログを発火することの実行可能検証。
@@ -746,7 +1566,7 @@ mod tests {
 /// 組」に対する防御であり、直接駆動が唯一かつ正当な網羅手段である。
 #[cfg(test)]
 mod log_firing_tests {
-    use super::log_capture::{assert_logged, capture, CapturedEvent};
+    use super::log_capture::{assert_logged, capture, logged_once, CapturedEvent};
     use super::*;
     use crate::msg::{CloseReason, ShioriFailure};
     use crate::talk::TalkDone;
@@ -762,6 +1582,8 @@ mod log_firing_tests {
             last_now: Some(MonotonicMs(1_000)),
             next_talk_id: 5,
             pending_close: None,
+            choice: None,
+            choice_prev_talk: None,
         }
     }
 
@@ -770,6 +1592,7 @@ mod log_firing_tests {
             talk: Some(ActiveTalk {
                 talk_id,
                 origin: "steady",
+                script: String::new(),
             }),
         }
     }
@@ -850,6 +1673,8 @@ mod log_firing_tests {
             last_now: Some(MonotonicMs(900)),
             next_talk_id: 8,
             pending_close: None,
+            choice: None,
+            choice_prev_talk: None,
         };
         let ev = capture(|| {
             let _ = step(s, Input::Tick { now: MonotonicMs(2_000) }, &cfg);
@@ -1086,6 +1911,254 @@ mod log_firing_tests {
     // ============================================================
     // 観測用ログ（level = INFO）— TalkEndReason::Interrupted の防御的非 quit 扱い
     // ============================================================
+
+    // ============================================================
+    // 選択確定の受領検証とカスケード駆動（タスク 4.3・設計ログ語彙表）
+    // ============================================================
+
+    /// 任意の `State` を捕捉付きで駆動する（帳簿を直接構成する檻用）。
+    fn run_step_state(state: State, input: Input) -> Vec<CapturedEvent> {
+        let cfg = config();
+        capture(|| {
+            let _ = step(state, input, &cfg);
+        })
+    }
+
+    /// 檻用の選択確定入力。
+    fn choice_input_of(id: &str) -> Input {
+        Input::Choice(crate::msg::ChoiceInput {
+            id: id.to_string(),
+            label: "メニュー".to_string(),
+            scope: 0,
+            references: Vec::new(),
+        })
+    }
+
+    /// 帳簿つき `Steady{Some(5)}` を構成する。
+    fn state_with_ledger(candidates: &[&str], phase: ChoicePhase) -> State {
+        let mut s = state_in(steady_with_talk(TalkId(5)));
+        s.choice = Some(ChoiceState {
+            talk_id: TalkId(5),
+            candidates: candidates.iter().map(|c| c.to_string()).collect(),
+            deadline: None,
+            phase,
+        });
+        s
+    }
+
+    /// Req1.3: 選択待ち不在・対象 talk 不一致・非 Steady の 3 経路とも warn で記録する。
+    #[test]
+    fn warn_choice_rejected_no_wait_logs() {
+        // 選択待ち帳簿が無い（解決済み・未成立）。
+        let ev = run_step(steady_with_talk(TalkId(5)), choice_input_of("OnMenu"));
+        assert_logged(&ev, Level::WARN, "choice_rejected_no_wait");
+
+        // 帳簿の対象 talk が現行 talk と食い違う。
+        let mut s = state_in(steady_with_talk(TalkId(5)));
+        s.choice = Some(ChoiceState {
+            talk_id: TalkId(999),
+            candidates: vec!["OnMenu".to_string()],
+            deadline: None,
+            phase: ChoicePhase::Waiting,
+        });
+        let ev = run_step_state(s, choice_input_of("OnMenu"));
+        assert_logged(&ev, Level::WARN, "choice_rejected_no_wait");
+
+        // 非 Steady フェーズ（横断アーム側）。
+        let ev = run_step(Phase::BootMain, choice_input_of("OnMenu"));
+        assert_logged(&ev, Level::WARN, "choice_rejected_no_wait");
+    }
+
+    /// Req1.4: 候補集合に無い ID の棄却は warn で記録する。
+    #[test]
+    fn warn_choice_rejected_unknown_id_logs() {
+        let ev = run_step_state(
+            state_with_ledger(&["OnMenu"], ChoicePhase::Waiting),
+            choice_input_of("choice9"),
+        );
+        assert_logged(&ev, Level::WARN, "choice_rejected_unknown_id");
+    }
+
+    /// Req1.1: 段の進行中（`Cascading`／`TimeoutInFlight`）の二重確定は warn で記録する。
+    #[test]
+    fn warn_choice_rejected_busy_logs() {
+        for phase in [
+            ChoicePhase::Cascading {
+                choice_id: "OnMenu".to_string(),
+                next: None,
+            },
+            ChoicePhase::TimeoutInFlight,
+        ] {
+            let ev = run_step_state(state_with_ledger(&["OnMenu"], phase), choice_input_of("OnMenu"));
+            assert_logged(&ev, Level::WARN, "choice_rejected_busy");
+        }
+    }
+
+    /// Req2.7: `script:` 前置の明示縮退は warn 記録の上で選択解決のみを行う。
+    #[test]
+    fn warn_choice_unsupported_category_logs() {
+        let ev = run_step_state(
+            state_with_ledger(&["script:\\e"], ChoicePhase::Waiting),
+            choice_input_of("script:\\e"),
+        );
+        assert_logged(&ev, Level::WARN, "choice_unsupported_category");
+        // 未対応カテゴリでも選択解決は実行する（会話を止めない・Req2.7）。
+        assert_logged(&ev, Level::INFO, "choice_resolved");
+    }
+
+    /// Req1.6: 受理は info で記録し、判定した段列をフィールドに載せる。
+    #[test]
+    fn info_choice_accepted_logs_plan() {
+        let ev = run_step_state(
+            state_with_ledger(&["OnMenu"], ChoicePhase::Waiting),
+            choice_input_of("OnMenu"),
+        );
+        let accepted = logged_once(&ev, Level::INFO, "choice_accepted");
+        assert_eq!(
+            accepted.fields.get("choice_id").map(String::as_str),
+            Some("OnMenu"),
+            "確定した選択肢 ID がログフィールドに載る。\n捕捉={accepted:#?}"
+        );
+        assert_eq!(
+            accepted.fields.get("plan").map(String::as_str),
+            Some("Named"),
+            "判定した段列がログフィールドに載る。\n捕捉={accepted:#?}"
+        );
+    }
+
+    /// 各段の GET 送出は trace で記録する（設計ログ語彙表）。
+    #[test]
+    fn trace_choice_cascade_stage_logs() {
+        let ev = run_step_state(
+            state_with_ledger(&["choice1"], ChoicePhase::Waiting),
+            choice_input_of("choice1"),
+        );
+        assert_logged(&ev, Level::TRACE, "choice_cascade_stage");
+    }
+
+    /// Req5.1: `ResolveChoice` 発行は info で記録する。
+    #[test]
+    fn info_choice_resolved_logs() {
+        let ev = run_step_state(
+            state_with_ledger(
+                &["choice1"],
+                ChoicePhase::Cascading {
+                    choice_id: "choice1".to_string(),
+                    next: None,
+                },
+            ),
+            Input::ShioriReply {
+                outcome: ShioriOutcome::NoContent,
+                origin: "OnChoiceSelect",
+            },
+        );
+        assert_logged(&ev, Level::INFO, "choice_resolved");
+    }
+
+    /// Req4.5: カスケード段の失敗は error で記録し 204 相当で継続する。
+    ///
+    /// 本檻は steady 側の 204 相当処理と error 語彙**そのもの**を層局所に固定するため
+    /// `steady::step` を直接駆動する。`step()` 経由の end-to-end（横断 `Failed` アームの免除＝
+    /// DD-12 が実際に効き `Unloading{Fault}` へ倒れないこと）は
+    /// `tests/kanade/choice_test.rs` の統合檻が免除の正・非 choice 経路の負の両方向で固定する。
+    #[test]
+    fn error_choice_shiori_failed_as_204_logs() {
+        let cfg = config();
+        let s = state_with_ledger(
+            &["choice1"],
+            ChoicePhase::Cascading {
+                choice_id: "choice1".to_string(),
+                next: None,
+            },
+        );
+        let ev = capture(|| {
+            let _ = steady::step(
+                s,
+                Input::ShioriReply {
+                    outcome: ShioriOutcome::Failed(ShioriFailure::Timeout("30s".to_string())),
+                    origin: "OnChoiceSelect",
+                },
+                &cfg,
+            );
+        });
+        assert_logged(&ev, Level::ERROR, "choice_shiori_failed_as_204");
+    }
+
+    // ============================================================
+    // 選択待ち帳簿の確立・棄却（タスク 4.2・設計ログ語彙表）
+    // ============================================================
+
+    /// 帳簿確立は info で記録し、**候補数と期限をフィールドに載せる**（設計ログ語彙表）。
+    ///
+    /// 「ログに載っていること」自体が要求であるため、発火だけでなくフィールド実値まで突合する。
+    #[test]
+    fn info_choice_waiting_established_logs_candidate_count_and_deadline() {
+        let ev = run_step(
+            steady_with_talk(TalkId(5)),
+            Input::ChoiceWaiting {
+                talk_id: TalkId(5),
+                choice_ids: vec!["OnMenu".to_string(), "choice1".to_string()],
+                display_end: MonotonicMs(2_000),
+                timeout_directive_secs: None,
+            },
+        );
+        let established = logged_once(&ev, Level::INFO, "choice_waiting_established");
+        assert_eq!(
+            established.fields.get("choice_count").map(String::as_str),
+            Some("2"),
+            "候補数がログフィールドに載る。\n捕捉={established:#?}"
+        );
+        assert_eq!(
+            established.fields.get("deadline_ms").map(String::as_str),
+            Some("Some(32000)"),
+            "写像済みの期限がログフィールドに載る。\n捕捉={established:#?}"
+        );
+    }
+
+    /// Req7.6: 無効化指令で確立された帳簿は、期限フィールドが無期限（`None`）として観測できる。
+    #[test]
+    fn info_choice_waiting_established_logs_indefinite_deadline() {
+        let ev = run_step(
+            steady_with_talk(TalkId(5)),
+            Input::ChoiceWaiting {
+                talk_id: TalkId(5),
+                choice_ids: vec!["OnMenu".to_string()],
+                display_end: MonotonicMs(2_000),
+                timeout_directive_secs: Some(-1.0),
+            },
+        );
+        let established = logged_once(&ev, Level::INFO, "choice_waiting_established");
+        assert_eq!(
+            established.fields.get("deadline_ms").map(String::as_str),
+            Some("None"),
+            "無効化指令は無期限として記録される。\n捕捉={established:#?}"
+        );
+    }
+
+    /// 通知の棄却は 3 経路（talk_id 不一致／active talk 不在／非 Steady）とも warn で記録する。
+    #[test]
+    fn warn_choice_waiting_stale_logs() {
+        let cases = [
+            // 現行トークと識別子が一致しない。
+            (steady_with_talk(TalkId(5)), TalkId(999)),
+            // 再生中でない（active talk 不在）。
+            (Phase::Steady { talk: None }, TalkId(5)),
+            // 非 Steady フェーズ。
+            (Phase::BootMain, TalkId(5)),
+        ];
+        for (phase, talk_id) in cases {
+            let ev = run_step(
+                phase,
+                Input::ChoiceWaiting {
+                    talk_id,
+                    choice_ids: vec!["OnMenu".to_string()],
+                    display_end: MonotonicMs(2_000),
+                    timeout_directive_secs: None,
+                },
+            );
+            assert_logged(&ev, Level::WARN, "choice_waiting_stale");
+        }
+    }
 
     #[test]
     fn info_talk_done_interrupted_as_non_quit_logs() {

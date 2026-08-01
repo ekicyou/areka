@@ -97,7 +97,7 @@ fn boot_sequence_matches_canonical_exactly() {
         expected_call(events::on_boot(&config, &ExecutionSnapshot::INACTIVE)), // GET（Ref0=shell_name）→Value
         expected_call(events::baseware_version(
             &config,
-            &ExecutionSnapshot { talk_active: true },
+            &ExecutionSnapshot { talk_active: true, choice_active: false },
         )), // NOTIFY（Ref0=version・Ref1=name・Status: talking）
     ];
 

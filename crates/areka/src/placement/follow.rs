@@ -45,8 +45,7 @@ use wintf::ecs::{DPI, Point, SetWindowPosCommand, SizeI, WindowHandle, WindowPos
 
 use super::diag::{self, DESPAWNED_SKIP_TAG, PlacementRoute, WindowKind, WindowMoveRecord};
 use super::persist::{
-    balloon_offset_entries, balloon_offset_to_persist, char_pos_entries, char_pos_to_origin_x,
-    persist_entries,
+    balloon_offset_entries, char_pos_entries, char_pos_to_origin_x, persist_entries,
 };
 use super::resolver::{Anchor, PointPx, RectPx, SizePx};
 use super::spawn::{BalloonWindowMarker, CharWindowMarker};
@@ -763,9 +762,10 @@ pub(crate) fn on_balloon_drag(
 /// `offset_tl = balloon_pos − char_pos`（左上基準・物理 px・再スケールなし・U4）で
 /// **最終確定位置から再導出**する——in-session の `BalloonFollow.offset`（連続ドラッグ中の
 /// 表現）は**流用しない**（最後の OnDrag 配信と最終確定位置はずれ得るため）。導出した
-/// 左上基準 offset を [`balloon_offset_to_persist`]`(anchor, offset_tl, char_size)` で
-/// サーフェス寸不変なアンカー辺基準へ移し、[`balloon_offset_entries`]→[`persist_entries`]
+/// 左上基準 offset は基準変換せずそのまま [`balloon_offset_entries`]→[`persist_entries`]
 /// で Ghost 永続スコープへ即時 write-through する（fire-and-forget・非ブロッキング）。
+/// 保存基準がランタイム基準（char 左上）と同一である理由は
+/// [`balloon_offset_entries`] を参照。
 /// scope はバルーン窓自身の [`BalloonWindowMarker`]（追従元 char の
 /// [`CharWindowMarker`] と同番号）。
 ///
@@ -855,12 +855,13 @@ pub(crate) fn on_balloon_drag_end(
                 y: balloon_pos.y - char_pos.y,
             };
 
-            // アンカー辺基準へ変換（保存方向・サーフェス寸不変）→ BalloonOffset entries を
-            // Ghost 永続スコープへ即時 write-through（fire-and-forget・7.1）。
-            let persist = balloon_offset_to_persist(anchor, offset_tl, char_size);
+            // 保存基準＝ランタイム基準（char 左上）ゆえ基準変換なし（balloon_offset_entries
+            // の基準記述）→ BalloonOffset entries を Ghost 永続スコープへ即時
+            // write-through（fire-and-forget・7.1）。
+            let persist = offset_tl;
             // 保存の計測ログ（実機診断・保存↔復元の座標突合）: balloon_pos＝バルーン最終位置、
-            // char_pos＝追従元 char の最終位置、offset_tl＝左上基準差分、persist＝アンカー辺基準
-            // （BalloonOffset entries として書かれる値）、char_size＝offset 逆変換で使う寸。
+            // char_pos＝追従元 char の最終位置、offset_tl＝左上基準差分、persist＝保存値
+            // （＝offset_tl・BalloonOffset entries として書かれる値）、char_size＝診断用の現寸。
             tracing::info!(
                 target: "areka::persist::save",
                 scope,
@@ -983,6 +984,18 @@ pub fn move_window_to(world: &mut World, window: Entity, x: i32, y: i32) -> bool
 /// **task 6.2 以後、route は随伴バルーンの発火条件でもある**——手順 7 の
 /// [`follow_balloon`] へ [`BalloonFollowTrigger::Placement`]`(route)` として渡され、
 /// バルーン矩形への遷移ガード（S3′・Req 3.4）が同じ 4 経路でのみ発火する。
+///
+/// # バルーン追従はリサイズで補正しない（**全アンカー共通**・2026-07-31 実機裁定）
+///
+/// 本関数は `BalloonFollow.offset` を**一切書き換えない**。以前は Bottom に限って
+/// 「原点＝下端中央からの相対を保つ」ため offset に `((w'/2−w/2), (h'−h))` を加算して
+/// おり、上記の恒等式記述と矛盾していた（Bottom だけ窓相対でない＝内部分裂）。
+/// 受理オラクルは参照実装 SSP の実測——SSP のバルーンは**観測時つねに現在表示中の**
+/// キャラ窓に対して窓相対 (−168,−161) にある（実 DPI 120・むらさき 478×684 表示時）。
+/// 一方 補正ありの areka は boot 採寸窓（543×859）を基準に置いたきり据え置き、
+/// 切替後に 336px 上空へ浮かせていた。補正を撤去して
+/// `areka-P0-surface-resize-resnap` Req2.6 の窓相対契約を復元し、矛盾を解消した。
+/// 檻: `resize_window_to_bottom_keeps_ssp_window_relative_balloon_offset`。
 #[allow(dead_code)] // 呼び出し側（anchor_changed_system task 2.6・frame resnap シーム）は後続 task の領分
 pub fn resize_window_to(
     world: &mut World,
@@ -1160,35 +1173,12 @@ pub fn resize_window_to(
         return false;
     }
 
-    // 6. 随伴バルーン維持（Req2.6）＋**原点（下端中央）基準での相対維持**:
-    //    セッション内 `BalloonFollow.offset` は左上基準表現ゆえ、寸法が変わると
-    //    「左上からの距離」を保ったままバルーンが動いてしまう（実機: むらさきの
-    //    surface0 434x687 → surface1000 382x547 で高さ差 140px・幅差 52px ぶん
-    //    バルーンが引きずられた）。原点＝下端中央は寸法変動で動かないのだから、
-    //    バルーンの相対位置も下端中央基準で不変であるべき。旧寸・新寸から原点差
-    //    （Δ = 新原点 − 旧原点、左上基準の差分）を求め、offset をその逆方向へ
-    //    付け替えて「下端中央からの相対位置」を保存する。旧寸不明なら従来どおり。
-    //    対象は下端吸着（Bottom）のみ（他アンカーは原点が中央でないため従来どおり）。
-    if let (Anchor::Bottom, Some(old)) = (anchor, current_size)
-        && old.width > 0
-        && old.height > 0
-        && let Some(mut follow) = world.get_mut::<BalloonFollow>(char_window)
-    {
-        // offset は「char 左上からの差分」表現。原点（下端中央）からの相対を不変に保つには、
-        //   旧原点相対 = offset_old + 旧左上 − 旧原点 = offset_old − (old.w/2, old.h)
-        //   新 offset   = 旧原点相対 + 新原点 − 新左上 = 旧原点相対 + (new.w/2, new.h)
-        // ゆえに offset += ((new.w/2 − old.w/2), (new.h − old.h)) が正しい変換
-        // （原点が左上から見て遠ざかった分だけ、左上基準 offset は増える）。
-        let d_origin_x = (new_size.w / 2) - (old.width / 2);
-        let d_origin_y = new_size.h - old.height;
-        if d_origin_x != 0 || d_origin_y != 0 {
-            follow.offset = PointPx {
-                x: follow.offset.x.saturating_add(d_origin_x),
-                y: follow.offset.y.saturating_add(d_origin_y),
-            };
-        }
-    }
-    // 7. 確定後キャラ窓座標＋（補正済み）offset で追従（offset 恒等式維持）。
+    // 6. 随伴バルーン維持（Req2.6）: **リサイズで `BalloonFollow.offset` を補正しない**。
+    //    受理オラクルは参照実装 SSP の実測——SSP のバルーンは観測時つねに現在表示中の
+    //    キャラ窓に対して窓相対にある（2026-07-31 実機裁定）。これは
+    //    `areka-P0-surface-resize-resnap` Req2.6 の「追従 offset を維持」という窓相対契約
+    //    そのものであり、全アンカーで恒等式 `balloon_pos − char_pos ≡ offset` が成立する。
+    // 確定後キャラ窓座標＋（不変の）offset で追従（offset 恒等式維持）。
     //    引き金はキャラ窓を動かした route そのもの——バルーン矩形への遷移ガード
     //    （task 6.2・S3′）はこれで発火可否が決まる（書込自身の `BalloonFollow` では
     //    決められない・[`BalloonFollowTrigger`] の doc 参照）。
@@ -4398,14 +4388,14 @@ mod tests {
     // 更新済み——DragEnd 時点の最終確定位置はこの WindowPos.position で読める
     // （on_balloon_drag と同源）。on_balloon_drag_end は最終確定位置から
     // offset = balloon_pos − char_pos を**再導出**（in-session BalloonFollow.offset は
-    // 使わない）し、balloon_offset_to_persist でアンカー辺基準へ変換して
-    // BalloonOffset entries を Ghost 永続スコープへ即時 write-through する。
+    // 使わない）し、その左上基準値を基準変換せずそのまま
+    // BalloonOffset entries として Ghost 永続スコープへ即時 write-through する。
     // 実 publisher（spawn_sylphya + SharedFakeIo）で barrier→load_scope し、保存値が
     // 最終確定位置由来の persist 値に一致することを固定する（Issue 1 対応・2.1/8.1）。
     // -------------------------------------------------------------------------
 
     /// Task 2.3 保存フック（Req2.1/8.1・design C3）: バルーン窓の DragEnd で、最終確定
-    /// 位置から**再導出**した相対 offset がアンカー辺基準へ変換され scope の
+    /// 位置から**再導出**した左上基準の相対 offset が（基準変換なしで）scope の
     /// BalloonOffset として Ghost 永続スコープへ write-through される。**in-session の
     /// BalloonFollow.offset は SAVE に使わない**（DragEnd 最終確定位置から再導出）——
     /// stale な offset を仕込んで弁別する。
@@ -4419,7 +4409,7 @@ mod tests {
             Axis, PersistKey, PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya,
         };
 
-        use super::super::persist::{PersistWiring, balloon_offset_to_persist};
+        use super::super::persist::PersistWiring;
         use super::on_balloon_drag_end;
         use crate::placement::spawn::BalloonWindowMarker;
 
@@ -4480,12 +4470,17 @@ mod tests {
             ))
             .id();
 
-        // 期待 persist 値 = 最終確定位置から再導出（in-session offset ではない）。
-        let offset_tl = PointPx {
-            x: final_balloon_pos.x - char_pos.x,
-            y: final_balloon_pos.y - char_pos.y,
+        // 期待 persist 値 = 最終確定位置から再導出した左上基準 offset そのもの
+        // （保存基準＝ランタイム基準・アンカー辺基準変換なし）。
+        let expected = PointPx {
+            x: final_balloon_pos.x - char_pos.x, // 1071−1483 = −412
+            y: final_balloon_pos.y - char_pos.y, // 708−733  = −25
         };
-        let expected = balloon_offset_to_persist(anchor, offset_tl, char_size);
+        assert_eq!(
+            expected,
+            PointPx { x: -412, y: -25 },
+            "保存値は char 左上基準の生 offset（Bottom でも h/w を引かない）"
+        );
         assert_ne!(
             expected, stale_offset,
             "檻の前提: 最終確定 offset は stale な in-session offset と異なる"
@@ -4559,9 +4554,10 @@ mod tests {
     /// - char: save 側の bottom 吸着確定位置（1427, 513）が実ファイルへ書かれ、restore 側で
     ///   同一 work area の `project_restore` が恒等（既に下端一致・x 域内）ゆえ merge 後の
     ///   `char_pos` が確定位置と値等価に戻る。既定 char_pos(100,100) が漏れれば落ちる。
-    /// - balloon: DragEnd 最終確定位置から再導出した左上基準 offset(-412,-43) が下端基準
-    ///   (-412,-730) へ変換されてファイルへ、restore 側で現 char_size で左上基準へ足し戻り、
-    ///   `balloon_pos` が balloon 最終確定位置(1015, 470)へ戻る。
+    /// - balloon: DragEnd 最終確定位置から再導出した左上基準 offset(-412,-43) が**基準変換
+    ///   なしで**そのままファイルへ書かれ（保存基準＝ランタイム基準＝char 左上・2026-07-31
+    ///   実機裁定）、restore 側でもそのまま採用され `balloon_pos` が balloon 最終確定位置
+    ///   (1015, 470)へ戻る。
     /// - 7.2: 事前に `persist_put` した無関係 key `BootCount="1"` が、char/balloon の DragEnd
     ///   save 後も `load_restored_state` に不変で残る（read-modify-write の無関係 key 温存）。
     ///
@@ -4579,8 +4575,7 @@ mod tests {
         };
 
         use super::super::persist::{
-            PersistWiring, apply_restored_placements, balloon_offset_from_persist,
-            balloon_offset_to_persist, load_restored_state,
+            PersistWiring, apply_restored_placements, load_restored_state,
         };
         use super::on_balloon_drag_end;
         use crate::placement::resolver::ScopePlacement;
@@ -4696,20 +4691,20 @@ mod tests {
             y: balloon_final.y,
         };
 
-        // --- balloon DragEnd（保存）: 最終確定位置から左上基準 offset を再導出→下端基準で保存 ---
+        // --- balloon DragEnd（保存）: 最終確定位置から左上基準 offset を再導出しそのまま保存 ---
         let balloon_ev = Phase::Bubble(drag_end_event_at(balloon, (0, 0)));
         assert!(!on_balloon_drag_end(&mut world, balloon, balloon, &balloon_ev));
 
-        // 期待 persist（下端基準）と復元 offset（左上基準）を同じ純関数で先に押さえる。
+        // 期待 persist＝左上基準 offset そのもの（保存基準＝ランタイム基準・変換なし）。
         let expected_offset_tl = PointPx {
             x: balloon_final.x - char_final.x, // 1015−1427 = −412
             y: balloon_final.y - char_final.y, // 470−513  = −43
         };
-        let expected_persist =
-            balloon_offset_to_persist(Anchor::Bottom, expected_offset_tl, char_size); // (−412,−730)
-        assert_ne!(
-            expected_offset_tl, expected_persist,
-            "檻の前提: 下端基準変換が左上基準と別値（Bottom は h ぶんずれる）"
+        let expected_persist = expected_offset_tl;
+        assert_eq!(
+            expected_persist,
+            PointPx { x: -412, y: -43 },
+            "保存値は char 左上基準の生 offset（Bottom でも char_size を混ぜない）"
         );
 
         // --- barrier: 上記 3 件の put（BootCount／WindowPos／BalloonOffset）が実 FS へ確定 ---
@@ -4751,7 +4746,7 @@ mod tests {
                 },
                 expected_persist.y.to_string()
             )),
-            "balloon 下端基準 offset が実 FS へ書かれていない: {loaded:?}"
+            "balloon 左上基準 offset が実 FS へ書かれていない: {loaded:?}"
         );
 
         // --- restore 側: mount 解決経由で実ファイルを読み、merge へ流す ------------------
@@ -4792,12 +4787,6 @@ mod tests {
             "復元が既定位置を漏らしている"
         );
         // (8.1) 復元 balloon offset（左上基準）が DragEnd 由来 offset と値等価。
-        let expected_restored_offset =
-            balloon_offset_from_persist(Anchor::Bottom, expected_persist, char_size);
-        assert_eq!(
-            expected_restored_offset, expected_offset_tl,
-            "檻の前提: 下端基準⇄左上基準が現 char_size で往復恒等"
-        );
         assert_eq!(
             out[0].balloon_offset, expected_offset_tl,
             "復元 balloon offset が DragEnd 由来 offset と値等価でない（2.2/2.3/8.1）"
@@ -4857,8 +4846,7 @@ mod tests {
         };
 
         use super::super::persist::{
-            PersistWiring, apply_restored_placements, balloon_offset_from_persist,
-            balloon_offset_to_persist, load_restored_state,
+            PersistWiring, apply_restored_placements, load_restored_state,
         };
         use super::on_balloon_drag_end;
         use crate::placement::resolver::ScopePlacement;
@@ -5074,16 +5062,32 @@ mod tests {
                 "復元 char_pos が既定へ落ちている（scope{} の window 保存欠落）",
                 p.scope
             );
-            // balloon 往復健全性（純関数側は 8.5 で証明済み・ここは結線の確認）。
+            // balloon 往復健全性（純関数側は persist.rs 8.5 群で証明済み・ここは結線の確認）。
+            // 保存基準＝ランタイム基準（char 左上）ゆえ、保存値は生 offset そのもの。
             let offset_tl = PointPx {
                 x: bf.x - cf.x,
                 y: bf.y - cf.y,
             };
-            let expected_persist = balloon_offset_to_persist(Anchor::Bottom, offset_tl, size);
+            assert!(
+                loaded.contains(&(
+                    PersistKey::BalloonOffset {
+                        scope: p.scope as u32,
+                        axis: Axis::X
+                    },
+                    offset_tl.x.to_string()
+                )) && loaded.contains(&(
+                    PersistKey::BalloonOffset {
+                        scope: p.scope as u32,
+                        axis: Axis::Y
+                    },
+                    offset_tl.y.to_string()
+                )),
+                "scope{} の balloon offset が char 左上基準の生値で保存されていない（size={size:?}）: {loaded:?}",
+                p.scope
+            );
             assert_eq!(
-                balloon_offset_from_persist(Anchor::Bottom, expected_persist, size),
-                offset_tl,
-                "檻の前提: 下端基準⇄左上基準が現 char_size で往復恒等（scope{}）",
+                p.balloon_offset, offset_tl,
+                "復元 balloon offset が左上基準の生 offset と値等価でない（scope{}）",
                 p.scope
             );
             assert_eq!(
@@ -5468,14 +5472,19 @@ mod tests {
         assert_eq!(size_of(&world, window), SizeI::new(434, 687));
     }
 
-    /// #1 随伴バルーン維持（Req2.6）＋**原点（下端中央）基準の相対位置不変**:
-    /// `BalloonFollow` 付き Bottom char 窓を resize すると、バルーンは「キャラの
-    /// 下端中央からの相対位置」を保ったまま随伴する（左上基準 offset は原点移動ぶん
-    /// 補正される）。伺かの立ち絵は足元中央が接地点＝寸法が変わっても原点は動かないので、
-    /// バルーンも引きずられてはならない（実機回帰: むらさきが surface0 434x687 →
-    /// surface1000 382x547 でバルーンが 140px 引きずられた欠陥の恒久檻）。
+    /// #1 随伴バルーン維持（Req2.6）＝**窓相対 offset 不変**（Bottom）:
+    /// `BalloonFollow` 付き Bottom char 窓を resize しても `BalloonFollow.offset` は
+    /// 書き換わらず、バルーンは `new_char_pos + offset` へ随伴して恒等式
+    /// `balloon_pos − char_pos ≡ offset` を保つ。
+    ///
+    /// キャラ窓自身の原点は下端中央（`char_pos` は中央 x を保って再導出される）が、
+    /// **バルーンの追従は原点基準ではなく窓（左上）相対**である——受理オラクルは
+    /// 参照実装 SSP の実測で、SSP のバルーンは観測時つねに現在表示中のキャラ窓に対して
+    /// 窓相対にある（2026-07-31 実機裁定）。以前の「下端中央基準の offset 補正」は Bottom だけを
+    /// 窓相対から外し、実機でバルーンを旧絶対位置に置き去りにしていた（本檻はその反転）。
+    /// 実寸オラクルは `resize_window_to_bottom_keeps_ssp_window_relative_balloon_offset`。
     #[test]
-    fn resize_window_to_keeps_balloon_relative_to_bottom_center_origin() {
+    fn resize_window_to_bottom_preserves_balloon_follow_offset() {
         let mut world = World::new();
         world.insert_resource(single_monitor_snapshot()); // 下端 1043
         let balloon = world
@@ -5492,11 +5501,12 @@ mod tests {
             .id();
 
         // 旧原点（下端中央）: x=731+434/2=948・y=356+687=1043。
-        // バルーンの旧絶対位置: (731−412, 356−25)=(319, 331)。
-        // 旧原点からの相対: (319−948, 331−1043)=(-629, -712)。
+        // 旧バルーン絶対位置: (731−412, 356−25)=(319, 331)。
         let old_origin = (731 + 434 / 2, 356 + 687);
-        let old_balloon = (731 + offset.x, 356 + offset.y);
-        let rel_to_origin = (old_balloon.0 - old_origin.0, old_balloon.1 - old_origin.1);
+        let old_balloon = Point {
+            x: 731 + offset.x,
+            y: 356 + offset.y,
+        };
 
         // 新寸 (517×823): char は下端中央保持で x=948−517/2=690・y=1043−823=220。
         assert!(resize_window_to(
@@ -5509,25 +5519,111 @@ mod tests {
         let balloon_pos = position_of(&world, balloon);
         assert_eq!(char_pos, Point { x: 690, y: 1043 - 823 });
 
-        // 新原点（下端中央）= (690+517/2, 220+823) = (948, 1043)＝**旧原点と同一**。
+        // キャラ窓の原点（下端中央）は寸法変動で動かない（step 3b の契約・無改変）。
         let new_origin = (char_pos.x + 517 / 2, char_pos.y + 823);
         assert_eq!(
             new_origin, old_origin,
             "原点（下端中央）は寸法変動で動かない"
         );
-        // バルーンは原点からの相対位置を保つ＝絶対位置も不変。
-        assert_eq!(
-            (balloon_pos.x - new_origin.0, balloon_pos.y - new_origin.1),
-            rel_to_origin,
-            "バルーンは下端中央原点からの相対位置を保つ（引きずられない）"
-        );
+
+        // バルーンは**窓相対**: 新 char 左上 + 不変 offset。
         assert_eq!(
             balloon_pos,
             Point {
-                x: old_balloon.0,
-                y: old_balloon.1
+                x: char_pos.x + offset.x,
+                y: char_pos.y + offset.y
             },
-            "原点が動かない以上、バルーンの絶対位置も動かない"
+            "バルーンは窓（左上）相対 offset で追随する"
+        );
+        // offset 恒等式（balloon_pos − char_pos ≡ offset）の維持。
+        assert_eq!(balloon_pos.x - char_pos.x, offset.x);
+        assert_eq!(balloon_pos.y - char_pos.y, offset.y);
+        assert_eq!(
+            world.get::<BalloonFollow>(window).unwrap().offset,
+            offset,
+            "BalloonFollow.offset は resize で補正されない"
+        );
+        // 旧「下端中央基準」実装は原点不動ゆえバルーン絶対位置も不動にしていた——
+        // 窓上端が 136px 上がった本ケースでは窓相対と弁別できる（反転の証明）。
+        assert_ne!(
+            balloon_pos, old_balloon,
+            "下端中央基準補正の復活検出: 窓が動いた以上バルーンも動く"
+        );
+    }
+
+    /// SSP オラクル檻（2026-07-31 実機裁定・実 DPI 120／k=1.25 のむらさき実寸）:
+    /// talk 中のサーフェス切替で Bottom キャラ窓が 543×859 → 478×684（下端 2100 固定）へ
+    /// 縮んでも、バルーンは**窓相対 offset (−167,−161) を保ったまま**追随する。
+    ///
+    /// 参照実装 SSP は同時点で char 477×683@(3363,1417)／balloon (3195,1256)＝offset
+    /// (−168,−161) を保っており、本檻の (−167,−161) とは x が 1px だけ違う。この 1px は
+    /// サーフェス寸の丸め権威（SSP と areka のスケール丸め）由来であって、追従セマンティクス
+    /// とは無関係——本変更の受理判定には影響しない。
+    ///
+    /// 欠陥（削除した step 6＝Bottom 限定の下端中央基準 offset 補正）が残っていると、
+    /// offset は (−167+(478/2−543/2), −161+(684−859)) = (−199,−336) へ書き換わり、
+    /// バルーンは旧絶対位置 (3130,1080) に貼り付いたまま新窓上端の 336px 上空へ浮く
+    /// ——実機で観測された症状そのもの。本檻はその恒久回帰檻。
+    #[test]
+    fn resize_window_to_bottom_keeps_ssp_window_relative_balloon_offset() {
+        let mut world = World::new();
+        // 実機 4K 縦 2100 の work area（下端 2100・むらさきが載っていたモニタ）。
+        world.insert_resource(MonitorSnapshot {
+            work_areas: vec![rect(2560, 0, 3840, 2100)],
+        });
+        // boot 直後の実測: char 543×859 @ (3297,1241)／balloon (3130,1080)。
+        let offset = PointPx { x: -167, y: -161 };
+        let balloon = world
+            .spawn((fake_handle(0x2000), window_pos_at(3130, 1080)))
+            .id();
+        let window = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(3297, 1241, 543, 859),
+                Anchored(Anchor::Bottom),
+                BalloonFollow { balloon, offset },
+            ))
+            .id();
+
+        // サーフェス切替後の実測寸 478×684 へ resize。
+        // route は `dpi-window-vanish` の D11 配管でシグネチャに入った引数。本檻の主題は
+        // 追従セマンティクス（窓相対）ゆえ、遷移ガードが発火する配置系 route の代表値
+        // （`Resnap`）を渡す——ガードが働く経路でも offset が補正されないことを見る。
+        assert!(resize_window_to(
+            &mut world,
+            window,
+            SizePx { w: 478, h: 684 },
+            PlacementRoute::Resnap
+        ));
+        let char_pos = position_of(&world, window);
+        let balloon_pos = position_of(&world, balloon);
+
+        // char は下端中央原点を保つ: 中央 x = 3297+271 = 3568 → 左上 x = 3568−239 = 3329・
+        // y = wa.bottom − h' = 2100−684 = 1416（実機実測 (3329,1416) と一致）。
+        assert_eq!(
+            char_pos,
+            Point { x: 3329, y: 1416 },
+            "char は下端中央原点維持（実機実測 (3329,1416)）"
+        );
+        // バルーンは**窓相対**: 新窓左上 + offset = (3329−167, 1416−161) = (3162,1255)。
+        assert_eq!(
+            balloon_pos,
+            Point { x: 3329 - 167, y: 1416 - 161 },
+            "バルーンは窓相対 offset で追随する（SSP と同セマンティクス）"
+        );
+        // 恒等式 balloon_pos − char_pos ≡ offset（resize で補正しない）。
+        assert_eq!(balloon_pos.x - char_pos.x, offset.x);
+        assert_eq!(balloon_pos.y - char_pos.y, offset.y);
+        assert_eq!(
+            world.get::<BalloonFollow>(window).unwrap().offset,
+            offset,
+            "BalloonFollow.offset は resize で書き換わらない"
+        );
+        // 欠陥時の値（旧絶対位置に貼り付く）を明示的に排除する。
+        assert_ne!(
+            balloon_pos,
+            Point { x: 3130, y: 1080 },
+            "step 6 復活の検出: 旧絶対位置に貼り付いてはならない"
         );
     }
 
@@ -5669,10 +5765,14 @@ mod tests {
         assert_eq!(size_of(&world, window), SizeI::new(517, 823));
     }
 
-    /// #3 随伴バルーン維持（非 Bottom・Req2.6）: `Anchored(Left)`＋`BalloonFollow` の
+    /// #3 随伴バルーン維持（Left・Req2.6）: `Anchored(Left)`＋`BalloonFollow` の
     /// char 窓を resize すると、char は左端固定（Y 保持）へ移り、バルーンは
-    /// `new_char_pos + offset` へ随伴し `balloon_pos − char_pos ≡ offset` を維持する
-    /// （task 2.4 の Bottom 版と別アンカーで offset 恒等式を固定）。
+    /// `new_char_pos + offset` へ随伴し `balloon_pos − char_pos ≡ offset` を維持する。
+    ///
+    /// 本檻はかつて「非 Bottom だけの例外」を主張していたが、2026-07-31 実機裁定で
+    /// Bottom の下端中央基準補正が撤去され、窓相対追従が**全アンカー共通の規範**になった
+    /// ——Bottom 版は `resize_window_to_bottom_preserves_balloon_follow_offset`。
+    /// 本檻はその規範をアンカー辺 x 固定（Left）側で固定する。
     #[test]
     fn resize_window_to_left_preserves_balloon_follow_offset() {
         let mut world = World::new();
@@ -8099,16 +8199,12 @@ mod tests {
     // （Req 5.6）。実 GPU・実高 DPI モニタを要さず決定論（Req 5.2）。
     // -------------------------------------------------------------------------
 
-    /// 下端中央原点の移動量（左上基準 offset の付替え量・[`resize_window_to`] 手順 6 の
-    /// **檻側の独立実装**）。本体の式を呼び直さない。
-    fn origin_delta(old: SizePx, new: SizePx) -> PointPx {
-        point(new.w / 2 - old.w / 2, new.h - old.h)
-    }
-
     /// [`gap_bound_char_world`] に随伴バルーンを足した World。
     ///
-    /// `offset` は **spawn 時点**の左上基準 offset。手順 6 が原点移動ぶんを付け替えるため、
-    /// 追従に実際に使われるのは `offset + origin_delta(wide, narrow)` である。
+    /// `offset` は**窓（char 窓左上）相対**の追従 offset。[`resize_window_to`] は寸法変動で
+    /// これを**一切書き換えない**（2026-07-31 実機 SSP 裁定・恒等式
+    /// `balloon_pos − char_pos ≡ offset` が全アンカーで不変）ので、spawn 時点の値が
+    /// そのまま追従に使われる。
     fn gap_bound_char_world_with_balloon(
         dpi: i32,
         balloon_size: SizePx,
@@ -8164,13 +8260,9 @@ mod tests {
             let layout = mixed_layout(dpi);
             let new = narrow_char_size(dpi);
             let b_size = balloon_size(dpi);
-            // 追従に実際に使われる offset（手順 6 の付替え後）と、spawn 時点の offset。
-            let applied_offset = point(-px(2600, dpi), -px(600, dpi));
-            let d_origin = origin_delta(wide_char_size(dpi), new);
-            let spawn_offset = point(
-                applied_offset.x - d_origin.x,
-                applied_offset.y - d_origin.y,
-            );
+            // 窓相対の追従 offset。リサイズで補正されないので spawn 時点＝追従時点。
+            // 救出後のキャラ位置から見て遥か左（左モニタよりさらに外）を指す。
+            let offset = point(-px(2600, dpi), -px(600, dpi));
             // 旧バルーンは**左モニタ内**で可視（＝「遷移」であって留置ではない）。
             // 座標は左モニタ左端からの論理オフセット×DPI で組む（絶対 px を置かない・Req 5.6）。
             let old_balloon = point(left_wa().left + px(360, dpi), px(200, dpi));
@@ -8182,15 +8274,12 @@ mod tests {
                 PlacementRoute::ReportedSizeReconcile,
             ] {
                 let (mut world, char_window, balloon, old_pos) =
-                    gap_bound_char_world_with_balloon(dpi, b_size, old_balloon, spawn_offset);
+                    gap_bound_char_world_with_balloon(dpi, b_size, old_balloon, offset);
 
                 // --- (1) 探針の自己検査（[[2.2 の教訓]]）---
                 let char_bare = unguarded_projection(dpi, old_pos, new);
                 let char_saved = point(right_wa(dpi).left, char_bare.y);
-                let balloon_bare = point(
-                    char_saved.x + applied_offset.x,
-                    char_saved.y + applied_offset.y,
-                );
+                let balloon_bare = point(char_saved.x + offset.x, char_saved.y + offset.y);
                 assert!(
                     visible_in(&layout, old_pos, wide_char_size(dpi)),
                     "dpi={dpi}: 旧キャラ矩形が非交差では『遷移』にならない"
@@ -8286,12 +8375,8 @@ mod tests {
                 w: px(48, dpi),
                 h: px(300, dpi),
             };
-            let applied_offset = point(-px(12, dpi), -px(600, dpi));
-            let d_origin = origin_delta(wide_char_size(dpi), new);
-            let spawn_offset = point(
-                applied_offset.x - d_origin.x,
-                applied_offset.y - d_origin.y,
-            );
+            // 窓相対の追従 offset（リサイズで補正されない＝spawn 時点＝追従時点）。
+            let offset = point(-px(12, dpi), -px(600, dpi));
             let old_balloon = visible_balloon_pos(dpi);
 
             for route in [
@@ -8301,18 +8386,12 @@ mod tests {
                 PlacementRoute::ReportedSizeReconcile,
             ] {
                 let (mut world, char_window, balloon, old_pos) =
-                    gap_bound_char_world_with_balloon(dpi, b_size, old_balloon, spawn_offset);
+                    gap_bound_char_world_with_balloon(dpi, b_size, old_balloon, offset);
 
                 let char_bare = unguarded_projection(dpi, old_pos, new);
                 let char_saved = point(right_wa(dpi).left, char_bare.y);
-                let follows_guarded = point(
-                    char_saved.x + applied_offset.x,
-                    char_saved.y + applied_offset.y,
-                );
-                let follows_raw = point(
-                    char_bare.x + applied_offset.x,
-                    char_bare.y + applied_offset.y,
-                );
+                let follows_guarded = point(char_saved.x + offset.x, char_saved.y + offset.y);
+                let follows_raw = point(char_bare.x + offset.x, char_bare.y + offset.y);
 
                 // --- 探針の自己検査: 2 つの追従先が**区別できる**こと ---
                 assert_ne!(
@@ -8353,14 +8432,18 @@ mod tests {
                     "dpi={dpi} route={route}: 追従先のバルーンが全 work area と非交差"
                 );
 
-                // 恒等式（Req 4.4）: `balloon − char ≡ BalloonFollow.offset`（付替え後）。
-                let offset = world
+                // 恒等式（Req 4.4）: `balloon − char ≡ BalloonFollow.offset`。
+                // 比較相手は**書込前から不変の**窓相対 offset（テスト側の定数）であり、
+                // world から読み直した値ではない——読み直すと「恒等式を、それを作った
+                // 当人に問う」恒真形になる（[[7.2 の空虚性 8 例目]]）。
+                let stored_offset = world
                     .get::<BalloonFollow>(char_window)
                     .expect("char 窓は BalloonFollow を持つ")
                     .offset;
                 assert_eq!(
-                    offset, applied_offset,
-                    "dpi={dpi} route={route}: 原点（下端中央）基準の offset 付替えが崩れている"
+                    stored_offset, offset,
+                    "dpi={dpi} route={route}: BalloonFollow.offset が書き換わった\
+                     （窓相対契約＝リサイズで offset を補正しない・2026-07-31 実機 SSP 裁定）"
                 );
                 let c = point_of(&world, char_window);
                 let b = point_of(&world, balloon);

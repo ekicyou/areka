@@ -43,24 +43,42 @@ use tracing_subscriber::layer::{Context, Layer};
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::registry::LookupSpan;
 
-/// 捕捉した 1 イベント（固定ログ檻が照合するのは target／level／message）。
+/// 捕捉した 1 イベント（固定ログ檻が照合するのは target／level／message／event）。
 #[derive(Clone, Debug)]
 pub(crate) struct CapturedEvent {
     pub target: String,
     pub level: Level,
     /// 構造化フィールド `message`（マクロ本文）の `Debug` 表現。未設定なら空文字。
     pub message: String,
+    /// 構造化フィールド `event`（design「ログ語彙表」の区別語彙）の値。未設定なら `None`。
+    ///
+    /// 語彙は message 本文ではなくこのフィールドが担うため、語彙の檻（[`assert_logged_event`]）は
+    /// 本文言い回しの変更では緑のまま・語彙の改名では確実に落ちる。
+    pub event: Option<String>,
 }
 
-/// `message` フィールドを取り出す訪問子。
+/// `message`／`event` フィールドを取り出す訪問子。
 struct MessageVisitor {
     message: String,
+    event: Option<String>,
 }
 
 impl Visit for MessageVisitor {
+    /// 語彙フィールドは文字列リテラルで渡す規約（`event = "..."`）ゆえ、通常はこちらで拾う。
+    fn record_str(&mut self, field: &Field, value: &str) {
+        if field.name() == "event" {
+            self.event = Some(value.to_string());
+        }
+    }
+
     fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
-        if field.name() == "message" {
-            self.message = format!("{value:?}");
+        match field.name() {
+            "message" => self.message = format!("{value:?}"),
+            // `event` を `%`/`?` 経由で渡した場合の保険（Debug 表現の囲み引用符を剥がす）。
+            "event" if self.event.is_none() => {
+                self.event = Some(format!("{value:?}").trim_matches('"').to_string());
+            }
+            _ => {}
         }
     }
 }
@@ -75,13 +93,17 @@ where
     S: Subscriber + for<'a> LookupSpan<'a>,
 {
     fn on_event(&self, event: &Event<'_>, _ctx: Context<'_, S>) {
-        let mut visitor = MessageVisitor { message: String::new() };
+        let mut visitor = MessageVisitor {
+            message: String::new(),
+            event: None,
+        };
         event.record(&mut visitor);
         let meta = event.metadata();
         self.sink.lock().unwrap().push(CapturedEvent {
             target: meta.target().to_string(),
             level: *meta.level(),
             message: visitor.message,
+            event: visitor.event,
         });
     }
 }
@@ -130,6 +152,30 @@ pub(crate) fn assert_logged(events: &[CapturedEvent], level: Level, target: &str
         events
             .iter()
             .map(|e| (e.target.clone(), e.level, e.message.clone()))
+            .collect::<Vec<_>>()
+    );
+}
+
+/// 捕捉列に `target`・`level`・構造化フィールド `event == event_name` のイベントが存在することを
+/// 表明する（design「ログ語彙表」の語彙固定・棄却/防御アームの回帰檻）。
+///
+/// [`assert_logged`] が message 本文で照合するのに対し、こちらは**語彙フィールド**で照合する。
+/// 語彙の削除・改名・レベル変更で落ちる（本文の言い回し変更では落ちない）。
+pub(crate) fn assert_logged_event(
+    events: &[CapturedEvent],
+    level: Level,
+    target: &str,
+    event_name: &str,
+) {
+    let hit = events
+        .iter()
+        .any(|e| e.target == target && e.level == level && e.event.as_deref() == Some(event_name));
+    assert!(
+        hit,
+        "期待ログ未検出: target={target:?} level={level} event={event_name:?}。\n捕捉={:?}",
+        events
+            .iter()
+            .map(|e| (e.target.clone(), e.level, e.event.clone(), e.message.clone()))
             .collect::<Vec<_>>()
     );
 }

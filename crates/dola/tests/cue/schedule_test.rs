@@ -653,3 +653,69 @@ fn extend_inserts_multiple_entries() {
     sched.tick(2.0);
     assert_eq!(sched.ready(), &["second".to_string()]);
 }
+
+// ============================================================================
+// 占有 horizon の絶対時刻照会（Task 3.1・R7.2）
+// ============================================================================
+
+/// `occupancy_horizon()` はアンカー（`start_time`）＋相対 horizon の**和**を返す。
+/// タイムアウト計測の起点はこの duration 権威から取得され、独自の時間基準を作らない（R7.2）。
+#[test]
+fn occupancy_horizon_returns_anchor_plus_relative_horizon() {
+    let sched = TimedSchedule::<String>::with_horizon(10.0, 2.5);
+    assert_eq!(
+        sched.occupancy_horizon(),
+        12.5,
+        "アンカー 10.0 ＋ 相対 horizon 2.5 = 12.5"
+    );
+}
+
+/// horizon 既定（`new` = 0.0）ではアンカーそのものを返す（手組みスケジュールの後方互換）。
+#[test]
+fn occupancy_horizon_of_default_schedule_is_the_anchor() {
+    let sched = TimedSchedule::<String>::new(7.25);
+    assert_eq!(
+        sched.occupancy_horizon(),
+        7.25,
+        "horizon=0.0 既定ゆえアンカーそのもの"
+    );
+}
+
+/// アンカー未刻印（0.0）では相対 horizon がそのまま絶対値になる。
+#[test]
+fn occupancy_horizon_without_anchor_is_the_relative_horizon() {
+    let sched = TimedSchedule::<String>::with_horizon(0.0, 3.0);
+    assert_eq!(sched.occupancy_horizon(), 3.0);
+}
+
+/// `occupancy_horizon()` は tick で進行しても不変（配送位置でなく占有区間の終端を指す）。
+#[test]
+fn occupancy_horizon_is_invariant_across_ticks() {
+    let mut sched = TimedSchedule::<String>::with_horizon(100.0, 2.0);
+    sched.insert(Entry::Payload(0.5, "a".into()));
+    assert_eq!(sched.occupancy_horizon(), 102.0);
+
+    sched.tick(100.5);
+    assert_eq!(sched.ready(), &["a".to_string()]);
+    assert_eq!(
+        sched.occupancy_horizon(),
+        102.0,
+        "配送が進んでも占有 horizon の絶対時刻は動かない"
+    );
+}
+
+/// `occupancy_horizon()` は `is_completed()` の閾値と一致する（同一の horizon 権威）。
+#[test]
+fn occupancy_horizon_matches_is_completed_threshold() {
+    let mut sched = TimedSchedule::<String>::with_horizon(100.0, 2.0);
+    sched.insert(Entry::Payload(0.5, "a".into()));
+
+    sched.tick(100.5);
+    assert!(!sched.is_completed(), "horizon 未到達では完了しない");
+
+    sched.tick(sched.occupancy_horizon());
+    assert!(
+        sched.is_completed(),
+        "occupancy_horizon() が返す絶対時刻の到達で完了する"
+    );
+}

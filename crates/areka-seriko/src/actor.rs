@@ -2064,11 +2064,11 @@ mod tests {
             )])
         }
 
-        /// 実表＋注入 rng の live config（balloon 表は空）。
+        /// 実表＋注入 rng の live config（バルーン表の写像は空＝全 scope 不活性）。
         fn live_cfg(shell_table: AnimationTable, rng: LoopRng) -> SerikoLoopConfig {
             SerikoLoopConfig {
                 shell_table,
-                balloon_table: AnimationTable::empty(),
+                balloon_tables: BTreeMap::new(),
                 rng,
             }
         }

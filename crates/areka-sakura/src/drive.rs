@@ -33,11 +33,12 @@ use std::sync::mpsc::Sender;
 
 use crate::compile::compile;
 use crate::contract::{
-    CueSheet, SakuraMsg, StartTalk, SystemVarSnapshot, TalkDone, TalkEndReason, TalkHandle, TalkId,
+    ChoiceWaiting, CueSheet, SakuraMsg, StartTalk, SystemVarSnapshot, TalkDone, TalkEndReason,
+    TalkHandle, TalkId,
 };
 use crate::error::SakuraError;
 use areka_actor::{run_inbox, spawn_actor};
-use dola::cue::{CuePlayer, CueSink};
+use dola::cue::{BarrierKind, CuePlayer, CuePlayerState, CueSink};
 
 /// per-talk transient を起動し、`Tick`/`Close` の投函端と join ハンドルを返す。
 ///
@@ -57,7 +58,10 @@ use dola::cue::{CuePlayer, CueSink};
 /// sakura は値源を所有せず（永続化層・SHIORI・OS 環境を直接読まない）このスナップショットを
 /// 参照するだけである（D8: スナップショットは `StartTalk` でなく talk 起動境界で手渡す）。
 ///
-/// `done` は `TalkDone` の届け先（呼び出し側 inbox への変換投函・`D: From<TalkDone>`）。
+/// `done` は talk からの**完了通知ポート**（呼び出し側 inbox への変換投函）。境界は
+/// `D: From<TalkDone> + From<ChoiceWaiting>` で、[`TalkDone`]（通算高々 1 回）と
+/// [`ChoiceWaiting`]（選択待ち成立・DD-6）が**同一ポート**を流れる——同一 talk についての
+/// 「選択待ち成立」と「再生完了」の因果順が単一 FIFO で保存される（別チャンネルへ分離しない）。
 ///
 /// # Preconditions
 ///
@@ -75,7 +79,7 @@ pub fn spawn_talk<D>(
     system_vars: SystemVarSnapshot,
 ) -> TalkHandle
 where
-    D: From<TalkDone> + Send + 'static,
+    D: From<TalkDone> + From<ChoiceWaiting> + Send + 'static,
 {
     let talk_id = start.talk_id;
     let name = format!("sakura-talk-{}", talk_id.0);
@@ -139,11 +143,19 @@ struct TalkDriver<D> {
     system_vars: SystemVarSnapshot,
     /// `TalkDone` の届け先（呼び出し側 inbox への変換投函）。
     done: Sender<D>,
+    /// 現在の選択待ちバリアについて [`ChoiceWaiting`] を送出済みか（一度きり検出・DD-6）。
+    ///
+    /// `WaitingForChoice` へ遷移した tick で `true` にし、以降の tick では再送しない
+    /// （`CuePlayer` は待機中 tick を早期 return するため状態は待機のまま維持される）。
+    /// [`on_resolve_choice`](Self::on_resolve_choice) の解決成功で `false` へ戻す——M1 の
+    /// compile は talk あたり高々 1 個の選択待ちバリアしか発行しないため実際には再成立しないが、
+    /// 1 トークに複数バリアを持つ将来拡張のシームとしてリセットを残す。
+    choice_notified: bool,
 }
 
 impl<D> TalkDriver<D>
 where
-    D: From<TalkDone> + Send + 'static,
+    D: From<TalkDone> + From<ChoiceWaiting> + Send + 'static,
 {
     fn new(
         sinks: Vec<Box<dyn CueSink + Send>>,
@@ -155,6 +167,7 @@ where
             sinks,
             system_vars,
             done,
+            choice_notified: false,
         }
     }
 
@@ -292,6 +305,10 @@ where
     /// `player.tick` の後始末: 占有 horizon 到達（[`CuePlayer::is_completed`]）なら
     /// `TalkDone{end}` を送出し `Break`（phase は既に Idle）、未完了なら `Driving` を書き戻して
     /// `Continue`。完了検知は entry 枯渇でなく horizon 到達で真になる（早期終了しない・R2.5/D6）。
+    ///
+    /// 未完了側では書き戻しの直前に**選択待ち成立の検出**（[`notify_choice_waiting_if_newly_waiting`]
+    /// (Self::notify_choice_waiting_if_newly_waiting)）を挟む（DD-6・R7.1/7.2）。完了側で検出しないのは
+    /// [`CuePlayerState`] が排他ゆえ——`WaitingForChoice` なら `is_completed()` は必ず偽である。
     fn settle_after_tick(
         &mut self,
         talk_id: TalkId,
@@ -304,6 +321,10 @@ where
             self.send_done(talk_id, end);
             ControlFlow::Break(())
         } else {
+            // 選択待ち成立の一度きり検出＋通知（tick 経路。`on_resolve_choice` からの合流でも
+            // 呼ばれるが、`resolve_choice` 成功直後の状態は `Playing`/`Completed` であって
+            // `WaitingForChoice` にはなり得ないため構造的に no-op である）。
+            self.notify_choice_waiting_if_newly_waiting(talk_id, &player);
             self.phase = TalkPhase::Driving {
                 talk_id,
                 player,
@@ -312,6 +333,68 @@ where
             };
             ControlFlow::Continue(())
         }
+    }
+
+    /// 選択待ちバリアの成立（[`CuePlayerState::WaitingForChoice`] 遷移）を**一度きり**検出し、
+    /// [`ChoiceWaiting`] を done ポートへ送出する（DD-6・R7.1/7.2）。
+    ///
+    /// 通知の真実源は**再生層**（[`CuePlayer`]）であり、本メソッドは検出時点の player から
+    /// 3 つの事実をその場で写し取って送る:
+    ///
+    /// - **候補選択肢 ID 列**: [`CuePlayer::pending_choices`] の表示順（照合は下流・DD-7。talk 側
+    ///   [`CuePlayer::resolve_choice`] の id 照合は二重防御として温存する）。
+    /// - **表示完了時刻**: [`CuePlayer::occupancy_horizon`]（アンカー込みの絶対値＝duration 権威）。
+    ///   注入 Tick の現在時刻ではない——タイムアウト計測の起点に再生層以外の時間基準を持ち込まない
+    ///   （R7.2）。**捕捉は送出時点**で行う: [`CuePlayer::stop`] 後は schedule が clear されて
+    ///   horizon がアンカーへ落ちるため、停止前のこの時点で読むことが値の正しさを担保する。
+    /// - **タイムアウト指令**: [`BarrierKind::WaitForChoice`] の `timeout` をそのまま搬送する
+    ///   （写像も既定値の適用も本層では行わない・DD-8）。
+    ///
+    /// 二重送出は [`choice_notified`](Self::choice_notified) が塞ぐ。送信失敗は `error!` を記録して
+    /// 黙殺せず、talk は終端させない（`TalkDone` 送出と同規律・受信端不在は致命ではない）。
+    fn notify_choice_waiting_if_newly_waiting(&mut self, talk_id: TalkId, player: &CuePlayer) {
+        if self.choice_notified || !matches!(player.state(), CuePlayerState::WaitingForChoice) {
+            return;
+        }
+
+        let choice_ids: Vec<String> = player
+            .pending_choices()
+            .iter()
+            .map(|choice| choice.id.clone())
+            .collect();
+        let timeout_directive_secs = match player.current_barrier() {
+            Some(BarrierKind::WaitForChoice { timeout }) => *timeout,
+            other => {
+                // 非到達（`WaitingForChoice` は `WaitForChoice` バリアでのみ成立する）。黙って
+                // 既定へ倒さず記録したうえで「未指定」として搬送する（防御枝・DD-8）。
+                tracing::warn!(
+                    talk_id = talk_id.0,
+                    barrier = ?other,
+                    "WaitingForChoice なのに WaitForChoice バリアではない; タイムアウト指令を未指定として扱う"
+                );
+                None
+            }
+        };
+        // 停止（`stop`）前のこの時点で占有 horizon を捕捉する（送出時点での捕捉）。
+        let display_end_elapsed_secs = player.occupancy_horizon();
+
+        let waiting = ChoiceWaiting {
+            talk_id,
+            choice_ids,
+            display_end_elapsed_secs,
+            timeout_directive_secs,
+        };
+        tracing::info!(
+            talk_id = talk_id.0,
+            choice_count = waiting.choice_ids.len(),
+            display_end_elapsed_secs,
+            ?timeout_directive_secs,
+            "choice barrier reached; notifying ChoiceWaiting"
+        );
+        if self.done.send(D::from(waiting)).is_err() {
+            tracing::error!(talk_id = talk_id.0, "ChoiceWaiting done receiver dropped");
+        }
+        self.choice_notified = true;
     }
 
     /// `Close` 受領: 進行中の再生を即時停止し、中断 ACK を返す（R7.1/7.2/7.3/7.4）。
@@ -370,6 +453,10 @@ where
                 last_tick,
             } => match player.resolve_choice(&id) {
                 Some(_) => {
+                    // 選択待ち成立の検出フラグを戻す（DD-6 のシーム）。M1 の compile は talk あたり
+                    // 高々 1 個のバリアしか発行しないため同一 talk で再成立しないが、1 トークに複数
+                    // バリアを持つ将来拡張ではこのリセットが次バリアの通知を可能にする。
+                    self.choice_notified = false;
                     // 選択解決成功。解決後に既に占有 horizon 到達なら即時 settle（次 Tick を待たない）。
                     // settle_after_tick と同型（同一 TalkDone{end} 構築・同一 reason・同一片付け）を
                     // 共用し、tick 完了経路と分岐させない。last_tick は未完了時の書き戻し用に温存する。
@@ -446,9 +533,51 @@ mod tests {
     use super::*;
     use crate::contract::{CueCommand, TalkCue, TalkId};
     use crate::duration::text_playback_duration;
-    use std::sync::mpsc::{self, TryRecvError};
+    use std::sync::mpsc::{self, RecvTimeoutError, TryRecvError};
     use std::sync::{Arc, Mutex};
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
+
+    // ── テスト用 done ポート型（`D: From<TalkDone> + From<ChoiceWaiting>` 境界の充足） ──
+
+    /// 完了通知ポートを流れる 2 種の通知を合流させる最小の enum（本番は ⓪ghost の
+    /// `DispatcherMsg` が同じ役を担う）。[`TalkDone`] と [`ChoiceWaiting`] が**同一ポート**を
+    /// 流れることで因果順が保存される（DD-6）ため、檻もこの単一チャンネルで観測する。
+    #[derive(Debug, Clone, PartialEq)]
+    enum TalkNotice {
+        /// 再生完了/中断 ACK（通算高々 1 回）。
+        Done(TalkDone),
+        /// 選択待ち成立（バリアごとに 1 回）。
+        ChoiceWaiting(ChoiceWaiting),
+    }
+    impl From<TalkDone> for TalkNotice {
+        fn from(done: TalkDone) -> Self {
+            TalkNotice::Done(done)
+        }
+    }
+    impl From<ChoiceWaiting> for TalkNotice {
+        fn from(waiting: ChoiceWaiting) -> Self {
+            TalkNotice::ChoiceWaiting(waiting)
+        }
+    }
+
+    /// `TalkDone` **だけ**を待つ受信ヘルパ（間に挟まる `ChoiceWaiting` は読み飛ばす）。
+    ///
+    /// 既存檻が `done_rx.recv_timeout(..)` で観測していた意味論（「この窓の中で `TalkDone` が
+    /// 来るか否か」）をそのまま保つための薄いフィルタである。与えた総待ち時間を deadline として
+    /// 守るため、`ChoiceWaiting` の読み飛ばしで窓が延びることはない（負の窓の判定が緩まない）。
+    fn recv_done(
+        rx: &mpsc::Receiver<TalkNotice>,
+        timeout: Duration,
+    ) -> Result<TalkDone, RecvTimeoutError> {
+        let deadline = Instant::now() + timeout;
+        loop {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            match rx.recv_timeout(remaining)? {
+                TalkNotice::Done(done) => return Ok(done),
+                TalkNotice::ChoiceWaiting(_) => continue,
+            }
+        }
+    }
 
     // ── テスト用 CueSink 群（broadcast: 登録された全 sink が全 cue を受ける） ──
 
@@ -517,7 +646,7 @@ mod tests {
     /// （observable・R1.4）。`talk_id` は起動要求のものがエコーされる（R1.3）。
     #[test]
     fn empty_script_talk_returns_talkdone_immediately_without_tick() {
-        let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+        let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
         let talk_id = TalkId(7);
         let start = StartTalk {
             epilogue: Vec::new(),
@@ -537,8 +666,7 @@ mod tests {
         );
 
         // TalkDone が即座に到達すること（Tick 不要・時間軸駆動なし）。
-        let done = done_rx
-            .recv_timeout(Duration::from_secs(5))
+        let done = recv_done(&done_rx, Duration::from_secs(5))
             .expect("空 script の talk は即座に TalkDone を返すべき");
 
         assert_eq!(done.talk_id, talk_id, "talk_id がエコーされること");
@@ -556,7 +684,7 @@ mod tests {
     /// 駆動し、両者が ClearAll/Emote/hello/Wait/world を過不足なく受けることを固定する。
     #[test]
     fn broadcast_delivers_identical_cue_stream_to_every_registered_sink() {
-        let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+        let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
         let start = StartTalk {
             epilogue: Vec::new(),
             script: r"\s[10]hello\w[2]world\e".to_string(),
@@ -576,8 +704,7 @@ mod tests {
         // 初回 Tick(0.0) でアンカー刻印（0.0）、占有 horizon（world 再生完了＝0.35+0.25=0.60）を跨ぐ 1.0。
         handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
         handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
-        done_rx
-            .recv_timeout(Duration::from_secs(5))
+        recv_done(&done_rx, Duration::from_secs(5))
             .expect("自然終端で TalkDone");
         handle.actor.join().expect("body は正常終了する");
 
@@ -615,7 +742,7 @@ mod tests {
     fn same_sheet_started_at_different_times_delivers_cue_at_different_absolute_fire_times() {
         // 1 回の再生を anchor で駆動し、(初回Tick直後にbye未着か, A+0.5でbye未着か, A+0.6でbye着弾か) を返す。
         fn run_with_anchor(anchor: f64) -> (bool, bool, bool) {
-            let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+            let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
             let start = StartTalk {
                 epilogue: Vec::new(),
                 script: r"\s[0]hi\w[10]bye\e".to_string(),
@@ -680,8 +807,7 @@ mod tests {
             let mut bye_after_full = false;
             // 自然終端まで進めてから observe すると drain が確定する。horizon=0.75 を跨ぐ A+1.0。
             handle.inbox.send(SakuraMsg::Tick(anchor + 1.0)).unwrap();
-            done_rx
-                .recv_timeout(Duration::from_secs(5))
+            recv_done(&done_rx, Duration::from_secs(5))
                 .expect("horizon 到達で TalkDone");
             handle.actor.join().expect("body 正常終了");
             while let Ok(cue) = rx.try_recv() {
@@ -730,7 +856,7 @@ mod tests {
     ///   Wait@1.05 / world@1.15。probe 受信を barrier に、未 due cue が保留されることを try_recv Empty で固定する。
     #[test]
     fn undue_cues_are_withheld_until_their_at_is_reached() {
-        let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+        let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
         let talk_id = TalkId(314);
         let start = StartTalk {
             epilogue: Vec::new(),
@@ -805,8 +931,7 @@ mod tests {
 
         // 占有 horizon（world 再生完了＝1.15+0.25=1.40）を跨ぐ Tick で自然終端。
         handle.inbox.send(SakuraMsg::Tick(2.0)).unwrap();
-        let done = done_rx
-            .recv_timeout(Duration::from_secs(5))
+        let done = recv_done(&done_rx, Duration::from_secs(5))
             .expect("末尾到達で TalkDone");
         assert_eq!(done.talk_id, talk_id, "talk_id エコー");
         assert_eq!(done.reason, TalkEndReason::Ended, "`\\e` は Ended");
@@ -820,7 +945,7 @@ mod tests {
     ///   ClearAll@0 / Emote{10}@0 / Text(hello)@0（at=0 群）→ NewLine@0.25 / Text(world)@0.25（at=0.25 群）。
     #[test]
     fn same_at_cues_preserve_script_order_fifo() {
-        let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+        let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
         let start = StartTalk {
             epilogue: Vec::new(),
             script: r"\s[10]hello\nworld\e".to_string(),
@@ -838,8 +963,7 @@ mod tests {
         // 初回 Tick(0.0) 刻印＋単一 Tick(0.5) で全 due（world 再生完了 horizon=0.50 到達）→自然終端。
         handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
         handle.inbox.send(SakuraMsg::Tick(0.5)).unwrap();
-        let done = done_rx
-            .recv_timeout(Duration::from_secs(5))
+        let done = recv_done(&done_rx, Duration::from_secs(5))
             .expect("単一 Tick で自然終端");
         assert_eq!(done.reason, TalkEndReason::Ended);
         handle.actor.join().expect("body は正常終了する");
@@ -875,7 +999,7 @@ mod tests {
     /// 1 本目（script A）で spawn 後、別 script の 2 本目 `Start`(B) を送っても A のみ再生される。
     #[test]
     fn duplicate_start_is_ignored_and_first_talk_plays_unchanged() {
-        let (done_a_tx, done_a_rx) = mpsc::channel::<TalkDone>();
+        let (done_a_tx, done_a_rx) = mpsc::channel::<TalkNotice>();
         let id_a = TalkId(11);
         let start_a = StartTalk {
             epilogue: Vec::new(),
@@ -906,8 +1030,7 @@ mod tests {
         // A を駆動して自然終端（world 再生完了 horizon=0.60 を跨ぐ Tick(1.0) まで）。
         handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
         handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
-        let done = done_a_rx
-            .recv_timeout(Duration::from_secs(5))
+        let done = recv_done(&done_a_rx, Duration::from_secs(5))
             .expect("A の TalkDone");
         assert_eq!(
             done.talk_id, id_a,
@@ -935,7 +1058,7 @@ mod tests {
     /// 発火自体は正常（done drop は終端信号にのみ影響し broadcast には影響しない）。
     #[test]
     fn dropped_done_receiver_at_terminal_exits_cleanly_without_panic() {
-        let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+        let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
         let start = StartTalk {
             epilogue: Vec::new(),
             script: r"\s[10]hello\w[2]world\e".to_string(),
@@ -971,7 +1094,7 @@ mod tests {
     /// 末尾到達の `Ended`（R1.4）を伴う `TalkDone` を即座に返す（リテラル空 script とは別経路）。
     #[test]
     fn ignored_tags_only_script_ends_immediately_with_ended_and_no_firing() {
-        let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+        let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
         let talk_id = TalkId(55);
         // task 4.2 で SystemVar/GenericCommand は cue を発行するようになったため、無 cue フィラーには
         // `\0` を用いる。parser は `\0` を正典スコープタグ `SpeakerScope{n:0}` へ写像するが（task 12.1・
@@ -992,8 +1115,7 @@ mod tests {
             two_sinks(sink, NoopSink),
             SystemVarSnapshot::default(),
         );
-        let done = done_rx
-            .recv_timeout(Duration::from_secs(5))
+        let done = recv_done(&done_rx, Duration::from_secs(5))
             .expect("無視タグのみの script も空 sheet 経路で即座に TalkDone を返すべき");
 
         assert_eq!(done.talk_id, talk_id, "talk_id エコー（R1.3）");
@@ -1013,7 +1135,7 @@ mod tests {
     /// 要さずに **`Quit`（`Ended` ではない）** を伴う `TalkDone` を即座に返す（空 sheet 経路の弁別・R6.2）。
     #[test]
     fn quit_only_script_ends_immediately_with_quit_not_ended() {
-        let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+        let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
         let talk_id = TalkId(56);
         // task 4.2 で SystemVar は cue を発行するようになったため、`\-` の先行フィラーには `\0` を用いる。
         // parser は `\0` を `SpeakerScope{n:0}` へ写像し（task 12.1・R1.5/R4.4）、compile はそれを
@@ -1033,8 +1155,7 @@ mod tests {
             two_sinks(sink, NoopSink),
             SystemVarSnapshot::default(),
         );
-        let done = done_rx
-            .recv_timeout(Duration::from_secs(5))
+        let done = recv_done(&done_rx, Duration::from_secs(5))
             .expect("quit 相当のみの script も空 sheet 経路で即座に TalkDone を返すべき");
 
         assert_eq!(done.talk_id, talk_id, "talk_id エコー（R1.3）");
@@ -1067,7 +1188,7 @@ mod tests {
     /// reveal 完了時刻（区間 `[at, at+duration)` の終端）を導く素が正しく搬送されることを示す。
     #[test]
     fn fixture_script_drives_broadcast_and_returns_ended() {
-        let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+        let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
         let talk_id = TalkId(42);
         let start = StartTalk {
             epilogue: Vec::new(),
@@ -1090,8 +1211,7 @@ mod tests {
         handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
         handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
 
-        let done = done_rx
-            .recv_timeout(Duration::from_secs(5))
+        let done = recv_done(&done_rx, Duration::from_secs(5))
             .expect("自然終端で TalkDone が返るべき");
         assert_eq!(done.talk_id, talk_id, "talk_id エコー（R6.6）");
         assert_eq!(done.reason, TalkEndReason::Ended, "`\\e` は Ended");
@@ -1161,7 +1281,7 @@ mod tests {
     /// 冪等/逆行 `Tick` で二重発火しない（設計クリティカルな二重発火ガードの固定・R11.x）。
     #[test]
     fn duplicate_and_backward_tick_do_not_double_fire() {
-        let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+        let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
         let start = StartTalk {
             epilogue: Vec::new(),
             script: r"\s[10]hello\w[10]world\e".to_string(),
@@ -1185,8 +1305,7 @@ mod tests {
 
         // 終端まで進める（hello D=0.25＋\w[10]=0.5 後 world@0.75・horizon=1.0 を跨ぐ）。
         handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
-        let done = done_rx
-            .recv_timeout(Duration::from_secs(5))
+        let done = recv_done(&done_rx, Duration::from_secs(5))
             .expect("終端で TalkDone");
         assert_eq!(done.reason, TalkEndReason::Ended);
         handle.actor.join().expect("body は正常終了する");
@@ -1209,7 +1328,7 @@ mod tests {
     /// 非有限 Tick でアンカーを刻印せず（NaN アンカー防止）、その後の正常 Tick で通常どおり終端する。
     #[test]
     fn non_finite_tick_is_ignored_and_playback_survives() {
-        let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+        let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
         let start = StartTalk {
             epilogue: Vec::new(),
             script: r"\s[10]hello\w[2]world\e".to_string(),
@@ -1233,8 +1352,7 @@ mod tests {
         handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
         handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
 
-        let done = done_rx
-            .recv_timeout(Duration::from_secs(5))
+        let done = recv_done(&done_rx, Duration::from_secs(5))
             .expect("非有限 Tick 後も正常 Tick で終端するべき");
         assert_eq!(done.reason, TalkEndReason::Ended, "再生は破綻せず Ended");
         handle.actor.join().expect("body は正常終了する");
@@ -1252,7 +1370,7 @@ mod tests {
     /// 先頭群だけ発火させたところで Close。world（at=0.75）は未発火＝以降届いてはならない。
     #[test]
     fn mid_playback_close_returns_interrupted_once_and_drops_unfired_cues() {
-        let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+        let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
         let talk_id = TalkId(101);
         let start = StartTalk {
             epilogue: Vec::new(),
@@ -1277,8 +1395,7 @@ mod tests {
         // 中断（Close）を送る。進行中の再生を即時停止し Interrupted ACK を返すべき。
         handle.inbox.send(SakuraMsg::Close).expect("Close 投函");
 
-        let done = done_rx
-            .recv_timeout(Duration::from_secs(5))
+        let done = recv_done(&done_rx, Duration::from_secs(5))
             .expect("中断で TalkDone{Interrupted} が返るべき");
         assert_eq!(done.talk_id, talk_id, "talk_id エコー（R6.6）");
         assert_eq!(
@@ -1304,7 +1421,7 @@ mod tests {
     /// 自然終端後はアクタースレッドが消えており `inbox.send(Close)` が `Err`＝二重終端不能の構造的証。
     #[test]
     fn close_after_natural_end_produces_no_extra_talkdone() {
-        let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+        let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
         let talk_id = TalkId(102);
         let start = StartTalk {
             epilogue: Vec::new(),
@@ -1328,8 +1445,7 @@ mod tests {
             .send(SakuraMsg::Tick(1.0))
             .expect("Tick(1.0) 投函");
 
-        let done = done_rx
-            .recv_timeout(Duration::from_secs(5))
+        let done = recv_done(&done_rx, Duration::from_secs(5))
             .expect("自然終端で TalkDone{Ended} が返るべき");
         assert_eq!(done.talk_id, talk_id, "talk_id エコー");
         assert_eq!(done.reason, TalkEndReason::Ended, "`\\e` は Ended");
@@ -1351,7 +1467,7 @@ mod tests {
     #[test]
     fn multiple_talks_echo_own_talk_id_without_cross_talk_mixing() {
         // talk A: TalkId(7)・Ended 経路。
-        let (done_a_tx, done_a_rx) = mpsc::channel::<TalkDone>();
+        let (done_a_tx, done_a_rx) = mpsc::channel::<TalkNotice>();
         let id_a = TalkId(7);
         let start_a = StartTalk {
             epilogue: Vec::new(),
@@ -1362,7 +1478,7 @@ mod tests {
         let records_a = sink_a.records();
 
         // talk B: TalkId(42)・Quit 経路（末尾 `\-`）。
-        let (done_b_tx, done_b_rx) = mpsc::channel::<TalkDone>();
+        let (done_b_tx, done_b_rx) = mpsc::channel::<TalkNotice>();
         let id_b = TalkId(42);
         let start_b = StartTalk {
             epilogue: Vec::new(),
@@ -1402,11 +1518,9 @@ mod tests {
             .send(SakuraMsg::Tick(1.0))
             .expect("B Tick(1.0)");
 
-        let done_a = done_a_rx
-            .recv_timeout(Duration::from_secs(5))
+        let done_a = recv_done(&done_a_rx, Duration::from_secs(5))
             .expect("talk A は TalkDone を返すべき");
-        let done_b = done_b_rx
-            .recv_timeout(Duration::from_secs(5))
+        let done_b = recv_done(&done_b_rx, Duration::from_secs(5))
             .expect("talk B は TalkDone を返すべき");
 
         assert_eq!(done_a.talk_id, id_a, "talk A の TalkDone は id_a をエコー");
@@ -1464,7 +1578,7 @@ mod tests {
         }
 
         fn run_once() -> (Vec<CueKey>, TalkEndReason) {
-            let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+            let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
             let start = StartTalk {
                 epilogue: Vec::new(),
                 script: r"\s[10]hello\w[2]world\e".to_string(),
@@ -1482,8 +1596,7 @@ mod tests {
             handle.inbox.send(SakuraMsg::Tick(0.0)).expect("Tick(0.0)");
             handle.inbox.send(SakuraMsg::Tick(1.0)).expect("Tick(1.0)");
 
-            let done = done_rx
-                .recv_timeout(Duration::from_secs(5))
+            let done = recv_done(&done_rx, Duration::from_secs(5))
                 .expect("自然終端で TalkDone");
             handle.actor.join().expect("body 正常終了");
             (project(&records), done.reason)
@@ -1512,7 +1625,7 @@ mod tests {
     // である（compile-level の extent 檻は「配送し終えた」時点の完了を検知できない）。共通の骨子:
     //
     // - **負の窓（早期終了しないことの決定的証明）**: horizon 未満の注入時刻まで駆動した後、
-    //   `done_rx.recv_timeout(NEG_WINDOW)` が **timeout（`is_err()`）** することを主張する。完了通知は
+    //   `recv_done(&done_rx, NEG_WINDOW)` が **timeout（`is_err()`）** することを主張する。完了通知は
     //   `is_completed()`（占有 horizon gated）でしか送られないため、horizon 未満では送信自体が起きず
     //   recv は必ず timeout する。逆にもし「entry 枯渇＝完了」の早期終了バグがあれば、この窓で
     //   `TalkDone` が既に届き `recv_timeout` が **成功**して `is_err()` が偽になり檻が落ちる（バグ検出）。
@@ -1536,7 +1649,7 @@ mod tests {
     /// まで `TalkDone` は発火しない。末尾待ちの 0.8 秒が talk 終端で切り捨てられない（早期終了しない）。
     #[test]
     fn trailing_wait_talkdone_fires_at_horizon_not_at_cue_exhaustion() {
-        let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+        let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
         let talk_id = TalkId(720);
         let start = StartTalk {
             epilogue: Vec::new(),
@@ -1567,7 +1680,7 @@ mod tests {
 
         // 負の窓: entry 枯渇かつ horizon 手前では完了通知が **発火しない**（配送 ≠ 再生完了・早期終了しない）。
         assert!(
-            done_rx.recv_timeout(NEG_WINDOW).is_err(),
+            recv_done(&done_rx, NEG_WINDOW).is_err(),
             "全 cue 配送済み（entry 枯渇）かつ horizon 未満では TalkDone は発火してはならない（配送 ≠ 完了・R2.5）"
         );
         // 窓明けの race なし観測: 全 cue は既に broadcast 配送済み（配送完了）だが完了はしていない。
@@ -1588,8 +1701,7 @@ mod tests {
 
         // horizon 到達で初めて完了する（末尾 Wait の 0.8 秒が終端で切り捨てられない）。
         handle.inbox.send(SakuraMsg::Tick(horizon)).unwrap();
-        let done = done_rx
-            .recv_timeout(Duration::from_secs(5))
+        let done = recv_done(&done_rx, Duration::from_secs(5))
             .expect("占有 horizon 到達で TalkDone が発火するべき");
         assert_eq!(done.talk_id, talk_id, "talk_id エコー");
         assert_eq!(done.reason, TalkEndReason::Ended, "`\\e` は Ended");
@@ -1605,7 +1717,7 @@ mod tests {
     /// `(D_h+0.5) + D_w` であり、world の **再生時間 D_w** が終端で落とされずそこまで完了は遅れる。
     #[test]
     fn trailing_final_text_talkdone_fires_after_text_duration_not_at_delivery() {
-        let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+        let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
         let talk_id = TalkId(721);
         let start = StartTalk {
             epilogue: Vec::new(),
@@ -1635,7 +1747,7 @@ mod tests {
 
         // 負の窓: 末尾テキストは配送済み（発火 start 到達）だが、その再生時間 D_w ぶん完了は遅れる。
         assert!(
-            done_rx.recv_timeout(NEG_WINDOW).is_err(),
+            recv_done(&done_rx, NEG_WINDOW).is_err(),
             "末尾テキストの配送時刻（発火 start）では TalkDone は発火してはならない（再生時間を終端で落とさない・R2.5）"
         );
         assert_eq!(
@@ -1656,8 +1768,7 @@ mod tests {
 
         // start + D（世界の再生完了＝占有 horizon）到達で初めて完了する。
         handle.inbox.send(SakuraMsg::Tick(horizon)).unwrap();
-        let done = done_rx
-            .recv_timeout(Duration::from_secs(5))
+        let done = recv_done(&done_rx, Duration::from_secs(5))
             .expect("末尾テキストの再生完了（start+D）で TalkDone が発火するべき");
         assert_eq!(done.talk_id, talk_id, "talk_id エコー");
         assert_eq!(done.reason, TalkEndReason::Ended, "`\\e` は Ended");
@@ -1672,7 +1783,7 @@ mod tests {
     /// horizon 手前（0.5）でも、tick を止めれば完了通知は保留され、horizon（0.7）到達で初めて発火する。
     #[test]
     fn talkdone_withheld_while_ticks_stop_below_horizon_then_fires_on_resume() {
-        let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+        let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
         let talk_id = TalkId(722);
         let start = StartTalk {
             epilogue: Vec::new(),
@@ -1695,7 +1806,7 @@ mod tests {
         handle.inbox.send(SakuraMsg::Tick(d_ab)).unwrap();
         // tick 停止中（entry 枯渇・horizon 未満）は完了通知が発火しない。
         assert!(
-            done_rx.recv_timeout(NEG_WINDOW).is_err(),
+            recv_done(&done_rx, NEG_WINDOW).is_err(),
             "tick が horizon 未満で止まると TalkDone は発火しない（entry 枯渇 ≠ 完了・R2.5）"
         );
         assert!(!handle.actor.is_finished(), "駆動継続（未完了）");
@@ -1703,15 +1814,14 @@ mod tests {
         // tick を再開するが依然 horizon 手前（0.5 < 0.7）。まだ発火しない。
         handle.inbox.send(SakuraMsg::Tick(0.5)).unwrap();
         assert!(
-            done_rx.recv_timeout(NEG_WINDOW).is_err(),
+            recv_done(&done_rx, NEG_WINDOW).is_err(),
             "horizon 手前まで進めても未達なら TalkDone は発火しない"
         );
         assert!(!handle.actor.is_finished(), "horizon 手前ゆえ依然駆動継続");
 
         // horizon まで tick を送り切ると初めて発火する（liveness 契約の正の側）。
         handle.inbox.send(SakuraMsg::Tick(horizon)).unwrap();
-        let done = done_rx
-            .recv_timeout(Duration::from_secs(5))
+        let done = recv_done(&done_rx, Duration::from_secs(5))
             .expect("horizon まで tick を送り続けると TalkDone が発火するべき");
         assert_eq!(done.talk_id, talk_id, "talk_id エコー");
         assert_eq!(done.reason, TalkEndReason::Ended, "`\\e` は Ended");
@@ -1742,7 +1852,7 @@ mod tests {
         // FACT 2（終了時刻）: 発火時刻の権威は台本由来の占有 horizon（アンカー未刻印＝0 起点で導出）。
         let horizon = compiled.sheet.absolute_end_time(); // 0.1(hi) + 0.7(\_w[700]) = 0.8
 
-        let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+        let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
         let talk_id = TalkId(723);
         let start = StartTalk {
             epilogue: Vec::new(),
@@ -1763,15 +1873,14 @@ mod tests {
         handle.inbox.send(SakuraMsg::Tick(d_hi)).unwrap();
         // 発火時刻が horizon 由来である証: entry 枯渇では発火しない（reason が確定していても時刻は別権威）。
         assert!(
-            done_rx.recv_timeout(NEG_WINDOW).is_err(),
+            recv_done(&done_rx, NEG_WINDOW).is_err(),
             "終端理由が確定していても発火は entry 枯渇でなく horizon 到達に従う（時刻は別権威・D6）"
         );
         assert!(!handle.actor.is_finished(), "horizon 未達ゆえ駆動継続");
 
         // 台本由来の horizon 到達で発火。reason は compile 由来（Quit）で、firing time は horizon 由来。
         handle.inbox.send(SakuraMsg::Tick(horizon)).unwrap();
-        let done = done_rx
-            .recv_timeout(Duration::from_secs(5))
+        let done = recv_done(&done_rx, Duration::from_secs(5))
             .expect("台本由来の horizon 到達で TalkDone が発火するべき");
         assert_eq!(done.talk_id, talk_id, "talk_id エコー");
         assert_eq!(
@@ -1822,7 +1931,7 @@ mod tests {
     /// しても**完了として通知されない**（選択未解決の間 `TalkDone` を出さない）。
     #[test]
     fn menu_barrier_withholds_talkdone_while_choice_unresolved() {
-        let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+        let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
         let (tx, rx) = mpsc::channel::<TalkCue>();
         let start = StartTalk {
             epilogue: Vec::new(),
@@ -1844,7 +1953,7 @@ mod tests {
 
         // 負の窓: barrier 未解決の間は TalkDone が発火しない（早期完了しない）。
         assert!(
-            done_rx.recv_timeout(NEG_WINDOW).is_err(),
+            recv_done(&done_rx, NEG_WINDOW).is_err(),
             "選択待ち barrier 未解決の間は horizon 越え Tick でも TalkDone を出さない（R2.3）"
         );
         assert!(
@@ -1854,8 +1963,7 @@ mod tests {
 
         // 片付け: Close で中断 ACK を取り body を畳む（テスト resource の後始末）。
         handle.inbox.send(SakuraMsg::Close).unwrap();
-        let done = done_rx
-            .recv_timeout(Duration::from_secs(5))
+        let done = recv_done(&done_rx, Duration::from_secs(5))
             .expect("Close で中断 ACK");
         assert_eq!(done.reason, TalkEndReason::Interrupted);
         handle.actor.join().expect("body は正常終了する");
@@ -1866,7 +1974,7 @@ mod tests {
     /// 到達する（menu ケース＝barrier が最終 horizon 要素ゆえその場で完了・R-5 の一 tick 遅延を残さない）。
     #[test]
     fn resolve_choice_resumes_barrier_stopped_talk_and_settles_immediately() {
-        let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+        let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
         let (tx, rx) = mpsc::channel::<TalkCue>();
         let talk_id = TalkId(802);
         let start = StartTalk {
@@ -1892,8 +2000,7 @@ mod tests {
             .unwrap();
 
         // 追加 Tick なしで自然終端へ到達する（barrier 解決で offset(0.5) ≥ horizon(0.35) ＝即完了）。
-        let done = done_rx
-            .recv_timeout(Duration::from_secs(5))
+        let done = recv_done(&done_rx, Duration::from_secs(5))
             .expect("ResolveChoice で talk が再開し、追加 Tick なしで TalkDone に到達すべき（R2.4/9.8）");
         assert_eq!(done.talk_id, talk_id, "talk_id エコー");
         assert_eq!(
@@ -1909,7 +2016,7 @@ mod tests {
     /// 誤 id が barrier を壊していない（talk が生存継続していた）ことを示す。
     #[test]
     fn resolve_choice_with_unknown_id_is_noop_and_talk_continues() {
-        let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+        let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
         let (tx, rx) = mpsc::channel::<TalkCue>();
         let talk_id = TalkId(803);
         let start = StartTalk {
@@ -1936,7 +2043,7 @@ mod tests {
 
         // 負の窓: 誤 id では完了しない（barrier 依然未解決）。
         assert!(
-            done_rx.recv_timeout(NEG_WINDOW).is_err(),
+            recv_done(&done_rx, NEG_WINDOW).is_err(),
             "未知 id の ResolveChoice では TalkDone を出さない（状態不変・継続）"
         );
         assert!(
@@ -1951,8 +2058,7 @@ mod tests {
                 id: "targetA".to_string(),
             })
             .unwrap();
-        let done = done_rx
-            .recv_timeout(Duration::from_secs(5))
+        let done = recv_done(&done_rx, Duration::from_secs(5))
             .expect("有効 id の解決で完了へ到達すべき（誤 id 後も barrier は生存）");
         assert_eq!(done.talk_id, talk_id);
         assert_eq!(done.reason, TalkEndReason::Ended);
@@ -1986,7 +2092,7 @@ mod tests {
             r"\_l[5em,2lh]",
             r"\q[閉じる,Onメニュー閉じる]",
         );
-        let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+        let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
         let (tx, rx) = mpsc::channel::<TalkCue>();
         let talk_id = TalkId(810);
         let start = StartTalk {
@@ -2008,7 +2114,7 @@ mod tests {
         handle.inbox.send(SakuraMsg::Tick(5.0)).unwrap();
         handle.inbox.send(SakuraMsg::Tick(50.0)).unwrap();
         assert!(
-            done_rx.recv_timeout(NEG_WINDOW).is_err(),
+            recv_done(&done_rx, NEG_WINDOW).is_err(),
             "実 3 択 menu でも barrier 未解決の間は horizon 越え Tick で TalkDone を出さない（R2.3）"
         );
         assert!(
@@ -2024,7 +2130,7 @@ mod tests {
             })
             .unwrap();
         assert!(
-            done_rx.recv_timeout(NEG_WINDOW).is_err(),
+            recv_done(&done_rx, NEG_WINDOW).is_err(),
             "不一致 id の ResolveChoice では TalkDone を出さない（状態不変・複数 Choice バッグは無傷）"
         );
         assert!(
@@ -2040,8 +2146,7 @@ mod tests {
                 id: "Onエモの位置調整メニュー".to_string(),
             })
             .unwrap();
-        let done = done_rx
-            .recv_timeout(Duration::from_secs(5))
+        let done = recv_done(&done_rx, Duration::from_secs(5))
             .expect("中間実 id の解決で再開し、追加 Tick なしで TalkDone に到達すべき（R2.4/9.8）");
         assert_eq!(done.talk_id, talk_id, "talk_id エコー");
         assert_eq!(
@@ -2056,7 +2161,7 @@ mod tests {
     /// 届いても warn して継続し（防御枝）、以降の通常 Tick 駆動で talk は正常に終端する。
     #[test]
     fn resolve_choice_before_playback_armed_is_ignored_and_playback_survives() {
-        let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+        let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
         let talk_id = TalkId(804);
         let start = StartTalk {
             epilogue: Vec::new(),
@@ -2083,8 +2188,7 @@ mod tests {
         // 通常 Tick 列で駆動・終端する（防御枝がループを殺していない証）。
         handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
         handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
-        let done = done_rx
-            .recv_timeout(Duration::from_secs(5))
+        let done = recv_done(&done_rx, Duration::from_secs(5))
             .expect("Armed 誤投函後も通常 Tick で終端するべき");
         assert_eq!(done.reason, TalkEndReason::Ended, "再生は破綻せず Ended");
         handle.actor.join().expect("body は正常終了する");
@@ -2260,7 +2364,7 @@ mod tests {
     fn unknown_command_names_broadcast_and_benign_skip_then_talk_completes() {
         use dola::cue::cue_target_of;
 
-        let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+        let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
         let talk_id = TalkId(103);
         // 未知名 2 種（引数付き `raise` と単独形 `vanish`）＋テキストを挟み `\e` で終端。
         // parse: `\![raise,OnBoot]`→GenericCommand{"raise",["OnBoot"]}／`\![vanish]`→GenericCommand{"vanish",[]}。
@@ -2289,9 +2393,9 @@ mod tests {
         handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
 
         // R8.2 の帰結: 未知名キャリアが無音落ちせず talk が完走し TalkDone{Ended} を返す。
-        let done = done_rx
-            .recv_timeout(Duration::from_secs(5))
-            .expect("未知名キャリアを含む talk も良性スキップして完了すべき（無音落ち／panic しない）");
+        let done = recv_done(&done_rx, Duration::from_secs(5)).expect(
+            "未知名キャリアを含む talk も良性スキップして完了すべき（無音落ち／panic しない）",
+        );
         assert_eq!(done.talk_id, talk_id, "talk_id エコー（R1.3）");
         assert_eq!(
             done.reason,
@@ -2355,6 +2459,350 @@ mod tests {
             cue_target_of(&CueCommand::command_carrier("move", vec![])),
             None,
             "move キャリアでも型レベル分類は None（dola は名前語彙を持たず消費側が自己選別する）"
+        );
+    }
+
+    // ── task 3.2: 選択待ち成立の通知（`ChoiceWaiting`）檻（R5.2/7.1/7.2・DD-6/DD-7/DD-8） ──
+    //
+    // 通知は **talk アクター**（再生層＝真実源）が `WaitingForChoice` 遷移を検出した時点で、
+    // `TalkDone` と**同一の done ポート**へ送出する（因果順保存・DD-6）。檻は注入 Tick のみで
+    // 駆動し（実時間待機なし）、次の 4 点を固定する:
+    //
+    //  - **一度きり**: barrier 成立の tick でちょうど 1 通。以降 Tick を打ち続けても 2 通目は来ない。
+    //  - **内容**: 候補 id 列（`pending_choices()` 由来・表示順）／`display_end_elapsed_secs`
+    //    （占有 horizon＝duration 権威・**tick 時刻ではない**・R7.2）／`timeout_directive_secs`
+    //    （compile は `None` を書く＝未指定＝下流の既定値へ委譲・DD-8）。
+    //  - **解決後に再通知しない**: 同一バリアが再成立しない限り 2 通目は出ない（R5.2 の完了へ進む）。
+    //  - **送出失敗で運行継続**: done 受信端 drop でも `error!` 記録のみで talk は死なない。
+
+    /// 通知の**捕捉時点**を弁別するための算術（MENU_SCRIPT の相対占有 horizon）。
+    ///
+    /// `\s[10]hello\w[2]\q[選択A,targetA]\e`: hello の D(0.25) ＋ `\w[2]`(0.1) ＝ 0.35。
+    /// 期待値は本番と同一算術で導く（10 進直書きの表現誤差を排除）。
+    fn menu_relative_horizon() -> f64 {
+        text_playback_duration("hello") + Duration::from_millis(100).as_secs_f64()
+    }
+
+    /// **一度きり検出＋通知内容（R7.1/7.2・DD-6/DD-7/DD-8）**: 選択肢を含む台本を注入 Tick で
+    /// 駆動すると、選択待ちバリア成立の tick で `ChoiceWaiting` が**ちょうど 1 回**届き、
+    /// 候補 id 列・占有 horizon・タイムアウト指令を同梱する。以降 Tick を打ち続けても再通知されない。
+    ///
+    /// **弁別**: `display_end_elapsed_secs` は **注入 Tick 時刻（0.5）ではなく** 占有 horizon
+    /// （0.35＝台本由来の duration 権威）である。tick 時刻を載せる実装ならこの assert が落ちる。
+    #[test]
+    fn choice_waiting_notifies_exactly_once_with_ids_horizon_and_timeout() {
+        let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
+        let (tx, rx) = mpsc::channel::<TalkCue>();
+        let talk_id = TalkId(820);
+        let start = StartTalk {
+            epilogue: Vec::new(),
+            script: MENU_SCRIPT.to_string(),
+            talk_id,
+        };
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(ChannelSink { tx }, NoopSink),
+            SystemVarSnapshot::default(),
+        );
+
+        // Tick(0.0) 刻印（アンカー 0.0）→ Tick(0.5) で barrier@0.35 到達＝WaitingForChoice。
+        drive_menu_to_barrier(&handle, &rx);
+
+        // 通知は barrier 成立の tick で送出される（**追加 Tick を要さない**）。
+        let notice = done_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("選択待ちバリア成立で ChoiceWaiting が done ポートへ届くべき（DD-6・R7.1）");
+
+        // 期待 horizon: 台本由来の占有 horizon（duration 権威）＝アンカー(0.0)＋相対 0.35。
+        let compiled = compile(
+            &areka_parsers::sakura::parse(MENU_SCRIPT),
+            &SystemVarSnapshot::default(),
+        );
+        let expected_horizon = compiled.sheet.absolute_end_time();
+        assert_eq!(
+            expected_horizon,
+            menu_relative_horizon(),
+            "台本由来 horizon は hello の D ＋ \\w[2]（本番と同一算術で導いた 0.35）"
+        );
+
+        assert_eq!(
+            notice,
+            TalkNotice::ChoiceWaiting(ChoiceWaiting {
+                talk_id,
+                choice_ids: vec!["targetA".to_string()],
+                display_end_elapsed_secs: expected_horizon,
+                timeout_directive_secs: None,
+            }),
+            "通知は talk_id エコー＋候補 id 列＋占有 horizon（tick 時刻 0.5 ではない・R7.2）＋\
+             タイムアウト未指定（compile は `None` を書く＝下流の既定値へ委譲・DD-8）を同梱する"
+        );
+
+        // 一度きり: barrier は解けていないため以降の Tick でも 2 通目は出ない（検出フラグ・DD-6）。
+        handle.inbox.send(SakuraMsg::Tick(5.0)).unwrap();
+        handle.inbox.send(SakuraMsg::Tick(50.0)).unwrap();
+        assert_eq!(
+            done_rx.recv_timeout(NEG_WINDOW).unwrap_err(),
+            RecvTimeoutError::Timeout,
+            "選択待ち継続中に Tick を重ねても ChoiceWaiting は再送されない（一度きり検出）"
+        );
+
+        // 通知後の Close: 中断 ACK が**通知の後**に同一ポートを流れる（因果順保存・DD-6）。
+        handle.inbox.send(SakuraMsg::Close).unwrap();
+        let done = recv_done(&done_rx, Duration::from_secs(5))
+            .expect("通知後の Close でも中断 ACK（TalkDone{Interrupted}）が返るべき");
+        assert_eq!(
+            done,
+            TalkDone {
+                talk_id,
+                reason: TalkEndReason::Interrupted
+            },
+            "Close は既存どおり Interrupted ACK（通知の追加で中断経路は変わらない）"
+        );
+        handle.actor.join().expect("body は正常終了する");
+    }
+
+    /// **候補 id 列は表示順・horizon はアンカー込み（DD-7・R7.2）**: 実 3 択メニューを **0 以外の
+    /// アンカー**（7.0）で駆動し、通知が (1) 3 択の id を**表示順のまま**運び、(2)
+    /// `display_end_elapsed_secs` に**アンカーを含む**占有 horizon を載せることを固定する。
+    ///
+    /// **弁別**: この台本は全内容が `at=0`（相対 horizon＝0）ゆえ、期待値は **アンカー 7.0 そのもの**。
+    /// アンカーを無視して相対 horizon だけを載せる実装なら 0.0 が届いて落ちる。
+    /// なお barrier は初回 `Tick(7.0)` で成立するため、本檻では注入 Tick 時刻と horizon が
+    /// 一致し **tick 時刻実装は弁別できない**——その弁別は
+    /// `choice_waiting_notifies_exactly_once_with_ids_horizon_and_timeout`
+    /// （horizon 0.35 vs tick 0.5）が担う。
+    #[test]
+    fn choice_waiting_carries_candidate_ids_in_display_order_with_anchored_horizon() {
+        let script = concat!(
+            r"\q[おしゃべり頻度,Onおしゃべり頻度メニュー]",
+            r"\n",
+            r"\q[エモの位置調整,Onエモの位置調整メニュー]",
+            r"\_l[5em,2lh]",
+            r"\q[閉じる,Onメニュー閉じる]",
+        );
+        let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
+        let (tx, rx) = mpsc::channel::<TalkCue>();
+        let talk_id = TalkId(821);
+        let start = StartTalk {
+            epilogue: Vec::new(),
+            script: script.to_string(),
+            talk_id,
+        };
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(ChannelSink { tx }, NoopSink),
+            SystemVarSnapshot::default(),
+        );
+
+        // アンカー 7.0 で刻印し、7.5 で barrier@0（相対）到達まで進める。
+        const ANCHOR: f64 = 7.0;
+        handle.inbox.send(SakuraMsg::Tick(ANCHOR)).unwrap();
+        handle.inbox.send(SakuraMsg::Tick(ANCHOR + 0.5)).unwrap();
+        loop {
+            let cue = rx
+                .recv_timeout(Duration::from_secs(5))
+                .expect("Choice cue（barrier 手前）が届くべき");
+            if matches!(cue.command, CueCommand::Choice { .. }) {
+                break;
+            }
+        }
+
+        // 弁別の前提: この台本の相対占有 horizon は 0.0（全内容が at=0・duration 0）。
+        let compiled = compile(
+            &areka_parsers::sakura::parse(script),
+            &SystemVarSnapshot::default(),
+        );
+        assert_eq!(
+            compiled.sheet.absolute_end_time(),
+            0.0,
+            "3 択 menu は全内容 at=0 ゆえ相対占有 horizon は 0.0（アンカー弁別の前提）"
+        );
+
+        let notice = done_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("3 択 menu でも barrier 成立で ChoiceWaiting が届くべき");
+        assert_eq!(
+            notice,
+            TalkNotice::ChoiceWaiting(ChoiceWaiting {
+                talk_id,
+                choice_ids: vec![
+                    "Onおしゃべり頻度メニュー".to_string(),
+                    "Onエモの位置調整メニュー".to_string(),
+                    "Onメニュー閉じる".to_string(),
+                ],
+                display_end_elapsed_secs: ANCHOR,
+                timeout_directive_secs: None,
+            }),
+            "候補 id は表示順（先頭/中間/末尾）で運ばれ、horizon はアンカー込み（7.0・相対 0.0 ではない）"
+        );
+
+        // 片付け: Close で中断 ACK を取り body を畳む。
+        handle.inbox.send(SakuraMsg::Close).unwrap();
+        let done = recv_done(&done_rx, Duration::from_secs(5)).expect("Close で中断 ACK");
+        assert_eq!(done.reason, TalkEndReason::Interrupted);
+        handle.actor.join().expect("body は正常終了する");
+    }
+
+    /// **解決後に再通知されない（R5.2）**: 通知 → 有効 id の `ResolveChoice` → `TalkDone{Ended}` の
+    /// **ちょうど 2 通**が同一ポートを因果順で流れ、3 通目は存在しない（ポート disconnect で確定）。
+    ///
+    /// 既存挙動の保存も同時に固定する: 残台本なしのメニュー形は解決の**その場で** settle し、
+    /// 追加 `Tick` なしに `Ended` へ到達する（`on_resolve_choice` の即 settle は無改変）。
+    #[test]
+    fn choice_waiting_is_not_renotified_after_resolve_and_done_follows() {
+        let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
+        let (tx, rx) = mpsc::channel::<TalkCue>();
+        let talk_id = TalkId(822);
+        let start = StartTalk {
+            epilogue: Vec::new(),
+            script: MENU_SCRIPT.to_string(),
+            talk_id,
+        };
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(ChannelSink { tx }, NoopSink),
+            SystemVarSnapshot::default(),
+        );
+
+        drive_menu_to_barrier(&handle, &rx);
+
+        // 1 通目: 選択待ち成立通知。
+        let first = done_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("1 通目は ChoiceWaiting");
+        assert_eq!(
+            first,
+            TalkNotice::ChoiceWaiting(ChoiceWaiting {
+                talk_id,
+                choice_ids: vec!["targetA".to_string()],
+                display_end_elapsed_secs: menu_relative_horizon(),
+                timeout_directive_secs: None,
+            }),
+            "1 通目は選択待ち成立通知（因果順の先）"
+        );
+
+        // 有効 id で解決。追加 Tick は**送らない**（即時 settle の保存＝既存挙動無改変）。
+        handle
+            .inbox
+            .send(SakuraMsg::ResolveChoice {
+                id: "targetA".to_string(),
+            })
+            .unwrap();
+
+        // 2 通目: 再生完了。ChoiceWaiting の再送ではない。
+        let second = done_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("2 通目は TalkDone（解決で即時 settle・追加 Tick 不要）");
+        assert_eq!(
+            second,
+            TalkNotice::Done(TalkDone {
+                talk_id,
+                reason: TalkEndReason::Ended
+            }),
+            "2 通目は TalkDone{{Ended}}（解決後に ChoiceWaiting が再送されない）"
+        );
+
+        // 3 通目は存在しない: talk スレッド終了で送信端が drop され、ポートは Disconnected になる。
+        handle.actor.join().expect("body は正常終了する");
+        assert_eq!(
+            done_rx.recv_timeout(Duration::from_secs(5)).unwrap_err(),
+            RecvTimeoutError::Disconnected,
+            "通知は通算 2 通のみ（解決後の再通知も二重完了も無い）"
+        );
+    }
+
+    /// **送出失敗でも運行継続（ログ無し失敗経路の禁止・TalkDone 送出と同規律）**: done 受信端を
+    /// 通知前に drop すると `ChoiceWaiting` の送出は `Err` になるが、talk は死なず選択待ちを継続し、
+    /// その後の有効 id 解決で通常どおり終端して body が panic せず畳まれる。
+    #[test]
+    fn choice_waiting_send_failure_is_tolerated_and_playback_continues() {
+        let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
+        let (tx, rx) = mpsc::channel::<TalkCue>();
+        let start = StartTalk {
+            epilogue: Vec::new(),
+            script: MENU_SCRIPT.to_string(),
+            talk_id: TalkId(823),
+        };
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(ChannelSink { tx }, NoopSink),
+            SystemVarSnapshot::default(),
+        );
+
+        // 通知送出**前**に受信端を drop（以降の送出は全て Err＝`error!` 記録のみ）。
+        drop(done_rx);
+
+        drive_menu_to_barrier(&handle, &rx);
+        assert!(
+            !handle.actor.is_finished(),
+            "通知の送出失敗は talk を終端させない（選択待ちを継続する）"
+        );
+
+        // 送出失敗後も inbox は生きており、解決入力を通常どおり処理して終端する
+        // （＝失敗経路が受信ループを殺していないことの決定的証拠）。
+        handle
+            .inbox
+            .send(SakuraMsg::ResolveChoice {
+                id: "targetA".to_string(),
+            })
+            .expect("通知の送出失敗後も inbox は生きている");
+        handle
+            .actor
+            .join()
+            .expect("done 受信端 drop でも body は panic せず正常終了する");
+    }
+
+    /// **通知の負条件（DD-6・R5.2）**: `\q` を含まない台本は選択待ちへ入らないため
+    /// `ChoiceWaiting` を**一切**送出せず、done ポートを流れる通知は `TalkDone{Ended}` の
+    /// **ちょうど 1 通**である。
+    ///
+    /// **弁別**: 通知条件から `WaitingForChoice` 判定を落とし settle ごとに通知する実装なら、
+    /// 1 通目が `ChoiceWaiting` になってこの assert が落ちる。通算 1 通であることは
+    /// talk スレッド終了後の `Disconnected` で確定させる（負の時間窓に依存しない）。
+    #[test]
+    fn script_without_choices_never_notifies_choice_waiting() {
+        let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
+        let talk_id = TalkId(824);
+        let start = StartTalk {
+            epilogue: Vec::new(),
+            // `\q` 無し（＝compile は選択待ち barrier を発行しない・R2.5）。
+            script: r"\s[10]hello\e".to_string(),
+            talk_id,
+        };
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(NoopSink, NoopSink),
+            SystemVarSnapshot::default(),
+        );
+
+        // Tick(0.0) でアンカー刻印、Tick(1.0) で占有 horizon（hello の D＝0.25）を跨いで自然終端。
+        handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
+        handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
+
+        // 1 通目は `TalkDone{Ended}`（`recv_done` の読み飛ばしを使わず**生の 1 通目**を突合する）。
+        let first = done_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("自然終端で通知が 1 通届く");
+        assert_eq!(
+            first,
+            TalkNotice::Done(TalkDone {
+                talk_id,
+                reason: TalkEndReason::Ended
+            }),
+            "選択肢の無い台本の 1 通目は TalkDone{{Ended}}（ChoiceWaiting は出ない）"
+        );
+
+        // 2 通目は存在しない: talk スレッド終了で送信端が drop され、ポートは Disconnected になる。
+        handle.actor.join().expect("body は正常終了する");
+        assert_eq!(
+            done_rx.recv_timeout(Duration::from_secs(5)).unwrap_err(),
+            RecvTimeoutError::Disconnected,
+            "通知は通算 1 通のみ（選択待ちに入らない talk は ChoiceWaiting を送出しない）"
         );
     }
 }
