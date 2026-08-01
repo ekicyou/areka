@@ -87,6 +87,8 @@ Req 5.1 も同じ側から支える——「Requirement 2.8 の S1〜S3 は本�
 
 design.md「既存アーキテクチャ分析」の表は `follow.rs:810-826`（`raw`）・`follow.rs:85-112`（X 素通し）・`window_pos.rs:359-369` を挙げていた。タスク 1.4／2.1／3.2 の着地で全て移動しており、現ツリーの実値は上表のとおり（`follow.rs:867-883` ／ `follow.rs:86-113` ／ `window_pos.rs:343-379`）。
 
+**タスク 5.1 着地後の追記（§0.3 の引用更新規約）**: 上表の①①'（`window_pos.rs:343-346`／`:369-379`／`:359`）は**5.1 の是正で移動・改変された**。本表は**赤の採取時点の構造**を保存する台帳ゆえ書き換えない——是正後の所在（`:339`／`:373`／`:374`／`:407`／`:411`／`:421`）と対応関係は **§3.1「5.1 の是正の実体」**が表で持つ。②（`window_pos.rs:109`・`:143-148`）と③④（`follow.rs`）は 5.1 が編集していないため引用は現ツリーでも有効である（②は①①'が断たれた結果 `dpi_context` が `None` となり、ゴースト窓では echo bypass 側へ回る＝汚染の入口が閉じる）。
+
 ### 1.2 S2: 位置の再射影が窓寸の再導出結果に条件付けられ、得られない経路で欠落する
 
 **未充足 AC: 4.1（DPI 変化前後で接地点＝下端中央を保つ）・4.2（処理完了時の最終位置が接地点規約に従う）・4.6（不可視中に DPI が変化した窓は、可視化時点で規約準拠の位置と変化後 DPI 相当の寸で表示する）**
@@ -635,14 +637,15 @@ OS 側で拡大率を変えると、areka の 2 つの位置権威が**同時に
 
 | 項目 | 内容 |
 | --- | --- |
-| 檻の所在 | `crates/wintf/src/ecs/window_proc/window_pos.rs:550-845`（`mod tests` 内の「S1 の赤証跡＝表示基盤ディスパッチ檻」ブロック）。赤 4 件＝`s1_red_external_authority_preserves_anchor_at_dpi96`（`:739`）／`_dpi120`（`:746`）／`_dpi192`（`:753`）／`s1_red_external_authority_establishes_no_write_context`（`:766`）。常時走る随伴 2 件＝`s1_control_default_policy_windows_apply_suggested_origin`（`:798`・非退行）／`s1_write_context_and_position_write_are_branched_together`（`:828`・D3 の分割禁止） |
+| 檻の所在（赤の採取時点） | `crates/wintf/src/ecs/window_proc/window_pos.rs:550-845`（`mod tests` 内の「S1 の赤証跡＝表示基盤ディスパッチ檻」ブロック）。赤 4 件＝`s1_red_external_authority_preserves_anchor_at_dpi96`（`:739`）／`_dpi120`（`:746`）／`_dpi192`（`:753`）／`s1_red_external_authority_establishes_no_write_context`（`:766`）。常時走る随伴 2 件＝`s1_control_default_policy_windows_apply_suggested_origin`（`:798`・非退行）／`s1_write_context_and_position_write_are_branched_together`（`:828`・D3 の分割禁止） |
+| 檻の所在（**5.1 着地後の実測**） | 同ファイル `:835`／`:841`／`:847`／`:859`（旧赤 4 件・**無視属性は撤去済み**）・`:891`（非退行）・`:921`（D3 の分割禁止）。5.1 が追加した 6 件＝実施可否行のフィールド檻 4 件（`:952` `_external_authority_and_applied_false`／`:978` `_unset_policy_and_applied_true`／`:998` `_apply_position_as_its_own_label`／`:1034` `_unreachable_when_policy_cannot_be_read`）＋**源断ちの最外殻**（ハンドラ戻り値）2 件（`:1117` `s1_external_authority_handles_the_message_instead_of_delegating_to_defwindowproc`／`:1144` `s1_default_policy_windows_also_report_the_message_as_handled`） |
 | 赤の採取コミット | **`77411c0`**（タスク 4.2 着地時点＝Phase A 完了・S1 是正未投入）に本檻のみを載せたツリー。`WM_DPICHANGED`（同ファイル `:285`）は無改変で、差分は `#[cfg(test)] mod tests` 内に閉じている |
 | 赤の再現コマンド | `cargo test -p wintf -- --ignored s1_red_`（赤 4 件は `#[ignore]` ゲート下。理由は下記「ゲート機構」） |
 | 赤の実行出力 | 下記コードブロック（実行実測・`--test-threads=1`） |
 | dpi 水準ごとの挙動 | **96 は通過・120／192 は失敗**（下記出力の 4 行が水準ごとに分かれている理由）。96 では `suggested_rect_for` が組む提案原点が現位置 `(1200,400)` と一致するため、提案位置を書いても書かなくても最終位置が変わらず政策分岐が観測できない。120 では提案原点が `(1500,500)`・192 では `(2400,800)` へ離れ、無条件書込が接地点を破壊する |
 | 判定の表現 | 絶対 px の固定値ではなく **DPI 水準に対する比**（`suggested_rect_for` が `dpi/96` で提案原点を組む）と、**「`ExternalAuthority` 窓の最終位置＝現接地点」の不変条件**で表現している（Req 5.6）。探針の自己検査として「96 では提案＝現位置」「96 以外では提案 X ≠ 現位置」を檻自身が `assert` する（不動点に落ちた空虚な緑を防ぐ・記憶〈2.2 の教訓〉） |
-| 緑の採取コミット | _（7.1）_ |
-| 緑の実行出力 | _（7.1・全水準）_ |
+| 緑の採取コミット | **タスク 5.1 の是正投入直後**（基底 `36a7731`＝4.7 着地・S1 是正未投入。是正差分は本節「5.1 の是正の実体」の 3 ファイル）。7.1 は S2 側の緑と合わせて最終確認する |
+| 緑の実行出力 | 下記コードブロック（実行実測・`cargo test -p wintf --lib s1_ -- --test-threads=1`・**無視属性ゼロ**＝ゲートを掛けたままの見かけの緑ではない） |
 
 #### 赤の実行出力（`cargo test -p wintf -- --ignored s1_red_ --test-threads=1`）
 
@@ -685,9 +688,78 @@ test result: FAILED. 1 passed; 3 failed; 0 ignored; 0 measured; 537 filtered out
 
 **タスク 5.1／7.1 は是正配線と同時に `#[ignore]` を 4 件とも外し、常時走る回帰檻へ昇格させること**（Req 5.1 の常時テスト化）。dpi96 の 1 件も外す——「96 では緑」は是正後も成立する性質であり、外して初めて非対称の記録が回帰檻として保存される。
 
-#### 緑側の先行確認（本タスクで実施・是正は投入していない）
+#### 緑側の先行確認（**タスク 4.3** で実施・当時は是正を投入していない）
 
 檻が是正後に緑へ反転することを、5.1 相当の分岐（entity から `DpiSuggestedRectPolicy` を読み、`dpi_suggested_position_decision` の `None` で `DpiChangeContext::set` と `guarded_set_window_pos` を**まとめて**飛ばす）を**一時的に当てて実測し、直後に完全に戻した**。結果は赤 4 件すべて `ok`・随伴 2 件も `ok`。**是正はツリーに残していない**（4.5 の実機採取が是正未投入ビルドを要求するため・§2 の冒頭注記）。これにより本檻は「今赤・是正後緑」の両側が実行で確かめられている（空虚な赤ではない）。
+
+---
+
+#### 緑の実行出力（**タスク 5.1 の是正投入後**・`cargo test -p wintf --lib s1_ -- --test-threads=1`）
+
+```text
+running 12 tests
+test ecs::window_proc::window_pos::tests::s1_control_default_policy_windows_apply_suggested_origin ... ok
+test ecs::window_proc::window_pos::tests::s1_decision_line_reports_apply_position_as_its_own_label ... ok
+test ecs::window_proc::window_pos::tests::s1_decision_line_reports_external_authority_and_applied_false ... ok
+test ecs::window_proc::window_pos::tests::s1_decision_line_reports_unreachable_when_policy_cannot_be_read ... ok
+test ecs::window_proc::window_pos::tests::s1_decision_line_reports_unset_policy_and_applied_true ... ok
+test ecs::window_proc::window_pos::tests::s1_default_policy_windows_also_report_the_message_as_handled ... ok
+test ecs::window_proc::window_pos::tests::s1_external_authority_handles_the_message_instead_of_delegating_to_defwindowproc ... ok
+test ecs::window_proc::window_pos::tests::s1_red_external_authority_establishes_no_write_context ... ok
+test ecs::window_proc::window_pos::tests::s1_red_external_authority_preserves_anchor_at_dpi120 ... ok
+test ecs::window_proc::window_pos::tests::s1_red_external_authority_preserves_anchor_at_dpi192 ... ok
+test ecs::window_proc::window_pos::tests::s1_red_external_authority_preserves_anchor_at_dpi96 ... ok
+test ecs::window_proc::window_pos::tests::s1_write_context_and_position_write_are_branched_together ... ok
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 549 filtered out; finished in 1.46s
+```
+
+**`0 ignored` が本節の要点である**——赤 4 件（dpi96 を含む）は無視属性を撤去して常時走っており、ゲートを掛けたままの見かけの緑ではない。機械的な確認は「`crates/wintf/src/ecs/window_proc/window_pos.rs` に無視属性の grep が 0 件」（実測 0 件・注記文からも字面を排除済み）。スイート全体は `cargo test -p wintf` が **1,057 passed / 0 failed / lib ignored 2**（残る 2 件は 4.6 が置いた `s4_red_`＝本節の対象外）、`cargo test -p areka` が **595 passed / 0 failed / 4 ignored**（残る 4 件は 5.2 が外す `s2_red_`）。
+
+赤（上掲）と緑（本節）の対比で、Req 5.1／5.4 の非対称がそのまま読める——**dpi96 は赤の時点から一貫して `ok`**（提案原点＝現位置ゆえ政策分岐が観測できない水準）、**120／192 は赤で `FAILED`・緑で `ok`**。
+
+#### 5.1 の是正の実体（§1.1 の①①'を断った場所）
+
+| §1.1 の段 | 是正後の所在（`file:line`・構造名） | 何が変わったか |
+| --- | --- | --- |
+| ① 位置書込が無条件 | `crates/wintf/src/ecs/window_proc/window_pos.rs:407`（`WM_DPICHANGED`（`:303`）内の `if let Some((x, y)) = decision`）→ 書込本体は `:421` `guarded_set_window_pos(hwnd, None, x, y, …)` | 書込が `decision` の `Some` 腕の中へ入った。座標も `suggested_rect.left/top` の直参照をやめ、判断関数が返した `(x, y)` を書く（判断と書込の値が構造上一致する） |
+| ①' 書込コンテキストが無条件 | 同 `:411` `DpiChangeContext::set(...)`——**①と同一の `if let` の中**（D3 の対分岐） | `ExternalAuthority` 窓では立たない。残置コンテキストが後続 `WM_WINDOWPOSCHANGED` を DPI echo と誤認させる競合が構造的に消えた |
+| 判断の入力 | 同 `:339` `let mut policy: Option<DpiSuggestedRectPolicy>`（①の World 借用の**中**で `entity_ref.get::<DpiSuggestedRectPolicy>().copied()`）→ `:373` `dpi_suggested_position_decision(policy.as_ref(), &suggested_rect)` | 借用を 2 度取らない（再入時に片方だけ失敗する経路を作らない） |
+| 実施可否の報告 | 同 `:374` `let applied = decision.is_some();`＋`policy` フィールド（`unset`／`ApplyPosition`／`ExternalAuthority`／`unreachable` の網羅 match） | 1.3 が定数で据え置いた `let applied = true;` が**実際の分岐結果**になった。design.md:330 が挙げていた `policy` フィールドも出力に載った |
+| 判断関数の配線 | `crates/wintf/src/ecs/window_proc/dpi_helpers.rs:31` `dpi_suggested_position_decision`——`#[allow(dead_code)]` を撤去 | §1.1「是正機構は存在するが**未配線**である」が解消した（本番呼出が `window_pos.rs:373` の 1 箇所に生まれた） |
+| 宣言の付与 | `crates/areka/src/placement/spawn.rs:249`（バルーン窓）／`:275`（キャラ窓）が `external_position_authority()`（`:353`）を bundle へ入れる | 全 scope × 窓 2 種へ `ExternalAuthority` が付く。付与漏れは `:1015` `external_authority_attached_to_every_ghost_window_of_every_scope` が数え上げで赤にする |
+
+`policy` フィールドの値語彙に `unreachable` を持たせているのは Req 1.5 の趣旨による——World 借用の再入や entity 破棄で政策を**読めなかった**場合、フォールバックは従来挙動（書く）だが、それを「宣言が無かった（`unset`）」と同じ語で報告すると事後の突合が偽の結論を作る。**値語彙 4 種の一覧と実機での読み方は `diagnosis-procedure.md` §3.4 が正本**（本書 §5 規約 3）。
+
+**源断ちの最外殻**は `guarded_set_window_pos` を飛ばすことではなく、**ハンドラが `Some(LRESULT(0))`（処理済み）を返し切ること**である（`window_pos.rs:436-442`）。`None` を返すと `DefWindowProcW` が既定の提案矩形適用を行い、**その内部から `SetWindowPos` が同期的に呼ばれる**（`crates/wintf/src/ecs/window/components.rs:29-31` が当該同期発火を明記）。この最外殻は檻 `s1_external_authority_handles_the_message_instead_of_delegating_to_defwindowproc` が固定する。
+
+#### 檻の非空虚性（実装者が独立に当てたミューテーション 6 種）
+
+> **1〜4 は初版（レビュー #1 前）で当てたもの、5〜6 はレビュー #1 の指摘で追加した檻に対して当てたもの**。5・6 はレビュアが独立に当てて**初版では全緑だった**変異と同一であり、追加後は赤になることを実測した。
+
+| # | 変異 | 赤になった檻 |
+| --- | --- | --- |
+| 1 | `spawn.rs` の**バルーン窓のみ** `external_position_authority()` を落とす | `external_authority_attached_to_every_ghost_window_of_every_scope`（全数走査の `assert_eq!`＝`spawn.rs:1035-1039` が「ゴースト窓 `1v0` に外部権威宣言が無い」で赤・4 窓中 2 窓） |
+| 2 | `DpiChangeContext::set` を `if let` の**外**へ出す（片側だけ分岐＝D3 違反の split fix） | `s1_write_context_and_position_write_are_branched_together`（**dpi=96 で赤**——位置檻が盲目な水準で効く。4.3 の予告どおり）＋`s1_red_external_authority_establishes_no_write_context` |
+| 3 | `let applied = decision.is_some();` を `let applied = true;` へ戻す（Phase A の据置き相当） | `s1_decision_line_reports_external_authority_and_applied_false`（`applied=true` のまま出た実行出力を assert メッセージが晒す） |
+| 4 | 政策の読み取りを落とす（`policy = None` 固定＝純関数は在るが World から引かない） | 旧赤 3 件（`_dpi120`／`_dpi192`／`establishes_no_write_context`）＋`s1_decision_line_reports_external_authority_and_applied_false` の計 4 件。**dpi96 は緑のまま**＝「96 が欠陥を隠す」性質が是正後の檻でも再現する |
+| 5 | **`policy_label` の 4 腕のうち 2 腕を取り違える**（`ApplyPosition`→`"unreachable"`／到達不能→`"unset"`） | `s1_decision_line_reports_apply_position_as_its_own_label`（`policy=unreachable` が出た実行行を晒す）＋`s1_decision_line_reports_unreachable_when_policy_cannot_be_read`（破棄済み entity が `policy=unset` を名乗る）。**初版では 555 passed の全緑だった変異**（値語彙 4 種のうち 2 種が完全に空虚だった） |
+| 6 | **書かなかったとき `None` を返す**（`DefWindowProcW` へ委譲＝源断ちの最外殻を外す） | `s1_external_authority_handles_the_message_instead_of_delegating_to_defwindowproc` の **1 件のみ**。**初版では全緑だった変異**（ヘッドレス檻の `guarded_set_window_pos` 実施ログは自前の書込しか捉えないため、戻り値を直接見ないと無検出で通る） |
+
+変異 2 と 4 が別々の檻集合を赤にすることが、D3 の「まとめて分岐」と「World からの政策読み取り」が**独立に**固定されていることの証跡である。変異 6 が**新設檻 1 件だけ**を赤にすることは、当該檻が既存檻と重複しない固有の防壁を張っていることの証跡である（`guarded_set_window_pos` を飛ばすことと、`DefWindowProcW` へ委譲しないことは別の要求である）。
+
+#### 検証中に観測した既知の非決定（**本 spec 範囲外・W6.5 `test-cage-determinism` の所有**）
+
+`cargo test -p areka` の全体走行で `emo2_boot::spine::*` の 1〜3 件が走行ごとに入れ替わりながら散発的に落ちる（`spine_e2e_sakura_blink_*`／`spine_harness_boots_*`／`spine_s5_close_handshake_*`／`spine_e2e_kero_blink_*`）。**失敗形はすべて有界スピンの踏破失敗**（`spine.rs:1883` の `for now in 1u64..=200_000 { … yield_now() }` → `:1906` の `assert!(satisfied, "…有界内に表示しない…")`）で、単独実行では必ず緑・並列全体走行でのみ出る。1 走行が **566 秒**を要した回もあり、記憶〈Defender 再スキャンが協調テストループを飢餓させる〉の症状と一致する。
+
+**5.1 の変更が原因でないことを A/B で実測確認した**——`spawn.rs` の `external_position_authority()` 挿入 2 箇所だけを一時撤去した状態で全体走行を回し、**同じ spine 失敗が再現**した（撤去後 1 走行目で 1 件）。当該スピンは反復回数で区切られており時間意味論を持たないため、CPU/I-O 競合下で協調相手のスレッドが 200,000 回の `yield_now` 以内に進捗しないと落ちる。**位置権威の宣言（純データ component・areka 側に読む system なし・wintf 側の読取点は実 `WM_DPICHANGED` のみ）はこの経路に影響しない。**
+
+#### `DPI center correction skipped: BoxStyle not found` の到達性（4.6 → 5.1 の申し送りへの回答）
+
+実機セッション①で DPI 受理と同数（84 件）出ていた当該 `warn!`（`crates/wintf/src/ecs/window_proc/dpi_helpers.rs:109-112`・`correct_position_for_dpi_center_preserve`（`:96`）の `box_style` フォールバック）は、**5.1 で当該経路に手を入れずに消える**。理由は構造的で、同関数は冒頭 `:104` の `let Some(_ctx) = dpi_context else { return client_pos; }` で打ち切るため、`DpiChangeContext` が立たない窓では `BoxStyle` の判定行まで到達しない。ゴースト窓は 5.1 以後コンテキストが立たない（本節①'）ので、warn の発火条件が成立しない。
+
+ゆえに**削除も `BoxStyle` 前提の是正も行わない**——当該 warn は「コンテキストが立つ窓（＝非ゴースト窓・examples・将来の通常窓）で `BoxStyle` が欠けている」という**真の異常**を指す観測点として意味を保っており、areka のゴースト窓は `BoxStyle` を持たない設計（単位契約 U2・`spawn.rs` の檻 `t_i3_no_box_style_no_drag_constraint_and_move_window_contract` が固定）だからこそ 84 件出ていた。設計 design.md:331 が「中心保持補正はゴースト窓で不発になり、`BoxStyle not found` の良性 warn ノイズも同時に消える」と予告していたとおりである。
+
+この事実を 7.4 がどう使うか（判定手順・grep 判定語・肯定側との対読み）は **`diagnosis-procedure.md` §6.5（`S1-SOURCE-CUT`）が正本**である（本書 §5 規約 3: 手順・判定語・grep 規則は本書に書かない）。本節が持つのは「なぜ 0 件になるのか」の構造的根拠だけである。
 
 ### 3.2 S2 の実行記録（**S2 専用節**）
 

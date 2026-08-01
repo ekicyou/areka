@@ -26,9 +26,8 @@ use crate::ecs::{Point, SizeI};
 /// 寸は使わない（サイズは ECS レイアウトパイプラインの所管＝`SWP_NOSIZE`）ため、
 /// 参照するのは矩形の左上のみである。
 //
-// 配線（`WM_DPICHANGED` ハンドラでの消費）は Phase C（タスク 5.1）の所有。
-// 本タスク（2.1）は契約と判断関数の切り出しのみで、実行時挙動は不変に保つ。
-#[allow(dead_code)]
+// 配線済み（タスク 5.1・Phase C）: `window_pos.rs` の `WM_DPICHANGED` が本関数の
+// 戻り値で `DpiChangeContext::set` と `guarded_set_window_pos` をまとめて分岐する。
 pub(super) fn dpi_suggested_position_decision(
     policy: Option<&DpiSuggestedRectPolicy>,
     suggested: &RECT,

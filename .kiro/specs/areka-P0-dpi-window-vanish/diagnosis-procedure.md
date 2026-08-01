@@ -171,7 +171,7 @@ $env:AREKA_PROFILE_DIR       = $PROFILE_DIR
 | O5 | `[initialize_layout_root] Creating Monitor entity` （`handle=`・`work_area=`） | `wintf::ecs::layout::systems::monitor_systems` | `debug` | `layout/systems/monitor_systems.rs:39-55` |
 | O6 | `WM_DPICHANGED`（`suggested_left/top/right/bottom` を持つ受信行） | `wintf::ecs::window_proc::window_pos` | `debug` | `window_proc/window_pos.rs:302-313` |
 | O7 | **`[WM_DPICHANGED] DPI component directly updated (Changed<DPI>)`**（`entity=`・`old_dpi_x=`・`new_dpi_x=`） | 同上 | `debug` | `window_proc/window_pos.rs:325-332` ＝ **§5 の受理計数の対象行** |
-| O8 | `[WM_DPICHANGED] suggested position write decision`（`entity=`・`hwnd=`・`applied=`・`suggested_left=`・`suggested_top=`） | 同上 | `debug`（旧 `trace!` から是正・要件 1.3） | `window_proc/window_pos.rs:360-367` |
+| O8 | `[WM_DPICHANGED] suggested position write decision`（`entity=`・`hwnd=`・**`policy=`**・`applied=`・`suggested_left=`・`suggested_top=`） | 同上 | `debug`（旧 `trace!` から是正・要件 1.3） | `window_proc/window_pos.rs:392-403`（**タスク 5.1 着地後**。`policy=` 新設・`applied` は `decision.is_some()` の分岐結果） |
 | O9 | `[guarded_set_window_pos] Calling SetWindowPos`（`hwnd=`・`x=`・`y=`・`cx=`・`cy=`・`flags=`） | `wintf::ecs::window::command` | `debug`（旧 `trace!` から是正） | `window/command.rs:97-102` |
 | O10 | `[WM_WINDOWPOSCHANGED]`（`is_echo=`・`has_dpi_ctx=`・`client_xy=`） | `wintf::ecs::window_proc::window_pos` | `debug` | `window_proc/window_pos.rs:80-90` |
 | O11 | `[start_preparing] DragState -> Preparing (with capture)`（`entity=`・`hwnd=`） | `wintf::ecs::drag::state` | `debug` | `drag/state/mod.rs:246-252` |
@@ -196,12 +196,28 @@ $env:AREKA_PROFILE_DIR       = $PROFILE_DIR
 | --- | --- | --- |
 | `ClampX` / `VisibilityVerdict` 関連の `warn!` | `guard_visibility`（`follow.rs:1417`）は**意図的に無ログ**の純関数で、まだどこからも呼ばれていない（`#[allow(dead_code)]`） | タスク **6.1**（キャラ窓）／**6.2**（バルーン窓）で配線＋`warn!` |
 | `NearestFallback` の `warn!` | `work_area_for_window_with_origin`（`follow.rs:1315`）は判別を返すが、水準昇格は消費側の責務で未配線 | タスク **6.1** |
-| `policy=` フィールド（提案位置の採用方針） | `DpiSuggestedRectPolicy` は新設済みだが wndproc へ未配線 | タスク **5.1** |
-| `applied=false` | **`applied` は Phase A では定数**（`window_pos.rs:359` の `let applied = true;`）。分岐は未実装ゆえ**常に `applied=true` しか出ない** | タスク **5.1** |
-| `route=SpawnInitial` / `route=Restore` | 語彙のみ予約・未配線（`diag.rs:120-125`・D13 帰結⑷） | タスク **5.1**（spawn 側） |
+| ~~`policy=` フィールド~~ | ~~未配線~~ | **タスク 5.1 で配線済み＝本表から退役**（現在は O8 に必ず載る。値語彙は §3.4） |
+| ~~`applied=false`~~ | ~~`applied` は定数~~ | **タスク 5.1 で分岐化済み＝本表から退役**（ゴースト窓では `false`・非ゴースト窓では `true`。§3.4） |
+| `route=SpawnInitial` / `route=Restore` | 語彙のみ予約・未配線（`diag.rs:120-125`・D13 帰結⑷） | **未定**——5.1 は spawn へ `ExternalAuthority` を付与しただけで **route の配線は行わなかった**（spawn は単一ライター `enqueue_window_set_pos` を通らず entity 組立時に `WindowPos` を直接持たせるため。`diag.rs` の `#[allow(dead_code)]` も存置）。位置復元（`Restore`）は position-persist spec の所有。**本 spec では出ないままである**——0 行を「配線漏れ」と読まないこと |
 | ドラッグ由来の `[diag.window_move]` | ドラッグ経路は `enqueue_window_set_pos(..., route=None)` で呼ぶ（`follow.rs:290,383`）＝**設計上レコードを出さない** | 予定なし（§4 の対応表で wintf 側から観測する） |
 
-> **とりわけ危険なのは `applied=true` である。** これは「OS 提案位置を書くと**決定した**」証拠ではなく、「分岐がまだ存在しない」ことの表示にすぎない。`applied=true` を根拠に「政策判断が働いた」と読むのは、要件 1.5 が禁じる誤読と同型の誤りである。
+> **`applied` の読み方は 2026-08-01（タスク 5.1 着地）で反転した。** 採取ログが**どちらのビルドのものか**を先に確定してから読むこと。
+>
+> - **5.1 着地前（Phase A/B・セッション①および②-b）**: `applied` は定数（`let applied = true;`）であり、`applied=true` は「OS 提案位置を書くと**決定した**」証拠ではなく「**分岐がまだ存在しない**」ことの表示にすぎない。これを「政策判断が働いた」と読むのは要件 1.5 が禁じる誤読と同型である（§2.3.3 の実機 84/84 はこの意味の `true` である）。
+> - **5.1 着地後（タスク 7.4 の再サインオフ）**: `applied` は `dpi_suggested_position_decision` の**実際の分岐結果**である。`applied=true` は「政策が `ApplyPosition`／未付与だったので書いた」という**正常な政策判断**であり、非ゴースト窓では**そう出るのが正しい**。**これを「分岐が無い」と読むと再サインオフの判定が反転する**。分岐の有無は `applied` ではなく **同一行の `policy=`** で判別すること（§3.4）。
+
+### 3.4 O8 の `policy=` 値語彙（**タスク 5.1 着地後**・要件 1.5）
+
+`policy=` は判断の**根拠**を名指しするフィールドで、値は次の 4 種に限られる（`window_pos.rs:384-391` の網羅 match ＝腕が増えればコンパイラが指摘する）。**引用符は付かない**（`policy=ExternalAuthority` の形。他フィールドと grep の当たり方を揃えるため `format_args!` で出している）。
+
+| 値 | 意味 | 同行の `applied` | 実機で出るはずの窓 |
+| --- | --- | --- | --- |
+| `ExternalAuthority` | 位置権威が areka 配置系にある窓＝**OS 提案位置を書かない** | `false` | **ゴースト窓（キャラ・バルーンの全 scope）** |
+| `unset` | component 未付与＝後方互換の既定（従来どおり書く） | `true` | 非ゴースト窓（examples・将来の通常窓） |
+| `ApplyPosition` | 明示的に既定を宣言した窓（`unset` と同義の判断） | `true` | 現状 areka 本体では付与箇所なし |
+| `unreachable` | **政策を読めなかった**（World 借用の再入・entity 破棄）。従来挙動へフォールバックする | `true` | 通常は 0 行。出たら「宣言が無かった（`unset`）」と**混同しないこと**——読めなかっただけであり、`unset` と同じ語で報告すると事後の突合が偽の結論を作る（要件 1.5） |
+
+> **`unreachable` を `unset` と数え合わせてはならない。** ゴースト窓の受理が `unreachable` を報告していたら、それは「外部権威が効いた」でも「宣言が無い」でもなく**観測そのものの失敗**であり、その受理は計数から除外して原因を先に潰すこと。
 
 ---
 
@@ -400,6 +416,29 @@ $verdict = if ((@($result | Where-Object { -not $_.ok }).Count -eq 0) -and $sum 
   判定語 `TEARDOWN-SILENCE: PASS` / `FAIL`。
 - **肯定側**（`[despawn-skip]` が実際に出ている・他 scope が処理を継続している）を見たい場合のみ、D-TEARDOWN で追加の 1 回を回す。**D-BASE のログに `[despawn-skip]` が 0 行なのは消灯しているだけであり、何の根拠にもならない**（§3.2）。
 
+### 6.5 S1 是正の実機成立判定（**タスク 7.4 専用**・5.1 着地後のビルドでのみ使う）
+
+> **Phase A/B の採取（セッション①・②-b）にこの節を適用してはならない**——当時 `applied` は定数であり、以下の判定はすべて偽陰性になる（§3.3・§3.4）。
+>
+> **前提: 当該セッションが `SESSION-QUOTA: PASS`（§5）であること。** 下の手順 1 は「O8 の件数が O7（DPI 受理）と同数」を求めるが、これは **`0 == 0` でも成立してしまう**——DPI 受理が一度も起きていない死んだセッションでも合否判定語が `PASS (external=0/0, boxstyle_warn=0, x_divergence=0)` と綺麗に埋まる。**`N = 0` は `PASS` ではなく `N/A` とすること。** 受理回数の下限を踏破していないセッションを是正成立の根拠に用いない（要件 1.9／2.10）。
+
+S1 是正は「ゴースト窓の DPI 受理で OS 提案位置が**書かれない**」ことで成立する。**0 件を数える判定は単独では偽陰性と区別が付かない**（点灯していないだけかもしれない）ため、**必ず肯定側の相方と対で読む**。
+
+**手順**（§5.2 の第 1 段で作った「scope → キャラ窓 entity」の対応表を前提とする）:
+
+1. **肯定側**: ゴースト窓 entity の O8 行を数える。全件が `policy=ExternalAuthority` かつ `applied=false` であること。件数はその entity の **O7（DPI 受理）と同数**であること（＝受理のたびに政策判断が下っている＝観測点が点灯している証拠）。
+2. **否定側**: 同じ受理に対応する O9（`[guarded_set_window_pos]`）に、O6 の `suggested_left`／`suggested_top` と一致する `x=`／`y=` が **1 件も現れない**こと（§7.1 の手順 3 の反転）。
+3. **非退行の対照**: 非ゴースト窓が存在する走行では、その O8 が `policy=unset`・`applied=true` を報告し、O9 に提案座標が現れること（Per-Monitor v2 の標準応答の維持）。
+4. **相方の消滅**: `[WM_WINDOWPOSCHANGED] DPI center correction skipped: BoxStyle not found`（`warn!`・target **`wintf::ecs::window_proc::dpi_helpers`**・D-BASE の大域 `info` に載る）が **0 件**であること。セッション①では DPI 受理と同数（84 件）出ていた。5.1 で `DpiChangeContext` がゴースト窓では立たなくなり、`correct_position_for_dpi_center_preserve`（`window_proc/dpi_helpers.rs:96`）が冒頭 `:104` で打ち切るため当該 `warn!`（`:110`）へ到達しなくなる。
+   - **⑴と⑷は対で読む**。`applied=false` が受理と同数（肯定側の点灯）でありながら `BoxStyle not found` が 0 件（否定側）である、という**組**が S1 是正の実機成立である。⑷だけが 0 件なら「そもそも DPI 受理が起きていない」だけかもしれず、根拠にならない（要件 1.5）。
+5. **X 差の消滅**（§2.5.1 の指紋との対比）: セッション①で観測された二重ライターの差分は「Y が定数・**X が可変（−861〜+861）**」だった。X の可変性が S1 の指紋ゆえ、是正後は **O9 と `[diag.window_move]` の X が一致し、861px 級の X 差が 0 件**になる。
+
+**合否判定語**（`diagnosis-report.md` §4 へ転記）:
+
+- `S1-SOURCE-CUT: PASS (external=N/N, boxstyle_warn=0, x_divergence=0)` — 1〜5 がすべて成立。`N` はゴースト窓の DPI 受理件数。
+- `S1-SOURCE-CUT: FAIL <項番>` — 不成立。とりわけ `policy=unreachable` が 1 行でも出ていたら**その受理は計数から除外**し、原因（World 借用の再入・entity 破棄）を先に潰す（§3.4）。
+- `S1-SOURCE-CUT: N/A` — 採取ビルドが 5.1 着地前である（§0.1 の順序制約の確認漏れを疑う）、**または `N = 0`**（ゴースト窓の DPI 受理が 1 件も無い＝上記の前提を満たさない）。
+
 ---
 
 ## 7. 実機サインオフ（要件 5.5・決定論化できない残余）
@@ -422,7 +461,7 @@ $verdict = if ((@($result | Where-Object { -not $_.ok }).Count -eq 0) -and $sum 
 - `RESIDUE-A-SUGGESTED-RECT: PASS` — 上記 1〜4 がすべて確認でき、提案矩形の実値がログから復元できた。
 - `RESIDUE-A-SUGGESTED-RECT: FAIL` — O6／O8／O9 のいずれかが欠落しており実値を復元できない（＝手順の設定ミスを疑う。`wintf::ecs::window=debug` の入れ忘れが第一容疑）。
 
-> **是正後（タスク 7.4）の再サインオフでは判定が反転する**: S1 是正後、ゴースト窓では O8 が `applied=false` を報告し、O9 に提案座標が現れないことが PASS 条件になる（非ゴースト窓では従来どおり）。**Phase A の採取でこれを期待してはならない**——§3.3 のとおり Phase A の `applied` は定数 `true` である。
+> **是正後（タスク 7.4）の再サインオフでは判定が反転する**: S1 是正後、ゴースト窓では O8 が `policy=ExternalAuthority`・`applied=false` を報告し、O9 に提案座標が現れないことが PASS 条件になる（非ゴースト窓では従来どおり）。**Phase A の採取でこれを期待してはならない**——§3.3 のとおり Phase A の `applied` は定数 `true` である。反転後の完全な判定手順と合否判定語は **§6.5**（`S1-SOURCE-CUT`）が持つ。本節（残余 A）は「OS が実際に何を提示したか」の復元が目的であり、**是正後も手順 1・2・4 はそのまま有効**（提案矩形の実値は O6／O8 から復元できる＝書かないことと記録しないことは別である）。手順 3 だけが §6.5 の否定側へ反転する。
 
 ### 7.2 残余 B: **実モニタ列挙**
 
@@ -463,6 +502,15 @@ TRACE wintf::ecs::drag::dispatch 相当: [DragEvent] … （trace 水準の点�
 ```
 
 併せて、既定水準（`info`）では O8・O9 が **1 行も出ない**ことも確認した（診断専用のまま＝要件 1.7）。
+
+> **上の抜粋は 4.1 実施時（Phase A）の書式である。** O8 の行は **タスク 5.1 で `policy=` が加わり、`applied` が分岐結果になった**。5.1 着地後の実測書式は次のとおり（in-source 檻 `s1_decision_line_reports_external_authority_and_applied_false`／`_unset_policy_and_applied_true` がリテラルを固定している）:
+>
+> ```
+> DEBUG wintf::ecs::window_proc::window_pos: [WM_DPICHANGED] suggested position write decision entity=3v0 hwnd=HWND(0x0) policy=ExternalAuthority applied=false suggested_left=2400 suggested_top=800
+> DEBUG wintf::ecs::window_proc::window_pos: [WM_DPICHANGED] suggested position write decision entity=3v0 hwnd=HWND(0x0) policy=unset applied=true suggested_left=2400 suggested_top=800
+> ```
+>
+> `policy=` の値に**引用符が付かない**ことも檻が固定している（`format_args!` 経由。素の `&str` として渡すと `policy="unset"` になり、同行の他フィールドと grep の当たり方が変わる＝§5.4 のトークン境界の罠と同型）。
 
 > **本書のメンテ規約**: 出力書式は in-source 檻がリテラル固定している（`diag.rs` の `record_tags_are_fixed`・`monitor_record_line_carries_every_field`・`window_move_record_line_carries_every_field` ほか）。書式を変えれば檻が赤になる。**檻を直すときは本書の判定語も同じコミットで直すこと**——直さなければ本書が静かに嘘になる。
 

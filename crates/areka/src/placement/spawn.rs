@@ -14,6 +14,9 @@
 //!
 //! # 窓 entity 構成（design「placement::spawn」の正本 bullet）
 //!
+//! キャラ窓・バルーン窓の**両方**が `DpiSuggestedRectPolicy::ExternalAuthority` を持つ
+//! （areka-P0-dpi-window-vanish 要件 4.3・D3。[`external_position_authority`] に理由を記載）。
+//!
 //! - キャラ窓: `Name`＋`CharWindowMarker{scope}`＋`GhostWindowMarker`＋`Window{title}`
 //!   ＋`WindowStyle { style: WS_POPUP|WS_VISIBLE, ex_style: WS_EX_LAYERED|WS_EX_TOOLWINDOW }`
 //!   （**`WS_EX_TOPMOST` なし**・5.1／DD13）＋`WindowPos { position, size }`（物理 px）
@@ -62,7 +65,9 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use wintf::ecs::clickthrough::ClickThroughRegistryHandle;
 use wintf::ecs::drag::{DragConfig, OnDrag, OnDragEnd};
 use wintf::ecs::layout::HitTest;
-use wintf::ecs::{Point, SizeI, Window, WindowHandle, WindowPos, WindowStyle};
+use wintf::ecs::{
+    DpiSuggestedRectPolicy, Point, SizeI, Window, WindowHandle, WindowPos, WindowStyle,
+};
 
 use super::follow::{
     on_balloon_drag, on_balloon_drag_end, on_char_drag, on_char_drag_end, Anchored, BalloonFollow,
@@ -238,6 +243,10 @@ pub fn spawn_ghost_windows(
                 window_style(),
                 window_pos(p.balloon_pos.x, p.balloon_pos.y, p.balloon_size.w, p.balloon_size.h),
                 HitTest::none(),
+                // 位置権威の外部宣言（areka-P0-dpi-window-vanish 4.3・D3）。バルーン窓も
+                // OS 直書きから外す——キャラ窓だけ外すと、DPI 跨ぎでバルーンだけが OS 提案
+                // 位置へ飛び、`balloon_pos − char_pos ≡ offset` の恒等式が構造的に崩れる。
+                external_position_authority(),
                 DragConfig::default(),
                 OnDrag(on_balloon_drag),
                 // バルーン単独ドラッグ確定 offset の永続 write-through（2.1・8.1・
@@ -262,6 +271,8 @@ pub fn spawn_ghost_windows(
                 window_style(),
                 window_pos(p.char_pos.x, p.char_pos.y, p.char_size.w, p.char_size.h),
                 HitTest::none(),
+                // 位置権威の外部宣言（areka-P0-dpi-window-vanish 4.3・D3・S1 是正の源断ち）。
+                external_position_authority(),
                 // 解決済みアンカーの単一真実源を全 char 窓へ**無条件付与**する（4.2/1.6）。
                 // Free 窓も付ける——resize の identity 射影（project_anchor の Free 腕）が
                 // Anchored を読むため。二値吸着フラグ（旧 BottomSnap marker）は廃し、
@@ -323,6 +334,24 @@ fn window_style() -> WindowStyle {
         style: WS_POPUP | WS_VISIBLE,
         ex_style: WS_EX_LAYERED | WS_EX_TOOLWINDOW,
     }
+}
+
+/// 全ゴースト窓共通の位置権威宣言（areka-P0-dpi-window-vanish 要件 4.3・D3・task 5.1）。
+///
+/// # なぜ全ゴースト窓に要るのか
+///
+/// `WM_DPICHANGED` の OS 提案矩形は「モニタ間の DPI 比で現在位置を素直に拡縮した」
+/// 位置であって、接地点規約（下端中央）とは無関係である。wintf 側はこの component が
+/// **未付与の窓へは従来どおり提案位置を書き込む**（Per-Monitor v2 の標準応答＝
+/// 非ゴースト窓の後方互換）。ゴースト窓の位置を決める権威は areka の配置系
+/// （`project_anchor`／`resize_window_to`／DPI 相の再射影）ただ 1 つであり、
+/// 二重ライターを許すと OS 由来座標が `WindowPos.position` へ landing して、
+/// 以後の射影が「直前に areka が確定した接地点」ではなく OS 提示値を生位置として読む
+/// （診断レポート §1.1 の連鎖①〜④＝S1。実機セッション①で `applied=true` が 84/84）。
+///
+/// 付与の責務が窓の所有者側にあること（wintf は読むだけ）は D3 の裁定である。
+fn external_position_authority() -> DpiSuggestedRectPolicy {
+    DpiSuggestedRectPolicy::ExternalAuthority
 }
 
 /// `ScopePlacement` 由来の位置・寸法（物理 px）だけを転記した `WindowPos`（U1）。
@@ -404,7 +433,7 @@ mod tests {
     use wintf::ecs::drag::{DragConfig, DragConstraint, OnDrag, OnDragEnd};
     use wintf::ecs::layout::{BoxStyle, HitTest};
     use wintf::ecs::pointer::{OnPointerMoved, OnPointerPressed, Phase};
-    use wintf::ecs::{Point, SizeI, Window, WindowPos, WindowStyle};
+    use wintf::ecs::{DpiSuggestedRectPolicy, Point, SizeI, Window, WindowPos, WindowStyle};
 
     use super::{
         BalloonWindowMarker, CharWindowMarker, GhostWindowMarker, GhostWindows, ScopeWindows,
@@ -961,6 +990,81 @@ mod tests {
             assert_eq!(style.ex_style, WS_EX_LAYERED | WS_EX_TOOLWINDOW);
             assert_eq!(style.style, WS_POPUP | WS_VISIBLE);
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // 外部権威宣言（areka-P0-dpi-window-vanish 要件 4.3・D3・task 5.1）
+    //
+    // 付与漏れが S1（OS 提案位置の素通し）再発の穴になる。wintf 側は
+    // 「component 未付与＝従来どおり提案位置を適用」ゆえ、**落とした窓だけが静かに
+    // OS 直書きへ戻る**——落ちたことはログにも型にも現れない。よって
+    // 「全 scope × 窓 2 種」を檻で数え上げて固定する。
+    // -------------------------------------------------------------------------
+
+    /// 5.1（4.3・D3）: spawn 直後の**全**ゴースト窓（全 scope × キャラ/バルーン）が
+    /// `DpiSuggestedRectPolicy::ExternalAuthority` を保持する。
+    ///
+    /// 空虚性回避（[[2.2 の教訓]]・tasks.md Implementation Notes 2.2/3.2/4.4/4.6）:
+    /// ①探針の自己検査——**既定値が `ExternalAuthority` ではない**ことを先に固定する
+    /// （既定が外部権威なら「付与されている」の主張は component 未付与でも成り立ち、
+    /// 檻が不動点に落ちる）。②**数え上げで固定する**——`ghost_window_entities` の全数
+    /// （2 scope × 2 種＝4）を走査し、scope×種別を名指しで再確認する（キャラ窓にだけ
+    /// 付ける部分是正が「4 件中 2 件」で赤になる）。③非ゴースト窓には付かないことも
+    /// 主張する（World 全体への無差別挿入で緑にならない）。
+    #[test]
+    fn external_authority_attached_to_every_ghost_window_of_every_scope() {
+        // ① 探針の自己検査: 既定値は従来挙動側（＝未付与と外部権威が区別できる）
+        assert_ne!(
+            DpiSuggestedRectPolicy::default(),
+            DpiSuggestedRectPolicy::ExternalAuthority,
+            "既定値が ExternalAuthority なら本檻は不動点に落ちて何も検出しない"
+        );
+
+        let mut world = World::new();
+        let mut placements = two_scope_placements();
+        placements[1].anchor = Anchor::Free; // アンカー種別に依存しないことも同時に固定
+        // 非ゴースト窓（無差別挿入の検出用の対照）
+        let stranger = world.spawn(Window::default()).id();
+
+        let gw = spawn_ghost_windows(&mut world, &placements, &titles());
+
+        // ② 全数走査（4 窓すべてに付いている）
+        let entities = ghost_window_entities(&mut world);
+        assert_eq!(entities.len(), 4, "2 scope × キャラ/バルーン＝4 窓のはず");
+        for e in &entities {
+            assert_eq!(
+                world.get::<DpiSuggestedRectPolicy>(*e).copied(),
+                Some(DpiSuggestedRectPolicy::ExternalAuthority),
+                "ゴースト窓 {e:?} に外部権威宣言が無い（OS 提案位置が直書きされる＝S1 再発）"
+            );
+        }
+
+        // ② scope×種別の名指し（部分是正が「どちらを落としたか」で赤になる）
+        for p in &placements {
+            assert_eq!(
+                world
+                    .get::<DpiSuggestedRectPolicy>(gw.char_window(p.scope).unwrap())
+                    .copied(),
+                Some(DpiSuggestedRectPolicy::ExternalAuthority),
+                "scope{}: キャラ窓に外部権威宣言が無い",
+                p.scope
+            );
+            assert_eq!(
+                world
+                    .get::<DpiSuggestedRectPolicy>(gw.balloon_window(p.scope).unwrap())
+                    .copied(),
+                Some(DpiSuggestedRectPolicy::ExternalAuthority),
+                "scope{}: バルーン窓に外部権威宣言が無い（バルーンも OS 直書きから外す・D3。\
+                 落とすと balloon_pos − char_pos ≡ offset が DPI 跨ぎで崩れる）",
+                p.scope
+            );
+        }
+
+        // ③ 非ゴースト窓には付かない（World 全体への無差別挿入では緑にならない）
+        assert!(
+            world.get::<DpiSuggestedRectPolicy>(stranger).is_none(),
+            "spawn_ghost_windows が自分の生成窓以外へ政策を挿入している"
+        );
     }
 
     // -------------------------------------------------------------------------
