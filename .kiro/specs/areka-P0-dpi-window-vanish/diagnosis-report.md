@@ -1381,13 +1381,61 @@ Req 5.4 が要求するのはこの性質の**檻水準での明示**であり�
 
 | 項目 | 内容 |
 | --- | --- |
-| 再サインオフのコミット SHA | _（7.4）_ |
-| セッション①／②の `SESSION-QUOTA` | _（7.4・受理回数の下限踏破）_ |
-| 消失痕跡 | _（7.4・`VANISH-TRACE: NONE` であること）_ |
-| 接地点保存の実測 | _（7.4）_ |
-| 残余 A（提案矩形） | _（7.4・**判定が反転する**——ゴースト窓では `applied=false` を報告し、提案座標が窓へ書かれないことが PASS 条件）_ |
-| 残余 B（モニタ列挙） | _（7.4）_ |
-| S1〜S3′ の是正後の実機挙動 | _（7.4・§1 の 4 件それぞれについて）_ |
+| 再サインオフのコミット SHA | **`c6b83bc`**（7.5 着地＝Phase C＋D′ 完了・profile `debug`） |
+| 採取日時／生ログ | 2026-08-01 08:28〜08:42 UTC。`%LOCALAPPDATA%\areka-diag\20260801-172820\`（`session1-drag.log`／`session2c-osdpi.log`／`meta.txt`。無効化された `session2-osdpi.log`・`session2b-osdpi.log` も保存） |
+| 実機構成 | 2 台。index=0（主）`bounds=0,0,2880,1800` `work_area=0,0,2880,1704` `dpi=192`／index=1 `bounds=-2560,195,0,1795` `dpi=144`。**左モニタが負座標**＝手順書 §1.3 が望む構成。`[SetProcessDpiAwarenessContext] DPI awareness set context="PER_MONITOR_AWARE_V2"`（Req 7.4 の観測点が実機で点灯） |
+| セッション①／②の `SESSION-QUOTA` | ① **`PASS (total=12)`**（scope0 3↑/3↓・scope1 3↑/3↓）／②c **`PASS (total=24)`**（同）。**②は 2 度採り直した**——`SESSION2-NO-DRAG` の構造的欠陥（下記）ゆえ。②c は `SESSION2-NO-DRAG: PASS`（`[start_preparing]` 0 件） |
+| 消失痕跡 | **`VANISH-TRACE: NONE`（両セッション）**。①＝`[diag.window_move]` 1,793 行＋`[guarded_set_window_pos]` 3,976 行、②c＝37 行＋38 行。**いずれも全 work area 非交差の矩形が 1 件も無い**（幾何突合＝§6.3 の正本判定） |
+| 接地点保存の実測 | **`ground_y=1704` が全 DPI 遷移を通じて定数**（scope0）。同一遷移で `h` は 1094↔821・`x` は 2120↔2216（中心保存の付替え）と動くのに接地点だけが不動＝**Req 4.1／4.2 の実機成立** |
+| 残余 A（提案矩形） | **`S1-SOURCE-CUT: PASS (external=24/24, boxstyle_warn=0, unreachable=0)`（両セッション）**。判定の反転が実測で成立——**是正前のセッション①は `applied=true` が 84/84・`BoxStyle not found` も 84 件**（§2.5.1・§2.3.5）だったのに対し、是正後は**全件 `policy=ExternalAuthority` かつ `applied=false`・`BoxStyle not found` 0 件**。§6.5 が要求する「肯定側⑴と否定側⑷を対で読む」を満たしている |
+| 残余 B（モニタ列挙） | 両側の列挙が一致（`handle=395545`／`461083` が areka `[diag.monitor]` と wintf `monitor_systems` の双方に出現）。`[visibility-guard] WorkAreaUnresolved` は**0 件**＝観測装置側の異常なし |
+| S1〜S3′ の是正後の実機挙動 | **S1**: 上記のとおり源断ちが成立（84/84 陽性 → 24/24 陰性）。**S2**: `ground_y` 定数＝射影の欠落が消えた。DPI 相の書込は全て `route=DpiReproject`。**S3／S3′**: `[visibility-guard] ClampX` **0 件**——ガードは配線されているが**発火する状況が起きなかった**（VANISH-TRACE: NONE と整合）。ガード不発は不足ではなく、非交差への遷移そのものが生じなかったことの裏面である |
+| `TEARDOWN-SILENCE` | **`PASS`（両セッション）**——`Could not despawn entity` が **0 件**。②c は自動終了経路（`despawn_smoke_targets` → 非同期 `WM_CLOSE` → `lifecycle.rs`）を通っており、**§2.3.4 の訂正で真の出所と特定した `lifecycle.rs:70` を実際に踏んだうえで 0 件**である。タスク 7.3（areka 側 2 入口）と 7.5（表示基盤側 1 入口）の是正が実機で成立した |
+
+#### 4.1 タスク 4.6（S4 是正）の実機的裏づけ——駆動路の内訳
+
+②c の DPI 遷移 24 件の経路内訳は次のとおりで、**4.6 が新設した `WM_DPICHANGED` 非依存の駆動路が実遷移のすべてを担っている**。
+
+| 経路 | 行数 | うち実遷移（`new != old`） |
+| --- | --- | --- |
+| **O16**（`Redriving window DPI from updated Monitor`・4.6 新設） | 24 | **24** |
+| **O7**（`[WM_DPICHANGED] DPI component directly updated`） | 24 | **0**（全件 `new == old`） |
+
+`WM_DPICHANGED` は届いている（②-a の 0 件とは異なる）が、到達時には **O16 が既に DPI を更新済み**で `new == old` になっている。§5.1 の改訂が想定した「同一の遷移が両方に現れることはない（等値ガード）」が**逆順（再導出が先・通知が後）でも成立する**ことが実測された。`[detect_display_change_system] Display configuration change applied windows_redriven=4` が 6 回。
+
+#### 4.2 S5（work area 非追随）の実測確定——**本 spec の対象外であることの再確認**
+
+wintf のモニタ表は work area の変化に**正しく追随している**（4.6 の成果）:
+
+```
+Updating Monitor entity … old_work_area=0,0,2880,1704 new_work_area=0,0,2880,1728 old_dpi=192 new_dpi=144
+Updating Monitor entity … old_work_area=0,0,2880,1728 new_work_area=0,0,2880,1704 old_dpi=144 new_dpi=192
+```
+
+にもかかわらず、キャラ窓の `ground_y` は**常に 1704**（起動時＝`dpi=192` の下端）。つまり `dpi=144` のとき **work area 下端 1728 に対して 24px 浮いている**。§2.5.3 が +36px として記録した現象と同一で、機序も既に確定済み——**areka の `MonitorSnapshot`（射影 `project_anchor` が読む権威）は `main.rs:703` の 1 箇所でしか書かれず更新経路が存在しない**（4.6 が是正したのは wintf 側の `Monitor` エンティティ表であって本 Resource ではない）。
+
+**所有は `areka-P0-dpi-transition-atomicity`**（roadmap 登記済み）。本項は 7.4 の合否に影響しない——Req 4.1／4.2 が要求するのは「**変化の前後で接地点を保つ**」ことであり、`ground_y` が 1 bit も動いていない以上それは成立している。「新しい work area 下端へ**追随する**」ことは Req 7 系（表示構成変更への追従）の範疇であり、位置についての追随は本 spec の Boundary 外（Non-Goals の「モニタ構成変化への運転中追随」）である。
+
+#### 4.3 手順書 §6.2 の `SESSION2-NO-DRAG` は**構造的に到達不能だった**（採り直し 2 回の原因・要是正）
+
+②を 3 回採取した。1 回目・2 回目とも `SESSION2-NO-DRAG: FAIL (1 件)` で、その 1 件は**いずれもセッション終了のためのクリック**だった:
+
+```
+08:36:36.987  [start_preparing] DragState -> Preparing (with capture) entity=6v0
+08:36:37.187  record_button_up entity=14v0 button=Left
+08:36:37.240  Entity being removed, sending WM_CLOSE          ← 200ms 後にシャットダウン
+```
+
+areka のゴーストは**クリック（ダブルクリック）で閉じる**設計（`crates/areka/src/main.rs:566`）であり、押下の瞬間に `handle_button_message` が `start_preparing` を呼ぶ（ドラッグか単クリックかは離すまで確定しないため）。したがって:
+
+- §6.1 手順 7 が併記する「**または全キャラ窓を閉じる**」で終えると、`[start_preparing]` は**必ず 1 件以上出る**
+- §6.2 手順 7 の判定「`[start_preparing]` が 0 行であること」は、その終了方法と**両立しない**
+
+**判定基準そのものが到達不能**という、S4 と同じ「観測装置側の欠陥」である。**基準は緩めていない**（Req 2.10 が禁じる「観測装置を被検体に合わせて曲げる」行為に当たるため）——代わりに基準を満たせる終了経路、すなわち `AREKA_APP_SMOKE_EXIT_MS` による**自動終了**（ゴーストに一切触れない）で 3 回目（②c）を採取し、`SESSION2-NO-DRAG: PASS` を成立させた。
+
+なお 1・2 回目の混入は**実害を伴っていない**（`route=Drag` の窓書込は 0 件・クリックは 91〜200ms で離されており移動していない）。それでも無効として採り直したのは上記の理由による。
+
+> **手順書への是正提案（開発者裁定待ち・本書からの申し送り）**: §6.2 手順 7 を「セッション②は `AREKA_APP_SMOKE_EXIT_MS` の**自動終了で終えること**（窓を閉じる操作はゴーストへの押下を伴い、判定を必ず FAIL させる）」と改め、§6.1 手順 7 の「または全キャラ窓を閉じる」は**セッション①限定**であることを明記する。値は 15 分である必要はない——本採取では `300000`（5 分）で下限を十分に踏破した（実操作は約 1 分）。
 
 ---
 

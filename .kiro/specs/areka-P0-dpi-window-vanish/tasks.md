@@ -281,13 +281,16 @@
   - _完了（2026-08-01）_: 編集面は `crates/wintf/src/ecs/window_proc/lifecycle.rs` **1 ファイルのみ**。本番は `WM_CLOSE` 内の 9 行（`get_entity(entity).is_err()` → `debug!` 打ち切り／それ以外は従来どおり `despawn`）。**投函契約・正準シグナル・wndproc 戻り値 `Some(LRESULT(0))` はいずれも無改変**（レビュアが `window_handle.rs:279`・`clickthrough/controller.rs:90` の無変更を diff で確認・5.1 で踏んだ「戻り値が黙って OS 挙動を変える」罠の再来を回避）。檻は**三アーム構成**（⑴対照＝`World::despawn` の `false`／⑵本体＝打ち切り行の存在と DEBUG 水準／⑶自己証明＝ハーネスが同一呼出点の WARN を見られること）で空虚性 9 例目を回避。変異 M1（ガード撤去）・M3（水準）が各 sole failure、M2（述語反転）が新設 2 件＋**既存 `wm_close_despawns_target_entity` も**赤＝生存経路の破壊を検出。`cargo test -p wintf` **1,062 passed / lib ignored 0**・`cargo test -p areka` **628 passed**（非退行）
   - _残る危険（機械的に塞げない）_: `DESPAWNED_SKIP_TAG` は areka（`placement/diag.rs`）と wintf（`lifecycle.rs`）に**同一文字列で二重定義**されている（依存方向規約により定数共有は不可・wintf 側は `pub(crate)` ゆえ crate 跨ぎの等値 assert も書けない）。相互参照の doc は **wintf 側にのみ**あり、areka 側から文字列を変えると終了時ログの grep 語が静かに分裂する。areka 側への注記追加は 7.5 の `_Boundary:_` 外ゆえ本タスクでは行っていない
 
-- [ ] 7.4 是正後の実機再サインオフ
+- [x] 7.4 是正後の実機再サインオフ
   - 是正投入後のビルドで診断手順書と同一手順の 2 セッションを再実行し、受理回数の下限を踏破したうえで消失痕跡がゼロであることを判定語で確認する
   - 決定論化できない残余（OS が実際に提示する提案矩形の実値・実モニタ列挙）を実機ログで確認し、合否を判定語で記録する
   - S1〜S3′ の各項目について是正後の実機挙動を診断レポートへ追記する
   - 完了状態: 診断レポートに是正後セッションの受理回数・消失痕跡ゼロ・接地点保存の実測が記録され、実機サインオフが成立する
   - _Requirements: 2.9, 5.5_
   - _Depends: 7.1, 7.2, 7.3, 7.5_
+  - _完了（2026-08-01・`c6b83bc` のビルドで採取）_: 正本は `diagnosis-report.md` **§4**（§4.1〜§4.3 を含む）。実機は 2 台・混在 DPI（192／144）・左モニタが負座標。**全判定 PASS**——① `SESSION-QUOTA: PASS(12)`／②c `PASS(24)`・両者 `VANISH-TRACE: NONE`（計 5,844 矩形すべて work area と交差）・`TEARDOWN-SILENCE: PASS`（**7.3／7.5 の是正が実機で成立**）・`S1-SOURCE-CUT: PASS(external=24/24, boxstyle_warn=0)`（**是正前の 84/84 陽性・BoxStyle 84 件から反転**）・`ground_y=1704` 定数（Req 4.1/4.2 成立）。4.6 の駆動路も裏づけ（**O16 が実遷移 24 件すべてを担い O7 は全件 `new==old`**）
+  - _7.4 が発見した手順書の欠陥（開発者裁定待ち・`diagnosis-report.md` §4.3 が正本）_: 手順書 §6.2 手順 7 の `SESSION2-NO-DRAG`（`[start_preparing]` 0 行）は、§6.1 手順 7 が併記する「**または全キャラ窓を閉じる**」終了方法と**両立しない**——areka のゴーストはクリックで閉じる設計（`main.rs:566`）ゆえ、閉じれば必ず `[start_preparing]` が出る。**判定基準が構造的に到達不能**という S4 と同型の観測装置側の欠陥。基準は緩めず（Req 2.10）、`AREKA_APP_SMOKE_EXIT_MS` の自動終了で 3 回目を採取して `PASS` を成立させた。②は計 3 回採取（1・2 回目は終了クリック 1 件で無効・ただし `route=Drag` は 0 件で実害なし）
+  - _S5（work area 非追随）は実測で再確認_: モニタ表は追随するが（`work_area` が 1704↔1728 で実変化）`ground_y` は起動時の 1704 のまま＝`dpi=144` 時に **24px 浮く**。`MonitorSnapshot` の更新経路不在が機序。**所有は `areka-P0-dpi-transition-atomicity`**・7.4 の合否には影響しない（Req 4.1/4.2 は「変化の前後で接地点を保つ」であり成立済み・「新下端への追随」は Non-Goals）
 
 ## Implementation Notes
 
