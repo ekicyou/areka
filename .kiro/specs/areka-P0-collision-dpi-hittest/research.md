@@ -319,3 +319,32 @@
 
 - **R4 実機サインオフ**は実装完了後のゲート（tasks 8.2）。OS 表示スケール 125%／200% の 2 水準を実機で切り替えられることが条件で、実装着手の前提ではない。
 - **R-2/R-4** はサインオフ手順内で消化する（tasks 8.2 に内包済み）。
+
+---
+
+## 11. main 再マージ後の再突合（2026-08-01・tasks 生成後）
+
+> 契機: tasks.md 生成後に `origin/main` を再マージ（clean・conflict ゼロ・merge commit `d4e83ad`）。
+> 取り込み: `ec9687c dpi-window-vanish`（W5 同居）・`70bd1b3 kero-balloon`（W5 同居・PR#97）・`81c60e3 roadmap 追記(58) 棚卸⑤`。
+> §10 は**前回マージ**（`choice-select-events` 着地時）の記録であり、本節がその後続。設計アンカーを再び全数現物照合した。
+
+### 11.1 判定結果 = **実装ブロックなし（着手可）**
+
+| # | ブロック候補 | 判定 | 根拠（実測） |
+|---|---|---|---|
+| 1 | W5 同居との編集面衝突 | **完全消滅** | W5 同居 3 本（`choice-select-events`／`kero-balloon`／`dpi-window-vanish`）が**全て completed へ着地**。本 spec は W5 唯一の生存者として **W6 へ編入**（roadmap:51/:84）。並走相手が存在しないため R6.7 のバルーン例外条項と design DD-11 の conflict 解消規律は**発動不要**（防御規定として保持するが、実際の衝突リスクは消滅） |
+| 2 | 判定コードへの意味的干渉 | **なし** | マージが本 spec の編集面 9 ファイルに与えた差分は **2 ファイル・テスト補助と example 配線のみ**。`click_selection`／`hit_choice_row`／`on_balloon_pointer_pressed`／`hit_region`／`resolve_hit_region` の**判定コードは 1 行も変更されていない** |
+| 3 | DD-8 VOID の前提（バルーン逆向き整合） | **不変** | `choice.rs:260-289` `to_window_physical` の `* k` 持ち上げは無変更。「点は無変換が正しい」の根拠は健在 |
+| 4 | 設計アンカーのドリフト | **なし（1 件のみ軽微）** | `presenter.rs` :108/:705/:858-870、`hit.rs` :42-44/:57、`scale.rs` derive＋`scale_len`、`hit_region.rs` :54-73、`choice.rs` :260、`balloon.rs` 改訂対象 6 行、wintf DPI 初期化（R-1 根拠）——**全て設計記載と一致**。ドリフトは probe の `resolve_hit_region` 呼出のみ（:681→**:683**） |
+| 5 | ベースラインのビルド健全性 | **緑** | `cargo check --workspace --all-targets` exit 0（警告は既存 dead_code のみ） |
+| 6 | W6 同ウェーブ 4 本との干渉 | **素** | roadmap 追記(58) が全 10 ペア素と実測宣言。`bindoption-exclusivity` は `areka-emo-compose` を**明示的に「変更不要」**と登記（brief:197）。`balloon-visibility` は `presenter.rs` を**既存貫通経路として参照するのみ**（:379/:393 `apply_hide`）で本 spec の :705/:858-870 域とは非重複。roadmap ⑸「col は presenter.rs :867 域＝同ファイル他 spec は全て後続ウェーブ」 |
+
+### 11.2 実装時に吸収すべき機械的差分（ブロックではないが必須の追従）
+
+1. **tasks 6（probe 改修）**: `dpi-window-vanish` が `resize_window_to` の呼出へ引数 `placement::diag::PlacementRoute::Resnap` を追加した（`collision-probe.rs:494-497`）。窓 resize 先を `target_physical_size()` へ差し替える際、**この引数を保持したまま**変更すること（欠落すると型エラー）。
+2. **tasks 5（バルーン檻）**: `kero-balloon` が per-scope バルーン資産化により `balloon.rs` のテスト fixture を変更した——`balloons: Vec<BalloonScopeAssets{scope, emo_world, atlas, model}>`（旧: タプル＋独立 `balloon_model`）・`loop_tables.balloon: BTreeMap`（旧: `AnimationTable::empty()`）。新設する檻 2 本は**この新 fixture 形**で組むこと。
+3. probe の `resolve_hit_region` 呼出行は **:683**（設計記載 :681 から +2）。
+
+### 11.3 残る運用条件（§10.3 から不変）
+
+R4 実機サインオフ（tasks 8.2）と R-2/R-4 の消化は実装完了後のゲートであり、着手の前提ではない。
