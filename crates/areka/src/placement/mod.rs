@@ -23,6 +23,7 @@ pub mod persist;
 pub mod resolver;
 pub mod source;
 pub mod spawn;
+mod windowposition;
 /// `#[cfg(test)]` 限定のテスト共有部品（tracing ログ捕捉ハーネス）。本番バイナリには含まれない。
 #[cfg(test)]
 mod test_support;
@@ -30,6 +31,8 @@ mod test_support;
 use std::path::{Path, PathBuf};
 
 use areka_emo_compose::ScaleRatio;
+use areka_emo_present::balloon::{load_scope_balloon_model, resolve_balloon_faces};
+use areka_parsers::balloon::WindowPosition;
 use areka_parsers::package::MountError;
 use tracing::{error, info, warn};
 use wintf::ecs::window::monitor::{Monitor, enumerate_monitors};
@@ -257,7 +260,7 @@ fn prepare_stages(
     primary_dpi: Option<u32>,
 ) -> Result<PreparedStages, PlacementError> {
     let src = source::load_descript_source(ghost_root)?;
-    let cfg = config::build_placement_config(&src.ghost_kv, &src.shell_kv);
+    let mut cfg = config::build_placement_config(&src.ghost_kv, &src.shell_kv);
     let scope_ids: Vec<usize> = cfg.scopes.keys().copied().collect();
     // 作者基準 DPI（design D1・Flow 3 手順1）は**ここで 1 度だけ**読む。shell は既に
     // 読み込み済みの生 KV（`load_descript_source` の戻り）から、balloon は別パッケージ
@@ -281,12 +284,129 @@ fn prepare_stages(
         scopes = ?sizes.scopes,
         "placement: k₀ 倍後の物理窓寸で窓を生成する（起動採寸・要件 3.3）"
     );
+    // 表示位置指定（`windowposition` 数値指定）→ 初期既定位置の調整量（areka-P0-kero-balloon
+    // 要件 3.2/3.3/3.4/3.6・design D1'）。**採寸の後**に scope ごとの定義を権威から取得し、
+    // `ScopeConfig.balloon_offset`（P5 が既に加算している欄）へ合流させる供給のみを行う
+    // ——配置解決の式 P1〜P5 は無改変であり、永続値優先の復元規約（`persist.rs`）にも触れない。
+    apply_scope_windowpositions(&mut cfg, balloon_root, &scope_ids, scaling.balloon);
     Ok(PreparedStages {
         cfg,
         sizes,
         titles: src.titles,
         author_dpi,
     })
+}
+
+/// scope ごとの表示位置指定（`windowposition` 数値指定）を初期既定位置の調整量へ変換し
+/// `cfg.scopes[scope].balloon_offset` へ合流させる（要件 3.2/3.3/3.4/3.6・design D1'）。
+///
+/// **供給元を増やすだけ**の層である——`resolver.rs` の配置式 P1〜P5 は無改変で、P5 が既に
+/// 加算している `balloon_offset.unwrap_or((0, 0))` の入力が増える。ゆえに恒等式
+/// `balloon_offset ≡ balloon_pos − char_pos` も、キャラ窓の基準原点も、位置の保存・復元の
+/// 基準（`persist.rs`・永続値優先）も変わらない（要件 3.5/3.8）。
+///
+/// `k` は**バルーン軸**の表示スケール（`MeasureScaling::balloon`）である——`windowposition` は
+/// バルーン作者の空間で書かれた値ゆえ、シェル軸の k を掛けてはならない（要件 3.6・2 軸独立）。
+/// 大きさの丸めは既存権威 `ScaleRatio::scale_len` へ委譲される（新しい丸め規約を導入しない）。
+///
+/// # 観測（要件 6.3・design Monitoring 観測点 4）
+///
+/// scope ごとに `info!` で scope・wp 生値・バルーンの左右・変換後の調整量（物理 px）を記録する。
+/// 実機サインオフ（R7.6・task 6.1）はこの行を grep して SSP 実測と突合し、x 方向の符号規約を
+/// **確定させた**——確定形は「左右で反転しない素の画面座標オフセット」（`windowposition.rs` の
+/// `to_screen_adjust`「符号規約」節）。`balloon_side` は調整量の計算には効かなくなったが、
+/// 基本位置（Left＝`char_x − balloon_w`／Right＝`char_x + char_w`）がどちらだったかを実機ログ
+/// だけで再構成できるようにするため記録し続ける。
+///
+/// # 失敗（log-first・表示を失わない）
+///
+/// 系列解決・面 0 の不在はいずれも `warn!` のうえ当該 scope の供給を見送る（配置自体は基本位置で
+/// 成立する）。同じ事象は直前の採寸（`measure_scope_sizes`）が既に `error!`＋`Err` で弾いており
+/// ——採寸が成功した後に本関数だけが失敗する経路は実在しない——ここは無言化を防ぐ防波堤である。
+fn apply_scope_windowpositions(
+    cfg: &mut PlacementConfig,
+    balloon_root: &Path,
+    scope_ids: &[usize],
+    k: ScaleRatio,
+) {
+    for &scope in scope_ids {
+        // バルーンの左右は配置構成の解決済み値（`balloon.alignment`・cascade 済み）。
+        // 調整量の計算には効かない（符号は置き側に依らない・R7.6 確定形）が、観測点 4 の
+        // 記録項目である。未収載 scope には合流先が無いため、ここで供給を見送る判定も兼ねる。
+        let Some(side) = cfg.scopes.get(&scope).map(|sc| sc.balloon_alignment) else {
+            warn!(
+                scope,
+                "placement: 配置表に無い scope の windowposition 供給要求を無視した"
+            );
+            continue;
+        };
+        let Some(wp) = scope_windowposition(balloon_root, scope) else {
+            continue;
+        };
+        let (wp_x, wp_y) = (wp.x(), wp.y());
+        let adjust = windowposition::to_screen_adjust(wp_x, wp_y, k);
+        // 観測点 4: 数値指定なし（`adjust=None`）でも 1 行出す——「読んだが指定が無かった」ことと
+        // 「そもそも読めなかった」ことを実機ログで区別できるようにするため（`adjusted` で判別）。
+        let (adjust_dx, adjust_dy) = adjust.unwrap_or((0, 0));
+        info!(
+            scope,
+            windowposition_x = ?wp_x,
+            windowposition_y = ?wp_y,
+            balloon_side = ?side,
+            adjust_dx,
+            adjust_dy,
+            adjusted = adjust.is_some(),
+            k = k.as_f32(),
+            "placement: windowposition を初期既定位置の調整量へ変換した（scope 別・要件 3.2/7.6）"
+        );
+        windowposition::apply_windowposition(cfg, scope, adjust);
+    }
+}
+
+/// 当該 scope のバルーン定義（2 層マージ済み）から `windowposition` を取り出す。
+///
+/// 系列解決も 2 層マージも権威（`areka-emo-present` の `resolve_balloon_faces` /
+/// `load_scope_balloon_model`）の消費のみで行う——採寸・起動時資産構築と同じ規則で同じ面を
+/// 見ることが、実機でしか現れない「採寸した枠と表示される枠が違う」欠陥を封じる唯一の手段である
+/// （design D2）。接頭辞連鎖も上書きファイル名の導出も本層は持たない。
+///
+/// 取得できないときは `warn!` のうえ `None`（呼び手が当該 scope の供給を見送る）。
+fn scope_windowposition(balloon_root: &Path, scope: usize) -> Option<WindowPosition> {
+    // 権威の scope 通貨は u32（placement の通貨は usize）。表現できない scope を無言で
+    // 切り詰めると別 scope の系列を採ってしまうため、変換失敗は供給の見送りとして報告する。
+    let scope_key = match u32::try_from(scope) {
+        Ok(scope_key) => scope_key,
+        Err(_) => {
+            warn!(
+                scope,
+                "placement: scope 番号が u32 に収まらない（windowposition の供給を見送る）"
+            );
+            return None;
+        }
+    };
+    let faces = match resolve_balloon_faces(balloon_root, scope_key) {
+        Ok(faces) => faces,
+        Err(err) => {
+            warn!(
+                balloon_root = %balloon_root.display(),
+                scope,
+                error = %err,
+                "placement: バルーン系列の解決に失敗（windowposition の供給を見送る）"
+            );
+            return None;
+        }
+    };
+    // 定義の上書き層は**採用した面 0**に対応するもの（要件 2.2/2.3）。面 0 の必在は権威側の
+    // 単一施行点（要件 1.7）ゆえここで再判定はしないが、空列を無言で通さない。
+    let Some(face0) = faces.iter().find(|face| face.surface_id == 0) else {
+        warn!(
+            balloon_root = %balloon_root.display(),
+            scope,
+            "placement: 解決結果に面 0 が無い（windowposition の供給を見送る）"
+        );
+        return None;
+    };
+    Some(load_scope_balloon_model(balloon_root, scope_key, face0).windowposition())
 }
 
 /// 窓配置の準備処理（design「main.rs seam」・task 6.1）。
@@ -397,6 +517,7 @@ mod tests {
     use wintf::ecs::window::monitor::Monitor;
 
     use super::resolver::{PointPx, RectPx, SizePx};
+    use super::test_support::{LogEvent, capture_logs};
     use super::*;
 
     /// COM 初期化下でクロージャを実行する（measure が `WicDecoderArm` を要求・
@@ -468,8 +589,12 @@ mod tests {
     const SCOPE0_H: i32 = 687;
     const SCOPE1_W: i32 = 336;
     const SCOPE1_H: i32 = 400;
-    const BALLOON_W: i32 = 400;
-    const BALLOON_H: i32 = 224;
+    /// バルーン面 0 は **scope ごとに解決した系列**の実寸である（要件 3.1）——
+    /// scope0＝本体側 `balloons0.png`・scope1＝相方側 `balloonk0.png`。
+    const BALLOON0_W: i32 = 400;
+    const BALLOON0_H: i32 = 224;
+    const BALLOON1_W: i32 = 288;
+    const BALLOON1_H: i32 = 203;
 
     /// 既約有理 k のテスト用短縮構築（0 入力はテストの誤りゆえ expect）。
     fn k(num: u32, den: u32) -> ScaleRatio {
@@ -507,9 +632,26 @@ mod tests {
     /// 2 スコープの `ScopePlacement`（resolver P1〜P5 の厳密値）と titles を返す。
     ///
     /// 期待値の根拠（emo2 実測: alignment=bottom・defaultx=0×2・
-    /// balloon.alignment=left/right・寸法 434×687／336×400／balloon 400×224）:
-    /// - scope0: char=(1920−434, 1040−687)=(1486,353)・balloon 左隣=(1086,353)
-    /// - scope1: char=(1486−434, 1040−400)=(1052,640)・balloon 右隣=(1388,640)
+    /// balloon.alignment=left/right・寸法 434×687／336×400・balloon は scope 別で
+    /// scope0=400×224（`balloons0.png`）／scope1=288×203（`balloonk0.png`）):
+    /// - scope0: char=(1920−434, 1040−687)=(1486,353)・基本位置＝左隣=(1486−400)=(1086,353)
+    /// - scope1: char=(1486−434, 1040−400)=(1052,640)・基本位置＝右隣=(1052+336)=(1388,640)
+    ///
+    /// バルーン寸が scope 別になっても**基本位置**が動かないのは、右置き（scope1）の基準 x が
+    /// キャラ窓の右端＝バルーン幅に依存しないためである（resolver P5 は無改変）。
+    ///
+    /// **task 4.3（要件 3.2/7.2）＋ task 6.1 の実機確定（R7.6）**: 基本位置へ当該 scope の
+    /// `windowposition` 由来の調整量が合流する。x は**左右で反転しない素の画面座標オフセット**
+    /// （SSP 実測で確定・`windowposition.rs` の `to_screen_adjust`「符号規約」節）ゆえ、
+    /// k₀=1/1 の本検体では wp 生値がそのまま加算される:
+    /// - scope0（`balloons0s.txt` の `266,-129`・side=Left）→ 調整量 (+266,−129)
+    ///   → balloon=(1086+266, 353−129)=(1352,224)・offset=(−400+266, −129)=(−134,−129)
+    /// - scope1（`balloonk0s.txt` の `-190,-75`・side=Right）→ 調整量 (−190,−75)
+    ///   → balloon=(1388−190, 640−75)=(1198,565)・offset=(336−190, −75)=(146,−75)
+    ///
+    /// 恒等式 `balloon_offset ≡ balloon_pos − char_pos` は両 scope で保たれている
+    /// （P5 の加算入力が増えただけ）。SSP 実測との数値突合は
+    /// [`prepare_emo2_matches_ssp_balloon_offsets_at_dpi_120`]（実機と同じ k=5/4）が担う。
     #[test]
     fn prepare_emo2_returns_two_scope_placements() {
         with_com_initialized(|| {
@@ -524,16 +666,45 @@ mod tests {
             assert_eq!(s0.scope, 0);
             assert_eq!(s0.char_pos, PointPx { x: 1486, y: 353 });
             assert_eq!(s0.char_size, SizePx { w: 434, h: 687 });
-            assert_eq!(s0.balloon_pos, PointPx { x: 1086, y: 353 });
+            assert_eq!(
+                s0.balloon_pos,
+                PointPx { x: 1352, y: 224 },
+                "本体側は balloons0s.txt の windowposition 266,-129 を反映（要件 3.2）"
+            );
             assert_eq!(s0.balloon_size, SizePx { w: 400, h: 224 });
-            assert_eq!(s0.balloon_offset, PointPx { x: -400, y: 0 });
+            assert_eq!(s0.balloon_offset, PointPx { x: -134, y: -129 });
 
             let s1 = &p.placements[1];
             assert_eq!(s1.scope, 1);
             assert_eq!(s1.char_pos, PointPx { x: 1052, y: 640 });
             assert_eq!(s1.char_size, SizePx { w: 336, h: 400 });
-            assert_eq!(s1.balloon_pos, PointPx { x: 1388, y: 640 });
-            assert_eq!(s1.balloon_offset, PointPx { x: 336, y: 0 });
+            assert_eq!(
+                s1.balloon_pos,
+                PointPx { x: 1198, y: 565 },
+                "相方側は balloonk0s.txt の windowposition -190,-75 を反映（本体側の値ではない）"
+            );
+            assert_eq!(
+                s1.balloon_size,
+                SizePx {
+                    w: BALLOON1_W,
+                    h: BALLOON1_H
+                },
+                "相方側は自分の系列（balloonk0.png）の寸——本体側 400×224 ではない"
+            );
+            assert_eq!(s1.balloon_offset, PointPx { x: 146, y: -75 });
+
+            // 恒等式（resolver.rs の恒久事後条件）は供給元が増えても保たれる。
+            for s in &p.placements {
+                assert_eq!(
+                    s.balloon_offset,
+                    PointPx {
+                        x: s.balloon_pos.x - s.char_pos.x,
+                        y: s.balloon_pos.y - s.char_pos.y
+                    },
+                    "scope {}: balloon_offset ≡ balloon_pos − char_pos",
+                    s.scope
+                );
+            }
 
             // titles は MountModel.names 由来（source T-I5 と同値）
             assert_eq!(p.titles.title(0), "むらさき");
@@ -921,16 +1092,24 @@ mod tests {
                     h: SCOPE1_H * 2
                 }
             );
-            for p in &doubled.placements {
-                assert_eq!(
-                    p.balloon_size,
-                    SizePx {
-                        w: BALLOON_W * 2,
-                        h: BALLOON_H * 2
-                    },
-                    "バルーン窓も自軸の k₀ で追従する"
-                );
-            }
+            // バルーン窓も自軸の k₀ で追従する。寸は **scope ごとに解決した系列**の
+            // 原寸の 2 倍であり、全 placement で同一ではない（要件 3.1）。
+            assert_eq!(
+                doubled.placements[0].balloon_size,
+                SizePx {
+                    w: BALLOON0_W * 2,
+                    h: BALLOON0_H * 2
+                },
+                "scope0 は本体側系列（400×224）の 2 倍"
+            );
+            assert_eq!(
+                doubled.placements[1].balloon_size,
+                SizePx {
+                    w: BALLOON1_W * 2,
+                    h: BALLOON1_H * 2
+                },
+                "scope1 は相方側系列（288×203）の 2 倍"
+            );
 
             let seven_sixths =
                 prepare_ghost_windows_with_work_area(&emo2_root(), &balloon_root(), WA, Some(112))
@@ -978,7 +1157,7 @@ mod tests {
         with_com_initialized(|| {
             let root = TempDir::new();
             // shell=120（125% 原稿）・balloon=144（150% 原稿）——既定 96 とも互いとも異なる 3 値。
-            let (ghost_root, balloon_dir) = synth_declared_dpi_ghost(&root, "120", "144");
+            let (ghost_root, balloon_dir) = synth_declared_dpi_ghost(&root, "120", "144", None);
 
             let p = prepare_ghost_windows_with_work_area(&ghost_root, &balloon_dir, WA, Some(240))
                 .expect("宣言 DPI 付き合成ゴーストの準備は成功する");
@@ -1003,6 +1182,8 @@ mod tests {
                 },
                 "char は shell 宣言 120 由来の k=2/1（balloon の 5/3 ではない）"
             );
+            // 本補助の合成バルーンは本体側 `balloons0.png` しか持たないため、全 scope が
+            // 本体側系列へ収束する（要件 3.7 の後方互換——`balloonk*` 不在なら全 scope 同一寸）。
             for placement in &p.placements {
                 assert_eq!(
                     placement.balloon_size,
@@ -1026,7 +1207,7 @@ mod tests {
     fn prepare_k0_rounding_matches_integer_authority_not_f32() {
         with_com_initialized(|| {
             let root = TempDir::new();
-            let (ghost_root, balloon_dir) = synth_declared_dpi_ghost(&root, "168", "96");
+            let (ghost_root, balloon_dir) = synth_declared_dpi_ghost(&root, "168", "96", None);
 
             let p = prepare_ghost_windows_with_work_area(&ghost_root, &balloon_dir, WA, Some(186))
                 .expect("k₀=31/28 の準備は成功する");
@@ -1053,10 +1234,20 @@ mod tests {
     /// 注意: 合成 shell の `surfaces.txt` は単一 overlay ゆえ、scope0 は emo2 実測と同じ
     /// 434×687 になるが scope1（surface10 単体）は emo2 実 shell の合成寸（336×400）とは
     /// 異なる——本補助を使う檻は scope0 と balloon を期待値の錨に用いる。
+    ///
+    /// 合成バルーンへ複写するのは本体側 `balloons0.png` の 1 枚のみ（相方側 `balloonk*` を
+    /// 置かない）。ゆえに全 scope の連鎖が本体側系列へ収束し、バルーン寸は scope に依らず
+    /// 同一になる——本補助を使う檻は同時に要件 3.7（`balloonk*` 不在時の後方互換）の錨でもある。
+    ///
+    /// `balloon_windowposition`（task 4.3）: `Some((x, y))` ならバルーン既定設定へ
+    /// `windowposition.x`/`.y` を宣言する（面別上書き `balloons0s.txt` は置かないので、
+    /// 確定値はこの基層のみが供給する）。`None` なら**どの層にも `windowposition` が無い**
+    /// ＝要件 3.4 の「数値指定なし」検体になる。
     fn synth_declared_dpi_ghost(
         root: &TempDir,
         shell_dpi: &str,
         balloon_dpi: &str,
+        balloon_windowposition: Option<(i32, i32)>,
     ) -> (PathBuf, PathBuf) {
         let ghost_master = root.path().join("ghost").join("master");
         let shell_master = root.path().join("shell").join("master");
@@ -1088,9 +1279,13 @@ mod tests {
             )
             .unwrap_or_else(|e| panic!("{png} 複写: {e}"));
         }
+        let windowposition = match balloon_windowposition {
+            Some((x, y)) => format!("windowposition.x,{x}\nwindowposition.y,{y}\n"),
+            None => String::new(),
+        };
         fs::write(
             balloon_dir.join("descript.txt"),
-            format!("charset,UTF-8\ndpi,{balloon_dpi}\n"),
+            format!("charset,UTF-8\ndpi,{balloon_dpi}\n{windowposition}"),
         )
         .expect("balloon descript");
         fs::copy(
@@ -1130,6 +1325,356 @@ mod tests {
             assert_eq!(
                 p.author_dpi, expected,
                 "採寸 k₀ に使った宣言値がそのまま attach 側へ搬送される（読取は 1 度）"
+            );
+        });
+    }
+
+    // ------------------------------------------------------------------
+    // windowposition → 初期既定位置（task 4.3・要件 3.2/3.4/3.5/3.6/6.3/7.6）
+    // ------------------------------------------------------------------
+
+    /// 観測点 4（design Monitoring・要件 6.3/7.6）: `prepare_stages` が scope ごとに
+    /// **scope・wp 生値・バルーンの左右・変換後の調整量**を info レベルで記録する。
+    ///
+    /// 実機サインオフ（task 6.1）は本行を `RUST_LOG=info` で grep し、SSP 実測と突合して
+    /// x 方向の符号規約を確定させた（R7.6）。ゆえに**フィールド名と値の形そのものが契約**
+    /// である。`balloon_side` は調整量の計算に効かなくなった後も、基本位置がどちらだったかを
+    /// ログだけで再構成するために記録し続ける（実機診断の要）。
+    #[test]
+    fn prepare_windowposition_logs_scope_raw_side_and_converted_adjust() {
+        with_com_initialized(|| {
+            let (result, events) = capture_logs(|| {
+                prepare_ghost_windows_with_work_area(&emo2_root(), &balloon_root(), WA, Some(96))
+            });
+            result.expect("emo2 fixture の配置準備は成功する");
+
+            let hits: Vec<&LogEvent> = events
+                .iter()
+                .filter(|e| {
+                    e.message()
+                        .contains("windowposition を初期既定位置の調整量へ")
+                })
+                .collect();
+            assert_eq!(
+                hits.len(),
+                2,
+                "scope ごとに 1 行（emo2 は 2 スコープ）: {events:?}"
+            );
+
+            // scope0（本体側・`balloons0s.txt` の 266,-129・バルーンはキャラ左）。
+            assert_eq!(hits[0].level, tracing::Level::INFO);
+            assert_eq!(hits[0].field("scope"), "0");
+            assert_eq!(hits[0].field("windowposition_x"), "Some(266)");
+            assert_eq!(hits[0].field("windowposition_y"), "Some(-129)");
+            assert_eq!(hits[0].field("balloon_side"), "Left");
+            assert_eq!(hits[0].field("adjust_dx"), "266");
+            assert_eq!(hits[0].field("adjust_dy"), "-129");
+            assert_eq!(hits[0].field("adjusted"), "true");
+
+            // scope1（相方側・`balloonk0s.txt` の -190,-75・バルーンはキャラ右）。
+            assert_eq!(hits[1].field("scope"), "1");
+            assert_eq!(hits[1].field("windowposition_x"), "Some(-190)");
+            assert_eq!(hits[1].field("windowposition_y"), "Some(-75)");
+            assert_eq!(hits[1].field("balloon_side"), "Right");
+            assert_eq!(
+                hits[1].field("adjust_dx"),
+                "-190",
+                "生値 −190 は Right 側でも反転せず画面 −x のまま（SSP 実測で確定・R7.6）"
+            );
+            assert_eq!(hits[1].field("adjust_dy"), "-75");
+        });
+    }
+
+    /// **参照実装（SSP）実測との突合**（要件 7.6 の実機確定・task 6.1）。
+    ///
+    /// areka は「ukadoc 準拠 SSP 代替」であり、正典が沈黙する `windowposition.x` の
+    /// 基本位置・符号の向きについては **SSP の実挙動が正解表**である。実機（DPI 120＝
+    /// k=5/4・DPI aware）で同一ゴースト emo2 ＋バルーン emo2-kakukaku を SSP に読ませた
+    /// 実測（task 6.1）:
+    ///
+    /// | 窓 | SSP 実測 | 相対オフセット |
+    /// |---|---|---|
+    /// | むらさき（scope 0・balloon Left） | 477×683 @ (3363,1417) | — |
+    /// | むらさき/Balloon | 500×280 @ (3195,1256) | (−168, −161) |
+    /// | エモ（scope 1・balloon Right） | 420×500 @ (3006,1600) | — |
+    /// | エモ/Balloon | 360×253 @ (3189,1507) | (+183, −93) |
+    ///
+    /// 逆算すると SSP は `windowposition.x` を**左右で反転しない素の画面座標オフセット**
+    /// として適用している（sakura wp x=+266 → −500+332＝−168・kero wp x=−190 →
+    /// +420−237＝+183。どちらも「正＝画面右／負＝画面左」）。
+    ///
+    /// 許容差は **各成分 1px**（`ScaleRatio::scale_len` の round half away from zero が
+    /// 266×1.25=332.5→333・190×1.25=237.5→238・75×1.25=93.75→94 と切り上げるのに対し
+    /// SSP は 332／237／93 と切り捨て寄りに落とすため）。丸め権威は既存のまま変えない
+    /// （新しい丸め規約を導入しない・要件 3.6）。
+    #[test]
+    fn prepare_emo2_matches_ssp_balloon_offsets_at_dpi_120() {
+        /// SSP 実測のバルーン相対オフセット（scope 0＝Left 置き）。
+        const SSP_SCOPE0_OFFSET: PointPx = PointPx { x: -168, y: -161 };
+        /// SSP 実測のバルーン相対オフセット（scope 1＝Right 置き）。
+        const SSP_SCOPE1_OFFSET: PointPx = PointPx { x: 183, y: -93 };
+
+        /// 各成分が 1px 以内で一致することを確認する（丸め権威由来の差のみ許容）。
+        fn assert_within_1px(actual: PointPx, ssp: PointPx, scope: usize) {
+            assert!(
+                (actual.x - ssp.x).abs() <= 1 && (actual.y - ssp.y).abs() <= 1,
+                "scope {scope}: SSP 実測 {ssp:?} と areka 算出 {actual:?} の差が 1px を超える"
+            );
+        }
+
+        with_com_initialized(|| {
+            // 実機と同じ DPI 120（emo2 の作者基準 DPI は 96 ゆえ k=5/4）。
+            let p =
+                prepare_ghost_windows_with_work_area(&emo2_root(), &balloon_root(), WA, Some(120))
+                    .expect("emo2 fixture の配置準備は成功する");
+
+            let s0 = &p.placements[0];
+            let s1 = &p.placements[1];
+
+            // 突合の錨: Right 置きの基本位置はキャラ窓幅に依存するため、まず窓寸が
+            // SSP と一致していることを確かめる（一致しなければオフセット比較が無意味）。
+            assert_eq!(
+                s1.char_size,
+                SizePx { w: 420, h: 500 },
+                "scope1 キャラ窓は SSP 実測 420×500 と一致する（336×400 の 5/4 倍）"
+            );
+            assert_eq!(
+                s0.balloon_size,
+                SizePx { w: 500, h: 280 },
+                "scope0 バルーンは SSP 実測 500×280 と一致する"
+            );
+
+            // areka の算出値（既存丸め権威のまま）。
+            assert_eq!(
+                s0.balloon_offset,
+                PointPx { x: -167, y: -161 },
+                "scope0: 基本位置 −500 ＋ 素の調整量 +333（266×5/4）"
+            );
+            assert_eq!(
+                s1.balloon_offset,
+                PointPx { x: 182, y: -94 },
+                "scope1: 基本位置 +420 ＋ 素の調整量 −238（−190×5/4・左右で反転しない）"
+            );
+
+            assert_within_1px(s0.balloon_offset, SSP_SCOPE0_OFFSET, 0);
+            assert_within_1px(s1.balloon_offset, SSP_SCOPE1_OFFSET, 1);
+
+            // 恒等式は SSP 突合の検体でも保たれる。
+            for s in &p.placements {
+                assert_eq!(
+                    s.balloon_offset,
+                    PointPx {
+                        x: s.balloon_pos.x - s.char_pos.x,
+                        y: s.balloon_pos.y - s.char_pos.y
+                    },
+                    "scope {}: balloon_offset ≡ balloon_pos − char_pos",
+                    s.scope
+                );
+            }
+        });
+    }
+
+    /// 要件 3.6: `windowposition` 由来の調整量は**バルーン軸の k**（`scaling.balloon`）で
+    /// 拡縮する（`windowposition` はバルーン作者の空間で書かれた値ゆえ・shell の k ではない）。
+    ///
+    /// 検体（shell=120／balloon=144／primary=240）は k_shell=2/1・k_balloon=5/3 と
+    /// **異なる 2 値**ゆえ取り違えが観測できる（既存の
+    /// [`prepare_declared_author_dpi_drives_each_axis_k0_and_attach_value`] と同じ流儀）:
+    /// - 権威（balloon 軸 5/3）: 266×5/3＝443.33→443・129×5/3＝ちょうど 215
+    /// - 誤って shell 軸 2/1 を使うと 532／258 になり本檻が落ちる
+    ///
+    /// 合成バルーンは `balloons0.png` の 1 枚のみゆえ両 scope が本体側系列へ収束し、
+    /// **同一の wp 生値**が side（left／right）に依らず同一の調整量になることも同時に固定する
+    /// （R7.6 の実機確定形）。
+    #[test]
+    fn prepare_windowposition_adjust_scales_with_balloon_k_not_shell_k() {
+        with_com_initialized(|| {
+            let root = TempDir::new();
+            let (ghost_root, balloon_dir) =
+                synth_declared_dpi_ghost(&root, "120", "144", Some((266, -129)));
+
+            let p = prepare_ghost_windows_with_work_area(&ghost_root, &balloon_dir, WA, Some(240))
+                .expect("windowposition 宣言つき合成ゴーストの準備は成功する");
+
+            // balloon 寸は k=5/3 で 667×373（既存檻と同値）。
+            let s0 = &p.placements[0];
+            assert_eq!(s0.balloon_size, SizePx { w: 667, h: 373 });
+            assert_eq!(
+                s0.balloon_offset,
+                // 基本位置（左隣＝−667）＋調整量 (+443, −215)
+                PointPx { x: -224, y: -215 },
+                "balloon 軸 k=5/3 で拡縮（shell 軸 2/1 なら (−135, −258) になる）"
+            );
+
+            let s1 = &p.placements[1];
+            assert_eq!(
+                s1.balloon_offset,
+                // 基本位置（右隣＝+char_w）＋調整量 (+443, −215)（side に依らず同一）
+                PointPx {
+                    x: s1.char_size.w + 443,
+                    y: -215
+                },
+                "Right 側も balloon 軸 k=5/3 で +443（shell 軸 2/1 なら +532 になる）"
+            );
+        });
+    }
+
+    /// **檻 9 の配置面の対（R3.3 の実機確定形・R7.6／task 6.1）**: 同一の `windowposition`
+    /// 生値は、バルーンの置き側（Left／Right）に依らず**同一の調整量**として基本位置へ
+    /// 加算される。
+    ///
+    /// SSP 実測で確定した規約は「`windowposition.x` は左右で反転しない素の画面座標
+    /// オフセット」であり、置き側が変えるのは**基本位置だけ**（Left＝`char_x − balloon_w`／
+    /// Right＝`char_x + char_w`）である。左右反転を再導入すると Right 側の寄与が
+    /// −266 になり本檻が落ちる。
+    ///
+    /// 検体は合成ゴースト（shell/balloon とも DPI 96＝k₀ 1/1 ゆえ生値がそのまま調整量に
+    /// なる）で、`balloons0.png` の 1 枚しか持たないため両 scope が同一のバルーン定義
+    /// ——すなわち**同一の wp 生値**——を読む。違うのは `balloon.alignment` だけである。
+    #[test]
+    fn prepare_windowposition_adjust_is_identical_for_both_balloon_sides() {
+        with_com_initialized(|| {
+            let root = TempDir::new();
+            let (ghost_root, balloon_dir) =
+                synth_declared_dpi_ghost(&root, "96", "96", Some((266, -129)));
+
+            let (result, events) = capture_logs(|| {
+                prepare_ghost_windows_with_work_area(&ghost_root, &balloon_dir, WA, Some(96))
+            });
+            let p = result.expect("windowposition 宣言つき合成ゴーストの準備は成功する");
+
+            // (a) 観測点 4: 置き側は Left／Right と異なるのに調整量は同一。
+            let hits: Vec<&LogEvent> = events
+                .iter()
+                .filter(|e| {
+                    e.message()
+                        .contains("windowposition を初期既定位置の調整量へ")
+                })
+                .collect();
+            assert_eq!(hits.len(), 2, "scope ごとに 1 行: {events:?}");
+            assert_eq!(hits[0].field("balloon_side"), "Left");
+            assert_eq!(hits[1].field("balloon_side"), "Right");
+            assert_eq!(hits[0].field("adjust_dx"), "266");
+            assert_eq!(
+                hits[1].field("adjust_dx"),
+                "266",
+                "Right 側でも符号は反転しない（反転すれば -266 になる）"
+            );
+            assert_eq!(hits[0].field("adjust_dy"), "-129");
+            assert_eq!(hits[1].field("adjust_dy"), "-129");
+
+            // (b) 配置面: 基本位置からの寄与が両 scope で一致する
+            //     （置き側が変えるのは基本位置だけ）。
+            let s0 = &p.placements[0];
+            let s1 = &p.placements[1];
+            let contribution_left = s0.balloon_offset.x - (-s0.balloon_size.w);
+            let contribution_right = s1.balloon_offset.x - s1.char_size.w;
+            assert_eq!(contribution_left, 266, "Left 置きの基本位置は −balloon_w");
+            assert_eq!(contribution_right, 266, "Right 置きの基本位置は +char_w");
+            assert_eq!(
+                contribution_left, contribution_right,
+                "同一 wp 生値の寄与は置き側に依らず同一（R3.3 の実機確定形）"
+            );
+            assert_eq!(s0.balloon_offset.y, -129);
+            assert_eq!(s1.balloon_offset.y, -129);
+        });
+    }
+
+    /// 要件 3.4／design Postconditions: `windowposition` の数値指定が**どの層にも無い**
+    /// とき（かつ descript の `balloon.offsetx/offsety` も無いとき）`balloon_offset` は
+    /// `None` のまま＝resolver 出力は本仕様適用前と bit 同一である。
+    ///
+    /// 観測面は resolver の出力そのもの: left 置き＝`−balloon_w`・right 置き＝`+char_w`
+    /// （P5 の基本位置ちょうど・y はゼロ）。
+    #[test]
+    fn prepare_without_windowposition_keeps_resolver_output_bit_identical() {
+        with_com_initialized(|| {
+            let root = TempDir::new();
+            // 作者基準 DPI も 96／96（k₀=1/1）＝調整量以外の変化要因を持たない検体。
+            let (ghost_root, balloon_dir) = synth_declared_dpi_ghost(&root, "96", "96", None);
+
+            let p = prepare_ghost_windows_with_work_area(&ghost_root, &balloon_dir, WA, Some(96))
+                .expect("windowposition 無宣言の合成ゴーストの準備は成功する");
+
+            let s0 = &p.placements[0];
+            assert_eq!(
+                s0.balloon_offset,
+                PointPx {
+                    x: -s0.balloon_size.w,
+                    y: 0
+                },
+                "scope0（left 置き）は基本位置ちょうど＝本仕様適用前と同一"
+            );
+            let s1 = &p.placements[1];
+            assert_eq!(
+                s1.balloon_offset,
+                PointPx {
+                    x: s1.char_size.w,
+                    y: 0
+                },
+                "scope1（right 置き）も基本位置ちょうど＝本仕様適用前と同一"
+            );
+        });
+    }
+
+    /// 要件 3.5: 永続化されたバルーン相対位置があるとき、復元 merge（`persist.rs`・無改変）は
+    /// **永続値を優先**し、`windowposition` 由来の初期既定位置は結果に一切残らない。
+    ///
+    /// 檻の作り: 同じ永続 entries を (a) 本準備の出力（windowposition 反映済み）と
+    /// (b) `balloon_offset` を潰した対照へ適用し、**両者の復元結果が一致する**ことを見る。
+    /// 一致すれば復元後の値は永続値のみに依存する＝供給元の増加が優先順位を変えていない。
+    #[test]
+    fn prepare_windowposition_yields_to_persisted_balloon_offset() {
+        use areka_sylphya::{Axis, PersistKey};
+
+        with_com_initialized(|| {
+            let p =
+                prepare_ghost_windows_with_work_area(&emo2_root(), &balloon_root(), WA, Some(96))
+                    .expect("emo2 fixture の配置準備は成功する");
+            // 前提: windowposition が実際に効いている（対照が空虚一致にならないことの確認）。
+            assert_ne!(
+                p.placements[0].balloon_offset,
+                PointPx {
+                    x: -p.placements[0].balloon_size.w,
+                    y: 0
+                },
+                "windowposition 反映前の値と同じでは檻が無意味"
+            );
+
+            let entry = |scope: u32, axis: Axis, v: &str| {
+                (PersistKey::BalloonOffset { scope, axis }, v.to_string())
+            };
+            let entries = vec![
+                entry(0, Axis::X, "-512"),
+                entry(0, Axis::Y, "-48"),
+                entry(1, Axis::X, "640"),
+                entry(1, Axis::Y, "-16"),
+            ];
+            let snapshot = follow::MonitorSnapshot {
+                work_areas: vec![WA],
+            };
+
+            // 対照: windowposition の寄与を取り除いた（基本位置ちょうどの）配置。
+            let control: Vec<ScopePlacement> = p
+                .placements
+                .iter()
+                .map(|s| {
+                    let balloon_offset = PointPx { x: 0, y: 0 };
+                    ScopePlacement {
+                        balloon_pos: s.char_pos,
+                        balloon_offset,
+                        ..*s
+                    }
+                })
+                .collect();
+
+            let restored =
+                persist::apply_restored_placements(p.placements.clone(), &entries, &snapshot);
+            let restored_control = persist::apply_restored_placements(control, &entries, &snapshot);
+
+            assert_eq!(
+                restored, restored_control,
+                "永続値がある scope の復元結果は windowposition に依存しない（要件 3.5）"
             );
         });
     }

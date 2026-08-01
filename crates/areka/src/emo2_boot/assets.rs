@@ -1,7 +1,8 @@
 //! 構築入力（BootAssets）の組立と shell descript からの static bindset 抽出。
 //!
 //! `build_boot_assets`（shell: `surfaces.txt` 読取→`areka_parsers::shell::parse`→bake→scope ごとに
-//! `EmoWorld::build`＋`bind_atlas`／balloon: `build_balloon_target`＋`BalloonModel`／
+//! `EmoWorld::build`＋`bind_atlas`／balloon: scope ごとに `resolve_balloon_faces`→
+//! `build_balloon_target_from_faces`＋`load_scope_balloon_model`＝[`BalloonScopeAssets`]／
 //! `SurfaceResolver`＝`alias_snapshot()`／static bindset＝`default_bind_ids`→`build_static_bindset`）と
 //! `default_bind_ids`（`sakura.bindgroup{N}.default==1` の N 抽出・DD-8・ukadoc 正典）を所有する。
 //! 戻り値だけで以後ファイル I/O 不要にする（parse／bake は 1 回・`AtlasTable` は Clone 共有）。
@@ -16,14 +17,18 @@ use std::path::Path;
 use areka_emo_atlas::{
     AlphaParams, AtlasTable, PackConfig, SetId, SurfaceSet, UseSelfAlpha, WicDecoderArm, bake,
 };
-use areka_emo_compose::{BindSet, EmoWorld};
-use areka_emo_present::build_balloon_target;
+use areka_emo_compose::{BindSet, ComposeError, EmoWorld};
+use areka_emo_present::PresentError;
+use areka_emo_present::balloon::{
+    build_balloon_target_from_faces, load_scope_balloon_model, resolve_balloon_faces,
+};
 use areka_parsers::balloon::BalloonModel;
 use areka_parsers::charset::{DefaultEncoding, decode};
 use areka_parsers::kv::parse_kv;
 use areka_parsers::package::resolve;
+use areka_sakura::ActorKey;
 use areka_seriko::{AnimationTable, BindResolver, SurfaceResolver, build_static_bindset};
-use tracing::warn;
+use tracing::{error, warn};
 
 use super::BootWiringError;
 
@@ -73,10 +78,8 @@ pub fn default_bind_ids(shell_kv: &BTreeMap<String, String>) -> Vec<u32> {
 
 /// shell 定義ファイル名（surface ツリー・`shell/<dir>` 配下）。
 const SURFACES_TXT: &str = "surfaces.txt";
-/// descript 定義ファイル名（shell／balloon の双方で同名）。
+/// descript 定義ファイル名（shell の static bindset 抽出に読む）。
 const DESCRIPT_TXT: &str = "descript.txt";
-/// 面 0 の面別バルーン記述ファイル名（`BalloonModel` 2 層マージの上書き層・DD-9 の初期面 0）。
-const BALLOON_FACE0_TXT: &str = "balloons0s.txt";
 /// scope>=1 の初期表示 surface id（DD-9・ukadoc 相方既定サーフェス＝10・placement measure と同値）。
 const KERO_INITIAL_SURFACE_ID: u32 = 10;
 
@@ -95,19 +98,69 @@ pub struct ScopeAssets {
     pub initial_surface_id: u32,
 }
 
-/// SERIKO ループ表の一括（シェル面・バルーン面の 2 表・design「結線・資産・実機経路（assets.rs）」）。
+/// 1 scope 分のバルーン表示資産（[`ScopeAssets`] と対称・design D4=S1）。
+///
+/// scope・表示 World・アトラス・**その scope 専用の**マージ済み定義を 1 件に束ねる。
+/// 「全 scope 共有のバルーン定義 1 本」を型として表現できなくすることが本保持器の要点であり
+/// （旧 `BootAssets.balloon_model` の撤去・Req 2.1）、ある scope のバルーンが別 scope の系列
+/// 由来の定義で駆動される事故を構造的に防ぐ。
+///
+/// `emo_world` は当該 scope が解決した系列から build した非 Clone World（装着で move 消費）。
+/// `atlas` は当該 scope の面画像を bake した表（`AtlasTable` は内部 Arc の安価 Clone）。
+pub struct BalloonScopeAssets {
+    /// この資産が対応する scope 番号。
+    pub scope: u32,
+    /// scope の系列から build 済みの表示 World（`bind_atlas(SetId(0))` 済み・装着で move 消費）。
+    pub emo_world: EmoWorld,
+    /// 当該 scope の bake 済みアトラス。
+    pub atlas: AtlasTable,
+    /// scope 別 2 層マージ済み定義（文字層・`windowposition`／`validrect` の源・Req 2.1）。
+    pub model: BalloonModel,
+}
+
+/// SERIKO ループ表の一括（シェル面 1 表＋バルーン面の scope 別表・design「結線・資産・実機経路
+/// （assets.rs）」）。
 ///
 /// 面種非依存（裁定 (a)）: 同一 `AnimationTable::from_world` がシェル世界・バルーン世界の双方から
 /// 同型に表を組む。`shell`／`balloon` は **surface ID 名前空間の別**（emo2 はシェル surface0 と
-/// バルーン面 0 が別物）であり能力の仕切りではない。両表は同一評価経路で駆動される。
+/// バルーン面 0 が別物）であり能力の仕切りではない。いずれの表も同一評価経路で駆動される。
 ///
 /// いずれの表も既に `BootAssets` が保持する fold 完了 `EmoWorld` スナップショットから構築するため、
 /// 表の構築に **新規のファイル I/O は要らない**（「以後ファイル I/O なし」の事後条件は不変）。
 pub struct LoopTables {
     /// シェル面のループ表（`shells[0].emo_world` から `from_world`・scope 資産不在なら空表）。
+    ///
+    /// 単数なのは **シェル面に限る**前提の帰結である: 全 scope が同一 `Shell` から build されるため
+    /// 表の内容が scope 非依存になる。バルーン面にこの前提は無い（下記 `balloon` 参照）。
     pub shell: AnimationTable,
-    /// バルーン面のループ表（最初のバルーン `EmoWorld` から `from_world`・資産不在なら空表）。
-    pub balloon: AnimationTable,
+    /// バルーン面の **scope 別**ループ表（キー＝scope 番号・design D9'・Req 5.6）。
+    ///
+    /// バルーン World は scope ごとに解決される系列（`balloons*`／`balloonk*` 等）が異なるため、
+    /// ある scope のバルーンが別 scope の系列由来の定義で駆動されない形を型で担保する。各表は
+    /// 当該 scope の `EmoWorld` から `from_world` で導出する（導出は構築ループ内の単一導出点）。
+    ///
+    /// キー集合は `BootAssets.balloons` の scope 集合と一致する（Data Models 不変条件 (c)）。
+    /// 表は `spawn_seriko` が attach より前に消費し `BalloonScopeAssets` は attach で move 消費される
+    /// ため、表を資産へ同梱せず本並行構造で持つ（D9' 裁定）。反復順の決定論のため `BTreeMap`。
+    pub balloon: BTreeMap<u32, AnimationTable>,
+}
+
+/// バルーン表の scope キーを seriko のアクタ鍵語彙へ変換する（起動シームの転送・Req 5.6）。
+///
+/// boot 側の `u32` scope を `SerikoLoopConfig.balloon_tables` が要求する [`ActorKey`] へ
+/// `ActorKey::from(scope.to_string())` で写す。この写像は attach（`frame.rs`）・文字層の再追従・
+/// `target_map::scope_of` の逆写像と**同一語彙**であり、ここで別語彙を作らないことが scope 同定の
+/// 一貫性を保つ要点である。表そのものは値移送（内容は変えない）。
+///
+/// 純粋関数（状態・I/O なし）。`BTreeMap` 同士の変換ゆえ反復順は決定論（`ActorKey` の順序は
+/// 文字列順のため、数値順とは一致しないことがある——キー集合の同一性のみが意味を持つ）。
+pub fn actor_keyed_balloon_tables(
+    tables: BTreeMap<u32, AnimationTable>,
+) -> BTreeMap<ActorKey, AnimationTable> {
+    tables
+        .into_iter()
+        .map(|(scope, table)| (ActorKey::from(scope.to_string()), table))
+        .collect()
 }
 
 /// 表示結線に必要な load-time 資産の一括（design「構築入力 / assets」Service Interface）。
@@ -116,10 +169,10 @@ pub struct LoopTables {
 pub struct BootAssets {
     /// scope ごとのシェル表示資産（`GhostWindows` の scope 集合に対応）。
     pub shells: Vec<ScopeAssets>,
-    /// scope ごとのバルーン表示資産（面 0 初期表示・`(scope, EmoWorld, AtlasTable)`）。
-    pub balloons: Vec<(u32, EmoWorld, AtlasTable)>,
-    /// バルーンモデル（`register_actor_view` が消費・全 scope 共有）。
-    pub balloon_model: BalloonModel,
+    /// scope ごとのバルーン表示資産（面 0 初期表示・World／アトラス／scope 別定義の 3 点組）。
+    ///
+    /// 不変条件 (a): この scope 集合は `shells` の scope 集合と一致する（DD-12 の対応関係）。
+    pub balloons: Vec<BalloonScopeAssets>,
     /// `Emote{key}` → surface 解決器（`EmoWorld::alias_snapshot()` 由来）。
     pub resolver: SurfaceResolver,
     /// 起動時オンの静的 bind 集合（shell descript `sakura.bindgroup{N}.default==1`・DD-8）。
@@ -127,9 +180,10 @@ pub struct BootAssets {
     /// bind 名前解決情報（`MountModel.bindgroups` の名前宣言由来・`(カテゴリ, パーツ)`→着せ替え ID）。
     /// task 7.2 で `spawn_seriko` の actor 構築へ手渡す（本タスクは起動時資産への保持のみ）。
     pub bind_resolver: BindResolver,
-    /// SERIKO ループ表（シェル面・バルーン面の 2 表・面種非依存＝裁定 (a)）。
+    /// SERIKO ループ表（シェル面 1 表＋バルーン面の scope 別表・面種非依存＝裁定 (a)）。
     /// 既に保持する `EmoWorld` スナップショットから `AnimationTable::from_world` で構築する
-    /// （新規ファイル I/O なし）。`spawn_seriko` の actor 構築へ手渡す（本タスクは起動時資産への保持のみ）。
+    /// （新規ファイル I/O なし）。`spawn_seriko` の actor 構築へ手渡す（起動シームが
+    /// [`actor_keyed_balloon_tables`] で scope キーをアクタ鍵語彙へ写して転送する）。
     pub loop_tables: LoopTables,
     /// シェル面の作者基準 DPI（ukadoc shell descript `seriko.dpi`・既定 96・areka-P0-emo-dpi-scaling D1）。
     ///
@@ -148,7 +202,9 @@ pub struct BootAssets {
 /// `resolve`（shell dir）→ `surfaces.txt` 読取 → `areka_parsers::shell::parse` → `bake`
 /// （WIC decoder・`UseSelfAlpha::On`・`PackConfig::default()`）を **1 回**行い、scope ごとに
 /// `EmoWorld::build`＋`bind_atlas(SetId(0))`（`EmoWorld` は非 Clone・`AtlasTable` は安価 Clone）。
-/// balloon は scope ごとに `build_balloon_target`、`BalloonModel` は面 0 の 2 層マージで 1 回。
+/// balloon は scope ごとに 系列解決（`resolve_balloon_faces`）→ 構築
+/// （`build_balloon_target_from_faces`）→ 定義読込（`load_scope_balloon_model`）を行い
+/// [`BalloonScopeAssets`] へ束ねる（scope 専用の定義を保持する＝共有 1 本を作らない・Req 2.1）。
 /// `SurfaceResolver` は `EmoWorld::alias_snapshot()` から、static bindset は shell descript KV の
 /// `default_bind_ids`（DD-8・task 2.3）→ `build_static_bindset` で組む。
 ///
@@ -175,7 +231,8 @@ pub struct BootAssets {
 /// - WIC デコーダ生成失敗 → [`BootWiringError::Decoder`]。
 /// - `surfaces.txt`／`descript.txt` 読取失敗 → [`BootWiringError::ShellRead`]。
 /// - `surfaces.txt` が surface を産まない → [`BootWiringError::ShellEmpty`]。
-/// - バルーン target 構築失敗 → [`BootWiringError::Balloon`]（`#[from] PresentError`）。
+/// - バルーン系列解決／target 構築失敗（走査失敗・面 0 不在・bake 脱落）
+///   → [`BootWiringError::Balloon`]（`#[from] PresentError`・真因ログは権威側が既に出す）。
 pub fn build_boot_assets(
     ghost_root: &Path,
     balloon_root: &Path,
@@ -275,34 +332,67 @@ pub fn build_boot_assets(
     };
     let static_binds = build_static_bindset(&default_bind_ids(&shell_kv));
 
-    // バルーン: scope ごとに build_balloon_target（EmoWorld は非 Clone ゆえ scope 数だけ組む）。
-    // balloon_model は面 0 の 2 層マージで **1 回**組み全 scope 共有する。
+    // バルーン: scope ごとに 解決 → 構築 → 定義読込 を **同一箇所で**導出する（単一導出点）。
+    // 系列解決（`resolve_balloon_faces`）は scope あたり 1 回だけ呼び、その戻りを構築
+    // （`build_balloon_target_from_faces`）と定義読込（`load_scope_balloon_model`）の双方へ
+    // 使い回す——公開ラッパ `build_balloon_target` を使うとディレクトリ列挙が scope あたり
+    // 2 回走るため、解決済み面列を受ける版を直接呼ぶ。
+    // 2 層マージ規則・層別ログレベル（D8）・確定値の info!（R6.3）はすべて権威クレート
+    // （`areka-emo-present` の `balloon`）が持ち、本シームは呼ぶだけである（Req 2.1）。
+    // SERIKO のバルーン側ループ表もこのループ内で **同一箇所から**導出する（単一導出点・D9'）。
+    // シェル面と違いバルーン World は scope ごとに別系列から build されるため、「先頭 World から
+    // 1 度だけ組めば足りる」という前提はバルーン面には無い（Req 5.6）。表は当該 scope の World から
+    // `from_world` で組むだけで **新規ファイル I/O は起きない**。表を `BalloonScopeAssets` へ同梱
+    // しないのは、表を spawn_seriko が attach より前に消費するのに対し資産は attach で move 消費
+    // されるためで（消費タイミングが交差する）、並行構造の `LoopTables.balloon` 側で保持する。
     let mut balloons = Vec::with_capacity(scopes.len());
+    let mut balloon_tables: BTreeMap<u32, AnimationTable> = BTreeMap::new();
     for &scope in scopes {
-        let (b_world, b_atlas) = build_balloon_target(balloon_root, &decoder)?;
-        balloons.push((scope, b_world, b_atlas));
+        let faces = resolve_balloon_faces(balloon_root, scope)?;
+        let (emo_world, atlas) = build_balloon_target_from_faces(balloon_root, &decoder, &faces)?;
+        // 面 0 必在（R1.7）は `resolve_balloon_faces` が権威として施行済みゆえ先頭は必ず存在する。
+        // 万一の不在は権威の契約違反であり、log-first で真因を残して構築失敗に畳む（無言で
+        // 定義なしのバルーンを組まない）。
+        let Some(face0) = faces.first() else {
+            error!(
+                balloon_root = %balloon_root.display(),
+                scope,
+                "assets: 解決済みバルーン面列が空（resolve_balloon_faces の面 0 必在契約違反）"
+            );
+            return Err(BootWiringError::Balloon(PresentError::Compose(
+                ComposeError::EmptyComposition(0),
+            )));
+        };
+        let model = load_scope_balloon_model(balloon_root, scope, face0);
+        // 表は World を資産へ move する前に、この scope の World から導出する（単一導出点）。
+        balloon_tables.insert(scope, AnimationTable::from_world(&emo_world));
+        balloons.push(BalloonScopeAssets {
+            scope,
+            emo_world,
+            atlas,
+            model,
+        });
     }
-    let balloon_model = build_balloon_model(balloon_root);
 
-    // SERIKO ループ表: 既に build 済みの EmoWorld スナップショット（shells[0]／balloons[0]）から
-    // `AnimationTable::from_world` で構築する（面種非依存＝裁定 (a)・**新規ファイル I/O なし**）。
-    // scope 資産が不在（空 scopes 等）なら空表を明示（AnimationTable::empty()）。全 scope は同一
-    // `Shell` から build 済みゆえシェル面の内容は scope 非依存＝先頭 World から 1 度だけ組めば足りる。
+    // SERIKO ループ表（面種非依存＝裁定 (a)・**新規ファイル I/O なし**＝保持済み World の再利用のみ）。
+    //
+    // シェル面: 全 scope が同一 `Shell` から build 済みゆえ内容は scope 非依存＝先頭 World から
+    // 1 度だけ組めば足りる（この前提が成り立つのは **シェル面に限る**）。scope 資産が不在
+    // （空 scopes 等）なら空表を明示（`AnimationTable::empty()`）。
+    // バルーン面: 上の前提は成り立たない（系列が scope ごとに異なる）ため、表は上の構築ループ内で
+    // scope ごとに導出済みである。ここではその写像をそのまま載せる（キー集合＝`balloons` の
+    // scope 集合・不変条件 (c)・scope 資産不在なら空写像）。
     let loop_tables = LoopTables {
         shell: shells
             .first()
             .map(|scope_assets| AnimationTable::from_world(&scope_assets.emo_world))
             .unwrap_or_else(AnimationTable::empty),
-        balloon: balloons
-            .first()
-            .map(|(_, b_world, _)| AnimationTable::from_world(b_world))
-            .unwrap_or_else(AnimationTable::empty),
+        balloon: balloon_tables,
     };
 
     Ok(BootAssets {
         shells,
         balloons,
-        balloon_model,
         resolver,
         static_binds,
         bind_resolver,
@@ -313,42 +403,17 @@ pub fn build_boot_assets(
     })
 }
 
-/// balloon dir の `descript.txt`（基層）＋面 0 の `balloons0s.txt`（面別上書き層）を
-/// 2 層後勝ちマージして [`BalloonModel`] を組む（design「構築入力 / assets」・`areka_parsers::balloon`
-/// の既存契約 `parse_str` をそのまま呼ぶ・面別層が同一キーを後勝ち上書き）。
-///
-/// `parse_str` は `Result` を返さず panic しない寛容写像ゆえ、記述ファイル読取失敗は
-/// `warn!`＋空層で継続する（欠落キーは当該スカラ `None`・parsers 転写層の寛容契約に整合）。
-fn build_balloon_model(balloon_root: &Path) -> BalloonModel {
-    let descript = read_decoded_lenient(&balloon_root.join(DESCRIPT_TXT)).unwrap_or_default();
-    let face0 = read_decoded_lenient(&balloon_root.join(BALLOON_FACE0_TXT));
-    areka_parsers::balloon::parse_str(&descript, face0.as_deref())
-}
-
-/// descript 系ファイルを charset 対応（既定 Ansi・宣言優先＝emo2 は `charset,UTF-8`）で読み、
-/// デコード済み文字列を返す。読取失敗は `warn!`＋`None`（空層で継続・placement `read_kv_lenient` 流儀）。
-fn read_decoded_lenient(path: &Path) -> Option<String> {
-    match std::fs::read(path) {
-        Ok(bytes) => Some(decode(&bytes, DefaultEncoding::Ansi)),
-        Err(err) => {
-            warn!(
-                path = %path.display(),
-                error = %err,
-                "assets: balloon 記述ファイルの読取に失敗（空層で継続）"
-            );
-            None
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
 
+    use areka_emo_text::actor::ResolvedBalloonText;
     use areka_seriko::{BindNamespace, SurfaceTarget};
     use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 
     use super::*;
+    // アクタ鍵 → scope の逆写像正本（`ActorKey` 語彙が既存写像と同一であることの往復検査に使う）。
+    use crate::emo2_boot::target_map::scope_of;
     // 本番 boot（design Flow 3 手順1）と同じ作者基準 DPI 読取器（task 2.1）。
     use crate::placement::source::{load_balloon_author_dpi, load_descript_source};
 
@@ -427,26 +492,52 @@ mod tests {
 
         // --- balloons: scope ごとに populated（面 0 初期表示の資産） ---
         assert_eq!(boot.balloons.len(), 2, "balloon 資産も scope ごとに 1:1");
-        assert_eq!(boot.balloons[0].0, 0);
-        assert_eq!(boot.balloons[1].0, 1);
-        // balloon target World は面 0（初期表示・DD-9）を内包する（build_balloon_target が実枠を組んだ担保）。
+        assert_eq!(boot.balloons[0].scope, 0);
+        assert_eq!(boot.balloons[1].scope, 1);
+        // balloon target World は面 0（初期表示・DD-9）を内包する（構築が実枠を組んだ担保）。
         assert!(
-            boot.balloons[0].1.surface(0).is_some(),
+            boot.balloons[0].emo_world.surface(0).is_some(),
             "balloon target World は初期面 0 を内包する"
         );
-        assert!(!boot.balloons[0].2.is_empty(), "balloon アトラスは bake 済み（非空）");
+        assert!(
+            boot.balloons[1].emo_world.surface(0).is_some(),
+            "相方側 scope の World も自系列（balloonk0）の面 0 を内包する"
+        );
+        assert!(
+            !boot.balloons[0].atlas.is_empty(),
+            "balloon アトラスは bake 済み（非空）"
+        );
 
-        // --- balloon_model: descript 基層 + balloons0s.txt 面別層の 2 層後勝ちマージ ---
+        // --- balloons[*].model: descript 基層 + **採用面に対応する**面別層の 2 層後勝ちマージ ---
+        // scope0 は balloons0.png を採用 → balloons0s.txt が上書き層。
         // descript.txt は validrect 全 0（degenerate）・balloons0s.txt が 46/-56/36/-44 で後勝ち上書き。
-        let vr = boot.balloon_model.validrect();
-        assert_eq!(vr.top(), Some(46), "面別層 balloons0s.txt が descript を後勝ち上書き");
-        assert_eq!(vr.bottom(), Some(-56));
-        assert_eq!(vr.left(), Some(36));
-        assert_eq!(vr.right(), Some(-44));
+        let vr0 = boot.balloons[0].model.validrect();
+        assert_eq!(
+            vr0.top(),
+            Some(46),
+            "面別層 balloons0s.txt が descript を後勝ち上書き"
+        );
+        assert_eq!(vr0.bottom(), Some(-56));
+        assert_eq!(vr0.left(), Some(36));
+        assert_eq!(vr0.right(), Some(-44));
         // windowposition は面別層のみが供給するキー（descript.txt に不在）。
-        let wp = boot.balloon_model.windowposition();
-        assert_eq!(wp.x(), Some(266), "windowposition は面別層のみ供給");
-        assert_eq!(wp.y(), Some(-129));
+        let wp0 = boot.balloons[0].model.windowposition();
+        assert_eq!(wp0.x(), Some(266), "windowposition は面別層のみ供給");
+        assert_eq!(wp0.y(), Some(-129));
+
+        // scope1 は balloonk0.png を採用 → balloonk0s.txt が上書き層（balloons0s.txt ではない・R2.2）。
+        let vr1 = boot.balloons[1].model.validrect();
+        assert_eq!(
+            vr1.top(),
+            Some(40),
+            "相方側は balloonk0s.txt が上書き層（本体側 46 ではない）"
+        );
+        assert_eq!(vr1.bottom(), Some(-70));
+        assert_eq!(vr1.left(), Some(24));
+        assert_eq!(vr1.right(), Some(-48));
+        let wp1 = boot.balloons[1].model.windowposition();
+        assert_eq!(wp1.x(), Some(-190), "相方側 windowposition は balloonk0s.txt 実値");
+        assert_eq!(wp1.y(), Some(-75));
 
         // --- resolver: EmoWorld::alias_snapshot() 由来（emo2 実測 alias で決定論解決） ---
         assert_eq!(
@@ -486,16 +577,326 @@ mod tests {
             shell_rebuilt.animations(0).len(),
             "shell 表は保持 World と同一エントリ（新規 I/O なし・面種非依存）"
         );
-        let balloon_rebuilt = AnimationTable::from_world(&boot.balloons[0].1);
+        // balloon 表は **scope 別**（キー＝scope 番号・Req 5.6）。各 scope の表が、その scope が
+        // 保持する World から再構築した表と一致する（＝別 scope の World 由来ではない・新規 I/O なし）。
+        for balloon_assets in &boot.balloons {
+            let rebuilt = AnimationTable::from_world(&balloon_assets.emo_world);
+            let table = boot
+                .loop_tables
+                .balloon
+                .get(&balloon_assets.scope)
+                .expect("各 scope の balloon 表が存在する（不変条件 (c)）");
+            assert_eq!(
+                table.is_empty(),
+                rebuilt.is_empty(),
+                "scope {} の balloon 表は当該 scope の保持 World から from_world 済み",
+                balloon_assets.scope
+            );
+            assert_eq!(
+                table.animations(0).len(),
+                rebuilt.animations(0).len(),
+                "scope {} の balloon 表は当該 scope の保持 World と同一エントリ（新規 I/O なし・面種非依存）",
+                balloon_assets.scope
+            );
+        }
+    }
+
+    /// 観測可能な完了条件（tasks.md task 3.2・要件 5.6）: バルーンのループ表が **scope 別の写像**
+    /// として導出され、そのキー集合が scope 集合と一致する。
+    ///
+    /// 「先頭 scope の資産から 1 本組めば全 scope に足りる」という旧前提の実装（＝写像が単一
+    /// エントリ `{0}` に縮む形）はこの檻で落ちる。またキー集合が `BootAssets.balloons` の scope
+    /// 集合と一致することで design「Data Models」不変条件 (c) を固定する。
+    ///
+    /// 内容についての注記（データ事実・観測等価）: emo2 のバルーン面は `areka-emo-present` の
+    /// 合成 `surfaces.txt` から build され、そこに `animation*` 行が一切無いため **全 scope とも
+    /// 空表**になる。したがって本仕様が変えた観測は表の中身ではなく **どの World から何本の表を
+    /// 導出するか**であり、この檻はキー集合（と導出元 World の scope 一致）を固定する。表内容の
+    /// 一致は `build_boot_assets_from_emo2_fixture` が scope ごとの再構築突合で担保する。
+    #[test]
+    fn build_boot_assets_derives_balloon_loop_tables_per_scope() {
+        // SAFETY: bake の WIC デコードに要る COM 初期化（既初期化の S_FALSE/RPC_E_CHANGED_MODE は無視）。
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        }
+
+        let boot = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
+            .expect("emo2 fixture の BootAssets 組立は成功する");
+
+        let table_scopes: Vec<u32> = boot.loop_tables.balloon.keys().copied().collect();
         assert_eq!(
+            table_scopes,
+            vec![0, 1],
+            "バルーン表は scope ごとに 1 本ずつ導出される（先頭 scope の 1 本で済ませない・R5.6）"
+        );
+        let asset_scopes: Vec<u32> = boot.balloons.iter().map(|b| b.scope).collect();
+        assert_eq!(
+            table_scopes, asset_scopes,
+            "バルーン表のキー集合は balloons の scope 集合と一致する（不変条件 (c)）"
+        );
+
+        // データ事実（合成 surfaces.txt に animation 行が無い）ゆえ emo2 は全 scope 空表。
+        // 中身が観測等価でも、駆動される表が scope ごとに別実体であることが本仕様の是正点。
+        for (scope, table) in &boot.loop_tables.balloon {
+            assert!(
+                table.is_empty(),
+                "emo2 の合成 surfaces.txt は animation 行を持たないため scope {scope} も空表（データ事実）"
+            );
+        }
+
+        // シェル表は単数のまま（全 scope 同一 Shell 由来＝この前提はシェル面に限る）。
+        let shell_rebuilt = AnimationTable::from_world(&boot.shells[0].emo_world);
+        assert_eq!(
+            boot.loop_tables.shell.is_empty(),
+            shell_rebuilt.is_empty(),
+            "シェル表は単数のまま（scope 非依存という前提が成り立つのはシェル面に限る）"
+        );
+    }
+
+    /// 観測可能な完了条件（tasks.md task 3.2・要件 5.6）: 起動シームの転送が **全 scope** を
+    /// アクタ鍵語彙へ写して seriko へ渡す（単一エントリ暫定でない）。
+    ///
+    /// `wire_emo2_boot`（mod.rs）と spine ハーネス（spine.rs）が共有する転送
+    /// [`actor_keyed_balloon_tables`] を実 fixture 由来の写像へ適用し、`SerikoLoopConfig.balloon_tables`
+    /// のキー集合が `ActorKey::from(scope.to_string())` で `{"0","1"}` になることを固定する。
+    /// 先頭 scope だけを載せる旧形（`{"0"}`）はこの檻で落ちる。
+    #[test]
+    fn boot_seam_transfers_every_balloon_scope_as_actor_key() {
+        // SAFETY: bake の WIC デコードに要る COM 初期化（既初期化の S_FALSE/RPC_E_CHANGED_MODE は無視）。
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        }
+
+        let boot = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
+            .expect("emo2 fixture の BootAssets 組立は成功する");
+        let asset_scopes: Vec<u32> = boot.balloons.iter().map(|b| b.scope).collect();
+
+        // 起動シーム（mod.rs／spine.rs）が行う転送そのもの。
+        let transferred = actor_keyed_balloon_tables(boot.loop_tables.balloon);
+
+        let keys: Vec<ActorKey> = transferred.keys().cloned().collect();
+        assert_eq!(
+            keys,
+            vec![ActorKey::from("0"), ActorKey::from("1")],
+            "全 scope がアクタ鍵語彙で seriko へ渡る（単一エントリ暫定でない・R5.6）"
+        );
+        // 逆写像（`target_map::scope_of`）と往復し、boot 側 scope 集合へ戻ることを固定する
+        // （＝attach／再追従と同一語彙であり、ここで別語彙を作っていない）。
+        let round_tripped: Vec<u32> = transferred.keys().filter_map(scope_of).collect();
+        assert_eq!(
+            round_tripped, asset_scopes,
+            "アクタ鍵は scope_of の逆写像で boot 側 scope 集合へ戻る（既存写像語彙と同一）"
+        );
+    }
+
+    /// 転送 [`actor_keyed_balloon_tables`] の純粋部分: 全エントリを保ち、キーだけを
+    /// `ActorKey::from(scope.to_string())` へ写す（COM/fixture 不要の決定論檻）。
+    ///
+    /// 多桁 scope（10）を混ぜ、`to_string()` 語彙（`"10"`）がそのままキーになること、および
+    /// エントリが取りこぼされたり併合されたりしないことを固定する。
+    #[test]
+    fn actor_keyed_balloon_tables_maps_every_scope() {
+        let tables = BTreeMap::from([
+            (0u32, AnimationTable::empty()),
+            (1u32, AnimationTable::empty()),
+            (10u32, AnimationTable::empty()),
+        ]);
+
+        let keyed = actor_keyed_balloon_tables(tables);
+
+        assert_eq!(keyed.len(), 3, "全エントリが転送される（取りこぼし・併合なし）");
+        for scope in [0u32, 1, 10] {
+            assert!(
+                keyed.contains_key(&ActorKey::from(scope.to_string())),
+                "scope {scope} は `ActorKey::from(scope.to_string())` のキーで引ける"
+            );
+        }
+        // 逆写像で元の scope 集合へ戻る（別語彙 `"scope0"` 等を作っていない）。
+        let mut round_tripped: Vec<u32> = keyed.keys().filter_map(scope_of).collect();
+        round_tripped.sort_unstable();
+        assert_eq!(round_tripped, vec![0, 1, 10], "scope_of の逆写像で元の集合へ戻る");
+    }
+
+    /// 空の scope 集合では balloon 表の写像も空になる（縮退・不変条件 (c) の degenerate 端）。
+    ///
+    /// seriko 側は不在 scope を**空表意味論**（抽選対象ゼロ・乱数非消費・panic なし）で扱うため、
+    /// 空写像はループ完全不活性と等価である。
+    #[test]
+    fn build_boot_assets_yields_empty_balloon_table_map_for_no_scopes() {
+        // SAFETY: bake の WIC デコードに要る COM 初期化（既初期化の S_FALSE/RPC_E_CHANGED_MODE は無視）。
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        }
+
+        let boot = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[], 96, 96)
+            .expect("scope 集合が空でも組立は成功する（縮退許容）");
+
+        assert!(boot.balloons.is_empty(), "scope 資産が無い");
+        assert!(
             boot.loop_tables.balloon.is_empty(),
-            balloon_rebuilt.is_empty(),
-            "balloon 表は最初のバルーン EmoWorld から from_world 済み（保持 World の再利用）"
+            "balloon 表の写像も空（キー集合⊆balloons の scope 集合・不変条件 (c)）"
+        );
+        assert!(
+            boot.loop_tables.shell.is_empty(),
+            "シェル表も空表（scope 資産不在の既定）"
+        );
+    }
+
+    /// 観測可能な完了条件（tasks.md task 3.1・要件 2.1／7.2）: 起動時資産が **scope ごとに
+    /// 異なる**バルーン定義を保持する（共有 1 本ではない）。
+    ///
+    /// emo2-kakukaku fixture では scope0 が `balloons0.png`（→ `balloons0s.txt`）を、scope1 が
+    /// `balloonk0.png`（→ `balloonk0s.txt`）を採用する。両 scope の `windowposition` /
+    /// `validrect` が**互いに異なる**こと、および `wordwrappoint.x` が
+    /// **scope0 は面別層で -49 に上書き・scope1 は面別層に宣言が無いため descript 基層の -34 を継承**
+    /// することを固定する（R2.1／R2.2／R2.5）。共有 1 本のモデルを全 scope へ配る実装はこの檻で落ちる。
+    #[test]
+    fn build_boot_assets_holds_per_scope_balloon_models() {
+        // SAFETY: bake の WIC デコードに要る COM 初期化（既初期化の S_FALSE/RPC_E_CHANGED_MODE は無視）。
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        }
+
+        let boot = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
+            .expect("emo2 fixture の BootAssets 組立は成功する");
+
+        // 不変条件 (a): balloons の scope 集合＝shells の scope 集合。
+        let balloon_scopes: Vec<u32> = boot.balloons.iter().map(|b| b.scope).collect();
+        let shell_scopes: Vec<u32> = boot.shells.iter().map(|s| s.scope).collect();
+        assert_eq!(
+            balloon_scopes, shell_scopes,
+            "balloons の scope 集合は shells の scope 集合と一致する（不変条件 (a)）"
+        );
+
+        let scope0 = &boot.balloons[0].model;
+        let scope1 = &boot.balloons[1].model;
+
+        // windowposition: 本体側 balloons0s.txt vs 相方側 balloonk0s.txt の実値。
+        assert_eq!(scope0.windowposition().x(), Some(266));
+        assert_eq!(scope0.windowposition().y(), Some(-129));
+        assert_eq!(scope1.windowposition().x(), Some(-190));
+        assert_eq!(scope1.windowposition().y(), Some(-75));
+        assert_ne!(
+            scope0.windowposition().x(),
+            scope1.windowposition().x(),
+            "scope ごとに異なる定義を保持する（共有 1 本ではない）"
+        );
+
+        // validrect: 同上（相方側は 40/-70/24/-48）。
+        assert_eq!(
+            (
+                scope0.validrect().top(),
+                scope0.validrect().bottom(),
+                scope0.validrect().left(),
+                scope0.validrect().right()
+            ),
+            (Some(46), Some(-56), Some(36), Some(-44))
         );
         assert_eq!(
-            boot.loop_tables.balloon.animations(0).len(),
-            balloon_rebuilt.animations(0).len(),
-            "balloon 表は保持 World と同一エントリ（新規 I/O なし・面種非依存）"
+            (
+                scope1.validrect().top(),
+                scope1.validrect().bottom(),
+                scope1.validrect().left(),
+                scope1.validrect().right()
+            ),
+            (Some(40), Some(-70), Some(24), Some(-48))
+        );
+
+        // wordwrappoint.x: scope0 は面別層が -49 で後勝ち上書き・scope1 は面別層に宣言が無く
+        // descript 基層の -34 を継承する（上書き／継承の対照＝R2.5）。
+        assert_eq!(
+            scope0.wordwrappoint().x(),
+            Some(-49),
+            "scope0 は balloons0s.txt の wordwrappoint.x が後勝ち上書き"
+        );
+        assert_eq!(
+            scope1.wordwrappoint().x(),
+            Some(-34),
+            "scope1 は balloonk0s.txt に宣言が無く descript 基層 -34 を継承"
+        );
+    }
+
+    /// 本仕様適用**前**の 2 層マージを再現する神託（tasks 5.1・R5.5）。
+    ///
+    /// merge-base（969a9b3）の `build_balloon_model` は **固定名** `descript.txt`（基層）＋
+    /// `balloons0s.txt`（面別上書き層）を `areka_parsers::balloon::parse_str` へ渡すだけの
+    /// 関数であり、その結果を単一の [`BalloonModel`] として全 scope で共有していた
+    /// （`BALLOON_FACE0_TXT` 定数）。読取は `decode(bytes, DefaultEncoding::Ansi)`・
+    /// 読取失敗は空層で継続——現行 `load_scope_balloon_model` の層構成と同じ規約である。
+    ///
+    /// 適用前のバイナリは手元に残らないが、規則は数行で再現できる。手書き期待値ではなく
+    /// **適用前の規則そのもの**と突き合わせることで、非回帰の主張を規則同士の等式として固定する。
+    fn pre_spec_balloon_model(balloon_root: &Path) -> BalloonModel {
+        let read = |name: &str| {
+            std::fs::read(balloon_root.join(name))
+                .ok()
+                .map(|bytes| decode(&bytes, DefaultEncoding::Ansi))
+        };
+        let descript = read("descript.txt").unwrap_or_default();
+        let face0 = read("balloons0s.txt");
+        areka_parsers::balloon::parse_str(&descript, face0.as_deref())
+    }
+
+    /// R5.5（tasks 5.1）本体側 scope の非回帰: 本体側 scope（scope 0）の**バルーン定義**と、
+    /// そこから解決される**文字描画領域**が本仕様適用前と同一である。
+    ///
+    /// 成立の理由（適用前後の経路が同じ 2 ファイルへ落ちること）:
+    /// - 適用前は固定名 `balloons0s.txt` を上書き層として読んでいた。
+    /// - 適用後の scope 0 の連鎖は `balloonp0def` → `balloons` であり、emo2-kakukaku は
+    ///   `balloonp0def*` を持たないため面 0 は `balloons0.png` へ解決し、対応する上書き層は
+    ///   `balloons0s.txt` になる。
+    ///
+    /// ゆえに両者は**同一の 2 層**をマージしており、モデルは bit 同値でなければならない。
+    /// 文字描画領域は [`ResolvedBalloonText::resolve`] にモデルと**バルーン面の image px 原寸**
+    /// （scope 0 は `balloons0.png` の 400×224＝適用前の固定名採寸が返していた値そのもの）を
+    /// 与えて解決する——`validrect` 由来の領域・折返し閾値・描画開始点までを含む同一性の檻。
+    ///
+    /// 判別力: scope 1 の定義（`balloonk0s.txt` 由来）から解決した領域は別値になる。もし
+    /// 全 scope が 1 本のモデルへ畳み戻れば、あるいは scope 0 の上書き層が相方側へずれれば落ちる。
+    #[test]
+    fn scope0_balloon_model_and_text_region_match_pre_spec_fixed_name_merge() {
+        // SAFETY: bake の WIC デコードに要る COM 初期化（既初期化の S_FALSE/RPC_E_CHANGED_MODE は無視）。
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        }
+
+        /// scope 0 のバルーン面 0（`balloons0.png`）の image px 原寸——適用前の固定名採寸が
+        /// 返していた値と同一（`placement::measure` テストの `BALLOON0_W`/`BALLOON0_H`）。
+        const SAKURA_FACE0: (u32, u32) = (400, 224);
+
+        let boot = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
+            .expect("emo2 fixture の BootAssets 組立は成功する");
+
+        let oracle = pre_spec_balloon_model(&emo2_balloon_root());
+        // 神託が空虚でないこと（実ファイルが読めており、面別層が実際に効いている）。
+        assert_eq!(
+            (oracle.windowposition().x(), oracle.windowposition().y()),
+            (Some(266), Some(-129)),
+            "神託の前提: 適用前は balloons0s.txt を上書き層として読んでいた"
+        );
+
+        assert_eq!(
+            boot.balloons[0].model, oracle,
+            "本体側 scope の定義は適用前の固定名 2 層マージと同一（R5.5）"
+        );
+
+        // 文字描画領域（`validrect` 絶対矩形・描画開始点・折返し閾値）まで同一である。
+        let now = ResolvedBalloonText::resolve(&boot.balloons[0].model, SAKURA_FACE0);
+        assert_eq!(
+            now,
+            ResolvedBalloonText::resolve(&oracle, SAKURA_FACE0),
+            "本体側 scope の文字描画領域は適用前と同一（R5.5）"
+        );
+
+        // 判別力: 相方側 scope の定義から解決すると別領域になる（＝上の等式は空虚でない）。
+        assert_ne!(
+            boot.balloons[1].model, oracle,
+            "相方側まで神託と一致するなら本 fixture は判別力を持たない"
+        );
+        assert_ne!(
+            ResolvedBalloonText::resolve(&boot.balloons[1].model, SAKURA_FACE0),
+            now,
+            "相方側 scope の validrect は別値ゆえ文字描画領域も別になる"
         );
     }
 

@@ -54,7 +54,7 @@ use wintf::ecs::FrameFinalize;
 use crate::placement::AuthorDpi;
 
 use self::adapter::PresentBridge;
-use self::assets::{BootAssets, LoopTables, build_boot_assets};
+use self::assets::{BootAssets, LoopTables, actor_keyed_balloon_tables, build_boot_assets};
 use self::frame::{Emo2Wiring, emo2_frame_system};
 use self::move_cue::{MoveCueSink, MoveDirective};
 use self::talk_clock::{ClockedTextSink, TalkClock};
@@ -319,7 +319,6 @@ pub fn wire_emo2_boot(
     let BootAssets {
         shells,
         balloons,
-        balloon_model,
         resolver,
         static_binds,
         bind_resolver,
@@ -334,8 +333,11 @@ pub fn wire_emo2_boot(
     // `finish()` はその hasher のランダム鍵由来値を返すため、実行ごとに異なる seed が得られる。
     let LoopTables {
         shell: shell_table,
-        balloon: balloon_table,
+        balloon: balloon_scope_tables,
     } = loop_tables;
+    // バルーン表の転送（要件 5.6）: `LoopTables.balloon` は既に scope 別の写像（`build_boot_assets` の
+    // 構築ループ内で単一導出済み）ゆえ、ここは scope キーをアクタ鍵語彙へ写す値移送だけを行う。
+    let balloon_tables = actor_keyed_balloon_tables(balloon_scope_tables);
     let seed: u64 = {
         use std::hash::{BuildHasher, Hasher};
         std::collections::hash_map::RandomState::new()
@@ -346,7 +348,7 @@ pub fn wire_emo2_boot(
     info!(seed, "emo2-boot: SERIKO ループ乱数 seed（RandomState 由来・実 entropy・再現用）");
     let loop_config = SerikoLoopConfig {
         shell_table,
-        balloon_table,
+        balloon_tables,
         rng: seeded_rng(seed),
     };
     // boot は S: dola::cue::CueSink + Clone を要求する。SerikoSink は upstream `areka-seriko` で
@@ -365,7 +367,6 @@ pub fn wire_emo2_boot(
     let wiring_assets = BootAssets {
         shells,
         balloons,
-        balloon_model,
         // attach は resolver を一切読まない（Task 4.1 申し送り）ため無害なプレースホルダ。
         resolver: SurfaceResolver::new(BTreeMap::new()),
         static_binds,
@@ -374,7 +375,7 @@ pub fn wire_emo2_boot(
         // 実 loop_tables は loop_config へ移送済み（attach は loop_tables を読まない）ため空表プレースホルダ。
         loop_tables: LoopTables {
             shell: AnimationTable::empty(),
-            balloon: AnimationTable::empty(),
+            balloon: BTreeMap::new(),
         },
         // 作者基準 DPI は搬送のみ（本相は値を解釈しない・attach への供給は task 4.2）。
         shell_author_dpi,

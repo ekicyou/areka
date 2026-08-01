@@ -1291,7 +1291,7 @@ mod tests {
     use wintf::ecs::Point;
     use wintf::ecs::pointer::{Phase, PointerState};
 
-    use crate::emo2_boot::assets::{BootAssets, LoopTables, ScopeAssets};
+    use crate::emo2_boot::assets::{BalloonScopeAssets, BootAssets, LoopTables, ScopeAssets};
     use crate::emo2_boot::frame::Emo2Wiring;
     use crate::emo2_boot::move_cue::MoveDirective;
     use crate::emo2_boot::talk_clock::TalkClock;
@@ -1316,8 +1316,12 @@ mod tests {
                 atlas: empty_atlas(),
                 initial_surface_id: 0,
             }],
-            balloons: vec![(0, empty_world(), empty_atlas())],
-            balloon_model: areka_parsers::balloon::parse_str("", None),
+            balloons: vec![BalloonScopeAssets {
+                scope: 0,
+                emo_world: empty_world(),
+                atlas: empty_atlas(),
+                model: areka_parsers::balloon::parse_str("", None),
+            }],
             resolver: SurfaceResolver::new(BTreeMap::new()),
             static_binds: BindSet::default(),
             bind_resolver: BindResolver::empty(),
@@ -1325,7 +1329,7 @@ mod tests {
             balloon_author_dpi: 96,
             loop_tables: LoopTables {
                 shell: AnimationTable::empty(),
-                balloon: AnimationTable::empty(),
+                balloon: BTreeMap::new(),
             },
         }
     }

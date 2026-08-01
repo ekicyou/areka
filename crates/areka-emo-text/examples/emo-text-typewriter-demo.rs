@@ -167,7 +167,7 @@ fn build_and_spawn(world: &mut World) {
         setup_abort("balloon descript の読取/解釈に失敗（共有 fixture の配置を確認）");
     };
     let balloon_dir = shared_balloon_dir();
-    let Ok(assets) = build_balloon_target(&balloon_dir, &decoder) else {
+    let Ok(assets) = build_balloon_target(&balloon_dir, &decoder, 0) else {
         setup_abort("バルーン枠アセットの構築に失敗");
     };
     // 窓寸 ≔ balloon surface0 の合成原寸（物理 px・等倍表示）。
