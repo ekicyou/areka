@@ -16,7 +16,7 @@
   - 完了条件: k=1.0 で既存純照合関数と region が完全一致し surface_point が入力と一致する檻が緑
   - _Requirements: 1.1, 1.2, 1.3, 3.1, 3.4, 5.3_
 
-- [ ] 2.2 任意 k 注入の決定論檻を整備する
+- [x] 2.2 任意 k 注入の決定論檻を整備する
   - R3.3 の 5 分岐（領域内／別領域内／背景／矩形境界の内側 1px／外側 1px）× k=2.0・k=1.25
   - k=2.0 (100,100)≡(50,50) の固定・割り切れない縮約（k=5/4）と k=2 奇数座標の期待値固定（k=1.0 恒等檻は 2.1 が正本）
   - 重なり優先（画家則）・反転/退化矩形・負値/窓外・決定性の k≠1.0 版
@@ -100,4 +100,5 @@
 ## Implementation Notes
 
 - 2.1: `hit.rs` の恒等檻 doc（`scaled_identity_matches_hit_region_exactly` 直上）に「×k の誤挿入も落とす」との過剰主張がある。k=1.0 では ×k も恒等ゆえ検出不能。×k 誤挿入の検出は 2.2 の任意 k 檻が担うので、2.2 で文言を是正すること。
+- 2.2: 檻の doc に「どの誤実装をどの点が殺すか」を書くときは、必ず実測（mutant を作って落ちる檻を記録）してから書くこと。round 1 で 2 件の事実誤認（うち 1 件は隣接 assert と自己矛盾）が出た。丸め檻は k=2 系と k=5/4 系で殺せる mutant が異なる（k=2 では DD-1 と素の floor が一致するため、素の floor を殺せるのは k=5/4 系のみ）。
 - 2.1: `scale::tests::mul_degradation_emits_warn_log`（`scale.rs`・本 spec の増分ではない既存檻）が全体並列実行で稀に失敗した報告あり。疑いは tracing callsite interest キャッシュ競合（[[areka-log-cage-harness-blindspots]] クラス）。レビュー時 4/4 は再現せず。8.1 の `cargo test --workspace` 決定論性（R3.6）で再評価すること。

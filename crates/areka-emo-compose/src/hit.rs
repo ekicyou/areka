@@ -291,8 +291,12 @@ mod tests {
     /// 既存純関数 [`hit_region`] と `region` 完全一致し、`surface_point` が入力そのものになる。
     ///
     /// 点は「領域内」「別領域内」「背景」「閉区間の端（内側/外側 1px）」「負値・窓外」を含み、
-    /// 縮約が恒等でなくなる改変（丸め持ち込み・軸取り違え・×k の誤挿入）を全て落とす。
-    /// 任意 k の網羅檻は本関数の射程外（Task 2.2 が担う）。
+    /// **軸の取り違え**（非対称点ゆえ `surface_point` が `(y, x)` になり検出できる）を落とす。
+    ///
+    /// 一方、**×k の誤挿入・素の floor 丸めの持ち込みは k=1.0 では検出できない**——どちらも
+    /// k=1.0 では恒等写像へ退化するためである（本檻の射程外）。それらの誤実装を殺すのは
+    /// 任意 k（2.0・1.25）の網羅檻の責務であり、本ファイルの `scaled_five_branches_at_k2` ／
+    /// `scaled_five_branches_at_k125` 以下が担う。
     #[test]
     fn scaled_identity_matches_hit_region_exactly() {
         let m = master_with(vec![
@@ -331,5 +335,302 @@ mod tests {
         let hit = hit_region_scaled(&m, 180, 96, ScaleRatio::ONE, RegionPriority::Painter);
         assert_eq!(hit.region, Some("Head"));
         assert_eq!(hit.surface_point, (180, 96));
+    }
+
+    // ------------------------------------------------------------------
+    // 任意 k（k≠1.0）の決定論檻（要件 3.1/3.2/3.3/3.5・2.1/2.3/2.4/2.5/2.6）
+    //
+    // 丸め規約は DD-1（画素中心逆写像）: `s(v) = ⌊((2v + 1)·den) / (2·num)⌋`。
+    // 本節の期待値は**全てハードコード定数**であり、実装式を期待値側で再計算しない
+    // （トートロジー禁止）。各値は手計算で導出済みで、代表値は DD-1 の
+    // 「k=2: 100→50・101→50／k=5/4: 1→1・6→5」と一致する。
+    // ------------------------------------------------------------------
+
+    /// 作者基準 DPI（ukadoc 正典既定）。k を「実 DPI ÷ 作者基準 DPI」として組む分母。
+    const AUTHOR_DPI: u32 = 96;
+
+    /// k=2.0（192dpi / 96dpi → 既約 2/1）。`s(v) = ⌊(2v+1)/4⌋`（＝`⌊v/2⌋`）。
+    fn k2() -> ScaleRatio {
+        ScaleRatio::new(192, AUTHOR_DPI).expect("192/96 は構築可能")
+    }
+
+    /// k=1.25（120dpi / 96dpi → 既約 5/4）。`s(v) = ⌊(8v+4)/10⌋`（割り切れない縮約）。
+    fn k125() -> ScaleRatio {
+        ScaleRatio::new(120, AUTHOR_DPI).expect("120/96 は構築可能")
+    }
+
+    /// 既存 5 分岐檻（`point_inside_returns_region_name`／`closed_interval_edges_and_corners`）と
+    /// 同一の fixture。k 空間版はこの矩形の逆像を物理 px で狙う。
+    fn head_and_bust() -> SurfaceMaster {
+        master_with(vec![
+            coll(0, 93, 62, 271, 130, "Head"),
+            coll(1, 133, 270, 229, 326, "Bust"),
+        ])
+    }
+
+    /// 期待値表 1 件の検証補助（`surface_point` と `region` を同時に固定する）。
+    ///
+    /// `surface_point` を毎件固定することで、「region は偶然一致するが縮約値が違う」
+    /// 誤実装（素の floor 丸めなど）も逃さない。
+    fn assert_scaled(
+        m: &SurfaceMaster,
+        k: ScaleRatio,
+        client: (i64, i64),
+        want_surface: (i64, i64),
+        want_region: Option<&str>,
+        what: &str,
+    ) {
+        let (x, y) = client;
+        let got = hit_region_scaled(m, x, y, k, RegionPriority::Painter);
+        assert_eq!(
+            got.surface_point, want_surface,
+            "surface_point: {what} / client=({x},{y})"
+        );
+        assert_eq!(
+            got.region, want_region,
+            "region: {what} / client=({x},{y}) → surface={:?}",
+            got.surface_point
+        );
+    }
+
+    /// 要件 3.3（5 分岐 × k=2.0）＋ 3.1/1.1/1.2/1.3/2.3: 領域内／別領域内／背景／
+    /// 矩形境界の内側 1px／外側 1px を、窓 client 物理 px の点で網羅する。
+    ///
+    /// 境界画素は「縮約後に境界へ**乗る**／**外れる**」物理点を明示的に選んである
+    /// （design Testing Strategy 項目 1 の但し書き）——k=2.0 では物理 x=186・187 が共に
+    /// surface 93（Head 左端＝当たり）へ落ち、x=185 が surface 92（外れ）へ落ちる。
+    /// これにより閉区間の含端が k 空間でも保存されていることが 1px 精度で固定される。
+    #[test]
+    fn scaled_five_branches_at_k2() {
+        let m = head_and_bust();
+        let k = k2();
+        for (client, surface, region, what) in [
+            // (1) 領域内: Head の内部。
+            ((360, 192), (180, 96), Some("Head"), "領域内（Head）"),
+            // (2) 別領域内: Bust の内部（同一 x 列でも y で別領域になる）。
+            ((360, 600), (180, 300), Some("Bust"), "別領域内（Bust）"),
+            // (3) 背景: Head と Bust の隙間／原点。
+            ((360, 400), (180, 200), None, "背景（Head と Bust の間）"),
+            ((0, 0), (0, 0), None, "背景（原点）"),
+            // (4) 矩形境界（縮約後に境界へ乗る＝当たり）。
+            ((186, 124), (93, 62), Some("Head"), "境界に乗る（左上隅）"),
+            ((187, 125), (93, 62), Some("Head"), "境界に乗る（同一元画素の別物理点）"),
+            ((543, 261), (271, 130), Some("Head"), "境界に乗る（右下隅）"),
+            // (4') 境界の内側 1px。
+            ((188, 126), (94, 63), Some("Head"), "内側 1px（左上）"),
+            ((541, 259), (270, 129), Some("Head"), "内側 1px（右下）"),
+            // (5) 境界の外側 1px（縮約後に境界を外れる）。
+            ((185, 124), (92, 62), None, "外側 1px（左端の 1 つ外・x）"),
+            ((186, 123), (93, 61), None, "外側 1px（上端の 1 つ外・y）"),
+            ((544, 261), (272, 130), None, "外側 1px（右端の 1 つ外・x）"),
+            ((543, 262), (271, 131), None, "外側 1px（下端の 1 つ外・y）"),
+        ] {
+            assert_scaled(&m, k, client, surface, region, what);
+        }
+    }
+
+    /// 要件 3.3/3.5（5 分岐 × k=1.25）: 割り切れない縮約（5/4）でも 5 分岐が同一の意味を保つ。
+    ///
+    /// k=5/4 では 1 元画素へ落ちる物理画素が 1〜2 列で不均等になるため、境界の内外が
+    /// 物理空間で非自明になる——例えば surface 93（Head 左端）へ落ちる物理列は x=116 **のみ**で、
+    /// x=115 は surface 92（外れ）、x=117 は surface 94（内側 1px）である。素の floor 丸め
+    /// （`⌊v·den/num⌋`）ならば x=116 は 92 となり本檻は落ちる（DD-1 の +1/2 中心補正の檻）。
+    #[test]
+    fn scaled_five_branches_at_k125() {
+        let m = head_and_bust();
+        let k = k125();
+        for (client, surface, region, what) in [
+            // (1) 領域内。
+            ((120, 90), (96, 72), Some("Head"), "領域内（Head）"),
+            // (2) 別領域内。
+            ((225, 375), (180, 300), Some("Bust"), "別領域内（Bust）"),
+            // (3) 背景。
+            ((225, 250), (180, 200), None, "背景（Head と Bust の間）"),
+            ((0, 0), (0, 0), None, "背景（原点）"),
+            // (4) 矩形境界（縮約後に境界へ乗る）。
+            ((116, 77), (93, 62), Some("Head"), "境界に乗る（左上隅）"),
+            ((116, 78), (93, 62), Some("Head"), "境界に乗る（y=77/78 が同一元画素 62）"),
+            ((339, 163), (271, 130), Some("Head"), "境界に乗る（右下隅）"),
+            // (4') 境界の内側 1px。
+            ((117, 79), (94, 63), Some("Head"), "内側 1px（左上）"),
+            ((338, 161), (270, 129), Some("Head"), "内側 1px（右下）"),
+            // (5) 境界の外側 1px。
+            ((115, 77), (92, 62), None, "外側 1px（左端の 1 つ外・x）"),
+            ((116, 76), (93, 61), None, "外側 1px（上端の 1 つ外・y）"),
+            ((340, 163), (272, 130), None, "外側 1px（右端の 1 つ外・x）"),
+            ((339, 164), (271, 131), None, "外側 1px（下端の 1 つ外・y）"),
+        ] {
+            assert_scaled(&m, k, client, surface, region, what);
+        }
+    }
+
+    /// 要件 3.2（正本檻）: k=2.0・client 点 (100,100) は **surface (50,50) として照合**される。
+    ///
+    /// 矩形は (30,30)-(70,70) ゆえ、縮約を省いた素通し（(100,100)）は領域外＝`None` へ落ちる。
+    /// 一方 ×k の誤挿入（(200,200)）は `None` ではなく**別の領域 `Some("Foot")`** へ解決する
+    /// ——第 2 矩形 `Foot` (200,200)-(260,260) は、×k mutant に「該当なし」ではなく
+    /// **区別可能な誤答**を出させるために fixture へ置いてある（誤答が `None` だと、単に
+    /// 外れただけの他の誤実装と見分けが付かない）。いずれの誤実装でも本檻の
+    /// `Some("Torso")` 期待は破れる＝非トートロジー。
+    #[test]
+    fn scaled_k2_client_100_100_equals_surface_50_50() {
+        let m = master_with(vec![
+            coll(0, 30, 30, 70, 70, "Torso"),
+            coll(1, 200, 200, 260, 260, "Foot"),
+        ]);
+        let got = hit_region_scaled(&m, 100, 100, k2(), RegionPriority::Painter);
+        assert_eq!(got.surface_point, (50, 50), "R3.2: (100,100) ÷ 2 = (50,50)");
+        assert_eq!(got.region, Some("Torso"), "R3.2: surface (50,50) の領域");
+        assert_eq!(
+            got.region,
+            hit_region(&m, 50, 50, RegionPriority::Painter),
+            "R3.2: k=2.0 の client (100,100) は surface (50,50) の無縮約照合と同一結果"
+        );
+        // 反トートロジーの明示: 素通し (100,100) は `None`・×k (200,200) は別領域
+        // `Some("Foot")` となり、いずれも上の `Some("Torso")` 期待とは一致しない。
+        assert_eq!(hit_region(&m, 100, 100, RegionPriority::Painter), None);
+        assert_eq!(hit_region(&m, 200, 200, RegionPriority::Painter), Some("Foot"));
+    }
+
+    /// 要件 3.5（丸め期待値の固定・DD-1 代表値）: 割り切れない縮約と、整数倍 k で
+    /// 画素の中間に落ちる奇数座標の丸め結果を期待値として固定する。
+    ///
+    /// - k=2.0: 100→50・**101→50**（奇数 client 座標が同一元画素へ落ちる）
+    /// - k=5/4: **1→1**・**6→5**（素の floor なら 0・4 になる値）
+    ///
+    /// 矩形は「元画素 50 のみ」「元画素 1 のみ」「元画素 5 のみ」を含む 1px 幅の帯にしてあり、
+    /// 丸め結果が 1 でもずれれば当たり／外れが反転する。
+    #[test]
+    fn scaled_rounding_expectations_are_pinned() {
+        // 元画素 x=50 のみを含む 1px 幅の縦帯（y は十分広く取る）。
+        let band50 = master_with(vec![coll(0, 50, 0, 50, 1000, "Band50")]);
+        let k = k2();
+        assert_scaled(&band50, k, (100, 0), (50, 0), Some("Band50"), "k=2: 100→50");
+        assert_scaled(&band50, k, (101, 0), (50, 0), Some("Band50"), "k=2: 101→50");
+        // 直前・直後の物理列は別の元画素（49・51）へ落ちる＝帯の外。
+        assert_scaled(&band50, k, (99, 0), (49, 0), None, "k=2: 99→49");
+        assert_scaled(&band50, k, (102, 0), (51, 0), None, "k=2: 102→51");
+
+        // k=5/4 の代表値: 1→1（素の floor なら 0）・6→5（素の floor なら 4）。
+        let band1 = master_with(vec![coll(0, 1, 0, 1, 1000, "Band1")]);
+        let band5 = master_with(vec![coll(0, 5, 0, 5, 1000, "Band5")]);
+        let q = k125();
+        assert_scaled(&band1, q, (1, 0), (1, 0), Some("Band1"), "k=5/4: 1→1");
+        assert_scaled(&band1, q, (0, 0), (0, 0), None, "k=5/4: 0→0");
+        assert_scaled(&band5, q, (6, 0), (5, 0), Some("Band5"), "k=5/4: 6→5");
+        assert_scaled(&band5, q, (7, 0), (6, 0), None, "k=5/4: 7→6");
+        // 素の floor（⌊v·4/5⌋）ならば 1→0・6→4 となり、上の 2 件が外れる。
+        assert_scaled(&band1, q, (2, 0), (2, 0), None, "k=5/4: 2→2");
+    }
+
+    /// 要件 2.4（重なり優先の k 非依存）: k≠1.0 でも画家則（後定義が手前）が保存される。
+    ///
+    /// [`hit_region_scaled`] は照合を [`hit_region`] へ完全委譲するため構造的に保存されるが、
+    /// 「縮約後の点が重なり域へ落ちる」ことを含めて 1 本の檻で固定する。
+    #[test]
+    fn scaled_overlap_prefers_later_defined_at_nonidentity_k() {
+        let m = master_with(vec![
+            coll(1, 0, 0, 100, 100, "A"),
+            coll(2, 50, 50, 150, 150, "B"),
+        ]);
+        // k=2.0: 重なり域（surface 75,75）は後定義 B。
+        assert_scaled(&m, k2(), (150, 150), (75, 75), Some("B"), "k=2: 重なり域は B");
+        assert_scaled(&m, k2(), (151, 151), (75, 75), Some("B"), "k=2: 奇数座標も同一元画素");
+        // 重なりの外は各々の領域（重なり優先が「常に B」に潰れていないことの非空虚性）。
+        assert_scaled(&m, k2(), (40, 40), (20, 20), Some("A"), "k=2: A 単独域");
+        assert_scaled(&m, k2(), (280, 280), (140, 140), Some("B"), "k=2: B 単独域");
+        // k=1.25 でも同一の重なり域へ落ちる（(8·94+4)/10 = 75）。
+        assert_scaled(&m, k125(), (94, 94), (75, 75), Some("B"), "k=5/4: 重なり域は B");
+        assert_scaled(&m, k125(), (25, 25), (20, 20), Some("A"), "k=5/4: A 単独域");
+    }
+
+    /// 要件 2.6（反転/退化矩形 × k≠1.0）: 反転矩形は k によらず何にも当たらない。
+    ///
+    /// 非空虚性のため、同じ物理点が**正立矩形なら当たる**ことを対照で固定する
+    /// （「縮約がおかしくて外れている」のではないことの証拠）。
+    #[test]
+    fn scaled_inverted_rect_hits_nothing_at_nonidentity_k() {
+        let inverted = master_with(vec![
+            coll(0, 100, 100, 0, 0, "InvBoth"),
+            coll(1, 0, 100, 100, 0, "InvY"),
+        ]);
+        let upright = master_with(vec![coll(0, 0, 0, 100, 100, "Ok")]);
+
+        // k=2.0: client (100,100) → surface (50,50)。
+        assert_scaled(&inverted, k2(), (100, 100), (50, 50), None, "k=2: 反転は当たらない");
+        assert_scaled(&upright, k2(), (100, 100), (50, 50), Some("Ok"), "対照: 正立なら当たる");
+        // k=1.25: client (63,63) → surface (50,50)（(8·63+4)/10 = 50）。
+        assert_scaled(&inverted, k125(), (63, 63), (50, 50), None, "k=5/4: 反転は当たらない");
+        assert_scaled(&upright, k125(), (63, 63), (50, 50), Some("Ok"), "対照: 正立なら当たる");
+    }
+
+    /// 要件 2.5（負値・窓外・i64 極値 × k≠1.0）: panic せず定義された結果を返す。
+    ///
+    /// 負値の縮約は Euclid 除算＝**床方向**である。2 つの k の負値点は**別々の誤実装を殺す**
+    /// ——実測どおりの帰属を以下に記す（片方を「冗長」として刈り取ると当該 mutant が黙って通る）。
+    ///
+    /// - **0 方向切り捨て（Euclid でなく素の `/`）の判別**は **k=2 の `(-7, -13)`** が担う:
+    ///   DD-1 は `(-4, -7)`、切り捨てなら `(-3, -6)` になる。k=5/4 では x=-7（DD-1 -6・
+    ///   切り捨て -5）が判別する一方、**y=-13 は切り捨てを判別しない**——分子
+    ///   `(2·(-13)+1)·4 = -100` が `2·num = 10` で割り切れ、Euclid と切り捨てがともに -10 に
+    ///   なるためである。
+    /// - **素の floor 丸め `⌊v·den/num⌋`（DD-1 の +1/2 中心補正を落とす mutant）の判別**は
+    ///   逆に **k=5/4 の y=-13** が担う: 同 mutant は `⌊-52/5⌋ = -11` を返し、DD-1 の -10 と
+    ///   食い違う。k=2 の負値点はこの mutant を判別しない（k=2 では両者が一致する）。
+    ///
+    /// i64 極値は `unscale_coord` の i128 中間＋飽和縮小の経路を通る（本 fixture では
+    /// 飽和は起きない領域）。
+    #[test]
+    fn scaled_negative_and_out_of_window_points_are_defined_at_nonidentity_k() {
+        let m = head_and_bust();
+        // k=2.0。
+        assert_scaled(&m, k2(), (-7, -13), (-4, -7), None, "k=2: 負値（床方向）");
+        assert_scaled(&m, k2(), (5000, 5000), (2500, 2500), None, "k=2: 窓外");
+        assert_scaled(
+            &m,
+            k2(),
+            (i64::MIN, 0),
+            (-4_611_686_018_427_387_904, 0),
+            None,
+            "k=2: i64 極値（panic なし）",
+        );
+        // k=1.25。
+        assert_scaled(&m, k125(), (-7, -13), (-6, -10), None, "k=5/4: 負値（床方向）");
+        assert_scaled(&m, k125(), (5000, 5000), (4000, 4000), None, "k=5/4: 窓外");
+        assert_scaled(
+            &m,
+            k125(),
+            (i64::MIN, 0),
+            (-7_378_697_629_483_820_646, 0),
+            None,
+            "k=5/4: i64 極値（panic なし）",
+        );
+    }
+
+    /// 要件 2.1（決定性の k≠1.0 版・既存 `deterministic_repeated_calls` の流儀）:
+    /// 同一 `(master, x, y, k, priority)` の反復呼出は常に同一の `ScaledHit` を返す。
+    #[test]
+    fn scaled_deterministic_repeated_calls_at_nonidentity_k() {
+        let m = head_and_bust();
+        for (k, client, surface, region) in [
+            (k2(), (360, 192), (180, 96), Some("Head")),
+            (k2(), (360, 600), (180, 300), Some("Bust")),
+            (k2(), (186, 124), (93, 62), Some("Head")),
+            (k125(), (120, 90), (96, 72), Some("Head")),
+            (k125(), (116, 77), (93, 62), Some("Head")),
+            (k125(), (225, 250), (180, 200), None),
+        ] {
+            let (x, y) = client;
+            let first = hit_region_scaled(&m, x, y, k, RegionPriority::Painter);
+            for _ in 0..5 {
+                assert_eq!(
+                    hit_region_scaled(&m, x, y, k, RegionPriority::Painter),
+                    first,
+                    "反復呼出で結果が変わってはならない: client=({x},{y})"
+                );
+            }
+            assert_eq!(first.surface_point, surface, "client=({x},{y})");
+            assert_eq!(first.region, region, "client=({x},{y})");
+        }
     }
 }
