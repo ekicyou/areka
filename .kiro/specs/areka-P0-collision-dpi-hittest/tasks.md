@@ -24,7 +24,7 @@
   - _Requirements: 3.2, 3.3, 3.5, 2.1, 2.3, 2.4, 2.5, 2.6_
 
 - [ ] 3. presenter 配線——実適用 k の厳密消費
-- [ ] 3.1 production 判定入口と厳密照会を新設する
+- [x] 3.1 production 判定入口と厳密照会を新設する
   - 私有 applied 直読（f32 非経由・derive_scale 再呼出禁止・判定ごと読取で k 更新へ自動追従）
   - applied 不在時の防御分岐（warn 1 行＋等倍続行・到達不能性の doc 明記）
   - k・縮約前後座標・解決 region の debug 1 行構造化ログ（R4.5 の観測面）
@@ -100,5 +100,7 @@
 ## Implementation Notes
 
 - 2.1: `hit.rs` の恒等檻 doc（`scaled_identity_matches_hit_region_exactly` 直上）に「×k の誤挿入も落とす」との過剰主張がある。k=1.0 では ×k も恒等ゆえ検出不能。×k 誤挿入の検出は 2.2 の任意 k 檻が担うので、2.2 で文言を是正すること。
+- 3.1: R1.6 防御分岐の述語は **「`applied == None` かつ表示 surface が存在する」**（DD-5 が正典・design の Error Handling 表が未登録/未表示を「正常縮退・ログ不要」と分類しているため）。`applied.is_none()` 単独にすると未表示 scope 上のマウス移動ごとに warn が出るログ洪水になる。3.2 の R1.6 檻はこの述語で構築すること（未登録・未表示では warn 0 件であることも併せて固定する）。
+- 3.1: `lib.rs` の `pub use areka_emo_compose::ScaleRatio;` がローカル module の `pub use` 群より後ろにあり rustfmt のグループ順序に反する（crate は元々広く fmt 非準拠・fmt ゲートは存在しない）。将来 fmt をかけるときに `pub use balloon::…` の上へ移すこと。
 - 2.2: 檻の doc に「どの誤実装をどの点が殺すか」を書くときは、必ず実測（mutant を作って落ちる檻を記録）してから書くこと。round 1 で 2 件の事実誤認（うち 1 件は隣接 assert と自己矛盾）が出た。丸め檻は k=2 系と k=5/4 系で殺せる mutant が異なる（k=2 では DD-1 と素の floor が一致するため、素の floor を殺せるのは k=5/4 系のみ）。
 - 2.1: `scale::tests::mul_degradation_emits_warn_log`（`scale.rs`・本 spec の増分ではない既存檻）が全体並列実行で稀に失敗した報告あり。疑いは tracing callsite interest キャッシュ競合（[[areka-log-cage-harness-blindspots]] クラス）。レビュー時 4/4 は再現せず。8.1 の `cargo test --workspace` 決定論性（R3.6）で再評価すること。
