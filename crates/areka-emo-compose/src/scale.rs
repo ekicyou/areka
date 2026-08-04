@@ -7,9 +7,12 @@
 //!
 //! - **既約正準化**（要件 1.1）: 構築時に gcd で約分し、`Eq`/`Hash` を正準形で厳密化する
 //!   （下流 `emo-present` の合成キャッシュキーの一意性を担保する）。
-//! - **丸め規約の単一権威**（要件 2.5）: [`ScaleRatio::scale_len`] ／
+//! - **丸め規約の単一権威（乗算方向・長さ）**（要件 2.5）: [`ScaleRatio::scale_len`] ／
 //!   [`ScaleRatio::scaled_extent`] は round half away from zero（wintf `DPI::to_physical_*`
 //!   と同規約）で丸め、非ゼロ入力に最小 1px を保証する（拡大結果が消える欠けを作らない）。
+//! - **丸め規約の単一権威（除算方向・座標）**: [`ScaleRatio::unscale_coord`] は物理画素座標を
+//!   native 画素座標へ縮約する唯一の写像で、[`resample`] の画素中心写像の最近傍逆をとる
+//!   （当たり判定の点 ÷k がここを通る）。乗算方向権威と**対**を成すが互いの逆関数ではない。
 //! - **乗算合成**（要件 1.6）: 最終拡大率＝アプリ管理拡大率 × DPI 由来 k を
 //!   [`ScaleRatio::mul`] の有理数乗算として表現する（本仕様のアプリ管理拡大率は
 //!   [`ScaleRatio::ONE`] 固定の縮退シーム）。
@@ -186,6 +189,74 @@ impl ScaleRatio {
     /// [`scale_len`]: ScaleRatio::scale_len
     pub fn scaled_extent(self, w: u32, h: u32) -> (u32, u32) {
         (self.scale_len(w), self.scale_len(h))
+    }
+
+    /// 物理画素**座標** → native 画素座標の縮約（**除算方向の丸め権威**・要件 2.1/2.2/2.5/1.5）。
+    ///
+    /// ```text
+    /// s(v) = ⌊ ((2v + 1) · den) / (2 · num) ⌋      （⌊⌋ は Euclid 除算＝負値も床方向）
+    /// ```
+    ///
+    /// [`resample`] が実際に用いた画素中心写像 `src = (v + 1/2)·den/num − 1/2` の**最近傍整数**
+    /// ——すなわち「その表示画素に主として描かれている元画素」——を返す。当たり判定の
+    /// 「見えているとおりの部位が当たる」は、この写像が描画写像と定義的に一致することに依拠する。
+    ///
+    /// # 乗算方向権威との対（責務の相互参照）
+    ///
+    /// [`scaled_extent`]／[`scale_len`] が**乗算方向（native → 物理）の「長さ」の丸め権威**であるのに対し、
+    /// 本メソッドは**除算方向（物理 → native）の「座標」の丸め権威**である。両者は対を成すが
+    /// **互いの逆関数ではない**——長さの丸めは round half away from zero、座標の丸めは画素中心逆写像で
+    /// 規約そのものが異なる（長さの丸めを鏡写しにすると整数倍 k で半画素ずれる: k=2 の表示画素 101 は
+    /// 元画素 50 を映すのに 51 を返してしまう）。
+    ///
+    /// # 座標専用（長さの縮約には使わない）
+    ///
+    /// 引数は**点の座標**であり、寸法・長さを渡してはならない。物理寸から native 寸を得たい場合に
+    /// 本メソッドを使うのは誤り（`+1/2` の中心補正が入るため長さの丸めにならない）。
+    ///
+    /// # 端の注意
+    ///
+    /// [`scale_len`] が切り上げた最終物理画素では `s(v)` が native 寸を 1 だけ超え得る
+    /// （例: native 27・k=7/6 → 物理 32px の最終列 31 は 27 を返し、有効添字 `0..=26` の外側になる）。
+    /// 当たり判定矩形は native 寸の内側にあるため、この値は照合で自然に「該当なし」となる
+    /// ——定義された結果であり、異常でも panic 事象でもない。
+    ///
+    /// # 規約変更の権威
+    ///
+    /// ÷k の丸め規約を変える改修は**本メソッド 1 箇所**で行う（経路ごとの丸め持ち込みを禁ずる）。
+    /// 変更時は下流の期待値檻と実機受け入れ記録の再実施が必要である。
+    ///
+    /// # 桁溢れと飽和（panic なし）
+    ///
+    /// 中間は i128——`v: i64` ゆえ `2v+1` は 2^64 域、`den ≤ u32::MAX` を掛けても 2^96 域で溢れない。
+    /// `num ≥ 1`（`ScaleRatio` 不変条件）ゆえゼロ除算もない。k<1（`num < den`）では極値近傍の `v` で
+    /// 結果が i64 域を超え得るため、戻り値は **i64 へ飽和縮小**する（`as` のラップは単調性を破り、
+    /// `try_into().unwrap()` は非パニック宣言を破るため、飽和が唯一の整合解）。単調非減少は
+    /// 非飽和域で成立し、飽和域では定値になる。Win32 の実座標は i32 域に束縛されるため、
+    /// 実経路で飽和は発生しない（防御規約）。
+    ///
+    /// # 性質（in-source 檻で固定）
+    ///
+    /// - k=1 で厳密恒等 `s(v) = v`（負値・i64 極値を含む全域）。
+    /// - `v` について単調非減少（非飽和域）——サーフェス px の閉区間矩形の逆像が物理空間でも
+    ///   連続区間になり、境界画素の内外一貫が k によらず保存される。
+    /// - 決定論・整数のみ（f32 を一切経由しない）。
+    ///
+    /// # 公開面の申し送り（W6.5 `scale-exact-rational`）
+    ///
+    /// 本 spec が `scale.rs` へ追加する公開面は本メソッドのみである（`num`／`den` アクセサは
+    /// **新設しない**——W6.5 が計画する `ratio()` 等との名前二重化を避けるため）。W6.5 は設計前に
+    /// 本メソッド着地後の `scale.rs` へ rebase すること。
+    ///
+    /// [`scale_len`]: ScaleRatio::scale_len
+    /// [`scaled_extent`]: ScaleRatio::scaled_extent
+    pub fn unscale_coord(self, v: i64) -> i64 {
+        let num = self.num as i128;
+        let den = self.den as i128;
+        // 画素中心逆写像の最近傍整数（Euclid 除算ゆえ負値も床方向・num ≥ 1 でゼロ除算なし）。
+        let s = ((2 * v as i128 + 1) * den).div_euclid(2 * num);
+        // i64 への飽和縮小（k<1 の極値近傍でのみ到達し得る）。
+        s.clamp(i64::MIN as i128, i64::MAX as i128) as i64
     }
 }
 
@@ -1486,5 +1557,222 @@ mod tests {
 
         // 決定論（同一入力は同一出力）。
         assert_eq!(k.scale_len(u32::MAX), k.scale_len(u32::MAX));
+    }
+
+    // ------------------------------------------------------------------
+    // areka-P0-collision-dpi-hittest task 1: `unscale_coord`（除算方向の丸め権威）
+    // 設計 DD-1／Testing Strategy「Unit Tests（scale.rs — unscale_coord の丸め権威檻）」の 6 項目。
+    // ------------------------------------------------------------------
+
+    /// 檻 1（要件 1.5／2.5）: k=1 は**全域恒等** `s(v)=v`——負値・0・i64 極値近傍を含む。
+    ///
+    /// 要件 1.5 の no-op 保存はこの厳密恒等に依拠する。i64 極値を入れてあるため、
+    /// 中間演算を i128 でなく i64 で書いた実装は `2·v+1` の桁溢れで死ぬ。
+    #[test]
+    fn unscale_coord_is_exact_identity_for_k_one() {
+        for v in [
+            0i64,
+            1,
+            -1,
+            2,
+            -2,
+            3,
+            -3,
+            100,
+            -100,
+            123_456_789,
+            -123_456_789,
+            i32::MAX as i64,
+            i32::MIN as i64,
+            i64::MAX - 1,
+            i64::MAX,
+            i64::MIN + 1,
+            i64::MIN,
+        ] {
+            assert_eq!(ScaleRatio::ONE.unscale_coord(v), v, "k=1 の恒等: v={v}");
+        }
+
+        // 既約化で 1/1 になる比も同じ恒等経路（96/96 は k=1）。
+        let k = ScaleRatio::new(AUTHOR_DPI, AUTHOR_DPI).unwrap();
+        for v in [-7i64, 0, 7, i64::MAX, i64::MIN] {
+            assert_eq!(k.unscale_coord(v), v, "96/96 の恒等: v={v}");
+        }
+
+        // 決定論（同一入力は同一出力）。
+        assert_eq!(
+            ScaleRatio::ONE.unscale_coord(-42),
+            ScaleRatio::ONE.unscale_coord(-42)
+        );
+    }
+
+    /// 檻 2（要件 3.5 の期待値・DD-1 代表値）: k=2 表——100→50・101→50 と負値の床方向規約。
+    ///
+    /// DD-1 が棄却した候補の witness を兼ねる:
+    /// - `scale_len` の round half away from zero を鏡写しにする候補 C なら 101→51（半画素ずれ）。
+    /// - `as` キャスト（0 方向切り捨て）なら -1→0・-3→-1（負側で床でなくなる）。
+    #[test]
+    fn unscale_coord_k2_table_pins_pixel_center_inverse() {
+        let k2 = ScaleRatio::new(2, 1).unwrap();
+
+        assert_eq!(k2.unscale_coord(100), 50, "DD-1 代表値");
+        assert_eq!(k2.unscale_coord(101), 50, "DD-1 代表値（奇数座標）");
+        assert_ne!(k2.unscale_coord(101), 51, "候補 C（長さの丸めの鏡写し）ではない");
+        assert_eq!(k2.unscale_coord(102), 51);
+        assert_eq!(k2.unscale_coord(103), 51);
+        assert_eq!(k2.unscale_coord(0), 0);
+        assert_eq!(k2.unscale_coord(1), 0);
+        assert_eq!(k2.unscale_coord(2), 1);
+
+        // 負値は Euclid 除算＝床方向（`as` の 0 方向切り捨てなら -1・-2 が 0 へ落ちる）。
+        assert_eq!(k2.unscale_coord(-1), -1);
+        assert_eq!(k2.unscale_coord(-2), -1);
+        assert_eq!(k2.unscale_coord(-3), -2);
+        assert_eq!(k2.unscale_coord(-4), -2);
+
+        // 192dpi 由来の 2/1 も同一（構築経路によらない）。
+        let k192 = ScaleRatio::new(192, AUTHOR_DPI).unwrap();
+        assert_eq!(k192.unscale_coord(101), 50);
+    }
+
+    /// 檻 3（要件 3.5 の期待値・DD-1 代表値）: k=5/4 表——1→1・6→5（割り切れない縮約）。
+    ///
+    /// 素の floor（DD-1 候補 A）なら 1→0（`floor(1·4/5)=0`）へ落ちる。本表はその棄却の witness。
+    #[test]
+    fn unscale_coord_k54_table_pins_non_divisible_reduction() {
+        let k54 = ScaleRatio::new(5, 4).unwrap();
+
+        assert_eq!(k54.unscale_coord(1), 1, "DD-1 代表値（候補 A なら 0）");
+        assert_ne!(k54.unscale_coord(1), 0, "素の floor ではない");
+        assert_eq!(k54.unscale_coord(6), 5, "DD-1 代表値");
+
+        // 物理 0..=10 の全域表（s(v) = ⌊((2v+1)·4)/10⌋）。
+        const TABLE: [i64; 11] = [0, 1, 2, 2, 3, 4, 5, 6, 6, 7, 8];
+        for (v, &want) in TABLE.iter().enumerate() {
+            assert_eq!(k54.unscale_coord(v as i64), want, "k=5/4 v={v}");
+        }
+
+        // 負側も床方向で定義される。
+        assert_eq!(k54.unscale_coord(-1), -1);
+        assert_eq!(k54.unscale_coord(-2), -2);
+
+        // 120dpi 由来の 5/4 も同一。
+        let k120 = ScaleRatio::new(120, AUTHOR_DPI).unwrap();
+        assert_eq!(k120.unscale_coord(6), 5);
+    }
+
+    /// 檻 4（DD-1「端の注意」）: `scaled_extent` が切り上げた最終物理列は native 寸を 1 超える。
+    ///
+    /// k=7/6・native 27 → 物理 32px（`scale_len(27)=32`）。最終列 31 の縮約は 27 ——
+    /// native の有効添字 0..=26 の**外側**である。collision 矩形は native 寸内ゆえ自然に None となり、
+    /// 定義された結果を返す（panic なし・要件 2.5 と整合）。
+    #[test]
+    fn unscale_coord_k76_final_column_maps_outside_native_extent() {
+        let k76 = ScaleRatio::new(7, 6).unwrap();
+        const NATIVE: u32 = 27;
+
+        // 前提: 乗算方向権威が 31.5 を切り上げて 32 にしている。
+        assert_eq!(k76.scale_len(NATIVE), 32);
+
+        assert_eq!(
+            k76.unscale_coord(31),
+            NATIVE as i64,
+            "最終物理列は native 寸(27)ちょうど＝有効添字 0..=26 の外側"
+        );
+        assert!(
+            k76.unscale_coord(31) >= NATIVE as i64,
+            "端の注意が成立している"
+        );
+        assert_eq!(k76.unscale_coord(30), 26, "その 1 つ手前は最終 native 画素");
+        assert_eq!(k76.unscale_coord(0), 0);
+
+        // 縮約結果が native 域に収まる範囲（0..=30）では添字が有効。
+        for v in 0i64..=30 {
+            let s = k76.unscale_coord(v);
+            assert!((0..NATIVE as i64).contains(&s), "v={v} → s={s}");
+        }
+    }
+
+    /// 檻 5（要件 2.3 の根拠）: v について**単調非減少**。
+    ///
+    /// 閉区間矩形の逆像が物理空間でも連続区間になり、境界画素の内外一貫が k によらず
+    /// 保存されることの根拠（DD-1 性質 b）。
+    #[test]
+    fn unscale_coord_is_monotonic_non_decreasing() {
+        for (num, den) in [
+            (1u32, 1u32),
+            (2, 1),
+            (5, 4),
+            (3, 2),
+            (7, 4),
+            (7, 6),
+            (1, 2),
+            (1, 100),
+            (100, 1),
+            (192, AUTHOR_DPI),
+        ] {
+            let k = ScaleRatio::new(num, den).unwrap();
+            let mut prev = k.unscale_coord(-200);
+            for v in -199i64..=400 {
+                let cur = k.unscale_coord(v);
+                assert!(
+                    cur >= prev,
+                    "k={num}/{den}: s({v})={cur} が s({})={prev} を下回った",
+                    v - 1
+                );
+                prev = cur;
+            }
+            // 非自明性（定値写像で単調性を満たす退化実装を排除）。
+            assert!(
+                k.unscale_coord(400) > k.unscale_coord(-200),
+                "k={num}/{den}: 全域定値ではない"
+            );
+        }
+    }
+
+    /// 檻 6（要件 2.5・DD-1 縮小規約）: k<1 × i64 極値は**飽和縮小**（panic なし・飽和域で定値）。
+    ///
+    /// `as` キャスト（ラップ＝単調性が破れる）でも `try_into().unwrap()`（panic）でもなく、
+    /// 飽和が唯一の整合解。Win32 実座標は i32 域に束縛されるため実経路で飽和は発生しない。
+    #[test]
+    fn unscale_coord_saturates_at_i64_extremes_for_k_below_one() {
+        let half = ScaleRatio::new(1, 2).unwrap();
+
+        // 非飽和域は厳密値 s(v) = 2v+1。
+        assert_eq!(half.unscale_coord(0), 1);
+        assert_eq!(half.unscale_coord(1), 3);
+        assert_eq!(half.unscale_coord(100), 201);
+        assert_eq!(half.unscale_coord(-1), -1);
+        assert_eq!(half.unscale_coord(-100), -199);
+        // Win32 実座標域（i32）では飽和しない＝防御規約であることの witness。
+        assert_eq!(half.unscale_coord(i32::MAX as i64), 4_294_967_295);
+        assert_eq!(half.unscale_coord(i32::MIN as i64), -4_294_967_295);
+
+        // 正側の飽和（ラップなら負値になる）。
+        assert_eq!(half.unscale_coord(i64::MAX), i64::MAX);
+        assert_eq!(half.unscale_coord(i64::MAX - 1), i64::MAX);
+        assert_eq!(
+            half.unscale_coord(i64::MAX),
+            half.unscale_coord(i64::MAX - 1),
+            "飽和域は定値"
+        );
+        // 負側の飽和。
+        assert_eq!(half.unscale_coord(i64::MIN), i64::MIN);
+        assert_eq!(half.unscale_coord(i64::MIN + 1), i64::MIN);
+        assert_eq!(
+            half.unscale_coord(i64::MIN),
+            half.unscale_coord(i64::MIN + 1),
+            "飽和域は定値"
+        );
+
+        // 極端な k<1（1/u32::MAX）でも panic せず飽和する（i128 中間の桁溢れなし）。
+        let shrink = ScaleRatio::new(1, u32::MAX).unwrap();
+        assert_eq!(shrink.unscale_coord(i64::MAX), i64::MAX);
+        assert_eq!(shrink.unscale_coord(i64::MIN), i64::MIN);
+        assert_eq!(shrink.unscale_coord(0), (u32::MAX as i64) / 2);
+
+        // k>1 側は極値でも飽和しない（縮小方向ゆえ i64 域に収まる）。
+        let k2 = ScaleRatio::new(2, 1).unwrap();
+        assert_eq!(k2.unscale_coord(i64::MAX), i64::MAX / 2);
+        assert_eq!(k2.unscale_coord(i64::MIN), i64::MIN / 2);
     }
 }
