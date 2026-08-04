@@ -8,7 +8,7 @@
   - _Requirements: 2.1, 2.2, 2.5, 1.5_
 
 - [ ] 2. ÷k＋照合の合成純関数と決定論檻
-- [ ] 2.1 合成純関数と縮約済み結果型を新設する
+- [x] 2.1 合成純関数と縮約済み結果型を新設する
   - k を明示引数で受け、2 軸を縮約してから既存純照合関数へ完全委譲する合成純関数（重なり・反転・閉区間の意味論を再実装しない）
   - 縮約後サーフェス px 点（SHIORI 配信の正準値の出所）を結果に同梱し、crate 公開面へ再輸出
   - 既存純照合関数の Preconditions doc を「呼び手が ÷k 済み座標を渡す（or 合成関数を使う）」へ改訂・「DPI 非参照」宣言の維持を補足
@@ -96,3 +96,8 @@
   - acceptance-record.md 新設（判定・実測値・実施条件・不一致欄。不一致時は是正して再実施するまで完了としない）
   - 完了条件: acceptance-record.md に 2 水準の合格記録が存在する
   - _Requirements: 4.1, 4.2, 4.6, 4.7, 4.8_
+
+## Implementation Notes
+
+- 2.1: `hit.rs` の恒等檻 doc（`scaled_identity_matches_hit_region_exactly` 直上）に「×k の誤挿入も落とす」との過剰主張がある。k=1.0 では ×k も恒等ゆえ検出不能。×k 誤挿入の検出は 2.2 の任意 k 檻が担うので、2.2 で文言を是正すること。
+- 2.1: `scale::tests::mul_degradation_emits_warn_log`（`scale.rs`・本 spec の増分ではない既存檻）が全体並列実行で稀に失敗した報告あり。疑いは tracing callsite interest キャッシュ競合（[[areka-log-cage-harness-blindspots]] クラス）。レビュー時 4/4 は再現せず。8.1 の `cargo test --workspace` 決定論性（R3.6）で再評価すること。
