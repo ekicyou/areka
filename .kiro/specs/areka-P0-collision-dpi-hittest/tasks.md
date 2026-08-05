@@ -48,7 +48,7 @@
   - 完了条件: 未表示 scope 縮退テスト＋surface_point 伝播テストが緑
   - _Requirements: 1.1, 1.8, 5.3, 5.4, 5.5_
 
-- [ ] 4.2 SHIORI 配信座標を surface px へ切替え throttle 空間を固定する
+- [x] 4.2 SHIORI 配信座標を surface px へ切替え throttle 空間を固定する
   - 配信座標の生成 2 箇所（move／double-click）を surface_point 値へ切替（契機・種別・頻度は不変）
   - throttle へ渡す位置は client px のまま（throttle 実装は無変更）
   - DD-IE-10 の素通し規約記述（全再掲箇所）を「resolver が ÷k を吸収・配信は surface px・throttle は client px」へ改訂
