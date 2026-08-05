@@ -7,7 +7,7 @@
   - 完了条件: `cargo test -p areka-emo-compose` が新檻 6 種を含め緑
   - _Requirements: 2.1, 2.2, 2.5, 1.5_
 
-- [ ] 2. ÷k＋照合の合成純関数と決定論檻
+- [x] 2. ÷k＋照合の合成純関数と決定論檻
 - [x] 2.1 合成純関数と縮約済み結果型を新設する
   - k を明示引数で受け、2 軸を縮約してから既存純照合関数へ完全委譲する合成純関数（重なり・反転・閉区間の意味論を再実装しない）
   - 縮約後サーフェス px 点（SHIORI 配信の正準値の出所）を結果に同梱し、crate 公開面へ再輸出
@@ -23,7 +23,7 @@
   - 完了条件: GPU・実窓・sleep 非依存で全檻が緑
   - _Requirements: 3.2, 3.3, 3.5, 2.1, 2.3, 2.4, 2.5, 2.6_
 
-- [ ] 3. presenter 配線——実適用 k の厳密消費
+- [x] 3. presenter 配線——実適用 k の厳密消費
 - [x] 3.1 production 判定入口と厳密照会を新設する
   - 私有 applied 直読（f32 非経由・derive_scale 再呼出禁止・判定ごと読取で k 更新へ自動追従）
   - applied 不在時の防御分岐（warn 1 行＋等倍続行・到達不能性の doc 明記）
@@ -40,7 +40,7 @@
   - 完了条件: GPU 非依存で新檻が緑
   - _Requirements: 1.6, 1.5_
 
-- [ ] 4. bin 結線と SHIORI 配信の空間切替
+- [x] 4. bin 結線と SHIORI 配信の空間切替
 - [x] 4.1 resolver を新判定入口へ切替え縮約済み点を授受する
   - 判定結果型へ surface_point を追加し全構築点を更新（presenter 不在縮退は無変換値＝等倍相当）
   - resolver の呼出切替（`#[path]` include 規律維持・依存は外部 crate のみ）
@@ -82,7 +82,7 @@
   - _Requirements: 5.1, 5.2_
   - _Boundary: 文書改訂（specs/completed）_
 
-- [ ] 8. 全体検証と実機サインオフ
+- [x] 8. 全体検証と実機サインオフ
 - [x] 8.1 ワークスペース全体の非退行を検証する
   - `cargo test --workspace` exit 0（既存 GPU テスト運用の不破壊・既存檻の期待値不変）
   - 純照合関数・作者定義矩形・collision 集合経路の diff レビュー（不変確認）
@@ -98,6 +98,10 @@
   - _Requirements: 4.1, 4.2, 4.6, 4.7, 4.8_
 
 ## Implementation Notes
+
+- **feature 最終検証（`/kiro-validate-impl`）で NO-GO 2 件 → 是正済み**（2026-08-05）:
+  - **① R5.3 未消化・Revalidation Trigger 3 の影響先未検査**: 4.2 で `MouseInput{x,y}` を surface px へ切り替えたのに、受け手 `areka-kanade` の型/関数 doc が「窓 client 物理 px」と宣言し続けていた（`msg.rs` 4 箇所・`schedule/events.rs` 2 箇所）。design の R5 対象一覧が `areka-kanade` を 1 件も含まず、どのタスクも担わない cross-cutting requirement の取りこぼし。**doc のみ是正**（実行コード diff ゼロ＝R6.3 不変）。**教訓: 値の意味（空間）を変えたら、その値の全下流の空間宣言も射程に入る。** design の File Structure Plan は消費側まで辿って作ること。
+  - **② 檻の継ぎ目**: `hit_region_client` の正常経路（表示 surface あり）を **k≠1.0 で通す檻が 1 本も無く**、`hit_region_scaled` へ渡す `k` を `ScaleRatio::ONE` へ変異させても in-source 檻が全緑で通った。`force_current_surface` を呼ぶ檻は k=ONE のみ・k=2 の檻は `master=None` 側を通っていたため。檻 `visible_surface_hit_uses_applied_scale_at_k2` を追加し、region が**双方向に割れる** 3 点（k=2 で Some・恒等で None／その逆）で封鎖。**教訓: 「fixture を用意する檻」と「k を注入する檻」が別々だと、両者の合流点だけが穴になる。**
 
 - 2.1: `hit.rs` の恒等檻 doc（`scaled_identity_matches_hit_region_exactly` 直上）に「×k の誤挿入も落とす」との過剰主張がある。k=1.0 では ×k も恒等ゆえ検出不能。×k 誤挿入の検出は 2.2 の任意 k 檻が担うので、2.2 で文言を是正すること。
 - 8.2: **2 水準サインオフ合格**（2026-08-05）。125%＝k=5/4・physical `478x684` ／ 200%＝k=2/1・physical `764x1094`（native は両者 `382x547` で不変）＝**互いに異なる拡大寸**の証跡が初めて成立（`collision-geometry` Task 4.2 却下の観測条件を突破）。DD-1 の丸め規約が実機で厳密一致（k=5/4 で 9/9・k=2 で 5/5）。閉区間の内外も 1px 単位で保存（k=2: Head 下端 surface y=130 当たり／131 外れ）。脚 B は本番 emo2 を絶対パス起動して SHIORI 実結線成立（`0x8007007E` 0 件）・shell `TargetId(0)` の実 k が `ScaleRatio { num: 2, den: 1 }`＝**R-2 消化**・`hit_region_client` の debug を 2271 行採取（Head 638／Bust 445／None 224）＝**本番バイナリが新 ÷k 入口を通っている証跡**・開発者が撫で／さわり反応を直接目視確認。

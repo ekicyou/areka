@@ -5328,4 +5328,90 @@ mod tests {
             );
         }
     }
+
+    /// 要件 1.1/1.4 観測完了（**正常経路で実適用 k が合成純関数へ渡ること**）: 「表示中サーフェス
+    /// あり × `applied = Some(k)`・k≠1.0」で [`EmoPresenter::hit_region_client`] を呼ぶと、判定は
+    /// **÷k した縮約後サーフェス px** で解決され、`surface_point` も同じ縮約値になる。
+    ///
+    /// # なぜ既存 3 檻と別に要るのか（継ぎ目の封鎖）
+    ///
+    /// 本ファイルの既存 3 檻はいずれも `hit_region_scaled(master, x, y, k, …)` の `k` を固定しない——
+    /// `applied_absent_with_visible_surface_warns_once_and_degradations_stay_silent` は warn 述語が
+    /// 主語で k は**不在**、`unshown_and_unregistered_targets_degrade_to_none_with_scaled_surface_point`
+    /// は k=2 を与えるが `master` **不在**側（`hit_region_client` 内で `unscale_coord` を直接呼ぶ分岐）
+    /// を通り、`client_entry_matches_native_entry_at_identity_scale` は k=1.0 ゆえ縮約が恒等へ退化する。
+    /// ゆえに「面あり × k≠1.0」の合流点は一度も実行されておらず、実適用 k が合成純関数へ本当に
+    /// 渡っているかは決定論テストで固定されていなかった。本檻の主語はその 1 点のみである。
+    ///
+    /// # 殺す誤実装（反証可能性）
+    ///
+    /// `hit_region_scaled` へ渡す `k` を [`ScaleRatio::ONE`] へすり替える（＝実適用 k を無視して
+    /// client 点をそのまま照合する）と、下の 3 点は `surface_point`・`region` の**双方**で割れる。
+    /// とくに (210,310) は恒等なら `Some("Arm")`・k=2 なら `None` と**逆向きに**割れるため、
+    /// 「両方そろって `None`」の空虚な一致では緑にならない。
+    ///
+    /// 期待値は**ハードコード定数**であり、`unscale_coord` を期待値側で呼び直さない（実装式の
+    /// 再実行はトートロジー）。k=2 の縮約は画素中心逆写像 `floor((2v+1)/4)`:
+    /// 360→180・192→96・420→210・620→310・210→105・310→155。
+    #[test]
+    fn visible_surface_hit_uses_applied_scale_at_k2() {
+        let mut world = World::new();
+        let mut presenter = EmoPresenter::new();
+        attach_hit_target(&mut presenter, &mut world, TargetId(0));
+        force_current_surface(&mut presenter, TargetId(0), 1000);
+        let k2 = ScaleRatio::new(2, 1).expect("2/1 は構築可能");
+        force_applied(&mut presenter, TargetId(0), Some(k2));
+
+        // 前提の明示（檻が空虚でないこと＝「面あり × k≠1.0」が本当に組めていること）。
+        assert_eq!(
+            presenter.current_surface_id(TargetId(0)),
+            Some(1000),
+            "前提: 表示中サーフェスあり（＝正常経路の合成純関数へ入る）"
+        );
+        assert_eq!(
+            presenter.applied_ratio(TargetId(0)),
+            Some(k2),
+            "前提: 実適用 k は 2/1（恒等ではない）"
+        );
+
+        for (cx, cy, want_region, want_point, identity_would_be, what) in [
+            (
+                360,
+                192,
+                Some("Head"),
+                (180, 96),
+                "None",
+                "縮約後は Head（client 点のままなら領域外）",
+            ),
+            (
+                420,
+                620,
+                Some("Arm"),
+                (210, 310),
+                "None",
+                "縮約後は Bust/Arm の重なり点で画家則の Arm（後定義が手前）",
+            ),
+            (
+                210,
+                310,
+                None,
+                (105, 155),
+                "Some(\"Arm\")",
+                "縮約後は背景（client 点のままなら Arm＝逆向きに割れる点）",
+            ),
+        ] {
+            let hit = presenter.hit_region_client(TargetId(0), cx, cy);
+            assert_eq!(
+                hit.surface_point, want_point,
+                "実適用 k=2 で縮約した座標が期待と違う（恒等 k なら ({cx},{cy}) のまま）: \
+                 {what} client=({cx},{cy})"
+            );
+            assert_eq!(
+                hit.region, want_region,
+                "縮約後サーフェス px で解決した領域が期待と違う（恒等 k で照合していれば \
+                 {identity_would_be} になる＝実適用 k が合成純関数へ渡っていない）: \
+                 {what} client=({cx},{cy})"
+            );
+        }
+    }
 }

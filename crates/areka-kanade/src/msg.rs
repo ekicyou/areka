@@ -45,14 +45,28 @@ impl CloseReason {
 
 /// マウス入力（UI 配線層 → kanade の境界メッセージ・DD-IE 系）。
 ///
-/// UI 配線層が collision resolver の `HitRegion { scope, region }` を destructure して詰める
-/// 値オブジェクト（同一性なし）。kanade は `region` を意味解釈せず不透明転写する
-/// （[[areka-surface-args-opaque-string-downstream-resolve]] と同精神）。座標は窓 client 物理 px。
+/// UI 配線層が collision resolver の `HitRegion { scope, region, surface_point }` を destructure して
+/// 詰める値オブジェクト（同一性なし）。kanade は `region` を意味解釈せず不透明転写する
+/// （[[areka-surface-args-opaque-string-downstream-resolve]] と同精神）。
+///
+/// # 座標空間（areka-P0-collision-dpi-hittest・R1.8/R5.3）
+///
+/// `x`/`y` は **縮約後のサーフェス px**（作者定義の合成座標系）であり、`region` が解決された空間と
+/// **同一**である（同じ判定 1 回から生まれた対）。窓 client 物理 px ではない——÷k（実適用の表示
+/// スケール）は `areka-emo-present` の `EmoPresenter::hit_region_client` ただ 1 箇所が吸収し、UI 配線層は
+/// その結果 `HitRegion::surface_point` をそのまま本型へ詰める。**kanade は受け取った値を無変換で
+/// Reference0/1 へ転写するだけ**であり、縮約の式も k も持たない。
+///
+/// 座標契約の正本（受領空間・吸収点・配信空間・shell 窓限定の旨）は `areka` bin の
+/// `emo2_boot::hit_region` モジュール冒頭 doc である。なお正典（ukadoc）の `OnMouseMove`
+/// Reference0/1 は「ローカル座標」としか規定しておらず空間を定義していない（SSP は k=1.0 恒等ゆえ
+/// 二義性が生じない）ため、サーフェス px を採ることは **areka 側の裁定**である（R1.8）。k=1.0 では
+/// 縮約が恒等ゆえ従前の配信値と完全に一致する。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MouseInput {
     /// 対象スコープ（本体 0／相方 1・Ref3 へ転写）。
     pub scope: u32,
-    /// ローカル x 座標（Ref0・窓 client 物理 px）。
+    /// ローカル x 座標（Ref0・縮約後サーフェス px・型 doc「座標空間」節を参照）。
     pub x: i64,
     /// ローカル y 座標（Ref1・同上）。
     pub y: i64,

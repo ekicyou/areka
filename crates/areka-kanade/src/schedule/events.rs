@@ -224,7 +224,7 @@ pub fn on_close_notify(reason: CloseReason, snapshot: &ExecutionSnapshot) -> Shi
 /// 撫で入力を SSP/NINIX 準拠の正典 Reference layout で組み立てる純粋関数（副作用なし）。
 /// Reference 数は常に 7。
 ///
-/// - Ref0=`x`（ローカル x 座標・窓 client 物理 px）。
+/// - Ref0=`x`（ローカル x 座標・**縮約後サーフェス px**・下記「座標空間」節）。
 /// - Ref1=`y`（ローカル y 座標・同上）。
 /// - Ref2=[`REF2_WHEEL_M1`]（ホイール回転量・M1 固定 "0"・Req2.4）。
 /// - Ref3=`scope`（対象スコープ・本体 0／相方 1）。
@@ -234,6 +234,16 @@ pub fn on_close_notify(reason: CloseReason, snapshot: &ExecutionSnapshot) -> Shi
 ///
 /// `region` は collision resolver 由来の領域名を意味解釈せず不透明転写する（kanade は
 /// 当たり判定名を解釈しない・[[areka-surface-args-opaque-string-downstream-resolve]] と同精神）。
+///
+/// # 座標空間（areka-P0-collision-dpi-hittest・R1.8/R5.3）
+///
+/// Ref0/Ref1 の値は **縮約後のサーフェス px**（作者定義の合成座標系）であり、Ref4 の当たり判定
+/// 識別子が解決された空間と**同一**である。窓 client 物理 px ではない——÷k（実適用の表示スケール）は
+/// `areka-emo-present` の `EmoPresenter::hit_region_client` ただ 1 箇所が吸収し、本関数は呼び手
+/// （[`crate::msg::MouseInput`] の `x`/`y`）から受けた値を**無変換で** Reference へ載せるだけである。座標契約の
+/// 正本は `areka` bin の `emo2_boot::hit_region` モジュール冒頭 doc。正典（ukadoc）の `OnMouseMove`
+/// Reference0/1 は「ローカル座標」としか規定せず空間を定義していないため、サーフェス px を採ることは
+/// areka 側の裁定である（R1.8）。k=1.0 では縮約が恒等ゆえ従前の配信値と完全に一致する。
 pub fn on_mouse_move(
     x: i64,
     y: i64,
@@ -262,12 +272,16 @@ pub fn on_mouse_move(
 /// （副作用なし）。Reference 数は常に 7。[`on_mouse_move`] と同一の Reference 構造で、
 /// Ref2 が常に "0"・Ref5 がボタン識別（左 "0"／右 "1"・Req3.3）である点のみ異なる。
 ///
-/// - Ref0=`x`／Ref1=`y`（座標・窓 client 物理 px）。
+/// - Ref0=`x`／Ref1=`y`（座標・**縮約後サーフェス px**・[`on_mouse_move`] の「座標空間」節と同一契約）。
 /// - Ref2=`"0"`（正典で常に "0"・Req3.2）。
 /// - Ref3=`scope`（対象スコープ・本体 0／相方 1）。
 /// - Ref4=`region`（当たり判定の識別子・不透明転写・`None`→空文字・Req3.4/DD-IE-6）。
 /// - Ref5=`button`（左 [`MouseButton::Left`]→"0"／右 [`MouseButton::Right`]→"1"・Req3.3）。
 /// - Ref6=[`REF6_DEVICE_MOUSE`]（入力デバイス種・M1 固定 "mouse"・DD-IE-6）。
+///
+/// 座標は Ref4 の当たり判定識別子と同一空間（作者定義のサーフェス px）に揃う。÷k は
+/// `areka-emo-present` の `EmoPresenter::hit_region_client` が吸収済みで、本関数は無変換で転写する
+/// （正本＝`areka` bin の `emo2_boot::hit_region` モジュール冒頭 doc・areka 側の裁定＝R1.8）。
 pub fn on_mouse_double_click(
     x: i64,
     y: i64,
