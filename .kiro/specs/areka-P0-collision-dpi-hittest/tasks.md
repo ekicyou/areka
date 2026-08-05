@@ -64,7 +64,7 @@
   - _Requirements: 3.7, 5.6, 5.7, 6.4, 6.7_
   - _Boundary: バルーン明文化＋檻（input_events/balloon.rs）_
 
-- [ ] 6. (P) collision-probe の k 対応改修
+- [x] 6. (P) collision-probe の k 対応改修
   - 窓 resize 先を物理寸権威（target_physical_size）へ差替・GetClientRect 整合 assert の置換
   - read_back anchor を物理座標へ写像（中心を ×k・矩形内側 ≥2px・描画証跡であり判定証跡でない旨の明記）
   - `assert_eq!(scale, 1.0)` 撤去→env `AREKA_COLLISION_PROBE_EXPECT_K` 期待ゲート（未指定時は実測ログのみで開発機でも実行可）
@@ -100,6 +100,10 @@
 ## Implementation Notes
 
 - 2.1: `hit.rs` の恒等檻 doc（`scaled_identity_matches_hit_region_exactly` 直上）に「×k の誤挿入も落とす」との過剰主張がある。k=1.0 では ×k も恒等ゆえ検出不能。×k 誤挿入の検出は 2.2 の任意 k 檻が担うので、2.2 で文言を是正すること。
+- 6→**8.2 への申し送り（必読）**: **開発機の実表示スケールは 200%（実適用 k=2/1）と実測済み**。probe 実行の実測値は `k=2/1 native=382x547 physical=764x1094`。8.2 の 2 水準は「現状の 200% で 1 回（`AREKA_COLLISION_PROBE_EXPECT_K=2`）」＋「OS 表示スケールを 125% へ変更して再実行（`=5/4`）」で満たす。期待ゲートは不一致時 exit 101 の hard assert で loud fail することを実測済み。
+- 6→8.2 への申し送り: R4.6 は**二脚**に分かれる。probe が担うのは**ヒットテスト目視の脚**（probe は `pasta.dll` を一切ロードしないので絶対パス起動の失敗経路自体が存在しない）。**本番 emo2 実ゴーストを絶対パスで起動する脚は 8.2 の担当**。acceptance-record では**両脚を別項目として記録**し、probe 実行を絶対パス起動の証跡に流用しないこと。
+- 6: probe は `attach_target` へ author_dpi=96 を直書きしている。emo2 fixture は shell descript に `seriko.dpi` 宣言が無く既定 96 ゆえ**たまたま一致**するが、`seriko.dpi` を宣言するゴーストへ差し替えると採寸 k₀ と表示 k が食い違う。そのときは `PreparedPlacement::author_dpi.shell`（搬送口は実在）へ差し替えること。本 spec の射程外ゆえ実装変更はしていない。
+- 6: 本 spec は doc の事実誤認で **4 回** 差し戻しになった（2.2 で 2 件・6 で 2 件）。**doc に「どのコードが何を読む／どの誤実装をどの点が殺す」と書くときは、書く前に該当コードを開いて file:line で裏取りすること。** 未確認の推測を書かない。
 - 4.1→**4.2 への申し送り（必読）**: 4.1 で `RegionSource::Mock` の 12 クロージャを `surface_point: (x, y)`（k=1.0 恒等の忠実な模型）へ更新した。このため既存ハンドラ檻では `surface_point` が生の client 点と**数値的に区別できない**。4.2 で `MouseInput{x,y}` を `surface_point` へ切替えても、これらの檻は切替の前後で同じ色のまま＝何も証明しない。**4.2 は `surface_point` が `(x, y)` と意図的に異なる mock（例 `(x / 2, y / 2)`）を最低 1 本導入し、「配信値が surface_point であること」と「throttle へ渡る pos が client px のままであること」の両方を反証可能にすること**（design の bin テスト項目 2）。
 - 4.1→4.2 への申し送り: `input_events/mod.rs` の DD-IE-10 記述（:98 / :109 / :144 / :184 / :296 付近の「素通し＝DPI 変換なし」「k=1.0 契約」）は 4.1 では意図的に未改訂。現在は実態と食い違っているので 4.2 で必ず消化すること（`DD-IE-10` を grep して特定）。
 - 3.2: ログ檻で「出ないこと」を主張するときは、**陽性（発火）と陰性（無音）を同一 `with_default` スコープ・同一 callsite 内で観測**すること。別スコープで陰性だけ見ると tracing の callsite interest キャッシュで恒真になる（[[areka-log-cage-harness-blindspots]]）。3.2 ではこの形で書き、述語潰し変異のとき陰性側の warn が実際に捕捉列へ現れることまで実測している。
