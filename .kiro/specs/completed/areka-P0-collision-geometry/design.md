@@ -39,6 +39,8 @@
 | C8 | 透明画素と collision の関係 | **SILENT**。正典は透過色と「窓としてのクリック可否」（半透明部分はクリックできる／透明部分は完全な黒に）を述べるのみで、collision 判定を α が gate するか否かは述べていない | **別層**＝純関数は α を一切参照しない（6.1）。`AlphaMask` は不触（6.2） | α 由来の `AlphaMask` は領域名を持たない（`alpha_mask.rs:16-104`）＝データ上も直交。ただし**エンド一周では透明画素上のイベントが窓へ届かない**（クリック透過）ため実効経路が異なる＝Coordination Notes C-3 |
 | C9 | マウス局所座標（Ref0/1）の座標空間 | **SILENT**。「ローカル座標」とのみ記され、collision 座標空間（サーフェス画像左上原点）との同一性は明記されていない。DPI/スケーリングとの関係も記述なし | **窓 client 物理 px ＝ サーフェス px（k=1.0）** として照合する（4.3） | 正典が沈黙ゆえ areka 側の座標契約（下表 C10）が唯一の根拠。**この同一性こそ 7.3 の probe が実証する対象**（正典の裏付けが無いため机上で担保できない） |
 
+> **追記（2026-08-05・`areka-P0-collision-dpi-hittest`）**: 上表 **C9** の確定「窓 client 物理 px ＝ サーフェス px（k=1.0）」は**解除済み**である。DPI追従（k≠1.0）下では、窓 client 物理 px の点を**実適用中の k で除して**サーフェス px へ縮約したうえで照合する。丸め規約の単一権威は `ScaleRatio::unscale_coord`（`crates/areka-emo-compose/src/scale.rs:253`）、縮約＋照合の合成純関数は `hit_region_scaled` / `ScaledHit`（`crates/areka-emo-compose/src/hit.rs:136` / `:99`）である。詳細は `.kiro/specs/areka-P0-collision-dpi-hittest/` の requirements.md（Requirement 1・5）／design.md（DD-9）、および正準となったコード doc 側を参照。**上表の既存行は当時の確定として保存する（改訂しない）。**
+
 ### 座標契約の確定表（研究 §10.3 指示・物理/論理・原点・scale k の3列）
 
 | 面 | 物理 / 論理 | 原点 | scale k | 典拠（file:line） |
@@ -48,6 +50,14 @@
 | emo-present 合成 | **物理 px** | サーフェス画像左上 | **k = 1.0 恒常** | `presenter.rs:117-118` `CURRENT_COMPOSE_SCALE: f32 = 1.0`・`presenter.rs:108-114` `TextSlotView::scale()` doc |
 
 **k=1.0 限定契約（要件 Adjacent expectations「k=1.0 依存の明文化」・研究 §10.3）**: 4.3「サーフェス px で照合」は等倍（k=1.0）への依存である。将来 emo-present が DPI スケーリング（k = モニタ DPI ÷ author_dpi）を導入する場合、**供給値の単一変更点は `TextSlotView::scale()`（`presenter.rs:110-111` の doc が宣言する1点）**であり、その時点で本 spec の純関数は「照合前に点を k で除す」変更を要する＝**再検証トリガ**として Revalidation Triggers に登録する。本 spec は k≠1.0 を実装しない（`scale()` が 1.0 以外を返す実装が存在しないため）。
+
+> **追記（2026-08-05・`areka-P0-collision-dpi-hittest`）**: 上記の **k=1.0 限定契約は解除済み**であり、本節が「その時点で要る」と予告した「照合前に点を k で除す」変更は**実装済み**である。
+>
+> - **÷k の実装位置**: `EmoPresenter::hit_region_client`（`crates/areka-emo-present/src/presenter.rs:953`）が窓 client 物理 px の点を受け取り、`hit_region_scaled`（`crates/areka-emo-compose/src/hit.rs:136`）へ委譲して縮約＋照合を行う。丸め規約の単一権威は `ScaleRatio::unscale_coord`（`crates/areka-emo-compose/src/scale.rs:253`）。**既存純関数 `hit_region` の署名と契約（下記 Service Interface）は不変**であり、÷k は上流の合成純関数側に置かれた。
+> - **k の供給点は本節の予告と異なる**: 本節は単一変更点を `TextSlotView::scale()` と予告したが、実装は**表示へ実適用中の k**（`PresentTarget.applied`）を真実源とした（判定経路はこれを直読する。同値の公開照会は `EmoPresenter::applied_ratio`＝`crates/areka-emo-present/src/presenter.rs:744`）。
+> - **結線層への波及**: `HitRegion` は縮約後サーフェス px の `surface_point` を持ち（`crates/areka/src/emo2_boot/hit_region.rs:86`）、SHIORI へ配信する `MouseInput{x,y}` は client px から**サーフェス px へ切り替わった**（`crates/areka/src/input_events/mod.rs:357`・`:430`）。
+>
+> **本節の既存本文は当時の確定として保存する（改訂しない）。**
 
 ## Boundary Commitments
 
@@ -84,6 +94,9 @@
 
 1. **`HitRegion` の形（`scope` 型・`region` の所有形）の変更** → `input-events` の消費面が破れる。
 2. **k=1.0 契約の解除**（`TextSlotView::scale()` が 1.0 以外を返す実装の導入） → 4.3 の照合空間が破れ、純関数への点の受け渡しにスケール除算が要る。7.3 probe の再実行が必須。
+
+   > **追記（2026-08-05・`areka-P0-collision-dpi-hittest`）**: 本トリガは**消化済み**——未消化の再検証要求として残さない。DPI追従（k≠1.0）そのものは上流 `areka-P0-emo-dpi-scaling`（`.kiro/specs/completed/areka-P0-emo-dpi-scaling/`）で着地し、本トリガが要求した「純関数への点の受け渡しにスケール除算」は `areka-P0-collision-dpi-hittest` で実装済みである（`EmoPresenter::hit_region_client`（`crates/areka-emo-present/src/presenter.rs:953`）→ `hit_region_scaled`（`crates/areka-emo-compose/src/hit.rs:136`）→ `ScaleRatio::unscale_coord`（`crates/areka-emo-compose/src/scale.rs:253`））。要求された 7.3 probe の再実行は、実 DPI≠96 の 2 水準・scale≠1.0 表示下の実機受け入れとして同 spec が引き受ける（記録先＝`.kiro/specs/areka-P0-collision-dpi-hittest/acceptance-record.md`。**本追記の時点では当該ファイルは未作成**であり、同 spec の実機サインオフタスクで作成される）。
+
 3. **含端規則（C2）の変更**（SSP 実挙動との突合で排他境界が判明した場合） → 純関数の比較式1箇所＋境界檻の更新。
 4. **重なり優先（C3）の変更**（`collision-sort` 忠実解決へ舵を切る場合） → `RegionPriority` へ variant 追加＝純関数内の網羅 match がコンパイルエラーで漏れを検出。データ配管は不要（`EmoWorld::collision_sort()`（`world.rs:150-152`）が既に world 面で参照可能＝本 spec は参照しない）。
 5. **collision 集合が base surface id のみで決まらなくなる変更**（`animation*.collision*` の実装・`base` 描画メソッドによる collision 差替＝seriko-loop / mayuna-compose） → 現サーフェス読み口の契約（id だけで collision 集合が決まる）が破れ、bind を含む鍵が必要になる。

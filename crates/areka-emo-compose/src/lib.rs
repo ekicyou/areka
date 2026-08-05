@@ -46,7 +46,7 @@ pub mod plan;
 pub use plan::BlitOp;
 pub mod blit;
 pub mod hit;
-pub use hit::{hit_region, RegionPriority};
+pub use hit::{hit_region, hit_region_scaled, RegionPriority, ScaledHit};
 pub mod scale;
 pub use scale::{ScaleRatio, resample};
 

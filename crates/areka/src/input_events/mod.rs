@@ -95,15 +95,29 @@ impl MouseWiring {
         }
     }
 
-    /// (scope, 窓 client 物理 px) → 当たり判定名（DD-IE-10・座標は素通し＝DPI 変換なし）。
+    /// (scope, 窓 client 物理 px) → [`HitRegion`]（当たり判定名＋配信空間の座標・DD-IE-10 改訂）。
     ///
     /// - [`RegionSource::Mock`] → `f(scope, x, y)`（presenter を無視・1.5）。
     /// - [`RegionSource::Presenter`] → `Some(p)` なら `resolve_hit_region(p, scope, x, y)`（1.3）。
-    ///   `presenter` 不在（`Emo2Wiring` 未挿入＝boot 前／失敗時）は `HitRegion { scope, region: None }`
-    ///   へ正常縮退する（collision-geometry design の消費想定どおり・trace）。
+    ///   `presenter` 不在（`Emo2Wiring` 未挿入＝boot 前／失敗時）は `region: None` へ正常縮退する
+    ///   （collision-geometry design の消費想定どおり・trace）。このとき `surface_point` は**無変換の
+    ///   入力値**とする——presenter が居なければ実適用 k を知る術が無く、等倍相当（縮約は恒等）が
+    ///   唯一整合する縮退規約である（presenter 側の k 不在縮退＝要件 1.6 と同じ扱い。座標空間の
+    ///   正準契約は `emo2_boot::hit_region` の冒頭 doc）。
     ///
-    /// 座標 `x`/`y` は当該 shell 窓の client 物理 px であり、そのまま resolver へ渡す（DPI 変換しない・
-    /// k=1.0 契約＝collision-geometry 4.3 を継承・DD-IE-10）。
+    /// # 座標空間（DD-IE-10 改訂・areka-P0-collision-dpi-hittest）
+    ///
+    /// 旧 DD-IE-10 の「座標は素通し＝DPI 変換なし・k=1.0 限定契約」は**解除済み**。現契約は次のとおりで、
+    /// 全体像の正本は [`crate::emo2_boot::hit_region`] の冒頭 doc（受領空間・吸収点・配信空間・
+    /// shell 限定の旨）である。本 doc はそこへの参照＋本層の差分のみを述べる。
+    ///
+    /// - 受領する `x`/`y` は当該 shell 窓の client 物理 px であり、**そのまま** resolver へ渡す
+    ///   （呼び手側で ÷k しない＝前処理は二重縮約になる）。
+    /// - ÷k は resolver の先の presenter（`hit_region_client`）が吸収する。本層は縮約の式を持たない。
+    /// - 返る [`HitRegion::surface_point`] が SHIORI へ配信する座標（縮約後サーフェス px）であり、
+    ///   throttle の位置比較だけは縮約前の client px を使い続ける（[`plan_and_send_move`] 参照・6.8）。
+    ///
+    /// [`plan_and_send_move`]: MouseWiring::plan_and_send_move
     fn resolve_region(
         &self,
         presenter: Option<&EmoPresenter>,
@@ -121,7 +135,12 @@ impl MouseWiring {
                         scope,
                         "Emo2Wiring 不在（boot 前／失敗時）: region None へ正常縮退"
                     );
-                    HitRegion { scope, region: None }
+                    // k 不明ゆえ等倍相当（縮約は恒等）＝受領した client 物理 px をそのまま配信空間の値とする。
+                    HitRegion {
+                        scope,
+                        region: None,
+                        surface_point: (x, y),
+                    }
                 }
             },
         }
@@ -133,24 +152,34 @@ impl MouseWiring {
     /// (次状態, 送出可否) を求めて次状態を保存し、送出可否が true のときだけ
     /// `KanadeMsg::Mouse(MouseInput { .., kind: Move })` を [`Sender`] へ送る。
     ///
-    /// 座標 `x`/`y` は窓 client 物理 px（DD-IE-10・素通し）。返り値は実際に送出したか。
+    /// # 2 つの座標空間（DD-IE-10 改訂・DD-4）
+    ///
+    /// - `client_pos`: 窓 client 物理 px。**throttle の位置比較専用**であり、縮約前の空間を保持し
+    ///   続ける唯一の分岐である（縮約すると移動検出の実効粒度が k 倍粗くなる・6.8）。
+    /// - `surface_pos`: resolver が返した縮約後サーフェス px。**配信する `MouseInput{x,y}` の値**
+    ///   であり、`region` と同一空間に揃う（1.8）。k=1.0 では両者が一致し従前の配信値と同一（1.9）。
+    ///
+    /// 座標契約の全体像は [`crate::emo2_boot::hit_region`] の冒頭 doc（正本）を参照。
+    /// 返り値は実際に送出したか。
     /// 送出失敗（kanade 停止後の [`Sender`] エラー）は warn＋no-op（false 返し・log-first）。
     fn plan_and_send_move(
         &mut self,
         scope: u32,
-        x: i64,
-        y: i64,
+        client_pos: (i64, i64),
+        surface_pos: (i64, i64),
         region: Option<String>,
     ) -> bool {
         let now = (self.now_ms)();
         let state = self.throttle.entry(scope).or_default();
-        let (next, send) = plan_mouse_move(state, (x, y), &region, now);
+        // 位置比較は縮約前 client px のまま（throttle.rs は無変更・6.8）。
+        let (next, send) = plan_mouse_move(state, client_pos, &region, now);
         *state = next;
 
         if !send {
             return false;
         }
 
+        let (x, y) = surface_pos;
         let msg = KanadeMsg::Mouse(MouseInput {
             scope,
             x,
@@ -172,16 +201,18 @@ impl MouseWiring {
 
     /// `OnMouseDoubleClick` 相当を無条件送出する（間引きなし・1.2/3.x）。
     ///
-    /// クリックは間引き対象外ゆえ throttle を通さず即送出する。座標 `x`/`y` は窓 client 物理 px
-    /// （DD-IE-10・素通し）。送出失敗は warn＋no-op（log-first）。
+    /// クリックは間引き対象外ゆえ throttle を通さず即送出する。`surface_pos` は resolver が返した
+    /// 縮約後サーフェス px＝配信空間の値（1.8・DD-IE-10 改訂）。throttle を経ないため本経路に
+    /// client px は現れない。座標契約の正本は [`crate::emo2_boot::hit_region`] の冒頭 doc。
+    /// 送出失敗は warn＋no-op（log-first）。
     fn send_double_click(
         &mut self,
         scope: u32,
-        x: i64,
-        y: i64,
+        surface_pos: (i64, i64),
         region: Option<String>,
         button: MouseButton,
     ) {
+        let (x, y) = surface_pos;
         let msg = KanadeMsg::Mouse(MouseInput {
             scope,
             x,
@@ -265,14 +296,17 @@ fn char_scope(world: &World, entity: Entity) -> Option<u32> {
     Some(scope as u32)
 }
 
-/// (scope, 窓 client 物理 px) → 当たり判定 region を owned で解決する（DD-IE-9 の借用規律）。
+/// (scope, 窓 client 物理 px) → [`HitRegion`] を owned で解決する（DD-IE-9 の借用規律）。
 ///
 /// presenter 借用（`&Emo2Wiring`）と間引き状態（`&mut MouseWiring`）が同じ `&mut World` 上の別
-/// NonSend 資源であるため、**presenter を含む解決は共有借用のみで完結させ region を owned で取り
+/// NonSend 資源であるため、**presenter を含む解決は共有借用のみで完結させ結果を owned で取り
 /// 出してから** `&mut MouseWiring` を取る（送出は呼び手が行う）。`Emo2Wiring` 不在（boot 前／失敗時）
 /// は presenter=None ゆえ `resolve_region` が `region: None` へ正常縮退する（RegionSource::Mock は
 /// presenter を無視）。呼び手は事前に `MouseWiring` 在を確認済み（self-gating）。
-fn resolve_region_owned(world: &World, scope: u32, x: i64, y: i64) -> Option<String> {
+///
+/// 返り値には `region` に加えて配信空間の座標 [`HitRegion::surface_point`] が載る（DD-4）。
+/// 呼び手はこれを `MouseInput{x,y}` へ載せ、throttle へは受領した client px を渡す（6.8）。
+fn resolve_hit_owned(world: &World, scope: u32, x: i64, y: i64) -> HitRegion {
     let wiring = world
         .get_non_send_resource::<MouseWiring>()
         .expect("MouseWiring は呼び手が存在確認済み（self-gating）");
@@ -280,15 +314,18 @@ fn resolve_region_owned(world: &World, scope: u32, x: i64, y: i64) -> Option<Str
     let presenter = world
         .get_non_send_resource::<Emo2Wiring>()
         .map(Emo2Wiring::presenter);
-    wiring.resolve_region(presenter, scope, x, y).region
+    wiring.resolve_region(presenter, scope, x, y)
 }
 
 /// キャラ窓のポインタ移動ハンドラ（Bubble のみ処理・1.1/1.3・5.x）。
 ///
-/// `CharWindowMarker.scope` と `PointerState.client_point`（窓 client 物理 px・DD-IE-10・DPI 変換
-/// なし）を取り、当たり判定を解決し [`plan_mouse_move`] の間引き判定を通して送出条件成立時のみ
+/// `CharWindowMarker.scope` と `PointerState.client_point`（窓 client 物理 px・前処理せず resolver へ
+/// 渡す）を取り、当たり判定を解決し [`plan_mouse_move`] の間引き判定を通して送出条件成立時のみ
 /// `KanadeMsg::Mouse(Move)` を送出する。`MouseWiring` 不在（wiring 前）は self-gating no-op（false・
 /// trace）。Tunnel 相は伝播続行のため常に false。
+///
+/// 座標（DD-IE-10 改訂）: 間引きの位置比較は受領した client px のまま（6.8）、配信する
+/// `MouseInput{x,y}` は resolver が返した `surface_point`（縮約後サーフェス px・1.8）。
 pub(crate) fn on_char_pointer_moved(
     world: &mut World,
     _sender: Entity,
@@ -311,12 +348,13 @@ pub(crate) fn on_char_pointer_moved(
     let x = state.client_point.x as i64;
     let y = state.client_point.y as i64;
 
-    // presenter 借用を解いて region を owned で取り出してから &mut MouseWiring を取る（DD-IE-9）。
-    let region = resolve_region_owned(world, scope, x, y);
+    // presenter 借用を解いて解決結果を owned で取り出してから &mut MouseWiring を取る（DD-IE-9）。
+    let hit = resolve_hit_owned(world, scope, x, y);
     let mut wiring = world
         .get_non_send_resource_mut::<MouseWiring>()
         .expect("MouseWiring は直上で存在確認済み");
-    wiring.plan_and_send_move(scope, x, y, region)
+    // throttle 比較＝client px（縮約前）／配信＝surface_point（縮約後）。
+    wiring.plan_and_send_move(scope, (x, y), hit.surface_point, hit.region)
 }
 
 /// キャラ窓のポインタ押下ハンドラ（Bubble のみ処理・1.2/3.3・6.2/6.3・7.1/7.3/7.4）。
@@ -326,7 +364,8 @@ pub(crate) fn on_char_pointer_moved(
 ///   shutdown→`ForceQuit` 系列）へ委ねる（stand-in 直接経路を新設しない）。true。
 ///   **暫定退避 — M-dialogue の `\-` メニュー終了完成で退役**。
 /// - **左／右ダブルクリック（Ctrl なし）** → 当たり判定を解決し `KanadeMsg::Mouse(DoubleClick{button})`
-///   を送出（Left→`MouseButton::Left`・Right→`Right`）。true。
+///   を送出（Left→`MouseButton::Left`・Right→`Right`）。配信座標は resolver が返した `surface_point`
+///   （縮約後サーフェス px・1.8・DD-IE-10 改訂）。true。
 /// - **中／拡張ボタンのダブルクリック** → 送出しない（OnMouseDoubleClickEx は M2・7.1）。false。
 /// - **単発クリック**（`DoubleClick::None`）→ 送出しない（7.3）。false。
 /// - The Hand／collisionex／owner-draw 右クリックメニューは実装しない（7.4）。
@@ -383,11 +422,12 @@ pub(crate) fn on_char_pointer_pressed(
     let x = state.client_point.x as i64;
     let y = state.client_point.y as i64;
 
-    let region = resolve_region_owned(world, scope, x, y);
+    let hit = resolve_hit_owned(world, scope, x, y);
     let mut wiring = world
         .get_non_send_resource_mut::<MouseWiring>()
         .expect("MouseWiring は直上で存在確認済み");
-    wiring.send_double_click(scope, x, y, region, button);
+    // 配信座標は surface_point（縮約後サーフェス px・1.8）。クリックは throttle を通らない。
+    wiring.send_double_click(scope, hit.surface_point, hit.region, button);
     true
 }
 
@@ -447,9 +487,10 @@ mod tests {
         let (tx, rx) = mpsc::channel::<KanadeMsg>();
         let mut wiring = MouseWiring::with_clock(
             tx,
-            RegionSource::Mock(|_, _, _| HitRegion {
+            RegionSource::Mock(|_, x, y| HitRegion {
                 scope: 0,
                 region: Some("Head".to_string()),
+                surface_point: (x, y),
             }),
             stepping_clock(1000, 1000),
         );
@@ -458,8 +499,8 @@ mod tests {
         let hit = wiring.resolve_region(None, 0, 10, 20);
         assert_eq!(hit.region, Some("Head".to_string()), "Mock は固定 region を返す");
 
-        // 初回送出（moved=first_send）。
-        let sent = wiring.plan_and_send_move(0, 10, 20, hit.region.clone());
+        // 初回送出（moved=first_send）。恒等 mock ゆえ client px と surface px は同値。
+        let sent = wiring.plan_and_send_move(0, (10, 20), hit.surface_point, hit.region.clone());
         assert!(sent, "初回移動は送出される");
 
         let msg = rx.try_recv().expect("KanadeMsg が届くべき");
@@ -482,21 +523,22 @@ mod tests {
         let (tx, rx) = mpsc::channel::<KanadeMsg>();
         let mut wiring = MouseWiring::with_clock(
             tx,
-            RegionSource::Mock(|_, _, _| HitRegion {
+            RegionSource::Mock(|_, x, y| HitRegion {
                 scope: 0,
                 region: Some("Head".to_string()),
+                surface_point: (x, y),
             }),
             // 大きく進む clock でも位置不変なら送出されないことを見る。
             stepping_clock(1000, 10_000),
         );
 
         // 初回は送出。
-        assert!(wiring.plan_and_send_move(0, 10, 20, Some("Head".to_string())));
+        assert!(wiring.plan_and_send_move(0, (10, 20), (10, 20), Some("Head".to_string())));
         rx.try_recv().expect("初回は届く");
 
         // 同一 pos（moved=false）: 間隔が幾ら経っても hover 抑制で送出しない。
         assert!(
-            !wiring.plan_and_send_move(0, 10, 20, Some("Head".to_string())),
+            !wiring.plan_and_send_move(0, (10, 20), (10, 20), Some("Head".to_string())),
             "同一 pos は送出しない（hover 抑制）"
         );
         assert!(rx.try_recv().is_err(), "抑制時は何も届かない");
@@ -509,20 +551,21 @@ mod tests {
         // clock: 1回目=1000, 2回目=1050（+50ms < 100ms 間隔）。
         let mut wiring = MouseWiring::with_clock(
             tx,
-            RegionSource::Mock(|_, _, _| HitRegion {
+            RegionSource::Mock(|_, x, y| HitRegion {
                 scope: 0,
                 region: Some("Head".to_string()),
+                surface_point: (x, y),
             }),
             stepping_clock(1000, 50),
         );
 
         // 初回送出（now=1000）。
-        assert!(wiring.plan_and_send_move(0, 10, 20, Some("Head".to_string())));
+        assert!(wiring.plan_and_send_move(0, (10, 20), (10, 20), Some("Head".to_string())));
         rx.try_recv().expect("初回は届く");
 
         // 移動・同一 region・間隔未経過（now=1050, delta=50 < 100）: 抑制。
         assert!(
-            !wiring.plan_and_send_move(0, 11, 20, Some("Head".to_string())),
+            !wiring.plan_and_send_move(0, (11, 20), (11, 20), Some("Head".to_string())),
             "移動＋同一 region＋間隔未経過は抑制"
         );
         assert!(rx.try_recv().is_err(), "抑制時は何も届かない");
@@ -534,11 +577,15 @@ mod tests {
         let (tx, rx) = mpsc::channel::<KanadeMsg>();
         let mut wiring = MouseWiring::with_clock(
             tx,
-            RegionSource::Mock(|_, _, _| HitRegion { scope: 0, region: None }),
+            RegionSource::Mock(|_, x, y| HitRegion {
+                scope: 0,
+                region: None,
+                surface_point: (x, y),
+            }),
             stepping_clock(1000, 1000),
         );
 
-        wiring.send_double_click(0, 5, 6, Some("Head".to_string()), MouseButton::Left);
+        wiring.send_double_click(0, (5, 6), Some("Head".to_string()), MouseButton::Left);
         match rx.try_recv().expect("dblclick が届くべき") {
             KanadeMsg::Mouse(m) => {
                 assert_eq!(m.scope, 0);
@@ -551,7 +598,7 @@ mod tests {
         }
 
         // クリックは throttle を通さない: 同一座標で連続送出しても届く。
-        wiring.send_double_click(0, 5, 6, Some("Head".to_string()), MouseButton::Left);
+        wiring.send_double_click(0, (5, 6), Some("Head".to_string()), MouseButton::Left);
         assert!(rx.try_recv().is_ok(), "クリックは間引かれず 2 回目も届く");
     }
 
@@ -561,11 +608,15 @@ mod tests {
         let (tx, rx) = mpsc::channel::<KanadeMsg>();
         let mut wiring = MouseWiring::with_clock(
             tx,
-            RegionSource::Mock(|_, _, _| HitRegion { scope: 0, region: None }),
+            RegionSource::Mock(|_, x, y| HitRegion {
+                scope: 0,
+                region: None,
+                surface_point: (x, y),
+            }),
             stepping_clock(1000, 1000),
         );
 
-        wiring.send_double_click(1, 7, 8, None, MouseButton::Right);
+        wiring.send_double_click(1, (7, 8), None, MouseButton::Right);
         match rx.try_recv().expect("dblclick が届くべき") {
             KanadeMsg::Mouse(m) => {
                 assert_eq!(m.scope, 1);
@@ -597,7 +648,11 @@ mod tests {
     }
 
     /// presenter 不在の正常縮退（1.3・DD-IE-9）: `RegionSource::Presenter` で presenter=None なら
-    /// `HitRegion { region: None }` を返し panic しない。
+    /// `region: None` を返し panic しない。
+    ///
+    /// DPI追従（areka-P0-collision-dpi-hittest）以後は `surface_point` も併せて固定する——presenter が
+    /// 居なければ実適用 k を知る術が無いため等倍相当（縮約は恒等）で縮退し、受領した client 物理 px
+    /// がそのまま配信空間の値になる（要件 1.6 と同じ縮退規約）。
     #[test]
     fn presenter_absent_degrades_to_region_none() {
         let (tx, _rx) = mpsc::channel::<KanadeMsg>();
@@ -610,8 +665,12 @@ mod tests {
         let hit = wiring.resolve_region(None, 3, 100, 200);
         assert_eq!(
             hit,
-            HitRegion { scope: 3, region: None },
-            "Emo2Wiring 不在は region None へ正常縮退（scope はそのまま反映）"
+            HitRegion {
+                scope: 3,
+                region: None,
+                surface_point: (100, 200),
+            },
+            "Emo2Wiring 不在は region None・座標は無変換へ正常縮退（scope はそのまま反映）"
         );
     }
 
@@ -627,9 +686,10 @@ mod tests {
     #[test]
     fn handler_move_sends_then_suppresses_same_position() {
         let (mut world, rx) = world_with_wiring(
-            |_, _, _| HitRegion {
+            |_, x, y| HitRegion {
                 scope: 0,
                 region: Some("Head".to_string()),
+                surface_point: (x, y),
             },
             stepping_clock(1000, 10_000),
         );
@@ -663,9 +723,10 @@ mod tests {
     #[test]
     fn handler_double_click_left_and_right_send() {
         let (mut world, rx) = world_with_wiring(
-            |_, _, _| HitRegion {
+            |_, x, y| HitRegion {
                 scope: 0,
                 region: Some("Bust".to_string()),
+                surface_point: (x, y),
             },
             stepping_clock(1000, 1000),
         );
@@ -711,9 +772,10 @@ mod tests {
     #[test]
     fn handler_middle_xbutton_and_single_click_do_not_send() {
         let (mut world, rx) = world_with_wiring(
-            |_, _, _| HitRegion {
+            |_, x, y| HitRegion {
                 scope: 0,
                 region: None,
+                surface_point: (x, y),
             },
             stepping_clock(1000, 1000),
         );
@@ -739,9 +801,10 @@ mod tests {
     #[test]
     fn handler_ctrl_left_double_click_despawns_all_ghost_windows_without_sending() {
         let (mut world, rx) = world_with_wiring(
-            |_, _, _| HitRegion {
+            |_, x, y| HitRegion {
                 scope: 0,
                 region: Some("Head".to_string()),
+                surface_point: (x, y),
             },
             stepping_clock(1000, 1000),
         );
@@ -763,9 +826,10 @@ mod tests {
     #[test]
     fn handler_left_double_click_without_ctrl_does_not_despawn_and_sends() {
         let (mut world, rx) = world_with_wiring(
-            |_, _, _| HitRegion {
+            |_, x, y| HitRegion {
                 scope: 0,
                 region: None,
+                surface_point: (x, y),
             },
             stepping_clock(1000, 1000),
         );
@@ -824,9 +888,10 @@ mod tests {
     fn wiring_throttles_scopes_independently_via_hashmap() {
         // clock: 各ハンドラ呼出で +10ms（間隔 100ms 未満）。
         let (mut world, rx) = world_with_wiring(
-            |_, _, _| HitRegion {
+            |_, x, y| HitRegion {
                 scope: 0,
                 region: Some("Head".to_string()),
+                surface_point: (x, y),
             },
             stepping_clock(1000, 10),
         );
@@ -873,9 +938,10 @@ mod tests {
     #[test]
     fn only_escape_terminates_ghost_windows() {
         let (mut world, _rx) = world_with_wiring(
-            |_, _, _| HitRegion {
+            |_, x, y| HitRegion {
                 scope: 0,
                 region: Some("Head".to_string()),
+                surface_point: (x, y),
             },
             stepping_clock(1000, 1000),
         );
@@ -916,13 +982,161 @@ mod tests {
         );
     }
 
+    // -------------------------------------------------------------------------
+    // 配信座標の空間切替檻（task 4.2・DD-4・design Testing Strategy「Unit Tests（areka bin）」項目 2）
+    //
+    // 恒等 mock（`surface_point: (x, y)`）では配信値が client 点と**数値的に区別できず**、切替の
+    // 前後で同じ色のままになる＝何も証明しない。ゆえに以下 2 本は **非恒等 mock**
+    // （surface = client ÷ 2）を用い、(i) 配信値が `surface_point` であること (ii) throttle の位置
+    // 比較が縮約前 client px のままであることを**両方向に割れる**形で固定する。
+    // -------------------------------------------------------------------------
+
+    /// 非恒等 mock で (i) 配信 `MouseInput{x,y}` が `surface_point` 値であること (ii) throttle が
+    /// 縮約前 client px を比較していることを同時に固定する（1.8・6.8・DD-4）。
+    ///
+    /// 写像は `surface = client / 2`。client (10,20) と (11,20) は**同一の** surface (5,10) へ潰れる:
+    /// - 配信が client px のままなら (i) の期待値 (5,10) が外れる。
+    /// - throttle が surface px を比較していれば 2 回目は `moved=false` で hover 抑制され届かない。
+    ///
+    /// clock は毎回 10s 進める＝間隔条件を常に満たすため、2 回目の送出可否は「位置が動いたか」
+    /// （＝どちらの空間で比較しているか）だけに依存する。
+    #[test]
+    fn move_delivers_surface_point_while_throttle_compares_client_px() {
+        let (mut world, rx) = world_with_wiring(
+            |_, x, y| HitRegion {
+                scope: 0,
+                region: Some("Head".to_string()),
+                surface_point: (x / 2, y / 2),
+            },
+            stepping_clock(1000, 10_000),
+        );
+        let e = world.spawn(CharWindowMarker { scope: 0 }).id();
+
+        // (i) client (10,20) → 配信は surface (5,10)。
+        let ev = bubble_pointer(10, 20, DoubleClick::None, false);
+        assert!(on_char_pointer_moved(&mut world, e, e, &ev), "初回移動は送出");
+        match rx.try_recv().expect("KanadeMsg が届く") {
+            KanadeMsg::Mouse(m) => {
+                assert_eq!(m.scope, 0);
+                assert_eq!(
+                    (m.x, m.y),
+                    (5, 10),
+                    "配信座標は surface_point（client px の素通しではない）"
+                );
+                assert_eq!(m.region, Some("Head".to_string()));
+                assert_eq!(m.kind, MouseEventKind::Move);
+            }
+            _ => panic!("Mouse(Move) を期待"),
+        }
+
+        // (ii) client (11,20) は surface では同一点 (5,10)。client px 比較なら moved=true で送出。
+        let ev = bubble_pointer(11, 20, DoubleClick::None, false);
+        assert!(
+            on_char_pointer_moved(&mut world, e, e, &ev),
+            "throttle は縮約前 client px を比較する（surface px 比較なら同一点で抑制されてしまう）"
+        );
+        match rx.try_recv().expect("2 回目の Move が届く") {
+            KanadeMsg::Mouse(m) => assert_eq!(
+                (m.x, m.y),
+                (5, 10),
+                "2 回目も配信値は surface_point（client px は配信されない）"
+            ),
+            _ => panic!("Mouse(Move) を期待"),
+        }
+
+        // 逆向きの固定: client 座標が真に同一なら hover 抑制で届かない（throttle は生きている）。
+        let ev = bubble_pointer(11, 20, DoubleClick::None, false);
+        assert!(
+            !on_char_pointer_moved(&mut world, e, e, &ev),
+            "同一 client px は hover 抑制"
+        );
+        assert!(rx.try_recv().is_err(), "抑制時は何も届かない");
+    }
+
+    /// 非恒等 mock で double-click の配信座標も `surface_point` であることを固定する（1.8・DD-4）。
+    ///
+    /// クリック経路は throttle を通らない＝この経路に client px は現れない。
+    #[test]
+    fn double_click_delivers_surface_point() {
+        let (mut world, rx) = world_with_wiring(
+            |_, x, y| HitRegion {
+                scope: 0,
+                region: Some("Bust".to_string()),
+                surface_point: (x / 2, y / 2),
+            },
+            stepping_clock(1000, 1000),
+        );
+        let e = world.spawn(CharWindowMarker { scope: 0 }).id();
+
+        let ev = bubble_pointer(10, 20, DoubleClick::Left, false);
+        assert!(on_char_pointer_pressed(&mut world, e, e, &ev));
+        match rx.try_recv().expect("dblclick が届く") {
+            KanadeMsg::Mouse(m) => {
+                assert_eq!(
+                    (m.x, m.y),
+                    (5, 10),
+                    "dblclick の配信座標も surface_point（client px ではない）"
+                );
+                assert_eq!(m.region, Some("Bust".to_string()));
+                assert_eq!(
+                    m.kind,
+                    MouseEventKind::DoubleClick {
+                        button: MouseButton::Left
+                    }
+                );
+            }
+            _ => panic!("Mouse(DoubleClick) を期待"),
+        }
+    }
+
+    /// no-op 保存檻（1.9）: k=1.0 相当（恒等 mock）では move／double-click の配信値が
+    /// 受領 client px と完全に一致する＝DPI追従導入前の配信値を変更しない。
+    ///
+    /// 上 2 本（非恒等 mock）が「空間が切り替わったこと」を固定するのに対し、本檻は
+    /// 「等倍では何も変わらないこと」を固定する対（両者が揃って初めて R1.8/R1.9 が閉じる）。
+    #[test]
+    fn identity_scale_delivers_unchanged_client_coords() {
+        let (mut world, rx) = world_with_wiring(
+            |_, x, y| HitRegion {
+                scope: 0,
+                region: Some("Head".to_string()),
+                surface_point: (x, y),
+            },
+            stepping_clock(1000, 10_000),
+        );
+        let e = world.spawn(CharWindowMarker { scope: 0 }).id();
+
+        let ev = bubble_pointer(42, 77, DoubleClick::None, false);
+        assert!(on_char_pointer_moved(&mut world, e, e, &ev));
+        match rx.try_recv().expect("Move が届く") {
+            KanadeMsg::Mouse(m) => assert_eq!(
+                (m.x, m.y),
+                (42, 77),
+                "k=1.0 では配信値＝受領 client px（従前と同一）"
+            ),
+            _ => panic!("Mouse(Move) を期待"),
+        }
+
+        let ev = bubble_pointer(13, 99, DoubleClick::Right, false);
+        assert!(on_char_pointer_pressed(&mut world, e, e, &ev));
+        match rx.try_recv().expect("dblclick が届く") {
+            KanadeMsg::Mouse(m) => assert_eq!(
+                (m.x, m.y),
+                (13, 99),
+                "k=1.0 では dblclick の配信値も従前どおり client px と同値"
+            ),
+            _ => panic!("Mouse(DoubleClick) を期待"),
+        }
+    }
+
     /// Tunnel 相は両ハンドラとも no-op（Bubble のみ処理）: 退避も送出も起きない。
     #[test]
     fn handlers_ignore_tunnel_phase() {
         let (mut world, rx) = world_with_wiring(
-            |_, _, _| HitRegion {
+            |_, x, y| HitRegion {
                 scope: 0,
                 region: Some("Head".to_string()),
+                surface_point: (x, y),
             },
             stepping_clock(1000, 1000),
         );
