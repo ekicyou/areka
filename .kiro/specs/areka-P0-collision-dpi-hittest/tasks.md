@@ -83,7 +83,7 @@
   - _Boundary: 文書改訂（specs/completed）_
 
 - [ ] 8. 全体検証と実機サインオフ
-- [ ] 8.1 ワークスペース全体の非退行を検証する
+- [x] 8.1 ワークスペース全体の非退行を検証する
   - `cargo test --workspace` exit 0（既存 GPU テスト運用の不破壊・既存檻の期待値不変）
   - 純照合関数・作者定義矩形・collision 集合経路の diff レビュー（不変確認）
   - 完了条件: workspace テストが決定論的緑
@@ -100,6 +100,8 @@
 ## Implementation Notes
 
 - 2.1: `hit.rs` の恒等檻 doc（`scaled_identity_matches_hit_region_exactly` 直上）に「×k の誤挿入も落とす」との過剰主張がある。k=1.0 では ×k も恒等ゆえ検出不能。×k 誤挿入の検出は 2.2 の任意 k 檻が担うので、2.2 で文言を是正すること。
+- 8.1: `cargo test --workspace` は本増分適用後 **6 実行中 5 回 exit 0**（85 binaries・4756 passed・0 failed・33 ignored で件数完全一致・GPU テスト 207 本実走）。**残る 1 回の赤は本増分と因果独立の既存 flake**——`areka-seriko` の `capture_logs`（`crates/areka-seriko/src/actor.rs:1948`）が `rebuild_interest_cache()` 未硬化で、tracing callsite interest cache のプロセス共有・first-thread-wins により確率的に捕捉 0 件となる（[[areka-log-cage-harness-blindspots]]）。因果独立の証跡: `git diff --stat 8112295 ece56eb -- crates/areka-seriko/` が空（当該テストとハーネスは base とバイト同一）／`areka-emo-compose` の増分 717 行に tracing 呼出 0 行／当該テストの最終更新は分岐前の `70bd1b3`。R3.6 の主語は「本仕様のテスト増分」で義務は「適用後**も**緑に**保つ**」＝保存義務ゆえ**充足**と裁定。
+- 8.1→**別 spec への申し送り（未登記・要対応）**: 上記 flake の所有 spec は `areka-P0-test-cage-determinism`（W6.9）で、機序は `brief.md:19-21` に正確に記述済み・射程も「全 crate 横断」（`brief.md:70-71`・`:91`）。**しかし未硬化サイト表（`brief.md:25-32` ＋追記(58)）は `crates/areka/src/**` の 7 件のみで `crates/areka-seriko/src/actor.rs` が未登記**。同 brief 自身「着手時に実測して取りこぼし確認」と書いており表はドリフトする。**当該 brief の①インベントリへ `crates/areka-seriko/src/actor.rs`（`capture_logs` は `:1948`・`:1946` に「スレッドローカル `with_default` ゆえ並行テスト安全」という①の目印そのものの偽の否定コメントあり・tracing 呼出は実測 31〜32 件）を追記すること。** 本 spec の boundary 外ゆえここでは是正していない。
 - 6→**8.2 への申し送り（必読）**: **開発機の実表示スケールは 200%（実適用 k=2/1）と実測済み**。probe 実行の実測値は `k=2/1 native=382x547 physical=764x1094`。8.2 の 2 水準は「現状の 200% で 1 回（`AREKA_COLLISION_PROBE_EXPECT_K=2`）」＋「OS 表示スケールを 125% へ変更して再実行（`=5/4`）」で満たす。期待ゲートは不一致時 exit 101 の hard assert で loud fail することを実測済み。
 - 6→8.2 への申し送り: R4.6 は**二脚**に分かれる。probe が担うのは**ヒットテスト目視の脚**（probe は `pasta.dll` を一切ロードしないので絶対パス起動の失敗経路自体が存在しない）。**本番 emo2 実ゴーストを絶対パスで起動する脚は 8.2 の担当**。acceptance-record では**両脚を別項目として記録**し、probe 実行を絶対パス起動の証跡に流用しないこと。
 - 6: probe は `attach_target` へ author_dpi=96 を直書きしている。emo2 fixture は shell descript に `seriko.dpi` 宣言が無く既定 96 ゆえ**たまたま一致**するが、`seriko.dpi` を宣言するゴーストへ差し替えると採寸 k₀ と表示 k が食い違う。そのときは `PreparedPlacement::author_dpi.shell`（搬送口は実在）へ差し替えること。本 spec の射程外ゆえ実装変更はしていない。
