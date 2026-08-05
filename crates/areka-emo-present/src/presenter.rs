@@ -4972,4 +4972,360 @@ mod tests {
         assert_eq!(t.applied, Some(k32), "applied が実適用 k と一致しない");
         assert_eq!(t.native_size, Some(native_size), "native_size は k 適用前の原寸");
     }
+
+    // ── hit_region_client の配線と縮退の檻（タスク 3.2・要件 1.4-1.7・DD-5）─────────────────
+    //
+    // 本節はすべて **GPU 非依存**である。`attach_target` は skeleton 登録のみで World にも GPU にも
+    // 触れないため素の `World::new()` で足り、判定に必要な状態（表示中サーフェス・実適用 k）は
+    // in-source テストの特権である**私有フィールドの直接構築**で作る。実表示（`ShowSurface`）で
+    // 作ろうとすると GPU/WUC 資源が要り、かつ「面はあるのに applied が無い」状態は表示成立点が
+    // 両者を同時に確定させるため**原理的に作れない**（DD-5 が「現行の公開 API 経由では到達不能な
+    // 防御分岐」と述べるとおり）。私有状態の直接構築だけがこの分岐を実行テストへ入れる手段である。
+
+    use areka_parsers::shell::{Collision, CollisionName};
+
+    /// 当たり判定矩形 1 件（`hit.rs` の檻と同一の作り方）。
+    fn hit_coll(index: u32, left: i64, top: i64, right: i64, bottom: i64, name: &str) -> Collision {
+        Collision {
+            index,
+            left,
+            top,
+            right,
+            bottom,
+            name: CollisionName::new(name.to_string()),
+        }
+    }
+
+    /// collision のみを持つ surface 1000 の `(EmoWorld, AtlasTable)`。
+    ///
+    /// element を 1 つも持たないため atlas 焼きは空で、画像デコード・GPU・実描画のいずれも要さない
+    /// （本節は判定だけを見るので画素は不要）。矩形は `hit.rs` の檻と同一の Head/Bust に、
+    /// **Bust と重なる Arm**（後定義＝画家則で手前）を足した 3 件で、重なり点の檻を成立させる。
+    fn build_collision_only_assets() -> (EmoWorld, AtlasTable) {
+        let base = Path::new("shell/master");
+        let surfaces = vec![Surface {
+            id: 1000,
+            targets: vec![AppendTarget::Single(1000)],
+            elements: Vec::new(),
+            collisions: vec![
+                hit_coll(0, 93, 62, 271, 130, "Head"),
+                hit_coll(1, 133, 270, 229, 326, "Bust"),
+                hit_coll(2, 200, 300, 400, 400, "Arm"),
+            ],
+            animations: Vec::new(),
+        }];
+
+        let dec = MemoryDecoder::new();
+        let set = SurfaceSet {
+            surfaces: &surfaces,
+            base_dir: base,
+            alpha_params: AlphaParams {
+                use_self_alpha: UseSelfAlpha::On,
+            },
+        };
+        let baked = bake(&[set], &dec, PackConfig::default());
+        assert!(
+            baked.errors.is_empty(),
+            "element 無し surface の atlas bake は失敗しない: {:?}",
+            baked.errors
+        );
+
+        (EmoWorld::build(&shell_of(surfaces)), baked.table)
+    }
+
+    /// `attach_target` 済み（未表示）の target を 1 つ登録する。
+    fn attach_hit_target(presenter: &mut EmoPresenter, world: &mut World, target: TargetId) {
+        let window = spawn_window_with_dpi(world, 96);
+        let (emo_world, atlas) = build_collision_only_assets();
+        presenter
+            .attach_target(world, target, window, emo_world, atlas, 96)
+            .expect("attach_target 失敗");
+    }
+
+    /// 私有状態を直接書いて「表示中サーフェスあり」を作る（GPU なしで R1.6 分岐へ到達する唯一の手段）。
+    fn force_current_surface(presenter: &mut EmoPresenter, target: TargetId, surface_id: u32) {
+        presenter
+            .targets
+            .get_mut(&target)
+            .expect("attach 済み target")
+            .current_surface_id = Some(surface_id);
+    }
+
+    /// 私有状態を直接書いて実適用 k を与える（表示成立点を GPU なしで代替する）。
+    fn force_applied(presenter: &mut EmoPresenter, target: TargetId, k: Option<ScaleRatio>) {
+        presenter
+            .targets
+            .get_mut(&target)
+            .expect("attach 済み target")
+            .applied = k;
+    }
+
+    /// 捕捉イベント列のうち **R1.6 の防御 warn** の件数（level と固有文言の双方で選別する）。
+    fn applied_absent_warn_count(events: &[CapturedEvent]) -> usize {
+        events
+            .iter()
+            .filter(|e| {
+                e.level == tracing::Level::WARN
+                    && e.fields
+                        .get("message")
+                        .is_some_and(|m| m.contains("適用スケール未確定"))
+            })
+            .count()
+    }
+
+    /// 要件 1.6 観測完了（DD-5 の防御分岐・**述語そのものの檻**）: 「表示中サーフェスがあるのに
+    /// `applied` が無い」状態でのみ `warn!` が呼出 1 回につき 1 件鳴り、正常縮退（未表示 scope・
+    /// 未登録 target）では **1 件も鳴らない**。あわせて (a) panic しない (b) k=1.0 と同一結果を返す、
+    /// を固定する。
+    ///
+    /// # なぜ「鳴る」「鳴らない」を 1 つの subscriber 下で観測するのか
+    ///
+    /// `tracing` の callsite interest はプロセス大域にキャッシュされるため、「ログが出ない」ことの
+    /// 主張は subscriber 未設置の並列テストが同一 callsite を先に踏むと**恒真に**なり得る（檻が
+    /// 何も守らなくなる）。本テストは陽性（1 件鳴る）と陰性（追加で鳴らない）を**同一の
+    /// `with_default` スコープ・同一 callsite** で観測するため、陰性主張は「捕捉が死んでいない」
+    /// ことが同じ捕捉列で証明された上でのみ成立する。
+    ///
+    /// # 殺す誤実装
+    ///
+    /// - 述語を `applied.is_none()` 単独へ潰す（未表示・未登録でも鳴る）→ warn 件数 4 で RED
+    ///   （実挙動としては未表示 scope 上のマウス移動ごとにログ洪水を作る退行）
+    /// - `warn!` を削除する → warn 件数 0 で RED
+    /// - `applied` 不在時に `ScaleRatio::ONE` 以外で続行する → region/surface_point 期待で RED
+    ///   （点 (180,96) は k=1 で `Head`・k=2 なら `None`、点 (360,192) は k=1 で `None`・k=2 なら
+    ///   `Head` と**双方向に**割れるので、恒等以外の k は必ずどちらかで外れる）
+    /// - `applied` 不在で panic／早期 return する → 判定そのものが取れず RED
+    #[test]
+    fn applied_absent_with_visible_surface_warns_once_and_degradations_stay_silent() {
+        let mut world = World::new();
+        let mut presenter = EmoPresenter::new();
+
+        // T0: 面あり・applied なし（R1.6 の防御分岐・現行公開 API では作れない状態）。
+        attach_hit_target(&mut presenter, &mut world, TargetId(0));
+        force_current_surface(&mut presenter, TargetId(0), 1000);
+        // T1: attach のみ（未表示 scope）＝正常縮退。TargetId(9) は未登録＝正常縮退。
+        attach_hit_target(&mut presenter, &mut world, TargetId(1));
+
+        // 前提の明示（檻が空虚でないこと＝狙った状態が本当に組めていること）。
+        assert_eq!(
+            presenter.applied_ratio(TargetId(0)),
+            None,
+            "前提: T0 は applied 不在"
+        );
+        assert_eq!(
+            presenter.current_surface_id(TargetId(0)),
+            Some(1000),
+            "前提: T0 は表示中サーフェスあり"
+        );
+        assert_eq!(
+            presenter.current_surface_id(TargetId(1)),
+            None,
+            "前提: T1 は未表示"
+        );
+
+        let cap = CaptureSubscriber::default();
+        let (defensive_hit, defensive_miss, unshown, unregistered) =
+            tracing::subscriber::with_default(cap.clone(), || {
+                // (1) 防御分岐: 面あり・applied なし → 鳴る。
+                let a = presenter.hit_region_client(TargetId(0), 180, 96);
+                let b = presenter.hit_region_client(TargetId(0), 360, 192);
+                // (2) 正常縮退: 同一 callsite に対して鳴らない側を同一スコープで観測する。
+                let c = presenter.hit_region_client(TargetId(1), 180, 96);
+                let d = presenter.hit_region_client(TargetId(9), 180, 96);
+                (a, b, c, d)
+            });
+
+        let events = cap.0.lock().expect("捕捉バッファ").clone();
+
+        // (a) panic しない: ここへ到達している時点で 4 呼出すべてが値を返している。
+        // (b) k=1.0 と同一結果（ScaleRatio::ONE 相当で続行している）。
+        assert_eq!(
+            defensive_hit.region,
+            Some("Head"),
+            "applied 不在は k=1.0 相当で照合を続行すること（判定を失わせない・要件 1.6）"
+        );
+        assert_eq!(defensive_hit.surface_point, (180, 96), "k=1.0 相当＝無縮約");
+        assert_eq!(
+            defensive_miss.region, None,
+            "k=1.0 相当なら (360,192) は領域外（k=2 で続行していれば Head になり RED）"
+        );
+        assert_eq!(defensive_miss.surface_point, (360, 192));
+        // 既存の native px 入口（k を一切参照しない）と region が完全一致する＝「k=1.0 と同一結果」。
+        assert_eq!(
+            defensive_hit.region,
+            presenter.hit_region(TargetId(0), 180, 96),
+            "縮退結果は k=1.0（無縮約）の既存入口と一致すること"
+        );
+        assert_eq!(
+            defensive_miss.region,
+            presenter.hit_region(TargetId(0), 360, 192),
+            "縮退結果は k=1.0（無縮約）の既存入口と一致すること"
+        );
+
+        // (c) warn 経路を実際に通る（陽性）。防御分岐の呼出 1 回につき warn 1 件ゆえ、
+        //     防御呼出 2 回で **ちょうど 2 件**（0 なら防御ログ欠落＝ログ無し失敗経路）。
+        assert_eq!(
+            applied_absent_warn_count(&events),
+            2,
+            "面あり・applied なしの呼出 1 回につき warn 1 件が鳴ること（防御呼出 2 回＝2 件。\
+             0 なら防御ログ欠落・3 以上なら述語が正常縮退まで巻き込んでいる）: {events:?}"
+        );
+        // 各 warn が「どの窓のどの座標で内部不変条件が破れたか」を載せている（呼出ごとの識別）。
+        for (want_x, want_y) in [("180", "96"), ("360", "192")] {
+            let warn = events
+                .iter()
+                .find(|e| {
+                    e.level == tracing::Level::WARN
+                        && e.fields
+                            .get("message")
+                            .is_some_and(|m| m.contains("適用スケール未確定"))
+                        && e.fields.get("client_x").map(String::as_str) == Some(want_x)
+                })
+                .unwrap_or_else(|| {
+                    panic!("client_x={want_x} の防御 warn が捕捉されていない: {events:?}")
+                });
+            assert_eq!(
+                warn.fields.get("target").map(String::as_str),
+                Some("TargetId(0)"),
+                "warn が対象 target を載せていない（どの窓で不変条件が破れたか特定できない）: {:?}",
+                warn.fields
+            );
+            assert_eq!(
+                warn.fields.get("client_y").map(String::as_str),
+                Some(want_y),
+                "warn が client 座標を載せていない: {:?}",
+                warn.fields
+            );
+        }
+
+        // (d) 正常縮退は同一 callsite で **1 件も増やさない**（陰性）。捕捉が生きていることは
+        //     直前の陽性 1 件が証明済みゆえ、この陰性主張は恒真になり得ない。
+        assert_eq!(
+            unshown.region, None,
+            "未表示 scope は正常縮退（region なし）"
+        );
+        assert_eq!(
+            unregistered.region, None,
+            "未登録 target は正常縮退（region なし）"
+        );
+        assert_eq!(
+            applied_absent_warn_count(&events),
+            2,
+            "未表示 scope・未登録 target で warn を足してはならない（述語を applied.is_none() 単独へ\
+             潰すとマウス移動ごとのログ洪水になる。防御呼出 2 回分の 2 件から増えない）: {events:?}"
+        );
+    }
+
+    /// 要件 1.6/1.1 観測完了（正常縮退の値契約）: attach のみ（未表示）target と未登録 target は
+    /// `region: None` へ縮退しつつ、`surface_point` は**有効 k で縮約した座標**を返す。
+    ///
+    /// `applied` 不在の縮退では有効 k が [`ScaleRatio::ONE`] ゆえ `surface_point` は入力素通し
+    /// （等倍縮約値）である。座標は **x≠y の非対称値**を使うため、軸の取り違え（`(y, x)`）も落ちる。
+    /// 対照として「未表示だが `applied` は在る」状態も固定する——縮退経路が縮約を**やめて**
+    /// 生座標を返す誤実装、および丸め権威以外の式を持ち込む誤実装を殺す（k=2 の期待値
+    /// (181,97)→(90,48) はハードコード定数で、実装式を期待値側で再計算しない）。
+    #[test]
+    fn unshown_and_unregistered_targets_degrade_to_none_with_scaled_surface_point() {
+        let mut world = World::new();
+        let mut presenter = EmoPresenter::new();
+        attach_hit_target(&mut presenter, &mut world, TargetId(0));
+
+        // attach のみ（未表示・applied なし）: 等倍縮約＝入力素通し。
+        let hit = presenter.hit_region_client(TargetId(0), 181, 97);
+        assert_eq!(
+            hit.region, None,
+            "未表示 target に判定対象は無い（region なし）"
+        );
+        assert_eq!(
+            hit.surface_point,
+            (181, 97),
+            "applied 不在の縮退は等倍縮約（入力素通し）であること"
+        );
+        // 負値・窓外でも panic せず定義された結果を返す（要件 2.5 の配線層での保存）。
+        let neg = presenter.hit_region_client(TargetId(0), -7, -13);
+        assert_eq!(neg.region, None);
+        assert_eq!(neg.surface_point, (-7, -13), "負値も等倍縮約で素通し");
+
+        // 未登録 target（attach すらしていない）も同一の正常縮退。
+        let unregistered = presenter.hit_region_client(TargetId(9), 181, 97);
+        assert_eq!(unregistered.region, None, "未登録 target は region なし");
+        assert_eq!(
+            unregistered.surface_point,
+            (181, 97),
+            "未登録 target でも座標空間の契約は保つ（等倍縮約）"
+        );
+
+        // 対照: 未表示のまま applied だけ在る状態では、縮退経路も**有効 k で縮約する**。
+        // k=2（192/96）の期待値はハードコード: 181→90・97→48（DD-1 の画素中心逆写像）。
+        force_applied(
+            &mut presenter,
+            TargetId(0),
+            Some(ScaleRatio::new(192, 96).expect("192/96 は構築可能")),
+        );
+        let scaled = presenter.hit_region_client(TargetId(0), 181, 97);
+        assert_eq!(
+            scaled.region, None,
+            "未表示なら k が在っても region は None"
+        );
+        assert_eq!(
+            scaled.surface_point,
+            (90, 48),
+            "未表示縮退でも surface_point は有効 k で縮約されること（生座標を返す実装は RED）"
+        );
+    }
+
+    /// 要件 1.5 観測完了（**公開面同士の恒等**・タスク 3.1 完了条件の検証本体）: k=1.0 では
+    /// [`EmoPresenter::hit_region_client`] の `region` が既存 [`EmoPresenter::hit_region`] と
+    /// 完全一致し、`surface_point` は入力素通しになる。
+    ///
+    /// 代表点は「領域内」「別領域内」「重なり点（画家則＝後定義 Arm が手前）」「背景」
+    /// 「閉区間の端（4 隅・辺）」「境界の内側 1px／外側 1px」「負値」「窓外」を含む。期待 region は
+    /// **ハードコード定数**でも同時に固定するため、両入口がそろって壊れる（＝両方 None を返す）
+    /// 形の空虚な一致では緑にならない。
+    ///
+    /// なお本檻は k=1.0 の恒等のみを守る——`×k` の誤挿入や素の floor 丸めの持ち込みは k=1.0 では
+    /// 恒等へ退化して検出できない（それらは `hit.rs` の任意 k 檻と本ファイルの縮退檻の責務）。
+    #[test]
+    fn client_entry_matches_native_entry_at_identity_scale() {
+        let mut world = World::new();
+        let mut presenter = EmoPresenter::new();
+        attach_hit_target(&mut presenter, &mut world, TargetId(0));
+        force_current_surface(&mut presenter, TargetId(0), 1000);
+        force_applied(&mut presenter, TargetId(0), Some(ScaleRatio::ONE));
+
+        for (x, y, want, what) in [
+            (180, 96, Some("Head"), "領域内（Head）"),
+            (180, 300, Some("Bust"), "別領域内（Bust）"),
+            (210, 310, Some("Arm"), "重なり点（後定義 Arm が手前）"),
+            (0, 0, None, "背景（原点）"),
+            (500, 500, None, "背景（窓外相当）"),
+            (93, 62, Some("Head"), "閉区間の左上隅"),
+            (271, 130, Some("Head"), "閉区間の右下隅"),
+            (93, 130, Some("Head"), "閉区間の左下隅"),
+            (271, 62, Some("Head"), "閉区間の右上隅"),
+            (94, 63, Some("Head"), "境界の内側 1px"),
+            (92, 62, None, "境界の外側 1px（左）"),
+            (93, 61, None, "境界の外側 1px（上）"),
+            (272, 130, None, "境界の外側 1px（右）"),
+            (271, 131, None, "境界の外側 1px（下）"),
+            (400, 400, Some("Arm"), "後定義矩形の右下隅"),
+            (-7, -13, None, "負値（panic なし）"),
+        ] {
+            let hit = presenter.hit_region_client(TargetId(0), x, y);
+            assert_eq!(
+                hit.region,
+                presenter.hit_region(TargetId(0), x, y),
+                "k=1.0 では新旧の判定入口が一致すること: {what} ({x},{y})"
+            );
+            assert_eq!(
+                hit.region, want,
+                "k=1.0 の解決領域が期待と違う: {what} ({x},{y})"
+            );
+            assert_eq!(
+                hit.surface_point,
+                (x, y),
+                "k=1.0 の surface_point は入力素通しであること: {what} ({x},{y})"
+            );
+        }
+    }
 }

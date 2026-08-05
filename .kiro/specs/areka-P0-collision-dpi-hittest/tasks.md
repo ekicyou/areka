@@ -33,7 +33,7 @@
   - 完了条件: k=1.0 で既存判定メソッドと region 一致（檻の作成は 3.2 が担う）
   - _Requirements: 1.4, 1.5, 1.6, 1.7, 4.1, 4.5, 5.3_
 
-- [ ] 3.2 配線と縮退の in-source 檻を整備する
+- [x] 3.2 配線と縮退の in-source 檻を整備する
   - 私有状態で「surface あり・applied なし」を構築し panic なし・k=1.0 同一結果・warn 経路通過を固定
   - attach のみ（未表示）target の縮退（region None・surface_point は等倍縮約値）
   - k=1.0 時に新旧判定入口の region が一致する公開面恒等檻（3.1 完了条件の検証本体）
@@ -100,6 +100,7 @@
 ## Implementation Notes
 
 - 2.1: `hit.rs` の恒等檻 doc（`scaled_identity_matches_hit_region_exactly` 直上）に「×k の誤挿入も落とす」との過剰主張がある。k=1.0 では ×k も恒等ゆえ検出不能。×k 誤挿入の検出は 2.2 の任意 k 檻が担うので、2.2 で文言を是正すること。
+- 3.2: ログ檻で「出ないこと」を主張するときは、**陽性（発火）と陰性（無音）を同一 `with_default` スコープ・同一 callsite 内で観測**すること。別スコープで陰性だけ見ると tracing の callsite interest キャッシュで恒真になる（[[areka-log-cage-harness-blindspots]]）。3.2 ではこの形で書き、述語潰し変異のとき陰性側の warn が実際に捕捉列へ現れることまで実測している。
 - 3.1: R1.6 防御分岐の述語は **「`applied == None` かつ表示 surface が存在する」**（DD-5 が正典・design の Error Handling 表が未登録/未表示を「正常縮退・ログ不要」と分類しているため）。`applied.is_none()` 単独にすると未表示 scope 上のマウス移動ごとに warn が出るログ洪水になる。3.2 の R1.6 檻はこの述語で構築すること（未登録・未表示では warn 0 件であることも併せて固定する）。
 - 3.1: `lib.rs` の `pub use areka_emo_compose::ScaleRatio;` がローカル module の `pub use` 群より後ろにあり rustfmt のグループ順序に反する（crate は元々広く fmt 非準拠・fmt ゲートは存在しない）。将来 fmt をかけるときに `pub use balloon::…` の上へ移すこと。
 - 2.2: 檻の doc に「どの誤実装をどの点が殺すか」を書くときは、必ず実測（mutant を作って落ちる檻を記録）してから書くこと。round 1 で 2 件の事実誤認（うち 1 件は隣接 assert と自己矛盾）が出た。丸め檻は k=2 系と k=5/4 系で殺せる mutant が異なる（k=2 では DD-1 と素の floor が一致するため、素の floor を殺せるのは k=5/4 系のみ）。
