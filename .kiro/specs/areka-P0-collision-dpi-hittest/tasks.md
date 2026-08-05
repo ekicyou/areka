@@ -41,7 +41,7 @@
   - _Requirements: 1.6, 1.5_
 
 - [ ] 4. bin 結線と SHIORI 配信の空間切替
-- [ ] 4.1 resolver を新判定入口へ切替え縮約済み点を授受する
+- [x] 4.1 resolver を新判定入口へ切替え縮約済み点を授受する
   - 判定結果型へ surface_point を追加し全構築点を更新（presenter 不在縮退は無変換値＝等倍相当）
   - resolver の呼出切替（`#[path]` include 規律維持・依存は外部 crate のみ）
   - 冒頭 doc へ R5.4 の集約記述（受領空間・吸収点・配信空間・正典沈黙ゆえの areka 裁定・shell 限定）
@@ -100,6 +100,8 @@
 ## Implementation Notes
 
 - 2.1: `hit.rs` の恒等檻 doc（`scaled_identity_matches_hit_region_exactly` 直上）に「×k の誤挿入も落とす」との過剰主張がある。k=1.0 では ×k も恒等ゆえ検出不能。×k 誤挿入の検出は 2.2 の任意 k 檻が担うので、2.2 で文言を是正すること。
+- 4.1→**4.2 への申し送り（必読）**: 4.1 で `RegionSource::Mock` の 12 クロージャを `surface_point: (x, y)`（k=1.0 恒等の忠実な模型）へ更新した。このため既存ハンドラ檻では `surface_point` が生の client 点と**数値的に区別できない**。4.2 で `MouseInput{x,y}` を `surface_point` へ切替えても、これらの檻は切替の前後で同じ色のまま＝何も証明しない。**4.2 は `surface_point` が `(x, y)` と意図的に異なる mock（例 `(x / 2, y / 2)`）を最低 1 本導入し、「配信値が surface_point であること」と「throttle へ渡る pos が client px のままであること」の両方を反証可能にすること**（design の bin テスト項目 2）。
+- 4.1→4.2 への申し送り: `input_events/mod.rs` の DD-IE-10 記述（:98 / :109 / :144 / :184 / :296 付近の「素通し＝DPI 変換なし」「k=1.0 契約」）は 4.1 では意図的に未改訂。現在は実態と食い違っているので 4.2 で必ず消化すること（`DD-IE-10` を grep して特定）。
 - 3.2: ログ檻で「出ないこと」を主張するときは、**陽性（発火）と陰性（無音）を同一 `with_default` スコープ・同一 callsite 内で観測**すること。別スコープで陰性だけ見ると tracing の callsite interest キャッシュで恒真になる（[[areka-log-cage-harness-blindspots]]）。3.2 ではこの形で書き、述語潰し変異のとき陰性側の warn が実際に捕捉列へ現れることまで実測している。
 - 3.1: R1.6 防御分岐の述語は **「`applied == None` かつ表示 surface が存在する」**（DD-5 が正典・design の Error Handling 表が未登録/未表示を「正常縮退・ログ不要」と分類しているため）。`applied.is_none()` 単独にすると未表示 scope 上のマウス移動ごとに warn が出るログ洪水になる。3.2 の R1.6 檻はこの述語で構築すること（未登録・未表示では warn 0 件であることも併せて固定する）。
 - 3.1: `lib.rs` の `pub use areka_emo_compose::ScaleRatio;` がローカル module の `pub use` 群より後ろにあり rustfmt のグループ順序に反する（crate は元々広く fmt 非準拠・fmt ゲートは存在しない）。将来 fmt をかけるときに `pub use balloon::…` の上へ移すこと。

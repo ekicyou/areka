@@ -1902,8 +1902,9 @@ mod tests {
             HitRegion {
                 scope: 0,
                 region: None,
+                surface_point: (100, 100),
             },
-            "未装着 presenter は region None（collision-geometry の正常縮退・Req1.3）"
+            "未装着 presenter は region None・座標は等倍縮退（collision-geometry の正常縮退・Req1.3）"
         );
     }
 

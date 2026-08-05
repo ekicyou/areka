@@ -99,8 +99,11 @@ impl MouseWiring {
     ///
     /// - [`RegionSource::Mock`] → `f(scope, x, y)`（presenter を無視・1.5）。
     /// - [`RegionSource::Presenter`] → `Some(p)` なら `resolve_hit_region(p, scope, x, y)`（1.3）。
-    ///   `presenter` 不在（`Emo2Wiring` 未挿入＝boot 前／失敗時）は `HitRegion { scope, region: None }`
-    ///   へ正常縮退する（collision-geometry design の消費想定どおり・trace）。
+    ///   `presenter` 不在（`Emo2Wiring` 未挿入＝boot 前／失敗時）は `region: None` へ正常縮退する
+    ///   （collision-geometry design の消費想定どおり・trace）。このとき `surface_point` は**無変換の
+    ///   入力値**とする——presenter が居なければ実適用 k を知る術が無く、等倍相当（縮約は恒等）が
+    ///   唯一整合する縮退規約である（presenter 側の k 不在縮退＝要件 1.6 と同じ扱い。座標空間の
+    ///   正準契約は `emo2_boot::hit_region` の冒頭 doc）。
     ///
     /// 座標 `x`/`y` は当該 shell 窓の client 物理 px であり、そのまま resolver へ渡す（DPI 変換しない・
     /// k=1.0 契約＝collision-geometry 4.3 を継承・DD-IE-10）。
@@ -121,7 +124,12 @@ impl MouseWiring {
                         scope,
                         "Emo2Wiring 不在（boot 前／失敗時）: region None へ正常縮退"
                     );
-                    HitRegion { scope, region: None }
+                    // k 不明ゆえ等倍相当（縮約は恒等）＝受領した client 物理 px をそのまま配信空間の値とする。
+                    HitRegion {
+                        scope,
+                        region: None,
+                        surface_point: (x, y),
+                    }
                 }
             },
         }
@@ -447,9 +455,10 @@ mod tests {
         let (tx, rx) = mpsc::channel::<KanadeMsg>();
         let mut wiring = MouseWiring::with_clock(
             tx,
-            RegionSource::Mock(|_, _, _| HitRegion {
+            RegionSource::Mock(|_, x, y| HitRegion {
                 scope: 0,
                 region: Some("Head".to_string()),
+                surface_point: (x, y),
             }),
             stepping_clock(1000, 1000),
         );
@@ -482,9 +491,10 @@ mod tests {
         let (tx, rx) = mpsc::channel::<KanadeMsg>();
         let mut wiring = MouseWiring::with_clock(
             tx,
-            RegionSource::Mock(|_, _, _| HitRegion {
+            RegionSource::Mock(|_, x, y| HitRegion {
                 scope: 0,
                 region: Some("Head".to_string()),
+                surface_point: (x, y),
             }),
             // 大きく進む clock でも位置不変なら送出されないことを見る。
             stepping_clock(1000, 10_000),
@@ -509,9 +519,10 @@ mod tests {
         // clock: 1回目=1000, 2回目=1050（+50ms < 100ms 間隔）。
         let mut wiring = MouseWiring::with_clock(
             tx,
-            RegionSource::Mock(|_, _, _| HitRegion {
+            RegionSource::Mock(|_, x, y| HitRegion {
                 scope: 0,
                 region: Some("Head".to_string()),
+                surface_point: (x, y),
             }),
             stepping_clock(1000, 50),
         );
@@ -534,7 +545,11 @@ mod tests {
         let (tx, rx) = mpsc::channel::<KanadeMsg>();
         let mut wiring = MouseWiring::with_clock(
             tx,
-            RegionSource::Mock(|_, _, _| HitRegion { scope: 0, region: None }),
+            RegionSource::Mock(|_, x, y| HitRegion {
+                scope: 0,
+                region: None,
+                surface_point: (x, y),
+            }),
             stepping_clock(1000, 1000),
         );
 
@@ -561,7 +576,11 @@ mod tests {
         let (tx, rx) = mpsc::channel::<KanadeMsg>();
         let mut wiring = MouseWiring::with_clock(
             tx,
-            RegionSource::Mock(|_, _, _| HitRegion { scope: 0, region: None }),
+            RegionSource::Mock(|_, x, y| HitRegion {
+                scope: 0,
+                region: None,
+                surface_point: (x, y),
+            }),
             stepping_clock(1000, 1000),
         );
 
@@ -597,7 +616,11 @@ mod tests {
     }
 
     /// presenter 不在の正常縮退（1.3・DD-IE-9）: `RegionSource::Presenter` で presenter=None なら
-    /// `HitRegion { region: None }` を返し panic しない。
+    /// `region: None` を返し panic しない。
+    ///
+    /// DPI追従（areka-P0-collision-dpi-hittest）以後は `surface_point` も併せて固定する——presenter が
+    /// 居なければ実適用 k を知る術が無いため等倍相当（縮約は恒等）で縮退し、受領した client 物理 px
+    /// がそのまま配信空間の値になる（要件 1.6 と同じ縮退規約）。
     #[test]
     fn presenter_absent_degrades_to_region_none() {
         let (tx, _rx) = mpsc::channel::<KanadeMsg>();
@@ -610,8 +633,12 @@ mod tests {
         let hit = wiring.resolve_region(None, 3, 100, 200);
         assert_eq!(
             hit,
-            HitRegion { scope: 3, region: None },
-            "Emo2Wiring 不在は region None へ正常縮退（scope はそのまま反映）"
+            HitRegion {
+                scope: 3,
+                region: None,
+                surface_point: (100, 200),
+            },
+            "Emo2Wiring 不在は region None・座標は無変換へ正常縮退（scope はそのまま反映）"
         );
     }
 
@@ -627,9 +654,10 @@ mod tests {
     #[test]
     fn handler_move_sends_then_suppresses_same_position() {
         let (mut world, rx) = world_with_wiring(
-            |_, _, _| HitRegion {
+            |_, x, y| HitRegion {
                 scope: 0,
                 region: Some("Head".to_string()),
+                surface_point: (x, y),
             },
             stepping_clock(1000, 10_000),
         );
@@ -663,9 +691,10 @@ mod tests {
     #[test]
     fn handler_double_click_left_and_right_send() {
         let (mut world, rx) = world_with_wiring(
-            |_, _, _| HitRegion {
+            |_, x, y| HitRegion {
                 scope: 0,
                 region: Some("Bust".to_string()),
+                surface_point: (x, y),
             },
             stepping_clock(1000, 1000),
         );
@@ -711,9 +740,10 @@ mod tests {
     #[test]
     fn handler_middle_xbutton_and_single_click_do_not_send() {
         let (mut world, rx) = world_with_wiring(
-            |_, _, _| HitRegion {
+            |_, x, y| HitRegion {
                 scope: 0,
                 region: None,
+                surface_point: (x, y),
             },
             stepping_clock(1000, 1000),
         );
@@ -739,9 +769,10 @@ mod tests {
     #[test]
     fn handler_ctrl_left_double_click_despawns_all_ghost_windows_without_sending() {
         let (mut world, rx) = world_with_wiring(
-            |_, _, _| HitRegion {
+            |_, x, y| HitRegion {
                 scope: 0,
                 region: Some("Head".to_string()),
+                surface_point: (x, y),
             },
             stepping_clock(1000, 1000),
         );
@@ -763,9 +794,10 @@ mod tests {
     #[test]
     fn handler_left_double_click_without_ctrl_does_not_despawn_and_sends() {
         let (mut world, rx) = world_with_wiring(
-            |_, _, _| HitRegion {
+            |_, x, y| HitRegion {
                 scope: 0,
                 region: None,
+                surface_point: (x, y),
             },
             stepping_clock(1000, 1000),
         );
@@ -824,9 +856,10 @@ mod tests {
     fn wiring_throttles_scopes_independently_via_hashmap() {
         // clock: 各ハンドラ呼出で +10ms（間隔 100ms 未満）。
         let (mut world, rx) = world_with_wiring(
-            |_, _, _| HitRegion {
+            |_, x, y| HitRegion {
                 scope: 0,
                 region: Some("Head".to_string()),
+                surface_point: (x, y),
             },
             stepping_clock(1000, 10),
         );
@@ -873,9 +906,10 @@ mod tests {
     #[test]
     fn only_escape_terminates_ghost_windows() {
         let (mut world, _rx) = world_with_wiring(
-            |_, _, _| HitRegion {
+            |_, x, y| HitRegion {
                 scope: 0,
                 region: Some("Head".to_string()),
+                surface_point: (x, y),
             },
             stepping_clock(1000, 1000),
         );
@@ -920,9 +954,10 @@ mod tests {
     #[test]
     fn handlers_ignore_tunnel_phase() {
         let (mut world, rx) = world_with_wiring(
-            |_, _, _| HitRegion {
+            |_, x, y| HitRegion {
                 scope: 0,
                 region: Some("Head".to_string()),
+                surface_point: (x, y),
             },
             stepping_clock(1000, 1000),
         );
