@@ -8,6 +8,12 @@
 >
 > **以下の実測値は k=1.0 契約下の 7.3 証跡として有効。** DPI追従下（scale≠1.0）の当たり判定受け入れは `collision-dpi-hittest` が担う（本 spec の範囲外）。
 
+> **追記（2026-08-05・`areka-P0-collision-dpi-hittest`）**: 上で「切り出し済み」とした k=1.0 限定契約は `areka-P0-collision-dpi-hittest` で**解除済み**であり、点を実適用中の k で除してから照合する実装（`EmoPresenter::hit_region_client`（`crates/areka-emo-present/src/presenter.rs:953`）→ `hit_region_scaled`（`crates/areka-emo-compose/src/hit.rs:136`）→ 丸め権威 `ScaleRatio::unscale_coord`（`crates/areka-emo-compose/src/scale.rs:253`））が着地している。
+>
+> **DPI追従下（scale≠1.0）の受け入れは本記録ではなく `areka-P0-collision-dpi-hittest` の記録を参照すること。** 記録先は `.kiro/specs/areka-P0-collision-dpi-hittest/acceptance-record.md`（**本追記の時点では未作成**——実 DPI≠96 の 2 水準・本番ゴースト emo2・scale≠1.0 表示下の実機サインオフタスクで作成される）。同 spec の要件・設計は `.kiro/specs/areka-P0-collision-dpi-hittest/requirements.md`（Requirement 5）／`design.md`（DD-9）。
+>
+> **本記録の実測値・判定は k=1.0 契約下の 7.3 証跡として引き続き有効であり、1 文字も書き換えていない（本注記は追記のみ）。**
+
 - 実施日: 2026-07-18
 - 実施者: 目視操作＝開発者（実カーソルで頭/胸/背景を目視で狙う）／駆動・記録・自動 assert・外部窓寸実測＝Claude（Claudia）
 - 対象: `cargo run -p areka --example collision-probe`（debug ビルド・PID 26028 他）

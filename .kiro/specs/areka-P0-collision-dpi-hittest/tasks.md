@@ -75,7 +75,7 @@
   - _Depends: 3.1, 4.1_
   - _Boundary: CollisionProbe（examples/collision-probe.rs）_
 
-- [ ] 7. (P) k=1.0 限定契約の解除登記（completed 文書への日付付き追記）
+- [x] 7. (P) k=1.0 限定契約の解除登記（completed 文書への日付付き追記）
   - collision-geometry design の k=1.0 限定契約と Revalidation Trigger 2 へ解除済み／消化済みの日付付き追記（既存本文は書き換えない）
   - 同 acceptance-record へ「DPI追従下の受け入れは本 spec の記録を参照」の日付付き追記
   - 完了条件: 追記が日付付きで存在し既存本文が無改変
