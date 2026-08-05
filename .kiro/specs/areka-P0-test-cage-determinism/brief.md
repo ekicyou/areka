@@ -9,6 +9,15 @@
 > - **③ の新事実**: van が frame.rs:4088 で正典ハーネス（`placement/test_support.rs`）を消費開始＝**frame.rs 内に probe 方式と局所 `capture_logs` が同居**——一本化裁定の材料が増えた。frame.rs の helper は :1990 へドリフト。
 > - **規模: medium-large → medium へ縮小**。配置＝**W6.9**（追記(58)裁定: vis 先着必達〔frame.rs テスト域〕＋presenter.rs `apply_show` 鎖〔col→exact→budget→atom④〕の最後尾。④を `#[cfg(test)]` fault フラグ小案に縮めれば presenter.rs 衝突は :510 の 1 呼出に縮退）。553/1 単発赤の監視は継続。
 >
+> **📌 2026-08-05 追記(59)＝① 射程の全面拡大（`areka-P0-collision-dpi-hittest` Task 8.1 実測由来・本ブロックが(58)以前の①の数値に優先）**:
+> - **① tracing 毒化: 45 呼出/7 モジュール → 95 呼出/12 モジュール**。(58) までの表は `crates/areka/src/**` だけを見ていたが、**射程は Desired Outcome(:70-71)・Boundary Candidate ③(:91) の宣言どおり全 crate 横断**であり、`crates/areka` 外に**未登記の未硬化サイトが 5 モジュール・50 呼出**あった（内訳は下表 7〜11・全件 2026-08-05 に `rebuild_interest_cache()` 不在を file:line で実測）。
+> - **発見経路は本番実測**: `cargo test --workspace` が**約 1/6 で `areka-seriko` のログ捕捉檻で赤**になる（単独 30 走 0 失敗・CPU 負荷下 60 走 1 失敗＝負荷依存）。特定 assert ではなく**ハーネス全体が確率的に捕捉 0 件**を返す。観測された落ち方は `actor::tests::non_shell_broadcast_reception_is_benign_debug_no_warn_error`（assert は actor.rs:1258・`level=DEBUG` の**存在**主張）と `actor::tests::bind_apply_on_shown_emits_show_and_info_marker`（assert は actor.rs:1470・`level=INFO` の**存在**主張）。
+> - **①の「目印」である偽の否認コメントも同伴していた**: `actor.rs:1946-1947`「スレッドローカル `with_default` ゆえ並行テスト安全」は :34 が marker として挙げる記述と**逐語一致**。同型の否認は table.rs:206・emo-atlas/emo-compose の `log_capture.rs`(:14-16 モジュール doc ＋ :55 関数 doc) にも伝播している。
+> - **出自の取り違えを実測で確認**: seriko の否認コメントは自らの流儀を「emo-compose/kanade の log_capture 流儀」と名乗るが、**kanade は硬化済み・compose は未硬化**。誤った由来表示のまま複製されている＝(58) の「否認が残ると再発する」の 2 例目。
+> - **リスク記述の片側漏れを是正**（本文 :21 に反映）: 従来「イベント 0 件を静かに観測して**緑になる**（偽陰性）」だけを書いていたが、**ログの存在を assert する檻では同じ毒化が偽陽性＝赤として現れる**。seriko の 2 件がまさにそれ。
+> - **規模への影響**: 呼出数は倍増するが作業は依然として機械的（③の裁定が決まれば差し替えのみ）。ただし**crate 境界を跨ぐ**ため、③の「共有化の実現方法」（:117 の Constraints）は `crates/areka` 内で閉じない形が**必須条件**になった。配置（W6.9）は変更なし。
+> - **①の未登記候補の掘り出しは今回で完了とはみなさない**: 判定は「`rebuild_interest_cache()` を呼んでいるか」の 1 点で機械判定できるため、**着手時に workspace 全体を再走査**すること（下表は 2026-08-05 時点のスナップショット）。
+>
 > **出自**: `completed/areka-P0-emo-dpi-scaling` の `/kiro-validate-impl` ゲートが「無名の別タスク宛て＝実質未所有」として記録した 4 件（tasks.md:222）。
 > 2026-07-30 に**全件の実在を再検証**したところ 4 件とも健在で、うち 1 件は記録より**悪化**していた。担当 spec は 10 本の active spec のいずれにも存在しない。
 
@@ -16,11 +25,18 @@
 
 **檻（テスト）が嘘をつき得る状態が 4 系統残っている。** いずれも本番挙動のバグではないが、「緑である」という信号の信頼性を損なう——本プロジェクトは [[deterministic-test-coverage-mandate]] を掲げており、檻の決定性そのものが成果物である。
 
-### ① tracing callsite 毒化ハザード（6 モジュール・44 呼出）
+### ① tracing callsite 毒化ハザード（**12 モジュール・95 呼出**・追記(59)）
 
-`tracing` の callsite interest cache は**プロセス全体で共有され first-thread-wins**。`with_default` はスレッドローカルだが interest は違うため、先に別スレッドが「このログは不要」と判定を焼き付けると、**捕捉テストがイベント 0 件を静かに観測して緑になる**。硬化済み正典は `crates/areka/src/placement/test_support.rs`（常駐 probe dispatcher 2 個＋捕捉窓の内側で `rebuild_interest_cache()`）。
+`tracing` の callsite interest cache は**プロセス全体で共有され first-thread-wins**。`with_default` はスレッドローカルだが interest は違うため、先に別スレッドが「このログは不要」と判定を焼き付けると、**後続の捕捉テストはイベントを 1 件も観測できなくなる**。硬化済み正典は `crates/areka/src/placement/test_support.rs`（常駐 probe dispatcher 2 個＋捕捉窓の内側で `rebuild_interest_cache()`）。
 
-未硬化サイト（`registry().with(cap)` ＋素の `with_default`・probe 無し・rebuild 無し）:
+**症状は檻の書き方によって両側に出る**（追記(59) で是正・従来は前者しか書いていなかった）:
+
+- **偽陰性＝緑**: 「このログは出ない」を主張する檻（`assert!(!logs.contains(…))`）は、毒化で捕捉 0 件になっても**静かに通る**。何も検証していないのに緑。
+- **偽陽性＝赤**: 「このログが出る」を主張する檻（`assert!(logs.contains("level=INFO …"))`）は、毒化で捕捉 0 件になると**落ちる**。本番は正しいのにテストだけが確率的に赤くなる——`areka-seriko` の 2 テストで実測された落ち方がこれ（追記(59)・約 1/6・負荷依存）。
+
+どちらも「檻が嘘をついている」点は同じで、**赤の側は少なくとも気づけるぶん幸運**。緑の側は気づく手段が無い。
+
+未硬化サイト（`registry().with(cap)` ＋素の `with_default`・probe 無し・**`rebuild_interest_cache()` 無し**）。7〜11 は 2026-08-05 追記(59) の追加分:
 
 | # | ファイル（ヘルパ定義） | 呼出数 |
 |---|---|---|
@@ -30,8 +46,15 @@
 | 4 | `crates/areka/src/emo2_boot/spine.rs`（`capture_logs`） | 8 |
 | 5 | `crates/areka/src/input_events/balloon.rs`（`capture_logs`） | 18 |
 | 6 | `crates/areka/src/shiori_demo.rs`（ヘルパ無し・**inline** `with_default` × 3） | 3 |
+| 7 | **`crates/areka-seriko/src/actor.rs`**（`capture_logs` **:1948**／`registry().with(cap)` :1978／素の `with_default` :1979。派生ヘルパ `capture_logs_flow` :1937 が :1940 で委譲＝**同一捕捉層**） | **19**（テスト直呼 18 ＋ flow 内部委譲 1） |
+| 8 | `crates/areka-seriko/src/table.rs`（`capture_logs` :208／`registry().with(cap)` :238／`with_default` :239） | 2（:339, :401） |
+| 9 | `crates/areka-emo-atlas/src/log_capture.rs`（`pub(crate) fn capture_logs` :59／:62-63） | 6（`lib.rs` :470/:506/:525 ＋自己テスト :75/:89/:101） |
+| 10 | `crates/areka-emo-compose/src/log_capture.rs`（`pub(crate) fn capture_logs` :59／:62-63） | 20（`log_firing_tests.rs` 11・`scale.rs` 4・`plan.rs` 2・自己テスト 3） |
+| 11 | `crates/wintf/src/ecs/window_proc/dpi_helpers.rs`（`mod tests` 内 `capture_logs` :479／:483） | 3（:506, :538, :559） |
 
-**さらに悪いことに、6 箇所とも「スレッドローカル `with_default` ゆえ並行実行でも干渉しない」という誤ったコメントを掲げている**（dispatcher については真だが interest cache については偽）。ハザードが積極的に否認されている状態。
+**さらに悪いことに、これらは「スレッドローカル `with_default` ゆえ並行実行でも干渉しない」という誤ったコメントを掲げている**（dispatcher については真だが interest cache については偽）。ハザードが積極的に否認されている状態。追記(59) で確認された否認の所在: `actor.rs:1946-1947`（**:34 の marker と逐語一致**）・`table.rs:206`・`areka-emo-atlas/src/log_capture.rs:14-16`（モジュール doc）と `:55`・`areka-emo-compose/src/log_capture.rs:14-16` と `:55`。`dpi_helpers.rs:477-478` は「`set_global_default` は使わない」とだけ書いており否認は無いが、rebuild も無い。
+
+**2026-08-05 時点で硬化済み（`rebuild_interest_cache()` 有り）と実測確認できたのは**: `crates/areka/src/placement/{test_support.rs, diag.rs, follow.rs}`・`crates/areka-emo-present/src/{balloon.rs, scale.rs}`・`crates/areka-ghost/src/test_log_capture.rs`・`crates/areka-ghost/tests/ghost/spine_e2e_test.rs`・`crates/areka-kanade/src/schedule/log_capture.rs`・`crates/areka-sylphya/src/test_log_capture.rs`・`crates/wintf/src/ecs/test_support.rs`・`crates/areka-emo-text/tests/attach_wiring_test.rs`。**硬化済み／未硬化の判定は `rebuild_interest_cache()` の有無 1 点で機械判定できる**ため、着手時は workspace 全体を `rg rebuild_interest_cache` と捕捉ヘルパ定義の突合で再走査すること。
 
 ### ② `spine.rs` の協調スピン flake（**8 → 13 箇所へ増加**）
 
@@ -68,7 +91,7 @@ probe 方式（3 コピー・意味論はバイト等価で命名と prose だ�
 ## Desired Outcome
 
 - ログ捕捉の硬化設計が**ワークスペースで 1 つ**に決まり、全 crate がそれを共有する（コピーはゼロ）。
-- 捕捉テストが「イベント 0 件を静かに観測して緑」になり得ない。
+- 捕捉テストが毒化で「イベント 0 件」を掴まされ得ない——**「静かに緑」（不在主張の檻）も「確率的に赤」（存在主張の檻）も、どちらも起こらない**（追記(59)）。
 - `spine.rs` の待機が全て `Instant` 基準の有界スピンになり、負荷下でも偽赤しない。
 - `chain.upload` 失敗時に「表示は前状態を保つ」が**実行テストで証明**される。
 
@@ -77,7 +100,7 @@ probe 方式（3 コピー・意味論はバイト等価で命名と prose だ�
 **檻の決定性を 1 spec で通しで直す。** 4 件はどれも「テストが本当のことを言っているか」という同一の関心であり、①③は同じファイル群を触るため分けると二重作業になる。
 
 1. **③ を先に決める**（設計判断が①の実装形を決めるため）: probe 方式と global-keeper 方式のどちらを正典とするか裁定し、**共有 crate（dev-dependency）または `pub` テスト支援モジュール**へ 1 本化。
-2. **① を機械適用**: 6 モジュールのヘルパを削除し共有版へ差し替え（44 呼出の import 書き換え）。`shiori_demo.rs` の inline 3 箇所は先にヘルパ化。**誤ったコメントも全て是正**する（否認が残ると再発する）。
+2. **① を機械適用**: **11 モジュール**のヘルパを削除し共有版へ差し替え（**95 呼出**の import 書き換え・追記(59)）。`shiori_demo.rs` の inline 3 箇所は先にヘルパ化。`capture_logs_flow`（`actor.rs:1937`）は捕捉層を `capture_logs` へ委譲しているだけなので、**基底 1 本を差し替えれば派生も同時に硬化する**。**誤ったコメントも全て是正**する（否認が残ると再発する——追記(59) で、否認が誤った由来表示〔「kanade 流儀」を名乗るが kanade は硬化済み〕ごと複製されていることが判明）。
 3. **② を変換**: `areka-ghost` の `spin_pumping_ticks` を donor に `spin_until(what, deadline, done)` を導入し 13 箇所を変換。Tick 生成子を兼ねる 5 箇所は Tick カウンタと deadline を分離。
 4. **④ にシーム**: `#[cfg(test)]` の fault フラグ（小）か `trait SurfaceUpload` ＋ fake（大・`presenter.rs`/`mount.rs` へ波及）を裁定し、失敗経路の「前状態保持」を檻化。
 
@@ -89,7 +112,7 @@ probe 方式（3 コピー・意味論はバイト等価で命名と prose だ�
 ## Boundary Candidates
 
 - **硬化設計の裁定と共有化**（③ — 全 crate 横断・最初に片づける）
-- **捕捉サイトの追随**（① — `crates/areka/src` 6 モジュール・機械的）
+- **捕捉サイトの追随**（① — **11 モジュール／5 crate 横断**〔`areka` 6・`areka-seriko` 2・`areka-emo-atlas` 1・`areka-emo-compose` 1・`wintf` 1〕・機械的・追記(59)）
 - **待機機構**（② — `spine.rs` 単独ファイル）
 - **失敗注入シーム**（④ — `areka-emo-present` の `chain.rs`＋`presenter.rs`）
 
@@ -110,11 +133,12 @@ probe 方式（3 コピー・意味論はバイト等価で命名と prose だ�
   - `areka-P0-kero-balloon`（W5）— `emo2_boot/frame.rs`・`placement/measure.rs` を割当に持つ。本 spec の① site 2 が `frame.rs`、正典ハーネスの消費者が `measure.rs`。**ゆえに W5 と同居不可**（W6 の後に配置する根拠）。
   - `areka-P0-balloon-visibility`（W6）— `emo2_boot/` に新モジュール＋`frame.rs` を触る。**本 spec は W6 完了後に着手**する。
   - `areka-P0-scale-exact-rational`（同時起票）— `areka-emo-present/src/scale.rs` の `mod tests`（③のコピー 3）で**同一ファイル異ハンク**。着手順の裁定が要る。
+  - **`areka-P0-bindoption-exclusivity`（W6）— 追記(59) で「素」判定が覆った**。追記(52) は「bindoption は seriko/parsers 面ゆえ本 spec と素」と書いたが、①に `crates/areka-seriko/src/actor.rs` が加わったため**同一ファイル**になる（bind 側の割当は同 brief :41/:205 の `actor.rs:367` 分岐＋`:1546` 檻）。**本 spec は W6.9＝W6 完了後**ゆえ順序は既に安全だが、bind が actor.rs の bind 檻を増改築すると①の呼出数（19）は動く＝**着手時に再計数が要る**。なお追記(59) で観測された確率赤の 1 本は `bind_apply_on_shown_emits_show_and_info_marker`（actor.rs:1470）＝bind 檻そのもの。
 
 ## Constraints
 
 - **新規外部依存なし**（`tracing-subscriber` は既出）。
-- 共有化の実現方法は要設計: `src` の `mod tests` 内・統合テスト・別 crate と**配置がバラバラ**なため、単なる移動では済まない（dev-dependency 用の支援 crate か `#[cfg(feature = "test-support")]` 公開かの判断）。
+- 共有化の実現方法は要設計: `src` の `mod tests` 内・統合テスト・別 crate と**配置がバラバラ**なため、単なる移動では済まない（dev-dependency 用の支援 crate か `#[cfg(feature = "test-support")]` 公開かの判断）。**追記(59) で必須条件が 1 段強まった**——消費側が `areka`・`areka-seriko`・`areka-emo-atlas`・`areka-emo-compose`・`wintf`・`areka-ghost`・`areka-kanade`・`areka-sylphya`・`areka-emo-present`・`areka-emo-text` に跨るため、**`crates/areka` 内で閉じる形は最初から不可**。とくに **`wintf` は `Cargo.toml` 上 `areka-*` crate へ一切依存していない**（実測・ワークスペース内依存は `dola`・`wintf-winmsg-executor` のみ）ため、共有先を既存のどの `areka-*` crate に置いても `wintf` からは引けない。**ワークスペース内依存を持たない新規 leaf crate を dev-dependency として全消費者に配る形**が最有力（③の裁定で確定させること）。
 - [[areka-bin-crate-internal-tests-in-crate]]: `crates/areka` は bin crate ゆえ内部到達テストは in-crate 配置が必須（`tests/` はバイナリ起動型専用）。共有化の形はこの制約を満たすこと。
 - 検証は**反復実行**で行う（フレーキーは単発の緑では証明できない）。②は負荷下・並列で最低数十走。
 
@@ -122,3 +146,4 @@ probe 方式（3 コピー・意味論はバイト等価で命名と prose だ�
 
 **2026-08-01 追補（kero-balloon task 7.1/7.2 の先行消化・roadmap 追記(56)）**: 本 brief の②「spine.rs 協調スピン 13 箇所」は **kero-balloon が 11 箇所を先行是正済み**（R7.8＝S2 注入時刻の観測窓頭打ち〔Clear@1.40s・導出式は同 spec requirements R7.8〕・R7.9＝壁時計 `Instant` deadline 10s＋200µs poll-backoff sleep×11 本）。残作業＝(a) 是正形の検収（台本・アサート無改変の確認）、(b) 意図的に `yield_now` のまま温存した **settle drain 2 箇所**（負検証「尽きるのが正常」）の扱い裁定、(c) 着手時に spine.rs を実測して取りこぼし確認。**②の規模見積りは縮む**。
 **監視項目の引き継ぎ**: kero-balloon 検証中に `cargo test -p areka` が **1 回だけ 553/1 で赤**（13 秒・S2 空回りパターンではない・**ログ未保存でテスト名不明**）。以後 15 回以上連続緑で再現せず。本 spec の反復検証（②は負荷下で数十走）中に赤を見たら**必ずログを tee してテスト名を採る**こと——これが正体不明のまま残っている唯一の非決定性候補。
+**2026-08-05 追記(59)**: 別途 `cargo test --workspace` が**約 1/6 で `areka-seriko` のログ捕捉檻で赤**になることが実測された（テスト名まで特定済み・①へ登記）。これは**上記 553/1（`cargo test -p areka`・13 秒・テスト名不明）とは別件**であり、553/1 の正体は依然不明のまま残る——ただし**同じ毒化機序で説明できる可能性がある**（`crates/areka` 側にも未硬化サイトが 6 モジュール 44 呼出ある）ため、①を硬化した後に 553/1 が再現しなくなるかを**反復検証で確認**すること。①硬化後も再現するなら別系統の非決定性が残っている証拠になる。
