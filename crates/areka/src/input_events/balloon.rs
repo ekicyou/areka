@@ -133,8 +133,24 @@ pub(crate) struct ChoiceSelectionInbox(pub(crate) Receiver<ChoiceSelection>);
 ///
 /// 包含は半開区間 `[left, right) × [top, bottom)`（whole-pixel 行矩形と整合）——
 /// `left`/`top` 辺は包含・`right`/`bottom` 辺は非包含。座標 `x`/`y`（バルーン窓 client
-/// **物理 px**・f32）を `HitRectPx` の各辺へ**そのまま**比較する（DPI 変換・スケール係数を
-/// 一切挟まない・k=1.0 素通し・R4.2／8.6・DD-IE-10 整合）。
+/// **物理 px**・f32）を `HitRectPx` の各辺へ**そのまま（無変換で）**比較する。
+///
+/// # 無変換が正しい理由（k=1.0 だからではない・R5.6/5.7・R6.4）
+///
+/// `HitRectPx` は `areka_emo_text::choice::to_window_physical` が**既に実適用 k を掛けて
+/// バルーン窓物理 px へ持ち上げた**矩形である（行内軸＝`(region 原点 + inline) × k`・ブロック軸
+/// ＝`… × k + committed`）。点も窓 client 物理 px ゆえ、**両者は既に同一空間**にあり無変換で一致
+/// する。すなわち成立根拠は「矩形側が ×k 済み」であって「k=1.0 だから」ではない——DPI追従により
+/// k≠1.0 が実供給されても本経路は正しいままである。
+///
+/// シェル窓の当たり判定は逆向きで、「矩形は作者定義サーフェス px のまま・**点を ÷k**」する
+/// （正準記述＝`crate::emo2_boot::hit_region` の座標契約）。バルーンは「点はそのまま・**矩形を ×k**」
+/// ——**逆向きだが等価に正しい**整合方式である。
+///
+/// **警告**: 本経路へ ÷k を追加すると **二重縮約**（矩形 ×k と点 ÷k の両掛け）になり、正常動作を
+/// 破壊する。シェル側で k=1.0 限定契約が解除されたことを本経路へ一般化してはならない（R6.4 が
+/// 明文で禁じる）。不変条件は下段の in-source 檻（k=2.0 で持ち上げた行矩形×無変換点＝ヒット／
+/// 同点を ÷k すると外れる・R3.7）が固定する。
 ///
 /// 判定対象は上流が供給する選択肢行ジオメトリ（`rows`）のみ。選択肢以外のバルーン内リンク
 /// （`\_a` 等）は `rows` に含まれず本関数の対象外（R5.2）。
@@ -151,7 +167,8 @@ pub(crate) struct ChoiceSelectionInbox(pub(crate) Receiver<ChoiceSelection>);
 pub(crate) fn hit_choice_row(rows: &[ChoiceHitRow], x: f32, y: f32) -> Option<usize> {
     // 逆順走査の最初の一致＝スライス最終一致（後定義が手前・画家のアルゴリズム・DD-CI-5）。
     // 半開区間 [left, right) × [top, bottom)：left/top は包含・right/bottom は非包含。
-    // 座標は物理 px 素通し——スケール係数を掛けない（R4.2／8.6）。
+    // 座標は無変換で比較する——行矩形が to_window_physical で既に実適用 k ×済みの窓物理 px ゆえ
+    // 点と同一空間で一致する（k=1.0 だからではない）。ここへ ÷k を足すと二重縮約（R5.6/5.7・R6.4）。
     rows.iter()
         .enumerate()
         .rev()
@@ -276,8 +293,10 @@ pub(crate) fn click_selection(
 ///
 /// wintf `PointerEventHandler` 署名（donor `on_char_pointer_moved` 同型）。**Bubble 相のみ処理し
 /// Tunnel は伝播続行のため即 `false`**。`BalloonWindowMarker.scope` を取り、`client_point`（窓 client
-/// **物理 px**・i32）を `as f32` で（**スケール係数を掛けず**＝k=1.0 素通し・R4.2/8.6・DD-IE-10 整合）
-/// 純関数核へ渡し、hover 遷移を上流 `TextLayerRuntime` へ注入する。moved は非侵襲ゆえ**常に `false`**。
+/// **物理 px**・i32）を `as f32` で**無変換のまま**（行ヒット矩形が `to_window_physical` で既に実適用
+/// k ×済みの窓物理 px であり点と同一空間ゆえ——k=1.0 だからではない。÷k の追加は二重縮約・
+/// R5.6/5.7・R6.4）純関数核へ渡し、hover 遷移を上流 `TextLayerRuntime` へ注入する。moved は非侵襲ゆえ
+/// **常に `false`**。
 ///
 /// **借用規律（固定順序・design §204）**:
 /// 1. `Emo2Wiring` 共有借用→`runtime()` アクセサで `Rc` clone→world 側借用解放。
@@ -319,7 +338,8 @@ pub(crate) fn on_balloon_pointer_moved(
     };
     let actor = ActorKey::from(scope.to_string());
 
-    // (2) client 物理 px（i32）を f32 へ——スケール係数を掛けない（k=1.0 素通し・R4.2/8.6・DD-IE-10）。
+    // (2) client 物理 px（i32）を f32 へ——無変換のまま渡す。行矩形が to_window_physical で既に実適用
+    // k ×済みの窓物理 px ゆえ同一空間で一致する（k=1.0 だからではない）。÷k 追加は二重縮約（R6.4）。
     let x = state.client_point.x as f32;
     let y = state.client_point.y as f32;
 
@@ -442,7 +462,10 @@ pub(crate) fn on_balloon_pointer_moved(
 ///    `error!(event = "choice_selection_send_failed", scope, id)`＋`false`。
 ///
 /// `resolve_choice` は本 crate から呼ばない（発行まで・カスケードは W6・R2.6/5.4）。自前描画なし。
-/// `RefCell` は `try_borrow` のみ（panic しない・log-first）。座標は物理 px 素通し（k=1.0・R4.2/8.6）。
+/// `RefCell` は `try_borrow` のみ（panic しない・log-first）。座標は窓 client 物理 px を**無変換**で
+/// 照合する——行矩形が `to_window_physical` で既に実適用 k ×済みゆえ同一空間で一致する（k=1.0 だから
+/// ではない）。シェルの「点 ÷k」とは逆向きだが等価に正しく、本経路へ ÷k を足すと二重縮約になり正常
+/// 動作を壊す（R5.6/5.7・R6.4。詳細は [`hit_choice_row`] の座標契約 doc）。
 ///
 /// **戻り値**: `ChoiceSelection` を発行したときのみ `true`（棄却・縮退・非左押下・Tunnel 時は `false`）。
 ///
@@ -478,7 +501,8 @@ pub(crate) fn on_balloon_pointer_pressed(
     };
     let actor = ActorKey::from(scope.to_string());
 
-    // client 物理 px（i32）を f32 へ——スケール係数を掛けない（k=1.0 素通し・R4.2/8.6・DD-IE-10）。
+    // client 物理 px（i32）を f32 へ——無変換のまま渡す。行矩形が to_window_physical で既に実適用
+    // k ×済みの窓物理 px ゆえ同一空間で一致する（k=1.0 だからではない）。÷k 追加は二重縮約（R6.4）。
     let x = state.client_point.x as f32;
     let y = state.client_point.y as f32;
 
@@ -913,8 +937,9 @@ mod tests {
     // hit_choice_row 純関数檻（task 3.1・design「純関数判定核」／Testing Strategy item 1/4）
     //
     // 上流実型 `ChoiceHitRow`／`HitRectPx`（全 pub フィールド）で fixture を組み、
-    // 包含／境界（半開）／行外／空／複数行／病的重なり／座標素通し（DPI 非適用）を
-    // GPU・実窓不要で決定的に判定する（R1.1/1.5/2.3/4.2/5.2/8.6）。
+    // 包含／境界（半開）／行外／空／複数行／病的重なりを GPU・実窓不要で決定的に判定する
+    // （R1.1/1.5/2.3/5.2）。座標を**無変換**で照合する不変条件（矩形側が実適用 k で ×k 済み
+    // ゆえ正しい・÷k 追加は二重縮約）は直後の DD-11 檻（R3.7）が k=2.0 で固定する。
     // -------------------------------------------------------------------------
 
     use areka_emo_text::actor::HitRectPx;
@@ -1026,29 +1051,159 @@ mod tests {
         );
     }
 
-    /// 座標素通し＝DPI 非適用（design Testing Strategy item 4・R4.2／8.6）: k=1.0 では
-    /// ヒットする点が、もし DPI スケール（>1）を座標へ掛けていれば矩形外へ出て miss する
-    /// 配置を用い、実際には**スケールを掛けず**ヒットすることを固定する（falsifying fixture）。
-    #[test]
-    fn hit_coordinate_passthrough_no_dpi_scaling() {
-        // 矩形は右下に離れた帯。点は k=1.0 でその内側。
-        let rows = [row(0, 100.0, 100.0, 140.0, 120.0)];
-        let (x, y) = (110.0_f32, 110.0_f32);
+    // -------------------------------------------------------------------------
+    // バルーン逆向き整合の不変条件檻（DD-11・R3.7／R5.6/5.7/6.4）
+    //
+    // 旧「座標素通し（k=1.0）」fixture の**強化版**（新規並置ではなく理由の是正＋条件の拡張）。
+    // 旧版は「k=1.0 だから素通し」を理由とし、行矩形を実 k で持ち上げた条件を持たなかった。
+    // 本檻は上流の実写像 `to_window_physical` に **k=2.0** を実供給して行矩形を窓物理 px へ
+    // 持ち上げ、そこへ (a) **無変換の** client 物理 px 点が正しくヒットすること、(b) 同じ点を
+    // ÷k してしまうと外れること（＝二重縮約の退行検出）を `click_selection` で固定する。
+    //
+    // 成立根拠は「矩形側が既に ×k 済み」——k=1.0 であることではない。シェル窓は逆向き（矩形は
+    // 作者定義サーフェス px のまま・点を ÷k）であり、両者は等価に正しい。バルーン経路へ ÷k を
+    // 足すと矩形 ×k と点 ÷k の二重縮約になり正常動作を壊す（R6.4 が明文で禁じる）。
+    //
+    // f32 誤差との無関係化（design Risks）: `to_window_physical` は f32 積を含み 1px の余地が
+    // あるため、檻の点は矩形境界から **8px 以上**（要件の 2px 以上を満たす）内側／外側に置く。
+    // -------------------------------------------------------------------------
 
-        // k=1.0 素通し: ヒットする。
+    use areka_emo_text::choice::{CanvasHitRow, to_window_physical};
+    use areka_emo_text::layout::LineRect;
+    use areka_emo_text::region::{ScaleContract, TextRegion};
+    use areka_emo_text::writing::WritingMode;
+    use areka_parsers::balloon::{
+        BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
+    };
+
+    /// 檻に用いる実適用スケール（k≠1.0——DPI追従下で実供給される値の代表）。
+    const CAGE_K: f32 = 2.0;
+
+    /// validrect 原点 (36, 46) の `TextRegion`（choice.rs 檻と同型の最小構築・画像原寸 400×224）。
+    fn cage_region() -> TextRegion {
+        let model = BalloonModel::new(
+            WindowPosition::new(None, None),
+            Origin::new(None, None),
+            WordWrapPoint::new(None, None),
+            ValidRect::new(Some(46), Some(168), Some(36), Some(356)),
+            Font::new(None, None, FontColor::new(None, None, None)),
+            None,
+            None,
+        );
+        TextRegion::resolve(&model, (400, 224), WritingMode::HorizontalTb)
+    }
+
+    /// canvas-local 行矩形を **上流の実写像 `to_window_physical`** で k=2.0 の窓物理 px へ
+    /// 持ち上げた 2 行（ordinal 0＝上帯・1＝下帯・committed=0）。
+    ///
+    /// 期待値（横書き・`行内 x=(36+inline)×2`／`ブロック y=(46+block)×2+0`）:
+    /// - 行 0: canvas (10, 0, 30, 10) → 窓物理 `[92, 132) × [92, 112)`
+    /// - 行 1: canvas (10, 10, 30, 20) → 窓物理 `[92, 132) × [112, 132)`
+    fn rows_lifted_by_real_k() -> Vec<ChoiceHitRow> {
+        let region = cage_region();
+        let contract = ScaleContract::new(CAGE_K, None);
+        [(0usize, 0.0_f32, 10.0_f32), (1, 10.0, 20.0)]
+            .into_iter()
+            .map(|(ordinal, top, bottom)| {
+                let canvas = CanvasHitRow {
+                    ordinal,
+                    rect: LineRect {
+                        left: 10.0,
+                        top,
+                        right: 30.0,
+                        bottom,
+                    },
+                };
+                ChoiceHitRow {
+                    ordinal,
+                    id: format!("q{ordinal}"),
+                    label: format!("label{ordinal}"),
+                    references: Vec::new(),
+                    rect: to_window_physical(
+                        &canvas,
+                        &region,
+                        WritingMode::HorizontalTb,
+                        0,
+                        &contract,
+                    ),
+                }
+            })
+            .collect()
+    }
+
+    /// 持ち上げ結果の固定（トートロジー回避の土台）: `to_window_physical` が k=2.0 で実際に
+    /// 生む窓物理 px 矩形を**ハードコード期待値**で押さえる。以降 2 本の檻の座標判断は、
+    /// この確定した矩形に対して行われる。
+    #[test]
+    fn cage_rows_are_lifted_to_window_physical_px_by_real_k() {
+        let rows = rows_lifted_by_real_k();
         assert_eq!(
-            hit_choice_row(&rows, x, y),
-            Some(0),
-            "物理 px 素通し（k=1.0）ではヒットする"
+            rows[0].rect,
+            HitRectPx {
+                left: 92.0,
+                top: 92.0,
+                right: 132.0,
+                bottom: 112.0
+            },
+            "行 0 は (36+10..30)×2 / (46+0..10)×2 の窓物理 px へ持ち上げられる"
+        );
+        assert_eq!(
+            rows[1].rect,
+            HitRectPx {
+                left: 92.0,
+                top: 112.0,
+                right: 132.0,
+                bottom: 132.0
+            },
+            "行 1 は (46+10..20)×2 のブロック帯へ持ち上げられる"
+        );
+    }
+
+    /// 檻 (a)（R3.7）: k=2.0 で持ち上げた行矩形に対し、**無変換の** client 物理 px 点
+    /// (110, 120) が正しく行 1 へヒットし `ChoiceSelection` を構成する。
+    ///
+    /// 点は行 1 の矩形 `[92, 132) × [112, 132)` の内側で、最寄り境界（top=112）から 8px 離れて
+    /// おり f32 誤差 1px と無関係に成立する。**成立根拠は矩形が ×k 済みであること**——k=1.0
+    /// ではないことを直上の持ち上げ檻が示している。本経路へ ÷k を追加すれば本檻は落ちる。
+    #[test]
+    fn click_untransformed_point_hits_row_lifted_by_real_k() {
+        let rows = rows_lifted_by_real_k();
+        // 無変換の client 物理 px 点（÷k も ×k もしない）。
+        let (x, y) = (110.0_f32, 120.0_f32);
+
+        let sel = click_selection(true, &rows, x, y, 7)
+            .expect("×k 済み行矩形へ無変換の client 物理 px 点は正しくヒットする（R3.7）");
+        assert_eq!(
+            sel.id, "q1",
+            "無変換点 (110,120) は k=2.0 で持ち上げた行 1（y∈[112,132)）へ当たる"
+        );
+        assert_eq!(sel.scope, 7, "scope は引数由来（判定空間とは独立）");
+    }
+
+    /// 檻 (b)（R3.7・二重縮約の退行検出）: 檻 (a) と**同一の行矩形・同一の点**に対し、点を
+    /// ÷k してしまうと `(55, 60)` となり全行の外（最寄り境界 left=92 から 37px・top=92 から
+    /// 32px 外）＝ヒットしない。
+    ///
+    /// (a) と (b) は行矩形も k も同一で、**÷k の有無だけ**で結果が割れる。ゆえに「バルーン経路
+    /// へ ÷k を足す」改変（＝矩形 ×k と点 ÷k の二重縮約）は (a) を落として必ず検出される。
+    #[test]
+    fn click_double_reduced_point_misses_row_lifted_by_real_k() {
+        let rows = rows_lifted_by_real_k();
+        let (x, y) = (110.0_f32, 120.0_f32);
+
+        // 誤って ÷k した座標（シェル経路の規約をバルーンへ一般化した場合の値）。
+        let (rx, ry) = (x / CAGE_K, y / CAGE_K);
+        assert_eq!((rx, ry), (55.0, 60.0), "÷k 後の座標（期待値ハードコード）");
+        assert_eq!(
+            click_selection(true, &rows, rx, ry, 7),
+            None,
+            "÷k した点は ×k 済み行矩形の外＝二重縮約は必ず外れる（R3.7 退行検出）"
         );
 
-        // もし DPI スケール（例 1.5）を座標へ掛けていたら (165, 165) となり矩形外＝miss。
-        // 実装がスケールを掛けていないことを、スケール後座標が miss になることで補強する。
-        let scale = 1.5_f32;
-        assert_eq!(
-            hit_choice_row(&rows, x * scale, y * scale),
-            None,
-            "スケールを掛けた座標なら矩形外（＝実装はスケールを掛けていない反証 fixture）"
+        // 同じ入力で無変換なら当たる——÷k の有無だけで結果が割れることをこの檻の中でも示す。
+        assert!(
+            click_selection(true, &rows, x, y, 7).is_some(),
+            "無変換なら当たる（÷k の有無だけが結果を分ける・非空虚性）"
         );
     }
 
@@ -2303,7 +2458,8 @@ mod tests {
         let rows = two_choice_rows();
         let scope = 7usize;
 
-        // ── 注入 move 点列（バルーン窓 client 物理 px・k=1.0 素通し・R6.4）─────────────────────────
+        // ── 注入 move 点列（バルーン窓 client 物理 px・**無変換**で照合される。行矩形が既に実適用 k
+        // ×済みの窓物理 px ゆえ同一空間で一致する——k=1.0 だからではない。÷k 追加は二重縮約・R6.4）──
         let moves = [
             (50.0_f32, 10.0_f32), // row0 内 → Some(0)（初回 Inject）
             (50.0, 30.0),         // row1 内 → Some(1)（行遷移 Inject）
