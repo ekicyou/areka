@@ -89,7 +89,7 @@
   - 完了条件: workspace テストが決定論的緑
   - _Requirements: 3.6, 6.1, 6.2, 6.5, 6.6_
 
-- [ ] 8.2 実 DPI 2 水準の実機サインオフと受け入れ記録を作成する
+- [x] 8.2 実 DPI 2 水準の実機サインオフと受け入れ記録を作成する
   - OS スケール 125%（期待 k=5/4）／200%（期待 k=2）で probe を各 1 回実行（期待ゲート env・有界 auto-exit・絶対パス起動）
   - 頭・胸・背景を人間の目視のみで狙い、client/surface/region ログと目視の一致を突合・2 実行の物理寸が互いに異なる証跡を採取
   - 本番 emo2 実ゴーストで shell target の実 k を debug ログ grep（R-2 の消化）
@@ -100,6 +100,9 @@
 ## Implementation Notes
 
 - 2.1: `hit.rs` の恒等檻 doc（`scaled_identity_matches_hit_region_exactly` 直上）に「×k の誤挿入も落とす」との過剰主張がある。k=1.0 では ×k も恒等ゆえ検出不能。×k 誤挿入の検出は 2.2 の任意 k 檻が担うので、2.2 で文言を是正すること。
+- 8.2: **2 水準サインオフ合格**（2026-08-05）。125%＝k=5/4・physical `478x684` ／ 200%＝k=2/1・physical `764x1094`（native は両者 `382x547` で不変）＝**互いに異なる拡大寸**の証跡が初めて成立（`collision-geometry` Task 4.2 却下の観測条件を突破）。DD-1 の丸め規約が実機で厳密一致（k=5/4 で 9/9・k=2 で 5/5）。閉区間の内外も 1px 単位で保存（k=2: Head 下端 surface y=130 当たり／131 外れ）。脚 B は本番 emo2 を絶対パス起動して SHIORI 実結線成立（`0x8007007E` 0 件）・shell `TargetId(0)` の実 k が `ScaleRatio { num: 2, den: 1 }`＝**R-2 消化**・`hit_region_client` の debug を 2271 行採取（Head 638／Bust 445／None 224）＝**本番バイナリが新 ÷k 入口を通っている証跡**・開発者が撫で／さわり反応を直接目視確認。
+- 8.2: **probe には手動終了の手段が無い**（実機で発覚・doc を是正済み）。かつて終了を担った stand-in `spawn_ghost_windows` の `OnPointerPressed(on_ghost_pressed)` は `areka-P0-input-events` task 2.7 で退役し、正典の脱出口（Ctrl+左ダブルクリック・DD-IE-7）は `input_events::attach_char_pointer_handlers` へ移ったが、同関数は `pub(crate)` かつ内部が `crate::` パスを使うため example から `#[path]` include できない。**probe 実行時は必ず `AREKA_APP_SMOKE_EXIT_MS`（推奨 180000）を与えること。** 脱出口の結線は本 spec の射程外（`input_events` の `#[path]` include 可能化が要る）。
+- 8.2: **probe は可視の端末で走らせること。** 出力をログファイルへリダイレクトすると、`region=` の変化を見ながら狙う本来の目視突合ができなくなる。今回は「狙う順序を先に宣言 → `region=` の時系列区間の並びと照合」という形で代替した（結果を見る前に期待値を宣言するので自己整合の罠は生じない）。本番 emo2（脚 B）は撫で反応という可視フィードバックがあるため、その場で直接判定できる。
 - 8.1: `cargo test --workspace` は本増分適用後 **6 実行中 5 回 exit 0**（85 binaries・4756 passed・0 failed・33 ignored で件数完全一致・GPU テスト 207 本実走）。**残る 1 回の赤は本増分と因果独立の既存 flake**——`areka-seriko` の `capture_logs`（`crates/areka-seriko/src/actor.rs:1948`）が `rebuild_interest_cache()` 未硬化で、tracing callsite interest cache のプロセス共有・first-thread-wins により確率的に捕捉 0 件となる（[[areka-log-cage-harness-blindspots]]）。因果独立の証跡: `git diff --stat 8112295 ece56eb -- crates/areka-seriko/` が空（当該テストとハーネスは base とバイト同一）／`areka-emo-compose` の増分 717 行に tracing 呼出 0 行／当該テストの最終更新は分岐前の `70bd1b3`。R3.6 の主語は「本仕様のテスト増分」で義務は「適用後**も**緑に**保つ**」＝保存義務ゆえ**充足**と裁定。
 - 8.1→**別 spec への申し送り（未登記・要対応）**: 上記 flake の所有 spec は `areka-P0-test-cage-determinism`（W6.9）で、機序は `brief.md:19-21` に正確に記述済み・射程も「全 crate 横断」（`brief.md:70-71`・`:91`）。**しかし未硬化サイト表（`brief.md:25-32` ＋追記(58)）は `crates/areka/src/**` の 7 件のみで `crates/areka-seriko/src/actor.rs` が未登記**。同 brief 自身「着手時に実測して取りこぼし確認」と書いており表はドリフトする。**当該 brief の①インベントリへ `crates/areka-seriko/src/actor.rs`（`capture_logs` は `:1948`・`:1946` に「スレッドローカル `with_default` ゆえ並行テスト安全」という①の目印そのものの偽の否定コメントあり・tracing 呼出は実測 31〜32 件）を追記すること。** 本 spec の boundary 外ゆえここでは是正していない。
 - 6→**8.2 への申し送り（必読）**: **開発機の実表示スケールは 200%（実適用 k=2/1）と実測済み**。probe 実行の実測値は `k=2/1 native=382x547 physical=764x1094`。8.2 の 2 水準は「現状の 200% で 1 回（`AREKA_COLLISION_PROBE_EXPECT_K=2`）」＋「OS 表示スケールを 125% へ変更して再実行（`=5/4`）」で満たす。期待ゲートは不一致時 exit 101 の hard assert で loud fail することを実測済み。

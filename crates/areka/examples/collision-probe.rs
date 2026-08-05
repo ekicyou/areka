@@ -67,8 +67,18 @@
 //! ```text
 //! cargo run -p areka --example collision-probe
 //! ```
-//! キャラ窓の不透明域をダブルクリックすると全ゴースト窓を閉じて終了する（`AREKA_APP_SMOKE_EXIT_MS`
-//! でも自動終了できる）。
+//! **終了は `AREKA_APP_SMOKE_EXIT_MS`（有界 auto-exit）のみ**。目視プロトコル ⑤ の所要時間を見込んで
+//! 寛大な値（例 `180000`＝3 分）を必ず与えること。
+//!
+//! **ダブルクリックでは終了しない**（2026-08-05 実機で確認）。本 probe が装着するポインタ
+//! ハンドラは [`on_probe_pointer_moved`]（`OnPointerMoved`）**だけ**であり、`OnPointerPressed` は
+//! 一切付いていない——`spawn_ghost_windows` が付けていた stand-in `on_ghost_pressed` は
+//! `areka-P0-input-events` task 2.7 で**退役**し（`placement/spawn.rs` の当該コメント参照）、
+//! 正典の脱出口（**Ctrl+左ダブルクリック**・DD-IE-7）は `input_events::attach_char_pointer_handlers`
+//! （`pub(crate)`・内部が `crate::` パスを使うため example から `#[path]` include できない）が
+//! 担うようになったためである。素のダブルクリックは本来 `KanadeMsg::Mouse(DoubleClick)` の送出契機で
+//! あって終了契機ではない。probe への脱出口結線は本 spec の射程外（`input_events` の
+//! `#[path]` include 可能化が要る）。
 //!
 //! # 起動時のパス（絶対パスの要否・要件 4.6）
 //!
@@ -360,7 +370,9 @@ fn main() -> Result<()> {
     );
     println!("  ログ  : `collision-probe: k=` / `collision-probe: client=` を grep して採取（1 実行 = 1 DPI 水準）");
     println!("  受け入れ: rustdoc プロトコル ①〜⑥（dpi≠96 を2水準必達・96 のみは不合格）");
-    println!("  終了  : キャラ窓の不透明域をダブルクリック／{SMOKE_EXIT_ENV}");
+    println!(
+        "  終了  : {SMOKE_EXIT_ENV} の有界 auto-exit のみ（ダブルクリックでは終了しない＝OnPointerPressed 未装着）"
+    );
     println!();
 
     mgr.run()?;
@@ -431,8 +443,14 @@ fn build_and_spawn(world: &mut World) {
     };
 
     // ⑤ マウス経路照合の観測シーム: probe 窓へ `OnPointerMoved` を1行装着（donor `OnPointerPressed`
-    // 前例＝`emo-present.rs:523` と同型・placement 非改変）。ダブルクリック終了は spawn 付与の
-    // `OnPointerPressed(on_ghost_pressed)` が担うため本 probe は移動ハンドラのみ追加する。
+    // 前例＝`emo-present.rs:523` と同型・placement 非改変）。
+    //
+    // **本 probe に `OnPointerPressed` は付かない**（2026-08-05 実機で確認・冒頭 doc「使い方」参照）。
+    // かつて終了を担っていた stand-in `spawn_ghost_windows` の `OnPointerPressed(on_ghost_pressed)` は
+    // `areka-P0-input-events` task 2.7 で退役し（`placement/spawn.rs` の当該コメント）、正典の脱出口
+    // （Ctrl+左ダブルクリック・DD-IE-7）は `input_events::attach_char_pointer_handlers` へ移った。
+    // 同関数は `pub(crate)` かつ内部が `crate::` パスを使うため example から `#[path]` include できず、
+    // 本 probe の終了は `AREKA_APP_SMOKE_EXIT_MS` の有界 auto-exit のみである。
     world
         .entity_mut(char_window)
         .insert(OnPointerMoved(on_probe_pointer_moved));
