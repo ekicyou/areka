@@ -1,6 +1,6 @@
 ---
 inclusion: manual
-updated_at: 2026-08-01
+updated_at: 2026-08-05
 ---
 
 # Roadmap — areka M1（最小 SSP 互換ベースウェア）
@@ -48,18 +48,19 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 - **耐力壁突破**（2026-07-01 `pilot-shiori-host-32`）: x64→32bit pasta.dll 駆動 GO。
 - **M-boot 23/23 完了**（2026-07-13 `emo2-boot`）: 起動→表示→talk→close の可視一周。①shiori・②parsers トラック全完了。
 - **増分ウェーブ W1〜W4＋割込 全完走**: W1〜W3（idle-talk／collision-geometry／sakura-dialogue-tags／input-events／mayuna-compose／sylphya／seriko-loop／choice-render）→ 割込（wintf-gpu-test-crash）→ W4（position-persist ∥ choice-interact ∥ emo-dpi-scaling＝DPI 追従 k の全表示経路適用）。横断: cue-playback-duration・surface-resize-resnap・balloon-face-cue・emo-text-viewbox ✅。
-- **W5 完了 3/4**（残 1 本 `collision-dpi-hittest` は W6 へ編入）:
+- **W5 完了 4/4**（`collision-dpi-hittest` は W6 へ編入のうえ 2026-08-05 に着地）:
   - `choice-select-events` ✅（2026-07-31）＝**M-dialogue 4/4 完走**。メニュー一周を実 emo2・実 DPI(120) で人間サインオフ。
   - `kero-balloon` ✅（2026-08-01・PR#97）＝kero が正典どおり `balloonk*`・採寸 per-scope。**SSP 裁定 2 件**（`windowposition.x` 符号非反転／**バルーン追従は窓相対**＝position-persist の Bottom 限定補正を撤去）。
   - `dpi-window-vanish` ✅（2026-08-01・PR#98）＝混在 DPI 窓消失の決着（S1〜S4 是正・実機全判定 PASS・`S1-SOURCE-CUT` 84/84 陽性→0 へ反転・`ground_y` 定数）。`TEARDOWN-SILENCE` 確定原因の誤りを裁定経由で訂正（確定台帳の訂正運用が実例確立）。マージ時の ker との意味的衝突は **ker の裁定済み正典（窓相対）を採用**。
+  - `collision-dpi-hittest` ✅（2026-08-05）＝**DPI 追従下の当たり判定 ÷k の決着**。丸め権威 `ScaleRatio::unscale_coord`（DD-1 画素中心逆写像・整数のみ）＋合成純関数 `hit_region_scaled` ＋ production 入口 `hit_region_client`（私有 `applied` 直読・f32 非経由）。SHIORI 配信座標を**サーフェス px** へ正準化（throttle は client px 維持）。**実 DPI 2 水準サインオフ合格**——125%(k=5/4・478×684) と 200%(k=2/1・764×1094) で**互いに異なる拡大寸**を実測し、`collision-geometry` Task 4.2 が 2026-07-18 に「k=1.0 固定ゆえ検証自体が成立しない」で却下された観測条件を初めて突破。本番 emo2 絶対パス起動で shell 実 k を確認（R-2 消化）＋開発者が撫で／さわり反応を直接目視。
 - **実機サインオフ発見 7件中 #1〜#6 解決済み**。**#7（冒頭空行）のみ pasta 上流（`ekicyou/pasta` 起票済み）＝areka スコープ外・未解決**。
-- 完了 spec = **150**（`.kiro/specs/completed/`）。
+- 完了 spec = **151**（`.kiro/specs/completed/`）。
 
 ## M1 残工程ゴール表（2026-08-01 棚卸⑤・全配置確定）
 
 | 種別 | ゴール（単一文） | ユニット | ウェーブ |
 |---|---|---|---|
-| 挙動バグ（M-dpi 残1） | DPI 追従下の当たり判定 ÷k | `collision-dpi-hittest` | **W6**（W5 から編入） |
+| ~~挙動バグ（M-dpi 残1）~~ | ~~DPI 追従下の当たり判定 ÷k~~ | `completed/collision-dpi-hittest` | ✅ **完了**（2026-08-05・W6 で着地） |
 | 横断 | バルーンが可視コンテンツ駆動 show／talk 終了+30s+無フォーカス hide／再表示 | `balloon-visibility` | **W6** |
 | 挙動バグ | 表情固着解消＝bindoption 3値正典（mustselect/非宣言=高々1/multiple）準拠 | `bindoption-exclusivity` | **W6** |
 | 挙動バグ | バルーンが他アプリ窓の背後へ埋もれない＝各バルーンを自シェルの直前へ維持 | `ghost-window-zorder` | **W6**（確定） |
@@ -69,7 +70,7 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 | 挙動バグ | 常駐アイドルの CPU 消費＝毎フレーム全再合成のアロケーション予算是正 | `recompose-budget` | **W6.75**（確定） |
 | 挙動バグ | 拡大率切替時の跳ね＝遷移の原子性＋work area 追随（+36px/24px 浮き） | `dpi-transition-atomicity` | **W6.75**（確定・再観測は W6 中） |
 | 挙動バグ | DPI 遷移時の `BalloonFollow.offset` スケール意味論確定 | `balloon-offset-dpi` | **W6.75**（atom 縮退時は atom と統合） |
-| 基盤 | 檻の決定性（毒化 45 呼出/7 モジュール・ハーネス 2 設計の一本化・注入シーム） | `test-cage-determinism` | **W6.9**（W6.5 から改訂） |
+| 基盤 | 檻の決定性（毒化 45 呼出/7 モジュール・ハーネス 2 設計の一本化・注入シーム） | `test-cage-determinism` | **W6.9**（W6.5 から改訂）／**⚠️ 未硬化サイト表に取りこぼし**——`crates/areka-seriko/src/actor.rs`（`capture_logs` :1948・偽の否定コメント :1946・tracing 呼出 31〜32 件）が brief 未登記。col 実装中に `cargo test --workspace` が約 1/6 で偽赤になる形で顕在化（2026-08-05 実測）。着手時に brief の①インベントリへ追記すること |
 | M-e2e | 適合14項目一周＋DoD＝**M1 完成宣言** | `emo2-conformance-e2e` | **W7**（最終） |
 
 > 完了済みマイルストーンのゴール表は history 参照。M-dual は退役＝e2e 適合 #10 へ吸収。
@@ -80,8 +81,8 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 
 | Wave | ユニット | 開始コマンド | 編成根拠・条件 |
 |---|---|---|---|
-| W1〜W5 ✅ | （W5 は 3/4 着地・完了サマリ参照・col は W6 へ編入） | — | 詳細は history |
-| **W6**（5本） | `collision-dpi-hittest` ∥ `balloon-visibility` ∥ `bindoption-exclusivity` ∥ `ghost-window-zorder` ∥ `scope-chain-gap` | `/kiro-start areka-P0-collision-dpi-hittest` ほか各 spec | **実測で全 10 ペア素**（2026-08-01 干渉再測定）。全て挙動バグ級＋vis は W7 前提の最長依存（vis→cage→e2e）。編成面の条件: ⑴**vis の hover は既設消費**（spawn.rs 非接触・触るなら despawn hook ハンク回避）⑵**bind は `BindResolver::empty()` 署名維持**（呼出元 4 箇所）⑶**zorder は案 A（owner）の WUC 共存実機検証が最初のタスク**・vis は zorder の「自シェルより手前」保証を前提にしてよい⑷**scg は要件前に SSP 実測必須**（brief 登記済み）⑸col は presenter.rs :867 域＝同ファイル他 spec（exact/budget/atom/cage④）は全て後続ウェーブ。**⑹`dpi-transition-atomicity` を文書フェーズ限定で同居**（6 本目・下行）——観測は spec の外では実施できない（本プロジェクトに spec 外の作業経路は無い）ため、**第 1 段再観測は atom 自身の requirements フェーズの research として行う**。`/kiro-start` は要件討議まででコードに触れないので W6 の 5 本と衝突しない。design 以降は W6.75 まで進めないこと（settled main へ再突合してから） |
+| W1〜W5 ✅ | （W5 は 4/4 着地・完了サマリ参照。col は W6 へ編入のうえ 2026-08-05 着地） | — | 詳細は history |
+| **W6**（残 4本・col ✅ 着地済み） | ~~`collision-dpi-hittest`~~ ✅ ∥ `balloon-visibility` ∥ `bindoption-exclusivity` ∥ `ghost-window-zorder` ∥ `scope-chain-gap` | `/kiro-start areka-P0-balloon-visibility` ほか各 spec | **実測で全 10 ペア素**（2026-08-01 干渉再測定）。全て挙動バグ級＋vis は W7 前提の最長依存（vis→cage→e2e）。編成面の条件: ⑴**vis の hover は既設消費**（spawn.rs 非接触・触るなら despawn hook ハンク回避）⑵**bind は `BindResolver::empty()` 署名維持**（呼出元 4 箇所）⑶**zorder は案 A（owner）の WUC 共存実機検証が最初のタスク**・vis は zorder の「自シェルより手前」保証を前提にしてよい⑷**scg は要件前に SSP 実測必須**（brief 登記済み）⑸~~col は presenter.rs :867 域~~ → **col 着地により presenter.rs の実形が変化**（`hit_region_client`／`applied_ratio`／`ClientHit` 新設・`hit_region` 本体は不変）。同ファイル後続（exact/budget/atom/cage④）は着手時に col 後の presenter.rs へ rebase すること。**⑹`dpi-transition-atomicity` を文書フェーズ限定で同居**（下行）——観測は spec の外では実施できない（本プロジェクトに spec 外の作業経路は無い）ため、**第 1 段再観測は atom 自身の requirements フェーズの research として行う**。`/kiro-start` は要件討議まででコードに触れないので W6 の残 4 本と衝突しない。design 以降は W6.75 まで進めないこと（settled main へ再突合してから） |
 | **W6 併走（文書のみ）** | `dpi-transition-atomicity`（**requirements フェーズまで**） | `/kiro-start areka-P0-dpi-transition-atomicity` | 第 1 段再観測＝要件の土台。S1 是正で実測①（859ms・`SetWindowPos` 8 回のうち 4 回）が失効しているため、**再採取しないと要件が書けない**。観測結果で W6.75 の形が決まる（縮退→bod と統合／残存→3 分割検討）。**⛔ design 以降は W6.75 で**（presenter.rs `apply_show`・frame.rs dpi 相で col/vis と衝突するため） |
 | **W6.5**（2本） | `scale-exact-rational` ∥ `windowposition-limit` | `/kiro-start areka-P0-scale-exact-rational`・`/kiro-start areka-P0-windowposition-limit` | 実測で素。**wpl は scg 着地後必達**（resolver.rs 同一関数 `resolve` :131-190 内 P2/P5 が 30 行差＋mod.rs fixture 檻共有＝scg の新期待値へ rebase。逆順だと limit クランプ後の値へ scg が二重補正）。exact は presenter.rs :665 域＝col の実形へ rebase。**exact は bod の前提**（丸め権威）ゆえ W6.75 より先 |
 | **W6.75** | `recompose-budget` ∥ `dpi-transition-atomicity`（＋`balloon-offset-dpi`） | `/kiro-start areka-P0-recompose-budget`・`/kiro-start areka-P0-dpi-transition-atomicity` | **分岐は W6 中の atom 再観測結果で確定**: ⑴**縮退時（859ms/8 回が S1 是正で消滅）**＝atom は「+36px work-area 追随＋檻」へ縮退し **bod と統合して 1 spec 化**（follow.rs/persist.rs 系）→ budget（presenter.rs/cache.rs 系）と**並走可**。⑵**残存時**＝atom は presenter.rs apply_show 域へ広がるため **budget 先行→atom 直列**（budget 着地後に 859ms を再測すると合成コスト ≒143ms の帰着切り分けが最良）・bod は atom に従う。いずれでも bind 着地済み（W6）ゆえ budget の CPU 単調上昇の (a)bind 同根/(b)活性集合の切り分けが可能 |
