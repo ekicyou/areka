@@ -1,6 +1,6 @@
 ---
 inclusion: manual
-updated_at: 2026-08-05
+updated_at: 2026-08-06
 ---
 
 # Roadmap — areka M1（最小 SSP 互換ベースウェア）
@@ -70,7 +70,7 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 | 挙動バグ | 常駐アイドルの CPU 消費＝毎フレーム全再合成のアロケーション予算是正 | `recompose-budget` | **W6.75**（確定） |
 | 挙動バグ | 拡大率切替時の跳ね＝遷移の原子性＋work area 追随（+36px/24px 浮き） | `dpi-transition-atomicity` | **W6.75**（確定・再観測は W6 中） |
 | 挙動バグ | DPI 遷移時の `BalloonFollow.offset` スケール意味論確定 | `balloon-offset-dpi` | **W6.75**（atom 縮退時は atom と統合） |
-| 基盤 | 檻の決定性（毒化 45 呼出/7 モジュール・ハーネス 2 設計の一本化・注入シーム） | `test-cage-determinism` | **W6.9**（W6.5 から改訂）／**⚠️ 未硬化サイト表に取りこぼし**——`crates/areka-seriko/src/actor.rs`（`capture_logs` :1948・偽の否定コメント :1946・tracing 呼出 31〜32 件）が brief 未登記。col 実装中に `cargo test --workspace` が約 1/6 で偽赤になる形で顕在化（2026-08-05 実測）。着手時に brief の①インベントリへ追記すること |
+| 基盤 | 檻の決定性（毒化 **95 呼出/12 モジュール**・ハーネス 2 設計の一本化・注入シーム） | `test-cage-determinism` | **W6.9**（W6.5 から改訂）。取りこぼし（areka-seriko/actor.rs 他）は**追記(59) 済**（2026-08-05 PR#101）＝①インベントリを 45/7 → 95/12 へ拡大・偽陽性=赤の側も明記 |
 | M-e2e | 適合14項目一周＋DoD＝**M1 完成宣言** | `emo2-conformance-e2e` | **W7**（最終） |
 
 > 完了済みマイルストーンのゴール表は history 参照。M-dual は退役＝e2e 適合 #10 へ吸収。
@@ -91,15 +91,15 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 
 **干渉台帳（生存ペアのみ・2026-08-01 実測再構築・退役分は history）**:
 - **scg⇄wpl**〔**同ハンク級・直列必達（scg 先）**: resolver.rs `resolve`（:131-190）内 P2 :151-159／P5 :182-188 ＝30 行差＋mod.rs fixture 檻（:711 位置期待値）共有〕
-- **budget⇄atom**〔**同ハンク＋因果**: presenter.rs `apply_show`（:343-600）同一関数内。859ms が合成コスト帰着なら budget へ差し戻し＝budget 先着後の再測が切り分け最良。atom 縮退時は解消〕
-- **cage⇄budget／cage⇄atom**〔apply_show 鎖: cage④ :510-514 が budget :377-392・atom 観測点と近接。④小案で縮退可。cage は W6.9 最後尾で解決〕
+- **budget⇄atom**〔**同ハンク＋因果**: presenter.rs `apply_show`（:360-614・col 後 +17）同一関数内。859ms が合成コスト帰着なら budget へ差し戻し＝budget 先着後の再測が切り分け最良。atom 縮退時は解消〕
+- **cage⇄budget／cage⇄atom**〔apply_show 鎖: cage④ :527-531 が budget :394-409・atom 観測点と近接。④小案で縮退可。cage は W6.9 最後尾で解決〕
 - **cage⇄vis**〔frame.rs: vis が本体 :369-596＋テスト大幅書換・cage①は同ファイル capture_logs :1990＋8 呼出＝**vis 先着必達**〕
 - **atom⇄bod**〔follow.rs 共有＝**統合候補（縮退時は統合が既定路線）**。分離時は atom 先着→bod rebase〕
-- **atom⇄vis**〔frame.rs 異ハンク（vis=attach 相 :369-596／atom=dpi 相 :796-1000・resnap :1286）。`emo2_frame_system` フェーズ列 :1466-1496 に両者が触る場合のみ直列注意〕
+- **atom⇄vis**〔frame.rs 異ハンク（vis=attach 相 :369-581／atom=dpi 相 :796-950・resnap :1305/:1488）。`emo2_frame_system` フェーズ列 :1466-1496 に両者が触る場合のみ直列注意〕
 - **atom⇄wpl**〔wpl の limit クランプが follow 側に落ちた場合のみ衝突＝wpl の SSP 観測（適用時点）確定後に再判定〕
 - **atom⇄zorder**〔`SetWindowPos` flags 別ビットゆえ素の見込み。atom が flush 経路（tick_bridge/command.rs）を改造する場合のみ着手時再突合〕
 - **wpl⇄bod**〔windowposition.rs（331 行）異ハンク: wpl=:39 変換域／bod=:93-94 合流欄。小ファイルゆえ先着後 rebase〕
-- **presenter.rs 直列鎖**〔col(:867)→exact(:665)→budget(:377-392)→atom(apply_show)→cage④(:510)＝**全て別関数・異ハンクだが同一ファイル**。ウェーブ順がそのまま先着順＝各後続は先行の実形へ rebase〕
+- **presenter.rs 直列鎖**〔col ✅→exact(:682)→budget(:394-409)→atom(apply_show :360-614)→cage④(:527-531)＝**全て別関数・異ハンクだが同一ファイル**。col 着地で全域 +17 シフト済み（2026-08-06 実測・各 brief 追記(60) が正本）。ウェーブ順がそのまま先着順＝各後続は先行の実形へ rebase〕
 - **因果のみ（コードは素）**: bind→budget（CPU 上昇の切り分け）・exact→bod（丸め権威）・zorder→vis（手前保証の前提）・vis⇄scg/wpl（balloon 位置は char 従属・hide 中の limit 補正は無意味＝順序自由）
 - **軽微**: cage③の test_support 共有化で placement 系（scg/wpl/bod）の import 行が追随＝実質共存可
 - `status-execution-states`=台帳 spec（着手しない・源着地時に just-in-time）・`surfaces-basepos`／`sakura-time-directives`／`balloon-canon-residue`=**M2 解禁ゲート**（M1 では着手しない）
@@ -130,6 +130,8 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 
 ---
 
-**追記台帳（要約・全文は history）**: (51) W6.5 残件 2 spec 起票（07-30）／(52) 棚卸④＝roadmap 履歴分離・W6 に bind 編入・brief 補正 8 本（07-31）／(53) `recompose-budget` 起票＝`compose_into` 本番未配線・アイドル 1 コア 13〜22%（07-31）／(54) `ghost-window-zorder` 起票＝owner 無し・全 `SWP_NOZORDER`・「語彙完備・配線ゼロ」3 例目（07-31）／**(55) 欠番**（atom 起票の本体がマージで脱落・内容は atom brief＋(57)⑴ が正本）／(56) 未登記先送り棚卸＝孤児 17 件・新規 brief 4 本起票（08-01）／(57) van 完了＝S5 担当が atom で確定・確定台帳の裁定付き訂正運用が確立・檻の空虚性通算 9 例（08-01）。
+**追記台帳（要約・全文は history）**: (51) W6.5 残件 2 spec 起票（07-30）／(52) 棚卸④＝roadmap 履歴分離・W6 に bind 編入・brief 補正 8 本（07-31）／(53) `recompose-budget` 起票＝`compose_into` 本番未配線・アイドル 1 コア 13〜22%（07-31）／(54) `ghost-window-zorder` 起票＝owner 無し・全 `SWP_NOZORDER`・「語彙完備・配線ゼロ」3 例目（07-31）／**(55) 欠番**（atom 起票の本体がマージで脱落・内容は atom brief＋(57)⑴ が正本）／(56) 未登記先送り棚卸＝孤児 17 件・新規 brief 4 本起票（08-01）／(57) van 完了＝S5 担当が atom で確定・確定台帳の裁定付き訂正運用が確立・檻の空虚性通算 9 例（08-01）／(59) col 実装中の申し送り＝cage brief ①インベントリを 95 呼出/12 モジュールへ拡大・偽陽性側も明記（08-05・PR#101・cage brief 内が全文正本）。
+
+**2026-08-06 追記(60)（棚卸⑥＝col マージ後の軽量アンカー監査）**: `/kiro-discovery` 再入。前回⑤以降の main 差分は col 実装（PR#100）と cage brief 追記(59)（PR#101）のみ＝brief 無し spec **0**・新規起票 **0**・ウェーブ編成**変更なし**を確認。col 着地の brief アンカー実測監査（W6 残 4 本＋atom＋exact＋budget・16 項目）: **実害ドリフトは balloon.rs（+155・col のテスト増）と presenter.rs（+17）の 2 ファイルのみ**で、意味論的陳腐化はゼロ（TalkDone 未配線・無条件 ShowSurface・f32 汚染経路・resolver.rs P2/P5 は全て現物一致）。補正: bind（`empty()` :1482）・exact（汚染点 :682＋**col 新設の `unscale_coord`/`applied_ratio`/`ClientHit` を前提へ編入**＝重複設計防止）・budget（apply_show 一族 +17）・vis（全アンカー無傷の再確認）・atom（全一致確認）の 5 brief へ追記(60) 適用＋本台帳の干渉行番号を col 後の実形へ更新。zorder・scg・wpl・cage は無傷（cage は (59) で更新済み）。
 
 **2026-08-01 追記(58)（棚卸⑤＝W5 3本マージ後の全面棚卸・本改訂の由来）**: `/kiro-discovery` 再入（開発者指示: roadmap 棚卸＋brief 精査＋肥大化対処＋ウェーブ再編）。サブエージェント 2 体で実測——(a) **brief 陳腐化監査**（12 本全数・main `ec9687c` 突合）: 重大 1（atom＝着手ゲート開放・S1 是正で実測①②の前提失効・+36px スコープは有効のまま）・数値全面更新 1（cage＝スピン 13→残 2・毒化 44/6→45/7・medium へ縮小）・要補正 4（vis/bind/zorder/e2e＝W5 前提の完了形化）・軽微 6。**7 本へ追記(58) 補正ブロック適用済み**。(b) **干渉行列再構築**（11 spec・55 ペア）: 生存衝突 12 ペア＋因果 4 ペア・素 26 ペア。**新発見**: scg⇄wpl は resolver.rs 同一関数内 30 行差＝同ハンク級へ格上げ。①**brief 無し spec=0 を確認**（roadmap 登記 16 本全てに brief 実在）。②**全配置確定**（従来の配置裁定待ち 6 本を一括裁定）: W6=5 本並走（col 編入・zorder/scg 編入）・wpl=W6.5・budget/atom/bod=W6.75（atom 縮退時は bod と統合）・cage=W6.9 へ後送（apply_show 鎖の最後尾・ただしこれ以上は後送しない）。③**過積載 1 件**: atom は 3 関心（観測基盤/原子性/work-area 追随）で分割規定を brief へ登記——ただし分割判断は W6 中の再観測（コード非接触・即実施可能）を待つ。④roadmap 減量: W5 詳報・旧ウェーブ表・旧干渉台帳・追記(53)(54)(56)(57) 全文を history へ退避し、干渉台帳を生存ペアのみへ再構築・**(55) 欠番を正式裁定**（㊻の教訓どおり注記のみ・追記順序の乱れ〔(57) が (56) より先〕も要約台帳化で解消）。⑤「語彙完備・配線ゼロ」通算 5 例を受け、実装規律へ定期監査項目として昇格。

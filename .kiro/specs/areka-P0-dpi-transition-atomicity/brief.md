@@ -4,6 +4,8 @@
 > 本 brief は**実測証跡・踏査結果・所有権判断を全て内包**する。別セッションはこの brief 単体で再開できる（会話ログは不要）。
 > **機序は未確定である。** 本 brief は仮説を仮説として書く。断定している箇所は実測引用を必ず添えてある。
 
+> **📌 2026-08-06 追記(60)再実測（棚卸⑥・col=collision-dpi-hittest PR#100 マージ後）**: 本 spec の全アンカーは現物一致を再確認（dpi 相 :796-950 帯・`run_dpi_phase` :976・`resnap_shell_targets` :1305/:1488・`flush_window_pos_commands` command.rs :210）。干渉先の presenter.rs `apply_show` は col で +17 シフト＝現在 **:360-614**（budget 檻点 :394-409・cage④ :527-531）。requirements 着手（W6 文書同居）の条件に変更なし。
+>
 > **📌 2026-08-01 追記(58)陳腐化補正（棚卸⑤・W5 3本マージ後の実測・本ブロックが以下の本文より優先）**:
 > - **着手ゲート開放**: van（`dpi-window-vanish`）マージ済（PR#98・main `ec9687c`）＝「van 5.1/5.2 着地後に再観測」の待ち条件が**充足**。**第1段再観測は本 spec の requirements フェーズの research として実施する**（spec 外の作業経路は本プロジェクトに存在しない）。`/kiro-start` は要件討議まででコードに触れないため **W6 の 5 本と文書フェーズで同居可能**——**design 以降は W6.75 まで進めないこと**（presenter.rs `apply_show`・frame.rs dpi 相で col/vis と衝突）。
 > - **S1 是正着地で実測①②の前提が動いた**: window_pos.rs の WM_DPICHANGED は `dpi_suggested_position_decision`＋`ExternalAuthority`（:288-290/:388-389）で **OS 提案位置を書かなくなった**＝実測①の 8 回中 4 回（flags=21 の S1 書込 ②④⑥⑧）は現行コードで発生しない見込み。「859ms・SetWindowPos 8 回」は**全面再採取が必要**。実測②「applied=true 素通し」は是正済みの過去形として読むこと。

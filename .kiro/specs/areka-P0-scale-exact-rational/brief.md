@@ -4,6 +4,11 @@
 > **出自**: `completed/areka-P0-emo-dpi-scaling` の残件是正（PR #92・roadmap 追記㊿）の最中に**新規発見**した欠陥。
 > 担当 spec が実在しないため [[deferral-requires-verified-owner]] の規律に従い起票する。
 
+> **📌 2026-08-06 追記(60)陳腐化補正（棚卸⑥・col=collision-dpi-hittest PR#100 マージ後の実測・本ブロックが本文より優先）**:
+> - **col が本 spec の前提を前進させた（重複設計に注意）**: `ScaleRatio::unscale_coord`（scale.rs **:253**・逆写像・i128 中間・Euclid 除算・f32 非経由・決定論檻 6 本付き）＋ presenter に `applied_ratio() -> Option<ScaleRatio>`（**:744**・有理厳密）＋`ClientHit`/`hit_region_client`（**:248**/**:953**）が新設。「f32 を消す」ではなく **「f32 出口ビュー ∥ 有理権威」の二層併存**（doc :723-731 が判定経路まで明文化）へ前提が移動——本文 Approach の `TextSlotView.scale_ratio` 案は**整合したまま**だが、設計時は `applied_ratio` を配管の起点に使うこと（`ratio()` アクセサ新設と重ねない）。
+> - アンカードリフト（+3〜+17・形は全て不変）: 汚染点 `scale: applied.as_f32()` :665 → **:682**（供給域 :659-666 → :676-683）・`as_f32` :144/doc :140 → **:147**/**:142**・`scale_len` :166 → **:169**・emo-text 本番呼出 actor.rs :649-650 → **:665-666**。`TextSlotView::scale` :233 は一致。emo-text への `ScaleRatio` 配管は**依然ゼロ**（region.rs :119 `ceil(v × k_f32)` 健在）＝gap 有効。
+> - 干渉更新: cage との scale.rs `mod tests` 共有は不変。budget との presenter.rs 異ハンク判定は col 後も成立（budget=:386-417 ∥ 本 spec=:676-683）。
+
 ## Problem
 
 DPI 追従（k = 窓の実モニタ DPI ÷ `author_dpi`）の**丸め権威は整数有理数 `ScaleRatio`** であり、画素・寸法演算で f32 を使うことは D4 で禁じられている。ところが**バルーン文字層だけは k が f32 へ落ちてから寸法演算に使われており**、非二進比で 1px 誤る。
