@@ -3,6 +3,9 @@
 > **起票 2026-07-26**（`/kiro-discovery`・`areka-P0-emo-dpi-scaling` の task 7.4 実機サインオフ中に開発者が発見）。
 > 本 brief は**調査済みの根因と実測証拠を全て内包**する。別セッションはこの brief 単体で再開できる（会話ログは不要）。
 
+> **📌 2026-08-06 追記(60)ドリフト補正（棚卸⑥・col=collision-dpi-hittest PR#100 マージ後の実測）**:
+> - col が `input_events/balloon.rs` へ +210 行（テスト増）＝`empty()` 呼出 **:1327 → :1482**。他 3 箇所（frame.rs:1563・emo2_boot/mod.rs:374・spine.rs:671）と assets.rs `BindResolver::new` :267・looper.rs :215 は**現物一致を再確認**。監視対象 4 箇所・署名不変条件は不変。W6 は col 着地済みで**残 4 本並走**（vis ∥ 本 spec ∥ zorder ∥ scg）。
+>
 > **📌 2026-08-01 追記(58)陳腐化補正（棚卸⑤・W5 3本マージ後の実測・本ブロックが(52)より優先）**:
 > - **着手ゲート開放**: kero-balloon マージ済（PR#97）＝「assets.rs 異ハンク衝突ゆえ W5 不可・ker 先着後に rebase」は**充足**。今から着手可。ウェーブは **W6 の 5 本並走**（col ∥ vis ∥ 本 spec ∥ zorder ∥ scg・追記(58)裁定）で不変同居。
 > - アンカードリフト（シンボル実在・軽微）: looper.rs bind ゲート :196-201 → **:215**・assets.rs `BindResolver::new` :196-210 → **:267**（ker の balloon 資産ループ +563 行が上に挿入・ker 側は :336-370 で両ハンクの距離はむしろ開いた）・frame.rs `BindResolver::empty` :1387 → **:1563**・spine.rs :572 → **:671**。

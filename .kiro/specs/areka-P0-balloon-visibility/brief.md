@@ -3,6 +3,9 @@
 > バルーン表示ライフサイクル（自然な表示・消去・再表示）。`/kiro-discovery` 2026-07-23 発。
 > 実測（コード配管・7項目）と正典（ukadoc・6項目）の二重裏取り済み。file:line は本日時点の実測。
 
+> **📌 2026-08-06 追記(60)再実測（棚卸⑥・col=collision-dpi-hittest PR#100 マージ後）**:
+> - col の frame.rs 変更は**テスト 1 行増のみ**（:1902）＝本 spec の全アンカー無傷を再確認: 主犯 ShowSurface **:541-550**・`emo2_frame_system` **:1466-1496**・`on_talk_done` steady.rs **:827**・`TalkDone` は crates/areka/src 出現ゼロ＝**gap 核は 2026-08-06 実測でも有効**。attach 相の実範囲は `run_attach_phase` **:369-581**＋`connect_balloon_text` **:589-608**（旧表記 :369-596 の精密化）。W6 は col 着地済みで**残 4 本並走**。
+>
 > **📌 2026-08-01 追記(58)陳腐化補正（棚卸⑤・W5 3本マージ後の実測・本ブロックが(52)㊹㊵より優先）**:
 > - **W5 前提は全て完了形へ**: ①kero-balloon の per-scope 化は**着地済み**（`balloon_models` は `Emo2Wiring` フィールド :207＋insert :568・消費は `run_text_scale_phase` :1045）＝「先行改造への再突合」条件は充足・実形確定。②「ChoiceSelectionInbox は下流 seam」→ se の `choice_drain::wire_choice_drain`（main.rs:370・新ファイル `input_events/choice_drain.rs`）が**消費済み**。③van の spawn.rs 大改修着地＝「触る場合のみ van 後着の直列注意」は解消（触るなら `GhostWindowMarker` despawn hook ハンクを避けるのみ）。**van 申し送りの転記: hide は despawn でなく可視性切替で実装**（despawn すると `GhostWindows` から scope が自動で消え respawn しない）。
 > - アンカードリフト: `emo2_frame_system` :1297-1327 → **:1466-1496**（7 フェーズ構成は一致・resnap 実体は `resnap_shell_targets` :1488）。主犯 ShowSurface :531-540 → **:541-550**（surface_id:0・無条件のまま健在＝gap 認識有効）・first-`\s` ゲート → **:490-497**・`connect_balloon_text` fn → **:589**・`text_slot_view` → **:553**・`Emo2Wiring` → **:181**・spawn.rs `HitTest::none()` → **:245/:273**・檻 → **:862-882**。
