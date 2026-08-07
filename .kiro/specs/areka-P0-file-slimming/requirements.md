@@ -106,8 +106,9 @@
 1. The file-slimming 実装 shall テストハーネスの一本化・共有化、テスト間の状態汚染の是正、時刻注入シームの変更を行わない。
 2. If 移設の過程で壊れたテストモジュール・不正なテストモジュール・テスト間で状態が汚染されているテストモジュールを発見したとき, the file-slimming 実装 shall 本 spec では修正せず、所見を file:line 付きで登記し、所有 spec（`test-cage-determinism` または当該領域の所有 spec）へ送る。
 3. The file-slimming 実装 shall 他 spec の brief に記載された file:line アンカーを書き換えない（新レイアウトの吸収は各 spec の design 前 rebase または次回棚卸に委ねる）。
-4. When 実装へ着手するとき, the file-slimming 実装 shall 他 spec の実装ブランチが同時進行していないこと（W5.95＝実装ウェーブの空白期）を確認する。
+4. When 実装へ着手するとき, the file-slimming 実装 shall 他 spec の実装ブランチが同時進行していないこと（W5.95＝実装ウェーブの空白期）を確認する。2026-08-07 実測では他 spec の実装ブランチは 0 本であり、前提は成立している。
 5. If 着手後に他 spec の実装が同一ファイルへ着地したとき, the file-slimming 実装 shall 当該ファイルの移設を強行せず、衝突を登記したうえで対象から一時的に外す。
+6. The file-slimming 実装 shall 本 spec の正典ブランチを `claude/areka-p0-file-slimming-64d065`（要件・ギャップ分析・要件ディスカッションの全成果を保持）とする（開発者裁定 2026-08-07）。同一 spec の重複ワークツリー `claude/areka-p0-file-slimming-e4f098`（`f657d84`）は正典ではなく、その破棄は開発者の操作に委ねる。
 
 ### Requirement 6: 規律の明文化と実測の更新
 
