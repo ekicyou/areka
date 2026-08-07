@@ -391,7 +391,27 @@ impl<'a> Replayer<'a> {
 }
 
 
+// ============================================================================
+// D2D1_LAYER_PARAMETERS ヘルパー（COM所有権の生々しさをここに隔離）
+// ============================================================================
 
+/// geometricMask による Layer パラメータ。
+///   - maskTransform = identity: 位置は current world transform に委ねる。
+///   - layer(第2引数)は None: Win8+ の自動管理（呼び出し側で PushLayer(&p, None)）。
+/// contentBounds は簡易に無限大。実運用では clip_aabb を入れるとバッキングストアが縮む。
+unsafe fn layer_params(geom: &ID2D1Geometry) -> D2D1_LAYER_PARAMETERS {
+    D2D1_LAYER_PARAMETERS {
+        contentBounds: infinite_rect(),
+        // windows-rs の geometricMask は ManuallyDrop<Option<ID2D1Geometry>>。
+        // clone() で AddRef。PopLayer 後は D2D 側が Release する前提。
+        geometricMask: std::mem::ManuallyDrop::new(Some(geom.clone())),
+        maskAntialiasMode: D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+        maskTransform: Matrix3x2::identity(),
+        opacity: 1.0,
+        opacityBrush: std::mem::ManuallyDrop::new(None),
+        layerOptions: D2D1_LAYER_OPTIONS_NONE,
+    }
+}
 
 
 
