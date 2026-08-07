@@ -287,3 +287,146 @@ cargo build -p shiori-host32-testdll --target i686-pc-windows-msvc   #  7.77s / 
 x64 で `ignored` になる 3 件は `shiori_proxy::tests::testdll_drop_invokes_courtesy_unload` ／ `shiori_proxy::tests::testdll_request_roundtrip_get_and_notify` ／ `loopback_tests::loopback_hello_request_proxy_driven_and_bounded_loop`。32bit の `shiori.dll` を `LoadLibrary` するため x64 プロセスでは `BAD_EXE_FORMAT` になるという構造上の制約で、実装側が実行時に `ignore` 理由つきでスキップしている（失敗ではない）。本 spec では**是正しない**。
 
 **要件 2.2（前後のテスト総数完全一致）への含意**: この 3 件は「x64 では ignored / i686 では passed」と、**ターゲットによって passed 件数が変わる**。したがって EvidencePipeline の移設前後スナップショットは**同一ターゲットで採取**しなければ総数一致の判定が壊れる。既定（x64）で揃えれば 3 件は前後とも ignored で安定し、比較は成立する。この 3 件は移設対象モジュール（`main.rs` の 4 モジュール・`shiori_proxy.rs`）と重なるため、当該クレートのコミット時に本注意を再確認すること。
+
+## 10. 移設前スナップショットの採取（タスク 1.3・要件 2.2 / 2.3 / 2.6）
+
+design §検証 / EvidencePipeline（証跡パイプライン）の採取手順 1〜3 を、実装開始直前に一度だけ実行した記録。
+以後の実装作業（タスク 2 以降）は、この 3 ファイルを基準値として比較される。
+
+- 採取日: 2026-08-07
+- ブランチ: `claude/areka-p0-file-slimming-64d065` / HEAD `6289b70`（タスク 1.2 のコミット時点。作業ツリーの変更は verification/ の新規 3 ファイル＋本 notes.md への追記のみ。`before_build_warnings.txt` の記録 sha と一致する）
+- 実行シェル: **PowerShell（pwsh）**。Git Bash は使わない（§9.5 の理由——GNU `link.exe` が MSVC `link.exe` を隠す）
+- ツールチェーン: `cargo 1.97.1 (c980f4866 2026-06-30)` / `rustc 1.97.1 (8bab26f4f 2026-07-14)` / `stable-x86_64-pc-windows-msvc (default)`
+
+### 10.1 3 本の採取結果
+
+| # | コマンド | exit | 保存先 | 行数 |
+|---:|---|---:|---|---:|
+| 1 | `cargo test --workspace --no-fail-fast -- --list` | 0 | `verification/before_default.txt` | **4,790** |
+| 2 | `cargo test --workspace --exclude areka --all-targets --no-fail-fast -- --list` | 0 | `verification/before_alltargets.txt` | **4,105** |
+| 3 | `cargo build --workspace --all-targets` | 0 | `verification/before_build_warnings.txt` | 254（集計値 5 個＋警告原文 23 行＋raw stderr 187 行） |
+
+3 本とも **exit 0**。失敗・未達は無い。
+
+### 10.2 リストファイルの生成手順（移設後も同一手順で再現すること）
+
+1. cargo の **stdout** のみを対象とする（`--list` 出力は stdout・進捗と警告は stderr）。
+2. 正規表現 `: test$` に一致する行だけを残す。除外されるのはユニット単位の集計行（`N tests, 0 benchmarks`）と空行のみ。
+3. **序数（ordinal）比較で整列**する。`[Array]::Sort($arr, [System.StringComparer]::Ordinal)` を用いる。
+   PowerShell の `Sort-Object` 既定はカルチャ依存比較でありアンダースコアと英字の順序が変わるため使わない。
+4. UTF-8（BOM 無し）で書き出す。
+
+**重複行は除去しない。** 同一の完全修飾名が複数のテストバイナリに現れることがあり、要件 2.2 が問うのは総数であるため、比較は集合ではなく**多重集合（行数込み）**で行う。実測の重複は以下:
+
+- `before_default.txt`: 4,790 行 / 相異なる名前 4,787（`log_capture::tests::` の 3 本が各 2 回）
+- `before_alltargets.txt`: 4,105 行 / 相異なる名前 4,097（上記 3 本＋`ipc::tests::` の 5 本が各 2 回）
+
+集計行の総和（`N tests` の合計）は 1 が 4,790、2 が 4,105 で、抽出行数と一致する。抽出漏れは無い。
+
+### 10.3 3 本立てが実際に相互補完していることの実測
+
+design が 3 本立てを要求する根拠を、採取結果そのもので裏づけた。
+
+| 観測 | 実測値 |
+|---|---:|
+| (1) にのみ在るテスト行 | 711 |
+| (2) にのみ在るテスト行 | 26 |
+| (1) の doctest 行（`<path>.rs - <item> (line N): test` 形式） | 37 |
+| (2) の doctest 行 | **0** |
+
+- **(2) が doctest を落とす**ことは実測で確認（37 → 0）。`--all-targets` は doctest を含まないという design の前提どおり。
+- **(2) にのみ在る 26 行はすべて `crates/pilot/examples/**` のテストモジュール**である。相異なる名前で 21 本。
+  裏取り: `crates/pilot/examples/shiori-host-32/process_host.rs:254`（`exit_kind_classification_table`）・
+  `crates/pilot/examples/shiori-host-32/shiori_proxy.rs:273`（`ansi_encode_ascii_is_byte_equivalent`）・
+  `crates/pilot/examples/pilot-clickthrough-alpha-toggle/main.rs:921`（`center_is_opaque`）。
+  これらは既定の `--list`（1）に **0 件**しか現れない。examples 被覆に (2) が必要であることの直接証跡。
+- (1) にのみ在る 711 行は doctest 37 行と、(2) が `--exclude areka` で落とした `crates/areka` のテストの合計。
+  検算: 4,790 − 4,105 + 26 = 711。
+- (3) は (2) が除外した `crates/areka` の examples を**非 test モード**でビルドして被覆する。既存 E0433 は test モード限定の
+  コンパイルエラー（`crates/areka/src/placement/spawn.rs:879`・先行裁定注記 `:871`）であるため、(3) は exit 0 で通る。
+  この既存エラーは本 spec の担当ではない（§7.1 の送付所見）。
+
+### 10.4 `#[cfg_attr(not(target_arch = "x86"), ignore)]` の 3 件は `--list` に現れる（要件 2.2 への含意・§9.8 の続き）
+
+§9.8 で「x64 では ignored / i686 では passed」と記録した 3 件について、`--list` 出力への現れ方を実測で確定した。
+
+**結論: 現れる。** `--list` は `ignore` 属性の有無を区別せず、無印で `: test` 行として列挙する。
+`before_default.txt` に以下の 3 行が実在する:
+
+```
+loopback_tests::loopback_hello_request_proxy_driven_and_bounded_loop: test
+shiori_proxy::tests::testdll_drop_invokes_courtesy_unload: test
+shiori_proxy::tests::testdll_request_roundtrip_get_and_notify: test
+```
+
+さらに、この 3 件が**ターゲットによってリスト membership を変えない**ことも実測した:
+
+| 実行 | `: test` 行数 | 差分 |
+|---|---:|---|
+| `cargo test -p shiori-host32-helper -- --list`（既定 x64・exit 0） | 23 | — |
+| `cargo test -p shiori-host32-helper --target i686-pc-windows-msvc -- --list`（exit 0） | 23 | **差分ゼロ**（`Compare-Object` 出力なし） |
+
+`ignore` は「列挙されるが実行されない」を意味するだけで、テストの**存在**を消さない。したがってこの 3 件に限れば
+リスト比較はターゲット差の影響を受けない（§9.8 が懸念した passed 件数の 20 対 23 という差は、`--list` ではなく実行結果側の話である）。
+
+**それでも移設前後の 2 スナップショットは同一ホストターゲット（既定の x64）で採取しなければならない。**
+理由は `ignore` ではなく `#[cfg(...)]` である——`cfg` でゲートされたテストはターゲットが変わると
+リストから**消える／現れる**ため、ターゲットを跨いだ比較は要件 2.2 の「総数完全一致」判定を無意味にする。
+本 spec の全スナップショットは既定ターゲット `x86_64-pc-windows-msvc` で採取する。タスク 7.1 の移設後採取も同一とすること。
+
+### 10.5 警告集計の方法（要件 2.6・タスク 7.2 が同一手順で再現すること）
+
+`before_build_warnings.txt` の `[TALLY METHOD]` セクションに手順を逐語で埋め込んである。要点:
+
+- 対象は **stderr のみ**（cargo の警告は stderr へ出る）。
+- 2 種類の行を別々に数える。
+  - **SUMMARY 行**: `^warning: ` + 「バッククォート囲みのクレート名」+ `(ユニット) generated N warnings` に一致する行。
+  - **DIAG 行**: `^warning: ` に一致し、SUMMARY 行ではないもの（個別警告の見出し行）。
+- SUMMARY 行から `generated N warnings` の N を総和して `GENERATED_SUM`、`(N duplicates)` の N を総和して `DUPLICATES` とし、
+  `NET = GENERATED_SUM − DUPLICATES` を求める。`NET` と `DIAG_COUNT` の一致が集計の健全性チェックになる。
+
+**移設前の基準値（この 5 数値が比較対象）**:
+
+| 指標 | 値 |
+|---|---:|
+| `DIAG_COUNT` | **16** |
+| `SUMMARY_COUNT` | 7 |
+| `GENERATED_SUM` | 22 |
+| `DUPLICATES` | 6 |
+| `NET` | **16** |
+
+ユニット別内訳（原文はファイル内 `[PER-UNIT TALLY]`）。**7.2 の比較対象は上記 5 数値のみ**であり、
+下表の `duplicates` 列の帰属先と行順は比較対象に含めない——同一コミットの再ビルドで duplicates 3 件が
+`shiori-host32-testdll` の `(lib)` と `(lib test)` の間を移動し行順も変わることを実測済み（`generated` 列は再現する）:
+
+| ユニット | generated | duplicates |
+|---|---:|---:|
+| `shiori-host32-helper` (bin, test) | 3 | 0 |
+| `shiori4-testdll` (lib) | 1 | 0 |
+| `areka-seriko` (lib test) | 4 | 0 |
+| `shiori-host32-testdll` (lib test) | 3 | 0 |
+| `areka` (bin "areka") | 4 | 0 |
+| `shiori-host32-testdll` (lib) | 4 | 3 |
+| `shiori-host32-helper` (bin) | 3 | 3 |
+
+内訳の性質（16 件の DIAG の中身）: `"cdecl" is not a supported ABI for the current target` × 6、
+`unused std::ops::ControlFlow that must be used` × 4、デッドコード系（`CommandConsumer`・`LedgerError`・`ConsumerLedger`・
+`new`/`try_register`/`consumer_of`/`canonical`）× 4、`linker stdout: ...`（MSVC link.exe の import library 生成通知）× 2。
+
+集計上の注意（7.2 で踏むこと）:
+
+- `linker stdout:` の 2 件は本文にワークツリー絶対パスと日本語ロケールの MSVC 出力を含む。**比較は本文一致ではなく件数**で行う。
+- cargo はキャッシュ済み（fresh）ユニットの警告も再生する。本採取時点でワークスペースは (1)(2) のビルドで温まっており、
+  それでも 7 ユニット分の警告がすべて再生された。フルリビルドでも fresh でも件数は同一になる。
+- `[RAW STDERR]` セクション（全 187 行）は証跡であって比較対象ではない。`Compiling` / `Fresh` 行はキャッシュ状態で変動する。
+
+### 10.6 本タスクの成果物
+
+| ファイル | 内容 |
+|---|---|
+| `verification/before_default.txt` | 手順 1 のテスト名リスト・4,790 行・序数整列済み |
+| `verification/before_alltargets.txt` | 手順 2 のテスト名リスト・4,105 行・序数整列済み |
+| `verification/before_build_warnings.txt` | 手順 3 の警告集計・基準値 5 数値＋ユニット別内訳＋警告原文＋raw stderr |
+| `verification/notes.md` | 本節（§10）を追記 |
+
+`crates/**`・`Cargo.toml`・spec 本体ドキュメントには一切触れていない。
