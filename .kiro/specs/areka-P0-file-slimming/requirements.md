@@ -14,7 +14,9 @@
 
 本 spec は areka ワークスペースの**ファイル構造のみ**を是正する。動かすのは「檻の位置」であって「檻の中身」でも「本番のふるまい」でもない。受け入れの中心は 3 つの不変量——**テスト総数不変**・**公開 API 不変**・**挙動変更ゼロ**——であり、この 3 つが証跡で示せない変更は本 spec の成果物ではない。
 
-対象規模は 2026-08-07 の全数実測で確定している: `crates/*/src/**/*.rs` 387 ファイル・総 189,190 行のうち、`#[cfg(test)] mod {...}` ブロックが占めるのは 92,868 行（49.1%）。うち**檻が 500 行を超えるファイルは 48 本**（当該 48 本の檻合計 66,830 行・檻 1,000 行超は 26 本）。この 48 本が檻分離の必須対象であり、brief 実測表の 16 本はその部分集合である。
+**対象は areka リポジトリの全 Rust ソースファイル**である。すなわち全クレートの `src/` に加え、`tests/`（統合テスト）・`examples/`・`benches/`・`build.rs` を含む、リポジトリ配下の `*.rs` 全数を対象とする（Markdown・TOML 等の非 Rust ファイルは対象外）。
+
+対象規模のうち `crates/*/src/**/*.rs` については 2026-08-07 の全数実測が済んでいる: 387 ファイル・総 189,190 行のうち `#[cfg(test)] mod {...}` ブロックが 92,868 行（49.1%）。**檻が 500 行を超えるファイルは 48 本**（当該 48 本の檻合計 66,830 行・檻 1,000 行超は 26 本）で、brief 実測表の 16 本はその部分集合である。`src/` 外（`tests/`・`examples/`・`benches/`・`build.rs`）を含む全域の実測値は Requirement 1.2 の再計測で確定させる。
 
 > 注: 全体合計は 2 度の独立計測で 92,591 → 92,868（+277）へ訂正された。出所は `crates/shiori-host32-host/src/lifecycle.rs:272` の `#[cfg(test)] pub(crate) mod tests`（277 行）で、初回スキャナが `pub(crate) mod` を取りこぼしていた。当該檻は 500 行未満のため**必須対象 48 本の一覧は不変**。
 
@@ -22,7 +24,7 @@
 
 ## Boundary Context
 
-- **In scope**: 檻が 500 行を超える全 `crates/*/src/**/*.rs` の檻分離／`crates/areka/src/placement/follow.rs` と `crates/areka/src/emo2_boot/frame.rs` の本番本体分割／移設方式の単一裁定と一貫適用／新規檻の配置規律の steering 明文化／移設後の行数実測の brief 更新／移設前後のテスト総数一致の証跡採取。
+- **In scope**: areka リポジトリの全 Rust ソースファイル（全クレートの `src/`・`tests/`・`examples/`・`benches/`・`build.rs`）のうち檻が 500 行を超えるものの檻分離／`crates/areka/src/placement/follow.rs` と `crates/areka/src/emo2_boot/frame.rs` の本番本体分割／移設方式の単一裁定と一貫適用／新規檻の配置規律の steering 明文化／移設後の行数実測の brief 更新／移設前後のテスト総数一致の証跡採取。
 - **Out of scope**: 檻の内容変更・追加・削除／テストハーネスの一本化・共有化・毒化是正・時刻注入シームの変更（`test-cage-determinism` W6.9 の領分）／`follow.rs`・`frame.rs` 以外の本番本体分割／関数分割・責務移動・ロジック書き換えを伴うリファクタ／他 spec の brief に記載された file:line アンカーの更新／檻が 500 行以下のファイルの必須移設。
 - **Adjacent expectations**: `test-cage-determinism` は本 spec 着地後の**新レイアウト上で**作業する（本 spec は檻の**位置**のみを所有し、檻の**中身**は cage が所有する）。W6 以降の各 spec は design 前 rebase（既存規律）で新レイアウトを吸収し、本 spec が各 spec の brief を書き換えて回ることはしない。`cargo test --workspace` の全緑判定には i686 の host-32 成果物が事前に用意されていることを前提とする（既存の DoD 前提であり本 spec が変更するものではない）。
 
@@ -34,8 +36,8 @@
 
 #### Acceptance Criteria
 
-1. The areka ワークスペース shall `crates/*/src/**/*.rs` のうち `#[cfg(test)]` 檻の合計が 500 行を超える全ファイルについて、その檻の本体を当該ファイルの外にある専用のテストファイルへ移した状態を持つ。
-2. The file-slimming 実装 shall 檻分離の必須対象一覧を設計時に同一条件で全数再計測して確定する。2026-08-07 実測では 48 ファイル（brief 実測表の 16 ファイルを含む・檻合計 66,830 行）が該当しており、再計測結果がこれと乖離する場合は差分の理由を示す。
+1. The areka リポジトリ shall 全 Rust ソースファイル（全クレートの `src/`・`tests/`・`examples/`・`benches/`・`build.rs`）のうち `#[cfg(test)]` 檻の合計が 500 行を超える全ファイルについて、その檻の本体を当該ファイルの外にある専用のテストファイルへ移した状態を持つ。
+2. The file-slimming 実装 shall 檻分離の必須対象一覧を設計時にリポジトリ全域で全数再計測して確定する。`crates/*/src/` 限定の 2026-08-07 実測では 48 ファイル（brief 実測表の 16 ファイルを含む・檻合計 66,830 行）が該当しており、全域の再計測結果は最低でもこの 48 本を包含する。`src/` 外で新たに該当したファイルは一覧へ加える。
 3. When 1 つのファイルが複数の `#[cfg(test)]` 檻を持つとき（必須対象 48 本のうち 7 本が該当・最大は `crates/areka/src/main.rs` の 7 檻）, the file-slimming 実装 shall それらを当該ファイル専用の檻の置き場へ集約する。なお 2026-08-07 の全数実測により、必須対象 48 本の檻は**すべてファイル末尾に連続配置**されており、本体の途中に挿入された interleaved 檻は 0 件である（ワークスペース全体でも `crates/wintf/src/ecs/world/mod.rs` の 1 件のみ・檻 500 行未満で対象外）。
 4. Where 檻が既に本番ファイルの外に在る（例: `crates/areka/src/emo2_boot/spine.rs`＝親の `#[cfg(test)] mod spine;` で外部から gate されている）, the file-slimming 実装 shall 当該ファイルを移設対象から除外し、そのまま維持する。
 5. Where ファイルの `#[cfg(test)]` 檻が 500 行以下であるとき, the file-slimming 実装 shall 当該ファイルの移設を必須としない。ただし同一ディレクトリ・同一モジュール群の一貫性のために併せて移設することを許容する。
