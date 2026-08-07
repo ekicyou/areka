@@ -184,3 +184,106 @@ design はテーマ分割について「自然な境界が無ければ単一維�
 | `excluded_inventory.csv` | 既に分離済みのテストファイル 55 本 |
 | `scan_summary.txt` | 区分別集計・対象集計・診断カウンタ |
 | `notes.md` | 本ファイル（着手条件の記録＋登記） |
+
+## 9. 32bit ヘルパ成果物の事前ビルド（タスク 1.2・要件 2.1）
+
+- 実施日: 2026-08-07 / ブランチ `claude/areka-p0-file-slimming-64d065`
+- 位置づけ: design.md §Migration Strategy（段階着地計画）順 0「準備」の一項（i686 成果物ビルド）、および §検証 / EvidencePipeline が前提とする「最終全緑は i686 host-32 成果物ビルド後に取る」に対応する環境前提。本番コード（`crates/**`）・`Cargo.toml` には一切触れていない。
+- design.md §Allowed Dependencies に「i686 host-32 成果物の事前ビルド（`cargo test --workspace` 全緑の既存 DoD 前提——本 spec は変更しない）」と明記された依存の実体化にあたる。
+
+### 9.1 着手前の状態（この作業が取り除いた失敗）
+
+両成果物とも不在であり、`cargo test -p shiori-host32-host` は exit **101** で停止した。最初に落ちるのは `tests/error_paths.rs` で、パニック本文は成果物の探索先とビルド手順をそのまま示している。
+
+```
+thread 'helper_abnormal_exit_is_detected_nonblocking' panicked at crates\shiori-host32-host\tests\error_paths.rs:114:5:
+i686 helper exe が見つかりません（探索先: <repo>\target\i686-pc-windows-msvc\{debug,release}\shiori-host32-helper.exe）。
+PowerShell で先に i686 helper をビルドしてください（Git Bash 不可）:
+  cargo build -p shiori-host32-helper --target i686-pc-windows-msvc
+```
+
+内訳: `src/lib.rs` のユニット 87 件は成果物不在でも全て緑。`tests/error_paths.rs` が 1 passed / 1 **failed** となり、cargo はここで打ち切るため後続の 4 本の E2E バイナリ（`lifecycle_cyclic_e2e` / `lifecycle_kill_e2e` / `shiori_load_e2e` / `shiori_request_e2e`）は実行に到達しない。
+
+**正確な記録**: 失敗していたのは「実行」であって「列挙」ではない。成果物不在の状態でも `cargo test -p shiori-host32-host -- --list` は exit **0** で全 96 件を列挙できた（`--list` / `--no-run` はコンパイルまでで、ヘルパを起動しないため）。タスクの完了状態にある「列挙・実行」のうち、実際にヘルパ不在で落ちていたのは実行側のみである。
+
+### 9.2 ビルドコマンド（PowerShell で実行）
+
+```powershell
+cargo build -p shiori-host32-helper  --target i686-pc-windows-msvc   # 49.07s / exit 0
+cargo build -p shiori-host32-testdll --target i686-pc-windows-msvc   #  7.77s / exit 0
+```
+
+`cargo` の出力はファイルへリダイレクトし、終了コードは `$LASTEXITCODE` で別途確認すること。`tee` / `tail` へパイプするとパイプライン末尾のコマンドの終了コードが返り、cargo の失敗が隠れる。
+
+### 9.3 生成物
+
+| 成果物 | 絶対パス | サイズ | 更新時刻 | PE machine |
+|---|---|---:|---|---|
+| helper 実行ファイル | `<repo>\target\i686-pc-windows-msvc\debug\shiori-host32-helper.exe` | 271,872 B | 2026-08-07 23:21:27 | `0x014C`（i386 / 32bit） |
+| テスト用 SHIORI DLL | `<repo>\target\i686-pc-windows-msvc\debug\shiori.dll` | 155,648 B | 2026-08-07 23:21:35 | `0x014C`（i386 / 32bit） |
+
+`<repo>` = `C:\home\maz\git\areka\.claude\worktrees\areka-p0-file-slimming-64d065`。PE ヘッダの machine 値を実読して 32bit であることを確認済み（x64 でビルドしてしまう取り違えの検出）。`target/` は git 管理外のため、この作業によるワークツリーの追跡ファイルへの変更は本ファイルの追記のみである。
+
+なお `shiori-host32-testdll` の i686 ビルドは `#[warn(linker_messages)]` 由来の警告を 1 件出すが、これは既存の状態であり本 spec 以前から変わらない。要件 2.6 の警告件数比較は x64 の `cargo build` を対象とするので、この 1 件は比較の母数に入らない。
+
+### 9.4 ツールチェーン
+
+| 項目 | 値 |
+|---|---|
+| 既定ツールチェーン | `stable-x86_64-pc-windows-msvc`（active・default） |
+| ホスト | `x86_64-pc-windows-msvc` |
+| 追加ターゲット | `i686-pc-windows-msvc`（`rustup target list --installed` に存在・追加インストール不要） |
+| rustup home | `c:\rust\up` |
+
+### 9.5 再現手順（PowerShell 必須）
+
+1. **PowerShell（pwsh）で実行する。Git Bash では実行しない。** Git Bash の PATH には GNU coreutils の `link.exe` が入っており、これが MSVC の `link.exe` を隠す。i686 のリンク段でリンカが取り違えられビルドが失敗する。9.1 のパニック本文自身が「Git Bash 不可」と明示している。
+2. リポジトリルート（本ワークツリー）で 9.2 の 2 コマンドを順に実行する。
+3. 9.3 の 2 ファイルの存在を確認する。
+4. `cargo test -p shiori-host32-host` が exit 0 になることを確認する。
+5. 探索先を変えたい場合のみ、環境変数 `HOST32_HELPER_EXE` で exe パスを明示できる（既定は `target/i686-pc-windows-msvc/{debug,release}/` の探索）。
+
+前提として `vendors/pasta` サブモジュールが初期化済みであること（本ワークツリーでは初期化済み）。
+
+### 9.6 完了状態の証跡
+
+ビルド後の `cargo test -p shiori-host32-host` は **exit 0**。
+
+| テストバイナリ | 結果 |
+|---|---|
+| `unittests src\lib.rs` | ok. 87 passed / 0 failed |
+| `tests\error_paths.rs` | ok. 2 passed / 0 failed |
+| `tests\lifecycle_cyclic_e2e.rs` | ok. 2 passed / 0 failed |
+| `tests\lifecycle_kill_e2e.rs` | ok. 1 passed / 0 failed |
+| `tests\shiori_load_e2e.rs` | ok. 2 passed / 0 failed |
+| `tests\shiori_request_e2e.rs` | ok. 2 passed / 0 failed |
+| Doc-tests | 0 tests |
+
+合計 **96 件・失敗 0**。9.1 で落ちていた `helper_abnormal_exit_is_detected_nonblocking` を含め全て緑になった。
+
+`shiori_load_e2e` の出力には `LoadLibraryFailed(HRESULT(0x8007007E))` の行が現れるが、これは `load_e2e_success_fail_survival` が意図的に観測している失敗経路（LOAD 失敗後も helper が生存することの確認）であり、テストは緑である。異常ではない。
+
+### 9.7 ヘルパ以外の消費側 — 既定のワークスペース実行では未到達
+
+`resolve_helper_exe` 相当を持つテストは host32-host 以外に 3 本あるが、いずれも環境変数ゲートで、ヘルパ解決に到達する前に早期 return する。
+
+| ファイル | ゲート |
+|---|---|
+| `crates/areka-kanade/tests/kanade/real_helper_test.rs:160` | `HOST32_PASTA_DLL` 未設定なら return |
+| `crates/areka-ghost/tests/ghost/real_pasta_test.rs:153` | 同上 |
+| `crates/areka-ghost/tests/ghost/snapshot_capture_test.rs` | `HOST32_PASTA_DLL` ＋ `AREKA_SNAPSHOT_OUT` の両設定時のみ動作 |
+
+→ 成果物不在で無条件に落ちていたのは `shiori-host32-host` のみであり、そこが緑になった時点でヘルパ不在起因の失敗はワークスペースから消えている。
+
+### 9.8 `shiori-host32-helper` 自身のテストのアーキテクチャ依存（要件 2.2 への含意・記録のみ）
+
+`shiori-host32-helper` は本 spec の対象クレート 12 のうちの 1 つ（`main.rs` 595 行・4 モジュール）であるため、その挙動を実測して記録する。
+
+| 実行 | 結果 |
+|---|---|
+| `cargo test -p shiori-host32-helper`（既定 x64） | exit 0 — **20 passed / 0 failed / 3 ignored** |
+| `cargo test -p shiori-host32-helper --target i686-pc-windows-msvc` | exit 0 — **23 passed / 0 failed / 0 ignored** |
+
+x64 で `ignored` になる 3 件は `shiori_proxy::tests::testdll_drop_invokes_courtesy_unload` ／ `shiori_proxy::tests::testdll_request_roundtrip_get_and_notify` ／ `loopback_tests::loopback_hello_request_proxy_driven_and_bounded_loop`。32bit の `shiori.dll` を `LoadLibrary` するため x64 プロセスでは `BAD_EXE_FORMAT` になるという構造上の制約で、実装側が実行時に `ignore` 理由つきでスキップしている（失敗ではない）。本 spec では**是正しない**。
+
+**要件 2.2（前後のテスト総数完全一致）への含意**: この 3 件は「x64 では ignored / i686 では passed」と、**ターゲットによって passed 件数が変わる**。したがって EvidencePipeline の移設前後スナップショットは**同一ターゲットで採取**しなければ総数一致の判定が壊れる。既定（x64）で揃えれば 3 件は前後とも ignored で安定し、比較は成立する。この 3 件は移設対象モジュール（`main.rs` の 4 モジュール・`shiori_proxy.rs`）と重なるため、当該クレートのコミット時に本注意を再確認すること。
