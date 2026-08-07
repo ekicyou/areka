@@ -521,13 +521,20 @@ flowchart TB
 
 | 順 | コミット単位 | 内容 | ゲート |
 |---:|---|---|---|
-| 0 | 準備 | 対象 49 本の再確認と他 spec 実装不在の確認（TargetInventory——結果は `verification/notes.md` へ記録）・i686 成果物ビルド・移設前スナップショット 3 本を `verification/` へ | スナップショット採取成功 |
-| 1〜12 | クレート単位テスト分離（12 論理コミット: areka／emo-text／emo-present／kanade／sakura／emo-compose／seriko／ghost（tests/ 含む）／wintf／sylphya／dola／host32-helper） | 移設＋テーマ分割＋対応表追記 | `cargo test -p <crate>` 緑＋リスト比較一致（7.2） |
+| 0 | 準備 | 対象 49 本の再確認と他 spec 実装不在の確認（TargetInventory——結果は `verification/notes.md` へ記録）・i686 成果物ビルド・移設前スナップショット 3 本を `verification/` へ・**3 階層解決の事前スモーク**（下記） | スナップショット採取成功＋スモーク緑 |
+| 1〜12 | クレート単位テスト分離（12 論理コミット: areka／emo-text／emo-present／kanade／sakura／emo-compose／seriko／ghost（tests/ 含む）／wintf／sylphya／dola／host32-helper） | 移設＋テーマ分割＋対応表追記 | `cargo test -p <crate>` 緑＋リスト比較一致＋**対応表の全単射検証**（7.2） |
 | 13 | follow 本体分割 | ファサード化・項目純移動 | areka 緑＋examples ビルド緑 |
 | 14 | frame 本体分割 | 同上 | 同上 |
 | 15 | 文書 | steering 改訂・brief 実測表更新・移設後スナップショット・最終全緑証跡 | 全検証パス |
 
 ロールバックはコミット単位の revert で完結する（各コミットが独立に緑であるため）。
+
+**3 階層解決の事前スモーク**（バリデーション指摘 2 への対応）: research §2.3.3 の実測は「`#[path]` 読込ファイル → その子」の 2 階層までであり、follow 本体分割後の「`#[path]` include された `placement/mod.rs` → `follow.rs` → `follow/anchor.rs`」という 3 階層の example ビルド成立は意味論からの推論である。よって準備段階（順 0）で最小サブモジュール 1 本（例: `follow/work_area.rs` 相当のダミーでよい）を仮置きして `cargo build -p areka --examples` の緑を確認し、確認後に仮置きを撤去する。赤だった場合はテスト分離の成果に影響させず、ファサード形の裁定（§本体分割）へ戻る。
+
+### Tasks フェーズへの申し送り（バリデーション指摘の反映・設計変更なし）
+
+1. **テーマ分割の作業順序を各タスク内で固定する**（指摘 1）: テーマ分割対象 24 モジュールのうち初期テーマ案が確定しているのは `follow.rs`・`frame.rs` のみで、残り 22 モジュールのテーマ名は実装時に確定する（§テーマ分割ポリシー）。tasks 生成時は各対象モジュールについて「①テーマ案の確定（モジュール内部構造の確認）→ ②項目単位の分割 → ③`test_name_mapping.csv` への追記 → ④リスト一致＋全単射検証」の順序をタスク内ステップとして固定し、クレート単位コミットのゲート（7.2）に対応表の全単射検証を含める。
+2. **事前スモークをタスク化する**（指摘 2）: 上記「3 階層解決の事前スモーク」を準備タスク（Migration 順 0）の明示ステップとして生成する。
 
 ## Supporting References
 
