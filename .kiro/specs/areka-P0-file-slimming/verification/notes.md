@@ -819,3 +819,131 @@ Test-Path crates\areka\src\placement\follow   → False
 - 実行時挙動（要件 2.7）への影響は無い。本節は最終状態で本番コードの差分 0 件である。
 
 差し戻し（ファサード形の裁定へ戻す）は**不要**。
+
+## 13. クレート単位のテスト分離: `wintf`（タスク 2.1・要件 1.1 / 1.6 / 2.4 / 2.8 / 3.1〜3.3 / 7.1 / 7.2）
+
+- 実施日: 2026-08-08
+- ブランチ: `claude/areka-p0-file-slimming-64d065` / 移設前コミット `264bac2`
+- 実行シェル: **PowerShell（pwsh 7）**
+- `crates/wintf` の対象 4 ファイル＋新規テストファイル 4 本以外には一切触れていない（`Cargo.toml`・他クレート・spec 本体ドキュメントは無変更）
+
+### 13.1 移設した 4 ファイル（design §File Structure Plan の `crates/wintf` と完全一致）
+
+| 本番ファイル | 移設前 総行 | テストモジュール | 新テストファイル | 新ファイル行 | 本番 残行 |
+|---|---:|---|---|---:|---:|
+| `crates/wintf/src/ecs/window_proc/window_pos.rs` | 1,160 | `tests`（445-1160） | `window_pos_tests.rs` | 713 | 447 |
+| `crates/wintf/src/ecs/clickthrough/controller.rs` | 1,092 | `tests`（456-1092） | `controller_tests.rs` | 634 | 458 |
+| `crates/wintf/src/ecs/window_proc/dpi_helpers.rs` | 746 | `tests`（149-746） | `dpi_helpers_tests.rs` | 595 | 151 |
+| `crates/wintf/src/ecs/layout/systems/monitor_systems.rs` | 1,050 | `tests`（482-1050） | `monitor_systems_tests.rs` | 566 | 484 |
+
+- 4 ファイルとも**テストモジュールは 1 個・ファイル末尾に連続配置**（design の実測どおり・ズレ 0）。モジュール名はいずれも `tests`。
+- 4 ファイルとも新テストファイルが **1,000 行以下**のため、テーマ分割は不要（要件 1.7）。
+  完全修飾名は 1 件も変わらないため、**`mapping/wintf.csv` は作成しない**（対応表の行 0 件・§11.3 の規約どおり）。
+- 4 ファイルとも `#[cfg(test)]` は**テストモジュールの 1 箇所のみ**。非 `mod` `#[cfg(test)]` 項目（設計判断 #3 の残置対象 40 件）は
+  この 4 ファイルには 1 件も存在しない（wintf の該当 4 件は `ecs/widget/bitmap_source/systems.rs:49`・`task_pool.rs:91,97`・
+  `runtime/window_registry.rs:99` で、いずれも本タスクの対象外ファイル）。
+- **可視性・`use`・モジュール接続の調整は 1 件も必要なかった**（要件 2.8 の発動なし）。`use super::*;` を含む既存 import が
+  そのまま有効であり、本番ファイルの差分は「テストモジュールブロックの削除」＋「接続宣言 2 行の追加」のみ。
+
+接続宣言（4 ファイルとも同一文言・design §移設方式の裁定 案 C）:
+
+```rust
+#[cfg(test)]
+#[path = "<stem>_tests.rs"]
+mod tests;
+```
+
+### 13.2 §11.4 の盲点（複数行文字列リテラル内の行頭空白）への対処と目視突合
+
+`crates/wintf/src/ecs/window_proc/window_pos.rs:1137`（移設前）＝リポジトリ全域で唯一の該当行。
+一律 4 スペース de-indent の**対象外**として扱い、行頭空白 17 個を 1 文字も増減させずに移した。
+
+- 直前行 `:1136` は `\` 継続**ではない**行であるため、`:1137` の行頭 17 空白は文字列リテラルの中身である
+  （一方 `:1135` は `\` 継続なので `:1136` の行頭空白は Rust が除去する＝de-indent してよい）。
+
+移設前（`git show 264bac2:crates/wintf/src/ecs/window_proc/window_pos.rs`）:
+
+```
+1135 [lead=16] |                "dpi={dpi}: 書かない判定でハンドラが未処理（None）を返している\|
+1136 [lead=17] |                 ——`DefWindowProcW` が提案矩形を適用し、その中の `SetWindowPos` が|
+1137 [lead=17] |                 同期的に窓を動かすため源断ちが無効化する: {outcome:?}"|
+```
+
+移設後（`crates/wintf/src/ecs/window_proc/window_pos_tests.rs`）:
+
+```
+ 689 [lead=12] |            "dpi={dpi}: 書かない判定でハンドラが未処理（None）を返している\|
+ 690 [lead=13] |             ——`DefWindowProcW` が提案矩形を適用し、その中の `SetWindowPos` が|
+ 691 [lead=17] |                 同期的に窓を動かすため源断ちが無効化する: {outcome:?}"|
+```
+
+**目視突合の結果: 合格。** `:1135`→`:689` と `:1136`→`:690` は −4、`:1137`→`:691` は **±0**（17 のまま）。
+文字列リテラルの値はバイト等価であり、要件 2.4 違反は発生していない。
+なお結果として `:690`（13）と `:691`（17）の見た目のインデントは揃わないが、これは意図した正しい状態である
+（揃えると文字列の中身が変わる）。**この行を今後さわる者は同じ理由で行頭空白を保存すること。**
+
+### 13.3 検証（すべて実測・終了コードで判定）
+
+**(a) 本文一致検証（要件 2.4）** — `pwsh -File $V/Compare-RelocatedTests.ps1 -Commit 264bac2 -OriginalPath <本番> -RelocatedPath <新テスト> -Detail`
+
+| 対象 | 出力 | exit |
+|---|---|---:|
+| `window_pos.rs` | `MATCH: test fn 18=18 / helper item 16=16 / mod block 1 / files 1` | 0 |
+| `controller.rs` | `MATCH: test fn 22=22 / helper item 12=12 / mod block 1 / files 1` | 0 |
+| `dpi_helpers.rs` | `MATCH: test fn 22=22 / helper item 8=8 / mod block 1 / files 1` | 0 |
+| `monitor_systems.rs` | `MATCH: test fn 13=13 / helper item 11=11 / mod block 1 / files 1` | 0 |
+
+**(b) テスト名リストの不変（要件 2.2 / 2.9・完了状態）** — `cargo test -p wintf --no-fail-fast -- --list` を移設前後で採取し、
+`: test$` 抽出・`[StringComparer]::Ordinal` 整列（§10.2 と同一手順）:
+
+```
+before = 1088 行 / after = 1088 行
+Compare-Object → 差分なし
+SHA256 = 634A79061DE29A7CF15ED36BB6A9A50A864AF4767F731FD97C8077ED90CAD335（before / after 一致）
+```
+
+本タスクは完全修飾名が 1 件も変わらないため、対応表を介さない**素のバイト一致**が成立している。
+
+**(c) クレート緑（要件 7.2）** — `cargo test -p wintf` → **exit 0**。
+11 ターゲット合計 **1,062 passed / 0 failed / 26 ignored**（= `--list` の 1,088 と整合）。
+
+**(d) 本番本体の無変更** — 移設前コミットの各本番ファイル 1 行目〜（旧 `#[cfg(test)]` 行の直前）までを
+現作業ツリーと逐行突合し、**不一致 0**（window_pos 1-444 / controller 1-455 / dpi_helpers 1-148 / monitor_systems 1-481）。
+`git diff --stat -- crates/wintf` = `4 files changed, 8 insertions(+), 2516 deletions(-)`
+（挿入 8 = 4 ファイル × `#[path = …]` + `mod tests;` の 2 行。`#[cfg(test)]` 行は元位置のまま据え置きのため差分に現れない）。
+
+**(e) 完了状態の直接確認** — 4 本番ファイルに残る `cfg(test)` / `mod tests` の出現はすべて接続宣言のみ:
+`window_pos.rs:445,447`・`controller.rs:456,458`・`dpi_helpers.rs:149,151`・`monitor_systems.rs:482,484`。
+テストモジュール本体は 1 行も残っていない。
+
+**(f) 警告（要件 2.6 の予備確認）** — `cargo build -p wintf --all-targets` → exit 0・`warning` 行 **0 件**（増加なし）。
+
+**(g) 作業ツリーの範囲** — `git status --porcelain -uall` は本節追記前の時点で下記 8 パスのみ:
+変更 4 本（上表の本番ファイル）＋未追跡 4 本（新テストファイル）。`crates/**` の他ファイル・`Cargo.toml` への差分は 0 件。
+
+### 13.4 登記（要件 5.2）— 壊れたテスト・状態汚染の所見
+
+**本タスクの範囲（`crates/wintf` の対象 4 ファイル・テストコード 2,508 行）では、修正を要する壊れたテスト・
+不正なテスト・テスト間の状態汚染は 1 件も発見しなかった。** 送付所見は 0 件である。
+
+以下は「調べたが問題なし」と確定した 2 点の記録（次に触る者が同じ調査を繰り返さないための控え。所有 spec への送付は不要）:
+
+| 観測 | file:line（移設後） | 判定 |
+|---|---|---|
+| 本番の thread_local ドラッグ状態（`crate::ecs::drag`）をテストから書き換える唯一の箇所 | `crates/wintf/src/ecs/clickthrough/controller_tests.rs:352-395` | **問題なし**。`std::panic::catch_unwind` で本体を包み、`:390` の `reset_to_idle()` を panic 経路でも必ず通してから `resume_unwind` する。汚染は残らない |
+| `capture_under_filter`（スレッドローカル dispatcher 差し替え）による多スレッド実行器の取りこぼし（既知の盲点） | `crates/wintf/src/ecs/layout/systems/monitor_systems_tests.rs:194-202` | **問題なし**。`run_apply` が `ExecutorKind::SingleThreaded` を明示しており、盲点は既に塞がれている（`:194-196` に理由がコメントで明記済み） |
+
+その他、`controller_tests.rs:177-215` の `create_test_hwnd` は実 Win32 窓を生成・破棄する（各テストが自前で `destroy_test_hwnd`）。
+本 spec 着手前から存在する構造であり、移設で変わっていない。
+
+### 13.5 本タスクの成果物
+
+| ファイル | 内容 |
+|---|---|
+| `crates/wintf/src/ecs/window_proc/window_pos_tests.rs` | 新規（713 行） |
+| `crates/wintf/src/ecs/clickthrough/controller_tests.rs` | 新規（634 行） |
+| `crates/wintf/src/ecs/window_proc/dpi_helpers_tests.rs` | 新規（595 行） |
+| `crates/wintf/src/ecs/layout/systems/monitor_systems_tests.rs` | 新規（566 行） |
+| 上記に対応する本番 4 ファイル | 末尾のテストモジュールブロックを接続宣言へ置換（本番本体は無変更） |
+| `verification/notes.md` | 本節（§13）を追記 |
+| `verification/mapping/wintf.csv` | **作成しない**（FQN 変化 0 件・対応表の行を持たない） |
