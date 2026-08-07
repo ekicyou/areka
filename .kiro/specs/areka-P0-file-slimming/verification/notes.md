@@ -430,3 +430,260 @@ shiori_proxy::tests::testdll_request_roundtrip_get_and_notify: test
 | `verification/notes.md` | 本節（§10）を追記 |
 
 `crates/**`・`Cargo.toml`・spec 本体ドキュメントには一切触れていない。
+
+## 11. 検証ツールの整備（タスク 1.4・要件 1.8 / 2.3 / 2.4 / 2.9）
+
+design §検証 / EvidencePipeline の判定契約を実行可能なスクリプトとして用意し、
+既知の一致ケース・不一致ケースの双方で期待どおり判定することを確認した記録。
+
+- 整備日: 2026-08-07
+- ブランチ: `claude/areka-p0-file-slimming-64d065` / HEAD `48d0b5d`（タスク 1.3 のコミット時点）
+- 実行シェル: **PowerShell（pwsh 7）**。文字列整列は `[System.StringComparer]::Ordinal` を用いる（§10.2 手順 3 と同一）
+- `crates/**`・`Cargo.toml`・spec 本体ドキュメントには一切触れていない
+
+### 11.1 成果物
+
+| ファイル | 役割 |
+|---|---|
+| `verification/Compare-RelocatedTests.ps1` | 移設前後のテスト本文一致検証（行頭空白非依存・項目単位） |
+| `verification/Test-MappingBijection.ps1` | 旧→新テスト名対応表の全単射検証・フラグメント結合 |
+| `verification/Compare-TestLists.ps1` | 対応表を旧リストへ適用した結果と新リストの多重集合突合 |
+| `verification/test_name_mapping.csv` | 対応表の器（ヘッダ行のみ・データ行はクレート単位タスクが追記） |
+| `verification/mapping/` | クレート単位の対応表フラグメント置き場（`README.txt` に規約を逐語で記載） |
+| `verification/RustParse.ps1` | 上記が共有する Rust 字句正規化・項目パース（dot-source 用ライブラリ） |
+| `verification/Test-VerificationTools.ps1` | 上記 3 本の自己検証ドライバ（一致／不一致ケースの判定マトリクス） |
+| `verification/fixtures/` | 既知ケースの入力（`relocate/` 7 本・`lists/` 5 本・`mapping/` 5 本＋フラグメント 2 組） |
+
+### 11.2 後続タスクの呼び出し方（この記載どおりに実行すること）
+
+いずれも終了コードで判定する。**0 = 合格 / 1 = 不合格 / 2 = 引数不正**。
+以下の `$V` は `\.kiro/specs/areka-P0-file-slimming/verification` を指す。
+
+**(a) 本文一致検証（タスク 2.x の各ファイル移設直後・要件 2.4）**
+
+```powershell
+# 単一ファイルへの移設（テーマ分割なし）
+pwsh -File $V/Compare-RelocatedTests.ps1 `
+    -Commit <移設前コミット> `
+    -OriginalPath crates/areka-seriko/src/resolver.rs `
+    -RelocatedPath crates/areka-seriko/src/resolver_tests.rs
+
+# テーマ分割（複数ファイル）— 複数指定は**カンマ区切りの 1 引数**で渡す
+pwsh -File $V/Compare-RelocatedTests.ps1 `
+    -Commit <移設前コミット> `
+    -OriginalPath crates/areka/src/placement/follow.rs `
+    -RelocatedPath "crates/areka/src/placement/follow_test_support.rs,crates/areka/src/placement/follow_anchor_tests.rs,crates/areka/src/placement/follow_drag_tests.rs"
+```
+
+- `-OriginalPath` は**リポジトリ相対パス**（`/` 区切り）。`-Commit` を与えると `git show <commit>:<path>`
+  で読む——移設後の作業ツリーには既にテストモジュールが無いため、実運用では `-Commit` を必ず指定する。
+  読み取り専用の git のみを使う（`checkout`／`restore` は行わない）。
+- 元ファイルに複数のテストモジュールがある場合は既定で全ブロックを合算する。名前で絞るときは `-ModuleName`。
+- 一致すると**何も出力せず** exit 0。件数を目で見たいときだけ `-Detail` を付ける
+  （`MATCH: test fn 133=133 / helper item 57=57 / mod block 1 / files 3` の形式）。
+- `-Commit` を省略すると作業ツリーの元ファイルを読む（フィクスチャ検証用の経路）。
+
+**(b) 対応表の全単射検証（テーマ分割を行ったクレートごと・要件 2.9）**
+
+```powershell
+pwsh -File $V/Test-MappingBijection.ps1 -Path $V/mapping/<crate>.csv
+```
+
+**(c) 最終照合（タスク 7.1）— フラグメント結合 → 対応表検証 → リスト突合**
+
+```powershell
+# 1. 全フラグメントを結合して単一の対応表を書き出す（検証 PASS のときだけ書き出される）
+pwsh -File $V/Test-MappingBijection.ps1 -Path $V/mapping -Out $V/test_name_mapping.csv
+
+# 2. 既定リスト（doctest 込み）
+pwsh -File $V/Compare-TestLists.ps1 `
+    -Before $V/before_default.txt -After $V/after_default.txt -Mapping $V/test_name_mapping.csv
+
+# 3. examples 込みリスト
+pwsh -File $V/Compare-TestLists.ps1 `
+    -Before $V/before_alltargets.txt -After $V/after_alltargets.txt -Mapping $V/test_name_mapping.csv
+```
+
+- `after_*.txt` は §10.2 の手順（`: test$` 抽出・序数整列・UTF-8 BOM 無し・**重複行を残す**）で採取すること。
+  採取ターゲットは移設前と同じ既定の `x86_64-pc-windows-msvc`（§10.4 の理由）。
+- `Compare-TestLists.ps1` は行数一致（要件 2.2）と対称差の双方を報告する。両方が満たされたときのみ `RESULT: PASS`。
+- 対応表の行が `-Before` に一度も現れない場合は `UNUSED MAPPING ROWS` として報告する。既定では不合格にしない
+  ——examples のテストは `_alltargets` 側にしか現れず、`_default` 側の照合では未使用になるのが正常であるため。
+  2 本のリストを跨いでも未使用の行が残る場合は対応表の誤りなので、その行を修正する（`-StrictUnusedMappings` で不合格化できる）。
+
+**(d) 検証ツール自体の自己検証（ツールに手を入れたら必ず再実行）**
+
+```powershell
+pwsh -File $V/Test-VerificationTools.ps1            # 判定マトリクスのみ
+pwsh -File $V/Test-VerificationTools.ps1 -ShowOutput # 各ケースの出力も表示
+```
+
+### 11.3 対応表フラグメントの規約
+
+- 置き場: `verification/mapping/<crate>.csv`（Cargo のパッケージ名そのまま・1 クレート 1 ファイル・ディレクトリを掘らない）
+- 列: `old_fqn,new_fqn,reason`（結合先と同一・同一順序）。`reason` は `theme_split` のみ
+- テーマ分割でモジュールパスが変わったテスト関数のみ 1 行を持つ。完全修飾名が変わらない移設は行を持たない
+- 行の並びは問わない（検証は集合として行う）。結合時に `old_fqn` の序数順へ整列して書き出す
+- 逐語の規約は `verification/mapping/README.txt`
+
+### 11.4 本文一致検証が吸収する差分／吸収しない差分
+
+要件 2.4 が許容する機械的調整だけを吸収する。それ以外は 1 文字でも不一致として報告する。
+
+| 差分 | 扱い | 根拠 |
+|---|---|---|
+| 行頭の空白（一律 4 スペース de-indent を含む） | 吸収（各行を lstrip） | 2.4 |
+| 行末の空白 | 吸収（`git diff -w` 相当） | 2.4 |
+| 行頭の可視性修飾（`pub` / `pub(crate)` / `pub(super)` / `pub(in …)`）の付与 | 吸収 | 2.4 |
+| `use` 項目の追加・変更・分散 | 吸収（`use` 項目を突合対象から外す） | 2.4 |
+| モジュール接続宣言（`mod X;`）の追加 | 吸収（突合対象から外す） | 2.4 |
+| 入れ子 `mod X { … }` がファイル root へ持ち上がること | 吸収（入れ子を平坦化して比較） | 2.4 |
+| 項目の順序変更・複数ファイルへの分散 | 吸収（テスト関数は識別子キーで対応付け・非テスト項目は本文の多重集合で対応付け） | 1.8 / 2.9・design §EvidencePipeline |
+| アサーション・入力値・期待値の変更 | **不一致**（`[TEST-BODY]`・差分行を提示） | 2.4 |
+| テスト関数の欠落・追加 | **不一致**（`[TEST-MISSING]` / `[TEST-EXTRA]`） | 2.2 / 2.4 |
+| テスト関数の改名 | **不一致**（欠落＋追加として現れる） | 2.9 |
+| 属性・コメントの変更 | **不一致**（項目本文の一部として比較される） | 2.4 |
+| 非テスト項目（ヘルパ・定数・型・`impl`）の欠落・変更 | **不一致**（`[ITEM-MISSING]` / `[ITEM-EXTRA]`） | 2.4 |
+
+補足: 移設先ファイルの**行数**は判定に用いない。空行の増減と項目の再配置は 2.4 の許容範囲であり、
+判定はあくまで項目本文の一致に置く。1 ファイル 1,000 行の目安（1.7）は別の指標であって本スクリプトの対象外。
+
+#### 検出できない差分（盲点・タスク 1.4 のレビューで実測確定）
+
+以下の 2 つは本スクリプトが **MATCH と誤判定する**。移設作業者はこの 2 点を手で守ること。
+
+| 盲点 | なぜ検出できないか | 代償措置 |
+|---|---|---|
+| **複数行文字列リテラルの内部**の行頭空白が変わる | 正規化が各行を無条件に lstrip するため、文字列の**中身**である行頭空白も消える。テストの入力値が変わっているのに一致と判定される | **代償措置なし**（完全修飾名が変わらないのでリスト照合でも捕まらない）。下記の唯一の該当箇所を手で守る |
+| 平坦化される入れ子 `mod X { … }` に付いた**属性**（例 `#[cfg(target_arch = "…")]`） | 平坦化時に `mod` 項目自身の属性行を記録しないため、テストがコンパイルから外れても一致と判定される | `cargo test -- --list` からテストが消えるので **`Compare-TestLists.ps1` が捕捉する**（実測確認済み） |
+
+**必須対象 49 本を全走査した結果、第 1 の盲点に該当する行はリポジトリ全域で 1 箇所のみ**:
+
+- `crates/wintf/src/ecs/window_proc/window_pos.rs:1137` — `\` 継続でない行が続く複数行文字列で、17 個の行頭空白が**リテラルの中身**になっている。
+  当該ファイルを移設するタスク（2.1・ウィンドウ基盤クレート）は、この行の行頭空白を 1 文字も増減させずに移すこと。
+  de-indent はテストモジュールブロック**全体**に一律 4 スペース適用されるが、この行だけは対象外として扱う
+  （4 スペース削ると文字列の中身が変わる＝要件 2.4 違反になる）。移設後に当該行を目視で突合し、結果を登記すること。
+- 他の候補 13 行はすべて `\` 継続（Rust が行頭空白を除去する）か単一行 raw 文字列であり、影響しない。
+
+### 11.5 既知の一致ケース・不一致ケースでの判定確認（完了状態の証跡）
+
+`Test-VerificationTools.ps1` の 24 ケースが全て期待どおり（`RESULT: PASS  (24/24 ケースが期待どおり)`）。
+
+| ケース | 対象 | 期待 | 実 | 判定 |
+|---|---|---:|---:|---|
+| `RELOC-OK-DEINDENT` | 純粋な 4 スペース de-indent のみ | 0 | 0 | OK |
+| `RELOC-BAD-ASSERT` | 期待値を 1 文字変更（`, 7)` → `, 8)`） | 1 | 1 | OK |
+| `RELOC-BAD-DROPPED` | テスト関数 1 本を丸ごと欠落 | 1 | 1 | OK |
+| `RELOC-BAD-RENAMED` | テスト関数 1 本を改名 | 1 | 1 | OK |
+| `RELOC-OK-THEMESPLIT` | 3 ファイルへ分散＋順序入れ替え＋`pub(super)` 付与 | 0 | 0 | OK |
+| `MAP-OK` | 正しい対応表 1 行 | 0 | 0 | OK |
+| `MAP-DUP-OLD` | `old_fqn` の重複 | 1 | 1 | OK |
+| `MAP-DUP-NEW` | `new_fqn` の重複 | 1 | 1 | OK |
+| `MAP-BAD-IDENT` | 末尾セグメント（関数識別子）が旧新で相違 | 1 | 1 | OK |
+| `MAP-BAD-REASON` | `reason` が `theme_split` 以外 | 1 | 1 | OK |
+| `MAP-FRAG-OK` | フラグメント 2 本の結合（衝突なし） | 0 | 0 | OK |
+| `MAP-FRAG-COLLIDE` | フラグメント間でキー衝突 | 1 | 1 | OK |
+| `MAP-EMPTY-CONTAINER` | ヘッダのみの `test_name_mapping.csv` | 0 | 0 | OK |
+| `MAP-FRAGDIR-EMPTY` | フラグメント 0 件の `mapping/` | 0 | 0 | OK |
+| `MAP-MERGE-OUT` | `-Out` による結合書き出し | 0 | 0 | OK |
+| `MAP-MERGE-ROUNDTRIP` | 結合結果を単体で再検証 | 0 | 0 | OK |
+| `LIST-OK-IDENTICAL` | 同一リスト（重複行込み） | 0 | 0 | OK |
+| `LIST-BAD-MISSING` | テスト 1 本の欠落 | 1 | 1 | OK |
+| `LIST-BAD-RENAMED-NOMAP` | 対応表なしで名前が変わった | 1 | 1 | OK |
+| `LIST-OK-RENAMED-WITHMAP` | 同じ変更＋正しい対応表 1 行 | 0 | 0 | OK |
+| `LIST-BAD-DUPCOLLAPSE` | 相異なる名前は同じで重複回数だけ減少 | 1 | 1 | OK |
+| `LIST-SMOKE-REALDATA-DEFAULT` | 実データ `before_default.txt` を両側に | 0 | 0 | OK |
+| `LIST-SMOKE-REALDATA-ALLTARGETS` | 実データ `before_alltargets.txt` を両側に | 0 | 0 | OK |
+| `TOKENIZER-EQUIV` | 字句解析の持ち上げ等価性（§11.6） | 0 | 0 | OK |
+
+実データスモークの出力（フィクスチャではなく §10 の移設前スナップショットそのもの）:
+
+```
+BEFORE      : before_default.txt  (4790 行 / 相異なる 4787)
+AFTER       : before_default.txt  (4790 行 / 相異なる 4787)
+MAPPING     : 0 行 (1 ファイル) / 適用 0 行 / 未使用 0 行
+LINE COUNT  : before 4790 / after 4790 -> 一致 (Requirement 2.2)
+RESULT: PASS
+
+BEFORE      : before_alltargets.txt  (4105 行 / 相異なる 4097)
+AFTER       : before_alltargets.txt  (4105 行 / 相異なる 4097)
+MAPPING     : 0 行 (1 ファイル) / 適用 0 行 / 未使用 0 行
+LINE COUNT  : before 4105 / after 4105 -> 一致 (Requirement 2.2)
+RESULT: PASS
+```
+
+重複行の扱いが §10.2 の実測（4,790 行 / 相異なる 4,787）と一致しており、多重集合として比較していることが確かめられる。
+
+### 11.6 字句解析の持ち上げの等価性（`Measure-TestModules.ps1` との突合）
+
+`RustParse.ps1` は `Measure-TestModules.ps1`（タスク 1.1）の字句正規化ルーチンを逐語で持ち上げたものである。
+「2 本目の弱い解析器」を作っていないことを、タスク 1.1 の実測結果そのもので裏づけた。
+
+- 方法: `scan_raw.csv` の各行について実ファイルを読み、`RustParse.ps1` が求めたテストモジュールの
+  行範囲（`名前:開始-終了(行数)` の連結）が `modules` 列と**文字列として完全一致**することを要求する。
+- 結果: **走査 619 ファイル / テストモジュールを持つ 219 ファイル / 不一致 0**。
+
+> **このケースが有効なのは移設前のツリーに限る。** `TOKENIZER-EQUIV` は「現在の作業ツリー」を
+> `scan_raw.csv`（移設前の実測）と突合するため、タスク 2.1 以降でテストモジュールを本番ファイルの外へ
+> 出した瞬間から**必ず赤になる**——これは欠陥ではなく仕様である（本番ファイルにブロックが無くなる一方、
+> CSV は `tests:X-Y(N)` を記載したままになる）。
+> 移設開始後に `Test-VerificationTools.ps1` を再実行する場合は、`TOKENIZER-EQUIV` の失敗は
+> **想定どおりとして扱い、残る 23 ケースが全て期待どおりであることをもって合格**とすること。
+> 字句解析の等価性そのものを再確認したいときは、移設前コミット（`48d0b5d`）のツリーに対して実行する。
+
+### 11.7 実データでの動作確認（フィクスチャ以外の証跡）
+
+移設前コミット（この時点の `HEAD` = `48d0b5d`＝タスク 1.3 のコミット）から `git show` で読み出し、`#[cfg(test)] mod` ブロックの本体を
+4 スペース de-indent して書き出したものと突合した。実運用と同一の読み出し経路である。
+
+| 対象 | モジュール数 | テストコード行 | 結果 |
+|---|---:|---:|---|
+| `crates/areka/src/placement/follow.rs` | 1 | 6,476 | `MATCH: test fn 133=133 / helper item 57=57 / mod block 1 / files 1` |
+| `crates/areka/src/emo2_boot/frame.rs` | 1 | 3,163 | `MATCH: test fn 56=56 / helper item 56=56 / mod block 1 / files 1` |
+| `crates/areka-ghost/tests/ghost/spine_e2e_test.rs` | 10 | 2,091 | `MATCH: test fn 15=15 / helper item 40=40 / mod block 10 / files 10` |
+
+不一致側も実データで確認した。
+
+- **1 文字改変**: `follow.rs` の切り出し本文で `assert_eq!(position_of(&world, window), Point { x: 1531, y: 883 });`
+  の数値を変えたところ、`[TEST-BODY] テスト関数 move_window_to_updates_window_pos_physical_px の本文が一致しません`
+  と該当行の before / after を提示して exit 1。
+- **テーマ分割の模擬**: `follow.rs` の 223 項目を 3 ファイルへ巡回配分し（順序が完全に入れ替わる）、
+  さらに全行を 8 スペースで再インデントしたうえで突合したところ
+  `MATCH: test fn 133=133 / helper item 57=57 / mod block 1 / files 3` で exit 0。
+  項目単位の対応付けが順序とインデントの双方に依存しないことの直接証跡。
+
+### 11.8 運用上の注意
+
+- `pwsh -File` は引数を常に単一文字列として渡すため、複数ファイルの指定は**カンマ区切りの 1 引数**にする
+  （`-RelocatedPath "a.rs,b.rs,c.rs"`）。各スクリプトが内部でカンマ展開する。
+- 文字列の整列は必ず `[System.StringComparer]::Ordinal`。`Sort-Object` の既定はカルチャ依存で
+  アンダースコアと英字の順序が変わる（§10.2 手順 3 と同じ理由）。
+- `Compare-RelocatedTests.ps1` は git を**読み取りにしか使わない**（`show` のみ）。作業ツリーを書き換える
+  git コマンドは実行しない。
+- 判定は必ず終了コードで行う。合格時に何も出力しないのが `Compare-RelocatedTests.ps1` の既定であり、
+  「出力が無い＝実行されていない」ではない。
+- **終了コード 2（引数不正）は 1（不一致）と必ず区別すること。** パスの打ち間違いで 2 が返っているのを
+  「本文が一致しなかった」と読み違えると、直す必要のないテストを直しにいってしまう。
+  タスク 1.4 のレビュー時点では 3 スクリプトとも `$ErrorActionPreference = 'Stop'` により
+  `Write-Error` が即時終了して exit 1 になっていた欠陥があり、`-ErrorAction Continue` を付けて是正済み
+  （`Compare-TestLists.ps1` 4 箇所・`Compare-RelocatedTests.ps1` 4 箇所・`Test-MappingBijection.ps1` 1 箇所）。
+- **計測スクリプトの走査範囲から `.kiro/` を除外済み。** `verification/fixtures/relocate/*.rs` は本物の
+  `#[cfg(test)] mod` ブロックを含むため、除外しないとリポジトリ全域の実測へ混入する
+  （実測: 619 → 627 ファイル・テストコード 99,012 → 99,043 行）。`Measure-TestModules.ps1` の
+  `$excludeRe` に `^\.kiro/` を追加してあり、除外後は `scan_raw.csv`・`target_inventory.csv`・
+  `excluded_inventory.csv` の 3 本がタスク 1.1 のコミット版とバイト一致で再現することを確認済み。
+  タスク 7.4 の実測やり直しは必ずこの修正後のスクリプトで行うこと。
+
+### 11.9 本タスクの成果物
+
+| ファイル | 内容 |
+|---|---|
+| `verification/Compare-RelocatedTests.ps1` | 本文一致検証スクリプト |
+| `verification/Test-MappingBijection.ps1` | 全単射検証・フラグメント結合スクリプト |
+| `verification/Compare-TestLists.ps1` | リスト照合スクリプト |
+| `verification/RustParse.ps1` | 共有の字句正規化・項目パース |
+| `verification/Test-VerificationTools.ps1` | 自己検証ドライバ（24 ケース） |
+| `verification/test_name_mapping.csv` | 対応表の器（ヘッダ行のみ） |
+| `verification/mapping/README.txt` | フラグメント規約 |
+| `verification/fixtures/**` | 既知の一致ケース・不一致ケースの入力 |
+| `verification/notes.md` | 本節（§11）を追記 |

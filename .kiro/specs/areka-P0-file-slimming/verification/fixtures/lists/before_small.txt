@@ -1,0 +1,4 @@
+alpha::tests::a_one: test
+alpha::tests::a_two: test
+beta::tests::b_one: test
+beta::tests::b_one: test

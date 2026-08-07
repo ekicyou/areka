@@ -8,7 +8,10 @@
 
     計測定義（research と同一）:
       - 対象      : リポジトリ配下の全 *.rs（`target/`・`vendors/`・`.git/`・
-                    `.claude/worktrees/` を除く）
+                    `.claude/worktrees/`・`.kiro/` を除く）
+                    ※ `.kiro/` の除外は spec 配下の検証用フィクスチャ
+                       （`verification/fixtures/relocate/*.rs`）が実測値へ
+                       混入するのを防ぐため（タスク 1.4 のレビューで確定）
       - テストコード行 = 各 `#[cfg(test)]` 属性行から対応する `mod` ブロックの
                     閉じ波括弧行までの行数（属性行・閉じ括弧行を含む）の総和
       - 文字列リテラル・raw 文字列・文字リテラル・行コメント・ブロックコメント
@@ -346,7 +349,11 @@ Write-Host "OutDir   : $OutDir"
 # NOTE: 判定は必ず「リポジトリルートからの相対パス」に対して行う。
 # 本ブランチのワークツリー自身が `...\.claude\worktrees\...` 配下にあるため、
 # 絶対パスへ適用すると全ファイルが除外されてしまう。
-$excludeRe = '^(target|vendors|\.git|node_modules)/|^\.claude/worktrees/'
+# NOTE: `.kiro/` も除外する。spec 配下には検証スクリプトのテスト用フィクスチャ
+# （`verification/fixtures/relocate/*.rs` 等）が置かれ、その一部は本物の
+# `#[cfg(test)] mod` ブロックを含む。除外しないと spec 自身のフィクスチャが
+# リポジトリ全域の実測値へ混入する（実測: 619 → 627 ファイル）。
+$excludeRe = '^(target|vendors|\.git|node_modules)/|^\.claude/worktrees/|^\.kiro/'
 
 $files = Get-ChildItem -Path $RepoRoot -Recurse -Filter '*.rs' -File |
     Where-Object {

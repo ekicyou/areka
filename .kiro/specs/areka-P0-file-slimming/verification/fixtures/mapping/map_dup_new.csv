@@ -1,0 +1,3 @@
+old_fqn,new_fqn,reason
+alpha::tests::a_one,alpha::alpha_tests::a_one,theme_split
+alpha::other::a_one,alpha::alpha_tests::a_one,theme_split
