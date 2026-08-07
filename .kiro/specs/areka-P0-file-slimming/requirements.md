@@ -108,7 +108,7 @@
 3. The file-slimming 実装 shall 他 spec の brief に記載された file:line アンカーを書き換えない（新レイアウトの吸収は各 spec の design 前 rebase または次回棚卸に委ねる）。
 4. When 実装へ着手するとき, the file-slimming 実装 shall 他 spec の実装ブランチが同時進行していないこと（W5.95＝実装ウェーブの空白期）を確認する。2026-08-07 実測では他 spec の実装ブランチは 0 本であり、前提は成立している。
 5. If 着手後に他 spec の実装が同一ファイルへ着地したとき, the file-slimming 実装 shall 当該ファイルの移設を強行せず、衝突を登記したうえで対象から一時的に外す。
-6. The file-slimming 実装 shall 本 spec の正典ブランチを `claude/areka-p0-file-slimming-64d065`（要件・ギャップ分析・要件ディスカッションの全成果を保持）とする（開発者裁定 2026-08-07）。同一 spec の重複ワークツリー `claude/areka-p0-file-slimming-e4f098`（`f657d84`）は正典ではなく、その破棄は開発者の操作に委ねる。
+6. The file-slimming 実装 shall 本 spec の正典ブランチを `claude/areka-p0-file-slimming-64d065`（要件・ギャップ分析・要件ディスカッションの全成果を保持）とする（開発者裁定 2026-08-07）。同一 spec の重複ワークツリー `claude/areka-p0-file-slimming-e4f098`（`f657d84`＝並行実行された古い `/kiro-start` の産物・内容は本ブランチの版に包含・未コミット作業なし）は**開発者の指示により 2026-08-07 に破棄済み**（ワークツリー削除＋ブランチ削除）。
 
 ### Requirement 6: 規律の明文化と実測の更新
 
