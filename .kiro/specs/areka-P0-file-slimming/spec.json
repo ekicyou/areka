@@ -1,16 +1,16 @@
 {
   "feature_name": "areka-P0-file-slimming",
   "created_at": "2026-08-07T12:06:49Z",
-  "updated_at": "2026-08-07T12:24:00Z",
+  "updated_at": "2026-08-07T14:35:00Z",
   "language": "ja",
-  "phase": "requirements-generated",
+  "phase": "design-generated",
   "approvals": {
     "requirements": {
       "generated": true,
-      "approved": false
+      "approved": true
     },
     "design": {
-      "generated": false,
+      "generated": true,
       "approved": false
     },
     "tasks": {
