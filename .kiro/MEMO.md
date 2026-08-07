@@ -357,11 +357,22 @@ impl<'a> Replayer<'a> {
 
     /// クリップを push し、解除に使う ClipKind を返す。
     /// 矩形は current mat が軸整列なら Aa、そうでなければ Layer フォールバック。
-    fn push_clip(&self, clip: &Clip) -> ClipKind {
-        match clip {
+    fn push_clip(&mut self, clip: &Clip) -> ClipEntry {
+        let saved = self.clip_aabb;
+        let region = world_aabb(&clip.local_aabb(), &self.top().mat);
+        let new_clip = aabb_intersect(&self.clip_aabb, &region);
+
+        // 完全に画面外 → 実際の push を省略（この subtree の Content は全部カリングされる）
+        if aabb_is_empty(&new_clip) {
+            self.clip_aabb = new_clip; // 空を伝播（配下の交差判定は必ず false）
+            return ClipEntry { kind: ClipKind::Culled, saved_clip_aabb: saved };
+        }
+
+        self.clip_aabb = new_clip;
+
+        let kind = match clip {
             Clip::Rect { rect, geom } => {
                 if self.top().exact {
-                    // current が軸整列 → Aa で厳密（中間ビットマップ不要）
                     self.dc.PushAxisAlignedClip(rect, D2D1_ANTIALIAS_MODE_ALIASED);
                     ClipKind::Aa
                 } else {
@@ -371,11 +382,11 @@ impl<'a> Replayer<'a> {
                 }
             }
             Clip::Shape { geom, .. } => {
-                // 非矩形は常に Layer
                 self.dc.PushLayer(&layer_params(geom), None);
                 ClipKind::Layer
             }
-        }
+        };
+        ClipEntry { kind, saved_clip_aabb: saved }
     }
 }
 
