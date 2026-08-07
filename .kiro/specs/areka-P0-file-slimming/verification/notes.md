@@ -687,3 +687,135 @@ RESULT: PASS
 | `verification/mapping/README.txt` | フラグメント規約 |
 | `verification/fixtures/**` | 既知の一致ケース・不一致ケースの入力 |
 | `verification/notes.md` | 本節（§11）を追記 |
+
+## 12. 3 階層モジュール解決の事前スモーク（タスク 1.5・要件 2.7 / 4.1 / 4.3）
+
+### 12.1 何を測ったか
+
+`design.md:532`（Migration Strategy 順 0「3 階層解決の事前スモーク」）が要求する測定。
+`research.md:161-175`（§2.3.3）の実測は「`#[path]` 読込ファイル → その子」の **2 階層**までであり、
+`follow.rs` の本体分割（タスク 6.1・D1 ファサード再輸出型）が必要とする **3 階層**は
+言語意味論からの推論にとどまっていた。本節はこれを実測へ置き換える。
+
+対象の取り込み鎖（file:line で確認済み）:
+
+```
+crates/areka/examples/window-placement.rs:107   #[path = "../src/placement/mod.rs"] mod placement;   ← 1 階層目
+crates/areka/examples/collision-probe.rs:231    #[path = "../src/placement/mod.rs"] mod placement;   ← 同上
+crates/areka/src/placement/mod.rs:24            pub mod follow;                                      ← 2 階層目（§2.3.3 で実測済）
+crates/areka/src/placement/follow.rs            mod <サブモジュール>;                                ← 3 階層目（本節で実測）
+```
+
+事前状態: `crates/areka/src/placement/follow.rs` は 8,472 行のフラットファイルで、
+`crates/areka/src/placement/follow/` ディレクトリは存在しない（`ls crates/areka/src/placement/` で確認）。
+
+### 12.2 仮置きした内容（実施後に全て撤去済）
+
+| ファイル | 内容 |
+|---|---|
+| `crates/areka/src/placement/follow/smoke3.rs`（新規） | `pub(crate) const SMOKE3_LEVELS: u32 = 3;` のみ。`crate::` パスを 1 件も持たない（design §本体分割の制約 1） |
+| `crates/areka/src/placement/follow.rs`（追記 7 行・`use` ブロック直後 L52 の後ろ） | `mod smoke3;` と `#[allow(dead_code)] pub(crate) const SMOKE3_PROBE: u32 = smoke3::SMOKE3_LEVELS;` |
+
+到達性の証明形として `pub(crate) const` の初期化子からサブモジュールの項目を参照する形を採った。
+理由: (i) `mod` 宣言だけでは「宣言はしたが経路が通っているか」を分離できず、
+モジュールパス `smoke3::SMOKE3_LEVELS` の解決まで含めて初めて 3 階層が通ったと言えるため。
+(ii) `pub(crate) use` の再輸出形は未使用時に `unused_imports` 警告を生み、
+要件 2.6（警告非増加）の測定を濁す。`#[allow(dead_code)]` を項目に直付けする形なら
+警告を 1 件も増やさずに到達性だけを測れる（実測でも警告増加 0 件・下記 12.4）。
+(iii) 既存関数の中へ参照を差し込む形は本番コードへの侵襲が大きく、撤去の完全性が担保しにくい。
+
+### 12.3 否定対照（どこを探しているかを確定させた測定）
+
+3 階層が「通った」ことより、**どのディレクトリを探しているか**が本質。
+`#[path]` で読み込まれたモジュールの子は、そのファイル自身のディレクトリへ解決される
+（§2.3.3 の 1 行目＝`tests/dom/a.rs` の `mod sub;` は `tests/dom/sub.rs` を探し `tests/dom/a/sub.rs` は探さない）。
+この規則が `follow.rs` にも及ぶなら、3 階層目は `src/placement/follow/` ではなく
+**`src/placement/`（兄弟位置）**へ解決されてしまい、D1 ファサード形は成立しない。
+そこで肯定側の緑を採る前に、2 本の否定対照でこの分岐を潰した。
+
+**否定対照 1（ファイルをどこにも置かない）** — `mod smoke3;` のみを宣言して example ビルド:
+
+```
+cargo build -p areka --examples     → exit 101
+error[E0583]: file not found for module `smoke3`
+  --> crates\areka\examples\..\src\placement\follow.rs:53:1
+   = help: to create the module `smoke3`, create file
+           "crates\areka\examples\..\src\placement\follow\smoke3.rs" or
+           "crates\areka\examples\..\src\placement\follow\smoke3\mod.rs"
+```
+
+コンパイラが探索した候補が `...\src\placement\follow\smoke3.rs` であると
+エラーメッセージ自身が名指ししている。`...\src\placement\smoke3.rs` は候補に挙がっていない。
+
+**否定対照 2（兄弟位置へ置く）** — `crates/areka/src/placement/smoke3.rs` を作成して再ビルド:
+
+```
+cargo build -p areka --examples     → exit 101
+error[E0583]: file not found for module `smoke3`
+   = help: to create the module `smoke3`, create file
+           "crates\areka\examples\..\src\placement\follow\smoke3.rs" or ...
+```
+
+兄弟位置のファイルは拾われない＝`#[path]` 直読みモジュール（`placement/mod.rs`）に適用される
+「親ディレクトリへ解決」の特例は、その先の通常 `mod` 宣言（`follow.rs`）へは伝播しない。
+`follow.rs` の子は通常規則どおり **file-stem ディレクトリ `follow/`** へ解決される。
+これが D1 ファサード形の成立条件そのものである。
+
+### 12.4 計測（BEFORE / WITH-SMOKE / AFTER-REMOVAL）
+
+すべて PowerShell、出力はファイルへリダイレクトして `$LASTEXITCODE` を別途取得（`tee` 経由にしない）。
+警告件数は出力中の行頭 `warning` 行数（サマリ行 1 本を含む）。
+
+| 相 | コマンド | exit | 警告行 |
+|---|---|---:|---:|
+| BEFORE | `cargo build -p areka --examples` | 0 | 0 |
+| 否定対照 1（ファイル無し） | `cargo build -p areka --examples` | **101**（E0583） | — |
+| 否定対照 2（兄弟位置） | `cargo build -p areka --examples` | **101**（E0583） | — |
+| WITH-SMOKE | `cargo build -p areka --examples` | **0** | **0** |
+| WITH-SMOKE | `cargo build -p areka` | **0** | 5（内訳は既存 dead_code 4 件＋サマリ 1 行・`smoke3` の出現 0 件） |
+| AFTER-REMOVAL | `cargo build -p areka --examples` | 0 | 0 |
+| AFTER-REMOVAL | `cargo build -p areka` | 0 | 5（WITH-SMOKE と同一） |
+
+AFTER-REMOVAL は BEFORE と exit・警告件数ともに完全一致。
+`cargo build -p areka` の既存 4 警告（`CommandConsumer` / `LedgerError` / `ConsumerLedger` /
+その associated items が never used）は仮置きと無関係な既存分であり、
+仮置き中の出力に `smoke3` を含む警告は 1 件も無い（要件 2.6 の観点で増分 0）。
+
+なお本節は `cargo build`（非テストモード）で測っている。
+`cargo test -p areka --examples`（テストモード）は `crates/areka/src/placement/spawn.rs:879` の
+既存 E0433 で赤であり、本節の測定対象ではない（当該欠陥には触れていない）。
+
+### 12.5 撤去の完全性
+
+仮置きの撤去は Edit による原文復元とファイル削除のみで行った（`git checkout`／`restore`／`reset`／
+`stash`／`clean` は不使用）。撤去後の確認:
+
+```
+git status --porcelain -uall -- crates   → 出力なし（空）
+git diff --stat -- crates                → 出力なし（空）
+git status --porcelain -uall             → 出力なし（空・リポジトリ全域）
+Test-Path crates\areka\src\placement\follow   → False
+```
+
+`crates/**` に差分は 1 件も残っていない。
+
+### 12.6 結論
+
+**3 階層解決は成立する。**
+
+`example（#[path] include）→ src/placement/mod.rs → follow.rs → follow/<サブモジュール>.rs` の
+3 階層は `cargo build -p areka --examples` で緑（exit 0・警告増加 0）。
+かつ否定対照 2 本により、3 階層目の解決先が `follow.rs` 自身の file-stem ディレクトリ
+`src/placement/follow/` であることが確定した（兄弟位置ではない）。
+
+したがって:
+
+- タスク 6.1 の `follow.rs` 本体分割は **D1 ファサード再輸出型のまま進めてよい**（要件 4.1 / 4.3）。
+  設計 §本体分割の 5 サブモジュール（`anchor` / `drag_follow` / `window_move` / `work_area` / `visibility`）は
+  この形で example ビルドを壊さない。
+- design §本体分割の制約 5（examples の追随＝ファサード維持により編集不要）は前提が実測で裏づけられた。
+  ただし制約 1（`crate::` パス不使用）は新サブモジュール側でも必ず守ること——
+  example は placement 木を私有 include するため、`crate::` を 1 件でも書けば example ビルドが即赤になる。
+- 実行時挙動（要件 2.7）への影響は無い。本節は最終状態で本番コードの差分 0 件である。
+
+差し戻し（ファサード形の裁定へ戻す）は**不要**。
