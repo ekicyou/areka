@@ -20,11 +20,11 @@ emo_worldの設計に整理が必要。以下の概念を中心に検討せよ�
 + visual entity
   + Visual
     + transform(Transform2D)
-      + offset：view_boxのスクロール位置
-      + center：中心座標
-      + scale：スケール
-      + rot：回転
-      + mat：変換行列
+      + center: Vector2 // 中心座標
+      + mat: Matrix3x2  // 変換行列
+      + scale: Vector2  // スケール
+      + rot: f32        // 回転
+      + offset: Vector2 // view_boxのスクロール位置
     + clip：option 描画クリップ領域のAABB
     + content：content entity
     + children：n個のvisual entity
@@ -32,6 +32,362 @@ emo_worldの設計に整理が必要。以下の概念を中心に検討せよ�
     + world_prev：option world_visual entity
     + world_now：option world_visual entity
     + dirty_flag：ダーティならtrue
+
+
+
+```rs:types:draw_command
+
+pub struct DrawContent{
+  local_aabb: Aabb,
+  command_list: ID2D1CommandList,
+}
+
+pub enum Clip{
+  Rect(D2D_RECT_F),
+  Geometry(geom: ID2D1Geometry, local_aabb: D2D_RECT_F),
+}
+
+pub enum DrawCommand{
+  Content(DrawContent),
+  PushMatrix(Matrix3x2),
+  PopMatrix(),
+  PushClip(Clip),
+  PopClip(),
+}
+
+```
+
+```rs:types:numerics
+pub use windows_numerics::*;
+use windows::Win32::Graphics::Direct2D::Common::*;
+
+pub const EPS: f32 = 1e-4;
+
+// ============================================================================
+// 座標変換
+// ============================================================================
+
+pub type Aabb = D2D_RECT_F;
+
+#[derive(Clone, Copy, Debug)]
+pub struct Transform2D {
+    /// 追加変換（せん断など）。単位行列なら実質無効。
+    pub mat: Matrix3x2,
+    /// 回転・スケールの中心
+    pub center: Vector2,
+    /// スケール (sx, sy)
+    pub scale: Vector2,
+    /// 回転（ラジアン）
+    pub rot: f32,
+    /// スクロール位置（並進）
+    pub offset: Vector2,
+}
+
+// ============================================================================
+// 描画コマンド・クリップ
+// ============================================================================
+
+#[derive(Clone)]
+pub struct PaintContent {
+    /// build時カリング用
+    pub aabb: Aabb,
+    /// ID2D1Image。DrawImage で描く
+    pub command_list: ID2D1CommandList,
+}
+
+#[derive(Clone)]
+pub enum Clip {
+    /// 矩形クリップ。
+    /// replay時に current mat の軸整列性を見て Aa/Layer を決める。
+    ///   rect: Aa経路（current空間そのまま）
+    ///   geom: Layerフォールバック用の同一矩形 RectangleGeometry（生成時1回キャッシュ）
+    Rect { rect: D2D_RECT_F, geom: ID2D1Geometry },
+    /// 非矩形（角丸・星形等）。常に Layer。
+    Shape { geom: ID2D1Geometry, aabb: Aabb },
+}
+
+#[derive(Clone)]
+pub enum PaintCommand {
+    Content(PaintContent),
+    PushMatrix(Matrix3x2),
+    PopMatrix,
+    PushClip(Clip),
+    PopClip,
+}
+
+// ============================================================================
+// 描画スタック
+// ============================================================================
+
+/// mstack の1フレーム。world mat と、累積が軸整列を保存しているか（単調フラグ）。
+#[derive(Clone, Copy)]
+struct MatFrame {
+    mat: Matrix3x2,
+    exact: bool,
+}
+
+/// クリップの解除APIを振り分けるための種別。
+#[derive(Clone, Copy)]
+enum ClipKind {
+    Aa,    // PushAxisAlignedClip → PopAxisAlignedClip
+    Layer, // PushLayer → PopLayer
+}
+
+/// cstack の1エントリ。解除種別と push 前の有効クリップAABB（pop 復元用）。
+#[derive(Clone, Copy)]
+struct ClipFrame {
+    kind: ClipKind,
+    saved_clip_aabb: Aabb,
+}
+
+
+```
+
+```rs:transform
+
+impl Default for Transform2D {
+    fn default() -> Self {
+        Self {
+            offset: Vector2 { X: 0.0, Y: 0.0 },
+            center: Vector2 { X: 0.0, Y: 0.0 },
+            scale: Vector2 { X: 1.0, Y: 1.0 },
+            rot: 0.0,
+            mat: Matrix3x2::identity(),
+        }
+    }
+}
+
+impl Transform2D {
+    /// 最終アフィン（ローカル → 親）を Matrix3x2 で得る。
+    /// 合成順（WinUI Composition 準拠・公式）:
+    ///   V = TransformMatrix · Scale · Rotation · Offset
+    pub fn to_affine(&self) -> Matrix3x2 {
+        let scale = Matrix3x2::scale_around(self.scale.X, self.scale.Y, self.enter);
+        let rot = Matrix3x2::rotation_around(self.rot, self.center);
+        let offset = Matrix3x2::translation(self.offset.X, self.offset.Y);
+        self.mat * scale * rot * offset
+    }
+}
+
+
+// ============================================================================
+// Matrix3x2拡張
+// ============================================================================
+
+pub trait Matrix3x2Ext {
+    fn transform_point(&self, p: Vector2) -> Vector2;
+    fn transform_aabb(&self, aabb:Aabb) -> Aabb;
+
+    /// 単純クリップできるかどうかを判定。
+    /// 純スケール/並進(M12=M21=0) or 90°/270°回転(M11=M22=0) なら true。
+    fn preserves_axis_alignment(&self, eps: f32) -> bool;
+}
+
+impl Matrix3x2Ext for Matrix3x2 {
+    /// 点を Matrix3x2（行ベクトル規約 p' = p * M）で変換。
+    #[inline]
+    fn transform_point(&self, p: Vector2) -> Vector2 {
+        Vector2::new(
+            p.x * self.m11 + p.y * self.m21 + self.m31,
+            p.x * self.m12 + p.y * self.m22 + self.m32,
+        )
+    }
+
+    /// ローカルAABBの4隅を mat で変換し、
+    /// その外接AABB（world/device空間）を返す。
+    /// 回転が入ると膨らむが「広め＝安全側」なのでカリング判定には無害。
+    fn transform_aabb(&self, aabb: &Aabb) -> Aabb {
+        let pts = [
+            self.transform_point(Vector2::new(aabb.left, aabb.top)),
+            self.transform_point(Vector2::new(aabb.right, aabb.top)),
+            self.transform_point(Vector2::new(aabb.left, aabb.bottom)),
+            self.transform_point(Vector2::new(aabb.right, aabb.bottom)),
+        ];
+        let mut min_x = f32::INFINITY;
+        let mut min_y = f32::INFINITY;
+        let mut max_x = f32::NEG_INFINITY;
+        let mut max_y = f32::NEG_INFINITY;
+        for (x, y) in pts {
+            min_x = min_x.min(x);
+            min_y = min_y.min(y);
+            max_x = max_x.max(x);
+            max_y = max_y.max(y);
+        }
+        Aabb { left: min_x, top: min_y, right: max_x, bottom: max_y }
+    }
+
+    #[inline]
+    fn preserves_axis_alignment(&self, eps: f32) -> bool {
+        let axis_scale = self.M12.abs() < eps && self.M21.abs() < eps;
+        let axis_rot90 = self.M11.abs() < eps && self.M22.abs() < eps;
+        axis_scale || axis_rot90
+    }
+}
+
+```
+
+```rs:aabb
+// ============================================================================
+// AABB ユーティリティ（D2D_RECT_F ベース）
+// ============================================================================
+
+pub trait AabbExt{
+    /// 積集合
+    fn aabb_intersect(&self, dst: &Self) -> Self;
+
+    /// AABBが空ならtrue
+    fn aabb_is_empty(&self) -> bool;
+}
+
+impl AabbExt for Aabb{
+    #[inline]
+    fn aabb_intersect(&self, dst: &Self) -> Self {
+        Self {
+            left: self.left.max(b.left),
+            top: self.top.max(b.top),
+            right: self.right.min(b.right),
+            bottom: self.bottom.min(b.bottom),
+        }
+    }
+
+    /// AABBが空ならtrue
+    #[inline]
+    fn aabb_is_empty(a: &Self) -> bool {
+        a.right <= a.left || a.bottom <= a.top
+    }
+}
+```
+
+```rs:clip
+
+impl Clip{
+    #[inline]
+    pub fn aabb(&self) -> Aabb {
+        match self {
+            Clip::Rect { rect, .. } => *rect,
+            Clip::Shape { aabb, .. } => *aabb,
+        }
+    }
+}
+
+```
+
+```rs:painter
+
+// ============================================================================
+// Replayer
+// ============================================================================
+
+pub struct Painter<'a> {
+    dc: &'a ID2D1DeviceContext,
+    mstack: Vec<MatFrame>,  /// world transform ＋ exact（PushMatrix累積）
+    cstack: Vec<ClipFrame>, /// Pop振り分け用（PushClipごと1ビット）
+    clip_aabb: Aabb,        /// 現在の有効クリップ（デバイス空間）
+}
+
+impl<'a> Replayer<'a> {
+    /// root は最上位の world 変換（通常 identity か、DPI等の基底）。
+    pub fn new(dc: &'a ID2D1DeviceContext, root_mat: Matrix3x2) -> Self {
+        Self {
+            dc,
+            root_mat,
+            mstack: Vec::new(),
+            cstack: Vec::new(),
+            clip_aabb: D2D_RECT_F { left: 0.0, top: 0.0, right: 0.0, bottom: 0.0 },
+        }
+    }
+
+    #[inline]
+    fn top(&self) -> MatFrame {
+        *self.mstack.last().expect("mstack underflow")
+    }
+
+    /// コマンド列を D2D 状態機械へ流す。
+    /// 判断は全て build 側で済ませてある前提で、
+    /// ここは薄く保つ（唯一の判定は「矩形クリップを Aa にできるか」だけ）。
+    pub fn run(&mut self, cmds: &[DrawCommand]) {
+        for cmd in cmds {
+            match cmd {
+                // --- 変換: 相対積み上げ。exact は単調AND ---
+                DrawCommand::PushMatrix(local) => {
+                    let parent = self.top();
+                    let world = parent.mat * *local;
+                    let exact = parent.exact && local.preserves_axis_alignment(EPS);
+                    self.mstack.push(MFrame { mat: world, exact });
+                    unsafe { self.dc.SetTransform(&world) };
+                }
+                DrawCommand::PopMatrix => {
+                    self.mstack.pop();
+                    unsafe { self.dc.SetTransform(&self.top().mat) };
+                }
+
+                // --- クリップ: current空間のまま。Aa/Layer を決めて cstack に記録 ---
+                DrawCommand::PushClip(clip) => {
+                    let frame = self.push_clip(clip);
+                    self.cstack.push(frame);
+                }
+                DrawCommand::PopClip => {
+                    let frame = self.cstack.pop().expect("unbalanced PopClip");
+                    self.clip_aabb = frame.saved_clip_aabb;
+                    match frame.kind {
+                        ClipKind::Aa => unsafe { self.dc.PopAxisAlignedClip() },
+                        ClipKind::Layer => unsafe { self.dc.PopLayer() },
+                        ClipKind::Culled => (),
+                    }
+                }
+
+                // --- 描画: current空間で command_list を DrawImage ---
+                DrawCommand::Content(c) => {
+                    unsafe {
+                        self.dc.DrawImage(
+                            &c.command_list,
+                            None,
+                            None,
+                            D2D1_INTERPOLATION_MODE_LINEAR,
+                            D2D1_COMPOSITE_MODE_SOURCE_OVER,
+                        );
+                    }
+                }
+            }
+        }
+        // 終了時、スタックは初期状態に戻っているべき（Push/Pop balance 検証）
+        debug_assert_eq!(self.mstack.len(), 1, "unbalanced PushMatrix/PopMatrix");
+        debug_assert!(self.cstack.is_empty(), "unbalanced PushClip/PopClip");
+    }
+
+    /// クリップを push し、解除に使う ClipKind を返す。
+    /// 矩形は current mat が軸整列なら Aa、そうでなければ Layer フォールバック。
+    fn push_clip(&self, clip: &Clip) -> ClipKind {
+        match clip {
+            Clip::Rect { rect, geom } => {
+                if self.top().exact {
+                    // current が軸整列 → Aa で厳密（中間ビットマップ不要）
+                    self.dc.PushAxisAlignedClip(rect, D2D1_ANTIALIAS_MODE_ALIASED);
+                    ClipKind::Aa
+                } else {
+                    // 任意角回転/せん断 → 矩形geometryをLayerで厳密クリップ
+                    self.dc.PushLayer(&layer_params(geom), None);
+                    ClipKind::Layer
+                }
+            }
+            Clip::Shape { geom, .. } => {
+                // 非矩形は常に Layer
+                self.dc.PushLayer(&layer_params(geom), None);
+                ClipKind::Layer
+            }
+        }
+    }
+}
+
+
+
+
+
+
+```
+
+
+
 
 + world_visual entity
   + aabb
