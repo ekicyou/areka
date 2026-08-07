@@ -1,0 +1,43 @@
+scan date        : 2026-08-07 23:01:53
+repo root        : C:\home\maz\git\areka\.claude\worktrees\areka-p0-file-slimming-64d065
+git branch       : claude/areka-p0-file-slimming-64d065
+git HEAD         : f05537e
+threshold        : test_lines > 500
+
+=== area breakdown ===
+area           files      total test_lines
+examples          34      14146        798
+src              387     189190      92777
+tests            198      53798       5437
+TOTAL            619     257134      99012
+
+=== targets (test_lines > threshold) ===
+count            : 49
+test lines total : 68921
+crates           : 12
+multi-module     : 8
+
+=== target breakdown by crate ===
+areka                       13 files   21056 test lines
+areka-emo-text               7 files   12411 test lines
+areka-emo-present            4 files    7563 test lines
+areka-kanade                 6 files    7150 test lines
+areka-ghost                  4 files    4994 test lines
+areka-sakura                 2 files    3824 test lines
+areka-emo-compose            3 files    3715 test lines
+areka-seriko                 3 files    3469 test lines
+wintf                        4 files    2520 test lines
+areka-sylphya                1 files     866 test lines
+dola                         1 files     758 test lines
+shiori-host32-helper         1 files     595 test lines
+
+=== diagnostics ===
+in-file test module blocks   : 262
+files with in-file blocks    : 219
+declaration-only mod sites   : 55
+files declaring separated mod: 30
+non-mod #[cfg(test)] items   : 40
+inline (non-line-start) attrs: 0
+loose cfg(...test...) variants: 1
+unresolved separated modules : 0
+
