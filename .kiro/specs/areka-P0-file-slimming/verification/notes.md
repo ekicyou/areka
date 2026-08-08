@@ -1879,3 +1879,278 @@ exit 0。**適用 232 行・未使用 0 行**。移設後リストの SHA256 は
 | `verification/notes.md` | 本節（§17）を追記 |
 
 コミットは要件 7.1 に従い**クレート単位の 1 コミット**（`areka-sakura`）とする。
+
+## 18. クレート単位のテスト分離とテーマ分割: `areka-ghost`（ライブラリ側）（タスク 3.4・要件 1.1 / 1.6 / 1.7 / 1.8 / 2.4 / 2.8 / 2.9 / 3.1〜3.3 / 7.1 / 7.2）
+
+- 実施日: 2026-08-08
+- ブランチ: `claude/areka-p0-file-slimming-64d065` / 移設前コミット `470164a`（タスク 3.3 のコミット時点）
+- 実行シェル: **PowerShell（pwsh 7）**
+- 下表の本番 3 ファイル＋新規テストファイル 5 本＋`verification/mapping/areka-ghost.csv`＋本ファイル以外には一切触れていない。**`crates/areka-ghost/tests/**`（統合テストツリー・`spine_e2e_test.rs` を含む）はタスク 3.5 の領分であり本タスクでは 1 行も変更していない**（`git status --porcelain -uall` で確認済み）
+
+### 18.1 移設した 3 ファイル（design §File Structure Plan の `crates/areka-ghost` の `src/` 3 本と完全一致）
+
+| 本番ファイル | 移設前 総行 | テストモジュール（移設前の行範囲） | 扱い | 新テストファイル | 新ファイル行 | 本番 残行 |
+|---|---:|---|---|---|---:|---:|
+| `src/dispatcher.rs` | 1,856 | `tests`（421-1856・テストコード 1,436） | **テーマ分割 ×2 ＋共有ヘルパ** | `dispatcher_test_support.rs` ／ `dispatcher_slot_tests.rs` ／ `dispatcher_choice_tests.rs` | 63 / 613 / 767 | 429 |
+| `src/runtime.rs` | 1,613 | `tests`（651-1613・テストコード 963） | 単純移設 | `runtime_tests.rs` | 960 | 653 |
+| `src/ticker.rs` | 823 | `tests`（320-823・テストコード 504） | 単純移設 | `ticker_tests.rs` | 501 | 322 |
+
+- 3 ファイルとも**テストモジュールは 1 個・ファイル末尾に連続配置**（`scan_raw.csv:77,81,87` の実測どおり・ズレ 0）。モジュール名はいずれも `tests`。
+- **新テストファイル 5 本はすべて 1,000 行以下**（最大 `runtime_tests.rs` の 960 行）。僅少超過で単一維持したファイルは **0 件**（§7.4 への追記は不要）。
+- 3 ファイルとも非 `mod` `#[cfg(test)]` 項目（設計判断 #3 の残置対象 40 件）は 1 件も存在しない（`scan_raw.csv` の当該 3 行の `nonmod_count` が 0）。テストモジュールに付いた `///` doc コメントも 0 件（Implementation Notes の §14.3 規則は本タスクでは発動しない）。
+- `#[cfg(test)]` 行は §13〜§17 と同じく**元位置に据え置き**、増えるモジュールぶんの宣言だけを新設した（`git diff --numstat` の挿入は dispatcher 8・runtime 2・ticker 2 の計 12 行）。
+- 同クレートの残る `src/` 8 本（`shiori_inproc.rs` 446／`prop_sink.rs` 407／`sink.rs` 284／`sylphya_wiring.rs` 189／`config.rs` 134／`relay.rs` 115／`shiori_wiring.rs` 89／`lib.rs`・`test_log_capture.rs` 0）はテストコード 500 行以下ゆえ要件 1.5 で非必須・設計判断 #10 により任意移設は行わない（無変更）。
+- `crates/areka-ghost/tests/ghost/spine_e2e_test.rs`（2,091 行・10 モジュール）は**タスク 3.5 の担当**。本タスクでは触っていない。
+
+接続宣言（5 モジュールとも同一文言・design §移設方式の裁定 案 C）:
+
+    #[cfg(test)]
+    #[path = "<stem>_<モジュール名>.rs"]
+    mod <モジュール名>;
+
+### 18.2 テーマ境界の裁定（design §テーマ分割ポリシー・手順①）
+
+**`dispatcher.rs`** — テーマ分割が要るのは本ファイルのみ（他 2 本は 1,000 行未満で単純移設）。
+
+タスク 3.1〜3.3 ではコメントバナーが「作業時系列の見出し」で thematic でなかったため本番 API の継ぎ目へ退避したが、
+**本ファイルではバナーが唯一 1 本しかなく、しかもそれが本番 API の継ぎ目とちょうど一致する**。
+移設前 `dispatcher.rs:1097-1107` の
+`// ── task 3.3: 選択系 3 アームの中継意味論と時刻換算（design C9・DD-9/DD-11・R1.3/5.5/7.2/7.5） ──`
+がそれで、区画の切れ目は `DispatcherState::handle`（`:122`）が配る 7 アームのうち
+**選択系 3 アーム**（`on_resolve_choice` `:154` ／ `on_cancel_choice` `:194` ／ `on_choice_waiting` `:228`）と
+**それ以外**（`on_start` `:282` ／ `on_done` `:314` ／ `on_tick` `:337` ／ `on_close` `:358` ／
+`close_active_if_any` `:365`、および inbox 境界の `From` 実装 5 本 `:51-95`）の境目に一致する。
+よって本ファイルに限りバナー由来の境界と本番 API シーム由来の境界が同一であり、両者は互いの裏取りになっている。
+（行番号はすべて移設前 `470164a`。）
+
+| 新モジュール（ファイル） | 移設前の行範囲 | 対象の本番項目 | テスト数 |
+|---|---|---|---:|
+| `test_support`（`dispatcher_test_support.rs`） | 431-487 | —（2 テーマから参照される 3 ヘルパ項目＋その impl 2 本） | 0 |
+| `slot_tests`（`dispatcher_slot_tests.rs`） | 489-1096 | inbox 境界の `From` 変換（`TalkCommand`／`ChoiceWaiting` の無損失写像）と、単一 slot の運行——差し替え（`on_start`＋`close_active_if_any`）・stale `Done` 棄却（`on_done`）・停止時の内側 join（`on_close`）・経過秒換算の Tick 中継（`on_tick`）・完了転送と slot 解放・`system_vars` provider の per-talk 凍結 | 8 |
+| `choice_tests`（`dispatcher_choice_tests.rs`） | 1097-1855 | 選択系 3 アーム——`on_resolve_choice`（一致中継・不一致棄却・送出失敗継続）・`on_cancel_choice`（Close 転送＋slot 維持・不一致棄却・送出失敗継続）・`on_choice_waiting`（ms 換算・不一致棄却・`base_now` 未確定の warn 防御・転送失敗継続）と実 talk e2e 2 本 | 12 |
+
+**ヘルパ参照関係による裏取り**（テストモジュール内の全ヘルパ項目 16 件の参照行を全数走査。行番号は移設前）:
+
+- **2 テーマから参照される 3 項目**（→ `test_support` へ集約）:
+  `test_system_vars`（定義 `:436`／参照 slot 側 `:593,671,752,791,893`・choice 側 `:1158,1707,1799`）・
+  `run_bounded`（定義 `:446`／参照 slot 側 `:648,727,765,868,975,1086`・choice 側 `:1774,1846`）・
+  `RecordingSink`（定義 `:462`＋`impl RecordingSink :466`＋`impl CueSink for RecordingSink :480`／
+  参照 slot 側 `:587,588,665,666,746,747,785,886,887,1009`・choice 側 `:1704,1705,1796,1797`）。
+- **slot 専用 1 項目**（同ファイルに残置）: `ChannelSink`（定義 `:492`＋`impl CueSink :496`／参照 `:786,1010` の 2 箇所とも slot 側）。
+- **choice 専用 9 項目**（同ファイルに残置）: `spawn_probe_talk`（`:1112`）・`spawn_vanished_talk`（`:1130`）・
+  `StateFixture`（`:1143`）・`state_fixture`（`:1150`）・`impl StateFixture`（`:1166`・`feed`）・`occupy`（`:1180`）・
+  `release`（`:1189`）・`MENU_SCRIPT`（定義 `:1200`／参照 `:1714,1806`）・
+  `relay_choice_waiting`（定義 `:1460`／参照 `:1504,1536`）。参照行はいずれも `:1097` 以降にしか現れない。
+
+この分布は上記の境界と完全に整合する（境界を跨ぐヘルパは 3 件だけで、それらは `test_support` に集約した）。
+
+**バナーの帰属**: 本文一致検証は項目の直前コメントを（空行を挟んでも）当該項目の本文の一部として比較する。
+唯一のバナー `:1097-1107` は移設前も直後の `spawn_probe_talk`（choice 専用ヘルパ）に付属する本文の一部であり、
+移設後も `dispatcher_choice_tests.rs` の同じ位置（同ファイル先頭の `use` ヘッダ直後）にそのまま置いた。文言は 1 文字も変えていない。
+
+**共有ヘルパの可視性（要件 2.4 が許容する機械的調整）**: `dispatcher_test_support.rs` の 5 箇所
+（`test_system_vars`・`run_bounded`・`struct RecordingSink`・`RecordingSink::new`・`RecordingSink::records`）へ
+`pub(super)` を付与した（付与のみ・本文は無変更）。フィールド `records` は同モジュール内の impl からしか触られないため
+付与不要（テーマ側は `.records()` メソッド経由・参照 `:888` のみ）。複製は 1 件も作っていない。
+
+**Implementation Notes の E0659 罠（タスク 3.3 §17.5）への対処**: 共有ヘルパは**明示 import** で受けた
+（`use super::test_support::{RecordingSink, run_bounded, test_system_vars};`）。加えて誤結合の有無を実測で確認した——
+移設前 `dispatcher.rs` を全数走査した結果、`test_system_vars`／`run_bounded`／`RecordingSink` の 3 識別子は
+**テストモジュールの内側にしか出現せず**（親モジュール `dispatcher` の項目・`use` 由来の名前
+（`DispatcherMsg`・`ActiveTalk`・`DispatcherState`・`spawn_dispatcher`・`ControlFlow`・`Sender`・`ActorHandle`・
+`reply_channel`・`run_inbox`・`spawn_actor`・`KanadeMsg`・`MonotonicMs`・`ChoiceWaiting`・`CueSink`・`SakuraMsg`・
+`StartTalk`・`TalkCommand`・`TalkDone`・`TalkHandle`・`TalkId`・`spawn_talk`・`SystemVarSource`・`BootCueSink`）とは
+1 件も衝突しない）、`use super::*;` が同名を供給する余地は無い。同一シグネチャの黙った差し替えは起き得ない。
+
+**`use` ヘッダの調整（要件 2.4 / 2.6）**: 各新ファイルの先頭に移設元の `use` 群を置き、そのファイルで実際に使う項目だけへ絞った
+（絞る前のビルドで `unused_imports` が 7 件出て要件 2.6 に反したため）。落としたのは
+`dispatcher_test_support`＝`test_log_capture` 3 項目／`CueCommand`・`TalkEndReason`／`mpsc`（`self`）／`tracing::Level`、
+`dispatcher_slot_tests`＝`test_log_capture` 3 項目／`sync_channel`／`std::thread`／`tracing::Level`、
+`dispatcher_choice_tests`＝`CueCommand`・`TalkCue`／`sync_channel`／`std::thread`。
+`runtime_tests.rs`・`ticker_tests.rs` は単純移設のため `use` ヘッダを 1 行も変えていない。
+`use` 項目は §11.4 のとおり本文一致検証の対象外である。**可視性・`use` 以外の調整は 1 件も必要なかった**（要件 2.8 の追加調整 0 件）。
+
+### 18.3 §11.4 の盲点（複数行文字列リテラル内の行頭空白）— 担当 3 ファイルの独自走査
+
+Implementation Notes の指示に従い、担当ファイルを字句状態追跡つきの独立スキャナ
+（行コメント・入れ子ブロックコメント・通常文字列・raw 文字列（`#` の数）・バイト文字列・
+文字リテラルとライフタイムの判別・エスケープを追跡し、「行頭時点で文字列リテラルの内部にいる行」と
+「直前行が `\` 継続か」を判定する）で全走査した。スキャナの妥当性は、既知の唯一の該当箇所
+`crates/wintf/src/ecs/window_proc/window_pos_tests.rs:691` を**盲点 1 件**として検出し、同ファイルの
+`:382`・`:429`・`:614`・`:690` を **`\` 継続 4 件**として正しく切り分けることで確認した
+（実測出力: `継続行 5 件: 382,429,614,690,691 / 盲点該当 1 件: 691`）。
+
+| ファイル | 複数行にまたがる文字列リテラルの継続行 | 盲点該当（`\` 継続でない行） |
+|---|---|---:|
+| `crates/areka-ghost/src/dispatcher.rs`（移設前） | 2（`:249` は本番本体・`:771` はテストモジュール内） | **0** |
+| `crates/areka-ghost/src/runtime.rs`（移設前） | 8（`:271`・`:349` は本番本体／`:847`・`:860`・`:1222`・`:1223`・`:1224`・`:1306` はテストモジュール内） | **0** |
+| `crates/areka-ghost/src/ticker.rs`（移設前） | 0 | **0** |
+| 新テストファイル 5 本（移設後） | 7（`dispatcher_slot_tests.rs:289` ／ `runtime_tests.rs:195,208,570,571,572,654`） | **0** |
+
+**結論: 担当 3 ファイルの複数行文字列リテラルはすべて `\` 継続であり、§11.4 第 1 の盲点の該当行は 0 件。**
+Rust は `\` 改行に続く行頭空白を除去するため、一律 4 スペース de-indent はリテラルの中身を変えない。
+移設されたのは 7 行（dispatcher `:771` → `dispatcher_slot_tests.rs:289` ／ runtime `:847,860,1222,1223,1224,1306`
+→ `runtime_tests.rs:195,208,570,571,572,654`）で、いずれも
+**「移設前の行から先頭 4 文字を除いたものと移設後の行がバイト同値」**であることを §18.4 (a2) の全行分類で確認済み
+（この 7 行を含む全移設行が「ちょうど −4 スペース」に分類されている）。例外処理は不要だった。
+
+### 18.4 検証（すべて実測・終了コードで判定）
+
+**(a) 本文一致検証（要件 2.4）** — `pwsh -File $V/Compare-RelocatedTests.ps1 -Commit 470164a -OriginalPath <本番> -RelocatedPath "<新テスト群>" -Detail`
+
+| 対象 | 出力 | exit |
+|---|---|---:|
+| `dispatcher.rs` → 3 ファイル | `MATCH: test fn 20=20 / helper item 16=16 / mod block 1 / files 3` | 0 |
+| `runtime.rs` → 1 ファイル | `MATCH: test fn 16=16 / helper item 15=15 / mod block 1 / files 1` | 0 |
+| `ticker.rs` → 1 ファイル | `MATCH: test fn 18=18 / helper item 2=2 / mod block 1 / files 1` | 0 |
+
+3 本とも exit **0**（引数不正の 2 ではないことを、故意にパスを誤らせた対照実行が exit 2 を返すことで確認済み）。
+
+**(a2) 行単位の分類と多重集合突合（スクリプトより強い独自検証）** — 本文一致検証は項目単位・行頭空白非依存であるため、
+それとは独立に、移設した**全行**を位置対応で「(a) ちょうど −4 スペース」「(b) バイト同値（空行）」へ分類し、
+どちらでもない行を全件提示させた。
+
+| 新ファイル | −4 スペース行 | 空行 | その他 |
+|---|---:|---:|---:|
+| `dispatcher_test_support.rs` | 47 | 5 | **5**（すべて `pub(super)` 付与＝要件 2.4 が明示的に許容する可視性調整） |
+| `dispatcher_slot_tests.rs` | 551 | 56 | 0 |
+| `dispatcher_choice_tests.rs` | 700 | 59 | 0 |
+| `runtime_tests.rs` | 844 | 116 | 0 |
+| `ticker_tests.rs` | 433 | 68 | 0 |
+
+「その他」5 行の全数は
+`fn test_system_vars()` ／ `fn run_bounded<F: …>` ／ `struct RecordingSink {` ／ `fn new() -> Self {` ／
+`fn records(&self) -> …` の先頭への `pub(super) ` 付与のみで、それ以外の文字は 1 字も違わない。
+
+行の多重集合突合（空行を除く。元＝移設前ブロック本体を一律 4 スペース de-indent した行の多重集合）:
+
+| 本番ファイル | 元 | 新 | 消えた行 | 増えた行 | 内訳 |
+|---|---:|---:|---:|---:|---|
+| `dispatcher.rs` | 1,310 | 1,320 | 6 | 16 | 消 = `pub(super)` を付ける前の 5 行＋落とした `use std::sync::mpsc::{self, sync_channel};` 1 本 ／ 増 = `pub(super)` 付き 5 行＋新設・複製された `use` 11 本 |
+| `runtime.rs` | 844 | 844 | **0** | **0** | 完全一致（`use` も含め 1 行も動かしていない） |
+| `ticker.rs` | 433 | 433 | **0** | **0** | 完全一致 |
+
+**(b) 対応表フラグメントの全単射検証（要件 2.9）** — `pwsh -File $V/Test-MappingBijection.ps1 -Path $V/mapping/areka-ghost.csv`
+
+    PASS: 全単射 OK / 行数 20 / 相異なる old_fqn 20 / 相異なる new_fqn 20 / フラグメント 1
+      - areka-ghost.csv: 20 行
+
+exit 0。20 行の内訳は `dispatcher::tests::*` → `dispatcher::slot_tests::*` 8 行／
+`dispatcher::tests::*` → `dispatcher::choice_tests::*` 12 行。`reason` は全行 `theme_split`、
+末尾セグメント（関数識別子）は旧新で同一。**`runtime.rs`・`ticker.rs` は完全修飾名が変わらないため行を持たない**
+（`runtime::tests::*` 16 本・`ticker::tests::*` 18 本は移設前後で同名）。
+移設前 `before_default.txt` に `dispatcher::tests::` が **20 行**実在し、対応表の `old_fqn` 20 件すべてが
+そこに存在することを照合済み（不在 0）。
+既存フラグメントとの結合検証（`-Path $V/mapping`）も
+`PASS: 全単射 OK / 行数 252 / 相異なる old_fqn 252 / 相異なる new_fqn 252 / フラグメント 4` で exit 0（キー衝突なし）。
+
+> 注: `runtime::tests::` は `before_default.txt` に 22 行あるが、これは他クレート（`dola` の `runtime` 等）の
+> 同名モジュールを含む合計である。cargo の完全修飾名にはクレート名の接頭辞が付かないため、リスト照合は
+> §10.2 のとおり**多重集合**として行われ、この重なりは判定に影響しない（本クレートぶんは 16 本）。
+> タスク 3.5 は同じ `areka-ghost.csv` へ追記することになるが、`spine_e2e_test.rs` は 1 モジュール＝1 ファイルの
+> 個別移設で完全修飾名が変わらないため、追加行は 0 行になる見込みである。
+
+**(c) 対応表適用後のテスト名リスト一致（要件 1.8 / 2.2）— ワークスペース水準**
+
+移設後に §10.2 の手順（`cargo test --workspace --no-fail-fast -- --list` → stdout のみ → `: test$` 抽出 →
+`[Array]::Sort($arr, [System.StringComparer]::Ordinal)` → UTF-8 BOM 無し・CRLF・末尾改行 1 つ・重複行を残す）で
+リストを採取し、コミット済み `before_default.txt` と**タスク 3.1〜3.4 の 4 フラグメント全部**を渡して突合した:
+
+    BEFORE      : before_default.txt  (4790 行 / 相異なる 4787)
+    AFTER       : after_default_task34.txt  (4790 行 / 相異なる 4787)
+    MAPPING     : 252 行 (4 ファイル) / 適用 252 行 / 未使用 0 行
+    LINE COUNT  : before 4790 / after 4790 -> 一致 (Requirement 2.2)
+    RESULT: PASS
+
+exit 0。**適用 252 行・未使用 0 行**。移設後リストの SHA256 は
+`9C75E1B7BBFE9B4EEF8F229A48EB09AE6FFE0F3A9C013EDD2E9FFA6C72B9F20F`
+（§10.2 手順 5 の形式で採取。中間リストファイル自体はコミットしない）。
+整列は `Sort-Object` を使わず `[System.StringComparer]::Ordinal` で行った（§11.8）。
+
+**(c2) 対応表そのものへの反証（自分の表を疑う検証）** — 対応表が「実際に起きた変化」と過不足なく一致することを、
+対応表を**使わない**多重集合の対称差で確かめた。
+
+| 検査 | 結果 |
+|---|---|
+| `before_default.txt` と移設後リストの対称差（対応表なし）: 消えた行 / 現れた行 / 全フラグメント行数 | **252 / 252 / 252**（三者一致） |
+| タスク 3.1〜3.3 のフラグメントだけを `before_default.txt` へ適用して復元した「本タスク着手直前のリスト」と移設後リストの対称差: 消えた行 / 現れた行 / 本タスクの対応表行数 | **20 / 20 / 20**（三者一致） |
+| 消えた行がすべて `old_fqn` に在るか | **True**（例外 0） |
+| 現れた行がすべて `new_fqn` に在るか | **True**（例外 0） |
+| `old_fqn` なのに実際には消えていない行 | **0** |
+| `new_fqn` なのに実際には現れない行 | **0** |
+| `old_fqn` と `new_fqn` が同一の行（＝変わっていない名前を載せた水増し） | **0** |
+| 末尾セグメント（関数識別子）が旧新で相違する行 | **0** |
+| `reason` が `theme_split` 以外の行 | **0** |
+
+すなわち対応表は「実際に変わった名前だけ」を「実際に変わったとおりに」記載しており、水増しも取りこぼしも無い。
+
+移設後リストの当該モジュール別内訳（`cargo test -p areka-ghost --lib -- --list`）:
+`dispatcher::slot_tests` 8 ／ `dispatcher::choice_tests` 12 ／ `runtime::tests` 16 ／ `ticker::tests` 18。
+移設前の `dispatcher::tests` 20・`runtime::tests` 16・`ticker::tests` 18 と本数が一致する。
+
+**(d) クレート緑（要件 7.2）** — `cargo test -p areka-ghost --no-fail-fast` → **exit 0**。
+**147 passed / 0 failed / 0 ignored**（lib 107 ＋ 統合テスト（`tests/ghost.rs` ツリー）40 ＋ doctest 0）。
+移設前の独立導出値と一致する: 移設前コミット `470164a` の `git show` に対する `#[test]` 属性行の全数は
+`src/` 全 12 ファイルで **107**（config 4・dispatcher 20・prop_sink 9・relay 3・runtime 16・shiori_inproc 19・
+shiori_wiring 2・sink 5・sylphya_wiring 11・ticker 18）、`tests/` ツリー全 9 ファイルで **40**。
+**統合テストツリー（`spine_e2e_test.rs` を含む）は無変更のまま 40 本すべて緑である。**
+
+**(e) 警告非増加（要件 2.6）** — `cargo build -p areka-ghost --all-targets` → exit 0。
+`areka-ghost` に帰属する警告は **0 件**（出た警告は依存の `shiori4-testdll` (lib) 1 件のみで、
+`before_build_warnings.txt` の `[PER-UNIT TALLY]` に既に載っている基準内の警告）。基準値も `areka-ghost` へは 0 件の割当。
+ワークスペース全域でも §10.5 の手順で再集計した——`cargo build --workspace --all-targets` → exit 0、
+`DIAG_COUNT = 16` / `SUMMARY_COUNT = 7` / `GENERATED_SUM = 22` / `DUPLICATES = 6` / `NET = 16` で、
+§10.5 の移設前基準値 5 数値と**完全一致**。ユニット別 generated 件数（7 ユニット）も多重集合として一致し、
+`areka-ghost` のサマリ行は移設前後とも 0 件である。
+
+**(f) 本番本体の無変更** — 移設前コミット `470164a` の各本番ファイルの先頭〜旧 `#[cfg(test)]` 行の直前までを
+現作業ツリーと逐行突合し、**3 ファイルとも不一致 0**（dispatcher 1-420 ／ runtime 1-650 ／ ticker 1-319）。
+
+| ファイル | `git diff --numstat` |
+|---|---|
+| `dispatcher.rs` | 挿入 8 ／ 削除 1,435 |
+| `runtime.rs` | 挿入 2 ／ 削除 962 |
+| `ticker.rs` | 挿入 2 ／ 削除 503 |
+
+3 ファイル合計 `3 files changed, 12 insertions(+), 2900 deletions(-)`。挿入 12 = 新設した接続宣言（9＋3＋3＝15 行）のうち
+元位置に据え置いた `#[cfg(test)]` 行 3 本を除いた行数である。
+
+**(g) 完了状態の直接確認** — 3 本番ファイルに残る `cfg(test)` / `#[path]` / `mod …;` の出現はすべて接続宣言のみ:
+`dispatcher.rs:421-429` ／ `runtime.rs:651-653` ／ `ticker.rs:320-322`。`#[test]` は 1 件も残っていない。
+テストモジュール本体は 1 行も残っていない。
+
+**(h) 作業ツリーの範囲** — `git status --porcelain -uall` は本節追記前の時点で下記 9 パスのみ:
+変更 3 本（本番ファイル）＋未追跡 6 本（新テストファイル 5 本＋`verification/mapping/areka-ghost.csv`）。
+**`crates/areka-ghost/tests/` 配下の差分は 0 件**。他クレート・`Cargo.toml`・`tasks.md`・spec 本体ドキュメントも無変更。
+
+### 18.5 登記（要件 5.2）— 壊れたテスト・状態汚染の所見
+
+**本タスクの範囲（`areka-ghost` の `src/` 3 ファイル・54 テスト・テストコード 2,903 行）では、修正を要する
+壊れたテスト・不正なテストは 1 件も発見しなかった。所有 spec への送付所見は 0 件である。**
+
+以下は「調べたが問題なし／既存のまま据え置き」と確定した記録（次に触る者が同じ調査を繰り返さないための控え。是正は行わない）:
+
+| # | 観測 | file:line（移設後） | 判定 |
+|---|---|---|---|
+| 1 | `static` / `thread_local!` / `std::env::set_var` / `unsafe` / `std::thread::sleep` / `#[ignore]` / `OnceLock` の使用 | 担当 5 テストファイル全域 | **0 件**（全走査で確認）。`#[should_panic]` は 1 件（`ticker_tests.rs:57`・`starting_at_panics_on_zero_interval`＝正当な契約テスト）。プロセスグローバルな可変状態をテスト側で持つものは無い |
+| 2 | 一時ディレクトリ名が**テスト関数名だけ**でユニーク化されており、プロセス/実行をまたぐと同一パスになる | `runtime_tests.rs:55-59`（`unique_temp_dir`）＋利用 8 箇所（`:138,183,242,285,403,466,577,874`）。同型の既存実装が `config.rs:84-88` にもある | **既存・記録のみ（是正しない）**。1 プロセス内ではタグ（テスト関数名）が相異なるためテスト間の衝突は起きず、各テストは使用前後に `remove_dir_all` するので前回実行の残骸も掃われる。ただし**同一マシンで `cargo test` を 2 プロセス同時に走らせる**（例: x64 と i686 を並走させる・別シェルで同時実行する）と同じパスを共有し、片方の事前 `remove_dir_all` がもう片方の fixture を消し得る。関数名の「unique」は**プロセス内の一意性**であってグローバル一意ではない。テスト本文の変更は要件 2.4 違反になるため触らない。**要件 5.2 の送付対象ではない**——5.2 が拾うのは「テスト**間**で状態が汚染されているテストモジュール」であり、本件は 1 プロセス内では汚染が起きない**プロセス間**の危険だからである（8 タグが相異なることをレビューが実測確認済み）。将来この決定論の穴に手を入れるとすれば `test-cage-determinism`（W6.9）の領分だが、本 spec からの送付所見としては起票しない |
+| 3 | 実 DLL 経路の観測が**壁時計デッドライン**（10 秒）で括られており、注入 simulated time（`now += 1`）が観測を待たずに前進する | `runtime_tests.rs:634-651`（`inproc_wiring_boots_drives_and_shuts_down_through_real_test_dll`） | **既存・記録のみ（是正しない）**。当該箇所には「デッドラインは宙吊り防止の上限にすぎず、talk timeline を進めるのは注入 Tick のみ」という設計意図がコメントで明記されており、`base_now` は slot 占有後の初回 Tick で刻印されるため `now` の先行前進は換算結果を壊さない。とはいえ `LoadLibraryW`＋`CreateInstance` が 10 秒を超える極端な負荷では偽陽性の赤になり得る（回数上限ではなく壁時計で括っている唯一の箇所）。移設前から同一コードであり、テスト本文の変更は要件 2.4 違反になるため触らない |
+| 4 | 「送信が起きない」ことを短い timeout で示す負の窓 | `ticker_tests.rs:427`（200ms・catch-up が複数境界を 1 回へ畳むことの固定） | **問題なし・記録のみ**。時計は注入値のまま（次デッドライン未満）で追加発火が構造的に起き得ない状態を作ってから測っており、両方向決定的。他の `recv_timeout` はすべて 5 秒の宙吊り防止上限で、正常系では即座に届く |
+| 5 | プロセスグローバルな tracing subscriber（leak された interest-keeper） | `test_log_capture.rs:1-40`（本タスクの担当ファイルではない・`INTEREST_KEEPER`）。利用は `dispatcher_choice_tests.rs` の `capture` 9 箇所 | **問題なし・記録のみ（是正しない）**。並列負荷下で `Interest::never` が焼き付く確率欠陥を根治するために意図して常駐させているもので、モジュール doc に不変条件（「本モジュールより先に別のグローバル subscriber を設定してはならない」）と違反時の大声 panic まで明記されている。テスト間の状態汚染ではなく汚染の**予防**機構であり、本 spec でも `test-cage-determinism` でも撤去対象ではない |
+| 6 | 移設で可視性・`use`・モジュール接続の追加調整が要るケース（要件 2.8） | — | **0 件**。共有ヘルパ 3 項目（＋impl 内メソッド 2 本）への `pub(super)` 付与と `use` の絞り込みだけで通った。§17.5 #4 が警告した同名 shadow ヘルパによる E0659 は本ファイルには存在しない（§18.2 の全数照合で確認） |
+
+### 18.6 本タスクの成果物
+
+| ファイル | 内容 |
+|---|---|
+| `crates/areka-ghost/src/dispatcher_test_support.rs` | 新規（63 行・共有ヘルパ 3 項目＋impl 2 本） |
+| `crates/areka-ghost/src/dispatcher_slot_tests.rs` | 新規（613 行・8 テスト） |
+| `crates/areka-ghost/src/dispatcher_choice_tests.rs` | 新規（767 行・12 テスト） |
+| `crates/areka-ghost/src/runtime_tests.rs` | 新規（960 行・16 テスト・単純移設） |
+| `crates/areka-ghost/src/ticker_tests.rs` | 新規（501 行・18 テスト・単純移設） |
+| 上記に対応する本番 3 ファイル | 末尾のテストモジュールブロックを接続宣言へ置換（本番本体は無変更） |
+| `verification/mapping/areka-ghost.csv` | 新規（20 行・全単射検証済み。タスク 3.5 が同ファイルへ追記する） |
+| `verification/notes.md` | 本節（§18）を追記 |
+
+コミットは要件 7.1 に従い**クレート単位の 1 コミット**（`areka-ghost` ライブラリ側）とする。
+同クレートの統合テストツリー（タスク 3.5）は別コミットになる。
