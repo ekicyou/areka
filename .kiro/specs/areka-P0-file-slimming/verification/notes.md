@@ -3067,3 +3067,300 @@ exit 0。**適用 377 行・未使用 0 行**。移設後リストの SHA256 は
 
 コミットは要件 7.1 に従い**クレート単位の 1 コミット**（`areka-emo-present` の小規模 3 ファイル分）とする。
 `presenter.rs`（タスク 4.3）は同クレートの別コミットとして続く。
+
+## 22. クレート単位のテスト分離とテーマ分割: `areka-emo-present`（`presenter.rs`）（タスク 4.3・要件 1.1 / 1.6 / 1.7 / 1.8 / 2.4 / 2.8 / 2.9 / 3.1〜3.3 / 7.1 / 7.2）
+
+- 実施日: 2026-08-08
+- ブランチ: `claude/areka-p0-file-slimming-64d065` / 移設前コミット `91d59e0`（タスク 4.2 のコミット時点）
+- 実行シェル: **PowerShell（pwsh 7）**
+- 触ったのは `crates/areka-emo-present/src/presenter.rs` ＋ 新規テストファイル 8 本 ＋ `verification/mapping/areka-emo-present.csv`（追記のみ）＋ 本ファイルのみ。
+  タスク 4.2 の成果物（`balloon*.rs` 4 本・`cache_tests.rs`・`scale_tests.rs` と対応する本番 3 ファイル）は **1 行も触っていない**。
+  `crates/areka-emo-present/tests/`・`Cargo.toml`・他クレート・`tasks.md`・spec 本体ドキュメントも無変更（`git status --porcelain -uall` で確認）。
+
+### 22.1 移設した 1 ファイル
+
+| 本番ファイル | 移設前 総行 | テストモジュール（移設前の行範囲） | 扱い | 本番 残行 |
+|---|---:|---|---|---:|
+| `src/presenter.rs` | 5,417 | `tests`（1043-5417・テストコード 4,375・ブロック本体 4,372） | **テーマ分割 ×7 ＋共有ヘルパ** | 1,066 |
+
+- 移設前の行範囲は `target_inventory.csv` / `scan_raw.csv` の実測（`tests:1043-5417(4375)`）と**完全一致**（ズレ 0）。テストモジュールはファイル末尾に連続配置・1 ファイル 1 モジュール。
+- 非 `mod` `#[cfg(test)]` 項目（設計判断 #3 の残置対象 40 件）は 1 件も存在しない（`scan_raw.csv` の `nonmod_count` が 0）。テストモジュールに `///` doc コメントも付いていない（§14.3 規則は発動しない）。
+- `#[cfg(test)]` 行は §13〜§21 と同じく**元位置（1043 行）に据え置き**、増えるモジュールぶんの宣言だけを新設した（`git diff --numstat` = 挿入 23 ／ 削除 4,374）。
+
+| 新テストファイル | 行数 | テスト数 |
+|---|---:|---:|
+| `presenter_test_support.rs`（`test_support`） | 401 | 0 |
+| `presenter_display_tests.rs`（`display_tests`） | 601 | 7 |
+| `presenter_compose_input_tests.rs`（`compose_input_tests`） | 423 | 3 |
+| `presenter_read_accessor_tests.rs`（`read_accessor_tests`） | 451 | 9 |
+| `presenter_dpi_scale_tests.rs`（`dpi_scale_tests`） | 827 | 11 |
+| `presenter_resize_report_tests.rs`（`resize_report_tests`） | 265 | 4 |
+| `presenter_refresh_and_log_tests.rs`（`refresh_and_log_tests`） | 815 | 9 |
+| `presenter_fractional_scale_tests.rs`（`fractional_scale_tests`） | 691 | 4 |
+| **計** | **4,474** | **47** |
+
+**新テストファイル 8 本はすべて 1,000 行以下**（最大 `presenter_dpi_scale_tests.rs` の 827 行）。**僅少超過で単一維持したファイルは 0 件**（§7.4 への追記は不要）。同クレートの既存テストファイル 6 本（タスク 4.2）も 1,000 行以下のまま無変更（最大 `cache_tests.rs` 904 行）。
+
+**本番 `presenter.rs` は 1,066 行で 1,000 行の目安を 66 行超える**。これは本番本体 1,042 行＋接続宣言 24 行であり、**要件 4.5 と design §Non-Goals が `follow.rs`・`frame.rs` 以外の本番本体分割を明示的に禁じている**ため意図どおりである（design §Requirements Traceability 4.5 が `presenter.rs 1,042 行等は分割しない` と名指ししている）。本タスクは本番本体を 1 行も動かしていない（§22.4 (f)）。
+
+接続宣言（8 モジュールとも同一文言・design §移設方式の裁定 案 C）:
+
+    #[cfg(test)]
+    #[path = "presenter_<モジュール名>.rs"]
+    mod <モジュール名>;
+
+### 22.2 テーマ境界の裁定（design §テーマ分割ポリシー・手順①）
+
+**バナーは作業時系列ではなく thematic だった**（タスク 4.2 §21.2 と同じ・タスク 4.1 §20.2 とは逆）。
+`// ──` バナー 10 本のうち **9 本が見出しの先頭に対象（本番 API 名・観測契約）を掲げており**、
+タスク番号は括弧内の出所表記にとどまる——`CurrentSurfaceRead: 現サーフェス id 状態のライフサイクル固定（Task 2・…）`（`:2354`）・
+`DPI 追従（k 適用の単一漏斗）: タスク 3.2／3.3 の檻`（`:2595`）・`表示成立点の状態照合＝窓寸 reconcile 報告（タスク 3.4・…）`（`:3405`）・
+`表示成立点 info ログ（設計 D10・要件 6.1/6.3）の檻`（`:3657`）・`applied_scale／refresh_scale（タスク 3.5・design Flow 2）`（`:3796`）・
+`要件 2.3（多層コンテンツの単一 k 一貫拡大）の実表示檻`（`:4696`）・`hit_region_client の配線と縮退の檻（タスク 3.2・…）`（`:4976`）・
+フィクスチャ 2 本（`:1064` GPU/WUC ／ `:1195` ComposedSurface 生成補助）。
+タスク番号を先頭に掲げるのは `task 6.3: 端数 k（5/4）の実表示・…`（`:4305`）の 1 本のみである。
+先行タスクと同じく**本番 API の継ぎ目を第一基準**に採り、ヘルパ参照関係の全数走査で裏取りした。結果としてバナー位置は本番シームと一致した。
+
+**本番 API（移設前 `presenter.rs:1-1042`）の継ぎ目**:
+(i) 表示の成立と縮退 `apply`（`:332`）・`apply_show`（`:360`）・`apply_hide`（`:617`）・`apply_invalidate`（`:640`）・`read_back`（`:1013`）、
+(ii) 照会契約 `TextSlotView`（`:172`・`slot`/`window`/`surface_size`/`physical_size`/`scale`）・`target_physical_size`（`:704`）、
+(iii) k の再適用と報告 `applied_scale`（`:731`）・`applied_ratio`（`:744`）・`refresh_scale`（`:793`）・`take_pending_resize`（`:880`）、
+(iv) 読み取りアクセサ `current_surface_id`（`:891`）・`hit_region`（`:909`）・`hit_region_client`（`:953`）——本番でも隣接 3 連である。
+
+| 新モジュール（ファイル） | 移設前の行範囲 | 対象の本番項目 | テスト数 |
+|---|---|---|---:|
+| `test_support` | 1064-1278, 2013-2077, 2267-2283, 4976-5062 | —（2 テーマ以上から参照される共有フィクスチャ 21 項目群） | 0 |
+| `display_tests` | 1280-1863 | 表示成立と golden 一致・解決不能 id の非破壊 skip・0×0 縮退の Hidden 化・`Hide`→再表示のキャッシュ復帰・`text_slot_view` の基礎契約（`apply_show`／`apply_hide`／`read_back`／`TextSlotView`） | 7 |
+| `compose_input_tests` | 1865-2011, 2079-2259, 2261-2265, 2285-2352 | 合成入力（bind 集合・pattern・面 id）の差分が `ComposeKey` を通って表示へ届くこと＝キャッシュキーの回帰防止と文字スロットの安定 | 3 |
+| `read_accessor_tests` | 2354-2593, 5219-5416 | 読み取りアクセサ 3 連（`current_surface_id` のライフサイクル・`hit_region`／`hit_region_client` の値契約と正常縮退） | 9 |
+| `dpi_scale_tests` | 2595-3403 | DPI 追従（政策の窓単位保持・k=2/1 の実拡大表示・照会契約 `scale`／`physical_size`／`target_physical_size` の丸め権威・k のキャッシュキー参加・`native_size` の追随） | 11 |
+| `resize_report_tests` | 3405-3655 | 表示成立点の窓寸 reconcile 報告（`take_pending_resize`：変化時の報告・べき等・初回報告・失敗時の非報告） | 4 |
+| `refresh_and_log_tests` | 3657-3713, 3715-3794, 3796-4303, 5063-5074, 5076-5217 | 観測ログ捕捉ハーネスとその全消費者——D10 表示成立点 info ログ・`applied_scale`／`refresh_scale`（非実行の証明にログを使う 5 本を含む）・`hit_region_client` の防御 warn の発火条件 | 9 |
+| `fractional_scale_tests` | 4305-4974 | 端数 k（5/4）の実表示バイト・αマスクの寸と内容・縮小方向の追従・多層コンテンツ（bind／pattern）の単一 k 一貫拡大 | 4 |
+
+**design の初期見積 `×約 5` に対し `×7 ＋ 共有ヘルパ` を採った理由**: design は「他 22 モジュールのテーマ名は実装時に各モジュールの内容から決定し、旧→新テスト名対応表に記録する」としてテーマ名・本数を実装時裁定に委ねており、`×約 5` は概算である。本モジュールはテストコード 4,375 行・テスト 47 本で本 spec 最大の単一ブロックであり、5 分割では 1 ファイルあたり平均 875 行・最大が確実に 1,000 行を超える。上表のとおり本番 API の継ぎ目は 7 つに割れており、バナー 10 本もその 7 つへ 1 対 1 に畳める。
+
+**`refresh_and_log_tests` が 2 つのバナーをまたぐ理由（本タスク固有の構造的制約）**: 移設前 `presenter.rs:3689` の
+`struct CaptureSubscriber(std::sync::Arc<std::sync::Mutex<Vec<CapturedEvent>>>);` は**タプル構造体**であり、
+利用側は `cap.0.lock()` として**フィールド 0 を直に読む**（移設前 `:3737, 4001, 4047, 4122, 4192, 4285, 5138` の 7 箇所）。
+この 7 箇所は D10 ログ・`refresh_scale`・`hit_region_client` の 3 バナーにまたがる。
+ハーネスを `test_support` へ出すとタプルフィールドに可視性修飾が要るが、それは
+**行頭ではなく行内**（`struct CaptureSubscriber(pub(super) std::sync::Arc<…>);`）にしか書けず、
+本文一致検証の正規化（§11.4・`RustParse.ps1:494` は**行頭**の `pub(...)` のみ除去する）が吸収できない。
+実際に試したところ `[ITEM-MISSING]`／`[ITEM-EXTRA]` の 2 件で exit 1 になった。
+名前付きフィールドの `CapturedEvent`（`level`／`fields`）は行頭付与で吸収されるが、タプルフィールドだけは構造的に吸収できない。
+そこで**ハーネス（`CapturedEvent`／`FieldGrab`／`CaptureSubscriber` と 2 つの `impl`）とその全消費者を 1 モジュールに保ち、
+ハーネスには可視性修飾を 1 文字も加えない**方針を採った。結果として `refresh_and_log_tests` は
+「捕捉ハーネスを共有する檻の集合」という 1 つの主題で閉じており、`applied_absent_warn_count`（ハーネス依存の述語ヘルパ）も同居する。
+これは要件 5.1（テストハーネスの一本化・共有化をしない）とも整合する——3 重のハーネスは 3 重のまま、位置だけを動かしている。
+
+**ヘルパ参照関係による裏取り**（テストモジュール内の全ヘルパ項目 39 件の参照行を全数走査。行番号は移設前）:
+
+- **多テーマから参照 → `test_support`**（21 項目）: `make_world_with_gpu`（`:1072`・7 テーマ）・`spawn_window_with_dpi`（`:1094`・8 テーマ）・
+  `set_window_dpi`（`:1099`・4）・`scaled_golden`（`:1109`・3）・`ScaledGolden`（`:1127`・`scaled_golden` と fractional の 2）・
+  `scaled_golden_with`（`:1143`・同 2）・`px_at`（`:1169`）・`show_ok`（`:1177`・5）・`elem`（`:1199`・4）・`surface`（`:1208`・6）・
+  `shell_of`（`:1218`・6）・`build_target_assets`（`:1235`・6）・`build_two_face_assets`（`:2021`・5）・`pattern_overlay_at`（`:2271`・2）・
+  `hit_coll`（`:4988`）・`build_collision_only_assets`（`:5004`）・`attach_hit_target`（`:5037`・2）・`force_current_surface`（`:5046`・2）・
+  `force_applied`（`:5055`）。
+  うち `px_at`・`hit_coll`・`build_collision_only_assets`・`force_applied` の 4 項目は現時点で**単一テーマからしか参照されない**が、
+  いずれも複数テーマ共有の連続フィクスチャ塊（`:1064-1278` の GPU/golden 群、`:4976-5062` の当たり判定群）の内側にあり、
+  かつ同じ塊の他項目（`scaled_golden_with`／`attach_hit_target`）から呼ばれるため、塊ごと `test_support` へ置いた。
+- **単一テーマ専用（当該テーマファイルに残置）**: display 側＝`build_assets_with_valid_and_empty`（`:1395`）／
+  compose 側＝`build_target_assets_with_bind`（`:1870`）・`build_target_assets_with_pattern`（`:2200`）・`pattern_overlay`（`:2263`）／
+  dpi 側＝`build_two_sized_face_assets`（`:3193`）／refresh_and_log 側＝`CapturedEvent`（`:3669`）・`FieldGrab`（`:3678`）＋`impl Visit`（`:3680`）・
+  `CaptureSubscriber`（`:3689`）＋`impl Subscriber`（`:3691`）・`has_display_success_log`（`:3802`）・`applied_absent_warn_count`（`:5064`）／
+  fractional 側＝`surface_entity_of`（`:4315`）・`mask_dims`（`:4325`）・`arrangement_size`（`:4332`）・`build_alpha_varying_assets`（`:4346`）・
+  `LAYERED_BIND_AT`（`:4705`）・`LAYERED_PATTERN_AT`（`:4707`）・`LAYERED_PART_SIZE`（`:4709`）・`build_layered_assets`（`:4727`）。
+  参照行はいずれも自テーマの範囲にしか現れない。
+
+**バナーの帰属（§20.2 で確定した扱いの適用）**: 本文一致検証（`RustParse.ps1:319-331`）は直前の空行とコメント行を読み飛ばして
+最初のコード行を探すため、**先行コメント塊は後続項目の本文の一部**になる。したがって:
+`:1064`（GPU/WUC フィクスチャ）→ `make_world_with_gpu` ／ `:1195`（ComposedSurface 生成補助）→ `elem` ／
+`:3657`（表示成立点 info ログ）→ `CapturedEvent` ／ `:4305`（task 6.3 端数 k）→ `surface_entity_of` ／
+`:4696`（多層コンテンツ）→ `LAYERED_BIND_AT` ／ `:4976`（hit_region_client）→ `use areka_parsers::shell::{Collision, CollisionName};`
+の 6 本はヘルパ側の本文に属し、それぞれ該当ヘルパへ同伴させた（文言は 1 文字も変えていない）。
+残る 4 本（`:2354` CurrentSurfaceRead ／ `:2595` DPI 追従 ／ `:3405` 窓寸 reconcile 報告 ／ `:3796` applied_scale／refresh_scale）は
+後続のテスト関数またはヘルパの本文に属し、当該テーマファイルの元位置にそのまま置いた。
+`:4976` が束ねられる先は `use` 項目であり本文一致検証の対象外だが、当たり判定フィクスチャ塊の見出しであるため同塊とともに `test_support` へ移した。
+
+**共有ヘルパの可視性（要件 2.4 が許容する機械的調整）**: `presenter_test_support.rs` の **21 行の先頭にのみ** `pub(super)` を付与した
+（関数 16・`struct ScaledGolden` 1・`ScaledGolden` のフィールド 4）。付与のみで本文は無変更。
+`hit_coll`・`build_collision_only_assets` は `test_support` 内部からしか参照されないため可視性を変えていない。
+**複製は 1 件も作っていない**（`ITEM-EXTRA` 回避・Implementation Notes の集約規則どおり）。
+
+**Implementation Notes の E0659 罠（タスク 3.3 §17.5）への対処**: 共有ヘルパは**明示 import** で受けた（`use super::test_support::{…};`・グロブは使っていない）。
+加えて誤結合の有無を実測で確認した——移設前の本番スコープ（`presenter.rs:1-1042`）を全数走査した結果、
+`test_support` が公開する 17 識別子のうち**本番モジュールの名前空間と衝突するものは 0 件**である。
+同一シグネチャの黙った差し替えは起き得ない。
+
+**`use` ヘッダの調整（要件 2.4 / 2.6）**: 各ファイルの先頭に `use super::*;` と、そのファイルで実際に使う項目だけの `use` を置いた
+（絞る前のビルドで `unused_imports` が 45 件出て要件 2.6 に反したため、`cargo build --message-format=json` の
+`unused_imports` 診断が指す識別子だけを機械的に落とした）。移設前ヘッダの `use` 項目は**1 つも失われていない**
+（各項目が必要なファイルへ 1 回以上配置されている）。**可視性・`use` 以外の調整は 1 件も必要なかった**（要件 2.8 の追加調整 0 件）。
+
+### 22.3 §11.4 の盲点（複数行文字列リテラル内の行頭空白）— 担当ファイルの独自走査
+
+Implementation Notes の指示に従い、担当ファイルを字句状態追跡つきの独立スキャナ
+（行コメント・入れ子ブロックコメント・通常文字列・raw 文字列（`#` の数）・バイト文字列・
+文字リテラルとライフタイムの判別・エスケープを追跡し、「行頭時点で文字列リテラルの内部にいる行」と
+「直前行が `\` 継続か」を判定する）で全走査した。スキャナの妥当性は、既知の唯一の該当箇所
+`crates/wintf/src/ecs/window_proc/window_pos_tests.rs:691` を**盲点 1 件**として検出し、同ファイルの
+`:382`・`:429`・`:614`・`:690` を **`\` 継続 4 件**として正しく切り分けることで確認した
+（実測出力: `continuation=5 382,429,614,690,691 / blind=1 691`）。
+
+| 対象 | 複数行にまたがる文字列リテラルの継続行 | 盲点該当（`\` 継続でない行） |
+|---|---|---:|
+| 移設前 `presenter.rs`（`91d59e0` から `git show`） | **5**（`:5171, 5215, 5407, 5412, 5413`） | **0** |
+| 移設後の新テストファイル 8 本 | **5**（`presenter_read_accessor_tests.rs:442, 447, 448` ／ `presenter_refresh_and_log_tests.rs:769, 813`） | **0** |
+| 移設後の `presenter.rs` | **0** | **0** |
+
+**結論: 担当ファイルの複数行文字列リテラル 5 件はすべて `\` 継続であり、§11.4 第 1 の盲点の該当行は 0 件。**
+`\` 継続では Rust が行頭空白を除去するため、一律 4 スペース de-indent は文字列の中身を変えない。例外処理は不要だった。
+移設前 5 行と移設後 5 行は 1 対 1 に対応する（`5171→refresh_and_log:769`・`5215→refresh_and_log:813`・
+`5407,5412,5413→read_accessor:442,447,448`）。
+
+### 22.4 検証（すべて実測・終了コードで判定）
+
+**(a) 本文一致検証（要件 2.4）** — `pwsh -File $V/Compare-RelocatedTests.ps1 -Commit 91d59e0 -OriginalPath crates/areka-emo-present/src/presenter.rs -RelocatedPath "<新テスト 8 本>" -Detail`
+
+    MATCH: test fn 47=47 / helper item 39=39 / mod block 1 / files 8
+
+exit **0**。**引数不正の 2 と取り違えていないことを対照実行で確認した**——`-OriginalPath crates/areka-emo-present/src/nonexistent.rs`
+を与えると `fatal: path ... does not exist in '91d59e0'` を出して **exit 2** になる（不一致の 1 ではない）。
+
+**(a2) 行単位の分類と多重集合突合（スクリプトより強い独自検証）** — 本文一致検証は項目単位・行頭空白非依存であるため、
+それとは独立に、移設した**全行**を分類した。移設前ブロック本体（`1045-5416`・4,372 行）の各行を一律 4 スペース de-indent した
+多重集合（空行を除く 4,000 行）と、新テストファイル 8 本の全行の多重集合（空行を除く 4,076 行）を突合:
+
+| 検査 | 結果 |
+|---|---|
+| 「ちょうど −4 スペース」または空行で説明できない移設行 | **0**（生成時の分類器で `OTHER = 0` を確認） |
+| 消えた行（元にあって新に無い） | **25** |
+| 増えた行（新にあって元に無い） | **101** |
+
+- **消えた 25 行**の内訳: `pub(super)` 付与前の宣言行 **21**（関数 16・`struct ScaledGolden` 1・フィールド 4）＋
+  移設前ヘッダの `use` 行 **4**（`use areka_parsers::shell::{` とその継続 2 行・`use wintf::ecs::{Arrangement, GraphicsCore, HitTest, HitTestMode, Visual, WucGraphicsResource};`）。
+- **増えた 101 行**の内訳: `pub(super)` 付き宣言行 **21** ＋ 8 ファイルへ再配置・複製された `use` ヘッダ行 **80**
+  （`use super::*;` ×7・`use super::test_support::{…};` の展開行・`};` ×10 ほか）。
+
+差分はすべて要件 2.4 が明示的に許容する調整（可視性付与・`use` の追加／分散）だけで説明がつき、説明のつかない行は 0 件である。
+移設前ヘッダの `use` 項目は 1 つも失われていない（消えた 25 行に含まれる `use` 4 行はいずれも各テーマファイルで
+必要な項目だけに絞った形へ書き換わっている）。
+
+**(b) 対応表フラグメントの全単射検証（要件 2.9）** — `pwsh -File $V/Test-MappingBijection.ps1 -Path $V/mapping/areka-emo-present.csv`
+
+    PASS: 全単射 OK / 行数 84 / 相異なる old_fqn 84 / 相異なる new_fqn 84 / フラグメント 1
+      - areka-emo-present.csv: 84 行
+
+exit 0。**タスク 4.2 の 37 行に本タスクの 47 行を追記して 84 行**（`old_fqn` 序数順に整列して書き戻し・既存 37 行は無改変）。
+47 行の内訳は `presenter::tests::*` → `display_tests` 7／`compose_input_tests` 3／`read_accessor_tests` 9／`dpi_scale_tests` 11／
+`resize_report_tests` 4／`refresh_and_log_tests` 9／`fractional_scale_tests` 4。`reason` は全行 `theme_split`、
+末尾セグメント（関数識別子）は旧新で同一。移設前 `before_default.txt` に `presenter::tests::` が **47 行**実在し、
+対応表の `old_fqn` 47 件すべてがそこに存在することを照合済み（不在 0）。
+既存フラグメントとの結合検証（`-Path $V/mapping`）も
+`PASS: 全単射 OK / 行数 424 / 相異なる old_fqn 424 / 相異なる new_fqn 424 / フラグメント 6` で exit 0（キー衝突なし）。
+
+**(c) 対応表適用後のテスト名リスト一致（要件 1.8 / 2.2）— ワークスペース水準**
+
+移設後に §10.2 の手順（`cargo test --workspace --no-fail-fast -- --list`（exit 0）→ stdout のみ → `: test$` 抽出 →
+`$arr = [string[]]@(…)` へ型付け → `[Array]::Sort($arr, [System.StringComparer]::Ordinal)` →
+UTF-8 BOM 無し・重複行を残す）でリストを採取し、コミット済み `before_default.txt` と**タスク 3.1〜4.3 の 6 フラグメント全部**を渡して突合した:
+
+    BEFORE      : before_default.txt  (4790 行 / 相異なる 4787)
+    AFTER       : after_default_task43.txt  (4790 行 / 相異なる 4787)
+    MAPPING     : 424 行 (6 ファイル) / 適用 424 行 / 未使用 0 行
+    LINE COUNT  : before 4790 / after 4790 -> 一致 (Requirement 2.2)
+    RESULT: PASS
+
+exit 0。**適用 424 行・未使用 0 行**。移設後リストの SHA256 は
+`37547413DAE70BE311B85AFFD4D503A6ED1796010FB8884F1796F60538F2682B`（中間リストファイル自体はコミットしない）。
+
+**整列器の較正（Implementation Notes の ⚠ 項目）**: コミット済みファイルのハッシュ照合では整列器が動かないため、
+**同一の未整列生出力（4,790 行）を序数と `Sort-Object` の 2 通りに整列**して digest が割れることを先に確かめた:
+序数 `37547413…682B` ／ `Sort-Object` `6E51B3D9…3A12` ／ **1,806 位置が相違・多重集合の差は 0**。
+分岐点は index 179 の `bake::tests::blit_verbatim_correctness`（序数が先）と `bake_entry_tests::all_transparent_is_empty_entry_not_error`（カルチャが先）で、
+§10.2 の実測（1,806 位置・index 179・同一の分岐ペア）と完全に一致する。序数比較器が実際に働いていることの直接証跡である。
+
+**(c2) 対応表そのものへの反証（自分の表を疑う検証）** — 対応表が「実際に起きた変化」と過不足なく一致することを、
+対応表を**使わない**多重集合の対称差で確かめた。
+
+| 検査 | 結果 |
+|---|---|
+| `before_default.txt` と移設後リストの対称差（対応表なし）: 消えた行 / 現れた行 / 全フラグメント行数 | **424 / 424 / 424**（三者一致） |
+| うち本タスクぶん（`presenter::tests::` の消滅 ／ 7 テーマモジュールの出現） | **47 / 47**（本タスクの追記 47 行と一致） |
+| 消えた行がすべて `old_fqn` に在るか | **True**（例外 0） |
+| 現れた行がすべて `new_fqn` に在るか | **True**（例外 0） |
+| `old_fqn` なのに実際には消えていない行 | **0** |
+| `new_fqn` なのに実際には現れない行 | **0** |
+| `old_fqn` と `new_fqn` が同一の行（＝変わっていない名前を載せた水増し） | **0** |
+| 末尾セグメント（関数識別子）が旧新で相違する行 | **0** |
+| `reason` が `theme_split` 以外の行 | **0** |
+
+すなわち対応表は「実際に変わった名前だけ」を「実際に変わったとおりに」記載しており、水増しも取りこぼしも無い。
+
+**(d) クレート緑（要件 7.2）** — `cargo test -p areka-emo-present --no-fail-fast` → **exit 0**。
+**128 passed / 0 failed / 0 ignored**（lib 127 ＋ 統合テスト `tests/swapchain_spike.rs` 1 ＋ doctest 0）。
+タスク 4.2 の実測値（128）と一致する。移設後の lib 内訳は
+`balloon::model_tests` 6 ／ `balloon::series_tests` 24 ／ `balloon::target_tests` 7 ／ `cache::tests` 16 ／
+`chain::tests` 1 ／ `command::tests` 5 ／ `mount::tests` 3 ／ `scale::tests` 18 ／
+`presenter::compose_input_tests` 3 ／ `presenter::display_tests` 7 ／ `presenter::dpi_scale_tests` 11 ／
+`presenter::fractional_scale_tests` 4 ／ `presenter::read_accessor_tests` 9 ／ `presenter::refresh_and_log_tests` 9 ／
+`presenter::resize_report_tests` 4 の計 127。移設前の `presenter::tests` 47 と本数が一致する（7+3+9+11+4+9+4=47）。
+
+**(e) 警告非増加（要件 2.6）** — `cargo build -p areka-emo-present --all-targets` → exit 0・**警告 0 件**。
+ワークスペース全域でも §10.5 の手順で再集計した——`cargo build --workspace --all-targets` → exit 0、
+`DIAG_COUNT = 16` / `SUMMARY_COUNT = 7` / `GENERATED_SUM = 22` / `DUPLICATES = 6` / `NET = 16` で、
+§10.5 の移設前基準値 5 数値と**完全一致**。ユニット別 generated 件数（7 ユニット・多重集合 {1,3,3,3,4,4,4}）も一致し、
+`areka-emo-present` に帰属する警告行は 0 件である。
+
+> 集計時の注意（後続タスクへ）: SUMMARY 行の正規表現は §10.5 の逐語どおり `generated \d+ warnings?` と
+> **末尾 `?` まで含める**こと。`shiori4-testdll` (lib) は警告 1 件ゆえ cargo が単数形 `generated 1 warning` を出力し、
+> `?` を落とすとこの 1 行が DIAG 側へ回って 5 数値が 17/6/21/6/15 へずれる（本タスクで一度踏んだ）。
+
+**(f) 本番本体の無変更** — 移設前コミット `91d59e0` の `presenter.rs` 先頭〜旧 `#[cfg(test)]` 直前まで（1-1042 行）を
+現作業ツリーと逐行突合し、**不一致 0**。`git diff --numstat` は `23 / 4374`（挿入 23 ＝ 接続宣言 24 行 − 元位置据え置きの
+`#[cfg(test)]` 1 行 ／ 削除 4,374 ＝ テストコード 4,375 行 − 同 1 行）。
+
+**(g) 完了状態の直接確認** — `presenter.rs` に残る `cfg(test)` / `#[path]` / `mod …;` の出現はすべて接続宣言のみ
+（`:1043-1066` の 8 モジュール）。**`#[test]` は 1 件も残っていない。テストモジュール本体は 1 行も残っていない。**
+
+**(h) 作業ツリーの範囲** — `git status --porcelain -uall` は本節追記前の時点で下記 10 パスのみ:
+変更 2 本（`crates/areka-emo-present/src/presenter.rs`・`verification/mapping/areka-emo-present.csv`）＋未追跡 8 本（新テストファイル）。
+タスク 4.2 の成果物（`balloon*.rs` 4 本・`cache_tests.rs`・`scale_tests.rs`・`balloon.rs`・`cache.rs`・`scale.rs`）の差分は **0 件**。
+`crates/areka-emo-present/tests/`・他クレート・`Cargo.toml`・`tasks.md`・spec 本体ドキュメントも無変更。
+新規に導入した `TODO` / `FIXME` / `TBD` は 0 件。
+
+### 22.5 登記（要件 5.2）— 壊れたテスト・テスト間の状態汚染の所見
+
+**本タスクの範囲（`presenter.rs` の 47 テスト・テストコード 4,375 行・本 spec 最大の単一テストモジュール）では、
+壊れたテスト・不正なテストは 1 件も発見しなかった。所有 spec への送付所見は 1 件**（下表 #1・ハーネス重複＝
+タスク 4.2 §21.5 #2 で既登記のものの追跡）**であり、これは要件 5.1 により本 spec では是正しない。**
+
+| # | 観測 | file:line（移設後） | 判定 |
+|---|---|---|---|
+| 1 | **同一クレート内に同型のログ捕捉ハーネスが 3 重に存在する**（`CapturedEvent` / `FieldGrab` / `CaptureSubscriber` の 3 点セット）。本タスクが動かしたのは 3 本目の位置のみ | `crates/areka-emo-present/src/presenter_refresh_and_log_tests.rs:25,34,45`（本タスクで移設・**中身は 1 文字も変えていない**）／既登記の 2 本 = `balloon_test_support.rs:62,79,90`・`scale_tests.rs:304,327,338` | **送付所見 →`test-cage-determinism`（W6.9）**。タスク 4.2 §21.5 #2 の追跡。移設前 `balloon.rs:1449-1451` のコメントが理由を明記している——「同 crate `presenter.rs` の tests に同型のものが在るが、あちらは test-local な private 型ゆえ本モジュールから参照できない」。**要件 5.1 がテストハーネスの一本化・共有化を本 spec に禁じている**ため是正しない。本 spec の移設は 3 重を 3 重のまま保っている（増やしても減らしてもいない） |
+| 2 | `CaptureSubscriber` が**タプル構造体**で、利用側が `cap.0` としてフィールドを直に読む（移設前 7 箇所） | `crates/areka-emo-present/src/presenter_refresh_and_log_tests.rs:45`（定義）と同ファイル内 7 箇所の `cap.0.lock()` | **問題なし・記録のみ（是正しない）**。ただし**本 spec のテーマ分割にとっては構造的制約**である——タプルフィールドの可視性修飾は行内にしか書けず、本文一致検証の正規化（行頭 `pub(...)` のみ除去）が吸収できないため、ハーネスを共有ヘルパへ出すと必ず不一致になる。本タスクはハーネスと全消費者を 1 モジュールに保つことで回避した（§22.2）。**後続タスク（`areka`・`areka-emo-text` 等）も同型のタプルハーネスを持つ可能性があるので、テーマ境界を引く前に `.0` 参照の分布を確認すること** |
+| 3 | テストが本番構造体の**私有フィールドを直接書き換える**（`presenter.targets.get_mut(..).current_surface_id = …` / `.applied = …`） | `crates/areka-emo-present/src/presenter_test_support.rs:386,395`（`force_current_surface` / `force_applied`） | **問題なし・記録のみ**。移設前 `presenter.rs:4978-4983` のコメントが「現行の公開 API 経由では到達不能な防御分岐（DD-5）に、私有状態の直接構築だけが到達できる」と理由を明記している。in-source テストの特権であり、テスト間で共有される状態ではない（各テストが `EmoPresenter::new()` から組む） |
+| 4 | 各テストが実 GPU（`GraphicsCore::new()` の HARDWARE デバイス）と WUC コンポジタを生成し、テストスレッドごとに `CoInitializeEx(COINIT_MULTITHREADED)` を呼ぶ | `crates/areka-emo-present/src/presenter_test_support.rs:24-37`（`make_world_with_gpu`） | **問題なし・記録のみ**。`S_FALSE`／`RPC_E_CHANGED_MODE` を無視する形で冪等に書かれており、apartment 不変（`DQTAT_COM_NONE`）ゆえ他テストの観測へ副作用を与えない。プロセス大域の tracing subscriber は使わず `with_default`（スレッドローカル）で捕捉しているため、並列実行でログが混線しない |
+| 5 | 移設で可視性・`use`・モジュール接続の追加調整が要るケース（要件 2.8） | — | **0 件**。共有ヘルパ 17 項目（宣言行 21 本）への `pub(super)` 付与と `use` の絞り込みだけで通った。§17.5 #4 が警告した同名 shadow ヘルパによる E0659 は本ファイルには存在しない（§22.2 の全数照合で確認） |
+| 6 | 本番 `presenter.rs` が移設後も 1,066 行で 1,000 行の目安を超える | `crates/areka-emo-present/src/presenter.rs` | **意図どおり・是正しない**。本番本体 1,042 行＋接続宣言 24 行。要件 4.5 と design §Non-Goals が `follow.rs`・`frame.rs` 以外の本番本体分割を明示的に禁じており、design §Requirements Traceability 4.5 が `presenter.rs 1,042 行等は分割しない` と名指ししている。**クレート完了状態の「テストファイルがすべて 1,000 行以下」には抵触しない**（本番ファイルであってテストファイルではない） |
+
+### 22.6 本タスクの成果物
+
+| ファイル | 内容 |
+|---|---|
+| `crates/areka-emo-present/src/presenter_test_support.rs` | 新規（401 行・共有フィクスチャ 21 項目・テスト 0） |
+| `crates/areka-emo-present/src/presenter_display_tests.rs` | 新規（601 行・7 テスト） |
+| `crates/areka-emo-present/src/presenter_compose_input_tests.rs` | 新規（423 行・3 テスト） |
+| `crates/areka-emo-present/src/presenter_read_accessor_tests.rs` | 新規（451 行・9 テスト） |
+| `crates/areka-emo-present/src/presenter_dpi_scale_tests.rs` | 新規（827 行・11 テスト） |
+| `crates/areka-emo-present/src/presenter_resize_report_tests.rs` | 新規（265 行・4 テスト） |
+| `crates/areka-emo-present/src/presenter_refresh_and_log_tests.rs` | 新規（815 行・9 テスト・ログ捕捉ハーネス同居） |
+| `crates/areka-emo-present/src/presenter_fractional_scale_tests.rs` | 新規（691 行・4 テスト） |
+| `crates/areka-emo-present/src/presenter.rs` | 末尾のテストモジュールブロックを接続宣言 8 本へ置換（本番本体 1-1042 行は無変更） |
+| `verification/mapping/areka-emo-present.csv` | 追記（37 → 84 行・全単射検証済み・既存 37 行は無改変） |
+| `verification/notes.md` | 本節（§22）を追記 |
+
+コミットは要件 7.1 に従い**クレート単位の 1 コミット**（`areka-emo-present` の `presenter.rs` 分）とする。
+これで `areka-emo-present` の必須対象 4 ファイルはすべて移設完了であり、
+同クレートのテストファイルは 14 本すべてが 1,000 行以下である。
