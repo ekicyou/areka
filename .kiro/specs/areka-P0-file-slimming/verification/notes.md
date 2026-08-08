@@ -315,6 +315,16 @@ design §検証 / EvidencePipeline（証跡パイプライン）の採取手順 
 3. **序数（ordinal）比較で整列**する。`[Array]::Sort($arr, [System.StringComparer]::Ordinal)` を用いる。
    PowerShell の `Sort-Object` 既定はカルチャ依存比較でありアンダースコアと英字の順序が変わるため使わない。
 4. UTF-8（BOM 無し）で書き出す。
+5. **改行は CRLF・末尾に改行 1 つ**（`[IO.File]::WriteAllLines($path, $arr, (New-Object Text.UTF8Encoding($false)))` が既定でこの形になる）。
+
+> **手順 5 を後から追加した理由（タスク 3.3 レビュー）**: 当初この手順は改行形式を固定していなかったため、
+> 各タスクが記録した中間リストの SHA256 が担当者ごとに再現しなかった（BOM 有無・CRLF/LF・末尾改行の有無で
+> 4 通りに割れる）。**判定そのものは `Compare-TestLists.ps1` の行単位比較で行っており影響を受けない**が、
+> 記録した値が第三者に再現できないのは要件 2.3 の趣旨に反する。以後、リストの SHA256 を証跡に載せる場合は
+> 必ず手順 5 の形で採ること。タスク 3.2 §16 と 3.3 §17 に載る中間リストのハッシュは
+> **この規定より前に採られた参考値**であり、正規の witness は
+> コミット済み `before_default.txt`（4,790 行・SHA256 `77F03656B507D72DB4A5D9E5D75DC4849C16A92B6E371F718F8887F7EB43D2AD`）
+> との `Compare-TestLists.ps1` 照合結果そのものである。
 
 **重複行は除去しない。** 同一の完全修飾名が複数のテストバイナリに現れることがあり、要件 2.2 が問うのは総数であるため、比較は集合ではなく**多重集合（行数込み）**で行う。実測の重複は以下:
 
@@ -1605,3 +1615,267 @@ exit 0。**適用 157 行・未使用 0 行**。移設後リストの SHA256 は
 | `verification/notes.md` | 本節（§16）を追記 |
 
 コミットは要件 7.1 に従い**クレート単位の 1 コミット**（`areka-seriko`）とする。
+
+## 17. クレート単位のテスト分離とテーマ分割: `areka-sakura`（タスク 3.3・要件 1.1 / 1.6 / 1.7 / 1.8 / 2.4 / 2.8 / 2.9 / 3.1〜3.3 / 7.1 / 7.2）
+
+- 実施日: 2026-08-08
+- ブランチ: `claude/areka-p0-file-slimming-64d065` / 移設前コミット `2048941`（タスク 3.2 のコミット時点）
+- 実行シェル: **PowerShell（pwsh 7）**
+- 下表の本番 2 ファイル＋新規テストファイル 7 本＋`verification/mapping/areka-sakura.csv`＋本ファイル以外には一切触れていない（`Cargo.toml`・他クレート・spec 本体ドキュメントは無変更）
+
+### 17.1 移設した 2 ファイル（design §File Structure Plan の `crates/areka-sakura` と完全一致）
+
+| 本番ファイル | 移設前 総行 | テストモジュール（移設前の行範囲） | 扱い | 新テストファイル | 新ファイル行 | 本番 残行 |
+|---|---:|---|---|---|---:|---:|
+| `src/drive.rs` | 2,808 | `tests`（531-2808・テストコード 2,278） | **テーマ分割 ×3 ＋共有ヘルパ** | `drive_test_support.rs` ／ `drive_delivery_tests.rs` ／ `drive_lifecycle_tests.rs` ／ `drive_choice_tests.rs` | 136 / 837 / 672 / 654 | 542 |
+| `src/compile.rs` | 1,867 | `tests`（322-1867・テストコード 1,546） | **テーマ分割 ×2 ＋共有ヘルパ** | `compile_test_support.rs` ／ `compile_arm_tests.rs` ／ `compile_sheet_tests.rs` | 57 / 891 / 602 | 330 |
+
+- 2 ファイルとも**テストモジュールは 1 個・ファイル末尾に連続配置**（`scan_raw.csv:168,170` の実測どおり・ズレ 0）。モジュール名はいずれも `tests`。
+- **新テストファイル 7 本はすべて 1,000 行以下**（最大 `compile_arm_tests.rs` の 891 行）。僅少超過で単一維持したファイルは **0 件**（§7.4 への追記は不要）。
+- 2 ファイルとも非 `mod` `#[cfg(test)]` 項目（設計判断 #3 の残置対象 40 件）は 1 件も存在しない（`scan_raw.csv` の当該 2 行の `nonmod_count` が 0）。
+- `#[cfg(test)]` 行は §13〜§16 と同じく**元位置に据え置き**、テーマ分割で増えるモジュールぶんの宣言だけを新設した（`git diff --numstat` の挿入は drive 11・compile 8 の計 19 行）。
+- 同クレートの残る 5 本（`sysvar.rs` 68／`duration.rs` 50／`error.rs` 46／`contract.rs` 0／`lib.rs` 0）はテストコード 500 行以下ゆえ要件 1.5 で非必須・設計判断 #10 により任意移設は行わない（無変更）。
+
+接続宣言（7 モジュールとも同一文言・design §移設方式の裁定 案 C）:
+
+    #[cfg(test)]
+    #[path = "<stem>_<モジュール名>.rs"]
+    mod <モジュール名>;
+
+### 17.2 テーマ境界の裁定（design §テーマ分割ポリシー・手順①）
+
+**タスク文の「スクリプト解釈と実行駆動という 2 つの関心」ヒントは、ファイル境界の説明としては当たっているが、
+ファイル内のテーマ境界は与えない。** 実測すると解釈＝`compile.rs`・駆動＝`drive.rs` と**クレート内の 2 ファイルに
+そのまま 1 対 1 対応**しており（`compile.rs` の公開項目は `compile` / `append_epilogue` / `CompiledTalk` のみ、
+`drive.rs` の `pub` 項目は `spawn_talk` 1 本のみ——`TalkHandle` は `contract.rs` の定義を戻り値型として
+私有 `use` で取り込んでいるだけ）、ヒントに従うだけでは 2,278 行と 1,546 行のテストファイルが
+2 本残る。よって**ファイル内の実シームはヒントの外に求めた**——採ったのは**本番 API の継ぎ目**である。
+
+**`drive.rs`** — 本番は talk アクター 1 本で、`TalkDriver::handle` が `SakuraMsg` を 4 腕へ配る
+（`on_start` :186 ／ `on_tick` :246（＋`settle_after_tick` :312・`notify_choice_waiting_if_newly_waiting` :355）／
+`on_close` :407 ／ `on_resolve_choice` :447、終端は `send_done` :509 / `send_interrupted` :517。行番号は移設前）。
+テストモジュール内部には**バナー区画が 5 本**ある（1622 = task 7.2 完了 horizon ／ 1898 = task 5.2 ResolveChoice ／
+2202 = task 10.1 配送列 ／ 2343 = task 10.3 未知コマンド名 ／ 2465 = task 3.2 ChoiceWaiting）。
+この 5 区画はいずれも上記 4 腕のどれか 1 つに閉じており、**1 本も跨がずに束ねられる**。
+残る先頭群（644-1620・バナー無しの 16 テスト）だけが 2 テーマに割れるが、ここはバナーが 1 本も無いため
+区画を割ってはいない。
+
+| 新モジュール（ファイル） | 移設前の行範囲 | 束ねたバナー区画 | 対象の本番項目 | テスト数 |
+|---|---|---|---|---:|
+| `test_support`（`drive_test_support.rs`） | 540-642 ／ 1622-1641 | task 7.2 バナー（`NEG_WINDOW` に付属） | —（3 テーマから参照される 17 ヘルパ項目） | 0 |
+| `delivery_tests`（`drive_delivery_tests.rs`） | 682-996 ／ 1179-1366 ／ 1560-1620 ／ 2202-2463 | task 10.1・task 10.3 | `on_tick` の配送（アンカー刻印・未 due の保留・同一 at の FIFO・broadcast fan-out・envelope duration・未知コマンドキャリアの素通し） | 10 |
+| `lifecycle_tests`（`drive_lifecycle_tests.rs`） | 644-680 ／ 998-1177 ／ 1368-1558 ／ 1643-1896 | task 7.2 | `on_start`（空 sheet 即完了・二重 Start ガード）・`on_close`（中断 ACK・自然終端後の Close）・`send_done`（占有 horizon gated の発火時刻・talk_id エコー・受信端 drop 耐性）＝**`TalkDone` を誰に・いつ・高々 1 回返すか** | 12 |
+| `choice_tests`（`drive_choice_tests.rs`） | 1898-2200 ／ 2465-2807 | task 5.2・task 3.2 | `on_resolve_choice`（barrier 停止・解決・不一致 id・Armed 誤投函）と `notify_choice_waiting_if_newly_waiting`（`ChoiceWaiting` の通算 1 回性） | 10 |
+
+**ヘルパ参照関係による裏取り**（全 17 ヘルパ項目の参照行を全数走査）: `TalkNotice`（＋`From` 実装 2 本）・
+`recv_done`・`RecordingSink`（＋実装 2 本）・`NoopSink`（＋実装）・`two_sinks`・`ChannelSink`（＋実装）・
+`commands`・`NEG_WINDOW` の 17 項目は**すべて 2 テーマ以上から参照される**（`ChannelSink` は delivery と choice、
+`commands` は delivery と lifecycle、`NEG_WINDOW` は lifecycle と choice、残りは 3 テーマ全部）。
+逆に `MENU_SCRIPT`・`drive_menu_to_barrier`・`menu_relative_horizon` の 3 項目は choice 専用で
+（参照行 1938/1982/2024/2072/2086/2478/2499/2519/2660/2726・1948/1992/2034/2111/2510/2670/2739・2525/2681）、
+同ファイルに残した。この分布が上記の境界を裏づける。
+
+**task 7.2 バナーが `test_support` へ移った理由**: 本文一致検証は項目の直前コメントを（空行を挟んでも）当該項目の
+本文の一部として比較する。移設前の 1622-1641 は「バナー 17 行＋空行＋doc 1 行＋`const NEG_WINDOW`」で**1 項目**であり、
+`NEG_WINDOW` が lifecycle と choice の両方から参照される以上、集約先は `test_support` しかない（複製は `ITEM-EXTRA`）。
+バナー本文は「負の窓」という `NEG_WINDOW` そのものの技法説明なので、帰属としても不自然ではない。文言は 1 文字も変えていない。
+
+**`compile.rs`** — 本番は `compile`（`Instruction` 列の走査転写）と `append_epilogue`（末尾 carrier 付加・純関数）の
+2 公開関数だけで、テストは 43 本。バナーは 6 本（839 = task 5.2 D 焼き込み ／ 1016 = task 4.1 Choice/Cursor ／
+1139 = task 4.2 Move/GenericCommand/SystemVar＋barrier ／ 1401 = task 4.4 決定論 ／ 1687 = task 4.2 append_epilogue）。
+`append_epilogue` 単独ではテスト 180 行にしかならず 2 テーマの一方にはならないため、
+`compile` 側を**「個々の命令アームが cue へどう写るか」**と**「台本（`CueSheet`）全体としての性質」**へ割り、
+`append_epilogue`（末尾 horizon・同時刻 barrier の後ろへの安定挿入）を後者に含めた。バナー区画は 1 本も跨いでいない。
+
+| 新モジュール（ファイル） | 移設前の行範囲 | 束ねたバナー区画 | 対象の本番項目 | テスト数 |
+|---|---|---|---|---:|
+| `test_support`（`compile_test_support.rs`） | 330-383 | — | —（両テーマから参照される 4 ヘルパ） | 0 |
+| `arm_tests`（`compile_arm_tests.rs`） | 401-469 ／ 555-590 ／ 603-663 ／ 721-765 ／ 1016-1399 ／ 1401-1685 | task 4.1・task 4.2（アーム＋barrier）・task 4.4 | `compile` の `match instruction` 各腕（`Surface`／`BalloonSurface`／`SpeakerScope`／`NewLine`／`Clear`／`Choice`／`Cursor`／`Move`／`GenericCommand`／`SystemVar`／catch-all）の不透明転写と、走査後に付く選択待ち barrier。task 4.4 はその同じ腕（メニュー・キャリア・sysvar）の包括的な決定論固定 | 23 |
+| `sheet_tests`（`compile_sheet_tests.rs`） | 385-399 ／ 471-553 ／ 592-601 ／ 665-719 ／ 767-837 ／ 839-1014 ／ 1687-1866 | task 5.2・task 4.2（append_epilogue） | 命令を跨いで決まる台本全体の性質——`offset`／`duration` の累積（先頭待ちの保存・単調増加・D 焼き込み・`Wait` の第一級化）・`ClearAll` 前置・`End`/`Quit` の切詰めと `TalkEndReason`・`start_time` の有限非負非減少・同一入力の決定性、および `append_epilogue` | 20 |
+
+**ヘルパ参照関係による裏取り**: `compile`（1 引数ブリッジ）・`command_of`・`cue_eq`・`assert_clear_all_prefix_and_rest` の
+4 本は両テーマから参照される（`cue_eq` は arm 側 1499・sheet 側 781/1720）ため `test_support` へ集約。
+`representative_instructions`（参照 771 のみ）は sheet 専用、`barrier_of`（参照 1106/1315/1347/1395/1529）は arm 専用、
+`relative_horizon`（参照 1755/1782/1808/1831/1839）は sheet 専用ゆえ、それぞれ当該テーマファイルに残した。
+
+**共有ヘルパの可視性（要件 2.4 が許容する機械的調整）**: `drive_test_support.rs` の 11 箇所
+（`TalkNotice`・`recv_done`・`RecordingSink`＋`new`／`records`・`NoopSink`・`two_sinks`・`ChannelSink`＋フィールド `tx`・
+`commands`・`NEG_WINDOW`）と `compile_test_support.rs` の 4 関数へ `pub(super)` を付与した（付与のみ・本文は無変更）。
+`ChannelSink.tx` はテーマ側がリテラル構築するためフィールドにも付与が要る。複製は 1 件も作っていない。
+
+**バナーの帰属**: 本文一致検証は項目の直前コメントを当該項目の本文の一部として比較する。したがってバナーは
+**元と同じ項目へ付属したまま**移した。`compile.rs` の task 4.2 append_epilogue バナー（1687-1688）は移設前も
+`use areka_talk::EpilogueCommand;` に付属する `use` 項目の一部（＝比較対象外）だったため、移設後も同じ `use` の
+直前に置いて帰属を変えていない。他の 9 本（drive 5・compile 4）はいずれも直後の項目（テスト関数・`const`・ヘルパ）に
+付属したまま移動しており、文言は 1 文字も変えていない。
+
+**`use` ヘッダの調整（要件 2.4 / 2.6）**: 各テーマファイルの先頭に移設元の `use` 群を置き、そのファイルで実際に使う
+項目だけへ絞った（絞る前のビルドで `unused_imports` が 17 件出て要件 2.6 に反したため）。落としたのは
+`compile_test_support`＝`text_playback_duration`／`{NewLineRatio, SurfaceArg}`／`Duration`、
+`compile_arm_tests`＝`Duration`、`compile_sheet_tests`＝`SystemVarSnapshot`、
+`drive_test_support`＝`TalkId`／`text_playback_duration`／`TryRecvError`、
+`drive_delivery_tests`＝`RecvTimeoutError`／`Instant`、`drive_lifecycle_tests`＝`TalkCue`／`RecvTimeoutError`／
+`TryRecvError`／`{Arc, Mutex}`／`Instant`、`drive_choice_tests`＝`TryRecvError`／`{Arc, Mutex}`／`Instant`。
+`use` 項目は §11.4 のとおり本文一致検証の対象外である。**可視性・`use` 以外の調整は 1 件も必要なかった。**
+
+### 17.3 §11.4 の盲点（複数行文字列リテラル内の行頭空白）— 担当 2 ファイルの独自走査
+
+Implementation Notes の指示に従い、担当ファイルを字句状態追跡つきの独立スキャナ
+（行コメント・ブロックコメント（入れ子）・通常文字列・raw 文字列（`#` の数）・バイト文字列・
+文字リテラルとライフタイムの判別・エスケープを追跡し、「行頭時点で文字列リテラルの内部にいる行」と
+「直前行が `\` 継続か」を判定する）で全走査した。スキャナの妥当性は、既知の唯一の該当箇所
+`crates/wintf/src/ecs/window_proc/window_pos_tests.rs:691` を**盲点 1 件**として検出し、同ファイルの
+`:382`・`:429`・`:614`・`:690` を **`\` 継続 4 件**として正しく切り分けることで確認した
+（実測出力: `継続行 5 件: 382,429,614,690,691 / 盲点該当 1 件: 691`）。
+
+| ファイル | 複数行にまたがる文字列リテラルの継続行 | 盲点該当（`\` 継続でない行） |
+|---|---:|---:|
+| `crates/areka-sakura/src/drive.rs`（移設前） | 1（`:2538`） | **0** |
+| `crates/areka-sakura/src/compile.rs`（移設前） | 0 | **0** |
+| 新テストファイル 7 本（移設後） | 1（`drive_choice_tests.rs:385`） | **0** |
+
+**結論: 担当 2 ファイルに複数行文字列リテラルは 1 箇所しかなく、それは `\` 継続（`drive.rs:2537` の行末が `\`）である。**
+Rust は `\` 改行に続く行頭空白を除去するため、一律 4 スペース de-indent はリテラルの中身を変えない。
+念のため当該 2 行を目視で突合した——移設前 `drive.rs:2537-2538` と移設後 `drive_choice_tests.rs:384-385` は
+**「移設前の行から先頭 4 文字を除いたものと移設後の行がバイト同値」**であることをプログラム比較で確認済み（両行とも True）。
+§11.4 第 1 の盲点の該当行は **0 件**であり、例外処理は不要だった。
+
+### 17.4 検証（すべて実測・終了コードで判定）
+
+**(a) 本文一致検証（要件 2.4）** — `pwsh -File $V/Compare-RelocatedTests.ps1 -Commit 2048941 -OriginalPath <本番> -RelocatedPath "<新テスト群>" -Detail`
+
+| 対象 | 出力 | exit |
+|---|---|---:|
+| `drive.rs` → 4 ファイル | `MATCH: test fn 32=32 / helper item 17=17 / mod block 1 / files 4` | 0 |
+| `compile.rs` → 3 ファイル | `MATCH: test fn 43=43 / helper item 7=7 / mod block 1 / files 3` | 0 |
+
+**(a2) 行単位の多重集合突合（スクリプトより強い独自検証）** — 本文一致検証は項目単位・行頭空白非依存であるため、
+それとは独立に「移設前ブロック本体を一律 4 スペース de-indent した行の多重集合」と「新テストファイル群の行の多重集合」を
+（空行を除いて）突合した。差分はすべて要件 2.4 が許容する調整（可視性付与・`use`）だけであり、
+テスト本文の行は 1 行も増減・改変していない。
+
+| 対象 | 元 | 新 | 消えた行 | 増えた行 | 内訳 |
+|---|---:|---:|---:|---:|---|
+| `drive.rs` | 2,088 | 2,106 | 12 | 30 | 消 = `pub(super)` を付ける前の 11 行＋落とした `use` 1 本 ／ 増 = `pub(super)` 付き 11 行＋新設 `use` 19 本 |
+| `compile.rs` | 1,449 | 1,456 | 4 | 11 | 消 = `pub(super)` 前の 4 行 ／ 増 = `pub(super)` 付き 4 行＋新設 `use` 7 本 |
+
+de-indent の分類（移設した全行）: **(a) ちょうど −4 スペース**または**(b) バイト同値（空行）**のいずれか。
+これ以外に分類される行は **0 件**（検出したら停止する設計で、全 7 ファイルとも検出 0）。
+内訳は `drive_test_support` 114/3・`drive_delivery_tests` 765/55・`drive_lifecycle_tests` 608/46・
+`drive_choice_tests` 595/40・`compile_test_support` 51/0・`compile_arm_tests` 836/26・
+`compile_sheet_tests` 557/17（形式: −4 スペース行 / 空行）。
+
+**(b) 対応表フラグメントの全単射検証（要件 2.9）** — `pwsh -File $V/Test-MappingBijection.ps1 -Path $V/mapping/areka-sakura.csv`
+
+    PASS: 全単射 OK / 行数 75 / 相異なる old_fqn 75 / 相異なる new_fqn 75 / フラグメント 1
+      - areka-sakura.csv: 75 行
+
+exit 0。75 行の内訳は `compile::tests::*` → `compile::arm_tests::*` 23 行／`compile::tests::*` → `compile::sheet_tests::*` 20 行／
+`drive::tests::*` → `drive::delivery_tests::*` 10 行／`drive::tests::*` → `drive::lifecycle_tests::*` 12 行／
+`drive::tests::*` → `drive::choice_tests::*` 10 行。`reason` は全行 `theme_split`、末尾セグメント（関数識別子）は旧新で同一。
+cargo が実際に印字する完全修飾名にクレート名の接頭辞は付かない（`before_default.txt` の実データで確認済み——
+`compile::tests::` 43 行・`drive::tests::` 32 行が移設前に実在する）。
+既存フラグメントとの結合検証（`-Path $V/mapping`）も
+`PASS: 全単射 OK / 行数 232 / 相異なる old_fqn 232 / 相異なる new_fqn 232 / フラグメント 3` で exit 0（キー衝突なし）。
+
+**(c) 対応表適用後のテスト名リスト一致（要件 1.8 / 2.2）— ワークスペース水準**
+
+移設後に §10.2 の手順（`cargo test --workspace --no-fail-fast -- --list` → `: test$` 抽出 →
+`[Array]::Sort($arr, [System.StringComparer]::Ordinal)` → UTF-8 BOM 無し・重複行を残す）でリストを採取し、
+コミット済み `before_default.txt` と**タスク 3.1・3.2・3.3 の 3 フラグメント全部**を渡して突合した:
+
+    BEFORE      : before_default.txt  (4790 行 / 相異なる 4787)
+    AFTER       : after_default_task33.txt  (4790 行 / 相異なる 4787)
+    MAPPING     : 232 行 (1 ファイル) / 適用 232 行 / 未使用 0 行
+    LINE COUNT  : before 4790 / after 4790 -> 一致 (Requirement 2.2)
+    RESULT: PASS
+
+exit 0。**適用 232 行・未使用 0 行**。移設後リストの SHA256 は
+`63994B62B8F9CBA31EF7CF6DDF07C20DD6098A8D2D183590C0976B7BF03C0E75`
+（§16 と同じく中間リストファイル自体はコミットしない。再現手順は §10.2 のとおり）。
+整列は `Sort-Object` を使わず `[System.StringComparer]::Ordinal` で行った（§11.8）。
+
+**(c2) 対応表そのものへの反証（自分の表を疑う検証）** — 対応表が「実際に起きた変化」と過不足なく一致することを、
+対応表を**使わない**多重集合の対称差で確かめた。
+
+| 検査 | 結果 |
+|---|---|
+| `before_default.txt` と移設後リストの対称差（対応表なし）: 消えた行 / 現れた行 / 全フラグメント行数 | **232 / 232 / 232**（三者一致） |
+| タスク 3.1・3.2 のフラグメントだけを `before_default.txt` へ適用して復元した「本タスク着手直前のリスト」と移設後リストの対称差: 消えた行 / 現れた行 / 本タスクの対応表行数 | **75 / 75 / 75**（三者一致） |
+| 消えた行がすべて `old_fqn` に在るか | **True** |
+| 現れた行がすべて `new_fqn` に在るか | **True** |
+| `old_fqn` なのに実際には消えていない行 | **0** |
+| `new_fqn` なのに実際には現れない行 | **0** |
+| `old_fqn` と `new_fqn` が同一の行（＝変わっていない名前を載せた水増し） | **0** |
+| 末尾セグメント（関数識別子）が旧新で相違する行 | **0** |
+| `reason` が `theme_split` 以外の行 | **0** |
+
+すなわち対応表は「実際に変わった名前だけ」を「実際に変わったとおりに」記載しており、水増しも取りこぼしも無い。
+
+移設後リストのモジュール別内訳（`cargo test -p areka-sakura -- --list`・本クレート 88）:
+`compile::arm_tests` 23 ／ `compile::sheet_tests` 20 ／ `drive::delivery_tests` 10 ／ `drive::lifecycle_tests` 12 ／
+`drive::choice_tests` 10 ／ `duration::tests` 5 ／ `error::tests` 3 ／ `sysvar::tests` 5。
+移設前の `compile::tests` 43・`drive::tests` 32・`duration::tests` 5・`error::tests` 3・`sysvar::tests` 5 と本数が一致する。
+
+**(d) クレート緑（要件 7.2）** — `cargo test -p areka-sakura --no-fail-fast` → **exit 0**。
+**88 passed / 0 failed / 0 ignored**（lib 88 ＋ 統合 0 ＋ doctest 0）。
+移設前の独立導出値と一致する: 移設前コミット `2048941` の `git show` に対する `#[test]` 属性行の全数は
+`compile.rs` 43・`drive.rs` 32 で、`before_default.txt` の `compile::tests::` 43 行・`drive::tests::` 32 行と一致し、
+これに `duration`5・`error`3・`sysvar`5 を足した 88 が移設後の実測値と完全一致する。
+
+**(e) 警告非増加（要件 2.6）** — `cargo build -p areka-sakura --all-targets` → exit 0・**警告行 0 件**
+（`warning:` で始まる行が 1 行も出ない）。`before_build_warnings.txt` の `[PER-UNIT TALLY]` は本クレートに
+1 件も割り当てていない（基準値 0）ので、増加ゼロ。
+ワークスペース全域でも §10.5 の手順で再集計した——`cargo build --workspace --all-targets` → exit 0、
+`DIAG_COUNT = 16` / `SUMMARY_COUNT = 7` / `GENERATED_SUM = 22` / `DUPLICATES = 6` / `NET = 16` で、
+§10.5 の移設前基準値 5 数値と**完全一致**。ユニット別 generated 件数（7 ユニット）も多重集合として一致し、
+`areka-sakura` のサマリ行は移設前後とも 0 件である。
+
+**(f) 本番本体の無変更** — 移設前コミット `2048941` の各本番ファイルの先頭〜旧 `#[cfg(test)]` 行の直前までを
+現作業ツリーと逐行突合し、**2 ファイルとも不一致 0**（drive 1-530 ／ compile 1-321）。
+
+| ファイル | `git diff --numstat` |
+|---|---|
+| `drive.rs` | 挿入 11 ／ 削除 2,277 |
+| `compile.rs` | 挿入 8 ／ 削除 1,545 |
+
+2 ファイル合計 `2 files changed, 19 insertions(+), 3822 deletions(-)`。挿入 19 = 新設した接続宣言のうち
+元位置に据え置いた `#[cfg(test)]` 行 2 本を除いた行数である。
+
+**(g) 完了状態の直接確認** — 2 本番ファイルに残る `cfg(test)` / `#[path]` / `mod …;` の出現はすべて接続宣言のみ:
+`drive.rs:531-542` ／ `compile.rs:322-330`。テストモジュール本体は 1 行も残っていない。
+
+**(h) 作業ツリーの範囲** — `git status --porcelain -uall` は本節追記前の時点で下記 10 パスのみ:
+変更 2 本（本番ファイル）＋未追跡 8 本（新テストファイル 7 本＋`verification/mapping/areka-sakura.csv`）。
+`crates/**` の他ファイル・`Cargo.toml` への差分は 0 件。
+
+### 17.5 登記（要件 5.2）— 壊れたテスト・状態汚染の所見
+
+**本タスクの範囲（`areka-sakura` の 2 ファイル・75 テスト・テストコード 3,824 行）では、修正を要する
+壊れたテスト・不正なテスト・テスト間の状態汚染は 1 件も発見しなかった。所有 spec への送付所見は 0 件である。**
+
+以下は「調べたが問題なし／既存のまま据え置き」と確定した記録（次に触る者が同じ調査を繰り返さないための控え。是正は行わない）:
+
+| # | 観測 | file:line（移設後） | 判定 |
+|---|---|---|---|
+| 1 | `static` / `thread_local!` / `std::env::set_var` / `unsafe` / `std::thread::sleep` / `#[ignore]` / `#[should_panic]` / `OnceLock` の使用 | 担当 7 テストファイル全域 | **0 件**（全走査で確認。`sleep` の 1 件の文字列一致は `drive_delivery_tests.rs:178` の「実時計・sleep 非依存」と書いたコメント）。プロセスグローバルな状態に触れるテストは 1 件も無い。`drive` 系は talk ごとに独立スレッド＋独立 mpsc チャンネルを張るだけで、共有状態は持たない |
+| 2 | 実時計に依存する観測窓（`recv_timeout`） | `drive_test_support.rs:38-50`（`recv_done` の deadline）・`drive_test_support.rs:137`（`NEG_WINDOW = 200ms`）・`drive_lifecycle_tests.rs` と `drive_choice_tests.rs` の負の窓 9 箇所 | **問題なし・記録のみ**。正常系では「送信が起きない」ことを 200ms の timeout で示し、バグ系では窓内に必ず届く両方向決定的な設計であることを、移設前のバナーが明記している（そのバナーは `drive_test_support.rs:118-134` に同文で残っている）。5 秒側の `recv_timeout(...).unwrap_err()` 2 箇所（`drive_choice_tests.rs:558,650`）は `handle.actor.join()` 済みで送信端が drop されているため `Disconnected` が即返り、5 秒待つことはない（クレート全体の実行時間 0.41 秒が裏づけ） |
+| 3 | 有界スピン待ち（`for _ in 0..1000` ＋ `std::thread::yield_now()`） | `drive_delivery_tests.rs:114-128`（`undue_cues_are_withheld_until_their_at_is_reached`） | **既存・記録のみ（是正しない）**。反復上限が壁時計でなく回数で決まっているため、極端に負荷の高いマシンでは理論上 1,000 回のスピンで cue 着弾を取り逃す余地がある（取り逃すと `assert!(wait_seen, ...)` が落ちる＝偽陽性の赤）。移設前から同一コードであり、テスト本文の変更は要件 2.4 違反になるため触らない。同一ファイルの前後の barrier は `recv_timeout(5s)` でブロックしており、この 1 箇所だけが `try_recv` スピンである |
+| 4 | 移設で可視性・`use`・モジュール接続の追加調整が要るケース（要件 2.8） | `compile_arm_tests.rs:5` ／ `compile_sheet_tests.rs:4` | **1 件発生・接続側で解決済み（テストロジックは無変更）**。`compile.rs` のテストモジュールは本番 `compile` と同名の 1 引数ブリッジ関数を定義しており、移設前は「グロブ `use super::*;` を同一モジュール内の明示定義が shadow する」ことで解決していた。テーマ分割でブリッジを `test_support` へ出すと、`use super::*;`（本番 `compile`）と `use super::test_support::*;`（ブリッジ）の**グロブ同士が衝突**して E0659（曖昧）＋E0061（引数不足）が 98 件出る。明示 import（`use super::test_support::{assert_clear_all_prefix_and_rest, command_of, compile, cue_eq};`）はグロブより優先されるため、これで解決した。**同名 shadow ヘルパを持つテストモジュールをテーマ分割する後続タスク（`areka` / `areka-emo-text` / `areka-kanade` 等）は同じ罠を踏むので、共有ヘルパは明示 import で受けること。** `drive` 側は本番と同名のヘルパが無いためグロブのままで足りている |
+
+### 17.6 本タスクの成果物
+
+| ファイル | 内容 |
+|---|---|
+| `crates/areka-sakura/src/drive_test_support.rs` | 新規（136 行・共有ヘルパ 17 項目） |
+| `crates/areka-sakura/src/drive_delivery_tests.rs` | 新規（837 行・10 テスト） |
+| `crates/areka-sakura/src/drive_lifecycle_tests.rs` | 新規（672 行・12 テスト） |
+| `crates/areka-sakura/src/drive_choice_tests.rs` | 新規（654 行・10 テスト） |
+| `crates/areka-sakura/src/compile_test_support.rs` | 新規（57 行・共有ヘルパ 4 本） |
+| `crates/areka-sakura/src/compile_arm_tests.rs` | 新規（891 行・23 テスト） |
+| `crates/areka-sakura/src/compile_sheet_tests.rs` | 新規（602 行・20 テスト） |
+| 上記に対応する本番 2 ファイル | 末尾のテストモジュールブロックを接続宣言へ置換（本番本体は無変更） |
+| `verification/mapping/areka-sakura.csv` | 新規（75 行・全単射検証済み） |
+| `verification/notes.md` | 本節（§17）を追記 |
+
+コミットは要件 7.1 に従い**クレート単位の 1 コミット**（`areka-sakura`）とする。
