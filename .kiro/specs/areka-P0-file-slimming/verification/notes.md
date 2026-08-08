@@ -947,3 +947,193 @@ SHA256 = 634A79061DE29A7CF15ED36BB6A9A50A864AF4767F731FD97C8077ED90CAD335（befo
 | 上記に対応する本番 4 ファイル | 末尾のテストモジュールブロックを接続宣言へ置換（本番本体は無変更） |
 | `verification/notes.md` | 本節（§13）を追記 |
 | `verification/mapping/wintf.csv` | **作成しない**（FQN 変化 0 件・対応表の行を持たない） |
+
+## 14. クレート単位のテスト分離: `areka-sylphya` / `dola` / `shiori-host32-helper`（タスク 2.2・要件 1.1 / 1.3 / 1.6 / 2.4 / 2.8 / 3.1〜3.3 / 7.1 / 7.2）
+
+- 実施日: 2026-08-08
+- ブランチ: `claude/areka-p0-file-slimming-64d065` / 移設前コミット `bfbdfb5`
+- 実行シェル: **PowerShell（pwsh 7）**
+- 下表の本番 3 ファイル＋新規テストファイル 8 本と本ファイル以外には一切触れていない（`Cargo.toml`・他クレート・spec 本体ドキュメントは無変更）
+
+### 14.1 移設した 3 クレート・3 ファイル（design §File Structure Plan と完全一致）
+
+| クレート | 本番ファイル | 移設前 総行 | テストモジュール（移設前の行範囲） | 新テストファイル | 新ファイル行 | 本番 残行 |
+|---|---|---:|---|---|---:|---:|
+| `areka-sylphya` | `src/actor.rs` | 1,587 | `tests`（675-1028）／`actor_integration_tests`（1036-1379）／`actor_criteria_cage`（1420-1587） | `actor_tests.rs`／`actor_actor_integration_tests.rs`／`actor_actor_criteria_cage.rs` | 351 / 341 / 165 | 730 |
+| `dola` | `src/cue/command.rs` | 1,089 | `tests`（332-1089） | `cue/command_tests.rs` | 755 | 334 |
+| `shiori-host32-helper` | `src/main.rs` | 1,114 | `resolve_param_tests`（517-568）／`classify_tests`（570-660）／`load_ack_tests`（662-689）／`loopback_tests`（691-1114） | `main_resolve_param_tests.rs`／`main_classify_tests.rs`／`main_load_ack_tests.rs`／`main_loopback_tests.rs` | 49 / 88 / 25 / 421 | 531 |
+
+- 3 ファイルとも**テストモジュールはファイル末尾に連続配置**（design の実測どおり・ズレ 0）。本体の途中に挿入されたテストモジュールは 0 件。
+- 新テストファイル 8 本はすべて **1,000 行以下**（最大 `cue/command_tests.rs` の 755 行）のため、テーマ分割は 1 件も行わない（要件 1.7）。
+- **完全修飾名は 8 モジュールすべてで 1 件も変わらない**（1 テストモジュール＝1 テストファイル・設計判断 #2）。したがって
+  `mapping/areka-sylphya.csv`・`mapping/dola.csv`・`mapping/shiori-host32-helper.csv` は**いずれも作成しない**（対応表の行 0 件・§11.3 の規約どおり）。
+- `shiori-host32-helper/src/main.rs` は**バイナリ入口**であるため、stem は読み替え規則により **`main`**（design §移設方式の裁定・`main.rs` / `lib.rs` は読み替えなし）。よってテストファイル名は `main_<モジュール名>.rs`。
+- `dola/src/cue/command.rs` はサブディレクトリモジュール配下だが、接続規約どおりテストファイルは**同一ディレクトリ** `crates/dola/src/cue/` に置く。
+- **可視性・`use`・モジュール接続の調整は 1 件も必要なかった**（要件 2.8 の発動なし）。各テストモジュール冒頭の `use super::*;` を含む既存 import がそのまま有効。
+
+接続宣言（8 モジュールとも同一文言・design §移設方式の裁定 案 C）:
+
+```rust
+#[cfg(test)]
+#[path = "<stem>_<テストモジュール名>.rs"]
+mod <テストモジュール名>;
+```
+
+`#[cfg(test)]` 行は §13（タスク 2.1）と同じく**元位置に据え置き**、その下 2 行だけを新設する。
+
+### 14.2 非 `mod` `#[cfg(test)]` 項目の残置（設計判断 #3）
+
+`shiori-host32-helper/src/main.rs` の 2 件（design §Supporting References が `:418,424` として列挙した自由関数
+——属性行は `:417,423`）は `impl` ブロック内のテスト専用 inherent メソッドであり、`:427` で閉じる本体側の項目である。
+**移設せず元位置に残置**した。移設後も同一行番号（`main.rs:417,423`）に在る。
+`areka-sylphya/src/actor.rs`・`dola/src/cue/command.rs` には非 `mod` `#[cfg(test)]` 項目は 1 件も無い。
+
+### 14.3 テストモジュールに付いた doc コメント（`///`）の扱い — 本タスクで確定した規則
+
+`areka-sylphya/src/actor.rs` の 2 モジュールは、`#[cfg(test)]` 行の**直前**に doc コメントを持つ:
+
+| モジュール | doc コメント（移設前の行範囲） | 行数 |
+|---|---|---:|
+| `actor_integration_tests` | `crates/areka-sylphya/src/actor.rs:1030-1035` | 6 |
+| `actor_criteria_cage` | `crates/areka-sylphya/src/actor.rs:1381-1419` | 39 |
+
+**裁定: doc コメントは接続宣言に付けたまま本番ファイルへ残す（テストファイルへは移さない）。**
+
+理由:
+
+1. `///` は `#[doc = "…"]` すなわち `mod` 項目の**属性**であって、設計判断 #2 が言う「モジュールブロック外のコメントバナー」（`spine_e2e_test.rs` の `// ===== S2 … =====` 形）ではない。移設単位の定義は「`#[cfg(test)]`＋**付随属性**＋`mod <name> { … }`」であり、属性は項目に付随する。項目そのもの（`mod actor_integration_tests`）は接続宣言として本番ファイルに残るのだから、属性もそこに残るのが整合する——タスク 2.1 が `#[cfg(test)]` 行を元位置に据え置いたのと同一の扱いである。
+2. ファイル先頭へ移すには `///` を `//!`（内部 doc）へ書き換えねばならず、これは要件 2.4 が禁じる**コメントの変更**にあたる。`///` のままファイル先頭に置くと直後の `use super::*;` を文書化する別物になる。
+3. 残置ならバイト等価で、intra-doc リンク（`[`send_after_death_logs_warn_not_silent`]` 等）の解決先も同一モジュールのままで変わらない。
+
+`dola`・`shiori-host32-helper` の 5 モジュールには doc コメントは付いていない（`#[cfg(test)]` の直前は空行）。
+**今後 doc コメント付きテストモジュールを移設するタスクは本裁定に従うこと。**
+
+### 14.4 §11.4 の盲点（複数行文字列リテラル内の行頭空白）— 担当 3 ファイルの独自走査
+
+Implementation Notes の指示（「各タスクは自分の担当ファイルで独自に走査し直すこと」）に従い、
+本タスクの 3 ファイルを字句状態追跡つきの独立スキャナ（コメント・raw 文字列・エスケープを追跡）で全走査した。
+スキャナの妥当性は、既知の該当箇所である `crates/wintf/src/ecs/window_proc/window_pos_tests.rs:689-691`
+（§13.2 の移設後の位置）を正しく検出することで確認済み。
+
+| ファイル | 複数行にまたがる文字列リテラル | 盲点該当（`\` 継続でない行） |
+|---|---|---|
+| `crates/areka-sylphya/src/actor.rs` | 0 件 | **0 件** |
+| `crates/dola/src/cue/command.rs` | 0 件 | **0 件** |
+| `crates/shiori-host32-helper/src/main.rs` | 1 件（移設前 `:719-721`） | **0 件** |
+
+唯一の複数行文字列 `main.rs:719-721`（移設後 `main_loopback_tests.rs:27-29`）は、継続する 2 行がいずれも
+**直前行の末尾 `\` による継続**である（`:719` 末尾 `\`／`:720` 末尾 `\`）。Rust は `\`＋改行の直後の行頭空白を除去するため、
+一律 4 スペース de-indent（lead 12/13/13 → 8/9/9）を適用しても**文字列の値はバイト等価**である。目視で突合済み。
+
+**結論: 本タスクの 3 ファイルに §11.4 第 1 の盲点の該当行は 1 件も無い。**
+
+### 14.5 検証（すべて実測・終了コードで判定・クレート単位）
+
+**(a) 本文一致検証（要件 2.4）** — `pwsh -File $V/Compare-RelocatedTests.ps1 -Commit bfbdfb5 -OriginalPath <本番> -RelocatedPath "<新テスト群>" -Detail`
+
+| クレート | 出力 | exit |
+|---|---|---:|
+| `areka-sylphya` | `MATCH: test fn 34=34 / helper item 13=13 / mod block 3 / files 3` | 0 |
+| `dola` | `MATCH: test fn 29=29 / helper item 1=1 / mod block 1 / files 1` | 0 |
+| `shiori-host32-helper` | `MATCH: test fn 17=17 / helper item 1=1 / mod block 4 / files 4` | 0 |
+
+**(b) テスト名リストの不変（要件 2.2 / 2.9・完了状態）** — `cargo test -p <crate> --no-fail-fast -- --list` を移設前後で採取し、
+`: test$` 抽出・`[StringComparer]::Ordinal` 整列（§10.2 と同一手順）。採取ターゲットは前後とも既定の `x86_64-pc-windows-msvc`（§10.4）:
+
+| クレート | before 行数 | after 行数 | `Compare-Object` | SHA256（before = after） |
+|---|---:|---:|---|---|
+| `areka-sylphya` | 171 | 171 | 差分なし | `023A89718C7725917801459586D834CDAD33A9DF1F012130E8DE01B1F13AF75A` |
+| `dola` | 638 | 638 | 差分なし | `D42F7CA3082F1112C1E8B2C48D12FED40B4562FF870489A001E5E76101B57BF8` |
+| `shiori-host32-helper` | 23 | 23 | 差分なし | `9CA4B3CE62AEBC1F4DA9B2FFD7743FB6EACA192533F58A29629A2FA147ED79B5` |
+
+3 クレートとも対応表を介さない**素のバイト一致**（本タスクの対応表の行は 0 件）。
+
+> **是正（タスク 2.2 レビュー）**: `dola` 行の SHA256 は当初 `A488140F…248C3D` と記録していたが、これは
+> `Sort-Object`（カルチャ依存）で整列した値であり、§10.2 が禁じる手順だった。`[StringComparer]::Ordinal` で
+> 採り直した正しい値 `D42F7CA3…B57BF8` へ差し替えてある（`areka-sylphya` と `shiori-host32-helper` の 2 行は
+> 当初から Ordinal で正しく、変更していない）。
+> なお `dola` の**移設前**リストは現ツリーからは再生成できないため、before = after の根拠は
+> 次のワークスペース水準の照合に置く——移設後の `cargo test --workspace --no-fail-fast -- --list` が
+> コミット済み `before_default.txt` と**バイト一致**（4,790 行・SHA256
+> `77F03656B507D72DB4A5D9E5D75DC4849C16A92B6E371F718F8887F7EB43D2AD`）。
+> これは §10.2 の手順そのままであり `dola` を含む全クレートを覆う。
+
+`shiori-host32-helper` の 23 行は §10.4 の実測値と一致し、アーキテクチャゲート 3 件
+（`loopback_tests::loopback_hello_request_proxy_driven_and_bounded_loop`・`shiori_proxy::tests::testdll_drop_invokes_courtesy_unload`・
+`shiori_proxy::tests::testdll_request_roundtrip_get_and_notify`）は移設前後とも `--list` に現れている。
+`#[cfg_attr(not(target_arch = "x86"), ignore = "…")]` 属性には一切手を触れていない（要件 2.4）。
+
+**(c) クレート緑（要件 7.2）**
+
+| クレート | コマンド | exit | 結果 |
+|---|---|---:|---|
+| `areka-sylphya` | `cargo test -p areka-sylphya` | 0 | **171 passed / 0 failed / 0 ignored**（＋doctest 0） |
+| `dola` | `cargo test -p dola` | 0 | 7 ターゲット合計 **637 passed / 0 failed** ＋ doctest 1 ignored（= `--list` の 638 と整合） |
+| `shiori-host32-helper` | `cargo test -p shiori-host32-helper` | 0 | **20 passed / 0 failed / 3 ignored**（x64 のアーキテクチャゲート 3 件＝§9.8 のとおり緑） |
+
+**(d) 警告非増加（要件 2.6）** — `cargo build -p <crate> --all-targets`
+
+| クレート | exit | 行頭 `warning` 行（移設前実測） | 同（移設後） |
+|---|---:|---:|---:|
+| `areka-sylphya` | 0 | 0 | **0** |
+| `dola` | 0 | 0 | **0** |
+| `shiori-host32-helper` | 0 | 5（`"cdecl" is not a supported ABI` ×3 ＋サマリ 2 行） | **5**（同一） |
+
+`shiori-host32-helper` の 5 行は `before_build_warnings.txt` の基準値（`(bin, test)` generated 3 ／ `(bin)` generated 3（3 duplicates））と一致する。
+
+念のためワークスペース全域でも突合した——`cargo build --workspace --all-targets` → exit 0、
+`DIAG_COUNT = 16` / `SUMMARY_COUNT = 7` / `GENERATED_SUM = 22` / `DUPLICATES = 6` / `NET = 16`。
+§10.5 の移設前基準値 5 数値と**完全一致**（増加ゼロ）。
+
+**(e) 本番本体の無変更** — 移設前コミット `bfbdfb5` の各本番ファイルへ「テストモジュール本体（`mod X {` 〜 閉じ `}`）を
+接続宣言 2 行へ置換」という機械規則のみを適用した期待形を生成し、現作業ツリーと逐行突合した。**3 ファイルとも不一致 0**
+（`actor.rs` 期待 730 = 実 730 ／ `command.rs` 期待 334 = 実 334 ／ `main.rs` 期待 531 = 実 531）。
+すなわち本番本体・モジュール間の空行・doc コメントは 1 文字も変わっていない。
+
+| クレート | `git diff --stat` |
+|---|---|
+| `areka-sylphya` | `1 file changed, 6 insertions(+), 863 deletions(-)`（挿入 6 = 3 モジュール × 2 行） |
+| `dola` | `1 file changed, 2 insertions(+), 757 deletions(-)`（挿入 2 = 1 モジュール × 2 行） |
+| `shiori-host32-helper` | `1 file changed, 8 insertions(+), 591 deletions(-)`（挿入 8 = 4 モジュール × 2 行） |
+
+削除行数はいずれも「テストコード行 − `#[cfg(test)]` 行数」（866−3 / 758−1 / 595−4）と一致する。
+
+**(f) 完了状態の直接確認** — 3 本番ファイルに残る `cfg(test)` / `#[path]` / `mod …;` の出現はすべて接続宣言と残置項目のみ:
+`actor.rs:675-677,685-687,728-730`／`command.rs:332-334`／`main.rs:517-519,521-523,525-527,529-531`
+（＋ `main.rs:417,423` の残置 `#[cfg(test)]` 自由関数、`main.rs:33` の本番 `mod shiori_proxy;`）。
+テストモジュール本体は 1 行も残っていない。
+
+**(g) 作業ツリーの範囲** — `git status --porcelain -uall` は本節追記前の時点で下記 11 パスのみ:
+変更 3 本（上表の本番ファイル）＋未追跡 8 本（新テストファイル）。`crates/**` の他ファイル・`Cargo.toml` への差分は 0 件。
+
+### 14.6 登記（要件 5.2）— 壊れたテスト・状態汚染の所見
+
+**本タスクの範囲（3 クレート・8 テストモジュール・テストコード 2,219 行）では、修正を要する壊れたテスト・
+不正なテスト・テスト間の状態汚染は 1 件も発見しなかった。所有 spec への送付所見は 0 件である。**
+
+以下は「調べたが問題なし」と確定した記録（次に触る者が同じ調査を繰り返さないための控え。送付不要）:
+
+| # | 観測 | file:line（移設後） | 判定 |
+|---|---|---|---|
+| 1 | プロセスグローバルな tracing subscriber（interest-keeper）を `set_global_default` で常駐させる仕組みをテストから使う 3 箇所 | `crates/areka-sylphya/src/actor_tests.rs:255,276`・`crates/areka-sylphya/src/actor_actor_criteria_cage.rs:138,152`（実体は `crates/areka-sylphya/src/test_log_capture.rs`） | **問題なし**。`capture` は `with_default` でスレッドローカルに subscriber を差し込み、global の bare registry は `event` が no-op。捕捉列がテスト間で混ざらないことがモジュール doc（`test_log_capture.rs:1-46`）に明記され、並列負荷下の `Interest::never` 焼き付きも interest-keeper で構造的に到達不能化済み。移設で何も変わらない |
+| 2 | 実スレッドを spawn する統合檻（`spawn_sylphya` → `publish` → `barrier` → `join`）。同期は barrier と join のみで `thread::sleep` 皆無 | `crates/areka-sylphya/src/actor_actor_integration_tests.rs` 全域・`actor_actor_criteria_cage.rs:125-165` | **問題なし**。ログ捕捉はいずれも `join` 後のテストスレッド上で行われ、クロススレッド取りこぼしの窓が無い |
+| 3 | `std::env::temp_dir()` 配下に `SystemTime` 由来のユニーク名でディレクトリを作り、testdll をコピーする | `crates/shiori-host32-helper/src/main_loopback_tests.rs:98`（後始末は `:420` の `let _ = std::fs::remove_dir_all(&load_dir);`） | **テスト間汚染は無し**（名前がユニークで他テストと共有しない）。ただし後始末はテスト本体末尾の best-effort であり、途中の assert 失敗時は一時ディレクトリが残る（RAII ガード無し）。x64 では当該テストは `ignore` のため既定実行では発生しない。**本 spec 着手前から存在する構造で、移設で変わっていない。是正しない・記録のみ** |
+| 4 | `std::env::var("HOST32_TESTDLL_DLL")` の読み取り | `crates/shiori-host32-helper/src/main_loopback_tests.rs:9` | **問題なし**。読み取りのみで `set_var` は無く、他テストの環境を書き換えない |
+
+### 14.7 本タスクの成果物
+
+| ファイル | 内容 |
+|---|---|
+| `crates/areka-sylphya/src/actor_tests.rs` | 新規（351 行） |
+| `crates/areka-sylphya/src/actor_actor_integration_tests.rs` | 新規（341 行） |
+| `crates/areka-sylphya/src/actor_actor_criteria_cage.rs` | 新規（165 行） |
+| `crates/dola/src/cue/command_tests.rs` | 新規（755 行） |
+| `crates/shiori-host32-helper/src/main_resolve_param_tests.rs` | 新規（49 行） |
+| `crates/shiori-host32-helper/src/main_classify_tests.rs` | 新規（88 行） |
+| `crates/shiori-host32-helper/src/main_load_ack_tests.rs` | 新規（25 行） |
+| `crates/shiori-host32-helper/src/main_loopback_tests.rs` | 新規（421 行） |
+| 上記に対応する本番 3 ファイル | 末尾のテストモジュールブロックを接続宣言へ置換（本番本体・doc コメントは無変更） |
+| `verification/notes.md` | 本節（§14）を追記 |
+| `verification/mapping/*.csv` | **作成しない**（3 クレートとも FQN 変化 0 件・対応表の行を持たない） |
+
+コミットは要件 7.1 に従い**クレート単位の 3 コミット**へ分ける（`areka-sylphya` ／ `dola` ／ `shiori-host32-helper`）。
