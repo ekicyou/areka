@@ -4259,3 +4259,389 @@ Implementation Notes の指示（「各タスクは自分の担当ファイル�
 
 `crates/areka` の残る 7 ファイル（`placement/follow.rs`・`emo2_boot/frame.rs`・`input_events/balloon.rs`・`placement/mod.rs`・
 `placement/spawn.rs`・`placement/persist.rs`・`placement/resolver.rs`）は本タスクの対象外であり、1 文字も触っていない。
+
+## 26. 本体クレートの配置系 4 ファイルのテーマ分割: `areka`（タスク 5.2・要件 1.1 / 1.6 / 1.7 / 1.8 / 2.4 / 2.8 / 2.9 / 3.1〜3.3 / 7.1 / 7.2）
+
+- 実施日: 2026-08-08
+- ブランチ: `claude/areka-p0-file-slimming-64d065` / 移設前コミット `f720244`（タスク 5.1 のコミット）
+- 実行シェル: **PowerShell（pwsh 7）**
+- 下表の本番 4 ファイル＋新規テストファイル 16 本＋`verification/mapping/areka.csv`＋本ファイル以外には一切触れていない（`Cargo.toml`・他クレート・spec 本体ドキュメントは無変更）
+- 本タスクは 4 ファイルすべてがテーマ分割の対象である。完全修飾名が変わるテスト関数は **117 本**で、`mapping/areka.csv` を**本タスクで新設**した（タスク 5.1 は行 0 件で作成していない）
+
+### 26.1 移設した 4 ファイル（design §File Structure Plan の `crates/areka` 13 本のうち配置系 4 本）
+
+| 本番ファイル | 移設前 総行 | テストモジュール（移設前の行範囲） | 新テストファイル | 新ファイル行 | 本番 残行 |
+|---|---:|---|---|---:|---:|
+| `src/placement/mod.rs` | 1,899 | `tests`（565-1899） | `placement/placement_shared_test_support.rs` | 141 | 575 |
+| | | | `placement/placement_prepare_tests.rs` | 567 | |
+| | | | `placement/placement_monitor_tests.rs` | 287 | |
+| | | | `placement/placement_windowposition_tests.rs` | 356 | |
+| `src/placement/spawn.rs` | 1,582 | `tests`（428-1582） | `placement/spawn_test_support.rs` | 57 | 441 |
+| | | | `placement/spawn_assembly_tests.rs` | 454 | |
+| | | | `placement/spawn_cleanup_tests.rs` | 234 | |
+| | | | `placement/spawn_clickthrough_tests.rs` | 134 | |
+| | | | `placement/spawn_follow_pipeline_tests.rs` | 302 | |
+| `src/placement/persist.rs` | 1,535 | `tests`（467-1535） | `placement/persist_entries_tests.rs` | 153 | 474 |
+| | | | `placement/persist_restore_tests.rs` | 730 | |
+| | | | `placement/persist_io_wiring_tests.rs` | 186 | |
+| `src/placement/resolver.rs` | 1,306 | `tests`（297-1306） | `placement/resolver_test_support.rs` | 28 | 307 |
+| | | | `placement/resolver_resolve_tests.rs` | 865 | |
+| | | | `placement/resolver_union_tests.rs` | 62 | |
+| | | | `placement/resolver_from_alignment_tests.rs` | 59 | |
+
+- 4 ファイルとも**テストモジュールはファイル末尾に連続配置**（design の実測どおり・ズレ 0）。本体の途中に挿入されたテストモジュールは 0 件。
+- 新テストファイル 16 本はすべて **1,000 行以下**（最大 `resolver_resolve_tests.rs` の 865 行）。新ファイル合計 4,615 行。
+- `src/placement/mod.rs` は**モジュール root** ゆえ stem は**親ディレクトリ名 `placement`**（design §移設方式の裁定）。よってテストファイルは `placement/placement_<モジュール名>.rs`。
+- 接続宣言は 16 モジュールとも同一文言（案 C）。`#[cfg(test)]` 行は §13（タスク 2.1）以来の扱いと同じく**元位置に据え置き**、2 本目以降のモジュールぶんだけ新設した（`git diff --stat` の挿入 44 行 = 3 行 × 16 モジュール − 4 ファイルぶんの据え置き `#[cfg(test)]`）。
+
+```rust
+#[cfg(test)]
+#[path = "<stem>_<テストモジュール名>.rs"]
+mod <テストモジュール名>;
+```
+
+### 26.2 共有ヘルパのモジュール名を `placement/mod.rs` だけ `shared_test_support` にした理由（design §テーマ分割ポリシーからの逸脱・本タスクで裁定）
+
+design の共有ヘルパ規約は「`<stem>_test_support.rs`（モジュール名 `test_support`）」である。`placement/mod.rs` に限りこれが**使えない**——
+同じ親モジュール `placement` に **`crates/areka/src/placement/mod.rs:35-36` の `#[cfg(test)] pub(crate) mod test_support;`**（実体 `crates/areka/src/placement/test_support.rs`・195 行・tracing ログ捕捉ハーネス）が既に存在し、
+`mod test_support;` を追加すると **E0428（重複定義）**になるためである。当該既存モジュールは要件 1.4 の除外対象（既に本番ファイル外へ分離済み）であり、本 spec は 1 文字も触らない。
+
+**裁定**: `placement/mod.rs` の共有ヘルパのみモジュール名を `shared_test_support` とし、ファイル名は接続規約どおり `<stem>_<モジュール名>.rs` ＝ **`placement_shared_test_support.rs`** とする。
+規約（ファイル名がモジュール名から一意に決まる・逆引き可）は保たれており、逸脱は「共有ヘルパのモジュール名は常に `test_support`」という既定の 1 点に限る。
+`spawn.rs`・`resolver.rs` の共有ヘルパは衝突がないため規約どおり `test_support`（`placement::spawn::test_support` ／ `placement::resolver::test_support`）である。
+**後続タスク（5.3〜6.2）への申し送り**: 親モジュールに既存の `test_support` がある木では同じ衝突が起きる。`placement/` 配下の残り 1 本（`follow.rs`＝タスク 5.3/5.4/6.1）も**同じ親 `placement` の子**ではなく `placement::follow` の子になるため衝突しないが、`placement/mod.rs` を再度触る作業がある場合はこの名前を踏襲すること。
+
+### 26.3 テーマ境界の裁定（design §テーマ分割ポリシー・手順①）
+
+**4 ファイルともバナーは作業時系列ではなく thematic だった**（タスク 4.2 §21.2・4.3 §22.2 と同じ・4.1 §20.2 とは逆）。
+すべてのバナーが見出しの先頭に**本番 API 名または契約名**を掲げ、タスク番号は括弧内の出所表記にとどまる。
+先行タスクと同じく**本番 API の継ぎ目を第一基準**に採り、ヘルパ参照関係の全数走査で裏取りした。結果としてバナー位置は本番シームと一致したので、両者は互いの裏取りになっている。
+
+#### (a) `placement/mod.rs` — 本番 API は 3 群
+
+移設前の本番項目: (i) 準備パイプライン `prepare_ghost_windows`（`:474`）・`prepare_ghost_windows_with_work_area`（`:510`）・`prepare_stages`（`:307`）・`PreparedStages`（`:215`）・`PreparedPlacement`（`:197`）・`build_measure_scaling`（`:249`）・`AuthorDpi`（`:171`）、
+(ii) モニタ列挙・work area `monitor_records`（`:137`）・`primary_monitor`（`:526`）・`work_area_of`（`:548`）・`MONITOR_SNAPSHOT_CONTEXT`（`:119`）・`PREPARE_GHOST_WINDOWS_CONTEXT`（`:126`）、
+(iii) `windowposition` 合流 `apply_scope_windowpositions`（`:376`）・`scope_windowposition`（`:424`）。バナー 7 本もこの 3 群へ畳める。
+
+| 新モジュール（ファイル） | 移設前の行範囲 | 対象の本番項目 | テスト数 |
+|---|---|---|---:|
+| `shared_test_support`（`placement_shared_test_support.rs`） | 578-639, 1283-1352 | —（2〜3 テーマから参照される 7 ヘルパ項目） | 0 |
+| `prepare_tests`（`placement_prepare_tests.rs`） | 641-657, 681-808, 904-1282, 1354-1386 | 準備パイプラインの観測可能な完了状態（`prepare_ghost_windows*`・`prepare_stages`）・Send 契約／失敗経路／永続不触・起動時 k₀ の導出（`build_measure_scaling`・`AuthorDpi`） | 13 |
+| `monitor_tests`（`placement_monitor_tests.rs`） | 659-679, 809-903, 1387-1549 | モニタ列挙と work area 解決（`primary_monitor`・`work_area_of`・`MonitorSnapshot::from_monitors`・`monitor_records`・呼出点タグ 2 定数） | 9 |
+| `windowposition_tests`（`placement_windowposition_tests.rs`） | 1550-1898 | `windowposition` 由来の初期既定位置（`apply_scope_windowpositions`・`scope_windowposition`）——観測ログ・SSP 実測突合・バルーン軸 k・左右対称性・不在時 bit 同一・永続優先 | 6 |
+
+**ヘルパ参照関係による裏取り**（テストモジュール内の全ヘルパ項目 12 件の参照行を全数走査。行番号は移設前）:
+
+- **2〜3 テーマから参照 → `shared_test_support`**（7 項目）: `with_com_initialized`（定義 `:580`／参照 prepare 6・wp 6）・`emo2_root`（`:591`／prepare 8・wp 3）・
+  `balloon_root`（`:597`／prepare 10・wp 3・**monitor 1**（`:1516`））・`WA`（`:602`／prepare 9・wp 5）・`TEMP_COUNTER`（`:611`・`TempDir`（`:614`）＋`impl`（`:618`）＋`impl Drop`（`:635`）／prepare 3・wp 3）・
+  `synth_declared_dpi_ghost`（`:1301`／prepare 2・wp 3）。
+- **単一テーマ専用（当該テーマファイルに残置）**: prepare 側＝`SCOPE0_W`/`SCOPE0_H`/`SCOPE1_W`/`SCOPE1_H`/`BALLOON0_W`/`BALLOON0_H`/`BALLOON1_W`/`BALLOON1_H`（`:643-652`）・`k`（`:655`）／
+  monitor 側＝`make_monitor`（`:660`／参照 `:828,829,847,848,871,872` の 6 箇所はすべて monitor テーマ内）。
+- `capture_logs`／`LogEvent`（既存の `placement::test_support`）は monitor（`:1516`・**絶対パス** `crate::placement::test_support::capture_logs`）と wp（`:1564,1569,1759,1765`・`use super::test_support::{…}`）の 2 テーマが使う。
+  いずれも `use` 項目または絶対パスであり共有ヘルパの対象外（本文一致検証も `use` を突合対象から外す・§11.4）。
+
+#### (b) `placement/spawn.rs` — 本番 API は 4 群、テストモジュール自身も 3 区画に割れていた
+
+移設前の本番項目: (i) spawn 組立とコンポーネント契約 `spawn_ghost_windows`（`:217`）・`CharWindowMarker`（`:85`）・`BalloonWindowMarker`（`:93`）・`GhostWindowMarker`（`:109`）・`ScopeWindows`（`:150`）・`GhostWindows`（`:164`）・`window_style`（`:332`）・`external_position_authority`（`:353`）・`window_pos`（`:358`）、
+(ii) despawn 掃除 `on_ghost_window_marker_remove`（`:122`）＋`GhostWindows::remove_entry_of`（`impl` は `:170`）、
+(iii) clickthrough 登録 `ClickThroughRegistrar`（`impl` `:382`）・`register_ghost_windows_click_through`（`:401`）・`register_ghost_windows_via`（`:414`）、
+(iv) 実パイプライン follow 幾何——これは spawn の本番 API ではなく、**移設前 `spawn.rs:1299-1300` のバナー自身が「spawn は resolver 出力と follow API の両方を消費する合成根であり、兄弟モジュールのテストは自ファイル内という repo 慣行に従いここに置く」と置き場の判断を明記している**統合檻である。
+
+さらに移設前のテストモジュールは**自前で 3 区画に割れていた**——区画ごとに独自の `use` ヘッダを持つ（`:429-444` 冒頭／`:1176-1182` clickthrough／`:1303-1310` follow 幾何）。この内部構造が (iii)(iv) を独立テーマとすることの直接証跡である。
+
+| 新モジュール（ファイル） | 移設前の行範囲 | 対象の本番項目 | テスト数 |
+|---|---|---|---:|
+| `test_support`（`spawn_test_support.rs`） | 446-486, 1196-1202 | —（2〜4 テーマから参照される 4 ヘルパ項目） | 0 |
+| `assembly_tests`（`spawn_assembly_tests.rs`） | 488-580, 808-1151 | spawn 組立と全窓のコンポーネント契約（`spawn_ghost_windows`＋markers／`GhostWindows` 引き当て／タイトル／`BalloonFollow`・`OnDrag` 付与／`HitTest::none`／`Anchored` 5 値伝搬／`WS_EX_TOPMOST` 不在／`DpiSuggestedRectPolicy::ExternalAuthority` 全数／`BoxStyle`・`DragConstraint` 不在と `move_window` 契約） | 9 |
+| `cleanup_tests`（`spawn_cleanup_tests.rs`） | 581-807 | despawn 掃除（`on_ghost_window_marker_remove` フックと `remove_entry_of` の全域性・生存 scope 不変・Resource 不在縮退・ログ静穏性） | 7 |
+| `clickthrough_tests`（`spawn_clickthrough_tests.rs`） | 1152-1194, 1204-1288 | clickthrough 登録 system（`register_ghost_windows_via` の Added 起動・非ゴースト窓の除外・実 system の Resource 不在縮退） | 3 |
+| `follow_pipeline_tests`（`spawn_follow_pipeline_tests.rs`） | 1290-1581 | 実パイプライン統合（KV → `build_placement_config` → `resolve_placement` → `spawn_ghost_windows` → `move_window_to`）の follow 幾何 | 3 |
+
+**design の初期見積 `×約 2` に対し `×4 ＋ 共有ヘルパ` を採った理由**: design は他 22 モジュールのテーマ名・本数を実装時裁定に委ねており `×約 2` は概算である（§22.2 で `×約 5` → `×7` を採った先例と同じ）。
+本モジュールは本番 API の継ぎ目が 4 つに割れており、バナー 9 本もその 4 つへ畳める。加えて上記のとおりテストモジュール自身が 3 区画の `use` ヘッダで分かれている。
+2 分割にすると「clickthrough 登録 ＋ 実パイプライン follow 幾何」という無関係な 2 件を 1 テーマ名で束ねることになり、テーマ名が内容を説明しなくなる。
+
+**ヘルパ参照関係による裏取り**（テストモジュール内の全ヘルパ項目 15 件の参照行を全数走査。行番号は移設前）:
+
+- **多テーマから参照 → `test_support`**（4 項目）: `two_scope_placements`（定義 `:453`／assembly 9・cleanup 6・clickthrough 2）・`titles`（`:476`／assembly 9・cleanup 6・clickthrough 2・**follow 1**（`:1371`））・
+  `ghost_window_entities`（`:481`／assembly 6・clickthrough 1（`:1287`））・`fake_window_handle`（`:1197`／clickthrough 5・**follow 1**（`:1383`））。
+- **単一テーマ専用（当該テーマファイルに残置）**: cleanup 側＝`ScopeState`（`:593`）・`scope_state`（`:604`）／clickthrough 側＝`FakeRegistrar`（`:1186`）＋`impl ClickThroughRegistrar`（`:1190`）・`registrar_calls`（`:1204`）・`register_schedule`（`:1212`）／
+  follow 側＝`drag_event`（`:1313`）・`kv_map`（`:1324`）・`real_pipeline_world`（`:1338`）・`attach_fake_handles`（`:1376`）・`window_position`（`:1390`）。参照行はいずれも自テーマの範囲にしか現れない。
+
+#### (c) `placement/persist.rs` — 本番 API は 5 群、共有ヘルパ 0 件
+
+移設前の本番項目: (i) 保存 entries の純関数 `parse_px`（`:36`）・`char_pos_to_origin_x`（`:53`）・`char_pos_from_origin_x`（`:64`）・`char_pos_entries`（`:74`）・`balloon_offset_entries`（`:107`）、
+(ii) 復元時再射影 `project_restore`（`:160`）＋`clamp_axis`（`:130`）、(iii) 復元 merge `apply_restored_placements`（`:314`）＋`merge_scope`（`:326`）＋`entry_value`（`:287`）、
+(iv) 唯一の IO 点 `load_restored_state`（`:259`）、(v) 保存投函 `PersistWiring`（`:434`）・`persist_entries`（`:453`）。バナー 8 本もこの 5 群へ畳める。
+
+| 新モジュール（ファイル） | 移設前の行範囲 | 対象の本番項目 | テスト数 |
+|---|---|---|---:|
+| `entries_tests`（`persist_entries_tests.rs`） | 470-620 | 保存 entries の構築（`parse_px` の寛容 parse と決定論・`char_pos_entries`／`balloon_offset_entries` の key/値等価・Display ⇄ parse 対称） | 9 |
+| `restore_tests`（`persist_restore_tests.rs`） | 622-1349 | 復元系（バルーン相対オフセットの保存基準＝左上基準の往復・`project_restore` のアンカー辺再導出と補軸 clamp・`apply_restored_placements` の merge 全分岐） | 23 |
+| `io_wiring_tests`（`persist_io_wiring_tests.rs`） | 1351-1534 | IO と配線（`load_restored_state` の先読みと寛容縮退・`PersistWiring`／`persist_entries` の write-through と不在縮退） | 5 |
+
+**「バルーン相対オフセットの保存基準」群（`:622-832`）を `restore_tests` に置いた根拠**: バナー自身が「以下の檻は同じ性質を『保存 entries ⇄ 復元 merge』の実経路（`balloon_offset_entries` → `apply_restored_placements`）で固定する」（移設前 `:632-633`）と述べており、
+実際にこの群は復元側のヘルパ `snapshot_of`（定義 `:848`・参照 `:684,714,760`）・`placement`（`:1007`・参照 `:688,732,775,808`）・`CSZ`（`:1037`・参照 `:692`）・`BSZ`（`:1038`・参照 `:694,738,781,814`）を**前方参照**している。保存側（`entries_tests`）へ置くとこれら 4 項目が 2 テーマ共有になる。
+
+**共有ヘルパは 0 件**（`persist_test_support.rs` は作らない）。ヘルパ項目 13 件の参照行を全数走査した結果、テーマを跨ぐものは 1 件も無い:
+`ALL_ANCHORS`（`:636`／restore のみ）・`wa_rect`（`:839`）・`snapshot_of`（`:848`）・`SZ`（`:853`）・`placement`（`:1007`）・`wp`（`:1029`）・`bo`（`:1032`）・`CSZ`（`:1037`）・`BSZ`（`:1038`）はすべて `restore_tests` の範囲内、
+`unique_temp_dir`（`:1356`）・`plant_minimal_ghost`（`:1364`）・`SharedFakeIo`（`:1455`）＋`impl PersistIo`（`:1456`）はすべて `io_wiring_tests` の範囲内。`entries_tests` はヘルパ項目を 1 件も持たない。
+
+#### (d) `placement/resolver.rs` — **僅少超過（1,011 行）の裁定 = 分割する**
+
+design §テーマ分割ポリシー「目安の運用」は本ファイルを名指しで「僅少超過（例: `resolver.rs` の 1,011 行）で**自然なテーマ境界が見いだせない場合に限り**単一ファイル維持を許容し、その理由を記録する。**既定はあくまで分割である**」としている。
+**裁定: 自然な境界が実在するので分割する（単一維持は採らない）。** 根拠は本番 API そのものである——移設前 `resolver.rs` の本番項目は
+`resolve_placement`（`:124`）・`virtual_desktop_union`（`:228`）・`Anchor::from_alignment`（`impl Anchor` は `:259`）の**独立した 3 本**であり、テスト群もこの 3 本に 1 対 1 で対応して割れている（バナー `:1017` が `virtual_desktop_union`・`:1250` が `Anchor::from_alignment` を見出しに掲げる）。
+
+- 8 行の超過を埋めるための分割ではない。`virtual_desktop_union`（59 行）と `Anchor::from_alignment`（56 行）は**別の本番関数の檻**であって、`resolve_placement` の檻と同居させる理由がそもそも無い。
+- 残る `resolve_tests`（865 行）は 1,008 行の単一ファイルより 143 行小さく、目安の内側に収まる。`resolve_placement` を検証する T-R1〜T-R6・T-R8・anchor 伝搬・事後条件は**すべて同一関数の契約の面**であり、これ以上割ると「テーマ」が「同じ関数のどの引数を振ったか」に退化する——ゆえに 3 分割で止める。
+
+| 新モジュール（ファイル） | 移設前の行範囲 | 対象の本番項目 | テスト数 |
+|---|---|---|---:|
+| `test_support`（`resolver_test_support.rs`） | 303-328 | —（2 テーマから参照される 3 ヘルパ項目） | 0 |
+| `resolve_tests`（`resolver_resolve_tests.rs`） | 330-1015, 1077-1248 | `resolve_placement` の全契約（T-R1 bottom 右下基準／T-R2 スコープ連鎖／T-R3 defaulttop 無視／T-R5 シーム値／T-R6 クランプ／T-R4 free／T-R8 バルーン暫定 offset／anchor 5 値伝搬／事後条件） | 25 |
+| `union_tests`（`resolver_union_tests.rs`） | 1017-1075 | `virtual_desktop_union`（T-R7・複数モニタの和・単一モニタ恒等・空入力 None） | 3 |
+| `from_alignment_tests`（`resolver_from_alignment_tests.rs`） | 1250-1305 | `Anchor::from_alignment`（5 値解釈写像の全分岐・`Seam` 値の正規化） | 2 |
+
+**ヘルパ参照関係による裏取り**（テストモジュール内の全ヘルパ項目 8 件の参照行を全数走査。行番号は移設前）:
+
+- **2 テーマから参照 → `test_support`**（3 項目）: `DPIS`（定義 `:304`／resolve 25・union 2（`:1025,1065`））・`px`（`:311`／resolve 多数・union 12（`:1029-1055`））・`work_area`（`:321`／resolve 15・union 1（`:1066`））。
+- **`resolve_tests` 専用（同ファイルに残置）**: `offset_work_area`（`:331`）・`scope_cfg`（`:340`）・`cfg_of`（`:354`）・`input`（`:363`）・`scope_cfg_balloon`（`:878`）。参照行はいずれも `resolve_tests` の範囲にしか現れない。
+- `from_alignment_tests` はヘルパ項目を 1 件も参照しない（`:1250-1305` にヘルパ参照 0 件）。
+
+### 26.4 バナーの帰属（§20.2 / §22.2 で確定した扱いの適用）
+
+本文一致検証（`RustParse.ps1:319-331`）は直前の空行とコメント行を読み飛ばして最初のコード行を探すため、**先行コメント塊は後続項目の本文の一部**になる。
+本タスクの全バナー 27 本を、この機械規則が束ねる先の項目とともに移した（**文言は 1 文字も変えていない・バナーだけを別ファイルへ残した箇所は 0 件**）。行番号は移設前:
+
+| 本番ファイル | バナー | 束ねられる項目 | 行先 |
+|---|---|---|---|
+| `mod.rs` | `:609`（テスト用一時ディレクトリ） | `TEMP_COUNTER`（`:611`） | `shared_test_support` |
+| | `:681-684`（観測可能な完了状態） / `:904-906`（Send 契約・失敗経路・永続化なし） / `:1006-1008`（起動時 k₀ の導出） | 直後のテスト関数 | `prepare_tests` |
+| | `:809-811`（primary_monitor／work_area_of） / `:862-864`（MonitorSnapshot::from_monitors） / `:1387-1389`（起動時モニタスナップショット） | 直後のテスト関数 | `monitor_tests` |
+| | `:1550-1552`（windowposition → 初期既定位置） | 直後のテスト関数 | `windowposition_tests` |
+| `spawn.rs` | `:446-450`（テストヘルパ） | `two_scope_placements`（`:453`） | `test_support` |
+| | `:488-490`（T-I1 spawn 組立） / `:915-921`（anchor 伝搬） / `:968-970`（T-I2 z-order 既定） / `:995-1002`（外部権威宣言） / `:1070-1072`（T-I3 単位契約） | 直後のテスト関数 | `assembly_tests` |
+| | `:581-586`（T-V1 despawn 掃除） | `ScopeState`（`:593`） | `cleanup_tests` |
+| | `:1152-1164`（stand-in 即終了の退役） ＋ `:1166-1174`（T-I4 clickthrough 登録 system） | `use std::cell::RefCell;`（`:1176`） | `clickthrough_tests` |
+| | `:1290-1301`（T-I4 follow 幾何） | `use std::collections::BTreeMap;`（`:1303`） | `follow_pipeline_tests` |
+| `persist.rs` | `:470-472`（parse_px） / `:505-507`（char_pos_entries） / `:558-560`（balloon_offset_entries） | 直後のテスト関数 | `entries_tests` |
+| | `:622-634`（バルーン相対オフセットの保存基準） | `ALL_ANCHORS`（`:636`） | `restore_tests` |
+| | `:833-837`（project_restore） | `wa_rect`（`:839`） | `restore_tests` |
+| | `:1000-1003`（apply_restored_placements） | `placement`（`:1007`） | `restore_tests` |
+| | `:1351-1353`（load_restored_state） | `unique_temp_dir`（`:1356`） | `io_wiring_tests` |
+| | `:1443-1447`（PersistWiring / persist_entries） | `use areka_sylphya::persist::{…};`（`:1449`） | `io_wiring_tests` |
+| `resolver.rs` | `:371-373`（T-R1） / `:446-448`（T-R2） / `:521-523`（T-R3） / `:549-551`（T-R5） / `:620-622`（T-R6） / `:705-707`（T-R4） / `:873-875`（T-R8） / `:1077-1083`（anchor 伝搬） / `:1212-1214`（事後条件） | 直後のテスト関数・ヘルパ | `resolve_tests` |
+| | `:1017-1019`（T-R7 virtual_desktop_union） | 直後のテスト関数 | `union_tests` |
+| | `:1250-1252`（Anchor::from_alignment） | 直後のテスト関数 | `from_alignment_tests` |
+
+`:1152-1164`（spawn.rs の stand-in 即終了の退役）だけは内容が `assembly_tests` の `t_i1_all_windows_have_hit_test_none_and_char_has_pointer_handlers` を指す**退役記録**であり、テーマ上は assembly 寄りである。
+それでも `clickthrough_tests` へ送ったのは、(i) 機械規則（後続項目＝`:1176` の `use`）に従うのが本 spec の一貫した扱いであること（§22.2 の `:4976` と同型）、(ii) 直後に隣接していたバナー `:1166-1174` と分断されないこと、の 2 点による。束ねられる先が `use` 項目のため本文一致検証の対象外であり、判定には影響しない。
+
+**`///` doc コメント付きテストモジュールは 0 件**（4 ファイルとも `#[cfg(test)]` の直前は空行）。よって Implementation Notes の `///` 残置規則の発動は無い。
+
+### 26.5 共有ヘルパの可視性・`use` の調整（要件 2.4 が許容する機械的調整）
+
+- **可視性**: 共有ヘルパ **15 項目のシグネチャ行の先頭にのみ** `pub(super)` を付与した（付与のみ・本文は無変更）。内訳は
+  `placement_shared_test_support.rs` 8 件（`with_com_initialized`・`emo2_root`・`balloon_root`・`WA`・`struct TempDir`・`TempDir::new`・`TempDir::path`・`synth_declared_dpi_ghost`）／
+  `spawn_test_support.rs` 4 件（`two_scope_placements`・`titles`・`ghost_window_entities`・`fake_window_handle`）／
+  `resolver_test_support.rs` 3 件（`DPIS`・`px`・`work_area`）。
+  `TEMP_COUNTER`（`test_support` 内部からのみ参照）と `TempDir.path` フィールド（同一モジュール内の `impl` からのみ参照）は可視性を変えていない。
+  **タプル構造体のヘルパ（§22.2 の制約）は 4 ファイルとも 0 件**——`TempDir`・`ScopeState`・`FakeRegistrar` はいずれも名前付きフィールドであり、`.0` 直読みの利用側も存在しない。テーマ境界がこの制約に拘束された箇所は無い。
+  **複製は 1 件も作っていない**（`ITEM-EXTRA` 回避・Implementation Notes の集約規則どおり）。
+- **Implementation Notes の E0659 罠（タスク 3.3 §17.5）への対処**: 共有ヘルパは**明示 import** で受けた（`use super::shared_test_support::{…};` ／ `use super::test_support::{…};`・グロブは使っていない）。
+  加えて誤結合の有無を実測で確認した——移設前の本番スコープ（`mod.rs:1-563` の 27 項目／`spawn.rs:1-426` の 13 項目／`resolver.rs:1-295` の 9 項目）を全数走査した結果、**共有ヘルパ 15 識別子と本番モジュール名前空間の衝突は 0 件**である。
+  `spawn` のテーマ 4 本はそもそも `use super::*;` を使わず明示 import のみ（移設前ヘッダがそうだった）なのでグロブ供給自体が無い。同一シグネチャの黙った差し替えは起き得ない。
+- **`use` ヘッダの調整（要件 2.4 / 2.6）**: 各ファイルの先頭に移設元の `use` 群を置き、そのファイルで実際に使う項目だけへ絞った（絞る前のビルドで `unused_imports` が 11 件出て要件 2.6 に反したため、`cargo build` の診断が指す識別子だけを機械的に落とした）。
+  落としたのは `placement_prepare_tests`＝`std::path::PathBuf`／`wintf::ecs::window::monitor::Monitor`／`RectPx`、`placement_windowposition_tests`＝`std::fs`／`std::path::PathBuf`、
+  `placement_shared_test_support`＝`use super::*;`（1 行まるごと）、`spawn_assembly_tests`＝`Phase`／`ScopeWindows`／`PointPx`・`ScopePlacement`・`SizePx`、
+  `spawn_clickthrough_tests`＝`HINSTANCE`／`wintf::ecs::WindowHandle`（1 行まるごと・`fake_window_handle` が `test_support` へ出たため）である。
+  移設前ヘッダの `use` 項目は**1 つも失われていない**（各項目が必要なファイルへ 1 回以上配置されている）。
+  **可視性・`use` 以外の調整は 1 件も必要なかった**（要件 2.8 の追加調整 0 件）。
+
+### 26.6 §11.4 の盲点（複数行文字列リテラル内の行頭空白）— 担当 4 ファイルの独自走査
+
+Implementation Notes の指示に従い、本タスクの 4 ファイル（移設前）と成果物 20 ファイル（移設後の本番 4 ＋ 新規 16）を、字句状態追跡つきの独立スキャナ
+（行コメント・入れ子ブロックコメント・通常文字列・raw 文字列（`#` の数）・バイト文字列・文字リテラルとライフタイムの判別・エスケープを追跡し、「行頭時点で文字列リテラルの内部にいる行」と「直前行が `\` 継続か」を判定する）で全走査した。
+スキャナの妥当性は既知ケース `crates/wintf/src/ecs/window_proc/window_pos_tests.rs` で確認済み（実測出力: `継続行 5 件: 382,429,614,690,691 / 盲点該当 1 件: 691`）。
+
+| ファイル | 複数行文字列の継続行（移設前） | 同（移設後） | 盲点該当（`\` 継続でない行） |
+|---|---|---|---:|
+| `src/placement/mod.rs` | 1（`:259`） | 本番 1（`:259`・本番本体で不動） | **0** |
+| `src/placement/spawn.rs` | 1（`:1058`） | `spawn_assembly_tests.rs` 1（`:362`） | **0** |
+| `src/placement/persist.rs` | 0 | 0 | **0** |
+| `src/placement/resolver.rs` | 0 | 0 | **0** |
+
+継続行は移設前後とも 2 = 2 で本数一致。`mod.rs:259` は本番本体側（移設範囲外）で 1 文字も動いていない。
+`spawn.rs:1058` → `spawn_assembly_tests.rs:362` は**直前行末尾の `\` による継続**（`"scope{}: バルーン窓に外部権威宣言が無い（…・D3。\` の次行）であり、Rust は `\`＋改行の直後の行頭空白を除去するため一律 4 スペース de-indent はリテラルの値を変えない。
+**結論: 本タスクの 4 ファイルに §11.4 第 1 の盲点の該当行は 1 件も無い。** 例外処理は不要だった。
+
+### 26.7 検証（すべて実測・終了コードで判定）
+
+**(a) 本文一致検証（要件 2.4）** — `pwsh -File $V/Compare-RelocatedTests.ps1 -Commit f720244 -OriginalPath <本番> -RelocatedPath "<新テスト群>" -Detail`
+
+| 本番ファイル | 出力 | exit |
+|---|---|---:|
+| `src/placement/mod.rs` | `MATCH: test fn 28=28 / helper item 19=19 / mod block 1 / files 4` | 0 |
+| `src/placement/spawn.rs` | `MATCH: test fn 22=22 / helper item 15=15 / mod block 1 / files 5` | 0 |
+| `src/placement/persist.rs` | `MATCH: test fn 37=37 / helper item 13=13 / mod block 1 / files 3` | 0 |
+| `src/placement/resolver.rs` | `MATCH: test fn 30=30 / helper item 8=8 / mod block 1 / files 4` | 0 |
+
+テスト関数 28+22+37+30 = **117** が対応表の行数と一致する。
+
+**(a2) de-indent の全行分類（移設した全 4,511 行の内訳）** — 移設前コミット `f720244` のブロック内部から**実際に移設した行範囲**（§26.3 の各表）を取り出し、
+1 行ずつ「ちょうど −4 スペース」「バイト同一（空行）」「その他」へ分類した:
+
+| 本番ファイル | 行頭ちょうど −4 スペース | バイト同一（空行） | その他（要件 2.4 の個別調整） |
+|---|---:|---:|---:|
+| `src/placement/mod.rs` | 1,223 | 94 | **0** |
+| `src/placement/spawn.rs` | 1,009 | 123 | **0** |
+| `src/placement/persist.rs` | 981 | 82 | **0** |
+| `src/placement/resolver.rs` | 907 | 92 | **0** |
+| **合計** | **4,120** | **391** | **0** |
+
+「その他」0 件＝**移設に伴う本文の個別調整は 1 件も発生していない**。「行頭空白 4 未満かつ非空」の行も「空白のみで空でない行」も 0 件（＝一律 4 スペース de-indent が全行へ無条件に適用できる形だった）。
+
+**行単位の多重集合突合**（期待＝移設前範囲を de-indent した多重集合／実＝新テストファイル 16 本の全行の多重集合）: 差分は下記のみで、**すべて要件 2.4 が許容する調整**である。
+
+| 本番ファイル | 期待にのみ | 実にのみ | 内訳 |
+|---|---:|---:|---|
+| `mod.rs` | 8 | 46 | 期待側 8＝`pub(super)` 付与**前**のシグネチャ行／実側 46＝同 8 本の付与**後** ＋ `use` 項目（継続行・閉じ `};` 込み）22 ＋ ファイル分割で生じる区切り空行 16 |
+| `spawn.rs` | 4 | 58 | 期待側 4＝`pub(super)` 付与前／実側 58＝付与後 4 ＋ `use` 項目 38 ＋ 区切り空行 16 |
+| `persist.rs` | 0 | 9 | 実側 9＝`use super::*;` 3 ＋ 区切り空行 6（可視性付与 0 件＝共有ヘルパ無し） |
+| `resolver.rs` | 3 | 22 | 期待側 3＝`pub(super)` 付与前／実側 22＝付与後 3 ＋ `use` 項目 10 ＋ 区切り空行 9 |
+
+分類は機械的に行い、上記 3 カテゴリ（`pub(super)` 付与後／`use` 項目／空行）に**入らない差分行は 4 ファイルとも 0 件**である。
+
+**(b) 対応表と最終照合（要件 1.8 / 2.2 / 2.9・完了状態）**
+
+```
+pwsh -File $V/Test-MappingBijection.ps1 -Path $V/mapping/areka.csv
+  → PASS: 全単射 OK / 行数 117 / 相異なる old_fqn 117 / 相異なる new_fqn 117 / フラグメント 1   exit 0
+
+pwsh -File $V/Test-MappingBijection.ps1 -Path $V/mapping -Out <tmp>/combined_mapping.csv
+  → PASS: 全単射 OK / 行数 780 / 相異なる old_fqn 780 / 相異なる new_fqn 780 / フラグメント 8   exit 0
+    （areka-emo-compose 78 / areka-emo-present 84 / areka-emo-text 239 / areka-ghost 20 /
+      areka-kanade 88 / areka-sakura 75 / areka-seriko 79 / **areka 117**＝先行 663 ＋ 本タスク 117）
+
+pwsh -File $V/Compare-TestLists.ps1 -Before $V/before_default.txt -After <tmp>/after_default.txt -Mapping <tmp>/combined_mapping.csv
+  → BEFORE 4790 行 / AFTER 4790 行 / 適用 780 行 / 未使用 0 行 / LINE COUNT 一致 / RESULT: PASS   exit 0
+```
+
+**対応表への攻撃（対応表を使わない素の対称差での自己反証）**: 移設後リストと `before_default.txt` を**対応表なし**で多重集合突合すると
+
+```
+removed = 780 / added = 780            （＝結合対応表の行数と一致）
+removed のうち old_fqn でないもの = 0
+added   のうち new_fqn でないもの = 0
+old_fqn == new_fqn の行（不変名を写す無駄行） = 0
+末尾セグメント（関数識別子）が旧新で相違する行 = 0     （要件 2.9）
+本タスクの share: removed 側 117 / added 側 117        （＝`mapping/areka.csv` の行数と一致）
+```
+
+すなわち対応表は「実際に消えた名前」と「実際に生えた名前」を過不足なく 1 対 1 で結んでおり、余剰行・欠落行・自己写像は 1 件も無い。
+
+- 整列器の較正（Implementation Notes の必須手順）: **未整列の生出力**（4,790 行）を序数と `Sort-Object` の 2 通りに整列し、digest が割れることを確認した——
+  序数 `29CA8DCE…C1DF` ／ `Sort-Object` `2202ABC9…91DD`、**相違位置 1,823 / 4,790・初出 index 179**
+  （序数 `bake::tests::blit_verbatim_correctness` 対 カルチャ `bake_entry_tests::all_transparent_is_empty_entry_not_error`＝`::`(0x3A) 対 `_`(0x5F)）。
+  本節に載る値はすべて `[string[]]` 型付け済みの序数整列で採っている。移設後リスト（4,790 行・CRLF・BOM 無し）の SHA256 = `98538EE1A4049D3426B1FF3AC2420EB87AEDE56A8838D022041E43FE750962C6`。
+
+**(c) クレート緑（要件 7.2）** — `cargo test -p areka` → **exit 0**
+
+| | exit | 3 ターゲットの結果 | 合計 |
+|---|---:|---|---:|
+| 移設前（タスク 5.1 §25.5(c) の実測値） | 0 | 671 / 1 / 2 passed・0 failed | **674 passed** |
+| 移設後 | 0 | 671 / 1 / 2 passed・0 failed | **674 passed** |
+
+移設前後とも 0 failed / 0 ignored。
+
+**(d) サンプルビルドの緑（design §本体分割の制約 1・placement 木の `#[path]` include）** — `cargo build -p areka --examples` → **exit 0**・`warning` 行 0。
+`placement/` 木は `crates/areka/examples/window-placement.rs:107`・`collision-probe.rs:231` が `#[path = "../src/placement/mod.rs"]` で私有 include するため**本番コードに `crate::` パスを持てない**。
+本タスクが本番ファイルへ加えたのは接続宣言 44 行のみで、`crate::` パスの新規導入は **0 件**である。
+
+`cargo test -p areka --examples`（test モード）は移設前と同じく赤のままである。**移設前後で件数・出所とも不変**であることを実測で確認した:
+
+| | エラー | 出所 | 件数 |
+|---|---|---|---:|
+| 移設前（§25.5(d)） | `error[E0433]: cannot find `input_events` in `crate`` | `crates\areka\examples\..\src\placement\spawn.rs:879:16` | 1 箇所（example 2 本ぶん） |
+| 移設後 | 同一メッセージ | `crates\areka\examples\..\src\placement\spawn_assembly_tests.rs:183:12` | **1 箇所（example 2 本ぶん）** |
+
+移設前 `spawn.rs:877-879` と移設後 `spawn_assembly_tests.rs:181-183` は同一の 3 行（`let gw = spawn_ghost_windows(…);` ／ 先行コメント ／ `crate::input_events::attach_char_pointer_handlers(&mut world);`）であり、
+移設で**増えても減ってもいない**。**これは §7.1 に登記済みの既存状態**（本 spec は是正しない・先行裁定注記は移設前 `spawn.rs:871`＝移設後 `spawn_assembly_tests.rs:175`）。
+
+なお同じ木の中で `crates/areka/src/placement/placement_monitor_tests.rs:255` は `crate::placement::test_support::capture_logs(…)` という**絶対パス**を使うが、これは example crate 側にも `mod placement;` が在るため解決でき、E0433 にならない（移設前 `mod.rs:1516` と同一・移設で変わっていない）。
+
+**(e) 警告非増加（要件 2.6）** — `cargo build -p areka --all-targets` → exit 0。
+`areka (bin "areka")` の警告は移設前後とも **4 件**で同一（`CommandConsumer` / `LedgerError` / `ConsumerLedger` / `new`・`try_register`・`consumer_of`・`canonical` の各 never used）。
+`areka (bin "areka" test)` の警告は **0 件**（§26.5 の `use` 絞り込み後）。
+
+ワークスペース全域でも突合した——`cargo build --workspace --all-targets` → exit 0、
+`DIAG_COUNT = 16` / `SUMMARY_COUNT = 7` / `GENERATED_SUM = 22` / `DUPLICATES = 6` / `NET = 16`。
+§10.5 の移設前基準値 5 数値と**完全一致**（増加ゼロ）。集計の正規表現は `warnings?` で単複両対応（Implementation Notes）。
+
+**(f) 本番本体の無変更** — 移設前コミット `f720244` の各本番ファイルと現作業ツリーを、テストモジュール開始の直前行まで逐行突合した。**4 ファイルとも不一致 0**:
+
+| 本番ファイル | 旧 | 新 | 逐行突合した範囲 | 不一致 |
+|---|---:|---:|---|---:|
+| `src/placement/mod.rs` | 1,899 | 575 | 1-563 | 0 |
+| `src/placement/spawn.rs` | 1,582 | 441 | 1-426 | 0 |
+| `src/placement/persist.rs` | 1,535 | 474 | 1-465 | 0 |
+| `src/placement/resolver.rs` | 1,306 | 307 | 1-295 | 0 |
+
+すなわち本番本体・`mod.rs:31-36` の既存 `#[cfg(test)] pub(crate) mod test_support;`（要件 1.4 の除外・§26.2）を含め 1 文字も変わっていない。
+
+`git diff --stat -- crates/areka` = `4 files changed, 44 insertions(+), 4569 deletions(-)`
+（挿入 44 = 3 行 × 16 モジュール − 4（各ファイル先頭モジュールは既存 `#[cfg(test)]` を据え置き））。
+
+**(g) 完了状態の直接確認** — 4 本番ファイルに残る `mod` の出現はすべて**宣言のみ**であり、`mod X {` 形のブロック開き行は **0 件**（`Select-String -Pattern 'mod\s+\w+\s*\{'` が 4 ファイルとも 0 ヒット）。
+**テストモジュール本体は 1 行も残っていない。** `#[cfg(test)]` 属性行は `mod.rs` 5 本（`:35` の既存除外＋`:564,567,570,573`）／`spawn.rs` 5 本（`:427,430,433,436,439`）／`persist.rs` 3 本（`:466,469,472`）／`resolver.rs` 4 本（`:296,299,302,305`）で、すべて `mod` 宣言に付いている。
+非 `mod` `#[cfg(test)]` 項目（設計判断 #3 の残置対象）は 4 ファイルとも **0 件**（design §Supporting References が挙げる `crates/areka` の 2 件は `input_events/mod.rs:85` と `placement/source.rs:77` で本タスクの対象外）。
+
+**(h) 作業ツリーの範囲** — `git status --porcelain -uall` は本節追記前の時点で下記 21 パスのみ:
+変更 4 本（上表の本番ファイル）＋未追跡 17 本（新テストファイル 16 本＋`verification/mapping/areka.csv`）。
+`crates/**` の他ファイル・`Cargo.toml`・spec 本体ドキュメントへの差分は 0 件。
+新規テストファイルに `TODO` / `FIXME` / `TBD` は 1 件も導入していない（`placement/` 全 `*.rs` を走査・0 ヒット）。
+
+### 26.8 登記（要件 5.2）— 壊れたテスト・テスト間の状態汚染の所見
+
+**本タスクの範囲（`crates/areka` の配置系 4 ファイル・4 テストモジュール・テストコード 4,573 行・テスト 117 本）では、
+修正を要する壊れたテスト・不正なテスト・テスト間の状態汚染は 1 件も発見しなかった。所有 spec への新規送付所見は 0 件である。**
+
+`crates/areka` には `include_str!` で本番ファイル本文を読む構造テスト（§23.5 #2 / §24.5 の被覆縮小問題）は 1 件も存在しない（§25.6 で走査済み・本タスクの 4 ファイルでも 0 ヒットを再確認）。
+
+以下は「調べたが問題なし／是正しない」と確定した記録（次に触る者が同じ調査を繰り返さないための控え。送付不要）:
+
+| # | 観測 | file:line（移設後） | 判定 |
+|---|---|---|---|
+| 1 | `cargo test -p areka --examples` の既存 E0433（テストモジュール内 `crate::` 参照） | `crates/areka/src/placement/spawn_assembly_tests.rs:183`（先行裁定注記 `:175`） | **既に §7.1 へ登記済み**（`test-cage-determinism` へ所見送付）。本タスクで新規の所見ではない。**出所ファイルが `spawn.rs:879` → `spawn_assembly_tests.rs:183` へ移った**（件数・メッセージは不変）ので、§7.1 のアンカーを引く者は本節を併読すること |
+| 2 | 一時ディレクトリ名が固定文字列で、プロセス ID や連番を含まない | `crates/areka/src/placement/placement_prepare_tests.rs:172-174`（`areka_placement_prepare_missing_root/no_such_ghost`）・`placement_monitor_tests.rs:251-253`（`areka_placement_prepare_snapshot_log/no_such_ghost`）・`persist_io_wiring_tests.rs:8-12`（`areka_placement_persist_tests_{tag}`） | **テスト間汚染は無し**。前 2 者は「存在しないパス」を作るための名前で**ディレクトリを一切作らない**（`Mount` 失敗経路の入力）。`persist_io_wiring_tests` の tag は実測で 3 種すべて相異なる（`load_reads_planted`／`load_absent_file`／`load_mount_fail`）。§25.6 #1 と同型の既存構造で、移設で変わっていない。**是正しない・記録のみ** |
+| 3 | 一時ディレクトリの後始末が RAII ガードのある形と無い形に割れている | ガード有: `crates/areka/src/placement/placement_shared_test_support.rs:42-64`（`TEMP_COUNTER`＋`struct TempDir`＋`impl Drop`・`process::id()`＋`AtomicU32` 連番）／ガード無: `persist_io_wiring_tests.rs:33,78`（テスト本体冒頭の `let _ = fs::remove_dir_all(...)`） | **テスト間汚染は無し**（名前が相異なる）。§25.6 #2 と同型の既存構造。**是正しない・記録のみ** |
+| 4 | `CoInitializeEx(None, COINIT_MULTITHREADED)` / `CoUninitialize` の対 | `crates/areka/src/placement/placement_shared_test_support.rs:5-13`（`with_com_initialized` が必ず対にする・戻り値は `let _ =` で捨てる） | **問題なし**。libtest は各テストを専用スレッドで走らせる。`let _ =` は `RPC_E_CHANGED_MODE` を握り潰す既存の定石。§25.6 #3 と同一判断。**是正しない・記録のみ** |
+| 5 | 共有ログ捕捉ハーネス `placement::test_support::capture_logs` の参照経路が 2 通りに割れている | 絶対パス: `crates/areka/src/placement/placement_monitor_tests.rs:255`（`crate::placement::test_support::capture_logs`）／相対 import: `placement_windowposition_tests.rs`（`use super::test_support::{LogEvent, capture_logs};`） | **問題なし**。移設前の同一テストモジュール内で既に割れていた（移設前 `mod.rs:575` の `use` と `:1516` の絶対パス）。`capture_logs` は `tracing::subscriber::with_default` によるスレッドローカル差し替えで並行実行でも干渉しない（§14.6 #1 と同じ機構）。**移設で参照経路は 1 文字も変わっていない**（モジュール深さが不変のため両形とも有効）。ハーネス本体（`placement/test_support.rs`）は本タスクの対象外で無変更 |
+| 6 | `cargo fmt --check` が本タスクの新規ファイルで差分を出す | `crates/areka/src/placement/*_tests.rs` ほか | **是正しない**。de-indent により旧インデントで折り返されていた行が 1 行に収まるようになるためで、整形すると要件 2.4 が禁じる本文変更になる。**リポジトリは元から fmt-clean ではない**（`crates/areka/examples/*.rs`・`src/emo2_boot/adapter.rs`・`frame.rs` 等の本番ファイルおよびタスク 5.1 の `emo2_boot/assets_tests.rs` も同様に差分を出す）ため、本タスクが状態を悪化させてはいない。**記録のみ** |
+
+### 26.9 本タスクの成果物
+
+| ファイル | 内容 |
+|---|---|
+| `crates/areka/src/placement/placement_shared_test_support.rs` | 新規（141 行・`mod shared_test_support`・§26.2 の理由で名前のみ規約から逸脱） |
+| `crates/areka/src/placement/placement_prepare_tests.rs` | 新規（567 行） |
+| `crates/areka/src/placement/placement_monitor_tests.rs` | 新規（287 行） |
+| `crates/areka/src/placement/placement_windowposition_tests.rs` | 新規（356 行） |
+| `crates/areka/src/placement/spawn_test_support.rs` | 新規（57 行） |
+| `crates/areka/src/placement/spawn_assembly_tests.rs` | 新規（454 行） |
+| `crates/areka/src/placement/spawn_cleanup_tests.rs` | 新規（234 行） |
+| `crates/areka/src/placement/spawn_clickthrough_tests.rs` | 新規（134 行） |
+| `crates/areka/src/placement/spawn_follow_pipeline_tests.rs` | 新規（302 行） |
+| `crates/areka/src/placement/persist_entries_tests.rs` | 新規（153 行） |
+| `crates/areka/src/placement/persist_restore_tests.rs` | 新規（730 行） |
+| `crates/areka/src/placement/persist_io_wiring_tests.rs` | 新規（186 行） |
+| `crates/areka/src/placement/resolver_test_support.rs` | 新規（28 行） |
+| `crates/areka/src/placement/resolver_resolve_tests.rs` | 新規（865 行） |
+| `crates/areka/src/placement/resolver_union_tests.rs` | 新規（62 行） |
+| `crates/areka/src/placement/resolver_from_alignment_tests.rs` | 新規（59 行） |
+| 上記に対応する本番 4 ファイル | 末尾のテストモジュールブロックを接続宣言 16 本へ置換（本番本体は無変更） |
+| `verification/mapping/areka.csv` | **新規**（117 行・`reason=theme_split`・後続タスク 5.3〜5.6 が同一ファイルへ追記する） |
+| `verification/notes.md` | 本節（§26）を追記 |
+
+`crates/areka` の残る 3 ファイル（`placement/follow.rs`・`emo2_boot/frame.rs`・`input_events/balloon.rs`）は本タスクの対象外であり、1 文字も触っていない。
