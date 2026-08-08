@@ -5595,3 +5595,390 @@ design §本体分割の 5 相を、移設前 `frame.rs` の実測項目位置�
 | `verification/notes.md` | 本節（§29）を追記 |
 
 **`crates/areka` のテスト分離・テーマ分割は `input_events/balloon.rs` を残すのみ**となった（本タスクの対象外・1 文字も触っていない）。`frame.rs` の本番本体 1,497 行の分割は**タスク 6.2** の担当で、§29.12 の在庫表がそのままシーム表になる。
+
+## 30. 入力イベント（バルーン）テストのテーマ分割と本体クレートの着地: `areka`（タスク 5.6・要件 1.1 / 1.6 / 1.7 / 1.8 / 2.4 / 2.8 / 2.9 / 3.1〜3.3 / 7.1 / 7.2）
+
+- 実施日: 2026-08-08
+- ブランチ: `claude/areka-p0-file-slimming-64d065` / 直前コミット `7d4c40a`（タスク 5.5）。**本文一致検証の基準コミットも `7d4c40a`**（`balloon.rs` にテストモジュールが在った最後のコミット＝直前コミットで足りる）
+- 実行シェル: **PowerShell（pwsh 7）**
+- 対象は `crates/areka/src/input_events/balloon.rs` **1 本**（2,825 行・本番本体 `:1-829`・テストモジュール 1 個 `mod tests`＝`:830-2825`）。テストコード 1,996 行の内訳は外枠 3 行（`#[cfg(test)]`＋`mod tests {`＋`}`）＋本体 `:832-2824` の **1,993 行**である（Implementation Notes の「設計値と移設後行数は 3 行ずれる」に一致）
+- 触れたのは本番 1（`balloon.rs` の末尾置換のみ）＋新規テストファイル 6＋`verification/mapping/areka.csv`（追記）＋本ファイルの計 9 パス。`Cargo.toml`・他クレート・spec 本体ドキュメント・`tasks.md` は無変更。**同ディレクトリのタスク 5.1 成果（`input_events_tests.rs`）と `mod.rs`・`choice_drain.rs`・`throttle.rs` は 1 文字も触っていない**
+- 本ファイルは design §File Structure Plan の `crates/areka` 13 本の**最後の 1 本**であり、本節はタスク 5.1〜5.6 の**クレート全体の着地確認**（§30.11）も併せて記録する
+
+### 30.1 成果ファイルと行数（すべて 1,000 行以下）
+
+| ファイル（モジュール名） | 行 | テスト | ヘルパ項目 | 由来（移設前 `balloon.rs` の行範囲） |
+|---|---:|---:|---:|---|
+| `input_events/balloon_test_support.rs`（`test_support`） | 156 | 0 | 10 | 947-962, 1455-1522, 1532-1564, 2037-2044 |
+| `input_events/balloon_pure_core_tests.rs`（`pure_core_tests`） | 464 | 20 | 4 | 936-945（バナー＋`use`）, 964-1052, 1054-1077（バナー＋`use`）, 1079-1208, 1210-1292, 1294-1413 |
+| `input_events/balloon_pointer_handler_tests.rs`（`pointer_handler_tests`） | 753 | 16 | 4 | 1415-1432（バナー＋`use`）, 1524-1530, 1566-1777, 1779-1811, 1813-2020, 2568-2601, 2603-2824 |
+| `input_events/balloon_leave_tests.rs`（`leave_tests`） | 189 | 5 | 1 | 2022-2035（バナー＋`use`）, 2046-2205 |
+| `input_events/balloon_wiring_tests.rs`（`wiring_tests`） | 302 | 9 | 6 | 836-934, 2207-2229（バナー＋`use`）, 2231-2403 |
+| `input_events/balloon_pass_through_tests.rs`（`pass_through_tests`） | 166 | 2 | 2 | 2405-2566 |
+
+20＋16＋5＋9＋2 = **52**（移設前テスト本数と一致）。ヘルパ項目 10＋4＋4＋1＋6＋2 = **27**（うち `impl` ブロック 1）。最大は `balloon_pointer_handler_tests.rs` の 753 行・新ファイル合計 2,030 行。
+
+**`balloon.rs` は 2,825 → 847 行**（本番本体 `:1-829` は無変更・末尾に 6 モジュールの接続宣言 `:830-847`）。接続宣言は 6 モジュールとも同一文言（design §移設方式の裁定 案 C）。`#[cfg(test)]` 行は §13（タスク 2.1）以来の扱いと同じく**元位置（`:830`）に据え置き**、2 本目以降のモジュールぶんだけ新設した。
+
+### 30.2 テーマ本数の裁定（design 初期案の `×約 2〜3` → 5 テーマ＋共有ヘルパ 1）
+
+design §File Structure Plan は本ファイルを「`input_events/balloon_<テーマ>_tests.rs` ×約 2〜3」と見積もっているが、テーマ名・本数は §テーマ分割ポリシーが実装時裁定に委ねている。
+
+**裁定: 本番 API の責務 5 群に 1 対 1 対応する 5 テーマ＋共有ヘルパ 1 とする。** 移設前 `balloon.rs` の本番項目は次の 5 群に割れており、テストのバナー区画 11 本もこの 5 群へ畳める:
+
+1. 型と NonSend 資源: `ChoiceSelection`（`:43`）・`BalloonWiring`（`:74`）＋`impl`（`:82`）・`ChoiceSelectionInbox`（`:130`）／設置側 `attach_balloon_pointer_handlers`（`:782`）・`wire_balloon_choice`（`:806`）・`register_balloon_leave_system`（`:823`） → `wiring_tests`
+2. 純関数判定核: `hit_choice_row`（`:167`）・`HoverAction`（`:203`）＋`hover_action`（`:217`）・`click_selection`（`:259`） → `pure_core_tests`
+3. ポインタハンドラ 2 本: `on_balloon_pointer_moved`（`:318`）・`on_balloon_pointer_pressed`（`:475`） → `pointer_handler_tests`
+4. 排他システム: `clear_balloon_hover_on_leave`（`:641`） → `leave_tests`
+5. 上記を貫く注入座標列の貫通観測 → `pass_through_tests`
+
+**2 分割にしなかった理由**: 1,993 行を 2 分割すると 1 ファイルあたり約 1,000 行で目安の縁に張りつき、かつ「純関数核」と「実 World 配線層」という性質のまったく違う檻を 1 テーマ名で束ねることになる。先行タスクの §22.2（`×約 5` → `×7`）・§26.3(b)（`×約 2` → `×4`）・§28.3（`×3` → `×7`）・§29.2（5 相 → 8 テーマ）と同型の実装時裁定である。
+
+**逆に 7 分割へ割らなかった理由（本タスク固有の裁定）**: バナー区画は 11 本あり、素直に区画ごとへ割ると 7〜8 テーマになる。しかし `on_balloon_pointer_moved` 檻（区画 F）・`on_balloon_pointer_pressed` 檻（区画 G）・副作用ゼロ回帰檻（区画 K）を別テーマにすると、**区画 G のバナー（17 行・移設前 `:1779-1795`）が `test_support` へ流れる**——このバナーは本文一致検証の機械規則（`RustParse.ps1:313-331`）が `fn bubble_left_press`（`:1799`）へ束ねており、`bubble_left_press` は区画 G と区画 K の両方から参照される共有ヘルパになるためである（§29.5 の `:1958-1965` と同型）。区画 K のバナー自身が「**両ハンドラ**×{Tunnel, Emo2Wiring 不在, BalloonWiring 不在}へ first-class に追試する」と述べており、F・G・K は本番 API 上も 1 つの束（ポインタハンドラ 2 本の契約）である。3 区画を 1 テーマへ束ねると `bubble_move`・`bubble_left_press` の 2 ヘルパがテーマ内に留まり、**バナーは 1 本も `test_support` へ流れない**（実測: 11 本すべてがテーマファイルに在る）。合算 753 行は目安の内側。**読みやすさ（バナーが説明する檻と同じファイルに在ること）を、テーマ数の細かさより優先した。**
+
+### 30.3 テーマ境界の裁定（design §テーマ分割ポリシー・手順①）
+
+移設前テストモジュール本体 `:832-2824`（1,993 行）は、モジュール直下のバナーコメントで **11 区画**に割れている（先頭の区画 A のみバナー無し＝モジュールヘッダ区画）。区画は割らずに 5 テーマへ束ねた:
+
+| 区画 | 移設前行 | 行数 | テスト | 主題 | 行先テーマ |
+|---|---|---:|---:|---|---|
+| A | 832-935 | 104 | 5 | `ChoiceSelection` の値意味論（Eq/Clone/Debug）・`BalloonWiring` の NonSend 挿入と `ChoiceSelectionInbox` 観測・`set_hover`/`hover` の scope 別追跡 | `wiring_tests` |
+| B | 936-1053 | 118 | 6 | `hit_choice_row` 純関数（包含／半開境界／行外／空／複数行／病的重なり） | `pure_core_tests` |
+| C | 1054-1209 | 156 | 3 | バルーン逆向き整合の不変条件（DD-11・`to_window_physical` に k=2.0 を実供給・無変換照合／二重縮約の退行検出） | `pure_core_tests` |
+| D | 1210-1293 | 84 | 5 | `hover_action` 純関数の全分岐 | `pure_core_tests` |
+| E | 1294-1414 | 121 | 6 | `click_selection` 純関数（構成／非構成／stale／転写忠実性） | `pure_core_tests` |
+| F | 1415-1778 | 364 | 7 | `on_balloon_pointer_moved` 配線層（Tunnel 素通し・資源不在の縮退ログレベル・適用アーム） | `pointer_handler_tests` |
+| G | 1779-2021 | 243 | 7 | `on_balloon_pointer_pressed` 配線層（Tunnel／非左押下／縮退／棄却 reason 弁別・零 send） | `pointer_handler_tests` |
+| H | 2022-2206 | 185 | 5 | `clear_balloon_hover_on_leave` 排他システム（バルーン所有 leave のみ解除・非バルーン無視・マーカー不在 no-op・Emo2 不在 DEBUG 縮退） | `leave_tests` |
+| I | 2207-2404 | 198 | 4 | post-spawn 装着・NonSend 結線・`Input` スケジュール登録（`attach_balloon_pointer_handlers`／`wire_balloon_choice`） | `wiring_tests` |
+| J | 2405-2567 | 163 | 2 | 貫通ポインタ列の決定論（注入座標列 → hover 追従 → 一度きり発行／非発行を実 mpsc seam で観測） | `pass_through_tests` |
+| K | 2568-2824 | 257 | 2 | 資源縮退・Tunnel 素通しの副作用ゼロ回帰（**両ハンドラ**×3 シナリオ） | `pointer_handler_tests` |
+
+検算: 104+118+156+84+121+364+243+185+198+163+257 = **1,993**（移設前本体行数と一致）。
+
+**区画 A と I を 1 ファイル（`wiring_tests`）にした理由**: 両者は同じ主題の表裏である——A は資源側（`BalloonWiring` を World へ NonSend 挿入し `ChoiceSelectionInbox` 経由で `ChoiceSelection` を観測する `wiring_inserts_non_send_and_selection_observed_via_inbox`）、I は設置側（`wire_balloon_choice` が両 NonSend 資源を入れる `wire_inserts_both_non_send_resources`）で、**ほぼ同一の契約を 2 方向から固定している**。別ファイルにするとこの対が割れる。加えて区画 A を単独テーマにすると 104 行になり、テーマ名（`selection_tests`）が説明する内容が 3 本の値意味論檻だけに痩せる。
+**区画 B〜E を 1 ファイル（`pure_core_tests`）にした理由**: 4 区画とも「GPU・実窓・World 不要の純関数檻」であり、design が `純関数判定核` と呼ぶ 1 つの層に対応する。とくに区画 B のバナー自身が「座標を無変換で照合する不変条件……は**直後の DD-11 檻**（R3.7）が k=2.0 で固定する」と区画 C を名指しで参照しており、B と C は分けられない。合算 456 行（移設分・`row` を除く）で目安の内側。
+
+### 30.4 ヘルパ参照関係による裏取りと共有ヘルパの集約（要件 2.4 / 2.8）
+
+移設前の非テスト項目 **27 件**（名前つき 26＋`impl` ブロック 1）の参照行を、字句解析つきの独立スキャナ（行コメント・入れ子ブロックコメント・通常／raw／バイト文字列・文字リテラルとライフタイムの判別・エスケープを追跡）で全数走査し、`use` 項目の行を除外したうえで **5 テーマのどれから参照されるか**を数えた。定義行は参照に数えない。
+
+**2 テーマ以上から参照される 5 件＋その参照閉包 5 件＝計 9 名前（`impl` ブロック 1 を同伴して 10 項目）を `balloon_test_support.rs` へ集約した**（Implementation Notes の「共有ヘルパは 1 件でも集約」・複製すると `ITEM-EXTRA` になる）。参照数は「テーマ:件数」:
+
+- 直接の共有 5 件:
+  `row`（定義 移設前 `:949`／pure_core 11・pass_through 3）・
+  `headless_emo2_wiring`（`:1496`／pointer_handler 10・leave 4・wiring 1）・
+  `runtime_with_active_choice`（`:1509`／pointer_handler 5・leave 3・wiring 1）・
+  `capture_logs`（`:1557`／pointer_handler 14・leave 4）・
+  `spawn_balloon_leave_child`（`:2039`／leave 3・wiring 1）。
+- 参照閉包で引き込まれた 4 名前＋`impl` 1（テーマからは直接参照されないが、上の 5 件が呼ぶ）:
+  `synth_boot_assets`（`:1466`・`headless_emo2_wiring` 専用）・`empty_world`（`:1456`）・`empty_atlas`（`:1461`）（いずれも `synth_boot_assets` 専用）・
+  `Capture`（`:1534`）＋`impl Layer for Capture`（`:1536`）（`capture_logs` 専用）。
+
+**単一テーマ専用として当該テーマファイルに残置した 17 名前**: `CAGE_K`・`cage_region`・`rows_lifted_by_real_k`・`row_with_refs`（pure_core）／`bubble_move`・`bubble_left_press`・`wiring_with_inbox`・`Degrade`（pointer_handler）／`insert_wiring_with_hover`（leave）／`sample`・`two_scopes`・`ghost_titles`・`balloon_window_entities`・`char_window_entities`・`has_pointer_handlers`（wiring）／`two_choice_rows`・`apply_last`（pass_through）。参照行はいずれも自テーマの範囲にしか現れない。
+
+**`bubble_move`（F 6・K 1）と `bubble_left_press`（G 5・K 1）が共有ヘルパにならないのは §30.2 のテーマ束ねの直接の帰結**である（F・G・K が 1 テーマ）。7 分割案ならこの 2 件が `test_support` 行きとなり、`bubble_left_press` に束ねられた区画 G のバナーも同伴していた。
+
+**閉包の確認**: 集約した 9 名前のうち、残置側のヘルパを参照するものは **0 件**（機械走査）。逆向き（残置側 → 集約ヘルパ）は生じるので、当該ファイルで `use super::test_support::{ … }` を**明示 import** している。集約判定はコンパイラの `unused_imports` 診断でも二重に裏取りしており、過剰集約は 0 件（最終ビルドの `areka (bin "areka" test)` 警告は 0 件）。
+
+**§22.2 のタプル構造体制約は本タスクで発動しなかった**: 移設前の項目にタプル構造体は 1 件——`balloon.rs:1534` の `struct Capture(Arc<Mutex<Vec<String>>>);` があり、`.0` を読む利用側は `impl Layer for Capture` の `self.0`（`:1553`）と `capture_logs` の `cap.0`（`:1558`）の 2 箇所。**両方が `Capture` と同じ `test_support` へ移る**ため行内 `pub(super)` は不要で制約に触れない（§29.4 と同型）。
+
+**E0659（グロブ供給による曖昧化）は構造的に成立しない**: 共有ヘルパ 9 名前と、`use super::*;` が供給する `balloon` の項目名（`ChoiceSelection`・`BalloonWiring`・`ChoiceSelectionInbox`・`hit_choice_row`・`HoverAction`・`hover_action`・`click_selection`・`on_balloon_pointer_moved`・`on_balloon_pointer_pressed`・`clear_balloon_hover_on_leave`・`attach_balloon_pointer_handlers`・`wire_balloon_choice`・`register_balloon_leave_system` および親の `use` 束縛 `HashMap`・`Rc`・`Receiver`・`Sender`・`channel`・`ChoiceHitRow`・`ActorKey`・`Entity`・`With`・`IntoScheduleConfigs`・`Schedules`・`World`・`Input`・`find_owner_window`・`Emo2Wiring`・`BalloonWindowMarker` ほか）は**全数不一致**（機械突合）。共有ヘルパはすべて明示 import で受けており、グロブと競合しない。
+
+**§26.2 の標準名衝突は起きない**: 新設する `test_support` は `input_events::balloon` の子であり、`crates/areka/src/placement/mod.rs:35-36` の既存 `test_support` とは親モジュールが異なる。`input_events/mod.rs` にも `test_support` は無い（走査で 0 ヒット）。よって design の標準名 `test_support` をそのまま使える（`shared_test_support` への読み替えは不要）。
+
+### 30.5 バナーの帰属（§20.2 / §22.2 / §26.4 / §28.5 / §29.5 で確定した扱いの適用）
+
+本文一致検証（`RustParse.ps1:313-331`）は、直前の空行を読み飛ばしたうえで**先行コメント塊を後続項目の本文の一部**として扱い、`use` 項目と `mod` 宣言はダイジェストから落とす（`:536`）。モジュール直下バナー **10 本**＋区画内小見出し **1 本**を、この機械規則が束ねる先の項目とともに移した。**文言は 1 文字も変えていない・バナーだけを別ファイルへ残した箇所は 0 件**である。行番号は移設前 `balloon.rs`:
+
+| バナー | 機械規則が束ねる項目 | ダイジェスト可視性 | 行先 |
+|---|---|---|---|
+| `:936-943`（task 3.1 hit_choice_row 純関数檻） | `use areka_emo_text::actor::HitRectPx;`（`:945`） | **不可視（`use`）** | `pure_core_tests` |
+| `:1054-1069`（DD-11 バルーン逆向き整合の不変条件檻） | `use areka_emo_text::choice::{CanvasHitRow, to_window_physical};`（`:1071`） | **不可視（`use`）** | `pure_core_tests` |
+| `:1210-1216`（task 3.2 hover_action 純関数檻） | 直後のテスト関数 `hover_inactive_no_prior_injection_is_noop`（`:1221`） | 可視 | `pure_core_tests` |
+| `:1294-1301`（task 3.3 click_selection 純関数檻） | `fn row_with_refs`（`:1304`） | 可視 | `pure_core_tests` |
+| `:1415-1430`（task 4.1 on_balloon_pointer_moved 配線層檻） | `use std::cell::RefCell;`（`:1432`） | **不可視（`use`）** | `pointer_handler_tests` |
+| `:1532`（スレッドローカル tracing capture 小見出し） | `struct Capture`（`:1534`・`#[derive]` 経由） | 可視 | **`test_support`** |
+| `:1779-1795`（task 4.2 on_balloon_pointer_pressed 配線層檻） | `fn bubble_left_press`（`:1799`） | 可視 | `pointer_handler_tests` |
+| `:2022-2031`（task 5 clear_balloon_hover_on_leave 排他システム檻） | `use bevy_ecs::hierarchy::ChildOf;`（`:2033`） | **不可視（`use`）** | `leave_tests` |
+| `:2207-2220`（task 6.1 post-spawn 装着・NonSend 結線・スケジュール登録檻） | `use bevy_ecs::schedule::Schedules;`（`:2222`） | **不可視（`use`）** | `wiring_tests` |
+| `:2405-2427`（task 7.1 貫通ポインタ列の決定論檻） | `fn two_choice_rows`（`:2430`） | 可視 | `pass_through_tests` |
+| `:2568-2590`（task 7.2 資源縮退・Tunnel 素通し 副作用ゼロ回帰檻） | `enum Degrade`（`:2594`・`#[derive]` 経由） | 可視 | `pointer_handler_tests` |
+
+**§28.5 の規則を守った（今回は踏まずに済んだ）**: `use` に束ねられたバナー 5 本（`:936` / `:1054` / `:1415` / `:2022` / `:2207`）は、**バナー＋空行＋`use` の並びを含む行範囲ごと逐語で移した**（`936-945`・`1054-1077`・`1415-1432`・`2022-2035`・`2207-2229`）ため、行先でも直後が `use` 項目であることが構成上保証される。`use` の再配置は 1 件も要らなかった。テーマファイルの生成 `use` ヘッダは、この 5 チャンクの**前**（`pointer_handler_tests`／`leave_tests` はバナーチャンクの直後）に置いてある——バナーと束ね先 `use` の隣接を割らない位置である。
+
+**区画のバナーが `test_support` へ流れた箇所は 0 件**（§29.5 の `:1958-1965` と違い、本タスクは §30.2 のテーマ束ねでこれを回避した）。`test_support` へ移ったのは区画内小見出し `:1532` の 1 本のみで、これは `struct Capture` そのものの説明である。
+
+**`///` doc コメント付きテストモジュールは 0 件**（`mod tests` に doc コメントは無い）。Implementation Notes の `///` 残置規則の発動は無い。
+
+### 30.6 非 `mod` `#[cfg(test)]` 項目（設計判断 #3）
+
+`balloon.rs` には **非 `mod` の `#[cfg(test)]` 項目は 1 件も無い**（本番本体 `:1-829` を字句走査して 0 ヒット・design §Supporting References の `crates/areka` 一覧にも本ファイルは載っていない）。移設後 `balloon.rs` に残る `#[cfg(test)]` 属性行は **6 本**で、すべて接続宣言（`mod` 宣言）に付いている。
+
+design §Supporting References が `crates/areka` について挙げる `input_events/mod.rs:85`（`impl MouseWiring` 内の `with_clock`）は**タスク 5.1 の担当ファイル**であり、本タスクでは 1 文字も触っていない（§25.2 のとおり残置済み）。
+
+### 30.7 可視性・`use` の調整（要件 2.4 が許容する機械的調整・要件 2.8 の追加調整）
+
+- **可視性**: `balloon_test_support.rs` の **5 行のシグネチャ行の先頭にのみ** `pub(super)` を付与した（付与のみ・本文は無変更）——`row`（`:31`）・`headless_emo2_wiring`（`:87`）・`runtime_with_active_choice`（`:100`）・`capture_logs`（`:140`）・`spawn_balloon_leave_child`（`:151`）。`empty_world`／`empty_atlas`／`synth_boot_assets`／`Capture`＋`impl` は `test_support` の内側からしか使われないので付与していない。**複製は 1 件も作っていない。**
+- **`use` ヘッダ**: 各テーマファイルの先頭に、そのファイルが実際に使う項目だけを列挙した `use` 群を置いた。生成は識別子の機械走査で行い、`cargo build -p areka --all-targets` の `unused_imports` 診断が指した 6 件だけを追加で落とした——`pure_core_tests`／`pass_through_tests` の `use bevy_ecs::world::World;`（両ファイルとも `World` を使わない純関数テストのみ）、`pointer_handler_tests` の `use std::collections::BTreeMap;` と `use std::sync::{Arc, Mutex};`（`synth_boot_assets`／`Capture` が `test_support` へ移ったため未使用に）、`pointer_handler_tests`／`leave_tests` の `use crate::emo2_boot::frame::Emo2Wiring;`（`use super::*;` が同一項目を供給するので冗長）。**落ちた識別子はすべて `test_support` 側で受け直しており、移設前ヘッダの `use` で失われたものは 1 つも無い。**
+- 移設前のモジュールヘッダ `use`（`:832-834`）と区画 F の残り `use`（`:1433-1435, 1437-1447, 1449-1453`）は、生成ヘッダへ再構成した。移動範囲に入らなかった非空行は**この `use` 項目 22 行のみ**であり、他はすべて区画境界の空行である（§30.9 の検算）。
+- **可視性・`use` 以外の調整は 1 件も必要なかった**（要件 2.8 の追加調整 0 件）。
+- **元の行間の保存**: 区画の連結部には空行をちょうど 1 行だけ置いた（移設前も区画境界は空行 1 行）。区画内部の行間は 1 行も変えていない。
+
+### 30.8 §11.4 の盲点（複数行文字列リテラル内の行頭空白）— 担当ファイルの独自走査
+
+Implementation Notes の指示に従い、字句状態追跡つきの独立スキャナ（行コメント・入れ子ブロックコメント・通常文字列・raw 文字列（`#` の数）・バイト文字列・文字リテラルとライフタイムの判別・エスケープを追跡し、「行頭時点で文字列リテラルの内部にいる行」と「直前行が `\` 継続か」を判定する）で、移設前 `balloon.rs` と成果物 7 ファイルを全走査した。スキャナの妥当性は既知ケース `crates/wintf/src/ecs/window_proc/window_pos_tests.rs` で確認済み（実測出力: `継続行 5 件: 382,429,614,690,691 / 盲点該当 1 件: 691`）。
+
+| ファイル | 複数行文字列の継続行 | 盲点該当（`\` 継続でない行） |
+|---|---:|---:|
+| 移設前 `balloon.rs`（2,825 行・全域） | **0** | **0** |
+| 移設後 `balloon.rs`（本番 847 行） | 0 | **0** |
+| `balloon_test_support.rs` | 0 | **0** |
+| `balloon_pure_core_tests.rs` | 0 | **0** |
+| `balloon_pointer_handler_tests.rs` | 0 | **0** |
+| `balloon_leave_tests.rs` | 0 | **0** |
+| `balloon_wiring_tests.rs` | 0 | **0** |
+| `balloon_pass_through_tests.rs` | 0 | **0** |
+
+移設前 0 本＝移設後 0 本。**本タスクの担当ファイルには複数行文字列リテラルが 1 つも無く、§11.4 第 1 の盲点の該当行は 0 件である。例外処理は不要だった。**
+
+### 30.9 de-indent の分類（要件 2.4）
+
+移設前ブロック本体 `:832-2824` の **1,993 行**を分類した: **行頭が 4 スペース以上で一律 −4 の行 1,794 行**／**空行（バイト同一）199 行**／**それ以外 0 行**。すなわち移動した全行が「厳密に −4 スペース」か「バイト同一」のいずれかである。
+
+そのうえで、移設元の全行（de-indent 後・移動範囲 1,946 行）と成果物 6 ファイルの全行（2,030 行）を多重集合で突合した:
+
+| 側 | 行数 | 内訳 |
+|---|---:|---|
+| 期待にのみ | 5 | `pub(super)` 付与**前**のシグネチャ行 5 |
+| 実にのみ | 89 | `pub(super)` 付与**後**のシグネチャ行 5 ＋ `use` 項目（生成ヘッダ・複数行の継続行・閉じ `};` 込み）57 ＋ ファイル分割で生じる区切り空行・ヘッダ直後の空行 27 |
+
+分類は機械的に行い、上記 3 カテゴリ（`pub(super)` 付与後／`use` 項目／空行）に**入らない差分行は 0 件**である。すなわち**移設に伴う本文の個別調整は 1 件も発生していない**。
+
+移動範囲の検算: 1,993（ブロック本体）− 1,946（移動範囲）= **47** = 区画境界などの空行 25 ＋ 移設前ヘッダ／区画 F 残余の `use` 項目 22。非空の未移動行は `use` 項目のみである。
+
+### 30.10 検証（すべて実測・終了コードで判定）
+
+**(a) 本文一致検証（要件 2.4）** — 基準は直前コミット `7d4c40a`:
+
+    pwsh -File $V/Compare-RelocatedTests.ps1 -Commit 7d4c40a `
+        -OriginalPath crates/areka/src/input_events/balloon.rs `
+        -RelocatedPath "<balloon_test_support, balloon_pure_core_tests, balloon_pointer_handler_tests,
+                         balloon_leave_tests, balloon_wiring_tests, balloon_pass_through_tests の 6 本を
+                         カンマ区切り 1 引数>" -Detail
+
+    MATCH: test fn 52=52 / helper item 27=27 / mod block 1 / files 6     exit 0
+
+**否定対照（検証器が落ちることの確認）**: 上記から `balloon_leave_tests.rs` の 1 本だけを外して同じ検証を回すと
+`[TEST-MISSING] × 5`（`leave_balloon_owned_clears_hover_via_inject_none`・`leave_balloon_owned_inactive_resets_own_state_without_inject`・`leave_emo2_absent_degrades_with_debug_and_leaves_hover`・`leave_no_marker_is_full_noop`・`leave_non_balloon_window_is_ignored`）＋
+`[ITEM-MISSING] × 1`（`insert_wiring_with_hover` `2046-2054`）＝ `MISMATCH: 6 件の差分`・**exit 1**。
+存在しないパスを渡すと `Write-Error: 移設後ファイルが見つかりません`・**exit 2**（引数不正）で、1 と 2 が区別できることも併せて確認した。
+
+**(b) 対応表と最終照合（要件 1.8 / 2.2 / 2.9・完了状態）**
+
+    pwsh -File $V/Test-MappingBijection.ps1 -Path $V/mapping/areka.csv
+      → PASS: 全単射 OK / 行数 358 / 相異なる old_fqn 358 / 相異なる new_fqn 358 / フラグメント 1   exit 0
+        （先行 306 行は byte 不変＝`git diff --numstat` が `52  0`＝挿入のみ・削除 0）
+
+    pwsh -File $V/Test-MappingBijection.ps1 -Path $V/mapping -Out <tmp>/combined_mapping.csv
+      → PASS: 全単射 OK / 行数 1021 / 相異なる old_fqn 1021 / 相異なる new_fqn 1021 / フラグメント 8   exit 0
+        （areka-emo-compose 78 / areka-emo-present 84 / areka-emo-text 239 / areka-ghost 20 /
+          areka-kanade 88 / areka-sakura 75 / areka-seriko 79 / **areka 358**＝969 ＋ 本タスク 52）
+
+    pwsh -File $V/Compare-TestLists.ps1 -Before $V/before_default.txt -After <tmp>/after_default.txt `
+        -Mapping <tmp>/combined_mapping.csv
+      → BEFORE 4790 行 / AFTER 4790 行 / 適用 1021 行 / 未使用 0 行 / LINE COUNT 一致 / RESULT: PASS   exit 0
+
+本タスクの 52 行の内訳: `pure_core_tests` 20 ／ `pointer_handler_tests` 16 ／ `leave_tests` 5 ／ `wiring_tests` 9 ／ `pass_through_tests` 2（`test_support` は 0）。`old_fqn` はすべて `input_events::balloon::tests::*`、`new_fqn` は `input_events::balloon::<テーマ>::*` で末尾セグメント（関数識別子）は不変。
+
+**対応表への攻撃（対応表を使わない素の対称差での自己反証）**:
+
+    removed = 1021 / added = 1021          （＝結合対応表の行数と一致）
+    removed のうち old_fqn でないもの = 0
+    added   のうち new_fqn でないもの = 0
+    old_fqn == new_fqn の行（不変名を写す無駄行） = 0
+    末尾セグメント（関数識別子）が旧新で相違する行 = 0     （要件 2.9）
+    reason 列の値 = theme_split のみ（1021 件）
+    本タスクの share: 対応表 52 行 ／ added 側 52 ／ removed 側 52
+    移設後リストに残る input_events::balloon::tests:: の FQN = 0
+    移設後リストのテーマ別 FQN: pure_core_tests 20 / pointer_handler_tests 16 /
+                                 leave_tests 5 / wiring_tests 9 / pass_through_tests 2 / test_support 0
+
+- 整列器の較正（Implementation Notes の必須手順）: **未整列の生出力**（4,790 行）を `[string[]]` 型付けの序数比較器と `Sort-Object` の 2 通りに整列し、digest が割れることを確認した——序数 `AC0E29A7…193EB26A` ／ `Sort-Object` `C9C52C3A…DA055DA1`、**相違位置 1,823 / 4,790・初出 index 179**（序数 `bake::tests::blit_verbatim_correctness` 対 カルチャ `bake_entry_tests::all_transparent_is_empty_entry_not_error`＝`::`(0x3A) 対 `_`(0x5F)）。§26.7(b)／§27.8(b)／§28.9(b)／§29.10(b) の較正値と完全一致する。
+  本節に載る値はすべて `[string[]]` 型付け済みの序数整列で採っている。移設後リスト（4,790 行・CRLF・BOM 無し）の SHA256 = `593395EBD71A6C25BA4D52294DAD0D89DB5507AE09F9CCB29C14CB49C000F30D`。
+- `--all-targets` 側リスト（`before_alltargets.txt`）は `--exclude areka` で採るため本タスクの変更が入らない（`crates/areka` 以外を 1 文字も触っていない）。
+
+**(c) クレート緑（要件 7.2）** — `cargo test -p areka` → **exit 0**
+
+| | exit | 3 ターゲットの結果 | 合計 |
+|---|---:|---|---:|
+| 移設前（§29.10(c) の実測値・HEAD `7d4c40a`） | 0 | 671 / 1 / 2 passed・0 failed | **674 passed** |
+| 移設後 | 0 | 671 / 1 / 2 passed・0 failed | **674 passed** |
+
+移設前後とも 0 failed / 0 ignored。
+
+**(d) サンプルビルドの緑** — `cargo build -p areka --examples` → **exit 0**・`warning` 行 0。
+`input_events/` は placement 木の外なので design §本体分割の制約 1（`crate::` パス不使用）の対象外であり、`balloon.rs` および新テストファイルの `crate::…` 参照（`test_support` 5・`wiring_tests` 4・`pointer_handler_tests` 1・`leave_tests` 1）は逐語のまま移した。
+
+`cargo test -p areka --examples`（test モード）の既存 E0433 は**移設の前後で件数・出所とも不変**である:
+
+| | `error[E0433]` の件数 | 出所 |
+|---|---:|---|
+| 移設前（§29.10(d) の実測） | 1 | `crates\areka\examples\..\src\placement\spawn_assembly_tests.rs:183:12` |
+| 移設後 | **1** | **同一** |
+
+**これは §7.1 / §26.8 #1 / §27.10 #5 / §28.10 #4 / §29.11 #5 に登記済みの既存状態**（本 spec は是正しない）。`balloon.rs` 由来の新しい E0433 site は **0 件**である。
+
+**(e) 警告非増加（要件 2.6）** — `cargo build -p areka --all-targets` → exit 0。
+`areka (bin "areka")` の警告は移設前後とも **4 件**で同一（`CommandConsumer` / `LedgerError` / `ConsumerLedger` / `new`・`try_register`・`consumer_of`・`canonical` の各 never used）。`areka (bin "areka" test)` の警告は **0 件**（サマリ行そのものが出ない）。
+
+ワークスペース全域でも突合した——`cargo build --workspace --all-targets` → exit 0、
+`DIAG_COUNT = 16` / `SUMMARY_COUNT = 7` / `GENERATED_SUM = 22` / `DUPLICATES = 6` / `NET = 16`。
+§10.5 の移設前基準値 5 数値と**完全一致**（増加ゼロ）。集計の正規表現は `warnings?` で単複両対応（Implementation Notes）。
+
+**(f) 本番本体の無変更** — `git show 7d4c40a:crates/areka/src/input_events/balloon.rs` と現作業ツリーを `:1-829` で逐行突合した。**不一致 0**:
+
+| 本番ファイル | 旧 | 新 | 逐行突合した範囲 | 不一致 |
+|---|---:|---:|---|---:|
+| `src/input_events/balloon.rs` | 2,825 | 847 | 1-829 | 0 |
+
+**(g) 完了状態の直接確認** — `balloon.rs` に `mod X {` 形のブロック開き行は **0 件**（`mod\s+\w+\s*\{` が 0 ヒット）。`mod tests` 宣言も **0 件**。`#[cfg(test)]` 属性行 6 本はすべて接続宣言に付いている。新テストファイル 6 本はすべて 1,000 行以下（最大 753）。
+
+**(h) 作業ツリーの範囲** — `git status --porcelain -uall` は本節追記前の時点で下記 8 パスのみ:
+変更 2 本（`crates/areka/src/input_events/balloon.rs`・`verification/mapping/areka.csv`）＋未追跡 6 本（新テストファイル）。
+`crates/**` の他ファイル（同ディレクトリのタスク 5.1 成果 `input_events_tests.rs`、および `mod.rs`・`choice_drain.rs`・`throttle.rs` を含む）・`Cargo.toml`・spec 本体ドキュメント・`tasks.md` への差分は 0 件。
+新規テストファイルに `TODO` / `FIXME` / `TBD` は 1 件も導入していない（`input_events/balloon*.rs` を走査・0 ヒット）。改行は **CRLF**（既存兄弟ファイルに合わせた）。
+
+### 30.11 `crates/areka` の着地確認（タスク 5.1〜5.6 のまとめ・タスク 5.6 第 2 の完了条件）
+
+**(1) 必須対象 13 本の消化** — `verification/target_inventory.csv` の `areka` 行はちょうど 13 本で、全数が着地済みである:
+
+| 本番ファイル | 移設前 総行／テスト行 | 担当タスク | 移設後 総行 |
+|---|---|---|---:|
+| `src/placement/follow.rs` | 8,472 / 6,476 | 5.3・5.4 | 2,032 |
+| `src/emo2_boot/frame.rs` | 4,660 / 3,163 | 5.5 | 1,532 |
+| `src/input_events/balloon.rs` | 2,825 / 1,996 | **5.6** | 847 |
+| `src/placement/mod.rs` | 1,899 / 1,336 | 5.2 | 575 |
+| `src/placement/spawn.rs` | 1,582 / 1,156 | 5.2 | 441 |
+| `src/placement/persist.rs` | 1,535 / 1,070 | 5.2 | 474 |
+| `src/placement/resolver.rs` | 1,306 / 1,011 | 5.2 | 307 |
+| `src/emo2_boot/move_cue.rs` | 1,634 / 934 | 5.1 | 655 |
+| `src/placement/measure.rs` | 1,387 / 922 | 5.1 | 468 |
+| `src/main.rs` | 1,842 / 901 | 5.1 | 962 |
+| `src/emo2_boot/assets.rs` | 1,225 / 820 | 5.1 | 408 |
+| `src/input_events/mod.rs` | 1,164 / 731 | 5.1 | 436 |
+| `src/placement/source.rs` | 819 / 540 | 5.1 | 282 |
+
+13 本のいずれにも `#[cfg(test)] mod X { … }` のブロック本体は残っていない（機械走査で 0 ヒット）。
+
+**(2) テストファイルの行数（65 本の全数列挙）** — 「`crates/areka` 内で `#[cfg(test)] mod` 宣言の実体になっているファイル、または `crates/areka/tests/` 配下のファイル」を全数列挙した。**64 本が 1,000 行以下**、1 本のみ超過（下記 (3)）:
+
+```
+   817  src/emo2_boot/assets_tests.rs                  397  src/emo2_boot/frame_attach_tests.rs
+   362  src/emo2_boot/frame_diag_route_tests.rs        303  src/emo2_boot/frame_dpi_reproject_none_tests.rs
+   608  src/emo2_boot/frame_dpi_reproject_tests.rs     361  src/emo2_boot/frame_dpi_tests.rs
+   294  src/emo2_boot/frame_drain_text_tests.rs        274  src/emo2_boot/frame_resnap_tests.rs
+   457  src/emo2_boot/frame_test_support.rs            228  src/emo2_boot/frame_text_scale_tests.rs
+   356  src/emo2_boot/move_cue_apply_move_tests.rs     201  src/emo2_boot/move_cue_move_severity_log_tests.rs
+   117  src/emo2_boot/move_cue_move_sink_tests.rs      305  src/emo2_boot/move_cue_tests.rs
+  2503  src/emo2_boot/spine.rs  <<< 超過（要件 1.4 除外・下記 (3)）
+   189  src/input_events/balloon_leave_tests.rs        166  src/input_events/balloon_pass_through_tests.rs
+   753  src/input_events/balloon_pointer_handler_tests.rs
+   464  src/input_events/balloon_pure_core_tests.rs    156  src/input_events/balloon_test_support.rs
+   302  src/input_events/balloon_wiring_tests.rs       728  src/input_events/input_events_tests.rs
+    64  src/main_config_input_tests.rs                  73  src/main_ghost_wiring_tests.rs
+   154  src/main_monitor_snapshot_seam_tests.rs         86  src/main_persist_wiring_seam_tests.rs
+   123  src/main_restore_seam_tests.rs                 213  src/main_seam_tests.rs
+   167  src/main_startup_window_tests.rs               323  src/placement/follow_anchor_tests.rs
+   287  src/placement/follow_balloon_drag_tests.rs     733  src/placement/follow_drag_end_persist_tests.rs
+   911  src/placement/follow_drag_tests.rs             937  src/placement/follow_resize_tests.rs
+   303  src/placement/follow_test_support.rs           950  src/placement/follow_visibility_balloon_wiring_tests.rs
+   698  src/placement/follow_visibility_char_wiring_tests.rs
+   343  src/placement/follow_visibility_guard_tests.rs 557  src/placement/follow_window_move_diag_tests.rs
+   325  src/placement/follow_window_move_tests.rs      227  src/placement/follow_work_area_tests.rs
+   919  src/placement/measure_tests.rs                 153  src/placement/persist_entries_tests.rs
+   186  src/placement/persist_io_wiring_tests.rs       730  src/placement/persist_restore_tests.rs
+   287  src/placement/placement_monitor_tests.rs       567  src/placement/placement_prepare_tests.rs
+   141  src/placement/placement_shared_test_support.rs 356  src/placement/placement_windowposition_tests.rs
+    59  src/placement/resolver_from_alignment_tests.rs 865  src/placement/resolver_resolve_tests.rs
+    28  src/placement/resolver_test_support.rs          62  src/placement/resolver_union_tests.rs
+   537  src/placement/source_tests.rs                  454  src/placement/spawn_assembly_tests.rs
+   234  src/placement/spawn_cleanup_tests.rs           134  src/placement/spawn_clickthrough_tests.rs
+   302  src/placement/spawn_follow_pipeline_tests.rs    57  src/placement/spawn_test_support.rs
+   195  src/placement/test_support.rs                  186  src/shiori_e2e_tests.rs
+   199  src/shiori_lifecycle_e2e_tests.rs              329  src/shiori_reference_e2e_tests.rs
+   243  tests/emo2_real_run.rs                         208  tests/smoke_boot_loop_exit.rs
+```
+
+内訳: **本 spec が新設した 58 本**（5.1 が 15・5.2 が 16・5.3＋5.4 が 12・5.5 が 9・**5.6 が 6**）＋**着手前から本番ファイルの外に在った 7 本**（`spine.rs` 2,503・`shiori_e2e_tests.rs` 186・`shiori_lifecycle_e2e_tests.rs` 199・`shiori_reference_e2e_tests.rs` 329・`placement/test_support.rs` 195・`tests/emo2_real_run.rs` 243・`tests/smoke_boot_loop_exit.rs` 208）。新設 58 本の最大は `assets_tests.rs` の 817 行で、**すべて 1,000 行以下**。
+
+**(3) 1,000 行を超える 1 本の扱い** — `src/emo2_boot/spine.rs`（2,503 行）は `crates/areka/src/emo2_boot/mod.rs:30` の素の `#[cfg(test)] mod spine;` で外部から gate される**要件 1.4 の除外ファイル**であり、`verification/excluded_inventory.csv` に登載済みである。Implementation Notes の確定裁定（「要件 1.4 の除外ファイルは 1,000 行超でも分割しない」）どおり本 spec の対象外——`#[cfg(test)] mod` ブロックを持たないので要件 1.1 の対象でなく、要件 1.7 が縛るのは**移設先**のみである。**クレート完了状態の「テストファイルがすべて 1,000 行以下」はこの除外を前提に読む**（タスク 3.1 で確定した読み方と同一）。
+
+**(4) 本番ファイルに残る `#[cfg(test)] mod X { … }` ブロック本体 — 17 件・全数が対象外** — 機械走査で下記 17 件が残る。**全数がテストコード 500 行以下**であり、要件 1.5 と設計判断 #10（「任意移設は行わない（0 件）」）により本 spec の移設対象ではない。移設前後で 1 文字も触れていない（テストコード行は `verification/scan_raw.csv` の実測値）:
+
+| 本番ファイル | 開き行 | テストコード行 |
+|---|---:|---:|
+| `examples/mock-shell.rs` | 464 | 446 |
+| `src/placement/diag.rs` | 339 | 400 |
+| `src/placement/config.rs` | 265 | 382 |
+| `src/input_events/choice_drain.rs` | 135 | 244 |
+| `src/shiori_session.rs` | 302 | 320 |
+| `src/emo2_boot/hover_inject.rs` | 198 | 167 |
+| `src/shiori_host.rs` | 329 | 287 |
+| `src/emo2_boot/adapter.rs` | 139 | 353 |
+| `src/placement/windowposition.rs` | 123 | 210 |
+| `src/emo2_boot/talk_clock.rs` | 112 | 205 |
+| `src/reference_brain.rs` | 290 | 202 |
+| `src/input_events/throttle.rs` | 112 | 173 |
+| `src/emo2_boot/mod.rs`（`wire_tests`） | 471 | 90 |
+| `src/shiori_demo.rs` | 220 | 92 |
+| `src/emo2_boot/consumer_ledger.rs` | 108 | 85 |
+| `src/emo2_boot/target_map.rs` | 41 | 73 |
+| `src/emo2_boot/hit_region.rs` | 130 | 49 |
+
+**(5) 非 `mod` `#[cfg(test)]` 項目 — 9 件が残置** — 走査結果は design §Supporting References の `crates/areka` 分と**完全一致**する: `emo2_boot/frame.rs:300,315,327,336,345`（inherent メソッド 5・`#[cfg(test)]` 属性行）・`input_events/mod.rs:84`（`with_clock`）・`placement/source.rs:76`（`impl GhostTitles`）・`shiori_host.rs:291,308`（`TestSylphyaSink`・`spawn_test_sylphya_sink`）。設計判断 #3 のとおり全数残置。
+
+**(6) 1,000 行を超える本番ファイル（4 本）** — 本節時点で `crates/areka` に残る 1,000 行超の本番ファイルは次の 4 本である:
+
+| ファイル | 行 | 扱い |
+|---|---:|---|
+| `src/placement/follow.rs` | 2,032 | **タスク 6.1**（本番本体のファサード分割）が所有。要件 4.1 |
+| `src/emo2_boot/frame.rs` | 1,532 | **タスク 6.2** が所有。要件 4.1・在庫表は §29.12 |
+| `examples/emo-present.rs` | 1,168 | **範囲外**。要件 4.5 は本体分割を `follow.rs`・`frame.rs` の 2 本に限定しており、design §Non-Goals も「2 本以外の本番本体は分割しない」と明記する。テストモジュールも持たない（要件 1.1 の対象外） |
+| `examples/collision-probe.rs` | 1,063 | 同上 |
+
+すなわち **「1,000 行超の本番ファイルはタスク 6.1／6.2 が所有する 2 本と、要件 4.5 が明示的に範囲外とする examples 2 本のみ」**であり、本タスク（テスト分離・テーマ分割）の未達は 0 件である。
+
+**(7) クレートの緑と名前の同一性** — `cargo test -p areka` = exit 0・**674 passed / 0 failed / 0 ignored**（タスク 5.1 の移設前実測値と完全一致）。ワークスペース水準は §30.10(b) のとおり 4,790 = 4,790・対応表適用 1,021 行・未使用 0 行で `RESULT: PASS`。
+
+### 30.12 登記（要件 5.2）— 壊れたテスト・テスト間の状態汚染の所見
+
+**本タスクの範囲（`crates/areka/src/input_events/balloon.rs` のテストコード 1,993 行・テスト 52 本・ヘルパ 27 件）では、
+修正を要する壊れたテスト・不正なテスト・テスト間の状態汚染は 1 件も発見しなかった。所有 spec への新規送付所見は 0 件である。**
+
+機械走査の結果、本ファイルのテスト群には `CoInitializeEx`／一時ディレクトリ／`static mut`／`thread_local!`／`OnceLock`／`AtomicU*`／`set_global_default`／`std::env::set_var`／`unsafe`／`sleep` が **1 件も無い**（プロセス全体・ファイルシステム・グローバル状態に触れる経路がゼロ）。`crates/areka` に `include_str!` で本番ファイル本文を読む構造テスト（§23.5 #2）も 1 件も存在しない（§25.6・§27.10・§29.11 で走査済み・本タスクの対象ファイルでも 0 ヒットを再確認）。
+
+以下は「調べたが問題なし／是正しない」と確定した記録（次に触る者が同じ調査を繰り返さないための控え。送付不要）:
+
+| # | 観測 | file:line（移設後） | 判定 |
+|---|---|---|---|
+| 1 | ログ観測ハーネス `Capture`／`capture_logs` が `frame.rs` 檻の自前複製である（移設前 `balloon.rs:1532` のバナーが逐語で「frame.rs 檻の最小複製」と明記） | `crates/areka/src/input_events/balloon_test_support.rs:115-148`（バナー `:115`・`struct Capture` `:117`・`impl Layer` `:119`・`capture_logs` `:140`） | **問題なし**。`tracing::subscriber::with_default` のスレッドスコープ購読で、テスト終了時に必ず外れる（グローバル `set_global_default` は使っていない）。移設前も同一実装で二重登録は起こらない。ハーネス一本化は要件 5.1 が明示的に範囲外とする `test-cage-determinism` の領分。**記録のみ**（§29.11 #1 と同型） |
+| 2 | 共有ヘルパの doc に `[`hover_action`]` 等の intra-doc リンクがあり、参照先が別モジュール（`test_support`）へ移った | `balloon_test_support.rs` の集約 10 項目の doc | **是正しない**。リンク解決は rustdoc の関心事で `cargo build` / `cargo test` は診断を出さない（実測: 警告 0）。doc コメントの書き換えは要件 2.4 が禁じる「コメントの変更」に当たる。§28.10 #2 / §29.11 #3 と同型。**記録のみ** |
+| 3 | `cargo fmt --check` が本タスクの新規ファイルで差分を出す | `crates/areka/src/input_events/balloon_*.rs` | **是正しない**。生成した `use` ヘッダの折返し位置が rustfmt の版と一致しないためで、整形すると本文へも及びうる。**リポジトリは元から fmt-clean ではない**（§26.8 #6 / §27.10 #4 / §28.10 #3 / §29.11 #4 と同一判断）。**記録のみ** |
+| 4 | `cargo test -p areka --examples` の既存 E0433 | `crates/areka/src/placement/spawn_assembly_tests.rs:183` | **既に §7.1 / §26.8 #1 / §27.10 #5 / §28.10 #4 / §29.11 #5 へ登記済み**。移設の前後で件数・出所とも不変（§30.10(d)）。`balloon.rs` 由来の新規 site は 0 件 |
+
+### 30.13 本タスクの成果物
+
+| ファイル | 内容 |
+|---|---|
+| `crates/areka/src/input_events/balloon_test_support.rs` | 新規（156 行・共有ヘルパ 10 項目・テスト 0） |
+| `crates/areka/src/input_events/balloon_pure_core_tests.rs` | 新規（464 行・テスト 20） |
+| `crates/areka/src/input_events/balloon_pointer_handler_tests.rs` | 新規（753 行・テスト 16） |
+| `crates/areka/src/input_events/balloon_leave_tests.rs` | 新規（189 行・テスト 5） |
+| `crates/areka/src/input_events/balloon_wiring_tests.rs` | 新規（302 行・テスト 9） |
+| `crates/areka/src/input_events/balloon_pass_through_tests.rs` | 新規（166 行・テスト 2） |
+| `crates/areka/src/input_events/balloon.rs` | 2,825 → 847 行。末尾 `:830-847` を 6 モジュールの接続宣言へ。本番本体 `:1-829` は無変更 |
+| `verification/mapping/areka.csv` | **追記**（306 → 358 行・本タスクぶん 52 行・`reason=theme_split`） |
+| `verification/notes.md` | 本節（§30）を追記 |
+
+**`crates/areka` のテスト分離・テーマ分割は本タスクで完了した**（design §File Structure Plan の 13 本すべて着地）。残るのは本番本体のファサード分割 2 本——`placement/follow.rs`（**タスク 6.1**・在庫表は §27.9／§28 の各節）と `emo2_boot/frame.rs`（**タスク 6.2**・在庫表は §29.12）——のみである。
