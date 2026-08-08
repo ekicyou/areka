@@ -1349,3 +1349,259 @@ exit 0。**適用 78 行・未使用 0 行**——対応表の全行が移設前
 | `verification/notes.md` | 本節（§15）を追記 |
 
 コミットは要件 7.1 に従い**クレート単位の 1 コミット**（`areka-emo-compose`）とする。
+
+## 16. クレート単位のテスト分離とテーマ分割: `areka-seriko`（タスク 3.2・要件 1.1 / 1.6 / 1.7 / 1.8 / 2.4 / 2.8 / 2.9 / 3.1〜3.3 / 7.1 / 7.2）
+
+- 実施日: 2026-08-08
+- ブランチ: `claude/areka-p0-file-slimming-64d065` / 移設前コミット `1021ccf`（タスク 3.1 のコミット時点）
+- 実行シェル: **PowerShell（pwsh 7）**
+- 下表の本番 3 ファイル＋新規テストファイル 7 本＋`verification/mapping/areka-seriko.csv`＋本ファイル以外には一切触れていない（`Cargo.toml`・他クレート・spec 本体ドキュメントは無変更）
+
+### 16.1 移設した 3 ファイル（design §File Structure Plan の `crates/areka-seriko` と完全一致）
+
+| 本番ファイル | 移設前 総行 | テストモジュール（移設前の行範囲） | 扱い | 新テストファイル | 新ファイル行 | 本番 残行 |
+|---|---:|---|---|---|---:|---:|
+| `src/actor.rs` | 2,331 | `tests`（485-2331・テストコード 1,847） | **テーマ分割 ×2 ＋共有ヘルパ** | `actor_test_support.rs` ／ `actor_dispatch_tests.rs` ／ `actor_bind_loop_tests.rs` | 84 / 840 / 928 | 493 |
+| `src/state.rs` | 1,576 | `tests`（519-1576・テストコード 1,058） | **テーマ分割 ×2 ＋共有ヘルパ** | `state_test_support.rs` ／ `state_surface_tests.rs` ／ `state_bind_pattern_tests.rs` | 10 / 483 / 566 | 527 |
+| `src/looper.rs` | 939 | `tests`（376-939・テストコード 564） | 単純移設（FQN 不変） | `looper_tests.rs` | 561 | 378 |
+
+- 3 ファイルとも**テストモジュールは 1 個・ファイル末尾に連続配置**（`scan_raw.csv:175,178,181` の実測どおり・ズレ 0）。モジュール名はいずれも `tests`。
+- **新テストファイル 7 本はすべて 1,000 行以下**（最大 `actor_bind_loop_tests.rs` の 928 行）。僅少超過で単一維持したファイルは **0 件**（§7.4 への追記は不要）。
+- 3 ファイルとも非 `mod` `#[cfg(test)]` 項目（設計判断 #3 の残置対象 40 件）は 1 件も存在しない（`scan_raw.csv` の該当 3 行が示すとおり `#[cfg(test)]` の出現はテストモジュール 1 箇所のみ）。
+- `#[cfg(test)]` 行は §13〜§15 と同じく**元位置に据え置き**、テーマ分割で増えるモジュールぶんの宣言だけを新設した（`git diff --numstat` の挿入は actor 8・state 8・looper 2 の計 18 行）。
+- 同クレートの残る 5 本（`bind.rs` 485／`table.rs` 323／`timeline.rs` 313／`resolve.rs` 186／`output.rs` 159）はテストコード 500 行以下ゆえ要件 1.5 で非必須・設計判断 #10 により任意移設は行わない（無変更）。
+
+接続宣言（7 モジュールとも同一文言・design §移設方式の裁定 案 C）:
+
+```rust
+#[cfg(test)]
+#[path = "<stem>_<モジュール名>.rs"]
+mod <モジュール名>;
+```
+
+### 16.2 テーマ境界の裁定（design §テーマ分割ポリシー・手順①）
+
+design は本 2 ファイルを「テーマ分割 ×約 2」と見積もっている。実装時に各モジュールの内部構造
+（コメントバナー・対象関数のまとまり・ヘルパの参照関係）を確認した結果、**両ファイルとも見積りどおり
+ちょうど 2 テーマ＋共有ヘルパへ割れる**ことを確認した。関数の中は 1 箇所も割っておらず、識別子の改名も 0 件である（要件 2.9）。
+
+**`actor.rs`** — テストモジュール内部には長いバナーが 5 本ある（635／919／1205／1359／1984）。いずれも
+`// Task 4.1: 停止経路・異常系…` のように**作業単位（時系列）の見出しに主題の説明が併記された混成形**である。
+`scale.rs`（§15.3）のように主題の材料がまったく無いわけではないので、バナー区画は 1 本も跨がずに束ね、
+**束ね方は本番 API の継ぎ目で決めた**。`handle_message` の分岐は「面 id を切り替える経路」と
+「面 id を変えずに現在面を `emit_display` から再発行する経路」に割れ、後者が bind 適用（BindSet の変化）と
+Tick（アニメコマの進行）の 2 本である。
+
+| 新モジュール（ファイル） | 移設前の行範囲 | 束ねたバナー区画 | 対象の本番項目 | テスト数 |
+|---|---|---|---|---:|
+| `test_support`（`actor_test_support.rs`） | 492-500 ／ 653-670 ／ 1933-1982 | —（両テーマから参照される 6 ヘルパ） | — | 0 |
+| `dispatch_tests`（`actor_dispatch_tests.rs`） | 502-633 ／ 635-651 ／ 672-1357 | 冒頭群・Task 4.1・Task 4.4・Task 6.2 | `SerikoSink`（結線契約）・`spawn_seriko`（Close／disconnect／停止後 emit）・`handle_message` の面切替分岐（シェル面／バルーン面）と担当外 cue の honor | 19 |
+| `bind_loop_tests`（`actor_bind_loop_tests.rs`） | 1359-1931 ／ 1984-2330 | Task 6.1/6.3（bind）・Task 6.1（Tick） | `handle_message` の bind キャリア分岐と Tick 腕。いずれも**表示中の面 id を変えずに現在面を再発行する**経路 | 15（うち入れ子 `tick_loop_tests` 4） |
+
+**ヘルパ参照関係による裏取り**（全 16 ヘルパの呼び出し行を全数走査）: 両テーマから参照されるのは
+`emote_cue`・`tiny_resolver`・`fresh_states`・`inert_runtime`・`capture_logs_flow`・`capture_logs` の **6 本のみ**で、
+`assert_cue_sink_contract`・`entityref_cue`・`balloon_cue`・`text_cue`・`wait_cue` の 5 本は `dispatch_tests` 専用、
+`bind_carrier_cue`・`named_carrier_cue`・`noncanonical_custom_cue`・`arm_bind_resolver`・`eye_mustselect_resolver` の
+5 本は `bind_loop_tests` 専用である（5 対 5 の対称・境界を跨ぐ専用ヘルパ 0 本）。この分布が上記の境界を裏づける。
+
+入れ子モジュール `tick_loop_tests`（移設前 2001-2330・テスト 4 本）は**項目としてまるごと**
+`bind_loop_tests` へ移した（入れ子を解体していない）。完全修飾名は
+`actor::tests::tick_loop_tests::*` → `actor::bind_loop_tests::tick_loop_tests::*` へ変わり、対応表に 4 行を持つ。
+
+**`state.rs`** — バナーは 4 本（787／1013／1208／1331）あり、いずれも
+`// ---- apply_balloon（バルーン面・別 map 同居…） ----` のように**本番 API 名そのもの**を主題にした真正のテーマ見出しである。
+`ScopeStates` の可変 API は「面 id を切り替える 2 本（`apply` / `apply_balloon`）」と
+「面 id を変えずに再発行の要否を判定する 3 本（`apply_bind` / `apply_bind_exclusive` / `commit_pattern`）」へ割れ、
+バナー区画の並びがそのままこの 2 群に対応する。
+
+| 新モジュール（ファイル） | 移設前の行範囲 | 束ねたバナー区画 | 対象の本番項目 | テスト数 |
+|---|---|---|---|---:|
+| `test_support`（`state_test_support.rs`） | 523-530 | —（両テーマから参照される 2 ヘルパ） | — | 0 |
+| `surface_tests`（`state_surface_tests.rs`） | 532-1011 | 冒頭群（`apply`）・`apply_balloon` | `ScopeStates::apply` / `apply_balloon`（面の状態機械・相互独立） | 22 |
+| `bind_pattern_tests`（`state_bind_pattern_tests.rs`） | 1013-1575 | `apply_bind`・`apply_bind_exclusive`・`commit_pattern`/`current_pattern` | `apply_bind` / `apply_bind_exclusive` / `commit_pattern` / `current_pattern` / `shown_slots` | 23 |
+
+- `shown_slots_enumerates_only_shown_shell_and_balloon`（移設前 1550-1575）は `commit_pattern` バナー区画の末尾に置かれているため、
+  バナーを跨がずそのまま `bind_pattern_tests` へ入れた（`shown_slots` は Tick 経路の入口として pattern 群と同居しているのが元の構造）。
+- 同様に `apply_surface_switch_clears_stored_pattern` / `apply_balloon_surface_switch_clears_stored_pattern` は名前こそ `apply` 系だが
+  「面切替で格納 pattern がクリアされる」ことの檻であり、元から `commit_pattern` 区画に在る。区画どおり `bind_pattern_tests` へ入れた。
+- ヘルパ参照関係の裏取り: `binds_1100_1207`（546,560,627,651,676 と 1407,1491）・`empty_states`（両テーマの全域）が両テーマ参照ゆえ `test_support` へ。
+  `pat`（1366-1533 でのみ参照）は `bind_pattern_tests` 専用ゆえ同ファイルに残した。
+
+**共有ヘルパの可視性（要件 2.4 が許容する機械的調整）**: `actor_test_support.rs` の 6 関数と
+`state_test_support.rs` の 2 関数へ `pub(super)` を付与した（付与のみ・本文は無変更）。テーマモジュールからは
+`use super::test_support::*;` で参照する。設計判断の申し送り（Implementation Notes「共有ヘルパは項目が 1 件でも集約する」）に従い、
+複製は 1 件も作っていない（複製すると本文一致検証が `ITEM-EXTRA` を出す）。
+
+**バナーの帰属**: 本文一致検証は項目の直前コメントを当該項目の本文の一部として比較する。したがってバナーは
+**元と同じ種類の項目へ付属したまま**移した。actor の Task 4.1 バナー（635-646）は移設前も
+`use crate::resolve::SurfaceResolver;` に付属する `use` 項目の一部（＝比較対象外）だったため、移設後も
+`use areka_emo_compose::{BindSet, PatternState};` の直前へ置いて帰属を変えていない。他の 4 本
+（Task 4.4／Task 6.2／Task 6.1・6.3／Task 6.1 Tick）と state の 3 本（787／1013／1208）は直後のテスト関数・
+ヘルパ・入れ子 `mod` に付属したまま移動しており、文言は 1 文字も変えていない。
+
+**`use` ヘッダの調整（要件 2.4 / 2.6）**: 各テーマファイルの先頭に移設元の `use` 群を置き、そのファイルで実際に使う項目だけへ絞った。
+絞る前のビルドでは `actor_dispatch_tests.rs` に `unused_imports` が 3 件出て要件 2.6（警告非増加）に反したため、
+`use crate::resolve::SurfaceResolver;`・`use crate::state::ScopeStates;`・`use std::collections::{BTreeMap, BTreeSet};` の 3 行を落とした
+（いずれも `use super::*;` で同名が入るか、当該ファイルでは未使用）。`use` 項目は §11.4 のとおり本文一致検証の対象外である。
+入れ子 `tick_loop_tests` の `use super::*;` は親（`bind_loop_tests`）のグロブ取り込みを素通しで解決でき、追加調整は不要だった。
+**可視性・`use` 以外の調整は 1 件も必要なかった**（要件 2.8 の発動なし）。
+
+### 16.3 §11.4 の盲点（複数行文字列リテラル内の行頭空白）— 担当 3 ファイルの独自走査
+
+Implementation Notes の指示に従い、担当ファイルを字句状態追跡つきの独立スキャナ
+（行コメント・ブロックコメント（入れ子）・通常文字列・raw 文字列・バイト文字列・文字リテラルとライフタイムの判別・
+エスケープを追跡し、「行頭時点で文字列リテラルの内部にいる行」と「直前行が `\` 継続か」を判定する）で全走査した。
+スキャナの妥当性は、既知の唯一の該当箇所 `crates/wintf/src/ecs/window_proc/window_pos_tests.rs:691`（§13.2）を
+**盲点 1 件**として検出し、同ファイルの `:382`・`:429`・`:614`・`:690` を **`\` 継続 4 件**として正しく切り分けることで確認した
+（実測出力: `継続行 5 件: 382,429,614,690,691 / 盲点該当 1 件: 691`）。
+
+| ファイル | 複数行にまたがる文字列リテラルの継続行 | 盲点該当（`\` 継続でない行） |
+|---|---:|---:|
+| `crates/areka-seriko/src/actor.rs`（移設前） | 0 | **0** |
+| `crates/areka-seriko/src/state.rs`（移設前） | 0 | **0** |
+| `crates/areka-seriko/src/looper.rs`（移設前） | 0 | **0** |
+| 新テストファイル 7 本（移設後） | 0 | **0** |
+
+**結論: 担当 3 ファイルには複数行文字列リテラルが 1 件も無く、§11.4 第 1 の盲点の該当行は 0 件。**
+よって全行へ一律 4 スペース de-indent を適用してよく、例外処理は不要だった。
+
+### 16.4 検証（すべて実測・終了コードで判定）
+
+**(a) 本文一致検証（要件 2.4）** — `pwsh -File $V/Compare-RelocatedTests.ps1 -Commit 1021ccf -OriginalPath <本番> -RelocatedPath "<新テスト群>" -Detail`
+
+| 対象 | 出力 | exit |
+|---|---|---:|
+| `actor.rs` → 3 ファイル | `MATCH: test fn 34=34 / helper item 24=24 / mod block 1 / files 3` | 0 |
+| `state.rs` → 3 ファイル | `MATCH: test fn 45=45 / helper item 3=3 / mod block 1 / files 3` | 0 |
+| `looper.rs` → 1 ファイル | `MATCH: test fn 18=18 / helper item 12=12 / mod block 1 / files 1` | 0 |
+
+`actor.rs` のヘルパ 24 件は、テストモジュール直下の 16 件と入れ子 `tick_loop_tests` の 8 件の合計である
+（`ParseItems` は入れ子 `mod` を平坦化して比較するため両者が 1 つの多重集合に入る）。
+
+**(a2) 行単位の多重集合突合（スクリプトより強い独自検証）** — 本文一致検証は項目単位・行頭空白非依存であるため、
+それとは独立に「移設前ブロック本体を一律 4 スペース de-indent した行の多重集合」と「新テストファイル群の行の多重集合」を
+（空行を除いて）突合した。差分は下表のとおり**すべて要件 2.4 が許容する調整（可視性付与・`use`）だけ**であり、
+テスト本文の行は 1 行も増減・改変していない。
+
+| 対象 | 元 | 新 | 消えた行 | 増えた行 | 内訳 |
+|---|---:|---:|---:|---:|---|
+| `actor.rs` | 1,700 | 1,708 | 8 | 16 | 消 = `pub(super)` を付ける前の `fn` 行 6 本＋落とした `use` 2 本 ／ 増 = `pub(super) fn` 6 本＋新設 `use` 10 本 |
+| `state.rs` | 931 | 935 | 2 | 6 | 消 = `pub(super)` 前の `fn` 行 2 本 ／ 増 = `pub(super) fn` 2 本＋新設 `use` 4 本 |
+| `looper.rs` | 499 | 499 | **0** | **0** | 完全一致（単純移設ゆえ調整ゼロ） |
+
+de-indent の分類（移設した全行）: **(a) ちょうど −4 スペース**または**(b) バイト同値（空行）**のいずれか。
+これ以外に分類される行は **0 件**（アセンブラが検出したら停止する設計で、全 7 ファイルとも検出 0）。
+内訳は `looper_tests` 499/62・`actor_test_support` 65/3（＋`pub(super)` 6）・`actor_dispatch_tests` 767/43・
+`actor_bind_loop_tests` 855/50・`state_test_support` 5/0（＋`pub(super)` 2）・`state_surface_tests` 420/39・
+`state_bind_pattern_tests` 503/36（形式: −4 スペース行 / 空行）。
+
+**(b) 対応表フラグメントの全単射検証（要件 2.9）** — `pwsh -File $V/Test-MappingBijection.ps1 -Path $V/mapping/areka-seriko.csv`
+
+```
+PASS: 全単射 OK / 行数 79 / 相異なる old_fqn 79 / 相異なる new_fqn 79 / フラグメント 1
+  - areka-seriko.csv: 79 行
+```
+
+exit 0。79 行の内訳は `actor::tests::*` → `actor::dispatch_tests::*` 19 行／`actor::tests::*` → `actor::bind_loop_tests::*` 11 行／
+`actor::tests::tick_loop_tests::*` → `actor::bind_loop_tests::tick_loop_tests::*` 4 行／
+`state::tests::*` → `state::surface_tests::*` 22 行／`state::tests::*` → `state::bind_pattern_tests::*` 23 行。
+`reason` は全行 `theme_split`、末尾セグメント（関数識別子）は旧新で同一である。`looper.rs` の 18 件は FQN 不変ゆえ行を持たない。
+既存フラグメントとの結合検証（`-Path $V/mapping`）も `PASS: 全単射 OK / 行数 157 / … / フラグメント 2` で exit 0（キー衝突なし）。
+
+**(c) 対応表適用後のテスト名リスト一致（要件 1.8 / 2.2）— ワークスペース水準**
+
+移設後に §10.2 の手順（`cargo test --workspace --no-fail-fast -- --list` → `: test$` 抽出 →
+`[Array]::Sort($arr, [System.StringComparer]::Ordinal)` → UTF-8 BOM 無し・重複行を残す）でリストを採取し、
+コミット済み `before_default.txt` と**タスク 3.1・3.2 両方のフラグメント**を渡して突合した:
+
+```
+BEFORE      : before_default.txt  (4790 行 / 相異なる 4787)
+AFTER       : after_default_task32.txt  (4790 行 / 相異なる 4787)
+MAPPING     : 157 行 (2 ファイル) / 適用 157 行 / 未使用 0 行
+LINE COUNT  : before 4790 / after 4790 -> 一致 (Requirement 2.2)
+RESULT: PASS
+```
+
+exit 0。**適用 157 行・未使用 0 行**。移設後リストの SHA256 は `99EF337A4322D91E2EFFE1DD1BF1799C7CB86E0F3111F228153704E456775B1E`。
+整列は `Sort-Object` を使わず `[System.StringComparer]::Ordinal` で行った（§11.8）。
+
+**(c2) 対応表そのものへの反証（自分の表を疑う検証）** — 対応表が「実際に起きた変化」と過不足なく一致することを、
+対応表を**使わない**多重集合の対称差で確かめた。手順は (i) `before_default.txt` へタスク 3.1 のフラグメントだけを適用して
+本タスク着手直前のリストを復元し、(ii) それと移設後リストの対称差を取る:
+
+| 検査 | 結果 |
+|---|---|
+| 消えた行数 / 現れた行数 / 本タスクの対応表行数 | **79 / 79 / 79**（三者一致） |
+| 消えた行がすべて `old_fqn` に在るか | **True** |
+| 現れた行がすべて `new_fqn` に在るか | **True** |
+| `old_fqn` なのに実際には消えていない行 | **0** |
+| `new_fqn` なのに実際には現れない行 | **0** |
+
+すなわち対応表は「実際に変わった名前だけ」を「実際に変わったとおりに」記載しており、水増しも取りこぼしも無い。
+
+移設後リストのモジュール別内訳（`cargo test -p areka-seriko -- --list`・本クレート該当分 97）:
+`actor::dispatch_tests` 19 ／ `actor::bind_loop_tests` 11 ／ `actor::bind_loop_tests::tick_loop_tests` 4 ／
+`state::surface_tests` 22 ／ `state::bind_pattern_tests` 23 ／ `looper::tests` 18。
+移設前の `actor::tests` 30・`actor::tests::tick_loop_tests` 4・`state::tests` 45・`looper::tests` 18 と本数が一致する。
+
+**(d) クレート緑（要件 7.2）** — `cargo test -p areka-seriko --no-fail-fast` → **exit 0**。
+**203 passed / 0 failed / 0 ignored**（lib 177 ＋ 統合 5+8+1+9+3 ＋ doctest 0）。
+移設前の独立導出値と一致する: 移設前 `cargo test -p areka-seriko -- --list` の `: test$` 行は **203 行**、
+うち統合テストバイナリ 26 本を差し引いた lib ぶんが 177 本で、移設後の内訳と完全一致する。
+
+**(e) 警告非増加（要件 2.6）** — `cargo build -p areka-seriko --all-targets` → exit 0・
+`warning: areka-seriko (lib test) generated 4 warnings`。`before_build_warnings.txt` の
+`[PER-UNIT TALLY]` が本クレートに割り当てる基準値 **4 件**と同数で、増加ゼロ。
+ワークスペース全域でも §10.5 の手順で再集計した——`cargo build --workspace --all-targets` → exit 0、
+`DIAG_COUNT = 16` / `SUMMARY_COUNT = 7` / `GENERATED_SUM = 22` / `DUPLICATES = 6` / `NET = 16` で、
+§10.5 の移設前基準値 5 数値と**完全一致**。
+
+**(f) 本番本体の無変更** — 移設前コミット `1021ccf` の各本番ファイルの先頭〜旧 `#[cfg(test)]` 行の直前までを
+現作業ツリーと逐行突合し、**3 ファイルとも不一致 0**（actor 1-484 ／ state 1-518 ／ looper 1-375）。
+
+| ファイル | `git diff --numstat` |
+|---|---|
+| `actor.rs` | 挿入 8 ／ 削除 1,846 |
+| `state.rs` | 挿入 8 ／ 削除 1,057 |
+| `looper.rs` | 挿入 2 ／ 削除 563 |
+
+3 ファイル合計 `3 files changed, 18 insertions(+), 3466 deletions(-)`。挿入 18 = 新設した接続宣言のうち
+元位置に据え置いた `#[cfg(test)]` 行 3 本を除いた行数である。
+
+**(g) 完了状態の直接確認** — 3 本番ファイルに残る `cfg(test)` / `#[path]` / `mod …;` の出現はすべて接続宣言のみ:
+`actor.rs:485-493` ／ `state.rs:519-527` ／ `looper.rs:376-378`。テストモジュール本体は 1 行も残っていない。
+
+**(h) 作業ツリーの範囲** — `git status --porcelain -uall` は本節追記前の時点で下記 11 パスのみ:
+変更 3 本（本番ファイル）＋未追跡 8 本（新テストファイル 7 本＋`verification/mapping/areka-seriko.csv`）。
+`crates/**` の他ファイル・`Cargo.toml` への差分は 0 件。
+
+### 16.5 登記（要件 5.2）— 壊れたテスト・状態汚染の所見
+
+**本タスクの範囲（`areka-seriko` の 3 ファイル・97 テスト・テストコード 3,469 行）では、修正を要する
+壊れたテスト・不正なテスト・テスト間の状態汚染は 1 件も発見しなかった。所有 spec への送付所見は 0 件である。**
+
+以下は「調べたが問題なし／既存のまま据え置き」と確定した記録（次に触る者が同じ調査を繰り返さないための控え。是正は行わない）:
+
+| # | 観測 | file:line（移設後） | 判定 |
+|---|---|---|---|
+| 1 | `tracing` ログ捕捉ハーネスの呼び出し 18 箇所（`dispatch_tests` 8・`bind_loop_tests` 10） | `crates/areka-seriko/src/actor_dispatch_tests.rs:75,261,330,387,488,546,713,767`・`actor_bind_loop_tests.rs:94,283,324,361,402,437,472,520,552,811`（実体は `crates/areka-seriko/src/actor_test_support.rs:38-49`（`capture_logs_flow`）と `:51-84`（`capture_logs`）） | **問題なし**。`capture_logs` は `tracing::subscriber::with_default` でスレッドローカルに subscriber を差し込み、`set_global_default` を使わないため並行実行でも他テストと混ざらない。ハーネスが見られないのは**別スレッドで発火するログ**だけだが、18 箇所の内訳を全数確認したところ、包んでいるのは同期 `handle_message`（15）・`CueSink::emit`（2＝`actor_dispatch_tests.rs:75,387`・いずれもテストスレッド上の同期呼び出し）・`sink.send_tick`（1）で、**`spawn_seriko` を包んでいる呼び出しは 0 件**。したがって「ログが出ないこと」を主張する assert（`matches("level=WARN").count() == 0` 等）が捕捉漏れで空虚に真になる経路は存在しない。この制約は元のテストモジュール自身がバナーで明記しており、移設後は `actor_dispatch_tests.rs:140-151` に同文で残っている |
+| 2 | `handle_message` の戻り値 `ControlFlow` を受け取らない呼び出し 4 件＝`unused_must_use` 警告 4 件 | `crates/areka-seriko/src/actor_bind_loop_tests.rs:147,156,211,219`（移設前は `actor.rs:1498,1507,1562,1570`） | **既存・記録のみ（是正しない）**。移設前から同一の 4 件で、`before_build_warnings.txt` が `areka-seriko (lib test) generated 4 warnings` として基準値に織り込んでいるものと同一である。本 spec が縛るのは件数の非増加（要件 2.6）だけであり、`let _ =` の付与はテスト本文の変更＝要件 2.4 違反になるため行わない |
+| 3 | `static` / `thread_local!` / `std::env::set_var` / `unsafe` / `sleep` / `#[ignore]` / `#[should_panic]` / `OnceLock` の使用 | 担当 7 テストファイル全域 | **0 件**（全走査で確認。`static` の 7 件の文字列一致はすべて `'static` 境界かコメント内の「static = {1100, 1207}」表記、`sleep` の 6 件はすべて「sleep 不使用」と書いたコメント）。プロセスグローバルな状態に触れるテストは 1 件も無い |
+| 4 | 移設で可視性・`use`・モジュール接続の追加調整が要るケース（要件 2.8） | — | **発生せず**。必要だったのは共有ヘルパへの `pub(super)` 付与（8 項目）と各テーマファイルの `use` ヘッダの絞り込みのみ。入れ子 `tick_loop_tests` の `use super::*;` も無調整で解決した |
+
+### 16.6 本タスクの成果物
+
+| ファイル | 内容 |
+|---|---|
+| `crates/areka-seriko/src/actor_test_support.rs` | 新規（84 行・共有ヘルパ 6 本） |
+| `crates/areka-seriko/src/actor_dispatch_tests.rs` | 新規（840 行・19 テスト） |
+| `crates/areka-seriko/src/actor_bind_loop_tests.rs` | 新規（928 行・15 テスト。うち入れ子 `tick_loop_tests` 4） |
+| `crates/areka-seriko/src/state_test_support.rs` | 新規（10 行・共有ヘルパ 2 本） |
+| `crates/areka-seriko/src/state_surface_tests.rs` | 新規（483 行・22 テスト） |
+| `crates/areka-seriko/src/state_bind_pattern_tests.rs` | 新規（566 行・23 テスト） |
+| `crates/areka-seriko/src/looper_tests.rs` | 新規（561 行・18 テスト） |
+| 上記に対応する本番 3 ファイル | 末尾のテストモジュールブロックを接続宣言へ置換（本番本体は無変更） |
+| `verification/mapping/areka-seriko.csv` | 新規（79 行・全単射検証済み） |
+| `verification/notes.md` | 本節（§16）を追記 |
+
+コミットは要件 7.1 に従い**クレート単位の 1 コミット**（`areka-seriko`）とする。
