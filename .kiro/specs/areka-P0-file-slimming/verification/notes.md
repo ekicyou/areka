@@ -3364,3 +3364,309 @@ exit 0。**適用 424 行・未使用 0 行**。移設後リストの SHA256 は
 コミットは要件 7.1 に従い**クレート単位の 1 コミット**（`areka-emo-present` の `presenter.rs` 分）とする。
 これで `areka-emo-present` の必須対象 4 ファイルはすべて移設完了であり、
 同クレートのテストファイルは 14 本すべてが 1,000 行以下である。
+
+## 23. クレート単位のテスト分離とテーマ分割: `areka-emo-text`（レイアウト系 3 ファイル）（タスク 4.4・要件 1.1 / 1.6 / 1.7 / 1.8 / 2.4 / 2.8 / 2.9 / 3.1〜3.3 / 7.1 / 7.2）
+
+- 実施日: 2026-08-08
+- ブランチ: `claude/areka-p0-file-slimming-64d065` / 移設前コミット `7372699`（タスク 4.3 のコミット時点）
+- 実行シェル: **PowerShell（pwsh 7）**
+- 触ったのは `crates/areka-emo-text/src/layout.rs`・`viewbox.rs`・`viewbox_draw.rs` の 3 本 ＋ 新規テストファイル 16 本 ＋ `verification/mapping/areka-emo-text.csv`（新規）＋ 本ファイルのみ。
+  同クレートのタスク 4.5 担当分（`actor.rs`・`draw.rs`・`choice.rs`・`state.rs`）と既存の分離済みファイルは **1 行も触っていない**（`git status --porcelain -uall` で確認・§23.4 (h)）。
+
+### 23.1 移設した 3 ファイル（design §File Structure Plan の `crates/areka-emo-text` 7 本のうちレイアウト系 3 本）
+
+| 本番ファイル | 移設前 総行 | テストモジュール（移設前の行範囲） | 扱い | 本番 残行 |
+|---|---:|---|---|---:|
+| `src/layout.rs` | 3,294 | `tests`（750-3294・テストコード 2,545・ブロック本体 2,542） | **テーマ分割 ×4 ＋共有ヘルパ** | 764 |
+| `src/viewbox.rs` | 2,498 | `tests`（750-2498・テストコード 1,749・ブロック本体 1,746） | **テーマ分割 ×4 ＋共有ヘルパ** | 764 |
+| `src/viewbox_draw.rs` | 3,090 | `tests`（786-3090・テストコード 2,305・ブロック本体 2,302） | **テーマ分割 ×5 ＋共有ヘルパ** | 803 |
+
+- 移設前の行範囲は `target_inventory.csv` / `scan_raw.csv` の実測（`tests:750-3294(2545)` / `tests:750-2498(1749)` / `tests:786-3090(2305)`）と**完全一致**（ズレ 0）。3 本ともテストモジュールはファイル末尾に連続配置・1 ファイル 1 モジュール。
+- `#[cfg(test)]` 行は §13〜§22 と同じく**元位置に据え置き**、増えるモジュールぶんの宣言だけを新設した（`git diff --numstat` = `14/2544`・`14/1748`・`17/2304`。挿入は接続宣言行数 − 据え置きの `#[cfg(test)]` 1 行、削除はテストコード行数 − 同 1 行）。
+- テストモジュールに `///` doc コメントは付いていない（§14.3 規則は発動しない）。
+
+| 新テストファイル | 行数 | テスト数 |
+|---|---:|---:|
+| `layout_test_support.rs`（`test_support`） | 95 | 0 |
+| `layout_wrap_tests.rs`（`wrap_tests`） | 731 | 20 |
+| `layout_visible_window_tests.rs`（`visible_window_tests`） | 262 | 10 |
+| `layout_segmented_tests.rs`（`segmented_tests`） | 768 | 16 |
+| `layout_cursor_tests.rs`（`cursor_tests`） | 702 | 13 |
+| `viewbox_test_support.rs`（`test_support`） | 106 | 0 |
+| `viewbox_axis_tests.rs`（`axis_tests`） | 147 | 8 |
+| `viewbox_dirty_tests.rs`（`dirty_tests`） | 582 | 14 |
+| `viewbox_plan_commit_tests.rs`（`plan_commit_tests`） | 704 | 13 |
+| `viewbox_choice_marker_tests.rs`（`choice_marker_tests`） | 224 | 4 |
+| `viewbox_draw_test_support.rs`（`test_support`） | 172 | 0 |
+| `viewbox_draw_frame_render_tests.rs`（`frame_render_tests`） | 502 | 8 |
+| `viewbox_draw_choice_hover_tests.rs`（`choice_hover_tests`） | 230 | 2 |
+| `viewbox_draw_oracle_regression_tests.rs`（`oracle_regression_tests`） | 246 | 2 |
+| `viewbox_draw_live_diff_tests.rs`（`live_diff_tests`） | 685 | 10 |
+| `viewbox_draw_png_dump_tests.rs`（`png_dump_tests`） | 504 | 2 |
+| **計** | **6,660** | **122** |
+
+**新テストファイル 16 本はすべて 1,000 行以下**（最大 `layout_segmented_tests.rs` の 768 行）。**僅少超過で単一維持したファイルは 0 件**（§7.4 への追記は不要）。本番 3 本も 764 / 764 / 803 行で 1,000 行以下に収まった。
+
+接続宣言（16 モジュールとも同一文言・design §移設方式の裁定 案 C）:
+
+    #[cfg(test)]
+    #[path = "<stem>_<モジュール名>.rs"]
+    mod <モジュール名>;
+### 23.2 テーマ境界の裁定（design §テーマ分割ポリシー・手順①）
+
+**バナーの分類は 3 本で割れた**——`layout.rs` は**混在**（前半 thematic／後半 chronological）・`viewbox.rs` は **thematic**・`viewbox_draw.rs` は**バナーがほぼ無い**（`════` 2 本のみ・区切りは項目ごとの `///` doc コメント）。
+したがって 3 本とも**本番 API の継ぎ目を第一基準**に採り、テストモジュール内ヘルパの参照関係を全数走査して裏取りした。
+
+#### (1) `layout.rs` — バナー 16 本は**混在**（前半 thematic・後半 chronological）
+
+`// ──` バナー 16 本のうち前半 10 本は要件番号ベースの thematic 見出し（`R4.5: FixedMetrics の決定論仮想値`（`:799`）・
+`R2.1/2.2/2.4: \_l カーソル座標 → image px 換算`（`:820`）・`R6.1: 横書き`（`:938`）・`R6.2: 日本語縦書き（vertical_rl）`（`:1016`）・
+`R6.3: vertical_lr`（`:1062`）・`改行マーカー（NewLine{ratio}）`（`:1116`）・`縮退・境界`（`:1177`）・
+`遅延意味論（deferred newline）の判断分岐`（`:1347`）・`R2.5 系/R11.6: 決定論`（`:1641`）・
+`3.2 R7.1/7.2/7.4/7.5: あふれ判定とスクロール可視窓`（`:1643`））であるのに対し、
+後半 6 本は**作業時系列**の見出しである（`Task 4.1: 塊先決による折返し`（`:1957`）・`Task 4.2: 長大塊の文字単位縮退`（`:2299`）・
+`Task 4.4: 保留改行との整合`（`:2459`）・`Task 4.2: pending-cursor 遅延実体化`（`:2719`）・`Task 4.3: 換算表完全性`（`:2887`）・
+`Task 4.2: \_l 縮退 4 分岐の actor ごと warn-once`（`:3132`））——`Task 4.2` が 3 か所に散らばり、`4.4` が `4.3` より前に来ている。
+**chronological 側はそのままではテーマにならない**ため、Implementation Notes の指示どおり本番 API の継ぎ目へ落とした。
+
+**本番 API（移設前 `layout.rs:1-749`）の継ぎ目**:
+(i) metrics 注入口 `GlyphMetrics`（`:74`）・`FixedMetrics`（`:105`）・`FIXED_LINE_BOX_RATIO`（`:112`）と折返し／行送りの中核 `LayoutEngine::layout`（`:235`）・`layout_inner`（`:292`）・`finish_line`（`:593`）、
+(ii) 塊先決 `WrapPlan`（`:191`）・`segment_advance_sum`（`:567`）、
+(iii) あふれ・可視窓 `VisibleWindow`（`:172`）・`LayoutEngine::visible_window`（`:512`）、
+(iv) `\_l` カーソル `cursor_to_image_px`（`:650`）・`CursorDegrade`（`:678`）・`CursorWarnGuard`（`:697`）・`warn_cursor_degrade`（`:715`）・`layout_with_cursor_warn`（`:268`）。
+この 4 つがそのまま 4 テーマになった（後半の chronological バナー 6 本は (ii) と (iv) へ 2:4 に畳める）。
+
+| 新モジュール（ファイル） | 移設前の行範囲 | 対象の本番項目 | テスト数 |
+|---|---|---|---:|
+| `test_support` | 770-797, 1641-1698 | —（2 テーマ以上から参照される共有フィクスチャ 7 項目） | 0 |
+| `wrap_tests` | 799-818, 938-1639 | metrics 仮想値・折返し閾値・3 方向の軸読み替え・改行マーカーの行送り・遅延改行（累算／蒸発／リビール進行）・縮退境界（`GlyphMetrics`／`FixedMetrics`／`LayoutEngine::layout`／`finish_line`） | 20 |
+| `visible_window_tests` | 1700-1955 | あふれ判定とスクロール可視窓（`LayoutEngine::visible_window`／`VisibleWindow`・3 方向のスクロール方向・飽和・端数行送り） | 10 |
+| `segmented_tests` | 1957-2717 | 塊先決ワードラップ（`WrapPlan::Segmented`／`segment_advance_sum`・境界値・長大塊の char 縮退・保留改行との順序・prefix 安定性） | 16 |
+| `cursor_tests` | 820-936, 2719-3293 | `\_l` カーソル（`cursor_to_image_px` の換算表・レイアウト経由の遅延実体化・per-axis 合成・`CursorWarnGuard` の actor ごと warn-once） | 13 |
+
+**design の初期見積 `×約 3` に対し `×4 ＋ 共有ヘルパ` を採った理由**: design は「他 22 モジュールのテーマ名は実装時に各モジュールの内容から決定し、旧→新テスト名対応表に記録する」としてテーマ名・本数を実装時裁定に委ねており、`×約 3` は概算である。本番 API の継ぎ目が 4 つに割れており、3 分割にすると `wrap_tests`＋`cursor_tests` か `wrap_tests`＋`visible_window_tests` を束ねることになって 1 ファイルが 1,000 行を超える（前者 1,433 行・後者 1,097 行）。
+
+**ヘルパ参照関係による裏取り**（テストモジュール内の非テスト項目 11 件の参照行を全数走査。行番号は移設前）:
+
+- **多テーマから参照 → `test_support`**（7 項目）: `IMAGE`（`:770`・4 テーマ）・`model`（`:773`・4）・`glyphs`（`:789`・2＋`test_support` 内部）・`inline_positions`（`:794`・3）・`model_rect`（`:1641`・2）・`broken_lines`（`:1665`・2）・`window_for`（`:1677`・2）。
+  後ろの 3 項目は可視窓テスト群の直前に定義されているが、`wrap_tests` の `materialized_newline_near_full_triggers_overflow`（`:1492`）が 3 つとも呼ぶ（同テストの doc が可視窓側の `trailing_pending_newline_does_not_trigger_overflow` と対を成すと明記している）ため、**複製せず** `test_support` へ集約した（`ITEM-EXTRA` 回避・Implementation Notes の集約規則どおり）。
+- **単一テーマ専用（当該テーマファイルに残置）**: `plan`（`:1957`）・`flat_glyphs`（`:1972`）＝ `segmented_tests` 専用／`WarnCounter`（`:3132`）＋`impl tracing::Subscriber for WarnCounter`（`:3139`）＝ `cursor_tests` 専用。参照行はいずれも自テーマの範囲にしか現れない。
+
+#### (2) `viewbox.rs` — バナー 19 本は **thematic**
+
+`// ──` バナー 19 本はすべて対象（本番 API 名・要件番号）を掲げる thematic 見出しであり、タスク番号を先頭に置くものは 1 本も無い
+（`R5.1–5.3: 軸写像（横=y・縦=x）と符号素通し`（`:776`）・`DD11/R6.4/R8.2: 真位置と量子化`（`:821`）・`R7.5 系: 純関数・契約点の初期状態・blit 軸写像委譲`（`:867`）・
+`3.2 R2.2/3.2/3.3/4.2: ダーティ導出（露出帯 ∪ 変化行 ∪ 全域）の檻`（`:912`）・`3.3 R2.3/4.3: plan/commit 二相`（`:1559`）・
+`6.1 R4.4: 行指紋の hover 印（choice_marker）`（`:2284`）ほか）。総括節の `(a)`〜`(e)`（`:1855`/`:1927`/`:2020`/`:2106`/`:2212`）だけは列挙記号だが、
+いずれも `plan/commit 二相` 節の内側にある小見出しで、独立したテーマにはならない。**バナー位置は本番シームと一致した。**
+
+**本番 API（移設前 `viewbox.rs:1-749`）の継ぎ目**:
+(i) 軸写像・量子化 `block_axis_vector`（`:93`）・`ScrollState`（`:56`）・`resolve_position`（`:147`）・`blit_vector`（`:160`）、
+(ii) ダーティ導出 `line_fingerprint`（`:588`）・`CommittedLine`（`:389`）・`resident_rect`（`:633`）・`exposure_band`（`:674`）・`expand_guard_clamp`（`:724`）・`is_backward_shrink`（`:424`）・`LineOverhang`（`:327`）・`DIRTY_GUARD_IMG_PX`（`:306`）、
+(iii) plan/commit 二相 `ScrollPlanner::plan`（`:168`）・`plan_with_overhangs`（`:191`）・`commit`（`:263`）・`request_clear`（`:293`）・`FramePlan`（`:70`）、
+(iv) 行指紋の hover 印（`line_fingerprint` の `choice_marker` 経路）。
+
+| 新モジュール（ファイル） | 移設前の行範囲 | 対象の本番項目 | テスト数 |
+|---|---|---|---:|
+| `test_support` | 912-980, 1828-1853 | —（2 テーマ以上から参照される共有フィクスチャ 8 項目） | 0 |
+| `axis_tests` | 770-910 | 軸写像と符号素通し・真位置からの直接量子化・純関数性と契約点の初期状態（`block_axis_vector`／`resolve_position`／`blit_vector`／`ScrollState`） | 8 |
+| `dirty_tests` | 982-1557 | ダーティ導出（露出帯 ∪ 変化行 ∪ 全域）・行指紋・オーバーハング拡張・整数格子拡張とクランプ・back 全被覆（`line_fingerprint`／`resident_rect`／`exposure_band`／`expand_guard_clamp`／`DIRTY_GUARD_IMG_PX`） | 14 |
+| `plan_commit_tests` | 1559-1826, 1855-2282 | plan/commit 二相（純粋計画・確定・Clear・失敗フレーム再試行）と、その上に載る総括檻 (a)〜(e)（軸写像 e2e・長スクロールのドリフトなし・ダーティ 5 ケース一式・back 全被覆総当り・二相反復同一性） | 13 |
+| `choice_marker_tests` | 2284-2497 | 行指紋の hover 印（`choice_marker` の set／clear／switch が当該行の指紋だけを変える） | 4 |
+
+**design の初期見積 `×約 2` に対し `×4 ＋ 共有ヘルパ` を採った理由**: 2 分割でも 1,000 行には収まる（783 / 939 行）が、`plan_commit_tests` 側が 939 行と目安すれすれになるうえ、本番 API の継ぎ目は 4 つに割れておりバナーもその 4 つに整列している。design が「テーマの境界を壊してまで満たす強制値ではない」としているのは**分割しない側**の逃げ道であって、自然な境界で細かく割ることを禁じてはいない。
+
+**ヘルパ参照関係による裏取り**（非テスト項目 19 件を全数走査。行番号は移設前）:
+
+- **多テーマから参照 → `test_support`**（8 項目）: `phys`（`:920`・3 テーマ）・`broken_lines`（`:938`・2）・`canvas_for`（`:950`・2）・`window`（`:974`・3）・`commit_initial`（`:1828`・2）・`expect_update`（`:1847`・2）。
+  加えて `IMAGE`（`:912`）と `model_rect`（`:925`）は**テストからは `dirty_tests` 側でしか参照されない**が、いずれも `canvas_for` の内部から呼ばれる（`:950` の本文）ため、`canvas_for` と分離できず塊ごと `test_support` へ置いた（§22.2 の「共有フィクスチャ塊は塊ごと動かす」と同じ扱い）。
+- **単一テーマ専用（当該テーマファイルに残置）**: `HORIZONTAL_OFFSET`／`VERTICAL_RL_OFFSET`／`VERTICAL_LR_OFFSET`（`:770-774`）＝ `axis_tests`／`covers_block_axis_fully`（`:1530`）＝ `dirty_tests`／`plan_canvas`（`:1559`）・`assert_long_scroll_is_drift_free`（`:1927`）・`assert_back_fully_covered`（`:2106`）＝ `plan_commit_tests`／`run_content`（`:2284`）・`glyph_resident`（`:2303`）・`choice_resident`（`:2312`）・`derive_dirty_for_hover`（`:2371`）＝ `choice_marker_tests`。
+
+#### (3) `viewbox_draw.rs` — バナーは 2 本だけ（分類の対象にならない）
+
+テストモジュール内に `// ──` 形式のバナーは **0 本**で、`// ════` の大見出しが 2 本あるのみ（`live-diff pixel 等価主檻（task 10・…）`（`:1922`）・
+`目視診断（PNG ダンプ・#[ignore]・…）`（`:2595`））。残りの区切りは項目ごとの `///` doc コメントである。
+したがってバナーからテーマは導けず、**本番 API の継ぎ目だけを基準**に引いた（2 本のバナーはそのうち 2 つの境界と一致した）。
+
+**本番 API（移設前 `viewbox_draw.rs:1-785`）の継ぎ目**:
+(i) フレーム描画契約 `ViewboxExecutor::render`（`:207`）・`DrawStats`（`:78`）・`request_clear`（`:182`）・`scroll_state`（`:170`）・`ensure_format`（`:507`）・`degrade_if_needed`（`:544`）・`full_domain_update`（`:598`）・`plan_inconsistency`（`:619`）、
+(ii) Choice／hover 描画 `ChoiceDraw`（`:672`）・`ChoiceHover`（`:678`）・`color_f`（`:686`）・`highlight_rect`（`:704`）・`segment_text_range`（`:764`）・`expand_overhang_for_band`（`:737`）。
+
+| 新モジュール（ファイル） | 移設前の行範囲 | 対象の本番項目 | テスト数 |
+|---|---|---|---:|
+| `test_support` | 815-968 | —（5 テーマすべてが使う headless リグと画素ヘルパ 9 項目） | 0 |
+| `frame_render_tests` | 970-1008, 1231-1683 | `render` の観測可能な完了状態 1〜4 と縮退・失敗経路（初回全域描画・NoChange・可視窓移動の blit と露出帯・typewriter 現在行のみ・`request_clear` の FullClear・font 変更の全域縮退・`plan_inconsistency` の述語・デバイス失敗の再試行安全） | 8 |
+| `choice_hover_tests` | 1010-1229 | Choice 住人の素描画が GlyphRun とピクセル同一であること／hover セグメントの塗りと解除リセット（`ChoiceDraw`／`ChoiceHover`／`highlight_rect`／`segment_text_range`） | 2 |
+| `oracle_regression_tests` | 1685-1920 | oracle（全域再描画）との byte 一致で固定した 2 件の実欠陥回帰（行間の文字欠け診断・DD-9 行内縮小の退避インク未クリア） | 2 |
+| `live_diff_tests` | 1922-2593 | live-diff pixel 等価主檻（`LiveDiffRig` で oracle と viewbox を同時駆動・3 方向 byte 等価・端数 k の許容差・大サイズ／プロポーショナル／Yu Gothic UI 実フォント・注入 divergence の検出） | 10 |
+| `png_dump_tests` | 2595-3089 | 目視診断の PNG ダンプ 2 本（`#[ignore]`・自前 PNG エンコーダ 6 ヘルパ同居） | 2 |
+
+**design の初期見積 `×約 3` に対し `×5 ＋ 共有ヘルパ` を採った理由**: 3 分割では 1 ファイルが確実に 1,000 行を超える（テストコード 2,302 行・共有リグ 154 行を差し引いても平均 716 行で、`live_diff_tests` 672 行と `png_dump_tests` 495 行はどちらも他と併合できない大きさ）。上表の 5 つは目的（描画契約の檻／Choice 素描画／実欠陥の回帰固定／oracle 等価の主檻／目視診断）が互いに独立している。
+
+**ヘルパ参照関係による裏取り**（非テスト項目 23 件を全数走査。行番号は移設前）:
+
+- **多テーマから参照 → `test_support`**（9 項目）: `Rig`（`:828`）＋`impl Rig`（`:836`）は **5 テーマすべて**が使う／`glyph_items`（`:914`・4）・`build`（`:919`・3）・`opaque_count`（`:944`・3）・`geo_model`（`:878`・3）。
+  `make_dispatcher_and_compositor`（`:815`）は `impl Rig::new` からのみ呼ばれ、`live_diff_model_font`（`:891`）と `block_axis_ink_span`（`:949`）は現時点で `live_diff_tests` からしか参照されないが、3 つとも `:815-968` の連続したリグ／画素ヘルパ塊の内側にあり（`live_diff_model_font` の doc は直前の `geo_model` の説明から続いている）、塊ごと `test_support` へ置いた（§22.2 と同じ扱い）。
+- **単一テーマ専用（当該テーマファイルに残置）**: `multiline_items`（`:1419`）＝ `frame_render_tests`／`as_choice_canvas`（`:1010`）・`count_bgra_in_x_band`（`:1100`）＝ `choice_hover_tests`／`LiveDiffRig`（`:1922`）＋`impl LiveDiffRig`（`:1963`）・`run_live_diff_scenario`（`:2209`）・`run_live_diff_scenario_on`（`:2217`）・`run_live_diff_nonunit_scale`（`:2304`）＝ `live_diff_tests`／`diag_crc32`（`:2595`）・`diag_adler32`（`:2618`）・`diag_png_chunk`（`:2628`）・`diag_encode_png_rgba`（`:2638`）・`diag_composite_rgba`（`:2673`）・`diag_bottom_ink_row`（`:2719`）＝ `png_dump_tests`。
+
+#### (4) 3 本に共通する裁定
+
+**タプル構造体ヘルパの分布確認（Implementation Notes・§22.2 の制約）**: テーマ案を立てる前に 3 ファイルのテストモジュール内の構造体を全数走査した結果、**タプル構造体は 1 件も無い**
+（`WarnCounter`（`layout.rs:3132`）・`Rig`（`viewbox_draw.rs:828`）・`LiveDiffRig`（`viewbox_draw.rs:1922`）はいずれも名前付きフィールド）。§22.2 の「利用側ごと 1 テーマに収める」制約は本タスクでは発動しなかった。
+
+**バナーの帰属（§20.2 で確定した扱いの適用）**: 本文一致検証（`RustParse.ps1:319-331`）は直前の空行とコメント行を読み飛ばして最初のコード行を探すため、**先行コメント塊は後続項目の本文の一部**になる。したがってバナーは常に直後の項目と同じテーマファイルへ運ばれた。共有ヘルパ側へ束ねられたのは 2 本——`viewbox.rs:912`（`ダーティ導出の檻` 見出し → `const IMAGE`）と `viewbox_draw.rs:1922`（`live-diff pixel 等価主檻` → `struct LiveDiffRig`。ただし `LiveDiffRig` は `live_diff_tests` 専用なので同テーマ内に留まる）である。文言は 1 文字も変えていない。
+
+**共有ヘルパの可視性（要件 2.4 が許容する機械的調整）**: 3 つの `*_test_support.rs` の**宣言行の先頭にのみ** `pub(super)` を付与した——`layout` 7 行（`const` 1・関数 6）・`viewbox` 8 行（`const` 1・関数 7）・`viewbox_draw` 14 行（`struct Rig` 1・そのフィールド 4・`impl Rig` の inherent メソッド 2・自由関数 7）。付与のみで本文は無変更。**複製は 1 件も作っていない**。
+
+**Implementation Notes の E0659 罠（タスク 3.3 §17.5）への対処**: 生成した 16 ファイルに**グロブ import は 1 件も無い**（`use …::*;` の出現 0）。共有ヘルパは `use super::test_support::{…};` の明示 import で受けた。加えて誤結合の有無を実測で確認した——`test_support` が公開する識別子（layout 7・viewbox 8・viewbox_draw 8）のうち、対応する本番モジュールの名前空間と衝突するものは **3 本とも 0 件**である。同一シグネチャの黙った差し替えは起き得ない。
+
+**`use` ヘッダの調整（要件 2.4 / 2.6）**: 移設前ヘッダの `use` 項目を各テーマファイルへ配り、そのファイルで実際に使う項目だけに絞った（絞る前のビルドで `unused_imports` が多数出て要件 2.6 に反したため、`cargo build --message-format=json` の `unused_imports` 診断が指す識別子だけを機械的に落とした。**トレイトメソッド解決に必要な `GlyphMetrics` のような「識別子が本文に現れない import」を落とさないよう、全項目を配ってから診断で削る向きに揃えた**）。移設前ヘッダの `use` 項目は**1 つも失われていない**（各項目が必要なファイルへ 1 回以上配置されている）。**可視性・`use` 以外の調整は 1 件も必要なかった**（要件 2.8 の追加調整 0 件）。
+### 23.3 §11.4 の盲点（複数行文字列リテラル内の行頭空白）— 担当 3 ファイルの独自走査
+
+Implementation Notes の指示に従い、担当ファイルを字句状態追跡つきの独立スキャナ（行コメント・入れ子ブロックコメント・通常文字列・raw 文字列（`#` の数）・バイト文字列・文字リテラルとライフタイムの判別・エスケープを追跡し、「行頭時点で文字列リテラルの内部にいる行」と「直前行が `\` 継続か」を判定する）で全走査した。スキャナの妥当性は、既知の唯一の該当箇所 `crates/wintf/src/ecs/window_proc/window_pos_tests.rs:691` を**盲点 1 件**として検出し、同ファイルの `:382`・`:429`・`:614`・`:690` を **`\` 継続 4 件**として正しく切り分けることで確認した（実測出力: `continuation=5 382,429,614,690,691 / blind=1 691`）。
+
+| 対象 | 複数行にまたがる文字列リテラルの継続行 | 盲点該当（`\` 継続でない行） |
+|---|---|---:|
+| 移設前 `layout.rs`（`7372699` から `git show`） | **0** | **0** |
+| 移設前 `viewbox.rs` | **1**（`:1997`） | **0** |
+| 移設前 `viewbox_draw.rs` | **6**（`:1786, 1847, 2203, 2581, 2893, 3071`） | **0** |
+| 移設後の新テストファイル 16 本 | **7**（`viewbox_plan_commit_tests.rs:419` ／ `viewbox_draw_oracle_regression_tests.rs:112, 173` ／ `viewbox_draw_live_diff_tests.rs:295, 673` ／ `viewbox_draw_png_dump_tests.rs:308, 486`） | **0** |
+| 移設後の本番 3 ファイル | **0** | **0** |
+
+**結論: 担当 3 ファイルの複数行文字列リテラル 7 件はすべて `\` 継続であり、§11.4 第 1 の盲点の該当行は 0 件。**
+`\` 継続では Rust が行頭空白を除去するため、一律 4 スペース de-indent は文字列の中身を変えない。例外処理は不要だった。
+移設前 7 行と移設後 7 行は 1 対 1 に対応する（`viewbox:1997→plan_commit:419` ／ `viewbox_draw:1786,1847→oracle_regression:112,173` ／ `2203,2581→live_diff:295,673` ／ `2893,3071→png_dump:308,486`）。
+
+### 23.4 検証（すべて実測・終了コードで判定）
+
+**(a) 本文一致検証（要件 2.4）** — `pwsh -File $V/Compare-RelocatedTests.ps1 -Commit 7372699 -OriginalPath <本番> -RelocatedPath "<新テストファイル群>" -Detail`
+
+    layout.rs        : MATCH: test fn 59=59 / helper item 11=11 / mod block 1 / files 5   (exit 0)
+    viewbox.rs       : MATCH: test fn 39=39 / helper item 19=19 / mod block 1 / files 5   (exit 0)
+    viewbox_draw.rs  : MATCH: test fn 24=24 / helper item 23=23 / mod block 1 / files 6   (exit 0)
+
+3 本とも exit **0**。**引数不正の 2 と取り違えていないことを対照実行で確認した**——`-OriginalPath crates/areka-emo-text/src/nonexistent.rs` を与えると `fatal: path ... does not exist in '7372699'` を出して **exit 2** になる（不一致の 1 ではない）。
+
+**(a2) 行単位の分類と多重集合突合（スクリプトより強い独自検証）** — 本文一致検証は項目単位・行頭空白非依存であるため、それとは独立に、移設した**全行**を分類した。移設前ブロック本体の各行を一律 4 スペース de-indent した多重集合（空行を除く）と、新テストファイル群の全行の多重集合（空行を除く）を突合:
+
+| 本番ファイル | ブロック本体 / 非空行 | 新ファイル計 / 非空行 | 「ちょうど −4 スペース」または空行で説明できない行 | 消えた行 | 増えた行 |
+|---|---|---|---:|---:|---:|
+| `layout.rs` | 2,542 / 2,443 | 2,558 / 2,462 | **0** | 10 | 29 |
+| `viewbox.rs` | 1,746 / 1,631 | 1,763 / 1,647 | **0** | 14 | 30 |
+| `viewbox_draw.rs` | 2,302 / 2,167 | 2,339 / 2,206 | **0** | 16 | 55 |
+
+- **`layout.rs`**: 消えた 10 行 = `pub(super)` 付与前の宣言行 **7**（`const IMAGE` / `fn model(` / `fn glyphs(` / `fn inline_positions(` / `fn model_rect(` / `fn broken_lines(` / `fn window_for(`）＋ 移設前ヘッダの `use` 行 **3**（`use super::{` とその継続 2 行）。増えた 29 行 = `pub(super)` 付き宣言行 **7** ＋ 5 ファイルへ再配置・複製された `use` 行 **22**。
+- **`viewbox.rs`**: 消えた 14 行 = 宣言行 **8**（`const IMAGE` / `fn phys(` / `fn model_rect(` / `fn broken_lines(` / `fn canvas_for(` / `fn window(` / `fn commit_initial(` / `fn expect_update(`）＋ `use` 行 **6**（`use super::{`・継続 4 行・`};`）。増えた 30 行 = 宣言行 **8** ＋ `use` 行 **22**。
+- **`viewbox_draw.rs`**: 消えた 16 行 = 宣言行 **14**（`struct Rig {` 1・そのフィールド 4・`impl Rig` の `fn new(` / `fn attach(` 2・自由関数 7）＋ `use` 継続行 **2**。増えた 55 行 = `pub(super)` 付き宣言行 **14** ＋ `use` 行 **41**。
+
+差分はすべて要件 2.4 が明示的に許容する調整（可視性付与・`use` の追加／分散）だけで説明がつき、説明のつかない行は **3 本とも 0 件**である。移設前ヘッダの `use` 項目は 1 つも失われていない。
+
+**(b) 対応表フラグメントの全単射検証（要件 2.9）** — `pwsh -File $V/Test-MappingBijection.ps1 -Path $V/mapping/areka-emo-text.csv`
+
+    PASS: 全単射 OK / 行数 122 / 相異なる old_fqn 122 / 相異なる new_fqn 122 / フラグメント 1
+      - areka-emo-text.csv: 122 行
+
+exit 0。**本タスクで新規作成した 122 行**（`old_fqn` 序数順に整列。タスク 4.5 が同クレートの残り 4 ファイル分を同じフラグメントへ追記できるよう、末尾に追記可能な形で置いた）。
+内訳は `layout::tests::*` → `wrap_tests` 20／`visible_window_tests` 10／`segmented_tests` 16／`cursor_tests` 13、`viewbox::tests::*` → `axis_tests` 8／`dirty_tests` 14／`plan_commit_tests` 13／`choice_marker_tests` 4、`viewbox_draw::tests::*` → `frame_render_tests` 8／`choice_hover_tests` 2／`oracle_regression_tests` 2／`live_diff_tests` 10／`png_dump_tests` 2。
+`reason` は全行 `theme_split`、末尾セグメント（関数識別子）は旧新で同一。移設前 `before_default.txt` に `layout::tests::` 59 行・`viewbox::tests::` 39 行・`viewbox_draw::tests::` 24 行（計 122）が実在し、対応表の `old_fqn` 122 件すべてがそこに存在することを照合済み（不在 0）。
+既存フラグメントとの結合検証（`-Path $V/mapping`）も
+`PASS: 全単射 OK / 行数 546 / 相異なる old_fqn 546 / 相異なる new_fqn 546 / フラグメント 7` で exit 0（キー衝突なし）。
+
+**(c) 対応表適用後のテスト名リスト一致（要件 1.8 / 2.2）— ワークスペース水準**
+
+移設後に §10.2 の手順（`cargo test --workspace --no-fail-fast -- --list`（exit 0）→ stdout のみ → `: test$` 抽出 → `$arr = [string[]]@(…)` へ型付け → `[Array]::Sort($arr, [System.StringComparer]::Ordinal)` → UTF-8 BOM 無し・重複行を残す）でリストを採取し、コミット済み `before_default.txt` と**タスク 3.1〜4.4 の 7 フラグメント全部**を渡して突合した:
+
+    BEFORE      : before_default.txt  (4790 行 / 相異なる 4787)
+    AFTER       : after_default_task44.txt  (4790 行 / 相異なる 4787)
+    MAPPING     : 546 行 (7 ファイル) / 適用 546 行 / 未使用 0 行
+    LINE COUNT  : before 4790 / after 4790 -> 一致 (Requirement 2.2)
+    RESULT: PASS
+
+exit 0。**適用 546 行・未使用 0 行**。移設後リストの SHA256 は `E4604A1161219E857AE8702A98DD108FC93371C7538569E156BDDC4340E171AA`（中間リストファイル自体はコミットしない）。
+
+**整列器の較正（Implementation Notes の ⚠ 項目）**: コミット済みファイルのハッシュ照合では整列器が動かないため、**同一の未整列生出力（4,790 行）を序数と `Sort-Object` の 2 通りに整列**して digest が割れることを先に確かめた:
+序数 `E4604A11…71AA` ／ `Sort-Object` `663D17D0…543D` ／ **1,806 位置が相違**。
+分岐点は index 179 の `bake::tests::blit_verbatim_correctness`（序数が先）と `bake_entry_tests::all_transparent_is_empty_entry_not_error`（カルチャが先）で、§10.2 の実測（1,806 位置・index 179・同一の分岐ペア）と完全に一致する。序数比較器が実際に働いていることの直接証跡である。
+
+**(c2) 対応表そのものへの反証（自分の表を疑う検証）** — 対応表が「実際に起きた変化」と過不足なく一致することを、対応表を**使わない**多重集合の対称差で確かめた。
+
+| 検査 | 結果 |
+|---|---|
+| `before_default.txt` と移設後リストの対称差（対応表なし）: 消えた行 / 現れた行 / 全フラグメント行数 | **546 / 546 / 546**（三者一致） |
+| うち本タスクぶん（`layout::tests::` `viewbox::tests::` `viewbox_draw::tests::` の消滅 ／ 13 テーマモジュールの出現） | **122 / 122**（本タスクの追記 122 行と一致） |
+| 消えた行がすべて `old_fqn` に在るか | **True**（例外 0） |
+| 現れた行がすべて `new_fqn` に在るか | **True**（例外 0） |
+| `old_fqn` なのに実際には消えていない行 | **0** |
+| `new_fqn` なのに実際には現れない行 | **0** |
+| `old_fqn` と `new_fqn` が同一の行（＝変わっていない名前を載せた水増し） | **0** |
+| 末尾セグメント（関数識別子）が旧新で相違する行 | **0** |
+| `reason` が `theme_split` 以外の行 | **0** |
+
+すなわち対応表は「実際に変わった名前だけ」を「実際に変わったとおりに」記載しており、水増しも取りこぼしも無い。
+
+**(d) クレート緑（要件 7.2）** — `cargo test -p areka-emo-text --no-fail-fast` → **exit 0**。
+**406 passed / 0 failed / 2 ignored**（lib 376＝374 passed＋2 ignored ＋ 統合テスト 9 本 32 ＋ doctest 0）。
+移設前との本数一致は、**独立に導出した `#[test]` 属性の全数**で裏づけた——`git ls-tree 7372699 crates/areka-emo-text/` の `.rs` 26 本を `git show` で読んで `^\s*#\[test\]\s*$` を数えると **408**、移設後の作業ツリー 42 本でも **408** で一致する（cargo の実行総数 406 passed + 2 ignored = 408 とも一致）。
+移設後の lib 内訳（`--lib -- --list` の集計）は
+`layout::wrap_tests` 20 ／ `layout::visible_window_tests` 10 ／ `layout::segmented_tests` 16 ／ `layout::cursor_tests` 13（計 59＝移設前 `layout::tests` 59）、
+`viewbox::axis_tests` 8 ／ `viewbox::dirty_tests` 14 ／ `viewbox::plan_commit_tests` 13 ／ `viewbox::choice_marker_tests` 4（計 39＝移設前 `viewbox::tests` 39）、
+`viewbox_draw::frame_render_tests` 8 ／ `viewbox_draw::choice_hover_tests` 2 ／ `viewbox_draw::oracle_regression_tests` 2 ／ `viewbox_draw::live_diff_tests` 10 ／ `viewbox_draw::png_dump_tests` 2（計 24＝移設前 `viewbox_draw::tests` 24）。
+残る 254 本（`actor` 33・`state` 59・`draw` 29・`choice` 50・`region` 22・`canvas` 12・`writing` 11・`wrap` 9・`segment` 9・`sink` 8・`surface` 6・`lib` 6）はタスク 4.5 以降の担当で、本タスクでは無変更。
+
+**(e) 警告非増加（要件 2.6）** — `cargo build -p areka-emo-text --all-targets` → exit 0・**警告 0 件**。
+ワークスペース全域でも §10.5 の手順で再集計した——`cargo build --workspace --all-targets` → exit 0、
+`DIAG_COUNT = 16` / `SUMMARY_COUNT = 7` / `GENERATED_SUM = 22` / `DUPLICATES = 6` / `NET = 16` で、§10.5 の移設前基準値 5 数値と**完全一致**。
+SUMMARY 行の正規表現は §10.5 逐語どおり `generated \d+ warnings?`（末尾 `?` 込み・タスク 4.3 の申し送り）を用いた。
+ユニット別 generated 件数（7 ユニット・多重集合 {1,3,3,3,4,4,4}）も一致し、`areka-emo-text` に帰属する警告行は 0 件である。
+
+**(f) 本番本体の無変更** — 移設前コミット `7372699` の各ファイル先頭〜旧 `#[cfg(test)]` 直前まで（`layout.rs` 1-749／`viewbox.rs` 1-749／`viewbox_draw.rs` 1-785）を現作業ツリーと逐行突合し、**3 本とも不一致 0**。
+とくに `viewbox_draw.rs` の**非 `mod` `#[cfg(test)]` 4 項目は元位置にバイト同一で生存**している（属性行 `:116` → フィールド `fail_next_render: bool,`（`:117`）／属性行 `:146` → 初期化 `fail_next_render: false,`（`:147`）／属性行 `:153` → `fn inject_render_failure(&mut self)`（`:154`）／属性行 `:484` → 分岐 `if self.fail_next_render {`（`:485`））。design §Supporting References の全数表と行番号まで一致する（ズレ 0）。
+`layout.rs`・`viewbox.rs` には非 `mod` `#[cfg(test)]` 項目は 1 件も無い（`scan_raw.csv` の `nonmod_count` が 0）。
+
+**(g) 完了状態の直接確認** — 3 本の本番ファイルに残る `mod …;` / `#[path]` の出現はすべて接続宣言のみ（`layout.rs:750-764` の 5 モジュール・`viewbox.rs:750-764` の 5 モジュール・`viewbox_draw.rs:786-803` の 6 モジュール）。**`#[test]` は 1 件も残っていない。テストモジュール本体は 1 行も残っていない。** 残る `#[cfg(test)]` は接続宣言のぶんと、`viewbox_draw.rs` の設計判断 #3 による残置 4 項目だけである。
+
+**(h) 作業ツリーの範囲** — `git status --porcelain -uall` は本節追記前の時点で下記 20 パスのみ:
+変更 3 本（`layout.rs`・`viewbox.rs`・`viewbox_draw.rs`）＋未追跡 17 本（新テストファイル 16 本＋`verification/mapping/areka-emo-text.csv`）。
+タスク 4.5 担当の 4 ファイル（`actor.rs`・`draw.rs`・`choice.rs`・`state.rs`）・`crates/areka-emo-text/tests/`・`examples/`・他クレート・`Cargo.toml`・`tasks.md`・spec 本体ドキュメントは無変更。
+新規に導入した `TODO` / `FIXME` / `TBD` は 0 件。
+### 23.5 登記（要件 5.2）— 壊れたテスト・テスト間の状態汚染の所見
+
+**本タスクの範囲（3 ファイル・122 テスト・テストコード 6,599 行）では、壊れたテスト・不正なテストは 1 件も発見しなかった。所有 spec への送付所見は 2 件**（下表 #1・#2）**であり、いずれも要件 5.1 により本 spec では是正しない。**
+
+| # | 観測 | file:line | 判定 |
+|---|---|---|---|
+| 1 | **本番構造体に埋め込まれたテスト注入シーム `fail_next_render`**。`ViewboxExecutor` の私有フィールド（`#[cfg(test)]` 付き）・`new()` 内の初期化・注入用 inherent メソッド `inject_render_failure`・`render` 内の失敗分岐の 4 点セットで、本番構造体の状態としてテスト専用の可変フラグを持つ | `crates/areka-emo-text/src/viewbox_draw.rs:117`（フィールド `fail_next_render: bool,`）・`:147`（`new()` の初期化 `fail_next_render: false,`）・`:154`（`fn inject_render_failure(&mut self)`）・`:485`（`render` 内の分岐 `if self.fail_next_render {`）——それぞれ直前行 `:116` / `:146` / `:153` / `:484` が `#[cfg(test)]`。**本タスクの移設で 1 バイトも動いていない**（§23.4 (f) で逐行突合済み） | **送付所見 →`test-cage-determinism`（W6.9）**。design §Error Handling が「設計時点で確定済みの送付所見」として名指ししているもの（design §Supporting References の非 `mod` `#[cfg(test)]` 40 件のうち 4 件＝構造体フィールド 2・自由関数扱い 1・分岐 1）。**設計判断 #3 が 40 件全数残置を裁定している**ため本番ファイルに据え置いた。唯一の消費者は `viewbox_draw_frame_render_tests.rs:467` の `device_failure_mid_render_is_retry_safe_front_unchanged_no_commit`（`exec.inject_render_failure();`・リポジトリ全域で唯一の呼出） で、同テストは注入後に必ず 1 フレーム消費してフラグを落とすが、**フラグの寿命が本番オブジェクトの寿命に等しい**点は変わらない（`Rig` を使い捨てにする現在の書き方では顕在化しない） |
+| 2 | **層規律の構造檻の被覆が、本 spec の移設によって黙って縮む**。`pure_layer_modules_have_no_windows_imports` は `include_str!("layout.rs")` 等で**本番ファイルのテキストそのもの**を読んで `windows::` 等の禁止パターンを探すため、テストモジュールを外へ出した時点で**移設したテストコードは走査対象から外れる**（`layout.rs` 2,545 行・`viewbox.rs` 1,749 行ぶんが被覆から抜けた。`choice.rs`・`state.rs` も同檻の対象なのでタスク 4.5 でさらに縮む） | `crates/areka-emo-text/src/lib.rs:173-183`（`PURE_SOURCES` の 9 エントリ。うち本タスクの担当は `:179` `layout.rs` と `:181` `viewbox.rs`） | **送付所見 →`test-cage-determinism`（W6.9）／タスク 4.5・7.x への申し送り**。**現時点で実害は 0**——移設した純粋層テストファイル 10 本（`layout_*` 5・`viewbox_*` 5）を全数走査した結果、禁止パターン（`use windows` / `windows::` / `windows_core` / `windows_numerics` / `extern crate windows`）の該当は **0 件**であり、`windows` の文字列が現れるのは `viewbox_test_support.rs:83` のコメント 1 行だけ（禁止パターンには一致しない）。**是正しない理由**: `PURE_SOURCES` はテストの入力値そのものであり、エントリを増やすことは要件 2.4 が禁じる「入力値の変更」に当たる。加えて `lib.rs` は本タスクの担当外（テストモジュール 65 行・必須対象でない）。**縮んだ被覆を戻すなら `<stem>_*_tests.rs` を `PURE_SOURCES` へ足す 1 行追加で済む**ことを申し送る |
+| 3 | 目視診断の PNG ダンプ 2 本が**カレントディレクトリへファイルを書き出す**（`AREKA_DIAG_OUT` 未指定時の既定が `"."`） | `crates/areka-emo-text/src/viewbox_draw_png_dump_tests.rs:152` と `:385`（`std::env::var("AREKA_DIAG_OUT").unwrap_or_else(\|_\| ".".to_string())`）・書き込みは `:319`・`:355`・`:483` | **問題なし・記録のみ（是正しない）**。両テストとも `#[ignore = "PNG ダンプ（ファイル副作用・目視診断用・明示実行のみ）"]`（`:150`・`:383`）が付いており既定実行では走らない（`cargo test -p areka-emo-text` の `2 ignored` はこの 2 本）。副作用が属性で明示されているのは正しい書き方である |
+| 4 | 各テストが実 GPU（`GraphicsCore::new()`）と WUC コンポジタを生成し、テストスレッドごとに dispatcher queue を作る | `crates/areka-emo-text/src/viewbox_draw_test_support.rs:21`（`make_dispatcher_and_compositor`・ASTA 第一候補／NONE 保険）・`:41`（`Rig::new`） | **問題なし・記録のみ**。`presenter.rs`（§22.5 #4）と同じ方針で、apartment 生成に失敗しても保険経路へ落ちる冪等な書き方。`Rig` はテストごとに新規生成され、テスト間で共有される状態は無い |
+| 5 | ログ捕捉に**プロセス大域の subscriber を使っていない** | `crates/areka-emo-text/src/layout_cursor_tests.rs:544`（`struct WarnCounter`・名前付きフィールド）・`:600`・`:669`（`tracing::subscriber::with_default`） | **問題なし・記録のみ**。スレッドローカルの `with_default` で捕捉しているため並列実行で混線しない。§22.5 #1 が `areka-emo-present` で登記した「同型ハーネスの重複」は本クレートでは 1 本のみで、重複は無い |
+| 6 | `yugothic_real_fixture_matches_oracle_byte_for_byte` が**実インストールフォント（Yu Gothic UI）と実 fixture ファイル**に依存する | `crates/areka-emo-text/src/viewbox_draw_live_diff_tests.rs:566` | **問題なし・記録のみ**。doc（`:562-563`）が「fixture が読めない環境（font 不在等）でも oracle↔viewbox は font に依らず一致するため頑健」と縮退条件を明記しており、環境差で赤くならない設計になっている |
+| 7 | 移設で可視性・`use`・モジュール接続の**追加**調整が要るケース（要件 2.8） | — | **0 件**。共有ヘルパへの `pub(super)` 付与（宣言行 計 29 本）と `use` の配り直しだけで 3 本とも通った。§17.5 #4 が警告した同名 shadow ヘルパによる E0659 は本 3 ファイルには存在しない（§23.2 (4) の全数照合で確認）。グロブ import は 1 件も生成していない |
+
+### 23.6 本タスクの成果物
+
+| ファイル | 内容 |
+|---|---|
+| `crates/areka-emo-text/src/layout_test_support.rs` | 新規（95 行・共有フィクスチャ 7 項目・テスト 0） |
+| `crates/areka-emo-text/src/layout_wrap_tests.rs` | 新規（731 行・20 テスト） |
+| `crates/areka-emo-text/src/layout_visible_window_tests.rs` | 新規（262 行・10 テスト） |
+| `crates/areka-emo-text/src/layout_segmented_tests.rs` | 新規（768 行・16 テスト） |
+| `crates/areka-emo-text/src/layout_cursor_tests.rs` | 新規（702 行・13 テスト） |
+| `crates/areka-emo-text/src/viewbox_test_support.rs` | 新規（106 行・共有フィクスチャ 8 項目・テスト 0） |
+| `crates/areka-emo-text/src/viewbox_axis_tests.rs` | 新規（147 行・8 テスト） |
+| `crates/areka-emo-text/src/viewbox_dirty_tests.rs` | 新規（582 行・14 テスト） |
+| `crates/areka-emo-text/src/viewbox_plan_commit_tests.rs` | 新規（704 行・13 テスト） |
+| `crates/areka-emo-text/src/viewbox_choice_marker_tests.rs` | 新規（224 行・4 テスト） |
+| `crates/areka-emo-text/src/viewbox_draw_test_support.rs` | 新規（172 行・共有リグ 9 項目・テスト 0） |
+| `crates/areka-emo-text/src/viewbox_draw_frame_render_tests.rs` | 新規（502 行・8 テスト） |
+| `crates/areka-emo-text/src/viewbox_draw_choice_hover_tests.rs` | 新規（230 行・2 テスト） |
+| `crates/areka-emo-text/src/viewbox_draw_oracle_regression_tests.rs` | 新規（246 行・2 テスト） |
+| `crates/areka-emo-text/src/viewbox_draw_live_diff_tests.rs` | 新規（685 行・10 テスト） |
+| `crates/areka-emo-text/src/viewbox_draw_png_dump_tests.rs` | 新規（504 行・2 テスト・自前 PNG エンコーダ同居） |
+| `crates/areka-emo-text/src/layout.rs` | 末尾のテストモジュールブロックを接続宣言 5 本へ置換（本番本体 1-749 行は無変更・残 764 行） |
+| `crates/areka-emo-text/src/viewbox.rs` | 同上（接続宣言 5 本・本番本体 1-749 行は無変更・残 764 行） |
+| `crates/areka-emo-text/src/viewbox_draw.rs` | 同上（接続宣言 6 本・本番本体 1-785 行は無変更・非 `mod` `#[cfg(test)]` 4 項目もバイト同一で生存・残 803 行） |
+| `verification/mapping/areka-emo-text.csv` | 新規（122 行・全単射検証済み・タスク 4.5 が追記できる形） |
+| `verification/notes.md` | 本節（§23）を追記 |
+
+コミットは要件 7.1 に従い**クレート単位の 1 コミット**（`areka-emo-text` のレイアウト系 3 ファイル分）とする。残る 4 ファイル（`actor.rs`・`draw.rs`・`choice.rs`・`state.rs`）はタスク 4.5 の担当であり、同クレートのテストファイルがすべて 1,000 行以下になるのはタスク 4.5 の完了時点である（本タスクで生成した 16 本はすべて 1,000 行以下）。
