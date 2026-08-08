@@ -312,8 +312,28 @@ design §検証 / EvidencePipeline（証跡パイプライン）の採取手順 
 
 1. cargo の **stdout** のみを対象とする（`--list` 出力は stdout・進捗と警告は stderr）。
 2. 正規表現 `: test$` に一致する行だけを残す。除外されるのはユニット単位の集計行（`N tests, 0 benchmarks`）と空行のみ。
-3. **序数（ordinal）比較で整列**する。`[Array]::Sort($arr, [System.StringComparer]::Ordinal)` を用いる。
+3. **序数（ordinal）比較で整列**する。**必ず `[string[]]` に型付けしてから** `[Array]::Sort($arr, [System.StringComparer]::Ordinal)` を用いる:
+
+   ```powershell
+   $arr = [string[]]@(Get-Content $raw | Where-Object { $_ -match ': test$' })
+   [Array]::Sort($arr, [System.StringComparer]::Ordinal)
+   ```
+
    PowerShell の `Sort-Object` 既定はカルチャ依存比較でありアンダースコアと英字の順序が変わるため使わない。
+
+   > **`[string[]]` の型付けを省くと黙ってカルチャ順になる**（タスク 3.5 のレビューで根本原因を特定）。
+   > パイプライン出力（`… | Where-Object …`）の各要素は `PSObject` に包まれており、
+   > `object[]` のまま `[Array]::Sort` へ渡すと `StringComparer.Ordinal` の内部 `as string` キャストが失敗して
+   > **既定のカルチャ比較器へ静かにフォールバックする**。`$arr[0].GetType()` は `System.String` を返すので
+   > 目視では気づけない。本 spec の採取はすべてパイプライン出力なので、この罠は常に踏みうる。
+   >
+   > 実測（同一配列を 1 コマンド内で 2 通りに整列・4,790 行）:
+   > 序数 `8468B087…C0E9` ／ `Sort-Object` `9C75E1B7…F20F` ／ **1,806 位置が相違・多重集合は同一**。
+   > 分岐点は index 179 の `bake::tests::…`（序数が先）と `bake_entry_tests::…`（カルチャが先）＝`::`(0x3A) 対 `_`(0x5F)。
+   >
+   > **較正の落とし穴**: コミット済み `before_default.txt` をハッシュして基準値と一致しても、
+   > あのファイルは既に整列済みなので**整列器そのものは 1 度も動いていない**——符号化と改行しか検証できない。
+   > 較正するなら**未整列の生出力を 2 通りに整列して digest が割れること**を確かめること。
 4. UTF-8（BOM 無し）で書き出す。
 5. **改行は CRLF・末尾に改行 1 つ**（`[IO.File]::WriteAllLines($path, $arr, (New-Object Text.UTF8Encoding($false)))` が既定でこの形になる）。
 
@@ -2063,9 +2083,16 @@ exit 0。20 行の内訳は `dispatcher::tests::*` → `dispatcher::slot_tests::
     RESULT: PASS
 
 exit 0。**適用 252 行・未使用 0 行**。移設後リストの SHA256 は
-`9C75E1B7BBFE9B4EEF8F229A48EB09AE6FFE0F3A9C013EDD2E9FFA6C72B9F20F`
-（§10.2 手順 5 の形式で採取。中間リストファイル自体はコミットしない）。
-整列は `Sort-Object` を使わず `[System.StringComparer]::Ordinal` で行った（§11.8）。
+`8468B087D4748BEC6DE24A9E08CF78996918413AC764C3680582C4D5B705C0E9`
+（§10.2 手順 3〜5 の形式＝序数整列・UTF-8 BOM 無し・CRLF・末尾改行で採取。
+中間リストファイル自体はコミットしない）。
+
+> **是正（タスク 3.5 で発覚・親が訂正）**: ここには当初 `9C75E1B7…F20F` と記録していたが、
+> これは同じ 4,790 行を **`Sort-Object`（カルチャ依存比較）** で整列したファイルのハッシュだった。
+> §10.2 手順 3 が指定する `[System.StringComparer]::Ordinal` で採り直すと `8468B087…C0E9` になる
+> （タスク 3.5 の実装者が出所を特定し、親が独立に再計算して確認）。
+> **リストの内容（行の多重集合）は同一**であり `Compare-TestLists.ps1` の判定は整列順に依存しないため、
+> 要件 2.2 / 2.3 の充足には影響しない。§14.5(b) に続き 2 度目の同種の取り違えである。
 
 **(c2) 対応表そのものへの反証（自分の表を疑う検証）** — 対応表が「実際に起きた変化」と過不足なく一致することを、
 対応表を**使わない**多重集合の対称差で確かめた。
@@ -2154,3 +2181,268 @@ shiori_wiring 2・sink 5・sylphya_wiring 11・ticker 18）、`tests/` ツリー
 
 コミットは要件 7.1 に従い**クレート単位の 1 コミット**（`areka-ghost` ライブラリ側）とする。
 同クレートの統合テストツリー（タスク 3.5）は別コミットになる。
+
+## 19. 統合テストツリーのテスト分離: `areka-ghost`（タスク 3.5・要件 1.1 / 1.3 / 1.7 / 2.4 / 2.8 / 3.1〜3.3 / 7.1 / 7.2）
+
+- 実施日: 2026-08-08
+- ブランチ: `claude/areka-p0-file-slimming-64d065` / 移設前コミット `585cd5d`（タスク 3.4 のコミット時点）
+- 実行シェル: **PowerShell（pwsh 7）**
+- 触ったのは `crates/areka-ghost/tests/ghost/spine_e2e_test.rs` ＋ 新規テストファイル 10 本 ＋ 本ファイルのみ。
+  入口 `tests/ghost.rs`・同ツリーの他 7 ファイル・`src/**`・`Cargo.toml`・spec 本体ドキュメントは **1 行も変更していない**
+  （`git status --porcelain -uall` で確認）。`verification/mapping/areka-ghost.csv` も **20 行のまま無変更**——本タスクは
+  1 テストモジュール＝1 テストファイルの個別移設で完全修飾名が一切変わらないため、対応表の追加行は **0 行**である
+  （§18.4 (b) の予測どおり）。
+
+### 19.1 移設した 1 ファイル・10 テストモジュール（design §File Structure Plan の `crates/areka-ghost` の `tests/` 1 本と完全一致）
+
+移設前 `spine_e2e_test.rs` は 2,574 行・テストモジュール 10 個・テストコード 2,091 行（要件 1.2 の実測値と一致）。
+10 モジュールはいずれも **ファイル末尾側に連続配置**され、共有 fixture（L1-314）より後ろにのみ在る。
+
+| # | テストモジュール | 移設前ブロック（`#[cfg(test)]`〜`}`） | ブロック行 | バナー行範囲 | 本体行範囲 | 新テストファイル | 新ファイル行 |
+|---:|---|---|---:|---|---|---|---:|
+| 1 | `tests` | 321-459 | 139 | 316-319 | 323-458 | `spine_e2e_test_tests.rs` | 141 |
+| 2 | `broadcast_relevance_partition` | 473-643 | 171 | 461-472 | 475-642 | `spine_e2e_test_broadcast_relevance_partition.rs` | 181 |
+| 3 | `s1_boot_success` | 652-934 | 283 | 645-651 | 654-933 | `spine_e2e_test_s1_boot_success.rs` | 288 |
+| 4 | `s2_connect_failure` | 945-1103 | 159 | 936-944 | 947-1102 | `spine_e2e_test_s2_connect_failure.rs` | 166 |
+| 5 | `s3_helper_liveness_detected` | 1116-1386 | 271 | 1105-1115 | 1118-1385 | `spine_e2e_test_s3_helper_liveness_detected.rs` | 280 |
+| 6 | `s4_close_handshake` | 1415-1667 | 253 | 1388-1414 | 1417-1666 | `spine_e2e_test_s4_close_handshake.rs` | 278 |
+| 7 | `s5_close_deadline` | 1707-2006 | 300 | 1669-1706 | 1709-2005 | `spine_e2e_test_s5_close_deadline.rs` | 336 |
+| 8 | `s6_full_disconnect` | 2033-2236 | 204 | 2008-2032 | 2035-2235 | `spine_e2e_test_s6_full_disconnect.rs` | 227 |
+| 9 | `global_log_probe` | 2248-2330 | 83 | 2238-2247 | 2250-2329 | `spine_e2e_test_global_log_probe.rs` | 91 |
+| 10 | `s7_second_boot_record_present` | 2347-2574 | 228 | 2332-2346 | 2349-2573 | `spine_e2e_test_s7_second_boot_record_present.rs` | 241 |
+
+- ブロック行の合計は **2,091**（要件 1.2・design の「テスト行 2,091」と完全一致）。
+- **新テストファイル 10 本はすべて 1,000 行以下**（最大 `…_s5_close_deadline.rs` の 336 行）。テーマ分割は不要
+  （design §テーマ分割ポリシー: 本ファイルは複数テストモジュールの個別ファイル化だけで全ファイル 1,000 行以下に収まる 3 本のうちの 1 本）。
+- 移設後の `spine_e2e_test.rs` は **354 行**（共有 fixture L1-314 ＋ 接続宣言 10 組 40 行）。`git diff --numstat` は
+  `20 insertions(+) / 2240 deletions(-)`（挿入 20 = 新設した `#[path]` 10 行 ＋ `mod X;` 10 行。`#[cfg(test)]` 10 行と
+  区切りの空行 10 行は元位置の行と一致するため差分に現れない）。
+- **共有 fixture は本体に残置**（design §File Structure Plan の規定どおり）: `E2E_BOUND`(:22)・`spin_pumping_ticks`(:48)・
+  `RecordedCall`(:73)・`ScriptedShioriBackendBuilder`(:89)・`ScriptedShioriBackend`(:170)・`ScriptedShioriHandle`(:252)・
+  `RecordingSink`(:282) とその impl 群。行番号は移設前後で同一（§19.5 (f)）。
+
+接続宣言（10 モジュールとも同一文言・design §移設方式の裁定 案 C・**`src/` 側と文言まで同一**）:
+
+    #[cfg(test)]
+    #[path = "spine_e2e_test_<モジュール名>.rs"]
+    mod <モジュール名>;
+
+**統合テストツリー内の冗長 `#[cfg(test)]` は落とさず残した**（設計判断 #13）。`tests/` 配下はクレート全体が test ターゲット
+であり `#[cfg(test)]` は常に真だが、除去は要件 2.4 が禁じる属性の変更に当たり、次回の行数計測（テストモジュール判定式）の
+一貫性も壊すためである。移設前後の `#[cfg(test)]` の出現数はともに **11**——内訳は属性 10 件（＝接続宣言 10 組）と、
+`global_log_probe` のバナー内でリテラルとして言及されている 1 件（移設前 `:2242` → `spine_e2e_test_global_log_probe.rs:5`）。
+移設後の `spine_e2e_test.rs` に残る `#[test]` の文字列 1 件は先頭 module doc（`:9`）の記述であり、移設前から同一・テスト実体ではない。
+
+### 19.2 モジュール解決の実測（要件 3.1 / 3.2・research §2.3.3 の 2 階層規則を本ツリーで再確認）
+
+`spine_e2e_test.rs` 自身が入口 `tests/ghost.rs:17-18` から `#[path = "ghost/spine_e2e_test.rs"]` で読み込まれるため、
+その子モジュールの `#[path]` 値（裸のファイル名）が **どのディレクトリを基準に解決されるか** を否定対照で確定させた。
+いずれも一時的に宣言を書き換えて `cargo test -p areka-ghost --test ghost --no-run` を実行し、**Edit で厳密に復元**した
+（破壊的 git は不使用。復元後に `NEGCTRL` 文字列がリポジトリ全域に 0 件であること、`git diff` に痕跡が無いことを確認済み）。
+
+| 対照 | 書き換えた宣言 | rustc の出力（要点） | 判ること |
+|---|---|---|---|
+| A | `#[path = "spine_e2e_test_tests_NEGCTRL.rs"]` | `error: couldn't read `crates\areka-ghost\tests\ghost\spine_e2e_test_tests_NEGCTRL.rs`: 指定されたファイルが見つかりません。 (os error 2)` / `--> crates\areka-ghost\tests\ghost\spine_e2e_test.rs:318:1` | 裸のファイル名は **宣言ファイル `spine_e2e_test.rs` 自身のディレクトリ `tests/ghost/`** を基準に解決される（入口 `tests/` でも `tests/ghost/spine_e2e_test/` でもない） |
+| B | `#[path]` を外した素の `mod tests;` | `error[E0583]: file not found for module `tests`` / `= help: to create the module `tests`, create file "crates\areka-ghost\tests\ghost\tests.rs" or "crates\areka-ghost\tests\ghost\tests\mod.rs"` | 素の `mod` も同じディレクトリを見る。ゆえに `<stem>_<モジュール名>.rs` 命名（案 C）を素の `mod` で表現することは**できない**——`#[path]` の明示が必須である |
+
+対照 B は research §2.3.3 が測った E0583 を本ツリーで再現したものであり、案 A（素の `mod`）が単一方式として成立しない
+という裁定の裏取りになっている。両対照とも exit 101（コンパイルエラー）で、復元後は exit 0・全緑に戻る。
+
+### 19.3 バナーと doc コメントの分類（設計判断 #2 と Implementation Notes の `///` 規則の適用）
+
+10 モジュールすべてで、`#[cfg(test)]` の直前にあるのは **`//` 行コメントのバナーブロック**（`// ===== S2: … =====` の
+見出し行＋そのモジュールが何を固定するかの説明行）である。`///`（doc コメント）や `//!` は **1 件も無い**——
+機械判定（バナー候補行が `///` / `//!` で始まったら例外送出）でも 0 件を確認した。よって Implementation Notes の
+「`///` doc コメント付きテストモジュールは接続宣言側へ残置する」規則（§14.3）は本タスクでは発動せず、
+設計判断 #2 のとおり **10 本すべてのバナーを対応するテストファイルの先頭へ同伴**させた。
+
+| # | モジュール | バナー行数 | 分類 | 移設後の位置 |
+|---:|---|---:|---|---|
+| 1 | `tests` | 4 | `//` バナー（モジュール間見出し） | ファイル先頭 L1-4 |
+| 2 | `broadcast_relevance_partition` | 12 | 同上 | L1-12 |
+| 3 | `s1_boot_success` | 7 | 同上 | L1-7 |
+| 4 | `s2_connect_failure` | 9 | 同上 | L1-9 |
+| 5 | `s3_helper_liveness_detected` | 11 | 同上 | L1-11 |
+| 6 | `s4_close_handshake` | 27 | 同上 | L1-27 |
+| 7 | `s5_close_deadline` | 38 | 同上 | L1-38 |
+| 8 | `s6_full_disconnect` | 25 | 同上 | L1-25 |
+| 9 | `global_log_probe` | 10 | 同上 | L1-10 |
+| 10 | `s7_second_boot_record_present` | 15 | 同上 | L1-15 |
+
+バナー 158 行は **全行がバイト同値**（行頭空白・文言・行数のいずれも不変・10 モジュールとも不一致 0）。
+バナーの直後に空行を 1 行置き（移設前もバナーと `#[cfg(test)]` の間に空行があった形を保つ）、その後に de-indent した本体を置いた。
+本文一致検証はバナーを見ない——比較対象は移設前の「`{` の次の行〜`}` の前の行」であり、バナーはブロックの外側だからである。
+移設後のファイルでもバナーは先頭の `use` 項目に付属し、`use` 項目は §11.4 のとおり突合対象から外れる（10 モジュールとも
+本体の先頭項目は `use` である）。したがってバナーの同伴は判定に影響せず、かつ 1 文字も失われていない。
+
+### 19.4 §11.4 の盲点（複数行文字列リテラル内の行頭空白）— 担当ファイルの独自走査
+
+Implementation Notes の指示に従い、担当ファイルを字句状態追跡つきの独立スキャナ（行コメント・入れ子ブロックコメント・
+通常文字列・raw 文字列（`#` の数）・バイト文字列・文字リテラルとライフタイムの判別・エスケープを追跡し、「行頭時点で
+文字列リテラルの内部にいる行」と「直前行が `\` 継続か」を判定する）で全走査した。スキャナの妥当性は §18.3 と同じ既知ケース
+`crates/wintf/src/ecs/window_proc/window_pos_tests.rs` で確認済み（実測出力: `継続行 5 件: 382,429,614,690,691 / 盲点該当 1 件: 691`）。
+
+| ファイル | 複数行文字列の継続行 | 盲点該当（`\` 継続でない行） |
+|---|---|---:|
+| `tests/ghost/spine_e2e_test.rs`（移設前・2,574 行） | 27（`790,895,1043,1073,1074,1271,1288,1336,1337,1338,1551,1588,1642,1660,1842,1882,1937,1980,1999,2189,2204,2218,2231,2321,2322,2510,2557`） | **0** |
+| 新テストファイル 10 本（移設後） | 27（s1 `145,250` ／ s2 `107,137,138` ／ s3 `166,183,231,232,233` ／ s4 `163,200,254,272` ／ s5 `173,213,268,311,330` ／ s6 `181,196,210,223` ／ `global_log_probe` `83,84` ／ s7 `178,225`） | **0** |
+| `tests/ghost/spine_e2e_test.rs`（移設後・354 行＝共有 fixture のみ） | 0 | **0** |
+
+**結論: 担当ファイルの複数行文字列リテラルはすべて `\` 継続であり、§11.4 第 1 の盲点の該当行は 0 件。**
+継続行の本数も移設前後で 27 = 27 と一致する。Rust は `\` 改行に続く行頭空白を除去するため、一律 4 スペース de-indent は
+リテラルの中身を変えない。例外処理は不要だった（§19.5 (a2) の全行分類でも、これら 27 行を含む全移設行が
+「ちょうど −4 スペース」に分類されている）。
+
+### 19.5 検証（すべて実測・終了コードで判定）
+
+**(a) 本文一致検証（要件 2.4）** — `pwsh -File $V/Compare-RelocatedTests.ps1 -Commit 585cd5d -OriginalPath crates/areka-ghost/tests/ghost/spine_e2e_test.rs -RelocatedPath "<新 10 本をカンマ区切り>" -Detail`
+
+    MATCH: test fn 15=15 / helper item 40=40 / mod block 10 / files 10
+
+exit **0**。加えて `-ModuleName` で 1 モジュール対 1 ファイルへ絞った 10 本の個別照合もすべて exit 0:
+
+| モジュール | 出力 |
+|---|---|
+| `tests` | `MATCH: test fn 6=6 / helper item 0=0 / mod block 1 / files 1` |
+| `broadcast_relevance_partition` | `MATCH: test fn 2=2 / helper item 3=3 / mod block 1 / files 1` |
+| `s1_boot_success` | `MATCH: test fn 1=1 / helper item 4=4 / mod block 1 / files 1` |
+| `s2_connect_failure` | `MATCH: test fn 1=1 / helper item 4=4 / mod block 1 / files 1` |
+| `s3_helper_liveness_detected` | `MATCH: test fn 1=1 / helper item 4=4 / mod block 1 / files 1` |
+| `s4_close_handshake` | `MATCH: test fn 1=1 / helper item 4=4 / mod block 1 / files 1` |
+| `s5_close_deadline` | `MATCH: test fn 1=1 / helper item 4=4 / mod block 1 / files 1` |
+| `s6_full_disconnect` | `MATCH: test fn 1=1 / helper item 4=4 / mod block 1 / files 1` |
+| `global_log_probe` | `MATCH: test fn 0=0 / helper item 7=7 / mod block 1 / files 1` |
+| `s7_second_boot_record_present` | `MATCH: test fn 1=1 / helper item 6=6 / mod block 1 / files 1` |
+
+故意にパスを誤らせた対照実行は **exit 2**（引数不正）を返し、不一致の 1 と区別できることを確認した
+（Implementation Notes の「2 を 1 と読み違えない」に対応）。
+
+**(a2) 行単位の分類と多重集合突合（スクリプトより強い独自検証）** — 移設した全行を位置対応で
+「ちょうど −4 スペース」「バイト同値（空行）」へ分類し、どちらでもない行を全件提示させた。
+
+| 新ファイル | −4 スペース行 | 空行 | その他 | バナーのバイト不一致 |
+|---|---:|---:|---:|---:|
+| `…_tests.rs` | 113 | 23 | **0** | 0 |
+| `…_broadcast_relevance_partition.rs` | 159 | 9 | **0** | 0 |
+| `…_s1_boot_success.rs` | 262 | 18 | **0** | 0 |
+| `…_s2_connect_failure.rs` | 140 | 16 | **0** | 0 |
+| `…_s3_helper_liveness_detected.rs` | 244 | 24 | **0** | 0 |
+| `…_s4_close_handshake.rs` | 231 | 19 | **0** | 0 |
+| `…_s5_close_deadline.rs` | 275 | 22 | **0** | 0 |
+| `…_s6_full_disconnect.rs` | 182 | 19 | **0** | 0 |
+| `…_global_log_probe.rs` | 72 | 8 | **0** | 0 |
+| `…_s7_second_boot_record_present.rs` | 205 | 20 | **0** | 0 |
+| **合計** | **1,883** | **178** | **0** | **0** |
+
+「その他」は **全モジュールで 0 件**——すなわち **可視性の付与も `use` の改変も本タスクでは 1 件も発生していない**
+（要件 2.8 の追加調整 0 件）。1 テストモジュール＝1 テストファイルで `super` の指す先が変わらないため、
+`use super::*;` を含む import 群がそのまま有効だったことによる。共有ヘルパの切り出し（`test_support`）も不要のため、
+Implementation Notes の E0659 罠（同名 shadow ヘルパのグロブ衝突・§17.5）は本タスクでは発生し得ない。
+
+行の多重集合突合（空行を除く。元＝移設前ブロック本体を一律 4 スペース de-indent した行の多重集合）:
+**元 1,883 / 新 1,883 / 消えた行 0 / 増えた行 0**（完全一致）。
+
+**(b) 対応表（要件 2.9）— 追加行 0** — 1 テストモジュール＝1 テストファイルの個別移設ゆえ、10 モジュールの
+モジュールパスは移設前後で不変であり、テスト完全修飾名は 1 件も変わらない。`verification/mapping/areka-ghost.csv` は
+タスク 3.4 の **20 行のまま無変更**（本タスクは行を追加しない）。
+
+**(b2) 直接証跡: `spine_e2e_test::` の 15 件がバイト同値** — 移設前 `before_default.txt` から抽出した
+`spine_e2e_test::` で始まる 15 行と、移設後リストから抽出した 15 行を `Compare-Object` で突合し **差分ゼロ**。
+15 件の内訳は `tests::` 6 ／ `broadcast_relevance_partition::` 2 ／ `s1`〜`s7` 各 1（`global_log_probe` は
+テスト関数を持たない支援モジュール）。
+
+**(c) 対応表適用後のテスト名リスト一致（要件 1.8 / 2.2）— ワークスペース水準**
+
+§10.2 の手順（`cargo test --workspace --no-fail-fast -- --list` → stdout のみ → `: test$` 抽出 →
+`[Array]::Sort($arr, [System.StringComparer]::Ordinal)` → UTF-8 BOM 無し・CRLF・末尾改行 1 つ・重複行を残す）で
+移設後リストを採取し、コミット済み `before_default.txt` と**タスク 3.1〜3.4 の 4 フラグメント全部（252 行・無変更）**を
+渡して突合した:
+
+    BEFORE      : before_default.txt  (4790 行 / 相異なる 4787)
+    AFTER       : after_default_task35.txt  (4790 行 / 相異なる 4787)
+    MAPPING     : 252 行 (4 ファイル) / 適用 252 行 / 未使用 0 行
+    LINE COUNT  : before 4790 / after 4790 -> 一致 (Requirement 2.2)
+    RESULT: PASS
+
+exit 0。**適用 252 行・未使用 0 行**（本タスクが対応表を 1 行も増やしていないことと整合）。
+移設後リストの SHA256 は `8468B087D4748BEC6DE24A9E08CF78996918413AC764C3680582C4D5B705C0E9`
+（§10.2 手順 5 の形式＝UTF-8 BOM 無し・CRLF・末尾改行 1 つ・序数整列。中間リストファイル自体はコミットしない）。
+
+**(c2) 反証: 対応表を使わない対称差** — `before_default.txt` と移設後リストの多重集合対称差は
+**消えた行 252 / 現れた行 252**（＝全フラグメント行数 252 と三者一致）。さらに、コミット済み `before_default.txt` に
+4 フラグメントを適用して再構成したリストは、移設後の実採取リストと **完全同値**（`Compare-Object` 差分なし・
+SHA256 も同一）。すなわち本タスクによる名前の変化は **0 件**であることが、対応表に依らずに示されている。
+
+**(d) クレート緑（要件 7.2）** — `cargo test -p areka-ghost --no-fail-fast` → **exit 0**。
+**147 passed / 0 failed / 0 ignored**（lib 107 ＋ 統合テスト（`tests/ghost.rs` ツリー）40 ＋ doctest 0）。
+§18.4 (d) が記録した移設前の 147（lib 107 ＋統合 40）と**完全一致**。統合テスト 40 本のうち
+`spine_e2e_test::` は 15 本で、10 の新ファイルすべてから期待どおり収集されている
+（`#[cfg(test)]` が統合テストターゲットで真であることの実行時確認でもある）。
+
+**(e) 警告非増加（要件 2.6）** — `cargo build -p areka-ghost --all-targets` → exit 0。
+`areka-ghost` に帰属する警告は **0 件**（出た警告は依存の `shiori4-testdll` (lib) の linker stdout 1 件のみで、
+`before_build_warnings.txt` の `[PER-UNIT TALLY]` に既に載っている基準内の警告）。
+ワークスペース全域でも §10.5 の手順で再集計した——`cargo build --workspace --all-targets` → exit 0、
+`DIAG_COUNT = 16` / `SUMMARY_COUNT = 7` / `GENERATED_SUM = 22` / `DUPLICATES = 6` / `NET = 16` で、
+§10.5 の移設前基準値 5 数値と**完全一致**。ユニット別 generated 件数（7 ユニット）も多重集合として一致する。
+
+**(f) 共有 fixture の無変更と外部参照の不変（design §File Structure Plan）** — 移設前コミット `585cd5d` の
+`spine_e2e_test.rs` の L1-314（module doc ＋ `use` ＋ `E2E_BOUND` ＋ `spin_pumping_ticks` ＋ `ScriptedShioriBackend` 一式 ＋
+`RecordingSink` 一式）を現作業ツリーの L1-314 と逐行突合し、**バイト不一致 0**。行番号も動いていない。
+外部からの参照 4 箇所はいずれも文言・解決先とも不変で、当該 4 ファイルに `git` 差分は無い:
+
+| 参照元 | 行 | 参照 |
+|---|---:|---|
+| `crates/areka-ghost/tests/ghost/inproc_e2e_test.rs` | 49 | `use crate::spine_e2e_test::RecordingSink;` |
+| `crates/areka-ghost/tests/ghost/real_pasta_test.rs` | 39 | `use crate::spine_e2e_test::RecordingSink;` |
+| `crates/areka-ghost/tests/ghost/snapshot_capture_test.rs` | 106 | `use crate::spine_e2e_test::RecordingSink;` |
+| `crates/areka-ghost/tests/ghost/sylphya_integration_test.rs` | 46 | `use crate::spine_e2e_test::RecordingSink;` |
+
+モジュール内部からの `super::` 参照（`super::E2E_BOUND` 11 箇所・`super::spin_pumping_ticks` 6 箇所・
+`super::global_log_probe::install` 1 箇所・`use super::*;` 8 箇所）も、`super` の指す先が
+`spine_e2e_test` のままであるため 1 件も書き換えていない。
+
+**(g) 完了状態の直接確認** — 移設後 `spine_e2e_test.rs` に残る `cfg(test)` / `#[path]` / `mod …;` の出現はすべて
+接続宣言のみ（`:316-318`・`:320-322`・`:324-326`・`:328-330`・`:332-334`・`:336-338`・`:340-342`・`:344-346`・
+`:348-350`・`:352-354` の 10 組）。テストモジュール本体は 1 行も残っていない。
+
+**(h) 作業ツリーの範囲** — `git status --porcelain -uall` は本節追記前の時点で下記 11 パスのみ:
+変更 1 本（`tests/ghost/spine_e2e_test.rs`）＋未追跡 10 本（新テストファイル）。
+`tests/ghost.rs`・同ツリーの他 7 ファイル・`src/**`・`verification/mapping/**`・`Cargo.toml`・`tasks.md`・
+spec 本体ドキュメントはいずれも無変更。否定対照（§19.2）の痕跡も 0 件（`NEGCTRL` の全域 grep が 0 ヒット）。
+
+### 19.6 登記（要件 5.2）— 壊れたテスト・状態汚染の所見
+
+**本タスクの範囲（統合テストツリー 1 ファイル・10 テストモジュール・15 テスト・テストコード 2,091 行）では、
+修正を要する壊れたテスト・不正なテストは 1 件も発見しなかった。所有 spec への送付所見は 0 件である。**
+
+以下は「調べたが問題なし／既存のまま据え置き」と確定した記録（次に触る者が同じ調査を繰り返さないための控え。是正は行わない）:
+
+| # | 観測 | file:line（移設後） | 判定 |
+|---|---|---|---|
+| 1 | プロセスグローバルな tracing subscriber を `OnceLock` ＋ `set_global_default` で常駐させる支援モジュール | `spine_e2e_test_global_log_probe.rs:68`（`static BUFFER`）・`:75-91`（`install()`）。利用は `spine_e2e_test_s7_second_boot_record_present.rs:109`（`super::global_log_probe::install()`） | **問題なし・記録のみ（是正しない）**。kanade アクタースレッドで発火する `boot_gate skip_first_boot` ログをスレッドローカル捕捉では捕えられないために意図して常駐させているもので、`install()` の `expect` メッセージに不変条件（「本モジュールより先に別の global subscriber を設定してはならない」）が明記されている。**この不変条件が現に成立していることを実測で確認した**——`crates/areka-ghost/tests/` 全域を走査した結果、`set_global_default` ／ `subscriber::set_default` ／ `with_default` ／ `.init()` を呼ぶ箇所は本モジュール以外に **0 件**。フィルタ無しの capture-all ゆえ Interest の `Never` 焼き付きも起こさない。テスト間の状態汚染ではなく汚染の**予防**機構であり、`test-cage-determinism` への送付対象ではない |
+| 2 | 一時ディレクトリ名がテスト関数名だけでユニーク化されており、プロセス/実行をまたぐと同一パスになる | `spine_e2e_test_s1_boot_success.rs:17-21`／`…_s2_connect_failure.rs:22-26`／`…_s3_helper_liveness_detected.rs:25-29`／`…_s4_close_handshake.rs:37-41`／`…_s5_close_deadline.rs:48-52`／`…_s6_full_disconnect.rs:39-43`（いずれも `unique_temp_dir`） | **既存・記録のみ（是正しない）**。§18.5 #2（`runtime_tests.rs:55-59`・`config.rs:84-88`）と**同型**の観測である。モジュール名（`s1`〜`s6`）とテスト関数名で 1 プロセス内の一意性は保たれるため、テスト間の衝突は起きない。危険なのは同一マシンで `cargo test` を 2 プロセス同時に走らせた場合（プロセス**間**）であり、要件 5.2 が拾う「テスト**間**の状態汚染」には当たらない。**同ファイル群のうち `s7` だけは `std::process::id()` を混ぜて硬化済み**（`…_s7_second_boot_record_present.rs:32-40`）——同一ツリー内で流儀が割れている点も含めて記録に留める。テスト本文の変更は要件 2.4 違反になるため触らない |
+| 3 | 有界スピンの壁時計安全弁 60 秒（`E2E_BOUND`）と、それを直接使う `Instant` デッドライン | `spine_e2e_test.rs:22`（定数・共有 fixture に残置）・`:54`（`spin_pumping_ticks` 内）／`super::E2E_BOUND` の参照は新 7 ファイルに 11 箇所（`…_s1…:277`・`…_s2…:69`・`…_s3…:68,144`・`…_s4…:266`・`…_s5…:251,324`・`…_s6…:83`・`…_s7…:156,206,231`） | **問題なし・記録のみ**。定義位置（`:19-22`）のコメントに「意味論 deadline は MonotonicMs 仮想時間で注入されるためこの壁時計値はテスト意味論に影響せず、workspace 並列負荷の飢餓による偽赤のみを防ぐ」と明記されており、兄弟 e2e（inproc/real_pasta/snapshot_capture = 60s）と規約が揃っている。仮想時刻を進めるのは注入 Tick のみで、壁時計は宙吊り検出の上限にすぎない |
+| 4 | `static` / `thread_local!` / `std::env::set_var` / `unsafe` / `std::thread::sleep` / `#[ignore]` / `#[should_panic]` の使用 | 担当 11 ファイル全域 | `static` は #1 の `BUFFER` 1 件のみ。`thread_local!` ／ `set_var` ／ `unsafe` ／ `sleep` ／ `#[ignore]` ／ `#[should_panic]` は **0 件**（全走査で確認）。プロセスグローバルな可変状態は #1 の観測用バッファのみである |
+| 5 | 移設で可視性・`use`・モジュール接続の追加調整が要るケース（要件 2.8） | — | **0 件**。1 テストモジュール＝1 テストファイルで `super` の指す先が変わらないため、`use super::*;` を含む import 群がそのまま有効だった（§19.5 (a2) の「その他 0 行」がその機械的証跡） |
+| 6 | §18.4 (c) が記録した移設後リストの SHA256 `9C75E1B7…F20F` が §10.2 手順 3・5 の形式で再現しない | `verification/notes.md` §18.4 (c) | **記録のみ（是正しない・他タスクの記録であり本 spec の受け入れには無影響）**。本タスクで出所を特定した——当該ハッシュは同じ 4,790 行を **`Sort-Object`（カルチャ依存比較）で整列**したファイルのものであり（実測で完全一致を確認）、§10.2 手順 3 が指定する `[System.StringComparer]::Ordinal` 整列では `8468B087…C0E9` になる。**リストの内容（行の多重集合）は同一**であり、`Compare-TestLists.ps1` の判定は行単位の多重集合突合ゆえ整列順に依存しないため、要件 2.2 / 2.3 の充足には影響しない。§18.4 (c) の本文が「整列は `Sort-Object` を使わず `Ordinal` で行った」と述べている点と記録値が食い違っているだけであり、**本文の是正はタスク 7.1／完了時にまとめて判断する**（Implementation Notes の「リストの SHA256 は補助証跡・正規の witness は `Compare-TestLists.ps1` の照合結果」に従い、本タスクの witness は §19.5 (c) の `RESULT: PASS` である） |
+
+### 19.7 本タスクの成果物
+
+| ファイル | 内容 |
+|---|---|
+| `crates/areka-ghost/tests/ghost/spine_e2e_test_tests.rs` | 新規（141 行・6 テスト） |
+| `crates/areka-ghost/tests/ghost/spine_e2e_test_broadcast_relevance_partition.rs` | 新規（181 行・2 テスト） |
+| `crates/areka-ghost/tests/ghost/spine_e2e_test_s1_boot_success.rs` | 新規（288 行・1 テスト） |
+| `crates/areka-ghost/tests/ghost/spine_e2e_test_s2_connect_failure.rs` | 新規（166 行・1 テスト） |
+| `crates/areka-ghost/tests/ghost/spine_e2e_test_s3_helper_liveness_detected.rs` | 新規（280 行・1 テスト） |
+| `crates/areka-ghost/tests/ghost/spine_e2e_test_s4_close_handshake.rs` | 新規（278 行・1 テスト） |
+| `crates/areka-ghost/tests/ghost/spine_e2e_test_s5_close_deadline.rs` | 新規（336 行・1 テスト） |
+| `crates/areka-ghost/tests/ghost/spine_e2e_test_s6_full_disconnect.rs` | 新規（227 行・1 テスト） |
+| `crates/areka-ghost/tests/ghost/spine_e2e_test_global_log_probe.rs` | 新規（91 行・テスト 0・S7 支援モジュール） |
+| `crates/areka-ghost/tests/ghost/spine_e2e_test_s7_second_boot_record_present.rs` | 新規（241 行・1 テスト） |
+| `crates/areka-ghost/tests/ghost/spine_e2e_test.rs` | 末尾の 10 テストモジュールブロックを接続宣言 10 組へ置換（共有 fixture L1-314 は無変更・2,574 → 354 行） |
+| `verification/notes.md` | 本節（§19）を追記 |
+
+コミットは要件 7.1 に従い **`areka-ghost` 統合テストツリーの 1 コミット**（同クレートのライブラリ側＝タスク 3.4 とは別コミット）とする。
+これで design §File Structure Plan の `crates/areka-ghost`（`src/` 3 本＋`tests/` 1 本）は全数着地した。
