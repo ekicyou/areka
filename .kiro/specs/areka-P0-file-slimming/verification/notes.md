@@ -2766,3 +2766,304 @@ mod 1-670 ／ steady 1-904 ／ boot 1-289）。加えて `mod.rs` が保存し�
 | `verification/notes.md` | 本節（§20）を追記 |
 
 コミットは要件 7.1 に従い**クレート単位の 1 コミット**（`areka-kanade`）とする。
+
+## 21. クレート単位のテスト分離とテーマ分割: `areka-emo-present`（小規模 3 ファイル）（タスク 4.2・要件 1.1 / 1.6 / 1.7 / 1.8 / 2.4 / 2.8 / 2.9 / 3.1〜3.3 / 7.1 / 7.2）
+
+- 実施日: 2026-08-08
+- ブランチ: `claude/areka-p0-file-slimming-64d065` / 移設前コミット `60e0b22`（タスク 4.1 のコミット時点）
+- 実行シェル: **PowerShell（pwsh 7）**
+- 触ったのは下表の本番 3 ファイル ＋ 新規テストファイル 6 本 ＋ `verification/mapping/areka-emo-present.csv` ＋ 本ファイルのみ。
+  **`crates/areka-emo-present/src/presenter.rs`（テストコード 4,375 行）はタスク 4.3 の担当ゆえ 1 行も触っていない**。
+  `crates/areka-emo-present/tests/`・`Cargo.toml`・他クレート・spec 本体ドキュメントも無変更（`git status --porcelain -uall` で確認）
+
+### 21.1 移設した 3 ファイル（design §File Structure Plan の `crates/areka-emo-present` の 4 本のうち `presenter.rs` を除く 3 本）
+
+| 本番ファイル | 移設前 総行 | テストモジュール（移設前の行範囲） | 扱い | 新テストファイル | 新ファイル行 | テスト数 | 本番 残行 |
+|---|---:|---|---|---|---:|---:|---:|
+| `src/balloon.rs` | 2,264 | `tests`（633-2264・テストコード 1,632） | **テーマ分割 ×3 ＋共有ヘルパ** | `balloon_test_support.rs` ／ `balloon_series_tests.rs` ／ `balloon_model_tests.rs` ／ `balloon_target_tests.rs` | 197 / 685 / 338 / 418 | 0 / 24 / 6 / 7 | 644 |
+| `src/cache.rs` | 1,100 | `tests`（194-1100・907） | 単純移設 | `cache_tests.rs` | 904 | 16 | 196 |
+| `src/scale.rs` | 876 | `tests`（228-876・649） | 単純移設 | `scale_tests.rs` | 646 | 18 | 230 |
+
+- 3 ファイルとも移設前の行範囲は `target_inventory.csv` / `scan_raw.csv` の実測（`crates/areka-emo-present` の該当 3 行）と**完全一致**（ズレ 0）。テストモジュールはすべてファイル末尾に連続配置・1 ファイル 1 モジュール。
+- **新テストファイル 6 本はすべて 1,000 行以下**（最大 `cache_tests.rs` の 904 行）。**僅少超過で単一維持したファイルは 0 件**（§7.4 への追記は不要）。
+- 3 ファイルとも非 `mod` `#[cfg(test)]` 項目（設計判断 #3 の残置対象 40 件）は 1 件も存在しない（`scan_raw.csv` の当該 3 行の `nonmod_count` が 0）。`scale.rs:21` の `#[cfg(test)]` はモジュール doc コメント本文中の文字列であって属性ではない。
+- テストモジュールに `///` doc コメントは付いていない（Implementation Notes の §14.3 規則は本タスクでは発動しない）。
+- `#[cfg(test)]` 行は §13〜§20 と同じく**元位置に据え置き**、増えるモジュールぶんの宣言だけを新設した（`git diff --numstat` の挿入は balloon 11・cache 2・scale 2 の計 15 行／削除 3,185 行）。
+- 移設先 4 ファイルの合計 1,638 行は、移設前ブロック本体 1,629 行 − 元の `use` ヘッダ 6 行 ＋ 各テーマファイルの新ヘッダ 15 行 で説明がつく（項目間の空行 20 本は元の配置のまま保存）。
+- 同クレートの残る `src/` は `presenter.rs`（**タスク 4.3 の担当**）と、テストコード 500 行以下ゆえ要件 1.5 で非必須・設計判断 #10 により任意移設を行わない 4 本（`chain.rs` 159／`mount.rs` 198／`command.rs` 92／`lib.rs` 0）である（いずれも無変更）。`tests/swapchain_spike.rs`（273 行）は `#[cfg(test)] mod` ブロックを持たず要件 1.1 の対象外（無変更）。
+
+接続宣言（6 モジュールとも同一文言・design §移設方式の裁定 案 C）:
+
+    #[cfg(test)]
+    #[path = "<stem>_<モジュール名>.rs"]
+    mod <モジュール名>;
+
+### 21.2 テーマ境界の裁定（design §テーマ分割ポリシー・手順①）
+
+**本ファイルのバナーは作業時系列ではなく thematic だった**（タスク 4.1 §20.2 とは逆）。`balloon.rs` の
+`// ──` バナー 7 本はいずれも「檻 1: scope→接頭辞優先連鎖の導出」「檻 2-5: 面 ID 単位の連鎖探索」
+「檻 6: 採用接頭辞からの面別上書きファイル名導出」「公開 API `resolve_balloon_faces`」「檻 7: R6.2 warn の発火条件」
+「檻 8: scope 別バルーン定義の 2 層マージ」「後方互換の非回帰」という**対象の本番項目名を掲げた見出し**であり
+（移設前 `balloon.rs:929,1056,1293,1340,1443,1714,2063`）、本番 API の継ぎ目と 1 対 1 に対応していた。
+先行タスクと同じく**本番 API の継ぎ目を第一基準**に採り、ヘルパ参照関係の全数走査で裏取りした。
+
+**本番 API（移設前 `balloon.rs:1-632`）は 3 群に分かれる**:
+(i) **系列解決** `SeriesFamily`（`:62`）・`BALLOON_FAMILY`（`:72`）・`SeriesPrefix`（`:80`）・`ChainTier`（`:89`）・
+`prefix_chain`（`:143`）・`ResolvedFace`（`:191`・`override_file_name` は `impl`（`:203`）内）・`face_id_of`（`:233`）・
+`select_faces`（`:265`）・`enumerate_file_names`（`:309`）・`resolve_balloon_faces`（`:358`）、
+(ii) **scope 別バルーン定義の 2 層マージ** `read_decoded`（`:417`）・`read_descript_layer`（`:425`）・
+`read_face_override_layer`（`:446`）・`load_scope_balloon_model`（`:499`）、
+(iii) **表示ターゲット構築** `synthetic_surfaces_txt`（`:541`）・`build_balloon_target`（`:566`）・
+`build_balloon_target_from_faces`（`:585`）。
+
+| 新モジュール（ファイル） | 移設前の行範囲 | 対象の本番項目 | テスト数 |
+|---|---|---|---:|
+| `test_support`（`balloon_test_support.rs`） | 642-684, 1443-1576, 1714-1726 | —（2〜3 テーマから参照される 3 群の共有ヘルパ） | 0 |
+| `series_tests`（`balloon_series_tests.rs`） | 737-785, 929-1054, 1056-1291, 1293-1338, 1340-1441, 1578-1589, 1591-1694 | 系列を明示した面判定・接頭辞優先連鎖の導出（`prefix_chain`・`SeriesFamily` 表データ）・面 ID 単位の連鎖探索（`select_faces`・`face_id_of`）・採用接頭辞からの上書きファイル名導出（`ResolvedFace::override_file_name`）・公開解決 API（`resolve_balloon_faces`）・R6.2 縮退 warn の発火条件 | 24 |
+| `model_tests`（`balloon_model_tests.rs`） | 1728-1736, 1738-2061 | scope 別バルーン定義の 2 層マージ（`load_scope_balloon_model`＋`read_*_layer`）——per-scope 実値・未指定キーの継承・上書き層不在の `debug!` 縮退・不在以外の I/O エラーの `warn!`・基層読取失敗・確定値の `info!` 記録 | 6 |
+| `target_tests`（`balloon_target_tests.rs`） | 686-689, 691-735, 787-830, 832-870, 872-927, 1696-1712, 2063-2143, 2145-2263 | synthetic surfaces.txt の転記一致（`synthetic_surfaces_txt`）・parse→bake→World の全経路構築（`build_balloon_target`・`build_balloon_target_from_faces`）・面 0 不在の `EmptyComposition` 縮退・本仕様適用前の固定接頭辞列挙（神託）との後方互換非回帰 | 7 |
+
+**design の初期見積 `×約 2` に対し `×3 ＋ 共有ヘルパ` を採った理由**: design は
+「他 22 モジュールのテーマ名は実装時に各モジュールの内容から決定し、旧→新テスト名対応表に記録する」として
+テーマ名・本数を実装時裁定に委ねており、`×約 2` は概算である。本ファイルの本番 API は上記のとおり
+**3 つの継ぎ目に明確に割れており**、2 分割にすると (ii) 定義マージ と (iii) ターゲット構築 という
+互いに独立した継ぎ目を、行数を満たす目的だけで 1 ファイルへ融合することになる（両者が共有するヘルパは
+`emo2_balloon_root` と `TempDir` の 2 件のみで、いずれも 3 テーマ横断ゆえ `test_support` へ出る）。
+design §テーマ分割ポリシーの判定基準は「テストモジュール内部の既存構造（対象関数のまとまり・コメントバナー・
+ヘルパの参照関係）に従い」であり、本数ではない。3 分割はバナー 7 本・本番 API 3 群・ヘルパ参照グラフの
+3 者すべてと整合する唯一の分け方である。
+
+**ヘルパ参照関係による裏取り**（テストモジュール内の全ヘルパ項目 23 件の参照行を全数走査。行番号は移設前）:
+
+- **3 テーマから参照される群**（→ `test_support`）: `TEMP_COUNTER`（`:646`）＋`TempDir`（`:649`・`impl` `:653`・
+  `impl Drop` `:680`）——参照は series 7 箇所（`:1346,1364,1382,1408,1600,1645,1666`）・model 3 箇所
+  （`:1863,1931,1973`）・target 4 箇所（`:793,839,1700,2157`）。
+- **2 テーマから参照される群 その 1**（→ `test_support`）: ログ捕捉ハーネス 6 項目——`CapturedEvent`（`:1455`）・
+  `impl CapturedEvent`（`:1460`）・`FieldGrab`（`:1472`）・`impl Visit`（`:1474`）・`CaptureSubscriber`（`:1483`）・
+  `impl Subscriber`（`:1485`）・`InterestProbe`（`:1514`）・`impl Subscriber`（`:1516`）・`ensure_interest_probes`（`:1546`）・
+  `capture_events`（`:1565`）。`capture_events` の参照は series 3 箇所（`:1605,1649,1671`）・model 4 箇所
+  （`:1874,1941,1980,2019`）。`CapturedEvent` の型名・`.level`・`.fields`・`.field()` は series（`:1583,1584,1623,1625,1630,1635,1656,1689,1693`）と
+  model（`:1890,1893,1904,1910,1917,1946,1949,1956,1962,1989,1992,2003,2021,2024,2025,2033,2039,2043,2049,2053,2054,2055,2057`）の双方から直に触られる。
+- **2 テーマから参照される群 その 2**（→ `test_support`）: `emo2_balloon_root`（`:1723`）——参照は model 3 箇所
+  （`:1749,1818,2017`）・target 2 箇所（`:883,2221`）。
+- **単一テーマ専用 10 項目**（当該テーマファイルに残置）: series 側＝`chain_pairs`（`:932`・参照 5）・
+  `selected`（`:1059`・参照 12）・`default_fallback_warns`（`:1579`・参照 2）／
+  model 側＝`emo2_face0`（`:1729`・参照 5・すべて model 内）／
+  target 側＝`opaque_1x1`（`:687`・参照 3）・`pre_spec_faces`（`:2078`・参照 3）・`opaque`（`:2096`・参照 2）・
+  `scope_digest`（`:2111`・参照 4）。参照行はいずれも自テーマの範囲にしか現れない。
+
+**バナーの帰属（§20.2 で確定した扱いの適用）**: 本文一致検証（`RustParse.ps1:319-331`）は、直前の空行と
+コメント行を読み飛ばして最初のコード行を探すため、**先行コメント塊は後続項目の本文の一部**になる。
+したがって共有ヘルパの直前にあるバナー 3 本——`:642-644`（一時ディレクトリ）・`:1443-1451`（檻 7: R6.2 warn の
+発火条件）・`:1714-1715`（檻 8: 2 層マージ）——はそれぞれ `TEMP_COUNTER`・`CapturedEvent`・`emo2_balloon_root` の
+本文に属する。**バナーだけをテーマ側へ残すと本文不一致になる**ため、3 本とも該当ヘルパに同伴させて
+`balloon_test_support.rs` へ移した（文言は 1 文字も変えていない。現 `:5-7`・`:50-58`・`:186-187`）。
+残る 4 本（`:929` 檻 1／`:1056` 檻 2-5／`:1293` 檻 6／`:1340` 公開 API／`:2063-2070` 後方互換）は
+自テーマの項目に属するため、当該テーマファイルの元位置にそのまま置いた。
+
+**共有ヘルパの可視性（要件 2.4 が許容する機械的調整）**: `balloon_test_support.rs` の
+`TempDir`（struct＋`path` フィールド＋`new`/`path`/`touch`/`write` の 4 メソッド）・
+`CapturedEvent`（struct＋`level`/`fields` の 2 フィールド＋`field` メソッド）・`capture_events`・`emo2_balloon_root` の
+**計 12 行の先頭にのみ** `pub(super)` を付与した（付与のみ・本文は無変更）。`TEMP_COUNTER`・`FieldGrab`・
+`CaptureSubscriber`・`InterestProbe`・`ensure_interest_probes` は `test_support` の内部からしか参照されないため
+可視性を変えていない。**複製は 1 件も作っていない**（`ITEM-EXTRA` 回避・Implementation Notes の集約規則どおり）。
+
+**Implementation Notes の E0659 罠（タスク 3.3 §17.5）への対処**: 共有ヘルパは**明示 import** で受けた
+（`use super::test_support::{…};`）。加えて誤結合の有無を実測で確認した——移設前の本番スコープ
+（`balloon.rs:1-632`）を全数走査した結果、`test_support` が持つ 9 識別子
+（`TEMP_COUNTER`・`TempDir`・`CapturedEvent`・`FieldGrab`・`CaptureSubscriber`・`InterestProbe`・
+`ensure_interest_probes`・`capture_events`・`emo2_balloon_root`）のうち、
+**本番モジュールの名前空間と衝突するものは 0 件**である（各識別子の本番スコープ出現数がすべて 0）。
+同一シグネチャの黙った差し替えは起き得ない。
+
+**`use` ヘッダの調整（要件 2.4 / 2.6）**: 各テーマファイルの先頭に `use super::*;` と、そのファイルで実際に
+使う項目だけの `use` を置いた（絞る前のビルドで `unused_imports` が 3 件出て要件 2.6 に反したため）。
+落としたのは `series_tests`＝`areka_emo_atlas::MemoryDecoder`（`super::*` 経由で本番の import が届くため不要）・
+`model_tests`＝`std::path::PathBuf`・`target_tests`＝`std::path::PathBuf` の 3 件のみで、
+移設前ヘッダの 4 本（`areka_emo_atlas::{ElementId, MemoryDecoder}`・`areka_parsers::shell::parse`・
+`std::path::PathBuf`・`std::sync::atomic::{AtomicU32, Ordering}`）は**いずれも 1 本も失われず**、
+必要なテーマファイルへ 1 回ずつ配置されている。単純移設の 2 本（`cache_tests`・`scale_tests`）は
+`use` ヘッダを 1 行も変えていない。**可視性・`use` 以外の調整は 1 件も必要なかった**（要件 2.8 の追加調整 0 件）。
+
+### 21.3 §11.4 の盲点（複数行文字列リテラル内の行頭空白）— 担当 3 ファイルの独自走査
+
+Implementation Notes の指示に従い、担当ファイルを字句状態追跡つきの独立スキャナ
+（行コメント・入れ子ブロックコメント・通常文字列・raw 文字列（`#` の数）・バイト文字列・
+文字リテラルとライフタイムの判別・エスケープを追跡し、「行頭時点で文字列リテラルの内部にいる行」と
+「直前行が `\` 継続か」を判定する）で全走査した。スキャナの妥当性は、既知の唯一の該当箇所
+`crates/wintf/src/ecs/window_proc/window_pos_tests.rs:691` を**盲点 1 件**として検出し、同ファイルの
+`:382`・`:429`・`:614`・`:690` を **`\` 継続 4 件**として正しく切り分けることで確認した
+（実測出力: `継続行 5 件: 382,429,614,690,691 / 盲点該当 1 件: 691`）。
+
+| ファイル群 | 複数行にまたがる文字列リテラルの継続行 | 盲点該当（`\` 継続でない行） |
+|---|---:|---:|
+| 移設前の本番 3 ファイル（`60e0b22` から `git show`） | **0** | **0** |
+| 移設後の新テストファイル 6 本 | **0** | **0** |
+| 移設後の本番 3 ファイル | **0** | **0** |
+
+**結論: 担当 3 ファイルには複数行にまたがる文字列リテラルが 1 件も存在せず、§11.4 第 1 の盲点の該当行は 0 件。**
+例外処理は不要だった。
+
+### 21.4 検証（すべて実測・終了コードで判定）
+
+**(a) 本文一致検証（要件 2.4）** — `pwsh -File $V/Compare-RelocatedTests.ps1 -Commit 60e0b22 -OriginalPath <本番> -RelocatedPath "<新テスト群>" -Detail`
+
+| 対象 | 出力 | exit |
+|---|---|---:|
+| `cache.rs` → 1 ファイル | `MATCH: test fn 16=16 / helper item 9=9 / mod block 1 / files 1` | 0 |
+| `scale.rs` → 1 ファイル | `MATCH: test fn 18=18 / helper item 14=14 / mod block 1 / files 1` | 0 |
+| `balloon.rs` → 4 ファイル | `MATCH: test fn 37=37 / helper item 23=23 / mod block 1 / files 4` | 0 |
+
+3 本とも exit **0**。**引数不正の 2 と取り違えていないことを対照実行で確認した**——
+`-OriginalPath crates/areka-emo-present/src/nonexistent.rs` を与えると
+`fatal: path ... does not exist in '60e0b22'` を出して **exit 2** になる（不一致の 1 ではない）。
+
+**(a2) 行単位の分類と多重集合突合（スクリプトより強い独自検証）** — 本文一致検証は項目単位・行頭空白非依存であるため、
+それとは独立に、移設した**全行**を「(a) ちょうど −4 スペース」「(b) 空行」へ分類し、
+どちらでもない行を全件提示させた（新設した `use` ヘッダ行は分類の対象外）。
+
+| 新ファイル | −4 スペース行 | 空行 | 非適合行 | 新ヘッダ | 総行 |
+|---|---:|---:|---:|---:|---:|
+| `balloon_test_support.rs` | 159 | 22 | **12** | 4 | 197 |
+| `balloon_series_tests.rs` | 637 | 45 | **0** | 3 | 685 |
+| `balloon_model_tests.rs` | 311 | 24 | **0** | 3 | 338 |
+| `balloon_target_tests.rs` | 380 | 33 | **0** | 5 | 418 |
+| `cache_tests.rs` | 834 | 70 | **0** | 0 | 904 |
+| `scale_tests.rs` | 598 | 48 | **0** | 0 | 646 |
+
+`balloon_test_support.rs` の非適合 **12 行はすべて `pub(super)` を付与した宣言行**であり（§21.2 の可視性調整）、
+要件 2.4 が明示的に許容する調整である。それ以外の移設行は例外なく「ちょうど −4 スペース」または空行。
+
+行の多重集合突合（空行を除く。元＝移設前ブロック本体を一律 4 スペース de-indent した行の多重集合。新側は
+`use` ヘッダを含む全行）:
+
+| 本番ファイル | 元 | 新 | 消えた行 | 増えた行 | 内訳 |
+|---|---:|---:|---:|---:|---|
+| `cache.rs` | 834 | 834 | **0** | **0** | 完全一致（`use` も含め 1 行も動かしていない） |
+| `scale.rs` | 598 | 598 | **0** | **0** | 完全一致 |
+| `balloon.rs` | 1,504 | 1,510 | 12 | 18 | 消 = `pub(super)` を付ける前の 12 宣言行 ／ 増 = `pub(super)` 付き 12 行 ＋ 複製された `use super::*;` 3 行 ＋ 新設した `use super::test_support::{…};` 3 行 |
+
+差分はすべて要件 2.4 が明示的に許容する調整（可視性付与・`use` の追加／複製）だけで説明がつき、
+説明のつかない行は 0 件である。移設前ヘッダの `use` 4 本は 1 本も消えていない（消えた 12 行に `use` は無い）。
+
+**(b) 対応表フラグメントの全単射検証（要件 2.9）** — `pwsh -File $V/Test-MappingBijection.ps1 -Path $V/mapping/areka-emo-present.csv`
+
+    PASS: 全単射 OK / 行数 37 / 相異なる old_fqn 37 / 相異なる new_fqn 37 / フラグメント 1
+      - areka-emo-present.csv: 37 行
+
+exit 0。37 行の内訳は `balloon::tests::*` → `series_tests` 24／`model_tests` 6／`target_tests` 7。
+`reason` は全行 `theme_split`、末尾セグメント（関数識別子）は旧新で同一。
+**`cache.rs`・`scale.rs` は完全修飾名が変わらないため行を持たない**（`cache::tests` 16・`scale::tests` 18 は移設前後で同名）。
+移設前 `before_default.txt` に `balloon::tests::` が **37 行**実在し、対応表の `old_fqn` 37 件すべてが
+そこに存在することを照合済み（不在 0）。既存フラグメントとの結合検証（`-Path $V/mapping`）も
+`PASS: 全単射 OK / 行数 377 / 相異なる old_fqn 377 / 相異なる new_fqn 377 / フラグメント 6` で exit 0（キー衝突なし）。
+**本フラグメントはタスク 4.3 が `presenter.rs` 分を追記できる状態（同一 3 列・`old_fqn` 序数順）で残してある。**
+
+**(c) 対応表適用後のテスト名リスト一致（要件 1.8 / 2.2）— ワークスペース水準**
+
+移設後に §10.2 の手順（`cargo test --workspace --no-fail-fast -- --list`（exit 0）→ stdout のみ → `: test$` 抽出 →
+`$arr = [string[]]@(…)` へ型付け → `[Array]::Sort($arr, [System.StringComparer]::Ordinal)` →
+UTF-8 BOM 無し・CRLF・末尾改行 1 つ・重複行を残す）でリストを採取し、
+コミット済み `before_default.txt` と**タスク 3.1〜4.2 の 6 フラグメント全部**を渡して突合した:
+
+    BEFORE      : before_default.txt  (4790 行 / 相異なる 4787)
+    AFTER       : after_default_task42.txt  (4790 行 / 相異なる 4787)
+    MAPPING     : 377 行 (6 ファイル) / 適用 377 行 / 未使用 0 行
+    LINE COUNT  : before 4790 / after 4790 -> 一致 (Requirement 2.2)
+    RESULT: PASS
+
+exit 0。**適用 377 行・未使用 0 行**。移設後リストの SHA256 は
+`A311FC84A2A4ED828C6729521A25B122D991F529B1CF70A6756433AA9B8FBABA`
+（§10.2 手順 3〜5 の形式。中間リストファイル自体はコミットしない）。
+
+**整列器の較正（Implementation Notes の ⚠ 項目）**: コミット済みファイルのハッシュ照合では整列器が動かないため、
+**同一の未整列生出力（4,790 行）を序数と `Sort-Object` の 2 通りに整列**して digest が割れることを先に確かめた:
+序数 `A311FC84…BABA` ／ `Sort-Object` `FE2479FA…5D6E` ／ **1,806 位置が相違・多重集合の差は 0**。
+§10.2 の実測（1,806 位置）と一致しており、序数比較器が実際に働いていることの直接証跡である。
+
+**(c2) 対応表そのものへの反証（自分の表を疑う検証）** — 対応表が「実際に起きた変化」と過不足なく一致することを、
+対応表を**使わない**多重集合の対称差で確かめた。
+
+| 検査 | 結果 |
+|---|---|
+| `before_default.txt` と移設後リストの対称差（対応表なし）: 消えた行 / 現れた行 / 全フラグメント行数 | **377 / 377 / 377**（三者一致） |
+| うち本タスクぶん（`balloon::tests::` の消滅 ／ `balloon::(series\|model\|target)_tests::` の出現） | **37 / 37**（自クレートの対応表 37 行と一致） |
+| 消えた行がすべて `old_fqn` に在るか | **True**（例外 0） |
+| 現れた行がすべて `new_fqn` に在るか | **True**（例外 0） |
+| `old_fqn` なのに実際には消えていない行 | **0** |
+| `new_fqn` なのに実際には現れない行 | **0** |
+| `old_fqn` と `new_fqn` が同一の行（＝変わっていない名前を載せた水増し） | **0** |
+| 末尾セグメント（関数識別子）が旧新で相違する行 | **0** |
+| `reason` が `theme_split` 以外の行 | **0** |
+
+すなわち対応表は「実際に変わった名前だけ」を「実際に変わったとおりに」記載しており、水増しも取りこぼしも無い。
+
+移設後リストのモジュール別内訳（`cargo test -p areka-emo-present --lib -- --list`・計 127）:
+`balloon::model_tests` 6 ／ `balloon::series_tests` 24 ／ `balloon::target_tests` 7 ／ `cache::tests` 16 ／
+`chain::tests` 1 ／ `command::tests` 5 ／ `mount::tests` 3 ／ `presenter::tests` 47 ／ `scale::tests` 18。
+移設前の `balloon::tests` 37 と本数が一致する（24+6+7=37）。`presenter::tests` 47 は**無変更**（タスク 4.3 の担当）。
+
+**(d) クレート緑（要件 7.2）** — `cargo test -p areka-emo-present --no-fail-fast` → **exit 0**。
+**128 passed / 0 failed / 0 ignored**（lib 127 ＋ 統合テスト `tests/swapchain_spike.rs` 1 ＋ doctest 0）。
+移設前の独立導出値と一致する: 移設前コミット `60e0b22` の `git show` に対する `#[test]` 属性行の全数は
+`src/` 8 ファイルで **127**（balloon 37・cache 16・chain 1・command 5・lib 0・mount 3・presenter 47・scale 18）、
+`tests/` で **1**（swapchain_spike 1）。
+
+**(e) 警告非増加（要件 2.6）** — `cargo build -p areka-emo-present --all-targets` → exit 0・**警告 0 件**
+（`areka-emo-present` に帰属する警告は移設前基準値でも 0 件の割当）。
+ワークスペース全域でも §10.5 の手順で再集計した——`cargo build --workspace --all-targets` → exit 0、
+`DIAG_COUNT = 16` / `SUMMARY_COUNT = 7` / `GENERATED_SUM = 22` / `DUPLICATES = 6` / `NET = 16` で、
+§10.5 の移設前基準値 5 数値と**完全一致**。ユニット別 generated 件数（7 ユニット・多重集合 {1,3,3,3,4,4,4}）も一致する。
+
+**(f) 本番本体の無変更** — 移設前コミット `60e0b22` の各本番ファイルの先頭〜旧 `#[cfg(test)]` 行までを
+現作業ツリーと逐行突合し、**3 ファイルとも不一致 0**（balloon 1-633 ／ cache 1-194 ／ scale 1-228）。
+
+| ファイル | `git diff --numstat` |
+|---|---|
+| `balloon.rs` | 挿入 11 ／ 削除 1,631 |
+| `cache.rs` | 挿入 2 ／ 削除 906 |
+| `scale.rs` | 挿入 2 ／ 削除 648 |
+
+3 ファイル合計 `3 files changed, 15 insertions(+), 3185 deletions(-)`。
+
+**(g) 完了状態の直接確認** — 3 本番ファイルに残る `cfg(test)` / `#[path]` / `mod …;` の出現はすべて接続宣言のみ:
+`balloon.rs:633-644`（4 モジュール）／`cache.rs:194-196`（1 モジュール）／`scale.rs:228-230`（1 モジュール）。
+`scale.rs:21` の `#[cfg(test)]` はモジュール doc コメント本文中の文字列であって属性ではない（移設前から同一）。
+**`#[test]` は 3 ファイルとも 1 件も残っていない。テストモジュール本体は 1 行も残っていない。**
+
+**(h) 作業ツリーの範囲** — `git status --porcelain -uall` は本節追記前の時点で下記 10 パスのみ:
+変更 3 本（本番ファイル）＋未追跡 7 本（新テストファイル 6 本＋`verification/mapping/areka-emo-present.csv`）。
+**`crates/areka-emo-present/src/presenter.rs` の差分は 0 件**（`git diff --stat` が空）。
+`crates/areka-emo-present/tests/`・他クレート・`Cargo.toml`・`tasks.md`・spec 本体ドキュメントも無変更。
+新規に導入した `TODO` / `FIXME` / `TBD` は 0 件。
+
+### 21.5 登記（要件 5.2）— 壊れたテスト・状態汚染の所見
+
+**本タスクの範囲（`areka-emo-present` の `src/` 3 ファイル・71 テスト・テストコード 3,188 行）では、
+壊れたテスト・不正なテストは 1 件も発見しなかった。所有 spec への送付所見は 1 件**（下表 #2・ハーネス重複）
+**であり、これは要件 5.1 により本 spec では是正しない。**
+
+| # | 観測 | file:line（移設後） | 判定 |
+|---|---|---|---|
+| 1 | プロセス寿命で常駐する tracing の interest probe dispatcher 2 個（`OnceLock` 保持・`Dispatch::new` 済み） | `crates/areka-emo-present/src/balloon_test_support.rs:121,153-163`（`InterestProbe` / `ensure_interest_probes`）ならびに同型の `crates/areka-emo-present/src/scale_tests.rs:368,398-408` | **問題なし・記録のみ（是正しない）**。callsite の interest キャッシュに `never` が焼き付く確率欠陥を潰すために意図して常駐させているもので、`enabled()` は偽・`event()` は no-op ゆえ他テストの観測へ副作用を与えない。テスト間の状態汚染ではなく汚染の**予防**機構であり、`areka-ghost` の `test_log_capture.rs`（§18.5 #5）・`areka-kanade` の `log_capture.rs`（§20.5 #2）と同型 |
+| 2 | **同一クレート内に同型のログ捕捉ハーネスが 3 重に存在する**（`CapturedEvent` / `FieldGrab` / `CaptureSubscriber` の 3 点セット） | `crates/areka-emo-present/src/balloon_test_support.rs:62,79,90`（本タスクで `test_support` へ集約）／`crates/areka-emo-present/src/scale_tests.rs:304,327,338`／`crates/areka-emo-present/src/presenter.rs:3669,3678,3689`（**本タスク非担当・無変更**） | **送付所見 →`test-cage-determinism`（W6.9）**。重複の理由は移設前 `balloon.rs:1449-1451` のコメントに明記されている——「同 crate `presenter.rs` の tests に同型のものが在るが、あちらは test-local な private 型ゆえ本モジュールから参照できない。新規 dev-dependency を足さない方針ゆえ、`tracing` 本体のみで最小構成を再現する」。**テストハーネスの一本化・共有化は要件 5.1 が本 spec に禁じている**ため是正しない。なお本 spec の移設は 3 重を 3 重のまま保っている（増やしても減らしてもいない）——`balloon` 側は 1 クレート内で `test_support` へ集約したのみ。将来 `presenter.rs` のハーネスをクレート共通のテストヘルパへ持ち上げれば 3 → 1 に畳める |
+| 3 | 一時ディレクトリ fixture が `std::env::temp_dir()` 配下へ実ファイルを作る | `crates/areka-emo-present/src/balloon_test_support.rs:10,17-27,44-47`（`TEMP_COUNTER` ＋ `TempDir::new` ＋ `impl Drop`） | **問題なし・記録のみ**。ディレクトリ名は `areka-emo-present-balloon-{プロセス id}-{単調カウンタ}` で並列実行でも衝突せず、`Drop` で再帰削除される。プロセス間・テスト間の共有状態にならない |
+| 4 | 移設で可視性・`use`・モジュール接続の追加調整が要るケース（要件 2.8） | — | **0 件**。共有ヘルパ 4 項目（宣言行 12 本）への `pub(super)` 付与と `use` の絞り込み（3 件）だけで通った。§17.5 #4 が警告した同名 shadow ヘルパによる E0659 は本クレートには存在しない（§21.2 の全数照合で確認） |
+| 5 | 要件 1.5 で非必須のファイル（`chain.rs` 159／`mount.rs` 198／`command.rs` 92 のテストコード） | `crates/areka-emo-present/src/{chain,mount,command}.rs` | **非必須・無変更**。設計判断 #10 により任意移設は行わない |
+
+### 21.6 本タスクの成果物
+
+| ファイル | 内容 |
+|---|---|
+| `crates/areka-emo-present/src/cache_tests.rs` | 新規（904 行・16 テスト・単純移設） |
+| `crates/areka-emo-present/src/scale_tests.rs` | 新規（646 行・18 テスト・単純移設） |
+| `crates/areka-emo-present/src/balloon_test_support.rs` | 新規（197 行・共有ヘルパ 3 群・テスト 0） |
+| `crates/areka-emo-present/src/balloon_series_tests.rs` | 新規（685 行・24 テスト） |
+| `crates/areka-emo-present/src/balloon_model_tests.rs` | 新規（338 行・6 テスト） |
+| `crates/areka-emo-present/src/balloon_target_tests.rs` | 新規（418 行・7 テスト） |
+| 上記に対応する本番 3 ファイル（`balloon.rs`・`cache.rs`・`scale.rs`） | 末尾のテストモジュールブロックを接続宣言へ置換（本番本体は無変更） |
+| `verification/mapping/areka-emo-present.csv` | 新規（37 行・全単射検証済み・タスク 4.3 が `presenter.rs` 分を追記できる状態） |
+| `verification/notes.md` | 本節（§21）を追記 |
+
+コミットは要件 7.1 に従い**クレート単位の 1 コミット**（`areka-emo-present` の小規模 3 ファイル分）とする。
+`presenter.rs`（タスク 4.3）は同クレートの別コミットとして続く。
