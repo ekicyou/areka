@@ -4966,3 +4966,301 @@ old_fqn == new_fqn の行（不変名を写す無駄行） = 0
 | `verification/notes.md` | 本節（§27）を追記 |
 
 `crates/areka` の残る 2 ファイル（`emo2_boot/frame.rs`・`input_events/balloon.rs`）は本タスクの対象外であり、1 文字も触っていない。
+
+## 28. `follow.rs` 追従処理テストのテーマ分割（後半: 窓移動・リサイズ／作業領域解決／可視性ガード）: `areka`（タスク 5.4・要件 1.1 / 1.6 / 1.7 / 1.8 / 2.4 / 2.8 / 2.9 / 3.1〜3.3 / 4.6 / 7.1 / 7.2）
+
+- 実施日: 2026-08-08
+- ブランチ: `claude/areka-p0-file-slimming-64d065` / 直前コミット `f81acc3`（タスク 5.3）。**本文一致検証の基準コミットは `f64fac1`**（タスク 5.2＝`follow.rs` にテストモジュールが在った最後のコミット）
+- 実行シェル: **PowerShell（pwsh 7）**
+- 対象はタスク 5.3 が残した残余ファイル `crates/areka/src/placement/follow_tests.rs`（4,148 行・テスト 93 本・モジュール名 `tests`）**1 本のみ**。本タスクでこれを**完全に解消**した——ファイルを削除し、`follow.rs` から `mod tests;` 宣言を除いた。移設後に `placement::follow::tests::` を名乗るテストは **0 本**である。
+- 触れたのは本番 1（`follow.rs` の接続宣言のみ）＋既存の共有ヘルパ 1（`follow_test_support.rs`）＋新規テストファイル 7＋`verification/mapping/areka.csv`（追記）＋本ファイルの計 11 パス。`Cargo.toml`・他クレート・spec 本体ドキュメント・`tasks.md` は無変更。**タスク 5.3 の他 4 ファイル（`follow_anchor_tests.rs`・`follow_drag_tests.rs`・`follow_balloon_drag_tests.rs`・`follow_drag_end_persist_tests.rs`）は 1 文字も変えていない**（変更の必要が生じなかった）。
+
+### 28.1 成果ファイルと行数（すべて 1,000 行以下）
+
+| ファイル | 行 | テスト | ヘルパ項目 | 由来（`follow_tests.rs` の行範囲） |
+|---|---:|---:|---:|---|
+| `placement/follow_test_support.rs`（既存 126 行を **303 行**へ拡張） | 303 | 0 | 36（既存 11＋本タスクで集約した 25） | 229-236, 242-314, 796-810, 936-943, 2495-2525, 2551-2582 |
+| `placement/follow_window_move_tests.rs`（`window_move_tests`） | 325 | 12 | 0 | 17-134, 781-794, 812-934, 945-999 |
+| `placement/follow_resize_tests.rs`（`resize_tests`） | 937 | 25 | 2 | 1001-1925 |
+| `placement/follow_window_move_diag_tests.rs`（`window_move_diag_tests`） | 557 | 14 | 4 | 1927-2469 |
+| `placement/follow_work_area_tests.rs`（`work_area_tests`） | 227 | 9 | 0 | 136-227, 316-443 |
+| `placement/follow_visibility_guard_tests.rs`（`visibility_guard_tests`） | 343 | 10 | 0 | 445-779 |
+| `placement/follow_visibility_char_wiring_tests.rs`（`visibility_char_wiring_tests`） | 698 | 11 | 6 | 2471-2493, 2527-2549, 2584-2942, 3582-3854 |
+| `placement/follow_visibility_balloon_wiring_tests.rs`（`visibility_balloon_wiring_tests`） | 950 | 12 | 8 | 2944-3580, 3856-4148 |
+| `placement/follow_tests.rs` | **削除** | — | — | — |
+
+12＋25＋14＋9＋10＋11＋12 = **93**（残余のテスト本数と一致）。最大は `follow_visibility_balloon_wiring_tests.rs` の 950 行。
+
+**`follow.rs` は 2,014 → 2,032 行**（本番本体 `:1-1996` は無変更・接続宣言が 6 モジュール 18 行から 12 モジュール 36 行へ）。タスク 5.3 の 5 本（`follow_test_support.rs` を除く）も 1,000 行以下のまま無変更（`follow_anchor_tests.rs` 323 / `follow_drag_tests.rs` 911 / `follow_balloon_drag_tests.rs` 287 / `follow_drag_end_persist_tests.rs` 733）。**`crates/areka/src/placement/follow*.rs` の 13 本すべてが 1,000 行以下**である。
+
+接続宣言は 12 モジュールとも同一文言（design §移設方式の裁定 案 C）。移設後の位置は `crates/areka/src/placement/follow.rs:1997-2032`。
+
+### 28.2 §27.9 の在庫表（移設前 `follow.rs` 座標）から `follow_tests.rs` 座標への再写像
+
+§27.9 の行範囲は**移設前 `follow.rs`** の座標で書かれており、本タスクが実際に切る `follow_tests.rs` の座標とは異なる。写像は §27.9 が各区画に添えたバナー見出しを**アンカー**にして 1 度だけ求めた——15 本の見出し文字列はいずれも移設前 `follow.rs` と `follow_tests.rs` の双方で**一意にヒット**する（機械照合で確認・複数ヒットは 0 件）。得られたオフセットは 3 帯に分かれる:
+
+| 帯 | `follow_tests.rs` 行 | 移設前 `follow.rs` 行 | オフセット | 段差の出所 |
+|---|---|---|---:|---|
+| 1 | 17-141（区画 1・2 の前半） | 2052-2176 | +2035 | 先頭 `use` 群の再構成（移設前 `:1999-2008` の 10 行 → 残余 `:1-15`） |
+| 2 | 142-780（区画 2 の後半・区画 3） | 2186-2824 | +2044 | タスク 5.3 が `rect`（移設前 `:2178-2185`）を `test_support` へ集約した 8 行＋空行 1 |
+| 3 | 781-4148（区画 4〜15） | 5104-8471 | +4323 | タスク 5.3 が移した drag 系の塊（移設前 `:2825-5103`） |
+
+検算: 残余末尾 4148 ＋ 4323 = 8471 ＝ §27.9 区画 15 の終端。区画別のテスト数・ヘルパ数・`use` 数を独自スキャナで数え直した結果は §27.9 の在庫表と**全区画で完全一致**した（テスト 93／ヘルパ 45／`use` 16。`use` は module 直下ヘッダの 10 件を除いた数）。
+
+### 28.3 テーマ本数の裁定（design 初期案の 3 テーマ → 7 テーマ）
+
+design §File Structure Plan の初期案テーマは `anchor / drag / move / work_area / visibility` であり、本タスクの担当は残る **`move`（窓移動・リサイズ）／`work_area`／`visibility`** の 3 つである。テーマ名・本数は実装時裁定に委ねられている（design §テーマ分割ポリシー）。
+
+**裁定: 窓移動・リサイズを 3 ファイル、可視性ガードを 3 ファイル、作業領域解決を 1 ファイルの計 7 ファイルへ分ける。** 根拠は行数の実測である:
+
+- 素朴に 1 テーマ 1 ファイルにすると **窓移動・リサイズ 1,809 行**（区画 1・4〜11）と **可視性ガード 2,014 行**（区画 3 の 10 本＋区画 12〜15）になり、どちらも 1,000 行目安の 2 倍近い（§27.9 申し送り 3 の見積り 1,741／1,631 は空行を含まない項目行の合計で、ファイル行数はこれより多い）。要件 1.7 が「6,476 行のテストファイルが残る結果は認めない」と言う理由と同じ理由で不可。
+- 分割は**バナー区画の境界でのみ**行い、区画の中を割っていない（関数の中を割らないのは要件 2.4・区画を割らないのは design §テーマ分割ポリシーの「既存構造に従う」）。
+- 先行タスクの §22.2（`×約 5` → `×7`）・§26.3(b)（`×約 2` → `×4`）・§27.2（drag を 3 分割）と同型の実装時裁定である。
+
+分割後のテーマは本番シーム（design §本体分割の表）と次のように対応する。**タスク 6.1 の本体分割はこの対応を保ったまま 3 サブモジュールへ割ればよい**:
+
+| 本番シーム | テストテーマ（モジュール） | 主題 |
+|---|---|---|
+| `window_move`（`move_window_to`・`resize_window_to`・`anchor_changed_system`・`resize_window_keep_position`） | `window_move_tests` | 単一ライター発行口——`move_window_to` の位置更新と随伴バルーン・`enqueue_window_set_pos` の position／size ミラー・`Arrangement.offset` 同期 |
+| 同上 | `resize_tests` | 寸法変更と再射影——`resize_window_to`（Bottom＋5 アンカー統合）・`anchor_changed_system`・`resize_window_keep_position` |
+| 同上 | `window_move_diag_tests` | 追従層の観測——消費側の存在確認と警告水準の区別（`debug!` 対 `warn!`）・窓移動レコード（`areka::placement::diag`）とフィルタ応答 |
+| `work_area` | `work_area_tests` | モニタ作業領域の解決——`MonitorSnapshot`／`work_area_for_window`／`work_area_for_window_with_origin`（`Contains`／最近傍フォールバック／空 snapshot） |
+| `visibility` | `visibility_guard_tests` | 可視性ガードの純関数——`guard_visibility` のキャラ矩形・バルーン矩形（`Keep`／`ClampX`／留置尊重／Y 不変） |
+| 同上 | `visibility_char_wiring_tests` | キャラ窓経路の配線——`route_applies_visibility_guard` の発火表・`resize_window_to` 内での実発火・位置未確定表現（`CW_USEDEFAULT`）の打ち切り |
+| 同上 | `visibility_balloon_wiring_tests` | バルーン随伴の配線——`BalloonFollowTrigger` 別の発火条件・バルーン矩形の clamp と縮退・両窓連言の回帰確認 |
+
+**区画 14（`CW_USEDEFAULT` 打ち切り）の帰属**: §27.9 は「可視性ガード（または窓移動・リサイズ）」と両属性を認めていた。**キャラ窓側**へ置いた——この打ち切りは `resize_window_to` 手順 3 の入口で `guard_visibility` の腕が誤って `Keep` へ落ちるのを防ぐもので、区画 12 と同じキャラ窓経路の話であり、実際にヘルパも区画 12 と共有している（下表）。
+**区画 15（両窓連言）の帰属**: バルーン側へ置いた。主題 (B) が「バルーンが追従するのはガード適用**後**のキャラ位置」であり、区画 13 の `visible_balloon_pos` を参照する唯一の外部区画でもある。
+
+### 28.4 ヘルパ参照関係による裏取りと共有ヘルパの追加集約（要件 2.4 / 2.8）
+
+残余ファイルのヘルパ項目 **45 件**の参照行を、字句解析つきの独立スキャナ（行コメント・文字列リテラル内の一致を除外）で全数走査し、**7 テーマのどれから参照されるか**を数えた。パス修飾子の直後（`Foo::Bar` の `Bar`）は参照に数えない。
+
+**2 テーマ以上から参照される 25 件を `follow_test_support.rs` へ追加集約した**（Implementation Notes の「共有ヘルパは 1 件でも集約」・複製すると `ITEM-EXTRA` になる）。参照数は「テーマ:件数」:
+
+- 区画 3 由来の 11 件（§27.9 申し送り 1 が予告していたもの・実測で全件が 2 テーマ以上から参照されることを確認）:
+  `DPIS`（work_area 3・visibility_guard 6・char_wiring 10・balloon_wiring 10）・
+  `px`（work_area 21・visibility_guard 33・char_wiring 12（うち実コード参照は 7 件。残り 5 件は `use` 行 1 とコメント 2 等の非コード出現——タスク 5.4 レビューの指摘で注記）・balloon_wiring 24・共有ヘルパ内 7）・
+  `mixed_layout`（3・9・11・10）・`left_wa`（3・6・4・4）・`right_wa`（5・10・2・5）・
+  `char_size`（work_area 3・visibility_guard 7・balloon_wiring 12）・`balloon_size`（visibility_guard 4・balloon_wiring 10）・
+  `point`（11・29・—・22）・`win`（work_area 6・visibility_guard 23・char_wiring 2）・
+  `overlaps`（visibility_guard 19 ・ test_support::visible_in 1（char_wiring での直接参照は 0 件。共有ヘルパ内の閉包により集約が必須——`visible_in` が `overlaps` を呼び、その `visible_in` を char_wiring 10・balloon_wiring 20 が使う。タスク 5.4 レビューの指摘で訂正））・`grounded_y`（4・9・—・2）。
+- 区画 4／5 由来の 3 件: `arrangement_at`（window_move 5・resize 7）・`arrangement_offset_of`（window_move 5・resize 2）・`size_of`（window_move 3・resize 21）。
+- 区画 12 由来の 11 件: `CLAMP_TAG`（char 4・balloon 7）・`NEAREST_TAG`（1・1）・`UNRESOLVED_TAG`（1・2）・`GUARD_TAG_PREFIX`（char 6・balloon 3）・`wide_char_size`（char 7・balloon 2）・`narrow_char_size`（char 9・balloon 2）・`gap_center_x`（char 2・balloon 1）・`unguarded_projection`（char 4・balloon 2）・`visible_in`（char 10・balloon 20）・`point_of`（char 7・balloon 15）・`guard_events`（char 9・balloon 9）。
+
+**単一テーマ専用として当該テーマファイルに残置した 20 件**: `WRITER_WITNESS`・`assert_no_write`（resize）／`window_move_lines`・`only_window_move_line`・`char_window_world`・`window_move_output_under_filter`（diag）／`gap_bound_char_world`・`POSITION_SENTINEL_TAG`・`char_world_with_window_pos`・`old_size_i`・`negative_real_pos`・`assert_control_position_writes`（char_wiring）／`char_start_pos`・`char_settled_pos`・`far_out_offset`・`visible_balloon_pos`・`char_with_far_balloon_world`・`char_with_balloon_window_pos`・`despawn_skip_lines`・`gap_bound_char_world_with_balloon`（balloon_wiring）。参照行はいずれも自テーマの範囲にしか現れない。
+
+**閉包の確認**: 集約した 25 件のうち、残置側のヘルパを参照するものは **0 件**（機械走査）。逆向き（残置ヘルパ → 集約ヘルパ）の参照は生じるので、当該ファイルで `use super::test_support::{ … }` を明示 import している。集約判定はコンパイラの `unused_imports` 診断でも二重に裏取りしており、偽陽性による過剰集約は 0 件だった（最終ビルドの `areka (bin "areka" test)` 警告は 0 件）。
+
+**§22.2 のタプル構造体制約は本タスクでも発動しない**: 残余ファイルの項目に `struct`／`enum` 定義は **0 件**（機械走査）。`.0` を直読みする共有ヘルパが存在しないので、テーマ境界がこの制約に拘束された箇所は無い。
+
+**E0659（グロブ供給による曖昧化）は構造的に成立しない**: 残余ファイルに `use super::*;` は **0 件**（再確認）。唯一のグロブは外部クレートの `use bevy_ecs::prelude::*;` で、共有ヘルパ 25 識別子とも本番 `follow` の項目名とも衝突しない。共有ヘルパはすべて**明示 import** で受けている。
+
+### 28.5 バナーの帰属（§20.2 / §27.5 で確定した扱いの適用）と、そこで踏んだ 1 件の実測
+
+本文一致検証（`RustParse.ps1:313-331`）は、直前の空行を読み飛ばしたうえで**先行コメント塊を後続項目の本文の一部**として扱う。残余ファイルのモジュール直下バナー 15 本（＋小見出し 3 本）を、この機械規則が束ねる先の項目とともに移した。**文言は 1 文字も変えていない・バナーだけを別ファイルへ残した箇所は 0 件**である。行番号は `follow_tests.rs`:
+
+| バナー | 束ねられる項目 | 行先 |
+|---|---|---|
+| `:17-19`（move_window_to） | 直後のテスト関数 | `window_move_tests` |
+| `:136-138`（MonitorSnapshot / work_area_for_window） | `use super::{MonitorSnapshot, work_area_for_window};`（`:140`） | `work_area_tests` |
+| `:229-236`（with_origin ／ guard_visibility 共通規約） | 移設前は `use super::{ … };`（`:238`） | **`test_support`**（下記参照） |
+| `:316`（--- with_origin 小見出し） | 直後のテスト関数 | `work_area_tests` |
+| `:445` / `:624-627`（--- guard_visibility キャラ／バルーン 小見出し） | 直後のテスト関数 | `visibility_guard_tests` |
+| `:781-792`（Arrangement.offset 同期） | `use wintf::ecs::layout::…;`（`:794`） | `window_move_tests` |
+| `:922-932`（enqueue_window_set_pos） | `use super::enqueue_window_set_pos;`（`:934`） | `window_move_tests` |
+| `:1001-1011`（resize_window_to） | `use super::{PlacementRoute, resize_window_to};`（`:1013`） | `resize_tests` |
+| `:1307-1322`（resize_window_to 5 アンカー） | 直後のテスト関数 | `resize_tests` |
+| `:1568-1580`（anchor_changed_system） | `use super::anchor_changed_system;`（`:1582`） | `resize_tests` |
+| `:1699-1713`（resize_window_keep_position） | `use super::resize_window_keep_position;`（`:1715`） | `resize_tests` |
+| `:1927-1937`（task 3.2 消費側の区別） | 直後のテスト関数 | `window_move_diag_tests` |
+| `:2055-2070`（窓移動レコード） | `use std::sync::{Arc, Mutex};`（`:2072`） | `window_move_diag_tests` |
+| `:2471-2491`（遷移ガードの配線） | `use super::route_applies_visibility_guard;`（`:2493`） | `visibility_char_wiring_tests` |
+| `:2944-2964`（バルーン矩形への遷移ガード配線） | `use super::BalloonFollowTrigger;`（`:2966`） | `visibility_balloon_wiring_tests` |
+| `:3582-3612`（位置の未確定表現） | `use windows::…CW_USEDEFAULT as SENTINEL;`（`:3614`） | `visibility_char_wiring_tests` |
+| `:3856-3883`（混在 DPI・複数モニタの回帰確認） | `gap_bound_char_world_with_balloon`（`:3885`） | `visibility_balloon_wiring_tests` |
+
+**`:229-236` で 1 件踏んだ（実測・是正済み）**: このバナーは移設前 `follow.rs:2273-2280` で `use` 項目に束ねられており（§27.5）、`use` 項目に束ねられたバナーは本文一致検証の対象外である。当初これを `test_support` の**共有ヘルパ 11 件の直前**（次項目が `const DPIS`）へ置いたところ、機械規則がバナーを `DPIS` の本文へ併合してしまい `Compare-RelocatedTests.ps1` が
+
+    [ITEM-MISSING] … follow.rs:mod tests:2286-2287: /// DPI 水準（…）
+    [ITEM-EXTRA]   … follow_test_support.rs:130-140: // ----------
+
+を出して exit 1 になった。**是正: バナーの直後に `use` 項目を 1 つ置き、移設前と同じ「バナー＋`use`」の並びを復元した**（`use crate::placement::resolver::{Anchor, PointPx, SizePx};` を先頭ヘッダから当該位置へ移した）。移設後の位置は `crates/areka/src/placement/follow_test_support.rs:130-139`（バナー `:130-137`＋空行＋`use` `:139`）。
+**後続タスクへの申し送り**: 「`use` 項目に束ねられたバナー」を別ファイルへ移すときは、**行先でもバナーの直後が `use` 項目であること**を保たなければならない。直後がヘルパやテストになるとバナーがその項目の本文へ併合され、`ITEM-MISSING`／`ITEM-EXTRA` で落ちる。タスク 6.1（本体分割）でも同型の並びが出うる。
+
+**`///` doc コメント付きテストモジュールは 0 件**（残余ファイルはモジュール本体そのもので、`mod` 項目を含まない）。Implementation Notes の `///` 残置規則の発動は無い。
+
+### 28.6 可視性・`use` の調整（要件 2.4 が許容する機械的調整・要件 2.8 の追加調整）
+
+- **可視性**: `follow_test_support.rs` へ集約した **25 項目のシグネチャ行の先頭にのみ** `pub(super)` を付与した（付与のみ・本文は無変更）。**複製は 1 件も作っていない**。
+- **`use` ヘッダ**: 各テーマファイルの先頭に、そのファイルが実際に使う項目だけを列挙した `use` 群を置いた。生成は識別子の機械走査で行い、`cargo build -p areka --all-targets` の `unused_imports` 診断が指した 5 件だけを追加で落とした——
+  `follow_window_move_tests.rs:145` の `Arrangement`（`arrangement_at` が `test_support` へ移ったため未使用に。`use wintf::ecs::layout::{Arrangement, Offset};` → `use wintf::ecs::layout::Offset;`）、
+  `follow_work_area_tests.rs` の `use crate::placement::resolver::RectPx;`（行ごと削除）、
+  `follow_visibility_guard_tests.rs`／`follow_work_area_tests.rs` の `use bevy_ecs::prelude::*;`（両ファイルとも `World`／`Entity` を使わない純関数テストのみ）、
+  `follow_visibility_char_wiring_tests.rs` の `BalloonFollow`（`PlacementRoute::BalloonFollow` という**列挙子のパス末尾**との取り違え＝素の識別子走査の偽陽性）。
+- **テストモジュール本体の途中にあった `use` 項目 16 件は元の位置のまま**各テーマファイルへ移した（上記 `Arrangement`／`RectPx` の 2 件のみ調整）。移設前ヘッダの `use` 項目は 1 つも失われていない。
+- **`follow_test_support.rs` の先頭ヘッダ**は集約した 25 項目が要求する型・関数を足して書き換えた（`use super::MonitorSnapshot;` → `use super::{MonitorSnapshot, project_anchor};`、`use wintf::ecs::layout::{Arrangement, Offset};`・`use super::super::test_support::LogEvent;` を追加、`Anchor`／`PointPx`／`SizePx` は §28.5 の理由でバナー直後へ配置）。
+- **可視性・`use` 以外の調整は 1 件も必要なかった**（要件 2.8 の追加調整 0 件）。
+- **元の行間の保存**: 区画の連結部には空行をちょうど 1 行だけ置いた（移設前も区画境界は空行 1 行）。区画内部の行間は 1 行も変えていない。
+
+### 28.7 §11.4 の盲点（複数行文字列リテラル内の行頭空白）— 担当ファイルの独自走査
+
+Implementation Notes の指示に従い、字句状態追跡つきの独立スキャナ（行コメント・入れ子ブロックコメント・通常文字列・raw 文字列（`#` の数）・バイト文字列・文字リテラルとライフタイムの判別・エスケープを追跡し、「行頭時点で文字列リテラルの内部にいる行」と「直前行が `\` 継続か」を判定する）で、残余ファイルと成果物 13 ファイルを全走査した。
+スキャナの妥当性は既知ケース `crates/wintf/src/ecs/window_proc/window_pos_tests.rs` で確認済み（実測出力: `継続行 5 件: 382,429,614,690,691 / 盲点該当 1 件: 691`）。
+
+| ファイル | 複数行文字列の継続行 | 盲点該当（`\` 継続でない行） |
+|---|---|---:|
+| 移設前 `follow_tests.rs`（4,148 行） | 11（`:737,768,774,2142,2256,2302,2306,4004,4105,4123,4139`） | **0** |
+| `follow.rs`（本番・2,032 行） | 0 | **0** |
+| `follow_test_support.rs` | 0 | **0** |
+| `follow_window_move_tests.rs` | 0 | **0** |
+| `follow_resize_tests.rs` | 0 | **0** |
+| `follow_window_move_diag_tests.rs` | 4（`:230,344,390,394`） | **0** |
+| `follow_work_area_tests.rs` | 0 | **0** |
+| `follow_visibility_guard_tests.rs` | 3（`:301,332,338`） | **0** |
+| `follow_visibility_char_wiring_tests.rs` | 0 | **0** |
+| `follow_visibility_balloon_wiring_tests.rs` | 4（`:806,907,925,941`） | **0** |
+| （タスク 5.3 の 4 本・再走査） `follow_anchor_tests.rs` 0 ／ `follow_drag_tests.rs` 3（`:613,762,763`） ／ `follow_balloon_drag_tests.rs` 0 ／ `follow_drag_end_persist_tests.rs` 0 | 3 | **0** |
+
+本タスクの 11 本は 3＋4＋4 = **11** で本数一致（`:737,768,774` → `visibility_guard:301,332,338`／`:2142,2256,2302,2306` → `diag:230,344,390,394`／`:4004,4105,4123,4139` → `balloon_wiring:806,907,925,941`）。タスク 5.3 の 3 本と合わせて **14 本＝§27.7 の移設前実測 14 本と一致**し、すべて説明がつく。全件が直前行末尾の `\` による継続で、盲点該当は 0 件。**例外処理は不要だった。**
+
+### 28.8 de-indent の分類（要件 2.4）
+
+本タスクが動かした行はすでに module root へ出された後の行なので、**インデントの移動量は 0**（一律 de-indent は タスク 5.3 が済ませている）。したがって期待は**バイト同一**である。移設元の項目範囲（§28.1 の由来欄）と成果物の行を多重集合で突合した:
+
+| 側 | 行数 | 内訳 |
+|---|---:|---|
+| 期待にのみ | 27 | `pub(super)` 付与**前**のシグネチャ行 25 ＋ `unused_imports` で落とした `use crate::placement::resolver::RectPx;` 1 ＋ 先頭ヘッダの書き換えで消えた `use super::MonitorSnapshot;` 1 |
+| 実にのみ | 133 | `pub(super)` 付与**後**のシグネチャ行 25 ＋ `use` 項目（生成ヘッダ・複数行の継続行・閉じ `};` 込み）79 ＋ ファイル分割で生じる区切り空行・ヘッダ直後の空行 29 |
+
+分類は機械的に行い、上記 3 カテゴリ（`pub(super)` 付与後／`use` 項目／空行）に**入らない差分行は 0 件**である。すなわち**移設に伴う本文の個別調整は 1 件も発生していない**。
+
+### 28.9 検証（すべて実測・終了コードで判定）
+
+**(a) 本文一致検証（要件 2.4）** — 基準は **タスク 5.3 の前**のコミット `f64fac1` である。タスク 5.3 が既に `follow.rs` からテストブロックを出し切っているため、`f81acc3` を基準にすると比較対象のブロックが存在しない。よって **`follow_*` テストファイル 12 本の和集合**を、移設前 `follow.rs` の 6,476 行ブロックと突合した:
+
+    pwsh -File $V/Compare-RelocatedTests.ps1 -Commit f64fac1 `
+        -OriginalPath crates/areka/src/placement/follow.rs `
+        -RelocatedPath "<follow_test_support, follow_anchor_tests, follow_drag_tests, follow_balloon_drag_tests,
+                         follow_drag_end_persist_tests, follow_window_move_tests, follow_resize_tests,
+                         follow_window_move_diag_tests, follow_work_area_tests, follow_visibility_guard_tests,
+                         follow_visibility_char_wiring_tests, follow_visibility_balloon_wiring_tests の 12 本を
+                         カンマ区切り 1 引数>" -Detail
+
+    MATCH: test fn 133=133 / helper item 57=57 / mod block 1 / files 12     exit 0
+
+テスト関数 133 のうち FQN が変わるのは **133 全数**（タスク 5.3 の 40 ＋ 本タスクの 93）。ヘルパ項目 57 の内訳は `test_support` 36＋`anchor_tests` 1＋`resize_tests` 2＋`window_move_diag_tests` 4＋`visibility_char_wiring_tests` 6＋`visibility_balloon_wiring_tests` 8 で、タスク 5.3 の 4 本のうち残り 3 本はヘルパ 0 件である。
+
+**(b) 対応表と最終照合（要件 1.8 / 2.2 / 2.9・完了状態）**
+
+    pwsh -File $V/Test-MappingBijection.ps1 -Path $V/mapping/areka.csv
+      → PASS: 全単射 OK / 行数 250 / 相異なる old_fqn 250 / 相異なる new_fqn 250 / フラグメント 1   exit 0
+        （先行 157 行は byte 不変＝`git diff --numstat` が `93  0`＝挿入のみ・削除 0）
+
+    pwsh -File $V/Test-MappingBijection.ps1 -Path $V/mapping -Out <tmp>/combined_mapping.csv
+      → PASS: 全単射 OK / 行数 913 / 相異なる old_fqn 913 / 相異なる new_fqn 913 / フラグメント 8   exit 0
+        （areka-emo-compose 78 / areka-emo-present 84 / areka-emo-text 239 / areka-ghost 20 /
+          areka-kanade 88 / areka-sakura 75 / areka-seriko 79 / **areka 250**＝820 ＋ 本タスク 93）
+
+    pwsh -File $V/Compare-TestLists.ps1 -Before $V/before_default.txt -After <tmp>/after_default.txt `
+        -Mapping <tmp>/combined_mapping.csv
+      → BEFORE 4790 行 / AFTER 4790 行 / 適用 913 行 / 未使用 0 行 / LINE COUNT 一致 / RESULT: PASS   exit 0
+
+本タスクの 93 行の内訳: `window_move_tests` 12 ／ `resize_tests` 25 ／ `window_move_diag_tests` 14 ／ `work_area_tests` 9 ／ `visibility_guard_tests` 10 ／ `visibility_char_wiring_tests` 11 ／ `visibility_balloon_wiring_tests` 12。`old_fqn` はすべて `placement::follow::tests::*`、`new_fqn` は `placement::follow::<テーマ>::*` で末尾セグメント（関数識別子）は不変。
+
+**対応表への攻撃（対応表を使わない素の対称差での自己反証）**:
+
+    removed = 913 / added = 913            （＝結合対応表の行数と一致）
+    removed のうち old_fqn でないもの = 0
+    added   のうち new_fqn でないもの = 0
+    old_fqn == new_fqn の行（不変名を写す無駄行） = 0
+    末尾セグメント（関数識別子）が旧新で相違する行 = 0     （要件 2.9）
+    reason 列の値 = theme_split のみ（913 件）
+    本タスクの share: added 側 93（new_fqn が本タスクの 7 モジュールの行）／ removed 側は 133
+                      （`placement::follow::tests::*` はタスク 5.3 の 40 と本タスクの 93 の合計であり、
+                        `old_fqn` の接頭辞では両タスクを区別できないため new_fqn 側で数える）
+    移設後リストに残る placement::follow::tests:: の FQN = 0
+
+- 整列器の較正（Implementation Notes の必須手順）: **未整列の生出力**（4,790 行）を `[string[]]` 型付けの序数比較器と `Sort-Object` の 2 通りに整列し、digest が割れることを確認した——序数 `5EE151CD…EE66` ／ `Sort-Object` `D5F1B24A…0C17`、**相違位置 1,823 / 4,790・初出 index 179**（序数 `bake::tests::blit_verbatim_correctness` 対 カルチャ `bake_entry_tests::all_transparent_is_empty_entry_not_error`＝`::`(0x3A) 対 `_`(0x5F)）。§26.7(b)／§27.8(b) の較正値と完全一致する。
+  本節に載る値はすべて `[string[]]` 型付け済みの序数整列で採っている。移設後リスト（4,790 行・CRLF・BOM 無し）の SHA256 = `A7187813CFF5C49BEBC01AF03740E6CE47C2DEB1980803B02F02E8831DDD9EC4`。
+- `--all-targets` 側リスト（`before_alltargets.txt`）は `--exclude areka` で採るため本タスクの変更が入らない（`crates/areka` 以外を 1 文字も触っていない）。
+
+**(c) クレート緑（要件 7.2）** — `cargo test -p areka` → **exit 0**
+
+| | exit | 3 ターゲットの結果 | 合計 |
+|---|---:|---|---:|
+| 移設前（§27.8(c) の実測値・HEAD `f81acc3`） | 0 | 671 / 1 / 2 passed・0 failed | **674 passed** |
+| 移設後 | 0 | 671 / 1 / 2 passed・0 failed | **674 passed** |
+
+移設前後とも 0 failed / 0 ignored。
+
+**(d) サンプルビルドの緑（design §本体分割の制約 1・placement 木の `#[path]` include）** — `cargo build -p areka --examples` → **exit 0**・`warning` 行 0。
+移設後 `follow.rs` の本番本体（`:1-1996`）の `crate::` パスは移設前と同じ **0 件**であり（ファイル全体でも 0 件）、本タスクが本番ファイルへ加えたのは接続宣言 18 行の増分のみである。新テストファイル内の `crate::` 参照はすべて `use` 宣言で、逐語のまま移した。
+
+`cargo test -p areka --examples`（test モード）の既存 E0433 は**移設の前後で件数・出所とも不変**である。**「前」は推定ではなく実測**した——作業ツリーを一時的に `f81acc3` の 3 ファイル（`follow.rs`・`follow_tests.rs`・`follow_test_support.rs`）へ戻して計測し、計測後に再生成して復元した（読み取り専用の `git show` のみを使用・破壊的 git は不使用）:
+
+| | `error[E0433]` の件数 | 出所 | 打ち切られた target |
+|---|---:|---|---|
+| 移設前（`f81acc3` 相当へ戻して実測） | 1 | `crates\areka\examples\..\src\placement\spawn_assembly_tests.rs:183:12` | example "collision-probe" test ／ example "window-placement" test |
+| 移設後 | **1** | **同一** | **同一** |
+
+**これは §7.1 / §26.8 #1 / §27.10 #5 に登記済みの既存状態**（本 spec は是正しない）。`follow.rs` 由来の新しい E0433 site は **0 件**である。
+
+**(e) 警告非増加（要件 2.6）** — `cargo build -p areka --all-targets` → exit 0。
+`areka (bin "areka")` の警告は移設前後とも **4 件**で同一（`CommandConsumer` / `LedgerError` / `ConsumerLedger` / `new`・`try_register`・`consumer_of`・`canonical` の各 never used）。`areka (bin "areka" test)` の警告は **0 件**。
+
+ワークスペース全域でも突合した——`cargo build --workspace --all-targets` → exit 0、
+`DIAG_COUNT = 16` / `SUMMARY_COUNT = 7` / `GENERATED_SUM = 22` / `DUPLICATES = 6` / `NET = 16`。
+§10.5 の移設前基準値 5 数値と**完全一致**（増加ゼロ）。集計の正規表現は `warnings?` で単複両対応（Implementation Notes）。
+
+**(f) 本番本体の無変更** — 直前コミット `f81acc3` の `follow.rs` と現作業ツリーを `:1-1996` で逐行突合した。**不一致 0**:
+
+| 本番ファイル | 旧 | 新 | 逐行突合した範囲 | 不一致 |
+|---|---:|---:|---|---:|
+| `src/placement/follow.rs` | 2,014 | 2,032 | 1-1996 | 0 |
+
+`git diff --stat -- crates/areka/src/placement/follow.rs` の増分は接続宣言のみ（`mod tests;` の 3 行 → 7 モジュール 21 行）。
+
+**(g) 完了状態の直接確認** — `follow.rs` に残る `mod` の出現はすべて**宣言のみ**であり、`mod X {` 形のブロック開き行は **0 件**（`Select-String -Pattern 'mod\s+\w+\s*\{'` が 0 ヒット）。`mod tests;` 宣言は **0 件**、`follow_tests.rs` は**存在しない**（`Test-Path` = False）。`#[cfg(test)]` 属性行は 12 本で、すべて `mod` 宣言に付いている。
+
+**(h) 作業ツリーの範囲** — `git status --porcelain -uall` は本節追記前の時点で下記 11 パスのみ:
+変更 3 本（`crates/areka/src/placement/follow.rs`・同 `follow_test_support.rs`・`verification/mapping/areka.csv`）＋削除 1 本（`crates/areka/src/placement/follow_tests.rs`）＋未追跡 7 本（新テストファイル）。
+`crates/**` の他ファイル・`Cargo.toml`・spec 本体ドキュメント・`tasks.md` への差分は 0 件。
+新規テストファイルに `TODO` / `FIXME` / `TBD` は 1 件も導入していない（`placement/follow*.rs` を走査・0 ヒット）。改行は **CRLF**（既存兄弟ファイルに合わせた）。
+
+### 28.10 登記（要件 5.2）— 壊れたテスト・テスト間の状態汚染の所見
+
+**本タスクの範囲（`crates/areka/src/placement/follow_tests.rs`・テストコード 4,148 行・テスト 93 本・ヘルパ 45 件）では、
+修正を要する壊れたテスト・不正なテスト・テスト間の状態汚染は 1 件も発見しなかった。所有 spec への新規送付所見は 0 件である。**
+
+`crates/areka` に `include_str!` で本番ファイル本文を読む構造テスト（§23.5 #2）は 1 件も存在しない（§25.6・§27.10 で走査済み・本タスクの対象ファイルでも 0 ヒットを再確認）。
+
+以下は「調べたが問題なし／是正しない」と確定した記録（次に触る者が同じ調査を繰り返さないための控え。送付不要）:
+
+| # | 観測 | file:line（移設後） | 判定 |
+|---|---|---|---|
+| 1 | 観測ハーネス `capture_logs` を 4 テーマが別々に import する（`use super::super::test_support::{…}`） | `follow_window_move_diag_tests.rs:167`・`follow_visibility_char_wiring_tests.rs:11`・`follow_visibility_balloon_wiring_tests.rs:13`・`follow_test_support.rs:10` | **問題なし**。`super::super` = `placement` はモジュール深さが不変なので解決先が変わらない。ハーネス本体（`placement/test_support.rs`）は本タスクの対象外で無変更。§27.10 #3 と同型 |
+| 2 | 集約した共有ヘルパ `guard_events` の doc に `[`overlaps`]` などの intra-doc リンクがあり、参照先が別モジュール（`test_support`）へ移った | `follow_test_support.rs` の集約 25 項目の doc、および残置側 `follow_visibility_char_wiring_tests.rs:42-47` の `gap_bound_char_world` doc（`[`wide_char_size`]` 等） | **是正しない**。リンク解決は rustdoc の関心事で `cargo build` / `cargo test` は診断を出さない（実測: 警告 0）。doc コメントの書き換えは要件 2.4 が禁じる「コメントの変更」に当たる。**記録のみ** |
+| 3 | `cargo fmt --check` が本タスクの新規ファイルで差分を出す | `crates/areka/src/placement/follow_*.rs` | **是正しない**。生成した `use` ヘッダの折り返し位置が rustfmt の版と一致しないためで、整形すると本文へも及びうる。**リポジトリは元から fmt-clean ではない**（§26.8 #6 / §27.10 #4 と同一判断）。**記録のみ** |
+| 4 | `cargo test -p areka --examples` の既存 E0433 | `crates/areka/src/placement/spawn_assembly_tests.rs:183`（先行裁定注記 `:175`） | **既に §7.1 / §26.8 #1 / §27.10 #5 へ登記済み**。移設の前後を実測で突合し、件数・出所とも不変であることを確認した（§28.9(d)）。`follow.rs` 由来の新規 site は 0 件 |
+| 5 | 実 FS を使う往復テストの固定名一時ディレクトリ（§27.10 #1・#2） | `follow_drag_end_persist_tests.rs`（タスク 5.3 の担当範囲） | 本タスクは当該ファイルに触れていない。**既登記のまま・是正しない** |
+
+### 28.11 本タスクの成果物
+
+| ファイル | 内容 |
+|---|---|
+| `crates/areka/src/placement/follow_window_move_tests.rs` | 新規（325 行・テスト 12） |
+| `crates/areka/src/placement/follow_resize_tests.rs` | 新規（937 行・テスト 25） |
+| `crates/areka/src/placement/follow_window_move_diag_tests.rs` | 新規（557 行・テスト 14） |
+| `crates/areka/src/placement/follow_work_area_tests.rs` | 新規（227 行・テスト 9） |
+| `crates/areka/src/placement/follow_visibility_guard_tests.rs` | 新規（343 行・テスト 10） |
+| `crates/areka/src/placement/follow_visibility_char_wiring_tests.rs` | 新規（698 行・テスト 11） |
+| `crates/areka/src/placement/follow_visibility_balloon_wiring_tests.rs` | 新規（950 行・テスト 12） |
+| `crates/areka/src/placement/follow_test_support.rs` | 126 → 303 行（共有ヘルパ 25 項目を追加集約・`pub(super)` 付与・先頭 `use` を拡張） |
+| `crates/areka/src/placement/follow_tests.rs` | **削除**（残余の解消＝タスク 5.4 の完了状態） |
+| `crates/areka/src/placement/follow.rs` | 末尾の接続宣言を 6 → 12 モジュールへ（`:1997-2032`）。本番本体 `:1-1996` は無変更 |
+| `verification/mapping/areka.csv` | **追記**（157 → 250 行・本タスクぶん 93 行・`reason=theme_split`） |
+| `verification/notes.md` | 本節（§28）を追記 |
+
+**`follow.rs` の系列はこれで完結した**——テストコード 6,476 行が 12 ファイル（共有ヘルパ 1＋テーマ 11）へ分かれ、すべて 1,000 行以下である。残る本番本体 1,996 行の分割は**タスク 6.1** の担当で、§28.3 の対応表がそのままシーム表になる。
+`crates/areka` の残る 2 ファイル（`emo2_boot/frame.rs`・`input_events/balloon.rs`）は本タスクの対象外であり、1 文字も触っていない。

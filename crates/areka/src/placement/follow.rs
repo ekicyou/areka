@@ -2010,5 +2010,23 @@ mod balloon_drag_tests;
 #[path = "follow_drag_end_persist_tests.rs"]
 mod drag_end_persist_tests;
 #[cfg(test)]
-#[path = "follow_tests.rs"]
-mod tests;
+#[path = "follow_window_move_tests.rs"]
+mod window_move_tests;
+#[cfg(test)]
+#[path = "follow_resize_tests.rs"]
+mod resize_tests;
+#[cfg(test)]
+#[path = "follow_window_move_diag_tests.rs"]
+mod window_move_diag_tests;
+#[cfg(test)]
+#[path = "follow_work_area_tests.rs"]
+mod work_area_tests;
+#[cfg(test)]
+#[path = "follow_visibility_guard_tests.rs"]
+mod visibility_guard_tests;
+#[cfg(test)]
+#[path = "follow_visibility_char_wiring_tests.rs"]
+mod visibility_char_wiring_tests;
+#[cfg(test)]
+#[path = "follow_visibility_balloon_wiring_tests.rs"]
+mod visibility_balloon_wiring_tests;
