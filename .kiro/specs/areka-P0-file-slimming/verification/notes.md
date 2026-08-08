@@ -2446,3 +2446,323 @@ spec 本体ドキュメントはいずれも無変更。否定対照（§19.2）
 
 コミットは要件 7.1 に従い **`areka-ghost` 統合テストツリーの 1 コミット**（同クレートのライブラリ側＝タスク 3.4 とは別コミット）とする。
 これで design §File Structure Plan の `crates/areka-ghost`（`src/` 3 本＋`tests/` 1 本）は全数着地した。
+
+## 20. クレート単位のテスト分離とテーマ分割: `areka-kanade`（タスク 4.1・要件 1.1 / 1.3 / 1.6 / 1.7 / 1.8 / 2.4 / 2.8 / 2.9 / 3.1〜3.3 / 7.1 / 7.2）
+
+- 実施日: 2026-08-08
+- ブランチ: `claude/areka-p0-file-slimming-64d065` / 移設前コミット `7c57594`（タスク 3.5 のコミット時点）
+- 実行シェル: **PowerShell（pwsh 7）**
+- 触ったのは下表の本番 6 ファイル ＋ 新規テストファイル 12 本 ＋ `verification/mapping/areka-kanade.csv` ＋ 本ファイルのみ。
+  `crates/areka-kanade/tests/**`（統合テストツリー）・`Cargo.toml`・他クレート・spec 本体ドキュメントは **1 行も変更していない**（`git status --porcelain -uall` で確認）
+
+### 20.1 移設した 6 ファイル（design §File Structure Plan の `crates/areka-kanade` と完全一致）
+
+| 本番ファイル | 移設前 総行 | テストモジュール（移設前の行範囲） | 扱い | 新テストファイル | 新ファイル行 | テスト数 | 本番 残行 |
+|---|---:|---|---|---|---:|---:|---:|
+| `src/schedule/steady.rs` | 3,286 | `tests`（904-3286・テストコード 2,383） | **テーマ分割 ×3 ＋共有ヘルパ** | `steady_test_support.rs` ／ `steady_flow_tests.rs` ／ `steady_choice_tests.rs` ／ `steady_choice_timeout_tests.rs` | 106 / 736 / 723 / 831 | 0 / 27 / 20 / 21 | 918 |
+| `src/schedule/mod.rs` | 2,176 | `tests`（670-1554・885）＋`log_firing_tests`（1567-2176・610） | 個別ファイル化のみ | `schedule_tests.rs` ／ `schedule_log_firing_tests.rs` | 882 / 607 | 33 / 33 | 687 |
+| `src/schedule/boot.rs` | 1,406 | `tests`（289-1406・1,118） | **テーマ分割 ×2 ＋共有ヘルパ** | `boot_test_support.rs` ／ `boot_sequence_tests.rs` ／ `boot_reply_branch_tests.rs` | 46 / 556 / 518 | 0 / 8 / 12 | 299 |
+| `src/actor.rs` | 1,318 | `tests`（371-1318・948） | 単純移設 | `actor_tests.rs` | 945 | 22 | 373 |
+| `src/shiori/real.rs` | 903 | `tests`（281-903・623） | 単純移設 | `shiori/real_tests.rs` | 620 | 17 | 283 |
+| `src/schedule/events.rs` | 993 | `tests`（411-993・583） | 単純移設 | `schedule/events_tests.rs` | 580 | 28 | 413 |
+
+- 6 ファイルとも移設前の行範囲は `target_inventory.csv` / `scan_raw.csv` の実測（`crates/areka-kanade` の 6 行）と**完全一致**（ズレ 0）。テストモジュールはすべてファイル末尾に連続配置。
+- **新テストファイル 12 本はすべて 1,000 行以下**（最大 `steady_choice_timeout_tests.rs` の 831 行）。**僅少超過で単一維持したファイルは 0 件**（§7.4 への追記は不要）。
+- 6 ファイルとも非 `mod` `#[cfg(test)]` 項目（設計判断 #3 の残置対象 40 件）は 1 件も存在しない（`scan_raw.csv` の当該 6 行の `nonmod_count` が 0）。
+- **`schedule/mod.rs` の stem はモジュール root 規則により親ディレクトリ名 `schedule`**（design §移設方式の裁定）。よって `schedule/schedule_tests.rs`・`schedule/schedule_log_firing_tests.rs` となる。
+- `log_firing_tests` に付いた `///` doc コメント（移設前 `mod.rs:1556-1566`・11 行）は **Implementation Notes の §14.3 規則どおり接続宣言側へ残置**した（現 `mod.rs:674-684`）。移設前後でバイト一致を確認済み（§20.4 (f)）。
+- `#[cfg(test)]` 行は §13〜§19 と同じく**元位置に据え置き**、増えるモジュールぶんの宣言だけを新設した（`git diff --numstat` の挿入は steady 11・boot 8・mod 4・actor 2・real 2・events 2 の計 29 行／削除 7,138 行）。
+- 同クレートの残る `src/` 6 本（`msg.rs` 388／`schedule/close.rs` 350／`schedule/choice.rs` 237／`status.rs` 143／`schedule/resources.rs` 121／`talk.rs` 18）はテストコード 500 行以下ゆえ要件 1.5 で非必須・設計判断 #10 により任意移設は行わない（無変更）。`schedule/log_capture.rs`（274 行）は親 `mod.rs:31-32` の `#[cfg(test)] pub(crate) mod log_capture;` で**既に本番ファイル外へ分離済み**＝要件 1.4 の除外対象（無変更）。
+- `crates/areka-kanade/tests/**`（`choice_test.rs` 1,563 行・`common/mod.rs` 1,657 行ほか計 11 本）は `#[cfg(test)] mod` ブロックを持つのが `common/mod.rs` の `smoke`（256 行）1 件のみで 500 行以下。要件 1.1 の対象外（無変更）。
+
+接続宣言（12 モジュールとも同一文言・design §移設方式の裁定 案 C）:
+
+    #[cfg(test)]
+    #[path = "<stem>_<モジュール名>.rs"]
+    mod <モジュール名>;
+
+### 20.2 テーマ境界の裁定（design §テーマ分割ポリシー・手順①）
+
+**バナーは thematic ではなく作業時系列の見出しだった。** `steady.rs` の `// ====` バナー 5 本はいずれも
+「タスク 4.1」「タスク 4.3」「タスク 4.4」「タスク 4.5」「タスク 4.6」という**タスク番号**を見出しに掲げており
+（移設前 `steady.rs:1620,1688,2325,2464,2897`）、`boot.rs` の 2 本も「タスク 6.2」「タスク 5.3」である
+（`boot.rs:892,1151`）。タスク 3.1〜3.3 と同じく**本番 API の継ぎ目**を第一基準に採り、
+ヘルパ参照関係の全数走査で裏取りした。結果としてバナー位置は本番シームと一致したので、両者は互いの裏取りになっている。
+
+**`steady.rs`** — 本番 API（移設前）は 3 群に分かれる:
+(i) 定常運行 `on_tick`（`:675`）・`on_reply`（`:726`）・`on_talk_done`（`:827`）・`on_close_request`（`:851`）・
+`begin_close`（`:871`）・`on_mouse`（`:78`）、
+(ii) 選択の受領とカスケード `on_choice`（`:218`）・`on_cascade_reply`（`:352`）・`resolve_choice`（`:474`）・
+`on_choice_waiting`（`:138`）・`choice_phase_label`（`:494`）、
+(iii) 選択肢タイムアウト `fire_choice_timeout_if_due`（`:528`）・`on_timeout_reply`（`:593`）。
+
+| 新モジュール（ファイル） | 移設前の行範囲 | 対象の本番項目 | テスト数 |
+|---|---|---|---:|
+| `test_support`（`steady_test_support.rs`） | 911-913, 915-925, 927-943, 984-994, 1688-1700, 1702-1717, 1719-1727, 1729-1732, 2325-2337 | —（3 テーマから参照される 9 ヘルパ項目） | 0 |
+| `flow_tests`（`steady_flow_tests.rs`） | 945-982, 996-1686 | pump ゲート表駆動（`on_tick`）・talk 調停（`on_reply`）・origin 別 reply 政策（置換／DD-6 防御）・`TalkDone` の 2 値ルーティング（`on_talk_done`）・`CloseRequest`（`on_close_request`／`begin_close`）・マウス GET 発行（`on_mouse`）・`ActiveTalk.script` の保持 | 27 |
+| `choice_tests`（`steady_choice_tests.rs`） | 1734-2323, 2339-2462 | 選択確定の受領と棄却分岐（`on_choice`）・カスケード応答（`on_cascade_reply`・`resolve_choice`）・選択待ち中の実行状態導出（`on_choice_waiting`・`choice_phase_label`） | 20 |
+| `choice_timeout_tests`（`steady_choice_timeout_tests.rs`） | 2464-2895, 2897-3285 | 選択肢タイムアウト（`fire_choice_timeout_if_due`・`on_timeout_reply`）・解除後の棄却・帳簿の掃除・選択起因の失敗例外（DD-12） | 21 |
+
+**`boot.rs`** — 本番 API は `boot_start`（`:41`）／`on_reply`（`:51`）／`on_prefetch_reply`（`:131`）／
+`to_baseware_version`（`:221`）／`record_pending_close`（`:277`）。テストは「起動シーケンス全体を通す群」と
+「reply の枝（prefetch 応答・初回ゲート分岐）を細かく踏む群」に割れる。
+
+| 新モジュール（ファイル） | 移設前の行範囲 | 対象の本番項目 | テスト数 |
+|---|---|---|---:|
+| `test_support`（`boot_test_support.rs`） | 294-296, 298-301, 303-319, 321-337 | —（2 テーマから参照される 4 ヘルパ項目） | 0 |
+| `sequence_tests`（`boot_sequence_tests.rs`） | 339-890 | 起動シーケンス通し（`boot_start`＋`on_reply` の主経路）・talk_id の一意性と単調性・boot 中の `CloseRequest` 保留・`to_baseware_version` の greeting 追跡 | 8 |
+| `reply_branch_tests`（`boot_reply_branch_tests.rs`） | 892-1405 | username リソース照会 prefetch（`on_prefetch_reply`）と初回ゲート分岐＋epilogue 添付（`on_reply` の first_boot 枝） | 12 |
+
+**ヘルパ参照関係による裏取り**（テストモジュール内の全ヘルパ項目 17＋13 件の参照行を全数走査。行番号は移設前）:
+
+- `steady.rs` の**3 テーマ／2 テーマから参照される 9 項目**（→ `test_support` へ集約）:
+  `config`（定義 `:911`／参照 flow 20・choice 25・timeout 34 箇所）・
+  `steady_none`（`:915`／flow 14・choice 1（`:1777`））・`steady_some`（`:927`／flow 11・choice 2・timeout 2＋`steady_waiting` 内 2）・
+  `assert_no_second_change`（`:984`／flow 4・timeout 1（`:2536`））・`choice_input_of`（`:1688`／choice 13・timeout 2）・
+  `steady_with_ledger`（`:1702`／choice 17・timeout 14）・`expect_get_call`（`:1719`／choice 6・timeout 7）・
+  `expect_ledger`（`:1729`／choice 8・timeout 5）・`status_wire`（`:2325`／choice 3・timeout 2）。
+- `steady.rs` の**単一テーマ専用 8 項目**（同ファイルに残置）: flow 側＝`assert_shiori`（`:945`）・`mouse_move_input`（`:1492`）・
+  `mouse_dbl_input`（`:1502`）・`active_script`（`:1620`）・`started_script`（`:1638`）／timeout 側＝`steady_waiting`（`:2475`）・
+  `step_capturing`（`:2498`）・`assert_choice_invariant`（`:2905`）。参照行はいずれも自テーマの範囲にしか現れない。
+- `boot.rs` の**2 テーマから参照される 4 項目**（→ `test_support`）: `config`（`:294`）・`initial`（`:298`）・
+  `assert_get`（`:303`／参照 sequence 3・branch 2（`:916,1268`））・`assert_notify`（`:321`／sequence 4・branch 1（`:944`））。
+- `boot.rs` の**branch 専用 9 項目**（同ファイルに残置）: `drive_to_prefetch`（`:899`）・`resource_outcome_of`（`:923`）・
+  `is_username_get`（`:1127`）・`is_onfirstboot_get`（`:1135`）・`is_onboot_get`（`:1143`）・`reply`（`:1157`）・
+  `config_not_first_boot`（`:1165`）・`config_with_epilogue`（`:1172`）・`start_talk_of`（`:1182`）。
+
+**バナーの帰属（本タスクで確定した扱い）**: 本文一致検証（`RustParse.ps1:319-331`）は、直前の空行を読み飛ばしたうえで
+**先行コメント行を後続項目の本文の一部**として扱う。したがって `steady.rs` の `// ====` バナー 2 本
+——`:1688-1690`（「選択確定の受領検証とカスケード駆動」）と `:2325-2327`（「選択待ち中の実行状態導出」）——は
+それぞれ共有ヘルパ `choice_input_of`・`status_wire` の本文に属する。**バナーだけをテーマ側へ残すと本文不一致になる**ため、
+2 本とも該当ヘルパに同伴させて `steady_test_support.rs` へ移した（文言は 1 文字も変えていない）。
+残る 3 本のバナー（`:1620-1626` ActiveTalk.script ／ `:2464-2472` 選択肢タイムアウト ／ `:2897-2901` 帳簿の掃除）と
+`boot.rs` の 2 本（`:892-896` prefetch ／ `:1151-1155` 初回ゲート分岐）は `use` 項目または自テーマの項目に属するため、
+当該テーマファイルの元位置にそのまま置いた。`use` 項目は §11.4 のとおり本文一致検証の対象外である。
+
+**共有ヘルパの可視性（要件 2.4 が許容する機械的調整）**: `steady_test_support.rs` の 9 関数と
+`boot_test_support.rs` の 4 関数の**シグネチャ行の先頭にのみ** `pub(super)` を付与した（付与のみ・本文は無変更）。
+複製は 1 件も作っていない。
+
+**Implementation Notes の E0659 罠（タスク 3.3 §17.5）への対処**: 共有ヘルパは**明示 import** で受けた
+（`use super::test_support::{…};`）。加えて誤結合の有無を実測で確認した——移設前の本番スコープ
+（`steady.rs:1-903` ／ `boot.rs:1-288`）を全数走査した結果、13 個の共有ヘルパ識別子のうち
+**モジュール名前空間の項目と衝突するものは 0 件**である。唯一 `config` だけが本番側に出現するが
+（`steady.rs:129,144,170` ／ `boot.rs` 17 箇所）、いずれも**関数の仮引数・局所束縛の名前**であって
+モジュール項目ではないため `use super::*;` が供給する余地はない（本番 `boot.rs:24` の
+`fn step(state: State, input: Input, config: &KanadeConfig)` が代表例）。同一シグネチャの黙った差し替えは起き得ない。
+
+**`use` ヘッダの調整（要件 2.4 / 2.6）**: 各テーマファイルの先頭に移設元の `use` 群を置き、
+そのファイルで実際に使う項目だけへ絞った（絞る前のビルドで `unused_imports` が 2 件出て要件 2.6 に反したため）。
+落としたのは `boot_test_support`＝`crate::schedule::{step, ActiveTalk}`（1 行まるごと）と
+`steady_choice_tests`＝`crate::talk::TalkEndReason` の 2 件のみ。
+単純移設の 5 本（`actor_tests`・`real_tests`・`events_tests`・`schedule_tests`・`schedule_log_firing_tests`）は
+`use` ヘッダを 1 行も変えていない。**可視性・`use` 以外の調整は 1 件も必要なかった**（要件 2.8 の追加調整 0 件）。
+
+### 20.3 §11.4 の盲点（複数行文字列リテラル内の行頭空白）— 担当 6 ファイルの独自走査
+
+Implementation Notes の指示に従い、担当ファイルを字句状態追跡つきの独立スキャナ
+（行コメント・入れ子ブロックコメント・通常文字列・raw 文字列（`#` の数）・バイト文字列・
+文字リテラルとライフタイムの判別・エスケープを追跡し、「行頭時点で文字列リテラルの内部にいる行」と
+「直前行が `\` 継続か」を判定する）で全走査した。スキャナの妥当性は、既知の唯一の該当箇所
+`crates/wintf/src/ecs/window_proc/window_pos_tests.rs:691` を**盲点 1 件**として検出し、同ファイルの
+`:382`・`:429`・`:614`・`:690` を **`\` 継続 4 件**として正しく切り分けることで確認した
+（実測出力: `継続行 5 件: 382,429,614,690,691 / 盲点該当 1 件: 691`）。
+
+| ファイル群 | 複数行にまたがる文字列リテラルの継続行 | 盲点該当（`\` 継続でない行） |
+|---|---:|---:|
+| 移設前の本番 6 ファイル（`7c57594` から `git show`） | **0** | **0** |
+| 移設後の新テストファイル 12 本 | **0** | **0** |
+
+**結論: 担当 6 ファイルには複数行にまたがる文字列リテラルが 1 件も存在せず、§11.4 第 1 の盲点の該当行は 0 件。**
+例外処理は不要だった。
+
+### 20.4 検証（すべて実測・終了コードで判定）
+
+**(a) 本文一致検証（要件 2.4）** — `pwsh -File $V/Compare-RelocatedTests.ps1 -Commit 7c57594 -OriginalPath <本番> -RelocatedPath "<新テスト群>" -Detail`
+
+| 対象 | 出力 | exit |
+|---|---|---:|
+| `schedule/steady.rs` → 4 ファイル | `MATCH: test fn 68=68 / helper item 17=17 / mod block 1 / files 4` | 0 |
+| `schedule/mod.rs` → 2 ファイル | `MATCH: test fn 66=66 / helper item 16=16 / mod block 2 / files 2` | 0 |
+| `schedule/boot.rs` → 3 ファイル | `MATCH: test fn 20=20 / helper item 13=13 / mod block 1 / files 3` | 0 |
+| `actor.rs` → 1 ファイル | `MATCH: test fn 22=22 / helper item 10=10 / mod block 1 / files 1` | 0 |
+| `shiori/real.rs` → 1 ファイル | `MATCH: test fn 17=17 / helper item 14=14 / mod block 1 / files 1` | 0 |
+| `schedule/events.rs` → 1 ファイル | `MATCH: test fn 28=28 / helper item 6=6 / mod block 1 / files 1` | 0 |
+
+6 本とも exit **0**（引数不正の 2 ではない。exit 2 は `-OriginalPath` にパス誤りを与えた対照実行でのみ発生する）。
+
+**(a2) 行単位の分類と多重集合突合（スクリプトより強い独自検証）** — 本文一致検証は項目単位・行頭空白非依存であるため、
+それとは独立に、移設した**全行**を「(a) ちょうど −4 スペース」「(b) バイト同値（空行）」へ分類し、
+どちらでもない行を全件提示させた。
+
+| 新ファイル | −4 スペース行 | 空行 | 非適合行 | 総行（＝上記＋新設ヘッダ） |
+|---|---:|---:|---:|---:|
+| `actor_tests.rs` | 822 | 123 | **0** | 945 |
+| `shiori/real_tests.rs` | 567 | 53 | **0** | 620 |
+| `schedule/events_tests.rs` | 542 | 38 | **0** | 580 |
+| `schedule/schedule_tests.rs` | 823 | 59 | **0** | 882 |
+| `schedule/schedule_log_firing_tests.rs` | 557 | 50 | **0** | 607 |
+| `schedule/steady_test_support.rs` | 95 | 2 | **0** | 106 |
+| `schedule/steady_flow_tests.rs` | 666 | 63 | **0** | 736 |
+| `schedule/steady_choice_tests.rs` | 691 | 23 | **0** | 723 |
+| `schedule/steady_choice_timeout_tests.rs` | 789 | 32 | **0** | 831 |
+| `schedule/boot_test_support.rs` | 41 | 0 | **0** | 46 |
+| `schedule/boot_sequence_tests.rs` | 520 | 32 | **0** | 556 |
+| `schedule/boot_reply_branch_tests.rs` | 478 | 36 | **0** | 518 |
+
+**移設した全行が例外なく「ちょうど −4 スペース」または空行**であり、非適合行は 1 行も無い。
+
+行の多重集合突合（空行を除く。元＝移設前ブロック本体を一律 4 スペース de-indent した行の多重集合）:
+
+| 本番ファイル | 元 | 新 | 消えた行 | 増えた行 | 内訳 |
+|---|---:|---:|---:|---:|---|
+| `actor.rs` | 822 | 822 | **0** | **0** | 完全一致（`use` も含め 1 行も動かしていない） |
+| `shiori/real.rs` | 567 | 567 | **0** | **0** | 完全一致 |
+| `schedule/events.rs` | 542 | 542 | **0** | **0** | 完全一致 |
+| `schedule/mod.rs`（`tests`） | 823 | 823 | **0** | **0** | 完全一致 |
+| `schedule/mod.rs`（`log_firing_tests`） | 557 | 557 | **0** | **0** | 完全一致 |
+| `schedule/steady.rs` | 2,245 | 2,262 | 9 | 26 | 消 = `pub(super)` を付ける前の共有ヘルパ 9 シグネチャ ／ 増 = `pub(super)` 付き 9 行 ＋ 新設・複製された `use` 17 行（`use super::*;` ×3・`use crate::msg::ShioriCall;` ×2・`use crate::schedule::step;` ×2・`use crate::talk::TalkEndReason;` ×1・`use super::test_support::{…}` 3 組 9 行） |
+| `schedule/boot.rs` | 1,041 | 1,046 | 4 | 9 | 消 = `pub(super)` を付ける前の共有ヘルパ 4 シグネチャ ／ 増 = `pub(super)` 付き 4 行 ＋ `use super::*;` ×2・`use crate::schedule::{step, ActiveTalk};` ×1・`use super::test_support::{…}` ×2 |
+
+差分はすべて要件 2.4 が明示的に許容する調整（可視性付与・`use` の追加／複製）だけで説明がつき、
+説明のつかない行は 0 件である。
+
+**(b) 対応表フラグメントの全単射検証（要件 2.9）** — `pwsh -File $V/Test-MappingBijection.ps1 -Path $V/mapping/areka-kanade.csv`
+
+    PASS: 全単射 OK / 行数 88 / 相異なる old_fqn 88 / 相異なる new_fqn 88 / フラグメント 1
+      - areka-kanade.csv: 88 行
+
+exit 0。88 行の内訳は `schedule::steady::tests::*` → `flow_tests` 27／`choice_tests` 20／`choice_timeout_tests` 21 の計 68 行と、
+`schedule::boot::tests::*` → `sequence_tests` 8／`reply_branch_tests` 12 の計 20 行。`reason` は全行 `theme_split`、
+末尾セグメント（関数識別子）は旧新で同一。**`actor.rs`・`shiori/real.rs`・`schedule/events.rs`・`schedule/mod.rs` は
+完全修飾名が変わらないため行を持たない**（`actor::tests` 22・`shiori::real::tests` 17・`schedule::events::tests` 28・
+`schedule::tests` 33・`schedule::log_firing_tests` 33 は移設前後で同名）。
+移設前 `before_default.txt` に `schedule::steady::tests::` が **68 行**・`schedule::boot::tests::` が **20 行**実在し、
+対応表の `old_fqn` 88 件すべてがそこに存在することを照合済み（不在 0）。
+既存フラグメントとの結合検証（`-Path $V/mapping`）も
+`PASS: 全単射 OK / 行数 340 / 相異なる old_fqn 340 / 相異なる new_fqn 340 / フラグメント 5` で exit 0（キー衝突なし）。
+
+**(c) 対応表適用後のテスト名リスト一致（要件 1.8 / 2.2）— ワークスペース水準**
+
+移設後に §10.2 の手順（`cargo test --workspace --no-fail-fast -- --list` → stdout のみ → `: test$` 抽出 →
+`$arr = [string[]]@(…)` へ型付け → `[Array]::Sort($arr, [System.StringComparer]::Ordinal)` →
+UTF-8 BOM 無し・CRLF・末尾改行 1 つ・重複行を残す）でリストを採取し、
+コミット済み `before_default.txt` と**タスク 3.1〜4.1 の 5 フラグメント全部**を渡して突合した:
+
+    BEFORE      : before_default.txt  (4790 行 / 相異なる 4787)
+    AFTER       : after_default_task41.txt  (4790 行 / 相異なる 4787)
+    MAPPING     : 340 行 (5 ファイル) / 適用 340 行 / 未使用 0 行
+    LINE COUNT  : before 4790 / after 4790 -> 一致 (Requirement 2.2)
+    RESULT: PASS
+
+exit 0。**適用 340 行・未使用 0 行**。移設後リストの SHA256 は
+`8B29C296097FDEC7BC897944641F17B5D32CB724C2F56C0115DEEEF46A9DFD34`
+（§10.2 手順 3〜5 の形式。中間リストファイル自体はコミットしない）。
+
+**整列器の較正（Implementation Notes の ⚠ 項目）**: コミット済みファイルのハッシュ照合では整列器が動かないため、
+**同一の未整列生出力（4,790 行）を序数と `Sort-Object` の 2 通りに整列**して digest が割れることを先に確かめた:
+序数 `8B29C296…FD34` ／ `Sort-Object` `5B8A9CC0…F882` ／ **1,806 位置が相違・多重集合は同一**。
+§10.2 の実測（1,806 位置）と一致しており、序数比較器が実際に働いていることの直接証跡である。
+
+**(c2) 対応表そのものへの反証（自分の表を疑う検証）** — 対応表が「実際に起きた変化」と過不足なく一致することを、
+対応表を**使わない**多重集合の対称差で確かめた。
+
+| 検査 | 結果 |
+|---|---|
+| `before_default.txt` と移設後リストの対称差（対応表なし）: 消えた行 / 現れた行 / 全フラグメント行数 | **340 / 340 / 340**（三者一致） |
+| うち本タスクぶん（`schedule::(steady\|boot)::tests::` の消滅 ／ 5 新モジュールの出現） | **88 / 88**（自クレートの対応表 88 行と一致） |
+| 消えた行がすべて `old_fqn` に在るか | **True**（例外 0） |
+| 現れた行がすべて `new_fqn` に在るか | **True**（例外 0） |
+| `old_fqn` なのに実際には消えていない行 | **0** |
+| `new_fqn` なのに実際には現れない行 | **0** |
+| `old_fqn` と `new_fqn` が同一の行（＝変わっていない名前を載せた水増し） | **0** |
+| 末尾セグメント（関数識別子）が旧新で相違する行 | **0** |
+| `reason` が `theme_split` 以外の行 | **0** |
+
+すなわち対応表は「実際に変わった名前だけ」を「実際に変わったとおりに」記載しており、水増しも取りこぼしも無い。
+
+移設後リストのモジュール別内訳（`cargo test -p areka-kanade --lib -- --list`・計 279）:
+`actor::tests` 22 ／ `msg::tests` 14 ／ `schedule::boot::reply_branch_tests` 12 ／ `schedule::boot::sequence_tests` 8 ／
+`schedule::choice::tests` 19 ／ `schedule::close::tests` 11 ／ `schedule::events::tests` 28 ／
+`schedule::log_firing_tests` 33 ／ `schedule::resources::tests` 8 ／ `schedule::steady::choice_tests` 20 ／
+`schedule::steady::choice_timeout_tests` 21 ／ `schedule::steady::flow_tests` 27 ／ `schedule::tests` 33 ／
+`shiori::real::tests` 17 ／ `status::tests` 5 ／ `talk::tests` 1。
+移設前の `schedule::steady::tests` 68・`schedule::boot::tests` 20 と本数が一致する（27+20+21=68／8+12=20）。
+
+**(d) クレート緑（要件 7.2）** — `cargo test -p areka-kanade --no-fail-fast` → **exit 0**。
+**326 passed / 0 failed / 0 ignored**（lib 279 ＋ 統合テスト（`tests/kanade.rs` ツリー）47 ＋ doctest 0）。
+移設前の独立導出値と一致する: 移設前コミット `7c57594` の `git show` に対する `#[test]` 属性行の全数は
+`src/` 12 ファイルで **279**（actor 22・msg 14・boot 20・choice 19・close 11・events 28・mod 66・resources 8・
+steady 68・real 17・status 5・talk 1）、`tests/` ツリー 10 ファイルで **47**（boot 1・choice 10・close 7・
+common 4・failure 4・full_run 1・mouse 11・prefetch 2・real_helper 1・steady 6）。
+環境変数ゲートつきの `tests/kanade/real_helper_test.rs` の 1 本も移設前と同じく passed（ignored ではない）。
+**統合テストツリーは無変更のまま 47 本すべて緑である。**
+
+**(e) 警告非増加（要件 2.6）** — `cargo build -p areka-kanade --all-targets` → exit 0・**警告 0 件**
+（`areka-kanade` に帰属する警告は移設前基準値でも 0 件の割当）。
+ワークスペース全域でも §10.5 の手順で再集計した——`cargo build --workspace --all-targets` → exit 0、
+`DIAG_COUNT = 16` / `SUMMARY_COUNT = 7` / `GENERATED_SUM = 22` / `DUPLICATES = 6` / `NET = 16` で、
+§10.5 の移設前基準値 5 数値と**完全一致**。ユニット別 generated 件数（7 ユニット）も多重集合として一致する。
+
+**(f) 本番本体の無変更** — 移設前コミット `7c57594` の各本番ファイルの先頭〜旧 `#[cfg(test)]` 行までを
+現作業ツリーと逐行突合し、**6 ファイルとも不一致 0**（actor 1-371 ／ real 1-281 ／ events 1-411 ／
+mod 1-670 ／ steady 1-904 ／ boot 1-289）。加えて `mod.rs` が保存した `log_firing_tests` の
+`///` doc コメント＋空行＋`#[cfg(test)]`（移設前 1555-1567 → 現 673-685・13 行）も**逐行で不一致 0**。
+
+| ファイル | `git diff --numstat` |
+|---|---|
+| `schedule/steady.rs` | 挿入 11 ／ 削除 2,379 |
+| `schedule/boot.rs` | 挿入 8 ／ 削除 1,115 |
+| `schedule/mod.rs` | 挿入 4 ／ 削除 1,493 |
+| `actor.rs` | 挿入 2 ／ 削除 947 |
+| `shiori/real.rs` | 挿入 2 ／ 削除 622 |
+| `schedule/events.rs` | 挿入 2 ／ 削除 582 |
+
+6 ファイル合計 `6 files changed, 29 insertions(+), 7138 deletions(-)`。
+
+**(g) 完了状態の直接確認** — 6 本番ファイルに残る `cfg(test)` / `#[path]` / `mod …;` の出現はすべて接続宣言のみ:
+`steady.rs:904-918`（4 モジュール）／`boot.rs:289-299`（3 モジュール）／`mod.rs:670-672,685-687`（2 モジュール・
+既存の `mod.rs:31-32` の `log_capture` 宣言は要件 1.4 の除外分で無変更）／`actor.rs:371-373` ／
+`shiori/real.rs:281-283` ／ `schedule/events.rs:411-413`。**`#[test]` は 6 ファイルとも 1 件も残っていない。
+テストモジュール本体は 1 行も残っていない。**
+
+**(h) 作業ツリーの範囲** — `git status --porcelain -uall` は本節追記前の時点で下記 19 パスのみ:
+変更 6 本（本番ファイル）＋未追跡 13 本（新テストファイル 12 本＋`verification/mapping/areka-kanade.csv`）。
+**`crates/areka-kanade/tests/` 配下の差分は 0 件**。他クレート・`Cargo.toml`・`tasks.md`・spec 本体ドキュメントも無変更。
+
+### 20.5 登記（要件 5.2）— 壊れたテスト・状態汚染の所見
+
+**本タスクの範囲（`areka-kanade` の `src/` 6 ファイル・221 テスト・テストコード 7,150 行）では、修正を要する
+壊れたテスト・不正なテストは 1 件も発見しなかった。所有 spec への送付所見は 0 件である。**
+
+以下は「調べたが問題なし／既存のまま据え置き」と確定した記録（次に触る者が同じ調査を繰り返さないための控え。是正は行わない）:
+
+| # | 観測 | file:line（移設後） | 判定 |
+|---|---|---|---|
+| 1 | `static` 項目 / `thread_local!` / `std::env::set_var` / `unsafe` / `std::thread::sleep` / `#[ignore]` / `OnceLock` / `#[should_panic]` / `Instant::now` / `SystemTime` / ファイル入出力の使用 | 担当 12 テストファイル全域 | **0 件**（全走査で確認）。`static` の文字列一致 8 件はすべて `&'static str` のライフタイム表記であって項目ではない（`actor_tests.rs:503,610`・`schedule_tests.rs:368,394,423`・`real_tests.rs:21` ほか）。プロセスグローバルな可変状態も一時ファイルもテスト側には無く、時刻はすべて `MonotonicMs` の注入値である |
+| 2 | プロセスグローバルな tracing subscriber（leak された interest-keeper） | `crates/areka-kanade/src/schedule/log_capture.rs:149,159`（本タスクの担当ファイルではない・`INTEREST_KEEPER`）。利用は `schedule_tests.rs`・`schedule_log_firing_tests.rs`・`steady_choice_timeout_tests.rs` の `capture` 呼出 | **問題なし・記録のみ（是正しない）**。並列負荷下で `Interest::never` が焼き付く確率欠陥を根治するために意図して常駐させているもので、モジュール doc（`:10-42`）に不変条件（「本モジュールより先に別のグローバル subscriber を設定してはならない」）と違反時の大声 panic まで明記されている。テスト間の状態汚染ではなく汚染の**予防**機構であり、本 spec でも `test-cage-determinism` でも撤去対象ではない。`areka-ghost` の `test_log_capture.rs`（§18.5 #5）と同型 |
+| 3 | 要件 1.4 の除外ファイル `schedule/log_capture.rs`（274 行） | `crates/areka-kanade/src/schedule/mod.rs:31-32` の `#[cfg(test)] pub(crate) mod log_capture;` | **除外・無変更**。既に本番ファイル外へ分離済みで `#[cfg(test)] mod` ブロックを持たない。`excluded_inventory.csv` の登載どおり |
+| 4 | 統合テストツリーの巨大ファイル（`tests/kanade/choice_test.rs` 1,563 行・`common/mod.rs` 1,657 行・`mouse_test.rs` 1,116 行・`close_test.rs` 1,009 行） | `crates/areka-kanade/tests/kanade/**` | **対象外・記録のみ**。`#[cfg(test)] mod` ブロックを持たない（`common/mod.rs` の `smoke` 256 行のみが該当し 500 行以下）ため要件 1.1 の「同居テストモジュールの外出し」という操作が定義できない。design §Non-Goals が明示的に対象外としているカテゴリ（`choice_tests.rs` と同型） |
+| 5 | 移設で可視性・`use`・モジュール接続の追加調整が要るケース（要件 2.8） | — | **0 件**。共有ヘルパ 13 項目への `pub(super)` 付与と `use` の絞り込み（2 件）だけで通った。§17.5 #4 が警告した同名 shadow ヘルパによる E0659 は本クレートには存在しない（§20.2 の全数照合で確認） |
+
+### 20.6 本タスクの成果物
+
+| ファイル | 内容 |
+|---|---|
+| `crates/areka-kanade/src/actor_tests.rs` | 新規（945 行・22 テスト・単純移設） |
+| `crates/areka-kanade/src/shiori/real_tests.rs` | 新規（620 行・17 テスト・単純移設） |
+| `crates/areka-kanade/src/schedule/events_tests.rs` | 新規（580 行・28 テスト・単純移設） |
+| `crates/areka-kanade/src/schedule/schedule_tests.rs` | 新規（882 行・33 テスト・個別ファイル化） |
+| `crates/areka-kanade/src/schedule/schedule_log_firing_tests.rs` | 新規（607 行・33 テスト・個別ファイル化） |
+| `crates/areka-kanade/src/schedule/steady_test_support.rs` | 新規（106 行・共有ヘルパ 9 項目） |
+| `crates/areka-kanade/src/schedule/steady_flow_tests.rs` | 新規（736 行・27 テスト） |
+| `crates/areka-kanade/src/schedule/steady_choice_tests.rs` | 新規（723 行・20 テスト） |
+| `crates/areka-kanade/src/schedule/steady_choice_timeout_tests.rs` | 新規（831 行・21 テスト） |
+| `crates/areka-kanade/src/schedule/boot_test_support.rs` | 新規（46 行・共有ヘルパ 4 項目） |
+| `crates/areka-kanade/src/schedule/boot_sequence_tests.rs` | 新規（556 行・8 テスト） |
+| `crates/areka-kanade/src/schedule/boot_reply_branch_tests.rs` | 新規（518 行・12 テスト） |
+| 上記に対応する本番 6 ファイル | 末尾のテストモジュールブロックを接続宣言へ置換（本番本体は無変更） |
+| `verification/mapping/areka-kanade.csv` | 新規（88 行・全単射検証済み） |
+| `verification/notes.md` | 本節（§20）を追記 |
+
+コミットは要件 7.1 に従い**クレート単位の 1 コミット**（`areka-kanade`）とする。
