@@ -1137,3 +1137,215 @@ Implementation Notes の指示（「各タスクは自分の担当ファイル�
 | `verification/mapping/*.csv` | **作成しない**（3 クレートとも FQN 変化 0 件・対応表の行を持たない） |
 
 コミットは要件 7.1 に従い**クレート単位の 3 コミット**へ分ける（`areka-sylphya` ／ `dola` ／ `shiori-host32-helper`）。
+
+## 15. クレート単位のテスト分離とテーマ分割: `areka-emo-compose`（タスク 3.1・要件 1.1 / 1.6 / 1.7 / 1.8 / 2.4 / 2.8 / 2.9 / 3.1〜3.3 / 7.1 / 7.2）
+
+- 実施日: 2026-08-08
+- ブランチ: `claude/areka-p0-file-slimming-64d065` / 移設前コミット `7599c90`
+- 実行シェル: **PowerShell（pwsh 7）**
+- 下表の本番 3 ファイル＋新規テストファイル 7 本＋`verification/mapping/areka-emo-compose.csv`＋本ファイル以外には一切触れていない（`Cargo.toml`・他クレート・spec 本体ドキュメントは無変更）
+- **本 spec で初めてテーマ分割を行うタスク**であり、対応表フラグメント（§11.3）に実データの行が入るのも本タスクが最初である
+
+### 15.1 移設した 3 ファイル（design §File Structure Plan の `crates/areka-emo-compose` と完全一致）
+
+| 本番ファイル | 移設前 総行 | テストモジュール（移設前の行範囲） | 扱い | 新テストファイル | 新ファイル行 | 本番 残行 |
+|---|---:|---|---|---|---:|---:|
+| `src/plan.rs` | 2,203 | `tests`（668-2203・テストコード 1,536） | **テーマ分割 ×2 ＋共有ヘルパ** | `plan_test_support.rs` ／ `plan_ops_tests.rs` ／ `plan_extent_tests.rs` | 139 / 942 / 467 | 678 |
+| `src/scale.rs` | 1,778 | `tests`（468-1778・テストコード 1,311） | **テーマ分割 ×2 ＋共有ヘルパ** | `scale_test_support.rs` ／ `scale_resample_tests.rs` ／ `scale_ratio_tests.rs` | 2 / 499 / 809 | 478 |
+| `src/fold.rs` | 1,132 | `tests`（265-1132・テストコード 868） | 単純移設（FQN 不変） | `fold_tests.rs` | 865 | 267 |
+
+- 3 ファイルとも**テストモジュールは 1 個・ファイル末尾に連続配置**（design の実測どおり・ズレ 0）。モジュール名はいずれも `tests`。
+- **新テストファイル 7 本はすべて 1,000 行以下**（最大 `plan_ops_tests.rs` の 942 行）。僅少超過で単一維持したファイルは **0 件**（§7.4 への追記は不要）。
+- 3 ファイルとも非 `mod` `#[cfg(test)]` 項目（設計判断 #3 の残置対象 40 件）は 1 件も存在しない（`scan_raw.csv` の該当 3 行が示すとおり、`#[cfg(test)]` の出現はテストモジュール 1 箇所のみ）。
+- `#[cfg(test)]` 行は §13 / §14 と同じく**元位置に据え置き**、テーマ分割で増えるモジュールぶんの宣言だけを新設する（`git diff` の挿入は plan 8 行・scale 8 行・fold 2 行の計 18 行）。
+
+接続宣言（7 モジュールとも同一文言・design §移設方式の裁定 案 C）:
+
+```rust
+#[cfg(test)]
+#[path = "<stem>_<モジュール名>.rs"]
+mod <モジュール名>;
+```
+
+### 15.2 要件 1.4 による除外（本タスクで**触っていない** 3 ファイル）
+
+`crates/areka-emo-compose/src` には既に本番ファイル外へ分離済みのテストファイルが 3 本ある。素の
+`#[cfg(test)] mod X;`（`lib.rs:166-176`）で宣言される歴史的形式であり、要件 1.4 により**除外・そのまま維持**した。
+案 C へ揃え直していないし、1,000 行超（`golden_tests.rs`）のテーマ分割もしていない。
+
+| ファイル | 行数 | 宣言元 |
+|---|---:|---|
+| `golden_tests.rs` | 1,356 | `lib.rs:169-170` |
+| `composer_tests.rs` | 703 | `lib.rs:172-173` |
+| `log_firing_tests.rs` | 664 | `lib.rs:175-176` |
+
+同様に `log_capture.rs`（テスト専用ハーネス・`lib.rs:166-167`）と、`lib.rs:178-194` の `contract_tests`（テストコード 17 行・
+500 行以下ゆえ要件 1.5 で非必須・設計判断 #10 により任意移設は行わない）も無変更である。
+
+### 15.3 テーマ境界の裁定（design §テーマ分割ポリシー・手順①）
+
+design は本 2 ファイルを「テーマ分割 ×約 2」と見積もっている。実装時に各モジュールの内部構造
+（コメントバナー・対象関数のまとまり・ヘルパの参照関係）を確認した結果、**両ファイルとも本番 API の継ぎ目に沿って
+ちょうど 2 テーマへ割れる**ことを確認し、見積りどおり 2 テーマ＋共有ヘルパの構成とした。関数の中は 1 箇所も割っておらず、
+識別子の改名も 0 件である（要件 2.9）。
+
+**`plan.rs`** — テストモジュール内部には `// ── task N ── …` のバナーが 6 本あり、
+それぞれが本番の 2 系統の関数へ素直に対応する。バナーの区切りを 1 本も跨がずに 2 テーマへ束ねられる。
+
+| 新モジュール（ファイル） | 移設前の行範囲 | 束ねたバナー区画 | 対象の本番関数 | テスト数 |
+|---|---|---|---|---:|
+| `test_support`（`plan_test_support.rs`） | 681-809 | `// ---- 合成モデルビルダ ----`（10 ヘルパ） | —（共有土台） | 0 |
+| `ops_tests`（`plan_ops_tests.rs`） | 811-1403 ＋ 1864-2202 | 冒頭の task 4 群・task 5.2・task 5.3・task 11.2・task 7.2 | `push_static_element_ops` / `derive_ops` / `flatten_surface`（命令列の導出） | 28 |
+| `extent_tests`（`plan_extent_tests.rs`） | 1405-1862 | task 5.4・task 5.5 | `compute_extent` / `build_plan`（静的外形と計画組み立ての 3 分類） | 12 |
+
+**`scale.rs`** — バナーは 2 本あるが、いずれも「task 6.1: 純関数の全網羅」「collision-dpi-hittest task 1」という
+**作業単位（時系列）**の見出しで、テーマ名の材料にならない。一方で対象関数は `resample`（自由関数・双一次再標本化）と
+`ScaleRatio`（型とそのメソッド `new`/`mul`/`as_f32`/`scale_len`/`scaled_extent`/`unscale_coord`）の 2 系統に
+きれいに分かれ、**ヘルパの参照関係もこの境界と一致する**（`surface_of`・`gray`・`gray_bytes`・`oracle`・
+`assert_matches_oracle` の 5 ヘルパは `resample` 系テストからしか参照されない）。よって対象関数のまとまりを
+テーマ境界に採った。バナー 2 本は直後の項目に付属したまま移動しており、文言は 1 文字も変えていない。
+
+| 新モジュール（ファイル） | 移設前の行範囲 | 対象の本番項目 | テスト数 |
+|---|---|---|---:|
+| `test_support`（`scale_test_support.rs`） | 473-474 | `const AUTHOR_DPI`（両テーマから参照される唯一の共有項目） | 0 |
+| `resample_tests`（`scale_resample_tests.rs`） | 476-818 ＋ 1120-1271 | `resample`（＋専用ヘルパ 5 本） | 11 |
+| `ratio_tests`（`scale_ratio_tests.rs`） | 820-1118 ＋ 1273-1777 | `ScaleRatio` の各メソッド | 27 |
+
+`fold.rs` は移設後 865 行で 1,000 行以下ゆえテーマ分割せず、`mod tests` のまま `fold_tests.rs` へ単純移設した
+（完全修飾名 `fold::tests::*` は 24 件とも不変・対応表の行を持たない）。
+
+**共有ヘルパの可視性（要件 2.4 が許容する機械的調整）**: `plan_test_support.rs` の 10 関数と
+`scale_test_support.rs` の 1 定数へ `pub(super)` を付与した（付与のみ・本文は無変更）。テーマモジュールからは
+`use super::test_support::*;` で参照する。付与した可視性は本文一致検証の正規化が吸収する（§11.4）。
+
+**`use` ヘッダの調整（要件 2.4 / 2.6）**: 各テーマファイルの先頭には移設元モジュールの `use` 群を置き、
+そのファイルで実際に使う項目だけへ絞った（絞らないと `unused_imports` 警告が増えて要件 2.6 に反する）。
+`use` 項目は §11.4 のとおり本文一致検証の対象外である。**可視性・`use` 以外の調整は 1 件も必要なかった**（要件 2.8 の発動なし）。
+
+### 15.4 §11.4 の盲点（複数行文字列リテラル内の行頭空白）— 担当 3 ファイルの独自走査
+
+Implementation Notes の指示に従い、担当 3 ファイルを字句状態追跡つきの独立スキャナ
+（行コメント・ブロックコメント・通常文字列・raw 文字列・バイト文字列・文字リテラル・エスケープを追跡し、
+「行頭時点で文字列リテラルの内部にいる行」と「直前行が `\` 継続か」を判定する）で全走査した。
+スキャナの妥当性は、既知の唯一の該当箇所 `crates/wintf/src/ecs/window_proc/window_pos_tests.rs:691`（§13.2）を
+盲点として、同ファイルの `:382`・`:429`・`:614`・`:690` を `\` 継続として正しく切り分けることで確認済み。
+
+| ファイル | 複数行にまたがる文字列リテラルの継続行 | 盲点該当（`\` 継続でない行） |
+|---|---:|---:|
+| `crates/areka-emo-compose/src/plan.rs` | 0 | **0** |
+| `crates/areka-emo-compose/src/scale.rs` | 0 | **0** |
+| `crates/areka-emo-compose/src/fold.rs` | 0 | **0** |
+
+**結論: 担当 3 ファイルには複数行文字列リテラルが 1 件も無く、§11.4 第 1 の盲点の該当行は 0 件。**
+よって全行へ一律 4 スペース de-indent を適用してよく、例外処理は不要だった。
+
+### 15.5 検証（すべて実測・終了コードで判定）
+
+**(a) 本文一致検証（要件 2.4・テーマ分割の同一性）** — `pwsh -File $V/Compare-RelocatedTests.ps1 -Commit 7599c90 -OriginalPath <本番> -RelocatedPath "<新テスト群>" -Detail`
+
+| 対象 | 出力 | exit |
+|---|---|---:|
+| `plan.rs` → 3 ファイル | `MATCH: test fn 40=40 / helper item 19=19 / mod block 1 / files 3` | 0 |
+| `scale.rs` → 3 ファイル | `MATCH: test fn 38=38 / helper item 6=6 / mod block 1 / files 3` | 0 |
+| `fold.rs` → 1 ファイル | `MATCH: test fn 24=24 / helper item 17=17 / mod block 1 / files 1` | 0 |
+
+テーマ分割は項目の再配置と順序変更を伴うが、テスト関数は識別子キーで 1:1、ヘルパ項目は正規化本文の多重集合で
+突合されるため（§11.4）、3 件とも exit 0＝本文完全一致である。
+
+**(b) 対応表フラグメントの全単射検証（要件 2.9）** — `pwsh -File $V/Test-MappingBijection.ps1 -Path $V/mapping/areka-emo-compose.csv`
+
+```
+PASS: 全単射 OK / 行数 78 / 相異なる old_fqn 78 / 相異なる new_fqn 78 / フラグメント 1
+  - areka-emo-compose.csv: 78 行
+```
+
+exit 0。78 行の内訳は `plan::tests::*` → `plan::ops_tests::*` 28 行／`plan::tests::*` → `plan::extent_tests::*` 12 行／
+`scale::tests::*` → `scale::resample_tests::*` 11 行／`scale::tests::*` → `scale::ratio_tests::*` 27 行。
+`reason` は全行 `theme_split`、末尾セグメント（関数識別子）は旧新で同一である。`fold.rs` の 24 件は FQN 不変ゆえ行を持たない。
+
+**(c) 対応表適用後のテスト名リスト一致（要件 1.8 / 2.2）— ワークスペース水準**
+
+移設後に §10.2 の手順（`cargo test --workspace --no-fail-fast -- --list` → `: test$` 抽出 →
+`[Array]::Sort($arr, [System.StringComparer]::Ordinal)` → UTF-8 BOM 無し・重複行を残す）でリストを採取し、
+コミット済み `before_default.txt` と対応表経由で突合した:
+
+```
+BEFORE      : before_default.txt  (4790 行 / 相異なる 4787)
+AFTER       : after_default_task31.txt  (4790 行 / 相異なる 4787)
+MAPPING     : 78 行 (1 ファイル) / 適用 78 行 / 未使用 0 行
+LINE COUNT  : before 4790 / after 4790 -> 一致 (Requirement 2.2)
+RESULT: PASS
+```
+
+exit 0。**適用 78 行・未使用 0 行**——対応表の全行が移設前リストの実在する行に当たり、適用結果が移設後リストと
+多重集合として完全一致した。移設後リストの SHA256 は `E312A434FFBAD0A1BF842FF697D8AE488C5942E3C34FC4BCB59F837C9F0616A5`
+（`before_default.txt` の `77F03656…43D2AD` と異なるのは 78 件のモジュールパスが変わったためで、対応表適用後は一致する）。
+整列は `Sort-Object` を使わず `[System.StringComparer]::Ordinal` で行った（§11.8）。
+
+> リストは**ワークスペース全域**で突合した（クレート単位へ絞るより強い形）。なお `scale::` で始まる行は
+> ワークスペース全体で 56 行あり、本クレートの 38 行に加えて他クレートの `scale` モジュール由来が 18 行含まれる。
+> 56 行に**重複する完全修飾名は 1 件も無い**ことを確認済みで、対応表の 78 行が他クレートの行を巻き込む余地は無い。
+
+移設後リストのモジュール別内訳（本クレートぶん・`cargo test -p areka-emo-compose -- --list`・合計 216）:
+`plan::ops_tests` 28 ／ `plan::extent_tests` 12 ／ `scale::resample_tests` 11 ／ `scale::ratio_tests` 27 ／
+`fold::tests` 24（残りは無変更の 12 モジュール）。移設前の `plan::tests` 40・`scale::tests` 38・`fold::tests` 24 と本数が一致する。
+
+**(d) クレート緑（要件 7.2）** — `cargo test -p areka-emo-compose` → **exit 0**。
+**216 passed / 0 failed / 0 ignored**（＋doctest 0）。移設前の 216 と一致。
+
+**(e) 警告非増加（要件 2.6）** — `cargo build -p areka-emo-compose --all-targets` → exit 0・`warning` 行 **0 件**。
+`before_build_warnings.txt` の `[PER-UNIT TALLY]` に `areka-emo-compose` の行は無く（基準値 0）、増加ゼロである。
+念のためワークスペース全域でも §10.5 の手順で再集計した——`cargo build --workspace --all-targets` → exit 0、
+`DIAG_COUNT = 16` / `SUMMARY_COUNT = 7` / `GENERATED_SUM = 22` / `DUPLICATES = 6` / `NET = 16` で、
+§10.5 の移設前基準値 5 数値と**完全一致**。
+
+**(f) 本番本体の無変更** — 移設前コミット `7599c90` の各本番ファイルの先頭〜旧 `#[cfg(test)]` 行の直前までを
+現作業ツリーと逐行突合し、**3 ファイルとも不一致 0**（plan 1-667 ／ scale 1-467 ／ fold 1-264）。
+
+| ファイル | `git diff --stat` |
+|---|---|
+| `plan.rs` | `1541 +--------` （挿入 8・削除 1,533） |
+| `scale.rs` | `1316 +--------` （挿入 8・削除 1,308） |
+| `fold.rs` | `869 +--------` （挿入 2・削除 867） |
+
+3 ファイル合計 `3 files changed, 18 insertions(+), 3708 deletions(-)`。挿入 18 = 新設した接続宣言のうち
+元位置に据え置いた `#[cfg(test)]` 行 3 本を除いた行数である。
+
+**(g) 完了状態の直接確認** — 3 本番ファイルに残る `cfg(test)` / `#[path]` / `mod …;` の出現はすべて接続宣言のみ:
+`plan.rs:668-670,672-674,676-678` ／ `scale.rs:468-470,472-474,476-478` ／ `fold.rs:265-267`。
+テストモジュール本体は 1 行も残っていない。
+
+**(h) 作業ツリーの範囲** — `git status --porcelain -uall` は本節追記前の時点で下記 11 パスのみ:
+変更 3 本（本番ファイル）＋未追跡 8 本（新テストファイル 7 本＋`verification/mapping/areka-emo-compose.csv`）。
+`crates/**` の他ファイル（`golden_tests.rs`・`composer_tests.rs`・`log_firing_tests.rs` を含む）・`Cargo.toml` への差分は 0 件。
+
+### 15.6 登記（要件 5.2）— 壊れたテスト・状態汚染の所見
+
+**本タスクの範囲（`areka-emo-compose` の 3 ファイル・102 テスト・テストコード 3,715 行）では、修正を要する
+壊れたテスト・不正なテスト・テスト間の状態汚染は 1 件も発見しなかった。所有 spec への送付所見は 0 件である。**
+
+以下は「調べたが問題なし」と確定した記録（次に触る者が同じ調査を繰り返さないための控え。送付不要）:
+
+| # | 観測 | file:line（移設後） | 判定 |
+|---|---|---|---|
+| 1 | `tracing` ログ捕捉の呼び出し 6 箇所（plan 2・scale 4） | `crates/areka-emo-compose/src/plan_ops_tests.rs:755,795`・`scale_resample_tests.rs:296,319`・`scale_ratio_tests.rs:139,150`（実体は `crates/areka-emo-compose/src/log_capture.rs:59-67`） | **問題なし**。`capture_logs` は `tracing::subscriber::with_default` でスレッドローカルに subscriber を差し込み、`set_global_default` を使わない（`log_capture.rs:1-19` に明記）。compose パイプラインは完全同期でログは呼び出しスレッド上で発火するため、クロージャ復帰時点で捕捉が完結し、並行実行でも他テストと混ざらない |
+| 2 | ファイルシステムを読む唯一のテスト経路（emo2 fixture の `surfaces.txt`） | `crates/areka-emo-compose/src/fold_tests.rs:671-676`（`emo2_shell()`） | **問題なし**。`CARGO_MANIFEST_DIR` 起点の絶対パスを組み立てての**読み取り専用**。書き込み・一時ディレクトリ生成・後始末は無く、テスト間で共有される可変状態を作らない |
+| 3 | `static` / `thread_local` / `std::env::set_var` / `unsafe` / `sleep` / `#[ignore]` / `#[should_panic]` の使用 | 担当 7 テストファイル全域 | **0 件**（全走査で確認）。プロセスグローバルな状態に触れるテストは 1 件も無い |
+| 4 | 移設で可視性・`use`・モジュール接続の追加調整が要るケース（要件 2.8） | — | **発生せず**。`use super::*;` を含む既存 import がそのまま有効で、必要だったのは共有ヘルパへの `pub(super)` 付与（11 項目）と各テーマファイルの `use` ヘッダの絞り込みのみ |
+
+### 15.7 本タスクの成果物
+
+| ファイル | 内容 |
+|---|---|
+| `crates/areka-emo-compose/src/plan_test_support.rs` | 新規（139 行・共有ヘルパ 10 本） |
+| `crates/areka-emo-compose/src/plan_ops_tests.rs` | 新規（942 行・28 テスト） |
+| `crates/areka-emo-compose/src/plan_extent_tests.rs` | 新規（467 行・12 テスト） |
+| `crates/areka-emo-compose/src/scale_test_support.rs` | 新規（2 行・共有定数 1 本） |
+| `crates/areka-emo-compose/src/scale_resample_tests.rs` | 新規（499 行・11 テスト） |
+| `crates/areka-emo-compose/src/scale_ratio_tests.rs` | 新規（809 行・27 テスト） |
+| `crates/areka-emo-compose/src/fold_tests.rs` | 新規（865 行・24 テスト） |
+| 上記に対応する本番 3 ファイル | 末尾のテストモジュールブロックを接続宣言へ置換（本番本体は無変更） |
+| `verification/mapping/areka-emo-compose.csv` | **新規・本 spec で最初の対応表フラグメント**（78 行・全単射検証済み） |
+| `verification/notes.md` | 本節（§15）を追記 |
+
+コミットは要件 7.1 に従い**クレート単位の 1 コミット**（`areka-emo-compose`）とする。
