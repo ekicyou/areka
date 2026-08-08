@@ -3995,3 +3995,267 @@ design §Supporting References の全数表（`draw.rs:75,77,106,108,110,112,114
 | `verification/notes.md` | 本節（§24）を追記 |
 
 コミットは要件 7.1 に従い**クレート単位の 1 コミット**（`areka-emo-text` の残る 4 ファイル分）とする。**本コミットをもって `areka-emo-text` クレートのテスト分離とテーマ分割は完了**し、当該クレートのテストファイルはすべて 1,000 行以下になった（design §File Structure Plan の 7 本すべて着地・新規テストファイル計 32 本）。
+
+## 25. クレート単位のテスト分離: `areka`（本体クレート・テーマ分割不要な 6 ファイル）（タスク 5.1・要件 1.1 / 1.3 / 1.6 / 2.4 / 2.8 / 3.1〜3.3 / 7.1 / 7.2）
+
+- 実施日: 2026-08-08
+- ブランチ: `claude/areka-p0-file-slimming-64d065` / 移設前コミット `425b914`
+- 実行シェル: **PowerShell（pwsh 7）**
+- 下表の本番 6 ファイル＋新規テストファイル 15 本と本ファイル以外には一切触れていない（`Cargo.toml`・他クレート・spec 本体ドキュメント・`verification/mapping/**` は無変更）
+- 本タスクは **テーマ分割を 1 件も行わない純粋な 1 テストモジュール＝1 テストファイル移設**である。テスト完全修飾名は 1 件も変わらないため `mapping/areka.csv` は**作成しない**（対応表の行 0 件・§11.3 の規約どおり）
+
+### 25.1 移設した 6 ファイル（design §File Structure Plan の `crates/areka` 13 本のうち、テーマ分割を要さない 6 本）
+
+| 本番ファイル | 移設前 総行 | テストモジュール（移設前の行範囲） | 同伴バナー | 新テストファイル | 新ファイル行 | 本番 残行 |
+|---|---:|---|---|---|---:|---:|
+| `src/main.rs` | 1,842 | `startup_window_tests`（899-1068） | — | `main_startup_window_tests.rs` | 167 | 962 |
+| | | `seam_tests`（1077-1292） | — | `main_seam_tests.rs` | 213 | |
+| | | `config_input_tests`（1294-1360） | — | `main_config_input_tests.rs` | 64 | |
+| | | `ghost_wiring_tests`（1368-1443） | — | `main_ghost_wiring_tests.rs` | 73 | |
+| | | `restore_seam_tests`（1453-1578） | — | `main_restore_seam_tests.rs` | 123 | |
+| | | `persist_wiring_seam_tests`（1589-1677） | — | `main_persist_wiring_seam_tests.rs` | 86 | |
+| | | `monitor_snapshot_seam_tests`（1686-1842） | — | `main_monitor_snapshot_seam_tests.rs` | 154 | |
+| `src/emo2_boot/move_cue.rs` | 1,634 | `tests`（671-948） | 641-669（29 行） | `emo2_boot/move_cue_tests.rs` | 305 | 655 |
+| | | `move_sink_tests`（954-1069） | 950-952（3 行） | `emo2_boot/move_cue_move_sink_tests.rs` | 117 | |
+| | | `apply_move_tests`（1081-1429） | 1071-1079（9 行） | `emo2_boot/move_cue_apply_move_tests.rs` | 356 | |
+| | | `move_severity_log_tests`（1444-1634） | 1431-1442（12 行） | `emo2_boot/move_cue_move_severity_log_tests.rs` | 201 | |
+| `src/placement/measure.rs` | 1,387 | `tests`（466-1387） | — | `placement/measure_tests.rs` | 919 | 468 |
+| `src/emo2_boot/assets.rs` | 1,225 | `tests`（406-1225） | — | `emo2_boot/assets_tests.rs` | 817 | 408 |
+| `src/input_events/mod.rs` | 1,164 | `tests`（434-1164） | — | `input_events/input_events_tests.rs` | 728 | 436 |
+| `src/placement/source.rs` | 819 | `tests`（280-819） | — | `placement/source_tests.rs` | 537 | 282 |
+
+- 6 ファイルとも**テストモジュールはファイル末尾に連続配置**（design の実測どおり・ズレ 0）。本体の途中に挿入されたテストモジュールは 0 件。
+- 新テストファイル 15 本はすべて **1,000 行以下**（最大 `placement/measure_tests.rs` の 919 行）のため、テーマ分割は 1 件も行わない（要件 1.7）。新ファイル合計 4,860 行。
+- `src/main.rs` は**バイナリ入口**ゆえ stem は読み替えなしの **`main`**、`src/input_events/mod.rs` は**モジュール root** ゆえ stem は**親ディレクトリ名 `input_events`**（design §移設方式の裁定）。よって後者のテストファイルは `input_events/input_events_tests.rs`。
+- `emo2_boot/`・`placement/` 配下のファイルもテストファイルは接続規約どおり**同一ディレクトリ**へ置いた。
+- **可視性・`use`・モジュール接続の調整は 1 件も必要なかった**（要件 2.8 の発動なし）。各テストモジュール冒頭の `use super::*;` を含む既存 import がそのまま有効で、本番ファイルの差分は「テストモジュールブロック（＋同伴バナー）の削除」＋「接続宣言 2 行の追加」のみ。
+
+接続宣言（15 モジュールとも同一文言・design §移設方式の裁定 案 C）:
+
+```rust
+#[cfg(test)]
+#[path = "<stem>_<テストモジュール名>.rs"]
+mod <テストモジュール名>;
+```
+
+`#[cfg(test)]` 行は §13（タスク 2.1）以来の扱いと同じく**元位置に据え置き**、その下 2 行だけを新設する。
+
+### 25.2 非 `mod` `#[cfg(test)]` 項目の残置（設計判断 #3）
+
+design §Supporting References が列挙した `crates/areka` の 2 件は、いずれも**移設せず元位置にバイト等価で残置**した。
+2 件とも移設範囲より前方（本番本体側）にあるため、移設後も**行番号は 1 行も動いていない**。
+
+| 分類 | 属性行 | 項目行 | 移設後の位置 | 裁定 |
+|---|---|---|---|---|
+| 自由関数（テスト専用ヘルパ）※実体は `impl MouseWiring` 内の inherent メソッド `with_clock` | `crates/areka/src/input_events/mod.rs:84` | `:85` | 同一（`:84,:85`） | 残置 |
+| `impl` ブロック（`impl GhostTitles` のテスト専用コンストラクタ `from_scope_titles`） | `crates/areka/src/placement/source.rs:76` | `:77` | 同一（`:76,:77`） | 残置 |
+
+その他の 4 ファイル（`main.rs`・`move_cue.rs`・`measure.rs`・`assets.rs`）には非 `mod` `#[cfg(test)]` 項目は 1 件も無い。
+`measure.rs:1217`（移設前）・`source.rs:593`（移設前）の `#[cfg(test)]` 文字列は**行コメントの中身**であり項目ではない（字句走査で確認済み）。
+
+なお `main.rs:74-75,80-81,87-88` の `#[cfg(test)] mod shiori_e2e_tests;` ほか 3 件は**宣言のみ**（既に本番ファイル外へ分離済み＝要件 1.4 の除外）であり、本タスクでは 1 文字も触っていない。
+
+### 25.3 バナーと doc コメントの分類（設計判断 #2 と Implementation Notes の `///` 規則の適用）
+
+| 出所 | 形 | 行数 | 裁定 | 根拠 |
+|---|---|---:|---|---|
+| `move_cue.rs` の 4 モジュール直前 | `//` バナーブロック（`// ====` 見出し＋当該モジュールが何を固定するかの逐条説明） | 29 / 3 / 9 / 12 = **53 行** | **対応するテストファイルの先頭へ同伴** | 設計判断 #2・§19.3 の先例。内容が当該モジュール固有の説明である |
+| `main.rs` の 6 モジュール直前 | `///` doc コメント（`mod` 項目への doc 属性） | 894-898（5）／1070-1076（7）／`config_input_tests` は無し／1362-1367（6）／1445-1452（8）／1580-1588（9）／1679-1685（7）= **42 行** | **接続宣言側へ残置** | Implementation Notes・§14.3 の確定規則（`///`→`//!` 書き換えは要件 2.4 違反） |
+| `main.rs:890-892` | `//` セクション区切り（`// ---` ／ `// Tests` ／ `// ---`） | 3 行 | **本番ファイルに残置** | 下記の裁定 |
+
+**`main.rs:890-892` を残置とした裁定（本タスクで確定・後続タスクは同一基準に従うこと）**:
+
+設計判断 #2 が移送対象とするのは「テストモジュール**間**のコメントバナー」＝当該モジュールの内容を説明するバナーである。
+`main.rs:890-892` はモジュール固有の説明を一切含まない**ファイルのセクション区切り**（`// Tests` の 1 語）であり、
+移設後もその直下に在るのは 7 本の接続宣言＝まさに当該ファイルのテスト区画であるから、区切りとしての意味が保たれる。
+加えて、この区切りの直後（`:893` の空行を挟んで `:894-898`）には `startup_window_tests` の `///` doc があり、
+これは `///` 規則により本番ファイルへ残る。区切りだけを移すと**移設前に隣接していたコメント領域が 2 ファイルへ割れる**。
+残置ならばバイト等価で、割れも起きない。要件 2.4 の観点では「移す」も「残す」も文字の増減が無く同値であるため、
+より保守的な残置を採った。判定への影響は無い——本文一致検証の比較対象はモジュールブロックの内部（`{` の次〜`}` の前）であり、
+バナーはブロックの外側だからである。
+
+`move_cue.rs` の 4 バナーは **53 行全行がバイト同値**（行頭空白・文言・行数のいずれも不変・不一致 0）。
+バナーの直後に空行を 1 行置き（移設前もバナーと `#[cfg(test)]` の間は空行 1 行だった形を保つ）、その後に de-indent した本体を置いた。
+`config_input_tests` にはバナーも doc コメントも無い（移設前の `:1293` は空行）。
+
+### 25.4 §11.4 の盲点（複数行文字列リテラル内の行頭空白）— 担当 6 ファイルの独自走査
+
+Implementation Notes の指示（「各タスクは自分の担当ファイルで独自に走査し直すこと」）に従い、
+本タスクの 6 ファイルを字句状態追跡つきの独立スキャナ（行コメント・入れ子ブロックコメント・通常文字列・raw 文字列（`#` の数）・
+バイト文字列・文字リテラルとライフタイムの判別・エスケープを追跡し、「行頭時点で文字列リテラルの内部にいる行」と
+「直前行が `\` 継続か」を判定する）で全走査した。スキャナの妥当性は既知ケース
+`crates/wintf/src/ecs/window_proc/window_pos_tests.rs` で確認済み（実測出力: `継続行 5 件: 382,429,614,690,691 / 盲点該当 1 件: 691`）。
+
+| ファイル | 複数行文字列の継続行（移設前） | 同（移設後） | 盲点該当（`\` 継続でない行） |
+|---|---|---|---:|
+| `src/main.rs` | 3（`840,1241,1252`） | 本番 1（`840`・本番本体で不動）＋`main_seam_tests.rs` 2（`163,174`） | **0** |
+| `src/emo2_boot/move_cue.rs` | 0 | 0 | **0** |
+| `src/placement/measure.rs` | 0 | 0 | **0** |
+| `src/emo2_boot/assets.rs` | 0 | 0 | **0** |
+| `src/input_events/mod.rs` | 0 | 0 | **0** |
+| `src/placement/source.rs` | 0 | 0 | **0** |
+
+継続行は移設前後とも 3 = 3 で本数一致（`1241 → 163`・`1252 → 174` はいずれも `mod seam_tests {` 開き行 1078 を基準とした相対位置が一致する）。
+3 行すべてが**直前行末尾の `\` による継続**であり、Rust は `\`＋改行の直後の行頭空白を除去するため、一律 4 スペース de-indent は
+リテラルの値を変えない。**結論: 本タスクの 6 ファイルに §11.4 第 1 の盲点の該当行は 1 件も無い。** 例外処理は不要だった。
+
+### 25.5 検証（すべて実測・終了コードで判定）
+
+**(a) 本文一致検証（要件 2.4）** — `pwsh -File $V/Compare-RelocatedTests.ps1 -Commit 425b914 -OriginalPath <本番> -RelocatedPath "<新テスト群>" -Detail`
+
+| 本番ファイル | 出力 | exit |
+|---|---|---:|
+| `src/main.rs` | `MATCH: test fn 32=32 / helper item 10=10 / mod block 7 / files 7` | 0 |
+| `src/emo2_boot/move_cue.rs` | `MATCH: test fn 32=32 / helper item 15=15 / mod block 4 / files 4` | 0 |
+| `src/placement/measure.rs` | `MATCH: test fn 25=25 / helper item 16=16 / mod block 1 / files 1` | 0 |
+| `src/emo2_boot/assets.rs` | `MATCH: test fn 19=19 / helper item 4=4 / mod block 1 / files 1` | 0 |
+| `src/input_events/mod.rs` | `MATCH: test fn 20=20 / helper item 4=4 / mod block 1 / files 1` | 0 |
+| `src/placement/source.rs` | `MATCH: test fn 26=26 / helper item 4=4 / mod block 1 / files 1` | 0 |
+
+**(a2) de-indent の全行分類（移設した全 4,803 行の内訳）** — 移設前コミット `425b914` のブロック内部と新テストファイル（バナー分を除く）を
+同一 index で 1 行ずつ突合し、各行を「ちょうど −4 スペース」「バイト同一」「その他」へ分類した:
+
+| 分類 | 行数 |
+|---|---:|
+| 行頭ちょうど −4 スペース | **4,387** |
+| バイト同一（全数が空行） | **416** |
+| その他（要件 2.4 の個別調整） | **0** |
+
+「その他」0 件＝**移設に伴う本文の個別調整は 1 件も発生していない**。ブロック内部に「行頭空白 4 未満かつ非空」の行は 0 件であることも
+独立に確認済み（＝一律 4 スペース de-indent が全行へ無条件に適用できる形だった）。
+
+**(b) テスト名リストの不変（要件 2.2 / 2.9・完了状態）**
+
+本タスクは完全修飾名が 1 件も変わらないため、対応表を介さない**素のバイト一致**が最強の証跡になる。2 水準で採った。
+
+- クレート水準: `cargo test -p areka --no-fail-fast -- --list` を移設前後で採取（`: test$` 抽出・`[StringComparer]::Ordinal` 整列・§10.2 手順）:
+
+  ```
+  before = 674 行 / after = 674 行
+  Compare-Object → 差分なし
+  SHA256 = C39479237B72192E3CE5F3E3ACC16800C01BDBF59DD9B5A5FED7EB6EE627EC1F（before / after 一致）
+  ```
+
+- ワークスペース水準: `cargo test --workspace --no-fail-fast -- --list`（exit 0）を §10.2 の手順で採取し、
+  コミット済み `before_default.txt` と 7 フラグメント結合の対応表で照合:
+
+  ```
+  pwsh -File $V/Test-MappingBijection.ps1 -Path $V/mapping -Out <tmp>/combined_mapping.csv
+    → PASS: 全単射 OK / 行数 663 / 相異なる old_fqn 663 / 相異なる new_fqn 663 / フラグメント 7   exit 0
+  pwsh -File $V/Compare-TestLists.ps1 -Before $V/before_default.txt -After <tmp>/after_default.txt -Mapping <tmp>/combined_mapping.csv
+    → BEFORE 4790 行 / AFTER 4790 行 / 適用 663 行 / 未使用 0 行 / LINE COUNT 一致 / RESULT: PASS   exit 0
+  ```
+
+  対応表 663 行は**先行タスクのテーマ分割分がそのまま**であり、本タスクは 1 行も追加していない（`mapping/` は無変更）。
+
+- **`areka` 完全修飾名の多重集合バイト一致（本タスク固有の追加検証）**: `-p areka` の 674 行を鍵として
+  `before_default.txt` と移設後リストの双方から `areka` の行を抜き出し、多重集合で突合した:
+
+  ```
+  areka FQN 出現数: before = 674 / after = 674 / 不一致 0
+  対応表を使わない素の対称差: removed = 663 / added = 663（いずれも先行タスクのテーマ分割分）
+  そのうち areka FQN: removed 側 0 / added 側 0
+  ```
+
+  **`areka` の完全修飾名は 674 件すべてが移設前後でバイト等価**であり、対称差に 1 件も現れない。
+
+- 整列器の較正（Implementation Notes の必須手順）: **未整列の生出力**（4,790 行）を序数と `Sort-Object` の 2 通りに整列し、
+  digest が割れることを確認した——序数 `3ED02579…FA0F` ／ `Sort-Object` `8CE51BDA…DA57`、
+  **相違位置 1,806 / 4,790・初出 index 179**（序数 `bake::tests::blit_verbatim_correctness` 対 カルチャ `bake_entry_tests::all_transparent_is_empty_entry_not_error`＝`::`(0x3A) 対 `_`(0x5F)）。
+  本節に載る値はすべて `[string[]]` 型付け済みの序数整列で採っている。
+
+**(c) クレート緑（要件 7.2）** — `cargo test -p areka`
+
+| | exit | 3 ターゲットの結果 | 合計 |
+|---|---:|---|---:|
+| 移設前（独立導出・`425b914` 時点） | 0 | 671 / 1 / 2 passed・0 failed | **674 passed** |
+| 移設後 | 0 | 671 / 1 / 2 passed・0 failed | **674 passed** |
+
+移設前後とも 0 failed / 0 ignored で、`--list` の 674 と完全に整合する。
+
+**(d) サンプルビルドの緑（design §本体分割の制約 1・placement 木の `#[path]` include）** — `cargo build -p areka --examples` → **exit 0**・`warning` 行 0（移設前後で同一）。
+`placement/measure.rs`・`placement/source.rs` は `crates/areka/examples/window-placement.rs:107`・`collision-probe.rs:231` が
+私有 include する木の中にあるが、接続宣言・残置項目のいずれにも `crate::` パスを 1 件も導入していないため影響しない。
+
+なお `cargo test -p areka --examples`（test モード）は移設前と同じく赤のままである——`error[E0433]: cannot find `input_events` in `crate`` が
+`crates\areka\examples\..\src\placement\spawn.rs:879:16` で 1 件、example 2 本ぶんで計 3 行。**これは §7.1 に登記済みの既存状態**（本 spec は是正しない）であり、
+移設で件数も出所も変わっていないことを実測で確認した（証跡採取が `--exclude areka` を使う根拠）。
+
+**(e) 警告非増加（要件 2.6）** — `cargo build -p areka --all-targets` → exit 0。
+`areka (bin "areka")` の警告は移設前後とも **4 件**で同一（`CommandConsumer` / `LedgerError` / `ConsumerLedger` / `new`・`try_register`・`consumer_of`・`canonical` の各 never used）。
+`before_build_warnings.txt` のユニット別内訳の `areka` (bin "areka") = generated 4 と一致する。
+
+ワークスペース全域でも突合した——`cargo build --workspace --all-targets` → exit 0、
+`DIAG_COUNT = 16` / `SUMMARY_COUNT = 7` / `GENERATED_SUM = 22` / `DUPLICATES = 6` / `NET = 16`。
+§10.5 の移設前基準値 5 数値と**完全一致**（増加ゼロ）。集計の正規表現は `warnings?` で単複両対応（Implementation Notes）。
+
+**(f) 本番本体の無変更** — 移設前コミット `425b914` の各本番ファイルへ「移動範囲（同伴バナーがある場合はバナー先頭から）→ 接続宣言 3 行」という
+機械規則のみを適用した期待形を生成し、現作業ツリーと逐行突合した。**6 ファイルとも不一致 0**:
+
+| 本番ファイル | 旧 | 期待 | 実 | 先頭側の逐行不一致 |
+|---|---:|---:|---:|---|
+| `src/main.rs` | 1,842 | 962 | 962 | 1-898 行で 0 |
+| `src/emo2_boot/move_cue.rs` | 1,634 | 655 | 655 | 1-640 行で 0 |
+| `src/placement/measure.rs` | 1,387 | 468 | 468 | 1-465 行で 0 |
+| `src/emo2_boot/assets.rs` | 1,225 | 408 | 408 | 1-405 行で 0 |
+| `src/input_events/mod.rs` | 1,164 | 436 | 436 | 1-433 行で 0 |
+| `src/placement/source.rs` | 819 | 282 | 282 | 1-279 行で 0 |
+
+すなわち本番本体・モジュール間の空行・`///` doc コメント・§25.2 の残置 2 項目は 1 文字も変わっていない。
+
+`git diff --stat -- crates/areka` = `6 files changed, 30 insertions(+), 4890 deletions(-)`
+（挿入 30 = 15 モジュール × 2 行。`#[cfg(test)]` 行は元位置のまま据え置きのため差分に現れない）。
+
+**(g) 完了状態の直接確認** — 6 本番ファイルに残る `mod` の出現はすべて**宣言のみ**であり、`mod X {` 形のブロック開き行は **0 件**:
+`main.rs:901,912,916,926,938,951,962`（本タスクの接続宣言 7 本）＋`:39,44,48,52,57,63,69`（本番サブモジュール）＋`:75,81,88`（要件 1.4 の既存分離済み宣言）／
+`move_cue.rs:643,647,651,655`／`measure.rs:468`／`assets.rs:408`／`input_events/mod.rs:436`（＋`:10,11,12` の本番サブモジュール）／`source.rs:282`。
+**テストモジュール本体は 1 行も残っていない。**
+
+**(h) 作業ツリーの範囲** — `git status --porcelain -uall` は本節追記前の時点で下記 21 パスのみ:
+変更 6 本（上表の本番ファイル）＋未追跡 15 本（新テストファイル）。
+`verification/mapping/` 配下の差分は **0 件**、`crates/**` の他ファイル・`Cargo.toml`・spec 本体ドキュメントへの差分も 0 件。
+新規テストファイルに `TODO` / `FIXME` / `TBD` は 1 件も導入していない（全 15 本を走査・0 ヒット）。
+
+### 25.6 登記（要件 5.2）— 壊れたテスト・テスト間の状態汚染の所見
+
+**本タスクの範囲（`crates/areka` の 6 ファイル・15 テストモジュール・テストコード 4,848 行）では、
+修正を要する壊れたテスト・不正なテスト・テスト間の状態汚染は 1 件も発見しなかった。所有 spec への送付所見は 0 件である。**
+
+`crates/areka` には `include_str!` で本番ファイル本文を読む構造テスト（§23.5 #2 / §24.5 の縮小問題）は **1 件も存在しない**
+（`src/` 全域を走査して 0 ヒット）。よって本タスクでは当該所見の拡張は不要である。
+
+以下は「調べたが問題なし／是正しない」と確定した記録（次に触る者が同じ調査を繰り返さないための控え。送付不要）:
+
+| # | 観測 | file:line（移設後） | 判定 |
+|---|---|---|---|
+| 1 | 一時ディレクトリ名がテスト名タグのみで一意化され、プロセス ID や連番を含まない（`std::env::temp_dir()` 直下・外部 tempfile 非依存の既存規約） | `crates/areka/src/placement/source_tests.rs:26-30`（`areka_placement_source_tests_{tag}`）・`crates/areka/src/main_restore_seam_tests.rs:14-18`（`areka_main_restore_seam_tests_{tag}`） | **テスト間汚染は無し**。タグは実測で全数相異なる（`source_tests` は直接 7 種＋`balloon_root_with` 経由 7 種の計 14 種すべて一意・`main_restore_seam_tests` は 2 種一意）。各テストが冒頭で `remove_dir_all` してから作り直すので前回残骸にも耐える。ただし**同一マシンで同じテストバイナリを 2 プロセス同時に走らせると衝突しうる**。`measure_tests.rs` の `TempDir`（下記 #2）は `process::id()` を含めており同一クレート内で流儀が割れている。**本 spec 着手前から存在する構造で、移設で変わっていない。是正しない・記録のみ** |
+| 2 | 一時ディレクトリの後始末が RAII ガードのある形と無い形に割れている | ガード有: `crates/areka/src/placement/measure_tests.rs:34-62`（`TEMP_COUNTER`:34・`struct TempDir`:37・`impl Drop`:58-62・`process::id()`＋`AtomicU32` 連番）／ガード無: `crates/areka/src/placement/source_tests.rs:139,159,271-289,447,488,521,536` ほか・`crates/areka/src/main_restore_seam_tests.rs:93,122`（いずれもテスト本体末尾の `let _ = fs::remove_dir_all(...)`） | **テスト間汚染は無し**（名前が相異なるため他テストと共有しない）。ガード無の側は途中の assert 失敗時に一時ディレクトリが残る（§14.6 #3 と同型の既存構造）。**是正しない・記録のみ** |
+| 3 | `CoInitializeEx(None, COINIT_MULTITHREADED)` の呼び出しが `CoUninitialize` と対で無い | 対で有: `crates/areka/src/placement/measure_tests.rs:16,20`（`with_com` ヘルパが必ず対にする）／対で無: `crates/areka/src/emo2_boot/assets_tests.rs:48,213,260,321,350,453,506,536,577,608`（戻り値も `let _ =` で捨てる） | **問題なし**。libtest は各テストを専用スレッドで走らせるためアパートメント初期化はスレッド終了とともに消える。`let _ =` は `RPC_E_CHANGED_MODE`（同一スレッドで既に別モードが初期化済み）を握り潰すための既存の定石であり、判定に用いる値ではない。**本 spec 着手前から存在する構造で、移設で変わっていない。是正しない・記録のみ** |
+| 4 | 共有ログ捕捉ハーネス `crate::placement::test_support::capture_logs` を使うテストが 5 ファイルに散る | `crates/areka/src/main_seam_tests.rs`・`main_monitor_snapshot_seam_tests.rs`・`emo2_boot/move_cue_move_severity_log_tests.rs`・`placement/measure_tests.rs`・`placement/source_tests.rs` | **問題なし**。`capture_logs` は `tracing::subscriber::with_default` によるスレッドローカル差し替えで、`cargo test` の並行実行でも干渉しない（§14.6 #1 と同じ機構）。ハーネス本体（`placement/test_support.rs`）は本タスクの対象外で無変更。**移設で参照経路は 1 文字も変わっていない**（`super::*` 経由ではなく `crate::placement::test_support::…` の絶対参照であり、モジュールパスが不変のため） |
+| 5 | `cargo test -p areka --examples` の既存 E0433（テストモジュール内 `crate::` 参照） | `crates/areka/src/placement/spawn.rs:879`（先行裁定注記 `:871`） | **既に §7.1 へ登記済み**（`test-cage-determinism` へ所見送付）。本タスクで新規の所見ではない。移設前後で件数・出所とも不変であることを実測で再確認した（§25.5 (d)）。`spawn.rs` は本タスクの対象外ファイルで無変更 |
+
+### 25.7 本タスクの成果物
+
+| ファイル | 内容 |
+|---|---|
+| `crates/areka/src/main_startup_window_tests.rs` | 新規（167 行） |
+| `crates/areka/src/main_seam_tests.rs` | 新規（213 行） |
+| `crates/areka/src/main_config_input_tests.rs` | 新規（64 行） |
+| `crates/areka/src/main_ghost_wiring_tests.rs` | 新規（73 行） |
+| `crates/areka/src/main_restore_seam_tests.rs` | 新規（123 行） |
+| `crates/areka/src/main_persist_wiring_seam_tests.rs` | 新規（86 行） |
+| `crates/areka/src/main_monitor_snapshot_seam_tests.rs` | 新規（154 行） |
+| `crates/areka/src/emo2_boot/move_cue_tests.rs` | 新規（305 行・先頭にバナー 29 行） |
+| `crates/areka/src/emo2_boot/move_cue_move_sink_tests.rs` | 新規（117 行・先頭にバナー 3 行） |
+| `crates/areka/src/emo2_boot/move_cue_apply_move_tests.rs` | 新規（356 行・先頭にバナー 9 行） |
+| `crates/areka/src/emo2_boot/move_cue_move_severity_log_tests.rs` | 新規（201 行・先頭にバナー 12 行） |
+| `crates/areka/src/placement/measure_tests.rs` | 新規（919 行） |
+| `crates/areka/src/emo2_boot/assets_tests.rs` | 新規（817 行） |
+| `crates/areka/src/input_events/input_events_tests.rs` | 新規（728 行） |
+| `crates/areka/src/placement/source_tests.rs` | 新規（537 行） |
+| 上記に対応する本番 6 ファイル | 末尾のテストモジュールブロック（＋`move_cue.rs` の同伴バナー）を接続宣言へ置換（本番本体・`///` doc コメント・残置 2 項目は無変更） |
+| `verification/notes.md` | 本節（§25）を追記 |
+| `verification/mapping/areka.csv` | **作成しない**（FQN 変化 0 件・対応表の行を持たない） |
+
+`crates/areka` の残る 7 ファイル（`placement/follow.rs`・`emo2_boot/frame.rs`・`input_events/balloon.rs`・`placement/mod.rs`・
+`placement/spawn.rs`・`placement/persist.rs`・`placement/resolver.rs`）は本タスクの対象外であり、1 文字も触っていない。
