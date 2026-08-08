@@ -5982,3 +5982,102 @@ Implementation Notes の指示に従い、字句状態追跡つきの独立ス�
 | `verification/notes.md` | 本節（§30）を追記 |
 
 **`crates/areka` のテスト分離・テーマ分割は本タスクで完了した**（design §File Structure Plan の 13 本すべて着地）。残るのは本番本体のファサード分割 2 本——`placement/follow.rs`（**タスク 6.1**・在庫表は §27.9／§28 の各節）と `emo2_boot/frame.rs`（**タスク 6.2**・在庫表は §29.12）——のみである。
+
+## 31. 追従処理の本番本体をファサード分割: `crates/areka/src/placement/follow.rs`（タスク 6.1・要件 2.5 / 2.6 / 2.7 / 4.1 / 4.2 / 4.3 / 4.4 / 4.5 / 7.3）
+
+- 実施日: 2026-08-09
+- ブランチ: `claude/areka-p0-file-slimming-64d065` / 直前コミット `bddf620`（タスク 5.6）。**本節の全比較の基準は `bddf620`**
+- 実行シェル: **PowerShell（pwsh 7）**
+- **本 spec で唯一「本番コードを動かす」タスク群の 1 本目**である。テスト分離コミットとは独立させた（要件 7.3）
+- 触れたのは `crates/areka/src/placement/follow.rs`（M）と新規 `crates/areka/src/placement/follow/` 配下 5 本の計 6 パス＋本ファイル。**テストファイル・対応表・他クレートは 1 バイトも触っていない**
+
+### 31.1 成果ファイルと行数（すべて 1,000 行以下）
+
+| ファイル | 行 | 内容 |
+|---|---:|---|
+| `placement/follow.rs`（ファサード） | 122 | `//!` モジュールドキュメント（`:1-32`・`bddf620` と完全一致）＋`mod` 宣言 5＋placement 兄弟の `use` 4＋再輸出群＋テスト接続宣言 12（`bddf620` の `:1993-2032` と完全一致） |
+| `placement/follow/anchor.rs` | 174 | アンカー射影（`DragPositionPolicy`・`BottomSnapPolicy`＋impl・`project_anchor`・`Anchored`） |
+| `placement/follow/drag_follow.rs` | 682 | ドラッグ＋バルーン追従（`BalloonFollow`・`on_char_drag*`・`policy_mapped_position`・`BalloonFollowTrigger`＋impl・`follow_balloon`・`guard_balloon_position`・`on_balloon_drag*`） |
+| `placement/follow/window_move.rs` | 701 | 窓移動・リサイズ（`move_window_to`・`resize_window_to`・`anchor_changed_system`・`enqueue_window_set_pos`・`log_window_move`・`resize_window_keep_position`） |
+| `placement/follow/visibility.rs` | 313 | 可視性ガード（`VisibilityVerdict`＋impl・`guard_visibility`・`rect_at`・`rects_intersect`・`intersects_any_work_area`・`clamp_x_into`・`VISIBILITY_*` 定数 3・`route_applies_visibility_guard`・`apply_visibility_guard`・`evaluate_visibility_guard`） |
+| `placement/follow/work_area.rs` | 127 | 作業領域解決（`MonitorSnapshot`＋impl・`work_area_for_window`・`WorkAreaResolution`・`work_area_for_window_with_origin`） |
+
+**`follow.rs` は 2,032 → 122 行**。項目の割り当ては design §本体分割の表（`design.md:190-196`）と一致（anchor 5 項目・drag_follow 10・window_move 6・visibility 13・work_area 5）。design の概算行（166 / 670 / 642 / 113 / 338）に対する実測は 174 / 682 / 701 / 127 / 313——`window_move` の +59 は `use` ブロックと `//!` ヘッダの新設ぶんであり、項目内容の増減ではない。
+
+**本 spec 最大の懸案だった `follow.rs` は、テスト分離（8,472 → 2,032）と本タスク（2,032 → 122）で計 8,350 行が解消された。**
+
+### 31.2 「純移動」の機械証明（要件 4.4）
+
+「関数の分割・統合・責務移動・ロジック書き換えを行わない」は反証可能な主張なので、機械的に確かめた。`git show bddf620:crates/areka/src/placement/follow.rs` の本番本体（`:53-1991`）と、移設後 5 サブモジュール本体の連結を、**属性・先行コメント塊つきの最上位項目**（括弧の釣り合いで区切る）へ分解して 1 対 1 突合した。
+
+**移設前 39 項目 ↔ 移設後 39 項目。欠落 0・重複 0・新設 0。** 差分は次の 10 件のみで、いずれも許容区分に収まる:
+
+| # | 差分 | 区分 |
+|---|---|---|
+| 1〜9 | `VISIBILITY_UNRESOLVED_TAG`・`BalloonFollowTrigger`・`BalloonFollowTrigger::applies_visibility_guard`・`apply_visibility_guard`・`enqueue_window_set_pos`・`evaluate_visibility_guard`・`follow_balloon`・`rect_at`・`route_applies_visibility_guard` へ `pub(super)` 付与 | クレート内可視性のみ（いずれも移設前は `follow` 私有・移設後も `follow` 私有） |
+| 10 | `follow_balloon` の署名を 1 行 → 6 行へ折り返し | 空白のみ。**「空白だから無害」で済ませず検証した**——引数の順序と型は同一・署名直後の本体 31 行は完全一致。折り返しは強制（移設前 97 字＋`pub(super) ` = 108 字 > rustfmt の 100 字） |
+
+`#[allow(dead_code)]` は移設前後とも **5 件**で、すべて自分の項目に付随したまま移動した（`bddf620:149,217,999,1230,1927` → `anchor.rs:104,172`・`window_move.rs:134,365,637`）。末尾の説明コメントも逐語一致。バナーコメントは移設前後とも **10 本**で、束ねられる項目も不変（Implementation Notes §28.5 の「`use` 直前バナー」問題は本タスクでは発生しなかった——ファサードに残した `use super::…` 4 本の直前バナーはファサード側に留まったため）。
+
+### 31.3 公開面の維持（要件 2.5・4.3）
+
+サブモジュールは **すべて私有 `mod`**（`mod anchor;` 等）として宣言した。よって `follow::anchor::X` のような**新しい公開モジュールパスは 1 本も生えていない**。
+
+- 移設前 `pub` **15 項目** → すべて `pub use` でファサードに再輸出（`follow::<Name>` で同一可視性）
+- 移設前 `pub(crate)` **4 項目**（`on_char_drag`・`on_char_drag_end`・`on_balloon_drag`・`on_balloon_drag_end`） → `pub(crate) use`
+- 移設前私有の項目 → 可視性キーワード無しの素の `use` で再束縛（`follow` とその子孫のみ＝従来どおり）。**`pub` へ格上げした項目は 0 件**
+
+私有項目をファサードで素の `use` に再束縛すれば、`follow` の子孫であるテストモジュール群の `use super::*;` が従来どおり拾う——12 本のテストファイルが 1 バイトも変わっていないことがその証明である。
+
+### 31.4 呼び出し側: **タスク記載の「26 箇所」は実測 30 箇所（19 ファイル）が正**
+
+`tasks.md:206` と `design.md:177` の「呼び出し側 26 箇所」は実測と合わない。実測は **30 箇所・19 ファイル**（`bddf620` と移設後で同一＝差分 0）。
+
+内訳の裏取り: **26 は `crates/areka/src` のみを数えた値**（26 箇所・17 ファイル）で、欠けている 4 箇所は examples——`examples/collision-probe.rs:59,417,656` と `examples/window-placement.rs:259`。examples は `#[path]` で placement 木を私有 include しており design 制約 1・5 が明示的に射程へ入れているので、**30/19 を正とする**。
+
+**Implementation Notes に既載の「26 宣言ファイル → 実測 30」とは別件**（あちらはテストモジュール宣言ファイル数）。数が同じなのは偶然である。完了状態の「差分が無く」は 26 と読んでも 30 と読んでも成立する（どちらの集合も差分 0）ため、本タスクの合否には影響しない。
+
+### 31.5 D1 ファサードの `pub use` は bin クレートで `unused_imports` を出す（**タスク 6.2 への申し送り**）
+
+`areka` は **lib target を持たない bin クレート**である。そのため `pub use` 再輸出のうち、消費者が `#[cfg(test)]` のテストモジュールと examples の部分木しか無い項目は、非 test ビルド単位で「未使用」と判定される。移設前は同一モジュール内の**項目定義**だったので `#[allow(dead_code)]` が効いていたが、移設後は**インポート**になり別の lint に掛かる——これは design が予期していなかった D1 の構造的副作用である。
+
+手当てせずにビルドすると `areka (bin)` が 4 → 7 件、examples が 0 → 2 件へ増え、基準値 16/7/22/6/16 を割る。該当 3 グループへ `#[allow(unused_imports)]` を付けて基準値へ戻した。
+
+**「死んだ再輸出を握り潰したのではない」ことを確認済み**: `cargo rustc -p areka --bin areka -- --force-warn unused_imports` で属性を上書きしたところ、`follow.rs` について rustc が挙げたのは**ちょうど 5 名**だけだった——`follow.rs:61` の `BottomSnapPolicy`・`DragPositionPolicy`、`:63` の `VisibilityVerdict`・`guard_visibility`、`:69` の `anchor_changed_system`。5 名すべてに `#[cfg(test)]` 側の実消費者がある（`follow_anchor_tests.rs:12`・`follow_visibility_guard_tests.rs:6`・`follow_resize_tests.rs:594`・`follow_window_move_diag_tests.rs:10`）。しかも要件 2.5 が 5 名すべての `follow::<Name>` パス維持を要求している。属性は `use` 文単位で効くので影響範囲もこの 3 文に限られる（`--force-warn` が他に何も出さないことで確認）。
+
+なお `:69` のグループで実際に未使用なのは `anchor_changed_system` **のみ**であり、同居する `move_window_to`・`resize_window_to`・`resize_window_keep_position` は非 test ビルドでも消費されている（`move_cue.rs:46`・`emo2_boot/frame.rs:44`）。**実装当初のコメントはこの 3 項目も未参照であるかのように書かれていたのでレビュー指摘を受けて是正した**（`follow.rs:64-67`）——タスク 6.2 がこの文言をそのまま複製すると誤った根拠が伝播するため。
+
+**タスク 6.2（`frame.rs`）も同一構造ゆえ同じ手当てが要る。** ただし `frame.rs` は examples に include されないため、増分は bin ユニットのみに出る見込みである。
+
+### 31.6 副作用: 私有ヘルパ 8 件の可視性が**狭まった**（広がっていない）
+
+どのテストからも参照されていない私有ヘルパ 8 件——`policy_mapped_position`・`guard_balloon_position`・`log_window_move`・`rects_intersect`・`intersects_any_work_area`・`clamp_x_into`・`VISIBILITY_CLAMP_TAG`・`VISIBILITY_NEAREST_FALLBACK_TAG`——は、「`follow` の全子孫から見える」から「自サブモジュール内のみ」へ狭まった。要件 2.5 は**クレート外から観測できる公開面**を縛るものであり、これは公開面の変化ではない。全テスト緑で実害なし。将来これらを単体テストの対象にする場合は、ファサードへ 1 行再束縛すればよい。
+
+### 31.7 検証結果（すべて基準値と一致）
+
+| 検証 | 基準（`bddf620`） | 移設後 | 判定 |
+|---|---|---|---|
+| `cargo test -p areka` | 671 + 1 + 2 = **674 passed / 0 failed** | 671 + 1 + 2 = **674 passed / 0 failed** | 一致 |
+| `cargo test -p areka -- --list` の名前集合 | 674 名 | 674 名（`diff` 完全一致） | 一致・**対応表への追加行 0** |
+| `cargo build -p areka --examples` | 緑・警告 0 | 緑・警告 0 | 一致 |
+| ワークスペース警告集計 | 16 / 7 / 22 / 6 / 16 | 16 / 7 / 22 / 6 / 16 | 一致 |
+| `follow_*.rs` テストファイル 12 本 | — | `git diff --name-only` に 1 本も現れない | 差分 0 |
+| `crate::` パス（6 ファイル） | 0 | 0 | 一致（design 制約 1） |
+| 各ファイル行数 | — | 122 / 174 / 682 / 701 / 313 / 127（最大 701） | 全数 1,000 行以下 |
+| `placement::follow` 配下のテスト | 133 本・11 モジュール | 133 本・11 モジュール（パス不変） | 一致 |
+
+`cargo fmt --check` はこのリポジトリでは既にゲートになっていない（`areka` だけで既存 688 件の差分があり、本 spec がコミット済みのテストファイル群も含む）。移動した本体は既存の非準拠をそのまま持ち込み、**新規に生じる差分は `follow_balloon` の 1 件だけだったので rustfmt の出力どおり手で折り返した**（§31.2 の #10）。`cargo fmt` を全体に走らせる選択は採らなかった——無関係の巨大差分が混ざり、純移動の証明ができなくなるためである。
+
+### 31.8 変更ファイル一覧
+
+| ファイル | 内容 |
+|---|---|
+| `crates/areka/src/placement/follow.rs` | 2,032 → 122 行。ファサード化（`mod` 宣言 5＋再輸出＋テスト接続宣言 12）。`//!` ドキュメントと接続宣言は `bddf620` と完全一致 |
+| `crates/areka/src/placement/follow/anchor.rs` | 新規（174 行・本番項目 5） |
+| `crates/areka/src/placement/follow/drag_follow.rs` | 新規（682 行・本番項目 10） |
+| `crates/areka/src/placement/follow/window_move.rs` | 新規（701 行・本番項目 6） |
+| `crates/areka/src/placement/follow/visibility.rs` | 新規（313 行・本番項目 13） |
+| `crates/areka/src/placement/follow/work_area.rs` | 新規（127 行・本番項目 5） |
+| `verification/notes.md` | 本節（§31）を追記 |
+
+**残るはタスク 6.2（`emo2_boot/frame.rs`・在庫表は §29.12）のみで、本番本体の分割は完了する。**
