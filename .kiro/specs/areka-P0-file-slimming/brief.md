@@ -15,7 +15,67 @@
 2. **同一ファイル干渉の増幅器**: 干渉台帳の「同一ファイル異ハンク」衝突（presenter.rs 直列鎖・cage⇄vis 等)の一部は、複数 spec 分のテストモジュールが同じファイルに積まれることで発生・悪化する。
 3. **編集・レビューの人間工学**: 4,000〜8,000 行のファイルはエディタ・diff・レビューの全てで扱いづらい。
 
-### 実測（2026-08-06・上位ファイルの本体/テストモジュール内訳）
+### 実測（起票時 2026-08-06 → 移設・分割後 2026-08-09 `6c5cb70`）
+
+**更新後の値は同一条件のスキャナ `verification/Measure-TestModules.ps1`（`.kiro/` 除外済みの版）による全域再計測である。更新前の全域値の出所はタスク 1.1 のコミット済み成果物 `verification/scan_raw.csv` ／ `scan_summary.txt`、上位ファイルの per-file 値は下表の起票時実測（main `686ff10` 相当）である。**
+
+#### リポジトリ全域
+
+| 指標 | 更新前（2026-08-07 `f05537e`） | 更新後（2026-08-09 `6c5cb70`） |
+|---|---:|---:|
+| 走査した `.rs` ファイル数 | 619 | 793 |
+| 総行 | 257,134 | 258,342 |
+| 本番本体 | 158,122 | 158,660 |
+| テストコード | 99,012 | 99,682 |
+| **最大ファイル行数** | **8,472**（`placement/follow.rs`） | **2,503**（`emo2_boot/spine.rs`＝要件 1.4 の除外ファイル） |
+| **1,000 行を超えるファイル数** | **54** | **13** |
+| ファイル内テストモジュールが 500 行を超えるファイル数（＝必須対象） | 49 | 0 |
+
+ファイル数の +174 は、本 spec が新設したテストファイル 164 本＋本番サブモジュール 10 本である。総行の +1,208 は、ファサード・接続宣言・各テストファイルの `use` ヘッダの増分であり、**移設したテストコードの本文は 1 行も変えていない**（要件 2.4・タスク 7.1 で 49/49 の本文一致を機械確認）。更新後の「テストコード」は、ファイル内に残る `#[cfg(test)] mod` ブロック 30,091 行＋パス属性で接続された 164 本の総行 69,591 行の合計である（両者に重複は無い）。
+
+#### 更新後に 1,000 行を超えて残る 13 本
+
+| 行数 | ファイル | 残る理由 |
+|---:|---|---|
+| 2,503 | `crates/areka/src/emo2_boot/spine.rs` | 要件 1.4 の除外（親の `emo2_boot/mod.rs` が既に本番ファイル外へ分離済み） |
+| 1,657 | `crates/areka-kanade/tests/kanade/common/mod.rs` | 統合テスト・ファイル内テストモジュール 256 行（要件 1.5 の必須対象外） |
+| 1,563 | `crates/areka-kanade/tests/kanade/choice_test.rs` | 統合テスト・`#[cfg(test)] mod` を持たない（要件 1.1 の対象外） |
+| 1,434 | `crates/areka-emo-text/examples/emo-text-layer.rs` | サンプル・本体分割の範囲外（要件 4.5） |
+| 1,395 | `crates/areka-parsers/src/shell/decode_tests.rs` | 着手前から分離済みの歴史的形式（要件 1.4） |
+| 1,356 | `crates/areka-emo-compose/src/golden_tests.rs` | 着手前から分離済みの歴史的形式（要件 1.4） |
+| 1,168 | `crates/areka/examples/emo-present.rs` | サンプル・本体分割の範囲外（要件 4.5） |
+| 1,116 | `crates/areka-kanade/tests/kanade/mouse_test.rs` | 統合テスト・`#[cfg(test)] mod` を持たない（要件 1.1 の対象外） |
+| 1,102 | `crates/dola/tests/cue/runtime_test.rs` | 統合テスト・`#[cfg(test)] mod` を持たない（要件 1.1 の対象外） |
+| 1,066 | `crates/areka-emo-present/src/presenter.rs` | 本番本体・要件 4.5 が `follow.rs`／`frame.rs` 以外の分割を範囲外としている |
+| 1,063 | `crates/areka/examples/collision-probe.rs` | サンプル・本体分割の範囲外（要件 4.5） |
+| 1,018 | `crates/areka-ghost/src/shiori_inproc.rs` | ファイル内テストモジュール 446 行（要件 1.5 の必須対象外） |
+| 1,009 | `crates/areka-kanade/tests/kanade/close_test.rs` | 統合テスト・`#[cfg(test)] mod` を持たない（要件 1.1 の対象外） |
+
+**移設先テストファイルは全域で最大 960 行**（`crates/areka-ghost/src/runtime_tests.rs`）で 1,000 行超は 0 本（要件 1.7 を充足）。**本番ファイルで 1,000 行を超えるのは `presenter.rs`（1,066）と `shiori_inproc.rs`（1,018）の 2 本**であり、前者は要件 4.5 が本体分割の範囲外としたもの、後者はファイル内テストモジュールが 446 行で要件 1.5 の必須対象に届かないものである。なお**本番本体**（テストコードを除いた行）で 1,000 行を超えるのは `presenter.rs` の 1 本だけである（`shiori_inproc.rs` の本番本体は 572 行）。
+
+#### 起票時に挙げた上位ファイルの内訳
+
+| ファイル | 更新前 総行 | 更新前 本番本体 | 更新前 テスト | 更新後 本番（本／最大） | 更新後 テスト（本／最大） |
+|---|---:|---:|---:|---:|---:|
+| `crates/areka/src/placement/follow.rs` | 8,472 | **1,997** | 6,475 | 6 ／ 701（計 2,119） | 12 ／ 950（計 6,594） |
+| `crates/areka-emo-present/src/presenter.rs` | 5,417 | 1,043 | 4,374 | 1 ／ 1,066 | 8 ／ 827（計 4,474） |
+| `crates/areka/src/emo2_boot/frame.rs` | 4,660 | **1,498** | 3,162 | 6 ／ 394（計 1,693） | 9 ／ 608（計 3,284） |
+| `crates/areka-emo-text/src/layout.rs` | 3,294 | 750 | 2,544 | 1 ／ 764 | 5 ／ 768（計 2,558） |
+| `crates/areka-kanade/src/schedule/steady.rs` | 3,286 | 904 | 2,382 | 1 ／ 918 | 4 ／ 831（計 2,396） |
+| `crates/areka-emo-text/src/viewbox_draw.rs` | 3,090 | 786 | 2,304 | 1 ／ 803 | 6 ／ 685（計 2,339） |
+| `crates/areka-emo-text/src/actor.rs` | 2,967 | 858 | 2,109 | 1 ／ 880 | 6 ／ 681（計 2,130） |
+| `crates/areka/src/input_events/balloon.rs` | 2,825 | 830 | 1,995 | 1 ／ 847 | 6 ／ 753（計 2,030） |
+| `crates/areka-sakura/src/drive.rs` | 2,808 | 531 | 2,277 | 1 ／ 542 | 4 ／ 837（計 2,299） |
+| `crates/areka/src/emo2_boot/spine.rs` | 2,503 | （全量テストスパイン） | 2,503 | — | 1 ／ 2,503（要件 1.4 の除外・無変更） |
+| `crates/areka-seriko/src/actor.rs` | 2,331 | 485 | 1,846 | 1 ／ 493 | 3 ／ 928（計 1,852） |
+| `crates/areka-emo-present/src/balloon.rs` | 2,264 | 633 | 1,631 | 1 ／ 644 | 4 ／ 685（計 1,638） |
+| `crates/areka-emo-compose/src/plan.rs` | 2,203 | 668 | 1,535 | 1 ／ 678 | 3 ／ 942（計 1,548） |
+| `crates/areka-kanade/src/schedule/mod.rs` | 2,176 | 670 | 1,506 | 1 ／ 687 | 2 ／ 882（計 1,489） |
+| `crates/areka/src/placement/mod.rs` | 1,899 | 564 | 1,335 | 1 ／ 575 | 4 ／ 567（計 1,351） |
+| `crates/areka-emo-compose/src/scale.rs` | 1,778 | 468 | 1,310 | 1 ／ 478 | 3 ／ 809（計 1,310） |
+
+<details>
+<summary>起票時（2026-08-06）の実測表・原文</summary>
 
 | ファイル | 総行 | 本番本体 | テストモジュール |
 |---|---:|---:|---:|
@@ -38,11 +98,15 @@
 
 注: frame.rs はテストモジュールが本体に**散在**（:299-345 帯等）しており、trailing だけでなく interleaved のテストモジュールも対象。
 
+</details>
+
+注（更新後の訂正）: 上の「散在」は起票時の見立てである。2026-08-07 の全数実測で、必須対象 49 本に interleaved のテストモジュールは **0 件**と確定した（要件 1.3）。また起票時の `follow.rs` 本番本体 1,997 ／ テスト 6,475 は、厳密計測（ブロック外枠を移設側に数える定義）では 1,996 ／ 6,476 であり、要件 4.1 以降はこの値を採っている。
+
 ## Current State
 
 - テストモジュールは [[areka-bin-crate-internal-tests-in-crate]] の規律で in-crate 配置——ただしこの規律は「**in-crate**」であって「**in-file**」ではない。`#[cfg(test)] mod tests;`（別ファイル）でも `super::` 経由の私有アクセスは保たれ、規律違反にならない。
 - テストモジュールの実体は決定論テスト・ログテスト・property テストなど多様で、`capture_logs` 等の共有ハーネスを含む（ハーネス一本化は `test-cage-determinism` W6.9 の領分＝本 spec は触らない）。
-- 本体が実際に太いのは `follow.rs`（1,997）と `frame.rs`（1,498）の 2 本のみ。
+- 本体が実際に太いのは `follow.rs`（1,997）と `frame.rs`（1,498）の 2 本のみ。**〔起票時の記述。実装後はこの 2 本ともファサード分割済みで、本番本体が 1,000 行を超えるのは `presenter.rs`（1,066）だけである——上の実測表を参照。厳密計測では `follow.rs` の本番本体は 1,996 が正。〕**
 
 ## Desired Outcome
 
