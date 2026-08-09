@@ -32,6 +32,20 @@
 .PARAMETER ModuleName
     元ファイルに複数のテストモジュールがあるとき、比較対象を名前で絞る。省略時は全ブロックの合算。
 
+.PARAMETER WholeFile
+    元ファイルに `#[cfg(test)] mod` ブロックが存在しない種類のファイル——
+      (a) 既に分離済みのテストファイル（ファイル全体がテストモジュール本体で、親から
+          `#[cfg(test)] mod X;` で接続されている）
+      (b) `tests/` 配下の結合テスト（全体がテストなので `#[cfg(test)]` を書かない）
+    を検証するためのスイッチ。元ファイルの全行を単一のモジュール本体とみなし、
+    通常経路とまったく同じ項目単位の規則（テスト関数＝識別子キーで 1:1／ヘルパ項目＝
+    正規化本文の多重集合／行頭空白正規化）で突合する。
+
+    誤用防止のため、`-WholeFile` を指定した元ファイルに `#[cfg(test)] mod` ブロックが
+    1 つでも存在する場合は比較を行わず引数エラー（exit 2）とする——ブロック外の本番コードまで
+    比較対象へ混ぜてしまい、取り違えた判定を出すほうが有害だからである。
+    `-ModuleName` との同時指定も引数エラー（exit 2）。
+
 .OUTPUTS
     一致: 出力ゼロ・exit 0
     不一致: 差分の逐条レポート・exit 1
@@ -45,6 +59,15 @@
                        crates/areka/src/placement/follow_anchor_tests.rs, `
                        crates/areka/src/placement/follow_drag_tests.rs
 
+.EXAMPLE
+    # 既に分離済みのテストファイル（ファイル全体がテスト本体）のテーマ分割を検証する
+    pwsh -File .kiro/specs/areka-P0-file-slimming/verification/Compare-RelocatedTests.ps1 `
+        -Commit 09f3b85 -WholeFile `
+        -OriginalPath crates/areka/src/emo2_boot/spine.rs `
+        -RelocatedPath crates/areka/src/emo2_boot/spine.rs, `
+                       crates/areka/src/emo2_boot/spine_test_support.rs `
+        -Detail
+
 .NOTES
     Requirements: 1.8, 2.3, 2.4, 2.9
     Design:       §検証 / EvidencePipeline（証跡パイプライン）, §実装 / TestRelocation, §実装 / ThemeSplit
@@ -56,6 +79,7 @@ param(
     [Parameter(Mandatory)][string[]]$RelocatedPath,
     [string[]]$ModuleName,
     [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path,
+    [switch]$WholeFile,
     [switch]$Detail
 )
 
@@ -112,12 +136,27 @@ $originalLines = [string[]]$originalLines
 
 # ------------------------------------------------- 元ファイルのテストモジュール本体を抽出
 $blocks = [RustItemScan]::FindTestModules($originalLines)
-if ($ModuleName) {
-    $blocks = @($blocks | Where-Object { $ModuleName -contains $_.Name })
+if ($WholeFile) {
+    # -WholeFile はブロックを探さずファイル全体を本体とみなす経路。
+    # 取り違え防止のため、ブロックが実在する元ファイルへの指定は引数エラーとする。
+    if ($ModuleName) {
+        Write-Error "-WholeFile と -ModuleName は同時に指定できません（-WholeFile はファイル全体を単一のモジュール本体として扱うため、名前による絞り込みが意味を持ちません）" -ErrorAction Continue
+        exit 2
+    }
+    if (@($blocks).Count -gt 0) {
+        $found = (@($blocks) | ForEach-Object { '{0} ({1}-{2} 行)' -f $_.Name, $_.Start, $_.End }) -join ', '
+        Write-Error "-WholeFile が指定されましたが、元ファイルには #[cfg(test)] mod ブロックが存在します: $OriginalPath -> $found。ファイル全体を本体として扱うとブロック外の本番コードまで比較対象へ混ざり、取り違えた判定になるため中止します（-WholeFile を外して実行してください）" -ErrorAction Continue
+        exit 2
+    }
 }
-if (@($blocks).Count -eq 0) {
-    Write-Error "元ファイルに比較対象の #[cfg(test)] mod ブロックがありません: $OriginalPath" -ErrorAction Continue
-    exit 2
+else {
+    if ($ModuleName) {
+        $blocks = @($blocks | Where-Object { $ModuleName -contains $_.Name })
+    }
+    if (@($blocks).Count -eq 0) {
+        Write-Error "元ファイルに比較対象の #[cfg(test)] mod ブロックがありません: $OriginalPath" -ErrorAction Continue
+        exit 2
+    }
 }
 
 function Merge-Digest($acc, $d) {
@@ -138,11 +177,31 @@ function New-EmptyDigest {
 }
 
 $before = New-EmptyDigest
-foreach ($b in $blocks) {
-    # ブロック内部 = `{` の次の行 〜 `}` の前の行（0-based [BraceLine, End-1)）
-    $d = Get-ItemDigest -Lines $originalLines -From $b.BraceLine -To ($b.End - 1) `
-        -Origin ('{0}:mod {1}' -f $OriginalPath, $b.Name)
+if ($WholeFile) {
+    # ファイル全体 = 単一のモジュール本体（0-based [0, Length)）。
+    # 以降の突合規則は通常経路と完全に同一。
+    $d = Get-ItemDigest -Lines $originalLines -From 0 -To $originalLines.Length `
+        -Origin ('{0}:<whole file>' -f $OriginalPath)
     Merge-Digest $before $d
+
+    # 通常経路の「ブロック 0 件 → exit 2」（下方）に対応する健全性ゲート。
+    # 元ファイルから項目が 1 つも採れないなら、それは比較ではなく引数の誤りである
+    # （例: 接続宣言だけの分割済みハブを -OriginalPath に渡した・-Commit の付け忘れ）。
+    # これが無いと `MATCH: test fn 0=0 / helper item 0=0` を exit 0 で返してしまう＝偽の緑。
+    if ($before.TestBodies.Count -eq 0 -and $before.Helpers.Count -eq 0) {
+        Write-Error -ErrorAction Continue (
+            '-WholeFile: 元ファイルから比較対象の項目を 1 つも抽出できませんでした' +
+            '（テスト関数 0 件・ヘルパ項目 0 件）: {0}' -f $OriginalPath)
+        exit 2
+    }
+}
+else {
+    foreach ($b in $blocks) {
+        # ブロック内部 = `{` の次の行 〜 `}` の前の行（0-based [BraceLine, End-1)）
+        $d = Get-ItemDigest -Lines $originalLines -From $b.BraceLine -To ($b.End - 1) `
+            -Origin ('{0}:mod {1}' -f $OriginalPath, $b.Name)
+        Merge-Digest $before $d
+    }
 }
 
 # ------------------------------------------------------------ 移設後ファイル群の取得
@@ -255,7 +314,8 @@ if ($report.Count -gt 0) {
 if ($Detail) {
     $bCount = 0; foreach ($k in $before.TestBodies.Keys) { $bCount += $before.TestBodies[$k].Count }
     $aCount = 0; foreach ($k in $after.TestBodies.Keys) { $aCount += $after.TestBodies[$k].Count }
+    $blockDesc = if ($WholeFile) { 'whole-file' } else { [string]@($blocks).Count }
     Write-Output ('MATCH: test fn {0}={1} / helper item {2}={3} / mod block {4} / files {5}' -f `
-                  $bCount, $aCount, $before.Helpers.Count, $after.Helpers.Count, @($blocks).Count, @($relResolved).Count)
+                  $bCount, $aCount, $before.Helpers.Count, $after.Helpers.Count, $blockDesc, @($relResolved).Count)
 }
 exit 0

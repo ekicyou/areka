@@ -6943,3 +6943,57 @@ Get-ItemDigest -Lines (git show 09f3b85:crates/areka/src/emo2_boot/spine.rs) -Fr
 **修正を要する壊れたテスト・不正なテスト・テスト間の状態汚染は 1 件も発見しなかった。新規送付所見 0 件。**
 
 記録のみ（送付不要）: (i) `cargo fmt --check` が新規 7 本で差分（生成した `use` ヘッダの折り返し。§26.8 #6 等と同一判断）。(ii) 共有ヘルパの doc の intra-doc リンクが別モジュールを指す（§32.10 と同一判断・`cargo build`／`cargo test` は診断を出さない）。(iii) `emo2_root()`（`spine.rs:364-382`・**分割前と同一行**）が呼ぶたびに fixture の永続ディレクトリを消す——既存の設計意図で doc に明記があり、本タスクは 1 文字も触っていない。
+
+## 41. 検証ツールの改修: `-WholeFile`（`#[cfg(test)] mod` を持たない元ファイルの本文一致）
+
+- 実施日: 2026-08-09 / HEAD `5cf4866` / 変更は `verification/Compare-RelocatedTests.ps1` の 1 本のみ（+80/−10）。`RustParse.ps1` は無変更（レビュアーが HEAD との差分 0 行を確認）
+- 動機は §40.3——群 8 の 13 本のうち **7 本**が構造上 `#[cfg(test)] mod` ブロックを持たず、従来経路では exit 2（引数不正）で止まる。タスク 8.1 は手作りのラッパ写しで回避したが、その入力はリポジトリに無く**第三者が再実行できない**（Implementation Notes の禁じ手）
+- **測定器そのものへの変更**であり、以後 5 タスクの要件 2.4 の証跡が全てこれに乗る。ゆえに通常のレビューより強い検証を課した
+
+### 41.1 追加した仕様
+
+`-WholeFile` は元ファイルの全行を単一のモジュール本体（`Get-ItemDigest -From 0 -To Length`）とみなす。**突合規則は通常経路と完全に同一**——テスト関数は識別子キーで 1:1、ヘルパ項目は正規化本文の多重集合、行頭空白は正規化。比較エンジン（`:196-301`）は共有で 1 行も触っていない。
+
+誤用ガードは 3 つ:
+1. `#[cfg(test)] mod` ブロックが実在する元ファイルへの `-WholeFile` → **exit 2**（比較せず停止）
+2. `-WholeFile` と `-ModuleName` の同時指定 → **exit 2**
+3. **元ファイルから項目が 1 つも採れないとき → exit 2**（本節のレビューで追加）
+
+### 41.2 ③ の追加は「偽の緑」を塞いだもの
+
+初版には 3 つ目が無く、**接続宣言だけの分割済みハブを `-OriginalPath` に渡すと `MATCH: test fn 0=0 / helper item 0=0` を exit 0 で返した**。レビュアーが専用のフィクスチャ（doc・`use` 1 本・`#[cfg(test)] #[path] mod` 宣言 2 本のみ）を作り、**改修前は exit 0・改修後は exit 2** を実測して、対照が同語反復でないことを示した。
+
+条件を `-and`（テスト 0 **かつ** ヘルパ 0）にしたのも実測に基づく——`decode_tests.rs`（タスク 8.5 の対象）は正当に `test fn 59 / helper item 0` になるので、`-or` なら実在の対象を偽陽性で弾いていた。
+
+`Write-Error` に `-ErrorAction Continue` を付けたのは必須である。Implementation Notes が記録するとおり `$ErrorActionPreference='Stop'` は `exit 2` に到達する前にスクリプトを殺す。レビュアーがメッセージの出力と `exit 2` への到達の両方を確認した。
+
+### 41.3 非退行の証跡（通常経路は 1 ビットも変わらない）
+
+`verification/task_7_1_body_identity.csv` の**全 49 行**を、各行固有の base コミット・移設先集合・期待 exit・期待 verdict 文字列つきで改修後スクリプトへ通した。**49/49 が一致**。レビュアーはさらに HEAD 版と改修版の **stdout+stderr+exit をバイト単位で比較**し、49 行すべてで完全一致を確認している。`Test-VerificationTools.ps1` は 23/24（`TOKENIZER-EQUIV` のみ赤・§33.6 の恒久赤・不一致数 49 も不変）。
+
+### 41.4 等価性と失敗能力
+
+| 検証 | 結果 |
+|---|---|
+| 等価性: `-WholeFile` で `spine.rs @09f3b85` vs 現 8 本 | `test fn 14=14 / helper item 46=46` exit 0——§40 がラッパ写しで得た値と同一 |
+| 群 8 の 6 本の自己同一スモーク | 全て exit 0（choice 10/19・mouse 11/8・close 7/4・runtime 24/10・decode 59/0・golden 17/32） |
+| リテラル 1 文字改変 | exit **1**＋`[TEST-BODY]` 差分 |
+| 移設先を 1 本落とす | exit **1**＋`[TEST-MISSING]`／`[ITEM-MISSING]` |
+| ヘルパ追加／テスト追加 | exit **1**（`[ITEM-EXTRA]`／`[TEST-EXTRA]`） |
+| 不正パス（元・移設先とも） | exit **2** |
+
+**新ガードが実在の不一致を exit 2 へ飲み込んでいない**ことを、上記 4 つの不一致対照で個別に確認した。
+
+### 41.5 副次的な裁定 2 件
+
+**(a) `-WholeFile` は入れ子の `#[cfg(test)] mod` に降りていく。** `Get-ItemDigest` は常に `flatten=true` で解析する（`RustParse.ps1:529 → :394-400`）。`crates/areka-kanade/tests/kanade/common/mod.rs` で実測: `flatten=true` なら 68 項目・不透明 `mod` 0 件・テスト 4 本が第一級に昇格、`flatten=false` なら不透明 `OPAQUE MOD 1398-1657 name=smoke` が 1 件。
+
+**したがってガード①は当該ファイルに対しては保守的な誤検知である**——`tests/` 配下にはそもそも本番コードが無いのでガードの根拠（「ブロック外の本番コードが混ざる」）が成り立たない。**タスク 8.2 は明示的なオプトインで `-WholeFile` を使ってよい**（意味的に正しいことが上記で確定した）。
+
+**(b) 記録用の 2 つの差異**:
+- `-Detail` の出力は `mod block whole-file` となるため、§40.3 が記録した `… / mod block 1 / files 8` は新手順では逐語再現しない。**再現するのは判定に効く数値（14=14・46=46）である**
+- 「空ダイジェストの元ファイル＋実在する移設先」の形（分割済みハブに `-Commit` を付け忘れる等）は **exit 1 → exit 2 へ再分類**された。§11.2 の 0/1/2 契約では引数不正が正しい分類だが、変更点として記録する
+
+### 41.6 残る既知の隙間（受容）
+
+ガード①が見るのはインラインの `#[cfg(test)] mod X { … }` だけで、宣言のみの `#[cfg(test)] mod X;` と `cfg(all(test, …))` は通り抜ける。レビュアーがこれらの誤用形を実測し、**いずれも `TEST-EXTRA`／`ITEM-MISSING` の雪崩で騒がしく落ちる（偽の緑にはならない）**ことを確認したので、追加のゲートは置かない。
