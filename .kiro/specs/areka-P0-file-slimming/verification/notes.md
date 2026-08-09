@@ -5571,6 +5571,8 @@ design §本体分割の 5 相を、移設前 `frame.rs` の実測項目位置�
 | `frame/drain_resnap.rs` | `reconcile_reported_sizes`:1108・`run_drain_phase`:1192・`run_move_drain_phase`:1226・`resnap_from_sizes`:1259・`resnap_shell_targets`:1305・`PhysicalSizeSource`:1320・`impl PhysicalSizeSource for EmoPresenter`:1325・`resnap_with`:1343 | ~300 | `resnap_tests`（9）／`drain_text_tests` から 3（`run_drain_phase_gates_on_attach_*`・`run_move_drain_phase_*` 2）／`diag_route_tests` から 3（`resnap_from_sizes_records_the_resnap_route`・`resnap_skips_despawned_scope_*`・`drain_reconcile_skips_despawned_scope_*`） |
 | `frame.rs`（ファサード） | `emo2_frame_system`:1466-1497 ＋ `mod` 宣言 9 ＋ `pub use` 再輸出 | ~60 | `diag_route_tests` から 1（`frame_after_teardown_despawn_emits_no_warning_for_destroyed_windows`＝`emo2_frame_system` 全相の連言） |
 
+> **【訂正・タスク 6.2 で裁定】上表の `reconcile_reported_sizes`（`:1108`）の行先は `drain_resnap.rs` ではなく `scale_text.rs` が正。** 上表の記載（および概算 ~121 / ~300）は誤りであり、実装は design.md:205-206 の表に従った。根拠は design の概算行が両案を一意に判別すること——`scale_text` に置くと `:1045-1191`（147 行）＋`:1408-1465`（58 行）＝ **205 行**で design の `~205` に、`drain_resnap` は `:1192-1407` ＝ **216 行**で design の `~216` にそれぞれ行単位で一致する。上表の配置では 121 / 300 になり両方が外れる。**原記述は履歴として残す**（訂正の経緯ごと参照できるようにするため）。詳細は §32.2。
+
 **タスク 6.2 が裁定を要する境界項目**（design の相表がどちらとも読める位置にある）:
 
 1. **`reconcile_window_size`（`:715`）と `reconcile_reported_sizes`（`:1108`）は 2 呼出元の共通末端**である（DPI 相 `dpi_phase_with` ／ drain 相）。前者は DPI 相の内側にあり後者は drain 相の側にあるが、両者とも `ScaleReportSource` に依存する。`diag_route_tests` の `dpi_phase_and_drain_phase_record_distinct_routes` は**この 2 経路が別の route 語を記録すること**を檻に入れているので、分割で 2 つが別サブモジュールへ離れても route 語の対は保たれること（`placement::diag` の語彙は `crate::placement::diag` 側が持つ）を確認すること。
@@ -6081,3 +6083,174 @@ Implementation Notes の指示に従い、字句状態追跡つきの独立ス�
 | `verification/notes.md` | 本節（§31）を追記 |
 
 **残るはタスク 6.2（`emo2_boot/frame.rs`・在庫表は §29.12）のみで、本番本体の分割は完了する。**
+
+## 32. フレーム処理の本番本体をファサード分割: `crates/areka/src/emo2_boot/frame.rs`（タスク 6.2・要件 2.5 / 2.6 / 2.7 / 4.1 / 4.2 / 4.3 / 4.4 / 4.5 / 7.3）
+
+- 実施日: 2026-08-09
+- ブランチ: `claude/areka-p0-file-slimming-64d065` / 直前コミット `72947f7`（タスク 6.1）。**本節の全比較の基準は `72947f7`**
+- 実行シェル: **PowerShell（pwsh 7）**
+- 本番本体の分割 2 本目（最後）。テスト分離コミットともタスク 6.1 とも独立させた（要件 7.3）
+- 触れたのは `crates/areka/src/emo2_boot/frame.rs`（M）と新規 `crates/areka/src/emo2_boot/frame/` 配下 5 本の計 6 パス。**テストファイル・対応表・他クレートは 1 バイトも触っていない**
+
+### 32.1 成果ファイルと行数（すべて 1,000 行以下）
+
+| ファイル | 行 | 内容 |
+|---|---:|---|
+| `emo2_boot/frame.rs`（ファサード） | 201 | `//!` ドキュメント（`72947f7:1-24` と完全一致）＋`mod` 宣言 5＋移設前 import 22 文＋再輸出群＋`emo2_frame_system`（`72947f7:1466-1497` と完全一致）＋テスト接続宣言 9（`72947f7:1498-1532` と完全一致） |
+| `frame/attach.rs` | 394 | attach 計画＋attach 相（`AttachPlan`・`PlannedAttach`・`plan_attachments`・`run_attach_phase`・`connect_balloon_text`） |
+| `frame/dpi.rs` | 393 | DPI 相（`AuthorDpis`＋impl・`GhostWindowKind`・`GhostWindowClass`・`classify_ghost_window`・`reconcile_window_size`・`ScaleReportSource`＋impl・`DpiChangedQuery`・`dpi_phase_with`・`reproject_char_window_at_current_size`・`run_dpi_phase`） |
+| `frame/scale_text.rs` | 261 | テキスト scale 相＋テキスト相（`run_text_scale_phase`・`reconcile_reported_sizes`・`resolve_talk_time`・`run_text_phase`） |
+| `frame/drain_resnap.rs` | 239 | drain 相＋resnap（`run_drain_phase`・`run_move_drain_phase`・`resnap_from_sizes`・`resnap_shell_targets`・`PhysicalSizeSource`＋impl・`resnap_with`） |
+| `frame/wiring.rs` | 205 | 配線コンテナ（`Emo2Wiring`＋impl 全体・`#[cfg(test)]` メソッド 5 件を同伴） |
+
+**`frame.rs` は 1,532 → 201 行**（最大ファイルは `attach.rs` の 394 行）。design 概算（370 / 188 / 423 / 205 / 216 / 60）に対する実測は 394 / 205 / 393 / 261 / 239 / 201。
+
+> **記録の訂正**: 実装者の報告と提案台帳は 183 / 368 / 190 / 374 / 250 / 226 という一律 18〜20 行少ない値を挙げていたが、親とレビュアーが独立に `wc -l` で再計測した結果はいずれも上表の値だった。**採用するのは上表**。判定（全数 1,000 行以下）はどちらの値でも変わらないが、記録値が第三者に再現できないので差し替えた。§10.2 手順 3 と同型の「実装者の計測をそのまま台帳へ載せない」事例である。
+
+### 32.2 `reconcile_reported_sizes` の帰属: **`scale_text.rs`**（§29.12 の在庫表を訂正）
+
+§29.12 の在庫表は当該項目（移設前 `:1108`）を `drain_resnap` 行に載せていたが、**これは誤りで `scale_text.rs` が正**。design.md:200-207 の相表は本文でどちらの行にも項目名を挙げていないため、**概算行が唯一の判別材料**であり、そしてそれは一意に決まる:
+
+| 案 | `scale_text` | `drain_resnap` | design の概算 |
+|---|---:|---:|---|
+| **採用（`scale_text` へ）** | `:1045-1191`（147）＋`:1408-1465`（58）＝ **205** | `:1192-1407` ＝ **216** | **~205 / ~216 — 行単位で一致** |
+| §29.12 の記載（`drain_resnap` へ） | 121 | 300 | 両方外れる |
+
+§29.12 側には訂正の注記を入れ、原記述は履歴として残した。呼出元 `run_drain_phase`（`drain_resnap.rs`）はファサードの再束縛 `use self::scale_text::reconcile_reported_sizes;` 経由で到達する。
+
+**§29.12 の懸案 1（DPI 相と drain 相が別の route 語を記録する）は保たれている**——`reconcile_window_size` は `dpi.rs` に残り、2 呼出元がそれぞれ `PlacementRoute::DpiReproject`／`ReportedSizeReconcile` を渡す構造は不変で、`dpi_phase_and_drain_phase_record_distinct_routes` は緑。懸案 2（`PhysicalSizeSource` の可視性）は `pub(super)` 付与で解決。懸案 3（`use` 直前バナー）は**不発**——移設前のバナー 6 本はどれも `use` の直前に無かった。
+
+### 32.3 「純移動」の機械証明（要件 4.4）
+
+`git show 72947f7:crates/areka/src/emo2_boot/frame.rs` の本番本体（`:1-1497`）と、移設後 5 サブモジュール＋ファサード残置の `emo2_frame_system` を、**属性・先行コメント塊つきの最上位項目**（括弧の釣り合いで区切る・文字列とコメントを認識する）へ分解して 1 対 1 突合した。実装者とレビュアーが**別々のパーサで独立に**実施し、同じ結論に達している。
+
+**移設前 31 項目 ↔ 移設後 31 項目。欠落 0・重複 0・新設 0。名前多重集合は完全一致。**
+
+本文が変わった項目は 18 件、変わった行は合計 **29 行**で、**その 29 行すべてが `pub(super) ` という文字列の挿入だけ**である（レビュアーは 29 組を目視でなく機械分類し、それ以外が 0 組であることを確認した）。区分別:
+
+| 区分 | 件数 |
+|---|---:|
+| (a) クレート内可視性キーワードの付与（`pub(super)`） | **29** |
+| (b) 項目本文内の `use`／モジュールパス調整 | **0**（調整はすべて項目の外＝各ファイル冒頭の `use` ブロックとファサードの再束縛で吸収） |
+| (c) 空白・rustfmt 折り返し | **0**（`pub(super) ` 付与後の最長行は 97 字で 100 字上限に未達。6.1 の `follow_balloon` に相当する事象なし） |
+| (d) それ以外 | **0** |
+
+`pub(super) ` を機械的に剥がすと **31 項目すべての本文がバイト単位で一致**した。`pub(super)`（＝`pub(in …::frame)`）は「`frame` とその子孫から見える」であり、移設前の「`frame` 私有」と**可視集合が同一**である。
+
+29 件の内訳: `Emo2Wiring` のフィールド 10 ／ `AuthorDpis` の struct＋フィールド 2＋`for_target` の計 4 ／ `GhostWindowKind`・`GhostWindowClass`・`classify_ghost_window`・`reconcile_window_size`・`ScaleReportSource`・`DpiChangedQuery`・`dpi_phase_with`・`reproject_char_window_at_current_size` の 8 ／ `connect_balloon_text` 1 ／ `reconcile_reported_sizes`・`resolve_talk_time` 2 ／ `resnap_from_sizes`・`resnap_shell_targets`・`PhysicalSizeSource`・`resnap_with` 4。
+
+属性の同伴も census で確認: `#[allow(dead_code)]` 2 → 2、`#[cfg(test)]` 5 → 5（すべて `wiring.rs` の `impl Emo2Wiring` 内＝**struct と impl が一体で移動したことの証明**・design 制約 2）、`#[derive(Debug, Clone, Copy, PartialEq, Eq)]` 3 → 3、`#[derive(Debug, Clone, PartialEq, Eq)]` 2 → 2。バナーコメント 6 本はいずれも束ねる項目とともに移動し本文は逐語一致。
+
+### 32.4 ファサードは移設前の import 一式を保持する必要がある（**`follow.rs` との構造差**）
+
+9 本のテストファイルはすべて `use super::*;` でファサードを glob import しており、移設前は**親モジュールの `use` 束縛**から `Rc`・`RefCell`・`PresentCommand`・`TargetId`・`GhostWindows`・`SystemState`・`EmoPresenter`・`TextLayerRuntime`・`ActorKey`・`PlacementRoute`・`GraphicsCore`・`WucGraphicsResource` 等を拾っていた。サブモジュール側で個別に import し直しただけでファサードから落とすと、**test ビルドが E0433／E0425 を 79 件出す**。
+
+必要性はレビューで裏取り済み: `frame_attach_tests.rs` は `Rc::new`／`RefCell::new`／`WucGraphicsResource` を 9 箇所で使うが、自身の import（`:1-8`）にはそのどれも無く、**`use super::*;` だけで届いている**。
+
+タスク 6.1 の `follow.rs` でこれが起きなかったのは、あちらのファサードが placement 兄弟 4 本しか import しておらず、外部クレート型はテストファイル側が各自 import していたためである。**`frame.rs` は移設前 import 22 文をそのまま残す**ことで解決した（テストファイル 0 バイト差分の代償）。ファサードが design 概算 ~60 行に対し 201 行になったのはこの分＋接続宣言 35 行＋属性とそのコメントであり、**逸脱ではなく D1 と「テストファイル凍結」の必然**である。
+
+### 32.5 `#[allow(unused_imports)]` は 24 文（§31.5 の申し送りどおり・ただし規模は 8 倍）
+
+§31.5 の予告どおり同じ手当てが要った。手当て無しでは `areka (bin)` が 4 → 11 件へ増える。抑止したのは **24 文**（ファサード 22＋`wiring.rs` 2）で、examples は `frame.rs` を include しないため増分は bin ユニットのみ（§31.5 の見込みどおり）。
+
+**過剰抑止 0 をレビュアーが独立に確認**: `cargo rustc -p areka --bin areka -- --force-warn unused_imports` の出力は 27 件で、内訳は `follow.rs` 3（タスク 6.1 のコミット済み分）＋`frame.rs` 22＋`wiring.rs` 2——**付与した 24 文と行単位で 1 対 1 に一致**した。抑止していない文（ファサードの `use bevy_ecs::world::World;`・`super::` 兄弟 4 本・新設 `use super::hover_inject;`・`pub use` 5 群のうち 4 群）は 1 件も挙がらない。**どの属性を 1 つ外しても警告が出る**＝実在の問題を隠していない。
+
+§31.5 が課した「属性のコメントは実際に未使用な名前だけを名指しする」義務（6.1 が差し戻された点）も**逐語で満たしている**ことをレビュアーが 6 箇所すべて突合した:
+
+| 文 | コメントの名指し | `--force-warn` の実出力 |
+|---|---|---|
+| `frame.rs:85-90` | `AttachPlan`・`plan_attachments` | 同一 |
+| `frame.rs:104-108` | `GhostWindowClass`・`classify_ghost_window`・`dpi_phase_with`・`reproject_char_window_at_current_size` | 同一 |
+| `frame.rs:115-116` | `PhysicalSizeSource`・`resnap_from_sizes`・`resnap_with` | 同一 |
+| `frame.rs:119-120` | `resolve_talk_time` のみ | 同一 |
+| `wiring.rs:9-11` | `World` | 同一 |
+| `wiring.rs:14-17` | `TargetId` のみ | 同一 |
+
+**`AttachPlan` だけは `#[cfg(test)]` の消費者も無い**——テストファイル 9 本のどこにも現れない。それでも再輸出を残すのは要件 2.5 のためである: `frame::attach` は私有モジュールなので再輸出を落とすとパス `frame::AttachPlan` が消滅する一方、`pub fn plan_attachments` はその型を返し続ける——**公開関数の戻り値型が自モジュールのパスで名指しできなくなる**のは 2.5 が禁じる公開面の後退そのものである（§31.3 の「消費者の有無によらず全 `pub` 項目を再輸出」と同じ扱い）。この 1 名だけ性格が違うので属性のコメントで区別して書いた。
+
+### 32.6 公開面の維持（要件 2.5・4.3）
+
+サブモジュールは **すべて私有 `mod`**（`mod attach;` 等）として宣言した。よって `frame::attach::X` のような**新しい公開モジュールパスは 1 本も生えていない**（`pub mod` 0 件をレビュアーが確認）。
+
+- 移設前 `pub` **11 項目** → すべて同一パス `frame::<Name>`・同一可視性で存在（10 項目は `pub use` 再輸出・`emo2_frame_system` はファサード残置）
+- 移設前 `pub(crate)` **2 項目**（`Emo2Wiring::presenter`／`::runtime` アクセサ）→ impl ごと移動したため宣言は不変
+- 移設前私有の項目 → 可視性キーワード無しの素の `use` でファサードへ再束縛。**`pub` へ格上げした項目は 0 件**
+- `pub(super)` を付けた 29 箇所（§32.3）はいずれも可視集合が変わらない
+
+9 本のテストファイルが 1 バイトも変わっていないことがその証明である。
+
+### 32.7 呼び出し側: **タスク記載の「10 箇所」は実測と一致**（6.1 の `follow.rs` と異なる）
+
+`tasks.md:217` の「呼び出し側 10 箇所」は実測と合う。`frame::` の名前参照は **11 箇所・5 ファイル**で、うち 1 箇所は `#[cfg(test)]` モジュール（`input_events/balloon_test_support.rs:24`）ゆえ本番は **10 箇所**である。
+
+| ファイル | 名前参照 |
+|---|---|
+| `emo2_boot/mod.rs:58` | `Emo2Wiring`・`emo2_frame_system`（2） |
+| `emo2_boot/spine.rs:84-87` | `run_attach_phase`・`run_dpi_phase`・`run_move_drain_phase`・`run_text_phase`・`run_text_scale_phase`・`Emo2Wiring`（6） |
+| `input_events/balloon.rs:32` | `Emo2Wiring`（1） |
+| `input_events/mod.rs:22` | `Emo2Wiring`（1） |
+| `input_events/balloon_test_support.rs:24` | `Emo2Wiring`（1・`#[cfg(test)]`） |
+
+`72947f7` と移設後で **差分 0**（`git diff --stat` は `frame.rs` 1 ファイルのみ）。**6.1 の `follow.rs`（26 → 実測 30）と違い examples の上乗せは無い**——`frame.rs` は examples から `#[path]` include されず、`examples/emo-present.rs:758` の `emo2_boot::frame::GhostWindowKind` は doc コメント中の言及のみで import ではない。
+
+### 32.8 `crate::` パスは使用可（design 制約 1 の対象外）
+
+design.md:211 が明示するとおり `frame.rs` は examples に include されないため `crate::` 禁止の対象外である。移設前の `crate::placement::…` 4 文は各サブモジュールへ**そのままの書式で**分配した（`super::` へ変換していない）。
+
+emo2_boot 兄弟への `super::` 4 文（`assets`／`move_cue`／`talk_clock`／`target_map`）は 6.1 と同じくファサードに残し、子は `super::` で辿る（`placement/follow.rs:40-45` と同形）。
+
+加えて **`use super::hover_inject;` を 1 文新設**した——`run_text_phase` の本文にある `super::hover_inject::drive(&mut runtime, talk_time);` を書き換えずに `scale_text.rs` から解決させるためである。**新しい `use` を足すほうが本文を書き換えるより保守的**であり（要件 4.4 の「モジュールパスの追随」に当たる）、§31.2 が確立した「項目本文はバイト一致」の基準を守る唯一の手でもある。
+
+### 32.9 tracing target の再確認（要件 2.7・design 制約 3）
+
+項目の移動で既定 target が `areka::emo2_boot::frame::{attach,wiring,dpi,scale_text,drain_resnap}` の子パスへ変わる。実装者とレビュアーが**別々に**リポジトリ全域（`src`／`tests`／`examples`／`.kiro`／steering／手順書）を再突合し、同じ結論に達した:
+
+- **コード中の完全一致判定は 0 件**。target リテラルの `assert_eq!` はリポジトリ全体で `crates/areka/src/placement/diag.rs:371`（`DIAG_TARGET == "areka::placement::diag"`）ただ 1 件であり、分割対象外・明示 `target:` 指定ゆえモジュール移動の影響を受けない。
+- **実行時フィルタはすべて前置一致 directive**。`areka::emo2_boot::frame` のリポジトリ全域の出現は 10 件で、うち唯一の実行時 directive は `.kiro/specs/completed/areka-P0-dpi-window-vanish/diagnosis-procedure.md:114` の `areka::emo2_boot::frame=debug`——`EnvFilter` の前置一致なので `…::frame::dpi` 等の子 target にもマッチする。同手順書 `:184`／`:213` は実機ログへの部分一致 grep で読む観測表の欄であり、これも前置一致で有効。残りは完了済みサインオフログ・research／notes の散文・doc コメントである。
+- `main.rs` ほかの `EnvFilter::try_from_default_env()` は `RUST_LOG` をそのまま解釈するだけで frame の target 名を焼き込まない。
+- **`placement::test_support::capture_logs` は target ではなくメッセージで絞る**（`test_support.rs:187`）ため、移設した `diag_route_tests` の檻は target 非依存である（レビュアーの追加確認）。
+
+**よって挙動・観測互換は保たれる**（design 制約 3 の design 時実測を移設後に再確認した）。恒久 target `areka::placement::diag` には触れていない。
+
+### 32.10 副作用: intra-doc リンクが未解決になる（**非ブロッキング・タスク 6.1 と同種**）
+
+doc コメントを逐語のまま移した結果、`frame` サブツリー由来の未解決 intra-doc リンクが **34 件**生じる（レビュアーのファイル別実測: `wiring` 15・`scale_text` 8・`dpi` 7・`drain_resnap` 3・`attach` 1。実装者の報告は 37 件だったが、採用するのはレビュアーの実測値）。
+
+**`cargo doc` は本 spec のゲートではなく**（steering にも検証コマンド一覧にも rustdoc の言及が無い）、`areka` クレートは移設前から多数の rustdoc 警告を抱える。その中には**タスク 6.1 が `placement/follow` の分割で生んだ同種のもの 16 件**も既にコミット済みで含まれている。
+
+**修正しない理由は「要件 2.4 が禁じるから」ではない**（2.4 が縛るのはテストコードである——実装者の当初の言い方は不正確でレビューで是正された）。**正しい理由は、doc コメントが項目本文の内側にあり、書き換えると §31.2／§32.3 が拠って立つ「本文バイト一致」の純移動証明を失うから**である。リンク解決のために import を足す案も、`#[allow(unused_imports)]` が増えるだけで実益が無い。
+
+加えて `wiring.rs` の平文コードスパン 2 件（`super::super::input_events::balloon`・`super::spine`）は、リンクではないので rustdoc は鳴らないが字義どおりに読むと別モジュールを指す。これも同じ理由で無修正。
+
+**タスク 7.3 の steering 明文化に「本体分割では `super::`／相対の intra-doc リンクが指す先が変わり、doc の書き換えは純移動証明と両立しない」旨を 1 行入れること**——入れないと将来の分割で同じ驚きが繰り返される。
+
+### 32.11 検証結果（すべて基準値と一致）
+
+親・実装者・レビュアーの 3 者がそれぞれ独立に実行した。
+
+| 検証 | 基準（`72947f7`） | 移設後 | 判定 |
+|---|---|---|---|
+| `cargo test -p areka` | 671 + 1 + 2 = **674 passed / 0 failed** | 671 + 1 + 2 = **674 passed / 0 failed** | 一致 |
+| `cargo test -p areka -- --list` の名前集合 | 674 名 | 674 名（差分 0・モジュールパスも `emo2_boot::frame::<theme>_tests` のまま） | 一致・**対応表への追加行 0** |
+| `cargo build -p areka --examples` | 緑・警告 0 | 緑・警告 0 | 一致 |
+| ワークスペース警告 5 数値 | 16 / 7 / 22 / 6 / 16 | 16 / 7 / 22 / 6 / 16 | 一致 |
+| `frame_*.rs` テストファイル 9 本 | — | `git diff --name-only` に 1 本も現れない | 差分 0 |
+| `git diff --stat`（`crates/areka` 全域） | — | `frame.rs` 1 ファイルのみ | 呼び出し側 0 変更 |
+| 各ファイル行数 | — | 201 / 394 / 393 / 261 / 239 / 205（最大 394） | 全数 1,000 行以下 |
+| 最上位項目の 1 対 1 突合 | 31 項目 | 31 項目（`pub(super)` 剥離後バイト一致） | 欠落 0・重複 0・新設 0 |
+
+新規に生じた整形差分は **0 件**（`pub(super) ` 付与後の最長行 97 字）。`cargo fmt` は全体に走らせていない。
+
+### 32.12 変更ファイル一覧
+
+| ファイル | 内容 |
+|---|---|
+| `crates/areka/src/emo2_boot/frame.rs` | 1,532 → 201 行。ファサード化（`mod` 宣言 5＋移設前 import 22 文＋再輸出＋`emo2_frame_system`＋テスト接続宣言 9）。`//!` ドキュメント・`emo2_frame_system`・接続宣言は `72947f7` と完全一致 |
+| `crates/areka/src/emo2_boot/frame/attach.rs` | 新規（394 行・本番項目 5） |
+| `crates/areka/src/emo2_boot/frame/dpi.rs` | 新規（393 行・本番項目 11） |
+| `crates/areka/src/emo2_boot/frame/scale_text.rs` | 新規（261 行・本番項目 4） |
+| `crates/areka/src/emo2_boot/frame/drain_resnap.rs` | 新規（239 行・本番項目 8） |
+| `crates/areka/src/emo2_boot/frame/wiring.rs` | 新規（205 行・本番項目 2＝struct＋impl） |
+| `verification/notes.md` | 本節（§32）を追記。あわせて §29.12 へ `reconcile_reported_sizes` の訂正注記を挿入（原記述は履歴として残置） |
+
+**本 spec の本番本体分割（タスク 6.1／6.2）は完了した。** 群 1〜6 の実装 27 サブタスクがすべて着地し、残るは群 7（全体検証と着地・5 サブタスク）のみである。
