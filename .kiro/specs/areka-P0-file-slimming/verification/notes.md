@@ -7065,3 +7065,76 @@ module doc `:11-50` が自ら「群 1〜6」を宣言し、本文の `// ======`
 **修正を要する壊れたテスト・不正なテスト・テスト間の状態汚染は 1 件も発見しなかった。新規送付所見 0 件。**
 
 記録のみ: (i) `cargo fmt --check` は当該クレートで分割前から広範に赤（本タスク非接触の 31 ファイルを含む）。増分は接続宣言の並び 1 箇所——rustfmt は `mod` を辞書順に並べたがるが、群 1〜6 の順は module doc の檻一覧に対応する意味順（タスク 8.1 と同じ判断）。(ii) intra-doc リンクの破断（§32.10 と同一判断・診断 0 件）。
+
+> **【訂正・タスク 8.4 のレビューで発覚】§42.8 の対応表に関する記述は、コミットされていない作業ツリーの状態を書いていた。**
+> タスク 8.3 のコミット `3b8856c` は **`verification/mapping/areka-kanade.csv` を staging から漏らしている**（親が明示パスで stage した際の抜け）。`git log -- <csv>` が示す最後の変更コミットはタスク 4.1 の `60e0b22` である。したがって §42.8 の「88 → 98 行・`numstat` = `10 0`・8 フラグメント結合 **1,045 行**」は、いずれも**リポジトリに存在しない状態**を指していた。当該 10 行は作業ツリーに留まり、**タスク 8.4 のコミットで一緒に着地する**（§43.6 に内訳を明記）。行の内容自体は正しく、全単射も成立している——欠けていたのはコミットであって証跡の中身ではない。
+> **教訓**: 明示パス staging は `git add -A` の事故を防ぐ代わりに、**成果物の取りこぼしを検出しない**。以後、コミット直前に `git status --porcelain` が空になることを確認すること（§34.4 の「書き出したら `git status` に現れることを確認」の裏返しの失敗形である）。
+
+## 43. 入力・終了系統合テストのテーマ分割: `crates/areka-kanade/tests/kanade/{mouse_test,close_test}.rs`（タスク 8.4・要件 1.7 / 2.2 / 2.4 / 2.9 / 3.1 / 3.2）
+
+- 実施日: 2026-08-09 / 分割前コミット `3c34122` / **PowerShell（pwsh 7）**
+- §39.4 の 13 本のうち 2 本。いずれも `#[cfg(test)]` を 1 つも持たない `tests/` 配下の統合テスト
+- レビュアーが `3c34122` と `3b8856c` の両ブロブ OID を照合し、`mouse_test.rs`／`close_test.rs`／`kanade.rs` が同一＝`3c34122` が正しい base であることを確認した
+
+### 43.1 成果ファイルと行数（すべて 1,000 行以下）
+
+| ファイル | 行 | テスト |
+|---|---:|---:|
+| `mouse_test.rs`（module doc＋`use`＋接続宣言） | **55** | 0 |
+| `mouse_test_talk_start_tests.rs` | 525 | 4 |
+| `mouse_test_event_layout_tests.rs` | 314 | 4 |
+| `mouse_test_phase_guard_tests.rs` | 236 | 3 |
+| `mouse_test_test_support.rs` | 22 | 0 |
+| `close_test.rs`（同上） | **55** | 0 |
+| `close_test_handshake_tests.rs` | 520 | 4 |
+| `close_test_boot_greeting_tests.rs` | 453 | 3 |
+| `close_test_test_support.rs` | 10 | 0 |
+
+**1,116 → 最大 525 ／ 1,009 → 最大 520。** テスト 11・7 とも分割前に一致。
+
+### 43.2 テーマ境界は元ファイルの module doc が宣言していた区切りを採った
+
+`mouse_test.rs` の module doc は「檻一覧（設計 Testing Strategy #1〜#6）」を、本文の見出し `// 統合檻: マウス応答による talk 起動と置換` が別区画を明示している。前半 6 檻はさらに、共通ドライバ `drive_mouse_steady_none` を共有する cage 1〜4 と、GET を**出さない**ことを固定するフェーズ規律 cage 5a/5b/6 へ割れる——この 3 分割はヘルパ参照関係とも一致する。`close_test.rs` は module doc の「close 握手の 4 シナリオ」と「# 追加: boot 挨拶の統合檻（DD-IT-12）」の 2 区画をそのまま採った。**新設した境界は 0。**
+
+### 43.3 命名は §42.4 の是正後の形に従った
+
+テーマモジュールは `event_layout_tests`／`phase_guard_tests`／`talk_start_tests`／`handshake_tests`／`boot_greeting_tests`、共有ヘルパは `test_support`（接尾辞なし・`design.md:151`）。**レビュアーが対応表 1,063 行を機械走査し、103 のテーマモジュールのうち `_tests` を欠くものは 0 件**であることを確認した。§42.4 の差し戻しは再発していない。
+
+### 43.4 §40.5／§42.5 の適用——単一消費者は 8 件すべてテーマ側に残した
+
+**レビュアーがヘルパ 12 件すべての消費者数を独自に数え直した。** 集約したのは `move_input`（3 テーマ）・`mouse_gets`（3）・`onclose_get_index`（2）に加え、`is_mouse_get`——単一消費者だが共有ヘルパ `mouse_gets` の私有被呼出であり §42.5 の carve-out に当たる。**真に単一消費者の 8 件はすべてテーマ側に残った**（`FIXED_MOUSE_SCRIPT`・`FIXED_MOUSE_REPLACE_SCRIPT`・`Driven`・`dbl_input`・`drive_mouse_steady_none`・`wait_until`・`resumed_get_after_notify`・`force_quit_onclose_notify`）。
+
+とくに `force_quit_onclose_notify` は独立バナー `// 期待値導出ヘルパ（ForceQuit の …）` を伴い、消費者がシナリオ 4 の 1 本だけなので**バナーごと handshake テーマへ同伴**した——§40.5 が「回避可能だった」と記録した轍を踏んでいない。mouse 8 本・close 8 本のバナーはすべて正しいテーマへ着地し、`use` 直前バナー（§28.5）は 0 件。
+
+§22.2 のタプル構造体制約は不発——`Driven` は名前付きフィールド（`recorded`／`started`）で、`.0` 参照はすべて本番 newtype `TalkId` に対するもの。
+
+### 43.5 本文一致の独立検算（要件 2.4）
+
+置換行は 1 回だけ計上する（§42.7 の規約）。**レビュアーが独立に再導出して同値を得た。**
+
+| 元ファイル | 元 | 成果物合計 | 置換 | 追加 | 削除 | 字下げの変更 |
+|---|---:|---:|---:|---:|---:|---:|
+| `mouse_test.rs` | 1,116 | 1,152（5 本） | **2** | **36** | **0** | **0** |
+| `close_test.rs` | 1,009 | 1,038（4 本） | **1** | **29** | **0** | **0** |
+
+検算 `1,116+36 = 1,152`・`1,009+29 = 1,038` がいずれも実測と一致。置換 3 件は `pub(super)` 付与前後のシグネチャ行のみ。**字下げ 0 は §40.4 と同じ構造的理由**（`tests/` 配下の項目は元から列 0）。§11.4 の盲点も元 2 本・成果物 9 本とも該当 0 件を実測。
+
+較正（§42.2 の規律）: `mouse_test_phase_guard_tests.rs` を落とすと exit 1・3 テストが `TEST-MISSING`、`close_test_boot_greeting_tests.rs` を落とすと exit 1・3 `TEST-MISSING`＋2 `ITEM-MISSING`。**道具がこの入力で弁別している。**
+
+### 43.6 ⚠ 対応表の差分は 28 行——うち 10 行はタスク 8.3 の積み残しである
+
+`verification/mapping/areka-kanade.csv` の `git diff --numstat` は **`28 0`**、行数は **89 → 117**（データ行 88 → 116）。**本タスクの追記は 18 行だけ**で、残る 10 行は §42 の冒頭訂正に記したとおり**タスク 8.3 のコミットが漏らした分**である。先頭 89 行が `3b8856c` とバイト一致することはレビュアーが接頭辞比較で確認した（差分の形だけでなく実バイトで）。
+
+8 フラグメント結合は **1,063 行**で全単射 PASS。18 行はすべて末尾セグメント不変（mouse 11・close 7）。
+
+### 43.7 検証結果
+
+`Compare-RelocatedTests.ps1 -WholeFile`（mouse）`test fn 11=11 / helper item 8=8 / files 5` exit 0 ／（close）`7=7 / 4=4 / files 4` exit 0 ／ `cargo test -p areka-kanade` 279+47 passed / 0 failed ／ `--list` 326 = 326（対称差 removed 18 / added 18・対応表適用後は完全一致）／ ワークスペース警告 16/7/22/6/16 ／ Cargo ターゲット 2 件のまま ／ `tests/kanade.rs` と `choice_test*.rs` はバイト不変 ／ `unused_imports` 0（親の `use` は 1 行も落としていない・§32.4）。
+
+### 43.8 登記（要件 5.2）
+
+**修正を要する壊れたテスト・不正なテスト・テスト間の状態汚染は 1 件も発見しなかった。新規送付所見 0 件。**
+
+既存の `test-cage-determinism`（W6.9）宛所見のアンカー移動のみ記録する（**本文はバイト不変**）: `wait_until`（壁時計 `Instant` deadline＋`yield_now` スピン）`close_test.rs:52-77` → `close_test_boot_greeting_tests.rs:19-44`（`Instant::now()` は `:24`／`:29`・`yield_now` は `:32`）／反復回数上限の yield ループ `close_test.rs:325-331` → `close_test_handshake_tests.rs:238-243`。`mouse_test` 側に待機・スピンは無い（全ケースが `join_bounded` バリア）。
+
+記録のみ: `cargo fmt --check` の増分は各ファイル 2 件（`mod` 宣言の並び）。元ファイルが分割前から差分を持つ（`3c34122` で mouse 13 件・close 16 件を実測）。§40.7 (i) と同一判断。
