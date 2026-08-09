@@ -6376,3 +6376,76 @@ doc コメントを逐語のまま移した結果、`frame` サブツリー由�
 | `verification/task_7_1_results.txt` | 新規（逐語コマンドと全出力） |
 | `verification/task_7_1_body_identity.csv` | 新規（49 行・base／移設先／判定の機械可読表） |
 | `verification/notes.md` | 本節（§33）を追記 |
+
+## 34. 全緑と警告非増加の最終確認（タスク 7.2・要件 2.1 / 2.6）
+
+- 実施日: 2026-08-09 / HEAD `e5c428e`（タスク 7.1 のコミット時点）/ **PowerShell（pwsh 7）** / 既定ターゲット `x86_64-pc-windows-msvc`
+- 逐語のコマンドと全出力は `verification/task_7_2_results.txt`、警告の前後比較は `verification/task_7_2_warning_comparison.txt`
+- 本タスクは `.rs` を 1 本も変更していない
+- **実装者とレビュアーが別々にワークスペース全体を走らせ、85 ユニットの (passed/failed/ignored) 三つ組が 1 行の差も無く一致した**
+
+### 34.1 前提: i686 host-32 成果物（§9 の再実行）
+
+着手時点で両成果物とも実在し §9.3 の記録とサイズが一致していたが、HEAD は `crates/shiori-host32-helper/src/main.rs` を変更している（タスク 2.2・`7599c90` で +8 / −591）ため、§9.5 の再現手順で**再ビルドした**（`cargo build -p shiori-host32-helper --target i686-pc-windows-msvc` ／ 同 `-testdll`・いずれも exit 0）。
+
+| 成果物 | サイズ | PE machine | 状態 |
+|---|---:|---|---|
+| `shiori-host32-helper.exe` | 271,872 B | `0x014C` | 再コンパイル |
+| `shiori.dll` | 155,648 B | `0x014C` | fresh（ソース無変更） |
+
+**§9.1 が記録する「成果物不在で exit 101」の失敗経路は、不在でないことではなく実走で閉じた**——`shiori-host32-host` は **96 件すべて緑**（87＋2＋2＋1＋2＋2）で、実際にヘルパを起動する e2e バイナリも含まれる。§9.1 の `error_paths` 失敗は解消している（レビュアーが独立に確認）。
+
+### 34.2 全緑（要件 2.1）— exit 0・失敗 0
+
+`cargo test --workspace --no-fail-fast` は **exit 0**。**85 ユニット・4,757 passed / 0 failed / 33 ignored / 0 measured / 0 filtered out**。`test result: FAILED` 行 0・`failures:` 行 0。**1 回目の実行で全緑であり、再実行による flake 救済は行っていない（再試行 0 回）。**
+
+**「速すぎる緑」ではないことを確認した。** 実測 28 秒（レビュアーの独立再実行は 25.5 秒）は本スイートの実力であり、黙って絞られた結果ではない:
+
+- stderr の `Running`／`Doc-tests` 行 **85** と stdout の `test result:` 行 **85** が 1 対 1
+- **85 ユニットすべてで `filtered out` が 0**
+- 0/0/0 を返す 19 ユニットは、doctest を持たない 17 クレートと、テストを持たない統合ターゲット `atlas.rs`・`pilot` lib であり、**絞られたのではなく空のコンパイル単位**
+- 22 unit ＋ 44 integration ＋ 19 doctest ＝ 85 で辻褄が合う
+
+**スコープはタスク 1.3 のスナップショット 1 と同一**（`-- --list` を外しただけ）。`--exclude` は使っていない——あれは `--all-targets` 列挙（スナップショット 2）専用の除外であり、既定スコープでは `crates/areka` も 3 ユニット・674 件が完全に実行対象である。`--no-fail-fast` は要件 2.1 の `cargo test --workspace` より強い（最初の失敗で打ち切らず全ユニットを走らせる）。**狭めたスコープで得た緑は偽の緑なので明示しておく**——レビュアーは `Cargo.toml` が `members = ["crates/*"]` で `exclude` 無し、`.cargo/config.toml` がツリー内に存在しないことまで確認した。
+
+**列挙との独立な突合**: `passed + ignored = 4,757 + 33 = 4,790` が `before_default.txt` / `after_default.txt` の行数 4,790 と一致した。タスク 7.1 が**列挙**で示した総数不変（要件 2.2）を、**実行**の側から独立に裏づけたことになる。これは偶然の一致ではない——`failed = 0` かつ `filtered out = 0` のとき `passed + ignored` は列挙集合の濃度そのものであり、`-- --list` は doctest も列挙するからである。doctest も wintf 10 passed / 26 ignored ＋ dola 0 passed / 1 ignored ＝ **37** で §33.3 および §10.3 と一致。
+
+ignored 33 の内訳は doctest 27（wintf 26・dola 1）＋実行時 ignore 6（`shiori-host32-helper` 3 ＝ §9.8 の x64 構造制約 ／ `areka-emo-text` 2 ／ `areka-emo-atlas` 1）で、いずれも既存の状態である。
+
+### 34.3 警告非増加（要件 2.6）— 全指標 delta 0
+
+`cargo build --workspace --all-targets` は exit 0。§10.5 の集計手順を再現した。
+
+| 指標 | before（`6289b70`） | after 7.1（`2ef0311`） | now 7.2（`e5c428e`） | delta |
+|---|---:|---:|---:|---:|
+| `DIAG_COUNT` | 16 | 16 | **16** | **0** |
+| `SUMMARY_COUNT` | 7 | 7 | **7** | **0** |
+| `GENERATED_SUM` | 22 | 22 | **22** | **0** |
+| `DUPLICATES` | 6 | 6 | **6** | **0** |
+| `NET` | 16 | 16 | **16** | **0** |
+
+`NET == DIAG_COUNT` の健全性チェックも成立。**判定 PASS（増加ゼロ）。**
+
+比較対象の 5 数値だけでなく中身も一致した——DIAG 16 行の**多重集合差分 0**、7 ユニットの `generated` 件数も**差分 0**（実装者・レビュアーの双方が確認）。
+
+**集計器が実際に動いていることを対照で確かめた**: `warnings?` の `?` を落とした誤った正規表現で同一 stderr を集計すると **17 / 6 / 21 / 6 / 15** になり、Implementation Notes が予告するずれを実測で再現した。出所は `shiori4-testdll` (lib) の `generated 1 warning`（単数形）が SUMMARY から DIAG 側へ落ちることである。
+
+**duplicates の帰属移動が実増加を隠していないことに、3 本目の観測が付いた。** §10.5 は duplicates 3 件の帰属が `shiori-host32-testdll` の (lib) と (lib test) の間で揺れることを比較対象外と定めているが、今回**レビュアーの実行は (lib) 側**（＝before と同じ側）に付き、実装者の実行は (lib test) 側だった。**3 回の実行で帰属だけが揺れ、`DUPLICATES` 合計 6 と全ユニットの `generated` 件数は不動**——§10.5 の予告どおりの挙動であることが、単一観測の言い訳ではなく実測で確定した。
+
+**`after_build_warnings.txt`（7.1 採取・HEAD `2ef0311`）は本 HEAD でも有効**である（`git diff --name-only 2ef0311 e5c428e -- "*.rs"` が空）。それでも本タスクは HEAD で独立に再採取し、5 数値・PER-UNIT・DIAG のすべてが 7.1 の採取と一致することを確認した。
+
+### 34.4 検証成果物を `*_test.txt` で命名してはならない（本タスクで実際に踏んだ）
+
+最初 `verification/task_7_2_workspace_test.txt` という名前で書き出したところ、**`.gitignore:6` の `*_test.txt`（デバッグ用一時ログ除外）に一致して `git status` に現れなかった**。検証成果物が「コミットしたつもりで存在しない」状態になる事故であり、`git check-ignore -v` で気づいて `task_7_2_results.txt`（タスク 7.1 の命名規約）へ改名した。タスク 7.1 が同じ罠を踏まなかったのは `_results.txt` を選んでいたためで、規約として意識されていたわけではない。
+
+**過去の巻き添えは無い**（レビュアーが確認）——リポジトリ全体で `_test.txt` ／ `_dump.txt` で終わる**追跡ファイルは 0 件**、`target/` の外のディスク上にも 0 件、spec 文書からの参照も 0 件。今回は未遂で済んでいる。
+
+**以後 `verification/` へ成果物を追加するときは、書き出し後に `git status` へ現れることを必ず確認すること。**
+
+### 34.5 本タスクの成果物
+
+| ファイル | 内容 |
+|---|---|
+| `verification/task_7_2_results.txt` | 新規。ワークスペース全緑の逐語証跡（コマンド・exit・85 ユニット別内訳・stdout/stderr 全文） |
+| `verification/task_7_2_warning_comparison.txt` | 新規。警告 5 数値の前後比較表・正規表現の対照較正・PER-UNIT / DIAG 多重集合突合・stderr 全文 |
+| `verification/notes.md` | 本節（§34）を追記 |
