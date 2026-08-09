@@ -43,8 +43,27 @@
 
     誤用防止のため、`-WholeFile` を指定した元ファイルに `#[cfg(test)] mod` ブロックが
     1 つでも存在する場合は比較を行わず引数エラー（exit 2）とする——ブロック外の本番コードまで
-    比較対象へ混ぜてしまい、取り違えた判定を出すほうが有害だからである。
+    比較対象へ混ぜてしまい、取り違えた判定を出すほうが有害だからである
+    （このガードだけは `-AllowNestedTestModules` で明示的に解除できる。下記参照）。
     `-ModuleName` との同時指定も引数エラー（exit 2）。
+
+.PARAMETER AllowNestedTestModules
+    `-WholeFile` の誤用ガード①（元ファイルに `#[cfg(test)] mod` ブロックが実在する）だけを
+    解除するオプトイン。呼び出し側が「この元ファイルは全体がテストコードであり、`mod` ブロックの
+    外側に本番コードは 1 行も無い」と明示的に主張する場合にのみ指定する。
+
+    典型は `tests/` 配下の結合テストで、ファイル全体がテストでありながら内部に
+    `#[cfg(test)] mod <名前>` を持つもの（例:
+    `crates/areka-kanade/tests/kanade/common/mod.rs` の `mod smoke`）。ガード①の根拠は
+    「ブロック外の本番コードが比較対象へ混ざる」ことだが、`tests/` 配下にはそもそも本番コードが
+    存在しないため、この種のファイルに対してガード①は保守的な誤検知である。
+    `Get-ItemDigest` は常に flatten=true で解析する（`RustParse.ps1`）ので、入れ子の
+    `#[cfg(test)] mod` は展開され、その中のテスト関数は第一級の項目として突合される。
+
+    解除するのはガード①のみである。`-ModuleName` との同時指定（ガード②）と、
+    元ファイルから項目が 1 つも採れないとき（ガード③）は、本スイッチの有無に関わらず
+    従来どおり exit 2 となる。`-WholeFile` を伴わない場合、本スイッチは完全に無効
+    （通常経路の挙動は 1 ビットも変わらない）。
 
 .OUTPUTS
     一致: 出力ゼロ・exit 0
@@ -80,6 +99,7 @@ param(
     [string[]]$ModuleName,
     [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path,
     [switch]$WholeFile,
+    [switch]$AllowNestedTestModules,
     [switch]$Detail
 )
 
@@ -145,8 +165,14 @@ if ($WholeFile) {
     }
     if (@($blocks).Count -gt 0) {
         $found = (@($blocks) | ForEach-Object { '{0} ({1}-{2} 行)' -f $_.Name, $_.Start, $_.End }) -join ', '
-        Write-Error "-WholeFile が指定されましたが、元ファイルには #[cfg(test)] mod ブロックが存在します: $OriginalPath -> $found。ファイル全体を本体として扱うとブロック外の本番コードまで比較対象へ混ざり、取り違えた判定になるため中止します（-WholeFile を外して実行してください）" -ErrorAction Continue
-        exit 2
+        if (-not $AllowNestedTestModules) {
+            Write-Error "-WholeFile が指定されましたが、元ファイルには #[cfg(test)] mod ブロックが存在します: $OriginalPath -> $found。ファイル全体を本体として扱うとブロック外の本番コードまで比較対象へ混ざり、取り違えた判定になるため中止します（-WholeFile を外して実行してください）" -ErrorAction Continue
+            exit 2
+        }
+        # -AllowNestedTestModules: 呼び出し側が「ファイル全体がテストコード」と明示主張した経路。
+        # ガード①のみを解除する（②③は下方／上方でそのまま効く）。判定に効く出力は増やさない
+        # （「出力ゼロ＝一致」の契約を守るため -Verbose 時のみ記録する）。
+        Write-Verbose ("-AllowNestedTestModules: ガード① を解除しました（入れ子の #[cfg(test)] mod は flatten されて突合対象になります）: $OriginalPath -> $found")
     }
 }
 else {
