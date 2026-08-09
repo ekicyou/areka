@@ -6216,7 +6216,11 @@ emo2_boot 兄弟への `super::` 4 文（`assets`／`move_cue`／`talk_clock`／
 
 doc コメントを逐語のまま移した結果、`frame` サブツリー由来の未解決 intra-doc リンクが **34 件**生じる（レビュアーのファイル別実測: `wiring` 15・`scale_text` 8・`dpi` 7・`drain_resnap` 3・`attach` 1。実装者の報告は 37 件だったが、採用するのはレビュアーの実測値）。
 
+> **【訂正・タスク 7.5 で再実測】上の 34 は過少で、正しくは 37 件である。** 隔離ターゲットで `cargo doc -p areka --no-deps` を実行し `-->` 行をファイル別に集計したところ、`wiring.rs` 16・`scale_text.rs` 9・`dpi.rs` 7・`drain_resnap.rs` 4・`attach.rs` 1 ＝ **37** で、**実装者の報告のほうが正しかった**（レビュアーの per-file 値が `wiring`・`scale_text`・`drain_resnap` で 1 ずつ低かった）。**「レビュアーの値を採る」という採用の判断そのものが誤りだった**——どちらの値も再実測で決着できたのに、それをせずに一方を採ったためである。詳細は §37.4 の注。判定（非ブロッキング・一律未修正）は件数に依存しないので結論は変わらない。
+
 **`cargo doc` は本 spec のゲートではなく**（steering にも検証コマンド一覧にも rustdoc の言及が無い）、`areka` クレートは移設前から多数の rustdoc 警告を抱える。その中には**タスク 6.1 が `placement/follow` の分割で生んだ同種のもの 16 件**も既にコミット済みで含まれている。
+
+> **【訂正・タスク 7.5 で再実測】直上の `follow` 16 件も過少で、正しくは 21 件である**（`drag_follow.rs` 11・`window_move.rs` 6・`visibility.rs` 4・`anchor.rs` 0・`work_area.rs` 0）。この 16 という数字は本節がタスク 6.1 について付随的に触れたもので、**タスク 6.1 の §31 では一度も計測されていない**（§31 に intra-doc の小節は無い）。上の `frame` 34→37 の訂正と同じ再実測で得た値である。**この 2 つの訂正は一体で読むこと。**
 
 **修正しない理由は「要件 2.4 が禁じるから」ではない**（2.4 が縛るのはテストコードである——実装者の当初の言い方は不正確でレビューで是正された）。**正しい理由は、doc コメントが項目本文の内側にあり、書き換えると §31.2／§32.3 が拠って立つ「本文バイト一致」の純移動証明を失うから**である。リンク解決のために import を足す案も、`#[allow(unused_imports)]` が増えるだけで実益が無い。
 
@@ -6567,3 +6571,142 @@ ignored 33 の内訳は doctest 27（wintf 26・dola 1）＋実行時 ignore 6�
 |---|---|
 | `.kiro/specs/areka-P0-file-slimming/brief.md` | 実測表を更新前／更新後の対比形へ全面改訂。起票時の表と注は `<details>` 内に逐語保存 |
 | `verification/notes.md` | 本節（§36）を追記 |
+
+## 37. 送付所見の登記の確定（タスク 7.5・要件 5.1 / 5.2）
+
+- 実施日: 2026-08-09 / HEAD `fbe6c5e`（タスク 7.4 のコミット時点）/ **PowerShell（pwsh 7）**
+- 位置づけ: 群 1〜6 の全タスクが各節へ書き溜めた所見を本節で確定し、各所見に送り先 spec を割り当てる。併せて要件 5.1 が禁じる 3 項目（テストハーネスの一本化・共有化／テスト間の状態汚染の是正／時刻注入シームの変更）を 1 件も行っていないことを、ブランチ差分から機械的に証明する
+- **本節は所見を「登記」するところまでが範囲であり、所有 spec の brief を書き換えることはしない**（要件 5.3——他 spec の file:line アンカーは各 spec の design 前 rebase で吸収される）
+- **アンカーはすべて HEAD で再解決した。** 本 spec は 49 本のテストモジュールを動かしたので、実装中に記録した行番号の一部は自分自身の移設で動いている——陳腐化していた **3 件**は §37.3 で訂正した
+
+### 37.1 送付所見の確定（全 8 件）
+
+送り先はいずれも `areka-P0-test-cage-determinism`（W6.9・実在確認は §37.6）。
+
+| # | 所見 | file:line（HEAD 再解決済み） | 初出 |
+|---|---|---|---|
+| 1 | **本番構造体に埋め込まれたテスト注入シーム `fail_next_render`**。`ViewboxExecutor` の私有フィールド・`new()` の初期化・注入用 inherent メソッド・`render` 内の失敗分岐の 4 点セットで、**テスト専用の可変フラグの寿命が本番オブジェクトの寿命に等しい** | `crates/areka-emo-text/src/viewbox_draw.rs:117`（フィールド）・`:147`（初期化）・`:154`（`fn inject_render_failure`）・`:485`（分岐）——各直前行が `#[cfg(test)]`。唯一の呼出は `viewbox_draw_frame_render_tests.rs:467` | §7.1 #1（**設計時に確定**）／詳細 §23.5 #1 |
+| 2 | **`cargo test -p areka --examples` の既存 E0433**（テストモジュール内の `crate::` 参照）。example は `#[path]` で本番モジュールを私有 include するため、テスト側の `crate::` パスが example クレートルートで解決しない。証跡採取が `--exclude areka` を使う根拠 | `crates/areka/src/placement/spawn_assembly_tests.rs:183`（`crate::input_events::attach_char_pointer_handlers`）・先行裁定の注記は `:175`。include 鎖は `examples/window-placement.rs:107` および `examples/collision-probe.rs:231` → `src/placement/mod.rs` → `spawn.rs` 末尾の接続宣言 | §7.1 #2（**設計時に確定**）／追跡 §25.6 #5・§26.8 #1・§27.10 #5・§28.10 #4・§29.11 #5・§30.12 #4 |
+| 3 | **`areka-emo-present` に同型のログ捕捉ハーネスが 3 重に存在する**（`CapturedEvent` / `FieldGrab` / `CaptureSubscriber`）。理由は当時のコメントに明記——「`presenter.rs` の tests にあるものは test-local な private 型ゆえ参照できない」。**本 spec は 3 重を 3 重のまま保った** | `crates/areka-emo-present/src/balloon_test_support.rs:62,79,90`・`src/scale_tests.rs:304,327,338`・`src/presenter_refresh_and_log_tests.rs:25,34,45` | §21.5 #2 ／ §22.5 #1 |
+| 4 | **`include_str!` で本番ファイル本文を読む構造テストの走査対象が、本 spec の移設によって黙って縮んだ**。本番ファイルのテキストそのものを読んで禁止パターンを探すため、テストを外へ出した分だけ被覆が抜ける（累計 −6,625 行）。**現時点で実害は 0**（移設先の全テストファイルを再走査して禁止パターン 0 件）。戻すには `<stem>_*_tests.rs` を `PURE_SOURCES` へ足せばよいが、**入力値の変更は要件 2.4 が禁じる**ため本 spec では行わない | `crates/areka-emo-text/src/lib.rs:173-183`（`PURE_SOURCES` の 9 エントリ）。縮小したのは `:174` `choice.rs`・`:175` `state.rs`・`:179` `layout.rs`・`:181` `viewbox.rs` の 4 件 | §23.5 #2 ／ §24.5（拡張） |
+| 5 | **`areka-emo-text` に同型のログ捕捉ハーネスが 8 重に存在する**。捕捉機構そのものは健全（`tracing::subscriber::with_default` のスレッドローカル捕捉ゆえ並列実行で混線しない）で、送付理由は**重複そのもの**——§21.5 が `areka-emo-present` の 3 重を送付所見とした扱いに分類を揃える。8 本はすべて同型の最小 `tracing::Subscriber` であり、コメント自身が「`draw.rs` の檻パターン踏襲」「`writing.rs` の檻パターン踏襲」「`state.rs` の檻パターン踏襲」と複製であることを申告している。**本 spec は 8 本を 8 本のまま保った** | `LevelCounter`: `crates/areka-emo-text/src/actor_runtime_frame_tests.rs:21`・`src/draw_test_support.rs:31`・`src/sink.rs:137` ／ `WarnCounter`: `src/state_cue_apply_tests.rs:235`・`src/layout_cursor_tests.rs:544`・`src/region.rs:339`・`src/wrap.rs:91`・`src/writing.rs:105`。うち `sink.rs`／`region.rs`／`wrap.rs`／`writing.rs` の 4 本は当該テストモジュールが 500 行未満で移設対象外のため**ファイル内に残っている** | §24.5 #3 |
+| 6 | **回数で打ち切る有界スピン待ちが、負荷下で偽の赤を出しうる**。`for _ in 0..1000` ＋ `yield_now()` で cue 着弾を待つが、上限が壁時計でなく回数なので極端に負荷の高いマシンでは着弾を取り逃し `assert!(wait_seen, …)` が落ちる。同一ファイルの前後の barrier は `recv_timeout(5s)` でブロックしており、**この 1 箇所だけが `try_recv` スピン**である | `crates/areka-sakura/src/drive_delivery_tests.rs:118-129`（`#[test] fn same_sheet_started_at_different_times_delivers_cue_at_different_absolute_fire_times`（`:68-69`）の内部関数 `fn run_with_anchor`（`:71`）の中。`:118` がスピン開始・`:129` が `assert!(wait_seen, …)`） | §17.5 #3（**「記録のみ」で登記されていたものを本節で送付へ格上げ**——理由は §37.2。**テスト関数名のアンカーも本節で訂正した**——§37.3 #3） |
+| 7 | **`crates/areka` にもログ捕捉ハーネスの複製が 2 系統ある**。`frame_test_support.rs` は自前の `Capture`／`capture_logs` を持ちながら、同クレートには `placement::test_support::capture_logs` が別に在る。`input_events/balloon_test_support.rs` のバナーは自らを「`frame.rs` 檻の最小複製」と逐語で申告している。**#3・#5 と同一分類の所見であり、扱いを揃えて送る**（この 3 件を分けて扱う理由が無い） | `crates/areka/src/emo2_boot/frame_test_support.rs:92-122`（自前 `Capture`／`capture_logs`）・`crates/areka/src/input_events/balloon_test_support.rs:115-148`（「最小複製」と申告するバナーつき）・正典側は `crates/areka/src/placement/test_support.rs`（所有 spec の brief が正典コピーとして名指ししているもの） | §29.11 #1 ／ §30.12 #1 |
+| 8 | **壁時計デッドラインが兄弟の規約より一桁小さい**。実 DLL を読む経路（`LoadLibraryW`＋`CreateInstance`）を待つスピンのデッドラインが **10 秒**で、`E2E_BOUND` 系の兄弟が揃って採る **60 秒**より一桁小さい。§18.5 #3 自身が「極端な負荷では偽陽性の赤になり得る」と記録している。**#6 とは失敗様式が違う**——#6 は反復回数で打ち切るので負荷に比例して早まるが、こちらは壁時計で括っており、しかも**コードの形は所有 spec が Problem ② の是正形（donor）として名指しする `spin_pumping_ticks`（`crates/areka-ghost/tests/ghost/spine_e2e_test.rs:48-62`——`fn` `:48`・`deadline` `:54`・`while` `:55`・`send_tick` `:59`・`*now += 1` `:60`・`yield_now()` `:61`）と構造的に同一**である（`deadline = Instant::now() + 上限` → `while Instant::now() < deadline` → Tick 注入 → `yield_now()`。**逐語一致ではなく構造の一致**である）。**したがって争点は形ではなく上限の大きさである**——しかも絶対値だけでは決まらず、**待つ対象の重さとの比**で見る必要がある（§37.4 の「プロセス内チャンネル受信の 5 秒」行を併読のこと。あちらは 5 秒でも余裕 4 桁ゆえ送らない）。ここでは実 DLL の読み込みという重い待ちに対して 10 秒しかなく、同じ重さを待つ兄弟が揃って 60 秒を採っている。`E2E_BOUND` 60 秒（§19.6 #3）へ揃えるかどうかの裁定を要する | `crates/areka-ghost/src/runtime_tests.rs:634-651`（デッドラインは `:636` の `Instant::now() + Duration::from_secs(10)`・囲むテストは `:559` の `inproc_wiring_boots_drives_and_shuts_down_through_real_test_dll`） | §18.5 #3（**「記録のみ」で登記されていたものを本節で送付へ格上げ**——ただし理由は #6 と別。**所有 spec の Out 条項に触れるため §37.6 に特記した**） |
+
+**8 件のいずれも要件 5.1 が本 spec に禁じている領分である**——#1 は注入シームの変更、#3・#5・#7 はハーネスの一本化・共有化、#6・#8 は待機機構の書き換え（かつテスト本文の変更＝要件 2.4 違反）、#2 と #4 は本 spec の対象外ファイルにあり #4 の是正はテストの入力値変更に当たる。ゆえに全件を所有 spec へ送る。
+
+### 37.2 #6・#7・#8 を「記録のみ」から送付へ格上げした理由
+
+§17.5 #3（有界スピン）・§18.5 #3（壁時計 10 秒）・§29.11 #1／§30.12 #1（`crates/areka` のハーネス複製）は、いずれも各タスクの時点で「既存・記録のみ（是正しない）」と分類されていた。**その判断自体は正しい**——移設前から同一コードであり、本文を触れば要件 2.4 違反になる。しかし「本 spec で直さない」ことと「所有 spec へ送らない」ことは別である。タスク 7.5 の職務は**各所見に送り先を割り当てること**であり、ここが最後の関門になる。
+
+送付へ回す根拠は 3 つ:
+
+1. #6・#8 は**偽陽性の赤を生みうる決定論の欠陥**であって、単なる様式の記録ではない。要件 5.2 が拾う「壊れたテストモジュール・不正なテストモジュール」に当たる（ただし**両者の様式は違う**——#6 は反復回数で打ち切るので負荷に比例して早まり、#8 は壁時計だが上限が兄弟の一桁下である。当初この 2 件を「同型」と書いたのは誤りで、レビュー指摘により是正した）。#7 は #3・#5 と同一分類であり、**同じものを 3 クレートのうち 2 つだけ送るのは筋が通らない**。
+2. `areka-P0-test-cage-determinism` の brief の Problem ②（協調スピン flake）・③（ログ捕捉ハーネスの複製）が主題として一致している。**ただし ② の Boundary Candidate はファイルを `spine.rs` 単独に絞っており、`areka-sakura`／`areka-ghost` は現行 scope の外である**（#6・#8 は scope の追加を要する——§37.6 に明記した）。
+3. 送らなければ、この観測はこの spec の登記の中で朽ちる。**「先送りは担当 spec の実在検証つきで即報告」**という本プロジェクトの規律に反する。
+
+同種の候補として検討したが**送付しなかった**ものは §37.4 に理由つきで列挙した。
+
+### 37.3 陳腐化していたアンカーの訂正（3 件）
+
+全数を HEAD で再解決した結果、訂正を要したのは 3 件だった。**原表は履歴として残し、本節が引き継ぐ形にした**（原記述を書き換えると訂正の経緯が消えるため）。
+
+1. **§21.5 #2 の 3 本目のハーネス**: `crates/areka-emo-present/src/presenter.rs:3669,3678,3689` は**解決しない**——`presenter.rs` はタスク 4.3 の移設で 1,066 行になっている。現在位置は `presenter_refresh_and_log_tests.rs:25,34,45`（§22.5 #1 が記録済み）。
+2. **§7.1 #2 の E0433 の出所**: `crates/areka/src/placement/spawn.rs:879`（注記 `:871`）は**解決しない**——タスク 5.2 で `spawn_assembly_tests.rs:183`（注記 `:175`）へ移った（§26.8 #1 が記録済み）。
+3. **§17.5 #3 の有界スピンのテスト関数名が誤っていた**（本節のレビューで発覚）。§17.5 #3 は `undue_cues_are_withheld_until_their_at_is_reached` の中だと記していたが、**当該テスト（`:185` 以降）にスピンループは無い**（`recv_timeout` が `:210`、`try_recv().unwrap_err()` が `:229`／`:239`／`:249`）。`for _ in 0..1000` の実在位置は `same_sheet_started_at_different_times_delivers_cue_at_different_absolute_fire_times`（`#[test]` `:68`・`fn` `:69`）の内部関数 `run_with_anchor`（`:71`）の中で、スピンは `:118`、引用されている `assert!(wait_seen, …)` は `:129` である。§17.5 が記した範囲 `:114-128` は `assert!` の手前で切れていた。**行番号だけでなく「どのテストの話か」も間違っていた**ので、送付前にここで訂正する。
+
+そのほかのアンカー（#1 の 4 箇所・#3 の 6 箇所・#4・#5 の 8 箇所・#7 の 3 箇所・#8、および §7.2 の 2 件）は**すべて HEAD で逐語に解決する**。
+
+なお §19.6 #6 が「タスク 7.1／完了時にまとめて判断する」として残した §18.4(c) の SHA256 の食い違いは、**本節の時点で既に解消済み**である（§18.4(c) に是正注記が入っており、序数整列値が正・`Sort-Object` 値は履歴として併記）。未処理の申し送りではない。
+
+### 37.4 送付しない所見（記録のみ）— 転送対象から外した根拠
+
+各節の「記録のみ」表は、**次に触る者が同じ調査を繰り返さないための控え**であって送付対象ではない。所在だけ挙げて転送しない。
+
+| 分類 | 所在 | 送付しない根拠 |
+|---|---|---|
+| テストモジュール後方の本番コード 5 行／`#[cfg(all(test, target_os = "windows"))]` の唯一例 | §7.2 #1（`crates/wintf/src/ecs/world/mod.rs:710-714`）・§7.2 #2（`crates/dola/src/runtime/clock.rs:31`） | いずれもテストコード 500 行未満で要件 1.1 の対象外。design も「記録のみ」と裁定済み。**欠陥ではなく構造の記録である** |
+| 一時ディレクトリ名がプロセス内でしか一意でない（プロセス**間**では衝突しうる） | §18.5 #2・§19.6 #2・§25.6 #1・§26.8 #2・§27.10 #1 | 1 プロセス内ではタグが全数相異なることを各節が実測済み。要件 5.2 が拾うのはテスト**間**の汚染であり、本件は**プロセス間**の危険である。§18.5 #2 が「本 spec からの送付所見としては起票しない」と明示的に裁定している（#6 と扱いが分かれるのは、#6 が**単一プロセス内で完結する偽赤**だからである） |
+| 一時ディレクトリの後始末が RAII ガード有／無に割れている | §14.6 #3・§25.6 #2・§26.8 #3 | 名前が相異なりテスト間で共有されない。着手前から同一構造で、移設で 1 文字も変わっていない |
+| **宙吊り防止の 60 秒デッドライン**（**§18.5 #3 の 10 秒だけは除く——#8 として送付する**） | §19.6 #3・§19 各節（`E2E_BOUND` 60 秒） | いずれも意味論を進めるのは注入時刻のみで、上限は宙吊り検出にすぎない（当該箇所のコメントが逐語でそう明記）。**この行の判別基準は「桁」である**——ここに残る各件は上限 **60 秒**で兄弟 e2e（inproc／real_pasta／snapshot_capture）と規約が揃っており、§18.5 #3 だけが **10 秒**で一桁小さい。**この基準は §37.1 #8 のそれと同一である**（#8 を送る理由がまさに「桁が揃っていない」ことだから） |
+| **負の観測窓**（上とは**別の理由**で除外する） | §17.5 #2 のうち: `drive_test_support.rs:137` の `NEG_WINDOW = 200ms`・`recv_done(&done_rx, NEG_WINDOW).is_err()` **9 箇所**（`drive_choice_tests.rs` 4・`drive_lifecycle_tests.rs` 5）・`drive_choice_tests.rs:558,650` の 5 秒 `recv_timeout(...).unwrap_err()` 2 件 ／ §18.5 #4（`ticker_tests.rs:427` の 200ms） | **短い上限であることが設計として正しい**——「来ないこと」を確かめる檻なので、待てば待つほど遅くなるだけで判定は変わらない。両節とも「両方向決定的」と記録している。**上の行の「桁」基準はここには適用されない**（適用すると 200ms のほうが 10 秒より先に送付対象になってしまい、意味を成さない） |
+| **プロセス内チャンネル受信の 5 秒宙吊り検出**（さらに**別の理由**で除外する） | `recv_done(&done_*_rx, Duration::from_secs(5))` の **28 箇所**（`drive_lifecycle_tests.rs` 17 − 負の窓 5 ＝ **12**・`drive_choice_tests.rs` 11 − 負の窓 4 ＝ **7**・`drive_delivery_tests.rs` 9 − 負の窓 0 ＝ **9**。12＋7＋9 ＝ **28**。呼出総数 37 ＝ 負の窓 9 ＋ 肯定的 28 で、`recv_done` の全呼出を過不足なく分類している——上限は `NEG_WINDOW` か `Duration::from_secs(5)` の 2 種のみで第 3 の値は無い）。ヘルパ本体は `drive_test_support.rs:38-50` | **`recv_done` は `timeout` を引数に取る汎用ヘルパで、向きの違う 2 つの使われ方をする**（doc `:34-36` が「この窓の中で `TalkDone` が来るか否か」と両義を明記）。上の行が扱うのは「来ないこと」を確かめる負の窓で、こちらは**「来ること」を待つ肯定的な待ち**であり、上限が小さすぎれば偽の赤になりうる——**その意味では #8 と同じ側にある**。それでも送らない理由は**上限と正常時の所要時間の比**である: これはプロセス内 mpsc の受信で、正常時はマイクロ秒台に着弾するから 5 秒は 4 桁以上の余裕がある。#8 は実 DLL の `LoadLibraryW`＋`CreateInstance` を待っており、**正常時の所要そのものが数百 ms〜秒の桁**なので 10 秒では余裕が乏しく、しかも同じ重さの作業を待つ兄弟が揃って 60 秒を採っている。**「絶対値の桁」だけでは判別できず、待つ対象の重さと突き合わせる必要がある**——上の行の基準はそこまで含めて読むこと |
+| `unused_must_use` 4 件 | §16.5 #2（`crates/areka-seriko/src/actor_bind_loop_tests.rs:147,156,211,219`） | 移設前から同一の 4 件で `before_build_warnings.txt` の基準値に織り込み済み。本 spec が縛るのは件数の非増加（要件 2.6）だけ |
+| 汚染の**予防**機構としての常駐 subscriber | §18.5 #5・§19.6 #1・§20.5 #2・§21.5 #1 | 並列負荷下の `Interest::never` 焼き付きを根治するために意図して常駐させているもの。**汚染ではなく汚染の予防**であり撤去対象ではない |
+| `cargo fmt --check` の差分 | §26.8 #6・§27.10 #4・§28.10 #3・§29.11 #4・§30.12 #3 | リポジトリは元から fmt-clean ではない。整形は要件 2.4 が禁じる本文変更になる |
+| 本体分割で生じた未解決 intra-doc リンク（**実測 `follow` 21・`frame` 37**） | 本節で実測（§32.10 の 34 を上書き・§37.4 注を参照） | `cargo doc` は本 spec のゲートではない。doc を書き換えると純移動のバイト一致証明が崩れる。**申し送りは既に着地済み**——`.kiro/steering/structure.md` に「`super::`／相対の intra-doc リンクは指す先が変わる・一律未修正が正解」が入っている（タスク 7.3） |
+| `TOKENIZER-EQUIV` の恒久的な赤 | §33.6 | 移設完了により構造的に緑へ戻らない、想定内の赤。その中身自体が要件 1.1 の全域証跡になっている |
+| `verification/` 成果物の `*_test.txt` 命名罠 | §34.4 | 本 spec 内の作業知見。未遂で終わり、過去の巻き添えも 0 件 |
+
+> **§37.4 注: intra-doc リンク件数の訂正（§32.10 の 34 は過少）。** 本節で HEAD の隔離ターゲットに対し `cargo doc -p areka --no-deps` を実行し、`-->` 行をファイル別に集計した。結果は **`follow` 21**（`drag_follow.rs` 11・`window_move.rs` 6・`visibility.rs` 4・`anchor.rs` 0・`work_area.rs` 0）・**`frame` 37**（`wiring.rs` 16・`scale_text.rs` 9・`dpi.rs` 7・`drain_resnap.rs` 4・`attach.rs` 1）で、クレート全体では 95 件である。
+>
+> §32.10 は `frame` を **34** と記録しているが、これは**タスク 6.2 のレビュアーが提示した per-file 値を、実装者が報告した 37 より優先して採用した結果**であった。今回の実測は実装者側の per-file 値（`wiring` 16・`scale_text` 9・`drain_resnap` 4）を再現しており、**37 が正しく、採用の判断が誤っていた**。`follow` の 16 の出所は **§32.10 の本文（`notes.md:6221`）**である——タスク 6.2 の節が、先行するタスク 6.1 の `follow` 分割について付随的に触れた数字であり、**タスク 6.1 の §31 では一度も計測されていない**（§31 に intra-doc の小節は無い）。旧行が挙げていた「§31 各節・§32.10」という出典は半分だけ正しかった。実測は **21** で、これも 16 を上回る。**本節の実測値を正とする。** 判定（非ブロッキング・一律未修正）は件数に依存しないので結論は変わらない。
+
+> なお本節の初稿は「16 は notes.md 中この行にしか現れず出所を持たない」と書いていたが、**それは誤りである**（出所は `notes.md:6221`）。レビュアーが自身の前回指摘の行き過ぎを申告し、本節がそれを採用してしまっていたもので、再指摘を受けて是正した。**レビュー側の誤りを無検証で採ると、こちら側の記録が壊れる**——検証者の指摘であっても裏を取ること。
+
+### 37.5 要件 5.1 の三禁止を行っていないことの証明
+
+**手法**: マージベース `247d48a`（`git merge-base origin/main HEAD`・本ブランチはここから **46 コミット**）から HEAD までの差分を、禁止項目に対応する構文の**多重集合**として突合する。
+
+タスク 7.1 の 49/49 本文一致（§33.4）は「49 本のテスト**本文**」を保証するが、(i) 49 本の本番側、(ii) 49 本の**外**のファイル、(iii) 可視性のみの変更が隠す差、の 3 点は覆わない。以下の (a)〜(d) がその穴を塞ぐ。
+
+**(a) 49 本の外は 1 ファイルも触っていない。**
+`git diff --name-status 247d48a HEAD -- 'crates/**/*.rs'` の `M` エントリは 49 本。これを `verification/target_inventory.csv` の 49 パス（区切りを `/` に正規化）と `diff` したところ **差分 0＝集合として完全一致**。`A` エントリは新規テストファイル群・本体分割の 10 本・統合テストの分割 9 本のみである。**ゆえにワークスペース内の他のハーネス・他の時刻シームには手が届いていない。**
+
+**(b) 時刻注入シームは 1 箇所も変えていない（禁止 3 項目め）。**
+差分の追加行・削除行から `MonotonicMs|Instant::now|SystemTime::|thread::sleep|recv_timeout|set_global_default|subscriber::with_default|Duration::from` に一致する行を抜き、前後の空白を落として多重集合として突合した——**削除 392 行／追加 392 行**、両者の差は**次の 1 対のみ**:
+
+```
+-  const NEG_WINDOW: Duration = Duration::from_millis(200);
++  pub(super) const NEG_WINDOW: Duration = Duration::from_millis(200);
+```
+
+テーマ分割に伴う可視性修飾の付与であり（要件 2.4 が許容する機械的調整）、**値 200ms は不変**。時刻の注入経路・待機上限・購読差し替えは 1 つも増減・改変していない。
+
+**(c) ハーネスの一本化・共有化も、状態汚染の是正も行っていない（禁止 1・2 項目め）。**
+同じ手法を `thread_local!|OnceLock|static |env::set_var|env::temp_dir|process::id|AtomicU|CoInitializeEx|CoUninitialize|remove_dir_all|impl Drop|struct CaptureSubscriber|struct CapturedEvent|struct FieldGrab|struct LevelCounter|struct WarnCounter|fn capture|catch_unwind|unique_temp_dir` へ適用し、行頭の `pub` / `pub(crate)` / `pub(super)` を剥がしたうえで突合した——**削除 240 行／追加 242 行**、差は**追加側 2 行のみ**で、いずれも `use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};`（テーマ分割で必要になった `use` の追加＝要件 2.8 が許容）。**ハーネスの定義・`static` 項目・一時ディレクトリヘルパ・`Drop` ガード・COM 初期化／解放の呼出は 1 件も増減していない。**
+
+**(d) 全域の実数でも同じ結論になる**（`git grep -c -F <pat> {247d48a,HEAD} -- crates/` の総和）:
+
+| 構文 | 基準 `247d48a` | HEAD |
+|---|---:|---:|
+| `struct CaptureSubscriber` | 5 | 5 |
+| `struct CapturedEvent` | 7 | 7 |
+| `struct FieldGrab` | 5 | 5 |
+| `struct LevelCounter` | 3 | 3 |
+| `struct WarnCounter` | 5 | 5 |
+| `fn unique_temp_dir` | 15 | 15 |
+| `thread_local!` | 14 | 14 |
+| `set_global_default` | 24 | 24 |
+| `fn inject_render_failure` | 1 | 1 |
+| `fail_next_render` | 5 | 5 |
+
+**§37.1 #3 が登記した 3 重・#5 が登記した 8 重（`LevelCounter` 3 ＋ `WarnCounter` 5）が、基準と HEAD で寸分違わず保たれている**ことが、「一本化していない」ことのもっとも直接的な証拠である。#1 の注入シームも 4 点セットのまま不変である。**なお #5 の「8 重」はこの表の実数と一致する**——初稿は §24.5 の記述を引いて「4 重」と書いており、**自分の表と矛盾していた**（レビュー指摘で是正・§37.1 #5 に 8 箇所すべてのアンカーを列挙した）。
+
+**(e) 併せて要件 5.3 も充足する。**
+`git diff --name-only 247d48a HEAD -- ':!crates/'` に現れるのは本 spec 自身の `.kiro/specs/areka-P0-file-slimming/**` と `.kiro/steering/structure.md`（タスク 7.3 の改訂）だけである。**他 spec の brief・その file:line アンカーは 1 文字も書き換えていない。**
+
+**(f) #2 の E0433 は静的検証だけでなく実機で再観測した。**
+`cargo test -p areka --examples` を HEAD で実行し、`error[E0433]: cannot find 'input_events' in 'crate'` を再現した（`window-placement` と `collision-probe` の 2 つの example テストターゲットがそれぞれコンパイル失敗）。**移設前と同一のエラー 1 種であり、本 spec が新しい失敗を持ち込んでいないこと**が確認できる。
+
+### 37.6 送り先 spec の実在と受け入れ可能性
+
+- `.kiro/specs/areka-P0-test-cage-determinism/`（`brief.md`）が**実在し、`completed/` へアーカイブされていない**ことを確認した。`.kiro/steering/roadmap.md` が **W6.9** に配置している。**送付先として有効である。**
+- **主題が素直に一致するのは 1 件だけである。** Problem ③「ログ捕捉ハーネスが 3 コピー、しかも競合する 2 設計が併存」は **#3・#5・#7** と同一主題であり、しかも brief が正典コピーとして名指しする `crates/areka/src/placement/test_support.rs` は #7 の対になるファイルそのものである（ただし brief が列挙する 3 コピーの具体的な集合は #3 のそれとは大きく異なる）。
+- **残る 5 件はいずれも scope の追加を要する。** 楽観的に書かない:
+  - **#6 は Problem ②（協調スピン flake）と主題が近いが、ファイルが scope 外である。** brief の Boundary Candidate は「待機機構（② — `spine.rs` 単独ファイル）」と明記しており、Problem ② の本文も `crates/areka/src/emo2_boot/spine.rs` について書かれている。#6 は `areka-sakura` であり、**現行 scope に入っていない**（scope の追加を要する）。
+  - **#8 は scope の追加ではなく、明示的な除外の見直しを要する——ここは特に注意して読まれたい。** brief の Scope 節の **Out** に「`areka-ghost` 側（2026-07-30 に是正済み）」がある。つまり #8 は「scope の外」ではなく「**是正済みとして明示的に外された領域**」に当たる。しかし**その「是正済み」が指すのは `spin_pumping_ticks` の修正であって、`runtime_tests.rs:636` には届いていない**——当該箇所は今も 10 秒のままである。**除外の前提が本件については成り立っていない**ので、W6.9 の実装者はまず Out 条項の射程を確認する必要がある。加えて §37.1 #8 のとおり、**当該コードは既に donor の形をしている**。争点は上限の大きさ——10 秒 対 60 秒——を、**待つ対象の重さ**（実 DLL のロードは正常時から数百 ms〜秒を要する）と突き合わせて裁定するかどうかだけである。受理するかどうかを判断するのにこれ以上の再導出は要らない。
+  - **#1 は Problem ④ と方向が逆である。** ④ は `areka-emo-present/src/chain.rs`＋`presenter.rs` に**失敗注入シームが無い**ことを問題にしており、#1 は `areka-emo-text/src/viewbox_draw.rs` に**在る**ことを問題にしている——別クレートで、しかも向きが反対である。さらに `roadmap.md` は ④ の第一候補の是正を「`#[cfg(test)]` fault フラグ小案」と記録しており、**それは #1 が咎めているパターンそのものを導入する案**である。**両者を同時に扱うなら、まず「この形を正典とするのか否か」を裁定する必要がある。**
+  - **#2 と #4 も同 brief の現行 Scope に明記が無い。** 正直に書いておく:
+  - **#2（E0433）は所有者の適合が最も弱い。** design.md と §7.1 が設計時に `test-cage-determinism` へ割り当てたのでその裁定を維持するが、実体は「example の `#[path]` include とテストモジュール内 `crate::` パスの衝突」というビルド構成の不変条件であって、檻の決定論の問題ではない。**着手時に scope へ取り込むか、単独で処理するかの判断を要する。**
+  - **#4（`PURE_SOURCES`）も自然な所有者がいない。** `areka-emo-text` 系の spec はすべて `completed/` にある。是正は 1 行の追加で済むので、**「所有者なし——次に `areka-emo-text` を触る者が拾う」**と読んでも実務上は差し支えない。`test-cage-determinism` へ載せたのは §23.5／§24.5 の記録を引き継いだためである。
+- 送付は brief の書き換えではなく**本節の参照で行う**（要件 5.3）。`test-cage-determinism` は W6.9 着手時に新レイアウト上で作業するため、本節のアンカーはその時点の rebase 対象となる。
+
+### 37.7 本タスクの成果物
+
+| ファイル | 内容 |
+|---|---|
+| `verification/notes.md` | 本節（§37）を追記。§7.1 の 2 行は本節 #1・#2 が引き継ぎ、アンカーを HEAD へ追随させた（原表は履歴として残置）。**あわせて §32.10 へ訂正の印を 2 つ挿入**（`frame` 34→37 と `follow` 16→21・いずれも原文はバイト単位で保存し、追記のみ）——§32.10 に先に辿り着いた読み手が、訂正済みの数字と未訂正の数字を同じ節で読むことがないようにするため |
+
+**これをもって `areka-P0-file-slimming` の全 30 サブタスクが完了する。**
