@@ -1,0 +1,270 @@
+# task_7_1_results.txt - areka-P0-file-slimming / task 7.1
+# 移設後スナップショットの採取と全体照合（要件 1.8 / 2.2 / 2.3 / 2.4 / 2.9）
+#
+# 第三者が再実行できるよう、すべてのコマンドを逐語で載せる。$V は本ディレクトリを指す。
+# 判定はすべて終了コード（0=合格 / 1=不合格 / 2=引数不正）による。
+
+  実施日     : 2026-08-09 09:33:23 +09:00
+  ブランチ   : claude/areka-p0-file-slimming-64d065
+  HEAD       : 2ef03111f94f38c438c3d879d7f6fc7814e3c556  (feat(areka-P0-file-slimming): フレーム処理の本番本体をファサード分割 (task 6.2))
+  実行シェル : PowerShell (pwsh)  ／ 採取ターゲット: x86_64-pc-windows-msvc（既定・§10.4）
+  cargo 1.97.1 (c980f4866 2026-06-30)
+  rustc 1.97.1 (8bab26f4f 2026-07-14)
+  stable-x86_64-pc-windows-msvc (default)
+
+===============================================================================
+ 0. 移設後スナップショットの採取（§10.2 と同一手順）
+===============================================================================
+
+  cargo test --workspace --no-fail-fast -- --list                              -> exit 0
+  cargo test --workspace --exclude areka --all-targets --no-fail-fast -- --list -> exit 0
+  cargo build --workspace --all-targets                                        -> exit 0
+
+  stdout のみを対象に `: test$` へ一致する行を抽出し、[string[]] へ型付けしてから
+  [Array]::Sort($arr, [System.StringComparer]::Ordinal) で序数整列。
+  [IO.File]::WriteAllLines($path, $arr, (New-Object Text.UTF8Encoding($false))) で
+  UTF-8 BOM 無し・CRLF・末尾改行 1 つとして書き出した。
+
+  --- 整列器の較正（§10.2 手順 3 の要求）------------------------------------
+  コミット済みの整列済みファイルをハッシュするのは較正にならないため、
+  「未整列の生出力」を序数と Sort-Object の 2 通りに整列して digest が割れることを確かめた。
+  さらに [string[]] 型注釈を省いた [Array]::Sort が黙ってカルチャ順へ落ちる罠も再現した。
+
+    after_default (4,790 行・未整列の同一配列):
+      ordinal                     : 593395EBD71A6C25BA4D52294DAD0D89DB5507AE09F9CCB29C14CB49C000F30D
+      Sort-Object (culture)       : CEC5ED481C84B8FBC6CF6BCA1F714532C8F11A10F3C1BE49FE1AD6B85C716419
+      [Array]::Sort 型注釈なし     : CEC5ED481C84B8FBC6CF6BCA1F714532C8F11A10F3C1BE49FE1AD6B85C716419  <- カルチャ順と一致（罠を再現）
+      相違位置                     : 1,823 / 4,790   -> 較正 PASS
+
+    after_alltargets (4,105 行・未整列の同一配列):
+      ordinal                     : 77D2FED6595DD5C0D2A0C367235578AAEC422CD463C809E447C35CC7693F5284
+      Sort-Object (culture)       : 3CA9B4ECB481A540B766EAD80E01A4C4372CCFFFF244A96D3EF995BBD134A4DA
+      [Array]::Sort 型注釈なし     : 3CA9B4ECB481A540B766EAD80E01A4C4372CCFFFF244A96D3EF995BBD134A4DA  <- カルチャ順と一致（罠を再現）
+      相違位置                     : 1,726 / 4,105   -> 較正 PASS
+
+  --- 採取結果 ---------------------------------------------------------------
+
+    ファイル                    行数   相異なる   SHA256
+    before_default.txt         4790       4787   77F03656B507D72DB4A5D9E5D75DC4849C16A92B6E371F718F8887F7EB43D2AD
+    after_default.txt          4790       4787   593395EBD71A6C25BA4D52294DAD0D89DB5507AE09F9CCB29C14CB49C000F30D
+    before_alltargets.txt      4105       4097   3DB6579958E226F0CCAD8BFDF77F8014E70825E5288143F773D255C7E789B29F
+    after_alltargets.txt       4105       4097   77D2FED6595DD5C0D2A0C367235578AAEC422CD463C809E447C35CC7693F5284
+
+    移設前 4,790 / 移設後 4,790（既定列挙）、移設前 4,105 / 移設後 4,105（全ターゲット列挙）。
+    重複行は除去していない（多重集合として比較する・§10.2）。
+
+    3 本目（警告集計）は after_build_warnings.txt。5 数値は移設前基準値と同一:
+      DIAG_COUNT 16 / SUMMARY_COUNT 7 / GENERATED_SUM 22 / DUPLICATES 6 / NET 16
+      （要件 2.6 の判定そのものは タスク 7.2 が行う。本タスクは採取のみ。）
+
+===============================================================================
+ 1. 全単射検証（要件 2.9）
+===============================================================================
+
+  pwsh -File $V/Test-MappingBijection.ps1 -Path $V/mapping -Out $V/test_name_mapping.csv
+
+    PASS: 全単射 OK / 行数 1021 / 相異なる old_fqn 1021 / 相異なる new_fqn 1021 / フラグメント 8
+      - areka-emo-compose.csv:  78 行
+      - areka-emo-present.csv:  84 行
+      - areka-emo-text.csv   : 239 行
+      - areka-ghost.csv      :  20 行
+      - areka-kanade.csv     :  88 行
+      - areka-sakura.csv     :  75 行
+      - areka-seriko.csv     :  79 行
+      - areka.csv            : 358 行
+    exit 0 / 78+84+239+20+88+75+79+358 = 1021（フラグメント総和と一致）
+
+  pwsh -File $V/Test-MappingBijection.ps1 -Path $V/test_name_mapping.csv      # 結合結果の単体再検証
+    PASS / exit 0
+
+  独立検算（スクリプトに依存しない直接確認）:
+    old_fqn 重複                          : 0
+    new_fqn 重複                          : 0
+    末尾セグメント（関数識別子）の旧新相違 : 0     <- 要件 2.9
+    old_fqn == new_fqn の恒等行            : 0
+    reason の値                            : theme_split のみ
+    new_fqn が別の行の old_fqn でもある件数 : 0     <- 連鎖写像なし＝適用順に依存しない
+
+===============================================================================
+ 2. リスト照合（要件 2.2 / 2.3）
+===============================================================================
+
+  pwsh -File $V/Compare-TestLists.ps1 -Before $V/before_default.txt \
+       -After $V/after_default.txt -Mapping $V/test_name_mapping.csv
+
+    BEFORE      : before_default.txt  (4790 行 / 相異なる 4787)
+    AFTER       : after_default.txt  (4790 行 / 相異なる 4787)
+    MAPPING     : 1021 行 (1 ファイル) / 適用 1021 行 / 未使用 0 行
+    LINE COUNT  : before 4790 / after 4790 -> 一致 (Requirement 2.2)
+    RESULT: PASS                                                    exit 0
+
+  pwsh -File $V/Compare-TestLists.ps1 -Before $V/before_alltargets.txt \
+       -After $V/after_alltargets.txt -Mapping $V/test_name_mapping.csv
+
+    BEFORE      : before_alltargets.txt  (4105 行 / 相異なる 4097)
+    AFTER       : after_alltargets.txt  (4105 行 / 相異なる 4097)
+    MAPPING     : 1021 行 (1 ファイル) / 適用 663 行 / 未使用 358 行
+    LINE COUNT  : before 4105 / after 4105 -> 一致 (Requirement 2.2)
+    UNUSED MAPPING ROWS: 358                                        exit 0
+
+    未使用 358 行は mapping/areka.csv（358 行）と集合として完全一致する。
+    全ターゲット列挙は --exclude areka で採取するため areka のテストが現れないのが正常であり、
+    同じ 358 行は既定列挙側で全て使用されている（適用 1021 / 未使用 0）。
+    したがって 2 本のリストを跨いで未使用のまま残る行は 0 行（§11.2 の合格条件）。
+
+  --- 独立検算: 対応表を使わない多重集合の対称差 -------------------------------
+  対応表がリスト差分を「説明しきっている（完全）」かつ「余計な行を持たない（最小）」
+  ことを、Compare-TestLists.ps1 とは独立に確かめた。
+
+    既定列挙 (default):
+      REMOVED（before のみ） : 1021 件 / 相異なる 1021
+      ADDED  （after のみ）  : 1021 件 / 相異なる 1021
+      REMOVED の集合 == 対応表 old_fqn の集合  : True   （余計な消失 0 / 未登録の消失 0）
+      ADDED   の集合 == 対応表 new_fqn の集合  : True   （余計な出現 0 / 未登録の出現 0）
+      VERDICT: PASS（対応表は完全かつ最小）
+
+    全ターゲット列挙 (alltargets):
+      REMOVED : 663 件 / ADDED : 663 件
+      before に実在する old_fqn 663 / after に実在する new_fqn 663 と完全一致
+      VERDICT: PASS（対応表は完全かつ最小）
+
+===============================================================================
+ 3. 本文一致（要件 2.4）
+===============================================================================
+
+  各元ファイルは固有の base コミット（当該ファイルを最初に触れた移設コミットの親）を持つ。
+  base は git から機械的に導出した（当該ファイルを最初に触れた移設コミットの親）。
+  notes.md §13〜§30 に記録された -Commit 値と 47/49 が一致する。残る 2 ファイル
+  （crates/dola/src/cue/command.rs = bea58b3 ／ crates/shiori-host32-helper/src/main.rs = fda59cf）は
+  notes.md §14 が 3 コミット共通の base として記載する bfbdfb5 と blob が同一であることを
+  git rev-parse で確認済みであり、読み出す内容は同一である。
+  （タスク 2.2 の 3 本目 crates/areka-sylphya/src/actor.rs は本表も bfbdfb5 を採っており notes と一致する。
+    当初の記述は「3 ファイルが乖離」としていたが実測は 2 ファイルであり、レビュー指摘により訂正した。）
+  対象 49 本は target_inventory.csv（必須対象 49 本）と集合として完全一致する。
+
+  pwsh -File $V/Compare-RelocatedTests.ps1 -Commit <base> \
+       -OriginalPath <元ファイル> -RelocatedPath "<移設先をカンマ区切りの 1 引数>" -Detail
+
+  元ファイル                                              base      本数  exit  結果
+  ------------------------------------------------------------------------------------------------------------------------
+  crates/areka-emo-compose/src/fold.rs                   7599c90     1     0  MATCH: test fn 24=24 / helper item 17=17 / mod block 1 / files 1
+  crates/areka-emo-compose/src/plan.rs                   7599c90     3     0  MATCH: test fn 40=40 / helper item 19=19 / mod block 1 / files 3
+  crates/areka-emo-compose/src/scale.rs                  7599c90     3     0  MATCH: test fn 38=38 / helper item 6=6 / mod block 1 / files 3
+  crates/areka-emo-present/src/balloon.rs                60e0b22     4     0  MATCH: test fn 37=37 / helper item 23=23 / mod block 1 / files 4
+  crates/areka-emo-present/src/cache.rs                  60e0b22     1     0  MATCH: test fn 16=16 / helper item 9=9 / mod block 1 / files 1
+  crates/areka-emo-present/src/presenter.rs              91d59e0     8     0  MATCH: test fn 47=47 / helper item 39=39 / mod block 1 / files 8
+  crates/areka-emo-present/src/scale.rs                  60e0b22     1     0  MATCH: test fn 18=18 / helper item 14=14 / mod block 1 / files 1
+  crates/areka-emo-text/src/actor.rs                     246ddb9     6     0  MATCH: test fn 33=33 / helper item 14=14 / mod block 2 / files 6
+  crates/areka-emo-text/src/choice.rs                    246ddb9     3     0  MATCH: test fn 50=50 / helper item 15=15 / mod block 3 / files 3
+  crates/areka-emo-text/src/draw.rs                      246ddb9     3     0  MATCH: test fn 29=29 / helper item 19=19 / mod block 1 / files 3
+  crates/areka-emo-text/src/layout.rs                    7372699     5     0  MATCH: test fn 59=59 / helper item 11=11 / mod block 1 / files 5
+  crates/areka-emo-text/src/state.rs                     246ddb9     4     0  MATCH: test fn 59=59 / helper item 9=9 / mod block 1 / files 4
+  crates/areka-emo-text/src/viewbox_draw.rs              7372699     6     0  MATCH: test fn 24=24 / helper item 23=23 / mod block 1 / files 6
+  crates/areka-emo-text/src/viewbox.rs                   7372699     5     0  MATCH: test fn 39=39 / helper item 19=19 / mod block 1 / files 5
+  crates/areka-ghost/src/dispatcher.rs                   470164a     3     0  MATCH: test fn 20=20 / helper item 16=16 / mod block 1 / files 3
+  crates/areka-ghost/src/runtime.rs                      470164a     1     0  MATCH: test fn 16=16 / helper item 15=15 / mod block 1 / files 1
+  crates/areka-ghost/src/ticker.rs                       470164a     1     0  MATCH: test fn 18=18 / helper item 2=2 / mod block 1 / files 1
+  crates/areka-ghost/tests/ghost/spine_e2e_test.rs       585cd5d    10     0  MATCH: test fn 15=15 / helper item 40=40 / mod block 10 / files 10
+  crates/areka-kanade/src/actor.rs                       7c57594     1     0  MATCH: test fn 22=22 / helper item 10=10 / mod block 1 / files 1
+  crates/areka-kanade/src/schedule/boot.rs               7c57594     3     0  MATCH: test fn 20=20 / helper item 13=13 / mod block 1 / files 3
+  crates/areka-kanade/src/schedule/events.rs             7c57594     1     0  MATCH: test fn 28=28 / helper item 6=6 / mod block 1 / files 1
+  crates/areka-kanade/src/schedule/mod.rs                7c57594     2     0  MATCH: test fn 66=66 / helper item 16=16 / mod block 2 / files 2
+  crates/areka-kanade/src/schedule/steady.rs             7c57594     4     0  MATCH: test fn 68=68 / helper item 17=17 / mod block 1 / files 4
+  crates/areka-kanade/src/shiori/real.rs                 7c57594     1     0  MATCH: test fn 17=17 / helper item 14=14 / mod block 1 / files 1
+  crates/areka-sakura/src/compile.rs                     2048941     3     0  MATCH: test fn 43=43 / helper item 7=7 / mod block 1 / files 3
+  crates/areka-sakura/src/drive.rs                       2048941     4     0  MATCH: test fn 32=32 / helper item 17=17 / mod block 1 / files 4
+  crates/areka-seriko/src/actor.rs                       1021ccf     3     0  MATCH: test fn 34=34 / helper item 24=24 / mod block 1 / files 3
+  crates/areka-seriko/src/looper.rs                      1021ccf     1     0  MATCH: test fn 18=18 / helper item 12=12 / mod block 1 / files 1
+  crates/areka-seriko/src/state.rs                       1021ccf     3     0  MATCH: test fn 45=45 / helper item 3=3 / mod block 1 / files 3
+  crates/areka-sylphya/src/actor.rs                      bfbdfb5     3     0  MATCH: test fn 34=34 / helper item 13=13 / mod block 3 / files 3
+  crates/areka/src/emo2_boot/assets.rs                   425b914     1     0  MATCH: test fn 19=19 / helper item 4=4 / mod block 1 / files 1
+  crates/areka/src/emo2_boot/frame.rs                    2470ccb     9     0  MATCH: test fn 56=56 / helper item 56=56 / mod block 1 / files 9
+  crates/areka/src/emo2_boot/move_cue.rs                 425b914     4     0  MATCH: test fn 32=32 / helper item 15=15 / mod block 4 / files 4
+  crates/areka/src/input_events/balloon.rs               7d4c40a     6     0  MATCH: test fn 52=52 / helper item 27=27 / mod block 1 / files 6
+  crates/areka/src/input_events/mod.rs                   425b914     1     0  MATCH: test fn 20=20 / helper item 4=4 / mod block 1 / files 1
+  crates/areka/src/main.rs                               425b914     7     0  MATCH: test fn 32=32 / helper item 10=10 / mod block 7 / files 7
+  crates/areka/src/placement/follow.rs                   f64fac1    12     0  MATCH: test fn 133=133 / helper item 57=57 / mod block 1 / files 12
+  crates/areka/src/placement/measure.rs                  425b914     1     0  MATCH: test fn 25=25 / helper item 16=16 / mod block 1 / files 1
+  crates/areka/src/placement/mod.rs                      f720244     4     0  MATCH: test fn 28=28 / helper item 19=19 / mod block 1 / files 4
+  crates/areka/src/placement/persist.rs                  f720244     3     0  MATCH: test fn 37=37 / helper item 13=13 / mod block 1 / files 3
+  crates/areka/src/placement/resolver.rs                 f720244     4     0  MATCH: test fn 30=30 / helper item 8=8 / mod block 1 / files 4
+  crates/areka/src/placement/source.rs                   425b914     1     0  MATCH: test fn 26=26 / helper item 4=4 / mod block 1 / files 1
+  crates/areka/src/placement/spawn.rs                    f720244     5     0  MATCH: test fn 22=22 / helper item 15=15 / mod block 1 / files 5
+  crates/dola/src/cue/command.rs                         bea58b3     1     0  MATCH: test fn 29=29 / helper item 1=1 / mod block 1 / files 1
+  crates/shiori-host32-helper/src/main.rs                fda59cf     4     0  MATCH: test fn 17=17 / helper item 1=1 / mod block 4 / files 4
+  crates/wintf/src/ecs/clickthrough/controller.rs        264bac2     1     0  MATCH: test fn 22=22 / helper item 12=12 / mod block 1 / files 1
+  crates/wintf/src/ecs/layout/systems/monitor_systems.rs 264bac2     1     0  MATCH: test fn 13=13 / helper item 11=11 / mod block 1 / files 1
+  crates/wintf/src/ecs/window_proc/dpi_helpers.rs        264bac2     1     0  MATCH: test fn 22=22 / helper item 8=8 / mod block 1 / files 1
+  crates/wintf/src/ecs/window_proc/window_pos.rs         264bac2     1     0  MATCH: test fn 18=18 / helper item 16=16 / mod block 1 / files 1
+
+  合計: 49 本 / exit 0 = 49 / exit 1（不一致）= 0 / exit 2（引数不正）= 0
+  移設先テストファイル 164 本（タスク 5.3 が作り 5.4 で解消した中間ファイル
+  crates/areka/src/placement/follow_tests.rs を除く。タスク 6.1 / 6.2 が追加した
+  本番サブモジュール 10 本は本番分割であり本文一致の対象ではないため含めない）。
+
+  --- 終了コード 0/1/2 が識別されていることの対照実行 --------------------------
+  上の 49 個の 0 が「何もせず 0 を返した」ものでないことを対照で確かめた。
+
+    (A) 存在しないパス:
+        -Commit 264bac2 -OriginalPath crates/wintf/src/nonexistent.rs
+        -> fatal: path ... does not exist in '264bac2' / exit 2（不一致の 1 ではない）
+
+    (B) 移設先本文の 1 文字改変（assert_eq!(reg.len(), 2) -> 9）:
+        -> [TEST-BODY] テスト関数 prune_removes_despawned_window_entity の本文が一致しません
+           before: assert_eq!(reg.len(), 2); / after : assert_eq!(reg.len(), 9);
+           MISMATCH: 1 件の差分 / exit 1
+        （改変ファイルは検証後に削除済み。git status で crates/ に差分が無いことを確認済み。）
+
+  --- §11.4 の盲点（複数行文字列リテラル内部の行頭空白）の全域再走査 ------------
+  本文一致検証が構造的に検出できない唯一の差分について、49 本を全域で再走査した。
+  判定条件: 行の先頭が既に文字列リテラルの内部にあり、かつ直前行が `\` 継続でない
+  （`\` 継続なら Rust が行頭空白を捨てるため無害）。
+  実装: RustParse.ps1 の [RustItemScan]::Tokenize を、全文脈と 1 行単体の 2 通りで走らせ、
+        結果が食い違う行＝前行から続く複数行構文の内部で始まる行、として抽出した。
+
+    移設前テストモジュール内の該当行 総数        : 1 行
+      crates/wintf/src/ecs/window_proc/window_pos.rs:1137
+        [                 同期的に窓を動かすため源断ちが無効化する: {outcome:?}"]
+    行頭空白込みで不一致となったファイル数        : 0 / 49
+
+  §11.4 が「リポジトリ全域で 1 箇所のみ」と記録した実測を独立に再現し、
+  その 1 行が移設後 window_pos_tests.rs:691 に 17 個の行頭空白ごとバイト一致で
+  存在することを確認した（前後の 689-690 行は `\` 継続ゆえ 4 スペース de-indent 済み）。
+  タスク 2.1 の例外処理が正しく効いている。
+
+===============================================================================
+ 4. 補助証跡
+===============================================================================
+
+  --- 検証ツール自体の自己検証 -------------------------------------------------
+  pwsh -File $V/Test-VerificationTools.ps1
+    24 ケース中 23 ケースが期待どおり。TOKENIZER-EQUIV のみ赤。
+    §11.6 が「移設開始後は必ず赤になる（移設前ツリー前提のケースであり欠陥ではない）」と
+    予告したとおりであり、残る 23 ケースをもって合格と判定する。
+
+  --- TOKENIZER-EQUIV の赤の中身が想定どおりであることの確認 --------------------
+  scan_raw.csv（移設前の全域実測 619 ファイル）に対し、現作業ツリーで
+  [RustItemScan]::FindTestModules を再走査した。
+
+    走査 619 ファイル / 不一致 49 ファイル
+    不一致 49 の集合 == target_inventory.csv の必須対象 49 本  : True
+    49 件すべて actual = ""（本番ファイルからテストモジュールブロックが完全に消えている）
+    必須対象のうち、まだテストモジュールブロックを残しているファイル : 0 本
+    残り 570 ファイルは移設前と完全一致（想定外の巻き添え 0）
+
+  これは「テストモジュール本体が本番ファイルに 1 行も残らない」（要件 1.1・各タスクの完了状態）
+  を 49 本まとめて機械確認したものでもある。
+
+===============================================================================
+ 5. 総括
+===============================================================================
+
+  (1) リスト照合   : 差分ゼロ（既定 4790=4790 / 全ターゲット 4105=4105・いずれも exit 0）
+  (2) 全単射検証   : 差分ゼロ（1,021 行・キー重複 0・値重複 0・関数識別子相違 0・exit 0）
+  (3) 本文一致     : 差分ゼロ（49 本すべて exit 0・MATCH・不一致 0・引数不正 0）
+
+  タスク 7.1 の完了状態（3 つがいずれも差分ゼロ）を満たす。
+  要件 2.2（テスト総数不変）・2.3（列挙リスト一致）・2.4（テストコード無改変）・
+  2.9（改名は全単射かつ関数識別子不変）・1.8（対応表による突合）を充足する。
+
+  本タスクは .rs ファイルを 1 本も変更していない（git status で確認済み）。

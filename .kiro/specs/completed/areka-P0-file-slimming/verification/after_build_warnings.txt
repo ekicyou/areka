@@ -1,0 +1,260 @@
+# after_build_warnings.txt - areka-P0-file-slimming / task 8.13
+# 群 8 完了後（対応漏れ解消後）の全体再検証で採り直した移設後ビルド警告。
+# タスク 7.1 が採取した版（HEAD 2ef0311）を上書きしている——群 8 の 13 サブタスクぶん陳腐化していたため。
+
+[COMMAND]
+  pwsh: cargo build --workspace --all-targets
+  cwd : C:\home\maz\git\areka\.claude\worktrees\areka-p0-file-slimming-64d065
+  exit: 0
+  date: 2026-08-10 17:00:49 +09:00
+  git : 5e362187ab016d8765d0c5e6c76c029b121bf907
+
+[TOOLCHAIN]
+  cargo 1.97.1 (c980f4866 2026-06-30)
+  rustc 1.97.1 (8bab26f4f 2026-07-14)
+  stable-x86_64-pc-windows-msvc (default)
+
+[TALLY METHOD] — before_build_warnings.txt の [TALLY METHOD] と逐語で同一
+  stderr のみを対象とする。stdout は使わない。
+  正規表現（PowerShell -match・大文字小文字区別なし既定）:
+    SUMMARY 行 : ^warning: `.+` \(.*\) generated \d+ warnings?
+    DIAG    行 : ^warning:  かつ SUMMARY 行に該当しないもの
+  GENERATED_SUM = SUMMARY 行の "generated N warnings" の N の総和
+  DUPLICATES    = SUMMARY 行の "(N duplicates)" の N の総和
+  NET           = GENERATED_SUM - DUPLICATES（＝ DIAG_COUNT と一致するのが健全）
+
+[JUDGEMENT RULE — タスク 8.13 で確定]
+  ⚠ 5 数値の逐語一致は判定条件ではない。5 数値は増分ビルド状態に依存する
+     （notes.md §47.10・§48.6・§49.7・§50.6 で 4 度確認。cargo clean からの完全再ビルドでは 14/6/20/6/14）。
+  要件 2.6（警告を増加させない）の判定は次のとおり行う:
+     「DIAG 行の多重集合が before_build_warnings.txt の基準 16 行の部分集合であり、新規行が 0 件」
+  linker stdout 行はワークツリー絶対パスを含むため、多重集合の突合ではこの 1 種へ正規化して数える。
+
+[AFTER NUMBERS]  （移設前の基準値: DIAG 16 / SUMMARY 7 / GENERATED 22 / DUPLICATES 6 / NET 16）
+  DIAG_COUNT     = 15
+  SUMMARY_COUNT  = 7
+  GENERATED_SUM  = 21
+  DUPLICATES     = 6
+  NET            = 15
+
+[SUBSET CHECK vs before_build_warnings.txt]  — 要件 2.6 の判定
+  新規 DIAG 行（基準に無い行 / 基準より多い行） : 0
+  欠落 DIAG 行                                  : 1
+    - warning: linker stdout: ライブラリ …\shiori.dll.lib と…\shiori.dll.exp を作成中
+      （MSVC が import library を新規作成したときだけ出る通知。減少方向）
+  判定 : PASS（増加ゼロ）
+
+[PER-UNIT TALLY] — cargo のユニット単位サマリ行（原文）
+  warning: `shiori-host32-helper` (bin "shiori-host32-helper") generated 3 warnings
+  warning: `shiori-host32-helper` (bin "shiori-host32-helper" test) generated 3 warnings (3 duplicates)
+  warning: `shiori4-testdll` (lib) generated 1 warning
+  warning: `areka-seriko` (lib test) generated 4 warnings
+  warning: `shiori-host32-testdll` (lib) generated 3 warnings
+  warning: `shiori-host32-testdll` (lib test) generated 3 warnings (3 duplicates)
+  warning: `areka` (bin "areka") generated 4 warnings
+
+[DIAGNOSTIC WARNING LINES] — 個別警告の見出し行（原文・出現順）
+  warning: "cdecl" is not a supported ABI for the current target
+  warning: "cdecl" is not a supported ABI for the current target
+  warning: "cdecl" is not a supported ABI for the current target
+  warning: linker stdout: ライブラリ C:\home\maz\git\areka\.claude\worktrees\areka-p0-file-slimming-64d065\target\debug\deps\shiori4_testdll.dll.lib とオブジェクト C:\home\maz\git\areka\.claude\worktrees\areka-p0-file-slimming-64d065\target\debug\deps\shiori4_testdll.dll.exp を作成中
+  warning: unused `std::ops::ControlFlow` that must be used
+  warning: unused `std::ops::ControlFlow` that must be used
+  warning: unused `std::ops::ControlFlow` that must be used
+  warning: unused `std::ops::ControlFlow` that must be used
+  warning: "cdecl" is not a supported ABI for the current target
+  warning: "cdecl" is not a supported ABI for the current target
+  warning: "cdecl" is not a supported ABI for the current target
+  warning: enum `CommandConsumer` is never used
+  warning: enum `LedgerError` is never used
+  warning: struct `ConsumerLedger` is never constructed
+  warning: associated items `new`, `try_register`, `consumer_of`, and `canonical` are never used
+
+[NOTES]
+  - 採取は タスク 8.13 の 3 本立てスナップショットの 3 本目（after_default.txt / after_alltargets.txt と同一 HEAD）。
+  - "linker stdout: ..." はワークツリー絶対パスを本文に含む。比較は本文一致ではなく件数で行う。
+  - [PER-UNIT TALLY] の `(N duplicates)` の帰属先と要約行の並び順は比較対象ではない（before 側 [NOTES] と同一）。
+  - shiori-host32-testdll (lib) の generated が基準 4 に対し 3 なのは、上記の欠落 1 行と同一の出所である。
+
+[RAW STDERR]
+  warning: "cdecl" is not a supported ABI for the current target
+    --> crates\shiori-host32-helper\src\shiori_proxy.rs:62:15
+     |
+  62 | type LoadFn = unsafe extern "cdecl" fn(hdir: HGLOBAL, len: usize) -> bool;
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: use `extern "C"` instead
+     = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+     = note: for more information, see issue #137018 <https://github.com/rust-lang/rust/issues/137018>
+     = note: `#[warn(unsupported_calling_conventions)]` (part of `#[warn(future_incompatible)]`) on by default
+  
+  warning: "cdecl" is not a supported ABI for the current target
+    --> crates\shiori-host32-helper\src\shiori_proxy.rs:64:17
+     |
+  64 | type UnloadFn = unsafe extern "cdecl" fn() -> bool;
+     |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: use `extern "C"` instead
+     = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+     = note: for more information, see issue #137018 <https://github.com/rust-lang/rust/issues/137018>
+  
+  warning: "cdecl" is not a supported ABI for the current target
+    --> crates\shiori-host32-helper\src\shiori_proxy.rs:67:18
+     |
+  67 | type RequestFn = unsafe extern "cdecl" fn(req: HGLOBAL, len: *mut usize) -> HGLOBAL;
+     |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: use `extern "C"` instead
+     = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+     = note: for more information, see issue #137018 <https://github.com/rust-lang/rust/issues/137018>
+  
+  warning: `shiori-host32-helper` (bin "shiori-host32-helper") generated 3 warnings
+  warning: `shiori-host32-helper` (bin "shiori-host32-helper" test) generated 3 warnings (3 duplicates)
+  warning: linker stdout: ライブラリ C:\home\maz\git\areka\.claude\worktrees\areka-p0-file-slimming-64d065\target\debug\deps\shiori4_testdll.dll.lib とオブジェクト C:\home\maz\git\areka\.claude\worktrees\areka-p0-file-slimming-64d065\target\debug\deps\shiori4_testdll.dll.exp を作成中
+    |
+    = note: `#[warn(linker_messages)]` on by default
+  
+  warning: `shiori4-testdll` (lib) generated 1 warning
+  warning: unused `std::ops::ControlFlow` that must be used
+     --> crates\areka-seriko\src\actor_bind_loop_tests.rs:147:5
+      |
+  147 | /     handle_message(
+  148 | |         &resolver,
+  149 | |         &bind_resolver,
+  150 | |         &mut states,
+  ...   |
+  153 | |         SerikoMsg::Cue(bind_carrier_cue("0", &["目", "笑", "1"])),
+  154 | |     );
+      | |_____^
+      |
+      = note: `#[warn(unused_must_use)]` (part of `#[warn(unused)]`) on by default
+  help: use `let _ = ...` to ignore the resulting value
+      |
+  147 |     let _ = handle_message(
+      |     +++++++
+  
+  warning: unused `std::ops::ControlFlow` that must be used
+     --> crates\areka-seriko\src\actor_bind_loop_tests.rs:156:5
+      |
+  156 | /     handle_message(
+  157 | |         &resolver,
+  158 | |         &bind_resolver,
+  159 | |         &mut states,
+  ...   |
+  162 | |         SerikoMsg::Cue(bind_carrier_cue("0", &["目", "閉", "1"])),
+  163 | |     );
+      | |_____^
+      |
+  help: use `let _ = ...` to ignore the resulting value
+      |
+  156 |     let _ = handle_message(
+      |     +++++++
+  
+  warning: unused `std::ops::ControlFlow` that must be used
+     --> crates\areka-seriko\src\actor_bind_loop_tests.rs:211:5
+      |
+  211 | /     handle_message(
+  212 | |         &resolver,
+  213 | |         &bind_resolver,
+  214 | |         &mut states,
+  ...   |
+  217 | |         SerikoMsg::Cue(bind_carrier_cue("0", &["腕", "伸び", "1"])),
+  218 | |     );
+      | |_____^
+      |
+  help: use `let _ = ...` to ignore the resulting value
+      |
+  211 |     let _ = handle_message(
+      |     +++++++
+  
+  warning: unused `std::ops::ControlFlow` that must be used
+     --> crates\areka-seriko\src\actor_bind_loop_tests.rs:219:5
+      |
+  219 | /     handle_message(
+  220 | |         &resolver,
+  221 | |         &bind_resolver,
+  222 | |         &mut states,
+  ...   |
+  225 | |         SerikoMsg::Cue(bind_carrier_cue("0", &["肩", "上げ", "1"])),
+  226 | |     );
+      | |_____^
+      |
+  help: use `let _ = ...` to ignore the resulting value
+      |
+  219 |     let _ = handle_message(
+      |     +++++++
+  
+  warning: "cdecl" is not a supported ABI for the current target
+    --> crates\shiori-host32-testdll\src\lib.rs:56:1
+     |
+  56 | pub unsafe extern "cdecl" fn load(hdir: HGLOBAL, _len: usize) -> bool {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: use `extern "C"` instead
+     = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+     = note: for more information, see issue #137018 <https://github.com/rust-lang/rust/issues/137018>
+     = note: `#[warn(unsupported_calling_conventions)]` (part of `#[warn(future_incompatible)]`) on by default
+  
+  warning: "cdecl" is not a supported ABI for the current target
+    --> crates\shiori-host32-testdll\src\lib.rs:78:1
+     |
+  78 | pub unsafe extern "cdecl" fn unload() -> bool {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: use `extern "C"` instead
+     = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+     = note: for more information, see issue #137018 <https://github.com/rust-lang/rust/issues/137018>
+  
+  warning: "cdecl" is not a supported ABI for the current target
+     --> crates\shiori-host32-testdll\src\lib.rs:146:1
+      |
+  146 | pub unsafe extern "cdecl" fn request(req: HGLOBAL, len: *mut usize) -> HGLOBAL {
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: use `extern "C"` instead
+      = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+      = note: for more information, see issue #137018 <https://github.com/rust-lang/rust/issues/137018>
+  
+  warning: `areka-seriko` (lib test) generated 4 warnings
+  warning: `shiori-host32-testdll` (lib) generated 3 warnings
+  warning: `shiori-host32-testdll` (lib test) generated 3 warnings (3 duplicates)
+  warning: enum `CommandConsumer` is never used
+    --> crates\areka\src\emo2_boot\consumer_ledger.rs:34:10
+     |
+  34 | pub enum CommandConsumer {
+     |          ^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+  
+  warning: enum `LedgerError` is never used
+    --> crates\areka\src\emo2_boot\consumer_ledger.rs:43:10
+     |
+  43 | pub enum LedgerError {
+     |          ^^^^^^^^^^^
+  
+  warning: struct `ConsumerLedger` is never constructed
+    --> crates\areka\src\emo2_boot\consumer_ledger.rs:57:12
+     |
+  57 | pub struct ConsumerLedger {
+     |            ^^^^^^^^^^^^^^
+  
+  warning: associated items `new`, `try_register`, `consumer_of`, and `canonical` are never used
+    --> crates\areka\src\emo2_boot\consumer_ledger.rs:64:12
+     |
+  62 | impl ConsumerLedger {
+     | ------------------- associated items in this implementation
+  63 |     /// 空の台帳を作る（登記は [`try_register`](Self::try_register) で追加する）。
+  64 |     pub fn new() -> Self {
+     |            ^^^
+  ...
+  70 |     pub fn try_register(
+     |            ^^^^^^^^^^^^
+  ...
+  85 |     pub fn consumer_of(&self, name: &str) -> Option<CommandConsumer> {
+     |            ^^^^^^^^^^^
+  ...
+  95 |     pub fn canonical() -> Self {
+     |            ^^^^^^^^^
+  
+  warning: `areka` (bin "areka") generated 4 warnings
+      Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.53s

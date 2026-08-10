@@ -378,7 +378,7 @@ DEALINGS IN THE SOFTWARE.
 対象 crate:
 - bitflags 2.13.1
 - log 0.4.33
-- regex-automata 0.4.16
+- regex-automata 0.4.18
 - regex-syntax 0.8.11
 
 ```
@@ -1681,7 +1681,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 対象 crate:
-- zerocopy 0.8.55
+- zerocopy 0.8.56
 
 ```
 Copyright 2023 The Fuchsia Authors
