@@ -161,7 +161,14 @@ mod <モジュール名>;
 
   **逆向き（テストファイル → 本番ファイル）の曖昧さを断つ 2 つの規則**——同一ディレクトリに `foo.rs` と `foo_bar.rs` の両方が在ると、`foo_bar_baz_tests.rs` は「`foo` ＋ `bar_baz_tests`」とも「`foo_bar` ＋ `baz_tests`」とも読めてしまう（実在例: `areka-emo-text/src/` の `viewbox.rs` と `viewbox_draw.rs`）。
 
-  1. **最長 stem 優先**: 候補が複数あるときは、同一ディレクトリに実在する**接続宣言を持ちうるファイル**（`src/` なら本番ファイル、`tests/` なら統合テストのファイル）のうち **stem が最も長いもの**を採る。上の例では `viewbox_draw.rs` が勝ち、`viewbox_draw_test_support.rs` は `viewbox_draw` の `test_support` と読む。
+  1. **最長 stem 優先**: 候補が複数あるときは、同一ディレクトリに実在する**接続宣言を持ちうるファイル**のうち **stem が最も長いもの**を採る。上の例では `viewbox_draw.rs` が勝ち、`viewbox_draw_test_support.rs` は `viewbox_draw` の `test_support` と読む。
+
+     **「接続宣言を持ちうるファイル」を「本番ファイル」と読み替えないこと。** 候補集合は次のとおりで、`src/` でも本番ファイルには限らない。
+     - `src/`: 本番ファイル、**および歴史的形式で既に分離されているテストファイル**（親が `#[cfg(test)] mod X;` で宣言しているもの。例 `areka-parsers/src/shell/decode_tests.rs`・`areka-emo-compose/src/golden_tests.rs`・`areka/src/emo2_boot/spine.rs`）。これらもテーマ分割の親になりうるので候補である
+     - `tests/`: 統合テストのファイル
+     - `examples/`: サンプルのルートファイル
+
+     候補を本番ファイルだけに絞ると `decode_tests_alias_tests.rs` が「`decode.rs` ＋ `tests_alias_tests`」と誤解決する（`decode_tests.rs` が候補から落ちるため）。正しくは最長 stem の `decode_tests` ＋ `alias_tests` である。
   2. **前向きの衝突禁止**: テーマ名を選ぶとき、`<stem>_<テーマ名>.rs` が**同一ディレクトリの別の本番ファイルから導出しうる名前と衝突してはならない**。上の例なら `viewbox.rs` にテーマ名 `draw_test_support` を付けてはいけない。
 
   この 2 つを守る限り導出は双方向に一意である。

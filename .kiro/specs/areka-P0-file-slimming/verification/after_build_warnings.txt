@@ -1,12 +1,13 @@
-# after_build_warnings.txt - areka-P0-file-slimming / task 7.1
-# 移設後のビルド警告（要件 2.6 の突合対象。判定はタスク 7.2）
+# after_build_warnings.txt - areka-P0-file-slimming / task 8.13
+# 群 8 完了後（対応漏れ解消後）の全体再検証で採り直した移設後ビルド警告。
+# タスク 7.1 が採取した版（HEAD 2ef0311）を上書きしている——群 8 の 13 サブタスクぶん陳腐化していたため。
 
 [COMMAND]
   pwsh: cargo build --workspace --all-targets
   cwd : C:\home\maz\git\areka\.claude\worktrees\areka-p0-file-slimming-64d065
   exit: 0
-  date: 2026-08-09 09:31:18 +09:00
-  git : 2ef03111f94f38c438c3d879d7f6fc7814e3c556
+  date: 2026-08-10 17:00:49 +09:00
+  git : 5e362187ab016d8765d0c5e6c76c029b121bf907
 
 [TOOLCHAIN]
   cargo 1.97.1 (c980f4866 2026-06-30)
@@ -22,19 +23,33 @@
   DUPLICATES    = SUMMARY 行の "(N duplicates)" の N の総和
   NET           = GENERATED_SUM - DUPLICATES（＝ DIAG_COUNT と一致するのが健全）
 
+[JUDGEMENT RULE — タスク 8.13 で確定]
+  ⚠ 5 数値の逐語一致は判定条件ではない。5 数値は増分ビルド状態に依存する
+     （notes.md §47.10・§48.6・§49.7・§50.6 で 4 度確認。cargo clean からの完全再ビルドでは 14/6/20/6/14）。
+  要件 2.6（警告を増加させない）の判定は次のとおり行う:
+     「DIAG 行の多重集合が before_build_warnings.txt の基準 16 行の部分集合であり、新規行が 0 件」
+  linker stdout 行はワークツリー絶対パスを含むため、多重集合の突合ではこの 1 種へ正規化して数える。
+
 [AFTER NUMBERS]  （移設前の基準値: DIAG 16 / SUMMARY 7 / GENERATED 22 / DUPLICATES 6 / NET 16）
-  DIAG_COUNT     = 16
+  DIAG_COUNT     = 15
   SUMMARY_COUNT  = 7
-  GENERATED_SUM  = 22
+  GENERATED_SUM  = 21
   DUPLICATES     = 6
-  NET            = 16
+  NET            = 15
+
+[SUBSET CHECK vs before_build_warnings.txt]  — 要件 2.6 の判定
+  新規 DIAG 行（基準に無い行 / 基準より多い行） : 0
+  欠落 DIAG 行                                  : 1
+    - warning: linker stdout: ライブラリ …\shiori.dll.lib と…\shiori.dll.exp を作成中
+      （MSVC が import library を新規作成したときだけ出る通知。減少方向）
+  判定 : PASS（増加ゼロ）
 
 [PER-UNIT TALLY] — cargo のユニット単位サマリ行（原文）
-  warning: `shiori-host32-helper` (bin "shiori-host32-helper" test) generated 3 warnings
-  warning: `shiori-host32-helper` (bin "shiori-host32-helper") generated 3 warnings (3 duplicates)
+  warning: `shiori-host32-helper` (bin "shiori-host32-helper") generated 3 warnings
+  warning: `shiori-host32-helper` (bin "shiori-host32-helper" test) generated 3 warnings (3 duplicates)
   warning: `shiori4-testdll` (lib) generated 1 warning
   warning: `areka-seriko` (lib test) generated 4 warnings
-  warning: `shiori-host32-testdll` (lib) generated 4 warnings
+  warning: `shiori-host32-testdll` (lib) generated 3 warnings
   warning: `shiori-host32-testdll` (lib test) generated 3 warnings (3 duplicates)
   warning: `areka` (bin "areka") generated 4 warnings
 
@@ -50,16 +65,16 @@
   warning: "cdecl" is not a supported ABI for the current target
   warning: "cdecl" is not a supported ABI for the current target
   warning: "cdecl" is not a supported ABI for the current target
-  warning: linker stdout: ライブラリ C:\home\maz\git\areka\.claude\worktrees\areka-p0-file-slimming-64d065\target\debug\deps\shiori.dll.lib とオブジェクト C:\home\maz\git\areka\.claude\worktrees\areka-p0-file-slimming-64d065\target\debug\deps\shiori.dll.exp を作成中
   warning: enum `CommandConsumer` is never used
   warning: enum `LedgerError` is never used
   warning: struct `ConsumerLedger` is never constructed
   warning: associated items `new`, `try_register`, `consumer_of`, and `canonical` are never used
 
 [NOTES]
-  - 採取は タスク 7.1 の 3 本立てスナップショットの 3 本目。判定（要件 2.6 の非増加）は タスク 7.2 が行う。
+  - 採取は タスク 8.13 の 3 本立てスナップショットの 3 本目（after_default.txt / after_alltargets.txt と同一 HEAD）。
   - "linker stdout: ..." はワークツリー絶対パスを本文に含む。比較は本文一致ではなく件数で行う。
   - [PER-UNIT TALLY] の `(N duplicates)` の帰属先と要約行の並び順は比較対象ではない（before 側 [NOTES] と同一）。
+  - shiori-host32-testdll (lib) の generated が基準 4 に対し 3 なのは、上記の欠落 1 行と同一の出所である。
 
 [RAW STDERR]
   warning: "cdecl" is not a supported ABI for the current target
@@ -93,8 +108,8 @@
      = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
      = note: for more information, see issue #137018 <https://github.com/rust-lang/rust/issues/137018>
   
-  warning: `shiori-host32-helper` (bin "shiori-host32-helper" test) generated 3 warnings
-  warning: `shiori-host32-helper` (bin "shiori-host32-helper") generated 3 warnings (3 duplicates)
+  warning: `shiori-host32-helper` (bin "shiori-host32-helper") generated 3 warnings
+  warning: `shiori-host32-helper` (bin "shiori-host32-helper" test) generated 3 warnings (3 duplicates)
   warning: linker stdout: ライブラリ C:\home\maz\git\areka\.claude\worktrees\areka-p0-file-slimming-64d065\target\debug\deps\shiori4_testdll.dll.lib とオブジェクト C:\home\maz\git\areka\.claude\worktrees\areka-p0-file-slimming-64d065\target\debug\deps\shiori4_testdll.dll.exp を作成中
     |
     = note: `#[warn(linker_messages)]` on by default
@@ -200,12 +215,8 @@
       = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
       = note: for more information, see issue #137018 <https://github.com/rust-lang/rust/issues/137018>
   
-  warning: linker stdout: ライブラリ C:\home\maz\git\areka\.claude\worktrees\areka-p0-file-slimming-64d065\target\debug\deps\shiori.dll.lib とオブジェクト C:\home\maz\git\areka\.claude\worktrees\areka-p0-file-slimming-64d065\target\debug\deps\shiori.dll.exp を作成中
-    |
-    = note: `#[warn(linker_messages)]` on by default
-  
   warning: `areka-seriko` (lib test) generated 4 warnings
-  warning: `shiori-host32-testdll` (lib) generated 4 warnings
+  warning: `shiori-host32-testdll` (lib) generated 3 warnings
   warning: `shiori-host32-testdll` (lib test) generated 3 warnings (3 duplicates)
   warning: enum `CommandConsumer` is never used
     --> crates\areka\src\emo2_boot\consumer_ledger.rs:34:10
@@ -246,4 +257,4 @@
      |            ^^^^^^^^^
   
   warning: `areka` (bin "areka") generated 4 warnings
-      Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.39s
+      Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.53s

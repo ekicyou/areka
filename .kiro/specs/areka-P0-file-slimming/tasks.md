@@ -348,7 +348,7 @@
   - **完了状態**: 分割後の各ファイルが 1,000 行以下・`cargo build -p areka --examples` が緑
   - _Requirements: 4.2, 4.3, 4.4, 4.5（改訂後）_
 
-- [ ] 8.13 対応漏れ解消後の全体再検証と GO 再判定
+- [x] 8.13 対応漏れ解消後の全体再検証と GO 再判定
   - 移設後スナップショット 3 本を再採取し、対応表へ群 8 のぶんを追記して全単射を再検証する
   - 本文一致を群 8 の全対象について確認する（既分離ファイルは分割前コミットを base とする）
   - ワークスペース全緑と警告非増加を再確認する
@@ -386,7 +386,13 @@
 - **警告集計の正規表現は `warnings?` と単複両対応にする**（タスク 4.3 で一度踏んだ）。`shiori4-testdll` が `generated 1 warning` と単数形を出すため、`?` を落とすと 5 数値が 16/7/22/6/16 → 17/6/21/6/15 へずれる。
 - **リストの SHA256 を証跡に載せるときは改行形式まで固定する**（タスク 3.3 レビューで判明・`verification/notes.md` §10.2 手順 5）。UTF-8 BOM 無し・CRLF・末尾改行 1 つ。固定しないと担当者ごとに 4 通りに割れて再現しない。**判定自体は `Compare-TestLists.ps1` の行単位比較で行うのでハッシュは補助証跡**であり、正規の witness はコミット済み `before_default.txt` との照合結果。
 - **`verification/` の成果物を `*_test.txt` ／ `*_dump.txt` で命名しない**（タスク 7.2 で未遂・`verification/notes.md` §34.4）。`.gitignore:6` の `*_test.txt` に一致して `git status` に現れず、**「コミットしたつもりで存在しない」検証成果物**になる。書き出したら必ず `git status` に現れることを確認すること。命名は `task_<n>_<m>_results.txt` に揃える。過去の巻き添えは 0 件（追跡ファイル・ディスク上・spec 参照のいずれも該当なし）。
-- **`crates/areka` の examples は test モードで既存 E0433**（`crates/areka/src/placement/spawn.rs:879`）。証跡採取が `--exclude areka` を使う根拠であり、本 spec は是正しない（登記済み）。
+- **`crates/areka` の examples は test モードで既存 E0433**。証跡採取が `--exclude areka` を使う根拠であり、本 spec は是正しない（登記済み）。
+  - ~~出所は `crates/areka/src/placement/spawn.rs:879`~~ **【訂正・タスク 8.11 で判明／8.13 で実機再確認・`verification/notes.md` §51.4】** 当該アンカーは**本 spec 自身のタスク 5.2（`f64fac1`）の純テスト移設で動いた**。`f64fac1^:crates/areka/src/placement/spawn.rs` の同一コードは確かに 879 行目にあるが、現在の逐語は次のとおりである:
+    ```
+    error[E0433]: cannot find `input_events` in `crate`
+       --> crates\areka\examples\..\src\placement\spawn_assembly_tests.rs:183:12
+    ```
+  - **test モードで落ちるのは `window-placement` と `collision-probe` の 2 本のみ**（`cargo test -p areka --examples --no-run` は exit 101・エラーは上記 1 種のみ。`emo-present` は exit 0）。タスク 8.13 が HEAD `5e36218` で再確認した。**同じ欠陥が別の file:line へ動いただけ**であり、群 8 の本体分割（8.11／8.12）に帰属しない。
 - **D1 ファサードの `pub use` は bin クレートで `unused_imports` を出す**（タスク 6.1 で実測・`verification/notes.md` §31.5）。`areka` は lib target を持たないため、再輸出の消費者が `#[cfg(test)]` のテストモジュールと examples の部分木しか無い項目は非 test ビルド単位で未使用と判定される。移設前は同一モジュール内の**項目定義**で `#[allow(dead_code)]` が効いていたが、移設後は**インポート**になり別の lint に掛かる——design が予期していなかった D1 の構造的副作用である。6.1 では手当て無しだと `areka (bin)` 4→7・examples 0→2 と増えたため、該当 3 グループへ `#[allow(unused_imports)]` を付けて基準値 16/7/22/6/16 へ戻した。**死んだ再輸出の握り潰しではないことを `cargo rustc -p areka --bin areka -- --force-warn unused_imports` で確認すること**——6.1 では挙がった 5 名すべてに `#[cfg(test)]` 側の実消費者があり、かつ要件 2.5 が 5 名全部のパス維持を要求していた。**タスク 6.2（`frame.rs`）も同一構造ゆえ同じ手当てが要る**（ただし examples に include されないので増分は bin ユニットのみ）。**属性に添えるコメントは実際に未使用な項目だけを名指しすること**——6.1 では同居する 3 項目まで未参照であるかのように書いてレビュー指摘を受けた。
 - **`follow.rs` の「呼び出し側 26 箇所」（`tasks.md:206`・`design.md:177`）は実測 30 箇所・19 ファイルが正**（タスク 6.1 で実測・`verification/notes.md` §31.4）。26 は `crates/areka/src` のみを数えた値で、`examples/collision-probe.rs:59,417,656` と `examples/window-placement.rs:259` の 4 箇所が抜けている。examples は `#[path]` で placement 木を私有 include するため射程内。Implementation Notes 既載の「26 宣言ファイル → 実測 30」とは**別件**（数の一致は偶然）。
 - **本体分割はファサードに移設前の `use` 一式を残さねばならないことがある**（タスク 6.2 で実測・`verification/notes.md` §32.4）。テストファイルは `use super::*;` で親の `use` 束縛から外部クレート型を拾っているため、サブモジュールへ import を分配してファサードから落とすと**テストビルドが壊れる**（`frame.rs` では E0433／E0425 が 79 件）。テストファイルは凍結されているので、ファサード側が import を保持するのが唯一の解であり、その結果ファサードは design の概算行を大きく超える（`frame.rs` は ~60 見積に対し 201 行）。**逸脱ではない。** 6.1 の `follow.rs` で起きなかったのは、あちらのファサードが兄弟モジュール 4 本しか import していなかったため。
