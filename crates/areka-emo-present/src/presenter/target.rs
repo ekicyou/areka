@@ -1,0 +1,106 @@
+//! target ごとの表示コンテキスト（`PresentTarget`）——presenter が target 単位で持つ私有状態。
+//!
+//! 合成入力（`emo_world`／`atlas`／`composer`／`cache`）・装着資源（`window`／`mount`／`chain`）・
+//! 表示成立点で更新される状態（`applied`／`native_size`／`last_show`／`pending_resize` ほか）を 1 つの
+//! 構造体に束ねる。フィールドの更新規律は各 doc が正本であり、書き込み点は `presenter` サブツリー内に
+//! 閉じる（`pub(super)` はその範囲を表す＝分割前の「`presenter` 私有」と可視集合が同一）。
+
+use super::{
+    AtlasTable, BindSet, ComposeCache, Composer, EmoWorld, Entity, PatternState, ScalePolicy,
+    ScaleRatio, SwapChainPresenter, VisualMount,
+};
+
+/// target ごとの表示コンテキスト（シェル・バルーンで同一機構・R5.1 の統一原則）。
+///
+/// `chain`／`mount` は **初回 `ShowSurface` で原寸が確定してから遅延生成**する（0×0 の供給面は作れない・
+/// 全透明退化では生成しない）。`emo_world`／`atlas`（構築時 `bind_atlas` 済み）と `composer`／`cache` は
+/// 合成・引き当ての入力側、`window` は装着先の窓ハンドル（R1.3）である。
+pub(super) struct PresentTarget {
+    /// 合成入力（構築時 `bind_atlas` 済み・不変）。
+    pub(super) emo_world: EmoWorld,
+    /// アトラス正本（不変・`InvalidateCache` の再合成源）。
+    pub(super) atlas: AtlasTable,
+    /// 合成器（状態非保持・スクラッチのみ再利用）。
+    pub(super) composer: Composer,
+    /// 合成入力（surface id＋bind 集合）→ (composed, mask) 対の容量 1 メモ化スロット。
+    pub(super) cache: ComposeCache,
+    /// 装着先の窓 Entity（R1.3・遅延装着の対象）。
+    pub(super) window: Entity,
+    /// 窓装着ハンドル（初回表示で生成）。
+    pub(super) mount: Option<VisualMount>,
+    /// 自前供給面（初回表示で原寸確定後に生成）。
+    pub(super) chain: Option<SwapChainPresenter>,
+    /// 現在可視か（`Hide`／全透明退化で false・`ShowSurface` 成功で true）。
+    pub(super) visible: bool,
+    /// 現在表示中のサーフェス id ＝「**最後に表示が成立した id**」（CurrentSurfaceRead・R3.1-3.3）。
+    ///
+    /// 画面の絵ではなく表示成立の結果を刻む（全透明合成でも表示成立＝その id が正・α 非依存で collision
+    /// 解決の単一真実源）。`Hide`／`EmptyComposition` 縮退で `None`。書き込みは既存 `visible` 更新点と
+    /// 同一の3箇所のみ（表示成立＝`Some(surface_id)`／縮退・Hide＝`None`）で、失敗経路は表示成立点より
+    /// 手前で early return するため前値を保持する（`ComposeKey` からは導出しない＝`invalidate_all` で
+    /// キーが消えても表示は残るため画面と乖離する）。
+    pub(super) current_surface_id: Option<u32>,
+    /// 拡大政策（`attach_target` で確定・以後不変・要件 1.5）。
+    ///
+    /// k は target（＝窓）ごとの `policy` と**その窓の** `DPI` component から導出されるため、DPI の
+    /// 異なる複数モニタに窓が同時に存在しても各窓が自窓の k で表示される。政策自体（author_dpi・
+    /// アプリ管理拡大率）は時間で変わらない——変わるのは窓 DPI の側である。
+    pub(super) policy: ScalePolicy,
+    /// **実際に表示へ適用中の** k（照会契約の単一真実源・要件 1.2）。
+    ///
+    /// 更新は**表示成立点のみ**（失敗経路は手前で early return ＝前値保持・要件 4.4）。表示が一度も
+    /// 成立していない間は `None` で、[`EmoPresenter::text_slot_view`] もその間は `None` を返す
+    /// （「まだ何も適用していない」を 1.0 で塗り潰さない）。
+    pub(super) applied: Option<ScaleRatio>,
+    /// 表示中サーフェスの **native 原寸**（k 適用**前**の合成外形・照会契約 `surface_size()` の供給源）。
+    ///
+    /// 物理寸との関係は `物理寸 == applied.scaled_extent(native_size)`（丸め権威は
+    /// [`ScaleRatio::scaled_extent`] 1 本）。供給面 `chain.size()` は k 適用**後**の物理寸を持つため、
+    /// 照会契約の native 原寸をここで別に保持する。
+    ///
+    /// **更新規則**: 更新点は `applied` と同じ表示成立点 1 箇所だが、書き込む値は「今回合成したか」に
+    /// 依らず常に [`PresentTarget::cached_native`]（＝いま表示に使ったキャッシュエントリ由来の原寸）
+    /// である。今回合成した回だけ書く実装は、`insert` 済みのまま失敗して後から**ヒットで**表示が成立した
+    /// 場合に「画面の絵と別サーフェスの原寸」あるいは `None` が残り、照会契約が壊れる。
+    pub(super) native_size: Option<(u32, u32)>,
+    /// **cache スロットの現エントリに対応する native 原寸**（k 適用前の合成外形）。
+    ///
+    /// `ComposeCache` は容量 1 スロットで、挿入者は本 presenter ただ 1 箇所（`apply_show` のミス経路）
+    /// である。ゆえに `cache.insert` と同じ場所で本フィールドを書けば、**スロットの中身と本フィールドは
+    /// 常に対**になる——引き当てがヒットした回は「そのエントリを入れたときの原寸」がここに在る。
+    /// `invalidate_all`（スロット破棄）では `None` へ戻す（対を崩さない）。表示成立点はこの値を
+    /// [`PresentTarget::native_size`] へ写すだけでよく、合成の有無で分岐しない。
+    pub(super) cached_native: Option<(u32, u32)>,
+    /// 最後に表示が成立した show 入力（再表示＝k 再適用のための入力保持）。
+    ///
+    /// DPI 変化時に「同じ絵を新しい k で描き直す」ための唯一の入力源であり、読み手は
+    /// [`EmoPresenter::refresh_scale`] である。記録点は `applied`/`native_size` と同一（表示成立点）で、
+    /// 失敗経路では前値が保たれる——ゆえに再表示は常に「最後に**実際に画面へ出た**入力」を描き直す。
+    ///
+    /// `Hide` では**消さない**（キャッシュ・供給面と同じく保持する）。再表示するか否かは可視ゲートが
+    /// 決めるのであって、入力を捨てて決めるのではない（`Hide` → 再 show の復帰経路を壊さない）。
+    pub(super) last_show: Option<(u32, BindSet, PatternState)>,
+    /// **未消費の窓寸 reconcile 要求**（表示成立点の状態照合が積む・design Flow 1 キー決定／議題 #2 裁定）。
+    ///
+    /// 表示成立点で今回の物理寸（k 適用後の scaled 寸）を**前回適用の物理寸**と照合し、異なるときだけ
+    /// `Some(新物理寸)` を置く。呼び手（emo2_boot の frame drain フェーズ）は
+    /// [`EmoPresenter::take_pending_resize`] で取り出し、同一フレーム内で窓 client を合わせる。
+    ///
+    /// # なぜ「エッジ」ではなく「状態」なのか（議題 #2 裁定）
+    ///
+    /// 窓寸 reconcile は **表示が成立したという状態**に紐づく。`Changed<DPI>` エッジに紐づけると、
+    /// エッジが初回 show より前に消費された場合に不整合が残置する。ゆえに報告は表示成立点で積まれ、
+    /// **取り出されるまで保持される**（呼び手が或るフレームで取り出さなくても要求は失われない）。
+    ///
+    /// # 初回表示も必ず報告する（Flow 3 手順 5）
+    ///
+    /// 前回適用寸が無い（`applied`／`native_size` が `None`）初回表示は「差分あり」として扱う。窓は
+    /// 起動時の k₀ 見積もり寸で生成されており、実窓 DPI 由来の k と一致する保証がない——初回を黙らせると
+    /// k₀ と実 DPI の差分を補正する経路が永久に走らない。
+    ///
+    /// # べき等（churn を作らない）
+    ///
+    /// 同寸の再表示では**何も置かない**。`None` を書き戻して既存の未消費要求を消すこともしない
+    /// （同寸でも「まだ窓へ反映していない要求」は生きているため）。
+    pub(super) pending_resize: Option<(u32, u32)>,
+}
