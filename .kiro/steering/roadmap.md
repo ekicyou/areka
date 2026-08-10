@@ -61,7 +61,7 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 | 種別 | ゴール（単一文） | ユニット | ウェーブ |
 |---|---|---|---|
 | ~~挙動バグ（M-dpi 残1）~~ | ~~DPI 追従下の当たり判定 ÷k~~ | `completed/collision-dpi-hittest` | ✅ **完了**（2026-08-05・W6 で着地） |
-| 基盤 | ソースファイル肥大の是正＝檻の兄弟ファイル分離＋follow.rs/frame.rs 本体分割（挙動変更ゼロ・テスト総数不変） | `file-slimming` | **W5.95**（単独・新設） |
+| ~~基盤~~ | ~~ソースファイル肥大の是正＝檻の兄弟ファイル分離＋follow.rs/frame.rs 本体分割（挙動変更ゼロ・テスト総数不変）~~ **実績は全域**（1,000 行超の全ファイルを分割） | `completed/file-slimming` | ✅ **完了**（2026-08-10・W5.95 単独で着地。最大 8,472→986 行・1,000 行超 54→0 本） |
 | 横断 | バルーンが可視コンテンツ駆動 show／talk 終了+30s+無フォーカス hide／再表示 | `balloon-visibility` | **W6** |
 | 挙動バグ | 表情固着解消＝bindoption 3値正典（mustselect/非宣言=高々1/multiple）準拠 | `bindoption-exclusivity` | **W6** |
 | 挙動バグ | バルーンが他アプリ窓の背後へ埋もれない＝各バルーンを自シェルの直前へ維持 | `ghost-window-zorder` | **W6**（確定） |
@@ -83,7 +83,7 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 | Wave | ユニット | 開始コマンド | 編成根拠・条件 |
 |---|---|---|---|
 | W1〜W5 ✅ | （W5 は 4/4 着地・完了サマリ参照。col は W6 へ編入のうえ 2026-08-05 着地） | — | 詳細は history |
-| **W5.95**（単独・次の実装ウェーブ） | `file-slimming` | `/kiro-start areka-P0-file-slimming` | **実装空白期（並走 0 本）が観測条件＝今が最安**（棚卸⑥裁定・後送 W6.95 案は却下＝W6〜W6.9 が檻挿入ドリフト税を払い続けるため）。檻の兄弟ファイル分離＋follow.rs/frame.rs 本体分割・挙動変更ゼロ・テスト総数不変。**W6 各 spec の `/kiro-start`（文書フェーズ・コード非接触）は本 spec 実装中も並走可**。着地後、W6 実装は design 前 rebase（既存規律）で新レイアウトを吸収 |
+| ~~**W5.95**（単独）~~ ✅ | ~~`file-slimming`~~ → `completed/file-slimming` | — | ✅ **完了**（2026-08-10・64 コミット・PR で squash マージ）。**最大 8,472→986 行・1,000 行超 54→0 本・ファイル内テスト 500 行超 49→0 本。** 三不変量（テスト総数 4,790 不変・本文一致 61/61・対応表 1,163 行の全単射）成立。**一度 GO を撤回して群 8 を追加**（1,000 行超 13 本＝17,450 行を 92 本へ分割）——経緯は `completed/areka-P0-file-slimming/verification/notes.md` §39／§54 |
 | **W6**（残 4本・col ✅ 着地済み） | ~~`collision-dpi-hittest`~~ ✅ ∥ `balloon-visibility` ∥ `bindoption-exclusivity` ∥ `ghost-window-zorder` ∥ `scope-chain-gap` | `/kiro-start areka-P0-balloon-visibility` ほか各 spec | **実測で全 10 ペア素**（2026-08-01 干渉再測定）。全て挙動バグ級＋vis は W7 前提の最長依存（vis→cage→e2e）。編成面の条件: ⑴**vis の hover は既設消費**（spawn.rs 非接触・触るなら despawn hook ハンク回避）⑵**bind は `BindResolver::empty()` 署名維持**（呼出元 4 箇所）⑶**zorder は案 A（owner）の WUC 共存実機検証が最初のタスク**・vis は zorder の「自シェルより手前」保証を前提にしてよい⑷**scg は要件前に SSP 実測必須**（brief 登記済み）⑸~~col は presenter.rs :867 域~~ → **col 着地により presenter.rs の実形が変化**（`hit_region_client`／`applied_ratio`／`ClientHit` 新設・`hit_region` 本体は不変）。同ファイル後続（exact/budget/atom/cage④）は着手時に col 後の presenter.rs へ rebase すること。**⑹`dpi-transition-atomicity` を文書フェーズ限定で同居**（下行）——観測は spec の外では実施できない（本プロジェクトに spec 外の作業経路は無い）ため、**第 1 段再観測は atom 自身の requirements フェーズの research として行う**。`/kiro-start` は要件討議まででコードに触れないので W6 の残 4 本と衝突しない。design 以降は W6.75 まで進めないこと（settled main へ再突合してから） |
 | **W6 併走（文書のみ）** | `dpi-transition-atomicity`（**requirements フェーズまで**） | `/kiro-start areka-P0-dpi-transition-atomicity` | 第 1 段再観測＝要件の土台。S1 是正で実測①（859ms・`SetWindowPos` 8 回のうち 4 回）が失効しているため、**再採取しないと要件が書けない**。観測結果で W6.75 の形が決まる（縮退→bod と統合／残存→3 分割検討）。**⛔ design 以降は W6.75 で**（presenter.rs `apply_show`・frame.rs dpi 相で col/vis と衝突するため） |
 | **W6.5**（2本） | `scale-exact-rational` ∥ `windowposition-limit` | `/kiro-start areka-P0-scale-exact-rational`・`/kiro-start areka-P0-windowposition-limit` | 実測で素。**wpl は scg 着地後必達**（resolver.rs 同一関数 `resolve` :131-190 内 P2/P5 が 30 行差＋mod.rs fixture 檻共有＝scg の新期待値へ rebase。逆順だと limit クランプ後の値へ scg が二重補正）。exact は presenter.rs :665 域＝col の実形へ rebase。**exact は bod の前提**（丸め権威）ゆえ W6.75 より先 |
@@ -104,7 +104,7 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 - **presenter.rs 直列鎖**〔col ✅→exact(:682)→budget(:394-409)→atom(apply_show :360-614)→cage④(:527-531)＝**全て別関数・異ハンクだが同一ファイル**。col 着地で全域 +17 シフト済み（2026-08-06 実測・各 brief 追記(60) が正本）。ウェーブ順がそのまま先着順＝各後続は先行の実形へ rebase〕
 - **因果のみ（コードは素）**: bind→budget（CPU 上昇の切り分け）・exact→bod（丸め権威）・zorder→vis（手前保証の前提）・vis⇄scg/wpl（balloon 位置は char 従属・hide 中の limit 補正は無意味＝順序自由）
 - **軽微**: cage③の test_support 共有化で placement 系（scg/wpl/bod）の import 行が追随＝実質共存可
-- **slim→全 spec（因果のみ・W5.95 単独ゆえ並走衝突なし）**: `file-slimming` 着地で全 brief の file:line が一度ずれる＝各 spec の design 前 rebase（既存規律）で吸収・slim が全 brief を書き換えて回ることはしない。**檻の位置=slim／檻の中身=cage** が境界の核（cage は W6.9 着手時に新レイアウト上で作業・追加コストなし）
+- **slim→全 spec（着地済み・2026-08-10）**: `file-slimming` の着地で**全 brief の file:line が一度ずれた**。各 spec は design 前 rebase（既存規律）で吸収すること。**とくに `test-cage-determinism`（W6.9）は送付所見 9 件すべての宛先**で、アンカーは `completed/areka-P0-file-slimming/verification/notes.md` §37 が HEAD 時点で全数再解決済み。`presenter.rs` は 1,066→109 行のファサードとなり本体は `presenter/{hub,show,refresh,read,hit,target}.rs` へ分かれた（直列鎖のアンカーは全面的に取り直しが要る）
 - `status-execution-states`=台帳 spec（着手しない・源着地時に just-in-time）・`surfaces-basepos`／`sakura-time-directives`／`balloon-canon-residue`=**M2 解禁ゲート**（M1 では着手しない）
 
 ## 着手手順
