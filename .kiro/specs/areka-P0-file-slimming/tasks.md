@@ -336,7 +336,7 @@
   - **完了状態**: 分割後の各ファイルが 1,000 行以下・当該クレートのサンプルビルドが緑
   - _Requirements: 4.2, 4.3, 4.4, 4.5（改訂後）_
 
-- [ ] 8.11 表示合成サンプルの本体分割
+- [x] 8.11 表示合成サンプルの本体分割
   - `crates/areka/examples/emo-present.rs`（1,168 行）を 8.10 と同一の方式で分割する
   - **完了状態**: 分割後の各ファイルが 1,000 行以下・`cargo build -p areka --examples` が緑
   - _Requirements: 4.2, 4.3, 4.4, 4.5（改訂後）_
@@ -357,6 +357,7 @@
   - `verification/notes.md` へ本群の登記を追記し、撤回した GO を再判定する
   - **§37 の送付所見一覧へ 9 件目を追加する**（タスク 8.10 で発見・§50.7）——`areka-seriko` のログ捕捉ハーネスがワークスペース検証中に空バッファで 1 度失敗し、§16 の「並行安全」判定を経験的に反証した。送り先は `test-cage-determinism`（W6.9）
   - **steering `structure.md:164` の言い換えを §35.3 の規範文へ揃える**（§45.4）
+  - **Implementation Notes の E0433 アンカーを訂正する**（タスク 8.11 で判明・§51.4）——「`crates/areka/src/placement/spawn.rs:879`」は本 spec のタスク 5.2（`f64fac1`）の純テスト移設で動いており、現在の逐語は `crates/areka/examples/../src/placement/spawn_assembly_tests.rs:183:12`（`cannot find 'input_events' in 'crate'`）。test モードで落ちるのは `window-placement` と `collision-probe` の 2 本のみ
   - **警告の判定は 5 数値の逐語一致ではなく「DIAG 多重集合が基準の部分集合かつ新規行 0」で行う**（§47.10・§48.6・§49.7・§50.6 で 4 度確認）
   - **完了状態**: 3 つの照合が差分ゼロ・全緑・警告非増加・1,000 行超 0 本（または残余の理由が明記）・GO
   - _Requirements: 1.7, 2.1, 2.2, 2.3, 2.4, 2.6, 2.9, 6.3, 6.4_
