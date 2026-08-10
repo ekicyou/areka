@@ -7385,3 +7385,132 @@ design.md:134/:239 の `<テーマ>_tests` は**新設するテーマモジュ�
 1. **`cargo fmt --check` の増分 +15（42 → 57）は「ハブから走らせて rustfmt が `#[path]` 子 7 本へ再帰した場合」の値**である（子を単体で測ると 54）。条件を書かないと再現しない。内訳は `mod` 宣言の並び 2・`use` の並び 12・**署名の折り返し 1**。最後の 1 件は `golden_tests_test_support.rs:133`——`pub(super)` 付与で **106 桁**（原本 `:311` は 95 桁）になり rustfmt が折り返しを要求するが、折り返せば本文一致（署名行は比較対象）を失うので**放置が正解**。§45.7(1) の「並びだけ」とは種類が違い、§44.9(2) と同型である。移動した本文が持ち込んだ 42 ハンクは**分割前と同数の 42** で、変更行キーの多重集合突合で逐語再現した。
 2. **intra-doc リンク 3 本が別モジュールを指すようになった**（§32.10 と同一判断・診断 0 件）: `blink_static_tests.rs:33` の `` [`build_atlas_for_surface1000`] ``、`surface1000_bind_tests.rs` の `` [`Extent`] ``（原本 `:379`。`Extent` の import はフレーム範囲テーマへ移った）、`determinism_budget_tests.rs` の `` [`surface1000_bind_parts`] `` ／ `` [`surface1000_full_bindset`] ``。
 3. **`tasks.md` の Implementation Note「要件 1.4 の除外ファイルは 1,000 行超でも分割しない」（タスク 3.1 の裁定）を本タスクが反証した。** 名指しの例が `golden_tests.rs` 1,356 行その当人だったにもかかわらず、§39.2 ② が裁定の誤りを記録したあとも取り消し線が無く「以後の全タスクが従うこと」の下に立ち続けていた（レビュー指摘）。**8.7〜8.12 が読む前に危険なので 8.13 へ送らず本タスクのコミットで撤回注記を入れた。**
+
+## 47. cue ランタイム統合テストのテーマ分割: `crates/dola/tests/cue/runtime_test.rs`（タスク 8.7・要件 1.7 / 2.2 / 2.4 / 2.9 / 3.1 / 3.2）
+
+- 実施日: 2026-08-10 / 分割前コミット `35d3f62` / **PowerShell（pwsh 7）**
+- §39.4 の 13 本のうち、`tests/` 配下で `#[cfg(test)]` を 1 つも書かない統合テスト（出所 ①）。ファイル全体がテストコードゆえ移設ではなく**分割**
+- 入口 `crates/dola/tests/cue.rs` と兄弟 4 本（`schedule_test.rs`・`sheet_test.rs`・`sink_test.rs`・`tick_last_result_test.rs`）は **1 バイトも変更していない**（`git diff --stat` 空で確認）
+
+### 47.1 成果ファイルと行数（すべて 1,000 行以下・最大 326）
+
+| ファイル | 行 | テスト | 由来（原本の区画バナー） |
+|---|---:|---:|---|
+| `runtime_test.rs`（ハブ） | **34** | 0 | 原本 `:1-16` をバイト不変で保持＋接続宣言 5 組 |
+| `runtime_test_broadcast_tests.rs` | 326 | 8 | `:656` Task 4.3（broadcast・is_completed・stop・sink 登録） |
+| `runtime_test_barrier_tests.rs` | 299 | 6 | `:85` ＋ `:156` ＋ `:468` ＋ `:583` ＋ `:619` |
+| `runtime_test_choice_delivery_tests.rs` | 253 | 3 | `:245` Task 2.2 対置換（配送列＋バッグ並存） |
+| `runtime_test_occupancy_horizon_tests.rs` | 172 | 7 | `:515` ＋ `:1005` |
+| `runtime_test_test_support.rs` | 76 | 0 | 共有ヘルパ 7 項目 |
+
+**1,102 → 最大 326 行**・合計 1,160・テスト 24。
+
+### 47.2 テーマ境界——バナー箱 9 個を 4 テーマへ束ねた（新設した境界は 0）
+
+`// ====` 行は `:85,87 / :156,158 / :245,252 / :468,470 / :515,517 / :583,585 / :619,621 / :656,658 / :1005,1007` の 18 本＝**箱 9 つ**。箱をそのままテーマにすると 1 テスト 35 行のファイルが 4 本できるため、**箱を割らず・並べ替えず**に主題で束ねた:
+
+| テーマ | 束ねた箱 | 主題 |
+|---|---|---|
+| `barrier_tests` | `:85`（WaitForInput 停止/`resolve_click` 再開）・`:156`（WaitForChoice 停止/`resolve_choice` 再開）・`:468`（`skip_barrier` 強制再開・非待機での no-op）・`:583`（Timeout の自動解除）・`:619`（構築経路 `from_schedule` の等価性） | バリア状態機械。`:619` の唯一のテストは観測点が `WaitingForInput` と `ready()` 列＝バリア停止そのもの |
+| `choice_delivery_tests` | `:245` | 配送列合流とバッグ並存（3 テストとも同一箱） |
+| `occupancy_horizon_tests` | `:515`（完了は占有 horizon 到達で）・`:1005`（占有 horizon の絶対時刻照会） | 同一の horizon 権威を閾値側と照会側から観測する 2 箱 |
+| `broadcast_tests` | `:656` | Task 4.3 の 8 テスト（箱が分割不能なので `is_completed`／`stop` もここ） |
+
+各テーマ内では箱を原本の昇順のまま並べてある。命名は **§44.4 規則 2**——4 本すべて `<テーマ>_tests` ／ 共有ヘルパのみ `test_support`（`design.md:151`・接尾辞の対象外）。接続は設計判断 #1／#13 のとおり `#[cfg(test)]` ＋ `#[path]` ＋ `mod <名>;` の 3 行組（`runtime_test.rs:20-34`）。§45.4 の逆向き導出は一意——同ディレクトリの stem は `runtime_test`・`schedule_test`・`sheet_test`・`sink_test`・`tick_last_result_test` で、新 5 本の接頭辞に一致するのは `runtime_test` だけである。
+
+### 47.3 共有ヘルパの判定は機械的に行った（§40.5／§42.5）
+
+ヘルパ 10 項目の消費箇所を識別子ごとに全数列挙し、テーマ範囲へ割り当てて数えた:
+
+| 項目 | 消費テーマ | 行き先 |
+|---|---|---|
+| `barrier` | 4（`:97,174,477,594,629` / `:335,415` / `:785,849` / `:1048`） | `test_support` |
+| `text` | **3**（barrier / broadcast / occupancy） | `test_support` |
+| `choice` | 3（barrier / choice_delivery / occupancy） | `test_support` |
+| `recording_sink` | 2（`:272,338` / `:718,719,720,789,823,853,901,959`） | `test_support` |
+| `logged_commands` | 2（`:314` / `:795,808,837,859,875,908,964,980`） | `test_support` |
+| `RecordingSink` ＋ `impl CueSink for RecordingSink` | 1（`recording_sink` の内部被呼出のみ） | `test_support`（§42.5 の carve-out） |
+| `ready_has_text` | **1**（`:115,119,136,146,207,235,488,607,614` — すべて barrier テーマ） | `barrier_tests` に残置 |
+| `newline` | **1**（`:266,331`） | `choice_delivery_tests` に残置 |
+| `cursor` | **1**（`:268,333`） | `choice_delivery_tests` に残置 |
+
+**目視では `ready_has_text` を共有と見誤りやすい**（9 箇所・**4 テスト**から呼ばれる）が、4 テストはすべて barrier テーマに入る。機械計測がこれを弾いた。可視性付与は **5 件**（`barrier`・`text`・`choice`・`recording_sink`・`logged_commands` の行頭 `pub(super)`）。`RecordingSink` は `test_support` の内部だけで使うので私有のまま——付与不要。付与後の最長行は **83 桁**（`logged_commands`・`runtime_test_test_support.rs:74`）で、max_width 100 に届かず rustfmt の折り返しを誘発しない（§46.7(1) の逆のケース）。
+
+> **訂正（レビュー指摘・第三者が再計算すると別の値になる「再現しない数」を 3 件含んでいた）**: 初稿は ①`text` の消費テーマを **4** と書いていたが実測 **3**（`runtime_test_choice_delivery_tests.rs:5` の import に `text` が無いことと自ら矛盾していた）、②`ready_has_text` を「9 箇所・**5 テスト**」と書いていたが実測 **4 テスト**（原本 `:93` / `:169` / `:474` / `:590`）、③付与後の最長行を「**81 桁**（`recording_sink`）」と書いていたが実測は **83 桁の `logged_commands`**（`recording_sink` は `:67` で 81）。**いずれも裁定・成果物・不変量には影響しない**（`text` は 2 テーマ以上ゆえ集約が正・`ready_has_text` は単一テーマゆえ残置が正・折り返し不発の結論も不変）が、Implementation Notes が繰り返し戒めている失敗形なので明記する。
+
+### 47.4 区画バナー 1 本が `test_support` へ同伴した——§46.3 と同型の強制
+
+`// ==== Task 4.3: broadcast 配送・… ====`（原本 `:656-658`）は、比較器の先行コメント塊規則（`RustParse.ps1:314-331`）により `struct RecordingSink`（原本 `:665`）の項目本文 `:656-667` の一部である——`test_support` を移設先から外した較正出力が、この行範囲を `[ITEM-MISSING] … :656-667` として逐語で示した。`RecordingSink` は共有ヘルパ `recording_sink` の構築対象ゆえ `test_support` 行きが確定しており、複製すれば `ITEM-EXTRA`、バナーだけ切り離せば `ITEM-MISSING` になる。**回避策が無い側**である。結果 `broadcast_tests` は自分の区画バナーを持たないので、module doc にその旨を明記した。
+
+`use` 直前バナー（§28.5）は 0 件。中途の `use` も 0 件（`use` は原本 `:11-16` の 3 文のみ）。
+
+### 47.5 本文一致（要件 2.4）と較正
+
+比較器: `-Commit 35d3f62 -WholeFile -OriginalPath crates/dola/tests/cue/runtime_test.rs -RelocatedPath <子 5 本> -Detail` → `MATCH: test fn 24=24 / helper item 10=10 / mod block whole-file / files 5`・**exit 0**。§41.4 が予告した digest（24/10）を実測再現した。
+
+**較正（§42.2）は 3 通り**:
+- `runtime_test_broadcast_tests.rs` を落とす → `MISMATCH: 8 件` **exit 1**・`[TEST-MISSING]` 8 件を名指し
+- `runtime_test_test_support.rs` を落とす → `MISMATCH: 7 件` **exit 1**・`[ITEM-MISSING]` 7 件を行範囲つきで名指し（`:18-26 / :28-36 / :38-51 / :656-667 / :669-673 / :675-680 / :682-685`）
+- **木の外の複製**でリテラル 1 個を `102.5`→`102.6` に改変 → `[TEST-BODY]` **exit 1**（`occupancy_horizon_returns_anchor_plus_relative_horizon`・正規化 18 行目の before/after を提示）
+
+**道具を介さない再導出**（アルゴリズムは逐語再現可能: 原本を先頭から貪欲に「成果物 6 本のどこかに連続して現れる最長の未消費連続断片」へ分解し、同着は列挙順＝ハブ→`test_support`→`barrier`→`choice_delivery`→`occupancy_horizon`→`broadcast` の先勝ち。CRLF/LF は正規化）:
+
+| 指標 | 値 |
+|---|---:|
+| 断片数 | **20** |
+| 被覆した原本行 | **1,097** |
+| 重複（同一成果物行の二重消費） | **0** |
+| 未被覆の原本行 | **5**（`:19 :29 :39 :676 :683` — いずれも空行ではなく、`pub(super)` を付与した 5 本の署名行そのもの） |
+| 成果物 バイト一致 | **1,097** |
+| 成果物 可視性のみ差分 | **5** |
+| 成果物 真に新規 | **58** |
+
+1,097 + 5 + 58 = 1,160 = 成果物実測合計。**字下げの変更は 0 行**——原本の項目はすべて列 0 に在り de-indent が構造的に発生しない（§40.4／§42.7／§45.5 と同じ形）。
+
+### 47.6 §11.4 の盲点は自分のファイルを走査して閉じた（§45.3 の申し送り）
+
+較正として `crates/wintf/src/ecs/window_proc/window_pos_tests.rs` の「**継続行 5 件 `[382,429,614,690,691]`／盲点 1 件 `[691]`**」を逐語再現したうえで走査した:
+
+| 対象 | 継続行 | 盲点 |
+|---|---:|---:|
+| 分割前 `runtime_test.rs @35d3f62` | **0** | **0** |
+| 分割後 6 本（ハブ＋子 5 本） | **0** | **0** |
+
+本ファイルは複数行文字列リテラルを 1 つも持たない。加えて字下げの変更が 0 行なので、仮に在っても構造的に無害である。
+
+### 47.7 行数会計（§42.7 の多重集合規約・置換は 1 回だけ計上）
+
+| 区分 | 件数 |
+|---|---:|
+| 置換 | **5**（可視性付与のみ） |
+| 追加 | **58** |
+| 削除 | **0** |
+| 字下げの変更 | **0** |
+
+検算 `1,102 − 0 + 58 = 1,160` ＝ 成果物 6 本の実測合計。**空行成分は 103 → 109 の純増 +6**（追加 58 のうち空行 6・非空行 52）。非空行 52 の内訳は ハブ 17（見出しコメント 2＋接続宣言 15＝5×3）・`test_support` 9（module doc 8＋`use` 1）・`barrier_tests` 10（module doc 6＋`use` 4 行）・`broadcast_tests` 7（module doc 5＋`use` 2）・`choice_delivery_tests` 5（module doc 3＋`use` 2）・`occupancy_horizon_tests` 4（module doc 2＋`use` 2）。
+
+### 47.8 検証結果
+
+`cargo test -p dola` **637 passed / 0 failed**（＋ doctest 1 ignored）・分割前と同数 ／ `cargo test --workspace --no-fail-fast` exit 0・**4,757 passed / 0 failed / 33 ignored**（＝4,790） ／ `--list` は before 638 / after 638 で、対称差 24 removed / 24 added は**対応表 24 行を適用して 0** ／ ワークスペース警告 **16/7/22/6/16**（delta 0・DIAG 16 行の多重集合も `before_build_warnings.txt` と差分 0） ／ `cargo rustc -p dola --test cue -- --force-warn unused_imports` **0 件** ／ Cargo テストターゲットは前後とも 7 バイナリ＋doctest で不変。
+
+対応表 `verification/mapping/dola.csv` は**新規作成**（`README.txt` の 3 列 `old_fqn,new_fqn,reason`・`reason=theme_split`・UTF-8 BOM 無し・CRLF）。**24 行**、全行の**末尾セグメント不変**。`Test-MappingBijection.ps1` PASS（24）／ディレクトリ結合 **1,163 行・10 フラグメント**で全単射 PASS（1,139 + 24）。`git status --porcelain` に現れることを確認済み（§42 の訂正が記録した 8.3 の取りこぼしを繰り返していない）。
+
+**1,000 行超のファイルは 6 本 → 5 本**（`crates/` 全域計測）。残る 5 本は `areka-emo-text/examples/emo-text-layer.rs` 1,434・`areka/examples/emo-present.rs` 1,168・`areka-emo-present/src/presenter.rs` 1,066・`areka/examples/collision-probe.rs` 1,063・`areka-ghost/src/shiori_inproc.rs` 1,018 で、タスク 8.8〜8.12 の対象と過不足なく一致する。
+
+### 47.9 登記（要件 5.2）
+
+**修正を要する壊れたテスト・不正なテスト・テスト間の状態汚染は 1 件も発見しなかった。新規送付所見 0 件。** 本ファイルは注入時刻（`player.tick(t)`）のみで駆動され、待機・スピン・壁時計を 1 件も含まない。
+
+記録のみ:
+1. **`cargo fmt --check` の増分は +3・すべて `mod` 宣言の並び**（rustfmt は辞書順を望むが、採った順はテーマの原本先頭位置順＝`test_support`(`:18`)→`barrier_tests`(`:85`)→`choice_delivery_tests`(`:245`)→`occupancy_horizon_tests`(`:515`)→`broadcast_tests`(`:687`)）。§40.7(i)／§42.9(i)／§43.8／§45.7(1) と同一判断で、§44.9(2)／§46.7(1) のような「並び以外」は含まない。**移動した本文が持ち込んだハンクは 3 件で、分割前の元ファイル 3 件と同数**（`rustfmt --check --edition 2024` 単体で実測。3 件とも `occupancy_horizon_tests.rs:121,140,158`＝原本 `:1054` 前後の既存分）。
+2. intra-doc リンクの破断は発生しない（移動した本文に `[`…`]` 形式の intra-doc リンク 0 件）。
+
+### 47.10 ⚠ 警告の 5 数値はリンク時状態に依存する——タスク 8.13 への申し送り
+
+レビュアーが `cargo clean` からの完全再ビルドを行ったところ、**16/7/22/6/16 は再現せず 14/6/20/6/14 になった**。欠けた 2 件の DIAG 行は MSVC の `linker stdout: ライブラリ …dll.lib と …dll.exp を作成中`（`shiori4_testdll` と `shiori`）ちょうど 2 本で、**リンカが import library を新規作成したときだけ出る**性質のものである。
+
+**要件 2.6（警告を増加させない）は満たされる**——差は減少方向であり、`dola` はクリーンビルドで警告 0、基準の per-unit 表に `dola` ユニットは登場しない。だが **§10.5 が定めた 5 数値の基準そのものが増分ビルド状態に依存する**という事実は、タスク 8.13 が全域再判定を行う前提として無視できない。**8.13 はこの性質を織り込んで判定すること**——`before_build_warnings.txt` を採取したときの `target/` 状態と同じ状態を再現できない以上、5 数値の逐語一致ではなく「DIAG 行の多重集合が基準の部分集合であり、新規行が 0 件」を判定条件とするのが正しい。
+
+あわせて 2 件:
+- **レビュー中に `cargo clean` が走り `target/` が消えた**（i686 host-32 成果物を含む）。実装者・レビュアーの緑はいずれも**クリーン前**の採取だったため、**親が復旧のうえ全量を取り直した**: §9.5 の 2 コマンドを PowerShell で実行して helper を再ビルド（`shiori-host32-helper.exe` 271,872 B ／ `shiori.dll` 155,648 B ＝ **§9.3 の記録とバイト数一致**）、続いて完全再ビルドからの `cargo test --workspace --no-fail-fast` を実行 → **exit 0・85 ユニット・4,757 passed / 0 failed / 33 ignored（＝4,790）・`test result: FAILED` 0 行**。クリーンビルドでも基準と完全一致する。
+- §35 の逆向き導出を `crates/` 全域で再実行した結果、同一ディレクトリ `#[path]` 宣言は **222 件**（§46.1 の 217 ＋ 本タスクの新規 5）、既存例外は **23 件**（`mod.rs` stem 14 ＋ `shiori-host-32` の歴史的形式 9）。§46.1 が「22 件」と記録したのとの差 1 は**当時の分類差であって本タスク起因ではない**。新規 5 本はすべて `runtime_test` へ一意解決し、新たな誤解決は 0。
