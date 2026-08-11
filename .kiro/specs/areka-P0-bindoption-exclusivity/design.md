@@ -110,6 +110,8 @@ research.md §6 の設計判断事項 #1〜#8 への裁定。以後本文書で�
 **D1: mustselect「解除不可」を本 spec で実装する（2026-08-11 開発者裁定・GO）**
 mustselect カテゴリへの off（脱衣）指示は bind 集合を**変更せず**読み流し、`warn!` でログ痕跡を残す（3.2）。レベル選定の根拠: steering logging 基準で warn は「無効なパラメーター・回復可能な警告」——ゴースト側の正典逸脱指示を正典どおり無視する事象に合致し、emo2 実測では発火ゼロ（休眠）ゆえ高頻度化の懸念もない。debug では実機サインオフの `RUST_LOG=info` 実走で不可視となり「無言の握り潰し」の再来になるため不採用。旧 R6.4 の先送り登記条項は本裁定で解消（6.4 の記録は本節が担う）。
 
+**残余の正典乖離の登記（D7 同型・先送り語彙）**: 正典の mustselect は「必ず 1 つ選択」（ちょうど 1 個）だが、本 spec が実装するのは off 無視（解除不可）までであり、**起動時の充足は shell の `default,1` 宣言に委譲する（既存縮退の維持）**。mustselect カテゴリに default 宣言が 1 つも無い shell では、最初の on 指示が届くまで当該カテゴリは起動時ゼロ個のままとなる。emo2 は既定集合 `{1100,1207,1302,1500,1800}` が全 mustselect カテゴリを被覆するため実害なし。起動時自動充足（先頭パーツの自動選択等）は実装しない——spec 完了時の roadmap 追記（6.3）にこの語彙を含めて追跡する。
+
 **D2: 搬送形＝Option A の格納＋Option B の語彙（seriko 限定）＋Option C の構造体引数**
 - 格納（A）: parsers は `BindGroupDefaults` へ `sakura_multiple`/`kero_multiple: Vec<String>` を追加するのみ（転写層原則維持——enum 解釈を parsers に持ち込む純 B 案は**棄却**。parsers はオプション語の所属を写すだけで意味を解釈しない）。
 - 語彙（B）: seriko 側は typed enum `BindChoicePolicy { MustSelect, Default, Multiple }` と単一アクセサ `BindResolver::policy(ns, category)` に一本化。D1 裁定により off 経路で MustSelect と Default の判別が**必須**になり、bool 述語 2 本（is_exclusive＋is_mustselect）より 3 値 enum 1 本が分岐・doc・テスト語彙のすべてで一致する（6.1 の一掃語彙と実装語彙の一致）。
