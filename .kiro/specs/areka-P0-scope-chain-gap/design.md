@@ -100,6 +100,7 @@ let base_x = match prev {
   - **新設** `t_r2_unequal_widths_leave_no_gap` — 規則の檻の本丸（後述 C2）。
 - `crates/areka/src/placement/placement_prepare_tests.rs` — `prepare_emo2_returns_two_scope_placements`（:57）の `s1.char_pos`（:80）`(1052,640)→(1150,640)`・`s1.balloon_pos`（:84）`(1198,565)→(1296,565)`・導出 doc コメント（:38-51）更新。`s1.balloon_offset (146,−75)`（:95）は**不変のまま assert 維持**。**新設** `prepare_emo2_at_dpi_120_places_scopes_adjacent`（後述 C3）。
 - `doc/COMPAT_ARCHITECTURE.md` — §8 表へ 1 行追加（後述 C4）。
+- `.kiro/specs/areka-P0-scope-chain-gap/tools/measure-ssp-rects.ps1` — `-ProcessName` パラメタ追加（既定 `ssp`・後方互換。C5 従判定で areka プロセスへ向けるための前提改修）。
 
 ### Unchanged (regression net / monitors)
 
@@ -279,7 +280,7 @@ let base_x = match prev {
   - 判定式: scope0 行と scope1 行の **`default_char_x`／`char_w`** を突合し、`gap = default_char_x(scope0) − (default_char_x(scope1) + char_w(scope1))`。**合格条件: |gap| ≤ 1**（既存丸め権威由来の許容差・2.3/6.4）。
   - **`char_x` ではなく `default_char_x` を用いる**（設計決定）: `default_char_x` は resolver 出力そのもの（persist.rs:402）であり、ゴースト演出 `\![move]`（boot 約 1 秒後に scope1 を移動）と保存位置の復元のいずれの汚染も受けない。是正前の実機ログでは同式が gap=123 を返しており（scope0 3297・scope1 2754+420）、同一 grep が是正後に gap=0 を返すことが判定になる。
   - 付随確認: 是正が Y へ波及していないこと（`default_char_y` が各 scope の bottom 密着値であること）を同一ログで確認。
-- **従判定（6.4 補強・証跡用）＝外部矩形実測**: `tools/measure-ssp-rects.ps1` を areka の窓へ向けて起動時系列の窓矩形を採取する。ゴースト演出 move 適用**後**の値が混ざり得るため（オラクル採取時と同じ罠）、**合否は主判定で確定**し、従判定は初期出現時点の矩形が主判定と整合することの補強証跡とする。
+- **従判定（6.4 補強・証跡用）＝外部矩形実測**: `tools/measure-ssp-rects.ps1` を areka の窓へ向けて起動時系列の窓矩形を採取する。**前提改修（バリデーション指摘）**: 同ツールは対象プロセス名 `ssp` を固定でハードコードしている（`Get-Process -Name ssp`）ため、実装フェーズで `-ProcessName` パラメタ（既定 `ssp`・後方互換）を追加してから areka のプロセスへ向ける。ゴースト演出 move 適用**後**の値が混ざり得るため（オラクル採取時と同じ罠）、**合否は主判定で確定**し、従判定は初期出現時点の矩形が主判定と整合することの補強証跡とする。
 - **証跡**: 実行ログ・grep 結果・判定値を `real-run-signoff-<date>.log` として spec ディレクトリへ保存（先例体裁）。
 
 **Contracts**: Batch [x]
