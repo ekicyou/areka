@@ -114,7 +114,7 @@
   - _Requirements: 7.1, 7.2, 7.4, 7.5, 7.6_
   - _Boundary: 状態側の発行前処理_
 
-- [ ] 8.2 再生中に外れた ID の停止（再生側）
+- [x] 8.2 再生中に外れた ID の停止（再生側）
   - 再生の進行段で、bind 種でありながら現在の bind 集合に属さない ID を停止相当（保持コマ除去＋再生除去）へ落とす
   - 発火ゲート自体は無改変で通し、bind に属さないアニメの再生には影響を与えない
   - 再生中に bind から外した ID が次の評価で復活しないことを決定論テストで固定する
@@ -177,3 +177,6 @@
 - **task 8.1（2026-08-11）**: **7.4（非 bind への無影響）は構造的に成立**——`BindSet` への流入は `assets.rs:338` の bindgroup default 由来と `actor.rs:356` の名前解決済み ID の 2 経路のみで、純 `random` の `interval` ID は混じらない（`apply_bind_exclusive` の `category_ids` は filter にしか使われず加算しない）。レビュアーが独立に裏取り済み。
 - **task 8.1（2026-08-11）**: **8.1 単体では「再生中に外れた ID」は直らない**——次の評価で再生側がコマを置き直すため。8.1 が直すのは「再生が既に終わって残留している ID」（emo2 の 1402 がこれ）。**タスク 8.2 が必須**。
 - **task 8.1（2026-08-11）**: `capture_logs` を `state_test_support.rs` へ複製した（既存 15 箇所と同じ流儀）。`areka-P0-test-cage-determinism`（W6.9）のログ捕捉ハーネス是正対象が 1 本増える。
+- **task 8.2（2026-08-11）**: RED が **8.1 と 8.2 の両方が必要な理由を直接観測**した——8.1 が除去した `1412` のコマを進行相が次 tick で置き直す。停止は `looper.rs:288-311` で**コマ除去と playback 除去の両方**を行い、位置は `frame_at` の**手前**。bind 種の判定は `LoopTrigger::BindRandom`（`table.rs:36-47`）で、`Interval::Bind`・`Other` は `table.rs:110-136` で非採録＝**完全かつ唯一の判定**（純 random を巻き込まない）。slot 限定はしない——発火ゲートが slot 非区別なので進行相はその鏡映にする。
+- **task 8.2（2026-08-11）**: **空虚な檻を 1 本作って差し戻された**。負の錨 `progress_phase_emits_no_drop_marker_while_bind_holds` が、健全系で捕捉が空（`logs=[]`）ゆえ不在主張が**恒真**になっていた。是正＝**同一捕捉内の陽性対照**（`loop 抽選発火` の存在主張）＋**ログ経路に依らない状態反証**（保持コマの残存）の併置。ガード条件反転の変異で looper セットの検出が **5/6 → 6/6** へ。**負の錨には必ず陽性対照を同一捕捉内に置くこと**（`actor_dispatch_tests.rs:741-745` が既存の手本）。
+- **【W6.9 申し送り・要追加】** `areka-P0-test-cage-determinism` の間欠赤対象へ **`bind_default_exclusive_replace_emits_show_and_info_marker`**（`actor_bind_loop_tests.rs`・本 spec がタスク 5.2 で追加）を追加すること——full-lib 120 回反復で ×2 を実測。既知 4 本に入っていない。本 spec が新規追加した `progress_phase_bind_drop_emits_info_marker` と `residual_frame_removal_emits_info_marker` も同じ脆弱クラス（`capture_logs` の `rebuild_interest_cache()` 未硬化）。`capture_logs` の複製も `state_test_support.rs`／`looper_tests.rs` の 2 本増えて計 16 箇所。
