@@ -32,7 +32,7 @@ requirements 作成に先立ち、brief が義務づけた `RUST_LOG=info,areka_
 
 ### 是正の方向（WHAT）
 
-`bindoption` の 3 値意味論を実装する——descript 読み取りが `multiple` 宣言を収録して非宣言と区別可能にし、**非宣言カテゴリを「高々 1 個（解除可）」として排他置換**する。既存の `mustselect` 排他と `multiple` 明示時の加算は不変（回帰の錨）。具体の述語設計・搬送形は設計フェーズの領分。
+`bindoption` の 3 値意味論を実装する——descript 読み取りが `multiple` 宣言を収録して非宣言と区別可能にし、**非宣言カテゴリを「高々 1 個（解除可）」として排他置換**する。あわせて `mustselect` の**「解除不可」も正典適合**させる（off 指示は bind 集合を変えず読み流す——2026-08-11 要件ディスカッション裁定）。mustselect の着衣側排他と `multiple` 明示時の加算は不変（回帰の錨）。具体の述語設計・搬送形は設計フェーズの領分。
 
 ### アンカー再検証（2026-08-11・file-slimming PR#103 マージ後の現物実測）
 
@@ -63,13 +63,13 @@ W6 並走 4 本（balloon-visibility ∥ 本 spec ∥ zorder ∥ scope-chain-gap
   - 上記の決定論テスト檻（GPU・実窓・実機不要）と、emo2 実機サインオフ（ログ判定＋目視）。
   - 資産構築から適用分岐までの変更を全呼出元一括で通す atomic 追随（中間 stand-in を挟まない）。
   - 旧 2 値前提のコード内 doc コメント・テスト文言の一掃と、`completed/areka-P0-mayuna-compose` R4.5/D11 を覆す旨の明記＋roadmap 追跡。
+  - `mustselect` カテゴリの「解除不可」正典適合——off（脱衣）指示は bind 集合を変えずに読み流す（2026-08-11 要件ディスカッション裁定・同じ 2 値誤実装から派生した同根の正典乖離を本 spec で一括是正）。
 - **Out of scope**:
   - SERIKO アニメーションのループ/interval 意味論（`completed/areka-P0-seriko-loop` 領分・本件と無関係）。
   - z-order／合成順の変更——14xx が 13xx の上に来るのは作者意図どおり（正常・変更は誤った治療）。
   - ゴースト fixture（emo2）の辞書修正——正典準拠の排他実装下では一過性のズレに縮退し自己修復する。fixture を直して症状を隠すのは禁じ手。
   - `\![bind]` の Toggle 形／CategoryWide 形の実導出——全実走ログで発火ゼロ＝本件と無関係（既知の別件先送り）。
   - DPI／スケール関心事（別 spec 領分）。
-  - **`mustselect` の「解除不可」適合（off 素通しの是正）**——brief の Desired Outcome が「既存 mustselect 挙動は不変（回帰の錨）」と定めるため本 spec では変更しない。ただし正典乖離としては実在する（emo2 は mustselect カテゴリへ off を送らないため休眠中・実害なし）。**要件ディスカッションで本 spec に拾うか裁定し、拾わない場合は完全語彙＋追跡先つきで登記する**（素の先送り禁止・Requirement 6.4）。
 - **Adjacent expectations**:
   - **W6 並走の無干渉条件**: 本 spec の編集面は parsers（package 読み取り）＋seriko（bind 判定・状態・actor）＋areka 資産構築の 1 行域で、並走 3 本と実測で互いに素。`BindResolver::empty()` の**署名不変**が並走無干渉の前提条件であり、areka 側の現呼出元 4 箇所（`input_events/balloon_test_support.rs:73`・`emo2_boot/frame_test_support.rs:71`・`emo2_boot/mod.rs:374`・`spine.rs:671`）はこの条件下で無傷に保つ。
   - **資産構築の署名変更は全呼出元をコンパイル結合で巻き込む**: 本番呼出は 1 箇所（assets.rs:267）だが、seriko の in-crate／tests 配下に多数のテスト呼出元があり、atomic 追随が必要。
@@ -107,14 +107,14 @@ W6 並走 4 本（balloon-visibility ∥ 本 spec ∥ zorder ∥ scope-chain-gap
 6. While 対象 scope が非表示または未知のとき、the bind 適用 shall 既存の縮退挙動（状態のみ更新・発行なし・debug ログ）を排他置換でも維持する。
 7. If (カテゴリ, パーツ) が名前解決できないとき、then the bind 適用 shall 既存どおり error ログの上読み飛ばし、状態を変えない（既存挙動不変）。
 
-### Requirement 3: 明示宣言カテゴリと横断挙動の非退行（回帰の錨）
+### Requirement 3: 明示宣言カテゴリの正典挙動（回帰の錨＋mustselect 解除不可適合）
 
-**Objective:** 保守者として、`mustselect`・`multiple` 明示宣言の挙動とカテゴリ横断の挙動が本増分で変わらないことを求める。これにより是正が既存の正常系を壊さない。
+**Objective:** 保守者として、`mustselect`・`multiple` 明示宣言の着衣側挙動とカテゴリ横断の挙動が本増分で変わらず、mustselect の脱衣素通しのみ正典「解除不可」へ適合することを求める（2026-08-11 要件ディスカッション裁定）。これにより是正が既存の正常系を壊さず、正典乖離を残さない。
 
 #### Acceptance Criteria
 
 1. When mustselect 宣言カテゴリのパーツへ着衣指示（on）が適用されるとき、the bind 適用 shall 従来どおり排他置換する（挙動不変）。
-2. When mustselect 宣言カテゴリのパーツへ脱衣指示（off）が適用されるとき、the bind 適用 shall 現行どおり当該パーツを外す（挙動維持。正典の「解除不可」への適合は本 spec の対象外——Boundary Context の裁定事項）。
+2. When mustselect 宣言カテゴリのパーツへ脱衣指示（off）が適用されるとき、the bind 適用 shall 当該指示で bind 集合を変更せず、無視した事実をログに残す（正典「解除不可」への適合・2026-08-11 裁定。ログ無し失敗経路の禁止に従い無言の握り潰しにしない。ログレベルの選定は既存流儀への整合として設計の領分）。
 3. When multiple 宣言カテゴリのパーツへ着衣／脱衣指示が適用されるとき、the bind 適用 shall 従来の加算／除去を維持し、同一カテゴリ内の複数パーツ同時 bind を許す。
 4. The 本増分 shall 異なるカテゴリ間の bind 共存（カテゴリを跨いだ複数カテゴリの同時 bind）を変更しない。
 5. The 本増分 shall 適用後も `cargo test --workspace` を exit 0 の決定論的緑に保つ。
@@ -127,7 +127,7 @@ W6 並走 4 本（balloon-visibility ∥ 本 spec ∥ zorder ∥ scope-chain-gap
 
 1. The 本増分 shall brief の最小再現——非宣言カテゴリの同一カテゴリ 2 パーツへ着衣指示を 2 回流し、現在 bind 集合が後勝ち 1 個のみとなる——を決定論テストとして固定する（現状の欠陥挙動 {両方} が正典期待値 {後者のみ} へ反転したことの檻）。
 2. The 決定論テスト shall descript 読み取りの 3 値分岐（mustselect／multiple／非宣言／`+` 区切り複数／未知語／不完全値／宣言ゼロ）を網羅する。
-3. The 決定論テスト shall 排他か否かの判定について、mustselect 宣言・multiple 宣言・非宣言の各カテゴリ × 着衣／脱衣の組合せを網羅する。
+3. The 決定論テスト shall 排他か否かの判定について、mustselect 宣言・multiple 宣言・非宣言の各カテゴリ × 着衣／脱衣の組合せを網羅する（mustselect × 脱衣＝無視（解除不可）の檻を含む）。
 4. The 決定論テスト shall GPU 実描画・実窓・実 DPI・実 SHIORI・sleep・実時間待機のいずれにも依存しない。
 5. The 本増分 shall 旧 2 値前提を名前・文言で固定している既存テスト（例: 「非 mustselect＝加算」を謳う名前・コメント）を新正典の語彙へ更新し、検証内容が正典下でも有効なテスト（異カテゴリ加算等）は実体を保って維持する。
 
@@ -153,4 +153,4 @@ W6 並走 4 本（balloon-visibility ∥ 本 spec ∥ zorder ∥ scope-chain-gap
 1. The 本増分 shall コード内の「非 mustselect＝加算」前提の doc コメント・設計参照（mayuna-compose R4.5／D11 を根拠に引く記述を含む）を 3 値正典の記述へ更新し、旧前提の主張を残さない。
 2. The 本 spec の設計文書 shall `completed/areka-P0-mayuna-compose` の R4.5／D11 を覆す旨とその根拠（正典・実機証拠）を明記する（completed 文書自体は改変しない）。
 3. When 本 spec が完了するとき、the roadmap shall mayuna-compose R4.5／D11 の覆しと本 spec による是正を追記として追跡する。
-4. If mustselect の「解除不可」適合を本 spec で拾わない裁定となったとき、then the 本 spec shall 当該正典乖離を完全語彙・縮退シーム・追跡先つきで登記し、無名の先送りとして残さない。
+4. The 本 spec の設計文書 shall mustselect「解除不可」適合を本 spec で拾う 2026-08-11 裁定（要件ディスカッション議題 1）を記録する（旧 R6.4 の先送り登記条項は本裁定により解消）。
