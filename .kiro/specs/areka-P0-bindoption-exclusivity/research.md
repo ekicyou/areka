@@ -164,6 +164,8 @@ Extension（既存システムの是正）ゆえ light discovery を主コンテ
 
 ### 7.1 意味反転監査台帳（「multiple 集合が空の非空 resolver」全数・2026-08-11 実測）
 
+> **【設計時点の台帳・実装後は §11 が最新】** 本節は design 生成時（実装前）の実測である。実装（タスク 2〜6.1）で resolver・テストが増減し行番号も動いたため、**現物と突合した最新の台帳はタスク 6.2 の §11**（結論は同じだが本節には**漏れが 2 件**あった）。
+
 | resolver | 場所 | 非宣言カテゴリの構成 | 反転影響 |
 |---|---|---|---|
 | `tiny_resolver` | bind.rs:351 | 腕 1 パーツ／kero 脚 1 パーツ | なし（1 パーツ/カテゴリ＝排他と加算が集合同値） |
@@ -200,3 +202,85 @@ Extension（既存システムの是正）ゆえ light discovery を主コンテ
 
 - 機械検査: 全 34 要件 ID（1.1-1.7／2.1-2.7／3.1-3.5／4.1-4.5／5.1-5.6／6.1-6.4）がトレーサビリティ表に存在・境界 4 節充足・File Structure Plan 具体パス（new 8 呼出元台帳含む）・境界と file plan の整合・孤児コンポーネントなし——**合格**。
 - 判定レビュー: 要件被覆に穴なし（Research Needed 4 件は §7 で全消化）・分岐は (on×policy) 直積表で網羅・実装タスクへ分割可能（採取→判定→結線→檻→実機の brief 境界 4 分割と一致）——**合格（修復パス 0 回）**。
+
+---
+
+# 実装完了後の再監査（2026-08-11・タスク 6.2）
+
+## 11. 意味反転監査の再実行（全数・現物実測）
+
+**実施日**: 2026-08-11（タスク 1〜6.1 コミット済み・HEAD `e1335ee`・作業ツリークリーン）
+**根拠**: workspace 全体を `BindResolver::new` / `BindResolver::empty` で grep して構築点を全数列挙し、各構築点を消費する全テストのテスト本体（名前表構成・投入する cue 列・期待集合）を逐一読んで判定した。コード・テストは 1 行も変更していない。
+**結論**: **design.md §テスト影響監査 の結論（「同一カテゴリ複数 on を前提とするテストは存在しない」）は現物と一致する**。既定の意味反転で期待値が変わるテストはゼロ。ただし**設計時点の台帳（§7.1）には漏れが 2 件**あり（下記 §11.4）、いずれも結論を変えない。
+
+### 11.1 判定軸
+
+排他置換 `apply_bind_exclusive` は「現在集合 − `category_ids(カテゴリ)` ∪ {対象 ID}」ゆえ、加算と結果が食い違うのは次の 2 条件のいずれかが成り立つときに限る。
+
+- **(a)** 同一カテゴリの**別パーツ**へ 2 回以上 on が流れる
+- **(b)** 対象カテゴリの**別パーツ ID が事前に集合へ載っている**（静的既定 bind 集合 `static_binds` 経由を含む）
+
+したがって各テストについて「1 カテゴリあたりの宣言パーツ数」「同一カテゴリへの on 回数」「静的既定集合と対象カテゴリ ID 集合の交わり」の 3 点を実測した。
+
+### 11.2 `multiple` 集合が空の非空判定器（＝反転の影響を受け得る全数）
+
+| # | 判定器 | 構築 file:line | 非宣言（Default）カテゴリのパーツ数 | 消費テスト（file:line・fn） | 同一カテゴリへの on 回数 | 静的既定との交わり | 判定 |
+|---|---|---|---|---|---|---|---|
+| 1 | `tiny_resolver` | `crates/areka-seriko/src/bind.rs:404` | sakura 腕 1／kero 脚 1 | bind.rs:458 `policy_empty_or_absent_is_default`／:681 `resolve_declared_returns_id_per_namespace`／:697 `resolve_is_namespace_isolated`／:713 `resolve_unknown_returns_none` | 0（純関数アクセサのみ・適用経路を通らない） | なし | **影響なし** |
+| 2 | `mustselect_resolver` | `bind.rs:415` | 紅 1（目は mustselect 3 パーツ） | bind.rs:432 `policy_mustselect_only_declared_category_per_namespace`／:655 `category_ids_collects_category_members_ascending` | 0（純関数アクセサのみ） | なし | **影響なし** |
+| 3 | `arm_bind_resolver` | `crates/areka-seriko/src/actor_bind_loop_tests.rs:64` | 腕 1（1302） | :117 `bind_apply_on_shown_emits_show_and_info_marker`／:645 `bind_apply_on_hidden_scope_state_only_no_emit`／:676 `bind_toggle_form_warns_no_emit`／:717 `bind_category_wide_form_warns_no_emit`／:752 `bind_malformed_errors_no_emit`／:796 `bind_scope_unmapped_warns_no_emit`／:866 `bind_name_gate_other_name_is_benign_debug_no_emit`／:912 `bind_noncanonical_addressee_severity_split` | 高々 1（残りは Toggle/CategoryWide/Malformed/宛名違い＝適用に到達しない縮退枝） | static `{1100,1207}` ∩ `category_ids(腕)={1302}` = ∅ | **影響なし**（1 パーツ/カテゴリ＝排他と加算が集合同値） |
+| 4 | `blink_default_resolver` | `actor_bind_loop_tests.rs:91` | まばたき 2（1400/1402） | :422 `bind_default_category_off_removes_part`（on×1→off×1）／:471 `bind_default_exclusive_replace_emits_show_and_info_marker`（**別パーツへ on×2＝本 spec の新規檻**）／:536 `bind_default_same_part_re_on_is_unchanged_no_emit`（**同一パーツ**へ on×2） | :471 のみ別パーツ 2 回 | static `{1100,1207}` ∩ `{1400,1402}` = ∅ | **本 spec が新規に追加した檻**（反転後の期待値で書かれている・既存テストではない） |
+| 5 | `eye_mustselect_resolver` | `actor_bind_loop_tests.rs:100` | （非宣言カテゴリなし・目は mustselect 3 パーツ） | :170 `bind_mustselect_second_on_replaces_prior_part_in_category`／:271 `bind_mustselect_off_is_ignored_with_warn` | 目へ on×2（:170） | ∅ | **影響なし**（MustSelect は反転前から排他） |
+| 6 | インライン（まばたき 2 パーツ） | `actor_bind_loop_tests.rs:239` | まばたき 2（1400/1402） | :233 `bind_default_category_second_on_replaces_prior_part` | on×2 | ∅ | **本 spec の最小再現檻**（タスク 4 で新規追加・既存テストではない） |
+| 7 | インライン（腕 1・肩 1） | `actor_bind_loop_tests.rs:604` | 腕 1・肩 1 | :598 `bind_cross_category_accumulates_via_actor` | **異なるカテゴリ**へ 1 回ずつ | ∅ | **影響なし**（排他置換が外すのは同一カテゴリのみ＝期待値 `{1100,1207,1302,1500}` 不変） |
+| 8 | `test_bind_resolver` | `crates/areka-seriko/tests/bind_e2e.rs:119` | 腕 1（1100）・頬 1（1200） | :309 `bind_off_reissues_show_with_updated_set_end_to_end`／:323 `bind_off_then_on_round_trips_and_reissues_end_to_end`／:342 `bind_off_twice_is_idempotent_no_third_show_end_to_end`／:357 `unresolvable_bind_does_not_grow_display_list_end_to_end`／:377 `bind_and_text_streams_do_not_cross_contaminate_end_to_end` | 高々 1 | static `{1100,1207}` ∩ `category_ids(腕)={1100}` = `{1100}` ——ただし**唯一のパーツ**ゆえ排他置換は「1100 を除いて 1100 を足す」＝同値 | **影響なし** |
+| 9 | `mustselect_bind_resolver` | `bind_e2e.rs:241` | 紅 1（1600）（目は mustselect 3 パーツ） | :428 `mustselect_sequence_replaces_prior_part_end_to_end`（目へ on×3）／:472 `default_category_explicit_on_then_off_removes_part_end_to_end`（紅 on→off）／:498 `mustselect_replace_does_not_drop_other_category_end_to_end`（紅 on×1＋目 on×2） | 紅へは高々 1 | static `{1207}` ∩ `{1600}` = ∅ | **影響なし** |
+| 10 | 実 emo2 判定器（本番構築経路） | `crates/areka/src/emo2_boot/assets.rs:272`（`build_boot_assets`） | 実 fixture: まばたき 4（1400-1403）・キラリ 2（1700/1701）・髪飾り 2（1800/1801）・紅 1（1600）／mustselect＝腕・口・眉・目 | `crates/areka/src/emo2_boot/assets_tests.rs:503` `build_boot_assets_bind_resolver_resolves_emo2_names`／:534 `build_boot_assets_bind_resolver_carries_mustselect`（いずれも `resolve`／`policy`／`category_ids` の純関数照会のみ・適用経路を通らない）／`crates/areka/src/emo2_boot/spine_seriko_loop_tests.rs:298` `spine_e2e_sakura_blink_after_bind_one_cycle_golden`（実 `boot_live` 貫通・`\![bind,まばたき,通常,1]` **1 回のみ**）／:353 `spine_e2e_sakura_blink_default_off_emits_nothing`（bind を通さない） | まばたきへ on×1 | 実 fixture の静的既定 on＝`{1100 腕, 1207 口, 1302 目, 1500 眉, 1800 髪飾り}`。`category_ids(まばたき)={1400,1401,1402,1403}` と交わらない | **影響なし** |
+
+### 11.3 `multiple` 集合が非空の判定器（反転の対象外・対照として列挙）
+
+| 判定器 | 構築 file:line | multiple 宣言 | 消費テスト |
+|---|---|---|---|
+| `policy_matrix_resolver` | `bind.rs:484` | sakura `{髪, 腕}`／kero `{尾, 羽}` | bind.rs:510／:541／:575／:604（導出マトリクス檻・純関数） |
+| `hair_multiple_resolver` | `actor_bind_loop_tests.rs:75` | sakura `{髪飾り}` | :344 `bind_multiple_category_two_parts_coexist_via_actor`／:381 `bind_multiple_category_off_removes_only_that_part` |
+| `multiple_bind_resolver` | `bind_e2e.rs:276` | sakura `{髪飾り}` | :526 `multiple_category_two_parts_coexist_end_to_end` |
+
+### 11.4 `empty()` 系（名前解決が常に不成立＝適用に到達しない・別枠）
+
+`BindResolver::empty()` は名前表が両スコープとも空ゆえ `resolve()` が常に `None` で、bind cue は `error!`＋skip の解決不能枝に落ちて適用へ到達しない（`bind.rs:629` `empty_resolver_is_default_policy_and_never_reaches_apply` がこの根拠自体を檻に固定している）。ポリシーは全カテゴリ `Default`（＝意味反転の影響下）に変わるが、**挙動への実害はゼロ**。呼出全数:
+
+- seriko in-crate: `actor_dispatch_tests.rs:117/206/230/264/296/333/377/426/457/491/549/605/613/651/659/716/770/818`（18）・`actor_bind_loop_tests.rs:832（bind_unresolvable_errors_no_emit・解決不能枝を意図して使う）/1121/1152/1166/1206/1270/1278/1288/1298`（9）・`bind.rs:460/630/730`（3）
+- seriko tests/: `regression.rs:74/135/190`・`loop_integration.rs:82`・`cue_sequence.rs:71`・`balloon_face_e2e.rs:85`（6）
+- areka 側（**署名不変の監視対象 4 箇所**・W6 並走無干渉の前提）: `input_events/balloon_test_support.rs:73`・`emo2_boot/frame_test_support.rs:71`・`emo2_boot/spine.rs:671`・`emo2_boot/mod.rs:374` ——**現物一致・無改変**（`empty()` の署名が変わっていないことは、これら 4 箇所を触らずに workspace がコンパイルを通ることで検証されている）
+
+### 11.5 設計時点の台帳（§7.1）との差分
+
+結論は一致するが、**§7.1 には次の 2 件の漏れがあった**（いずれも判定は「影響なし」ゆえ結論は不変。設計の監査漏れとして記録する）:
+
+1. **areka クレート側の実 emo2 判定器を列挙していなかった**——§7.1 は seriko 側の 7 fixture と `empty()` 系のみを数え、`build_boot_assets` が実 emo2 descript から組む**本番構築経路の判定器**（`assets_tests.rs` 2 本＋`spine_seriko_loop_tests.rs` の実貫通 1 本）を台帳に載せていなかった。実 fixture は非宣言カテゴリに**複数パーツ**を持つ（まばたき 4・キラリ 2・髪飾り 2）ため、seriko 側 fixture（全て 1 パーツ/カテゴリ）より条件が厳しい。実測では貫通テストが送る on はまばたきへ 1 回のみ、かつ静的既定 on 集合 `{1100,1207,1302,1500,1800}` がまばたきの ID 集合と交わらないため影響なし。
+2. **判定軸 (b)（静的既定 bind 集合との交わり）を明示していなかった**——§7.1 は「1 カテゴリあたりのパーツ数」だけを見ており、「対象カテゴリの別パーツが `static_binds` 経由で事前に載っている」経路を条件として立てていない。実測では全テストで交わりが空か唯一パーツ（`test_bind_resolver` の 腕/1100）であり影響なし。
+
+あわせて **`BindResolver::new` の呼出元は 8 → 13 箇所へ増えた**（本 spec が檻を追加したため）。実装後の全数 13: 本番 1（`assets.rs:272`）／seriko in-crate 9（構築関数 7＝`bind.rs:409/427/504`・`actor_bind_loop_tests.rs:67/85/95/111`＋テスト本体インライン 2＝`actor_bind_loop_tests.rs:239/604`）／seriko tests/ 3（`bind_e2e.rs:126/253/286`）。design.md の「全 8 呼出元」台帳は**設計時点の値**として読むこと。
+
+### 11.6 本番挙動で新たに排他となるカテゴリ（実 emo2・記録）
+
+反転により実 emo2 で新たに排他置換の対象となるのは**非宣言かつ複数パーツを持つカテゴリ**——**まばたき（1400/1401/1402/1403）・キラリ（1700/1701）・髪飾り（1800/1801）**の 3 つ。まばたきが本 spec の是正対象そのもの。髪飾りは `1800.default,1` ゆえ、今後 `\![bind,髪飾り,ボンボン,1]` が来ると既定オンの 1800（リボン）が自動で外れる——これが正典の既定挙動（高々 1 個）であり意図した是正である。決定論テストでこの経路を通るものは現時点で存在しない（実機サインオフ〔タスク 7.2〕はまばたきを観測対象とする）。
+
+### 11.7 workspace 全緑の実測（要件 3.5・4.4）
+
+前提ビルド（PowerShell・Git Bash 不可）: `cargo build -p shiori-host32-helper -p shiori-host32-testdll --target i686-pc-windows-msvc` → exit 0。
+
+`cargo test --workspace` を 4 回実行:
+
+| 回 | 結果 | 内訳 |
+|---|---|---|
+| 1 | **exit 0**（全緑） | 全 60 テストバイナリ ok・約 1 分 30 秒 |
+| 2 | **exit 0**（全緑） | — |
+| 3 | exit 101 | `actor::bind_loop_tests::bind_apply_on_shown_emits_show_and_info_marker` 1 本のみ FAILED |
+| 4 | **exit 0**（全緑） | — |
+
+第 3 回の赤は**別 spec 所有の既知間欠赤**（`areka-P0-test-cage-determinism`／W6.9 に登記済みの tracing callsite 毒化＝ログ捕捉 0 件）であり、本 spec の変更とは因果独立。追加の頻度実測として `cargo test -p areka-seriko -p areka-emo-compose --lib` を 20 回反復した内訳:
+
+- **RED 3/20 回**（内訳: `actor::dispatch_tests::non_shell_broadcast_reception_is_benign_debug_no_warn_error` ×1・`scale::ratio_tests::mul_degradation_emits_warn_log` ×2）
+
+観測された赤は**全て登記済みの 4 本の集合内**（`non_shell_broadcast_reception_is_benign_debug_no_warn_error`／`bind_apply_on_shown_emits_show_and_info_marker`／`wait_broadcast_reception_is_benign_debug_no_warn_error`／`mul_degradation_emits_warn_log`）に収まり、**本 spec が追加した檻は 1 度も落ちていない**。要件 3.5 の「決定論的緑」は、この 4 本を除いた全体で成立している——4 本の非決定性の解消は W6.9 の所有事項として残る（本 spec では是正しない）。
