@@ -534,6 +534,19 @@ A が通れば M / Low へ落ちるが、要件 5.7 の裁定は A を採る場�
 - atom（W6.75）が flush 経路を改造する場合の再突合（roadmap 干渉台帳 atom⇄zorder）——
   Revalidation Triggers に登記。
 
+### 設計ディスカッションによる改訂（2026-08-11・validate-design の critical 3 件を消化）
+
+1. **raise assist のトリガ供給者を確定**（CI1）: z 変化検知の発火条件を「`ExplicitMaintenance` または
+   `OwnerLink { raise_assist: true }`」へ拡張。トリガ命名を正準化——**バルーン側の z 変化＝`RaisedAbove`・
+   キャラ側＝`RaisedBelow`**で、G7 raise assist が処理するのは `RaisedAbove`（要件 1.3）。
+   G7 のみ FAIL の場合は検知のみ実装し funnel 引数（B3）は実装しない。
+2. **案 B の呼出契約を確定**（CI2）: areka は wintf 公開ヘルパ `compute_pair_z_intent`（観測組立＋判断を
+   wintf 内で包み `ZOrder` を返す）だけを呼ぶ。`decide_pair_fix` と入出力型は `pub(crate)` のまま
+   ＝判断の一元点を別クレートへ漏らさない。
+3. **沈降観測を遅延 1 巡へ**（CI3）: `WM_ACTIVATE(WA_INACTIVE)` 枝はマーク付与のみ・実測と
+   `sink-observed` 出力は次巡に維持系が実施（`pending_verify` 同型）。S3 判定は非活性化ごとの
+   最後の `sink-observed` レコードで行う（活性化トランザクション途中の即時走査による偽 FAIL を排除）。
+
 ### Review Gate 結果
 
 - 機械チェック: 要件 ID 41 個（1.1〜8.5）全て design.md に出現・Boundary 4 節充足・

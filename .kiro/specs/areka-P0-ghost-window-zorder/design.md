@@ -123,7 +123,7 @@ graph TB
 | G4 | タスクバー／Alt+Tab 非露出 | `WS_EX_TOOLWINDOW` の現行の見え方が不変（要件 5.5） | **案 B へ切替** |
 | G5 | ドラッグ＋バルーン追従 | キャラ窓ドラッグ・バルーン単独ドラッグ・追従が現行どおり（要件 5.4） | **案 B へ切替** |
 | G6 | owner 活性化でペア浮上＋隣接 | キャラ窓クリック後 `GetWindow(char, GW_HWNDPREV) == balloon` の実測レコード（要件 1.1/1.2） | **案 B へ切替**（A の中核保証の不成立） |
-| G7 | owned 活性化で owner も浮上 | バルーン窓クリック後、キャラ窓が他アプリ窓の背後に残らない（要件 1.3） | **案 A 継続＋raise assist 有効化**（維持系の `RaisedBelow` トリガで 1.3 を明示実装。research.md §8-6 の裁定どおり） |
+| G7 | owned 活性化で owner も浮上 | バルーン窓クリック後、キャラ窓が他アプリ窓の背後に残らない（要件 1.3） | **案 A 継続＋raise assist 有効化**（z 変化検知を有効化し、維持系の `RaisedAbove` トリガで 1.3 を明示実装。research.md §8-6 の裁定どおり） |
 | G8 | 破棄順序の双方向で異常終了なし | char 先行 despawn／balloon 先行 despawn の双方でプロセス継続（要件 5.9） | **owner 切離し機構を必須化**（下記「破棄経路」）。切離しでも解けない場合は案 B へ切替 |
 
 - 判定は G1→G8 の順で行い、G1〜G6 のいずれかが FAIL した時点で案 B 確定（残項目の検証は案 B 構成で再実施）。
@@ -155,13 +155,13 @@ crates/wintf/src/ecs/window/
 - `crates/wintf/src/ecs/window/mod.rs` — `mod zorder_pair;` 接続と re-export
 - `crates/wintf/src/ecs/mod.rs` — `KeepDirectlyAbove`／`ReassertZOrder`／`ZOrderPairStrategy` の公開エクスポート（`ZOrder` は `:49` で公開済み）
 - `crates/wintf/src/api.rs` — safe wrapper 新設: `get_window_above(hwnd)`／`get_window_below(hwnd)`（`GetWindow` GW_HWNDPREV/GW_HWNDNEXT）・`set_window_owner(hwnd, owner)`／`clear_window_owner(hwnd)`（`SetWindowLongPtrW(GWLP_HWNDPARENT)`）
-- `crates/wintf/src/ecs/window_proc/keyboard.rs` — `WM_ACTIVATE` の**非活性化枝（既存処理の後）**に読み取り専用の沈降観測レコードを追加（要件 4.4/7.5 の証跡。挙動変更なし）
-- `crates/wintf/src/ecs/window_proc/window_pos.rs` — 【案 B 発動時のみ】`WM_WINDOWPOSCHANGED` で `WINDOWPOS.flags` の `SWP_NOZORDER` 不在（＝z が動いた）を検知し、エコーでなければ当該 entity へ `ReassertZOrder` を挿入（B2）
+- `crates/wintf/src/ecs/window_proc/keyboard.rs` — `WM_ACTIVATE` の**非活性化枝（既存処理の後）**に読み取り専用の沈降観測**マーク**を追加。実測走査と `sink-observed` レコードは**次巡**に維持系が実施（即時走査は活性化トランザクション未完で偽陽性を生むため。要件 4.4/7.5 の証跡。挙動変更なし）
+- `crates/wintf/src/ecs/window_proc/window_pos.rs` — 【案 B 発動時、**または案 A で raise assist 有効時**】`WM_WINDOWPOSCHANGED` で `WINDOWPOS.flags` の `SWP_NOZORDER` 不在（＝z が動いた）を検知し、エコーでなければ当該 entity へ `ReassertZOrder` を挿入（B2。raise assist のトリガ供給者はこの検知のみ）
 - `crates/areka/src/placement/spawn.rs` — キャラ窓 spawn 後にバルーン窓へ `KeepDirectlyAbove { peer: char_window }` を insert（`OnDragEnd` 後付けと同じパターン・`:312-314` 隣接）。あわせてペア宣言レコード（scope／char entity／balloon entity）を診断 target へ出力（scope 結合キーの供給・要件 6.1）
 - `crates/areka/src/main.rs` — `ZOrderPairStrategy` Resource の挿入と、`establish_owner_links`／`apply_zorder_pair_maintenance` の `FrameFinalize` 結線（`register_ghost_windows_click_through` の結線 `:687-692` と同居）
 - `crates/areka/src/placement/follow/window_move.rs` — 【案 B 発動時のみ】`enqueue_window_set_pos` へ `zorder: ZOrder` 引数を追加（B3。既定 `NoChange` で現行挙動不変・`SWP_NOZORDER` の付け外しは `zorder != NoChange` で分岐・`hwnd_insert_after` へ変換値を搬送）。同 funnel の呼出元（drag end／DPI 再射影／復元／リサイズ／追従／`\![move]`）はゴースト窓ペアに対して z 意図を渡す
 
-> 案 B 限定の 2 ファイルは、ゲートが案 A PASS で確定した場合は**変更しない**（空虚な保険を作らない・brief の案 C 却下の裁定）。
+> funnel z 引数（`window_move.rs`）は、ゲートが案 A PASS で確定した場合は**変更しない**（空虚な保険を作らない・brief の案 C 却下の裁定）。z 変化検知（`window_pos.rs`）は案 B 時に加えて **G7 FAIL の raise assist 時にも実装する**——供給者の居ないトリガを設計に置かない。G1〜G7 全 PASS なら両ファイルとも変更しない。
 
 ## System Flows
 
@@ -187,7 +187,7 @@ flowchart TB
 
 1. spawn で両窓へ宣言が付く（バルーン: `KeepDirectlyAbove { peer: char }`）。
 2. `establish_owner_links`（`Added<WindowHandle>` 駆動・両窓の HWND が揃った巡で 1 回）: `set_window_owner(balloon_hwnd, char_hwnd)` → 成功時 `OwnerLink` を insert し、初期隣接を確定するため `ReassertZOrder` を 1 発挿入 → 確立レコード出力。失敗時は `error!`＋ゲート FAIL 材料（要件 6.2）。
-3. 以後の維持は OS 保証（owned は owner より手前・owner 活性化でペア浮上・他アプリ活性化で一括沈降）。維持系は `ReassertZOrder`（2.6 シーム）と、G7 FAIL 時のみ `RaisedBelow`（バルーン浮上でキャラを直後へ）を処理する。
+3. 以後の維持は OS 保証（owned は owner より手前・owner 活性化でペア浮上・他アプリ活性化で一括沈降）。維持系は `ReassertZOrder`（2.6 シーム）と、G7 FAIL 時のみ `RaisedAbove`（バルーン側の z 上昇でキャラを直後へ・トリガは z 変化検知が供給）を処理する。
 
 ### 案 B の維持フロー（フォールバック時のみ）
 
@@ -200,7 +200,7 @@ flowchart TB
 |-------------|---------|------------|--------------------|
 | 1.1 | バルーンがキャラより手前 | 案 A: `OwnerLink`（OS 保証）／案 B: 維持系 | 確立フロー・維持フロー |
 | 1.2 | キャラ活性化で「すぐ手前」へ | 案 A: OS のペア浮上（G6 で実測）／案 B: B2→`decide_pair_fix` | `PlaceAboveOverBelow` |
-| 1.3 | バルーン活性化でキャラを直後へ | G7 PASS: OS／G7 FAIL: raise assist（`RaisedBelow`）／案 B: B2 | `PlaceBelowUnderAbove` |
+| 1.3 | バルーン活性化でキャラを直後へ | G7 PASS: OS／G7 FAIL: raise assist（`RaisedAbove`＋z 変化検知）／案 B: B2 | `PlaceBelowUnderAbove` |
 | 1.4 | 全経路で反転させない | 案 A: OS 保証＋2.6 シーム／案 B: B2（1 点捕捉）＋B3 | 維持フロー |
 | 1.5 | 片方不在なら何もしない | `decide_pair_fix` の peer 生存判定（`None`＋理由） | skip レコード |
 | 1.6 | 表示順のみ動かし位置不変 | `PairFix` 型に座標フィールドが**存在しない**（構造的保証）＋`SWP_NOMOVE\|SWP_NOSIZE` 固定 | 維持フロー |
@@ -218,7 +218,7 @@ flowchart TB
 | 4.1 | 他アプリ活性化で背面へ | **受動実装**（`WS_EX_TOPMOST` 無し＝OS 既定で沈む。research.md §8-11 ⑴ の読みを採用） | — |
 | 4.2 | バルーンだけ前に残らない | 案 A: owner 群ごと沈降／案 B: 維持系はトリガ駆動のみで自発浮上しない | 4.4 検証 |
 | 4.3 | 常時最前面に固定しない | `decide_pair_fix` は `TopMost` を**返さない**（テストで固定） | — |
-| 4.4 | 背面でも相対順を保持 | `WM_ACTIVATE` 非活性化枝の読み取り専用観測レコード（実測 `GetWindow` 走査） | 観測記録 |
+| 4.4 | 背面でも相対順を保持 | `WM_ACTIVATE` 非活性化枝の観測マーク→次巡の遅延実測（`sink-observed`） | 観測記録 |
 | 5.1〜5.5 | 透過・クリック・ドラッグ・追従・非露出 | ゲート G2〜G5（実機判定）＋維持系は窓スタイルに触れない | ゲート表 |
 | 5.6 | 損なう手段は不採用 | ゲート表の FAIL→案 B 分岐そのもの | ゲート表 |
 | 5.7 | 他スコープを破棄に巻き込まない | owner 関係はスコープ内ペアのみ（スコープ間リンク無し） | — |
@@ -315,7 +315,7 @@ pub enum ZOrderPairStrategy {
 pub(crate) fn decide_pair_fix(obs: &PairObservation) -> PairFixDecision;
 
 pub(crate) struct PairObservation {
-    pub trigger: PairTrigger,                 // Establish / Reassert / RaisedAbove / RaisedBelow
+    pub trigger: PairTrigger,                 // Establish / Reassert / RaisedAbove(=バルーン側のz変化) / RaisedBelow(=キャラ側のz変化)
     pub strategy: ZOrderPairStrategy,
     pub above_alive: bool,                    // バルーン entity＋WindowHandle の生存
     pub below_alive: bool,                    // キャラ側の生存
@@ -353,7 +353,14 @@ pub fn establish_owner_links(/* Query, Res<ZOrderPairStrategy>, NonSend 固定 *
 
 /// 維持系: トリガ（ReassertZOrder／raise assist）→観測組立→decide_pair_fix→
 /// SetWindowPosCommand enqueue（SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE）→次巡実測検証→記録。
+/// 沈降観測マーク（WM_ACTIVATE 非活性化枝が付与）の遅延実測と sink-observed 出力もここで行う。
 pub fn apply_zorder_pair_maintenance(/* Query, Res<ZOrderPairStrategy>, NonSend 固定 */);
+
+/// 案 B（B3）専用の公開契約点: 観測組立→ decide_pair_fix を wintf 内で包み、
+/// funnel（enqueue_window_set_pos）へ渡す z 意図を返す。ペア非当事者・同値ガード成立時は
+/// ZOrder::NoChange。decide_pair_fix と入出力型は pub(crate) のまま——
+/// 判断ロジックの一元点を別クレートへ漏らさない。
+pub fn compute_pair_z_intent(/* &World, Entity */) -> ZOrder;
 ```
 
 **Implementation Notes**
@@ -381,13 +388,14 @@ pub fn apply_zorder_pair_maintenance(/* Query, Res<ZOrderPairStrategy>, NonSend 
 
 #### WM_WINDOWPOSCHANGED z 変化検知（案 B・B2）
 
-- 既存ハンドラ第 1 借用セクションに追加: `strategy == ExplicitMaintenance` かつ `!is_echo` かつ `WINDOWPOS.flags` に `SWP_NOZORDER` が**無い**（＝z が動いた）とき、当該 entity がペア宣言の当事者（`KeepDirectlyAbove` 保持または peer として参照）なら `ReassertZOrder` を挿入する。判断・適用は行わない（維持系へ一元化）。
-- トリガ種別: z が動いた窓がバルーン側なら `RaisedAbove`、キャラ側なら `RaisedBelow` 相当として観測に写す。
+- 既存ハンドラ第 1 借用セクションに追加: **strategy が z 変化検知を要する構成**（`ExplicitMaintenance`、または `OwnerLink { raise_assist: true }`）かつ `!is_echo` かつ `WINDOWPOS.flags` に `SWP_NOZORDER` が**無い**（＝z が動いた）とき、当該 entity がペア宣言の当事者（`KeepDirectlyAbove` 保持または peer として参照）なら `ReassertZOrder` を挿入する。判断・適用は行わない（維持系へ一元化）。
+- トリガ種別（**正準定義**）: z が動いた窓が**バルーン側なら `RaisedAbove`**、**キャラ側なら `RaisedBelow`**。raise assist（G7 FAIL）が処理するのは `RaisedAbove`（要件 1.3）。
 - 活性化既定処理の**事後**に走るため raise 上書き競合が無い（B1 却下理由の回避）。エコー遮断＋同値ガードの二重で往復を断つ。
 
-#### WM_ACTIVATE 沈降観測（読み取り専用・両案共通）
+#### WM_ACTIVATE 沈降観測（読み取り専用・両案共通・遅延 1 巡）
 
-- 既存の非活性化枝（`keyboard.rs:129` 以降）の末尾に、当該窓がペア当事者なら `GetWindow` 実測で隣接維持を記録する `sink-observed` レコードを足す。**挙動は一切変更しない**（要件 4.4 の観測タイミング問題〔research.md §8-10〕への解——「前面から外れる瞬間」が唯一確実に届く自窓イベントである）。
+- 既存の非活性化枝（`keyboard.rs:129` 以降）の末尾では**沈降観測マークの付与のみ**を行う（当該窓がペア当事者の場合）。`GetWindow` 実測と `sink-observed` レコード出力は**次巡**に維持系が行う（`pending_verify` と同型の遅延 1 巡）。
+- 理由: `WM_ACTIVATE(WA_INACTIVE)` は活性化トランザクションの**途中**に届き、新前面窓の raise 完了前でありうる。その瞬間の走査は実装欠陥が無くても「前面窓より背面」を満たさず、偽 FAIL を記録する——遅延観測がこの偽陽性を断つ（要件 4.4/7.5・research.md §8-10）。「前面から外れる瞬間」を確実に知る自窓イベントとして非活性化枝を**マーク付与**に使い、実測は安定後に行う分業である。**窓の挙動は一切変更しない**（読み取り専用）。
 
 ### areka / placement
 
@@ -400,7 +408,7 @@ pub fn apply_zorder_pair_maintenance(/* Query, Res<ZOrderPairStrategy>, NonSend 
 #### funnel z 引数（案 B・B3。ゲート FAIL 時のみ実装）
 
 - `enqueue_window_set_pos(world, window, x, y, size, route, zorder: ZOrder)` へ拡張。`NoChange` は現行フラグ（`SWP_NOZORDER` 付き・`hwnd_insert_after: None`）と完全等価。`NoChange` 以外は `SWP_NOZORDER` を外し `get_hwnd_insert_after` 写像値を搬送。
-- 呼出元は、対象窓がペア当事者のときだけ areka 側ヘルパ（維持系と同じ観測→`decide_pair_fix` 呼出）で z 意図を求めて渡す。同値ガードにより定常時は `NoChange` になり、ドラッグ中の毎フレーム z 指定は発生しない。
+- 呼出元は、対象窓がペア当事者のときだけ wintf 公開ヘルパ `compute_pair_z_intent`（観測組立→`decide_pair_fix` を wintf 内で包む）で z 意図を求めて渡す。`decide_pair_fix` と入出力型は `pub(crate)` のまま——判断の一元点を別クレートへ漏らさない。同値ガードにより定常時は `NoChange` になり、ドラッグ中の毎フレーム z 指定は発生しない。
 - 「本経路を迂回する第二の書込経路を新設しない」既存規約（`window_move.rs` doc）を維持——z も本 funnel に同乗させ、別経路の `SetWindowPos` は作らない。
 
 ### 破棄経路（要件 5.7/5.8/5.9・案 A）
@@ -440,7 +448,7 @@ pub fn apply_zorder_pair_maintenance(/* Query, Res<ZOrderPairStrategy>, NonSend 
 - 共通形: `AREKA_APP_SMOKE_EXIT_MS` 有界実行＋`RUST_LOG=wintf::ecs::window::zorder_pair=debug,areka=debug` で grep 判定。判定は常に「指令＋実測」レコードの実測側で行う。
 - S1（7.3）: 拡大率の異なる 2 ディスプレイ間でキャラ窓をドラッグ往復 → 各移動後の実測レコードで `GetWindow(char, GW_HWNDPREV) == balloon` を確認。バルーンが他アプリ窓の背後に隠れないこと。
 - S2（7.4）: バルーン窓をドラッグ・クリック → キャラ窓が他アプリ窓に埋もれない実測レコード（1.3・キャラ位置は不変であること＝1.6 も同時判定）。
-- S3（7.5）: メモ帳等を活性化 → `sink-observed` レコードでゴースト全窓が前面窓より背面かつペア隣接が維持（4.1/4.2/4.4）。
+- S3（7.5）: メモ帳等を活性化 → **非活性化の次巡に出る** `sink-observed` レコード（遅延観測）でゴースト全窓が前面窓より背面かつペア隣接が維持（4.1/4.2/4.4）。判定は非活性化ごとの**最後の** `sink-observed` レコードで行う。
 - ゲート（G1〜G8）はこの手順の初回実施であり、結果を `verification/plan-a-gate.md` に判定表として残す。
 - 2.6 の実機確認は行わない（要件 7.6——発火経路が無い。vis 着地後に vis 側サインオフで実施）。
 
@@ -459,7 +467,7 @@ flowchart TB
 ```
 
 - ロールバック条件: サインオフ S1〜S3 で要件 5.1〜5.5 の毀損が観測された場合、要件 5.6 に従い当該手段を撤回し反対側の案へ移る（ゲート表と同じ判定基準を使う）。
-- 案 A 確定時、案 B 限定ファイル（`window_pos.rs` 検知・funnel 引数）は**実装しない**。案 B へ落ちた場合、案 A の owner 確立系はコードごと撤去する（`OwnerLink` は残さない——効いていない保険を残すと症状を隠す・brief 案 C 却下と同根）。
+- 案 A 確定（G1〜G7 全 PASS）時、案 B 限定の実装（`window_pos.rs` 検知・funnel 引数）は**行わない**。G7 のみ FAIL（raise assist）の場合は z 変化検知だけを実装し、funnel 引数（B3）は実装しない。案 B へ落ちた場合、案 A の owner 確立系はコードごと撤去する（`OwnerLink` は残さない——効いていない保険を残すと症状を隠す・brief 案 C 却下と同根）。
 
 ## Supporting References
 
