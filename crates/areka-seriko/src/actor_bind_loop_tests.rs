@@ -2,6 +2,7 @@ use super::test_support::*;
 use super::*;
 use areka_emo_compose::{BindSet, PatternState};
 use areka_sakura::{ActorKey, CueCommand, TalkCue};
+use crate::bind::BindOptionDecls;
 use crate::output::{DisplayCommand, MockSurfaceOutput};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -57,14 +58,15 @@ fn noncanonical_custom_cue(scope: &str, command: &str) -> TalkCue {
     cue
 }
 
-/// (腕,伸び)→1302 の sakura 名前表を持つ解決層（static={1100,1207} と交わらない新 id・mustselect なし）。
+/// (腕,伸び)→1302 の sakura 名前表を持つ解決層（static={1100,1207} と交わらない新 id・
+/// `bindoption` 宣言なし）。
 fn arm_bind_resolver() -> BindResolver {
     let mut sakura: BTreeMap<(String, String), u32> = BTreeMap::new();
     sakura.insert(("腕".to_string(), "伸び".to_string()), 1302);
-    BindResolver::new(sakura, BTreeMap::new(), BTreeSet::new(), BTreeSet::new())
+    BindResolver::new(sakura, BTreeMap::new(), BindOptionDecls::default())
 }
 
-/// mustselect カテゴリ「目」を持つ sakura 解決層（D11・R4.5・actor 経路の排他検証用）。
+/// mustselect カテゴリ「目」を持つ sakura 解決層（bindopt 3.1・actor 経路の排他検証用）。
 /// (目,笑)→1301 / (目,普)→1303 / (目,閉)→1304。static={1100,1207} と交わらない新 id。
 fn eye_mustselect_resolver() -> BindResolver {
     let mut sakura: BTreeMap<(String, String), u32> = BTreeMap::new();
@@ -73,7 +75,11 @@ fn eye_mustselect_resolver() -> BindResolver {
     sakura.insert(("目".to_string(), "閉".to_string()), 1304);
     let mut sakura_ms: BTreeSet<String> = BTreeSet::new();
     sakura_ms.insert("目".to_string());
-    BindResolver::new(sakura, BTreeMap::new(), sakura_ms, BTreeSet::new())
+    let options = BindOptionDecls {
+        sakura_mustselect: sakura_ms,
+        ..Default::default()
+    };
+    BindResolver::new(sakura, BTreeMap::new(), options)
 }
 
 /// ケース15（6.3/3.5/7.1・D5・D8 正常経路）: 表示中 scope で解決可能な Apply は現 surface を
@@ -198,8 +204,7 @@ fn bind_non_mustselect_accumulates_via_actor() {
     let mut sakura: BTreeMap<(String, String), u32> = BTreeMap::new();
     sakura.insert(("腕".to_string(), "伸び".to_string()), 1302);
     sakura.insert(("肩".to_string(), "上げ".to_string()), 1500);
-    let bind_resolver =
-        BindResolver::new(sakura, BTreeMap::new(), BTreeSet::new(), BTreeSet::new());
+    let bind_resolver = BindResolver::new(sakura, BTreeMap::new(), BindOptionDecls::default());
     let mut states = fresh_states(); // static = {1100, 1207}
     let scope = ActorKey::from("0");
     states.apply(&scope, SurfaceTarget::Show(2100));

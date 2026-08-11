@@ -40,7 +40,8 @@ use areka_sakura::{
     SystemVarSnapshot, TalkCue, TalkDone, TalkEndReason, TalkId,
 };
 use areka_seriko::{
-    spawn_seriko, BindResolver, DisplayCommand, MockSurfaceOutput, SerikoLoopConfig, SurfaceResolver,
+    spawn_seriko, BindOptionDecls, BindResolver, DisplayCommand, MockSurfaceOutput,
+    SerikoLoopConfig, SurfaceResolver,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
@@ -120,7 +121,7 @@ fn test_bind_resolver() -> BindResolver {
     sakura.insert(("腕".into(), "伸び".into()), 1100);
     sakura.insert(("頬".into(), "赤面".into()), 1200);
     // mustselect 空集合＝全カテゴリ非排他（従来 additive の byte 同値）。専用 mustselect e2e は task 10.4。
-    BindResolver::new(sakura, BTreeMap::new(), BTreeSet::new(), BTreeSet::new())
+    BindResolver::new(sakura, BTreeMap::new(), BindOptionDecls::default())
 }
 
 /// 既定 scope "0"・指定 bind 集合を載せたシェル面 `Show` 指令を組む（期待値ヘルパ）。
@@ -241,7 +242,11 @@ fn mustselect_bind_resolver() -> BindResolver {
     sakura.insert(("紅".into(), "差し".into()), 1600);
     let mut sakura_ms: BTreeSet<String> = BTreeSet::new();
     sakura_ms.insert("目".into());
-    BindResolver::new(sakura, BTreeMap::new(), sakura_ms, BTreeSet::new())
+    let options = BindOptionDecls {
+        sakura_mustselect: sakura_ms,
+        ..Default::default()
+    };
+    BindResolver::new(sakura, BTreeMap::new(), options)
 }
 
 /// mustselect 対比観測用の貫通駆動ラッパ（task 10.4）。

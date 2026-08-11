@@ -41,7 +41,9 @@ use std::ops::ControlFlow;
 
 use areka_sakura::{cue_target_of, CueCommand, CueTarget, TalkCue};
 
-use crate::bind::{parse_bind_directive, scope_namespace, BindDirective, BindResolver};
+use crate::bind::{
+    parse_bind_directive, scope_namespace, BindChoicePolicy, BindDirective, BindResolver,
+};
 use crate::looper::{LoopRuntime, SerikoLoopConfig};
 use crate::output::{DisplayCommand, SurfaceOutput};
 use crate::resolve::{resolve_balloon_key, BalloonResolve, SurfaceResolver, SurfaceTarget};
@@ -362,9 +364,11 @@ fn handle_message<O: SurfaceOutput>(
                     };
 
                     // (step 6) 適用＋発行。mustselect カテゴリの着衣（on=true）は排他置換
-                    // （同カテゴリ他パーツを自動 off・D11・R4.5）、それ以外（脱衣・非 mustselect）は
+                    // （同カテゴリ他パーツを自動 off・bindopt 3.1）、それ以外（脱衣・mustselect 以外）は
                     // 従来の加算/除去。Changed のみ単一発行点から発行し、実機 grep マーカーを発火する。
-                    let outcome = if on && bind_resolver.is_mustselect(ns, &category) {
+                    let outcome = if on
+                        && bind_resolver.policy(ns, &category) == BindChoicePolicy::MustSelect
+                    {
                         let cat_ids = bind_resolver.category_ids(ns, &category);
                         states.apply_bind_exclusive(&cue.actor, &cat_ids, id)
                     } else {

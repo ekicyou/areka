@@ -35,6 +35,39 @@ pub enum BindNamespace {
     Kero,
 }
 
+/// カテゴリの着せ替え選択ポリシー（ukadoc 正典の 3 値・bindopt 設計 D2）。
+///
+/// `bindoption*.group` のオプション宣言から [`BindResolver::policy`] が導出する。「排他か」
+/// 「解除できるか」の**解釈**はこの型へ一元化され、適用側（actor）は値を照合するだけになる。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BindChoicePolicy {
+    /// `mustselect` 宣言: ちょうど 1 個（着衣＝排他置換・脱衣＝無視〔解除不可〕）。
+    MustSelect,
+    /// 非宣言（正典の既定）: 高々 1 個（着衣＝排他置換・脱衣＝除去〔解除可〕）。
+    Default,
+    /// `multiple` 宣言: 複数可（着衣＝加算・脱衣＝除去）。
+    Multiple,
+}
+
+/// `bindoption` 宣言のスコープ別カテゴリ名集合（名前付き搬送・bindopt 設計 D2/D3）。
+///
+/// 同型の `BTreeSet<String>` が 4 本並ぶため、位置引数で直列に並べず名前付きフィールドで運ぶ
+/// （取り違えをコンパイラに検出させる）。[`Default`] 実装＝全集合空＝全カテゴリが正典の既定
+/// （[`BindChoicePolicy::Default`]）。
+///
+/// [`Default`]: std::default::Default
+#[derive(Clone, Debug, Default)]
+pub struct BindOptionDecls {
+    /// 本体側（sakura）で `mustselect` と宣言されたカテゴリ名（bindopt 1.2）。
+    pub sakura_mustselect: BTreeSet<String>,
+    /// 相方側（kero）で `mustselect` と宣言されたカテゴリ名（bindopt 1.2）。
+    pub kero_mustselect: BTreeSet<String>,
+    /// 本体側（sakura）で `multiple` と宣言されたカテゴリ名（bindopt 1.1）。
+    pub sakura_multiple: BTreeSet<String>,
+    /// 相方側（kero）で `multiple` と宣言されたカテゴリ名（bindopt 1.1）。
+    pub kero_multiple: BTreeSet<String>,
+}
+
 /// bind 名前解決スナップショット（所有・純関数・[`SurfaceResolver`] 同型）。
 ///
 /// 本体側（sakura）・相方側（kero）を別々の所有スナップショット
@@ -50,49 +83,53 @@ pub struct BindResolver {
     sakura: BTreeMap<(String, String), u32>,
     /// 相方側（kero）: `(カテゴリ, パーツ)` → 着せ替え ID。emo2 では空（Risks）。
     kero: BTreeMap<(String, String), u32>,
-    /// 本体側（sakura）の mustselect（排他選択）カテゴリ名集合（D11・R4.5）。
+    /// `bindoption*.group` 宣言のスコープ別カテゴリ名集合（bindopt 設計 D2/D3）。
     ///
-    /// `sakura.bindoption*.group,カテゴリ,mustselect` 宣言のカテゴリ名。着衣（on）時に
-    /// 同カテゴリ他パーツを自動 off する排他置換の対象判定に使う。`multiple`／非宣言は
-    /// 既定＝非排他ゆえここに含めない（空集合＝全カテゴリ非排他＝従来 additive）。
-    sakura_mustselect: BTreeSet<String>,
-    /// 相方側（kero）の mustselect（排他選択）カテゴリ名集合（D11・R4.5）。emo2 では空。
-    kero_mustselect: BTreeSet<String>,
+    /// [`policy`] が 3 値ポリシーを導出する唯一の材料。全集合空＝全カテゴリが正典の既定
+    /// （[`BindChoicePolicy::Default`]）。
+    ///
+    /// [`policy`]: BindResolver::policy
+    options: BindOptionDecls,
 }
 
 impl BindResolver {
-    /// 本体側・相方側の名前表（所有）から構築する。
+    /// 本体側・相方側の名前表（所有）と `bindoption` 宣言集合から構築する。
     ///
-    /// app 層（task 7.1）が `MountModel.bindgroups` の名前転記から素データで組む。
+    /// app 層（起動時資産構築）が `MountModel.bindgroups` の名前転記から素データで組む。
     /// 二重定義せず、渡された表をそのまま所有スナップショットとして保持する。
     ///
-    /// `sakura_mustselect`／`kero_mustselect` は mustselect（排他選択）カテゴリ名集合
-    /// （D11・R4.5）。空集合を渡せば全カテゴリ非排他＝従来 additive 挙動と byte 同値。
+    /// `options` は `sakura/kero.bindoption*.group,カテゴリ,オプション` 由来のスコープ別
+    /// カテゴリ名集合（bindopt 設計 D2/D3）。[`BindOptionDecls::default`]（全集合空）を渡せば
+    /// 全カテゴリが正典の既定（[`BindChoicePolicy::Default`]）になる。
     pub fn new(
         sakura: BTreeMap<(String, String), u32>,
         kero: BTreeMap<(String, String), u32>,
-        sakura_mustselect: BTreeSet<String>,
-        kero_mustselect: BTreeSet<String>,
+        options: BindOptionDecls,
     ) -> Self {
         Self {
             sakura,
             kero,
-            sakura_mustselect,
-            kero_mustselect,
+            options,
         }
     }
 
-    /// 空リゾルバ（本体側・相方側とも空表・mustselect も空）。
+    /// 空リゾルバ（本体側・相方側とも空表・`bindoption` 宣言も空）。
     ///
     /// bind 名前表を供給しない既存テスト（task 6.4）・bind cue 不在経路の追随用。空表は
     /// R4.3 のシームを「同一機構」で実現する——人工的な無効化コードを書かず、引きが自然に
-    /// 解決不能（`None`）へ落ちる（D7）。mustselect も空ゆえ排他判定は常に非排他。
+    /// 解決不能（`None`）へ落ちる（D7）。宣言集合も空ゆえ [`policy`] は全カテゴリで正典の既定
+    /// （[`BindChoicePolicy::Default`]）を返すが、名前表が空＝[`resolve`] が常に `None` ゆえ
+    /// 適用へ到達せず、挙動への実害はない（bindopt 設計 D3）。
+    ///
+    /// **署名は不変**——並走 spec の無干渉前提として固定する（bindopt 設計 D3）。
+    ///
+    /// [`policy`]: BindResolver::policy
+    /// [`resolve`]: BindResolver::resolve
     pub fn empty() -> Self {
         Self {
             sakura: BTreeMap::new(),
             kero: BTreeMap::new(),
-            sakura_mustselect: BTreeSet::new(),
-            kero_mustselect: BTreeSet::new(),
+            options: BindOptionDecls::default(),
         }
     }
 
@@ -113,17 +150,29 @@ impl BindResolver {
             .copied()
     }
 
-    /// カテゴリが名前空間 `ns` で mustselect（排他選択）宣言されているか（純粋・副作用なし・D11）。
+    /// カテゴリの 3 値ポリシーを名前空間 `ns` の宣言集合から導出する（純粋・副作用なし）。
     ///
-    /// `sakura.bindoption*.group,カテゴリ,mustselect` 由来の集合に属せば `true`。`multiple`・
-    /// 非宣言（既定＝非排他）・未知カテゴリは `false`。名前空間は隔離され、`Sakura` は sakura
-    /// 集合のみ、`Kero` は kero 集合のみを見る。空集合（従来 additive）なら常に `false`。
-    pub fn is_mustselect(&self, ns: BindNamespace, category: &str) -> bool {
-        let set = match ns {
-            BindNamespace::Sakura => &self.sakura_mustselect,
-            BindNamespace::Kero => &self.kero_mustselect,
+    /// 導出順は `multiple` 所属 → [`BindChoicePolicy::Multiple`]、次に `mustselect` 所属 →
+    /// [`BindChoicePolicy::MustSelect`]、どちらでもなければ [`BindChoicePolicy::Default`]。
+    /// 併記（`mustselect+multiple`）は正典文言「multiple で複数のパーツを選択可能」に従い
+    /// **multiple 優先**（bindopt 設計 D4）。未知カテゴリ（名前表に無いカテゴリを含む）も
+    /// 正典の既定＝`Default`。名前空間は隔離され、`Sakura` は sakura 集合のみ、`Kero` は
+    /// kero 集合のみを見る。
+    pub fn policy(&self, ns: BindNamespace, category: &str) -> BindChoicePolicy {
+        let (mustselect, multiple) = match ns {
+            BindNamespace::Sakura => (
+                &self.options.sakura_mustselect,
+                &self.options.sakura_multiple,
+            ),
+            BindNamespace::Kero => (&self.options.kero_mustselect, &self.options.kero_multiple),
         };
-        set.contains(category)
+        if multiple.contains(category) {
+            BindChoicePolicy::Multiple
+        } else if mustselect.contains(category) {
+            BindChoicePolicy::MustSelect
+        } else {
+            BindChoicePolicy::Default
+        }
     }
 
     /// カテゴリに属する全着せ替え ID を名前空間 `ns` の名前表から集める（純粋・副作用なし・D11）。
@@ -346,19 +395,19 @@ mod tests {
     use areka_sakura::ActorKey;
     use std::collections::{BTreeMap, BTreeSet};
 
-    /// sakura/kero 各 1 件の宣言を持つ小さな名前解決表を組む（mustselect なし）。
+    /// sakura/kero 各 1 件の宣言を持つ小さな名前解決表を組む（`bindoption` 宣言なし）。
     /// sakura: (腕, 上げ)→1100 / kero: (脚, 組む)→2100。
     fn tiny_resolver() -> BindResolver {
         let mut sakura: BTreeMap<(String, String), u32> = BTreeMap::new();
         sakura.insert(("腕".into(), "上げ".into()), 1100);
         let mut kero: BTreeMap<(String, String), u32> = BTreeMap::new();
         kero.insert(("脚".into(), "組む".into()), 2100);
-        BindResolver::new(sakura, kero, BTreeSet::new(), BTreeSet::new())
+        BindResolver::new(sakura, kero, BindOptionDecls::default())
     }
 
-    /// mustselect（排他選択）宣言を持つ名前解決表を組む（D11・R4.5）。
+    /// `mustselect` 宣言を持つ名前解決表を組む（bindopt 設計 D2）。
     /// sakura: (目,笑)→1301 / (目,普)→1303 / (目,閉)→1304 / (紅,あり)→1207。
-    /// mustselect カテゴリ = {目}（紅は非宣言＝非排他）。
+    /// mustselect カテゴリ = {目}（紅は非宣言＝正典の既定）。
     fn mustselect_resolver() -> BindResolver {
         let mut sakura: BTreeMap<(String, String), u32> = BTreeMap::new();
         sakura.insert(("目".into(), "笑".into()), 1301);
@@ -367,38 +416,50 @@ mod tests {
         sakura.insert(("紅".into(), "あり".into()), 1207);
         let mut sakura_ms: BTreeSet<String> = BTreeSet::new();
         sakura_ms.insert("目".into());
-        BindResolver::new(sakura, BTreeMap::new(), sakura_ms, BTreeSet::new())
+        let options = BindOptionDecls {
+            sakura_mustselect: sakura_ms,
+            ..Default::default()
+        };
+        BindResolver::new(sakura, BTreeMap::new(), options)
     }
 
-    /// mustselect 判定は名前空間ごと・宣言カテゴリのみ true（D11）。
+    /// ポリシー導出は名前空間ごと・`mustselect` 宣言カテゴリのみ MustSelect（bindopt 設計 D2）。
     #[test]
-    fn is_mustselect_only_declared_category_per_namespace() {
+    fn policy_mustselect_only_declared_category_per_namespace() {
         let r = mustselect_resolver();
-        assert!(
-            r.is_mustselect(BindNamespace::Sakura, "目"),
-            "sakura で mustselect 宣言されたカテゴリは排他（D11・R4.5）"
+        assert_eq!(
+            r.policy(BindNamespace::Sakura, "目"),
+            BindChoicePolicy::MustSelect,
+            "sakura で mustselect 宣言されたカテゴリは MustSelect（bindopt 設計 D2）"
         );
-        assert!(
-            !r.is_mustselect(BindNamespace::Sakura, "紅"),
-            "非宣言カテゴリ（紅）は非排他（既定・従来 additive）"
+        assert_eq!(
+            r.policy(BindNamespace::Sakura, "紅"),
+            BindChoicePolicy::Default,
+            "非宣言カテゴリ（紅）は正典の既定（Default）"
         );
-        assert!(
-            !r.is_mustselect(BindNamespace::Sakura, "未知"),
-            "未知カテゴリは非排他（false）"
+        assert_eq!(
+            r.policy(BindNamespace::Sakura, "未知"),
+            BindChoicePolicy::Default,
+            "未知カテゴリも正典の既定（Default）"
         );
-        assert!(
-            !r.is_mustselect(BindNamespace::Kero, "目"),
+        assert_eq!(
+            r.policy(BindNamespace::Kero, "目"),
+            BindChoicePolicy::Default,
             "kero では sakura の mustselect を引かない（名前空間隔離）"
         );
     }
 
-    /// 空リゾルバ・mustselect なしの表は常に非排他（従来 additive の byte 同値）。
+    /// 空リゾルバ・`bindoption` 宣言なしの表は全カテゴリ既定（bindopt 設計 D3）。
     #[test]
-    fn is_mustselect_empty_or_absent_is_false() {
-        assert!(!BindResolver::empty().is_mustselect(BindNamespace::Sakura, "目"));
-        assert!(
-            !tiny_resolver().is_mustselect(BindNamespace::Sakura, "腕"),
-            "mustselect 空集合の表は全カテゴリ非排他"
+    fn policy_empty_or_absent_is_default() {
+        assert_eq!(
+            BindResolver::empty().policy(BindNamespace::Sakura, "目"),
+            BindChoicePolicy::Default
+        );
+        assert_eq!(
+            tiny_resolver().policy(BindNamespace::Sakura, "腕"),
+            BindChoicePolicy::Default,
+            "bindoption 宣言のない表は全カテゴリ既定（Default）"
         );
     }
 

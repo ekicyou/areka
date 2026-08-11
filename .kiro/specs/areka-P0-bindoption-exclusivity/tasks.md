@@ -15,7 +15,7 @@
   - 観測可能な完了状態: multiple 宣言が転記モデルへスコープ別に収録され、拡張した採取層の決定論テストが全緑
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 4.2, 4.5_
 
-- [ ] 3. 【統合】3 値ポリシー語彙の導入と全呼出元の atomic 追随（挙動不変）
+- [x] 3. 【統合】3 値ポリシー語彙の導入と全呼出元の atomic 追随（挙動不変）
   - カテゴリの選択ポリシーを 3 値で明示する型と、bindoption 宣言をスコープ別に運ぶ名前付き搬送型を新設する
   - 判定器の構築を名前表 2 本＋搬送型の形へ変更し、併記は複数可を優先する導出順でポリシーを返す単一アクセサを備える
   - **判定器側の**旧 2 値述語のみを退役させ、その消費者を新アクセサでの同値判定へ機械的に置換する（この段階では挙動を変えない）。採取層の同名の所属照会は存置する
@@ -109,3 +109,5 @@
 - **task 1（2026-08-11）**: ベースライン全緑を確認。手順＝PowerShell で `cargo build -p shiori-host32-helper -p shiori-host32-testdll --target i686-pc-windows-msvc` → `cargo test --workspace`（exit 0）。i686 ビルドは必ず PowerShell（Git Bash の coreutils `link.exe` が MSVC link を遮蔽する）。
 - **task 2（2026-08-11）**: `BindGroupDefaults` は転記順保持・重複可（design.md:490）。同一カテゴリの重複宣言は Vec へ重複 push されるので、集合化はタスク 3 の `BindOptionDecls` 構築（BTreeSet 変換）が担う——既存 mustselect と同型。
 - **task 2（2026-08-11）**: D8 の引用差し替え対象は `D11`/`R4.5`/`Req 4.5` の 3 文字列に限る。同じファイルに残る `D2`・`R1.x`・`Req 1.x`/`Req 3.x` 等は bind 経路外（`.name`/`.default`/マウント解決）の別 spec 由来ゆえ無改変が正しい（タスク 6.1 でも同じ線引きを守ること）。
+- **task 3（2026-08-11）**: 設計の変更ファイル台帳に `crates/areka-seriko/src/lib.rs` が漏れていた。`lib.rs` の `mod bind;` は非公開なので、`BindChoicePolicy`/`BindOptionDecls` を `pub use` で再エクスポートしないと areka クレートと `tests/bind_e2e.rs` からコンパイル不能。タスク 6.1 で設計台帳へ追記すること。
+- **task 3（2026-08-11）**: `cargo test --workspace` に**別 spec 所有の間欠赤**がある——`actor_dispatch_tests.rs:741` の `non_shell_broadcast_reception_is_benign_debug_no_warn_error` が約 1/6〜1/8 の頻度で捕捉ログ 0 件になる。原因は `areka-P0-test-cage-determinism`（W6.9）に登記済みの tracing callsite 毒化（seriko の `capture_logs`/`capture_logs_flow` が `rebuild_interest_cache()` 未硬化）。本 spec の変更とは因果独立。全緑判定時は再実行して切り分けること。
