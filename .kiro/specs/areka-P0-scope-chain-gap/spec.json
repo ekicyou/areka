@@ -1,13 +1,13 @@
 {
   "feature_name": "areka-P0-scope-chain-gap",
   "created_at": "2026-08-11T00:00:00+09:00",
-  "updated_at": "2026-08-11T00:00:00+09:00",
+  "updated_at": "2026-08-11",
   "language": "ja",
   "phase": "requirements-generated",
   "approvals": {
     "requirements": {
       "generated": true,
-      "approved": false
+      "approved": true
     },
     "design": {
       "generated": false,

@@ -1,4 +1,6 @@
-# SSP 実測オラクル 作業ノート（R1・進行中）
+# SSP 実測オラクル 作業ノート（R1・**完了**）
+
+> **後始末（2026-08-11）**: 計測プローブ `C:\wintools\ssp\ghost\emo2-probe` は役目を終え開発者指示で削除済み。再検証が必要になった場合はセッション5 の手順（開発版 emo2 `C:\home\maz\git\ghost_dev\project\emo2\ghost\emo2` をコピー → ghost/master/descript.txt の name/id を probe 名へ変更 → dic/boot.pasta と dic/menu.pasta の `\![move,-353,,,0,base,base]` を除去 → ghost/master/profile と shell/master/profile を削除）で再作成する。
 
 > 計測ツール: `tools/measure-ssp-rects.ps1`（DPI aware Per-Monitor v2・読み取り専用ポーリング）
 > 証跡ログ: `ssp-rects-steady-dpi96.log`（定常スナップショット）／`ssp-rects-boot-dpi96.log`（再起動時系列）
