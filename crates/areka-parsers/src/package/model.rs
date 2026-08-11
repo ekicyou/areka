@@ -33,7 +33,7 @@ pub struct MountModel {
     pub shiori: ShioriMount,
     /// shell マウント先（Req 3.1/3.2）。
     pub shell: ShellMount,
-    /// shell descript の bindgroup default 転記（Req 4.5・既存 3 フィールドと非衝突）。
+    /// shell descript の bindgroup default 転記（bindopt 1.1/1.2・既存 3 フィールドと非衝突）。
     pub bindgroups: BindGroupDefaults,
 }
 
@@ -56,11 +56,26 @@ pub struct BindGroupDefaults {
     pub sakura_names: Vec<BindGroupName>,
     /// `kero.bindgroup*.name,…` の名前宣言転記（相方側・本体側と区別・Req 1.2）。
     pub kero_names: Vec<BindGroupName>,
-    /// `sakura.bindoption*.group,カテゴリ名,mustselect` と宣言されたカテゴリ名（本体側・Req 4.5）。
-    /// `multiple`／非宣言は既定＝非排他ゆえ収録しない（転記のみ・保持は転記順・欠落は空 `Vec`）。
+    /// `sakura.bindoption*.group` のオプション欄に `mustselect` が現れたカテゴリ名（本体側・bindopt 1.2）。
+    ///
+    /// ukadoc 正典の 3 値（`mustselect`＝ちょうど 1 個・解除不可／非宣言＝既定で高々 1 個・
+    /// 解除可／`multiple`＝複数可）のうち `mustselect` 宣言の**所属**のみを写す。非宣言
+    /// カテゴリはどちらの集合にも入らない＝下流が正典の既定として扱う（3 値の区別が成立
+    /// する）。`+` 区切り併記（`mustselect+multiple`）は両集合へ転記して情報を落とさない
+    /// （転記のみ・解釈しない・保持は転記順・欠落は空 `Vec`）。
     pub sakura_mustselect: Vec<String>,
-    /// `kero.bindoption*.group,カテゴリ名,mustselect` と宣言されたカテゴリ名（相方側・本体側と区別・Req 4.5）。
+    /// `kero.bindoption*.group` のオプション欄に `mustselect` が現れたカテゴリ名
+    /// （相方側・本体側と区別・bindopt 1.2）。
     pub kero_mustselect: Vec<String>,
+    /// `sakura.bindoption*.group` のオプション欄に `multiple` が現れたカテゴリ名（本体側・bindopt 1.1）。
+    ///
+    /// `multiple`（複数可）宣言の**所属**を写し、非宣言（既定）と区別可能にする。旧実装は
+    /// この宣言を破棄していたため下流に「明示 multiple」と「非宣言」を区別する情報が存在
+    /// しなかった（転記のみ・解釈しない・保持は転記順・欠落は空 `Vec`）。
+    pub sakura_multiple: Vec<String>,
+    /// `kero.bindoption*.group` のオプション欄に `multiple` が現れたカテゴリ名
+    /// （相方側・本体側と区別・bindopt 1.1）。
+    pub kero_multiple: Vec<String>,
 }
 
 /// bindgroup 名前宣言 1 件の忠実転記（不透明文字列・ID 非生成・Req 1.5）。
@@ -135,12 +150,31 @@ impl BindGroupDefaults {
         }
     }
 
-    /// 当該スコープで `category` が mustselect（排他選択）と宣言されているか（Req 4.5）。
+    /// 当該スコープで `category` が `mustselect` と**宣言されているか**（転写所属照会・bindopt D5）。
     ///
-    /// `sakura/kero.bindoption*.group,カテゴリ,mustselect` で宣言されたカテゴリのみ真。
-    /// `multiple`／非宣言は既定＝非排他ゆえ偽。純関数（同一入力同一出力・副作用なし）。
+    /// `sakura/kero.bindoption*.group` のオプション欄に `mustselect` が現れたカテゴリのみ真
+    /// （`+` 区切り併記でも真）。`multiple` 単独宣言・非宣言は偽。答えるのは宣言の**所属**
+    /// だけで、「排他か」の解釈（非宣言＝既定も着衣は排他置換）は下流 seriko の責務であり
+    /// 本メソッドは持たない（parsers 転写層原則）。純関数（同一入力同一出力・副作用なし）。
     pub fn is_mustselect(&self, scope: BindScope, category: &str) -> bool {
         self.mustselect(scope).iter().any(|c| c == category)
+    }
+
+    /// スコープに対応する multiple カテゴリ名スライスを返す（内部ヘルパ）。
+    fn multiple(&self, scope: BindScope) -> &[String] {
+        match scope {
+            BindScope::Sakura => &self.sakura_multiple,
+            BindScope::Kero => &self.kero_multiple,
+        }
+    }
+
+    /// 当該スコープで `category` が `multiple` と**宣言されているか**（転写所属照会・bindopt 1.1）。
+    ///
+    /// `is_mustselect` と対称。オプション欄に `multiple` が現れたカテゴリのみ真（`+` 区切り
+    /// 併記でも真）。非宣言カテゴリは偽——偽は「既定（高々 1 個・解除可）」を意味し、
+    /// 「複数可」ではない。純関数（同一入力同一出力・副作用なし）。
+    pub fn is_multiple(&self, scope: BindScope, category: &str) -> bool {
+        self.multiple(scope).iter().any(|c| c == category)
     }
 }
 
@@ -279,15 +313,20 @@ mod bindgroup_name_tests {
         assert!(defaults.category_ids(BindScope::Sakura, "脚").is_empty());
     }
 
-    /// 空の mustselect 表への問い合わせは全カテゴリ偽（既定＝非排他・R4.5）。
+    /// 空の宣言表への問い合わせは全カテゴリ偽＝全カテゴリ既定（bindopt 1.6）。
+    ///
+    /// 両照会が偽であることが「既定（高々 1 個・解除可）」の表現であり、
+    /// bindoption 宣言ゼロの shell はこの形で成立する。
     #[test]
     fn is_mustselect_on_empty_returns_false() {
         let defaults = BindGroupDefaults::default();
         assert!(!defaults.is_mustselect(BindScope::Sakura, "腕"));
         assert!(!defaults.is_mustselect(BindScope::Kero, "腕"));
+        assert!(!defaults.is_multiple(BindScope::Sakura, "腕"));
+        assert!(!defaults.is_multiple(BindScope::Kero, "腕"));
     }
 
-    /// 宣言済みカテゴリのみ mustselect＝真、非宣言は偽（R4.5）。
+    /// 宣言済みカテゴリのみ mustselect＝真、非宣言（既定）は偽（bindopt 1.2）。
     #[test]
     fn is_mustselect_returns_declared_only() {
         let defaults = BindGroupDefaults {
@@ -296,11 +335,13 @@ mod bindgroup_name_tests {
         };
         assert!(defaults.is_mustselect(BindScope::Sakura, "腕"));
         assert!(defaults.is_mustselect(BindScope::Sakura, "目"));
-        // 非宣言カテゴリ（紅＝multiple/既定）は偽。
+        // 非宣言カテゴリ（紅）は偽＝既定（高々 1 個・解除可）。
         assert!(!defaults.is_mustselect(BindScope::Sakura, "紅"));
+        // mustselect 宣言は multiple 所属を意味しない（2 集合は独立）。
+        assert!(!defaults.is_multiple(BindScope::Sakura, "腕"));
     }
 
-    /// mustselect は本体（sakura）／相方（kero）を区別する（R4.5・スコープ隔離）。
+    /// mustselect は本体（sakura）／相方（kero）を区別する（bindopt 1.2・スコープ隔離）。
     #[test]
     fn is_mustselect_distinguishes_scope() {
         let defaults = BindGroupDefaults {
@@ -312,5 +353,71 @@ mod bindgroup_name_tests {
         assert!(!defaults.is_mustselect(BindScope::Kero, "腕"));
         assert!(defaults.is_mustselect(BindScope::Kero, "口"));
         assert!(!defaults.is_mustselect(BindScope::Sakura, "口"));
+    }
+
+    /// 宣言済みカテゴリのみ multiple（複数可）＝真、非宣言（既定）は偽（bindopt 1.1）。
+    ///
+    /// 「偽」は既定（高々 1 個・解除可）であって複数可ではない——この区別の成立が
+    /// 本 spec の是正の核である。
+    #[test]
+    fn is_multiple_returns_declared_only() {
+        let defaults = BindGroupDefaults {
+            sakura_multiple: vec!["紅".to_string(), "髪飾り".to_string()],
+            ..Default::default()
+        };
+        assert!(defaults.is_multiple(BindScope::Sakura, "紅"));
+        assert!(defaults.is_multiple(BindScope::Sakura, "髪飾り"));
+        // 非宣言カテゴリ（まばたき）は偽＝既定。
+        assert!(!defaults.is_multiple(BindScope::Sakura, "まばたき"));
+        // multiple 宣言は mustselect 所属を意味しない（2 集合は独立）。
+        assert!(!defaults.is_mustselect(BindScope::Sakura, "紅"));
+    }
+
+    /// multiple は本体（sakura）／相方（kero）を区別する（bindopt 1.1・スコープ隔離）。
+    #[test]
+    fn is_multiple_distinguishes_scope() {
+        let defaults = BindGroupDefaults {
+            sakura_multiple: vec!["紅".to_string()],
+            kero_multiple: vec!["尻尾飾り".to_string()],
+            ..Default::default()
+        };
+        assert!(defaults.is_multiple(BindScope::Sakura, "紅"));
+        assert!(!defaults.is_multiple(BindScope::Kero, "紅"));
+        assert!(defaults.is_multiple(BindScope::Kero, "尻尾飾り"));
+        assert!(!defaults.is_multiple(BindScope::Sakura, "尻尾飾り"));
+    }
+
+    /// `mustselect+multiple` 併記は両集合へ所属し、両照会がともに真になる（bindopt 1.3）。
+    ///
+    /// 併記の情報を落とさないのが転写層の責務で、どちらを優先するか（bindopt D4）は
+    /// 下流 seriko の解釈。
+    #[test]
+    fn both_options_declared_belongs_to_both_sets() {
+        let defaults = BindGroupDefaults {
+            sakura_mustselect: vec!["腕".to_string()],
+            sakura_multiple: vec!["腕".to_string()],
+            ..Default::default()
+        };
+        assert!(defaults.is_mustselect(BindScope::Sakura, "腕"));
+        assert!(defaults.is_multiple(BindScope::Sakura, "腕"));
+    }
+
+    /// `#[non_exhaustive]`＋`Default` ゆえ multiple フィールド追加は additive——
+    /// 既存フィールドのみを指定する構築が無傷で通り、追加分は空になる（bindopt 1.1）。
+    #[test]
+    fn multiple_fields_are_additive_to_existing_construction() {
+        let defaults = BindGroupDefaults {
+            sakura_default_on: vec![1100],
+            sakura_names: vec![name(1100, "腕", "伸び")],
+            sakura_mustselect: vec!["腕".to_string()],
+            ..Default::default()
+        };
+        // 既存フィールドの意味は不変。
+        assert_eq!(defaults.sakura_default_on, vec![1100]);
+        assert_eq!(defaults.resolve_name(BindScope::Sakura, "腕", "伸び"), Some(1100));
+        assert!(defaults.is_mustselect(BindScope::Sakura, "腕"));
+        // 追加フィールドは既定で空＝全カテゴリ「multiple 非宣言」。
+        assert!(defaults.sakura_multiple.is_empty());
+        assert!(defaults.kero_multiple.is_empty());
     }
 }

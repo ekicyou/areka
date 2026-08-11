@@ -17,6 +17,12 @@
 > - 2026-07-31 実測: 本文の全アンカー（actor.rs:367-371 `is_mustselect` 分岐・resolve.rs:172-184・looper.rs:201・actor.rs:1546/:320-323・assets.rs:210）は **W4 マージ後も現物一致＝陳腐化なし**。補足: frame.rs:1387・spine.rs:572 は `BindResolver::empty()` 使用＝`empty()` 署名不変なら frame.rs/spine.rs は無傷（seriko 内で吸収可能）。
 > - W7 `emo2-conformance-e2e` 適合 #3（着せ替え表情）の前提充足＝本 spec が W6 で先行する。
 
+> **📌 2026-08-11 追記（requirements セッション実測・本ブロックが (60) より優先）**:
+> - **【義務消化】`RUST_LOG=info,areka_seriko=debug` 直接観測を実施済み**（`target/bindopt-debug-observation.log`・実 pasta.dll・絶対パス・`AREKA_APP_SMOKE_EXIT_MS=420000` 有界・exit 0）。結果: **握り潰しの直接証明が成立・ゴースト完全にシロ**。ゴーストは毎回の表情変更でまばたきをペア送信し続けており、Changed（info）は 1403→1400→1402 の **3 回のみ**（飽和 01:20:20）。飽和後はまばたき指示 **28 件**（1400×13・1402×4 ほか・実走末尾まで継続）が全て Unchanged の debug に落ちた。同一実走でルーパーは 1400×156・1402×182 を並行発火。**証拠グレードは「推論」→「直接観測」へ格上げ完了**（「確定的な追加実験（未実施・最優先）」節は消化済み）。
+> - **file-slimming（PR#103）によるアンカー移動**: 檻 `bind_non_mustselect_accumulates_via_actor` は actor.rs:1546 → **`actor_bind_loop_tests.rs:195`**（テスト分離）。`empty()` 監視 4 箇所のうち 2 箇所移動: input_events/balloon.rs:1482 → **`input_events/balloon_test_support.rs:73`**・frame.rs:1563 → **`emo2_boot/frame_test_support.rs:71`**。actor.rs:367 分岐・:319-326 warn・:374-396 ログ分岐・resolve.rs:172-188（+`parse_bindoption_mustselect` :196-205）・looper.rs:215・assets.rs:267・emo2_boot/mod.rs:374・spine.rs:671 は**現物一致を再確認**。
+> - **ukadoc 逐語再確認で正典事実 1 件追加**: 「**オプションは+区切りで複数可**」（例 `mustselect+multiple`）。現実装は値と `mustselect` の完全一致判定ゆえ **`+` 結合値は mustselect 側も含めて全部落ちる**。3 値読み取り実装時に同時適合させる（requirements R1.3 へ収録済み）。
+> - `BindResolver::new` の現署名は **4 引数**（sakura 表・kero 表・sakura mustselect・kero mustselect）＝brief 本文の「mustselect 集合」は namespace 別 2 本に分かれている。
+
 ## Problem
 
 **誰の問題か**: エンドユーザー（ゴースト利用者）と、正典準拠を掲げる areka のシェル互換性。

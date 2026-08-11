@@ -15,7 +15,9 @@
 //! 再抽選対象へ戻る。**再発火の瞬間、残留コマは即時クリアされ**、以降の表示は [`frame_at`] の結果
 //! のみで決まる（討議 #2 裁定：表示を直前 PatternState に依存させない・`Pending` 中はエントリなし＝
 //! ベース露出）。surface 切替／Hide は当該 slot の playback を全除去する（PatternState クリアは
-//! ScopeStates 側 apply の責務）。
+//! ScopeStates 側 apply の責務）。**bind 種（`BindRandom`）の再生中 ID が bind 集合から外れたときは、
+//! 進行相で停止相当（コマ除去＋playback 除去）へ落とす**（bindopt 7.3・D9-2）。発火ゲートは発火を
+//! 止めるだけで進行を止めないため、これが無いと「再生中に外れた」ID のコマが次 tick で復活する。
 //!
 //! # 抽選の固定消費順（D-7）
 //!
@@ -139,9 +141,11 @@ impl LoopRuntime {
     ///
     /// 手順: (1) 単調性ガード（`now < 前回` → `debug!`＋無視）。(2) 境界跨ぎ時のみ抽選（表示中×非再生中×
     /// bind ゲート通過のアニメへ固定消費順で [`should_fire`]・fire で playback 登録＋`info!`）。(3) 全再生中
-    /// アニメへ [`frame_at`] を評価し slot ごとの新 [`PatternState`] を組む（`Pending`→エントリ除去＝再発火
-    /// 残留の即時クリア・`Active`/`FinishedResidual`→コマ搬送・`Stopped`→除去＋playback 除去・
-    /// `FinishedResidual`→コマ残留のまま playback 除去）。(4) slot ごとに `commit_pattern` し `Changed` を集約。
+    /// アニメへ、まず**進行相の bind 判定**（bind 種かつ現在の bind 集合に非所属なら停止相当＝コマ除去＋
+    /// playback 除去・bindopt 7.3/D9-2）を行い、残ったものへ [`frame_at`] を評価して slot ごとの新
+    /// [`PatternState`] を組む（`Pending`→エントリ除去＝再発火残留の即時クリア・`Active`/`FinishedResidual`
+    /// →コマ搬送・`Stopped`→除去＋playback 除去・`FinishedResidual`→コマ残留のまま playback 除去）。
+    /// (4) slot ごとに `commit_pattern` し `Changed` を集約。
     pub(crate) fn on_tick(&mut self, now_ms: u64, states: &mut ScopeStates) -> Vec<DisplayCommand> {
         // (1) 単調性ガード（防御・実クロックでは非発生）。非単調 tick は状態を変えず無発行。
         if let Some(last) = self.last_seen {
@@ -280,6 +284,31 @@ impl LoopRuntime {
                     new_pattern.remove(anim_id);
                     continue;
                 };
+
+                // 進行相の bind 判定（bindopt 7.3/7.4・D9-2）: bind 種（`BindRandom`）でありながら現在の
+                // bind 集合に属さない ID は、再生中であっても停止相当（コマ除去＋playback 除去）へ落とす。
+                // 発火ゲート（上の `:contains` 判定）と同一述語の鏡映であり、面種にも依らない
+                // （bind 非所属の bind 種はそもそも発火し得ない＝再生が続く根拠が無い）。
+                //
+                // **これが無いと「再生中に外れた」場合に次 tick でコマが復活する**——状態側の除去
+                // （`commit_bind` の `drop_residual_frames`・bindopt 7.1）は playback を触らないため、
+                // playback が残る限り下の [`frame_at`] が同じコマを置き直す（2026-08-11 実機で確定）。
+                // `Random`（bind に属さない interval アニメ）はこの判定を通らず従来どおり（bindopt 7.4）。
+                let dropped_by_bind = matches!(anim.trigger, LoopTrigger::BindRandom { .. })
+                    && !states.current_binds(scope).contains(anim_id);
+                if dropped_by_bind {
+                    new_pattern.remove(anim_id);
+                    if let Some(pb) = playback.get_mut(&key) {
+                        pb.remove(&anim_id);
+                    }
+                    tracing::info!(
+                        scope = scope.as_str(),
+                        slot = ?slot,
+                        animation_id = anim_id,
+                        "seriko: loop bind から外れた ID の再生を停止（保持コマ除去・bindopt 7.3）"
+                    );
+                    continue;
+                }
 
                 match frame_at(&anim.frames, elapsed) {
                     // 先頭デッドライン未到達＝ベース露出。再発火時はここで残留コマが即時クリアされる（討議 #2）。
