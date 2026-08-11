@@ -123,7 +123,7 @@
   - _Boundary: 再生の進行段_
   - _Depends: 8.1_
 
-- [ ] 8.3 合成計画の合流条件の補強（最後の砦）
+- [x] 8.3 合成計画の合流条件の補強（最後の砦）
   - 描画対象へ合流する条件に「bind 種のアニメなら現在の bind 集合に属すること」を加える
   - 合成順・重ね順は無改変に保ち、bind に属さないアニメは従来どおり無条件で合流させる
   - bind 非所属の ID の保持コマを渡しても合成計画にその層が現れないことを決定論テストで固定し、既存の合成順の検証は無改変で維持する
@@ -180,3 +180,7 @@
 - **task 8.2（2026-08-11）**: RED が **8.1 と 8.2 の両方が必要な理由を直接観測**した——8.1 が除去した `1412` のコマを進行相が次 tick で置き直す。停止は `looper.rs:288-311` で**コマ除去と playback 除去の両方**を行い、位置は `frame_at` の**手前**。bind 種の判定は `LoopTrigger::BindRandom`（`table.rs:36-47`）で、`Interval::Bind`・`Other` は `table.rs:110-136` で非採録＝**完全かつ唯一の判定**（純 random を巻き込まない）。slot 限定はしない——発火ゲートが slot 非区別なので進行相はその鏡映にする。
 - **task 8.2（2026-08-11）**: **空虚な檻を 1 本作って差し戻された**。負の錨 `progress_phase_emits_no_drop_marker_while_bind_holds` が、健全系で捕捉が空（`logs=[]`）ゆえ不在主張が**恒真**になっていた。是正＝**同一捕捉内の陽性対照**（`loop 抽選発火` の存在主張）＋**ログ経路に依らない状態反証**（保持コマの残存）の併置。ガード条件反転の変異で looper セットの検出が **5/6 → 6/6** へ。**負の錨には必ず陽性対照を同一捕捉内に置くこと**（`actor_dispatch_tests.rs:741-745` が既存の手本）。
 - **【W6.9 申し送り・要追加】** `areka-P0-test-cage-determinism` の間欠赤対象へ **`bind_default_exclusive_replace_emits_show_and_info_marker`**（`actor_bind_loop_tests.rs`・本 spec がタスク 5.2 で追加）を追加すること——full-lib 120 回反復で ×2 を実測。既知 4 本に入っていない。本 spec が新規追加した `progress_phase_bind_drop_emits_info_marker` と `residual_frame_removal_emits_info_marker` も同じ脆弱クラス（`capture_logs` の `rebuild_interest_cache()` 未硬化）。`capture_logs` の複製も `state_test_support.rs`／`looper_tests.rs` の 2 本増えて計 16 箇所。
+- **task 8.3（2026-08-11）**: 合流ゲートは `plan.rs:326` の `if is_bind_animation(master, id) && !binds.contains(id) { debug!; continue; }`。**依存の逆流なし**——`SurfaceMaster.animations`（`normalized.rs:85`）が転記層の `Interval` を保持しており、`Bind`/`BindRandom` と `Random`/`Other`（`areka-parsers/src/shell/model.rs:119-136`）を emo-compose 内だけで区別できる。seriko の `LoopTrigger::BindRandom` と同じ区別が得られる。
+- **task 8.3（2026-08-11）**: `&& !binds.contains(id)` は**論理冗長（等価変異）**——層(i) の filter が pattern0 の有無を条件にせず「bind 種かつ bind 所属」を先取りするため、ゲート到達時には恒真。設計 D9-3 の字義どおりの自己文書化として残してある（層(i) 変更に対する防御）。落としても全緑になるのは正常。
+- **task 8.3（2026-08-11）**: 変異検査は**両側**で荷重を確認済み——①ゲート撤去で負の錨が赤（漏らし過ぎ側）／③`is_bind_animation` を落として全コマに bind 所属を要求すると新規 3 本＋既存 2 本が赤（**締め過ぎ側**＝純 random が描画されなくなる回帰を検出）。負の錨には非空の陽性対照を同一検証内に併置してある（8.2 の空虚な檻の再発防止）。
+- **task 8.3（2026-08-11）**: 「最後の砦」の守備範囲は**当 surface に定義のある bind 種 ID に限る**（未定義 ID は fail-open で従来どおり合流）。7.4 を守るための必然で、仕様どおりの限界として記録。

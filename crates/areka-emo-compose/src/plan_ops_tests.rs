@@ -912,6 +912,11 @@ fn empty_pattern_state_yields_identical_ops_to_pre_merge() {
 
 /// テスト7.2-⑥（要件 4.6・5.3）: bind pattern0 を持たない id の Overlay コマ単独でも描画される
 /// （合流集合が union ゆえ・コマ専用 id）。まばたき再生（pattern0 なし bind の再生コマ）を突く。
+///
+/// 注（task 8.3・bindopt D9-3）: 本フィクスチャの host は animation を 1 本も持たないため、
+/// id=1400 は当 surface の **bind 種アニメではない**。ゆえに task 8.3 の合流ゲート（bind 種のコマは
+/// bind 集合に属することを要求）を受けず、期待値は無改変で成立する。bind 種として定義された id を
+/// bind 非所属のまま与える場合の期待値は [`bind_kind_koma_outside_bindset_is_not_merged`] を見よ。
 #[test]
 fn koma_only_id_without_bind_pattern0_is_drawn() {
     let base = Path::new("shell/master");
@@ -938,5 +943,134 @@ fn koma_only_id_without_bind_pattern0_is_drawn() {
         ops_to_paths(&ops, &map),
         vec!["blink.png"],
         "bind pattern0 を持たない id のコマ単独でも描画（union 合流）"
+    );
+}
+
+// ── task 8.3: 合流条件の補強＝最後の砦（bindopt D9-3・bindopt 7.1/7.4/7.6）───────────────
+//
+// 実機の表情固着は「bind から外れたパーツの保持コマが掃除されない」ことが根因で、掃除は
+// state.rs（発行前除去）→ looper.rs（進行相の停止）→ plan.rs（合流条件）の 3 段で多重化する。
+// 本段は最後の砦: **bind 種のアニメのコマは現在の bind 集合に属するときだけ**描画対象へ合流する。
+// 上流 2 段が漏れても外れたパーツが表示に残らない不変量をここで成立させる（bindopt 7.1）。
+// bind に属さないアニメ（純 `random` の `interval` 等）は従来どおり無条件で合流する（bindopt 7.4）。
+// 合成順・z-order の規則は 1 行も変えない（作者意図どおり・design Out of Boundary）。
+
+/// task 8.3 の共通フィクスチャ: host=1000 に 3 本のアニメを置き、対応する参照先 surface を用意する。
+///
+/// - id=1300: **bind 種**（`Interval::Bind`）・pattern0→surface1301（`eyebase.png`）＝目のベース。
+/// - id=1402: **bind 種**（`Interval::BindRandom`）・**pattern0 なし**（index=1 のみ）→surface1413
+///   （`jito.png`）＝実機で固着したジト目まばたき（視覚寄与が `PatternState` 単独）。
+/// - id=1500: **非 bind**（`Interval::Random`）・pattern0 なし（index=1 のみ）→surface1501
+///   （`sparkle.png`）＝bind に属さない抽選発火アニメ。
+///
+/// 戻り値は (world, atlas, id→path 対応表)。
+fn build_last_stand_world() -> (EmoWorld, AtlasTable, Vec<(ElementId, &'static str)>) {
+    let base = Path::new("shell/master");
+    let rels = ["eyebase.png", "jito.png", "sparkle.png"];
+    let atlas = bake_atlas(base, &rels);
+    let map = id_to_path(&atlas, &rels);
+
+    let host = surface_with_anims(
+        1000,
+        Vec::new(), // 静的 element なし（層はすべて bind／コマ由来）。
+        vec![
+            bind_anim(1300, 1301, 0, 0),
+            single_pattern_anim(1402, Interval::BindRandom { k: 4 }, 1, 1413),
+            single_pattern_anim(1500, Interval::Random { k: 4 }, 1, 1501),
+        ],
+    );
+    let eyebase = surface(1301, vec![elem(0, "eyebase.png", 0, 0)]);
+    let jito = surface(1413, vec![elem(0, "jito.png", 0, 0)]);
+    let sparkle = surface(1501, vec![elem(0, "sparkle.png", 0, 0)]);
+    let shell = shell_of(vec![host, eyebase, jito, sparkle]);
+    let mut world = EmoWorld::build(&shell);
+    world.bind_atlas(&atlas, SetId(0));
+    (world, atlas, map)
+}
+
+/// テスト8.3-①（**RED 核**・受入基準・bindopt 7.1・D9-3）: bind 集合から外れた **bind 種**アニメの
+/// 保持コマは、合成計画にその層を作らない（最後の砦）。
+///
+/// binds={1300} に対し `PatternState` は 1402（bind 種・bind 非所属＝外れたジト目の残留コマ）と
+/// 1500（非 bind の抽選発火コマ）を持つ。是正前は合流条件に bind 所属の要求が無いため 1402 の
+/// `jito.png` が描画され（RED）、是正後は 1402 だけが落ちる。
+///
+/// **陽性対照を同一検証内に併置する**（負の錨の恒真化を防ぐ）: 同じ 1 回の導出で
+/// 1300 の `eyebase.png` と 1500 の `sparkle.png` が**現に描画される**ことを同時に固定するため、
+/// 「何も描画されないから jito も無い」という空虚な一致にならない。
+#[test]
+fn bind_kind_koma_outside_bindset_is_not_merged() {
+    let (world, atlas, map) = build_last_stand_world();
+
+    // 1402 は bind 集合に**属さない**（排他置換で外れた／掃除漏れの残留コマ）。
+    let binds = BindSet::from_ids([1300]);
+    let mut pattern = PatternState::default();
+    pattern.set(1402, koma(1413, ComposeMethod::Overlay, 0, 0));
+    pattern.set(1500, koma(1501, ComposeMethod::Overlay, 0, 0));
+
+    let mut ops = Vec::new();
+    derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds, &pattern);
+    let paths = ops_to_paths(&ops, &map);
+
+    // 負の錨: 外れた bind 種 id=1402 の層（jito.png）は現れない（bindopt 7.1）。
+    assert!(
+        !paths.iter().any(|p| p == "jito.png"),
+        "bind 非所属の bind 種アニメの保持コマは合成計画へ入らない（bindopt 7.1・最後の砦）: {paths:?}"
+    );
+    // 陽性対照＋合成順の不変（既定 descend＝id 昇順描画で 1300 → 1500）。
+    assert_eq!(
+        paths,
+        vec!["eyebase.png", "sparkle.png"],
+        "有効 bind の pattern0 と非 bind コマは従来どおり id 昇順で描画される（陽性対照・bindopt 7.4）"
+    );
+}
+
+/// テスト8.3-②（bindopt 7.4）: **bind に属さない**アニメ（純 `random` の `interval`）のコマは、
+/// bind 集合が空でも従来どおり無条件で合流する。
+///
+/// 補強したゲートが bind 種を超えて効いていないことの錨。①の陽性対照を単独条件（空 BindSet）で
+/// もう一度固定し、「binds が空なら全部落ちる」という過剰な締めすぎを直接反証する。
+#[test]
+fn non_bind_koma_merges_regardless_of_bindset() {
+    let (world, atlas, map) = build_last_stand_world();
+
+    // bind 集合は空。非 bind の id=1500 のコマだけを与える。
+    let binds = BindSet::default();
+    let mut pattern = PatternState::default();
+    pattern.set(1500, koma(1501, ComposeMethod::Overlay, 0, 0));
+
+    let mut ops = Vec::new();
+    derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds, &pattern);
+
+    assert_eq!(
+        ops_to_paths(&ops, &map),
+        vec!["sparkle.png"],
+        "bind に属さないアニメのコマは BindSet に関係なく合流する（bindopt 7.4）"
+    );
+}
+
+/// テスト8.3-③（回帰の錨・bindopt 7.4／要件 4.6）: bind 集合に**属している** bind 種アニメの
+/// コマは従来どおり合流し、pattern0 を持たない再生アニメ（まばたき相当）も描画される。
+///
+/// ①の裏返し。ゲートが「bind 種なら常に落とす」へ振れていないことを固定し、合流の可否が
+/// **bind 所属**という 1 点のみで分かれることを（①と対で）決定づける。
+#[test]
+fn bind_kind_koma_inside_bindset_still_merges() {
+    let (world, atlas, map) = build_last_stand_world();
+
+    // 1402 が bind 集合に**属している**（再生中の正常系）。
+    let binds = BindSet::from_ids([1300, 1402]);
+    let mut pattern = PatternState::default();
+    pattern.set(1402, koma(1413, ComposeMethod::Overlay, 0, 0));
+    pattern.set(1500, koma(1501, ComposeMethod::Overlay, 0, 0));
+
+    let mut ops = Vec::new();
+    derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds, &pattern);
+
+    // 既定 descend＝id 昇順描画で 1300 → 1402 → 1500（合成順は無改変）。
+    assert_eq!(
+        ops_to_paths(&ops, &map),
+        vec!["eyebase.png", "jito.png", "sparkle.png"],
+        "bind 所属の bind 種アニメのコマは従来どおり合流し、合成順も不変（bindopt 7.4）"
     );
 }
