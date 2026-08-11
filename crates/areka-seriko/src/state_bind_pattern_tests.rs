@@ -725,18 +725,57 @@ fn residual_frame_removal_emits_info_marker() {
 }
 
 /// 保持コマを持たない ID が外れただけでは除去ログを出さない（実際に取り除いた事実のみ残す・7.5）。
+///
+/// **不在主張には同一捕捉内の陽性対照を併置する**（`looper_tests` の既存流儀）。同じ捕捉区間で
+/// 1402 の保持コマを**現に持つ** scope0 の排他置換も走らせ、除去痕跡がちょうど 1 行出ることを
+/// 同時に主張する——捕捉が空でも通ってしまう恒真の檻にしないため。あわせて状態側（scope1 の
+/// pattern が手つかず）でも反証し、ログ経路が壊れても判別能力が残るようにする。ID 単位の在庫
+/// 確認（`drop_residual_frames` の `pattern.get(id).is_none()` → `continue`）を落とす変異では、
+/// コマを持たない scope1 側にも痕跡が出て 2 行になり、この檻が赤になる。
 #[test]
 fn no_removal_log_when_dropped_id_has_no_residual_frame() {
+    const REMOVAL_MARKER: &str = "seriko: bind から外れた ID の保持コマを除去";
+
     let mut states = ScopeStates::new(BindSet::from_ids([1402]));
-    let scope = ActorKey::from("0");
-    states.apply(&scope, SurfaceTarget::Show(2100));
+    let with_frame = ActorKey::from("0"); // 外れる 1402 の保持コマを持つ（陽性対照）
+    let without_frame = ActorKey::from("1"); // pattern はあるが 1402 の保持コマは無い（本題）
+    states.apply(&with_frame, SurfaceTarget::Show(2100));
+    states.apply(&without_frame, SurfaceTarget::Show(2100));
+
+    let mut held = PatternState::default();
+    held.set(1402, frame(1413));
+    states.commit_pattern(&with_frame, Slot::Shell, held);
+
+    // 外れる 1402 のコマは持たず、bind 非所属の 9000 のコマだけを持つ。
+    let mut unrelated = PatternState::default();
+    unrelated.set(9000, frame(9001));
+    states.commit_pattern(&without_frame, Slot::Shell, unrelated.clone());
 
     let logs = capture_logs(|| {
-        states.apply_bind_exclusive(&scope, &[1400, 1401, 1402, 1403], 1400);
+        states.apply_bind_exclusive(&with_frame, &[1400, 1401, 1402, 1403], 1400);
+        states.apply_bind_exclusive(&without_frame, &[1400, 1401, 1402, 1403], 1400);
     });
+
+    // 陽性対照: この捕捉には現に除去痕跡が出ている（空捕捉に対する恒真の不在主張を禁じる）。
     assert!(
-        !logs.contains("seriko: bind から外れた ID の保持コマを除去"),
-        "取り除くコマが無いときは除去ログを出さない（bindopt 7.5）: {logs}"
+        logs.contains(REMOVAL_MARKER) && logs.contains("scope=0"),
+        "陽性対照: 保持コマを持つ scope の除去痕跡が同一捕捉に現れる（捕捉が空でないことの反証）: {logs}"
+    );
+    // 不在主張: 実際に取り除いた 1 件のみ＝コマを持たない側の痕跡は出ない（bindopt 7.5）。
+    assert_eq!(
+        logs.matches(REMOVAL_MARKER).count(),
+        1,
+        "除去ログは実際に取り除いた 1 件のみ（取り除くコマが無い scope では出さない・bindopt 7.5）: {logs}"
+    );
+    assert!(
+        !logs.contains("scope=1"),
+        "取り除くコマが無い scope の痕跡は 1 行も出さない（bindopt 7.5）: {logs}"
+    );
+    // 状態側の反証（ログ経路に依らない判別）: コマを持たない側の pattern は手つかず。
+    assert_eq!(
+        states.current_pattern(&without_frame, Slot::Shell),
+        &unrelated,
+        "取り除くコマが無い側は状態も動かない（bindopt 7.4/7.5）"
     );
 }
 

@@ -374,7 +374,7 @@ fn handle_message<O: SurfaceOutput>(
                     let policy = bind_resolver.policy(ns, &category);
 
                     // mustselect の脱衣は正典「解除不可」: 集合を変えず読み流し、痕跡を warn! で
-                    // 残す（bindopt 3.2・D1）。無言の握り潰しにしないため実機の既定ログ水準（info）で
+                    // 残す（bindopt 3.2・bindopt D1）。無言の握り潰しにしないため実機の既定ログ水準（info）で
                     // 見える warn を選ぶ。
                     if !on && policy == BindChoicePolicy::MustSelect {
                         tracing::warn!(

@@ -265,7 +265,7 @@ fn bind_default_category_second_on_replaces_prior_part() {
     );
 }
 
-/// mustselect 脱衣の無視檻（bindopt 3.2・D1）: mustselect カテゴリへの脱衣（off）指示は
+/// mustselect 脱衣の無視檻（bindopt 3.2・bindopt D1）: mustselect カテゴリへの脱衣（off）指示は
 /// bind 集合を一切変えず、固定文言の `warn!` を 1 回残して読み飛ばす（正典「解除不可」）。
 #[test]
 fn bind_mustselect_off_is_ignored_with_warn() {

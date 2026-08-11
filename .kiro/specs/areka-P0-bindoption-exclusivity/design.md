@@ -206,7 +206,10 @@ completed 文書は不改変とし、本記録と roadmap 追記（spec 完了�
 - `crates/areka-emo-compose/src/plan.rs` — **D9 で追加**（:302-309 の描画対象合流に「bind 種 interval なら `binds.contains(id)` を要求」の補強。合成順・z-order は無改変）。
 - `crates/areka/src/emo2_boot/assets.rs` — multiple 集合の構築を追加し `BindOptionDecls` で `BindResolver::new` へ渡す（:253-267）。doc（:261-262 の「Req 4.5・D11」引用）差し替え（D8）。
 - `crates/areka/src/emo2_boot/assets_tests.rs` — **退役述語のコンパイル結合消費者**（:547・:553 が `boot.bind_resolver.is_mustselect(...)` を呼ぶ）。`policy()` での同値判定へ置換し、doc（:530・:531・:551・:554 の旧語彙／引用）を差し替える。**`is_mustselect` 退役と同一変更で atomic に追随しなければ areka がコンパイルできない**（2026-08-11 実測で発見・下記「退役述語の呼出元台帳」）。
-- `crates/areka-seriko/src/state_bind_pattern_tests.rs` — doc コメント／テスト文言の引用差し替えのみ（:199・:201・:219・:304 の mayuna-compose 引用）。コード実体は無改変。
+- `crates/areka-seriko/src/state_bind_pattern_tests.rs` — 当初は doc コメント／テスト文言の引用差し替えのみ（:199・:201・:219・:304 の mayuna-compose 引用）。**D9 のスコープ追加で残留掃除の檻 7 本を新設**（`apply_bind_exclusive_drops_residual_frames_of_removed_ids` ほか・7.1/7.2/7.4/7.5/7.6）。
+- `crates/areka-seriko/src/state_test_support.rs` — **D9 で追加**（残留掃除の檻がログ水準・文言を固定するための `capture_logs` 複製。既存 15 箇所と同じ流儀・W6.9 のハーネス統合対象）。
+- `crates/areka-seriko/src/looper_tests.rs` — **D9 で追加**（進行相の停止の檻。復活しないこと・非 bind 無影響・除去ログの文言と水準・誤検出の不在＝陽性対照付きの負の錨）。
+- `crates/areka-emo-compose/src/plan_ops_tests.rs` — **D9 で追加**（合流条件の檻。bind 非所属の保持コマが合成計画へ入らないこと・非 bind は無条件合流・既存の合成順 golden は無改変で維持）。
 
 **テスト追随（atomic・`BindResolver::new` 全 8 呼出元）**
 
@@ -275,6 +278,31 @@ flowchart TB
 | false | Default | 除去（解除可＝正典既定） | 2.2 |
 | false | Multiple | 除去（従来どおり） | 3.3 |
 
+### 残留掃除の 3 段（D9・Requirement 7）
+
+```mermaid
+flowchart TB
+    Commit[commit_bind: 新旧 bind 集合の差分] --> Removed{removed = 旧 - 新 が空でないか}
+    Removed -- 空 --> BuildShow[表示指令を組む]
+    Removed -- 非空 --> Stage1[① 状態側: 保持コマを除去し info ログ]
+    Stage1 --> BuildShow
+    BuildShow --> Emit[単一発行点]
+    Tick[毎 tick の再生評価] --> Playing{再生中かつ bind 種か}
+    Playing -- はい かつ bind 非所属 --> Stage2[② 再生側: コマ除去 と playback 除去 と info ログ]
+    Playing -- それ以外 --> Advance[従来どおり進行]
+    Stage2 --> Advance
+    Emit --> Plan[合成計画の合流]
+    Advance --> Plan
+    Plan --> Stage3{bind 種なら bind 所属を要求}
+    Stage3 -- 非所属 --> Skip[③ 合流しない debug ログ]
+    Stage3 -- 所属 または 非 bind --> Draw[描画対象へ合流 合成順は無改変]
+```
+
+フロー上の決定:
+- **①だけでは塞がらない**——bind 変化時に**再生中**だった ID は、①が状態を掃除しても次の tick で②の経路がコマを置き直す。実測で確認済み（タスク 8.2 の RED）
+- **②だけでも塞がらない**——再生を終えて残留しているだけの ID は進行相に載らないため、①が要る（emo2 の 1402 がこの形）
+- **③は状態を変えない**。①②が漏れた場合にのみ効く純粋な防御であり、合成順には触れない
+
 ## Requirements Traceability
 
 | Requirement | Summary | Components | Interfaces | Flows |
@@ -327,11 +355,48 @@ flowchart TB
 |-----------|--------------|--------|--------------|------------------|-----------|
 | bindoption 採取 | parsers 転写層 | 3 値宣言の忠実転記 | 1.1-1.7 | parse_kv（P0） | Service |
 | policy 判定 | seriko 純関数層 | 3 値ポリシー導出 | 2.1, 3.1, 3.3 | BindOptionDecls（P0） | Service |
-| 適用結線 | seriko actor | 分岐差し替え＋off 無視 | 2.1-2.7, 3.1-3.4 | policy 判定（P0）・state.rs（P0・無改変） | Service, Event |
+| 適用結線 | seriko actor | 分岐差し替え＋off 無視 | 2.1-2.7, 3.1-3.4 | policy 判定（P0）・state.rs（P0・**D9 で `commit_bind` を改変**） | Service, Event |
+| **残留掃除** | **seriko 状態／再生＋emo-compose 合成計画** | **bind から外れた ID の保持コマ除去（3 段構え）** | **7.1-7.6** | **適用結線（P0）・bind 集合（P0）** | **Service, Event** |
 | 資産構築 | areka boot | multiple 集合の搬送 | 1.1（下流成立）, 3.5 | parsers（P0）・seriko（P0） | Service |
-| 決定論檻群 | テスト | 判断分岐の全網羅 | 4.1-4.5, 3.5 | 各コンポーネント | — |
-| 実機サインオフ | 観測 | 固着解消の実機確認 | 5.1-5.6 | emo2 fixture・実 pasta.dll | — |
+| 決定論檻群 | テスト | 判断分岐の全網羅 | 4.1-4.5, 3.5, **7.6** | 各コンポーネント | — |
+| 実機サインオフ | 観測 | 固着解消の実機確認 | 5.1-5.6, **7.7** | emo2 fixture・実 pasta.dll | — |
 | 文書整合 | 横断 | 旧前提一掃・覆し登記 | 6.1-6.4, 4.5 | D6/D8 | — |
+
+### 残留掃除（3 段構え・D9）
+
+| Field | Detail |
+|-------|--------|
+| Intent | bind 集合から外れた着せ替え ID の保持コマを表示から消す。**排他置換で集合を正しても固着が消えなかった実機事実**への是正 |
+| Requirements | 7.1, 7.2, 7.3, 7.4, 7.5, 7.6 |
+
+**Responsibilities & Constraints**
+- 3 段は**不変量を多重化**する関係であり、上流が漏れても下流が受ける（D9 の「採る形」）。単段では塞がらないことが実測で確定している——8.1 が除去した保持コマを 8.2 の対象経路が次の評価で置き直す
+- 除去対象は **bind 集合由来の ID に限る**（7.4）。bind に属さないアニメの再生・保持コマには一切影響しない
+- **合成順・z-order・`animation-sort` の規則は無改変**（作者意図どおり）
+
+**段の分担**
+
+| 段 | 所在 | 何を掃除するか | ログ |
+|---|---|---|---|
+| ① 状態側 | `state.rs` `commit_bind` | bind 変化の瞬間に外れた ID の保持コマを**表示指令の構築前**に除去 | `info!`（7.5） |
+| ② 再生側 | `looper.rs` 進行相 | **再生中**に外れた ID を停止（コマ除去＋playback 除去）。①だけでは次の評価で復活する | `info!`（7.5） |
+| ③ 合成側 | `plan.rs` 合流条件 | bind 種の ID に bind 所属を要求（**最後の砦**） | `debug!` |
+
+**③ が `debug!` である理由**: ③は状態を変更せず「合流させない」判断に留まるため、7.5 の「取り除いた事実」に当たらない。また毎フレーム・毎 ID で評価されるため `info!` にすると①②の掃除漏れ時に恒常出力になる。**状態を変える①②が実機の既定水準で見えること**が 7.5 の要請であり、それは満たされている。
+
+**既知の守備範囲の限界（登記）**
+- ① は `Slot::Shell` 限定（bind はシェル面に適用される）
+- ③ は**当 surface に定義のある bind 種 ID** に限る（未定義 ID は fail-open で従来どおり合流）——7.4 を守るための必然。**実害なし**: surface 切替時にシェルの `pattern_states` は消去され、表に無い ID は再生側の防御腕が playback ごと落とすため、当 surface 未定義 ID がコマを保持し続ける状態は構成できない。加えて①が bind 由来 ID を種別不問で拾う
+- ② は slot 非依存（発火ゲートが slot 非区別なのでその鏡映）
+
+**3 段が揃っても拾わない形（2026-08-11 バリデーションで発見・emo2 では未実現・登記して先送り）**
+
+1. **bind 集合の要素でありながら interval が純 `random` の ID**——①はコマを消すが、②は bind 種（`bind+random`）限定ゆえ停止せず、③も bind 種判定が偽で素通しするため、次の評価で同じコマが置き直される。**emo2 は全 bindgroup ID が `interval,bind` か `bind+random` のため未実現**（`shell/master/surfaces.txt:27-115` で実測）。要件 7.4 の文言（「bind 種でないアニメに影響しない」）とは整合しており、是正するなら②③の判定を「bind 集合に属するなら種別を問わない」へ広げることになるが、それは 7.4 と衝突するため**要件の再裁定が要る**。追跡先＝本節。
+2. **③のゲートがシェル面限定でない**——バルーン合成は常に空の bind 集合で走るため、バルーン面に bind 種アニメのコマがあれば③が無条件に落とす。**今日は到達不能**（`Interval::Bind` はループ表に非採録・バルーンの `bind+random` は発火ゲートがシェルの bind 集合を引くため ID 衝突がない限り発火しない）。①はシェル限定の論証を持つが、③は同じ論証を持たない。バルーン面に着せ替えアニメを載せる拡張が来たら**③にも面種の限定を入れるか、バルーン用の bind 集合を渡すかの裁定が要る**。追跡先＝本節。
+
+いずれも**現行の emo2 fixture では構成できない**ため本 spec では実装しない。次に bind 経路へ触る spec が本節を参照すること。
+
+**Contracts**: Service [x] / Event [x]（除去の `info!` が観測面）
 
 ### parsers 転写層
 
