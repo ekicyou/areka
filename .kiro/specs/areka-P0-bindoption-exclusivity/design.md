@@ -33,15 +33,17 @@
 - 「排他か」「解除不可か」のポリシー判定語彙: `crates/areka-seriko/src/bind.rs` の `BindChoicePolicy`／`BindResolver::policy`（`is_mustselect` は退役）
 - bind 適用分岐（actor.rs step 6）の 3 値化と mustselect 脱衣無視: `crates/areka-seriko/src/actor.rs`
 - 起動時資産構築での multiple 集合の搬送: `crates/areka/src/emo2_boot/assets.rs`
+- **bind から外れた ID の残留コマ掃除と再生停止（Requirement 7・2026-08-11 スコープ追加）**: `crates/areka-seriko/src/{state.rs, looper.rs}` の該当経路と `crates/areka-emo-compose/src/plan.rs` の合流条件
 - 上記の決定論テスト檻・emo2 実機サインオフ判定基準と受け入れ記録
 - 旧 2 値前提の doc コメント／テスト文言の一掃と mayuna-compose R4.5/D11 覆しの登記
 
 ### Out of Boundary
 
-- `apply_bind_exclusive`・`commit_bind`・`accumulate` の実装ロジック（`state.rs`/`bind.rs`）——**doc コメントの文言更新のみ**行い、コードは無改変
-- `looper.rs:215` の bind ゲート——読み取りのみ・無改変（排他置換が集合を正せば発火は自然に正常化）
+- `apply_bind_exclusive`・`accumulate` の実装ロジック（`state.rs`/`bind.rs`）——**doc コメントの文言更新のみ**行い、コードは無改変。**`commit_bind` は Requirement 7 で改変する**（外れた ID の保持コマ除去を発行前に挟む・下記 D9）
+- ~~`looper.rs:215` の bind ゲート——読み取りのみ・無改変（排他置換が集合を正せば発火は自然に正常化）~~ **← 2026-08-11 実機サインオフで撤回。この「自然に正常化する」という前提が誤りだった**（下記 D9）。`looper.rs` は Requirement 7 の担当範囲として **This Spec Owns** へ移る
 - `BindResolver::empty()` の**署名**——変更禁止（W6 並走無干渉の前提条件・下記 Revalidation Triggers）
-- `areka-emo-compose`（BindSet・合成順）・emo-present・placement・DPI 系
+- `areka-emo-compose` の **z-order／合成順**（作者意図どおり・変更禁止）・emo-present・placement・DPI 系。**ただし `plan.rs` の「描画対象 ID 集合への合流条件」は Requirement 7 の担当**（bind 種の ID に bind 所属を要求する補強・合成順は無改変）
+- **常駐アイドルの CPU 消費・毎フレーム全再合成（presenter の 1 コマ約 500ms・`cache_hit=false`）**——`recompose-budget`（W6.75）の領分。2026-08-11 実機で併発観測したが固着の根因ではないと切り分け済み（`real-machine-signoff.md` §5.1）
 - `completed/areka-P0-mayuna-compose` 文書そのもの（不改変・本 spec 文書と roadmap 追記で追跡）
 
 ### Allowed Dependencies
@@ -141,6 +143,32 @@ mustselect カテゴリへの off（脱衣）指示は bind 集合を**変更せ
 
 **適用範囲は bind 経路に限る（閉じた対象集合）**: `D11`/`R4.5`/`Req 4.5` の文字列は workspace 全体で約 69 ファイルに現れるが、その大半は**他 spec 領分の同名 ID**（dpi/frame/text/balloon/placement 等）を指しており本件と無関係である。差し替え対象は下記 §File Structure Plan の Modified Files に列挙したファイルのみとし、bind 経路外の同名引用には触れない（誤った一括置換の禁止）。`completed/areka-P0-mayuna-compose` の文書は不改変。覆しの登記は下記「mayuna-compose 覆しの記録」と、spec 完了時の roadmap 追記（6.3）で行う。
 
+**D9: bind から外れた ID の残留コマ掃除をスコープへ取り込む（2026-08-11 実機サインオフ後の開発者裁定・Requirement 7）**
+
+初版設計は `looper.rs` を「読み取りのみ・無改変（**排他置換が集合を正せば発火は自然に正常化**）」と宣言していた。**この前提は実機で反証された**——J1・J2 が FAIL→PASS へ反転してもなお J3（目視）で固着が再現した（`real-machine-signoff.md`）。
+
+**反証の中身**: emo2 の 14xx は `pattern0` を持たない（`shell/master/surfaces.txt:84-86`）ため、視覚寄与が**すべて `PatternState` 経由**＝bind ゲートの外にある。bind 集合を正典どおりにしても、既に置かれた残留コマには影響が及ばない。不透明な `surface1413`（`eyebase.png`＋`jito.png`・`:226-229`）が下層の目を覆い続ける。
+
+**確定した機構（全て file:line で裏取り済み）**:
+
+| # | 機構 | 所在 |
+|---|---|---|
+| 1 | `FinishedResidual`（`-1` 終端なしの末尾到達）は playback だけ除去し**コマを残す** | `looper.rs:304-315` |
+| 2 | playback を持たない slot は**丸ごと無評価**。毎 tick `current_pattern` の clone から再開 | `looper.rs:244-247`・`:257` |
+| 3 | bind ゲートは**発火を止めるだけ**。進行相に bind 判定なし | `looper.rs:215`・`:264-346` |
+| 4 | `commit_bind` は `current_pattern` を**そのまま複製して**再発行 | `state.rs:377-405`・`:394` |
+| 5 | 描画対象 ID 集合が `{有効 bind の pattern0 を持つ ID} ∪ {PatternState にコマを持つ ID}` で、**後者に bind 所属の条件が無い** | `plan.rs:302-309`・`:331-350` |
+
+**正典根拠**: ukadoc は `bindgroup*.default` を「1 で表示、**0 で非表示**」と規定する。bind から外れたパーツのコマが描画され続けるのは正典違反であり、`looper.rs` を無改変に保つ初版の境界は**正典を満たせない境界**だった。
+
+**採る形**（`state.rs` → `looper.rs` → `plan.rs` の 3 点・不変条件を多重化する）:
+1. `state.rs` `commit_bind`: `removed = 旧 bind 集合 \ 新 bind 集合` を求め、`pattern_states` から `removed` の ID を除去してから Show を組む（`:394` の複製**前**）。bind 集合に入る ID は bindgroup 解決由来ゆえ、純 `random` アニメを巻き込まない
+2. `looper.rs` 進行相: 再生中かつ bind 種かつ `current_binds` 非所属の ID を停止相当（コマ除去＋playback 除去）へ落とす。**これが無いと「再生中に外れた」場合に次 tick でコマが復活する**
+3. `plan.rs:302-309` の合流に「bind 種 interval なら `binds.contains(id)` を要求」を追加（非 bind アニメは無条件のまま）。1・2 が漏れても表示が壊れない最後の砦
+4. 除去は `info!` を出す（無言の状態変更を作らない・ログ規律・7.5）
+
+**最終コマ保持そのものは疑わない**——`completed/areka-P0-seriko-loop` requirements.md:120 が「デファクト推定・実機で齟齬が観測されたら SSP 実観察で裏取り」と留保付きで確定させた仕様であり、emo2 のデータ（1403「----」が `null.png` で「まばたき層なし」を表現）は「bind 中の残留は意図どおり」という読みと整合する。**欠けているのは外れたときの掃除だけ**である。今回が同 spec の留保が言う「齟齬の初観測」にあたるが、留保が想定した SSP 追験は不要——正典文言（0 で非表示）が一意に読めるため。
+
 ### mayuna-compose 覆しの記録（6.2）
 
 本 spec は `completed/areka-P0-mayuna-compose` の **R4.5**（requirements.md:85）および **D11**（design.md:68 表・:142）——「`multiple`（紅等・非宣言＝既定）はスクリプト明示 on/off で従来どおり成立ゆえ語彙保持のまま」「非宣言は既定＝非排他で無視」——を**覆す**。根拠:
@@ -173,7 +201,9 @@ completed 文書は不改変とし、本記録と roadmap 追記（spec 完了�
 - `crates/areka-seriko/src/bind.rs` — `BindChoicePolicy` enum・`BindOptionDecls` 構造体（`Default` 実装）を新設。`BindResolver` の内部集合を 4 本（mustselect×2・multiple×2）へ拡張。`new(sakura, kero, options: BindOptionDecls)` へ署名変更。`policy(ns, category)` アクセサ新設・`is_mustselect` 退役。doc（:53-60・:69-70・:85-89・:116-120）一掃。in-crate テストを policy マトリクスへ書き換え。
 - `crates/areka-seriko/src/lib.rs` — `BindChoicePolicy`／`BindOptionDecls` の `pub use` 再エクスポート（**2026-08-11 実装中に発見した台帳の記載漏れ**。`mod bind;` は非公開ゆえ、再エクスポートなしでは areka クレートの `assets.rs`／`assets_tests.rs` と統合テスト `tests/bind_e2e.rs` から新型へ到達できずコンパイル不能）。モジュール doc の語彙更新を伴う。
 - `crates/areka-seriko/src/actor.rs` — step 6（:364-372）を 3 値分岐へ差し替え（mustselect×off の無視＋`warn!` を含む）。doc（:170・:364-366）一掃・引用差し替え（D8）。
-- `crates/areka-seriko/src/state.rs` — **doc コメントのみ**（:329-339 の「mustselect（排他選択）カテゴリの」限定文言を「排他カテゴリ（mustselect／非宣言既定）の」汎用文言へ）。コード無改変。
+- `crates/areka-seriko/src/state.rs` — doc コメント（:329-339 の限定文言を汎用文言へ・完了済み）に加え、**D9 で `commit_bind` を改変**（`removed = 旧集合 \ 新集合` の保持コマ除去を `:394` の複製前に挟む＋除去の `info!`）。
+- `crates/areka-seriko/src/looper.rs` — **D9 で追加**（進行相に「bind 種かつ `current_binds` 非所属なら停止相当」を追加。:215 の bind ゲート自体は無改変）。
+- `crates/areka-emo-compose/src/plan.rs` — **D9 で追加**（:302-309 の描画対象合流に「bind 種 interval なら `binds.contains(id)` を要求」の補強。合成順・z-order は無改変）。
 - `crates/areka/src/emo2_boot/assets.rs` — multiple 集合の構築を追加し `BindOptionDecls` で `BindResolver::new` へ渡す（:253-267）。doc（:261-262 の「Req 4.5・D11」引用）差し替え（D8）。
 - `crates/areka/src/emo2_boot/assets_tests.rs` — **退役述語のコンパイル結合消費者**（:547・:553 が `boot.bind_resolver.is_mustselect(...)` を呼ぶ）。`policy()` での同値判定へ置換し、doc（:530・:531・:551・:554 の旧語彙／引用）を差し替える。**`is_mustselect` 退役と同一変更で atomic に追随しなければ areka がコンパイルできない**（2026-08-11 実測で発見・下記「退役述語の呼出元台帳」）。
 - `crates/areka-seriko/src/state_bind_pattern_tests.rs` — doc コメント／テスト文言の引用差し替えのみ（:199・:201・:219・:304 の mayuna-compose 引用）。コード実体は無改変。
@@ -203,7 +233,7 @@ completed 文書は不改変とし、本記録と roadmap 追記（spec 完了�
 
 **変更しないファイル（明示・境界の錨）**
 
-- `crates/areka-seriko/src/looper.rs`（:215 bind ゲート・読み取りのみ）
+- ~~`crates/areka-seriko/src/looper.rs`（:215 bind ゲート・読み取りのみ）~~ **← D9 で撤回。Requirement 7 の変更対象へ移動**（進行相に bind 非所属の停止を追加。:215 のゲート自体は無改変）
 - `crates/areka/src/input_events/balloon_test_support.rs:73`・`crates/areka/src/emo2_boot/frame_test_support.rs:71`・`crates/areka/src/emo2_boot/mod.rs:374`・`crates/areka/src/emo2_boot/spine.rs:671`（`empty()` 呼出＝署名不変ゆえ無傷・W6 無干渉の監視対象）
 - `crates/areka-emo-compose/`（z-order・BindSet）
 - `doc/emo2-conformance-scope.md`（:43 の bindoption 言及は descript キーの列挙のみで旧前提の主張を含まない——2026-08-11 現物確認済み・追随不要）
@@ -283,6 +313,13 @@ flowchart TB
 | 6.2 | mayuna-compose 覆しの明記 | 文書整合 | §mayuna-compose 覆しの記録 | — |
 | 6.3 | roadmap 追記による追跡 | 文書整合 | spec 完了時（kiro-complete）に roadmap へ追記 | — |
 | 6.4 | 2026-08-11 裁定の記録 | 文書整合 | D1（本設計書に記録済み） | — |
+| 7.1 | 外れた ID の保持コマを合成対象から除く | 残留掃除 | `commit_bind` の除去前処理（D9-1）＋`plan.rs` 合流条件（D9-3） | 残留掃除 |
+| 7.2 | 排他置換で外れたパーツを同じ発行で除く | 残留掃除 | `commit_bind`（D9-1・`apply_bind_exclusive` の直後） | 残留掃除 |
+| 7.3 | 再生中に外れた ID の再生停止＋復活しない | 残留掃除 | `looper.rs` 進行相の停止（D9-2） | 残留掃除 |
+| 7.4 | bind 種でないアニメへ影響しない | 残留掃除 | 除去対象を bind 集合由来 ID に限定（D9-1/2/3） | 残留掃除 |
+| 7.5 | 除去のログ痕跡 | 残留掃除 | `info!`（D9-4・無言の状態変更を作らない） | 残留掃除 |
+| 7.6 | 残留掃除の決定論テスト | 檻群 | state／looper の in-crate 檻＋emo-compose の合成計画檻 | — |
+| 7.7 | 実機で次の表情へ切り替わる | 実機サインオフ | J3 目視の再実施 | 実機観測 |
 
 ## Components and Interfaces
 
@@ -551,6 +588,14 @@ Summary-only: `model.bindgroups.sakura_multiple/kero_multiple` から BTreeSet �
 
 - 既存シナリオは `new()` 追随＋コメント語彙更新のみで**期待値不変**（§テスト影響監査: 非宣言カテゴリは全構成で 1 パーツ/カテゴリゆえ排他置換と加算が集合同値）
 - 追加 1 本: multiple 宣言カテゴリの貫通加算（`\![bind]` 2 連で両パーツ共存・3.3 の e2e 錨）
+
+### Unit / Integration Tests（残留コマ掃除・D9）— 7.6, 7.1-7.5
+
+1. **`state.rs`（発行前の除去・7.1/7.2）**: 1402 の保持コマがある状態で 1400 へ排他置換 → 発行される表示指令の pattern に **1402 が含まれない**。除去の `info!` の文言・水準を固定（7.5）
+2. **`looper.rs`（進行相の停止・7.3）**: bind 種アニメの再生中に当該 ID を bind から外す → 次の評価で**コマと playback がともに消える**（復活しない）
+3. **非 bind への無影響（7.4）**: bind 集合に属さない `interval` アニメの再生・保持コマが、上記いずれの経路でも**除去されない**
+4. **`emo-compose` の合成計画（7.1 の最後の砦）**: bind 非所属の ID の保持コマを渡した合成計画に**その層が現れない**。合成順・z-order は無改変であることを既存 golden で維持
+5. 上記はいずれも GPU 実描画・実窓・実 DPI・実 SHIORI・sleep・実時間待機に依存しない（4.4）
 
 ### Real Machine Sign-off（emo2・R5）— 5.1-5.6
 
