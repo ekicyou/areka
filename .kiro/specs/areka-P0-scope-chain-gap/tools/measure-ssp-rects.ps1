@@ -76,7 +76,7 @@ function Get-SspWindows {
 
 function Format-Snapshot($wins) {
     if ($wins.Count -eq 0) { return "(no visible ssp windows)" }
-    ($wins | Sort-Object Class, L | Format-Table HWnd, Class, Title, Dpi, L, T, W, H, WorkArea -AutoSize | Out-String).TrimEnd()
+    ($wins | Sort-Object Class, L | Format-Table HWnd, Class, Title, Dpi, L, T, W, H, WorkArea -AutoSize | Out-String -Width 400).TrimEnd()
 }
 
 if ($PollSeconds -le 0) {
