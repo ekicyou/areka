@@ -1,9 +1,9 @@
 {
   "feature_name": "areka-P0-bindoption-exclusivity",
   "created_at": "2026-08-11T10:17:27+09:00",
-  "updated_at": "2026-08-11T14:20:00+09:00",
+  "updated_at": "2026-08-11T20:35:00+09:00",
   "language": "ja",
-  "phase": "tasks-generated",
+  "phase": "implementation-validated",
   "approvals": {
     "requirements": {
       "generated": true,
