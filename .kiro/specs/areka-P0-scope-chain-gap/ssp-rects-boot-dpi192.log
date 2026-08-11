@@ -1,0 +1,426 @@
+=== change 2026-08-11 10:54:07.178 ===
+
+HWnd    Class                                        Title            Dpi     L     T   W   H WorkArea
+----    -----                                        -----            ---     -     -   -   - --------
+0x80C38 SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP               96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x4011C Tkeroform                                    エモ              96  2142  1352 336 400 L=0 T=0 R=2880 B=1752
+0x20C54 Tmainform                                    むらさき          96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x80BE4 TMasterForm                                  えも2DEBUG        96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x20C5A Tmessageform                                 むらさき/Balloon  96  2364  1076 400 224 L=0 T=0 R=2880 B=1752
+0x80BF0 Tmessageformu                                エモ/Balloon      96  2288  1277 288 203 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 10:54:08.956 ===
+
+HWnd    Class                                        Title            Dpi     L     T   W   H WorkArea
+----    -----                                        -----            ---     -     -   -   - --------
+0x70C3C #32768                                                         96  2651   957 178 436 L=0 T=0 R=2880 B=1752
+0x80C38 SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP               96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x4011C Tkeroform                                    エモ              96  2142  1352 336 400 L=0 T=0 R=2880 B=1752
+0x20C54 Tmainform                                    むらさき          96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x80BE4 TMasterForm                                  えも2DEBUG        96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x20C5A Tmessageform                                 むらさき/Balloon  96  2364  1076 400 224 L=0 T=0 R=2880 B=1752
+0x80BF0 Tmessageformu                                エモ/Balloon      96  2288  1277 288 203 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 10:54:10.079 ===
+
+HWnd    Class                                        Title        Dpi     L     T   W   H WorkArea
+----    -----                                        -----        ---     -     -   -   - --------
+0x80C38 SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP           96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x4011C Tkeroform                                    エモ          96  2142  1352 336 400 L=0 T=0 R=2880 B=1752
+0x20C54 Tmainform                                    むらさき      96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x80BE4 TMasterForm                                  えも2DEBUG    96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x80BF0 Tmessageformu                                エモ/Balloon  96  2288  1277 288 203 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 10:54:11.576 ===
+
+HWnd    Class                                        Title            Dpi     L     T   W   H WorkArea
+----    -----                                        -----            ---     -     -   -   - --------
+0x80C38 SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP               96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x4011C Tkeroform                                    エモ              96  2142  1352 336 400 L=0 T=0 R=2880 B=1752
+0x20C54 Tmainform                                    むらさき          96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x80BE4 TMasterForm                                  えも2DEBUG        96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x20C5A Tmessageform                                 むらさき/Balloon  96  2364  1076 400 224 L=0 T=0 R=2880 B=1752
+0x80BF0 Tmessageformu                                エモ/Balloon      96  2288  1277 288 203 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 10:54:16.385 ===
+
+HWnd    Class                                        Title Dpi     L     T   W   H WorkArea
+----    -----                                        ----- ---     -     -   -   - --------
+0x80C38 SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP    96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 10:54:17.373 ===
+(no visible ssp windows)
+=== change 2026-08-11 10:55:22.640 ===
+
+HWnd    Class             Title           Dpi    L    T   W  H WorkArea
+----    -----             -----           ---    -    -   -  - --------
+0x30C5C SSPProgressWindow TProgressWindow 192 2346 1596 524 98 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 10:55:23.500 ===
+
+HWnd    Class             Title           Dpi    L    T   W   H WorkArea
+----    -----             -----           ---    -    -   -   - --------
+0x30C5C SSPProgressWindow TProgressWindow 192 2346 1596 524  98 L=0 T=0 R=2880 B=1704
+0xE0A74 TMasterForm       えも2DEBUG      192    3    3 400 218 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 10:55:23.599 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W    H WorkArea
+----     -----                                        -----            ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP              192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ             192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき         192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG       192     3     3 400  218 L=0 T=0 R=2880 B=1704
+0x50AAC  Tmessageform                                 むらさき/Balloon 192  1848   352 800  448 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 10:55:26.543 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W    H WorkArea
+----     -----                                        -----            ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP              192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ             192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき         192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG       192     3     3 400  218 L=0 T=0 R=2880 B=1704
+0x50AAC  Tmessageform                                 むらさき/Balloon 192  1848   352 800  448 L=0 T=0 R=2880 B=1704
+0x30BF2  Tmessageformu                                エモ/Balloon     192  2049   754 576  406 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 10:55:56.618 ===
+
+HWnd     Class                                        Title      Dpi     L     T   W    H WorkArea
+----     -----                                        -----      ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP        192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ       192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき   192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG 192     3     3 400  218 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 10:56:08.624 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W    H WorkArea
+----     -----                                        -----            ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP              192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ             192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき         192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG       192     3     3 400  218 L=0 T=0 R=2880 B=1704
+0x50AAC  Tmessageform                                 むらさき/Balloon 192  1848   352 800  448 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 10:56:10.743 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W    H WorkArea
+----     -----                                        -----            ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP              192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ             192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき         192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG       192     3     3 400  218 L=0 T=0 R=2880 B=1704
+0x50AAC  Tmessageform                                 むらさき/Balloon 192  1848   352 800  448 L=0 T=0 R=2880 B=1704
+0x30BF2  Tmessageformu                                エモ/Balloon     192  2049   754 576  406 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 10:56:28.712 ===
+
+HWnd     Class                                        Title      Dpi     L     T   W    H WorkArea
+----     -----                                        -----      ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP        192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ       192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき   192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG 192     3     3 400  218 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 10:56:29.586 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W    H WorkArea
+----     -----                                        -----            ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP              192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ             192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき         192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG       192     3     3 400  218 L=0 T=0 R=2880 B=1704
+0x50AAC  Tmessageform                                 むらさき/Balloon 192  1848   352 800  448 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 10:56:31.710 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W    H WorkArea
+----     -----                                        -----            ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP              192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ             192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき         192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG       192     3     3 400  218 L=0 T=0 R=2880 B=1704
+0x50AAC  Tmessageform                                 むらさき/Balloon 192  1848   352 800  448 L=0 T=0 R=2880 B=1704
+0x30BF2  Tmessageformu                                エモ/Balloon     192  2049   754 576  406 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 10:56:44.588 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W    H WorkArea
+----     -----                                        -----            ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP              192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ             192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき         192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG       192     3     3 400  218 L=0 T=0 R=2880 B=1704
+0x50AAC  Tmessageform                                 むらさき/Balloon 192  1848   352 800  448 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 10:56:46.508 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W    H WorkArea
+----     -----                                        -----            ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP              192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ             192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき         192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG       192     3     3 400  218 L=0 T=0 R=2880 B=1704
+0x50AAC  Tmessageform                                 むらさき/Balloon 192  1848   352 800  448 L=0 T=0 R=2880 B=1704
+0x30BF2  Tmessageformu                                エモ/Balloon     192  2049   754 576  406 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 10:57:01.650 ===
+
+HWnd     Class                                        Title        Dpi     L     T   W    H WorkArea
+----     -----                                        -----        ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP          192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ         192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき     192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG   192     3     3 400  218 L=0 T=0 R=2880 B=1704
+0x30BF2  Tmessageformu                                エモ/Balloon 192  2049   754 576  406 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 10:57:03.619 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W    H WorkArea
+----     -----                                        -----            ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP              192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ             192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき         192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG       192     3     3 400  218 L=0 T=0 R=2880 B=1704
+0x50AAC  Tmessageform                                 むらさき/Balloon 192  1848   352 800  448 L=0 T=0 R=2880 B=1704
+0x30BF2  Tmessageformu                                エモ/Balloon     192  2049   754 576  406 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 10:57:21.616 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W    H WorkArea
+----     -----                                        -----            ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP              192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ             192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき         192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG       192     3     3 400  218 L=0 T=0 R=2880 B=1704
+0x50AAC  Tmessageform                                 むらさき/Balloon 192  1848   352 800  448 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 10:57:23.775 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W    H WorkArea
+----     -----                                        -----            ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP              192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ             192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき         192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG       192     3     3 400  218 L=0 T=0 R=2880 B=1704
+0x50AAC  Tmessageform                                 むらさき/Balloon 192  1848   352 800  448 L=0 T=0 R=2880 B=1704
+0x30BF2  Tmessageformu                                エモ/Balloon     192  2049   754 576  406 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 10:57:42.977 ===
+
+HWnd     Class                                        Title      Dpi     L     T   W    H WorkArea
+----     -----                                        -----      ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP        192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ       192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき   192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG 192     3     3 400  218 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 10:57:46.650 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W    H WorkArea
+----     -----                                        -----            ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP              192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ             192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき         192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG       192     3     3 400  218 L=0 T=0 R=2880 B=1704
+0x50AAC  Tmessageform                                 むらさき/Balloon 192  1848   352 800  448 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 10:57:47.806 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W    H WorkArea
+----     -----                                        -----            ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP              192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ             192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき         192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG       192     3     3 400  218 L=0 T=0 R=2880 B=1704
+0x50AAC  Tmessageform                                 むらさき/Balloon 192  1848   352 800  448 L=0 T=0 R=2880 B=1704
+0x30BF2  Tmessageformu                                エモ/Balloon     192  2049   754 576  406 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 10:58:05.665 ===
+
+HWnd     Class                                        Title      Dpi     L     T   W    H WorkArea
+----     -----                                        -----      ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP        192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ       192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき   192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG 192     3     3 400  218 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 10:58:08.636 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W    H WorkArea
+----     -----                                        -----            ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP              192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ             192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき         192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG       192     3     3 400  218 L=0 T=0 R=2880 B=1704
+0x50AAC  Tmessageform                                 むらさき/Balloon 192  1848   352 800  448 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 10:58:10.621 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W    H WorkArea
+----     -----                                        -----            ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP              192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ             192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき         192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG       192     3     3 400  218 L=0 T=0 R=2880 B=1704
+0x50AAC  Tmessageform                                 むらさき/Balloon 192  1848   352 800  448 L=0 T=0 R=2880 B=1704
+0x30BF2  Tmessageformu                                エモ/Balloon     192  2049   754 576  406 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 10:58:26.635 ===
+
+HWnd     Class                                        Title        Dpi     L     T   W    H WorkArea
+----     -----                                        -----        ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP          192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ         192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき     192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG   192     3     3 400  218 L=0 T=0 R=2880 B=1704
+0x30BF2  Tmessageformu                                エモ/Balloon 192  2049   754 576  406 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 10:58:29.540 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W    H WorkArea
+----     -----                                        -----            ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP              192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ             192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき         192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG       192     3     3 400  218 L=0 T=0 R=2880 B=1704
+0x50AAC  Tmessageform                                 むらさき/Balloon 192  1848   352 800  448 L=0 T=0 R=2880 B=1704
+0x30BF2  Tmessageformu                                エモ/Balloon     192  2049   754 576  406 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 10:58:47.054 ===
+
+HWnd     Class                                        Title      Dpi     L     T   W    H WorkArea
+----     -----                                        -----      ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP        192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ       192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき   192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG 192     3     3 400  218 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 10:58:54.634 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W    H WorkArea
+----     -----                                        -----            ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP              192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ             192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき         192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG       192     3     3 400  218 L=0 T=0 R=2880 B=1704
+0x50AAC  Tmessageform                                 むらさき/Balloon 192  1848   352 800  448 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 10:58:56.539 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W    H WorkArea
+----     -----                                        -----            ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP              192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ             192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき         192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG       192     3     3 400  218 L=0 T=0 R=2880 B=1704
+0x50AAC  Tmessageform                                 むらさき/Balloon 192  1848   352 800  448 L=0 T=0 R=2880 B=1704
+0x30BF2  Tmessageformu                                エモ/Balloon     192  2049   754 576  406 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 10:59:09.600 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W    H WorkArea
+----     -----                                        -----            ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP              192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ             192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき         192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG       192     3     3 400  218 L=0 T=0 R=2880 B=1704
+0x50AAC  Tmessageform                                 むらさき/Balloon 192  1848   352 800  448 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 10:59:11.588 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W    H WorkArea
+----     -----                                        -----            ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP              192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ             192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき         192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG       192     3     3 400  218 L=0 T=0 R=2880 B=1704
+0x50AAC  Tmessageform                                 むらさき/Balloon 192  1848   352 800  448 L=0 T=0 R=2880 B=1704
+0x30BF2  Tmessageformu                                エモ/Balloon     192  2049   754 576  406 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 10:59:31.197 ===
+
+HWnd     Class                                        Title      Dpi     L     T   W    H WorkArea
+----     -----                                        -----      ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP        192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ       192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき   192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG 192     3     3 400  218 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 11:00:00.603 ===
+
+HWnd     Class                                        Title        Dpi     L     T   W    H WorkArea
+----     -----                                        -----        ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP          192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ         192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき     192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG   192     3     3 400  218 L=0 T=0 R=2880 B=1704
+0x30BF2  Tmessageformu                                エモ/Balloon 192  2049   754 576  406 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 11:00:02.182 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W    H WorkArea
+----     -----                                        -----            ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP              192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ             192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき         192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG       192     3     3 400  218 L=0 T=0 R=2880 B=1704
+0x50AAC  Tmessageform                                 むらさき/Balloon 192  1848   352 800  448 L=0 T=0 R=2880 B=1704
+0x30BF2  Tmessageformu                                エモ/Balloon     192  2049   754 576  406 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 11:00:04.586 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W    H WorkArea
+----     -----                                        -----            ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP              192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ             192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき         192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG       192     3     3 400  218 L=0 T=0 R=2880 B=1704
+0x50AAC  Tmessageform                                 むらさき/Balloon 192  1848   352 800  448 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 11:00:06.868 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W    H WorkArea
+----     -----                                        -----            ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP              192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ             192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき         192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG       192     3     3 400  218 L=0 T=0 R=2880 B=1704
+0x50AAC  Tmessageform                                 むらさき/Balloon 192  1848   352 800  448 L=0 T=0 R=2880 B=1704
+0x30BF2  Tmessageformu                                エモ/Balloon     192  2049   754 576  406 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 11:00:23.601 ===
+
+HWnd     Class                                        Title        Dpi     L     T   W    H WorkArea
+----     -----                                        -----        ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP          192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ         192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき     192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG   192     3     3 400  218 L=0 T=0 R=2880 B=1704
+0x30BF2  Tmessageformu                                エモ/Balloon 192  2049   754 576  406 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 11:00:25.804 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W    H WorkArea
+----     -----                                        -----            ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP              192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ             192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき         192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG       192     3     3 400  218 L=0 T=0 R=2880 B=1704
+0x50AAC  Tmessageform                                 むらさき/Balloon 192  1848   352 800  448 L=0 T=0 R=2880 B=1704
+0x30BF2  Tmessageformu                                エモ/Balloon     192  2049   754 576  406 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 11:00:42.976 ===
+
+HWnd     Class                                        Title      Dpi     L     T   W    H WorkArea
+----     -----                                        -----      ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP        192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ       192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき   192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG 192     3     3 400  218 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 11:00:43.572 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W    H WorkArea
+----     -----                                        -----            ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP              192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ             192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき         192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG       192     3     3 400  218 L=0 T=0 R=2880 B=1704
+0x50AAC  Tmessageform                                 むらさき/Balloon 192  1848   352 800  448 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 11:00:45.056 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W    H WorkArea
+----     -----                                        -----            ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP              192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ             192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき         192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG       192     3     3 400  218 L=0 T=0 R=2880 B=1704
+0x50AAC  Tmessageform                                 むらさき/Balloon 192  1848   352 800  448 L=0 T=0 R=2880 B=1704
+0x30BF2  Tmessageformu                                エモ/Balloon     192  2049   754 576  406 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 11:01:02.791 ===
+
+HWnd     Class                                        Title      Dpi     L     T   W    H WorkArea
+----     -----                                        -----      ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP        192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ       192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき   192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG 192     3     3 400  218 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 11:01:08.601 ===
+
+HWnd     Class                                        Title        Dpi     L     T   W    H WorkArea
+----     -----                                        -----        ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP          192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ         192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき     192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG   192     3     3 400  218 L=0 T=0 R=2880 B=1704
+0x30BF2  Tmessageformu                                エモ/Balloon 192  2049   754 576  406 L=0 T=0 R=2880 B=1704
+=== change 2026-08-11 11:01:11.616 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W    H WorkArea
+----     -----                                        -----            ---     -     -   -    - --------
+0x1C0B7A SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP              192 30000 30000 100  100 L=0 T=0 R=2880 B=1704
+0xB0974  Tkeroform                                    エモ             192  1757   904 672  800 L=0 T=0 R=2880 B=1704
+0x20C28  Tmainform                                    むらさき         192  2116   610 764 1094 L=0 T=0 R=2880 B=1704
+0xE0A74  TMasterForm                                  えも2DEBUG       192     3     3 400  218 L=0 T=0 R=2880 B=1704
+0x50AAC  Tmessageform                                 むらさき/Balloon 192  1848   352 800  448 L=0 T=0 R=2880 B=1704
+0x30BF2  Tmessageformu                                エモ/Balloon     192  2049   754 576  406 L=0 T=0 R=2880 B=1704
