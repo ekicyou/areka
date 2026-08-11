@@ -141,7 +141,7 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 
 **2026-08-11 追記(62)（棚卸⑦＝file-slimming マージ後の干渉台帳全面再解決）**: `/kiro-discovery` 再入。前回⑥以降の main 差分は file-slimming 実装（PR#103・64 コミット）とメモのみ＝brief 無し spec **0**・新規起票 **0**・**ウェーブ編成の骨格は変更なし**（W6 残 4 本並走→W6.5→W6.75→W6.9→W7）。slimming の分割で干渉台帳を実測再解決——**緩和 3 ペア**: ⑴cage⇄vis（vis 本体=`frame/attach.rs` ∥ cage①=`frame_test_support.rs` へ別ファイル化＝vis 先着は必達→推奨へ格下げ）⑵exact⇄budget（exact=`presenter/read.rs` ∥ budget=`presenter/show.rs`）⑶atom⇄vis（`frame/dpi.rs` ∥ `frame/attach.rs`・共有はファサード `frame.rs:135-163` フェーズ列のみ）。**同居継続 2 ペア**: budget⇄atom・cage④⇄budget（いずれも `presenter/show.rs` の `apply_show` 内＝W6.75/W6.9 の直列条件は不変）。scg⇄wpl は resolver.rs 未分割で不変（P5 のみ −2 行）。旧「presenter.rs 直列鎖」は**ファイル単位では解消**（同居は show.rs 3 者へ縮小）。付随発見: bind brief の `looper.rs:215 BindResolver::new` は現物に不在（等価サイトは `areka-seriko/src/bind.rs:356,370`）＝bind の design 前 rebase で吸収すること。brief 書換は規律どおり実施せず（design 前 rebase が正）。
 
-**2026-08-11 追記(63)（`bindoption-exclusivity` 完了＝表情固着の根治・根因は 2 層・`mayuna-compose` R4.5/D11 の覆し）**: W6 の挙動バグ 1 本が着地（PR#PLACEHOLDER）。**根因は 1 層ではなく 2 層あった**。
+**2026-08-11 追記(63)（`bindoption-exclusivity` 完了＝表情固着の根治・根因は 2 層・`mayuna-compose` R4.5/D11 の覆し）**: W6 の挙動バグ 1 本が着地（PR#105）。**根因は 1 層ではなく 2 層あった**。
 
 **第 1 層（当初捕捉・bind 集合の単調肥大）**: `bindoption` を ukadoc 正典の **3 値意味論**（`mustselect`＝ちょうど 1 個・解除不可／**非宣言（既定）＝高々 1 個・解除可**／`multiple`＝複数可）へ是正した。**採取層が `multiple` 宣言を捨てていた**（非宣言と明示 multiple を下流で区別できない情報欠落の根）ため、判定は「`mustselect` か、さもなくば加算」の 2 値に縮退しており、非宣言カテゴリで bind 集合が単調に肥大していた。⑴採取層は `+` 区切り複数オプション（正典「オプションは+区切りで複数可」）を含めてオプション語ごとに認識・スコープ別に転記、⑵判定は 3 値 enum（`BindChoicePolicy`）＋単一アクセサ `BindResolver::policy` へ一本化（旧 2 値述語は退役）、⑶適用は「複数可と宣言されていないカテゴリの着衣＝排他置換」へ反転、⑷`mustselect` への脱衣指示は正典「解除不可」どおり集合を変えず読み流し `warn!` で痕跡を残す（**無言の握り潰しを作らない**）。
 
