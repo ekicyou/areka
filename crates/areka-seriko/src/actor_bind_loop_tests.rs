@@ -66,6 +66,34 @@ fn arm_bind_resolver() -> BindResolver {
     BindResolver::new(sakura, BTreeMap::new(), BindOptionDecls::default())
 }
 
+/// 複数可（Multiple）宣言カテゴリ「髪飾り」を持つ sakura 解決層（bindopt 3.3・actor 経路の
+/// 加算検証用）。(髪飾り,花)→1600 / (髪飾り,リボン)→1601。static={1100,1207} と交わらない新 id。
+///
+/// 明示 `multiple` 宣言のカテゴリは既定（Default）と異なり、同一カテゴリ 2 パーツの共存を許す
+/// ——これが Default×着衣（排他置換）との差を観測できる唯一の点（bindopt 3.3）。
+fn hair_multiple_resolver() -> BindResolver {
+    let mut sakura: BTreeMap<(String, String), u32> = BTreeMap::new();
+    sakura.insert(("髪飾り".to_string(), "花".to_string()), 1600);
+    sakura.insert(("髪飾り".to_string(), "リボン".to_string()), 1601);
+    let mut sakura_mul: BTreeSet<String> = BTreeSet::new();
+    sakura_mul.insert("髪飾り".to_string());
+    let options = BindOptionDecls {
+        sakura_multiple: sakura_mul,
+        ..Default::default()
+    };
+    BindResolver::new(sakura, BTreeMap::new(), options)
+}
+
+/// 既定（Default＝非宣言・高々 1 個・解除可）カテゴリ「まばたき」を持つ sakura 解決層
+/// （bindopt 2.1/2.2・actor 経路の排他置換／除去検証用）。emo2 のまばたきカテゴリを模した
+/// (まばたき,通常)→1400 / (まばたき,ジトー)→1402。static={1100,1207} と交わらない新 id。
+fn blink_default_resolver() -> BindResolver {
+    let mut sakura: BTreeMap<(String, String), u32> = BTreeMap::new();
+    sakura.insert(("まばたき".to_string(), "通常".to_string()), 1400);
+    sakura.insert(("まばたき".to_string(), "ジトー".to_string()), 1402);
+    BindResolver::new(sakura, BTreeMap::new(), BindOptionDecls::default())
+}
+
 /// mustselect カテゴリ「目」を持つ sakura 解決層（bindopt 3.1・actor 経路の排他検証用）。
 /// (目,笑)→1301 / (目,普)→1303 / (目,閉)→1304。static={1100,1207} と交わらない新 id。
 fn eye_mustselect_resolver() -> BindResolver {
@@ -290,11 +318,284 @@ fn bind_mustselect_off_is_ignored_with_warn() {
     );
 }
 
-/// 非 mustselect カテゴリは従来どおり加算される（R4.5 の対比・actor 経路）。
-/// 非排他の resolver（arm_bind_resolver・mustselect なし）で 2 つ着衣すると両方が積算される。
+// ─────────────────────────────────────────────────────────────────────
+// bindopt 4.3: ポリシー×着脱の直積 6 セル（design.md §System Flows 直積表）の所在。
+//
+// | on    | policy     | 期待動作             | 檻                                                |
+// |-------|------------|----------------------|---------------------------------------------------|
+// | true  | MustSelect | 排他置換             | bind_mustselect_second_on_replaces_prior_part_in_category |
+// | true  | Default    | 排他置換             | bind_default_category_second_on_replaces_prior_part（最小再現・bindopt 4.1） |
+// | true  | Multiple   | 加算（2 パーツ共存） | bind_multiple_category_two_parts_coexist_via_actor |
+// | false | MustSelect | 無視（集合不変+warn）| bind_mustselect_off_is_ignored_with_warn          |
+// | false | Default    | 除去                 | bind_default_category_off_removes_part            |
+// | false | Multiple   | 除去                 | bind_multiple_category_off_removes_only_that_part |
+//
+// 既存流儀（排他置換経路でも維持されること）: 変更時のみ発行＋info マーカー（bindopt 2.4）＝
+// bind_default_exclusive_replace_emits_show_and_info_marker／同値適用は非発行（bindopt 2.5）＝
+// bind_default_same_part_re_on_is_unchanged_no_emit／非表示 scope は状態のみ更新（bindopt 2.6）＝
+// bind_apply_on_hidden_scope_state_only_no_emit（未知 scope は bind_scope_unmapped_warns_no_emit）／
+// 解決不能は読み飛ばし（bindopt 2.7）＝bind_unresolvable_errors_no_emit。
+// ─────────────────────────────────────────────────────────────────────
+
+/// 複数可×着衣（bindopt 3.3）: 明示 `multiple` 宣言カテゴリでは同一カテゴリの 2 パーツを
+/// 続けて着衣すると**両方が共存**する（既定＝排他置換との差を検出する唯一の観測点）。
 #[test]
-fn bind_non_mustselect_accumulates_via_actor() {
-    // (腕,伸び)→1302 と (肩,上げ)→1500 を持つ非 mustselect 表。
+fn bind_multiple_category_two_parts_coexist_via_actor() {
+    let resolver = tiny_resolver();
+    let bind_resolver = hair_multiple_resolver();
+    let mut states = fresh_states(); // static = {1100, 1207}
+    let scope = ActorKey::from("0");
+    states.apply(&scope, SurfaceTarget::Show(2100));
+
+    let mut out = MockSurfaceOutput::new();
+    let mut loop_runtime = inert_runtime();
+    let records = out.records();
+
+    for tokens in [["髪飾り", "花", "1"], ["髪飾り", "リボン", "1"]] {
+        let _ = handle_message(
+            &resolver,
+            &bind_resolver,
+            &mut states,
+            &mut loop_runtime,
+            &mut out,
+            SerikoMsg::Cue(bind_carrier_cue("0", &tokens)),
+        );
+    }
+
+    assert_eq!(
+        states.current_binds(&scope),
+        &BindSet::from_ids([1100, 1207, 1600, 1601]),
+        "複数可カテゴリの着衣は加算＝同一カテゴリ 2 パーツが共存する（bindopt 3.3）"
+    );
+    assert_eq!(
+        records.lock().expect("records mutex poisoned").len(),
+        2,
+        "2 回とも集合が変化＝表示中 scope で Changed 発行（bindopt 2.4）"
+    );
+}
+
+/// 複数可×脱衣（bindopt 3.3）: 明示 `multiple` 宣言カテゴリの脱衣は従来どおり当該パーツのみを
+/// 除去し、同カテゴリの他パーツは残る。
+#[test]
+fn bind_multiple_category_off_removes_only_that_part() {
+    let resolver = tiny_resolver();
+    let bind_resolver = hair_multiple_resolver();
+    let mut states = fresh_states(); // static = {1100, 1207}
+    let scope = ActorKey::from("0");
+    states.apply(&scope, SurfaceTarget::Show(2100));
+
+    let mut out = MockSurfaceOutput::new();
+    let mut loop_runtime = inert_runtime();
+
+    // 前段: 2 パーツを共存させる → {1100,1207,1600,1601}。
+    for tokens in [["髪飾り", "花", "1"], ["髪飾り", "リボン", "1"]] {
+        let _ = handle_message(
+            &resolver,
+            &bind_resolver,
+            &mut states,
+            &mut loop_runtime,
+            &mut out,
+            SerikoMsg::Cue(bind_carrier_cue("0", &tokens)),
+        );
+    }
+    // 本題: 花（1600）だけ脱衣 → リボン（1601）は残る。
+    let _ = handle_message(
+        &resolver,
+        &bind_resolver,
+        &mut states,
+        &mut loop_runtime,
+        &mut out,
+        SerikoMsg::Cue(bind_carrier_cue("0", &["髪飾り", "花", "0"])),
+    );
+
+    assert_eq!(
+        states.current_binds(&scope),
+        &BindSet::from_ids([1100, 1207, 1601]),
+        "複数可カテゴリの脱衣は当該パーツのみ除去し他パーツを残す（bindopt 3.3）"
+    );
+}
+
+/// 既定×脱衣（bindopt 2.2）: 非宣言（既定）カテゴリの脱衣は当該パーツを外し、カテゴリ内
+/// ゼロ個の状態を許す（正典の既定＝「選択解除可能」）。
+#[test]
+fn bind_default_category_off_removes_part() {
+    let resolver = tiny_resolver();
+    let bind_resolver = blink_default_resolver();
+    let mut states = fresh_states(); // static = {1100, 1207}
+    let scope = ActorKey::from("0");
+    states.apply(&scope, SurfaceTarget::Show(2100));
+
+    let mut out = MockSurfaceOutput::new();
+    let mut loop_runtime = inert_runtime();
+
+    // 前段: まばたき=通常（1400）を着衣 → {1100,1207,1400}。
+    let _ = handle_message(
+        &resolver,
+        &bind_resolver,
+        &mut states,
+        &mut loop_runtime,
+        &mut out,
+        SerikoMsg::Cue(bind_carrier_cue("0", &["まばたき", "通常", "1"])),
+    );
+    assert_eq!(
+        states.current_binds(&scope),
+        &BindSet::from_ids([1100, 1207, 1400]),
+        "前提: 既定カテゴリの着衣で 1 パーツが載る"
+    );
+
+    // 本題: 同じパーツへ脱衣 → カテゴリ内ゼロ個（解除可）。
+    let _ = handle_message(
+        &resolver,
+        &bind_resolver,
+        &mut states,
+        &mut loop_runtime,
+        &mut out,
+        SerikoMsg::Cue(bind_carrier_cue("0", &["まばたき", "通常", "0"])),
+    );
+
+    assert_eq!(
+        states.current_binds(&scope),
+        &BindSet::from_ids([1100, 1207]),
+        "既定（非宣言）カテゴリの脱衣は当該パーツを外しゼロ個を許す（解除可・bindopt 2.2）"
+    );
+}
+
+/// 既存流儀の維持（bindopt 2.4）: 既定カテゴリの**排他置換**でも、集合が変わったときは従来の
+/// 単一発行点から Show を再発行し、実機 grep マーカー `seriko: bind 適用`（info）を発火する。
+///
+/// `bind_apply_on_shown_emits_show_and_info_marker` は 1 カテゴリ 1 パーツ構成ゆえ「置換が
+/// 実際に起きる」経路を通らない。本檻は旧パーツを外して新パーツを載せる置換そのものが
+/// Changed 扱いで発行され info が出ることを固定する。
+#[test]
+fn bind_default_exclusive_replace_emits_show_and_info_marker() {
+    let resolver = tiny_resolver();
+    let bind_resolver = blink_default_resolver();
+    let mut states = fresh_states(); // static = {1100, 1207}
+    let scope = ActorKey::from("0");
+    states.apply(&scope, SurfaceTarget::Show(2100));
+
+    let mut out = MockSurfaceOutput::new();
+    let mut loop_runtime = inert_runtime();
+    let records = out.records();
+
+    // 前段: まばたき=通常（1400）を着衣。
+    let _ = handle_message(
+        &resolver,
+        &bind_resolver,
+        &mut states,
+        &mut loop_runtime,
+        &mut out,
+        SerikoMsg::Cue(bind_carrier_cue("0", &["まばたき", "通常", "1"])),
+    );
+
+    // 本題: まばたき=ジトー（1402）を着衣＝排他置換（1400 を外し 1402 を載せる）。
+    let flow = capture_logs_flow(|| {
+        handle_message(
+            &resolver,
+            &bind_resolver,
+            &mut states,
+            &mut loop_runtime,
+            &mut out,
+            SerikoMsg::Cue(bind_carrier_cue("0", &["まばたき", "ジトー", "1"])),
+        )
+    });
+
+    assert_eq!(flow.1, ControlFlow::Continue(()), "適用後も処理継続");
+    let recorded = records.lock().expect("records mutex poisoned");
+    assert_eq!(
+        recorded.len(),
+        2,
+        "排他置換でも集合が変わったときは発行する（bindopt 2.4）: {recorded:?}"
+    );
+    assert_eq!(
+        &recorded[1],
+        &DisplayCommand::Show {
+            scope: scope.clone(),
+            surface_id: 2100,
+            binds: BindSet::from_ids([1100, 1207, 1402]),
+            pattern: PatternState::default(),
+        },
+        "排他置換後の集合で現 surface を単一発行点から再発行（bindopt 2.4）"
+    );
+    assert!(
+        flow.0.contains("level=INFO"),
+        "排他置換の Changed も info! 水準（bindopt 2.4）: {}",
+        flow.0
+    );
+    assert!(
+        flow.0.contains("seriko: bind 適用"),
+        "実機 grep マーカー文言を排他置換経路でも保つ（bindopt 2.4）: {}",
+        flow.0
+    );
+}
+
+/// 既存流儀の維持（bindopt 2.5）: 排他置換経路でも同値適用（同一パーツの再着衣）は結果集合が
+/// 変わらず Unchanged＝再発行しない（冪等）。
+#[test]
+fn bind_default_same_part_re_on_is_unchanged_no_emit() {
+    let resolver = tiny_resolver();
+    let bind_resolver = blink_default_resolver();
+    let mut states = fresh_states(); // static = {1100, 1207}
+    let scope = ActorKey::from("0");
+    states.apply(&scope, SurfaceTarget::Show(2100));
+
+    let mut out = MockSurfaceOutput::new();
+    let mut loop_runtime = inert_runtime();
+    let records = out.records();
+
+    // 1 度目の着衣で Changed 発行（1 件）。
+    let _ = handle_message(
+        &resolver,
+        &bind_resolver,
+        &mut states,
+        &mut loop_runtime,
+        &mut out,
+        SerikoMsg::Cue(bind_carrier_cue("0", &["まばたき", "通常", "1"])),
+    );
+    assert_eq!(
+        records.lock().expect("records mutex poisoned").len(),
+        1,
+        "前提: 1 度目の着衣は Changed で発行される"
+    );
+
+    // 本題: 同一パーツを再着衣 → 排他置換の結果集合が同値ゆえ Unchanged・非発行。
+    let flow = capture_logs_flow(|| {
+        handle_message(
+            &resolver,
+            &bind_resolver,
+            &mut states,
+            &mut loop_runtime,
+            &mut out,
+            SerikoMsg::Cue(bind_carrier_cue("0", &["まばたき", "通常", "1"])),
+        )
+    });
+
+    assert_eq!(flow.1, ControlFlow::Continue(()), "同値適用でも処理継続");
+    assert_eq!(
+        states.current_binds(&scope),
+        &BindSet::from_ids([1100, 1207, 1400]),
+        "同値適用は集合を変えない（冪等・bindopt 2.5）"
+    );
+    assert_eq!(
+        records.lock().expect("records mutex poisoned").len(),
+        1,
+        "同値適用は再発行しない（変更時のみ発行・bindopt 2.5）"
+    );
+    assert_eq!(
+        flow.0.matches("seriko: bind 適用").count(),
+        0,
+        "同値適用では info マーカーを発火しない（bindopt 2.5）: {}",
+        flow.0
+    );
+}
+
+/// 異カテゴリ加算（bindopt 3.4）: 異なるカテゴリ間の bind は共存する。
+///
+/// 各カテゴリが既定（Default＝高々 1 個）でも、排他置換が外すのは**同一カテゴリ**の ID のみ
+/// ゆえ、腕と肩は互いに干渉せず両方が載る（3 値化で変わらない不変量＝回帰の錨）。
+#[test]
+fn bind_cross_category_accumulates_via_actor() {
+    // (腕,伸び)→1302 と (肩,上げ)→1500 を持つ 2 カテゴリ表（いずれも bindoption 非宣言＝既定）。
     let resolver = tiny_resolver();
     let mut sakura: BTreeMap<(String, String), u32> = BTreeMap::new();
     sakura.insert(("腕".to_string(), "伸び".to_string()), 1302);
@@ -325,11 +626,11 @@ fn bind_non_mustselect_accumulates_via_actor() {
         SerikoMsg::Cue(bind_carrier_cue("0", &["肩", "上げ", "1"])),
     );
 
-    // 非 mustselect ゆえ両方積算（1302 も 1500 も残る）。
+    // 異なるカテゴリ同士は干渉しない（1302 も 1500 も残る）。
     assert_eq!(
         states.current_binds(&scope),
         &BindSet::from_ids([1100, 1207, 1302, 1500]),
-        "非 mustselect カテゴリは従来どおり加算（両パーツ有効・R4.5 対比）"
+        "異なるカテゴリ間の bind は共存する（両パーツ有効・bindopt 3.4）"
     );
     assert_eq!(
         records.lock().expect("records mutex poisoned").len(),

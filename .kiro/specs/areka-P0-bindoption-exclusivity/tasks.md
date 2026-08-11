@@ -46,7 +46,7 @@
   - _Boundary: policy 判定の檻_
   - _Depends: 3_
 
-- [ ] 5.2 (P) 適用経路の最小再現檻とポリシー×着脱の全網羅
+- [x] 5.2 (P) 適用経路の最小再現檻とポリシー×着脱の全網羅
   - 非宣言カテゴリの同一カテゴリ 2 パーツへ着衣指示を 2 回流し、後勝ち 1 個になることを最小再現として固定する（旧欠陥挙動からの反転の檻）
   - ポリシー 3 種×着衣／脱衣の 6 組合せをすべて固定する（mustselect の脱衣は集合不変かつ警告の文言・水準まで固定、複数可カテゴリの同一カテゴリ 2 パーツ共存を含む）
   - 排他置換でも変更時のみ発行・同値適用は非発行・非表示 scope は状態のみ更新・解決不能は読み飛ばしとなる既存流儀を檻で維持する
@@ -114,3 +114,6 @@
 - **task 4（2026-08-11）**: RED で旧欠陥挙動を実測採取した——非宣言カテゴリへ 2 度着衣すると `BindSet([1100,1207,1400,1402])`（まばたき 2 パーツ共存）になり、正典期待値 `BindSet([1100,1207,1402])` と乖離。実機観測の症状そのもの。是正後は後勝ち 1 個。設計の「テスト影響監査」は正しく、既存テストは期待値無改変で全緑のまま（既存フィクスチャは全て 1 カテゴリ 1 パーツ）。
 - **task 4（2026-08-11）**: mustselect 脱衣の前段ガードは `return ControlFlow::Continue(())` で `match outcome` より手前に置いてあり、`commit_bind`／`emit_display`／info マーカーのいずれにも到達しない。集合不変かつ発行なしが構造的に保証される。タスク 5.2 で檻に固定する warn 文言は `actor.rs:383` の逐語 `seriko: mustselect カテゴリの脱衣指示を無視（正典・解除不可・bindopt 3.2）`。
 - **task 5.1（2026-08-11）**: **間欠赤の実体はテスト 1 本ではなく 3 本**だった（レビューの独立実測）。`actor_dispatch_tests.rs:741` に加え、`actor_bind_loop_tests.rs:125` の `bind_apply_on_shown_emits_show_and_info_marker`（`level=INFO` 捕捉）と `actor::dispatch_tests::wait_broadcast_reception_is_benign_debug_no_warn_error` も同じログ捕捉クラスで落ちる（本 spec の新規テストを除外した状態でも 10 回中 2 回再現＝因果独立）。`areka-P0-test-cage-determinism`（W6.9）の登記対象を 1 本から 3 本へ広げる材料。
+- **task 5.2（2026-08-11）**: 直積 6 セルの所在——MustSelect×on=`bind_mustselect_second_on_replaces_prior_part_in_category`（既存）／Default×on=`bind_default_category_second_on_replaces_prior_part`（task 4）／Multiple×on=`bind_multiple_category_two_parts_coexist_via_actor`（新規・`hair_multiple_resolver`）／MustSelect×off=`bind_mustselect_off_is_ignored_with_warn`（task 4）／Default×off=`bind_default_category_off_removes_part`（新規）／Multiple×off=`bind_multiple_category_off_removes_only_that_part`（新規）。既存の `bind_apply_on_shown_emits_show_and_info_marker` は 1 カテゴリ 1 パーツ構成で置換が実際に起きないため、排他置換の Changed=info は `bind_default_exclusive_replace_emits_show_and_info_marker` で別途固定した。
+- **task 5.2（2026-08-11）**: **旧語彙のテスト名が `tests/bind_e2e.rs:434` に 1 本残っている**——`non_mustselect_explicit_on_off_is_additive_end_to_end`。本タスクの境界外（貫通シナリオ檻）ゆえ**タスク 5.3 で改名すること**（要件 4.5・bindopt D6）。`actor_bind_loop_tests.rs` 側の旧語彙テスト名はゼロ。
+- **task 5.2（2026-08-11）**: 間欠赤の再実測でレート更新——`cargo test -p areka-seriko --lib` 20 回反復で 4 回 RED（内訳: `bind_apply_on_shown_emits_show_and_info_marker` 2／`non_shell_broadcast_reception_is_benign_debug_no_warn_error` 1／`wait_broadcast_reception_is_benign_debug_no_warn_error` 1）。**新規に追加した檻は 1 度も落ちていない**。W6.9 への申し送り対象は seriko 3 本＋`areka-emo-compose` の `scale::ratio_tests::mul_degradation_emits_warn_log` 1 本の計 4 本へ拡大。
