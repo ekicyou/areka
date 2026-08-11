@@ -136,7 +136,7 @@
 3. **`doc/emo2-conformance-scope.md` の bindoption 記述**の現物確認と追随要否。
 4. **SSP 実挙動の `mustselect+multiple` 併記時の解釈**——正典文言からは multiple 優先（複数可）が読めるが、SSP 実機の追験可否を設計で判断（追験不能なら正典文言解釈で確定し設計に根拠を明記）。
 
-## 6. 設計判断事項（要件ディスカッションへ供する・番号付き）
+## 6. 設計判断事項（要件ディスカッションへ供する・番号付き・**全件裁定済み→§8**）
 
 1. **【裁定済 2026-08-11・要件ディスカッション議題 1】mustselect「解除不可」適合＝本 spec で拾う**——開発者裁定（GO）。off 指示は bind 集合を変えず読み流し、ログに痕跡を残す（requirements R3.2 改訂済・旧 R6.4 の先送り登記条項は解消）。帰結: Option B（3 値型付け）の相対優位が上がる（#2 の判断材料）。emo2 実害なし（休眠中）は実測済みのため実機リスク増なし。
 2. **3 値の搬送形**——Option A（集合 2 本・最小同型）／B（enum ポリシー表・型で明示）／C（A＋構造体引数で署名 churn 打ち止め）。判断軸: R6.4 の帰趨・レビュー差分量・3 度目の署名変更を許容するか。
@@ -146,3 +146,57 @@
 6. **旧語彙テストの改名方針**——`bind_non_mustselect_accumulates_via_actor`（実体＝異カテゴリ加算・保持）の新名と、resolve.rs in-file テストの期待値反転の粒度（R4.5/R6.1 の適用単位）。
 7. **`char*.bindoption*.group`（char2+）の登記**——正典に実在・現行未走査（M-dual シーム・D7 整合）。本 spec の設計文書で「既存縮退の維持」として語彙明記するか（新規乖離ではないため要件追加は不要という整理でよいか）。
 8. **mayuna-compose 引用の差し替え様式**——コード内の「D11・R4.5」引用を本 spec の要件 ID へ置換する際の引用規約（R6.1/R6.2 の実施形。completed 文書は不改変・roadmap 追記で追跡＝R6.3）。
+
+---
+
+# 設計フェーズ追記（2026-08-11・kiro-spec-design）
+
+## 7. 設計ディスカバリ（light・現物再検証）
+
+Extension（既存システムの是正）ゆえ light discovery を主コンテキストで実施。§1 の全アンカーを Grep/Read で再照合し**全件現物一致**を確認した（`BindResolver::new` 8 箇所・`empty()` areka 側 4 箇所＋seriko 側多数・actor.rs:367 分岐・resolve.rs:172-205・state.rs:342-402・assets.rs:253-267・looper.rs:215）。外部依存の新規調査は不要（新規 crates.io 依存なし・正典は §1.5 で逐語保全済み）。
+
+**Research Needed（§5）の消化**:
+
+1. **R5.4 判定基準** → design.md「Real Machine Sign-off」で確定。J1（各まばたき発火の id が直前のまばたき Changed の id と一致＝任意時点で発火し得るまばたき id 高々 1 種・是正前ログで必ず赤になる既知ケース較正付き）・J2（|Changed(まばたき)−Changed(目)| ≤ 2 かつ最終まばたき Changed が最終目 Changed の 120 秒以内＝観測済み飽和形の直接否定）・J3（目視）。
+2. **既存テスト全数の意味反転監査** → 実施済み（下記 §7.1）。同一カテゴリ複数 on を非 multiple カテゴリで前提とするテストは**ゼロ**。
+3. **`doc/emo2-conformance-scope.md`** → 現物確認済み（:43）。bindoption 言及は descript キーの列挙のみで「非宣言＝非排他」等の旧前提の主張を**含まない**＝追随不要。
+4. **SSP 実機の併記解釈追験** → 行わない裁定（design D4）。正典文言「multipleで複数のパーツを選択可能」が一意に読め、emo2 に併記宣言が存在せず観測対象にならないため。正典文言解釈（multiple 優先）で確定し design に根拠明記。
+
+### 7.1 意味反転監査台帳（「multiple 集合が空の非空 resolver」全数・2026-08-11 実測）
+
+| resolver | 場所 | 非宣言カテゴリの構成 | 反転影響 |
+|---|---|---|---|
+| `tiny_resolver` | bind.rs:351 | 腕 1 パーツ／kero 脚 1 パーツ | なし（1 パーツ/カテゴリ＝排他と加算が集合同値） |
+| `mustselect_resolver` | bind.rs:362 | 紅 1 パーツ（目は mustselect） | なし |
+| `arm_bind_resolver` | actor_bind_loop_tests.rs:61 | 腕 1 パーツ | なし |
+| `eye_mustselect_resolver` | actor_bind_loop_tests.rs:69 | （非宣言側なし） | なし |
+| 檻内 2 カテゴリ表 | actor_bind_loop_tests.rs:198-202 | 腕 1・肩 1（**異カテゴリ**加算檻） | なし（3.4 で正典後も有効・改名のみ D6） |
+| `test_bind_resolver` | tests/bind_e2e.rs:118 | 腕 1・頬 1 | なし |
+| `mustselect_bind_resolver` | tests/bind_e2e.rs:236 | 紅 1（目は mustselect） | なし |
+| `empty()` 系全数 | actor_dispatch_tests／tests/{regression,loop_integration,cue_sequence,balloon_face_e2e} ほか | 名前表空＝resolve 常時 None | なし（適用に到達しない） |
+
+結論: 既存テストの**期待値変更はゼロ**。変更は語彙（名前・コメント・アサーションメッセージ）と `new()` 署名追随のみ。実装フェーズで本監査を再実行して緑を確認する（R3.5）。
+
+## 8. 設計判断の裁定（§6 → design.md D1〜D8）
+
+| §6 | 裁定 | design |
+|---|---|---|
+| #1 mustselect 解除不可 | 本 spec で実装（開発者裁定 GO）。off は集合不変＋`warn!`（レベル根拠: steering logging の「無効なパラメーター」区分・debug では info 実走で不可視＝無言の握り潰しの再来ゆえ不採用） | D1 |
+| #2 搬送形 | **合成形**: A の格納（parsers は Vec 追加のみ・転写層原則維持）＋B の語彙を seriko 限定で採用（`BindChoicePolicy`＋`policy()` 単一アクセサ——#1 裁定で off 経路に MustSelect/Default 判別が必須となり bool 述語 2 本より型付き 3 値が一致）＋C の構造体引数。純 B（parsers に enum）は転写層原則違反で棄却。純 A（6 引数直列）は同型 `BTreeSet<String>` 4 本の取り違えリスクで棄却 | D2 |
+| #3 new 署名戦略 | `new(sakura, kero, options: BindOptionDecls)`（named-field＋`Default`）。`empty()` は署名不変（W6 前提・専用テスト不要＝外部呼出 10 箇所超のコンパイル結合が検証）。意味反転（empty＝全カテゴリ Default）は resolve 常時 None ゆえ実害なし——この根拠を檻に固定 | D3 |
+| #4 併記の優先則 | multiple 優先（複数可）。導出順＝multiple 所属 → mustselect 所属 → Default。parsers は両集合へ転記し情報を落とさない（将来の解釈変更に parsers 無改変で耐える） | D4 |
+| #5 is_mustselect の去就 | seriko 側は**退役**（policy() へ一本化・2 値語彙の残存を許さない）。parsers 側 `BindGroupDefaults::is_mustselect` は転写所属照会として**保持**＋対称の `is_multiple` 追加（テスト可読性・解釈を含まない） | D5 |
+| #6 テスト改名 | `bind_non_mustselect_accumulates_via_actor` → `bind_cross_category_accumulates_via_actor`（実体保持）。resolve.rs `multiple_option_not_ingested` は期待値ごと反転。新語彙＝排他置換/既定（高々 1 個・解除可）/複数可 | D6 |
+| #7 char2+ の登記 | 既存縮退の維持を design に語彙明記（M-dual シーム・新規乖離でないため要件追加不要という整理を採用） | D7 |
+| #8 引用差し替え規約 | 「D11・R4.5」（mayuna-compose）→ `bindopt D1〜D8`／`bindopt N.M` 形式（spec 略号を冠し裸の ID を残さない）。completed 不改変・覆しの記録は design.md 専用節＋完了時 roadmap 追記 | D8 |
+
+## 9. 統合（synthesis）の記録
+
+- **一般化**: 「排他か」と「解除不可か」の 2 述語は同一の 3 値ポリシーの射影——`policy()` 1 アクセサへ一般化（インターフェースを一般化し実装は現要件の範囲に留める）。`apply_bind_exclusive`／`category_ids` は元よりカテゴリ非依存の汎用形で、非宣言カテゴリへ**無改変**で適用可能（§1.2 の再確認）。
+- **build vs adopt**: 全面 adopt（既存資産再利用）。新設は型 2 つ（`BindChoicePolicy`・`BindOptionDecls`）と関数 2 つ（`policy`・`parse_bindoption_options`）のみ。新規依存なし。
+- **簡素化**: seriko `is_mustselect` 退役（述語 1 本化）。char2+ の投機的配線なし（D7＝縮退維持のみ）。`BindOptionDecls` は「3 度目の署名 churn を打ち止める」現実の反復実績（mayuna-compose 4 引数化→本件）に基づく採用で、投機ではない。
+
+## 10. 設計レビューゲート結果（2026-08-11）
+
+- 機械検査: 全 34 要件 ID（1.1-1.7／2.1-2.7／3.1-3.5／4.1-4.5／5.1-5.6／6.1-6.4）がトレーサビリティ表に存在・境界 4 節充足・File Structure Plan 具体パス（new 8 呼出元台帳含む）・境界と file plan の整合・孤児コンポーネントなし——**合格**。
+- 判定レビュー: 要件被覆に穴なし（Research Needed 4 件は §7 で全消化）・分岐は (on×policy) 直積表で網羅・実装タスクへ分割可能（採取→判定→結線→檻→実機の brief 境界 4 分割と一致）——**合格（修復パス 0 回）**。
