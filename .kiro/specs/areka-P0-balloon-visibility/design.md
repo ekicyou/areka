@@ -520,7 +520,7 @@ pub(crate) struct ScopeVisibility {
 }
 ```
 
-- 不変条件: `deadline` は `display_end` 確立後にのみ Some になりうる。`display_end` が現在時刻より未来へ更新されたら `deadline` は破棄（バリア解除後の cue 到着）。可視か否かの**判断**は `target_visible` を毎フレーム読む（真実源は presenter 1 箇所）——`prev_visible` は判断根拠ではなく、エッジ検出（ログ・掃除）にのみ使う。
+- 不変条件: `deadline` は `display_end` 確立後にのみ Some になりうる。**初期確立式は `deadline = display_end + timeout_secs`**（正典起点「スクリプトの表示が終わってから」＝Requirement 4.1。「計測 eligible になった最初のフレームの `now + timeout`」ではない——観測遅延分のずれを持ち込まない）。`now` 基準への再設定は Requirement 5.3 の抑止解除エッジのみ。`display_end` が現在時刻より未来へ更新されたら `deadline` は破棄（バリア解除後の cue 到着）。可視か否かの**判断**は `target_visible` を毎フレーム読む（真実源は presenter 1 箇所）——`prev_visible` は判断根拠ではなく、エッジ検出（ログ・掃除）にのみ使う。
 - `TalkStarted` 受信時: `display_end=None`・`deadline=None`・`signal_gap_warned=false`（`per_scope.last_glyphs` は保持——直後の `ClearAll` 観測がゼロ下降エッジとして全非表示を導く）。
 
 ## Error Handling
@@ -543,7 +543,7 @@ Requirement 8 のログ契約（D10 の表）が実機サインオフの合否�
 
 ### Unit Tests（決定論・GPU 不要）
 
-1. **判断中核 `decide`**（`balloon_visibility_tests.rs`・表駆動）: 可視コンテンツ判定（グリフあり／改行・待機・消去のみ→エッジなし）／scope 別 show と無発話 scope 非表示（2.1-2.7, 3.3）／ゼロ下降エッジの全非表示と直後の再出現（3.1-3.2）／タイムアウト境界（満了直前 now＝deadline-ε で不成立・直後 +ε で成立。now は観測点で頭打ち＝9.3）／抑止の成立・解除・解除後の再計測（5.1-5.3）・抑止中超過の保留（5.6）／観測不能→非抑止（5.5）／信号欠落→保持（4.8）／`TalkStarted` での計測破棄（4.5）／horizon 引き上げによる計測自動破棄（バリア解除後）／明示指令との相互作用（外因 hide の `trigger=explicit` 検出・`\b[-1]` 後の新規コンテンツで再表示）。
+1. **判断中核 `decide`**（`balloon_visibility_tests.rs`・表駆動）: 可視コンテンツ判定（グリフあり／改行・待機・消去のみ→エッジなし）／scope 別 show と無発話 scope 非表示（2.1-2.7, 3.3）／ゼロ下降エッジの全非表示と直後の再出現（3.1-3.2）／タイムアウト境界（満了直前 now＝deadline-ε で不成立・直後 +ε で成立。now は観測点で頭打ち＝9.3。**表駆動入力は `display_end` 相対で書く**——初期式 `deadline = display_end + timeout` の取り違えを檻が検出できる形にする）／抑止の成立・解除・解除後の再計測（5.1-5.3）・抑止中超過の保留（5.6）／観測不能→非抑止（5.5）／信号欠落→保持（4.8）／`TalkStarted` での計測破棄（4.5）／horizon 引き上げによる計測自動破棄（バリア解除後）／明示指令との相互作用（外因 hide の `trigger=explicit` 検出・`\b[-1]` 後の新規コンテンツで再表示）。
 2. **`BalloonLifecycleSink`**（`talk_lifecycle_tests.rs`）: 初回 emit の `TalkStarted` 先行・`max(at+duration)` の単調送出・`Wait` cue の duration が horizon へ入ること（4.1）・clone 後のリセット（talk 境界）。
 3. **`parse_timeout_ms`**: 未設定／正値／0・負・非数（warn＋既定）の縮退表。
 4. **`VisualMount`**（mount.rs tests・実 GPU）: hide で両 entity 不可視＋両 `HitTest::None`、再表示で両復帰（1.7/1.8）、不可視構築で可視 component を一度も経由しない（1.2）。
@@ -552,7 +552,7 @@ Requirement 8 のログ契約（D10 の表）が実機サインオフの合否�
 ### Integration Tests
 
 1. **frame 相順**: drain で `\b[-1]`／`\b[0]` を適用後に vis 相が実状態で判断すること・vis 相の show が同一フレームの reconcile で窓寸へ届くこと（6.6）。
-2. **起動シーケンス**（spine 更新分）: attach 完了フレームから最初のコンテンツ配置まで全フレーム `target_visible==Some(false)`（1.1/1.2 の系統・9.1）・readback／スロット成立／適用 k の既存 assert は維持（6.3）。
+2. **起動シーケンス**（spine 更新分）: attach 完了フレームから最初のコンテンツ配置まで全フレーム `target_visible==Some(false)`（1.1/1.2 の系統・9.1）・**`connect_balloon_text` 完了後も slot entity の `Visual.is_visible == false`**（テキスト装着のフック経由で mount の不可視構築が可視既定へ上書きされないこと——presenter 状態でなく entity 実値を観測する。実装時に wintf `Visual` フックの意味論〔既存 `Visual` 存在時に上書きしない〕を file:line で確認する）・readback／スロット成立／適用 k の既存 assert は維持（6.3）。
 3. **`\b` 回帰**: `spine_display_tests` の発行順序・readback 一致が前提変更なしで緑（6.3）。
 4. **会話終了信号の端到端**: 実 cue 列（Wait 含む）→ sink → コントローラの `display_end` が `CueSheet` の占有終端と一致（4.1）。
 
