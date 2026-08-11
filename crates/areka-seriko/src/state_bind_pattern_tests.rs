@@ -538,6 +538,208 @@ fn apply_bind_reemit_carries_current_pattern() {
     );
 }
 
+// ---- 残留コマの掃除（bind から外れた ID の保持コマ除去・bindopt 7.1/7.2/7.4/7.5） ----
+
+/// テスト用のコマ 1 枚（`Overlay`・オフセットなし）。
+fn frame(surface_id: u32) -> PatternFrame {
+    PatternFrame {
+        surface_id,
+        method: ComposeMethod::Overlay,
+        x: 0,
+        y: 0,
+    }
+}
+
+/// 排他置換で外れたパーツの保持コマが**同じ発行で**消える（bindopt 7.1/7.2）。
+///
+/// 実機の固着そのものの再現形: まばたき 1402（`-1` 終端なし＝末尾到達後もコマを保持・
+/// `surface1413` は不透明）が bind 済みで保持コマを持つ状態から 1400 へ排他置換する。
+/// bind 集合は正典どおり {1400} になるのに、除去前処理が無いと発行される Show の pattern に
+/// 1402 の残留コマが乗ったままになり、以後の表示を覆い続ける。
+#[test]
+fn apply_bind_exclusive_drops_residual_frames_of_removed_ids() {
+    let mut states = ScopeStates::new(BindSet::from_ids([1402]));
+    let scope = ActorKey::from("0");
+    states.apply(&scope, SurfaceTarget::Show(2100));
+
+    // 1402（bind 種・外れる側）と 9000（bind 非所属の interval アニメ）の保持コマを置く。
+    let mut residual = PatternState::default();
+    residual.set(1402, frame(1413));
+    residual.set(9000, frame(9001));
+    states.commit_pattern(&scope, Slot::Shell, residual);
+
+    let outcome = states.apply_bind_exclusive(&scope, &[1400, 1401, 1402, 1403], 1400);
+
+    // 期待: 1402 のコマは消え、bind 非所属 9000 のコマは残る（bindopt 7.1/7.2/7.4）。
+    let mut expected = PatternState::default();
+    expected.set(9000, frame(9001));
+    assert_eq!(
+        outcome,
+        BindApplyOutcome::Changed(DisplayCommand::Show {
+            scope: scope.clone(),
+            surface_id: 2100,
+            binds: BindSet::from_ids([1400]),
+            pattern: expected.clone(),
+        }),
+        "排他置換で外れた ID の保持コマは発行前に取り除かれる（bindopt 7.1/7.2）"
+    );
+    assert_eq!(
+        states.current_pattern(&scope, Slot::Shell),
+        &expected,
+        "状態側の格納 pattern からも除去されている（次の発行でも復活しない）"
+    );
+}
+
+/// 除去（脱衣）で外れた ID の保持コマも消える（bindopt 7.1）。非 bind コマは無影響（bindopt 7.4）。
+#[test]
+fn apply_bind_off_drops_residual_frame_of_that_id_only() {
+    let mut states = ScopeStates::new(BindSet::from_ids([1402, 1600]));
+    let scope = ActorKey::from("0");
+    states.apply(&scope, SurfaceTarget::Show(2100));
+
+    let mut residual = PatternState::default();
+    residual.set(1402, frame(1413));
+    residual.set(1600, frame(1610));
+    residual.set(9000, frame(9001));
+    states.commit_pattern(&scope, Slot::Shell, residual);
+
+    let outcome = states.apply_bind(&scope, 1402, false);
+
+    let mut expected = PatternState::default();
+    expected.set(1600, frame(1610));
+    expected.set(9000, frame(9001));
+    assert_eq!(
+        outcome,
+        BindApplyOutcome::Changed(DisplayCommand::Show {
+            scope: scope.clone(),
+            surface_id: 2100,
+            binds: BindSet::from_ids([1600]),
+            pattern: expected.clone(),
+        }),
+        "脱衣で外れた ID のコマのみ除去し、bind 継続中の ID と bind 非所属の ID のコマは保つ（bindopt 7.1/7.4）"
+    );
+}
+
+/// 着衣（加算）だけでは何も外れないので保持コマも一切減らない（bindopt 7.4 の裏側）。
+#[test]
+fn apply_bind_on_keeps_all_residual_frames() {
+    let mut states = ScopeStates::new(BindSet::from_ids([1402]));
+    let scope = ActorKey::from("0");
+    states.apply(&scope, SurfaceTarget::Show(2100));
+
+    let mut residual = PatternState::default();
+    residual.set(1402, frame(1413));
+    residual.set(9000, frame(9001));
+    states.commit_pattern(&scope, Slot::Shell, residual.clone());
+
+    // multiple カテゴリ相当の加算（外れる ID なし）。
+    let outcome = states.apply_bind(&scope, 1700, true);
+    assert_eq!(
+        outcome,
+        BindApplyOutcome::Changed(DisplayCommand::Show {
+            scope: scope.clone(),
+            surface_id: 2100,
+            binds: BindSet::from_ids([1402, 1700]),
+            pattern: residual.clone(),
+        }),
+        "外れた ID が無い変化では保持コマを 1 枚も落とさない（bindopt 7.4）"
+    );
+    assert_eq!(states.current_pattern(&scope, Slot::Shell), &residual);
+}
+
+/// 非表示 scope（StateOnly）でも状態側の保持コマは取り除かれる（次 Show へ古いコマを持ち越さない）。
+#[test]
+fn commit_bind_state_only_still_drops_residual_frames() {
+    let mut states = ScopeStates::new(BindSet::from_ids([1402]));
+    let scope = ActorKey::from("0");
+    states.apply(&scope, SurfaceTarget::Show(2100));
+
+    let mut residual = PatternState::default();
+    residual.set(1402, frame(1413));
+    residual.set(9000, frame(9001));
+    states.commit_pattern(&scope, Slot::Shell, residual);
+
+    // Hidden にしてから排他置換 → 発行はしないが状態側の残留は掃除する。
+    states.apply(&scope, SurfaceTarget::Hide);
+    let outcome = states.apply_bind_exclusive(&scope, &[1400, 1401, 1402, 1403], 1400);
+    assert_eq!(outcome, BindApplyOutcome::StateOnly);
+
+    let mut expected = PatternState::default();
+    expected.set(9000, frame(9001));
+    assert_eq!(
+        states.current_pattern(&scope, Slot::Shell),
+        &expected,
+        "非表示でも外れた ID の保持コマは除去（次 Show へ古いコマを持ち越さない）"
+    );
+}
+
+/// バルーン面の保持コマは bind の影響を受けない（bind はシェル面のみ・R3.8 の非退行）。
+#[test]
+fn commit_bind_does_not_touch_balloon_pattern() {
+    let mut states = ScopeStates::new(BindSet::from_ids([1402]));
+    let scope = ActorKey::from("0");
+    states.apply(&scope, SurfaceTarget::Show(2100));
+    states.apply_balloon(&scope, SurfaceTarget::Show(2));
+
+    let mut balloon_pattern = PatternState::default();
+    balloon_pattern.set(1402, frame(1413));
+    states.commit_pattern(&scope, Slot::Balloon, balloon_pattern.clone());
+
+    states.apply_bind_exclusive(&scope, &[1400, 1401, 1402, 1403], 1400);
+    assert_eq!(
+        states.current_pattern(&scope, Slot::Balloon),
+        &balloon_pattern,
+        "bind の残留掃除はシェル面 slot に限る（バルーン面は不変・R3.8）"
+    );
+}
+
+/// 除去の痕跡は info! で残す（bindopt 7.5・無言の状態変更を作らない）。文言と水準を固定する。
+#[test]
+fn residual_frame_removal_emits_info_marker() {
+    let mut states = ScopeStates::new(BindSet::from_ids([1402]));
+    let scope = ActorKey::from("0");
+    states.apply(&scope, SurfaceTarget::Show(2100));
+
+    let mut residual = PatternState::default();
+    residual.set(1402, frame(1413));
+    residual.set(9000, frame(9001));
+    states.commit_pattern(&scope, Slot::Shell, residual);
+
+    let logs = capture_logs(|| {
+        states.apply_bind_exclusive(&scope, &[1400, 1401, 1402, 1403], 1400);
+    });
+
+    assert!(
+        logs.contains("level=INFO")
+            && logs.contains("seriko: bind から外れた ID の保持コマを除去"),
+        "除去は実機の既定ログ水準（info）で grep 可能な固定文言を残す（bindopt 7.5）: {logs}"
+    );
+    assert!(
+        logs.contains("id=1402"),
+        "除去した ID を痕跡に載せる（bindopt 7.5）: {logs}"
+    );
+    assert!(
+        !logs.contains("id=9000"),
+        "bind 非所属の ID は除去対象でなく痕跡にも現れない（bindopt 7.4）: {logs}"
+    );
+}
+
+/// 保持コマを持たない ID が外れただけでは除去ログを出さない（実際に取り除いた事実のみ残す・7.5）。
+#[test]
+fn no_removal_log_when_dropped_id_has_no_residual_frame() {
+    let mut states = ScopeStates::new(BindSet::from_ids([1402]));
+    let scope = ActorKey::from("0");
+    states.apply(&scope, SurfaceTarget::Show(2100));
+
+    let logs = capture_logs(|| {
+        states.apply_bind_exclusive(&scope, &[1400, 1401, 1402, 1403], 1400);
+    });
+    assert!(
+        !logs.contains("seriko: bind から外れた ID の保持コマを除去"),
+        "取り除くコマが無いときは除去ログを出さない（bindopt 7.5）: {logs}"
+    );
+}
+
 /// `shown_slots` は `Shown` の (scope, slot, surface_id) のみ列挙する（`Hidden`／未知は除外・要件 2.1）。
 #[test]
 fn shown_slots_enumerates_only_shown_shell_and_balloon() {

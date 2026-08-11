@@ -105,7 +105,7 @@
   - _Requirements: 6.2, 6.3, 6.4_
 
 - [ ] 8. 【スコープ追加】bind から外れたパーツの残留コマの掃除（2026-08-11 裁定・Requirement 7）
-- [ ] 8.1 発行前の残留除去（状態側）
+- [x] 8.1 発行前の残留除去（状態側）
   - bind 集合の変化時に「外れた ID の集合」を求め、表示指令を組む**前**に保持コマを取り除く
   - 除去対象は bind 集合由来の ID に限り、bind に属さないアニメの保持コマへ影響を与えない
   - 取り除いた事実を実機の既定ログ水準で見える形で残す（無言の状態変更を作らない）
@@ -173,3 +173,7 @@
 - **task 7.2（2026-08-11・不合格）**: 実機サインオフは **J1=PASS・J2=PASS・J3=FAIL**。bind 層は実機で証明された（共存痕跡 109/169 → **0/66**・まばたき Changed 3 回 → **20 回**・J2 差 22 → **1**・末尾差 316.8 秒 → **0.000 秒**）が、**表情固着は再現**。要件 5.6 により未完了。ログ＝`%LOCALAPPDATA%\areka-diag\bindopt-signoff-20260811-181137\bindopt-signoff.log`（md5 `5B14F166078FD67A4B9D2D8A49C28233`）。受け入れ記録＝`real-machine-signoff.md`。
 - **task 7.2（2026-08-11）**: **要件の因果モデルに一段の誤りがあった**——`requirements.md:21` は固着の機構（不透明最終コマが覆う）を正しく書きながら「排他置換すれば積み上がりが消える」と結論した。しかし emo2 の 14xx は `pattern0` を持たず**視覚寄与が `PatternState` 単独**（`surfaces.txt:84-86`）なので、bind 集合を正しても**既に置かれた残留コマには何の影響も及ばない**。裁定でスコープを広げる場合、requirements.md:21 の因果記述と design.md :42/:74/:206 の「looper.rs 無改変」宣言・Boundary Context を**同時に**改訂すること（片肺にしない）。
 - **task 7.2（2026-08-11）**: スロー再生と CPU 20% 超は **`recompose-budget`（W6.75）の領分**と確定。seriko の進行は壁時計どおり（183ms／定義 172ms）で、遅いのは presenter 側の **1 コマ約 500ms**・`ShowSurface` 404 件すべて `cache_hit=false`・`areka-emo-present` に throttle 実装なし＝実コスト。**固着の根因ではないが症状を悪化させている**（閉じ目コマが約 500ms 滞留）。roadmap:90 が予告した「bind 着地後に budget の CPU 上昇を (a)bind 同根/(b)活性集合へ切り分ける」材料が本実走ログで揃った。
+- **task 8.1（2026-08-11）**: RED が実機の固着を逐語で捉えた——排他置換後の pattern に `1402: PatternFrame { surface_id: 1413 }`（＝ジト目の不透明コマ）が残存。除去は `state.rs` の `drop_residual_frames` で、**`current_pattern(...).clone()` の前**・`removed` は **`dynamic_binds.insert` の前**に旧集合から確定（どちらかを取り違えると修正が無意味化する）。除去ログの文言＝`seriko: bind から外れた ID の保持コマを除去`（info）。
+- **task 8.1（2026-08-11）**: **7.4（非 bind への無影響）は構造的に成立**——`BindSet` への流入は `assets.rs:338` の bindgroup default 由来と `actor.rs:356` の名前解決済み ID の 2 経路のみで、純 `random` の `interval` ID は混じらない（`apply_bind_exclusive` の `category_ids` は filter にしか使われず加算しない）。レビュアーが独立に裏取り済み。
+- **task 8.1（2026-08-11）**: **8.1 単体では「再生中に外れた ID」は直らない**——次の評価で再生側がコマを置き直すため。8.1 が直すのは「再生が既に終わって残留している ID」（emo2 の 1402 がこれ）。**タスク 8.2 が必須**。
+- **task 8.1（2026-08-11）**: `capture_logs` を `state_test_support.rs` へ複製した（既存 15 箇所と同じ流儀）。`areka-P0-test-cage-determinism`（W6.9）のログ捕捉ハーネス是正対象が 1 本増える。

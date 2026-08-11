@@ -369,8 +369,17 @@ impl ScopeStates {
     /// 2. **冪等ガード（要件 3.6・D9）**: `new` が現在集合と同値なら状態を書き込まず
     ///    [`BindApplyOutcome::Unchanged`]。
     /// 3. **状態更新**: `dynamic_binds` へ `new` を書き込む（シェル/バルーン state は不変・R3.8）。
+    /// 3b. **残留コマの掃除（bindopt 7.1/7.2・D9-1）**: `removed = 旧集合 − 新集合` の ID が
+    ///    シェル slot に保持コマ（`-1` 終端を持たないアニメが末尾到達後に保つ最終コマ）を
+    ///    持っていれば、**発行を組む前に**取り除く。これが無いと bind 集合を正典どおりにしても
+    ///    外れたパーツのコマが Show に乗り続け、表情が固着する（2026-08-11 実機で確定）。
     /// 4. **発行判定（D5）**: `Shown(sid)` → 現 surface を `new` で再発行、`Hidden`／未知 →
     ///    [`BindApplyOutcome::StateOnly`]。
+    ///
+    /// 発行判定と掃除の関係（bindopt 7.2）: `removed` が非空なら旧集合と `new` は必ず相異なる
+    /// ため冪等ガードを通過する＝掃除した回は必ず状態更新まで進み、表示中なら同じ発行で新しい
+    /// pattern が載る。逆に [`BindApplyOutcome::Unchanged`] の回は集合同値ゆえ `removed` は空で、
+    /// 掃除すべきものが無い（判定の意味を変えずに掃除を挟める理由）。
     ///
     /// [`apply_bind`]: ScopeStates::apply_bind
     /// [`apply_bind_exclusive`]: ScopeStates::apply_bind_exclusive
@@ -380,8 +389,22 @@ impl ScopeStates {
             return BindApplyOutcome::Unchanged;
         }
 
+        // 外れた ID（旧集合 − 新集合）を状態更新の前に確定させる（bindopt 7.1・D9-1）。bind 集合の
+        // 要素は shell descript の bindgroup 由来（既定 on／名前解決済みの着せ替え ID）のみゆえ、
+        // 純 `random` の `interval` など bind に属さないアニメは構造的に混じらない（bindopt 7.4）。
+        let removed: Vec<u32> = self
+            .current_binds(scope)
+            .ids()
+            .iter()
+            .copied()
+            .filter(|id| !new.contains(*id))
+            .collect();
+
         // (3) 状態更新: 動的集合のみ書き込む（要件 3.4 積算保持・シェル/バルーン state は不変・R3.8）。
         self.dynamic_binds.insert(scope.clone(), new.clone());
+
+        // (3b) 残留コマの掃除: 発行を組む前に外れた ID の保持コマを取り除く（bindopt 7.1/7.2・D9-1）。
+        self.drop_residual_frames(scope, &removed);
 
         // (4) 発行判定: 対象 scope のシェル面状態で決める（D5）。
         match self.scopes.get(scope) {
@@ -401,6 +424,34 @@ impl ScopeStates {
             }
             // 非表示または未知 scope → 状態のみ更新・発行なし（D5・次 Show へ保留）。
             Some(ScopeState::Hidden) | None => BindApplyOutcome::StateOnly,
+        }
+    }
+
+    /// bind から外れた ID の保持コマをシェル slot から取り除く（bindopt 7.1/7.4/7.5・D9-1）。
+    ///
+    /// `-1` 終端を持たないアニメは末尾到達後も最終コマを保持する（`completed/areka-P0-seriko-loop`
+    /// の確定仕様・不変）。その ID が bind 集合から外れたときの**後始末**だけをここで行う。
+    /// 対象は [`Slot::Shell`] のみ（bind はシェル面に適用される・バルーン面 slot は不変・R3.8）。
+    ///
+    /// 実際にコマを取り除いた ID ごとに `info!` を残す（bindopt 7.5・無言の状態変更を作らない）。
+    /// 保持コマを持たない ID は状態が動かないため痕跡も残さない。
+    fn drop_residual_frames(&mut self, scope: &ActorKey, removed: &[u32]) {
+        if removed.is_empty() {
+            return;
+        }
+        let Some(pattern) = self.pattern_states.get_mut(&(scope.clone(), Slot::Shell)) else {
+            return;
+        };
+        for &id in removed {
+            if pattern.get(id).is_none() {
+                continue;
+            }
+            pattern.remove(id);
+            tracing::info!(
+                scope = %scope,
+                id,
+                "seriko: bind から外れた ID の保持コマを除去（bindopt 7.1）"
+            );
         }
     }
 
