@@ -326,11 +326,14 @@ impl ScopeStates {
         self.commit_bind(scope, new)
     }
 
-    /// mustselect（排他選択）カテゴリの排他置換を対象 scope へ適用する（要件 4.5・D11）。
+    /// 排他カテゴリ（mustselect／非宣言既定）の排他置換を対象 scope へ適用する（bindopt 2.1/3.1）。
     ///
     /// 新集合＝`(現在集合 − category_ids) ∪ {target_id}`。同カテゴリの旧パーツ（`category_ids`）を
-    /// すべて外したうえで対象パーツ `target_id` を有効化する（同カテゴリ内は高々 1 パーツ有効・SSP
-    /// 正典の排他選択挙動）。`target_id` 自身が `category_ids` に含まれても、フィルタで一旦除いた後
+    /// すべて外したうえで対象パーツ `target_id` を有効化する（同カテゴリ内は高々 1 パーツ有効・
+    /// ukadoc 正典の排他選択挙動）。呼び手（actor）はカテゴリの選択ポリシーが `multiple` 宣言以外
+    /// ——mustselect（bindopt 3.1）と非宣言の既定（bindopt 2.1）——の着衣でこの経路を選ぶ。本メソッド
+    /// 自身はポリシーを解釈せず、渡された `category_ids` をそのまま外す。`target_id` 自身が
+    /// `category_ids` に含まれても、フィルタで一旦除いた後
     /// `chain` で再付与するため最終的に必ず有効になる（結果集合に含まれる）。
     ///
     /// 冪等ガード・状態更新・発行判定（Changed/StateOnly/Unchanged）は [`apply_bind`] と完全同型

@@ -169,7 +169,10 @@ fn emit_display<O: SurfaceOutput>(out: &mut O, command: DisplayCommand) {
 /// 到着順（FIFO）に処理する。
 ///
 /// `bind_resolver` は additive 追加（D4）。bind 名前表を供給しない既存経路は
-/// [`BindResolver::empty`] を渡せば従来と byte 同値（空表＝自然な解決不能で発行に影響しない）。
+/// [`BindResolver::empty`] を渡せば従来と byte 同値。その根拠は宣言集合が空であることではなく、
+/// **名前表が空＝[`BindResolver::resolve`] が常に `None`** であること——空リゾルバは
+/// 全カテゴリが正典の既定（[`BindChoicePolicy::Default`]＝着衣は排他置換）になるが、そもそも
+/// 着せ替え ID を解決できず適用へ到達しないため発行に影響しない（bindopt 設計 D3）。
 ///
 /// # 停止（1.4）
 ///

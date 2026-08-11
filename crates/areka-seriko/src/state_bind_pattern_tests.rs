@@ -196,9 +196,9 @@ fn apply_bind_accumulates_across_two_binds_when_shown() {
     );
 }
 
-// ---- apply_bind_exclusive（mustselect 排他置換・要件 4.5・D11） ----
+// ---- apply_bind_exclusive（排他カテゴリ〔mustselect／非宣言既定〕の排他置換・bindopt 2.1/3.1） ----
 
-/// 排他置換（R4.5・D11）: 表示中 scope で同カテゴリ全 ID を外し target のみ有効化する。
+/// 排他置換（bindopt 2.1/3.1）: 表示中 scope で同カテゴリ全 ID を外し target のみ有効化する。
 /// 現集合 {1301,1303,1207}・category_ids=[1301,1303,1304]・target=1304 →
 /// 目カテゴリ旧パーツ(1301,1303) を外し 1304 を付与、非カテゴリ 1207 は保持 → {1207,1304}。
 #[test]
@@ -216,7 +216,7 @@ fn apply_bind_exclusive_replaces_same_category_on_shown() {
             binds: BindSet::from_ids([1207, 1304]),
             pattern: PatternState::default(),
         }),
-        "同カテゴリ旧パーツを外し target のみ有効・非カテゴリは保持（高々 1 パーツ・R4.5・D11）"
+        "同カテゴリ旧パーツを外し target のみ有効・非カテゴリは保持（高々 1 パーツ・bindopt 2.1/3.1）"
     );
     assert_eq!(
         states.current_binds(&scope),
@@ -301,7 +301,7 @@ fn apply_bind_exclusive_does_not_touch_shell_or_balloon_state() {
     );
 }
 
-/// target が category_ids に含まれても最終的に有効になる（filter→chain の順序保証・D11）。
+/// target が category_ids に含まれても最終的に有効になる（filter→chain の順序保証・bindopt 2.1/3.1）。
 #[test]
 fn apply_bind_exclusive_target_in_category_ids_stays_present() {
     let mut states = ScopeStates::new(BindSet::from_ids([1301]));

@@ -65,7 +65,7 @@
   - _Depends: 4_
 
 - [ ] 6. 文書整合と全体検証
-- [ ] 6.1 旧 2 値前提の記述と外部引用の一掃（対象は bind 経路に限る）
+- [x] 6.1 旧 2 値前提の記述と外部引用の一掃（対象は bind 経路に限る）
   - 「非 mustselect は加算」「複数可／非宣言は収録しない」を前提とする doc コメントを 3 値正典の記述へ更新する
   - 完了済み spec を根拠に引く裸の識別子引用を、本 spec の識別子を冠した引用へ差し替える（完了済み spec の文書自体は改変しない）
   - 対象は設計書の変更ファイル一覧に列挙された bind 経路のファイル群に**閉じる**——採取層・判定器・適用・状態の doc とその檻、資産構築とその檻のみ。同じ識別子文字列は workspace 全体で他 spec 領分にも多数現れるため、bind 経路外には触れない
@@ -119,3 +119,6 @@
 - **task 5.2（2026-08-11）**: 間欠赤の再実測でレート更新——`cargo test -p areka-seriko --lib` 20 回反復で 4 回 RED（内訳: `bind_apply_on_shown_emits_show_and_info_marker` 2／`non_shell_broadcast_reception_is_benign_debug_no_warn_error` 1／`wait_broadcast_reception_is_benign_debug_no_warn_error` 1）。**新規に追加した檻は 1 度も落ちていない**。W6.9 への申し送り対象は seriko 3 本＋`areka-emo-compose` の `scale::ratio_tests::mul_degradation_emits_warn_log` 1 本の計 4 本へ拡大。
 - **task 5.3（2026-08-11）**: 貫通シナリオの改名は `non_mustselect_explicit_on_off_is_additive_end_to_end` → `default_category_explicit_on_then_off_removes_part_end_to_end`（実体＝既定カテゴリ「紅」の唯一パーツが明示 on で載り明示 off で外れる＝正典の解除可）。resolver・スクリプト・ticks・期待値は逐語同一。新規錨は `multiple_category_two_parts_coexist_end_to_end`（`sakura_multiple={髪飾り}`・発行列 `[{1207},{1207,1700},{1207,1700,1701}]`）。
 - **task 5.3（2026-08-11）**: **`R8.1` の引用が 1 件消えた**（`completed/areka-P0-mayuna-compose` の Requirement 8＝非退行/additive 制約）。`R4.5` と同一文に同居し、その文の主張「紅は排他置換を受けず加算」が新正典下で虚偽になったため文ごと書き換えた巻き添え。置換後の文が非退行の含意をより正確に明示しており情報の喪失なし——**タスク 6.1 で復活させる必要はない**（レビューで裏取り済み）。
+- **task 6.1（2026-08-11）**: 書き換えた主張は 4 件——`actor.rs` の `empty()` 根拠（主張は真だが根拠文言が旧前提）／`state.rs:329` の「mustselect カテゴリの」限定（**虚偽化していた**——`apply_bind_exclusive` は MustSelect と Default の両方から呼ばれる）／`bind.rs` の `category_ids` doc（mustselect 専用の道具に読める）／`actor_bind_loop_tests.rs` のモジュール doc（実体は 3 分岐）。いずれもレビューが実コードで裏取り済み。
+- **task 6.1（2026-08-11）**: bind 経路に残った `R4.5`／`要件 4.5` 5 件（`actor.rs:439/444/449/453`・`state.rs:272`）は **`completed/areka-P0-balloon-face-cue` の Requirement 4 の 5**（バルーン面 key が解決できないときの縮退）であり mayuna-compose の R4.5 とは別物。**触らないのが正しい**（レビューが completed spec の現物で裏取り済み）。
+- **【開発者裁定待ち・本 spec 未処理】** bind 経路のファイルに mayuna-compose 由来と思われる裸引用が残る（`actor.rs:171` の `D4`・`:312` の `D1/D10`・`:325/328` の `D8②`・`:342/346/349` の `D7`・`:414` の `D5`、`actor_bind_loop_tests.rs:11/15` の `D1`・`D8`）。**本 spec の `D1`〜`D8` と番号が正面衝突**しており、設計 D8 が防ごうとした事象そのもの。ただし実測すると出所が単一 spec に定まらない（`D4`＝broadcast/cue 系・`D7`＝scope 写像・`D8②〜⑤`＝bind 類別など複数由来が混在）。**誤った spec 名を冠するのは裸で残すより有害**なため本 spec では無改変とした。設計 D8 の対象集合は `D11`/`R4.5`/`Req 4.5` の 3 文字列に明示限定されており受入条件は満たしている。出所の全数特定と接頭辞付与は別途裁定すること。

@@ -175,10 +175,14 @@ impl BindResolver {
         }
     }
 
-    /// カテゴリに属する全着せ替え ID を名前空間 `ns` の名前表から集める（純粋・副作用なし・D11）。
+    /// カテゴリに属する全着せ替え ID を名前空間 `ns` の名前表から集める（純粋・副作用なし・
+    /// bindopt 2.1/3.1）。
     ///
     /// `(カテゴリ, パーツ)→ID` 表を走査し `key.0 == category` の ID を昇順・重複除去して返す
-    /// （排他置換の「同カテゴリ他パーツ off」の対象集合）。宣言のないカテゴリは空 `Vec`。
+    /// （排他置換の「同カテゴリ他パーツ off」の対象集合）。排他置換は mustselect
+    /// （[`BindChoicePolicy::MustSelect`]・bindopt 3.1）と非宣言の既定
+    /// （[`BindChoicePolicy::Default`]・bindopt 2.1）の**両方**の着衣で使われるため、本アクセサは
+    /// カテゴリの宣言形に依存しない（名前表のみを引く）。宣言のないカテゴリは空 `Vec`。
     /// `BTreeSet` 経由で dedup＋昇順を保証する（emo2 は約 30 宣言ゆえ全走査で足りる）。
     pub fn category_ids(&self, ns: BindNamespace, category: &str) -> Vec<u32> {
         let table = match ns {
@@ -645,14 +649,15 @@ mod tests {
         }
     }
 
-    /// category_ids はカテゴリの全 ID を昇順・重複除去で返す（D11・排他置換の off 対象集合）。
+    /// category_ids はカテゴリの全 ID を昇順・重複除去で返す（bindopt 2.1/3.1・排他置換の
+    /// off 対象集合）。
     #[test]
     fn category_ids_collects_category_members_ascending() {
         let r = mustselect_resolver();
         assert_eq!(
             r.category_ids(BindNamespace::Sakura, "目"),
             vec![1301, 1303, 1304],
-            "カテゴリ「目」の全パーツ ID を昇順で集める（同カテゴリ他パーツ off の対象・D11）"
+            "カテゴリ「目」の全パーツ ID を昇順で集める（同カテゴリ他パーツ off の対象・bindopt 2.1/3.1）"
         );
         assert_eq!(
             r.category_ids(BindNamespace::Sakura, "紅"),
