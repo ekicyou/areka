@@ -137,7 +137,9 @@ mustselect カテゴリへの off（脱衣）指示は bind 集合を**変更せ
 正典に実在するが、現行 parsers は `sakura.`/`kero.` 接頭辞のみ走査し `scope_namespace` も "0"/"1" のみ写像（M1 未取込・M-dual シーム）。本 spec は bindoption の走査もこの既存縮退に揃える——**新規の乖離ではなく**、要件追加は不要。語彙としてここに登記し、M-dual が拡張時に本節を参照する。
 
 **D8: mayuna-compose 引用の差し替え規約**
-コード内 doc コメントの「D11」「R4.5」「Req 4.5」（mayuna-compose 参照）は、本 spec の設計判断 ID（`bindopt D1`〜`bindopt D8`）または要件 ID（`bindopt 2.1` 形式）へ置換する。裸の「D*/R*」を残さない（次の spec が同じ衝突を起こさないため spec 略号 `bindopt` を冠する）。`completed/areka-P0-mayuna-compose` の文書は不改変。覆しの登記は下記「mayuna-compose 覆しの記録」と、spec 完了時の roadmap 追記（6.3）で行う。
+コード内 doc コメントの「D11」「R4.5」「Req 4.5」（mayuna-compose 参照）は、本 spec の設計判断 ID（`bindopt D1`〜`bindopt D8`）または要件 ID（`bindopt 2.1` 形式）へ置換する。裸の「D*/R*」を残さない（次の spec が同じ衝突を起こさないため spec 略号 `bindopt` を冠する）。
+
+**適用範囲は bind 経路に限る（閉じた対象集合）**: `D11`/`R4.5`/`Req 4.5` の文字列は workspace 全体で約 69 ファイルに現れるが、その大半は**他 spec 領分の同名 ID**（dpi/frame/text/balloon/placement 等）を指しており本件と無関係である。差し替え対象は下記 §File Structure Plan の Modified Files に列挙したファイルのみとし、bind 経路外の同名引用には触れない（誤った一括置換の禁止）。`completed/areka-P0-mayuna-compose` の文書は不改変。覆しの登記は下記「mayuna-compose 覆しの記録」と、spec 完了時の roadmap 追記（6.3）で行う。
 
 ### mayuna-compose 覆しの記録（6.2）
 
@@ -172,6 +174,8 @@ completed 文書は不改変とし、本記録と roadmap 追記（spec 完了�
 - `crates/areka-seriko/src/actor.rs` — step 6（:364-372）を 3 値分岐へ差し替え（mustselect×off の無視＋`warn!` を含む）。doc（:170・:364-366）一掃・引用差し替え（D8）。
 - `crates/areka-seriko/src/state.rs` — **doc コメントのみ**（:329-339 の「mustselect（排他選択）カテゴリの」限定文言を「排他カテゴリ（mustselect／非宣言既定）の」汎用文言へ）。コード無改変。
 - `crates/areka/src/emo2_boot/assets.rs` — multiple 集合の構築を追加し `BindOptionDecls` で `BindResolver::new` へ渡す（:253-267）。doc（:261-262 の「Req 4.5・D11」引用）差し替え（D8）。
+- `crates/areka/src/emo2_boot/assets_tests.rs` — **退役述語のコンパイル結合消費者**（:547・:553 が `boot.bind_resolver.is_mustselect(...)` を呼ぶ）。`policy()` での同値判定へ置換し、doc（:530・:531・:551・:554 の旧語彙／引用）を差し替える。**`is_mustselect` 退役と同一変更で atomic に追随しなければ areka がコンパイルできない**（2026-08-11 実測で発見・下記「退役述語の呼出元台帳」）。
+- `crates/areka-seriko/src/state_bind_pattern_tests.rs` — doc コメント／テスト文言の引用差し替えのみ（:199・:201・:219・:304 の mayuna-compose 引用）。コード実体は無改変。
 
 **テスト追随（atomic・`BindResolver::new` 全 8 呼出元）**
 
@@ -184,6 +188,13 @@ completed 文書は不改変とし、本記録と roadmap 追記（spec 完了�
 6. `crates/areka-seriko/src/actor_bind_loop_tests.rs:202`
 7. `crates/areka-seriko/tests/bind_e2e.rs:123`
 8. `crates/areka-seriko/tests/bind_e2e.rs:244`
+
+`BindResolver::is_mustselect` **退役述語の呼出元台帳**（2026-08-11 実測・署名変更と同一変更で全数追随。ここを漏らすと workspace がコンパイルできない）:
+1. `crates/areka-seriko/src/actor.rs:367`（本番の適用分岐）
+2. `crates/areka-seriko/src/bind.rs:375-400`（in-crate テスト 2 本——`policy()` マトリクス檻へ書き換え）
+3. `crates/areka/src/emo2_boot/assets_tests.rs:547`・`:553`（**crate 越しの消費者**——設計初版の台帳から漏れていた分）
+
+注: parsers 側の `BindGroupDefaults::is_mustselect`（model.rs:142）は**退役しない**（D5——転写所属照会として正典下でも正しい）。その呼出元（`resolve.rs:572-656`・`model.rs:284-314`）は存置し、`is_multiple` の対称テストを追加する。退役対象は **seriko 判定器の述語のみ**。
 
 - `crates/areka-seriko/src/actor_bind_loop_tests.rs` — new() 追随（3 箇所）・檻改名（D6）・最小再現檻＋policy×on/off マトリクス檻＋multiple 明示加算檻の追加。
 - `crates/areka-seriko/tests/bind_e2e.rs` — new() 追随（2 箇所）・「mustselect 空集合＝全カテゴリ非排他」等の旧前提コメント更新（非宣言 1 パーツ/カテゴリ構成ゆえ**期待値は集合同値で不変**・§テスト影響監査）。
