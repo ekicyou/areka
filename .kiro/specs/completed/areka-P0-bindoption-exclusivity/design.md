@@ -243,7 +243,7 @@ completed 文書は不改変とし、本記録と roadmap 追記（spec 完了�
 
 ### New Files
 
-- `.kiro/specs/areka-P0-bindoption-exclusivity/real-machine-signoff.md` — 実機サインオフ受け入れ記録（5.5。判定・実測値・実施条件。実装フェーズで作成）
+- `.kiro/specs/completed/areka-P0-bindoption-exclusivity/real-machine-signoff.md` — 実機サインオフ受け入れ記録（5.5。判定・実測値・実施条件。実装フェーズで作成）
 
 ## System Flows
 
