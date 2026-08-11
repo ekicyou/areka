@@ -195,6 +195,101 @@ fn bind_mustselect_second_on_replaces_prior_part_in_category() {
     );
 }
 
+/// 最小再現の反転檻（bindopt 4.1/2.1）: `bindoption` 非宣言＝正典の既定（Default＝高々 1 個）の
+/// カテゴリで 2 パーツを続けて着衣（on）すると、後勝ちの 1 個だけが残る。
+///
+/// emo2 のまばたきカテゴリ（1400 通常／1402 ジトー）を模した構成。是正前は非宣言カテゴリが
+/// 加算扱いだったため {1400,1402} が共存し、集合が飽和して以後の是正指示を握り潰していた。
+#[test]
+fn bind_default_category_second_on_replaces_prior_part() {
+    let resolver = tiny_resolver();
+    // (まばたき,通常)→1400 / (まばたき,ジトー)→1402 の非宣言（既定）カテゴリ。
+    let mut sakura: BTreeMap<(String, String), u32> = BTreeMap::new();
+    sakura.insert(("まばたき".to_string(), "通常".to_string()), 1400);
+    sakura.insert(("まばたき".to_string(), "ジトー".to_string()), 1402);
+    let bind_resolver = BindResolver::new(sakura, BTreeMap::new(), BindOptionDecls::default());
+    let mut states = fresh_states(); // static = {1100, 1207}
+    let scope = ActorKey::from("0");
+    states.apply(&scope, SurfaceTarget::Show(2100));
+
+    let mut out = MockSurfaceOutput::new();
+    let mut loop_runtime = inert_runtime();
+
+    for tokens in [
+        ["まばたき", "通常", "1"],
+        ["まばたき", "ジトー", "1"],
+    ] {
+        let _ = handle_message(
+            &resolver,
+            &bind_resolver,
+            &mut states,
+            &mut loop_runtime,
+            &mut out,
+            SerikoMsg::Cue(bind_carrier_cue("0", &tokens)),
+        );
+    }
+
+    assert_eq!(
+        states.current_binds(&scope),
+        &BindSet::from_ids([1100, 1207, 1402]),
+        "既定（非宣言）カテゴリの 2 度目着衣は排他置換で後勝ち 1 個（1400 は残らない・bindopt 2.1/4.1）"
+    );
+}
+
+/// mustselect 脱衣の無視檻（bindopt 3.2・D1）: mustselect カテゴリへの脱衣（off）指示は
+/// bind 集合を一切変えず、固定文言の `warn!` を 1 回残して読み飛ばす（正典「解除不可」）。
+#[test]
+fn bind_mustselect_off_is_ignored_with_warn() {
+    let resolver = tiny_resolver();
+    let bind_resolver = eye_mustselect_resolver();
+    let mut states = fresh_states(); // static = {1100, 1207}
+    let scope = ActorKey::from("0");
+    states.apply(&scope, SurfaceTarget::Show(2100));
+
+    let mut out = MockSurfaceOutput::new();
+    let mut loop_runtime = inert_runtime();
+
+    // 前段: 目=笑（1301）を着衣 → {1100,1207,1301}。
+    let _ = handle_message(
+        &resolver,
+        &bind_resolver,
+        &mut states,
+        &mut loop_runtime,
+        &mut out,
+        SerikoMsg::Cue(bind_carrier_cue("0", &["目", "笑", "1"])),
+    );
+
+    // 本題: 同じパーツへ脱衣指示 → 集合不変・warn! 1 回。
+    let flow = capture_logs_flow(|| {
+        handle_message(
+            &resolver,
+            &bind_resolver,
+            &mut states,
+            &mut loop_runtime,
+            &mut out,
+            SerikoMsg::Cue(bind_carrier_cue("0", &["目", "笑", "0"])),
+        )
+    });
+
+    assert_eq!(flow.1, ControlFlow::Continue(()), "無視後も処理継続");
+    assert_eq!(
+        states.current_binds(&scope),
+        &BindSet::from_ids([1100, 1207, 1301]),
+        "mustselect カテゴリの脱衣指示では bind 集合が変わらない（解除不可・bindopt 3.2）"
+    );
+    assert_eq!(
+        flow.0.matches("level=WARN").count(),
+        1,
+        "mustselect 脱衣の無視は warn! を 1 回残す（実機の既定ログ水準で可視・bindopt D1）: {}",
+        flow.0
+    );
+    assert!(
+        flow.0.contains("seriko: mustselect カテゴリの脱衣指示を無視（正典・解除不可・bindopt 3.2）"),
+        "固定文言（grep マーカー）を含む（bindopt D1）: {}",
+        flow.0
+    );
+}
+
 /// 非 mustselect カテゴリは従来どおり加算される（R4.5 の対比・actor 経路）。
 /// 非排他の resolver（arm_bind_resolver・mustselect なし）で 2 つ着衣すると両方が積算される。
 #[test]

@@ -27,7 +27,7 @@
   - _Requirements: 1.1, 3.5_
   - _Boundary: policy 判定, 適用結線, 資産構築_
 
-- [ ] 4. 適用分岐の 3 値化と mustselect 解除不可の実装
+- [x] 4. 適用分岐の 3 値化と mustselect 解除不可の実装
   - 着衣指示では、複数可と宣言されていないカテゴリ（mustselect／非宣言）を排他置換へ流し、非宣言カテゴリの bind を高々 1 個に保つ
   - mustselect カテゴリへの脱衣指示は bind 集合を変えずに読み飛ばし、実機の既定ログ水準で見える警告として痕跡を残す
   - 複数可カテゴリの着衣は従来どおり加算、mustselect 以外の脱衣は従来どおり除去へ流す
@@ -111,3 +111,5 @@
 - **task 2（2026-08-11）**: D8 の引用差し替え対象は `D11`/`R4.5`/`Req 4.5` の 3 文字列に限る。同じファイルに残る `D2`・`R1.x`・`Req 1.x`/`Req 3.x` 等は bind 経路外（`.name`/`.default`/マウント解決）の別 spec 由来ゆえ無改変が正しい（タスク 6.1 でも同じ線引きを守ること）。
 - **task 3（2026-08-11）**: 設計の変更ファイル台帳に `crates/areka-seriko/src/lib.rs` が漏れていた。`lib.rs` の `mod bind;` は非公開なので、`BindChoicePolicy`/`BindOptionDecls` を `pub use` で再エクスポートしないと areka クレートと `tests/bind_e2e.rs` からコンパイル不能。タスク 6.1 で設計台帳へ追記すること。
 - **task 3（2026-08-11）**: `cargo test --workspace` に**別 spec 所有の間欠赤**がある——`actor_dispatch_tests.rs:741` の `non_shell_broadcast_reception_is_benign_debug_no_warn_error` が約 1/6〜1/8 の頻度で捕捉ログ 0 件になる。原因は `areka-P0-test-cage-determinism`（W6.9）に登記済みの tracing callsite 毒化（seriko の `capture_logs`/`capture_logs_flow` が `rebuild_interest_cache()` 未硬化）。本 spec の変更とは因果独立。全緑判定時は再実行して切り分けること。
+- **task 4（2026-08-11）**: RED で旧欠陥挙動を実測採取した——非宣言カテゴリへ 2 度着衣すると `BindSet([1100,1207,1400,1402])`（まばたき 2 パーツ共存）になり、正典期待値 `BindSet([1100,1207,1402])` と乖離。実機観測の症状そのもの。是正後は後勝ち 1 個。設計の「テスト影響監査」は正しく、既存テストは期待値無改変で全緑のまま（既存フィクスチャは全て 1 カテゴリ 1 パーツ）。
+- **task 4（2026-08-11）**: mustselect 脱衣の前段ガードは `return ControlFlow::Continue(())` で `match outcome` より手前に置いてあり、`commit_bind`／`emit_display`／info マーカーのいずれにも到達しない。集合不変かつ発行なしが構造的に保証される。タスク 5.2 で檻に固定する warn 文言は `actor.rs:383` の逐語 `seriko: mustselect カテゴリの脱衣指示を無視（正典・解除不可・bindopt 3.2）`。

@@ -363,15 +363,36 @@ fn handle_message<O: SurfaceOutput>(
                         }
                     };
 
-                    // (step 6) 適用＋発行。mustselect カテゴリの着衣（on=true）は排他置換
-                    // （同カテゴリ他パーツを自動 off・bindopt 3.1）、それ以外（脱衣・mustselect 以外）は
-                    // 従来の加算/除去。Changed のみ単一発行点から発行し、実機 grep マーカーを発火する。
-                    let outcome = if on
-                        && bind_resolver.policy(ns, &category) == BindChoicePolicy::MustSelect
-                    {
+                    // (step 6) 適用＋発行（bindopt 設計 D1/D2）。カテゴリの 3 値ポリシーで分岐する:
+                    // 複数可（Multiple）でないカテゴリ——mustselect（bindopt 3.1）と既定（非宣言・
+                    // 高々 1 個・bindopt 2.1）——の着衣（on=true）は排他置換（同カテゴリ他パーツを
+                    // 自動 off）、複数可の着衣は加算（bindopt 3.3）、mustselect 以外の脱衣は除去
+                    // （bindopt 2.2/3.3）。Changed のみ単一発行点から発行し、実機 grep マーカーを発火する。
+                    let policy = bind_resolver.policy(ns, &category);
+
+                    // mustselect の脱衣は正典「解除不可」: 集合を変えず読み流し、痕跡を warn! で
+                    // 残す（bindopt 3.2・D1）。無言の握り潰しにしないため実機の既定ログ水準（info）で
+                    // 見える warn を選ぶ。
+                    if !on && policy == BindChoicePolicy::MustSelect {
+                        tracing::warn!(
+                            scope = %cue.actor,
+                            category = %category,
+                            part = %part,
+                            id,
+                            on,
+                            "seriko: mustselect カテゴリの脱衣指示を無視（正典・解除不可・bindopt 3.2）"
+                        );
+                        return ControlFlow::Continue(());
+                    }
+
+                    let outcome = if on && policy != BindChoicePolicy::Multiple {
+                        // MustSelect（従来どおり・bindopt 3.1）／Default（本 spec の是正・bindopt 2.1）
+                        // の着衣は排他置換。
                         let cat_ids = bind_resolver.category_ids(ns, &category);
                         states.apply_bind_exclusive(&cue.actor, &cat_ids, id)
                     } else {
+                        // Multiple の着衣＝加算（bindopt 3.3）／MustSelect 以外の脱衣＝除去
+                        // （bindopt 2.2/3.3）。
                         states.apply_bind(&cue.actor, id, on)
                     };
                     match outcome {
