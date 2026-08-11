@@ -448,3 +448,95 @@ A が通れば M / Low へ落ちるが、要件 5.7 の裁定は A を採る場�
     （§2 の 🟡 判定はこの読み）か、⑵能動的な背面化処理を持つか、を明示的に決めること。
     ⑵を採ると要件 4.3（常時最前面にしない）・要件 3（スコープ間非強制）と干渉しうる。
     要件文はどちらの読みでも満たせるため、**要件は改訂せず design で手段を確定する**。
+
+---
+
+## 9. design フェーズの決定（2026-08-11・design.md 生成時。§8 の裁定を消化した確定値）
+
+> 実施: `/kiro-spec-design areka-P0-ghost-window-zorder -y`。Discovery は **light（Extension）**——
+> 本書 §1〜§5（同日・同ブランチの実測）を discovery 本体とし、design 生成時に主要アンカー
+> （`spawn.rs` markers/`GhostWindows`/`window_style`・`window_move.rs:452-544`・
+> `keyboard.rs:119-169`・`window_pos/mod.rs` `ZOrder`/`build_flags`/`get_hwnd_insert_after`・
+> `command.rs:117-212`・`dpi_helpers.rs:31`・`lifecycle.rs:34-36`）を現物で再照合し**全一致**を確認した。
+> Web 調査は不要（Win32 owner 意味論は §3/§8-1 に記録済み・追加依存なし）。
+
+### Decision D1: 二層構造 = 宣言層（案 D）＋ストラテジ切替（案 A 本線／案 B fallback）
+
+- **Selected**: wintf に `KeepDirectlyAbove { peer: Entity }`（バルーン窓へ付与・peer=キャラ窓）と
+  one-shot `ReassertZOrder`、Resource `ZOrderPairStrategy { OwnerLink { raise_assist } | ExplicitMaintenance }` を新設。
+  areka は spawn でコンポーネントを 1 個付けるだけ（案 A/B で同一）。
+- **Rationale**: §8-1 の裁定（A 本線・実機 FAIL で B）＋§8-5（`DpiSuggestedRectPolicy`／`BalloonFollow` の 2 先例合致）。
+  wintf → areka import 禁止を守りつつ scope 解決を areka に残す唯一の形。
+- **Rejected**: 案 C（A+B 併用）＝brief の却下どおり。**案 B へ落ちた場合は案 A の owner 確立系をコードごと撤去**
+  し、効いていない保険を残さない（design「Migration Strategy」）。
+
+### Decision D2: 是正判断の純関数 `decide_pair_fix`（要件 7.1）
+
+- 入力 `PairObservation`（トリガ・生存・実測 `GW_HWNDPREV`/`GW_HWNDNEXT`）→
+  出力 `PairFixDecision { Skip(理由) | PlaceAboveOverBelow | PlaceBelowUnderAbove }`。
+  `dpi_suggested_position_decision` と同型。**返り値型が座標を持たない＝要件 1.6 の構造的保証**。
+  `TopMost` は決して返さない（4.3/8.1）。同値ガードは **`GW_HWNDPREV` 実測方式**を採用
+  （§8-7 の裁定。キャッシュ方式は外部要因で実 z が動くと嘘になるため不採用）。
+- 「すぐ手前へ」の実現手段: バルーン移動は `InsertAfter(キャラの直前窓)`、直前窓が無い縁のみ
+  `ZOrder::Top`（`InsertSpec::TopEdge`。移動対象は当該 1 窓のみで他窓の相互順を変えないため
+  要件 3.2/3.4 と両立——§7 の「`HWND_TOP` を使わない」推奨はこの縁 1 点に限り緩和し、design に明文化）。
+  キャラ移動（1.3）は `InsertAfter(バルーン)`。
+
+### Decision D3: 案 B の起動条件 = B2＋B3・B1 は不採用（§8-2 の確定）
+
+- **B2**: `WM_WINDOWPOSCHANGED` で `SWP_NOZORDER` 不在（z が動いた）∧ 非エコーを検知し
+  `ReassertZOrder` を挿入するだけ（判断・適用は維持系へ一元化）。活性化既定処理の**事後**に
+  届くため、`WM_ACTIVATE` 内是正の上書き競合リスク（Research #2）を構造的に回避——
+  **B1（`WM_ACTIVATE` 相乗り）は是正用途では不採用**。`WM_ACTIVATE` 非活性化枝には
+  読み取り専用の沈降観測レコードのみ追加（4.4/7.5 の観測タイミング問題 §8-10 の解）。
+- **B3**: `enqueue_window_set_pos` へ `zorder: ZOrder` 引数を追加（既定 `NoChange`＝現行完全等価）。
+  §8-3 は「引数を足す」で確定——第二の書込経路は新設しない（同関数の既存規約維持）。
+
+### Decision D4: 案 A 実機ゲート G1〜G8 とフォールバック基準（design 正本）
+
+- G1 WUC 描画／G2 クリック透過／G3 `WS_EX_TRANSPARENT` トグル／G4 タスクバー・Alt+Tab／
+  G5 ドラッグ＋追従／G6 owner 活性化のペア浮上＋隣接実測——**いずれか FAIL で案 B 確定**（要件 5.6 の実装形）。
+- G7 owned 活性化で owner 浮上（要件 1.3・§8-6 の追加検証項目）——FAIL でも案 A 継続＋
+  `raise_assist` 有効化（維持系の `RaisedBelow` トリガで 1.3 を明示実装）。
+- G8 破棄順序双方向の無異常終了（要件 5.9）——標準機構は **owner 切離し**
+  （peer 消滅検知時に `clear_window_owner`）で OS カスケードを不発化し現行破棄意味論へ戻す。
+  ピン留めライブラリ drop の無効 HWND 耐性を実測し、非許容なら切離し適用点を強化、
+  それでも塞げない場合のみ案 B（owner 無し＝5.9 自明成立）。
+
+### Decision D5: 要件 2.6 シームの具体形 = `ReassertZOrder` コンポーネント挿入（§8-9 の宿題の解）
+
+- `areka-P0-balloon-visibility` は再表示（show）後にバルーン窓 entity へ
+  `wintf::ecs::ReassertZOrder` を insert する——これが相互登記の契約点。
+  本 spec の受入は決定論的テスト（純関数＋状態機械）のみ（要件 7.6）。
+  **vis の設計文書に同じ契約を記載すること**（design「Boundary Commitments > Out of Boundary」
+  と「Revalidation Triggers」に登記済み）。
+
+### Decision D6: 要件 4.1 は受動実装（§8-11 の裁定 = ⑴）
+
+- 能動的な背面化処理は持たない。維持系は**トリガ駆動のみ**（非活性化・タイマ・毎フレーム巡回で
+  動かない）＝「沈んだ後に持ち上げ返さない」の構造的保証。検証は `decide_pair_fix` の
+  該当 Skip 腕テスト＋実機 S3（`sink-observed` レコード）。
+
+### Decision D7: 診断ログ = 指令＋実測の同一行レコード（§7・§8-8 の採用）
+
+- `GetWindow(GW_HWNDPREV/GW_HWNDNEXT)` 走査を**採用**（新設 safe wrapper・追加依存なし）。
+  レコード語彙 7 種（declared/owner-established/fix/skip/verify-failed/owner-establish-failed/
+  sink-observed）を design に確定。scope は areka 側 `declared` レコードとの entity 結合で
+  2 段 grep（`log_window_move` 先例）。適用後検証は次巡実測照合（`pending_verify`）で
+  「指令は出したが効かなかった」を error! に切り分ける（6.2）。
+
+### Risks & Mitigations（design 時点の残余）
+
+- `SetWindowLongPtrW(GWLP_HWNDPARENT)` 後付け owner の WUC 窓での実挙動（Research #1/#3）——
+  未知のまま design を確定してよい構造（ゲート G1〜G6 が全て吸収し、FAIL は案 B へ落ちるだけ）。
+- Win32 を呼ぶ system のスレッド制約——NonSend パラメータで UI スレッド固定
+  （`SetWindowPosCommand` TLS キューの前提と一致）。
+- atom（W6.75）が flush 経路を改造する場合の再突合（roadmap 干渉台帳 atom⇄zorder）——
+  Revalidation Triggers に登記。
+
+### Review Gate 結果
+
+- 機械チェック: 要件 ID 41 個（1.1〜8.5）全て design.md に出現・Boundary 4 節充足・
+  File Structure Plan 具体・孤児コンポーネント無し。
+- 判定レビュー: 修復 2 件（G6 の `GW_HWNDPREV` 表記・`PlaceAboveOverBelow` の冗長フィールド削除）
+  を第 1 パスで適用し、第 2 パスで PASS。要件ギャップ・矛盾は検出されず。
