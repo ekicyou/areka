@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. 実行前提の整備とベースライン確認
+- [x] 1. 実行前提の整備とベースライン確認
   - 是正前の実機観測ログ（`target/bindopt-debug-observation.log`）を、cargo が消去しない位置（`%LOCALAPPDATA%\areka-diag\` 配下の日付付きディレクトリ）へ**最初に**複製し、その絶対パスを控える（実装後は是正前ログを再採取できないため、較正の唯一の材料）
   - i686 host-32 成果物をビルドし、`cargo test --workspace` がベースラインで exit 0 の全緑になることを確認する（steering 既知の前提: host-32 成果物が無いと workspace テストが赤になる）
   - 観測可能な完了状態: 複製先の絶対パスに保全ログが存在し（是正前の握り潰しを含む内容）、ベースライン全緑の実行結果が記録されている
@@ -102,3 +102,8 @@
   - 覆しの根拠（正典・実機証拠）と裁定の記録が設計文書に残っていることを確認する
   - 観測可能な完了状態: 追記文の草案が spec 配下に用意され、設計文書の覆し記録と裁定記録の所在が確認済み
   - _Requirements: 6.2, 6.3, 6.4_
+
+## Implementation Notes
+
+- **task 1（2026-08-11）**: 是正前の実機観測ログを `C:\Users\maz-o\AppData\Local\areka-diag\bindopt-20260811-101835\bindopt-debug-observation.log` へ保全済み（465,055 bytes・md5 `d910e4dc7d1ebd350ec0b1fa6bb8f4df`・worktree の `target/bindopt-debug-observation.log` と一致）。タスク 7.1 の既知ケース較正はこの絶対パスを使う。
+- **task 1（2026-08-11）**: ベースライン全緑を確認。手順＝PowerShell で `cargo build -p shiori-host32-helper -p shiori-host32-testdll --target i686-pc-windows-msvc` → `cargo test --workspace`（exit 0）。i686 ビルドは必ず PowerShell（Git Bash の coreutils `link.exe` が MSVC link を遮蔽する）。
