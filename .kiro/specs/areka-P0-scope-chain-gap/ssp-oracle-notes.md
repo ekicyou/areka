@@ -78,6 +78,15 @@
 - **副産物②（正しい初回起動化の手順）**: FirstBoot フラグと位置の実体は `ghost\<dir>\ghost\master\profile\ghost.dat`。emo2 の各セッションは OnFirstBoot 発動（会話証跡）＝削除成功＝**emo2 データは有効**。
 - Emily の descript には defaultx/defaulty 宣言なし（alignment のみ）。ghost 辞書の move はメニュー起動 1 箇所のみ（boot 系ゼロ）＝ Emily は本来クリーンな auto サンプルになり得たが、profile 残存で無効化。
 
+## セッション5（14:08・emo2-probe・DPI 96）——**H1 隣接で確定**
+証跡: `ssp-rects-boot-probeA-dpi96.log`。プローブ＝`C:\wintools\ssp\ghost\emo2-probe`（開発版 emo2 のコピー・boot/menu の `\![move]` 完全除去・名前 えも2PROBE/id.emo2-probe・プロファイル無しで起動・開発者承認済み）。
+- むらさき: L=2498, W=382（右端 2880 ＝ work 右端密着・下端 1752 密着）
+- **エモ: L=2162, W=336 → 右端 2498 ＝ むらさき左端と厳密一致 ⇒ gap = 0（完全隣接）**・下端 1752 密着
+- **`scope1.L = scope0.L − scope1自身の幅`（2498−336=2162）が誤差 0 で成立 ⇒ SSP 既定規則 = H1（隣接・自幅減算）で確定**。
+- 今朝の「gap 20px」は emo2 ゴーストの `\![move,-353]`（演出）による着地であり SSP 既定ではない（move 除去で 2142→2162 へ +20 変化＝隙間消滅が直接証拠）。
+- **教訓（檻へ）**: SSP はスクリプトの move を窓の可視化前に適用しうる。「窓出現 tick がバルーンより先＝move 前」という推論は不成立（セッション2 の 2142 は既に move 後だった）。ゴースト演出の混入排除には move 無しプローブが必須。
+- 仮説判定の最終形: **H1 確定** ✓／H2（マージン20）＝move 演出の誤読で棄却／H3 棄却／現行 areka 式（前スコープ幅減算・gap=幅差）棄却。
+
 ## 残る未観測・次の実験（改訂）
 1. **【本命・開発者へ提案中】計測プローブゴースト `emo2-probe`**: SSP 内 `ghost\emo` のコピーから boot.pasta の `\![move]` 行を除去（＋descript 名変更）。move が消えれば**定常状態＝素の既定配置**となりタイミング競争が消滅。
    - probe-A（原寸のまま・96/192 両方）: kero 既定の DPI スケール則を確定（R2.3/R6.4 の成立可否を裁定）。

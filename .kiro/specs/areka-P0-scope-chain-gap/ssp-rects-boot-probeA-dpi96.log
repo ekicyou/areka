@@ -1,0 +1,659 @@
+=== change 2026-08-11 14:07:55.311 ===
+
+HWnd    Class             Title           Dpi    L    T   W  H WorkArea
+----    -----             -----           ---    -    -   -  - --------
+0x40D2A SSPProgressWindow TProgressWindow  96 2607 1692 263 50 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:07:55.713 ===
+
+HWnd    Class             Title                                 Dpi    L    T   W   H WorkArea
+----    -----             -----                                 ---    -    -   -   - --------
+0x40D2A SSPProgressWindow TProgressWindow                        96 2607 1692 263  50 L=0 T=0 R=2880 B=1752
+0x60CC8 TMasterForm       Emily/Phase4.5 "the Slapstick Beauty"  96    3    3 400 218 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:07:55.920 ===
+
+HWnd    Class                                        Title                                 Dpi     L     T   W   H WorkArea
+----    -----                                        -----                                 ---     -     -   -   - --------
+0xD0118 SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP                                    96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x60CC8 TMasterForm                                  Emily/Phase4.5 "the Slapstick Beauty"  96     3     3 400 218 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:07:55.979 ===
+
+HWnd     Class                                        Title                                 Dpi     L     T   W   H WorkArea
+----     -----                                        -----                                 ---     -     -   -   - --------
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP                                    96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x30D20  Tcharbodywnd                                 -(2)                                   96  2357  1372 276 380 L=0 T=0 R=2880 B=1752
+0xD0A6C  Tcharbodywnd                                 -(4)                                   96  2709  1314 150 125 L=0 T=0 R=2880 B=1752
+0xB0C28  Tkeroform                                    Teddy                                  96  2515  1599 255 161 L=0 T=0 R=2880 B=1752
+0x160BA4 Tmainform                                    Emily                                  96  2659  1367 253 385 L=0 T=0 R=2880 B=1752
+0x60CC8  TMasterForm                                  Emily/Phase4.5 "the Slapstick Beauty"  96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x210C02 Tmessageform                                 Emily/Balloon                          96  2331  1297 335 199 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:08:01.032 ===
+
+HWnd     Class                                        Title                                 Dpi     L     T   W   H WorkArea
+----     -----                                        -----                                 ---     -     -   -   - --------
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP                                    96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x30D20  Tcharbodywnd                                 -(2)                                   96  2357  1372 276 380 L=0 T=0 R=2880 B=1752
+0xD0A6C  Tcharbodywnd                                 -(4)                                   96  2709  1314 150 125 L=0 T=0 R=2880 B=1752
+0xB0C28  Tkeroform                                    Teddy                                  96  2515  1599 255 161 L=0 T=0 R=2880 B=1752
+0x160BA4 Tmainform                                    Emily                                  96  2659  1367 253 385 L=0 T=0 R=2880 B=1752
+0x60CC8  TMasterForm                                  Emily/Phase4.5 "the Slapstick Beauty"  96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x210C02 Tmessageform                                 Emily/Balloon                          96  2331  1297 335 199 L=0 T=0 R=2880 B=1752
+0x1A0BAE Tmessageformc                                -(2)/Balloon                           96  2062  1467 335 126 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:08:03.104 ===
+
+HWnd     Class                                        Title                                 Dpi     L     T   W   H WorkArea
+----     -----                                        -----                                 ---     -     -   -   - --------
+0x140A74 #32768                                                                              96  2694  1112 182 436 L=0 T=0 R=2880 B=1752
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP                                    96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x30D20  Tcharbodywnd                                 -(2)                                   96  2357  1372 276 380 L=0 T=0 R=2880 B=1752
+0xD0A6C  Tcharbodywnd                                 -(4)                                   96  2709  1314 150 125 L=0 T=0 R=2880 B=1752
+0xB0C28  Tkeroform                                    Teddy                                  96  2515  1599 255 161 L=0 T=0 R=2880 B=1752
+0x160BA4 Tmainform                                    Emily                                  96  2659  1367 253 385 L=0 T=0 R=2880 B=1752
+0x60CC8  TMasterForm                                  Emily/Phase4.5 "the Slapstick Beauty"  96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x210C02 Tmessageform                                 Emily/Balloon                          96  2331  1297 335 199 L=0 T=0 R=2880 B=1752
+0x1A0BAE Tmessageformc                                -(2)/Balloon                           96  2062  1467 335 126 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:08:03.654 ===
+
+HWnd     Class                                        Title                                 Dpi     L     T   W   H WorkArea
+----     -----                                        -----                                 ---     -     -   -   - --------
+0x140A74 #32768                                                                              96  2694  1112 182 436 L=0 T=0 R=2880 B=1752
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP                                    96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x30D20  Tcharbodywnd                                 -(2)                                   96  2357  1372 276 380 L=0 T=0 R=2880 B=1752
+0xD0A6C  Tcharbodywnd                                 -(4)                                   96  2709  1314 150 125 L=0 T=0 R=2880 B=1752
+0xB0C28  Tkeroform                                    Teddy                                  96  2515  1599 255 161 L=0 T=0 R=2880 B=1752
+0x160BA4 Tmainform                                    Emily                                  96  2659  1367 253 385 L=0 T=0 R=2880 B=1752
+0x60CC8  TMasterForm                                  Emily/Phase4.5 "the Slapstick Beauty"  96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x210C02 Tmessageform                                 Emily/Balloon                          96  2331  1297 335 199 L=0 T=0 R=2880 B=1752
+0x1A0BAE Tmessageformc                                -(2)/Balloon                           96  2062  1467 335 126 L=0 T=0 R=2880 B=1752
+0xF0114  Tmessageformu                                Teddy/Balloon                          96  2190  1579 335 126 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:08:05.044 ===
+
+HWnd     Class                                        Title                                 Dpi     L     T   W   H WorkArea
+----     -----                                        -----                                 ---     -     -   -   - --------
+0x80D1A  #32768                                                                              96  2554  1337 143  66 L=0 T=0 R=2880 B=1752
+0x140A74 #32768                                                                              96  2694  1112 182 436 L=0 T=0 R=2880 B=1752
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP                                    96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x30D20  Tcharbodywnd                                 -(2)                                   96  2357  1372 276 380 L=0 T=0 R=2880 B=1752
+0xD0A6C  Tcharbodywnd                                 -(4)                                   96  2709  1314 150 125 L=0 T=0 R=2880 B=1752
+0xB0C28  Tkeroform                                    Teddy                                  96  2515  1599 255 161 L=0 T=0 R=2880 B=1752
+0x160BA4 Tmainform                                    Emily                                  96  2659  1367 253 385 L=0 T=0 R=2880 B=1752
+0x60CC8  TMasterForm                                  Emily/Phase4.5 "the Slapstick Beauty"  96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x210C02 Tmessageform                                 Emily/Balloon                          96  2331  1297 335 199 L=0 T=0 R=2880 B=1752
+0x1A0BAE Tmessageformc                                -(2)/Balloon                           96  2062  1467 335 126 L=0 T=0 R=2880 B=1752
+0xF0114  Tmessageformu                                Teddy/Balloon                          96  2190  1579 335 126 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:08:05.460 ===
+
+HWnd     Class                                        Title                                 Dpi     L     T   W   H WorkArea
+----     -----                                        -----                                 ---     -     -   -   - --------
+0x260BB4 #32768                                                                              96  2554  1321 143  66 L=0 T=0 R=2880 B=1752
+0x140A74 #32768                                                                              96  2694  1112 182 436 L=0 T=0 R=2880 B=1752
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP                                    96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x30D20  Tcharbodywnd                                 -(2)                                   96  2357  1372 276 380 L=0 T=0 R=2880 B=1752
+0xD0A6C  Tcharbodywnd                                 -(4)                                   96  2709  1314 150 125 L=0 T=0 R=2880 B=1752
+0xB0C28  Tkeroform                                    Teddy                                  96  2515  1599 255 161 L=0 T=0 R=2880 B=1752
+0x160BA4 Tmainform                                    Emily                                  96  2659  1367 253 385 L=0 T=0 R=2880 B=1752
+0x60CC8  TMasterForm                                  Emily/Phase4.5 "the Slapstick Beauty"  96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x210C02 Tmessageform                                 Emily/Balloon                          96  2331  1297 335 199 L=0 T=0 R=2880 B=1752
+0x1A0BAE Tmessageformc                                -(2)/Balloon                           96  2062  1467 335 126 L=0 T=0 R=2880 B=1752
+0xF0114  Tmessageformu                                Teddy/Balloon                          96  2190  1579 335 126 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:08:06.943 ===
+
+HWnd     Class                                        Title                                 Dpi     L     T   W   H WorkArea
+----     -----                                        -----                                 ---     -     -   -   - --------
+0x1D0C38 #32768                                                                              96  2245  1321 312 354 L=0 T=0 R=2880 B=1752
+0x260BB4 #32768                                                                              96  2554  1321 143  66 L=0 T=0 R=2880 B=1752
+0x140A74 #32768                                                                              96  2694  1112 182 436 L=0 T=0 R=2880 B=1752
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP                                    96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x30D20  Tcharbodywnd                                 -(2)                                   96  2357  1372 276 380 L=0 T=0 R=2880 B=1752
+0xD0A6C  Tcharbodywnd                                 -(4)                                   96  2709  1314 150 125 L=0 T=0 R=2880 B=1752
+0xB0C28  Tkeroform                                    Teddy                                  96  2515  1599 255 161 L=0 T=0 R=2880 B=1752
+0x160BA4 Tmainform                                    Emily                                  96  2659  1367 253 385 L=0 T=0 R=2880 B=1752
+0x60CC8  TMasterForm                                  Emily/Phase4.5 "the Slapstick Beauty"  96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x210C02 Tmessageform                                 Emily/Balloon                          96  2331  1297 335 199 L=0 T=0 R=2880 B=1752
+0x1A0BAE Tmessageformc                                -(2)/Balloon                           96  2062  1467 335 126 L=0 T=0 R=2880 B=1752
+0xF0114  Tmessageformu                                Teddy/Balloon                          96  2190  1579 335 126 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:08:12.105 ===
+
+HWnd     Class                                        Title                                 Dpi     L     T   W   H WorkArea
+----     -----                                        -----                                 ---     -     -   -   - --------
+0x260BB4 #32768                                                                              96  2554  1321 143  66 L=0 T=0 R=2880 B=1752
+0x140A74 #32768                                                                              96  2694  1112 182 436 L=0 T=0 R=2880 B=1752
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP                                    96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x30D20  Tcharbodywnd                                 -(2)                                   96  2357  1372 276 380 L=0 T=0 R=2880 B=1752
+0xD0A6C  Tcharbodywnd                                 -(4)                                   96  2709  1314 150 125 L=0 T=0 R=2880 B=1752
+0xB0C28  Tkeroform                                    Teddy                                  96  2515  1599 255 161 L=0 T=0 R=2880 B=1752
+0x160BA4 Tmainform                                    Emily                                  96  2659  1367 253 385 L=0 T=0 R=2880 B=1752
+0x60CC8  TMasterForm                                  Emily/Phase4.5 "the Slapstick Beauty"  96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x210C02 Tmessageform                                 Emily/Balloon                          96  2331  1297 335 199 L=0 T=0 R=2880 B=1752
+0x1A0BAE Tmessageformc                                -(2)/Balloon                           96  2062  1467 335 126 L=0 T=0 R=2880 B=1752
+0xF0114  Tmessageformu                                Teddy/Balloon                          96  2190  1579 335 126 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:08:12.300 ===
+
+HWnd     Class                                        Title                                 Dpi     L     T   W   H WorkArea
+----     -----                                        -----                                 ---     -     -   -   - --------
+0x260BB4 #32768                                                                              96  2554  1321 143  66 L=0 T=0 R=2880 B=1752
+0x1E0C38 #32768                                                                              96  2691  1353 109  18 L=0 T=0 R=2880 B=1752
+0x140A74 #32768                                                                              96  2694  1112 182 436 L=0 T=0 R=2880 B=1752
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP                                    96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x30D20  Tcharbodywnd                                 -(2)                                   96  2357  1372 276 380 L=0 T=0 R=2880 B=1752
+0xD0A6C  Tcharbodywnd                                 -(4)                                   96  2709  1314 150 125 L=0 T=0 R=2880 B=1752
+0xB0C28  Tkeroform                                    Teddy                                  96  2515  1599 255 161 L=0 T=0 R=2880 B=1752
+0x160BA4 Tmainform                                    Emily                                  96  2659  1367 253 385 L=0 T=0 R=2880 B=1752
+0x60CC8  TMasterForm                                  Emily/Phase4.5 "the Slapstick Beauty"  96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x210C02 Tmessageform                                 Emily/Balloon                          96  2331  1297 335 199 L=0 T=0 R=2880 B=1752
+0x1A0BAE Tmessageformc                                -(2)/Balloon                           96  2062  1467 335 126 L=0 T=0 R=2880 B=1752
+0xF0114  Tmessageformu                                Teddy/Balloon                          96  2190  1579 335 126 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:08:13.048 ===
+
+HWnd     Class                                        Title                                 Dpi     L     T   W   H WorkArea
+----     -----                                        -----                                 ---     -     -   -   - --------
+0x250BFE #32768                                                                              96  2245  1321 312 354 L=0 T=0 R=2880 B=1752
+0x260BB4 #32768                                                                              96  2554  1321 143  66 L=0 T=0 R=2880 B=1752
+0x140A74 #32768                                                                              96  2694  1112 182 436 L=0 T=0 R=2880 B=1752
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP                                    96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x30D20  Tcharbodywnd                                 -(2)                                   96  2357  1372 276 380 L=0 T=0 R=2880 B=1752
+0xD0A6C  Tcharbodywnd                                 -(4)                                   96  2709  1314 150 125 L=0 T=0 R=2880 B=1752
+0xB0C28  Tkeroform                                    Teddy                                  96  2515  1599 255 161 L=0 T=0 R=2880 B=1752
+0x160BA4 Tmainform                                    Emily                                  96  2659  1367 253 385 L=0 T=0 R=2880 B=1752
+0x60CC8  TMasterForm                                  Emily/Phase4.5 "the Slapstick Beauty"  96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x210C02 Tmessageform                                 Emily/Balloon                          96  2331  1297 335 199 L=0 T=0 R=2880 B=1752
+0x1A0BAE Tmessageformc                                -(2)/Balloon                           96  2062  1467 335 126 L=0 T=0 R=2880 B=1752
+0xF0114  Tmessageformu                                Teddy/Balloon                          96  2190  1579 335 126 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:08:13.661 ===
+
+HWnd     Class                                        Title                                 Dpi     L     T   W   H WorkArea
+----     -----                                        -----                                 ---     -     -   -   - --------
+0x250BFE #32768                                                                              96  2245  1321 312 354 L=0 T=0 R=2880 B=1752
+0x260BB4 #32768                                                                              96  2554  1321 143  66 L=0 T=0 R=2880 B=1752
+0x140A74 #32768                                                                              96  2694  1112 182 436 L=0 T=0 R=2880 B=1752
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP                                    96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0xC0D14  SSPThumbnailWindow                           HelperThread                           96    10  1342 300 400 L=0 T=0 R=2880 B=1752
+0x30D20  Tcharbodywnd                                 -(2)                                   96  2357  1372 276 380 L=0 T=0 R=2880 B=1752
+0xD0A6C  Tcharbodywnd                                 -(4)                                   96  2709  1314 150 125 L=0 T=0 R=2880 B=1752
+0xB0C28  Tkeroform                                    Teddy                                  96  2515  1599 255 161 L=0 T=0 R=2880 B=1752
+0x160BA4 Tmainform                                    Emily                                  96  2659  1367 253 385 L=0 T=0 R=2880 B=1752
+0x60CC8  TMasterForm                                  Emily/Phase4.5 "the Slapstick Beauty"  96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x210C02 Tmessageform                                 Emily/Balloon                          96  2331  1297 335 199 L=0 T=0 R=2880 B=1752
+0x1A0BAE Tmessageformc                                -(2)/Balloon                           96  2062  1467 335 126 L=0 T=0 R=2880 B=1752
+0xF0114  Tmessageformu                                Teddy/Balloon                          96  2190  1579 335 126 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:08:14.462 ===
+
+HWnd     Class                                        Title                                 Dpi     L     T   W   H WorkArea
+----     -----                                        -----                                 ---     -     -   -   - --------
+0x250BFE #32768                                                                              96  2245  1321 312 354 L=0 T=0 R=2880 B=1752
+0x260BB4 #32768                                                                              96  2554  1321 143  66 L=0 T=0 R=2880 B=1752
+0x140A74 #32768                                                                              96  2694  1112 182 436 L=0 T=0 R=2880 B=1752
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP                                    96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x30D20  Tcharbodywnd                                 -(2)                                   96  2357  1372 276 380 L=0 T=0 R=2880 B=1752
+0xD0A6C  Tcharbodywnd                                 -(4)                                   96  2709  1314 150 125 L=0 T=0 R=2880 B=1752
+0xB0C28  Tkeroform                                    Teddy                                  96  2515  1599 255 161 L=0 T=0 R=2880 B=1752
+0x160BA4 Tmainform                                    Emily                                  96  2659  1367 253 385 L=0 T=0 R=2880 B=1752
+0x60CC8  TMasterForm                                  Emily/Phase4.5 "the Slapstick Beauty"  96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x210C02 Tmessageform                                 Emily/Balloon                          96  2331  1297 335 199 L=0 T=0 R=2880 B=1752
+0x1A0BAE Tmessageformc                                -(2)/Balloon                           96  2062  1467 335 126 L=0 T=0 R=2880 B=1752
+0xF0114  Tmessageformu                                Teddy/Balloon                          96  2190  1579 335 126 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:08:16.511 ===
+
+HWnd     Class                                        Title                                 Dpi     L     T   W   H WorkArea
+----     -----                                        -----                                 ---     -     -   -   - --------
+0x250BFE #32768                                                                              96  2245  1321 312 354 L=0 T=0 R=2880 B=1752
+0x260BB4 #32768                                                                              96  2554  1321 143  66 L=0 T=0 R=2880 B=1752
+0x140A74 #32768                                                                              96  2694  1112 182 436 L=0 T=0 R=2880 B=1752
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP                                    96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0xC0D14  SSPThumbnailWindow                           HelperThread                           96    10  1342 300 400 L=0 T=0 R=2880 B=1752
+0x30D20  Tcharbodywnd                                 -(2)                                   96  2357  1372 276 380 L=0 T=0 R=2880 B=1752
+0xD0A6C  Tcharbodywnd                                 -(4)                                   96  2709  1314 150 125 L=0 T=0 R=2880 B=1752
+0xB0C28  Tkeroform                                    Teddy                                  96  2515  1599 255 161 L=0 T=0 R=2880 B=1752
+0x160BA4 Tmainform                                    Emily                                  96  2659  1367 253 385 L=0 T=0 R=2880 B=1752
+0x60CC8  TMasterForm                                  Emily/Phase4.5 "the Slapstick Beauty"  96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x210C02 Tmessageform                                 Emily/Balloon                          96  2331  1297 335 199 L=0 T=0 R=2880 B=1752
+0x1A0BAE Tmessageformc                                -(2)/Balloon                           96  2062  1467 335 126 L=0 T=0 R=2880 B=1752
+0xF0114  Tmessageformu                                Teddy/Balloon                          96  2190  1579 335 126 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:08:18.690 ===
+
+HWnd     Class                                        Title                                 Dpi     L     T   W   H WorkArea
+----     -----                                        -----                                 ---     -     -   -   - --------
+0x250BFE #32768                                                                              96  2245  1321 312 354 L=0 T=0 R=2880 B=1752
+0x260BB4 #32768                                                                              96  2554  1321 143  66 L=0 T=0 R=2880 B=1752
+0x140A74 #32768                                                                              96  2694  1112 182 436 L=0 T=0 R=2880 B=1752
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP                                    96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x30D20  Tcharbodywnd                                 -(2)                                   96  2357  1372 276 380 L=0 T=0 R=2880 B=1752
+0xD0A6C  Tcharbodywnd                                 -(4)                                   96  2709  1314 150 125 L=0 T=0 R=2880 B=1752
+0xB0C28  Tkeroform                                    Teddy                                  96  2515  1599 255 161 L=0 T=0 R=2880 B=1752
+0x160BA4 Tmainform                                    Emily                                  96  2659  1367 253 385 L=0 T=0 R=2880 B=1752
+0x60CC8  TMasterForm                                  Emily/Phase4.5 "the Slapstick Beauty"  96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x210C02 Tmessageform                                 Emily/Balloon                          96  2331  1297 335 199 L=0 T=0 R=2880 B=1752
+0x1A0BAE Tmessageformc                                -(2)/Balloon                           96  2062  1467 335 126 L=0 T=0 R=2880 B=1752
+0xF0114  Tmessageformu                                Teddy/Balloon                          96  2190  1579 335 126 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:08:19.252 ===
+
+HWnd     Class                                        Title                                 Dpi     L     T   W   H WorkArea
+----     -----                                        -----                                 ---     -     -   -   - --------
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP                                    96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0xD0A6C  Tcharbodywnd                                 -(4)                                   96  2709  1314 150 125 L=0 T=0 R=2880 B=1752
+0xB0C28  Tkeroform                                    Teddy                                  96  2515  1599 255 161 L=0 T=0 R=2880 B=1752
+0x160BA4 Tmainform                                    Emily                                  96  2659  1367 253 385 L=0 T=0 R=2880 B=1752
+0x60CC8  TMasterForm                                  Emily/Phase4.5 "the Slapstick Beauty"  96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x210C02 Tmessageform                                 Emily/Balloon                          96  2331  1297 335 199 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:08:21.368 ===
+
+HWnd     Class                                        Title                                 Dpi     L     T   W   H WorkArea
+----     -----                                        -----                                 ---     -     -   -   - --------
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP                                    96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x40D2A  SSPProgressWindow                            TProgressWindow                        96  2607  1692 263  50 L=0 T=0 R=2880 B=1752
+0xD0A6C  Tcharbodywnd                                 -(4)                                   96  2709  1314 150 125 L=0 T=0 R=2880 B=1752
+0xB0C28  Tkeroform                                    Teddy                                  96  2515  1599 255 161 L=0 T=0 R=2880 B=1752
+0x160BA4 Tmainform                                    Emily                                  96  2659  1367 253 385 L=0 T=0 R=2880 B=1752
+0x60CC8  TMasterForm                                  Emily/Phase4.5 "the Slapstick Beauty"  96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x210C02 Tmessageform                                 Emily/Balloon                          96  2331  1297 335 199 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:08:21.428 ===
+
+HWnd    Class                                        Title           Dpi     L     T   W   H WorkArea
+----    -----                                        -----           ---     -     -   -   - --------
+0xD0118 SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP              96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x40D2A SSPProgressWindow                            TProgressWindow  96  2607  1692 263  50 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:08:23.155 ===
+
+HWnd    Class                                        Title           Dpi     L     T   W   H WorkArea
+----    -----                                        -----           ---     -     -   -   - --------
+0xD0118 SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP              96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x40D2A SSPProgressWindow                            TProgressWindow  96  2607  1692 263  50 L=0 T=0 R=2880 B=1752
+0x70CC8 TMasterForm                                  えも2PROBE       96     3     3 400 218 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:08:23.223 ===
+
+HWnd    Class                                        Title      Dpi     L     T   W   H WorkArea
+----    -----                                        -----      ---     -     -   -   - --------
+0xD0118 SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP         96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x70CC8 TMasterForm                                  えも2PROBE  96     3     3 400 218 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:08:23.281 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W   H WorkArea
+----     -----                                        -----            ---     -     -   -   - --------
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP               96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8  Tkeroform                                    エモ              96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28  Tmainform                                    むらさき          96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8  TMasterForm                                  えも2PROBE        96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x100114 Tmessageform                                 むらさき/Balloon  96  2364  1076 400 224 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:08:26.192 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W   H WorkArea
+----     -----                                        -----            ---     -     -   -   - --------
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP               96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8  Tkeroform                                    エモ              96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28  Tmainform                                    むらさき          96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8  TMasterForm                                  えも2PROBE        96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x100114 Tmessageform                                 むらさき/Balloon  96  2364  1076 400 224 L=0 T=0 R=2880 B=1752
+0xE0A6C  Tmessageformu                                エモ/Balloon      96  2308  1277 288 203 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:08:56.232 ===
+
+HWnd    Class                                        Title      Dpi     L     T   W   H WorkArea
+----    -----                                        -----      ---     -     -   -   - --------
+0xD0118 SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP         96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8 Tkeroform                                    エモ        96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28 Tmainform                                    むらさき    96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8 TMasterForm                                  えも2PROBE  96     3     3 400 218 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:09:07.841 ===
+
+HWnd    Class                                        Title        Dpi     L     T   W   H WorkArea
+----    -----                                        -----        ---     -     -   -   - --------
+0xD0118 SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP           96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8 Tkeroform                                    エモ          96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28 Tmainform                                    むらさき      96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8 TMasterForm                                  えも2PROBE    96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0xE0A6C Tmessageformu                                エモ/Balloon  96  2308  1277 288 203 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:09:10.096 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W   H WorkArea
+----     -----                                        -----            ---     -     -   -   - --------
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP               96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8  Tkeroform                                    エモ              96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28  Tmainform                                    むらさき          96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8  TMasterForm                                  えも2PROBE        96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x100114 Tmessageform                                 むらさき/Balloon  96  2364  1076 400 224 L=0 T=0 R=2880 B=1752
+0xE0A6C  Tmessageformu                                エモ/Balloon      96  2308  1277 288 203 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:09:28.580 ===
+
+HWnd    Class                                        Title      Dpi     L     T   W   H WorkArea
+----    -----                                        -----      ---     -     -   -   - --------
+0xD0118 SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP         96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8 Tkeroform                                    エモ        96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28 Tmainform                                    むらさき    96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8 TMasterForm                                  えも2PROBE  96     3     3 400 218 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:09:28.808 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W   H WorkArea
+----     -----                                        -----            ---     -     -   -   - --------
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP               96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8  Tkeroform                                    エモ              96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28  Tmainform                                    むらさき          96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8  TMasterForm                                  えも2PROBE        96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x100114 Tmessageform                                 むらさき/Balloon  96  2364  1076 400 224 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:09:31.313 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W   H WorkArea
+----     -----                                        -----            ---     -     -   -   - --------
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP               96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8  Tkeroform                                    エモ              96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28  Tmainform                                    むらさき          96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8  TMasterForm                                  えも2PROBE        96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x100114 Tmessageform                                 むらさき/Balloon  96  2364  1076 400 224 L=0 T=0 R=2880 B=1752
+0xE0A6C  Tmessageformu                                エモ/Balloon      96  2308  1277 288 203 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:09:43.812 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W   H WorkArea
+----     -----                                        -----            ---     -     -   -   - --------
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP               96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8  Tkeroform                                    エモ              96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28  Tmainform                                    むらさき          96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8  TMasterForm                                  えも2PROBE        96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x100114 Tmessageform                                 むらさき/Balloon  96  2364  1076 400 224 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:09:45.811 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W   H WorkArea
+----     -----                                        -----            ---     -     -   -   - --------
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP               96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8  Tkeroform                                    エモ              96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28  Tmainform                                    むらさき          96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8  TMasterForm                                  えも2PROBE        96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x100114 Tmessageform                                 むらさき/Balloon  96  2364  1076 400 224 L=0 T=0 R=2880 B=1752
+0xE0A6C  Tmessageformu                                エモ/Balloon      96  2308  1277 288 203 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:10:00.806 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W   H WorkArea
+----     -----                                        -----            ---     -     -   -   - --------
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP               96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8  Tkeroform                                    エモ              96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28  Tmainform                                    むらさき          96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8  TMasterForm                                  えも2PROBE        96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x100114 Tmessageform                                 むらさき/Balloon  96  2364  1076 400 224 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:10:01.924 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W   H WorkArea
+----     -----                                        -----            ---     -     -   -   - --------
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP               96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8  Tkeroform                                    エモ              96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28  Tmainform                                    むらさき          96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8  TMasterForm                                  えも2PROBE        96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x100114 Tmessageform                                 むらさき/Balloon  96  2364  1076 400 224 L=0 T=0 R=2880 B=1752
+0xE0A6C  Tmessageformu                                エモ/Balloon      96  2308  1277 288 203 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:10:19.226 ===
+
+HWnd    Class                                        Title      Dpi     L     T   W   H WorkArea
+----    -----                                        -----      ---     -     -   -   - --------
+0xD0118 SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP         96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8 Tkeroform                                    エモ        96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28 Tmainform                                    むらさき    96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8 TMasterForm                                  えも2PROBE  96     3     3 400 218 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:10:20.827 ===
+
+HWnd    Class                                        Title        Dpi     L     T   W   H WorkArea
+----    -----                                        -----        ---     -     -   -   - --------
+0xD0118 SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP           96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8 Tkeroform                                    エモ          96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28 Tmainform                                    むらさき      96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8 TMasterForm                                  えも2PROBE    96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0xE0A6C Tmessageformu                                エモ/Balloon  96  2308  1277 288 203 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:10:22.902 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W   H WorkArea
+----     -----                                        -----            ---     -     -   -   - --------
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP               96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8  Tkeroform                                    エモ              96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28  Tmainform                                    むらさき          96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8  TMasterForm                                  えも2PROBE        96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x100114 Tmessageform                                 むらさき/Balloon  96  2364  1076 400 224 L=0 T=0 R=2880 B=1752
+0xE0A6C  Tmessageformu                                エモ/Balloon      96  2308  1277 288 203 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:10:43.195 ===
+
+HWnd    Class                                        Title      Dpi     L     T   W   H WorkArea
+----    -----                                        -----      ---     -     -   -   - --------
+0xD0118 SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP         96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8 Tkeroform                                    エモ        96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28 Tmainform                                    むらさき    96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8 TMasterForm                                  えも2PROBE  96     3     3 400 218 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:10:44.845 ===
+
+HWnd    Class                                        Title        Dpi     L     T   W   H WorkArea
+----    -----                                        -----        ---     -     -   -   - --------
+0xD0118 SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP           96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8 Tkeroform                                    エモ          96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28 Tmainform                                    むらさき      96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8 TMasterForm                                  えも2PROBE    96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0xE0A6C Tmessageformu                                エモ/Balloon  96  2308  1277 288 203 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:10:46.996 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W   H WorkArea
+----     -----                                        -----            ---     -     -   -   - --------
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP               96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8  Tkeroform                                    エモ              96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28  Tmainform                                    むらさき          96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8  TMasterForm                                  えも2PROBE        96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x100114 Tmessageform                                 むらさき/Balloon  96  2364  1076 400 224 L=0 T=0 R=2880 B=1752
+0xE0A6C  Tmessageformu                                エモ/Balloon      96  2308  1277 288 203 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:11:01.844 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W   H WorkArea
+----     -----                                        -----            ---     -     -   -   - --------
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP               96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8  Tkeroform                                    エモ              96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28  Tmainform                                    むらさき          96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8  TMasterForm                                  えも2PROBE        96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x100114 Tmessageform                                 むらさき/Balloon  96  2364  1076 400 224 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:11:03.415 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W   H WorkArea
+----     -----                                        -----            ---     -     -   -   - --------
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP               96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8  Tkeroform                                    エモ              96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28  Tmainform                                    むらさき          96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8  TMasterForm                                  えも2PROBE        96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x100114 Tmessageform                                 むらさき/Balloon  96  2364  1076 400 224 L=0 T=0 R=2880 B=1752
+0xE0A6C  Tmessageformu                                エモ/Balloon      96  2308  1277 288 203 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:11:19.821 ===
+
+HWnd    Class                                        Title        Dpi     L     T   W   H WorkArea
+----    -----                                        -----        ---     -     -   -   - --------
+0xD0118 SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP           96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8 Tkeroform                                    エモ          96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28 Tmainform                                    むらさき      96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8 TMasterForm                                  えも2PROBE    96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0xE0A6C Tmessageformu                                エモ/Balloon  96  2308  1277 288 203 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:11:21.167 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W   H WorkArea
+----     -----                                        -----            ---     -     -   -   - --------
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP               96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8  Tkeroform                                    エモ              96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28  Tmainform                                    むらさき          96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8  TMasterForm                                  えも2PROBE        96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x100114 Tmessageform                                 むらさき/Balloon  96  2364  1076 400 224 L=0 T=0 R=2880 B=1752
+0xE0A6C  Tmessageformu                                エモ/Balloon      96  2308  1277 288 203 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:11:37.934 ===
+
+HWnd    Class                                        Title      Dpi     L     T   W   H WorkArea
+----    -----                                        -----      ---     -     -   -   - --------
+0xD0118 SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP         96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8 Tkeroform                                    エモ        96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28 Tmainform                                    むらさき    96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8 TMasterForm                                  えも2PROBE  96     3     3 400 218 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:11:47.840 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W   H WorkArea
+----     -----                                        -----            ---     -     -   -   - --------
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP               96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8  Tkeroform                                    エモ              96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28  Tmainform                                    むらさき          96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8  TMasterForm                                  えも2PROBE        96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x100114 Tmessageform                                 むらさき/Balloon  96  2364  1076 400 224 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:11:49.976 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W   H WorkArea
+----     -----                                        -----            ---     -     -   -   - --------
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP               96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8  Tkeroform                                    エモ              96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28  Tmainform                                    むらさき          96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8  TMasterForm                                  えも2PROBE        96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x100114 Tmessageform                                 むらさき/Balloon  96  2364  1076 400 224 L=0 T=0 R=2880 B=1752
+0xE0A6C  Tmessageformu                                エモ/Balloon      96  2308  1277 288 203 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:12:02.830 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W   H WorkArea
+----     -----                                        -----            ---     -     -   -   - --------
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP               96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8  Tkeroform                                    エモ              96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28  Tmainform                                    むらさき          96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8  TMasterForm                                  えも2PROBE        96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x100114 Tmessageform                                 むらさき/Balloon  96  2364  1076 400 224 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:12:04.713 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W   H WorkArea
+----     -----                                        -----            ---     -     -   -   - --------
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP               96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8  Tkeroform                                    エモ              96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28  Tmainform                                    むらさき          96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8  TMasterForm                                  えも2PROBE        96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x100114 Tmessageform                                 むらさき/Balloon  96  2364  1076 400 224 L=0 T=0 R=2880 B=1752
+0xE0A6C  Tmessageformu                                エモ/Balloon      96  2308  1277 288 203 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:12:25.173 ===
+
+HWnd    Class                                        Title      Dpi     L     T   W   H WorkArea
+----    -----                                        -----      ---     -     -   -   - --------
+0xD0118 SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP         96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8 Tkeroform                                    エモ        96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28 Tmainform                                    むらさき    96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8 TMasterForm                                  えも2PROBE  96     3     3 400 218 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:12:30.828 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W   H WorkArea
+----     -----                                        -----            ---     -     -   -   - --------
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP               96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8  Tkeroform                                    エモ              96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28  Tmainform                                    むらさき          96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8  TMasterForm                                  えも2PROBE        96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x100114 Tmessageform                                 むらさき/Balloon  96  2364  1076 400 224 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:12:32.087 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W   H WorkArea
+----     -----                                        -----            ---     -     -   -   - --------
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP               96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8  Tkeroform                                    エモ              96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28  Tmainform                                    むらさき          96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8  TMasterForm                                  えも2PROBE        96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x100114 Tmessageform                                 むらさき/Balloon  96  2364  1076 400 224 L=0 T=0 R=2880 B=1752
+0xE0A6C  Tmessageformu                                エモ/Balloon      96  2308  1277 288 203 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:12:47.824 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W   H WorkArea
+----     -----                                        -----            ---     -     -   -   - --------
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP               96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8  Tkeroform                                    エモ              96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28  Tmainform                                    むらさき          96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8  TMasterForm                                  えも2PROBE        96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x100114 Tmessageform                                 むらさき/Balloon  96  2364  1076 400 224 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:12:50.062 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W   H WorkArea
+----     -----                                        -----            ---     -     -   -   - --------
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP               96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8  Tkeroform                                    エモ              96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28  Tmainform                                    むらさき          96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8  TMasterForm                                  えも2PROBE        96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x100114 Tmessageform                                 むらさき/Balloon  96  2364  1076 400 224 L=0 T=0 R=2880 B=1752
+0xE0A6C  Tmessageformu                                エモ/Balloon      96  2308  1277 288 203 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:13:07.564 ===
+
+HWnd    Class                                        Title      Dpi     L     T   W   H WorkArea
+----    -----                                        -----      ---     -     -   -   - --------
+0xD0118 SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP         96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8 Tkeroform                                    エモ        96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28 Tmainform                                    むらさき    96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8 TMasterForm                                  えも2PROBE  96     3     3 400 218 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:13:07.847 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W   H WorkArea
+----     -----                                        -----            ---     -     -   -   - --------
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP               96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8  Tkeroform                                    エモ              96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28  Tmainform                                    むらさき          96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8  TMasterForm                                  えも2PROBE        96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x100114 Tmessageform                                 むらさき/Balloon  96  2364  1076 400 224 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:13:09.286 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W   H WorkArea
+----     -----                                        -----            ---     -     -   -   - --------
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP               96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8  Tkeroform                                    エモ              96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28  Tmainform                                    むらさき          96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8  TMasterForm                                  えも2PROBE        96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x100114 Tmessageform                                 むらさき/Balloon  96  2364  1076 400 224 L=0 T=0 R=2880 B=1752
+0xE0A6C  Tmessageformu                                エモ/Balloon      96  2308  1277 288 203 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:13:28.448 ===
+
+HWnd    Class                                        Title      Dpi     L     T   W   H WorkArea
+----    -----                                        -----      ---     -     -   -   - --------
+0xD0118 SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP         96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8 Tkeroform                                    エモ        96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28 Tmainform                                    むらさき    96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8 TMasterForm                                  えも2PROBE  96     3     3 400 218 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:13:36.819 ===
+
+HWnd    Class                                        Title        Dpi     L     T   W   H WorkArea
+----    -----                                        -----        ---     -     -   -   - --------
+0xD0118 SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP           96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8 Tkeroform                                    エモ          96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28 Tmainform                                    むらさき      96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8 TMasterForm                                  えも2PROBE    96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0xE0A6C Tmessageformu                                エモ/Balloon  96  2308  1277 288 203 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:13:38.544 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W   H WorkArea
+----     -----                                        -----            ---     -     -   -   - --------
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP               96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8  Tkeroform                                    エモ              96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28  Tmainform                                    むらさき          96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8  TMasterForm                                  えも2PROBE        96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x100114 Tmessageform                                 むらさき/Balloon  96  2364  1076 400 224 L=0 T=0 R=2880 B=1752
+0xE0A6C  Tmessageformu                                エモ/Balloon      96  2308  1277 288 203 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:13:50.941 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W   H WorkArea
+----     -----                                        -----            ---     -     -   -   - --------
+0x870C34 #32768                                                         96  2674  1252 178 436 L=0 T=0 R=2880 B=1752
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP               96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8  Tkeroform                                    エモ              96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28  Tmainform                                    むらさき          96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8  TMasterForm                                  えも2PROBE        96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x100114 Tmessageform                                 むらさき/Balloon  96  2364  1076 400 224 L=0 T=0 R=2880 B=1752
+0xE0A6C  Tmessageformu                                エモ/Balloon      96  2308  1277 288 203 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:13:52.024 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W   H WorkArea
+----     -----                                        -----            ---     -     -   -   - --------
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP               96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8  Tkeroform                                    エモ              96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28  Tmainform                                    むらさき          96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8  TMasterForm                                  えも2PROBE        96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x100114 Tmessageform                                 むらさき/Balloon  96  2364  1076 400 224 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:13:52.813 ===
+
+HWnd     Class                                        Title            Dpi     L     T   W   H WorkArea
+----     -----                                        -----            ---     -     -   -   - --------
+0xD0118  SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP               96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8  Tkeroform                                    エモ              96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0xC0C28  Tmainform                                    むらさき          96  2498  1205 382 547 L=0 T=0 R=2880 B=1752
+0x70CC8  TMasterForm                                  えも2PROBE        96     3     3 400 218 L=0 T=0 R=2880 B=1752
+0x100114 Tmessageform                                 むらさき/Balloon  96  2364  1076 400 224 L=0 T=0 R=2880 B=1752
+0xE0A6C  Tmessageformu                                エモ/Balloon      96  2308  1277 288 203 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:13:54.803 ===
+
+HWnd    Class                                        Title      Dpi     L     T   W   H WorkArea
+----    -----                                        -----      ---     -     -   -   - --------
+0xD0118 SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP         96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+0x50CE8 Tkeroform                                    エモ        96  2162  1352 336 400 L=0 T=0 R=2880 B=1752
+0x70CC8 TMasterForm                                  えも2PROBE  96     3     3 400 218 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:13:54.863 ===
+
+HWnd    Class                                        Title Dpi     L     T   W   H WorkArea
+----    -----                                        ----- ---     -     -   -   - --------
+0xD0118 SSPMAIN-3145fdab-2ee0-4158-a1ce-832b553ad790 SSP    96 30000 30000 100 100 L=0 T=0 R=2880 B=1752
+=== change 2026-08-11 14:13:55.806 ===
+(no visible ssp windows)
