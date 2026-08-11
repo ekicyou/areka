@@ -36,7 +36,7 @@
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 3.1, 3.2, 3.3, 3.4, 3.5_
 
 - [ ] 5. 決定論テストの檻
-- [ ] 5.1 (P) ポリシー導出のマトリクス檻
+- [x] 5.1 (P) ポリシー導出のマトリクス檻
   - mustselect 宣言・複数可宣言・非宣言・併記・未知カテゴリの各ケースで導出結果を固定し、本体／相方の名前空間隔離も併せて固定する
   - 空構築ではすべて既定ポリシーとなり、名前解決が常に不成立で適用に到達しないことを檻に固定する
   - 既存の名前解決・カテゴリ ID 収集・加算の檻は無改変で維持する（構築形の追随はタスク 3 で完了済み。本タスクは檻の追加のみ）
@@ -113,3 +113,4 @@
 - **task 3（2026-08-11）**: `cargo test --workspace` に**別 spec 所有の間欠赤**がある——`actor_dispatch_tests.rs:741` の `non_shell_broadcast_reception_is_benign_debug_no_warn_error` が約 1/6〜1/8 の頻度で捕捉ログ 0 件になる。原因は `areka-P0-test-cage-determinism`（W6.9）に登記済みの tracing callsite 毒化（seriko の `capture_logs`/`capture_logs_flow` が `rebuild_interest_cache()` 未硬化）。本 spec の変更とは因果独立。全緑判定時は再実行して切り分けること。
 - **task 4（2026-08-11）**: RED で旧欠陥挙動を実測採取した——非宣言カテゴリへ 2 度着衣すると `BindSet([1100,1207,1400,1402])`（まばたき 2 パーツ共存）になり、正典期待値 `BindSet([1100,1207,1402])` と乖離。実機観測の症状そのもの。是正後は後勝ち 1 個。設計の「テスト影響監査」は正しく、既存テストは期待値無改変で全緑のまま（既存フィクスチャは全て 1 カテゴリ 1 パーツ）。
 - **task 4（2026-08-11）**: mustselect 脱衣の前段ガードは `return ControlFlow::Continue(())` で `match outcome` より手前に置いてあり、`commit_bind`／`emit_display`／info マーカーのいずれにも到達しない。集合不変かつ発行なしが構造的に保証される。タスク 5.2 で檻に固定する warn 文言は `actor.rs:383` の逐語 `seriko: mustselect カテゴリの脱衣指示を無視（正典・解除不可・bindopt 3.2）`。
+- **task 5.1（2026-08-11）**: **間欠赤の実体はテスト 1 本ではなく 3 本**だった（レビューの独立実測）。`actor_dispatch_tests.rs:741` に加え、`actor_bind_loop_tests.rs:125` の `bind_apply_on_shown_emits_show_and_info_marker`（`level=INFO` 捕捉）と `actor::dispatch_tests::wait_broadcast_reception_is_benign_debug_no_warn_error` も同じログ捕捉クラスで落ちる（本 spec の新規テストを除外した状態でも 10 回中 2 回再現＝因果独立）。`areka-P0-test-cage-determinism`（W6.9）の登記対象を 1 本から 3 本へ広げる材料。

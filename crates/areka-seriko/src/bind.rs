@@ -463,6 +463,188 @@ mod tests {
         );
     }
 
+    // ─────────────────────────────────────────────────────────────────────
+    // Task 5.1: `policy()` 導出マトリクスの檻（bindopt 4.2/4.3・設計 §Testing Strategy
+    // → Unit Tests（seriko・bind.rs）1-2）。宣言 3 形（mustselect／multiple／非宣言）に
+    // 併記・未知カテゴリを加えた全ケースを 2 名前空間で固定し、本体（sakura）／相方（kero）の
+    // 名前空間隔離も併せて固定する。`empty()` は全カテゴリ既定かつ名前解決が常に不成立
+    // ＝適用に到達しない（bindopt 設計 D3 の「実害なし」根拠）を檻に固定する。
+    // ─────────────────────────────────────────────────────────────────────
+
+    /// 導出マトリクス用の名前解決表（本体・相方それぞれに宣言 3 形＋併記を持たせる）。
+    ///
+    /// sakura 宣言: mustselect={目}／multiple={髪}／併記={腕}（mustselect と multiple の両方）。
+    /// kero 宣言:   mustselect={脚}／multiple={尾}／併記={羽}。
+    /// 「紅」は両スコープとも名前表にのみ在って宣言なし＝正典の既定（[`BindChoicePolicy::Default`]）。
+    /// 本体と相方でカテゴリ名を一切重ねないため、名前空間を取り違えると必ず導出が崩れる。
+    fn policy_matrix_resolver() -> BindResolver {
+        let mut sakura: BTreeMap<(String, String), u32> = BTreeMap::new();
+        sakura.insert(("目".into(), "笑".into()), 1301);
+        sakura.insert(("髪".into(), "長".into()), 1250);
+        sakura.insert(("腕".into(), "上げ".into()), 1100);
+        sakura.insert(("紅".into(), "あり".into()), 1207);
+        let mut kero: BTreeMap<(String, String), u32> = BTreeMap::new();
+        kero.insert(("脚".into(), "組む".into()), 2100);
+        kero.insert(("尾".into(), "振り".into()), 2200);
+        kero.insert(("羽".into(), "開き".into()), 2300);
+        kero.insert(("紅".into(), "あり".into()), 2207);
+        let names = |names: &[&str]| -> BTreeSet<String> {
+            names.iter().map(|s| (*s).to_string()).collect()
+        };
+        let options = BindOptionDecls {
+            sakura_mustselect: names(&["目", "腕"]),
+            kero_mustselect: names(&["脚", "羽"]),
+            sakura_multiple: names(&["髪", "腕"]),
+            kero_multiple: names(&["尾", "羽"]),
+        };
+        BindResolver::new(sakura, kero, options)
+    }
+
+    /// 本体側（sakura）の導出マトリクス全ケース（bindopt 4.2/4.3）。
+    /// mustselect 宣言→MustSelect／multiple 宣言→Multiple／非宣言→既定／併記→Multiple／未知→既定。
+    #[test]
+    fn policy_matrix_sakura_covers_all_declaration_forms() {
+        let r = policy_matrix_resolver();
+        assert_eq!(
+            r.policy(BindNamespace::Sakura, "目"),
+            BindChoicePolicy::MustSelect,
+            "sakura の mustselect 宣言カテゴリ（目）は MustSelect＝ちょうど 1 個（bindopt 4.3）"
+        );
+        assert_eq!(
+            r.policy(BindNamespace::Sakura, "髪"),
+            BindChoicePolicy::Multiple,
+            "sakura の multiple 宣言カテゴリ（髪）は Multiple＝複数可（bindopt 4.3）"
+        );
+        assert_eq!(
+            r.policy(BindNamespace::Sakura, "紅"),
+            BindChoicePolicy::Default,
+            "名前表に在るが bindoption 非宣言のカテゴリ（紅）は既定＝高々 1 個・解除可（bindopt 4.3）"
+        );
+        assert_eq!(
+            r.policy(BindNamespace::Sakura, "腕"),
+            BindChoicePolicy::Multiple,
+            "mustselect と multiple の併記カテゴリ（腕）は複数可を優先（bindopt D4）"
+        );
+        assert_eq!(
+            r.policy(BindNamespace::Sakura, "未知"),
+            BindChoicePolicy::Default,
+            "名前表にも宣言集合にも無い未知カテゴリは既定（bindopt 4.3）"
+        );
+    }
+
+    /// 相方側（kero）の導出マトリクス全ケース——本体側と同一の規則が独立に成り立つ（bindopt 4.2/4.3）。
+    #[test]
+    fn policy_matrix_kero_covers_all_declaration_forms() {
+        let r = policy_matrix_resolver();
+        assert_eq!(
+            r.policy(BindNamespace::Kero, "脚"),
+            BindChoicePolicy::MustSelect,
+            "kero の mustselect 宣言カテゴリ（脚）は MustSelect（bindopt 4.3）"
+        );
+        assert_eq!(
+            r.policy(BindNamespace::Kero, "尾"),
+            BindChoicePolicy::Multiple,
+            "kero の multiple 宣言カテゴリ（尾）は Multiple＝複数可（bindopt 4.3）"
+        );
+        assert_eq!(
+            r.policy(BindNamespace::Kero, "紅"),
+            BindChoicePolicy::Default,
+            "kero 側の非宣言カテゴリ（紅）も既定＝高々 1 個・解除可（bindopt 4.3）"
+        );
+        assert_eq!(
+            r.policy(BindNamespace::Kero, "羽"),
+            BindChoicePolicy::Multiple,
+            "kero の併記カテゴリ（羽）も複数可を優先（bindopt D4）"
+        );
+        assert_eq!(
+            r.policy(BindNamespace::Kero, "未知"),
+            BindChoicePolicy::Default,
+            "kero の未知カテゴリも既定（bindopt 4.3）"
+        );
+    }
+
+    /// 併記（`mustselect+multiple`）は複数可を優先する（bindopt D4）——導出順の錨。
+    ///
+    /// 同じ表で mustselect 単独宣言が MustSelect に留まることも併せて確かめ、
+    /// 「常に Multiple を返している」だけの退化した実装では緑にならないようにする。
+    #[test]
+    fn policy_both_options_declared_prefers_multiple() {
+        let r = policy_matrix_resolver();
+        assert_eq!(
+            r.policy(BindNamespace::Sakura, "腕"),
+            BindChoicePolicy::Multiple,
+            "mustselect と multiple の両方に属するカテゴリは複数可（正典「multiple で複数のパーツを選択可能」・bindopt D4）"
+        );
+        assert_eq!(
+            r.policy(BindNamespace::Kero, "羽"),
+            BindChoicePolicy::Multiple,
+            "併記の優先則は相方側でも同一（bindopt D4）"
+        );
+        assert_eq!(
+            r.policy(BindNamespace::Sakura, "目"),
+            BindChoicePolicy::MustSelect,
+            "mustselect 単独宣言は MustSelect のまま（併記優先は併記のときだけ働く・bindopt D4）"
+        );
+        assert_eq!(
+            r.policy(BindNamespace::Kero, "尾"),
+            BindChoicePolicy::Multiple,
+            "multiple 単独宣言も Multiple（併記と同じ値へ収束することの確認・bindopt D4）"
+        );
+    }
+
+    /// 名前空間の隔離（bindopt 4.3）: 本体の宣言は相方で効かず、相方の宣言も本体で効かない。
+    ///
+    /// mustselect・multiple・併記のいずれの宣言形についても、反対側の名前空間で引くと
+    /// 正典の既定（[`BindChoicePolicy::Default`]）へ落ちる。
+    #[test]
+    fn policy_is_namespace_isolated_between_sakura_and_kero() {
+        let r = policy_matrix_resolver();
+        for category in ["目", "髪", "腕"] {
+            assert_eq!(
+                r.policy(BindNamespace::Kero, category),
+                BindChoicePolicy::Default,
+                "本体（sakura）の宣言カテゴリ「{category}」を相方（kero）で引いても効かず既定（名前空間隔離・bindopt 4.3）"
+            );
+        }
+        for category in ["脚", "尾", "羽"] {
+            assert_eq!(
+                r.policy(BindNamespace::Sakura, category),
+                BindChoicePolicy::Default,
+                "相方（kero）の宣言カテゴリ「{category}」を本体（sakura）で引いても効かず既定（名前空間隔離・bindopt 4.3）"
+            );
+        }
+    }
+
+    /// `empty()` は全カテゴリ既定であり、かつ名前解決が常に不成立ゆえ**適用に到達しない**
+    /// （bindopt 設計 D3 の「署名不変でも実害なし」根拠の檻）。
+    ///
+    /// 既定は「高々 1 個」＝排他置換の意味を持つが、空リゾルバでは `resolve` が常に `None`
+    /// ＝呼び手（actor）が着せ替え ID を得られないため、排他置換の適用そのものに達しない。
+    /// 排他置換の対象集合（`category_ids`）も空である。
+    #[test]
+    fn empty_resolver_is_default_policy_and_never_reaches_apply() {
+        let r = BindResolver::empty();
+        for ns in [BindNamespace::Sakura, BindNamespace::Kero] {
+            for category in ["目", "髪", "腕", "紅", "未知"] {
+                assert_eq!(
+                    r.policy(ns, category),
+                    BindChoicePolicy::Default,
+                    "空リゾルバは宣言集合も空ゆえ全カテゴリが正典の既定（{ns:?}／{category}・bindopt 設計 D3）"
+                );
+                assert_eq!(
+                    r.resolve(ns, category, "任意"),
+                    None,
+                    "空リゾルバは名前解決が常に不成立＝適用に到達しない（{ns:?}／{category}・bindopt 設計 D3）"
+                );
+                assert_eq!(
+                    r.category_ids(ns, category),
+                    Vec::<u32>::new(),
+                    "空リゾルバでは排他置換の対象集合も空（{ns:?}／{category}・bindopt 設計 D3）"
+                );
+            }
+        }
+    }
+
     /// category_ids はカテゴリの全 ID を昇順・重複除去で返す（D11・排他置換の off 対象集合）。
     #[test]
     fn category_ids_collects_category_members_ascending() {
