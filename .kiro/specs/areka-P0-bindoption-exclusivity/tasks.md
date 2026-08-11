@@ -6,7 +6,7 @@
   - 観測可能な完了状態: 複製先の絶対パスに保全ログが存在し（是正前の握り潰しを含む内容）、ベースライン全緑の実行結果が記録されている
   - _Requirements: 3.5_
 
-- [ ] 2. bindoption 3 値読み取りとモデル拡張（採取層）
+- [x] 2. bindoption 3 値読み取りとモデル拡張（採取層）
   - `bindoption*.group` の値をカテゴリ名とオプション欄に分け、オプション欄を `+` 区切りで分解して mustselect / multiple を個別に認識する読み取りへ置換する（併記時は両方へ転記し情報を落とさない）
   - 転記モデルへ multiple カテゴリ名のスコープ別保持を追加し、mustselect と対称の所属照会を備える（採取層の既存所属照会は正典下でも正しいため退役させない）
   - 未知オプション語は読み流し、カテゴリ名空・オプション欄欠落は収録対象外とする寛容パースを維持する
@@ -107,3 +107,5 @@
 
 - **task 1（2026-08-11）**: 是正前の実機観測ログを `C:\Users\maz-o\AppData\Local\areka-diag\bindopt-20260811-101835\bindopt-debug-observation.log` へ保全済み（465,055 bytes・md5 `d910e4dc7d1ebd350ec0b1fa6bb8f4df`・worktree の `target/bindopt-debug-observation.log` と一致）。タスク 7.1 の既知ケース較正はこの絶対パスを使う。
 - **task 1（2026-08-11）**: ベースライン全緑を確認。手順＝PowerShell で `cargo build -p shiori-host32-helper -p shiori-host32-testdll --target i686-pc-windows-msvc` → `cargo test --workspace`（exit 0）。i686 ビルドは必ず PowerShell（Git Bash の coreutils `link.exe` が MSVC link を遮蔽する）。
+- **task 2（2026-08-11）**: `BindGroupDefaults` は転記順保持・重複可（design.md:490）。同一カテゴリの重複宣言は Vec へ重複 push されるので、集合化はタスク 3 の `BindOptionDecls` 構築（BTreeSet 変換）が担う——既存 mustselect と同型。
+- **task 2（2026-08-11）**: D8 の引用差し替え対象は `D11`/`R4.5`/`Req 4.5` の 3 文字列に限る。同じファイルに残る `D2`・`R1.x`・`Req 1.x`/`Req 3.x` 等は bind 経路外（`.name`/`.default`/マウント解決）の別 spec 由来ゆえ無改変が正しい（タスク 6.1 でも同じ線引きを守ること）。
