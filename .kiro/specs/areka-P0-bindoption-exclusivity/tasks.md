@@ -56,7 +56,7 @@
   - _Boundary: 適用結線の檻_
   - _Depends: 4_
 
-- [ ] 5.3 (P) 貫通シナリオの回帰錨
+- [x] 5.3 (P) 貫通シナリオの回帰錨
   - 既存の貫通シナリオの期待値が不変であることを確認し、旧 2 値前提のコメント語彙を新正典へ更新する（構築形の追随はタスク 3 で完了済み）
   - 複数可宣言カテゴリで 2 パーツが共存したまま貫通することを新規シナリオとして追加する
   - 観測可能な完了状態: 貫通テストが全緑で、複数可カテゴリの共存錨が新規に緑
@@ -117,3 +117,5 @@
 - **task 5.2（2026-08-11）**: 直積 6 セルの所在——MustSelect×on=`bind_mustselect_second_on_replaces_prior_part_in_category`（既存）／Default×on=`bind_default_category_second_on_replaces_prior_part`（task 4）／Multiple×on=`bind_multiple_category_two_parts_coexist_via_actor`（新規・`hair_multiple_resolver`）／MustSelect×off=`bind_mustselect_off_is_ignored_with_warn`（task 4）／Default×off=`bind_default_category_off_removes_part`（新規）／Multiple×off=`bind_multiple_category_off_removes_only_that_part`（新規）。既存の `bind_apply_on_shown_emits_show_and_info_marker` は 1 カテゴリ 1 パーツ構成で置換が実際に起きないため、排他置換の Changed=info は `bind_default_exclusive_replace_emits_show_and_info_marker` で別途固定した。
 - **task 5.2（2026-08-11）**: **旧語彙のテスト名が `tests/bind_e2e.rs:434` に 1 本残っている**——`non_mustselect_explicit_on_off_is_additive_end_to_end`。本タスクの境界外（貫通シナリオ檻）ゆえ**タスク 5.3 で改名すること**（要件 4.5・bindopt D6）。`actor_bind_loop_tests.rs` 側の旧語彙テスト名はゼロ。
 - **task 5.2（2026-08-11）**: 間欠赤の再実測でレート更新——`cargo test -p areka-seriko --lib` 20 回反復で 4 回 RED（内訳: `bind_apply_on_shown_emits_show_and_info_marker` 2／`non_shell_broadcast_reception_is_benign_debug_no_warn_error` 1／`wait_broadcast_reception_is_benign_debug_no_warn_error` 1）。**新規に追加した檻は 1 度も落ちていない**。W6.9 への申し送り対象は seriko 3 本＋`areka-emo-compose` の `scale::ratio_tests::mul_degradation_emits_warn_log` 1 本の計 4 本へ拡大。
+- **task 5.3（2026-08-11）**: 貫通シナリオの改名は `non_mustselect_explicit_on_off_is_additive_end_to_end` → `default_category_explicit_on_then_off_removes_part_end_to_end`（実体＝既定カテゴリ「紅」の唯一パーツが明示 on で載り明示 off で外れる＝正典の解除可）。resolver・スクリプト・ticks・期待値は逐語同一。新規錨は `multiple_category_two_parts_coexist_end_to_end`（`sakura_multiple={髪飾り}`・発行列 `[{1207},{1207,1700},{1207,1700,1701}]`）。
+- **task 5.3（2026-08-11）**: **`R8.1` の引用が 1 件消えた**（`completed/areka-P0-mayuna-compose` の Requirement 8＝非退行/additive 制約）。`R4.5` と同一文に同居し、その文の主張「紅は排他置換を受けず加算」が新正典下で虚偽になったため文ごと書き換えた巻き添え。置換後の文が非退行の含意をより正確に明示しており情報の喪失なし——**タスク 6.1 で復活させる必要はない**（レビューで裏取り済み）。
