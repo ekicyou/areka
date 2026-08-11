@@ -329,3 +329,49 @@ Requirement 4.4 が「タイムアウト非表示では内容を消さない」�
 10. **D10（ログ水準・要件 8）**: 実機サインオフのログ grep が契約になる（`apply_show` の `info!`＝`show.rs:258-275` が先例）。表示／非表示の遷移は `info!`、計測の開始・破棄・抑止は `debug!`、といった水準割りをどう置くか。Requirement 8.5「1 行から scope と契機が確定できる」を満たす構造化フィールド名（`scope`／`trigger`／`visible`）の確定。
 11. **D11（既存注記の是正範囲・§3.6／要件 9.6）**: 更新対象 9 箇所のうち、`input_events/balloon.rs` の「本番到達者なし」注記と `#[allow(dead_code)]`（既に陳腐）を本 spec の範囲で是正するか、別 spec へ送るか。
 12. **D12（SERIKO ループとの相互作用・R6）**: バルーン側 SERIKO ループが `ShowBalloon` を出す経路が将来生きたとき、頭脳のタイムアウト hide を打ち消さないための規約（ループ由来の表示指令は可視性を変えない＝D2 と同じ能力で塞げる）を M1 の時点で設計に含めるか。
+
+---
+
+## 8. 設計フェーズの決定記録（2026-08-11・design.md 生成時）
+
+> §7 の処理区分で設計フェーズへ残った D2/D4/D5/D6/D8/D10 の裁定と、R1〜R8 の処理。結論の正本は design.md（本節は根拠と追加実測の記録）。
+
+### 8.1 追加実測（設計中の新事実）
+
+- **既定ヒットテストは `Bounds`**: `HitTest` component を持たない entity は `HitTestMode::Bounds` として扱われる（`wintf/src/ecs/layout/hit_test/mod.rs:91`・`:367-371`）。さらに `Bounds` 判定の合成 α は `Visual::clamped_opacity()`（`visual.rs:140-142`）で **`is_visible` を参照しない**。ゆえに文字層スロット（`HitTest` 無しで spawn・`mount.rs:129-135`）は、Visual を不可視にしただけでは**当たり続ける**——Requirement 1.8 の是正には slot への明示 `HitTest` 付与と切替が必須（§3.1 の帰結を精密化）。
+- **`Visual::default()` は可視**（`visual.rs:117`）: 不可視のままの確立（Requirement 1.2）には `VisualMount::attach` へ初期可視性引数を足し、component レベルでも可視状態を経由させない。
+- **sink は talk ごとに clone される**（`dispatcher.rs:290-294` `clone_box`・prototype は emit を受けない）: per-talk clone の初回 emit が talk 境界の自己検出になる（talk_id 不要）。`CueSink` は `emit` 1 メソッドのみでライフサイクル callback を持たない（`dola/src/cue/sink.rs:25-31`）。
+- **broadcast は逐次配送**（`dola/src/cue/runtime.rs:184-187`・`:215-226`）: 選択肢バリア中は sink へ cue が届かず、UI 側 sink の horizon はバリア解除まで過小になりうる。`Wait` cue は duration を第一級で運び sink へ届く（`areka-sakura/src/compile.rs:59-63`）＝`max(at+duration)` は待機込みの占有終端を再現する。`cue.at` は talk 相対秒＝`TalkClock::talk_time` と同一軸（単位変換不要）。
+- **`BalloonWiring.hover` は選択肢行の追跡であってバルーン滞在ではない**（`balloon.rs:74-119`。choice 非表示中は pointer がバルーン上でも `None` のまま）: Requirement 5.2 には「バルーンの上に居る」専用フラグの追加が要る（`on_balloon_pointer_moved` は選択肢の有無に依らず着火するため、既存ハンドラへの additive で足りる）。
+- **`WindowDragging` マーカーが最も頑健なドラッグ観測**: 挿入 `wintf/src/ecs/drag/dispatch.rs:172`・除去 `:268-270`（`DraggingState` 除去 `:252` より後）。`DraggingState` の多窓時脱落穴（`drag_follow.rs:159-174`）に巻き込まれない。バルーンはドラッグ対象＝窓 entity ゆえ `With<BalloonWindowMarker>` との連言で判定できる。
+- **`visible_glyphs(actor, t)` は時刻依存**（リビール済み数・`state.rs:440`→`RevealSchedule::visible`）: 配置済み未リビールのグリフは数えない。`present_frame` 自身が同じゲートで描くため、リビール数の増加エッジを契機にすると枠と最初の文字が同一フレームで現れる。
+- **`spawn_dispatcher` は 9 呼出箇所**（本番 `runtime.rs:602`＋テスト 8）: β 案の署名波及の実測値。
+- **cue の UI 適用は `spawn_ui` の UI ドレイン**（`actor.rs:549`・フレーム相の外）: コントローラのエッジ検出は最大 1 フレーム遅れるが、枠と文字は双方不可視のまま同時に可視化されるため同時性は保たれる（R4 の解決）。
+
+### 8.2 裁定
+
+| 判断 | 裁定 | 要旨 |
+|---|---|---|
+| **D2** | **所有権方式**（A-2 を精密化・A-1／B／C 棄却） | `PresentTarget` に `VisibilityOwnership { CommandDriven, External }`。`External` は `apply_show` の可視化手順だけをスキップ（確立・状態更新は共通＝単一漏斗維持）。可視化は新 API `show_target`（漏斗再通過→可視付与）。attach 相の初回 ShowSurface は「不可視のままの確立」として**維持**——`text_slot_view`／窓寸 k₀ 補正／既存テスト前提（readback・スロット成立・適用 k）が無傷で残り、§3.5 の波及表がほぼ消える。A-1 は送信側（adapter・talk スレッド）が可視性状態を知り得ず棄却。B は Requirement 1.2 が禁止（要件ディスカッション済）。C は 6.2／6.9 を解けない |
+| **D4** | **α（4 本目 broadcast sink）** | `BalloonLifecycleSink`＝`MoveCueSink` 同型。`TalkStarted`（per-talk clone 初回 emit）＋`DisplayEndAt(max(at+duration))`。上流署名 0 変更。弱点 2 つは要件の別条項が吸収——バリア中の horizon 過小は 5.4 の選択肢抑止が非表示を防ぎ、解除後の cue が horizon を引き上げて計測を自動破棄。**中断（4.6）の起点は占有 horizon（正常終了と同一値）**＝即時非表示の経路が構造的に存在せず、誤差は表示保持側（4.8 と同じ側）にのみ倒れる。中断時刻起点への精密化は `TalkDone.reason` 配線と一体で `balloon-canon-residue` へ登記（7.2 の口の実装時）。β は `spawn_dispatcher` 9 箇所へ波及し「会話進行の管理層の既存の通知先は変えない」に反するため主経路にしない |
+| **D5** | **drain 後・reconcile 前の独立相** | `reconcile_reported_sizes` の呼び出しを `run_drain_phase` 末尾から `emo2_frame_system` 直下へ純移動し、attach→dpi→drain→**vis**→reconcile→move_drain→resnap→text_scale→text の 9 相へ。全 `\b` 指令を見た後に判断・show の窓寸要求を同一フレームで消化（6.6）・binding 再構築と描画の上流（3.5） |
+| **D6** | **定数 1 箇所＋env 上書き** | `DEFAULT_BALLOON_TIMEOUT_SECS = 30.0`＋`AREKA_BALLOON_TIMEOUT_MS`（read-once・不正値 warn＋既定・`hover_inject`／`smoke_exit_ms` 同型）。起動時に採用値と供給源を info! 1 行（9.5 の確認装置）。sylphya 語彙化は消費者 1 つの M1 では過剰＝ベースウェア本体設定を実装する将来 spec の領分として対応表へ記録 |
+| **D8** | **`WindowDragging`∧`BalloonWindowMarker` の query** | `DraggingState` ポーリング（既知の穴）と `OnDrag` エッジ自前追跡（placement 編集＋終端取りこぼしリスク）を棄却 |
+| **D10** | **遷移・計測・抑止＝info!／失敗＝error!** | 実機サインオフの既定 `RUST_LOG=info` grep が合否契約。フィールド `scope`／`trigger`（content・clear・timeout・explicit）／`visible`／`deadline`／`talk_time`・プレフィックス `[balloon-visibility]`。明示指令由来の遷移も**コントローラが** `prev_visible` 差分で検出して同一書式で出す（presenter のログへ手を入れない） |
+
+### 8.3 R1〜R8 の処理
+
+- **R1**（文字層残存の実機確認）: 静的構造証跡で確定済み（§3.1＋§8.1 の HitTest 既定の追実測）。是正後の見た目は実機サインオフ項目（`\b[-1]` 後に文字が残らない目視）として design のテスト戦略へ編入。
+- **R2**（不可視中の bounds／マスク更新の安全性）: 安全と裁定。`Arrangement`・`SpriteVisual::SetSize`・`AlphaMaskResource` は合成コミットと独立で、`HitTest::none()` 中はマスクが判定に使われない。`External` の `apply_show` は可視化以外の全手順を共通実行する。
+- **R3**（ドラッグ観測形）: D8 で裁定（`WindowDragging`）。
+- **R4**（ClearAll の到達タイミング）: cue 適用は UI ドレイン（フレーム相の外・同一スレッド直列）。エッジ検出は最大 1 フレーム遅延だが両層とも不可視のまま同時可視化されるため要件上の問題なし。同一フレームで「消えて出る」場合はゼロ下降→増加の 2 エッジが順に観測され、ログは trigger=clear→content の 2 行（仕様どおり）。
+- **R5**（バリア中の horizon）: D4 で裁定（5.4 抑止＋horizon 更新での計測自動破棄）。
+- **R6**（SERIKO ループ）: バルーン表は現 fixture で構造的に常に空（`synthetic_surfaces_txt` が animation 行を出さない・`looper.rs:41-42` に明記）だが、データ不変量に依存せず所有権方式が経路を型で塞ぐ（6.9＝6.2 と同一機構）。
+- **R7**（時間短縮手段）: D6 で裁定（`AREKA_BALLOON_TIMEOUT_MS`・`AREKA_` 冠規約準拠）。
+- **R8**（対応表書式・追跡 spec 実在）: `doc/COMPAT_ARCHITECTURE.md` §8 の `\![move]` 行を書式先例として採用。追跡 spec の実在を確認——`areka-P0-balloon-canon-residue`／`areka-P0-status-execution-states` は `.kiro/specs/` 直下に実在（本仕様の**新規**先送りの受け皿はこの 2 本）。`areka-P0-choice-select-events` は `completed/` に実在＝**完了済み**であり、選択肢タイムアウト規約の所有は同 spec で決着済み（本仕様は既存照会 `choice_active` を消費するだけで、同 spec へ新たな先送りを積まない——completed は新規先送りを消化できないという規律とも整合）。
+
+### 8.4 リスク更新
+
+- `presenter/show.rs` は budget／atom／cage④ との共有ハンク——本仕様が W6 先着として「可視化手順のゲート」を最小差分で確定し、後続が rebase する（roadmap 干渉台帳どおり）。
+- フェーズ列（`frame.rs:135-165`）の 7→9 相化は atom（`dpi-transition-atomicity`）との登記済み共有面「順序変更時のみ直列注意」に該当——vis 先着で確定。
+- `Emo2Wiring::new` の引数拡張はテスト構築箇所への機械的波及（実装タスクで一括）。
