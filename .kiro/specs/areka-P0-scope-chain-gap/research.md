@@ -144,6 +144,8 @@ P2 の基準式を enum（例 `ChainRule::AdjacentOwnWidth | FixedMargin(i32) | 
 
 ## 6. 設計判断項目（要件ディスカッションの種）
 
+> **設計フェーズでの裁定結果（2026-08-11）**: 全 7 項目とも解決済み。各項目の裁定は本ファイル末尾「設計フェーズ追記」の Design Decisions を正、design.md の該当節を実装向け正本とする。
+
 1. **SSP 実測ツールの形態と置き場**: (a) アドホック PowerShell（DPI aware プロセス＋`GetWindowRect` ポーリング・証跡ログのみ spec dir へ保存）、(b) リポジトリにコミットする計測スクリプト/Rust example（再現可能性最大・R6 の areka 窓突合と共用）、のどちらか。先例（kero-balloon）は (a) 相当でツールが残らず、本仕様の R1.2 が再採取を強いられた当の原因。証跡ログの置き場は `real-run-signoff-2026-07-31.log` 先例に倣い spec ディレクトリが自然。
 2. **実測タイミングの単離方法**: emo2 boot スクリプトの `\![move]`（scope1・実機ログ :68 で +251px）より前の初期矩形をどう捕捉するか——高頻度ポーリング（起動直後から窓出現を待ち受け）か、move を含む二時点記録で既定配置時点を明示区別するか。R1.3 の「単発観測の不変量範囲」の書き方に直結。
 3. **H3 だった場合の設計分岐の扱い**: Option C 採用時、H3（独立配置）判明時に design を二段階にするか、design 内で条件分岐した二案を先に書くか。R2.7 のヘッジが構造変更を許すが、その場合の free フォールバック（P3 の X 未指定→連鎖値）・クランプ連鎖（P4）の再定義範囲。
@@ -151,3 +153,86 @@ P2 の基準式を enum（例 `ChainRule::AdjacentOwnWidth | FixedMargin(i32) | 
 5. **実機受け入れの判定チャネル（R6.2/R6.4)**: `merge_scope restore` ログ grep（追加実装ゼロ・gap 算出式を手順書化）を主判定とし、外部計測（設計判断 #1 のツール）を SSP 突合用の従とする二本立てで足りるか。
 6. **doc 内「2.9」参照の書き換え方針**: resolver.rs・檻メッセージが引用する旧要件番号（2.9/DD3）を本仕様の要件番号へ振り直すか、「window-placement R2.9（本仕様で上書き・COMPAT §8 参照）」の形で履歴を残すか。記憶則（値の意味を変えたら全下流の宣言を洗う）の適用範囲確定。
 7. **§8 エントリの粒度**: R2.9 上書き 1 行で足りるか、「SSP de-facto 札が無検証だった」事実（R5.3）を同一行に含めるか別行にするか（R3.8 先例は 1 行に全要素を畳んでいる——同型を推奨）。
+
+---
+
+# 設計フェーズ追記（2026-08-11・kiro-spec-design）
+
+## Summary
+
+- **Feature**: `areka-P0-scope-chain-gap`
+- **Discovery Scope**: Extension（既存 placement 系への欠陥是正）→ light discovery をメインコンテキストで実施（gap 分析＝本ファイル前半＋SSP 実測オラクル完了済みのため、追加のサブエージェント調査は不要と判断）
+- **Key Findings**:
+  - **H1 確定により設計分岐が消滅**: 要件フェーズで SSP 実測が完了し（`ssp-oracle-notes.md` 正本・DPI 96/192 で誤差 0）、Option C の Step 0 は消化済み。最終形は Option A（最小是正）と同一に収束した。
+  - **波及面の file:line を全数再検証（設計時点の実測）**: P2 欠陥式は `resolver.rs:155-158` の 1 分岐のみ。式引用は `resolver.rs:99/:151`・`resolver_resolve_tests.rs:127/:154/:164/:193/:377/:545`・`placement_prepare_tests.rs:38-51` に限られ、`mod.rs:368`／`windowposition.rs:63-64` は P5 引用で非該当（grep で確認・§1.3 と一致）。
+  - **実機判定チャネルの汚染回避策を確定**: `persist.rs:397-409` の `merge_scope restore` ログのうち **`default_char_x`**（resolver 出力そのもの・:402）を判定に用いれば、ゴースト演出 `\![move]` と保存位置復元のどちらの汚染も構造的に受けない（`char_x` は復元後値ゆえ不採用）。
+
+## Research Log
+
+### 設計時点の blast radius 再検証（doc 主張の file:line 裏取り）
+
+- **Context**: 記憶則「doc の主張は書く前に file:line で裏取り」。file-slimming（PR#103）後の行番号ずれ再発防止。
+- **Sources Consulted**: `resolver.rs`・`resolver_resolve_tests.rs`・`placement_prepare_tests.rs`・`placement_windowposition_tests.rs`・`persist.rs`・`doc/COMPAT_ARCHITECTURE.md`・`tools/measure-ssp-rects.ps1`（実在確認）を直接読解＋grep。
+- **Findings**: §1.1〜§1.6 の全 file:line が設計時点の tree と一致。`prepare_emo2_matches_ssp_balloon_offsets_at_dpi_120`（:87）が char 絶対位置を一切 assert しないことも再確認（R4.2 成立見込みの根拠維持）。
+- **Implications**: design.md の File Structure Plan は現行 tree の実測行番号で記述できた。
+
+### 是正後期待値の算術検証
+
+- **Findings**: `prepare_emo2_returns_two_scope_placements` の是正後値は `s1.char_pos = (1150, 640)`（1486−336）・`s1.balloon_pos = (1296, 565)`（右置き基準 1150+336=1486 ＋ wp −190）・`s1.balloon_offset = (146, −75)` **不変**（1296−1150=146）。DPI 120 決定論檻は `543×859`／`420×500`（434/687/336/400 × 5/4・round half away from zero）で `s1.x + 420 == s0.x` が整数演算の恒等式として成立（許容差不要）。
+- **Implications**: R2.3 は実機（C5）に加えて決定論檻（C3 新設）でも固定できる。
+
+## Architecture Pattern Evaluation（§3 の確定）
+
+| Option | 判定 | 理由 |
+|---|---|---|
+| A 最小是正 | **採用（最終形）** | H1 確定により「測ってから式を書く」は充足済み。1 分岐＋`prev` 縮小で完結 |
+| B 規則注入（ChainRule enum） | 棄却 | 確定後は 1 規則のみ＝YAGNI。「単純な基準配置のみ」（R2.9 継承）と摩擦 |
+| C 実測先行ハイブリッド | 工程として消化済み | Step 0（実測）は要件フェーズで完了。設計フェーズに残る形は A と同一 |
+
+## Design Decisions（§6 の 7 項目の裁定）
+
+### 判断 #1: SSP 実測ツールの形態と置き場 — **事実により解決済み**
+- リポジトリコミット型（(b)）で決着: `tools/measure-ssp-rects.ps1`（DPI aware Per-Monitor v2・読み取り専用ポーリング）が spec ディレクトリ配下にコミット済み。証跡ログ 8 本も同ディレクトリに保存済み。R6 の areka 窓突合（従判定）にも同ツールを再利用する（design C5）。
+
+### 判断 #2: 実測タイミングの単離方法 — **事実により解決済み**
+- move 除去プローブゴースト方式で決着（`emo2-probe`・boot/menu の `\![move]` 完全除去）。「窓出現 tick がバルーンより先＝move 前」の推論は不成立と実証済み（セッション2 の教訓）。プローブ実体は役目を終え開発者指示で削除済み・再作成手順は `ssp-oracle-notes.md` 冒頭に記録。
+
+### 判断 #3: H3 だった場合の設計分岐 — **moot（消滅）**
+- H1 確定（H2=move 演出の誤読で棄却・H3=重なり不発生で棄却）。P2 連鎖構造・free フォールバック（P3）・クランプ連鎖（P4)の再定義は不要。
+
+### 判断 #4: 連鎖檻の再設計粒度（R3.5） — **既存 3 本改修＋新設 1 本**
+- 既存檻の名前は是正後に真実となるため改名しない（`…_stays_adjacent` は gap 0 を実際に主張する形へ assert を是正）。gap 明示 assert・欠陥式（`x0−w0`）の否定 assert・等幅併置ケースを備えた `t_r2_unequal_widths_leave_no_gap` を新設し規則の檻の本丸とする。wpl の rebase を考慮し P2 の檻は P5 の檻と分離を維持。DPIS=[96,120,144,192] 行列は既存機構を踏襲。
+
+### 判断 #5: 実機受け入れの判定チャネル（R6.2/R6.4） — **二本立て・主はログ grep**
+- 主判定＝`merge_scope restore` ログの **`default_char_x`／`char_w`** による gap 算出（追加実装ゼロ・move/復元汚染なし・|gap| ≤ 1 で合格）。従判定＝`measure-ssp-rects.ps1` を areka 窓へ向けた矩形実測（move 適用後値が混ざり得るため補強証跡に限定・合否は主判定で確定）。
+
+### 判断 #6: doc 内「2.9」参照の書き換え方針 — **本仕様番号へ振り直し＋履歴注記 1 箇所**
+- 式引用は是正式＋scg 2.1/2.2 へ振り直す。履歴（「旧 window-placement R2.9 は本仕様で上書き・COMPAT §8 参照」）は `resolver.rs` モジュール doc の 1 箇所にのみ残し、テストメッセージでは繰り返さない（下流宣言の全洗い対象は §1.3 の一覧で確定）。
+
+### 判断 #7: §8 エントリの粒度 — **1 行に全要素を畳む（R3.8 先例と同型）**
+- 否定した先行 AC の名指し・オラクルと実測条件（emo2-probe・DPI 96/192・誤差 0）・「SSP de-facto 札が無検証だった」事実（R5.3）・SSP 自己不整合 2 件の互換対象外宣言（要件討議 #2）を同一行の根拠列に収める。
+
+### 追加決定: `prev` の型縮小
+- **Context**: 欠陥式のためだけに存在した幅の第 2 要素。
+- **Selected Approach**: `Option<(i32, i32)>` → `Option<i32>`（クランプ後 char_x のみ）。
+- **Rationale**: 是正式は自スコープ幅（ループ内 `w`）のみを使う。前スコープ幅を参照する退行はコンパイルエラーになり、構造で再発を防ぐ。
+- **Trade-offs**: なし（公開シグネチャ・出力型は無変更）。
+
+### 追加決定: R2.3 の決定論形（DPI 120 隣接檻の新設）
+- **Selected Approach**: `prepare_emo2_at_dpi_120_places_scopes_adjacent`（k=5/4・543/420 実寸の前提錨 assert 付きで `s1.x + 420 == s0.x` を固定）。
+- **Rationale**: R2.3 の「実機実測と同条件」を実機任せにせず檻でも固定する（決定論的テスト網羅は必達の規律）。位置式は整数演算ゆえ等式で成立し、1px 許容は上界として実機側にのみ残る。
+
+## Risks & Mitigations（更新）
+
+- ~~H3 だった場合の構造置換~~ — H1 確定で消滅。
+- ~~SSP 実測ロジスティクス（move 汚染・丸め揺れ）~~ — 要件フェーズで消化済み（プローブ方式・DPI 96/192 誤差 0）。
+- 実機受け入れの環境準備（DPI 切替・プロファイル削除）— 先例手順（kero-balloon 6.1／dpi-window-vanish サインオフ）踏襲で Low。判定は `default_char_x` ベースの grep で決定論化済み。
+- バルーン offset SSP 突合テストの想定外不合格 — R4.3 の手順（期待値書き換え禁止・原因特定→記録→是正）を design C3 に明文化済み。
+
+## References
+
+- `.kiro/specs/areka-P0-scope-chain-gap/ssp-oracle-notes.md` — R1 実測オラクル正本（H1 確定・R1.5 判定・SSP 自己不整合 2 件の記録）
+- `.kiro/specs/areka-P0-scope-chain-gap/tools/measure-ssp-rects.ps1` — 計測ツール（R1 で作成・R6 従判定で再利用）
+- `doc/COMPAT_ARCHITECTURE.md` §8:147 — kero-balloon R3.8 行（R5.5 の体裁先例）
+- `crates/areka/src/placement/persist.rs:397-409` — `merge_scope restore` ログ（R6 主判定の観測点）
+- `.kiro/steering/roadmap.md` — scg⇄wpl 直列必達（scg 先）の干渉台帳
