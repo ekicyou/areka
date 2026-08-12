@@ -762,3 +762,9 @@ mod content_tests;
 #[cfg(test)]
 #[path = "balloon_visibility_timeout_suppression_tests.rs"]
 mod timeout_suppression_tests;
+
+// 会話終了観測から判断中核までの端から端（task 6.6）。実台本の再生から占有終端が計測起点に
+// なるところまでを 1 本で通す。判断中核の私有状態を読むため親の内側に置く。
+#[cfg(test)]
+#[path = "balloon_visibility_lifecycle_e2e_tests.rs"]
+mod lifecycle_e2e_tests;

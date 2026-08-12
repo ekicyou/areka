@@ -233,3 +233,9 @@ mod diag_route_tests;
 #[cfg(test)]
 #[path = "frame_text_scale_tests.rs"]
 mod text_scale_tests;
+
+// 相順そのものの検査（areka-P0-balloon-visibility task 6.6）。実 emo2 資産＋実 GPU で
+// `emo2_frame_system` をそのまま駆動し、相を並べ替えたときにだけ壊れる性質を主張する。
+#[cfg(test)]
+#[path = "frame_visibility_integration_tests.rs"]
+mod visibility_integration_tests;

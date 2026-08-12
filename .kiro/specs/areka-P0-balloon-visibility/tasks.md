@@ -140,7 +140,7 @@
   - _Boundary: EmoPresenter 可視性能力_
   - _Depends: 1.2_
 
-- [ ] 6.6 フレーム統合と非回帰を検証する
+- [x] 6.6 フレーム統合と非回帰を検証する
   - 表示指令を適用した後の実状態で判断されること・表示へ遷移したフレームで窓寸法が同一フレームに届くこと
   - 起動から最初の可視コンテンツまで全フレームで不可視であること、および文字の配置先を接続した後も文字スロットの可視状態が偽のままであること（外部からの挿入で可視既定へ戻されないこと）
   - 既存の明示指令経路の回帰（発行順序・再表示後の描画一致）が前提変更なしで緑であること、scope 別バルーン資産の解決結果と窓位置・追従・永続の規約が変わっていないこと
@@ -194,7 +194,9 @@
 - **配線層は別ファイル `balloon_visibility_phase.rs`**（4.4 が新設・判断中核と合わせて 1,000 行を越えるため分割）。`#[path]` の子モジュールなので親の非公開項目（`state.per_scope` 等）へ到達でき、巻き戻しの義務を果たせる。テストは `balloon_visibility_phase_tests.rs`。
 - **相順は 9 相**（4.3 で確定）——attach → dpi → drain（適用のみ）→ **balloon_visibility** → **reconcile** → move_drain → resnap → text_scale → text。`reconcile_reported_sizes` は `run_drain_phase` から相順の所有者 `emo2_frame_system` へ純移動済みで、本番呼び出しは `frame.rs` の 1 箇所のみ（`drain_resnap.rs` は import ごと落としてあるので、呼び戻すとコンパイルが通らない）。**相の本体は空**で、中身はタスク 4.4 が書く。
 - **reconcile が装着前フレームでも走るようになった**（移動前は `run_drain_phase` の `attached` 早期 return の内側だった）。presenter に target が 1 つも無い間は全アームが短絡するため無操作で、既存の未装着テストが緑のまま押さえている。**装着前に走ってはいけない処理をこの相の後段へ足さないこと**。
-- **相順を固定するテストはリポジトリに存在しない**（4.3 で全 `emo2_frame_system` 呼び出し元を実測）。「指令適用後の実状態で判断されること」「表示遷移フレームで窓寸が同一フレームに届くこと」は**タスク 6.6 の所有**であり、空の相では呼び出し順しか主張できないため 4.3 では追加しなかった。
+- **【6.6 で解消】相順は 2 方向の変異で固定済み**——可視性の相を drain より前へ動かすと「指令適用後の実状態で判断」の檻が、reconcile より後ろへ動かすと「表示遷移フレームで窓寸が同一フレームに届く」の檻が、それぞれ単独で赤くなる。**相順を触るときはこの 2 本が番人**。
+- **`wintf` の `Visual::on_add` フックは装着時にスロットへ既定の `VisualGraphics` を差し込む**（`wintf/src/ecs/graphics/visual.rs:97-99`）。したがって**「スロットが `VisualGraphics` を持つ」ことは文字層が接続された証拠にならない**。6.6 の檻は `Arrangement.size` が 0 から実寸へ変わることを証人にしている。
+- **`spine_s5_close_handshake…` は負荷時に稀に落ちる既存の間欠**（6.6 の変異検証中に 1 回だけ観測・以後 6 回の完走では再現せず）。spine は `emo2_frame_system` を呼ばないため本 spec とは無関係。担当は **test-cage-determinism（W6.9）**。
 - **未使用許容の孤児 1 件（担当未定・本 spec の担当外）**: `placement/follow/window_move.rs:134` の `resize_window_to` に付いた `#[allow(dead_code)]` は実測で非 load-bearing。注記は「呼び出し側は後続 task の領分」と述べているが、実際には `frame/dpi.rs:154` / `:350` / `frame/drain_resnap.rs:133` の 3 箇所から本番到達している。**HEAD 時点で既に陳腐化しており本 spec の変更が原因ではない**ため 4.3 では触っていない。同ファイル `:637` は `cargo check -p areka` が examples をビルドしないため判定不能で、`cargo check -p areka --examples` が要る。`placement` を触る spec が拾うこと。
 - **⚠ `Copy-Item` での復元は cargo の陳腐化を解かない**（6.3 で実測）。PowerShell の `Copy-Item` は**元ファイルの最終更新時刻を保持する**ため、変異検証のあとバックアップから戻しても fingerprint が無効化されず、変異版の成果物が残ったまま次の実行が走る。復元時は `LastWriteTime` を明示的に打ち直すか `cargo clean -p <crate>` を挟むこと。
 - **`\wN` の N は 1 桁のみ**——`\w20` は `\w2` ＋ 文字 `0` として解釈される（2 桁以上は `\w[n]` 形）。台本を書くテストで踏みやすい。
