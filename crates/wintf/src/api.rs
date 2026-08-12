@@ -77,6 +77,21 @@ pub(crate) fn get_window_below(hwnd: HWND) -> Result<Option<HWND>> {
     get_window_relative(hwnd, GW_HWNDNEXT)
 }
 
+/// 現在の前面窓（フォアグラウンドウィンドウ）を返す。
+///
+/// 前面窓が無い状態——他プロセスが前面を手放した直後や、前面窓が別のデスクトップに居る場合
+/// ——では OS が NULL を返す。これは**失敗ではなく正常な不在**であり `None` になる。
+/// `Result` で包まないのは、`GetForegroundWindow` が失敗そのものを持たない API だからである
+/// （不在と失敗の区別が存在しないため、`Err` を作ると呼び出し側が偽の失敗を見ることになる）。
+///
+/// 読み取り専用であり、前面窓を変えることは決してない（要件 4.1／4.3）。
+#[inline(always)]
+pub(crate) fn get_foreground_window() -> Option<HWND> {
+    // SAFETY: Win32 境界。前面窓の識別子を読むだけで、窓の状態は一切変えない。
+    let hwnd = unsafe { GetForegroundWindow() };
+    if hwnd.is_invalid() { None } else { Some(hwnd) }
+}
+
 /// 指定窓の owner を `owner` に設定する（`SetWindowLongPtrW(GWLP_HWNDPARENT)`）。
 ///
 /// トップレベル窓に対する `GWLP_HWNDPARENT` の書込は親子化（`SetParent`）ではなく
@@ -316,6 +331,27 @@ mod tests {
     fn clear_window_owner_with_null_hwnd_returns_invalid_window_handle() {
         let err = clear_window_owner(HWND::default()).unwrap_err();
         assert_eq!(err.code(), ERROR_INVALID_WINDOW_HANDLE.to_hresult());
+    }
+
+    #[test]
+    fn get_foreground_window_returns_absence_or_a_real_window() {
+        // 何が前面に居るかはテスト環境で決まらない（他プロセスの窓が前面なのが普通）。
+        // 決定論的に主張できるのは「不在（None）か、実在する窓のいずれかである」ことだけで
+        // ある——NULL を実在ハンドルとして返してしまう取り違えはここで落ちる。
+        // 値そのものを使った判定の網羅は純関数 `is_behind_foreground` 側で行う。
+        match get_foreground_window() {
+            None => {}
+            Some(hwnd) => {
+                assert!(
+                    !hwnd.is_invalid(),
+                    "不在は None であって NULL ハンドルではない"
+                );
+                assert!(
+                    unsafe { IsWindow(Some(hwnd)) }.as_bool(),
+                    "返るのは実在する窓のはず"
+                );
+            }
+        }
     }
 
     #[test]

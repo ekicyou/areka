@@ -8,6 +8,7 @@ pub(crate) mod window_system;
 mod zorder_pair;
 mod zorder_pair_establish;
 mod zorder_pair_maintain;
+mod zorder_pair_sink;
 
 pub use command::*;
 pub use components::*;
@@ -17,3 +18,4 @@ pub use window_pos::*;
 pub use zorder_pair::*;
 pub use zorder_pair_establish::*;
 pub use zorder_pair_maintain::*;
+pub use zorder_pair_sink::*;

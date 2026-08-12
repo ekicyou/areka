@@ -24,6 +24,11 @@
 //! 「相手が消えた」こと自体を見つけるほかないためであり、見るのは owner を張った窓の集合に
 //! 限られる。ここでも窓の重なりは動かさない——外すのは owner の関係だけである。
 //!
+//! 沈降観測（[`observe_marked_pair_sinks`]）も本 system の中で回る。こちらもトリガ駆動で
+//! あり、目印を置くのは `WM_ACTIVATE` の非活性化枝である。実測を非活性化の巡ではなく
+//! **次の巡**で行う理由は [`zorder_pair_sink`](super::zorder_pair_sink) の doc を参照
+//! （活性化の途中で測ると偽の失敗を記録するため）。読み取りだけを行い、窓の挙動は変えない。
+//!
 //! # 収束の二重の停止条件
 //!
 //! ① 適用は [`SetWindowPosCommand`] の flush 経由であり、誘発される `WM_WINDOWPOSCHANGED` は
@@ -42,8 +47,6 @@
 //! - 切離しの適用時点を早める強化——相手の消滅を検知した巡ではなく、窓の登録が実際に
 //!   取り崩される直前で外す形。実機ゲート G8 が「切離しが間に合わない順序」を FAIL と
 //!   判定した場合にのみ後続タスクが足す（design.md「破棄経路」）。
-//! - 他アプリ活性化時の沈降観測（`sink-observed` の遅延実測）——観測の目印を付けるのは
-//!   `WM_ACTIVATE` の非活性化枝であり、その目印を読む巡を本 system へ足すのも後続タスクである。
 //! - 重なりが動いたことの検知（案 B／補助浮上のトリガ供給）。要求さえ届けば本 system は
 //!   トリガ種別によらず同じ手順で処理する。
 //!
@@ -61,6 +64,7 @@ use super::zorder_pair::{
     log_unbacked_verification_dropped, measure_window_above, measure_window_below, record_decision,
     record_verification,
 };
+use super::zorder_pair_sink::{SinkMarkQuery, observe_marked_pair_sinks};
 use super::{
     ExpectedOrder, KeepDirectlyAbove, OwnerLink, ReassertZOrder, SetWindowPosCommand, WindowHandle,
     WindowPos, ZOrder, ZOrderPairStrategy,
@@ -192,7 +196,9 @@ type OwnerLinkQuery<'w, 's> = Query<
 >;
 
 /// すべての entity に当たるクエリ（相手の生存とハンドルの有無を分けて読むための形）。
-type HandleQuery<'w, 's> = Query<'w, 's, Option<&'static WindowHandle>>;
+///
+/// 沈降観測（[`observe_marked_pair_sinks`]）も同じ形で読むため、型をここで 1 つに保つ。
+pub(crate) type HandleQuery<'w, 's> = Query<'w, 's, Option<&'static WindowHandle>>;
 
 /// 相手を失ったペアの owner を外す（要件 5.7／5.8／5.9・design.md「破棄経路」）。
 ///
@@ -307,6 +313,8 @@ pub fn apply_zorder_pair_maintenance(
     orphans: Query<Entity, (With<ReassertZOrder>, Without<KeepDirectlyAbove>)>,
     // owner を張った窓。破棄時の切離しが見るのはこの集合だけである。
     links: OwnerLinkQuery,
+    // 沈降観測の目印が付いた窓（`WM_ACTIVATE` の非活性化枝が前の巡で付けたもの）。
+    sink_marks: SinkMarkQuery,
     // すべての entity に当たるクエリ。`Err` は「その実体がもう無い」、`Ok(None)` は
     // 「実体はあるがハンドルがまだ無い」——見送りの理由を分けるためこの形にする
     // （確立系 `establish_owner_links` と同じ形）。
@@ -318,6 +326,11 @@ pub fn apply_zorder_pair_maintenance(
     // 破棄の後始末を先に済ませる——相手が消えた窓の owner は、この巡のうちに外れていないと
     // 登録の取り崩し（`DestroyWindow`）に間に合わない。
     detach_owner_links_for_lost_peers(&mut commands, &links, &handles);
+
+    // 前の巡に非活性化された窓の沈降を、いま実測して記録する（読み取りのみ）。
+    // 是正の処理より先に置くのは、記録に載る実測が**この巡の是正より前の重なり**である
+    // ことを明らかにするためである（是正の書込はいずれにせよ tick 後の flush で起きる）。
+    observe_marked_pair_sinks(&mut commands, &sink_marks, &handles);
 
     for entity in orphans.iter() {
         log_orphan_request_dropped(entity);

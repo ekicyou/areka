@@ -237,7 +237,70 @@ mod tests {
         );
     }
 
-    /// 代表メッセージ ④ 非クライアント破棄 `WM_NCDESTROY`（要件 2.4・設計 Testing Strategy）。
+    /// 代表メッセージ ④ 非活性化 `WM_ACTIVATE`（`WA_INACTIVE`）。
+    /// `dispatch_window_message` は `keyboard::WM_ACTIVATE` へ配送し、ゴースト窓ペアの
+    /// 当事者には沈降観測の目印が付く（要件 4.4／7.5）。返り値は `None`（DefWindowProcW 委譲）
+    /// のままであり、**窓の挙動は変わらない**。重なりの実測と記録はこの巡では行わない
+    /// （遅延 1 巡の分業は `zorder_pair_sink` の兄弟テストが固定する）。
+    /// ヘッドレス: 実 HWND / メッセージループ不要。
+    #[test]
+    fn dispatch_activate_inactive_marks_the_pair_for_sink_observation() {
+        use crate::ecs::window::{KeepDirectlyAbove, SinkObservationPending};
+
+        let world = Rc::new(RefCell::new(EcsWorld::new()));
+        let (character, balloon) = {
+            let mut w = world.borrow_mut();
+            let w = w.world_mut();
+            let character = w.spawn(()).id();
+            let balloon = w.spawn(KeepDirectlyAbove { peer: character }).id();
+            (character, balloon)
+        };
+
+        let m = WindowMessage {
+            hwnd: HWND(std::ptr::null_mut()),
+            msg: WM_ACTIVATE,
+            wparam: WPARAM(0), // WA_INACTIVE
+            lparam: LPARAM(0),
+        };
+        let ret = dispatch_window_message(&world, character, &m);
+
+        assert!(
+            ret.is_none(),
+            "WM_ACTIVATE は None（DefWindowProcW 委譲）を返すべき"
+        );
+        assert!(
+            world
+                .borrow()
+                .world()
+                .entity(balloon)
+                .contains::<SinkObservationPending>(),
+            "非活性化の受理でペアの宣言側へ目印が付くべき"
+        );
+        // 対照: 活性化（WA_ACTIVE）は目印を付けない（付く側の主張が恒真にならない）。
+        let stray_world = Rc::new(RefCell::new(EcsWorld::new()));
+        let (stray_char, stray_balloon) = {
+            let mut w = stray_world.borrow_mut();
+            let w = w.world_mut();
+            let character = w.spawn(()).id();
+            let balloon = w.spawn(KeepDirectlyAbove { peer: character }).id();
+            (character, balloon)
+        };
+        let active = WindowMessage {
+            wparam: WPARAM(1), // WA_ACTIVE
+            ..m
+        };
+        dispatch_window_message(&stray_world, stray_char, &active);
+        assert!(
+            !stray_world
+                .borrow()
+                .world()
+                .entity(stray_balloon)
+                .contains::<SinkObservationPending>(),
+            "活性化では目印を付けないべき"
+        );
+    }
+
+    /// 代表メッセージ ⑤ 非クライアント破棄 `WM_NCDESTROY`（要件 2.4・設計 Testing Strategy）。
     /// `WM_NCDESTROY` は配送表からライフサイクル特例として除外されており（タスク 3.2／旧
     /// `ecs_wndproc` シムが直接処理）、新経路 `dispatch_window_message` では表に無いため
     /// `None`（DefWindowProcW 委譲）を返すのが設計どおりの「旧手続きと同等」結果である。

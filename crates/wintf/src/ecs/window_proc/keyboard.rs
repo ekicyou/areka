@@ -111,14 +111,19 @@ pub(super) fn WM_CANCELMODE(
     None // DefWindowProcWに委譲
 }
 
-/// WM_ACTIVATE: ウィンドウ非アクティブ化時のドラッグキャンセル
+/// WM_ACTIVATE: ウィンドウ非アクティブ化時のドラッグキャンセルと沈降観測の目印付け
 ///
 /// Alt+Tabなどでウィンドウが非アクティブになった場合、ドラッグ中であればキャンセルする。
 /// WM_CANCELMODEはモーダルダイアログやメニュー表示時にのみ送られ、
 /// Alt+Tabでは送られないため、WM_ACTIVATEで補完する必要がある。
+///
+/// あわせて、当該窓がゴースト窓ペアの当事者なら**沈降観測の目印**を付ける（要件 4.4／7.5）。
+/// 付けるのは目印だけで、重なりの実測も記録もここでは行わない——理由は
+/// [`mark_pair_sink_observation`](crate::ecs::window::mark_pair_sink_observation) の
+/// 呼出箇所のコメントを参照。**窓の挙動は一切変えない**（読み取りのみ）。
 pub(super) fn WM_ACTIVATE(
     world: &Rc<RefCell<EcsWorld>>,
-    _entity: Entity,
+    entity: Entity,
     _hwnd: HWND,
     wparam: WPARAM,
     _lparam: LPARAM,
@@ -163,6 +168,20 @@ pub(super) fn WM_ACTIVATE(
             crate::ecs::drag::cancel_dragging();
         }
         _ => {}
+    }
+
+    // 沈降観測の目印を付ける（既存処理の後・読み取り専用）。
+    //
+    // ここで重なりを測ってはならない。WM_ACTIVATE(WA_INACTIVE) は活性化トランザクションの
+    // **途中**に届き、自分が前面から外れたことは確定していても、**新しい前面窓の浮上は
+    // 終わっていないことがある**。その瞬間に走査すると、実装に何の欠陥が無くても
+    // 「前面窓より背面に居る」を満たさず、偽の失敗が記録として残る。
+    // よってこの枝が行うのは目印を付けることだけであり、実測と記録は次の巡に維持系
+    // （apply_zorder_pair_maintenance）が行う（design.md「WM_ACTIVATE 沈降観測」）。
+    //
+    // 当該窓がペアの当事者でなければ何も起きない。窓の状態には一切書き込まない。
+    if let Ok(mut world_borrow) = world.try_borrow_mut() {
+        crate::ecs::window::mark_pair_sink_observation(world_borrow.world_mut(), entity);
     }
 
     None // DefWindowProcWに委譲

@@ -635,6 +635,75 @@ pub(crate) fn measure_window_below(hwnd: HWND) -> Option<HWND> {
     }
 }
 
+/// 兄弟列を前面側へ辿った結果（沈降観測が使う）。
+///
+/// 「前面窓より背面に居るか」は 1 回の問い合わせでは分からない——Win32 に 2 つの窓の
+/// 前後を直接比べる API は無く、隣を 1 枚ずつ辿るほかない。よって走査の**結果そのもの**を
+/// 値にして、判定は純関数へ渡す（実機不要の決定論的テストで判定を固定するため）。
+pub(crate) struct FrontScan {
+    /// 対象より手前に居た窓（手前へ向かう順）
+    pub windows: Vec<HWND>,
+    /// 最前面まで辿り着いたか。
+    ///
+    /// `false` は走査の失敗ないし上限による打切りであり、**列が不完全**であることを意味する。
+    /// この区別が無いと「探したが見つからなかった」と「最後まで探せなかった」が同じ字面に
+    /// なり、測れなかっただけの巡に偽の判定が出る。
+    pub reached_top: bool,
+}
+
+/// 前面側へ何枚まで辿るかの上限。
+///
+/// 兄弟列が壊れて環になっている場合に無限に辿らないための歯止めである。デスクトップの
+/// トップレベル窓がこの枚数を超えることは実運用では起きないが、超えた場合は打切りとして
+/// 記録に残し、判定は番兵へ倒す（測れなかったことを偽の判定にすり替えない）。
+const FRONT_SCAN_LIMIT: usize = 512;
+
+/// 指定窓より手前に居る窓を、手前へ向かって辿って集める。
+///
+/// [`measure_window_above`] を繰り返すのではなく `get_window_above` を直に使うのは、
+/// あちらが**走査の失敗と「手前に誰も居ない」を同じ `None` へ潰す**ためである。
+/// 沈降観測では両者を混同できない——失敗を「最前面まで辿った」と扱うと、前面窓を
+/// 見つけられなかっただけの巡に「背面に居ない」という偽の失敗が記録される。
+/// 失敗は記録に残したうえで [`FrontScan::reached_top`] を `false` にする。
+pub(crate) fn measure_windows_in_front(hwnd: HWND) -> FrontScan {
+    let mut windows = Vec::new();
+    let mut cursor = hwnd;
+    for _ in 0..FRONT_SCAN_LIMIT {
+        match get_window_above(cursor) {
+            Ok(Some(found)) => {
+                windows.push(found);
+                cursor = found;
+            }
+            Ok(None) => {
+                return FrontScan {
+                    windows,
+                    reached_top: true,
+                };
+            }
+            Err(err) => {
+                warn!(
+                    "手前側の走査に失敗しました（前面窓との相対は判定しません） hwnd={hwnd} error={code:?} message={message}",
+                    hwnd = hwnd_field(Some(cursor)),
+                    code = err.code(),
+                    message = err.message(),
+                );
+                return FrontScan {
+                    windows,
+                    reached_top: false,
+                };
+            }
+        }
+    }
+    warn!(
+        "手前側の走査が上限に達しました（前面窓との相対は判定しません） hwnd={hwnd} limit={FRONT_SCAN_LIMIT}",
+        hwnd = hwnd_field(Some(hwnd)),
+    );
+    FrontScan {
+        windows,
+        reached_top: false,
+    }
+}
+
 /// owner 確立の記録を出す（info・要件 6.1）。
 pub(crate) fn log_owner_established(
     entity: Entity,
@@ -698,8 +767,11 @@ pub(crate) fn log_owner_detach_failed(
 }
 
 /// 沈降観測の記録を出す（debug・要件 4.4／7.5）。
-// 呼び出しの結線は後続タスク（維持系の遅延観測）で入る。
-#[allow(dead_code)]
+///
+/// 出すのは非活性化の**次の巡**であり、出す主体は維持系
+/// （[`observe_marked_pair_sinks`](super::zorder_pair_sink::observe_marked_pair_sinks)）である。
+/// 非活性化の瞬間に出さない理由は当該モジュールの doc を参照（活性化の途中で測ると
+/// 偽の失敗を記録するため）。
 pub(crate) fn log_sink_observed(
     entity: Entity,
     adjacency_ok: bool,
@@ -766,6 +838,18 @@ pub(crate) fn record_decision(
 pub(crate) fn log_orphan_request_dropped(entity: Entity) {
     warn!(
         "ペア宣言の無い窓に再断行の要求が付いていたため落としました（是正は行いません） entity={entity:?}"
+    );
+}
+
+/// ペア宣言を持たない窓に残っていた沈降観測の目印を落としたことを記録する（warn）。
+///
+/// 目印は宣言を持つ窓にしか付かないが、付いてから次の巡までに宣言が外れる余地はある。
+/// そのまま読み飛ばすと目印が entity に残り続けて毎巡黙って無視される——**記録の無い
+/// 見送り**になる（要件 6.3 が禁じる形）。よって記録して落とす。タグを付けない理由は
+/// [`log_orphan_request_dropped`] と同じ（サインオフの grep 判定語を増やさない）。
+pub(crate) fn log_orphan_sink_mark_dropped(entity: Entity) {
+    warn!(
+        "沈降観測の目印がペア宣言の無い窓に付いていたため落としました（観測は行いません） entity={entity:?}"
     );
 }
 
