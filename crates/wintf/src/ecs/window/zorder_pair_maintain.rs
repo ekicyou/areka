@@ -37,6 +37,23 @@
 //! 加えて検証は一致・不一致のどちらでも要求を消し、**再試行の輪を作らない**
 //! （design.md「Error Strategy」の検証不一致）。
 //!
+//! # 複数ペアが同じ巡で是正を求めたとき——動かすのは高々 1 ペア
+//!
+//! 上の 2 つは 1 つのペアだけを見た停止条件であり、ペアが複数あるときの**観測の陳腐化**は
+//! 塞がない。実測は巡の中で採るが実際の書込はその巡の後の flush であるため、同じ巡で
+//! 2 つの是正を積むと、後から適用される指令の挿入位置は先の適用で既に古い——指した窓の
+//! 隣に別の窓が割り込み、要件 1.1 の「すぐ手前」が成立しない（実機の 2 スコープ起動で
+//! 毎回 `verify-failed` になっていた形）。
+//!
+//! よって **1 巡で実際に指令を出すのは高々 1 ペア**とする。残るペアの要求は消さずに残し、
+//! 次の巡の**新しい実測**から計算し直す。持ち越しは見送りではないので記録も出さない
+//! ——要求は entity に残り次巡で必ず処理されるため、記録の無い握り潰しにはならない。
+//!
+//! 巡数はペア数だけ要るが、ペアはスコープ数（実運用で 2）を超えない。しかも
+//! **適用した是正が、既に隣接している別のペアを壊すことはない**——是正は自分のキャラ窓の
+//! すぐ手前へ 1 枚だけ挿し込む操作であり、他ペアのバルーンとキャラの間へ割り込めるのは
+//! そのペアが元から隣接していない場合だけだからである。よって単調に収束する。
+//!
 //! # 書き込まないもの
 //!
 //! 位置・寸法・窓スタイル・表示状態には一切書き込まない（要件 1.6／5.x）。指令は必ず
@@ -283,6 +300,10 @@ fn detach_owner_links_for_lost_peers(
 /// 記録が氾濫して「トリガ駆動のみ」という性質も失われる。取りこぼした是正は次のトリガで
 /// 自然に処理される（再試行の輪を作らない・design.md「Error Strategy」と同根）。
 ///
+/// ただし **1 巡で指令を出すのは高々 1 ペア**であり、同じ巡で是正を要する 2 つめ以降の
+/// ペアは①のまま次巡へ持ち越される（module doc「複数ペアが同じ巡で…」）。持ち越しは
+/// 見送りではない——要求は残り、次巡の新しい実測で必ずやり直される。
+///
 /// # 相手が居ない巡（要件 1.5）
 ///
 /// 検証待ちであっても、相手の実体やハンドルが先に消えていれば実測照合へは進まない
@@ -336,6 +357,10 @@ pub fn apply_zorder_pair_maintenance(
         log_orphan_request_dropped(entity);
         commands.entity(entity).remove::<ReassertZOrder>();
     }
+
+    // この巡で既に是正の指令を出したか。実際に窓を動かす指令は 1 巡につき 1 本までとし、
+    // 残る要求は次巡の新しい実測で計算し直す（module doc「複数ペアが同じ巡で…」）。
+    let mut fix_issued_this_pass = false;
 
     for (entity, declaration, mut request, issued) in requests.iter_mut() {
         let peer = declaration.peer;
@@ -409,6 +434,13 @@ pub fn apply_zorder_pair_maintenance(
             commands.entity(entity).remove::<ReassertZOrder>();
             continue;
         };
+        if fix_issued_this_pass {
+            // この巡では既に別のペアの窓を動かす指令を積んでいる。その書込は本巡の後の
+            // flush で起きるため、いま手にしている実測（と、そこから決まる挿入位置）は
+            // 適用の時点では既に古い。要求はそのまま残し、次巡でやり直す——ここは
+            // 見送りではないので記録も出さないし、要求も消さない。
+            continue;
+        }
         let Some(plan) = plan_pair_fix(&observation, fix) else {
             // 是正の腕が返った以上ハンドルは揃っており、ここへは届かない。届いても
             // panic は作らず、指令を出さずに要求を落とす（要件 6.4）。
@@ -417,6 +449,7 @@ pub fn apply_zorder_pair_maintenance(
         };
 
         SetWindowPosCommand::enqueue(pair_fix_command(plan.target, plan.insert_after));
+        fix_issued_this_pass = true;
         // 実際の書込は tick 後の flush である。ゆえに実測照合は次の巡で行う——同じ巡で
         // 測っても指令はまだ反映されていない。
         request.pending_verify = Some(plan.expected);
@@ -429,6 +462,10 @@ pub fn apply_zorder_pair_maintenance(
 #[cfg(test)]
 #[path = "zorder_pair_maintain_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "zorder_pair_multipair_tests.rs"]
+mod multipair_tests;
 
 #[cfg(test)]
 #[path = "zorder_pair_detach_tests.rs"]
