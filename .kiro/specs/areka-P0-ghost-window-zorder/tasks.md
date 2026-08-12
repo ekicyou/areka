@@ -28,7 +28,7 @@
   - _Requirements: 1.2, 1.3, 1.5, 1.6, 3.1, 3.2, 3.3, 3.4, 4.3, 7.1, 8.1_
   - _Depends: 1.2_
 
-- [ ] 1.4 診断記録の語彙を実装する
+- [x] 1.4 診断記録の語彙を実装する
   - 宣言・owner 確立・是正・見送り・検証不一致・確立失敗・沈降観測の各記録を出せるようにする
   - 是正の記録には出した指令と、その後に実測した前後関係を同じ 1 行へ載せる
   - 見送りは必ず理由を伴わせ、記録の無い見送りが起きない形にする
@@ -192,6 +192,11 @@
 - (1.1) `windows` 0.62 の `GetWindow` は「隣が無い」場合も `Err` を返す。`SetLastError(ERROR_SUCCESS)` で先にクリアし `err.code() == S_OK` を「不在＝`Ok(None)`」へ写像して失敗と切り分けている。
 - (1.1) **トップレベル窓の重なり隣接は同一テストバイナリ内で決定論にならない**（他テストの窓が割り込む）。決定論的テストは私有の親窓＋子窓 2 枚（兄弟列を閉じる）で行う。実窓の隣接そのものは実機サインオフ（要件 7.2）の担当。
 - (1.2) `ExpectedOrder` は design.md の State ブロックが型として参照するだけで定義していないため実装側で補完した（`above`／`below` の 2 HWND・座標フィールド無し）。`ZOrderPairStrategy` にも `Default`（案 A・raise assist 無効）を足している——**`init_resource` で暗黙に案 A が入りうるため、areka main 側では必ず明示 `insert_resource` で選択結果を入れること**（タスク 3.2／5.1 の前提）。
+- (1.4) **タスク 2.2 のレビュー必須確認項目**: 「記録の無い見送りが起きない」ことは**規約であって構造保証ではない**。`decide_pair_fix` は `pub(crate)` で `Skip` をそのまま返せ、design「File Structure Plan」が確立系・維持系を同一ファイルへ置くと定めている以上モジュール可視性でも塞げない。維持系は判断結果を必ず `record_decision` へ通すこと。型で包んで構造保証にする案は、1.3 で承認済みの `decide_pair_fix` 署名（design「Service Interface（純関数）」に逐語明記）の改訂を伴うため不採用とした（裁定理由はコードの doc に記載）。
+- (1.4) 診断記録は「行を組む純関数 `*_line` ＋ 出力関数」の二層（areka `placement/diag.rs` の先例に倣う）。出力先は module path 既定 `wintf::ecs::window::zorder_pair`。`record_decision` が見送りを必ず理由つきで記録して是正だけを返し、`record_verification` が一致→`fix`(debug)／不一致→`verify-failed`(error) を出す。`PairFixDecision::insert_spec()` は**2.2 が適用時に挿入位置を取り出して次巡へ持ち越す**ための射影（是正の記録は適用の次巡に出るため）。
+- (1.4) `verify-failed` は実測が `None` の場合も error。`GetWindow(GW_HWNDNEXT)` の `None` は「背後に窓なし」という**有効な実測**であって取得失敗ではないため。要件 1.5（片方不在）は `Skip(PeerMissing)` が指令発行前に止めるので正常系が error を吐く経路にはならないが、**2.2 は「指令発行後・検証前に peer が破棄された」巡で漫然と `record_verification` を呼ばないこと**（peer 生存を先に見る）。
+- (1.4) `[zorder-pair] declared` だけは areka 帰属（scope／char_entity／balloon_entity を載せるため。wintf は scope を知れず、wintf → areka の import は禁止）。出力点はタスク 3.1。
+- (1.4) **ログ捕捉テストで「出ないこと」を主張するときは、同じ捕捉窓の中に確実に拾える記録を必ず併置すること。** 本タスクは 1 度これを外して差し戻された——記録を一切出さない経路だけを捕捉窓に入れると、捕捉が完全に死んでいてもテストが通る。併置に加えて「行数がちょうど N 本」を検査すると、拾えない側（0 本）と余計に出る側（N+1 本）の両方向で赤にできる。
 - (1.3) `decide_pair_fix` の決定表（トリガ × ストラテジ）。後続の維持系はこの表の外へ判断を持ち出さないこと。
 
   | トリガ | 案 A (raise_assist=false) | 案 A (true) | 案 B (ExplicitMaintenance) |

@@ -13,10 +13,12 @@
 //! - `ZOrderPairStrategy`: 案 A／案 B を実行時に切り替える設定
 //!
 //! - `decide_pair_fix`: 是正判断の純関数（実機・World 不要）
+//! - 診断記録の語彙: 行を組む純関数（`*_line`）と、それを出すだけの `log_*`／`record_*`
 //!
-//! 確立系・維持系・診断ログ語彙は本フィーチャーの後続タスクが同ファイルへ足す。
+//! 確立系・維持系は本フィーチャーの後続タスクが同ファイルへ足す。
 
 use bevy_ecs::prelude::*;
+use tracing::{debug, error, info};
 use windows::Win32::Foundation::HWND;
 
 // ============================================================================
@@ -307,6 +309,334 @@ pub(crate) fn decide_pair_fix(obs: &PairObservation) -> PairFixDecision {
     }
 }
 
+// ============================================================================
+// 診断記録の語彙（要件 6）
+// ============================================================================
+//
+// design.md「診断ログ語彙（要件 6）」のレコード表が正本である。本節はその表を
+// そのまま写した 6 種の記録を出す手段を提供する（呼び出す結線は確立系・維持系＝
+// 後続タスクの担当）。
+//
+// # レコード表のうち `declared` が本節に無い理由
+//
+// `declared` の必須フィールドは scope・キャラ窓・バルーン窓であり、scope を知る層は
+// areka だけである（wintf → areka の import は禁止ゆえ scope 型を受け取る口も作れない）。
+// ゆえに `declared` の出力点は areka の窓生成であり、本節が持つのは wintf が自力で
+// 全フィールドを埋められる 6 種に限る。scope は `declared` レコードとの entity 結合で
+// 2 段 grep する（`log_window_move` の先例）。
+//
+// # 行は純関数が組み、ログはそれを出すだけ
+//
+// サインオフの grep 判定語と出力書式は 1:1 で対応する。書式が意図せず変われば手順が
+// 静かに嘘になるため、組立を純関数（`*_line`）へ切り出してテストで語彙を固定し、
+// `log_*`／`record_*` はその戻り値をそのまま本文にする（組立を二重に持たない）。
+//
+// # 出力先と水準
+//
+// target は module path 既定（`wintf::ecs::window::zorder_pair`）——サインオフの
+// `RUST_LOG` はこの名前で点灯させる。水準はレコード表どおりで、失敗と検証不一致だけが
+// error、確立成功が info、残りは診断専用の debug（既定運転では無音）である。
+
+/// 値が取得できなかったフィールドの番兵。
+///
+/// フィールドごと落とさないのは、落とすと「記録が出ていない」のと「その経路には
+/// その値が無い」の区別が事後に付かなくなるためである。
+const UNKNOWN: &str = "-";
+
+/// owner 確立の記録タグ（grep 判定語）。
+const OWNER_ESTABLISHED_TAG: &str = "[zorder-pair] owner-established";
+/// 是正の記録タグ（指令と実測を同一行に載せる・要件 6.1）。
+const FIX_TAG: &str = "[zorder-pair] fix";
+/// 見送りの記録タグ（理由必須・要件 6.3）。
+const SKIP_TAG: &str = "[zorder-pair] skip";
+/// 検証不一致の記録タグ（error 水準・要件 6.2）。
+const VERIFY_FAILED_TAG: &str = "[zorder-pair] verify-failed";
+/// owner 確立失敗の記録タグ（error 水準・要件 6.2）。
+const OWNER_ESTABLISH_FAILED_TAG: &str = "[zorder-pair] owner-establish-failed";
+/// 沈降観測の記録タグ（要件 4.4／7.5）。
+const SINK_OBSERVED_TAG: &str = "[zorder-pair] sink-observed";
+
+/// HWND をログ用の 16 進表現へ（不在は番兵）。
+///
+/// `Debug` 表現をそのまま使わないのは、値の中に空白や記号が混じると
+/// `field=value` の 1 行から機械的に切り出せなくなるためである。
+fn hwnd_field(hwnd: Option<HWND>) -> String {
+    match hwnd {
+        Some(h) => format!("0x{:X}", h.0 as usize),
+        None => UNKNOWN.to_string(),
+    }
+}
+
+/// 真偽値をログ用表現へ（判定そのものが取れなかった場合は番兵）。
+///
+/// 「取れなかった」を `false` へ潰さない——潰すと「沈まなかった」という**異常**と
+/// 「測れなかった」という**観測の欠落**が同じ字面になる。
+fn tristate_field(value: Option<bool>) -> String {
+    match value {
+        Some(v) => v.to_string(),
+        None => UNKNOWN.to_string(),
+    }
+}
+
+impl SkipReason {
+    /// 記録に載る理由語（サインオフの grep 判定語）。
+    ///
+    /// 5 種が互いに異なる語であることがそのまま要件 6.3 の「理由を伴う見送り」の
+    /// 実質になる——1 語へ潰れると記録があっても理由が読めない。
+    pub(crate) fn as_str(&self) -> &'static str {
+        match self {
+            SkipReason::AlreadyAdjacent => "AlreadyAdjacent",
+            SkipReason::PeerMissing => "PeerMissing",
+            SkipReason::HandleMissing => "HandleMissing",
+            SkipReason::EchoOrIrrelevant => "EchoOrIrrelevant",
+            SkipReason::StrategyDisabled => "StrategyDisabled",
+        }
+    }
+}
+
+impl InsertSpec {
+    /// 挿入位置のログ用表現（縁は専用の語で、ハンドル表現と混ざらない）。
+    fn as_field(&self) -> String {
+        match self {
+            InsertSpec::After(hwnd) => hwnd_field(Some(*hwnd)),
+            InsertSpec::TopEdge => "top-edge".to_string(),
+        }
+    }
+}
+
+impl PairFixDecision {
+    /// 是正の腕が指す挿入位置（見送りには挿入位置が無い＝`None`）。
+    ///
+    /// 2 つの腕は動かす窓こそ違うが、`SetWindowPos` へ渡す挿入位置はどちらも
+    /// 「ある窓の背後」か「最上位」に収まるため 1 つの型で表せる。
+    ///
+    /// # 何のための射影か
+    ///
+    /// 是正の記録（[`record_verification`] の一致側）は「出した指令」として挿入位置を
+    /// 載せるが、その記録が出るのは適用の**次巡**である。よって維持系（タスク 2.2）は
+    /// 適用時に判断からこの値を取り出して持ち越し、次巡の検証で
+    /// [`record_verification`] の `insert_after` 引数へ渡す——本メソッドはその
+    /// 「判断 → 記録に載る指令」の射影であり、記録側が判断の型を知らずに済む境界でもある。
+    /// 現時点の消費者はテストのみで、実際の持ち越しは 2.2 が結線する。
+    // 呼び出しの結線は後続タスク（維持系が判断を適用し、次巡の検証へ指令を持ち越す）で入る。
+    #[allow(dead_code)]
+    pub(crate) fn insert_spec(&self) -> Option<InsertSpec> {
+        match self {
+            PairFixDecision::Skip(_) => None,
+            PairFixDecision::PlaceAboveOverBelow { insert_after } => Some(*insert_after),
+            PairFixDecision::PlaceBelowUnderAbove { insert_after } => {
+                Some(InsertSpec::After(*insert_after))
+            }
+        }
+    }
+}
+
+/// owner 確立の記録行（純関数）。
+///
+/// `measured_prev` は確立直後に採った「owner（キャラ窓）の 1 つ手前」の実測であり、
+/// ここに被 owner（バルーン窓）が現れることが案 A の中核保証（ゲート G6）の証跡になる。
+fn owner_established_line(
+    entity: Entity,
+    peer: Entity,
+    owned_hwnd: HWND,
+    owner_hwnd: HWND,
+    measured_prev: Option<HWND>,
+) -> String {
+    format!(
+        "{OWNER_ESTABLISHED_TAG} entity={entity:?} peer={peer:?} owned_hwnd={owned} \
+         owner_hwnd={owner} measured_prev={measured}",
+        owned = hwnd_field(Some(owned_hwnd)),
+        owner = hwnd_field(Some(owner_hwnd)),
+        measured = hwnd_field(measured_prev),
+    )
+}
+
+/// 是正の記録行（純関数）——**出した指令と、その後の実測を同じ 1 行に載せる**。
+///
+/// 行を「指令」と「実測」に分けないのは design.md「Implementation Notes > Validation」の
+/// 裁定である。分けると「指令は出したが効かなかった」の判定が 2 行の突合になり、
+/// 過去に同型の誤診を生んでいる。
+fn fix_line(
+    entity: Entity,
+    peer: Entity,
+    insert_after: InsertSpec,
+    measured_next_after_fix: Option<HWND>,
+) -> String {
+    format!(
+        "{FIX_TAG} entity={entity:?} peer={peer:?} insert_after={insert_after} \
+         measured_next_after_fix={measured}",
+        insert_after = insert_after.as_field(),
+        measured = hwnd_field(measured_next_after_fix),
+    )
+}
+
+/// 見送りの記録行（純関数・理由必須）。
+fn skip_line(entity: Entity, peer: Entity, reason: SkipReason) -> String {
+    format!(
+        "{SKIP_TAG} entity={entity:?} peer={peer:?} reason={reason}",
+        reason = reason.as_str(),
+    )
+}
+
+/// 検証不一致の記録行（純関数）——期待した隣接と実測を同じ行へ。
+fn verify_failed_line(
+    entity: Entity,
+    peer: Entity,
+    expected: ExpectedOrder,
+    measured: Option<HWND>,
+) -> String {
+    format!(
+        "{VERIFY_FAILED_TAG} entity={entity:?} peer={peer:?} expected_above={above} \
+         expected_below={below} measured={measured}",
+        above = hwnd_field(Some(expected.above)),
+        below = hwnd_field(Some(expected.below)),
+        measured = hwnd_field(measured),
+    )
+}
+
+/// owner 確立失敗の記録行（純関数）。
+fn owner_establish_failed_line(entity: Entity, error: &windows::core::Error) -> String {
+    format!(
+        "{OWNER_ESTABLISH_FAILED_TAG} entity={entity:?} error={code:?} message={message}",
+        code = error.code(),
+        message = error.message(),
+    )
+}
+
+/// 沈降観測の記録行（純関数）。
+///
+/// `behind_foreground` は「当該窓が前面窓より背面に居るか」の判定で、前面窓が取れない
+/// ／比較できない場合は番兵になる（偽と混同させない）。
+fn sink_observed_line(
+    entity: Entity,
+    adjacency_ok: bool,
+    foreground: Option<HWND>,
+    behind_foreground: Option<bool>,
+) -> String {
+    format!(
+        "{SINK_OBSERVED_TAG} entity={entity:?} adjacency_ok={adjacency_ok} \
+         foreground={foreground} behind_foreground={behind}",
+        foreground = hwnd_field(foreground),
+        behind = tristate_field(behind_foreground),
+    )
+}
+
+/// owner 確立の記録を出す（info・要件 6.1）。
+// 呼び出しの結線は後続タスク（確立系 `establish_owner_links`）で入る。
+#[allow(dead_code)]
+pub(crate) fn log_owner_established(
+    entity: Entity,
+    peer: Entity,
+    owned_hwnd: HWND,
+    owner_hwnd: HWND,
+    measured_prev: Option<HWND>,
+) {
+    info!(
+        "{}",
+        owner_established_line(entity, peer, owned_hwnd, owner_hwnd, measured_prev)
+    );
+}
+
+/// owner 確立失敗の記録を出す（error・要件 6.2）。
+///
+/// 記録するだけで再試行はしない——同じハンドルでの再試行は同じ失敗を繰り返し、
+/// 記録を二重化するだけである（design.md「Error Strategy」）。
+// 呼び出しの結線は後続タスク（確立系 `establish_owner_links`）で入る。
+#[allow(dead_code)]
+pub(crate) fn log_owner_establish_failed(entity: Entity, error: &windows::core::Error) {
+    error!("{}", owner_establish_failed_line(entity, error));
+}
+
+/// 沈降観測の記録を出す（debug・要件 4.4／7.5）。
+// 呼び出しの結線は後続タスク（維持系の遅延観測）で入る。
+#[allow(dead_code)]
+pub(crate) fn log_sink_observed(
+    entity: Entity,
+    adjacency_ok: bool,
+    foreground: Option<HWND>,
+    behind_foreground: Option<bool>,
+) {
+    debug!(
+        "{}",
+        sink_observed_line(entity, adjacency_ok, foreground, behind_foreground)
+    );
+}
+
+/// 判断結果を記録し、**適用すべき是正だけ**を返す（要件 6.3）。
+///
+/// 見送りはこの関数の中で必ず理由つきの記録になり、返り値としては何も返らない。
+/// 返るのは常に是正の腕であり、見送りは決して返らない。
+///
+/// # これは規約であって構造保証ではない
+///
+/// [`decide_pair_fix`] は `pub(crate)` で [`PairFixDecision::Skip`] をそのまま返すため、
+/// 本関数を通さずに判断結果を握り潰す書き方は**言語上は可能**である。加えて design.md
+/// 「File Structure Plan」は確立系・維持系を本ファイルへ置くと定めており、その実装
+/// （タスク 2.2）は同一モジュールに来る——モジュールが Rust の可視性境界である以上、
+/// 可視性で塞ぐ余地は無い。したがってここにあるのは
+/// **「判断結果を適用へ渡すときは必ず本関数を経由する」という規約**であり、
+/// 記録の無い見送りが起きないことは 2.2 がこの規約を守ることに依存している。
+///
+/// # 型で塞ぐ案を採らない理由
+///
+/// [`decide_pair_fix`] の戻り値を「本関数でしか開けない型」（下位モジュールに置いた
+/// フィールド非公開の包み）で返せば構造保証になるが、採らない。design.md
+/// 「Service Interface（純関数）」は当該関数の署名を
+/// `fn decide_pair_fix(obs: &PairObservation) -> PairFixDecision` と明記しており、
+/// この形はタスク 1.3 でレビュー承認済みである。診断語彙の都合で承認済みの判断関数の
+/// 署名を変えるのは、変更の理由と場所が食い違う。規約側で守り、逸脱はテスト
+/// （見送り 5 種が理由つきで記録されること）とレビューで検出する。
+// 呼び出しの結線は後続タスク（維持系 `apply_zorder_pair_maintenance`）で入る。
+#[allow(dead_code)]
+pub(crate) fn record_decision(
+    entity: Entity,
+    peer: Entity,
+    decision: PairFixDecision,
+) -> Option<PairFixDecision> {
+    match decision {
+        PairFixDecision::Skip(reason) => {
+            debug!("{}", skip_line(entity, peer, reason));
+            None
+        }
+        fix => Some(fix),
+    }
+}
+
+/// 適用後の実測照合を記録し、期待どおりだったかを返す（要件 6.1／6.2）。
+///
+/// - 一致: 是正の記録（debug）——出した指令 `insert_after` と実測を同じ行に載せる。
+/// - 不一致: 検証不一致の記録（error）。実測が取れなかった場合も一致とは扱わない。
+///
+/// 不一致でも再試行の輪は作らない（外部の窓操作と競合すると恒常再試行になる）。
+/// 次のトリガが来た時点で自然に再是正される。
+// 呼び出しの結線は後続タスク（維持系 `apply_zorder_pair_maintenance`）で入る。
+#[allow(dead_code)]
+pub(crate) fn record_verification(
+    entity: Entity,
+    peer: Entity,
+    insert_after: InsertSpec,
+    expected: ExpectedOrder,
+    measured_below_of_above: Option<HWND>,
+) -> bool {
+    if measured_below_of_above == Some(expected.below) {
+        debug!(
+            "{}",
+            fix_line(entity, peer, insert_after, measured_below_of_above)
+        );
+        true
+    } else {
+        error!(
+            "{}",
+            verify_failed_line(entity, peer, expected, measured_below_of_above)
+        );
+        false
+    }
+}
+
 #[cfg(test)]
 #[path = "zorder_pair_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "zorder_pair_diag_tests.rs"]
+mod diag_tests;
