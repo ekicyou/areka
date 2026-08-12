@@ -35,7 +35,7 @@
   - _Boundary: hover 観測フラグ_
   - _Depends: 2.1_
 
-- [ ] 2.3 ポインタ配線まわりの陳腐化した注記を実態へ直す
+- [x] 2.3 ポインタ配線まわりの陳腐化した注記を実態へ直す
   - 本番結線済みにもかかわらず「本番からの到達者が存在しない」と述べている注記と、それを前提とした未使用許容の指定を、注記ごとに到達実態を確認したうえで是正する（真に未到達のものだけ実態に即した文言へ書き換える）
   - 完了状態: 対象箇所に到達実態と異なる注記が残っておらず、除去できない未使用許容には理由が明記されている
   - _Requirements: 9.7_
@@ -186,8 +186,8 @@
 - **design 本文の file:line が 2 件陳腐化している**（実装の欠陥ではなく、主張内容自体は正しい）——`apply_show` は `show.rs:23-277` ではない、`VisualMount::set_visible` は `mount.rs:193-216` ではない。design の file:line は都度実測し直すこと。
 - **2.2 で `on_balloon_pointer_moved` の借用手順②が共有借用から可変借用へ変わった**（`balloon.rs:398-403`）。`Mut<BalloonWiring>` は `.map()` クロージャ内に閉じ、手順③の `runtime.try_borrow()` より前に落ちるため二重借用は不可能。縮退順序・ログレベル・ログ event 名は不変。
 - **2.2 の記録側と解除側は `Emo2Wiring` 依存が意図的に非対称**（記録は在席を要求・解除は無条件）。どちらも「抑止しない側」へ倒れる形であり要件 5.5 の指定どおり。`Emo2Wiring` は `frame.rs:137` の `remove_non_send_resource` で毎フレーム一時的に world から抜けるため、不在は実在する過渡状態である。
-- **hover 照会の新規 accessor は `balloon.rs:86` の既存 impl 単位 `#[allow(dead_code)]` に覆われている**。タスク 2.3 がこの allow 群を実態へ是正する際、`is_balloon_hovered` / `set_balloon_hover` / `clear_balloon_hover` の 3 本は**タスク 4.4 が消費者になるまで到達者ゼロ**である事実を踏まえて扱うこと。
-- **2.2 の檻に 1 件の潜在的空振り**（非阻害・2.3 で同ファイルを触る際のついで作業候補）——`moved_records_hover_when_choice_active_but_no_row_hit` が前提（`choice_active == true`）を自前で主張していない。ヘルパが劣化すると隣の檻の重複へ静かに退化する。
+- **`input_events/balloon.rs` に残る `#[allow(dead_code)]` は 2.3 の実測監査の結果 1 本だけ**（`is_balloon_hovered`・理由注記つき）。書き込み側の `set_balloon_hover`（`balloon.rs:414`）と `clear_balloon_hover`（`:732`）は 2.2 の配線で**すでに本番到達済み**であり、読み口 `is_balloon_hovered` のみが**タスク 4.4 の消費まで到達者ゼロ**。他の 13 本は非 load-bearing と実測されて撤去済みなので、**このファイルへ新たに dead_code を持ち込むと即警告になる**。
+- **`input_events/balloon.rs` の注記は 2.3 で全数が実測へ揃えられた**（本番入口は `main.rs:363` = `wire_balloon_choice` と `main.rs:731` = `attach_balloon_pointer_handlers`）。以後このファイルへ到達性の主張を書くときは、必ず実測した file:line を添えること。
 - **2.1 の `BalloonLifecycleSink::clone` は会話境界を能動的にリセットする手書き実装**（design のスケッチは `#[derive(Clone)]`）。dispatcher は登録 sink を talk ごとに `clone_box` するのみで（`areka-ghost/src/dispatcher.rs:288-294`）、生成された `Box<dyn CueSink + Send>` は `Clone` ではないため derive でも今日の不変条件下では成立する——が、手書きにすることで上流の暗黙不変条件を構造的保証へ変換している（レビュー裁定済み・逸脱として承認）。
 - **`display_end` の畳み込み種は `NEG_INFINITY`**（dola は `0.0` で seed する・`sheet.rs:86-90`）。`at` が全て負の台本では sink が負値を返し、dola は `0.0` を返すという乖離が理論上ある。正典の変換経路では非負時刻しか出ないため到達しないが、**タスク 3.2 / 4.4 が `display_end` を消費する際に下限 `0.0` へ丸めておくのが安全**（早すぎる非表示側へ倒れる乖離のため）。
 - **`at` は dola 側で有限性を保証されない**（`duration` のみ `clamp_duration` で有限化・`sheet.rs:126-136`）。2.1 は `is_finite` ガードを追加済み（`+inf` が入ると下流の `deadline = display_end + timeout` が永久に到達不能になるため）。design の Event Contract には無い追加だが要件 4.8 の「保持側へ倒す」方向であり承認済み。

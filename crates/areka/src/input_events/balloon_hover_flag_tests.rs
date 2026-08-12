@@ -99,6 +99,16 @@ fn moved_records_hover_when_choice_active_but_no_row_hit() {
     let mut world = World::new();
     let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
     let rt = runtime_with_active_choice("0");
+    // 前提を自前で主張する（ヘルパが劣化して choice_active=false・行あり になると、この檻は
+    // 隣の `moved_over_balloon_records_hover_without_any_choice` の重複へ静かに退化する）。
+    assert!(
+        rt.borrow().choice_active(&ActorKey::from("0")),
+        "前提: 選択肢は表示中（choice_active=true）"
+    );
+    assert!(
+        rt.borrow().choice_hit_rows(&ActorKey::from("0")).is_empty(),
+        "前提: headless では行ジオメトリが空＝どの座標でも hit なし"
+    );
     world.insert_non_send_resource(headless_emo2_wiring(Rc::clone(&rt)));
     let _rx = insert_wiring(&mut world);
 
