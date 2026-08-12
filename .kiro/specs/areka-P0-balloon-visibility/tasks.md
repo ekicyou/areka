@@ -166,8 +166,9 @@
   - 完了状態: 4 点すべてが目視とログ検索で一致し、判定に用いた検索文字列と結果が残っている
   - _Requirements: 9.4, 9.5_
   - _Depends: 3.3, 6.6_
+  - _Blocked: 目視の証跡が本ワークツリーの自動実行では取得できない。画面キャプチャは 3 方式とも拒否され（`CopyFromScreen` は無効ハンドル、`GetDC(NULL)`+`BitBlt` は有効な画面 DC を得ても失敗しサンドボックス解除でも同じ、computer-use は許可アプリが空で承認ダイアログに応答できない）、本番バイナリに読み戻しの出力口が無く、バルーン窓は `WS_EX_NOREDIRECTIONBITMAP` のため窓単位の取得もできない。**ログ検索側は 4 挙動すべてと既定 30 秒の記録が実機で緑**（DPI 192・絶対パス・有界終了・3 会話サイクル・誤りログ 0 件）。残るのは⑴〜⑷の画素証跡と、明示的な非表示指令の後に文字が残らないことの確認。後者は**別の理由でも塞がっている**——emo2 fixture 全体に `[` が 1 件も無く、実ゴーストは `[-1]` を発行しないため、fixture を編集するか別ゴーストを与えない限り実機では踏めない（現状の被覆は単体テストのみ）。人手での手順は本タスクの実施報告に記載済み。_
 
-- [ ] 8.2 ワークスペース全体の検査を緑にする
+- [x] 8.2 ワークスペース全体の検査を緑にする
   - 32bit 補助実行体を先にビルドしたうえでワークスペース全体の検査を通す
   - 実時間の待機や反復回数のみによる有界化を新たに持ち込んでいないことを確認する
   - 完了状態: ワークスペース全体が緑
@@ -193,6 +194,7 @@
 - **6.2 の表は満了予定の起点を構造で守っている**——時刻・信号・期待値をすべて占有終端 `ANCHOR`(=12.0) からの相対で書き、計測が成り立つ最初の観測を `LATE`(=7.0) 秒遅らせてある。`now` 起点の実装にすると満了予定が 7 秒ずれて 9 ケースが赤くなる。**`ANCHOR` と `LATE` を 0 にすると表が骨抜きになる**ので、それを禁じる番人テストが置いてある。触らないこと。
 - **【7 で記録】互換対応表 §8 に本 spec の 11 行が入った**（`doc/COMPAT_ARCHITECTURE.md`）。先送り 4 件は受け皿 `areka-P0-balloon-canon-residue` の brief にも項目 7〜10 として登記済みで**双方向**になっている。受け側が項目を列挙していない spec は所有者ではない、という規律による。`Status` の `balloon` は `areka-P0-status-execution-states` の brief `:27` へ読み口ごと登記した。
 - **`.kiro/steering/roadmap.md:132` の「6 項目の受け皿」表記が実態とずれた**（`balloon-canon-residue` は 7 で 10 項目になった）。本 spec の柵の外なので未着手。**次にロードマップを編集する spec が直すこと**。解禁条件そのものは正しく、対応表側の記録も揃っている。
+- **【8.2 で確認】ワークスペース全体が緑**（32bit 補助実行体を先にビルドしたうえで `cargo test --workspace` が exit 0）。本 spec が触った 48 ファイルに**新規の実時間待機はゼロ**——`sleep` / `Instant::now` / spin は全て spine 由来の既存分で、本 spec の差分は 1 行も足していない。`for _ in 0..N` は 4 箇所あるが、いずれも**同一入力を繰り返して不変であることを主張する形**であって待機の有界化ではない（要件 9.3 が禁じているのは後者）。
 - **配線層は別ファイル `balloon_visibility_phase.rs`**（4.4 が新設・判断中核と合わせて 1,000 行を越えるため分割）。`#[path]` の子モジュールなので親の非公開項目（`state.per_scope` 等）へ到達でき、巻き戻しの義務を果たせる。テストは `balloon_visibility_phase_tests.rs`。
 - **相順は 9 相**（4.3 で確定）——attach → dpi → drain（適用のみ）→ **balloon_visibility** → **reconcile** → move_drain → resnap → text_scale → text。`reconcile_reported_sizes` は `run_drain_phase` から相順の所有者 `emo2_frame_system` へ純移動済みで、本番呼び出しは `frame.rs` の 1 箇所のみ（`drain_resnap.rs` は import ごと落としてあるので、呼び戻すとコンパイルが通らない）。**相の本体は空**で、中身はタスク 4.4 が書く。
 - **reconcile が装着前フレームでも走るようになった**（移動前は `run_drain_phase` の `attached` 早期 return の内側だった）。presenter に target が 1 つも無い間は全アームが短絡するため無操作で、既存の未装着テストが緑のまま押さえている。**装着前に走ってはいけない処理をこの相の後段へ足さないこと**。
@@ -208,7 +210,7 @@
 - **`Emo2Wiring::new` の引数が 4.1 で 1 本増えた**（`lifecycle_rx`）。構築点は 9 箇所（本番 1・spine 1・テスト 7）で、受信端 3 本は型が互いに異なるため取り違えはコンパイルで落ちる。以後の構築点追加時も型で守られる。
 - **`spine.rs` は本番の sink 構成を忠実に再現する方針**（`spine.rs:683-690`・タスク 9.3 由来）。4.1 で実 `BalloonLifecycleSink` を 4 本目へ登録した。使い捨ての sink を置くとこの方針が壊れるので、以後 sink を足すときも spine へ同じものを登録すること。
 - **4.1 で `frame/wiring.rs` の陳腐化注記が 2 件見つかった**（design は `runtime()` の 1 件しか挙げていない）。`presenter()` の「本番消費者なし」も偽で、実消費者は `input_events/mod.rs:316` の `.map(Emo2Wiring::presenter)` という**関数パス形**——`.presenter()` の grep には出ない。**到達性を grep だけで判定しないこと**。
-- **タスク 8.1 の実機サインオフ向け訂正**: design の実機手順は起動ログを `timeout_secs=30 source=default` で grep せよと書いているが、`tracing` の `f64` フィールドは Debug 形で出るため実際は **`timeout_secs=30.0`** になる。値も供給源も同じ 1 行に載っているので grep 文字列に `.0` を足せばよい（design の記述側の誤りで、実装の欠陥ではない）。
+- **⚠ 実機サインオフの grep 文字列（実測で 2 度訂正）**: design は `timeout_secs=30 source=default` と書いているが、実際の出力は **`timeout_secs=30.0 source="default"`**。`tracing` は `f64` を Debug 形で出し、**文字列フィールドは引用符つきで出す**。同様に `trigger=content` は 0 件で **`trigger="content"`** が正しい（実機 Run A で 6 件）。design の記述側の誤りであり実装の欠陥ではないが、**どちらの文書に従っても偽の赤が出る**ので必ず引用符込みで検索すること。
 - **タイムアウト設定のテストは別ファイル `balloon_visibility_timeout_config_tests.rs`**（3.3 が新設）。`balloon_visibility_tests.rs` を 1,000 行超にしないための分割で、タスク 6.2 の分割計画とは別物。
 - **【4.4 で裁定済】`DisplayEndSignalMissing` の取りこぼしは到達不能**——配線側で観測可能にする必要はない。連鎖で閉じている: 判断中核は `content.shown` が非空のときだけ当該記録を作り、`content.shown` へ scope が載るには `visible_glyphs` が `Some` である必要があり、配線は `now_talk_time` が `Some` のときしか `Some` を作らない（`Option::zip`）。ゆえに `decide_timeout` が早期 return するフレームでは表示エッジ自体が立たず、記録が落ちる組み合わせは存在しない。論拠は `balloon_visibility_phase.rs` の観測収集箇所のコメントにもある。
 - **`balloon_visibility_tests.rs` は 3.2 完了時点で 979 行**。タスク 6.2 が同じファイルへタイムアウト・抑止の網羅表を足すと 1,000 行を超える。design の File Structure Plan が「テーマ超過時はさらに分割」と既に想定しているので、**6.2 は分割を計画に織り込むこと**（スコープ逸脱ではない）。
