@@ -16,11 +16,18 @@
 // =============================================================================
 
 use super::*;
-use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
+use dola::cue::{ActorKey, CueCommand, CuePayload, CuePlayer, CueSink, TalkCue};
 use std::sync::mpsc::{TryRecvError, channel};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use tracing::field::{Field, Visit};
 use tracing_subscriber::prelude::*;
+
+// task 6.3（台本レベルの観測）で使う実経路の部品。
+use areka_ghost::sink::BootCueSink;
+use areka_sakura::CompiledTalk;
+use areka_sakura::duration::CHAR_NOMINAL_MS;
+use areka_sakura::sysvar::SystemVarSnapshot;
 
 /// 任意の cue を組む（`at`／`duration` を明示指定する最小ヘルパ）。
 fn cue(at: f64, duration: f64, command: CueCommand) -> TalkCue {
@@ -384,5 +391,249 @@ fn construction_and_clone_emit_nothing() {
         rx.try_recv(),
         Err(TryRecvError::Empty),
         "複製だけでは信号は出ない（信号の源は emit のみ）"
+    );
+}
+
+// =============================================================================
+// 台本レベルの会話終了観測（task 6.3・Requirements 4.1 / 9.1）
+//
+// 上の 9 本は手組みの `TalkCue` を直接 `emit` する単体檻である。ここから下は
+// **実台本** を parse → compile → `CuePlayer` と通し、本番と同じ経路で sink が受け取る
+// cue から占有終端を組み立てる。単体檻との違いは 2 点:
+//
+//   ⒜ 待機の duration が cue へ載る経路（compile）まで込みで検証する。手組み cue は
+//      「Wait cue が duration を運ぶ」という compile の性質を仮定してしまっている。
+//   ⒝ 期待値を実行結果から読まず、per-char ノミナルウェイトと `\w` 単位から導出する。
+//
+// 待機を**効かせる**ために、台本は末尾を待機で終える形にしてある——待機の後ろに文字が
+// 続くと、その文字 cue の発火時刻に待機時間が畳み込まれてしまい、待機の duration を
+// 落としても占有終端が変わらない（=待機の検証にならない）。この落とし穴は
+// `frame_attach_tests.rs::talk_playback_reaches_emo2_wiring_lifecycle_receiver` の台本
+// `\0あい\w9\1うえ\e` に実在する（末尾の文字 cue の終端 0.65 が待機の終端 0.55 を上回る）。
+//
+// 時刻は台本から導いた発火時刻の注入のみで進める（実時間の待機なし・Requirement 9.2/9.3）。
+// =============================================================================
+
+/// `\w[n]` / `\wN` の 1 ウェイト単位（ミリ秒）。
+///
+/// 定義は parser 側の非公開定数（`crates/areka-parsers/src/sakura/decode.rs:38` の
+/// `WAIT_UNIT_MS`・ukadoc 確定の 50ms）。公開されていないため本檻が同値を持つ——
+/// 期待値を実行結果から読まずに導出するための写しであり、値が食い違えば下の
+/// 「台本の占有終端との一致」assert が落ちる。
+const WAIT_UNIT_MS: u64 = 50;
+
+/// 台本を parse → compile し、cue の発火時刻を昇順に辿って sink へ配送する。
+///
+/// 注入する時刻は台本自身から導いた発火時刻と、末尾の観測点（占有終端）だけ——実時間の
+/// 待機もスピンも使わず、観測すべき時点を追い越さない（Requirement 9.2 / 9.3）。
+fn play_script(script: &str, sink: Box<dyn CueSink>) -> CompiledTalk {
+    let instructions = areka_parsers::sakura::parse(script);
+    let compiled = areka_sakura::compile(&instructions, &SystemVarSnapshot::default());
+
+    let mut player = CuePlayer::from_sheet(&compiled.sheet);
+    player.register_sink(sink);
+
+    let mut tick_points: Vec<f64> = compiled
+        .sheet
+        .cues()
+        .iter()
+        .map(|cue| compiled.sheet.absolute_fire_time(cue))
+        .collect();
+    tick_points.push(compiled.sheet.absolute_end_time());
+    for at in tick_points {
+        player.tick(at);
+    }
+
+    compiled
+}
+
+/// 受信列から `DisplayEndAt` の値だけを順序どおり抜き出す（受信済みスライス版）。
+fn ends_of(signals: &[TalkLifecycleSignal]) -> Vec<f64> {
+    signals
+        .iter()
+        .filter_map(|s| match s {
+            TalkLifecycleSignal::DisplayEndAt(end) => Some(*end),
+            TalkLifecycleSignal::TalkStarted => None,
+        })
+        .collect()
+}
+
+/// 完了条件（task 6.3）: **待機を含む台本**で占有終端が台本の占有区間の終端と一致する
+/// （Requirement 4.1）。あわせて会話開始の通知が占有終端の通知に先行する。
+///
+/// 台本 `\0あい\w9\e` の占有終端の導出（実行結果からは読まない）:
+///
+/// | cue | 発火 | duration | 終端 |
+/// |---|---|---|---|
+/// | `ClearAll`（compile が先頭へ前置） | 0.0 | 0.0 | 0.0 |
+/// | `Text("あい")` | 0.0 | 2 文字 × 50ms = 0.1 | 0.1 |
+/// | `Wait`（`\w9`） | 0.1 | 9 × 50ms = 0.45 | **0.55** |
+///
+/// 待機が末尾ゆえ占有終端 0.55 は待機だけが決める——待機の duration が落ちれば 0.1 になる。
+#[test]
+fn script_ending_with_a_wait_reports_occupancy_end_that_only_the_wait_determines() {
+    let (tx, rx) = channel::<TalkLifecycleSignal>();
+
+    // 期待値の導出: 文字は per-char ノミナルウェイト、待機は `\w` 単位から。compile と同じ
+    // 整数 ms 算術＋単一変換で組むため、丸めの差は入らない。
+    let text_seconds = Duration::from_millis(2 * CHAR_NOMINAL_MS).as_secs_f64();
+    let wait_seconds = Duration::from_millis(9 * WAIT_UNIT_MS).as_secs_f64();
+    let expected_end = text_seconds + wait_seconds;
+
+    let compiled = play_script(r"\0あい\w9\e", Box::new(BalloonLifecycleSink::new(tx)));
+
+    // 前提①: 待機が効いている台本であること——待機以外の cue の終端は占有終端に届かない。
+    // （待機の後ろに文字が続く台本ではここが等しくなり、待機の検証にならない。）
+    let non_wait_end = compiled
+        .sheet
+        .cues()
+        .iter()
+        .filter(|cue| !matches!(&cue.payload, CuePayload::Command(CueCommand::Wait)))
+        .map(|cue| cue.start_time + cue.duration)
+        .fold(0.0_f64, f64::max);
+    assert!(
+        non_wait_end < expected_end,
+        "前提: 占有終端 {expected_end} は待機だけが決める（待機以外の終端は {non_wait_end}）"
+    );
+
+    // 前提②: 導出した期待値が台本の占有区間の終端（dola の定義）と一致すること。
+    assert_eq!(
+        compiled.sheet.absolute_end_time(),
+        expected_end,
+        "前提: 導出値は台本の占有区間の終端と一致する（文字 {text_seconds} ＋ 待機 {wait_seconds}）"
+    );
+
+    let signals = drain(&rx);
+
+    // 会話開始の通知が占有終端の通知に先行する（Ordering 契約・実台本経路）。
+    let started_positions: Vec<usize> = signals
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| **s == TalkLifecycleSignal::TalkStarted)
+        .map(|(i, _)| i)
+        .collect();
+    assert_eq!(
+        started_positions,
+        vec![0],
+        "会話開始の通知は台本の先頭で 1 回だけ出る: {signals:?}"
+    );
+    let end_positions: Vec<usize> = signals
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| matches!(s, TalkLifecycleSignal::DisplayEndAt(_)))
+        .map(|(i, _)| i)
+        .collect();
+    assert!(
+        !end_positions.is_empty() && end_positions.iter().all(|i| *i > 0),
+        "占有終端の通知はすべて会話開始の通知より後に届く: {signals:?}"
+    );
+
+    // 完了条件: 最後に届く占有終端が台本の占有区間の終端と一致する（待機込み）。
+    let ends = ends_of(&signals);
+    assert_eq!(
+        ends.last().copied(),
+        Some(expected_end),
+        "待機を含む台本の占有終端が届く（待機の duration を落とすと {non_wait_end} になる）: {ends:?}"
+    );
+}
+
+/// 会話境界のリセットを**本番の複製経路**で確かめる（Requirement 4.5 の破棄契機の前提）。
+///
+/// dispatcher は登録 sink を talk 起動ごとに `clone_box` で複製する
+/// （`crates/areka-ghost/src/dispatcher.rs:293`）。本檻はその `BootCueSink::clone_box`
+/// をそのまま踏み、2 本の実台本を続けて再生する。
+///
+/// 2 本目の占有終端（0.05）は 1 本目（0.7）より**小さい**——会話境界が持ち越されると
+/// 2 本目は既知最大を超えられず、占有終端の通知が 1 件も出ない状態になる。
+///
+/// 3 本目の脚は、1 本目の cue を実際に浴びたインスタンスからの複製を試す。今日の dispatcher は
+/// 登録 sink を emit しないため複製元は常に未使用だが、本 sink はその上流の暗黙不変条件に
+/// 依存せず境界を戻す設計であり（`talk_lifecycle.rs` の `Clone` 実装の注記）、実台本の
+/// 占有終端でもその保証が成り立つことをここで押さえる。
+#[test]
+fn per_talk_clone_box_resets_the_conversation_boundary_between_two_scripts() {
+    let (tx, rx) = channel::<TalkLifecycleSignal>();
+    // `GhostBootOptions.sinks` へ登録される形（複製元）。
+    let registered: Box<dyn BootCueSink> = Box::new(BalloonLifecycleSink::new(tx.clone()));
+
+    // 1 本目 `\0あいうえお\w9\e`: 文字 5 × 50ms = 0.25 ＋ 待機 9 × 50ms = 0.45 → 終端 0.7。
+    // （`\wN` の N は 1 桁のみ——`\w20` は `\w2` ＋ 文字 "0" になる。2 桁以上は `\w[n]` 形。）
+    let first_end = Duration::from_millis(5 * CHAR_NOMINAL_MS).as_secs_f64()
+        + Duration::from_millis(9 * WAIT_UNIT_MS).as_secs_f64();
+    // 2 本目 `\0あ\e`: 文字 1 × 50ms → 終端 0.05。
+    let second_end = Duration::from_millis(CHAR_NOMINAL_MS).as_secs_f64();
+    assert!(
+        second_end < first_end,
+        "前提: 2 本目の占有終端 {second_end} は 1 本目 {first_end} より小さい（境界が持ち越されると通知が消える形）"
+    );
+
+    let first = play_script(r"\0あいうえお\w9\e", registered.clone_box());
+    let first_signals = drain(&rx);
+    assert_eq!(
+        first.sheet.absolute_end_time(),
+        first_end,
+        "前提: 1 本目の導出値は台本の占有区間の終端と一致する"
+    );
+    assert_eq!(
+        first_signals.first(),
+        Some(&TalkLifecycleSignal::TalkStarted),
+        "1 本目: 会話開始の通知が先行する: {first_signals:?}"
+    );
+    assert_eq!(
+        ends_of(&first_signals).last().copied(),
+        Some(first_end),
+        "1 本目: 待機を含む占有終端が届く: {first_signals:?}"
+    );
+
+    let second = play_script(r"\0あ\e", registered.clone_box());
+    let second_signals = drain(&rx);
+    assert_eq!(
+        second.sheet.absolute_end_time(),
+        second_end,
+        "前提: 2 本目の導出値は台本の占有区間の終端と一致する"
+    );
+    assert_eq!(
+        second_signals.first(),
+        Some(&TalkLifecycleSignal::TalkStarted),
+        "2 本目: 複製ごとに会話開始の通知が改めて出る: {second_signals:?}"
+    );
+    assert_eq!(
+        ends_of(&second_signals).last().copied(),
+        Some(second_end),
+        "2 本目: 前の会話の占有終端（{first_end}）を持ち越さず、自分の終端が届く: {second_signals:?}"
+    );
+
+    // 3 本目: 1 本目の cue を実際に浴びたインスタンスから複製する。複製元の既知最大は 0.7 まで
+    // 上がっているため、境界を引き継ぐ複製では 2 本目と同じ台本（終端 0.05）で通知が 1 件も出ない。
+    let mut used = BalloonLifecycleSink::new(tx);
+    for cue in first.sheet.cues() {
+        if let CuePayload::Command(command) = &cue.payload {
+            used.emit(TalkCue {
+                at: cue.start_time,
+                actor: cue.actor.clone(),
+                command: command.clone(),
+                duration: cue.duration,
+            });
+        }
+    }
+    let used_ends = ends(&rx);
+    assert_eq!(
+        used_ends.last().copied(),
+        Some(first_end),
+        "前提: 複製元は 1 本目の占有終端まで既知最大を上げてある: {used_ends:?}"
+    );
+
+    let used_registered: Box<dyn BootCueSink> = Box::new(used);
+    play_script(r"\0あ\e", used_registered.clone_box());
+    let third_signals = drain(&rx);
+    assert_eq!(
+        third_signals.first(),
+        Some(&TalkLifecycleSignal::TalkStarted),
+        "3 本目: 使用済みインスタンスからの複製でも会話開始の通知が出る: {third_signals:?}"
+    );
+    assert_eq!(
+        ends_of(&third_signals).last().copied(),
+        Some(second_end),
+        "3 本目: 使用済みインスタンスからの複製でも前の会話の占有終端（{first_end}）を持ち越さない: {third_signals:?}"
     );
 }

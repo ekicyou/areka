@@ -119,7 +119,7 @@
   - _Requirements: 9.1, 9.2, 9.3_
   - _Depends: 3.2_
 
-- [ ] 6.3 (P) 会話終了観測の集約と会話境界を検証する
+- [x] 6.3 (P) 会話終了観測の集約と会話境界を検証する
   - 会話開始の通知が占有終端の通知に先行すること・待機の所要時間が占有終端へ算入されること・複製後に会話境界がリセットされること
   - 完了状態: 待機を含む台本で占有終端が台本の占有区間の終端と一致する
   - _Requirements: 4.1, 9.1_
@@ -196,6 +196,8 @@
 - **reconcile が装着前フレームでも走るようになった**（移動前は `run_drain_phase` の `attached` 早期 return の内側だった）。presenter に target が 1 つも無い間は全アームが短絡するため無操作で、既存の未装着テストが緑のまま押さえている。**装着前に走ってはいけない処理をこの相の後段へ足さないこと**。
 - **相順を固定するテストはリポジトリに存在しない**（4.3 で全 `emo2_frame_system` 呼び出し元を実測）。「指令適用後の実状態で判断されること」「表示遷移フレームで窓寸が同一フレームに届くこと」は**タスク 6.6 の所有**であり、空の相では呼び出し順しか主張できないため 4.3 では追加しなかった。
 - **未使用許容の孤児 1 件（担当未定・本 spec の担当外）**: `placement/follow/window_move.rs:134` の `resize_window_to` に付いた `#[allow(dead_code)]` は実測で非 load-bearing。注記は「呼び出し側は後続 task の領分」と述べているが、実際には `frame/dpi.rs:154` / `:350` / `frame/drain_resnap.rs:133` の 3 箇所から本番到達している。**HEAD 時点で既に陳腐化しており本 spec の変更が原因ではない**ため 4.3 では触っていない。同ファイル `:637` は `cargo check -p areka` が examples をビルドしないため判定不能で、`cargo check -p areka --examples` が要る。`placement` を触る spec が拾うこと。
+- **⚠ `Copy-Item` での復元は cargo の陳腐化を解かない**（6.3 で実測）。PowerShell の `Copy-Item` は**元ファイルの最終更新時刻を保持する**ため、変異検証のあとバックアップから戻しても fingerprint が無効化されず、変異版の成果物が残ったまま次の実行が走る。復元時は `LastWriteTime` を明示的に打ち直すか `cargo clean -p <crate>` を挟むこと。
+- **`\wN` の N は 1 桁のみ**——`\w20` は `\w2` ＋ 文字 `0` として解釈される（2 桁以上は `\w[n]` 形）。台本を書くテストで踏みやすい。
 - **⚠ cargo の結果を根拠にする前に再ビルドが走ったことを確認すること**。4.2 で**成果物の陳腐化による偽の赤**が発生した——HEAD 版のテストファイルと作業ツリー版の実装が混成でリンクされ、`spine_dpi_change_refreshes_balloon_text_scale_on_real_attach` が 6/6 で落ちた。cargo は mtime ベースの freshness 判定で当該ユニットを fresh と誤認しており、`Finished ... in 0.24s`（`Compiling areka` 行なし）だった。**並行サブエージェントが共有 `target/` へ編集しながらビルドする構成が誘発条件**。判定前に `cargo clean -p areka` か crate 内 `.rs` の touch を挟み、出力に `Compiling areka` があることを確認する。偽の緑も同じ機序で起こりうる。
 - **テスト間のプロセス汚染が 1 件実在する（本 spec の担当外）**: `emo2_boot/mod.rs:554` のテストが `WinApp::new()` 経由で `SetProcessDpiAwarenessContext`（`wintf/src/runtime/mod.rs:117`・プロセス全体・一度きり）を立てるため、以後 `GetDpiForSystem()`（`wintf/src/ecs/window/components.rs:195`）が 96 でなく実機 DPI を返すようになる。`bump_window_dpi`（`spine_test_support.rs:74-83`）が現在値と必ず異なる方を選ぶ設計なので**合否は環境非依存**で、影響は診断メッセージの数値のみ。担当は **test-cage-determinism（W6.9）**。
 - **不可視のバルーンは dpi 相で拡大率を拾わない**（`refresh_scale` の可視ゲート・`areka-emo-present/src/presenter/refresh.rs:74-80`・4.2 以前から存在）。要件 6.6 は `show_target` が `apply_show` の漏斗を再通過して表示時に k を導出し直すことで満たされる。**不可視中の DPI 変化を検査するテストは、可視化してから k を測ること**。
