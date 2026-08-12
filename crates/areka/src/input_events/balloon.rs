@@ -13,7 +13,7 @@
 //! 上流契約（collision-geometry の resolver・`Emo2Wiring::runtime()` の読み口）は消費のみ行い、
 //! 逆方向依存（上流が balloon.rs を知る）は禁止（design「依存方向」）。
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::mpsc::{Receiver, Sender, channel};
 
@@ -76,6 +76,11 @@ pub(crate) struct BalloonWiring {
     selection_tx: Sender<ChoiceSelection>,
     /// scope → 最後に注入した hover ordinal（getter 不在の自前追跡・B-2）。
     hover: HashMap<usize, Option<usize>>,
+    /// ポインタがバルーン窓の上に居る scope の集合（areka-P0-balloon-visibility 5.2）。
+    ///
+    /// `hover` とは**別概念の独立した軸**——`hover` は選択肢行の追跡（どの行を光らせたか）であり、
+    /// 本集合は「バルーンの上に居るか」だけを表す（選択肢の有無・行ヒットの有無に依存しない）。
+    balloon_hover: HashSet<usize>,
 }
 
 #[allow(dead_code)] // 全 API は後続 task（4.x/6.x）で本番結線される（M1 は単体檻のみ到達）。
@@ -85,6 +90,7 @@ impl BalloonWiring {
         Self {
             selection_tx,
             hover: HashMap::new(),
+            balloon_hover: HashSet::new(),
         }
     }
 
@@ -117,6 +123,29 @@ impl BalloonWiring {
     /// 注入は「本仕様が最後に注入した値」の記録であり表示状態の正本ではない（正本は上流）。
     pub(crate) fn set_hover(&mut self, scope: usize, ordinal: Option<usize>) {
         self.hover.insert(scope, ordinal);
+    }
+
+    /// scope のバルーン窓上にポインタが居るかを照会する（areka-P0-balloon-visibility 5.2）。
+    ///
+    /// タイムアウト抑止の判断側（バルーン可視性コントローラ）が読む口。未観測の scope は偽。
+    pub(crate) fn is_balloon_hovered(&self, scope: usize) -> bool {
+        self.balloon_hover.contains(&scope)
+    }
+
+    /// scope のバルーン窓上へポインタが入った（居る）ことを記録する（5.2）。
+    ///
+    /// 選択肢行の追跡（[`set_hover`](Self::set_hover)）とは独立——行に当たっていなくても記録する。
+    pub(crate) fn set_balloon_hover(&mut self, scope: usize) {
+        self.balloon_hover.insert(scope);
+    }
+
+    /// scope のバルーン滞在の記録を落とす（離脱・非表示遷移時の掃除・5.2/5.5）。
+    ///
+    /// 窓外離脱（`PointerLeave`）のほか、可視性コントローラが非表示遷移で呼ぶ掃除口でもある——
+    /// 不可視の間は `PointerLeave` が届かず、放置すると滞在が真のまま固着して恒久抑止になる
+    /// （Requirement 5.5 が禁じる側）。未記録 scope への呼出は no-op（冪等）。
+    pub(crate) fn clear_balloon_hover(&mut self, scope: usize) {
+        self.balloon_hover.remove(&scope);
     }
 }
 
@@ -301,8 +330,10 @@ pub(crate) fn click_selection(
 /// **借用規律（固定順序・design §204）**:
 /// 1. `Emo2Wiring` 共有借用→`runtime()` アクセサで `Rc` clone→world 側借用解放。
 ///    `Emo2Wiring` 不在（boot 前／失敗）は**正常縮退**＝`debug!`＋no-op（donor presenter=None 同型・R4.1）。
-/// 2. `BalloonWiring` から `last_injected` を copy（共有借用即解放）。`BalloonWiring` 不在は結線漏れ＝
-///    **構成異常** `error!(event = "balloon_wiring_missing")`＋no-op（配線存在檻が開発時に検出）。
+/// 2. `BalloonWiring` へバルーン滞在（`balloon_hover`）を記録し `last_injected` を copy（可変借用即解放）。
+///    `BalloonWiring` 不在は結線漏れ＝**構成異常** `error!(event = "balloon_wiring_missing")`＋no-op
+///    （配線存在檻が開発時に検出）。滞在の記録は選択肢の有無・行ヒットの有無に依存しない独立の軸
+///    （areka-P0-balloon-visibility 5.2）。
 /// 3. runtime `try_borrow`（不変）でスナップショット（`choice_active`＋現行 `choice_hit_rows` を純関数
 ///    評価・move はここで完結）。`try_borrow` 失敗は構成異常 `error!(event = "balloon_runtime_borrow_failed")`。
 /// 4. 借用解放後に runtime `try_borrow_mut` で `inject_choice_hover`（`Inject` アームのみ）。
@@ -357,11 +388,19 @@ pub(crate) fn on_balloon_pointer_moved(
         return false;
     };
 
-    // ── 借用規律 ② BalloonWiring から last_injected を copy（共有借用即解放）─────────────────────
+    // ── 借用規律 ② BalloonWiring へ滞在を記録し last_injected を copy（可変借用即解放）───────────
+    // 滞在の記録（areka-P0-balloon-visibility 5.2）は選択肢機構と**独立の軸**——選択肢の表示有無・
+    // 行ヒットの有無に依らず、バルーン窓上の移動そのもので当該 scope を真にする（ゆえに選択肢
+    // スナップショット ③ より前で行い、③ の縮退に巻き込まれない）。解除は窓外離脱
+    // （`clear_balloon_hover_on_leave`）と非表示遷移時の掃除（`BalloonWiring::clear_balloon_hover`）。
+    // 読み口 `is_balloon_hovered` の消費は可視性コントローラ（別 task）。
     // BalloonWiring 不在は結線漏れ＝構成異常 error!（配線存在檻が開発時に検出）＋no-op。
     let Some(last_injected) = world
-        .get_non_send_resource::<BalloonWiring>()
-        .map(|bw| bw.hover(scope))
+        .get_non_send_resource_mut::<BalloonWiring>()
+        .map(|mut bw| {
+            bw.set_balloon_hover(scope);
+            bw.hover(scope)
+        })
     else {
         tracing::error!(
             event = "balloon_wiring_missing",
@@ -621,6 +660,10 @@ pub(crate) fn on_balloon_pointer_pressed(
 /// `hover_action(active, None, last_injected)` を再利用して hover 状態を解除する（hit は `None`＝ポインタが
 /// 窓外へ出た高速離脱ゆえエッジ非採取・R1.3）。
 ///
+/// 併せて当該 scope の**バルーン滞在**（`BalloonWiring::clear_balloon_hover`・
+/// areka-P0-balloon-visibility 5.2）を解除する。滞在は選択肢行の追跡とは独立の軸であり、解除は
+/// `Emo2Wiring` の可否より前・選択肢機構の縮退に依らず行う（記録側との非対称は本文中コメント参照・5.5）。
+///
 /// **借用規律・縮退はハンドラ（task 4.1）と同一**:
 /// - `Emo2Wiring` 不在（boot 前／失敗）は**正常縮退**＝`debug!(event = "choice_leave_no_emo2")`＋no-op
 ///   （donor presenter=None 同型・R4.1）。runtime `Rc` は 1 度 clone し全 scope で共有する（同一資源）。
@@ -665,6 +708,23 @@ pub(crate) fn clear_balloon_hover_on_leave(world: &mut World) {
     if scopes.is_empty() {
         // バルーン所有 leave が皆無なら完全 no-op（非バルーン leave は無視・key assertion）。
         return;
+    }
+
+    // ── バルーン滞在の解除（areka-P0-balloon-visibility 5.2）——選択肢機構より前 ────────────────
+    // 記録側（`on_balloon_pointer_moved` の借用規律 ②）と縮退方向を意図的に非対称にする: 記録は
+    // 上流 `Emo2Wiring` が揃うときだけ行い（抑止を増やす側は保守的）、解除はその可否に依らず行う
+    // （抑止を解く側は積極的）。滞在が真のまま残ると恒久抑止へ固着し Requirement 5.5 に反するため。
+    // BalloonWiring 不在は結線漏れ＝構成異常 error!＋no-op（silent failure 禁止）。
+    if let Some(mut bw) = world.get_non_send_resource_mut::<BalloonWiring>() {
+        for &scope in &scopes {
+            bw.clear_balloon_hover(scope);
+        }
+    } else {
+        tracing::error!(
+            event = "balloon_wiring_missing",
+            scopes = ?scopes,
+            "BalloonWiring 不在（結線漏れ）: バルーン滞在の解除を no-op 縮退"
+        );
     }
 
     // ── 借用規律 ① Emo2Wiring 共有借用→runtime() で Rc clone→world 側借用解放 ─────────────────
@@ -845,3 +905,6 @@ mod wiring_tests;
 #[cfg(test)]
 #[path = "balloon_pass_through_tests.rs"]
 mod pass_through_tests;
+#[cfg(test)]
+#[path = "balloon_hover_flag_tests.rs"]
+mod hover_flag_tests;
