@@ -8,7 +8,7 @@
   - 観測: 既知の 2 窓を生成して重なり順を実測し、期待どおりの前後関係が返ることを確かめる単体テストが緑になる
   - _Requirements: 5.9, 7.2_
 
-- [ ] 1.2 (P) ペア関係の宣言・再断行要求・確立記録・実行時ストラテジの状態を定義する
+- [x] 1.2 (P) ペア関係の宣言・再断行要求・確立記録・実行時ストラテジの状態を定義する
   - 「この窓は相手の窓のすぐ手前に居るべき」という永続宣言の状態を定義する
   - 重なりを断行し直す一回限りの要求（適用済み・検証待ちの段階を持つ）を定義する
   - owner を張った事実の記録と、案 A／案 B を実行時に切り替える設定を定義する
@@ -191,4 +191,6 @@
 - (1.1) `SetWindowPos` の `hWndInsertAfter` は、指定窓の**背後**へ対象を置く（手前ではない）。テスト下拵えでも実装でも取り違えやすい。
 - (1.1) `windows` 0.62 の `GetWindow` は「隣が無い」場合も `Err` を返す。`SetLastError(ERROR_SUCCESS)` で先にクリアし `err.code() == S_OK` を「不在＝`Ok(None)`」へ写像して失敗と切り分けている。
 - (1.1) **トップレベル窓の重なり隣接は同一テストバイナリ内で決定論にならない**（他テストの窓が割り込む）。決定論的テストは私有の親窓＋子窓 2 枚（兄弟列を閉じる）で行う。実窓の隣接そのものは実機サインオフ（要件 7.2）の担当。
+- (1.2) `ExpectedOrder` は design.md の State ブロックが型として参照するだけで定義していないため実装側で補完した（`above`／`below` の 2 HWND・座標フィールド無し）。`ZOrderPairStrategy` にも `Default`（案 A・raise assist 無効）を足している——**`init_resource` で暗黙に案 A が入りうるため、areka main 側では必ず明示 `insert_resource` で選択結果を入れること**（タスク 3.2／5.1 の前提）。
+- (1.2) HWND を内包する `ExpectedOrder`／`OwnerLink` には手動 `unsafe impl Send + Sync` が**必須**（windows 0.62 は HWND に Send/Sync を実装せず、bevy の `Component` は Send+Sync を要求する）。一方 `ReassertZOrder` 自身には不要（`Option<ExpectedOrder>` 経由で自動導出）。冗長な `unsafe` を足さないこと。テスト側の `assert_send_sync::<T>()` がこの落ちを型検査で拾う。
 - (1.1) **検証時は `target/` の成果物キャッシュを疑うこと**。古い成果物が fresh と誤判定され、健全なソースに対して決定論的な赤が 8 回連続再現した事例あり。疑わしいときは対象ファイルへ touch するか `cargo clean -p wintf` から測り直す。

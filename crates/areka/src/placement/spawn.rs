@@ -439,3 +439,6 @@ mod clickthrough_tests;
 #[cfg(test)]
 #[path = "spawn_follow_pipeline_tests.rs"]
 mod follow_pipeline_tests;
+#[cfg(test)]
+#[path = "spawn_zorder_pair_export_tests.rs"]
+mod zorder_pair_export_tests;
