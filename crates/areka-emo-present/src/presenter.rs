@@ -112,3 +112,6 @@ mod fractional_scale_tests;
 #[cfg(test)]
 #[path = "presenter_visibility_tests.rs"]
 mod visibility_tests;
+#[cfg(test)]
+#[path = "presenter_hide_contract_tests.rs"]
+mod hide_contract_tests;
