@@ -42,7 +42,11 @@
 //!   確定 offset の永続 write-through（2.1・design C3・task 2.3。`on_balloon_drag` は連続
 //!   イベントで保存トリガではなく、DragEnd 確定点でのみ 1 ドラッグ 1 書込）・`BalloonFollow`
 //!   なし。M1 はマウス送出なし＝ポインタハンドラを付けない・DD-IE-12。バルーン入力は
-//!   M-dialogue／choice-render の領分）
+//!   M-dialogue／choice-render の領分。さらに同一スコープのキャラ窓を指す
+//!   `KeepDirectlyAbove { peer }`＝「このバルーン窓はこのキャラ窓のすぐ手前に居るべき」の
+//!   永続宣言を**バルーン窓側にだけ**後付けする（areka-P0-ghost-window-zorder 1.1・
+//!   キャラ窓 entity を要するため後付け＝生成順は不変。同時に scope とペア両窓を結ぶ
+//!   `declared` 記録を出す＝scope を知る層は areka だけ・6.1））
 //!
 //! # clickthrough 登録（task 5.2）
 //!
@@ -66,9 +70,11 @@ use wintf::ecs::clickthrough::ClickThroughRegistryHandle;
 use wintf::ecs::drag::{DragConfig, OnDrag, OnDragEnd};
 use wintf::ecs::layout::HitTest;
 use wintf::ecs::{
-    DpiSuggestedRectPolicy, Point, SizeI, Window, WindowHandle, WindowPos, WindowStyle,
+    DpiSuggestedRectPolicy, KeepDirectlyAbove, Point, SizeI, Window, WindowHandle, WindowPos,
+    WindowStyle,
 };
 
+use super::diag::log_zorder_pair_declared;
 use super::follow::{
     on_balloon_drag, on_balloon_drag_end, on_char_drag, on_char_drag_end, Anchored, BalloonFollow,
 };
@@ -312,6 +318,29 @@ pub fn spawn_ghost_windows(
         world
             .entity_mut(char_window)
             .insert(OnDragEnd(on_char_drag_end));
+
+        // ゴースト窓ペアの重なり宣言（areka-P0-ghost-window-zorder 要件 1.1／6.1・
+        // design「areka / placement > spawn ペア宣言」）:
+        // 「このバルーン窓はこのキャラ窓のすぐ手前に居るべき」を永続宣言として
+        // **バルーン窓側にだけ**付ける（対になるキャラ窓は `peer` が指す）。
+        //
+        // 後付けなのは生成順の帰結である——`BalloonFollow.balloon` がバルーン entity を
+        // 要するためバルーンを先に spawn しており、その時点でキャラ窓 entity はまだ無い。
+        // 順序を入れ替えて「宣言のために」生成順を変えることはしない（上の OnDragEnd
+        // 後付けと同じ形）。
+        //
+        // 宣言はスコープ内ペアにのみ張り、スコープ間には一切張らない——これが
+        // 「スコープ間の上下関係を固定規則で決めない」（要件 3.1）と「是正時に当該
+        // スコープの 2 窓しか動かさない」（要件 3.4）の構造的な根拠である。
+        // 宣言を消費する確立系・維持系（wintf 側）の結線は main.rs が行う。
+        world
+            .entity_mut(balloon_window)
+            .insert(KeepDirectlyAbove { peer: char_window });
+
+        // 宣言の記録（要件 6.1）。wintf 側の各レコードは scope を持てない（wintf は
+        // scope を知る層ではない）ため、**scope とペア両窓を結び付ける記録はここでしか
+        // 出せない**。実機ログはこの行の entity を結合キーに wintf 側レコードへ辿る。
+        log_zorder_pair_declared(p.scope, char_window, balloon_window);
 
         windows.insert(
             p.scope,

@@ -70,6 +70,23 @@ pub const MONITOR_RECORD_TAG: &str = "[diag.monitor]";
 /// 窓移動レコード行タグ（grep 判定語・要件 1.2 の「経路」つき移動記録）。
 pub const WINDOW_MOVE_RECORD_TAG: &str = "[diag.window_move]";
 
+/// ゴースト窓ペア宣言レコード行タグ
+/// （areka-P0-ghost-window-zorder 要件 6.1・design「診断ログ語彙（要件 6）」表の `declared` 行）。
+///
+/// # なぜ他 6 種と違ってこのレコードだけ areka 側に住むのか
+///
+/// ペア宣言の記録に載る必須フィールドは **scope とペア両窓**であり、scope を知る層は
+/// areka だけである（wintf → areka の import は禁止ゆえ wintf 側に scope を渡す口も無い）。
+/// 残り 6 種のレコード（`owner-established`／`fix`／`skip`／`verify-failed`／
+/// `owner-establish-failed`／`sink-observed`）は wintf が自力で全フィールドを埋められる
+/// ため wintf 側に住み、scope を持たない。実機サインオフはこの `declared` レコードと
+/// wintf 側レコードを **entity の `Debug` 表現を結合キーとして 2 段 grep** で突き合わせる
+/// （[`window_move_record_line`] で確立済みの先例と同じ手口）。
+///
+/// タグ文字列が wintf 側 6 種と同じ `[zorder-pair] ` 接頭辞を持つのは意図的で、
+/// 接頭辞 1 語で当該機能の記録を全部拾えることが 2 段 grep の第 1 段になる。
+pub const ZORDER_PAIR_DECLARED_TAG: &str = "[zorder-pair] declared";
+
 /// 破棄済み（despawn 済み）entity を消費側が**正常系として**打ち切ったことを表す判定語
 /// （要件 6.2／6.3・design D8 消費側）。
 ///
@@ -335,6 +352,32 @@ pub fn log_window_move(record: &WindowMoveRecord) {
     debug!(target: DIAG_TARGET, "{}", window_move_record_line(record));
 }
 
+/// ゴースト窓ペア宣言レコード行を組む
+/// （純関数・areka-P0-ghost-window-zorder 要件 6.1 の全フィールド）。
+///
+/// entity は wintf 側レコード（`entity=…`／`peer=…`）と**同じ `Debug` 表現**で出す
+/// ——これが 2 段 grep の結合条件そのものである（[`window_move_record_line`] と同じ理由）。
+/// キャラ窓とバルーン窓は別フィールド名で載せ、役割が字面から読めるようにする。
+pub fn zorder_pair_declared_line(
+    scope: usize,
+    char_entity: Entity,
+    balloon_entity: Entity,
+) -> String {
+    format!(
+        "{ZORDER_PAIR_DECLARED_TAG} scope={scope} char_entity={char_entity:?} \
+         balloon_entity={balloon_entity:?}"
+    )
+}
+
+/// ゴースト窓ペア宣言レコードを 1 行出力する（要件 6.1・窓生成時の 1 スコープ 1 本）。
+pub fn log_zorder_pair_declared(scope: usize, char_entity: Entity, balloon_entity: Entity) {
+    debug!(
+        target: DIAG_TARGET,
+        "{}",
+        zorder_pair_declared_line(scope, char_entity, balloon_entity)
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::{Arc, Mutex};
@@ -377,6 +420,7 @@ mod tests {
         assert_eq!(MONITOR_SNAPSHOT_TAG, "[diag.monitor_snapshot]");
         assert_eq!(MONITOR_RECORD_TAG, "[diag.monitor]");
         assert_eq!(WINDOW_MOVE_RECORD_TAG, "[diag.window_move]");
+        assert_eq!(ZORDER_PAIR_DECLARED_TAG, "[zorder-pair] declared");
     }
 
     /// 経路語彙 9 種の表示語がリテラル固定されている（Req 2.4 の結論語彙・D13）。
@@ -573,6 +617,64 @@ mod tests {
         );
     }
 
+    // ------------------------------------------------------------------
+    // ペア宣言レコード（areka-P0-ghost-window-zorder 要件 6.1）
+    // ------------------------------------------------------------------
+
+    /// ペア宣言レコードが scope・キャラ窓・バルーン窓の**全フィールド**を持つ
+    /// （design「診断ログ語彙（要件 6）」表の `declared` 行）。
+    #[test]
+    fn zorder_pair_declared_line_carries_every_field() {
+        let char_entity = ent(3);
+        let balloon_entity = ent(4);
+        let line = zorder_pair_declared_line(1, char_entity, balloon_entity);
+        assert_eq!(
+            line,
+            format!(
+                "[zorder-pair] declared scope=1 char_entity={char_entity:?} \
+                 balloon_entity={balloon_entity:?}"
+            )
+        );
+        for key in ["scope=", "char_entity=", "balloon_entity="] {
+            assert!(line.contains(key), "フィールド `{key}` が欠落: {line}");
+        }
+    }
+
+    /// 2 つの entity フィールドは wintf 側レコード（`entity=…`／`peer=…`）と**同一の
+    /// `Debug` 表現**で出る——scope を持たない wintf 記録との 2 段 grep はこの一致だけが
+    /// 結合条件である（要件 6.1）。役割の取り違え（char と balloon の入れ替え）も同時に固定する。
+    #[test]
+    fn zorder_pair_declared_line_entities_use_debug_rendering_and_keep_their_roles() {
+        let char_entity = ent(11);
+        let balloon_entity = ent(22);
+        let line = zorder_pair_declared_line(0, char_entity, balloon_entity);
+        assert!(
+            line.contains(&format!("char_entity={char_entity:?}"))
+                && line.contains(&format!("balloon_entity={balloon_entity:?}")),
+            "wintf の `entity = ?e` と同じ Debug 表現で結合できない: {line}"
+        );
+        assert_ne!(
+            line,
+            zorder_pair_declared_line(0, balloon_entity, char_entity),
+            "キャラ窓とバルーン窓を入れ替えても同じ行になる（役割が読めない）"
+        );
+    }
+
+    /// `log_zorder_pair_declared` は純関数の組立結果を `debug!` 水準で 1 行出す
+    /// （組立の二重実装を許さない＝檻が本番の書式を固定する）。
+    #[test]
+    fn log_zorder_pair_declared_emits_the_assembled_record_at_debug() {
+        let char_entity = ent(5);
+        let balloon_entity = ent(6);
+        let (_, events) = capture_logs(|| log_zorder_pair_declared(2, char_entity, balloon_entity));
+        assert_eq!(events.len(), 1, "1 ペア 1 レコード: {events:?}");
+        assert_eq!(
+            events[0].message(),
+            zorder_pair_declared_line(2, char_entity, balloon_entity)
+        );
+        assert_eq!(events[0].level, Level::DEBUG);
+    }
+
     /// 全 9 経路が `route=<語>` として組み上がる（配管先が増えても語彙が固定される）。
     #[test]
     fn window_move_record_line_renders_every_route() {
@@ -693,6 +795,7 @@ mod tests {
                 size: Some((1, 1)),
                 dpi: Some(96),
             });
+            log_zorder_pair_declared(0, ent(1), ent(2));
         });
 
         String::from_utf8(buf.lock().expect("捕捉バッファの毒化なし").clone()).expect("UTF-8")
@@ -726,7 +829,8 @@ mod tests {
         assert!(
             out.contains(MONITOR_SNAPSHOT_TAG)
                 && out.contains(MONITOR_RECORD_TAG)
-                && out.contains(WINDOW_MOVE_RECORD_TAG),
+                && out.contains(WINDOW_MOVE_RECORD_TAG)
+                && out.contains(ZORDER_PAIR_DECLARED_TAG),
             "手順書の RUST_LOG で診断レコードが点灯しない: {out}"
         );
         assert!(
