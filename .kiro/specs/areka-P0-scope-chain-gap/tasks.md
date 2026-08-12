@@ -58,7 +58,7 @@
   - 観察可能な完了条件: 成果物が生成され、全体テストが前提不足で失敗しない状態になる
   - _Requirements: 3.5_
 
-- [ ] 5.2 全体テストを実行し、回帰網と不変量を確認する
+- [x] 5.2 全体テストを実行し、回帰網と不変量を確認する
   - ワークスペース全体のテストを実行する
   - 無改変で維持すると決めた突合テスト（バルーンのオフセットを参照実装と突き合わせるもの）が、手を入れないまま合格し続けることを確認する
   - 出力を記号参照して自動追随する下流のテスト群が緑であることを確認する
@@ -87,4 +87,5 @@
 - 旧 `window-placement` R2.9 の上書き注記は **`resolver.rs` のモジュール doc 1 箇所のみ**（design.md:81/:203 の裁定）。テスト側の導出コメントに複製すると差し戻し対象（task 3.1 で実際に発生）。`grep -rn "R2\.9" crates/areka/src/placement/` のヒットが 1 件であることで確認できる。
 - task 3.1 完了時点で bin ターゲット 672 passed / 0 failed（全緑）。task 3.2 で 673。
 - task 5.1: `cargo build --target i686-pc-windows-msvc -p shiori-host32-helper -p shiori-host32-testdll`（exit 0）。成果物 `shiori-host32-helper.exe`（272,384 B）・`shiori.dll`（155,648 B）はいずれも PE machine `0x014C`。全体テストはこの `target/i686-pc-windows-msvc/debug/` を直接探索するためコピーは不要（実機実走のみ `target/debug/` へのコピーが要る）。
+- task 5.2: `cargo test --workspace`（exit 0）= **4,759 passed / 0 failed / 33 ignored**（結果ブロック 85・doctest 込み）。要件 4.2 の不変量監視 `placement_windowposition_tests.rs::prepare_emo2_matches_ssp_balloon_offsets_at_dpi_120` は合格、かつ `git diff main...HEAD` で同ファイル・`persist.rs`・`spawn.rs`・`follow` 配下いずれも**差分 0 行**（記号参照の下流も全緑）。ブランチ全体の差分は 4 ファイル（resolver.rs / resolver_resolve_tests.rs / placement_prepare_tests.rs / doc/COMPAT_ARCHITECTURE.md）に限局。
 - **design.md:263（C4）の誤記を task 4 で検出**: 「DPI 96 と 192 の両方で誤差 0」は生観測に対しては成立しない。DPI 192 の生観測は見かけ隙間 104px で、誤差 0 が成立するのは配置時の代表面寸（868／854 物理 px・境界 2012）に対して（`ssp-oracle-notes.md:95-98` が正）。COMPAT §8 の追加行には限定つきの正しい記述を採用した。design 側は承認済み文書のため実装フェーズでは改訂せず、開発者判断へ申し送る。
