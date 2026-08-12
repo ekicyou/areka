@@ -19,7 +19,7 @@
   - _Boundary: EmoPresenter 可視性能力_
 
 - [ ] 2. 判断に必要な信号と観測源を用意する
-- [ ] 2.1 会話の表示終了時刻を UI へ届ける観測を新設する
+- [x] 2.1 会話の表示終了時刻を UI へ届ける観測を新設する
   - 再生台本の配信を購読する観測を 1 本追加し、会話の開始と、待機を含む占有区間の終端（既知最大の更新時）を UI へ非ブロックで送る
   - 会話ごとに複製される仕組みを利用して会話の境界を自己検出する（上流の署名・既存の通知先は変えない）
   - 将来の SHIORI 通知（閉鎖・タイムアウト・中断）に必要な情報の受け渡し口を型として予約し、消費者が存在しない事実と実在理由・追跡先を注記する
@@ -184,4 +184,7 @@
 - **`VisibilityOwnership` の参照パスは `areka_emo_present::presenter::VisibilityOwnership`**（1.2 で追加）。design の Modified Files に `lib.rs` が無いため、ファサード `presenter.rs` からのみ再輸出しており `lib.rs:55` の `pub use` には入っていない。**タスク 4.2 は完全パスで参照すること**。
 - **`presenter/` のサブモジュール宣言はファサード `presenter.rs` に集約**されている。design の `### Modified Files` は `presenter/hub.rs` がモジュール接続を担うと書いているが、design 自身の `### モジュール接続の変更` 節（具体的な方）が `presenter.rs` と書いており、後者が正しい（レビュー裁定済み）。
 - **design 本文の file:line が 2 件陳腐化している**（実装の欠陥ではなく、主張内容自体は正しい）——`apply_show` は `show.rs:23-277` ではない、`VisualMount::set_visible` は `mount.rs:193-216` ではない。design の file:line は都度実測し直すこと。
+- **2.1 の `BalloonLifecycleSink::clone` は会話境界を能動的にリセットする手書き実装**（design のスケッチは `#[derive(Clone)]`）。dispatcher は登録 sink を talk ごとに `clone_box` するのみで（`areka-ghost/src/dispatcher.rs:288-294`）、生成された `Box<dyn CueSink + Send>` は `Clone` ではないため derive でも今日の不変条件下では成立する——が、手書きにすることで上流の暗黙不変条件を構造的保証へ変換している（レビュー裁定済み・逸脱として承認）。
+- **`display_end` の畳み込み種は `NEG_INFINITY`**（dola は `0.0` で seed する・`sheet.rs:86-90`）。`at` が全て負の台本では sink が負値を返し、dola は `0.0` を返すという乖離が理論上ある。正典の変換経路では非負時刻しか出ないため到達しないが、**タスク 3.2 / 4.4 が `display_end` を消費する際に下限 `0.0` へ丸めておくのが安全**（早すぎる非表示側へ倒れる乖離のため）。
+- **`at` は dola 側で有限性を保証されない**（`duration` のみ `clamp_duration` で有限化・`sheet.rs:126-136`）。2.1 は `is_finite` ガードを追加済み（`+inf` が入ると下流の `deadline = display_end + timeout` が永久に到達不能になるため）。design の Event Contract には無い追加だが要件 4.8 の「保持側へ倒す」方向であり承認済み。
 - **`apply_show` の所有権条件化は 2 点のみ**（レビューで全数確認済み）——`initially_visible` の導出と、末尾の `mount.set_visible(world, true)` / `target.visible = true` の対。k 導出・合成・cache・upload・マスク・`set_bounds`・`current_surface_id`・`pending_resize`・`applied`・`native_size`・`last_show`・`info!` は所有権に依らず無条件。**ここへ条件を増やすと Requirement 1.3 / 6.6 が静かに壊れる**。

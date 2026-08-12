@@ -20,6 +20,7 @@ pub mod talk_clock;
 pub mod assets;
 pub mod frame;
 pub mod move_cue;
+pub mod talk_lifecycle;
 pub mod consumer_ledger;
 pub mod hover_inject;
 
