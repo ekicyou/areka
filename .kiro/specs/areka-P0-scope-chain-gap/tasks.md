@@ -53,7 +53,7 @@
   - _Boundary: 互換対応表ドキュメント_
 
 - [ ] 5. 統合と受け入れ検証
-- [ ] 5.1 全体テスト実行の前提となる 32bit ホスト成果物をビルドする
+- [x] 5.1 全体テスト実行の前提となる 32bit ホスト成果物をビルドする
   - ワークスペース全体のテストが要求する 32bit ホストの成果物を先に生成する
   - 観察可能な完了条件: 成果物が生成され、全体テストが前提不足で失敗しない状態になる
   - _Requirements: 3.5_
@@ -86,4 +86,5 @@
 - PowerShell から cargo を実行すること（Git Bash の GNU `link.exe` が MSVC link を隠す）。
 - 旧 `window-placement` R2.9 の上書き注記は **`resolver.rs` のモジュール doc 1 箇所のみ**（design.md:81/:203 の裁定）。テスト側の導出コメントに複製すると差し戻し対象（task 3.1 で実際に発生）。`grep -rn "R2\.9" crates/areka/src/placement/` のヒットが 1 件であることで確認できる。
 - task 3.1 完了時点で bin ターゲット 672 passed / 0 failed（全緑）。task 3.2 で 673。
+- task 5.1: `cargo build --target i686-pc-windows-msvc -p shiori-host32-helper -p shiori-host32-testdll`（exit 0）。成果物 `shiori-host32-helper.exe`（272,384 B）・`shiori.dll`（155,648 B）はいずれも PE machine `0x014C`。全体テストはこの `target/i686-pc-windows-msvc/debug/` を直接探索するためコピーは不要（実機実走のみ `target/debug/` へのコピーが要る）。
 - **design.md:263（C4）の誤記を task 4 で検出**: 「DPI 96 と 192 の両方で誤差 0」は生観測に対しては成立しない。DPI 192 の生観測は見かけ隙間 104px で、誤差 0 が成立するのは配置時の代表面寸（868／854 物理 px・境界 2012）に対して（`ssp-oracle-notes.md:95-98` が正）。COMPAT §8 の追加行には限定つきの正しい記述を採用した。design 側は承認済み文書のため実装フェーズでは改訂せず、開発者判断へ申し送る。
