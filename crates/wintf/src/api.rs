@@ -95,7 +95,6 @@ pub(crate) fn set_window_owner(hwnd: HWND, owner: HWND) -> Result<()> {
 /// semantics へ戻し、要件 5.9（破棄が重複しても異常終了しない）を構造的に満たす。
 /// 失敗は握り潰さず `Err` で返す。
 #[inline(always)]
-#[allow(dead_code)] // 呼び出しの結線は破棄時の owner 切離し（タスク 2.3）で入る
 pub(crate) fn clear_window_owner(hwnd: HWND) -> Result<()> {
     set_window_long_ptr(hwnd, GWLP_HWNDPARENT, 0).map(|_| ())
 }

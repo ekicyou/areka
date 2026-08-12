@@ -499,6 +499,65 @@ fn verify_failed_line(
     )
 }
 
+/// ペアの相手が失われた形（切離しの記録に載る）。
+///
+/// 実体ごと消えたのか、実体は残ってハンドルだけが外れたのかを分けるのは、破棄経路の
+/// どの段階で切離しが走ったのかが事後に読めるようにするためである（design.md「破棄経路」）。
+/// 1 語へ潰すと、この 2 つが記録の上で見分けられなくなる。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PeerLoss {
+    /// 相手の実体が消えた（despawn 済み）
+    Despawned,
+    /// 実体は残っているが OS のハンドルが外れた
+    HandleRemoved,
+}
+
+impl PeerLoss {
+    /// 記録に載る語。
+    fn as_str(&self) -> &'static str {
+        match self {
+            PeerLoss::Despawned => "despawned",
+            PeerLoss::HandleRemoved => "handle-removed",
+        }
+    }
+}
+
+/// owner 切離しの記録行（純関数）。
+fn owner_detached_line(
+    entity: Entity,
+    peer: Entity,
+    owned_hwnd: HWND,
+    owner_hwnd: HWND,
+    loss: PeerLoss,
+) -> String {
+    format!(
+        "ペアの相手が消えたため owner を切り離しました entity={entity:?} peer={peer:?} \
+         owned_hwnd={owned} owner_hwnd={owner} peer_state={state}",
+        owned = hwnd_field(Some(owned_hwnd)),
+        owner = hwnd_field(Some(owner_hwnd)),
+        state = loss.as_str(),
+    )
+}
+
+/// owner 切離し失敗の記録行（純関数）。
+fn owner_detach_failed_line(
+    entity: Entity,
+    peer: Entity,
+    owned_hwnd: HWND,
+    owner_hwnd: HWND,
+    error: &windows::core::Error,
+) -> String {
+    format!(
+        "ペアの相手が消えましたが owner の切離しに失敗しました（処理は継続します） \
+         entity={entity:?} peer={peer:?} owned_hwnd={owned} owner_hwnd={owner} \
+         error={code:?} message={message}",
+        owned = hwnd_field(Some(owned_hwnd)),
+        owner = hwnd_field(Some(owner_hwnd)),
+        code = error.code(),
+        message = error.message(),
+    )
+}
+
 /// owner 確立失敗の記録行（純関数）。
 fn owner_establish_failed_line(entity: Entity, error: &windows::core::Error) -> String {
     format!(
@@ -597,6 +656,45 @@ pub(crate) fn log_owner_established(
 /// 呼び出し側（確立系）が付ける（[`OwnerEstablishFailed`](super::OwnerEstablishFailed)）。
 pub(crate) fn log_owner_establish_failed(entity: Entity, error: &windows::core::Error) {
     error!("{}", owner_establish_failed_line(entity, error));
+}
+
+/// owner 切離しの記録を出す（debug・破棄経路）。
+///
+/// `[zorder-pair] ...` のタグを付けないのは、サインオフの grep 判定語が design.md
+/// 「診断ログ語彙（要件 6）」のレコード表で閉じているためである（判定語を勝手に増やさない）。
+/// 切離しは表示順の調整ではなく破棄の後始末であり、レコード表のどの行にも当たらない。
+/// 水準が debug なのは、ゴーストの終了ごとに必ず起きる正常な出来事だからである
+/// （既定運転では無音・サインオフの `RUST_LOG` では見える）。
+pub(crate) fn log_owner_detached(
+    entity: Entity,
+    peer: Entity,
+    owned_hwnd: HWND,
+    owner_hwnd: HWND,
+    loss: PeerLoss,
+) {
+    debug!(
+        "{}",
+        owner_detached_line(entity, peer, owned_hwnd, owner_hwnd, loss)
+    );
+}
+
+/// owner 切離し失敗の記録を出す（error）。
+///
+/// 切離せなければ OS の破棄カスケードが残り、要件 5.9 を構造的に満たせなくなる
+/// ——沈黙させてはならない失敗である（[areka-log-first-no-silent-failure]）。
+/// それでも `Err` を伝播させず記録に留めるのは、破棄の途中で利用者の操作を止めないため
+/// である（要件 6.4）。タグを付けない理由は [`log_owner_detached`] と同じ。
+pub(crate) fn log_owner_detach_failed(
+    entity: Entity,
+    peer: Entity,
+    owned_hwnd: HWND,
+    owner_hwnd: HWND,
+    error: &windows::core::Error,
+) {
+    error!(
+        "{}",
+        owner_detach_failed_line(entity, peer, owned_hwnd, owner_hwnd, error)
+    );
 }
 
 /// 沈降観測の記録を出す（debug・要件 4.4／7.5）。

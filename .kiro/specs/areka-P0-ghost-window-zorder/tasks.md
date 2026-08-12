@@ -55,7 +55,7 @@
   - _Requirements: 1.2, 1.4, 1.5, 2.6, 6.1, 6.2, 6.3, 6.4, 7.6_
   - _Depends: 1.3, 1.4_
 
-- [ ] 2.3 破棄時に owner を切り離し、重複破棄でも異常終了しない状態を作る
+- [x] 2.3 破棄時に owner を切り離し、重複破棄でも異常終了しない状態を作る
   - ペアの相手が消えたことを維持処理が検知した時点で owner 関係を外し、OS の連鎖破棄を起こさせない
   - 他スコープの窓へは owner 関係を一切張らないことを構造として保つ
   - 同一スコープの 2 窓が対で消えること自体は許容する
@@ -192,6 +192,9 @@
 - (1.1) `windows` 0.62 の `GetWindow` は「隣が無い」場合も `Err` を返す。`SetLastError(ERROR_SUCCESS)` で先にクリアし `err.code() == S_OK` を「不在＝`Ok(None)`」へ写像して失敗と切り分けている。
 - (1.1) **トップレベル窓の重なり隣接は同一テストバイナリ内で決定論にならない**（他テストの窓が割り込む）。決定論的テストは私有の親窓＋子窓 2 枚（兄弟列を閉じる）で行う。実窓の隣接そのものは実機サインオフ（要件 7.2）の担当。
 - (1.2) `ExpectedOrder` は design.md の State ブロックが型として参照するだけで定義していないため実装側で補完した（`above`／`below` の 2 HWND・座標フィールド無し）。`ZOrderPairStrategy` にも `Default`（案 A・raise assist 無効）を足している——**`init_resource` で暗黙に案 A が入りうるため、areka main 側では必ず明示 `insert_resource` で選択結果を入れること**（タスク 3.2／5.1 の前提）。
+- (2.3) 切離しは維持系の中の**トリガを持たない 1 パス** `detach_owner_links_for_lost_peers`（`OwnerLink` 保持窓だけを走査）。2.2 が書き残した「`SkipReason::PeerMissing` の枝に足すだけで乗る」は**誤り**——あの枝は `ReassertZOrder` を持つ窓しか回らず、破棄では要求を挿す者が居ないので本番経路で発火しない。design「破棄経路」も検知役を維持系と名指ししている。受動性制約（「毎フレーム巡回では動かない」）に触れないのは、このパスが窓の重なりを一切動かさず owner 関係だけを外すため（制約の趣旨は要件 4.1/4.2＝z を自発的に動かさないこと）。
+- (2.3) **owner を張ったまま owner 窓を破棄すると被 owner 窓が実際に道連れになることを実測で確認済み**（`owner_cascade_destroys_the_owned_window_unless_it_is_detached`）。ゲート G8 の前提は机上ではなくこの環境で成立している。切離し後は「独立生成・独立破棄」へ戻り対消滅しなくなるが、要件 5.8 は対消滅を*許容*であって必須ではないので違反ではない。残る窓は要件 1.5 の正常系。
+- (2.3) **同一巡で両 entity が despawn する場合とアプリ終了経路は、この標準機構では検知できない**（`OwnerLink` を持つ側も同時に消えて走査対象から外れる）。design が G8 の判定対象と定め、5.2（切離しの適用点を registry reconcile 直前へ早める）が担当する範囲。
 - (2.2) 維持系は `zorder_pair_maintain.rs`。`ReassertZOrder` の 2 段階に加えて **`IssuedPairFix`（出した指令の持ち越し）を新設**した——`insert_after` は `ExpectedOrder{above,below}` から復元できない（「手前へ」の腕の挿入位置は第三の窓だから）。`Option<&IssuedPairFix>` で受けるので、外部が `ReassertZOrder` だけを入れる 2.6 のシーム契約は無傷。
 - (2.2) 記録語彙を 2 つ足した（`log_orphan_request_dropped`／`log_unbacked_verification_dropped`）。`ReassertZOrder` が公開契約点である以上「宣言の無い窓に要求が付く」「持ち越し無しで検証段階になる」は到達可能で、既存 `SkipReason` 5 種では表せない。**`[zorder-pair]` タグは付けない**（サインオフの grep 判定語を増やさないため。水準は warn なので沈黙にはならない）——2.1 の走査失敗 warn と同じ方針。
 - (2.2) **`CreateWindow` の子窓は生成順が先のものほど手前**（新しい子窓は兄弟列の背面側へ入る）。実測で確認済み。テストの初期配置は生成順に依存させず `insert_after` で明示的に作ること。`api.rs` に逆のことを書いたコメントがあり差し戻しになった。

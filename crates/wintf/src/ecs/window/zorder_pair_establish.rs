@@ -9,7 +9,9 @@
 //! 本モジュールが足すのは**確立の手順**と、失敗を繰り返さないための印
 //! （[`OwnerEstablishFailed`]）だけである。
 //!
-//! 維持系（トリガ→判断→適用→検証）と破棄時の owner 切離しは後続タスクの担当。
+//! 維持系（トリガ→判断→適用→検証）と破棄時の owner 切離しは、いずれも隣の
+//! [`zorder_pair_maintain`](super::zorder_pair_maintain) が持つ（後者は
+//! `detach_owner_links_for_lost_peers`）。本モジュールが担うのは確立の手順のみである。
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::system::NonSendMarker;
