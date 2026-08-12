@@ -149,7 +149,7 @@
   - _Requirements: 3.4, 3.5, 6.3, 6.4, 6.5, 6.6, 9.1_
   - _Depends: 4.4, 5_
 
-- [ ] 7. 縮退した正典語彙と裁量判断を互換対応表へ記録する
+- [x] 7. 縮退した正典語彙と裁量判断を互換対応表へ記録する
   - 受理しないタグの完全な意味論と縮退理由、発火しない 3 つの通知の Reference 割当、クリック閉鎖が既存通知へ集約される事実、クリック待ちの語彙、表示中バルーン群の情報源が本仕様の表示状態である事実を記録する
   - 正典が沈黙する領域の裁量判断（出現契機・無発話 scope の非表示・滞在による延命と取り直し・面切替の非可視化・既定 30 秒・中断時の起点）を根拠区分つきで記録する
   - 各先送りに受け皿の spec と解禁条件を明記し、追跡先の無い先送りを作らない
@@ -191,6 +191,8 @@
 - **`decide_content` の `or_insert` が渡す `prev_visible` は死んだ初期値**（`balloon_visibility.rs:532-535`）。4 経路すべてが読む前に再代入するため、反転してもクレート全体が緑のまま。**判断分岐ではないので檻は不要**（6.1 で裁定）。ただし load-bearing に見える罠であり、将来どれか 1 経路の再代入を消すと静かに依存が生まれる。実装を触る spec が定数化するか注記を足すこと。
 - **判断中核の表駆動テストは 5 ファイルに分かれている**——`balloon_visibility_tests.rs`（3.1/3.2 の基本）・`balloon_visibility_content_tests.rs`（6.1 のコンテンツ駆動表）・`balloon_visibility_timeout_config_tests.rs`（3.3 の設定）。1,000 行の線を守るための分割で、共有ヘルパは `balloon_visibility_test_support.rs` に集約されている。6.2 はさらに走査（`balloon_visibility_timeout_suppression_tests.rs`）と表本体（`..._cases.rs`）へ `#[path]` で二分している。**以後もこの形を踏襲すること**。
 - **6.2 の表は満了予定の起点を構造で守っている**——時刻・信号・期待値をすべて占有終端 `ANCHOR`(=12.0) からの相対で書き、計測が成り立つ最初の観測を `LATE`(=7.0) 秒遅らせてある。`now` 起点の実装にすると満了予定が 7 秒ずれて 9 ケースが赤くなる。**`ANCHOR` と `LATE` を 0 にすると表が骨抜きになる**ので、それを禁じる番人テストが置いてある。触らないこと。
+- **【7 で記録】互換対応表 §8 に本 spec の 11 行が入った**（`doc/COMPAT_ARCHITECTURE.md`）。先送り 4 件は受け皿 `areka-P0-balloon-canon-residue` の brief にも項目 7〜10 として登記済みで**双方向**になっている。受け側が項目を列挙していない spec は所有者ではない、という規律による。`Status` の `balloon` は `areka-P0-status-execution-states` の brief `:27` へ読み口ごと登記した。
+- **`.kiro/steering/roadmap.md:132` の「6 項目の受け皿」表記が実態とずれた**（`balloon-canon-residue` は 7 で 10 項目になった）。本 spec の柵の外なので未着手。**次にロードマップを編集する spec が直すこと**。解禁条件そのものは正しく、対応表側の記録も揃っている。
 - **配線層は別ファイル `balloon_visibility_phase.rs`**（4.4 が新設・判断中核と合わせて 1,000 行を越えるため分割）。`#[path]` の子モジュールなので親の非公開項目（`state.per_scope` 等）へ到達でき、巻き戻しの義務を果たせる。テストは `balloon_visibility_phase_tests.rs`。
 - **相順は 9 相**（4.3 で確定）——attach → dpi → drain（適用のみ）→ **balloon_visibility** → **reconcile** → move_drain → resnap → text_scale → text。`reconcile_reported_sizes` は `run_drain_phase` から相順の所有者 `emo2_frame_system` へ純移動済みで、本番呼び出しは `frame.rs` の 1 箇所のみ（`drain_resnap.rs` は import ごと落としてあるので、呼び戻すとコンパイルが通らない）。**相の本体は空**で、中身はタスク 4.4 が書く。
 - **reconcile が装着前フレームでも走るようになった**（移動前は `run_drain_phase` の `attached` 早期 return の内側だった）。presenter に target が 1 つも無い間は全アームが短絡するため無操作で、既存の未装着テストが緑のまま押さえている。**装着前に走ってはいけない処理をこの相の後段へ足さないこと**。
