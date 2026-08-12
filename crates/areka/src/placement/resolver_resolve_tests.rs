@@ -186,6 +186,91 @@ fn t_r2_scope_chain_defaultx_zero_stays_adjacent() {
     }
 }
 
+/// T-R2 本丸: 幅が等しいか否かで**結果の形が分岐しない**（隣接・gap 0・scg 2.1/2.2）。
+///
+/// 確定規則（SSP 実測 H1）は `char_x(0) = right − w(0)`・
+/// `char_x(n≥1) = char_x(n−1) − w(n)`。引くのは**自スコープの幅**ゆえ、隣接ペアの
+/// 隙間は幅の組み合わせによらず常に 0 になる（幅差が隙間へ漏れない・scg 2.2）。
+///
+/// 本檻の要点は、不等幅（400/320/200）と等幅（320/320）を**同一のヘルパ**
+/// （同一式・同一 assert 形）で検定することにある（scg 2.5＝等幅を特殊扱いしない）。
+/// 期待値は幅列からの畳み込みで生成し、等幅側に手書き定数を置かない
+/// （偶然一致する定数では「同一式で配置されている」ことを主張できない）。
+/// `DPIS`＝100%／125%／150%／200% の全 4 水準で決定論的に実行する（scg 2.4/3.5）。
+#[test]
+fn t_r2_unequal_widths_leave_no_gap() {
+    /// 幅列を確定規則で検定する**唯一の検定路**（不等幅・等幅で分岐しない）。
+    /// 検定するのは P2（キャラ窓 X の連鎖）のみで、P5（バルーン）は混ぜない。
+    fn assert_chain_is_adjacent(dpi: i32, label: &str, widths: &[i32]) -> Vec<ScopePlacement> {
+        let wa = work_area(dpi);
+        let cfg = cfg_of(
+            (0..widths.len())
+                .map(|s| (s, scope_cfg(Alignment::Bottom, Some(0), None)))
+                .collect(),
+        );
+        let inputs: Vec<ScopeInput> = widths
+            .iter()
+            .enumerate()
+            .map(|(s, &w)| input(s, w, px(600, dpi) - s as i32 * px(40, dpi)))
+            .collect();
+
+        let out = resolve_placement(&cfg, wa, &inputs);
+        assert_eq!(
+            out.len(),
+            widths.len(),
+            "dpi={dpi} [{label}]: 出力長＝入力長（空虚一致封じ）"
+        );
+
+        // 期待 X は確定規則の畳み込みで生成する（等幅・不等幅で同一式・scg 2.5）
+        let mut expected_x = wa.right;
+        for (n, &w) in widths.iter().enumerate() {
+            expected_x -= w;
+            assert_eq!(
+                out[n].char_pos.x, expected_x,
+                "dpi={dpi} [{label}]: scope{n} は char_x(n)=char_x(n−1)−w(n)（隣接・gap 0（scg 2.1/2.2））"
+            );
+        }
+        // 全隣接ペアの隙間 0（scope n の右端＝scope n−1 の左端）
+        for n in 1..widths.len() {
+            assert_eq!(
+                out[n - 1].char_pos.x - (out[n].char_pos.x + widths[n]),
+                0,
+                "dpi={dpi} [{label}]: scope{}/scope{n} の隙間 0（隣接・gap 0（scg 2.1/2.2））",
+                n - 1
+            );
+        }
+        out
+    }
+
+    for dpi in DPIS {
+        let wa = work_area(dpi);
+
+        // (1) 不等幅 3 スコープ: 幅差（w(n−1)−w(n)）が隙間へ漏れない（scg 2.2/3.1/3.2）
+        let unequal = [px(400, dpi), px(320, dpi), px(200, dpi)];
+        let out_unequal = assert_chain_is_adjacent(dpi, "不等幅 400/320/200", &unequal);
+        // 欠陥式（前スコープの幅を引く）は不等幅でのみ判別できる（scg 3.2）
+        let x0 = wa.right - unequal[0];
+        assert_ne!(
+            out_unequal[1].char_pos.x,
+            x0 - unequal[0],
+            "dpi={dpi}: 前スコープ幅を引く旧式へ戻ってはならない（隣接・gap 0（scg 2.1/2.2））"
+        );
+
+        // (2) 等幅 2 スコープ: (1) と**同一のヘルパ＝同一式・同一 assert 形**で検定する
+        //     （scg 2.5＝等幅を特殊扱いしない）
+        let equal = [px(320, dpi), px(320, dpi)];
+        let out_equal = assert_chain_is_adjacent(dpi, "等幅 320/320", &equal);
+        // 等幅では是正式（自幅を引く）と欠陥式（前スコープ幅を引く）が数値的に一致する。
+        // すなわち等幅入力では本欠陥を構造的に観測できない——不等幅入力を必須とする理由
+        // そのものであり、(1) の assert_ne! を等幅側へ置けない根拠（scg 3.2）。
+        assert_eq!(
+            out_equal[1].char_pos.x,
+            (wa.right - equal[0]) - equal[0],
+            "dpi={dpi}: 等幅では是正式と欠陥式が一致（判別には不等幅入力が要る・scg 3.2）"
+        );
+    }
+}
+
 /// T-R2 補: 後続スコープの `defaultx` は「自スコープの基準位置（前スコープの
 /// 左隣＝`char_x(n−1) − w(n)`）からの左方向オフセット」（DD3・scg 2.1/2.2）。
 #[test]

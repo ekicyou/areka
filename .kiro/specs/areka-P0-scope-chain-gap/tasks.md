@@ -22,7 +22,7 @@
   - 観察可能な完了条件: 該当クレートのテストが全て緑（赤を残さない）で、テスト名・失敗メッセージ・検証内容に矛盾がない
   - _Requirements: 1.5, 2.1, 2.2, 2.6, 2.7, 2.8, 2.9, 3.1, 3.3, 3.4_
 
-- [ ] 2.2 不等幅と等幅を同一規則で検定する新テストを追加する
+- [x] 2.2 不等幅と等幅を同一規則で検定する新テストを追加する
   - 不等幅の 3 スコープで全隣接ペアの隙間 0 を検証する
   - 等幅のケースを同一テストへ併置し、同じ式で配置されること（等幅を特殊扱いしないこと）を検証する
   - 拡大率 100%／125%／150%／200% の全水準で決定論的に実行する
@@ -76,3 +76,11 @@
   - 観察可能な完了条件: 是正前に 123px あった隙間が 0（許容差 1px 以内）になった判定値とログが、証跡ファイルとして仕様ディレクトリに保存される
   - _Depends: 1, 5.2_
   - _Requirements: 2.3, 6.1, 6.2, 6.3, 6.4_
+
+## Implementation Notes
+
+- ワークツリーでは `vendors/pasta` サブモジュールが未展開のため、cargo 実行前に `git submodule update --init --recursive vendors/pasta` が必要（実行済み）。
+- `areka` は bin crate。`cargo test -p areka --lib …` は「no library targets」で失敗する。正しくは `cargo test -p areka <filter>`（例 `placement::resolver::resolve_tests`）。ベースラインは bin ターゲット 671 passed。
+- task 2.1 完了時点で `placement::prepare_tests::prepare_emo2_returns_two_scope_placements` のみ赤（実測 `x: 1150`）。これは仕様の予定どおりで task 3.1 が期待値を更新して緑へ戻す。
+- `cargo clippy -p areka --all-targets` は `crates/wintf` の既存エラーで赤。本仕様の変更とは無関係（変更ファイルを名指しする診断は 0 件）。
+- PowerShell から cargo を実行すること（Git Bash の GNU `link.exe` が MSVC link を隠す）。
