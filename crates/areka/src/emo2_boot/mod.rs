@@ -21,6 +21,7 @@ pub mod assets;
 pub mod frame;
 pub mod move_cue;
 pub mod talk_lifecycle;
+pub mod balloon_visibility;
 pub mod consumer_ledger;
 pub mod hover_inject;
 

@@ -42,7 +42,7 @@
   - _Depends: 2.2_
 
 - [ ] 3. 可視性の判断中核を実装する
-- [ ] 3.1 状態モデルとコンテンツ駆動の表示・非表示判定を実装する
+- [x] 3.1 状態モデルとコンテンツ駆動の表示・非表示判定を実装する
   - scope ごとの状態（前フレームの可視コンテンツ量・前フレームの実可視）と会話単位の状態（占有終端・満了予定・抑止の直前値）を定義する
   - 表示は可視コンテンツ量の増加かつ現に不可視のときのみ、会話開始側の非表示は可視コンテンツ量のゼロへの下降のみを契機とする
   - 遷移が起きたフレームにのみログ用の事象を生成し、毎フレームの判定自体は何も出さない
@@ -186,6 +186,9 @@
 - **design 本文の file:line が 2 件陳腐化している**（実装の欠陥ではなく、主張内容自体は正しい）——`apply_show` は `show.rs:23-277` ではない、`VisualMount::set_visible` は `mount.rs:193-216` ではない。design の file:line は都度実測し直すこと。
 - **2.2 で `on_balloon_pointer_moved` の借用手順②が共有借用から可変借用へ変わった**（`balloon.rs:398-403`）。`Mut<BalloonWiring>` は `.map()` クロージャ内に閉じ、手順③の `runtime.try_borrow()` より前に落ちるため二重借用は不可能。縮退順序・ログレベル・ログ event 名は不変。
 - **2.2 の記録側と解除側は `Emo2Wiring` 依存が意図的に非対称**（記録は在席を要求・解除は無条件）。どちらも「抑止しない側」へ倒れる形であり要件 5.5 の指定どおり。`Emo2Wiring` は `frame.rs:137` の `remove_non_send_resource` で毎フレーム一時的に world から抜けるため、不在は実在する過渡状態である。
+- **タスク 4.4 の義務**: `decide` は `Show` を積む前に `prev_visible = true` を確定させる（`balloon_visibility.rs:202`）。相順 D5 では観測が発行より前に採られるため、観測値をそのまま覚えると自分が出した表示が毎フレーム「外因」と誤検出される——この持ち方が正しい（レビュー裁定済み）。ただし **4.4 は `show_target` が `Err` を返した scope について `state.per_scope` の `prev_visible` を発行前の値へ巻き戻すこと**。さもないと次フレームで偽の `trigger=explicit`（要件 8.1）と不要なポインタ滞在の掃除が出る。相関数は同一モジュールに置かれるため非公開フィールドへ到達できる（同義の注記が `balloon_visibility.rs:129-136` にもある）。
+- **`balloon_visibility.rs` に `#[allow(dead_code)]` は 2 本しかない**（`:144` `BalloonVisibilityState` の会話単位フィールド未読＝タスク 3.2 が解消・`:167` `decide` の呼び手ゼロ＝タスク 4.4 が解消）。**`decide` の allow が 1 本で 7 つの型を live に見せている**ため、ここへ属性を足すと本当に死んでいるコードが見えなくなる。3.2 / 4.4 の着地時にこの 2 本は撤去できるはずで、撤去できないなら理由を実測すること。
+- **`decide` の出力順を決めているのは `VisibilityObservations::scopes` の走査順のみ**（`per_scope` はキー参照専用）。`actions` / `logs` は並びが観測可能な `Vec` なので、`BTreeMap` は design のスケッチ（`HashMap`）からの意図的な差し替えである（design 自身の不変条件「`decide` は同一入力に対し決定論」を守るため・レビュー裁定済み）。
 - **`input_events/balloon.rs` に残る `#[allow(dead_code)]` は 2.3 の実測監査の結果 1 本だけ**（`is_balloon_hovered`・理由注記つき）。書き込み側の `set_balloon_hover`（`balloon.rs:414`）と `clear_balloon_hover`（`:732`）は 2.2 の配線で**すでに本番到達済み**であり、読み口 `is_balloon_hovered` のみが**タスク 4.4 の消費まで到達者ゼロ**。他の 13 本は非 load-bearing と実測されて撤去済みなので、**このファイルへ新たに dead_code を持ち込むと即警告になる**。
 - **`input_events/balloon.rs` の注記は 2.3 で全数が実測へ揃えられた**（本番入口は `main.rs:363` = `wire_balloon_choice` と `main.rs:731` = `attach_balloon_pointer_handlers`）。以後このファイルへ到達性の主張を書くときは、必ず実測した file:line を添えること。
 - **2.1 の `BalloonLifecycleSink::clone` は会話境界を能動的にリセットする手書き実装**（design のスケッチは `#[derive(Clone)]`）。dispatcher は登録 sink を talk ごとに `clone_box` するのみで（`areka-ghost/src/dispatcher.rs:288-294`）、生成された `Box<dyn CueSink + Send>` は `Clone` ではないため derive でも今日の不変条件下では成立する——が、手書きにすることで上流の暗黙不変条件を構造的保証へ変換している（レビュー裁定済み・逸脱として承認）。
