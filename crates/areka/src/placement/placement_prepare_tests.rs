@@ -117,6 +117,64 @@ fn prepare_emo2_returns_two_scope_placements() {
     });
 }
 
+/// **要件 2.3 の決定論形**（design C3 の新設檻）: 実機実測と同条件——DPI 120（k=5/4）・
+/// scope0 543×859・scope1 420×500——で既定配置したとき、相方（scope1）の右端が
+/// 本体（scope0）の左端と一致する（隣接・gap 0・scg 2.1/2.2）。
+///
+/// **前提錨**: 先に両 scope の実表示寸が実機観測値（543×859／420×500）であることを
+/// 確認する。寸が変われば以下の隣接 assert は別の幾何を検定することになるため、
+/// 黙って追随せず前提の側で落ちる形にしておく。
+///
+/// **許容差は置かない（厳密等式）**。丸めは `ScaleRatio` 経由の**寸法算出**にのみ現れ、
+/// 位置の算出（`char_x(1) = char_x(0) − w(1)`・クランプ）は整数演算のみゆえ成分誤差が
+/// 生じ得ない。要件 2.3 の許容差 1px は実機ログ側の判定に適用される別チャネルである。
+#[test]
+fn prepare_emo2_at_dpi_120_places_scopes_adjacent() {
+    with_com_initialized(|| {
+        // 実機と同じ DPI 120（emo2 の作者基準 DPI は 96 ゆえ k=5/4）。
+        let p =
+            prepare_ghost_windows_with_work_area(&emo2_root(), &balloon_root(), WA, Some(120))
+                .expect("emo2 fixture の配置準備は成功する");
+
+        let s0 = &p.placements[0];
+        let s1 = &p.placements[1];
+
+        // 前提錨: 実表示寸が実機観測値と一致する（434×687／336×400 の 5/4 倍）。
+        assert_eq!(
+            s0.char_size,
+            SizePx { w: 543, h: 859 },
+            "scope0 キャラ窓は実機観測 543×859（434×687 の 5/4 倍）"
+        );
+        assert_eq!(
+            s1.char_size,
+            SizePx { w: 420, h: 500 },
+            "scope1 キャラ窓は実機観測 420×500（336×400 の 5/4 倍）"
+        );
+
+        // 隣接（本丸）: scope1 の右端＝scope0 の左端。
+        assert_eq!(
+            s1.char_pos.x + s1.char_size.w,
+            s0.char_pos.x,
+            "実機同条件（DPI 120）で scope1 右端＝scope0 左端（隣接・gap 0（scg 2.1/2.2））"
+        );
+
+        // 連鎖の絶対値も固定する（WA 右端 1920 基準: 1920−543=1377・1377−420=957）。
+        assert_eq!(
+            s0.char_pos.x, 1377,
+            "scope0 は work area 右端密着（1920−543）"
+        );
+        assert_eq!(
+            s1.char_pos.x, 957,
+            "scope1 は scope0 左端から**自スコープ幅**ぶん左（1377−420）"
+        );
+        assert_ne!(
+            s1.char_pos.x,
+            s0.char_pos.x - s0.char_size.w,
+            "前スコープ幅を引く旧式へ戻ってはならない（幅差 543−420＝123px の隙間・scg 2.1/2.2）"
+        );
+    });
+}
+
 /// 薄いラッパ `prepare_ghost_windows` は実モニタ列挙で primary work area を
 /// 取得し、同じ work area を与えた合成経路と同一の結果を返す。
 /// モニタ 0 台の環境（headless）では `PlacementError::Monitor` が返る
