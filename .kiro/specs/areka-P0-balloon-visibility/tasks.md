@@ -105,7 +105,7 @@
   - _Depends: 4.2, 4.4_
 
 - [ ] 6. 決定論的な検証を網羅する
-- [ ] 6.1 コンテンツ駆動の分岐を表駆動で網羅する
+- [x] 6.1 コンテンツ駆動の分岐を表駆動で網羅する
   - 可視コンテンツの有無（文字あり／改行・待機・消去のみ）／scope 別の表示と無発話 scope の非表示／全消去連動の全非表示と直後の再出現／同一 scope の 2 つ目以降で再発行しないこと／明示指令との相互作用
   - 完了状態: 上記の全分岐が実時間の待機なしで緑になる
   - _Requirements: 9.1_
@@ -188,6 +188,8 @@
 - **2.2 の記録側と解除側は `Emo2Wiring` 依存が意図的に非対称**（記録は在席を要求・解除は無条件）。どちらも「抑止しない側」へ倒れる形であり要件 5.5 の指定どおり。`Emo2Wiring` は `frame.rs:137` の `remove_non_send_resource` で毎フレーム一時的に world から抜けるため、不在は実在する過渡状態である。
 - **【task 5 で完了】起動時表示を前提とした記述の是正は 10 箇所**（申し送りの 9 箇所＋`spine_display_tests.rs:172` の見落とし 1 箇所）。既存の読み戻し・文字配置先・適用済みスケールの述語は 1 つも変えていない（コメントと assert メッセージのみ）。`assets.rs` / `assets_tests.rs` の「初期表示 surface id」は**面 ID の選定を指す語**であって可視性の主張ではないため対象外と裁定した。
 - **起動直後の不可視を主張する檻は 2 本**——frame 相当が `frame_attach_tests.rs::attach_establishes_balloons_invisible_with_slot_and_surface`、spine 相当が `spine_display_tests.rs::spine_boot_leaves_all_balloons_invisible_with_established_slot_and_surface`。後者は**空虚化を防ぐため確立の証人 3 つ（面 0 の記録・文字の配置先・供給面の実描画）を先に要求してから**可視性を判定する。所有権の設定を外す変異で可視性の assert だけが赤くなることを実測済み。**この形を崩さないこと**。
+- **`decide_content` の `or_insert` が渡す `prev_visible` は死んだ初期値**（`balloon_visibility.rs:532-535`）。4 経路すべてが読む前に再代入するため、反転してもクレート全体が緑のまま。**判断分岐ではないので檻は不要**（6.1 で裁定）。ただし load-bearing に見える罠であり、将来どれか 1 経路の再代入を消すと静かに依存が生まれる。実装を触る spec が定数化するか注記を足すこと。
+- **判断中核の表駆動テストは 3 ファイルに分かれている**——`balloon_visibility_tests.rs`（3.1/3.2 の基本）・`balloon_visibility_content_tests.rs`（6.1 のコンテンツ駆動表）・`balloon_visibility_timeout_config_tests.rs`（3.3 の設定）。1,000 行の線を守るための分割で、共有ヘルパは `balloon_visibility_test_support.rs` に集約されている。**6.2 も同じ形で新ファイルへ置くこと**。
 - **配線層は別ファイル `balloon_visibility_phase.rs`**（4.4 が新設・判断中核と合わせて 1,000 行を越えるため分割）。`#[path]` の子モジュールなので親の非公開項目（`state.per_scope` 等）へ到達でき、巻き戻しの義務を果たせる。テストは `balloon_visibility_phase_tests.rs`。
 - **相順は 9 相**（4.3 で確定）——attach → dpi → drain（適用のみ）→ **balloon_visibility** → **reconcile** → move_drain → resnap → text_scale → text。`reconcile_reported_sizes` は `run_drain_phase` から相順の所有者 `emo2_frame_system` へ純移動済みで、本番呼び出しは `frame.rs` の 1 箇所のみ（`drain_resnap.rs` は import ごと落としてあるので、呼び戻すとコンパイルが通らない）。**相の本体は空**で、中身はタスク 4.4 が書く。
 - **reconcile が装着前フレームでも走るようになった**（移動前は `run_drain_phase` の `attached` 早期 return の内側だった）。presenter に target が 1 つも無い間は全アームが短絡するため無操作で、既存の未装着テストが緑のまま押さえている。**装着前に走ってはいけない処理をこの相の後段へ足さないこと**。
