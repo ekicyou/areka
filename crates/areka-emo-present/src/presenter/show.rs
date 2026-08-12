@@ -30,7 +30,11 @@ impl EmoPresenter {
         reply: Option<ReplySender<PresentOutcome>>,
     ) {
         let Some(target) = self.targets.get_mut(&target_id) else {
-            tracing::error!(?target_id, surface_id, "apply(ShowSurface): 未装着ターゲット");
+            tracing::error!(
+                ?target_id,
+                surface_id,
+                "apply(ShowSurface): 未装着ターゲット"
+            );
             Self::reply(reply, Err(PresentError::TargetNotAttached(target_id)));
             return;
         };
@@ -54,8 +58,13 @@ impl EmoPresenter {
             match target
                 .composer
                 // pattern を合成入力の第一級要素として合成器へ透過する（R5.1）。
-                .compose(&target.emo_world, &target.atlas, surface_id, &binds, &pattern)
-            {
+                .compose(
+                    &target.emo_world,
+                    &target.atlas,
+                    surface_id,
+                    &binds,
+                    &pattern,
+                ) {
                 Ok(composed) => {
                     // 合成は常に native 原寸（emo-compose の合成経路は k を知らない・設計 D3 の A2）。
                     let native_extent = (composed.width(), composed.height());
@@ -168,14 +177,16 @@ impl EmoPresenter {
                 }
             };
 
-            let mount = match VisualMount::attach(world, window, &surface, &compositor, (w, h)) {
-                Ok(m) => m,
-                // VisualMount::attach も内部で error! 済み（mount.rs device_err）。
-                Err(e) => {
-                    Self::reply(reply, Err(e));
-                    return;
-                }
-            };
+            // 初期可視性は従来どおり可視で構築する（この漏斗の末尾で `set_visible(true)` する経路と同値）。
+            let mount =
+                match VisualMount::attach(world, window, &surface, &compositor, (w, h), true) {
+                    Ok(m) => m,
+                    // VisualMount::attach も内部で error! 済み（mount.rs device_err）。
+                    Err(e) => {
+                        Self::reply(reply, Err(e));
+                        return;
+                    }
+                };
 
             target.chain = Some(chain);
             target.mount = Some(mount);

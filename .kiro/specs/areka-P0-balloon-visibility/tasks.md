@@ -1,7 +1,7 @@
 # Implementation Plan
 
 - [ ] 1. 表示実行層に「可視化と分離した表示状態」の能力を確立する
-- [ ] 1.1 バルーンの非表示を枠と文字層の双方へ及ぼす
+- [x] 1.1 バルーンの非表示を枠と文字層の双方へ及ぼす
   - 表示対象の装着時に初期可視性を指定できるようにし、不可視で構築した場合は枠の面・文字スロットのいずれも可視状態を一度も経由しない
   - 可視切替の操作が枠の面と文字スロットの両方の可視状態とポインタ判定を同時に切り替える（文字スロットは従来 component 不在で既定判定に落ちていたため、可視時も明示的に付与して従来と同値にする）
   - 完了状態: 非表示にした後、枠の絵と文字の双方が画面から消え、その領域のクリックが背後のアプリケーションへ透過する。既存の明示的な非表示指令も同じ経路でこの契約を得る
@@ -172,3 +172,12 @@
   - 実時間の待機や反復回数のみによる有界化を新たに持ち込んでいないことを確認する
   - 完了状態: ワークスペース全体が緑
   - _Requirements: 9.8_
+
+## Implementation Notes
+
+- **ワークツリーではサブモジュールが未展開**: `vendors/pasta` が無い状態では `pasta_core` の解決に失敗して**あらゆる cargo コマンドが即死**する（`os error 3`）。着手前に `git submodule update --init --recursive` を一度実行すること。
+- **32bit 成果物は先にビルド済み**: `cargo build -p shiori-host32-helper -p shiori-host32-testdll --target i686-pc-windows-msvc`（**PowerShell で実行**）を完了済み。タスク 8.2 の `cargo test --workspace` の前提条件は充足している。
+- **クレート全体の `cargo fmt` を実行しないこと**: 本リポジトリは rustfmt 強制ではない（HEAD 時点で 445 ファイルが fmt 差分あり）。整形は**自分が編集したファイルに限定**する。タスク 1.1 では境界外 16 ファイルが整形されてレビュー差し戻しになった（並走中の W6 spec との rebase 衝突面を無駄に広げるため）。
+- **1.1 で `VisualMount::attach` の署名が変わった**: 末尾に `initially_visible: bool` が付いた。現在の唯一の呼び手 `presenter/show.rs:182` は従来挙動維持のため `true` を渡している——**タスク 1.2 がここを所有権から導出する形へ差し替える**。
+- **wintf の当たり判定の既定は `Bounds`**（`hit_test/mod.rs:366-371`）で、その合成 α は `Visual::clamped_opacity()`（`visual.rs:138-142`）＝ `is_visible` を見ない。`Visual` を不可視にしただけではポインタ透過は成立せず、`HitTest::none()` の明示付与が必須（`hit_test/mod.rs:373-376` で即 Miss）。
+- **`Visual::default().is_visible == true`**（`visual.rs:117`）。不可視構築の「可視状態を一度も経由しない」主張は `On<Insert, Visual>` observer で挿入値を全件記録して検証している（較正アサートを先に置き、恒真化を防いでいる）。
