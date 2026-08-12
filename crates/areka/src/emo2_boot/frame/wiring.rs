@@ -239,6 +239,21 @@ impl Emo2Wiring {
         self.presenter.apply(world, cmd);
     }
 
+    /// 外部所有（`VisibilityOwnership::External`）な target を可視化する
+    /// （`EmoPresenter::show_target` passthrough・`areka-P0-balloon-visibility` task 4.2）。
+    ///
+    /// attach 相はバルーンを**不可視のまま確立**するため、spine が「可視バルーン」を前提とする
+    /// ケースはその前提を自分で組む必要がある。本番で可視化を発行するのはバルーン可視性制御
+    /// （task 4.4 の相）であり、本口はそれを spine から代行するだけの passthrough である。
+    #[cfg(test)]
+    pub(crate) fn show_balloon_target(
+        &mut self,
+        world: &mut World,
+        target: TargetId,
+    ) -> Result<(), areka_emo_present::PresentError> {
+        self.presenter.show_target(world, target)
+    }
+
     /// 再追従用に記憶している [`BalloonModel`] の scope 集合（昇順・emo-dpi-scaling D11-3 の観測口）。
     ///
     /// 「attach 相が per-scope の model を実際に保持したか」は本番 attach（GPU 資源＋実資産）を

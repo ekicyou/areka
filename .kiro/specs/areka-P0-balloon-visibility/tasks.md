@@ -74,7 +74,7 @@
   - _Requirements: 4.1, 4.5, 9.7_
   - _Depends: 2.1_
 
-- [ ] 4.2 起動時の装着を「不可視のままの確立」へ改める
+- [x] 4.2 起動時の装着を「不可視のままの確立」へ改める
   - バルーンの表示対象を装着した直後に可視性の所有者を外部所有へ設定してから、従来の初回表示指令を適用する（撤去ではなく、不可視のままの確立として維持する）
   - 装着処理の失敗経路は従来どおり理由を記録して伝播させ、記録のないまま不可視で放置される経路を作らない
   - 「初回表示」を前提とする周辺の記述を「不可視のままの確立」へ是正する
@@ -103,6 +103,7 @@
   - 完了状態: 更新後の検査群が緑で、かつ起動直後の不可視が検査によって主張されている
   - _Requirements: 9.6_
   - _Depends: 4.2, 4.4_
+  - _Note (4.2 からの申し送り): 残る陳腐化した文言は実測で 9 箇所——`spine_display_tests.rs:48, 59, 99, 163, 289` ／ `frame_attach_tests.rs:305` ／ `spine_text_scale_tests.rs:13, 30, 54`。`spine_test_support.rs` には無いので design の 4 ファイル一覧は実質 3 ファイル。`frame_attach_tests.rs:124/131/134` も「初回 ShowSurface」に一致するが**これは陳腐化ではない**（`ShowSurface` 適用**前**の状態を述べており、指令を維持した今も正しい）——書き換えないこと。起動直後の不可視を積極的に主張する検査は frame 相当で 1 本だけ 4.2 が置いた（`frame_attach_tests.rs::attach_establishes_balloons_invisible_with_slot_and_surface`）ので、spine 相当は本タスクが担う。_
 
 - [ ] 6. 決定論的な検証を網羅する
 - [ ] 6.1 コンテンツ駆動の分岐を表駆動で網羅する
@@ -186,6 +187,9 @@
 - **design 本文の file:line が 2 件陳腐化している**（実装の欠陥ではなく、主張内容自体は正しい）——`apply_show` は `show.rs:23-277` ではない、`VisualMount::set_visible` は `mount.rs:193-216` ではない。design の file:line は都度実測し直すこと。
 - **2.2 で `on_balloon_pointer_moved` の借用手順②が共有借用から可変借用へ変わった**（`balloon.rs:398-403`）。`Mut<BalloonWiring>` は `.map()` クロージャ内に閉じ、手順③の `runtime.try_borrow()` より前に落ちるため二重借用は不可能。縮退順序・ログレベル・ログ event 名は不変。
 - **2.2 の記録側と解除側は `Emo2Wiring` 依存が意図的に非対称**（記録は在席を要求・解除は無条件）。どちらも「抑止しない側」へ倒れる形であり要件 5.5 の指定どおり。`Emo2Wiring` は `frame.rs:137` の `remove_non_send_resource` で毎フレーム一時的に world から抜けるため、不在は実在する過渡状態である。
+- **⚠ cargo の結果を根拠にする前に再ビルドが走ったことを確認すること**。4.2 で**成果物の陳腐化による偽の赤**が発生した——HEAD 版のテストファイルと作業ツリー版の実装が混成でリンクされ、`spine_dpi_change_refreshes_balloon_text_scale_on_real_attach` が 6/6 で落ちた。cargo は mtime ベースの freshness 判定で当該ユニットを fresh と誤認しており、`Finished ... in 0.24s`（`Compiling areka` 行なし）だった。**並行サブエージェントが共有 `target/` へ編集しながらビルドする構成が誘発条件**。判定前に `cargo clean -p areka` か crate 内 `.rs` の touch を挟み、出力に `Compiling areka` があることを確認する。偽の緑も同じ機序で起こりうる。
+- **テスト間のプロセス汚染が 1 件実在する（本 spec の担当外）**: `emo2_boot/mod.rs:554` のテストが `WinApp::new()` 経由で `SetProcessDpiAwarenessContext`（`wintf/src/runtime/mod.rs:117`・プロセス全体・一度きり）を立てるため、以後 `GetDpiForSystem()`（`wintf/src/ecs/window/components.rs:195`）が 96 でなく実機 DPI を返すようになる。`bump_window_dpi`（`spine_test_support.rs:74-83`）が現在値と必ず異なる方を選ぶ設計なので**合否は環境非依存**で、影響は診断メッセージの数値のみ。担当は **test-cage-determinism（W6.9）**。
+- **不可視のバルーンは dpi 相で拡大率を拾わない**（`refresh_scale` の可視ゲート・`areka-emo-present/src/presenter/refresh.rs:74-80`・4.2 以前から存在）。要件 6.6 は `show_target` が `apply_show` の漏斗を再通過して表示時に k を導出し直すことで満たされる。**不可視中の DPI 変化を検査するテストは、可視化してから k を測ること**。
 - **`Emo2Wiring::new` の引数が 4.1 で 1 本増えた**（`lifecycle_rx`）。構築点は 9 箇所（本番 1・spine 1・テスト 7）で、受信端 3 本は型が互いに異なるため取り違えはコンパイルで落ちる。以後の構築点追加時も型で守られる。
 - **`spine.rs` は本番の sink 構成を忠実に再現する方針**（`spine.rs:683-690`・タスク 9.3 由来）。4.1 で実 `BalloonLifecycleSink` を 4 本目へ登録した。使い捨ての sink を置くとこの方針が壊れるので、以後 sink を足すときも spine へ同じものを登録すること。
 - **4.1 で `frame/wiring.rs` の陳腐化注記が 2 件見つかった**（design は `runtime()` の 1 件しか挙げていない）。`presenter()` の「本番消費者なし」も偽で、実消費者は `input_events/mod.rs:316` の `.map(Emo2Wiring::presenter)` という**関数パス形**——`.presenter()` の grep には出ない。**到達性を grep だけで判定しないこと**。

@@ -319,6 +319,63 @@ fn attach_supplies_each_scope_its_own_balloon_model_to_map_and_text_layer() {
     );
 }
 
+/// `areka-P0-balloon-visibility` task 4.2 完了状態の檻: 起動直後、装着済みの**全 scope**の
+/// バルーンが不可視でありながら、文字の配置先と面が確立している（Requirements 1.1 / 1.3 / 1.6）。
+///
+/// attach 相は初回 `ShowSurface`（面 0）を従来どおり発行するが、その**前に**当該 target の
+/// 可視性を外部所有へ移すため、指令は表示状態の確立だけを行って可視化しない。ゆえに
+/// `target_visible` は `Some(false)` のまま、`current_surface_id`（確立した面）と
+/// `text_slot_view`（文字の配置先）は成立している。
+///
+/// 所有権の設定を初回 `ShowSurface` より**後**に置く実装では、指令が先に可視化してしまい
+/// `target_visible == Some(true)` で落ちる（順序そのものが檻に入っている）。装着 scope を
+/// 総当たりするため、先頭 scope だけを不可視化する部分適用も落ちる（Requirement 1.6）。
+#[test]
+fn attach_establishes_balloons_invisible_with_slot_and_surface() {
+    let (mut world, _gw) = gpu_attach_world();
+    let assets = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1], 96, 96)
+        .expect("emo2 fixture の BootAssets 組立は成功する");
+    let mut wiring = Emo2Wiring::new(
+        EmoPresenter::new(),
+        mpsc::channel::<PresentCommand>().1,
+        mpsc::channel::<MoveDirective>().1,
+        mpsc::channel::<TalkLifecycleSignal>().1,
+        Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default()))),
+        zero_clock(),
+        assets,
+    );
+
+    run_attach_phase(&mut wiring, &mut world);
+    assert!(
+        wiring.attached,
+        "前提: GhostWindows＋GPU 資源のゲート成立で attach が走る"
+    );
+    let scopes = wiring.balloon_model_scopes();
+    assert_eq!(
+        scopes,
+        vec![0u32, 1],
+        "前提: 両 scope の balloon 装着が成立している（片方でも欠けると総当たりが空虚になる）"
+    );
+
+    for scope in scopes {
+        let target = balloon_target(scope);
+        assert_eq!(
+            wiring.presenter.target_visible(target),
+            Some(false),
+            "scope{scope}: 起動直後のバルーンは不可視（Requirement 1.1・全 scope 適用の 1.6）"
+        );
+        assert_eq!(
+            wiring.presenter.current_surface_id(target),
+            Some(0),
+            "scope{scope}: 面 0 が確立している（撤去ではなく不可視のままの確立・Requirement 1.3）"
+        );
+        assert!(
+            wiring.presenter.text_slot_view(target).is_some(),
+            "scope{scope}: 文字の配置先が確立している（可視化から分離・Requirement 1.3）"
+        );
+    }
+}
+
 /// task 2.5（Req 1.3）: UI 配線層（`Emo2Wiring`）の presenter 読み口から collision-geometry の
 /// `resolve_hit_region` を呼べることを固定する。`input-events` の第一消費者（task 2.6/2.7 の
 /// `RegionSource::Presenter`）が `Emo2Wiring::presenter()` を借りて resolver を叩く経路の縮図。

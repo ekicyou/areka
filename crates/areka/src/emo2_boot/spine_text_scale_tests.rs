@@ -30,6 +30,15 @@ fn spine_dpi_change_refreshes_balloon_text_scale_on_real_attach() {
         "前提: attach 完了（balloon 初回表示＝文字層 actor 登録済み）が観測できない: {logs:?}"
     );
 
+    // attach 相はバルーンを不可視のまま確立する（`areka-P0-balloon-visibility` Requirement 1.1）。
+    // 本ケースの主題は**可視**バルーンの DPI 変化ゆえ、その前提をここで明示的に組む——不可視のままだと
+    // `refresh_scale` の可視ゲート（Hide/全透明退化を蘇らせない）に阻まれて適用 k が動かず、
+    // 観測すべき Flow 2 の正常系そのものが成立しない（不可視経路は下のケースが所有する）。
+    harness
+        .wiring
+        .show_balloon_target(&mut harness.world, balloon_target(0))
+        .expect("確立済みの balloon target は可視化できる");
+
     // 前提の非空虚性: attach で actor が登録され、balloon target は適用 k を持っている。
     let k_before = balloon_applied_scale(&harness, 0);
     // 前提: 本番経路の `Some(view)` が実際に成立している（`None` なら以降は縮退 skip の観測に

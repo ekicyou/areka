@@ -3,8 +3,10 @@
 //! `Emo2Wiring`（NonSend resource・presenter／rx／runtime／clock／assets／attached を保持）と
 //! 排他 system `emo2_frame_system(world: &mut World)`（donor パターン: remove→各フェーズ→insert）を
 //! 所有する。各フェーズ:
-//! - attach: GPU 資源＋`GhostWindows` 到達ゲート→`plan_attachments`（DD-12）→バルーン初回 `ShowSurface`
-//!   （面0）→文字層スロット取得→`register_actor_view`（`Option::take` で高々 1 回消費）。**シェルは初回
+//! - attach: GPU 資源＋`GhostWindows` 到達ゲート→`plan_attachments`（DD-12）→バルーンの可視性を
+//!   外部所有へ→**不可視のままの確立**（`ShowSurface` 面0）→文字層スロット取得→`register_actor_view`
+//!   （`Option::take` で高々 1 回消費）。バルーンは装着だけでは画面へ出ず、可視化はバルーン可視性制御が
+//!   別途付与する（`areka-P0-balloon-visibility` Requirement 1.1/1.3）。**シェルは初回
 //!   `ShowSurface` を発行せず**最初のさくらスクリプト `\s` cue まで非表示を保つ（defect #5・実機#5）。
 //! - dpi: `Changed<DPI>` の窓を永続 `SystemState` で観測し（`anchor_changed_system` 先例）、当該窓の
 //!   target を `refresh_scale` で再スケールして窓寸を reconcile する（emo-dpi-scaling task 4.2・D8）。
