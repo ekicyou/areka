@@ -61,8 +61,10 @@
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
+use bevy_ecs::world::World;
 use tracing::{info, warn};
 
+use super::frame::Emo2Wiring;
 use super::talk_lifecycle::TalkLifecycleSignal;
 
 /// バルーンを非表示にするまでの既定の待ち時間（秒）。**この値の定義箇所はここ 1 つだけ**
@@ -678,6 +680,36 @@ fn observe_suppression(obs: &VisibilityObservations, visible: &[u32]) -> Suppres
     }
     kinds
 }
+
+// ---------------------------------------------------------------------------
+// 相関数（フレームの相順から呼ばれる配線層）
+// ---------------------------------------------------------------------------
+
+/// バルーン可視性の相（`emo2_frame_system` の相順から毎フレーム呼ばれる配線）。
+///
+/// # 相順の中での位置（design 決定 D5）
+///
+/// drain（本フレームの表示指令の適用）の**直後**、窓寸 reconcile の**直前**に置く。3 つの
+/// 制約が同時に効いている:
+///
+/// - 本フレームの `\b` 指令をすべて適用し終えた**後**でなければ、判断が見る「現に可視か」が
+///   1 フレーム古い状態になる（Requirement 3.5）。
+/// - 表示が積む窓寸要求を同一フレームで消化できるよう、窓寸 reconcile の**前**に置く
+///   （非表示から表示へ移った時に窓寸が 1 フレーム遅れないこと・Requirement 6.6）。
+/// - 文字層の binding 再構築と描画より**上流**に置く（同じく Requirement 6.6）。
+///
+/// # 本体はまだ空である
+///
+/// 判断中核 [`decide`] の呼び出しと観測の収集・発行・ログは task 4.4 が実装する。本タスク
+/// （4.3）は挙動を変えない並べ替えだけを行うため、相の本体を意図的に空のままにしてある。
+/// 引数を先頭下線つきで受けているのはそのためで、4.4 が本体を書く時に下線が外れる。
+///
+/// # 事前条件
+///
+/// `Emo2Wiring` を world から取り出した状態（`emo2_frame_system` の内側）で呼ぶ。装着が未了で
+/// `wiring.balloon_models` が空なら対象 scope がゼロ件となり、本体が入った後も自然に no-op に
+/// なる（早期 return の特別扱いを持たない）。panic しない。
+pub(super) fn run_balloon_visibility_phase(_wiring: &mut Emo2Wiring, _world: &mut World) {}
 
 #[cfg(test)]
 #[path = "balloon_visibility_test_support.rs"]

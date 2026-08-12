@@ -17,8 +17,8 @@ use super::test_support::{
 // ── task 1.4 是正: frame 側 route 割当の檻（Req 1.2／2.4・design D13）──────────
 //
 // `reconcile_window_size` は **2 呼出元の共通末端**である（DPI 相＝`dpi_phase_with`／
-// drain 相＝`reconcile_reported_sizes`）。ここへ 1 つの route を貼り付けると、
-// `Changed<DPI>` 非依存の drain 相（初回表示の k₀ 補正を含む）まで「DPI 由来」と
+// drain 後段の報告回収＝`reconcile_reported_sizes`）。ここへ 1 つの route を貼り付けると、
+// `Changed<DPI>` 非依存の報告回収（初回表示の k₀ 補正を含む）まで「DPI 由来」と
 // 名乗ってしまい、Req 1.9 の 2 段 grep 突合（セッション②＝ドラッグ禁止・OS 側 DPI 変更のみ）
 // に**偽陽性**が混じる。ゆえに route は呼出元ごとに別語でなければならない（D13）。
 //
@@ -52,7 +52,7 @@ fn resnap_from_sizes_records_the_resnap_route() {
     );
 }
 
-/// **D13 の核心**: DPI 相（`Changed<DPI>` 由来）と drain 相（報告回収・エッジ非依存）は
+/// **D13 の核心**: DPI 相（`Changed<DPI>` 由来）と drain 後段の報告回収（エッジ非依存）は
 /// **別々の経路名**で記録される。同一の共通末端を通ることは route の同一性を意味しない。
 #[test]
 fn dpi_phase_and_drain_phase_record_distinct_routes() {
@@ -74,7 +74,7 @@ fn dpi_phase_and_drain_phase_record_distinct_routes() {
         window_move_lines(&dpi_events)
     );
 
-    // --- drain 相: `Changed<DPI>` を一切動かさずに報告だけを積む（＝表示成立由来）---
+    // --- drain 後段の報告回収: `Changed<DPI>` を一切動かさずに報告だけを積む（＝表示成立由来）---
     source.pending.insert(shell_target(0).0, (900, 1400));
     let (_, drain_events) =
         capture_diag_logs(|| reconcile_reported_sizes(&mut source, &mut world));
@@ -82,7 +82,7 @@ fn dpi_phase_and_drain_phase_record_distinct_routes() {
     assert_eq!(
         drain_routes,
         vec!["ReportedSizeReconcile"],
-        "drain 相の書込が ReportedSizeReconcile として記録されない: {:?}",
+        "drain 後段の報告回収の書込が ReportedSizeReconcile として記録されない: {:?}",
         window_move_lines(&drain_events)
     );
 
@@ -94,7 +94,7 @@ fn dpi_phase_and_drain_phase_record_distinct_routes() {
 
 /// **完了状態（tasks.md 1.4）**: DPI 変化ゼロの起動で `DpiReproject` レコードが 1 行も出ない。
 ///
-/// 初回表示の k₀ 補正は drain 相（`reconcile_reported_sizes`）で landing する
+/// 初回表示の k₀ 補正は drain 後段の報告回収（`reconcile_reported_sizes`）で landing する
 /// （`frame.rs` の `run_dpi_phase` doc「初回表示の k₀ 補正＝Flow 3 手順 5 はこちらの経路で
 /// landing する」）。この走行を `DpiReproject` と名乗らせると、セッション②の受理回数突合が
 /// 起動ごとに偽陽性を拾う。

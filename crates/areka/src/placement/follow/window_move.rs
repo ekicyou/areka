@@ -103,7 +103,7 @@ pub fn move_window_to(world: &mut World, window: Entity, x: i32, y: i32) -> bool
 ///
 /// 本関数は複数の上流（[`anchor_changed_system`]＝[`PlacementRoute::AnchorChange`]・
 /// frame の毎フレーム再スナップ＝[`PlacementRoute::Resnap`]・frame の DPI 相＝
-/// [`PlacementRoute::DpiReproject`]・frame の drain 相（寸法報告回収・`Changed<DPI>` 非依存）＝
+/// [`PlacementRoute::DpiReproject`]・frame の drain 後段（寸法報告回収・`Changed<DPI>` 非依存）＝
 /// [`PlacementRoute::ReportedSizeReconcile`]・D13）から呼ばれる**同一の反映口**であり、どの経路が
 /// 書いたかは呼出側しか知らない。ゆえに経路は引数で受け、[`enqueue_window_set_pos`] の
 /// 窓移動レコードへ透過させる（D11: ラッパ関数を乱立させない）。

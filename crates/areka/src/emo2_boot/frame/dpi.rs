@@ -114,7 +114,7 @@ pub(super) fn classify_ghost_window(
 /// 別物である:
 ///
 /// - [`dpi_phase_with`]（`Changed<DPI>` エッジ由来）→ [`PlacementRoute::DpiReproject`]
-/// - [`reconcile_reported_sizes`]（drain 相の報告回収・**初回表示の k₀ 補正を含み**
+/// - [`reconcile_reported_sizes`]（drain の後段で行う報告回収・**初回表示の k₀ 補正を含み**
 ///   `Changed<DPI>` 非依存）→ [`PlacementRoute::ReportedSizeReconcile`]
 ///
 /// ゆえに route を本関数の内部で決め打ちしてはならない——決め打つと DPI 変化ゼロの起動でも
@@ -150,7 +150,7 @@ pub(super) fn reconcile_window_size(
     match kind {
         // キャラ窓: アンカー射影 T を再適用して接地点（下端中央）を保つ。
         // 経路タグは呼出元が渡した route を透過させる（本関数は共通末端であって経路ではない
-        // ＝DPI 相と drain 相を 1 語で名乗らせない・Req 1.2／D13）。
+        // ＝DPI 相と drain 後段の報告回収を 1 語で名乗らせない・Req 1.2／D13）。
         GhostWindowKind::Char => resize_window_to(world, window, new_size, route),
         // バルーン窓: 位置は追従で決まる従属量ゆえ据え置き、寸だけ差し替える
         // （経路語彙は関数名そのもの＝KeepPositionResize ゆえ route を消費しない）。
@@ -227,7 +227,7 @@ pub(super) type DpiChangedQuery = Query<
 ///
 /// 再導出・再表示の失敗は presenter が `error!`＋`None` で前 k・前表示を維持する。本関数は
 /// `None` で**窓寸を一切触らない**（前寸維持）——位置だけは上記のとおり現寸で射影を通す
-/// （寸が古いまま位置だけ正す瞬間は同一フレームの drain 相 reconcile が閉じる・D7）。
+/// （寸が古いまま位置だけ正す瞬間は同一フレームの drain 後段の reconcile が閉じる・D7）。
 /// panic しない。
 pub(super) fn dpi_phase_with<S: ScaleReportSource>(
     source: &mut S,
@@ -372,8 +372,10 @@ pub(super) fn reproject_char_window_at_current_size(world: &mut World, window: E
 /// # 窓寸 reconcile の第 2 経路
 ///
 /// エッジ（`Changed<DPI>`）観測は「再表示のトリガ」に徹する。窓寸の整合そのものは**表示が成立
-/// したという状態**に紐づき、[`run_drain_phase`] 末尾の [`reconcile_reported_sizes`] が同一
-/// フレーム内で拾う（初回表示の k₀ 補正＝Flow 3 手順 5 はこちらの経路で landing する）。両者は
+/// したという状態**に紐づき、[`emo2_frame_system`](super::emo2_frame_system) が drain の後段で
+/// 直接呼ぶ [`reconcile_reported_sizes`] が同一フレーム内で拾う（初回表示の k₀ 補正＝Flow 3
+/// 手順 5 はこちらの経路で landing する。呼び出し位置は `areka-P0-balloon-visibility` design
+/// 決定 D5・task 4.3 で `run_drain_phase` 末尾から相順の所有者へ移した）。両者は
 /// presenter の消費規約により二重にも取りこぼしにもならない。
 ///
 /// # 文字層の k 追従は本フェーズが担わない（task 7.2・D11-4・Req8）

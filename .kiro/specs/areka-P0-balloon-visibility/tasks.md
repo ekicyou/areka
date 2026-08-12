@@ -82,7 +82,7 @@
   - _Requirements: 1.1, 1.5, 1.6, 6.8, 9.6_
   - _Depends: 1.2_
 
-- [ ] 4.3 可視性の相をフレームの相順へ挿入する
+- [x] 4.3 可視性の相をフレームの相順へ挿入する
   - 窓寸法の反映を相順の所有者側へ純粋に移し、可視性の相を「そのフレームの表示指令を適用し終えた後」かつ「窓寸法の反映より前」かつ「文字の再配置と描画より前」に挿入する（この時点では相は空実装でよい）
   - 完了状態: 相順が指定どおりに並び替わり、窓寸法の反映が相順の所有者側から 1 回だけ呼ばれ、既存の検査群が緑のまま（挙動の変化を伴わない純粋な並べ替えであることが確認できる）
   - _Requirements: 3.5, 6.6, 9.6_
@@ -187,6 +187,10 @@
 - **design 本文の file:line が 2 件陳腐化している**（実装の欠陥ではなく、主張内容自体は正しい）——`apply_show` は `show.rs:23-277` ではない、`VisualMount::set_visible` は `mount.rs:193-216` ではない。design の file:line は都度実測し直すこと。
 - **2.2 で `on_balloon_pointer_moved` の借用手順②が共有借用から可変借用へ変わった**（`balloon.rs:398-403`）。`Mut<BalloonWiring>` は `.map()` クロージャ内に閉じ、手順③の `runtime.try_borrow()` より前に落ちるため二重借用は不可能。縮退順序・ログレベル・ログ event 名は不変。
 - **2.2 の記録側と解除側は `Emo2Wiring` 依存が意図的に非対称**（記録は在席を要求・解除は無条件）。どちらも「抑止しない側」へ倒れる形であり要件 5.5 の指定どおり。`Emo2Wiring` は `frame.rs:137` の `remove_non_send_resource` で毎フレーム一時的に world から抜けるため、不在は実在する過渡状態である。
+- **相順は 9 相**（4.3 で確定）——attach → dpi → drain（適用のみ）→ **balloon_visibility** → **reconcile** → move_drain → resnap → text_scale → text。`reconcile_reported_sizes` は `run_drain_phase` から相順の所有者 `emo2_frame_system` へ純移動済みで、本番呼び出しは `frame.rs` の 1 箇所のみ（`drain_resnap.rs` は import ごと落としてあるので、呼び戻すとコンパイルが通らない）。**相の本体は空**で、中身はタスク 4.4 が書く。
+- **reconcile が装着前フレームでも走るようになった**（移動前は `run_drain_phase` の `attached` 早期 return の内側だった）。presenter に target が 1 つも無い間は全アームが短絡するため無操作で、既存の未装着テストが緑のまま押さえている。**装着前に走ってはいけない処理をこの相の後段へ足さないこと**。
+- **相順を固定するテストはリポジトリに存在しない**（4.3 で全 `emo2_frame_system` 呼び出し元を実測）。「指令適用後の実状態で判断されること」「表示遷移フレームで窓寸が同一フレームに届くこと」は**タスク 6.6 の所有**であり、空の相では呼び出し順しか主張できないため 4.3 では追加しなかった。
+- **未使用許容の孤児 1 件（担当未定・本 spec の担当外）**: `placement/follow/window_move.rs:134` の `resize_window_to` に付いた `#[allow(dead_code)]` は実測で非 load-bearing。注記は「呼び出し側は後続 task の領分」と述べているが、実際には `frame/dpi.rs:154` / `:350` / `frame/drain_resnap.rs:133` の 3 箇所から本番到達している。**HEAD 時点で既に陳腐化しており本 spec の変更が原因ではない**ため 4.3 では触っていない。同ファイル `:637` は `cargo check -p areka` が examples をビルドしないため判定不能で、`cargo check -p areka --examples` が要る。`placement` を触る spec が拾うこと。
 - **⚠ cargo の結果を根拠にする前に再ビルドが走ったことを確認すること**。4.2 で**成果物の陳腐化による偽の赤**が発生した——HEAD 版のテストファイルと作業ツリー版の実装が混成でリンクされ、`spine_dpi_change_refreshes_balloon_text_scale_on_real_attach` が 6/6 で落ちた。cargo は mtime ベースの freshness 判定で当該ユニットを fresh と誤認しており、`Finished ... in 0.24s`（`Compiling areka` 行なし）だった。**並行サブエージェントが共有 `target/` へ編集しながらビルドする構成が誘発条件**。判定前に `cargo clean -p areka` か crate 内 `.rs` の touch を挟み、出力に `Compiling areka` があることを確認する。偽の緑も同じ機序で起こりうる。
 - **テスト間のプロセス汚染が 1 件実在する（本 spec の担当外）**: `emo2_boot/mod.rs:554` のテストが `WinApp::new()` 経由で `SetProcessDpiAwarenessContext`（`wintf/src/runtime/mod.rs:117`・プロセス全体・一度きり）を立てるため、以後 `GetDpiForSystem()`（`wintf/src/ecs/window/components.rs:195`）が 96 でなく実機 DPI を返すようになる。`bump_window_dpi`（`spine_test_support.rs:74-83`）が現在値と必ず異なる方を選ぶ設計なので**合否は環境非依存**で、影響は診断メッセージの数値のみ。担当は **test-cage-determinism（W6.9）**。
 - **不可視のバルーンは dpi 相で拡大率を拾わない**（`refresh_scale` の可視ゲート・`areka-emo-present/src/presenter/refresh.rs:74-80`・4.2 以前から存在）。要件 6.6 は `show_target` が `apply_show` の漏斗を再通過して表示時に k を導出し直すことで満たされる。**不可視中の DPI 変化を検査するテストは、可視化してから k を測ること**。
