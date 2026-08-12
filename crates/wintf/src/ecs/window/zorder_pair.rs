@@ -15,11 +15,16 @@
 //! - `decide_pair_fix`: 是正判断の純関数（実機・World 不要）
 //! - 診断記録の語彙: 行を組む純関数（`*_line`）と、それを出すだけの `log_*`／`record_*`
 //!
-//! 確立系・維持系は本フィーチャーの後続タスクが同ファイルへ足す。
+//! 確立系は兄弟モジュール [`super::zorder_pair_establish`] にある（本ファイルが 1,000 行の
+//! 上限に迫るため分割した）。維持系は本フィーチャーの後続タスクが足す。
+//! **記録を出すマクロは本ファイル内に置くこと**——`tracing` の出力先は呼び出し元の
+//! module path が既定であり、他ファイルへ移すとサインオフの grep 対象が分裂する。
 
 use bevy_ecs::prelude::*;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 use windows::Win32::Foundation::HWND;
+
+use crate::api::get_window_above;
 
 // ============================================================================
 // KeepDirectlyAbove - ペア関係の永続宣言
@@ -521,9 +526,33 @@ fn sink_observed_line(
     )
 }
 
+/// 指定窓の 1 つ手前にある窓を実測する（走査の失敗は不在へ潰したうえで記録に残す）。
+///
+/// 記録に載る実測値の型は `Option<HWND>` であり、「手前に誰も居ない」と「走査に失敗した」は
+/// どちらも不在（記録では番兵 `-`）になる。値としてこの 2 つを分けないのは、載せる先の
+/// フィールドが 1 つだからである——**代わりに失敗そのものを必ず記録へ残す**ことで、
+/// 番兵が出た理由が事後に読めるようにする（[areka-log-first-no-silent-failure]）。
+///
+/// 失敗の記録に `[zorder-pair] ...` のタグを付けないのは、サインオフの grep 判定語が
+/// design.md「診断ログ語彙（要件 6）」のレコード表で閉じているためである（判定語を
+/// 勝手に増やさない）。出力先は本モジュール既定のままで、水準は warn——
+/// 走査が失敗しても是正そのものは続行でき、利用者の操作は妨げられない（要件 6.4）。
+pub(crate) fn measure_window_above(hwnd: HWND) -> Option<HWND> {
+    match get_window_above(hwnd) {
+        Ok(found) => found,
+        Err(err) => {
+            warn!(
+                "窓の 1 つ手前の走査に失敗しました（記録には不在として載ります） hwnd={hwnd} error={code:?} message={message}",
+                hwnd = hwnd_field(Some(hwnd)),
+                code = err.code(),
+                message = err.message(),
+            );
+            None
+        }
+    }
+}
+
 /// owner 確立の記録を出す（info・要件 6.1）。
-// 呼び出しの結線は後続タスク（確立系 `establish_owner_links`）で入る。
-#[allow(dead_code)]
 pub(crate) fn log_owner_established(
     entity: Entity,
     peer: Entity,
@@ -540,9 +569,8 @@ pub(crate) fn log_owner_established(
 /// owner 確立失敗の記録を出す（error・要件 6.2）。
 ///
 /// 記録するだけで再試行はしない——同じハンドルでの再試行は同じ失敗を繰り返し、
-/// 記録を二重化するだけである（design.md「Error Strategy」）。
-// 呼び出しの結線は後続タスク（確立系 `establish_owner_links`）で入る。
-#[allow(dead_code)]
+/// 記録を二重化するだけである（design.md「Error Strategy」）。再試行を抑える印は
+/// 呼び出し側（確立系）が付ける（[`OwnerEstablishFailed`](super::OwnerEstablishFailed)）。
 pub(crate) fn log_owner_establish_failed(entity: Entity, error: &windows::core::Error) {
     error!("{}", owner_establish_failed_line(entity, error));
 }
@@ -570,10 +598,9 @@ pub(crate) fn log_sink_observed(
 /// # これは規約であって構造保証ではない
 ///
 /// [`decide_pair_fix`] は `pub(crate)` で [`PairFixDecision::Skip`] をそのまま返すため、
-/// 本関数を通さずに判断結果を握り潰す書き方は**言語上は可能**である。加えて design.md
-/// 「File Structure Plan」は確立系・維持系を本ファイルへ置くと定めており、その実装
-/// （タスク 2.2）は同一モジュールに来る——モジュールが Rust の可視性境界である以上、
-/// 可視性で塞ぐ余地は無い。したがってここにあるのは
+/// 本関数を通さずに判断結果を握り潰す書き方は**言語上は可能**である。`pub(crate)` は
+/// クレート内のどのモジュールからも呼べる可視性であり、維持系（タスク 2.2）を別ファイルへ
+/// 置いても塞げない——狭めるには戻り値の型を変えるしかない（下記）。したがってここにあるのは
 /// **「判断結果を適用へ渡すときは必ず本関数を経由する」という規約**であり、
 /// 記録の無い見送りが起きないことは 2.2 がこの規約を守ることに依存している。
 ///
@@ -586,8 +613,10 @@ pub(crate) fn log_sink_observed(
 /// この形はタスク 1.3 でレビュー承認済みである。診断語彙の都合で承認済みの判断関数の
 /// 署名を変えるのは、変更の理由と場所が食い違う。規約側で守り、逸脱はテスト
 /// （見送り 5 種が理由つきで記録されること）とレビューで検出する。
-// 呼び出しの結線は後続タスク（維持系 `apply_zorder_pair_maintenance`）で入る。
-#[allow(dead_code)]
+///
+/// 確立系（[`establish_owner_links`](super::establish_owner_links)）も見送りをここへ通す
+/// ——確立は [`decide_pair_fix`] を経由しない判断だが、**見送りの記録語彙は 1 つ**であり、
+/// 理由も既存の 5 種で尽きるため、入口を分けない。
 pub(crate) fn record_decision(
     entity: Entity,
     peer: Entity,

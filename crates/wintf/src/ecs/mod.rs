@@ -47,8 +47,8 @@ pub use widget::{
 pub use window::{
     DPI, DpiChangeContext, DpiSuggestedRectPolicy, ExpectedOrder, KeepDirectlyAbove,
     ReassertZOrder, SetWindowPosCommand, Window, WindowHandle, WindowPos, WindowStyle, ZOrder,
-    ZOrderPairStrategy, find_owner_window, flush_window_pos_commands, guarded_set_window_pos,
-    is_self_initiated,
+    ZOrderPairStrategy, establish_owner_links, find_owner_window, flush_window_pos_commands,
+    guarded_set_window_pos, is_self_initiated,
 };
 pub(crate) use window_proc::dispatch_window_message;
 pub use world::{

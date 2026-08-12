@@ -6,6 +6,7 @@ mod window_handle;
 mod window_pos;
 pub(crate) mod window_system;
 mod zorder_pair;
+mod zorder_pair_establish;
 
 pub use command::*;
 pub use components::*;
@@ -13,3 +14,4 @@ pub use dpi::*;
 pub use window_handle::*;
 pub use window_pos::*;
 pub use zorder_pair::*;
+pub use zorder_pair_establish::*;

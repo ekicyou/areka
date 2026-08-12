@@ -136,14 +136,20 @@ graph TB
 
 ```
 crates/wintf/src/ecs/window/
-├── zorder_pair.rs             # ペア宣言・維持の唯一の住処:
-│                              #   KeepDirectlyAbove / ReassertZOrder / OwnerLink /
-│                              #   ZOrderPairStrategy / decide_pair_fix（純関数）/
-│                              #   establish_owner_links（案A系）/
-│                              #   apply_zorder_pair_maintenance（維持系）/ 診断ログ出力
-└── zorder_pair_tests.rs       # 兄弟テストファイル（純関数全腕・system 檻は不使用の
-                               #   決定論的 World テスト・ログ捕捉は capture_under_filter）
+├── zorder_pair.rs             # ペア宣言・判断・診断記録の住処:
+│                              #   KeepDirectlyAbove / ReassertZOrder / ExpectedOrder /
+│                              #   OwnerLink / ZOrderPairStrategy /
+│                              #   decide_pair_fix（純関数）/ 診断ログ出力（*_line と log_*）/
+│                              #   apply_zorder_pair_maintenance（維持系）
+├── zorder_pair_establish.rs   # establish_owner_links（案A系）
+└── *_tests.rs                 # 各実装ファイルの兄弟テスト（決定論的 World テスト・
+                               #   ログ捕捉は capture_under_filter）
 ```
+
+> 1 ファイル 1,000 行の上限があるため実装フェーズで分割してよい（実際に確立系は
+> `zorder_pair_establish.rs` へ分けた）。ただし **`tracing` の記録を出すマクロは
+> `zorder_pair.rs` 内に置く**——出力先は呼び出し元の module path が既定であり、
+> 他ファイルへ移すとサインオフ grep の target が分裂する。
 
 ```
 .kiro/specs/areka-P0-ghost-window-zorder/verification/

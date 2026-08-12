@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. 基盤: 重なり関係の宣言と判断の中核
+- [x] 1. 基盤: 重なり関係の宣言と判断の中核
 - [x] 1.1 窓の重なりを OS へ問い合わせ、owner 関係を張り外す手段を用意する
   - ある窓の 1 つ手前／1 つ背後にある窓を OS へ問い合わせる手段を追加する
   - ある窓の owner を設定する手段と、owner を外す手段を追加する
@@ -38,7 +38,7 @@
   - _Depends: 1.2_
 
 - [ ] 2. 案 A（本線）: owner による重なり保証の確立と維持
-- [ ] 2.1 両窓のハンドルが揃った時点で owner を一度だけ張る確立処理を実装する
+- [x] 2.1 両窓のハンドルが揃った時点で owner を一度だけ張る確立処理を実装する
   - 両方の窓に OS のハンドルが付いた巡で、バルーン窓の owner をキャラ窓に設定する
   - 成功したら確立の記録を残し、初期の隣接を確定させるため再断行の要求を一度入れる
   - 失敗したら error 水準で記録し、同じハンドルでの再試行は繰り返さない（窓は現行どおり表示され続ける）
@@ -192,6 +192,11 @@
 - (1.1) `windows` 0.62 の `GetWindow` は「隣が無い」場合も `Err` を返す。`SetLastError(ERROR_SUCCESS)` で先にクリアし `err.code() == S_OK` を「不在＝`Ok(None)`」へ写像して失敗と切り分けている。
 - (1.1) **トップレベル窓の重なり隣接は同一テストバイナリ内で決定論にならない**（他テストの窓が割り込む）。決定論的テストは私有の親窓＋子窓 2 枚（兄弟列を閉じる）で行う。実窓の隣接そのものは実機サインオフ（要件 7.2）の担当。
 - (1.2) `ExpectedOrder` は design.md の State ブロックが型として参照するだけで定義していないため実装側で補完した（`above`／`below` の 2 HWND・座標フィールド無し）。`ZOrderPairStrategy` にも `Default`（案 A・raise assist 無効）を足している——**`init_resource` で暗黙に案 A が入りうるため、areka main 側では必ず明示 `insert_resource` で選択結果を入れること**（タスク 3.2／5.1 の前提）。
+- (2.1) 確立系は `zorder_pair_establish.rs` へ分割した（`zorder_pair.rs` が 1,000 行の上限に迫るため）。design「File Structure Plan」も追随済み。**ただし `tracing` の記録を出すマクロは `zorder_pair.rs` 内に置くこと**——出力先は呼び出し元の module path が既定で、他ファイルへ移すとサインオフ grep の target（`wintf::ecs::window::zorder_pair`）が分裂する。確立系は記録用の関数を呼ぶだけでマクロを持たない形にしてある。
+- (2.1) 再試行抑止の印は新規コンポーネント `OwnerEstablishFailed { owned_hwnd, owner_hwnd }`（試した**ハンドルの組**を持つので、窓が作り直されて別ハンドルになれば再び試みる）。`OwnerLink` は「張れた事実」で切離し（2.3）が有無で対象を選ぶため流用しない。なお `WindowHandle` の挿入点は `window_factory.rs` の 1 箇所のみで再付与経路が無いため、この印は現行 production 経路では到達しない防御である。
+- (2.1) 印が立った巡では**見送りの記録を出さない**（design「Error Handling」の「回復は次の `Added<WindowHandle>` 巡では行わない・ログ二重化を避ける」に従う）。諦めの事実と理由は `owner-establish-failed`（error）として既に 1 本残っているため要件 6.3 は満たす、というのがレビュー裁定。
+- (2.1) 確立の見送りは `decide_pair_fix` を通さず `record_decision` へ直接渡す（確立は是正判断ではないが記録語彙は 1 つで足り、理由も既存 5 種で尽きる）。**ストラテジ判定を生存・ハンドル判定より先に置いている**（`decide_pair_fix` とは逆順）——案 B では owner をそもそも張らないので、相手不在を理由に挙げると本当の理由が記録から消えるため。
+- (2.1) owner の設定・読み戻しは**自プロセス所有の実窓 2 枚で決定論的に成立する**（1.1 の非決定は「トップレベル窓の**重なり隣接**」であって owner 関係ではない）。テストは `WS_POPUP` の非表示窓を実際に作り `GetWindow(GW_OWNER)` で OS 側の事実まで検査している。失敗経路は無効ハンドル（null HWND）で決定論的に作れる。
 - (1.4) **タスク 2.2 のレビュー必須確認項目**: 「記録の無い見送りが起きない」ことは**規約であって構造保証ではない**。`decide_pair_fix` は `pub(crate)` で `Skip` をそのまま返せ、design「File Structure Plan」が確立系・維持系を同一ファイルへ置くと定めている以上モジュール可視性でも塞げない。維持系は判断結果を必ず `record_decision` へ通すこと。型で包んで構造保証にする案は、1.3 で承認済みの `decide_pair_fix` 署名（design「Service Interface（純関数）」に逐語明記）の改訂を伴うため不採用とした（裁定理由はコードの doc に記載）。
 - (1.4) 診断記録は「行を組む純関数 `*_line` ＋ 出力関数」の二層（areka `placement/diag.rs` の先例に倣う）。出力先は module path 既定 `wintf::ecs::window::zorder_pair`。`record_decision` が見送りを必ず理由つきで記録して是正だけを返し、`record_verification` が一致→`fix`(debug)／不一致→`verify-failed`(error) を出す。`PairFixDecision::insert_spec()` は**2.2 が適用時に挿入位置を取り出して次巡へ持ち越す**ための射影（是正の記録は適用の次巡に出るため）。
 - (1.4) `verify-failed` は実測が `None` の場合も error。`GetWindow(GW_HWNDNEXT)` の `None` は「背後に窓なし」という**有効な実測**であって取得失敗ではないため。要件 1.5（片方不在）は `Skip(PeerMissing)` が指令発行前に止めるので正常系が error を吐く経路にはならないが、**2.2 は「指令発行後・検証前に peer が破棄された」巡で漫然と `record_verification` を呼ばないこと**（peer 生存を先に見る）。

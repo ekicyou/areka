@@ -64,7 +64,6 @@ fn get_window_relative(hwnd: HWND, ucmd: GET_WINDOW_CMD) -> Result<Option<HWND>>
 ///
 /// 最前面でこれ以上手前が無い場合は `Ok(None)`。失敗は `Err` で返し、記録は呼び出し側が行う。
 #[inline(always)]
-#[allow(dead_code)] // 呼び出しの結線は本フィーチャーの後続タスク（維持系・観測）で入る
 pub(crate) fn get_window_above(hwnd: HWND) -> Result<Option<HWND>> {
     get_window_relative(hwnd, GW_HWNDPREV)
 }
@@ -74,7 +73,7 @@ pub(crate) fn get_window_above(hwnd: HWND) -> Result<Option<HWND>> {
 /// 対応関係は [`get_window_above`] の doc を参照（背面側＝`GW_HWNDNEXT`）。
 /// 最背面でこれ以上背後が無い場合は `Ok(None)`。失敗は `Err` で返す。
 #[inline(always)]
-#[allow(dead_code)] // 呼び出しの結線は本フィーチャーの後続タスク（維持系・観測）で入る
+#[allow(dead_code)] // 呼び出しの結線は維持系（タスク 2.2）の適用後検証で入る
 pub(crate) fn get_window_below(hwnd: HWND) -> Result<Option<HWND>> {
     get_window_relative(hwnd, GW_HWNDNEXT)
 }
@@ -86,7 +85,6 @@ pub(crate) fn get_window_below(hwnd: HWND) -> Result<Option<HWND>> {
 /// 前面へ連れて上がる（要件 1.1 の確立手段）。
 /// 失敗は握り潰さず `Err` で返す（記録は呼び出し側・要件 6.2）。
 #[inline(always)]
-#[allow(dead_code)] // 呼び出しの結線は本フィーチャーの後続タスク（owner 確立系）で入る
 pub(crate) fn set_window_owner(hwnd: HWND, owner: HWND) -> Result<()> {
     set_window_long_ptr(hwnd, GWLP_HWNDPARENT, owner.0 as isize).map(|_| ())
 }
@@ -98,7 +96,7 @@ pub(crate) fn set_window_owner(hwnd: HWND, owner: HWND) -> Result<()> {
 /// semantics へ戻し、要件 5.9（破棄が重複しても異常終了しない）を構造的に満たす。
 /// 失敗は握り潰さず `Err` で返す。
 #[inline(always)]
-#[allow(dead_code)] // 呼び出しの結線は本フィーチャーの後続タスク（破棄経路）で入る
+#[allow(dead_code)] // 呼び出しの結線は破棄時の owner 切離し（タスク 2.3）で入る
 pub(crate) fn clear_window_owner(hwnd: HWND) -> Result<()> {
     set_window_long_ptr(hwnd, GWLP_HWNDPARENT, 0).map(|_| ())
 }
