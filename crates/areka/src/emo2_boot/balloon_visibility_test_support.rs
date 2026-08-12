@@ -9,8 +9,8 @@
 use std::collections::BTreeMap;
 
 use super::{
-    BalloonVisibilityState, ScopeObservation, TalkLifecycleSignal, VisibilityDecision,
-    VisibilityObservations, decide,
+    BalloonVisibilityState, DEFAULT_BALLOON_TIMEOUT_SECS, ScopeObservation, TalkLifecycleSignal,
+    VisibilityDecision, VisibilityObservations, decide,
 };
 
 /// 観測できた scope（可視グリフ数と実可視）。抑止条件はいずれも「観測できて不成立」。
@@ -89,12 +89,15 @@ pub(crate) struct Frame {
 }
 
 impl Frame {
-    /// 観測から 1 フレームを組む（既定は時刻なし・タイムアウト 30 秒・抑止なし・信号なし）。
+    /// 観測から 1 フレームを組む（既定は時刻なし・タイムアウトは既定時間・抑止なし・信号なし）。
+    ///
+    /// タイムアウトの既定は [`DEFAULT_BALLOON_TIMEOUT_SECS`] から引く（Requirement 4.2——
+    /// 同じ数値を複数箇所へ散らさない）。
     pub(crate) fn new(entries: &[(u32, ScopeObservation)]) -> Self {
         Self {
             obs: observations(entries),
             now: None,
-            timeout_secs: 30.0,
+            timeout_secs: DEFAULT_BALLOON_TIMEOUT_SECS,
         }
     }
 

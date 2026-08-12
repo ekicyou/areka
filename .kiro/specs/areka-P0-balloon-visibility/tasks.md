@@ -59,7 +59,7 @@
   - _Depends: 2.1_
   - _Boundary: BalloonVisibilityController_
 
-- [ ] 3.3 タイムアウト既定値の単一定義と実機観測用の短縮手段を用意する
+- [x] 3.3 タイムアウト既定値の単一定義と実機観測用の短縮手段を用意する
   - 既定 30 秒を 1 箇所の定義から供給し、実機サインオフ用に環境変数での短縮を受け付ける（一度だけ解析・不正値は警告して既定へ縮退）
   - 起動時に採用値とその供給源を 1 行記録する
   - 解析の縮退表（未設定／正値／0／負／非数）を決定論テストで網羅する
@@ -186,6 +186,10 @@
 - **design 本文の file:line が 2 件陳腐化している**（実装の欠陥ではなく、主張内容自体は正しい）——`apply_show` は `show.rs:23-277` ではない、`VisualMount::set_visible` は `mount.rs:193-216` ではない。design の file:line は都度実測し直すこと。
 - **2.2 で `on_balloon_pointer_moved` の借用手順②が共有借用から可変借用へ変わった**（`balloon.rs:398-403`）。`Mut<BalloonWiring>` は `.map()` クロージャ内に閉じ、手順③の `runtime.try_borrow()` より前に落ちるため二重借用は不可能。縮退順序・ログレベル・ログ event 名は不変。
 - **2.2 の記録側と解除側は `Emo2Wiring` 依存が意図的に非対称**（記録は在席を要求・解除は無条件）。どちらも「抑止しない側」へ倒れる形であり要件 5.5 の指定どおり。`Emo2Wiring` は `frame.rs:137` の `remove_non_send_resource` で毎フレーム一時的に world から抜けるため、不在は実在する過渡状態である。
+- **タスク 8.1 の実機サインオフ向け訂正**: design の実機手順は起動ログを `timeout_secs=30 source=default` で grep せよと書いているが、`tracing` の `f64` フィールドは Debug 形で出るため実際は **`timeout_secs=30.0`** になる。値も供給源も同じ 1 行に載っているので grep 文字列に `.0` を足せばよい（design の記述側の誤りで、実装の欠陥ではない）。
+- **タスク 4.4 が起動時記録を発火させる**: 3.3 は `configured_timeout_secs` の記録機構を作ってテストまで済ませたが、**起動時に呼ぶ配線は 4.4 の所有**。3.3 完了時点で本番呼び手はゼロなので、完了条件の「起動で記録される」はまだ成立していない。
+- **`balloon_visibility.rs` の未使用許容は 2 本**（`:153` `configured_timeout_secs`・`:368` `decide`）。前者 1 本だけで 7 項目（`DEFAULT_BALLOON_TIMEOUT_SECS` / `TIMEOUT_ENV_KEY` / `TimeoutSource` / `as_str` / `parse_timeout_ms` / `resolve_timeout_secs` / 自身）を live に見せている。**4.4 の配線でこの 2 本とも撤去できるはず**で、できないなら理由を実測すること。
+- **タイムアウト設定のテストは別ファイル `balloon_visibility_timeout_config_tests.rs`**（3.3 が新設）。`balloon_visibility_tests.rs` を 1,000 行超にしないための分割で、タスク 6.2 の分割計画とは別物。
 - **タスク 4.4 が裁定すべき残件**: `DisplayEndSignalMissing` は `now_talk_time` が `None` のフレームでは生成されない（`decide_timeout` が早期 return するため）。「信号未着のまま可視コンテンツが現れ、かつ talk 起点が未確立で、以後 1 度も新規表示が無い」という三重の縮退でのみ、要件 4.8 の**記録**だけが落ちる（表示を保持する主義務は成立し、方向も表示保持側）。4.4 の配線で観測できる形にするか、design の Error Strategy 側で明示的に許容するかを決めること。
 - **`balloon_visibility_tests.rs` は 3.2 完了時点で 979 行**。タスク 6.2 が同じファイルへタイムアウト・抑止の網羅表を足すと 1,000 行を超える。design の File Structure Plan が「テーマ超過時はさらに分割」と既に想定しているので、**6.2 は分割を計画に織り込むこと**（スコープ逸脱ではない）。
 - **`decide` の未使用許容は撤去できなかった**（3.2 完了時点でも本番呼び手ゼロ＝タスク 4.4 が解消する）。この 1 本が到達可能な型 17 個を live に見せているため、このモジュールへ属性を足すと本当に死んでいるコードが見えなくなる。`BalloonVisibilityState` の許容は 3.2 でフィールドが読まれるようになり撤去済み。

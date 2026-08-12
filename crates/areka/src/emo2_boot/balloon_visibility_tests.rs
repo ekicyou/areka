@@ -353,8 +353,9 @@ fn conversation_scoped_state_is_untouched_by_content_decisions() {
 
 /// 会話の占有終端（talk 相対秒）。
 const DISPLAY_END: f64 = 10.0;
-/// タイムアウト時間（秒）。既定値の供給は task 3.3 が所有するため、ここでは値を明示で渡す。
-const TIMEOUT: f64 = 30.0;
+/// タイムアウト時間（秒）。既定値の唯一の定義箇所から引く（Requirement 4.2——同じ数値を
+/// 複数箇所へ散らさない）。各フレームへは [`Frame::timeout`] で明示に渡す。
+const TIMEOUT: f64 = DEFAULT_BALLOON_TIMEOUT_SECS;
 
 /// scope 0 が可視・scope 1 は無発話のまま、満了予定 30.0 の計測が立っている状態を作る
 /// （占有終端 0.0 ＋ タイムアウト 30 秒）。

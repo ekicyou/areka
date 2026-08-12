@@ -1,7 +1,7 @@
 //! バルーン可視性の**判断中核**（純関数 [`decide`]）とその状態モデル
 //! （design.md「BalloonVisibilityController（`emo2_boot/balloon_visibility.rs`）」・
-//! Requirements 2.1〜2.7 / 3.1 / 3.2 / 3.3 / 3.6 / 4.3 / 4.5 / 4.6 / 4.7 / 4.8 / 4.9 /
-//! 5.1〜5.3 / 5.5 / 5.6 / 8.2 / 8.3 / 8.6）。
+//! Requirements 2.1〜2.7 / 3.1 / 3.2 / 3.3 / 3.6 / 4.2 / 4.3 / 4.5 / 4.6 / 4.7 / 4.8 / 4.9 /
+//! 5.1〜5.3 / 5.5 / 5.6 / 8.2 / 8.3 / 8.6 / 9.5）。
 //!
 //! # 何を決めるモジュールか
 //!
@@ -37,6 +37,11 @@
 //! 扱う（Requirement 5.5）——観測が取れないことを抑止と読むと、消えないまま固着する側へ
 //! 倒れるためである。
 //!
+//! 待ち時間そのものの既定値（30 秒）は [`DEFAULT_BALLOON_TIMEOUT_SECS`] ただ 1 箇所で定義し
+//! （Requirement 4.2）、実機サインオフで満了を観測するための短縮を環境変数
+//! `AREKA_BALLOON_TIMEOUT_MS` で受ける（Requirement 9.5）。判断中核 [`decide`] は待ち時間を
+//! 引数で受け取るだけで、環境変数にも既定値にも依存しない。
+//!
 //! # 可視かどうかの真実源
 //!
 //! 「現に可視か」は毎フレームの観測（本番では `EmoPresenter::target_visible`）が答える。
@@ -54,8 +59,102 @@
 //! 満たす順序つきの写像を採る。）
 
 use std::collections::BTreeMap;
+use std::sync::OnceLock;
+
+use tracing::{info, warn};
 
 use super::talk_lifecycle::TalkLifecycleSignal;
+
+/// バルーンを非表示にするまでの既定の待ち時間（秒）。**この値の定義箇所はここ 1 つだけ**
+/// （Requirement 4.2——同じ数値を複数箇所へ散らさない）。
+///
+/// 30 秒は正典が沈黙する領域の areka 裁量であり、互換対応表へ記録する対象である
+/// （Requirement 7.6）。
+pub(crate) const DEFAULT_BALLOON_TIMEOUT_SECS: f64 = 30.0;
+
+/// 既定の待ち時間を短縮するための環境変数名（`AREKA_` 冠規約・design 決定 D6）。
+///
+/// 実機サインオフで満了を観測するための手段であり（Requirement 9.5）、本番の既定経路では
+/// 未設定である。値は**正の整数ミリ秒**。
+const TIMEOUT_ENV_KEY: &str = "AREKA_BALLOON_TIMEOUT_MS";
+
+/// 採用した待ち時間がどこから来たか（ログの `source` フィールド・design 決定 D6）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TimeoutSource {
+    /// [`DEFAULT_BALLOON_TIMEOUT_SECS`]（環境変数が未設定、または不正で縮退した場合）。
+    Default,
+    /// 環境変数 [`TIMEOUT_ENV_KEY`] による短縮指定。
+    Env,
+}
+
+impl TimeoutSource {
+    /// ログへ書く表記。実機サインオフの文字列検索に使う語である。
+    fn as_str(self) -> &'static str {
+        match self {
+            TimeoutSource::Default => "default",
+            TimeoutSource::Env => "env",
+        }
+    }
+}
+
+/// 環境変数の値から短縮指定のミリ秒を読み取る純関数（環境変数へ触れない・単体テスト可能）。
+///
+/// - `None`／空／空白のみ → `None`（指定なし＝既定を使う。本番の既定経路なので無音）。
+/// - 周辺の空白を落とした**正の**整数 → `Some(ms)`。
+/// - `0`・負値・非数・`u64` の範囲超過 → `warn!` の上で `None`（既定へ縮退）。
+///
+/// `0` を受理しないのは、会話の表示終了と同時にバルーンが消えてしまい、実機サインオフで
+/// 「既定時間の経過で消える」ことを観測できなくなるためである（design 決定 D6 は正の整数
+/// ミリ秒と定めている）。`u64::from_str` が負号・小数点・非数字・範囲超過をいずれも `Err`
+/// にするため、それらは自然に不正側へ落ちる。
+pub(crate) fn parse_timeout_ms(value: Option<&str>) -> Option<u64> {
+    let trimmed = value.map(str::trim)?;
+    // 未設定と空白のみは同じ「指定なし」であり、誤りではないので警告を出さない。
+    if trimmed.is_empty() {
+        return None;
+    }
+    match trimmed.parse::<u64>() {
+        Ok(ms) if ms > 0 => Some(ms),
+        _ => {
+            warn!(
+                env = TIMEOUT_ENV_KEY,
+                value = trimmed,
+                "[balloon-visibility] 待ち時間の指定が不正（正の整数ミリ秒を要する）→ 既定へ縮退"
+            );
+            None
+        }
+    }
+}
+
+/// 採用する待ち時間とその供給源を決め、1 行記録して返す（環境変数へ触れない）。
+///
+/// 記録は採用値・供給源・既定値の 3 つを同じ 1 行に載せる。短縮して満了を観測している最中
+/// でも「短縮していない既定値が 30 秒であること」を同じ行から確かめられるようにするため
+/// である（Requirement 9.5）。
+fn resolve_timeout_secs(value: Option<&str>) -> (f64, TimeoutSource) {
+    let (secs, source) = match parse_timeout_ms(value) {
+        Some(ms) => (ms as f64 / 1000.0, TimeoutSource::Env),
+        None => (DEFAULT_BALLOON_TIMEOUT_SECS, TimeoutSource::Default),
+    };
+    info!(
+        env = TIMEOUT_ENV_KEY,
+        timeout_secs = secs,
+        source = source.as_str(),
+        default_secs = DEFAULT_BALLOON_TIMEOUT_SECS,
+        "[balloon-visibility] バルーン非表示までの待ち時間を確定"
+    );
+    (secs, source)
+}
+
+/// 採用する待ち時間（秒）を返す。環境変数はプロセスで**一度だけ**読む（design 決定 D6）。
+///
+/// 記録もこの初回の解決 1 回きりで、毎フレームの呼び出しでは何も起きない
+/// （Requirement 8.6——常時出力でログを埋めない）。
+#[allow(dead_code)] // 本番の呼び手は task 4.4（`run_balloon_visibility_phase` が `decide` へ渡す）
+pub(crate) fn configured_timeout_secs() -> f64 {
+    static RESOLVED: OnceLock<f64> = OnceLock::new();
+    *RESOLVED.get_or_init(|| resolve_timeout_secs(std::env::var(TIMEOUT_ENV_KEY).ok().as_deref()).0)
+}
 
 /// 表示・非表示が起きた契機の種別（ログの `trigger` フィールド・design 決定 D10）。
 ///
@@ -587,3 +686,7 @@ mod test_support;
 #[cfg(test)]
 #[path = "balloon_visibility_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "balloon_visibility_timeout_config_tests.rs"]
+mod timeout_config_tests;
