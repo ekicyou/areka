@@ -54,12 +54,19 @@
 //! [`GhostWindowMarker`] 窓を αマスク clickthrough 機構
 //! （wintf `ClickThroughRegistryHandle`・消費のみ）へ登録する
 //! （emo-present donor `register_click_through_windows` の一般化・6.1）。
+//!
+//! # 重なり管理の結線（areka-P0-ghost-window-zorder task 3.2）
+//!
+//! [`wire_zorder_pair`] が実行時ストラテジ（既定＝案 A・補助浮上なし）を明示挿入し、
+//! wintf の確立系 → 維持系を clickthrough 登録と同じ確定段（`FrameFinalize`）へ
+//! この順で載せる。呼び手は main.rs の起動窓シーム（同 1.1／5.6／6.1）。
 
 use std::collections::BTreeMap;
 
 use bevy_ecs::lifecycle::HookContext;
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
+use bevy_ecs::schedule::{IntoScheduleConfigs, Schedules};
 use bevy_ecs::world::DeferredWorld;
 use tracing::debug;
 use windows::Win32::Foundation::HWND;
@@ -70,8 +77,9 @@ use wintf::ecs::clickthrough::ClickThroughRegistryHandle;
 use wintf::ecs::drag::{DragConfig, OnDrag, OnDragEnd};
 use wintf::ecs::layout::HitTest;
 use wintf::ecs::{
-    DpiSuggestedRectPolicy, KeepDirectlyAbove, Point, SizeI, Window, WindowHandle, WindowPos,
-    WindowStyle,
+    DpiSuggestedRectPolicy, FrameFinalize, KeepDirectlyAbove, Point, SizeI, Window, WindowHandle,
+    WindowPos, WindowStyle, ZOrderPairStrategy, apply_zorder_pair_maintenance,
+    establish_owner_links,
 };
 
 use super::diag::log_zorder_pair_declared;
@@ -393,6 +401,50 @@ fn window_pos(x: i32, y: i32, w: i32, h: i32) -> WindowPos {
 }
 
 // ---------------------------------------------------------------------------
+// 重なり管理の結線（areka-P0-ghost-window-zorder task 3.2）
+// ---------------------------------------------------------------------------
+
+/// ゴースト窓ペアの重なり管理を World へ結線する
+/// （areka-P0-ghost-window-zorder task 3.2・要件 1.1／5.6／6.1）。
+///
+/// 結線するのは 2 つである。
+///
+/// - **実行時ストラテジ** [`ZOrderPairStrategy`]。既定は案 A（Win32 の owner 関係を張り、
+///   以後の重なりを OS に保証させる）・補助浮上なし。`Default` まかせにせず**値を明示して
+///   挿入する**——実機ゲート（design.md「Plan A 実機可否ゲートとフォールバック分岐」）の
+///   結果を反映するのはこの 1 箇所であり、どの案で動いているかが読む人の目に入る所に
+///   無いと、切替が「既定値をどこかで変える」形に散る。
+/// - **確立系 → 維持系**を `FrameFinalize` へこの順で載せる（[`IntoScheduleConfigs::chain`]）。
+///
+/// # なぜ順序を付けるのか
+///
+/// 確立系（[`establish_owner_links`]）は owner を張った巡に再断行の要求
+/// （[`ReassertZOrder`](wintf::ecs::ReassertZOrder)）を挿し、それを維持系
+/// （[`apply_zorder_pair_maintenance`]）が消費して初期の隣接を確定させる。順序を付けないと
+/// 消費が 1 巡遅れる。必要なのは順序だけではなく `chain` が置く**同期点**でもある——要求は
+/// `Commands` 経由で挿さるため、同期点が無ければ同じ巡ではまだ実体に付いていない。
+///
+/// # なぜ確定段なのか
+///
+/// クリック透過の登録（[`register_ghost_windows_click_through`]）と同じ確定段だからである
+/// （design.md「Implementation Notes」Integration——wintf 自身は schedule へ自動登録せず、
+/// 載せる場所を決めるのは areka 側という既存の流儀）。どちらの system も Win32 を呼ぶため
+/// UI スレッド固定であり、その担保は system 側の `NonSendMarker` が持つ。
+///
+/// 呼び手は main.rs の起動窓シーム（`open_startup_window`）で、`Schedules` 資源が既在の
+/// World（`EcsWorld` 内 World）に対し、schedule 実行外で 1 回だけ同期に呼ぶ
+/// （クリック透過登録と同じ作法）。
+pub fn wire_zorder_pair(world: &mut World) {
+    world.insert_resource(ZOrderPairStrategy::OwnerLink {
+        raise_assist: false,
+    });
+    world.resource_mut::<Schedules>().add_systems(
+        FrameFinalize,
+        (establish_owner_links, apply_zorder_pair_maintenance).chain(),
+    );
+}
+
+// ---------------------------------------------------------------------------
 // clickthrough 登録 system（task 5.2・6.1）
 // ---------------------------------------------------------------------------
 
@@ -471,3 +523,6 @@ mod follow_pipeline_tests;
 #[cfg(test)]
 #[path = "spawn_zorder_pair_export_tests.rs"]
 mod zorder_pair_export_tests;
+#[cfg(test)]
+#[path = "spawn_zorder_pair_wiring_tests.rs"]
+mod zorder_pair_wiring_tests;
