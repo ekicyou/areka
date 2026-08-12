@@ -97,13 +97,12 @@
   - _Requirements: 3.4, 4.4, 5.4, 6.7, 8.1, 8.2, 8.3, 8.4, 8.5_
   - _Depends: 1.2, 2.2, 3.2, 3.3, 4.1, 4.3_
 
-- [ ] 5. 起動時表示を前提とした既存の検査と記述を更新する
+- [x] 5. 起動時表示を前提とした既存の検査と記述を更新する
   - 「装着時点でバルーンが表示済み」を前提に主張している既存の検査群と、同じ前提の記述を「不可視のまま確立済み」へ更新する
   - 起動直後に不可視であることを積極的に主張する検査を追加する（読み戻し・配置先の成立・適用済みスケールの既存の主張は前提変更なしで維持する）
   - 完了状態: 更新後の検査群が緑で、かつ起動直後の不可視が検査によって主張されている
   - _Requirements: 9.6_
   - _Depends: 4.2, 4.4_
-  - _Note (4.2 からの申し送り): 残る陳腐化した文言は実測で 9 箇所——`spine_display_tests.rs:48, 59, 99, 163, 289` ／ `frame_attach_tests.rs:305` ／ `spine_text_scale_tests.rs:13, 30, 54`。`spine_test_support.rs` には無いので design の 4 ファイル一覧は実質 3 ファイル。`frame_attach_tests.rs:124/131/134` も「初回 ShowSurface」に一致するが**これは陳腐化ではない**（`ShowSurface` 適用**前**の状態を述べており、指令を維持した今も正しい）——書き換えないこと。起動直後の不可視を積極的に主張する検査は frame 相当で 1 本だけ 4.2 が置いた（`frame_attach_tests.rs::attach_establishes_balloons_invisible_with_slot_and_surface`）ので、spine 相当は本タスクが担う。_
 
 - [ ] 6. 決定論的な検証を網羅する
 - [ ] 6.1 コンテンツ駆動の分岐を表駆動で網羅する
@@ -187,6 +186,8 @@
 - **design 本文の file:line が 2 件陳腐化している**（実装の欠陥ではなく、主張内容自体は正しい）——`apply_show` は `show.rs:23-277` ではない、`VisualMount::set_visible` は `mount.rs:193-216` ではない。design の file:line は都度実測し直すこと。
 - **2.2 で `on_balloon_pointer_moved` の借用手順②が共有借用から可変借用へ変わった**（`balloon.rs:398-403`）。`Mut<BalloonWiring>` は `.map()` クロージャ内に閉じ、手順③の `runtime.try_borrow()` より前に落ちるため二重借用は不可能。縮退順序・ログレベル・ログ event 名は不変。
 - **2.2 の記録側と解除側は `Emo2Wiring` 依存が意図的に非対称**（記録は在席を要求・解除は無条件）。どちらも「抑止しない側」へ倒れる形であり要件 5.5 の指定どおり。`Emo2Wiring` は `frame.rs:137` の `remove_non_send_resource` で毎フレーム一時的に world から抜けるため、不在は実在する過渡状態である。
+- **【task 5 で完了】起動時表示を前提とした記述の是正は 10 箇所**（申し送りの 9 箇所＋`spine_display_tests.rs:172` の見落とし 1 箇所）。既存の読み戻し・文字配置先・適用済みスケールの述語は 1 つも変えていない（コメントと assert メッセージのみ）。`assets.rs` / `assets_tests.rs` の「初期表示 surface id」は**面 ID の選定を指す語**であって可視性の主張ではないため対象外と裁定した。
+- **起動直後の不可視を主張する檻は 2 本**——frame 相当が `frame_attach_tests.rs::attach_establishes_balloons_invisible_with_slot_and_surface`、spine 相当が `spine_display_tests.rs::spine_boot_leaves_all_balloons_invisible_with_established_slot_and_surface`。後者は**空虚化を防ぐため確立の証人 3 つ（面 0 の記録・文字の配置先・供給面の実描画）を先に要求してから**可視性を判定する。所有権の設定を外す変異で可視性の assert だけが赤くなることを実測済み。**この形を崩さないこと**。
 - **配線層は別ファイル `balloon_visibility_phase.rs`**（4.4 が新設・判断中核と合わせて 1,000 行を越えるため分割）。`#[path]` の子モジュールなので親の非公開項目（`state.per_scope` 等）へ到達でき、巻き戻しの義務を果たせる。テストは `balloon_visibility_phase_tests.rs`。
 - **相順は 9 相**（4.3 で確定）——attach → dpi → drain（適用のみ）→ **balloon_visibility** → **reconcile** → move_drain → resnap → text_scale → text。`reconcile_reported_sizes` は `run_drain_phase` から相順の所有者 `emo2_frame_system` へ純移動済みで、本番呼び出しは `frame.rs` の 1 箇所のみ（`drain_resnap.rs` は import ごと落としてあるので、呼び戻すとコンパイルが通らない）。**相の本体は空**で、中身はタスク 4.4 が書く。
 - **reconcile が装着前フレームでも走るようになった**（移動前は `run_drain_phase` の `attached` 早期 return の内側だった）。presenter に target が 1 つも無い間は全アームが短絡するため無操作で、既存の未装着テストが緑のまま押さえている。**装着前に走ってはいけない処理をこの相の後段へ足さないこと**。

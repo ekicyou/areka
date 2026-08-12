@@ -302,7 +302,7 @@ fn attach_supplies_each_scope_its_own_balloon_model_to_map_and_text_layer() {
     let view = wiring
         .presenter
         .text_slot_view(balloon_target(1))
-        .expect("前提: attach 初回 ShowSurface で相方側バルーンの文字層スロットが成立する");
+        .expect("前提: attach の不可視のままの確立（面 0 の ShowSurface）で相方側バルーンの文字層スロットが成立する");
     assert!(
         !runtime
             .borrow_mut()
