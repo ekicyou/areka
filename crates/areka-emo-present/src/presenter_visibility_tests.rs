@@ -16,27 +16,30 @@ use std::time::Duration;
 
 use areka_actor::reply_channel;
 
-use wintf::ecs::{HitTest, HitTestMode, Visual};
+use wintf::ecs::{Arrangement, HitTest, HitTestMode, Visual};
 
 use super::test_support::{
     attach_hit_target, build_target_assets, build_two_face_assets, make_world_with_gpu,
-    scaled_golden, set_window_dpi, show_ok, spawn_window_with_dpi,
+    mount_entities, scaled_golden, set_window_dpi, show_ok, spawn_window_with_dpi,
 };
 
-// ── 檻の補助（装着実体の実値を読む）────────────────────────────────────────────────────
+// ── テスト補助（装着実体の実値を読む）──────────────────────────────────────────────────
 // presenter の私有状態（`visible`）だけを見ると「照会は false を返すが entity は可視」という
-// 見かけ倒しを見逃す。可視性の主張は必ず **entity の実 component 値**でも裏を取る。
+// 食い違いを見逃す。可視性の主張は必ず **entity の実 component 値**でも裏を取る
+// （`mount_entities` は `presenter_test_support.rs` の共有補助）。
 
-/// 装着済み target の (surface entity, text 層スロット entity)。
-fn mount_entities(presenter: &EmoPresenter, target: TargetId) -> (Entity, Entity) {
-    let mount = presenter
-        .targets
-        .get(&target)
-        .expect("装着済み target")
-        .mount
-        .as_ref()
-        .expect("表示確立後は mount が生成済み");
-    (mount.surface_entity(), mount.text_slot())
+/// 枠の面 entity の `Arrangement` 寸（＝visual bounds・物理 px で直接設定される）。
+fn arrangement_size(world: &World, surface_entity: Entity) -> Option<(u32, u32)> {
+    world
+        .get::<Arrangement>(surface_entity)
+        .map(|a| (a.size.width as u32, a.size.height as u32))
+}
+
+/// 枠の面 entity へ供給済みの αマスク寸（未供給なら `None`）。
+fn mask_dims(world: &World, surface_entity: Entity) -> Option<(u32, u32)> {
+    world
+        .get::<AlphaMaskResource>(surface_entity)
+        .and_then(|r| r.mask().map(|m| (m.width(), m.height())))
 }
 
 /// 枠の面・文字層スロットの双方が不可視かつポインタ透過であること（Requirement 1.2/1.4/1.8）。
@@ -207,6 +210,60 @@ fn command_driven_target_is_still_visualized_by_show_surface() {
     );
 }
 
+/// Requirement 1.3: 表示倍率が等倍でない窓（192dpi／author 96 ＝ k=2/1）でも、外部所有の確立は
+/// **不可視のまま k を導出し切る**。
+///
+/// 既存の外部所有テストはすべて 96dpi で確立するため k=1/1 に縮退しており、「k 導出を所有権で
+/// 分岐させた」実装（外部所有なら等倍で確立する等）と観測上区別できない。等倍でない窓で確立させ、
+/// 実適用 k・配置先の物理寸・表示バイトのすべてが所有権に依らず確定することを見る。ここが崩れると
+/// 文字の配置先が起動時から誤った寸法で成立し、最初の発話が正しい大きさで出ない。
+#[test]
+fn external_establish_at_non_identity_dpi_derives_scale_without_visualizing() {
+    let (world, window, presenter, target, _native_golden) =
+        external_target_after_first_show(192, 0x29);
+
+    // 同一入力から k=2/1 の表示バイトを独立に再現する（presenter の内部値の追認にしない）。
+    let (probe_world, probe_atlas, _) = build_target_assets(3, 2, 0x29);
+    let k2 = ScaleRatio::new(2, 1).expect("非ゼロ比");
+    let (scaled_bytes, native_size, scaled_size) =
+        scaled_golden(&probe_world, &probe_atlas, 1000, k2);
+    assert_eq!(native_size, (3, 2));
+    assert_eq!(
+        scaled_size,
+        (6, 4),
+        "前提: k=2/1 で native 原寸と物理寸が異なる"
+    );
+
+    assert_eq!(
+        presenter.target_visible(target),
+        Some(false),
+        "等倍でない窓でも外部所有の確立は不可視のまま（Requirement 1.1）"
+    );
+    assert_entities_hidden(&world, &presenter, target, "192dpi での外部所有の確立後");
+
+    assert_eq!(
+        presenter.applied_ratio(target),
+        Some(k2),
+        "k 導出が所有権で分岐している（確立時に等倍へ縮退した・Requirement 1.3）"
+    );
+    let view = presenter
+        .text_slot_view(target)
+        .expect("不可視でも配置先は確立していなければならない（Requirement 1.3）");
+    assert_eq!(view.window(), window, "スロットは装着先の窓に属する");
+    assert_eq!(view.surface_size(), (3, 2), "native 原寸が確立していない");
+    assert_eq!(
+        view.physical_size(),
+        scaled_size,
+        "配置先の物理寸が確立時の k を反映していない"
+    );
+    assert_eq!(view.scale(), 2.0, "配置先が読む実適用 k が等倍のまま");
+    assert_eq!(
+        presenter.read_back(target).expect("read_back 失敗"),
+        scaled_bytes,
+        "不可視確立でも供給面は k 適用後のバイトで満たされる"
+    );
+}
+
 // ── ⑵ 不可視のままの面切替・ループ由来指令（Requirement 6.2/6.9）─────────────────────────
 
 /// Requirement 6.2／6.9: 不可視の外部所有 target へ面切替（`\b[ID]` 相当）と、同一面の再指令
@@ -272,6 +329,128 @@ fn external_reshow_updates_result_without_becoming_visible() {
         presenter.current_surface_id(TargetId(0)),
         Some(3000),
         "反復指令後も最後に確立した面 id が正"
+    );
+}
+
+/// Requirement 1.3／6.6 の土台: 不可視の期間中に表示倍率が変わった後の再指令で、**可視性に依らない
+/// 手順**（k 導出・供給面・visual bounds・αマスク）がすべて新しい倍率へ揃う。
+///
+/// 可視化の手順以外を所有権でゲートした実装（bounds やマスクの更新を可視のときだけ行う等）は、
+/// 事後状態だけを見るテストでは捕まらない——初回の確立では装着そのものが正しい外形で bounds を
+/// 組むため、bounds の更新手順が働くのは**再指令の経路だけ**だからである。ゆえに確立時の値を
+/// 起点として先に主張し、遷移として検査する。
+#[test]
+fn external_reshow_while_invisible_updates_scale_bounds_and_mask() {
+    let (mut world, window, mut presenter, target, native_golden) =
+        external_target_after_first_show(96, 0x2A);
+    let (surface, _slot) = mount_entities(&presenter, target);
+
+    // 遷移の起点: 確立時は k=1/1 の外形で bounds もマスクも揃っている。
+    assert_eq!(
+        arrangement_size(&world, surface),
+        Some((3, 2)),
+        "前提: 確立時の visual bounds は k=1/1 の外形"
+    );
+    assert_eq!(
+        mask_dims(&world, surface),
+        Some((3, 2)),
+        "前提: 確立時に k=1/1 のαマスクが供給されている"
+    );
+    assert_eq!(
+        presenter.read_back(target).expect("read_back 失敗"),
+        native_golden,
+        "前提: 確立時の供給面は等倍のバイト"
+    );
+
+    // 不可視の期間中にモニタ跨ぎ相当の表示倍率変化が起き、その後に再指令が届く
+    // （反復再生由来の同一面指令に相当）。
+    set_window_dpi(&mut world, window, 192);
+    show_ok(&mut presenter, &mut world, target, 1000);
+
+    let (probe_world, probe_atlas, _) = build_target_assets(3, 2, 0x2A);
+    let k2 = ScaleRatio::new(2, 1).expect("非ゼロ比");
+    let (scaled_bytes, _native_size, scaled_size) =
+        scaled_golden(&probe_world, &probe_atlas, 1000, k2);
+    assert_eq!(scaled_size, (6, 4), "前提: 遷移の前後で外形が変わる");
+
+    assert_eq!(
+        presenter.target_visible(target),
+        Some(false),
+        "再指令が可視化している（Requirement 6.9）"
+    );
+    assert_entities_hidden(&world, &presenter, target, "不可視期間中の再指令の後");
+    assert_eq!(
+        presenter.applied_ratio(target),
+        Some(k2),
+        "不可視の再指令が k を導出し直していない"
+    );
+    assert_eq!(
+        presenter.read_back(target).expect("read_back 失敗"),
+        scaled_bytes,
+        "不可視の再指令で供給面が新しい倍率のバイトへ入れ替わっていない"
+    );
+    // 本題: 可視化以外の手順が可視性でゲートされていないこと。
+    assert_eq!(
+        arrangement_size(&world, surface),
+        Some(scaled_size),
+        "visual bounds が可視性でゲートされている（不可視期間中の変化を取りこぼす・Requirement 6.6 の土台）"
+    );
+    assert_eq!(
+        mask_dims(&world, surface),
+        Some(scaled_size),
+        "αマスクが可視性でゲートされている（可視化した瞬間に前の倍率の判定が載る）"
+    );
+}
+
+/// Requirement 6.9: 一度可視になったバルーンを非表示にした後、面切替側の反復再生由来の表示指令を
+/// 何度受けても**可視へ復帰しない**（結果だけが更新される）。
+///
+/// 既存の反復指令テストは一度も可視になっていない target を駆動するため、「不可視のものは不可視の
+/// まま」しか語らない。要件 6.9 が名指しで禁じているのは**タイムアウトで消したバルーンが反復再生で
+/// 戻る**経路であり、それは可視 → 非表示を経た target でしか観測できない。
+#[test]
+fn show_surface_does_not_revive_an_external_target_hidden_after_being_visible() {
+    let (mut world, _window, mut presenter, target, golden) =
+        external_target_after_first_show(96, 0x2B);
+
+    presenter
+        .show_target(&mut world, target)
+        .expect("確立済みの外部所有 target の可視化は Ok");
+    assert_entities_visible(&world, &presenter, target, "前提: 一度可視になっている");
+
+    // タイムアウト非表示に相当（可視性制御が使う既存経路）。
+    hide_ok(&mut presenter, &mut world, target);
+    assert_entities_hidden(&world, &presenter, target, "前提: 非表示にした直後");
+    assert_eq!(
+        presenter.current_surface_id(target),
+        None,
+        "前提: Hide は現サーフェス無しへ落とす"
+    );
+
+    // 反復再生由来の表示指令が繰り返し届く。
+    for _ in 0..3 {
+        show_ok(&mut presenter, &mut world, target, 1000);
+        assert_eq!(
+            presenter.target_visible(target),
+            Some(false),
+            "非表示にしたバルーンが反復再生由来の指令で復帰している（Requirement 6.9）"
+        );
+    }
+    assert_entities_hidden(
+        &world,
+        &presenter,
+        target,
+        "非表示の後に反復再生由来の指令を重ねた後",
+    );
+    assert_eq!(
+        presenter.current_surface_id(target),
+        Some(1000),
+        "復帰させない代わりに指令の結果（面 id）まで捨ててはならない（Requirement 6.2）"
+    );
+    assert_eq!(
+        presenter.read_back(target).expect("read_back 失敗"),
+        golden,
+        "不可視のまま供給面の中身が更新されていない"
     );
 }
 
@@ -360,10 +539,63 @@ fn show_target_without_dpi_change_only_adds_visibility() {
     );
 }
 
+/// Requirement 6.6 の成立経路を固定する: 不可視の間の表示倍率変化は**DPI 追従の相では拾われず**
+/// （`refresh_scale` の可視ゲート・`crates/areka-emo-present/src/presenter/refresh.rs:74-80`）、
+/// 可視化の入口が同じ経路を再通過することで埋め合わされる。
+///
+/// この 2 段の役割分担を明示的に固定しておかないと、可視ゲートを外す是正（不可視の target まで
+/// DPI 追従で再表示する）が「要件 6.6 のため」という理由で持ち込まれかねない——それは非表示の
+/// バルーンを表示倍率の変化だけで蘇らせる経路になる。
+#[test]
+fn invisible_period_dpi_change_is_ignored_by_refresh_and_applied_by_show_target() {
+    let (mut world, window, mut presenter, target, native_golden) =
+        external_target_after_first_show(96, 0x2C);
+    assert_eq!(
+        presenter.applied_ratio(target),
+        Some(ScaleRatio::ONE),
+        "前提: 96dpi／author 96 の確立は k=1/1"
+    );
+
+    set_window_dpi(&mut world, window, 192);
+
+    // 第 1 段: DPI 追従の相は不可視の target に触れない。
+    assert_eq!(
+        presenter.refresh_scale(&mut world, target),
+        None,
+        "不可視の外部所有 target を DPI 追従の相が再表示している（非表示のまま蘇生させない契約）"
+    );
+    assert_eq!(
+        presenter.applied_ratio(target),
+        Some(ScaleRatio::ONE),
+        "DPI 追従の相が不可視のまま k を書き換えている"
+    );
+    assert_eq!(
+        presenter.read_back(target).expect("read_back 失敗"),
+        native_golden,
+        "DPI 追従の相が不可視のまま供給面を書き換えている"
+    );
+    assert_entities_hidden(&world, &presenter, target, "DPI 追従の相を通した後");
+
+    // 第 2 段: 取りこぼしは可視化の入口が漏斗を再通過して埋める。
+    let k2 = ScaleRatio::new(2, 1).expect("非ゼロ比");
+    presenter
+        .show_target(&mut world, target)
+        .expect("確立済みの外部所有 target の可視化は Ok");
+    assert_eq!(
+        presenter.applied_ratio(target),
+        Some(k2),
+        "可視化の入口が不可視期間中の表示倍率変化を埋め合わせていない（Requirement 6.6）"
+    );
+    assert_entities_visible(&world, &presenter, target, "可視化の入口を通した後");
+}
+
 // ── ⑷ 非表示側は所有権に依らず即時（Requirement 6.1）────────────────────────────────────
 
 /// Requirement 6.1: `\b[-1]` 相当の `Hide` は所有権に依らず**即時**に効く（可視化側だけが所有権で
 /// ゲートされる非対称を保つ）。外部所有・既定所有権の双方で同一の結果になることを見る。
+///
+/// 非表示の直前は照会値だけでなく **entity の実可視**でも前提を主張する。照会値だけの前提は
+/// 「元から不可視だった」場合と区別できず、事後状態が同一になるため非表示が効いた証拠にならない。
 #[test]
 fn hide_is_immediate_regardless_of_ownership() {
     // 外部所有: show_target で可視にした後の Hide。
@@ -373,6 +605,7 @@ fn hide_is_immediate_regardless_of_ownership() {
         .show_target(&mut world, target)
         .expect("可視化は Ok");
     assert_eq!(presenter.target_visible(target), Some(true), "前提: 可視");
+    assert_entities_visible(&world, &presenter, target, "外部所有の Hide 直前");
 
     hide_ok(&mut presenter, &mut world, target);
     assert_eq!(
@@ -397,6 +630,7 @@ fn hide_is_immediate_regardless_of_ownership() {
         .expect("attach_target 失敗");
     show_ok(&mut presenter2, &mut world2, TargetId(1), 1000);
     assert_eq!(presenter2.target_visible(TargetId(1)), Some(true));
+    assert_entities_visible(&world2, &presenter2, TargetId(1), "既定所有権の Hide 直前");
 
     hide_ok(&mut presenter2, &mut world2, TargetId(1));
     assert_eq!(

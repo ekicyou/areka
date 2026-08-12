@@ -31,7 +31,7 @@ use windows::core::Interface;
 use wintf::ecs::{HitTest, HitTestMode, Visual, VisualGraphics};
 
 use super::test_support::{
-    build_target_assets, make_world_with_gpu, show_ok, spawn_window_with_dpi,
+    build_target_assets, make_world_with_gpu, mount_entities, show_ok, spawn_window_with_dpi,
 };
 
 // ── 檻の補助 ────────────────────────────────────────────────────────────────────────────
@@ -43,18 +43,6 @@ enum Layers {
     Visible,
     /// 双方不可視。surface・slot とも当たり判定停止（ポインタ透過）。
     Hidden,
-}
-
-/// 装着済み target の (枠の面 entity, 文字層スロット entity)。
-fn mount_entities(presenter: &EmoPresenter, target: TargetId) -> (Entity, Entity) {
-    let mount = presenter
-        .targets
-        .get(&target)
-        .expect("装着済み target")
-        .mount
-        .as_ref()
-        .expect("表示確立後は mount が生成済み");
-    (mount.surface_entity(), mount.text_slot())
 }
 
 /// 枠の面・文字層スロットの実 component 値が `expected` と一致することを主張する。

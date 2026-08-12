@@ -144,6 +144,22 @@ pub(super) fn show_ok(presenter: &mut EmoPresenter, world: &mut World, target: T
     );
 }
 
+/// 装着済み target の (枠の面 entity, 文字層スロット entity)。
+///
+/// presenter の私有状態（`visible`）だけを見ると「照会は false を返すが entity は可視」という
+/// 食い違いを見逃すため、可視性を主張するテストはここから実 component 値を読む。表示が一度
+/// 成立するまで mount は生成されないので、初回の `ShowSurface` より後に呼ぶこと。
+pub(super) fn mount_entities(presenter: &EmoPresenter, target: TargetId) -> (Entity, Entity) {
+    let mount = presenter
+        .targets
+        .get(&target)
+        .expect("装着済み target")
+        .mount
+        .as_ref()
+        .expect("表示確立後は mount が生成済み");
+    (mount.surface_entity(), mount.text_slot())
+}
+
 // ── ComposedSurface 生成補助（chain.rs テストと同技法）──────────────────────────────────
 // `ComposedSurface::bytes_mut` は emo-compose の pub(crate) ゆえ本クレートから画素を直接焼けない。
 // 上流公開 API（atlas bake → EmoWorld → Composer::compose）で本物を合成して得る。
