@@ -36,7 +36,11 @@ fn k(num: u32, den: u32) -> ScaleRatio {
 /// balloon.alignment=left/right・寸法 434×687／336×400・balloon は scope 別で
 /// scope0=400×224（`balloons0.png`）／scope1=288×203（`balloonk0.png`）):
 /// - scope0: char=(1920−434, 1040−687)=(1486,353)・基本位置＝左隣=(1486−400)=(1086,353)
-/// - scope1: char=(1486−434, 1040−400)=(1052,640)・基本位置＝右隣=(1052+336)=(1388,640)
+/// - scope1: char=(1486−336, 1040−400)=(1150,640)・基本位置＝右隣=(1150+336)=(1486,640)
+///
+/// scope1 の X は `base_x(n≥1) = char_x(n−1) − w(n)`——引くのは**自スコープの幅**
+/// （336）であり、前スコープの幅（434）ではない（隣接・隙間 0・scg 2.1/2.2）。
+/// これにより scope1 の右端 1150+336=1486 が scope0 の左端 1486 と一致する。
 ///
 /// バルーン寸が scope 別になっても**基本位置**が動かないのは、右置き（scope1）の基準 x が
 /// キャラ窓の右端＝バルーン幅に依存しないためである（resolver P5 は無改変）。
@@ -48,7 +52,7 @@ fn k(num: u32, den: u32) -> ScaleRatio {
 /// - scope0（`balloons0s.txt` の `266,-129`・side=Left）→ 調整量 (+266,−129)
 ///   → balloon=(1086+266, 353−129)=(1352,224)・offset=(−400+266, −129)=(−134,−129)
 /// - scope1（`balloonk0s.txt` の `-190,-75`・side=Right）→ 調整量 (−190,−75)
-///   → balloon=(1388−190, 640−75)=(1198,565)・offset=(336−190, −75)=(146,−75)
+///   → balloon=(1486−190, 640−75)=(1296,565)・offset=(336−190, −75)=(146,−75)
 ///
 /// 恒等式 `balloon_offset ≡ balloon_pos − char_pos` は両 scope で保たれている
 /// （P5 の加算入力が増えただけ）。SSP 実測との数値突合は
@@ -77,11 +81,11 @@ fn prepare_emo2_returns_two_scope_placements() {
 
         let s1 = &p.placements[1];
         assert_eq!(s1.scope, 1);
-        assert_eq!(s1.char_pos, PointPx { x: 1052, y: 640 });
+        assert_eq!(s1.char_pos, PointPx { x: 1150, y: 640 });
         assert_eq!(s1.char_size, SizePx { w: 336, h: 400 });
         assert_eq!(
             s1.balloon_pos,
-            PointPx { x: 1198, y: 565 },
+            PointPx { x: 1296, y: 565 },
             "相方側は balloonk0s.txt の windowposition -190,-75 を反映（本体側の値ではない）"
         );
         assert_eq!(

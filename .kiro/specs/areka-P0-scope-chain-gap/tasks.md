@@ -30,7 +30,7 @@
   - _Requirements: 2.2, 2.4, 2.5, 3.1, 3.2, 3.5_
 
 - [ ] 3. 実寸フィクスチャの追随と不変量の監視
-- [ ] 3.1 実寸フィクスチャの位置期待値を是正後の値へ更新する
+- [x] 3.1 実寸フィクスチャの位置期待値を是正後の値へ更新する
   - 相方の位置期待値を是正後の値へ更新し、それに従属する右置きバルーンの基本位置の期待値も追随させる
   - 更新するのは期待値のみで、バルーン基本位置の規則そのものには手を入れない
   - バルーンのオフセット期待値は不変のまま維持し、導出を説明するコメントを是正式で書き直す
@@ -84,3 +84,5 @@
 - task 2.1 完了時点で `placement::prepare_tests::prepare_emo2_returns_two_scope_placements` のみ赤（実測 `x: 1150`）。これは仕様の予定どおりで task 3.1 が期待値を更新して緑へ戻す。
 - `cargo clippy -p areka --all-targets` は `crates/wintf` の既存エラーで赤。本仕様の変更とは無関係（変更ファイルを名指しする診断は 0 件）。
 - PowerShell から cargo を実行すること（Git Bash の GNU `link.exe` が MSVC link を隠す）。
+- 旧 `window-placement` R2.9 の上書き注記は **`resolver.rs` のモジュール doc 1 箇所のみ**（design.md:81/:203 の裁定）。テスト側の導出コメントに複製すると差し戻し対象（task 3.1 で実際に発生）。`grep -rn "R2\.9" crates/areka/src/placement/` のヒットが 1 件であることで確認できる。
+- task 3.1 完了時点で bin ターゲット 672 passed / 0 failed（全緑）。
