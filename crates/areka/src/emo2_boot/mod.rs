@@ -60,6 +60,7 @@ use self::assets::{BootAssets, LoopTables, actor_keyed_balloon_tables, build_boo
 use self::frame::{Emo2Wiring, emo2_frame_system};
 use self::move_cue::{MoveCueSink, MoveDirective};
 use self::talk_clock::{ClockedTextSink, TalkClock};
+use self::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
 
 /// 統合結線の構築時（load-time）失敗を観測可能化する誤り型（log-first・R7.3）。
 ///
@@ -318,6 +319,12 @@ pub fn wire_emo2_boot(
     // UI スレッドの Emo2Wiring が受信端（frame 相 drain＝task 9.2 が消費）を保持する。
     let (move_tx, move_rx) = std::sync::mpsc::channel::<MoveDirective>();
     let move_sink = MoveCueSink::new(move_tx);
+    // 表示ライフサイクル channel（move channel と同型の配線・task 4.1）: talk スレッドの
+    // BalloonLifecycleSink が送出端、UI スレッドの Emo2Wiring が受信端（バルーン可視性相＝
+    // task 4.4 が全件 drain）を保持する。会話の開始と、待機を含む占有区間の終端が talk 相対秒で
+    // 届き、タイムアウト計測の破棄と起点になる（Requirements 4.1／4.5・design 決定 D4＝α）。
+    let (lifecycle_tx, lifecycle_rx) = std::sync::mpsc::channel::<TalkLifecycleSignal>();
+    let lifecycle_sink = BalloonLifecycleSink::new(lifecycle_tx);
     let BootAssets {
         shells,
         balloons,
@@ -393,6 +400,9 @@ pub fn wire_emo2_boot(
     // sinks は broadcast 登録先で、surface（seriko）／text（ClockedTextSink）／move（MoveCueSink）の
     // 3 sink を第 1〜3 要素として渡す（task 9.1）。move_sink は `\![move]` を名前選別で消費し、
     // MoveDirective を move channel 経由で UI スレッド（Emo2Wiring の move_rx）へ送出する。
+    // 第 4 要素の lifecycle_sink（task 4.1）は cue を選別せず全件観測して占有区間の終端を集約し、
+    // 会話の開始と表示終了時刻を lifecycle channel 経由で UI スレッド（Emo2Wiring の lifecycle_rx）
+    // へ送出する。上流（ghost／kanade／dola）の署名も既存 3 sink の登録も変えない（決定 D4＝α）。
     let boot_options = GhostBootOptions {
         ghost_root: ghost_root.to_path_buf(),
         default_encoding: DefaultEncoding::Ansi,
@@ -403,6 +413,7 @@ pub fn wire_emo2_boot(
             Box::new(surface_sink),
             Box::new(clocked_text_sink),
             Box::new(move_sink),
+            Box::new(lifecycle_sink),
         ],
         system_vars: SystemVarWiring::FromSylphya,
         app_profile_dir: Some(crate::default_app_profile_dir()),
@@ -436,7 +447,15 @@ pub fn wire_emo2_boot(
     // 手順6: Emo2Wiring を NonSend 挿入＋emo2_frame_system を FrameFinalize へ登録（placement の
     // click-through 登録と同位置・self-gating・順序依存なし）。EcsWorld は insert_non_send_resource を
     // 直接持たないため world_mut() 経由で bevy World へ載せる（add_systems は EcsWorld 直メソッド）。
-    let wiring = Emo2Wiring::new(presenter, rx, move_rx, runtime, clock, wiring_assets);
+    let wiring = Emo2Wiring::new(
+        presenter,
+        rx,
+        move_rx,
+        lifecycle_rx,
+        runtime,
+        clock,
+        wiring_assets,
+    );
     app.world()
         .borrow_mut()
         .world_mut()

@@ -19,6 +19,8 @@ use areka_emo_present::{EmoPresenter, PresentCommand, TargetId};
 use areka_emo_text::actor::TextLayerRuntime;
 use areka_parsers::balloon::BalloonModel;
 
+use super::super::balloon_visibility::BalloonVisibilityState;
+use super::super::talk_lifecycle::TalkLifecycleSignal;
 use super::{BootAssets, DpiChangedQuery, MoveDirective, TalkClock};
 
 // ---------------------------------------------------------------------------
@@ -44,6 +46,30 @@ pub struct Emo2Wiring {
     /// `mpsc::channel::<MoveDirective>()` の受信端を受け渡し、frame 相の [`emo2_frame_system`] が
     /// [`run_move_drain_phase`] 経由で `try_iter` し `apply_move_directive` へ適用する（task 9.2）。
     pub(super) move_rx: Receiver<MoveDirective>,
+    /// talk スレッド（`BalloonLifecycleSink`）からの表示ライフサイクル信号受信端
+    /// （バルーン可視性相＝task 4.4 が消費・Requirements 4.1／4.5）。
+    ///
+    /// `move_rx` と同型の配線: [`super::super::wire_emo2_boot`] が
+    /// `mpsc::channel::<TalkLifecycleSignal>()` を作り、送出端を `GhostBootOptions.sinks` の
+    /// 4 本目（`BalloonLifecycleSink`）へ、受信端をここへ渡す（design 決定 D4＝α）。会話の開始
+    /// （[`TalkLifecycleSignal::TalkStarted`]）と、待機を含む占有区間の終端
+    /// （[`TalkLifecycleSignal::DisplayEndAt`]）が talk 相対秒で FIFO に届く。
+    ///
+    /// 取り出しは可視性相の `try_iter` による**全件 drain**（task 4.4）。受信前の信号はチャネル
+    /// 自身が保留バッファとして預かるため、attach 前に始まった会話の信号も落ちない。
+    // 本 task（4.1）時点では読み手が居ない（`#[cfg(test)]` の `drain_lifecycle_signals` のみ）ため
+    // 抑止する。本番の drain は task 4.4（`run_balloon_visibility_phase` の観測収集）が着地させる。
+    #[allow(dead_code)]
+    pub(super) lifecycle_rx: Receiver<TalkLifecycleSignal>,
+    /// バルーン可視性コントローラが持ち越す状態（エッジ検出・計測・抑止の記憶）。
+    ///
+    /// 判断中核（[`super::super::balloon_visibility::decide`]）は状態を `&mut` で受けて更新する
+    /// ため、フレームを跨いで生きる器がここに要る（`dpi_state` と同じ理由——相関数は排他 system
+    /// から呼ばれる素の関数で `Local` を取れない）。UI スレッド専有で、可視性相以外は触らない。
+    // 本 task（4.1）時点では読み手が居ないため抑止する。本番の読み手は task 4.4
+    // （`decide` へ `&mut` で渡す配線）が着地させる。
+    #[allow(dead_code)]
+    pub(super) balloon_visibility: BalloonVisibilityState,
     /// バルーン文字層ランタイム（`register_actor_view`／`present_frame` の所有・`!Send`）。
     pub(super) runtime: Rc<RefCell<TextLayerRuntime>>,
     /// scope → attach 相で装着に使った [`BalloonModel`]（文字層 k 再追従の再利用源・D11-3・R8.1）。
@@ -84,13 +110,16 @@ pub struct Emo2Wiring {
 }
 
 impl Emo2Wiring {
-    /// 結線資源を構築する（`wire_emo2_boot`＝task 5.1／9.1 が呼ぶ）。`assets` は `Some` で保持し、
-    /// attach フェーズ（[`run_attach_phase`]）が `take` で高々 1 回消費する。`move_rx` は
+    /// 結線資源を構築する（`wire_emo2_boot`＝task 5.1／9.1／4.1 が呼ぶ）。`assets` は `Some` で
+    /// 保持し、attach フェーズ（[`run_attach_phase`]）が `take` で高々 1 回消費する。`move_rx` は
     /// `MoveCueSink`（talk スレッド）と対の受信端で、frame 相 drain（task 9.2）が消費する。
+    /// `lifecycle_rx` は `BalloonLifecycleSink`（同じく talk スレッド）と対の受信端で、バルーン
+    /// 可視性相（task 4.4）が消費する。可視性の持ち越し状態は外から与えず初期値から始める。
     pub fn new(
         presenter: EmoPresenter,
         rx: Receiver<PresentCommand>,
         move_rx: Receiver<MoveDirective>,
+        lifecycle_rx: Receiver<TalkLifecycleSignal>,
         runtime: Rc<RefCell<TextLayerRuntime>>,
         clock: TalkClock,
         assets: BootAssets,
@@ -99,6 +128,9 @@ impl Emo2Wiring {
             presenter,
             rx,
             move_rx,
+            lifecycle_rx,
+            // 可視性の持ち越し状態は初期値（未観測・計測なし）から始める。
+            balloon_visibility: BalloonVisibilityState::default(),
             runtime,
             // attach 相が装着した scope ごとに埋める（D11-3）。
             balloon_models: HashMap::new(),
@@ -121,9 +153,11 @@ impl Emo2Wiring {
     /// 契約を消費のみ）。所有・可変アクセスは presenter を専有する frame 相（attach/drain/text）に
     /// 閉じたまま、UI 配線層へは read 口のみを開ける（本番表面を最小に保つ）。
     ///
-    /// 第一 production 消費者（`input-events`＝roadmap W2・task 2.6/2.7）が生えるまでは呼び出しが
-    /// 無く dead_code 警告になる（`areka` は bin crate・baseline は警告皆無）ため明示抑止する。
-    #[allow(dead_code)]
+    /// 本番の呼び手は結線済み（実測）——`input_events/mod.rs:316` が
+    /// `.map(Emo2Wiring::presenter)` の関数パス形で借り、`resolve_hit_owned`（`:309`）が当たり判定へ
+    /// 渡す。到達の起点は `main.rs:725` の `attach_char_pointer_handlers`（キャラ窓ポインタ
+    /// ハンドラ装着）と `main.rs:346` の `wire_mouse_input`。呼び出しがメソッド構文でないため
+    /// `.presenter()` の grep では見つからないが、dead_code 判定上は live である。
     pub(crate) fn presenter(&self) -> &EmoPresenter {
         &self.presenter
     }
@@ -137,11 +171,12 @@ impl Emo2Wiring {
     /// frame 相の text フェーズに閉じたまま、配線層へは read 口のみを開ける）。上流クレート
     /// （`areka-emo-text`）には一切手を入れない（R8.5）。
     ///
-    /// 第一 production 消費者（choice-interact の balloon 配線＝後続 task）が生えるまでは呼び出しが
-    /// 無く dead_code 警告になる（`areka` は bin crate・baseline は警告皆無）ため明示抑止する。
+    /// 本番の呼び手は結線済みで 3 箇所ある（実測・いずれも `Rc::clone` して world 側の借用を即座に
+    /// 解く形）——`input_events/balloon.rs:394`（ポインタ移動での選択肢 hover 追従）・`:564`
+    /// （クリックによる選択確定）・`:748`（バルーン離脱での hover 解除）。到達の起点は
+    /// `main.rs:363` の `wire_balloon_choice` と `main.rs:731` の `attach_balloon_pointer_handlers`。
     ///
     /// [`presenter()`]: Self::presenter
-    #[allow(dead_code)]
     pub(crate) fn runtime(&self) -> &Rc<RefCell<TextLayerRuntime>> {
         &self.runtime
     }
@@ -154,6 +189,18 @@ impl Emo2Wiring {
     #[cfg(test)]
     pub(crate) fn drain_move_directives(&self) -> Vec<MoveDirective> {
         self.move_rx.try_iter().collect()
+    }
+
+    /// 表示ライフサイクル信号受信端への test-support アクセサ（task 4.1 の配線檻で消費）。
+    ///
+    /// 本番の可視性相（task 4.4）は `lifecycle_rx` を private に閉じたまま同じ `try_iter` で全件
+    /// drain し、判断中核の観測スナップショットへ載せる。4.1 段階では channel 配線の到達性
+    /// （会話の再生が `BalloonLifecycleSink`→`Emo2Wiring` の受信端へ届く）を決定論に固定する
+    /// ための最小 read 口として `#[cfg(test)]` で開ける（`drain_move_directives` と同型・本番
+    /// 表面は増やさない）。
+    #[cfg(test)]
+    pub(crate) fn drain_lifecycle_signals(&self) -> Vec<TalkLifecycleSignal> {
+        self.lifecycle_rx.try_iter().collect()
     }
 
     // ── spine 観測用 test-support アクセサ（tasks.md task 6.2・spine S1/S3/S4） ──────────

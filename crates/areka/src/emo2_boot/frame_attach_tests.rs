@@ -3,6 +3,7 @@ use std::sync::{mpsc, Arc};
 use areka_emo_text::state::TextLayerConfig;
 use windows::Win32::System::Com::{CoInitializeEx, COINIT_MULTITHREADED};
 use crate::emo2_boot::assets::build_boot_assets;
+use crate::emo2_boot::talk_lifecycle::TalkLifecycleSignal;
 
 use super::*;
 use super::test_support::{
@@ -160,6 +161,7 @@ fn run_attach_phase_without_gpu_does_not_attach_or_consume_assets() {
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
         mpsc::channel::<MoveDirective>().1,
+        mpsc::channel::<TalkLifecycleSignal>().1,
         Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default()))),
         TalkClock::new(Arc::new(|| 0.0)),
         synth_assets(&[(0, 0), (1, 10)]),
@@ -261,6 +263,7 @@ fn attach_supplies_each_scope_its_own_balloon_model_to_map_and_text_layer() {
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
         mpsc::channel::<MoveDirective>().1,
+        mpsc::channel::<TalkLifecycleSignal>().1,
         Rc::clone(&runtime),
         zero_clock(),
         assets,
@@ -330,6 +333,7 @@ fn presenter_accessor_feeds_resolve_hit_region() {
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
         mpsc::channel::<MoveDirective>().1,
+        mpsc::channel::<TalkLifecycleSignal>().1,
         Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default()))),
         TalkClock::new(Arc::new(|| 0.0)),
         synth_assets(&[(0, 0), (1, 10)]),
@@ -367,6 +371,7 @@ fn move_cue_sink_reaches_emo2_wiring_receiver() {
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
         move_rx,
+        mpsc::channel::<TalkLifecycleSignal>().1,
         Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default()))),
         TalkClock::new(Arc::new(|| 0.0)),
         synth_assets(&[(0, 0)]),
@@ -393,5 +398,85 @@ fn move_cue_sink_reaches_emo2_wiring_receiver() {
         drained[0].base,
         crate::emo2_boot::move_cue::MoveBase::Scope(0),
         "base=scope0（fixture 形）"
+    );
+}
+
+/// task 4.1 完了状態の檻: **会話を再生すると**フレーム側（`Emo2Wiring`）が受信端
+/// `lifecycle_rx` から表示ライフサイクル信号を取り出せること（Requirements 4.1 / 4.5）。
+///
+/// `wire_emo2_boot` の配線（`mpsc::channel::<TalkLifecycleSignal>()` を生成し、送出端を
+/// `GhostBootOptions.sinks` 4 本目の `BalloonLifecycleSink` へ、受信端を `Emo2Wiring` へ渡す）の
+/// 縮図を、実台本の再生経路（parse → compile → `CueSheet` → `CuePlayer` の broadcast）の上で
+/// 通す。受け取った信号の消費（計測の破棄・占有終端の更新）は task 4.4 の配線が担うため本檻の
+/// 範囲外で、ここで固定するのは「会話の再生が受信端へ届く」ことだけである。
+///
+/// 再生は**注入時刻のみ**で駆動する（実時間の待機なし・Requirement 4.9 / 9.2）。tick 時刻は
+/// 台本自身の発火時刻と占有終端から採るため、注入時刻が観測すべき時点を追い越さない
+/// （Requirement 9.3——反復回数による有界化もしない）。
+#[test]
+fn talk_playback_reaches_emo2_wiring_lifecycle_receiver() {
+    use super::super::talk_lifecycle::BalloonLifecycleSink;
+    use areka_sakura::sysvar::SystemVarSnapshot;
+    use dola::cue::CuePlayer;
+
+    // wire_emo2_boot 手順4/5 と同型: 単一 channel の送出端を sink へ、受信端を Emo2Wiring へ。
+    let (lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
+    let wiring = Emo2Wiring::new(
+        EmoPresenter::new(),
+        mpsc::channel::<PresentCommand>().1,
+        mpsc::channel::<MoveDirective>().1,
+        lifecycle_rx,
+        Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default()))),
+        TalkClock::new(Arc::new(|| 0.0)),
+        synth_assets(&[(0, 0)]),
+    );
+
+    // 待機（`\w9`）を含む実台本（Requirement 4.1 の「占有区間の終端」が最後の文字より後になる形）。
+    let instructions = areka_parsers::sakura::parse(r"\0あい\w9\1うえ\e");
+    let compiled = areka_sakura::compile(&instructions, &SystemVarSnapshot::default());
+    let horizon = compiled.sheet.absolute_end_time();
+    assert!(
+        horizon > 0.0,
+        "前提: 待機を含む台本の占有終端は正（台本が空なら本檻は空虚になる）"
+    );
+
+    let mut player = CuePlayer::from_sheet(&compiled.sheet);
+    player.register_sink(Box::new(BalloonLifecycleSink::new(lifecycle_tx)));
+
+    // 台本の発火時刻を昇順に辿り、最後に占有終端へ達する（sleep もスピンも使わない）。
+    let mut tick_points: Vec<f64> = compiled
+        .sheet
+        .cues()
+        .iter()
+        .map(|cue| compiled.sheet.absolute_fire_time(cue))
+        .collect();
+    tick_points.push(horizon);
+    for at in tick_points {
+        player.tick(at);
+    }
+
+    // フレーム側の受信端から取り出す（本番は task 4.4 の可視性相が同じ口を drain する）。
+    let signals = wiring.drain_lifecycle_signals();
+    assert_eq!(
+        signals.first(),
+        Some(&TalkLifecycleSignal::TalkStarted),
+        "会話の開始通知が先行する（Ordering 契約・Requirement 4.5 の計測破棄契機）"
+    );
+
+    let ends: Vec<f64> = signals
+        .iter()
+        .filter_map(|signal| match signal {
+            TalkLifecycleSignal::DisplayEndAt(end) => Some(*end),
+            TalkLifecycleSignal::TalkStarted => None,
+        })
+        .collect();
+    assert!(
+        ends.windows(2).all(|pair| pair[0] < pair[1]),
+        "占有終端は狭義単調増加で届く（実際の受信列: {ends:?}）"
+    );
+    assert_eq!(
+        ends.last().copied(),
+        Some(horizon),
+        "最後に届く占有終端は台本の占有区間の終端と一致する（待機込み・Requirement 4.1）"
     );
 }

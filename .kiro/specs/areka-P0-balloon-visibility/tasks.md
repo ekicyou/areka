@@ -67,7 +67,7 @@
   - _Requirements: 4.2, 9.5_
 
 - [ ] 4. フレーム処理へ統合する
-- [ ] 4.1 会話終了信号の受け口と可視性状態をフレーム配線へ組み込む
+- [x] 4.1 会話終了信号の受け口と可視性状態をフレーム配線へ組み込む
   - 会話終了の観測を再生台本の購読先へ登録し、その受信端と可視性の状態を UI 側のフレーム配線が保持する
   - 同ファイルに残る陳腐化した記述（実行時状態の取得口に関する注記）を実態へ是正する
   - 完了状態: 会話を再生するとフレーム側で受信端から信号を取り出せる
@@ -186,6 +186,10 @@
 - **design 本文の file:line が 2 件陳腐化している**（実装の欠陥ではなく、主張内容自体は正しい）——`apply_show` は `show.rs:23-277` ではない、`VisualMount::set_visible` は `mount.rs:193-216` ではない。design の file:line は都度実測し直すこと。
 - **2.2 で `on_balloon_pointer_moved` の借用手順②が共有借用から可変借用へ変わった**（`balloon.rs:398-403`）。`Mut<BalloonWiring>` は `.map()` クロージャ内に閉じ、手順③の `runtime.try_borrow()` より前に落ちるため二重借用は不可能。縮退順序・ログレベル・ログ event 名は不変。
 - **2.2 の記録側と解除側は `Emo2Wiring` 依存が意図的に非対称**（記録は在席を要求・解除は無条件）。どちらも「抑止しない側」へ倒れる形であり要件 5.5 の指定どおり。`Emo2Wiring` は `frame.rs:137` の `remove_non_send_resource` で毎フレーム一時的に world から抜けるため、不在は実在する過渡状態である。
+- **`Emo2Wiring::new` の引数が 4.1 で 1 本増えた**（`lifecycle_rx`）。構築点は 9 箇所（本番 1・spine 1・テスト 7）で、受信端 3 本は型が互いに異なるため取り違えはコンパイルで落ちる。以後の構築点追加時も型で守られる。
+- **`spine.rs` は本番の sink 構成を忠実に再現する方針**（`spine.rs:683-690`・タスク 9.3 由来）。4.1 で実 `BalloonLifecycleSink` を 4 本目へ登録した。使い捨ての sink を置くとこの方針が壊れるので、以後 sink を足すときも spine へ同じものを登録すること。
+- **4.1 で `frame/wiring.rs` の陳腐化注記が 2 件見つかった**（design は `runtime()` の 1 件しか挙げていない）。`presenter()` の「本番消費者なし」も偽で、実消費者は `input_events/mod.rs:316` の `.map(Emo2Wiring::presenter)` という**関数パス形**——`.presenter()` の grep には出ない。**到達性を grep だけで判定しないこと**。
+- **`wiring.rs` の未使用許容は 4.1 時点で 2 本**（新規フィールド `lifecycle_rx` / `balloon_visibility`・いずれも実測で earned）。**タスク 4.4 の drain と `decide` 呼び出しが着地すれば撤去できるはず**。`runtime()` / `presenter()` の 2 本は 4.1 で非 load-bearing と実測して撤去済み。
 - **タスク 8.1 の実機サインオフ向け訂正**: design の実機手順は起動ログを `timeout_secs=30 source=default` で grep せよと書いているが、`tracing` の `f64` フィールドは Debug 形で出るため実際は **`timeout_secs=30.0`** になる。値も供給源も同じ 1 行に載っているので grep 文字列に `.0` を足せばよい（design の記述側の誤りで、実装の欠陥ではない）。
 - **タスク 4.4 が起動時記録を発火させる**: 3.3 は `configured_timeout_secs` の記録機構を作ってテストまで済ませたが、**起動時に呼ぶ配線は 4.4 の所有**。3.3 完了時点で本番呼び手はゼロなので、完了条件の「起動で記録される」はまだ成立していない。
 - **`balloon_visibility.rs` の未使用許容は 2 本**（`:153` `configured_timeout_secs`・`:368` `decide`）。前者 1 本だけで 7 項目（`DEFAULT_BALLOON_TIMEOUT_SECS` / `TIMEOUT_ENV_KEY` / `TimeoutSource` / `as_str` / `parse_timeout_ms` / `resolve_timeout_secs` / 自身）を live に見せている。**4.4 の配線でこの 2 本とも撤去できるはず**で、できないなら理由を実測すること。
