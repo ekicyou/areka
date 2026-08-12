@@ -121,11 +121,12 @@ fn t_r1_missing_scope_config_defaults_to_bottom_flush() {
 }
 
 // ------------------------------------------------------------------
-// T-R2: スコープ連鎖（P2・2.9/2.10・DD3）
+// T-R2: スコープ連鎖（P2・scg 2.1/2.2・2.10・DD3）
 // ------------------------------------------------------------------
 
-/// T-R2: `base_x(n≥1) = char_x(n−1) − w(n−1)`・`kero.defaultx=0` は基準密着で
-/// あって右端に戻らない（DD3 の檻）。3 スコープで一般連鎖も固定する。
+/// T-R2: `base_x(n≥1) = char_x(n−1) − w(n)`（隣接・gap 0・scg 2.1/2.2）。
+/// `kero.defaultx=0` は基準密着であって右端に戻らない（DD3 の檻）。
+/// 3 スコープで一般連鎖と、隣接ペアの隙間が 0 であることを固定する。
 #[test]
 fn t_r2_scope_chain_defaultx_zero_stays_adjacent() {
     for dpi in DPIS {
@@ -150,18 +151,34 @@ fn t_r2_scope_chain_defaultx_zero_stays_adjacent() {
         assert_eq!(out[0].char_pos.x, x0, "dpi={dpi}: scope0 右端密着");
         assert_eq!(
             out[1].char_pos.x,
-            x0 - w0,
-            "dpi={dpi}: base_x(1)=char_x(0)−w0・defaultx=0＝密着（2.9）"
+            x0 - w1,
+            "dpi={dpi}: base_x(1)=char_x(0)−w1・defaultx=0＝隣接・gap 0（scg 2.1/2.2）"
         );
         assert_ne!(
             out[1].char_pos.x,
             wa.right - w1,
             "dpi={dpi}: kero.defaultx=0 が右端に戻ってはならない（DD3）"
         );
+        assert_ne!(
+            out[1].char_pos.x,
+            x0 - w0,
+            "dpi={dpi}: 前スコープ幅を引く旧式へ戻ってはならない（不等幅でのみ判別可・scg 2.1/2.2）"
+        );
         assert_eq!(
             out[2].char_pos.x,
-            (x0 - w0) - w1,
-            "dpi={dpi}: base_x(2)=char_x(1)−w1（一般連鎖）"
+            (x0 - w1) - w2,
+            "dpi={dpi}: base_x(2)=char_x(1)−w2（一般連鎖・scg 2.1/2.2）"
+        );
+        // 隣接ペアの隙間はいずれも 0（scope n の右端＝scope n−1 の左端・scg 2.2）
+        assert_eq!(
+            out[0].char_pos.x - (out[1].char_pos.x + w1),
+            0,
+            "dpi={dpi}: scope0/scope1 の隙間 0（scg 2.1/2.2）"
+        );
+        assert_eq!(
+            out[1].char_pos.x - (out[2].char_pos.x + w2),
+            0,
+            "dpi={dpi}: scope1/scope2 の隙間 0（scg 2.1/2.2）"
         );
         // Y は各スコープの h で独立に bottom 基準
         assert_eq!(out[1].char_pos.y, wa.bottom - h1, "dpi={dpi}");
@@ -170,7 +187,7 @@ fn t_r2_scope_chain_defaultx_zero_stays_adjacent() {
 }
 
 /// T-R2 補: 後続スコープの `defaultx` は「自スコープの基準位置（前スコープの
-/// 左隣）からの左方向オフセット」（DD3）。
+/// 左隣＝`char_x(n−1) − w(n)`）からの左方向オフセット」（DD3・scg 2.1/2.2）。
 #[test]
 fn t_r2_chain_defaultx_offsets_leftward_from_base() {
     for dpi in DPIS {
@@ -189,8 +206,8 @@ fn t_r2_chain_defaultx_offsets_leftward_from_base() {
         assert_eq!(out[0].char_pos.x, x0, "dpi={dpi}");
         assert_eq!(
             out[1].char_pos.x,
-            x0 - w0 - dx1,
-            "dpi={dpi}: char_x(1)=base_x(1)−defaultx(1)"
+            x0 - w1 - dx1,
+            "dpi={dpi}: char_x(1)=base_x(1)−defaultx(1)（base_x(1)=char_x(0)−w1・scg 2.1/2.2）"
         );
     }
 }
@@ -374,7 +391,7 @@ fn t_r6_chain_uses_clamped_previous_position() {
         let out = resolve_placement(&cfg, wa, &[input(0, w0, h0), input(1, w1, h1)]);
 
         assert_eq!(out[0].char_pos.x, wa.left, "dpi={dpi}");
-        // base_x(1) = char_x(0) − w0 は左外 → scope1 も左端クランプ
+        // base_x(1) = char_x(0) − w1 は左外 → scope1 も左端クランプ（scg 2.1/2.2）
         assert_eq!(out[1].char_pos.x, wa.left, "dpi={dpi}: 連鎖先もクランプ");
     }
 }
@@ -539,10 +556,10 @@ fn t_r4_free_position_feeds_scope_chain() {
         assert_eq!(
             out[1].char_pos,
             PointPx {
-                x: x0 - w0,
+                x: x0 - w1,
                 y: wa.bottom - h1
             },
-            "dpi={dpi}: base_x(1)=char_x(0)−w0（free 実位置基準）"
+            "dpi={dpi}: base_x(1)=char_x(0)−w1（free 実位置基準・scg 2.1/2.2）"
         );
     }
 }
