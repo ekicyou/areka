@@ -758,3 +758,7 @@ mod timeout_config_tests;
 #[cfg(test)]
 #[path = "balloon_visibility_content_tests.rs"]
 mod content_tests;
+
+#[cfg(test)]
+#[path = "balloon_visibility_timeout_suppression_tests.rs"]
+mod timeout_suppression_tests;
