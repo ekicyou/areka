@@ -4,7 +4,7 @@
 use super::{
     AlphaMaskResource, BindSet, ComposeError, ComposedSurface, DPI, EmoPresenter, GraphicsCore,
     PatternState, PresentError, PresentOutcome, ReplySender, SwapChainPresenter, TargetId,
-    VisualMount, World, WucGraphicsResource, derive_scale, resample,
+    VisibilityOwnership, VisualMount, World, WucGraphicsResource, derive_scale, resample,
 };
 
 impl EmoPresenter {
@@ -20,6 +20,15 @@ impl EmoPresenter {
     /// `Err`（R3.4）、`EmptyComposition` は warn! ＋ Hide 縮退＋`Ok`（設計ディスカッション #1）、`Ok` なら
     /// `cache.insert`（マスクを 1 回だけ生成）。(4) 使えるエントリで、`chain`/`mount` 未生成なら原寸確定
     /// 後に遅延生成し、`chain.upload` ＋ `AlphaMaskResource::set` ＋ 可視化を同一呼び出し内で行う（R2.4）。
+    ///
+    /// # 可視化手順だけが所有権でゲートされる（`areka-P0-balloon-visibility` Requirement 1.1/6.2/6.9）
+    ///
+    /// [`VisibilityOwnership::External`] の target では、末尾の可視化（`set_visible(true)`／`visible=true`）
+    /// と mount 遅延生成の初期可視性だけが変わり、**それ以外の全手順は所有権に依らず共通**である
+    /// （k 導出・合成・キャッシュ・アップロード・マスク・`set_bounds`・`applied`／`native_size`／
+    /// `last_show`／`pending_resize`・下の `info!`）。表示成立点が 1 つであることを崩さないための境界であり、
+    /// 「不可視のまま配置先と面が確立する」（Requirement 1.3）はこの共通部分がそのまま与える。
+    /// 可視化は [`EmoPresenter::show_target`] が同じ漏斗を再通過したうえで付与する。
     pub(super) fn apply_show(
         &mut self,
         world: &mut World,
@@ -177,22 +186,39 @@ impl EmoPresenter {
                 }
             };
 
-            // 初期可視性は従来どおり可視で構築する（この漏斗の末尾で `set_visible(true)` する経路と同値）。
-            let mount =
-                match VisualMount::attach(world, window, &surface, &compositor, (w, h), true) {
-                    Ok(m) => m,
-                    // VisualMount::attach も内部で error! 済み（mount.rs device_err）。
-                    Err(e) => {
-                        Self::reply(reply, Err(e));
-                        return;
-                    }
-                };
+            // 初期可視性は**所有権から導出**する（`areka-P0-balloon-visibility` Requirement 1.2）。
+            // `CommandDriven` は従来どおり可視で構築（この漏斗の末尾で `set_visible(true)` する経路と
+            // 同値）、`External` は不可視で構築する——「可視で spawn してから消す」経路を持たないことで、
+            // 可視状態を component レベルでも一度も経由しないことを構造で保証する。導出をここで行う
+            // （装着側の既定に委ねない）のは、可視性の所有者を知っているのがこの層だけだからである。
+            let initially_visible = matches!(target.ownership, VisibilityOwnership::CommandDriven);
+            let mount = match VisualMount::attach(
+                world,
+                window,
+                &surface,
+                &compositor,
+                (w, h),
+                initially_visible,
+            ) {
+                Ok(m) => m,
+                // VisualMount::attach も内部で error! 済み（mount.rs device_err）。
+                Err(e) => {
+                    Self::reply(reply, Err(e));
+                    return;
+                }
+            };
 
             target.chain = Some(chain);
             target.mount = Some(mount);
         }
 
         // (3) 供給面アップロード ＋ マスク同期 ＋ 可視化（同一呼び出し内＝原子入替・R2.4）。
+        //
+        // **可視化手順だけ**が所有権でゲートされる（`areka-P0-balloon-visibility` Requirement 6.2/6.9）。
+        // `External` の target では表示状態の確立（合成・供給面・マスク・bounds・k・面 id・再表示入力・
+        // 窓寸 reconcile 要求）は従来どおり全て完了し、可視性の付与だけを行わない——面切替もループ由来の
+        // 反復指令も、経路を問わず可視状態を変えない。
+        let visualize = matches!(target.ownership, VisibilityOwnership::CommandDriven);
         let entry = target
             .cache
             .get(surface_id, &binds, &pattern, scale)
@@ -219,10 +245,18 @@ impl EmoPresenter {
                 "apply(ShowSurface): surface entity に AlphaMaskResource が無い（当たり判定は矩形/前状態）"
             );
         }
-        mount.set_visible(world, true);
+        if visualize {
+            mount.set_visible(world, true);
+        }
+        // bounds（＝αマスク座標基準）は可視性に依らず常に合わせる。不可視中の更新は安全であり
+        // （`Arrangement`・`SpriteVisual::SetSize` は合成コミットと独立、`HitTest::none()` 中はマスクが
+        // 判定に使われない）、ここで揃えておくことが「不可視期間中に生じた変化を取りこぼさない」
+        // （Requirement 6.6）の土台になる。
         mount.set_bounds(world, size);
-        target.visible = true;
-        // 表示成立＝この id が現サーフェス（全透明でも成立・α 非依存の単一真実源・R3.1/3.3・Key decisions）。
+        if visualize {
+            target.visible = true;
+        }
+        // 表示確立＝この id が現サーフェス（全透明でも成立・α 非依存の単一真実源・R3.1/3.3・Key decisions）。
         target.current_surface_id = Some(surface_id);
         // ここが**表示成立点**＝ k・native 原寸・再表示入力の唯一の更新点（design Flow 1 キー決定）。
         // 手前の失敗経路はすべて early return 済みゆえ、失敗時は前 k・前表示が保たれる（要件 4.4）。

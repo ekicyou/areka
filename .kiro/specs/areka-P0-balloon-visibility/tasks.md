@@ -8,7 +8,7 @@
   - _Requirements: 1.2, 1.4, 1.7, 1.8_
   - _Boundary: VisualMount 両 entity 化_
 
-- [ ] 1.2 可視性の所有権と、可視化を伴わない表示状態の更新を導入する
+- [x] 1.2 可視性の所有権と、可視化を伴わない表示状態の更新を導入する
   - 表示対象ごとに可視性の所有者（指令駆動／外部所有）を保持し、外部所有の対象では表示指令が可視化の手順だけを行わず、それ以外の全手順（合成・供給面・配置先・寸法・スケール導出）は従来どおり完了する
   - 表示対象を遅延生成する際の初期可視性を所有権から導出して 1.1 の装着へ渡す（外部所有なら不可視で構築する。この受け渡しは本タスクが負い、装着側の既定に依存しない）
   - 外部所有の対象を可視化する専用の入口を設け、最後に確立した表示内容で同じ単一経路を再通過してから可視性を付与する
@@ -181,3 +181,7 @@
 - **1.1 で `VisualMount::attach` の署名が変わった**: 末尾に `initially_visible: bool` が付いた。現在の唯一の呼び手 `presenter/show.rs:182` は従来挙動維持のため `true` を渡している——**タスク 1.2 がここを所有権から導出する形へ差し替える**。
 - **wintf の当たり判定の既定は `Bounds`**（`hit_test/mod.rs:366-371`）で、その合成 α は `Visual::clamped_opacity()`（`visual.rs:138-142`）＝ `is_visible` を見ない。`Visual` を不可視にしただけではポインタ透過は成立せず、`HitTest::none()` の明示付与が必須（`hit_test/mod.rs:373-376` で即 Miss）。
 - **`Visual::default().is_visible == true`**（`visual.rs:117`）。不可視構築の「可視状態を一度も経由しない」主張は `On<Insert, Visual>` observer で挿入値を全件記録して検証している（較正アサートを先に置き、恒真化を防いでいる）。
+- **`VisibilityOwnership` の参照パスは `areka_emo_present::presenter::VisibilityOwnership`**（1.2 で追加）。design の Modified Files に `lib.rs` が無いため、ファサード `presenter.rs` からのみ再輸出しており `lib.rs:55` の `pub use` には入っていない。**タスク 4.2 は完全パスで参照すること**。
+- **`presenter/` のサブモジュール宣言はファサード `presenter.rs` に集約**されている。design の `### Modified Files` は `presenter/hub.rs` がモジュール接続を担うと書いているが、design 自身の `### モジュール接続の変更` 節（具体的な方）が `presenter.rs` と書いており、後者が正しい（レビュー裁定済み）。
+- **design 本文の file:line が 2 件陳腐化している**（実装の欠陥ではなく、主張内容自体は正しい）——`apply_show` は `show.rs:23-277` ではない、`VisualMount::set_visible` は `mount.rs:193-216` ではない。design の file:line は都度実測し直すこと。
+- **`apply_show` の所有権条件化は 2 点のみ**（レビューで全数確認済み）——`initially_visible` の導出と、末尾の `mount.set_visible(world, true)` / `target.visible = true` の対。k 導出・合成・cache・upload・マスク・`set_bounds`・`current_surface_id`・`pending_resize`・`applied`・`native_size`・`last_show`・`info!` は所有権に依らず無条件。**ここへ条件を増やすと Requirement 1.3 / 6.6 が静かに壊れる**。
