@@ -213,7 +213,11 @@ pub(super) fn reconcile_reported_sizes<S: ScaleReportSource>(source: &mut S, wor
 /// - いずれも `clock` の epoch 未確立（talk 未到達）なら `talk_time` が `None` を返すため `None`。
 ///
 /// 戻り値 `None` は「今フレームは描くものがない（`present_frame` を呼ばない）」を意味する。
-pub(super) fn resolve_talk_time(
+///
+/// 可視性の相（`emo2_boot::balloon_visibility`）も同じ関数で `now_talk_time` を解決する
+/// （`frame.rs` の再輸出経由）。ゆえに可視性が観測するグリフ数と text 相が描く文字は必ず同一の
+/// 注入時刻に立つ。
+pub(in crate::emo2_boot) fn resolve_talk_time(
     override_: Option<f64>,
     frame_now: Option<f64>,
     clock: &TalkClock,

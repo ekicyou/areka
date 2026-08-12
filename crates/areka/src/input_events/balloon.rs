@@ -13,7 +13,8 @@
 //! 本番の入口は 2 箇所——`wire_balloon_choice`（`main.rs:363` から 1 回・同期呼出）と
 //! `attach_balloon_pointer_handlers`（`main.rs:731` の窓 spawn 直後クロージャ内）。
 //! 本 mod の公開項目はこの 2 入口のいずれかから到達する（唯一の例外は
-//! [`BalloonWiring::is_balloon_hovered`] で、消費者は areka-P0-balloon-visibility task 4.4）。
+//! [`BalloonWiring::is_balloon_hovered`] で、こちらはバルーン可視性の相
+//! ——`emo2_boot/frame.rs:170` から呼ばれる `run_balloon_visibility_phase`——が読む）。
 //!
 //! 上流契約（collision-geometry の resolver・`Emo2Wiring::runtime()` の読み口）は消費のみ行い、
 //! 逆方向依存（上流が balloon.rs を知る）は禁止（design「依存方向」）。
@@ -135,11 +136,9 @@ impl BalloonWiring {
     ///
     /// タイムアウト抑止の判断側（バルーン可視性コントローラ）が読む口。未観測の scope は偽。
     ///
-    /// `#[allow(dead_code)]`: 本 mod で**唯一**本番到達者が居ない項目。読み手であるバルーン可視性
-    /// コントローラの毎フレーム観測収集が areka-P0-balloon-visibility task 4.4 で結線されるまで、
-    /// 到達者はテストのみである（書き込み側 [`set_balloon_hover`](Self::set_balloon_hover)／
-    /// [`clear_balloon_hover`](Self::clear_balloon_hover) は既に本番到達済みで allow は不要）。
-    #[allow(dead_code)]
+    /// 本番到達済み（実測）——バルーン可視性の相が毎フレームの観測収集で呼ぶ
+    /// （`emo2_boot/balloon_visibility_phase.rs` の `collect_observations`）。到達の起点は
+    /// `emo2_boot/frame.rs:170` の `run_balloon_visibility_phase` 呼び出しである。
     pub(crate) fn is_balloon_hovered(&self, scope: usize) -> bool {
         self.balloon_hover.contains(&scope)
     }
@@ -406,7 +405,7 @@ pub(crate) fn on_balloon_pointer_moved(
     // 行ヒットの有無に依らず、バルーン窓上の移動そのもので当該 scope を真にする（ゆえに選択肢
     // スナップショット ③ より前で行い、③ の縮退に巻き込まれない）。解除は窓外離脱
     // （`clear_balloon_hover_on_leave`）と非表示遷移時の掃除（`BalloonWiring::clear_balloon_hover`）。
-    // 読み口 `is_balloon_hovered` の消費は可視性コントローラ（別 task）。
+    // 読み口 `is_balloon_hovered` はバルーン可視性の相が毎フレーム読む（抑止条件の観測）。
     // BalloonWiring 不在は結線漏れ＝構成異常 error!（配線存在檻が開発時に検出）＋no-op。
     let Some(last_injected) = world
         .get_non_send_resource_mut::<BalloonWiring>()

@@ -58,13 +58,11 @@
 //! 行動とログの並びが観測可能である以上、決定論の不変条件「`decide` は同一入力に対し決定論」を
 //! 満たす順序つきの写像を採る。）
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::OnceLock;
 
-use bevy_ecs::world::World;
 use tracing::{info, warn};
 
-use super::frame::Emo2Wiring;
 use super::talk_lifecycle::TalkLifecycleSignal;
 
 /// バルーンを非表示にするまでの既定の待ち時間（秒）。**この値の定義箇所はここ 1 つだけ**
@@ -152,7 +150,6 @@ fn resolve_timeout_secs(value: Option<&str>) -> (f64, TimeoutSource) {
 ///
 /// 記録もこの初回の解決 1 回きりで、毎フレームの呼び出しでは何も起きない
 /// （Requirement 8.6——常時出力でログを埋めない）。
-#[allow(dead_code)] // 本番の呼び手は task 4.4（`run_balloon_visibility_phase` が `decide` へ渡す）
 pub(crate) fn configured_timeout_secs() -> f64 {
     static RESOLVED: OnceLock<f64> = OnceLock::new();
     *RESOLVED.get_or_init(|| resolve_timeout_secs(std::env::var(TIMEOUT_ENV_KEY).ok().as_deref()).0)
@@ -160,10 +157,9 @@ pub(crate) fn configured_timeout_secs() -> f64 {
 
 /// 表示・非表示が起きた契機の種別（ログの `trigger` フィールド・design 決定 D10）。
 ///
-/// D10 の語彙は `content` / `clear` / `timeout` / `explicit` の 4 種だが、ここに実在するのは
-/// 判断中核が導ける 3 種である。`explicit` は task 4.4（明示指令による外因遷移の検出）が
-/// 判断を実装する時に足す。
-// 本番の消費者は task 4.4（ログの `trigger` フィールドへの書き出し）で着地する。
+/// D10 の語彙 `content` / `clear` / `timeout` / `explicit` の 4 種をそのまま持つ。前 3 者は
+/// 判断中核が導き、[`VisibilityTrigger::Explicit`] だけは配線層が前フレームとの差分から導く
+/// （判断中核は自分が発行していない遷移を知らない）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum VisibilityTrigger {
     /// 可視コンテンツの配置（可視グリフ数の増加・Requirement 2.1 / 4.7）。
@@ -172,6 +168,23 @@ pub(crate) enum VisibilityTrigger {
     Clear,
     /// 会話の表示終了から既定時間が過ぎたこと（Requirement 4.3）。
     Timeout,
+    /// 本制御が発行していない可視性の変化（`\b[-1]` の明示指令・面切替の全透明退化など）。
+    ///
+    /// 配線層が前フレームの [`ScopeVisibility::prev_visible`] と本フレームの観測との差分から
+    /// 検出する（Requirement 8.1 の「明示指令」）。判断中核はこの契機を作らない。
+    Explicit,
+}
+
+impl VisibilityTrigger {
+    /// ログの `trigger` フィールドへ書く語（design 決定 D10 の語彙・実機サインオフの検索語）。
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            VisibilityTrigger::Content => "content",
+            VisibilityTrigger::Clear => "clear",
+            VisibilityTrigger::Timeout => "timeout",
+            VisibilityTrigger::Explicit => "explicit",
+        }
+    }
 }
 
 /// 成立している抑止条件の内訳（Requirement 8.3 のログ用）。
@@ -205,6 +218,17 @@ pub(crate) enum MeasurementDiscardReason {
     DisplayEndAdvanced,
     /// 可視のバルーンが 1 つも無くなった（消す対象が無い）。
     NoVisibleScope,
+}
+
+impl MeasurementDiscardReason {
+    /// ログの `reason` フィールドへ書く語（実機サインオフの検索語）。
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            MeasurementDiscardReason::TalkStarted => "talk_started",
+            MeasurementDiscardReason::DisplayEndAdvanced => "display_end_advanced",
+            MeasurementDiscardReason::NoVisibleScope => "no_visible_scope",
+        }
+    }
 }
 
 /// 判断中核が生成するログ用の事象（配線層が `info!` へ写す・Requirement 8.1 / 8.6）。
@@ -323,17 +347,35 @@ pub(crate) struct ScopeVisibility {
     /// 用途は**自分が発行していない可視性遷移の検出**（`trigger=explicit` のログと、非表示へ
     /// 落ちた scope のポインタ滞在フラグの掃除）だけで、可視かどうかの判断には使わない。
     /// 発行分を反映するのはそのためで、観測値をそのまま覚えると、自分が出した表示が次の
-    /// フレームで「外から表示された」と誤検出される。消費は task 4.4。
+    /// フレームで「外から表示された」と誤検出される。読み手は配線層の
+    /// `log_external_transitions`（`balloon_visibility_phase.rs`）である。
     ///
-    /// **task 4.4 への申し送り（発行失敗時の巻き戻し）**: [`decide`] は `Show` を積む時点で
-    /// この値を `true` にする（発行が成功する前提で先に反映する）。design の Error Strategy に
-    /// 従い `show_target` が `Err` を返したフレームは当該 scope だけを飛ばすので、そのままだと
-    /// `prev_visible=true` に対して実際の観測は `false` のまま次フレームを迎える。task 4.4 は
-    /// **`show_target` が `Err` を返した scope について、この値を発行前の値へ巻き戻さなければ
-    /// ならない**。巻き戻さないと次フレームの外因遷移検出が偽の `trigger=explicit`
-    /// （Requirement 8.1）を出し、不要なポインタ滞在フラグの掃除まで走る。相関数は同一モジュール
-    /// 内にあるため、この非公開フィールドへ直接書き戻せる。
+    /// **発行が実らなかったときの巻き戻し**: [`decide`] は `Show` を積む時点でこの値を `true` に
+    /// する（発行が成功する前提で先に反映する）。design の Error Strategy に従って配線層は失敗した
+    /// scope だけを飛ばすので、そのままだと `prev_visible=true` に対して実際の観測は `false` の
+    /// まま次フレームを迎え、外因遷移の検出が偽の `trigger=explicit`（Requirement 8.1）を出して
+    /// 不要なポインタ滞在の掃除まで走る。配線層はこれを避けるため、表示が可視に至らなかった
+    /// scope についてこの値を発行前の観測値へ戻す（`roll_back_show`）。相関数は本モジュールの
+    /// 子モジュールにあるため、この非公開フィールドへ直接書き戻せる。
     pub(crate) prev_visible: bool,
+}
+
+/// 観測が取れなかったことを既に 1 回記録したか（配線層専用・Requirement 8.4 のログ抑制）。
+///
+/// 観測の失敗（design「Error Handling → Error Strategy」の「観測の失敗」）は毎フレーム同じ形で
+/// 続きうるため、素朴に記録すると誤りレベルの行でログを埋める（Requirement 8.6 が禁じる常時出力と
+/// 同じ害）。ここで「1 回鳴らして、観測が戻ったら武装し直す」を持つ——`text_scale_warned`
+/// （`frame/wiring.rs:94`）と同型のエッジガードである。
+///
+/// 判断中核 [`decide`] はこの値を読み書きしない（縮退の方向は観測値そのものが表す）。
+#[derive(Debug, Default)]
+struct ObservationFailureLogged {
+    /// 文字層ランタイムの借用に失敗した（グリフ数と選択肢表示中が観測できない）。
+    runtime: bool,
+    /// ポインタ配線（`BalloonWiring`）が world に無い（滞在が観測できない）。
+    hover_wiring: bool,
+    /// 表示層に当該 scope の target が無く、現に可視かが観測できない scope の集合。
+    unattached_scopes: BTreeSet<u32>,
 }
 
 /// 可視性コントローラが持ち越す状態（UI スレッド専有・design の Data Models）。
@@ -355,6 +397,13 @@ pub(crate) struct BalloonVisibilityState {
     /// 表示終了信号の欠落の記録を当該会話で既に 1 回出したか（Requirement 4.8）。
     /// 会話開始の通知で武装し直す。
     signal_gap_warned: bool,
+    /// 観測の失敗を既に記録したか（配線層専用のエッジガード）。
+    observation_failure_logged: ObservationFailureLogged,
+    /// 表示ライフサイクル信号の受信端が切断されたことを既に記録したか
+    /// （design「観測の収集（配線層）」の「切断検出は error! 1 回」・配線層専用）。
+    ///
+    /// 切断は復旧しない片道の状態なので、武装し直しの経路を持たない。
+    lifecycle_disconnect_logged: bool,
 }
 
 /// 本フレームの可視性遷移を決める（純関数・`World` / GPU / 時計に触れない）。
@@ -367,7 +416,6 @@ pub(crate) struct BalloonVisibilityState {
 /// `now_talk_time` は talk 相対秒の現在時刻（`resolve_talk_time` と同型で `None` は起点未確立）。
 /// `None` のフレームではタイムアウトの評価そのものを行わない——時刻が分からないまま満了を
 /// 名乗ると、表示を失う側へ倒れるためである。
-#[allow(dead_code)] // 本番の呼び手は task 4.4（`run_balloon_visibility_phase` の配線）
 pub(crate) fn decide(
     state: &mut BalloonVisibilityState,
     obs: &VisibilityObservations,
@@ -685,31 +733,15 @@ fn observe_suppression(obs: &VisibilityObservations, visible: &[u32]) -> Suppres
 // 相関数（フレームの相順から呼ばれる配線層）
 // ---------------------------------------------------------------------------
 
-/// バルーン可視性の相（`emo2_frame_system` の相順から毎フレーム呼ばれる配線）。
-///
-/// # 相順の中での位置（design 決定 D5）
-///
-/// drain（本フレームの表示指令の適用）の**直後**、窓寸 reconcile の**直前**に置く。3 つの
-/// 制約が同時に効いている:
-///
-/// - 本フレームの `\b` 指令をすべて適用し終えた**後**でなければ、判断が見る「現に可視か」が
-///   1 フレーム古い状態になる（Requirement 3.5）。
-/// - 表示が積む窓寸要求を同一フレームで消化できるよう、窓寸 reconcile の**前**に置く
-///   （非表示から表示へ移った時に窓寸が 1 フレーム遅れないこと・Requirement 6.6）。
-/// - 文字層の binding 再構築と描画より**上流**に置く（同じく Requirement 6.6）。
-///
-/// # 本体はまだ空である
-///
-/// 判断中核 [`decide`] の呼び出しと観測の収集・発行・ログは task 4.4 が実装する。本タスク
-/// （4.3）は挙動を変えない並べ替えだけを行うため、相の本体を意図的に空のままにしてある。
-/// 引数を先頭下線つきで受けているのはそのためで、4.4 が本体を書く時に下線が外れる。
-///
-/// # 事前条件
-///
-/// `Emo2Wiring` を world から取り出した状態（`emo2_frame_system` の内側）で呼ぶ。装着が未了で
-/// `wiring.balloon_models` が空なら対象 scope がゼロ件となり、本体が入った後も自然に no-op に
-/// なる（早期 return の特別扱いを持たない）。panic しない。
-pub(super) fn run_balloon_visibility_phase(_wiring: &mut Emo2Wiring, _world: &mut World) {}
+// 配線層は子モジュールへ置く。本ファイルは判断中核だけで既に 700 行を超えており、観測の収集・
+// 発行・ログを同居させるとリポジトリの 1 ファイル 1,000 行の上限を越えるためである
+// （design の File Structure Plan が「テーマ超過時はさらに分割」と既に想定している形）。
+// 子モジュールは親の非公開項目（[`BalloonVisibilityState::per_scope`] 等）へ到達できるため、
+// 「相関数は判断中核と同一の可視性の内側に置く」という設計上の前提は保たれる。
+#[path = "balloon_visibility_phase.rs"]
+mod phase;
+
+pub(super) use phase::run_balloon_visibility_phase;
 
 #[cfg(test)]
 #[path = "balloon_visibility_test_support.rs"]

@@ -34,9 +34,19 @@ use super::{BootAssets, DpiChangedQuery, MoveDirective, TalkClock};
 /// 構築（[`Emo2Wiring::new`]）と attach フェーズ（[`run_attach_phase`]）に加え、drain フェーズ
 /// （[`run_drain_phase`]・`rx` を消費）・text フェーズ（[`run_text_phase`]・`clock` を消費）・排他
 /// system [`emo2_frame_system`]（3 フェーズを remove→insert で駆動）を所有する（task 4.1／4.2）。
+///
+/// # フィールドの可視性が 2 種類ある理由
+///
+/// 大半のフィールドは `frame` 配下の相（attach／dpi／drain／text）だけが触るため `pub(super)`
+/// ＝`emo2_boot::frame` 内である。ただしバルーン可視性の相は design の File Structure Plan により
+/// **兄弟モジュール** `emo2_boot::balloon_visibility` に置かれる（判断中核と同居させるため）。
+/// その相が消費する 5 つ（`presenter`／`lifecycle_rx`／`balloon_visibility`／`balloon_models`／
+/// `clock`）だけを `pub(in crate::emo2_boot)` へ広げてある。相は 5 つを**同時に**可変借用するため
+/// （表示層へ発行しながら状態を更新する）、読み口メソッドを並べる形では組めない。広げた先は
+/// emo2_boot の内側どまりで、公開面は 1 つも増えない。
 pub struct Emo2Wiring {
     /// 表示層の指令適用ハブ（UI スレッド専有・`!Send`）。
-    pub(super) presenter: EmoPresenter,
+    pub(in crate::emo2_boot) presenter: EmoPresenter,
     /// worker（seriko 経由 `PresentBridge`）からの表示指令受信端（task 4.2 の drain で消費）。
     pub(super) rx: Receiver<PresentCommand>,
     /// talk スレッド（`MoveCueSink`）からの `\![move]` 指令受信端（frame 相 drain＝[`run_move_drain_phase`]
@@ -47,7 +57,7 @@ pub struct Emo2Wiring {
     /// [`run_move_drain_phase`] 経由で `try_iter` し `apply_move_directive` へ適用する（task 9.2）。
     pub(super) move_rx: Receiver<MoveDirective>,
     /// talk スレッド（`BalloonLifecycleSink`）からの表示ライフサイクル信号受信端
-    /// （バルーン可視性相＝task 4.4 が消費・Requirements 4.1／4.5）。
+    /// （バルーン可視性相が消費・Requirements 4.1／4.5）。
     ///
     /// `move_rx` と同型の配線: [`super::super::wire_emo2_boot`] が
     /// `mpsc::channel::<TalkLifecycleSignal>()` を作り、送出端を `GhostBootOptions.sinks` の
@@ -55,21 +65,15 @@ pub struct Emo2Wiring {
     /// （[`TalkLifecycleSignal::TalkStarted`]）と、待機を含む占有区間の終端
     /// （[`TalkLifecycleSignal::DisplayEndAt`]）が talk 相対秒で FIFO に届く。
     ///
-    /// 取り出しは可視性相の `try_iter` による**全件 drain**（task 4.4）。受信前の信号はチャネル
+    /// 取り出しは可視性相の `try_iter` による**全件 drain**。受信前の信号はチャネル
     /// 自身が保留バッファとして預かるため、attach 前に始まった会話の信号も落ちない。
-    // 本 task（4.1）時点では読み手が居ない（`#[cfg(test)]` の `drain_lifecycle_signals` のみ）ため
-    // 抑止する。本番の drain は task 4.4（`run_balloon_visibility_phase` の観測収集）が着地させる。
-    #[allow(dead_code)]
-    pub(super) lifecycle_rx: Receiver<TalkLifecycleSignal>,
+    pub(in crate::emo2_boot) lifecycle_rx: Receiver<TalkLifecycleSignal>,
     /// バルーン可視性コントローラが持ち越す状態（エッジ検出・計測・抑止の記憶）。
     ///
     /// 判断中核（[`super::super::balloon_visibility::decide`]）は状態を `&mut` で受けて更新する
     /// ため、フレームを跨いで生きる器がここに要る（`dpi_state` と同じ理由——相関数は排他 system
     /// から呼ばれる素の関数で `Local` を取れない）。UI スレッド専有で、可視性相以外は触らない。
-    // 本 task（4.1）時点では読み手が居ないため抑止する。本番の読み手は task 4.4
-    // （`decide` へ `&mut` で渡す配線）が着地させる。
-    #[allow(dead_code)]
-    pub(super) balloon_visibility: BalloonVisibilityState,
+    pub(in crate::emo2_boot) balloon_visibility: BalloonVisibilityState,
     /// バルーン文字層ランタイム（`register_actor_view`／`present_frame` の所有・`!Send`）。
     pub(super) runtime: Rc<RefCell<TextLayerRuntime>>,
     /// scope → attach 相で装着に使った [`BalloonModel`]（文字層 k 再追従の再利用源・D11-3・R8.1）。
@@ -84,7 +88,7 @@ pub struct Emo2Wiring {
     /// の共有 1 本は撤去済み）。ゆえにキーは **scope**——再追従は「どの scope の balloon 窓か」から
     /// 引くのが自然である。attach（[`run_attach_phase`]）は当該 scope の資産から取り出した定義を
     /// **ここと文字層結線（[`connect_balloon_text`]）の双方へ同一値で**挿す（Req 4.1/4.2）。
-    pub(super) balloon_models: HashMap<u32, BalloonModel>,
+    pub(in crate::emo2_boot) balloon_models: HashMap<u32, BalloonModel>,
     /// 文字層 k 追従で `text_slot_view` が `None` だった scope の警告済み集合（R8.6 のエッジガード）。
     ///
     /// [`run_text_scale_phase`] は毎フレーム走る。表示未確立の縮退を素朴に `warn!` すると毎フレーム
@@ -92,8 +96,8 @@ pub struct Emo2Wiring {
     /// 再武装する（`areka-emo-text` の `unresolved_warned: BTreeSet<ActorKey>` と同型の先例）。
     /// R8.6 が求めるのは縮退が**観測できる**ことであって毎回鳴ることではない。
     pub(super) text_scale_warned: BTreeSet<u32>,
-    /// talk 起点相対秒の時刻源（task 4.2 の text フェーズで `talk_time` を引く）。
-    pub(super) clock: TalkClock,
+    /// talk 起点相対秒の時刻源（text フェーズと可視性相が同一の `talk_time` を引く）。
+    pub(in crate::emo2_boot) clock: TalkClock,
     /// load-time 構築資産（attach で `take` して高々 1 回消費）。
     pub(super) assets: Option<BootAssets>,
     /// attach 完了フラグ（高々 1 回のゲート・以降 no-op）。
@@ -114,7 +118,7 @@ impl Emo2Wiring {
     /// 保持し、attach フェーズ（[`run_attach_phase`]）が `take` で高々 1 回消費する。`move_rx` は
     /// `MoveCueSink`（talk スレッド）と対の受信端で、frame 相 drain（task 9.2）が消費する。
     /// `lifecycle_rx` は `BalloonLifecycleSink`（同じく talk スレッド）と対の受信端で、バルーン
-    /// 可視性相（task 4.4）が消費する。可視性の持ち越し状態は外から与えず初期値から始める。
+    /// 可視性相が消費する。可視性の持ち越し状態は外から与えず初期値から始める。
     pub fn new(
         presenter: EmoPresenter,
         rx: Receiver<PresentCommand>,
@@ -193,8 +197,8 @@ impl Emo2Wiring {
 
     /// 表示ライフサイクル信号受信端への test-support アクセサ（task 4.1 の配線檻で消費）。
     ///
-    /// 本番の可視性相（task 4.4）は `lifecycle_rx` を private に閉じたまま同じ `try_iter` で全件
-    /// drain し、判断中核の観測スナップショットへ載せる。4.1 段階では channel 配線の到達性
+    /// 本番の可視性相は `lifecycle_rx` を private に閉じたまま同じ全件取り出しを行い、
+    /// 判断中核の観測スナップショットへ載せる。4.1 段階では channel 配線の到達性
     /// （会話の再生が `BalloonLifecycleSink`→`Emo2Wiring` の受信端へ届く）を決定論に固定する
     /// ための最小 read 口として `#[cfg(test)]` で開ける（`drain_move_directives` と同型・本番
     /// 表面は増やさない）。
@@ -244,7 +248,7 @@ impl Emo2Wiring {
     ///
     /// attach 相はバルーンを**不可視のまま確立**するため、spine が「可視バルーン」を前提とする
     /// ケースはその前提を自分で組む必要がある。本番で可視化を発行するのはバルーン可視性制御
-    /// （task 4.4 の相）であり、本口はそれを spine から代行するだけの passthrough である。
+    /// の相であり、本口はそれを spine から代行するだけの passthrough である。
     #[cfg(test)]
     pub(crate) fn show_balloon_target(
         &mut self,

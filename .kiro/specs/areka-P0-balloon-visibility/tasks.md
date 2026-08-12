@@ -87,7 +87,7 @@
   - 完了状態: 相順が指定どおりに並び替わり、窓寸法の反映が相順の所有者側から 1 回だけ呼ばれ、既存の検査群が緑のまま（挙動の変化を伴わない純粋な並べ替えであることが確認できる）
   - _Requirements: 3.5, 6.6, 9.6_
 
-- [ ] 4.4 観測の収集・指令の発行・ログを配線する
+- [x] 4.4 観測の収集・指令の発行・ログを配線する
   - 可視コンテンツ量・選択肢表示中・ポインタ滞在・ドラッグ中・現在の可視状態・注入時刻を毎フレーム集め、判断中核へ渡す
   - 判断が返した遷移を発行する（表示は専用入口、非表示は既存経路）。非表示は可視状態のみを変え、内容・会話状態・キャラクター窓に触れない
   - 自分が発行していない可視性の変化も前フレームとの差分で検出し、明示指令としてログの契機に含める。非表示へ遷移した scope のポインタ滞在記録は掃除する
@@ -187,6 +187,7 @@
 - **design 本文の file:line が 2 件陳腐化している**（実装の欠陥ではなく、主張内容自体は正しい）——`apply_show` は `show.rs:23-277` ではない、`VisualMount::set_visible` は `mount.rs:193-216` ではない。design の file:line は都度実測し直すこと。
 - **2.2 で `on_balloon_pointer_moved` の借用手順②が共有借用から可変借用へ変わった**（`balloon.rs:398-403`）。`Mut<BalloonWiring>` は `.map()` クロージャ内に閉じ、手順③の `runtime.try_borrow()` より前に落ちるため二重借用は不可能。縮退順序・ログレベル・ログ event 名は不変。
 - **2.2 の記録側と解除側は `Emo2Wiring` 依存が意図的に非対称**（記録は在席を要求・解除は無条件）。どちらも「抑止しない側」へ倒れる形であり要件 5.5 の指定どおり。`Emo2Wiring` は `frame.rs:137` の `remove_non_send_resource` で毎フレーム一時的に world から抜けるため、不在は実在する過渡状態である。
+- **配線層は別ファイル `balloon_visibility_phase.rs`**（4.4 が新設・判断中核と合わせて 1,000 行を越えるため分割）。`#[path]` の子モジュールなので親の非公開項目（`state.per_scope` 等）へ到達でき、巻き戻しの義務を果たせる。テストは `balloon_visibility_phase_tests.rs`。
 - **相順は 9 相**（4.3 で確定）——attach → dpi → drain（適用のみ）→ **balloon_visibility** → **reconcile** → move_drain → resnap → text_scale → text。`reconcile_reported_sizes` は `run_drain_phase` から相順の所有者 `emo2_frame_system` へ純移動済みで、本番呼び出しは `frame.rs` の 1 箇所のみ（`drain_resnap.rs` は import ごと落としてあるので、呼び戻すとコンパイルが通らない）。**相の本体は空**で、中身はタスク 4.4 が書く。
 - **reconcile が装着前フレームでも走るようになった**（移動前は `run_drain_phase` の `attached` 早期 return の内側だった）。presenter に target が 1 つも無い間は全アームが短絡するため無操作で、既存の未装着テストが緑のまま押さえている。**装着前に走ってはいけない処理をこの相の後段へ足さないこと**。
 - **相順を固定するテストはリポジトリに存在しない**（4.3 で全 `emo2_frame_system` 呼び出し元を実測）。「指令適用後の実状態で判断されること」「表示遷移フレームで窓寸が同一フレームに届くこと」は**タスク 6.6 の所有**であり、空の相では呼び出し順しか主張できないため 4.3 では追加しなかった。
@@ -197,15 +198,13 @@
 - **`Emo2Wiring::new` の引数が 4.1 で 1 本増えた**（`lifecycle_rx`）。構築点は 9 箇所（本番 1・spine 1・テスト 7）で、受信端 3 本は型が互いに異なるため取り違えはコンパイルで落ちる。以後の構築点追加時も型で守られる。
 - **`spine.rs` は本番の sink 構成を忠実に再現する方針**（`spine.rs:683-690`・タスク 9.3 由来）。4.1 で実 `BalloonLifecycleSink` を 4 本目へ登録した。使い捨ての sink を置くとこの方針が壊れるので、以後 sink を足すときも spine へ同じものを登録すること。
 - **4.1 で `frame/wiring.rs` の陳腐化注記が 2 件見つかった**（design は `runtime()` の 1 件しか挙げていない）。`presenter()` の「本番消費者なし」も偽で、実消費者は `input_events/mod.rs:316` の `.map(Emo2Wiring::presenter)` という**関数パス形**——`.presenter()` の grep には出ない。**到達性を grep だけで判定しないこと**。
-- **`wiring.rs` の未使用許容は 4.1 時点で 2 本**（新規フィールド `lifecycle_rx` / `balloon_visibility`・いずれも実測で earned）。**タスク 4.4 の drain と `decide` 呼び出しが着地すれば撤去できるはず**。`runtime()` / `presenter()` の 2 本は 4.1 で非 load-bearing と実測して撤去済み。
 - **タスク 8.1 の実機サインオフ向け訂正**: design の実機手順は起動ログを `timeout_secs=30 source=default` で grep せよと書いているが、`tracing` の `f64` フィールドは Debug 形で出るため実際は **`timeout_secs=30.0`** になる。値も供給源も同じ 1 行に載っているので grep 文字列に `.0` を足せばよい（design の記述側の誤りで、実装の欠陥ではない）。
-- **タスク 4.4 が起動時記録を発火させる**: 3.3 は `configured_timeout_secs` の記録機構を作ってテストまで済ませたが、**起動時に呼ぶ配線は 4.4 の所有**。3.3 完了時点で本番呼び手はゼロなので、完了条件の「起動で記録される」はまだ成立していない。
-- **`balloon_visibility.rs` の未使用許容は 2 本**（`:153` `configured_timeout_secs`・`:368` `decide`）。前者 1 本だけで 7 項目（`DEFAULT_BALLOON_TIMEOUT_SECS` / `TIMEOUT_ENV_KEY` / `TimeoutSource` / `as_str` / `parse_timeout_ms` / `resolve_timeout_secs` / 自身）を live に見せている。**4.4 の配線でこの 2 本とも撤去できるはず**で、できないなら理由を実測すること。
 - **タイムアウト設定のテストは別ファイル `balloon_visibility_timeout_config_tests.rs`**（3.3 が新設）。`balloon_visibility_tests.rs` を 1,000 行超にしないための分割で、タスク 6.2 の分割計画とは別物。
-- **タスク 4.4 が裁定すべき残件**: `DisplayEndSignalMissing` は `now_talk_time` が `None` のフレームでは生成されない（`decide_timeout` が早期 return するため）。「信号未着のまま可視コンテンツが現れ、かつ talk 起点が未確立で、以後 1 度も新規表示が無い」という三重の縮退でのみ、要件 4.8 の**記録**だけが落ちる（表示を保持する主義務は成立し、方向も表示保持側）。4.4 の配線で観測できる形にするか、design の Error Strategy 側で明示的に許容するかを決めること。
+- **【4.4 で裁定済】`DisplayEndSignalMissing` の取りこぼしは到達不能**——配線側で観測可能にする必要はない。連鎖で閉じている: 判断中核は `content.shown` が非空のときだけ当該記録を作り、`content.shown` へ scope が載るには `visible_glyphs` が `Some` である必要があり、配線は `now_talk_time` が `Some` のときしか `Some` を作らない（`Option::zip`）。ゆえに `decide_timeout` が早期 return するフレームでは表示エッジ自体が立たず、記録が落ちる組み合わせは存在しない。論拠は `balloon_visibility_phase.rs` の観測収集箇所のコメントにもある。
 - **`balloon_visibility_tests.rs` は 3.2 完了時点で 979 行**。タスク 6.2 が同じファイルへタイムアウト・抑止の網羅表を足すと 1,000 行を超える。design の File Structure Plan が「テーマ超過時はさらに分割」と既に想定しているので、**6.2 は分割を計画に織り込むこと**（スコープ逸脱ではない）。
-- **`decide` の未使用許容は撤去できなかった**（3.2 完了時点でも本番呼び手ゼロ＝タスク 4.4 が解消する）。この 1 本が到達可能な型 17 個を live に見せているため、このモジュールへ属性を足すと本当に死んでいるコードが見えなくなる。`BalloonVisibilityState` の許容は 3.2 でフィールドが読まれるようになり撤去済み。
-- **タスク 4.4 の義務**: `decide` は `Show` を積む前に `prev_visible = true` を確定させる（`balloon_visibility.rs:202`）。相順 D5 では観測が発行より前に採られるため、観測値をそのまま覚えると自分が出した表示が毎フレーム「外因」と誤検出される——この持ち方が正しい（レビュー裁定済み）。ただし **4.4 は `show_target` が `Err` を返した scope について `state.per_scope` の `prev_visible` を発行前の値へ巻き戻すこと**。さもないと次フレームで偽の `trigger=explicit`（要件 8.1）と不要なポインタ滞在の掃除が出る。相関数は同一モジュールに置かれるため非公開フィールドへ到達できる（同義の注記が `balloon_visibility.rs:129-136` にもある）。
+- **【4.4 で履行済】`prev_visible` の巻き戻し**——`decide` は `Show` を積む前に `prev_visible = true` を確定させる（相順 D5 では観測が発行より前に採られるため、観測値を覚えると自分が出した表示が毎フレーム「外因」と誤検出される）。4.4 の配線は発行が成らなかった scope についてこれを巻き戻す。**失敗の形は 2 つ**——`show_target` の `Err` と、`Ok` を返しながら可視にならない縮退（全透明）。後者は発行後に `target_visible` を読み直して検出し、`warn!` のうえ遷移ログを出さずに巻き戻す。**「起きていない遷移を名乗らない」を 1 箇所へ集約してある**ので、以後この経路へ分岐を足すときは両方の形を通すこと。
+- **非表示の発行を検査するときは「表示層が非表示を適用した瞬間に出す 1 行」を観測すること**。可視状態の値を見る形は**空虚になる**——`attach_target` 直後から `target_visible` は既に `Some(false)` で、しかも未表示 target への `apply_hide` は mount を持たず `visible` / `current_surface_id` しか書かないため、事後状態は非表示前と区別できない。4.4 のレビューで、この空虚な檻のせいで**非表示の発行を丸ごと削除しても全テストが緑**になることが変異検証で判明した。依存先は `areka-emo-present/src/presenter/hub.rs` の `apply(Hide): 非表示へ` と `apply(Hide): 未装着ターゲット` の 2 行（本 spec は変更していない既存の log-first 契約・別クレートのログ文言への結合はレビューで許容裁定済み）。
+- **【4.4 で解消】未使用許容の一斉撤去**——`balloon_visibility.rs`（`configured_timeout_secs` / `decide`）・`frame/wiring.rs`（`lifecycle_rx` / `balloon_visibility`）・`input_events/balloon.rs`（`is_balloon_hovered`）の 5 本と、`frame.rs` の `unused_imports` グループ 1 本を、配線の着地により非 load-bearing と実測して撤去した。`input_events/balloon.rs` の dead_code 許容は **0 本**になっている。
 - **`balloon_visibility.rs` に `#[allow(dead_code)]` は 2 本しかない**（`:144` `BalloonVisibilityState` の会話単位フィールド未読＝タスク 3.2 が解消・`:167` `decide` の呼び手ゼロ＝タスク 4.4 が解消）。**`decide` の allow が 1 本で 7 つの型を live に見せている**ため、ここへ属性を足すと本当に死んでいるコードが見えなくなる。3.2 / 4.4 の着地時にこの 2 本は撤去できるはずで、撤去できないなら理由を実測すること。
 - **`decide` の出力順を決めているのは `VisibilityObservations::scopes` の走査順のみ**（`per_scope` はキー参照専用）。`actions` / `logs` は並びが観測可能な `Vec` なので、`BTreeMap` は design のスケッチ（`HashMap`）からの意図的な差し替えである（design 自身の不変条件「`decide` は同一入力に対し決定論」を守るため・レビュー裁定済み）。
 - **`input_events/balloon.rs` に残る `#[allow(dead_code)]` は 2.3 の実測監査の結果 1 本だけ**（`is_balloon_hovered`・理由注記つき）。書き込み側の `set_balloon_hover`（`balloon.rs:414`）と `clear_balloon_hover`（`:732`）は 2.2 の配線で**すでに本番到達済み**であり、読み口 `is_balloon_hovered` のみが**タスク 4.4 の消費まで到達者ゼロ**。他の 13 本は非 load-bearing と実測されて撤去済みなので、**このファイルへ新たに dead_code を持ち込むと即警告になる**。

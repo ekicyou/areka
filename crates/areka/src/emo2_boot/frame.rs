@@ -13,7 +13,10 @@
 //! - drain: attach 完了後のみ `Receiver::try_iter` で `PresentCommand` を FIFO で `presenter.apply` へ
 //!   適用する（**適用のみ**）。
 //! - balloon-visibility: 本フレームの表示指令を適用し終えた実状態からバルーンの可視性を決めて発行する
-//!   （`areka-P0-balloon-visibility` design 決定 D5・Requirement 3.5／6.6。本体は task 4.4 が実装する）。
+//!   （`areka-P0-balloon-visibility` design 決定 D5・Requirement 3.5／6.6）。観測（可視状態・可視
+//!   グリフ数・選択肢表示中・ポインタ滞在・ドラッグ中・表示ライフサイクル信号）を集めて判断中核へ渡し、
+//!   返った遷移を発行して 1 行ずつ記録する。実装は `emo2_boot::balloon_visibility`（判断）と
+//!   その配線層 `balloon_visibility_phase.rs`。
 //! - 窓寸 reconcile: 表示成立点の状態照合報告（`take_pending_resize`）で窓寸を反映する（第 2 経路）。
 //!   可視性の相が発行した表示が積む窓寸要求も、同一フレームのここで landing する。
 //! - text-scale: 装着済み balloon scope の文字層 binding を presenter の**現適用 k** へ毎フレーム
@@ -124,11 +127,14 @@ use self::dpi::{
 // `resnap_shell_targets` は下の `emo2_frame_system` が呼ぶ。
 #[allow(unused_imports)]
 use self::drain_resnap::{PhysicalSizeSource, resnap_from_sizes, resnap_shell_targets, resnap_with};
-// 同上。未使用は `resolve_talk_time` のみで、`reconcile_reported_sizes` は下の
-// `emo2_frame_system` が非 test ビルドでも呼ぶ（呼び出しは task 4.3 で `run_drain_phase` から
-// 相順の所有者であるこちらへ移した・design 決定 D5）。
-#[allow(unused_imports)]
-use self::scale_text::{reconcile_reported_sizes, resolve_talk_time};
+// 同上。`reconcile_reported_sizes` は下の `emo2_frame_system` が非 test ビルドでも呼ぶ
+// （呼び出しは task 4.3 で `run_drain_phase` から相順の所有者であるこちらへ移した・design 決定 D5）。
+use self::scale_text::reconcile_reported_sizes;
+// バルーン可視性の相（兄弟モジュール `emo2_boot::balloon_visibility`）が注入時刻の解決に用いる
+// ための再輸出。可視性の相と text 相が**同一の**時刻契約を共有することが要る——可視性の相は
+// `visible_glyphs(actor, t)` でリビール済みグリフ数を観測し、text 相は同じ `t` で描画するため、
+// 別式で組むと「観測したグリフ数」と「実際に描かれる文字」が食い違う。
+pub(super) use self::scale_text::resolve_talk_time;
 
 /// `FrameFinalize` 登録の排他 system（donor パターン: remove→各フェーズ→insert・DD-1/DD-4）。
 ///
@@ -160,7 +166,7 @@ pub fn emo2_frame_system(world: &mut World) {
     // バルーン可視性（areka-P0-balloon-visibility design 決定 D5・Requirement 3.5／6.6）: 本フレームの
     // 表示指令をすべて適用し終えた**後**に置く——判断の根拠は「指令適用後の実状態」でなければならず、
     // drain の前だと 1 フレーム古い可視状態を見る。同時に窓寸 reconcile の**前**でもある必要がある
-    // ——ここで発行した表示が積む窓寸要求を同一フレームのうちに消化するため。本体は task 4.4。
+    // ——ここで発行した表示が積む窓寸要求を同一フレームのうちに消化するため。
     run_balloon_visibility_phase(&mut wiring, world);
     // 窓寸 reconcile の第 2 経路（emo-dpi-scaling task 4.2・design Flow 2 キー決定 (d)／Flow 3 手順 5）:
     // 本フレームの全 apply が済んだ**後**に、表示成立点の状態照合が積んだ未消費の窓寸要求を取り出して
