@@ -41,9 +41,8 @@ use tracing::warn;
 ///
 /// 受信側は [`TalkStarted`](Self::TalkStarted) で計測をリセットし、以降の
 /// [`DisplayEndAt`](Self::DisplayEndAt) を max 集約する（重複・順不同の値に対して単調）。
-// 消費者は task 4.1（`GhostBootOptions.sinks` への登録）と task 3.x（コントローラ側の drain）で
-// 着地する。それまで非 test ビルド（bin 本体）からは未参照ゆえ dead_code が出る。
-#[allow(dead_code)] // 実消費者は task 4.1 の配線で着地する（段階実装の想定内）
+// 判断側の消費は着地済み（`balloon_visibility.rs` の観測スナップショットが本型を運び、計測の
+// 破棄と占有終端の更新に使う）。送出側の構築点（`GhostBootOptions.sinks` への登録）は task 4.1。
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum TalkLifecycleSignal {
     /// この talk の観測が始まった（複製後の初回 `emit` で 1 回だけ・全 `DisplayEndAt` に先行）。
