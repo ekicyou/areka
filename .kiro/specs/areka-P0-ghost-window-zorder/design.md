@@ -431,7 +431,7 @@ pub fn compute_pair_z_intent(/* &World, Entity */) -> ZOrder;
 
 ### Unit Tests（決定論的・実機不要）
 
-1. `decide_pair_fix` 全腕: トリガ×生存×実測隣接の組——`Skip(PeerMissing)`（1.5）／`Skip(AlreadyAdjacent)`（収束ガード）／`PlaceAboveOverBelow`（1.2・`TopEdge` 縁含む）／`PlaceBelowUnderAbove`（1.3）／`Skip(StrategyDisabled)`（案 A で raise_assist=false のとき `RaisedBelow` が何もしない）
+1. `decide_pair_fix` 全腕: トリガ×生存×実測隣接の組——`Skip(PeerMissing)`（1.5）／`Skip(AlreadyAdjacent)`（収束ガード）／`PlaceAboveOverBelow`（1.2・`TopEdge` 縁含む）／`PlaceBelowUnderAbove`（1.3）／`Skip(StrategyDisabled)`（案 A で raise_assist=false のとき `RaisedAbove`／`RaisedBelow` のどちらも何もしない——この構成では z 変化検知自体を結線しないため、両トリガとも供給者が存在しない。上記「Modified Files」の `window_pos.rs` 行と直後の引用ブロックが根拠）
 2. `decide_pair_fix` 不変条件: 返り値に `TopMost` が現れない（4.3/8.1）・`PairFix` 型が座標を持たない（1.6・コンパイル時保証の明文化テスト）・対象がペア 2 窓に限られる（3.4）
 3. B3 funnel（案 B 時）: `zorder=NoChange` で現行フラグとコマンドが完全一致（回帰）／`InsertAfter` で `SWP_NOZORDER` が外れ `hwnd_insert_after` が載る
 4. `ReassertZOrder` の段階遷移: 挿入→適用→`pending_verify`→remove の状態機械（bare World・7.6 の受入形）

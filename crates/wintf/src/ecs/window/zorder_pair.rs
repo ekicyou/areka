@@ -12,8 +12,9 @@
 //! - `OwnerLink`: 案 A の owner を張った事実の記録（切離しに使う）
 //! - `ZOrderPairStrategy`: 案 A／案 B を実行時に切り替える設定
 //!
-//! 判断の純関数（`decide_pair_fix`）・確立系・維持系・診断ログ語彙は本フィーチャーの
-//! 後続タスクが同ファイルへ足す。本ファイルは現時点では状態定義のみを持つ。
+//! - `decide_pair_fix`: 是正判断の純関数（実機・World 不要）
+//!
+//! 確立系・維持系・診断ログ語彙は本フィーチャーの後続タスクが同ファイルへ足す。
 
 use bevy_ecs::prelude::*;
 use windows::Win32::Foundation::HWND;
@@ -137,6 +138,172 @@ impl Default for ZOrderPairStrategy {
         Self::OwnerLink {
             raise_assist: false,
         }
+    }
+}
+
+// ============================================================================
+// decide_pair_fix - 是正判断の純関数
+// ============================================================================
+
+/// 判断を起こしたトリガの種別。
+///
+/// z 変化の 2 種は**どちらの窓の重なりが動いたか**で分ける（design.md
+/// 「WM_WINDOWPOSCHANGED z 変化検知」の正準定義）。動いた窓が手前側（バルーン）なら
+/// [`PairTrigger::RaisedAbove`]、背後側（キャラ）なら [`PairTrigger::RaisedBelow`] である
+/// ——同じ「z が動いた」でも要件 1.3 と要件 1.2 のどちらの腕かが変わるため、
+/// ここを 1 種へ潰してはならない。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)] // 各種別を組み立てる結線は後続タスク（確立系・維持系・z 変化検知）で入る
+pub(crate) enum PairTrigger {
+    /// owner 確立直後の初期隣接の確定
+    Establish,
+    /// 一回限りの再断行要求（[`ReassertZOrder`]・要件 2.6 のシームを含む）
+    Reassert,
+    /// 手前側（バルーン窓）の重なりが動いた
+    RaisedAbove,
+    /// 背後側（キャラ窓）の重なりが動いた
+    RaisedBelow,
+}
+
+/// 是正を見送った理由（要件 6.3——理由の無い見送りを型として作らせない）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SkipReason {
+    /// 既にバルーンがキャラのすぐ手前に居る（収束の同値ガード）
+    AlreadyAdjacent,
+    /// ペアの一方が既に存在しない（要件 1.5——残る窓には一切書き込まない）
+    PeerMissing,
+    /// 両窓とも生きているが、まだ OS のハンドルが付いていない
+    HandleMissing,
+    /// 自分が出した指令の反響、ないし当該ストラテジでは是正の要らない変化
+    EchoOrIrrelevant,
+    /// 現在のストラテジがこのトリガを扱わない構成になっている
+    StrategyDisabled,
+}
+
+/// 是正判断の入力。実測値は呼出側（維持系）が同一巡で採取したものを渡す。
+///
+/// 本構造体は Win32 を呼ばない——「いま何が起きていて、実際の重なりはどうだったか」の
+/// 写しだけを持つ。これが判断を実機不要の決定論的テストで固定できる根拠である（要件 7.1）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct PairObservation {
+    /// 判断を起こしたトリガ種別
+    pub trigger: PairTrigger,
+    /// 実行時ストラテジ（案 A／案 B・raise assist の有無）
+    pub strategy: ZOrderPairStrategy,
+    /// 手前側（バルーン窓）の entity と [`WindowHandle`](super::WindowHandle) の生存
+    pub above_alive: bool,
+    /// 背後側（キャラ窓）の生存
+    pub below_alive: bool,
+    /// 手前側の HWND（未付与は `None`）
+    pub above_hwnd: Option<HWND>,
+    /// 背後側の HWND（未付与は `None`）
+    pub below_hwnd: Option<HWND>,
+    /// 手前側の 1 つ背後にある窓（`GetWindow(above, GW_HWNDNEXT)` 実測）
+    pub measured_below_of_above: Option<HWND>,
+    /// 背後側の 1 つ手前にある窓（`GetWindow(below, GW_HWNDPREV)` 実測）
+    pub measured_above_of_below: Option<HWND>,
+}
+
+/// 是正の挿入位置。
+///
+/// `SetWindowPos` の `hWndInsertAfter` は**指定窓の背後**へ対象を置くため、
+/// 「キャラのすぐ手前」を作る挿入位置はキャラ自身ではなく**キャラの 1 つ手前の窓**である。
+/// その窓が居ない（キャラが最上位）縁だけが [`InsertSpec::TopEdge`] になる。
+///
+/// バリアントは 2 つで尽きており、**常時最前面（`ZOrder::TopMost`）を表す値は無い**
+/// ——要件 4.3／8.1 はこの型の形そのもので満たされる。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum InsertSpec {
+    /// 指定窓のすぐ背後へ（`ZOrder::InsertAfter` へ写像）
+    After(HWND),
+    /// 最上位へ（`ZOrder::Top` へ写像。常時最前面ではない）
+    TopEdge,
+}
+
+/// 是正判断の結果。
+///
+/// 座標・寸法のフィールドを**一切持たない**——是正は表示順のみを動かすという要件 1.6 を、
+/// 実行時の判定ではなく型の形で保証する。動かす窓も宣言ペアの 2 枚のいずれか 1 枚に
+/// 限られる（腕の種別がそのまま対象を決め、第三の窓を指す余地が無い＝要件 3.4）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PairFixDecision {
+    /// 何もしない（理由必須・要件 6.3）
+    Skip(SkipReason),
+    /// バルーンをキャラのすぐ手前へ（動かすのは `above_hwnd`・要件 1.2）
+    PlaceAboveOverBelow { insert_after: InsertSpec },
+    /// キャラをバルーンのすぐ背後へ（動かすのは `below_hwnd`・要件 1.3）
+    PlaceBelowUnderAbove { insert_after: HWND },
+}
+
+/// ペアの重なりをどう是正するかの純判断（Win32 も World も触らない）。
+///
+/// 判定は次の順で行う——先に置いた歯止めほど強い。
+///
+/// 1. **生存**: 一方でも欠けていれば [`SkipReason::PeerMissing`]。残る窓には触れない（要件 1.5）。
+/// 2. **ハンドル**: 生きていても HWND 未付与なら [`SkipReason::HandleMissing`]。
+/// 3. **隣接**: 既に隣接していれば必ず [`SkipReason::AlreadyAdjacent`]。適用が誘発する
+///    z 変化で再是正が走る往復を断つ同値ガードであり、トリガ種別より優先する。
+/// 4. **トリガ種別×ストラテジ**: 下表のとおり。
+///
+/// | トリガ | 案 A（raise assist 無効） | 案 A（有効） | 案 B |
+/// |---|---|---|---|
+/// | `Establish` / `Reassert` | 手前へ | 手前へ | 手前へ |
+/// | `RaisedAbove` | `StrategyDisabled` | 背後へ（要件 1.3） | 背後へ |
+/// | `RaisedBelow` | `StrategyDisabled` | `EchoOrIrrelevant` | 手前へ（要件 1.2） |
+///
+/// 案 A で `RaisedBelow` を見送るのは、キャラ（owner）の浮上には OS が被 owner の
+/// バルーンを連れて上がるためである（ゲート G6 の保証）——是正は要らない。
+/// 案 A・raise assist 無効ではそもそも z 変化検知を結線しないが、万一トリガが届いても
+/// 判断側で止まる形にしておく（供給者の有無に判断の正しさを依存させない）。
+//
+// 配線は本フィーチャーの後続タスク（維持系 `apply_zorder_pair_maintenance`・
+// 案 B の `compute_pair_z_intent`）で入る。
+#[allow(dead_code)]
+pub(crate) fn decide_pair_fix(obs: &PairObservation) -> PairFixDecision {
+    if !obs.above_alive || !obs.below_alive {
+        return PairFixDecision::Skip(SkipReason::PeerMissing);
+    }
+    let (Some(above), Some(below)) = (obs.above_hwnd, obs.below_hwnd) else {
+        return PairFixDecision::Skip(SkipReason::HandleMissing);
+    };
+
+    // 同値ガード。正準の判定は「手前側の 1 つ背後が背後側か」（design.md Invariants）だが、
+    // 逆向きの実測が隣接を示す場合も併せて止める——そちらだけが隣接を示すのは 2 つの実測が
+    // 食い違った異常であり、そのまま是正へ流すと挿入位置が動かす窓自身になってしまう。
+    if obs.measured_below_of_above == Some(below) || obs.measured_above_of_below == Some(above) {
+        return PairFixDecision::Skip(SkipReason::AlreadyAdjacent);
+    }
+
+    // 「バルーンをキャラのすぐ手前へ」の挿入位置は、キャラの 1 つ手前の窓。
+    // その窓が居なければキャラが最上位であり、最上位へ置くほか無い。
+    let place_above = PairFixDecision::PlaceAboveOverBelow {
+        insert_after: match obs.measured_above_of_below {
+            Some(front_of_below) => InsertSpec::After(front_of_below),
+            None => InsertSpec::TopEdge,
+        },
+    };
+
+    // 上表そのままの組で尽くす（トリガ・ストラテジのどちらかにバリアントが増えれば
+    // ここがコンパイルエラーになり、決め忘れが黙って既定へ落ちない）。
+    match (obs.trigger, obs.strategy) {
+        (PairTrigger::Establish | PairTrigger::Reassert, _) => place_above,
+        (
+            PairTrigger::RaisedAbove,
+            ZOrderPairStrategy::OwnerLink { raise_assist: true }
+            | ZOrderPairStrategy::ExplicitMaintenance,
+        ) => PairFixDecision::PlaceBelowUnderAbove {
+            insert_after: above,
+        },
+        (PairTrigger::RaisedBelow, ZOrderPairStrategy::ExplicitMaintenance) => place_above,
+        (PairTrigger::RaisedBelow, ZOrderPairStrategy::OwnerLink { raise_assist: true }) => {
+            PairFixDecision::Skip(SkipReason::EchoOrIrrelevant)
+        }
+        (
+            PairTrigger::RaisedAbove | PairTrigger::RaisedBelow,
+            ZOrderPairStrategy::OwnerLink {
+                raise_assist: false,
+            },
+        ) => PairFixDecision::Skip(SkipReason::StrategyDisabled),
     }
 }
 

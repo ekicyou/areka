@@ -17,7 +17,7 @@
   - _Requirements: 1.1, 2.6, 3.4, 5.6_
   - _Boundary: zorder_pair 状態定義_
 
-- [ ] 1.3 是正判断を実機不要の純粋な判断として実装し、全分岐をテストで固定する
+- [x] 1.3 是正判断を実機不要の純粋な判断として実装し、全分岐をテストで固定する
   - 「トリガ種別・両窓の生存・実測した前後関係」から「何もしない（理由つき）／バルーンを相手のすぐ手前へ／キャラを相手のすぐ背後へ」を決める判断を実装する
   - トリガ種別は「バルーン側の重なりが動いた」「キャラ側の重なりが動いた」「確立」「再断行」を区別できる形にする
   - 既に隣接しているときは必ず何もしないと決める同値の歯止めを入れる
@@ -192,5 +192,15 @@
 - (1.1) `windows` 0.62 の `GetWindow` は「隣が無い」場合も `Err` を返す。`SetLastError(ERROR_SUCCESS)` で先にクリアし `err.code() == S_OK` を「不在＝`Ok(None)`」へ写像して失敗と切り分けている。
 - (1.1) **トップレベル窓の重なり隣接は同一テストバイナリ内で決定論にならない**（他テストの窓が割り込む）。決定論的テストは私有の親窓＋子窓 2 枚（兄弟列を閉じる）で行う。実窓の隣接そのものは実機サインオフ（要件 7.2）の担当。
 - (1.2) `ExpectedOrder` は design.md の State ブロックが型として参照するだけで定義していないため実装側で補完した（`above`／`below` の 2 HWND・座標フィールド無し）。`ZOrderPairStrategy` にも `Default`（案 A・raise assist 無効）を足している——**`init_resource` で暗黙に案 A が入りうるため、areka main 側では必ず明示 `insert_resource` で選択結果を入れること**（タスク 3.2／5.1 の前提）。
+- (1.3) `decide_pair_fix` の決定表（トリガ × ストラテジ）。後続の維持系はこの表の外へ判断を持ち出さないこと。
+
+  | トリガ | 案 A (raise_assist=false) | 案 A (true) | 案 B (ExplicitMaintenance) |
+  |---|---|---|---|
+  | `Establish` / `Reassert` | 手前へ | 手前へ | 手前へ |
+  | `RaisedAbove`（バルーン側の z が動いた） | `StrategyDisabled` | 背後へ（要件 1.3） | 背後へ |
+  | `RaisedBelow`（キャラ側の z が動いた） | `StrategyDisabled` | `EchoOrIrrelevant` | 手前へ（要件 1.2） |
+
+- (1.3) 案 A・raise_assist=false では z 変化検知そのものを結線しないため、`RaisedAbove`／`RaisedBelow` とも供給者が居ない（両方 `StrategyDisabled`）。design.md「Testing Strategy > Unit Tests」1 が `RaisedBelow` しか挙げていなかったのは記述漏れで、本タスクで design 側を訂正済み。
+- (1.3) 隣接の同値ガードは正準判定（`measured_below_of_above == below`）に加え逆向き実測（`measured_above_of_below == above`）でも止める。線形な兄弟列では整合入力で到達不能な防御であり、**要件 1.4 の反転隣接（キャラがバルーンの手前）は掛からない**ことを検算済み。ただし実測 2 値が引き裂かれた不整合スナップショットが真の隣接と同じ `AlreadyAdjacent` に畳まれる——1.4 で不整合を別レコードとして識別したいなら、`zorder_pair.rs` の隣接判定がその唯一の分岐点。
 - (1.2) HWND を内包する `ExpectedOrder`／`OwnerLink` には手動 `unsafe impl Send + Sync` が**必須**（windows 0.62 は HWND に Send/Sync を実装せず、bevy の `Component` は Send+Sync を要求する）。一方 `ReassertZOrder` 自身には不要（`Option<ExpectedOrder>` 経由で自動導出）。冗長な `unsafe` を足さないこと。テスト側の `assert_send_sync::<T>()` がこの落ちを型検査で拾う。
 - (1.1) **検証時は `target/` の成果物キャッシュを疑うこと**。古い成果物が fresh と誤判定され、健全なソースに対して決定論的な赤が 8 回連続再現した事例あり。疑わしいときは対象ファイルへ touch するか `cargo clean -p wintf` から測り直す。
