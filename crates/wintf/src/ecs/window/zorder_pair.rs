@@ -15,8 +15,8 @@
 //! - `decide_pair_fix`: 是正判断の純関数（実機・World 不要）
 //! - 診断記録の語彙: 行を組む純関数（`*_line`）と、それを出すだけの `log_*`／`record_*`
 //!
-//! 確立系は兄弟モジュール [`super::zorder_pair_establish`] にある（本ファイルが 1,000 行の
-//! 上限に迫るため分割した）。維持系は本フィーチャーの後続タスクが足す。
+//! 確立系は兄弟モジュール [`super::zorder_pair_establish`]、維持系は
+//! [`super::zorder_pair_maintain`] にある（本ファイルが 1,000 行の上限に迫るため分割した）。
 //! **記録を出すマクロは本ファイル内に置くこと**——`tracing` の出力先は呼び出し元の
 //! module path が既定であり、他ファイルへ移すとサインオフの grep 対象が分裂する。
 
@@ -24,7 +24,7 @@ use bevy_ecs::prelude::*;
 use tracing::{debug, error, info, warn};
 use windows::Win32::Foundation::HWND;
 
-use crate::api::get_window_above;
+use crate::api::{get_window_above, get_window_below};
 
 // ============================================================================
 // KeepDirectlyAbove - ペア関係の永続宣言
@@ -160,7 +160,9 @@ impl Default for ZOrderPairStrategy {
 /// ——同じ「z が動いた」でも要件 1.3 と要件 1.2 のどちらの腕かが変わるため、
 /// ここを 1 種へ潰してはならない。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)] // 各種別を組み立てる結線は後続タスク（確立系・維持系・z 変化検知）で入る
+// 組み立てているのは維持系の `Reassert` だけである。残る 3 種の供給者は後続タスク
+// （z 変化検知＝案 B／補助浮上）が入れるまで存在しない。
+#[allow(dead_code)]
 pub(crate) enum PairTrigger {
     /// owner 確立直後の初期隣接の確定
     Establish,
@@ -263,9 +265,8 @@ pub(crate) enum PairFixDecision {
 /// 案 A・raise assist 無効ではそもそも z 変化検知を結線しないが、万一トリガが届いても
 /// 判断側で止まる形にしておく（供給者の有無に判断の正しさを依存させない）。
 //
-// 配線は本フィーチャーの後続タスク（維持系 `apply_zorder_pair_maintenance`・
-// 案 B の `compute_pair_z_intent`）で入る。
-#[allow(dead_code)]
+// 呼び出しは維持系（[`apply_zorder_pair_maintenance`](super::apply_zorder_pair_maintenance)）。
+// 案 B の `compute_pair_z_intent` も同じ関数を呼ぶ（判断の一元点は 1 つに保つ）。
 pub(crate) fn decide_pair_fix(obs: &PairObservation) -> PairFixDecision {
     if !obs.above_alive || !obs.below_alive {
         return PairFixDecision::Skip(SkipReason::PeerMissing);
@@ -422,9 +423,8 @@ impl PairFixDecision {
     /// 適用時に判断からこの値を取り出して持ち越し、次巡の検証で
     /// [`record_verification`] の `insert_after` 引数へ渡す——本メソッドはその
     /// 「判断 → 記録に載る指令」の射影であり、記録側が判断の型を知らずに済む境界でもある。
-    /// 現時点の消費者はテストのみで、実際の持ち越しは 2.2 が結線する。
-    // 呼び出しの結線は後続タスク（維持系が判断を適用し、次巡の検証へ指令を持ち越す）で入る。
-    #[allow(dead_code)]
+    /// 持ち越しは維持系が
+    /// [`IssuedPairFix`](super::IssuedPairFix) として entity へ預ける。
     pub(crate) fn insert_spec(&self) -> Option<InsertSpec> {
         match self {
             PairFixDecision::Skip(_) => None,
@@ -552,6 +552,30 @@ pub(crate) fn measure_window_above(hwnd: HWND) -> Option<HWND> {
     }
 }
 
+/// 指定窓の 1 つ背後にある窓を実測する（走査の失敗は不在へ潰したうえで記録に残す）。
+///
+/// 向きが逆であることを除けば [`measure_window_above`] と同じ約束であり、理由も同じ
+/// （記録の欄は 1 つなので「背後に誰も居ない」と「走査に失敗した」は同じ番兵になるが、
+/// 失敗そのものは必ず記録へ残す）。
+///
+/// こちらは**適用後の検証**が使う向きである——「手前側の 1 つ背後が背後側の窓か」が
+/// 隣接の正準判定であり（design.md Invariants）、[`record_verification`] の
+/// `measured_below_of_above` に入るのがこの値である。
+pub(crate) fn measure_window_below(hwnd: HWND) -> Option<HWND> {
+    match get_window_below(hwnd) {
+        Ok(found) => found,
+        Err(err) => {
+            warn!(
+                "窓の 1 つ背後の走査に失敗しました（記録には不在として載ります） hwnd={hwnd} error={code:?} message={message}",
+                hwnd = hwnd_field(Some(hwnd)),
+                code = err.code(),
+                message = err.message(),
+            );
+            None
+        }
+    }
+}
+
 /// owner 確立の記録を出す（info・要件 6.1）。
 pub(crate) fn log_owner_established(
     entity: Entity,
@@ -631,6 +655,37 @@ pub(crate) fn record_decision(
     }
 }
 
+/// ペア宣言を持たない窓に付いていた再断行の要求を落としたことを記録する（warn）。
+///
+/// [`ReassertZOrder`] は他クレートから挿入される公開の契約点であり、宣言の無い窓へ
+/// 付けることも言語上は可能である。そのまま読み飛ばすと、要求が entity に残り続けて
+/// 毎巡黙って無視される——**記録の無い見送り**になる（要件 6.3 が禁じる形）。
+/// よって記録して落とす。
+///
+/// `[zorder-pair] ...` のタグを付けないのは、サインオフの grep 判定語が design.md
+/// 「診断ログ語彙（要件 6）」のレコード表で閉じているためである（判定語を勝手に増やさない）。
+/// 水準が warn なのは、挿入元の誤りであって表示順そのものは壊れていないからである。
+pub(crate) fn log_orphan_request_dropped(entity: Entity) {
+    warn!(
+        "ペア宣言の無い窓に再断行の要求が付いていたため落としました（是正は行いません） entity={entity:?}"
+    );
+}
+
+/// 出した指令の持ち越しが無い検証待ちの要求を落としたことを記録する（warn）。
+///
+/// 維持系は適用と同時に [`IssuedPairFix`](super::IssuedPairFix) を預けるため、自分で
+/// 適用した要求がこの形になることはない。外から検証段階の値だけを作られた場合に、
+/// **出してもいない指令を是正として記録したり、偽の検証不一致を error で残したり
+/// しない**ための枝である。タグを付けない理由は [`log_orphan_request_dropped`] と同じ。
+pub(crate) fn log_unbacked_verification_dropped(entity: Entity, expected: ExpectedOrder) {
+    warn!(
+        "検証待ちの要求に、出した指令の持ち越しがありません（検証を行わず落とします） \
+         entity={entity:?} expected_above={above} expected_below={below}",
+        above = hwnd_field(Some(expected.above)),
+        below = hwnd_field(Some(expected.below)),
+    );
+}
+
 /// 適用後の実測照合を記録し、期待どおりだったかを返す（要件 6.1／6.2）。
 ///
 /// - 一致: 是正の記録（debug）——出した指令 `insert_after` と実測を同じ行に載せる。
@@ -638,8 +693,6 @@ pub(crate) fn record_decision(
 ///
 /// 不一致でも再試行の輪は作らない（外部の窓操作と競合すると恒常再試行になる）。
 /// 次のトリガが来た時点で自然に再是正される。
-// 呼び出しの結線は後続タスク（維持系 `apply_zorder_pair_maintenance`）で入る。
-#[allow(dead_code)]
 pub(crate) fn record_verification(
     entity: Entity,
     peer: Entity,

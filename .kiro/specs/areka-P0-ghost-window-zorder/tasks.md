@@ -46,7 +46,7 @@
   - _Requirements: 1.1, 6.1, 6.2_
   - _Depends: 1.1, 1.2_
 
-- [ ] 2.2 維持処理を実装する（トリガ受理 → 観測組立 → 判断 → 適用 → 次巡での実測検証）
+- [x] 2.2 維持処理を実装する（トリガ受理 → 観測組立 → 判断 → 適用 → 次巡での実測検証）
   - 再断行の要求を受け、両窓の実測前後関係を採って判断へ渡す
   - 是正は位置・寸法・活性化を伴わない形で発行し、重なりだけを動かす
   - 適用の次の巡で実測と期待を突き合わせ、一致なら是正の記録、不一致なら error 記録を残す（再試行の輪は作らない）
@@ -192,6 +192,10 @@
 - (1.1) `windows` 0.62 の `GetWindow` は「隣が無い」場合も `Err` を返す。`SetLastError(ERROR_SUCCESS)` で先にクリアし `err.code() == S_OK` を「不在＝`Ok(None)`」へ写像して失敗と切り分けている。
 - (1.1) **トップレベル窓の重なり隣接は同一テストバイナリ内で決定論にならない**（他テストの窓が割り込む）。決定論的テストは私有の親窓＋子窓 2 枚（兄弟列を閉じる）で行う。実窓の隣接そのものは実機サインオフ（要件 7.2）の担当。
 - (1.2) `ExpectedOrder` は design.md の State ブロックが型として参照するだけで定義していないため実装側で補完した（`above`／`below` の 2 HWND・座標フィールド無し）。`ZOrderPairStrategy` にも `Default`（案 A・raise assist 無効）を足している——**`init_resource` で暗黙に案 A が入りうるため、areka main 側では必ず明示 `insert_resource` で選択結果を入れること**（タスク 3.2／5.1 の前提）。
+- (2.2) 維持系は `zorder_pair_maintain.rs`。`ReassertZOrder` の 2 段階に加えて **`IssuedPairFix`（出した指令の持ち越し）を新設**した——`insert_after` は `ExpectedOrder{above,below}` から復元できない（「手前へ」の腕の挿入位置は第三の窓だから）。`Option<&IssuedPairFix>` で受けるので、外部が `ReassertZOrder` だけを入れる 2.6 のシーム契約は無傷。
+- (2.2) 記録語彙を 2 つ足した（`log_orphan_request_dropped`／`log_unbacked_verification_dropped`）。`ReassertZOrder` が公開契約点である以上「宣言の無い窓に要求が付く」「持ち越し無しで検証段階になる」は到達可能で、既存 `SkipReason` 5 種では表せない。**`[zorder-pair]` タグは付けない**（サインオフの grep 判定語を増やさないため。水準は warn なので沈黙にはならない）——2.1 の走査失敗 warn と同じ方針。
+- (2.2) **`CreateWindow` の子窓は生成順が先のものほど手前**（新しい子窓は兄弟列の背面側へ入る）。実測で確認済み。テストの初期配置は生成順に依存させず `insert_after` で明示的に作ること。`api.rs` に逆のことを書いたコメントがあり差し戻しになった。
+- (2.2) `zorder_pair_maintain_tests.rs` が 893 行。**2.4 が同ファイルへテストを足すなら分割が要る**（1,000 行上限）。
 - (2.1) 確立系は `zorder_pair_establish.rs` へ分割した（`zorder_pair.rs` が 1,000 行の上限に迫るため）。design「File Structure Plan」も追随済み。**ただし `tracing` の記録を出すマクロは `zorder_pair.rs` 内に置くこと**——出力先は呼び出し元の module path が既定で、他ファイルへ移すとサインオフ grep の target（`wintf::ecs::window::zorder_pair`）が分裂する。確立系は記録用の関数を呼ぶだけでマクロを持たない形にしてある。
 - (2.1) 再試行抑止の印は新規コンポーネント `OwnerEstablishFailed { owned_hwnd, owner_hwnd }`（試した**ハンドルの組**を持つので、窓が作り直されて別ハンドルになれば再び試みる）。`OwnerLink` は「張れた事実」で切離し（2.3）が有無で対象を選ぶため流用しない。なお `WindowHandle` の挿入点は `window_factory.rs` の 1 箇所のみで再付与経路が無いため、この印は現行 production 経路では到達しない防御である。
 - (2.1) 印が立った巡では**見送りの記録を出さない**（design「Error Handling」の「回復は次の `Added<WindowHandle>` 巡では行わない・ログ二重化を避ける」に従う）。諦めの事実と理由は `owner-establish-failed`（error）として既に 1 本残っているため要件 6.3 は満たす、というのがレビュー裁定。

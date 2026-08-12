@@ -73,7 +73,6 @@ pub(crate) fn get_window_above(hwnd: HWND) -> Result<Option<HWND>> {
 /// 対応関係は [`get_window_above`] の doc を参照（背面側＝`GW_HWNDNEXT`）。
 /// 最背面でこれ以上背後が無い場合は `Ok(None)`。失敗は `Err` で返す。
 #[inline(always)]
-#[allow(dead_code)] // 呼び出しの結線は維持系（タスク 2.2）の適用後検証で入る
 pub(crate) fn get_window_below(hwnd: HWND) -> Result<Option<HWND>> {
     get_window_relative(hwnd, GW_HWNDNEXT)
 }
@@ -224,8 +223,9 @@ mod tests {
     #[test]
     fn get_window_above_and_below_report_real_two_window_zorder() {
         let parent = create_test_hwnd(w!("wintf-zorder-test-parent"));
-        // 兄弟列はこの 2 枚だけ。CreateWindow は新しい窓を兄弟の最前面側へ挿入するため、
-        // 生成直後は second が first より前面側に居る。
+        // 兄弟列はこの 2 枚だけ。**生成直後の重なりには依存しない**——配置は直後の
+        // `insert_after` で明示的に作る。実測すると子窓は**先に作ったものほど手前**であり
+        // （新しい子窓は兄弟列の背面側へ入る）、生成順から前後関係を読むと逆になる。
         let first = create_test_child_hwnd(parent, w!("wintf-zorder-test-first"));
         let second = create_test_child_hwnd(parent, w!("wintf-zorder-test-second"));
 
