@@ -1,3 +1,18 @@
+// `ID2D1CommandSink*_Impl` のコールバックは `*const T` を受け取り無条件に deref するため
+// `clippy::not_unsafe_ptr_arg_deref` が発火するが、**`unsafe fn` へ変えることはできない**——
+// 署名は `windows` クレートの `#[implement]` が生成するトレイト側で固定されており、実装側に
+// 変更の自由が無い（安全性の表明先が存在しない）。
+//
+// SAFETY 根拠は各コールバック（代表例は `SetTransform`）のコメントに記す: 本トレイトの
+// コールバックは D2D1 ランタイムのコマンドリスト再生（`ID2D1CommandList::Stream`）からのみ
+// 呼ばれ、値構造体への `*const` 引数は D2D1 が記録済みコマンドから渡す非 null ポインタである
+// （null 許容の引数は windows-rs 側で `Option`／null チェック付き `as_ref` へ写像済み）。
+// 無条件 deref の前提は `debug_assert!(!p.is_null())` で debug ビルドが検査する。
+//
+// ゆえに本モジュールに限り lint を許可する（診断を消すのではなく、表明できない理由と
+// 成立根拠を明記したうえでの限定許可）。
+#![allow(clippy::not_unsafe_ptr_arg_deref)]
+
 use std::cell::RefCell;
 use windows::Win32::Graphics::Direct2D::Common::*;
 use windows::Win32::Graphics::Direct2D::*;
