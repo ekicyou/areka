@@ -37,7 +37,7 @@
 - emo2 実寸フィクスチャテスト（`placement_prepare_tests.rs`）の**位置期待値**。
 - `doc/COMPAT_ARCHITECTURE.md` §8 の **window-placement R2.9 上書きエントリ**（新規 1 行）。
 - 実機受け入れの判定手順と証跡ログ（spec ディレクトリ）。
-- **要件 7 で増えた所有物（2026-08-13 追記・C6）**: 実表示寸での連鎖再解決の判定（`placement/chain_finalize.rs`）と確定標識 `ChainFinalized` の寿命／`spawn.rs` の既定キャラ位置台帳（`default_char_pos` と 3 アクセサ）／`emo2_boot/frame`・`frame/drain_resnap.rs` の確定結線（駆動条件と一度きりガード）／`main.rs` の復元判定シーム（`restore_merged_placements` の戻り値と `clear_default_char_pos` 呼出）。
+- **要件 7 で増えた所有物（2026-08-13 追記・C6）**: 実表示寸での連鎖再解決の判定（`placement/chain_finalize.rs`）と確定標識 `ChainFinalized` の寿命／`spawn.rs` の既定キャラ位置台帳（`default_char_pos` と 3 アクセサ）／`emo2_boot/frame`・`frame/drain_resnap.rs` の確定結線（駆動条件と一度きりガード）／`main.rs` の復元判定シーム（`restore_merged_placements` の戻り値と `clear_default_char_pos` 呼出）／**確定が見送られ続けたときの一発診断**（`ChainFinalizeStall`・`ChainDeferReason`・閾値 `CHAIN_FINALIZE_STALL_FRAMES`・タスク 6.5）。
 
 ### Out of Boundary
 
@@ -123,9 +123,9 @@ let base_x = match prev {
 
 ### 要件 7（C6）で追加・変更したファイル（2026-08-13 追記）
 
-- **新規** `crates/areka/src/placement/chain_finalize.rs` — 再解決の判定（純関数 `finalize_chain`・補助 `moved_default_pos`）＋確定標識 `ChainFinalized`（Resource）。
-- **新規** `crates/areka/src/placement/chain_finalize_tests.rs` — 判定の全網羅檻（12 本）。
-- **新規** `crates/areka/src/emo2_boot/frame_chain_finalize_tests.rs` — 結線の檻（6 本）。
+- **新規** `crates/areka/src/placement/chain_finalize.rs` — 再解決の判定（純関数 `finalize_chain`・補助 `moved_default_pos`）＋確定標識 `ChainFinalized`（Resource）。**タスク 6.5 で一発診断の語彙を追加**（`ChainFinalizeStall`（Resource）・`ChainDeferReason`（見送り理由）・`note_chain_deferral`（純関数）・閾値 `CHAIN_FINALIZE_STALL_FRAMES`）。
+- **新規** `crates/areka/src/placement/chain_finalize_tests.rs` — 判定の全網羅檻（16 本。うち 2 本は 6.5 の一発診断）。
+- **新規** `crates/areka/src/emo2_boot/frame_chain_finalize_tests.rs` — 結線の檻（8 本。うち 2 本は 6.5 のログ捕捉）。
 - `crates/areka/src/emo2_boot/frame/drain_resnap.rs` — `finalize_chain_once`／`finalize_chain_once_with` の新設（resnap と同じ委譲構造）。
 - `crates/areka/src/emo2_boot/frame.rs` — resnap 直後で `finalize_chain_once` を駆動する 1 行＋private import。
 - `crates/areka/src/placement/spawn.rs` — `ScopeWindows.default_char_pos` の追加とアクセサ 2 本（未接触判定の基準）。
@@ -342,7 +342,10 @@ let base_x = match prev {
   - 実測の裏づけ: emo2 は 3 分の会話で表情が複数回変わってもシェル面の寸法は不変（scope0 `764×1094`／scope1 `672×800` で固定・`size_changed=true` は起動時の 1 回のみ）。ゆえに一度きりで実害が出ない。
   - **受け入れる帰結**: 確定後に寸法の異なる面へ差し替わるシェル、および拡大率遷移では隙間が再発し得る（前者は emo2 で非顕在・後者は `dpi-transition-atomicity` へ申し送り済み）。requirements.md 要件 7 末尾の「本要件を承認することの意味」が正本。
 - **確定点の実装定義と限定**（設計検証 Round 2 指摘 1・2026-08-13 追記）: 「実表示寸の確定」の代理は「全スコープが初回表示され、`WindowPos` の寸が実表示寸と一致（resnap landing）した最初のフレーム」である。起動直後に寸法の異なる面へ差し替える台本では**差替前に確定し得る**——その後の差替は起動直後であっても 7.4 により是正しない。emo2 で定常の隙間 0 が成立するのは初回表示が定常面（`surface_id=1000`・§5.6 脚ⓑのログで確認）だからであり、**全ゴーストへの構造的保証ではない**。「安定を待つ」代替は一度きり原則（7.4）と衝突し、安定判定自体が非決定的になるため不採用。
-- **確定が見送られ続けた場合の一発診断**（設計検証 Round 2 指摘 2・タスク 6.5）: 見送り経路は正常な待ち（起動中）と異常な停滞（永久に条件が揃わない）を兼ねるため、有界の待ちを超えて未確定なら**一度だけ**理由つきの診断ログを出す（steering「ログ無し失敗経路の禁止」）。毎フレームの見送りは無音のまま・正常起動でもログ量は増えない。確定済みガードと同じ一発フラグの形で足りる。
+- **確定が見送られ続けた場合の一発診断**（設計検証 Round 2 指摘 2・タスク 6.5・**2026-08-13 実装済み**）: 見送り経路は正常な待ち（起動中）と異常な停滞（永久に条件が揃わない）を兼ねるため、有界の待ちを超えて未確定なら**一度だけ**理由つきの診断ログを出す（steering「ログ無し失敗経路の禁止」）。毎フレームの見送りは無音のまま・正常起動でもログ量は増えない。確定済みガードと同じ一発フラグの形で足りる。
+  - **有界の待ち＝フレーム数**（`CHAIN_FINALIZE_STALL_FRAMES = 600`）。呼び手が 60Hz の tick ループから毎フレーム試みるため約 10 秒に相当する。経過時間ではなくフレーム数を採るのは、檻を決定論のまま保つため（注入時刻に依存しない）。窓は `open_startup_window` の時点で既に生えており、この待ちで残るのは GPU 装着と初回 `ShowSurface` の landing だけゆえ、正常起動が閾値へ届くことはない。
+  - **理由は列挙型で表す**（`ChainDeferReason`）: `GhostWindows` 不在／スコープ 0／キャラ窓不在／初回表示未成立／実表示寸が扱えない／`WindowPos` 不在／位置・寸が未確定／再アンカー未 landing の 8 経路。走査は最初に躓いた条件で打ち切るため、報告されるのは**その時点の先頭の障害**（スコープ番号つき）。
+  - **判定と結線の分担は C6 本体と同じ**: 「この見送りで報告すべきか」は純関数 `note_chain_deferral`（`ChainFinalizeStall` を進めて `bool` を返す）、走査と `warn!` は `drain_resnap`。
 - **再解決は resolver の P2 式をそのまま実窓へ当てる**（設定・work area・バルーン寸を要さない）: scope 昇順に `new_x(n) = x(n−1) − w(n)`（`x(n−1)` は再アンカー後の実位置・`w(n)` は実表示幅）。Y は動かさない（R7.2）。scope0 は動かさない（連鎖の起点＝各キャラの接地点は不変）。
 - **「未接触」判定で明示的再配置を避ける**（R7.3）。spawn 時の既定位置を保持し、現在位置が既定位置と一致するスコープのみ再解決の対象とする。`\![move]` や利用者のドラッグで動いたスコープは一致しないため自動的に除外される——move／drag 側にフックを増やさずに済む。
 - **下端中央の再アンカー規則そのものは非接触**（`resize_window_to` は完了済み `areka-P0-surface-resize-resnap` の領分）。本仕様は再アンカー**後**の実位置を入力として受け取り、スコープ間の連鎖のみを直す。
@@ -357,6 +360,7 @@ let base_x = match prev {
 
 - 本是正はエラー経路を追加しない。`resolve_placement` の panic しない契約・saturating 演算を維持し、異常入力（空 scopes・巨大寸法・逆転 work area）は既存 P4/クランプ系の檻がそのまま担保する。
 - 検証系の失敗シグナル運用のみ規定する: (a) バルーン offset SSP 突合テストの不合格＝新欠陥のシグナル（4.3・期待値書き換え禁止）、(b) 実機主判定の |gap| > 1＝不合格（6.4・原因調査へ）。いずれも「テストを黙らせる」是正を禁じる。
+- **失敗ではないが痕跡を残す経路が 1 本ある**（タスク 6.5・2026-08-13 追記）: 初期配置の確定が有界の待ちを超えても起きない場合、`drain_resnap` が理由つきの `warn!` を**一度だけ**出す。確定の見送りそれ自体は正常な待ちでもあるため `Err` を返す設計にはせず、走査は打ち切って次フレームへ送る（挙動は無改変）。診断は事後の切り分け（確定が走らなかったのか、走って移動 0 だったのか）のためだけに存在する。
 
 ## Testing Strategy
 
@@ -380,7 +384,7 @@ let base_x = match prev {
 
 判定は純関数、結線は薄いアダプタという分担に従い、檻も 2 層に分ける（GPU 不要・決定論）。
 
-**判定（`placement/chain_finalize_tests.rs`・14 本）**
+**判定（`placement/chain_finalize_tests.rs`・16 本）**
 1. `emo2_surface_swap_gap_is_closed_by_moving_the_follower_only`（本丸）: 実機で観測した機序（起点が 2012→2064 へ 52 寄る）をそのまま入力にし、後続のみ 1340→1392 で隙間 0（7.1/7.2）。
 2. `unequal_widths_are_all_made_flush`／`equal_widths_use_the_same_rule`: 不等幅・等幅を同一式で（7.1）。
 3. `previous_width_subtraction_is_rejected`: 旧式への退行の否定 assert。
@@ -389,13 +393,17 @@ let base_x = match prev {
 6. `non_positive_width_is_skipped_and_keeps_its_place`／`empty_and_single_scope_yield_no_moves`／`saturating_arithmetic_does_not_panic_on_extremes`: 縮退入力。
 7. `moved_default_pos_replaces_x_and_preserves_y`: Y 非接触（7.2）。
 8. `restored_scope_is_never_pulled_back_even_when_it_sits_still`／`restored_scope_is_excluded_regardless_of_where_it_sits`: 復元位置（`default_x = None`）は現在位置に関わらず常に対象外（7.3⑶）。
+9. `chain_deferral_reports_exactly_once_at_the_bounded_wait`（6.5）: 閾値未満は無音・到達フレームで 1 回だけ真・以後は数えも報せもしない。
+10. `defer_reason_names_the_scope_and_the_condition`（6.5）: 診断本文がスコープと条件を名指しし、世界全体に関わる理由は偽のスコープ番号を作らない。全 8 経路の本文が空でない。
 
-**結線（`emo2_boot/frame_chain_finalize_tests.rs`・6 本）**
+**結線（`emo2_boot/frame_chain_finalize_tests.rs`・8 本）**
 1. `finalize_closes_the_gap_by_moving_the_follower_only`: 起点不動・Y 不変・隙間 0（7.1/7.2）。
 2. `finalize_does_not_touch_window_sizes`: 寸は resnap の領分ゆえ非接触。
 3. `finalize_runs_only_once_even_if_sizes_change_again`: **一度きりの判別檻**（7.4）。確定後に別寸を与えても後続が動かないことを固定する——一発ガードを外すと赤くなる。
 4. `finalize_defers_while_any_scope_has_not_shown_yet`／`finalize_defers_until_resnap_has_landed`: 部分適用しない見送り条件。
 5. `finalize_does_not_pull_back_an_explicitly_moved_scope`: 明示的再配置の尊重（7.3）。
+6. `stalled_finalize_reports_the_reason_exactly_once`（6.5）: 実ログ捕捉（`with_default`＋スレッドローカル Layer）。閾値の手前は 1 行も出ず、閾値の 2 倍回しても WARN はちょうど 1 行で、本文がスコープと条件を名指しする。
+7. `finalize_within_the_bounded_wait_emits_no_diagnostic`（6.5）: 閾値の直前で確定した起動では WARN が 0 行。確定後に長く回しても診断へ転じない（7.4 のガードが先に打ち切るため）。
 
 **復元判定シーム（`main_restore_seam_tests.rs`・2 本）**
 1. `restore_seam_prefers_saved_position_over_default`: 保存位置が採用されたスコープが復元集合へ入る（7.3⑶ の入口）。

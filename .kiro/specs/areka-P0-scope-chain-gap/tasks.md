@@ -121,7 +121,7 @@
   - _Requirements: 7.5, 7.6_
   - _Depends: 6.3_
 
-- [ ] 6.5 確定が見送られ続けた場合の一発診断ログを追加する（設計検証 Round 2 指摘 2）
+- [x] 6.5 確定が見送られ続けた場合の一発診断ログを追加する（設計検証 Round 2 指摘 2）
   - 連鎖の確定（6.3）の見送り経路は現状すべて無言で、正常な待ち（起動中）と異常な停滞（条件が永久に揃わない）をログから判別できない
   - 有界の待ち（フレーム数または経過時間の閾値・実装者が選ぶ）を超えても未確定なら、**一度だけ**理由つき（どのスコープがどの条件で見送られたか）の診断ログを出す
   - 毎フレームの見送りは無音のまま・確定が正常に起きる起動ではログを一切増やさない・確定済みガード（一発フラグ）と同じ形で足りる
@@ -181,18 +181,19 @@
 - 旧 `window-placement` R2.9 の上書き注記は **`resolver.rs` のモジュール doc 1 箇所のみ**（design.md:81/:203 の裁定）。テスト側の導出コメントに複製すると差し戻し対象（task 3.1 で実際に発生）。`grep -rn "R2\.9" crates/areka/src/placement/` のヒットが 1 件であることで確認できる。
 - task 3.1 完了時点で bin ターゲット 672 passed / 0 failed（全緑）。task 3.2 で 673。
 - task 5.1: `cargo build --target i686-pc-windows-msvc -p shiori-host32-helper -p shiori-host32-testdll`（exit 0）。成果物 `shiori-host32-helper.exe`（272,384 B）・`shiori.dll`（155,648 B）はいずれも PE machine `0x014C`。全体テストはこの `target/i686-pc-windows-msvc/debug/` を直接探索するためコピーは不要（実機実走のみ `target/debug/` へのコピーが要る）。
-- task 5.2: `cargo test --workspace`（exit 0）= **4,759 passed / 0 failed / 33 ignored**（結果ブロック 85・doctest 込み）。要件 4.2 の不変量監視 `placement_windowposition_tests.rs::prepare_emo2_matches_ssp_balloon_offsets_at_dpi_120` は合格、かつ `git diff main...HEAD` で同ファイル・`persist.rs`・`spawn.rs`・`follow` 配下いずれも**差分 0 行**（記号参照の下流も全緑）。**task 5.2 実施時点の**ブランチ差分は 4 ファイル（resolver.rs / resolver_resolve_tests.rs / placement_prepare_tests.rs / doc/COMPAT_ARCHITECTURE.md）に限局していた。**この記述は当時の値であり現状ではない**——その後に要件 7 の追加（差し戻し）と、開発者指示による境界外 2 件の是正が入り、**最終的な差分は 21 ファイル**（内訳は本ファイル末尾の「最終的な差分の内訳」節）。
+- task 5.2: `cargo test --workspace`（exit 0）= **4,759 passed / 0 failed / 33 ignored**（結果ブロック 85・doctest 込み）。要件 4.2 の不変量監視 `placement_windowposition_tests.rs::prepare_emo2_matches_ssp_balloon_offsets_at_dpi_120` は合格、かつ `git diff main...HEAD` で同ファイル・`persist.rs`・`spawn.rs`・`follow` 配下いずれも**差分 0 行**（記号参照の下流も全緑）。**task 5.2 実施時点の**ブランチ差分は 4 ファイル（resolver.rs / resolver_resolve_tests.rs / placement_prepare_tests.rs / doc/COMPAT_ARCHITECTURE.md）に限局していた。**この記述は当時の値であり現状ではない**——その後に要件 7 の追加（差し戻し）と、開発者指示による境界外 2 件の是正が入り、**最終的な差分は 22 ファイル**（内訳は本ファイル末尾の「最終的な差分の内訳」節。タスク 6.5 は既存ファイルへの追記のみでファイル数を増やしていない）。
 - **最終検証で要件 2.7 の檻の判別力ゼロを検出し是正した**: `t_r6_chain_uses_clamped_previous_position` は左端クランプの配置しか持たず、連鎖基準をクランプ前へ戻しても**両基準とも左端へ潰れて同値**になるため緑のまま通っていた（名前が主張する内容を assert が検定していない＝本仕様が潰した欠陥と同型）。右端クランプの区間を同じテストへ併置して是正（scope0 を free の過大な defaultleft で右端クランプさせると scope1 はクランプされない位置へ落ち、クランプ前基準なら幅 w0 ぶん右へずれる）。既存 assert は設計どおり不変で、追加のみ。**較正済み**——実装をクランプ前基準へ一時的に戻すと `1664 vs 1264`（差＝w0=400）で厳密に赤くなることを確認し、注入は撤去済み（`resolver.rs` は差分 0 行）。
 - task 5.3: 実機 2 水準とも `gap = 0`・exit 0。証跡は `real-run-signoff-2026-08-13.log`（＋生ログ `areka-rects-boot-dpi192.log` / `areka-rects-boot-dpi96.log`）。
 - **実効 DPI は DPI 対応プロセスから読むこと**（task 5.3 で嵌った罠）: DPI 非対応プロセスから `GetDpiForMonitor(MDT_EFFECTIVE_DPI)` を呼ぶと全モニタが 96 に丸められて返る。この誤読で 200% の実機を「100%」と誤認しかけた。`SetProcessDpiAwarenessContext(PER_MONITOR_AWARE_V2)` 済みプロセスから読むか、areka 自身の `起動時 k₀ を導出 … primary_dpi=` ログを見るのが確実。
 - 実機必達脚は **200%（DPI 192・k=2/1）** で実施した。規範文（要件 6.1・design.md:277）は「実 DPI≠96」であり逸脱ではない。120（k=5/4）水準は決定論テスト `prepare_emo2_at_dpi_120_places_scopes_adjacent` が誤差 0 で固定。**表示スケールの変更は OS のシステム設定のため開発者が実施**（100% 対照実行のみ依頼）。design の Testing Strategy が「実 DPI 120」と例示していた件は最終検証で規範文へ揃えて是正済み（上記「最終検証で追加是正した項目」）。
+- **task 6.5**: 有界の待ちは**フレーム数**（`CHAIN_FINALIZE_STALL_FRAMES = 600`・60Hz で約 10 秒）を採った。経過時間だと檻へ時刻を注入する必要が出て決定論が崩れるため。窓は `open_startup_window` の時点で既に生えており、この待ちで残るのは GPU 装着と初回表示の landing だけゆえ、正常起動が閾値へ届く余地はない。走査は `Result<_, ChainDeferReason>` を返す形へ組み替えたのみで**判定・移動の挙動は無改変**（既存の結線檻 6 本が無修正で緑）。**両方向に較正済み**——⑴ 報告済みフラグの立てを外すと停滞中ずっと出続けて判定側・結線側の 2 本が赤、⑵ 閾値を 1 へ潰すと「正常起動で無音」の檻を含む 3 本が赤。注入は撤去済み。テスト総数は areka bin 695→699・workspace 4,781→**4,785 passed / 0 failed**（`cargo clippy --workspace --all-targets` も exit 0）。
 - **design.md（C4）の誤記を task 4 で検出**: 「DPI 96 と 192 の両方で誤差 0」は生観測に対しては成立しない。DPI 192 の生観測は見かけ隙間 104px で、誤差 0 が成立するのは配置時の代表面寸（868／854 物理 px・境界 2012）に対して（`ssp-oracle-notes.md:95-98` が正）。COMPAT §8 の追加行には当初から限定つきの正しい記述を採用した。task 4 の時点では承認済み文書ゆえ無改訂として申し送ったが、**最終検証で開発者指示により requirements.md／design.md の両方へ限定を追記して是正済み**（上記「最終検証で追加是正した項目」）。
 
 ## ⚠️ 承認状態について（`/kiro-complete` を回す前に読むこと）
 
 **要件 7 と design C6 は承認フローを一度も通っていない。** `spec.json` の `approvals` は 3 フェーズとも `approved: true` だが、これは **2026-08-11 時点の「要件 6 本・C0〜C5」の版に対する承認**である。要件 7 は 2026-08-13 に開発者の決定（52px の定常隣接を本仕様の要件に含める）を受けて追加され、design C6・タスク 6.1〜6.4・実装・実機確認まで進んだが、承認済み文書の直接編集で進めたため `approvals` は更新していない（承認は開発者の権限のため AI 側で立てない）。フェーズを戻す正規手続き（`/kiro-design` 等の再実行）は行われていない。
 
-**2026-08-13 追記: 要件 7／C6 を含む現行版での設計検証は開発者指示により実施済み**（`design-validation.md` Round 2・Decision: **GO（条件つき）**）。GO の条件（指摘 1 の限定明記）は同日に requirements.md／design.md へ追記して**充足済み**。指摘 3 は受容（発生条件を design に記録）、指摘 2 は**タスク 6.5 として起票**（未着手）。
+**2026-08-13 追記: 要件 7／C6 を含む現行版での設計検証は開発者指示により実施済み**（`design-validation.md` Round 2・Decision: **GO（条件つき）**）。GO の条件（指摘 1 の限定明記）は同日に requirements.md／design.md へ追記して**充足済み**。指摘 3 は受容（発生条件を design に記録）、指摘 2 は**タスク 6.5 として起票し、同日に消化済み**（一発診断ログ）。**これで Round 2 の宿題は全て片づき、無条件の GO となった。**
 
 `/kiro-complete` の DoD ゲートは `approvals` を見るため、承認記録の欠落は検出されない。完了させる前に、下記「開発者裁定アジェンダ」を裁定されたい。`updated_at` のみ実態（2026-08-13）へ更新済み。
 
@@ -202,12 +203,12 @@
 
 | # | 種別 | 裁定事項 | 承認すると何を受け入れることになるか | 推奨 |
 |---|---|---|---|---|
-| 1 | 手続き | **要件 7／C6 の追補をどう正規化するか**。~~(a) この場で追認、または (b) 検証を回してから追認~~ → **(b) を実施済み**（2026-08-13・Round 2・GO 条件つき・条件は充足済み） | 残るのは**追認の宣言のみ**。検証報告（Round 2）・実装・実機証跡（§5.6）はすべて揃った。ただし追認の前に**タスク 6.5（Round 2 指摘 2 起因・未着手）の消化**が要る | 6.5 消化 → 追認 |
+| 1 | 手続き | **要件 7／C6 の追補をどう正規化するか**。~~(a) この場で追認、または (b) 検証を回してから追認~~ → **(b) を実施済み**（2026-08-13・Round 2・GO 条件つき・条件は充足済み） | 残るのは**追認の宣言のみ**。検証報告（Round 2）・実装・実機証跡（§5.6）はすべて揃い、**タスク 6.5 も消化済み**（Round 2 の宿題は残っていない） | 追認 |
 | 2 | 挙動 | **「一度きりの確定」方式**（要件 7.1/7.4 の核心）。起動直後に 1 回だけ連鎖を引き直し、以後は表情差替で窓を動かさない | ①勝手に動かないことを隙間 0 維持より優先する ②寸法が変わるシェル・拡大率遷移では隙間再発を許容（後者は `dpi-transition-atomicity` へ申し送り済み）。詳細は requirements.md 要件 7 末尾の追記 | 承認 — 実装・実機確認済み（200% で隙間 52px→0）。代替の常時追従は follow 領分へ踏み込み干渉が大きい |
 | 3 | 挙動 | **復元位置の扱い**（要件 7.3⑶）。前回セッションで保存された位置は既定配置とみなさず、起動時に隣接へ引き戻さない | 利用者が一度ドラッグすると以後の起動で隣接は再強制されない（利用者の意思を既定より優先） | 承認 — 最終検証で「復元位置が引き戻される」欠陥として検出・是正済み（`clear_default_char_pos`） |
 | 4 | 挙動 | **`\![move]` の dx/dy を拡大率で換算する＝意図的 SSP 非互換**。参照実装 SSP は無スケール（同じ現象を持つ） | 「数学的モデルを正とし SSP は絶対ではない」という本仕様の物差しを move にも適用する。COMPAT §8 に非互換として記録済み | 追認 — 是正はチップ対応の開発者指示で実施済み（200% の重なり 365px→12px）。この行はその裁定の明文化 |
 | 5 | 軽微 | **clippy「緑」の定義**。現状エラー 0（exit 0）だが `collapsible_if` 等の警告は残存 | エラー 0 で足りるとするか、警告 0 まで本仕様で求めるか | エラー 0 で足りる — 警告掃除は本仕様の目的と無関係 |
-| 6 | 完了時 | **PR 分割の要否**（差分 20 ファイル・A〜D 群、下記「最終的な差分の内訳」）。「1 機能 = 1 ブランチ = 1 PR」からの逸脱は開発者指示（このワークツリーで着手）に由来 | 1 PR なら squash 後の main に 4 群が 1 コミットで入る。分割ならコミット単位で cherry-pick 可能 | 1 PR — squash 前提で履歴の内訳は本ファイルに記録済み。判断は `/kiro-complete` 時で足りる |
+| 6 | 完了時 | **PR 分割の要否**（差分 22 ファイル・A〜D 群、下記「最終的な差分の内訳」）。「1 機能 = 1 ブランチ = 1 PR」からの逸脱は開発者指示（このワークツリーで着手）に由来 | 1 PR なら squash 後の main に 4 群が 1 コミットで入る。分割ならコミット単位で cherry-pick 可能 | 1 PR — squash 前提で履歴の内訳は本ファイルに記録済み。判断は `/kiro-complete` 時で足りる |
 
 裁定 2〜4 は**実装済みの挙動の追認**であり、否認する場合は該当コミットの巻き戻しが要る（2: `0d017c5`〜`694e4f9`、3: 7.3 是正コミット、4: `530ee83`）。
 
@@ -218,7 +219,7 @@
 | 群 | ファイル | 由来 |
 |---|---|---|
 | **A. 当初計画（要件 1〜6）** | `placement/resolver.rs`・`placement/resolver_resolve_tests.rs`・`placement/placement_prepare_tests.rs`・`doc/COMPAT_ARCHITECTURE.md` | 設計の File Structure Plan どおり |
-| **B. 要件 7（追補で追加）** | `placement/chain_finalize.rs`（新規）・`placement/chain_finalize_tests.rs`（新規）・`emo2_boot/frame_chain_finalize_tests.rs`（新規）・`emo2_boot/frame.rs`・`emo2_boot/frame/drain_resnap.rs`・`placement/spawn.rs`・`placement/spawn_cleanup_tests.rs`・`placement/mod.rs`・**`main.rs`**・**`main_restore_seam_tests.rs`**（後 2 者は 7.3⑶＝復元位置の除外） | 要件 7／design C6。requirements の Boundary Context・design の File Structure Plan とも追随済み |
+| **B. 要件 7（追補で追加）** | `placement/chain_finalize.rs`（新規）・`placement/chain_finalize_tests.rs`（新規）・`emo2_boot/frame_chain_finalize_tests.rs`（新規）・`emo2_boot/frame.rs`・`emo2_boot/frame/drain_resnap.rs`・`placement/spawn.rs`・`placement/spawn_cleanup_tests.rs`・`placement/mod.rs`・**`main.rs`**・**`main_restore_seam_tests.rs`**（後 2 者は 7.3⑶＝復元位置の除外） | 要件 7／design C6。requirements の Boundary Context・design の File Structure Plan とも追随済み。**タスク 6.5（一発診断）は `chain_finalize.rs`・`chain_finalize_tests.rs`・`frame/drain_resnap.rs`・`frame_chain_finalize_tests.rs` への追記のみでファイル数を増やしていない** |
 | **C. 境界外・`\![move]` の DPI スケール是正** | `emo2_boot/move_cue.rs`・`emo2_boot/move_cue_tests.rs`・`emo2_boot/move_cue_apply_move_tests.rs`・`placement/windowposition.rs`（`scale_signed` を `pub(crate)` 化）・`placement/mod.rs`（再エクスポート） | 実機観察で発見した孤児欠陥。担当仕様が実在しないため開発者指示で本ワークツリー処理 |
 | **D. 境界外・clippy 是正** | `wintf/src/com/d2d/command_sink.rs`・`wintf/src/ecs/types.rs`・`dola/tests/general/core_types_test/dynamic_value.rs`・`dola/tests/runtime/core_types_test.rs` | 本仕様の起因ではない既存事項（2 か月前から赤）。開発者指示で本ワークツリー処理 |
 

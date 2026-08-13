@@ -14,8 +14,11 @@ use std::collections::BTreeMap;
 use super::*;
 use super::test_support::{pos_of, resnap_world, size_of};
 
-use crate::placement::chain_finalize::ChainFinalized;
+use crate::placement::chain_finalize::{CHAIN_FINALIZE_STALL_FRAMES, ChainFinalized};
 
+use std::sync::{Arc, Mutex};
+use tracing::field::{Field, Visit};
+use tracing_subscriber::prelude::*;
 use wintf::ecs::{Point, SizeI};
 
 /// scope ごとに物理寸を作り分ける fake（`FakeSizes` は shell/balloon の 2 値しか返せず、
@@ -231,5 +234,149 @@ fn finalize_does_not_pull_back_an_explicitly_moved_scope() {
         pos_of(&world, char1).map(|p| p.x),
         Some(800),
         "明示的に動かされたスコープは引き戻さない（7.3）"
+    );
+}
+
+// -----------------------------------------------------------------------------
+// 確定が見送られ続けたときの一発診断（scg 6.5・design C6）
+//
+// 定石は `move_cue_move_severity_log_tests.rs` と同じ——`tracing::subscriber::with_default`＋
+// スレッドローカル Capture Layer（`with_default` はスレッドローカルゆえ `cargo test` の並行
+// 実行でも干渉しない）。判定そのものの回数は純関数檻が固定しており、ここで確かめるのは
+// **本番経路が実際に 1 行だけ出す／正常起動では 1 行も出さない**こと。
+// -----------------------------------------------------------------------------
+
+/// イベントの `level`＋各フィールドを 1 行文字列へ整形して共有 Vec へ push する最小 Layer。
+#[derive(Clone, Default)]
+struct Capture(Arc<Mutex<Vec<String>>>);
+
+impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Capture {
+    fn on_event(&self, ev: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
+        let meta = ev.metadata();
+        let mut line = format!("level={} target={}", meta.level(), meta.target());
+        struct V<'a>(&'a mut String);
+        impl Visit for V<'_> {
+            fn record_debug(&mut self, f: &Field, v: &dyn std::fmt::Debug) {
+                use std::fmt::Write;
+                let _ = write!(self.0, " {}={:?}", f.name(), v);
+            }
+        }
+        ev.record(&mut V(&mut line));
+        self.0.lock().unwrap().push(line);
+    }
+}
+
+/// クロージャ `f` 実行中に**現在のスレッド**で発火した tracing イベントを 1 行 1 件で返す。
+fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
+    let cap = Capture::default();
+    let logs = cap.0.clone();
+    let subscriber = tracing_subscriber::registry().with(cap);
+    tracing::subscriber::with_default(subscriber, f);
+    let guard = logs.lock().unwrap();
+    guard.clone()
+}
+
+/// 捕捉行のうち指定 level の行だけを抜く。
+fn lines_of_level(logs: &[String], level: &str) -> Vec<String> {
+    let needle = format!("level={level}");
+    logs.iter()
+        .filter(|l| l.contains(&needle))
+        .cloned()
+        .collect()
+}
+
+/// 失敗時に貼る要約（退行注入では数千行出るため、件数＋先頭 1 行に畳む）。
+fn digest(lines: &[String]) -> String {
+    format!(
+        "{} 行・先頭: {}",
+        lines.len(),
+        lines.first().map(String::as_str).unwrap_or("(無し)")
+    )
+}
+
+/// 表示が永久に成立しない停滞では、閾値を超えた時点で診断が**ちょうど 1 回**出る。
+///
+/// 閾値の手前は 1 行も出ない（毎フレームの見送りは無音）ことも同じ檻で押さえる——ここが緩むと
+/// 「起動中の正常な待ち」で毎フレーム警告が出る形へ退行する。
+#[test]
+fn stalled_finalize_reports_the_reason_exactly_once() {
+    let (mut world, _gw) = resnap_world();
+    // scope1 が永久に表示されない（初回 ShowSurface が来ない）状態。
+    let stuck = PerTargetSizes::new([(0, Some(SPAWN_SIZE_0)), (1, None)]);
+
+    // 閾値の手前まで: 無音。
+    let quiet = capture_logs(|| {
+        for _ in 0..(CHAIN_FINALIZE_STALL_FRAMES - 1) {
+            finalize_chain_once_with(&stuck, &mut world);
+        }
+    });
+    assert!(
+        quiet.is_empty(),
+        "閾値内の見送りは無音であるべき（実際: {}）",
+        digest(&quiet)
+    );
+
+    // 閾値到達以降を大きく超えて回しても、診断は 1 行だけ。
+    let logs = capture_logs(|| {
+        for _ in 0..(CHAIN_FINALIZE_STALL_FRAMES * 2) {
+            finalize_chain_once_with(&stuck, &mut world);
+        }
+    });
+    let warns = lines_of_level(&logs, "WARN");
+    assert_eq!(
+        warns.len(),
+        1,
+        "診断はちょうど 1 回（実際: {}）",
+        digest(&warns)
+    );
+    let diag = &warns[0];
+    assert!(
+        diag.contains("scope 1"),
+        "見送られたスコープを名指しする: {diag}"
+    );
+    assert!(
+        diag.contains("初回表示が未成立"),
+        "見送りの条件を名指しする: {diag}"
+    );
+    assert!(
+        world.get_resource::<ChainFinalized>().is_none(),
+        "診断は確定させない（条件が揃えば通常どおり確定できる）"
+    );
+}
+
+/// 閾値内に確定した起動では診断を出さない（正常系のログ量を増やさない）。
+///
+/// 確定後は駆動自体が打ち切られるため、そのまま長時間回しても警告へ転じない。
+#[test]
+fn finalize_within_the_bounded_wait_emits_no_diagnostic() {
+    let (mut world, gw) = resnap_world();
+    let stuck = PerTargetSizes::new([(0, Some(SPAWN_SIZE_0)), (1, None)]);
+
+    let logs = capture_logs(|| {
+        // 閾値の手前まで待たされてから表示が揃う（＝遅い起動）。
+        for _ in 0..(CHAIN_FINALIZE_STALL_FRAMES - 1) {
+            finalize_chain_once_with(&stuck, &mut world);
+        }
+        finalize_chain_once_with(&settled_sizes(), &mut world);
+        // 確定後は何フレーム回しても駆動しない（7.4）。停滞の診断へ転じないことの確認。
+        for _ in 0..(CHAIN_FINALIZE_STALL_FRAMES * 2) {
+            finalize_chain_once_with(&settled_sizes(), &mut world);
+        }
+    });
+
+    let warns = lines_of_level(&logs, "WARN");
+    assert!(
+        warns.is_empty(),
+        "確定した起動では診断を出さない（実際: {}）",
+        digest(&warns)
+    );
+    assert!(
+        world.get_resource::<ChainFinalized>().is_some(),
+        "前提: 閾値内に確定している（観測の退化防止）"
+    );
+    assert_eq!(
+        pos_of(&world, gw.char_window(1).unwrap()).map(|p| p.x),
+        Some(1205),
+        "前提: 確定は通常どおり隣接を回復している"
     );
 }

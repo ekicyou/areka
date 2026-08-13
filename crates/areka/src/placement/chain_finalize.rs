@@ -25,6 +25,16 @@
 //!   として使う（「クランプ後の実配置を連鎖基準とする」現行原則と同型・要件 2.7）。
 //! - 確定は**一度きり**で、以後のサーフェス切替では駆動しない（7.4）。その制御は呼び手
 //!   （`emo2_boot::frame`）が持ち、本モジュールは純粋な判定だけを担う。
+//!
+//! # 確定が起きなかったとき
+//!
+//! 確定の見送りは**正常な待ち**（起動中でまだ表示が揃っていない）と**異常な停滞**（条件が
+//! 永久に揃わない）を兼ねる。どちらも無音だと、隣接が崩れたままの報告を受けたときに
+//! 「確定が走らなかった」のか「走って移動 0 だった」のかをログから判別できない。そこで
+//! [`ChainFinalizeStall`] が見送りを数え、有界の待ち（[`CHAIN_FINALIZE_STALL_FRAMES`]）を
+//! 超えた時点で**一度だけ**理由つきの診断を出す（scg 6.5・steering「ログ無し失敗経路の禁止」）。
+
+use std::fmt;
 
 use bevy_ecs::prelude::Resource;
 
@@ -128,6 +138,124 @@ pub fn moved_default_pos(current: PointPx, new_x: i32) -> PointPx {
         x: new_x,
         y: current.y,
     }
+}
+
+// ---------------------------------------------------------------------------
+// 確定が見送られ続けたときの一発診断（scg 6.5・design C6「確定が見送られ続けた場合の一発診断」）
+// ---------------------------------------------------------------------------
+
+/// 診断を出すまでに待つフレーム数（有界の待ち・scg 6.5）。
+///
+/// 呼び手（`emo2_boot::frame::emo2_frame_system`）は 60Hz の tick ループから毎フレーム確定を
+/// 試みるため、**約 10 秒**ぶんに相当する。窓は `open_startup_window` の時点で既に生えており、
+/// この待ちで残るのは GPU 装着と初回 `ShowSurface` の landing だけゆえ、正常起動が閾値に届く
+/// ことはない（＝正常系で診断が出ない余裕を持たせた値）。
+pub const CHAIN_FINALIZE_STALL_FRAMES: u32 = 600;
+
+/// 確定の見送りを数える（診断を一度だけ出すための状態・scg 6.5）。
+///
+/// [`ChainFinalized`] と同じく**一発フラグ**の形。確定が起きればこの資源は二度と読まれない
+/// （呼び手が確定標識で先に打ち切るため）。
+#[derive(Resource, Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ChainFinalizeStall {
+    /// 確定できずに見送ったフレーム数。
+    pub deferrals: u32,
+    /// 診断を出し終えたか（二度目以降は数えも報せもしない）。
+    pub reported: bool,
+}
+
+/// 確定を見送った理由（診断ログの本文・scg 6.5）。
+///
+/// 「どのスコープが」「どの条件で」見送られたかを一意に表す。走査は最初に躓いた条件で
+/// 打ち切るため、報告されるのは**その時点の先頭の障害**である。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChainDeferReason {
+    /// `GhostWindows` が世界に無い（窓が生える前・破棄後）。
+    NoGhostWindows,
+    /// スコープが 1 つも無い。
+    NoScopes,
+    /// キャラ窓 entity が引けない。
+    NoCharWindow { scope: usize },
+    /// 実表示寸が引けない＝初回 `ShowSurface` が未成立。
+    NotShownYet { scope: usize },
+    /// 実表示寸が i32 で扱えない、または非正（縮退入力）。
+    UnusableShownSize { scope: usize, w: u32, h: u32 },
+    /// キャラ窓に `WindowPos` が無い。
+    NoWindowPos { scope: usize },
+    /// `WindowPos` の位置または寸が未確定（`None`）。
+    IncompleteWindowPos { scope: usize },
+    /// 再アンカーが未 landing＝窓寸が実表示寸に追いついていない。
+    ResnapNotLanded {
+        scope: usize,
+        shown: (i32, i32),
+        window: (i32, i32),
+    },
+}
+
+impl ChainDeferReason {
+    /// 障害が生じたスコープ番号（世界全体に関わる理由では `None`）。
+    pub fn scope(&self) -> Option<usize> {
+        match *self {
+            ChainDeferReason::NoGhostWindows | ChainDeferReason::NoScopes => None,
+            ChainDeferReason::NoCharWindow { scope }
+            | ChainDeferReason::NotShownYet { scope }
+            | ChainDeferReason::UnusableShownSize { scope, .. }
+            | ChainDeferReason::NoWindowPos { scope }
+            | ChainDeferReason::IncompleteWindowPos { scope }
+            | ChainDeferReason::ResnapNotLanded { scope, .. } => Some(scope),
+        }
+    }
+}
+
+impl fmt::Display for ChainDeferReason {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self {
+            ChainDeferReason::NoGhostWindows => {
+                write!(f, "GhostWindows が無い（窓が生えていない）")
+            }
+            ChainDeferReason::NoScopes => write!(f, "スコープが 1 つも無い"),
+            ChainDeferReason::NoCharWindow { scope } => {
+                write!(f, "scope {scope}: キャラ窓 entity が引けない")
+            }
+            ChainDeferReason::NotShownYet { scope } => {
+                write!(f, "scope {scope}: 実表示寸が未確定（初回表示が未成立）")
+            }
+            ChainDeferReason::UnusableShownSize { scope, w, h } => {
+                write!(f, "scope {scope}: 実表示寸が扱えない（{w}x{h}）")
+            }
+            ChainDeferReason::NoWindowPos { scope } => {
+                write!(f, "scope {scope}: キャラ窓に WindowPos が無い")
+            }
+            ChainDeferReason::IncompleteWindowPos { scope } => {
+                write!(f, "scope {scope}: WindowPos の位置か寸が未確定")
+            }
+            ChainDeferReason::ResnapNotLanded {
+                scope,
+                shown: (sw, sh),
+                window: (ww, wh),
+            } => write!(
+                f,
+                "scope {scope}: 再アンカーが未 landing（実表示寸 {sw}x{sh} ≠ 窓寸 {ww}x{wh}）"
+            ),
+        }
+    }
+}
+
+/// 見送りを 1 フレームぶん記録し、**この呼び出しで診断を出すべきか**を返す（scg 6.5）。
+///
+/// - 閾値（[`CHAIN_FINALIZE_STALL_FRAMES`]）に**到達したちょうどその 1 回**だけ `true`。
+/// - それ以前は `false`（毎フレームの見送りは無音）。
+/// - 報告後は数えることもやめて常に `false`（同じ停滞で溢れさせない）。
+pub fn note_chain_deferral(stall: &mut ChainFinalizeStall) -> bool {
+    if stall.reported {
+        return false;
+    }
+    stall.deferrals = stall.deferrals.saturating_add(1);
+    if stall.deferrals < CHAIN_FINALIZE_STALL_FRAMES {
+        return false;
+    }
+    stall.reported = true;
+    true
 }
 
 #[cfg(test)]

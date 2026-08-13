@@ -336,3 +336,82 @@ fn moved_default_pos_replaces_x_and_preserves_y() {
         "X のみ差し替え・Y は保存"
     );
 }
+
+// -----------------------------------------------------------------------------
+// 確定が見送られ続けたときの一発診断（scg 6.5）
+// -----------------------------------------------------------------------------
+
+/// 有界の待ちを超えた**ちょうど 1 回**だけ報告し、それ以前も以後も黙る。
+///
+/// 「毎フレームの見送りは無音・停滞し続けても出力は 1 行」という 6.5 の核をここで固定する
+/// （結線側の檻は同じ性質を実ログ捕捉で確かめる）。
+#[test]
+fn chain_deferral_reports_exactly_once_at_the_bounded_wait() {
+    let mut stall = ChainFinalizeStall::default();
+
+    // 閾値の手前までは 1 度も報告しない。
+    for frame in 1..CHAIN_FINALIZE_STALL_FRAMES {
+        assert!(
+            !note_chain_deferral(&mut stall),
+            "閾値未満（{frame} フレーム目）で報告してはならない"
+        );
+    }
+    assert!(!stall.reported, "まだ報告していない");
+
+    // 閾値に到達したフレームで 1 度だけ報告する。
+    assert!(
+        note_chain_deferral(&mut stall),
+        "閾値に到達したフレームで報告する"
+    );
+    assert!(stall.reported, "報告済みの標識が立つ");
+    assert_eq!(
+        stall.deferrals, CHAIN_FINALIZE_STALL_FRAMES,
+        "報告時点の見送り数＝閾値"
+    );
+
+    // 以後は停滞が続いても黙り、計数も進めない（同じ停滞で溢れさせない）。
+    for _ in 0..(CHAIN_FINALIZE_STALL_FRAMES * 2) {
+        assert!(!note_chain_deferral(&mut stall), "二度目以降は報告しない");
+    }
+    assert_eq!(
+        stall.deferrals, CHAIN_FINALIZE_STALL_FRAMES,
+        "報告後は数えもしない"
+    );
+}
+
+/// 診断の本文が「どのスコープが」「どの条件で」を名指しする（無内容な一行にしない・6.5）。
+#[test]
+fn defer_reason_names_the_scope_and_the_condition() {
+    let landing = ChainDeferReason::ResnapNotLanded {
+        scope: 1,
+        shown: (764, 1094),
+        window: (868, 1094),
+    };
+    assert_eq!(landing.scope(), Some(1), "障害の在り処はスコープ 1");
+    let text = landing.to_string();
+    assert!(text.contains("scope 1"), "スコープを名指しする: {text}");
+    assert!(text.contains("764"), "実表示寸を載せる: {text}");
+    assert!(text.contains("868"), "窓寸を載せて食い違いを示す: {text}");
+
+    // 世界全体に関わる理由はスコープを持たない（偽のスコープ番号を作らない）。
+    assert_eq!(ChainDeferReason::NoGhostWindows.scope(), None);
+    assert_eq!(ChainDeferReason::NoScopes.scope(), None);
+
+    // 全経路が本文を持つ（Display の取りこぼしを塞ぐ）。
+    for reason in [
+        ChainDeferReason::NoGhostWindows,
+        ChainDeferReason::NoScopes,
+        ChainDeferReason::NoCharWindow { scope: 0 },
+        ChainDeferReason::NotShownYet { scope: 0 },
+        ChainDeferReason::UnusableShownSize {
+            scope: 0,
+            w: 0,
+            h: 0,
+        },
+        ChainDeferReason::NoWindowPos { scope: 0 },
+        ChainDeferReason::IncompleteWindowPos { scope: 0 },
+        landing,
+    ] {
+        assert!(!reason.to_string().is_empty(), "理由 {reason:?} の本文が空");
+    }
+}

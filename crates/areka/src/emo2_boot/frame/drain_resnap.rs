@@ -2,14 +2,15 @@
 
 use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 use areka_emo_compose::ScaleRatio;
 use areka_emo_present::{EmoPresenter, TargetId};
 use wintf::ecs::{SizeI, WindowPos};
 
 use crate::placement::chain_finalize::{
-    ChainFinalized, ScopeChainState, finalize_chain, moved_default_pos,
+    ChainDeferReason, ChainFinalizeStall, ChainFinalized, ScopeChainState, finalize_chain,
+    moved_default_pos, note_chain_deferral,
 };
 use crate::placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
 use crate::placement::follow::{move_window_to, resize_window_to};
@@ -278,6 +279,14 @@ pub(super) fn finalize_chain_once(presenter: &EmoPresenter, world: &mut World) {
 ///
 /// いずれか 1 つでも欠ける scope があれば**確定させずに戻る**（部分適用しない）。窓破棄後の
 /// フレームでも `WindowPos` 不在で見送るだけで、panic もログ汚染もしない。
+///
+/// # 見送りの可観測性（scg 6.5）
+///
+/// 毎フレームの見送りは無音のままだが、有界の待ち（[`CHAIN_FINALIZE_STALL_FRAMES`]）を超えても
+/// 未確定なら [`defer_chain_finalize`] が**一度だけ**理由つきの `warn!` を出す。正常な待ちと
+/// 永久に条件が揃わない停滞を、事後にログから判別できるようにするため。
+///
+/// [`CHAIN_FINALIZE_STALL_FRAMES`]: crate::placement::chain_finalize::CHAIN_FINALIZE_STALL_FRAMES
 pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
     source: &S,
     world: &mut World,
@@ -286,56 +295,15 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
     if world.get_resource::<ChainFinalized>().is_some() {
         return;
     }
-    let Some(ghost_windows) = world.get_resource::<GhostWindows>() else {
-        return;
+    let (states, targets) = match collect_chain_states(source, world) {
+        Ok(scan) => scan,
+        Err(reason) => {
+            defer_chain_finalize(world, reason);
+            return;
+        }
     };
 
-    let mut states: Vec<ScopeChainState> = Vec::new();
-    // 反映用（scope, char 窓 entity, 現在位置）。位置は Y 保存のためにも要る（7.2）。
-    let mut targets: Vec<(usize, Entity, PointPx)> = Vec::new();
-
-    for scope in ghost_windows.scopes() {
-        let Some(char_window) = ghost_windows.char_window(scope) else {
-            return;
-        };
-        // `None` は「既定配置ではない」（保存位置の復元）。判定側が常に対象外として扱う
-        // ため、ここでは打ち切らずそのまま渡す（scg 7.3）。
-        let default_x = ghost_windows.default_char_pos(scope).map(|p| p.x);
-        // 表示未成立（初回 ShowSurface 前）は実表示寸が未確定＝まだ確定できない。
-        let Some((w, h)) = source.physical_size(shell_target(scope as u32)) else {
-            return;
-        };
-        let (Ok(w), Ok(h)) = (i32::try_from(w), i32::try_from(h)) else {
-            return;
-        };
-        if w <= 0 || h <= 0 {
-            return;
-        }
-        let Some(wp) = world.get::<WindowPos>(char_window) else {
-            return;
-        };
-        let (Some(pos), Some(size)) = (wp.position, wp.size) else {
-            return;
-        };
-        // 再アンカーが未 landing＝位置が確定していない。次フレームへ送る。
-        if size.width != w || size.height != h {
-            return;
-        }
-        states.push(ScopeChainState {
-            scope,
-            current_x: pos.x,
-            width: w,
-            default_x,
-        });
-        targets.push((scope, char_window, PointPx { x: pos.x, y: pos.y }));
-    }
-
-    if states.is_empty() {
-        // 窓がまだ生えていない。確定させずに次フレームへ。
-        return;
-    }
-
-    // ここで ghost_windows 借用は終わり、world を mut 借用して反映へ渡す。
+    // ここで world の shared 借用は終わり、mut 借用して反映へ渡す。
     let moves = finalize_chain(&states);
     for m in &moves {
         let Some(&(_, entity, pos)) = targets.iter().find(|(s, _, _)| *s == m.scope) else {
@@ -368,5 +336,90 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
         scopes = states.len(),
         moved = moves.len(),
         "chain_finalize: 初期配置を確定（以後のサーフェス切替では駆動しない・scg 7.4）"
+    );
+}
+
+/// 確定の走査結果——判定へ渡す状態列と、反映へ渡す `(scope, char 窓 entity, 現在位置)` の列。
+///
+/// 現在位置を持ち回るのは Y を据え置くため（7.2）。
+type ChainScan = (Vec<ScopeChainState>, Vec<(usize, Entity, PointPx)>);
+
+/// 確定に要る入力を集める。駆動条件を 1 つでも欠くスコープがあればその場で打ち切り、
+/// **見送った理由**を返す（部分適用しない）。
+fn collect_chain_states<S: PhysicalSizeSource + ?Sized>(
+    source: &S,
+    world: &World,
+) -> Result<ChainScan, ChainDeferReason> {
+    let Some(ghost_windows) = world.get_resource::<GhostWindows>() else {
+        return Err(ChainDeferReason::NoGhostWindows);
+    };
+
+    let mut states: Vec<ScopeChainState> = Vec::new();
+    let mut targets: Vec<(usize, Entity, PointPx)> = Vec::new();
+
+    for scope in ghost_windows.scopes() {
+        let Some(char_window) = ghost_windows.char_window(scope) else {
+            return Err(ChainDeferReason::NoCharWindow { scope });
+        };
+        // `None` は「既定配置ではない」（保存位置の復元）。判定側が常に対象外として扱う
+        // ため、ここでは打ち切らずそのまま渡す（scg 7.3）。
+        let default_x = ghost_windows.default_char_pos(scope).map(|p| p.x);
+        // 表示未成立（初回 ShowSurface 前）は実表示寸が未確定＝まだ確定できない。
+        let Some((w, h)) = source.physical_size(shell_target(scope as u32)) else {
+            return Err(ChainDeferReason::NotShownYet { scope });
+        };
+        let (Ok(iw), Ok(ih)) = (i32::try_from(w), i32::try_from(h)) else {
+            return Err(ChainDeferReason::UnusableShownSize { scope, w, h });
+        };
+        if iw <= 0 || ih <= 0 {
+            return Err(ChainDeferReason::UnusableShownSize { scope, w, h });
+        }
+        let Some(wp) = world.get::<WindowPos>(char_window) else {
+            return Err(ChainDeferReason::NoWindowPos { scope });
+        };
+        let (Some(pos), Some(size)) = (wp.position, wp.size) else {
+            return Err(ChainDeferReason::IncompleteWindowPos { scope });
+        };
+        // 再アンカーが未 landing＝位置が確定していない。次フレームへ送る。
+        if size.width != iw || size.height != ih {
+            return Err(ChainDeferReason::ResnapNotLanded {
+                scope,
+                shown: (iw, ih),
+                window: (size.width, size.height),
+            });
+        }
+        states.push(ScopeChainState {
+            scope,
+            current_x: pos.x,
+            width: iw,
+            default_x,
+        });
+        targets.push((scope, char_window, PointPx { x: pos.x, y: pos.y }));
+    }
+
+    if states.is_empty() {
+        // 窓がまだ生えていない。確定させずに次フレームへ。
+        return Err(ChainDeferReason::NoScopes);
+    }
+    Ok((states, targets))
+}
+
+/// 見送りを 1 フレームぶん記録し、有界の待ちを超えていれば**一度だけ**診断を出す（scg 6.5）。
+///
+/// 正常な起動ではログを 1 行も増やさない（確定は閾値の遥か手前で起きる）。報告後は数えも報せも
+/// しないため、停滞し続けても出力は 1 行のまま。
+fn defer_chain_finalize(world: &mut World, reason: ChainDeferReason) {
+    world.init_resource::<ChainFinalizeStall>();
+    let mut stall = world.resource_mut::<ChainFinalizeStall>();
+    if !note_chain_deferral(&mut stall) {
+        return;
+    }
+    let deferrals = stall.deferrals;
+    warn!(
+        deferrals,
+        // 構造化フィールドの `scope` は grep 用（本文の Display は人が読む側）。
+        scope = ?reason.scope(),
+        reason = %reason,
+        "chain_finalize: 初期配置の確定が続けて見送られている（隣接が崩れたままの可能性・scg 7.1/6.5）"
     );
 }
