@@ -82,8 +82,8 @@ use windows::Win32::Foundation::HWND;
 use super::zorder_pair::{
     InsertSpec, PairFixDecision, PairObservation, PairTrigger, PeerLoss, SkipReason,
     decide_pair_fix, log_orphan_request_dropped, log_owner_detach_failed, log_owner_detached,
-    log_unbacked_verification_dropped, measure_window_above, measure_window_below, record_decision,
-    record_verification,
+    log_unbacked_verification_dropped, measure_window_above, measure_window_below,
+    measure_window_is_always_on_top, record_decision, record_verification,
 };
 use super::zorder_pair_sink::{SinkMarkQuery, observe_marked_pair_sinks};
 use super::{
@@ -178,11 +178,18 @@ pub(crate) fn plan_pair_fix(obs: &PairObservation, fix: PairFixDecision) -> Opti
 ///
 /// [`InsertSpec::TopEdge`] は `ZOrder::Top`（最上位）であって `ZOrder::TopMost`
 /// （常時最前面）ではない——本フィーチャーは常時最前面を決して指さない（要件 4.3／8.1）。
+///
+/// [`InsertSpec::TopOfNormalBand`] も同じ `ZOrder::Top`（`HWND_TOP`）へ写像する。実測で
+/// 確かめた 2 つの候補のうち、`HWND_NOTOPMOST` は**既に常時最前面ではない窓には何も
+/// 起こさない**（重なりが 1 枚も動かない）のに対し、`HWND_TOP` は対象を常時最前面の帯の
+/// すぐ背後——通常帯の最上——へ置き、`WS_EX_TOPMOST` は付けない。よって「通常帯の最上」を
+/// 作る指令は `HWND_TOP` である。
 pub(crate) fn pair_fix_command(hwnd: HWND, insert_after: InsertSpec) -> SetWindowPosCommand {
     let pos = WindowPos {
         zorder: match insert_after {
             InsertSpec::After(after) => ZOrder::InsertAfter(after),
-            InsertSpec::TopEdge => ZOrder::Top,
+            // 「最上位へ」と「通常帯の最上へ」は指令としては同じ（区別は記録の側で保つ）。
+            InsertSpec::TopEdge | InsertSpec::TopOfNormalBand => ZOrder::Top,
         },
         position: None,
         size: None,
@@ -420,6 +427,18 @@ pub fn apply_zorder_pair_maintenance(
             }
             _ => (None, None),
         };
+        // 挿入位置の候補が常時最前面の帯に居るかを、指令を出す前に測る。判断は Win32 を
+        // 呼ばないので、この事実は観測に載せて渡す（要件 8.1・design.md Invariants）。
+        //
+        // 判断の結果を待たずに測るのは意図的である。観測は判断へ渡す**巡の写し**であり、
+        // どの腕が選ばれるかを知る前に組み上がっていなければならない——先に判断を覗いて
+        // 測るかどうかを決めると、観測の組立が判断に依存し、決定論的テストで固定している
+        // 「同じ観測なら同じ判断」の関係が崩れる。よって見送りや背後へ寄せる腕になって
+        // 値が読まれない巡でも測る。費用は `GetWindowLongPtrW` 1 回であり、しかも実測を
+        // 採るのは両窓のハンドルが揃った巡だけである。
+        let measured_above_of_below_is_always_on_top = measured_above_of_below
+            .map(measure_window_is_always_on_top)
+            .unwrap_or(false);
         let observation = PairObservation {
             trigger: PairTrigger::Reassert,
             strategy,
@@ -430,6 +449,7 @@ pub fn apply_zorder_pair_maintenance(
             below_hwnd,
             measured_below_of_above,
             measured_above_of_below,
+            measured_above_of_below_is_always_on_top,
         };
 
         // 判断結果は必ず `record_decision` を通す——見送りはそこで理由つきの記録になり、

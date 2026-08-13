@@ -109,6 +109,23 @@ pub(crate) fn is_window_visible(hwnd: HWND) -> bool {
     unsafe { IsWindowVisible(hwnd) }.as_bool()
 }
 
+/// 指定窓が**常時最前面の帯**（`WS_EX_TOPMOST`）に居るかを返す。
+///
+/// Windows はトップレベル窓を 2 つの帯に分けて重ねる——常時最前面の一群が、そうでない
+/// 一群より必ず手前に来る。`SetWindowPos` の `hWndInsertAfter` に帯の中の窓を渡すと、
+/// 対象窓自身にも `WS_EX_TOPMOST` が**付いて帯へ移る**（実測で確定した OS の性質）。
+/// ゴースト窓を常時最前面にしない（要件 8.1）ためには、挿入位置に選ぼうとしている窓が
+/// 帯の中に居るかを**指令を出す前に**知る必要があり、その読み取りが本関数である。
+///
+/// `is_window_visible` と違って `Result` を返すのは、`GetWindowLongPtrW` が失敗しうる
+/// （窓が消えた等）一方で、失敗を `false` へ潰すと「帯に居ない」と読めてしまい、
+/// 要件 8.1 を毀損する側へ倒れるためである。倒し方は呼び出し側が決める。
+#[inline(always)]
+pub(crate) fn is_window_always_on_top(hwnd: HWND) -> Result<bool> {
+    let ex_style = get_window_long_ptr(hwnd, GWL_EXSTYLE)?;
+    Ok((ex_style as u32) & WS_EX_TOPMOST.0 != 0)
+}
+
 /// 指定窓の owner を `owner` に設定する（`SetWindowLongPtrW(GWLP_HWNDPARENT)`）。
 ///
 /// トップレベル窓に対する `GWLP_HWNDPARENT` の書込は親子化（`SetParent`）ではなく

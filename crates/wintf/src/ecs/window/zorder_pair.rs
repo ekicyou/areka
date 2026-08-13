@@ -30,7 +30,7 @@ use super::zorder_pair_diag::{
     owner_establish_failed_line, owner_established_line, sink_observed_line, skip_line,
     verify_failed_line,
 };
-use crate::api::{get_window_above, get_window_below, is_window_visible};
+use crate::api::{get_window_above, get_window_below, is_window_always_on_top, is_window_visible};
 
 // ============================================================================
 // KeepDirectlyAbove - ペア関係の永続宣言
@@ -251,6 +251,18 @@ pub(crate) struct PairObservation {
     /// 意味の変化の理由は [`Self::measured_below_of_above`] と同じ。この値はそのまま
     /// 是正の挿入位置にもなる（[`measure_window_above`] の doc を参照）。
     pub measured_above_of_below: Option<HWND>,
+    /// [`Self::measured_above_of_below`] の窓が**常時最前面の帯に居るか**の実測。
+    ///
+    /// Windows はトップレベル窓を 2 つの帯に分けて重ね、常時最前面（`WS_EX_TOPMOST`）の
+    /// 一群を必ず手前に置く。`SetWindowPos` の `hWndInsertAfter` に帯の中の窓を渡すと、
+    /// 対象窓にも `WS_EX_TOPMOST` が付いて帯へ移ってしまう——キャラ窓が可視の通常窓のうち
+    /// 最前面に居るとき、キャラ窓の最も近い可視の手前は他アプリの常時最前面窓になるため、
+    /// そのまま挿入位置にするとバルーン窓が黙って常時最前面になる（要件 8.1 の毀損）。
+    ///
+    /// 判断が Win32 を呼ばずにこの分岐を選べるよう、帯の所属は**実測層が測って観測に載せる**
+    /// （[`measure_window_is_always_on_top`]）。窓が居ない（`measured_above_of_below` が
+    /// `None`）ときは偽であり、判断側もその場合はこの値を見ない。
+    pub measured_above_of_below_is_always_on_top: bool,
 }
 
 /// 是正の挿入位置。
@@ -259,14 +271,27 @@ pub(crate) struct PairObservation {
 /// 「キャラのすぐ手前」を作る挿入位置はキャラ自身ではなく**キャラの最も近い可視の手前の窓**である。
 /// その窓が居ない（キャラより手前に可視の窓が無い）縁だけが [`InsertSpec::TopEdge`] になる。
 ///
-/// バリアントは 2 つで尽きており、**常時最前面（`ZOrder::TopMost`）を表す値は無い**
-/// ——要件 4.3／8.1 はこの型の形そのもので満たされる。
+/// バリアントは 3 つで尽きており、**常時最前面（`ZOrder::TopMost`）を表す値は無い**
+/// ——要件 4.3／8.1 はこの型の形そのもので満たされる。3 つめの
+/// [`InsertSpec::TopOfNormalBand`] は「帯の中の窓を挿入位置にしない」ための逃げ道であり、
+/// 写像先は [`InsertSpec::TopEdge`] と同じ `ZOrder::Top` である（常時最前面ではない）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum InsertSpec {
     /// 指定窓のすぐ背後へ（`ZOrder::InsertAfter` へ写像）
     After(HWND),
     /// 最上位へ（`ZOrder::Top` へ写像。常時最前面ではない）
     TopEdge,
+    /// 通常帯（常時最前面ではない窓の帯）の最上へ（`ZOrder::Top` へ写像）。
+    ///
+    /// 実測した挿入位置が**常時最前面の窓**だったときに選ぶ。その窓のすぐ背後へ入れると
+    /// 対象窓まで帯へ引き込まれてしまうため（要件 8.1 の毀損）、帯の中の窓は指さずに
+    /// 通常帯の最上——すなわち帯のすぐ背後——へ置く。キャラ窓が通常帯の最上に居るのが
+    /// この分岐の起きる形なので、結果としてバルーンはキャラのすぐ手前に入る（要件 1.2）。
+    ///
+    /// [`InsertSpec::TopEdge`] と写像先は同じだが**別のバリアントにしてある**——記録を読む
+    /// 者が「キャラより手前に可視の窓が無かった」のか「手前の窓が常時最前面だった」のかを
+    /// 区別できなければ、同じ字面の是正から原因を辿れなくなるためである。
+    TopOfNormalBand,
 }
 
 /// 是正判断の結果。
@@ -328,8 +353,12 @@ pub(crate) fn decide_pair_fix(obs: &PairObservation) -> PairFixDecision {
     // 読み飛ばした結果ここに入るのは可視の窓だが、それで正しい——`SetWindowPos` の
     // `hWndInsertAfter` はその窓の**すぐ背後**へ対象を置くので、間に挟まっていた不可視窓
     // （OS が owner の直上に置く補助窓）より**手前**に入る。
+    //
+    // ただしその窓が常時最前面の帯に居る場合だけは、指すと対象まで帯へ引き込まれる
+    // （要件 8.1 の毀損）。帯の中の窓は指さず、帯のすぐ背後＝通常帯の最上へ置く。
     let place_above = PairFixDecision::PlaceAboveOverBelow {
         insert_after: match obs.measured_above_of_below {
+            Some(_) if obs.measured_above_of_below_is_always_on_top => InsertSpec::TopOfNormalBand,
             Some(front_of_below) => InsertSpec::After(front_of_below),
             None => InsertSpec::TopEdge,
         },
@@ -545,6 +574,34 @@ pub(crate) fn measure_window_above(hwnd: HWND) -> Option<HWND> {
 /// `measured_below_of_above` に入るのがこの値である。
 pub(crate) fn measure_window_below(hwnd: HWND) -> Option<HWND> {
     measure_nearest_visible(hwnd, NeighborSide::Below)
+}
+
+/// 指定窓が**常時最前面の帯に居るか**を実測する。
+///
+/// 挿入位置に選ぼうとしている窓の帯の所属は、指令を出す**前**に知らなければならない
+/// ——帯の中の窓を `SetWindowPos` の `hWndInsertAfter` に渡すと、対象窓にも
+/// `WS_EX_TOPMOST` が付いて帯へ移ってしまうためである（要件 8.1 の毀損）。
+/// 判断（[`decide_pair_fix`]）は Win32 を呼ばないので、測るのはこの実測層であり、
+/// 結果は [`PairObservation::measured_above_of_below_is_always_on_top`] に載る。
+///
+/// 読み取りに失敗した場合は**帯に居るものとして扱う**（`true` へ倒す）。`false` へ倒すと
+/// 「帯の中の窓を挿入位置に指す」経路が復活し、要件 8.1 を毀損しうる側へ倒れるからである。
+/// `true` へ倒れた場合に起きるのは「通常帯の最上へ置いたが、そこがキャラのすぐ手前では
+/// なかった」であり、次巡の実測照合が不一致として記録するだけで済む。
+/// 失敗そのものは黙って落とさず warn で残す（[areka-log-first-no-silent-failure]）。
+pub(crate) fn measure_window_is_always_on_top(hwnd: HWND) -> bool {
+    match is_window_always_on_top(hwnd) {
+        Ok(is_top) => is_top,
+        Err(err) => {
+            warn!(
+                "挿入位置の窓が常時最前面かを読めませんでした（常時最前面として扱います） hwnd={hwnd} error={code:?} message={message}",
+                hwnd = hwnd_field(Some(hwnd)),
+                code = err.code(),
+                message = err.message(),
+            );
+            true
+        }
+    }
 }
 
 /// 兄弟列を前面側へ辿った結果（沈降観測が使う）。

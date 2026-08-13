@@ -314,6 +314,8 @@ fn intruded(trigger: PairTrigger, strategy: ZOrderPairStrategy) -> PairObservati
         measured_below_of_above: Some(intruder_back()),
         // キャラの最も近い可視の手前も他アプリ窓＝ここがバルーンの挿入先になる
         measured_above_of_below: Some(intruder_front()),
+        // その割り込み窓は普通の窓（常時最前面ではない）
+        measured_above_of_below_is_always_on_top: false,
     }
 }
 
@@ -341,6 +343,13 @@ fn observation_matrix() -> Vec<(&'static str, PairObservation)> {
                 PairObservation {
                     measured_below_of_above: Some(character()),
                     measured_above_of_below: Some(balloon()),
+                    ..base.clone()
+                },
+            ));
+            matrix.push((
+                "キャラの手前の窓が常時最前面（帯の中）",
+                PairObservation {
+                    measured_above_of_below_is_always_on_top: true,
                     ..base.clone()
                 },
             ));
@@ -437,6 +446,69 @@ fn decide_pair_fix_yields_top_edge_when_character_is_frontmost() {
             insert_after: InsertSpec::After(intruder_front()),
         },
     );
+}
+
+/// キャラの手前の窓が常時最前面だったときは、その窓を指さず通常帯の最上へ置く（要件 8.1）。
+///
+/// `SetWindowPos` の `hWndInsertAfter` に常時最前面の帯の中の窓を渡すと、対象窓にも
+/// `WS_EX_TOPMOST` が付いて帯へ移ってしまう（実測で確定した OS の性質）。キャラ窓が可視の
+/// 通常窓のうち最前面に居るとき、キャラの最も近い可視の手前は他アプリの常時最前面窓に
+/// なるため、そのまま挿入位置にするとバルーン窓が黙って常時最前面になる。
+///
+/// 判断は Win32 を呼ばない（要件 7.1）ので、帯の所属は観測のフィールドとして届く。
+/// ここで固定するのはその 1 ビットが挿入位置を分けることそのものである。
+#[test]
+fn decide_pair_fix_avoids_pointing_at_an_always_on_top_window_as_the_insert_position() {
+    let base = intruded(PairTrigger::Reassert, ZOrderPairStrategy::default());
+
+    assert_eq!(
+        decide_pair_fix(&PairObservation {
+            measured_above_of_below_is_always_on_top: true,
+            ..base.clone()
+        }),
+        PairFixDecision::PlaceAboveOverBelow {
+            insert_after: InsertSpec::TopOfNormalBand,
+        },
+        "手前の窓が常時最前面なら、その窓を指さず通常帯の最上へ置く（要件 8.1）"
+    );
+    // 対照: 同じ観測で帯の所属だけが偽なら、従来どおりその窓の背後へ入れる。
+    assert_eq!(
+        decide_pair_fix(&base),
+        PairFixDecision::PlaceAboveOverBelow {
+            insert_after: InsertSpec::After(intruder_front()),
+        },
+        "普通の窓が手前に居るときの挿入位置は変わらない（帯の分岐が既定へ潰れていない）"
+    );
+    // 対照: 手前に窓が無ければ帯の所属によらず縁（`TopEdge`）のままで、
+    // 「通常帯の最上」が縁を飲み込んでいない（記録の上で 2 つが区別できる）。
+    assert_eq!(
+        decide_pair_fix(&PairObservation {
+            measured_above_of_below: None,
+            measured_above_of_below_is_always_on_top: true,
+            ..base.clone()
+        }),
+        PairFixDecision::PlaceAboveOverBelow {
+            insert_after: InsertSpec::TopEdge,
+        },
+        "手前に窓が無い縁は、帯の所属の値によらず `TopEdge` のまま"
+    );
+
+    // 全トリガ・全ストラテジで、手前へ寄せる腕が出るなら常時最前面の窓は決して指さない。
+    for trigger in ALL_TRIGGERS {
+        for strategy in ALL_STRATEGIES {
+            let obs = PairObservation {
+                measured_above_of_below_is_always_on_top: true,
+                ..intruded(trigger, strategy)
+            };
+            if let PairFixDecision::PlaceAboveOverBelow { insert_after } = decide_pair_fix(&obs) {
+                assert_ne!(
+                    insert_after,
+                    InsertSpec::After(intruder_front()),
+                    "{trigger:?}／{strategy:?}: 常時最前面の窓を挿入位置にしている"
+                );
+            }
+        }
+    }
 }
 
 /// バルーン側の重なりが動いたら、キャラをバルーンのすぐ背後へ引き上げる（要件 1.3）。
@@ -647,6 +719,7 @@ fn decide_pair_fix_covers_every_arm_without_ever_yielding_always_on_top() {
     let mut seen_skips: Vec<SkipReason> = Vec::new();
     let mut seen_after = false;
     let mut seen_top_edge = false;
+    let mut seen_top_of_normal_band = false;
     let mut seen_place_below = false;
 
     for (label, obs) in observation_matrix() {
@@ -666,6 +739,7 @@ fn decide_pair_fix_covers_every_arm_without_ever_yielding_always_on_top() {
                     );
                 }
                 InsertSpec::TopEdge => seen_top_edge = true,
+                InsertSpec::TopOfNormalBand => seen_top_of_normal_band = true,
             },
             PairFixDecision::PlaceBelowUnderAbove { insert_after } => {
                 seen_place_below = true;
@@ -693,6 +767,10 @@ fn decide_pair_fix_covers_every_arm_without_ever_yielding_always_on_top() {
     }
     assert!(seen_after, "「ある窓の背後へ」が一度も出ていない");
     assert!(seen_top_edge, "「最上位へ」（縁）が一度も出ていない");
+    assert!(
+        seen_top_of_normal_band,
+        "「通常帯の最上へ」（挿入位置が常時最前面だった場合）が一度も出ていない"
+    );
     assert!(seen_place_below, "「キャラを背後へ」が一度も出ていない");
 }
 

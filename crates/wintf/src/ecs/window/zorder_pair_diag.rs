@@ -79,10 +79,16 @@ impl SkipReason {
 
 impl InsertSpec {
     /// 挿入位置のログ用表現（縁は専用の語で、ハンドル表現と混ざらない）。
+    ///
+    /// 「最上位へ」の 2 種を別の語にしてあるのは、写像先の指令が同じ（`ZOrder::Top`）でも
+    /// **そこへ置いた理由が違う**からである——`top-edge` は「キャラより手前に可視の窓が
+    /// 無かった」、`top-of-normal-band` は「手前の窓が常時最前面だったので指せなかった」。
+    /// 1 語へ潰すと、記録を読む者が是正の原因を辿れなくなる。
     fn as_field(&self) -> String {
         match self {
             InsertSpec::After(hwnd) => hwnd_field(Some(*hwnd)),
             InsertSpec::TopEdge => "top-edge".to_string(),
+            InsertSpec::TopOfNormalBand => "top-of-normal-band".to_string(),
         }
     }
 }

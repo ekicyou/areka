@@ -330,26 +330,31 @@ pub(crate) struct PairObservation {
     pub below_hwnd: Option<HWND>,
     pub measured_below_of_above: Option<HWND>, // above から GW_HWNDNEXT を辿った「最も近い可視の背後」
     pub measured_above_of_below: Option<HWND>, // below から GW_HWNDPREV を辿った「最も近い可視の手前」
+    pub measured_above_of_below_is_always_on_top: bool, // ↑の窓が常時最前面の帯に居るか（実測層が測る）
 }
 
 pub(crate) enum PairFixDecision {
     /// 何もしない（理由必須＝要件 6.3。PeerMissing は要件 1.5 の腕）
     Skip(SkipReason),   // AlreadyAdjacent / PeerMissing / HandleMissing / EchoOrIrrelevant / StrategyDisabled
-    /// バルーンをキャラのすぐ手前へ（insert_after = キャラの**最も近い可視の手前**の窓。無ければ Top 縁）
+    /// バルーンをキャラのすぐ手前へ（insert_after = キャラの**最も近い可視の手前**の窓。無ければ Top 縁／その窓が常時最前面なら通常帯の最上）
     PlaceAboveOverBelow { insert_after: InsertSpec },
     /// キャラをバルーンのすぐ背後へ（insert_after = バルーン HWND）＝要件 1.3
     PlaceBelowUnderAbove { insert_after: HWND },
 }
 
 pub(crate) enum InsertSpec {
-    After(HWND),   // ZOrder::InsertAfter へ写像
-    TopEdge,       // below より手前に**可視の**窓が無い縁のみ。ZOrder::Top へ写像
+    After(HWND),      // ZOrder::InsertAfter へ写像
+    TopEdge,          // below より手前に**可視の**窓が無い縁のみ。ZOrder::Top へ写像
+    TopOfNormalBand,  // 手前の窓が常時最前面だった場合。ZOrder::Top へ写像（常時最前面ではない）
 }
 ```
 
 - **Preconditions**: `obs` の実測値は呼出側（維持系）が同一巡で採取したもの。
 - **Postconditions**: 返る fix は座標・寸法情報を持たない（型に存在しない＝要件 1.6 の構造的保証）。`TopMost` は決して返らない（要件 4.3/8.1）。対象は宣言ペアの 2 窓のみ（要件 3.4）。
 - **Invariants**: `measured_below_of_above == below_hwnd`（既に隣接）なら必ず `Skip(AlreadyAdjacent)`（収束の同値ガード・research.md §8-7 は `GW_HWNDPREV` 実測方式を採る。キャッシュ方式は実 z が外部要因で動くと嘘になるため不採用）。**隣接は「最も近い可視の隣」で測る**——`GetWindow` を辿る際に `IsWindowVisible` が偽の窓は読み飛ばす（走査は上限 512 枚で打ち切り、打切り・失敗はいずれも不在＝番兵へ倒して記録に残す）。判断（`decide_pair_fix`）の署名とロジックはこの測り方によって一切変わらない——変わるのは入力値の意味だけである。
+  - **挿入位置が常時最前面の窓だった場合**（要件 8.1）: Windows はトップレベル窓を 2 つの帯に分けて重ね、常時最前面（`WS_EX_TOPMOST`）の一群を必ず手前に置く。`SetWindowPos` の `hWndInsertAfter` に帯の中の窓を渡すと、**対象窓にも `WS_EX_TOPMOST` が付いて帯へ移る**。キャラ窓が可視の通常窓のうち最前面に居るとき、キャラ窓の「最も近い可視の手前」は他アプリの常時最前面窓になるため、そのまま挿入位置にするとバルーン窓が黙って常時最前面になる（要件 8.1 の毀損。しかも引き込まれた後もペアは隣接したままなので、次巡の実測照合も `verify-failed` も鳴らず、露見するのは他アプリ活性化時の `sink-observed` だけ＝要件 4.1/4.2 の毀損として現れる）。よって帯の中の窓は指さず、`InsertSpec::TopOfNormalBand`（通常帯の最上＝帯のすぐ背後）を選ぶ。この分岐が起きるのはキャラ窓が通常帯の最上に居る形なので、結果としてバルーンはキャラのすぐ手前に入り要件 1.2 は保たれる。判断は Win32 を呼ばない（要件 7.1）ため、帯の所属は実測層（`measure_window_is_always_on_top`）が測って `PairObservation` に載せる。
+    - **指令の選定（実測で確定）**: 「通常帯の最上」を作る指令は **`HWND_TOP`**（`ZOrder::Top`）である。もう一方の候補 `HWND_NOTOPMOST` は、既に常時最前面ではない窓に対しては**重なりを 1 枚も動かさない**（実測: z 位置が変わらない。MSDN の「既に非最前面窓なら効果が無い」の実測確認）。`HWND_TOP` は対象を常時最前面の帯のすぐ背後へ置き、`WS_EX_TOPMOST` は付けない（実測: 帯の外の窓に対し帯の所属は変わらないまま、手前に居る常時最前面窓の枚数だけが残り、通常帯の窓は 0 枚になる）。なお `HWND_TOP` がデスクトップのどこまで持ち上がるかは前面プロセスの状況に左右される（実測で、通常帯の最上まで届く回と自プロセスの窓の手前で止まる回の双方を観測。**前面を握っていることは本分岐の条件ではない**——分岐の条件はキャラ窓の最も近い**可視**の手前が常時最前面であることだけであり、背面のままこの分岐が起き、かつ持ち上がりが途中で止まる場合が実測されている）。
+      - **それでも要件 1.2 は壊れない——保証しているのは owner 関係である**: バルーン窓はキャラ窓を owner に持つ被 owner 窓であり（案 A の確立＝`establish_owner_links`／`OwnerLink`）、Windows は被 owner 窓を owner のすぐ手前に保ち、**owner ごと一組で動かす**。よって持ち上がり幅によらずバルーンはキャラのすぐ手前に居続け、次巡の実測照合は満たされる（`HWND_TOP` が届かなかった巡が `verify-failed` を量産することはない）。実測（同一手順 3 巡で同一）: 被 owner 窓 idx 29 → 4 に対し owner も 30 → 5 と一緒に動き、`WS_EX_TOPMOST` は付かず、隣接は前後とも成立。owner と被 owner の**間に割り込み窓を差し込むこと自体ができない**（owner のすぐ背後を指定して挿入しても、OS は割り込み窓を一組の**外**へ弾く。弾かれる向きは初期配置しだいで、実測では背後 idx 31 に落ちた回と、手前 idx 4 に出たうえで是正が一組ごとその手前へ抜いた回の双方を観測している）。持ち上がりが途中で止まった場合も同様に一組で動き、隣接は成立した（owned 6 → 5・owner 7 → 6・intruder 5 → 7・帯の外・隣接成立）。**対照**: owner を張らない 2 窓に同じ指令を出すと手前へ出るのはバルーンだけでキャラは置き去りになり隣接しない——すなわちこの隣接は指令の副産物ではなく owner 関係の帰結である。回帰は `zorder_pair_always_on_top_tests.rs::the_top_of_normal_band_fix_keeps_a_real_owned_pair_adjacent_and_out_of_the_band` が固定する。
   - **根拠（実機実測・ゴースト起動 3 回で同一）**: 割り込んでいたのはスレッド既定の IME 窓（クラス `IME`／タイトル `Default IME`／**不可視**／矩形 `0,0,0,0`／`WS_POPUP | WS_DISABLED | WS_CLIPSIBLINGS`／areka 自身の同一スレッド）であり、その **owner はキャラ窓そのもの**であった。IME 窓もバルーン窓も同じキャラ窓を owner に持つ被 owner 窓であり、Windows は被 owner 窓を owner の手前に保つため、キャラ窓の直上には被 owner 窓が 2 枚並びその内部順序は制御外になる。既定 IME 窓はスレッドに 1 個しか無いため割り込みは片方のスコープにしか起きず、実機では毎回そのスコープだけが `verify-failed` になっていた。**配置は要件 1.2 を満たしており、過剰に落としていたのは測り方の側である**（測り方の選択は要件 7.2 が実装に委ねる範囲・要件 1.2 に判定の但し書きを追記済み）。
 
 ##### Service Interface（システム）
@@ -390,6 +395,7 @@ pub fn compute_pair_z_intent(/* &World, Entity */) -> ZOrder;
 | `[zorder-pair] owner-establish-failed` | **error** | entity, error（要件 6.2・ゲート FAIL 材料) |
 | `[zorder-pair] sink-observed` | debug | entity, adjacency_ok, foreground 相対（WM_ACTIVATE 非活性化枝・要件 4.4/7.5） |
 
+- `fix` の `insert_after` 欄は 3 種の値を取る——挿入位置の HWND（`0x…`）／`top-edge`（キャラより手前に可視の窓が無かった）／`top-of-normal-band`（手前の窓が常時最前面だったので指せなかった）。後 2 者は指令としては同じ `HWND_TOP` だが、**そこへ置いた理由が違う**ため語を分ける（1 語へ潰すと記録から是正の原因を辿れない）。
 - scope はレコードに直接載らない（wintf は scope を知れない）。`declared` レコードとの entity 結合で 2 段 grep する（`log_window_move` の確立済み先例）。
 - ログ target は module path 既定（`wintf::ecs::window::zorder_pair`）。サインオフ grep はこの target 名で行う。
 
@@ -441,7 +447,7 @@ pub fn compute_pair_z_intent(/* &World, Entity */) -> ZOrder;
 ### Unit Tests（決定論的・実機不要）
 
 1. `decide_pair_fix` 全腕: トリガ×生存×実測隣接の組——`Skip(PeerMissing)`（1.5）／`Skip(AlreadyAdjacent)`（収束ガード）／`PlaceAboveOverBelow`（1.2・`TopEdge` 縁含む）／`PlaceBelowUnderAbove`（1.3）／`Skip(StrategyDisabled)`（案 A で raise_assist=false のとき `RaisedAbove`／`RaisedBelow` のどちらも何もしない——この構成では z 変化検知自体を結線しないため、両トリガとも供給者が存在しない。上記「Modified Files」の `window_pos.rs` 行と直後の引用ブロックが根拠）
-2. `decide_pair_fix` 不変条件: 返り値に `TopMost` が現れない（4.3/8.1）・`PairFix` 型が座標を持たない（1.6・コンパイル時保証の明文化テスト）・対象がペア 2 窓に限られる（3.4）
+2. `decide_pair_fix` 不変条件: 返り値に `TopMost` が現れない（4.3/8.1）・挿入位置に選ぼうとした窓が常時最前面なら `TopOfNormalBand` へ倒れその窓を指さない（8.1・対照つき）・`PairFix` 型が座標を持たない（1.6・コンパイル時保証の明文化テスト）・対象がペア 2 窓に限られる（3.4）
 3. B3 funnel（案 B 時）: `zorder=NoChange` で現行フラグとコマンドが完全一致（回帰）／`InsertAfter` で `SWP_NOZORDER` が外れ `hwnd_insert_after` が載る
 4. `ReassertZOrder` の段階遷移: 挿入→適用→`pending_verify`→remove の状態機械（bare World・7.6 の受入形）
 

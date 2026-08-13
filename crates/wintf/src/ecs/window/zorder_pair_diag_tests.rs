@@ -203,6 +203,27 @@ fn fix_line_carries_the_command_and_the_measurement_on_one_line() {
         !top_edge.contains("insert_after=0x"),
         "縁がハンドル表現へ潰れている: {top_edge}"
     );
+
+    // 対照: 「通常帯の最上」も専用の語で、縁とも混ざらない。指令としては同じ `HWND_TOP`
+    // だが理由が違う——1 語へ潰れると、記録を読む者が是正の原因を辿れなくなる。
+    let normal_band = fix_line(
+        balloon_entity,
+        char_entity,
+        InsertSpec::TopOfNormalBand,
+        Some(character()),
+    );
+    assert!(
+        normal_band.contains("insert_after=top-of-normal-band"),
+        "{normal_band}"
+    );
+    assert!(
+        !normal_band.contains("insert_after=top-edge"),
+        "「通常帯の最上」が縁の語へ潰れている: {normal_band}"
+    );
+    assert!(
+        !normal_band.contains("insert_after=0x"),
+        "「通常帯の最上」がハンドル表現へ潰れている: {normal_band}"
+    );
 }
 
 /// 見送りの記録は必ず理由を名乗り、5 種の理由が互いに区別できる（要件 6.3）。
