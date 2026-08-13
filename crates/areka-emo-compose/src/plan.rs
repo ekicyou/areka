@@ -249,12 +249,23 @@ pub(crate) fn derive_ops(
 ///
 /// `is_top_level`（derive_ops 直下の合成対象 surface のみ真）のとき、層(ii) の対象 id 集合へ
 /// `pattern`（[`PatternState`]）の現在コマを持つ id を合流する。合流対象 id 集合 =
-/// `{ 有効 bind pattern0 を持つ id } ∪ { PatternState に現在コマを持つ id }`。整列は既存の
+/// `{ 有効 bind pattern0 を持つ id } ∪ { PatternState に現在コマを持つ id のうち bind 種でないもの、
+/// または bind 種でも現在の bind 集合に属するもの }`（bind 所属条件は bindopt D9-3・下記）。整列は既存の
 /// animation-sort 2 段規則を**変更せず**適用する（R5.3・画家のアルゴリズム）。各 id で現在コマが
 /// あれば**コマが pattern0 静的寄与を置換**する（4.2「各コマは直前コマをリセットしてベースへ」）。
 /// コマ・pattern0 いずれも method ゲート（[`ComposeMethod::is_implemented`]＝Overlay のみ）を通し、
 /// 非 Overlay は `warn!`（method 名込み）＋不描画（完全形保持のまま非駆動・8.4）。**再帰段（入れ子
 /// 参照）は `is_top_level=false` で PatternState を参照しない**（コマは表示中 surface のアニメに属す）。
+///
+/// # bind 非所属コマの合流拒否（bindopt D9-3・最後の砦・bindopt 7.1/7.4）
+///
+/// 上記の合流で、**当 surface の bind 種アニメ**（[`is_bind_animation`]）に属する id のコマは
+/// `binds.contains(id)` のときだけ合流する。`-1` 終端を持たないアニメは末尾到達後に最終コマを
+/// 保持する仕様ゆえ、着せ替え ID が bind 集合から外れても保持コマが残り得る。その掃除は状態側
+/// （発行前除去）と再生側（進行相の停止）が担うが、いずれかが漏れても**外れたパーツが表示に
+/// 残らない**不変量を合成計画側でも保証する（実機の表情固着の直接の機構）。**bind に属さない
+/// アニメ（純 `random` の `interval` 等）のコマは無条件で従来どおり合流する**（bindopt 7.4）。
+/// 合成順・重ね順（animation-sort 2 段規則）は本ゲートで一切変わらない。
 ///
 /// 引数は out_ops/visited のスクラッチ2本＋world/atlas の入力2本＋surface_id＋binds＋pattern＋累積
 /// offset(x,y)＋is_top_level。全て再帰の各段で必要ゆえ削れない（スクラッチ構造体化は将来の整理余地）。
@@ -303,9 +314,25 @@ fn flatten_surface(
             // 現在コマの id を合流（有効 bind pattern0 を持たない id も含む）。重複は既存を優先し
             // 二重列挙しない（整列後も 1 回だけ処理される）。
             for (id, _frame) in pattern.iter() {
-                if !merged_ids.contains(&id) {
-                    merged_ids.push(id);
+                if merged_ids.contains(&id) {
+                    continue;
                 }
+                // bindopt D9-3（最後の砦・bindopt 7.1）: **bind 種**のアニメのコマは、現在の bind
+                // 集合に属するときだけ合流する。bind から外れた ID の保持コマ（`-1` 終端を持たない
+                // アニメが末尾到達後に保つ最終コマ）が、上流の掃除（状態側の発行前除去・再生側の
+                // 進行相停止）を漏れても表示へ届かない不変量をここで成立させる。**bind に属さない
+                // アニメ（純 `random` の `interval` 等・当 surface に定義の無い id）は無条件で従来
+                // どおり合流する**（bindopt 7.4）。合成順・重ね順の規則は不変（合流の可否のみ）。
+                if is_bind_animation(master, id) && !binds.contains(id) {
+                    tracing::debug!(
+                        target: "areka_emo_compose",
+                        surface_id,
+                        animation_id = id,
+                        "bind 集合に属さない bind 種アニメの保持コマ: 合成計画へ合流しない（bindopt 7.1・D9-3）"
+                    );
+                    continue;
+                }
+                merged_ids.push(id);
             }
         }
 
@@ -645,6 +672,23 @@ fn flatten_extent(
 /// `#[non_exhaustive]` ゆえ未知 variant は bind でないものとして扱う（非パニック）。
 fn is_bind_interval(interval: &Interval) -> bool {
     matches!(interval, Interval::Bind | Interval::BindRandom { .. })
+}
+
+/// 指定 animation id が当 surface の **bind 種**アニメか（bindopt D9-3・bindopt 7.1/7.4）。
+///
+/// [`flatten_surface`] の層(ii) 合流条件が「bind 種のコマは bind 集合に属することを要求する」ため
+/// の判定。当 surface の `animations` から id を引き、interval が bind 種（[`is_bind_interval`]）の
+/// ものが 1 本でもあれば真。**当 surface に定義の無い id・bind 種でない id（純 `random` の
+/// `interval` 等）は偽**で、追加ゲートを受けず従来どおり無条件に合流する（bindopt 7.4）。
+///
+/// 判定は `emo-compose` が既に持つ [`Interval`]（転記層由来）だけで閉じており、bind 種の語彙を
+/// 求めて seriko へ依存を逆流させない（design Allowed Dependencies「parsers → areka → seriko →
+/// emo-compose・逆流禁止」）。同 id の animation は fold 段で単一化済みゆえ `any` で足りる。
+fn is_bind_animation(master: &SurfaceMaster, animation_id: u32) -> bool {
+    master
+        .animations
+        .iter()
+        .any(|a| a.id == animation_id && is_bind_interval(&a.interval))
 }
 
 /// 指定 surface id の [`SurfaceMaster`] と [`AtlasBinding`] を同時に読む（本 module 内補助）。

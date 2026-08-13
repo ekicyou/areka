@@ -11,7 +11,7 @@
 //! `default_bind_ids` は tasks.md task 2.3 で実装済み。`build_boot_assets` の骨格は残り、
 //! 実装は tasks.md task 2.6 が担う。
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use areka_emo_atlas::{
@@ -27,7 +27,9 @@ use areka_parsers::charset::{DefaultEncoding, decode};
 use areka_parsers::kv::parse_kv;
 use areka_parsers::package::resolve;
 use areka_sakura::ActorKey;
-use areka_seriko::{AnimationTable, BindResolver, SurfaceResolver, build_static_bindset};
+use areka_seriko::{
+    AnimationTable, BindOptionDecls, BindResolver, SurfaceResolver, build_static_bindset,
+};
 use tracing::{error, warn};
 
 use super::BootWiringError;
@@ -258,13 +260,16 @@ pub fn build_boot_assets(
     for name in &model.bindgroups.kero_names {
         kero_map.insert((name.category.clone(), name.part.clone()), name.id);
     }
-    // mustselect（排他選択）カテゴリ集合を `MountModel.bindgroups` の名前宣言
-    // （`sakura/kero.bindoption*.group,カテゴリ,mustselect`・Req 4.5・D11）から起動時資産へ構築する。
-    let sakura_mustselect: BTreeSet<String> =
-        model.bindgroups.sakura_mustselect.iter().cloned().collect();
-    let kero_mustselect: BTreeSet<String> =
-        model.bindgroups.kero_mustselect.iter().cloned().collect();
-    let bind_resolver = BindResolver::new(sakura_map, kero_map, sakura_mustselect, kero_mustselect);
+    // `bindoption` 宣言集合を `MountModel.bindgroups` の転記
+    // （`sakura/kero.bindoption*.group,カテゴリ,オプション`・bindopt 1.1/1.2）から起動時資産へ構築する。
+    // 転記モデルは Vec（転記順保持・重複可）ゆえ、集合化（dedup）はここの BTreeSet 変換が担う。
+    let bind_options = BindOptionDecls {
+        sakura_mustselect: model.bindgroups.sakura_mustselect.iter().cloned().collect(),
+        kero_mustselect: model.bindgroups.kero_mustselect.iter().cloned().collect(),
+        sakura_multiple: model.bindgroups.sakura_multiple.iter().cloned().collect(),
+        kero_multiple: model.bindgroups.kero_multiple.iter().cloned().collect(),
+    };
+    let bind_resolver = BindResolver::new(sakura_map, kero_map, bind_options);
 
     let shell_dir = model.shell.dir;
 

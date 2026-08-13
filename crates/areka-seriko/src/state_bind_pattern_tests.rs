@@ -196,9 +196,9 @@ fn apply_bind_accumulates_across_two_binds_when_shown() {
     );
 }
 
-// ---- apply_bind_exclusive（mustselect 排他置換・要件 4.5・D11） ----
+// ---- apply_bind_exclusive（排他カテゴリ〔mustselect／非宣言既定〕の排他置換・bindopt 2.1/3.1） ----
 
-/// 排他置換（R4.5・D11）: 表示中 scope で同カテゴリ全 ID を外し target のみ有効化する。
+/// 排他置換（bindopt 2.1/3.1）: 表示中 scope で同カテゴリ全 ID を外し target のみ有効化する。
 /// 現集合 {1301,1303,1207}・category_ids=[1301,1303,1304]・target=1304 →
 /// 目カテゴリ旧パーツ(1301,1303) を外し 1304 を付与、非カテゴリ 1207 は保持 → {1207,1304}。
 #[test]
@@ -216,7 +216,7 @@ fn apply_bind_exclusive_replaces_same_category_on_shown() {
             binds: BindSet::from_ids([1207, 1304]),
             pattern: PatternState::default(),
         }),
-        "同カテゴリ旧パーツを外し target のみ有効・非カテゴリは保持（高々 1 パーツ・R4.5・D11）"
+        "同カテゴリ旧パーツを外し target のみ有効・非カテゴリは保持（高々 1 パーツ・bindopt 2.1/3.1）"
     );
     assert_eq!(
         states.current_binds(&scope),
@@ -301,7 +301,7 @@ fn apply_bind_exclusive_does_not_touch_shell_or_balloon_state() {
     );
 }
 
-/// target が category_ids に含まれても最終的に有効になる（filter→chain の順序保証・D11）。
+/// target が category_ids に含まれても最終的に有効になる（filter→chain の順序保証・bindopt 2.1/3.1）。
 #[test]
 fn apply_bind_exclusive_target_in_category_ids_stays_present() {
     let mut states = ScopeStates::new(BindSet::from_ids([1301]));
@@ -535,6 +535,247 @@ fn apply_bind_reemit_carries_current_pattern() {
             pattern: p.clone(),
         }),
         "bind 変化の Show 再発行は current_pattern(Shell) を同梱（現在コマ保持で再合成）"
+    );
+}
+
+// ---- 残留コマの掃除（bind から外れた ID の保持コマ除去・bindopt 7.1/7.2/7.4/7.5） ----
+
+/// テスト用のコマ 1 枚（`Overlay`・オフセットなし）。
+fn frame(surface_id: u32) -> PatternFrame {
+    PatternFrame {
+        surface_id,
+        method: ComposeMethod::Overlay,
+        x: 0,
+        y: 0,
+    }
+}
+
+/// 排他置換で外れたパーツの保持コマが**同じ発行で**消える（bindopt 7.1/7.2）。
+///
+/// 実機の固着そのものの再現形: まばたき 1402（`-1` 終端なし＝末尾到達後もコマを保持・
+/// `surface1413` は不透明）が bind 済みで保持コマを持つ状態から 1400 へ排他置換する。
+/// bind 集合は正典どおり {1400} になるのに、除去前処理が無いと発行される Show の pattern に
+/// 1402 の残留コマが乗ったままになり、以後の表示を覆い続ける。
+#[test]
+fn apply_bind_exclusive_drops_residual_frames_of_removed_ids() {
+    let mut states = ScopeStates::new(BindSet::from_ids([1402]));
+    let scope = ActorKey::from("0");
+    states.apply(&scope, SurfaceTarget::Show(2100));
+
+    // 1402（bind 種・外れる側）と 9000（bind 非所属の interval アニメ）の保持コマを置く。
+    let mut residual = PatternState::default();
+    residual.set(1402, frame(1413));
+    residual.set(9000, frame(9001));
+    states.commit_pattern(&scope, Slot::Shell, residual);
+
+    let outcome = states.apply_bind_exclusive(&scope, &[1400, 1401, 1402, 1403], 1400);
+
+    // 期待: 1402 のコマは消え、bind 非所属 9000 のコマは残る（bindopt 7.1/7.2/7.4）。
+    let mut expected = PatternState::default();
+    expected.set(9000, frame(9001));
+    assert_eq!(
+        outcome,
+        BindApplyOutcome::Changed(DisplayCommand::Show {
+            scope: scope.clone(),
+            surface_id: 2100,
+            binds: BindSet::from_ids([1400]),
+            pattern: expected.clone(),
+        }),
+        "排他置換で外れた ID の保持コマは発行前に取り除かれる（bindopt 7.1/7.2）"
+    );
+    assert_eq!(
+        states.current_pattern(&scope, Slot::Shell),
+        &expected,
+        "状態側の格納 pattern からも除去されている（次の発行でも復活しない）"
+    );
+}
+
+/// 除去（脱衣）で外れた ID の保持コマも消える（bindopt 7.1）。非 bind コマは無影響（bindopt 7.4）。
+#[test]
+fn apply_bind_off_drops_residual_frame_of_that_id_only() {
+    let mut states = ScopeStates::new(BindSet::from_ids([1402, 1600]));
+    let scope = ActorKey::from("0");
+    states.apply(&scope, SurfaceTarget::Show(2100));
+
+    let mut residual = PatternState::default();
+    residual.set(1402, frame(1413));
+    residual.set(1600, frame(1610));
+    residual.set(9000, frame(9001));
+    states.commit_pattern(&scope, Slot::Shell, residual);
+
+    let outcome = states.apply_bind(&scope, 1402, false);
+
+    let mut expected = PatternState::default();
+    expected.set(1600, frame(1610));
+    expected.set(9000, frame(9001));
+    assert_eq!(
+        outcome,
+        BindApplyOutcome::Changed(DisplayCommand::Show {
+            scope: scope.clone(),
+            surface_id: 2100,
+            binds: BindSet::from_ids([1600]),
+            pattern: expected.clone(),
+        }),
+        "脱衣で外れた ID のコマのみ除去し、bind 継続中の ID と bind 非所属の ID のコマは保つ（bindopt 7.1/7.4）"
+    );
+}
+
+/// 着衣（加算）だけでは何も外れないので保持コマも一切減らない（bindopt 7.4 の裏側）。
+#[test]
+fn apply_bind_on_keeps_all_residual_frames() {
+    let mut states = ScopeStates::new(BindSet::from_ids([1402]));
+    let scope = ActorKey::from("0");
+    states.apply(&scope, SurfaceTarget::Show(2100));
+
+    let mut residual = PatternState::default();
+    residual.set(1402, frame(1413));
+    residual.set(9000, frame(9001));
+    states.commit_pattern(&scope, Slot::Shell, residual.clone());
+
+    // multiple カテゴリ相当の加算（外れる ID なし）。
+    let outcome = states.apply_bind(&scope, 1700, true);
+    assert_eq!(
+        outcome,
+        BindApplyOutcome::Changed(DisplayCommand::Show {
+            scope: scope.clone(),
+            surface_id: 2100,
+            binds: BindSet::from_ids([1402, 1700]),
+            pattern: residual.clone(),
+        }),
+        "外れた ID が無い変化では保持コマを 1 枚も落とさない（bindopt 7.4）"
+    );
+    assert_eq!(states.current_pattern(&scope, Slot::Shell), &residual);
+}
+
+/// 非表示 scope（StateOnly）でも状態側の保持コマは取り除かれる（次 Show へ古いコマを持ち越さない）。
+#[test]
+fn commit_bind_state_only_still_drops_residual_frames() {
+    let mut states = ScopeStates::new(BindSet::from_ids([1402]));
+    let scope = ActorKey::from("0");
+    states.apply(&scope, SurfaceTarget::Show(2100));
+
+    let mut residual = PatternState::default();
+    residual.set(1402, frame(1413));
+    residual.set(9000, frame(9001));
+    states.commit_pattern(&scope, Slot::Shell, residual);
+
+    // Hidden にしてから排他置換 → 発行はしないが状態側の残留は掃除する。
+    states.apply(&scope, SurfaceTarget::Hide);
+    let outcome = states.apply_bind_exclusive(&scope, &[1400, 1401, 1402, 1403], 1400);
+    assert_eq!(outcome, BindApplyOutcome::StateOnly);
+
+    let mut expected = PatternState::default();
+    expected.set(9000, frame(9001));
+    assert_eq!(
+        states.current_pattern(&scope, Slot::Shell),
+        &expected,
+        "非表示でも外れた ID の保持コマは除去（次 Show へ古いコマを持ち越さない）"
+    );
+}
+
+/// バルーン面の保持コマは bind の影響を受けない（bind はシェル面のみ・R3.8 の非退行）。
+#[test]
+fn commit_bind_does_not_touch_balloon_pattern() {
+    let mut states = ScopeStates::new(BindSet::from_ids([1402]));
+    let scope = ActorKey::from("0");
+    states.apply(&scope, SurfaceTarget::Show(2100));
+    states.apply_balloon(&scope, SurfaceTarget::Show(2));
+
+    let mut balloon_pattern = PatternState::default();
+    balloon_pattern.set(1402, frame(1413));
+    states.commit_pattern(&scope, Slot::Balloon, balloon_pattern.clone());
+
+    states.apply_bind_exclusive(&scope, &[1400, 1401, 1402, 1403], 1400);
+    assert_eq!(
+        states.current_pattern(&scope, Slot::Balloon),
+        &balloon_pattern,
+        "bind の残留掃除はシェル面 slot に限る（バルーン面は不変・R3.8）"
+    );
+}
+
+/// 除去の痕跡は info! で残す（bindopt 7.5・無言の状態変更を作らない）。文言と水準を固定する。
+#[test]
+fn residual_frame_removal_emits_info_marker() {
+    let mut states = ScopeStates::new(BindSet::from_ids([1402]));
+    let scope = ActorKey::from("0");
+    states.apply(&scope, SurfaceTarget::Show(2100));
+
+    let mut residual = PatternState::default();
+    residual.set(1402, frame(1413));
+    residual.set(9000, frame(9001));
+    states.commit_pattern(&scope, Slot::Shell, residual);
+
+    let logs = capture_logs(|| {
+        states.apply_bind_exclusive(&scope, &[1400, 1401, 1402, 1403], 1400);
+    });
+
+    assert!(
+        logs.contains("level=INFO")
+            && logs.contains("seriko: bind から外れた ID の保持コマを除去"),
+        "除去は実機の既定ログ水準（info）で grep 可能な固定文言を残す（bindopt 7.5）: {logs}"
+    );
+    assert!(
+        logs.contains("id=1402"),
+        "除去した ID を痕跡に載せる（bindopt 7.5）: {logs}"
+    );
+    assert!(
+        !logs.contains("id=9000"),
+        "bind 非所属の ID は除去対象でなく痕跡にも現れない（bindopt 7.4）: {logs}"
+    );
+}
+
+/// 保持コマを持たない ID が外れただけでは除去ログを出さない（実際に取り除いた事実のみ残す・7.5）。
+///
+/// **不在主張には同一捕捉内の陽性対照を併置する**（`looper_tests` の既存流儀）。同じ捕捉区間で
+/// 1402 の保持コマを**現に持つ** scope0 の排他置換も走らせ、除去痕跡がちょうど 1 行出ることを
+/// 同時に主張する——捕捉が空でも通ってしまう恒真の檻にしないため。あわせて状態側（scope1 の
+/// pattern が手つかず）でも反証し、ログ経路が壊れても判別能力が残るようにする。ID 単位の在庫
+/// 確認（`drop_residual_frames` の `pattern.get(id).is_none()` → `continue`）を落とす変異では、
+/// コマを持たない scope1 側にも痕跡が出て 2 行になり、この檻が赤になる。
+#[test]
+fn no_removal_log_when_dropped_id_has_no_residual_frame() {
+    const REMOVAL_MARKER: &str = "seriko: bind から外れた ID の保持コマを除去";
+
+    let mut states = ScopeStates::new(BindSet::from_ids([1402]));
+    let with_frame = ActorKey::from("0"); // 外れる 1402 の保持コマを持つ（陽性対照）
+    let without_frame = ActorKey::from("1"); // pattern はあるが 1402 の保持コマは無い（本題）
+    states.apply(&with_frame, SurfaceTarget::Show(2100));
+    states.apply(&without_frame, SurfaceTarget::Show(2100));
+
+    let mut held = PatternState::default();
+    held.set(1402, frame(1413));
+    states.commit_pattern(&with_frame, Slot::Shell, held);
+
+    // 外れる 1402 のコマは持たず、bind 非所属の 9000 のコマだけを持つ。
+    let mut unrelated = PatternState::default();
+    unrelated.set(9000, frame(9001));
+    states.commit_pattern(&without_frame, Slot::Shell, unrelated.clone());
+
+    let logs = capture_logs(|| {
+        states.apply_bind_exclusive(&with_frame, &[1400, 1401, 1402, 1403], 1400);
+        states.apply_bind_exclusive(&without_frame, &[1400, 1401, 1402, 1403], 1400);
+    });
+
+    // 陽性対照: この捕捉には現に除去痕跡が出ている（空捕捉に対する恒真の不在主張を禁じる）。
+    assert!(
+        logs.contains(REMOVAL_MARKER) && logs.contains("scope=0"),
+        "陽性対照: 保持コマを持つ scope の除去痕跡が同一捕捉に現れる（捕捉が空でないことの反証）: {logs}"
+    );
+    // 不在主張: 実際に取り除いた 1 件のみ＝コマを持たない側の痕跡は出ない（bindopt 7.5）。
+    assert_eq!(
+        logs.matches(REMOVAL_MARKER).count(),
+        1,
+        "除去ログは実際に取り除いた 1 件のみ（取り除くコマが無い scope では出さない・bindopt 7.5）: {logs}"
+    );
+    assert!(
+        !logs.contains("scope=1"),
+        "取り除くコマが無い scope の痕跡は 1 行も出さない（bindopt 7.5）: {logs}"
+    );
+    // 状態側の反証（ログ経路に依らない判別）: コマを持たない側の pattern は手つかず。
+    assert_eq!(
+        states.current_pattern(&without_frame, Slot::Shell),
+        &unrelated,
+        "取り除くコマが無い側は状態も動かない（bindopt 7.4/7.5）"
     );
 }
 

@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use areka_emo_text::actor::ResolvedBalloonText;
-use areka_seriko::{BindNamespace, SurfaceTarget};
+use areka_seriko::{BindChoicePolicy, BindNamespace, SurfaceTarget};
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 
 use super::*;
@@ -527,8 +527,9 @@ fn build_boot_assets_bind_resolver_resolves_emo2_names() {
 /// そのカテゴリの ID 集合が引ける。
 ///
 /// emo2 shell descript の `sakura.bindoption{0..3}.group,カテゴリ,mustselect`（腕/口/眉/目）由来で
-/// `is_mustselect(Sakura, "腕"/"口"/"眉"/"目") == true`、非宣言カテゴリ（紅）は `false`。
-/// mustselect カテゴリの ID 集合（目は複数 id）は非空であることを確認する（R4.5・R7.1・D11）。
+/// `policy(Sakura, "腕"/"口"/"眉"/"目") == MustSelect`、非宣言カテゴリ（紅）は正典の既定
+/// （`Default`）。mustselect カテゴリの ID 集合（目は複数 id）は非空であることを確認する
+/// （bindopt 1.2・R7.1）。
 #[test]
 fn build_boot_assets_bind_resolver_carries_mustselect() {
     // SAFETY: bake の WIC デコードに要る COM 初期化（既初期化の S_FALSE/RPC_E_CHANGED_MODE は無視）。
@@ -542,16 +543,17 @@ fn build_boot_assets_bind_resolver_carries_mustselect() {
 
     // emo2 fixture の sakura.bindoption*.group,カテゴリ,mustselect（腕/口/眉/目）が起動時資産から判別できる。
     for category in ["腕", "口", "眉", "目"] {
-        assert!(
-            boot.bind_resolver
-                .is_mustselect(BindNamespace::Sakura, category),
-            "宣言済み mustselect カテゴリ `{category}` は起動時資産から真（10.3）"
+        assert_eq!(
+            boot.bind_resolver.policy(BindNamespace::Sakura, category),
+            BindChoicePolicy::MustSelect,
+            "宣言済み mustselect カテゴリ `{category}` は起動時資産から MustSelect（10.3）"
         );
     }
-    // 非宣言カテゴリは mustselect でない（捏造しない・R4.5）。
-    assert!(
-        !boot.bind_resolver.is_mustselect(BindNamespace::Sakura, "紅"),
-        "非宣言カテゴリ `紅` は mustselect でない（R4.5）"
+    // 非宣言カテゴリは mustselect でない（捏造しない・正典の既定＝Default・bindopt 1.2）。
+    assert_eq!(
+        boot.bind_resolver.policy(BindNamespace::Sakura, "紅"),
+        BindChoicePolicy::Default,
+        "非宣言カテゴリ `紅` は mustselect でない（正典の既定・bindopt 1.2）"
     );
     // mustselect カテゴリの ID 集合が引ける（目は複数 id を持つ）。
     assert!(
