@@ -20,7 +20,7 @@
 > - **本 spec で決めること**: ⑴ DPI 遷移時に連鎖を解き直すか（解き直すなら `ChainFinalized` の解除条件＝どの遷移で暫定へ戻すか）⑵ 解き直さないなら、隙間が残ることを正典として要件へ明記するか。いずれにせよ **`ChainFinalized` の寿命は本 spec の設計判断**とする。⑶ 遷移中の中間フレームで解き直すと「跳ね」を増やしうるため、本 spec の原子性設計と同時に決めること（scg の一度きり確定は、まさに中間状態で解かないための形である）。
 > - **構造的依存（併せて確認されたい）**: `finalize_chain_once_with` の駆動条件は「全スコープで `WindowPos.size` が実表示寸と一致する（＝resnap が landing 済み）」である（`drain_resnap.rs` の見送りガード）。これは完了済み `areka-P0-surface-resize-resnap` の内部挙動（再アンカー規則・フレーム内順序・`WindowPos` 更新タイミング）への**観測依存**であり、そこが変わると確定が静かに永久に見送られる（隙間が戻る）か早すぎるフレームで走る。完了済み spec ゆえ追跡先が無く、frame 相の順序を扱う本 spec が実質の見張り役になる。**ただし「静かに」ではなくなった**——scg のタスク 6.5 で、確定が有界の待ち（600 フレーム＝60Hz で約 10 秒・`CHAIN_FINALIZE_STALL_FRAMES`）を超えても起きない場合に、どのスコープがどの条件で見送られたかを添えた `warn!` が**一度だけ**出る。停滞の切り分けはログから可能になっている。
 > - **6.5 が本 spec へ及ぼす点**: `ChainFinalized` を解除して確定をやり直す設計を採るなら、見送り計数 `ChainFinalizeStall`（`reported` は一発フラグ）も同時に初期化しないと、2 度目の待ちでは診断が出ない。`ChainFinalized` の寿命を決める際に併せて裁定されたい。
-> - scg 側の証跡: `.kiro/specs/areka-P0-scope-chain-gap/real-run-signoff-2026-08-13.log` §5.5（拡大率 200% で定常時 gap 0 を実測）・同 `tasks.md` の要件 7 節。
+> - scg 側の証跡: `.kiro/specs/completed/areka-P0-scope-chain-gap/real-run-signoff-2026-08-13.log` §5.5（拡大率 200% で定常時 gap 0 を実測）・同 `tasks.md` の要件 7 節。
 
 ## Problem
 

@@ -26,7 +26,7 @@
 > - **⑵ 項目 9（`\![move,-353,...]`）の着地座標が k≠1 で変わった**。台本オフセットが k 倍されるようになったため（`resolve_move_target_position` に `k: ScaleRatio` 追加）。式は `x' = base_pos.x + basepos(base窓).x + k·dx − basepos(対象窓).x`。**k=1 では従来と同値**ゆえ 100% の適合走行に差は出ないが、実 DPI≠96 の走行では着地が変わる。実測: 拡大率 200% で二体の重なりが **365px → 12px**（＝100% の 6px のちょうど 2 倍）。
 > - **参照実装との関係**: SSP は `\![move]` を無スケールで適用するため、⑵ は**意図的な SSP 非互換**である（`ssp-oracle-notes.md` の SSP 自己不整合 #2）。適合検証で SSP と突き合わせる場合、この 1 点は差が出るのが正しい。
 > - 併せて `#12`（初回ゲート）と項目 9 の相互作用（本 brief 末尾の申し送り）を判断する際は、要件 7 の「明示的に再配置されたスコープは既定連鎖へ引き戻さない」（現在位置と既定位置の一致で判定）も前提に入れること。
-> - scg 側の正本: `.kiro/specs/areka-P0-scope-chain-gap/`（要件 1/2/7・`real-run-signoff-2026-08-13.log` §5.5）。
+> - scg 側の正本: `.kiro/specs/completed/areka-P0-scope-chain-gap/`（要件 1/2/7・`real-run-signoff-2026-08-13.log` §5.5）。
 
 ## Problem
 

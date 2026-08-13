@@ -9,7 +9,7 @@
 > - **P4 クランプを経由しない**: この経路は `resolve_placement` を通らないため、**work area 内クランプ（P4）が掛からない**。現行の 2 体構成・実機実測では画面外へ出る事象は観測されていないが、「キャラ窓は必ず work area 内」という構造的保証は失われている。本 brief の Current State が言う「キャラ窓には P4 クランプがある——バルーンだけが無制限」は、**確定経路については成り立たなくなった**。
 > - **roadmap 干渉台帳の記述が不完全**: `steering/roadmap.md` の `scg⇄wpl` 行は「`resolver.rs` `resolve_placement` 内 P2 ／ P5 が 30 行差」としか登記していない。実際の干渉面は resolver の外へ広がっている（`chain_finalize.rs`・`drain_resnap.rs`・`placement/spawn.rs` の `ScopeWindows.default_char_pos`）。**rebase 時はこの 3 ファイルも突合すること。**
 > - **limit 設計で決めること**: `windowposition.limit` のクランプを「どの位置ライターに掛けるか」。resolver P5 だけに掛けると確定経路が素通しになり、limit=1 の保証がキャラ窓の確定後配置で破れる。**クランプを単一の関門へ集約するか、書き込み口ごとに掛けるかは本 spec の設計判断**とする。
-> - scg 側の実装・証跡: `.kiro/specs/areka-P0-scope-chain-gap/`（要件 7・design C6・`real-run-signoff-2026-08-13.log` §5.5）。resolver の P5 ハンクは scg で**差分 0 行**（非接触を維持済み）。
+> - scg 側の実装・証跡: `.kiro/specs/completed/areka-P0-scope-chain-gap/`（要件 7・design C6・`real-run-signoff-2026-08-13.log` §5.5）。resolver の P5 ハンクは scg で**差分 0 行**（非接触を維持済み）。
 
 ## Problem
 
