@@ -209,6 +209,26 @@
 
 ## Implementation Notes
 
+### (最終検証) 本仕様が持ち込んだ規約違反を 2 件是正した
+
+要件網羅は **GAP 0**（45 基準）・境界違反 0・依存方向クリーン。一方で**本仕様が跨がせた
+リポジトリ規約の違反が 2 件**出たので是正した。どちらもテストでは検出できない種類である。
+
+1. **`placement/diag.rs` のテストモジュールが 500 行を超えた**（main の 399 行 → 503 行）。
+   file-slimming の要件 1 は「テスト本体の合計が 500 行を超えるファイルは外へ出す」と定める。
+   兄弟 `diag_tests.rs` へ移した（`diag.rs` は 946 → 445 行）。
+2. **テストファイル名 5 本が導出規則に違反**していた。`<stem>` は**接続宣言を置いた本番
+   ファイル**の basename である。
+   - `zorder_pair_diag_tests.rs` は `zorder_pair_diag.rs` が実在するため**前向きの衝突**
+     （規約が明示的に禁じる形）→ `zorder_pair_record_tests.rs` へ。
+   - 維持系から宣言する 4 本は逆引きが `zorder_pair.rs` を指してしまう →
+     `zorder_pair_maintain_{multipair,detach,survivor,always_on_top}_tests.rs` へ。
+
+**教訓**: ファイルを分けた時点で、そこから宣言する兄弟テストの名前も変わる。
+**分割のたびに導出規則を引き直すこと**——テストは緑のままなので誰も気づかない。
+
+design の File Structure Plan も着地形へ更新した（当初案の 2 本が実際は 5 本になっていた）。
+
 ### ✅ (6.2) 実機サインオフ合格: S1〜S4 全 PASS（2026-08-13）
 
 判定表は `verification/signoff.md`。**ERROR 0 件・`verify-failed` 0 件**。
@@ -306,7 +326,7 @@ owner に持つので OS が一組で動かす。実測で確定した:
 1. **残存窓の表示状態を誰も測っていなかった**（要件 1.5）。片割れ消滅の既存テストは「見送りが返る」
    「指令が積まれない」までで、**残る窓そのもの**は見ていなかった。キューを経由せず直接
    `SetWindowPos` する欠陥を注入すると、指令の本数を数えるテストは全部緑のまま通る。
-   `zorder_pair_survivor_tests.rs` を新設し、矩形・スタイル・拡張スタイル・可視性・重なりの隣・
+   `zorder_pair_maintain_survivor_tests.rs` を新設し、矩形・スタイル・拡張スタイル・可視性・重なりの隣・
    `WindowPos` を実測で突き合わせる形にした。
 2. **検証段階の `Skip(HandleMissing)`**（`zorder_pair_maintain.rs:388-395`）が一度も踏まれていなかった。
    相手の実体は生きているがハンドルだけ外れた状態で、要件 6.3 が記録を義務づける経路である。
@@ -317,7 +337,7 @@ owner に持つので OS が一組で動かす。実測で確定した:
 - **`zorder_pair_maintain_tests.rs` が 976 行（残り 24 行）＝実質的に増築不能。**
   **次にこのファイルへテストを足すタスクは、追記の前に共有テストヘルパの抽出を済ませること。**
   いま兄弟ファイルへ割ると `Trio`／`create_test_parent`／`create_test_child`／`insert_after`／
-  `request_reassert`／`issue_control_command` が三重化する（`zorder_pair_survivor_tests.rs` が既に
+  `request_reassert`／`issue_control_command` が三重化する（`zorder_pair_maintain_survivor_tests.rs` が既に
   大半を再宣言している）。抽出は本タスクの非挙動スコープを越えるので見送った。
 - **z 変化通知の配送は分岐不成立**（供給者であるタスク 5.3 が未実施）。`zorder_pair.rs` の
   `ReassertZOrder` doc（挿入元③）と design「Testing Strategy」の 2 箇所へ明記した。

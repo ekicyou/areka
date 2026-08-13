@@ -134,33 +134,58 @@ graph TB
 
 ### New Files
 
+1 ファイル 1,000 行の上限があるため実装フェーズで分割した。**着地した形は次のとおり**
+（当初案は `zorder_pair.rs` 1 本＋確立系のみ分離だったが、記録語彙と維持系と沈降観測が
+それぞれ育ったため 5 本になった）。
+
 ```
 crates/wintf/src/ecs/window/
-├── zorder_pair.rs             # ペア宣言・判断・診断記録の住処:
+├── zorder_pair.rs             # 状態・純判断・実測層・記録の出力:
 │                              #   KeepDirectlyAbove / ReassertZOrder / ExpectedOrder /
-│                              #   OwnerLink / ZOrderPairStrategy /
-│                              #   decide_pair_fix（純関数）/ 診断ログ出力（*_line と log_*）/
-│                              #   apply_zorder_pair_maintenance（維持系）
-├── zorder_pair_establish.rs   # establish_owner_links（案A系）
+│                              #   OwnerLink / ZOrderPairStrategy / PairObservation /
+│                              #   InsertSpec / PairFixDecision /
+│                              #   decide_pair_fix（純関数）/ measure_*（実測）/
+│                              #   log_*・record_*（tracing マクロはここだけ）
+├── zorder_pair_diag.rs        # 記録の文字列組立（*_line）——マクロを 1 つも持たない
+├── zorder_pair_establish.rs   # establish_owner_links（案 A の確立系）
+├── zorder_pair_maintain.rs    # apply_zorder_pair_maintenance（維持系）/ pair_fix_command /
+│                              #   detach_owner_links_for_lost_peers（切離し）
+├── zorder_pair_sink.rs        # 沈降観測（WM_ACTIVATE 非活性化枝の遅延実測）
 └── *_tests.rs                 # 各実装ファイルの兄弟テスト（決定論的 World テスト・
                                #   ログ捕捉は capture_under_filter）
 ```
 
-> 1 ファイル 1,000 行の上限があるため実装フェーズで分割してよい（実際に確立系は
-> `zorder_pair_establish.rs` へ分けた）。ただし **`tracing` の記録を出すマクロは
-> `zorder_pair.rs` 内に置く**——出力先は呼び出し元の module path が既定であり、
-> 他ファイルへ移すとサインオフ grep の target が分裂する。
+> **`tracing` の記録を出すマクロは `zorder_pair.rs` 内に置く**——出力先は呼び出し元の
+> module path が既定であり、他ファイルへ移すとサインオフ grep の target が分裂する。
+> `zorder_pair_diag.rs` はそのために**文字列組立だけ**を持つ（マクロを含まない）。
+
+> 兄弟テストのファイル名は steering `structure.md` の導出規則に従う——`<stem>` は
+> **接続宣言を置いた本番ファイル**の basename である。維持系から宣言するテストは
+> `zorder_pair_maintain_*` を冠する（`zorder_pair_*` にすると逆引きが `zorder_pair.rs` を
+> 指してしまう）。また `zorder_pair_diag.rs` が実在するため、`zorder_pair.rs` 側のテーマ名に
+> `diag` を使うと前向きの衝突になる（記録まわりのテストは `record_tests` とした）。
+
+```
+crates/areka/src/placement/
+├── diag.rs                    # declared / strategy-selected の組立と出力（既存ファイルへ追加）
+├── diag_tests.rs              # 同上の兄弟テスト（テスト本体 500 行の上限で分離）
+├── spawn.rs                   # ペア宣言の付与と wire_zorder_pair（既存ファイルへ追加）
+└── spawn_zorder_pair_*.rs     # 別クレートからの到達性・結線・先送り語彙の兄弟テスト
+```
 
 ```
 .kiro/specs/areka-P0-ghost-window-zorder/verification/
-└── plan-a-gate.md             # ゲート判定表の記録（実装フェーズで作成）
+├── plan-a-gate-procedure.md   # ゲート（タスク 4）の実行手順書
+├── plan-a-gate.md             # ゲート判定表
+├── signoff-procedure.md       # 実機サインオフ（タスク 6.2）の実行手順書
+└── signoff.md                 # 実機サインオフ判定表
 ```
 
 ### Modified Files
 
 - `crates/wintf/src/ecs/window/mod.rs` — `mod zorder_pair;` 接続と re-export
 - `crates/wintf/src/ecs/mod.rs` — `KeepDirectlyAbove`／`ReassertZOrder`／`ZOrderPairStrategy` の公開エクスポート（`ZOrder` は `:49` で公開済み）
-- `crates/wintf/src/api.rs` — safe wrapper 新設: `get_window_above(hwnd)`／`get_window_below(hwnd)`（`GetWindow` GW_HWNDPREV/GW_HWNDNEXT）・`is_window_visible(hwnd)`（`IsWindowVisible`・隣接を可視の窓で測るため）・`set_window_owner(hwnd, owner)`／`clear_window_owner(hwnd)`（`SetWindowLongPtrW(GWLP_HWNDPARENT)`）
+- `crates/wintf/src/api.rs` — safe wrapper 新設: `get_window_above(hwnd)`／`get_window_below(hwnd)`（`GetWindow` GW_HWNDPREV/GW_HWNDNEXT）・`is_window_visible(hwnd)`（`IsWindowVisible`・隣接を可視の窓で測るため）・`set_window_owner(hwnd, owner)`／`clear_window_owner(hwnd)`（`SetWindowLongPtrW(GWLP_HWNDPARENT)`）・`get_foreground_window()`（`GetForegroundWindow`・沈降観測の相対判定）・`is_window_always_on_top(hwnd)`（`GetWindowLongPtrW(GWL_EXSTYLE)` の `WS_EX_TOPMOST` を**読むだけ**・帯を書くことは決してしない。挿入位置が帯の中かを判断へ渡すため。要件 8.1）
 - `crates/wintf/src/ecs/window_proc/keyboard.rs` — `WM_ACTIVATE` の**非活性化枝（既存処理の後）**に読み取り専用の沈降観測**マーク**を追加。実測走査と `sink-observed` レコードは**次巡**に維持系が実施（即時走査は活性化トランザクション未完で偽陽性を生むため。要件 4.4/7.5 の証跡。挙動変更なし）
 - `crates/wintf/src/ecs/window_proc/window_pos.rs` — 【案 B 発動時、**または案 A で raise assist 有効時**】`WM_WINDOWPOSCHANGED` で `WINDOWPOS.flags` の `SWP_NOZORDER` 不在（＝z が動いた）を検知し、エコーでなければ当該 entity へ `ReassertZOrder` を挿入（B2。raise assist のトリガ供給者はこの検知のみ）
 - `crates/areka/src/placement/spawn.rs` — キャラ窓 spawn 後にバルーン窓へ `KeepDirectlyAbove { peer: char_window }` を insert（`OnDragEnd` 後付けと同じパターン・`:312-314` 隣接）。あわせてペア宣言レコード（scope／char entity／balloon entity）を診断 target へ出力（scope 結合キーの供給・要件 6.1）
@@ -354,7 +379,7 @@ pub(crate) enum InsertSpec {
 - **Invariants**: `measured_below_of_above == below_hwnd`（既に隣接）なら必ず `Skip(AlreadyAdjacent)`（収束の同値ガード・research.md §8-7 は `GW_HWNDPREV` 実測方式を採る。キャッシュ方式は実 z が外部要因で動くと嘘になるため不採用）。**隣接は「最も近い可視の隣」で測る**——`GetWindow` を辿る際に `IsWindowVisible` が偽の窓は読み飛ばす（走査は上限 512 枚で打ち切り、打切り・失敗はいずれも不在＝番兵へ倒して記録に残す）。判断（`decide_pair_fix`）の署名とロジックはこの測り方によって一切変わらない——変わるのは入力値の意味だけである。
   - **挿入位置が常時最前面の窓だった場合**（要件 8.1）: Windows はトップレベル窓を 2 つの帯に分けて重ね、常時最前面（`WS_EX_TOPMOST`）の一群を必ず手前に置く。`SetWindowPos` の `hWndInsertAfter` に帯の中の窓を渡すと、**対象窓にも `WS_EX_TOPMOST` が付いて帯へ移る**。キャラ窓が可視の通常窓のうち最前面に居るとき、キャラ窓の「最も近い可視の手前」は他アプリの常時最前面窓になるため、そのまま挿入位置にするとバルーン窓が黙って常時最前面になる（要件 8.1 の毀損。しかも引き込まれた後もペアは隣接したままなので、次巡の実測照合も `verify-failed` も鳴らず、露見するのは他アプリ活性化時の `sink-observed` だけ＝要件 4.1/4.2 の毀損として現れる）。よって帯の中の窓は指さず、`InsertSpec::TopOfNormalBand`（通常帯の最上＝帯のすぐ背後）を選ぶ。この分岐が起きるのはキャラ窓が通常帯の最上に居る形なので、結果としてバルーンはキャラのすぐ手前に入り要件 1.2 は保たれる。判断は Win32 を呼ばない（要件 7.1）ため、帯の所属は実測層（`measure_window_is_always_on_top`）が測って `PairObservation` に載せる。
     - **指令の選定（実測で確定）**: 「通常帯の最上」を作る指令は **`HWND_TOP`**（`ZOrder::Top`）である。もう一方の候補 `HWND_NOTOPMOST` は、既に常時最前面ではない窓に対しては**重なりを 1 枚も動かさない**（実測: z 位置が変わらない。MSDN の「既に非最前面窓なら効果が無い」の実測確認）。`HWND_TOP` は対象を常時最前面の帯のすぐ背後へ置き、`WS_EX_TOPMOST` は付けない（実測: 帯の外の窓に対し帯の所属は変わらないまま、手前に居る常時最前面窓の枚数だけが残り、通常帯の窓は 0 枚になる）。なお `HWND_TOP` がデスクトップのどこまで持ち上がるかは前面プロセスの状況に左右される（実測で、通常帯の最上まで届く回と自プロセスの窓の手前で止まる回の双方を観測。**前面を握っていることは本分岐の条件ではない**——分岐の条件はキャラ窓の最も近い**可視**の手前が常時最前面であることだけであり、背面のままこの分岐が起き、かつ持ち上がりが途中で止まる場合が実測されている）。
-      - **それでも要件 1.2 は壊れない——保証しているのは owner 関係である**: バルーン窓はキャラ窓を owner に持つ被 owner 窓であり（案 A の確立＝`establish_owner_links`／`OwnerLink`）、Windows は被 owner 窓を owner のすぐ手前に保ち、**owner ごと一組で動かす**。よって持ち上がり幅によらずバルーンはキャラのすぐ手前に居続け、次巡の実測照合は満たされる（`HWND_TOP` が届かなかった巡が `verify-failed` を量産することはない）。実測（同一手順 3 巡で同一）: 被 owner 窓 idx 29 → 4 に対し owner も 30 → 5 と一緒に動き、`WS_EX_TOPMOST` は付かず、隣接は前後とも成立。owner と被 owner の**間に割り込み窓を差し込むこと自体ができない**（owner のすぐ背後を指定して挿入しても、OS は割り込み窓を一組の**外**へ弾く。弾かれる向きは初期配置しだいで、実測では背後 idx 31 に落ちた回と、手前 idx 4 に出たうえで是正が一組ごとその手前へ抜いた回の双方を観測している）。持ち上がりが途中で止まった場合も同様に一組で動き、隣接は成立した（owned 6 → 5・owner 7 → 6・intruder 5 → 7・帯の外・隣接成立）。**対照**: owner を張らない 2 窓に同じ指令を出すと手前へ出るのはバルーンだけでキャラは置き去りになり隣接しない——すなわちこの隣接は指令の副産物ではなく owner 関係の帰結である。回帰は `zorder_pair_always_on_top_tests.rs::the_top_of_normal_band_fix_keeps_a_real_owned_pair_adjacent_and_out_of_the_band` が固定する。
+      - **それでも要件 1.2 は壊れない——保証しているのは owner 関係である**: バルーン窓はキャラ窓を owner に持つ被 owner 窓であり（案 A の確立＝`establish_owner_links`／`OwnerLink`）、Windows は被 owner 窓を owner のすぐ手前に保ち、**owner ごと一組で動かす**。よって持ち上がり幅によらずバルーンはキャラのすぐ手前に居続け、次巡の実測照合は満たされる（`HWND_TOP` が届かなかった巡が `verify-failed` を量産することはない）。実測（同一手順 3 巡で同一）: 被 owner 窓 idx 29 → 4 に対し owner も 30 → 5 と一緒に動き、`WS_EX_TOPMOST` は付かず、隣接は前後とも成立。owner と被 owner の**間に割り込み窓を差し込むこと自体ができない**（owner のすぐ背後を指定して挿入しても、OS は割り込み窓を一組の**外**へ弾く。弾かれる向きは初期配置しだいで、実測では背後 idx 31 に落ちた回と、手前 idx 4 に出たうえで是正が一組ごとその手前へ抜いた回の双方を観測している）。持ち上がりが途中で止まった場合も同様に一組で動き、隣接は成立した（owned 6 → 5・owner 7 → 6・intruder 5 → 7・帯の外・隣接成立）。**対照**: owner を張らない 2 窓に同じ指令を出すと手前へ出るのはバルーンだけでキャラは置き去りになり隣接しない——すなわちこの隣接は指令の副産物ではなく owner 関係の帰結である。回帰は `zorder_pair_maintain_always_on_top_tests.rs::the_top_of_normal_band_fix_keeps_a_real_owned_pair_adjacent_and_out_of_the_band` が固定する。
   - **根拠（実機実測・ゴースト起動 3 回で同一）**: 割り込んでいたのはスレッド既定の IME 窓（クラス `IME`／タイトル `Default IME`／**不可視**／矩形 `0,0,0,0`／`WS_POPUP | WS_DISABLED | WS_CLIPSIBLINGS`／areka 自身の同一スレッド）であり、その **owner はキャラ窓そのもの**であった。IME 窓もバルーン窓も同じキャラ窓を owner に持つ被 owner 窓であり、Windows は被 owner 窓を owner の手前に保つため、キャラ窓の直上には被 owner 窓が 2 枚並びその内部順序は制御外になる。既定 IME 窓はスレッドに 1 個しか無いため割り込みは片方のスコープにしか起きず、実機では毎回そのスコープだけが `verify-failed` になっていた。**配置は要件 1.2 を満たしており、過剰に落としていたのは測り方の側である**（測り方の選択は要件 7.2 が実装に委ねる範囲・要件 1.2 に判定の但し書きを追記済み）。
 
 ##### Service Interface（システム）
@@ -369,7 +394,10 @@ pub fn establish_owner_links(/* Query, Res<ZOrderPairStrategy>, NonSend 固定 *
 /// 沈降観測マーク（WM_ACTIVATE 非活性化枝が付与）の遅延実測と sink-observed 出力もここで行う。
 pub fn apply_zorder_pair_maintenance(/* Query, Res<ZOrderPairStrategy>, NonSend 固定 */);
 
-/// 案 B（B3）専用の公開契約点: 観測組立→ decide_pair_fix を wintf 内で包み、
+/// 【未実装】案 B（B3）専用の公開契約点。ゲートが G1〜G8 全 PASS で案 A 確定となったため
+/// タスク 5.5 は分岐不成立となり、この関数はコードに存在しない（空虚な保険を作らない）。
+/// 案 B へ倒す判断が将来なされた場合の契約形として残す。
+/// 観測組立→ decide_pair_fix を wintf 内で包み、
 /// funnel（enqueue_window_set_pos）へ渡す z 意図を返す。ペア非当事者・同値ガード成立時は
 /// ZOrder::NoChange。decide_pair_fix と入出力型は pub(crate) のまま——
 /// 判断ロジックの一元点を別クレートへ漏らさない。
@@ -394,6 +422,17 @@ pub fn compute_pair_z_intent(/* &World, Entity */) -> ZOrder;
 | `[zorder-pair] verify-failed` | **error** | entity, expected, measured（要件 6.2） |
 | `[zorder-pair] owner-establish-failed` | **error** | entity, error（要件 6.2・ゲート FAIL 材料) |
 | `[zorder-pair] sink-observed` | debug | entity, adjacency_ok, foreground 相対（WM_ACTIVATE 非活性化枝・要件 4.4/7.5） |
+
+**タグを付けない記録（5 種）**。サインオフの第 1 段 grep（`[zorder-pair]`）の判定語を増やさないため、
+上表以外の記録には**意図的にタグを付けない**。水準は warn／debug なので沈黙にはならず、要件 6.3 は満たす。
+
+| 記録 | 水準 | 出す状況 |
+|---|---|---|
+| owner 切離し | debug | ペアの相手が消えたので owner 関係を外した（正常系・要件 5.7） |
+| owner 切離し失敗 | **error** | 外す指令が失敗した（要件 6.2） |
+| 宣言の無い窓への要求を捨てた | warn | 公開シームから宣言の無い窓へ再断行要求が付いた（到達可能・既存 5 理由で表せない） |
+| 宣言の無い窓への沈降マークを捨てた | warn | 同上（沈降観測側） |
+| 持ち越し無しの検証段階を捨てた | warn | 出した指令の控えが無いまま検証段階になった |
 
 - `fix` の `insert_after` 欄は 3 種の値を取る——挿入位置の HWND（`0x…`）／`top-edge`（キャラより手前に可視の窓が無かった）／`top-of-normal-band`（手前の窓が常時最前面だったので指せなかった）。後 2 者は指令としては同じ `HWND_TOP` だが、**そこへ置いた理由が違う**ため語を分ける（1 語へ潰すと記録から是正の原因を辿れない）。
 - scope はレコードに直接載らない（wintf は scope を知れない）。`declared` レコードとの entity 結合で 2 段 grep する（`log_window_move` の確立済み先例）。
@@ -471,7 +510,7 @@ pub fn compute_pair_z_intent(/* &World, Entity */) -> ZOrder;
 1. `establish_owner_links`: 両窓 `WindowHandle` 揃いで 1 回だけ発火・片方欠けで skip レコード（`capture_under_filter` 捕捉・対照ケース併置〔ログ捕捉ハーネスの盲点規律〕）
 2. `WM_WINDOWPOSCHANGED` z 検知（案 B 時）: `SWP_NOZORDER` 有無×エコー有無の 4 象限で `ReassertZOrder` 挿入の有無を配送テストで固定（`window_proc/mod.rs:92-254` の既存配送テスト群へ追加）
 3. areka spawn assembly: バルーン窓が `KeepDirectlyAbove { peer: char }` を持つ・`declared` レコードに scope が載る（`spawn_assembly_tests` 兄弟ファイルへ追加）
-4. 片割れ despawn 後の維持系: skip 記録＋残存窓の `WindowPos`／スタイル不変（1.5/6.3）。skip 記録と「指令が 1 本も出ないこと」は `zorder_pair_maintain_tests.rs`、**残存窓そのものの実測**（矩形・スタイル・拡張スタイル・可視性・重なりの隣・`WindowPos`）は `zorder_pair_survivor_tests.rs` が受け持つ。後者は片割れが消える 2 経路（要求を持ったままの見送り／owner 切離し）の両方を見る——指令の本数だけを数えると、維持系以外の経路が窓へ書き込んだ場合を取り逃がすためである
+4. 片割れ despawn 後の維持系: skip 記録＋残存窓の `WindowPos`／スタイル不変（1.5/6.3）。skip 記録と「指令が 1 本も出ないこと」は `zorder_pair_maintain_tests.rs`、**残存窓そのものの実測**（矩形・スタイル・拡張スタイル・可視性・重なりの隣・`WindowPos`）は `zorder_pair_maintain_survivor_tests.rs` が受け持つ。後者は片割れが消える 2 経路（要求を持ったままの見送り／owner 切離し）の両方を見る——指令の本数だけを数えると、維持系以外の経路が窓へ書き込んだ場合を取り逃がすためである
 
 ### Real-Machine Signoff（有界自動終了＋ログ grep・要件 7.2〜7.5）
 

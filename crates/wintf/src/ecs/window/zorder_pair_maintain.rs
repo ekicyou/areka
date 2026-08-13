@@ -488,17 +488,17 @@ pub fn apply_zorder_pair_maintenance(
 mod tests;
 
 #[cfg(test)]
-#[path = "zorder_pair_multipair_tests.rs"]
+#[path = "zorder_pair_maintain_multipair_tests.rs"]
 mod multipair_tests;
 
 #[cfg(test)]
-#[path = "zorder_pair_detach_tests.rs"]
+#[path = "zorder_pair_maintain_detach_tests.rs"]
 mod detach_tests;
 
 #[cfg(test)]
-#[path = "zorder_pair_survivor_tests.rs"]
+#[path = "zorder_pair_maintain_survivor_tests.rs"]
 mod survivor_tests;
 
 #[cfg(test)]
-#[path = "zorder_pair_always_on_top_tests.rs"]
+#[path = "zorder_pair_maintain_always_on_top_tests.rs"]
 mod always_on_top_tests;
