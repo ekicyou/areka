@@ -260,7 +260,7 @@ let base_x = match prev {
 - 記載要素（5.1–5.3）:
   - **項目**: 複数スコープの既定 X 連鎖規則（正典沈黙箇所・先行 spec が「SSP de-facto」として規定していた項目）。
   - **裁量**: `scope_n.L = scope_{n−1}.L − scope_n 自身の幅`（完全隣接・gap 0）。連鎖基準はクランプ後実配置・defaultx は基準からの左方向オフセットで不変。
-  - **根拠**: 実機確定（2026-08-11）＝参照実装 SSP を受理オラクルとした。move 除去プローブ（emo2-probe）・プロファイル削除・初回起動・DPI 96 と 192 の両方で誤差 0（DPI 不変）。**本裁定が否定した先行 AC は `completed/areka-P0-window-placement` R2.9**（「scope1 を scope0 のサーフェス画像幅ぶん左へずらす（SSP de-facto）」）——同 spec の research.md は当該項目を Unknown と記載したまま要件討議で確定しており、**「SSP de-facto」の札は SSP 実挙動と突合されないまま貼られていた**。アーカイブ済み spec は非改変とし、上書きの事実を本表と現行 spec に記録する。付記: SSP のコールドブート定常値には SSP 自己不整合 2 件（起動時サーフェス寸レースによる見かけ隙間・ゴースト演出 `\![move]` の物理 px 無スケール適用）が混入するため**互換対象外**（受理オラクルは規則そのもの・要件討議 #2 裁定）。
+  - **根拠**: 実機確定（2026-08-11）＝参照実装 SSP を受理オラクルとした。move 除去プローブ（emo2-probe）・プロファイル削除・初回起動・DPI 96 と 192 の両方で誤差 0（DPI 不変）——ただし DPI 192 の「誤差 0」は**配置時の代表面寸**（868／854 物理 px・境界 2012）に対してであり、生観測は SSP の起動時サーフェス寸レースで見かけ隙間 104px を示す（`ssp-oracle-notes.md:95-98` が正）。**本裁定が否定した先行 AC は `completed/areka-P0-window-placement` R2.9**（「scope1 を scope0 のサーフェス画像幅ぶん左へずらす（SSP de-facto）」）——同 spec の research.md は当該項目を Unknown と記載したまま要件討議で確定しており、**「SSP de-facto」の札は SSP 実挙動と突合されないまま貼られていた**。アーカイブ済み spec は非改変とし、上書きの事実を本表と現行 spec に記録する。付記: SSP のコールドブート定常値には SSP 自己不整合 2 件（起動時サーフェス寸レースによる見かけ隙間・ゴースト演出 `\![move]` の物理 px 無スケール適用）が混入するため**互換対象外**（受理オラクルは規則そのもの・要件討議 #2 裁定）。
   - **出典 spec**: areka-P0-scope-chain-gap（`resolver.rs` P2・証跡 `ssp-oracle-notes.md`／`ssp-rects-boot-probeA-dpi96.log`／`ssp-rects-boot-probeA-dpi192.log`）。
 - `completed/areka-P0-window-placement` 配下には一切書き込まない（5.4）。
 
@@ -314,6 +314,6 @@ let base_x = match prev {
 
 ### Real Machine（受け入れ・C5）
 
-1. emo2＋実 DPI 120・プロファイル削除・有界終了で起動し、`merge_scope restore` grep により |gap| ≤ 1 を判定（6.1/6.2/6.4）。
+1. emo2＋実 DPI≠96（開発機の実績は 120。実施時の設定に従う）・プロファイル削除・有界終了で起動し、`merge_scope restore` grep により |gap| ≤ 1 を判定（6.1/6.2/6.4）。
 2. DPI 96 でも同判定を対照実行（規則の DPI 不変の実機面・2.4）。ただし 96 のみ緑は不合格（6.3）。
 3. 従判定: 外部矩形実測ログを補強証跡として保存（6.4）。

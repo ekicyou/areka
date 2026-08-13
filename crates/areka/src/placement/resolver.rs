@@ -123,7 +123,6 @@ pub struct ScopePlacement {
 /// `scopes` 入力に `cfg.scopes` 未収載のスコープ番号が来た場合は
 /// `ScopeConfig::default()`（＝Bottom・オフセットなし）で配置する（2.2 の既定と
 /// 同じ意味論・テストで固定）。
-#[allow(dead_code)] // scaffold（task 3.1）: 結線は task 6
 pub fn resolve_placement(
     cfg: &PlacementConfig,
     work_area: RectPx,
