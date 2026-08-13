@@ -80,7 +80,7 @@ file-slimming（PR#103）で `presenter.rs` は 118 行のファサードとな�
 | Req | 技術要素 | 既存資産 | ギャップ（タグ） |
 |---|---|---|---|
 | 1 計時ログ | 段階別計時・確保計数・檻 | tracing 全面採用・表示成立点 info!（show.rs:303）・log_capture 檻パターン | **Missing**: 計時コードそのもの／確保計数シーム。**Constraint**: 既存 info! の文言・水準は実機サインオフ契約ゆえ不変 |
-| 2 ベースライン自動採取 | 有界実走×2 水準・自動集計・CPU 時系列 | AREKA_APP_SMoke_EXIT_MS・signoff-scan.py 型紙・実走手順 md 群 | **Missing**: CPU 採取 ps1／集計・判定スクリプト本体／手順 md。**Unknown**: 資産の恒久配置場所（§5 論点5） |
+| 2 ベースライン自動採取 | 有界実走×2 水準・自動集計・CPU 時系列 | AREKA_APP_SMOKE_EXIT_MS・signoff-scan.py 型紙・実走手順 md 群 | **Missing**: CPU 採取 ps1／集計・判定スクリプト本体／手順 md。**Unknown**: 資産の恒久配置場所（§5 論点5） |
 | 3 アロケーション是正 | compose_into 切替・再利用バッファ・マスク再利用 | `compose_into`（提供済・未配線）・`resample(&src,k,&mut out)`（out 再利用形は既に取る）・`resize_and_clear` 容量再利用 | **Missing**: `PresentTarget` の再利用バッファ席／キャッシュのスロット・リサイクル API／`AlphaMask` の in-place 再生成 API（wintf 側は `from_pbgra32` の新規確保形のみ）。**Constraint**: cache.rs 容量 1＝R4.1 承認済み要件・キー完全一致規律は不変 |
 | 4 機械判定 | 合格判定式⑴〜⑷・較正値明記・dev/release 両適用 | signoff-scan.py の exit code／較正値運用・catch-up 固定文言（ticker.rs:205,225,307） | **Missing**: 判定式の実装。**Unknown**: コマ間隔の期待値ソース（emo2 較正値 172ms をスクリプト内定数にするか・アニメ別に持つか） |
 | 5 CPU 上昇切り分け | 収束判定（頭打ち vs 単調上昇） | なし（bindopt 保全ログ 4 本＝計時なし対照のみ） | **Missing**: 収束判定ロジック（スクリプト側・コード非接触）。仮説 (a) は bind 完了で構造消滅済み＝残余は (b)/未知 |
