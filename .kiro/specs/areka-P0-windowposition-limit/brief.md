@@ -4,6 +4,13 @@
 > **源**: `kero-balloon` R7.4 の COMPAT §8 記録（:145）が「`limit` 未実装のため……バルーンが画面外へはみ出し得る（**実機で観測・追跡対象**）」と書きながら**追跡者が存在しなかった**——2026-08-01 未登記先送り棚卸で孤児と判定・本起票で登記。
 > **着手ゲート**: `kero-balloon` の main マージ後（`placement/windowposition.rs` は同 spec の新設ファイル）。M1 内で着手可能な小型 spec（`limit` は正典既定 1＝**全ゴーストに適用される既定挙動**であり emo2 でも実害が出ている）。
 
+> **📌 2026-08-13 追記(63)（`areka-P0-scope-chain-gap` からの申し送り・rebase 前提の更新）**: **scg 着地により「キャラ窓の位置を決めるのは `resolve_placement` 唯一」という前提が崩れた。** rebase の対象が resolver の檻だけではなくなっている。
+> - **第 2 の位置ライター**: scg の要件 7 が `finalize_chain_once`（`crates/areka/src/emo2_boot/frame/drain_resnap.rs`・判定は `crates/areka/src/placement/chain_finalize.rs`）を新設した。実表示サーフェス寸が確定したフレームで**一度だけ**連鎖を解き直し、後続スコープのキャラ窓 X を `move_window_to` で直接書く。
+> - **P4 クランプを経由しない**: この経路は `resolve_placement` を通らないため、**work area 内クランプ（P4）が掛からない**。現行の 2 体構成・実機実測では画面外へ出る事象は観測されていないが、「キャラ窓は必ず work area 内」という構造的保証は失われている。本 brief の Current State が言う「キャラ窓には P4 クランプがある——バルーンだけが無制限」は、**確定経路については成り立たなくなった**。
+> - **roadmap 干渉台帳の記述が不完全**: `steering/roadmap.md` の `scg⇄wpl` 行は「`resolver.rs` `resolve_placement` 内 P2 ／ P5 が 30 行差」としか登記していない。実際の干渉面は resolver の外へ広がっている（`chain_finalize.rs`・`drain_resnap.rs`・`placement/spawn.rs` の `ScopeWindows.default_char_pos`）。**rebase 時はこの 3 ファイルも突合すること。**
+> - **limit 設計で決めること**: `windowposition.limit` のクランプを「どの位置ライターに掛けるか」。resolver P5 だけに掛けると確定経路が素通しになり、limit=1 の保証がキャラ窓の確定後配置で破れる。**クランプを単一の関門へ集約するか、書き込み口ごとに掛けるかは本 spec の設計判断**とする。
+> - scg 側の実装・証跡: `.kiro/specs/completed/areka-P0-scope-chain-gap/`（要件 7・design C6・`real-run-signoff-2026-08-13.log` §5.5）。resolver の P5 ハンクは scg で**差分 0 行**（非接触を維持済み）。
+
 ## Problem
 
 2 つの未実装が同じファイル（バルーン `descript.txt` の `windowposition` 族）に残っている:

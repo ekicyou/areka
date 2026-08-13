@@ -87,7 +87,7 @@ use super::diag::{log_zorder_pair_declared, log_zorder_pair_strategy};
 use super::follow::{
     on_balloon_drag, on_balloon_drag_end, on_char_drag, on_char_drag_end, Anchored, BalloonFollow,
 };
-use super::resolver::ScopePlacement;
+use super::resolver::{PointPx, ScopePlacement};
 use super::source::GhostTitles;
 
 // ---------------------------------------------------------------------------
@@ -167,6 +167,17 @@ pub struct ScopeWindows {
     pub char_window: Entity,
     /// バルーン窓 entity。
     pub balloon_window: Entity,
+    /// spawn 時に**既定配置（resolver 出力）が置いた**キャラ窓位置（物理 px・scg 7.3）。
+    ///
+    /// 「まだ誰にも動かされていない」ことの判定基準。現在位置がこの値と一致する間は
+    /// 既定配置のままであり、ゴースト台本の移動指令や利用者のドラッグで動いた
+    /// スコープは一致しなくなる——移動側へフックを足さずに除外できる。
+    ///
+    /// **`None` は「そもそも既定配置ではない」**を表す。前回セッションで保存された
+    /// 位置が復元されたスコープがこれにあたる（`main.rs` の復元マージが採用した位置は
+    /// 利用者の意思による配置であって resolver 既定ではない）。`None` のスコープは
+    /// 連鎖の再解決から**常に除外**され、既定位置へ引き戻されない（scg 7.3）。
+    pub default_char_pos: Option<PointPx>,
 }
 
 /// 後続（emo2-boot）への引き渡し正本（6.1/6.2）。
@@ -196,6 +207,47 @@ impl GhostWindows {
     /// 生成済みスコープ番号を昇順で列挙する（`BTreeMap` キー順）。
     pub fn scopes(&self) -> impl Iterator<Item = usize> + '_ {
         self.windows.keys().copied()
+    }
+
+    /// スコープの既定キャラ位置（spawn 時の resolver 出力）を返す。
+    ///
+    /// 現在位置がこの値と一致するかで「既定配置のまま＝まだ誰にも動かされていない」ことを
+    /// 判定する（scg 7.3）。**`None` は 2 通り**——未知スコープ、または当該スコープが
+    /// そもそも既定配置ではない（保存位置の復元）。連鎖の再解決はどちらの `None` も
+    /// 「対象外」として同じに扱えばよい。
+    pub fn default_char_pos(&self, scope: usize) -> Option<PointPx> {
+        self.windows.get(&scope).and_then(|w| w.default_char_pos)
+    }
+
+    /// スコープの既定キャラ位置を更新する（実表示寸での連鎖再解決が確定させた値・scg 7.1）。
+    ///
+    /// 未知スコープは **no-op**（panic せず `false` を返す）。台帳を再解決後の真値へ揃え、
+    /// 以後の「既定配置のまま」判定が確定後の位置を基準に働くようにする。
+    pub fn set_default_char_pos(&mut self, scope: usize, pos: PointPx) -> bool {
+        match self.windows.get_mut(&scope) {
+            Some(w) => {
+                w.default_char_pos = Some(pos);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// スコープを「既定配置ではない」と標す（保存位置が復元されたスコープ・scg 7.3）。
+    ///
+    /// 復元位置は**利用者の意思による配置**であって resolver 既定ではない。標されたスコープは
+    /// 連鎖の再解決から常に除外され、既定位置へ引き戻されない。未知スコープは no-op
+    /// （panic せず `false`）。
+    ///
+    /// 呼び手は復元マージを行う `main.rs` の起動シームのみ（保存位置が入り込む唯一の経路）。
+    pub fn clear_default_char_pos(&mut self, scope: usize) -> bool {
+        match self.windows.get_mut(&scope) {
+            Some(w) => {
+                w.default_char_pos = None;
+                true
+            }
+            None => false,
+        }
     }
 
     /// `entity` が char/balloon いずれかに一致する scope エントリを**丸ごと**除去し、
@@ -356,6 +408,10 @@ pub fn spawn_ghost_windows(
             ScopeWindows {
                 char_window,
                 balloon_window,
+                // spawn へ渡る placements が resolver 既定である前提で `Some` を置く。
+                // 保存位置が復元された場合は起動シーム（`main.rs`）が直後に
+                // `clear_default_char_pos` で `None` へ落とす（scg 7.3）。
+                default_char_pos: Some(p.char_pos),
             },
         );
     }

@@ -77,9 +77,16 @@ fn restore_seam_prefers_saved_position_over_default() {
         }],
     };
 
-    let out = restore_merged_placements(&root, placements, &snapshot, DefaultEncoding::Ansi);
+    let (out, restored) = restore_merged_placements(&root, placements, &snapshot, DefaultEncoding::Ansi);
 
     assert_eq!(out.len(), 1);
+    // 保存位置が採用された scope は「既定配置ではない」として報告される（scg 7.3）。
+    // これを受けて起動シームが台帳の既定位置を落とし、連鎖の再解決から除外する。
+    assert_eq!(
+        restored.iter().copied().collect::<Vec<_>>(),
+        vec![0usize],
+        "保存位置を採用した scope が復元済みとして報告される（scg 7.3）"
+    );
     assert_eq!(
         out[0].char_pos,
         PointPx { x: 800, y: 300 },
@@ -112,11 +119,15 @@ fn restore_seam_without_persist_is_identity_default() {
         }],
     };
 
-    let out = restore_merged_placements(&root, placements, &snapshot, DefaultEncoding::Ansi);
+    let (out, restored) = restore_merged_placements(&root, placements, &snapshot, DefaultEncoding::Ansi);
 
     assert_eq!(
         out, expected,
         "永続不在は既定 placement に恒等＝既定位置解決のまま（1.5）"
+    );
+    assert!(
+        restored.is_empty(),
+        "永続不在なら復元済み scope は無い＝全 scope が既定配置のまま（scg 7.3）"
     );
 
     let _ = std::fs::remove_dir_all(&root);

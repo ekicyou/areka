@@ -8,6 +8,7 @@
 // Anchored ビット同一（第二位置ライター非混入の構造檻）を固定する。
 // =============================================================================
 
+use areka_emo_compose::ScaleRatio;
 use super::*;
 use bevy_ecs::prelude::{Entity, World};
 use windows::Win32::Foundation::{HINSTANCE, HWND};
@@ -102,7 +103,7 @@ fn apply_moves_target_to_fixture_position() {
     let target = gw.char_window(1).unwrap();
 
     assert!(
-        apply_move_directive(&mut world, &fixture_directive()),
+        apply_move_directive(&mut world, &fixture_directive(), ScaleRatio::ONE),
         "対象・基準窓が揃うので適用は成功する"
     );
     assert_eq!(
@@ -124,7 +125,7 @@ fn apply_keeps_balloon_offset() {
         .expect("target に BalloonFollow")
         .offset;
 
-    assert!(apply_move_directive(&mut world, &fixture_directive()));
+    assert!(apply_move_directive(&mut world, &fixture_directive(), ScaleRatio::ONE));
 
     let cpos = pos_of(&world, target);
     let bpos = pos_of(&world, balloon);
@@ -148,7 +149,7 @@ fn apply_target_absent_returns_false_without_mutation() {
     let before = pos_of(&world, base);
 
     assert!(
-        !apply_move_directive(&mut world, &fixture_directive()),
+        !apply_move_directive(&mut world, &fixture_directive(), ScaleRatio::ONE),
         "対象 scope1 不在は false（R5.5）"
     );
     assert_eq!(pos_of(&world, base), before, "適用不成立で state は不変");
@@ -170,7 +171,7 @@ fn apply_leaves_anchored_bit_identical() {
         .copied()
         .expect("base に Anchored（spawn が付与）");
 
-    assert!(apply_move_directive(&mut world, &fixture_directive()));
+    assert!(apply_move_directive(&mut world, &fixture_directive(), ScaleRatio::ONE));
 
     assert_eq!(
         world.get::<Anchored>(target).copied(),
@@ -202,7 +203,7 @@ fn apply_non_scope_base_returns_false() {
     assert_eq!(directive.base, MoveBase::Screen);
 
     assert!(
-        !apply_move_directive(&mut world, &directive),
+        !apply_move_directive(&mut world, &directive, ScaleRatio::ONE),
         "非スコープ基準は M1 非実導出のため false（R5.5）"
     );
     assert_eq!(pos_of(&world, target), before, "適用不成立で対象窓は不動");
@@ -283,7 +284,7 @@ fn pipeline_sink_to_apply_moves_keeps_balloon_and_anchored() {
         "sink が cue.actor（\\1）から scope=1 を導出する（pipeline 前段）"
     );
     assert!(
-        apply_move_directive(&mut world, &directive),
+        apply_move_directive(&mut world, &directive, ScaleRatio::ONE),
         "対象・基準窓が揃うので pipeline 越しの適用は成功する"
     );
 
@@ -340,7 +341,7 @@ fn pipeline_target_absent_warns_false_no_mutation() {
     assert_eq!(directive.scope, 1, "sink 段は対象不在を知らず directive を送出する");
 
     assert!(
-        !apply_move_directive(&mut world, &directive),
+        !apply_move_directive(&mut world, &directive, ScaleRatio::ONE),
         "対象 scope1 不在は pipeline 越しでも warn＋false（R5.5）"
     );
     assert_eq!(

@@ -19,6 +19,7 @@
 //! source→config→measure→resolver を束ねる準備関数の自然な置き場として
 //! ここ（合成ルート）に実装する（シームの結線自体は task 6.2・main.rs 側）。
 
+pub mod chain_finalize;
 pub mod config;
 pub mod diag;
 pub mod follow;
@@ -28,6 +29,15 @@ pub mod resolver;
 pub mod source;
 pub mod spawn;
 mod windowposition;
+
+/// 作者空間の符号付きオフセットを k 倍する唯一の写像（大きさは `ScaleRatio::scale_len`
+/// 権威へ委譲し符号のみ保存する）。`windowposition.x/y` と `\![move]` の dx/dy は
+/// どちらも「作者基準 px で書かれた画面オフセット」であり、**同じ写像を通す**
+/// （片方だけ素通しにすると高 DPI で両者の意味論が割れる）。
+// examples の `#[path]` include ビルドでは本再エクスポートの消費者（emo2_boot）が居ないため
+// 未使用警告が出る（frame.rs の同型 allow と同じ事情・`areka` は lib target を持たない bin crate）。
+#[allow(unused_imports)]
+pub(crate) use windowposition::scale_signed;
 /// `#[cfg(test)]` 限定のテスト共有部品（tracing ログ捕捉ハーネス）。本番バイナリには含まれない。
 ///
 /// `pub(crate)`: `main.rs` の起動シーム檻（`monitor_snapshot_seam_tests`）も同じ捕捉

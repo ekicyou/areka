@@ -96,10 +96,13 @@ pub struct ScopePlacement {
 /// - **P1（Y・bottom）**: `alignment=Bottom|Seam(_)` のとき `y = work_area.bottom − h`。
 ///   `default_y`（defaulttop/defaulty）は無視（2.4）。
 /// - **P2（X・bottom・連鎖基準）**: `base_x(0) = work_area.right − w(0)`、
-///   `base_x(n≥1) = char_x(n−1) − w(n−1)`（2.9）。
+///   `base_x(n≥1) = char_x(n−1) − w(n)`（**自スコープの幅**を引く＝隣接・隣接ペアの
+///   隙間 0・scg 2.1/2.2）。
 ///   `char_x(n) = base_x(n) − default_x(n).unwrap_or(0)`（左方向オフセット・
 ///   0＝基準密着・2.10・DD3）。連鎖の `char_x(n−1)` は **P4 クランプ後**の実配置
 ///   （後続スコープは前スコープの実際の位置の左隣に置く）。
+///   なお旧 `window-placement` R2.9（前スコープの幅を引く）は本仕様
+///   areka-P0-scope-chain-gap で上書きされた（`doc/COMPAT_ARCHITECTURE.md` §8 参照）。
 /// - **P3（free・DD10）**: `alignment=Free` のとき原点は **work area 左上**。
 ///   `char_x = work_area.left + default_x`／`char_y = work_area.top + default_y`。
 ///   未指定成分は bottom 相当値（X→P2 連鎖値・Y→P1 値）へフォールバック（2.6）。
@@ -120,7 +123,6 @@ pub struct ScopePlacement {
 /// `scopes` 入力に `cfg.scopes` 未収載のスコープ番号が来た場合は
 /// `ScopeConfig::default()`（＝Bottom・オフセットなし）で配置する（2.2 の既定と
 /// 同じ意味論・テストで固定）。
-#[allow(dead_code)] // scaffold（task 3.1）: 結線は task 6
 pub fn resolve_placement(
     cfg: &PlacementConfig,
     work_area: RectPx,
@@ -128,8 +130,9 @@ pub fn resolve_placement(
 ) -> Vec<ScopePlacement> {
     let default_scope_cfg = ScopeConfig::default();
     let mut out = Vec::with_capacity(scopes.len());
-    // P2 連鎖の前スコープ状態: (クランプ後 char_x, char 幅)
-    let mut prev: Option<(i32, i32)> = None;
+    // P2 連鎖の前スコープ状態: クランプ後 char_x のみ（自スコープ幅を引く是正式では
+    // 前スコープの幅が不要・scg 2.1/2.2）
+    let mut prev: Option<i32> = None;
 
     for input in scopes {
         let sc = cfg.scopes.get(&input.scope).unwrap_or(&default_scope_cfg);
@@ -148,13 +151,14 @@ pub fn resolve_placement(
         //     free の Y 未指定成分のフォールバック先でもある（2.6）
         let bottom_y = work_area.bottom.saturating_sub(h);
 
-        // P2: base_x(0)=right−w0・base_x(n≥1)=char_x(n−1)−w(n−1)（2.9）・
+        // P2: base_x(0)=right−w0・base_x(n≥1)=char_x(n−1)−w(n)（自スコープの幅＝
+        //     隣接・隙間 0・scg 2.1/2.2）・
         //     char_x(n)=base_x(n)−defaultx(n).unwrap_or(0)（左方向オフセット・2.10/DD3）。
         //     free の X 未指定成分のフォールバック先でもある（2.6・その場合
         //     default_x は None ゆえオフセット項は 0）
         let base_x = match prev {
             None => work_area.right.saturating_sub(w),
-            Some((prev_x, prev_w)) => prev_x.saturating_sub(prev_w),
+            Some(prev_x) => prev_x.saturating_sub(w),
         };
         let bottom_x = base_x.saturating_sub(sc.default_x.unwrap_or(0));
 
@@ -175,7 +179,7 @@ pub fn resolve_placement(
         let x = clamp_axis(x, work_area.left, work_area.right.saturating_sub(w));
         let y = clamp_axis(y, work_area.top, work_area.bottom.saturating_sub(h));
 
-        prev = Some((x, w));
+        prev = Some(x);
 
         // P5: バルーン暫定 offset（DD7・クランプなし）。left（既定）＝キャラ左隣・
         //     right＝キャラ右隣・上端揃え・balloon.offsetx/offsety があれば加算

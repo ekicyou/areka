@@ -283,8 +283,9 @@ mod evaluated_value_tests {
 
     #[test]
     fn float_variant() {
-        let v = EvaluatedValue::Float(3.14);
-        assert_eq!(v, EvaluatedValue::Float(3.14));
+        // 任意の float 値でよい（円周率の意図はない・clippy::approx_constant の誤検知回避）。
+        let v = EvaluatedValue::Float(1.25);
+        assert_eq!(v, EvaluatedValue::Float(1.25));
     }
 
     #[test]
@@ -335,9 +336,11 @@ mod evaluated_value_tests {
 
     #[test]
     fn display_float() {
-        let v = EvaluatedValue::Float(3.14159);
+        // 小数 5 桁 → 6 桁への 0 埋めを検証する意図。円周率の意図はないため、
+        // 桁数を保ったまま clippy::approx_constant が反応しない値を使う。
+        let v = EvaluatedValue::Float(1.23456);
         let s = format!("{v}");
-        assert_eq!(s, "3.141590");
+        assert_eq!(s, "1.234560");
     }
 
     #[test]

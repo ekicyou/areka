@@ -35,7 +35,9 @@ mod dynamic_value_tests {
 
     #[test]
     fn float_roundtrip() {
-        let val = DynamicValue::Float(3.14);
+        // 任意の float 値でよい（円周率の意図はない）。`3.14` は clippy::approx_constant が
+        // 円周率の近似と誤検知するため、意味を持たない値を使う。
+        let val = DynamicValue::Float(1.25);
         let json = serde_json::to_string(&val).unwrap();
         let deserialized: DynamicValue = serde_json::from_str(&json).unwrap();
         assert_eq!(val, deserialized);

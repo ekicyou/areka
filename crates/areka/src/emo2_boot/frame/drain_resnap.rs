@@ -2,14 +2,19 @@
 
 use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
-use tracing::debug;
+use tracing::{debug, info, warn};
 
+use areka_emo_compose::ScaleRatio;
 use areka_emo_present::{EmoPresenter, TargetId};
 use wintf::ecs::{SizeI, WindowPos};
 
+use crate::placement::chain_finalize::{
+    ChainDeferReason, ChainFinalizeStall, ChainFinalized, ScopeChainState, finalize_chain,
+    moved_default_pos, note_chain_deferral,
+};
 use crate::placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
-use crate::placement::follow::resize_window_to;
-use crate::placement::resolver::SizePx;
+use crate::placement::follow::{move_window_to, resize_window_to};
+use crate::placement::resolver::{PointPx, SizePx};
 use crate::placement::spawn::GhostWindows;
 
 use super::{Emo2Wiring, apply_move_directive, shell_target};
@@ -78,9 +83,20 @@ pub fn run_move_drain_phase(wiring: &Emo2Wiring, world: &mut World) {
     // try_iter: 現時点でキュー済みの MoveDirective を非ブロックで FIFO 全件取り出す（空・全送信端 drop で尽きる）。
     // wiring.move_rx（shared 借用）と world（mut 借用・別オブジェクト）は互いに素ゆえ両立する。
     for directive in wiring.move_rx.try_iter() {
+        // 台本のオフセットは**作者基準 px**ゆえ、対象スコープのシェルへ実適用中の k で物理 px へ
+        // 換算する（`resolve_move_target_position` の doc・`windowposition.x/y` と同じ写像）。
+        // 真実源は表示層の `applied_ratio`＝「いま画面に載っている絵に実際に掛かった k」であり、
+        // 導出しただけで適用に失敗した k は漏れてこない。
+        //
+        // 表示未成立（初回 ShowSurface 前）・未登録 target は `None`。このとき恒等へ縮退する——
+        // まだ拡大が掛かっていない状態であり、従来（k 非適用）と同じ値になる安全側の既定である。
+        let k = wiring
+            .presenter
+            .applied_ratio(shell_target(directive.scope))
+            .unwrap_or(ScaleRatio::ONE);
         // 適用の全縮退（非スコープ基準・窓不在・算出不能）は apply_move_directive 内で warn!＋false 済み
         // （log-first・R5.5）。戻り値は捨てて次 directive へ進む（1 件の縮退で talk を殺さない・非 panic）。
-        apply_move_directive(world, &directive);
+        apply_move_directive(world, &directive, k);
     }
 }
 
@@ -240,4 +256,174 @@ pub(super) fn resnap_with<S: PhysicalSizeSource + ?Sized>(source: &S, world: &mu
     }
     // ここで presenter／ghost_windows 借用は終わり、world を mut 借用して判定・反映へ渡す。
     resnap_from_sizes(world, sizes.into_iter());
+}
+
+// ---------------------------------------------------------------------------
+// 実表示寸での連鎖再解決（scg 要件 7・design C6）
+// ---------------------------------------------------------------------------
+
+/// 初期配置を**実表示寸**で一度きり確定させる（要件 7.1/7.4）。
+///
+/// 本番経路は [`resnap_shell_targets`] と同じく本体を持たず [`finalize_chain_once_with`] へ
+/// 委譲する（実装を 2 つに割らない＝fake 相手の檻が本番の判断を担保する）。
+pub(super) fn finalize_chain_once(presenter: &EmoPresenter, world: &mut World) {
+    finalize_chain_once_with(presenter, world)
+}
+
+/// [`finalize_chain_once`] の本体（[`PhysicalSizeSource`] 越しに寸を引く形へ一般化したもの）。
+///
+/// # 駆動条件（すべて満たしたフレームで 1 度だけ走る）
+///
+/// - [`ChainFinalized`] 未挿入（＝まだ確定していない・7.4）。
+/// - [`GhostWindows`] が在り、スコープが 1 つ以上ある。
+/// - **全スコープ**について実表示寸が引け、かつ char 窓の `WindowPos` の寸が**それと一致**して
+///   いる。一致しない間は [`resnap_from_sizes`] の再適用が未 landing＝位置が確定していないため
+///   見送る（次フレームで再挑戦する）。この条件により「resize の反映を待たずに古い位置で連鎖を
+///   解く」取り違えが構造的に起こらない。
+///
+/// いずれか 1 つでも欠ける scope があれば**確定させずに戻る**（部分適用しない）。窓破棄後の
+/// フレームでも `WindowPos` 不在で見送るだけで、panic もログ汚染もしない。
+///
+/// # 見送りの可観測性（scg 6.5）
+///
+/// 毎フレームの見送りは無音のままだが、有界の待ち（[`CHAIN_FINALIZE_STALL_FRAMES`]）を超えても
+/// 未確定なら [`defer_chain_finalize`] が**一度だけ**理由つきの `warn!` を出す。正常な待ちと
+/// 永久に条件が揃わない停滞を、事後にログから判別できるようにするため。
+///
+/// [`CHAIN_FINALIZE_STALL_FRAMES`]: crate::placement::chain_finalize::CHAIN_FINALIZE_STALL_FRAMES
+pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
+    source: &S,
+    world: &mut World,
+) {
+    // 一度きり（7.4）。確定後のサーフェス切替では駆動しない＝会話中に位置が動かない。
+    if world.get_resource::<ChainFinalized>().is_some() {
+        return;
+    }
+    let (states, targets) = match collect_chain_states(source, world) {
+        Ok(scan) => scan,
+        Err(reason) => {
+            defer_chain_finalize(world, reason);
+            return;
+        }
+    };
+
+    // ここで world の shared 借用は終わり、mut 借用して反映へ渡す。
+    let moves = finalize_chain(&states);
+    for m in &moves {
+        let Some(&(_, entity, pos)) = targets.iter().find(|(s, _, _)| *s == m.scope) else {
+            continue;
+        };
+        info!(
+            scope = m.scope,
+            from_x = pos.x,
+            to_x = m.new_x,
+            "chain_finalize: 実表示寸で連鎖を再解決（初期配置の確定・scg 7.1）"
+        );
+        // 反映は move_window_to のみ（唯一の位置ライター・バルーン随伴 offset 維持を内包）。
+        // Y は現在値を据え置く（下端吸着は各窓の再アンカーが既に保っている・7.2）。
+        move_window_to(world, entity, m.new_x, pos.y);
+    }
+
+    // 台帳の既定位置を確定値へ揃える（以後の「既定配置のまま」判定が確定後を基準に働く）。
+    if !moves.is_empty()
+        && let Some(mut ghost_windows) = world.get_resource_mut::<GhostWindows>()
+    {
+        for m in &moves {
+            if let Some(&(_, _, pos)) = targets.iter().find(|(s, _, _)| *s == m.scope) {
+                ghost_windows.set_default_char_pos(m.scope, moved_default_pos(pos, m.new_x));
+            }
+        }
+    }
+
+    world.insert_resource(ChainFinalized);
+    debug!(
+        scopes = states.len(),
+        moved = moves.len(),
+        "chain_finalize: 初期配置を確定（以後のサーフェス切替では駆動しない・scg 7.4）"
+    );
+}
+
+/// 確定の走査結果——判定へ渡す状態列と、反映へ渡す `(scope, char 窓 entity, 現在位置)` の列。
+///
+/// 現在位置を持ち回るのは Y を据え置くため（7.2）。
+type ChainScan = (Vec<ScopeChainState>, Vec<(usize, Entity, PointPx)>);
+
+/// 確定に要る入力を集める。駆動条件を 1 つでも欠くスコープがあればその場で打ち切り、
+/// **見送った理由**を返す（部分適用しない）。
+fn collect_chain_states<S: PhysicalSizeSource + ?Sized>(
+    source: &S,
+    world: &World,
+) -> Result<ChainScan, ChainDeferReason> {
+    let Some(ghost_windows) = world.get_resource::<GhostWindows>() else {
+        return Err(ChainDeferReason::NoGhostWindows);
+    };
+
+    let mut states: Vec<ScopeChainState> = Vec::new();
+    let mut targets: Vec<(usize, Entity, PointPx)> = Vec::new();
+
+    for scope in ghost_windows.scopes() {
+        let Some(char_window) = ghost_windows.char_window(scope) else {
+            return Err(ChainDeferReason::NoCharWindow { scope });
+        };
+        // `None` は「既定配置ではない」（保存位置の復元）。判定側が常に対象外として扱う
+        // ため、ここでは打ち切らずそのまま渡す（scg 7.3）。
+        let default_x = ghost_windows.default_char_pos(scope).map(|p| p.x);
+        // 表示未成立（初回 ShowSurface 前）は実表示寸が未確定＝まだ確定できない。
+        let Some((w, h)) = source.physical_size(shell_target(scope as u32)) else {
+            return Err(ChainDeferReason::NotShownYet { scope });
+        };
+        let (Ok(iw), Ok(ih)) = (i32::try_from(w), i32::try_from(h)) else {
+            return Err(ChainDeferReason::UnusableShownSize { scope, w, h });
+        };
+        if iw <= 0 || ih <= 0 {
+            return Err(ChainDeferReason::UnusableShownSize { scope, w, h });
+        }
+        let Some(wp) = world.get::<WindowPos>(char_window) else {
+            return Err(ChainDeferReason::NoWindowPos { scope });
+        };
+        let (Some(pos), Some(size)) = (wp.position, wp.size) else {
+            return Err(ChainDeferReason::IncompleteWindowPos { scope });
+        };
+        // 再アンカーが未 landing＝位置が確定していない。次フレームへ送る。
+        if size.width != iw || size.height != ih {
+            return Err(ChainDeferReason::ResnapNotLanded {
+                scope,
+                shown: (iw, ih),
+                window: (size.width, size.height),
+            });
+        }
+        states.push(ScopeChainState {
+            scope,
+            current_x: pos.x,
+            width: iw,
+            default_x,
+        });
+        targets.push((scope, char_window, PointPx { x: pos.x, y: pos.y }));
+    }
+
+    if states.is_empty() {
+        // 窓がまだ生えていない。確定させずに次フレームへ。
+        return Err(ChainDeferReason::NoScopes);
+    }
+    Ok((states, targets))
+}
+
+/// 見送りを 1 フレームぶん記録し、有界の待ちを超えていれば**一度だけ**診断を出す（scg 6.5）。
+///
+/// 正常な起動ではログを 1 行も増やさない（確定は閾値の遥か手前で起きる）。報告後は数えも報せも
+/// しないため、停滞し続けても出力は 1 行のまま。
+fn defer_chain_finalize(world: &mut World, reason: ChainDeferReason) {
+    world.init_resource::<ChainFinalizeStall>();
+    let mut stall = world.resource_mut::<ChainFinalizeStall>();
+    if !note_chain_deferral(&mut stall) {
+        return;
+    }
+    let deferrals = stall.deferrals;
+    warn!(
+        deferrals,
+        // 構造化フィールドの `scope` は grep 用（本文の Display は人が読む側）。
+        scope = ?reason.scope(),
+        reason = %reason,
+        "chain_finalize: 初期配置の確定が続けて見送られている（隣接が崩れたままの可能性・scg 7.1/6.5）"
+    );
 }

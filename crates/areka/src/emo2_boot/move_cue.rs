@@ -43,8 +43,11 @@ use dola::cue::{CueCommand, TalkCue};
 use tracing::{debug, info, warn};
 use wintf::ecs::{SizeI, WindowPos};
 
+use areka_emo_compose::ScaleRatio;
+
 use crate::placement::follow::move_window_to;
 use crate::placement::resolver::PointPx;
+use crate::placement::scale_signed;
 use crate::placement::spawn::GhostWindows;
 
 /// `\![move]` の完全語彙型（design.md Service Interface・R5.2）。
@@ -96,7 +99,11 @@ impl MoveDirective {
 pub enum AxisSpec {
     /// 省略または `"fix"`＝現状維持。
     Fix,
-    /// 物理 px（差分/座標は基準解決に委ねる・R-6 物理 px 一元）。
+    /// **作者基準 px**（台本に書かれた値そのまま・転記層は解釈しない）。
+    ///
+    /// 物理 px への換算（k 倍）は解決側（[`resolve_move_target_position`]）の責務である。
+    /// `windowposition.x/y` と同種の「作者基準で書かれた画面オフセット」であり、同じ
+    /// 写像（`placement::scale_signed`）を通す。差分/座標の解釈は基準解決に委ねる（R-6）。
     Px(i32),
 }
 
@@ -357,11 +364,23 @@ impl BaseposResolver for CanonDefaultBasepos {
 /// # 算出式（design「座標算出」）
 ///
 /// - X: [`AxisSpec::Fix`] なら対象窓の現在 X を**現状維持**。[`AxisSpec::Px`]`(dx)` なら
-///   `x' = base_pos.x + basepos(base窓).x + dx − basepos(対象窓).x`。
-/// - Y: 同型（`Fix`＝現状維持／`Px(dy)`＝`base_pos.y + basepos(base窓).y + dy − basepos(対象窓).y`）。
+///   `x' = base_pos.x + basepos(base窓).x + k·dx − basepos(対象窓).x`。
+/// - Y: 同型（`Fix`＝現状維持／`Px(dy)`＝`base_pos.y + basepos(base窓).y + k·dy − basepos(対象窓).y`）。
+///
+/// # 台本オフセットの k 倍（作者空間 → 物理 px）
+///
+/// `base_pos`・`basepos(…)` は既に物理 px だが、`dx`／`dy` は**台本に書かれた作者基準の値**
+/// であり、そのまま加算してはならない。`windowposition.x/y` が実測で `wp.x × k` と確定して
+/// いる（`placement/windowposition.rs` の SSP 実測表）のと同種の値であり、同じ写像
+/// [`scale_signed`] を通す——大きさは既存丸め権威 `ScaleRatio::scale_len` へ委譲し符号のみ
+/// 保存する（新しい丸め規約を導入しない）。
+///
+/// 素通しにすると 96 前提で書かれたゴーストが高 DPI で崩れる。実測（emo2・拡大率 200%・
+/// `\![move,-353,…]`）では `dx` が k 倍されず二体が 365px 重なっていた（過剰分 353px は
+/// スケールし損ねた `dx` そのもの）。
 ///
 /// fixture 検算（`\1\![move,-353,,,0,base,base]`・x=Px(-353)・y=Fix）:
-/// `x' = pos0.x + w0/2 − 353 − w1/2`・y は現状維持。
+/// `x' = pos0.x + w0/2 + k·(−353) − w1/2`・y は現状維持（k=1 なら従来式と一致）。
 ///
 /// # 縮退（`None`）
 ///
@@ -374,6 +393,7 @@ pub fn resolve_move_target_position(
     base: &WindowPos,
     target: &WindowPos,
     directive: &MoveDirective,
+    k: ScaleRatio,
 ) -> Option<PointPx> {
     let target_pos = target.position?;
 
@@ -393,11 +413,12 @@ pub fn resolve_move_target_position(
 
     let x = match directive.x {
         AxisSpec::Fix => target_pos.x, // 現状維持
-        // x' = base_pos.x + basepos(base窓).x + dx − basepos(対象窓).x（全て物理 px）
+        // x' = base_pos.x + basepos(base窓).x + k·dx − basepos(対象窓).x
+        // （base_pos／basepos は物理 px・dx は作者基準ゆえ scale_signed で k 倍する）
         AxisSpec::Px(dx) => base_pos
             .x
             .saturating_add(base_bp.x)
-            .saturating_add(dx)
+            .saturating_add(scale_signed(dx, k))
             .saturating_sub(target_bp.x),
     };
     let y = match directive.y {
@@ -405,7 +426,7 @@ pub fn resolve_move_target_position(
         AxisSpec::Px(dy) => base_pos
             .y
             .saturating_add(base_bp.y)
-            .saturating_add(dy)
+            .saturating_add(scale_signed(dy, k))
             .saturating_sub(target_bp.y),
     };
 
@@ -554,7 +575,10 @@ impl dola::cue::CueSink for MoveCueSink {
 /// 未挿入・対象/基準 scope の窓不在・`WindowPos` 不在・座標算出不能（位置/寸法欠落）はいずれも
 /// warn＋`false`——silent no-op でも panic でもなく talk を殺さない（log-first・
 /// [[areka-log-first-no-silent-failure]]）。
-pub fn apply_move_directive(world: &mut World, directive: &MoveDirective) -> bool {
+///
+/// `k` は対象スコープのシェルへ**実際に適用中**の拡大率（表示層 `applied_ratio` 由来）。
+/// 台本オフセットの作者空間 → 物理 px 換算に用いる（[`resolve_move_target_position`] の doc）。
+pub fn apply_move_directive(world: &mut World, directive: &MoveDirective, k: ScaleRatio) -> bool {
     // 基準は M1 では数値スコープのみ実導出。非スコープ（screen 等）は語彙保持のうえ warn＋スキップ。
     let MoveBase::Scope(base_scope) = directive.base else {
         warn!(
@@ -605,7 +629,7 @@ pub fn apply_move_directive(world: &mut World, directive: &MoveDirective) -> boo
     // basepos シーム（M1 は CanonDefaultBasepos）経由で最終座標を算出（全て物理 px・R-6 対策）。
     // 位置/寸法欠落で算出不能なら None＝warn＋継続（R5.5）。
     let Some(pos) =
-        resolve_move_target_position(&CanonDefaultBasepos, &base_pos, &target_pos, directive)
+        resolve_move_target_position(&CanonDefaultBasepos, &base_pos, &target_pos, directive, k)
     else {
         warn!(
             scope = directive.scope,
