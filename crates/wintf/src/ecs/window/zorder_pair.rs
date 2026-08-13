@@ -821,3 +821,7 @@ mod measure_tests;
 #[cfg(test)]
 #[path = "zorder_pair_diag_tests.rs"]
 mod diag_tests;
+
+#[cfg(test)]
+#[path = "zorder_pair_deferred_vocabulary_tests.rs"]
+mod deferred_vocabulary_tests;

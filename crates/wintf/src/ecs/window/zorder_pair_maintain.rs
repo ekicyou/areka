@@ -478,3 +478,7 @@ mod detach_tests;
 #[cfg(test)]
 #[path = "zorder_pair_survivor_tests.rs"]
 mod survivor_tests;
+
+#[cfg(test)]
+#[path = "zorder_pair_always_on_top_tests.rs"]
+mod always_on_top_tests;

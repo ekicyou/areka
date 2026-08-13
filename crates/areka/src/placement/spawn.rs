@@ -533,5 +533,8 @@ mod follow_pipeline_tests;
 #[path = "spawn_zorder_pair_export_tests.rs"]
 mod zorder_pair_export_tests;
 #[cfg(test)]
+#[path = "spawn_zorder_pair_deferred_tests.rs"]
+mod zorder_pair_deferred_tests;
+#[cfg(test)]
 #[path = "spawn_zorder_pair_wiring_tests.rs"]
 mod zorder_pair_wiring_tests;
