@@ -445,12 +445,27 @@ pub fn compute_pair_z_intent(/* &World, Entity */) -> ZOrder;
 3. B3 funnel（案 B 時）: `zorder=NoChange` で現行フラグとコマンドが完全一致（回帰）／`InsertAfter` で `SWP_NOZORDER` が外れ `hwnd_insert_after` が載る
 4. `ReassertZOrder` の段階遷移: 挿入→適用→`pending_verify`→remove の状態機械（bare World・7.6 の受入形）
 
+#### 再表示（要件 2.6）の受け入れ形——決定論的テストのみで受け入れる（要件 7.6）
+
+非表示から表示へ戻った窓を隣へ戻す経路は、**本フィーチャーでは決定論的テストによる判断ロジックの検証をもって受け入れる**。実機での重なりの確認は行わない——areka に hide／show の実装がまだ無く、この要求（`ReassertZOrder`）を挿す発火経路が存在しないためである。**実機確認は、発火経路を所有する `areka-P0-balloon-visibility` の着地後に、当該フィーチャーの実機サインオフで行う。** 同じ趣旨を `ReassertZOrder` の doc（`zorder_pair.rs`・公開シームそのもの）にも記す。
+
+受け入れの根拠となる決定論的テストは 2 本立てである。
+
+- **別クレートからこのシームへ到達できること**: areka 側 `spawn_zorder_pair_export_tests` の `areka_can_attach_and_read_back_zorder_pair_state_through_public_exports`（wintf の外から `ReassertZOrder` を実体へ付け、段階を読み書きし、除去まで行う）
+- **付いた要求が実際に重なりを直し、消えること**: `zorder_pair_maintain_tests.rs` の `reassert_request_is_applied_verified_and_then_disappears`（挿入の形は要件 2.6 のシームそのもの＝`ReassertZOrder::default()`。検査は OS 側の重なり実測まで行う）
+
+#### 実施されなかった分岐（ゲート判定表の結論）
+
+実機ゲート（`verification/plan-a-gate.md`・G1〜G8 全 PASS）が案 A・補助浮上なしを確定させたため、**上記 Unit Tests 3 と下記 Integration Tests 2 は分岐不成立であり、固定すべき実装が存在しない**（タスク 5.3／5.6 が実施されないため）。とくに「重なりが動いた通知の配送」（`SWP_NOZORDER` 有無 × エコー有無の 4 象限）は、通知を受けて要求を挿す供給者そのものが結線されないため、配送テストを書く対象が無い。
+
+一方 `decide_pair_fix` の `RaisedAbove`／`RaisedBelow` は**純関数の分岐**であり、供給者の有無とは独立に検査できるため、全ストラテジ分を上記 Unit Tests 1 で固定してある（案 A・補助浮上なしでは両トリガとも `Skip(StrategyDisabled)`）。
+
 ### Integration Tests（wintf クレート内・headless World）
 
 1. `establish_owner_links`: 両窓 `WindowHandle` 揃いで 1 回だけ発火・片方欠けで skip レコード（`capture_under_filter` 捕捉・対照ケース併置〔ログ捕捉ハーネスの盲点規律〕）
 2. `WM_WINDOWPOSCHANGED` z 検知（案 B 時）: `SWP_NOZORDER` 有無×エコー有無の 4 象限で `ReassertZOrder` 挿入の有無を配送テストで固定（`window_proc/mod.rs:92-254` の既存配送テスト群へ追加）
 3. areka spawn assembly: バルーン窓が `KeepDirectlyAbove { peer: char }` を持つ・`declared` レコードに scope が載る（`spawn_assembly_tests` 兄弟ファイルへ追加）
-4. 片割れ despawn 後の維持系: skip 記録＋残存窓の `WindowPos`／スタイル不変（1.5/6.3）
+4. 片割れ despawn 後の維持系: skip 記録＋残存窓の `WindowPos`／スタイル不変（1.5/6.3）。skip 記録と「指令が 1 本も出ないこと」は `zorder_pair_maintain_tests.rs`、**残存窓そのものの実測**（矩形・スタイル・拡張スタイル・可視性・重なりの隣・`WindowPos`）は `zorder_pair_survivor_tests.rs` が受け持つ。後者は片割れが消える 2 経路（要求を持ったままの見送り／owner 切離し）の両方を見る——指令の本数だけを数えると、維持系以外の経路が窓へ書き込んだ場合を取り逃がすためである
 
 ### Real-Machine Signoff（有界自動終了＋ログ grep・要件 7.2〜7.5）
 

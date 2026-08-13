@@ -612,6 +612,63 @@ fn peer_lost_before_verification_skips_instead_of_failing() {
     trio.destroy();
 }
 
+/// 検証待ちの巡に相手の**ハンドルだけ**が外れた場合も、理由つきの見送りになる。
+///
+/// 相手の実体は生きているので「相手が居ない」では言い当てられない——切離しの側が
+/// `PeerLoss::HandleRemoved` として別に扱っているのと同じ状態である。実測に使う HWND が
+/// 無い以上、照合は成立しないが検証不一致でもない。
+///
+/// 捕捉窓には 1 巡目の是正の指令（確かに 1 本出る）が同居するので、「検証不一致が 0 本」の
+/// 主張が捕捉の死によって恒真になることはない。
+#[test]
+fn peer_losing_only_its_handle_before_verification_skips_with_handle_missing() {
+    let trio = Trio::create(w!("wintf-zorder-maintain-peer-handle-lost"));
+
+    let mut world = World::new();
+    world.insert_resource(ZOrderPairStrategy::default());
+    let character = spawn_window(&mut world, trio.character);
+    let balloon = spawn_window(&mut world, trio.balloon);
+    declare_pair(&mut world, balloon, character);
+    request_reassert(&mut world, balloon);
+
+    let mut schedule = maintain_schedule();
+    let out = capture_under_filter(CAPTURE_DIRECTIVES, || {
+        // 1 巡目: 是正を適用し、検証待ちへ進む。
+        schedule.run(&mut world);
+        SetWindowPosCommand::flush();
+        // 実体は残したまま OS のハンドルだけが外れる（切離し側の `HandleRemoved` と同じ状態）。
+        world.entity_mut(character).remove::<WindowHandle>();
+        // 2 巡目: 検証段階だが、実測に使う HWND がもう無い。
+        schedule.run(&mut world);
+        schedule.run(&mut world);
+        SetWindowPosCommand::flush();
+    });
+
+    assert_line_count(&out, SKIP_TAG, 1, "見送りは理由つきで 1 本だけ");
+    let skip = lines_with(&out, SKIP_TAG)[0];
+    assert!(
+        skip.contains("reason=HandleMissing"),
+        "理由は「ハンドルが無い」であるはず（相手の実体は生きている）: {skip}"
+    );
+    assert_line_count(
+        &out,
+        VERIFY_FAILED_TAG,
+        0,
+        "照合を行っていないので検証不一致にはしない",
+    );
+    assert_line_count(&out, FIX_TAG, 0, "照合を行っていないので是正の記録も出ない");
+    assert_line_count(
+        &out,
+        SET_WINDOW_POS_TAG,
+        1,
+        "出るのは 1 巡目の是正だけ（この 1 本が捕捉の生存を示す対照でもある）",
+    );
+    assert!(!world.entity(balloon).contains::<ReassertZOrder>());
+    assert!(!world.entity(balloon).contains::<IssuedPairFix>());
+
+    trio.destroy();
+}
+
 /// 要求を受けた巡で既に相手が居なければ、指令を出さずに理由つきで見送る。
 #[test]
 fn request_for_a_missing_peer_issues_no_command() {

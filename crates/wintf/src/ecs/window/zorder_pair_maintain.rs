@@ -474,3 +474,7 @@ mod multipair_tests;
 #[cfg(test)]
 #[path = "zorder_pair_detach_tests.rs"]
 mod detach_tests;
+
+#[cfg(test)]
+#[path = "zorder_pair_survivor_tests.rs"]
+mod survivor_tests;
