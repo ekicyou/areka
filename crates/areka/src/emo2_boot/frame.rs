@@ -115,7 +115,10 @@ use self::dpi::{
 // 同上。未使用は `PhysicalSizeSource`・`resnap_from_sizes`・`resnap_with` の 3 名で、
 // `resnap_shell_targets` は下の `emo2_frame_system` が呼ぶ。
 #[allow(unused_imports)]
-use self::drain_resnap::{PhysicalSizeSource, resnap_from_sizes, resnap_shell_targets, resnap_with};
+use self::drain_resnap::{
+    PhysicalSizeSource, finalize_chain_once, finalize_chain_once_with, resnap_from_sizes,
+    resnap_shell_targets, resnap_with,
+};
 // 同上。未使用は `resolve_talk_time` のみで、`reconcile_reported_sizes` は
 // `drain_resnap::run_drain_phase` が非 test ビルドでも呼ぶ。
 #[allow(unused_imports)]
@@ -155,6 +158,10 @@ pub fn emo2_frame_system(world: &mut World) {
     // アンカー再適用を駆動する（適用後の実寸を読むため drain の**後**・同一 World・同一 tick 内の
     // 直接呼び・Req4.1/4.3/1.3）。text の前後とは機能的に無関係だが drain の後であることが必須。
     resnap_shell_targets(&wiring.presenter, world);
+    // 初期配置の確定（scg 要件 7・C6）: 再アンカーが landing して全スコープの実表示寸が
+    // 確定したフレームで**一度だけ**連鎖を解き直し、サーフェス差替で崩れた隣接を戻す。
+    // resnap の**後**に置く（各窓の再アンカー結果を入力として受け取るため）。
+    finalize_chain_once(&wiring.presenter, world);
     // 文字層 k 追従（emo-dpi-scaling task 7.2・D11-4・Req8）: 適用 k の更新点（dpi 相の `refresh_scale`
     // ／drain 相の `apply_show`）の**両方の下流**、かつ `present_frame` の**上流**に置く。こうすると
     // どちらの経路で k が跳ねても同一フレーム内で binding が新 k へ組み直され、直後の描画が新しい物理寸
@@ -179,6 +186,10 @@ mod drain_text_tests;
 #[cfg(test)]
 #[path = "frame_resnap_tests.rs"]
 mod resnap_tests;
+
+#[cfg(test)]
+#[path = "frame_chain_finalize_tests.rs"]
+mod chain_finalize_tests;
 
 #[cfg(test)]
 #[path = "frame_dpi_tests.rs"]

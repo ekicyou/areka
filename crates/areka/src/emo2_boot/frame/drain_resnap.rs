@@ -2,15 +2,18 @@
 
 use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
-use tracing::debug;
+use tracing::{debug, info};
 
 use areka_emo_compose::ScaleRatio;
 use areka_emo_present::{EmoPresenter, TargetId};
 use wintf::ecs::{SizeI, WindowPos};
 
+use crate::placement::chain_finalize::{
+    ChainFinalized, ScopeChainState, finalize_chain, moved_default_pos,
+};
 use crate::placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
-use crate::placement::follow::resize_window_to;
-use crate::placement::resolver::SizePx;
+use crate::placement::follow::{move_window_to, resize_window_to};
+use crate::placement::resolver::{PointPx, SizePx};
 use crate::placement::spawn::GhostWindows;
 
 use super::{Emo2Wiring, apply_move_directive, reconcile_reported_sizes, shell_target};
@@ -248,4 +251,122 @@ pub(super) fn resnap_with<S: PhysicalSizeSource + ?Sized>(source: &S, world: &mu
     }
     // ここで presenter／ghost_windows 借用は終わり、world を mut 借用して判定・反映へ渡す。
     resnap_from_sizes(world, sizes.into_iter());
+}
+
+// ---------------------------------------------------------------------------
+// 実表示寸での連鎖再解決（scg 要件 7・design C6）
+// ---------------------------------------------------------------------------
+
+/// 初期配置を**実表示寸**で一度きり確定させる（要件 7.1/7.4）。
+///
+/// 本番経路は [`resnap_shell_targets`] と同じく本体を持たず [`finalize_chain_once_with`] へ
+/// 委譲する（実装を 2 つに割らない＝fake 相手の檻が本番の判断を担保する）。
+pub(super) fn finalize_chain_once(presenter: &EmoPresenter, world: &mut World) {
+    finalize_chain_once_with(presenter, world)
+}
+
+/// [`finalize_chain_once`] の本体（[`PhysicalSizeSource`] 越しに寸を引く形へ一般化したもの）。
+///
+/// # 駆動条件（すべて満たしたフレームで 1 度だけ走る）
+///
+/// - [`ChainFinalized`] 未挿入（＝まだ確定していない・7.4）。
+/// - [`GhostWindows`] が在り、スコープが 1 つ以上ある。
+/// - **全スコープ**について実表示寸が引け、かつ char 窓の `WindowPos` の寸が**それと一致**して
+///   いる。一致しない間は [`resnap_from_sizes`] の再適用が未 landing＝位置が確定していないため
+///   見送る（次フレームで再挑戦する）。この条件により「resize の反映を待たずに古い位置で連鎖を
+///   解く」取り違えが構造的に起こらない。
+///
+/// いずれか 1 つでも欠ける scope があれば**確定させずに戻る**（部分適用しない）。窓破棄後の
+/// フレームでも `WindowPos` 不在で見送るだけで、panic もログ汚染もしない。
+pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
+    source: &S,
+    world: &mut World,
+) {
+    // 一度きり（7.4）。確定後のサーフェス切替では駆動しない＝会話中に位置が動かない。
+    if world.get_resource::<ChainFinalized>().is_some() {
+        return;
+    }
+    let Some(ghost_windows) = world.get_resource::<GhostWindows>() else {
+        return;
+    };
+
+    let mut states: Vec<ScopeChainState> = Vec::new();
+    // 反映用（scope, char 窓 entity, 現在位置）。位置は Y 保存のためにも要る（7.2）。
+    let mut targets: Vec<(usize, Entity, PointPx)> = Vec::new();
+
+    for scope in ghost_windows.scopes() {
+        let (Some(char_window), Some(default_pos)) = (
+            ghost_windows.char_window(scope),
+            ghost_windows.default_char_pos(scope),
+        ) else {
+            return;
+        };
+        // 表示未成立（初回 ShowSurface 前）は実表示寸が未確定＝まだ確定できない。
+        let Some((w, h)) = source.physical_size(shell_target(scope as u32)) else {
+            return;
+        };
+        let (Ok(w), Ok(h)) = (i32::try_from(w), i32::try_from(h)) else {
+            return;
+        };
+        if w <= 0 || h <= 0 {
+            return;
+        }
+        let Some(wp) = world.get::<WindowPos>(char_window) else {
+            return;
+        };
+        let (Some(pos), Some(size)) = (wp.position, wp.size) else {
+            return;
+        };
+        // 再アンカーが未 landing＝位置が確定していない。次フレームへ送る。
+        if size.width != w || size.height != h {
+            return;
+        }
+        states.push(ScopeChainState {
+            scope,
+            current_x: pos.x,
+            width: w,
+            default_x: default_pos.x,
+        });
+        targets.push((scope, char_window, PointPx { x: pos.x, y: pos.y }));
+    }
+
+    if states.is_empty() {
+        // 窓がまだ生えていない。確定させずに次フレームへ。
+        return;
+    }
+
+    // ここで ghost_windows 借用は終わり、world を mut 借用して反映へ渡す。
+    let moves = finalize_chain(&states);
+    for m in &moves {
+        let Some(&(_, entity, pos)) = targets.iter().find(|(s, _, _)| *s == m.scope) else {
+            continue;
+        };
+        info!(
+            scope = m.scope,
+            from_x = pos.x,
+            to_x = m.new_x,
+            "chain_finalize: 実表示寸で連鎖を再解決（初期配置の確定・scg 7.1）"
+        );
+        // 反映は move_window_to のみ（唯一の位置ライター・バルーン随伴 offset 維持を内包）。
+        // Y は現在値を据え置く（下端吸着は各窓の再アンカーが既に保っている・7.2）。
+        move_window_to(world, entity, m.new_x, pos.y);
+    }
+
+    // 台帳の既定位置を確定値へ揃える（以後の「既定配置のまま」判定が確定後を基準に働く）。
+    if !moves.is_empty()
+        && let Some(mut ghost_windows) = world.get_resource_mut::<GhostWindows>()
+    {
+        for m in &moves {
+            if let Some(&(_, _, pos)) = targets.iter().find(|(s, _, _)| *s == m.scope) {
+                ghost_windows.set_default_char_pos(m.scope, moved_default_pos(pos, m.new_x));
+            }
+        }
+    }
+
+    world.insert_resource(ChainFinalized);
+    debug!(
+        scopes = states.len(),
+        moved = moves.len(),
+        "chain_finalize: 初期配置を確定（以後のサーフェス切替では駆動しない・scg 7.4）"
+    );
 }

@@ -26,7 +26,16 @@
 //! - 確定は**一度きり**で、以後のサーフェス切替では駆動しない（7.4）。その制御は呼び手
 //!   （`emo2_boot::frame`）が持ち、本モジュールは純粋な判定だけを担う。
 
+use bevy_ecs::prelude::Resource;
+
 use super::resolver::PointPx;
+
+/// 初期配置が実表示寸で確定済みであることを表す標識（要件 7.4）。
+///
+/// 挿入されている間は連鎖の再解決を駆動しない。**一度きり**の確定を保証する制御であり、
+/// 以後のサーフェス切替（会話中の表情差替等）で位置が動かないことの構造的な根拠になる。
+#[derive(Resource, Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ChainFinalized;
 
 /// 連鎖再解決の入力（スコープ 1 件ぶん・物理 px）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
