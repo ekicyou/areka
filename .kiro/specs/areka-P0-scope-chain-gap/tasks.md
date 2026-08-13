@@ -241,7 +241,7 @@
 
 | 申し送り先 | 内容 |
 |---|---|
-| `dpi-transition-atomicity`（W6.75） | **拡大率遷移で二体の隙間が再発する経路**。`ChainFinalized` が恒久フラグゆえ、遷移後に幅が k 倍に変わっても連鎖が解き直されない。要件 7.4 は「サーフェス切替での再解決禁止」を明示要求しており DPI 遷移は本仕様の要件・設計に記述が無い。`ChainFinalized` の寿命を同 spec の設計判断として委ねた。併せて、確定の駆動が完了済み `surface-resize-resnap` の landing 挙動へ構造依存する点も申し送り |
+| `dpi-transition-atomicity`（W6.75） | **拡大率遷移で二体の隙間が再発する経路**。**（2026-08-13 追補）** `ChainFinalized` を解除して確定をやり直す設計を採るなら、タスク 6.5 の見送り計数 `ChainFinalizeStall`（`reported` は一発フラグ）も同時に初期化しないと 2 度目の待ちで診断が出ない。brief 追記(63) へ反映済み。`ChainFinalized` が恒久フラグゆえ、遷移後に幅が k 倍に変わっても連鎖が解き直されない。要件 7.4 は「サーフェス切替での再解決禁止」を明示要求しており DPI 遷移は本仕様の要件・設計に記述が無い。`ChainFinalized` の寿命を同 spec の設計判断として委ねた。併せて、確定の駆動が完了済み `surface-resize-resnap` の landing 挙動へ構造依存する点も申し送り |
 | `windowposition-limit`（W6.5） | **resolver の外に第 2 の位置ライターが増えた**（`finalize_chain_once` は P4 クランプを経由しない）。roadmap 干渉台帳の「resolver 同一関数内 30 行差」という記述が不完全になったため rebase 対象の拡大を明記。limit のクランプをどの書き込み口へ掛けるかを設計判断として委ねた |
 | `surfaces-basepos` | `resolve_move_target_position` の署名と式が変わった（`k: ScaleRatio` 追加・`AxisSpec::Px` の契約是正）。`BaseposResolver` 型シームは無傷。SSP 非互換の裁定を前提として引き継ぐよう明記 |
 | `emo2-conformance-e2e` | 適合表の期待値 2 点（二体の既定間隔＝定常でも隙間 0／項目 9 の move 着地座標が k≠1 で変化） |
