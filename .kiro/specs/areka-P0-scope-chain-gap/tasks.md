@@ -67,7 +67,7 @@
   - _Depends: 2.1, 2.2, 3.1, 3.2, 5.1_
   - _Requirements: 3.5, 4.2, 4.3_
 
-- [ ] 5.3 実機受け入れ検証を実施し証跡を残す
+- [x] 5.3 実機受け入れ検証を実施し証跡を残す
   - 本番ゴーストと実際の拡大率（100% 以外）で、位置記憶を削除した初回起動の状態から、有界の自動終了を用いて実行する
   - 復元時のログに出る各スコープの既定 X と幅から二体の隙間を算出し、許容差 1px 以内であることを合否判定とする
   - Y 方向へ波及していないこと（各スコープが作業領域の下端に接していること）を同じログで確認する
@@ -88,4 +88,7 @@
 - task 3.1 完了時点で bin ターゲット 672 passed / 0 failed（全緑）。task 3.2 で 673。
 - task 5.1: `cargo build --target i686-pc-windows-msvc -p shiori-host32-helper -p shiori-host32-testdll`（exit 0）。成果物 `shiori-host32-helper.exe`（272,384 B）・`shiori.dll`（155,648 B）はいずれも PE machine `0x014C`。全体テストはこの `target/i686-pc-windows-msvc/debug/` を直接探索するためコピーは不要（実機実走のみ `target/debug/` へのコピーが要る）。
 - task 5.2: `cargo test --workspace`（exit 0）= **4,759 passed / 0 failed / 33 ignored**（結果ブロック 85・doctest 込み）。要件 4.2 の不変量監視 `placement_windowposition_tests.rs::prepare_emo2_matches_ssp_balloon_offsets_at_dpi_120` は合格、かつ `git diff main...HEAD` で同ファイル・`persist.rs`・`spawn.rs`・`follow` 配下いずれも**差分 0 行**（記号参照の下流も全緑）。ブランチ全体の差分は 4 ファイル（resolver.rs / resolver_resolve_tests.rs / placement_prepare_tests.rs / doc/COMPAT_ARCHITECTURE.md）に限局。
+- task 5.3: 実機 2 水準とも `gap = 0`・exit 0。証跡は `real-run-signoff-2026-08-13.log`（＋生ログ `areka-rects-boot-dpi192.log` / `areka-rects-boot-dpi96.log`）。
+- **実効 DPI は DPI 対応プロセスから読むこと**（task 5.3 で嵌った罠）: DPI 非対応プロセスから `GetDpiForMonitor(MDT_EFFECTIVE_DPI)` を呼ぶと全モニタが 96 に丸められて返る。この誤読で 200% の実機を「100%」と誤認しかけた。`SetProcessDpiAwarenessContext(PER_MONITOR_AWARE_V2)` 済みプロセスから読むか、areka 自身の `起動時 k₀ を導出 … primary_dpi=` ログを見るのが確実。
+- 実機必達脚は **200%（DPI 192・k=2/1）** で実施した。design.md:317 は「実 DPI 120」と例示するが、規範文（要件 6.1・design.md:277）は「実 DPI≠96」であり逸脱ではない。120（k=5/4）水準は決定論テスト `prepare_emo2_at_dpi_120_places_scopes_adjacent` が誤差 0 で固定。**表示スケールの変更は OS のシステム設定のため開発者が実施**（100% 対照実行のみ依頼）。
 - **design.md:263（C4）の誤記を task 4 で検出**: 「DPI 96 と 192 の両方で誤差 0」は生観測に対しては成立しない。DPI 192 の生観測は見かけ隙間 104px で、誤差 0 が成立するのは配置時の代表面寸（868／854 物理 px・境界 2012）に対して（`ssp-oracle-notes.md:95-98` が正）。COMPAT §8 の追加行には限定つきの正しい記述を採用した。design 側は承認済み文書のため実装フェーズでは改訂せず、開発者判断へ申し送る。

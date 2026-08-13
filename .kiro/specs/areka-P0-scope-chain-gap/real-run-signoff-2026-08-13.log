@@ -1,0 +1,173 @@
+# 実機受け入れ検証 証跡（areka-P0-scope-chain-gap task 5.3 / C5）
+
+実施日: 2026-08-12（水準① JST 23:15）〜 2026-08-13（水準② JST 10:26）
+判定: **合格**（2 水準とも gap 0・実 DPI≠96 の脚を含む）
+対象コミット: ブランチ `claude/areka-p0-scope-chain-gap-004c39`（task 5.2 完了時点＝全体テスト 4,759 passed / 0 failed）
+
+---
+
+## 1. 実施条件（要件 6.1 / 6.2）
+
+| 項目 | 値 |
+|---|---|
+| ゴースト | 本番 emo2（`crates\pilot\examples\shiori-host-32\fixtures\emo2`・絶対パスで起動） |
+| バルーン | 同 fixture 下 `emo2-kakukaku`（絶対パス） |
+| 実行体 | `target\debug\areka.exe`（`cargo build -p areka`・exit 0） |
+| SHIORI helper | `target\debug\shiori-host32-helper.exe` ＝ i686 版を上書き配置（PE machine `0x014C`） |
+| 初回起動 | 各脚の直前に永続ストア `…\emo2\ghost\master\profile\areka\sylphya.toml` を削除 |
+| 有界自動終了 | `AREKA_APP_SMOKE_EXIT_MS=22000`（両脚とも **exit 0**） |
+| ログ捕捉 | `RUST_LOG=info`（主判定の target `areka::persist::restore` は `info!`） |
+| 外部矩形実測 | `tools\measure-ssp-rects.ps1 -ProcessName areka -PollSeconds 28 -IntervalMs 50`（読み取り専用・task 1 で追加した `-ProcessName` を使用） |
+
+実行コマンド（両脚共通・PowerShell）:
+
+```powershell
+Remove-Item "<ghost>\ghost\master\profile\areka\sylphya.toml" -Force -ErrorAction SilentlyContinue
+$ghost   = (Resolve-Path "crates\pilot\examples\shiori-host-32\fixtures\emo2").Path
+$balloon = (Resolve-Path "crates\pilot\examples\shiori-host-32\fixtures\emo2\emo2-kakukaku").Path
+Start-Process pwsh -ArgumentList @("-NoProfile","-File",
+  ".kiro\specs\areka-P0-scope-chain-gap\tools\measure-ssp-rects.ps1",
+  "-ProcessName","areka","-PollSeconds","28","-IntervalMs","50","-LogPath","<rects.log>") -WindowStyle Hidden
+$env:AREKA_APP_SMOKE_EXIT_MS = "22000"
+$env:RUST_LOG = "info"
+& "target\debug\areka.exe" $ghost $balloon *> "<run.log>"
+```
+
+> **実効 DPI の読み取り上の注意**: DPI 非対応プロセスから `GetDpiForMonitor(MDT_EFFECTIVE_DPI)` を呼ぶと
+> 全モニタが 96 に丸められて返る。実効 DPI は `SetProcessDpiAwarenessContext(PER_MONITOR_AWARE_V2)`
+> 済みのプロセスから読むこと（計測ツールは冒頭で設定済み）。本検証では最初この罠に嵌り、
+> 水準①を「100%」と誤認しかけた。
+
+---
+
+## 2. 主判定（要件 6.2 / 6.4）— `merge_scope restore` ログ突合
+
+判定式（design C5）:
+
+```
+gap = default_char_x(scope0) − ( default_char_x(scope1) + char_w(scope1) )
+合格条件: |gap| ≤ 1
+```
+
+`char_x` ではなく `default_char_x` を用いる理由: 後者は resolver 出力そのもの（`persist.rs:402`）であり、
+ゴースト演出 `\![move]`（boot 約 1 秒後に scope1 を移動）と保存位置の復元のいずれの汚染も受けない。
+
+> **拡大率の選択について**: design.md:317（Testing Strategy / Real Machine）は必達脚を「実 DPI 120」と
+> 例示するが、要件 6.1 および design.md:277（C5 前提条件）の規範文は「実 DPI≠96」である。検証時点の
+> 開発機 primary モニタは 200%（DPI 192）に設定されていたため、規範を満たす脚として 200% を採り、
+> 対照として 100% を実行した。120（k=5/4）水準は §4 のとおり決定論テストが誤差 0 で固定している。
+
+### 水準①: OS 表示スケール 200%（実 DPI 192・k=2/1）— **実 DPI≠96 の必達脚**
+
+```
+2026-08-12T14:15:33.415586Z  INFO areka::persist::restore: merge_scope restore scope=0 anchor=Bottom saved_win_x=None saved_win_y=None default_char_x=2012 default_char_y=330 char_x=2012 char_y=330 char_w=868 char_h=1374 saved_off_x=None saved_off_y=None balloon_off_x=-268 balloon_off_y=-258 balloon_x=1744 balloon_y=72
+2026-08-12T14:15:33.415614Z  INFO areka::persist::restore: merge_scope restore scope=1 anchor=Bottom saved_win_x=None saved_win_y=None default_char_x=1340 default_char_y=904 char_x=1340 char_y=904 char_w=672 char_h=800 saved_off_x=None saved_off_y=None balloon_off_x=292 balloon_off_y=-150 balloon_x=1632 balloon_y=754
+```
+
+`起動時 k₀`: `primary_dpi=192 shell_author_dpi=96 k_shell_ratio=ScaleRatio { num: 2, den: 1 }`
+
+| 項目 | 値 | 判定 |
+|---|---|---|
+| gap | `2012 − (1340 + 672)` = **0** | **合格**（\|gap\| ≤ 1） |
+| Y 非波及: scope0 下端 | `330 + 1374` = 1704 | 作業領域下端 B=1704 に一致 |
+| Y 非波及: scope1 下端 | `904 + 800` = 1704 | 同上（両スコープとも下端接地） |
+| プロセス終了 | exit 0（有界自動終了） | 合格 |
+
+### 水準②: OS 表示スケール 100%（実 DPI 96・k=1/1）— 対照（要件 6.3）
+
+```
+2026-08-13T01:26:01.574874Z  INFO areka::persist::restore: merge_scope restore scope=0 anchor=Bottom saved_win_x=None saved_win_y=None default_char_x=2446 default_char_y=1065 char_x=2446 char_y=1065 char_w=434 char_h=687 saved_off_x=None saved_off_y=None balloon_off_x=-134 balloon_off_y=-129 balloon_x=2312 balloon_y=936
+2026-08-13T01:26:01.574910Z  INFO areka::persist::restore: merge_scope restore scope=1 anchor=Bottom saved_win_x=None saved_win_y=None default_char_x=2110 default_char_y=1352 char_x=2110 char_y=1352 char_w=336 char_h=400 saved_off_x=None saved_off_y=None balloon_off_x=146 balloon_off_y=-75 balloon_x=2256 balloon_y=1277
+```
+
+`起動時 k₀`: `primary_dpi=96 shell_author_dpi=96 k_shell_ratio=ScaleRatio { num: 1, den: 1 }`
+
+| 項目 | 値 | 判定 |
+|---|---|---|
+| gap | `2446 − (2110 + 336)` = **0** | **合格**（\|gap\| ≤ 1） |
+| Y 非波及: scope0 下端 | `1065 + 687` = 1752 | 作業領域下端 B=1752 に一致 |
+| Y 非波及: scope1 下端 | `1352 + 400` = 1752 | 同上 |
+| プロセス終了 | exit 0（有界自動終了） | 合格 |
+
+### 要件 6.3 の充足
+
+DPI 96 のみが緑という状況ではない。**実 DPI 192 の脚が単独で合格**しており、DPI 96 は対照として
+同じ規則（gap 0）を示す。規則が拡大率で変質していないことの実機面が 2 水準で成立した。
+
+---
+
+## 3. 従判定（要件 6.4 の補強証跡）— 外部からの窓矩形実測
+
+`tools\measure-ssp-rects.ps1 -ProcessName areka` による読み取り専用ポーリング。
+**初出時点**（ゴースト演出 `\![move]` 適用前）の矩形を採る。生ログは
+`areka-rects-boot-dpi192.log` ／ `areka-rects-boot-dpi96.log`。
+
+### 水準①（DPI 192）— 初出 2026-08-12 23:15:33.823
+
+| Class | Title | Dpi | L | T | W | H | WorkArea |
+|---|---|---|---|---|---|---|---|
+| wintf-winmsg-executor | エモ（scope1 char） | 192 | 1340 | 904 | 672 | 800 | L=0 T=0 R=2880 B=1704 |
+| wintf-winmsg-executor | むらさき（scope0 char） | 192 | 2012 | 330 | 868 | 1374 | 同上 |
+
+scope1 右端 `1340 + 672 = 2012` ＝ scope0 左端 `2012` → **隙間 0**。主判定と完全一致。
+
+### 水準②（DPI 96）— 初出 2026-08-13 10:26:02.069
+
+| Class | Title | Dpi | L | T | W | H | WorkArea |
+|---|---|---|---|---|---|---|---|
+| wintf-winmsg-executor | エモ（scope1 char） | 96 | 2110 | 1352 | 336 | 400 | L=0 T=0 R=2880 B=1752 |
+| wintf-winmsg-executor | むらさき（scope0 char） | 96 | 2446 | 1065 | 434 | 687 | 同上 |
+
+scope1 右端 `2110 + 336 = 2446` ＝ scope0 左端 `2446` → **隙間 0**。主判定と完全一致。
+
+> 各ログの 2 番目の `change` ブロックはゴースト演出 `\![move]` とサーフェス差し替え後の値であり、
+> 既定配置規則の観測には用いない（オラクル採取時と同じ罠。合否は主判定で確定済み）。
+
+---
+
+## 4. 是正前との対比（task 5.3 の完了条件「123px → 0」）
+
+是正前の式は `base_x(n≥1) = prev_x − w(n−1)`（前スコープの幅）であったため、
+幾何的に `gap = w(n−1) − w(n)` が恒等的に残る。本検証で実測した実寸を当てはめると:
+
+| 拡大率 | k | scope0 実寸 | scope1 実寸 | 是正前の gap（＝幅差） | 是正後の実測 gap |
+|---|---|---|---|---|---|
+| 200% | 2/1 | 868×1374 | 672×800 | 868 − 672 = 196 | **0** |
+| 125% | 5/4 | 543×859 | 420×500 | 543 − 420 = **123** | （決定論テストで 0） |
+| 100% | 1/1 | 434×687 | 336×400 | 434 − 336 = 98 | **0** |
+
+125% 行は当初の欠陥報告（kero-balloon 実機サインオフ 2026-07-31・「幅差 123px」）そのものであり、
+本検証の DPI 96 実測寸から丸め権威（round half away from zero）で厳密に再現できる:
+
+- `434 × 5/4 = 542.5 → 543`、`687 × 5/4 = 858.75 → 859`（scope0 = 543×859）
+- `336 × 5/4 = 420`、`400 × 5/4 = 500`（scope1 = 420×500）
+
+是正**前**の実機ログにも同じ判定式を当てた実測が残っている（design.md:281）——
+`gap = 3297 − (2754 + 420) = 123`（scope0 `default_char_x=3297`・scope1 `default_char_x=2754` `char_w=420`）。
+すなわち同一の grep・同一の判定式が、是正前は 123 を返し、是正後は本検証の 2 水準で 0 を返している。
+
+すなわち **報告された 123px は「幅差 543−420」そのもの**であり、その項を消したことが
+本検証の 2 水準（196 と 98 が両方 0 へ）で実機確認された。125% 水準そのものは
+決定論テスト `placement::prepare_tests::prepare_emo2_at_dpi_120_places_scopes_adjacent`
+（k=5/4・543×859／420×500・`s1.char_pos.x + 420 == s0.char_pos.x`）が誤差 0 で固定している。
+
+---
+
+## 5. 要件対応
+
+| 要件 | 内容 | 判定 |
+|---|---|---|
+| 6.1 | 本番ゴースト emo2 ＋実 DPI≠96 での実機実行を必達 | **合格**（emo2・DPI 192） |
+| 6.2 | 有界自動終了＋ログ突合による決定論的合否判定 | **合格**（`AREKA_APP_SMOKE_EXIT_MS` ＋ `merge_scope restore` grep・両脚 exit 0） |
+| 6.3 | DPI 96 のみ緑なら不合格 | **合格**（DPI 192 単独で緑・96 は対照） |
+| 6.4 | 窓矩形実測と規則期待値（gap 0・許容差 1px 以内）の一致 | **合格**（主判定 gap=0 ×2 水準・従判定 外部矩形でも右端＝左端） |
+| 2.3 | 実機同条件で規則適用期待値と一致 | **合格**（実機 2 水準＋ k=5/4 決定論テスト） |
+
+## 6. 証跡ファイル
+
+| ファイル | 内容 |
+|---|---|
+| `real-run-signoff-2026-08-13.log` | 本ファイル（判定記録） |
+| `areka-rects-boot-dpi192.log` | 水準① 外部窓矩形ポーリング生ログ |
+| `areka-rects-boot-dpi96.log` | 水準② 外部窓矩形ポーリング生ログ |
+| `ssp-oracle-notes.md` ／ `ssp-rects-*.log` | 要件 1（SSP 実測オラクル）の正本（本タスクでは非改変） |
