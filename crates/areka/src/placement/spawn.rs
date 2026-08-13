@@ -42,7 +42,11 @@
 //!   確定 offset の永続 write-through（2.1・design C3・task 2.3。`on_balloon_drag` は連続
 //!   イベントで保存トリガではなく、DragEnd 確定点でのみ 1 ドラッグ 1 書込）・`BalloonFollow`
 //!   なし。M1 はマウス送出なし＝ポインタハンドラを付けない・DD-IE-12。バルーン入力は
-//!   M-dialogue／choice-render の領分）
+//!   M-dialogue／choice-render の領分。さらに同一スコープのキャラ窓を指す
+//!   `KeepDirectlyAbove { peer }`＝「このバルーン窓はこのキャラ窓のすぐ手前に居るべき」の
+//!   永続宣言を**バルーン窓側にだけ**後付けする（areka-P0-ghost-window-zorder 1.1・
+//!   キャラ窓 entity を要するため後付け＝生成順は不変。同時に scope とペア両窓を結ぶ
+//!   `declared` 記録を出す＝scope を知る層は areka だけ・6.1））
 //!
 //! # clickthrough 登録（task 5.2）
 //!
@@ -50,12 +54,20 @@
 //! [`GhostWindowMarker`] 窓を αマスク clickthrough 機構
 //! （wintf `ClickThroughRegistryHandle`・消費のみ）へ登録する
 //! （emo-present donor `register_click_through_windows` の一般化・6.1）。
+//!
+//! # 重なり管理の結線（areka-P0-ghost-window-zorder task 3.2）
+//!
+//! [`wire_zorder_pair`] が実行時ストラテジ（既定＝案 A・補助浮上なし）を明示挿入し、
+//! **挿入した当の値を起動時ログへ 1 行残し**（要件 5.6・実機ゲートの結論をバイナリ自身が
+//! 名乗る）、wintf の確立系 → 維持系を clickthrough 登録と同じ確定段（`FrameFinalize`）へ
+//! この順で載せる。呼び手は main.rs の起動窓シーム（同 1.1／5.6／6.1）。
 
 use std::collections::BTreeMap;
 
 use bevy_ecs::lifecycle::HookContext;
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
+use bevy_ecs::schedule::{IntoScheduleConfigs, Schedules};
 use bevy_ecs::world::DeferredWorld;
 use tracing::debug;
 use windows::Win32::Foundation::HWND;
@@ -66,9 +78,12 @@ use wintf::ecs::clickthrough::ClickThroughRegistryHandle;
 use wintf::ecs::drag::{DragConfig, OnDrag, OnDragEnd};
 use wintf::ecs::layout::HitTest;
 use wintf::ecs::{
-    DpiSuggestedRectPolicy, Point, SizeI, Window, WindowHandle, WindowPos, WindowStyle,
+    DpiSuggestedRectPolicy, FrameFinalize, KeepDirectlyAbove, Point, SizeI, Window, WindowHandle,
+    WindowPos, WindowStyle, ZOrderPairStrategy, apply_zorder_pair_maintenance,
+    establish_owner_links,
 };
 
+use super::diag::{log_zorder_pair_declared, log_zorder_pair_strategy};
 use super::follow::{
     on_balloon_drag, on_balloon_drag_end, on_char_drag, on_char_drag_end, Anchored, BalloonFollow,
 };
@@ -313,6 +328,29 @@ pub fn spawn_ghost_windows(
             .entity_mut(char_window)
             .insert(OnDragEnd(on_char_drag_end));
 
+        // ゴースト窓ペアの重なり宣言（areka-P0-ghost-window-zorder 要件 1.1／6.1・
+        // design「areka / placement > spawn ペア宣言」）:
+        // 「このバルーン窓はこのキャラ窓のすぐ手前に居るべき」を永続宣言として
+        // **バルーン窓側にだけ**付ける（対になるキャラ窓は `peer` が指す）。
+        //
+        // 後付けなのは生成順の帰結である——`BalloonFollow.balloon` がバルーン entity を
+        // 要するためバルーンを先に spawn しており、その時点でキャラ窓 entity はまだ無い。
+        // 順序を入れ替えて「宣言のために」生成順を変えることはしない（上の OnDragEnd
+        // 後付けと同じ形）。
+        //
+        // 宣言はスコープ内ペアにのみ張り、スコープ間には一切張らない——これが
+        // 「スコープ間の上下関係を固定規則で決めない」（要件 3.1）と「是正時に当該
+        // スコープの 2 窓しか動かさない」（要件 3.4）の構造的な根拠である。
+        // 宣言を消費する確立系・維持系（wintf 側）の結線は main.rs が行う。
+        world
+            .entity_mut(balloon_window)
+            .insert(KeepDirectlyAbove { peer: char_window });
+
+        // 宣言の記録（要件 6.1）。wintf 側の各レコードは scope を持てない（wintf は
+        // scope を知る層ではない）ため、**scope とペア両窓を結び付ける記録はここでしか
+        // 出せない**。実機ログはこの行の entity を結合キーに wintf 側レコードへ辿る。
+        log_zorder_pair_declared(p.scope, char_window, balloon_window);
+
         windows.insert(
             p.scope,
             ScopeWindows {
@@ -361,6 +399,58 @@ fn window_pos(x: i32, y: i32, w: i32, h: i32) -> WindowPos {
         size: Some(SizeI::new(w, h)),
         ..Default::default()
     }
+}
+
+// ---------------------------------------------------------------------------
+// 重なり管理の結線（areka-P0-ghost-window-zorder task 3.2）
+// ---------------------------------------------------------------------------
+
+/// ゴースト窓ペアの重なり管理を World へ結線する
+/// （areka-P0-ghost-window-zorder task 3.2・要件 1.1／5.6／6.1）。
+///
+/// 結線するのは 2 つである。
+///
+/// - **実行時ストラテジ** [`ZOrderPairStrategy`]。既定は案 A（Win32 の owner 関係を張り、
+///   以後の重なりを OS に保証させる）・補助浮上なし。`Default` まかせにせず**値を明示して
+///   挿入する**——実機ゲート（design.md「Plan A 実機可否ゲートとフォールバック分岐」）の
+///   結果を反映するのはこの 1 箇所であり、どの案で動いているかが読む人の目に入る所に
+///   無いと、切替が「既定値をどこかで変える」形に散る。挿入した当の値は
+///   [`log_zorder_pair_strategy`] で起動時ログへも 1 行残す——判定表は spec 配下の文書で
+///   あって、目の前のバイナリが本当にその結論どおりに動いているかは、バイナリ自身が
+///   名乗る以外に確かめようがない（要件 5.6）。
+/// - **確立系 → 維持系**を `FrameFinalize` へこの順で載せる（[`IntoScheduleConfigs::chain`]）。
+///
+/// # なぜ順序を付けるのか
+///
+/// 確立系（[`establish_owner_links`]）は owner を張った巡に再断行の要求
+/// （[`ReassertZOrder`](wintf::ecs::ReassertZOrder)）を挿し、それを維持系
+/// （[`apply_zorder_pair_maintenance`]）が消費して初期の隣接を確定させる。順序を付けないと
+/// 消費が 1 巡遅れる。必要なのは順序だけではなく `chain` が置く**同期点**でもある——要求は
+/// `Commands` 経由で挿さるため、同期点が無ければ同じ巡ではまだ実体に付いていない。
+///
+/// # なぜ確定段なのか
+///
+/// クリック透過の登録（[`register_ghost_windows_click_through`]）と同じ確定段だからである
+/// （design.md「Implementation Notes」Integration——wintf 自身は schedule へ自動登録せず、
+/// 載せる場所を決めるのは areka 側という既存の流儀）。どちらの system も Win32 を呼ぶため
+/// UI スレッド固定であり、その担保は system 側の `NonSendMarker` が持つ。
+///
+/// 呼び手は main.rs の起動窓シーム（`open_startup_window`）で、`Schedules` 資源が既在の
+/// World（`EcsWorld` 内 World）に対し、schedule 実行外で 1 回だけ同期に呼ぶ
+/// （クリック透過登録と同じ作法）。
+pub fn wire_zorder_pair(world: &mut World) {
+    // 挿入と記録は**同じ束縛**から行う（要件 5.6・task 5.1 の観測条項）。値を 2 度書くと
+    // 片方だけ変えたときに記録が静かに嘘をつく——起動時ログは「どの方式で動いているか」を
+    // 名乗る唯一の手段ゆえ、嘘をつける形にしてはならない。
+    let strategy = ZOrderPairStrategy::OwnerLink {
+        raise_assist: false,
+    };
+    world.insert_resource(strategy);
+    log_zorder_pair_strategy(strategy);
+    world.resource_mut::<Schedules>().add_systems(
+        FrameFinalize,
+        (establish_owner_links, apply_zorder_pair_maintenance).chain(),
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -439,3 +529,12 @@ mod clickthrough_tests;
 #[cfg(test)]
 #[path = "spawn_follow_pipeline_tests.rs"]
 mod follow_pipeline_tests;
+#[cfg(test)]
+#[path = "spawn_zorder_pair_export_tests.rs"]
+mod zorder_pair_export_tests;
+#[cfg(test)]
+#[path = "spawn_zorder_pair_deferred_tests.rs"]
+mod zorder_pair_deferred_tests;
+#[cfg(test)]
+#[path = "spawn_zorder_pair_wiring_tests.rs"]
+mod zorder_pair_wiring_tests;

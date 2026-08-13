@@ -1,19 +1,24 @@
 use bevy_ecs::prelude::*;
+use tracing::Level;
 use windows::Win32::UI::WindowsAndMessaging::{
     WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP, WS_VISIBLE,
 };
 use wintf::ecs::drag::{DragConfig, DragConstraint, OnDrag, OnDragEnd};
 use wintf::ecs::layout::{BoxStyle, HitTest};
 use wintf::ecs::pointer::{OnPointerMoved, OnPointerPressed};
-use wintf::ecs::{DpiSuggestedRectPolicy, Point, SizeI, Window, WindowPos, WindowStyle};
+use wintf::ecs::{
+    DpiSuggestedRectPolicy, KeepDirectlyAbove, Point, SizeI, Window, WindowPos, WindowStyle,
+};
 
 use super::test_support::{ghost_window_entities, titles, two_scope_placements};
 use super::{
     BalloonWindowMarker, CharWindowMarker, GhostWindowMarker, GhostWindows, spawn_ghost_windows,
 };
+use crate::placement::diag::{ZORDER_PAIR_DECLARED_TAG, zorder_pair_declared_line};
 use crate::placement::follow::{Anchored, BalloonFollow};
 use crate::placement::resolver::Anchor;
 use crate::placement::source::GhostTitles;
+use crate::placement::test_support::capture_logs;
 
 // -------------------------------------------------------------------------
 // T-I1: spawn 組立（6.1/6.2・1.1/1.2）
@@ -451,4 +456,122 @@ fn t_i3_no_box_style_no_drag_constraint_and_move_window_contract() {
             "scope{scope}: バルーン窓に Anchored は付けない（char 窓のみ）"
         );
     }
+}
+
+// -------------------------------------------------------------------------
+// ペア宣言（areka-P0-ghost-window-zorder 要件 1.1／6.1・design「spawn ペア宣言」）
+//
+// 宣言は「バルーン窓はキャラ窓のすぐ手前に居るべき」を表す永続 component で、
+// 付けるのは scope を知る唯一の層＝本 spawn である（wintf は scope を知れない）。
+// 付け漏れは型にも実行時エラーにも現れず、実機で「バルーンが埋もれる」形でしか
+// 出てこないため、scope×窓種別を名指しで数え上げて固定する。
+// -------------------------------------------------------------------------
+
+/// 1.1: spawn 直後、**全 scope の**バルーン窓が同一スコープのキャラ窓を指す
+/// `KeepDirectlyAbove` を持つ。
+///
+/// 対照を 3 つ置く: ①キャラ窓側には付かない（宣言は片側のみ・向きが逆転していない）
+/// ②非ゴースト窓には付かない（World 全体への無差別挿入では緑にならない）
+/// ③peer はスコープを跨がない（scope0 の宣言が scope1 のキャラ窓を指していない）。
+#[test]
+fn keep_directly_above_attached_to_every_balloon_window_pointing_at_its_char_window() {
+    let mut world = World::new();
+    let mut placements = two_scope_placements();
+    placements[1].anchor = Anchor::Free; // アンカー種別に依存しないことも同時に固定
+    // 非ゴースト窓（無差別挿入の検出用の対照）
+    let stranger = world.spawn(Window::default()).id();
+
+    let gw = spawn_ghost_windows(&mut world, &placements, &titles());
+
+    for p in &placements {
+        let char_e = gw.char_window(p.scope).unwrap();
+        let balloon_e = gw.balloon_window(p.scope).unwrap();
+
+        assert_eq!(
+            world.get::<KeepDirectlyAbove>(balloon_e).copied(),
+            Some(KeepDirectlyAbove { peer: char_e }),
+            "scope{}: バルーン窓が同一スコープのキャラ窓を指す宣言を持たない",
+            p.scope
+        );
+        // ① 宣言は手前に居るべき側（バルーン窓）にのみ付く
+        assert!(
+            world.get::<KeepDirectlyAbove>(char_e).is_none(),
+            "scope{}: キャラ窓に宣言が付いている（向きが逆）",
+            p.scope
+        );
+    }
+
+    // ② 非ゴースト窓には付かない
+    assert!(
+        world.get::<KeepDirectlyAbove>(stranger).is_none(),
+        "spawn_ghost_windows が自分の生成窓以外へ宣言を挿入している"
+    );
+
+    // ③ peer はスコープを跨がない
+    assert_ne!(
+        world
+            .get::<KeepDirectlyAbove>(gw.balloon_window(0).unwrap())
+            .unwrap()
+            .peer,
+        gw.char_window(1).unwrap(),
+        "scope0 の宣言が scope1 のキャラ窓を指している（スコープ結合の取り違え）"
+    );
+
+    // 宣言を持つ窓はバルーン窓ちょうど 2 個（生成窓 4 個のうち半分）
+    let declared: Vec<Entity> = world
+        .query_filtered::<Entity, With<KeepDirectlyAbove>>()
+        .iter(&world)
+        .collect();
+    assert_eq!(
+        declared.len(),
+        2,
+        "宣言を持つ窓は 2 スコープぶんのバルーン窓ちょうど 2 個: {declared:?}"
+    );
+}
+
+/// 6.1: spawn は scope とペア両窓を載せた `declared` レコードを scope ごとに
+/// **ちょうど 1 本**出す（wintf 側レコードとの 2 段 grep の結合キー供給）。
+///
+/// 本文は純関数 `zorder_pair_declared_line` の組立結果と一致させる（組立の二重実装を
+/// 許さない）。捕捉窓の中に確実に拾える記録が併置されているので、件数の主張は
+/// 「捕捉が働いていないから 0 本」では成立しない——2 本を名指しで突き合わせる。
+#[test]
+fn spawn_emits_one_declared_record_per_scope_with_scope_and_both_entities() {
+    let mut world = World::new();
+    let placements = two_scope_placements();
+
+    let (gw, events) = capture_logs(|| spawn_ghost_windows(&mut world, &placements, &titles()));
+
+    let declared: Vec<&crate::placement::test_support::LogEvent> = events
+        .iter()
+        .filter(|e| e.message().contains(ZORDER_PAIR_DECLARED_TAG))
+        .collect();
+    assert_eq!(
+        declared.len(),
+        2,
+        "2 スコープぶんの宣言レコードがちょうど 2 本ではない: {events:?}"
+    );
+
+    for (index, p) in placements.iter().enumerate() {
+        let char_e = gw.char_window(p.scope).unwrap();
+        let balloon_e = gw.balloon_window(p.scope).unwrap();
+        assert_eq!(
+            declared[index].message(),
+            zorder_pair_declared_line(p.scope, char_e, balloon_e),
+            "scope{} の宣言レコードが scope・キャラ窓・バルーン窓と一致しない",
+            p.scope
+        );
+        assert_eq!(
+            declared[index].level,
+            Level::DEBUG,
+            "宣言レコードは debug 水準（design 診断ログ語彙表）"
+        );
+    }
+
+    // 2 スコープのレコードは互いに異なる（1 スコープぶんを 2 回出していない）
+    assert_ne!(
+        declared[0].message(),
+        declared[1].message(),
+        "同一内容の宣言レコードが 2 本出ている: {events:?}"
+    );
 }
