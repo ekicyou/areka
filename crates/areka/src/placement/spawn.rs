@@ -72,7 +72,7 @@ use wintf::ecs::{
 use super::follow::{
     on_balloon_drag, on_balloon_drag_end, on_char_drag, on_char_drag_end, Anchored, BalloonFollow,
 };
-use super::resolver::ScopePlacement;
+use super::resolver::{PointPx, ScopePlacement};
 use super::source::GhostTitles;
 
 // ---------------------------------------------------------------------------
@@ -152,6 +152,12 @@ pub struct ScopeWindows {
     pub char_window: Entity,
     /// バルーン窓 entity。
     pub balloon_window: Entity,
+    /// spawn 時に既定配置（resolver 出力）が置いたキャラ窓位置（物理 px・scg 7.3）。
+    ///
+    /// 「まだ誰にも動かされていない」ことの判定基準。現在位置がこの値と一致する間は
+    /// 既定配置のままであり、ゴースト台本の移動指令や利用者のドラッグで動いた
+    /// スコープは一致しなくなる——移動側へフックを足さずに除外できる。
+    pub default_char_pos: PointPx,
 }
 
 /// 後続（emo2-boot）への引き渡し正本（6.1/6.2）。
@@ -181,6 +187,28 @@ impl GhostWindows {
     /// 生成済みスコープ番号を昇順で列挙する（`BTreeMap` キー順）。
     pub fn scopes(&self) -> impl Iterator<Item = usize> + '_ {
         self.windows.keys().copied()
+    }
+
+    /// スコープの既定キャラ位置（spawn 時の resolver 出力）を返す（未知スコープは `None`）。
+    ///
+    /// 現在位置がこの値と一致するかで「既定配置のまま＝まだ誰にも動かされていない」ことを
+    /// 判定する（scg 7.3）。
+    pub fn default_char_pos(&self, scope: usize) -> Option<PointPx> {
+        self.windows.get(&scope).map(|w| w.default_char_pos)
+    }
+
+    /// スコープの既定キャラ位置を更新する（実表示寸での連鎖再解決が確定させた値・scg 7.1）。
+    ///
+    /// 未知スコープは **no-op**（panic せず `false` を返す）。台帳を再解決後の真値へ揃え、
+    /// 以後の「既定配置のまま」判定が確定後の位置を基準に働くようにする。
+    pub fn set_default_char_pos(&mut self, scope: usize, pos: PointPx) -> bool {
+        match self.windows.get_mut(&scope) {
+            Some(w) => {
+                w.default_char_pos = pos;
+                true
+            }
+            None => false,
+        }
     }
 
     /// `entity` が char/balloon いずれかに一致する scope エントリを**丸ごと**除去し、
@@ -318,6 +346,7 @@ pub fn spawn_ghost_windows(
             ScopeWindows {
                 char_window,
                 balloon_window,
+                default_char_pos: p.char_pos,
             },
         );
     }

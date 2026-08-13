@@ -19,6 +19,7 @@
 //! source→config→measure→resolver を束ねる準備関数の自然な置き場として
 //! ここ（合成ルート）に実装する（シームの結線自体は task 6.2・main.rs 側）。
 
+pub mod chain_finalize;
 pub mod config;
 pub mod diag;
 pub mod follow;
