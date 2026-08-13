@@ -172,7 +172,7 @@
   - **`areka-P0-dpi-window-vanish`（W5）— 最重要**。本 spec の +36px は同 spec の **6.1（遷移ガード配線）と同じ `follow.rs` を触る可能性がある**。6.1 のガードは「提案矩形が work area と**交差するか**」を見るため、はみ出し（交差はしている）を検出しない見込みだが、**6.1 着地後に実測再突合すること**（`dpi-window-vanish` の tasks.md 4.7 に「6.1 着手時に要確認」と登記済み）
   - **`areka-P0-recompose-budget`（W6.5）— 同一ファイル `crates/areka-emo-present/src/presenter.rs`・ハンク未確定**。あちらは `:369-400`（compose/cache/resample）、本 spec は `apply_show`／`chain.upload` 近傍の見込み。**先着後 rebase**。859ms の内訳が合成コストに帰着したら**そちらへ差し戻す**関係でもある
   - `areka-P0-scale-exact-rational`（W6.5）— 同じく `presenter.rs`（`:659-666`）。異ハンクの見込み
-  - `areka-P0-ghost-window-zorder`（W6）— 窓の `SetWindowPos` を触る点で近接。z オーダーは flags の別ビットゆえ素の見込みだが着手時に確認
+  - ~~`areka-P0-ghost-window-zorder`（W6）~~ **✅ 2026-08-13 着地・干渉は解消**（`completed/areka-P0-ghost-window-zorder`）。**flush 経路（`tick_bridge`／`command.rs`）は一切触っていない**——多ペア干渉の是正で flush 改造案を検討したが、本 spec の再突合トリガに触れるという理由で明示的に却下し「1 巡 1 ペア・次巡へ持ち越し」を採った（あちらの tasks.md に裁定記録）。よって**着手時の再突合は不要**。ただし **atom が flush 経路を改造するなら、zorder の維持系が同じ経路へ z のみの指令（`SWP_NOMOVE\|NOSIZE\|NOACTIVATE`）を積む**点は前提に入れること。なお zorder 側は「同じフレームに他の system が z を動かす指令を積めば実測は陳腐化しうる」という所見を残している（本欠陥以前からの性質・実機未再現）
 - **合流しない相手（判断の記録）**:
   - `areka-P0-dpi-window-vanish` とは**合流しない**。①ドメインが別（位置権威の正しさ vs 遷移の見え方）②3 フェーズ承認済みで Phase C 実装中＝承認済み成果物を実装中に膨らませることになる ③本 spec の第 1 段は同 spec の**着地を前提**とするので順序が逆
   - `areka-P0-recompose-budget` とも**合流しない**。関心が別（定常コスト vs 遷移の原子性）で、要件も檻も別物になる
