@@ -301,12 +301,12 @@ DEALINGS IN THE SOFTWARE.
 対象 crate:
 - backtrace 0.3.76
 - cfg-if 1.0.4
-- js-sys 0.3.103
+- js-sys 0.3.104
 - rustc-demangle 0.1.28
-- wasm-bindgen-macro-support 0.2.126
-- wasm-bindgen-macro 0.2.126
-- wasm-bindgen-shared 0.2.126
-- wasm-bindgen 0.2.126
+- wasm-bindgen-macro-support 0.2.127
+- wasm-bindgen-macro 0.2.127
+- wasm-bindgen-shared 0.2.127
+- wasm-bindgen 0.2.127
 
 ```
 Copyright (c) 2014 Alex Crichton
@@ -622,9 +622,9 @@ SOFTWARE.
 ## MIT License
 
 対象 crate:
-- futures-channel 0.3.33
-- futures-core 0.3.33
-- futures-io 0.3.33
+- futures-channel 0.3.34
+- futures-core 0.3.34
+- futures-io 0.3.34
 
 ```
 Copyright (c) 2016 Alex Crichton
@@ -2096,7 +2096,7 @@ SOFTWARE.
 - pin-project 1.1.13
 - polling 3.11.0
 - portable-atomic-util 0.2.7
-- portable-atomic 1.14.0
+- portable-atomic 1.15.0
 - proc-macro2 1.0.107
 - quote 1.0.47
 - rustix 1.1.4
@@ -2108,8 +2108,8 @@ SOFTWARE.
 - serde_json 1.0.151
 - syn 2.0.119
 - syn 3.0.3
-- thiserror-impl 2.0.19
-- thiserror 2.0.19
+- thiserror-impl 2.0.20
+- thiserror 2.0.20
 - typeid 1.0.3
 - unicode-ident 1.0.24
 - wasip2 1.0.4+wasi-0.2.12
