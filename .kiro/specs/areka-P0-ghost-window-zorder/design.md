@@ -382,6 +382,7 @@ pub fn compute_pair_z_intent(/* &World, Entity */) -> ZOrder;
 | レコード | 水準 | 必須フィールド |
 |---|---|---|
 | `[zorder-pair] declared` | debug | scope, char_entity, balloon_entity（areka spawn 側・結合キー供給） |
+| `[zorder-pair] strategy-selected` | debug | plan, mechanism, raise_assist（areka 結線側・上記ゲート判定表の結論を起動時に名乗る。方式を選ぶのは areka であり wintf は選択を知らない） |
 | `[zorder-pair] owner-established` | info | entity, peer, owned_hwnd, owner_hwnd, measured_prev（確立直後実測） |
 | `[zorder-pair] fix` | debug | entity, peer, insert_after, measured_next_after_fix（**指令と実測を同一行**） |
 | `[zorder-pair] skip` | debug | entity, reason（PeerMissing 等・要件 6.3） |

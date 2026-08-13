@@ -28,6 +28,7 @@
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::{IntoScheduleConfigs, Schedules};
+use tracing::Level;
 use windows::Win32::Foundation::{HINSTANCE, HWND};
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DestroyWindow, GW_OWNER, GetWindow, WINDOW_EX_STYLE, WINDOW_STYLE, WS_POPUP,
@@ -39,6 +40,8 @@ use wintf::ecs::{
 };
 
 use super::wire_zorder_pair;
+use crate::placement::diag::zorder_pair_strategy_line;
+use crate::placement::test_support::capture_logs;
 
 // -------------------------------------------------------------------------
 // 実窓・World のヘルパ
@@ -147,6 +150,36 @@ fn wire_inserts_plan_a_strategy_resource() {
         },
         "結線が入れる既定は案 A（owner 関係）・補助浮上なし（要件 5.6）"
     );
+}
+
+/// 結線は**挿入した当の値**を起動時ログへ 1 行残す（要件 5.6・task 5.1 の観測条項）。
+///
+/// 実機ゲート（`verification/plan-a-gate.md`）の結論は「案 A・補助浮上なし」であり、
+/// 起動時のログを読んだ人がそれを確かめられることが本タスクの受け入れ条件である。
+/// ゆえにここでは 2 つを同時に固定する——**字面がゲートの結論そのものであること**と、
+/// **その字面が Resource へ入った値から組まれていること**。後者が無いと、片方だけ
+/// 書き換えても檻が緑のまま通り、記録が静かに嘘をつく。
+///
+/// 捕捉窓に他の記録は出ない（結線が出すのはこの 1 本だけ）ゆえ件数も固定する。
+#[test]
+fn wire_logs_the_strategy_it_actually_inserted() {
+    let mut world = World::new();
+    world.init_resource::<Schedules>();
+
+    let (_, events) = capture_logs(|| wire_zorder_pair(&mut world));
+
+    assert_eq!(events.len(), 1, "結線が出す記録はちょうど 1 本: {events:?}");
+    assert_eq!(
+        events[0].message(),
+        zorder_pair_strategy_line(*world.resource::<ZOrderPairStrategy>()),
+        "記録が Resource へ入った値から組まれていない（両者が乖離しうる）"
+    );
+    assert_eq!(
+        events[0].message(),
+        "[zorder-pair] strategy-selected plan=A mechanism=owner-link raise_assist=false",
+        "起動時ログの字面がゲート判定表の結論（案 A・補助浮上なし）と一致しない"
+    );
+    assert_eq!(events[0].level, Level::DEBUG);
 }
 
 // -------------------------------------------------------------------------

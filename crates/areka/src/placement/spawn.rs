@@ -58,7 +58,8 @@
 //! # 重なり管理の結線（areka-P0-ghost-window-zorder task 3.2）
 //!
 //! [`wire_zorder_pair`] が実行時ストラテジ（既定＝案 A・補助浮上なし）を明示挿入し、
-//! wintf の確立系 → 維持系を clickthrough 登録と同じ確定段（`FrameFinalize`）へ
+//! **挿入した当の値を起動時ログへ 1 行残し**（要件 5.6・実機ゲートの結論をバイナリ自身が
+//! 名乗る）、wintf の確立系 → 維持系を clickthrough 登録と同じ確定段（`FrameFinalize`）へ
 //! この順で載せる。呼び手は main.rs の起動窓シーム（同 1.1／5.6／6.1）。
 
 use std::collections::BTreeMap;
@@ -82,7 +83,7 @@ use wintf::ecs::{
     establish_owner_links,
 };
 
-use super::diag::log_zorder_pair_declared;
+use super::diag::{log_zorder_pair_declared, log_zorder_pair_strategy};
 use super::follow::{
     on_balloon_drag, on_balloon_drag_end, on_char_drag, on_char_drag_end, Anchored, BalloonFollow,
 };
@@ -413,7 +414,10 @@ fn window_pos(x: i32, y: i32, w: i32, h: i32) -> WindowPos {
 ///   以後の重なりを OS に保証させる）・補助浮上なし。`Default` まかせにせず**値を明示して
 ///   挿入する**——実機ゲート（design.md「Plan A 実機可否ゲートとフォールバック分岐」）の
 ///   結果を反映するのはこの 1 箇所であり、どの案で動いているかが読む人の目に入る所に
-///   無いと、切替が「既定値をどこかで変える」形に散る。
+///   無いと、切替が「既定値をどこかで変える」形に散る。挿入した当の値は
+///   [`log_zorder_pair_strategy`] で起動時ログへも 1 行残す——判定表は spec 配下の文書で
+///   あって、目の前のバイナリが本当にその結論どおりに動いているかは、バイナリ自身が
+///   名乗る以外に確かめようがない（要件 5.6）。
 /// - **確立系 → 維持系**を `FrameFinalize` へこの順で載せる（[`IntoScheduleConfigs::chain`]）。
 ///
 /// # なぜ順序を付けるのか
@@ -435,9 +439,14 @@ fn window_pos(x: i32, y: i32, w: i32, h: i32) -> WindowPos {
 /// World（`EcsWorld` 内 World）に対し、schedule 実行外で 1 回だけ同期に呼ぶ
 /// （クリック透過登録と同じ作法）。
 pub fn wire_zorder_pair(world: &mut World) {
-    world.insert_resource(ZOrderPairStrategy::OwnerLink {
+    // 挿入と記録は**同じ束縛**から行う（要件 5.6・task 5.1 の観測条項）。値を 2 度書くと
+    // 片方だけ変えたときに記録が静かに嘘をつく——起動時ログは「どの方式で動いているか」を
+    // 名乗る唯一の手段ゆえ、嘘をつける形にしてはならない。
+    let strategy = ZOrderPairStrategy::OwnerLink {
         raise_assist: false,
-    });
+    };
+    world.insert_resource(strategy);
+    log_zorder_pair_strategy(strategy);
     world.resource_mut::<Schedules>().add_systems(
         FrameFinalize,
         (establish_owner_links, apply_zorder_pair_maintenance).chain(),

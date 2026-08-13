@@ -30,11 +30,17 @@
 //!
 //! # 依存方向（design「Allowed Dependencies」の強制規約）
 //!
-//! 本モジュールは placement の**最下流**であり、`World`・wintf の型に依存しない。
-//! 扱うのは素の数値・文字列・[`Entity`] のみで、wintf `Monitor` からの転写は
-//! 呼出側（`mod.rs`／`follow.rs`）の仕事である。[`Entity`] だけを例外的に受けるのは、
-//! これが **wintf 側ログ（`entity = ?e`）との結合キー**だからで、同じ `Debug` 表現で
-//! 出すことが要件 1.9 の scope 別計数（手順書の 2 段 grep）の成立条件になる。
+//! 本モジュールは placement の**最下流**であり、`World`・表示基盤の型に依存しない。
+//! 扱うのは素の数値・文字列と、**下記 2 つの例外**だけである。wintf `Monitor` からの
+//! 転写は呼出側（`mod.rs`／`follow.rs`）の仕事である。
+//!
+//! - [`Entity`] は **wintf 側ログ（`entity = ?e`）との結合キー**だから受ける。同じ `Debug`
+//!   表現で出すことが要件 1.9 の scope 別計数（手順書の 2 段 grep）の成立条件になる。
+//! - [`ZOrderPairStrategy`] は選ばれた方式そのものを記録する
+//!   （areka-P0-ghost-window-zorder 要件 5.6）ため受ける。素の文字列で受ける形にすると
+//!   「どの値がどの字面になるか」の写像が呼出側へ散り、**変種が増えたときに記録だけが
+//!   古いまま**になりうる。列挙をそのまま受ければ網羅 match がコンパイラに守られる。
+//!   いずれも `World` を要さない `Copy` 値であり、最下流という位置は動かない。
 
 // 配線状況（task 1.4 完了時点）: 本モジュールの API は**全面配線済み**である。
 // - モニタスナップショット側（`MonitorRecord`・`monitor_snapshot_header_line`／
@@ -53,6 +59,7 @@ use std::fmt;
 
 use bevy_ecs::entity::Entity;
 use tracing::debug;
+use wintf::ecs::ZOrderPairStrategy;
 
 /// 恒久観測の専用ログ target（design D1: 既定 OFF・診断手順が `RUST_LOG` で点灯）。
 ///
@@ -86,6 +93,29 @@ pub const WINDOW_MOVE_RECORD_TAG: &str = "[diag.window_move]";
 /// タグ文字列が wintf 側 6 種と同じ `[zorder-pair] ` 接頭辞を持つのは意図的で、
 /// 接頭辞 1 語で当該機能の記録を全部拾えることが 2 段 grep の第 1 段になる。
 pub const ZORDER_PAIR_DECLARED_TAG: &str = "[zorder-pair] declared";
+
+/// 実行時ストラテジ選択レコード行タグ
+/// （areka-P0-ghost-window-zorder 要件 5.6・design「診断ログ語彙（要件 6）」表の
+/// `strategy-selected` 行）。
+///
+/// # なぜ記録するのか
+///
+/// 重なりを保証する手段は実機ゲート（design「Plan A 実機可否ゲートとフォールバック分岐」の
+/// G1〜G8）の結果で決まる。決まった後は、**どの手段で動いているのかが運転中のログから
+/// 読めなければならない**——実機で重なりの不具合を切り分ける人にとって、前提の方式が
+/// 分からないログは診断の出発点を欠く。ゲート判定表は spec 配下の文書であり、
+/// 目の前で走っているバイナリが本当にその結論どおりかは、走っているバイナリ自身が
+/// 名乗る以外に確かめようがない。
+///
+/// # なぜ areka 側なのか
+///
+/// 方式を選ぶのは areka の結線（[`wire_zorder_pair`](super::spawn::wire_zorder_pair)）であり、
+/// wintf は与えられた値に従うだけで「どの分岐が選ばれたか」を知る立場にない
+/// （[`ZORDER_PAIR_DECLARED_TAG`] が areka 側に住むのと同じ理由の別の面）。
+///
+/// 接頭辞 `[zorder-pair] ` が wintf 側 6 種および `declared` と共通なのは意図的で、
+/// 実機サインオフの第 1 段 grep が 1 語のまま当該機能の記録を全部拾えることを保つ。
+pub const ZORDER_PAIR_STRATEGY_TAG: &str = "[zorder-pair] strategy-selected";
 
 /// 破棄済み（despawn 済み）entity を消費側が**正常系として**打ち切ったことを表す判定語
 /// （要件 6.2／6.3・design D8 消費側）。
@@ -378,6 +408,38 @@ pub fn log_zorder_pair_declared(scope: usize, char_entity: Entity, balloon_entit
     );
 }
 
+/// 実行時ストラテジ選択レコード行を組む（純関数・要件 5.6）。
+///
+/// 判定表の語彙（案 A／案 B）と実装の語彙（`OwnerLink`／`ExplicitMaintenance`）は別物ゆえ、
+/// **両方**を載せる——`plan` はゲート判定表と突き合わせるための語、`mechanism` は何を
+/// して重なりを保っているかを表す語である。どちらか片方だけだと、読み手はもう一方を
+/// 頭の中で翻訳しなければならない。
+///
+/// `raise_assist` は案 A にしか無い概念だが、案 B でも**フィールドを落とさず**番兵
+/// [`UNKNOWN`] を置く（本モジュールの既定方針＝経路によって grep の当たり方を変えない）。
+pub fn zorder_pair_strategy_line(strategy: ZOrderPairStrategy) -> String {
+    let (plan, mechanism, raise_assist) = match strategy {
+        ZOrderPairStrategy::OwnerLink { raise_assist } => {
+            ("A", "owner-link", raise_assist.to_string())
+        }
+        ZOrderPairStrategy::ExplicitMaintenance => {
+            ("B", "explicit-maintenance", UNKNOWN.to_string())
+        }
+    };
+    format!(
+        "{ZORDER_PAIR_STRATEGY_TAG} plan={plan} mechanism={mechanism} raise_assist={raise_assist}"
+    )
+}
+
+/// 実行時ストラテジ選択レコードを 1 行出力する（要件 5.6・起動時 1 運転 1 本）。
+pub fn log_zorder_pair_strategy(strategy: ZOrderPairStrategy) {
+    debug!(
+        target: DIAG_TARGET,
+        "{}",
+        zorder_pair_strategy_line(strategy)
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::{Arc, Mutex};
@@ -421,6 +483,7 @@ mod tests {
         assert_eq!(MONITOR_RECORD_TAG, "[diag.monitor]");
         assert_eq!(WINDOW_MOVE_RECORD_TAG, "[diag.window_move]");
         assert_eq!(ZORDER_PAIR_DECLARED_TAG, "[zorder-pair] declared");
+        assert_eq!(ZORDER_PAIR_STRATEGY_TAG, "[zorder-pair] strategy-selected");
     }
 
     /// 経路語彙 9 種の表示語がリテラル固定されている（Req 2.4 の結論語彙・D13）。
@@ -660,6 +723,44 @@ mod tests {
         );
     }
 
+    // ------------------------------------------------------------------
+    // 実行時ストラテジ選択レコード（要件 5.6・ゲート判定表の結論を起動時ログへ残す）
+    // ------------------------------------------------------------------
+
+    /// 3 通りのストラテジがそれぞれ**別の・読んで分かる**行になる（要件 5.6）。
+    ///
+    /// 将来どれかへ切り替わっても記録が嘘をつかないためには、選ばれ得る全ての値が
+    /// 今この場で読める字面に固定されていなければならない。
+    #[test]
+    fn zorder_pair_strategy_line_renders_every_strategy() {
+        assert_eq!(
+            zorder_pair_strategy_line(ZOrderPairStrategy::OwnerLink {
+                raise_assist: false
+            }),
+            "[zorder-pair] strategy-selected plan=A mechanism=owner-link raise_assist=false"
+        );
+        assert_eq!(
+            zorder_pair_strategy_line(ZOrderPairStrategy::OwnerLink { raise_assist: true }),
+            "[zorder-pair] strategy-selected plan=A mechanism=owner-link raise_assist=true"
+        );
+        assert_eq!(
+            zorder_pair_strategy_line(ZOrderPairStrategy::ExplicitMaintenance),
+            "[zorder-pair] strategy-selected plan=B mechanism=explicit-maintenance raise_assist=-"
+        );
+    }
+
+    /// `log_zorder_pair_strategy` は純関数の組立結果を `debug!` 水準で 1 行出す。
+    #[test]
+    fn log_zorder_pair_strategy_emits_the_assembled_record_at_debug() {
+        let strategy = ZOrderPairStrategy::OwnerLink {
+            raise_assist: false,
+        };
+        let (_, events) = capture_logs(|| log_zorder_pair_strategy(strategy));
+        assert_eq!(events.len(), 1, "1 運転 1 レコード: {events:?}");
+        assert_eq!(events[0].message(), zorder_pair_strategy_line(strategy));
+        assert_eq!(events[0].level, Level::DEBUG);
+    }
+
     /// `log_zorder_pair_declared` は純関数の組立結果を `debug!` 水準で 1 行出す
     /// （組立の二重実装を許さない＝檻が本番の書式を固定する）。
     #[test]
@@ -796,6 +897,9 @@ mod tests {
                 dpi: Some(96),
             });
             log_zorder_pair_declared(0, ent(1), ent(2));
+            log_zorder_pair_strategy(ZOrderPairStrategy::OwnerLink {
+                raise_assist: false,
+            });
         });
 
         String::from_utf8(buf.lock().expect("捕捉バッファの毒化なし").clone()).expect("UTF-8")
@@ -830,7 +934,8 @@ mod tests {
             out.contains(MONITOR_SNAPSHOT_TAG)
                 && out.contains(MONITOR_RECORD_TAG)
                 && out.contains(WINDOW_MOVE_RECORD_TAG)
-                && out.contains(ZORDER_PAIR_DECLARED_TAG),
+                && out.contains(ZORDER_PAIR_DECLARED_TAG)
+                && out.contains(ZORDER_PAIR_STRATEGY_TAG),
             "手順書の RUST_LOG で診断レコードが点灯しない: {out}"
         );
         assert!(
