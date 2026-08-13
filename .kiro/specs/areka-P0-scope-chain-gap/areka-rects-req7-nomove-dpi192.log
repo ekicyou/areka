@@ -1,0 +1,25 @@
+=== change 2026-08-13 15:05:24.211 ===
+
+HWnd     Class                 Title    Dpi    L   T   W    H WorkArea
+----     -----                 -----    ---    -   -   -    - --------
+0x860A3A wintf-winmsg-executor エモ     192 1340 904 672  800 L=0 T=0 R=2880 B=1704
+0xE809CE wintf-winmsg-executor むらさき 192 1744  72 800  448 L=0 T=0 R=2880 B=1704
+0x3A0B1A wintf-winmsg-executor むらさき 192 2012 330 868 1374 L=0 T=0 R=2880 B=1704
+=== change 2026-08-13 15:05:24.403 ===
+
+HWnd     Class                 Title    Dpi    L   T   W    H WorkArea
+----     -----                 -----    ---    -   -   -    - --------
+0x860A3A wintf-winmsg-executor エモ     192 1340 904 672  800 L=0 T=0 R=2880 B=1704
+0x750B08 wintf-winmsg-executor エモ     192 1632 754 576  406 L=0 T=0 R=2880 B=1704
+0xE809CE wintf-winmsg-executor むらさき 192 1744  72 800  448 L=0 T=0 R=2880 B=1704
+0x3A0B1A wintf-winmsg-executor むらさき 192 2012 330 868 1374 L=0 T=0 R=2880 B=1704
+=== change 2026-08-13 15:05:26.243 ===
+
+HWnd     Class                 Title    Dpi    L   T   W    H WorkArea
+----     -----                 -----    ---    -   -   -    - --------
+0x860A3A wintf-winmsg-executor エモ     192 1392 904 672  800 L=0 T=0 R=2880 B=1704
+0x750B08 wintf-winmsg-executor エモ     192 1684 754 576  406 L=0 T=0 R=2880 B=1704
+0xE809CE wintf-winmsg-executor むらさき 192 1796 352 800  448 L=0 T=0 R=2880 B=1704
+0x3A0B1A wintf-winmsg-executor むらさき 192 2064 610 764 1094 L=0 T=0 R=2880 B=1704
+=== change 2026-08-13 15:05:44.011 ===
+(no visible areka windows)
