@@ -308,7 +308,7 @@ flowchart TB
 | 9.2 | 注入時刻駆動 | 判断中核 | `decide(observations, now)` 純関数＋`FrameTime` 注入 |
 | 9.3 | 注入時刻が観測を追い越さない | テスト戦略 | 観測点（境界時刻の直前・直後）で now を頭打ちにする表駆動 |
 | 9.4 | 実機サインオフ 4 点 | テスト戦略 | 絶対パス起動＋実 DPI＋有界 auto-exit＋ログ grep |
-| 9.5 | 短縮時も既定 30 秒を確認 | コントローラ | env 短縮＋起動ログの `timeout_secs=30 source=default` 行（短縮なし実行で確認） |
+| 9.5 | 短縮時も既定 30 秒を確認 | コントローラ | env 短縮＋起動ログの `timeout_secs=30.0 source="default"` 行（短縮なし実行で確認。`tracing` は f64 を Debug 形・文字列を引用符つきで出すため、この形でないと 0 件になる） |
 | 9.6 | 既存テスト・注記の更新 | Modified Files | §File Structure Plan の 4 テスト＋frame.rs/attach.rs doc |
 | 9.7 | ポインタ配線注記の是正 | input_events/balloon.rs | 陳腐化注記＋`#[allow(dead_code)]` の実態化（wiring.rs `runtime()` doc 含む） |
 | 9.8 | ワークスペース全緑 | テスト戦略 | 完了判定ゲート（i686 host-32 成果物ビルド後） |
@@ -558,8 +558,8 @@ Requirement 8 のログ契約（D10 の表）が実機サインオフの合否�
 
 ### E2E（実機サインオフ・Requirement 9.4/9.5）
 
-1. 実 emo2（絶対パス）・実 DPI（96 以外）・`AREKA_APP_SMOKE_EXIT_MS` 有界終了で起動し、⑴起動直後にバルーン表示ログ・可視遷移が 1 件も無い ⑵起動挨拶で発話 scope のみ `trigger=content` の show が出る ⑶`AREKA_BALLOON_TIMEOUT_MS` 短縮下で `trigger=timeout` の全 hide が出る ⑷次の会話で再 show——を目視＋ログ grep の双方で確認。
-2. 短縮なしの別実行で起動ログ `timeout_secs=30 source=default` を確認（9.5）。
+1. 実 emo2（絶対パス）・実 DPI（96 以外）・`AREKA_APP_SMOKE_EXIT_MS` 有界終了で起動し、⑴起動直後にバルーン表示ログ・可視遷移が 1 件も無い ⑵起動挨拶で発話 scope のみ `trigger="content"` の show が出る ⑶`AREKA_BALLOON_TIMEOUT_MS` 短縮下で `trigger="timeout"` の全 hide が出る ⑷次の会話で再 show——を目視＋ログ grep の双方で確認。
+2. 短縮なしの別実行で起動ログ `timeout_secs=30.0 source="default"` を確認（9.5）。**検索文字列は引用符込みで**——`tracing` の出力形は f64 が Debug 形・文字列が引用符つきであり、引用符を落とすと一致 0 件になる（実機 2 回実行で実測）。
 3. `\b[-1]` 実行後に文字が画面へ残らないことの目視確認（是正前は残る——R1 の実機証跡）。
 
 ### 完了ゲート
