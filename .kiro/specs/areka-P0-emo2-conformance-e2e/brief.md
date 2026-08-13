@@ -21,6 +21,13 @@
 > - **上流列へ追補4本**: `choice-interact`（choice-render 2分割の対話半分・**`ChoiceSelection` 正本**＝適合 #7 hover の対話面と #8 の供給元）・`balloon-visibility`（M1 編入裁可済＝**本 spec 着手時に適合表へ「バルーン表示ライフサイクル」項目を追補**・roadmap W7 行登記済み）・`kero-balloon`（**#10 kero 一式の前提充足**＝kero が `balloonk*` 正典資産で表示・placement 採寸 scope 別）・`sylphya`✅（%username 実導出）。#1 の DPI 検証は DPI 追従込みへ格上げ（追記㉟裁定）。
 > - アンカー微修正: spawn.rs の `GhostWindows` は **:109-130**（`ScopeWindows` :95-100）・target_map.rs:19-38 は不変。
 
+> **📌 2026-08-13 追記(63)（`areka-P0-scope-chain-gap` からの申し送り・適合表の期待値更新）**: 二体の位置に関する適合項目の**期待値が 2 つ変わった**。着手時に適合表と決定論 spine の期待列を再突合すること。
+> - **⑴ 二体の既定間隔＝隣接（隙間 0）が正典**（scg 要件 1/2・SSP 実測で確定）。連鎖式は `scope_n.L = scope_{n-1}.L − scope_n 自身の幅`。さらに要件 7 で「初期配置は実表示サーフェス寸が確定するまで暫定」とし、確定時に一度だけ解き直すようにした（`chain_finalize.rs`／`drain_resnap.rs` の `finalize_chain_once`）。**定常表示状態で隙間 0** が期待値。実機実測（拡大率 200%・移動指令を除いた複製ゴースト）で `1392+672 = 2064` ＝ scope0 左端 `2064` を確認済み。
+> - **⑵ 項目 9（`\![move,-353,...]`）の着地座標が k≠1 で変わった**。台本オフセットが k 倍されるようになったため（`resolve_move_target_position` に `k: ScaleRatio` 追加）。式は `x' = base_pos.x + basepos(base窓).x + k·dx − basepos(対象窓).x`。**k=1 では従来と同値**ゆえ 100% の適合走行に差は出ないが、実 DPI≠96 の走行では着地が変わる。実測: 拡大率 200% で二体の重なりが **365px → 12px**（＝100% の 6px のちょうど 2 倍）。
+> - **参照実装との関係**: SSP は `\![move]` を無スケールで適用するため、⑵ は**意図的な SSP 非互換**である（`ssp-oracle-notes.md` の SSP 自己不整合 #2）。適合検証で SSP と突き合わせる場合、この 1 点は差が出るのが正しい。
+> - 併せて `#12`（初回ゲート）と項目 9 の相互作用（本 brief 末尾の申し送り）を判断する際は、要件 7 の「明示的に再配置されたスコープは既定連鎖へ引き戻さない」（現在位置と既定位置の一致で判定）も前提に入れること。
+> - scg 側の正本: `.kiro/specs/areka-P0-scope-chain-gap/`（要件 1/2/7・`real-run-signoff-2026-08-13.log` §5.5）。
+
 ## Problem
 
 M1 ゴール「emo2 が**そのまま** boot→talk→touch→menu→close まで E2E 実走する」を**証明する仕様が無所属**。各ユニットは自分の観測（決定論檻＋個別実機サインオフ）を持つが:

@@ -4,6 +4,13 @@
 > **源**: `areka-P0-sakura-dialogue-tags` 要件ディスカッション議題4（2026-07-18 A-1 決裁・R5.2 が正本）。
 > **着手ゲート**: M1 外。`point.basepos` を宣言する実シェル／fixture の適合が必要になった時（M2 シェル互換拡充）に解禁。
 
+> **📌 2026-08-13 追記(63)（`areka-P0-scope-chain-gap` からの申し送り・前提の更新）**: **`\![move]` の座標算出式が変わった。** 本 brief が差し替え対象とする `BaseposResolver` 型シームは**無傷**（宣言 basepos の実導出は従来どおり trait の別実装を差すだけで済む）が、式と署名が変わっているため着手時に再突合すること。
+> - **変更点**: `resolve_move_target_position`（`crates/areka/src/emo2_boot/move_cue.rs`）が `k: ScaleRatio` 引数を取り、**台本由来の `dx`／`dy` を `placement::scale_signed` で k 倍**するようになった。`apply_move_directive` も同じく `k` を取る。k の真実源は表示層の `applied_ratio`（実際に絵へ掛かった k）。
+> - **是正後の式**: `x' = base_pos.x + basepos(base窓).x + k·dx − basepos(対象窓).x`（Y も同型）。fixture 検算は `x' = pos0.x + w0/2 + k·(−353) − w1/2`。k=1 なら従来式と一致する。
+> - **`AxisSpec::Px` の契約が是正された**: doc は「物理 px」と書いていたが実際には台本の作者基準値が素通しで入っていた。**「作者基準 px・k 倍は解決側の責務」**へ改めた（転記層 `parse_move_directive` はスケールしない＝parser は転記層の正典を維持）。
+> - **理由（実測）**: 拡大率 200% で emo2 の二体が **365px 重なる**欠陥。過剰分 353px はスケールし損ねた `dx` そのものだった。是正後は 12px（＝100% の 6px のちょうど 2 倍）。
+> - **⚠️ 互換上の裁定が未確定**: 参照実装 SSP は `\![move]` オフセットを**無スケール**で適用する（`.kiro/specs/areka-P0-scope-chain-gap/ssp-oracle-notes.md` の SSP 自己不整合 #2）。ゆえに本是正は**意図的な SSP 非互換**である。同種の値 `windowposition.x/y` が実測で `wp.x × k` と確定していること（`placement/windowposition.rs` の SSP 実測表）との内部整合を優先した判断だが、**互換対応表（COMPAT §8）への記録が要る**。scg 側で記録するが、本 spec が `\![move]` 意味論を扱う際は**この裁定を前提として引き継ぐこと**（旧挙動へ戻す設計をしないこと）。
+
 ## Problem
 
 `\![move]` の基準位置語彙 `base` は正典で「**base は surfaces.txt 内の point.basepos 指定に従う**」（一次 SSP HTML `list_sakura_script.html` `\![move]` 項）。しかし宣言 `point.basepos.x/y` の実導出（surfaces.txt からの転記→move 解決での宣言値優先）は areka に存在しない（`grep basepos` → 全 codebase 0 件・emo2 fixture の surfaces.txt を含む）。
