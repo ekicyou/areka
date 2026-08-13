@@ -8,7 +8,8 @@ use super::{
 // move channel→frame 相 drain→apply→実窓移動）。
 //
 // 9.1 が置いた throwaway `(_move_tx, move_rx)` を実 `MoveCueSink`（`SpineHarness::boot_with` の
-// sinks 第 3 要素）へ差し替えた S-3 形（production `wire_emo2_boot` の 3-sink 構成）の上で、
+// sinks 第 3 要素）へ差し替えた S-3 形（production `wire_emo2_boot` と同じ sink 構成——task 4.1 で
+// 4 本目の `BalloonLifecycleSink` が加わったが move の第 3 要素という位置は変わらない）の上で、
 // `\1\![move,...]` を含む OnBoot talk を実 sink 経路で流し、`MoveDirective` が move channel へ届き
 // frame 相 drain（`run_move_drain_phase`＝task 9.2）で対象窓が fixture 検算位置へ即時移動することを
 // 固定する。9.2 の frame 相配線が spine で end-to-end に生きていることの自動檻（headless・sleep 不使用・

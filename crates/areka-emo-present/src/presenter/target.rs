@@ -10,6 +10,35 @@ use super::{
     ScaleRatio, SwapChainPresenter, VisualMount,
 };
 
+/// target の可視性を**誰が確定するか**（`areka-P0-balloon-visibility` Requirement 6.8 の所有一元化）。
+///
+/// 既定は [`Self::CommandDriven`]＝従来挙動そのもので、本 enum の導入は additive である
+/// （既存 target は 1 つも挙動が変わらない）。
+///
+/// # なぜ「指令にフラグを載せる」ではなく target の所有権なのか（design D2）
+///
+/// 表示指令の送信側（seriko／adapter／talk スレッド）は可視性の判断材料（バルーン内に可視コンテンツが
+/// 置かれたか・会話が終わって何秒経ったか）を一切持たない。ゆえに「この指令は可視化してよいか」を
+/// 指令へ載せる形は送信側に答えられない問いを押し付ける。可視性の所有者は target（＝窓）ごとに
+/// 静的に決まる（シェル窓＝指令駆動・バルーン窓＝外部所有）ため、**target の属性**として持つ。
+///
+/// # 非対称性（本設計の要）
+///
+/// ゲートされるのは**可視化側だけ**である。`Hide`（`\b[-1]` 相当）・全透明退化の Hide 縮退は所有権に
+/// 依らず常に即時で不可視化する（Requirement 6.1）——「消す」指令が所有権で遅延・抑止されると、明示
+/// 指令の即時性という完成済みの契約が壊れるためである。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum VisibilityOwnership {
+    /// 指令駆動（従来互換）: `ShowSurface` の表示成立＝可視。シェル窓（キャラクター窓）はこちら。
+    #[default]
+    CommandDriven,
+    /// 外部所有: `ShowSurface` は**表示状態の確立のみ**を行い可視化しない。可視化は
+    /// [`EmoPresenter::show_target`] のみ、不可視化は従来どおり `Hide` 系のみが行う。
+    ///
+    /// [`EmoPresenter::show_target`]: super::EmoPresenter::show_target
+    External,
+}
+
 /// target ごとの表示コンテキスト（シェル・バルーンで同一機構・R5.1 の統一原則）。
 ///
 /// `chain`／`mount` は **初回 `ShowSurface` で原寸が確定してから遅延生成**する（0×0 の供給面は作れない・
@@ -31,14 +60,36 @@ pub(super) struct PresentTarget {
     /// 自前供給面（初回表示で原寸確定後に生成）。
     pub(super) chain: Option<SwapChainPresenter>,
     /// 現在可視か（`Hide`／全透明退化で false・`ShowSurface` 成功で true）。
-    pub(super) visible: bool,
-    /// 現在表示中のサーフェス id ＝「**最後に表示が成立した id**」（CurrentSurfaceRead・R3.1-3.3）。
     ///
-    /// 画面の絵ではなく表示成立の結果を刻む（全透明合成でも表示成立＝その id が正・α 非依存で collision
+    /// **`ownership` が [`VisibilityOwnership::External`] のときは `ShowSurface` で true にならない**
+    /// （表示状態の確立と可視化が分離される）。その target を可視にできるのは
+    /// [`EmoPresenter::show_target`] だけであり、不可視化は所有権に依らず `Hide` 系が常に即時に行う。
+    ///
+    /// [`EmoPresenter::show_target`]: super::EmoPresenter::show_target
+    pub(super) visible: bool,
+    /// 可視性の所有者（既定 [`VisibilityOwnership::CommandDriven`]＝従来挙動）。
+    ///
+    /// `attach_target` は常に既定で登録し、変更は [`EmoPresenter::set_visibility_ownership`] のみが行う
+    /// （結線側が target の役割——シェル窓かバルーン窓か——を知っている唯一の層である）。
+    ///
+    /// [`EmoPresenter::set_visibility_ownership`]: super::EmoPresenter::set_visibility_ownership
+    pub(super) ownership: VisibilityOwnership,
+    /// **最後に表示が確立したサーフェス id**（CurrentSurfaceRead・R3.1-3.3）。
+    ///
+    /// 画面の絵ではなく確立の結果を刻む（全透明合成でも表示成立＝その id が正・α 非依存で collision
     /// 解決の単一真実源）。`Hide`／`EmptyComposition` 縮退で `None`。書き込みは既存 `visible` 更新点と
-    /// 同一の3箇所のみ（表示成立＝`Some(surface_id)`／縮退・Hide＝`None`）で、失敗経路は表示成立点より
+    /// 同一の3箇所のみ（確立＝`Some(surface_id)`／縮退・Hide＝`None`）で、失敗経路は表示成立点より
     /// 手前で early return するため前値を保持する（`ComposeKey` からは導出しない＝`invalidate_all` で
     /// キーが消えても表示は残るため画面と乖離する）。
+    ///
+    /// # 「確立」と「可視」は別軸である（`areka-P0-balloon-visibility` Requirement 6.2/6.8）
+    ///
+    /// [`VisibilityOwnership::External`] の target では確立しても可視にならないため、本フィールドは
+    /// 「表示中か」ではなく「最後に確立した面 id」を意味する。可視か否かは
+    /// [`EmoPresenter::target_visible`] が別軸で答える——面 ID の所有（本フィールド）と可視性の所有
+    /// （`visible`）を混同しないこと。
+    ///
+    /// [`EmoPresenter::target_visible`]: super::EmoPresenter::target_visible
     pub(super) current_surface_id: Option<u32>,
     /// 拡大政策（`attach_target` で確定・以後不変・要件 1.5）。
     ///

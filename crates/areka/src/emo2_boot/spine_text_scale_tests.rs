@@ -4,13 +4,13 @@ use super::{
     PatternState, PresentCommand, SpineHarness,
 };
 
-/// balloon target の適用 k（`applied_scale`）を読む短縮（`None`＝未表示は前提違反ゆえ panic）。
+/// balloon target の適用 k（`applied_scale`）を読む短縮（`None`＝表示状態が未確立は前提違反ゆえ panic）。
 fn balloon_applied_scale(harness: &SpineHarness, scope: u32) -> f32 {
     harness
         .wiring
         .presenter()
         .applied_scale(balloon_target(scope))
-        .expect("attach 初回表示済みの balloon target は適用 k を持つ")
+        .expect("attach で不可視のまま確立済みの balloon target は適用 k を持つ")
 }
 
 /// **可視バルーンの DPI 変化**（Flow 2 の正常系・R8.1）: `Changed<DPI>` → `run_dpi_phase` で
@@ -27,8 +27,17 @@ fn spine_dpi_change_refreshes_balloon_text_scale_on_real_attach() {
     let logs = capture_logs(|| run_attach_phase(&mut harness.wiring, &mut harness.world));
     assert!(
         logs.iter().any(|l| l.contains("attached=2")),
-        "前提: attach 完了（balloon 初回表示＝文字層 actor 登録済み）が観測できない: {logs:?}"
+        "前提: attach 完了（balloon の不可視のままの確立＝文字層 actor 登録済み）が観測できない: {logs:?}"
     );
+
+    // attach 相はバルーンを不可視のまま確立する（`areka-P0-balloon-visibility` Requirement 1.1）。
+    // 本ケースの主題は**可視**バルーンの DPI 変化ゆえ、その前提をここで明示的に組む——不可視のままだと
+    // `refresh_scale` の可視ゲート（Hide/全透明退化を蘇らせない）に阻まれて適用 k が動かず、
+    // 観測すべき Flow 2 の正常系そのものが成立しない（不可視経路は下のケースが所有する）。
+    harness
+        .wiring
+        .show_balloon_target(&mut harness.world, balloon_target(0))
+        .expect("確立済みの balloon target は可視化できる");
 
     // 前提の非空虚性: attach で actor が登録され、balloon target は適用 k を持っている。
     let k_before = balloon_applied_scale(&harness, 0);
@@ -42,7 +51,7 @@ fn spine_dpi_change_refreshes_balloon_text_scale_on_real_attach() {
             .presenter()
             .text_slot_view(balloon_target(0))
             .is_some(),
-        "前提: attach 初回表示で balloon の text_slot_view が Some になっている（本番の Some 経路）"
+        "前提: attach の不可視のままの確立で balloon の text_slot_view が Some になっている（本番の Some 経路）"
     );
     // churn ガード（変化前）: k が動いていないフレームでは 1 件も再構築しない。
     assert!(

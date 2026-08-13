@@ -215,7 +215,7 @@ fn dpi_phase_reconciles_changed_window_to_scaled_extent() {
 }
 
 /// 二経路の責任分界 (1)（**二重 resize しない**）: `refresh_scale` が再表示に成立して報告を
-/// 返した場合、その要求は presenter 自身が消費済みであり、同一フレームの drain 相 reconcile は
+/// 返した場合、その要求は presenter 自身が消費済みであり、同一フレームの drain 後段の reconcile は
 /// **窓へ一切書かない**（sentinel をフェーズ境界で戻して「以降の書込」だけを見る）。
 #[test]
 fn drain_reconcile_writes_nothing_when_refresh_already_consumed_the_report() {
@@ -236,15 +236,15 @@ fn drain_reconcile_writes_nothing_when_refresh_already_consumed_the_report() {
         "DPI 相で reconcile 済み（非空虚性の前提）"
     );
 
-    // フェーズ境界: witness を戻し、以降（drain 相）の書込だけを観測する。
+    // フェーズ境界: witness を戻し、以降（drain 後段の報告回収）の書込だけを観測する。
     reset_write_witness(&mut world, &gw);
     reconcile_reported_sizes(&mut source, &mut world);
 
     assert!(
         source.calls_of("take").contains(&shell_target(0).0),
-        "非空虚性: drain 相は take を実際に呼んでいる（呼んだ上で None だった）"
+        "非空虚性: drain 後段の報告回収は take を実際に呼んでいる（呼んだ上で None だった）"
     );
-    assert_no_write(&world, char0, "drain 相の二重 resize");
+    assert_no_write(&world, char0, "drain 後段の報告回収による二重 resize");
     assert_eq!(
         size_of(&world, char0),
         Some(SizeI::new(868, 1374)),
@@ -254,7 +254,7 @@ fn drain_reconcile_writes_nothing_when_refresh_already_consumed_the_report() {
 
 /// 二経路の責任分界 (2)（**取りこぼさない**・design Flow 3 手順 5）: `refresh_scale` の
 /// ゲートが不成立で報告が返らなくても、表示成立点が積んだ未消費要求（初回表示の k₀ 補正）は
-/// drain 相の reconcile が同一フレーム内で拾って窓寸へ反映する。
+/// drain 後段の reconcile が同一フレーム内で拾って窓寸へ反映する。
 #[test]
 fn drain_reconcile_applies_undrained_report_when_refresh_gate_fails() {
     let (mut world, gw) = dpi_world();
@@ -272,7 +272,7 @@ fn drain_reconcile_applies_undrained_report_when_refresh_gate_fails() {
     assert_eq!(
         size_of(&world, balloon0),
         Some(SizeI::new(279, 198)),
-        "未消費の要求を drain 相が拾って窓 client へ反映（取りこぼしなし）"
+        "未消費の要求を drain 後段の報告回収が拾って窓 client へ反映（取りこぼしなし）"
     );
     assert_eq!(
         pos_of(&world, balloon0),

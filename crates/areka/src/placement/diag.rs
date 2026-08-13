@@ -153,7 +153,7 @@ const UNKNOWN: &str = "-";
 ///
 /// # 語彙は「実在の書込トリガ」と 1:1 でなければならない（D13）
 ///
-/// 当初の 7 語彙は 2 つの実在トリガを覆えなかった——`reconcile_window_size` の drain 相
+/// 当初の 7 語彙は 2 つの実在トリガを覆えなかった——`reconcile_window_size` の drain 後段からの
 /// 呼出（[`ReportedSizeReconcile`](Self::ReportedSizeReconcile)）と `\![move]`
 /// （[`MoveCue`](Self::MoveCue)）である。**1 語が 2 トリガを指すと route 名での切り分けが
 /// 原理的に不能になる**（DPI 変化ゼロの起動が「DPI 由来」を名乗る偽陽性が毎回出る）ため、
@@ -176,7 +176,7 @@ pub enum PlacementRoute {
     Resnap,
     /// DPI 変化に伴う位置の再射影（**`dpi_phase` 限定**）。
     ///
-    /// drain 相の報告回収は [`ReportedSizeReconcile`](Self::ReportedSizeReconcile) が担い、
+    /// drain の後段の報告回収は [`ReportedSizeReconcile`](Self::ReportedSizeReconcile) が担い、
     /// 本変種と混同しない（D13）——両者は `reconcile_window_size` という同一の共通末端を
     /// 通るが、**同一の末端を通ることは同一の経路であることを意味しない**。
     DpiReproject,
@@ -184,7 +184,7 @@ pub enum PlacementRoute {
     KeepPositionResize,
     /// キャラ窓確定後のバルーン随伴（`follow_balloon`）。
     BalloonFollow,
-    /// drain 相の報告回収（`reconcile_reported_sizes`・**初回表示の k₀ 補正を含む**）。
+    /// drain の後段の報告回収（`reconcile_reported_sizes`・**初回表示の k₀ 補正を含む**）。
     ///
     /// `Changed<DPI>` **非依存**＝DPI 変化ゼロでも発火し得るため
     /// [`DpiReproject`](Self::DpiReproject) と別語にする（D13）。混同すると要件 1.9 の

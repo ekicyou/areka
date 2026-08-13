@@ -7,7 +7,7 @@
 use super::{
     AtlasTable, ComposeCache, Composer, EmoWorld, Entity, HashMap, PhantomData, PresentCommand,
     PresentError, PresentOutcome, PresentTarget, ReplySender, ScalePolicy, ScaleRatio, TargetId,
-    World,
+    VisibilityOwnership, World,
 };
 
 /// 指令適用の統括ハブ（合成・キャッシュ・表示・マスクの一点結線・UI スレッド専有）。
@@ -70,6 +70,9 @@ impl EmoPresenter {
                 mount: None,
                 chain: None,
                 visible: false,
+                // 可視性の所有者は常に既定（従来挙動）で登録する。バルーン窓のような外部所有は
+                // 結線側が `set_visibility_ownership` で明示する（attach に判断を持ち込まない）。
+                ownership: VisibilityOwnership::default(),
                 current_surface_id: None,
                 // アプリ管理拡大率は本仕様では ONE 固定の縮退シーム（要件 1.6）。
                 policy: ScalePolicy::new(author_dpi, ScaleRatio::ONE),

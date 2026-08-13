@@ -12,8 +12,17 @@
 //!    [`AlphaMaskResource`]。`Arrangement` は物理 px で直接設定（→ `GlobalArrangement.bounds` ＝
 //!    AlphaMask 座標基準・任意 DPI でクリック座標一致 R2.5）。
 //! 2. **text-layer slot**: surface entity の**兄弟・上位 z**（描画で上）に置く空 entity
-//!    （`Name("emo-text-layer-slot")` ＋ `Visual` のみ・内容なし）。M1 の独立レイヤ描画／M2 の
-//!    合成パス内レイヤ化の双方を「この entity の差し替え」で吸収する seam（emo-text-layer が消費）。
+//!    （`Name("emo-text-layer-slot")` ＋ `Visual` ＋ `HitTest`・内容（brush）なし）。M1 の独立レイヤ
+//!    描画／M2 の合成パス内レイヤ化の双方を「この entity の差し替え」で吸収する seam
+//!    （emo-text-layer が消費）。`HitTest` を明示付与するのは非表示時にポインタ透過させるため
+//!    （未付与は既定 `Bounds` 扱いで、`Bounds` の合成 α は `is_visible` を見ない）。
+//!
+//! # 非表示の契約（両 entity）
+//!
+//! 「バルーンを非表示にする」は**枠の面と文字層の双方が見えず・触れない**ことを意味する
+//! （`areka-P0-balloon-visibility` Requirement 1.7/1.8）。[`VisualMount::set_visible`] は両 entity の
+//! `Visual` と `HitTest` を同時に切り替え、[`VisualMount::attach`] の `initially_visible=false` は
+//! 両 entity を最初から不可視で spawn する（可視状態を一度も経由しない＝同 Requirement 1.2）。
 //!
 //! # wintf `Visual::on_add` との非衝突（design §VisualMount Implementation Notes）
 //!
@@ -35,7 +44,9 @@ use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
 
-use windows::UI::Composition::{Compositor, ICompositionSurface, SpriteVisual, Visual as WucVisual};
+use windows::UI::Composition::{
+    Compositor, ICompositionSurface, SpriteVisual, Visual as WucVisual,
+};
 use windows::core::Interface;
 use windows_numerics::Vector2;
 
@@ -78,11 +89,71 @@ fn physical_arrangement(size: (u32, u32)) -> Arrangement {
 pub(crate) struct VisualMount {
     /// SpriteVisual ＋ `HitTest` ＋ `AlphaMaskResource` を持つ表示 entity（窓の子）。
     surface_entity: Entity,
-    /// 予約済み text 層スロット（surface の兄弟・上位 z・内容なし）。emo-text-layer が消費する。
+    /// 予約済み text 層スロット（surface の兄弟・上位 z・brush なし）。emo-text-layer が消費する。
+    /// 可視性とポインタ判定は surface entity と一括で [`VisualMount::set_visible`] が切り替える。
     text_slot: Entity,
 }
 
 impl VisualMount {
+    /// 指定可視性の `Visual`（spawn 用）。可視で作ってから消す経路を持たせないための構築子。
+    fn visual_for(visible: bool) -> Visual {
+        Visual {
+            is_visible: visible,
+            ..Visual::default()
+        }
+    }
+
+    /// surface entity の `HitTest`: 可視＝αマスク判定・不可視＝判定停止（ポインタ透過）。
+    fn surface_hit_test(visible: bool) -> HitTest {
+        if visible {
+            HitTest::alpha_mask()
+        } else {
+            HitTest::none()
+        }
+    }
+
+    /// text-layer slot の `HitTest`: 可視＝矩形判定・不可視＝判定停止（ポインタ透過）。
+    ///
+    /// 可視時に `bounds()` を**明示**付与するのは、component 未付与が wintf 側で既定
+    /// `HitTestMode::Bounds` と扱われる（`hit_test/mod.rs`）ため従来挙動と同値だからである。
+    /// 明示付与にしておくことで不可視時に `none()` へ差し替えられる——`Bounds` 判定の合成 α は
+    /// `Visual::clamped_opacity()`（`visual.rs`）で決まり `is_visible` を見ないため、
+    /// `Visual` を不可視にするだけでは文字層のポインタ透過が成立しない。
+    fn slot_hit_test(visible: bool) -> HitTest {
+        if visible {
+            HitTest::bounds()
+        } else {
+            HitTest::none()
+        }
+    }
+
+    /// 1 つの entity へ可視性（`Visual`）とポインタ判定（`HitTest`）を同時に適用する。
+    ///
+    /// 未装着（component 不在）は装着契約の破綻ゆえ warn で記録する（沈黙する失敗経路を作らない）。
+    fn apply_visibility(
+        world: &mut World,
+        entity: Entity,
+        visible: bool,
+        mode: HitTest,
+        role: &'static str,
+    ) {
+        if let Some(mut v) = world.get_mut::<Visual>(entity) {
+            v.set_visible(visible);
+        } else {
+            tracing::warn!(?entity, role, "set_visible: Visual が無い（装着が未完了）");
+        }
+
+        if let Some(mut ht) = world.get_mut::<HitTest>(entity) {
+            *ht = mode;
+        } else {
+            tracing::warn!(
+                ?entity,
+                role,
+                "set_visible: HitTest が無い（装着が未完了・ポインタ透過が成立しない）"
+            );
+        }
+    }
+
     /// 窓 `window` の子として surface entity と text-layer slot を装着する。
     ///
     /// `surface` は [`crate::chain::SwapChainPresenter::new`] が返す `ICompositionSurface`、
@@ -91,12 +162,18 @@ impl VisualMount {
     ///
     /// z 順（描画）: text-layer slot を surface entity **より先**に子へ追加し、`Children` 先頭
     /// ＝最上（surface の上に描画）とする。
+    ///
+    /// `initially_visible` は装着直後の可視性。`false` の場合は surface entity・text-layer slot の
+    /// **双方**を最初から不可視（`Visual{is_visible:false}` ＋ `HitTest::none()`）で spawn する。
+    /// 「可視で spawn してから消す」経路を持たないことで、可視状態を一度も経由しないことを
+    /// 構造的に保証する（Requirement 1.2——フレーム遅延や合成のタイミングに成否を委ねない）。
     pub(crate) fn attach(
         world: &mut World,
         window: Entity,
         surface: &ICompositionSurface,
         compositor: &Compositor,
         size: (u32, u32),
+        initially_visible: bool,
     ) -> Result<Self, PresentError> {
         let (w, h) = size;
 
@@ -129,7 +206,8 @@ impl VisualMount {
         let text_slot = world
             .spawn((
                 Name::new("emo-text-layer-slot"),
-                Visual::default(),
+                Self::visual_for(initially_visible),
+                Self::slot_hit_test(initially_visible),
                 ChildOf(window),
             ))
             .id();
@@ -138,10 +216,10 @@ impl VisualMount {
         let surface_entity = world
             .spawn((
                 Name::new("emo-surface"),
-                Visual::default(),
+                Self::visual_for(initially_visible),
                 vg,
                 physical_arrangement(size),
-                HitTest::alpha_mask(),
+                Self::surface_hit_test(initially_visible),
                 AlphaMaskResource::new(),
                 ChildOf(window),
             ))
@@ -185,34 +263,34 @@ impl VisualMount {
         }
     }
 
-    /// 非表示／再表示の切替（R3.3）。
+    /// 非表示／再表示の切替（R3.3・balloon-visibility Requirement 1.7/1.8）。
     ///
-    /// `false`: `Visual::set_visible(false)` ＋ `HitTest::none()`（当たり判定停止）。swap chain・キャッシュは
-    /// 呼び手が保持するため再表示は Present 不要で復帰する。`true`: 可視 ＋ `HitTest::alpha_mask()` へ戻す。
+    /// **surface entity と text-layer slot の双方**へ同時に及ぶ。`false`: 両者の
+    /// `Visual::set_visible(false)` ＋ 当たり判定停止（surface・slot とも `HitTest::none()`）。
+    /// `true`: 両者を可視へ戻し、surface は `HitTest::alpha_mask()`、slot は `HitTest::bounds()`
+    /// （＝component 未付与時の既定挙動と同値）へ復帰する。
+    ///
+    /// 枠の面だけを不可視にすると文字層が画面に残り、さらにスロットは既定 `Bounds` 判定のまま
+    /// ポインタを受け続ける（`Bounds` の合成 α は `is_visible` を見ない）。両 entity を同時に
+    /// 切り替えることで「非表示＝枠と文字の双方が見えず・触れず」の契約が成立する。
+    ///
+    /// swap chain・キャッシュは呼び手が保持するため再表示は Present 不要で復帰する。
     /// 窓自体の show/hide は所有しない（placement/ghost 領分）。
     pub(crate) fn set_visible(&self, world: &mut World, visible: bool) {
-        if let Some(mut v) = world.get_mut::<Visual>(self.surface_entity) {
-            v.set_visible(visible);
-        } else {
-            tracing::warn!(
-                entity = ?self.surface_entity,
-                "set_visible: surface entity に Visual が無い（装着が未完了）"
-            );
-        }
-
-        let mode = if visible {
-            HitTest::alpha_mask()
-        } else {
-            HitTest::none()
-        };
-        if let Some(mut ht) = world.get_mut::<HitTest>(self.surface_entity) {
-            *ht = mode;
-        } else {
-            tracing::warn!(
-                entity = ?self.surface_entity,
-                "set_visible: surface entity に HitTest が無い（装着が未完了）"
-            );
-        }
+        Self::apply_visibility(
+            world,
+            self.surface_entity,
+            visible,
+            Self::surface_hit_test(visible),
+            "surface",
+        );
+        Self::apply_visibility(
+            world,
+            self.text_slot,
+            visible,
+            Self::slot_hit_test(visible),
+            "text-layer-slot",
+        );
     }
 
     /// SpriteVisual＋HitTest＋AlphaMaskResource を持つ表示 entity。
@@ -235,70 +313,20 @@ impl VisualMount {
 }
 
 #[cfg(test)]
+#[path = "mount_test_support.rs"]
+mod test_support;
+#[cfg(test)]
+#[path = "mount_visibility_tests.rs"]
+mod visibility_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
     use bevy_ecs::hierarchy::Children;
-    use wintf::com::wuc::create_dispatcher_queue_controller;
-    use wintf::ecs::{GraphicsCore, HitTestMode};
-    use windows::Win32::System::WinRT::{DQTAT_COM_ASTA, DQTAT_COM_NONE};
+    use wintf::ecs::HitTestMode;
 
-    use crate::chain::SwapChainPresenter;
-
-    /// テスト用 WUC apartment / dispatcher（chain.rs / spike と同一方針）。
-    ///
-    /// cargo test の各テストは専用スレッドで COM 未初期化ゆえ ASTA を第一候補・NONE を保険にする。
-    /// controller は Compositor より長寿命を要するため呼び出し側で保持する。
-    fn make_dispatcher_and_compositor()
-    -> (windows::System::DispatcherQueueController, Compositor) {
-        let dq = create_dispatcher_queue_controller(DQTAT_COM_ASTA)
-            .or_else(|e_asta| {
-                create_dispatcher_queue_controller(DQTAT_COM_NONE).map_err(|_| e_asta)
-            })
-            .expect("DispatcherQueueController 生成失敗（ASTA/NONE いずれも不可）");
-        let compositor = Compositor::new().expect("Compositor::new 失敗");
-        (dq, compositor)
-    }
-
-    /// 生存させておくべき WUC/GPU リソース群（drop 順の都合でまとめて保持する）。
-    ///
-    /// `ICompositionSurface` はスワップチェーンを内包する `SwapChainPresenter` に裏打ちされるため、
-    /// 装着後も presenter を保持する（構造アサートには描画不要だが破棄を防ぐ）。
-    #[allow(dead_code)]
-    struct Guards {
-        dq: windows::System::DispatcherQueueController,
-        compositor: Compositor,
-        core: GraphicsCore,
-        presenter: SwapChainPresenter,
-    }
-
-    /// `w×h` の供給面を持つ窓へ `VisualMount::attach` した状態を組む共通フィクスチャ。
-    ///
-    /// 返り値: (world, window entity, mount, 生存ガード)。window は実 `Window` ではない素の entity
-    /// （純 ECS 構造アサートのため。owner Window 不在でも surface/slot の構造は成立する）。
-    fn attach_fixture(w: u32, h: u32) -> (World, Entity, VisualMount, Guards) {
-        let (dq, compositor) = make_dispatcher_and_compositor();
-        let core = GraphicsCore::new().expect("GraphicsCore::new 失敗（HARDWARE デバイス生成）");
-        let (presenter, surface) = SwapChainPresenter::new(&core, &compositor, w, h)
-            .expect("SwapChainPresenter::new 失敗");
-
-        let mut world = World::new();
-        let window = world.spawn_empty().id();
-        let mount = VisualMount::attach(&mut world, window, &surface, &compositor, (w, h))
-            .expect("VisualMount::attach 失敗");
-
-        (
-            world,
-            window,
-            mount,
-            Guards {
-                dq,
-                compositor,
-                core,
-                presenter,
-            },
-        )
-    }
+    use super::test_support::attach_fixture;
 
     /// R1.4: attach 後、text-layer slot が surface entity の**兄弟**かつ**上位 z**（`Children` 先頭）で
     /// 存在し、`Name("emo-text-layer-slot")` を持ち、内容（描画リソース）を持たない予約 seam であること。
