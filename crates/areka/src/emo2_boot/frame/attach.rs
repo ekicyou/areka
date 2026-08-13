@@ -140,8 +140,11 @@ pub fn plan_attachments(window_scopes: &[usize], assets: &BootAssets) -> AttachP
 ///
 /// ゲート（`GhostWindows` Resource ＋ `GraphicsCore` ＋ `WucGraphicsResource::is_valid()`）成立
 /// フレームで純関数 [`plan_attachments`]（DD-12）を確定し、計画項目ごとに shell／balloon target を
-/// 装着する。**バルーンのみ**初回表示（面0）を駆動して文字層スロットを取得し、**シェルは初回表示を
-/// 発行せず**最初のさくらスクリプト `\s` cue まで非表示を保つ（defect #5・2026-07-13 実機#5）。
+/// 装着する。**バルーンのみ**面 0 の `ShowSurface` を駆動して文字層スロットを取得するが、その手前で
+/// 可視性を外部所有へ移すため画面には出ない——「不可視のままの確立」であり、可視化はバルーン可視性
+/// 制御が可視コンテンツの配置を契機に別途付与する（`areka-P0-balloon-visibility` Requirement 1.1/
+/// 1.3/6.8）。**シェルは `ShowSurface` そのものを発行せず**最初のさくらスクリプト `\s` cue まで
+/// 非表示を保つ（defect #5・2026-07-13 実機#5）。
 /// 資産は `Option::take` で高々 1 回消費し、ゲート不成立では消費せず
 /// 次フレーム再試行へ委ねる（表示なし縮退・hang しない）。窓あり資産なしは `warn!`＋skip、資産あり
 /// 窓なしは `debug!`＋破棄で log-first に観測し、計画件数と実装着件数を `info!` に列挙する（spine が
@@ -284,8 +287,8 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
         // シェル target の装着成功を計上（DD-12 の planned==attached 積極 assert 用・balloon と対で 1 scope）。
         attached_count += 1;
 
-        // --- balloon target（同 scope の資産がある場合）: attach → 初回 ShowSurface（面0・default）
-        //     → text_slot_view → register_actor_view ---
+        // --- balloon target（同 scope の資産がある場合）: attach → 可視性を外部所有へ →
+        //     不可視のままの確立（ShowSurface 面0・default）→ text_slot_view → register_actor_view ---
         let Some(balloon_index) = item.balloon_index else {
             warn!(scope, "emo2 attach: 同 scope の balloon 資産が無い（DD-12 balloon_index None）→ 文字層接続なし");
             continue;
@@ -322,8 +325,29 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
             error!(scope, error = %e, "emo2 attach: バルーン target の attach に失敗（log-first・継続）");
             continue;
         }
-        // バルーン初回表示は面 0・bind なし・pattern なし（DD-9・R4.1 の「初回サーフェス表示＝
-        // バルーン枠表示」）。初回枠は SERIKO ループ非駆動ゆえ空 pattern＝拡張前と観測等価（R5.4）。
+        // バルーンの可視性は areka-P0-balloon-visibility の可視性制御ただ一つが所有する
+        // （Requirement 6.8）。装着直後・初回指令の**前**に外部所有へ移す——後に置くと直下の
+        // ShowSurface が先に可視化してしまい、起動時の不可視（Requirement 1.1）が成立しない。
+        // 移した後の ShowSurface は表示状態の確立（合成・供給面・文字スロット・面 id・寸法）だけを
+        // 行って可視化しないため、面 0 は「不可視のままの確立」として維持される。
+        // 未装着 target のみが失敗し得る（直上の attach_target 成功後ゆえ通常は起こらない）が、
+        // 沈黙させると以降のバルーンが理由の記録なく不可視で放置されるため error!＋skip する
+        // （Requirement 1.5・log-first。他 scope は巻き込まない）。
+        if let Err(e) = wiring.presenter.set_visibility_ownership(
+            item.balloon_target,
+            areka_emo_present::presenter::VisibilityOwnership::External,
+        ) {
+            error!(
+                scope,
+                error = %e,
+                "emo2 attach: バルーン可視性の外部所有への設定に失敗（log-first・このバルーンを skip）"
+            );
+            continue;
+        }
+        // バルーンの表示確立は面 0・bind なし・pattern なし（DD-9・R4.1 の「初回サーフェス表示＝
+        // バルーン枠表示」）。上で外部所有へ移してあるため画面には出ず、文字の配置先と面だけが
+        // 立つ（可視化は可視性制御が可視コンテンツの配置を契機に別途付与する）。初回枠は SERIKO
+        // ループ非駆動ゆえ空 pattern＝拡張前と観測等価（R5.4）。
         wiring.presenter.apply(
             world,
             PresentCommand::ShowSurface {

@@ -40,7 +40,8 @@ use areka_sakura::{
     SystemVarSnapshot, TalkCue, TalkDone, TalkEndReason, TalkId,
 };
 use areka_seriko::{
-    spawn_seriko, BindResolver, DisplayCommand, MockSurfaceOutput, SerikoLoopConfig, SurfaceResolver,
+    spawn_seriko, BindOptionDecls, BindResolver, DisplayCommand, MockSurfaceOutput,
+    SerikoLoopConfig, SurfaceResolver,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
@@ -119,8 +120,10 @@ fn test_bind_resolver() -> BindResolver {
     let mut sakura: BTreeMap<(String, String), u32> = BTreeMap::new();
     sakura.insert(("腕".into(), "伸び".into()), 1100);
     sakura.insert(("頬".into(), "赤面".into()), 1200);
-    // mustselect 空集合＝全カテゴリ非排他（従来 additive の byte 同値）。専用 mustselect e2e は task 10.4。
-    BindResolver::new(sakura, BTreeMap::new(), BTreeSet::new(), BTreeSet::new())
+    // 宣言ゼロ＝全カテゴリが正典の既定（Default＝高々 1 個・解除可・bindopt 2.1/2.2）。本 fixture は
+    // 腕・頬とも 1 カテゴリ 1 パーツゆえ、排他置換と加算は結果集合が同値になり期待値は不変である
+    // （bindopt 設計 §テスト影響監査）。mustselect／複数可の専用 e2e は下記シナリオ 6〜9。
+    BindResolver::new(sakura, BTreeMap::new(), BindOptionDecls::default())
 }
 
 /// 既定 scope "0"・指定 bind 集合を載せたシェル面 `Show` 指令を組む（期待値ヘルパ）。
@@ -133,7 +136,7 @@ fn show(surface_id: u32, ids: impl IntoIterator<Item = u32>) -> DisplayCommand {
     }
 }
 
-/// 1 シナリオを貫通駆動する中核（resolver／静的既定集合を注入可能にした汎用形・task 10.4）。
+/// 1 シナリオを貫通駆動する中核（resolver／静的既定集合を注入可能にした汎用形）。
 ///
 /// `script` を直入力する talk を起動し、`ticks` を順に注入して駆動する。seriko には呼び手が
 /// 与えた静的既定集合 `static_binds` と bind 名前解決層 `resolver` を注入する（R5.5）。broadcast の
@@ -205,8 +208,9 @@ fn run_core(
 
 /// 既存シナリオ（task 6.4 系）の既定注入で貫通駆動する薄いラッパ。
 ///
-/// 非空の静的既定集合 `{1100,1207}` と test-local [`test_bind_resolver`]（mustselect 空・従来
-/// additive）を注入する。broadcast の 2 つ目のスロットは呼び手指定の `text_sink`。
+/// 非空の静的既定集合 `{1100,1207}` と test-local [`test_bind_resolver`]（bindoption 宣言ゼロ＝
+/// 全カテゴリ既定・1 カテゴリ 1 パーツ）を注入する。broadcast の 2 つ目のスロットは呼び手指定の
+/// `text_sink`。
 fn run_with_text_sink(
     script: &str,
     ticks: &[f64],
@@ -226,13 +230,14 @@ fn run_scenario(script: &str, ticks: &[f64]) -> Vec<DisplayCommand> {
     run_with_text_sink(script, ticks, Box::new(NullTextSink))
 }
 
-/// mustselect（排他選択）カテゴリを持つ test-local 名前解決表（task 10.4・D11・R4.5）。
+/// mustselect（排他置換・ちょうど 1 個）カテゴリを持つ test-local 名前解決表（bindopt 3.1/2.1/2.2）。
 ///
 /// 実 emo2 の目カテゴリ（笑顔→ジトー→静観 …）を模す。本体側（sakura）に mustselect カテゴリ
-/// `目`（3 パーツ：笑顔→1303／ジトー→1301／静観→1304）と、対比用の**非** mustselect カテゴリ
-/// `紅`（差し→1600）を持つ。`sakura_mustselect={目}`（紅は非宣言＝非排他）。相方側（kero）は空。
-/// これにより、同一 mustselect カテゴリへの連続着衣が高々 1 パーツへ「置換」される一方、非
-/// mustselect カテゴリは明示 on/off どおり「加算／除去」されることを対比観測できる。
+/// `目`（3 パーツ：笑顔→1303／ジトー→1301／静観→1304）と、対比用の既定（Default）カテゴリ
+/// `紅`（差し→1600）を持つ。`sakura_mustselect={目}`（紅は非宣言＝既定＝高々 1 個・解除可）。
+/// 相方側（kero）は空。これにより、同一 mustselect カテゴリへの連続着衣が高々 1 パーツへ
+/// 「置換」される一方、既定カテゴリのパーツが明示 on で載り明示 off で外れる（解除可）ことを
+/// 対比観測できる。紅は 1 カテゴリ 1 パーツゆえ、既定の排他置換でも結果集合は加算と同値である。
 fn mustselect_bind_resolver() -> BindResolver {
     let mut sakura: BTreeMap<(String, String), u32> = BTreeMap::new();
     sakura.insert(("目".into(), "笑顔".into()), 1303);
@@ -241,10 +246,14 @@ fn mustselect_bind_resolver() -> BindResolver {
     sakura.insert(("紅".into(), "差し".into()), 1600);
     let mut sakura_ms: BTreeSet<String> = BTreeSet::new();
     sakura_ms.insert("目".into());
-    BindResolver::new(sakura, BTreeMap::new(), sakura_ms, BTreeSet::new())
+    let options = BindOptionDecls {
+        sakura_mustselect: sakura_ms,
+        ..Default::default()
+    };
+    BindResolver::new(sakura, BTreeMap::new(), options)
 }
 
-/// mustselect 対比観測用の貫通駆動ラッパ（task 10.4）。
+/// mustselect 対比観測用の貫通駆動ラッパ。
 ///
 /// 静的既定集合は非 目 の口 id 1 本のみ `{1207}`（初回の 目 着衣がクリーンな add になり、かつ
 /// 排他置換で外れない「保持されるべき地」を観測できる）。bind 名前解決層は
@@ -253,6 +262,38 @@ fn run_mustselect_scenario(script: &str, ticks: &[f64]) -> Vec<DisplayCommand> {
     run_core(
         BindSet::from_ids([1207]),
         mustselect_bind_resolver(),
+        script,
+        ticks,
+        Box::new(NullTextSink),
+    )
+}
+
+/// 複数可（Multiple）宣言カテゴリを持つ test-local 名前解決表（bindopt 3.3・貫通観測用）。
+///
+/// 本体側（sakura）に `multiple` 宣言カテゴリ `髪飾り`（2 パーツ：花→1700／リボン→1701）を持つ。
+/// `sakura_multiple={髪飾り}`。相方側（kero）は空。カテゴリ名は名前表と `BindOptionDecls` で
+/// **厳密に一致**していなければならない（不一致だと policy が既定へ落ち、複数可の観測にならない）。
+fn multiple_bind_resolver() -> BindResolver {
+    let mut sakura: BTreeMap<(String, String), u32> = BTreeMap::new();
+    sakura.insert(("髪飾り".into(), "花".into()), 1700);
+    sakura.insert(("髪飾り".into(), "リボン".into()), 1701);
+    let mut sakura_mul: BTreeSet<String> = BTreeSet::new();
+    sakura_mul.insert("髪飾り".into());
+    let options = BindOptionDecls {
+        sakura_multiple: sakura_mul,
+        ..Default::default()
+    };
+    BindResolver::new(sakura, BTreeMap::new(), options)
+}
+
+/// 複数可カテゴリ観測用の貫通駆動ラッパ（bindopt 3.3）。
+///
+/// 静的既定集合は髪飾り以外の口 id 1 本のみ `{1207}`（着衣が clean add になり、かつ共存の
+/// 「保持されるべき地」も同時に観測できる）。text スロットは破棄（bind の表示発行のみ観測）。
+fn run_multiple_scenario(script: &str, ticks: &[f64]) -> Vec<DisplayCommand> {
+    run_core(
+        BindSet::from_ids([1207]),
+        multiple_bind_resolver(),
         script,
         ticks,
         Box::new(NullTextSink),
@@ -369,7 +410,7 @@ fn bind_and_text_streams_do_not_cross_contaminate_end_to_end() {
     );
 }
 
-/// シナリオ6（要件 4.5・D11・KEY＝排他置換 e2e）: 同一 mustselect カテゴリへ off なしで連続着衣する
+/// シナリオ6（bindopt 3.1・KEY＝排他置換 e2e）: 同一 mustselect カテゴリへ off なしで連続着衣する
 /// 列が、常に高々 1 パーツのみ有効な着せ替え集合を載せた表示発行になる（旧パーツが消え新パーツのみ・
 /// 「置換」）ことを、注入 Tick(0.0) だけで貫通観測する。
 ///
@@ -382,7 +423,7 @@ fn bind_and_text_streams_do_not_cross_contaminate_end_to_end() {
 ///
 /// 最終集合は 目 パーツを**ちょうど 1 個**（1304）だけ含み、旧 目 パーツ（1303・1301）は残らない
 /// ——これが反・積算（anti-accumulation）の証明。pre-fix の積算バグなら最終が `{1207,1301,1303,1304}`
-/// になるため、full-Vec 等値照合がこの判別を捕捉する（R4.5・D11）。
+/// になるため、full-Vec 等値照合がこの判別を捕捉する（bindopt 3.1）。
 #[test]
 fn mustselect_sequence_replaces_prior_part_end_to_end() {
     let records = run_mustselect_scenario(
@@ -397,7 +438,7 @@ fn mustselect_sequence_replaces_prior_part_end_to_end() {
             show(1000, [1207, 1301]), // 目=ジトー on → 排他置換（1303 除去・1301 追加・1207 保持）
             show(1000, [1207, 1304]), // 目=静観 on → 排他置換（1301 除去・1304 追加）
         ],
-        "mustselect 列は高々 1 パーツへ置換され、旧 目 パーツは残らない（反・積算・R4.5・D11）"
+        "mustselect 列は高々 1 パーツへ置換され、旧 目 パーツは残らない（反・積算・bindopt 3.1）"
     );
 
     // 判別の明示（anti-accumulation）: 最終集合の 目 パーツ（1301/1303/1304 のいずれか）はちょうど 1 個。
@@ -412,36 +453,38 @@ fn mustselect_sequence_replaces_prior_part_end_to_end() {
     assert_eq!(
         eye_parts,
         vec![1304],
-        "最終集合の 目 パーツはちょうど 1 個（1304）＝旧 1303/1301 は消えた（積算していない・R4.5）"
+        "最終集合の 目 パーツはちょうど 1 個（1304）＝旧 1303/1301 は消えた（積算していない・bindopt 3.1）"
     );
 }
 
-/// シナリオ7（要件 4.5・8.1・非 mustselect 対比）: 非 mustselect カテゴリ（紅）の明示 on/off は従来
-/// どおり「加算／除去」で成立する（mustselect の「置換」との対比・非退行）。
+/// シナリオ7（bindopt 2.1/2.2・mustselect 対比）: 既定（Default＝非宣言）カテゴリ（紅）のパーツは
+/// 明示 on で載り、明示 off で外れる（解除可）——mustselect の「脱衣は無視（解除不可）」との対比。
 ///
 /// `\s[1000]\![bind,紅,差し,1]\![bind,紅,差し,0]\e` を Tick(0.0) で駆動すると:
 /// - `\s[1000]` が既定 `{1207}` を発行、
-/// - 紅=差し（1600）on → 加算で `{1207,1600}`、
-/// - 紅=差し（1600）off → 明示脱衣で除去され `{1207}` へ戻る。
+/// - 紅=差し（1600）on → 当該カテゴリに他パーツが無いので排他置換の結果は `{1207,1600}`、
+/// - 紅=差し（1600）off → 既定は解除可ゆえ除去され `{1207}` へ戻る。
 ///
-/// 紅は mustselect 非宣言ゆえ排他置換を受けず、on で加算・明示 off で除去される（R4.5 対比・R8.1）。
+/// 紅は 1 カテゴリ 1 パーツゆえ、既定の排他置換でも結果集合は加算と同値であり期待値は
+/// bindopt 是正の前後で不変である（bindopt 設計 §テスト影響監査）。off が集合を変えることが
+/// mustselect（bindopt 3.2＝脱衣無視）との唯一の差である。
 #[test]
-fn non_mustselect_explicit_on_off_is_additive_end_to_end() {
+fn default_category_explicit_on_then_off_removes_part_end_to_end() {
     let records =
         run_mustselect_scenario(r"\s[1000]\![bind,紅,差し,1]\![bind,紅,差し,0]\e", &[0.0]);
     assert_eq!(
         records,
         vec![
             show(1000, [1207]),       // \s[1000] 既定
-            show(1000, [1207, 1600]), // 紅=差し on → 加算
-            show(1000, [1207]),       // 紅=差し off → 明示除去で既定へ
+            show(1000, [1207, 1600]), // 紅=差し on → 既定カテゴリの唯一パーツが載る
+            show(1000, [1207]),       // 紅=差し off → 既定は解除可ゆえ除去され既定へ
         ],
-        "非 mustselect カテゴリは加算／明示 off での除去（従来どおり・R4.5 対比・R8.1）"
+        "既定カテゴリは明示 on で載り明示 off で外れる（解除可・bindopt 2.1/2.2）"
     );
 }
 
-/// シナリオ8（要件 4.5・D11・クロスカテゴリ独立）: mustselect カテゴリ内の排他置換は、別の非
-/// mustselect カテゴリで着衣済みのパーツを巻き込まない（カテゴリ境界を越えて外さない）。
+/// シナリオ8（bindopt 3.4・クロスカテゴリ独立）: mustselect カテゴリ内の排他置換は、別カテゴリ
+/// （既定＝非宣言の紅）で着衣済みのパーツを巻き込まない（カテゴリ境界を越えて外さない）。
 ///
 /// `\s[1000]\![bind,紅,差し,1]\![bind,目,笑顔,1]\![bind,目,静観,1]\e` を Tick(0.0) で駆動すると:
 /// - `\s[1000]` が既定 `{1207}` を発行、
@@ -450,7 +493,7 @@ fn non_mustselect_explicit_on_off_is_additive_end_to_end() {
 /// - 目=静観（1304）on → 目カテゴリ内でのみ排他置換（1303 除去・1304 追加）→ `{1207,1600,1304}`。
 ///
 /// 紅（1600）は 目 の排他置換を跨いで保持され、最終集合は 目 パーツちょうど 1 個（1304）＋紅（1600）＋
-/// 口（1207）。排他は自カテゴリ限定であることを実証（R4.5・D11）。
+/// 口（1207）。排他は自カテゴリ限定＝異なるカテゴリ間の bind は共存することを実証（bindopt 3.4）。
 #[test]
 fn mustselect_replace_does_not_drop_other_category_end_to_end() {
     let records = run_mustselect_scenario(
@@ -465,6 +508,48 @@ fn mustselect_replace_does_not_drop_other_category_end_to_end() {
             show(1000, [1207, 1303, 1600]), // 目=笑顔 on → クリーン add
             show(1000, [1207, 1304, 1600]), // 目=静観 on → 目内のみ置換（紅 1600 は保持）
         ],
-        "目の排他置換は紅（別カテゴリ・非 mustselect）を巻き込まない（クロスカテゴリ独立・R4.5・D11）"
+        "目の排他置換は紅（別カテゴリ・既定）を巻き込まない（クロスカテゴリ独立・bindopt 3.4）"
+    );
+}
+
+/// シナリオ9（bindopt 3.3・KEY＝複数可の貫通共存錨）: `multiple` 明示宣言のカテゴリでは、同一
+/// カテゴリの 2 パーツが**両方 bind されたまま**表示まで貫通する（既定の排他置換を受けない）。
+///
+/// `\s[1000]\![bind,髪飾り,花,1]\![bind,髪飾り,リボン,1]\e` を Tick(0.0) で駆動すると:
+/// - `\s[1000]` が静的既定 `{1207}` を載せた Show を発行、
+/// - 髪飾り=花（1700）着衣 → clean add で `{1207,1700}`、
+/// - 髪飾り=リボン（1701）着衣 → **複数可ゆえ加算**で `{1207,1700,1701}`（1700 は外れない）。
+///
+/// 既定（Default）カテゴリなら 2 度目の着衣で 1700 が外れ `{1207,1701}` になる（シナリオ 6 の形）
+/// ——本錨はその分岐が複数可宣言で反転することを貫通経路で固定する。
+#[test]
+fn multiple_category_two_parts_coexist_end_to_end() {
+    let records = run_multiple_scenario(
+        r"\s[1000]\![bind,髪飾り,花,1]\![bind,髪飾り,リボン,1]\e",
+        &[0.0],
+    );
+    assert_eq!(
+        records,
+        vec![
+            show(1000, [1207]),             // \s[1000] 既定
+            show(1000, [1207, 1700]),       // 髪飾り=花 on → clean add
+            show(1000, [1207, 1700, 1701]), // 髪飾り=リボン on → 複数可ゆえ加算（1700 は保持）
+        ],
+        "複数可カテゴリは同一カテゴリ 2 パーツが共存したまま貫通する（bindopt 3.3）"
+    );
+
+    // 判別の明示（共存）: 最終集合は髪飾りパーツを 2 個とも含む（排他置換なら 1 個になる）。
+    let final_binds = match records.last().expect("最終 Show が存在する") {
+        DisplayCommand::Show { binds, .. } => binds.clone(),
+        other => panic!("最終指令は Show であるべき: {other:?}"),
+    };
+    let hair_parts: Vec<u32> = [1700u32, 1701]
+        .into_iter()
+        .filter(|id| final_binds.contains(*id))
+        .collect();
+    assert_eq!(
+        hair_parts,
+        vec![1700, 1701],
+        "最終集合の髪飾りパーツは 2 個とも残る＝複数可は排他置換を受けない（bindopt 3.3）"
     );
 }

@@ -17,7 +17,7 @@ use crate::placement::follow::{move_window_to, resize_window_to};
 use crate::placement::resolver::{PointPx, SizePx};
 use crate::placement::spawn::GhostWindows;
 
-use super::{Emo2Wiring, apply_move_directive, reconcile_reported_sizes, shell_target};
+use super::{Emo2Wiring, apply_move_directive, shell_target};
 
 // ---------------------------------------------------------------------------
 // drain・text フェーズ＋排他 system（tasks.md task 4.2・design「UI 毎フレーム結線 / frame」の
@@ -36,6 +36,15 @@ use super::{Emo2Wiring, apply_move_directive, reconcile_reported_sizes, shell_ta
 /// drain は attach 後にのみ走るため `TargetNotAttached` は原理上発生しない（発生＝結線バグとして
 /// presenter が `error!`・design「適用時（UI）」）。`try_iter` はチャネルが空になるか送信端が全て
 /// drop されると尽きる（ブロックしない）。
+///
+/// # 窓寸 reconcile は本フェーズの外側にある
+///
+/// 本フェーズは**指令の適用だけ**を担う。表示成立点の状態照合報告（`take_pending_resize`）を
+/// 窓へ反映する `reconcile_reported_sizes` は、呼び出し順の所有者である
+/// [`emo2_frame_system`](super::emo2_frame_system) が本フェーズの**後**に直接呼ぶ
+/// （`areka-P0-balloon-visibility` design 決定 D5・task 4.3）。バルーン可視性の相を
+/// 「全 `\b` 指令の適用後」かつ「表示が積む窓寸要求の消化前」へ挟むための並べ替えであり、
+/// 適用と反映の順序（適用 → 反映）は移動前と変わらない。
 pub fn run_drain_phase(wiring: &mut Emo2Wiring, world: &mut World) {
     // attach 前はチャネルが保留バッファを兼ねる（取りこぼしなし・FIFO）。装着後のみ drain する（DD-1）。
     if !wiring.attached {
@@ -48,11 +57,6 @@ pub fn run_drain_phase(wiring: &mut Emo2Wiring, world: &mut World) {
         // error! 済み（log-first）。撃ちっぱなしの非ブロック配送契約ゆえ本フェーズは panic しない。
         wiring.presenter.apply(world, cmd);
     }
-    // 窓寸 reconcile の第 2 経路（emo-dpi-scaling task 4.2・design Flow 2 キー決定 (d)／Flow 3 手順 5）:
-    // 本フレームの全 apply が済んだ**後**に、表示成立点の状態照合が積んだ未消費の窓寸要求を取り出して
-    // 窓 client へ反映する（同一フレーム内完結・エッジ消費順序に依存しない）。attach 相の初回
-    // ShowSurface が積む k₀ 補正もここで landing する。
-    reconcile_reported_sizes(&mut wiring.presenter, world);
 }
 
 /// move drain フェーズ（`\![move]` の末端結線・design「frame 相で drain→`apply_move_directive`」・

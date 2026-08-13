@@ -24,6 +24,7 @@ use crate::emo2_boot::assets::{BalloonScopeAssets, BootAssets, LoopTables, Scope
 use crate::emo2_boot::frame::Emo2Wiring;
 use crate::emo2_boot::move_cue::MoveDirective;
 use crate::emo2_boot::talk_clock::TalkClock;
+use crate::emo2_boot::talk_lifecycle::TalkLifecycleSignal;
 use crate::placement::spawn::BalloonWindowMarker;
 
 /// 窓物理 px の行矩形を持つ `ChoiceHitRow` を組む（ordinal は入力順昇順を模す）。
@@ -89,6 +90,7 @@ pub(super) fn headless_emo2_wiring(runtime: Rc<RefCell<TextLayerRuntime>>) -> Em
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
         mpsc::channel::<MoveDirective>().1,
+        mpsc::channel::<TalkLifecycleSignal>().1,
         runtime,
         TalkClock::new(Arc::new(|| 0.0)),
         synth_boot_assets(),

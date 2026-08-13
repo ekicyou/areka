@@ -3,13 +3,22 @@
 //! `Emo2Wiring`（NonSend resource・presenter／rx／runtime／clock／assets／attached を保持）と
 //! 排他 system `emo2_frame_system(world: &mut World)`（donor パターン: remove→各フェーズ→insert）を
 //! 所有する。各フェーズ:
-//! - attach: GPU 資源＋`GhostWindows` 到達ゲート→`plan_attachments`（DD-12）→バルーン初回 `ShowSurface`
-//!   （面0）→文字層スロット取得→`register_actor_view`（`Option::take` で高々 1 回消費）。**シェルは初回
+//! - attach: GPU 資源＋`GhostWindows` 到達ゲート→`plan_attachments`（DD-12）→バルーンの可視性を
+//!   外部所有へ→**不可視のままの確立**（`ShowSurface` 面0）→文字層スロット取得→`register_actor_view`
+//!   （`Option::take` で高々 1 回消費）。バルーンは装着だけでは画面へ出ず、可視化はバルーン可視性制御が
+//!   別途付与する（`areka-P0-balloon-visibility` Requirement 1.1/1.3）。**シェルは初回
 //!   `ShowSurface` を発行せず**最初のさくらスクリプト `\s` cue まで非表示を保つ（defect #5・実機#5）。
 //! - dpi: `Changed<DPI>` の窓を永続 `SystemState` で観測し（`anchor_changed_system` 先例）、当該窓の
 //!   target を `refresh_scale` で再スケールして窓寸を reconcile する（emo-dpi-scaling task 4.2・D8）。
-//! - drain: attach 完了後のみ `Receiver::try_iter` で `PresentCommand` を FIFO で `presenter.apply` へ適用し、
-//!   続けて表示成立点の状態照合報告（`take_pending_resize`）で窓寸を reconcile する（第 2 経路）。
+//! - drain: attach 完了後のみ `Receiver::try_iter` で `PresentCommand` を FIFO で `presenter.apply` へ
+//!   適用する（**適用のみ**）。
+//! - balloon-visibility: 本フレームの表示指令を適用し終えた実状態からバルーンの可視性を決めて発行する
+//!   （`areka-P0-balloon-visibility` design 決定 D5・Requirement 3.5／6.6）。観測（可視状態・可視
+//!   グリフ数・選択肢表示中・ポインタ滞在・ドラッグ中・表示ライフサイクル信号）を集めて判断中核へ渡し、
+//!   返った遷移を発行して 1 行ずつ記録する。実装は `emo2_boot::balloon_visibility`（判断）と
+//!   その配線層 `balloon_visibility_phase.rs`。
+//! - 窓寸 reconcile: 表示成立点の状態照合報告（`take_pending_resize`）で窓寸を反映する（第 2 経路）。
+//!   可視性の相が発行した表示が積む窓寸要求も、同一フレームのここで landing する。
 //! - text-scale: 装着済み balloon scope の文字層 binding を presenter の**現適用 k** へ毎フレーム
 //!   合わせ直す（`refresh_actor_scale`・emo-dpi-scaling task 7.2・D11-4・Req8）。適用 k の更新点は
 //!   1 フレームに 2 つ（dpi 相の `refresh_scale`／drain 相の `apply_show`）あるため、**両者の下流**・
@@ -21,7 +30,7 @@
 //! 本ファイルは task 3 の純関数 `plan_attachments`（＋`AttachPlan`／`PlannedAttach`）、task 4.1 の
 //! NonSend 結線資源 `Emo2Wiring` と attach フェーズ（`run_attach_phase`＋補助 `connect_balloon_text`）、
 //! そして task 4.2 の drain フェーズ（`run_drain_phase`）・text フェーズ（`run_text_phase`＋純判断
-//! `resolve_talk_time`）・排他 system `emo2_frame_system`（remove→3 フェーズ→insert）を実装する。
+//! `resolve_talk_time`）・排他 system `emo2_frame_system`（remove→各フェーズ→insert）を実装する。
 
 mod attach;
 mod dpi;
@@ -75,6 +84,8 @@ use crate::placement::resolver::SizePx;
 use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker, GhostWindows};
 
 use super::assets::{BalloonScopeAssets, BootAssets, ScopeAssets};
+// 可視性の相（design 決定 D5）。相順の所有者は本モジュールなので、呼び出しはここから行う。
+use super::balloon_visibility::run_balloon_visibility_phase;
 // `scale_text::run_text_phase` が `super::hover_inject::drive` で辿る先（移設前は本ファイルから
 // `super::hover_inject` が emo2_boot を指していた）。呼び出し本文を書き換えないための束縛。
 use super::hover_inject;
@@ -112,22 +123,28 @@ use self::dpi::{
     classify_ghost_window, dpi_phase_with, reconcile_window_size,
     reproject_char_window_at_current_size,
 };
-// 同上。未使用は `PhysicalSizeSource`・`resnap_from_sizes`・`resnap_with` の 3 名で、
-// `resnap_shell_targets` は下の `emo2_frame_system` が呼ぶ。
+// 同上。未使用は `PhysicalSizeSource`・`resnap_from_sizes`・`resnap_with`・
+// `finalize_chain_once_with` の 4 名で、`resnap_shell_targets` と `finalize_chain_once` は
+// 下の `emo2_frame_system` が呼ぶ。
 #[allow(unused_imports)]
 use self::drain_resnap::{
     PhysicalSizeSource, finalize_chain_once, finalize_chain_once_with, resnap_from_sizes,
     resnap_shell_targets, resnap_with,
 };
-// 同上。未使用は `resolve_talk_time` のみで、`reconcile_reported_sizes` は
-// `drain_resnap::run_drain_phase` が非 test ビルドでも呼ぶ。
-#[allow(unused_imports)]
-use self::scale_text::{reconcile_reported_sizes, resolve_talk_time};
+// 同上。`reconcile_reported_sizes` は下の `emo2_frame_system` が非 test ビルドでも呼ぶ
+// （呼び出しは task 4.3 で `run_drain_phase` から相順の所有者であるこちらへ移した・design 決定 D5）。
+use self::scale_text::reconcile_reported_sizes;
+// バルーン可視性の相（兄弟モジュール `emo2_boot::balloon_visibility`）が注入時刻の解決に用いる
+// ための再輸出。可視性の相と text 相が**同一の**時刻契約を共有することが要る——可視性の相は
+// `visible_glyphs(actor, t)` でリビール済みグリフ数を観測し、text 相は同じ `t` で描画するため、
+// 別式で組むと「観測したグリフ数」と「実際に描かれる文字」が食い違う。
+pub(super) use self::scale_text::resolve_talk_time;
 
-/// `FrameFinalize` 登録の排他 system（donor パターン: remove→3 フェーズ→insert・DD-1/DD-4）。
+/// `FrameFinalize` 登録の排他 system（donor パターン: remove→各フェーズ→insert・DD-1/DD-4）。
 ///
 /// `Emo2Wiring`（NonSend）を [`World::remove_non_send_resource`] で取り出してから
-/// attach→drain→text の 3 フェーズを順に駆動し、[`World::insert_non_send_resource`] で戻す。
+/// attach→dpi→drain→balloon-visibility→窓寸 reconcile→move-drain→resnap→連鎖確定→text-scale→text
+/// の順に各フェーズを駆動し、[`World::insert_non_send_resource`] で戻す。
 /// remove→insert は `&mut World` を各フェーズへ排他に渡すための donor 慣行（借用衝突回避・
 /// `examples/emo-present.rs::boot_present_system` と同型）。本番の text フェーズは override 無し
 /// （`FrameTime`＋`TalkClock` で `talk_time` を解決）。
@@ -146,10 +163,28 @@ pub fn emo2_frame_system(world: &mut World) {
     // 置く——装着前は再スケール対象の target が無く、attach と同一フレームで窓が生えた直後の
     // `Changed<DPI>`（生成時 GetDpiForWindow 実値補正）を同フレームで拾えるようにするため。drain の
     // **前**に置く理由は責任分界であり順序依存ではない: エッジ駆動の再表示を先に済ませ、残った
-    // 未消費要求（初回表示の k₀ 補正）を drain 末尾の状態照合経路が拾う（両経路は presenter の
+    // 未消費要求（初回表示の k₀ 補正）を後段の状態照合経路が拾う（両経路は presenter の
     // 消費規約により二重にも取りこぼしにもならない＝どちらの順でも整合する）。
     run_dpi_phase(&mut wiring, world);
     run_drain_phase(&mut wiring, world);
+    // バルーン可視性（areka-P0-balloon-visibility design 決定 D5・Requirement 3.5／6.6）: 本フレームの
+    // 表示指令をすべて適用し終えた**後**に置く——判断の根拠は「指令適用後の実状態」でなければならず、
+    // drain の前だと 1 フレーム古い可視状態を見る。同時に窓寸 reconcile の**前**でもある必要がある
+    // ——ここで発行した表示が積む窓寸要求を同一フレームのうちに消化するため。
+    run_balloon_visibility_phase(&mut wiring, world);
+    // 窓寸 reconcile の第 2 経路（emo-dpi-scaling task 4.2・design Flow 2 キー決定 (d)／Flow 3 手順 5）:
+    // 本フレームの全 apply が済んだ**後**に、表示成立点の状態照合が積んだ未消費の窓寸要求を取り出して
+    // 窓 client へ反映する（同一フレーム内完結・エッジ消費順序に依存しない）。attach 相の初回
+    // ShowSurface が積む k₀ 補正もここで landing する。task 4.3 で `run_drain_phase` 末尾から相順の
+    // 所有者である本関数へ純移動した（drain の責務を「適用のみ」に保ち、可視性の相を drain と本反映の
+    // 間へ挟めるようにするため。適用 → 反映という順序自体は移動前と変わらない）。
+    // 移動により装着ゲート（`run_drain_phase` 冒頭の `attached` 早期 return）の内側から外側へ出るが、
+    // 反映は自分でゲートされている——装着前は presenter に target が 1 つも無く、報告の取り出し
+    // （`take_pending_resize`）が全 target で `None` を返すため、窓書込もログも発生しない。
+    // 未装着 presenter で本 system を回して書込ゼロを主張する既存の検査
+    // （`frame_text_scale_tests.rs::emo2_frame_system_runs_dpi_phase_without_writes_when_unattached`）が
+    // この経路をそのまま覆っている。
+    reconcile_reported_sizes(&mut wiring.presenter, world);
     // `\![move]` の末端結線: talk スレッドの MoveCueSink から届いた MoveDirective を drain し
     // apply_move_directive で実窓へ即時反映する（GhostWindows ゲート・R5・task 9.2）。present drain
     // とは独立で、GPU attach でなく GhostWindows 存在を待つ（move はキャラ窓 entity へ作用するため）。
@@ -210,3 +245,9 @@ mod diag_route_tests;
 #[cfg(test)]
 #[path = "frame_text_scale_tests.rs"]
 mod text_scale_tests;
+
+// 相順そのものの検査（areka-P0-balloon-visibility task 6.6）。実 emo2 資産＋実 GPU で
+// `emo2_frame_system` をそのまま駆動し、相を並べ替えたときにだけ壊れる性質を主張する。
+#[cfg(test)]
+#[path = "frame_visibility_integration_tests.rs"]
+mod visibility_integration_tests;

@@ -172,15 +172,41 @@ impl EmoPresenter {
         self.targets.get(&target)?.applied
     }
 
-    /// target がいま表示しているサーフェス id（CurrentSurfaceRead・R3.1-3.3）。
+    /// target が**最後に確立した**サーフェス id（CurrentSurfaceRead・R3.1-3.3）。
     ///
-    /// 「最後に表示が成立したサーフェス id」を返す（画面の絵ではなく表示成立の結果・α 非依存）。
-    /// 未表示（一度も `ShowSurface` していない）・`Hide` 済み・空合成へ縮退した場合、および未登録
-    /// target は `None`。単一真実源は `PresentTarget.current_surface_id`（`ComposeKey` から導出しない・
-    /// design §CurrentSurfaceRead State Management）。既存の表示ロジックへ分岐を足さない additive な
-    /// 読み取りのみ（R3.4）。
+    /// 画面の絵ではなく表示確立の結果を返す（α 非依存）。未表示（一度も `ShowSurface` していない）・
+    /// `Hide` 済み・空合成へ縮退した場合、および未登録 target は `None`。単一真実源は
+    /// `PresentTarget.current_surface_id`（`ComposeKey` から導出しない・design §CurrentSurfaceRead
+    /// State Management）。既存の表示ロジックへ分岐を足さない additive な読み取りのみ（R3.4）。
+    ///
+    /// # 「確立」は「可視」を意味しない（`areka-P0-balloon-visibility` Requirement 6.2/6.8）
+    ///
+    /// [`VisibilityOwnership::External`] の target では `ShowSurface` が確立のみを行い可視化しないため、
+    /// 本照会が `Some` でも画面には出ていないことがある。可視か否かは [`Self::target_visible`] が答える
+    /// ——面 ID の所有（本照会）と可視性の所有（`target_visible`）は直交する別軸である。
+    ///
+    /// [`VisibilityOwnership::External`]: super::VisibilityOwnership::External
     pub fn current_surface_id(&self, target: TargetId) -> Option<u32> {
         self.targets.get(&target)?.current_surface_id
+    }
+
+    /// target がいま**可視か**（`areka-P0-balloon-visibility` Requirement 6.8 の可視性の単一真実源）。
+    ///
+    /// 未登録 target は `None`、登録済みなら `Some(可視か)` を返す。真実源は `PresentTarget.visible`
+    /// で、その更新点は「表示確立点の可視化手順（[`VisibilityOwnership::CommandDriven`] のみ）」・
+    /// [`Self::show_target`]・`Hide`／全透明退化の 3 系統だけである。
+    ///
+    /// # なぜ照会を生やすのか（第 2 の帳簿を作らせない）
+    ///
+    /// 可視性を判断する層（バルーン可視性コントローラ）が「自分が最後に何を発行したか」を自前で覚えると、
+    /// 明示指令（`\b[-1]`）や全透明退化のような**自分が発行していない遷移**で帳簿が実状態から乖離する。
+    /// 判断側は毎フレーム本照会を読み、presenter 1 箇所を真実源とする。
+    ///
+    /// 読み取り専用であり、表示状態を一切変更しない（additive な照会）。
+    ///
+    /// [`VisibilityOwnership::CommandDriven`]: super::VisibilityOwnership::CommandDriven
+    pub fn target_visible(&self, target: TargetId) -> Option<bool> {
+        Some(self.targets.get(&target)?.visible)
     }
 
     /// target の表示中画素を CPU へ読み戻す（R6.2/R8.3・検証・将来の直読みヒットテスト基盤）。

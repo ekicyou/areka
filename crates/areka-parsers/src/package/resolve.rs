@@ -87,7 +87,7 @@ pub fn resolve(
     if !shell_dir.is_dir() {
         return Err(MountError::ShellDirMissing { expected: shell_dir });
     }
-    // shell descript.txt から bindgroup default を転記（Req 4.5）。bindgroup default
+    // shell descript.txt から bindgroup default を転記（bindopt 1.1/1.2）。bindgroup default
     // （`sakura.bindgroup*.default,数値`／`kero.*`）は ukadoc カテゴリ `descript_shell`
     // に属し、起点 ghost/master/descript.txt ではなく **shell の descript.txt** に定義
     // される。shell descript は存在確定していない（shell dir の存在のみ Req 3.3 で確定）
@@ -117,8 +117,14 @@ const SAKURA_BINDOPTION_PREFIX: &str = "sakura.bindoption";
 const KERO_BINDOPTION_PREFIX: &str = "kero.bindoption";
 /// bindoption 宣言キーの接尾辞（`sakura.bindoptionN.group` の末尾・task 10.1）。
 const BINDOPTION_GROUP_SUFFIX: &str = ".group";
-/// 排他選択オプション語（`カテゴリ名,mustselect` の第 2 フィールド・task 10.1）。
+/// ちょうど 1 個（解除不可）を宣言するオプション語（オプション欄の 1 語・bindopt 1.2）。
 const MUSTSELECT_OPTION: &str = "mustselect";
+/// 複数可を宣言するオプション語（オプション欄の 1 語・bindopt 1.1）。
+///
+/// ukadoc 正典の 3 値は `mustselect`（ちょうど 1 個・解除不可）／非宣言（既定＝高々 1 個・
+/// 解除可）／`multiple`（複数可）。旧実装は `multiple` を破棄していたため下流に「明示
+/// multiple」と「非宣言」を区別する情報が無かった。
+const MULTIPLE_OPTION: &str = "multiple";
 /// shell 定義ファイル名（ghost/master と同名だが所在が異なる）。
 const SHELL_DESCRIPT_FILE: &str = "descript.txt";
 
@@ -169,36 +175,87 @@ fn read_bindgroup_defaults(shell_dir: &Path, default_encoding: DefaultEncoding) 
             defaults.kero_names.push(name);
             continue;
         }
-        // --- bindoption.group 経路（task 10.1・値はカテゴリ,オプション 文字列）---
-        // `sakura/kero.bindoptionN.group,カテゴリ名,mustselect` のうち mustselect 宣言の
-        // カテゴリ名のみをスコープ別に転記する（`multiple`／非宣言は既定＝非排他で無視）。
-        // オプションインデックス `N`（`parse_bindgroup_id` が検証する）は M1 不使用＝キー形の
-        // 妥当性検査にのみ用いる（転記のみ・展開しない・parsers 転写層原則）。
+        // --- bindoption.group 経路（値はカテゴリ,オプション[+オプション...] 文字列）---
+        // `sakura/kero.bindoptionN.group,カテゴリ名,オプション` のオプション欄を `+` で分解し、
+        // 認識できた語（`mustselect`／`multiple`）の**所属**をスコープ別に忠実転記する。
+        // 併記（`mustselect+multiple`）は両方の集合へ push し、併記の情報を落とさない
+        // （優先則は下流 seriko の解釈・bindopt D4）。どちらの集合にも入らないカテゴリが
+        // 正典の既定（高々 1 個・解除可）を表す——ここで既定を捏造しない（bindopt 1.1）。
+        // 「排他か」の判定語彙は parsers に持ち込まない（転写層原則）。オプション
+        // インデックス `N`（`parse_bindgroup_id` が検証する）は M1 不使用＝キー形の妥当性
+        // 検査にのみ用いる（転記のみ・展開しない）。
         if parse_bindgroup_id(key, SAKURA_BINDOPTION_PREFIX, BINDOPTION_GROUP_SUFFIX).is_some()
-            && let Some(category) = parse_bindoption_mustselect(value)
+            && let Some(decl) = parse_bindoption_options(value)
         {
-            defaults.sakura_mustselect.push(category);
+            if decl.mustselect {
+                defaults.sakura_mustselect.push(decl.category.clone());
+            }
+            if decl.multiple {
+                defaults.sakura_multiple.push(decl.category);
+            }
         } else if parse_bindgroup_id(key, KERO_BINDOPTION_PREFIX, BINDOPTION_GROUP_SUFFIX).is_some()
-            && let Some(category) = parse_bindoption_mustselect(value)
+            && let Some(decl) = parse_bindoption_options(value)
         {
-            defaults.kero_mustselect.push(category);
+            if decl.mustselect {
+                defaults.kero_mustselect.push(decl.category.clone());
+            }
+            if decl.multiple {
+                defaults.kero_multiple.push(decl.category);
+            }
         }
     }
     defaults
 }
 
-/// `bindoption*.group` の値 `カテゴリ名,オプション` を判定し、オプションが `mustselect`
-/// のときのみ trim 済みカテゴリ名を返す。
+/// `bindoption*.group` の値 1 行を分解した宣言（カテゴリ名と、認識できたオプション語の所属）。
 ///
-/// `splitn(2, ',')` で最大 2 分割し各フィールドを trim する。第 2 フィールド（オプション）が
-/// `mustselect` 以外（`multiple` 等）／欠落、または第 1 フィールド（カテゴリ名）が空なら
-/// `None`（既定＝非排他ゆえ収録しない・捏造しない・R4.5）。
-fn parse_bindoption_mustselect(value: &str) -> Option<String> {
+/// 「排他か」の**解釈**は持たない——認識できた語の所属を写すだけの転写値（転写層原則）。
+struct BindOptionDecl {
+    /// 第 1 フィールド（カテゴリ名・trim 済み・非空）。
+    category: String,
+    /// オプション欄に `mustselect` が現れたか（bindopt 1.2）。
+    mustselect: bool,
+    /// オプション欄に `multiple` が現れたか（bindopt 1.1）。
+    multiple: bool,
+}
+
+/// `bindoption*.group` の値 `カテゴリ名,オプション[+オプション...]` を分解し、認識できた
+/// オプション語の所属を返す（ukadoc 正典「オプションは `+` 区切りで複数指定可」・bindopt 1.3）。
+///
+/// `splitn(2, ',')` でカテゴリ名とオプション欄に分け、オプション欄を `'+'` で split して各語
+/// を trim し、`mustselect`／`multiple` との完全一致で認識する。認識できない語は捏造せず
+/// 読み流す（寛容パース・bindopt 1.4）。次のいずれかなら `None`＝収録対象外（bindopt 1.5）:
+/// カテゴリ名が空／オプション欄が欠落（`,` なし）／認識語ゼロ（空欄・未知語のみ）。
+/// どちらの集合にも入らないカテゴリは正典の既定（高々 1 個・解除可）として下流が扱うため、
+/// ここで既定を捏造しない。
+///
+/// 純関数（副作用なし・同一入力同一出力・bindopt 1.7）。
+fn parse_bindoption_options(value: &str) -> Option<BindOptionDecl> {
     let mut fields = value.splitn(2, ',');
     let category = fields.next().unwrap_or("").trim();
-    let option = fields.next().map(str::trim).unwrap_or("");
-    if option == MUSTSELECT_OPTION && !category.is_empty() {
-        Some(category.to_owned())
+    // オプション欄欠落（`,` なし）は空欄と同じく認識語ゼロへ落ちる。
+    let options = fields.next().unwrap_or("");
+    if category.is_empty() {
+        return None;
+    }
+
+    let mut mustselect = false;
+    let mut multiple = false;
+    for option in options.split('+') {
+        match option.trim() {
+            MUSTSELECT_OPTION => mustselect = true,
+            MULTIPLE_OPTION => multiple = true,
+            // 未知オプション語は読み流す（捏造しない・bindopt 1.4）。
+            _ => {}
+        }
+    }
+
+    if mustselect || multiple {
+        Some(BindOptionDecl {
+            category: category.to_owned(),
+            mustselect,
+            multiple,
+        })
     } else {
         None
     }
@@ -533,13 +590,18 @@ mod bindgroup_name_transcription_tests {
 }
 
 #[cfg(test)]
-mod bindoption_mustselect_tests {
-    //! `read_bindgroup_defaults` の `bindoption*.group` 取り込み（task 10.1）の in-source 檻。
+mod bindoption_options_tests {
+    //! `read_bindgroup_defaults` の `bindoption*.group` 取り込みの in-source 檻（bindopt 4.2）。
     //!
     //! shell descript.txt を合成 tempdir に書き出し、`read_bindgroup_defaults` を直接呼んで
-    //! `sakura/kero.bindoption*.group,カテゴリ,mustselect` の取り込み（mustselect のみ収録・
-    //! `multiple`／非宣言は無視・sakura/kero 区別）を決定論で固定する。tempfile 等外部
-    //! クレートには依存せず temp_dir 直下を使う。
+    //! `sakura/kero.bindoption*.group,カテゴリ,オプション[+オプション...]` の取り込みを
+    //! 決定論で固定する。網羅マトリクス: ukadoc 正典 3 値（`mustselect`／非宣言＝既定／
+    //! `multiple`）・`+` 区切り併記・未知語・不完全値・宣言ゼロ・sakura/kero 隔離・再読の
+    //! 同一結果。tempfile 等外部クレートには依存せず temp_dir 直下を使う。
+    //!
+    //! 語彙: 「排他置換（exclusive）」「既定（Default＝高々 1 個・解除可）」「複数可
+    //! （Multiple）」。ここで検証するのは**宣言の所属の転記**だけで、「排他か」の解釈は
+    //! 下流 seriko の責務（転写層原則）。
 
     use std::fs;
     use std::path::PathBuf;
@@ -551,14 +613,16 @@ mod bindoption_mustselect_tests {
 
     fn shell_with_descript(tag: &str, descript_body: &str) -> PathBuf {
         let mut dir = std::env::temp_dir();
-        dir.push(format!("areka_bindoption_mustselect_tests_{tag}"));
+        dir.push(format!("areka_bindoption_options_tests_{tag}"));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).expect("create shell dir");
         fs::write(dir.join("descript.txt"), descript_body.as_bytes()).expect("write descript.txt");
         dir
     }
 
-    /// mustselect 宣言カテゴリは取り込み＝真、非宣言・別スコープは偽（R4.5）。
+    /// `mustselect` 単独宣言はスコープ別に収録され、multiple 側へは漏れない（bindopt 1.2）。
+    ///
+    /// 既存挙動不変の錨。非宣言カテゴリ・別スコープはどちらの集合にも入らない＝既定。
     #[test]
     fn mustselect_declared_categories_ingested() {
         let shell = shell_with_descript(
@@ -571,30 +635,61 @@ mod bindoption_mustselect_tests {
 
         assert!(defaults.is_mustselect(BindScope::Sakura, "腕"));
         assert!(defaults.is_mustselect(BindScope::Sakura, "目"));
-        // 非宣言カテゴリは偽（捏造しない）。
+        // mustselect 単独宣言は multiple 集合へ入らない（2 集合は独立）。
+        assert!(defaults.sakura_multiple.is_empty());
+        assert!(!defaults.is_multiple(BindScope::Sakura, "腕"));
+        // 非宣言カテゴリはどちらの集合にも入らない＝既定（捏造しない）。
         assert!(!defaults.is_mustselect(BindScope::Sakura, "紅"));
+        assert!(!defaults.is_multiple(BindScope::Sakura, "紅"));
         // 別スコープ（kero）には漏れない。
         assert!(!defaults.is_mustselect(BindScope::Kero, "腕"));
 
         let _ = fs::remove_dir_all(&shell);
     }
 
-    /// `multiple` オプションは mustselect ではない＝取り込まない（既定＝非排他・R4.5）。
+    /// `multiple` 単独宣言は multiple としてスコープ別に**収録**される（bindopt 1.1）。
+    ///
+    /// 旧実装は `multiple` を破棄しており、下流に「複数可の明示宣言」と「非宣言（既定＝
+    /// 高々 1 個・解除可）」を区別する情報が存在しなかった——情報欠落の根。本檻は収録
+    /// されること（＝区別が成立すること）を固定する。
     #[test]
-    fn multiple_option_not_ingested() {
+    fn multiple_option_ingested() {
         let shell = shell_with_descript(
             "multiple",
             "charset,UTF-8\nsakura.bindoption0.group,紅,multiple\n",
         );
         let defaults = read_bindgroup_defaults(&shell, DefaultEncoding::Utf8);
 
+        assert_eq!(defaults.sakura_multiple, vec!["紅".to_string()]);
+        assert!(defaults.is_multiple(BindScope::Sakura, "紅"));
+        // multiple 宣言は mustselect ではない（2 集合は独立）。
         assert!(!defaults.is_mustselect(BindScope::Sakura, "紅"));
         assert!(defaults.sakura_mustselect.is_empty());
+        // 別スコープ（kero）には漏れない。
+        assert!(!defaults.is_multiple(BindScope::Kero, "紅"));
+        assert!(defaults.kero_multiple.is_empty());
 
         let _ = fs::remove_dir_all(&shell);
     }
 
-    /// kero 側は本体側と区別して取り込む（R4.5・スコープ隔離）。
+    /// kero 側の `multiple` は本体側と区別して収録する（bindopt 1.1・スコープ隔離）。
+    #[test]
+    fn kero_multiple_distinguished_from_sakura() {
+        let shell = shell_with_descript(
+            "kero_multiple",
+            "charset,UTF-8\nkero.bindoption0.group,尻尾飾り,multiple\n",
+        );
+        let defaults = read_bindgroup_defaults(&shell, DefaultEncoding::Utf8);
+
+        assert_eq!(defaults.kero_multiple, vec!["尻尾飾り".to_string()]);
+        assert!(defaults.is_multiple(BindScope::Kero, "尻尾飾り"));
+        assert!(!defaults.is_multiple(BindScope::Sakura, "尻尾飾り"));
+        assert!(defaults.sakura_multiple.is_empty());
+
+        let _ = fs::remove_dir_all(&shell);
+    }
+
+    /// kero 側は本体側と区別して取り込む（bindopt 1.2・スコープ隔離）。
     #[test]
     fn kero_mustselect_distinguished_from_sakura() {
         let shell = shell_with_descript(
@@ -610,7 +705,69 @@ mod bindoption_mustselect_tests {
         let _ = fs::remove_dir_all(&shell);
     }
 
-    /// カテゴリ／オプション欠落・空は取り込まない（捏造しない・R4.5）。
+    /// `+` 区切り併記（`mustselect+multiple`）は両方の集合へ収録し情報を落とさない
+    /// （ukadoc 正典「オプションは `+` 区切りで複数指定可」・bindopt 1.3）。
+    ///
+    /// 旧実装は値全体と `mustselect` の完全一致で判定していたため、`+` 結合値は
+    /// mustselect 側も含めて全部落ちていた。どちらを優先するか（bindopt D4）は
+    /// 下流 seriko の解釈であり、転写層は両方を写す。
+    #[test]
+    fn plus_separated_both_options_ingested_into_both_sets() {
+        let shell = shell_with_descript(
+            "plus_both",
+            "charset,UTF-8\nsakura.bindoption0.group,腕,mustselect+multiple\n",
+        );
+        let defaults = read_bindgroup_defaults(&shell, DefaultEncoding::Utf8);
+
+        assert_eq!(defaults.sakura_mustselect, vec!["腕".to_string()]);
+        assert_eq!(defaults.sakura_multiple, vec!["腕".to_string()]);
+        assert!(defaults.is_mustselect(BindScope::Sakura, "腕"));
+        assert!(defaults.is_multiple(BindScope::Sakura, "腕"));
+
+        let _ = fs::remove_dir_all(&shell);
+    }
+
+    /// `+` 区切りの語順は結果に影響しない（`multiple+mustselect`・bindopt 1.3）。
+    #[test]
+    fn plus_separated_option_order_is_insensitive() {
+        let shell = shell_with_descript(
+            "plus_order",
+            "charset,UTF-8\nsakura.bindoption0.group,腕,multiple+mustselect\n",
+        );
+        let defaults = read_bindgroup_defaults(&shell, DefaultEncoding::Utf8);
+
+        assert_eq!(defaults.sakura_mustselect, vec!["腕".to_string()]);
+        assert_eq!(defaults.sakura_multiple, vec!["腕".to_string()]);
+
+        let _ = fs::remove_dir_all(&shell);
+    }
+
+    /// `+` 区切りに未知語が混ざっても、認識できる語のみ収録して未知語は読み流す
+    /// （寛容パース・bindopt 1.3/1.4）。空白入りの語も trim して認識する。
+    #[test]
+    fn plus_separated_unknown_word_is_skipped() {
+        let shell = shell_with_descript(
+            "plus_unknown",
+            "charset,UTF-8\n\
+             sakura.bindoption0.group,紅,unknown+multiple\n\
+             sakura.bindoption1.group,腕,mustselect + unknown\n",
+        );
+        let defaults = read_bindgroup_defaults(&shell, DefaultEncoding::Utf8);
+
+        // unknown+multiple → multiple のみ収録。
+        assert_eq!(defaults.sakura_multiple, vec!["紅".to_string()]);
+        assert!(!defaults.is_mustselect(BindScope::Sakura, "紅"));
+        // mustselect + unknown → mustselect のみ収録（各語 trim）。
+        assert_eq!(defaults.sakura_mustselect, vec!["腕".to_string()]);
+        assert!(!defaults.is_multiple(BindScope::Sakura, "腕"));
+
+        let _ = fs::remove_dir_all(&shell);
+    }
+
+    /// 未知語のみ・オプション欄空・カテゴリ空・`,` なしはいずれも収録対象外
+    /// （捏造しない・寛容パース維持・bindopt 1.4/1.5）。
+    ///
+    /// 収録対象外＝どちらの集合にも入らない＝当該カテゴリは既定（高々 1 個・解除可）。
     #[test]
     fn missing_or_empty_fields_not_ingested() {
         let shell = shell_with_descript(
@@ -618,22 +775,94 @@ mod bindoption_mustselect_tests {
             "charset,UTF-8\n\
              sakura.bindoption0.group,腕\n\
              sakura.bindoption1.group,,mustselect\n\
-             sakura.bindoption2.group,口,\n",
+             sakura.bindoption2.group,口,\n\
+             sakura.bindoption4.group,眉,unknown\n\
+             sakura.bindoption5.group,頬,Mustselect\n\
+             sakura.bindoption6.group, ,multiple\n",
         );
         let defaults = read_bindgroup_defaults(&shell, DefaultEncoding::Utf8);
 
-        // オプション欠落（腕）・カテゴリ空（,mustselect）・オプション空（口,）はいずれも非収録。
-        assert!(defaults.sakura_mustselect.is_empty());
-        assert!(!defaults.is_mustselect(BindScope::Sakura, "腕"));
-        assert!(!defaults.is_mustselect(BindScope::Sakura, "口"));
+        // オプション欄欠落（腕・`,` なし）・カテゴリ空（,mustselect）・オプション欄空（口,）
+        // ・未知語のみ（眉）・大小異なる語（頬・完全一致のみ認識）・空白のみカテゴリ（multiple）
+        // はいずれも非収録。
+        assert!(
+            defaults.sakura_mustselect.is_empty(),
+            "不完全値・未知語は mustselect へ収録されない: {:?}",
+            defaults.sakura_mustselect
+        );
+        assert!(
+            defaults.sakura_multiple.is_empty(),
+            "不完全値・空カテゴリは multiple へ収録されない: {:?}",
+            defaults.sakura_multiple
+        );
+        for category in ["腕", "口", "眉", "頬", ""] {
+            assert!(!defaults.is_mustselect(BindScope::Sakura, category));
+            assert!(!defaults.is_multiple(BindScope::Sakura, category));
+        }
 
         let _ = fs::remove_dir_all(&shell);
     }
 
-    /// Observable（emo2 実 fixture）: 腕・口・眉・目 が mustselect と判別でき、宣言のない
-    /// カテゴリ（紅）は非 mustselect と判別できる（R4.5）。
+    /// bindoption 宣言が 1 件も無い shell も読み取りは成立し、全カテゴリ既定になる
+    /// （読み取り失敗にしない・bindopt 1.6）。
     #[test]
-    fn emo2_mustselect_categories_discriminated() {
+    fn no_bindoption_declarations_yields_all_default() {
+        let shell = shell_with_descript(
+            "no_bindoption",
+            "charset,UTF-8\n\
+             sakura.bindgroup1100.default,1\n\
+             sakura.bindgroup1100.name,腕,伸び\n\
+             kero.bindgroup2100.name,腕,伸び\n",
+        );
+        let defaults = read_bindgroup_defaults(&shell, DefaultEncoding::Utf8);
+
+        // 4 集合すべて空＝全カテゴリ既定（高々 1 個・解除可）。
+        assert!(defaults.sakura_mustselect.is_empty());
+        assert!(defaults.kero_mustselect.is_empty());
+        assert!(defaults.sakura_multiple.is_empty());
+        assert!(defaults.kero_multiple.is_empty());
+        // 併存する `.default`／`.name` 経路は通常どおり成立する（読み取り失敗にしない）。
+        assert_eq!(defaults.sakura_default_on, vec![1100]);
+        assert_eq!(defaults.resolve_name(BindScope::Sakura, "腕", "伸び"), Some(1100));
+        assert_eq!(defaults.resolve_name(BindScope::Kero, "腕", "伸び"), Some(2100));
+
+        let _ = fs::remove_dir_all(&shell);
+    }
+
+    /// 同一 descript を再読すると同一の収録結果を返す（決定論・走査順維持・bindopt 1.7）。
+    #[test]
+    fn same_descript_reread_yields_same_result() {
+        let shell = shell_with_descript(
+            "determinism",
+            "charset,UTF-8\n\
+             sakura.bindoption0.group,腕,mustselect\n\
+             sakura.bindoption1.group,口,mustselect+multiple\n\
+             sakura.bindoption2.group,紅,multiple\n\
+             sakura.bindoption3.group,眉,unknown\n\
+             kero.bindoption0.group,尻尾飾り,multiple\n",
+        );
+        let first = read_bindgroup_defaults(&shell, DefaultEncoding::Utf8);
+        let second = read_bindgroup_defaults(&shell, DefaultEncoding::Utf8);
+
+        assert_eq!(first, second, "同一入力に同一結果（決定論）");
+        // 収録順もキー昇順で固定（走査順維持）。
+        assert_eq!(first.sakura_mustselect, vec!["腕".to_string(), "口".to_string()]);
+        assert_eq!(first.sakura_multiple, vec!["口".to_string(), "紅".to_string()]);
+        assert_eq!(first.kero_multiple, vec!["尻尾飾り".to_string()]);
+        assert!(first.kero_mustselect.is_empty());
+
+        let _ = fs::remove_dir_all(&shell);
+    }
+
+    /// Observable（emo2 実 fixture）: 腕・口・眉・目 が `mustselect` 宣言と判別でき、
+    /// 宣言のないカテゴリ（紅・髪飾り・まばたき）はどちらの集合にも属さない＝既定
+    /// （高々 1 個・解除可）と判別できる（bindopt 1.1/1.2）。
+    ///
+    /// emo2 は `multiple` を 1 件も宣言していない——本件の表情固着はまさに「非宣言の
+    /// まばたきカテゴリ（1400-1403）」で起きており、非宣言が `multiple` と同一視されて
+    /// いたことが根であった。
+    #[test]
+    fn emo2_bindoption_categories_discriminated() {
         let shell_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("..")
             .join("pilot")
@@ -649,10 +878,20 @@ mod bindoption_mustselect_tests {
         assert!(defaults.is_mustselect(BindScope::Sakura, "口"));
         assert!(defaults.is_mustselect(BindScope::Sakura, "眉"));
         assert!(defaults.is_mustselect(BindScope::Sakura, "目"));
-        // 宣言のないカテゴリ（紅は .name 宣言はあるが mustselect ではない）。
-        assert!(!defaults.is_mustselect(BindScope::Sakura, "紅"));
-        assert!(!defaults.is_mustselect(BindScope::Sakura, "髪飾り"));
+        // emo2 は multiple を 1 件も宣言していない。
+        assert!(
+            defaults.sakura_multiple.is_empty(),
+            "emo2 に multiple 宣言は無い: {:?}",
+            defaults.sakura_multiple
+        );
+        assert!(defaults.kero_multiple.is_empty());
+        // 宣言のないカテゴリ（紅・髪飾りは .name 宣言はあるが bindoption 宣言なし）＝既定。
+        for category in ["紅", "髪飾り", "まばたき"] {
+            assert!(!defaults.is_mustselect(BindScope::Sakura, category));
+            assert!(!defaults.is_multiple(BindScope::Sakura, category));
+        }
         // kero 側は宣言なし＝全偽（スコープ隔離）。
         assert!(!defaults.is_mustselect(BindScope::Kero, "腕"));
+        assert!(defaults.kero_mustselect.is_empty());
     }
 }
