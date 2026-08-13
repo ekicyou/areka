@@ -171,8 +171,15 @@ grep '\[diag.window_move\]' signoff.out | grep 'kind=char'
 ```bash
 grep '\[zorder-pair\] sink-observed' signoff.out | grep -c 'adjacency_ok=true'
 grep '\[zorder-pair\] sink-observed' signoff.out | grep -c 'adjacency_ok=false'   # 0 であること
-grep '\[zorder-pair\] sink-observed' signoff.out | grep -c 'behind_foreground=false' # 0 であること
+grep '\[zorder-pair\] sink-observed' signoff.out | grep 'behind_foreground=false'
 ```
+
+**★ `behind_foreground=false` を機械的に FAIL と数えてはならない。** `foreground=` 欄を見ること。
+
+- `foreground` が**そのペア自身のキャラ窓**なら**正常**である。バルーンは自分のキャラのすぐ手前に
+  居るのだから、自分のキャラより背面であってはならない——`true` だったら要件 1.1 の違反になる。
+  この行は不変条件が立っていることの証跡として数える。
+- `foreground` が**他アプリ**の窓なのに `false` なら**それが FAIL** である（沈んでいない）。
 
 ---
 
