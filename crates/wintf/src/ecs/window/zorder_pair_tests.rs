@@ -275,11 +275,11 @@ fn balloon() -> HWND {
 fn character() -> HWND {
     fake_hwnd(0x00C0)
 }
-/// キャラ窓の 1 つ手前に割り込んでいる他アプリ窓（是正時の挿入位置になる）。
+/// キャラ窓の最も近い可視の手前に割り込んでいる他アプリ窓（是正時の挿入位置になる）。
 fn intruder_front() -> HWND {
     fake_hwnd(0x00F1)
 }
-/// バルーン窓の 1 つ背後に割り込んでいる他アプリ窓（＝ペアが隣接していない証拠）。
+/// バルーン窓の最も近い可視の背後に割り込んでいる他アプリ窓（＝ペアが隣接していない証拠）。
 fn intruder_back() -> HWND {
     fake_hwnd(0x00F2)
 }
@@ -310,9 +310,9 @@ fn intruded(trigger: PairTrigger, strategy: ZOrderPairStrategy) -> PairObservati
         below_alive: true,
         above_hwnd: Some(balloon()),
         below_hwnd: Some(character()),
-        // バルーンの 1 つ背後はキャラではない＝隣接していない
+        // バルーンの最も近い可視の背後はキャラではない＝隣接していない
         measured_below_of_above: Some(intruder_back()),
-        // キャラの 1 つ手前も他アプリ窓＝ここがバルーンの挿入先になる
+        // キャラの最も近い可視の手前も他アプリ窓＝ここがバルーンの挿入先になる
         measured_above_of_below: Some(intruder_front()),
     }
 }
@@ -345,7 +345,7 @@ fn observation_matrix() -> Vec<(&'static str, PairObservation)> {
                 },
             ));
             matrix.push((
-                "実測 2 値の食い違い（キャラの直前だけがバルーン）",
+                "実測 2 値の食い違い（キャラの最も近い可視の手前だけがバルーン）",
                 PairObservation {
                     measured_above_of_below: Some(balloon()),
                     ..base.clone()
@@ -384,10 +384,10 @@ fn observation_matrix() -> Vec<(&'static str, PairObservation)> {
     matrix
 }
 
-/// 確立・再断行では、バルーンをキャラのすぐ手前へ——挿入位置は「キャラの 1 つ手前の窓」。
+/// 確立・再断行では、バルーンをキャラのすぐ手前へ——挿入位置は「キャラの最も近い可視の手前の窓」。
 ///
 /// `SetWindowPos` の `hWndInsertAfter` は指定窓の**背後**へ対象を置くため、
-/// 「キャラのすぐ手前」を作る挿入位置はキャラ自身ではなくキャラの 1 つ手前の窓である。
+/// 「キャラのすぐ手前」を作る挿入位置はキャラ自身ではなくキャラの最も近い可視の手前の窓である。
 /// ここを取り違えると割り込み窓とキャラの間ではなく、キャラの直後へ落ちてしまう。
 #[test]
 fn decide_pair_fix_places_balloon_directly_above_character_on_establish_and_reassert() {
@@ -398,7 +398,7 @@ fn decide_pair_fix_places_balloon_directly_above_character_on_establish_and_reas
                 PairFixDecision::PlaceAboveOverBelow {
                     insert_after: InsertSpec::After(intruder_front()),
                 },
-                "{trigger:?}／{strategy:?}: バルーンはキャラの 1 つ手前の窓の背後へ入る"
+                "{trigger:?}／{strategy:?}: バルーンはキャラの最も近い可視の手前の窓の背後へ入る"
             );
             // 対照: キャラ自身を挿入位置にすると「すぐ背後」になってしまう（上下反転）
             assert_ne!(
@@ -412,7 +412,7 @@ fn decide_pair_fix_places_balloon_directly_above_character_on_establish_and_reas
     }
 }
 
-/// キャラが最上位で 1 つ手前の窓が無い縁では、挿入位置は最上位（`TopEdge`）になる。
+/// キャラより手前に可視の窓が無い縁では、挿入位置は最上位（`TopEdge`）になる。
 #[test]
 fn decide_pair_fix_yields_top_edge_when_character_is_frontmost() {
     let obs = PairObservation {
@@ -427,7 +427,7 @@ fn decide_pair_fix_yields_top_edge_when_character_is_frontmost() {
         },
         "キャラより手前に窓が無いなら、バルーンは最上位へ置くほか無い"
     );
-    // 対照: 1 つ手前の窓が在れば縁ではなく After になる（TopEdge が既定へ潰れていない）
+    // 対照: 可視の手前の窓が在れば縁ではなく After になる（TopEdge が既定へ潰れていない）
     assert_eq!(
         decide_pair_fix(&intruded(
             PairTrigger::Reassert,
@@ -613,10 +613,10 @@ fn decide_pair_fix_always_skips_when_already_adjacent() {
             assert_eq!(
                 decide_pair_fix(&adjacent),
                 PairFixDecision::Skip(SkipReason::AlreadyAdjacent),
-                "{trigger:?}／{strategy:?}: バルーンの 1 つ背後がキャラなら是正は不要"
+                "{trigger:?}／{strategy:?}: バルーンの最も近い可視の背後がキャラなら是正は不要"
             );
 
-            // 実測 2 値が食い違う場合（キャラの直前だけがバルーン）も隣接扱いで止める。
+            // 実測 2 値が食い違う場合（キャラの最も近い可視の手前だけがバルーン）も隣接扱いで止める。
             // ここを是正へ流すと挿入位置がバルーン自身になり、自分を自分の背後へ置く
             // 意味を成さない指令が出る。
             let inconsistent = PairObservation {

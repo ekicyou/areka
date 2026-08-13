@@ -36,8 +36,9 @@ use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::{ExecutorKind, Schedule};
 use windows::Win32::Foundation::{HINSTANCE, HWND, LPARAM, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DestroyWindow, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
-    SetWindowPos, WINDOW_EX_STYLE, WINDOW_STYLE, WM_ACTIVATE, WS_CHILD, WS_POPUP,
+    CreateWindowExW, DestroyWindow, SW_SHOWNA, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+    SWP_NOZORDER, SetWindowPos, ShowWindow, WINDOW_EX_STYLE, WINDOW_STYLE, WM_ACTIVATE, WS_CHILD,
+    WS_EX_TOOLWINDOW, WS_POPUP, WS_VISIBLE,
 };
 use windows::core::{PCWSTR, w};
 
@@ -73,13 +74,18 @@ const WA_ACTIVE: usize = 1;
 // 実窓・World・巡回のヘルパ
 // -------------------------------------------------------------------------
 
-fn create_window(title: PCWSTR, style: WINDOW_STYLE, parent: Option<HWND>) -> HWND {
+fn create_window(
+    title: PCWSTR,
+    ex_style: WINDOW_EX_STYLE,
+    style: WINDOW_STYLE,
+    parent: Option<HWND>,
+) -> HWND {
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-    // SAFETY: Win32 境界。定義済 "Static" クラスで非表示ウィンドウを生成する。
+    // SAFETY: Win32 境界。定義済 "Static" クラスで 0x0 のテスト窓を生成する。
     unsafe {
         let hinstance = GetModuleHandleW(None).expect("GetModuleHandleW");
         CreateWindowExW(
-            WINDOW_EX_STYLE(0),
+            ex_style,
             w!("Static"),
             title,
             style,
@@ -92,21 +98,51 @@ fn create_window(title: PCWSTR, style: WINDOW_STYLE, parent: Option<HWND>) -> HW
             Some(hinstance.into()),
             None,
         )
-        .expect("CreateWindowExW should create a hidden test window")
+        .expect("CreateWindowExW should create a test window")
     }
 }
 
 /// テスト専用の親窓（兄弟列を閉じるための入れ物）。
+///
+/// **可視で作る**——実測層は可視の窓だけを隣と数えるため（`zorder_pair` の実測層 doc）、
+/// 隠れた親の下の子窓では隣接も手前側の列も測れない（`IsWindowVisible` は当該窓と祖先
+/// すべての `WS_VISIBLE` を見る）。0x0 の道具窓（`WS_EX_TOOLWINDOW`）を活性化を伴わない
+/// `SW_SHOWNA` で見せるため、画面にもタスクバーにも現れず、前面窓も奪わない。
 fn create_test_parent(title: PCWSTR) -> HWND {
-    create_window(title, WINDOW_STYLE(WS_POPUP.0), None)
+    let parent = create_window(
+        title,
+        WINDOW_EX_STYLE(WS_EX_TOOLWINDOW.0),
+        WINDOW_STYLE(WS_POPUP.0),
+        None,
+    );
+    // SAFETY: Win32 境界。自プロセス所有の窓を活性化せずに表示する。
+    unsafe {
+        let _ = ShowWindow(parent, SW_SHOWNA);
+    }
+    parent
 }
 
-/// 親窓の子として非表示の実窓を生成する。
+/// 親窓の子として**可視の**実窓を生成する（本番のゴースト窓と同じ可視の窓を模す）。
 ///
 /// 生成直後の兄弟間の重なりは前提にしない——初期配置は必ず [`insert_after`] で明示的に作る
 /// （子窓は先に作ったものほど手前であり、生成順から前後関係を読むと逆になる）。
 fn create_test_child(parent: HWND, title: PCWSTR) -> HWND {
-    create_window(title, WINDOW_STYLE(WS_CHILD.0), Some(parent))
+    create_window(
+        title,
+        WINDOW_EX_STYLE(0),
+        WINDOW_STYLE(WS_CHILD.0 | WS_VISIBLE.0),
+        Some(parent),
+    )
+}
+
+/// 親窓の子として**不可視の**実窓を生成する（OS が owner の直上に置く補助窓に当たる役）。
+fn create_hidden_test_child(parent: HWND, title: PCWSTR) -> HWND {
+    create_window(
+        title,
+        WINDOW_EX_STYLE(0),
+        WINDOW_STYLE(WS_CHILD.0),
+        Some(parent),
+    )
 }
 
 /// `hwnd` を `after` のすぐ背後（1 つ背面側）へ移す。
@@ -728,22 +764,29 @@ fn is_behind_foreground_reports_absence_rather_than_a_false_negative() {
 // 手前側の走査（実窓）
 // -------------------------------------------------------------------------
 
-/// 手前側の走査は、対象より手前の窓を手前へ向かう順に集め、最前面まで辿ったことを示す。
+/// 手前側の走査は、対象より手前の**可視の**窓を手前へ向かう順に集め、最前面まで辿った
+/// ことを示す。不可視の窓は列に入らない（前面窓は必ず可視ゆえ判定は変わらない）。
 #[test]
-fn measure_windows_in_front_collects_the_chain_up_to_the_top() {
+fn measure_windows_in_front_collects_the_visible_chain_up_to_the_top() {
     let parent = create_test_parent(w!("wintf-zorder-sink-scan"));
     let back = create_test_child(parent, w!("back"));
     let middle = create_test_child(parent, w!("middle"));
+    let hidden = create_hidden_test_child(parent, w!("hidden"));
     let front = create_test_child(parent, w!("front"));
-    // 「front／middle／back」の順（手前 → 背後）を明示的に作る。
-    insert_after(middle, front);
+    // 「front／hidden／middle／back」の順（手前 → 背後）を明示的に作る。
+    insert_after(hidden, front);
+    insert_after(middle, hidden);
     insert_after(back, middle);
 
     let scanned = measure_windows_in_front(back);
     assert_eq!(
         scanned.windows,
         vec![middle, front],
-        "手前へ向かう順に集まるはず"
+        "手前へ向かう順に集まり、不可視の窓は入らないはず"
+    );
+    assert!(
+        !scanned.windows.contains(&hidden),
+        "不可視の窓は手前の列に数えない"
     );
     assert!(scanned.reached_top, "最前面まで辿り着いたはず");
 

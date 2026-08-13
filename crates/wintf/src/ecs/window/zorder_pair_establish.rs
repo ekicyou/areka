@@ -79,7 +79,7 @@ unsafe impl Sync for OwnerEstablishFailed {}
 ///    現在のストラテジが案 B で owner を張らない構成である（`StrategyDisabled`）。
 /// 2. 揃っていれば `set_window_owner(balloon_hwnd, char_hwnd)` を呼ぶ。
 /// 3. 成功: [`OwnerLink`] を付け、初期隣接を確定させるため [`ReassertZOrder`] を 1 発入れ、
-///    確立の記録（info・要件 6.1）を出す。記録には確立直後に採った「キャラ窓の 1 つ手前」の
+///    確立の記録（info・要件 6.1）を出す。記録には確立直後に採った「キャラ窓の最も近い可視の手前」の
 ///    実測を載せる——ここにバルーン窓が現れることが案 A の中核保証（ゲート G6）の証跡になる。
 /// 4. 失敗: error 水準で記録し（要件 6.2）、同じハンドルの組では再試行しないよう
 ///    [`OwnerEstablishFailed`] を付ける。窓は現行どおり表示され続ける（要件 6.4）。
@@ -168,7 +168,7 @@ pub fn establish_owner_links(
 
         match set_window_owner(owned_hwnd, owner_hwnd) {
             Ok(()) => {
-                // 確立直後の「キャラ窓の 1 つ手前」——ここにバルーン窓が居ることが
+                // 確立直後の「キャラ窓の最も近い可視の手前」——ここにバルーン窓が居ることが
                 // 案 A の中核保証の証跡（ゲート G6）。実測できなくても確立は成立する。
                 let measured_prev = measure_window_above(owner_hwnd);
                 commands.entity(entity).insert((

@@ -36,8 +36,9 @@ use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::{ExecutorKind, Schedule};
 use windows::Win32::Foundation::{HINSTANCE, HWND};
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DestroyWindow, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetWindowPos,
-    WINDOW_EX_STYLE, WINDOW_STYLE, WS_CHILD, WS_POPUP,
+    CreateWindowExW, DestroyWindow, SW_SHOWNA, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+    SetWindowPos, ShowWindow, WINDOW_EX_STYLE, WINDOW_STYLE, WS_CHILD, WS_EX_TOOLWINDOW, WS_POPUP,
+    WS_VISIBLE,
 };
 use windows::core::{PCWSTR, w};
 
@@ -63,13 +64,18 @@ const SET_WINDOW_POS_TAG: &str = "[guarded_set_window_pos] Calling SetWindowPos"
 // 実窓・World・巡回のヘルパ
 // -------------------------------------------------------------------------
 
-fn create_window(title: PCWSTR, style: WINDOW_STYLE, parent: Option<HWND>) -> HWND {
+fn create_window(
+    title: PCWSTR,
+    ex_style: WINDOW_EX_STYLE,
+    style: WINDOW_STYLE,
+    parent: Option<HWND>,
+) -> HWND {
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-    // SAFETY: Win32 境界。定義済 "Static" クラスで非表示ウィンドウを生成する。
+    // SAFETY: Win32 境界。定義済 "Static" クラスで 0x0 のテスト窓を生成する。
     unsafe {
         let hinstance = GetModuleHandleW(None).expect("GetModuleHandleW");
         CreateWindowExW(
-            WINDOW_EX_STYLE(0),
+            ex_style,
             w!("Static"),
             title,
             style,
@@ -82,18 +88,37 @@ fn create_window(title: PCWSTR, style: WINDOW_STYLE, parent: Option<HWND>) -> HW
             Some(hinstance.into()),
             None,
         )
-        .expect("CreateWindowExW should create a hidden test window")
+        .expect("CreateWindowExW should create a test window")
     }
 }
 
 /// テスト専用の親窓（兄弟列を閉じるための入れ物）。
+///
+/// **可視で作る**——実測層は可視の窓だけを隣と数えるため（`zorder_pair` の実測層 doc）、
+/// 隠れた親の下の子窓では隣接そのものが測れない。0x0 の道具窓（`WS_EX_TOOLWINDOW`）を
+/// 活性化を伴わない `SW_SHOWNA` で見せるため、画面にもタスクバーにも現れない。
 fn create_test_parent(title: PCWSTR) -> HWND {
-    create_window(title, WINDOW_STYLE(WS_POPUP.0), None)
+    let parent = create_window(
+        title,
+        WINDOW_EX_STYLE(WS_EX_TOOLWINDOW.0),
+        WINDOW_STYLE(WS_POPUP.0),
+        None,
+    );
+    // SAFETY: Win32 境界。自プロセス所有の窓を活性化せずに表示する。
+    unsafe {
+        let _ = ShowWindow(parent, SW_SHOWNA);
+    }
+    parent
 }
 
-/// 親窓の子として非表示の実窓を生成する（初期配置は [`insert_after`] で明示的に作ること）。
+/// 親窓の子として**可視の**実窓を生成する（初期配置は [`insert_after`] で明示的に作ること）。
 fn create_test_child(parent: HWND, title: PCWSTR) -> HWND {
-    create_window(title, WINDOW_STYLE(WS_CHILD.0), Some(parent))
+    create_window(
+        title,
+        WINDOW_EX_STYLE(0),
+        WINDOW_STYLE(WS_CHILD.0 | WS_VISIBLE.0),
+        Some(parent),
+    )
 }
 
 /// `hwnd` を `after` のすぐ背後（1 つ背面側）へ移す。

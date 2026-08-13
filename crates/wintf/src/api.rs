@@ -92,6 +92,23 @@ pub(crate) fn get_foreground_window() -> Option<HWND> {
     if hwnd.is_invalid() { None } else { Some(hwnd) }
 }
 
+/// 指定窓が可視かを返す（`IsWindowVisible`）。
+///
+/// 「可視」は `WS_VISIBLE` が当該窓**および祖先のすべて**に立っていることを意味する
+/// （親が隠れていれば子は可視ではない）。窓が画面外に居るか、他の窓に完全に覆われているか、
+/// 幅も高さも 0 かは問わない——**表示状態のスタイルだけ**の判定である。
+///
+/// `Result` で包まないのは、`GetForegroundWindow` と同じく失敗そのものを持たない API だから
+/// である。無効なハンドルに対しても OS は「可視ではない」（`FALSE`）を返すのであり、
+/// ここで `Err` を作ると呼び出し側が偽の失敗を見ることになる。
+///
+/// 読み取り専用であり、窓の表示状態を変えることは決してない。
+#[inline(always)]
+pub(crate) fn is_window_visible(hwnd: HWND) -> bool {
+    // SAFETY: Win32 境界。表示状態のスタイルを読むだけで、窓の状態は一切変えない。
+    unsafe { IsWindowVisible(hwnd) }.as_bool()
+}
+
 /// 指定窓の owner を `owner` に設定する（`SetWindowLongPtrW(GWLP_HWNDPARENT)`）。
 ///
 /// トップレベル窓に対する `GWLP_HWNDPARENT` の書込は親子化（`SetParent`）ではなく
@@ -352,6 +369,50 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn is_window_visible_reads_the_style_and_the_whole_ancestor_chain() {
+        // 「可視」は当該窓と**祖先すべて**の WS_VISIBLE で決まる。隣接の実測はこの判定で
+        // 窓を読み飛ばすため、3 通り（親が隠れている／自分に WS_VISIBLE が無い／両方立つ）が
+        // それぞれ別の答えになることを固定する。
+        let parent = create_test_hwnd(w!("wintf-visible-test-parent"));
+        let shown = create_test_window(
+            w!("wintf-visible-test-shown"),
+            WINDOW_STYLE(WS_CHILD.0 | WS_VISIBLE.0),
+            Some(parent),
+        );
+        let hidden = create_test_child_hwnd(parent, w!("wintf-visible-test-hidden"));
+
+        // 親が隠れている間は、WS_VISIBLE を持つ子でも可視ではない。
+        assert!(!is_window_visible(parent), "親窓はまだ表示していない");
+        assert!(
+            !is_window_visible(shown),
+            "祖先が隠れている子は WS_VISIBLE を持っていても可視ではない"
+        );
+
+        // SAFETY: Win32 境界。自プロセス所有の窓を活性化せずに表示する。
+        unsafe {
+            let _ = ShowWindow(parent, SW_SHOWNA);
+        }
+        assert!(is_window_visible(parent), "表示した親窓は可視");
+        assert!(
+            is_window_visible(shown),
+            "親が可視になれば WS_VISIBLE の子も可視になる"
+        );
+        // 対照: 同じ親の下でも WS_VISIBLE を持たない子は不可視のまま
+        // （「常に真」を返す実装はここで落ちる）。
+        assert!(
+            !is_window_visible(hidden),
+            "WS_VISIBLE を持たない子は親が可視でも不可視"
+        );
+
+        // 無効なハンドルは失敗ではなく「可視ではない」。
+        assert!(!is_window_visible(HWND::default()));
+
+        destroy_test_hwnd(hidden);
+        destroy_test_hwnd(shown);
+        destroy_test_hwnd(parent);
     }
 
     #[test]

@@ -179,7 +179,7 @@ pub(crate) fn observe_marked_pair_sinks(
             continue;
         };
 
-        // 隣接の正準判定は「手前側の 1 つ背後が背後側か」（design.md Invariants）。
+        // 隣接の正準判定は「手前側の最も近い可視の背後が背後側か」（design.md Invariants）。
         // 維持系の検証と同じ向きで測る——判定の向きが 2 通りあると記録が読めなくなる。
         let adjacency_ok = measure_window_below(above_hwnd) == Some(below_hwnd);
 

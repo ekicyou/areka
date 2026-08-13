@@ -16,7 +16,8 @@
 //! - 診断記録の語彙: 行を組む純関数（`*_line`）と、それを出すだけの `log_*`／`record_*`
 //!
 //! 確立系は兄弟モジュール [`super::zorder_pair_establish`]、維持系は
-//! [`super::zorder_pair_maintain`] にある（本ファイルが 1,000 行の上限に迫るため分割した）。
+//! [`super::zorder_pair_maintain`]、記録の**行を組む純関数**は
+//! [`super::zorder_pair_diag`] にある（本ファイルが 1,000 行の上限に迫るため分割した）。
 //! **記録を出すマクロは本ファイル内に置くこと**——`tracing` の出力先は呼び出し元の
 //! module path が既定であり、他ファイルへ移すとサインオフの grep 対象が分裂する。
 
@@ -24,7 +25,12 @@ use bevy_ecs::prelude::*;
 use tracing::{debug, error, info, warn};
 use windows::Win32::Foundation::HWND;
 
-use crate::api::{get_window_above, get_window_below};
+use super::zorder_pair_diag::{
+    fix_line, hwnd_field, owner_detach_failed_line, owner_detached_line,
+    owner_establish_failed_line, owner_established_line, sink_observed_line, skip_line,
+    verify_failed_line,
+};
+use crate::api::{get_window_above, get_window_below, is_window_visible};
 
 // ============================================================================
 // KeepDirectlyAbove - ペア関係の永続宣言
@@ -50,9 +56,10 @@ pub struct KeepDirectlyAbove {
 ///
 /// 「`above` が `below` のすぐ手前に居る」——是正の 2 つの腕
 /// （バルーンを手前へ／キャラを直後へ）はどちらも最終的にこの同一の隣接へ収束するため、
-/// 期待値はこの 1 形で足りる。照合は `get_window_below(above) == Some(below)`
-/// （`GetWindow(GW_HWNDNEXT)` 実測）で行い、不一致なら `verify-failed` を `error!` で
-/// 記録する（要件 6.2）。同レコードの `expected` がこの値、`measured` が実測値である。
+/// 期待値はこの 1 形で足りる。照合は `measure_window_below(above) == Some(below)`
+/// （`GW_HWNDNEXT` を辿り、不可視の窓を読み飛ばした**最も近い可視の背後**）で行い、
+/// 不一致なら `verify-failed` を `error!` で記録する（要件 6.2）。同レコードの `expected` が
+/// この値、`measured` が実測値である。
 ///
 /// 座標・寸法のフィールドは**持たない**——是正は表示順のみを動かす（要件 1.6）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -207,17 +214,24 @@ pub(crate) struct PairObservation {
     pub above_hwnd: Option<HWND>,
     /// 背後側の HWND（未付与は `None`）
     pub below_hwnd: Option<HWND>,
-    /// 手前側の 1 つ背後にある窓（`GetWindow(above, GW_HWNDNEXT)` 実測）
+    /// 手前側の**最も近い可視の背後**にある窓（`GW_HWNDNEXT` を辿り不可視窓を読み飛ばした実測）。
+    ///
+    /// 「1 つ背後」ではない——OS が owner の直上に置く不可視の補助窓（スレッド既定の IME 窓）が
+    /// 挟まると、配置が正しくても隣接が成立しなくなるためである（実測層 [`measure_window_below`]
+    /// の doc に根拠）。判断側の扱いはこの値の意味が変わっても一切変わらない。
     pub measured_below_of_above: Option<HWND>,
-    /// 背後側の 1 つ手前にある窓（`GetWindow(below, GW_HWNDPREV)` 実測）
+    /// 背後側の**最も近い可視の手前**にある窓（`GW_HWNDPREV` を辿り不可視窓を読み飛ばした実測）。
+    ///
+    /// 意味の変化の理由は [`Self::measured_below_of_above`] と同じ。この値はそのまま
+    /// 是正の挿入位置にもなる（[`measure_window_above`] の doc を参照）。
     pub measured_above_of_below: Option<HWND>,
 }
 
 /// 是正の挿入位置。
 ///
 /// `SetWindowPos` の `hWndInsertAfter` は**指定窓の背後**へ対象を置くため、
-/// 「キャラのすぐ手前」を作る挿入位置はキャラ自身ではなく**キャラの 1 つ手前の窓**である。
-/// その窓が居ない（キャラが最上位）縁だけが [`InsertSpec::TopEdge`] になる。
+/// 「キャラのすぐ手前」を作る挿入位置はキャラ自身ではなく**キャラの最も近い可視の手前の窓**である。
+/// その窓が居ない（キャラより手前に可視の窓が無い）縁だけが [`InsertSpec::TopEdge`] になる。
 ///
 /// バリアントは 2 つで尽きており、**常時最前面（`ZOrder::TopMost`）を表す値は無い**
 /// ——要件 4.3／8.1 はこの型の形そのもので満たされる。
@@ -275,15 +289,19 @@ pub(crate) fn decide_pair_fix(obs: &PairObservation) -> PairFixDecision {
         return PairFixDecision::Skip(SkipReason::HandleMissing);
     };
 
-    // 同値ガード。正準の判定は「手前側の 1 つ背後が背後側か」（design.md Invariants）だが、
+    // 同値ガード。正準の判定は「手前側の最も近い可視の背後が背後側か」（design.md Invariants）だが、
     // 逆向きの実測が隣接を示す場合も併せて止める——そちらだけが隣接を示すのは 2 つの実測が
     // 食い違った異常であり、そのまま是正へ流すと挿入位置が動かす窓自身になってしまう。
     if obs.measured_below_of_above == Some(below) || obs.measured_above_of_below == Some(above) {
         return PairFixDecision::Skip(SkipReason::AlreadyAdjacent);
     }
 
-    // 「バルーンをキャラのすぐ手前へ」の挿入位置は、キャラの 1 つ手前の窓。
-    // その窓が居なければキャラが最上位であり、最上位へ置くほか無い。
+    // 「バルーンをキャラのすぐ手前へ」の挿入位置は、キャラの最も近い可視の手前の窓。
+    // その窓が居なければ（可視の窓としては）キャラが最上位であり、最上位へ置くほか無い。
+    //
+    // 読み飛ばした結果ここに入るのは可視の窓だが、それで正しい——`SetWindowPos` の
+    // `hWndInsertAfter` はその窓の**すぐ背後**へ対象を置くので、間に挟まっていた不可視窓
+    // （OS が owner の直上に置く補助窓）より**手前**に入る。
     let place_above = PairFixDecision::PlaceAboveOverBelow {
         insert_after: match obs.measured_above_of_below {
             Some(front_of_below) => InsertSpec::After(front_of_below),
@@ -336,79 +354,16 @@ pub(crate) fn decide_pair_fix(obs: &PairObservation) -> PairFixDecision {
 // サインオフの grep 判定語と出力書式は 1:1 で対応する。書式が意図せず変われば手順が
 // 静かに嘘になるため、組立を純関数（`*_line`）へ切り出してテストで語彙を固定し、
 // `log_*`／`record_*` はその戻り値をそのまま本文にする（組立を二重に持たない）。
+// その純関数群は兄弟の [`zorder_pair_diag`](super::zorder_pair_diag) にある——
+// マクロを 1 つも含まない文字列組立だけをあちらへ置き、**マクロを呼ぶ側は本ファイルに
+// 残す**（`tracing` の出力先は呼び出し元の module path が既定であり、移すとサインオフの
+// grep 対象が分裂する）。
 //
 // # 出力先と水準
 //
 // target は module path 既定（`wintf::ecs::window::zorder_pair`）——サインオフの
 // `RUST_LOG` はこの名前で点灯させる。水準はレコード表どおりで、失敗と検証不一致だけが
 // error、確立成功が info、残りは診断専用の debug（既定運転では無音）である。
-
-/// 値が取得できなかったフィールドの番兵。
-///
-/// フィールドごと落とさないのは、落とすと「記録が出ていない」のと「その経路には
-/// その値が無い」の区別が事後に付かなくなるためである。
-const UNKNOWN: &str = "-";
-
-/// owner 確立の記録タグ（grep 判定語）。
-const OWNER_ESTABLISHED_TAG: &str = "[zorder-pair] owner-established";
-/// 是正の記録タグ（指令と実測を同一行に載せる・要件 6.1）。
-const FIX_TAG: &str = "[zorder-pair] fix";
-/// 見送りの記録タグ（理由必須・要件 6.3）。
-const SKIP_TAG: &str = "[zorder-pair] skip";
-/// 検証不一致の記録タグ（error 水準・要件 6.2）。
-const VERIFY_FAILED_TAG: &str = "[zorder-pair] verify-failed";
-/// owner 確立失敗の記録タグ（error 水準・要件 6.2）。
-const OWNER_ESTABLISH_FAILED_TAG: &str = "[zorder-pair] owner-establish-failed";
-/// 沈降観測の記録タグ（要件 4.4／7.5）。
-const SINK_OBSERVED_TAG: &str = "[zorder-pair] sink-observed";
-
-/// HWND をログ用の 16 進表現へ（不在は番兵）。
-///
-/// `Debug` 表現をそのまま使わないのは、値の中に空白や記号が混じると
-/// `field=value` の 1 行から機械的に切り出せなくなるためである。
-fn hwnd_field(hwnd: Option<HWND>) -> String {
-    match hwnd {
-        Some(h) => format!("0x{:X}", h.0 as usize),
-        None => UNKNOWN.to_string(),
-    }
-}
-
-/// 真偽値をログ用表現へ（判定そのものが取れなかった場合は番兵）。
-///
-/// 「取れなかった」を `false` へ潰さない——潰すと「沈まなかった」という**異常**と
-/// 「測れなかった」という**観測の欠落**が同じ字面になる。
-fn tristate_field(value: Option<bool>) -> String {
-    match value {
-        Some(v) => v.to_string(),
-        None => UNKNOWN.to_string(),
-    }
-}
-
-impl SkipReason {
-    /// 記録に載る理由語（サインオフの grep 判定語）。
-    ///
-    /// 5 種が互いに異なる語であることがそのまま要件 6.3 の「理由を伴う見送り」の
-    /// 実質になる——1 語へ潰れると記録があっても理由が読めない。
-    pub(crate) fn as_str(&self) -> &'static str {
-        match self {
-            SkipReason::AlreadyAdjacent => "AlreadyAdjacent",
-            SkipReason::PeerMissing => "PeerMissing",
-            SkipReason::HandleMissing => "HandleMissing",
-            SkipReason::EchoOrIrrelevant => "EchoOrIrrelevant",
-            SkipReason::StrategyDisabled => "StrategyDisabled",
-        }
-    }
-}
-
-impl InsertSpec {
-    /// 挿入位置のログ用表現（縁は専用の語で、ハンドル表現と混ざらない）。
-    fn as_field(&self) -> String {
-        match self {
-            InsertSpec::After(hwnd) => hwnd_field(Some(*hwnd)),
-            InsertSpec::TopEdge => "top-edge".to_string(),
-        }
-    }
-}
 
 impl PairFixDecision {
     /// 是正の腕が指す挿入位置（見送りには挿入位置が無い＝`None`）。
@@ -436,69 +391,6 @@ impl PairFixDecision {
     }
 }
 
-/// owner 確立の記録行（純関数）。
-///
-/// `measured_prev` は確立直後に採った「owner（キャラ窓）の 1 つ手前」の実測であり、
-/// ここに被 owner（バルーン窓）が現れることが案 A の中核保証（ゲート G6）の証跡になる。
-fn owner_established_line(
-    entity: Entity,
-    peer: Entity,
-    owned_hwnd: HWND,
-    owner_hwnd: HWND,
-    measured_prev: Option<HWND>,
-) -> String {
-    format!(
-        "{OWNER_ESTABLISHED_TAG} entity={entity:?} peer={peer:?} owned_hwnd={owned} \
-         owner_hwnd={owner} measured_prev={measured}",
-        owned = hwnd_field(Some(owned_hwnd)),
-        owner = hwnd_field(Some(owner_hwnd)),
-        measured = hwnd_field(measured_prev),
-    )
-}
-
-/// 是正の記録行（純関数）——**出した指令と、その後の実測を同じ 1 行に載せる**。
-///
-/// 行を「指令」と「実測」に分けないのは design.md「Implementation Notes > Validation」の
-/// 裁定である。分けると「指令は出したが効かなかった」の判定が 2 行の突合になり、
-/// 過去に同型の誤診を生んでいる。
-fn fix_line(
-    entity: Entity,
-    peer: Entity,
-    insert_after: InsertSpec,
-    measured_next_after_fix: Option<HWND>,
-) -> String {
-    format!(
-        "{FIX_TAG} entity={entity:?} peer={peer:?} insert_after={insert_after} \
-         measured_next_after_fix={measured}",
-        insert_after = insert_after.as_field(),
-        measured = hwnd_field(measured_next_after_fix),
-    )
-}
-
-/// 見送りの記録行（純関数・理由必須）。
-fn skip_line(entity: Entity, peer: Entity, reason: SkipReason) -> String {
-    format!(
-        "{SKIP_TAG} entity={entity:?} peer={peer:?} reason={reason}",
-        reason = reason.as_str(),
-    )
-}
-
-/// 検証不一致の記録行（純関数）——期待した隣接と実測を同じ行へ。
-fn verify_failed_line(
-    entity: Entity,
-    peer: Entity,
-    expected: ExpectedOrder,
-    measured: Option<HWND>,
-) -> String {
-    format!(
-        "{VERIFY_FAILED_TAG} entity={entity:?} peer={peer:?} expected_above={above} \
-         expected_below={below} measured={measured}",
-        above = hwnd_field(Some(expected.above)),
-        below = hwnd_field(Some(expected.below)),
-        measured = hwnd_field(measured),
-    )
-}
-
 /// ペアの相手が失われた形（切離しの記録に載る）。
 ///
 /// 実体ごと消えたのか、実体は残ってハンドルだけが外れたのかを分けるのは、破棄経路の
@@ -512,127 +404,121 @@ pub(crate) enum PeerLoss {
     HandleRemoved,
 }
 
-impl PeerLoss {
-    /// 記録に載る語。
-    fn as_str(&self) -> &'static str {
+// ============================================================================
+// 実測層——隣接は「最も近い可視の隣」で測る
+// ============================================================================
+//
+// # なぜ 1 歩ではなく可視の隣なのか（実機で確定した根拠）
+//
+// スレッド既定の IME 窓（クラス `IME`／タイトル `Default IME`／**不可視**／矩形 0x0）は
+// キャラ窓を owner に持ち、Windows は被 owner 窓を owner の手前に保つ。バルーン窓も同じ
+// キャラ窓を owner に持つ被 owner 窓であるため、キャラ窓の直上には被 owner 窓が 2 枚並び、
+// その内部順序は我々の制御外である。ゆえに `GetWindow` を 1 歩だけ辿る測り方では、
+// **配置が正しくても隣接判定が落ちる**（実機で毎回 `verify-failed` が出ていた形）。
+//
+// 要件 1.2 の趣旨は Introduction の「会話が読める」＝**可視の遮蔽**であり、可視の窓だけを
+// 見ればバルーンはキャラのすぐ手前に居る。よって走査は不可視の窓を読み飛ばし、
+// **最も近い可視の隣**を返す（測り方の裁定は requirements.md 受入基準 1.2 の但し書き）。
+
+/// 兄弟列を辿る向き（実測層の内部語彙）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NeighborSide {
+    /// 手前側（前面へ向かう＝`GW_HWNDPREV`）
+    Above,
+    /// 背後側（背面へ向かう＝`GW_HWNDNEXT`）
+    Below,
+}
+
+impl NeighborSide {
+    /// 隣へ 1 歩進む（可視・不可視は問わない生の隣）。
+    fn step(self, hwnd: HWND) -> windows::core::Result<Option<HWND>> {
         match self {
-            PeerLoss::Despawned => "despawned",
-            PeerLoss::HandleRemoved => "handle-removed",
+            NeighborSide::Above => get_window_above(hwnd),
+            NeighborSide::Below => get_window_below(hwnd),
+        }
+    }
+
+    /// 失敗・打切りの記録に載る向きの語。
+    fn label(self) -> &'static str {
+        match self {
+            NeighborSide::Above => "手前",
+            NeighborSide::Below => "背後",
         }
     }
 }
 
-/// owner 切離しの記録行（純関数）。
-fn owner_detached_line(
-    entity: Entity,
-    peer: Entity,
-    owned_hwnd: HWND,
-    owner_hwnd: HWND,
-    loss: PeerLoss,
-) -> String {
-    format!(
-        "ペアの相手が消えたため owner を切り離しました entity={entity:?} peer={peer:?} \
-         owned_hwnd={owned} owner_hwnd={owner} peer_state={state}",
-        owned = hwnd_field(Some(owned_hwnd)),
-        owner = hwnd_field(Some(owner_hwnd)),
-        state = loss.as_str(),
-    )
-}
-
-/// owner 切離し失敗の記録行（純関数）。
-fn owner_detach_failed_line(
-    entity: Entity,
-    peer: Entity,
-    owned_hwnd: HWND,
-    owner_hwnd: HWND,
-    error: &windows::core::Error,
-) -> String {
-    format!(
-        "ペアの相手が消えましたが owner の切離しに失敗しました（処理は継続します） \
-         entity={entity:?} peer={peer:?} owned_hwnd={owned} owner_hwnd={owner} \
-         error={code:?} message={message}",
-        owned = hwnd_field(Some(owned_hwnd)),
-        owner = hwnd_field(Some(owner_hwnd)),
-        code = error.code(),
-        message = error.message(),
-    )
-}
-
-/// owner 確立失敗の記録行（純関数）。
-fn owner_establish_failed_line(entity: Entity, error: &windows::core::Error) -> String {
-    format!(
-        "{OWNER_ESTABLISH_FAILED_TAG} entity={entity:?} error={code:?} message={message}",
-        code = error.code(),
-        message = error.message(),
-    )
-}
-
-/// 沈降観測の記録行（純関数）。
+/// 兄弟列を何枚まで辿るかの上限（両向き共通）。
 ///
-/// `behind_foreground` は「当該窓が前面窓より背面に居るか」の判定で、前面窓が取れない
-/// ／比較できない場合は番兵になる（偽と混同させない）。
-fn sink_observed_line(
-    entity: Entity,
-    adjacency_ok: bool,
-    foreground: Option<HWND>,
-    behind_foreground: Option<bool>,
-) -> String {
-    format!(
-        "{SINK_OBSERVED_TAG} entity={entity:?} adjacency_ok={adjacency_ok} \
-         foreground={foreground} behind_foreground={behind}",
-        foreground = hwnd_field(foreground),
-        behind = tristate_field(behind_foreground),
-    )
-}
+/// 兄弟列が壊れて環になっている場合や、不可視の窓が延々と続く場合に無限に辿らないための
+/// 歯止めである。デスクトップのトップレベル窓がこの枚数を超えることは実運用では起きないが、
+/// 超えた場合は打切りとして記録に残し、値は**不在（番兵）へ倒す**——測れなかったことを
+/// 偽の失敗にすり替えない（沈降観測の走査もこの上限を共有する）。
+const SIBLING_SCAN_LIMIT: usize = 512;
 
-/// 指定窓の 1 つ手前にある窓を実測する（走査の失敗は不在へ潰したうえで記録に残す）。
+/// 指定窓から `side` の向きへ辿り、**最も近い可視の窓**を実測する。
 ///
-/// 記録に載る実測値の型は `Option<HWND>` であり、「手前に誰も居ない」と「走査に失敗した」は
-/// どちらも不在（記録では番兵 `-`）になる。値としてこの 2 つを分けないのは、載せる先の
-/// フィールドが 1 つだからである——**代わりに失敗そのものを必ず記録へ残す**ことで、
-/// 番兵が出た理由が事後に読めるようにする（[areka-log-first-no-silent-failure]）。
+/// 記録に載る実測値の型は `Option<HWND>` であり、「その向きに可視の窓が居ない」と
+/// 「走査に失敗した／上限に達した」はどちらも不在（記録では番兵 `-`）になる。値として
+/// この 2 つを分けないのは、載せる先のフィールドが 1 つだからである——**代わりに失敗と
+/// 打切りそのものを必ず記録へ残す**ことで、番兵が出た理由が事後に読めるようにする
+/// （[areka-log-first-no-silent-failure]）。
 ///
 /// 失敗の記録に `[zorder-pair] ...` のタグを付けないのは、サインオフの grep 判定語が
 /// design.md「診断ログ語彙（要件 6）」のレコード表で閉じているためである（判定語を
 /// 勝手に増やさない）。出力先は本モジュール既定のままで、水準は warn——
 /// 走査が失敗しても是正そのものは続行でき、利用者の操作は妨げられない（要件 6.4）。
-pub(crate) fn measure_window_above(hwnd: HWND) -> Option<HWND> {
-    match get_window_above(hwnd) {
-        Ok(found) => found,
-        Err(err) => {
-            warn!(
-                "窓の 1 つ手前の走査に失敗しました（記録には不在として載ります） hwnd={hwnd} error={code:?} message={message}",
-                hwnd = hwnd_field(Some(hwnd)),
-                code = err.code(),
-                message = err.message(),
-            );
-            None
+fn measure_nearest_visible(hwnd: HWND, side: NeighborSide) -> Option<HWND> {
+    let mut cursor = hwnd;
+    for _ in 0..SIBLING_SCAN_LIMIT {
+        match side.step(cursor) {
+            // 可視の窓に当たった時点で終わり——これが「最も近い可視の隣」である。
+            Ok(Some(found)) if is_window_visible(found) => return Some(found),
+            // 不可視の窓は会話を遮らないので隣とは数えず、その先を見る。
+            Ok(Some(found)) => cursor = found,
+            // その向きにもう窓が無い（正常な不在）。
+            Ok(None) => return None,
+            Err(err) => {
+                warn!(
+                    "窓の最も近い可視の{side}の走査に失敗しました（記録には不在として載ります） hwnd={hwnd} error={code:?} message={message}",
+                    side = side.label(),
+                    hwnd = hwnd_field(Some(cursor)),
+                    code = err.code(),
+                    message = err.message(),
+                );
+                return None;
+            }
         }
     }
+    warn!(
+        "窓の最も近い可視の{side}の走査が上限に達しました（記録には不在として載ります） hwnd={hwnd} limit={SIBLING_SCAN_LIMIT}",
+        side = side.label(),
+        hwnd = hwnd_field(Some(hwnd)),
+    );
+    None
 }
 
-/// 指定窓の 1 つ背後にある窓を実測する（走査の失敗は不在へ潰したうえで記録に残す）。
+/// 指定窓の**最も近い可視の手前**にある窓を実測する。
 ///
-/// 向きが逆であることを除けば [`measure_window_above`] と同じ約束であり、理由も同じ
-/// （記録の欄は 1 つなので「背後に誰も居ない」と「走査に失敗した」は同じ番兵になるが、
-/// 失敗そのものは必ず記録へ残す）。
+/// 不可視の窓を読み飛ばす理由と、失敗・打切りを不在へ倒す約束は
+/// [`measure_nearest_visible`] の doc を参照。
 ///
-/// こちらは**適用後の検証**が使う向きである——「手前側の 1 つ背後が背後側の窓か」が
+/// この値は「バルーンをキャラのすぐ手前へ」の**挿入位置**にもなる
+/// （[`decide_pair_fix`] の `place_above`）。読み飛ばした結果として
+/// `SetWindowPos` の `hWndInsertAfter` へ渡るのは可視の窓だが、それで正しい——
+/// 対象はその可視窓の**すぐ背後**、すなわち間に挟まっていた不可視窓より**手前**へ入る。
+pub(crate) fn measure_window_above(hwnd: HWND) -> Option<HWND> {
+    measure_nearest_visible(hwnd, NeighborSide::Above)
+}
+
+/// 指定窓の**最も近い可視の背後**にある窓を実測する。
+///
+/// 向きが逆であることを除けば [`measure_window_above`] と同じ約束である。
+///
+/// こちらは**適用後の検証**が使う向きである——「手前側の最も近い可視の背後が背後側の窓か」が
 /// 隣接の正準判定であり（design.md Invariants）、[`record_verification`] の
 /// `measured_below_of_above` に入るのがこの値である。
 pub(crate) fn measure_window_below(hwnd: HWND) -> Option<HWND> {
-    match get_window_below(hwnd) {
-        Ok(found) => found,
-        Err(err) => {
-            warn!(
-                "窓の 1 つ背後の走査に失敗しました（記録には不在として載ります） hwnd={hwnd} error={code:?} message={message}",
-                hwnd = hwnd_field(Some(hwnd)),
-                code = err.code(),
-                message = err.message(),
-            );
-            None
-        }
-    }
+    measure_nearest_visible(hwnd, NeighborSide::Below)
 }
 
 /// 兄弟列を前面側へ辿った結果（沈降観測が使う）。
@@ -641,7 +527,10 @@ pub(crate) fn measure_window_below(hwnd: HWND) -> Option<HWND> {
 /// 前後を直接比べる API は無く、隣を 1 枚ずつ辿るほかない。よって走査の**結果そのもの**を
 /// 値にして、判定は純関数へ渡す（実機不要の決定論的テストで判定を固定するため）。
 pub(crate) struct FrontScan {
-    /// 対象より手前に居た窓（手前へ向かう順）
+    /// 対象より手前に居た**可視の**窓（手前へ向かう順）。
+    ///
+    /// 不可視の窓を入れないのは実測層の他の関数と同じ理由である（可視の窓だけを見る）。
+    /// 判定に使う前面窓は必ず可視なので、除いても「前面窓が手前に居るか」は変わらない。
     pub windows: Vec<HWND>,
     /// 最前面まで辿り着いたか。
     ///
@@ -651,27 +540,25 @@ pub(crate) struct FrontScan {
     pub reached_top: bool,
 }
 
-/// 前面側へ何枚まで辿るかの上限。
-///
-/// 兄弟列が壊れて環になっている場合に無限に辿らないための歯止めである。デスクトップの
-/// トップレベル窓がこの枚数を超えることは実運用では起きないが、超えた場合は打切りとして
-/// 記録に残し、判定は番兵へ倒す（測れなかったことを偽の判定にすり替えない）。
-const FRONT_SCAN_LIMIT: usize = 512;
-
-/// 指定窓より手前に居る窓を、手前へ向かって辿って集める。
+/// 指定窓より手前に居る**可視の**窓を、手前へ向かって辿って集める。
 ///
 /// [`measure_window_above`] を繰り返すのではなく `get_window_above` を直に使うのは、
-/// あちらが**走査の失敗と「手前に誰も居ない」を同じ `None` へ潰す**ためである。
+/// あちらが**走査の失敗と「手前に可視の窓が居ない」を同じ `None` へ潰す**ためである。
 /// 沈降観測では両者を混同できない——失敗を「最前面まで辿った」と扱うと、前面窓を
 /// 見つけられなかっただけの巡に「背面に居ない」という偽の失敗が記録される。
 /// 失敗は記録に残したうえで [`FrontScan::reached_top`] を `false` にする。
+///
+/// 上限は実測層と共有する（[`SIBLING_SCAN_LIMIT`]）。
 pub(crate) fn measure_windows_in_front(hwnd: HWND) -> FrontScan {
     let mut windows = Vec::new();
     let mut cursor = hwnd;
-    for _ in 0..FRONT_SCAN_LIMIT {
+    for _ in 0..SIBLING_SCAN_LIMIT {
         match get_window_above(cursor) {
             Ok(Some(found)) => {
-                windows.push(found);
+                // 不可視の窓は列に入れない（可視の窓だけを見る＝実測層と同じ規則）。
+                if is_window_visible(found) {
+                    windows.push(found);
+                }
                 cursor = found;
             }
             Ok(None) => {
@@ -695,7 +582,7 @@ pub(crate) fn measure_windows_in_front(hwnd: HWND) -> FrontScan {
         }
     }
     warn!(
-        "手前側の走査が上限に達しました（前面窓との相対は判定しません） hwnd={hwnd} limit={FRONT_SCAN_LIMIT}",
+        "手前側の走査が上限に達しました（前面窓との相対は判定しません） hwnd={hwnd} limit={SIBLING_SCAN_LIMIT}",
         hwnd = hwnd_field(Some(hwnd)),
     );
     FrontScan {
@@ -900,6 +787,10 @@ pub(crate) fn record_verification(
 #[cfg(test)]
 #[path = "zorder_pair_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "zorder_pair_measure_tests.rs"]
+mod measure_tests;
 
 #[cfg(test)]
 #[path = "zorder_pair_diag_tests.rs"]

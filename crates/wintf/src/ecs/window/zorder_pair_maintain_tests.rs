@@ -37,8 +37,8 @@ use bevy_ecs::schedule::{ExecutorKind, Schedule};
 use windows::Win32::Foundation::{HINSTANCE, HWND};
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DestroyWindow, HWND_TOP, HWND_TOPMOST, SET_WINDOW_POS_FLAGS, SWP_NOACTIVATE,
-    SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, WINDOW_EX_STYLE, WINDOW_STYLE, WS_CHILD,
-    WS_POPUP,
+    SW_SHOWNA, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, ShowWindow, WINDOW_EX_STYLE,
+    WINDOW_STYLE, WS_CHILD, WS_EX_TOOLWINDOW, WS_POPUP, WS_VISIBLE,
 };
 use windows::core::{PCWSTR, w};
 
@@ -75,13 +75,18 @@ const UNBACKED_VERIFY_MARK: &str = "検証待ちの要求に、出した指令�
 // 実窓・World・巡回のヘルパ
 // -------------------------------------------------------------------------
 
-fn create_window(title: PCWSTR, style: WINDOW_STYLE, parent: Option<HWND>) -> HWND {
+fn create_window(
+    title: PCWSTR,
+    ex_style: WINDOW_EX_STYLE,
+    style: WINDOW_STYLE,
+    parent: Option<HWND>,
+) -> HWND {
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-    // SAFETY: Win32 境界。定義済 "Static" クラスで非表示ウィンドウを生成する。
+    // SAFETY: Win32 境界。定義済 "Static" クラスで 0x0 のテスト窓を生成する。
     unsafe {
         let hinstance = GetModuleHandleW(None).expect("GetModuleHandleW");
         CreateWindowExW(
-            WINDOW_EX_STYLE(0),
+            ex_style,
             w!("Static"),
             title,
             style,
@@ -94,23 +99,44 @@ fn create_window(title: PCWSTR, style: WINDOW_STYLE, parent: Option<HWND>) -> HW
             Some(hinstance.into()),
             None,
         )
-        .expect("CreateWindowExW should create a hidden test window")
+        .expect("CreateWindowExW should create a test window")
     }
 }
 
 /// テスト専用の親窓（兄弟列を閉じるための入れ物）。
+///
+/// **可視で作る**——実測層は可視の窓だけを隣と数えるため（`zorder_pair` の実測層 doc）、
+/// 隠れた親の下の子窓では隣接そのものが測れない（`IsWindowVisible` は当該窓と祖先すべての
+/// `WS_VISIBLE` を見るので、親が隠れていれば子はどう作っても不可視になる）。0x0 の道具窓
+/// （`WS_EX_TOOLWINDOW`）を活性化を伴わない `SW_SHOWNA` で見せるため、画面にもタスクバーにも
+/// 現れず、他のテストが握っている前面窓も奪わない。
 fn create_test_parent(title: PCWSTR) -> HWND {
-    create_window(title, WINDOW_STYLE(WS_POPUP.0), None)
+    let parent = create_window(
+        title,
+        WINDOW_EX_STYLE(WS_EX_TOOLWINDOW.0),
+        WINDOW_STYLE(WS_POPUP.0),
+        None,
+    );
+    // SAFETY: Win32 境界。自プロセス所有の窓を活性化せずに表示する。
+    unsafe {
+        let _ = ShowWindow(parent, SW_SHOWNA);
+    }
+    parent
 }
 
-/// 親窓の子として非表示の実窓を生成する。
+/// 親窓の子として**可視の**実窓を生成する（本番のゴースト窓と同じ可視の窓を模す）。
 ///
 /// 生成直後の兄弟間の重なりは前提にしない——初期配置は必ず [`insert_after`] で明示的に作る。
 /// 実測すると子窓は**先に作ったものほど手前**（新しい子窓は兄弟列の背面側へ入る）であり、
 /// 生成順から前後関係を読むと逆になる。`api.rs` の z オーダーのラッパテストも同じ理由で
 /// 生成順に依存しない形にしてある。
 fn create_test_child(parent: HWND, title: PCWSTR) -> HWND {
-    create_window(title, WINDOW_STYLE(WS_CHILD.0), Some(parent))
+    create_window(
+        title,
+        WINDOW_EX_STYLE(0),
+        WINDOW_STYLE(WS_CHILD.0 | WS_VISIBLE.0),
+        Some(parent),
+    )
 }
 
 /// `hwnd` を `after` のすぐ背後（1 つ背面側）へ移す（`api.rs` のテストと同じ手）。
@@ -815,7 +841,7 @@ fn pair_fix_command_moves_only_the_zorder() {
     assert_eq!(cmd.hwnd_insert_after, Some(after));
     assert_eq!((cmd.x, cmd.y, cmd.width, cmd.height), (0, 0, 0, 0));
 
-    // 縁（背後側が最前面で 1 つ手前の窓が居ない）は最上位への挿入になる。
+    // 縁（背後側より手前に可視の窓が居ない）は最上位への挿入になる。
     let top = pair_fix_command(target, InsertSpec::TopEdge);
     assert_eq!(top.flags, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     assert_eq!(top.hwnd_insert_after, Some(HWND_TOP));

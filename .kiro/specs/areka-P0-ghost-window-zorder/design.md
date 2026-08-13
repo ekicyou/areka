@@ -122,7 +122,7 @@ graph TB
 | G3 | `WS_EX_TRANSPARENT` トグルの生存 | owner 付与後もトグルが機能し、スタイルがリセットされない（要件 5.3） | **案 B へ切替** |
 | G4 | タスクバー／Alt+Tab 非露出 | `WS_EX_TOOLWINDOW` の現行の見え方が不変（要件 5.5） | **案 B へ切替** |
 | G5 | ドラッグ＋バルーン追従 | キャラ窓ドラッグ・バルーン単独ドラッグ・追従が現行どおり（要件 5.4） | **案 B へ切替** |
-| G6 | owner 活性化でペア浮上＋隣接 | キャラ窓クリック後 `GetWindow(char, GW_HWNDPREV) == balloon` の実測レコード（要件 1.1/1.2） | **案 B へ切替**（A の中核保証の不成立） |
+| G6 | owner 活性化でペア浮上＋隣接 | キャラ窓クリック後、「キャラ窓の**最も近い可視の手前** == バルーン窓」の実測レコード（`GW_HWNDPREV` を辿り不可視窓を読み飛ばす・下記 Invariants の測り方／要件 1.1/1.2） | **案 B へ切替**（A の中核保証の不成立） |
 | G7 | owned 活性化で owner も浮上 | バルーン窓クリック後、キャラ窓が他アプリ窓の背後に残らない（要件 1.3） | **案 A 継続＋raise assist 有効化**（z 変化検知を有効化し、維持系の `RaisedAbove` トリガで 1.3 を明示実装。research.md §8-6 の裁定どおり） |
 | G8 | 破棄順序の双方向で異常終了なし | char 先行 despawn／balloon 先行 despawn の双方でプロセス継続（要件 5.9） | **owner 切離し機構を必須化**（下記「破棄経路」）。切離しでも解けない場合は案 B へ切替 |
 
@@ -160,7 +160,7 @@ crates/wintf/src/ecs/window/
 
 - `crates/wintf/src/ecs/window/mod.rs` — `mod zorder_pair;` 接続と re-export
 - `crates/wintf/src/ecs/mod.rs` — `KeepDirectlyAbove`／`ReassertZOrder`／`ZOrderPairStrategy` の公開エクスポート（`ZOrder` は `:49` で公開済み）
-- `crates/wintf/src/api.rs` — safe wrapper 新設: `get_window_above(hwnd)`／`get_window_below(hwnd)`（`GetWindow` GW_HWNDPREV/GW_HWNDNEXT）・`set_window_owner(hwnd, owner)`／`clear_window_owner(hwnd)`（`SetWindowLongPtrW(GWLP_HWNDPARENT)`）
+- `crates/wintf/src/api.rs` — safe wrapper 新設: `get_window_above(hwnd)`／`get_window_below(hwnd)`（`GetWindow` GW_HWNDPREV/GW_HWNDNEXT）・`is_window_visible(hwnd)`（`IsWindowVisible`・隣接を可視の窓で測るため）・`set_window_owner(hwnd, owner)`／`clear_window_owner(hwnd)`（`SetWindowLongPtrW(GWLP_HWNDPARENT)`）
 - `crates/wintf/src/ecs/window_proc/keyboard.rs` — `WM_ACTIVATE` の**非活性化枝（既存処理の後）**に読み取り専用の沈降観測**マーク**を追加。実測走査と `sink-observed` レコードは**次巡**に維持系が実施（即時走査は活性化トランザクション未完で偽陽性を生むため。要件 4.4/7.5 の証跡。挙動変更なし）
 - `crates/wintf/src/ecs/window_proc/window_pos.rs` — 【案 B 発動時、**または案 A で raise assist 有効時**】`WM_WINDOWPOSCHANGED` で `WINDOWPOS.flags` の `SWP_NOZORDER` 不在（＝z が動いた）を検知し、エコーでなければ当該 entity へ `ReassertZOrder` を挿入（B2。raise assist のトリガ供給者はこの検知のみ）
 - `crates/areka/src/placement/spawn.rs` — キャラ窓 spawn 後にバルーン窓へ `KeepDirectlyAbove { peer: char_window }` を insert（`OnDragEnd` 後付けと同じパターン・`:312-314` 隣接）。あわせてペア宣言レコード（scope／char entity／balloon entity）を診断 target へ出力（scope 結合キーの供給・要件 6.1）
@@ -187,7 +187,7 @@ flowchart TB
 
 - **適用は常に `SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE`**——z のみが動き、位置・寸法は不変（要件 1.6）。
 - **収束**: 適用は `SetWindowPosCommand` flush（`guarded_set_window_pos`）経由ゆえ、誘発される `WM_WINDOWPOSCHANGED` は `is_self_initiated()` でエコー判定され再検知しない。さらに `decide_pair_fix` は実測隣接なら `None` を返す同値ガードを持つ（二重の停止条件）。
-- **複数ペアが同じ巡で是正を出すとき**: 上の二重の停止条件は単一ペアの停止条件であり、**ペア間の観測の陳腐化**は覆わない——実測は巡の中で採るが書込は巡の後の flush であるため、同じ巡で 2 本の指令を積むと後から適用される側の `insert_after` が先の適用で古くなり、隣接（要件 1.1）が崩れる。よって **1 巡で実際に指令を出すのは高々 1 ペア**とし、残るペアの `ReassertZOrder` は消さずに残して次巡の新しい実測から計算し直す（持ち越しは見送りではないので `skip` レコードは出さない——要求が entity に残り次巡で必ず処理されるため、記録の無い握り潰しにはならない）。是正は自分のキャラ窓のすぐ手前へ 1 枚挿し込む操作であり、**既に隣接している他ペアの間へは割り込めない**（割り込めるのは元から隣接していないペアだけ）ため、単調に収束する。必要な巡数は是正がペア数（＝スコープ数）N を上限とし、最後の検証の 1 巡を含めて **N+1 巡**である。なおこの「割り込めない」は**宣言ペアどうしがキャラ窓を共有しない**ことを前提とする——共有すると挿入位置が他ペアのバルーンと一致しうる。areka の spawn はスコープごとにキャラ 1 枚・バルーン 1 枚を作るため構造的に成立する。
+- **複数ペアが同じ巡で是正を出すとき**: 上の二重の停止条件は単一ペアの停止条件であり、**ペア間の観測の陳腐化**は覆わない——実測は巡の中で採るが書込は巡の後の flush であるため、同じ巡で 2 本の指令を積むと後から適用される側の `insert_after` が先の適用で古くなり、隣接（要件 1.1）が崩れる。よって **1 巡で実際に指令を出すのは高々 1 ペア**とし、残るペアの `ReassertZOrder` は消さずに残して次巡の新しい実測から計算し直す（持ち越しは見送りではないので `skip` レコードは出さない——要求が entity に残り次巡で必ず処理されるため、記録の無い握り潰しにはならない）。是正は自分のキャラ窓のすぐ手前へ 1 枚挿し込む操作であり、**既に隣接している他ペアの間へは割り込めない**（割り込めるのは元から隣接していないペアだけ）ため、単調に収束する。必要な巡数は是正がペア数（＝スコープ数）N を上限とし、最後の検証の 1 巡を含めて **N+1 巡**である。なおこの「割り込めない」は 2 つを前提とする——⑴**宣言ペアどうしがキャラ窓を共有しない**（共有すると挿入位置が他ペアのバルーンと一致しうる）。areka の spawn はスコープごとにキャラ 1 枚・バルーン 1 枚を作るため構造的に成立する。⑵**キャラ窓が可視である**——隣接を「最も近い可視の隣」で測る（下記 Invariants）以上、この関係が可視窓どうしで対称に成り立つことが証明の土台であり、キャラ窓が不可視だと「最も近い可視の手前」から辿り返しても元の窓に戻らない。本フィーチャーにキャラ窓を不可視にする経路は無い。
 - **検証の遅延 1 巡**は `PendingVerify`（`ReassertZOrder` 内部の段階）で持ち、実測照合により「指令は出したが効かなかった」を切り分ける（research.md §4/§7 の裁定）。
 
 ### 案 A の確立フロー
@@ -328,14 +328,14 @@ pub(crate) struct PairObservation {
     pub below_alive: bool,                    // キャラ側の生存
     pub above_hwnd: Option<HWND>,
     pub below_hwnd: Option<HWND>,
-    pub measured_below_of_above: Option<HWND>, // GetWindow(above, GW_HWNDNEXT) 実測
-    pub measured_above_of_below: Option<HWND>, // GetWindow(below, GW_HWNDPREV) 実測
+    pub measured_below_of_above: Option<HWND>, // above から GW_HWNDNEXT を辿った「最も近い可視の背後」
+    pub measured_above_of_below: Option<HWND>, // below から GW_HWNDPREV を辿った「最も近い可視の手前」
 }
 
 pub(crate) enum PairFixDecision {
     /// 何もしない（理由必須＝要件 6.3。PeerMissing は要件 1.5 の腕）
     Skip(SkipReason),   // AlreadyAdjacent / PeerMissing / HandleMissing / EchoOrIrrelevant / StrategyDisabled
-    /// バルーンをキャラのすぐ手前へ（insert_after = キャラの直前窓。無ければ Top 縁）
+    /// バルーンをキャラのすぐ手前へ（insert_after = キャラの**最も近い可視の手前**の窓。無ければ Top 縁）
     PlaceAboveOverBelow { insert_after: InsertSpec },
     /// キャラをバルーンのすぐ背後へ（insert_after = バルーン HWND）＝要件 1.3
     PlaceBelowUnderAbove { insert_after: HWND },
@@ -343,13 +343,14 @@ pub(crate) enum PairFixDecision {
 
 pub(crate) enum InsertSpec {
     After(HWND),   // ZOrder::InsertAfter へ写像
-    TopEdge,       // below が最上位で直前窓が無い縁のみ。ZOrder::Top へ写像
+    TopEdge,       // below より手前に**可視の**窓が無い縁のみ。ZOrder::Top へ写像
 }
 ```
 
 - **Preconditions**: `obs` の実測値は呼出側（維持系）が同一巡で採取したもの。
 - **Postconditions**: 返る fix は座標・寸法情報を持たない（型に存在しない＝要件 1.6 の構造的保証）。`TopMost` は決して返らない（要件 4.3/8.1）。対象は宣言ペアの 2 窓のみ（要件 3.4）。
-- **Invariants**: `measured_below_of_above == below_hwnd`（既に隣接）なら必ず `Skip(AlreadyAdjacent)`（収束の同値ガード・research.md §8-7 は `GW_HWNDPREV` 実測方式を採る。キャッシュ方式は実 z が外部要因で動くと嘘になるため不採用）。
+- **Invariants**: `measured_below_of_above == below_hwnd`（既に隣接）なら必ず `Skip(AlreadyAdjacent)`（収束の同値ガード・research.md §8-7 は `GW_HWNDPREV` 実測方式を採る。キャッシュ方式は実 z が外部要因で動くと嘘になるため不採用）。**隣接は「最も近い可視の隣」で測る**——`GetWindow` を辿る際に `IsWindowVisible` が偽の窓は読み飛ばす（走査は上限 512 枚で打ち切り、打切り・失敗はいずれも不在＝番兵へ倒して記録に残す）。判断（`decide_pair_fix`）の署名とロジックはこの測り方によって一切変わらない——変わるのは入力値の意味だけである。
+  - **根拠（実機実測・ゴースト起動 3 回で同一）**: 割り込んでいたのはスレッド既定の IME 窓（クラス `IME`／タイトル `Default IME`／**不可視**／矩形 `0,0,0,0`／`WS_POPUP | WS_DISABLED | WS_CLIPSIBLINGS`／areka 自身の同一スレッド）であり、その **owner はキャラ窓そのもの**であった。IME 窓もバルーン窓も同じキャラ窓を owner に持つ被 owner 窓であり、Windows は被 owner 窓を owner の手前に保つため、キャラ窓の直上には被 owner 窓が 2 枚並びその内部順序は制御外になる。既定 IME 窓はスレッドに 1 個しか無いため割り込みは片方のスコープにしか起きず、実機では毎回そのスコープだけが `verify-failed` になっていた。**配置は要件 1.2 を満たしており、過剰に落としていたのは測り方の側である**（測り方の選択は要件 7.2 が実装に委ねる範囲・要件 1.2 に判定の但し書きを追記済み）。
 
 ##### Service Interface（システム）
 
@@ -452,8 +453,8 @@ pub fn compute_pair_z_intent(/* &World, Entity */) -> ZOrder;
 
 ### Real-Machine Signoff（有界自動終了＋ログ grep・要件 7.2〜7.5）
 
-- 共通形: `AREKA_APP_SMOKE_EXIT_MS` 有界実行＋`RUST_LOG=wintf::ecs::window::zorder_pair=debug,areka=debug` で grep 判定。判定は常に「指令＋実測」レコードの実測側で行う。
-- S1（7.3）: 拡大率の異なる 2 ディスプレイ間でキャラ窓をドラッグ往復 → 各移動後の実測レコードで `GetWindow(char, GW_HWNDPREV) == balloon` を確認。バルーンが他アプリ窓の背後に隠れないこと。
+- 共通形: `AREKA_APP_SMOKE_EXIT_MS` 有界実行＋`RUST_LOG=wintf::ecs::window::zorder_pair=debug,areka=debug` で grep 判定。判定は常に「指令＋実測」レコードの実測側で行う。**実測はいずれも「最も近い可視の隣」である**（不可視の窓は読み飛ばす。上記 Invariants の根拠を参照）。
+- S1（7.3）: 拡大率の異なる 2 ディスプレイ間でキャラ窓をドラッグ往復 → 各移動後の実測レコードで「キャラ窓の最も近い可視の手前 == バルーン窓」（`GW_HWNDPREV` を辿った実測）を確認。バルーンが他アプリ窓の背後に隠れないこと。
 - S2（7.4）: バルーン窓をドラッグ・クリック → キャラ窓が他アプリ窓に埋もれない実測レコード（1.3・キャラ位置は不変であること＝1.6 も同時判定）。
 - S3（7.5）: メモ帳等を活性化 → **非活性化の次巡に出る** `sink-observed` レコード（遅延観測）でゴースト全窓が前面窓より背面かつペア隣接が維持（4.1/4.2/4.4）。判定は非活性化ごとの**最後の** `sink-observed` レコードで行う。
 - ゲート（G1〜G8）はこの手順の初回実施であり、結果を `verification/plan-a-gate.md` に判定表として残す。

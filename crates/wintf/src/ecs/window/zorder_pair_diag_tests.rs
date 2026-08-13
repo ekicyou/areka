@@ -513,7 +513,7 @@ fn record_verification_emits_fix_on_match_and_error_on_mismatch() {
     let (balloon_entity, char_entity) = pair_entities();
     let insert_after = InsertSpec::After(intruder_front());
 
-    // 一致——バルーンの 1 つ背後が期待どおりキャラだった
+    // 一致——バルーンの最も近い可視の背後が期待どおりキャラだった
     let mut matched = false;
     let ok = capture_under_filter(SIGNOFF_DIRECTIVES, || {
         matched = record_verification(
