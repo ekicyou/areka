@@ -37,6 +37,7 @@
 - emo2 実寸フィクスチャテスト（`placement_prepare_tests.rs`）の**位置期待値**。
 - `doc/COMPAT_ARCHITECTURE.md` §8 の **window-placement R2.9 上書きエントリ**（新規 1 行）。
 - 実機受け入れの判定手順と証跡ログ（spec ディレクトリ）。
+- **要件 7 で増えた所有物（2026-08-13 追記・C6）**: 実表示寸での連鎖再解決の判定（`placement/chain_finalize.rs`）と確定標識 `ChainFinalized` の寿命／`spawn.rs` の既定キャラ位置台帳（`default_char_pos` と 3 アクセサ）／`emo2_boot/frame`・`frame/drain_resnap.rs` の確定結線（駆動条件と一度きりガード）／`main.rs` の復元判定シーム（`restore_merged_placements` の戻り値と `clear_default_char_pos` 呼出）。
 
 ### Out of Boundary
 
@@ -129,6 +130,8 @@ let base_x = match prev {
 - `crates/areka/src/placement/spawn.rs` — `ScopeWindows.default_char_pos` の追加とアクセサ 2 本（未接触判定の基準）。
 - `crates/areka/src/placement/spawn_cleanup_tests.rs` — 新フィールドの構築追随（+3 行）。
 - `crates/areka/src/placement/mod.rs` — `pub mod chain_finalize;` の追加。**上の Unchanged 節が名指しした「:368 域の P5 式引用」本文は無傷**。
+- `crates/areka/src/main.rs` — 7.3⑶（復元位置の除外）のシーム。`restore_merged_placements` が merge 前後の `char_pos` 比較で**保存位置が採用されたスコープ集合**を返し（`(Vec<ScopePlacement>, BTreeSet<usize>)`）、`open_startup_window` が spawn 後に `clear_default_char_pos` で台帳の既定位置を落とす。`persist.rs` は**無改変**（上の Unchanged 節のとおり）——変えたのは呼び手だけ。
+- `crates/areka/src/main_restore_seam_tests.rs` — 復元判定シームの檻（+2 本）。
 
 > **境界外の是正（開発者指示・本設計の担当外）**: `emo2_boot/move_cue.rs` 系（`\![move]` の DPI スケール是正）と `crates/wintf`・`crates/dola`（clippy 是正）も同じブランチに含まれる。経緯と分割方針は `tasks.md`「最終的な差分の内訳」を参照。`placement/windowposition.rs`（`scale_signed` の `pub(crate)` 化）と `placement/mod.rs`（同再エクスポート）はその随伴。
 
@@ -170,7 +173,7 @@ let base_x = match prev {
 | 6.4 | 窓矩形実測と規則期待値（gap 0・1px 以内）一致 | C5: 主判定（ログ）＋従判定（外部矩形実測） |
 | 7.1 | 実表示寸が判明した時点で連鎖を再解決し初期配置を確定 | C6: resnap 直後の一度きりの再解決（P2 式を実窓へ適用） |
 | 7.2 | 下端中央原点の保存規則は不変（接地点を動かさない） | C6: Y 非変更・scope0 非移動・`resize_window_to` 非接触 |
-| 7.3 | 明示的に再配置されたスコープは引き戻さない | C6: 既定位置との一致判定（move／drag 側へフックを足さない） |
+| 7.3 | 明示的に再配置されたスコープは引き戻さない（⑴台本の移動指令・⑵当該セッションのドラッグ・⑶前回セッションの復元位置） | C6: ⑴⑵＝既定位置との一致判定（move／drag 側へフックを足さない）／⑶＝`main.rs` の復元判定シームが `clear_default_char_pos` で台帳の既定位置を落とし、判定側は `default_x = None` を常に対象外とする |
 | 7.4 | 確定後のサーフェス切替では再解決しない（横滑り防止） | C6: 確定済みフラグで二度目以降を no-op |
 | 7.5 | 実機受け入れは定常表示状態の実測でも隙間 0 | C5 拡張: 定常時の外部矩形実測を合否判定に加える |
 | 7.6 | 演出の移動指令を判定から除外できる形で受け入れ判定 | C5 拡張: 移動指令を除いた複製ゴーストでの実行を手順に含める |
@@ -374,7 +377,7 @@ let base_x = match prev {
 
 判定は純関数、結線は薄いアダプタという分担に従い、檻も 2 層に分ける（GPU 不要・決定論）。
 
-**判定（`placement/chain_finalize_tests.rs`・12 本）**
+**判定（`placement/chain_finalize_tests.rs`・14 本）**
 1. `emo2_surface_swap_gap_is_closed_by_moving_the_follower_only`（本丸）: 実機で観測した機序（起点が 2012→2064 へ 52 寄る）をそのまま入力にし、後続のみ 1340→1392 で隙間 0（7.1/7.2）。
 2. `unequal_widths_are_all_made_flush`／`equal_widths_use_the_same_rule`: 不等幅・等幅を同一式で（7.1）。
 3. `previous_width_subtraction_is_rejected`: 旧式への退行の否定 assert。
@@ -382,6 +385,7 @@ let base_x = match prev {
 5. `already_flush_chain_emits_no_moves`／`applying_twice_is_a_no_op_the_second_time`: べき等・冗長駆動の回避。
 6. `non_positive_width_is_skipped_and_keeps_its_place`／`empty_and_single_scope_yield_no_moves`／`saturating_arithmetic_does_not_panic_on_extremes`: 縮退入力。
 7. `moved_default_pos_replaces_x_and_preserves_y`: Y 非接触（7.2）。
+8. `restored_scope_is_never_pulled_back_even_when_it_sits_still`／`restored_scope_is_excluded_regardless_of_where_it_sits`: 復元位置（`default_x = None`）は現在位置に関わらず常に対象外（7.3⑶）。
 
 **結線（`emo2_boot/frame_chain_finalize_tests.rs`・6 本）**
 1. `finalize_closes_the_gap_by_moving_the_follower_only`: 起点不動・Y 不変・隙間 0（7.1/7.2）。
@@ -389,6 +393,10 @@ let base_x = match prev {
 3. `finalize_runs_only_once_even_if_sizes_change_again`: **一度きりの判別檻**（7.4）。確定後に別寸を与えても後続が動かないことを固定する——一発ガードを外すと赤くなる。
 4. `finalize_defers_while_any_scope_has_not_shown_yet`／`finalize_defers_until_resnap_has_landed`: 部分適用しない見送り条件。
 5. `finalize_does_not_pull_back_an_explicitly_moved_scope`: 明示的再配置の尊重（7.3）。
+
+**復元判定シーム（`main_restore_seam_tests.rs`・2 本）**
+1. `restore_seam_prefers_saved_position_over_default`: 保存位置が採用されたスコープが復元集合へ入る（7.3⑶ の入口）。
+2. `restore_seam_without_persist_is_identity_default`: 保存が無ければ既定のまま＝復元集合は空（誤って全スコープを除外しない）。
 
 ### Real Machine（受け入れ・C5）
 

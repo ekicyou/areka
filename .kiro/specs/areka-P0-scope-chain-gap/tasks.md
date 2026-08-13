@@ -205,16 +205,26 @@
 
 ## 最終的な差分の内訳（2026-08-13・レビュー用）
 
-コード／doc の差分は **20 ファイル**（spec ディレクトリの文書・証跡を除く）。当初計画の 4 ファイルから広がった理由は 2 つ——要件 7 の追加（差し戻し）と、開発者指示による境界外 2 件の是正。**「1 機能 = 1 ブランチ = 1 PR」の規約からは外れており、PR を切る前に分割の要否を判断されたい。**
+コード／doc の差分は **22 ファイル**（spec ディレクトリの文書・証跡を除く。`git diff --stat main...HEAD -- ':!.kiro'` で確認可能）。当初計画の 4 ファイルから広がった理由は 2 つ——要件 7 の追加（差し戻し）と、開発者指示による境界外 2 件の是正。**「1 機能 = 1 ブランチ = 1 PR」の規約からは外れており、PR を切る前に分割の要否を判断されたい。**
 
 | 群 | ファイル | 由来 |
 |---|---|---|
 | **A. 当初計画（要件 1〜6）** | `placement/resolver.rs`・`placement/resolver_resolve_tests.rs`・`placement/placement_prepare_tests.rs`・`doc/COMPAT_ARCHITECTURE.md` | 設計の File Structure Plan どおり |
-| **B. 要件 7（差し戻しで追加）** | `placement/chain_finalize.rs`（新規）・`placement/chain_finalize_tests.rs`（新規）・`emo2_boot/frame_chain_finalize_tests.rs`（新規）・`emo2_boot/frame.rs`・`emo2_boot/frame/drain_resnap.rs`・`placement/spawn.rs`・`placement/spawn_cleanup_tests.rs`・`placement/mod.rs` | 要件 7／design C6。requirements の Boundary Context は追随済み |
+| **B. 要件 7（追補で追加）** | `placement/chain_finalize.rs`（新規）・`placement/chain_finalize_tests.rs`（新規）・`emo2_boot/frame_chain_finalize_tests.rs`（新規）・`emo2_boot/frame.rs`・`emo2_boot/frame/drain_resnap.rs`・`placement/spawn.rs`・`placement/spawn_cleanup_tests.rs`・`placement/mod.rs`・**`main.rs`**・**`main_restore_seam_tests.rs`**（後 2 者は 7.3⑶＝復元位置の除外） | 要件 7／design C6。requirements の Boundary Context・design の File Structure Plan とも追随済み |
 | **C. 境界外・`\![move]` の DPI スケール是正** | `emo2_boot/move_cue.rs`・`emo2_boot/move_cue_tests.rs`・`emo2_boot/move_cue_apply_move_tests.rs`・`placement/windowposition.rs`（`scale_signed` を `pub(crate)` 化）・`placement/mod.rs`（再エクスポート） | 実機観察で発見した孤児欠陥。担当仕様が実在しないため開発者指示で本ワークツリー処理 |
 | **D. 境界外・clippy 是正** | `wintf/src/com/d2d/command_sink.rs`・`wintf/src/ecs/types.rs`・`dola/tests/general/core_types_test/dynamic_value.rs`・`dola/tests/runtime/core_types_test.rs` | 本仕様の起因ではない既存事項（2 か月前から赤）。開発者指示で本ワークツリー処理 |
 
 分割する場合、コミットは論理単位で切ってあるため cherry-pick 可能: A＋B＝`60f82f8`〜`872187d` ほか、C＝`530ee83`、D＝`4146d53`・`36001e9`。
+
+## 最終ゲート再走（2026-08-13・`/kiro-impl` Step 4）で是正した文書乖離
+
+いずれもコード非接触の文書側の不一致。`git diff --stat main...HEAD` と実ファイルの機械照合で検出した。
+
+- **File Structure Plan の欠落 2 件**: design C6 の追加・変更ファイル一覧に `main.rs`・`main_restore_seam_tests.rs`（7.3⑶ の復元判定シーム）が不在だった。tasks.md の差分内訳表も同じ 2 件を落としており「20 ファイル」と述べていたが実体は **22 ファイル**。両方へ追記。
+- **檻の本数**: design C6 の判定側を「12 本」と記していたが実体 14 本（復元除外の 2 本が未記載）。結線側 6 本は正しかった。判定側を 14 本へ是正し、`main_restore_seam_tests.rs`（2 本）の節を新設。
+- **所有物宣言**: Boundary Commitments「This Spec Owns」が要件 6 本時点のままで、C6 が持ち込んだ 4 つの所有物（`chain_finalize.rs`・`spawn.rs` の既定位置台帳・frame の確定結線・`main.rs` の復元判定シーム）を列挙していなかった。追記。
+- **トレーサビリティ 7.3 行**: 「既定位置との一致判定」だけを書いており、要件が明記する⑶（復元位置）の実装（`clear_default_char_pos`）が対応表に現れていなかった。⑴⑵⑶ を分けて記述。
+- **実機証跡の鮮度**: §5.5 の採取は 7.3 是正コミットより前だった。最終ゲートで 3 脚を採り直し、**7.3⑶ の判別脚（脚ⓒ）を新設**（`real-run-signoff-2026-08-13.log` §5.6）。
 
 ## 最終検証（`/kiro-validate-impl`）で判明し、担当 spec へ申し送った事項
 
