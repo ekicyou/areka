@@ -329,7 +329,9 @@ mod tests {
 
     #[test]
     fn test_pointf_roundtrip() {
-        let original = PointF { x: 3.14, y: -2.71 };
+        // 任意の座標でよい（円周率・ネイピア数の意図はない）。`3.14`／`2.71` は
+        // clippy::approx_constant が定数の近似と誤検知するため、意味を持たない値を使う。
+        let original = PointF { x: 1.25, y: -2.5 };
         let vec2: Vector2 = original.into();
         let back: PointF = vec2.into();
         assert_eq!(original, back);
@@ -456,9 +458,10 @@ mod tests {
 
     #[test]
     fn test_pointf_new() {
-        let p = PointF::new(3.14, 2.71);
-        assert_eq!(p.x, 3.14);
-        assert_eq!(p.y, 2.71);
+        // 任意の座標でよい（clippy::approx_constant の誤検知回避・上の roundtrip と同旨）。
+        let p = PointF::new(1.25, 2.5);
+        assert_eq!(p.x, 1.25);
+        assert_eq!(p.y, 2.5);
     }
 
     #[test]
