@@ -151,13 +151,16 @@
 - 現象: 既定配置は隙間 0 で正しいのに、起動後にゴースト台本の `\![move,-353,,,0,base,base]` が適用されると **200% で二体が 365px 重なる**（100% では 6px でほぼ隣接＝台本の意図どおり）。
 - 出所: `crates/areka/src/emo2_boot/move_cue.rs:394-399`（式の doc は :357-364）。`x' = base_pos.x + basepos(base窓).x + dx − basepos(対象窓).x` のうち、`base_pos`／`basepos` は物理 px で正しく k 倍されるが、**台本由来の `dx`／`dy` だけが素通し**。
 - 検算（両水準とも実測と厳密一致）: 100% `2446+217−353−168=2142`（実測 2142）／200% `2012+434−353−336=1757`（実測 1757）／200% で dx を k 倍すれば `2012+434−706−336=1404`。重なりは 6px→（正しくは 12px）→実際 365px で、**過剰分 353px はスケールし損ねた dx そのもの**。
-- 本仕様との関係: **担当外**。`emo2_boot/move_cue.rs` は本仕様の差分 0 行で、既定配置（`placement/resolver.rs`）とは別機構。本仕様の実機判定が `char_x` ではなく `default_char_x`（move 適用前の resolver 出力）を用いる設計だったため、この汚染は判定へ混入していない。
+- 本仕様との関係: **当初は担当外**（既定配置とは別機構であり、実機判定が `char_x` ではなく `default_char_x`＝move 適用前の resolver 出力を用いる設計だったため、この汚染は判定へ混入していない）。**その後、開発者指示により本ワークツリーで是正した**（コミット `530ee83`・`emo2_boot/move_cue.rs` は +42 行）。
 - 担当仕様の実在確認（済）: `areka-P0-surfaces-basepos` は Scope に「`\![move]` の他の意味論」を **Out** と明記。式を確定した `completed/areka-P0-sakura-dialogue-tags` はアーカイブ済み。**現行の担当は存在しない＝新規起票が要る**。
 - 裁定が要る点: 参照実装 SSP も同じく無スケール（`ssp-oracle-notes.md:103` の SSP 自己不整合 #2・本仕様では互換対象外と裁定済み）。ゆえに「SSP 互換」と「正しい挙動」がここで分岐する。本仕様の要件討議 #2 は「確定規則＝数学的モデルを正とする。SSP は参照実装であって絶対ではない」と裁定しており、同じ物差しを当てるなら `dx`／`dy` は k 倍すべきだが、**move へ同じ裁定を適用するか否かは開発者判断**。
 
-## 開発者へ申し送る事項（本仕様の担当外・是正しない）
+## 本仕様の担当外だが本ワークツリーで是正した事項（開発者指示）
 
-- **`cargo clippy -p areka --all-targets` が赤（21 件）だが本仕様の起因ではないことを機械的に確定した**。診断は全て `crates/wintf/src/com/d2d/command_sink.rs` の `clippy::not_unsafe_ptr_arg_deref` で、同ファイルの blob は **main と完全一致**（`bdf80289`）・最終更新は **2026-06-16**（本仕様の約 2 か月前）。本仕様は `crates/wintf` に差分 0 行、`Cargo.toml`／`Cargo.lock` も無変更。したがって既存の未是正事項であり、修正は wintf 側の担当。完了判定に clippy 緑を含めるかは開発者判断。
+- **`cargo clippy` の赤（当初 21 件）を是正した**。発見時の診断は全て `crates/wintf/src/com/d2d/command_sink.rs` の `clippy::not_unsafe_ptr_arg_deref` で、同ファイルの blob は **main と完全一致**（`bdf80289`）・最終更新は **2026-06-16**（本仕様の約 2 か月前）＝**本仕様の起因ではないことを機械的に確定**したうえで、開発者指示により本ワークツリーで是正した（コミット `4146d53`・`36001e9`）。
+  - `command_sink.rs`: COM トレイトの署名は `windows` クレートの `#[implement]` が生成するため `unsafe fn` へ変えられない（安全性の表明先が存在しない）。診断を消すのではなく、表明できない理由と deref が成立する根拠を明記したうえでモジュール限定の `allow` を置いた。
+  - `crates/wintf/src/ecs/types.rs`・`crates/dola/tests/{general,runtime}/…`: 円周率・ネイピア数の意図がないテスト用 float が `clippy::approx_constant` で誤検知されていた。抑制ではなく値を差し替えて誤ったシグナル自体を消した（書式検証の桁数は保持）。
+  - 現状: `cargo clippy --workspace --all-targets` は **exit 0・エラー 0**。ただし `collapsible_if` 等の**警告は残存**しており、「緑」の定義（警告 0 を要求するか）は開発者判断。
 - **`DPIS` の同名別値**（軽微）: `resolver_test_support.rs:4` が `[96,120,144,192]`、`follow_test_support.rs:142` が `[96,120,192]`。別モジュールの `pub(super)` ゆえ衝突はしないが、将来の取り違えの種。follow 系は本仕様の境界外のため触れていない。
 
 ## Implementation Notes
@@ -165,14 +168,38 @@
 - ワークツリーでは `vendors/pasta` サブモジュールが未展開のため、cargo 実行前に `git submodule update --init --recursive vendors/pasta` が必要（実行済み）。
 - `areka` は bin crate。`cargo test -p areka --lib …` は「no library targets」で失敗する。正しくは `cargo test -p areka <filter>`（例 `placement::resolver::resolve_tests`）。ベースラインは bin ターゲット 671 passed。
 - task 2.1 完了時点で `placement::prepare_tests::prepare_emo2_returns_two_scope_placements` のみ赤（実測 `x: 1150`）。これは仕様の予定どおりで task 3.1 が期待値を更新して緑へ戻す。
-- `cargo clippy -p areka --all-targets` は `crates/wintf` の既存エラーで赤。本仕様の変更とは無関係（変更ファイルを名指しする診断は 0 件）。
+- `cargo clippy -p areka --all-targets` は当初 `crates/wintf` の既存エラーで赤だった（本仕様の変更とは無関係・変更ファイルを名指しする診断は 0 件）。**その後 `4146d53`／`36001e9` で是正済みで、現在は workspace 全体が exit 0**（上記「本仕様の担当外だが本ワークツリーで是正した事項」を参照）。
 - PowerShell から cargo を実行すること（Git Bash の GNU `link.exe` が MSVC link を隠す）。
 - 旧 `window-placement` R2.9 の上書き注記は **`resolver.rs` のモジュール doc 1 箇所のみ**（design.md:81/:203 の裁定）。テスト側の導出コメントに複製すると差し戻し対象（task 3.1 で実際に発生）。`grep -rn "R2\.9" crates/areka/src/placement/` のヒットが 1 件であることで確認できる。
 - task 3.1 完了時点で bin ターゲット 672 passed / 0 failed（全緑）。task 3.2 で 673。
 - task 5.1: `cargo build --target i686-pc-windows-msvc -p shiori-host32-helper -p shiori-host32-testdll`（exit 0）。成果物 `shiori-host32-helper.exe`（272,384 B）・`shiori.dll`（155,648 B）はいずれも PE machine `0x014C`。全体テストはこの `target/i686-pc-windows-msvc/debug/` を直接探索するためコピーは不要（実機実走のみ `target/debug/` へのコピーが要る）。
-- task 5.2: `cargo test --workspace`（exit 0）= **4,759 passed / 0 failed / 33 ignored**（結果ブロック 85・doctest 込み）。要件 4.2 の不変量監視 `placement_windowposition_tests.rs::prepare_emo2_matches_ssp_balloon_offsets_at_dpi_120` は合格、かつ `git diff main...HEAD` で同ファイル・`persist.rs`・`spawn.rs`・`follow` 配下いずれも**差分 0 行**（記号参照の下流も全緑）。ブランチ全体の差分は 4 ファイル（resolver.rs / resolver_resolve_tests.rs / placement_prepare_tests.rs / doc/COMPAT_ARCHITECTURE.md）に限局。
+- task 5.2: `cargo test --workspace`（exit 0）= **4,759 passed / 0 failed / 33 ignored**（結果ブロック 85・doctest 込み）。要件 4.2 の不変量監視 `placement_windowposition_tests.rs::prepare_emo2_matches_ssp_balloon_offsets_at_dpi_120` は合格、かつ `git diff main...HEAD` で同ファイル・`persist.rs`・`spawn.rs`・`follow` 配下いずれも**差分 0 行**（記号参照の下流も全緑）。**task 5.2 実施時点の**ブランチ差分は 4 ファイル（resolver.rs / resolver_resolve_tests.rs / placement_prepare_tests.rs / doc/COMPAT_ARCHITECTURE.md）に限局していた。**この記述は当時の値であり現状ではない**——その後に要件 7 の追加（差し戻し）と、開発者指示による境界外 2 件の是正が入り、**最終的な差分は 21 ファイル**（内訳は本ファイル末尾の「最終的な差分の内訳」節）。
 - **最終検証で要件 2.7 の檻の判別力ゼロを検出し是正した**: `t_r6_chain_uses_clamped_previous_position` は左端クランプの配置しか持たず、連鎖基準をクランプ前へ戻しても**両基準とも左端へ潰れて同値**になるため緑のまま通っていた（名前が主張する内容を assert が検定していない＝本仕様が潰した欠陥と同型）。右端クランプの区間を同じテストへ併置して是正（scope0 を free の過大な defaultleft で右端クランプさせると scope1 はクランプされない位置へ落ち、クランプ前基準なら幅 w0 ぶん右へずれる）。既存 assert は設計どおり不変で、追加のみ。**較正済み**——実装をクランプ前基準へ一時的に戻すと `1664 vs 1264`（差＝w0=400）で厳密に赤くなることを確認し、注入は撤去済み（`resolver.rs` は差分 0 行）。
 - task 5.3: 実機 2 水準とも `gap = 0`・exit 0。証跡は `real-run-signoff-2026-08-13.log`（＋生ログ `areka-rects-boot-dpi192.log` / `areka-rects-boot-dpi96.log`）。
 - **実効 DPI は DPI 対応プロセスから読むこと**（task 5.3 で嵌った罠）: DPI 非対応プロセスから `GetDpiForMonitor(MDT_EFFECTIVE_DPI)` を呼ぶと全モニタが 96 に丸められて返る。この誤読で 200% の実機を「100%」と誤認しかけた。`SetProcessDpiAwarenessContext(PER_MONITOR_AWARE_V2)` 済みプロセスから読むか、areka 自身の `起動時 k₀ を導出 … primary_dpi=` ログを見るのが確実。
 - 実機必達脚は **200%（DPI 192・k=2/1）** で実施した。規範文（要件 6.1・design.md:277）は「実 DPI≠96」であり逸脱ではない。120（k=5/4）水準は決定論テスト `prepare_emo2_at_dpi_120_places_scopes_adjacent` が誤差 0 で固定。**表示スケールの変更は OS のシステム設定のため開発者が実施**（100% 対照実行のみ依頼）。design の Testing Strategy が「実 DPI 120」と例示していた件は最終検証で規範文へ揃えて是正済み（上記「最終検証で追加是正した項目」）。
 - **design.md（C4）の誤記を task 4 で検出**: 「DPI 96 と 192 の両方で誤差 0」は生観測に対しては成立しない。DPI 192 の生観測は見かけ隙間 104px で、誤差 0 が成立するのは配置時の代表面寸（868／854 物理 px・境界 2012）に対して（`ssp-oracle-notes.md:95-98` が正）。COMPAT §8 の追加行には当初から限定つきの正しい記述を採用した。task 4 の時点では承認済み文書ゆえ無改訂として申し送ったが、**最終検証で開発者指示により requirements.md／design.md の両方へ限定を追記して是正済み**（上記「最終検証で追加是正した項目」）。
+
+## 最終的な差分の内訳（2026-08-13・レビュー用）
+
+コード／doc の差分は **20 ファイル**（spec ディレクトリの文書・証跡を除く）。当初計画の 4 ファイルから広がった理由は 2 つ——要件 7 の追加（差し戻し）と、開発者指示による境界外 2 件の是正。**「1 機能 = 1 ブランチ = 1 PR」の規約からは外れており、PR を切る前に分割の要否を判断されたい。**
+
+| 群 | ファイル | 由来 |
+|---|---|---|
+| **A. 当初計画（要件 1〜6）** | `placement/resolver.rs`・`placement/resolver_resolve_tests.rs`・`placement/placement_prepare_tests.rs`・`doc/COMPAT_ARCHITECTURE.md` | 設計の File Structure Plan どおり |
+| **B. 要件 7（差し戻しで追加）** | `placement/chain_finalize.rs`（新規）・`placement/chain_finalize_tests.rs`（新規）・`emo2_boot/frame_chain_finalize_tests.rs`（新規）・`emo2_boot/frame.rs`・`emo2_boot/frame/drain_resnap.rs`・`placement/spawn.rs`・`placement/spawn_cleanup_tests.rs`・`placement/mod.rs` | 要件 7／design C6。requirements の Boundary Context は追随済み |
+| **C. 境界外・`\![move]` の DPI スケール是正** | `emo2_boot/move_cue.rs`・`emo2_boot/move_cue_tests.rs`・`emo2_boot/move_cue_apply_move_tests.rs`・`placement/windowposition.rs`（`scale_signed` を `pub(crate)` 化）・`placement/mod.rs`（再エクスポート） | 実機観察で発見した孤児欠陥。担当仕様が実在しないため開発者指示で本ワークツリー処理 |
+| **D. 境界外・clippy 是正** | `wintf/src/com/d2d/command_sink.rs`・`wintf/src/ecs/types.rs`・`dola/tests/general/core_types_test/dynamic_value.rs`・`dola/tests/runtime/core_types_test.rs` | 本仕様の起因ではない既存事項（2 か月前から赤）。開発者指示で本ワークツリー処理 |
+
+分割する場合、コミットは論理単位で切ってあるため cherry-pick 可能: A＋B＝`60f82f8`〜`872187d` ほか、C＝`530ee83`、D＝`4146d53`・`36001e9`。
+
+## 最終検証（`/kiro-validate-impl`）で判明し、担当 spec へ申し送った事項
+
+いずれも **brief のみ＝未着手**であることを確認したうえで、各 brief へ追記(63) として登記済み（コミット `f104013`）。本仕様では扱わない。
+
+| 申し送り先 | 内容 |
+|---|---|
+| `dpi-transition-atomicity`（W6.75） | **拡大率遷移で二体の隙間が再発する経路**。`ChainFinalized` が恒久フラグゆえ、遷移後に幅が k 倍に変わっても連鎖が解き直されない。要件 7.4 は「サーフェス切替での再解決禁止」を明示要求しており DPI 遷移は本仕様の要件・設計に記述が無い。`ChainFinalized` の寿命を同 spec の設計判断として委ねた。併せて、確定の駆動が完了済み `surface-resize-resnap` の landing 挙動へ構造依存する点も申し送り |
+| `windowposition-limit`（W6.5） | **resolver の外に第 2 の位置ライターが増えた**（`finalize_chain_once` は P4 クランプを経由しない）。roadmap 干渉台帳の「resolver 同一関数内 30 行差」という記述が不完全になったため rebase 対象の拡大を明記。limit のクランプをどの書き込み口へ掛けるかを設計判断として委ねた |
+| `surfaces-basepos` | `resolve_move_target_position` の署名と式が変わった（`k: ScaleRatio` 追加・`AxisSpec::Px` の契約是正）。`BaseposResolver` 型シームは無傷。SSP 非互換の裁定を前提として引き継ぐよう明記 |
+| `emo2-conformance-e2e` | 適合表の期待値 2 点（二体の既定間隔＝定常でも隙間 0／項目 9 の move 着地座標が k≠1 で変化） |

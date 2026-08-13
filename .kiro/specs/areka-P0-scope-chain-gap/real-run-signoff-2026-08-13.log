@@ -184,7 +184,7 @@ scope1 右端 `2110 + 336 = 2446` ＝ scope0 左端 `2446` → **隙間 0**。�
 chain_finalize: 実表示寸で連鎖を再解決（初期配置の確定・scg 7.1） scope=1 from_x=1340 to_x=1392
 ```
 
-定常時の外部実測（`probe-fixed-rects.log` 最終ブロック・2026-08-13 15:05:26.243）:
+定常時の外部実測（`areka-rects-req7-nomove-dpi192.log` 最終ブロック・2026-08-13 15:05:26.243）:
 
 | Title | Dpi | L | W | 右端／左端 |
 |---|---|---|---|---|
@@ -226,4 +226,6 @@ chain_finalize: 実表示寸で連鎖を再解決（初期配置の確定・scg 
 | `real-run-signoff-2026-08-13.log` | 本ファイル（判定記録） |
 | `areka-rects-boot-dpi192.log` | 水準① 外部窓矩形ポーリング生ログ |
 | `areka-rects-boot-dpi96.log` | 水準② 外部窓矩形ポーリング生ログ |
+| `areka-rects-req7-nomove-dpi192.log` | §5.5 脚①（要件 7・移動指令を除いた複製ゴースト）の外部窓矩形生ログ |
+| `areka-rects-req7-prod-dpi192.log` | §5.5 脚②（要件 7・本番ゴースト）の外部窓矩形生ログ |
 | `ssp-oracle-notes.md` ／ `ssp-rects-*.log` | 要件 1（SSP 実測オラクル）の正本（本タスクでは非改変） |

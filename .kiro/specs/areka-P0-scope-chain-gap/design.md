@@ -8,6 +8,8 @@
 
 **Impact**: 変更の本体は `crates/areka/src/placement/resolver.rs` の `resolve_placement` P2 分岐 1 箇所（前スコープ幅の減算 → **自スコープ幅**の減算）。波及は研究フェーズで全数特定済み——連鎖値を絶対値で固定するテスト 3 本＋emo2 実寸フィクスチャ 1 本＋doc/コメントの式引用のみ。構造変更・新規抽象・新規ファイルは導入しない。
 
+> **改訂（2026-08-13・要件 7 の追加による）**: 上記は要件 1〜6 の範囲についての記述であり、**要件 7（実表示寸での連鎖再解決）は新規モジュール 1 本と新規テストファイル 2 本を導入する**（C6・後述）。是正の本体が 1 分岐であることは変わらないが、「新規ファイルなし」はもはや全体の記述ではない。File Structure Plan・Components 表・Testing Strategy・Revalidation Triggers も同日に追随させた。
+
 ### Goals
 
 - P2 連鎖式を確定規則 H1 へ是正し、幅差由来の隙間（`w(n−1) − w(n)` に比例する項）を解消する（2.1, 2.2）。
@@ -22,7 +24,8 @@
 - `windowposition.limit`／P5 バルーン基本位置（別 spec `windowposition-limit` の領分。同関数内だが本仕様は P5 のハンクに触れない）。
 - 重なり回避等の複雑な配置ロジックの導入（2.9）。
 - バルーン offset の基準（キャラ窓左上相対・kero-balloon R3.8 確定・不変）。
-- 位置の追従・保存・復元の実装変更（`spawn.rs`・`follow.rs`・`persist.rs` は無改変。persist の restore ログは**観測にのみ**用いる）。
+- 位置の追従・保存・復元の実装変更（`follow.rs`・`persist.rs` は無改変。persist の restore ログは**観測にのみ**用いる）。
+  - **要件 7 による改訂（2026-08-13）**: `spawn.rs` は**改変対象へ移した**——連鎖の再解決には「spawn 時の既定位置」が要り、その保持先を `ScopeWindows` へ足す必要があるため（requirements.md の Boundary Context も同日に「初期配置の確定点」を In scope へ追加済み）。`follow` は無改変のまま（`move_window_to` を**呼ぶ**だけで実装には触れない）。
 - SSP コールドブート定常値の模倣。SSP 自己不整合 2 件（起動時サーフェス寸レース・ゴースト演出 `\![move]` の物理 px 無スケール適用）は互換対象外として §8 に記録するのみ（要件討議 #2 裁定・2.3／6.4）。
 
 ## Boundary Commitments
@@ -38,7 +41,7 @@
 ### Out of Boundary
 
 - P1（Y・bottom）・P3（free）・P4（クランプ）・P5（バルーン暫定 offset）の**規則そのもの**（P2 からの参照関係は現状維持）。
-- `spawn.rs`・`follow.rs`・`persist.rs`（初期解決の下流。記号参照ゆえ自動追随）。
+- `follow.rs`・`persist.rs`（初期解決の下流。記号参照ゆえ自動追随）。**`spawn.rs` は要件 7 で境界内へ移動**（2026-08-13・上記 Non-Goals の改訂と同旨）。
 - `ScaleRatio` 丸め権威（round half away from zero・非ゼロ長最小 1px）の変更・例外追加（2.6）。
 - アーカイブ済み spec（`completed/areka-P0-window-placement`）の文書（5.4）。
 - SSP 再実測（R1 完了済み。再検証が必要になった場合の手順は `ssp-oracle-notes.md` 冒頭に記録済み）。
@@ -56,6 +59,13 @@
 - emo2 フィクスチャ位置期待値の変更 → 下流 `emo2-conformance-e2e`（二体間隔の目視項目）・`balloon-visibility`（char 位置従属）は本仕様の是正値を前提に再確認。
 - §8 エントリ追加 → 互換対応表の参照者（以後の placement 系 spec）は R2.9 を正典として引用してはならない。
 - バルーン offset の SSP 突合テストが不合格化した場合 → 新たな欠陥のシグナル（4.3）。期待値書き換えは禁止で、原因特定が先。
+
+**要件 7（C6）が新たに生むトリガ（2026-08-13 追記・いずれも該当 brief へ追記(63) として申し送り済み）**
+
+- **確定経路は P4 クランプを経由しない** → `windowposition-limit`（W6.5）。`finalize_chain_once` が `move_window_to` でキャラ窓 X を直接書くため、「キャラ窓は必ず work area 内」という構造的保証が確定後配置では失われる。limit のクランプをどの書き込み口へ掛けるかは同 spec の設計判断。roadmap 干渉台帳の「resolver 同一関数内 30 行差」も不完全になった。
+- **`ChainFinalized` は恒久フラグ** → `dpi-transition-atomicity`（W6.75）。拡大率遷移で幅が k 倍に変わっても連鎖が解き直されず、同じ機序の隙間が再発する。要件 7.4 が禁じたのは「サーフェス切替での再解決」であり DPI 遷移は本設計の射程外。`ChainFinalized` の寿命は同 spec の設計判断とする。
+- **確定の駆動は resnap の landing 観測へ構造依存** → 完了済み `areka-P0-surface-resize-resnap`（追跡先なし）。再アンカー規則・フレーム内順序・`WindowPos` 更新タイミングが変わると、確定が永久に見送られるか早すぎるフレームで走る。frame 相の順序を扱う `dpi-transition-atomicity` を実質の見張り役として申し送り済み。
+- **`\![move]` の k 倍是正（境界外・開発者指示）** → `surfaces-basepos`・`emo2-conformance-e2e`。`resolve_move_target_position` の署名と式が変わり、高 DPI での着地座標が変わった。
 
 ## Architecture
 
@@ -86,7 +96,7 @@ let base_x = match prev {
 
 ## File Structure Plan
 
-新規ソースファイルなし。変更は既存ファイルへの局所改修のみ。
+要件 1〜6 の範囲では新規ソースファイルなし（変更は既存ファイルへの局所改修のみ）。**要件 7 で新規 3 本を追加**（下記「要件 7（C6）で追加・変更したファイル」）。
 
 ### Modified Files
 
@@ -108,6 +118,19 @@ let base_x = match prev {
 - `crates/areka/src/placement/{spawn_follow_pipeline_tests.rs, spawn_assembly_tests.rs}`・persist/follow 系 — resolver 出力を記号参照（`p.char_pos` 透過）するのみで自動追随。
 - `crates/areka/src/placement/{mod.rs:368, windowposition.rs:63-64}` — P5 の式引用で P2 非依存（確認済み・追随不要）。
 - `crates/areka/src/placement/persist.rs` — 無改変（restore ログは観測のみ）。
+
+### 要件 7（C6）で追加・変更したファイル（2026-08-13 追記）
+
+- **新規** `crates/areka/src/placement/chain_finalize.rs` — 再解決の判定（純関数 `finalize_chain`・補助 `moved_default_pos`）＋確定標識 `ChainFinalized`（Resource）。
+- **新規** `crates/areka/src/placement/chain_finalize_tests.rs` — 判定の全網羅檻（12 本）。
+- **新規** `crates/areka/src/emo2_boot/frame_chain_finalize_tests.rs` — 結線の檻（6 本）。
+- `crates/areka/src/emo2_boot/frame/drain_resnap.rs` — `finalize_chain_once`／`finalize_chain_once_with` の新設（resnap と同じ委譲構造）。
+- `crates/areka/src/emo2_boot/frame.rs` — resnap 直後で `finalize_chain_once` を駆動する 1 行＋private import。
+- `crates/areka/src/placement/spawn.rs` — `ScopeWindows.default_char_pos` の追加とアクセサ 2 本（未接触判定の基準）。
+- `crates/areka/src/placement/spawn_cleanup_tests.rs` — 新フィールドの構築追随（+3 行）。
+- `crates/areka/src/placement/mod.rs` — `pub mod chain_finalize;` の追加。**上の Unchanged 節が名指しした「:368 域の P5 式引用」本文は無傷**。
+
+> **境界外の是正（開発者指示・本設計の担当外）**: `emo2_boot/move_cue.rs` 系（`\![move]` の DPI スケール是正）と `crates/wintf`・`crates/dola`（clippy 是正）も同じブランチに含まれる。経緯と分割方針は `tasks.md`「最終的な差分の内訳」を参照。`placement/windowposition.rs`（`scale_signed` の `pub(crate)` 化）と `placement/mod.rs`（同再エクスポート）はその随伴。
 
 ### Evidence (spec directory)
 
@@ -162,6 +185,7 @@ let base_x = match prev {
 | C3 フィクスチャ追随＋不変量監視 | placement tests | 実寸期待値の追随と offset 不変量の監視 | 2.3, 4.1, 4.2, 4.3 | C1（P0）・ScaleRatio（P2） | State（テスト固定） |
 | C4 COMPAT §8 記録 | doc | R2.9 上書きの正典記録 | 5.1–5.5 | C0（P0） | — |
 | C5 実機受け入れ | 検証手順 | 実機での決定論的合否判定と証跡 | 2.3, 6.1–6.4 | C1（P0）・persist restore ログ（P0・読取専用）・measure-ssp-rects.ps1（P2） | Batch（手順） |
+| C6 実表示寸での連鎖再解決 | placement＋emo2_boot/frame | 初期配置を実表示寸で一度きり確定させる | 7.1–7.6 | C1（P0・連鎖規則）・`spawn.rs` の既定位置台帳（P0）・`follow::move_window_to`（P1・唯一の位置ライター）・`surface-resize-resnap` の再アンカー結果（P0・**入力として受け取るのみ**） | Service（純関数判定＋薄い結線） |
 
 ### placement/resolver
 
@@ -344,6 +368,26 @@ let base_x = match prev {
 2. `prepare_emo2_at_dpi_120_places_scopes_adjacent`（新設）: k=5/4・543/420 実寸で scope1 右端＝scope0 左端（2.3 の決定論形）。
 3. `prepare_emo2_matches_ssp_balloon_offsets_at_dpi_120`（無改変）: 合格継続の確認が 4.2 の檻。
 4. spawn/follow/persist 系（無改変）: 記号参照の自動追随を全実行で確認。
+
+### Unit / Integration Tests（C6・要件 7・2026-08-13 追記）
+
+判定は純関数、結線は薄いアダプタという分担に従い、檻も 2 層に分ける（GPU 不要・決定論）。
+
+**判定（`placement/chain_finalize_tests.rs`・12 本）**
+1. `emo2_surface_swap_gap_is_closed_by_moving_the_follower_only`（本丸）: 実機で観測した機序（起点が 2012→2064 へ 52 寄る）をそのまま入力にし、後続のみ 1340→1392 で隙間 0（7.1/7.2）。
+2. `unequal_widths_are_all_made_flush`／`equal_widths_use_the_same_rule`: 不等幅・等幅を同一式で（7.1）。
+3. `previous_width_subtraction_is_rejected`: 旧式への退行の否定 assert。
+4. `repositioned_scope_is_not_pulled_back_and_becomes_the_next_basis`／`follower_chains_from_the_actual_position_of_a_moved_origin`: 明示的再配置の尊重と実位置基準（7.3）。
+5. `already_flush_chain_emits_no_moves`／`applying_twice_is_a_no_op_the_second_time`: べき等・冗長駆動の回避。
+6. `non_positive_width_is_skipped_and_keeps_its_place`／`empty_and_single_scope_yield_no_moves`／`saturating_arithmetic_does_not_panic_on_extremes`: 縮退入力。
+7. `moved_default_pos_replaces_x_and_preserves_y`: Y 非接触（7.2）。
+
+**結線（`emo2_boot/frame_chain_finalize_tests.rs`・6 本）**
+1. `finalize_closes_the_gap_by_moving_the_follower_only`: 起点不動・Y 不変・隙間 0（7.1/7.2）。
+2. `finalize_does_not_touch_window_sizes`: 寸は resnap の領分ゆえ非接触。
+3. `finalize_runs_only_once_even_if_sizes_change_again`: **一度きりの判別檻**（7.4）。確定後に別寸を与えても後続が動かないことを固定する——一発ガードを外すと赤くなる。
+4. `finalize_defers_while_any_scope_has_not_shown_yet`／`finalize_defers_until_resnap_has_landed`: 部分適用しない見送り条件。
+5. `finalize_does_not_pull_back_an_explicitly_moved_scope`: 明示的再配置の尊重（7.3）。
 
 ### Real Machine（受け入れ・C5）
 
