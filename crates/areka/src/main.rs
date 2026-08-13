@@ -709,6 +709,14 @@ fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) -> Option<placement::Au
                 placement::spawn::register_ghost_windows_click_through,
             );
 
+            // ゴースト窓ペアの重なり管理を同じ確定段へ結線（areka-P0-ghost-window-zorder
+            // task 3.2・要件 1.1/5.6/6.1）。実行時ストラテジ（既定＝案 A・補助浮上なし）の
+            // 明示挿入と、確立系 → 維持系の順での `FrameFinalize` 登録を
+            // `wire_zorder_pair` 1 本にまとめてある（登録内容と理由は同関数の doc）。
+            // clickthrough 登録と同じく `Added<WindowHandle>` 起点ゆえ、窓 spawn より
+            // 先に結線しても取りこぼさない。
+            placement::spawn::wire_zorder_pair(app.world().borrow_mut().world_mut());
+
             // 復元マージ（design C4・要件 1.4）: snapshot 構築直後・spawn closure へ渡す前に、
             // 永続先読み（load_restored_state）→ 純関数 merge（apply_restored_placements）で
             // 保存位置を反映した placements を得る。`prepared` を placements/titles へ分解し、
