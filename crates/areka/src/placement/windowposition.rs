@@ -30,7 +30,7 @@ use super::config::PlacementConfig;
 /// `i32::MIN` は [`i32::unsigned_abs`] で絶対値を取るためパニックしない。`scale_len` は
 /// `u32::MAX` へ飽和するのみゆえ、物理 px 通貨（i32）への収め直しは本層の責務であり
 /// `±i32::MAX` へ飽和させる（ラップアラウンドしない）。
-fn scale_signed(v: i32, k: ScaleRatio) -> i32 {
+pub(crate) fn scale_signed(v: i32, k: ScaleRatio) -> i32 {
     let scaled = k.scale_len(v.unsigned_abs());
     let magnitude = i32::try_from(scaled).unwrap_or(i32::MAX);
     if v < 0 { -magnitude } else { magnitude }

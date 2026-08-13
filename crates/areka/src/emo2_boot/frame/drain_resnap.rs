@@ -4,6 +4,7 @@ use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
 use tracing::debug;
 
+use areka_emo_compose::ScaleRatio;
 use areka_emo_present::{EmoPresenter, TargetId};
 use wintf::ecs::{SizeI, WindowPos};
 
@@ -74,9 +75,20 @@ pub fn run_move_drain_phase(wiring: &Emo2Wiring, world: &mut World) {
     // try_iter: 現時点でキュー済みの MoveDirective を非ブロックで FIFO 全件取り出す（空・全送信端 drop で尽きる）。
     // wiring.move_rx（shared 借用）と world（mut 借用・別オブジェクト）は互いに素ゆえ両立する。
     for directive in wiring.move_rx.try_iter() {
+        // 台本のオフセットは**作者基準 px**ゆえ、対象スコープのシェルへ実適用中の k で物理 px へ
+        // 換算する（`resolve_move_target_position` の doc・`windowposition.x/y` と同じ写像）。
+        // 真実源は表示層の `applied_ratio`＝「いま画面に載っている絵に実際に掛かった k」であり、
+        // 導出しただけで適用に失敗した k は漏れてこない。
+        //
+        // 表示未成立（初回 ShowSurface 前）・未登録 target は `None`。このとき恒等へ縮退する——
+        // まだ拡大が掛かっていない状態であり、従来（k 非適用）と同じ値になる安全側の既定である。
+        let k = wiring
+            .presenter
+            .applied_ratio(shell_target(directive.scope))
+            .unwrap_or(ScaleRatio::ONE);
         // 適用の全縮退（非スコープ基準・窓不在・算出不能）は apply_move_directive 内で warn!＋false 済み
         // （log-first・R5.5）。戻り値は捨てて次 directive へ進む（1 件の縮退で talk を殺さない・非 panic）。
-        apply_move_directive(world, &directive);
+        apply_move_directive(world, &directive, k);
     }
 }
 

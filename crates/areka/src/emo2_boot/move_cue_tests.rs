@@ -28,6 +28,7 @@
 // 監査結論: 両項目とも欠落・弱檻（トートロジー/部分網羅）なし。全 26 檻が具体 assert で緑。
 // =============================================================================
 
+use areka_emo_compose::ScaleRatio;
 use super::*;
 
 fn toks(items: &[&str]) -> Vec<String> {
@@ -214,13 +215,65 @@ fn fixture_move_353_x_and_y_unchanged() {
     let base = win(1000, 500, 400, 687);
     let target = win(1200, 800, 300, 434);
 
-    let pos = resolve_move_target_position(&CanonDefaultBasepos, &base, &target, &directive)
+    let pos = resolve_move_target_position(&CanonDefaultBasepos, &base, &target, &directive, ScaleRatio::ONE)
         .expect("位置・寸法が揃うので算出できる");
 
     // x' = 1000 + 200 − 353 − 150 = 697
     assert_eq!(pos.x, 697, "x' = pos0.x + w0/2 − 353 − w1/2");
     // Y は Fix ゆえ target の現在 Y を現状維持
     assert_eq!(pos.y, 800, "Y=Fix は対象窓の現在 Y を現状維持");
+}
+
+/// 台本オフセットは k 倍される（作者基準 px → 物理 px・`windowposition.x/y` と同じ写像）。
+///
+/// 同じ fixture を k=2/1 で解くと、`base_pos`／`basepos` は既に物理 px の入力ゆえそのまま、
+/// **`dx` だけが −353 → −706** になる。素通し実装（k 非適用）なら k=1 と同じ 697 が返るため、
+/// 本檻は「k を掛け忘れる退行」を厳密に判別する。
+///
+/// 実機の裏づけ（emo2・拡大率 200%）: k を掛けないと二体が 365px 重なり、過剰分 353px は
+/// スケールし損ねた `dx` そのものだった。
+#[test]
+fn script_offset_is_scaled_by_k_not_passed_through() {
+    let directive = parse_move_directive(1, &toks(&["-353", "", "", "0", "base", "base"]))
+        .expect("fixture move は Ok");
+    // 物理 px の入力（k=2 の実機で観測される寸法相当）。
+    let base = win(1000, 500, 400, 687);
+    let target = win(1200, 800, 300, 434);
+    let k2 = ScaleRatio::new(2, 1).expect("2/1 は正当な比");
+
+    let pos = resolve_move_target_position(&CanonDefaultBasepos, &base, &target, &directive, k2)
+        .expect("位置・寸法が揃うので算出できる");
+
+    // x' = 1000 + 200 + (2 × −353) − 150 = 344
+    assert_eq!(
+        pos.x, 344,
+        "x' = pos0.x + w0/2 + k·(−353) − w1/2（dx が k 倍される）"
+    );
+    // 素通し（k 非適用）の値へ戻ってはならない＝退行の否定 assert。
+    assert_ne!(
+        pos.x, 697,
+        "台本オフセットを素通しにしてはならない（k=1 の値と一致するのは退行）"
+    );
+    // Y は Fix ゆえ k に依らず現状維持（k 倍が Fix 軸へ漏れない檻）。
+    assert_eq!(pos.y, 800, "Y=Fix は k に依らず現状維持");
+}
+
+/// k 倍は符号を保存する（正のオフセットが負へ化けない・`scale_signed` の符号規約）。
+#[test]
+fn script_offset_scaling_preserves_sign_on_both_axes() {
+    let directive = parse_move_directive(1, &toks(&["100", "50", "", "0", "base", "base"]))
+        .expect("両軸 Px は Ok");
+    let base = win(1000, 500, 400, 687);
+    let target = win(1200, 800, 300, 434);
+    let k2 = ScaleRatio::new(2, 1).expect("2/1 は正当な比");
+
+    let pos = resolve_move_target_position(&CanonDefaultBasepos, &base, &target, &directive, k2)
+        .expect("算出できる");
+
+    // x' = 1000 + 200 + 200 − 150 = 1250（+100 が +200 へ）
+    assert_eq!(pos.x, 1250, "正の dx は正のまま k 倍される");
+    // y' = 500 + 687 + 100 − 434 = 853（+50 が +100 へ）
+    assert_eq!(pos.y, 853, "正の dy は正のまま k 倍される");
 }
 
 /// Y=Px 経路も対称に効く（Y が「常に現状維持」へ hardcode されていないことの檻）。
@@ -234,7 +287,7 @@ fn y_px_axis_is_symmetric_not_hardcoded() {
 
     let base = win(1000, 500, 400, 687);
     let target = win(1200, 800, 300, 434);
-    let pos = resolve_move_target_position(&CanonDefaultBasepos, &base, &target, &directive)
+    let pos = resolve_move_target_position(&CanonDefaultBasepos, &base, &target, &directive, ScaleRatio::ONE)
         .expect("算出できる");
 
     // X=Fix → 現状維持
@@ -263,7 +316,7 @@ fn computation_honors_resolver_seam() {
     let base = win(1000, 500, 400, 687);
     let target = win(1200, 800, 300, 434);
 
-    let pos = resolve_move_target_position(&FullSizeBasepos, &base, &target, &directive)
+    let pos = resolve_move_target_position(&FullSizeBasepos, &base, &target, &directive, ScaleRatio::ONE)
         .expect("算出できる");
     // x' = pos0.x + w0 − 353 − w1 = 1000 + 400 − 353 − 300 = 747（Canon の 697 とは別）
     assert_eq!(pos.x, 747, "resolver の basepos 出力（幅そのもの）が使われる");
@@ -281,7 +334,7 @@ fn both_fix_returns_current_position() {
     // 基準窓は寸法なし（現状維持のみゆえ basepos 不要）。
     let base = WindowPos::default();
     let target = win(1200, 800, 300, 434);
-    let pos = resolve_move_target_position(&CanonDefaultBasepos, &base, &target, &directive)
+    let pos = resolve_move_target_position(&CanonDefaultBasepos, &base, &target, &directive, ScaleRatio::ONE)
         .expect("両軸 Fix は現状維持で算出できる");
     assert_eq!(pos, PointPx { x: 1200, y: 800 });
 }
@@ -299,7 +352,7 @@ fn missing_geometry_with_px_axis_is_none() {
         ..Default::default()
     };
     assert!(
-        resolve_move_target_position(&CanonDefaultBasepos, &base, &target, &directive).is_none(),
+        resolve_move_target_position(&CanonDefaultBasepos, &base, &target, &directive, ScaleRatio::ONE).is_none(),
         "Px 軸で寸法欠落は算出不能＝None"
     );
 }
