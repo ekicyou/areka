@@ -9,7 +9,7 @@
   - _Requirements: 6.4_
   - _Boundary: 計測ツール_
 
-- [ ] 2. 連鎖規則の是正とテストの追随
+- [x] 2. 連鎖規則の是正とテストの追随
 - [x] 2.1 相方スコープの基準式を是正し、連鎖を検証する既存テストを同時に追随させる
   - 相方スコープの X 基準を「前スコープ左端 − 自スコープ幅」へ改め、幅差ぶんの隙間が生じない配置にする
   - 連鎖の持ち越し状態から不要になった幅を落とし、旧式へ戻す変更がコンパイルエラーになるようにする
@@ -29,7 +29,7 @@
   - 観察可能な完了条件: 新テストが 4 水準すべてで緑になり、幅が等しいか否かで結果の形が分岐しない
   - _Requirements: 2.2, 2.4, 2.5, 3.1, 3.2, 3.5_
 
-- [ ] 3. 実寸フィクスチャの追随と不変量の監視
+- [x] 3. 実寸フィクスチャの追随と不変量の監視
 - [x] 3.1 実寸フィクスチャの位置期待値を是正後の値へ更新する
   - 相方の位置期待値を是正後の値へ更新し、それに従属する右置きバルーンの基本位置の期待値も追随させる
   - 更新するのは期待値のみで、バルーン基本位置の規則そのものには手を入れない
@@ -52,7 +52,7 @@
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
   - _Boundary: 互換対応表ドキュメント_
 
-- [ ] 5. 統合と受け入れ検証
+- [x] 5. 統合と受け入れ検証
 - [x] 5.1 全体テスト実行の前提となる 32bit ホスト成果物をビルドする
   - ワークスペース全体のテストが要求する 32bit ホストの成果物を先に生成する
   - 観察可能な完了条件: 成果物が生成され、全体テストが前提不足で失敗しない状態になる
@@ -77,6 +77,20 @@
   - _Depends: 1, 5.2_
   - _Requirements: 2.3, 6.1, 6.2, 6.3, 6.4_
 
+## 後続 spec への引き継ぎ（発火した再検証トリガ）
+
+設計の Revalidation Triggers が 3 件発火した。マージ後の担当は以下。
+
+- **`windowposition-limit`（W6.5）は本仕様のマージ後、本仕様のテストへ rebase 必達**。P2 の式と連鎖の持ち越し状態（`Option<(i32, i32)>` → `Option<i32>`）の両方が変わったため。`resolver.rs` の同一関数内で 30 行差の直列関係にあり、本仕様のテストは相方スコープ側（P2）の検定として独立させ、バルーン基本位置側（P5）のテストとは混ぜていない（rebase しやすい形を意図的に維持）。P5 のハンクは本仕様で 1 行も触れていない。
+- **`emo2-conformance-e2e`（二体間隔の目視項目）・`balloon-visibility`（キャラ位置に従属）は是正後の値を前提に再確認**。実寸フィクスチャの期待値が `s1.char_pos (1052,640)→(1150,640)`・`s1.balloon_pos (1198,565)→(1296,565)` へ変わった（バルーンのオフセット期待値は不変）。
+- **互換対応表に本裁定の行が入ったため、以後の配置系 spec は先行仕様 `window-placement` の該当受入基準を正典として引用してはならない**。現行の正典は本仕様へ一意に辿れる。
+
+## 開発者の裁定を要する申し送り
+
+- **要件文書にも設計文書と同じ無限定表現が残っている**: `requirements.md:51` の「DPI 96/192 の両方で誤差 0」は、design.md:263 と同種の誤記。正しくは「DPI 192 では配置時の代表面寸（868／854 物理 px・境界 2012）に対して誤差 0」で、生観測は参照実装の起動レース由来の見かけ隙間 104px を含む（正本は `ssp-oracle-notes.md:95-98`）。互換対応表（正典）には既に限定つきの正しい記述を採用済みで実害はないが、承認済み文書 2 箇所の訂正可否は開発者判断。実装フェーズでは両方とも無改訂とした。
+- **実機必達脚の拡大率**: design.md:317 は「実 DPI 120」を例示するが、実施は 200%（DPI 192）。規範文（要件 6.1・design.md:277）は「実 DPI≠96」なので逸脱ではない。例示を実施水準へ合わせるか否かは開発者判断。
+- **`cargo clippy -p areka --all-targets` は `crates/wintf` の既存エラーで赤**。本仕様の変更起因ではない（変更ファイルを名指しする診断 0 件）。完了判定に clippy 緑を含めるかは開発者判断。
+
 ## Implementation Notes
 
 - ワークツリーでは `vendors/pasta` サブモジュールが未展開のため、cargo 実行前に `git submodule update --init --recursive vendors/pasta` が必要（実行済み）。
@@ -88,6 +102,7 @@
 - task 3.1 完了時点で bin ターゲット 672 passed / 0 failed（全緑）。task 3.2 で 673。
 - task 5.1: `cargo build --target i686-pc-windows-msvc -p shiori-host32-helper -p shiori-host32-testdll`（exit 0）。成果物 `shiori-host32-helper.exe`（272,384 B）・`shiori.dll`（155,648 B）はいずれも PE machine `0x014C`。全体テストはこの `target/i686-pc-windows-msvc/debug/` を直接探索するためコピーは不要（実機実走のみ `target/debug/` へのコピーが要る）。
 - task 5.2: `cargo test --workspace`（exit 0）= **4,759 passed / 0 failed / 33 ignored**（結果ブロック 85・doctest 込み）。要件 4.2 の不変量監視 `placement_windowposition_tests.rs::prepare_emo2_matches_ssp_balloon_offsets_at_dpi_120` は合格、かつ `git diff main...HEAD` で同ファイル・`persist.rs`・`spawn.rs`・`follow` 配下いずれも**差分 0 行**（記号参照の下流も全緑）。ブランチ全体の差分は 4 ファイル（resolver.rs / resolver_resolve_tests.rs / placement_prepare_tests.rs / doc/COMPAT_ARCHITECTURE.md）に限局。
+- **最終検証で要件 2.7 の檻の判別力ゼロを検出し是正した**: `t_r6_chain_uses_clamped_previous_position` は左端クランプの配置しか持たず、連鎖基準をクランプ前へ戻しても**両基準とも左端へ潰れて同値**になるため緑のまま通っていた（名前が主張する内容を assert が検定していない＝本仕様が潰した欠陥と同型）。右端クランプの区間を同じテストへ併置して是正（scope0 を free の過大な defaultleft で右端クランプさせると scope1 はクランプされない位置へ落ち、クランプ前基準なら幅 w0 ぶん右へずれる）。既存 assert は設計どおり不変で、追加のみ。**較正済み**——実装をクランプ前基準へ一時的に戻すと `1664 vs 1264`（差＝w0=400）で厳密に赤くなることを確認し、注入は撤去済み（`resolver.rs` は差分 0 行）。
 - task 5.3: 実機 2 水準とも `gap = 0`・exit 0。証跡は `real-run-signoff-2026-08-13.log`（＋生ログ `areka-rects-boot-dpi192.log` / `areka-rects-boot-dpi96.log`）。
 - **実効 DPI は DPI 対応プロセスから読むこと**（task 5.3 で嵌った罠）: DPI 非対応プロセスから `GetDpiForMonitor(MDT_EFFECTIVE_DPI)` を呼ぶと全モニタが 96 に丸められて返る。この誤読で 200% の実機を「100%」と誤認しかけた。`SetProcessDpiAwarenessContext(PER_MONITOR_AWARE_V2)` 済みプロセスから読むか、areka 自身の `起動時 k₀ を導出 … primary_dpi=` ログを見るのが確実。
 - 実機必達脚は **200%（DPI 192・k=2/1）** で実施した。design.md:317 は「実 DPI 120」と例示するが、規範文（要件 6.1・design.md:277）は「実 DPI≠96」であり逸脱ではない。120（k=5/4）水準は決定論テスト `prepare_emo2_at_dpi_120_places_scopes_adjacent` が誤差 0 で固定。**表示スケールの変更は OS のシステム設定のため開発者が実施**（100% 対照実行のみ依頼）。

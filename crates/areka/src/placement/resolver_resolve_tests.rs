@@ -460,7 +460,11 @@ fn t_r6_oversized_surface_pins_to_top_left() {
 }
 
 /// T-R6 補: クランプはキャラ窓の連鎖にも波及する（後続スコープは
-/// クランプ後の実配置の左隣＝P2 連鎖は実位置基準）。
+/// クランプ後の実配置の左隣＝P2 連鎖は実位置基準・2.7）。
+///
+/// 左端クランプの区間（前段）は両スコープとも左端へ潰れるため、
+/// 「クランプ前とクランプ後のどちらを連鎖基準にしたか」を判別できない。
+/// 判別には後段の右端クランプ区間が要る（そちらが 2.7 の実効的な檻）。
 #[test]
 fn t_r6_chain_uses_clamped_previous_position() {
     for dpi in DPIS {
@@ -478,6 +482,43 @@ fn t_r6_chain_uses_clamped_previous_position() {
         assert_eq!(out[0].char_pos.x, wa.left, "dpi={dpi}");
         // base_x(1) = char_x(0) − w1 は左外 → scope1 も左端クランプ（scg 2.1/2.2）
         assert_eq!(out[1].char_pos.x, wa.left, "dpi={dpi}: 連鎖先もクランプ");
+
+        // ここまでは両基準が左端へ潰れて同値になるため 2.7 を判別しない。
+        // 右端クランプ区間を併置して判別力を持たせる: scope0 を free の過大な
+        // defaultleft で右端クランプさせると、scope1 はクランプされない位置へ落ち、
+        // クランプ前基準なら w0 ぶん右（右端クランプ）へずれて差が出る。
+        let cfg = cfg_of(vec![
+            (
+                0,
+                scope_cfg(Alignment::Free, Some(px(2000, dpi)), Some(px(80, dpi))),
+            ),
+            (1, scope_cfg(Alignment::Bottom, Some(0), None)),
+        ]);
+
+        let out = resolve_placement(&cfg, wa, &[input(0, w0, h0), input(1, w1, h1)]);
+
+        let clamped_x0 = wa.right - w0;
+        assert_eq!(
+            out[0].char_pos.x, clamped_x0,
+            "dpi={dpi}: scope0 は free 指定が画面外ゆえ右端クランプ"
+        );
+        assert_eq!(
+            out[1].char_pos.x,
+            clamped_x0 - w1,
+            "dpi={dpi}: base_x(1)=クランプ後 char_x(0)−w1（2.7・scg 2.1/2.2）"
+        );
+        // クランプ前の位置（wa.left+2000）を連鎖基準にすると scope1 は右端クランプへ
+        // 落ちる。退行すればこの否定 assert が落ちる＝2.7 を判別する檻の本体。
+        assert_ne!(
+            out[1].char_pos.x,
+            wa.right - w1,
+            "dpi={dpi}: クランプ前の位置を連鎖基準にしてはならない（2.7）"
+        );
+        assert_eq!(
+            out[0].char_pos.x - (out[1].char_pos.x + w1),
+            0,
+            "dpi={dpi}: クランプが挟まっても隣接ペアの隙間は 0（scg 2.1/2.2）"
+        );
     }
 }
 
