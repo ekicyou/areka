@@ -295,12 +295,12 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
     let mut targets: Vec<(usize, Entity, PointPx)> = Vec::new();
 
     for scope in ghost_windows.scopes() {
-        let (Some(char_window), Some(default_pos)) = (
-            ghost_windows.char_window(scope),
-            ghost_windows.default_char_pos(scope),
-        ) else {
+        let Some(char_window) = ghost_windows.char_window(scope) else {
             return;
         };
+        // `None` は「既定配置ではない」（保存位置の復元）。判定側が常に対象外として扱う
+        // ため、ここでは打ち切らずそのまま渡す（scg 7.3）。
+        let default_x = ghost_windows.default_char_pos(scope).map(|p| p.x);
         // 表示未成立（初回 ShowSurface 前）は実表示寸が未確定＝まだ確定できない。
         let Some((w, h)) = source.physical_size(shell_target(scope as u32)) else {
             return;
@@ -325,7 +325,7 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
             scope,
             current_x: pos.x,
             width: w,
-            default_x: default_pos.x,
+            default_x,
         });
         targets.push((scope, char_window, PointPx { x: pos.x, y: pos.y }));
     }

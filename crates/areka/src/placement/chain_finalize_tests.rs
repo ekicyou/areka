@@ -14,7 +14,7 @@ fn untouched(scope: usize, x: i32, w: i32) -> ScopeChainState {
         scope,
         current_x: x,
         width: w,
-        default_x: x,
+        default_x: Some(x),
     }
 }
 
@@ -24,7 +24,17 @@ fn repositioned(scope: usize, current_x: i32, w: i32, default_x: i32) -> ScopeCh
         scope,
         current_x,
         width: w,
-        default_x,
+        default_x: Some(default_x),
+    }
+}
+
+/// **そもそも既定配置ではない**スコープを組む補助（保存位置が復元された scope・scg 7.3）。
+fn restored(scope: usize, current_x: i32, w: i32) -> ScopeChainState {
+    ScopeChainState {
+        scope,
+        current_x,
+        width: w,
+        default_x: None,
     }
 }
 
@@ -172,6 +182,49 @@ fn repositioned_scope_is_not_pulled_back_and_becomes_the_next_basis() {
     let xs = apply(&states, &moves);
     assert_eq!(xs[1], 900, "実位置のまま据え置く");
     assert_eq!(xs[2], 700, "以後の連鎖は実位置 900 を基準にする（900 − 200）");
+}
+
+/// **保存位置が復元されたスコープは、現在位置に関わらず常に対象外**（scg 7.3）。
+///
+/// 前回セッションで利用者がドラッグした位置は「既定配置」ではない。既定位置と比較する形の
+/// 判定では、復元位置が既定位置として台帳に載ってしまうと `current_x == default_x` が成立し
+/// 未接触と誤判定される——**セッションを跨ぐと利用者のドラッグが隣接位置へ引き戻される**。
+/// 起動シーム（`main.rs`）が復元済みスコープの既定位置を落とし、ここが `None` を対象外として
+/// 扱うことで防ぐ。
+#[test]
+fn restored_scope_is_never_pulled_back_even_when_it_sits_still() {
+    let states = [
+        untouched(0, 1000, 400),
+        // 復元位置 900。既定位置は台帳から落とされている（None）。
+        restored(1, 900, 320),
+        untouched(2, 0, 200),
+    ];
+
+    let moves = finalize_chain(&states);
+
+    assert!(
+        moves.iter().all(|m| m.scope != 1),
+        "復元されたスコープへ指示を出さない（7.3・セッションを跨ぐドラッグの保護）"
+    );
+    let xs = apply(&states, &moves);
+    assert_eq!(xs[1], 900, "復元位置のまま据え置く");
+    assert_eq!(xs[2], 700, "以後の連鎖は復元位置 900 を基準にする（900 − 200）");
+    // 既定位置を持っていたら引き戻されていた値。ここへ動いてはならない。
+    assert_ne!(
+        xs[1], 680,
+        "既定位置として扱うと 1000 − 320 = 680 へ引き戻される（是正前の挙動）"
+    );
+}
+
+/// 復元スコープが**たまたま隣接位置に居ても**指示は出ない（`None` は位置に依らず対象外）。
+#[test]
+fn restored_scope_is_excluded_regardless_of_where_it_sits() {
+    let states = [untouched(0, 1000, 400), restored(1, 680, 320)];
+
+    assert!(
+        finalize_chain(&states).is_empty(),
+        "復元スコープは既に隣接していても対象外（判定が位置ではなく由来で決まる）"
+    );
 }
 
 /// 起点スコープが動かされていても、後続は起点の実位置へ隣接する。

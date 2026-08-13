@@ -598,11 +598,28 @@ fn restore_merged_placements(
     placements: Vec<placement::resolver::ScopePlacement>,
     snapshot: &placement::follow::MonitorSnapshot,
     default_encoding: areka_parsers::charset::DefaultEncoding,
-) -> Vec<placement::resolver::ScopePlacement> {
+) -> (
+    Vec<placement::resolver::ScopePlacement>,
+    std::collections::BTreeSet<usize>,
+) {
     // 唯一の IO 点（design C1・A1 シーム）: mount 解決 → Ghost スコープ永続 entries 先読み。
     let entries = placement::persist::load_restored_state(ghost_root, default_encoding);
+    // resolver 既定のキャラ位置を merge 前に控える（scg 7.3 の「既定配置か否か」判定の基準）。
+    let defaults: Vec<(usize, placement::resolver::PointPx)> =
+        placements.iter().map(|p| (p.scope, p.char_pos)).collect();
     // 純関数 merge（永続不書込・保存位置優先 → project_restore → balloon 導出）。
-    placement::persist::apply_restored_placements(placements, &entries, snapshot)
+    let merged = placement::persist::apply_restored_placements(placements, &entries, snapshot);
+    // 保存位置が採用された（＝resolver 既定から動いた）スコープ集合。これらは**利用者の意思に
+    // よる配置**であって既定配置ではないため、連鎖の再解決から常に除外される（scg 7.3）。
+    // 保存値がたまたま既定と同値だった場合は差が出ないが、その位置は既定そのものゆえ
+    // 既定配置として扱って差し支えない。
+    let restored: std::collections::BTreeSet<usize> = merged
+        .iter()
+        .zip(defaults.iter())
+        .filter(|(m, (_, d))| m.char_pos != *d)
+        .map(|(m, _)| m.scope)
+        .collect();
+    (merged, restored)
 }
 
 /// `PersistWiring`（NonSend）を、ゴースト窓を保持する同一 World へ挿入するシーム抽出
@@ -699,7 +716,7 @@ fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) -> Option<placement::Au
             // （default_encoding は boot 結線・source.rs と同一の Ansi＝mount 解決の一貫性）。
             // 作者基準 DPI は `prepared` 分解の前に取り出して呼び手へ返す（`Copy` 値の転記）。
             let author_dpi = prepared.author_dpi;
-            let placements = restore_merged_placements(
+            let (placements, restored_scopes) = restore_merged_placements(
                 &cfg.ghost_root,
                 prepared.placements,
                 &snapshot,
@@ -717,6 +734,18 @@ fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) -> Option<placement::Au
                         &placements,
                         &titles,
                     );
+                    // 保存位置が復元されたスコープは既定配置ではない（scg 7.3）。台帳の
+                    // 既定位置を落として連鎖の再解決から常に除外する——さもないと次回起動で
+                    // 利用者のドラッグ位置が隣接位置へ引き戻される。spawn が Resource として
+                    // 挿した実体を直接標す（戻り値の clone を触っても Resource へは効かない）。
+                    if !restored_scopes.is_empty()
+                        && let Some(mut gw) =
+                            world.get_resource_mut::<placement::spawn::GhostWindows>()
+                    {
+                        for scope in &restored_scopes {
+                            gw.clear_default_char_pos(*scope);
+                        }
+                    }
                     // マウス入力ハンドラ装着（areka-P0-input-events・依存方向 input_events→
                     // placement）: placement は `crate::` パスを持てない（example の `#[path]`
                     // include で成立させるため）ゆえ、キャラ窓へのポインタハンドラ結線は
