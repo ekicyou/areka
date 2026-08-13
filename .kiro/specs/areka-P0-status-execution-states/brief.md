@@ -24,7 +24,7 @@ ukadoc `Status` 実行状態語彙の各状態が、それぞれの源サブシ�
 |---|---|---|---|---|
 | talking | 喋っている途中 | kanade `Steady{talk}` | ✅ `idle-talk` 完了 | M1 |
 | choosing | 選択肢表示中 | 選択肢UI | **`choice-select-events`**（既存 brief） | M1（M-dialogue） |
-| balloon(ID群) | バルーン表示中 | emo バルーン表示状態（UIスレッド） | 本 spec（UI→kanade 配線＝TickInfo 同型） | M1〜M2 |
+| balloon(ID群) | バルーン表示中 | emo バルーン表示状態（UIスレッド）＝**`areka-P0-balloon-visibility` が確立した表示状態が唯一の情報源**・読み口は `EmoPresenter::target_visible`（`crates/areka-emo-present/src/presenter/read.rs:208`）。可視性の第 2 の帳簿を別に作らないこと（同 spec R7.5・COMPAT §8） | 本 spec（UI→kanade 配線＝TickInfo 同型） | M1〜M2 |
 | minimizing | 最小化中 | UIスレッド窓状態 | 本 spec | M1〜M2 |
 | induction | `\![enter,inductionmode]`中 | sakura 再生状態 | 本 spec（sakura mode 拡張連動） | M2 |
 | passive | `\![enter,passivemode]`中 | SSTP | 本 spec（SSTP＝M2 送り） | M2 |

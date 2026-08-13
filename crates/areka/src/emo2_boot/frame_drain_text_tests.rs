@@ -2,6 +2,8 @@ use std::sync::{mpsc, Arc, Mutex};
 use areka_emo_text::state::TextLayerConfig;
 use wintf::ecs::Point;
 
+use crate::emo2_boot::talk_lifecycle::TalkLifecycleSignal;
+
 use super::*;
 use super::test_support::{
     capture_logs,
@@ -231,6 +233,7 @@ fn run_move_drain_phase_buffers_until_ghost_windows_present() {
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
         rx,
+        mpsc::channel::<TalkLifecycleSignal>().1,
         Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default()))),
         zero_clock(),
         synth_assets(&[(0, 0)]),
@@ -271,6 +274,7 @@ fn run_move_drain_phase_applies_directive_when_ghost_windows_present() {
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
         rx,
+        mpsc::channel::<TalkLifecycleSignal>().1,
         Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default()))),
         zero_clock(),
         synth_assets(&[(0, 0)]),

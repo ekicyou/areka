@@ -51,6 +51,7 @@ mod read;
 mod refresh;
 mod show;
 mod target;
+mod visibility;
 
 // 分割前の `use` 一式はここに残す。テストファイル 8 本は `use super::*;` で本モジュールの束縛から
 // 外部クレート型を拾っており、子モジュールへ分配してここから落とすと test ビルドが壊れるためである。
@@ -63,7 +64,7 @@ use std::marker::PhantomData;
 use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
 
-use areka_actor::ReplySender;
+use areka_actor::{ReplySender, reply_channel};
 use areka_emo_atlas::AtlasTable;
 use areka_emo_compose::{
     BindSet, ComposeError, ComposedSurface, Composer, EmoWorld, PatternState, RegionPriority,
@@ -81,6 +82,7 @@ use crate::scale::{ScalePolicy, derive_scale};
 pub use self::hit::ClientHit;
 pub use self::hub::EmoPresenter;
 pub use self::read::TextSlotView;
+pub use self::target::VisibilityOwnership;
 use self::target::PresentTarget;
 
 #[cfg(test)]
@@ -107,3 +109,9 @@ mod refresh_and_log_tests;
 #[cfg(test)]
 #[path = "presenter_fractional_scale_tests.rs"]
 mod fractional_scale_tests;
+#[cfg(test)]
+#[path = "presenter_visibility_tests.rs"]
+mod visibility_tests;
+#[cfg(test)]
+#[path = "presenter_hide_contract_tests.rs"]
+mod hide_contract_tests;

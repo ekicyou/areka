@@ -57,7 +57,8 @@
 //! **表示が成立した時点で窓 client を k 適用後の物理 px へ合わせる**（`areka-P0-emo-dpi-scaling`
 //! task 5.2・[`reconcile_present_sizes`]）——`EmoPresenter::take_pending_resize` が積む「表示成立点の
 //! 窓寸 reconcile 要求」を各 `apply` の直後に消費する流儀で、本番 boot（`emo2_boot` の
-//! `run_drain_phase` 末尾＝`reconcile_reported_sizes`）と同一である。これが無いと k≠1.0 の環境で
+//! `emo2_frame_system` が drain の後段で直接呼ぶ `reconcile_reported_sizes`）と同一である。これが
+//! 無いと k≠1.0 の環境で
 //! 「窓 client（native 原寸）＜ 表示内容（k 倍）」となり、拡大表示もクリック捕捉域も窓 client の外側が
 //! 切り詰められて**手動観測が劣化する**（golden assert は `read_back` が backbuffer 直読みゆえ無影響）。
 //!

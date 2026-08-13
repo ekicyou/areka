@@ -87,6 +87,7 @@ use super::frame::{
 };
 use super::move_cue::{MoveCueSink, MoveDirective};
 use super::talk_clock::{ClockedTextSink, TalkClock};
+use super::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
 use super::target_map::{balloon_target, shell_target};
 
 // ===========================================================================
@@ -682,13 +683,21 @@ impl SpineHarness {
         // ── move channel＋実 MoveCueSink（wire_emo2_boot 手順4 と同型・S-3 形＝task 9.3） ──
         // talk スレッドの MoveCueSink が送出端、UI スレッドの Emo2Wiring が受信端 move_rx（frame 相
         // drain＝run_move_drain_phase・task 9.2）を保持する。9.1 の throwaway 送出端を実 MoveCueSink へ
-        // 差し替え、production `wire_emo2_boot` の 3-sink 構成を spine でも忠実に再現する。
+        // 差し替え、production `wire_emo2_boot` の sink 構成（下記のとおり現在は 4 本）を spine でも
+        // 忠実に再現する。
         let (move_tx, move_rx) = mpsc::channel::<MoveDirective>();
         let move_sink = MoveCueSink::new(move_tx);
 
+        // ── lifecycle channel＋実 BalloonLifecycleSink（wire_emo2_boot 手順4 と同型・task 4.1） ──
+        // talk スレッドの BalloonLifecycleSink が送出端、UI スレッドの Emo2Wiring が受信端
+        // lifecycle_rx（バルーン可視性相＝task 4.4 が drain）を保持する。production と同じ 4-sink 構成を
+        // spine でも忠実に再現するため、throwaway ではなく実 sink を登録する。
+        let (lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
+        let lifecycle_sink = BalloonLifecycleSink::new(lifecycle_tx);
+
         // ── scripted boot（実 sink 注入・TickerMode::Disabled＝Tick 注入で駆動・R8.3） ──
-        // sinks は broadcast 登録先で surface（seriko）／text（ClockedTextSink）／move（MoveCueSink）の
-        // 3 sink を第 1〜3 要素として渡す（production mod.rs と同順・S-3 形）。
+        // sinks は broadcast 登録先で surface（seriko）／text（ClockedTextSink）／move（MoveCueSink）／
+        // lifecycle（BalloonLifecycleSink）の 4 sink を第 1〜4 要素として渡す（production mod.rs と同順・S-3 形）。
         let options = GhostBootOptions {
             ghost_root: emo2_root(),
             default_encoding: DefaultEncoding::Ansi,
@@ -697,6 +706,7 @@ impl SpineHarness {
                 Box::new(surface_sink),
                 Box::new(clocked_text_sink),
                 Box::new(move_sink),
+                Box::new(lifecycle_sink),
             ],
             // scripted spine harness: 本番 provider 経路（FromSylphya）を忠実に再現する。boot が
             // 内部で sylphya を起動し selfname 系／username を publish・provider を鏡像由来に据える。
@@ -710,8 +720,16 @@ impl SpineHarness {
         // ── frame 三相結線状態（wire_emo2_boot 手順6 相当・System 登録はせず直接駆動する） ──
         // Emo2Wiring は move の受信端 move_rx を保持し frame 相 drain（run_move_drain_phase・task 9.2）に
         // 備える。move の spine e2e（task 9.3）は上の実 MoveCueSink 経由で cue→channel→drain を通す。
-        let wiring =
-            Emo2Wiring::new(presenter, rx, move_rx, Rc::clone(&runtime), clock, wiring_assets);
+        // 表示ライフサイクルの受信端 lifecycle_rx も同様に保持し、可視性相（task 4.4）の drain に備える。
+        let wiring = Emo2Wiring::new(
+            presenter,
+            rx,
+            move_rx,
+            lifecycle_rx,
+            Rc::clone(&runtime),
+            clock,
+            wiring_assets,
+        );
 
         SpineHarness { world, wiring, runtime, ghost, seriko, shiori_handle, text_pump, tick_sink }
     }
