@@ -158,7 +158,7 @@ fn wire_inserts_plan_a_strategy_resource() {
 /// 起動時のログを読んだ人がそれを確かめられることが本タスクの受け入れ条件である。
 /// ゆえにここでは 2 つを同時に固定する——**字面がゲートの結論そのものであること**と、
 /// **その字面が Resource へ入った値から組まれていること**。後者が無いと、片方だけ
-/// 書き換えても檻が緑のまま通り、記録が静かに嘘をつく。
+/// 書き換えてもテストが緑のまま通り、記録が静かに嘘をつく。
 ///
 /// 捕捉窓に他の記録は出ない（結線が出すのはこの 1 本だけ）ゆえ件数も固定する。
 #[test]
@@ -194,7 +194,7 @@ fn wire_registers_both_systems_into_frame_finalize() {
 
     assert!(
         !world.resource::<Schedules>().contains(FrameFinalize),
-        "前提: 結線の前に確定段は空（本檻の World は wintf の既定システムを持たない）"
+        "前提: 結線の前に確定段は空（本テストの World は wintf の既定システムを持たない）"
     );
 
     wire_zorder_pair(&mut world);
