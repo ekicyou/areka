@@ -132,12 +132,12 @@ file-slimming（PR#103）で `presenter.rs` は 118 行のファサードとな�
 9. **確保計数の実装形**: グローバルアロケータ差し替えは前例が棄却済み。バッファ取得シーム（論点1 の構造）に計数カウンタを置き、計時サマリ行のフィールドとして emit する形が决定論的。カウンタの露出（テスト用アクセサ）をどこまで公開するか。
 10. **【裁定済 2026-08-14 議題4: 長時間水準はベースラインと最終合格判定のみ・中間ループは 7 分版。実機計測の開始前に開発者へセッションを渡し静寂状態の確認を得る（並行開発セッションの負荷排除）】** 20 分超走行の運用: 長時間実走はサインオフ級の occupied 時間（実機専有）。2 水準（7 分/20 分超）を毎ループ回すか、第 1 段と最終再測のみ 20 分級にするか（中間ループは 7 分で回す）——R2.1/R4.1 の文言は「同一手順」を要求するため、手順書で 2 水準の使い分けを定義しておく必要がある。
 
-## 6. Research Needed（design フェーズへ持ち越す調査）
+## 6. Research Needed（design フェーズへ持ち越す調査）→ **全件解決済（§9 参照・2026-08-14 design フェーズ）**
 
-- `Changed<AlphaMaskResource>`／マスク set の変更検知に依存する下流 system の有無（論点3(b) の安全性・wintf `hit_test` 系の走査）。
-- dev 500ms / release 143ms の 3.5 倍差の帰属（確保ゼロ埋めか画素ループか）——第 1 段実測で確定する設計にする（両ビルドで同一ログが出る・R4.3）。
-- `UpdateSubresource` 3.3MB×1.5Hz の GPU 転写コストの実測比重（是正対象外＝GPU 側 Out of scope だが、計時段⒠として測ることは In scope・「CPU 側の確定分を潰してから測り直す」の判断材料）。
-- CPU 上昇 (b) 仮説の観測フィールド: 活性アニメ数・発火頻度をログから数えられるか（seriko 側の既存ログで足りるか——ticker.rs／looper.rs の既存 info!/debug! の棚卸し。足りなければ本 spec は emo-present 外を触らない制約とどう折り合うか＝判定スクリプトの grep 対象拡張で足りる見込み）。
+- ~~`Changed<AlphaMaskResource>`／マスク set の変更検知に依存する下流 system の有無~~ → **0 件と実測確定**（§9.1）。
+- dev 500ms / release 143ms の 3.5 倍差の帰属——**設計どおり第 1 段実測で確定する**（両ビルドで同一 perf 行が出る・R4.3。design D10）。
+- `UpdateSubresource` の GPU 転写コスト実測比重——**計時段 `t_upload_us` として測る**（design のサマリ行スキーマに恒久フィールド化）。
+- ~~CPU 上昇 (b) 仮説の観測フィールド~~ → **seriko 既存 info!（発火・停止・末尾残留）の grep 計数で間接推定可能・活性集合サイズの直接ログは現存しない**と実測確定（§9.2）。コード非接触＝判定スクリプトの grep 対象拡張で足りる。
 
 ## 7. 工数・リスク評価
 
@@ -156,3 +156,59 @@ file-slimming（PR#103）で `presenter.rs` は 118 行のファサードとな�
 - 上流変更は**すべて additive**（wintf `AlphaMask` の in-place 再生成・emo-compose `resample` の scratch 形）に限定し、承認済み契約の書き換えを R7 の裁定ゲート以外で発生させない。
 - show.rs の :220-270 帯（atom 観測域）と :227-232（cage④ 観測点）の**構造を動かさない**是正形を選ぶ（合成・リサンプル・insert ブロックの内側で完結させる）。
 - 判定スクリプトは「欠落段＝エラー」（R2.5）と「観測ゼロ＝判定不能 exit 2」（signoff-scan.py 前例）の両規律を最初から仕込む。
+
+---
+
+## 9. Design フェーズ追記（2026-08-14・design.md 生成時の discovery と決定の記録）
+
+> Discovery 分類: **Extension（light discovery）**。§1〜§8 のギャップ分析を土台に、§6 の持ち越し調査をコード実測で解決し（読み取り専用サーベイ 2 本を並列実施）、design.md の決定 D1〜D10 を確定した。design.md が正本・本節は根拠ログ。
+
+### 9.1 調査: AlphaMaskResource の変更検知依存（論点 3 の安全性）→ 依存 0 件で確定
+
+- **Findings**: `AlphaMaskResource`（wintf hit_test/mod.rs:157-177・`Option<AlphaMask>` 値所有・`set`:169／`mask`:174）の本番読み手は `alpha_mask_hit`（mod.rs:199-216・`World::get` の同期 pull）から到達する 2 分岐（mod.rs:318・:419）のみ。書き手は show.rs:238-240 が唯一（他は mount.rs:223 の空初期化）。**`Changed<AlphaMaskResource>`／`Added`／`is_changed()` はリポジトリ全体で 0 件**（一致は本 research.md の記述のみ）。
+- **Implications**: 共有化（`Arc`）もヒット時 skip も変更検知の下流影響なし。design は **D3: `Arc<AlphaMask>` 共有＋2 スロット輪番 in-place 再生成**を採用（skip 方式より「set を常に呼ぶ」現行観測形を保てる・エントリとリソースの参照 2／前々回マスク参照 1＝unique の決定論輪番が成立）。`set` は `Arc::new` で包む内部表現変更（公開シグネチャ・挙動不変）＋additive `set_shared`。
+
+### 9.2 調査: CPU 上昇機序の観測フィールド（seriko/ticker ログ棚卸し）
+
+- **Findings**:
+  - catch-up ログの**実文言は brief の記載と異なる**: ticker.rs:205/:225 は `"ticker catch-up: skipped multiple boundaries, firing once"`（dispatcher／kanade）、:307 は `"loop ticker catch-up: skipped multiple boundaries, firing once"`——brief の `"(loop) ticker catch-up"` 形は誤り。さらに 3 箇所とも `target = "…"` は**ログのフィールド**であって tracing メタデータ target ではない（メタデータは `areka_ghost::ticker`）＝`RUST_LOG` の target フィルタでは選べず、文言 grep が唯一の判定手段。判定スクリプトは実文言を較正値に持つ（design 済み）。
+  - seriko `looper.rs` に活性再生集合サイズの直接ログは**存在しない**。発火（:231 `"seriko: loop 抽選発火"` info・scope/slot/animation_id/k）・bind 外れ停止（:304）・末尾残留（:338）・負 surface 停止（:368）の各 info! を窓別に計数すれば活性集合の収支を間接推定できる。
+- **Implications**: R5 の収束判定は CPU 時系列（主判定）＋発火系イベント収支（傍証・間接推定と明記）で構成し、**seriko 側コードは触らない**（Out of Boundary 維持）。
+
+### 9.3 調査: ホットパス・上流 API の設計前再検証（§1 アンカーの追認＋追加確定）
+
+- `apply_show` は cache `get` を 3 回呼ぶ（:62 照会・:136 遅延生成時・:222 アップロード用 entry 再取得）。`insert` の戻り値 `&CacheEntry` は破棄され :222 で再取得している（借用構造の都合・design は不変更）。
+- `compose_into`（lib.rs:117-125）は `out` に前提を課さない（内部 `resize_and_clear` が容量再利用）。`resize_and_clear`／`bytes_mut` は **emo-compose の `pub(crate)`**——emo-present からの直接容量操作は不可で、`compose_into`／`resample` 経由の再利用のみ可能（design はこの可視性を変えない）。
+- `resample`（scale.rs:395）の残存確保は x 軸写像表 `Vec<AxisSample>`（:423・`AxisSample` は私有型）のみ。scale.rs:245-249 に exact（W6.5）向け公開面申し送りが実在——additive 追加は opaque 型＋関数に限定すれば非抵触。
+- `AlphaMask`（wintf alpha_mask.rs:15-20・全フィールド私有）に再利用 API・`Default`・`PartialEq` は存在しない——`regenerate_from_pbgra32` の additive 追加が必須（design D3 の前提）。
+- emo-present の tracing は**全 57 箇所が module-path target**（明示 target 0 件・`RUST_LOG=areka_emo_present=debug` の prefix フィルタが実機手順の契約・hit.rs:77）。emo-compose は対照的に明示 flat target `"areka_emo_compose"`。perf サマリ行は emo-present 流儀（module-path）に従う（design 済み）。
+- 既存 info! 成立点ログの檻 `presenter_refresh_and_log_tests.rs:78-150` は **info 水準そのものを契約として赤にする**。同ファイル :661-697 に「出ないこと」主張の callsite interest キャッシュ罠と対処（同一 `with_default` スコープで陽性・陰性を対で観測）が記録済み——新設の計時檻はこの流儀を踏襲する（design Testing Strategy に明記）。
+- emo-present は `tracing-subscriber` を dev-dep に持たず**自前 `CaptureSubscriber`**（presenter_refresh_and_log_tests.rs:45-69）——新檻も同ハーネスを使う（新規依存なし）。
+
+### 9.4 調査: 計測・判定資産の型紙（signoff-scan.py／実走ゲート）
+
+- `signoff-scan.py`（472 行・stdlib のみ）の踏襲規律: 較正値は冒頭の定数バナー（「emo2 fixture 固有・他ゴーストへ流用しないこと」明記・裁定履歴をコメントで登記）／exit `0`=PASS・`1`=FAIL・`2`=判定不能（観測ゼロ含む・**FAIL が INCONCLUSIVE より優先**）・`3`=引数不正／観測ゼロ＝判定不能は 3 箇所で個別に実装（全体・判定別）。
+- `AREKA_APP_SMOKE_EXIT_MS`（main.rs:905・`smoke_exit_ms_from`:914 は不正入力を常に OFF へ）は起動窓 despawn の one-shot 非同期タスク（:804-836）＝有界 auto-exit の既存流儀そのまま使える。`emo2_real_run.rs` の 120 秒番犬は cargo test 用であり、7 分／20 分超の perf 実走は **bindopt 前例どおり直接起動（絶対パス）**で行う（design ランナー仕様に反映）。
+- リポジトリ root に `tools/` は**不存在**（新設）。既存 ps1 の前例は spec ローカル 3 形式（`verification/`・`tools/`・平置き）で分裂しており、`Get-Counter` を使う採取スクリプトは**リポジトリ内に 0 件**——`tools/perf/` 新設（議題 3 裁定）で恒久の住所を与える。
+
+### 9.5 Design Decisions（design.md D1〜D10 の採否根拠の要約）
+
+| # | 決定 | 棄却した代替 | 根拠 |
+|---|---|---|---|
+| D1 | Option C ハイブリッド（§4 の推奨を採用） | Option A（show.rs 直書き）＝責務混濁・Option B 単独＝段階ループと非対応 | §4・要件の段階ループと 1:1 |
+| D2 | 席の分担: native=常設スクラッチ（swap 交代）／表示=キャッシュ容量リサイクル／x_map=常設席／マスク=Arc 輪番 | 全席を budget 所有（キャッシュ原子対の外に表示バッファが出る）・全席をキャッシュ所有（native スクラッチの置き場がない） | §1.3 の対立点を「所有はキャッシュ・容量回収の仲介は budget」で解消 |
+| D3 | マスクは `Arc` 共有＋2 スロット輪番 | (b) ヒット時 set skip（安全だが「常に set」の現行観測形が変わる）・(c) 現状維持（裁定違反） | §9.1・議題 1 裁定「完全ゼロ」 |
+| D4 | マスク生成点を cache.insert から budget シームへ移動（insert は Arc を受ける） | insert 内生成の維持（budget との二重確保・計数シームが分裂） | 「1 apply 1 回生成・原子対挿入」は apply 単位で不変 |
+| D5 | 計時は無条件実行・emit のみ debug フィルタ | `enabled!` ゲート（ログ設定で実行経路が分岐＝R1.5 の検証が難化） | R1.5 の構造的自明化・Instant は段あたり数十 ns |
+| D6 | 確保計数は budget 取得シーム 1 箇所 | `#[global_allocator]` 差し替え | emo-compose 予算檻が明示棄却済み（golden_tests_determinism_budget_tests.rs:120-121） |
+| D7 | ランナー ps1＋判定 py＋README＋自己較正 fixture を tools/perf/ へ | spec ローカル配置（前例 3 形式に分裂・恒久資産の住所にならない） | 議題 3 裁定・§9.4 |
+| D8 | バイト等価＝便宜経路 vs budget 経路の層内等価＋既存 GPU readback 檻 | 是正前バイトの golden fixture 化（ビルド間安定性の管理コストが増えるだけで検出力は同じ） | composer_tests.rs:322 の既設パターンを presenter 級へ拡張 |
+| D9 | 不変量の対象は A1〜A4・A6・A7（キー複製 A5/A8 は対象外と明文化・観測は継続） | キー複製まで含める（BTreeMap ノード再利用は std に手段がなく費用対効果が壊れる） | 裁定の列挙（バッファ＋マスク複製＋作業領域）に忠実 |
+| D10 | 着手順は第 1 段実測が決め、仮説と異なれば design 追補 | 仮説順の固定 | R3.4 |
+
+### 9.6 Risks & Mitigations（design 時点の残リスク）
+
+- **R4.4（release 3% 未満）が是正だけでは未達の可能性**——残余最大項が再合成コストなら R7 ゲートへ（要件が経路を用意済み）。perf 行の `key_hash` で必要スロット数の実測根拠を最初から採れるよう設計済み。
+- **exact との scale.rs 同一ファイル並走**——追加は関数＋opaque 型のみ・先着後 rebase を干渉台帳へ登記（実装フェーズの手続き）。
+- **計時 mark の挿入で show.rs の行番号が全面シフト**——atom（W6.75）は budget 実形へ design 前 rebase が既定（roadmap 台帳）。:215-235 帯は分岐・呼出順序・エラー経路の構造を保つ（変更は mark 挿入と :240 の 1 文置換のみ）。
+- **マスク輪番の unique 不成立**（想定外の長期参照保持）——黙って新規確保＋必ず計数＝檻と判定式⑶が検出する（隠れ縮退なし）。
