@@ -43,6 +43,7 @@ use std::time::{Duration, Instant};
 
 use areka_emo_compose::{BindSet, PatternState, ScaleRatio};
 
+use super::budget::BudgetDelta;
 use crate::command::TargetId;
 
 /// perf サマリ行の固定文言（grep の唯一の足がかり・判定スクリプトとの契約面）。
@@ -83,22 +84,6 @@ impl Stage {
             Stage::Upload => 4,
         }
     }
-}
-
-/// 1 適用分の確保計数（perf サマリ行の `alloc_*` フィールドの供給源・Requirement 1.3）。
-///
-/// 値の生産は再利用席の所有者（`FrameBudget`）の責務であり、本型は行へ載せるための運搬形である
-/// （`FrameTiming` は計数を自分では作らない——確保の発生点を知らないため）。
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(super) struct AllocCounts {
-    /// native 合成先の新規確保／容量成長。
-    pub(super) alloc_compose_dst: u32,
-    /// 表示バッファの新規確保／容量成長（リサイクル不成立を含む）。
-    pub(super) alloc_resample_dst: u32,
-    /// リサンプル作業領域（x 軸写像表）の新規確保／容量成長。
-    pub(super) alloc_xmap: u32,
-    /// 当たり判定マスクの新規確保（輪番の unique 不成立を含む）。
-    pub(super) alloc_mask: u32,
 }
 
 /// perf サマリ行のうち、計時でも確保計数でもない同定情報（適用対象・引き当て・合成キー）。
@@ -166,7 +151,11 @@ impl FrameTiming {
     }
 
     /// 表示成立点で perf サマリ行を 1 本出す（`self` を消費）。
-    pub(super) fn emit(self, ctx: &EmitContext, allocs: AllocCounts) {
+    ///
+    /// 確保計数（[`BudgetDelta`]）は行へ載せるだけで、値は作らない——確保の発生点を知るのは
+    /// 計数シームの所有者 `FrameBudget` 側であり、`FrameTiming` はその 1 適用分の増分を
+    /// 受け取って同居させる運搬役である（Requirement 1.3）。
+    pub(super) fn emit(self, ctx: &EmitContext, allocs: BudgetDelta) {
         self.emit_at(ctx, allocs, Instant::now());
     }
 
@@ -175,7 +164,7 @@ impl FrameTiming {
     /// 全段フィールドを**常に**載せる: 記録の無い段は 0 である（Requirement 2.5 の行単位欠落
     /// 検出は「段が常に出る」ことに依存する。条件付きでフィールドを落とすと、実行されなかった
     /// 段と欠陥で消えた段が判定スクリプトから区別できなくなる）。
-    fn emit_at(self, ctx: &EmitContext, allocs: AllocCounts, now: Instant) {
+    fn emit_at(self, ctx: &EmitContext, allocs: BudgetDelta, now: Instant) {
         let stage_us = |stage: Stage| -> u64 { duration_us(self.stages[stage.index()]) };
         let t_cache_us = stage_us(Stage::CacheLookup);
         let t_compose_us = stage_us(Stage::Compose);
@@ -190,7 +179,7 @@ impl FrameTiming {
             cache_hit,
             key_hash,
         } = *ctx;
-        let AllocCounts {
+        let BudgetDelta {
             alloc_compose_dst,
             alloc_resample_dst,
             alloc_xmap,

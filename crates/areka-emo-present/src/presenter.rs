@@ -45,6 +45,7 @@
 
 // 責務単位のサブモジュール。すべて私有 `mod` であり、新しい公開モジュールパスは生やさない
 // （公開項目は下の `pub use` で従来と同一のパス `presenter::<Name>` に再輸出する）。
+mod budget;
 mod hit;
 mod hub;
 mod read;

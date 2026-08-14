@@ -123,8 +123,8 @@ fn ctx() -> EmitContext {
     }
 }
 
-fn allocs() -> AllocCounts {
-    AllocCounts {
+fn allocs() -> BudgetDelta {
+    BudgetDelta {
         alloc_compose_dst: 1,
         alloc_resample_dst: 2,
         alloc_xmap: 3,
@@ -236,7 +236,7 @@ fn all_stage_fields_appear_as_zero_when_nothing_was_marked() {
 
     let cap = CaptureSubscriber::default();
     tracing::subscriber::with_default(cap.clone(), || {
-        timing.emit_at(&ctx(), AllocCounts::default(), t0 + Duration::from_micros(42));
+        timing.emit_at(&ctx(), BudgetDelta::default(), t0 + Duration::from_micros(42));
     });
 
     let lines = perf_lines(&cap);

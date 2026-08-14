@@ -12,7 +12,7 @@
   - _Requirements: 1.1, 1.2, 1.5, 7.2_
   - _Boundary: FrameTiming_
 
-- [ ] 1.2 バッファ確保の計数シームを新設（席の再利用は第2段）
+- [x] 1.2 バッファ確保の計数シームを新設（席の再利用は第2段）
   - 毎フレーム経路の確保発生点（合成先・リサンプル先・リサンプル作業領域・当たり判定マスク）ごとのカウンタを持つ器を置く
   - 現時点では各発生点が確保のたびに計数する（是正後は同じシームが再利用の可否を計数する）
   - 適用単位の増分と累積の両方を露出し、増分は計時行のフィールドへ同居させる
@@ -183,7 +183,10 @@
 
 - **1.1 → 1.3 への申し送り（3 件）**:
   1. `timing.rs` の `compose_key_hash` は `PatternFrame.method` を `std::mem::discriminant` で混ぜているため、`Blend(Multiply)` と `Blend(Screen)` が同一ハッシュになる（系統的衝突・要件 7.2 の異なりキー数を過少に見積もる向き）。`method` が合成を駆動しない現状（`areka-emo-compose/src/pattern.rs:38`）ゆえ emo2 ベースラインでは到達しないが、1 行で修復可能（`if let ComposeMethod::Blend(mode) = &frame.method { discriminant(mode).hash(&mut hasher); }`）。1.3 の配線時に併せて入れ、等価テストへ `assert_ne!` 節を追加すること。
-  2. `timing.rs` の `AllocCounts`（4 フィールド・型は design.md の `BudgetDelta` と完全一致）を 1.2 の `BudgetDelta` と統合すること（別名か `From` 変換）。
+  2. ~~`timing.rs` の `AllocCounts` を 1.2 の `BudgetDelta` と統合すること~~ → **1.2 で解消済**（`AllocCounts` を削除し `budget.rs` の `BudgetDelta` に一本化。perf 行スキーマは `efc960b` とバイト同一であることをレビューで検証済み）。
   3. `timing.rs` 冒頭の `#![allow(dead_code)]` は未配線状態専用。1.3 の配線で必ず外すこと（外すと 14 件の dead_code 警告が出る状態＝全項目がテストで踏まれていることは検証済み）。
+- **1.2 → 1.3 への申し送り（2 件）**:
+  1. `budget.rs` 冒頭にも `#![allow(dead_code)]` がある（未配線専用・非 test ビルドで 7 件の警告、`cargo test --lib --no-run` では 0 件＝全項目がテストで踏まれていることを検証済み）。1.3 の配線コミットで `timing.rs` のものと併せて外すこと。
+  2. 計数の唯一のシームは `FrameBudget::note_alloc(AllocSite)`。1.3 は現行の 4 つの確保発生点へこれを置く。5.2 で席メソッドの内部呼出へ移す際、`note_alloc` は `pub(super)` から私有へ落とすこと（`show.rs` から直接叩けると「シーム 1 箇所」が形骸化する）。
 - **design.md:278 の誤記**: FrameTiming 節の「module-path target（`areka_emo_present::presenter::show` 配下）」は実現不能（`debug!` は `timing.rs` で展開されるため target は `…::presenter::timing`）。判定スクリプトの契約は固定文言とフィールド名であり target ではないので要件違反はない。1.3 の配線コミットで design.md の当該括弧書きを `…::presenter::timing` へ訂正する。
 - **`CaptureSubscriber` がクレート内で 3 重複**（`balloon_test_support.rs:90`／`presenter_refresh_and_log_tests.rs:45`／`presenter/timing_tests.rs`）。各々が別モジュールに私有で到達不能なため境界内では統合不可。別課題（steering `structure.md:176` の共有ヘルパ集約）として扱う。
