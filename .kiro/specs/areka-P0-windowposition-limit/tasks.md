@@ -8,7 +8,7 @@
   - _Requirements: 1.1, 4.1_
   - _Boundary: C2 WindowPositionRaw_
 
-- [ ] 1.2 (P) scope 別構成へ limit 値と水平配置モードの保持枠を追加する
+- [x] 1.2 (P) scope 別構成へ limit 値と水平配置モードの保持枠を追加する
   - limit 値の既定は正典既定（有効）、水平配置モードの既定は現行の左右分岐と同一挙動
   - バルーン定義が読めず既定構成へ落ちた scope でも limit が有効になることをテストで固定
   - _Requirements: 1.2, 1.4_

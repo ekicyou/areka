@@ -25,6 +25,7 @@ fn scope_cfg(
         default_y,
         balloon_alignment: BalloonSide::Left,
         balloon_offset: None,
+        ..ScopeConfig::default()
     }
 }
 
@@ -706,6 +707,7 @@ fn scope_cfg_balloon(
         default_y: None,
         balloon_alignment,
         balloon_offset,
+        ..ScopeConfig::default()
     }
 }
 

@@ -34,6 +34,23 @@ pub enum BalloonSide {
     Right,
 }
 
+/// バルーン水平配置モード（P5 の基本位置分岐・既定 `Side`＝現行挙動）。
+///
+/// `windowposition.x` のキーワード語彙（`center`/`top`/`bottom`）を保持する枠。
+/// 語彙の分類・警告と実際の幾何は後続タスク（C1 分類・C4 P5 幾何）の所有であり、
+/// 本 enum はその解決結果を scope 別に持ち回るためだけに存在する。
+#[allow(dead_code)] // scaffold（task 1.2）: 取得経路（task 2.2）/P5（task 2.3）が消費するまで非テストビルドでは未使用
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum BalloonXMode {
+    /// 数値指定・未指定（現行の [`BalloonSide`] 分岐へ委譲・bit 同一）。
+    #[default]
+    Side,
+    /// `center` / `top`: シェル中央上（バルーン下端＝シェル画像上端）。
+    CenterTop,
+    /// `bottom`: シェル中央下（バルーン上端＝シェル画像下端）。
+    CenterBottom,
+}
+
 /// スコープ 1 つぶんのカスケード解決済み配置構成。
 #[allow(dead_code)] // scaffold（task 2.1）: resolver（task 3.1）が消費するまで非テストビルドでは未使用
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -48,6 +65,14 @@ pub struct ScopeConfig {
     pub balloon_alignment: BalloonSide,
     /// `balloon.offsetx`/`balloon.offsety`（両方あるときのみ Some・emo2 は未使用＝None）。
     pub balloon_offset: Option<(i32, i32)>,
+    /// `windowposition.limit` の解決値（正典既定 `true`＝画面内へ維持する・1.2）。
+    /// 供給元はバルーン定義側の取得経路（task 2.2）であり descript KV ではない。
+    /// 未収載 scope が [`ScopeConfig::default()`] で配置される既存契約により、
+    /// バルーン定義が読めなかった scope でも limit は有効になる（1.2）。
+    pub balloon_limit: bool,
+    /// `windowposition.x` のキーワード語彙の解決値（既定 [`BalloonXMode::Side`]＝
+    /// 現行の左右分岐と同一挙動）。供給元は `balloon_limit` と同じ取得経路。
+    pub balloon_x_mode: BalloonXMode,
 }
 
 impl Default for ScopeConfig {
@@ -58,6 +83,10 @@ impl Default for ScopeConfig {
             default_y: None,
             balloon_alignment: BalloonSide::Left,
             balloon_offset: None,
+            // 正典既定 1（有効・1.2）。未指定・未収載・定義読み取り失敗のいずれも
+            // この既定へ落ちる。
+            balloon_limit: true,
+            balloon_x_mode: BalloonXMode::Side,
         }
     }
 }
@@ -246,6 +275,10 @@ fn resolve_scope(
         default_y,
         balloon_alignment,
         balloon_offset,
+        // `windowposition` 族は descript KV ではなくバルーン定義側の語彙である。
+        // 本関数は KV の純粋転記に徹し、正典既定のまま置く（供給は task 2.2 の
+        // 取得経路が担当する）。
+        ..ScopeConfig::default()
     }
 }
 
@@ -260,6 +293,10 @@ fn parse_i32(raw: Option<&str>, key: &str, scope: usize) -> Option<i32> {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "config_limit_tests.rs"]
+mod limit_tests;
 
 #[cfg(test)]
 mod tests {
