@@ -3,7 +3,14 @@
 > **種別**: 既知ギャップの正規登記（**宙に浮いていた申し送りの救済**）。⓪ghost（placement）帰属。
 > **源**: `kero-balloon` tasks.md の申し送り「DPI 変化時に `BalloonFollow.offset` を k 倍する処理はどこにも実装が無い……要否判断は後続（W5 `dpi-window-vanish` **ほか**窓位置に触る spec）へ」——2026-08-01 棚卸で**規律違反**と判定: 「ほか」は複数条件付きのウェーブ型申し送りであり担当 spec ではない。しかも `dpi-window-vanish` の brief は DPI 追従の全面実装を明示的に **Out** に置き、同 spec 自体が「再現せず・掃除のみ」へ縮退し得る＝**申し送りが黙って死ぬ構造**だった。本起票で担当を確定する。
 > **着手ゲート**: `dpi-window-vanish` 着地後（同 spec が `follow.rs` を触る）＋ `dpi-transition-atomicity`（起票済・配置未確定）の再観測結果と突合してから。**着手ゲートが同一なので合流セッションで transition-atomicity との統合も検討対象**。
-> **📌 2026-08-01 追記(58)補正（棚卸⑤）**: 着手ゲート半充足——van 着地済み（PR#98）・残りは atom の第1段再観測のみ（**再観測は今すぐ実施可能になった**）。**roadmap 追記(58) の既定路線: atom が「+36px＋檻」へ縮退した場合は本 spec と統合して 1 spec 化**（follow.rs 共有・W6.75 配置）。atom が縮退しない場合は atom 先着→本 spec が rebase。アンカードリフト: U4「再スケールなし」follow.rs:262 → **:265**（:686/:762 にも同契約明文・van +4049 行でも U4 契約は不変）・windowposition.rs 単位混在 doc :91-97 → **:93-94**。exact（丸め権威）先行必須は不変。
+> **📌 2026-08-01 追記(58)補正（棚卸⑤）**: 着手ゲート半充足——van 着地済み（PR#98）・残りは atom の第1段再観測のみ（**再観測は今すぐ実施可能になった**）。**roadmap 追記(58) の既定路線: atom が「+36px＋檻」へ縮退した場合は本 spec と統合して 1 spec 化**（follow.rs 共有・W6.75 配置）。atom が縮退しない場合は atom 先着→本 spec が rebase。アンカードリフト: U4「再スケールなし」follow.rs:262 → **:265**（:686/:762 にも同契約明文・van +4049 行でも U4 契約は不変）・windowposition.rs 単位混在 doc :91-97 → **:93-94**。exact（丸め権威）先行必須は不変。**【2026-08-14 失効・下記追記(68) が正本】**——丸め権威は exact の着地を待たずに既存で充足しており、本 spec が exact を待つ理由は無くなった（ウェーブ編成上の順序自体は維持）。
+
+> **📌 2026-08-14 追記(68)（`areka-P0-scale-exact-rational` からの申し送り・有理数配管の不採用と丸め権威の存続）**: **有理数の文字層配管は行われない。丸め権威は既存のまま使える。** 両者を取り違えないこと。
+> - **⑴ 配管は失効**: `ScaleRatio` の分子・分母を文字層まで配管する厳密化は **2026-08-14 に却下**された。当該 spec は裁定の登記・前提の決定論テスト・申し送りへ縮小され、実行時の挙動は 1 つも変わらない。よって本 brief の「配管を前提にする」記述（Approach 3・Upstream 欄・Constraints）は**失効**する——新しい配管や新 API の着地を待ってはならない。
+> - **⑵ 丸め権威は存続**: `ScaleRatio::scale_len` / `ScaleRatio::scaled_extent`（`crates/areka-emo-compose/src/scale.rs`）は**既存のまま利用可能**（`scale-exact-rational` は式も署名も変えず、doc に例外注記を足しただけ）。bod が寸法演算に f32 を持ち込まない規律は**不変**で、必要な API は着手時点で既に揃っている。
+> - **⑶ 供給面寸の例外は bod へ適用されない**: 裁定が許した f32 の例外は emo-text `ScaleContract::physical_extent`（文字供給面の確保寸）**ただ 1 点**に限られる。offset の単位空間・DPI 遷移時の変換・保存往復には**一切適用されない**——「f32 を使ってよい一般則」として読まないこと。
+> - **⑷ 根拠**: 再説明しない。spec **`areka-P0-scale-exact-rational`** の裁定登記（emo-text `crates/areka-emo-text/src/region.rs` の `ScaleContract::physical_extent` doc）を参照。裁定の前提は決定論テスト `crates/areka-emo-text/tests/physical_extent_arbitration_test.rs` が固定している。
+> - offset の単位空間契約と DPI 遷移規則をどう定めるかは**本 spec が決める**——上記は前提の申し送りであって、バルーン位置 DPI 追従の要件裁定ではない。
 
 ## Problem
 
@@ -28,7 +35,7 @@
 
 1. `dpi-window-vanish` 5.1/5.2 着地後・`dpi-transition-atomicity` の再観測と同じ実機セッションで、**SSP のモニタ跨ぎバルーン挙動を観測**（SSP が DPI で何もしないならそれ自体が観測結果）。
 2. 単位空間契約を設計で確定（有力: 「保存は作者空間（96dpi 相当）生値・適用点で現在 k を乗算」＝descript offset との合流も同空間になり B が同時に解ける）。
-3. `follow.rs`（DPI 遷移フック）＋`persist.rs`（保存空間の明文化）＋`windowposition.rs`（合流欄の単位統一）を是正。**`scale-exact-rational`（W6.5）の `ScaleRatio` 配管と丸め権威を前提にする**（f32 を持ち込まない）。
+3. `follow.rs`（DPI 遷移フック）＋`persist.rs`（保存空間の明文化）＋`windowposition.rs`（合流欄の単位統一）を是正。**`scale-exact-rational`（W6.5）の `ScaleRatio` 配管と丸め権威を前提にする**（f32 を持ち込まない）。**【2026-08-14 失効・冒頭の追記(68) が正本】**——配管は却下され行われない。丸め権威（`ScaleRatio::scale_len`/`scaled_extent`）は既存のまま利用可能で、f32 を持ち込まない規律は不変。
 
 ## Scope
 
@@ -47,7 +54,7 @@
 
 ## Upstream / Downstream
 
-- **Upstream**: `dpi-window-vanish`（follow.rs の編集面・着地待ち）／`dpi-transition-atomicity`（起票済・配置未確定——**同一ゲート・統合候補**）／`scale-exact-rational`（丸め権威の配管）／`kero-balloon`（R3.8 の窓相対契約と persist 生値保存が前提）。
+- **Upstream**: `dpi-window-vanish`（follow.rs の編集面・着地待ち）／`dpi-transition-atomicity`（起票済・配置未確定——**同一ゲート・統合候補**）／`scale-exact-rational`（丸め権威の配管。**【2026-08-14 失効・冒頭の追記(68) が正本】**——配管は却下・丸め権威は既存充足ゆえ、上流依存は申し送りのみに縮小）／`kero-balloon`（R3.8 の窓相対契約と persist 生値保存が前提）。
 - **Downstream**: `emo2-conformance-e2e` 適合 #1（DPI 検証は追従込み）。
 
 ## Existing Spec Touchpoints
@@ -57,6 +64,6 @@
 
 ## Constraints
 
-- 画素演算 f32 禁止（`ScaleRatio` 有理数・W6.5 exact の着地形に従う）。
+- 画素演算 f32 禁止（`ScaleRatio` 有理数・W6.5 exact の着地形に従う）。**【2026-08-14 失効・冒頭の追記(68) が正本】**——「exact の着地形に従う」は失効（新たな着地形は無い）。禁止の規律そのものは不変で、既存の `ScaleRatio::scale_len`/`scaled_extent` にそのまま従う。
 - 実機検証は実 DPI 混在環境（125%/200% デュアル等・emo-dpi-scaling 6.5 の手順が donor）。
 - 配置は合流セッション裁定。候補: W6.5 以降・van/transition-atomicity の観測結果待ち。

@@ -60,6 +60,11 @@ impl TextSlotView {
     /// round half away from zero が切り下がって権威と 1px 食い違う（27px → 権威 32・f32 経由 31）。
     /// 窓 client を 1px 小さく書くとべき等 skip がその誤差を恒久化するため、消費点は必ず本値を使う。
     ///
+    /// この禁止の**唯一の既知の例外は emo-text `ScaleContract::physical_extent`（文字供給面の
+    /// 確保寸）**であり、2026-08-14 の裁定（spec `areka-P0-scale-exact-rational`・登記は emo-text
+    /// `region.rs`）に基づく。**この例外を他の用途へ拡大してはならない**——例外は供給面寸の 1 点に
+    /// 限られ、本値のような**窓 client 寸**を [`scale`] から掛け算で復元することは従来どおり禁止である。
+    ///
     /// k=1.0 の窓では [`surface_size`] と一致する（恒等）。
     ///
     /// [`scale`]: Self::scale
@@ -153,6 +158,11 @@ impl EmoPresenter {
     /// の doc が述べる 1px 食い違いと同じ理由）。`areka-P0-collision-dpi-hittest` の点÷k は f32 を一切
     /// 経由せず、有理値のまま [`Self::hit_region_client`] が内部で厳密に消費する。厳密値そのものが要る
     /// 呼び手（実機 probe の期待ゲート等）は [`Self::applied_ratio`] を使う。
+    ///
+    /// この禁止の**唯一の既知の例外は emo-text `ScaleContract::physical_extent`（文字供給面の
+    /// 確保寸）**であり、2026-08-14 の裁定（spec `areka-P0-scale-exact-rational`・登記は emo-text
+    /// `region.rs`）に基づく。**この例外を他の用途へ拡大してはならない**——例外は供給面寸の 1 点に
+    /// 限られ、**窓 client 寸**をこの f32 から復元する禁止（[`target_physical_size`]）は据え置く。
     ///
     /// [`target_physical_size`]: Self::target_physical_size
     pub fn applied_scale(&self, target: TargetId) -> Option<f32> {
