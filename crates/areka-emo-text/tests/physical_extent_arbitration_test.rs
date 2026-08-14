@@ -50,6 +50,21 @@ const REACHABLE_RATIO_COUNT: usize = 23;
 /// 突合する寸の上限（`1..=MAX_EXTENT` の全ての寸を検証する・requirements 3.3）。
 const MAX_EXTENT: u32 = 1200;
 
+/// 誤差が実在する 2 比（既約 `(num, den)`・design.md D4）。
+///
+/// 12/5 は 6/5 の 2 倍尺で f32 仮数が同一のため、この 2 比は実質
+/// **「1.2 の f32 表現」という一点**に帰着する（裁定根拠⑶）。
+const ERROR_RATIOS: [(u32, u32); 2] = [(6, 5), (12, 5)];
+
+/// 誤差が実在する比 1 つあたりの誤り件数（寸 `1..=`[`MAX_EXTENT`] の総当たり・2026-08-14 実測）。
+const ERROR_COUNT_PER_RATIO: usize = 81;
+
+/// 誤りが 1 件も出ない比の個数（到達比から [`ERROR_RATIOS`] を除いた残り＝21）。
+///
+/// 一覧を直書きせず [`REACHABLE_RATIO_COUNT`] からの差で導く。比集合が広がればこの値も動き、
+/// ゼロ件側の assert が赤になる（design.md Revalidation Triggers）。
+const ZERO_ERROR_RATIO_COUNT: usize = REACHABLE_RATIO_COUNT - ERROR_RATIOS.len();
+
 /// 上下界の総当たりで踏むべき評価回数（到達比 23 × 寸 1200 ＝ 27,600）。
 ///
 /// ループが途中で痩せても緑は出るため、踏んだ回数そのものを期待値として固定する。
@@ -110,6 +125,43 @@ fn supply_extent_via_f32_path(v: u32, num: u32, den: u32) -> u32 {
         .expect("到達比は格子由来で num/den ともに正のため ScaleRatio::new は必ず Some を返す");
     let contract = ScaleContract::new(ratio.as_f32(), None);
     contract.physical_extent(ImagePx(v as f32))
+}
+
+/// 1 つの比について、寸 `1..=`[`MAX_EXTENT`] を総当たりした誤りの集計。
+struct ErrorTally {
+    /// 実際に踏んだ評価回数（ループが痩せていないことの証跡）。
+    evaluated: usize,
+    /// 本番経路の結果が整数オラクルの真値と食い違った件数。
+    errors: usize,
+    /// 最初に食い違った `(寸, 実測値, 真値)`。1 件も無ければ `None`。
+    first: Option<(u32, u32, u32)>,
+}
+
+/// 1 つの比について誤り件数を集計する（design.md C3 テスト②③の共通土台）。
+///
+/// 件数だけでは失敗メッセージに「どの寸で割れたか」を書けないため、最初の食い違いを
+/// 併せて持ち帰る（design.md Error Handling——ログ突合なしにその 1 件を再現できる形）。
+///
+/// 判定は等値比較（`実測値 != 真値`）のみで行い、`u32` の減算を一切用いない。差の大きさは
+/// 上下界のテストが受け持つため、ここにラップアラウンドの余地を作らない（requirements 3.7）。
+fn tally_extent_errors(num: u32, den: u32) -> ErrorTally {
+    let mut tally = ErrorTally {
+        evaluated: 0,
+        errors: 0,
+        first: None,
+    };
+    for v in 1..=MAX_EXTENT {
+        let actual = supply_extent_via_f32_path(v, num, den);
+        let truth = true_ceil(v, num, den);
+        if actual != truth {
+            tally.errors += 1;
+            if tally.first.is_none() {
+                tally.first = Some((v, actual, truth));
+            }
+        }
+        tally.evaluated += 1;
+    }
+    tally
 }
 
 // ── 較正（本タスクの観測可能な完了・design.md C3 Validation） ──────────────────
@@ -261,5 +313,143 @@ fn supply_extent_bounds_hold_for_all_reachable_ratios() {
         evaluated, EVALUATION_COUNT,
         "総当たりの評価回数が期待と異なる（ループが痩せている疑い）: \
          実測 {evaluated} 回 / 期待 {EVALUATION_COUNT} 回"
+    );
+}
+
+// ── 誤り件数と代表例の固定（design.md C3 テスト②・D4） ────────────────────────
+
+/// 誤りが出る 2 比（6/5・12/5）の件数と代表例を、**是正しない判断の期待値**として固定する。
+///
+/// **計測日 2026-08-14**（到達 23 比 × 寸 1..=1200 の総当たり）。ここに並ぶ 81/81 件と
+/// 代表例は「直すべき欠陥の記録」ではない。2026-08-14 の裁定は誤差を**是正しない**と決めており、
+/// 本テストはその**判断そのものを期待値として固定する**（requirements 3.4・design.md D4）。
+/// したがって件数が動けば赤になるが、それは実装の劣化ではなく **裁定の再審トリガ**である
+/// ——本番の f32 経路（`ScaleRatio::as_f32` / `ScaleContract::physical_extent` の式）か
+/// 到達比集合のどちらかが変わった合図であり、許容の判断を下し直す必要がある。
+///
+/// ## 固定する値（2026-08-14 実測）
+///
+/// - 比 6/5: 誤り **ちょうど 81 件**・代表例 **寸 25 → 実測 31（真値 30）**
+/// - 比 12/5: 誤り **ちょうど 81 件**・代表例 **寸 25 → 実測 61（真値 60）**
+///
+/// 代表例は件数とは別に個別の assert として置く。件数だけでは「81 件出ている」ことしか
+/// 言えず、誤り方（+1 側へ 1 だけ振れる）が入れ替わっても緑のままになり得るためである。
+/// 2 比の件数が一致することは、12/5 が 6/5 の 2 倍尺で f32 仮数を共有する——すなわち
+/// 欠陥の正体が「1.2 の f32 表現」一点である——という裁定根拠⑶の傍証でもある。
+///
+/// なお 2 比が到達比集合に実在することは較正テスト
+/// [`helpers_are_calibrated_against_known_values`] が担保する（ここでは重ねない）。
+///
+/// ## 同一入力に対し常に同一結果であること（requirements 3.7）
+///
+/// 件数を期待値として固定できる前提は、突合の両辺が決定論であることである。
+/// 本番経路側の f32 の乗除算と `ceil` は IEEE 754 単精度で結果がビット単位に一意と規定され、
+/// x64・arm64 のいずれでも同一の値を返す。整数オラクル側は u64 の切り上げ除算のみで
+/// 浮動小数を含まない。よって同一入力は常に同一結果を返し、実行環境・実行回数で件数は揺れない。
+/// 集計は等値比較のみで行い `u32` の減算を用いないため、ラップアラウンドも起こらない。
+///
+/// ## 実行条件（requirements 3.6）
+///
+/// 実 DPI モニタ・GPU・実窓を一切使わない。拡大率は [`ScaleContract::new`] へ注入するだけの
+/// 純粋な算術として走る。
+#[test]
+fn error_counts_fixed_for_six_fifths_and_twelve_fifths() {
+    for (num, den) in ERROR_RATIOS {
+        let tally = tally_extent_errors(num, den);
+
+        assert_eq!(
+            tally.evaluated, MAX_EXTENT as usize,
+            "誤り集計の評価回数が期待と異なる（ループが痩せている疑い）: \
+             num={num} den={den} 実測 {} 回 / 期待 {} 回",
+            tally.evaluated, MAX_EXTENT
+        );
+
+        assert_eq!(
+            tally.errors, ERROR_COUNT_PER_RATIO,
+            "誤り件数が固定値から動いた（＝裁定の再審トリガ・2026-08-14 実測との相違）: \
+             num={num} den={den} 寸域 1..={MAX_EXTENT} 実測 {} 件 / 期待 {ERROR_COUNT_PER_RATIO} 件・\
+             最初の食い違い（寸, 実測値, 真値）={:?}",
+            tally.errors, tally.first
+        );
+    }
+
+    // 代表例（2026-08-14 実測・design.md D4）。件数とは別に、誤り方そのものを個別に固定する。
+    for (num, den, v, expected_actual, expected_truth) in
+        [(6u32, 5u32, 25u32, 31u32, 30u32), (12, 5, 25, 61, 60)]
+    {
+        let actual = supply_extent_via_f32_path(v, num, den);
+        let truth = true_ceil(v, num, den);
+        assert_eq!(
+            actual, expected_actual,
+            "代表例の本番経路の値が固定値から動いた（＝裁定の再審トリガ）: \
+             num={num} den={den} v={v} 実測値={actual} 真値={truth} 期待実測値={expected_actual}"
+        );
+        assert_eq!(
+            truth, expected_truth,
+            "代表例の真値が固定値から動いた（整数オラクルの前提が崩れている疑い）: \
+             num={num} den={den} v={v} 実測値={actual} 真値={truth} 期待真値={expected_truth}"
+        );
+    }
+}
+
+// ── ゼロ件集合の固定（design.md C3 テスト③） ──────────────────────────────────
+
+/// 誤りが出る 2 比を除く残り 21 比では、誤りが **1 件も出ない**ことを固定する。
+///
+/// **計測日 2026-08-14**。裁定根拠⑶「救える範囲が極小」は、誤りの側（各 81 件）だけでは
+/// 成立しない。**誤りゼロの側**を同時に押さえて初めて「救える範囲は 2 比に限られる」と
+/// 言い切れる。本テストもまた**是正しない判断を期待値として固定する**ものであり
+/// （requirements 3.4）、ゼロでない比が現れれば赤になる——それは実装の劣化ではなく
+/// **裁定の再審トリガ**（誤差の広がりを前提から見直す合図）である。
+///
+/// 対象の 21 比は一覧を直書きせず、[`reachable_ratios`] から [`ERROR_RATIOS`] を除いて導く。
+/// 到達比集合が変われば残りの個数が [`ZERO_ERROR_RATIO_COUNT`] から外れてここが赤になり、
+/// 比集合の変化を取りこぼさない（design.md Revalidation Triggers）。
+///
+/// ゼロ件の主張は、ループが空でも同じく緑になる。そこで踏んだ評価回数
+/// （21 比 × 寸 [`MAX_EXTENT`]）も併せて固定し、空振りの緑を塞ぐ。
+///
+/// ## 同一入力に対し常に同一結果であること（requirements 3.7）
+///
+/// 突合の両辺（IEEE 754 単精度の乗除算・`ceil` と、u64 整数の切り上げ除算）はいずれも
+/// 決定論であり、x64・arm64 で同一の結果を返す。集計は等値比較のみで `u32` の減算を
+/// 用いないため、ラップアラウンドも起こらない。
+///
+/// ## 実行条件（requirements 3.6）
+///
+/// 実 DPI モニタ・GPU・実窓を一切使わない純粋な算術として走る。
+#[test]
+fn remaining_ratios_have_zero_errors() {
+    let remaining: Vec<(u32, u32)> = reachable_ratios()
+        .into_iter()
+        .filter(|ratio| !ERROR_RATIOS.contains(ratio))
+        .collect();
+
+    assert_eq!(
+        remaining.len(),
+        ZERO_ERROR_RATIO_COUNT,
+        "誤りゼロを期待する比の個数が変わった（到達比集合が変化した合図＝裁定の再審トリガ）: \
+         実測 {} 個 / 期待 {ZERO_ERROR_RATIO_COUNT} 個・除外した比 {ERROR_RATIOS:?}・実測集合 {remaining:?}",
+        remaining.len()
+    );
+
+    let mut evaluated = 0usize;
+    for &(num, den) in &remaining {
+        let tally = tally_extent_errors(num, den);
+        assert_eq!(
+            tally.errors, 0,
+            "誤りゼロのはずの比で食い違いが出た（＝裁定の再審トリガ・誤差が 2 比の外へ広がった）: \
+             num={num} den={den} 寸域 1..={MAX_EXTENT} 実測 {} 件 / 期待 0 件・\
+             最初の食い違い（寸, 実測値, 真値）={:?}",
+            tally.errors, tally.first
+        );
+        evaluated += tally.evaluated;
+    }
+
+    let expected_evaluated = ZERO_ERROR_RATIO_COUNT * MAX_EXTENT as usize;
+    assert_eq!(
+        evaluated, expected_evaluated,
+        "ゼロ件集合の評価回数が期待と異なる（ループが痩せて空振りの緑になっている疑い）: \
+         実測 {evaluated} 回 / 期待 {expected_evaluated} 回"
     );
 }
