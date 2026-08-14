@@ -403,6 +403,8 @@ fn placement(
         },
         balloon_size,
         balloon_offset,
+        // windowposition-limit: 正典既定（有効）。復元 merge は limit を変換しない。
+        balloon_limit: true,
         anchor,
     }
 }

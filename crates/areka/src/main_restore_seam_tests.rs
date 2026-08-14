@@ -44,6 +44,8 @@ fn synthetic_placement(default_char_pos: PointPx) -> ScopePlacement {
         },
         balloon_size: BSZ,
         balloon_offset,
+        // windowposition-limit: 正典既定（有効）。本檻は limit の判定を対象にしない。
+        balloon_limit: true,
         anchor: Anchor::Free,
     }
 }

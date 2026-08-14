@@ -12,7 +12,7 @@
 
 use tracing::warn;
 
-use super::config::{Alignment, BalloonSide, PlacementConfig, ScopeConfig};
+use super::config::{Alignment, BalloonSide, BalloonXMode, PlacementConfig, ScopeConfig};
 
 /// 物理 px の矩形（スクリーン座標系・wintf 非依存）。
 #[allow(dead_code)] // scaffold（task 3.1）: main.rs シーム（task 6）が結線するまで非テストビルドでは未使用
@@ -79,6 +79,12 @@ pub struct ScopePlacement {
     /// 恒等式 `balloon_offset ≡ balloon_pos − char_pos` は恒久の事後条件
     /// （design Postconditions）。
     pub balloon_offset: PointPx,
+    /// このスコープの `windowposition.limit` 解決値（正典既定 `true`＝画面内へ維持する）。
+    ///
+    /// resolver は**判定も補正もしない**——`ScopeConfig.balloon_limit` を転記して
+    /// 下流（起動時関門・spawn の `BalloonLimit` Component）へ運ぶだけの欄である
+    /// （design C4 Responsibilities「resolver は判定せず運ぶだけ」）。
+    pub balloon_limit: bool,
     /// このスコープの解決済みアンカー種別（5 値・単一真実源）。
     ///
     /// `alignment` の cascade 解決結果を `Anchor::from_alignment` で解釈した値
@@ -109,9 +115,22 @@ pub struct ScopePlacement {
 /// - **P4（クランプ）**: キャラ窓のみ `x ∈ [left, right−w]`・`y ∈ [top, bottom−h]`
 ///   （DD12・free 含む全 alignment）。窓が work area より大きく区間が逆転する場合は
 ///   left／top 側を優先。P2 連鎖の基準はクランプ後の実配置（alignment 不問）。
-/// - **P5（バルーン暫定 offset・DD7）**: `balloon.alignment=Left`（既定）→
-///   `balloon_x = char_x − balloon_w`、`Right` → `balloon_x = char_x + char_w`。
-///   `balloon_y = char_y`（上端揃え）。`balloon.offsetx/offsety` があれば加算。
+/// - **P5（バルーン暫定 offset・DD7）**: 基本位置は `balloon_x_mode`（`windowposition.x`
+///   の語彙解決値）で分岐する。
+///   - `Side`（数値指定・未指定＝現行挙動・windowposition-limit 4.5/5.2 で**不変**）:
+///     `balloon.alignment=Left`（既定）→ `balloon_x = char_x − balloon_w`、
+///     `Right` → `balloon_x = char_x + char_w`。`balloon_y = char_y`（上端揃え）。
+///   - `CenterTop`（`windowposition.x=center|top`・4.2）: シェル画像の中央上。
+///     `balloon_x = char_x + (char_w − balloon_w) / 2`（中点は整数除算＝0 方向切り捨て・
+///     DD8。丸め権威の新設ではない）・`balloon_y = char_y − balloon_h`
+///     （バルーン下端がシェル画像上端に接する）。
+///   - `CenterBottom`（`windowposition.x=bottom`・4.3）: 同 x ・
+///     `balloon_y = char_y + char_h`（バルーン上端がシェル画像下端に接する）。
+///
+///   いずれのモードでも `balloon.offsetx/offsety` と `windowposition.y` 由来の調整量
+///   （`balloon_offset` 欄へ合流済み）を基本位置へ加算する（4.4）。「シェル画像の
+///   上端／下端／中央」はキャラ窓 rect で読む（窓寸＝採寸したシェル画像寸——
+///   `measure.rs` の `char_size` が spawn の窓寸そのもの）。
 ///   **クランプなし**（バルーンは work area 外へ素直にはみ出す）。offset は
 ///   配置時に確定し以後静的（4.4: 正式規則は balloon 表示系の後続へ委ねる）。
 /// - **Seam の warn**: `Alignment::Seam` の警告ログは config 側から本関数
@@ -187,10 +206,24 @@ pub fn resolve_placement(
             BalloonSide::Left => x.saturating_sub(input.balloon_size.w),
             BalloonSide::Right => x.saturating_add(w),
         };
+        // P5 キーワード幾何（windowposition-limit 4.2/4.3・DD3）: `Side` は上の既存式を
+        // そのまま採る（4.5/5.2＝数値指定・未指定の分岐は 1 ビットも変えない）。
+        // キーワードのときだけシェル画像（＝キャラ窓 rect）中央上／中央下を直接計算する。
+        // 水平中央: 中点は整数除算（0 方向切り捨て・DD8）。
+        let center_x = x.saturating_add(w.saturating_sub(input.balloon_size.w) / 2);
+        let (balloon_base_x, balloon_base_y) = match sc.balloon_x_mode {
+            BalloonXMode::Side => (balloon_base_x, y),
+            // 下端がシェル画像上端に接する（4.2）
+            BalloonXMode::CenterTop => (center_x, y.saturating_sub(input.balloon_size.h)),
+            // 上端がシェル画像下端に接する（4.3）
+            BalloonXMode::CenterBottom => (center_x, y.saturating_add(h)),
+        };
+        // `windowposition.y` の数値調整量は `balloon_offset` 欄へ合流済み——モードに
+        // よらず基本位置へ加算する（4.4）。
         let (ox, oy) = sc.balloon_offset.unwrap_or((0, 0));
         let balloon_pos = PointPx {
             x: balloon_base_x.saturating_add(ox),
-            y: y.saturating_add(oy),
+            y: balloon_base_y.saturating_add(oy),
         };
 
         let char_pos = PointPx { x, y };
@@ -205,6 +238,8 @@ pub fn resolve_placement(
                 x: balloon_pos.x.saturating_sub(char_pos.x),
                 y: balloon_pos.y.saturating_sub(char_pos.y),
             },
+            // limit は判定せず転記するだけ（design C4・下流の関門が所有する）
+            balloon_limit: sc.balloon_limit,
             // 4.2/DD15: cascade 解決済み alignment を 5 値アンカーへ解釈（単一真実源・
             // Req1.6）。旧 bottom_snap（二値）はここでは格納せず、使用点で
             // !anchor.is_free() として導出する
@@ -303,6 +338,9 @@ mod test_support;
 #[cfg(test)]
 #[path = "resolver_resolve_tests.rs"]
 mod resolve_tests;
+#[cfg(test)]
+#[path = "resolver_balloon_keyword_tests.rs"]
+mod balloon_keyword_tests;
 #[cfg(test)]
 #[path = "resolver_union_tests.rs"]
 mod union_tests;

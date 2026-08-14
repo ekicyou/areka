@@ -415,6 +415,9 @@ fn merge_scope(
         balloon_pos,
         balloon_size: placement.balloon_size,
         balloon_offset,
+        // limit の解決値は merge の対象外（永続化しない・毎起動 descript から解決する）
+        // ゆえ、入力の値をそのまま転記する（merge 規則は無改変）。
+        balloon_limit: placement.balloon_limit,
         anchor: placement.anchor,
     }
 }

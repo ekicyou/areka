@@ -40,7 +40,7 @@
   - _Requirements: 1.3, 1.4, 4.6, 6.2, 6.3_
   - _Depends: 2.1_
 
-- [ ] 2.3 (P) キーワード指定時のバルーン基本位置を配置式へ追加する
+- [x] 2.3 (P) キーワード指定時のバルーン基本位置を配置式へ追加する
   - 中央上（水平はシェル画像の中央、垂直はバルーン下端がシェル画像上端に接する）と中央下（垂直はバルーン上端がシェル画像下端に接する）を配置式で直接計算する
   - `y` の数値指定は従来どおり調整量として基本位置へ加算する
   - 数値指定・未指定のときの分岐は1ビットも変えず、既存の配置テストが無改変で緑のまま
@@ -140,6 +140,10 @@
 - 全般: `areka-parsers` は元から rustfmt 非準拠 82 箇所を抱えるため `cargo fmt` の全体適用は禁止。追加分のみ手で整形する。リポジトリ全体では約 750 件の既存 rustfmt 差分があり、`cargo fmt --check` は完了ゲートに使えない。
 - 1.3: **`limit_correction` の `None` は「内包されている」という意味ではなく「クランプしても位置が動かない」という意味**。逆転区間（バルーン > 作業領域）で既に左上に居るときは、はみ出したままでも `None` を返す。2.4 / 3.3 / 3.4 の関門は `None` を「書き込み不要」として扱うこと。「内包の判定」として使ってはならない（毎フレーム偽の `[balloon-limit] Clamp` を出さないための設計）。
 - 1.3: `RectPx` の `right`/`bottom` は **排他的**（`resolver.rs:26-28`）。上界は `right - w` が正しく、キャラ窓側 `resolver.rs:179-180` と同一。
+- 2.3: `ScopePlacement` へ `balloon_limit: bool` を足したことで、struct literal を組む **9 ファイル**が機械的追随済み（`persist_restore_tests.rs` / `spawn_test_support.rs` / `follow_drag_tests.rs` / `follow_drag_end_persist_tests.rs` / `main_restore_seam_tests.rs` / `input_events/balloon_wiring_tests.rs` / `emo2_boot/spine.rs` / `emo2_boot/frame_test_support.rs` / `emo2_boot/move_cue_apply_move_tests.rs`）。以降フィールドを足すときも同じ集合を洗うこと。
+- 2.3: 中点は `(char_w - balloon_w) / 2`＝**Rust の 0 方向切り捨て**（floor ではない）。バルーンがシェルより幅広いと分子が負になり、floor 除算とは 1 px ずれる。`t_k5` が正負の両符号を固定している。
+- 2.3: `resolver_resolve_tests.rs` は着手時点で既に **1,010 行**（1,000 行規約の既存超過）。本タスクは 1 バイトも触らず新ファイルへ分離した（＝要件 5.2 の主檻）。是正は別スコープ。
+- 2.3: P5 doc の「クランプなし」記述 3 箇所（`resolver.rs:73` / `:134` / `:203`）と `t_r8_balloon_never_clamped_even_outside_work_area`（`resolver_resolve_tests.rs:816`）は**未着手のまま＝ 4.1 の所有**。
 - 2.2: **ログ檻は `placement/test_support.rs` の `capture_logs` を使うこと**（既存テスト `prepare_windowposition_logs_scope_raw_side_and_converted_adjust` が同じ観測点 4 の行の値を検査しており較正済み＝ハーネス盲点で恒真にならない）。主張の順序は必ず「先に `expect_one` で捕捉を取り出す → その後で `assert_no_event`」。`expect_one` は 0 件で panic するので、捕捉ゼロの恒真主張が作れない。
 - 2.2: `scope_windowposition` が `None` を返す 3 経路（`u32::try_from` 失敗・`resolve_balloon_faces` の `Err`・face 0 不在）は**いずれも呼び出し先で warn 済み**。この場合その scope の観測点 4 の行は出ない（解決値ログには現れない）ので、4.4 の実機サインオフで「行が無い＝未実装」と誤読しないこと。
 - 2.2: `config.rs::resolve_scope` は全 7 フィールドの網羅代入へ戻した（1.2 の過渡状態は解消）。既定値は `let canonical = ScopeConfig::default();` から読むので `Default` が単一権威のまま。以降フィールドを足すとここでコンパイルエラーになる＝正しい。

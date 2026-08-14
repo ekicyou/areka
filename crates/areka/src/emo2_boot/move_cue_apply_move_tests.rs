@@ -39,6 +39,8 @@ fn placement(scope: usize, cx: i32, cy: i32, cw: i32, ch: i32, boff: PointPx) ->
         },
         balloon_size: SizePx { w: 200, h: 150 },
         balloon_offset: boff,
+        // windowposition-limit: 正典既定（有効）。本檻は limit の判定を対象にしない。
+        balloon_limit: true,
         anchor: Anchor::Bottom,
     }
 }

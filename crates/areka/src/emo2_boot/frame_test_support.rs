@@ -165,6 +165,8 @@ fn resnap_placements() -> Vec<ScopePlacement> {
             balloon_pos: PointPx { x: 1071, y: 732 },
             balloon_size: SizePx { w: 223, h: 158 },
             balloon_offset: PointPx { x: -412, y: -25 },
+            // windowposition-limit: 正典既定（有効）。本檻は limit の判定を対象にしない。
+            balloon_limit: true,
             anchor: Anchor::Bottom,
         },
         ScopePlacement {
@@ -174,6 +176,8 @@ fn resnap_placements() -> Vec<ScopePlacement> {
             balloon_pos: PointPx { x: 1334, y: 1068 },
             balloon_size: SizePx { w: 223, h: 158 },
             balloon_offset: PointPx { x: 285, y: -19 },
+            // windowposition-limit: 正典既定（有効）。本檻は limit の判定を対象にしない。
+            balloon_limit: true,
             anchor: Anchor::Bottom,
         },
     ]

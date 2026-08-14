@@ -402,6 +402,8 @@ fn round_trip_save_restore_value_equivalence_over_real_fs() {
         },
         balloon_size: SizePx { w: 200, h: 300 },
         balloon_offset: default_balloon_offset,
+        // windowposition-limit: 正典既定（有効）。本檻は limit の判定を対象にしない。
+        balloon_limit: true,
         anchor: Anchor::Bottom,
     };
     // saved 位置を覆う work area ゆえ project_restore は恒等（既に下端一致・x 域内）。
@@ -666,6 +668,8 @@ fn dragged_char_persists_even_without_dragging_state_at_dragend() {
         balloon_pos: PointPx { x: 107, y: 107 },
         balloon_size: SizePx { w: 200, h: 300 },
         balloon_offset: PointPx { x: 7, y: 7 },
+        // windowposition-limit: 正典既定（有効）。本檻は limit の判定を対象にしない。
+        balloon_limit: true,
         anchor: Anchor::Bottom,
     };
     let out = apply_restored_placements(
