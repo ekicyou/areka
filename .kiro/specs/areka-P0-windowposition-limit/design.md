@@ -56,6 +56,7 @@
 - `enqueue_window_set_pos` の契約変化: 「挙動を持たない配管」から「対象窓の `BalloonLimit(true)` に限り limit 補正を内蔵する単一ライター」へ。**follow 系ファイル（`window_move.rs`・`drag_follow.rs`）への接触が確定**したため、roadmap 干渉台帳 **atom⇄wpl の再判定**を仰ぐこと（`dpi-transition-atomicity` は wpl 実形へ rebase・research.md §10）。
 - `PlacementRoute` が 9→10 variant（`BalloonLimitRelease` 追加）: `ALL`／`as_str`／ログ grep 資産の追随。
 - `ScopePlacement` に `balloon_limit: bool` フィールド追加: struct literal を組む全消費者（persist・tests）の機械的追随。
+- `ScopePlacement` に `balloon_keyword_base: Option<(BalloonXMode, PointPx)>` 追加（task 4.5）: 同じく全 struct literal の追随（`Copy` は維持）。
 - `WindowPosition` は不変のまま `BalloonModel` に `windowposition_raw()` アクセサ追加（既存消費者は無改変）。
 - resolver P5 の doc「クランプなし」の意味変更（limit は下流関門の所有）: doc・檻の前提記述の追随（7.3）。
 
@@ -494,5 +495,5 @@ Summary-only: :145 の追跡行を実装済みへ更新し、次を記録する�
 - **モニタ構成変更（作業領域のみの変化）**: `MonitorSnapshot` は起動時 1 回構築の権威であり（`main.rs` の `boot_monitor_snapshot`）、表示構成変更での再構築は placement 全体が持たない現行制約。窓書込を伴わない作業領域変化の瞬間は補正契機がない（要件 2.2 の契機列挙は書込のみ・帰属規則と snapshot 権威は 5.5/Boundary で不変と規定）。既存の全 placement 判断（アンカー・ガード・復元）と同一の制約であり、本仕様は新たな悪化を持ち込まない。snapshot 再構築の導入は将来 spec（表示構成追従系）の所有。
 - **OS 起因の窓移動は関門を通らない**（実装後の検証で発見・2026-08-14 追記）: `WM_WINDOWPOSCHANGED` で OS が与えた位置は `wintf` の `window_proc/window_pos.rs` が `WindowPos` へ書き、`graphics/systems/window_pos.rs` の `apply_window_pos` がそれを `SetWindowPos` へ差し戻す——この経路は areka の `enqueue_window_set_pos`（runtime 関門）を通らないため、モニタ切断・セッション変更等で OS がバルーン窓を動かした場合は補正されない最終位置が残りうる。上の「モニタ構成変更」と同系統の残余だが機構が別なので個別に登記する。**wintf 側の経路ゆえ本仕様の境界外**（Boundary の依存方向どおり areka は wintf の窓メッセージ処理を所有しない）。是正するなら wintf の書込口を単一ライターへ寄せる別 spec の領分。
 - **Unresolved 素通し後の無書込可視化**: 非表示中の書込が runtime 関門で解決不能（warn＋素通し）に終わり、その後書込なしに可視へ遷移した場合、補正契機がなく 2.6 の保証が warn 観測頼みになる（縮退経路限定の狭い残余窓）。`[balloon-limit] Unresolved` warn で観測可能であり、モニタ構成変更と同格の既知制約として登記する（可視化時の再検査シームは導入しない——縮退経路のための新機構は YAGNI）。
-- **atom⇄wpl 干渉（裁定済）**: 本設計は `follow/window_move.rs`・`follow/drag_follow.rs`・`diag.rs`・`visibility.rs`（1 腕）へ接触する。roadmap 干渉台帳の再判定は**開発者確認済（2026-08-14・既定路線＝wpl 先着・atom design は wpl 実形へ rebase）**——台帳 atom⇄wpl 行へ登記済み。
+- **atom⇄wpl 干渉（裁定済）**: 本設計は `follow/window_move.rs`・`follow/drag_follow.rs`・`diag.rs`・`visibility.rs`（1 腕）・**`follow/keyword_base.rs`（新設・task 4.5）**へ接触する。**`resize_window_to` の内側にキーワード基本位置の再導出呼出（step 5a）が入った**点は、atom が同関数へ rebase する際の要注意箇所である。roadmap 干渉台帳の再判定は**開発者確認済（2026-08-14・既定路線＝wpl 先着・atom design は wpl 実形へ rebase）**——台帳 atom⇄wpl 行へ登記済み。
 - **`enqueue_window_set_pos` の契約変質**: 「挙動を持たない配管」からの逸脱はデータ駆動（`BalloonLimit`）に限定し、route 語彙の純粋性を保つ（DD1）。wiring 檻がキャラ窓・limit=0 の bit 同一を固定する。

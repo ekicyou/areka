@@ -1,9 +1,13 @@
 use bevy_ecs::prelude::*;
+use wintf::ecs::pointer::Phase;
 use wintf::ecs::{Point, SizeI, WindowPos};
 
 use super::super::test_support::{LogEvent, capture_logs, expect_one};
-use super::test_support::{fake_handle, point_of, rect};
-use super::{BalloonFollow, MonitorSnapshot, PlacementRoute, resize_window_to};
+use super::test_support::{drag_end_event_at, drag_event, fake_handle, point_of, rect};
+use super::{
+    BalloonFollow, MonitorSnapshot, PlacementRoute, on_balloon_drag, on_balloon_drag_end,
+    resize_window_to,
+};
 use crate::placement::config::BalloonXMode;
 use crate::placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
 use crate::placement::source::GhostTitles;
@@ -139,6 +143,30 @@ fn offset_of(world: &World, char_window: Entity) -> PointPx {
         .get::<BalloonFollow>(char_window)
         .expect("キャラ窓に BalloonFollow があるはず")
         .offset
+}
+
+/// ユーザーのバルーン単独ドラッグを**本番のハンドラで**再現する（Component を手で
+/// 書き換えない）。本欠陥は「ドラッグ経路が素材を退役させない」ことであり、
+/// 手で `BalloonFollow.offset` を差し替えるとその経路をまるごと迂回してしまう。
+///
+/// 実 flow の順序どおり: wndproc（`DragConfig{move_window:true}`）が実窓を動かした
+/// 状態を作る → [`on_balloon_drag`]（連続・in-session offset 更新）→
+/// [`on_balloon_drag_end`]（確定・永続 write-through）。
+fn user_drags_balloon_to(world: &mut World, balloon: Entity, to: Point) {
+    world
+        .get_mut::<WindowPos>(balloon)
+        .expect("バルーン窓に WindowPos があるはず")
+        .position = Some(to);
+    let drag = Phase::Bubble(drag_event(balloon));
+    assert!(
+        !on_balloon_drag(world, balloon, balloon, &drag),
+        "ドラッグ中ハンドラはイベントを消費しない"
+    );
+    let end = Phase::Bubble(drag_end_event_at(balloon, (to.x, to.y)));
+    assert!(
+        !on_balloon_drag_end(world, balloon, balloon, &end),
+        "DragEnd ハンドラはイベントを消費しない"
+    );
 }
 
 fn assert_no_event(events: &[LogEvent], needle: &str) {
@@ -515,4 +543,161 @@ fn unresolvable_balloon_size_warns_and_leaves_the_offset_untouched() {
             "[{label}] 導出できなかったのに素材を消費した（次の機会が失われる）"
         );
     }
+}
+
+// -------------------------------------------------------------------------
+// (e) ユーザーが動かした相対位置が素材を退役させる（要件 4.7 の While 節・task 4.6）
+//
+// # なぜ起動時の規則だけでは足りなかったのか
+//
+// task 4.5 は「保存値が効いている scope には素材を付けない」を `persist::merge_scope`
+// ——すなわち**起動時**——にだけ置いた。要件 4.7 は While 節（状態）であり、保存された
+// 相対位置は**セッション中にも生まれる**（バルーン単独ドラッグの DragEnd 書込）。その
+// 経路に対応する退役点が無いと、次の寸法変化でキーワード既定が利用者のドラッグを
+// 上書きする。
+//
+// # これは隅の症状ではない
+//
+// 再解決は同寸の書込を skip する（`drain_resnap::resnap_from_sizes`）。採寸寸と実表示寸が
+// 一致する**ふつうの**ゴーストでは素材が起動時に消費されず、装填されたまま残り続ける
+// ——面替え・再吸着・DPI 移動のどれかが来た瞬間に発火する。
+// -------------------------------------------------------------------------
+
+/// 本欠陥の再現: 素材が残ったままユーザーがバルーンをずらし、その後にキャラ寸が
+/// 変わると、キーワード既定がドラッグ結果を上書きする。
+///
+/// 前段で「採寸寸＝実表示寸」の同寸再解決を通しているのが要点である——これが
+/// **ふつうのゴースト**の姿であり、素材が装填されたまま残る条件そのものである。
+#[test]
+fn a_dragged_relative_position_survives_a_later_char_size_change() {
+    let adjust = PointPx { x: 0, y: 0 };
+    let mode = BalloonXMode::CenterTop;
+    let (mut world, char_window, balloon_window) =
+        world_with(placement_measured_at(Some((mode, adjust)), false));
+
+    // 実表示寸が採寸寸と一致するゴーストでは、最初の再解決が寸を変えないので素材は
+    // 消費されない（同寸 skip）。ここが「装填されたまま」の出発点。
+    resize_window_to(
+        &mut world,
+        char_window,
+        measured_char(),
+        PlacementRoute::ReportedSizeReconcile,
+    );
+    assert!(
+        world.get::<BalloonKeywordBase>(char_window).is_some(),
+        "前提＝同寸の再解決では素材が残る（ふつうのゴーストの姿）"
+    );
+
+    // ユーザーがバルーンをずらす（本番ハンドラ経路・DragEnd で永続の相対位置が生まれる）。
+    let char_pos = point_of(&world, char_window);
+    let dragged = PointPx { x: -173, y: -389 };
+    user_drags_balloon_to(
+        &mut world,
+        balloon_window,
+        Point {
+            x: char_pos.x + dragged.x,
+            y: char_pos.y + dragged.y,
+        },
+    );
+    assert_eq!(
+        offset_of(&world, char_window),
+        dragged,
+        "前提＝ドラッグで相対位置がユーザーの値になる"
+    );
+
+    // その後にキャラ寸が変わる書込（面替え・再吸着・DPI 移動のいずれでも起こる）。
+    let (_, events) = capture_logs(|| {
+        resize_window_to(
+            &mut world,
+            char_window,
+            displayed_char(),
+            PlacementRoute::ReportedSizeReconcile,
+        )
+    });
+
+    let keyword_default = expected_offset(mode, displayed_char(), balloon(), adjust);
+    assert_ne!(
+        dragged, keyword_default,
+        "檻が空虚（ドラッグ値とキーワード既定が同値では上書きを観測できない）"
+    );
+    assert_eq!(
+        offset_of(&world, char_window),
+        dragged,
+        "ユーザーがずらした相対位置がキーワード既定へ引き戻された（要件 4.7 違反）"
+    );
+    assert_no_event(&events, REDERIVE_TAG);
+
+    // 表示位置も追従はドラッグ値のまま（offset だけ守って窓が別位置に居る形を弾く）。
+    let char_pos = point_of(&world, char_window);
+    assert_eq!(
+        point_of(&world, balloon_window),
+        PointPx {
+            x: char_pos.x + dragged.x,
+            y: char_pos.y + dragged.y,
+        },
+        "バルーンの表示位置がドラッグ後の相対位置に従っていない"
+    );
+}
+
+/// 退役点は DragEnd（＝永続の相対位置が生まれる観測点）である——素材はそこで除去される。
+#[test]
+fn the_balloon_drag_end_retires_the_keyword_material() {
+    let adjust = PointPx { x: 0, y: 0 };
+    let mode = BalloonXMode::CenterTop;
+    let (mut world, char_window, balloon_window) =
+        world_with(placement_measured_at(Some((mode, adjust)), false));
+
+    assert!(
+        world.get::<BalloonKeywordBase>(char_window).is_some(),
+        "前提＝キーワード scope のキャラ窓は素材を持って spawn される"
+    );
+
+    let char_pos = point_of(&world, char_window);
+    user_drags_balloon_to(
+        &mut world,
+        balloon_window,
+        Point {
+            x: char_pos.x - 40,
+            y: char_pos.y - 260,
+        },
+    );
+
+    assert!(
+        world.get::<BalloonKeywordBase>(char_window).is_none(),
+        "DragEnd が素材を退役させていない（起動時の規則だけでは要件 4.7 が成立しない）"
+    );
+}
+
+/// `Side`（数値指定・未指定）のバルーンドラッグは本件について完全な no-op である
+/// ——除去すべき素材がそもそも無い。**警告も panic も出してはならない**
+/// （`BalloonLimit` と同じデータ駆動の流儀＝持たない窓は 1 bit も触らない）。
+#[test]
+fn a_drag_on_a_side_scope_is_a_no_op_for_the_material() {
+    let (mut world, char_window, balloon_window) = world_with(placement_measured_at(None, false));
+    assert!(
+        world.get::<BalloonKeywordBase>(char_window).is_none(),
+        "前提＝Side のキャラ窓に素材は付かない"
+    );
+
+    let char_pos = point_of(&world, char_window);
+    let (_, events) = capture_logs(|| {
+        user_drags_balloon_to(
+            &mut world,
+            balloon_window,
+            Point {
+                x: char_pos.x - 40,
+                y: char_pos.y - 260,
+            },
+        )
+    });
+
+    // 捕捉ハーネスが本当に生きていることを、必ず**在ること**の主張で先に確かめる
+    // （檻の外で握り潰されていると、以下の「無いこと」は恒真になる）。
+    expect_one(&events, "PersistWiring 不在");
+    assert_no_event(&events, KEYWORD_UNRESOLVED_TAG);
+    assert_no_event(&events, REDERIVE_TAG);
+    assert!(
+        world.get::<BalloonKeywordBase>(char_window).is_none(),
+        "Side の scope に素材が生えている"
+    );
 }

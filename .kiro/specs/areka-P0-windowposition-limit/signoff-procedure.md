@@ -12,8 +12,8 @@
 |---|---|---|---|
 | A | 検証用バルーン fixture の作成 | 実装（自動） | ✅ 完了（§0.3） |
 | B | 水準①（現在の拡大率）での実走とログ突合 | 実装（自動） | ✅ 完了（§7.1・**dpi=192／200%**） |
-| C | 水準②（**100%＝dpi=96** 固定）での実走とログ突合 | **開発者** | ⬜ 未実施（§7.2） |
-| D | 画面端・モニタ境界へのドラッグと**目視**確認 | **開発者** | ⬜ 未実施（§7.3） |
+| C | 水準②（**100%＝dpi=96** 固定）での実走とログ突合 | **開発者** | ✅ 完了（§7.2） |
+| D | 画面端・モニタ境界へのドラッグと**目視**確認 | **開発者** | ✅ 完了（§7.3） |
 
 C は Windows の表示スケール変更（システム設定の変更）を伴うため、D は人間の目を要するため、
 いずれも自動化の対象外である。
@@ -71,8 +71,14 @@ placement: 起動時 k₀ を導出（…） primary_dpi=192 shell_author_dpi=96
 | `balloons0s.txt` | 0（sakura） | `windowposition.x,center`／`windowposition.limit,1` | **中央上**（`CenterTop`） |
 | `balloonk0s.txt` | 1（kero） | `windowposition.x,bottom`／`windowposition.limit,1` | **中央下**（`CenterBottom`） |
 
-- `windowposition.y` は原本のまま（sakura `-129`／kero `-75`）。キーワード指定でも
-  **調整量の加算が続く**こと（要件 4.4）をこの残置で観測する。
+- `windowposition.y` は**検証の途中で `0` へ変更した**（2026-08-14・当初は原本のまま
+  sakura `-129`／kero `-75`）。理由: 原本の `y` は**数値指定用に作られた値**で、数値指定の
+  基本位置（バルーン上端＝キャラ上端）を前提にしている。キーワードの基本位置は
+  （中央上なら）バルーン**下端**がキャラ上端に接する位置なので、同じ `y` を流用すると
+  バルーン高さぶん余計に浮き、§5 の ⑥（基本位置が意図どおりか）が観測できなくなる。
+  **要件 4.4（キーワード指定でも調整量の加算が続く）の実機証跡は、`y` が原本のままだった
+  水準①（200%・§7.1・`adjust_dy=-258`／`-150`）が持つ。** 決定論檻
+  （`t_k3_numeric_y_is_added_to_keyword_base_position`・4 DPI 水準 × 両モード）も併せて固定済み。
 - 既定層（`descript.txt`）は原本と 1 バイトも違わない。**面別上書き層が勝つ**ことが
   観測できる形になっている（要件 1.4）。
 - 要件 4.1 は `top` ≡ `center` を定めるので、キーワード幾何は `center` と `bottom` の
@@ -189,9 +195,12 @@ Git Bash なら `grep -n '\[balloon-limit\]' "$L"` 等で同じ。
 | 0 | `true` | `CenterTop` | `None`（キーワードなので数値 x は存在しない） |
 | 1 | `true` | `CenterBottom` | `None` |
 
-`windowposition_y` は `Some(-129)`（scope 0）／`Some(-75)`（scope 1）で、
-`adjusted=true`・`adjust_dx=0`・`adjust_dy = -129×k`／`-75×k`（丸めは `ScaleRatio::scale_len`＝
-0 から遠い側へ half away from zero）。
+`windowposition_y` は**その時点の fixture が宣言している値**と一致すること
+（`adjusted=true`・`adjust_dx=0`・`adjust_dy = 宣言値×k`。丸めは `ScaleRatio::scale_len`＝
+0 から遠い側へ half away from zero）。**現行 fixture は `y,0` ゆえ `Some(0)`／`adjust_dy=0`**。
+`y` を原本の `-129`／`-75` に戻して走らせた場合は `adjust_dy = -129×k`／`-75×k` になる
+（水準①＝§7.1 がその状態での実測）。合格判定は「宣言値と実測が一致すること」であって
+特定の数値ではない——fixture を変えたら基準も動く。
 
 > **行が出ない scope があっても即「未実装」と読まないこと。** `scope_windowposition` が
 > `None` を返す 3 経路（scope が u32 に収まらない／系列解決失敗／面 0 不在）では観測点 4 の行は
@@ -264,8 +273,8 @@ to.y >= work_area.top   かつ  to.y + balloon_size.h <= work_area.bottom
 
 6. 画面中央付近にキャラを置いた状態で、**sakura（scope 0）のバルーンがキャラ画像の
    真上・水平中央**に、**kero（scope 1）のバルーンがキャラ画像の真下・水平中央**に
-   出ていること。`windowposition.y` の負値ぶん（sakura `-129×k`／kero `-75×k`）
-   上へずれているのが正しい。
+   出ていること。**`windowposition.y` が非ゼロの fixture なら**その値ぶん上へずれているのが
+   正しい（現行 fixture は `y,0` ゆえずれ無し＝基本位置が素で見える）。
 
 **任意（`release-gate` を踏みたいとき）**: バルーン窓そのものを掴んで画面外へ引っ張り、
 **そこで手を離す**。解放位置が作業領域外なら `context="release-gate"` の `Clamp` が
@@ -379,7 +388,10 @@ scope=1 context="boot-gate" from=(1388,1554) → to=(1388,1298) balloon 576x406
 | 解決値 | scope0 `limit=true x_mode=CenterTop`／scope1 `limit=true x_mode=CenterBottom`（面別上書き層が勝っている） |
 | ログ | `%LOCALAPPDATA%\areka-diag\wplimit-dpi96-fixed-20260814-203002\wplimit-dpi96-fixed.log`（266,010 bytes・md5 `0A3168BD606CA88ACC42101D122DD410`） |
 
-**J1 解決値ログ: PASS** — 上記のとおり両 scope とも `limit` と `x_mode` の実値が出ている。
+**J1 解決値ログ: PASS** — 両 scope とも `limit` と `x_mode` の実値が出ている。
+**この走行の fixture は `windowposition.y,0`**（§0.3 参照）ゆえ `windowposition_y=Some(0)`・
+`adjust_dy=0` で、宣言値と実測が一致している。`y` が非ゼロの状態での実機証跡（要件 4.4）は
+水準①＝§7.1（`adjust_dy=-258`／`-150`）が持つ。
 
 **J2 キーワード基本位置の幾何: PASS** — `char=(2472,1205) 382x547`・`balloon 400x224` に対し
 `x = 2472 + (382−400)/2 = 2463`・`y = 1205 − 224 = 981`。実測 `balloon x=2463 y=981` と完全一致。

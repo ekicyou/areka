@@ -147,7 +147,9 @@ pub fn move_window_to(world: &mut World, window: Entity, x: i32, y: i32) -> bool
 /// [`BalloonKeywordBase`] を持って spawn される。この素材がある間の**最初の**リサイズだけは
 /// [`rederive_keyword_balloon_offset`] が offset をキーワード式で導出し直し、素材を除去する。
 /// 連続的な中央追従ではない——初期既定位置を**実際に表示される寸**から導くための一度きりの
-/// 確定である（詳細は [`BalloonKeywordBase`] の doc）。
+/// 確定である（詳細は [`BalloonKeywordBase`] の doc）。素材はリサイズを待たずに消えることも
+/// ある——利用者がバルーンをドラッグして相対位置を保存した瞬間に退役するからである
+/// （要件 4.7・`drag_follow::retire_keyword_base_on_save`）。
 #[allow(dead_code)] // 呼び出し側（anchor_changed_system task 2.6・frame resnap シーム）は後続 task の領分
 pub fn resize_window_to(
     world: &mut World,
