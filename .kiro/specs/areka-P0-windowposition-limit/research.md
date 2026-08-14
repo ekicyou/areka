@@ -159,3 +159,42 @@
    - §5 Research Needed：項 1・3・4（SSP 実測系）は**廃止**。項 2（`MonitorSnapshot` bounds 拡張）は**不要確定**（作業領域基準・既存 work_areas で足りる。ただし基準は「キャラ窓の帰属モニタ」＝バルーン自身でなくキャラ窓で引く）。項 5（檻反転インベントリ）・項 6（atom⇄wpl 台帳再判定）は**存続**——常時不変量により追従系ファイル接触は確定路線となったため、設計で接触ファイル集合が確定し次第、台帳再判定を仰ぐ。
    - §6 設計判断アイテム：項 7（wndproc ドラッグ経路）は「解放時補正」で要件確定——設計はその機構だけ設計する。項 1〜6 は設計フェーズへ持ち越しのまま。
 3. ghost 側 descript 受理の先送りは COMPAT 記録のみで確定（SSP 拡張ゆえ追跡 spec 起票義務なし・R7.4 現行のまま）。
+
+## 10. 設計フェーズの調査と設計判断（2026-08-14・kiro-spec-design）
+
+- **Discovery Scope**: Extension（軽量ディスカバリ）。外部調査なし（正典事項は要件へ転記済み・SSP 実測は §9 裁定で全廃）。§1〜§2 の file:line を設計前に全点再検証した（同日・同 worktree・乖離なし）。
+
+### 10.1 設計前の追加実測（§1 の補強）
+
+- `enqueue_window_set_pos`（`follow/window_move.rs:452`）の現契約: `route: Option<PlacementRoute>` は観測語彙のみ・挙動なし。`route=None` はキャラ窓ドラッグ専用。size=None は移動のみ（SWP_NOSIZE）。
+- バルーン窓 entity の実構成（`spawn.rs:294-324`）: `BalloonWindowMarker{scope}`・`DragConfig::default()`（move_window: true）・`OnDrag(on_balloon_drag)`・`OnDragEnd(on_balloon_drag_end)`。**limit/policy 系 Component は無い**。`Anchored` はキャラ窓のみ。
+- **バルーンドラッグの解放点は既存の `on_balloon_drag_end`（`drag_follow.rs:581`）**——解放位置から生 offset を再導出して永続 write-through する。解放時補正の掛け場所はここで確定（新規イベント機構は不要）。
+- `PlacementConfig`/`ScopeConfig` は spawn 後に破棄（Resource 非化・`PreparedStages::resolve` で consume）——runtime 伝搬は Component 焼込み一択を裏付け。
+- `MonitorSnapshot` は起動時 1 回構築（`main.rs:660-665`・挿入 `main.rs:739`）。表示構成変更での再構築は placement 全体に存在しない（limit 固有の新弱点ではない・design 残余リスクへ登記）。
+- 起動系列は `restore_merged_placements`（`main.rs:598-`）が resolver 出力＋永続 merge の**単一純粋シーム**——経路①②の関門を 1 点で置ける。
+- COMPAT §8 の追跡行は `doc/COMPAT_ARCHITECTURE.md:145`（キーワード＋limit 未実装登記）で確定。
+
+### 10.2 設計判断（§6 の持ち越し項目の決着）
+
+1. **クランプの掛け場所＝案 A-3'（式 1 本＋関門 3 点）**: 純関数 `clamp_rect_to_work_area` を新設 `placement/balloon_limit.rs` に 1 本だけ置き、⑴起動時関門（`restore_merged_placements` 末尾の `apply_balloon_limit`＝経路①②）⑵runtime 関門（`enqueue_window_set_pos` 内・対象窓が `BalloonLimit(true)` のときのみ＝経路③④⑤⑦＋将来の ECS 経路）⑶解放時補正（`on_balloon_drag_end`＝経路⑥）で全 7 経路を被覆。旧 A-2 への反対理由「適用時点の route 分岐が配管を変質させる」は常時不変量裁定で消滅——分岐は route ではなく**対象窓の Component（データ駆動）**であり route は観測語彙のまま。scg の `finalize_chain` 素通し欠陥と同型のリスクを関門の構造で塞ぐ。
+2. **語彙の型化層＝案 B-1'（sibling raw struct）**: `WindowPosition` を一切変えず、`BalloonModel` へ `WindowPositionRaw { x_raw, limit_raw }` を additive 追加。B-1 原案（WindowPosition 拡張）は String 保持で `Copy` を失い既存消費者へ波及するため、sibling 化で既存 API 完全不変へ改善。0/1 検証・キーワード判別・警告は placement 側の分類純関数（`classify_x_vocab`/`classify_limit_vocab`）。
+3. **キーワード幾何＝案 C-1（P5 additive 分岐）**: `ScopeConfig.balloon_x_mode: BalloonXMode { Side(既定) | CenterTop | CenterBottom }`。C-2（offset 焼き込み）は実表示寸確定の再解決で「中央」がずれるため棄却（§3.3 の評価どおり）。`Side` 分岐は bit 同一維持（R5.2）。
+4. **runtime 伝搬＝案 D-1（Component 焼込み）**: `BalloonLimit(pub bool)` をバルーン窓 entity へ spawn 焼込み（`Anchored` 同型）。キャラ窓へは挿入しない＝R2.8 の構造保証。
+5. **可視性ガードとの順序**: guard 先・limit 後（limit が最後の語）。limit=1 では補正後矩形が完全内包＝ガード恒常 Keep で無害。limit=0 ではガードが従来どおり最後の安全網。ガード本体・route 表の既存真偽値は不変。
+6. **観測**: 補正発火は独立 `info!`（`[balloon-limit] Clamp`・scope/from/to/契機 route）＋`[diag.window_move]` は最終位置。解放時補正の新規書込に `PlacementRoute::BalloonLimitRelease` を新設（ALL 9→10）。関門内補正は元書込の route を保つ（補正は同一書込の一部）。
+7. **焼き付けない（3.1(d)）の実装形**: 補正は書き込み直前の表示位置のみ。`balloon_offset`/`BalloonFollow.offset`/永続値は生値維持。resolver 恒等式 `balloon_offset ≡ balloon_pos − char_pos` は「resolver 出力時点の事後条件」へ再スコープ。`on_balloon_drag_end` は「①解放位置取得→②生 offset 永続→③補正 enqueue」の順序を固定（補正値の焼き付き防止）。
+8. **語彙細則（areka 裁量・COMPAT 記録対象）**: キーワードは trim 済み小文字完全一致（不一致は warn 縮退で観測可能）。中央揃えの `(char_w − balloon_w)/2` 整数除算は幾何の中点計算であり k 丸め権威の新設ではない。キーワード時も `balloon_offset`（y 調整量＋balloon.offsetx/y）の加算を一律適用。
+
+### 10.3 リスクと緩和
+
+- **atom⇄wpl 台帳再判定（接触集合の確定報告）**: 本設計の follow 系接触は `follow/window_move.rs`（runtime 関門）・`follow/drag_follow.rs`（解放時補正）・`placement/diag.rs`（route +1）・`follow/visibility.rs`（網羅 match の新腕 1 つ・判定不変）。**常時不変量裁定どおり follow 接触が確定**したため、roadmap 干渉台帳（`roadmap.md:93` atom⇄wpl）の再判定を仰ぐこと（wpl 先着・atom は wpl 実形へ rebase の既定路線を確認）。
+- **`enqueue_window_set_pos` の契約変質**: データ駆動（Component）に限定し route 純粋性を維持。キャラ窓・limit=0 の bit 同一を wiring 檻で固定。
+- **struct 追随の波及**: `ScopePlacement` +1 フィールドで persist・tests の struct literal が機械的に追随（Copy 維持・bool のみ）。
+- **表示構成変更の瞬間**: 窓書込を伴わない作業領域変化は補正契機がない（既存 placement 全体と同一の制約・新たな悪化なし・将来の表示構成追従系 spec の所有）。
+
+### 10.4 檻反転インベントリの確定（§5 項 5 の消化）
+
+- `resolver_resolve_tests.rs:814` `t_r8_balloon_never_clamped_even_outside_work_area` — resolver 出力の無クランプは設計上も真のまま。前提 doc を「limit 補正は下流関門の所有」へ書換えて維持。
+- `follow_visibility_guard_tests.rs:14` — ガード判定は不変。doc の「部分可視は clamp しない」へ「limit=1 では関門が別途補正する（ガード非所有）」を追記。
+- `follow_visibility_balloon_wiring_tests.rs:105/259` — route 表檻を 10 variant へ更新（`BalloonLimitRelease`=guard false）。`balloon_drag_trigger_neither_clamps_nor_warns` は「ドラッグ中無介入」の檻として維持し、解放時補正は新設檻が所有する旨を doc へ追記。
+- `resolver.rs:113-116` P5 doc「クランプなし」・`windowposition.rs` 冒頭 doc — 「limit は下流関門の所有」へ更新（doc 主張の file:line 裏取り規律）。
