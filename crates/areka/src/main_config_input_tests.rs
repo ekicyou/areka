@@ -1,4 +1,7 @@
-use super::{ConfigInputs, default_balloon_root, default_ghost_root, resolve_config_inputs};
+// `default_ghost_root`／`default_balloon_root` の消費者は本檻だけなので、crate 直下の
+// 再輸出には載せず定義元 `boot_config` から直接引く（本番ビルドで unused にならない）。
+use super::{ConfigInputs, resolve_config_inputs};
+use crate::boot_config::{default_balloon_root, default_ghost_root};
 use std::path::PathBuf;
 
 /// argv[1]/argv[2] が両方あるとき、両ルートを引数値でそのまま採用する（R3.3）。

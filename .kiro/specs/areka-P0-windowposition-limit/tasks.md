@@ -145,7 +145,7 @@
 - 4.4: 検証 fixture は原本 `fixtures/emo2` を改変せず**兄弟ディレクトリ**として置いた（原本の `x=266` / `x=-190` を期待値に持つ既存テストが 41 ファイル中 4 ファイルにあり、改変すると赤になる）。
 - 4.4: 実走で **DD6 が実機で確認できた**——起動時関門が scope0 を `y=-376→0` へ補正した後も、追従計算は `char(2064,610) + 生 offset(34,-706) = (2098,-96)` を提示している＝補正が相対位置へ焼き付いていない。
 - 4.4: `release-gate` は実走で 0 件（バルーン単独ドラッグをしていないため正常）。実機証跡が要るなら開発者にドラッグを依頼すること。
-- 4.3: **`cargo test --workspace` に間欠フレークが 1 本ある。本仕様の起因ではない。** `crates/areka-emo-atlas/src/lib.rs:461` の `bake_entry_tests::warn_fires_on_all_transparent_element` が約 1/3 の頻度で落ちる（`capture_logs` が空文字列を返す＝`tracing` の interest cache が並行負荷で汚染される既知クラス）。単独実行 `cargo test -p areka-emo-atlas --lib` は 5/5 緑。本仕様は同クレートを **1 ファイルも変更していない**。`test-cage-determinism`（W6.9）の領分として別途起票済み。**`/kiro-complete` の DoD ゲートでも同じフレークに当たる可能性がある**——落ちたら再実行して切り分けること。
+- 4.3 → **申し送りは解決済み（後日対応・本仕様の範囲外だった 2 件を消化）**。当初「`cargo test --workspace` に本仕様起因でない間欠フレーク 1 本」と記録したが、**根治した**。詳細は下の「後日対応」節を参照。
 - 4.3: 網羅監査で見つかった唯一の穴＝**`limit=0 × 上辺/隅 × k≠1`**（純関数檻は DPI 軸を持つが limit 分岐を持たず、3 関門の檻は limit 分岐を持つが DPI 軸を持たなかった＝交差が誰の担当でもなかった）。起動時関門の檻へ `boot_gate_limit_arms_cover_every_edge_at_every_dpi_level` を追加して閉塞。
 - 4.2: 先送り事項は ukadoc 実照会の結果 **`windowposition.x` / `.y` / `.limit` の 3 キーすべて**が「SSP に限り、descript.txt にも書ける」と注記しているため、`limit` だけでなく 3 キー全体へ広げて登記した（タスク本文より広い）。
 - 4.2: **doc へ行番号アンカーを書かないこと。** タスクを跨ぐと必ずずれる（`balloon_limit_tests.rs:57` の `resolver.rs:221` が実際は `:269` になっていた）。関数名・ファイル名で書くこと。
@@ -176,3 +176,49 @@
 - 2.1: 分類器は `warn!` を持たない。**`Invalid` に対する警告の発行は 2.2（`apply_scope_windowpositions`・scope 文脈つき）の所有**（設計 C1 Invariants）。
 - 2.1/1.2/1.3: `#[allow(dead_code)]` の scaffold が `config.rs`（`BalloonXMode`）・`windowposition.rs`（`XVocab`/`LimitVocab`/両分類器）・`balloon_limit.rs`（両純関数・両タグ定数）に付いている。**2.2 / 2.3 / 2.4 / 3.3 / 3.4 で結線したら必ず外すこと**（残すと本当に未結線の関数を恒久的に隠す）。
 - 1.3: `clamp_axis` は `resolver.rs:221-223` の private 関数を再利用せず `balloon_limit.rs` 内へ逐語再掲した（resolver は境界外・核は依存ゼロ）。同値性は `t_bl6` が固定するが両辺同一著者ゆえ部分的にトートロジー。将来 resolver 側の可視性を広げる用があれば 1 本化するとよい。
+
+## 後日対応（本仕様の範囲外だったが同ブランチで消化・2026-08-14）
+
+実装中に本仕様の範囲外として起票した 2 件を、開発者の指示により同ブランチで解決した。
+
+### (1) ログ捕捉ハーネスの間欠フレーク（根治）
+
+**症状**: `cargo test --workspace` の並行負荷下でのみ `capture_logs` が空文字列を返し、
+テストが約 1/3 の頻度で落ちる。単独実行は常に緑。
+
+**根因**: `tracing::subscriber::with_default` が差し替えるのはスレッドローカルの既定
+dispatcher だが、**callsite の interest キャッシュはプロセス大域**で、その callsite を
+最初に踏んだスレッドが勝つ。subscriber を持たないスレッドの既定 `NoSubscriber` は
+`register_callsite` で `Interest::never()` を返すため、`never` が大域キャッシュへ焼き付き、
+以後そのイベントは早期 return で捨てられる。各ハーネスの doc が主張していた
+「各テストが自分のコードのみを包む限り並行実行でも干渉しない」は**誤り**だった。
+
+**対策**: `crates/areka/src/placement/test_support.rs` で確立済みの構造的対策を移植——
+プロセス寿命の probe dispatcher を 2 個常駐させて `has_just_one` を恒久的に偽にし、
+捕捉窓の内側で `rebuild_interest_cache` を 1 回叩いて probe 導入前の毒を解く。
+
+**適用先（5 ハーネス / 3 クレート）**:
+- `crates/areka-emo-atlas/src/log_capture.rs`（実際に落ちていた当事者）
+- `crates/areka-emo-compose/src/log_capture.rs`（同一構造の姉妹実装＝同じ脆弱性）
+- `crates/areka-seriko/`（`actor_test_support.rs` / `looper_tests.rs` / `state_test_support.rs`
+  の 3 コピー。probe 本体は新設 `src/log_interest_probe.rs` へ集約し 3 箇所から共有）
+
+**検証**: 修正前は `--workspace` 10 走中 3 走が失敗（atlas 2・seriko 1）。修正後は連続走行で
+再現せず。**seriko 側は修正作業中に新たに露見したもので、memory の「seriko capture_logs
+未硬化」申し送りと同一の問題**。
+
+**W6.9 `test-cage-determinism` への申し送り**: probe の実装が 3 クレートに重複している。
+Rust はクレート跨ぎでテスト専用コードを共有できないため dev-dependency 用の
+テストヘルパークレート新設が本筋だが、それは同 spec の領分として残す。
+
+### (2) `main.rs` の 1,000 行規約超過（解消）
+
+本仕様の起動時関門の結線で `main.rs` が 999 → 1,005 行になり構造規約を超えた。
+相互に凝集した「起動引数・既定パスの解決」と「`GhostBootOptions` の組み立て」を
+`crates/areka/src/boot_config.rs` へ切り出し、**1,005 → 871 行**へ。
+
+**挙動は不変**: 移設ブロックを HEAD の原本と差分比較し、相違は可視性を `pub(crate)` へ
+広げた 7 箇所のみで、式・分岐・doc コメントはすべて逐語同一であることを確認済み。
+`default_ghost_root` / `default_balloon_root` は消費者が檻だけなので crate 直下の再輸出には
+載せず、`main_config_input_tests.rs` が定義元から直接引く（本番ビルドで unused にしない）。
+新規コンパイル警告ゼロ（残る 4 件は `emo2_boot/consumer_ledger.rs` の既存分）。
