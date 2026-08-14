@@ -132,3 +132,9 @@
   - 完了状態: 2水準ともバルーンが画面外へはみ出さず、補正ログと位置ログの値が一致し、キーワード指定の基本位置（中央上・中央下）が意図どおり出ている
   - _Requirements: 7.5_
   - _Depends: 4.3_
+
+## Implementation Notes
+
+- 1.2: `config.rs::resolve_scope` は `..ScopeConfig::default()` を末尾に置く形になった。以降 `ScopeConfig` へフィールドを足しても**ここではコンパイルエラーにならず既定値が黙って入る**。2.2 で `balloon_limit`/`balloon_x_mode` を明示代入するまでの過渡状態。
+- 1.2: `BalloonXMode` は消費者が 2.2/2.3 で入るまで `#[allow(dead_code)]` が必要（隣接する `Alignment`/`BalloonSide` と同一の staged-scaffold 規約）。2.3 完了後に不要になったら外すこと。
+- 全般: `areka-parsers` は元から rustfmt 非準拠 82 箇所を抱えるため `cargo fmt` の全体適用は禁止。追加分のみ手で整形する。
