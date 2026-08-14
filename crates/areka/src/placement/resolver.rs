@@ -349,8 +349,20 @@ impl Anchor {
 #[path = "resolver_test_support.rs"]
 mod test_support;
 #[cfg(test)]
+#[path = "resolver_resolve_test_support.rs"]
+mod resolve_test_support;
+#[cfg(test)]
 #[path = "resolver_resolve_tests.rs"]
 mod resolve_tests;
+#[cfg(test)]
+#[path = "resolver_resolve_free_tests.rs"]
+mod resolve_free_tests;
+#[cfg(test)]
+#[path = "resolver_resolve_balloon_tests.rs"]
+mod resolve_balloon_tests;
+#[cfg(test)]
+#[path = "resolver_resolve_contract_tests.rs"]
+mod resolve_contract_tests;
 #[cfg(test)]
 #[path = "resolver_balloon_keyword_tests.rs"]
 mod balloon_keyword_tests;
