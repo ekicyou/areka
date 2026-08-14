@@ -58,6 +58,7 @@
 - `AlphaMaskResource` の内部表現変更 → wintf hit_test 檻・emo-present 表示檻の再検証
 - `scale.rs` への追加が exact（scale-exact-rational）着地後に rebase された場合 → `resample_with` 等価檻の再実行
 - R7 裁定でキャッシュ容量が変わる場合 → 上流 `completed/areka-P0-emo-present` requirements R4.1 の改訂＋本設計のキャッシュ節・檻の全面再検証
+- `BindSet` の等価比較コストを線形から短絡形（ハッシュ保持・要素数や指紋による早期打ち切り・ポインタ同一性判定など）へ変える変更 → `presenter_perf_log_tests.rs` の `t_cache_us` 非 0 主張（`timing.mark(Stage::CacheLookup)` の唯一の固定点）の再検証
 
 ## Architecture
 

@@ -117,3 +117,6 @@ mod visibility_tests;
 #[cfg(test)]
 #[path = "presenter_hide_contract_tests.rs"]
 mod hide_contract_tests;
+#[cfg(test)]
+#[path = "presenter_perf_log_tests.rs"]
+mod perf_log_tests;
