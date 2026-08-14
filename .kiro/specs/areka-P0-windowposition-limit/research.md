@@ -187,7 +187,7 @@
 
 ### 10.3 リスクと緩和
 
-- **atom⇄wpl 台帳再判定（接触集合の確定報告）**: 本設計の follow 系接触は `follow/window_move.rs`（runtime 関門）・`follow/drag_follow.rs`（解放時補正）・`placement/diag.rs`（route +1）・`follow/visibility.rs`（網羅 match の新腕 1 つ・判定不変）。**常時不変量裁定どおり follow 接触が確定**したため、roadmap 干渉台帳（`roadmap.md:93` atom⇄wpl）の再判定を仰ぐこと（wpl 先着・atom は wpl 実形へ rebase の既定路線を確認）。
+- **atom⇄wpl 台帳再判定（接触集合の確定報告→裁定済）**: 本設計の follow 系接触は `follow/window_move.rs`（runtime 関門）・`follow/drag_follow.rs`（解放時補正）・`placement/diag.rs`（route +1）・`follow/visibility.rs`（網羅 match の新腕 1 つ・判定不変）。**常時不変量裁定どおり follow 接触が確定**し、設計ディスカッション（2026-08-14）で開発者が**既定路線（wpl 先着・atom は wpl 実形へ rebase）を確認**——roadmap 干渉台帳 atom⇄wpl 行へ登記済み。
 - **`enqueue_window_set_pos` の契約変質**: データ駆動（Component）に限定し route 純粋性を維持。キャラ窓・limit=0 の bit 同一を wiring 檻で固定。
 - **struct 追随の波及**: `ScopePlacement` +1 フィールドで persist・tests の struct literal が機械的に追随（Copy 維持・bool のみ）。
 - **表示構成変更の瞬間**: 窓書込を伴わない作業領域変化は補正契機がない（既存 placement 全体と同一の制約・新たな悪化なし・将来の表示構成追従系 spec の所有）。

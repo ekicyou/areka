@@ -90,7 +90,7 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 - **budget⇄atom**〔**同ハンク＋因果・直列確定（budget 先＝W6.5 前倒しで自然成立）**: `presenter/show.rs` の `apply_show`（:32 起点）内——budget=compose/resample **:68-88**／atom=スワップ〜upload 域 **:220-270 帯**（vis 着地で旧 :55-70／:186-215 から +13〜+40 ドリフト・2026-08-14 実測）。atom design（W6.75）は budget 実形へ rebase・着手時に 859ms を再測（合成コスト帰着なら budget へ差し戻し）。atom 縮退時は解消〕
 - **cage④⇄budget**〔`presenter/show.rs` 同居継続: cage④ 観測点＝upload エラー分岐 **:227-232** が budget :68-88 と同ファイル。④小案で縮退可。cage は W6.9 最後尾で解決〕
 - **atom⇄bod**〔follow 系共有＝**統合候補（縮退時は統合が既定路線）**: atom の主戦場は `follow/window_move.rs`（DPI 遷移域・scg 差分 +2 行のみ）・persist は `placement/persist.rs`。分離時は atom 先着→bod rebase〕
-- **atom⇄wpl**〔wpl の limit クランプが follow 側に落ちた場合のみ衝突＝wpl の SSP 観測（適用時点）確定後に再判定。**加えて両者とも scg 新設の連鎖確定機構を扱う**（wpl=クランプとの適用順序／atom=`ChainFinalized` 寿命の引き取り）＝wpl が W6.5 で先着し atom design（W6.75）は wpl 実形へ rebase〕
+- **atom⇄wpl**〔**衝突確定・既定路線を開発者確認済（2026-08-14 wpl design 確定時）**: wpl の limit クランプは follow 側へ落ちた（常時不変量裁定・SSP 実測は wpl R3 で廃止＝旧「SSP 観測確定後に再判定」条件は消滅）。wpl 接触集合＝`follow/window_move.rs`（runtime 関門）・`follow/drag_follow.rs`（解放時補正）・`placement/diag.rs`（route +1）・`follow/visibility.rs`（網羅 match 新腕 1・判定不変）。**wpl が W6.5 で先着し atom design（W6.75）は wpl 実形へ rebase**。両者とも scg 新設の連鎖確定機構を扱う（wpl=クランプとの適用順序／atom=`ChainFinalized` 寿命の引き取り）〕
 - **wpl⇄bod**〔windowposition.rs 異ハンク: wpl=:39 変換域／bod=:93-94 合流欄（scg 差分 +2 行のみ）。小ファイルゆえ先着後 rebase〕
 - **因果のみ（コードは素）**: exact→bod（丸め権威）・atom 859ms⇄budget 143ms（帰着切り分け・budget 先着後の再測が最良）
 - **軽微**: cage③の test_support 共有化で placement 系（wpl/bod）の import 行が追随＝実質共存可
