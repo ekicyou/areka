@@ -351,6 +351,22 @@ impl AxisWalk {
     }
 }
 
+/// リサンプルの作業領域（x 軸写像表の席・`recompose-budget` 要件 3.1／design D2⑶）。
+///
+/// [`resample_with`] が行間で共有する x 軸写像表を**呼び手が所有**するための不透明な席である。
+/// 中身は公開しない——保持しているのは私有型 [`AxisSample`] の表のみで、公開面に現れるのは
+/// この型の名前だけである（`AxisSample` は私有のまま）。
+///
+/// [`Default`] で空から始まり、初回のリサンプルで出力幅ぶんの容量へ到達する。以後は
+/// `clear`＋再充填で容量だけを持ち越すため、**同一の席を使い続ける限り容量は成長しない**
+/// （出力幅が縮んでも解放しない＝縮小・再伸長の往復確保を作らない）。毎コマ経路で
+/// この席を常設にすると、リサンプル内部の作業領域の確保が定常状態で 0 になる。
+#[derive(Debug, Default)]
+pub struct ResampleScratch {
+    /// 行間で不変な x 軸の写像表（[`resample_with`] が毎回 `clear`＋再充填する）。
+    x_map: Vec<AxisSample>,
+}
+
 /// native 合成結果を `scale` 倍の表示用サーフェスへ転写する
 /// （premultiplied BGRA・**完全整数** bilinear・要件 2.1/2.5/7.2）。
 ///
@@ -391,8 +407,37 @@ impl AxisWalk {
 /// # 割り当て
 ///
 /// 行間で不変な x 軸の写像表を 1 本だけ確保する（`O(out_w)`・画素あたりの除算を排するため）。
+/// 本関数は呼び出しごとに使い捨ての [`ResampleScratch`] を起こして [`resample_with`] へ委譲する
+/// ——ゆえに毎回この 1 本を確保する。作業領域を呼び手が持ち越して確保をなくしたい場合は
+/// [`resample_with`] を直接呼ぶこと（結果はバイト等価）。
 /// リサンプルは k 変化・合成入力変化時のみ発火する経路である（design「Performance」）。
 pub fn resample(src: &ComposedSurface, scale: ScaleRatio, out: &mut ComposedSurface) {
+    // 使い捨ての作業領域で新形へ委譲する（挙動・出力バイトとも従来と同一）。
+    let mut scratch = ResampleScratch::default();
+    resample_with(src, scale, out, &mut scratch);
+}
+
+/// 作業領域受け取り形のリサンプル（`recompose-budget` 要件 3.1・additive）。
+///
+/// 転写の契約——事前条件・事後条件・恒等バイトコピー・整数専用・premultiplied ドメイン・
+/// エッジクランプ・非パニック——は [`resample`] と**完全に同一**である（[`resample`] は本関数へ
+/// 委譲するだけの薄い形であり、同一 `(src, scale)` に対する出力は 1 バイトも違わない）。
+/// 唯一の差は、行間で共有する x 軸写像表を呼び手所有の `scratch` から借りる点にある。
+///
+/// # 作業領域の不変条件
+///
+/// `scratch` は入口で `clear` され、出力幅ぶんを再充填する。容量は出力幅へ到達した後は
+/// 成長せず、より小さい出力幅の呼び出しでも縮まない（往復確保を作らない）。前回の内容は
+/// `clear` で必ず捨てるため、使い回した席の残留が結果へ混ざることはない。恒等（k=1/1）と
+/// 外形ゼロの早期復帰経路は `scratch` に一切触れない。
+///
+/// [`resample`]: crate::scale::resample
+pub fn resample_with(
+    src: &ComposedSurface,
+    scale: ScaleRatio,
+    out: &mut ComposedSurface,
+    scratch: &mut ResampleScratch,
+) {
     let (out_w, out_h) = scale.scaled_extent(src.width(), src.height());
     // 出力は常に事後条件どおりの外形へ再確保＋全透明クリア（容量再利用・残像なし）。
     out.resize_and_clear(out_w, out_h);
@@ -419,10 +464,12 @@ pub fn resample(src: &ComposedSurface, scale: ScaleRatio, out: &mut ComposedSurf
     }
 
     // x 軸の写像は全行で共通ゆえ一度だけ表に落とす（内側ループから除算を除く）。
+    // 呼び手所有の席を clear＋再充填で使い回す（容量は到達後に成長しない・残留は残さない）。
+    scratch.x_map.clear();
+    scratch.x_map.reserve(out_w as usize);
     let mut walk = AxisWalk::new(scale);
-    let mut x_map: Vec<AxisSample> = Vec::with_capacity(out_w as usize);
     for _ in 0..out_w {
-        x_map.push(walk.sample(src.width()));
+        scratch.x_map.push(walk.sample(src.width()));
         walk.advance();
     }
 
@@ -442,7 +489,7 @@ pub fn resample(src: &ComposedSurface, scale: ScaleRatio, out: &mut ComposedSurf
         let inv_wy = (WEIGHT_ONE - ys.w) as u64;
         let dst_row = dy * out_stride;
 
-        for (dx, xs) in x_map.iter().enumerate() {
+        for (dx, xs) in scratch.x_map.iter().enumerate() {
             let wx = xs.w;
             let inv_wx = WEIGHT_ONE - wx;
             // 4 近傍のバイト先頭（クランプ済み座標ゆえ全て範囲内）。
