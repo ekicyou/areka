@@ -660,3 +660,42 @@ fn resample_with_identity_leaves_scratch_untouched() {
     assert_eq!(scratch.x_map.len(), 0, "恒等経路は写像表を組まない");
     assert_eq!(scratch.x_map.capacity(), 0, "恒等経路は確保しない");
 }
+
+/// 要件 3.1: `ResampleScratch::capacity` は**席そのものの容量**を返す（長さではない）。
+///
+/// 席を持ち越す呼び手（`emo-present` の `FrameBudget`）は、この値を `resample_with` の前後で
+/// 読み比べるだけで「この呼び出しで写像表を確保し直したか」を判定する。ゆえに本アクセサが
+/// 長さ（`len`）や定数へ配線されると、上流の確保計数が黙って壊れる。
+///
+/// **長さと容量が必ず食い違う状態**（大きい幅の後に小さい幅で呼ぶ）を作って両者を区別する。
+#[test]
+fn scratch_capacity_reports_the_seats_capacity_not_its_length() {
+    let mut scratch = ResampleScratch::default();
+    assert_eq!(scratch.capacity(), 0, "空の席の容量は 0");
+    assert_eq!(
+        scratch.capacity(),
+        scratch.x_map.capacity(),
+        "空の席で私有フィールドの容量と食い違う"
+    );
+
+    let k = ScaleRatio::new(2, 1).unwrap();
+    let mut out = ComposedSurface::new(0, 0);
+
+    let src = deterministic_surface(64, 40);
+    resample_with(&src, k, &mut out, &mut scratch);
+    let big = scratch.capacity();
+    assert_eq!(big, scratch.x_map.capacity(), "私有フィールドの容量と食い違う");
+    assert!(big >= 128, "初回で出力幅 128 ぶんへ到達している: {big}");
+
+    // 小さい幅で呼ぶと長さだけが縮み、容量は据え置かれる＝両者が必ず食い違う。
+    let small = deterministic_surface(9, 7);
+    resample_with(&small, k, &mut out, &mut scratch);
+    assert_eq!(scratch.x_map.len(), 18, "小さい幅の写像表の長さ");
+    assert_eq!(scratch.capacity(), big, "容量は縮まない（長さを返していないか）");
+    assert!(
+        scratch.capacity() > scratch.x_map.len(),
+        "この状態で容量と長さは食い違うはず（容量 {} / 長さ {}）",
+        scratch.capacity(),
+        scratch.x_map.len()
+    );
+}
