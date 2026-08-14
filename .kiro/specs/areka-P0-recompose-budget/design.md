@@ -36,6 +36,7 @@
 - `cache.rs` のスロット容量リサイクル API（容量 1・完全一致・原子対の意味論は不変のまま）
 - 上流への additive API 追加: emo-compose `resample_with`＋`ResampleScratch`／wintf `AlphaMask::regenerate_from_pbgra32`・`AlphaMaskResource::set_shared`（内部表現の `Arc` 化を含む・公開挙動不変）
 - リポジトリ共通の性能計測資産 `tools/perf/`（採取ランナー・判定スクリプト・手順書・自己較正 fixture）
+- **リサンプル出力の冗長なゼロ埋めの除去と、リサンプル計算そのものの是正**（追補 §A2／§A3・2026-08-14 の開発者裁定で本 spec の担当になった。表示バイトは 1 バイトも変えない＝要件 3.3／6.4）
 - 定常アロケーション 0 とバイト等価を固定する決定論檻
 
 ### Out of Boundary
@@ -43,7 +44,7 @@
 - キャッシュ容量政策の変更（R7 裁定が下りるまで実装しない・自律ループの唯一の例外）
 - SERIKO・ghost・kanade の駆動側（発火頻度・スケジュール・`ticker.rs`／`looper.rs` のコード）——判定スクリプトが既存ログを grep するのみで、コードには触れない
 - `show.rs` :215-235 帯（スワップ〜upload 域）の**構造**——atom（W6.75）の観測対象。upload エラー分岐 :227-231 は cage④（W6.9）の観測点であり移動しない。本帯への変更は :240 のマスク供給 1 文の置換（`set` → `set_shared`）に限る
-- `scale.rs` の既存項目の変更——追加は関数＋opaque 型のみ（exact との先着後 rebase 対象）
+- ~~`scale.rs` の既存項目の変更——追加は関数＋opaque 型のみ~~ → **2026-08-14 の開発者裁定で改訂**（追補 §A4）。支配項の是正（追補 §A2 のゼロ埋め除去・§A3 のリサンプル計算）に必要な範囲で**既存項目への変更を許可する**。ただし公開名の削除・意味変更は引き続き禁止で、exact（`areka-P0-scale-exact-rational`）との先着後 rebase の登記も不変
   - **※ task 3.2 追記（2026-08-14）**: 第 1 段実測により、支配項の是正（`resample` の計算・出力バッファの冗長なゼロ埋め）は本行に触れる。本行を改訂して範囲へ取り込むか、別 spec へ切り出すかは開発者裁定（追補 §A4）。裁定が下りるまで `resample` の既存項目は変更しない
 - 既存 info! 表示成立点ログ（`"apply(ShowSurface): 表示・マスクを更新"`・info 水準・全フィールド）——実機サインオフ契約ゆえ文言・水準・フィールドとも不変
 
@@ -61,6 +62,7 @@
 - `AlphaMaskResource` の内部表現変更 → wintf hit_test 檻・emo-present 表示檻の再検証
 - `scale.rs` への追加が exact（scale-exact-rational）着地後に rebase された場合 → `resample_with` 等価檻の再実行
 - R7 裁定でキャッシュ容量が変わる場合 → 上流 `completed/areka-P0-emo-present` requirements R4.1 の改訂＋本設計のキャッシュ節・檻の全面再検証
+- `resample` の内部実装または `ComposedSurface` の初期化規約の変更（追補 §A2／§A3） → バイト等価テスト（task 6.2）・`resample_with` 等価檻・emo-compose の既存 golden の再検証
 - `BindSet` の等価比較コストを線形から短絡形（ハッシュ保持・要素数や指紋による早期打ち切り・ポインタ同一性判定など）へ変える変更 → `presenter_perf_log_tests.rs` の `t_cache_us` 非 0 主張（`timing.mark(Stage::CacheLookup)` の唯一の固定点）の再検証
 
 ## Architecture
@@ -659,22 +661,27 @@ premultiplied 不変条件・決定論）を 1 本も緩めない。加えて **
 `scale-exact-rational` が残した 27,600 組の実測と同じ密度で固定する（同一 `(src, scale)` で
 是正前の出力と 1 バイトも違わないこと）。速くなったが絵が変わった、を通さない。
 
-### A4. 範囲の判断（**決定していない・開発者へ差し戻す**）
+### A4. 範囲の判断（**2026-08-14 開発者裁定で決着**）
 
 `### Non-Goals` は「合成アルゴリズム本体（`build_plan`／`blit::execute`）の最適化」を除外しているが、
 **`resample` はこの列挙に含まれていない**。一方 `Boundary Commitments` の `Out of Boundary` は
 「`scale.rs` の既存項目の変更——追加は関数＋opaque 型のみ」と定めており、A2・A3 はいずれも
-`resample`／`ComposedSurface` の**既存項目に触れる**。
+`resample`／`ComposedSurface` の**既存項目に触れる**。3 つの選択肢（本 spec へ取り込む／別 spec 起票／据え置き）を
+実測つきで提示した結果、**開発者は「本 spec の範囲に取り込む」を選んだ（2026-08-14）**。
 
-本追補は範囲を勝手に広げない。選択肢は次の 3 つで、判断は開発者に委ねる。
+裁定にともなう改訂（`Boundary Commitments` 本体へ反映済み）:
 
-1. 本 spec の範囲に取り込む（`Out of Boundary` の当該行を改訂し、A2・A3 を tasks へ追加する）
-2. 別 spec として起票する（本 spec は R7 裁定＋定常アロケーション 0 で着地させ、再測で残る最大内訳として引き渡す）
-3. 据え置く（release アイドル CPU 3% 未満は本 spec の範囲では達成不能と確定させる）
+- `Out of Boundary` の「`scale.rs` の既存項目の変更」行を改訂し、A2・A3 の範囲で**既存項目への変更を許可**する。
+  ただし**公開名の削除・意味変更は依然として禁止**（並走 spec `areka-P0-scale-exact-rational` との調停・先着後 rebase の登記は不変）。
+- `This Spec Owns` へ A2・A3 を追加する。
+- `Non-Goals` の「合成アルゴリズム本体の最適化」は**そのまま維持**する——除外されているのは `build_plan`／`blit::execute` であり、
+  `resample` は今回の裁定で本 spec の担当になった。両者を混同しないこと。
 
-**裁定が下りるまで `resample`／`ComposedSurface` の既存項目は変更しない。**
-`resample_with`＋`ResampleScratch` の additive 追加（D2 の A3 席・R3.1）は既存項目に触れないので、
-この裁定とは独立に着手できる。
+**安全網**: A2・A3 はいずれも表示バイトを変えてはならない。要件 3.3／6.4 のバイト等価テスト（task 6.2）が
+是正前後の同一性を固定するので、**6.2 を先に用意してから A2・A3 の実装へ入る**（順序は tasks.md の 5.4／5.5 の `_Depends:_` に登記した）。
+
+**着手順は変わらない**（A6 の直前に置く）: ①定常アロケーション 0（tasks 4.x／5.x・約 4%）→
+②リサンプル出力の冗長ゼロ埋め除去（task 5.4・約 6%・**①が前提**）→ ③リサンプル計算の是正（task 5.5・約 50%）。
 
 ### A5. R7 裁定ゲートへ渡す材料（R7.2）
 
