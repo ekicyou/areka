@@ -279,8 +279,8 @@ to.y >= work_area.top   かつ  to.y + balloon_size.h <= work_area.bottom
 | 判定 | 内容 | 水準①（済） | 水準②（未） |
 |---|---|---|---|
 | J1〜J6 | §4 のログ突合が全て PASS | ✅ | ⬜ |
-| §5 の 1〜5 | 画面端・モニタ境界での目視 | ⬜ | ⬜ |
-| §5 の 6 | キーワード基本位置の目視 | ⬜ | ⬜ |
+| §5 の 1〜5 | 画面端・モニタ境界での目視 | ✅ | ⬜ |
+| §5 の 6 | キーワード基本位置の目視 | ✅ | ⬜ |
 
 **2 水準とも**全項目が埋まってはじめてタスク 4.4 は完了である。
 
@@ -388,13 +388,39 @@ scope=1 context="boot-gate" from=(1388,1554) → to=(1388,1298) balloon 576x406
 
 | 項目 | 水準①（200%） | 水準②（100%） |
 |---|---|---|
-| 5-1 左端 | | |
-| 5-2 右端 | | |
-| 5-3 上端 | | |
-| 5-4 下端 | | |
-| 5-5 モニタ境界 | | |
-| 5-6 中央上・中央下の基本位置 | | |
-| サインオフ者 / 日付 | | |
+| 5-1 左端 | ✅ PASS | |
+| 5-2 右端 | ✅ PASS | |
+| 5-3 上端 | ✅ PASS | |
+| 5-4 下端 | ✅ PASS | |
+| 5-5 モニタ境界 | ✅ PASS | |
+| 5-6 中央上・中央下の基本位置 | ✅ PASS | |
+| サインオフ者 / 日付 | 開発者 / 2026-08-14 | |
+
+#### 水準①の目視実走（`primary_dpi=192`・k=2.0）
+
+| 項目 | 値 |
+|---|---|
+| 起動 | `AREKA_APP_SMOKE_EXIT_MS=600000`・`RUST_LOG=info,areka::placement::diag=debug`・絶対パス・検証 fixture `emo2-kakukaku-wplimit` |
+| areka 自身が申告した実効 DPI | `primary_dpi=192`・`k_shell=2.0`・`k_balloon=2.0` |
+| モニタ | index0 `work_area=0,0,2880,1704`（タスクバー 96px）／index1 `work_area=-2560,195,0,1795`（**タスクバー無し＝作業領域＝画面全体**） |
+| 解決値 | scope0 `limit=true x_mode=CenterTop adjust_dy=-258`／scope1 `limit=true x_mode=CenterBottom adjust_dy=-150` |
+| ログ | `%LOCALAPPDATA%\areka-diag\wplimit-signoff-visual-20260814-191549\wplimit-signoff-visual.log`（1,122,588 bytes・md5 `B7B209F1C79AF3227F5386BCB313E6E4`・4,262 行） |
+
+**補正の実測（実ドラッグを伴う走行）**
+
+| 関門 | 件数 |
+|---|---|
+| `boot-gate` | 2 |
+| `runtime-gate` | 921（`route=BalloonFollow` 919・`KeepPositionResize` 2） |
+| **`release-gate`** | **7** |
+| `Unresolved`（縮退） | **0** |
+
+- **補正 930 件すべてについて、補正後の矩形が当該 `work_area` へ完全内包されていることを
+  機械的に検算した（はみ出し 0 件）。** 判定は各行が自分で記録している `work_area=` に対して行い、
+  モニタを跨いだ分も取り違えないようにした。
+- **`release-gate` に初めて実機証跡が付いた**（自動実走 §7.1 では 0 件だった）。
+  バルーン単独ドラッグを画面外で解放し、表示位置だけが引き戻されることを目視で確認済み。
+- `Unresolved` が 1 件も出ていない＝縮退経路を一度も踏まずに全補正が成立している。
 
 ---
 
