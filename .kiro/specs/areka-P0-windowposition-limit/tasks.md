@@ -50,7 +50,7 @@
   - _Depends: 1.2_
   - _Boundary: C4 resolver P5_
 
-- [ ] 2.4 起動時の関門を復元合流シームへ設置する（統合タスク）
+- [x] 2.4 起動時の関門を復元合流シームへ設置する（統合タスク）
   - 初期配置と保存位置の復元がともに通る合流点で、limit 有効な scope のバルーン表示位置をキャラ窓が属するモニタの作業領域へ補正する
   - 論理相対位置（作者指定と保存値の系譜）は補正せず生値のまま残し、補正を焼き付けない
   - モニタ情報が解決できない scope は警告のうえ素通しし、書き込みを阻害しない
@@ -140,6 +140,8 @@
 - 全般: `areka-parsers` は元から rustfmt 非準拠 82 箇所を抱えるため `cargo fmt` の全体適用は禁止。追加分のみ手で整形する。リポジトリ全体では約 750 件の既存 rustfmt 差分があり、`cargo fmt --check` は完了ゲートに使えない。
 - 1.3: **`limit_correction` の `None` は「内包されている」という意味ではなく「クランプしても位置が動かない」という意味**。逆転区間（バルーン > 作業領域）で既に左上に居るときは、はみ出したままでも `None` を返す。2.4 / 3.3 / 3.4 の関門は `None` を「書き込み不要」として扱うこと。「内包の判定」として使ってはならない（毎フレーム偽の `[balloon-limit] Clamp` を出さないための設計）。
 - 1.3: `RectPx` の `right`/`bottom` は **排他的**（`resolver.rs:26-28`）。上界は `right - w` が正しく、キャラ窓側 `resolver.rs:179-180` と同一。
+- 2.4: 要件 6.1 の「契機」を、起動時関門では `BALLOON_LIMIT_BOOT_CONTEXT = "boot-gate"` という `context` フィールドで記録した（設計 DD7 は契機を route で表すが、起動時関門は route ではなく `PlacementRoute` は 3.2 の所有）。**3.3 / 3.4 も `route` と併せて `context` を出し、3 関門を同じ二段 grep で判別できるようにすること**。
+- 2.4: `main.rs` が 999 → **1,005 行**になった（構造規約 1,000 行の超過）。ただし HEAD 時点で既に 4 ファイル（1330/1076/1033/1010）が超過しており、本タスクの増分は設計指定のフック 6 行のみ。分割は別スコープ。
 - 2.3: `ScopePlacement` へ `balloon_limit: bool` を足したことで、struct literal を組む **9 ファイル**が機械的追随済み（`persist_restore_tests.rs` / `spawn_test_support.rs` / `follow_drag_tests.rs` / `follow_drag_end_persist_tests.rs` / `main_restore_seam_tests.rs` / `input_events/balloon_wiring_tests.rs` / `emo2_boot/spine.rs` / `emo2_boot/frame_test_support.rs` / `emo2_boot/move_cue_apply_move_tests.rs`）。以降フィールドを足すときも同じ集合を洗うこと。
 - 2.3: 中点は `(char_w - balloon_w) / 2`＝**Rust の 0 方向切り捨て**（floor ではない）。バルーンがシェルより幅広いと分子が負になり、floor 除算とは 1 px ずれる。`t_k5` が正負の両符号を固定している。
 - 2.3: `resolver_resolve_tests.rs` は着手時点で既に **1,010 行**（1,000 行規約の既存超過）。本タスクは 1 バイトも触らず新ファイルへ分離した（＝要件 5.2 の主檻）。是正は別スコープ。

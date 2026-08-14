@@ -609,6 +609,12 @@ fn restore_merged_placements(
         placements.iter().map(|p| (p.scope, p.char_pos)).collect();
     // 純関数 merge（永続不書込・保存位置優先 → project_restore → balloon 導出）。
     let merged = placement::persist::apply_restored_placements(placements, &entries, snapshot);
+    // 起動時関門（areka-P0-windowposition-limit design C6・要件 2.2/4.7/4.9/5.5/6.1）:
+    // 経路①（spawn 初期値）と経路②（復元 merge）はどちらもこの合流点の出力を消費するため、
+    // ここ 1 点で両方が被覆される。merge **後**に置くのは保存値優先の合流規則（4.7）を
+    // 一切変えないためであり、補正は `balloon_pos`（表示位置）だけに作用する
+    // ——`balloon_offset`（論理相対位置）は生値のまま（DD6・補正を焼き付けない）。
+    let merged = placement::balloon_limit::apply_balloon_limit(merged, snapshot);
     // 保存位置が採用された（＝resolver 既定から動いた）スコープ集合。これらは**利用者の意思に
     // よる配置**であって既定配置ではないため、連鎖の再解決から常に除外される（scg 7.3）。
     // 保存値がたまたま既定と同値だった場合は差が出ないが、その位置は既定そのものゆえ
