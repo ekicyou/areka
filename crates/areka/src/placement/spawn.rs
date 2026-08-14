@@ -224,10 +224,16 @@ pub struct BalloonLimit(pub bool);
 /// 要件 4.7 はキーワードの適用を「初期既定位置の供給にとどめる」と定める——連続的な
 /// 中央追従ではない。ただし採寸した寸と実際に表示される寸は食い違うことがあり
 /// （実機 2026-08-14: 採寸 434 に対し実表示 382）、そのとき初期既定位置は**表示される
-/// 寸から導かれていなければ意味を成さない**。実表示寸が判る唯一の瞬間が一度きりの
-/// 実表示寸確定の再解決（`PlacementRoute::ReportedSizeReconcile`）であり、そこで
-/// 本 Component を消費する。**その後にバルーン寸やキャラ寸が変わっても中央へ揃え直さない**
+/// 寸から導かれていなければ意味を成さない**。ゆえに消費の契機は**キャラ窓の寸が実際に
+/// 変わった最初の書込**であり、そこで本 Component を消費する。
+/// **その後にバルーン寸やキャラ寸が変わっても中央へ揃え直さない**
 /// ——`Side` と同じく配置時確定の静的 offset として振る舞う（4.4 の現行契約どおり）。
+///
+/// 特定の route（`PlacementRoute::ReportedSizeReconcile` など）を「実表示寸が判る唯一の
+/// 瞬間」として条件に置く案は**却下した**。実表示寸を最初に運ぶ route は
+/// `DpiReproject`／`ReportedSizeReconcile`／`Resnap` のいずれにもなり得て、どれが先に
+/// 来るかは frame の相順に依存するため、route を条件にすると相順が変わるたびに静かに
+/// 壊れる（判定の詳細は `follow::keyword_base::rederive_keyword_balloon_offset` の doc）。
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BalloonKeywordBase {
     /// キーワードが定める基本位置の種別（中央上／中央下）。

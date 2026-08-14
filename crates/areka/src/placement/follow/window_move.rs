@@ -150,7 +150,11 @@ pub fn move_window_to(world: &mut World, window: Entity, x: i32, y: i32) -> bool
 /// 確定である（詳細は [`BalloonKeywordBase`] の doc）。素材はリサイズを待たずに消えることも
 /// ある——利用者がバルーンをドラッグして相対位置を保存した瞬間に退役するからである
 /// （要件 4.7・`drag_follow::retire_keyword_base_on_save`）。
-#[allow(dead_code)] // 呼び出し側（anchor_changed_system task 2.6・frame resnap シーム）は後続 task の領分
+// 本体では結線済み（`emo2_boot::frame::dpi`／`emo2_boot::frame::drain_resnap` が呼ぶ）。
+// allow が要るのは examples が `placement/mod.rs` を `#[path]` include して本体を伴わずに
+// ビルドする形があるためで、そちらでは本関数に到達する呼出が存在しない
+// （[`resize_window_keep_position`] の allow と同じ事情）。
+#[allow(dead_code)] // examples が #[path] include するため、本体未使用ビルドでも必要
 pub fn resize_window_to(
     world: &mut World,
     char_window: Entity,

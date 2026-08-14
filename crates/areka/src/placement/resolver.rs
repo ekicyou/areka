@@ -121,9 +121,14 @@ pub struct ScopePlacement {
     /// キーワードの中央揃えは `(char_w − balloon_w) / 2` ゆえ、`char_w` が採寸値と
     /// 実表示値でずれるとバルーンがその差の半分だけ横へずれる。実機（2026-08-14 の
     /// サインオフ）では採寸 434 に対し実表示 382 で 26px ずれ、右端で作業領域を越えて
-    /// 関門のクランプまで誘発した。実表示寸が判るのは一度きりの実表示寸確定の再解決
-    /// （`PlacementRoute::ReportedSizeReconcile`）の瞬間であり、そこで
-    /// `spawn::BalloonKeywordBase` を消費して `BalloonFollow.offset` を導出し直す。
+    /// 関門のクランプまで誘発した。導出し直す契機は**キャラ窓の寸が実際に変わった最初の
+    /// 書込**であり、そこで `spawn::BalloonKeywordBase` を消費して `BalloonFollow.offset`
+    /// を導出し直す（`follow::keyword_base::rederive_keyword_balloon_offset`）。
+    ///
+    /// 特定の route（`PlacementRoute::ReportedSizeReconcile` など）で絞る案は**却下した**
+    /// ——実表示寸を最初に運ぶ route は `DpiReproject`／`ReportedSizeReconcile`／`Resnap`
+    /// のいずれにもなり得て、どれが先に来るかは frame の相順に依存する。route を条件に
+    /// すると相順が変わるたびに静かに壊れるため、寸の変化そのものを条件に置いている。
     pub balloon_keyword_base: Option<(BalloonXMode, PointPx)>,
 }
 
