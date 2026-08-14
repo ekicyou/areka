@@ -12,11 +12,49 @@ const ALPHA_THRESHOLD: u8 = 128;
 /// - 1ビット/ピクセル（8ピクセル/バイト）
 /// - MSBファースト（ビット7 = 最左ピクセル）
 /// - 行ごとに8ピクセル単位でアラインメント
-#[derive(Debug, Clone)]
+// `PartialEq` は再生成（`regenerate_from_pbgra32`）と新規生成（`from_pbgra32`）の等価檻の
+// 比較器として derive する（data/width/height の全一致＝マスクの完全同一）。公開挙動への
+// 影響はない（追加の trait 実装のみ）。
+#[derive(Debug, Clone, PartialEq)]
 pub struct AlphaMask {
     data: Vec<u8>,
     width: u32,
     height: u32,
+}
+
+/// PBGRA32 の α をビットパック済みバッファへ書き込む（共有本体）
+///
+/// `from_pbgra32`（新規確保）と `regenerate_from_pbgra32`（バッファ再利用）の**唯一の
+/// 実装**。両者の差はバッファの用意の仕方だけであり、ビットパックの意味論はここに一本化
+/// されている（二重実装による乖離を構造で防ぐ）。
+///
+/// # 前提
+/// `data` は `row_bytes * height` の長さで、**全バイトが 0 に初期化済み**であること
+/// （本関数はセットするビットしか書かないため、残留ビットは消さない）。
+fn pack_pbgra32_alpha(
+    data: &mut [u8],
+    pixels: &[u8],
+    width: u32,
+    height: u32,
+    stride: u32,
+    row_bytes: usize,
+) {
+    for y in 0..height {
+        let row_start = (y * stride) as usize;
+        for x in 0..width {
+            // PBGRA32: 4バイト/ピクセル、α値は4バイト目（オフセット+3）
+            let pixel_offset = row_start + (x as usize * 4);
+            let alpha = pixels.get(pixel_offset + 3).copied().unwrap_or(0);
+
+            // 閾値128で2値化
+            if alpha >= ALPHA_THRESHOLD {
+                // MSBファースト: ビット7 = 最左ピクセル
+                let byte_index = (y as usize * row_bytes) + (x as usize / 8);
+                let bit_index = 7 - (x % 8);
+                data[byte_index] |= 1 << bit_index;
+            }
+        }
+    }
 }
 
 impl AlphaMask {
@@ -35,28 +73,44 @@ impl AlphaMask {
         let row_bytes = width.div_ceil(8) as usize;
         let mut data = vec![0u8; row_bytes * height as usize];
 
-        for y in 0..height {
-            let row_start = (y * stride) as usize;
-            for x in 0..width {
-                // PBGRA32: 4バイト/ピクセル、α値は4バイト目（オフセット+3）
-                let pixel_offset = row_start + (x as usize * 4);
-                let alpha = pixels.get(pixel_offset + 3).copied().unwrap_or(0);
-
-                // 閾値128で2値化
-                if alpha >= ALPHA_THRESHOLD {
-                    // MSBファースト: ビット7 = 最左ピクセル
-                    let byte_index = (y as usize * row_bytes) + (x as usize / 8);
-                    let bit_index = 7 - (x % 8);
-                    data[byte_index] |= 1 << bit_index;
-                }
-            }
-        }
+        pack_pbgra32_alpha(&mut data, pixels, width, height, stride, row_bytes);
 
         Self {
             data,
             width,
             height,
         }
+    }
+
+    /// 既存バッファを再利用してαマスクの内容を再生成する
+    ///
+    /// [`from_pbgra32`](Self::from_pbgra32) と**同一入力に対して同一結果**を作るが、
+    /// 新しいバッファを確保せず `self.data` を `clear` + `resize` で作り直す
+    /// （容量は保持されるため、同寸または縮小方向の再生成では確保が発生しない）。
+    /// 定常状態の毎コマ適用で当たり判定マスクの新規確保を無くすための口（要件 3.1）。
+    ///
+    /// `clear` してから 0 で `resize` するため、**寸法が縮む方向でも前の内容は 1 ビットも
+    /// 残らない**（`resize` 単独だと保持された前半バイトのビットが生き残る）。
+    ///
+    /// # Arguments
+    /// - `pixels`: PBGRA32形式のピクセルデータ（B, G, R, A の順）
+    /// - `width`: 画像幅（ピクセル）
+    /// - `height`: 画像高さ（ピクセル）
+    /// - `stride`: 行あたりのバイト数
+    pub fn regenerate_from_pbgra32(&mut self, pixels: &[u8], width: u32, height: u32, stride: u32) {
+        // 行あたりのバイト数（8ピクセル単位でアラインメント）
+        let row_bytes = width.div_ceil(8) as usize;
+        let len = row_bytes * height as usize;
+
+        // clear → resize(len, 0) で「全バイト 0・長さ len」を作る。容量は保持されるので
+        // len <= capacity の間は確保が起きない。clear を挟むことで縮小方向でも残留しない。
+        self.data.clear();
+        self.data.resize(len, 0);
+
+        pack_pbgra32_alpha(&mut self.data, pixels, width, height, stride, row_bytes);
+
+        self.width = width;
+        self.height = height;
     }
 
     /// 指定座標がヒット対象かを判定
@@ -104,6 +158,11 @@ impl AlphaMask {
 }
 
 // Send + Sync は自動導出（Vec<u8> と u32 のみ）
+
+/// `regenerate_from_pbgra32` の等価檻とバッファ再利用檻（structure.md のテスト分離規約）
+#[cfg(test)]
+#[path = "alpha_mask_regenerate_tests.rs"]
+mod regenerate_tests;
 
 #[cfg(test)]
 mod tests {

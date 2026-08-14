@@ -88,7 +88,7 @@
   - _Requirements: 3.4_
   - _Depends: 3.1_
 
-- [ ] 4. 第2段: 上流クレートへの追加 API（既存の意味は変えない）
+- [x] 4. 第2段: 上流クレートへの追加 API（既存の意味は変えない）
 - [x] 4.1 (P) リサンプルの作業領域受け取り形を追加
   - 呼び手が作業領域を所有できる形を追加し、既存のリサンプルはその形へ委譲する（挙動不変）
   - 既存の項目・公開名は一切変更せず追加のみ行う（同一ファイルを並走 spec が編集するため・先着した側の実形へ後着側が追随する）
@@ -99,7 +99,7 @@
   - _Boundary: emo-compose 拡大縮小_
   - _Depends: 3.2_
 
-- [ ] 4.2 (P) 当たり判定マスクの再生成と共有供給を追加
+- [x] 4.2 (P) 当たり判定マスクの再生成と共有供給を追加
   - 既存バッファを再利用して内容を作り直す形を追加する（寸法が縮む方向でも前の内容が残らない）
   - マスク資源の内部表現を共有参照へ変え、共有供給の口を追加する（既存の設定・取得の見た目と挙動は不変）
   - 追加形と既存形が同一入力で等価であることをテストで固定する
@@ -268,3 +268,11 @@
   - 等価檻に**外形ゼロのケースを意図的に入れていない**。既存の `resample_zero_extent_is_empty_and_warns` が同一の `warn!` 呼出位置の捕捉に依存しており、subscriber 無しで先に踏むと捕捉の判定が固定されて既存檻が偽陰性になるため。レビューが当該檻の生存を変異で確認済み。
   - `lib.rs` は無修正。新規 2 名は `areka_emo_compose::scale::{resample_with, ResampleScratch}` のモジュールパスでのみ到達可能（`lib.rs:51` の平坦な再輸出は `ScaleRatio, resample` のまま）。**5.2/5.3 の配線はモジュールパスで参照すること**。
   - **本ブランチは exact（`areka-P0-scale-exact-rational`・PR#110 `9969fee`）を未取り込み**。`origin/main` との `scale.rs` 差分は module 冒頭と `ScaleRatio::as_f32` の doc 計 11 行のみで新規追加箇所と行域が重ならないが、design の再検証トリガに従い **rebase 時に `resample_with` 等価檻を再走させること**。
+- **4.2 の要点**:
+  - **再利用の檻を守っているのも「より小さい寸法での再生成で容量が変わらないこと」の節だけ**（`alpha_mask_regenerate_tests.rs:222`）。毎回 `vec![0u8; len]` する実装に変異させると**等価檻 7 本は全て緑のまま**で、再利用檻 3 本だけが赤になることをレビューが実測。4.1 と同じ構図。
+  - `regenerate_from_pbgra32` の `clear()` は必須。`resize` だけだと縮小時に前の内容が残る（変異で 5 本赤・実測確認）。
+  - `from_pbgra32` の本体を私有ヘルパ `pack_pbgra32_alpha` へ集約した（公開面は追加のみ）。**除去した元ループと新ヘルパ本体がインデント正規化後にハッシュ一致**することをレビューが確認＝挙動保存が証明済み。二重実装の乖離を構造で防ぐ意図。
+  - `AlphaMaskResource::clone()` は Arc の浅いクローンになったが、`&mut AlphaMask` へのアクセサが存在せず `set`／`set_shared` は `Option` ごと差し替えるため、公開 API からは観測できない。
+  - **`Changed<AlphaMaskResource>`／`Added` 依存はリポジトリ全体で 0 件を再確認**（205 箇所の変更検知のうち該当ゼロ・読み手は `hit_test/mod.rs:225` の `world.get` のみ・書き手は `show.rs:274` のみ）。
+  - `set_shared` はまだどこからも呼ばれていない（5.3 が `show.rs:275` の 1 文を置換する）。
+  - **既存フレークを 1 件観測（本 spec 由来ではない）**: `ecs::window::zorder_pair_maintain::always_on_top_tests::pair_fix_commands_keep_a_pair_inside_the_band_it_already_shares` が 8 回中 1 回失敗。実 HWND を作って `WS_EX_TOPMOST` を測る檻でデスクトップ環境依存。完了済み `areka-P0-ghost-window-zorder` の領域。
