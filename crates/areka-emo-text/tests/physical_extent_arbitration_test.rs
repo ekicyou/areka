@@ -18,7 +18,8 @@
 //!
 //! 本檻は [`ScaleRatio::as_f32`] 以降の算術（`as_f32` → [`ScaleContract::new`] →
 //! [`ScaleContract::physical_extent`]）を貫通する。一方、本番で k が経由する
-//! `TextSlotView.scale`（`crates/areka-emo-present/src/presenter/read.rs:109`）→
+//! `TextSlotView.scale`（`crates/areka-emo-present/src/presenter/read.rs` の
+//! `text_slot_view` 内 `scale: applied.as_f32()`。行番号は doc 追記で動くため記号で辿ること）→
 //! `TextSlotBinding::from_view`／`TextSlotBinding::new` の搬送層は **f32 素通し**を前提とする
 //! （現物は素通しで、正規化は [`ScaleContract::new`] へ委譲されている）。
 //! 搬送層が scale を変換するよう変わった場合、その変換は本檻の外であり、注入点の再設計が要る。
