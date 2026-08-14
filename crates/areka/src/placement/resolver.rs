@@ -74,7 +74,8 @@ pub struct ScopePlacement {
     ///
     /// **resolver 自身はクランプしない**——work area 外へ素直にはみ出した値を返す。
     /// `windowposition.limit` による作業領域内への補正は下流の関門が所有する
-    /// （起動時＝`balloon_limit::apply_balloon_limit`（`main.rs:617`）／実行時＝
+    /// （起動時＝`main.rs` の `restore_merged_placements` が呼ぶ
+    /// `balloon_limit::apply_balloon_limit`／実行時＝
     /// `follow::window_move::enqueue_window_set_pos` の runtime 関門）。
     pub balloon_pos: PointPx,
     /// バルーン窓寸（入力の転記）。

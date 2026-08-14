@@ -135,7 +135,7 @@ fn t_r8_balloon_offsetx_offsety_added() {
 ///
 /// 「バルーンは決してクランプされない」という意味ではない——`windowposition.limit`
 /// が有効なら、この出力は下流の関門が作業領域内へ補正する（起動時＝
-/// `balloon_limit::apply_balloon_limit`（`main.rs:617`）／実行時＝
+/// `balloon_limit::apply_balloon_limit`（`main.rs` の `restore_merged_placements`）／実行時＝
 /// `follow::window_move::enqueue_window_set_pos` の runtime 関門／バルーン単独ドラッグ
 /// の解放時＝`follow_drag_end_limit_tests.rs` が所有）。補正の所有は関門であって
 /// 配置式ではない、という分業を固定するのが本檻である。無クランプは

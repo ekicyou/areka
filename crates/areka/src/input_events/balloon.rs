@@ -10,8 +10,8 @@
 //! - 配線層（`on_balloon_pointer_moved`／`on_balloon_pointer_pressed`・
 //!   `attach_balloon_pointer_handlers`・`wire_balloon_choice`）
 //!
-//! 本番の入口は 2 箇所——`wire_balloon_choice`（`main.rs:363` から 1 回・同期呼出）と
-//! `attach_balloon_pointer_handlers`（`main.rs:731` の窓 spawn 直後クロージャ内）。
+//! 本番の入口は 2 箇所——`wire_balloon_choice`（`main.rs` から 1 回・同期呼出）と
+//! `attach_balloon_pointer_handlers`（`main.rs` の窓 spawn 直後クロージャ内）。
 //! 本 mod の公開項目はこの 2 入口のいずれかから到達する（唯一の例外は
 //! [`BalloonWiring::is_balloon_hovered`] で、こちらはバルーン可視性の相
 //! ——`emo2_boot/frame.rs:170` から呼ばれる `run_balloon_visibility_phase`——が読む）。
@@ -74,8 +74,8 @@ pub(crate) struct ChoiceSelection {
 ///   B-2）。表示状態の正本ではなく、(a) 同値再注入の遷移検出、(b) 選択肢消滅時の自前状態整合
 ///   （`None` 上書き・R3.4）のみに用いる。
 ///
-/// 本番到達済み——挿入は [`wire_balloon_choice`]（`main.rs:363`）、消費はポインタハンドラ
-/// （[`on_balloon_pointer_moved`]／[`on_balloon_pointer_pressed`]・`main.rs:731` の
+/// 本番到達済み——挿入は [`wire_balloon_choice`]（`main.rs`）、消費はポインタハンドラ
+/// （[`on_balloon_pointer_moved`]／[`on_balloon_pointer_pressed`]・`main.rs` の
 /// [`attach_balloon_pointer_handlers`] で装着）と離脱システム [`clear_balloon_hover_on_leave`]。
 /// 3 フィールドはいずれもそれらの経路で読み書きされる。
 pub(crate) struct BalloonWiring {
@@ -165,9 +165,9 @@ impl BalloonWiring {
 /// `Receiver` 生存により [`BalloonWiring::send_selection`] は `Err` にならず、発行の mpsc 観測と
 /// 実機ログが成立する。
 ///
-/// 本番到達済み——構築は [`wire_balloon_choice`]（`main.rs:363`）、受信は W6 が入れた drain 排他
+/// 本番到達済み——構築は [`wire_balloon_choice`]（`main.rs`）、受信は W6 が入れた drain 排他
 /// システム `input_events/choice_drain.rs:95` の `drain_choice_selections`（登録は同 `:126` の
-/// `wire_choice_drain`・`main.rs:370` から呼ばれる）。「M1 では受信処理を持たない」という旧記述は
+/// `wire_choice_drain`・`main.rs` から呼ばれる）。「M1 では受信処理を持たない」という旧記述は
 /// W6 の着地で無効になったため撤去した。
 pub(crate) struct ChoiceSelectionInbox(pub(crate) Receiver<ChoiceSelection>);
 
@@ -205,7 +205,7 @@ pub(crate) struct ChoiceSelectionInbox(pub(crate) Receiver<ChoiceSelection>);
 /// 決定論・失敗経路なし）。
 ///
 /// 本番到達済み——[`on_balloon_pointer_moved`]（hover 追従）と [`click_selection`] 経由の
-/// [`on_balloon_pointer_pressed`]（クリック確定）が呼ぶ。両ハンドラは `main.rs:731` の
+/// [`on_balloon_pointer_pressed`]（クリック確定）が呼ぶ。両ハンドラは `main.rs` の
 /// [`attach_balloon_pointer_handlers`] でバルーン窓へ装着される。
 pub(crate) fn hit_choice_row(rows: &[ChoiceHitRow], x: f32, y: f32) -> Option<usize> {
     // 逆順走査の最初の一致＝スライス最終一致（後定義が手前・画家のアルゴリズム・DD-CI-5）。
@@ -240,8 +240,8 @@ pub(crate) fn hit_choice_row(rows: &[ChoiceHitRow], x: f32, y: f32) -> Option<us
 ///   - `hit_ordinal != last_injected` → [`HoverAction::Inject`]`(hit_ordinal)`（遷移・新値注入。
 ///     `Some(ordinal)`＝行ハイライト・R1.2／`None`＝ハイライト解除・R1.3）。
 ///
-/// 本番到達済み——[`hover_action`] の返値を [`on_balloon_pointer_moved`]（`main.rs:731` で装着）と
-/// [`clear_balloon_hover_on_leave`]（`main.rs:363` 経由で Input スケジュールへ登録）の双方が解釈する。
+/// 本番到達済み——[`hover_action`] の返値を [`on_balloon_pointer_moved`]（`main.rs` で装着）と
+/// [`clear_balloon_hover_on_leave`]（`main.rs` 経由で Input スケジュールへ登録）の双方が解釈する。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum HoverAction {
     /// choice 非表示かつ自前状態も None——何もしない（R1.4）。
@@ -296,7 +296,7 @@ pub(crate) fn hover_action(
 /// 座標に現行 rows のどの行も無ければ非ヒット＝`None`、別行が現れていればその現行行から
 /// 構成される（キャッシュではなく現行ジオメトリが正本）。
 ///
-/// 本番到達済み——[`on_balloon_pointer_pressed`]（`main.rs:731` の
+/// 本番到達済み——[`on_balloon_pointer_pressed`]（`main.rs` の
 /// [`attach_balloon_pointer_handlers`] でバルーン窓へ装着）が押下ごとに呼ぶ。
 pub(crate) fn click_selection(
     active: bool,
@@ -356,7 +356,7 @@ pub(crate) fn click_selection(
 /// hover 遷移注入時は `debug!(event = "choice_hover_inject")` を発行する（DD-CI-7・トラブルシュート用）。
 /// クリック確定・`send`・`info!` は本ハンドラの範囲外（押下ハンドラ＝task 4.2）。
 ///
-/// 本番到達済み——[`attach_balloon_pointer_handlers`]（`main.rs:731` から呼ばれる）が
+/// 本番到達済み——[`attach_balloon_pointer_handlers`]（`main.rs` から呼ばれる）が
 /// `BalloonWindowMarker` 窓へ `OnPointerMoved` として挿入する。
 pub(crate) fn on_balloon_pointer_moved(
     world: &mut World,
@@ -520,7 +520,7 @@ pub(crate) fn on_balloon_pointer_moved(
 ///
 /// **戻り値**: `ChoiceSelection` を発行したときのみ `true`（棄却・縮退・非左押下・Tunnel 時は `false`）。
 ///
-/// 本番到達済み——[`attach_balloon_pointer_handlers`]（`main.rs:731` から呼ばれる）が
+/// 本番到達済み——[`attach_balloon_pointer_handlers`]（`main.rs` から呼ばれる）が
 /// `BalloonWindowMarker` 窓へ `OnPointerPressed` として挿入する。
 pub(crate) fn on_balloon_pointer_pressed(
     world: &mut World,
@@ -690,7 +690,7 @@ pub(crate) fn on_balloon_pointer_pressed(
 /// 機構不変）。マーカー不在フレーム・バルーン所有 leave 皆無フレームは**完全 no-op**（design Risks）。
 ///
 /// 本番到達済み——[`register_balloon_leave_system`]（[`wire_balloon_choice`] 経由・
-/// `main.rs:363`）が Input スケジュールへ `dispatch_pointer_events` の後として登録するため、
+/// `main.rs`）が Input スケジュールへ `dispatch_pointer_events` の後として登録するため、
 /// 以降は毎フレーム走る。
 pub(crate) fn clear_balloon_hover_on_leave(world: &mut World) {
     // (1) PointerLeave マーカー保持 entity を収集（query→即 collect で World 可変借用と分離）。
@@ -836,8 +836,8 @@ pub(crate) fn clear_balloon_hover_on_leave(world: &mut World) {
 // donor `attach_char_pointer_handlers`（input_events/mod.rs）／`wire_mouse_input`（同）／main.rs の
 // clickthrough 登録スロットの鏡写し。`spawn.rs` は不改変＝post-spawn 装着のみ（4.4）。上流 input-events
 // 成果（ハンドラ／排他システム／資源型）を消費し結線するだけで判断分岐は増設しない（5.5）。本番呼出は
-// 結線済み——`wire_balloon_choice` は `main.rs:363` から `wire_mouse_input` と同型に schedule 実行外で
-// 1 回同期呼出され、`attach_balloon_pointer_handlers` は `main.rs:731`（窓 spawn 直後の同一
+// 結線済み——`wire_balloon_choice` は `main.rs` から `wire_mouse_input` と同型に schedule 実行外で
+// 1 回同期呼出され、`attach_balloon_pointer_handlers` は `main.rs`（窓 spawn 直後の同一
 // `&mut World` クロージャ内）から呼ばれる。
 // ---------------------------------------------------------------------------
 
@@ -850,7 +850,7 @@ pub(crate) fn clear_balloon_hover_on_leave(world: &mut World) {
 /// 挿入する（donor 同型）。標的は `BalloonWindowMarker` 窓のみ——キャラ窓・その他 entity は一切
 /// 触らない（配線の非退行・R4.3）。
 ///
-/// 本番到達済み——`main.rs:731`（`attach_char_pointer_handlers` の直後・`spawn_ghost_windows` と
+/// 本番到達済み——`main.rs`（`attach_char_pointer_handlers` の直後・`spawn_ghost_windows` と
 /// 同一 `&mut World` クロージャ内）から呼ばれる。
 pub(crate) fn attach_balloon_pointer_handlers(world: &mut World) {
     let balloon_windows: Vec<Entity> = world
@@ -869,10 +869,10 @@ pub(crate) fn attach_balloon_pointer_handlers(world: &mut World) {
 /// `clear_balloon_hover_on_leave` を Input スケジュール（`dispatch_pointer_events` 後）へ登録する
 /// （donor `wire_mouse_input`＋main.rs clickthrough 登録の合成・design Option A・R5.5/6.6）。
 ///
-/// 本番到達済み——`main.rs:363` から `wire_mouse_input` と同型に **1 回・同期**（schedule 実行外）で
+/// 本番到達済み——`main.rs` から `wire_mouse_input` と同型に **1 回・同期**（schedule 実行外）で
 /// 呼ばれる。同期呼出ゆえ実行中スケジュールを触らず、`Schedules` 資源が既在の World（`EcsWorld` 内
 /// World）で成立する（donor clickthrough 登録＝`app.world().add_systems(...)` と同じ作法）。発行シンク
-/// `ChoiceSelectionInbox` の受信は W6 `choice-select-events` が着地済みで、`main.rs:370` の
+/// `ChoiceSelectionInbox` の受信は W6 `choice-select-events` が着地済みで、`main.rs` の
 /// `wire_choice_drain` が毎フレームの drain を登録する（5.3 の seam は消費済み）。
 pub(crate) fn wire_balloon_choice(world: &mut World) {
     let (tx, rx) = channel::<ChoiceSelection>();
@@ -889,7 +889,7 @@ pub(crate) fn wire_balloon_choice(world: &mut World) {
 /// `dispatch_pointer_events` の後（FrameFinalize の `clear_transient_pointer_state` による `PointerLeave`
 /// 除去より前は Input スケジュール内であることで成立）。`wire_balloon_choice` から呼ばれる私有ヘルパ。
 ///
-/// 本番到達済み——唯一の呼び手 [`wire_balloon_choice`] が `main.rs:363` から呼ばれるため間接に到達する。
+/// 本番到達済み——唯一の呼び手 [`wire_balloon_choice`] が `main.rs` から呼ばれるため間接に到達する。
 fn register_balloon_leave_system(world: &mut World) {
     world.resource_mut::<Schedules>().add_systems(
         Input,

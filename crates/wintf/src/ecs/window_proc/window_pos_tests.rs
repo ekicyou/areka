@@ -17,7 +17,7 @@ const PROCEDURE_DIRECTIVES: &str =
 /// `wintf::ecs::window` は前方一致ゆえ `wintf::ecs::window_proc` も併せて開く。
 const WRITE_PATH_DIRECTIVES: &str = "info,wintf::ecs::window=debug";
 
-/// 既定水準（`RUST_LOG` 未設定時のフォールバック＝`main.rs:262`）。
+/// 既定水準（`RUST_LOG` 未設定時のフォールバック＝areka `main.rs` の `EnvFilter::try_from_default_env()`）。
 const DEFAULT_DIRECTIVES: &str = "info";
 
 /// `WM_DPICHANGED` メッセージを組む（LOWORD=X DPI / HIWORD=Y DPI・LPARAM=提案矩形）。
