@@ -744,6 +744,7 @@ fn non_dragend_operations_leave_persist_store_byte_invariant() {
         // windowposition-limit: 正典既定（有効）。本檻は limit の判定を対象にしない。
         balloon_limit: true,
         anchor: Anchor::Bottom,
+        balloon_keyword_base: None,
     }];
     let _restored = apply_restored_placements(placements, &before, &snap);
     // 4) 連続ドラッグ（DragEnd ではない・書込トリガにしない確定点規律）。

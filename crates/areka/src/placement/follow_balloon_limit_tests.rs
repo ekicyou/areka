@@ -97,6 +97,7 @@ fn base_placement(balloon_limit: bool) -> ScopePlacement {
         balloon_offset: PointPx { x: 300, y: 400 },
         balloon_limit,
         anchor: Anchor::Bottom,
+        balloon_keyword_base: None,
     }
 }
 

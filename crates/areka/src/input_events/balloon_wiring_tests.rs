@@ -140,6 +140,7 @@ fn two_scopes() -> Vec<ScopePlacement> {
             // windowposition-limit: 正典既定（有効）。本檻は limit の判定を対象にしない。
             balloon_limit: true,
             anchor: Anchor::Bottom,
+            balloon_keyword_base: None,
         },
         ScopePlacement {
             scope: 1,
@@ -151,6 +152,7 @@ fn two_scopes() -> Vec<ScopePlacement> {
             // windowposition-limit: 正典既定（有効）。本檻は limit の判定を対象にしない。
             balloon_limit: true,
             anchor: Anchor::Bottom,
+            balloon_keyword_base: None,
         },
     ]
 }

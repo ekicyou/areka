@@ -25,6 +25,7 @@ pub(super) fn two_scope_placements() -> Vec<ScopePlacement> {
             // windowposition-limit: 正典既定（有効）。本檻は limit の判定を対象にしない。
             balloon_limit: true,
             anchor: Anchor::Bottom, // emo2＝alignmenttodesktop,bottom
+            balloon_keyword_base: None,
         },
         ScopePlacement {
             scope: 1,
@@ -36,6 +37,7 @@ pub(super) fn two_scope_placements() -> Vec<ScopePlacement> {
             // windowposition-limit: 正典既定（有効）。本檻は limit の判定を対象にしない。
             balloon_limit: true,
             anchor: Anchor::Bottom, // emo2＝alignmenttodesktop,bottom
+            balloon_keyword_base: None,
         },
     ]
 }

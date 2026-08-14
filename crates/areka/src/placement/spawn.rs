@@ -90,6 +90,7 @@ use super::diag::{log_zorder_pair_declared, log_zorder_pair_strategy};
 use super::follow::{
     on_balloon_drag, on_balloon_drag_end, on_char_drag, on_char_drag_end, Anchored, BalloonFollow,
 };
+use super::config::BalloonXMode;
 use super::resolver::{PointPx, ScopePlacement};
 use super::source::GhostTitles;
 
@@ -186,6 +187,40 @@ fn on_ghost_window_marker_remove(mut world: DeferredWorld, hook: HookContext) {
 // 「構築側が未実装」だった過渡状態の名残で、本 Component は事情が異なる）。
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BalloonLimit(pub bool);
+
+// ---------------------------------------------------------------------------
+// BalloonKeywordBase（windowposition-limit 4.7・実機サインオフ是正）
+// ---------------------------------------------------------------------------
+
+/// 実表示寸が確定した瞬間に**一度だけ**キーワード由来のバルーン基本位置を導出し直す
+/// ための素材（消費したら除去する使い切りの Component）。
+///
+/// # 付与対象は**キャラ窓**（`BalloonLimit` とは逆）
+///
+/// 導出し直す対象が `BalloonFollow.offset` であり、それがキャラ窓側に居るからである。
+/// 付くのは `ScopePlacement.balloon_keyword_base` が `Some` の scope だけ——すなわち
+/// `windowposition.x` がキーワード指定で、かつ保存された相対位置が効いていない scope に
+/// 限る。`Side`（数値指定・未指定）のキャラ窓には**構造的に付かない**ので、
+/// 「数値指定の分岐は 1 ビットも変わらない」（要件 4.5/5.2）は檻の主張ではなく
+/// 構造の帰結である。保存値が効いた scope に付かないこと（要件 4.7）も同様に
+/// `persist::merge_scope` が `None` を置くことで構造的に決まる。
+///
+/// # 一度きりである理由と、その限界
+///
+/// 要件 4.7 はキーワードの適用を「初期既定位置の供給にとどめる」と定める——連続的な
+/// 中央追従ではない。ただし採寸した寸と実際に表示される寸は食い違うことがあり
+/// （実機 2026-08-14: 採寸 434 に対し実表示 382）、そのとき初期既定位置は**表示される
+/// 寸から導かれていなければ意味を成さない**。実表示寸が判る唯一の瞬間が一度きりの
+/// 実表示寸確定の再解決（`PlacementRoute::ReportedSizeReconcile`）であり、そこで
+/// 本 Component を消費する。**その後にバルーン寸やキャラ寸が変わっても中央へ揃え直さない**
+/// ——`Side` と同じく配置時確定の静的 offset として振る舞う（4.4 の現行契約どおり）。
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BalloonKeywordBase {
+    /// キーワードが定める基本位置の種別（中央上／中央下）。
+    pub mode: BalloonXMode,
+    /// 作者指定の調整量（`windowposition.y` の数値＋`balloon.offsetx/offsety`・4.4）。
+    pub adjust: PointPx,
+}
 
 // ---------------------------------------------------------------------------
 // GhostWindows（後続 emo2-boot への引き渡し正本・6.1/6.2）
@@ -414,6 +449,16 @@ pub fn spawn_ghost_windows(
         world
             .entity_mut(char_window)
             .insert(OnDragEnd(on_char_drag_end));
+
+        // キーワード再導出の素材（windowposition-limit 4.7・実機サインオフ是正）:
+        // `Some` の scope のキャラ窓にだけ後付けする。`Side` と保存値が効いた scope には
+        // 構造的に付かない（`BalloonKeywordBase` の doc 参照）。後付けなのは上の
+        // `OnDragEnd` と同じ形——条件付きの Component を spawn タプルへ混ぜられないため。
+        if let Some((mode, adjust)) = p.balloon_keyword_base {
+            world
+                .entity_mut(char_window)
+                .insert(BalloonKeywordBase { mode, adjust });
+        }
 
         // ゴースト窓ペアの重なり宣言（areka-P0-ghost-window-zorder 要件 1.1／6.1・
         // design「areka / placement > spawn ペア宣言」）:

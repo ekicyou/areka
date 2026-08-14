@@ -103,6 +103,72 @@ pub struct ScopePlacement {
     /// `!anchor.is_free()`（＝`!matches!(anchor, Anchor::Free)`）で導出する
     /// ——二つ目の格納表現を作らない（単一真実源・Req1.6）。
     pub anchor: Anchor,
+    /// キーワード由来のバルーン基本位置を実表示寸確定時に一度だけ導出し直すための素材。
+    ///
+    /// `Some((mode, adjust))` は「この scope の `balloon_offset` はキーワード由来の
+    /// **初期既定位置**であり、実表示寸が確定したら `mode` で導出し直してよい」を意味する
+    /// （`adjust` は作者指定の調整量＝`windowposition.y` の数値と `balloon.offsetx/offsety`
+    /// が合流した値・4.4）。`Side`（数値指定・未指定）は `None`——数値指定の分岐は
+    /// 1 ビットも変えない（4.5/5.2）。保存値が効いている scope も `None` へ落ちる
+    /// （要件 4.7「保存値優先・キーワードの適用は初期既定位置の供給にとどめる」・
+    /// `persist::merge_scope`）。
+    ///
+    /// # なぜ「採寸した寸」ではなく「実表示寸」で導出し直す必要があるのか
+    ///
+    /// キーワードの中央揃えは `(char_w − balloon_w) / 2` ゆえ、`char_w` が採寸値と
+    /// 実表示値でずれるとバルーンがその差の半分だけ横へずれる。実機（2026-08-14 の
+    /// サインオフ）では採寸 434 に対し実表示 382 で 26px ずれ、右端で作業領域を越えて
+    /// 関門のクランプまで誘発した。実表示寸が判るのは一度きりの実表示寸確定の再解決
+    /// （`PlacementRoute::ReportedSizeReconcile`）の瞬間であり、そこで
+    /// `spawn::BalloonKeywordBase` を消費して `BalloonFollow.offset` を導出し直す。
+    pub balloon_keyword_base: Option<(BalloonXMode, PointPx)>,
+}
+
+/// キーワード由来のバルーン基本位置（`CenterTop`／`CenterBottom`）＋調整量の**唯一の式**
+/// （要件 4.2/4.3/4.4・DD8）。
+///
+/// `Side` は `None` を返す——数値指定・未指定の分岐はこの関数を通らず、P5 の既存式が
+/// そのまま担う（4.5/5.2 の bit 同一）。
+///
+/// # なぜ関数として切り出すのか
+///
+/// 消費者が 2 つあるからである: P5（[`resolve_placement`]・採寸寸での初期解決）と、
+/// 実表示寸確定時の一度きりの再導出（`follow::window_move::resize_window_to`）。
+/// 幾何を書き写すと片方だけ直したときに静かに割れる（`clamp_axis` を
+/// `balloon_limit.rs` へ逐語再掲した件で既に登記済みのドリフト面と同型）。
+///
+/// - 水平: `char_x + (char_w − balloon_w) / 2`（中点は整数除算＝0 方向切り捨て・DD8。
+///   丸め権威の新設ではない）
+/// - 垂直: `CenterTop` は `char_y − balloon_h`（バルーン下端がシェル画像上端に接する）・
+///   `CenterBottom` は `char_y + char_h`（バルーン上端がシェル画像下端に接する）
+/// - `adjust`（`windowposition.y` の数値＋`balloon.offsetx/offsety`）を基本位置へ加算（4.4）
+///
+/// 座標演算は P5 と同じく `saturating_add`／`saturating_sub`（panic しない契約）。
+/// `char_pos` に原点 `(0,0)` を渡せば戻り値はそのまま**キャラ窓左上相対の offset**になる
+/// （`balloon_pos − char_pos` の定義そのもの）。
+pub fn keyword_balloon_pos(
+    mode: BalloonXMode,
+    char_pos: PointPx,
+    char_size: SizePx,
+    balloon_size: SizePx,
+    adjust: PointPx,
+) -> Option<PointPx> {
+    let base_y = match mode {
+        // 数値指定・未指定はこの式を通さない（P5 の既存分岐が担う・4.5/5.2）
+        BalloonXMode::Side => return None,
+        // 下端がシェル画像上端に接する（4.2）
+        BalloonXMode::CenterTop => char_pos.y.saturating_sub(balloon_size.h),
+        // 上端がシェル画像下端に接する（4.3）
+        BalloonXMode::CenterBottom => char_pos.y.saturating_add(char_size.h),
+    };
+    // 水平中央: 中点は整数除算（0 方向切り捨て・DD8）
+    let base_x = char_pos
+        .x
+        .saturating_add(char_size.w.saturating_sub(balloon_size.w) / 2);
+    Some(PointPx {
+        x: base_x.saturating_add(adjust.x),
+        y: base_y.saturating_add(adjust.y),
+    })
 }
 
 /// 既定位置解決（純粋関数・パニックしない・入力順のまま返す・出力長＝入力長）。
@@ -214,31 +280,35 @@ pub fn resolve_placement(
         // P5: バルーン暫定 offset（DD7・ここではクランプしない＝limit 補正は下流の関門が
         //     所有）。left（既定）＝キャラ左隣・
         //     right＝キャラ右隣・上端揃え・balloon.offsetx/offsety があれば加算
-        let balloon_base_x = match sc.balloon_alignment {
-            BalloonSide::Left => x.saturating_sub(input.balloon_size.w),
-            BalloonSide::Right => x.saturating_add(w),
-        };
-        // P5 キーワード幾何（windowposition-limit 4.2/4.3・DD3）: `Side` は上の既存式を
-        // そのまま採る（4.5/5.2＝数値指定・未指定の分岐は 1 ビットも変えない）。
-        // キーワードのときだけシェル画像（＝キャラ窓 rect）中央上／中央下を直接計算する。
-        // 水平中央: 中点は整数除算（0 方向切り捨て・DD8）。
-        let center_x = x.saturating_add(w.saturating_sub(input.balloon_size.w) / 2);
-        let (balloon_base_x, balloon_base_y) = match sc.balloon_x_mode {
-            BalloonXMode::Side => (balloon_base_x, y),
-            // 下端がシェル画像上端に接する（4.2）
-            BalloonXMode::CenterTop => (center_x, y.saturating_sub(input.balloon_size.h)),
-            // 上端がシェル画像下端に接する（4.3）
-            BalloonXMode::CenterBottom => (center_x, y.saturating_add(h)),
-        };
         // `windowposition.y` の数値調整量は `balloon_offset` 欄へ合流済み——モードに
         // よらず基本位置へ加算する（4.4）。
         let (ox, oy) = sc.balloon_offset.unwrap_or((0, 0));
-        let balloon_pos = PointPx {
-            x: balloon_base_x.saturating_add(ox),
-            y: balloon_base_y.saturating_add(oy),
-        };
-
+        let adjust = PointPx { x: ox, y: oy };
         let char_pos = PointPx { x, y };
+
+        // P5 キーワード幾何（windowposition-limit 4.2/4.3・DD3）: キーワードのときだけ
+        // [`keyword_balloon_pos`]（唯一の式・実表示寸確定時の再導出と共有）へ委ねる。
+        // `Side` は下の既存式をそのまま採る（4.5/5.2＝数値指定・未指定の分岐は
+        // 1 ビットも変えない）。
+        let balloon_pos = match keyword_balloon_pos(
+            sc.balloon_x_mode,
+            char_pos,
+            input.char_size,
+            input.balloon_size,
+            adjust,
+        ) {
+            Some(pos) => pos,
+            None => {
+                let balloon_base_x = match sc.balloon_alignment {
+                    BalloonSide::Left => x.saturating_sub(input.balloon_size.w),
+                    BalloonSide::Right => x.saturating_add(w),
+                };
+                PointPx {
+                    x: balloon_base_x.saturating_add(ox),
+                    y: y.saturating_add(oy),
+                }
+            }
+        };
         out.push(ScopePlacement {
             scope: input.scope,
             char_pos,
@@ -258,6 +328,12 @@ pub fn resolve_placement(
             // Req1.6）。旧 bottom_snap（二値）はここでは格納せず、使用点で
             // !anchor.is_free() として導出する
             anchor: Anchor::from_alignment(&sc.alignment),
+            // 実表示寸確定時の一度きりの再導出の素材（要件 4.7・実機サインオフ是正）。
+            // `Side` は素材を持たない＝再導出が構造的に起こらない（4.5/5.2）。
+            balloon_keyword_base: match sc.balloon_x_mode {
+                BalloonXMode::Side => None,
+                mode => Some((mode, adjust)),
+            },
         });
     }
 

@@ -1,5 +1,5 @@
 windowposition.x,center
-windowposition.y,-129
+windowposition.y,0
 windowposition.limit,1
 
 wordwrappoint.x,-49

@@ -405,6 +405,7 @@ fn round_trip_save_restore_value_equivalence_over_real_fs() {
         // windowposition-limit: 正典既定（有効）。本檻は limit の判定を対象にしない。
         balloon_limit: true,
         anchor: Anchor::Bottom,
+        balloon_keyword_base: None,
     };
     // saved 位置を覆う work area ゆえ project_restore は恒等（既に下端一致・x 域内）。
     let out = apply_restored_placements(vec![synthetic], &entries, &snapshot);
@@ -671,6 +672,7 @@ fn dragged_char_persists_even_without_dragging_state_at_dragend() {
         // windowposition-limit: 正典既定（有効）。本檻は limit の判定を対象にしない。
         balloon_limit: true,
         anchor: Anchor::Bottom,
+        balloon_keyword_base: None,
     };
     let out = apply_restored_placements(
         vec![synth(0, s0_size), synth(1, s1_size)],

@@ -1,4 +1,5 @@
 use super::*;
+use crate::placement::config::BalloonXMode;
 
 // ------------------------------------------------------------------
 // バルーン相対オフセットの保存基準（2.2/2.5・2026-07-31 実機裁定）
@@ -406,6 +407,7 @@ fn placement(
         // windowposition-limit: 正典既定（有効）。復元 merge は limit を変換しない。
         balloon_limit: true,
         anchor,
+        balloon_keyword_base: None,
     }
 }
 
@@ -779,4 +781,83 @@ fn apply_is_deterministic() {
     let a = apply_restored_placements(placements.clone(), &entries, &snap);
     let b = apply_restored_placements(placements, &entries, &snap);
     assert_eq!(a, b, "同一入力→同一出力");
+}
+
+// ------------------------------------------------------------------
+// キーワード再導出の素材と保存値の優先順位（要件 4.7・2026-08-14 実機是正）
+//
+// 要件 4.7 は「永続値を優先し、キーワード指定の適用は初期既定位置の供給にとどめる」。
+// 実表示寸確定時の再導出はキーワードの初期既定位置を引き直す仕掛けなので、保存された
+// 相対位置が効いている scope では**素材ごと落として**発火させない——落とさないと、
+// 再導出がユーザーの保存値をキーワード既定へ静かに上書きしてしまう。
+// ------------------------------------------------------------------
+
+/// 保存 offset が両軸そろって効いた scope は再導出の素材を失う（4.7）。
+#[test]
+fn merge_drops_the_keyword_base_when_a_saved_balloon_offset_wins() {
+    let snap = snapshot_of(vec![]); // identity 射影（保存値素通し）
+    let keyworded = |scope: usize| ScopePlacement {
+        balloon_keyword_base: Some((BalloonXMode::CenterTop, PointPx { x: 0, y: -12 })),
+        ..placement(
+            scope,
+            Anchor::Free,
+            PointPx { x: 500, y: 440 },
+            CSZ,
+            PointPx { x: 17, y: -224 },
+            BSZ,
+        )
+    };
+    let placements = vec![keyworded(0), keyworded(1)];
+    // scope0 にだけ保存 offset を与える（勝つ経路と勝たない経路を 1 回で covering）。
+    let entries = vec![bo(0, Axis::X, "-40"), bo(0, Axis::Y, "-300")];
+
+    let out = apply_restored_placements(placements, &entries, &snap);
+
+    assert_eq!(
+        out[0].balloon_offset,
+        PointPx { x: -40, y: -300 },
+        "前提＝scope0 は保存 offset が勝っている"
+    );
+    assert_eq!(
+        out[0].balloon_keyword_base, None,
+        "保存 offset が勝った scope に再導出の素材が残っている（4.7 の優先順位が反転する）"
+    );
+    assert_eq!(
+        out[1].balloon_keyword_base,
+        Some((BalloonXMode::CenterTop, PointPx { x: 0, y: -12 })),
+        "保存 offset の無い scope で素材が落ちている（キーワードの初期既定位置が失われる）"
+    );
+}
+
+/// 片軸だけの保存 offset は「値なし」＝resolver 既定が残る腕であり、素材も残る
+/// （既存の片軸縮退規則と同じ側へ倒れることを固定する）。
+#[test]
+fn merge_keeps_the_keyword_base_when_the_saved_offset_is_half_missing() {
+    let snap = snapshot_of(vec![]);
+    let base = Some((BalloonXMode::CenterBottom, PointPx { x: 5, y: 6 }));
+    let placements = vec![ScopePlacement {
+        balloon_keyword_base: base,
+        ..placement(
+            0,
+            Anchor::Free,
+            PointPx { x: 500, y: 440 },
+            CSZ,
+            PointPx { x: 17, y: 687 },
+            BSZ,
+        )
+    }];
+    // y 軸だけ保存されている（片軸欠損＝採用しない既存規則）。
+    let entries = vec![bo(0, Axis::Y, "-300")];
+
+    let out = apply_restored_placements(placements, &entries, &snap);
+
+    assert_eq!(
+        out[0].balloon_offset,
+        PointPx { x: 17, y: 687 },
+        "前提＝片軸欠損では resolver 既定 offset が保持される"
+    );
+    assert_eq!(
+        out[0].balloon_keyword_base, base,
+        "既定 offset を保持した腕で素材が落ちている（offset と素材の腕がずれている）"
+    );
 }

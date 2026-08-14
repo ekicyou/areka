@@ -385,12 +385,17 @@ fn merge_scope(
         },
     )
     .and_then(parse_px);
-    let balloon_offset = match (saved_bx, saved_by) {
+    // キーワード再導出の素材は**保存値が効いた scope では落とす**（windowposition-limit
+    // 要件 4.7「永続値を優先し、キーワード指定の適用は初期既定位置の供給にとどめる」）。
+    // 落とさないと、実表示寸確定の再導出がユーザーの保存した相対位置をキーワード既定へ
+    // 上書きしてしまう——保存値優先の順位が静かに反転する。offset 欠損側（resolver 既定を
+    // 保持する腕）は素材をそのまま運ぶ。
+    let (balloon_offset, balloon_keyword_base) = match (saved_bx, saved_by) {
         // 保存 offset は**char 左上基準**（ランタイム BalloonFollow.offset と同一基準）ゆえ
         // 基準変換なしで採用する（2.3・[`balloon_offset_entries`] の基準記述）。
-        (Some(x), Some(y)) => PointPx { x, y },
+        (Some(x), Some(y)) => (PointPx { x, y }, None),
         // offset 欠損 → resolver 既定 offset（左上基準）を保持（2.4）。
-        _ => placement.balloon_offset,
+        _ => (placement.balloon_offset, placement.balloon_keyword_base),
     };
     // どちらの場合も最終 char_pos へ追従させて balloon_pos を再導出する。
     let balloon_pos = PointPx {
@@ -426,6 +431,8 @@ fn merge_scope(
         // ゆえ、入力の値をそのまま転記する（merge 規則は無改変）。
         balloon_limit: placement.balloon_limit,
         anchor: placement.anchor,
+        // 保存値が効いた scope では `None`（要件 4.7）。上の match が決めている。
+        balloon_keyword_base,
     }
 }
 

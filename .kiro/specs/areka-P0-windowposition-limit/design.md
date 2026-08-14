@@ -121,6 +121,15 @@ crates/areka/src/placement/
 └── follow_balloon_limit_tests.rs # runtime 関門・解放時補正の wiring 檻（follow facade 接続）
 ```
 
+実機サインオフ是正（task 4.5）で追加:
+
+```
+crates/areka/src/placement/
+├── follow/keyword_base.rs        # 実表示寸確定時のキーワード基本位置の一度きりの再導出
+│                                 #   （rederive_keyword_balloon_offset ＋ 観測タグ 2 種）
+└── follow_keyword_base_tests.rs  # 採寸寸 ≠ 実表示寸 を作る wiring 檻（本欠陥の直接の檻）
+```
+
 ### 変更ファイル
 
 - `crates/areka-parsers/src/balloon/model.rs` — `WindowPositionRaw` struct（`x_raw`/`limit_raw`・`#[non_exhaustive]`・Clone）＋ `BalloonModel` フィールド・アクセサ `windowposition_raw()` を additive 追加。`WindowPosition` は無改変。
@@ -128,11 +137,11 @@ crates/areka/src/placement/
 - `crates/areka/src/placement/config.rs` — `ScopeConfig` へ `balloon_limit: bool`（Default: `true`＝正典既定）と `balloon_x_mode: BalloonXMode`（新 enum・Default: `Side`）を追加。
 - `crates/areka/src/placement/windowposition.rs` — 語彙分類の純関数 `classify_x_vocab`／`classify_limit_vocab` を追加（既存 `to_screen_adjust`/`apply_windowposition` 無改変）。
 - `crates/areka/src/placement/mod.rs` — `scope_windowposition` が raw も返す形へ拡張。`apply_scope_windowpositions` で分類→`ScopeConfig` へ反映・不正値 warn（6.3）・観測点 4 の `info!` へ `limit`/`x_mode` フィールド追加（6.2）。
-- `crates/areka/src/placement/resolver.rs` — P5 に `balloon_x_mode` の additive 分岐（キーワード幾何）。`ScopePlacement` へ `balloon_limit: bool` 転記。P5 doc「クランプなし」を「limit 補正は下流関門の所有」へ更新（7.3）。
-- `crates/areka/src/placement/persist.rs` — `merge_scope` の `ScopePlacement` 再構築で `balloon_limit` を転記（merge 規則は無改変）。
+- `crates/areka/src/placement/resolver.rs` — P5 に `balloon_x_mode` の additive 分岐（キーワード幾何）。`ScopePlacement` へ `balloon_limit: bool` 転記。P5 doc「クランプなし」を「limit 補正は下流関門の所有」へ更新（7.3）。**task 4.5**: キーワード幾何を純関数 `keyword_balloon_pos` へ切り出し（P5 と再導出の共有・`Side` は `None`）、`ScopePlacement` へ `balloon_keyword_base` を追加。
+- `crates/areka/src/placement/persist.rs` — `merge_scope` の `ScopePlacement` 再構築で `balloon_limit` を転記（merge 規則は無改変）。**task 4.5**: 保存 balloon offset が勝つ腕で `balloon_keyword_base` を `None` へ落とす（4.7 の優先順位維持）。
 - `crates/areka/src/main.rs` — `restore_merged_placements` の末尾で `apply_balloon_limit`（起動時関門）を適用。
-- `crates/areka/src/placement/spawn.rs` — `BalloonLimit(bool)` Component 定義＋バルーン窓 entity への焼込み（`ScopePlacement.balloon_limit` から）。
-- `crates/areka/src/placement/follow/window_move.rs` — `enqueue_window_set_pos` 内に runtime 関門（対象窓が `BalloonLimit(true)` のときのみ補正・`[balloon-limit] Clamp` info・解決不能時は warn＋素通し）。
+- `crates/areka/src/placement/spawn.rs` — `BalloonLimit(bool)` Component 定義＋バルーン窓 entity への焼込み（`ScopePlacement.balloon_limit` から）。**task 4.5**: `BalloonKeywordBase { mode, adjust }` Component 定義＋**キャラ窓**への条件付き焼込み（素材が `Some` の scope のみ）。
+- `crates/areka/src/placement/follow/window_move.rs` — `enqueue_window_set_pos` 内に runtime 関門（対象窓が `BalloonLimit(true)` のときのみ補正・`[balloon-limit] Clamp` info・解決不能時は warn＋素通し）。**task 4.5**: `resize_window_to` の随伴バルーン追従の直前で `rederive_keyword_balloon_offset` を呼ぶ（1,000 行規約のため実体は `follow/keyword_base.rs` へ切り出し）。
 - `crates/areka/src/placement/follow/drag_follow.rs` — `on_balloon_drag_end` へ解放時補正（①解放位置取得→②生 offset の永続 write-through（既存・順序固定）→③補正が要るときのみ `BalloonLimitRelease` で enqueue）。
 - `crates/areka/src/placement/diag.rs` — `PlacementRoute::BalloonLimitRelease` 追加（`ALL` 9→10・`as_str`）。
 - `crates/areka/src/placement/follow/visibility.rs` — `route_applies_visibility_guard` の網羅 match へ新 variant の腕（`false`）を追加（既存 route の真偽値不変）。
@@ -190,7 +199,7 @@ sequenceDiagram
 | 4.4 | y 数値は基本位置からの調整量 | C4＋既存 `to_screen_adjust` | dy は `balloon_offset` 経由（dx=0） |
 | 4.5 | 数値指定の基本位置は不変 | C4（`Side` 分岐 bit 同一） | 5.2 回帰檻 |
 | 4.6 | 不正 x は警告＋未指定縮退 | C1・C10 | warn（`mod.rs`） |
-| 4.7 | 保存値優先は不変 | 既存 persist merge（非改変）・DD6 | キーワードは初期既定位置の供給に閉じる |
+| 4.7 | 保存値優先は不変 | persist merge（素材を落とす腕）・DD6 | キーワードは初期既定位置の供給に閉じる＝再導出は一度きりで消費 |
 | 4.8 | 既存 k 適用・丸め権威のみ | C4 | `scale_signed`/`ScaleRatio` 続用 |
 | 4.9 | キーワード＋limit=1 の同一規則 | C6 | 起動時関門は resolver 出力へ一律適用 |
 | 5.1 | 数値変換の同一性 | C4・C12 | 既存檻＋回帰檻 |
@@ -338,6 +347,20 @@ pub enum BalloonXMode {
 - `ScopePlacement` へ `balloon_limit: bool` を転記（resolver は判定せず運ぶだけ）。
 - キャラ窓 rect＝シェル画像 rect（窓寸＝画像寸の既存等式）を前提に「シェル画像の上端/下端/中央」を窓 rect で読む。
 
+**キーワード幾何は単一の純関数（`resolver::keyword_balloon_pos`）が所有する。** `Side` は `None` を返して P5 の既存式へ落とし（4.5/5.2 の bit 同一を分岐で保証）、キーワードのときだけ上の 2 式を計算する。切り出しの理由は消費者が 2 つあるからで、もう 1 つが次の再導出である——幾何を書き写すと片方だけ直したときに静かに割れる（`clamp_axis` を `balloon_limit.rs` へ逐語再掲した件で既に登記済みのドリフト面と同型）。
+
+**実表示寸確定時の一度きりの再導出（4.7・2026-08-14 実機サインオフ是正）**
+
+キーワードの中央揃えは `char_w` に依存するため、**採寸した寸と実際に表示される寸が食い違うと差の半分だけバルーンが横へずれる**（実機: 採寸 434 / 実表示 382 で 26px。ずれた位置は作業領域の右端を越え、C7 の関門のクランプまで誘発した）。要件 4.7 はキーワードの適用を「初期既定位置の供給」に限るが、その初期既定位置は**実際に表示される寸から導かれていなければ意味を成さない**。ゆえに次の 3 点で構成する:
+
+1. **素材の運搬**（C4）: `ScopePlacement` へ `balloon_keyword_base: Option<(BalloonXMode, PointPx)>` を足す。`Side` は `None`、キーワードは `Some((mode, 作者指定の調整量))`。
+2. **保存値優先の維持**（`persist::merge_scope`）: 保存 balloon offset が両軸そろって効いた scope は素材を `None` へ落とす。落とさないと再導出がユーザーの保存値をキーワード既定へ上書きし、4.7 の優先順位が静かに反転する。
+3. **一度きりの消費**（C9＋C7）: 素材を持つ scope のキャラ窓へ `spawn::BalloonKeywordBase` を焼き込み、`follow::keyword_base::rederive_keyword_balloon_offset`（`resize_window_to` の随伴バルーン追従の直前）が **`keyword_balloon_pos` を原点起点で呼んで**新しい `BalloonFollow.offset` を得て、Component を除去する。
+
+**発火条件は route ではなく「キャラ窓の寸が変わったこと」**である。実表示寸を運び得る route は `DpiReproject` / `ReportedSizeReconcile` / `Resnap` の 3 つあり、どれが最初に来るかは frame の相順に依存する——route で絞ると相順が変わった時点で静かに壊れる。逆に寸を見ずに消費すると、寸を伴わない再配置（`AnchorChange`）が素材を食い潰し、本命の実表示寸確定で直す手段が失われる。寸が変わらないうちは配置時の offset がその寸に対して正しいままなので、素材を残して次の機会へ譲る。
+
+観測は `[balloon-keyword] Rederive`（info・scope / 新旧 offset / 新旧キャラ寸 / バルーン寸）と `[balloon-keyword] Unresolved`（warn・`BalloonFollow` 不在・バルーン寸未確定・`CharWindowMarker` 不在）。縮退では offset にも素材にも触れない（次の機会を潰さない）。
+
 ### runtime 層
 
 #### C7: runtime 関門（`placement/follow/window_move.rs`・`enqueue_window_set_pos` 内）
@@ -416,7 +439,8 @@ Summary-only: :145 の追跡行を実装済みへ更新し、次を記録する�
 
 - `WindowPositionRaw`（parsers・値オブジェクト）: 生文字列 2 項。転記のみで不変条件なし。
 - `ScopeConfig` += `balloon_limit: bool`／`balloon_x_mode: BalloonXMode`（boot 時のみ生存・spawn 後破棄は現行どおり）。
-- `ScopePlacement` += `balloon_limit: bool`（Copy 維持・bool のみ）。
+- `ScopePlacement` += `balloon_limit: bool`（Copy 維持・bool のみ）／`balloon_keyword_base: Option<(BalloonXMode, PointPx)>`（Copy 維持・実表示寸確定時の一度きりの再導出の素材・C4 参照）。
+- runtime 状態: `BalloonKeywordBase { mode, adjust }` Component（**キャラ窓** entity・spawn 焼込み・最初に寸が変わった書込で消費して除去する使い切り）。永続化しない。
 - **不変量の再スコープ（DD6）**: `balloon_offset ≡ balloon_pos − char_pos` は「resolver 出力時点の事後条件」。起動時関門通過後は `balloon_pos`＝表示位置（limit 補正済み）／`balloon_offset`＝論理相対位置（作者指定・保存値の系譜）として役割分離し、resolver・persist の doc へ明記する（7.3 の doc 追随に含む）。
 - runtime 状態: `BalloonLimit(bool)` Component（バルーン窓 entity・spawn 焼込み・以後不変）。永続化しない（limit は毎起動 descript から解決）。
 
@@ -452,6 +476,9 @@ Summary-only: :145 の追跡行を実装済みへ更新し、次を記録する�
 3. **起動シーム檻（`main_restore_seam_tests.rs` へ追加）**: 保存位置が画面外相当 → merge 出力の `balloon_pos` 補正済み・`balloon_offset` 生値（2.2 経路②・DD6）。
 4. **route 表檻の追随（7.3）**: `follow_visibility_balloon_wiring_tests.rs` の表を 10 variant へ更新（`BalloonLimitRelease` は guard `false`）。`balloon_drag_trigger_neither_clamps_nor_warns` は「ドラッグ中無介入」の檻として前提 doc を「解放時補正は別檻が所有」へ更新して維持。`follow_visibility_guard_tests.rs` は doc の前提記述（「部分はみ出しは limit=1 では関門が補正する——ガード自体は不変」）を追記。
 
+5. **キーワード再導出檻（`follow_keyword_base_tests.rs`・task 4.5）**: **採寸寸 A と実表示寸 B を別々に与える**のが本檻の生命線である（既存檻はどれもひと組の寸法で組んでいたため、この欠陥をひとつも捉えられなかった）。(a) 中央上・中央下の両方で B から導出し直されること（中央下は垂直も `char_h` に依存する＝水平だけ直す実装を弾く）、(b) 作者指定の調整量が保存されること、(c) 素材が一度で消費され 2 度目は動かないこと、(d) 寸が変わらない書込では素材を温存すること、(e) 実表示寸を運ぶ route が複数あってもいずれで発火すること、(f) `Side` は素材を持たず offset が bit 同一のままであること、(g) バルーン寸が解決できないときは warn＋無変更で素材も残ること。探針の自己検査が「A ≠ B」「横ずれ＝寸法差の半分」を固定する。
+6. **保存値優先檻（`persist_restore_tests.rs` へ追加・4.7）**: 保存 balloon offset が両軸そろって勝った scope は素材が `None` へ落ちる（＝再導出が保存値を上書きしない）。片軸欠損の腕では offset も素材も resolver 既定のまま残る（offset と素材の腕がずれていないこと）。
+
 ### E2E / 実機サインオフ（7.5）
 
 - ゴースト emo2 を絶対パスで起動（`AREKA_APP_SMOKE_EXIT_MS` 有界・`RUST_LOG` grep の既定手順）。キャラ窓を画面端（左右・上下・モニタ境界）へドラッグし、limit=1 でバルーンが作業領域内へ収まることを k=1.0 と k≠1.0（125% または 200%）の 2 水準で目視確認。
@@ -460,6 +487,9 @@ Summary-only: :145 の追跡行を実装済みへ更新し、次を記録する�
 - 完了判定はワークスペース全テスト緑（7.6・i686 host-32 成果物の事前ビルド要）。
 
 ## 残余リスク（Supporting References）
+
+- **キーワード基本位置の再導出は一度きり（4.7 の帰結・2026-08-14 追記）**: 実表示寸が確定した最初の 1 回で `BalloonKeywordBase` を消費するため、**その後にバルーンの寸やキャラの寸が変わっても中央へ揃え直さない**。要件 4.7 がキーワードの適用を「初期既定位置の供給」に限る以上これは仕様どおりであり、数値指定（`Side`）とまったく同じ扱いである（`BalloonFollow.offset` は配置時確定の静的な相対位置）。連続的な中央追従が要るなら要件 4.7 の改訂を伴う別 spec の領分。なお消費後に寸が変わってもバルーンが画面外へ出る場合は C7 の関門が拾うため、可視性そのものは劣化しない。
+- **採寸の過大報告そのものは是正していない**: 上の欠陥の引き金は起動時の `measure: shell bake で脱落した element（採寸には無害の可能性）` という警告であり、採寸が実表示より大きい値を返していた。本仕様が入れたのは「実際に表示される寸で導出し直す」という下流の防波堤であって、採寸側の脱落要素の是正ではない（emo の合成層＝本仕様の境界外）。採寸が正確になれば再導出は同値になり無害に空振りする。
 
 - **モニタ構成変更（作業領域のみの変化）**: `MonitorSnapshot` は起動時 1 回構築の権威であり（`main.rs` の `boot_monitor_snapshot`）、表示構成変更での再構築は placement 全体が持たない現行制約。窓書込を伴わない作業領域変化の瞬間は補正契機がない（要件 2.2 の契機列挙は書込のみ・帰属規則と snapshot 権威は 5.5/Boundary で不変と規定）。既存の全 placement 判断（アンカー・ガード・復元）と同一の制約であり、本仕様は新たな悪化を持ち込まない。snapshot 再構築の導入は将来 spec（表示構成追従系）の所有。
 - **OS 起因の窓移動は関門を通らない**（実装後の検証で発見・2026-08-14 追記）: `WM_WINDOWPOSCHANGED` で OS が与えた位置は `wintf` の `window_proc/window_pos.rs` が `WindowPos` へ書き、`graphics/systems/window_pos.rs` の `apply_window_pos` がそれを `SetWindowPos` へ差し戻す——この経路は areka の `enqueue_window_set_pos`（runtime 関門）を通らないため、モニタ切断・セッション変更等で OS がバルーン窓を動かした場合は補正されない最終位置が残りうる。上の「モニタ構成変更」と同系統の残余だが機構が別なので個別に登記する。**wintf 側の経路ゆえ本仕様の境界外**（Boundary の依存方向どおり areka は wintf の窓メッセージ処理を所有しない）。是正するなら wintf の書込口を単一ライターへ寄せる別 spec の領分。

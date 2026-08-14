@@ -49,6 +49,7 @@ fn synthetic_placement(default_char_pos: PointPx) -> ScopePlacement {
         // windowposition-limit: 正典既定（有効）。本檻は limit の判定を対象にしない。
         balloon_limit: true,
         anchor: Anchor::Free,
+        balloon_keyword_base: None,
     }
 }
 

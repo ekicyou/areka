@@ -71,6 +71,7 @@ fn placement(
         balloon_offset,
         balloon_limit,
         anchor: Anchor::Free,
+        balloon_keyword_base: None,
     }
 }
 
@@ -442,6 +443,7 @@ fn placement_sized(
         balloon_offset,
         balloon_limit,
         anchor: Anchor::Free,
+        balloon_keyword_base: None,
     }
 }
 

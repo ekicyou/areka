@@ -535,6 +535,84 @@ fn t_k7_balloon_limit_value_does_not_affect_geometry() {
 }
 
 // ------------------------------------------------------------------
+// T-K9: 実表示寸確定時の再導出の素材（要件 4.7・2026-08-14 実機是正）
+// ------------------------------------------------------------------
+
+/// T-K9: `balloon_keyword_base` は「キーワード指定か否か」を**そのまま**運ぶ。
+///
+/// `Side` は `None`（数値指定・未指定の scope では再導出が構造的に起きない＝4.5/5.2）、
+/// キーワードは `Some((mode, adjust))`（`adjust` は `windowposition.y` の数値と
+/// `balloon.offsetx/offsety` が合流した作者指定の調整量・4.4）。
+#[test]
+fn t_k9_keyword_base_carries_mode_and_adjust_only_for_keyword_modes() {
+    for dpi in DPIS {
+        let wa = work_area(dpi);
+        for offset in [None, Some((px(24, dpi), -px(32, dpi)))] {
+            let (side, _, _) = resolve_one(dpi, wa, BalloonXMode::Side, BalloonSide::Left, offset);
+            assert_eq!(
+                side.balloon_keyword_base, None,
+                "dpi={dpi} offset={offset:?}: Side が再導出の素材を持っている（4.5/5.2）"
+            );
+
+            for mode in [BalloonXMode::CenterTop, BalloonXMode::CenterBottom] {
+                let (p, _, _) = resolve_one(dpi, wa, mode, BalloonSide::Left, offset);
+                let (ox, oy) = offset.unwrap_or((0, 0));
+                assert_eq!(
+                    p.balloon_keyword_base,
+                    Some((mode, PointPx { x: ox, y: oy })),
+                    "dpi={dpi} mode={mode:?} offset={offset:?}: 素材が mode と調整量を運んでいない"
+                );
+            }
+        }
+    }
+}
+
+/// T-K9 補: 素材から導いた offset は、同じ寸法では P5 の出力と**完全に一致**する。
+///
+/// 再導出は「別の寸法で同じ式を引き直す」ものであって、別の幾何を持ち込むものではない
+/// ——同一入力で結果が割れれば、切り出した純関数が P5 から乖離した証拠になる。
+#[test]
+fn t_k9_keyword_base_reproduces_the_p5_offset_for_the_same_sizes() {
+    for dpi in DPIS {
+        let wa = work_area(dpi);
+        for offset in [None, Some((px(24, dpi), -px(32, dpi)))] {
+            for mode in [BalloonXMode::CenterTop, BalloonXMode::CenterBottom] {
+                let (p, cs, bs) = resolve_one(dpi, wa, mode, BalloonSide::Left, offset);
+                let (m, adjust) = p.balloon_keyword_base.expect("キーワードは素材を持つ");
+
+                // 原点 (0,0) 起点で引くと戻り値がそのまま char 左上相対 offset になる。
+                let derived = keyword_balloon_pos(m, PointPx { x: 0, y: 0 }, cs, bs, adjust)
+                    .expect("キーワードモードは基本位置を持つ");
+                assert_eq!(
+                    derived, p.balloon_offset,
+                    "dpi={dpi} mode={mode:?} offset={offset:?}: \
+                     素材から引き直した offset が P5 の出力と一致しない（式が乖離した）"
+                );
+            }
+        }
+    }
+}
+
+/// T-K9 補: `Side` は素材を持たないので、共有した純関数も `None` を返す
+/// （数値指定の分岐がキーワード式へ流れ込む経路が構造的に無い）。
+#[test]
+fn t_k9_shared_keyword_formula_returns_none_for_side() {
+    let cs = SizePx { w: 400, h: 600 };
+    let bs = SizePx { w: 224, h: 160 };
+    assert_eq!(
+        keyword_balloon_pos(
+            BalloonXMode::Side,
+            PointPx { x: 100, y: 200 },
+            cs,
+            bs,
+            PointPx { x: 7, y: -7 }
+        ),
+        None,
+        "Side がキーワード式で位置を返している（4.5/5.2 の構造保証が壊れている）"
+    );
+}
+
+// ------------------------------------------------------------------
 // T-K8: 事後条件はモードによらず成立（design C4）
 // ------------------------------------------------------------------
 

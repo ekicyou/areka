@@ -184,6 +184,7 @@ fn resnap_placements() -> Vec<ScopePlacement> {
             // windowposition-limit: **無効**（task 3.3 の追随）。理由は下の注記を参照。
             balloon_limit: false,
             anchor: Anchor::Bottom,
+            balloon_keyword_base: None,
         },
         ScopePlacement {
             scope: 1,
@@ -195,6 +196,7 @@ fn resnap_placements() -> Vec<ScopePlacement> {
             // windowposition-limit: **無効**（task 3.3 の追随）。理由は下の注記を参照。
             balloon_limit: false,
             anchor: Anchor::Bottom,
+            balloon_keyword_base: None,
         },
     ]
 }

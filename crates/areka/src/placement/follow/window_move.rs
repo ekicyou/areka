@@ -14,7 +14,8 @@ use super::{
     BALLOON_LIMIT_UNRESOLVED_TAG, BalloonFollow, BalloonFollowTrigger, BalloonLimit,
     BalloonWindowMarker, CharWindowMarker, DESPAWNED_SKIP_TAG, GhostWindows, MonitorSnapshot,
     PlacementRoute, PointPx, RectPx, SizePx, WindowKind, WindowMoveRecord, apply_visibility_guard,
-    diag, follow_balloon, limit_correction, project_anchor, rect_at, work_area_for_window,
+    diag, follow_balloon, limit_correction, project_anchor, rect_at,
+    rederive_keyword_balloon_offset, work_area_for_window,
 };
 
 /// R7 公開 API: UI スレッド上で呼ばれる窓移動関数（物理 px・スクリーン座標直渡し・7.1）。
@@ -138,6 +139,15 @@ pub fn move_window_to(world: &mut World, window: Entity, x: i32, y: i32) -> bool
 /// 切替後に 336px 上空へ浮かせていた。補正を撤去して
 /// `areka-P0-surface-resize-resnap` Req2.6 の窓相対契約を復元し、矛盾を解消した。
 /// 檻: `resize_window_to_bottom_keeps_ssp_window_relative_balloon_offset`。
+///
+/// # 唯一の例外＝キーワード基本位置の一度きりの再導出（windowposition-limit 4.7）
+///
+/// 上の「offset を一切書き換えない」には例外が 1 つある。`windowposition.x` がキーワード
+/// （`center`／`top`／`bottom`）で、かつ保存された相対位置が効いていない scope は、キャラ窓へ
+/// [`BalloonKeywordBase`] を持って spawn される。この素材がある間の**最初の**リサイズだけは
+/// [`rederive_keyword_balloon_offset`] が offset をキーワード式で導出し直し、素材を除去する。
+/// 連続的な中央追従ではない——初期既定位置を**実際に表示される寸**から導くための一度きりの
+/// 確定である（詳細は [`BalloonKeywordBase`] の doc）。
 #[allow(dead_code)] // 呼び出し側（anchor_changed_system task 2.6・frame resnap シーム）は後続 task の領分
 pub fn resize_window_to(
     world: &mut World,
@@ -314,6 +324,24 @@ pub fn resize_window_to(
     ) {
         return false;
     }
+
+    // 5a. キーワード由来のバルーン基本位置の**一度きり**の再導出
+    //     （windowposition-limit 要件 4.2/4.3/4.7・2026-08-14 実機サインオフ是正）。
+    //     手順 6 の追従より**前**に置く——offset を直してから追従させないと、
+    //     このフレームのバルーンは古い offset で書かれ、次に何かが動くまで直らない。
+    //     `BalloonKeywordBase` を持つキャラ窓（＝キーワード指定かつ保存値が効いていない
+    //     scope）だけが対象で、`Side` と保存値スコープは構造的に素通しする。
+    //     `current_size` は書込**前**に読んだ採寸寸（手順 5 の bypass ミラーで
+    //     `WindowPos.size` は既に新寸へ変わっているため、ここで読み直してはならない）。
+    rederive_keyword_balloon_offset(
+        world,
+        char_window,
+        current_size.map(|s| SizePx {
+            w: s.width,
+            h: s.height,
+        }),
+        new_size,
+    );
 
     // 6. 随伴バルーン維持（Req2.6）: **リサイズで `BalloonFollow.offset` を補正しない**。
     //    受理オラクルは参照実装 SSP の実測——SSP のバルーンは観測時つねに現在表示中の

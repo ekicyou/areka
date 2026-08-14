@@ -1,5 +1,5 @@
 windowposition.x,bottom
-windowposition.y,-75
+windowposition.y,0
 windowposition.limit,1
 
 validrect.top,40
