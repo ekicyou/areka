@@ -148,7 +148,7 @@ crates/areka/src/placement/
 - `crates/areka/src/placement/follow/visibility.rs` — `route_applies_visibility_guard` の網羅 match へ新 variant の腕（`false`）を追加（既存 route の真偽値不変）。
 - `crates/areka/src/placement/follow.rs` — facade の再輸出へ `BalloonLimit` 等を追随（必要最小）。
 - `doc/COMPAT_ARCHITECTURE.md` — §8 :145 追跡行を実装済みへ更新＋裁定記録（7.4）。
-- 檻の反転・前提更新（7.3）: `placement/resolver_resolve_tests.rs`（`t_r8_balloon_never_clamped_even_outside_work_area` の反転）／`placement/follow_visibility_guard_tests.rs`（doc 前提の追記）／`placement/follow_visibility_balloon_wiring_tests.rs`（route 表檻の 10 variant 化・ドラッグ檻の「解放時補正」前提追記）／`main_restore_seam_tests.rs`・`follow_drag_end_persist_tests.rs` ほか struct literal の機械的追随。
+- 檻の反転・前提更新（7.3）: `placement/resolver_resolve_tests.rs`（`t_r8_resolver_does_not_clamp_balloon_outside_work_area` の反転）／`placement/follow_visibility_guard_tests.rs`（doc 前提の追記）／`placement/follow_visibility_balloon_wiring_tests.rs`（route 表檻の 10 variant 化・ドラッグ檻の「解放時補正」前提追記）／`main_restore_seam_tests.rs`・`follow_drag_end_persist_tests.rs` ほか struct literal の機械的追随。
 
 ## System Flows
 
@@ -470,7 +470,7 @@ Summary-only: :145 の追跡行を実装済みへ更新し、次を記録する�
 
 1. **`balloon_limit_tests.rs`（7.1 行列）**: `clamp_rect_to_work_area`/`limit_correction` を limit 有効 × はみ出し方向 4 辺（単独・複合）× k=1/k≠1 相当の寸法組で全網羅。逆転区間（巨大バルーン）の左/上優先（2.4・`clamp_axis` と同値であることの突合含む）。非はみ出し時の `None`（無補正）。冪等性。
 2. **語彙分類檻（`windowposition.rs` 檻へ追加・7.2）**: `classify_x_vocab`（数値/`center`/`top`/`bottom`/不正値/未指定/大文字混在→Invalid）・`classify_limit_vocab`（0/1/未指定/不正値）。「`x_num` があれば常に `Numeric`」の型保証。
-3. **resolver 檻（7.2・5.2）**: `CenterTop`/`CenterBottom` の基本位置 × y 調整量の有無 × k=1/k≠1（T-R 系へ追加）。`Side`＋limit=0 の既存全表が bit 同一で緑のまま（5.2 の回帰檻）。`t_r8_balloon_never_clamped_even_outside_work_area` は「resolver 出力はクランプしない（関門は下流所有）」へ前提書換えして維持（7.3——P5 無クランプ自体は設計上真のまま）。
+3. **resolver 檻（7.2・5.2）**: `CenterTop`/`CenterBottom` の基本位置 × y 調整量の有無 × k=1/k≠1（T-R 系へ追加）。`Side`＋limit=0 の既存全表が bit 同一で緑のまま（5.2 の回帰檻）。`t_r8_resolver_does_not_clamp_balloon_outside_work_area` は「resolver 出力はクランプしない（関門は下流所有）」へ前提書換えして維持（7.3——P5 無クランプ自体は設計上真のまま）。
 4. **parsers 檻**: `WindowPositionRaw` の忠実転記（2 層マージ後勝ち・trim 済み値・未指定 None）。`WindowPosition` 既存檻の無改変緑。
 5. **`apply_balloon_limit` 檻**: 起動時関門の scope 別適用・`balloon_offset` 不変（DD6）・snapshot 空の warn 素通し・キャラ窓帰属モニタ基準（複数モニタ表）。
 

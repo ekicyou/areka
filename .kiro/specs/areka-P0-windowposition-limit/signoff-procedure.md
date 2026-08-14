@@ -96,7 +96,10 @@ placement: 起動時 k₀ を導出（…） primary_dpi=192 shell_author_dpi=96
   **要件 4.4（キーワード指定でも調整量の加算が続く）の実機証跡は、`y` が原本のままだった
   水準①（200%・§7.1・`adjust_dy=-258`／`-150`）が持つ。** 決定論檻
   （`t_k3_numeric_y_is_added_to_keyword_base_position`・4 DPI 水準 × 両モード）も併せて固定済み。
-- 既定層（`descript.txt`）は原本と 1 バイトも違わない。**面別上書き層が勝つ**ことが
+- 既定層（`descript.txt`）は原本と 1 バイトも違わない。既定層は `windowposition` を
+  **1 つも宣言していない**ので、本 fixture が示すのは「面別上書き層が**採用される**」ことで
+  あって「既定層に**競り勝つ**」ことではない（2 層の優先順位そのものは決定論檻
+  `windowposition_raw_two_layer_merge_takes_winner` が固定している）。要件 1.4 の観点で
   観測できる形になっている（要件 1.4）。
 - 要件 4.1 は `top` ≡ `center` を定めるので、キーワード幾何は `center` と `bottom` の
   2 種で全被覆になる。
