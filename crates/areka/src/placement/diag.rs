@@ -205,8 +205,7 @@ pub enum PlacementRoute {
     ///
     /// 関門（`enqueue_window_set_pos` 内）が行う補正は本語を名乗らない——そちらは
     /// **元書込の route を保つ**。補正は同一書込の一部であって別書込ではないからである（DD7）。
-    // 発行者は task 3.4（`on_balloon_drag_end` の解放時補正）で入る。それまでは語彙のみ
-    // 先行して存在する（`ALL` から参照されるため dead_code にはならない）。
+    // 発行者は `follow::drag_follow::apply_release_limit_correction`（task 3.4）ただ 1 箇所。
     BalloonLimitRelease,
 }
 

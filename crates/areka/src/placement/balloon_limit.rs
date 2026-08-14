@@ -65,6 +65,17 @@ pub(crate) const BALLOON_LIMIT_BOOT_CONTEXT: &str = "boot-gate";
 /// 切り分けられる（`BALLOON_LIMIT_BOOT_CONTEXT` の doc と対を成す規約）。
 pub(crate) const BALLOON_LIMIT_RUNTIME_CONTEXT: &str = "runtime-gate";
 
+/// バルーン単独ドラッグの解放時補正（`on_balloon_drag_end`・task 3.4）であることを
+/// 表す契機ラベル。
+///
+/// 解放時補正は [`super::diag::PlacementRoute::BalloonLimitRelease`] という専用 route を
+/// 名乗る（DD7）ため route だけでも弁別できるが、3 関門を**同じ 1 語**（`context`）で
+/// 切り分けられることが 2 段 grep の要点である——起動時関門は route を持たず、runtime
+/// 関門は元書込の route を保つので、route を第 1 の弁別子にすると関門の切り分け規則が
+/// 関門ごとに変わってしまう（`BALLOON_LIMIT_BOOT_CONTEXT` ／
+/// [`BALLOON_LIMIT_RUNTIME_CONTEXT`] の doc と三つ組を成す規約）。
+pub(crate) const BALLOON_LIMIT_RELEASE_CONTEXT: &str = "release-gate";
+
 // =============================================================================
 // クランプ核
 // =============================================================================

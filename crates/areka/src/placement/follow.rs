@@ -38,10 +38,11 @@ mod window_move;
 mod work_area;
 
 // limit 補正の式とタグ語彙（windowposition-limit C5/C10）。runtime 関門
-// （`window_move::enqueue_window_set_pos`・task 3.3）が消費する。
+// （`window_move::enqueue_window_set_pos`・task 3.3）と解放時補正
+// （`drag_follow::on_balloon_drag_end`・task 3.4）が消費する。
 use super::balloon_limit::{
-    BALLOON_LIMIT_CLAMP_TAG, BALLOON_LIMIT_RUNTIME_CONTEXT, BALLOON_LIMIT_UNRESOLVED_TAG,
-    limit_correction,
+    BALLOON_LIMIT_CLAMP_TAG, BALLOON_LIMIT_RELEASE_CONTEXT, BALLOON_LIMIT_RUNTIME_CONTEXT,
+    BALLOON_LIMIT_UNRESOLVED_TAG, limit_correction,
 };
 use super::diag::{self, DESPAWNED_SKIP_TAG, PlacementRoute, WindowKind, WindowMoveRecord};
 use super::persist::{
@@ -49,7 +50,8 @@ use super::persist::{
 };
 use super::resolver::{Anchor, PointPx, RectPx, SizePx};
 use super::spawn::{BalloonWindowMarker, CharWindowMarker, GhostWindows};
-// runtime 関門（`window_move::enqueue_window_set_pos`・task 3.3）が読む limit 値の
+// runtime 関門（`window_move::enqueue_window_set_pos`・task 3.3）と解放時補正
+// （`drag_follow::on_balloon_drag_end`・task 3.4）が読む limit 値の
 // ファサード再束縛（windowposition-limit C9「follow facade から再輸出」）。
 // `spawn::BalloonLimit` は既に公開ゆえここは私有再束縛に留め、公開面は増やさない
 // （`BalloonWindowMarker`／`CharWindowMarker` と同じ扱い）。
@@ -134,3 +136,6 @@ mod visibility_balloon_wiring_tests;
 #[cfg(test)]
 #[path = "follow_balloon_limit_tests.rs"]
 mod balloon_limit_wiring_tests;
+#[cfg(test)]
+#[path = "follow_drag_end_limit_tests.rs"]
+mod drag_end_limit_tests;

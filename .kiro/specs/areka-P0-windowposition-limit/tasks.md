@@ -88,7 +88,7 @@
   - _Requirements: 2.1, 2.2, 2.6, 2.7, 2.8, 2.9, 5.5, 6.1, 6.3_
   - _Depends: 1.3, 3.1, 3.2_
 
-- [ ] 3.4 バルーン単独ドラッグの解放時補正を実装する
+- [x] 3.4 バルーン単独ドラッグの解放時補正を実装する
   - ドラッグ中はカーソル追随へ一切介入しない
   - 解放時は「解放位置の取得 → 相対位置を生値のまま保存 → 補正が必要なときだけ補正書き込み」の順序を固定し、補正値が保存値へ焼き付かないようにする
   - テスト: 画面外で解放すると保存値は生値のまま表示位置だけが補正されること、作業領域内で解放したときは補正の書き込みが発生しないこと
@@ -140,6 +140,9 @@
 - 全般: `areka-parsers` は元から rustfmt 非準拠 82 箇所を抱えるため `cargo fmt` の全体適用は禁止。追加分のみ手で整形する。リポジトリ全体では約 750 件の既存 rustfmt 差分があり、`cargo fmt --check` は完了ゲートに使えない。
 - 1.3: **`limit_correction` の `None` は「内包されている」という意味ではなく「クランプしても位置が動かない」という意味**。逆転区間（バルーン > 作業領域）で既に左上に居るときは、はみ出したままでも `None` を返す。2.4 / 3.3 / 3.4 の関門は `None` を「書き込み不要」として扱うこと。「内包の判定」として使ってはならない（毎フレーム偽の `[balloon-limit] Clamp` を出さないための設計）。
 - 1.3: `RectPx` の `right`/`bottom` は **排他的**（`resolver.rs:26-28`）。上界は `right - w` が正しく、キャラ窓側 `resolver.rs:179-180` と同一。
+- 3.4: 解放時補正の檻は設計が名指した `follow_drag_end_persist_tests.rs`（737 行）でも `follow_balloon_limit_tests.rs`（709 行）でも 1,000 行規約を割るため、**新ファイル `follow_drag_end_limit_tests.rs`（664 行）**へ置いた。設計の File Structure Plan と Testing Strategy が互いに違う置き場を指しており、どちらも成立しなかった。
+- 3.4: 解放時補正は**補正済みの位置を enqueue する**ので、3.3 の runtime 関門の再クランプは no-op になり `[balloon-limit] Clamp` は 1 回しか出ない（生位置を渡すと 2 重に出る＝レビューで実測確認済み）。
+- 3.4: 3 関門の `context` は `"boot-gate"` / `"runtime-gate"` / `"release-gate"`。実機サインオフの grep はこの 3 語で関門を判別できる。
 - 3.3: **`emo2_boot/frame_test_support.rs::resnap_placements()` を `balloon_limit: false` へ倒した。** 理由＝DPI 192 でキャラ窓が 1374px（作業領域 1379px）になり、offset y=−25 のバルーンが上端を 20px はみ出すのを関門が正しく引き戻すため、`frame_dpi_reproject_tests.rs:520` の「表示位置の追従恒等式」が落ちる。DD6 が同恒等式を「配置式の出力時点の事後条件」へ再スコープ済みなので、落ちる方が正しい。**下端中央基準（ground anchor）の主張はキャラ窓についてで、関門は構造的に触れないため無傷。** 影響は同テスト 1 本のみで、`frame_*` の約 40 本はいずれも `balloon_limit` を読まない（＝関門導入前の挙動へ戻しただけ）。
 - 3.3: 上端クランプの被覆は純関数檻 `balloon_limit_tests.rs` の `t_bl2`/`t_bl3` が持つ。wiring 檻（`follow_balloon_limit_tests.rs`）は右/下辺のみ＝設計の分業どおり。
 - 3.3: 5 本ある `Unresolved` warn 経路のうち `BalloonWindowMarker` 欠落の腕には専用テストが無い（spawn が両 Component を必ず一緒に付けるため構造的に到達不能・かつ黙って縮退せず warn する）。
