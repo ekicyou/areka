@@ -69,6 +69,32 @@ impl Drop for TempDir {
     }
 }
 
+/// バルーン定義だけの最小合成ディレクトリを組む（テスト補助・task 2.2）。
+///
+/// 中身は既定設定 `descript.txt` ＋ 面 0 の画像 1 枚のみ。`resolve_balloon_faces` は
+/// **ファイル名の列挙**しか行わない（画像を復号しない）ため、これだけで面 0 の連鎖が
+/// 解決でき、採寸も COM 初期化も不要な軽量検体になる。
+///
+/// `extra_lines` は既定設定へそのまま追記される行（末尾改行込みで渡すこと）。
+/// `windowposition.limit,2` のような**数値化を経ない生値の語彙検体**を、転記層まで
+/// 素通しで届けるための口である（同じ値を `synth_declared_dpi_ghost` の
+/// `Option<(i32, i32)>` 引数では表現できない）。
+pub(super) fn synth_balloon_dir(root: &TempDir, name: &str, extra_lines: &str) -> PathBuf {
+    let balloon_dir = root.path().join(name);
+    fs::create_dir_all(&balloon_dir).expect("create balloon dir");
+    fs::write(
+        balloon_dir.join("descript.txt"),
+        format!("charset,UTF-8\ndpi,96\n{extra_lines}"),
+    )
+    .expect("balloon descript");
+    fs::copy(
+        balloon_root().join("balloons0.png"),
+        balloon_dir.join("balloons0.png"),
+    )
+    .expect("balloons0.png 複写");
+    balloon_dir
+}
+
 /// 宣言 DPI 付きの最小合成ゴーストを一時ディレクトリへ組む（テスト補助）。
 ///
 /// `prepare_never_reads_or_writes_ghost_dat` の合成ゴーストと同型（emo2 の実 PNG を

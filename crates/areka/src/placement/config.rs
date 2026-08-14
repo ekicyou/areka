@@ -39,7 +39,6 @@ pub enum BalloonSide {
 /// `windowposition.x` のキーワード語彙（`center`/`top`/`bottom`）を保持する枠。
 /// 語彙の分類・警告と実際の幾何は後続タスク（C1 分類・C4 P5 幾何）の所有であり、
 /// 本 enum はその解決結果を scope 別に持ち回るためだけに存在する。
-#[allow(dead_code)] // scaffold（task 1.2）: 取得経路（task 2.2）/P5（task 2.3）が消費するまで非テストビルドでは未使用
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BalloonXMode {
     /// 数値指定・未指定（現行の [`BalloonSide`] 分岐へ委譲・bit 同一）。
@@ -269,16 +268,23 @@ fn resolve_scope(
     );
     let balloon_offset = offset_x.zip(offset_y);
 
+    // `windowposition` 族は descript KV ではなくバルーン定義側の語彙である。本関数は KV の
+    // 純粋転記に徹し、正典既定をそのまま置く（実供給は `placement/mod.rs` の
+    // `apply_scope_windowpositions` が持つ取得経路）。
+    //
+    // 既定値の**単一権威は [`ScopeConfig::default`]** ゆえ literal を再掲せず既定から読む。
+    // 同時に `..` 省略記法を使わず全フィールドを列挙することで、今後 `ScopeConfig` へ欄が
+    // 増えたとき**ここが必ずコンパイルエラーになる**（黙って既定が入り、供給元の追随漏れが
+    // 隠れることを防ぐ）。
+    let canonical = ScopeConfig::default();
     ScopeConfig {
         alignment,
         default_x,
         default_y,
         balloon_alignment,
         balloon_offset,
-        // `windowposition` 族は descript KV ではなくバルーン定義側の語彙である。
-        // 本関数は KV の純粋転記に徹し、正典既定のまま置く（供給は task 2.2 の
-        // 取得経路が担当する）。
-        ..ScopeConfig::default()
+        balloon_limit: canonical.balloon_limit,
+        balloon_x_mode: canonical.balloon_x_mode,
     }
 }
 

@@ -32,7 +32,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 4.1, 4.6, 7.2_
   - _Depends: 1.1, 1.2_
 
-- [ ] 2.2 scope 別解決へ分類結果を接続し、観測と警告を出す
+- [x] 2.2 scope 別解決へ分類結果を接続し、観測と警告を出す
   - 2層マージ済みのバルーン定義から生値も取り出し、分類結果を scope 別構成の limit 値と水平配置モードへ反映する
   - 不正値は scope と生値を添えた警告を出したうえで既定へ縮退させ、警告のない縮退経路を残さない
   - 既存の `windowposition` 観測ログへ、解決済みの limit 値と水平配置モードの実値を scope とともに追加する
@@ -140,6 +140,9 @@
 - 全般: `areka-parsers` は元から rustfmt 非準拠 82 箇所を抱えるため `cargo fmt` の全体適用は禁止。追加分のみ手で整形する。リポジトリ全体では約 750 件の既存 rustfmt 差分があり、`cargo fmt --check` は完了ゲートに使えない。
 - 1.3: **`limit_correction` の `None` は「内包されている」という意味ではなく「クランプしても位置が動かない」という意味**。逆転区間（バルーン > 作業領域）で既に左上に居るときは、はみ出したままでも `None` を返す。2.4 / 3.3 / 3.4 の関門は `None` を「書き込み不要」として扱うこと。「内包の判定」として使ってはならない（毎フレーム偽の `[balloon-limit] Clamp` を出さないための設計）。
 - 1.3: `RectPx` の `right`/`bottom` は **排他的**（`resolver.rs:26-28`）。上界は `right - w` が正しく、キャラ窓側 `resolver.rs:179-180` と同一。
+- 2.2: **ログ檻は `placement/test_support.rs` の `capture_logs` を使うこと**（既存テスト `prepare_windowposition_logs_scope_raw_side_and_converted_adjust` が同じ観測点 4 の行の値を検査しており較正済み＝ハーネス盲点で恒真にならない）。主張の順序は必ず「先に `expect_one` で捕捉を取り出す → その後で `assert_no_event`」。`expect_one` は 0 件で panic するので、捕捉ゼロの恒真主張が作れない。
+- 2.2: `scope_windowposition` が `None` を返す 3 経路（`u32::try_from` 失敗・`resolve_balloon_faces` の `Err`・face 0 不在）は**いずれも呼び出し先で warn 済み**。この場合その scope の観測点 4 の行は出ない（解決値ログには現れない）ので、4.4 の実機サインオフで「行が無い＝未実装」と誤読しないこと。
+- 2.2: `config.rs::resolve_scope` は全 7 フィールドの網羅代入へ戻した（1.2 の過渡状態は解消）。既定値は `let canonical = ScopeConfig::default();` から読むので `Default` が単一権威のまま。以降フィールドを足すとここでコンパイルエラーになる＝正しい。
 - 2.1: `windowposition.x,`（キーはあるが値が空）は `Some("")` として届き **`Invalid`**（＝未指定とは区別する・要件 7.2）。2.2 の警告対象になる。
 - 2.1: 分類器は `warn!` を持たない。**`Invalid` に対する警告の発行は 2.2（`apply_scope_windowpositions`・scope 文脈つき）の所有**（設計 C1 Invariants）。
 - 2.1/1.2/1.3: `#[allow(dead_code)]` の scaffold が `config.rs`（`BalloonXMode`）・`windowposition.rs`（`XVocab`/`LimitVocab`/両分類器）・`balloon_limit.rs`（両純関数・両タグ定数）に付いている。**2.2 / 2.3 / 2.4 / 3.3 / 3.4 で結線したら必ず外すこと**（残すと本当に未結線の関数を恒久的に隠す）。

@@ -28,7 +28,6 @@ use super::config::{BalloonXMode, PlacementConfig};
 /// 分類だけを行い**警告は発しない**——warn の発行は scope 文脈を持つ呼び出し側
 /// （`apply_scope_windowpositions`）が所有する（design C1 Invariants・要件 6.3）。
 /// 本 enum が [`XVocab::Invalid`] という腕を持つこと自体が「警告可能にする」設計である。
-#[allow(dead_code)] // scaffold（task 2.1）: 取得経路（task 2.2）/P5 幾何（task 2.3）が消費するまで非テストビルドでは未使用
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum XVocab {
     /// 数値または未指定（既存挙動そのまま・`None` は「調整なし」）。
@@ -46,7 +45,6 @@ pub(crate) enum XVocab {
 /// `windowposition.limit` の分類結果（design C1）。
 ///
 /// [`XVocab`] と同じく警告は発しない（呼び出し側の所有）。
-#[allow(dead_code)] // scaffold（task 2.1）: 取得経路（task 2.2）が消費するまで非テストビルドでは未使用
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum LimitVocab {
     /// 受理した値（`true`＝画面内維持・正典既定／`false`＝維持しない）。
@@ -79,7 +77,6 @@ pub(crate) enum LimitVocab {
 ///
 /// 未指定（`x_raw` が `None`）は [`XVocab::Numeric`]`(None)` ＝「調整なし」であり、
 /// 不正値とは**区別される**（要件 7.2）——未指定は無警告、不正値は警告付き縮退。
-#[allow(dead_code)] // scaffold（task 2.1）: 消費者は task 2.2／2.3
 pub(crate) fn classify_x_vocab(x_num: Option<i32>, x_raw: Option<&str>) -> XVocab {
     if x_num.is_some() {
         // 数値経路は生値を見ない（上記不変量。`x_raw` はこの分岐で参照されない）。
@@ -107,7 +104,6 @@ pub(crate) fn classify_x_vocab(x_num: Option<i32>, x_raw: Option<&str>) -> XVoca
 ///
 /// 未指定と不正値は**区別される**（要件 7.2）——どちらも最終的に既定 1 へ落ちるが、
 /// 不正値だけが警告経路を通る（要件 6.3: ログの無い縮退経路を作らない）。
-#[allow(dead_code)] // scaffold（task 2.1）: 消費者は task 2.2
 pub(crate) fn classify_limit_vocab(limit_raw: Option<&str>) -> LimitVocab {
     let Some(raw) = limit_raw else {
         // 未指定＝正典既定 1（有効・要件 1.2・警告の対象外）。
