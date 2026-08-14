@@ -351,7 +351,7 @@ pub enum BalloonXMode {
 - 発動条件: 対象 entity が `BalloonLimit(true)` を持つときのみ（データ駆動・route 非依存）。キャラ窓・limit=0 バルーンは従来経路と bit 同一（2.7/2.8）。
 - 判定矩形: 書込もうとする `(x, y)` × `size`（`size=None` は対象の現在 `WindowPos` 寸）＝寸法変更を含む矩形内包判定（経路⑦を被覆）。
 - 基準領域: `BalloonWindowMarker.scope` → `GhostWindows`（正本）→ キャラ窓 entity → `WindowPos` rect → `work_area_for_window`（既存帰属規則・5.5）。
-- 解決不能（`MonitorSnapshot`/`GhostWindows`/キャラ窓 `WindowPos` 不在・snapshot 空）: `[balloon-limit] Unresolved` warn の上で**素通し**（書込は阻害しない・log-first。`VISIBILITY_UNRESOLVED_TAG` と同型の縮退規約）。
+- 解決不能（`MonitorSnapshot`/`GhostWindows`/キャラ窓 `WindowPos` 不在・snapshot 空・**対象バルーンの現寸不明**＝`size=None` かつ対象の `WindowPos.size` 未確定＝窓生成直後）: `[balloon-limit] Unresolved` warn の上で**素通し**（書込は阻害しない・log-first。`VISIBILITY_UNRESOLVED_TAG` と同型の縮退規約）。
 - 補正発火時: `[balloon-limit] Clamp` の `info!`（scope・from/to・契機＝route）を出し、補正後座標で書込続行。route・`[diag.window_move]` レコードは補正後の最終位置を記録（DD7）。
 - 位置のみ補正し、size・可視性・Z 順（`KeepDirectlyAbove`）へは非接触（2.9）。
 - ガードとの順序: `follow_balloon` の `guard_balloon_position` が先・本関門が後（DD5・limit が最後の語）。
@@ -429,7 +429,7 @@ Summary-only: :145 の追跡行を実装済みへ更新し、次を記録する�
 | `windowposition.limit` が 0/1 以外 | 正典既定 1 へ縮退（1.3） | warn（scope・生値） |
 | `windowposition.x` が数値でもキーワードでもない | 未指定（数値 0 扱い）へ縮退（4.6） | warn（scope・生値） |
 | バルーン定義の取得失敗（faces 解決不能等） | `ScopeConfig::default()`＝limit=1・Side（既存縮退の継承） | 既存 warn 経路 |
-| runtime 関門で基準解決不能（snapshot/GhostWindows/キャラ窓 rect 不在） | 補正せず書込続行（書込を阻害しない） | `[balloon-limit] Unresolved` warn |
+| runtime 関門で基準解決不能（snapshot/GhostWindows/キャラ窓 rect 不在・対象バルーンの現寸不明） | 補正せず書込続行（書込を阻害しない） | `[balloon-limit] Unresolved` warn |
 | 起動時関門で work area 解決不能（snapshot 空） | 当該 scope は素通し | warn |
 | バルーン > 作業領域（両端不能） | 左/上優先で収める（2.4・エラーではなく仕様） | 補正 info に含む |
 
@@ -462,5 +462,6 @@ Summary-only: :145 の追跡行を実装済みへ更新し、次を記録する�
 ## 残余リスク（Supporting References）
 
 - **モニタ構成変更（作業領域のみの変化）**: `MonitorSnapshot` は起動時 1 回構築の権威であり（`main.rs:660`）、表示構成変更での再構築は placement 全体が持たない現行制約。窓書込を伴わない作業領域変化の瞬間は補正契機がない（要件 2.2 の契機列挙は書込のみ・帰属規則と snapshot 権威は 5.5/Boundary で不変と規定）。既存の全 placement 判断（アンカー・ガード・復元）と同一の制約であり、本仕様は新たな悪化を持ち込まない。snapshot 再構築の導入は将来 spec（表示構成追従系）の所有。
+- **Unresolved 素通し後の無書込可視化**: 非表示中の書込が runtime 関門で解決不能（warn＋素通し）に終わり、その後書込なしに可視へ遷移した場合、補正契機がなく 2.6 の保証が warn 観測頼みになる（縮退経路限定の狭い残余窓）。`[balloon-limit] Unresolved` warn で観測可能であり、モニタ構成変更と同格の既知制約として登記する（可視化時の再検査シームは導入しない——縮退経路のための新機構は YAGNI）。
 - **atom⇄wpl 干渉**: 本設計は `follow/window_move.rs`・`follow/drag_follow.rs`・`diag.rs`・`visibility.rs`（1 腕）へ接触する。roadmap 干渉台帳の再判定（wpl 先着・atom rebase）を設計確定の報告と同時に仰ぐ（research.md §10）。
 - **`enqueue_window_set_pos` の契約変質**: 「挙動を持たない配管」からの逸脱はデータ駆動（`BalloonLimit`）に限定し、route 語彙の純粋性を保つ（DD1）。wiring 檻がキャラ窓・limit=0 の bit 同一を固定する。
