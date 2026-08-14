@@ -599,3 +599,150 @@ fn text_slot_view_returns_slot_window_size_scale_after_display() {
     //     恒常値ではなく**この入力での**期待値（k≠1.0 の檻は別テストが所有）。
     assert_eq!(view.scale(), 1.0, "窓 DPI 96 / author_dpi 96 ゆえ scale() は 1.0");
 }
+
+/// `areka-P0-recompose-budget` Requirement 3.1 ／ 設計 Flow 2「容量回収は合成成功後に限る」観測完了:
+/// 有効 id で表示を確立したあと**解決不能 id** の適用で合成が失敗しても、合成メモのスロットは
+/// 適用前のエントリを**中身ごと**保持し続ける。ゆえに直後の同一入力の適用は再合成せず引き当てで
+/// 済み、表示も適用前のまま成立する。
+///
+/// # なぜ既存の失敗経路の檻では足りないのか（5.1 → 5.3 の申し送り）
+///
+/// [`invalid_surface_skips_and_leaves_display_and_mask_unchanged`] は表示バイト・`HitTest`・
+/// `AlphaMaskResource` の不変を見るが、これらはいずれも「失敗した適用は供給面へ再転写しない」ことの
+/// 帰結であり、**スロットが空になったかどうかとは独立**である——空にしても再転写は起きないので
+/// バイトは 1 つも変わらない。したがって `ComposeCache::take_recycled`（追い出しエントリの容量回収）を
+/// 合成の成否判定より**手前**へ置く誤りは、既存の檻を丸ごとすり抜ける。本檻はスロットそのものを
+/// 直接読み、Flow 2 の規律を固定する唯一の観測点である。
+///
+/// # 「引き当てで済む」の観測形
+///
+/// `apply_show` が `cache_hit` を決めるのは `cache.get(surface_id, &binds, &pattern, k)` ちょうど
+/// その呼び出しであり、k は窓 DPI と政策から導出される（本檻では窓 DPI 不変ゆえ `applied` と同一）。
+/// よって同じ引数での `get` が `Some` であることは「次の同一入力の適用が引き当てで済む」ことと同値である。
+#[test]
+fn compose_failure_keeps_the_cache_slot_so_the_next_identical_apply_still_hits() {
+    let mut world = make_world_with_gpu();
+    let window = spawn_window_with_dpi(&mut world, 96);
+
+    let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x6C);
+
+    let mut presenter = EmoPresenter::new();
+    presenter
+        .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
+        .expect("attach_target 失敗");
+
+    // 有効 id でスロットを埋める（表示成立＝表示バッファとマスクの原子対が入る）。
+    let (tx0, rx0) = reply_channel::<PresentOutcome>();
+    presenter.apply(
+        &mut world,
+        PresentCommand::ShowSurface {
+            target: TargetId(0),
+            surface_id: 1000,
+            binds: BindSet::default(),
+            pattern: PatternState::default(),
+            reply: Some(tx0),
+        },
+    );
+    assert!(
+        matches!(rx0.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
+        "前提の有効 ShowSurface が Ok でない"
+    );
+
+    // 適用に使われた k（窓 DPI 96 ÷ author_dpi 96 ＝ 恒等）。スロットのキー要素そのものを使う。
+    let applied = presenter
+        .targets
+        .get(&TargetId(0))
+        .expect("装着済み target")
+        .applied
+        .expect("表示成立後は適用 k が入る");
+
+    // 適用前のスロットの中身を控える（バイトとマスク寸＝原子対の両側）。
+    let (bytes_before, mask_dims_before) = {
+        let entry = presenter
+            .targets
+            .get(&TargetId(0))
+            .expect("装着済み target")
+            .cache
+            .get(1000, &BindSet::default(), &PatternState::default(), applied)
+            .expect("前提: 表示成立でスロットが埋まる");
+        (
+            entry.composed.bytes().to_vec(),
+            (entry.mask.width(), entry.mask.height()),
+        )
+    };
+    assert!(
+        bytes_before.iter().any(|&b| b != 0),
+        "前提: スロットの表示バッファは非退化（全 0 でない）"
+    );
+    let display_before = presenter
+        .read_back(TargetId(0))
+        .expect("read_back（前）失敗");
+
+    // 合成失敗（解決不能 id）: error! ＋ 表示不変 ＋ reply Err（R3.4）。
+    let (tx1, rx1) = reply_channel::<PresentOutcome>();
+    presenter.apply(
+        &mut world,
+        PresentCommand::ShowSurface {
+            target: TargetId(0),
+            surface_id: 9999,
+            binds: BindSet::default(),
+            pattern: PatternState::default(),
+            reply: Some(tx1),
+        },
+    );
+    assert!(
+        matches!(
+            rx1.recv_timeout(Duration::from_secs(10)),
+            Ok(Err(PresentError::Compose(ComposeError::SurfaceNotFound(
+                9999
+            ))))
+        ),
+        "前提: 解決不能 id は Err(Compose(SurfaceNotFound(9999)))"
+    );
+
+    // ここが本題。スロットは**空になっていない**。
+    let entry = presenter
+        .targets
+        .get(&TargetId(0))
+        .expect("装着済み target")
+        .cache
+        .get(1000, &BindSet::default(), &PatternState::default(), applied);
+    let entry = entry.expect(
+        "合成失敗でキャッシュスロットが空になった＝`take_recycled` が合成の成否判定より手前に         置かれている（設計 Flow 2「容量回収は合成成功後に限る」の違反）。以後の同一入力の適用は         引き当てに失敗して毎回再合成へ落ちる",
+    );
+    // 中身も適用前のまま（対の片側だけ差し替わっていない）。
+    assert_eq!(
+        entry.composed.bytes(),
+        bytes_before.as_slice(),
+        "合成失敗でスロットの表示バッファ内容が変化した（失敗した適用が中身を書き換えている）"
+    );
+    assert_eq!(
+        (entry.mask.width(), entry.mask.height()),
+        mask_dims_before,
+        "合成失敗でスロットのマスクが差し替わった（原子対の片側だけ動いている）"
+    );
+
+    // 直後の同一入力の適用は成立し、表示も適用前と全バイト一致する。
+    let (tx2, rx2) = reply_channel::<PresentOutcome>();
+    presenter.apply(
+        &mut world,
+        PresentCommand::ShowSurface {
+            target: TargetId(0),
+            surface_id: 1000,
+            binds: BindSet::default(),
+            pattern: PatternState::default(),
+            reply: Some(tx2),
+        },
+    );
+    assert!(
+        matches!(rx2.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
+        "合成失敗の直後でも同一入力の適用は成立する"
+    );
+    assert_eq!(
+        display_before,
+        presenter
+            .read_back(TargetId(0))
+            .expect("read_back（後）失敗"),
+        "合成失敗を挟んだ再適用で表示バイトが変化した"
+    );
+}

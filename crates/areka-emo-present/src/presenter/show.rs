@@ -1,16 +1,11 @@
 //! `ShowSurface` の適用（`EmoPresenter::apply_show`）——k 導出・引き当て／合成・供給面遅延生成・
 //! アップロード＋マスク同期＋可視化・表示成立点の状態更新を 1 呼び出しで行う単一漏斗。
 
-use std::sync::Arc;
-
-use wintf::ecs::widget::bitmap_source::AlphaMask;
-
-use super::budget::AllocSite;
 use super::timing::{EmitContext, FrameTiming, Stage, compose_key_hash};
 use super::{
-    AlphaMaskResource, BindSet, ComposeError, ComposedSurface, DPI, EmoPresenter, GraphicsCore,
-    PatternState, PresentError, PresentOutcome, ReplySender, SwapChainPresenter, TargetId,
-    VisibilityOwnership, VisualMount, World, WucGraphicsResource, derive_scale, resample,
+    AlphaMaskResource, BindSet, ComposeError, DPI, EmoPresenter, GraphicsCore, PatternState,
+    PresentError, PresentOutcome, ReplySender, SwapChainPresenter, TargetId, VisibilityOwnership,
+    VisualMount, World, WucGraphicsResource, derive_scale,
 };
 
 impl EmoPresenter {
@@ -19,13 +14,23 @@ impl EmoPresenter {
     /// 手順（design §System Flows・Flow 1）: (1) 未装着なら error! ＋ `Err(TargetNotAttached)`。
     /// (1.5) 窓の `DPI` component と target 政策から**この適用に使う k**を導出する（[`derive_scale`]・
     /// component 不在は `None` のまま渡して要件 1.4 の縮退へ落とす）。以降 k は合成入力と同格のキー
-    /// 要素であり、ミス時は合成（native）→ [`resample`]（k 適用）を経て挿入される。(2) 合成入力
+    /// 要素であり、ミス時は合成（native）→ k 適用（恒等 k は席の交代・非恒等 k は
+    /// [`FrameBudget`] のリサンプル席）を経て挿入される。(2) 合成入力
     /// （surface id＋bind 集合）が直前と完全一致するヒットなら再合成しない（R4.2）——bind 集合が
     /// 1 要素でも異なれば必ずミス＝再合成する（着せ替え・まばたきの正しさの担保）。(3) ミスなら合成し、
     /// `SurfaceNotFound` は error! ＋表示不変＋
     /// `Err`（R3.4）、`EmptyComposition` は warn! ＋ Hide 縮退＋`Ok`（設計ディスカッション #1）、`Ok` なら
     /// マスクを 1 回だけ生成して `cache.insert` へ表示バッファと対で渡す。(4) 使えるエントリで、`chain`/`mount` 未生成なら原寸確定
-    /// 後に遅延生成し、`chain.upload` ＋ `AlphaMaskResource::set` ＋ 可視化を同一呼び出し内で行う（R2.4）。
+    /// 後に遅延生成し、`chain.upload` ＋ `AlphaMaskResource::set_shared` ＋ 可視化を同一呼び出し内で行う（R2.4）。
+    ///
+    /// # 毎フレーム経路は再利用席の上を走る（`areka-P0-recompose-budget` Requirement 3.1・Flow 2）
+    ///
+    /// ミス経路の 4 つのバッファ（native 合成先・表示バッファ・リサンプル作業領域・当たり判定マスク）は
+    /// いずれも [`FrameBudget`] の席か、キャッシュ追い出しエントリの容量回収で回る。定常状態
+    /// （寸法不変・初回確保後）ではこの経路の新規確保は 0 であり、確保が起きた回だけが
+    /// perf サマリ行の `alloc_*` に現れる。
+    ///
+    /// [`FrameBudget`]: super::budget::FrameBudget
     ///
     /// # 可視化手順だけが所有権でゲートされる（`areka-P0-balloon-visibility` Requirement 1.1/6.2/6.9）
     ///
@@ -77,63 +82,71 @@ impl EmoPresenter {
             .is_some();
         timing.mark(Stage::CacheLookup);
         if !cache_hit {
+            // 合成先は [`FrameBudget`] の常設席（設計 D2⑴・Flow 2）。`compose_into` は席の容量を
+            // 再利用するため、外形の変わらない反復では 1 バイトも確保しない。席を**閉包で借りる**のは、
+            // 合成外形が `compose_into` の内側で決まり、伸長の観測を「席を使い終えた直後」にしか
+            // 置けないためである（`FrameBudget::native_scratch` の doc）。確保の計数は席メソッドの
+            // 内側で起き、その意味は「席の再利用が成立せず結局確保した回」である。
+            //
             // 合成結果を先に束縛して境界を作る（計時点 `Stage::Compose` を合成の直後に置くため）。
             // 分岐・呼出順序・エラー経路は下の `match` がそのまま担い、挙動は不変である。
-            let composed = target
-                .composer
-                // pattern を合成入力の第一級要素として合成器へ透過する（R5.1）。
-                .compose(
-                    &target.emo_world,
-                    &target.atlas,
-                    surface_id,
-                    &binds,
-                    &pattern,
-                );
+            let composed = target.budget.native_scratch(|scratch| {
+                target
+                    .composer
+                    // pattern を合成入力の第一級要素として合成器へ透過する（R5.1）。
+                    .compose_into(
+                        scratch,
+                        &target.emo_world,
+                        &target.atlas,
+                        surface_id,
+                        &binds,
+                        &pattern,
+                    )
+                    // 合成は常に native 原寸（emo-compose の合成経路は k を知らない・設計 D3 の A2）。
+                    // 外形は席そのものから読む——席は合成の出力先であり、値で返る結果は無い。
+                    .map(|()| (scratch.width(), scratch.height()))
+            });
             timing.mark(Stage::Compose);
             match composed {
-                Ok(composed) => {
-                    // `Composer::compose` は毎回 `ComposedSurface::new(0,0)` を起こし、内部の
-                    // `resize_and_clear` が外形まで伸長する（emo-compose lib.rs:158）。確保は上流の
-                    // 内部で起きるため、観測点は**合成が成功した直後のこの呼出側**に置く（Err は
-                    // 伸長前に落ちるため数えない）。是正（task 5.3）で `compose_into`＋常設席へ
-                    // 移ると、同じ計数が「席の再利用が成立しなかった回」を指すようになる。
-                    target.budget.note_alloc(AllocSite::ComposeDst);
-                    // 合成は常に native 原寸（emo-compose の合成経路は k を知らない・設計 D3 の A2）。
-                    let native_extent = (composed.width(), composed.height());
+                Ok(native_extent) => {
+                    // **容量回収は合成成功後に限る**（設計 Flow 2 の規律・`take_recycled` の契約）。
+                    // 合成が失敗し得る位置でこれを呼ぶとスロットが空のまま残り、「合成失敗時は表示も
+                    // キャッシュも適用前のまま」（R3.4・設計 §Error Handling）が崩れる——直後の同一
+                    // 入力の適用がヒットせず再合成へ落ちるためである。手前の失敗経路は全て早期復帰
+                    // 済みゆえ、ここへ到達した時点で合成は成功している。
+                    let recycled = target.cache.take_recycled();
+                    // 追い出しエントリの表示バッファ容量を受け取り、束ねられていたマスクは輪番の
+                    // 空きスロットとして下の `regenerate_mask` へ回す（設計 D2⑵/D3）。回収が
+                    // 成立しなければ空バッファから始まり、以後の伸長がそのまま計数される。
+                    let (mut display, retired_mask) = target.budget.display_buffer(recycled);
                     // k 適用（要件 2.1/2.3）: 合成済みの 1 枚（element 入れ子・SERIKO パターン・mayuna
                     // 着せ替えが畳み込まれた結果）へ**単一の k** を掛けるため、要素間の相対配置・重なりは
-                    // 等倍時と同一の見た目関係を保つ。恒等 k は resample を呼ばず native を素通しする
-                    // （要件 7.2: 既存 golden がバイト単位で不変であることの構造保証・割り当ても増えない）。
-                    let display = if scale.is_identity() {
-                        composed
+                    // 等倍時と同一の見た目関係を保つ。
+                    if scale.is_identity() {
+                        // 恒等 k は合成先席と表示バッファを**交代**させる（複写もリサンプルも確保も
+                        // 起きない・設計 D2⑴・Flow 2 の `alt k が恒等`）。native をそのまま表示へ
+                        // 載せる形は従来と同一ゆえ、既存 golden はバイト単位で不変である（要件 7.2）。
+                        // 交代後は回収した容量が合成先席に入り、次の適用はそちらへ合成する。
+                        target.budget.swap_native_scratch(&mut display);
                     } else {
-                        let mut scaled = ComposedSurface::new(0, 0);
-                        // 表示バッファ（リサンプル先）の新規確保。0×0 で起こして `resample` 内の
-                        // `resize_and_clear` が出力外形まで伸長する（is-a A2）。
-                        target.budget.note_alloc(AllocSite::ResampleDst);
-                        // リサンプル作業領域（x 軸写像表 `Vec<AxisSample>`・emo-compose scale.rs:423）
-                        // は `resample` の内部で毎回新規に組まれる私有バッファであり、呼出側から
-                        // 到達できる観測点はこの呼出そのものである（是正 task 5.2 で `ResampleScratch`
-                        // の常設席へ移ると、同じ計数が再利用の不成立を指す）。
-                        target.budget.note_alloc(AllocSite::Xmap);
-                        resample(&composed, scale, &mut scaled);
+                        // 非恒等 k は常設のリサンプル作業席（x 軸写像表）を使って回収バッファへ転写する
+                        // （設計 D2⑶）。出力バイトは使い捨て作業領域を起こす `resample` と 1 バイトも
+                        // 違わない（emo-compose 側の等価檻が固定している）。
+                        target.budget.resample_native_into(scale, &mut display);
                         timing.mark(Stage::Resample);
-                        scaled
-                    };
+                    }
                     // マスクをこの適用で 1 回だけ生成する（R2.1/R2.4）。生成点は `cache.insert` の
-                    // 内側から**呼出側のここへ移った**（設計 D4）——最終的な住所は `FrameBudget` の
-                    // 輪番シーム（task 5.2/5.3）であり、ここはその途中形である。挿入は表示バッファと
+                    // 内側から**予算シームの輪番へ移った**（設計 D4/D3）。`retired_mask` は直前の適用で
+                    // 表示に使ったマスクで、これが次の空きスロットへ回り、代わりに前々回のマスク
+                    // （下流が既に手放して単独所有）が再生成先として取り出される。挿入は表示バッファと
                     // マスクを同時に受け取るため、対が崩れないことは引き続き構造で担保される。
-                    let mask = Arc::new(AlphaMask::from_pbgra32(
+                    let mask = target.budget.regenerate_mask(
+                        retired_mask,
                         display.bytes(),
                         display.width(),
                         display.height(),
                         display.stride(),
-                    ));
-                    // 当たり判定マスクの新規確保（`vec!` 1 本）。計数はその確保の**直後**に置く
-                    // （是正 task 5.2/5.3 で輪番スロットの in-place 再生成へ移ると、同じ計数が
-                    // 「輪番が unique にならず新規確保へ落ちた回」を指すようになる）。
-                    target.budget.note_alloc(AllocSite::Mask);
+                    );
                     // pattern は binds と同格のキー要素として挿入キーへ透過する（R5.2）。マスクは
                     // k 適用済み bytes 由来ゆえ物理 px 契約が無修正で整合する（設計 D6）。
                     target.cache.insert(
@@ -144,8 +157,9 @@ impl EmoPresenter {
                         display,
                         mask,
                     );
-                    // `Stage::MaskGen` の区間はマスク生成＋挿入全体（スロット置換＋旧エントリ解放）を
-                    // 含む——旧エントリの解放は is-a A6 そのものであり、内訳として一体で読むのが正しい。
+                    // `Stage::MaskGen` の区間はマスク生成＋挿入全体（スロット置換）を含む。是正後は
+                    // 旧エントリが `take_recycled` で先に回収されているため、この区間から対の解放
+                    // churn（is-a A6）が消えている。恒等 k の交代（O(1) の入れ替え）もこの区間に入る。
                     timing.mark(Stage::MaskGen);
                     // スロットの中身と対で原寸を控える（`insert` と同じ場所＝対が崩れない唯一の書き方）。
                     // 以降この回が失敗して early return しても、後からヒットで表示が成立した時点で
@@ -291,9 +305,9 @@ impl EmoPresenter {
         let mount = target.mount.as_ref().expect("直上で生成済み");
         if let Some(mut mask_res) = world.get_mut::<AlphaMaskResource>(mount.surface_entity()) {
             // 表示バッファと同一 bytes 由来のマスクを hit-test へ供給する（R2.2/R2.5）。
-            // エントリ側が `Arc` 表現になったための機械的追随で、**供給は従来どおり実体の複製**
-            // （`set`）である。参照カウント増だけで済ませる `set_shared` への置換は task 5.3。
-            mask_res.set(entry.mask.as_ref().clone());
+            // 供給は**共有参照の受け渡し**（`set_shared`）＝`Arc` の参照カウント増のみで、実体の
+            // 複製は起きない（設計 D3・is-a A7 の消し方）。`set` を常に呼ぶ現行の観測形はそのまま。
+            mask_res.set_shared(entry.mask.clone());
         } else {
             tracing::warn!(
                 ?target_id,

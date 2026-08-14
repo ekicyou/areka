@@ -327,19 +327,28 @@ pub(super) struct FrameBudget { /* 席＋ BudgetCounters（私有） */ }
 /// 1 apply 分の確保計数スナップショット（サマリ行フィールドの供給源）
 pub(super) struct BudgetDelta {
     pub alloc_compose_dst: u32,   // A1: native 合成先の新規確保/成長
-    pub alloc_resample_dst: u32,  // A2: 表示バッファの新規確保/成長（リサイクル不成立を含む）
+    pub alloc_resample_dst: u32,  // A2: 表示バッファの新規確保/成長（k 非恒等の転写先が伸びた回）
     pub alloc_xmap: u32,          // A3: リサンプル作業領域の新規確保/成長
     pub alloc_mask: u32,          // A4/A7: マスクの新規確保（輪番 unique 不成立を含む）
 }
 
 impl FrameBudget {
     pub(super) fn new() -> Self;
-    /// 合成先席を貸し出す（compose_into へ渡す &mut）
-    pub(super) fn native_scratch(&mut self) -> &mut ComposedSurface;
-    /// 表示バッファを整える: 回収エントリがあれば流用・なければ新規確保して計数
+    /// 合成先席を**閉包へ貸す**（compose_into の出力先）。外形は compose_into の内側で決まるため、
+    /// 伸長の観測は「席を使い終えた直後」にしか置けない——`&mut` を裸で返す形は観測点を呼び手の
+    /// 記憶任せにし、忘れれば黙って確保する経路を作る
+    pub(super) fn native_scratch<R>(&mut self, borrow: impl FnOnce(&mut ComposedSurface) -> R) -> R;
+    /// 恒等 k の交代（Flow 2 の `alt k が恒等`）: 合成先席と表示バッファを入れ替える（コピー・確保なし）
+    pub(super) fn swap_native_scratch(&mut self, display: &mut ComposedSurface);
+    /// 表示バッファを整える: 回収エントリがあれば容量ごと流用し、束ねられていたマスクを
+    /// 第 2 要素で返す（呼び手はそれを regenerate_mask の `retired` へ渡す）
     pub(super) fn display_buffer(&mut self, recycled: Option<CacheEntry>) -> (ComposedSurface, Option<Arc<AlphaMask>>);
-    /// マスクを再生成して Arc で返す（輪番 in-place・unique 不成立は新規確保＋計数）
-    pub(super) fn regenerate_mask(&mut self, bytes: &[u8], w: u32, h: u32, stride: u32) -> Arc<AlphaMask>;
+    /// 合成先席の中身を scale 倍して out（回収した表示バッファ）へ転写（x 軸写像表は常設席）
+    pub(super) fn resample_native_into(&mut self, scale: ScaleRatio, out: &mut ComposedSurface);
+    /// マスクを再生成して Arc で返す（輪番 in-place・unique 不成立は新規確保＋計数）。
+    /// 第 1 引数の `retired` は display_buffer が回収エントリから外した**直前の適用のマスク**で、
+    /// これが次の空きスロットへ回る。この受け口が無いと 2 スロットの輪番が回らない
+    pub(super) fn regenerate_mask(&mut self, retired: Option<Arc<AlphaMask>>, pixels: &[u8], w: u32, h: u32, stride: u32) -> Arc<AlphaMask>;
     /// この apply の増分を取り出してリセット
     pub(super) fn take_delta(&mut self) -> BudgetDelta;
     /// 累積カウンタ（テスト用・読み取りのみ）
@@ -348,6 +357,14 @@ impl FrameBudget {
 ```
 
 - Invariants: 定常状態（初回確保後・寸法不変）で `take_delta` の全フィールドが 0。マスク輪番は高々 2 本の `Arc` を保持し無限成長しない。
+
+> **`alloc_resample_dst` の帰属（task 5.3 で実挙動へ追随）**: 本フィールドは「表示バッファの転写先が
+> 到達済みバイト長を超えて伸びた回」であり、**容量回収の不成立そのものは数えない**。恒等 k の交代経路
+> （`swap_native_scratch`）で回収が不成立になった適用は、空バッファが合成先席へ・容量のある方が表示
+> バッファへ出るため**その回に確保を 1 件も起こさず**、代金は次の適用の `alloc_compose_dst` に現れる。
+> 取りこぼしは無く、判定式⑶は 4 フィールドの**合計**ゆえ機械判定も変わらない（定常状態では回収不成立
+> 自体が起きない）。フィールド割り当てを変えると `judge-perf.py` との契約変更になるため、実装の帰属
+> （物理的に正しい側）を正とし本文を追随させた。
 
 #### ComposeCache 改修（`cache.rs`）
 

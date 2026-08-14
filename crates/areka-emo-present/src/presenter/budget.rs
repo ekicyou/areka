@@ -96,19 +96,20 @@
 //! 計数は整数の飽和加算のみで、確保もログもロックも行わない。ログ設定も参照しない——
 //! 表示経路がログ設定で分岐しないという構造（Requirement 1.5）は計数側でも保つ。
 //!
-//! # design.md の Service Interface と実装の差異（**task 5.3 が design.md 側を直すこと**）
+//! # design.md との突合（**task 5.3 で解消済み**）
 //!
-//! design.md「FrameBudget（`presenter/budget.rs`・新設）」の Service Interface ブロック
-//! （design.md:322-345）は task 5.2 実装より前に書かれており、次の 3 点で実形と食い違っている。
-//! いずれも実装側の判断で形を変えたものであり、**正しいのは実装の形**である（理由は各メソッドの
-//! doc に書いてある）。**design.md を実形へ更新するのは task 5.3 の責務**であり、本 task は
-//! design.md を編集しない。
+//! design.md「FrameBudget（`presenter/budget.rs`・新設）」の Service Interface ブロックは
+//! task 5.2 実装より前に書かれており、席の実形と 3 点で食い違っていた（閉包貸しの
+//! [`FrameBudget::native_scratch`]・第 1 引数に `retired` を取る [`FrameBudget::regenerate_mask`]・
+//! ブロックに無かった [`FrameBudget::swap_native_scratch`]）。いずれも実装側の判断で形を変えた
+//! ものであり **正しいのは実装の形**である（理由は各メソッドの doc に書いてある）。task 5.3 が
+//! design.md の当該ブロックを実形へ更新して差異を解消したため、本モジュールが単独で持つ
+//! 未解決の乖離は無い。
 //!
-//! | design.md | 宣言されている形 | 実形 | 変えた理由 |
-//! |---|---|---|---|
-//! | :338 | `fn native_scratch(&mut self) -> &mut ComposedSurface` | `fn native_scratch<R>(&mut self, borrow: impl FnOnce(&mut ComposedSurface) -> R) -> R` | 合成の外形は `compose_into` の内側で決まるため、伸長の観測は「席を使い終えた直後」にしか置けない。`&mut` を裸で返すと観測点が呼び手の記憶任せになり、忘れれば黙って確保する経路ができる（[`FrameBudget::native_scratch`] の doc） |
-//! | :342 | `fn regenerate_mask(&mut self, bytes: &[u8], w: u32, h: u32, stride: u32) -> Arc<AlphaMask>` | 第 1 引数に `retired: Option<Arc<AlphaMask>>` を取る | 輪番の空きスロットは「直前の適用で表示に使ったマスク」であり、それは表示バッファと原子対でキャッシュに入っている。回収エントリから外したマスクを器へ戻す口が無いと 2 スロットの輪番が回らない（[`FrameBudget::regenerate_mask`] の doc） |
-//! | :336-345 | `swap_native_scratch` が**ブロックに存在しない** | [`FrameBudget::swap_native_scratch`] を持つ | design.md 本文の Flow 2 は恒等 k で合成先席と表示バッファを交代させる（コピーも確保もしない）と定めている。その交代を行う口が Service Interface ブロックにだけ落ちていた |
+//! 併せて design.md の `alloc_resample_dst` の説明も実挙動へ揃えた: 恒等 k の交代経路で容量回収が
+//! 不成立になった適用は**その回に確保を 1 件も起こさず**、代金は次の適用の `alloc_compose_dst` に
+//! 載る（空バッファが合成先席へ、容量のある方が表示バッファへ出るため）。取りこぼしは無く、
+//! 判定式⑶は 4 フィールドの合計ゆえ機械判定も動かない。
 //!
 //! [`ComposeCache::take_recycled`]: crate::cache::ComposeCache::take_recycled
 
@@ -123,8 +124,11 @@ use crate::cache::CacheEntry;
 /// 確保の発生点（design.md §FrameBudget の席一覧・perf サマリ行の `alloc_*` と 1:1）。
 ///
 /// 列挙を増減させると perf サマリ行のフィールド集合が変わる＝判定スクリプトとの契約変更である。
+///
+/// **本モジュール私有**である。計数シームが 1 箇所（D6）であるためには、発生点の名前を外から
+/// 持ち出せないことが条件になる——外に出ていれば席を経由しない計数が書けてしまう。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum AllocSite {
+enum AllocSite {
     /// native 合成先の新規確保／容量成長。
     ComposeDst,
     /// 表示バッファ（リサンプル先）の新規確保／容量成長（容量の回収が不成立の場合を含む）。
@@ -141,7 +145,7 @@ impl AllocSite {
     /// 読み手は現時点ではテストのみ（`budget_tests.rs`）。製品コードからの走査は task 6.1
     /// （定常アロケーション 0 の檻）が全発生点を回す形で入る。
     #[allow(dead_code)]
-    pub(super) const ALL: [AllocSite; 4] = [
+    const ALL: [AllocSite; 4] = [
         AllocSite::ComposeDst,
         AllocSite::ResampleDst,
         AllocSite::Xmap,
@@ -172,7 +176,7 @@ impl BudgetDelta {
     /// 現時点の読み手はテストのみ（[`AllocSite::ALL`] を回す檻）。製品コードの
     /// perf サマリ行は名前つきフィールドを直接使う。
     #[allow(dead_code)]
-    pub(super) fn count(&self, site: AllocSite) -> u32 {
+    fn count(&self, site: AllocSite) -> u32 {
         match site {
             AllocSite::ComposeDst => self.alloc_compose_dst,
             AllocSite::ResampleDst => self.alloc_resample_dst,
@@ -214,7 +218,7 @@ impl BudgetCounters {
     ///
     /// 現時点の読み手はテストのみ。累積を「全発生点で 0 のまま」と主張する檻は task 6.1 が置く。
     #[allow(dead_code)]
-    pub(super) fn count(&self, site: AllocSite) -> u64 {
+    fn count(&self, site: AllocSite) -> u64 {
         match site {
             AllocSite::ComposeDst => self.alloc_compose_dst,
             AllocSite::ResampleDst => self.alloc_resample_dst,
@@ -469,13 +473,13 @@ impl FrameBudget {
     ///
     /// 確保もログもロックも行わないため、毎フレーム経路の上で無条件に呼んでよい。
     ///
-    /// # 可視性は task 5.3 で私有へ落とす
+    /// # 可視性は**私有**である（シーム 1 箇所の実効化・task 5.3）
     ///
-    /// 席が入った今、正しい呼び手は**本モジュールの席メソッドだけ**である（シーム 1 箇所・D6）。
-    /// ただし `show.rs` の現行配線（task 1.3）がまだ本メソッドを直接叩いており、その置き換えは
-    /// task 5.3 の領分ゆえ `pub(super)` を維持する。5.3 が `show.rs` を席メソッドへ移し終えたら
-    /// **私有へ落とすこと**——外から直接叩ける限り「シーム 1 箇所」は形骸化する。
-    pub(super) fn note_alloc(&mut self, site: AllocSite) {
+    /// 席が入った今、正しい呼び手は**本モジュールの席メソッドだけ**である（D6）。`show.rs` が
+    /// 席メソッドへ移った時点で `pub(super)` を落とした——外から直接叩ける限り「シーム 1 箇所」は
+    /// 形骸化し、席を通さない確保が黙って計数へ紛れ込む経路が残るためである。テスト
+    /// （`budget_tests.rs`）は子モジュールゆえ私有のまま到達でき、計数の意味論を単独で固定できる。
+    fn note_alloc(&mut self, site: AllocSite) {
         self.pending.bump(site);
         self.total.bump(site);
     }
@@ -491,7 +495,6 @@ impl FrameBudget {
     /// 知らない**。ゆえに伸長の観測は「席を使い終えた直後」にしか置けない。`&mut` を裸で返す形は
     /// この観測点を呼び手の記憶に委ねることになり、忘れれば**黙って確保する**経路ができる。
     /// 閉包で囲めば貸し出しと計数が構造的に対になり、シームが 1 箇所（D6）のまま保たれる。
-    #[allow(dead_code)] // 配線は task 5.3（show.rs のミス経路）。
     pub(super) fn native_scratch<R>(&mut self, borrow: impl FnOnce(&mut ComposedSurface) -> R) -> R {
         let (produced, grew) = self.native.lend(borrow);
         if grew {
@@ -507,7 +510,6 @@ impl FrameBudget {
     ///
     /// 到達済みバイト長も一緒に入れ替える——高水位は役割ではなく**実体**に紐づく値であり、
     /// 交換し忘れると交代先の席で伸長を見逃す（＝黙って確保する）ためである。
-    #[allow(dead_code)] // 配線は task 5.3。
     pub(super) fn swap_native_scratch(&mut self, display: &mut ComposedSurface) {
         self.native.swap(display, &mut self.display_reached);
     }
@@ -530,7 +532,6 @@ impl FrameBudget {
     /// [`resample_native_into`]: FrameBudget::resample_native_into
     /// [`native_scratch`]: FrameBudget::native_scratch
     /// [`swap_native_scratch`]: FrameBudget::swap_native_scratch
-    #[allow(dead_code)] // 配線は task 5.3。
     pub(super) fn display_buffer(
         &mut self,
         recycled: Option<CacheEntry>,
@@ -556,7 +557,6 @@ impl FrameBudget {
     /// [`AllocSite::Xmap`] は写像表の**容量がこの呼び出しで増えたとき**（席から直接読める）。
     /// 写像表は恒等 k と外形ゼロでは触られない（`resample_with` が先に復帰する）ため容量が動かず、
     /// その 2 経路は自動的に計数されない——触っていない席の確保を数えると定常ゼロの主張が濁る。
-    #[allow(dead_code)] // 配線は task 5.3。
     pub(super) fn resample_native_into(&mut self, scale: ScaleRatio, out: &mut ComposedSurface) {
         let grew_x_map = self.xmap.resample(self.native.get(), scale, out);
 
@@ -596,7 +596,6 @@ impl FrameBudget {
     /// 輪番は自力で 2 本へ戻る。
     ///
     /// [`display_buffer`]: FrameBudget::display_buffer
-    #[allow(dead_code)] // 配線は task 5.3。
     pub(super) fn regenerate_mask(
         &mut self,
         retired: Option<Arc<AlphaMask>>,
