@@ -459,10 +459,14 @@ impl AlphaMaskResource {
 
 ##### Batch / Job Contract
 
-- **Trigger**: 手動実行 `invoke-perf-run.ps1 -Profile short|long -Build dev|release -GhostRoot <絶対パス> [-OutDir <省略時 %LOCALAPPDATA%\areka-diag\perf-<timestamp>>] -ConfirmQuiet`
+- **Trigger**: 手動実行 `invoke-perf-run.ps1 -Profile short|long -Build dev|release -GhostRoot <絶対パス> [-BalloonRoot <絶対パス・省略時 <GhostRoot>\emo2-kakukaku>] [-OutDir <省略時 %LOCALAPPDATA%\areka-diag\perf-<timestamp>>] [-DryRun] -ConfirmQuiet`
 - **Input / validation**: `-ConfirmQuiet` が無ければ**起動を拒否**し、静寂状態（並行開発セッション等の他負荷がないこと）の確認を促して終了する（R2.7 の機械化・判定に目視を持ち込まない原則は不変）。ghost root は絶対パス必須（emo2 実走の既知要件）。実行体は `-Build` に応じ `target/debug|release/areka.exe`
+  - **`-BalloonRoot`（実装時に確定）**: areka 本体は balloon root を argv[2] で受け、欠落時は `<CARGO_MANIFEST_DIR>/balloon/master`（本リポジトリに実在しない）へフォールバックする（`crates/areka/src/main.rs:118-138`）。したがって balloon 引数なしの起動は正当なゴースト実走にならない。既定値 `<GhostRoot>\emo2-kakukaku` は **emo2 fixture 固有の較正値**でありスクリプト冒頭のバナーに明記する（R2.6）
+  - **`-DryRun`（実装時に追加・テスト用シーム）**: 引数検証と `run-meta.txt` の生成までを行い実走を起動しない。出力先名に `-dryrun` を付し `DRY-RUN.txt` を置き、`run.log`／`cpu.csv` を作らないため判定モードへ載せられない（測定との取り違えが構造的に起きない）
 - **実行**: `AREKA_APP_SMOKE_EXIT_MS`（short=420000／long=1500000）＋`RUST_LOG=info,areka_emo_present=debug` で直接起動し、標準出力・標準エラーをログファイルへ。並行して `Get-Counter` により対象プロセスの CPU（1 コア換算）を 15 秒刻みで CSV へ採取
-- **Output / destination**: `<OutDir>/run.log`・`<OutDir>/cpu.csv`・`<OutDir>/run-meta.txt`（ビルド種別・プロファイル・開始終了時刻・マシン識別＝R4.5 の条件併記素材）
+  - **「1 コア換算」の定義（実装時に実測確定）**: `\Process(areka*)\% Processor Time` の値を**除数なし**でそのまま出す（1 コア占有＝100）。1 スレッド専有の実測が 96〜101・4 スレッドで 268〜332 になることを検証済みで、較正値台帳の `IDLE_CPU_MAX_RELEASE_PCT = 3.0` と同一の土俵
+  - **対象プロセスの突き合わせ**: カウンタの `InstanceName` は同名プロセスが複数あると枝番を持たない（枝番は `Path` にのみ現れる）。PID との突き合わせは必ず `Path` を鍵に行う（`InstanceName` で照合すると他プロセスの CPU を誤帰属する）
+- **Output / destination**: `<OutDir>/run.log`・`<OutDir>/run.stderr.log`・`<OutDir>/cpu.csv`・`<OutDir>/run-meta.txt`（ビルド種別・プロファイル・開始終了時刻・マシン識別＝R4.5 の条件併記素材）。`run-meta.txt` は**起動前**に書き出す（失敗した走行でも実行条件が残る）。標準出力と標準エラーは同一ファイルへ流せないため別ファイルに分ける
 - **Idempotency & recovery**: 出力は毎回新規ディレクトリ。プロセス起動失敗・カウンタ取得失敗は即エラー終了（黙って部分成果を出さない・log-first）
 
 #### judge-perf.py
