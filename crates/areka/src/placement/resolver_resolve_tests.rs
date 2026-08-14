@@ -746,7 +746,9 @@ fn t_r8_balloon_left_places_left_of_char() {
 
 /// T-R8: `balloon.alignment=right` → `balloon_x = char_x + w`（キャラ右隣・DD7）。
 /// scope0 右端密着では `balloon_x = work_area.right`＝work area 外だが、
-/// バルーンはクランプなし（P5）＝そのままの幾何値を返す。
+/// **resolver はバルーンをクランプしない**（P5）＝そのままの幾何値を返す。
+/// `windowposition.limit` による作業領域内への補正は下流の関門の所有であり
+/// （windowposition-limit DD6）、本檻は関門より上流＝配置式の出力だけを見る。
 #[test]
 fn t_r8_balloon_right_places_right_of_char_without_clamp() {
     for dpi in DPIS {
@@ -764,7 +766,7 @@ fn t_r8_balloon_right_places_right_of_char_without_clamp() {
                 x: wa.right,
                 y: cp.y
             },
-            "dpi={dpi}: right はキャラ右隣・クランプなしで work area 外可"
+            "dpi={dpi}: right はキャラ右隣・resolver は work area 外のまま返す"
         );
         assert_eq!(
             out[0].balloon_offset,
@@ -810,10 +812,20 @@ fn t_r8_balloon_offsetx_offsety_added() {
     }
 }
 
-/// T-R8 補: バルーンにクランプなし（P5）＝キャラが左端クランプされた状態の
-/// left バルーンは work area 左外（負方向）へ素直にはみ出す。
+/// T-R8 補: **配置式（P5）はバルーンをクランプしない**＝キャラが左端クランプされた
+/// 状態の left バルーンは work area 左外（負方向）へ素直にはみ出したまま返る。
+///
+/// # 前提（windowposition-limit 7.3・DD6）
+///
+/// 「バルーンは決してクランプされない」という意味ではない——`windowposition.limit`
+/// が有効なら、この出力は下流の関門が作業領域内へ補正する（起動時＝
+/// `balloon_limit::apply_balloon_limit`（`main.rs:617`）／実行時＝
+/// `follow::window_move::enqueue_window_set_pos` の runtime 関門／バルーン単独ドラッグ
+/// の解放時＝`follow_drag_end_limit_tests.rs` が所有）。補正の所有は関門であって
+/// 配置式ではない、という分業を固定するのが本檻である。無クランプは
+/// `resolve_placement` の契約としていまも真であり、この assert は反転しない。
 #[test]
-fn t_r8_balloon_never_clamped_even_outside_work_area() {
+fn t_r8_resolver_does_not_clamp_balloon_outside_work_area() {
     for dpi in DPIS {
         let wa = offset_work_area(dpi);
         let (w, h) = (px(400, dpi), px(600, dpi));
@@ -831,7 +843,7 @@ fn t_r8_balloon_never_clamped_even_outside_work_area() {
         assert_eq!(
             out[0].balloon_pos.x,
             wa.left - bw,
-            "dpi={dpi}: バルーンは work area 左外でもクランプしない"
+            "dpi={dpi}: resolver は work area 左外のバルーンもクランプしない（補正は下流の関門）"
         );
     }
 }
@@ -972,11 +984,16 @@ fn anchor_propagates_through_build_placement_config_cascade() {
 }
 
 // ------------------------------------------------------------------
-// 事後条件（design Postconditions・恒久不変条件）
+// 事後条件（design Postconditions・resolve_placement の出力時点で成立する条件）
 // ------------------------------------------------------------------
 
 /// 事後条件: 出力長＝入力長・入力順保存・寸法転記・
-/// `balloon_offset ≡ balloon_pos − char_pos`（恒等式は task 3.2 以降も恒久）。
+/// `balloon_offset ≡ balloon_pos − char_pos`。
+///
+/// 恒等式は [`resolve_placement`] の**出力時点**の事後条件であり、以降ずっと成り立つ
+/// 不変量ではない（windowposition-limit DD6）——下流の関門は `balloon_pos`（表示位置）
+/// だけを補正し `balloon_offset`（論理相対位置）を生値のまま残すため、関門通過後は
+/// 両者の差が恒等式を満たすとは限らない。本檻は配置式の出力だけを見る。
 #[test]
 fn postconditions_order_length_and_offset_identity() {
     for dpi in DPIS {

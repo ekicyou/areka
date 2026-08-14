@@ -96,7 +96,7 @@
   - _Depends: 3.2, 3.3_
 
 - [ ] 4. 既存前提の更新と完了検証
-- [ ] 4.1 (P) 本仕様と矛盾する既存テストと前提記述を更新する
+- [x] 4.1 (P) 本仕様と矛盾する既存テストと前提記述を更新する
   - 「バルーンはクランプされない」と主張する既存テストを、配置式の出力は無補正のままで補正は下流の関門が所有する、という前提へ書き換える
   - 可視性遷移ガードのテストへ「部分的なはみ出しは limit 有効時に関門が別途補正する（ガード自体は不変）」の前提を追記する
   - バルーンドラッグのテストへ「ドラッグ中は無介入・解放時補正は別のテストが所有する」の前提を追記する（このテストは 3.2 が触れたファイルと同じファイルにあるため、3.2 の変更を取り込んだ状態で編集する）
@@ -140,6 +140,9 @@
 - 全般: `areka-parsers` は元から rustfmt 非準拠 82 箇所を抱えるため `cargo fmt` の全体適用は禁止。追加分のみ手で整形する。リポジトリ全体では約 750 件の既存 rustfmt 差分があり、`cargo fmt --check` は完了ゲートに使えない。
 - 1.3: **`limit_correction` の `None` は「内包されている」という意味ではなく「クランプしても位置が動かない」という意味**。逆転区間（バルーン > 作業領域）で既に左上に居るときは、はみ出したままでも `None` を返す。2.4 / 3.3 / 3.4 の関門は `None` を「書き込み不要」として扱うこと。「内包の判定」として使ってはならない（毎フレーム偽の `[balloon-limit] Clamp` を出さないための設計）。
 - 1.3: `RectPx` の `right`/`bottom` は **排他的**（`resolver.rs:26-28`）。上界は `right - w` が正しく、キャラ窓側 `resolver.rs:179-180` と同一。
+- 4.1: `t_r8_balloon_never_clamped_even_outside_work_area` は **`t_r8_resolver_does_not_clamp_balloon_outside_work_area` へ改名**（削除も反転もしていない＝P5 が無クランプであること自体はいまも真）。design.md:141 / :444 / research.md:197 は旧名を参照したままだが文書側であり、コード内の参照はゼロ。
+- 4.1: `follow_visibility_balloon_wiring_tests.rs` の `balloon_drag_trigger_neither_clamps_nor_warns` は**名前に反してキャラ窓ドラッグ**の檻（`on_char_drag` / `on_char_drag_end`）。design.md:453 が名指しで「前提 doc を更新して維持」と指示しているため改名しない。
+- 4.1: `resolver_resolve_tests.rs` が 1,010 → 1,027 行（既存超過をさらに押し広げた）。要件 7.3 が同ファイルを名指ししているため回避不能。是正は別スコープ。
 - 3.4: 解放時補正の檻は設計が名指した `follow_drag_end_persist_tests.rs`（737 行）でも `follow_balloon_limit_tests.rs`（709 行）でも 1,000 行規約を割るため、**新ファイル `follow_drag_end_limit_tests.rs`（664 行）**へ置いた。設計の File Structure Plan と Testing Strategy が互いに違う置き場を指しており、どちらも成立しなかった。
 - 3.4: 解放時補正は**補正済みの位置を enqueue する**ので、3.3 の runtime 関門の再クランプは no-op になり `[balloon-limit] Clamp` は 1 回しか出ない（生位置を渡すと 2 重に出る＝レビューで実測確認済み）。
 - 3.4: 3 関門の `context` は `"boot-gate"` / `"runtime-gate"` / `"release-gate"`。実機サインオフの grep はこの 3 語で関門を判別できる。

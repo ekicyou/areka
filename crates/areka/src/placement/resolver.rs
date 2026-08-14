@@ -70,14 +70,22 @@ pub struct ScopePlacement {
     pub char_pos: PointPx,
     /// キャラ窓寸（入力の転記）。
     pub char_size: SizePx,
-    /// バルーン窓の左上位置（物理 px・P5 の暫定 offset 適用済み・クランプなし）。
+    /// バルーン窓の左上位置（物理 px・P5 の暫定 offset 適用済み）。
+    ///
+    /// **resolver 自身はクランプしない**——work area 外へ素直にはみ出した値を返す。
+    /// `windowposition.limit` による作業領域内への補正は下流の関門が所有する
+    /// （起動時＝`balloon_limit::apply_balloon_limit`（`main.rs:617`）／実行時＝
+    /// `follow::window_move::enqueue_window_set_pos` の runtime 関門）。
     pub balloon_pos: PointPx,
     /// バルーン窓寸（入力の転記）。
     pub balloon_size: SizePx,
     /// `balloon_pos − char_pos`（追従用に配置時確定・物理 px）。
     ///
-    /// 恒等式 `balloon_offset ≡ balloon_pos − char_pos` は恒久の事後条件
-    /// （design Postconditions）。
+    /// 恒等式 `balloon_offset ≡ balloon_pos − char_pos` は **resolver 出力時点の
+    /// 事後条件**であって、以降ずっと成り立つ不変量ではない（design Postconditions・
+    /// windowposition-limit DD6）。下流の関門を通った後は `balloon_pos` が
+    /// 補正後の**表示位置**、`balloon_offset` が補正を焼き付けない**論理相対位置**
+    /// （作者指定・保存値の系譜）という役割分離になる。
     pub balloon_offset: PointPx,
     /// このスコープの `windowposition.limit` 解決値（正典既定 `true`＝画面内へ維持する）。
     ///
@@ -131,7 +139,9 @@ pub struct ScopePlacement {
 ///   （`balloon_offset` 欄へ合流済み）を基本位置へ加算する（4.4）。「シェル画像の
 ///   上端／下端／中央」はキャラ窓 rect で読む（窓寸＝採寸したシェル画像寸——
 ///   `measure.rs` の `char_size` が spawn の窓寸そのもの）。
-///   **クランプなし**（バルーンは work area 外へ素直にはみ出す）。offset は
+///   **本関数はバルーンをクランプしない**（バルーンは work area 外へ素直にはみ出す）
+///   ——`windowposition.limit` の補正は下流の関門が所有する（`ScopePlacement.balloon_pos`
+///   の doc 参照）。offset は
 ///   配置時に確定し以後静的（4.4: 正式規則は balloon 表示系の後続へ委ねる）。
 /// - **Seam の warn**: `Alignment::Seam` の警告ログは config 側から本関数
 ///   （シーム値を実際に消費する層）へ委ねられている（config.rs の Alignment doc・
@@ -200,7 +210,8 @@ pub fn resolve_placement(
 
         prev = Some(x);
 
-        // P5: バルーン暫定 offset（DD7・クランプなし）。left（既定）＝キャラ左隣・
+        // P5: バルーン暫定 offset（DD7・ここではクランプしない＝limit 補正は下流の関門が
+        //     所有）。left（既定）＝キャラ左隣・
         //     right＝キャラ右隣・上端揃え・balloon.offsetx/offsety があれば加算
         let balloon_base_x = match sc.balloon_alignment {
             BalloonSide::Left => x.saturating_sub(input.balloon_size.w),
@@ -233,7 +244,9 @@ pub fn resolve_placement(
             char_size: input.char_size,
             balloon_pos,
             balloon_size: input.balloon_size,
-            // 事後条件: balloon_offset ≡ balloon_pos − char_pos（design Postconditions）
+            // 事後条件: balloon_offset ≡ balloon_pos − char_pos（design Postconditions）。
+            // 成立するのは**本関数の出力時点**まで（DD6）——下流の関門が balloon_pos だけを
+            // 補正した後は、この欄は補正を含まない論理相対位置として残る。
             balloon_offset: PointPx {
                 x: balloon_pos.x.saturating_sub(char_pos.x),
                 y: balloon_pos.y.saturating_sub(char_pos.y),

@@ -308,6 +308,13 @@ fn entry_value<'a>(entries: &'a [(PersistKey, String)], target: PersistKey) -> O
 /// 出力は入力と同じ scope 集合・同じ寸法（char/balloon）・同じ anchor。変わるのは char_pos と
 /// balloon 導出（`balloon_pos`/`balloon_offset`）のみ。永続状態には触れない。
 ///
+/// `balloon_offset ≡ balloon_pos − char_pos` が成立するのは**本関数の出力時点**までである
+/// （windowposition-limit DD6）。`main.rs:617` は本関数の直後に起動時関門
+/// [`super::balloon_limit::apply_balloon_limit`] を通し、`balloon_limit` が真の scope の
+/// `balloon_pos` だけを作業領域内へ補正する（`balloon_offset` は生値のまま＝補正を
+/// 焼き付けない）。ゆえに関門通過後の `balloon_pos` は表示位置、`balloon_offset` は論理
+/// 相対位置であり、両者の差が恒等式を満たすとは限らない。本関数自身はクランプしない。
+///
 /// `ScopePlacement.scope` は `usize`・[`PersistKey`] の scope は `u32` ゆえ、entries 突合は
 /// `scope as u32` で一貫キャストする。
 #[allow(dead_code)] // 結線（main.rs シーム・task 6.1）は後続タスクの領分

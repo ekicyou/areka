@@ -1,3 +1,17 @@
+//! 可視性遷移ガード [`guard_visibility`] の純関数檻。
+//!
+//! # 前提（windowposition-limit 7.3・要件 2.1）
+//!
+//! 本檻が固定するのは**ガード自体の規則**（完全不可視への遷移だけを X clamp で救い、
+//! 部分的なはみ出しには手を出さない）であり、`windowposition.limit` の導入でこの規則は
+//! 1 bit も変わっていない。ただしバルーン窓については、limit が有効なときに**部分的な
+//! はみ出しを別途作業領域内へ補正する**のは下流の関門
+//! （`follow::window_move::enqueue_window_set_pos` の runtime 関門・起動時
+//! `balloon_limit::apply_balloon_limit`）である。すなわち limit 有効時の最終表示位置は
+//! 本檻の期待値と一致しないことがあるが、それはガードの退行ではなく関門の仕事であり、
+//! `follow_balloon_limit_tests.rs`／`balloon_limit_gate_tests.rs` が所有する。
+//! 本檻は [`guard_visibility`] を矩形で直接呼ぶ純関数檻であり、関門が読む
+//! `BalloonLimit` Component も ECS World もここには登場しない＝関門は走らない。
 
 use super::test_support::{
     DPIS, balloon_size, char_size, grounded_y, left_wa, mixed_layout, overlaps, point, px,
@@ -189,6 +203,11 @@ fn guard_empty_snapshot_keeps_position() {
 //
 // バルーンは**別規則を持たない**——キャラ窓とまったく同一の純関数・同一の
 // 遷移規則へ、バルーン矩形（`char_pos + offset` と バルーン寸）を渡すだけ。
+//
+// 前提（windowposition-limit 7.3）: 以下 3 檻の「部分的なはみ出しには触らない」
+// 「画面外へ留置されたものは引き戻さない」はガードの規則としていまも真である。
+// `windowposition.limit` が有効なバルーンについては、この後に走る関門が別途
+// 作業領域内へ補正する——ガード自体は不変で、限界の面倒を見るのは関門である。
 
 /// キャラ窓が右端で clamp された合成で、offset 恒等式が出したバルーン提案位置
 /// だけが全 work area と非交差になるケース → バルーン矩形も ClampX で救われる。

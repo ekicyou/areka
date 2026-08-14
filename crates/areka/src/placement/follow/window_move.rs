@@ -98,7 +98,12 @@ pub fn move_window_to(world: &mut World, window: Entity, x: i32, y: i32) -> bool
 /// ライター規律（bypass ミラー＋Arrangement 同期）を継承する。反映段階で既に確定
 /// 座標のみを書くため、切替・アンカー変更で窓が振動しない。書込成功後は
 /// [`follow_balloon`] が [`BalloonFollow.offset`] を保って随伴させる（Req2.6・
-/// 恒等式 `balloon_pos − char_pos ≡ offset` 維持）。
+/// 恒等式 `balloon_pos − char_pos ≡ offset` 維持）——ただしこの恒等式が保たれるのは
+/// [`BalloonFollow.offset`] と**追従計算が出す提案位置**についてである。対象が
+/// `BalloonLimit(true)` なら [`enqueue_window_set_pos`] の runtime 関門が表示位置だけを
+/// 作業領域内へ補正するため、実際に書き込まれた位置と `char_pos` の差が `offset` と
+/// 一致しないことがある（windowposition-limit DD6・`offset` は補正を焼き付けず生値の
+/// まま）。
 ///
 /// # `route` 引数（Req 1.2／2.4・design「PlacementRoute 配管＋guard_visibility >
 /// Integration」・task 1.4）
@@ -314,8 +319,13 @@ pub fn resize_window_to(
     //    受理オラクルは参照実装 SSP の実測——SSP のバルーンは観測時つねに現在表示中の
     //    キャラ窓に対して窓相対にある（2026-07-31 実機裁定）。これは
     //    `areka-P0-surface-resize-resnap` Req2.6 の「追従 offset を維持」という窓相対契約
-    //    そのものであり、全アンカーで恒等式 `balloon_pos − char_pos ≡ offset` が成立する。
-    // 確定後キャラ窓座標＋（不変の）offset で追従（offset 恒等式維持）。
+    //    そのものであり、全アンカーで恒等式 `balloon_pos − char_pos ≡ offset` が成立する
+    //    ——ただしこれは**追従計算が出す提案位置**についての話である。対象が
+    //    `BalloonLimit(true)` なら [`enqueue_window_set_pos`] の runtime 関門が表示位置
+    //    だけを作業領域内へ補正するため、書き込まれた位置との差は offset と一致しない
+    //    ことがある（windowposition-limit DD6・`offset` は補正を焼き付けず生値のまま）。
+    // 確定後キャラ窓座標＋（不変の）offset で追従（提案位置は offset 恒等式維持・
+    //    表示位置は上記の関門で補正され得る）。
     //    引き金はキャラ窓を動かした route そのもの——バルーン矩形への遷移ガード
     //    （task 6.2・S3′）はこれで発火可否が決まる（書込自身の `BalloonFollow` では
     //    決められない・[`BalloonFollowTrigger`] の doc 参照）。

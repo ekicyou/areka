@@ -9,7 +9,12 @@
 //! 本モジュールは `resolver.rs` の配置式 P1〜P5 を**無改変**に保つための供給層である
 //! ——P5 は `balloon_offset.unwrap_or((0, 0))` を既に加算しているため、供給元を足すだけで
 //! 正典化が成立する（design D1'）。恒等式 `balloon_offset ≡ balloon_pos − char_pos`
-//! （`resolver.rs` の恒久事後条件）は P5 の加算入力が変わるだけなので自動的に保たれる。
+//! （`resolver.rs` の**出力時点の**事後条件）は P5 の加算入力が変わるだけなので自動的に
+//! 保たれる。なお本モジュールも `resolver.rs` もバルーンをクランプしない——
+//! `windowposition.limit` による作業領域内への補正は下流の関門
+//! （`balloon_limit::apply_balloon_limit`／`follow::window_move::enqueue_window_set_pos`）
+//! が所有し、補正は `balloon_pos`（表示位置）だけに作用して調整量へは焼き付かない
+//! （windowposition-limit DD6）。
 //!
 //! 依存規約（placement/mod.rs）: `config`（`PlacementConfig`）と
 //! `areka-emo-compose`（`ScaleRatio` 丸め権威）のみを消費し、wintf/bevy_ecs を import しない。
