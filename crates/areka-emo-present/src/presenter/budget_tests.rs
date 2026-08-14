@@ -260,9 +260,12 @@ fn k(num: u32, den: u32) -> ScaleRatio {
 
 /// 席の中身を `w×h` へ伸ばす（`compose_into` が合成先席へ書くときと同じ伸長を踏む）。
 ///
-/// `ComposedSurface::resize_and_clear` は emo-compose の `pub(crate)` ゆえ本クレートからは
-/// 直接呼べない。恒等 k の公開 `resample` は入口で `out.resize_and_clear(外形)` を通るため、
-/// **本物の合成が席へ及ぼすのと同じ伸長・同じ容量再利用**を公開経路だけで再現できる。
+/// `ComposedSurface` の寸法合わせは emo-compose の `pub(crate)` ゆえ本クレートからは直接
+/// 呼べない。恒等 k の公開 `resample` は入口で `out.resize_for_full_overwrite(外形)` を通る
+/// （task 5.4 で `resize_and_clear` から差し替わった。長さが変われば従来どおり `clear`＋
+/// `resize` が走るため**伸長・容量再利用の挙動は同一**で、恒等 k は続く `copy_from_slice` が
+/// 全バイトを書くので中身も全 0 のまま変わらない）ため、**本物の合成が席へ及ぼすのと同じ
+/// 伸長・同じ容量再利用**を公開経路だけで再現できる。
 fn fill_extent(dst: &mut ComposedSurface, w: u32, h: u32) {
     let src = ComposedSurface::new(w, h);
     resample(&src, identity(), dst);

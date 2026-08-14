@@ -82,6 +82,36 @@ impl ComposedSurface {
         self.bytes.resize(len, 0u8);
     }
 
+    /// **直後に全バイトが上書きされる**用途向けの寸法合わせ（追補 §A2・要件 3.1）。
+    ///
+    /// 外形フィールド（`width`／`height`／`stride`）は**常に**更新する。バイト列は必要長が
+    /// 現在の長さと一致していれば**一切触らない**——ゼロ埋めも再割り当ても行わない。
+    /// 長さが違うときだけ従来どおり `clear`＋`resize` で 0 初期化する（容量は再利用され、
+    /// 伸長した領域は 0 で埋まるので未初期化メモリは決して露出しない・`unsafe` 不使用）。
+    ///
+    /// # 呼んでよい条件（呼び手の責務）
+    ///
+    /// 呼び出し直後に `0..stride*height` の**全バイト**が書かれること。これを満たさない
+    /// 呼び手が使うと、使い回したバッファの前回の内容がそのまま出力へ残る。現在の唯一の
+    /// 呼び手は [`crate::scale::resample_with`] で、恒等 k は `copy_from_slice`・非恒等 k は
+    /// 内側 2 重ループが `out_h × out_w × 4` バイトを全て代入する（`stride == width*4` ゆえ
+    /// 行内の余白は存在しない）。**画布へ重ねる**意味論の [`resize_and_clear`]（`blit` 用）とは
+    /// 用途が違い、そちらは 0 初期化が必須なので置き換えてはならない。
+    ///
+    /// [`resize_and_clear`]: ComposedSurface::resize_and_clear
+    pub(crate) fn resize_for_full_overwrite(&mut self, width: u32, height: u32) {
+        let stride = width * 4;
+        let len = stride as usize * height as usize;
+        // 外形は長さが一致していても必ず更新する（8×6 と 6×8 は同じ 192 バイト）。
+        self.width = width;
+        self.height = height;
+        self.stride = stride;
+        if self.bytes.len() != len {
+            self.bytes.clear();
+            self.bytes.resize(len, 0u8);
+        }
+    }
+
     /// premultiplied BGRA バイト列の可変参照（`len == stride * height`）。
     ///
     /// blit 実行器が転写先として書き込む（本クレート内専用）。
@@ -119,5 +149,85 @@ mod tests {
         let s = ComposedSurface::new(2, 2);
         let bytes = s.into_bytes();
         assert_eq!(bytes.len(), 2 * 4 * 2);
+    }
+
+    /// 追補 §A2 の**本題**: 長さが一致する呼び出しではバイト列に一切触れない。
+    ///
+    /// この 1 本が、除去したゼロ埋めが本当に消えていることの構造的な証拠である
+    /// （`resize_and_clear` へ戻すと事前に塗った値が 0 になり赤になる）。所要の計測は
+    /// 実時間ゆえ恒久テストの合否条件にできない（要件 6.2）ので、代わりに
+    /// 「書き込みが起きていない」ことを内容の不動で固定する。
+    #[test]
+    fn resize_for_full_overwrite_leaves_bytes_untouched_when_the_length_matches() {
+        let mut s = ComposedSurface::new(4, 3);
+        s.bytes_mut().fill(0xAA);
+        let before = s.bytes().to_vec();
+
+        s.resize_for_full_overwrite(4, 3);
+        assert_eq!(
+            s.bytes(),
+            before.as_slice(),
+            "同じ外形の呼び出しでバイトが書き換わった（ゼロ埋めが残っている）"
+        );
+
+        // バイト長が同じで外形だけ違う場合も、初期化は走らない（触るのは外形フィールドだけ）。
+        s.resize_for_full_overwrite(3, 4);
+        assert_eq!(
+            s.bytes(),
+            before.as_slice(),
+            "長さが同じ別外形の呼び出しでバイトが書き換わった"
+        );
+    }
+
+    /// 外形フィールドは**長さが一致していても**必ず更新する。
+    ///
+    /// `4×3` と `3×4` はどちらも 48 バイトである。「長さが同じなら何もしない」を
+    /// 外形の更新まで飛ばして読むと、まっさらな器では長さが違うため必ず作り直されて
+    /// **正しく動き**、使い回しの側でしか壊れない。
+    #[test]
+    fn resize_for_full_overwrite_always_updates_the_extent_fields() {
+        let mut s = ComposedSurface::new(4, 3);
+        s.resize_for_full_overwrite(3, 4);
+        assert_eq!((s.width(), s.height()), (3, 4), "外形が更新されていない");
+        assert_eq!(s.stride(), 3 * 4, "stride が新しい幅に追随していない");
+        assert_eq!(s.bytes().len(), 3 * 4 * 4, "不変条件 len == stride*height");
+    }
+
+    /// 伸長・縮小のどちらでも、事後に長さ・外形が厳密で、**新しい領域は 0 で初期化される**
+    /// （安全な Rust ゆえ未初期化メモリは露出しないが、前の内容が残らないことを固定する）。
+    /// 縮小方向では容量が再利用され、再確保が起きない（要件 3.1・5.1 の容量引き継ぎの前提）。
+    #[test]
+    fn resize_for_full_overwrite_reinitializes_on_growth_and_drops_the_tail_on_shrink() {
+        // 伸長: 前の内容は 1 バイトも残らない。
+        let mut s = ComposedSurface::new(2, 2);
+        s.bytes_mut().fill(0xAA);
+        s.resize_for_full_overwrite(4, 4);
+        assert_eq!((s.width(), s.height(), s.stride()), (4, 4, 16));
+        assert_eq!(s.bytes().len(), 4 * 4 * 4);
+        assert!(
+            s.bytes().iter().all(|&b| b == 0),
+            "伸長した器に前の内容が残っている（未初期化・残像の混入経路）"
+        );
+
+        // 縮小: 末尾が捨てられ、容量は据え置かれる（同じ確保が回る）。
+        s.bytes_mut().fill(0xBB);
+        let ptr = s.bytes().as_ptr();
+        s.resize_for_full_overwrite(2, 2);
+        assert_eq!((s.width(), s.height(), s.stride()), (2, 2, 8));
+        assert_eq!(s.bytes().len(), 2 * 4 * 2);
+        assert!(
+            s.bytes().iter().all(|&b| b == 0),
+            "縮小した器に前の内容が残っている"
+        );
+        assert_eq!(
+            s.bytes().as_ptr(),
+            ptr,
+            "縮小で再確保が起きた（回収した容量が引き継がれない）"
+        );
+
+        // 外形ゼロへ縮めても不変条件が保たれ、前の内容は残らない。
+        s.resize_for_full_overwrite(0, 0);
+        assert_eq!((s.width(), s.height(), s.stride()), (0, 0, 0));
+        assert!(s.bytes().is_empty(), "外形ゼロで空にならない");
     }
 }

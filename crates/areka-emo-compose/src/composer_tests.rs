@@ -253,6 +253,83 @@ fn compose_into_reuses_buffer_across_calls() {
     );
 }
 
+// ── テスト3b（recompose-budget 要件 3.3／6.4）: compose_into は使い回した out を必ず塗り直す ──
+
+/// 事前に 0 以外で塗った `out` へ `compose_into` した結果が、まっさらな `out` への結果と
+/// **バイト等価**であること（合成先に前コマの残像を残さない）。
+///
+/// # なぜこの 1 本が要るか
+///
+/// `resample` 側ではゼロ埋めを除去した（[`ComposedSurface::resize_for_full_overwrite`]）が、
+/// [`crate::blit::execute`] の `resize_and_clear` は**除去してはならない**——合成は画布へ重ねる
+/// 意味論で、どの命令にも覆われない領域は「書かれずに 0 のまま」であることに依存している。
+/// ところが実測では、`blit` 側へ同じ除去を誤って適用してもこのクレートの既存テストは
+/// **全て緑のまま**通り、別クレート（emo-present）の等価檻でしか赤にならなかった。
+/// 除去してはならない側の防壁を、その `resize_and_clear` を所有するクレート自身に置く。
+///
+/// # fixture の前提（偽の緑を作らないための自己検査つき）
+///
+/// 外形 200×30 に対し base（40×30）と bind part（200×10）を置くので、右下の
+/// `x∈[40,200) × y∈[10,30)` は**どの命令にも覆われない**＝正解が BGRA 全 0 になる。
+/// 「正解の出力に 0 バイトが実在し、かつ全部が 0 ではない」ことを檻の中で確認してから
+/// 残留の主張を立てる。
+#[test]
+fn compose_into_a_prepainted_buffer_is_byte_equal_to_a_fresh_one() {
+    let base = Path::new("shell/master");
+    let atlas = bake_atlas_spec(
+        base,
+        &[
+            ("base.png", (40, 30), Some((200, 0, 0))),  // 不透明青。
+            ("part.png", (200, 10), Some((0, 0, 200))), // 不透明赤。
+        ],
+    );
+    let host = surface_with_anims(
+        1000,
+        vec![elem(0, "base.png", 0, 0)],
+        vec![bind_anim(1, 1100, 0, 0)],
+    );
+    let part = surface(1100, vec![elem(0, "part.png", 0, 0)]);
+    let world = build_bound(shell_of(vec![host, part]), &atlas);
+
+    let binds = BindSet::from_ids([1]);
+    let mut composer = Composer::new();
+
+    // 対照（まっさらな出力先）。
+    let mut fresh = ComposedSurface::new(0, 0);
+    composer
+        .compose_into(&mut fresh, &world, &atlas, 1000, &binds, &PatternState::default())
+        .expect("まっさらな出力先への compose_into は Ok");
+    let (w, h) = (fresh.width(), fresh.height());
+    let want = fresh.bytes().to_vec();
+
+    // fixture の前提: 正解の出力に 0 バイトが実在し、かつ全部が 0 ではない。
+    assert!(
+        want.contains(&0),
+        "fixture 前提が崩れた（命令に覆われない領域が無いと残留を弁別できない）"
+    );
+    assert!(
+        want.iter().any(|&b| b != 0),
+        "fixture 前提が崩れた（出力が全ゼロでは何も主張していない）"
+    );
+
+    // 使い回した出力先（同じ外形・0 以外で事前に塗る）へ書いても 1 バイトも違わない。
+    let mut reused = ComposedSurface::new(w, h);
+    reused.bytes_mut().fill(0xAA);
+    composer
+        .compose_into(&mut reused, &world, &atlas, 1000, &binds, &PatternState::default())
+        .expect("使い回した出力先への compose_into は Ok");
+    assert_eq!(
+        (reused.width(), reused.height()),
+        (w, h),
+        "使い回しで外形が事後条件どおりでない"
+    );
+    assert_eq!(
+        reused.bytes(),
+        want.as_slice(),
+        "命令に覆われない領域へ 0xAA の残留が残った（合成先のクリアが失われている）"
+    );
+}
+
 // ── テスト4（要件 10.5・6.6）: 失敗経路の伝播と正常空合成 ──
 
 /// 不在 surface → `Err(SurfaceNotFound)`（error ログ済み・要件 10.5・非パニック）。

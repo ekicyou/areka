@@ -462,8 +462,10 @@ pub fn resample_with(
     scratch: &mut ResampleScratch,
 ) {
     let (out_w, out_h) = scale.scaled_extent(src.width(), src.height());
-    // 出力は常に事後条件どおりの外形へ再確保＋全透明クリア（容量再利用・残像なし）。
-    out.resize_and_clear(out_w, out_h);
+    // 出力は常に事後条件どおりの外形へ合わせる。以下の全経路が `0..out_stride*out_h` の
+    // 全バイトを書き潰すため、ゼロ埋めは 1 バイトも読まれない無駄である（追補 §A2）。
+    // 長さが変わるときだけ 0 初期化が走る（未初期化メモリは露出しない）。
+    out.resize_for_full_overwrite(out_w, out_h);
 
     // 事前条件違反（外形ゼロ）: 転写できる画素が存在しない。パニックせず空を返し、
     // 無言で通さない（steering ログ規律・要件 1.4 と同格の log-first）。
