@@ -54,7 +54,7 @@ fn point(x: i32, y: i32) -> PointPx {
     PointPx { x, y }
 }
 
-/// `resolver.rs:221` の `clamp_axis` を**本体の import とは独立に**逐語再掲した参照実装。
+/// `resolver.rs` の private な `clamp_axis` を**本体の import とは独立に**逐語再掲した参照実装。
 ///
 /// キャラ窓の既存クランプと同一の意味論であることを檻側で突合するための基準
 /// （逆転区間 `hi < lo` では `lo`＝left/top 側が勝つ・`i32::clamp` は panic するため使わない）。
