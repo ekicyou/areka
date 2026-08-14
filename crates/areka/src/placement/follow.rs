@@ -43,6 +43,14 @@ use super::persist::{
 };
 use super::resolver::{Anchor, PointPx, RectPx, SizePx};
 use super::spawn::{BalloonWindowMarker, CharWindowMarker};
+// runtime 関門（`window_move::enqueue_window_set_pos`・task 3.3）が読む limit 値の
+// ファサード再束縛（windowposition-limit C9「follow facade から再輸出」）。
+// `spawn::BalloonLimit` は既に公開ゆえここは私有再束縛に留め、公開面は増やさない
+// （`BalloonWindowMarker`／`CharWindowMarker` と同じ扱い）。
+// 消費者が入るのは task 3.3——そのとき `#[allow(unused_imports)]` を外すこと
+// （属性は use 文単位で効くため、この 1 項目だけを覆う独立の use 文にしてある）。
+#[allow(unused_imports)]
+use super::spawn::BalloonLimit;
 
 pub use self::anchor::{Anchored, project_anchor};
 pub use self::drag_follow::BalloonFollow;

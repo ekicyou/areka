@@ -61,7 +61,7 @@
   - _Boundary: C5 balloon_limit, C6 起動時関門_
 
 - [ ] 3. 実行時の関門とドラッグ解放時補正
-- [ ] 3.1 (P) バルーン窓へ limit 値を焼き込む
+- [x] 3.1 (P) バルーン窓へ limit 値を焼き込む
   - 窓の生成時に scope 別の解決値をバルーン窓へ持たせ、キャラ窓には持たせない
   - 追従層の外部公開へ必要最小限を追随させる
   - テスト: バルーン窓には limit 値が付きキャラ窓には付かないこと
@@ -140,6 +140,8 @@
 - 全般: `areka-parsers` は元から rustfmt 非準拠 82 箇所を抱えるため `cargo fmt` の全体適用は禁止。追加分のみ手で整形する。リポジトリ全体では約 750 件の既存 rustfmt 差分があり、`cargo fmt --check` は完了ゲートに使えない。
 - 1.3: **`limit_correction` の `None` は「内包されている」という意味ではなく「クランプしても位置が動かない」という意味**。逆転区間（バルーン > 作業領域）で既に左上に居るときは、はみ出したままでも `None` を返す。2.4 / 3.3 / 3.4 の関門は `None` を「書き込み不要」として扱うこと。「内包の判定」として使ってはならない（毎フレーム偽の `[balloon-limit] Clamp` を出さないための設計）。
 - 1.3: `RectPx` の `right`/`bottom` は **排他的**（`resolver.rs:26-28`）。上界は `right - w` が正しく、キャラ窓側 `resolver.rs:179-180` と同一。
+- 3.1: **`sed -i` など in-place ストリーム編集をこのリポジトリのソースへ使わないこと。** CRLF が黙って剥がれる（3.1 で実際に `spawn.rs` が LF only になった）。`core.autocrlf=true` かつ `.gitattributes` 無しなのでコミット内容は無事だが、`git status` が毎回警告を出す。編集は Edit ツールで行うこと。
+- 3.1: `follow.rs` の `BalloonLimit` 再束縛は `pub use` ではなく**private な `use`**（同ファイルの既存イディオム）。`#[allow(unused_imports)]` は 3.3 で `window_move.rs` が消費したら外すこと。
 - 2.4: 要件 6.1 の「契機」を、起動時関門では `BALLOON_LIMIT_BOOT_CONTEXT = "boot-gate"` という `context` フィールドで記録した（設計 DD7 は契機を route で表すが、起動時関門は route ではなく `PlacementRoute` は 3.2 の所有）。**3.3 / 3.4 も `route` と併せて `context` を出し、3 関門を同じ二段 grep で判別できるようにすること**。
 - 2.4: `main.rs` が 999 → **1,005 行**になった（構造規約 1,000 行の超過）。ただし HEAD 時点で既に 4 ファイル（1330/1076/1033/1010）が超過しており、本タスクの増分は設計指定のフック 6 行のみ。分割は別スコープ。
 - 2.3: `ScopePlacement` へ `balloon_limit: bool` を足したことで、struct literal を組む **9 ファイル**が機械的追随済み（`persist_restore_tests.rs` / `spawn_test_support.rs` / `follow_drag_tests.rs` / `follow_drag_end_persist_tests.rs` / `main_restore_seam_tests.rs` / `input_events/balloon_wiring_tests.rs` / `emo2_boot/spine.rs` / `emo2_boot/frame_test_support.rs` / `emo2_boot/move_cue_apply_move_tests.rs`）。以降フィールドを足すときも同じ集合を洗うこと。

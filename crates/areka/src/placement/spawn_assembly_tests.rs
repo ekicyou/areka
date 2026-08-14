@@ -12,7 +12,8 @@ use wintf::ecs::{
 
 use super::test_support::{ghost_window_entities, titles, two_scope_placements};
 use super::{
-    BalloonWindowMarker, CharWindowMarker, GhostWindowMarker, GhostWindows, spawn_ghost_windows,
+    BalloonLimit, BalloonWindowMarker, CharWindowMarker, GhostWindowMarker, GhostWindows,
+    spawn_ghost_windows,
 };
 use crate::placement::diag::{ZORDER_PAIR_DECLARED_TAG, zorder_pair_declared_line};
 use crate::placement::follow::{Anchored, BalloonFollow};
@@ -272,6 +273,94 @@ fn anchored_attached_to_all_char_windows_with_resolved_anchor() {
             "scope{scope}: バルーン窓には Anchored を付けない"
         );
     }
+}
+
+// -------------------------------------------------------------------------
+// balloon limit 伝搬（windowposition-limit 2.7/2.8・design C9/DD4・task 3.1）
+//
+// `ScopeConfig.balloon_limit` → `ScopePlacement.balloon_limit` → `BalloonLimit`
+// Component の一方向転写（DD4）の最終段を固定する。`Anchored` 同型だが**付く側が
+// 逆**——`Anchored` はキャラ窓のみ、`BalloonLimit` はバルーン窓のみ。
+// -------------------------------------------------------------------------
+
+/// 3.1（2.7）: 生成直後の各バルーン窓が自スコープの解決済み limit 値を
+/// `BalloonLimit(bool)` として保持する（`true`/`false` の両値を固定＝
+/// 「常に true を入れている」実装では緑にならない）。
+#[test]
+fn balloon_limit_attached_to_every_balloon_window_with_resolved_value() {
+    let mut world = World::new();
+    let mut placements = two_scope_placements(); // 両方 balloon_limit: true
+    placements[1].balloon_limit = false; // scope1 を limit 無効へ
+
+    let gw = spawn_ghost_windows(&mut world, &placements, &titles());
+
+    assert_eq!(
+        world
+            .get::<BalloonLimit>(gw.balloon_window(0).unwrap())
+            .copied(),
+        Some(BalloonLimit(true)),
+        "scope0: limit 有効スコープのバルーン窓は BalloonLimit(true) を保持"
+    );
+    assert_eq!(
+        world
+            .get::<BalloonLimit>(gw.balloon_window(1).unwrap())
+            .copied(),
+        Some(BalloonLimit(false)),
+        "scope1: limit 無効スコープのバルーン窓は BalloonLimit(false) を保持"
+    );
+    // 転写元の placement と一致すること（値の取り違え封じ・`Anchored` 檻と同型）
+    for p in &placements {
+        assert_eq!(
+            world
+                .get::<BalloonLimit>(gw.balloon_window(p.scope).unwrap())
+                .copied(),
+            Some(BalloonLimit(p.balloon_limit)),
+            "scope{}: BalloonLimit は ScopePlacement.balloon_limit の転写",
+            p.scope
+        );
+    }
+}
+
+/// 3.1（2.8 の構造保証）: キャラ窓には limit 値によらず `BalloonLimit` を付けない。
+///
+/// 3.3 の runtime 関門は `BalloonLimit` を持つ entity にのみ作用するため、
+/// 「キャラ窓に付いていない」ことが「limit 補正がキャラ窓の位置を変更しない」
+/// （要件 2.8）の証明そのものになる。両値（有効／無効）で固定する。
+#[test]
+fn balloon_limit_never_attached_to_char_windows() {
+    let mut world = World::new();
+    let mut placements = two_scope_placements();
+    placements[1].balloon_limit = false;
+
+    let gw = spawn_ghost_windows(&mut world, &placements, &titles());
+
+    for p in &placements {
+        assert!(
+            world
+                .get::<BalloonLimit>(gw.char_window(p.scope).unwrap())
+                .is_none(),
+            "scope{} (balloon_limit={}): キャラ窓には BalloonLimit を付けない（2.8 の構造保証）",
+            p.scope,
+            p.balloon_limit
+        );
+    }
+
+    // World 全体でも `BalloonLimit` 保持者はバルーン窓に限られる（付け忘れ・付け過ぎの両封じ）。
+    let holders: Vec<Entity> = world
+        .query_filtered::<Entity, With<BalloonLimit>>()
+        .iter(&world)
+        .collect();
+    let mut expected: Vec<Entity> = placements
+        .iter()
+        .map(|p| gw.balloon_window(p.scope).unwrap())
+        .collect();
+    let mut holders_sorted = holders;
+    holders_sorted.sort();
+    expected.sort();
+    assert_eq!(
+        holders_sorted, expected,
+        "BalloonLimit を持つ entity はバルーン窓 2 枚だけ"
+    );
 }
 
 // -------------------------------------------------------------------------

@@ -41,7 +41,10 @@
 //!   相対位置記憶（4.8・DD16・task 8.3）＋`OnDragEnd(on_balloon_drag_end)` で単独ドラッグ
 //!   確定 offset の永続 write-through（2.1・design C3・task 2.3。`on_balloon_drag` は連続
 //!   イベントで保存トリガではなく、DragEnd 確定点でのみ 1 ドラッグ 1 書込）・`BalloonFollow`
-//!   なし。M1 はマウス送出なし＝ポインタハンドラを付けない・DD-IE-12。バルーン入力は
+//!   なし。さらに `BalloonLimit(p.balloon_limit)`＝`windowposition.limit` 解決値の
+//!   runtime 焼込みを**バルーン窓側にだけ**持つ（areka-P0-windowposition-limit 2.7/2.8・
+//!   C9/DD4。キャラ窓には付けない＝「limit の補正でキャラ窓を動かさない」の構造保証）。
+//!   M1 はマウス送出なし＝ポインタハンドラを付けない・DD-IE-12。バルーン入力は
 //!   M-dialogue／choice-render の領分。さらに同一スコープのキャラ窓を指す
 //!   `KeepDirectlyAbove { peer }`＝「このバルーン窓はこのキャラ窓のすぐ手前に居るべき」の
 //!   永続宣言を**バルーン窓側にだけ**後付けする（areka-P0-ghost-window-zorder 1.1・
@@ -155,6 +158,34 @@ fn on_ghost_window_marker_remove(mut world: DeferredWorld, hook: HookContext) {
         ),
     }
 }
+
+// ---------------------------------------------------------------------------
+// BalloonLimit（windowposition-limit C9・DD4）
+// ---------------------------------------------------------------------------
+
+/// バルーン窓の limit 有効値（scope 別解決済み・spawn 焼込み・runtime 単一真実源）。
+///
+/// `windowposition.limit` の解決値を runtime へ運ぶ唯一の表現である
+/// （areka-P0-windowposition-limit 要件 2.7/2.8・design C9/DD4）。
+/// `PlacementConfig`／`ScopeConfig` は spawn 後に破棄され Resource 化もされないため、
+/// limit 値が runtime まで生き残る道は窓 entity 上の Component だけ——
+/// `ScopeConfig.balloon_limit` → `ScopePlacement.balloon_limit` → 本 Component の
+/// **一方向転写**で、spawn 時に焼き込んだあとは不変（永続化もしない。limit は
+/// 毎起動 `descript.txt` から解決し直す）。
+///
+/// # 付与対象はバルーン窓のみ（要件 2.8 の構造保証）
+///
+/// [`Anchored`] と同型の spawn 焼込みだが**付く側が逆**である。`Anchored` はキャラ窓
+/// にのみ、本 Component はバルーン窓にのみ付く。runtime 関門はこの Component を
+/// 持つ entity への書き込みだけを補正するため、「キャラ窓に付いていない」ことが
+/// そのまま「limit の補正でキャラ窓の位置を変更しない」（2.8）の証明になる——
+/// 檻の主張ではなく構造の帰結である。
+// 消費者（runtime 関門・`follow::enqueue_window_set_pos`）が入るのは task 3.3 だが、
+// `#[allow(dead_code)]` は付けない——spawn が構築し檻が読むため lint は鳴らず、
+// 不要な allow は本当に未結線の項目を隠すだけである（隣接 markers の allow は
+// 「構築側が未実装」だった過渡状態の名残で、本 Component は事情が異なる）。
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BalloonLimit(pub bool);
 
 // ---------------------------------------------------------------------------
 // GhostWindows（後続 emo2-boot への引き渡し正本・6.1/6.2）
@@ -315,6 +346,10 @@ pub fn spawn_ghost_windows(
                 // 位置へ飛び、`balloon_pos − char_pos ≡ offset` の恒等式が構造的に崩れる。
                 external_position_authority(),
                 DragConfig::default(),
+                // limit 解決値の runtime 焼込み（windowposition-limit 2.7・C9/DD4）。
+                // `ScopePlacement.balloon_limit` の転写であり、キャラ窓には付けない
+                // （＝2.8 の構造保証。下の char 窓 spawn に対応する行は無い）。
+                BalloonLimit(p.balloon_limit),
                 OnDrag(on_balloon_drag),
                 // バルーン単独ドラッグ確定 offset の永続 write-through（2.1・8.1・
                 // design C3・task 2.3）。on_balloon_drag は連続イベント（in-session offset
