@@ -5,6 +5,12 @@
 //! 浮動小数（f32/f64）を一切持ち込まない。f32 が現れるのは照会契約の出口ビュー
 //! [`ScaleRatio::as_f32`] のみである。
 //!
+//! **唯一の例外（裁定済み）**: 唯一の既知の例外は emo-text
+//! `ScaleContract::physical_extent`（文字供給面の確保寸）であり、2026-08-14 の裁定
+//! （spec `areka-P0-scale-exact-rational`）に基づく。誤差は +1 側のみで不可視。
+//! **この例外を他の用途へ拡大してはならない**——例外は供給面寸のこの 1 点に限られ、
+//! 新たな f32 寸法演算を許す一般則ではない。
+//!
 //! - **既約正準化**（要件 1.1）: 構築時に gcd で約分し、`Eq`/`Hash` を正準形で厳密化する
 //!   （下流 `emo-present` の合成キャッシュキーの一意性を担保する）。
 //! - **丸め規約の単一権威（乗算方向・長さ）**（要件 2.5）: [`ScaleRatio::scale_len`] ／
@@ -141,6 +147,11 @@ impl ScaleRatio {
     /// 下流（`collision-dpi-hittest` の ÷k・`emo-text-layer` の行寸）が参照する
     /// 合成スケール照会値の表現。**寸法・画素演算にこの値を使ってはならない**——
     /// 寸法の k 倍は必ず [`scale_len`]／[`scaled_extent`] を通す（丸め規約の単一権威）。
+    /// この禁止の**唯一の裁定済み例外は供給面寸の導出**（emo-text
+    /// `ScaleContract::physical_extent`＝文字供給面の確保寸）であり、2026-08-14 の裁定
+    /// （spec `areka-P0-scale-exact-rational`）に基づく。誤差は +1 側のみで不可視。
+    /// **この例外を他の用途へ拡大してはならない**——例外は供給面寸のこの 1 点に限られ、
+    /// 上の禁止は他の全ての用途に対してそのまま効く。
     ///
     /// [`scale_len`]: ScaleRatio::scale_len
     /// [`scaled_extent`]: ScaleRatio::scaled_extent
