@@ -51,6 +51,7 @@ mod read;
 mod refresh;
 mod show;
 mod target;
+mod timing;
 mod visibility;
 
 // 分割前の `use` 一式はここに残す。テストファイル 8 本は `use super::*;` で本モジュールの束縛から
