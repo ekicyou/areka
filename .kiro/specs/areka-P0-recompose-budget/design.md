@@ -54,6 +54,7 @@
 ### Revalidation Triggers
 
 - perf サマリ行の固定文言・フィールド名の変更 → `tools/perf/judge-perf.py` と計時檻の再検証
+- 判定式⑴の判定粒度（系列単位）・系列鍵（`FRAME_INTERVAL_SERIES_KEY`）・判定対象の確定方法（`FRAME_INTERVAL_JUDGED_SERIES`）の変更 → `judge-perf.py` の判定式⑴とプール希釈の赤ケースを含む自己較正 fixture の再検証
 - `ComposeCache` の公開シグネチャ変更（`insert`／`take_recycled`）→ `cache_tests.rs`・presenter 檻の再検証
 - `AlphaMaskResource` の内部表現変更 → wintf hit_test 檻・emo-present 表示檻の再検証
 - `scale.rs` への追加が exact（scale-exact-rational）着地後に rebase された場合 → `resample_with` 等価檻の再実行
@@ -521,7 +522,7 @@ impl AlphaMaskResource {
 |---|---|---|
 | `FRAME_INTERVAL_EXPECTED_MS` | 172（emo2 まばたき定義値） | brief 実測・seriko 定義由来 |
 | `FRAME_INTERVAL_TOLERANCE` | 許容率（例 15%・第 1 段で較正） | R4.2⑴ |
-| `FRAME_INTERVAL_WINDOW` | 判定式⑴の測定窓の定義: `target_id`／`surface_id` で系列を分離し、アイドル区間（talk 再生・複数アニメ重畳を除外した窓）限定の対象 target 別 p95 を用いる。窓の境界条件は第 1 段ベースラインで確定し README に登記 | R4.2⑴/R4.5（validation Issue 2 の取り込み・重畳 apply の混入による偽陽性/偽陰性の排除） |
+| `FRAME_INTERVAL_WINDOW` | 判定式⑴の測定窓と**判定粒度**の定義: `target_id`／`surface_id` で系列を分離し、アイドル区間（talk 再生・複数アニメ重畳を除外した窓）に限定する。**判定は分離した系列ごとに行い、判定対象の系列が 1 つでも上限を超えたら⑴は不合格とする**。同一 target の複数系列をまとめた p95 は参考表示にとどめ、判定には使わない——速い系列の 5% の裾に遅い系列が丸ごと吸収され、スロー再生が合格に化けるため。どの系列を判定対象とするかと窓の境界条件は第 1 段ベースラインで確定し README に登記 | R4.2⑴/R4.5（validation Issue 2 の取り込み・重畳 apply の混入による偽陽性/偽陰性の排除。validation Issue 2 の「対象 target 限定」は**判定対象の絞り込み**＝`FRAME_INTERVAL_JUDGED_SERIES` の意であり、target 単位への再併合ではない） |
 | `IDLE_CPU_MAX_RELEASE_PCT` | 3.0 | 議題 2 裁定（SSP 実測 2.2〜2.8% の同等圏） |
 | `WARMUP_EXCLUDE_SEC` | 定常状態の開始境界（初回確保・起動過渡の除外窓） | R3.1「定常状態」定義の運用形 |
 | `CONVERGENCE_*` | 収束判定: 時系列後半窓の回帰傾きと窓間平均差の上限 | R5.1/5.3 |
@@ -564,7 +565,7 @@ impl AlphaMaskResource {
 
 | # | 判定 | 適用ビルド |
 |---|---|---|
-| ⑴ | コマ適用間隔の p95 ≦ アニメ定義の指定間隔 ×（1＋許容率） | dev・release |
+| ⑴ | 判定対象の**各系列**（`target_id`×`surface_id`）について コマ適用間隔の p95 ≦ アニメ定義の指定間隔 ×（1＋許容率）。1 系列でも超過すれば不合格 | dev・release |
 | ⑵ | 定常状態（ウォームアップ除外後）の catch-up 件数 = 0 | dev・release |
 | ⑶ | 定常状態の表示用バッファ新規確保（perf 行 alloc_* 合計）= 0 | dev・release |
 | ⑷ | アイドル CPU（1 コア換算）< 3.0% かつ 20 分超で単調上昇しない | release のみ |
