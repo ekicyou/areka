@@ -77,7 +77,7 @@
   - _Requirements: 6.1_
   - _Boundary: C10 観測語彙_
 
-- [ ] 3.3 実行時の単一ライター内へ関門を設置する
+- [x] 3.3 実行時の単一ライター内へ関門を設置する
   - limit 値を持つ窓への書き込みのときだけ補正し、キャラ窓と limit 無効のバルーンは従来と完全に同一の挙動にする
   - 判定対象は書き込もうとする位置と寸法が作る矩形とし、位置据え置きで寸法だけが変わる書き込みも被覆する
   - 基準領域はキャラ窓が属するモニタの作業領域とし、既存のモニタ帰属規則をそのまま利用する
@@ -140,6 +140,10 @@
 - 全般: `areka-parsers` は元から rustfmt 非準拠 82 箇所を抱えるため `cargo fmt` の全体適用は禁止。追加分のみ手で整形する。リポジトリ全体では約 750 件の既存 rustfmt 差分があり、`cargo fmt --check` は完了ゲートに使えない。
 - 1.3: **`limit_correction` の `None` は「内包されている」という意味ではなく「クランプしても位置が動かない」という意味**。逆転区間（バルーン > 作業領域）で既に左上に居るときは、はみ出したままでも `None` を返す。2.4 / 3.3 / 3.4 の関門は `None` を「書き込み不要」として扱うこと。「内包の判定」として使ってはならない（毎フレーム偽の `[balloon-limit] Clamp` を出さないための設計）。
 - 1.3: `RectPx` の `right`/`bottom` は **排他的**（`resolver.rs:26-28`）。上界は `right - w` が正しく、キャラ窓側 `resolver.rs:179-180` と同一。
+- 3.3: **`emo2_boot/frame_test_support.rs::resnap_placements()` を `balloon_limit: false` へ倒した。** 理由＝DPI 192 でキャラ窓が 1374px（作業領域 1379px）になり、offset y=−25 のバルーンが上端を 20px はみ出すのを関門が正しく引き戻すため、`frame_dpi_reproject_tests.rs:520` の「表示位置の追従恒等式」が落ちる。DD6 が同恒等式を「配置式の出力時点の事後条件」へ再スコープ済みなので、落ちる方が正しい。**下端中央基準（ground anchor）の主張はキャラ窓についてで、関門は構造的に触れないため無傷。** 影響は同テスト 1 本のみで、`frame_*` の約 40 本はいずれも `balloon_limit` を読まない（＝関門導入前の挙動へ戻しただけ）。
+- 3.3: 上端クランプの被覆は純関数檻 `balloon_limit_tests.rs` の `t_bl2`/`t_bl3` が持つ。wiring 檻（`follow_balloon_limit_tests.rs`）は右/下辺のみ＝設計の分業どおり。
+- 3.3: 5 本ある `Unresolved` warn 経路のうち `BalloonWindowMarker` 欠落の腕には専用テストが無い（spawn が両 Component を必ず一緒に付けるため構造的に到達不能・かつ黙って縮退せず warn する）。
+- 3.3: `window_move.rs` が **921 行**（1,000 行規約まで残り 79 行）。3.4 は `drag_follow.rs` 側なので当面は保つが余裕は薄い。
 - 3.2: **タスク本文の「落ちる既存テスト 3 本」は実測では 1 本だった**（`placement_route_all_covers_nine_distinct_variants` のみ）。発火可否表の 2 本は期待値を「発火する 4 種のハードコード `matches!`」と `fired == 4` から導くため、`ALL` の走査で新語彙を自動被覆し無改変で緑。ただし**恒真ではない**——ガード判定を `true` へ反転させると両方とも赤になることを実測で確認済み。
 - 3.2: enum の variant は `ALL` const から参照されていれば `dead_code` にならない。**確かめずに `#[allow(dead_code)]` を付けない**こと（no-op の allow は本当に未結線の項目を隠す）。
 - 3.1: **`sed -i` など in-place ストリーム編集をこのリポジトリのソースへ使わないこと。** CRLF が黙って剥がれる（3.1 で実際に `spawn.rs` が LF only になった）。`core.autocrlf=true` かつ `.gitattributes` 無しなのでコミット内容は無事だが、`git status` が毎回警告を出す。編集は Edit ツールで行うこと。

@@ -2,7 +2,7 @@
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::system::SystemState;
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 use windows::Win32::UI::WindowsAndMessaging::{
     CW_USEDEFAULT, SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER,
 };
@@ -10,9 +10,11 @@ use wintf::ecs::layout::{Arrangement, Offset};
 use wintf::ecs::{DPI, Point, SetWindowPosCommand, SizeI, WindowHandle, WindowPos};
 
 use super::{
-    Anchor, Anchored, BalloonFollow, BalloonFollowTrigger, BalloonWindowMarker, CharWindowMarker,
-    DESPAWNED_SKIP_TAG, MonitorSnapshot, PlacementRoute, PointPx, SizePx, WindowKind,
-    WindowMoveRecord, apply_visibility_guard, diag, follow_balloon, project_anchor, rect_at,
+    Anchor, Anchored, BALLOON_LIMIT_CLAMP_TAG, BALLOON_LIMIT_RUNTIME_CONTEXT,
+    BALLOON_LIMIT_UNRESOLVED_TAG, BalloonFollow, BalloonFollowTrigger, BalloonLimit,
+    BalloonWindowMarker, CharWindowMarker, DESPAWNED_SKIP_TAG, GhostWindows, MonitorSnapshot,
+    PlacementRoute, PointPx, RectPx, SizePx, WindowKind, WindowMoveRecord, apply_visibility_guard,
+    diag, follow_balloon, limit_correction, project_anchor, rect_at, work_area_for_window,
 };
 
 /// R7 公開 API: UI スレッド上で呼ばれる窓移動関数（物理 px・スクリーン座標直渡し・7.1）。
@@ -449,6 +451,22 @@ pub fn anchor_changed_system(
 /// （無記録のままだと Q3「ドラッグ以外の経路での消失」の観測に穴が残る）。
 ///
 /// `None` でも**挙動は完全に同一**であり、変わるのはレコードを出すか否かだけである。
+///
+/// # runtime 関門（areka-P0-windowposition-limit C7・要件 2.1/2.2/2.6〜2.9/5.5）
+///
+/// **契約追記**: 対象 entity が [`BalloonLimit`]`(true)` を持つ場合、書込位置は
+/// キャラ窓帰属モニタの作業領域内へ補正される（[`apply_balloon_limit_gate`]）。
+/// それ以外の対象（キャラ窓・[`BalloonLimit`]`(false)`・Component 非保持窓）の挙動は
+/// 従来と **bit 同一**である——分岐は route ではなく**対象窓の Component**＝
+/// データ駆動で、route 語彙は観測のままに保たれる（DD1）。
+///
+/// 本関数が ECS 経路の位置書込の**単一ライター**であることが、要件 2.1「経路に
+/// よらず常時」を経路個別の規律ではなく**構造**で成立させる要点である（経路③④⑤⑦
+/// および将来の書込口が自動被覆される）。補正は `x`／`y` を再束縛して以降の全処理
+/// （`SetWindowPosCommand`・`WindowPos` ミラー・`Arrangement.offset` 同期・
+/// [`diag::log_window_move`] レコード）へ透過する＝**位置ログには補正後の最終位置が
+/// 残る**（DD7）。route は元書込のものを保つ——補正は同一書込の一部であって別書込では
+/// ないからである。
 pub(super) fn enqueue_window_set_pos(
     world: &mut World,
     window: Entity,
@@ -478,6 +496,14 @@ pub(super) fn enqueue_window_set_pos(
         );
         return false;
     };
+
+    // runtime 関門（windowposition-limit C7・DD1/DD5/DD7）: `BalloonLimit(true)` の窓に
+    // 限り、書き込もうとする矩形をキャラ窓帰属モニタの作業領域内へ補正する。ここで
+    // `x`／`y` を再束縛するため、以降の書込・ミラー・レコードはすべて補正後の最終位置を
+    // 見る。可視性ガード（`follow_balloon` 内の `guard_balloon_position`）は本関数を
+    // **呼ぶ前**に走り終えており、limit の補正が最後の語になる（DD5）。
+    let corrected = apply_balloon_limit_gate(world, window, PointPx { x, y }, size, route);
+    let (x, y) = (corrected.x, corrected.y);
 
     // size 有無で flags と width/height を明示分岐（SWP_NOSIZE の付け外しミスを防ぐ）。
     // None＝移動専用（SWP_NOSIZE 付・後方互換）／Some＝位置＋寸（SWP_NOSIZE 外し）。
@@ -593,6 +619,200 @@ fn log_window_move(
         size: size.map(|s| (s.w, s.h)),
         dpi: world.get::<DPI>(window).map(|d| d.dpi_x as u32),
     });
+}
+
+// =============================================================================
+// runtime 関門（areka-P0-windowposition-limit C7・task 3.3）
+// =============================================================================
+
+/// 書込直前の位置を `windowposition.limit=1` のバルーン窓に限って作業領域内へ補正する
+/// （design「C7: runtime 関門」・要件 2.1／2.2／2.6／2.7／2.8／2.9／5.5／6.1／6.3）。
+///
+/// # 発動条件はデータ駆動であって route ではない（DD1）
+///
+/// 対象 entity が [`BalloonLimit`]`(true)` を持つときだけ補正する。持たない窓
+/// （キャラ窓は spawn で**構造的に**付与されない＝2.8 の証明）と `false` の窓は
+/// 最初の `match` で即座に `proposed` を返す——読み出しも警告も一切増えないので、
+/// 従来経路と bit 同一である（2.7/2.8）。route を見ないので、`PlacementRoute` は
+/// 観測語彙のままであり、将来 ECS 経路に書込口が増えても自動で被覆される（2.1）。
+///
+/// # 判定矩形（2.2 経路⑦の被覆）
+///
+/// 判定するのは「書き込もうとする位置 × 書き込もうとする寸」である。`size` が
+/// `Some` ならその寸（位置据え置きのリサイズ＝[`resize_window_keep_position`] は
+/// これで被覆される）、`None` なら対象の現 `WindowPos.size`。**位置が動かず寸だけが
+/// 変わる書込**も、これで内包判定に掛かる。
+///
+/// # 基準領域はキャラ窓の帰属モニタ（5.5）
+///
+/// [`BalloonWindowMarker::scope`] → [`GhostWindows`]（scope→窓 entity の正本）→
+/// キャラ窓 entity → その `WindowPos` 矩形 → [`work_area_for_window`] の順で引く。
+/// **帰属規則そのもの（窓中心 half-open ＋最近傍フォールバック）は 1 bit も変えない**
+/// ——既存関数へキャラ窓矩形を渡すだけである。バルーン窓自身の帰属で引かないのは、
+/// はみ出したバルーンが隣モニタへ帰属して基準が振動するのを避けるためで、正典
+/// 「シェルが居る画面の中に維持する」の素直な読みでもある。
+///
+/// # 可視性状態を**入力に持たない**（要件 2.6）
+///
+/// 本関門が読むのは上記の 6 つ（`BalloonLimit`／`BalloonWindowMarker`／
+/// `GhostWindows`／キャラ窓 `WindowPos`／`MonitorSnapshot`／対象 `WindowPos.size`）
+/// だけで、可視性を表す状態は**ひとつも含まない**（そもそもバルーンの可視性は
+/// `emo2_boot::balloon_visibility` が表示層で所有し、placement の World には無い）。
+/// ゆえに非表示中の書込も可視中とまったく同一に補正され、「次に可視となった時点で
+/// 2.1 が成立している」が全書込の被覆から導かれる。檻
+/// `runtime_gate_result_is_identical_for_hidden_and_visible_balloons` が、World 上で
+/// 可視性に最も近い表現（`WindowStyle` の `WS_VISIBLE`）を落としても結果が
+/// bit 同一であることで固定する。
+///
+/// # 位置だけを触る（2.9）
+///
+/// 戻り値は位置のみ。`size`・可視性・Z 順（`KeepDirectlyAbove`）へは一切触れない
+/// ——呼出側が受け取った `size` はそのまま書かれる。
+///
+/// # 縮退（log-first・design Error Handling「runtime 関門で基準解決不能」）
+///
+/// 上記の解決がどこかで途切れたら [`BALLOON_LIMIT_UNRESOLVED_TAG`] の `warn!` を
+/// 残して `proposed` を素通しする。**書込自体は阻害しない**——架空の作業領域を
+/// 発明しないこと（`work_area_for_window` と同方針）と、補正できないことを理由に
+/// 窓の位置更新を落とさないことの両立である。無ログの縮退経路は作らない（6.3）。
+///
+/// 補正が発火したときだけ [`BALLOON_LIMIT_CLAMP_TAG`] の `info!` を出す。
+/// [`limit_correction`] の `None` は「クランプしても位置が動かない」の意であって
+/// 「内包されている」ではない（逆転区間で既に左上に居るときははみ出したままでも
+/// `None`）——毎フレーム偽の補正ログを出さないための設計であり、`None` では
+/// ログも位置の書換も起こさない（6.1 は「実際に動かしたとき」の記録を求める）。
+fn apply_balloon_limit_gate(
+    world: &World,
+    window: Entity,
+    proposed: PointPx,
+    size: Option<SizePx>,
+    route: Option<PlacementRoute>,
+) -> PointPx {
+    // 発動条件（DD1）: limit 無効・Component 非保持は 1 bit も触らず戻る。
+    if !matches!(world.get::<BalloonLimit>(window), Some(BalloonLimit(true))) {
+        return proposed;
+    }
+
+    // 判定寸: 明示寸（`Some`）が優先。`None` は対象の現寸。未確定表現は
+    // `Option::None` **だけではない**——`WindowPos::default()` は
+    // `CW_USEDEFAULT`（`i32::MIN` センチネル）を寸に持つため、正値フィルタで
+    // 一緒に落とす（`guard_balloon_position` と同型のガード）。
+    let target_size = size
+        .or_else(|| {
+            world
+                .get::<WindowPos>(window)
+                .and_then(|wp| wp.size)
+                .map(|s| SizePx {
+                    w: s.width,
+                    h: s.height,
+                })
+        })
+        .filter(|s| s.w > 0 && s.h > 0);
+    let Some(target_size) = target_size else {
+        warn!(
+            entity = ?window,
+            context = BALLOON_LIMIT_RUNTIME_CONTEXT,
+            route = ?route,
+            ?proposed,
+            "{BALLOON_LIMIT_UNRESOLVED_TAG} 対象バルーンの寸が未確定（窓生成直後／CW_USEDEFAULT センチネル）のため内包判定できない → 補正せず書込は続行"
+        );
+        return proposed;
+    };
+
+    let Some(scope) = world.get::<BalloonWindowMarker>(window).map(|m| m.scope) else {
+        warn!(
+            entity = ?window,
+            context = BALLOON_LIMIT_RUNTIME_CONTEXT,
+            route = ?route,
+            ?proposed,
+            "{BALLOON_LIMIT_UNRESOLVED_TAG} 対象窓に BalloonWindowMarker が無く scope を特定できない → 補正せず書込は続行"
+        );
+        return proposed;
+    };
+
+    let char_window = world
+        .get_resource::<GhostWindows>()
+        .and_then(|gw| gw.char_window(scope));
+    let Some(char_window) = char_window else {
+        warn!(
+            entity = ?window,
+            scope,
+            context = BALLOON_LIMIT_RUNTIME_CONTEXT,
+            route = ?route,
+            ?proposed,
+            "{BALLOON_LIMIT_UNRESOLVED_TAG} GhostWindows 未挿入または当該 scope のキャラ窓が無く基準モニタを決められない → 補正せず書込は続行"
+        );
+        return proposed;
+    };
+
+    let Some(char_rect) = window_rect_of(world, char_window) else {
+        warn!(
+            entity = ?window,
+            scope,
+            char_window = ?char_window,
+            context = BALLOON_LIMIT_RUNTIME_CONTEXT,
+            route = ?route,
+            ?proposed,
+            "{BALLOON_LIMIT_UNRESOLVED_TAG} キャラ窓の位置または寸が未確定で矩形を組めない → 補正せず書込は続行"
+        );
+        return proposed;
+    };
+
+    // 5.5: 帰属規則は既存関数のまま（キャラ窓矩形を渡すだけ）。
+    let area = world
+        .get_resource::<MonitorSnapshot>()
+        .and_then(|snapshot| work_area_for_window(snapshot, char_rect));
+    let Some(area) = area else {
+        warn!(
+            entity = ?window,
+            scope,
+            context = BALLOON_LIMIT_RUNTIME_CONTEXT,
+            route = ?route,
+            ?proposed,
+            ?char_rect,
+            "{BALLOON_LIMIT_UNRESOLVED_TAG} MonitorSnapshot 未挿入またはモニタ 0 台のためキャラ窓の作業領域を決められない → 補正せず書込は続行"
+        );
+        return proposed;
+    };
+
+    let Some(corrected) = limit_correction(proposed, target_size, area) else {
+        return proposed;
+    };
+
+    info!(
+        scope,
+        context = BALLOON_LIMIT_RUNTIME_CONTEXT,
+        entity = ?window,
+        route = ?route,
+        from = ?proposed,
+        to = ?corrected,
+        balloon_size = ?target_size,
+        work_area = ?area,
+        "{BALLOON_LIMIT_CLAMP_TAG} runtime 関門: バルーン窓の書込位置を作業領域内へ補正した（寸・可視性・Z 順には触れない）"
+    );
+    corrected
+}
+
+/// `WindowPos` から窓矩形を組む（位置・寸のどちらかが未確定なら `None`）。
+///
+/// 未確定表現が `Option::None` だけでないのは wintf の既知の性質である——
+/// `WindowPos::default()` は位置に `CW_USEDEFAULT`（`i32::MIN` センチネル）を持つ。
+/// 素通しすると `saturating_add` で逆転矩形になり、モニタ帰属が意味を失う
+/// （`resize_window_to` 手順 3／`guard_balloon_position` と同一の判定式）。
+/// 負座標そのものは正当（左隣モニタは負の X を持つ）ゆえ、符号や閾値では判定しない。
+fn window_rect_of(world: &World, window: Entity) -> Option<RectPx> {
+    let wp = world.get::<WindowPos>(window)?;
+    let pos = wp
+        .position
+        .filter(|p| p.x != CW_USEDEFAULT && p.y != CW_USEDEFAULT)?;
+    let size = wp.size.filter(|s| s.width > 0 && s.height > 0)?;
+    Some(rect_at(
+        PointPx { x: pos.x, y: pos.y },
+        SizePx {
+            w: size.width,
+            h: size.height,
+        },
+    ))
 }
 
 // =============================================================================

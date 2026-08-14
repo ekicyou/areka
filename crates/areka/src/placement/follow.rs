@@ -37,19 +37,22 @@ mod visibility;
 mod window_move;
 mod work_area;
 
+// limit 補正の式とタグ語彙（windowposition-limit C5/C10）。runtime 関門
+// （`window_move::enqueue_window_set_pos`・task 3.3）が消費する。
+use super::balloon_limit::{
+    BALLOON_LIMIT_CLAMP_TAG, BALLOON_LIMIT_RUNTIME_CONTEXT, BALLOON_LIMIT_UNRESOLVED_TAG,
+    limit_correction,
+};
 use super::diag::{self, DESPAWNED_SKIP_TAG, PlacementRoute, WindowKind, WindowMoveRecord};
 use super::persist::{
     balloon_offset_entries, char_pos_entries, char_pos_to_origin_x, persist_entries,
 };
 use super::resolver::{Anchor, PointPx, RectPx, SizePx};
-use super::spawn::{BalloonWindowMarker, CharWindowMarker};
+use super::spawn::{BalloonWindowMarker, CharWindowMarker, GhostWindows};
 // runtime 関門（`window_move::enqueue_window_set_pos`・task 3.3）が読む limit 値の
 // ファサード再束縛（windowposition-limit C9「follow facade から再輸出」）。
 // `spawn::BalloonLimit` は既に公開ゆえここは私有再束縛に留め、公開面は増やさない
 // （`BalloonWindowMarker`／`CharWindowMarker` と同じ扱い）。
-// 消費者が入るのは task 3.3——そのとき `#[allow(unused_imports)]` を外すこと
-// （属性は use 文単位で効くため、この 1 項目だけを覆う独立の use 文にしてある）。
-#[allow(unused_imports)]
 use super::spawn::BalloonLimit;
 
 pub use self::anchor::{Anchored, project_anchor};
@@ -128,3 +131,6 @@ mod visibility_char_wiring_tests;
 #[cfg(test)]
 #[path = "follow_visibility_balloon_wiring_tests.rs"]
 mod visibility_balloon_wiring_tests;
+#[cfg(test)]
+#[path = "follow_balloon_limit_tests.rs"]
+mod balloon_limit_wiring_tests;

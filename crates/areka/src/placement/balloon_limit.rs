@@ -56,6 +56,15 @@ pub(crate) const BALLOON_LIMIT_UNRESOLVED_TAG: &str = "[balloon-limit] Unresolve
 /// （実機サインオフの 2 段 grep で「どの関門が動いたか」を切り分ける）。
 pub(crate) const BALLOON_LIMIT_BOOT_CONTEXT: &str = "boot-gate";
 
+/// runtime 関門（`enqueue_window_set_pos` 内・task 3.3）であることを表す契機ラベル。
+///
+/// runtime 関門は [`super::diag::PlacementRoute`] も併せて出せる（元書込の route ＝
+/// DD7「関門内の補正は元書込の route を保つ」）が、route だけでは起動時関門・解放時
+/// 補正と同じ 2 段 grep に乗らない——起動時関門は route を持たないからである。
+/// `context` フィールドを 3 関門で共通に出すことで「どの関門が動いたか」を 1 語で
+/// 切り分けられる（`BALLOON_LIMIT_BOOT_CONTEXT` の doc と対を成す規約）。
+pub(crate) const BALLOON_LIMIT_RUNTIME_CONTEXT: &str = "runtime-gate";
+
 // =============================================================================
 // クランプ核
 // =============================================================================
