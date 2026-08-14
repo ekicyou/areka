@@ -12,6 +12,8 @@
 //! - 負値は符号付き `i32` のまま保持しピクセル解決は行わない（R4.1/R4.4/R4.5）。
 //! - `font.color.{r,g,b}` の 3 キーを個別に引き `FontColor` へ束ねる（部分欠落は個別 `None`・R2.6）。
 //! - 上流 `kv::parse_kv` のフラット KV 出力を消費し、KV 化を再実装しない（R1.5・foundation 所有）。
+//! - `windowposition.x`/`.limit` は数値写像とは別枠で生文字列を忠実転記する（解釈も警告もしない
+//!   転記層契約・windowposition-limit 要件 1.1/4.1。既存の数値写像は無改変＝同要件 5.1）。
 //!
 //! 依存方向は `model ← parse`。KV 化は `crate::kv::parse_kv` に委譲する。
 
@@ -22,7 +24,7 @@ use crate::kv::parse_kv;
 
 use super::model::{
     BalloonCursor, BalloonModel, CursorColor, Font, FontColor, Origin, ValidRect, WindowPosition,
-    WordWrapPoint,
+    WindowPositionRaw, WordWrapPoint,
 };
 
 /// 主入口: 既に KV マップ化済みの 2 層（descript 既定層＋画像別上書き層・任意）を写像する。
@@ -69,6 +71,14 @@ fn map_merged(merged: &BTreeMap<String, String>) -> BalloonModel {
     let windowposition = WindowPosition::new(
         get_scalar::<i32>(merged, "windowposition.x"),
         get_scalar::<i32>(merged, "windowposition.y"),
+    );
+    // windowposition.x/.limit の生文字列転記（windowposition-limit 要件 1.1/4.1）。
+    // 上の数値写像とは別枠であり、数値化できないキーワード（center/top/bottom）や limit の 0/1 を
+    // 解釈せず・警告せずそのまま持ち上げる。trim は kv 層（`kv::parse_kv`）で済んでいる。
+    // 0/1 検証・キーワード判別・語彙外値の警告付き縮退は下流（配置層）の責務。
+    let windowposition_raw = WindowPositionRaw::new(
+        merged.get("windowposition.x").map(|v| v.to_owned()),
+        merged.get("windowposition.limit").map(|v| v.to_owned()),
     );
     let origin = Origin::new(
         get_scalar::<i32>(merged, "origin.x"),
@@ -139,6 +149,7 @@ fn map_merged(merged: &BTreeMap<String, String>) -> BalloonModel {
         budoux_newline,
     )
     .with_cursor(cursor)
+    .with_windowposition_raw(windowposition_raw)
 }
 
 /// マージ済みマップから `key` を完全一致で引き、値を `T` へ整数パースする寛容ヘルパ（R1.4/R2.6）。

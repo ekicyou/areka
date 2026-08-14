@@ -21,6 +21,6 @@ mod validation_tests;
 
 pub use model::{
     BalloonCursor, BalloonModel, CursorColor, Font, FontColor, Origin, ValidRect, WindowPosition,
-    WordWrapPoint,
+    WindowPositionRaw, WordWrapPoint,
 };
 pub use parse::{parse, parse_str};
