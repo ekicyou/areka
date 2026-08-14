@@ -5,6 +5,7 @@
 //! 構造体に束ねる。フィールドの更新規律は各 doc が正本であり、書き込み点は `presenter` サブツリー内に
 //! 閉じる（`pub(super)` はその範囲を表す＝分割前の「`presenter` 私有」と可視集合が同一）。
 
+use super::budget::FrameBudget;
 use super::{
     AtlasTable, BindSet, ComposeCache, Composer, EmoWorld, Entity, PatternState, ScalePolicy,
     ScaleRatio, SwapChainPresenter, VisualMount,
@@ -51,6 +52,16 @@ pub(super) struct PresentTarget {
     pub(super) atlas: AtlasTable,
     /// 合成器（状態非保持・スクラッチのみ再利用）。
     pub(super) composer: Composer,
+    /// 毎フレーム経路の確保計数の器（Requirement 1.3・design.md §FrameBudget）。
+    ///
+    /// **累積カウンタの所有者はここ**である。target と同じ寿命で適用をまたいで存続するため、
+    /// 「ウォームアップ後の N 反復で 1 件も確保が増えていない」（Requirement 3.1）を run 全体の
+    /// 累積として主張できる。適用単位の増分は表示成立点で `take_delta` により取り出され、
+    /// perf サマリ行の `alloc_*` フィールドへ載る。
+    ///
+    /// 後段（task 5.2）は本フィールドへ再利用席（合成先の常設席・リサンプル作業領域の席・
+    /// マスクの輪番）を足す。席が増えても計数の API 面と所有者は動かない。
+    pub(super) budget: FrameBudget,
     /// 合成入力（surface id＋bind 集合）→ (composed, mask) 対の容量 1 メモ化スロット。
     pub(super) cache: ComposeCache,
     /// 装着先の窓 Entity（R1.3・遅延装着の対象）。

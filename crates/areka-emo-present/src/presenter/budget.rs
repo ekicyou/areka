@@ -40,11 +40,6 @@
 //! 計数は整数の飽和加算のみで、確保もログもロックも行わない。ログ設定も参照しない——
 //! 表示経路がログ設定で分岐しないという構造（Requirement 1.5）は計数側でも保つ。
 
-// 本モジュールは観測基盤の**先行導入**であり、毎フレーム経路への配線は後続タスクが行う。
-// 配線が済むまでは計数シームがクレート内から呼ばれないため dead_code が鳴る——配線と同時に
-// この許可は落とす（残っていれば本当の死蔵コードを隠す）。
-#![allow(dead_code)]
-
 /// 確保の発生点（design.md §FrameBudget の席一覧・perf サマリ行の `alloc_*` と 1:1）。
 ///
 /// 列挙を増減させると perf サマリ行のフィールド集合が変わる＝判定スクリプトとの契約変更である。
@@ -62,6 +57,10 @@ pub(super) enum AllocSite {
 
 impl AllocSite {
     /// 全発生点（走査の正本。檻はこれを回して「4 つある」ことごと固定する）。
+    ///
+    /// 読み手は現時点ではテストのみ（`budget_tests.rs`）。製品コードからの走査は task 6.1
+    /// （定常アロケーション 0 の檻）が全発生点を回す形で入る。
+    #[allow(dead_code)]
     pub(super) const ALL: [AllocSite; 4] = [
         AllocSite::ComposeDst,
         AllocSite::ResampleDst,
@@ -89,6 +88,10 @@ pub(super) struct BudgetDelta {
 
 impl BudgetDelta {
     /// 発生点で引く（全発生点の走査用。名前つきフィールドと同じ値を返す）。
+    ///
+    /// 現時点の読み手はテストのみ（[`AllocSite::ALL`] を回す檻）。製品コードの
+    /// perf サマリ行は名前つきフィールドを直接使う。
+    #[allow(dead_code)]
     pub(super) fn count(&self, site: AllocSite) -> u32 {
         match site {
             AllocSite::ComposeDst => self.alloc_compose_dst,
@@ -128,6 +131,9 @@ pub(super) struct BudgetCounters {
 
 impl BudgetCounters {
     /// 発生点で引く（全発生点の走査用）。
+    ///
+    /// 現時点の読み手はテストのみ。累積を「全発生点で 0 のまま」と主張する檻は task 6.1 が置く。
+    #[allow(dead_code)]
     pub(super) fn count(&self, site: AllocSite) -> u64 {
         match site {
             AllocSite::ComposeDst => self.alloc_compose_dst,
@@ -188,8 +194,9 @@ impl FrameBudget {
 
     /// この適用分の増分を取り出してリセットする（perf サマリ行へ載せる値）。
     ///
-    /// 累積には触れない。取り出し忘れた増分は次の適用へ持ち越されるため、成立点で必ず 1 回
-    /// 取り出す（配線は後続タスクの責務）。
+    /// 累積には触れない。取り出しは**表示成立点 1 箇所**（`show.rs` の perf サマリ行 emit の
+    /// 直前）で行う。早期復帰した適用の増分は取り出されず次の適用へ持ち越されるが、確保自体は
+    /// 実際に起きているため、成立した次の行に現れるのが正しい（累積は常に厳密）。
     pub(super) fn take_delta(&mut self) -> BudgetDelta {
         std::mem::take(&mut self.pending)
     }
@@ -197,6 +204,10 @@ impl FrameBudget {
     /// run 全体の累積カウンタ（読み取りのみ）。
     ///
     /// テストが「ウォームアップ後の N 反復で 1 件も増えていない」を主張する口である。
+    ///
+    /// 現時点の読み手はテストのみ（`budget_tests.rs`）。presenter 経由で累積を主張する檻は
+    /// task 6.1（定常アロケーション 0）が置く。
+    #[allow(dead_code)]
     pub(super) fn cumulative(&self) -> &BudgetCounters {
         &self.total
     }

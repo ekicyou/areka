@@ -1,6 +1,8 @@
 //! `ShowSurface` の適用（`EmoPresenter::apply_show`）——k 導出・引き当て／合成・供給面遅延生成・
 //! アップロード＋マスク同期＋可視化・表示成立点の状態更新を 1 呼び出しで行う単一漏斗。
 
+use super::budget::AllocSite;
+use super::timing::{EmitContext, FrameTiming, Stage, compose_key_hash};
 use super::{
     AlphaMaskResource, BindSet, ComposeError, ComposedSurface, DPI, EmoPresenter, GraphicsCore,
     PatternState, PresentError, PresentOutcome, ReplySender, SwapChainPresenter, TargetId,
@@ -38,6 +40,12 @@ impl EmoPresenter {
         pattern: PatternState,
         reply: Option<ReplySender<PresentOutcome>>,
     ) {
+        // (−1) 段階計時の起点（Requirement 1.1・design D5）。**無条件**に開始する——ログ設定を
+        // 一切参照しないため、計時ログの有効・無効で表示経路が分岐しない（Requirement 1.5）ことが
+        // 檻ではなく構造で成立する。`emit` は `self` を消費するため、以降の early return は
+        // すべて計時器を黙って drop する＝**成立点の対でしか行が出ない**（design §FrameTiming）。
+        let mut timing = FrameTiming::start();
+
         let Some(target) = self.targets.get_mut(&target_id) else {
             tracing::error!(
                 ?target_id,
@@ -63,8 +71,11 @@ impl EmoPresenter {
             .cache
             .get(surface_id, &binds, &pattern, scale)
             .is_some();
+        timing.mark(Stage::CacheLookup);
         if !cache_hit {
-            match target
+            // 合成結果を先に束縛して境界を作る（計時点 `Stage::Compose` を合成の直後に置くため）。
+            // 分岐・呼出順序・エラー経路は下の `match` がそのまま担い、挙動は不変である。
+            let composed = target
                 .composer
                 // pattern を合成入力の第一級要素として合成器へ透過する（R5.1）。
                 .compose(
@@ -73,8 +84,16 @@ impl EmoPresenter {
                     surface_id,
                     &binds,
                     &pattern,
-                ) {
+                );
+            timing.mark(Stage::Compose);
+            match composed {
                 Ok(composed) => {
+                    // `Composer::compose` は毎回 `ComposedSurface::new(0,0)` を起こし、内部の
+                    // `resize_and_clear` が外形まで伸長する（emo-compose lib.rs:158）。確保は上流の
+                    // 内部で起きるため、観測点は**合成が成功した直後のこの呼出側**に置く（Err は
+                    // 伸長前に落ちるため数えない）。是正（task 5.3）で `compose_into`＋常設席へ
+                    // 移ると、同じ計数が「席の再利用が成立しなかった回」を指すようになる。
+                    target.budget.note_alloc(AllocSite::ComposeDst);
                     // 合成は常に native 原寸（emo-compose の合成経路は k を知らない・設計 D3 の A2）。
                     let native_extent = (composed.width(), composed.height());
                     // k 適用（要件 2.1/2.3）: 合成済みの 1 枚（element 入れ子・SERIKO パターン・mayuna
@@ -85,7 +104,16 @@ impl EmoPresenter {
                         composed
                     } else {
                         let mut scaled = ComposedSurface::new(0, 0);
+                        // 表示バッファ（リサンプル先）の新規確保。0×0 で起こして `resample` 内の
+                        // `resize_and_clear` が出力外形まで伸長する（is-a A2）。
+                        target.budget.note_alloc(AllocSite::ResampleDst);
+                        // リサンプル作業領域（x 軸写像表 `Vec<AxisSample>`・emo-compose scale.rs:423）
+                        // は `resample` の内部で毎回新規に組まれる私有バッファであり、呼出側から
+                        // 到達できる観測点はこの呼出そのものである（是正 task 5.2 で `ResampleScratch`
+                        // の常設席へ移ると、同じ計数が再利用の不成立を指す）。
+                        target.budget.note_alloc(AllocSite::Xmap);
                         resample(&composed, scale, &mut scaled);
+                        timing.mark(Stage::Resample);
                         scaled
                     };
                     // 挿入時にマスクを 1 回だけ生成し、表示バッファと対で束ねる（R2.1/R2.4）。
@@ -94,6 +122,13 @@ impl EmoPresenter {
                     target
                         .cache
                         .insert(surface_id, binds.clone(), pattern.clone(), scale, display);
+                    // 当たり判定マスクの新規確保。生成（`AlphaMask::from_pbgra32`・cache.rs:135-140）は
+                    // 挿入の内側に隠されている（「表示のたびに再生成しない」を呼び手が破れない構造）
+                    // ため、呼出側から到達できる観測点はこの `insert` 呼出そのものである。ゆえに
+                    // `Stage::MaskGen` の区間も挿入全体（マスク生成＋スロット置換＋旧エントリ解放）を
+                    // 含む——旧エントリの解放は is-a A6 そのものであり、内訳として一体で読むのが正しい。
+                    target.budget.note_alloc(AllocSite::Mask);
+                    timing.mark(Stage::MaskGen);
                     // スロットの中身と対で原寸を控える（`insert` と同じ場所＝対が崩れない唯一の書き方）。
                     // 以降この回が失敗して early return しても、後からヒットで表示が成立した時点で
                     // 正しい原寸が照会契約へ渡る。
@@ -229,6 +264,7 @@ impl EmoPresenter {
             Self::reply(reply, Err(e));
             return;
         }
+        timing.mark(Stage::Upload);
         // 表示物理寸は**供給面の実寸**を単一真実源とする（upload が外形変化を検知して合わせ込んだ後の
         // 値＝k 適用済み composed の外形）。エントリ外形から別途組み立てないことで、供給面・visual
         // 境界・マスクが同一の物理寸に揃うことを構造で担保する（R3.2・k 追従は A2 の自動追従）。
@@ -287,6 +323,10 @@ impl EmoPresenter {
         // いま表示に使ったエントリ由来の原寸をそのまま写す（合成した回か否かで分岐しない——分岐させると
         // 「insert 済みのまま失敗 → 後からヒットで成立」の経路で照会値が画面と乖離する）。
         target.native_size = target.cached_native;
+        // 合成キーの安定ハッシュ（perf サマリ行の `key_hash`・Requirement 7.2 の裁定材料）は
+        // `last_show` への move の**直前**に取る。全段の `mark` が済んだ後なので、この走査
+        // （借用のみ・確保なし）は段別所要へ混入せず `t_total_us` にだけ含まれる。
+        let key_hash = compose_key_hash(surface_id, &binds, &pattern, scale);
         target.last_show = Some((surface_id, binds, pattern));
 
         // 表示成立点の観測ログ（設計 D10・要件 6.1/6.3 の判定素材）。実機サインオフは有界 auto-exit で
@@ -317,6 +357,23 @@ impl EmoPresenter {
             // 今回の表示成立が窓寸 reconcile 要求を積んだか（議題 #2 裁定の状態照合の観測点）。
             size_changed,
             "apply(ShowSurface): 表示・マスクを更新"
+        );
+
+        // perf サマリ行（Requirement 1.1/1.3・design.md §Data Models）。上の info! と**同一適用の対**
+        // として隣接して出る別行である。ここが唯一の emit 点＝早期復帰の経路では 1 行も出ない。
+        //
+        // `take_delta` は増分を取り出して器を 0 に戻す。早期復帰で取り出されなかった増分は次の適用へ
+        // 持ち越される（budget.rs の契約）——確保は実際に起きているため、成立した次の行に現れるのが
+        // 正しく、累積（`cumulative`）は常に厳密である。
+        let allocs = target.budget.take_delta();
+        timing.emit(
+            &EmitContext {
+                target_id,
+                surface_id,
+                cache_hit,
+                key_hash,
+            },
+            allocs,
         );
         Self::reply(reply, Ok(()));
     }

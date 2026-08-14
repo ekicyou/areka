@@ -275,7 +275,7 @@ sequenceDiagram
 **Responsibilities & Constraints**
 - 段は R1.1 の列挙に一致: キャッシュ照会（`t_cache_us`）・合成（`t_compose_us`）・リサンプル（`t_resample_us`）・マスク生成（`t_mask_us`）・供給面転写（`t_upload_us`）・合計（`t_total_us`）。スキップされた段は 0 を持つ（フィールドは常に全段出現＝R2.5 の行単位検証を可能にする）
 - 計測は無条件実行（`Instant::now` は段あたり数十 ns・emit 判断のみ tracing フィルタに委ねる）——表示経路がログ設定で分岐しない（D5）
-- emit は `tracing::debug!`・module-path target（`areka_emo_present::presenter::show` 配下）・固定文言 `"perf(apply_show): 段階別計時"`。既存 info! 成立点ログの直後に置き、同一 apply の対として読める
+- emit は `tracing::debug!`・module-path target（`areka_emo_present::presenter::timing`）・固定文言 `"perf(apply_show): 段階別計時"`。既存 info! 成立点ログの直後に置き、同一 apply の対として読める
 - 早期 return 経路（エラー・EmptyComposition）では emit しない（成立点の対のみ）
 
 ##### Service Interface

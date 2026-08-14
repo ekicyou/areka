@@ -33,15 +33,10 @@
 //! 同一適用の対として隣接して出る（配線は show.rs の責務）。文言・フィールド名の変更は
 //! `judge-perf.py` と計時檻の再検証トリガである（design.md §Revalidation Triggers）。
 
-// 本モジュールは観測基盤の**先行導入**であり、毎フレーム経路への配線（`FrameBudget` からの
-// 計数受け渡しを含む）は後続タスクが行う。配線が済むまでは公開シームがクレート内から呼ばれない
-// ため dead_code が鳴る——配線と同時にこの許可は落とす（残っていれば本当の死蔵コードを隠す）。
-#![allow(dead_code)]
-
 use std::hash::{Hash, Hasher};
 use std::time::{Duration, Instant};
 
-use areka_emo_compose::{BindSet, PatternState, ScaleRatio};
+use areka_emo_compose::{BindSet, ComposeMethod, PatternState, ScaleRatio};
 
 use super::budget::BudgetDelta;
 use crate::command::TargetId;
@@ -50,6 +45,11 @@ use crate::command::TargetId;
 ///
 /// `tracing` のメッセージは文字列リテラルでなければならないため、[`FrameTiming::emit_at`] 内の
 /// `debug!` には同じ文言を直接書いてある。両者の乖離は単体檻が RED で捕まえる。
+///
+/// 読み手は檻だけである（`timing_tests.rs`・task 1.4 の計時ログ較正檻）——製品コードは
+/// リテラルを直接持つため参照しない。契約面を名前で 1 箇所に据えることが本定数の目的であり、
+/// 死蔵ではない。
+#[allow(dead_code)]
 pub(super) const PERF_LINE_MESSAGE: &str = "perf(apply_show): 段階別計時";
 
 /// 計時対象の段（Requirement 1.1 の列挙と 1:1）。
@@ -281,6 +281,14 @@ pub(super) fn compose_key_hash(
         animation_id.hash(&mut hasher);
         frame.surface_id.hash(&mut hasher);
         std::mem::discriminant(&frame.method).hash(&mut hasher);
+        // `Blend` は**内側の `BlendMode` が意味を分ける**ため判別子だけでは足りない
+        // （`Blend(Multiply)` と `Blend(Screen)` が同一値になる系統的衝突＝異なりキー数を
+        // 過少に見積もる向き）。`BlendKind` も `#[non_exhaustive]` ゆえ判別子で混ぜ、
+        // 直交軸の `fast` を併せて流す。
+        if let ComposeMethod::Blend(mode) = &frame.method {
+            std::mem::discriminant(&mode.kind).hash(&mut hasher);
+            mode.fast.hash(&mut hasher);
+        }
         frame.x.hash(&mut hasher);
         frame.y.hash(&mut hasher);
     }

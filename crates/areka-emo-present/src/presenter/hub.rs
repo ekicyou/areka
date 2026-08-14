@@ -4,6 +4,7 @@
 //! `super::show`、DPI 再スケールは `super::refresh`、照会系は `super::read`、当たり判定は `super::hit` に
 //! 分かれる（いずれも同一型 `EmoPresenter` の別 `impl` ブロック）。
 
+use super::budget::FrameBudget;
 use super::{
     AtlasTable, ComposeCache, Composer, EmoWorld, Entity, HashMap, PhantomData, PresentCommand,
     PresentError, PresentOutcome, PresentTarget, ReplySender, ScalePolicy, ScaleRatio, TargetId,
@@ -65,6 +66,8 @@ impl EmoPresenter {
                 emo_world,
                 atlas,
                 composer: Composer::new(),
+                // 確保計数は target と同じ寿命で始まる（累積の起点＝この target の登録時）。
+                budget: FrameBudget::new(),
                 cache: ComposeCache::new(),
                 window,
                 mount: None,

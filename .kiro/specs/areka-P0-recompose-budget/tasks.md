@@ -20,7 +20,7 @@
   - _Requirements: 1.3_
   - _Boundary: FrameBudget_
 
-- [ ] 1.3 表示適用の毎フレーム経路へ計時点と計数を配線
+- [x] 1.3 表示適用の毎フレーム経路へ計時点と計数を配線
   - 表示対象の状態に計数器の席を 1 つ持たせ、適用をまたいで存続させる（累積カウンタの所有者を確定する）
   - 各段の境界で所要を記録し、既存の表示成立点ログの直後に計時行を出力する
   - 早期復帰の経路では出力しない（成立点の対のみ）
@@ -190,3 +190,7 @@
   2. 計数の唯一のシームは `FrameBudget::note_alloc(AllocSite)`。1.3 は現行の 4 つの確保発生点へこれを置く。5.2 で席メソッドの内部呼出へ移す際、`note_alloc` は `pub(super)` から私有へ落とすこと（`show.rs` から直接叩けると「シーム 1 箇所」が形骸化する）。
 - **design.md:278 の誤記**: FrameTiming 節の「module-path target（`areka_emo_present::presenter::show` 配下）」は実現不能（`debug!` は `timing.rs` で展開されるため target は `…::presenter::timing`）。判定スクリプトの契約は固定文言とフィールド名であり target ではないので要件違反はない。1.3 の配線コミットで design.md の当該括弧書きを `…::presenter::timing` へ訂正する。
 - **`CaptureSubscriber` がクレート内で 3 重複**（`balloon_test_support.rs:90`／`presenter_refresh_and_log_tests.rs:45`／`presenter/timing_tests.rs`）。各々が別モジュールに私有で到達不能なため境界内では統合不可。別課題（steering `structure.md:176` の共有ヘルパ集約）として扱う。
+- **1.3 → 1.4 への申し送り（最重要）**: **現時点で show.rs の配線を固定しているテストは 1 本も無い**。レビューの変異検査で `timing.mark(Stage::Upload)` を削除しても全 160 件が緑のままだった（`PERF_LINE_MESSAGE` を参照するのは `timing_tests.rs` の注入時刻テストのみで、`apply_show` を駆動して行を検査するテストが存在しないため）。したがって 1.4 の檻は「固定文言・水準・全段出現」だけに縮めてはならず、**各段 mark の設置位置・emit が 1 適用 1 回であること・成立点で出て早期復帰（8 経路）では出ないこと**まで固定すること。
+- **1.3 → 3.2 への申し送り（段の帯が名前より広い）**: 境界の制約上、3 つの段が名前より広い区間を含む。`t_cache_us` はターゲット照会と k 導出を含む。**`t_mask_us` は `cache.insert` 全体＝マスク生成＋スロット置換＋旧エントリ解放（約 4MB の free）を含む**。`t_upload_us` は初回適用の chain/mount 遅延生成を含み、キャッシュ命中経路では照会以降の全部を含む。3.2 で支配項を選ぶ際、`t_mask_us` が支配的でも「マスク生成だけが重い」と読んではならない（`AlphaMask::from_pbgra32` は `cache.rs:135-140` の内部にあり、1.3 の境界では呼出点でしか計れない）。いずれも 5.3 の再配線で同時に解消される。
+- **未解消の残件（`compose_key_hash`）**: `timing.rs:283-292` の `ComposeMethod::Unknown(Box<str>)` は判別子のみで混ぜているため、異なる未知メソッド名同士が同一ハッシュになる（Blend で直したのと同じ系統的衝突・要件 7.2 の異なりキー数を過少に見積もる向き）。`method` が合成を駆動しない現状（`areka-emo-compose/src/pattern.rs:38`）ゆえ材料性は低い。修正は 3 行。`timing.rs:263-265` の doc コメントも Blend 修正後は陳腐化している。次に `compose_key_hash` へ触るタスクで併せて処理すること。
+- **design.md の記載漏れ**: `## File Structure Plan` → `### Modified Files` は `budget: FrameBudget` の席の追加先として `presenter/target.rs` しか挙げていないが、`PresentTarget` の構造体リテラル構築点は `presenter/hub.rs:66-68` にあり機械的追随が必須。次に当該節へ触るタスクで補うこと。

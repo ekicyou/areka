@@ -24,7 +24,7 @@
 
 use super::*;
 
-use areka_emo_compose::{ComposeMethod, PatternFrame};
+use areka_emo_compose::{BlendKind, BlendMode, ComposeMethod, PatternFrame};
 
 // ── 捕捉 subscriber（tracing 単体・新規依存なし） ─────────────────────────────────────
 
@@ -400,5 +400,40 @@ fn compose_key_hash_is_stable_and_separates_every_key_element() {
         base,
         compose_key_hash(1000, &binds, &pattern, ScaleRatio::ONE),
         "表示スケール k 差が key_hash に現れていない"
+    );
+
+    // ⑶ コマの描画メソッド差。`ComposeMethod` は判別子で混ぜるが、`Blend` は**内側の
+    // [`BlendMode`] が意味を分ける**ため、判別子だけでは `Blend(Multiply)` と `Blend(Screen)` が
+    // 同一ハッシュになる（系統的衝突＝異なりキー数を過少に見積もる向き・tasks.md 申し送り 1.1→1.3）。
+    let with_method = |method: ComposeMethod| {
+        let mut p = PatternState::default();
+        p.set(
+            5,
+            PatternFrame {
+                surface_id: 20,
+                method,
+                x: 3,
+                y: -4,
+            },
+        );
+        p
+    };
+    assert_ne!(
+        base,
+        compose_key_hash(1000, &binds, &with_method(ComposeMethod::Replace), k),
+        "描画メソッド差（variant）が key_hash に現れていない"
+    );
+    let blend_multiply = with_method(ComposeMethod::Blend(BlendMode::new(BlendKind::Multiply)));
+    let blend_screen = with_method(ComposeMethod::Blend(BlendMode::new(BlendKind::Screen)));
+    assert_ne!(
+        compose_key_hash(1000, &binds, &blend_multiply, k),
+        compose_key_hash(1000, &binds, &blend_screen, k),
+        "Blend の内側ブレンド種別差（Multiply / Screen）が key_hash に現れていない"
+    );
+    let blend_multiply_fast = with_method(ComposeMethod::Blend(BlendMode::fast(BlendKind::Multiply)));
+    assert_ne!(
+        compose_key_hash(1000, &binds, &blend_multiply, k),
+        compose_key_hash(1000, &binds, &blend_multiply_fast, k),
+        "Blend の -fast 変種差が key_hash に現れていない"
     );
 }
