@@ -351,6 +351,38 @@ impl AxisWalk {
     }
 }
 
+/// 1 行ぶんの横方向 bilinear（隣接 2 画素の 4 チャンネル混合・`recompose-budget` 追補 §A3）。
+///
+/// `row` は**1 行を切り出したスライス**で、`o0`／`o1` はその中のバイト添字
+/// （クランプ済み座標 × 4 ゆえ常に行内）。画素を 4 バイトの部分スライスとして取り出すため、
+/// 範囲検査は 1 画素あたり 2 回（行あたりの部分スライス 2 本）に畳まれ、チャンネルごとの
+/// 検査は消える（追補 §A3 項目 1／項目 3 のチャンネル展開）。
+///
+/// # 値は元式と 1 も違わない（整数の恒等変形）
+///
+/// 混合 `p0·(WEIGHT_ONE − wx) + p1·wx` を `p0·WEIGHT_ONE + (p1 − p0)·wx` へ整理した形である。
+/// 分配則による**整数の恒等変形**ゆえ両式は厳密に等しく、途中の切り捨て・飽和は一切ない
+/// （変数どうしの乗算がチャンネルあたり 2 回から 1 回になる。残る `·WEIGHT_ONE` は
+/// 2 の冪の定数倍＝シフトである）。
+///
+/// # 桁溢れ
+///
+/// `p0·WEIGHT_ONE ≤ 255·65536 = 16_711_680`、`(p1 − p0)·wx` は `±255·65535` の域で、和は
+/// 常に `p0·WEIGHT_ONE` と `p1·WEIGHT_ONE` の間（＝`0..=16_711_680`）に収まる。
+/// i32 で厳密に足り、結果は非負である。
+#[inline(always)]
+fn blend_axis(row: &[u8], o0: usize, o1: usize, wx: i32) -> [u32; 4] {
+    let p0 = &row[o0..o0 + 4];
+    let p1 = &row[o1..o1 + 4];
+    let mix = |a: u8, b: u8| (a as i32 * WEIGHT_ONE as i32 + (b as i32 - a as i32) * wx) as u32;
+    [
+        mix(p0[0], p1[0]),
+        mix(p0[1], p1[1]),
+        mix(p0[2], p1[2]),
+        mix(p0[3], p1[3]),
+    ]
+}
+
 /// リサンプルの作業領域（x 軸写像表の席・`recompose-budget` 要件 3.1／design D2⑶）。
 ///
 /// [`resample_with`] が行間で共有する x 軸写像表を**呼び手が所有**するための不透明な席である。
@@ -404,8 +436,9 @@ impl ResampleScratch {
 /// # 整数専用（設計 D5・`blit.rs` と同格の決定性規約）
 ///
 /// 座標写像は `den/num` の有理逆写像を分子・剰余で厳密保持（[`AxisWalk`]）し、混合重みは
-/// 16bit 固定小数点へ量子化する。画素値の合成は u32/u64 のみで行い、**f32/f64 を経路に
-/// 一切持ち込まない**。丸めは `(v + 2^31) >> 32`（round half up）で一意である。
+/// 16bit 固定小数点へ量子化する。画素値の合成は 32/64bit 整数（i32/u32・i64）のみで行い、
+/// **f32/f64 を経路に一切持ち込まない**。丸めは `(v + 2^31) >> 32`（round half up）で一意である。
+/// 混合式は分配則で整理した恒等形（[`blend_axis`]）を用いるが、値は整理前と厳密に等しい。
 ///
 /// # premultiplied ドメイン（設計 D5）
 ///
@@ -499,8 +532,10 @@ pub fn resample_with(
     }
 
     let src_stride = src.stride() as usize;
+    let src_row_len = src.width() as usize * 4;
     let src_bytes = src.bytes();
     let out_stride = out.stride() as usize;
+    let out_row_len = out_w as usize * 4;
     let dst = out.bytes_mut();
 
     let mut y_walk = AxisWalk::new(scale);
@@ -508,31 +543,34 @@ pub fn resample_with(
         let ys = y_walk.sample(src.height());
         y_walk.advance();
 
-        let row0 = ys.i0 as usize * src_stride;
-        let row1 = ys.i1 as usize * src_stride;
-        let wy = ys.w as u64;
-        let inv_wy = (WEIGHT_ONE - ys.w) as u64;
-        let dst_row = dy * out_stride;
+        // 行スライスの前取り（追補 §A3 項目 2）: 画素ごとの `usize` 加算と添字検査ではなく、
+        // 上下 2 行と出力 1 行を**行の開始で 1 度だけ**切り出す。
+        let row0 = &src_bytes[ys.i0 as usize * src_stride..][..src_row_len];
+        let row1 = &src_bytes[ys.i1 as usize * src_stride..][..src_row_len];
+        let wy = ys.w as i64;
+        let dst_row = &mut dst[dy * out_stride..][..out_row_len];
 
-        for (dx, xs) in scratch.x_map.iter().enumerate() {
-            let wx = xs.w;
-            let inv_wx = WEIGHT_ONE - wx;
-            // 4 近傍のバイト先頭（クランプ済み座標ゆえ全て範囲内）。
-            let p00 = row0 + xs.i0 as usize * 4;
-            let p01 = row0 + xs.i1 as usize * 4;
-            let p10 = row1 + xs.i0 as usize * 4;
-            let p11 = row1 + xs.i1 as usize * 4;
-            let di = dst_row + dx * 4;
+        for (dpx, xs) in dst_row.chunks_exact_mut(4).zip(scratch.x_map.iter()) {
+            let wx = xs.w as i32;
+            // 4 近傍は行スライス内の**画素単位**の添字で読む（範囲検査は行あたり 2 回の
+            // 部分スライスへ畳まれ、チャンネルごとの検査は消える・追補 §A3 項目 1）。
+            let o0 = xs.i0 as usize * 4;
+            let o1 = xs.i1 as usize * 4;
 
             // BGRA 4 チャンネルへ同式適用（premultiplied ドメイン・α も同じ）。
-            for c in 0..4usize {
-                // 横方向: 最大 255·65536 = 16_711_680（u32 域）。
-                let top = src_bytes[p00 + c] as u32 * inv_wx + src_bytes[p01 + c] as u32 * wx;
-                let bottom = src_bytes[p10 + c] as u32 * inv_wx + src_bytes[p11 + c] as u32 * wx;
-                // 縦方向: 最大 16_711_680·65536 ≈ 1.1e12（u64 域）。丸めは round half up。
-                let v = top as u64 * inv_wy + bottom as u64 * wy;
-                dst[di + c] = ((v + PRODUCT_HALF) >> PRODUCT_SHIFT) as u8;
-            }
+            let top = blend_axis(row0, o0, o1, wx);
+            let bottom = blend_axis(row1, o0, o1, wx);
+
+            // 縦方向も同じ恒等変形（`t·(WEIGHT_ONE − wy) + b·wy` ＝ `t·WEIGHT_ONE + (b − t)·wy`）。
+            // 中間は最大 255·2^32 ≈ 1.1e12（i64 域・値は常に非負）。丸めは round half up。
+            let mix_y = |t: u32, b: u32| -> u8 {
+                let v = t as i64 * WEIGHT_ONE as i64 + (b as i64 - t as i64) * wy;
+                ((v + PRODUCT_HALF as i64) >> PRODUCT_SHIFT) as u8
+            };
+            dpx[0] = mix_y(top[0], bottom[0]);
+            dpx[1] = mix_y(top[1], bottom[1]);
+            dpx[2] = mix_y(top[2], bottom[2]);
+            dpx[3] = mix_y(top[3], bottom[3]);
         }
     }
 }
