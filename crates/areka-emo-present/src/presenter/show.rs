@@ -1,6 +1,10 @@
 //! `ShowSurface` の適用（`EmoPresenter::apply_show`）——k 導出・引き当て／合成・供給面遅延生成・
 //! アップロード＋マスク同期＋可視化・表示成立点の状態更新を 1 呼び出しで行う単一漏斗。
 
+use std::sync::Arc;
+
+use wintf::ecs::widget::bitmap_source::AlphaMask;
+
 use super::budget::AllocSite;
 use super::timing::{EmitContext, FrameTiming, Stage, compose_key_hash};
 use super::{
@@ -20,7 +24,7 @@ impl EmoPresenter {
     /// 1 要素でも異なれば必ずミス＝再合成する（着せ替え・まばたきの正しさの担保）。(3) ミスなら合成し、
     /// `SurfaceNotFound` は error! ＋表示不変＋
     /// `Err`（R3.4）、`EmptyComposition` は warn! ＋ Hide 縮退＋`Ok`（設計ディスカッション #1）、`Ok` なら
-    /// `cache.insert`（マスクを 1 回だけ生成）。(4) 使えるエントリで、`chain`/`mount` 未生成なら原寸確定
+    /// マスクを 1 回だけ生成して `cache.insert` へ表示バッファと対で渡す。(4) 使えるエントリで、`chain`/`mount` 未生成なら原寸確定
     /// 後に遅延生成し、`chain.upload` ＋ `AlphaMaskResource::set` ＋ 可視化を同一呼び出し内で行う（R2.4）。
     ///
     /// # 可視化手順だけが所有権でゲートされる（`areka-P0-balloon-visibility` Requirement 1.1/6.2/6.9）
@@ -116,18 +120,32 @@ impl EmoPresenter {
                         timing.mark(Stage::Resample);
                         scaled
                     };
-                    // 挿入時にマスクを 1 回だけ生成し、表示バッファと対で束ねる（R2.1/R2.4）。
+                    // マスクをこの適用で 1 回だけ生成する（R2.1/R2.4）。生成点は `cache.insert` の
+                    // 内側から**呼出側のここへ移った**（設計 D4）——最終的な住所は `FrameBudget` の
+                    // 輪番シーム（task 5.2/5.3）であり、ここはその途中形である。挿入は表示バッファと
+                    // マスクを同時に受け取るため、対が崩れないことは引き続き構造で担保される。
+                    let mask = Arc::new(AlphaMask::from_pbgra32(
+                        display.bytes(),
+                        display.width(),
+                        display.height(),
+                        display.stride(),
+                    ));
+                    // 当たり判定マスクの新規確保（`vec!` 1 本）。計数はその確保の**直後**に置く
+                    // （是正 task 5.2/5.3 で輪番スロットの in-place 再生成へ移ると、同じ計数が
+                    // 「輪番が unique にならず新規確保へ落ちた回」を指すようになる）。
+                    target.budget.note_alloc(AllocSite::Mask);
                     // pattern は binds と同格のキー要素として挿入キーへ透過する（R5.2）。マスクは
                     // k 適用済み bytes 由来ゆえ物理 px 契約が無修正で整合する（設計 D6）。
-                    target
-                        .cache
-                        .insert(surface_id, binds.clone(), pattern.clone(), scale, display);
-                    // 当たり判定マスクの新規確保。生成（`AlphaMask::from_pbgra32`・cache.rs:135-140）は
-                    // 挿入の内側に隠されている（「表示のたびに再生成しない」を呼び手が破れない構造）
-                    // ため、呼出側から到達できる観測点はこの `insert` 呼出そのものである。ゆえに
-                    // `Stage::MaskGen` の区間も挿入全体（マスク生成＋スロット置換＋旧エントリ解放）を
+                    target.cache.insert(
+                        surface_id,
+                        binds.clone(),
+                        pattern.clone(),
+                        scale,
+                        display,
+                        mask,
+                    );
+                    // `Stage::MaskGen` の区間はマスク生成＋挿入全体（スロット置換＋旧エントリ解放）を
                     // 含む——旧エントリの解放は is-a A6 そのものであり、内訳として一体で読むのが正しい。
-                    target.budget.note_alloc(AllocSite::Mask);
                     timing.mark(Stage::MaskGen);
                     // スロットの中身と対で原寸を控える（`insert` と同じ場所＝対が崩れない唯一の書き方）。
                     // 以降この回が失敗して early return しても、後からヒットで表示が成立した時点で
@@ -273,7 +291,9 @@ impl EmoPresenter {
         let mount = target.mount.as_ref().expect("直上で生成済み");
         if let Some(mut mask_res) = world.get_mut::<AlphaMaskResource>(mount.surface_entity()) {
             // 表示バッファと同一 bytes 由来のマスクを hit-test へ供給する（R2.2/R2.5）。
-            mask_res.set(entry.mask.clone());
+            // エントリ側が `Arc` 表現になったための機械的追随で、**供給は従来どおり実体の複製**
+            // （`set`）である。参照カウント増だけで済ませる `set_shared` への置換は task 5.3。
+            mask_res.set(entry.mask.as_ref().clone());
         } else {
             tracing::warn!(
                 ?target_id,

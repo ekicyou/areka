@@ -22,12 +22,21 @@
 //! （設計 D6）。ミスした呼び手（提示段）が再合成＋再サンプルして再挿入する——k 変化は稀イベント
 //! ゆえこの再計算は許容される。容量 1 スロットも維持し、k 別の多エントリ保持は行わない（同 D6）。
 //!
-//! 挿入時に [`AlphaMask`] を **1 回だけ**生成して同一エントリ（[`CacheEntry`]）へ束ねる純粋な状態層で
-//! ある点は従来どおり。マスクが k 適用済みバイト由来になることで、[`AlphaMask`] の物理 px 契約は
+//! [`AlphaMask`] を表示バッファと同一エントリ（[`CacheEntry`]）へ束ねる純粋な状態層である点は
+//! 従来どおり。マスクが k 適用済みバイト由来になることで、[`AlphaMask`] の物理 px 契約は
 //! **マスク生成コードを一切変更せずに** k 追従と整合する（設計「emo-present / cache.rs」）。表示
 //! バッファと当たり判定マスクを 1 エントリに封じることで、対の入替がスロット操作 1 回で原子的に
-//! 起きる（R2.4）。表示のたびにマスクを再生成しない（R2.1）ことを、マスク生成を挿入 API の内側へ
-//! 隠して**構造で**担保する（呼び手はマスク生成を書けない・忘れられない）。
+//! 起きる（R2.4）。
+//!
+//! # マスク生成点は挿入の外（`areka-P0-recompose-budget` 設計 D4）
+//!
+//! マスク生成（[`AlphaMask::from_pbgra32`]）は挿入 API の内側から**呼び手側の予算シームへ移った**。
+//! 本層は生成済みの [`Arc<AlphaMask>`] を [`insert`] の引数で受け取り、表示バッファと対で束ねる
+//! だけである。「1 apply につきマスク 1 回生成・表示バッファと原子対で挿入」の契約は apply 単位で
+//! 不変であり（[`insert`] が表示バッファと `Arc` マスクを**同時に**受け取るため対の崩れは起き得ない）、
+//! 「表示のたびに再生成しない」（R2.1）は本層側では「[`insert`] はミス時にしか呼ばれない」という
+//! 引き当てフローの形がそのまま担保する。エントリ側を [`Arc`] にしたのは、下流（hit-test）への
+//! 供給を複製から参照カウント増へ落とすためのクレート内部の表現変更であり、原子対の意味論は不変。
 //!
 //! # 責務分界（合成は持たない・純粋状態層）
 //!
@@ -41,13 +50,15 @@
 //! [`insert`]: ComposeCache::insert
 //! [`invalidate_all`]: ComposeCache::invalidate_all
 
+use std::sync::Arc;
+
 use areka_emo_compose::{BindSet, ComposedSurface, PatternState, ScaleRatio};
 use wintf::ecs::widget::bitmap_source::AlphaMask;
 
 /// キャッシュエントリ＝表示バッファと当たり判定マスクの原子対（R2.4 の構造的担保）。
 ///
 /// `composed` は表示（WUC アップロード）の真実源、`mask` はさわり判定の真実源であり、両者は
-/// **同一 `composed.bytes()` 由来**である（[`ComposeCache::insert`] が挿入時に一度だけ生成し束ねる）。
+/// **同一 `composed.bytes()` 由来**である（呼び手が対で作り [`ComposeCache::insert`] へ同時に渡す）。
 /// 1 エントリへ束ねてあるため、surface 切替に伴う対の入替はスロット操作 1 回で原子的に起きる。
 ///
 /// 保持されるのは**キーの `scale` を適用済みの表示用サーフェス**（＝物理 px 寸）であり、`mask` も
@@ -57,9 +68,12 @@ use wintf::ecs::widget::bitmap_source::AlphaMask;
 pub struct CacheEntry {
     /// premultiplied BGRA・表示の真実源（k 適用済みの表示寸）。
     pub composed: ComposedSurface,
-    /// `composed.bytes()`（＝k 寸バイト）から挿入時に 1 回だけ生成した当たり判定マスク・
+    /// `composed.bytes()`（＝k 寸バイト）から呼び手が 1 回だけ生成した当たり判定マスク・
     /// さわり判定の真実源。`AlphaMask` の物理 px 契約と無修正で整合する。
-    pub mask: AlphaMask,
+    ///
+    /// [`Arc`] 共有形なのは下流（hit-test）への供給を複製から参照カウント増へ落とすためであり
+    /// （設計 D3・クレート内部の表現変更）、`composed` との原子対という意味論は不変である。
+    pub mask: Arc<AlphaMask>,
 }
 
 /// キャッシュキー＝エントリを一意に定める全体（合成入力 ＝ surface id ＋ bind 集合 ＋ pattern 状態、
@@ -106,18 +120,43 @@ impl ComposeCache {
         Self { slot: None }
     }
 
-    /// 表示用サーフェスを合成入力（surface id ＋ bind 集合 ＋ pattern 状態）＋表示スケール `scale`
-    /// 鍵で挿入し、[`AlphaMask`] を **挿入時に 1 回だけ**生成して束ねる。既存スロットは対ごと置換
+    /// スロットの中身を取り出して**容量を回収**する（キーは破棄・スロットは空になる）。
+    ///
+    /// 追い出されるエントリの表示バッファ（`Vec<u8>` の確保）を呼び手が次の表示バッファとして
+    /// 使い回すための口である（要件 3.1・設計 D2⑵）。返り値を捨てれば従来どおり解放されるため、
+    /// **本メソッドは容量 1・完全一致・原子対という承認済み意味論を一切変えない**——スロットの
+    /// 容量は 1 のままであり、容量変更の経路でもない（要件 7.1・容量変更は開発者裁定ゲート）。
+    ///
+    /// # 呼出は合成成功後に限る（設計 Flow 2 の規律）
+    ///
+    /// 合成が失敗し得る位置でこれを呼ぶと、失敗時にキャッシュが空のまま残り「合成失敗時の表示は
+    /// 適用前のまま」という現行挙動が壊れる。**合成が成功した後にのみ呼ぶ**ことは呼び手
+    /// （`presenter/show.rs` のミス経路）が構造で保証する契約であり、本層は強制しない（本層は
+    /// 合成器を持たず成否を知り得ないため・本モジュール冒頭 §責務分界）。
+    ///
+    /// 空スロット（未挿入・[`invalidate_all`] 後・回収済み）に対しては `None` を返し、状態は
+    /// 変わらない（べき等）。
+    ///
+    /// [`invalidate_all`]: ComposeCache::invalidate_all
+    pub fn take_recycled(&mut self) -> Option<CacheEntry> {
+        // キーは破棄しエントリだけを渡す。以後スロットは空＝あらゆるキーがミスする
+        // （`invalidate_all` と同じ観測状態で、違いは「中身を返すか捨てるか」だけである）。
+        self.slot.take().map(|(_key, entry)| entry)
+    }
+
+    /// 表示用サーフェスと**生成済みの**当たり判定マスクを、合成入力（surface id ＋ bind 集合 ＋
+    /// pattern 状態）＋表示スケール `scale` 鍵の原子対として挿入する。既存スロットは対ごと置換
     /// する（直前 1 件のみ保持・R2.4）。
     ///
-    /// 呼び手は合成済み [`ComposedSurface`] を渡すだけでよく、マスク生成
-    /// （[`AlphaMask::from_pbgra32`]）は本メソッド内部で `composed.bytes()`／`width`／`height`／
-    /// `stride` から一度だけ行う。マスク生成 API を挿入の内側へ隠すことで、「表示のたびに再生成
-    /// しない」（R2.1）を呼び手が破れない構造にする。
+    /// マスク生成（[`AlphaMask::from_pbgra32`]）は呼び手側の予算シームで行う（`recompose-budget`
+    /// 設計 D4）。本メソッドは表示バッファと `Arc` マスクを**同時に**受け取るため、「1 apply に
+    /// つきマスク 1 回生成・表示バッファと原子対で挿入」の契約は apply 単位で不変である。渡す
+    /// `mask` は必ず**同じ `composed` の bytes 由来**でなければならない——別出所のマスクを渡すと
+    /// 絵とさわり判定が食い違い、原子対の意味が失われる。
     ///
     /// `pattern` は seriko のアニメ pattern 状態（[`PatternState`]）で、`binds` と同格の合成入力
     /// キー要素である（R5.2）。`scale` は表示スケール k（要件 2.4/4.1）で、渡す `composed` は
-    /// **その k を適用済みの表示用サーフェス**でなければならない——マスクはそのバイトから生成される
+    /// **その k を適用済みの表示用サーフェス**でなければならない——マスクはそのバイト由来である
     /// ため、k と `composed` の不一致はそのまま「絵とさわり判定の寸法不一致」になる。本層は合成器も
     /// リサンプラも持たない（k の適用は提示段の責務・本モジュール冒頭 §責務分界）。
     ///
@@ -129,15 +168,8 @@ impl ComposeCache {
         pattern: PatternState,
         scale: ScaleRatio,
         composed: ComposedSurface,
+        mask: Arc<AlphaMask>,
     ) -> &CacheEntry {
-        // マスクは挿入時に 1 回だけ生成し（R2.1）、表示バッファと同一 bytes 由来で束ねる（R2.4）。
-        // `composed` は k 適用済みゆえ、このマスクも k 寸（物理 px）で生成される（設計 D6）。
-        let mask = AlphaMask::from_pbgra32(
-            composed.bytes(),
-            composed.width(),
-            composed.height(),
-            composed.stride(),
-        );
         let key = ComposeKey {
             surface_id,
             binds,

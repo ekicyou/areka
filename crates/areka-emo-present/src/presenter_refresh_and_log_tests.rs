@@ -276,6 +276,15 @@ fn refresh_scale_without_dpi_change_does_nothing() {
         scaled
     };
     let tampered_bytes = tampered.bytes().to_vec();
+    // 設計 D4 で `insert` は生成済みマスクを引数で受ける形になった（署名追随）。改竄した絵と
+    // **同一 bytes 由来**のマスクを渡し、スロットの原子対をプローブ側でも崩さない。
+    let tampered_mask =
+        std::sync::Arc::new(wintf::ecs::widget::bitmap_source::AlphaMask::from_pbgra32(
+            tampered.bytes(),
+            tampered.width(),
+            tampered.height(),
+            tampered.stride(),
+        ));
     assert_ne!(
         tampered_bytes, scaled_1000,
         "プローブ前提: 別の絵であること"
@@ -291,6 +300,7 @@ fn refresh_scale_without_dpi_change_does_nothing() {
             PatternState::default(),
             k2,
             tampered,
+            tampered_mask,
         );
 
     // DPI は据え置き（k 不変）。
