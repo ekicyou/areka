@@ -396,6 +396,154 @@ fn boot_gate_never_touches_balloon_offset_on_any_edge() {
     }
 }
 
+// ---------------------------------------------------------------------------
+// limit {0,1} × はみ出し 4 辺（＋4 隅）× k=1／k≠1 の全交差（要件 7.1・task 4.3）
+// ---------------------------------------------------------------------------
+
+/// DPI パラメタ水準。96＝k=1 相当、120/144/192＝k≠1 相当。
+const GATE_DPIS: [i32; 4] = [96, 120, 144, 192];
+
+/// 論理基準値 → 各 DPI の物理 px（`balloon_limit_tests.rs` と同一の道具・厳密整除を強制）。
+///
+/// 関門は物理 px しか見ない。同じ論理形状を各水準の物理値で与えたとき期待値も同じ
+/// 物理式から出ることを固定する（隠れた `/96` 変換があれば 96 以外の水準で崩れる）。
+fn px(logical: i32, dpi: i32) -> i32 {
+    assert_eq!(
+        (logical * dpi) % 96,
+        0,
+        "テスト入力は厳密整除になる論理値（4 の倍数）で構築する"
+    );
+    logical * dpi / 96
+}
+
+/// 矩形 (pos, size) が area へ 4 辺内包されているか（檻側の独立実装）。
+fn contained(pos: PointPx, size: SizePx, area: RectPx) -> bool {
+    pos.x >= area.left
+        && pos.y >= area.top
+        && pos.x + size.w <= area.right
+        && pos.y + size.h <= area.bottom
+}
+
+/// 寸法を明示して placement を組む（[`placement`] の DPI 可変版）。
+fn placement_sized(
+    scope: usize,
+    char_pos: PointPx,
+    balloon_offset: PointPx,
+    balloon_limit: bool,
+    char_size: SizePx,
+    balloon_size: SizePx,
+) -> ScopePlacement {
+    ScopePlacement {
+        scope,
+        char_pos,
+        char_size,
+        balloon_pos: point(char_pos.x + balloon_offset.x, char_pos.y + balloon_offset.y),
+        balloon_size,
+        balloon_offset,
+        balloon_limit,
+        anchor: Anchor::Free,
+    }
+}
+
+/// 要件 7.1 の行列を**関門の層で**閉じる: `limit {0,1}` × はみ出し方向 4 辺（単独）と
+/// 4 隅（複合）× k=1（dpi=96）および k≠1（120/144/192）の全交差。
+///
+/// クランプ**式**の 4 辺 × k 行列は `balloon_limit_tests.rs` が持つが、そこには
+/// `limit` の分岐が無い（design C5「limit=0 は呼び出し側で skip」＝有効判定は関門の
+/// 責務）。一方これまでの関門檻は `limit=0` を**1 辺・1 水準ずつ**しか通していなかった
+/// （[`boot_gate_skips_scopes_with_limit_disabled`] は左辺・96 のみ）。ゆえに
+/// 「limit=0 × 上辺」「limit=0 × k≠1」といった交差セルがどの檻にも無かった。本檻が
+/// その交差を 1 本で埋める。
+///
+/// 各セルは **limit=0 と limit=1 を同じ呼び出しへ同時に**入れる——同一の入力に対して
+/// 一方は完全恒等・他方は補正、という対比が同じ捕捉集合の中で成立することが、
+/// 「素通しは限界式の失敗ではなく limit の判定によるものだ」ことの証明になる
+/// （limit=0 だけを見る檻は、式が壊れていても緑になりうる）。
+#[test]
+fn boot_gate_limit_arms_cover_every_edge_at_every_dpi_level() {
+    // (説明, 相対位置の論理値, 期待表示位置の論理値＝作業領域左上からの変位)
+    let table = [
+        ("左辺のみ", (-800, 0), (0, 240)),
+        ("右辺のみ", (1000, 0), (1720, 240)),
+        ("上辺のみ", (0, -280), (760, 0)),
+        ("下辺のみ", (0, 580), (760, 780)),
+        ("左上", (-800, -280), (0, 0)),
+        ("右上", (1000, -280), (1720, 0)),
+        ("左下", (-800, 580), (0, 780)),
+        ("右下", (1000, 580), (1720, 780)),
+    ];
+
+    for dpi in GATE_DPIS {
+        // 左上が原点**でない**作業領域（境界の left/top 依存を暴く）。
+        let area = RectPx {
+            left: px(64, dpi),
+            top: px(40, dpi),
+            right: px(64 + 1920, dpi),
+            bottom: px(40 + 1080, dpi),
+        };
+        let csz = SizePx {
+            w: px(400, dpi),
+            h: px(600, dpi),
+        };
+        let bsz = SizePx {
+            w: px(200, dpi),
+            h: px(300, dpi),
+        };
+        // キャラ窓中心が作業領域の中心＝帰属が最近傍フォールバックへ落ちない正常腕。
+        let char_pos = point(area.left + px(760, dpi), area.top + px(240, dpi));
+        assert!(
+            contained(char_pos, csz, area),
+            "dpi={dpi}: 前提＝キャラ窓は作業領域に内包（帰属の解決が正常腕で決まる）"
+        );
+
+        for (what, (ox, oy), (ex, ey)) in table {
+            let offset = point(px(ox, dpi), px(oy, dpi));
+            let expected = point(area.left + px(ex, dpi), area.top + px(ey, dpi));
+
+            let disabled = placement_sized(0, char_pos, offset, false, csz, bsz);
+            let enabled = placement_sized(1, char_pos, offset, true, csz, bsz);
+            // 探針: 入力が本当にはみ出していること（はみ出していなければ limit=1 側も
+            // `None` を返し、limit=0 の「動かない」が何も意味しなくなる）。
+            assert!(
+                !contained(disabled.balloon_pos, bsz, area),
+                "dpi={dpi} {what}: 探針の提案位置がはみ出していない（檻が空虚）"
+            );
+
+            let (out, events) =
+                capture_logs(|| apply_balloon_limit(vec![disabled, enabled], &snapshot(&[area])));
+
+            // limit=0 の腕: 辺・隅・DPI 水準によらず入力へ完全恒等（要件 2.7・5.2）。
+            assert_eq!(
+                out[0], disabled,
+                "dpi={dpi} {what}: limit=0 の scope が補正された（現行挙動が変わっている）"
+            );
+            // limit=1 の腕: 同じ入力が作業領域内へ補正される（要件 2.3）。
+            assert_eq!(
+                out[1].balloon_pos, expected,
+                "dpi={dpi} {what}: limit=1 の表示位置が期待の補正値でない"
+            );
+            assert!(
+                contained(expected, bsz, area),
+                "dpi={dpi} {what}: 期待値そのものが作業領域外（期待値の算出が誤り）"
+            );
+            assert_eq!(
+                out[1].balloon_offset, offset,
+                "dpi={dpi} {what}: 論理相対位置は生値のまま（DD6）"
+            );
+
+            // 補正ログは実際に動いた scope の分だけ＝limit=0 の腕は 1 行も出さない。
+            // `expect_one` が 1 件取り出せている時点で捕捉は生きている（空虚でない）。
+            let hit = expect_one(&events, BALLOON_LIMIT_CLAMP_TAG);
+            assert_eq!(
+                hit.field("scope"),
+                "1",
+                "dpi={dpi} {what}: limit=0 の scope の補正ログが出ている"
+            );
+            assert_no_event(&events, BALLOON_LIMIT_UNRESOLVED_TAG);
+        }
+    }
+}
+
 /// 入力の順序と長さは保たれる（下流は index で spawn するため順序が契約）。
 #[test]
 fn boot_gate_preserves_order_and_length() {

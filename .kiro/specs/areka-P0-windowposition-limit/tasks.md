@@ -115,7 +115,7 @@
   - _Requirements: 3.1, 3.2, 7.4_
   - _Boundary: C11 互換対応表_
 
-- [ ] 4.3 決定論テストの網羅を確認しワークスペース全体を緑にする
+- [x] 4.3 決定論テストの網羅を確認しワークスペース全体を緑にする
   - 32bit ヘルパーの成果物を先にビルドしてからワークスペース全体のテストを走らせる（成果物がないと完了判定が赤になる）
   - limit の判断分岐とキーワード語彙の判断分岐が要件の求める行列を満たしているか突き合わせ、不足があれば補う
   - キャラ窓の配置規則と数値指定の変換が本仕様の前後で変わっていないことを、既存テストが無改変で緑であることによって確認する
@@ -140,6 +140,8 @@
 - 全般: `areka-parsers` は元から rustfmt 非準拠 82 箇所を抱えるため `cargo fmt` の全体適用は禁止。追加分のみ手で整形する。リポジトリ全体では約 750 件の既存 rustfmt 差分があり、`cargo fmt --check` は完了ゲートに使えない。
 - 1.3: **`limit_correction` の `None` は「内包されている」という意味ではなく「クランプしても位置が動かない」という意味**。逆転区間（バルーン > 作業領域）で既に左上に居るときは、はみ出したままでも `None` を返す。2.4 / 3.3 / 3.4 の関門は `None` を「書き込み不要」として扱うこと。「内包の判定」として使ってはならない（毎フレーム偽の `[balloon-limit] Clamp` を出さないための設計）。
 - 1.3: `RectPx` の `right`/`bottom` は **排他的**（`resolver.rs:26-28`）。上界は `right - w` が正しく、キャラ窓側 `resolver.rs:179-180` と同一。
+- 4.3: **`cargo test --workspace` に間欠フレークが 1 本ある。本仕様の起因ではない。** `crates/areka-emo-atlas/src/lib.rs:461` の `bake_entry_tests::warn_fires_on_all_transparent_element` が約 1/3 の頻度で落ちる（`capture_logs` が空文字列を返す＝`tracing` の interest cache が並行負荷で汚染される既知クラス）。単独実行 `cargo test -p areka-emo-atlas --lib` は 5/5 緑。本仕様は同クレートを **1 ファイルも変更していない**。`test-cage-determinism`（W6.9）の領分として別途起票済み。**`/kiro-complete` の DoD ゲートでも同じフレークに当たる可能性がある**——落ちたら再実行して切り分けること。
+- 4.3: 網羅監査で見つかった唯一の穴＝**`limit=0 × 上辺/隅 × k≠1`**（純関数檻は DPI 軸を持つが limit 分岐を持たず、3 関門の檻は limit 分岐を持つが DPI 軸を持たなかった＝交差が誰の担当でもなかった）。起動時関門の檻へ `boot_gate_limit_arms_cover_every_edge_at_every_dpi_level` を追加して閉塞。
 - 4.2: 先送り事項は ukadoc 実照会の結果 **`windowposition.x` / `.y` / `.limit` の 3 キーすべて**が「SSP に限り、descript.txt にも書ける」と注記しているため、`limit` だけでなく 3 キー全体へ広げて登記した（タスク本文より広い）。
 - 4.2: **doc へ行番号アンカーを書かないこと。** タスクを跨ぐと必ずずれる（`balloon_limit_tests.rs:57` の `resolver.rs:221` が実際は `:269` になっていた）。関数名・ファイル名で書くこと。
 - 4.1: `t_r8_balloon_never_clamped_even_outside_work_area` は **`t_r8_resolver_does_not_clamp_balloon_outside_work_area` へ改名**（削除も反転もしていない＝P5 が無クランプであること自体はいまも真）。design.md:141 / :444 / research.md:197 は旧名を参照したままだが文書側であり、コード内の参照はゼロ。
