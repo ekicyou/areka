@@ -25,6 +25,7 @@ invoke-perf-run.ps1 — 有界実走＋CPU 時系列採取ランナー
   SMOKE_EXIT_ENV_NAME             有界自動終了を有効化する環境変数名
                                   （実装: crates/areka/src/main.rs の SMOKE_EXIT_ENV）
   RUST_LOG_VALUE                  実走時のログフィルタ（段階別計時ログを debug で出す）
+  NO_COLOR_VALUE                  実行ログの色付けを止める（run.log を人が grep できる形で残す）
   CPU_SAMPLE_INTERVAL_SEC = 15    CPU 時系列の採取間隔（秒）
   COUNTER_PATH_PROC_ID            プロセス PID のカウンタ名（英語版 Windows の名称）
   COUNTER_PATH_PROC_CPU           プロセス CPU のカウンタ名（英語版 Windows の名称）
@@ -102,6 +103,12 @@ $SMOKE_EXIT_MS_SHORT            = 420000
 $SMOKE_EXIT_MS_LONG             = 1500000
 $SMOKE_EXIT_ENV_NAME            = 'AREKA_APP_SMOKE_EXIT_MS'
 $RUST_LOG_VALUE                 = 'info,areka_emo_present=debug'
+# 実行ログの色付け（ANSI エスケープ）を止める。tracing-subscriber 0.3.23 は出力先が端末か
+# どうかを見ておらず、この変数が未設定だとファイルへ落とした run.log にも色コードが入る
+# （fmt_layer.rs:739-755）。人が run.log を直接 grep できる形で残すために設定する。
+# judge-perf.py 側の色除去は撤去しない——手で起動した走行や、この設定を入れる前に採った
+# 走行の run.log には色が入っており、それも読めなければならない（fixture でも固定済み）。
+$NO_COLOR_VALUE                 = '1'
 $CPU_SAMPLE_INTERVAL_SEC        = 15
 $COUNTER_PATH_PROC_ID           = '\Process({0})\ID Process'
 $COUNTER_PATH_PROC_CPU          = '\Process({0})\% Processor Time'
@@ -443,6 +450,7 @@ $targetSection = [ordered]@{
     'env_smoke_exit_name'    = $SMOKE_EXIT_ENV_NAME
     'env_smoke_exit_ms'      = $smokeExitMs
     'env_RUST_LOG'           = $RUST_LOG_VALUE
+    'env_NO_COLOR'           = $NO_COLOR_VALUE
 }
 $calibrationSection = [ordered]@{
     'SMOKE_EXIT_MS_SHORT'            = $SMOKE_EXIT_MS_SHORT
@@ -503,11 +511,13 @@ Set-Content -LiteralPath $cpuCsvPath -Value $CSV_HEADER -Encoding utf8
 $proc = $null
 $prevSmokeEnv = [Environment]::GetEnvironmentVariable($SMOKE_EXIT_ENV_NAME)
 $prevRustLog  = $env:RUST_LOG
+$prevNoColor  = $env:NO_COLOR
 
 try {
     # 子プロセスへ渡す環境変数（本スクリプト自身のプロセスに設定して継承させる）。
     [Environment]::SetEnvironmentVariable($SMOKE_EXIT_ENV_NAME, "$smokeExitMs")
     $env:RUST_LOG = $RUST_LOG_VALUE
+    $env:NO_COLOR = $NO_COLOR_VALUE
 
     $launchedAt = [DateTime]::UtcNow
     try {
@@ -606,6 +616,11 @@ try {
         Remove-Item Env:\RUST_LOG -ErrorAction SilentlyContinue
     } else {
         $env:RUST_LOG = $prevRustLog
+    }
+    if ($null -eq $prevNoColor) {
+        Remove-Item Env:\NO_COLOR -ErrorAction SilentlyContinue
+    } else {
+        $env:NO_COLOR = $prevNoColor
     }
     if ($proc -and -not $proc.HasExited) { try { $proc.Kill() } catch { } }
 }

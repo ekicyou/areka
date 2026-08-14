@@ -16,10 +16,13 @@
 ------
     python judge-perf.py <run.log> <cpu.csv> --mode baseline [--build dev|release] [--meta <run-meta.txt>]
     python judge-perf.py <run.log> <cpu.csv> --mode verdict  --build dev|release   [--meta <run-meta.txt>]
+    python judge-perf.py --selftest
 
 判定モードでは `--build` の明示が要る（どの判定式を適用するかがビルド種別で変わるため）。
 
-`--selftest`（自己較正・既知 fixture での逐語再現）は task 2.4 で追加する。
+`--selftest`（自己較正）は `fixtures/` の既知ログを **実運用と同じ入口（`main(argv)`）** で
+走らせ、各 fixture の `case.txt` に書いてある期待終了コードを逐語再現する（要件 2.4）。
+run.log・cpu.csv の指定は要らない。詳しくは「自己較正（--selftest）」の節を参照。
 
 終了コード（design.md「Error Handling」・D7・signoff-scan.py 前例踏襲）
 --------------------------------------------------------------------
@@ -28,6 +31,10 @@
     2  判定不能——必要ログ種の欠落・段フィールドの欠落・観測ゼロ・定常状態が空。
        部分集計は一切出さない（要件 2.5。沈黙を合格として読ませない）
     3  引数不正・ファイル読取不能
+
+`--selftest` も同じ体系に載せる: `0`=全 fixture が期待どおり／`1`=1 つでも食い違い（＝道具が
+壊れている＝不合格）／`3`=fixture 置き場そのものが読めない（引数・ファイルの問題）。`2` は
+返さない（自己較正に「判定不能」は無い——読めたか読めなかったかのどちらかである）。
 
 **不合格(1) は判定不能(2) より優先する**。1 つの判定式が確定的に不合格で、別の判定式が
 判定不能なら、総合は不合格である（design.md「Error Handling」）。
@@ -97,8 +104,8 @@ from pathlib import Path
 
 #: 本スクリプトの版（レポート先頭に出す。較正値を変えたら上げる）。
 SCRIPT_VERSION = (
-    "0.2.2 (task 2.3 / 集計モード＋判定モード・"
-    "判定式⑴の除外規則（判定窓で消えた系列を含む）と丸めを追加)"
+    "0.2.3 (task 2.4 / 集計モード＋判定モード＋自己較正モード・"
+    "判定式と較正値は 0.2.2 から不変)"
 )
 
 #: 終了コード表（バナーが唯一の所在であるため、docstring だけでなくここにも置く）。
@@ -110,6 +117,18 @@ EXIT_CODE_TABLE = (
     ("2", "判定不能（観測ゼロ・必要ログ種の欠落・定常状態が空・データ不足）"),
     ("3", "引数不正・ファイル読取不能"),
 )
+
+#: 自己較正（`--selftest`）の較正値。集計・判定の数値には一切関与しないため、
+#: レポート[2] の較正値表ではなく `--selftest` 自身の出力へ印字する（所在はここ 1 箇所）。
+SELFTEST_FIXTURES_DIRNAME = "fixtures"
+SELFTEST_CASE_FILENAME = "case.txt"
+
+#: 自己較正が「毎回赤も作る」ことの関門（D7・steering「検証の道具そのものが壊れる・較正せよ」）。
+#: ここに挙げた終了コードは、それを期待する fixture が **1 つ以上実際に走って再現している**
+#: ことを要求する。緑しか走らない自己較正は、道具が壊れていても緑を出すので較正にならない。
+#: （1=不合格・2=判定不能。終了コード定数 EXIT_FAIL / EXIT_INCONCLUSIVE より前に置くので
+#:   数値で書き、定義後に取り違えが無いことを検査する。）
+SELFTEST_REQUIRED_RED_CODES = (1, 2)
 
 #: 総合判定の決め方（要件 4.2 の運用形・D7「沈黙を PASS にしない」）。
 VERDICT_PRECEDENCE = (
@@ -384,6 +403,10 @@ EXIT_OK = 0
 EXIT_FAIL = 1  # 合否判定モード専用。集計モードは返さない
 EXIT_INCONCLUSIVE = 2
 EXIT_BAD_INPUT = 3
+
+# バナーの SELFTEST_REQUIRED_RED_CODES は定数定義より前にあるため数値で書いてある。
+# ここで取り違えが無いことを確かめる（赤の関門が別のコードを見張っていたら意味が無い）。
+assert SELFTEST_REQUIRED_RED_CODES == (EXIT_FAIL, EXIT_INCONCLUSIVE)
 
 
 class JudgeError(Exception):
@@ -2697,10 +2720,261 @@ def run_verdict(args: argparse.Namespace) -> int:
     return code
 
 
+# =============================================================================
+# 自己較正（--selftest・要件 2.4 / 2.6・design.md「judge-perf.py → 自己較正」・D7）
+# -----------------------------------------------------------------------------
+# 【何のためにあるか】判定の道具そのものが壊れていないことを、既知の入力で毎回確かめる。
+# 緑は道具が壊れていても出る。ゆえに合格を再現する fixture と同格に、不合格・判定不能を
+# 再現する fixture を置き、**そのどちらも実際に走って期待どおりになった** ことを出力に出す。
+# 「全部通った」と「1 つも走らなかった」が見分けられない自己較正は、無いのと同じである。
+#
+# 【実運用と同じ経路を通ること】fixture ごとに `main(argv)` を呼ぶ。判定用の関数を
+# 直接叩く別経路を作らない——別経路を作ると、入口（引数の検査・モードの振り分け・
+# 例外から終了コードへの変換）が壊れても自己較正は緑のままになる。
+#
+# 【期待値の所在】各 fixture ディレクトリの `case.txt`。fixture と期待値を同じ場所に
+# 置いてあるので、片方だけが更新されて静かにずれることがない。
+# =============================================================================
+
+
+@dataclass
+class SelftestCase:
+    """fixture 1 件（`case.txt` の中身そのもの）。"""
+
+    name: str
+    directory: Path
+    title: str
+    mode: str
+    build: str | None
+    expected: int
+    twin: str | None
+
+    def argv(self) -> list[str]:
+        args = [
+            str(self.directory / "run.log"),
+            str(self.directory / "cpu.csv"),
+            "--mode",
+            self.mode,
+        ]
+        if self.build:
+            args += ["--build", self.build]
+        return args
+
+
+def _selftest_read_case(directory: Path) -> SelftestCase:
+    """`case.txt` を読む。読めない・欠けているのは fixture 置き場の不備（exit 3）。"""
+    path = directory / SELFTEST_CASE_FILENAME
+    if not path.is_file():
+        raise bad_input(
+            f"fixture に {SELFTEST_CASE_FILENAME} がありません: {directory}",
+            [
+                "期待終了コードの書いていない fixture は、走らせても合否を言えません"
+                "（誰にも数えられない fixture を置かないこと）。",
+            ],
+        )
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise bad_input(f"{path} を読めません", [str(exc)]) from exc
+
+    fields: dict[str, str] = {}
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        key, _, value = stripped.partition("=")
+        key = key.strip()
+        if key == "note":  # 人が読む説明。機械は使わない
+            continue
+        fields[key] = value.strip()
+
+    missing = [name for name in ("mode", "exit") if name not in fields]
+    if missing:
+        raise bad_input(
+            f"{path} に {'・'.join(missing)} がありません",
+            [f"必須項目: mode・exit（任意: build・twin・title・note）"],
+        )
+    if fields["mode"] not in MODES:
+        raise bad_input(
+            f"{path} の mode が不正です（{fields['mode']!r}）",
+            [f"指定できるのは {'・'.join(sorted(MODES))} です。"],
+        )
+    try:
+        expected = int(fields["exit"])
+    except ValueError as exc:
+        raise bad_input(f"{path} の exit が整数ではありません（{fields['exit']!r}）") from exc
+
+    return SelftestCase(
+        name=directory.name,
+        directory=directory,
+        title=fields.get("title", "(説明なし)"),
+        mode=fields["mode"],
+        build=fields.get("build") or None,
+        expected=expected,
+        twin=fields.get("twin") or None,
+    )
+
+
+def _selftest_collect(root: Path) -> list[SelftestCase]:
+    if not root.is_dir():
+        raise bad_input(
+            f"fixture 置き場がありません: {root}",
+            [
+                "自己較正は判定スクリプトと同じ場所の "
+                f"{SELFTEST_FIXTURES_DIRNAME}/ を見ます（相対位置のみ・絶対パスは持ちません）。",
+            ],
+        )
+    cases = [
+        _selftest_read_case(child)
+        for child in sorted(root.iterdir())
+        if child.is_dir() and not child.name.startswith((".", "_"))
+    ]
+    if not cases:
+        raise bad_input(
+            f"fixture が 1 件もありません: {root}",
+            ["fixture の無い自己較正は、何も確かめずに緑を返します（D7）。"],
+        )
+    return cases
+
+
+def _selftest_invoke(case: SelftestCase) -> tuple[int, str]:
+    """実運用と同じ入口 `main(argv)` を呼び、終了コードと標準出力を持ち帰る。"""
+    import contextlib
+    import io
+
+    out, err = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        try:
+            code = main(case.argv())
+        except SystemExit as exc:  # 引数解析が直接終了する経路も終了コードとして拾う
+            code = exc.code if isinstance(exc.code, int) else EXIT_BAD_INPUT
+    return code, out.getvalue()
+
+
+def _selftest_normalize(case: SelftestCase, text: str) -> str:
+    """双子どうしのレポート比較のため、fixture 名（＝入力パスの違い）だけを伏せる。"""
+    return text.replace(case.name, "<FIXTURE>")
+
+
+def run_selftest() -> int:
+    """`fixtures/` の既知ログで終了コードを逐語再現する（要件 2.4）。"""
+    root = Path(__file__).resolve().parent / SELFTEST_FIXTURES_DIRNAME
+    cases = _selftest_collect(root)
+
+    report = Report()
+    report.line("=" * 78)
+    report.line("judge-perf.py 自己較正（--selftest・要件 2.4 / 2.6・D7）")
+    report.line("=" * 78)
+    report.line(f"  スクリプト版   : {SCRIPT_VERSION}")
+    report.line(f"  fixture 置き場 : {root}")
+    report.line(f"  期待値の所在   : 各 fixture の {SELFTEST_CASE_FILENAME}")
+    report.line("  経路           : 実運用と同じ入口 main(argv) を fixture ごとに呼ぶ")
+    report.line("  終了コード     : 0=全件一致 / 1=1 件でも食い違い / 3=fixture を読めない")
+
+    outputs: dict[str, str] = {}
+    results: list[tuple[SelftestCase, int, bool]] = []
+    report.sub("逐語再現（期待終了コードとの突き合わせ）")
+    for case in cases:
+        code, stdout = _selftest_invoke(case)
+        outputs[case.name] = stdout
+        ok = code == case.expected
+        results.append((case, code, ok))
+        build = f"/{case.build}" if case.build else ""
+        report.line(
+            f"  {'一致  ' if ok else '不一致'} {case.name:<40s} "
+            f"期待 {case.expected} 実際 {code}  [{case.mode}{build}]  {case.title}"
+        )
+
+    # --- 双子の突き合わせ（色付きログが色なしと同じ結論になること）-----------
+    twin_checks: list[tuple[str, str, bool, str]] = []
+    for case in cases:
+        if not case.twin:
+            continue
+        partner = next((c for c in cases if c.name == case.twin), None)
+        if partner is None:
+            twin_checks.append(
+                (case.name, case.twin, False, f"双子 {case.twin} が fixture 置き場にありません")
+            )
+            continue
+        mine = _selftest_normalize(case, outputs[case.name])
+        theirs = _selftest_normalize(partner, outputs[partner.name])
+        if mine == theirs:
+            twin_checks.append((case.name, partner.name, True, "レポートが一字一句一致"))
+        else:
+            first = next(
+                (
+                    f"{i} 行目: {a!r} ≠ {b!r}"
+                    for i, (a, b) in enumerate(
+                        zip(mine.splitlines(), theirs.splitlines()), start=1
+                    )
+                    if a != b
+                ),
+                "行数が違う",
+            )
+            twin_checks.append((case.name, partner.name, False, f"レポートが違う（{first}）"))
+    if twin_checks:
+        report.sub("双子の突き合わせ（色を落とした結果が色なしと同一になること）")
+        for name, partner, ok, detail in twin_checks:
+            report.line(f"  {'一致  ' if ok else '不一致'} {name} ⇔ {partner}: {detail}")
+
+    # --- 赤の実施状況（D7: 毎回赤も作る）------------------------------------
+    report.sub("赤の実施状況（緑だけの自己較正は較正になっていない・D7）")
+    labels = {
+        EXIT_OK: "0 合格",
+        EXIT_FAIL: "1 不合格",
+        EXIT_INCONCLUSIVE: "2 判定不能",
+        EXIT_BAD_INPUT: "3 引数不正・読取不能",
+    }
+    red_missing: list[str] = []
+    for code in sorted(labels):
+        registered = [c for c, _got, _ok in results if c.expected == code]
+        reproduced = [c for c, _got, ok in results if c.expected == code and ok]
+        report.line(
+            f"  期待 {labels[code]:<22s}: 登録 {len(registered)} 件 / "
+            f"実際に再現 {len(reproduced)} 件"
+            + (f"  （{'・'.join(c.name for c in reproduced)}）" if reproduced else "")
+        )
+        if code in SELFTEST_REQUIRED_RED_CODES and not reproduced:
+            red_missing.append(labels[code])
+
+    mismatches = [(c, got) for c, got, ok in results if not ok]
+    twin_failed = [name for name, _p, ok, _d in twin_checks if not ok]
+
+    report.head("自己較正の結果")
+    report.line(f"  fixture {len(results)} 件中 {len(results) - len(mismatches)} 件が期待どおり。")
+    for case, got in mismatches:
+        report.line(
+            f"  【食い違い】{case.name}: 期待 {case.expected} に対し実際 {got}"
+            f"（{case.mode}{'/' + case.build if case.build else ''}・{case.title}）"
+        )
+    for name in twin_failed:
+        report.line(f"  【食い違い】{name}: 色なしの双子とレポートが一致しません。")
+    for label in red_missing:
+        report.line(
+            f"  【較正になっていない】期待「{label}」を再現した fixture が 1 件もありません。"
+            "赤が出ない自己較正は、道具が壊れていても緑を返します（D7）。"
+        )
+
+    code = EXIT_OK if not (mismatches or twin_failed or red_missing) else EXIT_FAIL
+    if code == EXIT_OK:
+        report.line("  合格・不合格・判定不能・引数不正のいずれも期待どおり再現しました。")
+    else:
+        report.line(
+            "  判定スクリプトか fixture のどちらかが変わっています。"
+            "実走の判定に使う前に、どちらが正しいかを決めてください。"
+        )
+    report.line("")
+    report.line("=" * 78)
+    report.line(f"自己較正は以上。終了コード {code}")
+    report.line("=" * 78)
+    print(report.render())
+    return code
+
+
 #: モードの登録簿。
-#: task 2.4（`--selftest`）はこの登録簿ではなく `main(argv)` を入口として使う——
+#: `--selftest` はこの登録簿ではなく `main(argv)` を入口として使う——
 #: fixture ごとに `main([run.log, cpu.csv, "--mode", …, "--build", …])` を呼び、
-#: 返り値（終了コード）を期待値と突き合わせれば、実運用と同じ経路を逐語再現できる。
+#: 返り値（終了コード）を期待値と突き合わせるので、実運用と同じ経路を逐語再現できる。
 MODES = {
     "baseline": run_baseline,
     "verdict": run_verdict,
@@ -2729,13 +3003,21 @@ def build_parser() -> Parser:
         prog="judge-perf.py",
         description="areka 性能計測の集計・判定（要件 2.2/2.5/2.6/4.5/7.2）",
     )
-    parser.add_argument("run_log", help="実走ログ run.log のパス")
-    parser.add_argument("cpu_csv", help="CPU 時系列 cpu.csv のパス")
+    # `--selftest` は run.log / cpu.csv / --mode を取らない（fixture 側が全部持っている）。
+    # ゆえに必須指定を argparse から外し、下の `_require_run_arguments` で明示的に検査する。
+    # 検査に落ちたときの終了コードは従来どおり 3（Parser.error 経由）である。
+    parser.add_argument("run_log", nargs="?", help="実走ログ run.log のパス")
+    parser.add_argument("cpu_csv", nargs="?", help="CPU 時系列 cpu.csv のパス")
     parser.add_argument(
         "--mode",
-        required=True,
         choices=sorted(MODES) + sorted(PLANNED_MODES),
         help="baseline=集計／verdict=合否判定（要件 4.2 の判定式⑴〜⑷・収束判定 要件 5.1）",
+    )
+    parser.add_argument(
+        "--selftest",
+        action="store_true",
+        help=f"自己較正: {SELFTEST_FIXTURES_DIRNAME}/ の既知ログで期待終了コードを逐語再現する"
+        "（要件 2.4・run.log / cpu.csv の指定は不要）",
     )
     parser.add_argument(
         "--build",
@@ -2756,7 +3038,38 @@ def main(argv: list[str]) -> int:
     except (AttributeError, OSError):
         pass
 
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+
+    if args.selftest:
+        if args.run_log or args.cpu_csv or args.mode or args.build or args.meta:
+            parser.error(
+                "--selftest は他の引数と一緒に使えません"
+                "（fixture 側が入力もモードもビルド種別も持っています）"
+            )
+        try:
+            return run_selftest()
+        except JudgeError as exc:
+            sys.stderr.write(f"[judge-perf] 自己較正を開始できません: {exc.message}\n")
+            for detail in exc.details:
+                sys.stderr.write(f"  - {detail}\n")
+            sys.stderr.write(f"[judge-perf] 終了コード {exc.code}\n")
+            return exc.code
+
+    # --selftest でないなら、実走ログ・CPU 時系列・モードは必須である
+    # （argparse の必須指定から外した分をここで明示的に見る。落ちたら従来どおり exit 3）。
+    lacking = [
+        name
+        for name, value in (
+            ("run_log", args.run_log),
+            ("cpu_csv", args.cpu_csv),
+            ("--mode", args.mode),
+        )
+        if not value
+    ]
+    if lacking:
+        parser.error(f"次の指定がありません: {'・'.join(lacking)}")
+
     if args.mode in PLANNED_MODES:
         sys.stderr.write(f"[judge-perf] {PLANNED_MODES[args.mode]}\n")
         return EXIT_BAD_INPUT
