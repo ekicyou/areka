@@ -400,7 +400,7 @@ Summary-only: `restore_merged_placements` の merge 後に `apply_balloon_limit(
 #### C10: 観測（`placement/diag.rs`・各所）
 
 Summary-only:
-- `PlacementRoute::BalloonLimitRelease` 追加（`ALL` 10 variant・`as_str = "balloon-limit-release"`・`route_applies_visibility_guard` は `false` 腕）。
+- `PlacementRoute::BalloonLimitRelease` 追加（`ALL` 10 variant・`as_str` は既存規約どおり variant 名そのまま `"BalloonLimitRelease"`・`route_applies_visibility_guard` は `false` 腕）。
 - タグ定数（`balloon_limit.rs` 所有）: `[balloon-limit] Clamp`（info・scope/from/to/契機 route・6.1）／`[balloon-limit] Unresolved`（warn・縮退の観測可能化）。
 - 観測点 4 拡張（6.2）と縮退 warn（6.3）は C3 の取得経路に記載のとおり。ログ無し縮退経路を作らない（log-first steering）。
 
