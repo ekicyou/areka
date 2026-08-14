@@ -1,0 +1,4 @@
+charset,UTF-8
+type,balloon
+name,kakukaku for emo2 (windowposition-limit verification)
+directory,emo2-kakukaku-wplimit

@@ -132,6 +132,7 @@
   - 完了状態: 2水準ともバルーンが画面外へはみ出さず、補正ログと位置ログの値が一致し、キーワード指定の基本位置（中央上・中央下）が意図どおり出ている
   - _Requirements: 7.5_
   - _Depends: 4.3_
+  - **進捗（自動化可能な部分は完了・残りは開発者）**: 検証用 fixture `crates/pilot/examples/shiori-host-32/fixtures/emo2-kakukaku-wplimit/`（面別上書き層に `center` / `bottom`）を用意し、**拡大率 200%（dpi=192）で実走 1 回**（絶対パス・`AREKA_APP_SMOKE_EXIT_MS=120000`・exit 0・121.0 秒）してログ突合まで完了。**残り＝①現水準での目視確認 ②拡大率 100%（dpi=96）での再走と目視**。手順書は `signoff-procedure.md`（§7.1 記入済み・§7.2/§7.3 が開発者欄）。
 
 ## Implementation Notes
 
@@ -140,6 +141,10 @@
 - 全般: `areka-parsers` は元から rustfmt 非準拠 82 箇所を抱えるため `cargo fmt` の全体適用は禁止。追加分のみ手で整形する。リポジトリ全体では約 750 件の既存 rustfmt 差分があり、`cargo fmt --check` は完了ゲートに使えない。
 - 1.3: **`limit_correction` の `None` は「内包されている」という意味ではなく「クランプしても位置が動かない」という意味**。逆転区間（バルーン > 作業領域）で既に左上に居るときは、はみ出したままでも `None` を返す。2.4 / 3.3 / 3.4 の関門は `None` を「書き込み不要」として扱うこと。「内包の判定」として使ってはならない（毎フレーム偽の `[balloon-limit] Clamp` を出さないための設計）。
 - 1.3: `RectPx` の `right`/`bottom` は **排他的**（`resolver.rs:26-28`）。上界は `right - w` が正しく、キャラ窓側 `resolver.rs:179-180` と同一。
+- 4.4: **水準②は 100%（dpi=96）に固定**。水準①の実走が既に 200% だったため、「100% と 100% 以外の 2 水準」を満たすには残り枠は 100% しかない。125% を選ぶと k=1.0 を一度も踏まないまま完了してしまう。
+- 4.4: 検証 fixture は原本 `fixtures/emo2` を改変せず**兄弟ディレクトリ**として置いた（原本の `x=266` / `x=-190` を期待値に持つ既存テストが 41 ファイル中 4 ファイルにあり、改変すると赤になる）。
+- 4.4: 実走で **DD6 が実機で確認できた**——起動時関門が scope0 を `y=-376→0` へ補正した後も、追従計算は `char(2064,610) + 生 offset(34,-706) = (2098,-96)` を提示している＝補正が相対位置へ焼き付いていない。
+- 4.4: `release-gate` は実走で 0 件（バルーン単独ドラッグをしていないため正常）。実機証跡が要るなら開発者にドラッグを依頼すること。
 - 4.3: **`cargo test --workspace` に間欠フレークが 1 本ある。本仕様の起因ではない。** `crates/areka-emo-atlas/src/lib.rs:461` の `bake_entry_tests::warn_fires_on_all_transparent_element` が約 1/3 の頻度で落ちる（`capture_logs` が空文字列を返す＝`tracing` の interest cache が並行負荷で汚染される既知クラス）。単独実行 `cargo test -p areka-emo-atlas --lib` は 5/5 緑。本仕様は同クレートを **1 ファイルも変更していない**。`test-cage-determinism`（W6.9）の領分として別途起票済み。**`/kiro-complete` の DoD ゲートでも同じフレークに当たる可能性がある**——落ちたら再実行して切り分けること。
 - 4.3: 網羅監査で見つかった唯一の穴＝**`limit=0 × 上辺/隅 × k≠1`**（純関数檻は DPI 軸を持つが limit 分岐を持たず、3 関門の檻は limit 分岐を持つが DPI 軸を持たなかった＝交差が誰の担当でもなかった）。起動時関門の檻へ `boot_gate_limit_arms_cover_every_edge_at_every_dpi_level` を追加して閉塞。
 - 4.2: 先送り事項は ukadoc 実照会の結果 **`windowposition.x` / `.y` / `.limit` の 3 キーすべて**が「SSP に限り、descript.txt にも書ける」と注記しているため、`limit` だけでなく 3 キー全体へ広げて登記した（タスク本文より広い）。
