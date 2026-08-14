@@ -52,6 +52,7 @@
 - `physical_extent` の式・入力型・`ScaleContract` の形が将来変わる場合 → 本仕様の決定論テストが赤になる設計であり、その時点で裁定（+1 許容）の再審が必要。
 - 作者 DPI の語彙が {72, 96, 120, 144} の外へ広がる、またはモニタ DPI の対応域が 96〜288 を超える場合 → 到達比集合（23 比）が変わるためテストの比集合と登記の実測表の更新が必要（誤り方の性質＝+1 側のみ、は不変——requirements Adjacent expectations）。
 - `as_f32` の式（`num as f32 / den as f32`）が変わる場合 → 誤り件数（81/81/0×21）の期待値が変わり得る。
+- **搬送層（`TextSlotView.scale` → `TextSlotBinding::from_view`/`new`）が k を素通し以外に変換するよう変わる場合** → 本仕様の檻の到達範囲は `as_f32` 以降の算術であり、搬送層の変換は檻の外。その場合は檻の注入点の再設計が必要（C3 の Implementation Notes に同旨を登記）。
 
 ## Architecture
 
@@ -208,10 +209,11 @@ fn supply_extent_via_f32_path(v: u32, num: u32, den: u32) -> u32;
 - Integration: `use areka_emo_text::region::{ImagePx, ScaleContract};` と `use areka_emo_compose::ScaleRatio;`（dev-dep 既存）。`ScaleRatio::new` は `Option` を返すため導出ヘルパ内で `expect`（正の格子入力ゆえ到達しない失敗＝到達すればテスト失敗として正しい）。
 - Validation: `reachable_ratios().len() == 23` を assert し、6/5・12/5 が集合に含まれることも確認する（格子導出の較正・[[subagent-tooling-can-be-wrong-calibrate-it]] の教訓——裁定時の初回集計は道具の誤りを踏んだ）。
 - Risks: 将来 `as_f32` の式や `physical_extent` の式が変われば件数期待（81/81/0）が割れて赤になる——**それが本テストの目的**（Revalidation Triggers）。誤検知リスクは f32 の platform 差だが、IEEE 754 単精度の除算・乗算・ceil は決定論であり x64/arm64 で同一。
+- **檻の到達範囲**（テストファイル冒頭 doc に必ず記す）: 本檻は `as_f32` 以降の算術（`ScaleRatio::as_f32` → `ScaleContract::new` → `physical_extent`）を貫通するが、本番で k が経由する `TextSlotView.scale`（`read.rs:109`）→ `TextSlotBinding::from_view`/`new` の搬送層は **f32 素通し**を前提とする（現物は素通し・正規化は `ScaleContract::new` へ委譲）。搬送層が scale を変換するよう変わった場合は本檻の外である。
 
 ### C4: 申し送り（下流 2 brief＋roadmap）
 
-- **C4-a** `emo2-conformance-e2e/brief.md`: 追記ブロック 1 個——「適合 #1 の DPI 検証で供給面寸（文字供給面の確保寸）を判定する場合、絶対値一致では書けない。**期待値 +1 の許容が必要**（対象は 6/5・12/5 の比のみだが判定式は一律 +1 許容が安全）。窓 client 寸は丸め権威経由ゆえ従来どおり絶対値で書ける。根拠は spec `areka-P0-scale-exact-rational` の裁定登記を参照」。既存 `:14-15` の「適合 #1 の DPI 検証を**絶対値で書ける前提**＝画素演算の有理数化」の記述は**失効注記**を付す（brief の当該行を書き換えるか追記で上書き宣言——brief の追記が正本という運用に合わせ追記側で上書き）。
+- **C4-a** `emo2-conformance-e2e/brief.md`: 追記ブロック 1 個——「適合 #1 の DPI 検証で供給面寸（文字供給面の確保寸）を判定する場合、絶対値一致では書けない。**期待値 +1 の許容が必要**（対象は 6/5・12/5 の比のみだが判定式は一律 +1 許容が安全）。窓 client 寸は丸め権威経由ゆえ従来どおり絶対値で書ける。根拠は spec `areka-P0-scale-exact-rational` の裁定登記を参照」。既存 `:15` の「適合 #1 の DPI 検証を**絶対値で書ける前提**＝画素演算の有理数化」の記述は**失効注記**を付す（brief の当該行を書き換えるか追記で上書き宣言——brief の追記が正本という運用に合わせ追記側で上書き）。
 - **C4-b** `balloon-offset-dpi/brief.md`: 追記ブロック 1 個——「`scale-exact-rational` は 2026-08-14 裁定で文書＋検証仕様へ縮小され、**ScaleRatio の文字層配管は行われない**。既存 `:31`『ScaleRatio 配管と丸め権威を前提にする』のうち配管は失効。**丸め権威（`ScaleRatio::scale_len`/`scaled_extent`）は既存のまま利用可能**であり、bod が f32 を寸法演算に持ち込まない規律は不変（供給面寸の例外は emo-text 内の 1 点に限られ bod へは適用されない）」。
 - **C4-c** `roadmap.md`: ⑴ゴール表 `:66` の単一文を「裁定の登記＋前提の決定論テスト＝f32 供給面寸の許容を固定（配管は 2026-08-14 却下）」へ改訂 ⑵W6.5 行 `:84` 内の exact 記述（「f32 汚染点 :109」「exact は bod の前提（丸め権威）ゆえ W6.75 より先」）へ縮小の旨を追随（bod の前提は「丸め権威は既存充足＋供給面寸非厳密の申し送り」へ言い換え） ⑶因果台帳 `:95` の「exact→bod（丸め権威）」は「exact→bod（申し送りのみ・丸め権威は既存充足）」へ。**編成スロット（W6.5 での本仕様の着地）自体は維持**——縮小後も登記・テスト・申し送りの着地物がある。
 - 共通規律（4.4）: いずれも裁定根拠を再説明せず「spec `areka-P0-scale-exact-rational`（research.md §9／region.rs の裁定登記）」参照で済ませる。
