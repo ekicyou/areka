@@ -142,8 +142,11 @@ enum AllocSite {
 impl AllocSite {
     /// 全発生点（走査の正本。檻はこれを回して「4 つある」ことごと固定する）。
     ///
-    /// 読み手は現時点ではテストのみ（`budget_tests.rs`）。製品コードからの走査は task 6.1
-    /// （定常アロケーション 0 の檻）が全発生点を回す形で入る。
+    /// 読み手は本モジュールのテスト（`budget_tests.rs`）のみである。**製品コードにも presenter 側の
+    /// 檻にも走査の消費者は無い**——本列挙は本モジュール私有ゆえ外へ持ち出せず、presenter 経由の檻
+    /// （`presenter_budget_steady_state_tests.rs`）は [`BudgetCounters`] の名前つき 4 フィールドを
+    /// 直接読む。列挙を増減させると perf サマリ行のフィールド集合が変わるため、「4 つある」ことを
+    /// 固定する走査は本モジュール内に置く。
     #[allow(dead_code)]
     const ALL: [AllocSite; 4] = [
         AllocSite::ComposeDst,
@@ -216,7 +219,7 @@ pub(super) struct BudgetCounters {
 impl BudgetCounters {
     /// 発生点で引く（全発生点の走査用）。
     ///
-    /// 現時点の読み手はテストのみ。累積を「全発生点で 0 のまま」と主張する檻は task 6.1 が置く。
+    /// 読み手は本モジュールのテストのみ（presenter 経由の檻は名前つきフィールドを直接読む）。
     #[allow(dead_code)]
     fn count(&self, site: AllocSite) -> u64 {
         match site {
@@ -626,11 +629,36 @@ impl FrameBudget {
     ///
     /// テストが「ウォームアップ後の N 反復で 1 件も増えていない」を主張する口である。
     ///
-    /// 現時点の読み手はテストのみ（`budget_tests.rs`）。presenter 経由で累積を主張する檻は
-    /// task 6.1（定常アロケーション 0）が置く。
+    /// 読み手はテストのみ（`budget_tests.rs` が席の単体で、
+    /// `presenter_budget_steady_state_tests.rs` が実 `apply_show` を通した定常状態で読む）。
     #[allow(dead_code)]
     pub(super) fn cumulative(&self) -> &BudgetCounters {
         &self.total
+    }
+
+    /// 合成先の常設席がいま抱えているバイト列の先頭位置（**テストの観測口・製品経路に消費者なし**）。
+    ///
+    /// # なぜ口が要るのか（席を私有にした代償）
+    ///
+    /// design.md §Testing Strategy「Integration Tests」項目 1 は、定常アロケーション 0 の檻に
+    /// 「③native scratch ポインタ不変」を課している。ところが席（[`seat::SurfaceSeat`]）は
+    /// 本モジュール私有であり、**計数シームが 1 箇所である**（D6）ためにその私有性は落とせない。
+    /// presenter 側の檻（`presenter_budget_steady_state_tests.rs`）は本モジュールの子ではないので、
+    /// 席の実体へ届く道が他に無い。
+    ///
+    /// 読めるのは番地だけで、席の中身にも計数にも触れない。`#[cfg(test)]` ゆえ製品ビルドには
+    /// 存在せず、[`AllocSite`] も perf サマリ行のフィールド集合も動かさない
+    /// （`tools/perf/judge-perf.py` との契約は不変）。
+    ///
+    /// # 検出力はこの口には無い
+    ///
+    /// 返すのは席が抱えるバイト列の先頭位置だけである。番地を渡すだけのこの口自体に検出力は
+    /// 無く、検出力を持つのはこの値を読む側の assert である。どの assert がどの誤実装をどれだけ
+    /// 赤にしたかの実測は `presenter_budget_steady_state_tests.rs` の
+    /// §番地の主張はどこまで効くか に一箇所だけ登記してある。
+    #[cfg(test)]
+    pub(super) fn native_scratch_ptr(&self) -> *const u8 {
+        self.native.get().bytes().as_ptr()
     }
 }
 

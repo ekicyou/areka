@@ -126,3 +126,6 @@ mod hide_contract_tests;
 #[cfg(test)]
 #[path = "presenter_perf_log_tests.rs"]
 mod perf_log_tests;
+#[cfg(test)]
+#[path = "presenter_budget_steady_state_tests.rs"]
+mod budget_steady_state_tests;
