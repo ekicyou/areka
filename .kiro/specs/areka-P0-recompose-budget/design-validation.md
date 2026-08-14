@@ -6,7 +6,7 @@
 
 ## Review Summary
 
-要件 30 項目（AC 全数）を Traceability 表で 1:1 に写像し、D1〜D10 の各決定に棄却代替と根拠（research §9）を備えた、実装準備度の高い設計である。file:line アンカーはレビュー時に独立スポットチェックした範囲（show.rs :66-101／:240／:215-235・cache.rs :98-147・scale.rs :395/:423・`Changed<AlphaMaskResource>` 依存 0 件の grep）で全て実コードと一致した。承認済み契約（キャッシュ容量 1・原子対・既存 info! 実機サインオフ契約）を不変に保ち、上流変更を additive に限定し、隣接 spec（exact／atom／cage④）の観測域を明示凍結する境界規律も要件・steering と整合している。
+要件 32 項目（AC 全数）を Traceability 表で 1:1 に写像し、D1〜D10 の各決定に棄却代替と根拠（research §9）を備えた、実装準備度の高い設計である。file:line アンカーはレビュー時に独立スポットチェックした範囲（show.rs :66-101／:240／:215-235・cache.rs :98-147・scale.rs :395/:423・`Changed<AlphaMaskResource>` 依存 0 件の grep）で全て実コードと一致した。承認済み契約（キャッシュ容量 1・原子対・既存 info! 実機サインオフ契約）を不変に保ち、上流変更を additive に限定し、隣接 spec（exact／atom／cage④）の観測域を明示凍結する境界規律も要件・steering と整合している。
 
 ## Critical Issues
 

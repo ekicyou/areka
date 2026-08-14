@@ -516,6 +516,7 @@ impl AlphaMaskResource {
 |---|---|---|
 | `FRAME_INTERVAL_EXPECTED_MS` | 172（emo2 まばたき定義値） | brief 実測・seriko 定義由来 |
 | `FRAME_INTERVAL_TOLERANCE` | 許容率（例 15%・第 1 段で較正） | R4.2⑴ |
+| `FRAME_INTERVAL_WINDOW` | 判定式⑴の測定窓の定義: `target_id`／`surface_id` で系列を分離し、アイドル区間（talk 再生・複数アニメ重畳を除外した窓）限定の対象 target 別 p95 を用いる。窓の境界条件は第 1 段ベースラインで確定し README に登記 | R4.2⑴/R4.5（validation Issue 2 の取り込み・重畳 apply の混入による偽陽性/偽陰性の排除） |
 | `IDLE_CPU_MAX_RELEASE_PCT` | 3.0 | 議題 2 裁定（SSP 実測 2.2〜2.8% の同等圏） |
 | `WARMUP_EXCLUDE_SEC` | 定常状態の開始境界（初回確保・起動過渡の除外窓） | R3.1「定常状態」定義の運用形 |
 | `CONVERGENCE_*` | 収束判定: 時系列後半窓の回帰傾きと窓間平均差の上限 | R5.1/5.3 |
@@ -542,7 +543,7 @@ impl AlphaMaskResource {
 
 ### Integration Tests（presenter 経由）
 
-1. **定常アロケーション 0 檻**（presenter_budget_steady_state_tests）: 2 パターン交互適用（毎回ミス）×k≠1 でウォームアップ後、①budget 累積計数の増分 0 ②表示バッファ先頭ポインタ不変 ③native scratch ポインタ不変 ④マスク輪番の 2 ポインタ集合不変、を N 反復で assert（emo-compose 予算檻アプローチ (A) の presenter 移植・R6.1）。非空性ガード（不透明画素 > 0）で空実装の偽合格を防ぐ
+1. **定常アロケーション 0 檻**（presenter_budget_steady_state_tests）: 2 パターン交互適用（毎回ミス）×k≠1 でウォームアップ後、①budget 累積計数の増分 0 ②表示バッファ先頭ポインタ不変 ③native scratch ポインタ不変 ④マスク輪番の 2 ポインタ集合不変、を N 反復で assert（emo-compose 予算檻アプローチ (A) の presenter 移植・R6.1）。非空性ガード（不透明画素 > 0）で空実装の偽合格を防ぐ。**同檻を恒等 k（D2 の swap 交代経路＝100% 表示の一般条件）でも実施**し、表示バッファ・native scratch が 2 ポインタ集合の交互（swap を許容する形）に収まること＋計数増分 0 を assert する（validation Issue 1 の取り込み・swap 忘れ／コピー化の回帰を檻で検出）
 2. **新旧経路バイト等価檻**（presenter_budget_equivalence_tests）: 同一入力に対し便宜経路（`compose`＋新規 out `resample`＋`from_pbgra32`）と budget 経路の表示 bytes・マスクをバイト等価で固定（R3.3/6.4・k 恒等／非恒等の両方）
 3. **計時ログ較正檻**（presenter_perf_log_tests）: perf 行の固定文言・debug 水準・全段出現＋**既存 info! 行の文言・info 水準・全フィールドが不変であること**を同時に固定（R1.4・実機サインオフ契約の防波堤）
 4. **GPU readback 往復**: 既存檻（chain.rs:401 `upload_read_back_roundtrip_and_resize`）が是正後もそのまま成立することを確認（変更不要・表示面までのバイト保証）
