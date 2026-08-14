@@ -129,3 +129,7 @@ mod perf_log_tests;
 #[cfg(test)]
 #[path = "presenter_budget_steady_state_tests.rs"]
 mod budget_steady_state_tests;
+
+#[cfg(test)]
+#[path = "presenter_budget_equivalence_tests.rs"]
+mod budget_equivalence_tests;
