@@ -48,7 +48,7 @@
   - _Requirements: 2.1, 2.3, 2.6, 2.7_
   - _Boundary: invoke-perf-run_
 
-- [ ] 2.2 (P) 集計モードを新設
+- [x] 2.2 (P) 集計モードを新設
   - 計時行から段階別 p50/p95・キャッシュ命中率・コマ適用間隔・確保計数を集計し、CPU 時系列から統計を出す
   - 進行境界スキップの件数は既存ログの実文言で数える
   - 必要なログ種の欠落・段フィールドの欠落は部分集計を出さずエラーとして報告する
@@ -207,3 +207,11 @@
   2. 7 分／25 分の全長経路（watchdog・約 100 点の刻み積み上げ・早期終了判定）は未踏。12 秒の有界起動で向きが正しいことまでは確認済み。
   3. 開発者へ提案できる配管確認（本 spec 側では未実施・デスクトップにマスコットが出るため同意なしに走らせていない）: `AREKA_APP_SMOKE_EXIT_MS` を 45 秒程度に落とした 1 回きりの走行で、run.log に段階別計時ログと smoke ゲートの証跡が出ること・cpu.csv が 3〜4 行になること・exit 0 で終わることを確かめる。
 - **2.1 → 2.4（README）への申し送り**: `cpu.csv` の 1 行は約 1 秒幅の瞬時値で 15 秒平均ではない／`shiori_helper_present=False` の走行は発話のない別条件である／`areka_profile_dir` に前回の窓位置が残るため同一手順の再測では同じプロファイル位置を使う／性能カウンタ名が翻訳されている環境ではバナーの較正値を書き換える／**要件 4.4 の較正の出所である SSP 実測 2.2〜2.8% の採取方法が requirements.md にも design.md にも記録されていない**ため、再測時の取り違え防止として採取方法を README へ登記すること。
+- **2.2 で確定した実ログの形（後続タスクの前提）**: perf 行は `<ISO8601>Z DEBUG <スパン>: areka_emo_present::presenter::timing: perf(apply_show): 段階別計時 target_id=TargetId(0) surface_id=1000 cache_hit=false t_cache_us=… key_hash=…` の形（実物を採取して確定）。**実 run.log には ANSI 色コードが入る**——`tracing-subscriber` 0.3.23 は出力先が端末かどうかを見ず `NO_COLOR` 未設定なら色を付ける（`fmt_layer.rs:739-755`）ため。judge-perf.py は除去してから解析する（色あり／色なしで集計が逐語一致することを検証済み）。
+- **catch-up 文言の二重計上の罠**: `"loop ticker catch-up: skipped multiple boundaries, firing once"` は `"ticker catch-up: skipped multiple boundaries, firing once"` を部分文字列として含む（`areka-ghost/src/ticker.rs:205/225` が短い方・`:307` が長い方）。素朴に「含む行を数える」と loop_ticker が両方に計上される。長い方から先に判定すること。design.md の記載どおりで brief の `(loop)` 形が誤り、という点も逐語確認済み。
+- **2.2 → 2.3 への申し送り（最重要）**: **定常状態が空の走行を合格にしてはならない**。`WARMUP_EXCLUDE_SEC` が走行長を上回る等で定常区間が空になると、判定式⑵（catch-up 0 件）と⑶（確保 0 件）が恒真で緑になる。集計モードは全区間の集計＋警告を出して exit 0 で正しいが、**判定モードは定常区間が空なら判定不能（exit 2）にすること**。
+- **2.2 → 2.4 への申し送り（4 件）**:
+  1. `--selftest` の fixture には **run-meta.txt を必ず同梱**すること（集計は必要ログ種として要求し、無ければ exit 2）。**色コード入りの正常系を必ず 1 本含める**（本物の run.log がその形のため）。
+  2. `judge-perf.py` は必要ログ種に `run-meta.txt` を加えており design.md の 3 種記載と食い違う（要件 4.5 のマシン条件を書けない集計を通さないための意図的な強化）。README にこの差を登記すること。
+  3. 印字される較正値バナーに**終了コード表と解析用の正規表現が含まれていない**（モジュール docstring 側にある）。2.3/2.4 と README は「バナーが唯一の所在」と読む前提なので、README は「ファイル冒頭（docstring＋バナー）」を指すか、バナーへ終了コード行を足すこと。
+  4. `invoke-perf-run.ps1` が `NO_COLOR=1` を置けば raw run.log から色コードが消えて人が grep しやすくなる（judge-perf.py 側の除去は旧ログのため残す）。2.4 の境界を tools/perf/ 全体へ広げてこの 1 行を入れてよい。
