@@ -330,7 +330,7 @@
 - 項目 1（フレーム番号）: **World を持つ観測点は `Res<FrameCount>`＋新 Resource `TickStart` から刻印を組む。スレッド局所ミラーは World 外（flush・wndproc）専用**。`Update` の `detect_display_change_system` は多スレッド実行器上で走り得るため、ミラー統一だと `monitor` レコードの frame だけが壊れる（検証レポート Critical 1）。
 - 項目 4（2.2 の記録点）: `UploadOutcome` は撤回。**upload 直前の `chain.size()` と :306 の `size` の比較で `resized` を得る**（`chain.rs` 無改変・:297-301 字面不変と両立。検証 付録 B-1）。
 - 項目 5（作業領域源）: 資源差替は dpi 相の前のまま、**再射影 `WorkAreaResnap` は dpi 相の後**（経路 (b) の二重 enqueue／二重レコード回避。付録 B-2）。
-- 項目 6／15（`DpiSyncHold`）: 保証範囲の裁定は設計討議 議題 1（後述・design.md「設計討議の裁定」節）。
+- 項目 6／15（`DpiSyncHold`）: 設計討議 議題 1 で**待ち札のある窓へのすべての窓書込（dpi 相・報告寸突合・再スナップ）を見送る**と裁定（描画は止めない・不変条件を `enqueue_window_set_pos` 入口で監視）。design.md「設計討議の裁定」節が正本。
 - C7 判定量: 決定論量に加えて**実機サインオフ専用の `visualize_to_write_us`／`flush_total_us`（`Bounds::signoff`）**を追加（検証 Critical 2）。C8 の Q2／Q3 はこの量で分岐する。
 - 帰属規則の共有（付録 B-3）・証跡クラスの分離表記（B-4）・`drain_window_pos_commands` の `#[doc(hidden)]`（B-5）・C8 表の対テスト列（B-6）を反映。
 
