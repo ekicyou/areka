@@ -20,6 +20,10 @@
 //! - 例外として `writing_mode`／`budoux_newline`（areka 拡張キー）を additive な生文字列転記
 //!   フィールドとして持つ（値の解釈は下流 emo テキスト層・emo-text-layer 要件 5.6／
 //!   budoux-newline 要件 1.1）。
+//! - 同じく `windowposition_raw`（[`WindowPositionRaw`]）を additive な生文字列転記フィールドとして
+//!   持つ。数値化済みの [`WindowPosition`] とは別枠であり、数値化できないキーワードや
+//!   `windowposition.limit` の生値を解釈せず保持する（windowposition-limit 要件 1.1/4.1。
+//!   `WindowPosition` と既存アクセサは無改変＝同要件 5.1）。
 //!
 //! 構築は同クレートの `balloon::parse`（写像）とテストが公開/クレートパスで行う。
 //! `new` コンストラクタ＋read-only accessor という不変値オブジェクト流儀（`sakura::SurfaceArg` 流儀）。
@@ -39,6 +43,7 @@ pub struct BalloonModel {
     writing_mode: Option<String>,
     budoux_newline: Option<String>,
     cursor: BalloonCursor,
+    windowposition_raw: WindowPositionRaw,
 }
 
 impl BalloonModel {
@@ -47,6 +52,11 @@ impl BalloonModel {
     /// `cursor` は additive 追加フィールドのため、既存呼び出し互換のため本コンストラクタでは
     /// `BalloonCursor::default()`（全キー未指定）で初期化する。cursor.* を持つ写像は
     /// [`BalloonModel::with_cursor`] で相乗り上書きする（`balloon::parse` が使用・要件 4.2）。
+    ///
+    /// `windowposition_raw` も同様に additive 追加フィールドであり、本コンストラクタでは
+    /// `WindowPositionRaw::default()`（両項未指定）で初期化する。生値を持つ写像は
+    /// [`BalloonModel::with_windowposition_raw`] で相乗りさせる
+    /// （windowposition-limit 要件 1.1/4.1・既存呼び出し側は無改変＝要件 5.1）。
     pub fn new(
         windowposition: WindowPosition,
         origin: Origin,
@@ -65,6 +75,7 @@ impl BalloonModel {
             writing_mode,
             budoux_newline,
             cursor: BalloonCursor::default(),
+            windowposition_raw: WindowPositionRaw::default(),
         }
     }
 
@@ -74,6 +85,15 @@ impl BalloonModel {
     /// [`BalloonCursor`] を相乗りさせるために消費する（既存呼び出し側は `new` のまま不変・要件 4.2）。
     pub fn with_cursor(mut self, cursor: BalloonCursor) -> Self {
         self.cursor = cursor;
+        self
+    }
+
+    /// `windowposition.*` の生文字列を差し替えた値を返す additive ビルダ（`with_cursor` 流儀）。
+    ///
+    /// `new` で基層を組んだ後、`balloon::parse` の KV 写像が `windowposition.x`/`.limit` の
+    /// マージ済み生値を相乗りさせるために消費する（既存呼び出し側は `new` のまま不変・要件 5.1）。
+    pub fn with_windowposition_raw(mut self, windowposition_raw: WindowPositionRaw) -> Self {
+        self.windowposition_raw = windowposition_raw;
         self
     }
 
@@ -126,6 +146,17 @@ impl BalloonModel {
     pub fn cursor(&self) -> &BalloonCursor {
         &self.cursor
     }
+
+    /// `windowposition.x`/`.limit` の生文字列 [`WindowPositionRaw`] を参照で読み取る
+    /// （windowposition-limit 要件 1.1/4.1）。
+    ///
+    /// `Option<String>` を含むため参照返し（`font()`/`cursor()` 流儀）。2 層マージ済みの生値を
+    /// そのまま転記したものであり、0/1 検証・キーワード判別・警告縮退は下流（配置層の分類）の
+    /// 責務（parser は転記に徹する）。既存の数値アクセサ [`BalloonModel::windowposition`] は
+    /// 本フィールドの追加で一切変化しない（要件 5.1）。
+    pub fn windowposition_raw(&self) -> &WindowPositionRaw {
+        &self.windowposition_raw
+    }
 }
 
 /// `windowposition`（x: シェル側+/離れる側-、y: 下+/上-）。未指定は `None`（要件 2.1/2.6/4.2/4.3）。
@@ -150,6 +181,48 @@ impl WindowPosition {
     /// y 成分（未指定は `None`・`Some(0)` と判別・要件 2.6/4.3）。
     pub fn y(&self) -> Option<i32> {
         self.y
+    }
+}
+
+/// `windowposition` の生文字列 2 項（`x` / `limit`）。未指定は `None`。
+///
+/// [`WindowPosition`]（数値化済み x/y）の sibling であり、数値化できない語彙
+/// （`windowposition.x` の `center`/`top`/`bottom`）と数値化の対象外である
+/// `windowposition.limit`（0/1）を、**解釈せず・警告せず**そのまま保持するための転記面
+/// （windowposition-limit 要件 1.1/4.1）。
+///
+/// 転記層契約: trim は上流 `kv::parse_kv` で済んでおり、本型は追加の整形を行わない。
+/// 0/1 検証・キーワード判別・語彙外値の警告付き縮退は下流（配置層の分類純関数）の責務であり、
+/// ここでは語彙外の値も素通しで保持する（steering「parser は転記層・ツリー構築は下流」）。
+///
+/// `#[derive(Default)]` は「両項未指定」の素直な表現であり、additive フィールドとして
+/// 既存コンストラクタ互換を保つために [`BalloonModel::new`] が用いる（`BalloonCursor` 流儀）。
+/// `Option<String>` を含むため `Copy` 不可。
+#[non_exhaustive]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct WindowPositionRaw {
+    x_raw: Option<String>,
+    limit_raw: Option<String>,
+}
+
+impl WindowPositionRaw {
+    /// x/limit の生文字列を個別に `Option` で保持して構築する（部分欠落を欠落なく表現）。
+    pub fn new(x_raw: Option<String>, limit_raw: Option<String>) -> Self {
+        WindowPositionRaw { x_raw, limit_raw }
+    }
+
+    /// `windowposition.x` の生文字列（未指定は `None`・借用で読む・要件 4.1）。
+    ///
+    /// 数値・キーワード・語彙外値のいずれも区別せずそのまま返す（判別は下流）。
+    pub fn x_raw(&self) -> Option<&str> {
+        self.x_raw.as_deref()
+    }
+
+    /// `windowposition.limit` の生文字列（未指定は `None`・借用で読む・要件 1.1）。
+    ///
+    /// `0`/`1` の検証と既定値 1 への縮退は下流の責務であり、ここでは判定しない。
+    pub fn limit_raw(&self) -> Option<&str> {
+        self.limit_raw.as_deref()
     }
 }
 

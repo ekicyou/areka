@@ -742,10 +742,17 @@ fn capture_logs<F: FnOnce()>(f: F) -> String {
         }
     }
 
+    // 並行実行下の callsite interest 毒化対策（`log_interest_probe` のモジュール doc 参照）。
+    crate::log_interest_probe::ensure_interest_probes();
+
     let cap = Capture::default();
     let logs = cap.0.clone();
     let subscriber = tracing_subscriber::registry().with(cap);
-    tracing::subscriber::with_default(subscriber, f);
+    tracing::subscriber::with_default(subscriber, || {
+        // probe 常駐前に焼かれた `never` の掃き残しを、窓が開いた後にもう一度潰す。
+        tracing::callsite::rebuild_interest_cache();
+        f()
+    });
     let guard = logs.lock().unwrap();
     guard.join("\n")
 }

@@ -308,6 +308,13 @@ fn entry_value<'a>(entries: &'a [(PersistKey, String)], target: PersistKey) -> O
 /// 出力は入力と同じ scope 集合・同じ寸法（char/balloon）・同じ anchor。変わるのは char_pos と
 /// balloon 導出（`balloon_pos`/`balloon_offset`）のみ。永続状態には触れない。
 ///
+/// `balloon_offset ≡ balloon_pos − char_pos` が成立するのは**本関数の出力時点**までである
+/// （windowposition-limit DD6）。`main.rs` の `restore_merged_placements` は本関数の直後に起動時関門
+/// [`super::balloon_limit::apply_balloon_limit`] を通し、`balloon_limit` が真の scope の
+/// `balloon_pos` だけを作業領域内へ補正する（`balloon_offset` は生値のまま＝補正を
+/// 焼き付けない）。ゆえに関門通過後の `balloon_pos` は表示位置、`balloon_offset` は論理
+/// 相対位置であり、両者の差が恒等式を満たすとは限らない。本関数自身はクランプしない。
+///
 /// `ScopePlacement.scope` は `usize`・[`PersistKey`] の scope は `u32` ゆえ、entries 突合は
 /// `scope as u32` で一貫キャストする。
 #[allow(dead_code)] // 結線（main.rs シーム・task 6.1）は後続タスクの領分
@@ -378,12 +385,17 @@ fn merge_scope(
         },
     )
     .and_then(parse_px);
-    let balloon_offset = match (saved_bx, saved_by) {
+    // キーワード再導出の素材は**保存値が効いた scope では落とす**（windowposition-limit
+    // 要件 4.7「永続値を優先し、キーワード指定の適用は初期既定位置の供給にとどめる」）。
+    // 落とさないと、実表示寸確定の再導出がユーザーの保存した相対位置をキーワード既定へ
+    // 上書きしてしまう——保存値優先の順位が静かに反転する。offset 欠損側（resolver 既定を
+    // 保持する腕）は素材をそのまま運ぶ。
+    let (balloon_offset, balloon_keyword_base) = match (saved_bx, saved_by) {
         // 保存 offset は**char 左上基準**（ランタイム BalloonFollow.offset と同一基準）ゆえ
         // 基準変換なしで採用する（2.3・[`balloon_offset_entries`] の基準記述）。
-        (Some(x), Some(y)) => PointPx { x, y },
+        (Some(x), Some(y)) => (PointPx { x, y }, None),
         // offset 欠損 → resolver 既定 offset（左上基準）を保持（2.4）。
-        _ => placement.balloon_offset,
+        _ => (placement.balloon_offset, placement.balloon_keyword_base),
     };
     // どちらの場合も最終 char_pos へ追従させて balloon_pos を再導出する。
     let balloon_pos = PointPx {
@@ -415,7 +427,12 @@ fn merge_scope(
         balloon_pos,
         balloon_size: placement.balloon_size,
         balloon_offset,
+        // limit の解決値は merge の対象外（永続化しない・毎起動 descript から解決する）
+        // ゆえ、入力の値をそのまま転記する（merge 規則は無改変）。
+        balloon_limit: placement.balloon_limit,
         anchor: placement.anchor,
+        // 保存値が効いた scope では `None`（要件 4.7）。上の match が決めている。
+        balloon_keyword_base,
     }
 }
 

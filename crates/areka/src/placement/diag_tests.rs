@@ -42,7 +42,7 @@ fn record_tags_are_fixed() {
     assert_eq!(ZORDER_PAIR_STRATEGY_TAG, "[zorder-pair] strategy-selected");
 }
 
-/// 経路語彙 9 種の表示語がリテラル固定されている（Req 2.4 の結論語彙・D13）。
+/// 経路語彙 10 種の表示語がリテラル固定されている（Req 2.4 の結論語彙・D13）。
 #[test]
 fn placement_route_vocabulary_is_fixed() {
     assert_eq!(PlacementRoute::SpawnInitial.as_str(), "SpawnInitial");
@@ -60,16 +60,20 @@ fn placement_route_vocabulary_is_fixed() {
         "ReportedSizeReconcile"
     );
     assert_eq!(PlacementRoute::MoveCue.as_str(), "MoveCue");
+    assert_eq!(
+        PlacementRoute::BalloonLimitRelease.as_str(),
+        "BalloonLimitRelease"
+    );
 }
 
-/// `ALL` は 9 バリアント全部・重複なし（語彙が 1 つでも欠けたら落ちる・D13）。
+/// `ALL` は 10 バリアント全部・重複なし（語彙が 1 つでも欠けたら落ちる・D13）。
 #[test]
-fn placement_route_all_covers_nine_distinct_variants() {
+fn placement_route_all_covers_ten_distinct_variants() {
     let all = PlacementRoute::ALL;
     assert_eq!(
         all.len(),
-        9,
-        "経路語彙は 9 種（design Service Interface・D13）"
+        10,
+        "経路語彙は 10 種（design Service Interface・D13・windowposition-limit C10）"
     );
     for route in [
         PlacementRoute::SpawnInitial,
@@ -81,6 +85,7 @@ fn placement_route_all_covers_nine_distinct_variants() {
         PlacementRoute::BalloonFollow,
         PlacementRoute::ReportedSizeReconcile,
         PlacementRoute::MoveCue,
+        PlacementRoute::BalloonLimitRelease,
     ] {
         assert!(all.contains(&route), "ALL に {route} が無い");
     }
@@ -332,7 +337,7 @@ fn log_zorder_pair_declared_emits_the_assembled_record_at_debug() {
     assert_eq!(events[0].level, Level::DEBUG);
 }
 
-/// 全 9 経路が `route=<語>` として組み上がる（配管先が増えても語彙が固定される）。
+/// 全 10 経路が `route=<語>` として組み上がる（配管先が増えても語彙が固定される）。
 #[test]
 fn window_move_record_line_renders_every_route() {
     for route in PlacementRoute::ALL {

@@ -64,8 +64,8 @@ fn gap_bound_char_world(dpi: i32) -> (World, Entity, PointPx) {
 }
 
 /// 発火条件の**表そのもの**を固定する（D13 帰結⑴⑵）。挙動側の檻（下 2 件）と
-/// 二段構えにしてあるのは、語彙が 9 種あるのに `resize_window_to` を実際に通るのは
-/// 現状 4 種だけで、残り 5 種の判定が挙動檻だけでは**合成でしか**検査できないため。
+/// 二段構えにしてあるのは、語彙が 10 種あるのに `resize_window_to` を実際に通るのは
+/// 現状 4 種だけで、残り 6 種の判定が挙動檻だけでは**合成でしか**検査できないため。
 /// [`PlacementRoute::ALL`] を回すので、語彙が増えたら本檻も落ちる。
 #[test]
 fn visibility_guard_route_table_matches_the_d13_decision() {

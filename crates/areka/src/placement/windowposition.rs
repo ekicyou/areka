@@ -1,4 +1,6 @@
-//! `windowposition`（数値指定）→ バルーン窓の初期既定位置の調整量（純関数群）。
+//! `windowposition`（数値指定）→ バルーン窓の初期既定位置の調整量（純関数群）と、
+//! `windowposition.x`／`.limit` の語彙分類（[`classify_x_vocab`]／[`classify_limit_vocab`]・
+//! design C1）。
 //!
 //! バルーン定義（`descript.txt` ＋ 面別上書き `{接頭辞}{ID}s.txt` の 2 層マージ結果）の
 //! `windowposition` を、画面座標系（物理 px）の調整量へ変換し
@@ -7,7 +9,12 @@
 //! 本モジュールは `resolver.rs` の配置式 P1〜P5 を**無改変**に保つための供給層である
 //! ——P5 は `balloon_offset.unwrap_or((0, 0))` を既に加算しているため、供給元を足すだけで
 //! 正典化が成立する（design D1'）。恒等式 `balloon_offset ≡ balloon_pos − char_pos`
-//! （`resolver.rs` の恒久事後条件）は P5 の加算入力が変わるだけなので自動的に保たれる。
+//! （`resolver.rs` の**出力時点の**事後条件）は P5 の加算入力が変わるだけなので自動的に
+//! 保たれる。なお本モジュールも `resolver.rs` もバルーンをクランプしない——
+//! `windowposition.limit` による作業領域内への補正は下流の関門
+//! （`balloon_limit::apply_balloon_limit`／`follow::window_move::enqueue_window_set_pos`）
+//! が所有し、補正は `balloon_pos`（表示位置）だけに作用して調整量へは焼き付かない
+//! （windowposition-limit DD6）。
 //!
 //! 依存規約（placement/mod.rs）: `config`（`PlacementConfig`）と
 //! `areka-emo-compose`（`ScaleRatio` 丸め権威）のみを消費し、wintf/bevy_ecs を import しない。
@@ -19,7 +26,100 @@
 use areka_emo_compose::ScaleRatio;
 use tracing::warn;
 
-use super::config::PlacementConfig;
+use super::config::{BalloonXMode, PlacementConfig};
+
+/// `windowposition.x` の分類結果（閉じた語彙・網羅 `match` 強制・design C1）。
+///
+/// 分類だけを行い**警告は発しない**——warn の発行は scope 文脈を持つ呼び出し側
+/// （`apply_scope_windowpositions`）が所有する（design C1 Invariants・要件 6.3）。
+/// 本 enum が [`XVocab::Invalid`] という腕を持つこと自体が「警告可能にする」設計である。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum XVocab {
+    /// 数値または未指定（既存挙動そのまま・`None` は「調整なし」）。
+    Numeric(Option<i32>),
+    /// キーワード（`top` は `center` と同義に解決済み）。
+    ///
+    /// 現れるのは [`BalloonXMode::CenterTop`]／[`BalloonXMode::CenterBottom`] のみ。
+    /// [`BalloonXMode::Side`]（＝現行の左右分岐）は「キーワードでない」ことの表現ゆえ
+    /// この腕には現れない。
+    Keyword(BalloonXMode),
+    /// 数値でもキーワードでもない値（呼び出し側が warn ＋ `Numeric(None)` 扱いへ縮退）。
+    Invalid,
+}
+
+/// `windowposition.limit` の分類結果（design C1）。
+///
+/// [`XVocab`] と同じく警告は発しない（呼び出し側の所有）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum LimitVocab {
+    /// 受理した値（`true`＝画面内維持・正典既定／`false`＝維持しない）。
+    Value(bool),
+    /// 値域 0/1 の外（呼び出し側が warn ＋ 正典既定 `true` へ縮退）。
+    Invalid,
+}
+
+/// `windowposition.x` の語彙分類（要件 1.1 の x 側／4.1／4.6）。
+///
+/// - `x_num`: 既存の数値写像（`get_scalar::<i32>("windowposition.x")`）の結果。
+/// - `x_raw`: 転記層 `WindowPositionRaw::x_raw()` の生文字列。
+///
+/// # 不変量（数値経路の回帰境界・design C1 Invariants）
+///
+/// **`x_num.is_some()` なら常に [`XVocab::Numeric`]** ——数値が読めていれば生文字列を
+/// 一切参照しない。これが要件 5.1（数値指定の変換を本仕様の前後で同一に保つ）を
+/// 型と構造で保証する境界であり、キーワード語彙の追加が数値経路へ 1 ビットも
+/// 波及しないことの担保である。
+///
+/// # 語彙の細則（DD8・areka 裁量）
+///
+/// キーワードは小文字 `center`／`top`／`bottom` の**完全一致**のみ受理する。
+/// 大文字混在（`Center` 等）は [`XVocab::Invalid`] へ落ち、呼び出し側の警告で作者が
+/// 綴りに気づける（要件 4.6）。`top` は `center` と同義（正典）。
+///
+/// 前後空白の除去は上流 kv 層（`kv::parse_kv`）で既に済んでおり（`parse.rs` の転記層
+/// 契約）、ここでの `trim` はその冗長化である——実際に届く trim 済みの値に対しては
+/// 恒等であり、新しい正規化権威を作るものではない（DD8「trim 済み文字列との完全一致」）。
+///
+/// 未指定（`x_raw` が `None`）は [`XVocab::Numeric`]`(None)` ＝「調整なし」であり、
+/// 不正値とは**区別される**（要件 7.2）——未指定は無警告、不正値は警告付き縮退。
+pub(crate) fn classify_x_vocab(x_num: Option<i32>, x_raw: Option<&str>) -> XVocab {
+    if x_num.is_some() {
+        // 数値経路は生値を見ない（上記不変量。`x_raw` はこの分岐で参照されない）。
+        return XVocab::Numeric(x_num);
+    }
+    let Some(raw) = x_raw else {
+        // 未指定＝調整なし（現行と bit 同一・警告の対象外）。
+        return XVocab::Numeric(None);
+    };
+    match raw.trim() {
+        "center" | "top" => XVocab::Keyword(BalloonXMode::CenterTop),
+        "bottom" => XVocab::Keyword(BalloonXMode::CenterBottom),
+        _ => XVocab::Invalid,
+    }
+}
+
+/// `windowposition.limit` の語彙分類（要件 1.1／1.2／1.3）。
+///
+/// `"0"`→`Value(false)`・`"1"`→`Value(true)`・未指定→`Value(true)`（正典既定 1）・
+/// それ以外→[`LimitVocab::Invalid`]（呼び出し側が warn ＋ `true` へ縮退）。
+///
+/// 値域は 0/1 の**文字列完全一致**であり、`"2"`／`"-1"`／`"01"` のような
+/// 「数値としては読めるが値域外」の値も不正値である（正典の値域は 0/1 のみ）。
+/// `trim` の位置づけは [`classify_x_vocab`] と同じ（kv 層 trim の冗長化）。
+///
+/// 未指定と不正値は**区別される**（要件 7.2）——どちらも最終的に既定 1 へ落ちるが、
+/// 不正値だけが警告経路を通る（要件 6.3: ログの無い縮退経路を作らない）。
+pub(crate) fn classify_limit_vocab(limit_raw: Option<&str>) -> LimitVocab {
+    let Some(raw) = limit_raw else {
+        // 未指定＝正典既定 1（有効・要件 1.2・警告の対象外）。
+        return LimitVocab::Value(true);
+    };
+    match raw.trim() {
+        "0" => LimitVocab::Value(false),
+        "1" => LimitVocab::Value(true),
+        _ => LimitVocab::Invalid,
+    }
+}
 
 /// 符号付き長さの k 倍（**大きさは既存丸め権威 [`ScaleRatio::scale_len`] へ委譲**し、
 /// 符号だけを本層で保存する・R3.6）。
@@ -118,6 +218,10 @@ pub fn apply_windowposition(cfg: &mut PlacementConfig, scope: usize, adjust: Opt
         None => (dx, dy),
     });
 }
+
+#[cfg(test)]
+#[path = "windowposition_vocab_tests.rs"]
+mod vocab_tests;
 
 #[cfg(test)]
 mod tests {

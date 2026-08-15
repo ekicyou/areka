@@ -1,8 +1,10 @@
 use super::*;
 use areka_ghost::sylphya_wiring::profile_areka_root;
 use areka_parsers::charset::DefaultEncoding;
+use placement::balloon_limit::BALLOON_LIMIT_CLAMP_TAG;
 use placement::follow::MonitorSnapshot;
 use placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
+use placement::test_support::{capture_logs, expect_one};
 use std::path::Path;
 
 /// 復元テスト共通寸法（persist.rs の merge テストと同流儀）。
@@ -44,7 +46,10 @@ fn synthetic_placement(default_char_pos: PointPx) -> ScopePlacement {
         },
         balloon_size: BSZ,
         balloon_offset,
+        // windowposition-limit: 正典既定（有効）。本檻は limit の判定を対象にしない。
+        balloon_limit: true,
         anchor: Anchor::Free,
+        balloon_keyword_base: None,
     }
 }
 
@@ -128,6 +133,81 @@ fn restore_seam_without_persist_is_identity_default() {
     assert!(
         restored.is_empty(),
         "永続不在なら復元済み scope は無い＝全 scope が既定配置のまま（scg 7.3）"
+    );
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// areka-P0-windowposition-limit 2.2/4.7/6.1・design C6/DD6:
+/// **起動時関門が復元合流シームに実際に結線されている**ことの証明。
+///
+/// 植えた保存位置が優先されて（＝合流順序は不変・要件 4.7）そのキャラ位置から導いた
+/// バルーン表示位置が作業領域の外へ出るとき、シームの出力では
+/// - `balloon_pos`（表示位置）が作業領域内へ補正され、
+/// - `balloon_offset`（論理相対位置＝保存値・作者指定の系譜）は**生値のまま**残り、
+/// - `[balloon-limit] Clamp` が当該 scope で記録される（要件 6.1）。
+///
+/// 補正が `balloon_offset` へ焼き付いていたら（DD6 違反）3 番目の assert が赤になる。
+#[test]
+fn restore_seam_clamps_balloon_display_position_but_keeps_offset_raw() {
+    let root = unique_temp_dir("balloon_limit_gate");
+    plant_minimal_ghost(&root);
+    let profile = profile_areka_root(&root.join("ghost").join("master"));
+    std::fs::create_dir_all(&profile).expect("create profile/areka");
+    // 保存位置は作業領域の左端近く。balloon_offset(-50) を足すと左辺を 20px はみ出す。
+    std::fs::write(
+        profile.join("sylphya.toml"),
+        "format-version = 1\n[window.0]\nx = \"30\"\ny = \"300\"\n".as_bytes(),
+    )
+    .expect("plant sylphya.toml");
+
+    // 既定は保存値と別位置（保存値優先＝合流順序の証明のため）。
+    let default_char_pos = PointPx { x: 900, y: 200 };
+    let placements = vec![synthetic_placement(default_char_pos)];
+    let snapshot = MonitorSnapshot {
+        work_areas: vec![RectPx {
+            left: 0,
+            top: 0,
+            right: 1920,
+            bottom: 1080,
+        }],
+    };
+
+    let ((out, restored), events) = capture_logs(|| {
+        restore_merged_placements(&root, placements, &snapshot, DefaultEncoding::Ansi)
+    });
+
+    assert_eq!(out.len(), 1);
+    assert_eq!(
+        restored.iter().copied().collect::<Vec<_>>(),
+        vec![0usize],
+        "保存位置を採用した scope として報告される（合流規則は関門の設置で変わらない）"
+    );
+    assert_eq!(
+        out[0].char_pos,
+        PointPx { x: 30, y: 300 },
+        "保存値が既定(900,200)に優先する＝合流順序は不変（要件 4.7）"
+    );
+    assert_eq!(
+        out[0].balloon_pos,
+        PointPx { x: 0, y: 310 },
+        "バルーン表示位置は作業領域の左辺へ補正される（要件 2.2・起動時関門の結線）"
+    );
+    assert_eq!(
+        out[0].balloon_offset,
+        PointPx { x: -50, y: 10 },
+        "論理相対位置は生値のまま＝補正を焼き付けない（DD6・要件 3.1(d)）"
+    );
+    // キャラ窓は limit 補正で動かない（要件 2.8）。
+    assert_eq!(out[0].char_size, CSZ);
+    assert_eq!(out[0].balloon_size, BSZ);
+    assert_eq!(out[0].anchor, Anchor::Free);
+
+    let hit = expect_one(&events, BALLOON_LIMIT_CLAMP_TAG);
+    assert_eq!(
+        hit.field("scope"),
+        "0",
+        "補正した scope を記録する（要件 6.1）"
     );
 
     let _ = std::fs::remove_dir_all(&root);

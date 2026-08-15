@@ -159,8 +159,8 @@ impl Emo2Wiring {
     ///
     /// 本番の呼び手は結線済み（実測）——`input_events/mod.rs:316` が
     /// `.map(Emo2Wiring::presenter)` の関数パス形で借り、`resolve_hit_owned`（`:309`）が当たり判定へ
-    /// 渡す。到達の起点は `main.rs:725` の `attach_char_pointer_handlers`（キャラ窓ポインタ
-    /// ハンドラ装着）と `main.rs:346` の `wire_mouse_input`。呼び出しがメソッド構文でないため
+    /// 渡す。到達の起点は `main.rs` の `attach_char_pointer_handlers` 呼出（キャラ窓ポインタ
+    /// ハンドラ装着）と `main.rs` の `wire_mouse_input` 呼出。呼び出しがメソッド構文でないため
     /// `.presenter()` の grep では見つからないが、dead_code 判定上は live である。
     pub(crate) fn presenter(&self) -> &EmoPresenter {
         &self.presenter
@@ -178,7 +178,7 @@ impl Emo2Wiring {
     /// 本番の呼び手は結線済みで 3 箇所ある（実測・いずれも `Rc::clone` して world 側の借用を即座に
     /// 解く形）——`input_events/balloon.rs:394`（ポインタ移動での選択肢 hover 追従）・`:564`
     /// （クリックによる選択確定）・`:748`（バルーン離脱での hover 解除）。到達の起点は
-    /// `main.rs:363` の `wire_balloon_choice` と `main.rs:731` の `attach_balloon_pointer_handlers`。
+    /// `main.rs` の `wire_balloon_choice` と `attach_balloon_pointer_handlers` 呼出。
     ///
     /// [`presenter()`]: Self::presenter
     pub(crate) fn runtime(&self) -> &Rc<RefCell<TextLayerRuntime>> {

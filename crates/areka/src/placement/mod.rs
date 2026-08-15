@@ -19,6 +19,7 @@
 //! source→config→measure→resolver を束ねる準備関数の自然な置き場として
 //! ここ（合成ルート）に実装する（シームの結線自体は task 6.2・main.rs 側）。
 
+pub(crate) mod balloon_limit;
 pub mod chain_finalize;
 pub mod config;
 pub mod diag;
@@ -49,15 +50,16 @@ use std::path::{Path, PathBuf};
 
 use areka_emo_compose::ScaleRatio;
 use areka_emo_present::balloon::{load_scope_balloon_model, resolve_balloon_faces};
-use areka_parsers::balloon::WindowPosition;
+use areka_parsers::balloon::{WindowPosition, WindowPositionRaw};
 use areka_parsers::package::MountError;
 use tracing::{error, info, warn};
 use wintf::ecs::window::monitor::{Monitor, enumerate_monitors};
 
-use self::config::PlacementConfig;
+use self::config::{BalloonXMode, PlacementConfig};
 use self::measure::{MeasureScaling, MeasuredSizes};
 use self::resolver::{RectPx, ScopePlacement};
 use self::source::GhostTitles;
+use self::windowposition::{LimitVocab, XVocab, classify_limit_vocab, classify_x_vocab};
 
 /// 配置準備パイプライン（resolve→descript 読込→採寸→解決）の観測可能な失敗。
 ///
@@ -369,9 +371,17 @@ fn prepare_stages(
 /// バルーン作者の空間で書かれた値ゆえ、シェル軸の k を掛けてはならない（要件 3.6・2 軸独立）。
 /// 大きさの丸めは既存権威 `ScaleRatio::scale_len` へ委譲される（新しい丸め規約を導入しない）。
 ///
+/// # 語彙の解決（windowposition-limit 要件 1.3/1.4/4.6・design C3「取得経路の拡張」）
+///
+/// 同じ 2 層マージ済み定義から生値（[`WindowPositionRaw`]）も取り出し、[`classify_limit_vocab`]／
+/// [`classify_x_vocab`] の分類結果を `ScopeConfig.balloon_limit`／`balloon_x_mode` へ反映する。
+/// 分類器は警告を持たない——**不正値の警告は scope 文脈を持つ本層の所有**であり
+/// （design C1 Invariants）、警告の無い縮退経路を 1 本も残さない（要件 6.3）。
+///
 /// # 観測（要件 6.3・design Monitoring 観測点 4）
 ///
-/// scope ごとに `info!` で scope・wp 生値・バルーンの左右・変換後の調整量（物理 px）を記録する。
+/// scope ごとに `info!` で scope・wp 生値・バルーンの左右・変換後の調整量（物理 px）と、
+/// **解決済みの limit 値・水平配置モードの実値**（windowposition-limit 要件 6.2）を記録する。
 /// 実機サインオフ（R7.6・task 6.1）はこの行を grep して SSP 実測と突合し、x 方向の符号規約を
 /// **確定させた**——確定形は「左右で反転しない素の画面座標オフセット」（`windowposition.rs` の
 /// `to_screen_adjust`「符号規約」節）。`balloon_side` は調整量の計算には効かなくなったが、
@@ -393,20 +403,34 @@ fn apply_scope_windowpositions(
         // バルーンの左右は配置構成の解決済み値（`balloon.alignment`・cascade 済み）。
         // 調整量の計算には効かない（符号は置き側に依らない・R7.6 確定形）が、観測点 4 の
         // 記録項目である。未収載 scope には合流先が無いため、ここで供給を見送る判定も兼ねる。
-        let Some(side) = cfg.scopes.get(&scope).map(|sc| sc.balloon_alignment) else {
+        //
+        // 語彙の解決値（limit／x_mode）の合流先も同じ `ScopeConfig` ゆえ、可変で 1 度だけ引く。
+        let Some(sc) = cfg.scopes.get_mut(&scope) else {
             warn!(
                 scope,
                 "placement: 配置表に無い scope の windowposition 供給要求を無視した"
             );
             continue;
         };
-        let Some(wp) = scope_windowposition(balloon_root, scope) else {
+        let side = sc.balloon_alignment;
+        let Some((wp, wp_raw)) = scope_windowposition(balloon_root, scope) else {
+            // 定義を読めなかった scope は `ScopeConfig` の正典既定（limit=1・`Side`）のまま。
+            // 見送りの warn は `scope_windowposition` が既に出している（無言の縮退なし）。
             continue;
         };
-        let (wp_x, wp_y) = (wp.x(), wp.y());
+        // 語彙分類（C1）→ 不正値の警告付き縮退（要件 1.3/4.6/6.3）。
+        let (balloon_limit, x_mode, wp_x) = resolve_windowposition_vocab(scope, &wp_raw, wp.x());
+        let wp_y = wp.y();
+        // scope 別構成へ反映（要件 1.4——limit も x も「その scope が採用した面の
+        // 2 層マージ結果」という同一単位で解決される）。
+        sc.balloon_limit = balloon_limit;
+        sc.balloon_x_mode = x_mode;
+        // キーワード指定のとき `wp_x` は `None`（C1 の不変量）ゆえ、既存の
+        // `to_screen_adjust(None, wp_y)` がそのまま `(0, dy)` を供給する（要件 4.4）。
         let adjust = windowposition::to_screen_adjust(wp_x, wp_y, k);
         // 観測点 4: 数値指定なし（`adjust=None`）でも 1 行出す——「読んだが指定が無かった」ことと
         // 「そもそも読めなかった」ことを実機ログで区別できるようにするため（`adjusted` で判別）。
+        // `limit`／`x_mode` は**解決済みの実値**（縮退後の値）である（要件 6.2）。
         let (adjust_dx, adjust_dy) = adjust.unwrap_or((0, 0));
         info!(
             scope,
@@ -417,13 +441,66 @@ fn apply_scope_windowpositions(
             adjust_dy,
             adjusted = adjust.is_some(),
             k = k.as_f32(),
+            limit = balloon_limit,
+            x_mode = ?x_mode,
             "placement: windowposition を初期既定位置の調整量へ変換した（scope 別・要件 3.2/7.6）"
         );
         windowposition::apply_windowposition(cfg, scope, adjust);
     }
 }
 
-/// 当該 scope のバルーン定義（2 層マージ済み）から `windowposition` を取り出す。
+/// `windowposition` の語彙（limit／x）を解決し、不正値を **scope 文脈つきの警告を出したうえで**
+/// 正典既定へ縮退させる（要件 1.3/4.6/6.3・design C1 Invariants／Error Handling 表）。
+///
+/// 戻り値は `(limit 解決値, 水平配置モード, 調整量計算へ渡す数値 x)`。
+///
+/// - limit: `0`/`1` は受理・未指定は正典既定 `true`・それ以外は **warn（scope・生値）→ `true`**。
+/// - x: 数値・未指定は現行どおり（`Side` ＋ 生値を見ない＝要件 5.1 の回帰境界）。
+///   キーワードは対応する [`BalloonXMode`]（数値 x は存在しないので `None`）。
+///   それ以外は **warn（scope・生値）→ 未指定扱い（`Side`・`None`）**（要件 4.6）。
+///
+/// 警告を出さずに縮退する腕は 1 本も無い——`Invalid` の 2 腕がどちらも warn を通る
+/// ことが本関数の存在理由である（分類器側は scope を知らないので警告を持てない）。
+fn resolve_windowposition_vocab(
+    scope: usize,
+    wp_raw: &WindowPositionRaw,
+    x_num: Option<i32>,
+) -> (bool, BalloonXMode, Option<i32>) {
+    let balloon_limit = match classify_limit_vocab(wp_raw.limit_raw()) {
+        LimitVocab::Value(v) => v,
+        LimitVocab::Invalid => {
+            warn!(
+                scope,
+                limit_raw = ?wp_raw.limit_raw(),
+                "placement: windowposition.limit が 0/1 以外——正典既定 1（画面内へ維持）へ縮退する（要件 1.3）"
+            );
+            true
+        }
+    };
+    let (x_mode, wp_x) = match classify_x_vocab(x_num, wp_raw.x_raw()) {
+        // 数値・未指定は現行と bit 同一（生値を一切見ない・要件 5.1）。
+        XVocab::Numeric(x) => (BalloonXMode::Side, x),
+        // キーワード指定は基本位置を変える（幾何は resolver P5 の所有）。数値 x は存在しない。
+        XVocab::Keyword(mode) => (mode, None),
+        XVocab::Invalid => {
+            warn!(
+                scope,
+                x_raw = ?wp_raw.x_raw(),
+                "placement: windowposition.x が数値でもキーワード（center/top/bottom）でもない\
+                 ——未指定（調整量なし）へ縮退する（要件 4.6）"
+            );
+            (BalloonXMode::Side, None)
+        }
+    };
+    (balloon_limit, x_mode, wp_x)
+}
+
+/// 当該 scope のバルーン定義（2 層マージ済み）から `windowposition` の
+/// **数値解釈と生値の対**を取り出す（design C3「取得経路の拡張」）。
+///
+/// 生値（[`WindowPositionRaw`]）を同じ 1 回の解決から一緒に返すのは、数値と生値が
+/// **同じ面・同じマージ結果**に由来することを構造で保証するためである（別々に読むと
+/// 面の選択がずれて「数値は面 0・生値は別の面」という食い違いを作り得る・要件 1.4）。
 ///
 /// 系列解決も 2 層マージも権威（`areka-emo-present` の `resolve_balloon_faces` /
 /// `load_scope_balloon_model`）の消費のみで行う——採寸・起動時資産構築と同じ規則で同じ面を
@@ -431,7 +508,10 @@ fn apply_scope_windowpositions(
 /// （design D2）。接頭辞連鎖も上書きファイル名の導出も本層は持たない。
 ///
 /// 取得できないときは `warn!` のうえ `None`（呼び手が当該 scope の供給を見送る）。
-fn scope_windowposition(balloon_root: &Path, scope: usize) -> Option<WindowPosition> {
+fn scope_windowposition(
+    balloon_root: &Path,
+    scope: usize,
+) -> Option<(WindowPosition, WindowPositionRaw)> {
     // 権威の scope 通貨は u32（placement の通貨は usize）。表現できない scope を無言で
     // 切り詰めると別 scope の系列を採ってしまうため、変換失敗は供給の見送りとして報告する。
     let scope_key = match u32::try_from(scope) {
@@ -466,7 +546,8 @@ fn scope_windowposition(balloon_root: &Path, scope: usize) -> Option<WindowPosit
         );
         return None;
     };
-    Some(load_scope_balloon_model(balloon_root, scope_key, face0).windowposition())
+    let model = load_scope_balloon_model(balloon_root, scope_key, face0);
+    Some((model.windowposition(), model.windowposition_raw().clone()))
 }
 
 /// 窓配置の準備処理（design「main.rs seam」・task 6.1）。
@@ -583,3 +664,6 @@ mod monitor_tests;
 #[cfg(test)]
 #[path = "placement_windowposition_tests.rs"]
 mod windowposition_tests;
+#[cfg(test)]
+#[path = "placement_windowposition_vocab_tests.rs"]
+mod windowposition_vocab_tests;

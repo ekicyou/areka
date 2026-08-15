@@ -156,6 +156,22 @@ fn fake_handle(raw: usize) -> WindowHandle {
 
 /// resnap 檻の 2 スコープ解決済み配置（both Bottom・初期位置は work_area 下端に整合＝
 /// bottom 不変量を満たす: scope0 y=1444−687=757／scope1 y=1444−357=1087）。
+///
+/// # なぜ `balloon_limit` を無効にしてあるか（areka-P0-windowposition-limit task 3.3）
+///
+/// 本 fixture のキャラ窓は下端接地で背が高く（scope0 は 687 論理 px）、192 水準では
+/// 高さ 1374 px となって work area（top=17）をほぼ埋める。バルーンはキャラ窓の
+/// **上** 25 px にある（`balloon_offset.y = −25`）ため、192 水準の追従位置は
+/// work area の上辺を 20 px はみ出す——`limit=1` なら runtime 関門
+/// （`enqueue_window_set_pos` 内）が正しく上辺へ引き戻す。
+///
+/// その補正は本 fixture を使う檻の**主題ではない**。ここが固定しているのは DPI 相の
+/// 再射影と窓相対の追従 offset 契約（`balloon_pos − char_pos ≡ offset`）であり、
+/// 補正が混ざると恒等式が成立しなくなって主題が読めなくなる（設計 DD6: 恒等式は
+/// 「resolver／追従計算の出力時点の事後条件」であって表示位置の恒久不変量ではない）。
+/// ゆえに limit を無効にして関門を素通しさせる。limit の挙動そのものは
+/// `placement/follow_balloon_limit_tests.rs` が所有し、DPI 起因の寸法変更経路
+/// （`resize_window_keep_position`）もそこで補正が掛かることを固定している。
 fn resnap_placements() -> Vec<ScopePlacement> {
     vec![
         ScopePlacement {
@@ -165,7 +181,10 @@ fn resnap_placements() -> Vec<ScopePlacement> {
             balloon_pos: PointPx { x: 1071, y: 732 },
             balloon_size: SizePx { w: 223, h: 158 },
             balloon_offset: PointPx { x: -412, y: -25 },
+            // windowposition-limit: **無効**（task 3.3 の追随）。理由は下の注記を参照。
+            balloon_limit: false,
             anchor: Anchor::Bottom,
+            balloon_keyword_base: None,
         },
         ScopePlacement {
             scope: 1,
@@ -174,7 +193,10 @@ fn resnap_placements() -> Vec<ScopePlacement> {
             balloon_pos: PointPx { x: 1334, y: 1068 },
             balloon_size: SizePx { w: 223, h: 158 },
             balloon_offset: PointPx { x: 285, y: -19 },
+            // windowposition-limit: **無効**（task 3.3 の追随）。理由は下の注記を参照。
+            balloon_limit: false,
             anchor: Anchor::Bottom,
+            balloon_keyword_base: None,
         },
     ]
 }

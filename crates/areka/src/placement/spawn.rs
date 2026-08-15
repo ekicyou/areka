@@ -41,7 +41,10 @@
 //!   相対位置記憶（4.8・DD16・task 8.3）＋`OnDragEnd(on_balloon_drag_end)` で単独ドラッグ
 //!   確定 offset の永続 write-through（2.1・design C3・task 2.3。`on_balloon_drag` は連続
 //!   イベントで保存トリガではなく、DragEnd 確定点でのみ 1 ドラッグ 1 書込）・`BalloonFollow`
-//!   なし。M1 はマウス送出なし＝ポインタハンドラを付けない・DD-IE-12。バルーン入力は
+//!   なし。さらに `BalloonLimit(p.balloon_limit)`＝`windowposition.limit` 解決値の
+//!   runtime 焼込みを**バルーン窓側にだけ**持つ（areka-P0-windowposition-limit 2.7/2.8・
+//!   C9/DD4。キャラ窓には付けない＝「limit の補正でキャラ窓を動かさない」の構造保証）。
+//!   M1 はマウス送出なし＝ポインタハンドラを付けない・DD-IE-12。バルーン入力は
 //!   M-dialogue／choice-render の領分。さらに同一スコープのキャラ窓を指す
 //!   `KeepDirectlyAbove { peer }`＝「このバルーン窓はこのキャラ窓のすぐ手前に居るべき」の
 //!   永続宣言を**バルーン窓側にだけ**後付けする（areka-P0-ghost-window-zorder 1.1・
@@ -87,6 +90,7 @@ use super::diag::{log_zorder_pair_declared, log_zorder_pair_strategy};
 use super::follow::{
     on_balloon_drag, on_balloon_drag_end, on_char_drag, on_char_drag_end, Anchored, BalloonFollow,
 };
+use super::config::BalloonXMode;
 use super::resolver::{PointPx, ScopePlacement};
 use super::source::GhostTitles;
 
@@ -154,6 +158,88 @@ fn on_ghost_window_marker_remove(mut world: DeferredWorld, hook: HookContext) {
             "placement: ゴースト窓 despawn だがレジストリに該当 scope なし（除去済み・良性）"
         ),
     }
+}
+
+// ---------------------------------------------------------------------------
+// BalloonLimit（windowposition-limit C9・DD4）
+// ---------------------------------------------------------------------------
+
+/// バルーン窓の limit 有効値（scope 別解決済み・spawn 焼込み・runtime 単一真実源）。
+///
+/// `windowposition.limit` の解決値を runtime へ運ぶ唯一の表現である
+/// （areka-P0-windowposition-limit 要件 2.7/2.8・design C9/DD4）。
+/// `PlacementConfig`／`ScopeConfig` は spawn 後に破棄され Resource 化もされないため、
+/// limit 値が runtime まで生き残る道は窓 entity 上の Component だけ——
+/// `ScopeConfig.balloon_limit` → `ScopePlacement.balloon_limit` → 本 Component の
+/// **一方向転写**で、spawn 時に焼き込んだあとは不変（永続化もしない。limit は
+/// 毎起動 `descript.txt` から解決し直す）。
+///
+/// # 付与対象はバルーン窓のみ（要件 2.8 の構造保証）
+///
+/// [`Anchored`] と同型の spawn 焼込みだが**付く側が逆**である。`Anchored` はキャラ窓
+/// にのみ、本 Component はバルーン窓にのみ付く。runtime 関門はこの Component を
+/// 持つ entity への書き込みだけを補正するため、「キャラ窓に付いていない」ことが
+/// そのまま「limit の補正でキャラ窓の位置を変更しない」（2.8）の証明になる——
+/// 檻の主張ではなく構造の帰結である。
+// 消費者（runtime 関門・`follow::enqueue_window_set_pos`）が入るのは task 3.3 だが、
+// `#[allow(dead_code)]` は付けない——spawn が構築し檻が読むため lint は鳴らず、
+// 不要な allow は本当に未結線の項目を隠すだけである（隣接 markers の allow は
+// 「構築側が未実装」だった過渡状態の名残で、本 Component は事情が異なる）。
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BalloonLimit(pub bool);
+
+// ---------------------------------------------------------------------------
+// BalloonKeywordBase（windowposition-limit 4.7・実機サインオフ是正）
+// ---------------------------------------------------------------------------
+
+/// 実表示寸が確定した瞬間に**一度だけ**キーワード由来のバルーン基本位置を導出し直す
+/// ための素材（消費したら除去する使い切りの Component）。
+///
+/// # 付与対象は**キャラ窓**（`BalloonLimit` とは逆）
+///
+/// 導出し直す対象が `BalloonFollow.offset` であり、それがキャラ窓側に居るからである。
+/// 付くのは `ScopePlacement.balloon_keyword_base` が `Some` の scope だけ——すなわち
+/// `windowposition.x` がキーワード指定で、かつ保存された相対位置が効いていない scope に
+/// 限る。`Side`（数値指定・未指定）のキャラ窓には**構造的に付かない**ので、
+/// 「数値指定の分岐は 1 ビットも変わらない」（要件 4.5/5.2）は檻の主張ではなく
+/// 構造の帰結である。
+///
+/// # 保存された相対位置が効いている間は本 Component が居ない（要件 4.7・不変条件）
+///
+/// 要件 4.7 は While 節（状態）であり、保存値は**起動時に読み込まれる**だけでなく
+/// **セッション中にも生まれる**。ゆえに退役点は 2 つあり、どちらも「保存された相対位置が
+/// 生まれた事象」に結び付いている:
+///
+/// - 起動時: `persist::merge_scope` が保存 offset 両軸を読めた scope へ `None` を置く
+///   （そもそも付与されない）。
+/// - セッション中: バルーン単独ドラッグの DragEnd 書込と同じ観測点で
+///   `follow::drag_follow::retire_keyword_base_on_save` が除去する。
+///
+/// 起動時だけに置いていた頃は、実表示寸が採寸寸と一致する**ふつうの**ゴースト
+/// （＝再解決が同寸 skip で素材を消費しない）で、ドラッグ後の寸法変化がキーワード既定を
+/// 利用者の相対位置へ上書きしていた（2026-08-14 の feature 検証で確認・task 4.6 で是正）。
+///
+/// # 一度きりである理由と、その限界
+///
+/// 要件 4.7 はキーワードの適用を「初期既定位置の供給にとどめる」と定める——連続的な
+/// 中央追従ではない。ただし採寸した寸と実際に表示される寸は食い違うことがあり
+/// （実機 2026-08-14: 採寸 434 に対し実表示 382）、そのとき初期既定位置は**表示される
+/// 寸から導かれていなければ意味を成さない**。ゆえに消費の契機は**キャラ窓の寸が実際に
+/// 変わった最初の書込**であり、そこで本 Component を消費する。
+/// **その後にバルーン寸やキャラ寸が変わっても中央へ揃え直さない**
+/// ——`Side` と同じく配置時確定の静的 offset として振る舞う（4.4 の現行契約どおり）。
+///
+/// 特定の route（`PlacementRoute::ReportedSizeReconcile` など）を「実表示寸が判る唯一の
+/// 瞬間」として条件に置く案は**却下した**。実表示寸を最初に運ぶ route は
+/// `DpiReproject`／`ReportedSizeReconcile`／`Resnap` のいずれにもなり得て、どれが先に
+/// 来るかは frame の相順に依存するため、route を条件にすると相順が変わるたびに静かに
+/// 壊れる（判定の詳細は `follow::keyword_base::rederive_keyword_balloon_offset` の doc）。
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BalloonKeywordBase {
+    /// キーワードが定める基本位置の種別（中央上／中央下）。
+    pub mode: BalloonXMode,
+    /// 作者指定の調整量（`windowposition.y` の数値＋`balloon.offsetx/offsety`・4.4）。
+    pub adjust: PointPx,
 }
 
 // ---------------------------------------------------------------------------
@@ -315,6 +401,10 @@ pub fn spawn_ghost_windows(
                 // 位置へ飛び、`balloon_pos − char_pos ≡ offset` の恒等式が構造的に崩れる。
                 external_position_authority(),
                 DragConfig::default(),
+                // limit 解決値の runtime 焼込み（windowposition-limit 2.7・C9/DD4）。
+                // `ScopePlacement.balloon_limit` の転写であり、キャラ窓には付けない
+                // （＝2.8 の構造保証。下の char 窓 spawn に対応する行は無い）。
+                BalloonLimit(p.balloon_limit),
                 OnDrag(on_balloon_drag),
                 // バルーン単独ドラッグ確定 offset の永続 write-through（2.1・8.1・
                 // design C3・task 2.3）。on_balloon_drag は連続イベント（in-session offset
@@ -379,6 +469,16 @@ pub fn spawn_ghost_windows(
         world
             .entity_mut(char_window)
             .insert(OnDragEnd(on_char_drag_end));
+
+        // キーワード再導出の素材（windowposition-limit 4.7・実機サインオフ是正）:
+        // `Some` の scope のキャラ窓にだけ後付けする。`Side` と保存値が効いた scope には
+        // 構造的に付かない（`BalloonKeywordBase` の doc 参照）。後付けなのは上の
+        // `OnDragEnd` と同じ形——条件付きの Component を spawn タプルへ混ぜられないため。
+        if let Some((mode, adjust)) = p.balloon_keyword_base {
+            world
+                .entity_mut(char_window)
+                .insert(BalloonKeywordBase { mode, adjust });
+        }
 
         // ゴースト窓ペアの重なり宣言（areka-P0-ghost-window-zorder 要件 1.1／6.1・
         // design「areka / placement > spawn ペア宣言」）:

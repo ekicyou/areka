@@ -13,7 +13,7 @@ use std::collections::BTreeMap;
 
 use crate::balloon::{
     BalloonCursor, BalloonModel, CursorColor, Font, FontColor, Origin, ValidRect, WindowPosition,
-    WordWrapPoint, parse,
+    WindowPositionRaw, WordWrapPoint, parse,
 };
 
 /// テスト用: `&[(k, v)]` からフラット KV `BTreeMap` を組む小ヘルパ（parse_tests 流儀）。
@@ -127,6 +127,49 @@ fn font_unspecified_components_are_none() {
     assert_eq!(font.height(), None);
     assert_ne!(font.height(), Some(0));
     assert_eq!(font.color(), FontColor::new(None, None, None));
+}
+
+#[test]
+fn window_position_raw_accessors_read_raw_strings() {
+    // 生値 2 項を公開/クレートパスで構築し accessor が借用で読める（要件 1.1/4.1・C2）。
+    let raw = WindowPositionRaw::new(Some("center".to_string()), Some("0".to_string()));
+    assert_eq!(raw.x_raw(), Some("center"));
+    assert_eq!(raw.limit_raw(), Some("0"));
+}
+
+#[test]
+fn window_position_raw_unspecified_is_none() {
+    // 未指定＝None（「値なし」を型で表す・要件 1.1/4.1）。空文字 Some("") とも判別される。
+    let unspecified = WindowPositionRaw::new(None, None);
+    assert_eq!(unspecified.x_raw(), None);
+    assert_eq!(unspecified.limit_raw(), None);
+    let empty = WindowPositionRaw::new(Some(String::new()), Some(String::new()));
+    assert_ne!(unspecified, empty);
+}
+
+#[test]
+fn balloon_model_windowposition_raw_defaults_to_unspecified_and_builder_overrides() {
+    // `new` は既存署名のまま（additive）で、生値は未指定既定から始まる（要件 5.1）。
+    let base = BalloonModel::new(
+        WindowPosition::new(Some(-34), Some(56)),
+        Origin::new(None, None),
+        WordWrapPoint::new(None, None),
+        ValidRect::new(None, None, None, None),
+        Font::new(None, None, FontColor::new(None, None, None)),
+        None,
+        None,
+    );
+    assert_eq!(base.windowposition_raw().x_raw(), None);
+    assert_eq!(base.windowposition_raw().limit_raw(), None);
+
+    // additive ビルダで相乗りさせても既存の数値アクセサは不変（要件 5.1）。
+    let with_raw = base.clone().with_windowposition_raw(WindowPositionRaw::new(
+        Some("bottom".to_string()),
+        Some("1".to_string()),
+    ));
+    assert_eq!(with_raw.windowposition_raw().x_raw(), Some("bottom"));
+    assert_eq!(with_raw.windowposition_raw().limit_raw(), Some("1"));
+    assert_eq!(with_raw.windowposition(), base.windowposition());
 }
 
 #[test]

@@ -12,14 +12,31 @@
 //!   （`surface_id=...`／`method=...`／`key=...`／`path=...`）も `record_debug` で載せるため、
 //!   個別ログを判別する discriminating field をテストで突ける。
 //! - 導入は `tracing::subscriber::with_default`（**スレッドローカル**）で行い、`set_global_default`
-//!   （プロセス全体・並行テストを壊す）は使わない。各テストが自分のコードのみを `capture_logs`
-//!   で包む限り、`cargo test` の並行実行でも他スレッドの subscriber と干渉しない。
+//!   （プロセス全体・並行テストを壊す）は使わない。
 //! - compose パイプライン（fold/plan/execute）は完全同期で、全ログは呼び出しスレッド上で同期的に
 //!   発火するため、`capture_logs` はクロージャ復帰時点で全ログを捕捉済みである。
+//!
+//! # `with_default` だけでは並行実行で取りこぼす（実測で判明・2026-08-14）
+//!
+//! 「各テストが自分のコードのみを包む限り並行実行でも干渉しない」というのは**誤り**だった。
+//! `with_default` が差し替えるのはスレッドローカルの既定 dispatcher だが、
+//! **callsite の interest キャッシュはプロセス大域**で、その callsite をプロセス内で
+//! 最初に踏んだスレッドが勝つ。subscriber を持たないスレッドの既定は `NoSubscriber` で、
+//! その `register_callsite` は `Interest::never()` を返すため、`never` が大域キャッシュへ
+//! 焼き付き、以後そのイベントは早期 return で捨てられる。
+//!
+//! 姉妹実装の `crates/areka-emo-atlas/src/log_capture.rs` では、この毒化により
+//! `cargo test --workspace` の並行負荷下でのみ捕捉が**空文字列**になる間欠失敗が実測された。
+//! 本ファイルは同一構造ゆえ同じ脆弱性を抱えていたため、同じ対策を適用する——
+//! **プロセス寿命の probe dispatcher を 2 個常駐させて `has_just_one` を恒久的に偽にし**、
+//! 加えて捕捉窓の内側で `rebuild_interest_cache` を 1 回叩いて probe 導入前の毒を解く。
+//! 根因の逐条解説（`tracing-core-0.1.36` の実コード行番号つき）は
+//! `crates/areka/src/placement/test_support.rs` のモジュール doc を参照。
 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use tracing::field::{Field, Visit};
+use tracing::subscriber::Interest;
 use tracing_subscriber::prelude::*;
 
 /// イベントの `level`＋`target`＋各フィールドを 1 行文字列へ整形して捕捉する最小 Layer。
@@ -57,12 +74,62 @@ impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Capture {
 /// level（`level=WARN`/`level=ERROR`）・target（`target=areka_emo_compose`）・
 /// discriminating field（`surface_id=…`/`method=…`/`key=…`/`path=…`）を検証する。
 pub(crate) fn capture_logs<F: FnOnce()>(f: F) -> String {
+    ensure_interest_probes();
+
     let cap = Capture::default();
     let logs = cap.0.clone();
     let subscriber = tracing_subscriber::registry().with(cap);
-    tracing::subscriber::with_default(subscriber, f);
+    // `with_default` は内部で `Dispatch::new`（＝register_dispatch＋全 callsite 再計算）を
+    // 行うため、この時点で既存の `never` は解毒されている。
+    tracing::subscriber::with_default(subscriber, || {
+        // probe 常駐前（プロセス起動〜初回捕捉）に焼かれた `never` の掃き残しを、
+        // 窓が開いた**後**の時点でもう一度確定的に潰す。
+        tracing::callsite::rebuild_interest_cache();
+        f()
+    });
     let guard = logs.lock().unwrap();
     guard.join("\n")
+}
+
+/// interest キャッシュへ `never` を焼かせないための常駐 dispatcher。
+///
+/// `register_callsite` が常に [`Interest::sometimes`] を返すことだけが仕事で、
+/// `enabled()` は偽・`event()` は no-op（観測への副作用なし）。
+struct InterestProbe;
+
+impl tracing::Subscriber for InterestProbe {
+    fn register_callsite(&self, _meta: &'static tracing::Metadata<'static>) -> Interest {
+        // 既定実装は `enabled()` が偽なら `never` を返してしまう。ここを `sometimes` に
+        // 固定することが本 probe の唯一の存在理由（`Interest::and` は差異があれば
+        // 必ず `sometimes` ＝ 合成結果が `never` へ落ちない）。
+        Interest::sometimes()
+    }
+    fn enabled(&self, _meta: &tracing::Metadata<'_>) -> bool {
+        false
+    }
+    fn new_span(&self, _attrs: &tracing::span::Attributes<'_>) -> tracing::span::Id {
+        tracing::span::Id::from_u64(1)
+    }
+    fn record(&self, _span: &tracing::span::Id, _values: &tracing::span::Record<'_>) {}
+    fn record_follows_from(&self, _span: &tracing::span::Id, _follows: &tracing::span::Id) {}
+    fn event(&self, _event: &tracing::Event<'_>) {}
+    fn enter(&self, _span: &tracing::span::Id) {}
+    fn exit(&self, _span: &tracing::span::Id) {}
+}
+
+/// probe dispatcher を**2 個**プロセス寿命で常駐させる（冪等）。
+///
+/// 2 個必要なのは `has_just_one = (dispatchers.len() <= 1)` ゆえ——1 個では
+/// 登録直後に `has_just_one` が真のままとなり、次の `register_dispatch` までの隙間で
+/// `Rebuilder::JustOne`（毒の経路）が生き残る。2 個目の登録で確定的に偽へ落とす。
+fn ensure_interest_probes() {
+    static PROBES: OnceLock<(tracing::Dispatch, tracing::Dispatch)> = OnceLock::new();
+    PROBES.get_or_init(|| {
+        // `Dispatch::new` が `callsite::register_dispatch` を呼ぶ（＝登録＋全走査再計算）。
+        let first = tracing::Dispatch::new(InterestProbe);
+        let second = tracing::Dispatch::new(InterestProbe);
+        (first, second)
+    });
 }
 
 #[cfg(test)]

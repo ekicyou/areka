@@ -55,7 +55,9 @@ fn k(num: u32, den: u32) -> ScaleRatio {
 ///   → balloon=(1486−190, 640−75)=(1296,565)・offset=(336−190, −75)=(146,−75)
 ///
 /// 恒等式 `balloon_offset ≡ balloon_pos − char_pos` は両 scope で保たれている
-/// （P5 の加算入力が増えただけ）。SSP 実測との数値突合は
+/// （P5 の加算入力が増えただけ）——これは配置式の出力時点の事後条件であり、
+/// `windowposition.limit` の補正は下流の関門が持つ（windowposition-limit DD6）。
+/// SSP 実測との数値突合は
 /// [`prepare_emo2_matches_ssp_balloon_offsets_at_dpi_120`]（実機と同じ k=5/4）が担う。
 #[test]
 fn prepare_emo2_returns_two_scope_placements() {
@@ -98,7 +100,9 @@ fn prepare_emo2_returns_two_scope_placements() {
         );
         assert_eq!(s1.balloon_offset, PointPx { x: 146, y: -75 });
 
-        // 恒等式（resolver.rs の恒久事後条件）は供給元が増えても保たれる。
+        // 恒等式（resolver.rs の**出力時点**の事後条件・windowposition-limit DD6）は
+        // 供給元が増えても保たれる。本検体は配置準備の出力＝下流の関門より上流ゆえ、
+        // limit 補正は 1 度も掛かっていない。
         for s in &p.placements {
             assert_eq!(
                 s.balloon_offset,

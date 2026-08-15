@@ -255,6 +255,16 @@ fn balloon_visibility_guard_does_not_fire_on_explicit_or_non_placement_triggers(
 /// ユーザーがキャラを画面端へ運んだときにバルーンだけが引き戻され、Req 3.1 の
 /// 「明示操作の尊重」が壊れる——その変異を**位置 assert**で捕まえる（ログ側の否定
 /// assert だけに依存しない・[[5.2 の教訓]]）。
+///
+/// # 前提（windowposition-limit 7.3・要件 2.5／5.4）
+///
+/// 本檻が固定するのは「**ドラッグ中は無介入**」であって「バルーンは決してクランプ
+/// されない」ではない。`windowposition.limit` が有効なバルーンでは、ドラッグ**解放時**
+/// に作業領域内への補正が入る——その檻は `follow_drag_end_limit_tests.rs`
+/// （`on_balloon_drag`／`on_balloon_drag_end`・route `BalloonLimitRelease`）が所有し、
+/// 本檻は所有しない。ここで補正が起きないのは、[`char_with_far_balloon_world`] の
+/// バルーン entity に `BalloonLimit` を付けていないためである（`enqueue_window_set_pos`
+/// の runtime 関門は `BalloonLimit(true)` を持つ窓だけに作用する・DD1 のデータ駆動）。
 #[test]
 fn balloon_drag_trigger_neither_clamps_nor_warns() {
     for dpi in DPIS {
