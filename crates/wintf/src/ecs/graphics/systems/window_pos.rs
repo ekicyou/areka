@@ -3,6 +3,7 @@ use crate::ecs::drag::WindowDragging;
 use crate::ecs::graphics::GraphicsCore;
 use crate::ecs::graphics::wuc_resource::WucGraphicsResource;
 use crate::ecs::widget::bitmap_source::BitmapSourceGraphics;
+use crate::ecs::window::transition_diag::{ORIGIN_WINDOW_POS, WriteTag};
 use crate::ecs::window::{SetWindowPosCommand, Window, WindowHandle, WindowPos};
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
@@ -94,7 +95,14 @@ pub fn apply_window_pos_changes(
             height,
             flags,
             hwnd_insert_after,
-        );
+        )
+        // 観測専用の札。積み上げた経路を書込レコードの 1 行で見分けるためだけのもので、
+        // 座標変換・フラグ・スキップ判定のいずれも変わらない。スコープと窓種別は
+        // 表示基盤側では判らないため番兵のままにする。
+        .with_tag(WriteTag {
+            origin: ORIGIN_WINDOW_POS,
+            ..WriteTag::UNTAGGED
+        });
         SetWindowPosCommand::enqueue(cmd);
 
         debug!(

@@ -4,16 +4,31 @@
 //! - `guarded_set_window_pos`: RAII ガード付き SetWindowPos ラッパー
 //! - `SetWindowPosCommand`: SetWindowPos 遅延実行キュー
 //! - `find_owner_window`: エンティティの所属ウィンドウ特定
+//!
+//! # 遷移観測（`transition_diag`）
+//!
+//! 一括 flush はゴースト窓の窓矩形が実際に動く**唯一の共通経路**（経路 B）であり、
+//! DPI／拡大率遷移の時系列はここを通らないと 1 本に並ばない。よって `flush` は
+//! 区間の開始・各書込・区間の終了の 3 種を専用 target へ記録する（design.md C2・要件 2.1）。
+//!
+//! 観測は**既定 OFF** である。`transition_diag::is_enabled()` が偽のときは行の組立も
+//! `GetWindowRect` の読み戻しも `Instant` の読み取りも一切行わない——flush 区間の時刻基準
+//! （`begin_flush`）を開くことすら行わない。ここは毎 tick 走る経路であり、定常状態の
+//! アロケーション 0（要件 10.4）を壊さないための分岐である。
 
 use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::prelude::*;
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicI32, Ordering};
+use std::time::Instant;
 use tracing::{debug, trace, warn};
 use windows::Win32::Foundation::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
 use super::components::Window;
+use super::transition_diag::{
+    self, EnqueueRecord, FlushRecord, FlushStage, WriteRecord, WriteStage, WriteTag,
+};
 
 // ============================================================================
 // SELF_INITIATED_DEPTH - SetWindowPos ネストカウンタ (AtomicI32)
@@ -122,6 +137,13 @@ pub struct SetWindowPosCommand {
     pub height: i32,
     pub flags: SET_WINDOW_POS_FLAGS,
     pub hwnd_insert_after: Option<HWND>,
+    /// 要求元の語彙タグ（**観測専用**・design.md D3）。
+    ///
+    /// 「どの経路が・どのキャラの・どの種別の窓へ書いたか」を書込レコードの 1 行に載せる
+    /// ためだけに運ぶ値であり、`SetWindowPos` の引数にも適用順にも一切影響しない。
+    /// 既定は [`WriteTag::UNTAGGED`]（3 フィールドとも番兵）——タグを付け忘れた経路が
+    /// 行の上で見分けられる。
+    pub tag: WriteTag,
 }
 
 thread_local! {
@@ -129,8 +151,29 @@ thread_local! {
     static WINDOW_POS_COMMANDS: RefCell<Vec<SetWindowPosCommand>> = const { RefCell::new(Vec::new()) };
 }
 
+/// 書込後の物理矩形を読み戻す（**観測が有効なときだけ**呼ぶ）。
+///
+/// 読み戻せなければ `None`——書込レコードの `ax`／`ay`／`aw`／`ah` は 4 つとも番兵になる
+/// （フィールドごと落とすと「記録が出ていない」と「値が無い」の区別が付かない）。
+///
+/// # Safety
+/// `GetWindowRect` へ渡すのは呼び出し側が保持する `HWND` と、本関数がスタック上に確保した
+/// `RECT` への排他参照だけであり、いずれも呼出のあいだ生存する。無効なハンドルに対しては
+/// API が安全に失敗を返す（不正なポインタ参照は起きない）ため、偽ハンドルでも健全である。
+fn read_back_window_rect(hwnd: HWND) -> Option<RECT> {
+    let mut rect = RECT::default();
+    if unsafe { GetWindowRect(hwnd, &mut rect) }.is_ok() {
+        Some(rect)
+    } else {
+        None
+    }
+}
+
 impl SetWindowPosCommand {
     /// 新しいSetWindowPosCommandを作成
+    ///
+    /// 要求語彙タグは付かない（[`WriteTag::UNTAGGED`]）。付けるには [`with_tag`](Self::with_tag)
+    /// を続ける——**本関数の引数はタグ導入前と同一**であり、既存の呼び出し側は変わらない。
     pub fn new(
         hwnd: HWND,
         x: i32,
@@ -148,10 +191,20 @@ impl SetWindowPosCommand {
             height,
             flags,
             hwnd_insert_after,
+            tag: WriteTag::UNTAGGED,
         }
     }
 
+    /// 要求語彙タグを載せる（観測専用・指令の中身は変わらない）。
+    pub fn with_tag(mut self, tag: WriteTag) -> Self {
+        self.tag = tag;
+        self
+    }
+
     /// コマンドをキューに追加
+    ///
+    /// 積み上げは指令を**そのまま**押し込む（先着の枠へ畳まない）。よって観測レコードの
+    /// `merged_into_seq` は常に番兵＝「合流しなかった」になる。
     pub fn enqueue(cmd: SetWindowPosCommand) {
         trace!(
             hwnd = ?cmd.hwnd,
@@ -161,6 +214,14 @@ impl SetWindowPosCommand {
             height = cmd.height,
             "SetWindowPosCommand::enqueue"
         );
+        if transition_diag::is_enabled() {
+            transition_diag::emit_line(&transition_diag::enqueue_line(&EnqueueRecord {
+                stamp: transition_diag::stamp(),
+                hwnd: cmd.hwnd,
+                tag: cmd.tag,
+                merged_into_seq: None,
+            }));
+        }
         WINDOW_POS_COMMANDS.with(|cell| {
             cell.borrow_mut().push(cmd);
         });
@@ -170,17 +231,58 @@ impl SetWindowPosCommand {
     ///
     /// World借用解放後に呼び出すこと。
     /// 内部で `guarded_set_window_pos()` を使用し、TLS フラグによるフィードバック防止を適用する。
+    ///
+    /// # 観測
+    ///
+    /// 区間の開始（`flush stage=begin`）・各指令の書込（`write stage=flush`）・区間の終了
+    /// （`flush stage=end`）を発行する。観測が無効なら計時も読み戻しも行わず、行も組まない
+    /// ——時刻基準を開く [`transition_diag::begin_flush`] も**観測が有効なときだけ**呼ぶ。
+    /// 失敗時の `warn!` は観測の有無によらず従来どおり出る。
+    ///
+    /// # 時刻基準は入れ子になる
+    ///
+    /// 本関数は自分の内側でもう一度呼ばれ得る。`guarded_set_window_pos` の中で
+    /// `WM_WINDOWPOSCHANGED` が**同期送達**され（[`guarded_set_window_pos`] の doc・
+    /// `world/vsync.rs` の再入防止ガードの説明）、その処理の手順③が
+    /// [`flush_window_pos_commands`] を無条件に呼ぶためである
+    /// （`window_proc/window_pos.rs` の `WM_WINDOWPOSCHANGED` ハンドラ）。`vsync.rs` の
+    /// `IS_TICK_FLUSH_IN_PROGRESS` はこの直接呼出を塞がない（塞ぐのは再入する tick の側）。
+    ///
+    /// よって区間は「開くのは 1 箇所」ではなく「**内側は外側の起点を復元する**」形で守る
+    /// （[`transition_diag::FlushEpoch`]）。これが成り立たないと、2 本目以降の書込の
+    /// あいだ `since_flush_us` が `None` になり、「`WM_DPICHANGED` 等が `SetWindowPos` の
+    /// 内側で同期受理された」というメッセージ側の証跡が消える。
+    ///
+    /// 内側の flush は観測が有効なときしか区間を開かないが、有効／無効は同一スレッドの
+    /// subscriber が決めるため外側と内側で食い違わない。仮に食い違っても、開かなければ
+    /// 外側の起点はそのまま残り、開けば復元されるので、どちらでも外側は壊れない。
     pub fn flush() {
+        // 前置ガード。偽なら時刻基準も開かず、以降の観測分岐はすべて素通りする
+        // ——確保も時刻読みも一切起きない（要件 10.4）。
+        let observe = transition_diag::is_enabled();
+        let _flush_epoch = observe.then(transition_diag::begin_flush);
+
         WINDOW_POS_COMMANDS.with(|cell| {
             let commands: Vec<_> = cell.borrow_mut().drain(..).collect();
             if commands.is_empty() {
                 return;
             }
-            trace!(
-                count = commands.len(),
-                "SetWindowPosCommand::flush processing"
-            );
-            for cmd in commands {
+            let count = commands.len();
+            trace!(count = count, "SetWindowPosCommand::flush processing");
+
+            let flush_started = observe.then(Instant::now);
+            if observe {
+                transition_diag::emit_line(&transition_diag::flush_line(&FlushRecord {
+                    stamp: transition_diag::stamp(),
+                    stage: FlushStage::Begin,
+                    count,
+                    since_tick_us: transition_diag::since_tick_start_us(),
+                    total_us: None,
+                }));
+            }
+
+            for (index, cmd) in commands.into_iter().enumerate() {
+                let call_started = observe.then(Instant::now);
                 let result = unsafe {
                     guarded_set_window_pos(
                         cmd.hwnd,
@@ -192,6 +294,27 @@ impl SetWindowPosCommand {
                         cmd.flags,
                     )
                 };
+                let ok = result.is_ok();
+
+                if observe {
+                    let call_us = call_started.map_or(0, transition_diag::elapsed_us);
+                    transition_diag::emit_line(&transition_diag::write_line(&WriteRecord {
+                        stamp: transition_diag::stamp(),
+                        stage: WriteStage::Flush,
+                        seq: u32::try_from(index).unwrap_or(u32::MAX),
+                        hwnd: cmd.hwnd,
+                        tag: cmd.tag,
+                        x: cmd.x,
+                        y: cmd.y,
+                        cx: cmd.width,
+                        cy: cmd.height,
+                        flags: cmd.flags.0,
+                        after: read_back_window_rect(cmd.hwnd),
+                        call_us,
+                        ok,
+                    }));
+                }
+
                 if let Err(e) = result {
                     warn!(
                         hwnd = ?cmd.hwnd,
@@ -202,6 +325,16 @@ impl SetWindowPosCommand {
                     trace!(hwnd = ?cmd.hwnd, "SetWindowPos succeeded");
                 }
             }
+
+            if observe {
+                transition_diag::emit_line(&transition_diag::flush_line(&FlushRecord {
+                    stamp: transition_diag::stamp(),
+                    stage: FlushStage::End,
+                    count,
+                    since_tick_us: transition_diag::since_tick_start_us(),
+                    total_us: Some(flush_started.map_or(0, transition_diag::elapsed_us)),
+                }));
+            }
         });
     }
 }
@@ -209,6 +342,25 @@ impl SetWindowPosCommand {
 /// SetWindowPosコマンドキューをフラッシュする便利関数
 pub fn flush_window_pos_commands() {
     SetWindowPosCommand::flush();
+}
+
+/// キューの中身を**実行せずに**取り出す（テスト専用のシーム・design.md D11）。
+///
+/// 決定論テストは「どの窓へ何回・どの順で書こうとしたか」をキューの中身で検証し、実際の
+/// `SetWindowPos` は呼ばない（実窓も実 DPI も要らない形にするため）。
+///
+/// # 本番からは呼ばないこと
+///
+/// 取り出した指令は**二度と実行されない**——本番経路がこれを呼ぶと窓書込が黙って消える。
+/// 実行を伴う唯一の取り出し口は [`SetWindowPosCommand::flush`] である。
+///
+/// `pub` なのは areka 側の決定論テストが**別クレート**からキューを検査するためであり
+/// （クレート境界ゆえ `#[cfg(test)]` では届かない）、公開 API として提供する意図はない。
+/// あわせて `transition_diag::reset_for_test` を呼べば、テストは残留の無い状態から始まる
+/// （要件 7.7）。
+#[doc(hidden)]
+pub fn drain_window_pos_commands() -> Vec<SetWindowPosCommand> {
+    WINDOW_POS_COMMANDS.with(|cell| cell.borrow_mut().drain(..).collect())
 }
 
 // ============================================================================
@@ -245,6 +397,10 @@ pub fn find_owner_window(world: &World, entity: Entity) -> Option<Entity> {
 
     None
 }
+
+#[cfg(test)]
+#[path = "command_transition_tests.rs"]
+mod command_transition_tests;
 
 #[cfg(test)]
 mod tests {

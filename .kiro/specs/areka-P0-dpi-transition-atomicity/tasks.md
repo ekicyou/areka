@@ -23,7 +23,7 @@
   - _Requirements: 2.4, 7.6, 7.7_
 
 - [ ] 2. 観測点の設置（3 クレート）
-- [ ] 2.1 (P) 窓書込の実施を記録する
+- [x] 2.1 (P) 窓書込の実施を記録する
   - 窓書込指令に要求元の語彙（経路語・スコープ・窓種別）を運ぶ札を持たせる。既存の生成引数は変えない
   - 一括書込の開始・各書込・終了を記録し、各書込の所要と成否を載せる。観測が有効なときだけ書込後の実矩形を読み戻す
   - 表示基盤側の 2 つの積み上げ元（Z 維持系・汎用の位置反映）に札を付ける
@@ -251,3 +251,5 @@
 - **ログ濾過テストはスレッド局所の subscriber で書く** — `crate::ecs::test_support::capture_under_filter`（`crates/wintf/src/ecs/test_support.rs:96`・既存）が `tracing::subscriber::with_default` を使う。大域 subscriber を使うとテスト間で状態が汚染される（要件 7.7）。また「既定で無音」を主張するテストには同じ捕捉窓の内側に必ず出るはずの対照行を置き、捕捉が死んでいるだけで緑になる形にしない。
 - **`cargo fmt -p wintf -- <パス>` はパス列を無視してクレート全体を整形する** — task 1.2 で 75 本の無関係ファイルが書き換わった。個別ファイルの整形は `rustfmt --edition 2024 --style-edition 2024 <パス>` を使うこと。整形の巻き添えが差分に混ざっていないか、報告前に必ず `git status` で確認する。なお本ブランチでは `crates/wintf/examples/*.rs` と `world/mod.rs` の `tick_order_tests` 内 2 行が既に rustfmt 未整形であり、これらは触らない。
 - **多スレッド実行器の相でログ捕捉に依る検証をしない** — 既定の bevy スケジュールはワーカースレッドに載るため `tracing` 捕捉に届かず、検証が空振りのまま緑になる（要件 7.6）。刻印の検証は共有資源へ値を書き出してデータで突き合わせる形にし、観測件数の非空assertと `ExecutorKind::MultiThreaded` の事前assertを置く。task 1.2 の `world_stamps_match_frame_count_under_the_default_multi_threaded_executor` が雛形。
+- **一括書込の観測区間は入れ子になる（だから解除は復元）** — task 2.1 のレビューで確定。`SetWindowPos` は `WM_WINDOWPOSCHANGED` を同期送出し、その handler の段 ③（`crates/wintf/src/ecs/window_proc/window_pos.rs:268`）が `flush_window_pos_commands()` を無条件に呼ぶ。`IS_TICK_FLUSH_IN_PROGRESS` は vsync 経由の再入 tick しか塞がないのでこの直呼びは通る（機序は `crates/wintf/src/ecs/world/vsync.rs:109-114` に既述）。`FlushEpoch` が解除時に起点を `None` へ落とすと、複数窓の一括書込では 2 本目以降 `since_flush_us` が失われ、**「`WM_DPICHANGED` が `SetWindowPos` の内側で受理された」証跡（再観測 24/24）が消える**。よって `FlushEpoch` は直前値を持ち、解除で書き戻す。
+- **task 2.4 の宿題: `WM_WINDOWPOSCHANGED` 再入の決定論的な再現テスト** — task 2.1 のレビュー指摘（finding 5）。上記の入れ子は現状 epoch 単体のテストしか無い。end-to-end の再現は 2.1 の境界外（`window_proc/window_pos.rs` は 2.4 の持ち分）かつ `msg` レコード未実装のため見送ったが、**実機サインオフ送りにはしない**——wintf は既に 14 本のテストで実窓を作っており、`WM_WINDOWPOSCHANGED` は `SetWindowPos` が同期 send するのでメッセージポンプも要らない。task 2.4 が決定論テストとして持つこと（決定論的テスト網羅は必達）。

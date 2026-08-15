@@ -111,6 +111,20 @@ pub const MSG_DISPLAYCHANGE: &str = "WM_DISPLAYCHANGE";
 pub const MSG_ALL: &[&str] = &[MSG_DPICHANGED, MSG_WINDOWPOSCHANGED, MSG_DISPLAYCHANGE];
 
 // ---------------------------------------------------------------------------
+// 経路語彙（origin）のうち wintf が自分で名乗るもの
+// ---------------------------------------------------------------------------
+//
+// areka の配置経路語彙（`PlacementRoute`）は areka が定義し、wintf は `&'static str` として
+// 受け取るだけである（依存方向 wintf ← areka）。以下の 2 語は表示基盤自身が積む書込の
+// 出所であり、areka の経路語彙とは交わらない。定義元をここ 1 箇所にするのは、積み上げ元
+// （`zorder_pair_maintain`／`graphics::systems::window_pos`）と判定側が同じ語を見るためである。
+
+/// ペアの重なり維持系（`zorder_pair_maintain::pair_fix_command`）が積む Z のみの書込。
+pub const ORIGIN_ZORDER_PAIR: &str = "zorder-pair";
+/// 汎用の位置反映（`graphics::systems::window_pos::apply_window_pos_changes`）が積む書込。
+pub const ORIGIN_WINDOW_POS: &str = "window-pos";
+
+// ---------------------------------------------------------------------------
 // フィールド名（判定側が grep／辞書引きする語）
 // ---------------------------------------------------------------------------
 
@@ -607,8 +621,11 @@ thread_local! {
     static TICK_MIRROR: Cell<Option<(u32, Instant)>> = const { Cell::new(None) };
 }
 
-/// 経過を µs へ（飽和・時刻の読み取りはここだけが行う）。
-fn elapsed_us(at: Instant) -> u64 {
+/// 経過を µs へ（飽和・µs への換算規則はここだけが持つ）。
+///
+/// 一括 flush（`command.rs`）が自前の起点から所要を測るためにクレート内へ開いてある。
+/// 換算と飽和を 2 箇所に持つと、片方だけが `u64` 溢れの扱いを変えたときに静かに食い違う。
+pub(crate) fn elapsed_us(at: Instant) -> u64 {
     u64::try_from(at.elapsed().as_micros()).unwrap_or(u64::MAX)
 }
 
@@ -679,25 +696,43 @@ thread_local! {
 
 /// 一括 flush 区間の生存札。
 ///
-/// 落ちると起点が消えるので、[`since_flush_us`] は区間の外で必ず `None` を返す
-/// ——テスト間に起点が残らない（Requirement 7.7）。区間は**入れ子にしない**
-/// （内側の解除が外側の起点まで消すため。一括 flush は tick 末尾の 1 箇所だけが開く）。
+/// 落ちると起点が**開く前の値へ戻る**ので、最外の札が落ちた時点で [`since_flush_us`] は
+/// 必ず `None` を返す——テスト間に起点が残らない（Requirement 7.7）。
+///
+/// # 区間は入れ子になる（だから復元する）
+///
+/// 一括 flush は自分の内側でもう一度開かれ得る。`guarded_set_window_pos` の中で
+/// `WM_WINDOWPOSCHANGED` が**同期送達**され（`command.rs` の `guarded_set_window_pos` doc・
+/// `world/vsync.rs` の再入防止ガードの説明）、その処理の手順③が
+/// `flush_window_pos_commands()` を無条件に呼ぶためである
+/// （`window_proc/window_pos.rs` の `WM_WINDOWPOSCHANGED` ハンドラ）。`vsync.rs` の
+/// `IS_TICK_FLUSH_IN_PROGRESS` はこの直接呼出を塞がない（塞ぐのは再入する tick の側だけ）。
+///
+/// 内側の解除が起点を `None` へ潰すと、2 本目以降の書込のあいだ [`since_flush_us`] が
+/// `None` を返し、「そのメッセージは `SetWindowPos` の内側で受理された」という証跡が
+/// 消える。本仕様が追っている機序そのものが測れなくなるため、**内側は自分が上書きした
+/// 値を持ち帰り、落ちるときに書き戻す**。
 #[must_use = "生存札を落とすと flush 区間が即座に閉じる"]
 pub struct FlushEpoch {
-    /// 外部から構築できないようにするための私有フィールド。
-    _private: (),
+    /// この札が開く直前の起点（外側の区間があればその値・無ければ `None`）。
+    ///
+    /// 私有フィールドなので外部からは構築できない。
+    prev: Option<Instant>,
 }
 
 impl Drop for FlushEpoch {
     fn drop(&mut self) {
-        FLUSH_START.with(|start| start.set(None));
+        FLUSH_START.with(|start| start.set(self.prev));
     }
 }
 
 /// 一括 flush 区間を開き、生存札を返す。
+///
+/// 既に区間が開いていれば、その起点は札の中へ退避され、札が落ちるときに戻る
+/// （[`FlushEpoch`] の「区間は入れ子になる」を参照）。
 pub fn begin_flush() -> FlushEpoch {
-    FLUSH_START.with(|start| start.set(Some(Instant::now())));
-    FlushEpoch { _private: () }
+    let prev = FLUSH_START.with(|start| start.replace(Some(Instant::now())));
+    FlushEpoch { prev }
 }
 
 /// flush 開始からの経過（µs）。区間の外では `None`（行では番兵）。
