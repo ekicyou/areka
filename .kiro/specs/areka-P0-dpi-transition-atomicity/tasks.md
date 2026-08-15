@@ -42,7 +42,7 @@
   - _Boundary: ウィンドウメッセージ処理, モニタ表_
   - _Depends: 1.2_
 
-- [ ] 2.3 (P) サーフェス更新と段階別計時を記録する
+- [x] 2.3 (P) サーフェス更新と段階別計時を記録する
   - 表示の適用直前に現在の供給面寸を控え、適用後の寸と比べて「バッファ寸が変わったか」を導く（表示チェインの戻り値型は変えず、アップロード失敗分岐の字面も動かさない）
   - アップロード成立後と可視化後の 2 点で、対象・寸・段階を記録する。寸が変わったときだけ、かつ観測が有効なときだけ組む
   - 再表示の見送り（拡大率不変・不可視）を理由つきで記録する
@@ -256,3 +256,7 @@
 - **task 4.3 の台帳へ登記する項目（静的構造証跡）: `SELF_INITIATED_DEPTH` は型が広すぎる** — task 2.2 のレビューで確定。`crates/wintf/src/ecs/window/command.rs:48` の自発書込カウンタはプロセス共有の `AtomicI32` だが、意味論は**スレッド局所**である（`SetWindowPos` → `WM_WINDOWPOSCHANGED` は呼出スレッド上で同期に起きる＝同 :44-48 が `Relaxed` の根拠として自ら述べている）。**本番の欠陥ではない**——wintf に `thread::spawn` は 1 つも無く、メッセージポンプは `com/wuc.rs:110` の現スレッド 1 本だけ、`world/mod.rs:123-125` が WUC 接触を UI スレッドへ構造的に固定し、ランタイムは `!Send`／`spawn_local` ゆえ第 2 のポンプスレッドは存在し得ない。ただしテストは並列に走るので、このカウンタを読む／上げるテストが互いを汚染する（実測 60 回中 11 失敗）。**在庫の是正は `Cell<i32>` のスレッド局所化 1 手**で、これを行えばテスト側の錠はほぼ全て退役でき、zorder 系 3 ファイル（`CreateWindowExW`＋flush を持つ実窓の汚染源・約 35 箇所）を触る必要も消える。挙動変更ゆえ要件 3.4 により本仕様の対象外——台帳へ登記して申し送る。
 - **テスト間の直列化は「読む側」と「上げる側」の両方に錠を掛ける** — task 2.2。`command.rs` の `lock_self_initiated_for_test()` を使う。`std::sync::Mutex` は再入不可なので、助走関数と呼出側の両方で取らないこと。現行の取り決め＝`window_pos_tests.rs` は**助走関数で**取る（テスト本体では取らない）、`window_pos_transition_tests.rs` は**テスト本体で**取る（助走関数では取らない）。両者が交ざる 1 本（`s1_decision_line_reports_unreachable_when_policy_cannot_be_read`）は錠をブロックへ閉じ込めて助走関数の呼出前に落とす。錠は `unwrap_or_else(|p| p.into_inner())` で取り、1 本の失敗が毒化の連鎖にならないようにする。
 - **task 3.x への申し送り: 経路 A の書込は `origin=dpi-suggested` で数える** — `stage=sync` は裏取り。語は `transition_diag.rs` の `ORIGIN_DPI_SUGGESTED` を参照し、リテラルを二重定義しない。wintf 側の経路語は 3 つ（`zorder-pair`／`window-pos`／`dpi-suggested`）で、相互に異なり・番兵でなく・空白を含まないことをテストが固定している。
+- **報告の前に設計の突合台帳と照合する（コマンドは design.md の Modified Files 表の直後）** — task 2.2・2.3 で台帳が 2 度乖離した。機序は**設計が書いていた照合コマンドそのものの誤り**で、三点記法かつ HEAD 限定ゆえ未コミット・未追跡が見えず、実装者が報告する状態に対して常に「漏れなし」を返していた。是正済みのコマンドを使い、出力が空でないなら**報告の前に**行を足すこと。
+- **task 3.1 への申し送り: 全レコードの `frame` が一様に 0 の系列を「1 フレームで完了」と読まないこと** — `frame=0` は tick 前の World（`FrameCount` 既定値・`TickStart` 未挿入）が返す縮退値であり、要件 8.5 に従い「発生 0 回」「有界フレーム数以内」の根拠に用いず、判定不能として扱う。
+- **task 3.1 への申し送り: サーフェス語彙の単一定義元は `areka-emo-present` の `presenter::` 再輸出** — `KIND_SURFACE`／`SURFACE_STAGE_*`／`SURFACE_REASON_*`／`SURFACE_FIELD_*`／`SURFACE_FIELDS`／`SURFACE_STAGE_ALL`／`SURFACE_REASON_ALL`。窓の scope と種別は `target_id` から写像する（shell = 2·scope／balloon = 2·scope+1）。
+- **定常アロケーション 0 の既存テストは記録の増設を検出しない** — task 2.3 のレビューで確定。`presenter_budget_steady_state_tests` が測るのは `FrameBudget` の累計であってヒープではないので、定常フレームでレコードを組んでも赤にならない。要件 10.4 を守っているのは**本文走査の前置ガードテスト 1 本だけ**であり、これは補助ではなく唯一の担い手である。

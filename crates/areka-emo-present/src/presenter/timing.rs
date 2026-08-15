@@ -28,6 +28,9 @@
 //!   新規確保／容量成長の計数（Requirement 1.3・供給元は `FrameBudget`）
 //! - `key_hash`（u64）: 合成キーの安定ハッシュ。run 内の異なりキー数＝必要スロット数の実測根拠
 //!   （Requirement 7.2 のキャッシュ容量裁定材料）
+//! - `frame`（u32・**末尾**）: この適用が走った tick のフレーム番号。遷移観測チャネル
+//!   （`wintf::transition`）の全レコードと同じ番号系列であり、段階別計時の行を遷移の時系列へ
+//!   差し込むための唯一の鍵である（`areka-P0-dpi-transition-atomicity` Requirement 2.8・D12）
 //!
 //! 既存の表示成立点 info!（`"apply(ShowSurface): 表示・マスクを更新"`）とは**別行**であり、
 //! 同一適用の対として隣接して出る（配線は show.rs の責務）。文言・フィールド名の変更は
@@ -97,6 +100,12 @@ pub(super) struct EmitContext {
     pub(super) cache_hit: bool,
     /// 合成キーの安定ハッシュ（[`compose_key_hash`] の値・Requirement 7.2）。
     pub(super) key_hash: u64,
+    /// この適用が走った tick のフレーム番号（`areka-P0-dpi-transition-atomicity` Requirement 2.8）。
+    ///
+    /// 遷移観測チャネルの全レコード（窓書込・モニタ表更新・サーフェス更新）が同じ番号を持つため、
+    /// この 1 フィールドで「段階別計時の行」と「遷移の時系列」が突合できる。供給元は
+    /// `transition_record::frame_of`（World 資源 `FrameCount`）1 箇所である。
+    pub(super) frame: u32,
 }
 
 /// 1 適用分の段階計時。適用の冒頭で開始し、各段の境界で区間を確定する。
@@ -178,6 +187,7 @@ impl FrameTiming {
             surface_id,
             cache_hit,
             key_hash,
+            frame,
         } = *ctx;
         let BudgetDelta {
             alloc_compose_dst,
@@ -203,6 +213,11 @@ impl FrameTiming {
             alloc_xmap,
             alloc_mask,
             key_hash,
+            // **末尾追加**（design D12）。既存フィールドの順序・名前・文言を 1 つも動かさない
+            // ——`tools/perf/judge-perf.py::parse_fields` は `名前=値` を辞書化して必須フィールドの
+            // 存在だけを見るため、末尾への追加は互換である（DoD で `--selftest` を回して確かめる）。
+            // 既存の perf 行に `frame` という名前は無いので、後勝ちの上書きも起きない。
+            frame,
             "perf(apply_show): 段階別計時"
         );
     }

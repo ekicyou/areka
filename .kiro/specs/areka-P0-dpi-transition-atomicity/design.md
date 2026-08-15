@@ -228,6 +228,7 @@ crates/areka/src/main.rs               # MOD: 起動時に MonitorDpiTable も�
 
 | ファイル | 変更内容 | 起点タスク |
 |---|---|---|
+| `crates/wintf/src/ecs/window/transition_diag.rs` | NEW: target 定数・frame ミラー・TickStart・入れ子する flush epoch・`WriteTag`・レコード純関数・経路語 3 つ | 1.1・1.2・2.1・2.2 |
 | `crates/wintf/src/ecs/window/transition_diag_tests.rs` | NEW: 語彙固定（正例／負例）・実濾過・刻印の権威 | 1.1・1.2 |
 | `crates/wintf/src/ecs/window/command_transition_tests.rs` | NEW: 札・flush 観測・drain・入れ子 epoch・前置ガードの構造テスト | 2.1 |
 | `crates/wintf/src/ecs/window_proc/window_pos_transition_tests.rs` | NEW: 3 メッセージ受理・同期書込・`WM_WINDOWPOSCHANGED` 再入 | 2.2 |
@@ -235,8 +236,27 @@ crates/areka/src/main.rs               # MOD: 起動時に MonitorDpiTable も�
 | `crates/wintf/src/ecs/layout/systems/monitor_systems_transition_tests.rs` | NEW: モニタ表レコード・多スレッド刻印・構造テスト | 2.2 |
 | `crates/wintf/src/ecs/layout/systems/monitor_systems_tests.rs` | MOD: `apply_monitor_snapshot` の `stamp` 引数追加に追随 | 2.2 |
 | `crates/wintf/tests/window/monitor_hierarchy_test.rs` | MOD: 素の `World` へ `FrameCount`／`TickStart` を挿入（`detect_display_change_system` が読むため） | 2.2 |
+| `crates/areka-emo-present/src/presenter.rs` | MOD: `mod transition_record;` ＋ サーフェス語彙 13 定数の再輸出（判定側 task 3.1 が参照する単一定義元） | 2.3 |
+| `crates/areka-emo-present/src/presenter/transition_record.rs` | NEW: `surface` レコード純関数・語彙定数・World からの刻印取得 | 2.3 |
+| `crates/areka-emo-present/src/presenter/transition_record_tests.rs` | NEW: 語彙固定（正例／負例）・本文走査（前置ガード・ミラー禁止・perf 行末尾）・実駆動 | 2.3 |
+| `crates/areka-emo-present/src/presenter/timing_tests.rs` | MOD: `EmitContext` の `frame` フィールド追加に追随（`ctx()` 助走関数） | 2.3 |
+| `crates/areka-emo-present/src/presenter_perf_log_tests.rs` | MOD: `PERF_LINE_FIELDS` 15 → 16（`frame` 追加・完全一致照合ゆえ追加も RED） | 2.3 |
 
-> 本表は Requirement 10 の突合台帳である。実装が `git diff --name-only <分岐点>...HEAD -- crates/` と一致していなければならない。ファイルを 1 つでも触ったら同時に行を足すこと。
+> 本表は Requirement 10 の突合台帳である。触ったファイルの集合が本表（2 つの表の合併）と一致していなければならない。ファイルを 1 つでも触ったら同時に行を足すこと。
+>
+> **照合コマンド**（task 2.3 のレビューで是正。旧記載の `git diff --name-only <分岐点>...HEAD -- crates/` は**三点記法かつ HEAD 限定ゆえ未コミットの変更も未追跡の新規ファイルも見えず**、実装者が報告する状態に対して常に「漏れなし」を返していた——台帳の 2 度の乖離はこれが機序である）:
+>
+> ```bash
+> cd "$(git rev-parse --show-toplevel)"
+> SPEC=.kiro/specs/areka-P0-dpi-transition-atomicity/design.md
+> comm -23 \
+>   <({ git diff --name-only "$(git merge-base origin/main HEAD)" -- crates/
+>       git ls-files --others --exclude-standard -- crates/; } | sort -u) \
+>   <(sed -n '/^### Modified Files/,/^## System Flows/p' "$SPEC" \
+>       | grep -E '^\| `crates/' | awk -F'|' '{print $2}' | tr -d ' `' | sort -u)
+> ```
+>
+> 出力が空なら一致。行が出たら「触ったのに行が無いファイル」なので、報告の**前に**行を足す。仕様の途中では**片方向のみ**を誤りとする（表は未着手タスクのファイルを先行して宣言しているため）。**task 6.4 の「過不足なく一致」では逆向きも見る**——`comm -23` を `comm -3` に替えて空を期待する。
 
 ## System Flows
 
