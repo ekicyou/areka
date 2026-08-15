@@ -112,6 +112,9 @@ fn apply_injected_monitors(
         &mut windows,
         &mut taffy_res,
         injected.0.clone(),
+        // 本ファイルの檻は表の更新そのものを見る（遷移観測の刻印は
+        // `monitor_systems_transition_tests.rs` が担当）ため、固定値で足りる。
+        crate::ecs::window::transition_diag::Stamp { frame: 0, t_us: 0 },
     );
 }
 

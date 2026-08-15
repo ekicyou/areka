@@ -224,6 +224,18 @@ crates/areka/src/main.rs               # MOD: 起動時に MonitorDpiTable も�
 | `crates/areka/src/main.rs` | `boot_monitor_snapshot`（:530-538）が `MonitorDpiTable` も返し :611 で挿入／:569 注記撤回 | 復元判定シーム不変 |
 | `tools/perf/judge-perf.py` | 変更なし（`--selftest` で互換確認のみ） | budget 所有 |
 
+**兄弟テストファイル・統合テストの行**（本表は「触ったファイル」の突合台帳ゆえテストも登記する。task 2.2 のレビューで漏れが判明し追記）:
+
+| ファイル | 変更内容 | 起点タスク |
+|---|---|---|
+| `crates/wintf/src/ecs/window/transition_diag_tests.rs` | NEW: 語彙固定（正例／負例）・実濾過・刻印の権威 | 1.1・1.2 |
+| `crates/wintf/src/ecs/window/command_transition_tests.rs` | NEW: 札・flush 観測・drain・入れ子 epoch・前置ガードの構造テスト | 2.1 |
+| `crates/wintf/src/ecs/window_proc/window_pos_transition_tests.rs` | NEW: 3 メッセージ受理・同期書込・`WM_WINDOWPOSCHANGED` 再入 | 2.2 |
+| `crates/wintf/src/ecs/window_proc/window_pos_tests.rs` | MOD: `dispatch_dpichanged*` 助走関数へ直列化の錠 | 2.2 |
+| `crates/wintf/src/ecs/layout/systems/monitor_systems_transition_tests.rs` | NEW: モニタ表レコード・多スレッド刻印・構造テスト | 2.2 |
+| `crates/wintf/src/ecs/layout/systems/monitor_systems_tests.rs` | MOD: `apply_monitor_snapshot` の `stamp` 引数追加に追随 | 2.2 |
+| `crates/wintf/tests/window/monitor_hierarchy_test.rs` | MOD: 素の `World` へ `FrameCount`／`TickStart` を挿入（`detect_display_change_system` が読むため） | 2.2 |
+
 > 本表は Requirement 10 の突合台帳である。実装が `git diff --name-only <分岐点>...HEAD -- crates/` と一致していなければならない。ファイルを 1 つでも触ったら同時に行を足すこと。
 
 ## System Flows

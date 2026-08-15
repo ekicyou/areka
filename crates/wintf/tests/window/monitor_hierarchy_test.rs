@@ -306,6 +306,12 @@ fn test_monitor_update_on_change() {
     let mut world = World::new();
     world.insert_resource(TaffyLayoutResource::default());
     world.insert_resource(App::new());
+    // 遷移観測の刻印（D1）: `detect_display_change_system` は World 資源から
+    // 刻印を組むため、`EcsWorld::new` が入れる 2 資源を素の World にも用意する。
+    world.insert_resource(wintf::ecs::world::FrameCount::default());
+    world.insert_resource(wintf::ecs::window::transition_diag::TickStart(
+        std::time::Instant::now(),
+    ));
 
     // LayoutRootとMonitorを初期化
     initialize_layout_root(&mut world);

@@ -123,6 +123,13 @@ pub const MSG_ALL: &[&str] = &[MSG_DPICHANGED, MSG_WINDOWPOSCHANGED, MSG_DISPLAY
 pub const ORIGIN_ZORDER_PAIR: &str = "zorder-pair";
 /// 汎用の位置反映（`graphics::systems::window_pos::apply_window_pos_changes`）が積む書込。
 pub const ORIGIN_WINDOW_POS: &str = "window-pos";
+/// OS 提案位置を採ったときの同期書込（`window_proc/window_pos.rs` の `WM_DPICHANGED`）。
+///
+/// 上 2 語と違い、この経路は**キューへ積まない**——受理の内側で直に撃つ（経路 A）。
+/// `stage=sync` でも見分けは付くが、`origin` は「どの経路が書込を要求したか」を運ぶ
+/// フィールド（要件 2.1）であり、実在する要求元を番兵で埋めると
+/// [`WriteTag::UNTAGGED`]（＝タグの付け忘れ）と区別が付かなくなる。
+pub const ORIGIN_DPI_SUGGESTED: &str = "dpi-suggested";
 
 // ---------------------------------------------------------------------------
 // フィールド名（判定側が grep／辞書引きする語）

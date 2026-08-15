@@ -7,6 +7,7 @@
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::time::Instant;
 
 use bevy_ecs::change_detection::DetectChangesMut;
 use bevy_ecs::prelude::Entity;
@@ -14,6 +15,10 @@ use tracing::{debug, trace, warn};
 use windows::Win32::Foundation::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
+use crate::ecs::window::transition_diag::{
+    self, MSG_DPICHANGED, MSG_WINDOWPOSCHANGED, MsgRecord, ORIGIN_DPI_SUGGESTED, WriteRecord,
+    WriteStage, WriteTag,
+};
 use crate::ecs::world::EcsWorld;
 
 /// メッセージハンドラの戻り値型
@@ -36,12 +41,29 @@ type HandlerResult = Option<LRESULT>;
 pub(super) fn WM_WINDOWPOSCHANGED(
     world: &Rc<RefCell<EcsWorld>>,
     entity: Entity,
-    _hwnd: HWND,
+    hwnd: HWND,
     _wparam: WPARAM,
     lparam: LPARAM,
 ) -> HandlerResult {
     // echo 判定: TLS フラグを参照（ステップ①冒頭で1回のみ）
     let is_echo = crate::ecs::window::is_self_initiated();
+
+    // 受理の記録（要件 2.1）。`in_swp` は上の echo 判定そのもの——「自アプリの
+    // `SetWindowPos` の内側で同期送達されたか」であり、`since_flush_us` が非番兵なら
+    // その `SetWindowPos` は一括 flush の区間内で撃たれたことになる。
+    //
+    // **前置ガードの内側だけ**で組む。本ハンドラはドラッグ中も含めて絶えず走るため
+    // （要件 10.6 の追従比 1.000・定常の窓書込 0 を壊さない）、観測が無効な運転では
+    // 行の組立も時刻の読み取りも一切行わない。
+    if transition_diag::is_enabled() {
+        transition_diag::emit_line(&transition_diag::msg_line(&MsgRecord {
+            stamp: transition_diag::stamp(),
+            msg: MSG_WINDOWPOSCHANGED,
+            hwnd,
+            in_swp: is_echo,
+            since_flush_us: transition_diag::since_flush_us(),
+        }));
+    }
 
     // ------------------------------------------------------------------
     // ① 第1借用セクション: DPI更新, echo判定に基づきWindowPos更新, BoxStyle更新
@@ -307,6 +329,19 @@ pub(super) fn WM_DPICHANGED(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> HandlerResult {
+    // 受理の記録（要件 2.1）。再観測 §5 の 24/24——各窓の最初の `SetWindowPos` の内側で
+    // 当該窓の `WM_DPICHANGED` が同期処理される——は `in_swp`／`since_flush_us` の
+    // 組で読む。判定より前に置くのは「受理そのもの」の刻印だからである。
+    if transition_diag::is_enabled() {
+        transition_diag::emit_line(&transition_diag::msg_line(&MsgRecord {
+            stamp: transition_diag::stamp(),
+            msg: MSG_DPICHANGED,
+            hwnd,
+            in_swp: crate::ecs::window::is_self_initiated(),
+            since_flush_us: transition_diag::since_flush_us(),
+        }));
+    }
+
     let new_dpi = crate::ecs::window::DPI::from_WM_DPICHANGED(wparam, lparam);
 
     // lparam から suggested_rect を取得
@@ -417,17 +452,43 @@ pub(super) fn WM_DPICHANGED(
         // サイズは ECS レイアウトパイプライン（Changed<DPI> → update_arrangements_system
         // → propagate_global_arrangements → window_pos_sync_system → apply_window_pos_changes）
         // が算出するため、suggested_rect のサイズは使わない。
-        let result = unsafe {
-            crate::ecs::window::guarded_set_window_pos(
+        let flags = SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE;
+
+        // 観測（要件 2.1）。**書込 1 回を数える点はここ 1 箇所**であり、経路 A
+        // （メッセージ受理時の同期書込）として一括 flush（`stage=flush`）と区別する。
+        // 前置ガードが偽なら計時も読み戻しも行わない。
+        let observe = transition_diag::is_enabled();
+        let call_started = observe.then(Instant::now);
+
+        let result =
+            unsafe { crate::ecs::window::guarded_set_window_pos(hwnd, None, x, y, 0, 0, flags) };
+
+        if observe {
+            let call_us = call_started.map_or(0, transition_diag::elapsed_us);
+            transition_diag::emit_line(&transition_diag::write_line(&WriteRecord {
+                stamp: transition_diag::stamp(),
+                stage: WriteStage::Sync,
+                seq: 0,
                 hwnd,
-                None,
+                // 経路語は wintf 自身が名乗る（`origin` は「どの経路が書込を要求したか」＝
+                // 要件 2.1 のフィールドであり、実在する要求元を番兵で埋めると
+                // 「タグの付け忘れ」と区別が付かなくなる）。キャラ番号と窓種別は areka の
+                // 語彙であり表示基盤からは判らないので、そこは番兵のままにする。
+                tag: WriteTag {
+                    origin: ORIGIN_DPI_SUGGESTED,
+                    ..WriteTag::UNTAGGED
+                },
                 x,
                 y,
-                0,
-                0,
-                SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
-            )
-        };
+                cx: 0,
+                cy: 0,
+                flags: flags.0,
+                after: crate::ecs::window::read_back_window_rect(hwnd),
+                call_us,
+                ok: result.is_ok(),
+            }));
+        }
+
         if let Err(e) = result {
             warn!(hwnd = ?hwnd, error = ?e, "SetWindowPos failed in WM_DPICHANGED");
         }
@@ -445,3 +506,7 @@ pub(super) fn WM_DPICHANGED(
 #[cfg(test)]
 #[path = "window_pos_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "window_pos_transition_tests.rs"]
+mod window_pos_transition_tests;

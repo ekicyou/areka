@@ -47,6 +47,36 @@ use super::transition_diag::{
 /// 4. `SetWindowPosGuard` の Drop でカウンタ -1（RAII 保証）
 static SELF_INITIATED_DEPTH: AtomicI32 = AtomicI32::new(0);
 
+/// テスト専用: 上の**プロセス共有**カウンタを触る／読むテストを直列化する錠。
+///
+/// # なぜ要るのか（要件 7.7・7.1）
+///
+/// [`SELF_INITIATED_DEPTH`] はスレッド局所ではなく**プロセス共有の `AtomicI32`** である。
+/// `cargo test` はテストを並列に走らせるため、あるテストの [`guarded_set_window_pos`] が
+/// 持ち上げた値を、別スレッドで走る無関係なテストの [`is_self_initiated`]／観測レコードの
+/// `in_swp` 判定が読んでしまう。是正前の実測では `cargo test -p wintf --lib` を 60 周して
+/// **11 周が赤**になり、`test_flush_empty_queue_is_noop` の `assert!(!is_self_initiated())`
+/// と `msg` レコードの `in_swp=false` 検査がいずれも落ちた。
+///
+/// カウンタ自体の意味論（プロセス共有・`Relaxed`）は本仕様の変更対象ではない
+/// （観測の増設だけが本仕様の取り分＝Requirement 3.4）。よって**テスト側を直列化**して
+/// 決定論を取り戻す。
+///
+/// # 使い方
+///
+/// ⑴ カウンタを**持ち上げる**側（[`guarded_set_window_pos`]／[`flush_window_pos_commands`]
+/// を呼ぶテスト）と ⑵ カウンタを**読む**側（[`is_self_initiated`]／`in_swp` を検査する
+/// テスト）の**両方**が取得すること。片側だけでは直列化にならない。読む側はテスト本体の
+/// 先頭で取得して最後まで持ち、持ち上げるだけの側は少なくとも当該呼出を含む区間で持つ。
+///
+/// 毒化は無視する（`into_inner`）——1 本のテストの失敗が、以後の全テストを
+/// 「錠が毒化した」で連鎖失敗させないため。
+#[cfg(test)]
+pub(crate) fn lock_self_initiated_for_test() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 /// 現在 `guarded_set_window_pos` 呼び出しスコープ内かどうかを返す。
 ///
 /// `WM_WINDOWPOSCHANGED` ハンドラ内で echo 判定に使用する。
@@ -156,11 +186,15 @@ thread_local! {
 /// 読み戻せなければ `None`——書込レコードの `ax`／`ay`／`aw`／`ah` は 4 つとも番兵になる
 /// （フィールドごと落とすと「記録が出ていない」と「値が無い」の区別が付かない）。
 ///
+/// クレート内へ開いてあるのは、窓書込がもう 1 箇所——メッセージ受理時の同期書込
+/// （`window_proc/window_pos.rs` の `WM_DPICHANGED`・`stage=sync`）——にもあるためである。
+/// 2 箇所に同じ読み戻しを持つと、片方だけが失敗時の扱い（番兵）を変えたときに静かに食い違う。
+///
 /// # Safety
 /// `GetWindowRect` へ渡すのは呼び出し側が保持する `HWND` と、本関数がスタック上に確保した
 /// `RECT` への排他参照だけであり、いずれも呼出のあいだ生存する。無効なハンドルに対しては
 /// API が安全に失敗を返す（不正なポインタ参照は起きない）ため、偽ハンドルでも健全である。
-fn read_back_window_rect(hwnd: HWND) -> Option<RECT> {
+pub(crate) fn read_back_window_rect(hwnd: HWND) -> Option<RECT> {
     let mut rect = RECT::default();
     if unsafe { GetWindowRect(hwnd, &mut rect) }.is_ok() {
         Some(rect)
@@ -445,8 +479,13 @@ mod tests {
     #[test]
     fn test_is_self_initiated_false_at_rest() {
         // guarded_set_window_pos スコープ外（ネストカウンタ 0）では false
-        // 注: SELF_INITIATED_DEPTH はプロセス共有の AtomicI32 だが、
-        // テストスレッドで guarded_set_window_pos を呼ばない限り 0 のまま。
+        //
+        // 注: SELF_INITIATED_DEPTH は**プロセス共有**の AtomicI32 である。旧注記は
+        // 「テストスレッドで guarded_set_window_pos を呼ばない限り 0 のまま」としていたが、
+        // これは誤りだった——カウンタはスレッドごとではないので、並列に走る**別テスト**の
+        // 書込経路が持ち上げた値がそのまま見える（実測: 是正前 60 周中 11 周が赤）。
+        // ゆえに読む側も `lock_self_initiated_for_test` を取って直列化する（要件 7.7）。
+        let _serialized = lock_self_initiated_for_test();
         assert!(!is_self_initiated());
     }
 
@@ -455,6 +494,10 @@ mod tests {
         // 空キューの flush は early-return で SetWindowPos を呼ばずパニックしない。
         // （このテスト内では enqueue していないため WINDOW_POS_COMMANDS は空。
         //  thread_local かつ同一テストスレッドのため他テストの enqueue 残留はない）
+        //
+        // 末尾の `is_self_initiated()` はプロセス共有カウンタを読むため直列化が要る
+        // （`lock_self_initiated_for_test` の doc）。
+        let _serialized = lock_self_initiated_for_test();
         SetWindowPosCommand::flush();
         // 便利関数経由でも同様に no-op
         flush_window_pos_commands();
