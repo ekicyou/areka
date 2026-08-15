@@ -5,7 +5,7 @@
 > **要件 9.1** の判定（残存）は要件フェーズで確定済みで、task 4.2 がフレーム番号つきで再確認する。
 
 - [ ] 1. 観測の土台（刻印とレコード語彙）
-- [ ] 1.1 遷移観測チャネルの語彙とレコード純関数を新設する
+- [x] 1.1 遷移観測チャネルの語彙とレコード純関数を新設する
   - 専用の観測 target 定数、全レコード共通の刻印（フレーム番号・tick 開始からの経過）、レコード種別語（モニタ表更新／窓書込／一括書込の開始終了／メッセージ受理／指令の積み上げ）を 1 箇所に定義する
   - 各レコード行を組む純関数を置く（刻印は値で受け取り、関数自身は時刻を読まない）
   - 欠損フィールドは番兵で埋め、フィールドを落とさない
@@ -242,3 +242,10 @@
   - 観察可能な完了条件: 機械判定の全項目が合格で、目視でも跳ねが認められない
   - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 4.2_
   - _Depends: 7.2_
+
+## Implementation Notes
+
+- **窓種別のフィールド名は `win_kind=`（`kind=` ではない）** — task 1.1 のレビューで確定。`tools/perf/judge-perf.py:562,588-596` の `parse_fields` は同名キーを後勝ちで上書きするため、接頭語の `kind=<レコード種別>` と衝突してレコード種別が消え、判定器の起点判定（`kind=monitor`）が壊れる。設計の Data Models 表（`write`／`enqueue`／`hold` の行）と C7 の `writes_per_window` は追随済み。**1 行に同じフィールド名を 2 度出さない**が語彙の不変条件であり、`transition_diag_tests.rs::no_line_repeats_a_field_name` が固定している。task 2.1・2.4・3.1 はこの語彙に従うこと。
+- **`FlushRecord.total_us` は `Option<u64>`** — task 1.1 のレビューで確定。`stage=begin` では総所要が未確定であり、`0` を出すと「0µs で完了」と「未計測」が同一文字列になって番兵規則（欠損は `-`）と矛盾する。設計の C1 Service Interface は追随済み。
+- **観測レコードの定数はすべて `crates/wintf/src/ecs/window/transition_diag.rs` が単一の定義元** — `kind`／`stage`／`msg` 語と全フィールド名の `pub const`、および `KIND_ALL`／`STAGE_ALL`／`MSG_ALL`／per-kind の必須フィールド列（`MONITOR_FIELDS` 等）。判定器（task 3.1/3.2）はこれらを参照し、文字列リテラルを二重定義しない。
+- **ログ濾過テストはスレッド局所の subscriber で書く** — `crate::ecs::test_support::capture_under_filter`（`crates/wintf/src/ecs/test_support.rs:96`・既存）が `tracing::subscriber::with_default` を使う。大域 subscriber を使うとテスト間で状態が汚染される（要件 7.7）。また「既定で無音」を主張するテストには同じ捕捉窓の内側に必ず出るはずの対照行を置き、捕捉が死んでいるだけで緑になる形にしない。

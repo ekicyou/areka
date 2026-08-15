@@ -426,7 +426,7 @@ pub struct WriteRecord { pub stamp: Stamp, pub stage: WriteStage, pub seq: u32, 
     pub x: i32, pub y: i32, pub cx: i32, pub cy: i32, pub flags: u32,       // 要求値
     pub after: Option<RECT>,                                                // 書込後矩形（target 有効時のみ GetWindowRect で読み戻す・失敗は None＝"-"）
     pub call_us: u64, pub ok: bool }
-pub struct FlushRecord { pub stamp: Stamp, pub stage: FlushStage /* Begin|End */, pub count: usize, pub since_tick_us: u64, pub total_us: u64 }
+pub struct FlushRecord { pub stamp: Stamp, pub stage: FlushStage /* Begin|End */, pub count: usize, pub since_tick_us: u64, pub total_us: Option<u64> }   // stage=begin では総所要が未確定ゆえ None＝"-"（0 と「未計測」を同一文字列にしない）
 pub struct MsgRecord { pub stamp: Stamp, pub msg: &'static str /* WM_DPICHANGED|WM_WINDOWPOSCHANGED|WM_DISPLAYCHANGE */, pub hwnd: HWND, pub in_swp: bool, pub since_flush_us: Option<u64> }
 pub struct EnqueueRecord { pub stamp: Stamp, pub hwnd: HWND, pub tag: WriteTag, pub merged_into_seq: Option<u32> }
 
@@ -609,7 +609,7 @@ pub(crate) fn coalesce_geometry(queue: &mut Vec<SetWindowPosCommand>, cmd: SetWi
 **Responsibilities & Constraints**
 - 入力: `[transition]` 行の列（他の行は無視）。出力: `Vec<TransitionSummary>`＋`Verdict`。I/O を持たない。
 - 遷移の切り出し: `kind=monitor` で `old_dpi != new_dpi` の行を起点、次の起点の直前まで。
-- 判定量（`TransitionSummary`）: `frames_to_last_write`（起点 frame → 最終 `write` frame の `wrapping_sub`）／`writes_per_window: BTreeMap<(scope, kind), u32>`／`path_a_writes`（`stage=sync`）／`balloon_same_frame: bool`（キャラ write frame == 同 scope バルーン write frame）／`mismatch_frames_per_window`（`surface stage=visualize` の frame と当該窓 write frame の差）／`holds`／`chain_realigned: u32`／`ground_diff_max`（`ground` レコードの `|diff|` 最大）／`skipped_windows`（`stage=skipped` の target を除外）／参考値 `wall: { first_write_t_us, last_write_t_us, sum_call_us }`。
+- 判定量（`TransitionSummary`）: `frames_to_last_write`（起点 frame → 最終 `write` frame の `wrapping_sub`）／`writes_per_window: BTreeMap<(scope, kind), u32>`（キーの窓種別は行の **`win_kind=`** フィールドから読む＝下記「フィールド名の一意性」）／`path_a_writes`（`stage=sync`）／`balloon_same_frame: bool`（キャラ write frame == 同 scope バルーン write frame）／`mismatch_frames_per_window`（`surface stage=visualize` の frame と当該窓 write frame の差）／`holds`／`chain_realigned: u32`／`ground_diff_max`（`ground` レコードの `|diff|` 最大）／`skipped_windows`（`stage=skipped` の target を除外）／参考値 `wall: { first_write_t_us, last_write_t_us, sum_call_us }`。
 - 定数（回帰テストが固定・`Bounds::deterministic`）: `TRANSITION_FRAME_BOUND = 0`、`WRITES_PER_WINDOW_MAX = 1`、`PATH_A_WRITES_MAX = 0`、`GROUND_DIFF_MAX = 0`、`CHAIN_REALIGN_PER_TRANSITION = 1`（k 変化のある遷移）。hold を含む遷移は `frames_to_last_write ≤ DPI_SYNC_HOLD_MAX_FRAMES`。
 - **実機サインオフ専用の判定量（`Bounds::signoff`・設計討議 A-2 で追加）**: 第 1 段で確定した症状「描画内容は +13〜47ms に新寸・窓矩形は +63〜309ms まで旧寸」は**同一 tick の内側**の食い違いであり、上のフレーム単位の量では是正前でも 0 になる（`TRANSITION_FRAME_BOUND = 0` は現行コードで既に成立）。そこで `TransitionSummary` に窓ごとの `visualize_to_write_us`（同一 frame の `surface stage=visualize` の `t_us` から当該窓の `write` の `t_us` まで）と `flush_total_us`（`flush stage=end` の `total_us`）を持たせ、`Bounds::signoff` に上限を置く。**上限値は実装フェーズ 2 の再採取で確定**する（目安: 実測 vblank 周期 1〜2 回分。8.3ms@120Hz／16.7ms@60Hz を候補とし、台帳へ根拠つきで登記）。この量は非決定なので**回帰テストでは固定しない**——サインオフ手順書（C10）の合否と C8 の Q2 条件（B-2b→B-4→B-3 の分岐）にだけ使う。判定は決定論量と実機量の**両方**を Report に列挙し、`judge(summary, &Bounds::deterministic)` と `judge(summary, &Bounds::signoff)` を別々に呼ぶ。
 - 語彙: `kind`／`stage`／フィールド名は C1・C3・areka 側レコード純関数から `pub const` を参照して解析（判定語の二重定義をしない）。
@@ -683,15 +683,16 @@ pub fn judge_transition_log(log: &str) -> Report;   // 上 4 つの合成
 | `monitor` | wintf `monitor_systems.rs:280-316` 直後 | `entity old_dpi new_dpi old_wa new_wa` |
 | `snapshot` | areka C6 | `monitors m<i>=dpi:l,t,r,b …` |
 | `surface` | emo-present `show.rs`／`refresh.rs` | `stage=upload\|visualize\|skipped target_id w h resized reason` |
-| `enqueue` | wintf `command.rs::enqueue` | `hwnd origin scope kind merged_into_seq` |
-| `flush` | wintf `command.rs::flush` | `stage=begin\|end count since_tick_us total_us` |
-| `write` | wintf flush／`window_pos.rs:420` | `stage=flush\|sync seq hwnd origin scope kind x y cx cy flags ax ay aw ah call_us ok`（`ax..ah` は書込後矩形・読み戻せなければ `-`） |
+| `enqueue` | wintf `command.rs::enqueue` | `hwnd origin scope win_kind merged_into_seq` |
+| `flush` | wintf `command.rs::flush` | `stage=begin\|end count since_tick_us total_us`（`stage=begin` の `total_us` は `-`） |
+| `write` | wintf flush／`window_pos.rs:420` | `stage=flush\|sync seq hwnd origin scope win_kind x y cx cy flags ax ay aw ah call_us ok`（`ax..ah` は書込後矩形・読み戻せなければ `-`） |
 | `msg` | wintf window_proc | `msg hwnd in_swp since_flush_us` |
-| `hold` | areka C5 | `entity scope kind window_dpi table_dpi since_frame decision site=dpi\|reconcile\|resnap` |
+| `hold` | areka C5 | `entity scope win_kind window_dpi table_dpi since_frame decision site=dpi\|reconcile\|resnap` |
 | `ground` | areka `resize_window_to`（Bottom） | `scope ground_y wa_bottom diff route` |
 | `chain` | areka C4 | `stage=armed\|realigned\|deferred scopes moved reason` |
 
 - 全行の接頭語 `[transition] frame=<u32> t_us=<u64> kind=<k>`。欠損は `-`。フィールドは `名前=値`・空白区切り（`judge-perf.py` と同じ辞書化規則で読める）。
+- **フィールド名の一意性（1 行に同じ名前を 2 度出さない）**: `tools/perf/judge-perf.py:562,588-596` の `parse_fields` は同名キーを**後勝ち**で上書きするため、接頭語の `kind=<レコード種別>` と同じ名前を窓種別に使うと**レコード種別が消え**、`split_transitions` の起点判定（`kind=monitor`）が壊れる。よって窓種別のフィールド名は **`win_kind=`** とする（Rust 側の `WriteTag.kind` はそのまま）。同様に値には空白を含めない（`origin` に載る `PlacementRoute::as_str()` は 1 語）。
 
 ## Error Handling
 

@@ -2,6 +2,11 @@ mod command;
 mod components;
 mod dpi;
 pub mod monitor;
+/// DPI／拡大率遷移の観測チャネル（専用 target・既定 OFF・レコード語彙の純関数）。
+///
+/// 判定側（areka の `transition_judge`）とサインオフ手順書が語彙を直接参照するため、
+/// `pub` で crate 外へ開いてある。
+pub mod transition_diag;
 mod window_handle;
 mod window_pos;
 pub(crate) mod window_system;
