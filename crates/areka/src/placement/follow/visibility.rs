@@ -184,7 +184,12 @@ pub(super) fn route_applies_visibility_guard(route: PlacementRoute) -> bool {
         PlacementRoute::AnchorChange
         | PlacementRoute::Resnap
         | PlacementRoute::DpiReproject
-        | PlacementRoute::ReportedSizeReconcile => true,
+        | PlacementRoute::ReportedSizeReconcile
+        // 作業領域の変化・遷移後の連鎖再解決も**システム由来の再アンカー**であり、
+        // ユーザーの明示操作ではない（design D9 が既定位置の追跡対象として同じ 6 経路を
+        // 挙げているのと同じ区分）。ゆえに S3 の保護対象＝ガードは発火する。
+        | PlacementRoute::WorkAreaResnap
+        | PlacementRoute::ChainRealign => true,
         // 明示操作・別 spec 所有・バルーン窓側（上記 doc の内訳）
         PlacementRoute::SpawnInitial
         | PlacementRoute::Restore

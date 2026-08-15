@@ -29,6 +29,7 @@ pub mod persist;
 pub mod resolver;
 pub mod source;
 pub mod spawn;
+pub mod transition_diag;
 mod windowposition;
 
 /// 作者空間の符号付きオフセットを k 倍する唯一の写像（大きさは `ScaleRatio::scale_len`

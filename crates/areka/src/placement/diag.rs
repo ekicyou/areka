@@ -207,6 +207,27 @@ pub enum PlacementRoute {
     /// **元書込の route を保つ**。補正は同一書込の一部であって別書込ではないからである（DD7）。
     // 発行者は `follow::drag_follow::apply_release_limit_correction`（task 3.4）ただ 1 箇所。
     BalloonLimitRelease,
+    /// 作業領域の変化を契機とする現寸での再スナップ
+    /// （areka-P0-dpi-transition-atomicity C6 `work_area_sync::resnap_for_work_area_change`）。
+    ///
+    /// 拡大率は変わらず**作業領域だけ**が変わった窓を、現在の寸のまま新しい下端へ移す書込で
+    /// ある。毎フレーム走る [`Resnap`](Self::Resnap) とも、拡大率変化に伴う
+    /// [`DpiReproject`](Self::DpiReproject) とも**実在のトリガが違う**ため専用語を持つ
+    /// （D13 の 1 語＝1 実在トリガ）。混同すると「作業領域が動いたから移した」のか
+    /// 「毎フレームの再スナップが動かした」のかがログ上で切り分けられない。
+    // 発行者は task 5.2（作業領域の変化を契機とする再スナップ）が新設する。語彙を先に建てる
+    // のは、判定器（task 3.1）と単一の窓書込口の札が同じ語を見るためである。
+    #[allow(dead_code)]
+    WorkAreaResnap,
+    /// DPI 遷移後の連鎖（隣接ペア）再解決
+    /// （areka-P0-dpi-transition-atomicity C4 `chain_realign::realign_chain_once_with`）。
+    ///
+    /// 起動時一度きりの連鎖確定（`scope-chain-gap`）とは別機構で、遷移 1 回につき一度だけ
+    /// 隣接を解き直す書込である。起動時確定は `SpawnInitial`／`Restore` の後段で位置を決める
+    /// のに対し、こちらは遷移後の新しい幅で左端を連ね直す——由来が違うので語も分ける。
+    // 発行者は task 5.6（遷移後の連鎖再解決）が新設する（上と同じ理由で語彙が先着する）。
+    #[allow(dead_code)]
+    ChainRealign,
 }
 
 impl PlacementRoute {
@@ -217,7 +238,7 @@ impl PlacementRoute {
     // 消費者は in-source 檻（`#[cfg(test)]`）だけゆえ本番ビルドでは dead。檻専用の列である
     // ことが存在理由そのもの（語彙の網羅・一意性の単一の錨）ゆえ本属性を残す。
     #[allow(dead_code)]
-    pub const ALL: [PlacementRoute; 10] = [
+    pub const ALL: [PlacementRoute; 12] = [
         PlacementRoute::SpawnInitial,
         PlacementRoute::Restore,
         PlacementRoute::AnchorChange,
@@ -228,6 +249,8 @@ impl PlacementRoute {
         PlacementRoute::ReportedSizeReconcile,
         PlacementRoute::MoveCue,
         PlacementRoute::BalloonLimitRelease,
+        PlacementRoute::WorkAreaResnap,
+        PlacementRoute::ChainRealign,
     ];
 
     /// ログ上の表示語（診断手順書の grep 判定語と 1:1）。
@@ -243,6 +266,8 @@ impl PlacementRoute {
             PlacementRoute::ReportedSizeReconcile => "ReportedSizeReconcile",
             PlacementRoute::MoveCue => "MoveCue",
             PlacementRoute::BalloonLimitRelease => "BalloonLimitRelease",
+            PlacementRoute::WorkAreaResnap => "WorkAreaResnap",
+            PlacementRoute::ChainRealign => "ChainRealign",
         }
     }
 }

@@ -94,6 +94,10 @@ use self::visibility::{
     route_applies_visibility_guard,
 };
 use self::window_move::enqueue_window_set_pos;
+// 遷移観測（`kind=ground` の発行口・書込指令の要求語彙タグ）のファサード再束縛。
+// `window_move` は `super::transition_diag` としてここを辿る（兄弟モジュールへの
+// 直接参照はファサード分割では届かない・structure.md「ファサード形式」の注意点）。
+use super::transition_diag;
 
 // =============================================================================
 // Tests（TDD RED: 実装前に振る舞いを固定する）
@@ -144,3 +148,6 @@ mod drag_end_limit_tests;
 #[cfg(test)]
 #[path = "follow_keyword_base_tests.rs"]
 mod keyword_base_tests;
+#[cfg(test)]
+#[path = "follow_transition_diag_tests.rs"]
+mod transition_diag_tests;

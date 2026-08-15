@@ -15,7 +15,7 @@ use super::{
     BalloonWindowMarker, CharWindowMarker, DESPAWNED_SKIP_TAG, GhostWindows, MonitorSnapshot,
     PlacementRoute, PointPx, RectPx, SizePx, WindowKind, WindowMoveRecord, apply_visibility_guard,
     diag, follow_balloon, limit_correction, project_anchor, rect_at,
-    rederive_keyword_balloon_offset, work_area_for_window,
+    rederive_keyword_balloon_offset, transition_diag, work_area_for_window,
 };
 
 /// R7 公開 API: UI スレッド上で呼ばれる窓移動関数（物理 px・スクリーン座標直渡し・7.1）。
@@ -331,6 +331,17 @@ pub fn resize_window_to(
         return false;
     }
 
+    // 5b. 接地点の観測（要件 5.3・design Data Models `ground`）: **下端吸着のキャラ窓に限り**、
+    //     いま書いた接地点（窓矩形の下端）と実行時のモニタ表が持つ作業領域下端の差を 1 行残す。
+    //     接地点そのものは上の射影 T が決めた値を読むだけで、位置の決め方には触れない
+    //     （要件 10.1 の原点規約は不変）。ガードを組立の外側に置くのは、既定運転で
+    //     モニタ表の走査も `String` の確保も一切行わないためである（要件 10.4/10.6）。
+    //     手順 5a より前に置くのは、5a が offset を書き換える前の**書いた通りの**接地点を
+    //     残すため（5a はバルーン側の量であって接地点を動かさないが、順序の意図を明示する）。
+    if matches!(anchor, Anchor::Bottom) && transition_diag::is_enabled() {
+        transition_diag::log_char_ground(world, char_window, new_pos, new_size, route);
+    }
+
     // 5a. キーワード由来のバルーン基本位置の**一度きり**の再導出
     //     （windowposition-limit 要件 4.2/4.3/4.7・2026-08-14 実機サインオフ是正）。
     //     手順 6 の追従より**前**に置く——offset を直してから追従させないと、
@@ -556,15 +567,13 @@ pub(super) fn enqueue_window_set_pos(
         None => (SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE, 0, 0),
     };
 
-    SetWindowPosCommand::enqueue(SetWindowPosCommand::new(
-        handle.hwnd,
-        x,
-        y,
-        w,
-        h,
-        flags,
-        None,
-    ));
+    // 要求語彙タグ（要件 2.1・design D3）: 「どの経路が・どの窓へ」を書込指令へ載せる。
+    // 単一ライターがここ 1 箇所で付けるので、経路が増えても札の付け忘れが構造的に起きない
+    // （生成の 7 引数は不変＝`with_tag` はビルダで足すだけ）。
+    SetWindowPosCommand::enqueue(
+        SetWindowPosCommand::new(handle.hwnd, x, y, w, h, flags, None)
+            .with_tag(transition_diag::write_tag(world, window, route)),
+    );
 
     match world.get_mut::<WindowPos>(window) {
         Some(mut wp) => {

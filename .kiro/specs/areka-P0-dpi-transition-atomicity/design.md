@@ -55,6 +55,7 @@
 - 依存方向: `wintf` ← `areka-emo-present` ← `areka`（`crates/areka-emo-present/Cargo.toml:17`・`crates/areka/Cargo.toml:19,51` で確認）。観測 target 定数・フレームミラー・共通レコード接頭語は wintf に置き、上位 2 crate が参照する。**wintf から areka／emo-present の語彙（scope・target_id）を参照しない**（wintf 側レコードは `&'static str` と数値だけを運ぶ）。
 - 消費してよい着地物: `FrameCount`（`schedule_labels.rs:8`・u32）、`guarded_set_window_pos`／`is_self_initiated`（`command.rs:83,40`）、`Monitor` component（`monitor.rs:66-74`・bounds／work_area／dpi）、`MonitorSnapshot::from_monitors`（`work_area.rs:31`）、`project_anchor`（`anchor.rs:105`）、`resize_window_to`／`enqueue_window_set_pos`／`move_window_to`（`window_move.rs:158,514,42`）、`reproject_char_window_at_current_size`（`dpi.rs:335`）、`finalize_chain`／`ChainFinalizeStall`／`note_chain_deferral`（`chain_finalize.rs:99,159,249`）、`collect_chain_states`（`drain_resnap.rs:353`）、段階別計時 `FrameTiming`／`EmitContext`（`timing.rs:91-100,158`）、`PlacementRoute`（`diag.rs:162`）。
 - 禁止: `MonitorSnapshot` の消費者（`resize_window_to`・ドラッグ・可視性ガード・limit 関門・永続復元）を wintf `Monitor` 直読へ変えること（C-2 却下）。dpi 相だけ別の作業領域源を持つこと（C-3 却下）。永続化経路（`persist.rs`）へ実行時 snapshot の変化を効かせること（5.7）。
+  - **例外（task 2.4 のレビューで裁定・位置を一切決めない観測専用の読み取りは対象外）**: `placement::transition_diag::live_work_area_bottom` は wintf `Monitor` 表から作業領域下端を読むが、値は `GroundRecord.wa_bottom` にのみ流れ、位置の決定には 1 箇所も関与しない（`project_anchor` は `MonitorSnapshot` を読むまま・`window_move.rs:288`）。**接地点と同じ源から下端を引くと差が定義上つねに 0 になり、要件 5.3 と C6 の「`ground` レコード diff=0」が何も観測しなくなる**ため、観測にはもう一方の源が要る。C-2 の却下理由は消費者の多さと `MonitorSnapshot` の合成注入テスト戦略（偽装境界）を壊すこと（`research.md:167,316`）だが、`Monitor` は純データ（handle／bounds／work_area／dpi／is_primary）で素の `World` へ注入でき、偽装境界は保たれる。二重権威の懸念は C-3 の却下理由であって、位置を決めない読み取りには当たらない。**task 5.1 の同期後は 2 源が一致し、本観測は源の陳腐化を見張る口として残る**——task 5.1・5.2 はこの読み取りを撤去しないこと。
 
 ### Revalidation Triggers
 
@@ -241,6 +242,15 @@ crates/areka/src/main.rs               # MOD: 起動時に MonitorDpiTable も�
 | `crates/areka-emo-present/src/presenter/transition_record_tests.rs` | NEW: 語彙固定（正例／負例）・本文走査（前置ガード・ミラー禁止・perf 行末尾）・実駆動 | 2.3 |
 | `crates/areka-emo-present/src/presenter/timing_tests.rs` | MOD: `EmitContext` の `frame` フィールド追加に追随（`ctx()` 助走関数） | 2.3 |
 | `crates/areka-emo-present/src/presenter_perf_log_tests.rs` | MOD: `PERF_LINE_FIELDS` 15 → 16（`frame` 追加・完全一致照合ゆえ追加も RED） | 2.3 |
+| `crates/areka/src/placement/transition_diag.rs` | NEW: areka 側レコード純関数（`snapshot`／`hold`／`ground`／`chain`）・語彙定数・World からの刻印取得（`stamp_of`）・書込タグ組立（`write_tag`）・**実行時 `Monitor` 表からの作業領域下端**（`live_work_area_bottom`＝観測専用。同源から引くと差が定義上 0 になり 5.3 が何も観測しないため） | 2.4 |
+| `crates/areka/src/placement/transition_diag_tests.rs` | NEW: 語彙固定（正例／負例）・上流 2 crate の `kind` 語との非交差・同名フィールド禁止・刻印と書込タグの転写 | 2.4 |
+| `crates/areka/src/placement/follow_transition_diag_tests.rs` | NEW: 接地点レコードが**現行の −48px をそのまま出す**こと（task 5.1 の是正前の赤）・単一書込口の札・実濾過（既定 OFF／directive で点灯）・前置ガードと既存 3 チャネル不動の本文走査 | 2.4 |
+| `crates/areka/src/placement/mod.rs` | MOD: `pub mod transition_diag;`（起動時 snapshot 構築点は task 5.1） | 2.4 |
+| `crates/areka/src/placement/follow.rs` | MOD: ファサード再束縛 `use super::transition_diag;`（`window_move` が `super::` で辿る）＋兄弟テスト接続 | 2.4 |
+| `crates/areka/src/placement/follow/visibility.rs` | MOD: `route_applies_visibility_guard` の網羅 match に `WorkAreaResnap`／`ChainRealign` を**発火側**で追加（D9 のシステム由来 6 経路と同区分。書込元が未着地ゆえ現時点で挙動は不変） | 2.4 |
+| `crates/areka/src/placement/diag_tests.rs` | MOD: 経路語彙 12 種・`ALL` 12・一意性／空白なし／非番兵 | 2.4 |
+| `crates/areka/src/placement/follow_visibility_char_wiring_tests.rs` | MOD: 発火 route 表 4 → 6 に追随 | 2.4 |
+| `crates/areka/src/placement/follow_visibility_balloon_wiring_tests.rs` | MOD: 発火する引き金 4 → 6 に追随（キャラ窓表の写し） | 2.4 |
 
 > 本表は Requirement 10 の突合台帳である。触ったファイルの集合が本表（2 つの表の合併）と一致していなければならない。ファイルを 1 つでも触ったら同時に行を足すこと。
 >

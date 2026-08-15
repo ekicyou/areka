@@ -64,9 +64,15 @@ fn gap_bound_char_world(dpi: i32) -> (World, Entity, PointPx) {
 }
 
 /// 発火条件の**表そのもの**を固定する（D13 帰結⑴⑵）。挙動側の檻（下 2 件）と
-/// 二段構えにしてあるのは、語彙が 10 種あるのに `resize_window_to` を実際に通るのは
-/// 現状 4 種だけで、残り 6 種の判定が挙動檻だけでは**合成でしか**検査できないため。
+/// 二段構えにしてあるのは、語彙が 12 種あるのに `resize_window_to` を実際に通るのは
+/// 現状 4 種だけで、残り 8 種の判定が挙動檻だけでは**合成でしか**検査できないため。
 /// [`PlacementRoute::ALL`] を回すので、語彙が増えたら本檻も落ちる。
+///
+/// 発火側は 6 種ある。うち
+/// [`WorkAreaResnap`](PlacementRoute::WorkAreaResnap)／[`ChainRealign`](PlacementRoute::ChainRealign)
+/// は areka-P0-dpi-transition-atomicity が足した**システム由来の再アンカー**で、ユーザーの
+/// 明示操作ではない（同 design D9 が既定位置の追跡対象として挙げる 6 経路と同じ区分）。
+/// 書込を出す側は task 5.2／5.6 が新設するため、現時点で判定を検査できるのは本表だけである。
 #[test]
 fn visibility_guard_route_table_matches_the_d13_decision() {
     for route in PlacementRoute::ALL {
@@ -76,6 +82,8 @@ fn visibility_guard_route_table_matches_the_d13_decision() {
                 | PlacementRoute::Resnap
                 | PlacementRoute::DpiReproject
                 | PlacementRoute::ReportedSizeReconcile
+                | PlacementRoute::WorkAreaResnap
+                | PlacementRoute::ChainRealign
         );
         assert_eq!(
             route_applies_visibility_guard(route),
@@ -88,7 +96,7 @@ fn visibility_guard_route_table_matches_the_d13_decision() {
         .into_iter()
         .filter(|r| route_applies_visibility_guard(*r))
         .count();
-    assert_eq!(fired, 4, "発火 route が 4 種でない（表が潰れている）");
+    assert_eq!(fired, 6, "発火 route が 6 種でない（表が潰れている）");
 }
 
 /// **Req 3.1 の本体**: 非ドラッグの配置系 4 経路（D13 帰結⑴）では、全 work area
