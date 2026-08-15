@@ -142,7 +142,7 @@ graph TB
 - **D12 perf 行へ `frame=` を末尾追加し、`judge-perf.py --selftest` の互換確認を DoD に含める**。
 - **D13 4.5 の回数＝キャラ 1・バルーン 1・経路 A 0**（合流後）。回帰テストはこの値を固定する。
 - **D14 `FrameCount` の周回**: 判定は `wrapping_sub` の差分のみ。絶対値比較を判定語に使わない。
-- **D15 5.8 一度書き＝D5 の配置（dpi 相より前・同一 tick）で経路 (b) を保証し、経路 (a) が先行する場合は `DpiSyncHold` で当該窓の再導出を見送って一度書きに保つ**（有界 `DPI_SYNC_HOLD_MAX_FRAMES = 30`・超過時は warn の上で現 snapshot で進める）。
+- **D15 5.8 一度書き＝D5 の配置（dpi 相より前・同一 tick）で経路 (b) を保証し、経路 (a) が先行する場合は `DpiSyncHold` で当該窓の**すべての窓書込**を見送って一度書きに保つ**（設計討議 議題 1 で範囲を確定・有界 `DPI_SYNC_HOLD_MAX_FRAMES = 30`・超過時は warn の上で現 snapshot で進める）。待ち札は dpi 相だけでなく、報告寸の突合 `reconcile_reported_sizes`（`frame.rs:187`）と再スナップ `resnap_shell_targets`（`frame.rs:195`）でも当該窓の窓書込を見送る——待ち中に drain 相の `ShowSurface`（会話中の表情差替・SERIKO）が新 k で描画しても、窓を書くのは表が揃ってからにする。**描画そのものは止めない**（発話・アニメは遅らせない）。理由: Windows は `WM_DPICHANGED` と `WM_DISPLAYCHANGE` の順序を保証せず（実測は 6/6 が表更新先行だが）、dpi 相だけの防御では表情差替経路から 2 段書込がすり抜け、設計の「保証」とテストの範囲が食い違うため。
 
 ### Technology Stack
 
@@ -217,9 +217,9 @@ crates/areka/src/main.rs               # MOD: 起動時に MonitorDpiTable も�
 | `crates/areka/src/placement/diag.rs` | `PlacementRoute::WorkAreaResnap`／`ChainRealign` 追加・`ALL` 12 | 1 語＝1 実在トリガ（D13）維持 |
 | `crates/areka/src/placement/follow/work_area.rs` | `MonitorDpiTable`／`dpi_for_point`／`same_monitors`（順序非依存比較）／doc :12-19 の DD15 撤回 | `MonitorSnapshot` の型と 51 箇所の構築リテラルは不変 |
 | `crates/areka/src/placement/follow/window_move.rs` | `enqueue_window_set_pos`（:514-611）: タグ付与・既定位置追跡・キャラ Bottom の `ground` レコード／`move_window_with_route` 追加（`move_window_to` は委譲で不変） | 単一ライター維持。limit 関門（:549,:822）・手順 5a（:342）不変 |
-| `crates/areka/src/emo2_boot/frame.rs` | :168 の前に `sync_monitor_snapshot`、:168 の直後に `resnap_for_work_area_change`、:199 の後に `realign_chain_once` | 既存 4 段の順序不変 |
+| `crates/areka/src/emo2_boot/frame.rs` | :168 の前に `sync_monitor_snapshot`、:168 の直後に `resnap_for_work_area_change`、:187 `reconcile_reported_sizes` で `DpiSyncHold` の窓を見送り（`hold site=reconcile`）、:199 の後に `realign_chain_once` | 既存 4 段の順序不変 |
 | `crates/areka/src/emo2_boot/frame/dpi.rs` | `dpi_phase_with`（:232）に hold ゲート・武装トリガ、`reproject_char_window_at_current_size`（:335）に route 引数 | `reconcile_window_size`（:124）不変 |
-| `crates/areka/src/emo2_boot/frame/drain_resnap.rs` | `collect_chain_states`（:353）を `pub(super)`・`ChainDeferReason::DpiSyncHold` | `finalize_chain_once_with` の一度きり不変 |
+| `crates/areka/src/emo2_boot/frame/drain_resnap.rs` | `collect_chain_states`（:353）を `pub(super)`・`ChainDeferReason::DpiSyncHold`・`resnap_with` で `DpiSyncHold` の窓を見送り（`hold site=resnap`） | `finalize_chain_once_with` の一度きり不変 |
 | `crates/areka/src/placement/chain_finalize.rs` | `ChainFinalizeStall::reset()`・`ChainDeferReason` 1 変種 | `finalize_chain` 不変 |
 | `crates/areka/src/main.rs` | `boot_monitor_snapshot`（:530-538）が `MonitorDpiTable` も返し :611 で挿入／:569 注記撤回 | 復元判定シーム不変 |
 | `tools/perf/judge-perf.py` | 変更なし（`--selftest` で互換確認のみ） | budget 所有 |
@@ -268,6 +268,7 @@ sequenceDiagram
     participant FF2 as FrameFinalize tick N+m
     OS->>FF: WM_DPICHANGED DPI新値 表は旧
     FF->>FF: ゲート不一致 DpiSyncHold holdレコード 書込0
+    Note over FF: 待ち中の表情差替 ShowSurface は描画のみ 報告寸突合と再スナップも当該窓の書込を見送る
     OS->>Upd: WM_DISPLAYCHANGE
     Upd->>Upd: Monitor更新 monitorレコード
     FF2->>FF2: sync_monitor_snapshot 新表
@@ -371,7 +372,7 @@ flowchart TD
 | C2 `command.rs` 合流＋flush 観測（wintf） | 窓書込 | タグ・合流・書込レコード・drain | 2.1, 4.5, 10.3 | C1（P0）・zorder 維持系（P1） | Service, Event |
 | C3 `transition_record`（emo-present） | 表示 | サーフェス寸レコード | 2.2, 2.8 | C1（P0）・show.rs（P0） | Event |
 | C4 `chain_realign`（areka） | 配置 | DPI 遷移後の連鎖一度だけ | 6.1–6.3, 6.6 | `collect_chain_states`・`finalize_chain`（P0）・C5（P0） | State, Batch |
-| C5 `dpi_sync`（areka） | 配置 | 窓ごとの整合ゲート | 4.1, 5.8, 10.7 | `MonitorDpiTable`（P0） | State |
+| C5 `dpi_sync`（areka） | 配置 | 窓ごとの整合ゲート（dpi 相・報告寸突合・再スナップの全窓書込点） | 4.1, 5.8, 10.7 | `MonitorDpiTable`（P0） | State |
 | C6 `work_area_sync`（areka） | 配置 | snapshot 同期＋WorkAreaResnap | 5.1–5.5, 4.7 | `Monitor`（P0）・`reproject_char_window_at_current_size`（P0） | Batch |
 | C7 `transition_judge`（areka） | 判定 | ログ→遷移→判定量→合否 | 2.4, 2.7, 4.4, 4.5, 7.x, 8.3 | C1/C3 語彙（P0） | Service |
 | C8 原子性の段階裁定 | 配置／表示 | B-2a 確定・B-2b/B-4/B-3 段階 | 4.2, 3.4 | 台帳（P0） | — |
@@ -555,6 +556,8 @@ pub(crate) fn coalesce_geometry(queue: &mut Vec<SetWindowPosCommand>, cmd: SetWi
 - Component `DpiSyncHold { since_frame: u32 }`（ゴースト窓 entity）。定数 `DPI_SYNC_HOLD_MAX_FRAMES: u32 = 30`。
 - 純関数 `dpi_sync_decision(window_dpi: u32, table_dpi: Option<u32>, held_since: Option<u32>, now: u32) -> DpiSyncDecision { Proceed, Hold, ProceedAfterTimeout }`: `table_dpi` が `None`（表なし・帰属モニタなし）または一致→`Proceed`；不一致で `held_since` から `wrapping_sub` が上限未満→`Hold`；上限以上→`ProceedAfterTimeout`（`warn!`）。
 - dpi 相での適用: `Changed<DPI>` の窓と `DpiSyncHold` を持つ窓の和集合を対象に、`Proceed*` なら hold を外して現行処理へ、`Hold` なら hold を付けて（既存なら据え置き）`refresh_scale` も再導出も呼ばない（`hold` レコード）。
+- **他の窓書込点での適用（議題 1・⑴）**: `reconcile_reported_sizes`（`frame.rs:187`）と `resnap_shell_targets`（`frame.rs:195`＝`resnap_with`）は、対象窓に `DpiSyncHold` があれば当該窓の窓書込を見送る（`pending_resize`／報告寸は消費せず次フレームへ持ち越す・`hold` レコード `site=reconcile|resnap`）。待ち札のある窓の描画（`apply_show`）は止めない。解除は dpi 相が一元的に行い、解除フレームで dpi 相が新 snapshot・新寸で 1 本書く（持ち越された報告寸は べき等 skip で吸収）。
+- 待ち札の**適用範囲の不変条件**: 「`DpiSyncHold` を持つ窓に対する窓書込（`enqueue_window_set_pos` 到達）は 0」。これを `enqueue_window_set_pos` の入口で `debug_assert!`＋`warn!` として置き、すり抜け経路が増えたときに実機ログで見えるようにする（ログ無し失敗経路の禁止）。
 - 帰属モニタの dpi は `MonitorDpiTable::dpi_for_point(cx, cy)`（窓矩形の中心）。**帰属規則は wintf 側の `redrive_window_dpi_for_updated_monitors` の `monitor_containing`（`monitor_systems.rs:438-480`・含有のみ・非含有は skip）と同一の純関数を共有する**（設計討議 A-5）——含有のみ規則で `None`（帰属なし）を返し、C5 は `None` を `Proceed` と扱う。`work_area_for_window` の最近傍フォールバックとは規則が違うため流用しない（食い違うと、どのモニタにも中心が乗らない窓で毎回上限まで待つ）。
 
 **Dependencies**
@@ -564,7 +567,7 @@ pub(crate) fn coalesce_geometry(queue: &mut Vec<SetWindowPosCommand>, cmd: SetWi
 **Contracts**: State [x]
 
 **Implementation Notes**
-- Validation: 経路 (b)（表更新→DPI）で hold 0・書込 1／経路 (a)（DPI→表更新）で hold→解除→書込 1（旧下端の中間矩形なし）／上限超過で warn＋処理／別モニタへ移した窓（移動先 dpi が表に既在）は hold 0（10.7）。
+- Validation: 経路 (b)（表更新→DPI）で hold 0・書込 1／経路 (a)（DPI→表更新）で hold→解除→書込 1（旧下端の中間矩形なし）／**経路 (a) の待ち中に drain 相の `ShowSurface`（新 k・寸変化）が来ても書込 0 → 表更新フレームで 1 回（旧下端の中間矩形なし）**／上限超過で warn＋処理／別モニタへ移した窓（移動先 dpi が表に既在）は hold 0（10.7）。
 - Risks: 窓の中心が属するモニタと OS が DPI を決めるモニタが食い違う縁の配置では上限まで待つ（最大 30 フレーム・warn で可視）。
 
 #### C6 `work_area_sync`
@@ -684,7 +687,7 @@ pub fn judge_transition_log(log: &str) -> Report;   // 上 4 つの合成
 | `flush` | wintf `command.rs::flush` | `stage=begin\|end count since_tick_us total_us` |
 | `write` | wintf flush／`window_pos.rs:420` | `stage=flush\|sync seq hwnd origin scope kind x y cx cy flags ax ay aw ah call_us ok`（`ax..ah` は書込後矩形・読み戻せなければ `-`） |
 | `msg` | wintf window_proc | `msg hwnd in_swp since_flush_us` |
-| `hold` | areka C5 | `entity scope kind window_dpi table_dpi since_frame decision` |
+| `hold` | areka C5 | `entity scope kind window_dpi table_dpi since_frame decision site=dpi\|reconcile\|resnap` |
 | `ground` | areka `resize_window_to`（Bottom） | `scope ground_y wa_bottom diff route` |
 | `chain` | areka C4 | `stage=armed\|realigned\|deferred scopes moved reason` |
 
@@ -709,7 +712,7 @@ pub fn judge_transition_log(log: &str) -> Report;   // 上 4 つの合成
 
 ### Integration Tests（多フレーム駆動ハーネス・偽装境界・x64）
 1. 経路 (b): 表更新（`Monitor` 差替→`sync`）→ `dpi_phase_with(FakeReports)` で 120／192 の各 k → 全窓の書込が同一フレーム・キャラ 1・バルーン 1（`drain_window_pos_commands` で検査）・`ground diff=0`・hold 0（4.1, 4.3, 4.4, 4.5, 5.1, 5.8）。
-2. 経路 (a): DPI を先に注入 → hold・書込 0 → 表更新 → 解除・書込 1・旧下端の中間矩形なし（5.8）。上限超過で warn＋処理。
+2. 経路 (a): DPI を先に注入 → hold・書込 0 → 表更新 → 解除・書込 1・旧下端の中間矩形なし（5.8）。**待ち中に drain 相の `ShowSurface`（新 k・寸変化）を流し、`reconcile_reported_sizes`／`resnap_shell_targets` を回しても書込 0 → 表更新フレームで 1 回**。上限超過で warn＋処理。
 3. 作業領域のみ変化（DPI 同じ）→ `WorkAreaResnap` 1 書込・随伴バルーン同一フレーム／同一表 → 書込 0（5.1, 5.4）。定常 N フレーム → 書込 0（4.7）。`Monitor` 0 台 → warn＋現状維持（5.5）。
 4. 連鎖: k 変化 → 武装 → 同一フレームで解決（`chain realigned`）・キャラ指令 1 本に畳まれる／表情差替（k 不変）→ 0 回／hold 中は見送り→解除で解決／明示再配置スコープは不動／停滞 warn が 2 度目の待ちでも一度出る（6.2, 6.3, 6.6）。
 5. 既定位置追跡: `DpiReproject` で既定位置一致→追随、ドラッグ後（不一致）→非追随、`None` は `None`（D9）。
@@ -741,6 +744,13 @@ pub fn judge_transition_log(log: &str) -> Report;   // 上 4 つの合成
 - 遷移時に不可視のキャラ窓（`refresh_scale` 見送り）は旧寸のまま landing 判定を通り、連鎖再解決がその旧幅で走る。後の表示で寸が変わっても再解決しない（`scope-chain-gap` R7.4 の受容と同じ）。実機の emo2 では発生しない（キャラ窓は常時可視）。
 - 窓中心が属するモニタと OS が DPI を決めるモニタが食い違う配置では、整合ゲートが上限（30 フレーム）まで待ってから進む（warn で可視）。
 - `t_us`／`call_us` は参考値であり、DWM 合成の 1 回ぶんの中間状態は tick 単位ログでは見えない。R4.2 の可視判定は目視と併記で確定する。
+
+## 設計討議の裁定（2026-08-15/16）
+
+| # | 議題 | 裁定 | 反映先 |
+|---|---|---|---|
+| A-1〜A-8 | 検証レポート Critical 1・2＋付録 B 1〜6 | フレーム刻印は World 資源が正（ミラーは World 外専用）／C7 に実機専用量 `visualize_to_write_us`・`flush_total_us`／`UploadOutcome` 撤回（`chain.size()` 前後比較）／`WorkAreaResnap` は dpi 相の後／帰属規則の純関数共有／証跡クラス表記／`#[doc(hidden)]`／C8 表に対テスト列 | D1・C1・C7・C8・D4・C3・D5・C6・Existing Architecture・C2 |
+| 議題 1 | `DpiSyncHold` の守備範囲（Critical 3） | **⑴ 待ち札のある窓へのすべての窓書込（dpi 相・報告寸突合・再スナップ）を見送る**。描画は止めない。不変条件を `enqueue_window_set_pos` 入口の `debug_assert!`＋`warn!` で監視。開発者裁定＝推奨案 | D15・C5・System Flows・Testing・Modified Files |
 
 ## Supporting References
 
