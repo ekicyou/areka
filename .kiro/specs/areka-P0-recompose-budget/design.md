@@ -23,7 +23,8 @@
 - 合成キャッシュ容量の変更——Requirement 7 の裁定ゲートを通った場合のみ本 spec 内で実施。**2026-08-15 に裁定が下り、容量 1 → 3・置換方式 LRU として実施した**
 - SERIKO のアニメ発火頻度・アニメ定義・ゴースト fixture の改変（互換性違反・症状隠し）
 - 合成アルゴリズム本体（`build_plan`／`blit::execute`）の最適化——O(elements) 契約は満たされている前提
-  - **※ task 3.2 追記（2026-08-14）**: `scale.rs` の `resample` はこの列挙に**含まれていない**。第 1 段実測で `resample` の計算そのものが支配項（1 コマ適用の約 50%）と確定したため、これを本 spec の範囲に含めるかは開発者裁定に委ねる。決定は行っていない——下記「実測に基づく是正設計の追補（task 3.2）」§A4 を参照
+  - **※ task 3.2 追記（2026-08-14）**: `scale.rs` の `resample` はこの列挙に**含まれていない**。第 1 段実測で `resample` の計算そのものが支配項（1 コマ適用の約 50%）と確定したため、これを本 spec の範囲に含めるかは開発者裁定に委ねる。~~決定は行っていない~~——下記「実測に基づく是正設計の追補（task 3.2）」§A4 を参照
+    - **※ 追記の改訂（2026-08-14 の裁定で解消）**: 取り消し線の部分は裁定が下りる前の記述である。**同日の開発者裁定で「本 spec の範囲に取り込む」が選ばれ**（§A4）、`resample` の是正は task 5.4（冗長ゼロ埋めの除去）・task 5.5（計算そのものの作り直し）として**実施済み**。`### Non-Goals` の当該行が除外しているのは今も `build_plan`／`blit::execute` だけであり、`resample` は本 spec の担当（`This Spec Owns`）である
 - GPU 側（スワップチェーン・合成面更新）の最適化——CPU 側の確定分を潰してから測り直す
 - bind の意味論（bindoption-exclusivity で完了済み）・拡大率切替時の跳ね（dpi-transition-atomicity の所有）
 
@@ -43,9 +44,10 @@
 
 - ~~キャッシュ容量政策の変更（R7 裁定が下りるまで実装しない・自律ループの唯一の例外）~~ → **2026-08-15 の開発者裁定で本 spec の担当になった**（要件 7.1／7.3）。容量 1 → 3・置換方式 LRU。ゲートは今も生きており、この値をさらに動かすには改めて裁定が要る
 - SERIKO・ghost・kanade の駆動側（発火頻度・スケジュール・`ticker.rs`／`looper.rs` のコード）——判定スクリプトが既存ログを grep するのみで、コードには触れない
-- `show.rs` :215-235 帯（スワップ〜upload 域）の**構造**——atom（W6.75）の観測対象。upload エラー分岐 :227-231 は cage④（W6.9）の観測点であり移動しない。本帯への変更は :240 のマスク供給 1 文の置換（`set` → `set_shared`）に限る
+- `show.rs` :215-235 帯（スワップ〜upload 域）の**構造**——atom（W6.75）の観測対象。upload エラー分岐 :227-231 は cage④（W6.9）の観測点であり移動しない。~~本帯への変更は :240 のマスク供給 1 文の置換（`set` → `set_shared`）に限る~~ → **改訂（2026-08-15・文面の統一）**: 帯とその直後への変更は次の **2 点だけ**に限る——⑴ upload 直後への計時 `mark`（`timing.mark(Stage::Upload)`）**1 行の挿入**（現 `show.rs:302`）⑵ :240 のマスク供給 **1 文の置換**（`set` → `set_shared`・現 `show.rs:313`）。分岐・呼出順序・エラー経路の**構造**は不変である。旧文は ⑵ だけを挙げて ⑴ を落としており、後述の「apply_show 再配線」節（変更は計時 `mark` の挿入のみ）と文面上両立していなかった。**実装は ⑴⑵ の両方を行っている**ので、両節ともこの 2 点で読むこと
 - ~~`scale.rs` の既存項目の変更——追加は関数＋opaque 型のみ~~ → **2026-08-14 の開発者裁定で改訂**（追補 §A4）。支配項の是正（追補 §A2 のゼロ埋め除去・§A3 のリサンプル計算）に必要な範囲で**既存項目への変更を許可する**。ただし公開名の削除・意味変更は引き続き禁止で、exact（`areka-P0-scale-exact-rational`）との先着後 rebase の登記も不変
-  - **※ task 3.2 追記（2026-08-14）**: 第 1 段実測により、支配項の是正（`resample` の計算・出力バッファの冗長なゼロ埋め）は本行に触れる。本行を改訂して範囲へ取り込むか、別 spec へ切り出すかは開発者裁定（追補 §A4）。裁定が下りるまで `resample` の既存項目は変更しない
+  - **※ task 3.2 追記（2026-08-14）**: 第 1 段実測により、支配項の是正（`resample` の計算・出力バッファの冗長なゼロ埋め）は本行に触れる。本行を改訂して範囲へ取り込むか、別 spec へ切り出すかは開発者裁定（追補 §A4）。~~裁定が下りるまで `resample` の既存項目は変更しない~~
+    - **※ 追記の改訂（2026-08-14 の裁定で解消）**: 取り消し線の部分は裁定が下りる前の待機条件である。**同日に裁定が下りて上の親行が改訂され**、`resample`／`ComposedSurface` の既存項目への変更は §A2・§A3 の範囲で**許可された**（task 5.4・5.5 で実施済み）。実装が既存項目に触れていることは境界違反ではない。禁止のまま残っているのは**公開名の削除・意味変更**だけである
 - 既存 info! 表示成立点ログ（`"apply(ShowSurface): 表示・マスクを更新"`・info 水準・全フィールド）——実機サインオフ契約ゆえ文言・水準・フィールドとも不変
 
 ### Allowed Dependencies
@@ -61,7 +63,7 @@
 - `ComposeCache` の公開シグネチャ変更（`insert`／`take_recycled`／`touch`）→ `cache_tests.rs`・presenter 檻の再検証
 - `AlphaMaskResource` の内部表現変更 → wintf hit_test 檻・emo-present 表示檻の再検証
 - `scale.rs` への追加が exact（scale-exact-rational）着地後に rebase された場合 → `resample_with` 等価檻の再実行
-- R7 裁定でキャッシュ容量が変わる場合 → 上流 `completed/areka-P0-emo-present` requirements R4.1 の改訂＋本設計のキャッシュ節・檻の全面再検証（**2026-08-15 の 1 → 3 では実施済み**）。容量を動かすと次の 3 つが連動する: ⑴**巡回するキーの本数を容量より大きく保つ**（`presenter_budget_steady_state_tests.rs` の `ROTATING_KEYS`・`presenter_budget_equivalence_tests.rs` の `ROTATING_FACES`。容量以下へ落ちるとミス経路の檻が静かにヒット経路の檻へ化ける）⑵回る実体の本数が変わるので暖機の指紋（`[1,1,1,1] → [0,1,0,1] → [0,1,0,1] → [0,0,0,1]` など）が全て動く ⑶檻に写した容量の定数（`CACHE_CAPACITY`）
+- R7 裁定でキャッシュ容量が変わる場合 → 上流 `completed/areka-P0-emo-present` requirements R4.1 の改訂＋本設計のキャッシュ節・檻の全面再検証（**2026-08-15 の 1 → 3 では実施済み**）。**※ 追記（2026-08-15）: 実施した追随先は本行が挙げる 1 本ではなく 3 本ある**——⑴ `completed/areka-P0-emo-present/requirements.md` R4.1（改訂欄の新設＋受入基準 1 の本文を「上限 3 件・LRU 置換」へ）⑵ `completed/areka-P0-emo-present/design.md`（ファイル構成表の `cache.rs` 行・要件対応表の 4.1 行・`ComposeCache` 節の Intent と改訂欄）⑶ `completed/areka-P0-emo-dpi-scaling/design.md:450`（`State model: 容量 1 スロット維持` へ改訂追記。k をキー要素として弁別する D6 の要点は不変で、旧 k のエントリが表に残り得ても完全一致引き当てゆえ旧 k の絵は表示に載らない）。**容量に言及する上流宣言は「emo-present の R4.1 だけ」ではない**——次に容量を動かすときも、`.kiro/` 全体を「容量 1」「メモ化スロット」で走査して追随先を洗い直すこと。容量を動かすと次の 3 つが連動する: ⑴**巡回するキーの本数を容量より大きく保つ**（`presenter_budget_steady_state_tests.rs` の `ROTATING_KEYS`・`presenter_budget_equivalence_tests.rs` の `ROTATING_FACES`。容量以下へ落ちるとミス経路の檻が静かにヒット経路の檻へ化ける）⑵回る実体の本数が変わるので暖機の指紋（`[1,1,1,1] → [0,1,0,1] → [0,1,0,1] → [0,0,0,1]` など）が全て動く ⑶檻に写した容量の定数（`CACHE_CAPACITY`）
 - `ComposeCache` の**置換方式**の変更（LRU 以外へ）→ 要件 7.1 の裁定ゲート。命中率の裁定材料が LRU 再生で得られているため、方式を変えると容量 3 の根拠が失われる。**表示バイトも確保計数も動かない退化**なので、`presenter_cache_capacity_tests.rs`（実 `apply_show` の上で `touch` が呼ばれていることを見る継ぎ目の檻）だけが検出する
 - 上流 additive の容量読み口（`ComposedSurface::bytes_capacity`／`AlphaMask::packed_capacity`）の意味変更 → `FrameBudget` の確保観測が丸ごとこれに依っているため、`budget_tests.rs`・`presenter_budget_steady_state_tests.rs` の全面再検証
 - `resample` の内部実装または `ComposedSurface` の初期化規約の変更（追補 §A2／§A3） → バイト等価テスト（task 6.2）・`resample_with` 等価檻・emo-compose の既存 golden の再検証
@@ -159,13 +161,53 @@ tools/perf/
 └── fixtures/                          # judge-perf.py 自己較正用の既知ログ断片（PASS 用・FAIL 用・空＝判定不能用）
 ```
 
+> **※ 追記（2026-08-15・実施の追随）**: 上の計画に無かった新設ファイルが以下 6 件ある。実装で
+> 実際に生まれたものを漏れなく登記する（`This Spec Owns` の範囲は変わらない）。
+>
+> ```
+> crates/areka-emo-present/src/
+> └── presenter_cache_capacity_tests.rs      # 容量 3・LRU を実 apply_show の上で固定（task 7.3・要件 7.1）
+>                                            # `touch` が呼ばれず LRU が FIFO へ静かに退化する継ぎ目だけを見る檻
+> crates/areka-emo-compose/src/
+> └── scale_prior_path_tests.rs              # 是正前リサンプルの凍結参照実装に対するバイト等価檻（task 6.2・要件 3.3／6.4）
+>                                            # 追補 §A2／§A3 の「必須の固定」＝5.4／5.5 の安全網
+> crates/wintf/src/ecs/layout/hit_test/
+> └── hit_test_shared_mask_tests.rs          # `AlphaMaskResource` の Arc 化と `set_shared` の檻（要件 3.1・6.2・6.3）
+> crates/wintf/src/ecs/widget/bitmap_source/
+> └── alpha_mask_regenerate_tests.rs         # `regenerate_from_pbgra32 == from_pbgra32` の等価檻＋再利用檻（同上）
+> tools/perf/fixtures/
+> ├── generate.py                            # fixture を条件から機械的に組み直す道具（判定には非関与・素性の可検証性）
+> └── .gitattributes                         # `* -text`＝改行変換の停止（autocrlf=true では作り直しが毎回差分になるため）
+> ```
+>
+> - **4 本の新設テストと計画の対応**（1 本ずつ性質が違うので分けて書く）:
+>   - `scale_prior_path_tests.rs` と `alpha_mask_regenerate_tests.rs` は、計画では**既存テスト群への
+>     追加**として書かれていた（下の `### Modified Files` の
+>     `crates/areka-emo-compose/src/scale_resample_tests.rs` 行と「wintf 側の `alpha_mask` 既存テスト群」行）。
+>     実装は structure.md の兄弟ファイル規約（`<stem>_<モジュール名>.rs`＋`#[cfg(test)] #[path]` 接続宣言）
+>     に従い**新規ファイルとして分けた**——主張の集合が別（是正前経路の凍結参照・再生成の等価と再利用）で、
+>     既存ファイルへ混ぜると stem の責務が二重化するためである。**規約側が正**であり、計画の当該 2 行は
+>     この追記で読み替える（`scale_resample_tests.rs` 自体には `resample == resample_with` 等価檻と
+>     scratch 容量非成長檻を予定どおり追加した）
+>   - `hit_test_shared_mask_tests.rs` は計画に対応する行が無い。`AlphaMaskResource` の `Arc` 化と
+>     `set_shared` は `### Modified Files` の `hit_test/mod.rs` 行で予定されていたが、その檻の住所が
+>     書かれていなかった。同じ兄弟ファイル規約で新設した
+>   - `presenter_cache_capacity_tests.rs` は容量 3 の裁定（2026-08-15）より後のもので、計画には
+>     そもそも存在し得ない。`### Revalidation Triggers` の `ComposeCache` の**置換方式**の行が
+>     「これだけが検出する」と名指ししている檻がこれである
+> - 4 本の接続宣言（`#[cfg(test)] #[path]`）は、それぞれ既に `### Modified Files` に載っている
+>   親側（`presenter.rs`／`scale.rs`／`hit_test/mod.rs`／`alpha_mask.rs`）に置く。新たな Modified は増えない
+
 ### Modified Files
 
 - `crates/areka-emo-present/src/presenter/show.rs` — ミス経路を `compose_into`＋budget 席へ再配線（:66-101 帯）・:240 を `set_shared` へ置換・段階計時点の挿入とサマリ行 emit。**:215-235 帯の構造・:227-231 の upload エラー分岐・:303-320 の info! は不変**
 - `crates/areka-emo-present/src/presenter/target.rs` — `PresentTarget` へ `budget: FrameBudget` 席を追加（:53 `composer` の隣・他フィールド不変）
+- `crates/areka-emo-present/src/presenter/hub.rs` — **※ 追記（2026-08-15・記載漏れの補い）**: `PresentTarget` の**構造体リテラル構築点**（現 `hub.rs:70`）へ `budget: FrameBudget::new()` を足す。型へフィールドを足す以上ここへの追随は機械的に必須だが、当初の計画は席の追加先として `target.rs` しか挙げていなかった（`tasks.md` の 1.3 申し送り「design.md の記載漏れ・次に当該節へ触るタスクで補うこと」が指していたのが本行である）。併せて容量 3 化（task 7.3）で `cached_native` がエントリ内へ移ったため、`InvalidateCache` 経路（現 `hub.rs:143-147`）から当該フィールドを落とす追随も入る（`invalidate_all` の意味論は不変）
 - `crates/areka-emo-present/src/presenter.rs` — ファサードへ `mod budget;`／`mod timing;` と新テスト接続宣言を追加
 - `crates/areka-emo-present/src/cache.rs` — `CacheEntry.mask` を `Arc<AlphaMask>` へ・`take_recycled` 新設・`insert` がマスクを引数で受ける形へ（完全一致・原子対の意味論不変・`from_pbgra32` 呼出は budget シームへ移動）。**task 7.3 で容量 3・LRU へ**（`CAPACITY` 定数・`touch` 新設・`CacheEntry.native` 追加・`insert` が `native` を受ける）
 - `crates/areka-emo-present/src/cache_tests.rs` — 署名追随＋リサイクル檻の追加
+- `crates/areka-emo-compose/src/composed.rs` — **※ 追記（2026-08-15・実施の追随）**: `ComposedSurface::bytes_capacity`（`pub`・観測専用の容量読み口。`This Spec Owns` に登記済みだが本ファイル一覧に無かった）と `resize_for_full_overwrite`（`pub(crate)`・追補 §A2 のゼロ埋め除去。§A2 の型定義節が本ファイルを指している）を追加。既存の `resize_and_clear`（`blit` 用・0 初期化が意味論）は**変更しない**
+- `crates/areka-emo-compose/src/pattern.rs` — **※ 追記（2026-08-15・実施の追随）**: module doc の 1 行のみ。「emo-present の**容量 1** メモ化キー」という記述が容量 3 の裁定で陳腐化したため「合成メモ化キー」へ改めた（容量に依らない表現）。**コードは 1 行も変わらない**。設計のどの節にも登記が無かった唯一の接触点なので、ここで登記する
 - `crates/areka-emo-compose/src/scale.rs` — **additive のみ**: `pub struct ResampleScratch`（opaque・Default）＋`pub fn resample_with(src, scale, out, scratch)`。既存 `resample` は新形へ委譲（挙動不変）。exact（W6.5 並走）と同一ファイル＝先着後 rebase を登記
 - `crates/areka-emo-compose/src/scale_resample_tests.rs`（scale.rs の既存リサンプルテスト群）— `resample == resample_with` 等価檻＋scratch 容量非成長檻を追加
 - `crates/wintf/src/ecs/widget/bitmap_source/alpha_mask.rs` — **additive**: `pub fn regenerate_from_pbgra32(&mut self, …)`（`self.data` を clear+resize で再利用）＋`PartialEq` derive（等価檻用）
@@ -434,7 +476,7 @@ impl ComposeCache {
 
 - ミス経路 :66-101 帯を Flow 2 の形へ。エラー経路（SurfaceNotFound・EmptyComposition・upload 失敗）の挙動・ログ・reply は全て不変
 - :240 `mask_res.set(entry.mask.clone())` → `mask_res.set_shared(entry.mask.clone())`（`Arc` クローン・帯内の 1 文置換のみ）
-- 計時点: 冒頭 `FrameTiming::start` → 各段 `mark` → info! 直後に `emit`。**:215-235 帯は分岐・呼出順序・エラー経路の構造を不変に保つ**（変更は計時 `mark` の挿入のみ）。:227-231 の upload エラー分岐は移動せず、:303-320 の info! は文言・水準・フィールドとも不変（atom／cage④ の観測域・実機サインオフ契約）
+- 計時点: 冒頭 `FrameTiming::start` → 各段 `mark` → info! 直後に `emit`。**:215-235 帯は分岐・呼出順序・エラー経路の構造を不変に保つ**（~~変更は計時 `mark` の挿入のみ~~ → **改訂（2026-08-15・文面の統一）**: 帯とその直後への変更は計時 `mark` **1 行の挿入**と上の :240 マスク供給 **1 文の置換**の **2 点**。`Boundary Commitments` の `Out of Boundary` 該当行と同一の読みに揃えた）。:227-231 の upload エラー分岐は移動せず、:303-320 の info! は文言・水準・フィールドとも不変（atom／cage④ の観測域・実機サインオフ契約）
 - `refresh_scale`（refresh.rs:91 の再入）は無修正で是正の恩恵を受ける
 
 ### 上流 additive API
@@ -685,7 +727,7 @@ impl ComposedSurface {
   ——具体的には、`out` を 0 以外の値（例: `0xAA`）で満たしてから `resample` を呼び、まっさらな `out` を
   渡した場合とバイト等価であることを固定する。これが**残像混入の唯一の防波堤**になる。
 
-### A3. 追補②: リサンプル計算の是正（**開発者裁定待ち**・§A4）
+### A3. 追補②: リサンプル計算の是正（~~開発者裁定待ち~~ → **2026-08-14 の裁定で本 spec の担当・task 5.5 で実施済み**・§A4）
 
 **実測**: 計算だけで 1 画素あたり 7.31〜7.44ns（release）。同じ出力を単に 0 で埋めるだけの作業（1 画素 0.89〜0.91ns）の
 **8.1〜8.3 倍**である。出力の書き込み帯域で頭打ちになっているのではなく、計算で詰まっている。
