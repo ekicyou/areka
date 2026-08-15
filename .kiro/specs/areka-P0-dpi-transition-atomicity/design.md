@@ -210,7 +210,7 @@ crates/areka/src/main.rs               # MOD: 起動時に MonitorDpiTable も�
 | `crates/wintf/src/ecs/graphics/systems/window_pos.rs` | enqueue（:89-98）にタグ `origin="window-pos"` | — |
 | `crates/wintf/src/ecs/window_proc/window_pos.rs` | `WM_DPICHANGED`（:303）と `WM_WINDOWPOSCHANGED`（:36）に `msg` レコード／採用時の同期書込（:420-430）に `write stage=sync` レコード | 採否判定（:372-374）不変（`dpi-window-vanish`） |
 | `crates/wintf/src/ecs/window_proc/lifecycle.rs` | `WM_DISPLAYCHANGE`（:122）に `msg` レコード | 戻り値 `None` 不変 |
-| `crates/wintf/src/ecs/layout/systems/monitor_systems.rs` | 値変化更新（:280-316）の直後に `monitor` レコード | 既存 debug 行と `redrive` は不変 |
+| `crates/wintf/src/ecs/layout/systems/monitor_systems.rs` | 値変化更新（:280-316）の直後に `monitor` レコード（刻印は `Res<FrameCount>`＋`Res<TickStart>` から組む＝D1）／`monitor_containing`（:416）を crate 外へ開く（C5 が帰属規則を共有するため） | 既存 debug 行・`redrive`・帰属規則の中身は不変 |
 | `crates/areka-emo-present/src/presenter/show.rs` | upload 直前に `prev = chain.size()`／:302 以降に `surface stage=upload`（`resized = size != prev`）／:328 以降に `surface stage=visualize`（`size_changed \|\| resized` のときのみ・`tracing::enabled!` で守る） | 予算域 :96-170 と :297-301 は不動。`chain.rs` 無改変 |
 | `crates/areka-emo-present/src/presenter/refresh.rs` | :70-73（k 不変）・:74-77（不可視）で `surface stage=skipped reason=` | 見送り判定は不変 |
 | `crates/areka-emo-present/src/presenter/timing.rs` | `EmitContext.frame: u32`・perf 行末尾に `frame=` | 既存フィールド順・文言不変 |
@@ -558,7 +558,7 @@ pub(crate) fn coalesce_geometry(queue: &mut Vec<SetWindowPosCommand>, cmd: SetWi
 - dpi 相での適用: `Changed<DPI>` の窓と `DpiSyncHold` を持つ窓の和集合を対象に、`Proceed*` なら hold を外して現行処理へ、`Hold` なら hold を付けて（既存なら据え置き）`refresh_scale` も再導出も呼ばない（`hold` レコード）。
 - **他の窓書込点での適用（議題 1・⑴）**: `reconcile_reported_sizes`（`frame.rs:187`）と `resnap_shell_targets`（`frame.rs:195`＝`resnap_with`）は、対象窓に `DpiSyncHold` があれば当該窓の窓書込を見送る（`pending_resize`／報告寸は消費せず次フレームへ持ち越す・`hold` レコード `site=reconcile|resnap`）。待ち札のある窓の描画（`apply_show`）は止めない。解除は dpi 相が一元的に行い、解除フレームで dpi 相が新 snapshot・新寸で 1 本書く（持ち越された報告寸は べき等 skip で吸収）。
 - 待ち札の**適用範囲の不変条件**: 「`DpiSyncHold` を持つ窓に対する窓書込（`enqueue_window_set_pos` 到達）は 0」。これを `enqueue_window_set_pos` の入口で `debug_assert!`＋`warn!` として置き、すり抜け経路が増えたときに実機ログで見えるようにする（ログ無し失敗経路の禁止）。
-- 帰属モニタの dpi は `MonitorDpiTable::dpi_for_point(cx, cy)`（窓矩形の中心）。**帰属規則は wintf 側の `redrive_window_dpi_for_updated_monitors` の `monitor_containing`（`monitor_systems.rs:438-480`・含有のみ・非含有は skip）と同一の純関数を共有する**（設計討議 A-5）——含有のみ規則で `None`（帰属なし）を返し、C5 は `None` を `Proceed` と扱う。`work_area_for_window` の最近傍フォールバックとは規則が違うため流用しない（食い違うと、どのモニタにも中心が乗らない窓で毎回上限まで待つ）。
+- 帰属モニタの dpi は `MonitorDpiTable::dpi_for_point(cx, cy)`（窓矩形の中心）。**帰属規則は wintf 側の `monitor_containing`（`monitor_systems.rs:416`・中心点を含むモニタを半開区間で返す・非含有は `None`。`redrive_window_dpi_for_updated_monitors`（:438）が使うのと同一関数）を共有する**（設計討議 A-5・タスク健全性レビュー finding 1 で可視性を確認）——現状 `pub(crate)` ゆえ**共有には wintf 側で crate 外へ開く（`pub` 化または再輸出）変更が要る**。開かない裁定を採る場合は areka 側に同規則の述語を置き、両者が同一判定を返すことを対比テストで固定する——含有のみ規則で `None`（帰属なし）を返し、C5 は `None` を `Proceed` と扱う。`work_area_for_window` の最近傍フォールバックとは規則が違うため流用しない（食い違うと、どのモニタにも中心が乗らない窓で毎回上限まで待つ）。
 
 **Dependencies**
 - Inbound: dpi 相（P0）
