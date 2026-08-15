@@ -362,6 +362,77 @@ impl AxisWalk {
     }
 }
 
+/// 1 行ぶんの横方向 bilinear（隣接 2 画素の 4 チャンネル混合・`recompose-budget` 追補 §A3）。
+///
+/// `row` は**1 行を切り出したスライス**で、`o0`／`o1` はその中のバイト添字
+/// （クランプ済み座標 × 4 ゆえ常に行内）。画素を 4 バイトの部分スライスとして取り出すため、
+/// 範囲検査は 1 画素あたり 2 回（行あたりの部分スライス 2 本）に畳まれ、チャンネルごとの
+/// 検査は消える（追補 §A3 項目 1／項目 3 のチャンネル展開）。
+///
+/// # 値は元式と 1 も違わない（整数の恒等変形）
+///
+/// 混合 `p0·(WEIGHT_ONE − wx) + p1·wx` を `p0·WEIGHT_ONE + (p1 − p0)·wx` へ整理した形である。
+/// 分配則による**整数の恒等変形**ゆえ両式は厳密に等しく、途中の切り捨て・飽和は一切ない
+/// （変数どうしの乗算がチャンネルあたり 2 回から 1 回になる。残る `·WEIGHT_ONE` は
+/// 2 の冪の定数倍＝シフトである）。
+///
+/// # 桁溢れ
+///
+/// `p0·WEIGHT_ONE ≤ 255·65536 = 16_711_680`、`(p1 − p0)·wx` は `±255·65535` の域で、和は
+/// 常に `p0·WEIGHT_ONE` と `p1·WEIGHT_ONE` の間（＝`0..=16_711_680`）に収まる。
+/// i32 で厳密に足り、結果は非負である。
+#[inline(always)]
+fn blend_axis(row: &[u8], o0: usize, o1: usize, wx: i32) -> [u32; 4] {
+    let p0 = &row[o0..o0 + 4];
+    let p1 = &row[o1..o1 + 4];
+    let mix = |a: u8, b: u8| (a as i32 * WEIGHT_ONE as i32 + (b as i32 - a as i32) * wx) as u32;
+    [
+        mix(p0[0], p1[0]),
+        mix(p0[1], p1[1]),
+        mix(p0[2], p1[2]),
+        mix(p0[3], p1[3]),
+    ]
+}
+
+/// リサンプルの作業領域（x 軸写像表の席・`recompose-budget` 要件 3.1／design D2⑶）。
+///
+/// [`resample_with`] が行間で共有する x 軸写像表を**呼び手が所有**するための不透明な席である。
+/// 中身は公開しない——保持しているのは私有型 [`AxisSample`] の表のみで、公開面に現れるのは
+/// この型の名前だけである（`AxisSample` は私有のまま）。
+///
+/// [`Default`] で空から始まり、初回のリサンプルで出力幅ぶんの容量へ到達する。以後は
+/// `clear`＋再充填で容量だけを持ち越すため、**同一の席を使い続ける限り容量は成長しない**
+/// （出力幅が縮んでも解放しない＝縮小・再伸長の往復確保を作らない）。毎コマ経路で
+/// この席を常設にすると、リサンプル内部の作業領域の確保が定常状態で 0 になる。
+#[derive(Debug, Default)]
+pub struct ResampleScratch {
+    /// 行間で不変な x 軸の写像表（[`resample_with`] が毎回 `clear`＋再充填する）。
+    x_map: Vec<AxisSample>,
+}
+
+impl ResampleScratch {
+    /// 写像表がいま保持している容量（要素数）。
+    ///
+    /// **中身は返さない**——返すのは容量という 1 個の数だけで、写像表の要素型（私有）も
+    /// その値も公開面には現れない（本型の不透明性は変わらない）。
+    ///
+    /// # 何のための観測口か（`recompose-budget` 要件 3.1）
+    ///
+    /// 席を持ち越す呼び手（`emo-present` の `FrameBudget`）が「この呼び出しで写像表を
+    /// 確保し直したか」を**席そのものから**言い切るための唯一の口である。`Vec` の容量は
+    /// 再確保でしか増えないため、[`resample_with`] の前後でこの値を読み比べれば、
+    /// 増えた＝確保が起きた・変わらない＝確保は起きていない、が厳密に決まる。
+    ///
+    /// 呼び手が別に高水位を覚える形では、**席を毎回まっさらに起こす改変が計数に 1 件も
+    /// 現れない**（高水位が前の実体の値を覚えたままになる）。容量を席から直接読むこの口が
+    /// その抜け道を塞ぐ。
+    ///
+    /// 空の席は 0 を返す。初回のリサンプルで出力幅以上へ到達し、以後は縮まない。
+    pub fn capacity(&self) -> usize {
+        self.x_map.capacity()
+    }
+}
+
 /// native 合成結果を `scale` 倍の表示用サーフェスへ転写する
 /// （premultiplied BGRA・**完全整数** bilinear・要件 2.1/2.5/7.2）。
 ///
@@ -376,8 +447,9 @@ impl AxisWalk {
 /// # 整数専用（設計 D5・`blit.rs` と同格の決定性規約）
 ///
 /// 座標写像は `den/num` の有理逆写像を分子・剰余で厳密保持（[`AxisWalk`]）し、混合重みは
-/// 16bit 固定小数点へ量子化する。画素値の合成は u32/u64 のみで行い、**f32/f64 を経路に
-/// 一切持ち込まない**。丸めは `(v + 2^31) >> 32`（round half up）で一意である。
+/// 16bit 固定小数点へ量子化する。画素値の合成は 32/64bit 整数（i32/u32・i64）のみで行い、
+/// **f32/f64 を経路に一切持ち込まない**。丸めは `(v + 2^31) >> 32`（round half up）で一意である。
+/// 混合式は分配則で整理した恒等形（[`blend_axis`]）を用いるが、値は整理前と厳密に等しい。
 ///
 /// # premultiplied ドメイン（設計 D5）
 ///
@@ -402,11 +474,42 @@ impl AxisWalk {
 /// # 割り当て
 ///
 /// 行間で不変な x 軸の写像表を 1 本だけ確保する（`O(out_w)`・画素あたりの除算を排するため）。
+/// 本関数は呼び出しごとに使い捨ての [`ResampleScratch`] を起こして [`resample_with`] へ委譲する
+/// ——ゆえに毎回この 1 本を確保する。作業領域を呼び手が持ち越して確保をなくしたい場合は
+/// [`resample_with`] を直接呼ぶこと（結果はバイト等価）。
 /// リサンプルは k 変化・合成入力変化時のみ発火する経路である（design「Performance」）。
 pub fn resample(src: &ComposedSurface, scale: ScaleRatio, out: &mut ComposedSurface) {
+    // 使い捨ての作業領域で新形へ委譲する（挙動・出力バイトとも従来と同一）。
+    let mut scratch = ResampleScratch::default();
+    resample_with(src, scale, out, &mut scratch);
+}
+
+/// 作業領域受け取り形のリサンプル（`recompose-budget` 要件 3.1・additive）。
+///
+/// 転写の契約——事前条件・事後条件・恒等バイトコピー・整数専用・premultiplied ドメイン・
+/// エッジクランプ・非パニック——は [`resample`] と**完全に同一**である（[`resample`] は本関数へ
+/// 委譲するだけの薄い形であり、同一 `(src, scale)` に対する出力は 1 バイトも違わない）。
+/// 唯一の差は、行間で共有する x 軸写像表を呼び手所有の `scratch` から借りる点にある。
+///
+/// # 作業領域の不変条件
+///
+/// `scratch` は入口で `clear` され、出力幅ぶんを再充填する。容量は出力幅へ到達した後は
+/// 成長せず、より小さい出力幅の呼び出しでも縮まない（往復確保を作らない）。前回の内容は
+/// `clear` で必ず捨てるため、使い回した席の残留が結果へ混ざることはない。恒等（k=1/1）と
+/// 外形ゼロの早期復帰経路は `scratch` に一切触れない。
+///
+/// [`resample`]: crate::scale::resample
+pub fn resample_with(
+    src: &ComposedSurface,
+    scale: ScaleRatio,
+    out: &mut ComposedSurface,
+    scratch: &mut ResampleScratch,
+) {
     let (out_w, out_h) = scale.scaled_extent(src.width(), src.height());
-    // 出力は常に事後条件どおりの外形へ再確保＋全透明クリア（容量再利用・残像なし）。
-    out.resize_and_clear(out_w, out_h);
+    // 出力は常に事後条件どおりの外形へ合わせる。以下の全経路が `0..out_stride*out_h` の
+    // 全バイトを書き潰すため、ゼロ埋めは 1 バイトも読まれない無駄である（追補 §A2）。
+    // 長さが変わるときだけ 0 初期化が走る（未初期化メモリは露出しない）。
+    out.resize_for_full_overwrite(out_w, out_h);
 
     // 事前条件違反（外形ゼロ）: 転写できる画素が存在しない。パニックせず空を返し、
     // 無言で通さない（steering ログ規律・要件 1.4 と同格の log-first）。
@@ -430,16 +533,20 @@ pub fn resample(src: &ComposedSurface, scale: ScaleRatio, out: &mut ComposedSurf
     }
 
     // x 軸の写像は全行で共通ゆえ一度だけ表に落とす（内側ループから除算を除く）。
+    // 呼び手所有の席を clear＋再充填で使い回す（容量は到達後に成長しない・残留は残さない）。
+    scratch.x_map.clear();
+    scratch.x_map.reserve(out_w as usize);
     let mut walk = AxisWalk::new(scale);
-    let mut x_map: Vec<AxisSample> = Vec::with_capacity(out_w as usize);
     for _ in 0..out_w {
-        x_map.push(walk.sample(src.width()));
+        scratch.x_map.push(walk.sample(src.width()));
         walk.advance();
     }
 
     let src_stride = src.stride() as usize;
+    let src_row_len = src.width() as usize * 4;
     let src_bytes = src.bytes();
     let out_stride = out.stride() as usize;
+    let out_row_len = out_w as usize * 4;
     let dst = out.bytes_mut();
 
     let mut y_walk = AxisWalk::new(scale);
@@ -447,31 +554,34 @@ pub fn resample(src: &ComposedSurface, scale: ScaleRatio, out: &mut ComposedSurf
         let ys = y_walk.sample(src.height());
         y_walk.advance();
 
-        let row0 = ys.i0 as usize * src_stride;
-        let row1 = ys.i1 as usize * src_stride;
-        let wy = ys.w as u64;
-        let inv_wy = (WEIGHT_ONE - ys.w) as u64;
-        let dst_row = dy * out_stride;
+        // 行スライスの前取り（追補 §A3 項目 2）: 画素ごとの `usize` 加算と添字検査ではなく、
+        // 上下 2 行と出力 1 行を**行の開始で 1 度だけ**切り出す。
+        let row0 = &src_bytes[ys.i0 as usize * src_stride..][..src_row_len];
+        let row1 = &src_bytes[ys.i1 as usize * src_stride..][..src_row_len];
+        let wy = ys.w as i64;
+        let dst_row = &mut dst[dy * out_stride..][..out_row_len];
 
-        for (dx, xs) in x_map.iter().enumerate() {
-            let wx = xs.w;
-            let inv_wx = WEIGHT_ONE - wx;
-            // 4 近傍のバイト先頭（クランプ済み座標ゆえ全て範囲内）。
-            let p00 = row0 + xs.i0 as usize * 4;
-            let p01 = row0 + xs.i1 as usize * 4;
-            let p10 = row1 + xs.i0 as usize * 4;
-            let p11 = row1 + xs.i1 as usize * 4;
-            let di = dst_row + dx * 4;
+        for (dpx, xs) in dst_row.chunks_exact_mut(4).zip(scratch.x_map.iter()) {
+            let wx = xs.w as i32;
+            // 4 近傍は行スライス内の**画素単位**の添字で読む（範囲検査は行あたり 2 回の
+            // 部分スライスへ畳まれ、チャンネルごとの検査は消える・追補 §A3 項目 1）。
+            let o0 = xs.i0 as usize * 4;
+            let o1 = xs.i1 as usize * 4;
 
             // BGRA 4 チャンネルへ同式適用（premultiplied ドメイン・α も同じ）。
-            for c in 0..4usize {
-                // 横方向: 最大 255·65536 = 16_711_680（u32 域）。
-                let top = src_bytes[p00 + c] as u32 * inv_wx + src_bytes[p01 + c] as u32 * wx;
-                let bottom = src_bytes[p10 + c] as u32 * inv_wx + src_bytes[p11 + c] as u32 * wx;
-                // 縦方向: 最大 16_711_680·65536 ≈ 1.1e12（u64 域）。丸めは round half up。
-                let v = top as u64 * inv_wy + bottom as u64 * wy;
-                dst[di + c] = ((v + PRODUCT_HALF) >> PRODUCT_SHIFT) as u8;
-            }
+            let top = blend_axis(row0, o0, o1, wx);
+            let bottom = blend_axis(row1, o0, o1, wx);
+
+            // 縦方向も同じ恒等変形（`t·(WEIGHT_ONE − wy) + b·wy` ＝ `t·WEIGHT_ONE + (b − t)·wy`）。
+            // 中間は最大 255·2^32 ≈ 1.1e12（i64 域・値は常に非負）。丸めは round half up。
+            let mix_y = |t: u32, b: u32| -> u8 {
+                let v = t as i64 * WEIGHT_ONE as i64 + (b as i64 - t as i64) * wy;
+                ((v + PRODUCT_HALF as i64) >> PRODUCT_SHIFT) as u8
+            };
+            dpx[0] = mix_y(top[0], bottom[0]);
+            dpx[1] = mix_y(top[1], bottom[1]);
+            dpx[2] = mix_y(top[2], bottom[2]);
+            dpx[3] = mix_y(top[3], bottom[3]);
         }
     }
 }
@@ -487,3 +597,7 @@ mod resample_tests;
 #[cfg(test)]
 #[path = "scale_ratio_tests.rs"]
 mod ratio_tests;
+
+#[cfg(test)]
+#[path = "scale_prior_path_tests.rs"]
+mod prior_path_tests;

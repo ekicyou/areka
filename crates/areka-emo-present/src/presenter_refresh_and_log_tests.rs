@@ -6,8 +6,9 @@ use areka_actor::reply_channel;
 use areka_emo_compose::BindSet;
 
 use super::test_support::{
-    attach_hit_target, build_target_assets, build_two_face_assets, force_current_surface,
-    make_world_with_gpu, scaled_golden, set_window_dpi, show_ok, spawn_window_with_dpi,
+    CaptureSubscriber, CapturedEvent, attach_hit_target, build_target_assets,
+    build_two_face_assets, force_current_surface, make_world_with_gpu, scaled_golden,
+    set_window_dpi, show_ok, spawn_window_with_dpi,
 };
 
 // ── 表示成立点 info ログ（設計 D10・要件 6.1/6.3）の檻 ──────────────────────────────────
@@ -15,58 +16,10 @@ use super::test_support::{
 // 値**から「2 水準が異なる k・異なる物理寸で描かれた」ことを決定論的に判定する。ゆえに level が
 // `info` であることと D10 各フィールドが正しい値で在ることは観測状態と同格の契約であり、檻に入れる。
 //
-// 捕捉は **`tracing` 単体**（本 crate の既存依存）で組む——`tracing-subscriber` は dev-dependency に
-// 無く、要件 7.3（新規外部依存の禁止）ゆえ足さない。`with_default` は **スレッドローカル**の既定
-// subscriber を差すため、並列実行される他テストのイベントを取り込まない（`set_global_default` は
-// プロセス大域＝並列テストで混線するため使わない）。
-
-/// 捕捉した 1 イベント（level ＋ フィールド名 → Debug 表現）。
-#[derive(Debug, Clone)]
-struct CapturedEvent {
-    level: tracing::Level,
-    fields: std::collections::HashMap<String, String>,
-}
-
-/// 全フィールドを Debug 表現で拾う visitor。
-///
-/// [`tracing::field::Visit`] の `record_u64`/`record_f64`/`record_bool` 等はすべて既定実装が
-/// `record_debug` へ転送するため、`record_debug` 1 本の実装で型を問わず全フィールドを捕捉できる。
-struct FieldGrab(std::collections::HashMap<String, String>);
-
-impl tracing::field::Visit for FieldGrab {
-    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
-        self.0
-            .insert(field.name().to_string(), format!("{value:?}"));
-    }
-}
-
-/// イベントを溜めるだけの最小 subscriber（span は使わないので new_span は固定 id を返す）。
-#[derive(Clone, Default)]
-struct CaptureSubscriber(std::sync::Arc<std::sync::Mutex<Vec<CapturedEvent>>>);
-
-impl tracing::Subscriber for CaptureSubscriber {
-    fn enabled(&self, _meta: &tracing::Metadata<'_>) -> bool {
-        true
-    }
-    fn new_span(&self, _attrs: &tracing::span::Attributes<'_>) -> tracing::span::Id {
-        tracing::span::Id::from_u64(1)
-    }
-    fn record(&self, _span: &tracing::span::Id, _values: &tracing::span::Record<'_>) {}
-    fn record_follows_from(&self, _span: &tracing::span::Id, _follows: &tracing::span::Id) {}
-    fn event(&self, event: &tracing::Event<'_>) {
-        let mut grab = FieldGrab(std::collections::HashMap::new());
-        event.record(&mut grab);
-        self.0
-            .lock()
-            .expect("捕捉バッファの毒化なし")
-            .push(CapturedEvent {
-                level: *event.metadata().level(),
-                fields: grab.0,
-            });
-    }
-    fn enter(&self, _span: &tracing::span::Id) {}
-    fn exit(&self, _span: &tracing::span::Id) {}
-}
+// 捕捉ハーネス（`CaptureSubscriber`／`CapturedEvent`）は presenter 系テストの共有ヘルパ
+// `presenter_test_support.rs` に置いてある。`tracing` 単体（本 crate の既存依存）で組んであり、
+// `with_default` は **スレッドローカル**の既定 subscriber を差すため、並列実行される他テストの
+// イベントを取り込まない（`set_global_default` はプロセス大域＝並列テストで混線するため使わない）。
 
 /// 要件 6.1/6.3 観測完了（設計 D10 の観測ログ）: 表示成立点で **`info` レベル**のログが出て、
 /// k 導出値（`k`・`k_ratio`）・`author_dpi`・`window_dpi`・native 寸・scaled 寸が揃う。
@@ -90,7 +43,7 @@ fn display_success_emits_d10_observation_log_at_info() {
         show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     });
 
-    let events = cap.0.lock().expect("捕捉バッファ").clone();
+    let events = cap.events();
     let ev = events
         .iter()
         .find(|e| {
@@ -323,10 +276,29 @@ fn refresh_scale_without_dpi_change_does_nothing() {
         scaled
     };
     let tampered_bytes = tampered.bytes().to_vec();
+    // 設計 D4 で `insert` は生成済みマスクを引数で受ける形になった（署名追随）。改竄した絵と
+    // **同一 bytes 由来**のマスクを渡し、スロットの原子対をプローブ側でも崩さない。
+    let tampered_mask =
+        std::sync::Arc::new(wintf::ecs::widget::bitmap_source::AlphaMask::from_pbgra32(
+            tampered.bytes(),
+            tampered.width(),
+            tampered.height(),
+            tampered.stride(),
+        ));
     assert_ne!(
         tampered_bytes, scaled_1000,
         "プローブ前提: 別の絵であること"
     );
+    // 原寸は改竄前のエントリのものを引き継ぐ（キーも原寸も変えず**絵だけ**を差し替えるプローブ
+    // である）。原寸は `CacheEntry` の中に在るため、差し替えるときも対で渡す必要がある。
+    let tampered_native = presenter
+        .targets
+        .get(&TargetId(0))
+        .unwrap()
+        .cache
+        .get(1000, &BindSet::default(), &PatternState::default(), k2)
+        .expect("初回表示でエントリが在る")
+        .native;
     presenter
         .targets
         .get_mut(&TargetId(0))
@@ -338,6 +310,8 @@ fn refresh_scale_without_dpi_change_does_nothing() {
             PatternState::default(),
             k2,
             tampered,
+            tampered_mask,
+            tampered_native,
         );
 
     // DPI は据え置き（k 不変）。
@@ -354,7 +328,7 @@ fn refresh_scale_without_dpi_change_does_nothing() {
         "k 不変なのに再表示している（改竄画が画面へ載った＝無駄な表示更新）"
     );
     // (2) 表示成立点のログが 1 件も出ていない。
-    let events = cap.0.lock().expect("捕捉バッファ").clone();
+    let events = cap.events();
     assert!(
         !has_display_success_log(&events),
         "k 不変なのに表示成立点のログが出ている（再表示が走った）: {events:?}"
@@ -400,7 +374,7 @@ fn refresh_scale_without_last_show_input_does_nothing() {
     });
 
     assert_eq!(got, None, "再表示入力が無いのに新物理寸を返している");
-    let events = cap.0.lock().expect("捕捉バッファ").clone();
+    let events = cap.events();
     assert!(
         !has_display_success_log(&events),
         "再表示入力が無いのに表示が成立している: {events:?}"
@@ -475,7 +449,7 @@ fn refresh_scale_does_not_resurrect_hidden_target() {
     });
 
     assert_eq!(got, None, "非表示 target が新物理寸を報告している");
-    let events = cap.0.lock().expect("捕捉バッファ").clone();
+    let events = cap.events();
     assert!(
         !has_display_success_log(&events),
         "非表示 target が DPI 変化だけで再表示された（蘇生）: {events:?}"
@@ -545,7 +519,7 @@ fn refresh_scale_does_not_fabricate_dpi_when_component_is_absent() {
         got, None,
         "DPI 不在を 96 で捏造している（k=1/2 と誤導出して再表示が走った）"
     );
-    let events = cap.0.lock().expect("捕捉バッファ").clone();
+    let events = cap.events();
     assert!(
         !has_display_success_log(&events),
         "DPI 不在の縮退で再表示が走っている: {events:?}"
@@ -638,7 +612,7 @@ fn refresh_scale_failure_keeps_previous_display_and_k() {
     );
 
     // 無言の失敗経路を作らない: refresh_scale 固有の error! が出ている。
-    let events = cap.0.lock().expect("捕捉バッファ").clone();
+    let events = cap.events();
     let err = events
         .iter()
         .find(|e| {
@@ -733,7 +707,7 @@ fn applied_absent_with_visible_surface_warns_once_and_degradations_stay_silent()
             (a, b, c, d)
         });
 
-    let events = cap.0.lock().expect("捕捉バッファ").clone();
+    let events = cap.events();
 
     // (a) panic しない: ここへ到達している時点で 4 呼出すべてが値を返している。
     // (b) k=1.0 と同一結果（ScaleRatio::ONE 相当で続行している）。

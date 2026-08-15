@@ -5,6 +5,7 @@
 //! 構造体に束ねる。フィールドの更新規律は各 doc が正本であり、書き込み点は `presenter` サブツリー内に
 //! 閉じる（`pub(super)` はその範囲を表す＝分割前の「`presenter` 私有」と可視集合が同一）。
 
+use super::budget::FrameBudget;
 use super::{
     AtlasTable, BindSet, ComposeCache, Composer, EmoWorld, Entity, PatternState, ScalePolicy,
     ScaleRatio, SwapChainPresenter, VisualMount,
@@ -51,7 +52,18 @@ pub(super) struct PresentTarget {
     pub(super) atlas: AtlasTable,
     /// 合成器（状態非保持・スクラッチのみ再利用）。
     pub(super) composer: Composer,
-    /// 合成入力（surface id＋bind 集合）→ (composed, mask) 対の容量 1 メモ化スロット。
+    /// 毎フレーム経路の確保計数の器（Requirement 1.3・design.md §FrameBudget）。
+    ///
+    /// **累積カウンタの所有者はここ**である。target と同じ寿命で適用をまたいで存続するため、
+    /// 「ウォームアップ後の N 反復で 1 件も確保が増えていない」（Requirement 3.1）を run 全体の
+    /// 累積として主張できる。適用単位の増分は表示成立点で `take_delta` により取り出され、
+    /// perf サマリ行の `alloc_*` フィールドへ載る。
+    ///
+    /// 後段（task 5.2）は本フィールドへ再利用席（合成先の常設席・リサンプル作業領域の席・
+    /// マスクの輪番）を足す。席が増えても計数の API 面と所有者は動かない。
+    pub(super) budget: FrameBudget,
+    /// 合成入力（surface id＋bind 集合）→ (composed, mask, native) 対の**容量 3・LRU** メモ化表
+    /// （容量は 2026-08-15 の開発者裁定で 1 → 3・要件 7.1）。
     pub(super) cache: ComposeCache,
     /// 装着先の窓 Entity（R1.3・遅延装着の対象）。
     pub(super) window: Entity,
@@ -110,18 +122,16 @@ pub(super) struct PresentTarget {
     /// 照会契約の native 原寸をここで別に保持する。
     ///
     /// **更新規則**: 更新点は `applied` と同じ表示成立点 1 箇所だが、書き込む値は「今回合成したか」に
-    /// 依らず常に [`PresentTarget::cached_native`]（＝いま表示に使ったキャッシュエントリ由来の原寸）
+    /// 依らず常に [`CacheEntry::native`]（＝いま表示に使ったキャッシュエントリが束ねている原寸）
     /// である。今回合成した回だけ書く実装は、`insert` 済みのまま失敗して後から**ヒットで**表示が成立した
     /// 場合に「画面の絵と別サーフェスの原寸」あるいは `None` が残り、照会契約が壊れる。
-    pub(super) native_size: Option<(u32, u32)>,
-    /// **cache スロットの現エントリに対応する native 原寸**（k 適用前の合成外形）。
     ///
-    /// `ComposeCache` は容量 1 スロットで、挿入者は本 presenter ただ 1 箇所（`apply_show` のミス経路）
-    /// である。ゆえに `cache.insert` と同じ場所で本フィールドを書けば、**スロットの中身と本フィールドは
-    /// 常に対**になる——引き当てがヒットした回は「そのエントリを入れたときの原寸」がここに在る。
-    /// `invalidate_all`（スロット破棄）では `None` へ戻す（対を崩さない）。表示成立点はこの値を
-    /// [`PresentTarget::native_size`] へ写すだけでよく、合成の有無で分岐しない。
-    pub(super) cached_native: Option<(u32, u32)>,
+    /// 原寸がエントリの中に在る（target 側の別フィールドではない）のは、容量が 3 になって
+    /// 「保持しているエントリ＝直前に挿入したエントリ」が成り立たなくなったためである
+    /// （要件 7.1・[`CacheEntry::native`] の doc）。
+    ///
+    /// [`CacheEntry::native`]: crate::cache::CacheEntry::native
+    pub(super) native_size: Option<(u32, u32)>,
     /// 最後に表示が成立した show 入力（再表示＝k 再適用のための入力保持）。
     ///
     /// DPI 変化時に「同じ絵を新しい k で描き直す」ための唯一の入力源であり、読み手は

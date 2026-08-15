@@ -1,0 +1,11 @@
+# judge-perf.py --selftest の期待値台帳（人も機械もこの 1 ファイルを読む）
+title = 実行条件のファイルが無い（判定不能）
+mode = verdict
+build = release
+exit = 2
+
+note = run-meta.txt（どのマシンでどう走らせたかの記録）が無い走行。
+note = 判定不能（終了コード 2）でなければならない。
+note = 測定マシンの条件を書けない集計は、同じ条件で測り直せない＝比較にならない。
+note = judge-perf.py が run-meta.txt を必要なログの種類に数えているのは
+note = この理由による（design.md が挙げる 3 種より 1 つ多い。README に登記済み）。

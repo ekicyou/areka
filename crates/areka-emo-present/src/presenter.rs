@@ -45,12 +45,14 @@
 
 // 責務単位のサブモジュール。すべて私有 `mod` であり、新しい公開モジュールパスは生やさない
 // （公開項目は下の `pub use` で従来と同一のパス `presenter::<Name>` に再輸出する）。
+mod budget;
 mod hit;
 mod hub;
 mod read;
 mod refresh;
 mod show;
 mod target;
+mod timing;
 mod visibility;
 
 // 分割前の `use` 一式はここに残す。テストファイル 8 本は `use super::*;` で本モジュールの束縛から
@@ -68,8 +70,14 @@ use areka_actor::{ReplySender, reply_channel};
 use areka_emo_atlas::AtlasTable;
 use areka_emo_compose::{
     BindSet, ComposeError, ComposedSurface, Composer, EmoWorld, PatternState, RegionPriority,
-    ScaleRatio, hit_region_scaled, resample,
+    ScaleRatio, hit_region_scaled,
 };
+// `resample`（使い捨て作業領域を毎回起こす形）の消費者は**テストだけ**になった——本番のミス経路は
+// `FrameBudget` の常設席を使う `resample_with` 側（`budget.rs`）へ移ったためである
+// （`areka-P0-recompose-budget` task 5.3）。テスト 4 本が `use super::*;` でここから拾うので束縛は
+// 残すが、非 test ビルドでは消費者が 1 人も居ないので `#[cfg(test)]` で畳む（抑止指示を足さない）。
+#[cfg(test)]
+use areka_emo_compose::resample;
 
 use wintf::ecs::{AlphaMaskResource, DPI, GraphicsCore, WucGraphicsResource};
 
@@ -115,3 +123,17 @@ mod visibility_tests;
 #[cfg(test)]
 #[path = "presenter_hide_contract_tests.rs"]
 mod hide_contract_tests;
+#[cfg(test)]
+#[path = "presenter_perf_log_tests.rs"]
+mod perf_log_tests;
+#[cfg(test)]
+#[path = "presenter_budget_steady_state_tests.rs"]
+mod budget_steady_state_tests;
+
+#[cfg(test)]
+#[path = "presenter_budget_equivalence_tests.rs"]
+mod budget_equivalence_tests;
+
+#[cfg(test)]
+#[path = "presenter_cache_capacity_tests.rs"]
+mod cache_capacity_tests;

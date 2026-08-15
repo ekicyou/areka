@@ -5,3 +5,6 @@ tmpclaude*
 # デバッグ用一時ログファイル
 *_test.txt
 *_dump.txt
+# Python のバイトコードキャッシュ（tools/perf/ の判定スクリプトと fixture 生成器が作る）
+__pycache__/
+*.py[cod]

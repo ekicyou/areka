@@ -497,3 +497,332 @@ fn resample_alpha_varying_upscale_is_premultiplied_golden() {
         );
     }
 }
+
+// ------------------------------------------------------------------
+// task 4.1: 作業領域受け取り形（`resample_with` ＋ `ResampleScratch`）
+// ------------------------------------------------------------------
+
+// 決定的なテスト画像 `deterministic_surface` は task 6.2 が同じ生成器を要するため
+// `scale_test_support.rs` へ集約した（steering `structure.md`「テーマ間で共有するヘルパは
+// `<stem>_test_support.rs` へ集約する」）。本ファイル冒頭の `use super::test_support::*;` で
+// 従来と同じ名前で見える——本文・呼び出し側ともに変更していない。
+
+/// 要件 3.1／6.4: `resample_with` は `resample` と同一入力でバイト等価（外形・全バイト）。
+///
+/// 恒等（k=1/1）・拡大（k=2/1＝実機 emo2 の 192DPI 条件）・分数比（k=5/4）・縮小の各経路を
+/// 通す。作業領域は**新品**と**使い回し**の 2 通りで検証し、前ケースの残留が結果へ漏れない
+/// ことも同時に固定する（合否条件は外形とバイトのみ・実時間を一切見ない・要件 6.2）。
+#[test]
+fn resample_with_is_byte_equivalent_to_resample() {
+    // (src_w, src_h, num, den)
+    let cases: [(u32, u32, u32, u32); 7] = [
+        (382, 547, 1, 1), // 恒等・実機 emo2 の native 外形
+        (382, 547, 2, 1), // 実機 emo2 の 192DPI（764×1094）
+        (37, 23, 5, 4),   // 分数比（重みが割り切れない）
+        (16, 9, 2, 3),    // 縮小
+        (5, 4, 1, 2),     // 縮小（整数倍）
+        (1, 1, 7, 3),     // 1 画素からの拡大（エッジクランプのみ）
+        (3, 11, 3, 7),    // 縦長の縮小
+    ];
+    // 使い回し用の作業領域（ケースをまたいで持ち回す）。
+    let mut shared = ResampleScratch::default();
+
+    for (w, h, num, den) in cases {
+        let src = deterministic_surface(w, h);
+        let k = ScaleRatio::new(num, den).unwrap();
+
+        let mut want = ComposedSurface::new(0, 0);
+        resample(&src, k, &mut want);
+
+        // 新品の作業領域。
+        let mut fresh_scratch = ResampleScratch::default();
+        let mut got_fresh = ComposedSurface::new(0, 0);
+        resample_with(&src, k, &mut got_fresh, &mut fresh_scratch);
+        assert_eq!(
+            (got_fresh.width(), got_fresh.height()),
+            (want.width(), want.height()),
+            "{w}x{h} k={num}/{den}: 新品作業領域の外形が resample と一致"
+        );
+        assert_eq!(
+            got_fresh.bytes(),
+            want.bytes(),
+            "{w}x{h} k={num}/{den}: 新品作業領域でバイト等価"
+        );
+
+        // 使い回しの作業領域（直前ケースの写像表が残っている）。
+        let mut got_shared = ComposedSurface::new(0, 0);
+        resample_with(&src, k, &mut got_shared, &mut shared);
+        assert_eq!(
+            (got_shared.width(), got_shared.height()),
+            (want.width(), want.height()),
+            "{w}x{h} k={num}/{den}: 使い回し作業領域の外形が resample と一致"
+        );
+        assert_eq!(
+            got_shared.bytes(),
+            want.bytes(),
+            "{w}x{h} k={num}/{den}: 使い回し作業領域でもバイト等価（残留が漏れない）"
+        );
+    }
+}
+
+/// 要件 3.1（作業領域の再利用）: `ResampleScratch` の容量は出力幅へ到達後は成長しない。
+///
+/// 反復呼び出しで容量が一定であること・より小さい出力幅の呼び出しで縮まない（＝元の幅へ
+/// 戻したときに再確保しない）こと・写像表の長さが毎回ちょうど出力幅であること（残留エントリ
+/// なし）を固定する。判定量はいずれも容量・長さ・バイトのみで、実時間を用いない（要件 6.2）。
+#[test]
+fn resample_with_scratch_capacity_does_not_grow_on_reuse() {
+    let src = deterministic_surface(64, 40);
+    let k = ScaleRatio::new(2, 1).unwrap();
+    let mut out = ComposedSurface::new(0, 0);
+    let mut scratch = ResampleScratch::default();
+
+    // 初回で作業領域が出力幅へ到達する。
+    resample_with(&src, k, &mut out, &mut scratch);
+    let cap = scratch.x_map.capacity();
+    let out_w = out.width() as usize;
+    assert_eq!(out_w, 128, "k=2/1 の出力幅");
+    assert_eq!(scratch.x_map.len(), out_w, "写像表は出力幅ちょうど");
+    assert!(cap >= out_w, "初回で出力幅ぶんの容量へ到達している: {cap}");
+
+    // 同一寸法の反復適用で容量は 1 バイトも増えない（毎回新規確保していれば崩れる）。
+    for i in 0..8 {
+        resample_with(&src, k, &mut out, &mut scratch);
+        assert_eq!(
+            scratch.x_map.capacity(),
+            cap,
+            "反復 {i}: 到達後の容量が成長した"
+        );
+        assert_eq!(scratch.x_map.len(), out_w, "反復 {i}: 写像表の長さは出力幅");
+    }
+
+    // より小さい出力幅でも容量は縮まない（縮小 → 再伸長の往復確保を作らない）。
+    let small = deterministic_surface(9, 7);
+    resample_with(&small, k, &mut out, &mut scratch);
+    let small_w = out.width() as usize;
+    assert_eq!(small_w, 18, "小さい方の出力幅");
+    assert_eq!(scratch.x_map.capacity(), cap, "小さい幅で容量が縮んだ");
+    assert_eq!(scratch.x_map.len(), small_w, "小さい幅でも残留エントリなし");
+
+    // 小さい幅の結果は新品の作業領域と 1 バイトも違わない（残留内容が漏れない）。
+    let mut want_small = ComposedSurface::new(0, 0);
+    resample(&small, k, &mut want_small);
+    assert_eq!(
+        out.bytes(),
+        want_small.bytes(),
+        "使い回し作業領域の残留が小さい幅の結果へ漏れた"
+    );
+
+    // 元の幅へ戻しても再確保が起きない。
+    resample_with(&src, k, &mut out, &mut scratch);
+    assert_eq!(
+        scratch.x_map.capacity(),
+        cap,
+        "元の幅へ戻した際に再確保が起きた"
+    );
+    assert_eq!(scratch.x_map.len(), out_w);
+}
+
+/// 恒等 k（1/1）は作業領域を一切使わない（写像表は空のまま・バイト恒等コピー・要件 7.2）。
+#[test]
+fn resample_with_identity_leaves_scratch_untouched() {
+    let src = deterministic_surface(11, 6);
+    let mut out = ComposedSurface::new(0, 0);
+    let mut scratch = ResampleScratch::default();
+
+    resample_with(&src, ScaleRatio::ONE, &mut out, &mut scratch);
+    assert_eq!(out.bytes(), src.bytes(), "恒等はバイト恒等コピー");
+    assert_eq!(scratch.x_map.len(), 0, "恒等経路は写像表を組まない");
+    assert_eq!(scratch.x_map.capacity(), 0, "恒等経路は確保しない");
+}
+
+/// 要件 3.1: `ResampleScratch::capacity` は**席そのものの容量**を返す（長さではない）。
+///
+/// 席を持ち越す呼び手（`emo-present` の `FrameBudget`）は、この値を `resample_with` の前後で
+/// 読み比べるだけで「この呼び出しで写像表を確保し直したか」を判定する。ゆえに本アクセサが
+/// 長さ（`len`）や定数へ配線されると、上流の確保計数が黙って壊れる。
+///
+/// **長さと容量が必ず食い違う状態**（大きい幅の後に小さい幅で呼ぶ）を作って両者を区別する。
+#[test]
+fn scratch_capacity_reports_the_seats_capacity_not_its_length() {
+    let mut scratch = ResampleScratch::default();
+    assert_eq!(scratch.capacity(), 0, "空の席の容量は 0");
+    assert_eq!(
+        scratch.capacity(),
+        scratch.x_map.capacity(),
+        "空の席で私有フィールドの容量と食い違う"
+    );
+
+    let k = ScaleRatio::new(2, 1).unwrap();
+    let mut out = ComposedSurface::new(0, 0);
+
+    let src = deterministic_surface(64, 40);
+    resample_with(&src, k, &mut out, &mut scratch);
+    let big = scratch.capacity();
+    assert_eq!(big, scratch.x_map.capacity(), "私有フィールドの容量と食い違う");
+    assert!(big >= 128, "初回で出力幅 128 ぶんへ到達している: {big}");
+
+    // 小さい幅で呼ぶと長さだけが縮み、容量は据え置かれる＝両者が必ず食い違う。
+    let small = deterministic_surface(9, 7);
+    resample_with(&small, k, &mut out, &mut scratch);
+    assert_eq!(scratch.x_map.len(), 18, "小さい幅の写像表の長さ");
+    assert_eq!(scratch.capacity(), big, "容量は縮まない（長さを返していないか）");
+    assert!(
+        scratch.capacity() > scratch.x_map.len(),
+        "この状態で容量と長さは食い違うはず（容量 {} / 長さ {}）",
+        scratch.capacity(),
+        scratch.x_map.len()
+    );
+}
+
+/// 要件 3.3／6.4（**5.4 の安全網の欠落を塞ぐ**・追補 §A2）: **正解の値が 0 である領域**を
+/// 書き落とす形の書き漏らしも、使い回した出力先で必ず露見する。
+///
+/// # なぜこの 1 本が要るか（5.4 の実測で見つけた穴）
+///
+/// ゼロ埋めの除去が安全なのは「`resample` が出力の全バイトを書き潰す」ことに依る。書き漏らしを
+/// 捕まえる檻はすでに 2 系統ある（golden 群と `scale_prior_path_tests` の使い回し等価檻）が、
+/// **正解が 0 の領域を書き落とす**変異だけは両系統をすり抜ける:
+///
+/// - golden 群と是正前参照実装との突合は、器を 0 から起こすため書き落とした領域も 0 のままで
+///   正解と一致する。
+/// - `scale_prior_path_tests` の使い回し檻（`0xAA` 事前塗り）は残留を見るので原理的には効くが、
+///   その fixture（`opaque_gradient_surface`・α=255 の勾配）の出力に **0 バイトが 1 つも無い**
+///   ため、当該変異に対して実際には鳴らない。
+///
+/// 実測: 内側ループを `if out_b != 0 { dst[di+c] = out_b; }` へ変異させると、クレート全 229 件が
+/// **緑のまま**通った（5.4 実装時に確認）。本檻は透明領域を持つ fixture を使うことで、その
+/// 変異に対して赤になる唯一の檻になる。
+///
+/// # 小さい外形だけでは足りない（実測で確認した第 2 の穴）
+///
+/// 「正解が 0 のバイトを**大きい外形でだけ**書き落とす」変異は、小さい fixture しか持たない檻を
+/// すり抜ける。実測: 内側ループを `if out_b != 0 || out_h < 64 { dst[di+c] = out_b; }` へ変異させると
+/// 6×4 だけの版では emo-compose 233 件・emo-present 190 件が**全て緑**で通った。実機外形を通る
+/// 既存の使い回し檻（`scale_prior_path_tests` の `opaque_gradient_surface(382,547,0x3C)`）は
+/// 出力に 0 バイトを 1 つも持たないため、こちらも鳴らない。
+///
+/// そこで本檻は**実機外形 382×547（emo2 native）でも同じ主張を立てる**。次の 5.5 は内側ループを
+/// 書き換える（設計追補 §A3 は塊／端数の分割や横方向中間値の共有を検討している）ため、
+/// 「大きい外形でだけ通る経路」は現実的な欠陥の形そのものであり、要件 3.3／6.4（1 バイトも
+/// 変わらない）の安全網はここで張っておく必要がある。
+///
+/// # fixture の前提（偽の緑を作らないための自己検査つき）
+///
+/// 左帯が完全透明（BGRA 全 0）・残りが不透明の入力を使い、**正解の出力に 0 バイトが実在する**
+/// ことを外形・比ごとに檻の中で確認してから残留の主張を立てる（両辺が同じだけ間違う形を塞ぐ）。
+#[test]
+fn resample_overwrites_even_the_bytes_whose_correct_value_is_zero() {
+    let mut shared = ResampleScratch::default();
+
+    // (1) 小さい外形 6×4: 比を広く振る（左 2 列が完全透明・右 4 列が不透明グレー）。
+    let px: Vec<[u8; 4]> = (0..4u32)
+        .flat_map(|y| {
+            (0..6u32).map(move |x| {
+                if x < 2 {
+                    [0, 0, 0, 0]
+                } else {
+                    gray((60 + 20 * (x + y)) as u8)
+                }
+            })
+        })
+        .collect();
+    let small = surface_of(6, 4, &px);
+    assert_zero_valued_bytes_are_overwritten(
+        &small,
+        &[(1, 1), (2, 1), (5, 4), (2, 3)],
+        &mut shared,
+        "6x4",
+    );
+
+    // (2) 実機外形 382×547（emo2 native）: 実機サインオフの 2 水準ぶんに絞る
+    //     （1 例あたり出力 764×1094 ≒ 3.3MB ゆえ、既存の全比とは掛け合わせない）。
+    let device = transparent_band_surface(382, 547);
+    assert_zero_valued_bytes_are_overwritten(&device, &[(2, 1), (5, 4)], &mut shared, "382x547");
+}
+
+/// 左帯が完全透明（BGRA 全 0）・残りが不透明グレーの入力（**実機外形**用の fixture）。
+///
+/// [`surface_of`] は画素表を書き下す形ゆえ 382×547 では書けないので生成器にする。左 1/4 を
+/// BGRA 全 0、残りを α=255 のグレーにする（premultiplied 不変条件 B,G,R ≤ A を満たす）。
+/// 帯が十分広いため、扱う比のいずれでも帯の内側は補間しても純粋な 0 のままで、正解の出力に
+/// 0 バイトが実在する（この前提は [`assert_zero_valued_bytes_are_overwritten`] が毎回検査する）。
+fn transparent_band_surface(w: u32, h: u32) -> ComposedSurface {
+    let mut s = ComposedSurface::new(w, h);
+    let stride = s.stride() as usize;
+    let band = (w / 4).max(1) as usize;
+    let bytes = s.bytes_mut();
+    for y in 0..h as usize {
+        for x in 0..w as usize {
+            let o = y * stride + x * 4;
+            let px = if x < band {
+                [0, 0, 0, 0]
+            } else {
+                gray((60 + (x as u32 + y as u32) % 180) as u8)
+            };
+            bytes[o..o + 4].copy_from_slice(&px);
+        }
+    }
+    s
+}
+
+/// 「正解の値が 0 のバイトも必ず書き潰される」主張の本体（外形ごとに使い回す）。
+///
+/// 比ごとに (1) まっさらな出力先で正解 `want` を作り、(2) fixture 前提——`want` に 0 バイトが
+/// 実在し、かつ全部が 0 ではない——を確認し、(3) **0 以外で事前に塗った**使い回しの出力先へ
+/// `resample`／`resample_with` の**両方**で書いて `want` とバイト等価を要求する。
+///
+/// (2) を外形ごとに置くのが要点で、これが無いと「0 バイトを含まない fixture で残留を主張する」
+/// 空虚な檻（＝当該変異に対して鳴らない檻）が静かに成立してしまう。
+fn assert_zero_valued_bytes_are_overwritten(
+    src: &ComposedSurface,
+    ratios: &[(u32, u32)],
+    shared: &mut ResampleScratch,
+    label: &str,
+) {
+    for &(num, den) in ratios {
+        let k = ScaleRatio::new(num, den).expect("非ゼロの比は構築できる");
+        let at = format!("{label} k={num}/{den}");
+
+        // 対照（まっさらな出力先）。
+        let mut fresh = ComposedSurface::new(0, 0);
+        resample(src, k, &mut fresh);
+        let (out_w, out_h) = (fresh.width(), fresh.height());
+        let want = fresh.bytes().to_vec();
+
+        // fixture の前提: 正解の出力に 0 バイトが実在し、かつ全部が 0 ではない。
+        assert!(
+            want.contains(&0),
+            "{at}: fixture 前提が崩れた（正解の出力に 0 バイトが無いと当該変異を弁別できない）"
+        );
+        assert!(
+            want.iter().any(|&b| b != 0),
+            "{at}: fixture 前提が崩れた（出力が全ゼロでは何も主張していない）"
+        );
+
+        // 使い回した出力先（0 以外で事前に塗る）へ書いても、まっさらな結果と 1 バイトも違わない。
+        let mut reused = ComposedSurface::new(out_w, out_h);
+        reused.bytes_mut().fill(0xAA);
+        resample(src, k, &mut reused);
+        assert_eq!(
+            (reused.width(), reused.height()),
+            (out_w, out_h),
+            "{at}: 使い回しで外形が事後条件どおりでない"
+        );
+        assert_eq!(
+            reused.bytes(),
+            want.as_slice(),
+            "{at}: 正解が 0 の領域が書かれず 0xAA の残留が出力へ残った"
+        );
+
+        // 本番の毎コマ経路が通る作業領域受け取り形でも同じ。
+        let mut reused_with = ComposedSurface::new(out_w, out_h);
+        reused_with.bytes_mut().fill(0x5C);
+        resample_with(src, k, &mut reused_with, shared);
+        assert_eq!(
+            reused_with.bytes(),
+            want.as_slice(),
+            "{at}: resample_with で正解が 0 の領域へ残留が残った"
+        );
+    }
+}

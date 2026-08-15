@@ -415,3 +415,83 @@ pub(super) fn force_applied(presenter: &mut EmoPresenter, target: TargetId, k: O
         .expect("attach 済み target")
         .applied = k;
 }
+
+// ── ログ捕捉ハーネス（presenter 系テストモジュール共有）────────────────────────────────
+//
+// 捕捉は **`tracing` 単体**（本 crate の既存依存）で組む——`tracing-subscriber` は
+// dev-dependency に無く、要件 7.3（新規外部依存の禁止）ゆえ足さない。
+// `tracing::subscriber::with_default` は **スレッドローカル**の既定 subscriber を差すため、
+// 並列実行される他テストのイベントを取り込まない（`set_global_default` はプロセス大域＝
+// 並列テストで混線するため使わない）。
+//
+// presenter 系の複数テストモジュールが同じ道具を要するため、steering `structure.md` の
+// 「テーマ間で共有するヘルパは `<stem>_test_support.rs` へ集約する」に従い、ここへ 1 本化する。
+
+/// 捕捉した 1 イベント（level ＋ フィールド名 → Debug 表現）。
+#[derive(Debug, Clone)]
+pub(super) struct CapturedEvent {
+    pub(super) level: tracing::Level,
+    pub(super) fields: std::collections::HashMap<String, String>,
+}
+
+impl CapturedEvent {
+    /// メッセージ（`message` フィールドの Debug 表現）。フィールドが無ければ空文字。
+    pub(super) fn message(&self) -> &str {
+        self.fields.get("message").map_or("", String::as_str)
+    }
+
+    /// フィールド名の昇順一覧（フィールド集合を**ちょうど**で固定するための正準形）。
+    pub(super) fn field_names(&self) -> Vec<&str> {
+        let mut names: Vec<&str> = self.fields.keys().map(String::as_str).collect();
+        names.sort_unstable();
+        names
+    }
+}
+
+/// 全フィールドを Debug 表現で拾う visitor。
+///
+/// [`tracing::field::Visit`] の `record_u64`／`record_f64`／`record_bool` 等はすべて既定実装が
+/// `record_debug` へ転送するため、`record_debug` 1 本で型を問わず全フィールドを捕捉できる。
+struct FieldGrab(std::collections::HashMap<String, String>);
+
+impl tracing::field::Visit for FieldGrab {
+    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+        self.0
+            .insert(field.name().to_string(), format!("{value:?}"));
+    }
+}
+
+/// イベントを溜めるだけの最小 subscriber（span は使わないので new_span は固定 id を返す）。
+#[derive(Clone, Default)]
+pub(super) struct CaptureSubscriber(std::sync::Arc<std::sync::Mutex<Vec<CapturedEvent>>>);
+
+impl CaptureSubscriber {
+    /// 捕捉列のスナップショット（発火順を保つ——対の隣接判定がこの順序に依存する）。
+    pub(super) fn events(&self) -> Vec<CapturedEvent> {
+        self.0.lock().expect("捕捉バッファの毒化なし").clone()
+    }
+}
+
+impl tracing::Subscriber for CaptureSubscriber {
+    fn enabled(&self, _meta: &tracing::Metadata<'_>) -> bool {
+        true
+    }
+    fn new_span(&self, _attrs: &tracing::span::Attributes<'_>) -> tracing::span::Id {
+        tracing::span::Id::from_u64(1)
+    }
+    fn record(&self, _span: &tracing::span::Id, _values: &tracing::span::Record<'_>) {}
+    fn record_follows_from(&self, _span: &tracing::span::Id, _follows: &tracing::span::Id) {}
+    fn event(&self, event: &tracing::Event<'_>) {
+        let mut grab = FieldGrab(std::collections::HashMap::new());
+        event.record(&mut grab);
+        self.0
+            .lock()
+            .expect("捕捉バッファの毒化なし")
+            .push(CapturedEvent {
+                level: *event.metadata().level(),
+                fields: grab.0,
+            });
+    }
+    fn enter(&self, _span: &tracing::span::Id) {}
+    fn exit(&self, _span: &tracing::span::Id) {}
+}

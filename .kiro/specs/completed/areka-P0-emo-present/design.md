@@ -195,7 +195,7 @@ crates/areka-emo-present/
 └── src/
     ├── lib.rs                 # 公開面 re-export＋クレート規約 rustdoc（指令 API 契約正本の宣言）
     ├── command.rs             # PresentCommand / TargetId / PresentError / PresentOutcome（wintf 非依存・純粋）
-    ├── cache.rs               # ComposeCache: 合成入力（surface id＋BindSet）キーの容量1メモ・CacheEntry{ComposedSurface, AlphaMask}・invalidate
+    ├── cache.rs               # ComposeCache: 合成入力（surface id＋BindSet）キーの容量1メモ〔2026-08-15 改訂: 容量 3・LRU。§ComposeCache の改訂欄を参照〕・CacheEntry{ComposedSurface, AlphaMask}・invalidate
     ├── presenter.rs           # EmoPresenter: target 管理・apply(cmd)・compose/cache/表示/マスクの統括（UI スレッド）
     ├── chain.rs               # SwapChainPresenter: swap chain 生成/ResizeBuffers/アップロード/Present/readback（R8）
     ├── mount.rs               # VisualMount: 窓 Entity への SpriteVisual 装着・text-layer スロット予約・非表示切替
@@ -288,7 +288,7 @@ flowchart LR
 | 3.4 | 解決不能 id はログ＋スキップ | EmoPresenter, PresentError | `SurfaceNotFound` 写像 | 指令適用 |
 | 3.5 | Send 所有データ・enum 転写可 | PresentCommand | `PresentCommand: Send + 'static`（静的 assert） | — |
 | 3.6 | reply 口の同梱 | PresentCommand | `Option<ReplySender<PresentOutcome>>` | 指令適用 |
-| 4.1 | 合成入力（surface id＋binds）キーの容量 1 メモ | ComposeCache | `get(id, &binds)`/`insert(id, binds, ..)` | 指令適用 |
+| 4.1 | 合成入力（surface id＋binds）キーの容量 1 メモ〔**2026-08-15 改訂: 容量 3・LRU**。正本は本 spec requirements の Requirement 4 改訂欄〕 | ComposeCache | `get(id, &binds)`/`insert(id, binds, ..)` | 指令適用 |
 | 4.2 | 完全一致ヒットのみ再合成しない・入力差分は必ず再合成 | ComposeCache, EmoPresenter | miss 時のみ `compose` | 指令適用 |
 | 4.3 | 無効化の口 | ComposeCache, PresentCommand | `InvalidateCache` variant／`invalidate_all()` | — |
 | 4.4 | キャッシュは本層所有・上流純粋 | ComposeCache | Composer は状態非保持のまま | — |
@@ -388,12 +388,13 @@ pub enum PresentError {
 
 | Field | Detail |
 |-------|--------|
-| Intent | 合成入力（surface id＋BindSet）→ (ComposedSurface, AlphaMask) 対の容量 1 メモ化スロット |
+| Intent | 合成入力（surface id＋BindSet）→ (ComposedSurface, AlphaMask) 対の容量 1 メモ化スロット〔**2026-08-15 改訂: 容量 3・LRU**。下の改訂欄を参照〕 |
 | Requirements | 4.1, 4.2, 4.3, 4.4, 2.1, 2.4 |
 
 **Responsibilities & Constraints**
 - `CacheEntry { composed: ComposedSurface, mask: AlphaMask }` — 表示バッファと当たり判定マスクを**同一エントリに束ね**、対入替を構造で担保（R2.4）
 - **キー＝合成入力の全体**（`surface_id: u32` ＋ `binds: BindSet`。`BindSet` は昇順＋dedup の正規形で `Eq` 完備）。完全一致のみヒット・1 要素でも異なれば必ずミス＝再合成（R4.1/4.2 改訂）。**初版の surface id 単独キーは同一 surface の bind 差分（着せ替え・まばたき）で古い合成に衝突する仕様バグだった（2026-07-09 顕在化・是正）**
+- **改訂（2026-08-15・開発者裁定）**: 容量を **1 → 3**・置換方式を **LRU** とした（`areka-P0-recompose-budget` 要件 7.1／7.3 の裁定ゲート）。実測で「低ヒット率」の見積もりが否定されたためで、キー完全一致・原子対・`invalidate_all` の意味論は不変。正本は本 spec requirements の Requirement 4 改訂欄。**以下の記述は改訂前のものである。**
 - **直前 1 件のみ保持**（`slot: Option<(ComposeKey, CacheEntry)>`）。多エントリ全保持は不採用: 将来 seriko がアニメ pattern 状態を合成入力へ加えると状態空間が膨張し、全保持は原寸ビットマップのメモリ堆積と低ヒット率の二重苦になる。「合成入力が変わらない間だけ前回画像を継続」が正しい戦略。`invalidate_all()` のみ提供（部分無効化は実需まで凍結）
 - mask はエントリ挿入時に `AlphaMask::from_pbgra32(composed.bytes(), w, h, stride)` で 1 回だけ生成（表示のたびに再生成しない）
 - Composer の out 再利用（`compose_into`）とは独立に、エントリは `compose` 値返しで所有（キャッシュが結果を保持する以上、out 共有の複雑さに対して利得がないため。将来ホットパス最適化の余地としてのみ記録）
@@ -598,6 +599,7 @@ struct PresentTarget {
     atlas: AtlasTable,          // 不変・無効化トリガ源
     composer: Composer,
     cache: ComposeCache,        // slot: Option<(ComposeKey{surface_id, binds}, CacheEntry)>（容量1メモ）
+                                //   〔2026-08-15 改訂: entries: Vec<(ComposeKey, CacheEntry)>（容量 3・最近使用の昇順・LRU 追い出し）。§ComposeCache の改訂欄を参照〕
     window: Entity,             // 装着先窓（R1.3）
     surface_entity: Entity,     // SpriteVisual＋HitTest＋AlphaMaskResource
     text_slot: Entity,          // 予約スロット（R1.4）

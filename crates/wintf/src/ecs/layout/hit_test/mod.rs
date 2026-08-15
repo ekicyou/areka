@@ -30,6 +30,8 @@
 //! }
 //! ```
 
+use std::sync::Arc;
+
 use bevy_ecs::prelude::*;
 use tracing::warn;
 
@@ -154,9 +156,18 @@ impl HitTest {
 ///
 /// # 命名
 /// wintf の CPU リソース命名規約（`XxxResource`・`BitmapSourceResource` 等）に準拠。
+///
+/// # 内部表現
+/// マスクは `Arc<AlphaMask>` で保持する。供給側（合成結果の所有者）が同一マスクを
+/// 参照カウント増だけで渡せるようにするためで（[`set_shared`](Self::set_shared)）、
+/// 公開シグネチャと観測可能な挙動は値保持だった頃と同一である（[`set`](Self::set) は
+/// 値を受け取り `Arc::new` で包み、[`mask`](Self::mask) は `Option<&AlphaMask>` を返す）。
+/// 読み手は `hit_test` 内の `alpha_mask_hit`（`World::get` の同期 pull）のみで
+/// `Changed`／`Added` 依存はリポジトリ全体に存在しないため、内部表現の変更は
+/// 変更検知の下流へも影響しない。
 #[derive(Component, Debug, Clone, Default)]
 pub struct AlphaMaskResource {
-    mask: Option<AlphaMask>,
+    mask: Option<Arc<AlphaMask>>,
 }
 
 impl AlphaMaskResource {
@@ -167,12 +178,21 @@ impl AlphaMaskResource {
 
     /// αマスクを設定（表示所有者が合成結果から更新）
     pub fn set(&mut self, mask: AlphaMask) {
+        self.mask = Some(Arc::new(mask));
+    }
+
+    /// 共有αマスクを設定（供給は参照カウント増のみ・複製なし）
+    ///
+    /// [`set`](Self::set) と観測結果は同一だが、呼び出し側が既に `Arc` で持っている
+    /// マスクをそのまま渡せる。表示バッファと当たり判定マスクを同一の確保で共有し、
+    /// 毎コマ適用でのマスク複製を無くすための口（要件 3.1）。
+    pub fn set_shared(&mut self, mask: Arc<AlphaMask>) {
         self.mask = Some(mask);
     }
 
     /// αマスクへの参照を取得（未設定なら `None`）
     pub fn mask(&self) -> Option<&AlphaMask> {
-        self.mask.as_ref()
+        self.mask.as_deref()
     }
 }
 
@@ -605,3 +625,8 @@ mod tests;
 
 #[cfg(test)]
 mod tests_ex;
+
+/// `AlphaMaskResource` の内部 `Arc` 化と `set_shared` の檻（structure.md のテスト分離規約）
+#[cfg(test)]
+#[path = "hit_test_shared_mask_tests.rs"]
+mod shared_mask_tests;
