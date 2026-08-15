@@ -30,6 +30,15 @@ pub mod resolver;
 pub mod source;
 pub mod spawn;
 pub mod transition_diag;
+/// 遷移観測ログの判定器（純関数・I/O 無し）。
+///
+/// 消費者は決定論テストと実機サインオフのランナー（`#[ignore]` テスト）だけで、本番の
+/// 実行経路からは 1 度も呼ばれない。areka は lib ターゲットを持たない bin crate ゆえ
+/// `pub` でも dead_code 免除されず、本番ビルドへ置くと項目ごとに許可属性を貼る羽目に
+/// なる（それは以後の真の dead code を隠す）。[`test_support`] と同じ形にして、許可属性を
+/// 1 つも置かずに済ませる。
+#[cfg(test)]
+pub(crate) mod transition_judge;
 mod windowposition;
 
 /// 作者空間の符号付きオフセットを k 倍する唯一の写像（大きさは `ScaleRatio::scale_len`

@@ -251,6 +251,11 @@ crates/areka/src/main.rs               # MOD: 起動時に MonitorDpiTable も�
 | `crates/areka/src/placement/diag_tests.rs` | MOD: 経路語彙 12 種・`ALL` 12・一意性／空白なし／非番兵 | 2.4 |
 | `crates/areka/src/placement/follow_visibility_char_wiring_tests.rs` | MOD: 発火 route 表 4 → 6 に追随 | 2.4 |
 | `crates/areka/src/placement/follow_visibility_balloon_wiring_tests.rs` | MOD: 発火する引き金 4 → 6 に追随（キャラ窓表の写し） | 2.4 |
+| `crates/areka/src/placement/transition_judge.rs` | NEW: 行パーサ（`judge-perf.py` と同一の辞書化・同名フィールドは欠陥）・遷移切り出し・判定量の集計。消費者がテストとサインオフランナーだけなので `#[cfg(test)]` のモジュールとして置く（bin crate ゆえ本番ビルドでは全項目 dead_code になり、項目ごとの許可属性が以後の真の dead code を隠すため）。**`visualize_to_write_us` は遷移区間内の全ての（可視化, 同一フレームの書込）組にわたる真の最大**（最後の 1 組ではない）＝task 3.2 は `Bounds::signoff` の上限をこの最大に対して置く。`frames_indeterminate` は「一様に 0」と「`frame` が 1 つも読めなかった」の両方で立つ | 3.1 |
+| `crates/areka/src/placement/transition_judge_tests.rs` | NEW: 解析・切り出し・集計の分岐テスト（`win_kind` 由来の窓キー・経路 A は `origin` で計数・見送り窓の除外・`target_id` 往復を `emo2_boot::target_map` の正本と突合） | 3.1 |
+| `crates/areka/src/placement/transition_judge_frame_tests.rs` | NEW: フレーム刻印の扱い（欠落と読めない値の区別・読めない系列の判定不能・一様 0 の判定不能・2 つの量の周回差分・実機専用量の同一フレーム条件と最大） | 3.1 |
+| `crates/areka/src/placement/transition_judge_test_support.rs` | NEW: 種別ごとの観測行組立（フィールド名は発行側の `pub const` を参照）＋テーマ間で共有する助走 | 3.1 |
+| `crates/areka/src/placement/transition_judge_reobservation_tests.rs` | NEW: 再観測 §3.1 を新語彙へ整形した埋め込みログの逐語再現（書込 6・経路 A 0・接地点差 −48px・フレーム量は是正前でも 0） | 3.1 |
 
 > 本表は Requirement 10 の突合台帳である。触ったファイルの集合が本表（2 つの表の合併）と一致していなければならない。ファイルを 1 つでも触ったら同時に行を足すこと。
 >
@@ -651,7 +656,7 @@ pub(crate) fn coalesce_geometry(queue: &mut Vec<SetWindowPosCommand>, cmd: SetWi
 **Responsibilities & Constraints**
 - 入力: `[transition]` 行の列（他の行は無視）。出力: `Vec<TransitionSummary>`＋`Verdict`。I/O を持たない。
 - 遷移の切り出し: `kind=monitor` で `old_dpi != new_dpi` の行を起点、次の起点の直前まで。
-- 判定量（`TransitionSummary`）: `frames_to_last_write`（起点 frame → 最終 `write` frame の `wrapping_sub`）／`writes_per_window: BTreeMap<(scope, kind), u32>`（キーの窓種別は行の **`win_kind=`** フィールドから読む＝下記「フィールド名の一意性」）／`path_a_writes`（`stage=sync`）／`balloon_same_frame: bool`（キャラ write frame == 同 scope バルーン write frame）／`mismatch_frames_per_window`（`surface stage=visualize` の frame と当該窓 write frame の差）／`holds`／`chain_realigned: u32`／`ground_diff_max`（`ground` レコードの `|diff|` 最大）／`skipped_windows`（`stage=skipped` の target を除外）／参考値 `wall: { first_write_t_us, last_write_t_us, sum_call_us }`。
+- 判定量（`TransitionSummary`）: `frames_to_last_write`（起点 frame → 最終 `write` frame の `wrapping_sub`）／`writes_per_window: BTreeMap<(scope, kind), u32>`（キーの窓種別は行の **`win_kind=`** フィールドから読む＝下記「フィールド名の一意性」）／`path_a_writes`（**`origin=dpi-suggested` で数える**・`stage=sync` は裏取りとして別フィールド `sync_stage_writes` に持ち、両者の食い違いが均されずに見えるようにする＝task 2.2 の裁定）／`balloon_same_frame: bool`（キャラ write frame == 同 scope バルーン write frame）／`mismatch_frames_per_window`（`surface stage=visualize` の frame と当該窓 write frame の差）／`holds`／`chain_realigned: u32`／`ground_diff_max`（`ground` レコードの `|diff|` 最大）／`skipped_windows`（`stage=skipped` の target を除外）／参考値 `wall: { first_write_t_us, last_write_t_us, sum_call_us }`。
 - 定数（回帰テストが固定・`Bounds::deterministic`）: `TRANSITION_FRAME_BOUND = 0`、`WRITES_PER_WINDOW_MAX = 1`、`PATH_A_WRITES_MAX = 0`、`GROUND_DIFF_MAX = 0`、`CHAIN_REALIGN_PER_TRANSITION = 1`（k 変化のある遷移）。hold を含む遷移は `frames_to_last_write ≤ DPI_SYNC_HOLD_MAX_FRAMES`。
 - **実機サインオフ専用の判定量（`Bounds::signoff`・設計討議 A-2 で追加）**: 第 1 段で確定した症状「描画内容は +13〜47ms に新寸・窓矩形は +63〜309ms まで旧寸」は**同一 tick の内側**の食い違いであり、上のフレーム単位の量では是正前でも 0 になる（`TRANSITION_FRAME_BOUND = 0` は現行コードで既に成立）。そこで `TransitionSummary` に窓ごとの `visualize_to_write_us`（同一 frame の `surface stage=visualize` の `t_us` から当該窓の `write` の `t_us` まで）と `flush_total_us`（`flush stage=end` の `total_us`）を持たせ、`Bounds::signoff` に上限を置く。**上限値は実装フェーズ 2 の再採取で確定**する（目安: 実測 vblank 周期 1〜2 回分。8.3ms@120Hz／16.7ms@60Hz を候補とし、台帳へ根拠つきで登記）。この量は非決定なので**回帰テストでは固定しない**——サインオフ手順書（C10）の合否と C8 の Q2 条件（B-2b→B-4→B-3 の分岐）にだけ使う。判定は決定論量と実機量の**両方**を Report に列挙し、`judge(summary, &Bounds::deterministic)` と `judge(summary, &Bounds::signoff)` を別々に呼ぶ。
 - 語彙: `kind`／`stage`／フィールド名は C1・C3・areka 側レコード純関数から `pub const` を参照して解析（判定語の二重定義をしない）。
