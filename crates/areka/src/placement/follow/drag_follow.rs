@@ -1,17 +1,19 @@
 //! ドラッグ＋バルーン追従（[`BalloonFollow`]・[`on_char_drag`]・[`follow_balloon`]・[`on_balloon_drag`] ほか）。
 
 use bevy_ecs::prelude::*;
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 use windows::Win32::UI::WindowsAndMessaging::CW_USEDEFAULT;
 use wintf::ecs::drag::{DragEndEvent, DragEvent, DraggingState};
 use wintf::ecs::pointer::Phase;
 use wintf::ecs::{Point, WindowPos};
 
 use super::{
-    Anchor, Anchored, BalloonWindowMarker, CharWindowMarker, DESPAWNED_SKIP_TAG, MonitorSnapshot,
-    PlacementRoute, PointPx, SizePx, VISIBILITY_UNRESOLVED_TAG, balloon_offset_entries,
-    char_pos_entries, char_pos_to_origin_x, enqueue_window_set_pos, evaluate_visibility_guard,
-    persist_entries, project_anchor, rect_at, route_applies_visibility_guard,
+    Anchor, Anchored, BALLOON_LIMIT_CLAMP_TAG, BALLOON_LIMIT_RELEASE_CONTEXT,
+    BALLOON_LIMIT_UNRESOLVED_TAG, BalloonKeywordBase, BalloonLimit, BalloonWindowMarker,
+    CharWindowMarker, DESPAWNED_SKIP_TAG, MonitorSnapshot, PlacementRoute, PointPx, SizePx,
+    VISIBILITY_UNRESOLVED_TAG, balloon_offset_entries, char_pos_entries, char_pos_to_origin_x,
+    enqueue_window_set_pos, evaluate_visibility_guard, limit_correction, persist_entries,
+    project_anchor, rect_at, route_applies_visibility_guard, work_area_for_window,
 };
 
 /// キャラ窓に付与するバルーン追従 Component（4.2/4.4/4.8）。
@@ -577,6 +579,28 @@ pub(crate) fn on_balloon_drag(
 /// `debug!`＋skip する。`BalloonFollow.offset`（in-session 表現）は本ハンドラでは
 /// 変異させない（連続ドラッグ側 [`on_balloon_drag`] が所有）。
 ///
+/// # 解放時の limit 補正と**順序の固定**（areka-P0-windowposition-limit C8・要件 2.5/5.4）
+///
+/// バルーン単独ドラッグは wndproc が窓を直接動かす ECS 経路**外**の移動であり、
+/// [`enqueue_window_set_pos`] の runtime 関門を一度も通らない。よって解放の瞬間だけが
+/// 「はみ出したまま静止した位置」を捕まえられる唯一の観測点であり、ここに 3 つ目の
+/// 関門（[`apply_release_limit_correction`]）を置く。ドラッグ**中**（[`on_balloon_drag`]）
+/// へは一切介入しない——カーソル追随の自由は要件 2.5 前段が明示的に守るものである。
+///
+/// 本ハンドラの処理順は**固定**である（DD6・5.4）:
+///
+/// 1. 解放位置の取得（`WindowPos.position`＝wndproc の最終確定位置）
+/// 2. 生 offset（`balloon_pos − char_pos`）の導出と永続 write-through
+/// 3. キーワード素材の退役（[`retire_keyword_base_on_save`]・要件 4.7）
+/// 4. `BalloonLimit(true)` かつ補正が要るときだけ表示位置を補正
+///
+/// **2 と 4 を入れ替えてはならない。** 先に補正すると、4 が書いた補正後位置を 2 が
+/// `balloon_pos` として読み、補正値が保存値（`BalloonOffset`）へ焼き付く——以後キャラ窓が
+/// 作業領域の余裕ある位置へ戻っても、作者指定・保存の相対位置へ復帰できなくなる
+/// （DD6「補正を相対位置へ焼き付けない」）。同じ理由で 4 は `BalloonFollow.offset`
+/// （in-session 表現）にも触れない。次のバルーンドラッグ開始時の offset は、補正済みの
+/// 表示位置から [`on_balloon_drag`] が自然に再導出する。
+///
 /// イベントは消費しない（常に `false`＝伝播続行。[`on_balloon_drag`] と同じ規約）。
 pub(crate) fn on_balloon_drag_end(
     world: &mut World,
@@ -613,9 +637,9 @@ pub(crate) fn on_balloon_drag_end(
 
             // BalloonFollow.balloon == 自バルーンのキャラ窓を逆引きし、最終 char_pos・anchor・
             // char_size を読む（in-session の BalloonFollow.offset は SAVE に使わない）。
-            let mut chars = world.query::<(&BalloonFollow, &WindowPos, &Anchored)>();
-            let mut found: Option<(Point, Anchor, SizePx)> = None;
-            for (follow, char_wp, anchored) in chars.iter(world) {
+            let mut chars = world.query::<(Entity, &BalloonFollow, &WindowPos, &Anchored)>();
+            let mut found: Option<(Entity, Point, Anchor, SizePx)> = None;
+            for (char_window, follow, char_wp, anchored) in chars.iter(world) {
                 if follow.balloon != entity {
                     continue;
                 }
@@ -626,6 +650,7 @@ pub(crate) fn on_balloon_drag_end(
                     continue;
                 };
                 found = Some((
+                    char_window,
                     char_pos,
                     anchored.0,
                     SizePx {
@@ -635,7 +660,7 @@ pub(crate) fn on_balloon_drag_end(
                 ));
                 break;
             }
-            let Some((char_pos, anchor, char_size)) = found else {
+            let Some((char_window, char_pos, anchor, char_size)) = found else {
                 debug!(
                     ?entity,
                     "追従元キャラ窓（位置/anchor/寸法）不在のためバルーン offset 保存を skip（防御・no-op）"
@@ -676,7 +701,210 @@ pub(crate) fn on_balloon_drag_end(
             );
             let entries = balloon_offset_entries(scope as u32, persist);
             persist_entries(world, entries);
+
+            // ③ キーワード素材の退役（要件 4.7・task 4.6）。**②と同じ観測点**であること
+            // 自体が要点なので、②の直後に置く（詳細は [`retire_keyword_base_on_save`]）。
+            retire_keyword_base_on_save(world, char_window, entity, scope);
+
+            // ④ 解放時補正（C8・要件 2.5/5.4）。**②の永続 write-through より後**である
+            // ことが順序の要点であり、この 1 行が上へ動いた瞬間に補正値が保存値へ
+            // 焼き付く（本関数 doc「順序の固定」）。
+            apply_release_limit_correction(world, entity, scope, balloon_pos, char_pos, char_size);
             false
         }
     }
+}
+
+/// 保存された相対位置が生まれた瞬間に、キーワード由来の基本位置の素材を退役させる
+/// （areka-P0-windowposition-limit 要件 4.7・task 4.6）。
+///
+/// # 何を直しているのか
+///
+/// 要件 4.7 は While 節（状態）である——「永続化されたバルーン相対位置が**存在する間**は
+/// 永続値を優先し、キーワード指定の適用は初期既定位置の供給にとどめる」。task 4.5 は
+/// この規則を `persist::merge_scope`（＝**起動時**に読み込んだ保存値の有無）にだけ置いた。
+/// しかし保存された相対位置はセッション中にも生まれる——それがまさに本ハンドラの手順②
+/// である。対応する退役点が無いと、次にキャラ窓の寸が変わった書込で
+/// [`super::keyword_base::rederive_keyword_balloon_offset`] が発火し、利用者がドラッグで
+/// 決めた相対位置をキーワード既定へ**上書きする**（保存値優先の順位が静かに反転する）。
+///
+/// これは隅の症状ではない。実表示寸確定の再解決は同寸の書込を skip するため、採寸寸と
+/// 実表示寸が一致する**ふつうの**ゴーストでは素材が起動時に一度も消費されず、装填された
+/// まま残り続ける——面替え・再吸着・DPI 移動のどれかが来た瞬間に発火する。
+///
+/// # なぜ退役点が [`on_balloon_drag`]（連続）ではなく DragEnd（確定）なのか
+///
+/// 要件 4.7 の条件は「**永続化された**相対位置が存在する間」であり、その状態が生まれる
+/// 唯一の観測点が DragEnd の write-through である（1 ドラッグ＝1 書込・発火規律）。
+/// 「同じ事象が保存値を作り、同じ事象が素材を退役させる」——起動時に
+/// `persist::merge_scope` が保存値の存在をもって素材を落とすのと**同一の規則**であり、
+/// 二つの退役点が別々の条件で動く形にしない。
+///
+/// [`on_balloon_drag`] にも置かない理由はもう一つある。ドラッグ**中**に寸法変化が挟まって
+/// 再導出が走った場合でも、被害は残らない——利用者はまだバルーンを掴んでおり、次の
+/// カーソル移動で [`on_balloon_drag`] が `balloon_pos − char_pos` から offset を引き直し、
+/// 続く DragEnd がその値を保存する。すなわち連続側の穴は自己修復するのに対し、確定側の
+/// 穴（本欠陥）はセッションが終わるまで残る。加えて連続イベントごとに構造変更
+/// （Component 除去）を試みるのは、`BalloonLimit` と同じ「持たない窓は 1 bit も触らない」
+/// 流儀にも反する。
+///
+/// # 縮退を持たない理由（要件 6.3 の適用範囲）
+///
+/// 追従元キャラ窓が解決できない場合は、呼出元が**手前で**既に `debug!`＋skip している
+/// （保存値の導出に同じ entity が要る）。ここへ到達した時点で対象は確定しており、解決に
+/// 失敗する余地が無い。素材を持たない窓（`Side`・保存値が効いた scope・消費済み）は縮退
+/// ではなく**正常な no-op** ゆえ警告も出さない——出すと `Side` のバルーンをドラッグする
+/// たびに良性の警告が積み上がり、本物の異常を埋める。
+fn retire_keyword_base_on_save(
+    world: &mut World,
+    char_window: Entity,
+    balloon: Entity,
+    scope: usize,
+) {
+    // 実際に装填されていたときだけ記録する（no-op を毎回書かない）。
+    if world.get::<BalloonKeywordBase>(char_window).is_none() {
+        return;
+    }
+    world.entity_mut(char_window).remove::<BalloonKeywordBase>();
+    debug!(
+        scope,
+        entity = ?char_window,
+        ?balloon,
+        "バルーン相対位置が保存されたのでキーワード基本位置の素材を退役させた（要件 4.7・以後は保存値優先）"
+    );
+}
+
+/// バルーン単独ドラッグの解放位置を作業領域内へ引き戻す（design「C8: 解放時補正」・
+/// 要件 2.5／5.4／6.1／6.3）。**[`on_balloon_drag_end`] の永続 write-through より後**に
+/// 呼ばれることが契約である（呼出点の doc 参照）。
+///
+/// # 発動条件はデータ駆動（DD1・runtime 関門と同一）
+///
+/// 対象が [`BalloonLimit`]`(true)` を持つときだけ働く。持たない窓と `false` の窓は
+/// 1 bit も触らずに戻る——縮退ではないので警告も出さない（要件 2.7/2.8）。
+///
+/// # 基準領域はキャラ窓の帰属モニタ（要件 5.5）
+///
+/// 呼出元が保存値の導出で既に読み終えている追従元キャラ窓の位置・寸をそのまま受け取り、
+/// [`work_area_for_window`] の既存の帰属規則（窓中心 half-open ＋最近傍フォールバック）へ
+/// 渡すだけである。帰属規則そのものは 1 bit も変えない。runtime 関門のように
+/// `GhostWindows` を引き直さないのは、解放時点の追従元は保存値の導出で**既に**逆引き
+/// 済みであり、同じ World を二度引くと保存に使った char と補正の基準 char が乖離し得る
+/// からである（同一 DragEnd 内では同じ char を見る）。
+///
+/// # 書き込む位置と route（DD7）
+///
+/// 補正後位置を [`enqueue_window_set_pos`] へ [`PlacementRoute::BalloonLimitRelease`] で
+/// 渡す。この書込はドラッグ随伴でも位置据置きリサイズでもない**独立した新規書込**ゆえ
+/// 専用 route を名乗る（関門内の補正が元書込の route を保つのとは逆の扱い）。単一ライター
+/// 側の runtime 関門は同じ位置をもう一度クランプするが、クランプは**冪等**ゆえ二重適用は
+/// 無害であり、[`limit_correction`] が `None` を返して二重のログも出ない。
+///
+/// # 何に触れないか（DD6）
+///
+/// `BalloonFollow.offset` と永続値は解放時の**生値**のまま。本関数は表示位置しか書かない。
+///
+/// # 縮退（log-first・要件 6.3）
+///
+/// 判定寸・基準作業領域のいずれかが解決できないときは
+/// [`BALLOON_LIMIT_UNRESOLVED_TAG`] の `warn!` を残して補正を見送る（無ログの縮退経路を
+/// 作らない）。補正が実際に位置を動かしたときだけ [`BALLOON_LIMIT_CLAMP_TAG`] の `info!`
+/// を出す——[`limit_correction`] の `None` は「クランプしても位置が動かない」の意であって
+/// 「内包されている」ではない（要件 6.1 は「実際に動かしたとき」の記録を求める）。
+fn apply_release_limit_correction(
+    world: &mut World,
+    balloon: Entity,
+    scope: usize,
+    release_pos: Point,
+    char_pos: Point,
+    char_size: SizePx,
+) {
+    // 発動条件（DD1）: limit 無効・Component 非保持は 1 bit も触らず戻る。
+    if !matches!(world.get::<BalloonLimit>(balloon), Some(BalloonLimit(true))) {
+        return;
+    }
+
+    let pos = PointPx {
+        x: release_pos.x,
+        y: release_pos.y,
+    };
+
+    // 判定寸＝解放時点のバルーン現寸。未確定表現は `Option::None` **だけではない**
+    // ——`WindowPos::default()` は `CW_USEDEFAULT`（`i32::MIN` センチネル）を寸に持つ
+    // （`guard_balloon_position`／runtime 関門と同型のガード）。
+    let balloon_size = world
+        .get::<WindowPos>(balloon)
+        .and_then(|wp| wp.size)
+        .filter(|s| s.width > 0 && s.height > 0)
+        .map(|s| SizePx {
+            w: s.width,
+            h: s.height,
+        });
+    let Some(balloon_size) = balloon_size else {
+        warn!(
+            entity = ?balloon,
+            scope,
+            context = BALLOON_LIMIT_RELEASE_CONTEXT,
+            route = ?PlacementRoute::BalloonLimitRelease,
+            ?pos,
+            "{BALLOON_LIMIT_UNRESOLVED_TAG} 解放時補正: バルーンの寸が未確定（CW_USEDEFAULT センチネル含む）のため内包判定できない → 補正を見送る"
+        );
+        return;
+    };
+
+    // 基準はキャラ窓の帰属モニタ（要件 5.5）。位置のセンチネル・非正寸は矩形を組めない。
+    let char_rect = (char_pos.x != CW_USEDEFAULT
+        && char_pos.y != CW_USEDEFAULT
+        && char_size.w > 0
+        && char_size.h > 0)
+        .then(|| {
+            rect_at(
+                PointPx {
+                    x: char_pos.x,
+                    y: char_pos.y,
+                },
+                char_size,
+            )
+        });
+    let area = char_rect.and_then(|r| {
+        world
+            .get_resource::<MonitorSnapshot>()
+            .and_then(|snapshot| work_area_for_window(snapshot, r))
+    });
+    let Some(area) = area else {
+        warn!(
+            entity = ?balloon,
+            scope,
+            context = BALLOON_LIMIT_RELEASE_CONTEXT,
+            route = ?PlacementRoute::BalloonLimitRelease,
+            ?pos,
+            ?char_rect,
+            "{BALLOON_LIMIT_UNRESOLVED_TAG} 解放時補正: キャラ窓矩形が組めないか MonitorSnapshot 未挿入／モニタ 0 台で基準作業領域を決められない → 補正を見送る"
+        );
+        return;
+    };
+
+    let Some(corrected) = limit_correction(pos, balloon_size, area) else {
+        return;
+    };
+
+    info!(
+        scope,
+        context = BALLOON_LIMIT_RELEASE_CONTEXT,
+        entity = ?balloon,
+        route = ?PlacementRoute::BalloonLimitRelease,
+        from = ?pos,
+        to = ?corrected,
+        balloon_size = ?balloon_size,
+        work_area = ?area,
+        "{BALLOON_LIMIT_CLAMP_TAG} 解放時補正: バルーンの解放位置を作業領域内へ補正した（保存済みの相対位置は生値のまま）"
+    );
+    enqueue_window_set_pos(
+        world,
+        balloon,
+        corrected.x,
+        corrected.y,
+        None,
+        Some(PlacementRoute::BalloonLimitRelease),
+    );
 }

@@ -167,6 +167,9 @@ pub(super) const VISIBILITY_UNRESOLVED_TAG: &str = "[visibility-guard] WorkAreaU
 /// - [`SpawnInitial`](PlacementRoute::SpawnInitial)／[`Restore`](PlacementRoute::Restore):
 ///   復元時の可視化保証は `areka-P0-position-persist` の所有（design Boundary）。
 /// - [`MoveCue`](PlacementRoute::MoveCue): `\![move]` はスクリプトの明示操作（D13 帰結⑵）。
+/// - [`BalloonLimitRelease`](PlacementRoute::BalloonLimitRelease): バルーン窓側の書込であり、
+///   かつ `windowposition.limit` の関門が既に画面内を保証した後の位置である
+///   （areka-P0-windowposition-limit DD7）。遷移ガードで重ねて引き戻す対象ではない。
 /// - [`KeepPositionResize`](PlacementRoute::KeepPositionResize)／
 ///   [`BalloonFollow`](PlacementRoute::BalloonFollow): バルーン窓側の書込。
 ///   **本述語をそのままバルーン適用（task 6.2）の発火条件に流用しないこと**——
@@ -187,7 +190,8 @@ pub(super) fn route_applies_visibility_guard(route: PlacementRoute) -> bool {
         | PlacementRoute::Restore
         | PlacementRoute::KeepPositionResize
         | PlacementRoute::BalloonFollow
-        | PlacementRoute::MoveCue => false,
+        | PlacementRoute::MoveCue
+        | PlacementRoute::BalloonLimitRelease => false,
     }
 }
 

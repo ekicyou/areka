@@ -1,4 +1,5 @@
 use super::*;
+use crate::placement::config::BalloonXMode;
 
 // ------------------------------------------------------------------
 // バルーン相対オフセットの保存基準（2.2/2.5・2026-07-31 実機裁定）
@@ -403,7 +404,10 @@ fn placement(
         },
         balloon_size,
         balloon_offset,
+        // windowposition-limit: 正典既定（有効）。復元 merge は limit を変換しない。
+        balloon_limit: true,
         anchor,
+        balloon_keyword_base: None,
     }
 }
 
@@ -473,6 +477,56 @@ fn apply_empty_entries_is_identity() {
     let out = apply_restored_placements(placements.clone(), &[], &snap);
 
     assert_eq!(out, placements, "空 entries は入力恒等（1.5/2.4）");
+}
+
+/// windowposition-limit: 復元 merge は `balloon_limit` を**両方向とも**転記する。
+///
+/// 既存の復元檻はすべて `balloon_limit: true` の placement を投入するため、
+/// merge が「無効化しない」ことしか固定できていなかった。`merge_scope` の転記を
+/// `true` 固定へ変異させても既存檻は 1 本も落ちない（実測）。それでは
+/// 「`windowposition.limit,0` の scope に保存位置があると limit が黙って復活する」
+/// という退行を検出できない——保存位置を持つ scope はユーザが自分でドラッグした
+/// scope であり、画面外に居る可能性が最も高い当のケースである。
+///
+/// 本檻は `false` を投入して、保存値が効く経路（scope0）と効かない経路（scope1）の
+/// **両方**で `false` のまま出てくることを固定する。
+#[test]
+fn apply_restored_placements_carries_balloon_limit_false_both_ways() {
+    let snap = snapshot_of(vec![]); // identity 射影（保存値素通し）
+    // `Free` は射影を持たないので保存値がそのまま出る（既存の恒等檻と同じ流儀）。
+    let disabled = |scope: usize, char_pos: PointPx| ScopePlacement {
+        balloon_limit: false,
+        ..placement(
+            scope,
+            Anchor::Free,
+            char_pos,
+            CSZ,
+            PointPx { x: -200, y: 0 },
+            BSZ,
+        )
+    };
+    let placements = vec![
+        disabled(0, PointPx { x: 500, y: 440 }),
+        disabled(1, PointPx { x: 100, y: 200 }),
+    ];
+    // scope0 にだけ保存位置を与える（merge が働く経路と働かない経路を 1 回で covering）。
+    let entries = vec![wp(0, Axis::X, "777"), wp(0, Axis::Y, "333")];
+
+    let out = apply_restored_placements(placements, &entries, &snap);
+
+    assert_eq!(
+        out[0].char_pos,
+        PointPx { x: 777, y: 333 },
+        "前提: scope0 は保存値が効いて merge_scope を通っている"
+    );
+    assert!(
+        !out[0].balloon_limit,
+        "保存位置のある scope でも limit=0 は復活しない（merge_scope の転記）"
+    );
+    assert!(
+        !out[1].balloon_limit,
+        "保存位置のない scope でも limit=0 のまま（恒等経路）"
+    );
 }
 
 /// 1.6/2.5: scope 別 entries は交差しない。scope0 の WindowPos は scope1 に波及せず、
@@ -727,4 +781,83 @@ fn apply_is_deterministic() {
     let a = apply_restored_placements(placements.clone(), &entries, &snap);
     let b = apply_restored_placements(placements, &entries, &snap);
     assert_eq!(a, b, "同一入力→同一出力");
+}
+
+// ------------------------------------------------------------------
+// キーワード再導出の素材と保存値の優先順位（要件 4.7・2026-08-14 実機是正）
+//
+// 要件 4.7 は「永続値を優先し、キーワード指定の適用は初期既定位置の供給にとどめる」。
+// 実表示寸確定時の再導出はキーワードの初期既定位置を引き直す仕掛けなので、保存された
+// 相対位置が効いている scope では**素材ごと落として**発火させない——落とさないと、
+// 再導出がユーザーの保存値をキーワード既定へ静かに上書きしてしまう。
+// ------------------------------------------------------------------
+
+/// 保存 offset が両軸そろって効いた scope は再導出の素材を失う（4.7）。
+#[test]
+fn merge_drops_the_keyword_base_when_a_saved_balloon_offset_wins() {
+    let snap = snapshot_of(vec![]); // identity 射影（保存値素通し）
+    let keyworded = |scope: usize| ScopePlacement {
+        balloon_keyword_base: Some((BalloonXMode::CenterTop, PointPx { x: 0, y: -12 })),
+        ..placement(
+            scope,
+            Anchor::Free,
+            PointPx { x: 500, y: 440 },
+            CSZ,
+            PointPx { x: 17, y: -224 },
+            BSZ,
+        )
+    };
+    let placements = vec![keyworded(0), keyworded(1)];
+    // scope0 にだけ保存 offset を与える（勝つ経路と勝たない経路を 1 回で covering）。
+    let entries = vec![bo(0, Axis::X, "-40"), bo(0, Axis::Y, "-300")];
+
+    let out = apply_restored_placements(placements, &entries, &snap);
+
+    assert_eq!(
+        out[0].balloon_offset,
+        PointPx { x: -40, y: -300 },
+        "前提＝scope0 は保存 offset が勝っている"
+    );
+    assert_eq!(
+        out[0].balloon_keyword_base, None,
+        "保存 offset が勝った scope に再導出の素材が残っている（4.7 の優先順位が反転する）"
+    );
+    assert_eq!(
+        out[1].balloon_keyword_base,
+        Some((BalloonXMode::CenterTop, PointPx { x: 0, y: -12 })),
+        "保存 offset の無い scope で素材が落ちている（キーワードの初期既定位置が失われる）"
+    );
+}
+
+/// 片軸だけの保存 offset は「値なし」＝resolver 既定が残る腕であり、素材も残る
+/// （既存の片軸縮退規則と同じ側へ倒れることを固定する）。
+#[test]
+fn merge_keeps_the_keyword_base_when_the_saved_offset_is_half_missing() {
+    let snap = snapshot_of(vec![]);
+    let base = Some((BalloonXMode::CenterBottom, PointPx { x: 5, y: 6 }));
+    let placements = vec![ScopePlacement {
+        balloon_keyword_base: base,
+        ..placement(
+            0,
+            Anchor::Free,
+            PointPx { x: 500, y: 440 },
+            CSZ,
+            PointPx { x: 17, y: 687 },
+            BSZ,
+        )
+    }];
+    // y 軸だけ保存されている（片軸欠損＝採用しない既存規則）。
+    let entries = vec![bo(0, Axis::Y, "-300")];
+
+    let out = apply_restored_placements(placements, &entries, &snap);
+
+    assert_eq!(
+        out[0].balloon_offset,
+        PointPx { x: 17, y: 687 },
+        "前提＝片軸欠損では resolver 既定 offset が保持される"
+    );
+    assert_eq!(
+        out[0].balloon_keyword_base, base,
+        "既定 offset を保持した腕で素材が落ちている（offset と素材の腕がずれている）"
+    );
 }

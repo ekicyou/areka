@@ -272,7 +272,7 @@ fn window_move_record_route_follows_the_argument_of_the_shared_resize_entry() {
             line.contains(&format!("route={}", route.as_str())),
             "route={route} を渡したのにレコードが一致しない: {line}"
         );
-        // 他 8 経路の語が混ざらない（取り違えの檻）。
+        // 他 9 経路の語が混ざらない（取り違えの檻）。
         for other in PlacementRoute::ALL {
             if other == route {
                 continue;

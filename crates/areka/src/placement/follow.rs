@@ -33,16 +33,30 @@
 
 mod anchor;
 mod drag_follow;
+mod keyword_base;
 mod visibility;
 mod window_move;
 mod work_area;
 
+// limit 補正の式とタグ語彙（windowposition-limit C5/C10）。runtime 関門
+// （`window_move::enqueue_window_set_pos`・task 3.3）と解放時補正
+// （`drag_follow::on_balloon_drag_end`・task 3.4）が消費する。
+use super::balloon_limit::{
+    BALLOON_LIMIT_CLAMP_TAG, BALLOON_LIMIT_RELEASE_CONTEXT, BALLOON_LIMIT_RUNTIME_CONTEXT,
+    BALLOON_LIMIT_UNRESOLVED_TAG, limit_correction,
+};
 use super::diag::{self, DESPAWNED_SKIP_TAG, PlacementRoute, WindowKind, WindowMoveRecord};
 use super::persist::{
     balloon_offset_entries, char_pos_entries, char_pos_to_origin_x, persist_entries,
 };
-use super::resolver::{Anchor, PointPx, RectPx, SizePx};
-use super::spawn::{BalloonWindowMarker, CharWindowMarker};
+use super::resolver::{Anchor, PointPx, RectPx, SizePx, keyword_balloon_pos};
+use super::spawn::{BalloonKeywordBase, BalloonWindowMarker, CharWindowMarker, GhostWindows};
+// runtime 関門（`window_move::enqueue_window_set_pos`・task 3.3）と解放時補正
+// （`drag_follow::on_balloon_drag_end`・task 3.4）が読む limit 値の
+// ファサード再束縛（windowposition-limit C9「follow facade から再輸出」）。
+// `spawn::BalloonLimit` は既に公開ゆえここは私有再束縛に留め、公開面は増やさない
+// （`BalloonWindowMarker`／`CharWindowMarker` と同じ扱い）。
+use super::spawn::BalloonLimit;
 
 pub use self::anchor::{Anchored, project_anchor};
 pub use self::drag_follow::BalloonFollow;
@@ -74,6 +88,7 @@ pub use self::window_move::{
 // サブモジュール間の相互参照とテストモジュールからの `super::` 参照は、いずれも
 // ここを経由する。
 use self::drag_follow::{BalloonFollowTrigger, follow_balloon};
+use self::keyword_base::rederive_keyword_balloon_offset;
 use self::visibility::{
     VISIBILITY_UNRESOLVED_TAG, apply_visibility_guard, evaluate_visibility_guard, rect_at,
     route_applies_visibility_guard,
@@ -120,3 +135,12 @@ mod visibility_char_wiring_tests;
 #[cfg(test)]
 #[path = "follow_visibility_balloon_wiring_tests.rs"]
 mod visibility_balloon_wiring_tests;
+#[cfg(test)]
+#[path = "follow_balloon_limit_tests.rs"]
+mod balloon_limit_wiring_tests;
+#[cfg(test)]
+#[path = "follow_drag_end_limit_tests.rs"]
+mod drag_end_limit_tests;
+#[cfg(test)]
+#[path = "follow_keyword_base_tests.rs"]
+mod keyword_base_tests;

@@ -212,6 +212,106 @@ fn parse_str_descript_only() {
     assert_eq!(got.windowposition().x(), None);
 }
 
+/// `windowposition.x`/`.limit` の生値転記: 2 層マージ後に勝った値が取れる（要件 1.1/4.1・C2）。
+///
+/// 画像別層が同一キーを後勝ちで上書きし、その勝った生文字列がそのまま取れる。
+/// 併せて既存の数値アクセサが無改変であること（`center` は `i32` パース不能ゆえ従来どおり
+/// `None` へ降格）も固定する（要件 5.1 の bit 同一）。
+#[test]
+fn windowposition_raw_two_layer_merge_takes_winner() {
+    let descript = map(&[("windowposition.x", "10"), ("windowposition.limit", "1")]);
+    let image = map(&[
+        ("windowposition.x", "center"),
+        ("windowposition.limit", "0"),
+    ]);
+
+    let got = parse(&descript, Some(&image));
+
+    // 生値は画像別層が勝つ（後勝ち・要件 1.1/4.1）。
+    assert_eq!(got.windowposition_raw().x_raw(), Some("center"));
+    assert_eq!(got.windowposition_raw().limit_raw(), Some("0"));
+    // 既存の数値アクセサは無改変: `center` は非数値ゆえ従来どおり None（要件 5.1）。
+    assert_eq!(got.windowposition().x(), None);
+    assert_eq!(got.windowposition().y(), None);
+}
+
+/// 画像別層に無い `windowposition.*` は descript 基層を継承する（要件 1.1/4.1・R3.3 と同型）。
+#[test]
+fn windowposition_raw_image_missing_key_inherits_descript() {
+    let descript = map(&[
+        ("windowposition.x", "bottom"),
+        ("windowposition.limit", "0"),
+    ]);
+    // 画像別層は windowposition.* を持たない。
+    let image = map(&[("font.height", "28")]);
+
+    let got = parse(&descript, Some(&image));
+
+    assert_eq!(got.windowposition_raw().x_raw(), Some("bottom"));
+    assert_eq!(got.windowposition_raw().limit_raw(), Some("0"));
+}
+
+/// `windowposition.x`/`.limit` 未指定 → いずれも「値なし」（`None`）（要件 1.1/4.1）。
+#[test]
+fn windowposition_raw_unspecified_is_none() {
+    let descript = map(&[("origin.x", "12")]);
+
+    let got = parse(&descript, None);
+
+    assert_eq!(got.windowposition_raw().x_raw(), None);
+    assert_eq!(got.windowposition_raw().limit_raw(), None);
+}
+
+/// 数値指定も生文字列としてそのまま転記され、既存の数値アクセサと併存する（要件 4.1/5.1）。
+#[test]
+fn windowposition_raw_transcribes_numeric_verbatim() {
+    let descript = map(&[
+        ("windowposition.x", "266"),
+        ("windowposition.y", "-129"),
+        ("windowposition.limit", "1"),
+    ]);
+
+    let got = parse(&descript, None);
+
+    // 生値は解釈せず文字列のまま。
+    assert_eq!(got.windowposition_raw().x_raw(), Some("266"));
+    assert_eq!(got.windowposition_raw().limit_raw(), Some("1"));
+    // 既存の数値経路は無改変（要件 5.1）。
+    assert_eq!(got.windowposition().x(), Some(266));
+    assert_eq!(got.windowposition().y(), Some(-129));
+}
+
+/// 語彙外の値も解釈せず・警告せず素通しで転記される（転記層契約・要件 1.1/4.1）。
+///
+/// 0/1 検証・キーワード判別・警告縮退は下流（placement 側の分類純関数）の責務であり、
+/// parser はここで判断しない（steering「parser は転記層・解釈は下流」）。
+#[test]
+fn windowposition_raw_out_of_vocabulary_values_pass_through() {
+    let descript = map(&[
+        ("windowposition.x", "diagonal"),
+        ("windowposition.limit", "2"),
+    ]);
+
+    let got = parse(&descript, None);
+
+    assert_eq!(got.windowposition_raw().x_raw(), Some("diagonal"));
+    assert_eq!(got.windowposition_raw().limit_raw(), Some("2"));
+    // 非数値 x は既存どおり数値スカラでは None（要件 5.1）。
+    assert_eq!(got.windowposition().x(), None);
+}
+
+/// 前後空白は kv 層の trim で既に除かれており、転記層は追加の整形をしない（C2 前提）。
+#[test]
+fn windowposition_raw_relies_on_kv_layer_trim() {
+    let got = parse_str(
+        "windowposition.limit,  0  \nwindowposition.x,  center  ",
+        None,
+    );
+
+    assert_eq!(got.windowposition_raw().limit_raw(), Some("0"));
+    assert_eq!(got.windowposition_raw().x_raw(), Some("center"));
+}
+
 /// `writing_mode` 単層指定（descript のみ）→ 生文字列がそのまま転記される（要件 5.6）。
 #[test]
 fn writing_mode_descript_single_layer_transcribed() {

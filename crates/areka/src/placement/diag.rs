@@ -148,7 +148,7 @@ const UNKNOWN: &str = "-";
 /// 要件 2.4 の「最終位置を書き込んだ主体」を名指しするための結論語彙）。
 ///
 /// 消失の診断で最後に要るのは「どこに居たか」ではなく「**誰が最後に書いたか**」である。
-/// 位置を書ける経路は 9 つあり、ログ上でそれらが見分けられなければ書き手を名指しできない。
+/// 位置を書ける経路は 10 あり、ログ上でそれらが見分けられなければ書き手を名指しできない。
 /// 表示語（[`PlacementRoute::as_str`]）は診断手順書の判定語そのものゆえ檻で固定する。
 ///
 /// # 語彙は「実在の書込トリガ」と 1:1 でなければならない（D13）
@@ -195,17 +195,29 @@ pub enum PlacementRoute {
     /// 明示操作の尊重ゆえ遷移ガード適用外＝ドラッグ・[`Restore`](Self::Restore) と同族（D13）。
     /// 随伴バルーン側の書込は [`BalloonFollow`](Self::BalloonFollow) を持つ。
     MoveCue,
+    /// バルーン窓ドラッグ解放時の `windowposition.limit` 補正
+    /// （`on_balloon_drag_end` の解放時補正・areka-P0-windowposition-limit DD7）。
+    ///
+    /// **ドラッグ中は無介入**（明示操作の尊重）で、解放の瞬間にだけ画面内へ引き戻す
+    /// ——この書込はドラッグ随伴（[`BalloonFollow`](Self::BalloonFollow)）でも
+    /// 位置据置きリサイズでもない**独立した新規書込**ゆえ 1:1 の原則で専用語を持つ
+    /// （D13 の「1 語が 2 トリガを指すと切り分けが原理的に不能になる」と同じ理由）。
+    ///
+    /// 関門（`enqueue_window_set_pos` 内）が行う補正は本語を名乗らない——そちらは
+    /// **元書込の route を保つ**。補正は同一書込の一部であって別書込ではないからである（DD7）。
+    // 発行者は `follow::drag_follow::apply_release_limit_correction`（task 3.4）ただ 1 箇所。
+    BalloonLimitRelease,
 }
 
 impl PlacementRoute {
     /// 全経路（檻が語彙の網羅と一意性を固定するための単一の列）。
     ///
     /// バリアントを増やしたら[`as_str`](Self::as_str) の網羅 match がコンパイルを止め、
-    /// ここへの追加漏れは檻（`placement_route_all_covers_nine_distinct_variants`）が捕まえる。
+    /// ここへの追加漏れは檻（`placement_route_all_covers_ten_distinct_variants`）が捕まえる。
     // 消費者は in-source 檻（`#[cfg(test)]`）だけゆえ本番ビルドでは dead。檻専用の列である
     // ことが存在理由そのもの（語彙の網羅・一意性の単一の錨）ゆえ本属性を残す。
     #[allow(dead_code)]
-    pub const ALL: [PlacementRoute; 9] = [
+    pub const ALL: [PlacementRoute; 10] = [
         PlacementRoute::SpawnInitial,
         PlacementRoute::Restore,
         PlacementRoute::AnchorChange,
@@ -215,6 +227,7 @@ impl PlacementRoute {
         PlacementRoute::BalloonFollow,
         PlacementRoute::ReportedSizeReconcile,
         PlacementRoute::MoveCue,
+        PlacementRoute::BalloonLimitRelease,
     ];
 
     /// ログ上の表示語（診断手順書の grep 判定語と 1:1）。
@@ -229,6 +242,7 @@ impl PlacementRoute {
             PlacementRoute::BalloonFollow => "BalloonFollow",
             PlacementRoute::ReportedSizeReconcile => "ReportedSizeReconcile",
             PlacementRoute::MoveCue => "MoveCue",
+            PlacementRoute::BalloonLimitRelease => "BalloonLimitRelease",
         }
     }
 }
