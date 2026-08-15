@@ -104,8 +104,11 @@ from pathlib import Path
 
 #: 本スクリプトの版（レポート先頭に出す。較正値を変えたら上げる）。
 SCRIPT_VERSION = (
-    "0.2.3 (task 2.4 / 集計モード＋判定モード＋自己較正モード・"
-    "判定式と較正値は 0.2.2 から不変)"
+    "0.3.2 (task 3.2 の裁定を反映 / 判定式⑴の窓を発火起点へ・"
+    "上限の土台を最大コマ待ち 150ms へ・判定対象系列を明示指定へ / "
+    "0.3.1: 窓 C に条件 4（同一鍵の重畳除外・FRAME_INTERVAL_IDLE_MAX_ACTIVE）を復帰 / "
+    "0.3.2: 条件 4 の活性本数を判定対象系列の scope に限定"
+    "（別 scope のアニメで判定対象の間隔が落ちるのを止める）)"
 )
 
 #: 終了コード表（バナーが唯一の所在であるため、docstring だけでなくここにも置く）。
@@ -139,12 +142,41 @@ VERDICT_PRECEDENCE = (
 )
 
 # --- コマ適用間隔（要件 4.2⑴ の入力） ---------------------------------------
+#
+# 【この節の出所＝task 3.2 の裁定（`baseline-2026-08-14.md` §5）】
+# 以前ここには `FRAME_INTERVAL_EXPECTED_MS = 172.0` が「期待するコマ間隔」として置いてあり、
+# **それは誤りだった**。emo2 のキャラ（`surface1000`）に掛かる `animation1400`（まばたき）の
+# 定義は `crates/pilot/examples/shiori-host-32/fixtures/emo2/shell/master/surfaces.txt` にあり、
+# コマの待ち時間は **0 → 150 → 22** である。172 は 150 と 22 の **和＝サイクル全長** であって、
+# コマとコマの間隔ではない。実際のコマ間隔は **150ms と 22ms の 2 種** であり、
+# 「単一の指定間隔」はこのアニメには存在しない。
+#
+# ゆえに判定式⑴ は次の形へ確定した（3.2 の裁定・レビューが p95 を独立に再導出して合意）:
+#
+#   * 上限 …… **最大のコマ待ち時間** 150ms x (1 + 許容率)。サイクル全長 172 は上限に使わない
+#   * 窓 …… seriko の「loop 抽選発火」を起点に、サイクルの内側だけを切り出す
+#            （下の FRAME_INTERVAL_WINDOW が定義そのもの）
+#
+# 較正の検算（3 走行の実測・この値が出ないなら道具が壊れている）:
+#
+#   release long  … 判定対象 309 本・p95 164.0ms → 合格
+#   release short … 判定対象  65 本・p95 178.6ms → 不合格
+#   dev short     … 判定対象  22 本・p95 822.0ms → 不合格
 
-#: 期待するコマ適用間隔（ミリ秒）。emo2 のまばたきアニメ定義値。**emo2 固有**。
-FRAME_INTERVAL_EXPECTED_MS = 172.0
+#: そのアニメ定義に現れる **最大のコマ待ち時間**（ミリ秒）。判定式⑴の上限の土台。
+#: emo2 の `animation1400` は待ち 0 → 150 → 22 なので 150。**emo2 固有**。
+FRAME_INTERVAL_MAX_WAIT_MS = 150.0
 
-#: 期待値からの許容率。判定は p95 <= 期待値 x (1 + 許容率)（要件 4.2⑴）。
-#: 暫定値であり、task 3.1 の第 1 段ベースラインで確定する。
+#: そのアニメ定義の **サイクル全長**（ミリ秒）＝全コマの待ち時間の和。
+#: 判定窓の条件 2（発火からどれだけ離れた適用までをサイクル内とみなすか）に使う。
+#: **上限ではない**——ここを上限に使ったのが是正前の誤りである。**emo2 固有**。
+FRAME_INTERVAL_CYCLE_SPAN_MS = 172.0
+
+#: 上の 2 値の出どころ（アニメ定義のコマ待ち列）。読み手が再導出できるように併記する。
+#: 和 0+150+22 = 172 が CYCLE_SPAN、最大 150 が MAX_WAIT である。**emo2 固有**。
+FRAME_INTERVAL_ANIMATION_WAITS_MS = (0.0, 150.0, 22.0)
+
+#: 最大コマ待ちからの許容率。判定は p95 <= 最大コマ待ち x (1 + 許容率)（要件 4.2⑴）。
 FRAME_INTERVAL_TOLERANCE = 0.15
 
 #: コマ適用間隔の系列の分け方（design.md「較正値台帳」FRAME_INTERVAL_WINDOW）。
@@ -153,30 +185,92 @@ FRAME_INTERVAL_TOLERANCE = 0.15
 #: 各列の中で連続する適用の時刻差だけを間隔として数える。
 FRAME_INTERVAL_SERIES_KEY = ("target_id", "surface_id")
 
-#: 測定窓の定義。**未確定**であることを明示しておく。
-#: design.md の台帳は「アイドル区間（talk 再生・複数アニメ重畳を除外した窓）限定」と
-#: 定めているが、窓の境界条件は task 3.1 の第 1 段ベースラインで確定して README へ登記する
-#: 手筈になっている。本スクリプトは下の 2 つの窓を **両方** 集計して並べて出す：
-#:   "warmup"  : 起動過渡（WARMUP_EXCLUDE_SEC）を除いただけの窓。確実に計算できる
-#:   "idle"    : さらに「同時に走っているアニメが FRAME_INTERVAL_IDLE_MAX_ACTIVE 本以下」
-#:               の区間だけに絞った窓。seriko の発火・停止 info! の収支から推定する
-#: talk 再生の除外は、現在のログ水準（RUST_LOG=info,areka_emo_present=debug）で
-#: talk の開始・終了を名指しできる行が無いため **実装していない**。3.1 のベースラインで
-#: 目印になる行を決め、FRAME_INTERVAL_IDLE_EXCLUDE_MARKERS へ入れること。
-FRAME_INTERVAL_WINDOW = "warmup と idle の 2 通りを併記（idle の境界は task 3.1 で確定）"
-
-#: idle 窓とみなす「同時に走っているアニメの本数」の上限。
-#: 1 本（まばたき単独）までをアイドルとみなす暫定値。task 3.1 で確定する。
+#: 窓 C の条件 4 に使う、推定活性アニメ本数の上限。
+#: 【なぜ要るか】系列の鍵は (target_id, surface_id) であって **アニメ単位ではない**。
+#: 同じ鍵の上で 2 本のアニメが同時に走ると、両者のコマ適用が 1 本の列に混ざり、
+#: 隣り合う適用の差は **どちらのアニメのコマ間隔でもなくなる**。混ざり方の位相しだいで
+#: 偽の不合格にも **偽の合格** にも倒れる:
+#:   * 遅いアニメのコマがサイクルの外に落ちる位相 → 長い空きが間隔として残り偽の不合格
+#:   * 遅いアニメのコマがサイクルの内側へ落ちる位相 → 長い間隔が短い間隔 2 本へ割られ、
+#:     **上限の 4 倍で動いているアニメが判定の窓から丸ごと消えて合格に化ける**
+#: 後者は「速い系列だけが残って合格」という、本 spec が二度踏んだ形そのものである
+#: （fixture P13 がその位相を固定している。P12 は前者）。
+#: ゆえに、区間の両端のいずれかで推定活性本数がこの値を超える間隔は判定に使わない。
+#:
+#: 【数える範囲＝判定対象系列に対応する scope のアニメだけ（0.3.2 の是正）】
+#: 活性本数は **系列ごと**（FRAME_INTERVAL_SERIES_SCOPE がその系列に結び付けた scope）に
+#: 数える。全 scope をまたいで 1 つの集合を作ってはならない。
+#: 理由は上の「なぜ要るか」がそのまま裏返しになる——条件 4 が要るのは
+#: **同一の系列鍵に 2 本のアニメが乗ると隣り合う差がどちらの間隔でもなくなる** からであって、
+#: 別 scope のアニメは **別の系列鍵**（別の target_id）へコマを出す。ケロが動いていることは、
+#: キャラのコマ送りが健全かどうかについて何も語らない。
+#: 全 scope で数えると「別のアニメがこの系列を汚している」と「マシンが忙しい」が混ざるが、
+#: 判定式⑴が測っているのは後者ではない。
+#: 【混ぜると何が起きたか（実測）】0.3.1 は全 scope で数えていた。長時間 release で
+#: 42 本の間隔が落ち（309 → 267 本）、**その 42 本は 1 本残らず「キャラ 1 本＋ケロ 1 本」**
+#: であって、キャラの 2 本重なりは 1 件も無かった。しかも落ちた 42 本のうち 1 本は
+#: 上限超過（173.997ms）で、上限超過が 9 → 8 件へ減っていた＝**判定式⑴が探している当の
+#: 証跡を消していた**。短時間 release では、上限超過だった 5 本の区間にケロの発火・停止を
+#: 挟むだけで p95 が 178.615 → 161.928ms へ落ち、⑴ が不合格から **合格へ反転** する
+#: （fixture P14 がこの形を固定している）。安全側に倒れる見張りではなく偽合格の経路だった。
+#: 【この見張りの届く範囲】活性本数は発火・停止 info! の収支からの **間接推定** なので、
+#: 2 本目のアニメが発火の記録を出していなければ数えられない（fixture P12 がその形）。
+#: 【落とす方向は一方通行】条件 4 は間隔を **減らす** ことしかしない。ゆえに走行の相が
+#: 変わって落ちる本数が増えれば、系列は FRAME_INTERVAL_MIN_SAMPLES を割って
+#: **判定不能** へ倒れる（合格ではない）。
+#: ただし「減るだけ」は「安全側」を意味しない——落ちた中に上限超過が入っていれば、
+#: 残った間隔の p95 は下がる。それが 0.3.2 で塞いだ経路そのものである。
+#: 同一 scope・同一鍵の重畳では落とすのが正しい（その差はどちらのコマ間隔でもない）が、
+#: 遅い区間だけを覆う重畳なら証跡は同じように消える。この窓が測れる範囲の限界である。
 FRAME_INTERVAL_IDLE_MAX_ACTIVE = 1
 
-#: talk 再生区間を idle 窓から外すための目印（メッセージの一部）。**現在は空**。
-#: task 3.1 が第 1 段ベースラインの実走ログを見て確定し、ここへ入れる。
-#: 空のままだと talk 中の適用が idle 窓に混ざるため、レポートにその旨を明記する。
-FRAME_INTERVAL_IDLE_EXCLUDE_MARKERS: tuple[str, ...] = ()
+#: 測定窓の定義（task 3.2 の裁定で確定）。本スクリプトは 2 つの窓を集計して並べて出す：
+#:   窓 A: 起動過渡（WARMUP_EXCLUDE_SEC）を除いただけの窓。参考表示にのみ使う
+#:   窓 C: 発火起点の窓。**判定式⑴が使うのはこちら**
+#:
+#: 窓 C の定義（判定対象の系列の、連続する 2 回の適用時刻 a < b について）:
+#:   1. その系列に対応する scope（FRAME_INTERVAL_SERIES_SCOPE）の「loop 抽選発火」
+#:      （J_SERIKO_FIRE_MESSAGE）のうち、a 以前で最も新しいものの時刻を f とする。
+#:      f が存在しない系列・時刻は対象外
+#:   2. a - f <= FRAME_INTERVAL_CYCLE_SPAN_MS（＝サイクルの内側にある適用だけを起点にする）
+#:   3. 区間 (a, b] に新しい「loop 抽選発火」が無い（サイクルとサイクルの間の空白を落とす）
+#:   4. a と b の **両方** で、**その系列に対応する scope の**（＝条件 1 と同じ scope の）
+#:      推定活性アニメ本数が FRAME_INTERVAL_IDLE_MAX_ACTIVE 以下
+#:      （＝同じ鍵に 2 本のアニメが混ざった区間を落とす。別 scope のアニメは数えない）
+#:
+#: 条件 3 が「まばたきは数秒に 1 回しか起きない」という **正常な空白** を落とし、
+#: 条件 2 が発火と無関係な適用（会話で別の絵に切り替わる等）を落とす。
+#: 条件 4 が「隣り合う差がどちらのアニメの間隔でもない」区間を落とす（上の
+#: FRAME_INTERVAL_IDLE_MAX_ACTIVE の但し書き）。条件 4 が **同じ scope しか数えない** のは、
+#: 別 scope のアニメは別の系列鍵へコマを出すからである（0.3.2 の是正。全 scope で数えて
+#: いた 0.3.1 は、ケロが動いているだけでキャラの間隔を落としていた）。
+#: **停止ログ（J_SERIKO_STOP_MESSAGES）は窓の終端に使わない**——停止は最後のコマの適用より
+#: 先に出ることがあり、終端に使うと最後のコマが毎回落ちる（3.2 で実測確認）。
+#: ただし停止ログは条件 4 の活性本数の収支には使う（終端に使うのとは別の話である）。
+FRAME_INTERVAL_WINDOW = (
+    "窓 C（発火起点）: 「loop 抽選発火」時刻 f を起点に、a - f <= "
+    "FRAME_INTERVAL_CYCLE_SPAN_MS かつ区間 (a, b] に次の発火を含まず、"
+    "さらに両端で **同じ scope の** 推定活性アニメ本数が "
+    "FRAME_INTERVAL_IDLE_MAX_ACTIVE 以下の間隔だけを判定に使う"
+    "（別 scope のアニメは数えない）。"
+    "停止ログは終端に使わない（最後のコマの適用より先に出るため。活性本数の収支には使う）。"
+    "窓 A（起動過渡のみ除外）は参考表示にとどめる"
+)
 
-#: 判定式⑴が使う窓（要件 4.2⑴・design.md 較正値台帳）。台帳は「アイドル区間限定」と定めるので
-#: 窓 B を使う。窓 A（起動過渡のみ除外）は参考として集計に併記するだけで判定には使わない。
-FRAME_INTERVAL_JUDGE_WINDOW = "窓 B（起動過渡を除外し、さらに推定活性アニメ本数で絞った窓）"
+#: 系列（target_id x surface_id）と seriko の発火ログの scope の対応。**emo2 固有**。
+#: 発火ログはベースサーフェス ID を持たないため、系列と発火をつなぐのはこの表だけである。
+#: 実測（3.1 のベースライン）: scope="0" がキャラ（TargetId(0) / surface_id=1000）、
+#: scope="1" がケロ（TargetId(2)）。**ケロは表に入れない**——ケロのアニメ ID は複数のベース
+#: サーフェスで同じ 0 であり、待ち時間もベースごとに違い（2100 は 40/80・2110 は 160）、
+#: さらに 1 サイクルの中でベースサーフェスが変わる。系列が 1 つのアニメ定義と対応しないので
+#: この窓では判定できない（3.2 の裁定・ログの情報量の限界であって窓の失敗ではない）。
+#: 表に無い系列は起点 f を持てないので窓 C の間隔が 0 本になる。
+FRAME_INTERVAL_SERIES_SCOPE: tuple[tuple[tuple[str, str], str], ...] = (
+    (("TargetId(0)", "1000"), "0"),
+)
+
+#: 判定式⑴が使う窓（要件 4.2⑴・design.md 較正値台帳）。
+FRAME_INTERVAL_JUDGE_WINDOW = "窓 C（起動過渡を除外し、さらに発火起点でサイクルの内側へ絞った窓）"
 
 #: 判定式⑴の判定粒度（design.md 較正値台帳・合格判定式⑴）。target_id へ畳んだ 1 本の p95で
 #: 判定してはならない——遅い系列がまるごと速い系列の 5% の裾へ吸収されるため。
@@ -186,18 +280,31 @@ FRAME_INTERVAL_JUDGE_GRANULARITY = (
     "（速い系列の 5% 裾に遅い系列が丸ごと吸収されるため）"
 )
 
-#: 判定式⑴の対象系列を明示指定する場合の一覧（(target_id, surface_id) の並び）。
-#: **空なら下の 2 つの閾値で自動選別する**。task 3.1 の第 1 段ベースラインで実測を見て確定する。
-FRAME_INTERVAL_JUDGED_SERIES: tuple[tuple[str, str], ...] = ()
+#: 判定式⑴の対象系列を明示指定する一覧（(target_id, surface_id) の並び）。
+#: **空なら下の 2 つの閾値で自動選別する**。
+#: 【task 3.2 の裁定で確定】emo2 の実走で判定に耐える系列は **キャラの 1 本だけ** である。
+#: ケロ（TargetId(2)）は上の FRAME_INTERVAL_SERIES_SCOPE の注記の理由で判定できず、
+#: バルーン（TargetId(1)/TargetId(3)）はアニメのコマ送りではない散発的な書き換えである。
+#: **指定は all-or-nothing**——漏れた系列は黙って除外され合格を止めない。走行に現れる
+#: 「判定に耐える系列」を完全に列挙すること（漏らすと鈍化が無言で通る）。
+FRAME_INTERVAL_JUDGED_SERIES: tuple[tuple[str, str], ...] = (
+    ("TargetId(0)", "1000"),
+)
 
-#: 自動選別: 判定に足る間隔の本数の下限。これ未満の系列は判定対象から外す（p95 が立たない）。
-FRAME_INTERVAL_MIN_SAMPLES = 30
+#: 判定に足る間隔の本数の下限。
+#: 【自動選別】これ未満の系列は判定対象から外す。
+#: 【明示指定】これ未満でも **不合格は返す**（確定的な違反を本数不足に埋もれさせない）が、
+#:   **合格は返さない**（薄い観測を合格として売らない）。3.2 の実測では dev short の判定対象が
+#:   22 本まで減る（遅くなるほど条件 2 で 2 コマ目以降が窓から外れるため）ので、
+#:   30 のままだと本当は不合格の走行を不合格と言えなくなる。ゆえに 20 へ下げた。
+FRAME_INTERVAL_MIN_SAMPLES = 20
 
-#: 自動選別: 平均間隔が「期待間隔 x この倍率」を超える系列は、アニメのコマ送りではなく
+#: 自動選別: 平均間隔が「最大コマ待ち x この倍率」を超える系列は、アニメのコマ送りではなく
 #: 散発的な適用（バルーンの書き換え等）とみなして判定対象から外す。
+#: 明示指定（FRAME_INTERVAL_JUDGED_SERIES が非空）のときは使わない。
 FRAME_INTERVAL_MAX_MEAN_FACTOR = 10.0
 
-# --- 自動選別で外した系列を合格に読み替えない規則（D7）------------------------
+# --- 判定対象から外した系列を合格に読み替えない規則（D7）----------------------
 #
 # 【この判定の穴と、その塞ぎ方】
 # 判定式⑴の計算からまるごと消える系列は 3 通りある。しかも消える条件は、まさに本 spec が
@@ -205,9 +312,9 @@ FRAME_INTERVAL_MAX_MEAN_FACTOR = 10.0
 #   * 鈍化したアニメは同じ走行時間で出すコマ数が **減る** ため、まず MIN_SAMPLES で落ちる
 #     （こちらのほうが先に効く。20 秒/コマなら 7 分走っても 20 本前後にしかならない）
 #   * さらに鈍ければ平均間隔が MAX_MEAN_FACTOR 倍を超えて落ちる
-#   * **判定窓（活性アニメ本数の上限）で間隔が 1 本も残らなかった系列**は、そもそも間隔の表に
-#     鍵が立たない。上の 2 つの閾値にすら触れないので、放っておくと判定対象にも除外一覧にも
-#     現れず、誰にも数えられないまま「残った速い系列が上限内＝合格」に化ける。
+#   * **判定窓（窓 C）で間隔が 1 本も残らなかった系列**は、そもそも間隔の表に鍵が立たない。
+#     上の 2 つの閾値にすら触れないので、放っておくと判定対象にも除外一覧にも現れず、
+#     誰にも数えられないまま「残った速い系列が上限内＝合格」に化ける。
 #     窓内の適用が 1 回以下の系列も同じ経路で消える（適用 2 回なら MIN_SAMPLES で捕まるのに、
 #     適用 1 回の **もっと遅い** 系列はすり抜ける、という倒錯が生じる）。
 #     この 3 つ目は `vanished_series()` が perf レコードから数え直して除外へ差し戻す。
@@ -217,33 +324,43 @@ FRAME_INTERVAL_MAX_MEAN_FACTOR = 10.0
 #       1 つでも系列を外したら判定式⑴は 合格 を返さない（判定不能にする）。
 #       ただし上限超過が 1 つでもあれば、除外の有無によらず **不合格が優先** する
 #       （確定的な違反を判定不能に埋もれさせない）。
-# 解除: task 3.1 の第 1 段ベースラインが FRAME_INTERVAL_JUDGED_SERIES を実測から確定して
-#       明示指定に切り替えれば、除外は「意図した対象外」になるので合格が再び意味を持つ。
-#       ただし **明示指定した系列自身が判定窓から消えていた** 場合だけは別で、明示指定でも
-#       合格を返さない（対象と決めた系列を測れていないのだから合格ではない）。
+# 解除: task 3.2 の裁定が FRAME_INTERVAL_JUDGED_SERIES を実測から確定して明示指定へ
+#       切り替えた（＝現在は解除後）。除外は「意図した対象外」になるので合格が意味を持つ。
+#       **ただし明示指定した系列自身が測れていない場合は別で、明示指定でも合格を返さない**。
+#       測れていない形は 2 つあり、両方を塞ぐ:
+#         (a) 明示指定した系列が定常状態の perf 行を 1 本も出していない（＝指定の空振り。
+#             ログ設定の絞り込みミスや面の呼称変更で起きる。数え直す元の表にすら現れない）
+#         (b) 明示指定した系列が定常状態には現れるが、判定窓に間隔を 1 本も残していない
+#       さらに (c) 明示指定した系列の間隔が MIN_SAMPLES に満たないときは、不合格なら不合格を
+#       返し、上限内でも合格は返さない（薄い観測を合格として売らない）。
 FRAME_INTERVAL_EXCLUSION_BLOCKS_PASS = (
     "自動選別（FRAME_INTERVAL_JUDGED_SERIES が空）のあいだは、除外した系列が 1 つでもあれば"
     "判定式⑴は合格を返さない（判定不能）。除外には、閾値で外した系列だけでなく"
     "**判定窓に間隔が 1 本も残らなかった系列**（窓で全部落ちた／窓内の適用が 1 回以下）も含める"
     "（数えられずに消える経路を残さない）。不合格は除外の有無によらず優先する。"
-    "task 3.1 が対象系列を明示指定すれば除外は意図的になり、合格が再び意味を持つ。"
-    "ただし明示指定した系列自身が判定窓から消えていれば、明示指定でも合格は返さない。"
+    "明示指定へ切り替えた現在は除外が意図的になり合格が意味を持つが、"
+    "**明示指定した系列自身を測れていないとき**（定常状態に perf 行が 1 本も無い／"
+    "判定窓に間隔が 1 本も残らない／間隔が FRAME_INTERVAL_MIN_SAMPLES に満たない）は"
+    "明示指定でも合格を返さない。"
 )
 
 #: 判定式⑴の比較と表示を丸める桁数（ミリ秒の小数点以下）。
-#: 【なぜ要るか】上限は FRAME_INTERVAL_EXPECTED_MS x (1 + FRAME_INTERVAL_TOLERANCE) の
-#: 浮動小数点の積であり、172.0 x 1.15 は 197.79999999999998 になる。丸めずに比べると
-#: 実測 p95 が 197.8ms ちょうどの走行で「p95 197.8ms > 上限 197.8ms（超過）」という、
-#: 表示と判定が食い違う根拠が出る（要件 4.5 は比べた閾値の明記を求めている）。
-#: run.log の時刻はマイクロ秒分解能なので、間隔として意味を持つ桁は 0.001ms までである。
-#: ゆえに実測 p95 と上限の **双方** をこの桁へ丸めてから比べ、同じ桁で表示する。
-#: 丸めが動かすのは 0.0005ms 未満の差だけであり、判定の意味（⑴は ≦）は変えない。
+#: 【なぜ要るか】上限は FRAME_INTERVAL_MAX_WAIT_MS x (1 + FRAME_INTERVAL_TOLERANCE) という
+#: 浮動小数点の積である。積が 2 進で割り切れない較正値の組では、表示上ちょうど上限の走行が
+#: 「p95 X ms > 上限 X ms（超過）」という、表示と判定の食い違う根拠を出す
+#: （是正前の 172.0 x 1.15 = 197.79999999999998 が実際にその形だった。現在の
+#:  150.0 x 1.15 = 172.5 はたまたま 2 進で厳密だが、較正値を変えれば再び崩れる）。
+#: 実測 p95 の側にも同じ危険がある。run.log の時刻はマイクロ秒分解能なので、間隔として
+#: 意味を持つ桁は 0.001ms までである。ゆえに実測 p95 と上限の **双方** をこの桁へ丸めてから
+#: 比べ、同じ桁で表示する。丸めが動かすのは 0.0005ms 未満の差だけであり、
+#: 判定の意味（⑴は ≦）は変えない。
 FRAME_INTERVAL_COMPARE_DECIMALS = 3
 
 # --- 定常状態の開始境界 -------------------------------------------------------
 
 #: 起動過渡（初回確保・ウォームアップ）として集計から外す秒数。
-#: 実走の最初の観測時刻を 0 秒として数える。暫定値であり task 3.1 で確定する。
+#: 実走の最初の観測時刻を 0 秒として数える。
+#: task 3.2 のベースライン（3 走行）で 60 秒とも起動過渡が落ちていることを確認し据え置いた。
 WARMUP_EXCLUDE_SEC = 60.0
 
 #: 判定モード限定: 定常状態がこの回数未満の適用しか含まなければ判定式⑵⑶を判定不能にする。
@@ -290,10 +407,10 @@ CPU_SAMPLE_GAP_FACTOR = 1.5
 #: 収束判定（要件 5.1・5.3）。時系列を等分する窓の数。
 CONVERGENCE_WINDOW_COUNT = 4
 
-#: 収束判定: 後半窓の回帰傾きの上限（パーセント毎分）。task 3.1 で確定する暫定値。
+#: 収束判定: 後半窓の回帰傾きの上限（パーセント毎分）。task 7.2（長時間水準の最終判定）で確定する暫定値。
 CONVERGENCE_SLOPE_MAX_PCT_PER_MIN = 0.05
 
-#: 収束判定: 末尾窓平均 − 中間窓平均 の上限（パーセント）。task 3.1 で確定する暫定値。
+#: 収束判定: 末尾窓平均 − 中間窓平均 の上限（パーセント）。task 7.2（長時間水準の最終判定）で確定する暫定値。
 CONVERGENCE_WINDOW_DIFF_MAX_PCT = 0.3
 
 #: 収束判定: 窓の切り方。**採取点の個数**で等分する（時間で等分しない）。
@@ -539,7 +656,20 @@ class LogScan:
     seriko_events: list[tuple[datetime | None, str, str, str]] = field(default_factory=list)
     boot_dpi: dict[str, str] = field(default_factory=dict)
     show_dpi_variants: Counter = field(default_factory=Counter)
-    idle_exclusion_hits: int = 0
+
+    def fire_times_by_scope(self) -> dict[str, list[datetime]]:
+        """scope ごとの「loop 抽選発火」時刻（昇順）。判定窓（窓 C）の起点になる。
+
+        停止（J_SERIKO_STOP_MESSAGES）は入れない——停止ログは最後のコマの適用より先に
+        出ることがあり、窓の終端に使うと最後のコマが毎回落ちる（task 3.2 で実測確認）。
+        """
+        by_scope: dict[str, list[datetime]] = defaultdict(list)
+        for at, kind, scope, _anim in self.seriko_events:
+            if kind == "fire" and at is not None:
+                by_scope[scope].append(at)
+        for times in by_scope.values():
+            times.sort()
+        return by_scope
 
 
 def _catchup_kind(line: str) -> str | None:
@@ -558,6 +688,19 @@ def _seriko_kind(line: str) -> str | None:
         if stop in line:
             return "stop"
     return None
+
+
+def unquote_field(value: str) -> str:
+    """`scope="0"` のように引用符付きで出る値から引用符を落とす。
+
+    `tracing` は文字列フィールドを引用符付きで出す（実測の逐語:
+    `seriko: loop 抽選発火（…） scope="0" slot=Shell animation_id=1400 k=4`）。
+    較正値 FRAME_INTERVAL_SERIES_SCOPE は引用符なしの `"0"` で書いてあるので、
+    突合の前にここで揃える。引用符が付いていない値はそのまま返す。
+    """
+    if len(value) >= 2 and value[0] == '"' and value[-1] == '"':
+        return value[1:-1]
+    return value
 
 
 def scan_log(path: Path) -> LogScan:
@@ -600,12 +743,13 @@ def scan_log(path: Path) -> LogScan:
         if skind is not None:
             fields = parse_fields(line)
             scan.seriko_events.append(
-                (at, skind, fields.get("scope", "?"), fields.get("animation_id", "?"))
+                (
+                    at,
+                    skind,
+                    unquote_field(fields.get("scope", "?")),
+                    unquote_field(fields.get("animation_id", "?")),
+                )
             )
-            continue
-
-        if any(marker in line for marker in FRAME_INTERVAL_IDLE_EXCLUDE_MARKERS):
-            scan.idle_exclusion_hits += 1
             continue
 
         if not scan.boot_dpi and "primary_dpi=" in line:
@@ -814,7 +958,7 @@ def fmt_stats(values: list[float], unit: str = "", decimals: int = 1) -> str:
     `decimals` は表示桁数。既定の 1 桁は集計モードの一覧向けである。判定式の根拠行のように
     同じ行の中で閾値と実測を突き合わせる場合は、比較に使う桁（判定式⑴なら
     FRAME_INTERVAL_COMPARE_DECIMALS）を渡して行全体の桁を揃えること。桁が混ざると
-    「p95 197.8ms … → p95 197.802ms vs 上限 197.800ms（超過）」のように、同じ行の中で
+    「p95 172.5ms … → p95 172.502ms vs 上限 172.500ms（超過）」のように、同じ行の中で
     同じ値が違う数字に見える（要件 4.5 が求める「比べた閾値の明記」を濁らせる）。
     """
     if not values:
@@ -828,12 +972,26 @@ def fmt_stats(values: list[float], unit: str = "", decimals: int = 1) -> str:
 
 
 # =============================================================================
-# 活性アニメ本数の推定（idle 窓の根拠）
+# 活性アニメ本数の推定（要件 5.1 の傍証）
 # =============================================================================
 
 
-def active_animation_timeline(scan: LogScan) -> list[tuple[datetime, int]]:
+def active_animation_timeline(
+    scan: LogScan, scope: str | None = None
+) -> list[tuple[datetime, int]]:
     """seriko の発火・停止 info! の収支から、時刻ごとの活性アニメ本数を推定する。
+
+    `scope` を渡すとその scope の発火・停止だけを数える。`None` なら全 scope をまたいで
+    数える——こちらは **参考表示専用** である（レポート [12]）。判定（窓 C の条件 4）が
+    使うのは必ず scope 指定のほうで、入口は `judged_scope_timelines()` である。
+
+    【全 scope で数えてはならない理由（0.3.2 の是正）】条件 4 が要るのは、同じ系列鍵
+    (target_id, surface_id) の上に 2 本のアニメが乗ると隣り合う差がどちらのコマ間隔でも
+    なくなるからである。別 scope のアニメは **別の系列鍵** へコマを出すので、その系列の
+    コマ送りが健全かどうかについて何も語らない。全 scope で数えると
+    「別のアニメがこの系列を汚している」と「マシンが忙しい」が混ざる。
+    実測では、混ぜていた 0.3.1 が長時間 release で 42 本（309 → 267 本）を落とし、その
+    42 本は全て「キャラ 1 本＋ケロ 1 本」——上限超過を 1 本（173.997ms）含んでいた。
 
     活性集合サイズの直接ログは存在しないため、これは **間接推定** である
     （design.md「収束判定」の但し書きと同じ性質）。停止が発火より先に現れた場合は
@@ -841,10 +999,12 @@ def active_animation_timeline(scan: LogScan) -> list[tuple[datetime, int]]:
     """
     active: set[tuple[str, str]] = set()
     timeline: list[tuple[datetime, int]] = []
-    for at, kind, scope, anim in sorted(
+    for at, kind, ev_scope, anim in sorted(
         (e for e in scan.seriko_events if e[0] is not None), key=lambda e: e[0]
     ):
-        key = (scope, anim)
+        if scope is not None and ev_scope != scope:
+            continue
+        key = (ev_scope, anim)
         if kind == "fire":
             active.add(key)
         else:
@@ -853,8 +1013,25 @@ def active_animation_timeline(scan: LogScan) -> list[tuple[datetime, int]]:
     return timeline
 
 
+def judged_scope_timelines(scan: LogScan) -> dict[str, list[tuple[datetime, int]]]:
+    """窓 C の条件 4 が使う、**scope ごと** の活性本数の収支。
+
+    鍵は FRAME_INTERVAL_SERIES_SCOPE が判定対象の系列に結び付けた scope である。
+    表に無い scope はそもそも窓 C の起点を持てないので、ここにも現れない。
+    """
+    return {
+        scope: active_animation_timeline(scan, scope=scope)
+        for scope in {scope for _key, scope in FRAME_INTERVAL_SERIES_SCOPE}
+    }
+
+
 def active_count_at(timeline: list[tuple[datetime, int]], at: datetime) -> int:
-    """`at` の時点で走っていたと推定されるアニメ本数（直前の収支）。"""
+    """`at` の時点で走っていたと推定されるアニメ本数（直前の収支）。
+
+    窓 C の条件 4（FRAME_INTERVAL_IDLE_MAX_ACTIVE）がこれを使う。渡す `timeline` は
+    **判定対象系列の scope に限定したもの**（`judged_scope_timelines()` の値）である。
+    発火・停止の記録より前の時刻は 0 を返す（起動前から走っていたぶんは観測できない）。
+    """
     lo, hi = 0, len(timeline)
     while lo < hi:
         mid = (lo + hi) // 2
@@ -876,21 +1053,18 @@ class Aggregation:
     cpu: list[CpuSample]
     steady_from: datetime
     steady_perf: list[PerfRecord]
+    #: 窓 A（起動過渡のみ除外）。参考表示にのみ使う。
     intervals_warmup: dict[tuple[str, str], list[float]]
-    intervals_idle: dict[tuple[str, str], list[float]]
+    #: 窓 C（発火起点）。**判定式⑴が使うのはこちら**（FRAME_INTERVAL_WINDOW）。
+    intervals_judge: dict[tuple[str, str], list[float]]
 
 
-def frame_intervals(
-    records: list[PerfRecord],
-    timeline: list[tuple[datetime, int]],
-    idle_only: bool,
-) -> dict[tuple[str, str], list[float]]:
-    """コマ適用間隔（ミリ秒）を系列（target_id x surface_id）ごとに出す。
+def frame_intervals(records: list[PerfRecord]) -> dict[tuple[str, str], list[float]]:
+    """窓 A のコマ適用間隔（ミリ秒）を系列（target_id x surface_id）ごとに出す。
 
     系列を分けるのは、別対象への適用が同じ時間帯に重なると、混ぜた列の差分が「間隔」で
-    なくなるためである（FRAME_INTERVAL_SERIES_KEY）。`idle_only` のときは、推定活性アニメ
-    本数が FRAME_INTERVAL_IDLE_MAX_ACTIVE を超える区間の適用を落とす。**両端が残った隣接**
-    だけを間隔として数える（落とした点を跨いだ差分は間隔ではない）。
+    なくなるためである（FRAME_INTERVAL_SERIES_KEY）。ここでは絞り込みを掛けず、
+    連続する適用の時刻差をそのまま並べる（判定には使わない参考表示）。
     """
     by_series: dict[tuple[str, str], list[float]] = defaultdict(list)
     grouped: dict[tuple[str, str], list[PerfRecord]] = defaultdict(list)
@@ -899,19 +1073,108 @@ def frame_intervals(
 
     for key, group in grouped.items():
         group.sort(key=lambda r: r.at)
-        previous: PerfRecord | None = None
-        for record in group:
-            keep = True
-            if idle_only:
-                keep = active_count_at(timeline, record.at) <= FRAME_INTERVAL_IDLE_MAX_ACTIVE
-            if not keep:
-                previous = None
+        for previous, record in zip(group, group[1:]):
+            by_series[key].append((record.at - previous.at).total_seconds() * 1000.0)
+    return by_series
+
+
+def _latest_at_or_before(times: list[datetime], at: datetime) -> datetime | None:
+    """`times`（昇順）のうち `at` 以前で最も新しいもの。無ければ None。"""
+    lo, hi = 0, len(times)
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if times[mid] <= at:
+            lo = mid + 1
+        else:
+            hi = mid
+    return times[lo - 1] if lo > 0 else None
+
+
+def _has_time_in_half_open(times: list[datetime], after: datetime, until: datetime) -> bool:
+    """`times`（昇順）が区間 (after, until] に 1 つでも入っているか。"""
+    lo, hi = 0, len(times)
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if times[mid] <= after:
+            lo = mid + 1
+        else:
+            hi = mid
+    return lo < len(times) and times[lo] <= until
+
+
+def judge_window_intervals(
+    records: list[PerfRecord],
+    fires_by_scope: dict[str, list[datetime]],
+    timelines: dict[str, list[tuple[datetime, int]]],
+) -> dict[tuple[str, str], list[float]]:
+    """窓 C（発火起点）のコマ適用間隔を系列ごとに出す（判定式⑴の入力）。
+
+    定義は較正値 FRAME_INTERVAL_WINDOW にある逐語のとおり。連続する 2 回の適用時刻
+    a < b について、次を **全て** 満たす間隔だけを残す:
+
+      1. その系列に対応する scope（FRAME_INTERVAL_SERIES_SCOPE）の発火のうち、
+         a 以前で最も新しいものを f とする（存在しなければ対象外）
+      2. a - f <= FRAME_INTERVAL_CYCLE_SPAN_MS
+      3. 区間 (a, b] に次の発火が無い
+      4. a と b の **両方** で、**1 と同じ scope の** 推定活性アニメ本数が
+         FRAME_INTERVAL_IDLE_MAX_ACTIVE 以下（別 scope のアニメは数えない）
+
+    【なぜこの形か（task 3.2）】この系列の生の差分は性質の違う 4 種類を混ぜている——
+    サイクル内のコマ間隔（判定したいのはこれ）／サイクルとサイクルの間の空白（まばたきは
+    数秒に 1 回しか起きない。**この空白は正常**）／会話などで別の絵に切り替わったときの間隔／
+    同じ鍵の上で 2 本のアニメが同時に走っているときの、混ざった列の差。
+    条件 3 が 2 つ目を、条件 2 が 3 つ目を、条件 4 が 4 つ目を落とす。
+
+    【条件 4 が要る理由（remediation 1）】系列の鍵は (target_id, surface_id) であって
+    アニメ単位ではない。2 本のアニメが同じ鍵に混ざると、隣り合う差は **どちらのアニメの
+    コマ間隔でもない**。位相しだいで偽の不合格にも **偽の合格** にも倒れ、後者では上限の
+    4 倍で動いているアニメが窓から丸ごと消えて合格に化ける（fixture P13 が固定）。
+    条件 4 が無いとその走行が exit 0 を返す——本 spec が二度踏んだ形である。
+
+    【条件 4 が同じ scope しか数えない理由（remediation 2 / 0.3.2）】上の理由がそのまま
+    範囲を決める。別 scope のアニメは **別の系列鍵** へコマを出すので、この系列の列を
+    汚さない。全 scope で数えていた 0.3.1 は、ケロが動いているだけでキャラの間隔を落として
+    おり、長時間 release で 42 本（309 → 267 本・うち上限超過 1 本 173.997ms）を捨てていた。
+    上限超過の区間だけを別 scope の発火が覆えば、⑴ は不合格から合格へ反転する
+    （fixture P14 がその形を固定している）。
+
+    【この窓が判定できないもの】FRAME_INTERVAL_SERIES_SCOPE に対応の無い系列は起点 f を
+    持てないので間隔が 0 本になる。黙って消えないよう、呼び出し側（`vanished_series()`）が
+    perf レコードから数え直して除外として名指しする。
+    条件 4 の活性本数は発火・停止 info! の収支からの **間接推定** なので、発火の記録を
+    出さない書き換えが同じ鍵に混ざる形は今も見張れない（fixture P12 がその形）。
+    """
+    scope_of: dict[tuple[str, str], str] = dict(FRAME_INTERVAL_SERIES_SCOPE)
+    by_series: dict[tuple[str, str], list[float]] = defaultdict(list)
+    grouped: dict[tuple[str, str], list[PerfRecord]] = defaultdict(list)
+    for record in records:
+        grouped[record.series_key].append(record)
+
+    for key, group in grouped.items():
+        scope = scope_of.get(key)
+        if scope is None:
+            continue
+        fires = fires_by_scope.get(scope) or []
+        if not fires:
+            continue
+        # 条件 4 が数えるのは **この系列に対応する scope だけ**（0.3.2）。
+        timeline = timelines.get(scope) or []
+        group.sort(key=lambda r: r.at)
+        for previous, record in zip(group, group[1:]):
+            a, b = previous.at, record.at
+            fired_at = _latest_at_or_before(fires, a)
+            if fired_at is None:
                 continue
-            if previous is not None:
-                by_series[key].append(
-                    (record.at - previous.at).total_seconds() * 1000.0
-                )
-            previous = record
+            if (a - fired_at).total_seconds() * 1000.0 > FRAME_INTERVAL_CYCLE_SPAN_MS:
+                continue
+            if _has_time_in_half_open(fires, a, b):
+                continue
+            if (
+                active_count_at(timeline, a) > FRAME_INTERVAL_IDLE_MAX_ACTIVE
+                or active_count_at(timeline, b) > FRAME_INTERVAL_IDLE_MAX_ACTIVE
+            ):
+                continue
+            by_series[key].append((b - a).total_seconds() * 1000.0)
     return by_series
 
 
@@ -919,14 +1182,19 @@ def aggregate(scan: LogScan, cpu: list[CpuSample]) -> Aggregation:
     base = scan.perf[0].at
     steady_from = base + timedelta(seconds=WARMUP_EXCLUDE_SEC)
     steady_perf = [r for r in scan.perf if r.at >= steady_from]
-    timeline = active_animation_timeline(scan)
+    fires = scan.fire_times_by_scope()
+    # 窓 C の条件 4（FRAME_INTERVAL_IDLE_MAX_ACTIVE）が使う推定活性本数の収支。
+    # 走行全体から組む（定常状態だけで組むと、定常より前に始まったアニメを数え落とす）。
+    # **scope ごとに分けて組む**——全 scope を 1 つの集合にすると、別 scope のアニメが
+    # 動いているだけで判定対象の間隔が落ちる（0.3.2 の是正・fixture P14）。
+    timelines = judged_scope_timelines(scan)
     return Aggregation(
         scan=scan,
         cpu=cpu,
         steady_from=steady_from,
         steady_perf=steady_perf,
-        intervals_warmup=frame_intervals(steady_perf, timeline, idle_only=False),
-        intervals_idle=frame_intervals(steady_perf, timeline, idle_only=True),
+        intervals_warmup=frame_intervals(steady_perf),
+        intervals_judge=judge_window_intervals(steady_perf, fires, timelines),
     )
 
 
@@ -988,11 +1256,40 @@ def render_calibration(report: Report) -> None:
     report.head("[2] 較正値（要件 2.6 / 4.5 / 5.3・所在はスクリプト冒頭のバナー 1 箇所）")
     rows = [
         ("SCRIPT_VERSION", SCRIPT_VERSION, ""),
-        ("FRAME_INTERVAL_EXPECTED_MS", FRAME_INTERVAL_EXPECTED_MS, "emo2 固有・流用禁止"),
-        ("FRAME_INTERVAL_TOLERANCE", FRAME_INTERVAL_TOLERANCE, "暫定・task 3.1 で確定"),
+        (
+            "FRAME_INTERVAL_MAX_WAIT_MS",
+            FRAME_INTERVAL_MAX_WAIT_MS,
+            "上限の土台＝アニメ定義の最大コマ待ち・emo2 固有・流用禁止（task 3.2）",
+        ),
+        (
+            "FRAME_INTERVAL_CYCLE_SPAN_MS",
+            FRAME_INTERVAL_CYCLE_SPAN_MS,
+            "判定窓の条件 2＝サイクル全長・**上限ではない**・emo2 固有（task 3.2）",
+        ),
+        (
+            "FRAME_INTERVAL_ANIMATION_WAITS_MS",
+            list(FRAME_INTERVAL_ANIMATION_WAITS_MS),
+            "上の 2 値の出どころ（emo2 animation1400 のコマ待ち列）",
+        ),
+        ("FRAME_INTERVAL_TOLERANCE", FRAME_INTERVAL_TOLERANCE, ""),
+        (
+            "FRAME_INTERVAL_IDLE_MAX_ACTIVE",
+            FRAME_INTERVAL_IDLE_MAX_ACTIVE,
+            "判定窓の条件 4＝両端の推定活性アニメ本数の上限。"
+            "同じ鍵に 2 本のアニメが混ざるとその差はどちらのコマ間隔でもなくなる"
+            "（位相しだいで偽の合格へ倒れる）。"
+            "数えるのは **その系列に対応する scope だけ**（0.3.2）",
+        ),
         ("FRAME_INTERVAL_SERIES_KEY", " x ".join(FRAME_INTERVAL_SERIES_KEY), ""),
         ("FRAME_INTERVAL_WINDOW", FRAME_INTERVAL_WINDOW, ""),
         ("FRAME_INTERVAL_JUDGE_WINDOW", FRAME_INTERVAL_JUDGE_WINDOW, "判定式⑴が使う窓"),
+        (
+            "FRAME_INTERVAL_SERIES_SCOPE",
+            [f"{t} / surface_id={s} → scope={scope}"
+             for (t, s), scope in FRAME_INTERVAL_SERIES_SCOPE]
+            or "（空＝どの系列も発火と結び付かない＝窓 C が全て空になる）",
+            "系列と発火ログの対応・emo2 固有",
+        ),
         (
             "FRAME_INTERVAL_JUDGE_GRANULARITY",
             FRAME_INTERVAL_JUDGE_GRANULARITY,
@@ -1002,35 +1299,29 @@ def render_calibration(report: Report) -> None:
             "FRAME_INTERVAL_JUDGED_SERIES",
             [f"{t} / surface_id={s}" for t, s in FRAME_INTERVAL_JUDGED_SERIES]
             or "（空＝下の 2 値で自動選別）",
-            "task 3.1 で確定",
+            "task 3.2 で確定・指定は all-or-nothing",
         ),
-        ("FRAME_INTERVAL_MIN_SAMPLES", FRAME_INTERVAL_MIN_SAMPLES, "判定式⑴の自動選別・暫定"),
+        (
+            "FRAME_INTERVAL_MIN_SAMPLES",
+            FRAME_INTERVAL_MIN_SAMPLES,
+            "自動選別の除外閾値／明示指定では「合格を返さない」下限",
+        ),
         (
             "FRAME_INTERVAL_MAX_MEAN_FACTOR",
             FRAME_INTERVAL_MAX_MEAN_FACTOR,
-            "判定式⑴の自動選別・暫定",
+            "自動選別のみ（明示指定のときは使わない）",
         ),
         (
             "FRAME_INTERVAL_EXCLUSION_BLOCKS_PASS",
             FRAME_INTERVAL_EXCLUSION_BLOCKS_PASS,
-            "自動選別で外した系列を合格に読み替えない規則（D7）",
+            "判定対象から外した系列を合格に読み替えない規則（D7）",
         ),
         (
             "FRAME_INTERVAL_COMPARE_DECIMALS",
             FRAME_INTERVAL_COMPARE_DECIMALS,
             "判定式⑴の比較・表示を揃える桁（ms 小数点以下）",
         ),
-        (
-            "FRAME_INTERVAL_IDLE_MAX_ACTIVE",
-            FRAME_INTERVAL_IDLE_MAX_ACTIVE,
-            "暫定・task 3.1 で確定",
-        ),
-        (
-            "FRAME_INTERVAL_IDLE_EXCLUDE_MARKERS",
-            list(FRAME_INTERVAL_IDLE_EXCLUDE_MARKERS) or "（空＝talk 区間を除外できていない）",
-            "task 3.1 で確定",
-        ),
-        ("WARMUP_EXCLUDE_SEC", WARMUP_EXCLUDE_SEC, "暫定・task 3.1 で確定"),
+        ("WARMUP_EXCLUDE_SEC", WARMUP_EXCLUDE_SEC, "task 3.2 の実測で 60 秒を据え置き"),
         ("VERDICT_MIN_STEADY_APPLIES", VERDICT_MIN_STEADY_APPLIES, "判定式⑵⑶の成立条件・暫定"),
         ("VERDICT_MIN_STEADY_SEC", VERDICT_MIN_STEADY_SEC, "判定式⑵⑶の成立条件・暫定"),
         ("IDLE_CPU_MAX_RELEASE_PCT", IDLE_CPU_MAX_RELEASE_PCT, "判定式⑷前半・狭義の < 比較"),
@@ -1055,12 +1346,12 @@ def render_calibration(report: Report) -> None:
         (
             "CONVERGENCE_SLOPE_MAX_PCT_PER_MIN",
             CONVERGENCE_SLOPE_MAX_PCT_PER_MIN,
-            "収束判定・暫定・task 3.1 で確定",
+            "収束判定・暫定・task 7.2 で確定",
         ),
         (
             "CONVERGENCE_WINDOW_DIFF_MAX_PCT",
             CONVERGENCE_WINDOW_DIFF_MAX_PCT,
-            "収束判定・暫定・task 3.1 で確定",
+            "収束判定・暫定・task 7.2 で確定",
         ),
         (
             "CONVERGENCE_MIN_SAMPLES_PER_WINDOW",
@@ -1160,30 +1451,53 @@ def render_intervals(report: Report, agg: Aggregation, section: str = "7") -> No
     report.line(f"  系列の分け方: {' x '.join(FRAME_INTERVAL_SERIES_KEY)}")
     report.line(f"  測定窓: {FRAME_INTERVAL_WINDOW}")
     report.line(
-        f"  期待間隔 {FRAME_INTERVAL_EXPECTED_MS:.0f}ms・許容率 {FRAME_INTERVAL_TOLERANCE:.0%} "
-        f"→ 判定式⑴の上限は {FRAME_INTERVAL_EXPECTED_MS * (1 + FRAME_INTERVAL_TOLERANCE):.1f}ms"
+        f"  最大コマ待ち {FRAME_INTERVAL_MAX_WAIT_MS:.0f}ms"
+        f"・許容率 {FRAME_INTERVAL_TOLERANCE:.0%} "
+        f"→ 判定式⑴の上限は "
+        f"{FRAME_INTERVAL_MAX_WAIT_MS * (1 + FRAME_INTERVAL_TOLERANCE):.1f}ms"
         "（判定そのものは --mode verdict）"
     )
-    if not FRAME_INTERVAL_IDLE_EXCLUDE_MARKERS:
+    report.line(
+        f"  サイクル全長 {FRAME_INTERVAL_CYCLE_SPAN_MS:.0f}ms は窓 C の条件 2 に使う値であり"
+        "上限ではない（task 3.2）。"
+    )
+    report.line(
+        f"  窓 C の条件 4: 両端の推定活性アニメ本数 <= "
+        f"{FRAME_INTERVAL_IDLE_MAX_ACTIVE} 本。"
+        "同じ鍵に 2 本のアニメが混ざった区間の差は、どちらのアニメのコマ間隔でもない。"
+    )
+    report.line(
+        "  条件 4 が数えるのは **その系列に対応する scope のアニメだけ**（0.3.2）。"
+        "別 scope（例: ケロ）のアニメは別の系列鍵へコマを出すので数えない。"
+    )
+    for scope, timeline in sorted(judged_scope_timelines(agg.scan).items()):
+        counts = [float(c) for _at, c in timeline]
         report.line(
-            "  【未確定】talk 再生区間を外す目印が未設定です"
-            "（FRAME_INTERVAL_IDLE_EXCLUDE_MARKERS が空）。"
+            f"    scope={scope} の推定活性本数（条件 4 が実際に見た値）: "
+            + (fmt_stats(counts, " 本") if counts else "発火・停止のログが 1 件もありません")
         )
-        report.line(
-            "  現在の ログ水準では talk の開始・終了を名指しできる行が無く、talk 中の適用が"
+    fires = agg.scan.fire_times_by_scope()
+    report.line(
+        "  窓 C の起点になった発火: "
+        + (
+            "／".join(f"scope={scope}: {len(times)} 件" for scope, times in sorted(fires.items()))
+            or "（1 件も無い＝窓 C は全て空になる）"
         )
-        report.line("  idle 窓に混ざります。task 3.1 の第 1 段ベースラインで目印を確定すること。")
-    else:
-        report.line(
-            f"  talk 除外の目印に一致した行: {agg.scan.idle_exclusion_hits} 本"
+    )
+    report.line(
+        "  系列と scope の対応: "
+        + (
+            "／".join(
+                f"{t}/surface_id={s} → scope={scope}"
+                for (t, s), scope in FRAME_INTERVAL_SERIES_SCOPE
+            )
+            or "（空）"
         )
+    )
 
     for label, table in (
-        ("窓 A: 起動過渡のみ除外", agg.intervals_warmup),
-        (
-            f"窓 B: さらに推定活性アニメ {FRAME_INTERVAL_IDLE_MAX_ACTIVE} 本以下へ限定",
-            agg.intervals_idle,
-        ),
+        ("窓 A: 起動過渡のみ除外（参考表示・判定には使わない）", agg.intervals_warmup),
+        ("窓 C: さらに発火起点でサイクルの内側へ限定（判定式⑴が使う窓）", agg.intervals_judge),
     ):
         report.sub(label)
         if not table:
@@ -1321,7 +1635,7 @@ def render_compose_keys(report: Report, agg: Aggregation, section: str = "11") -
 
 
 def render_seriko(report: Report, agg: Aggregation, section: str = "12") -> None:
-    report.head(f"[{section}] seriko のループ発火・停止（要件 5.1 の傍証・idle 窓の根拠）")
+    report.head(f"[{section}] seriko のループ発火・停止（要件 5.1 の傍証・窓 C の起点）")
     report.line("  活性アニメ本数を直接出すログは無い。以下は発火・停止 info! の収支からの")
     report.line("  **間接推定** であり、そのつもりで読むこと。")
     fires = sum(1 for e in agg.scan.seriko_events if e[1] == "fire")
@@ -1330,8 +1644,21 @@ def render_seriko(report: Report, agg: Aggregation, section: str = "12") -> None
     timeline = active_animation_timeline(agg.scan)
     if timeline:
         counts = [c for _at, c in timeline]
-        report.line(f"  推定活性本数の推移: {fmt_stats([float(c) for c in counts], ' 本')}")
-        report.line(f"  末尾時点の推定活性本数: {counts[-1]} 本")
+        report.line(
+            f"  推定活性本数の推移（全 scope 合算・**参考表示**）: "
+            f"{fmt_stats([float(c) for c in counts], ' 本')}"
+        )
+        report.line(f"  末尾時点の推定活性本数（全 scope 合算）: {counts[-1]} 本")
+        report.line(
+            "  【判定はこの合算値を使わない】窓 C の条件 4 は判定対象系列の scope だけを"
+            "数える（0.3.2）。条件 4 が実際に見た scope 別の値は"
+            "「コマ適用間隔」の節に出る。"
+        )
+        per_scope = Counter(scope for _at, kind, scope, _a in agg.scan.seriko_events)
+        report.line(
+            "  scope 別の発火・停止の件数: "
+            + "／".join(f"scope={s}: {c} 件" for s, c in sorted(per_scope.items()))
+        )
     else:
         report.line("  発火・停止のログが 1 件もありません（RUST_LOG に seriko が乗っていない疑い）。")
 
@@ -1453,18 +1780,24 @@ def vanished_series(
     agg: "Aggregation",
     table: dict[tuple[str, str], list[float]],
     limit: float,
-) -> list[tuple[tuple[str, str], str]]:
+) -> list[tuple[tuple[str, str], str, str]]:
     """判定窓で間隔が 1 本も残らなかった系列を、除外理由の文言にして返す。
 
-    【なぜ要るか（この関数が塞ぐ穴）】
-    `frame_intervals` が返す表は「判定窓の中で **隣接が 2 点そろった** 系列」しか鍵を持たない。
-    ゆえに次の 2 種類の系列は、判定対象にも除外一覧にも現れない＝**誰にも数えられない**：
+    返すのは `(系列の鍵, 除外一覧へそのまま出せる全文, 窓 A の p95 注記だけ)` の並びである。
+    3 つ目を分けて返すのは、明示指定のときに除外の **理由** だけを差し替えつつ、
+    「その系列がどれだけ遅かったか」という判断材料を落とさないためである
+    （呼び出し側の `judge_frame_interval` を参照）。
 
-      * 判定窓（推定活性アニメ本数 <= FRAME_INTERVAL_IDLE_MAX_ACTIVE）で適用が全部落ちた系列
+    【なぜ要るか（この関数が塞ぐ穴）】
+    `judge_window_intervals` が返す表は「判定窓の中で **隣接が 2 点そろった** 系列」しか
+    鍵を持たない。ゆえに次の系列は、判定対象にも除外一覧にも現れない＝**誰にも数えられない**：
+
+      * 判定窓（窓 C）で適用の隣接が全部落ちた系列（発火から離れている・区間に発火が挟まる）
+      * FRAME_INTERVAL_SERIES_SCOPE に対応が無く、そもそも起点 f を持てない系列
       * 判定窓の中の適用が 1 回以下しかない系列（間隔は 0 本になる）
 
-    どちらも外れる条件は本 spec が直そうとしている鈍化そのものである。とくに後者は倒錯していて、
-    適用 2 回（間隔 1 本）の系列は FRAME_INTERVAL_MIN_SAMPLES で捕まるのに、適用 1 回の
+    どれも外れる条件は本 spec が直そうとしている鈍化そのものである。とくに 3 つ目は倒錯して
+    いて、適用 2 回（間隔 1 本）の系列は FRAME_INTERVAL_MIN_SAMPLES で捕まるのに、適用 1 回の
     **もっと遅い** 系列はすり抜ける。遅いほど見逃されるという逆転を残してはならない。
     そこで走行の perf レコードそのものから「判定され得た系列」を数え直し、表に無い鍵を
     除外として名指しする。呼び出し側はこれを `excluded` に足すので、D7 の関門
@@ -1473,13 +1806,16 @@ def vanished_series(
     【窓 A の p95 を併記する理由】
     消えた系列が「遅いから消えた（＝本 spec が追っている鈍化）」のか「速いが散発的なだけ
     （バルーンの書き換え等）」なのかは、判定窓の外＝窓 A（起動過渡のみ除外）を見ないと
-    分からない。task 3.1 が FRAME_INTERVAL_JUDGED_SERIES を確定するにはこの区別が要る。
+    分からない。FRAME_INTERVAL_JUDGED_SERIES を将来見直すときにこの区別が要る。
+    **明示指定のときも同じである**——README §12 項目 1 は「その走行に現れた系列に対して
+    指定が妥当か」を毎回この一覧で見直させるので、注記を落とすと材料なしの作業になる。
+    ゆえに 3 つ目の要素として注記だけを別に返し、明示指定の経路でも必ず添える。
     """
     counts: dict[tuple[str, str], int] = defaultdict(int)
     for record in agg.steady_perf:
         counts[record.series_key] += 1
 
-    lines: list[tuple[tuple[str, str], str]] = []
+    lines: list[tuple[tuple[str, str], str, str]] = []
     for key in sorted(counts):
         if key in table:
             continue
@@ -1488,25 +1824,25 @@ def vanished_series(
         if window_a:
             p95_a = round(percentile(window_a, 0.95), FRAME_INTERVAL_COMPARE_DECIMALS)
             mean_a = sum(window_a) / len(window_a)
-            mean_cap = FRAME_INTERVAL_EXPECTED_MS * FRAME_INTERVAL_MAX_MEAN_FACTOR
+            mean_cap = FRAME_INTERVAL_MAX_WAIT_MS * FRAME_INTERVAL_MAX_MEAN_FACTOR
             note = (
                 f"窓 A（起動過渡のみ除外）の p95 {p95_a:.{FRAME_INTERVAL_COMPARE_DECIMALS}f}ms"
                 f"（{len(window_a)} 本・平均 {mean_a:.1f}ms）"
             )
             # 「遅くなったアニメ」と「もともと散発的な系列（バルーンの書き換え等）」の読み分けに、
-            # 自動選別が使うのと同じ物差し（平均 vs 期待間隔 x MAX_MEAN_FACTOR）を併記する。
+            # 自動選別が使うのと同じ物差し（平均 vs 最大コマ待ち x MAX_MEAN_FACTOR）を併記する。
             # ただしこの物差しを超えた側では、両者は閾値だけでは区別できない。そこを
             # 断定すると、鈍化を「バルーンだから」と読み捨てる余地を作ってしまう。
             if mean_a > mean_cap:
                 note += (
-                    f" ＝ 平均が期待間隔 x FRAME_INTERVAL_MAX_MEAN_FACTOR={mean_cap:.0f}ms を"
+                    f" ＝ 平均が最大コマ待ち x FRAME_INTERVAL_MAX_MEAN_FACTOR={mean_cap:.0f}ms を"
                     "超える。この水準では「鈍化したアニメ」と「もともと散発的な系列"
                     "（バルーンの書き換え等）」を自動選別の閾値だけでは区別できない"
-                    "（どちらとも決めない。task 3.1 が FRAME_INTERVAL_JUDGED_SERIES で決めること）"
+                    "（どちらとも決めない。FRAME_INTERVAL_JUDGED_SERIES の明示指定で決めること）"
                 )
             elif p95_a > limit:
                 note += (
-                    " ＝ コマ送りの水準（平均は期待間隔 x "
+                    " ＝ コマ送りの水準（平均は最大コマ待ち x "
                     f"FRAME_INTERVAL_MAX_MEAN_FACTOR={mean_cap:.0f}ms の内側）でありながら"
                     f"上限 {limit:.{FRAME_INTERVAL_COMPARE_DECIMALS}f}ms を超えている"
                     "＝本 spec が追っている鈍化の疑いが濃い"
@@ -1518,40 +1854,61 @@ def vanished_series(
                 )
         else:
             note = "窓 A（起動過渡のみ除外）にも間隔が無い（定常状態の適用が 1 回だけ）"
+        scoped = dict(FRAME_INTERVAL_SERIES_SCOPE).get(key)
+        cause = (
+            f"起点になる発火が無い（FRAME_INTERVAL_SERIES_SCOPE に対応が無い系列）"
+            if scoped is None
+            else (
+                f"scope={scoped} の発火から "
+                f"FRAME_INTERVAL_CYCLE_SPAN_MS={FRAME_INTERVAL_CYCLE_SPAN_MS:.0f}ms 以内の"
+                "隣接が 1 組も無い（発火から離れている／区間に次の発火が挟まる／"
+                f"両端の推定活性アニメ本数が FRAME_INTERVAL_IDLE_MAX_ACTIVE="
+                f"{FRAME_INTERVAL_IDLE_MAX_ACTIVE} 本を超える）、"
+                "または窓内の適用が 1 回以下"
+            )
+        )
         lines.append(
             (
                 key,
                 f"{key[0]} / surface_id={key[1]}"
                 f"（判定窓の間隔 0 本・定常状態の適用 {applies} 回）: "
-                "判定窓に間隔が 1 本も残らなかった"
-                f"（推定活性アニメ本数が FRAME_INTERVAL_IDLE_MAX_ACTIVE="
-                f"{FRAME_INTERVAL_IDLE_MAX_ACTIVE} 本の上限を超えている、"
-                f"または窓内の適用が 1 回以下）。{note}",
+                f"判定窓に間隔が 1 本も残らなかった（{cause}）。{note}",
+                note,
             )
         )
     return lines
 
 
 def judge_frame_interval(agg: "Aggregation") -> FormulaResult:
-    """⑴ コマ適用間隔の p95 ≦ 期待間隔 x（1＋許容率）。dev・release 両方に適用（要件 4.3）。"""
-    # 上限は浮動小数点の積（172.0 x 1.15 = 197.79999999999998）なので、そのまま比べると
-    # 実測 p95 197.8ms の走行で「197.8ms > 197.8ms」という表示と判定の食い違いが出る。
-    # 実測側も同じ桁へ丸めて比べ、同じ桁で表示する（FRAME_INTERVAL_COMPARE_DECIMALS）。
+    """⑴ コマ適用間隔の p95 ≦ 最大コマ待ち x（1＋許容率）。dev・release 両方（要件 4.3）。
+
+    【task 3.2 の裁定】上限の土台はサイクル全長（172ms）ではなく **最大コマ待ち**（150ms）
+    である。窓は「loop 抽選発火」を起点にサイクルの内側だけを切り出す（窓 C）。
+    詳細は較正値バナーの FRAME_INTERVAL_MAX_WAIT_MS / FRAME_INTERVAL_WINDOW を参照。
+    """
+    # 上限は浮動小数点の積なので、丸めずに比べると表示上ちょうど上限の走行が
+    # 「X ms > X ms」という食い違う根拠を出しうる。実測側も同じ桁へ丸めて比べ、
+    # 同じ桁で表示する（FRAME_INTERVAL_COMPARE_DECIMALS）。
     limit = round(
-        FRAME_INTERVAL_EXPECTED_MS * (1.0 + FRAME_INTERVAL_TOLERANCE),
+        FRAME_INTERVAL_MAX_WAIT_MS * (1.0 + FRAME_INTERVAL_TOLERANCE),
         FRAME_INTERVAL_COMPARE_DECIMALS,
     )
     fmt = f".{FRAME_INTERVAL_COMPARE_DECIMALS}f"
     calibration = (
-        "FRAME_INTERVAL_EXPECTED_MS",
+        "FRAME_INTERVAL_MAX_WAIT_MS",
+        "FRAME_INTERVAL_CYCLE_SPAN_MS",
+        "FRAME_INTERVAL_ANIMATION_WAITS_MS",
         "FRAME_INTERVAL_TOLERANCE",
+        # 判定窓の条件 4。同じ鍵に 2 本のアニメが混ざった区間を落とす閾値であり、
+        # ここが無いと上限の 4 倍のアニメが窓から消えて合格に化ける（fixture P13）。
+        "FRAME_INTERVAL_IDLE_MAX_ACTIVE",
         "FRAME_INTERVAL_JUDGE_WINDOW",
         # 判定を系列ごとに行う（target へ畳まない）という粒度そのもの。合否の意味が
         # ここで決まるので、「使った較正値」に必ず出す（要件 4.5）。
         "FRAME_INTERVAL_JUDGE_GRANULARITY",
-        # 判定窓の境界そのもの。消えた系列の理由文がこの値を名指しするので、
+        # 系列と発火をつなぐ唯一の表。ここに無い系列は窓 C の間隔が 0 本になるので、
         # 「使った較正値」にも出しておく（要件 4.5・値の所在は冒頭バナー 1 箇所）。
-        "FRAME_INTERVAL_IDLE_MAX_ACTIVE",
+        "FRAME_INTERVAL_SERIES_SCOPE",
         "FRAME_INTERVAL_SERIES_KEY",
         "FRAME_INTERVAL_JUDGED_SERIES",
         "FRAME_INTERVAL_MIN_SAMPLES",
@@ -1564,27 +1921,86 @@ def judge_frame_interval(agg: "Aggregation") -> FormulaResult:
         "判定対象の系列が 1 つも残らなければ判定不能（間隔が無いことを合格として読ませない）。"
         "判定窓に間隔が 1 本も残らなかった系列も、間隔の表に鍵が立たないだけで「無かったこと」"
         "にはせず、走行の perf レコードから数え直して除外として名指しする（窓 A の p95 併記）。"
+        "明示指定した系列が定常状態の perf 行を 1 本も出していない場合は、数え直す元の表にも"
+        "現れないので、指定と実測を直接突き合わせて判定不能にする。"
         " さらに " + FRAME_INTERVAL_EXCLUSION_BLOCKS_PASS
         + " 鈍化したアニメほど出すコマ数が減って FRAME_INTERVAL_MIN_SAMPLES で落ちるため、"
         "除外を黙って合格に読み替えると本 spec が直そうとしている鈍化そのものを見逃す。"
     )
     threshold = (
         f"p95 <= {limit:{fmt}}ms"
-        f"（FRAME_INTERVAL_EXPECTED_MS={FRAME_INTERVAL_EXPECTED_MS:.0f}ms x "
+        f"（FRAME_INTERVAL_MAX_WAIT_MS={FRAME_INTERVAL_MAX_WAIT_MS:.0f}ms x "
         f"(1 + FRAME_INTERVAL_TOLERANCE={FRAME_INTERVAL_TOLERANCE:.0%})"
         f"・比較と表示は小数点以下 {FRAME_INTERVAL_COMPARE_DECIMALS} 桁へ丸めて揃える）"
     )
     reasons: list[str] = []
-    if not FRAME_INTERVAL_IDLE_EXCLUDE_MARKERS:
-        reasons.append(
-            "【較正が未確定】talk 再生区間を外す目印（FRAME_INTERVAL_IDLE_EXCLUDE_MARKERS）が"
-            "空のため、talk 中の適用が判定窓に混ざり得ます（task 3.1 で確定）。"
-        )
 
-    table = agg.intervals_idle
+    table = agg.intervals_judge
+
     # 判定窓で間隔が 1 本も残らなかった系列（表に鍵が立たない＝誰にも数えられない系列）。
     # 表の鍵の集合ではなく、走行の perf レコードから「判定され得た系列」を数え直す。
     vanished = vanished_series(agg, table, limit)
+
+    # 【明示指定の関門（D7 の解除条件の裏側）】明示指定した系列を **測れていない** 走行を
+    # 合格にしてはならない。測れていない形は 2 つあり、どちらも黙って進む経路を持つ:
+    #   (a) 定常状態の perf 行を 1 本も出していない（＝指定の空振り。RUST_LOG の絞り込みミスや
+    #       面の呼称・対象 ID の変化で起きる。`vanished_series()` が数え直す元の表にすら
+    #       現れないので、除外一覧にも判定対象にも出てこない）
+    #   (b) 定常状態には現れるが、判定窓に間隔を 1 本も残していない
+    # 他の系列がどれだけ上限内でも、対象と決めた系列を測れていないのだから合格ではない。
+    # 判定対象の絞り込みより **前** に置く（表が空でもこの理由が出るように）。
+    if FRAME_INTERVAL_JUDGED_SERIES:
+        steady_series = {record.series_key for record in agg.steady_perf}
+        unmeasured: list[str] = []
+        for key in FRAME_INTERVAL_JUDGED_SERIES:
+            label = f"{key[0]} / surface_id={key[1]}"
+            if key not in steady_series:
+                unmeasured.append(
+                    f"{label}: 定常状態の perf 行が 1 本も無い（指定の空振り）。"
+                    "ログ水準の絞り込み・面の呼称・対象 ID の変化を疑うこと"
+                )
+            elif key not in table:
+                window_a = agg.intervals_warmup.get(key) or []
+                detail = (
+                    f"窓 A（起動過渡のみ除外）には {len(window_a)} 本ある"
+                    if window_a
+                    else "窓 A（起動過渡のみ除外）にも間隔が無い（定常状態の適用が 1 回だけ）"
+                )
+                unmeasured.append(
+                    f"{label}: 定常状態には現れるが判定窓に間隔が 1 本も残らない（{detail}）。"
+                    "発火が出ていない／FRAME_INTERVAL_SERIES_SCOPE の対応が無い／適用が発火から"
+                    f"FRAME_INTERVAL_CYCLE_SPAN_MS={FRAME_INTERVAL_CYCLE_SPAN_MS:.0f}ms 以上"
+                    "離れている／同じ鍵の上で 2 本以上のアニメが走り続けている"
+                    f"（推定活性アニメ本数が FRAME_INTERVAL_IDLE_MAX_ACTIVE="
+                    f"{FRAME_INTERVAL_IDLE_MAX_ACTIVE} 本を超える）、のいずれかを疑うこと"
+                )
+        if unmeasured:
+            reasons.append(
+                f"FRAME_INTERVAL_JUDGED_SERIES で明示指定した {len(unmeasured)} 系列を"
+                "測れていません:"
+            )
+            reasons.extend(f"  - {text}" for text in unmeasured)
+            reasons.append(
+                "明示指定した対象を測れていないので、他の系列が上限内でも走行の合格としては"
+                "読ませません（判定不能）。明示指定は all-or-nothing であり、"
+                "指定した系列が観測されていることまで含めて初めて合格が意味を持ちます。"
+            )
+            return FormulaResult(
+                tag="⑴",
+                title="コマ適用間隔の p95",
+                applies_to="dev・release",
+                status=STATUS_INCONCLUSIVE,
+                measured=f"明示指定 {len(unmeasured)} 系列を測れていない",
+                threshold=threshold,
+                calibration=calibration,
+                observations=(
+                    f"判定窓の系列 {len(table)} 本／明示指定 "
+                    f"{len(FRAME_INTERVAL_JUDGED_SERIES)} 系列のうち "
+                    f"{len(unmeasured)} 系列が未計測"
+                ),
+                empty_behavior=empty_behavior,
+                reasons=reasons,
+            )
 
     if not table:
         reasons.append(
@@ -1593,13 +2009,14 @@ def judge_frame_interval(agg: "Aggregation") -> FormulaResult:
         if agg.intervals_warmup:
             reasons.append(
                 "窓 A（起動過渡のみ除外）には間隔があります。"
-                "推定活性アニメ本数が常時 "
-                f"FRAME_INTERVAL_IDLE_MAX_ACTIVE={FRAME_INTERVAL_IDLE_MAX_ACTIVE} 本を"
-                "超えていた疑いがあります。"
+                "発火（J_SERIKO_FIRE_MESSAGE）が 1 件も出ていない、"
+                "FRAME_INTERVAL_SERIES_SCOPE に対応が無い、あるいは適用が発火から"
+                f"FRAME_INTERVAL_CYCLE_SPAN_MS={FRAME_INTERVAL_CYCLE_SPAN_MS:.0f}ms 以上"
+                "離れている疑いがあります。"
             )
         if vanished:
             reasons.append("判定窓で間隔が消えた系列:")
-            reasons.extend(f"  - {text}" for _key, text in vanished)
+            reasons.extend(f"  - {text}" for _key, text, _note in vanished)
         return FormulaResult(
             tag="⑴",
             title="コマ適用間隔の p95",
@@ -1615,12 +2032,23 @@ def judge_frame_interval(agg: "Aggregation") -> FormulaResult:
 
     judged: dict[tuple[str, str], list[float]] = {}
     excluded: list[str] = []
+    #: 明示指定した系列のうち、間隔が FRAME_INTERVAL_MIN_SAMPLES に満たないもの。
+    #: 判定はする（不合格なら不合格を返す）が、上限内でも合格は返さない。
+    pinned_thin: list[str] = []
     for key, values in sorted(table.items(), key=lambda kv: -len(kv[1])):
         mean = sum(values) / len(values)
         label = f"{key[0]} / surface_id={key[1]}（{len(values)} 本・平均 {mean:.1f}ms）"
         if FRAME_INTERVAL_JUDGED_SERIES:
             if key in FRAME_INTERVAL_JUDGED_SERIES:
                 judged[key] = values
+                if len(values) < FRAME_INTERVAL_MIN_SAMPLES:
+                    # 【明示指定でも薄さは合格を止める】自動選別なら除外される薄さだが、
+                    # 明示指定を除外にすると「対象と決めた系列を測れていない」形になる。
+                    # そこで判定はさせたうえで（不合格は返る）、合格だけを止める。
+                    pinned_thin.append(
+                        f"{label}: 間隔が "
+                        f"FRAME_INTERVAL_MIN_SAMPLES={FRAME_INTERVAL_MIN_SAMPLES} 本に満たない"
+                    )
             else:
                 excluded.append(f"{label}: FRAME_INTERVAL_JUDGED_SERIES の明示指定に無い")
             continue
@@ -1629,10 +2057,10 @@ def judge_frame_interval(agg: "Aggregation") -> FormulaResult:
                 f"{label}: 間隔が FRAME_INTERVAL_MIN_SAMPLES={FRAME_INTERVAL_MIN_SAMPLES} 本に満たない"
             )
             continue
-        if mean > FRAME_INTERVAL_EXPECTED_MS * FRAME_INTERVAL_MAX_MEAN_FACTOR:
+        if mean > FRAME_INTERVAL_MAX_WAIT_MS * FRAME_INTERVAL_MAX_MEAN_FACTOR:
             excluded.append(
-                f"{label}: 平均が期待間隔 x FRAME_INTERVAL_MAX_MEAN_FACTOR="
-                f"{FRAME_INTERVAL_EXPECTED_MS * FRAME_INTERVAL_MAX_MEAN_FACTOR:.0f}ms を超える"
+                f"{label}: 平均が最大コマ待ち x FRAME_INTERVAL_MAX_MEAN_FACTOR="
+                f"{FRAME_INTERVAL_MAX_WAIT_MS * FRAME_INTERVAL_MAX_MEAN_FACTOR:.0f}ms を超える"
                 "（アニメのコマ送りではなく散発的な適用とみなす）"
             )
             continue
@@ -1640,19 +2068,18 @@ def judge_frame_interval(agg: "Aggregation") -> FormulaResult:
 
     # 判定窓で消えた系列も除外として名指しする（表に鍵が無いので上の走査には現れない）。
     # これで D7 の関門（下の FRAME_INTERVAL_EXCLUSION_BLOCKS_PASS）がそのまま効く。
-    pinned_missing: list[str] = []
-    for key, text in vanished:
+    # 明示指定した系列がここに来ることは無い——上の関門で先に判定不能を返しているため。
+    for key, text, note in vanished:
         if FRAME_INTERVAL_JUDGED_SERIES:
-            if key in FRAME_INTERVAL_JUDGED_SERIES:
-                # 明示指定した系列が判定窓から消えたのなら、それは「意図した対象外」ではない。
-                # 明示指定でも合格を返してはならない（下で判定不能にする）。
-                pinned_missing.append(text)
-                excluded.append(text)
-            else:
-                excluded.append(
-                    f"{key[0]} / surface_id={key[1]}（判定窓の間隔 0 本）: "
-                    "FRAME_INTERVAL_JUDGED_SERIES の明示指定に無い"
-                )
+            # 【窓 A の注記を捨てないこと】明示指定のときも、消えた系列が「遅いから消えた」の
+            # か「速いが散発的なだけ」なのかは窓 A の p95 を見ないと分からない。README §12
+            # 項目 1 は読み手にこの一覧を毎回読み直させる（＝指定の妥当性を見直させる）ので、
+            # 判断の材料をここで落とすと、その見直しが材料なしの作業になる。
+            # 「明示指定に無い」は除外の **理由** であって、系列の速さの説明ではない。
+            excluded.append(
+                f"{key[0]} / surface_id={key[1]}（判定窓の間隔 0 本）: "
+                f"FRAME_INTERVAL_JUDGED_SERIES の明示指定に無い。{note}"
+            )
         else:
             excluded.append(text)
 
@@ -1663,7 +2090,7 @@ def judge_frame_interval(agg: "Aggregation") -> FormulaResult:
     if not judged:
         reasons.append(
             "判定対象の系列が 1 つも残りませんでした。"
-            "期待間隔の "
+            "最大コマ待ちの "
             f"{FRAME_INTERVAL_MAX_MEAN_FACTOR:.0f} 倍を超える鈍化はこの経路（判定不能）に現れます。"
             "黙って合格にはしません。"
         )
@@ -1682,7 +2109,7 @@ def judge_frame_interval(agg: "Aggregation") -> FormulaResult:
 
     # 【判定は系列ごと】target_id へ畳んで 1 本の p95 を採ってはならない。同一 target の
     # 複数系列を連結すると、遅い系列がまるごと速い系列の 5% の裾へ吸収され、スロー再生が
-    # 合格に化ける（例: 3000 本 172ms ＋ 30 本 300ms → まとめた p95 は 172.0ms で「合格」）。
+    # 合格に化ける（例: 3000 本 150ms ＋ 30 本 300ms → まとめた p95 は 150.0ms で「合格」）。
     # 要件 4.2⑴ が測るのは「あるアニメのコマ適用間隔 vs そのアニメの指定間隔」であり、
     # 人がスロー再生に気づくのは、隣の系列がどれだけ滑らかでも変わらない。
     # perf 行の surface_id は表示要求の基底 surface id なので、1 つの target が表情替えで
@@ -1746,13 +2173,18 @@ def judge_frame_interval(agg: "Aggregation") -> FormulaResult:
             reasons=reasons + [f"上限を超えた系列: {'・'.join(failures)}"],
         )
 
-    # 明示指定した系列が判定窓から消えていたら、明示指定でも合格を返さない。
-    # 「対象はこれだ」と決めた系列を測れていないのだから、残りが上限内でも走行の合格ではない。
-    if pinned_missing:
+    # 明示指定した系列の観測が薄すぎるときは合格を返さない（不合格は上で既に返している）。
+    # 【なぜ「除外」ではなく「合格だけ止める」か】明示指定を除外へ落とすと判定対象が空になり、
+    # 上限超過が出ていてもそれを見る前に判定不能へ倒れる。不合格は判定不能に優先するので、
+    # 判定はさせたうえで合格だけを止めるのが正しい順序である。
+    if pinned_thin:
+        reasons.append("明示指定した系列のうち、観測が薄いもの:")
+        reasons.extend(f"  - {text}" for text in pinned_thin)
         reasons.append(
-            f"FRAME_INTERVAL_JUDGED_SERIES で明示指定した {len(pinned_missing)} 系列が、"
-            "判定窓に間隔を 1 本も残していません（上の一覧）。明示指定した対象を測れていない"
-            "ので、残った系列が上限内でも走行の合格としては読ませません（判定不能）。"
+            f"FRAME_INTERVAL_MIN_SAMPLES={FRAME_INTERVAL_MIN_SAMPLES} 本に満たない系列の p95 は"
+            "「2 番目に悪い値」程度の粗さしかありません。上限内であっても合格としては"
+            "読ませません（判定不能）。鈍化した系列ほど窓に残る間隔が減るため、"
+            "この経路は本 spec が追っている鈍化そのものと同じ向きに効きます。"
         )
         return FormulaResult(
             tag="⑴",
@@ -1760,7 +2192,7 @@ def judge_frame_interval(agg: "Aggregation") -> FormulaResult:
             applies_to="dev・release",
             status=STATUS_INCONCLUSIVE,
             measured="  ".join(measured_parts)
-            + f"（ただし明示指定 {len(pinned_missing)} 系列が判定窓から消失）",
+            + f"（ただし明示指定 {len(pinned_thin)} 系列の観測が薄い）",
             threshold=threshold,
             calibration=calibration,
             observations=observations,
@@ -1777,7 +2209,7 @@ def judge_frame_interval(agg: "Aggregation") -> FormulaResult:
             f"{len(excluded)} 系列を自動選別で判定対象から外しています。"
         )
         reasons.append(
-            "自動選別で外れる条件（コマ数が下限未満・平均間隔が期待の "
+            "自動選別で外れる条件（コマ数が下限未満・平均間隔が最大コマ待ちの "
             f"{FRAME_INTERVAL_MAX_MEAN_FACTOR:.0f} 倍超）は、本 spec が直そうとしている"
             "鈍化そのものです。鈍化した系列ほど出すコマ数が減るため、まず "
             f"FRAME_INTERVAL_MIN_SAMPLES={FRAME_INTERVAL_MIN_SAMPLES} 本の下限で落ちます。"
@@ -1787,9 +2219,9 @@ def judge_frame_interval(agg: "Aggregation") -> FormulaResult:
             "外した系列を名指しで上に出します。"
         )
         reasons.append(
-            "解除の仕方: task 3.1 の第 1 段ベースラインで FRAME_INTERVAL_JUDGED_SERIES を"
-            "実測から確定し明示指定に切り替えれば、除外は意図した対象外になり合格が"
-            "再び意味を持ちます。"
+            "解除の仕方: FRAME_INTERVAL_JUDGED_SERIES を実測から確定し明示指定に"
+            "切り替えれば、除外は意図した対象外になり合格が再び意味を持ちます"
+            "（task 3.2 の裁定で確定済み。この経路はその指定を空にしたときだけ通る）。"
         )
         return FormulaResult(
             tag="⑴",
@@ -2193,10 +2625,10 @@ def judge_idle_cpu(
             reasons=[
                 f"定常状態の CPU: {fmt_stats(values, '%')}",
                 "1 行は約 1 秒幅の瞬時値であり刻み幅の平均ではない（2.1→2.4 申し送り）。",
-                "【task 3.1 への申し送り】平均は 1 回の長い非アイドル区間に引きずられる"
-                "（分位点と違って裾に強くない）。"
-                "FRAME_INTERVAL_IDLE_EXCLUDE_MARKERS が空のあいだは talk 再生区間が混ざり得るので、"
-                "第 1 段ベースラインでは上の p50 と平均を必ず突き合わせること。"
+                "【読み方の注意】平均は 1 回の長い非アイドル区間に引きずられる"
+                "（分位点と違って裾に強くない）。CPU の窓は判定式⑴の窓 C と違って"
+                "talk 再生区間を落としていない（会話中の負荷も込みの定常値である）ので、"
+                "上の p50 と平均を必ず突き合わせること。"
                 "両者が離れていたら、比べる量ではなく窓の切り方を疑う。",
             ]
             + (
@@ -2594,17 +3026,20 @@ def run_baseline(args: argparse.Namespace) -> int:
     render_compose_keys(report, agg)
     render_seriko(report, agg)
 
-    report.head("[13] 読むときの注意（較正が未確定の箇所）")
+    report.head("[13] 読むときの注意（この集計の限界）")
     caveats = [
-        "コマ適用間隔の idle 窓の境界は未確定である（task 3.1 の第 1 段ベースラインで確定し"
-        " README へ登記する）。窓 A と窓 B の両方を並べてあるのはそのためである。",
-        "talk 再生区間を外す目印が未設定のため、talk 中の適用が窓 B に混ざっている。",
-        "活性アニメ本数は発火・停止 info! の収支からの間接推定であり、直接の観測ではない。"
-        "停止 info! が 1 本落ちると、そのアニメは以後ずっと走っている扱いになり、"
-        "窓 B が走行の残り全部で閉じたままになる（判定式⑴で系列が丸ごと消える経路）。"
-        "上の窓別収支が 0 に戻らない走行は、まずこれを疑うこと（task 3.1 で確定）。",
-        f"WARMUP_EXCLUDE_SEC={WARMUP_EXCLUDE_SEC:.0f} 秒・"
-        f"FRAME_INTERVAL_TOLERANCE={FRAME_INTERVAL_TOLERANCE:.0%} は暫定値である。",
+        "判定式⑴の窓は窓 C（発火起点）である。窓 A を並べてあるのは参考であり、"
+        "窓 A の p95 はサイクルとサイクルの間の正常な空白を含むので合否の材料にならない。",
+        "窓 C はケロ（TargetId(2)）を判定できない。ケロのアニメ ID は複数のベースサーフェスで"
+        "同じ 0 であり、1 サイクルの中でベースサーフェスが変わるため、系列が 1 つのアニメ定義と"
+        "対応しない（task 3.2・ログの情報量の限界であって窓の失敗ではない）。",
+        "窓 C は talk 再生区間を名指しで落としてはいない。落ちるのは「発火から"
+        f"{FRAME_INTERVAL_CYCLE_SPAN_MS:.0f}ms 以上離れた適用」であって、"
+        "会話中でも発火直後の適用は窓に入る。",
+        "同一の (target_id, surface_id) に 2 本のアニメが重なると互いを隠す"
+        "（混ざった列の隣接差はどちらのコマ間隔でもなくなる）。窓 C はこれを塞いでいない。",
+        "活性アニメ本数は発火・停止 info! の収支からの間接推定であり、直接の観測ではない"
+        "（要件 5.1 の傍証にのみ使う。判定式⑴の窓はこの推定を使っていない）。",
     ]
     if not agg.steady_perf:
         caveats.insert(

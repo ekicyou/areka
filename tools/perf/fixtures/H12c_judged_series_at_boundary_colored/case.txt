@@ -3,7 +3,7 @@ title = 色付きログ（色を落とす経路の較正）
 mode = verdict
 build = release
 exit = 0
-twin = H12_second_series_at_boundary
+twin = H12_judged_series_at_boundary
 
 note = H12 と中身が同じで、run.log にだけ色（画面を彩る制御文字）が入っている走行。
 note = 本物の run.log はこの形で出る——ログの出力先がファイルであっても、色を止める
