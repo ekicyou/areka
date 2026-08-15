@@ -28,7 +28,7 @@
 
 `recompose-budget` の要件 4.2⑵ は「**定常状態での進行境界スキップ（catch-up）0 件**」を
 掲げるが、同 spec は**一度も 0 に達しないまま着地する**。実測（正本は
-`.kiro/specs/areka-P0-recompose-budget/remeasure-2026-08-15.md`）:
+`.kiro/specs/completed/areka-P0-recompose-budget/remeasure-2026-08-15.md`）:
 
 | 走行 | dev | release |
 |---|---:|---:|
@@ -251,5 +251,5 @@ SSP 水準には届かない可能性が高い。
 - `tools/perf/judge-perf.py` — 集計＋合否判定（0.3.2・自己較正 fixture 17 件）
   - 判定式⑷b（単調上昇しない）は本 spec でもそのまま使う
   - **⚠ 較正値 `WARMUP_EXCLUDE_SEC=60` は容量 3 で暖機が 4 倍に伸びたため見直し対象**
-- `.kiro/specs/areka-P0-recompose-budget/remeasure-2026-08-15.md` — 是正後の全実測
-- `.kiro/specs/areka-P0-recompose-budget/baseline-2026-08-14.md` — 着手前の全実測
+- `.kiro/specs/completed/areka-P0-recompose-budget/remeasure-2026-08-15.md` — 是正後の全実測
+- `.kiro/specs/completed/areka-P0-recompose-budget/baseline-2026-08-14.md` — 着手前の全実測
