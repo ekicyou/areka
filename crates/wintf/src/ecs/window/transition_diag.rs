@@ -46,6 +46,8 @@ use std::time::Instant;
 use bevy_ecs::prelude::*;
 use windows::Win32::Foundation::{HWND, RECT};
 
+use crate::ecs::world::FrameCount;
+
 /// 観測チャネルの専用 target（3 crate が同じ文字列で発行する・D2）。
 ///
 /// `RUST_LOG` の directive は 1 語で足りる: `wintf::transition=debug`。
@@ -583,6 +585,90 @@ pub fn emit_line(line: &str) {
 }
 
 // ---------------------------------------------------------------------------
+// 刻印の権威（D1）——World 資源が正・スレッド局所ミラーは World 外専用
+// ---------------------------------------------------------------------------
+
+/// tick の開始時刻（`FrameCount` と**同じ点**で更新される World 資源）。
+///
+/// `FrameCount` と対にして [`stamp_from_world`] へ渡すと、World を借りられる観測点は
+/// どのスレッドに載っていても正しい刻印を組める。更新点は
+/// `crate::ecs::world::EcsWorld::try_tick_world` の `FrameCount` 増分と同一点の 1 箇所
+/// だけである（2 箇所で進めると 1 本のフレーム系列が割れる）。
+#[derive(Resource, Clone, Copy, Debug)]
+pub struct TickStart(pub Instant);
+
+thread_local! {
+    /// 直近 tick の `(フレーム番号, tick 開始時刻)` の**写し**。tick 前は `None`。
+    ///
+    /// スレッド局所なのは、⑴ World を借りられない観測点（一括 flush・wndproc）はどれも
+    /// UI スレッド上にあり、⑵ プロセス大域の atomic にするとテスト間で値が残って判定を
+    /// 変えてしまう（要件 7.7）ためである。テストはスレッドごとに走るので、この形なら
+    /// 隔離が自然に成立する（それでも [`reset_for_test`] で明示的に初期化する）。
+    static TICK_MIRROR: Cell<Option<(u32, Instant)>> = const { Cell::new(None) };
+}
+
+/// 経過を µs へ（飽和・時刻の読み取りはここだけが行う）。
+fn elapsed_us(at: Instant) -> u64 {
+    u64::try_from(at.elapsed().as_micros()).unwrap_or(u64::MAX)
+}
+
+/// tick の開始を刻む——`FrameCount` 増分・[`TickStart`] 更新と**同一点で同じ値**を
+/// スレッド局所の写しへ配る。
+///
+/// 呼び出しは tick ごとに 1 回（`world/mod.rs` の `FrameCount` 増分直後）。
+pub fn begin_tick(frame: u32, start: Instant) {
+    TICK_MIRROR.with(|mirror| mirror.set(Some((frame, start))));
+}
+
+/// 直近 tick のフレーム番号（**World を借りられない観測点専用**）。
+///
+/// 読んでよいのは一括 flush（World の借用を解放した後に走る）と wndproc の同期経路
+/// だけである。World を借りられる観測点は既定の**多スレッド**実行器でワーカースレッドへ
+/// 載り得て、そこからは UI スレッドの写しが見えない（frame=0 の行が出る）ため、必ず
+/// [`stamp_from_world`] を使うこと（D1）。
+///
+/// tick 前は `0`。tick の外で読むと「直近 tick の番号」になるため、判定は
+/// `wrapping_sub` の差分だけで行う（D14）。
+pub fn current_frame() -> u32 {
+    TICK_MIRROR
+        .with(|mirror| mirror.get())
+        .map_or(0, |(frame, _)| frame)
+}
+
+/// tick 開始からの経過（µs・**World を借りられない観測点専用**）。
+///
+/// 参考値であって判定語ではない。tick 前は `0`。読んでよい点は [`current_frame`] と同じ。
+pub fn since_tick_start_us() -> u64 {
+    TICK_MIRROR
+        .with(|mirror| mirror.get())
+        .map_or(0, |(_, start)| elapsed_us(start))
+}
+
+/// スレッド局所の写しから刻印を組む（**World を借りられない観測点専用**）。
+///
+/// 一括 flush（`command.rs`）と wndproc の同期経路のためのもの。World を借りられる
+/// 観測点がこれを呼ぶのは退行であり、多スレッド実行器のままで刻印を検査する回帰テスト
+/// （`transition_diag_tests.rs`）が赤にする。
+pub fn stamp() -> Stamp {
+    Stamp {
+        frame: current_frame(),
+        t_us: since_tick_start_us(),
+    }
+}
+
+/// World 資源から刻印を組む（**World を借りられる観測点はこちら**）。
+///
+/// 既定の実行器は多スレッドであり、ワーカースレッドからは UI スレッドの写しが見えない。
+/// `Res<FrameCount>`＋`Res<TickStart>` から組めば、どのスレッドに載っても同一 tick の
+/// 全レコードが同じ `frame` を持つ（D1）。
+pub fn stamp_from_world(frame: &FrameCount, start: &TickStart) -> Stamp {
+    Stamp {
+        frame: frame.0,
+        t_us: elapsed_us(start.0),
+    }
+}
+
+// ---------------------------------------------------------------------------
 // flush 区間の時刻基準（RAII）
 // ---------------------------------------------------------------------------
 
@@ -616,10 +702,20 @@ pub fn begin_flush() -> FlushEpoch {
 
 /// flush 開始からの経過（µs）。区間の外では `None`（行では番兵）。
 pub fn since_flush_us() -> Option<u64> {
-    FLUSH_START.with(|start| start.get()).map(|at| {
-        let elapsed = at.elapsed().as_micros();
-        u64::try_from(elapsed).unwrap_or(u64::MAX)
-    })
+    FLUSH_START.with(|start| start.get()).map(elapsed_us)
+}
+
+/// スレッド局所の写しと時刻基準（tick 開始・flush 開始）を初期化する。
+///
+/// テスト冒頭・末尾で呼ぶための口である（要件 7.7＝テスト間で状態を汚染しない）。
+/// 写しはスレッド局所なので並列実行するテスト同士は元より隔離されているが、同一
+/// スレッドで続けて走るテストへ前のフレーム番号を持ち越さないために明示的に初期化する。
+/// 初期化後は [`current_frame`] が `0`・[`since_tick_start_us`] が `0`・
+/// [`since_flush_us`] が `None` になる。
+#[doc(hidden)]
+pub fn reset_for_test() {
+    TICK_MIRROR.with(|mirror| mirror.set(None));
+    FLUSH_START.with(|start| start.set(None));
 }
 
 #[cfg(test)]

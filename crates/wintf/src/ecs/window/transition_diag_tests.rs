@@ -22,18 +22,24 @@
 //! 併置し、捕捉が生きている証拠を毎回同じ出力から取る。
 
 use std::collections::BTreeMap;
+use std::sync::{Arc, Mutex};
+use std::thread::ThreadId;
+use std::time::Instant;
 
 use bevy_ecs::prelude::*;
+use bevy_ecs::schedule::{ExecutorKind, Schedules};
 use windows::Win32::Foundation::{HWND, RECT};
 
 use super::{
     ENQUEUE_FIELDS, EnqueueRecord, FIELD_KIND, FLUSH_FIELDS, FlushRecord, FlushStage, KIND_ALL,
     KIND_ENQUEUE, KIND_FLUSH, KIND_MONITOR, KIND_MSG, KIND_WRITE, MONITOR_FIELDS, MSG_DPICHANGED,
-    MSG_FIELDS, MonitorRecord, MsgRecord, STAGE_ALL, Stamp, TRANSITION_TARGET, WRITE_FIELDS,
-    WriteRecord, WriteStage, WriteTag, begin_flush, emit_line, enqueue_line, flush_line,
-    is_enabled, monitor_line, msg_line, record_prefix, since_flush_us, write_line,
+    MSG_FIELDS, MonitorRecord, MsgRecord, STAGE_ALL, Stamp, TRANSITION_TARGET, TickStart,
+    WRITE_FIELDS, WriteRecord, WriteStage, WriteTag, begin_flush, begin_tick, current_frame,
+    emit_line, enqueue_line, flush_line, is_enabled, monitor_line, msg_line, record_prefix,
+    reset_for_test, since_flush_us, since_tick_start_us, stamp, stamp_from_world, write_line,
 };
 use crate::ecs::test_support::capture_under_filter;
+use crate::ecs::world::{EcsWorld, FrameCount, Update};
 
 /// 実機サインオフが用いる `RUST_LOG` 相当のうち、本チャネルを点灯させる directive。
 const SIGNOFF_DIRECTIVES: &str = "info,wintf::transition=debug";
@@ -607,4 +613,210 @@ fn is_enabled_follows_the_directive() {
         "既定では前置ガードが偽＝呼び出し側は組立の費用を払わない"
     );
     assert!(under_signoff, "専用指定では前置ガードが真");
+}
+
+// ---------------------------------------------------------------------------
+// 刻印の権威（D1）——資源が正・スレッド局所ミラーは World 外専用
+// ---------------------------------------------------------------------------
+
+#[test]
+fn reset_for_test_clears_the_mirror_and_the_time_bases() {
+    begin_tick(4_242, Instant::now());
+    assert_eq!(current_frame(), 4_242, "写しは tick 開始で更新される");
+
+    {
+        let _epoch = begin_flush();
+        assert!(since_flush_us().is_some());
+        reset_for_test();
+        assert_eq!(
+            current_frame(),
+            0,
+            "初期化後の写しは 0（前のテストのフレーム番号を持ち越さない・要件 7.7）"
+        );
+        assert_eq!(
+            since_tick_start_us(),
+            0,
+            "初期化後は tick 開始の時刻基準も無い"
+        );
+        assert_eq!(
+            since_flush_us(),
+            None,
+            "初期化は flush 起点も消す（生存札より先に効く）"
+        );
+    }
+}
+
+#[test]
+fn resource_and_mirror_stamps_agree_on_the_frame_within_one_tick() {
+    // 同一 tick の同一値で資源と写しを更新する（`try_tick_world` が行う配管と同じ形）。
+    let start = Instant::now();
+    let frame = FrameCount(11);
+    let tick_start = TickStart(start);
+    begin_tick(frame.0, start);
+
+    assert_eq!(
+        stamp_from_world(&frame, &tick_start).frame,
+        stamp().frame,
+        "同一 tick では資源から組んだ刻印と写しから組んだ刻印のフレーム番号が一致する"
+    );
+    assert_eq!(stamp().frame, 11);
+
+    reset_for_test();
+}
+
+#[test]
+fn the_mirror_does_not_reach_other_threads_but_the_resource_does() {
+    // D1 の核心——ミラーはスレッド局所ゆえ、ワーカースレッドからは読めない。
+    // World を持つ観測点が `stamp()` を呼ぶと frame=0 の行が出る（＝退行）ので、
+    // それらは必ず `stamp_from_world` を使う、という取り決めの根拠がこれである。
+    let start = Instant::now();
+    begin_tick(77, start);
+
+    let observed = std::thread::spawn(move || {
+        let frame = FrameCount(77);
+        let tick_start = TickStart(start);
+        (current_frame(), stamp_from_world(&frame, &tick_start).frame)
+    })
+    .join()
+    .expect("別スレッドの観測が完了する");
+
+    assert_eq!(
+        observed.0, 0,
+        "別スレッドからは写しが見えない（スレッド局所ゆえテスト間でも汚染しない・要件 7.7）"
+    );
+    assert_eq!(
+        observed.1, 77,
+        "資源から組んだ刻印は別スレッドでも正しいフレーム番号になる"
+    );
+    assert_eq!(current_frame(), 77, "元のスレッドの写しは影響を受けない");
+
+    reset_for_test();
+}
+
+// ---------------------------------------------------------------------------
+// 多スレッド実行器のままの検証（design C1 Validation）
+// ---------------------------------------------------------------------------
+
+/// 観測系システムが 1 回の実行で記録する値。
+#[derive(Clone, Copy, Debug)]
+struct Observation {
+    /// World 資源（`FrameCount`＋`TickStart`）から組んだ刻印のフレーム番号。
+    from_world: u32,
+    /// スレッド局所ミラーから読んだフレーム番号（World を持つ点は本来これを読まない）。
+    from_mirror: u32,
+    /// 記録したスレッド。
+    thread: ThreadId,
+}
+
+/// 観測の集積先。共有参照＋内部可変にしてあるので、複数の観測系システムが
+/// **同時に**走れる（`ResMut` にすると実行器が直列化してしまい、多スレッド実行の
+/// 検証にならない）。
+#[derive(Resource, Clone, Default)]
+struct ObservedStamps(Arc<Mutex<Vec<Observation>>>);
+
+/// `Update` へ複数本登録する観測系システム（`N` を変えて別の型にする）。
+fn observe_stamp<const N: usize>(
+    frame: Res<FrameCount>,
+    tick_start: Res<TickStart>,
+    out: Res<ObservedStamps>,
+) {
+    let observation = Observation {
+        from_world: stamp_from_world(&frame, &tick_start).frame,
+        from_mirror: current_frame(),
+        thread: std::thread::current().id(),
+    };
+    out.0
+        .lock()
+        .expect("観測バッファの毒化なし")
+        .push(observation);
+}
+
+/// 既定の多スレッド実行器のまま `Update` を回し、World 資源から組んだ刻印のフレーム番号が
+/// `FrameCount` と一致することを、**ログ捕捉に依らず**（システムが載るスレッドによっては
+/// 捕捉が届かない・要件 7.6）レコード純関数へ渡す値そのもので確かめる。
+#[test]
+fn world_stamps_match_frame_count_under_the_default_multi_threaded_executor() {
+    let mut ecs = EcsWorld::new();
+    let sink = ObservedStamps::default();
+    ecs.world_mut().insert_resource(sink.clone());
+
+    ecs.add_systems(Update, observe_stamp::<0>);
+    ecs.add_systems(Update, observe_stamp::<1>);
+    ecs.add_systems(Update, observe_stamp::<2>);
+    ecs.add_systems(Update, observe_stamp::<3>);
+
+    // 検証が空振りしていないこと——`Update` は既定の実行器（多スレッド）のままである。
+    let kind = ecs
+        .world()
+        .resource::<Schedules>()
+        .get(Update)
+        .expect("Update スケジュールは World 構築時に登録済み")
+        .get_executor_kind();
+    assert_eq!(
+        kind,
+        ExecutorKind::MultiThreaded,
+        "本テストの前提は既定の多スレッド実行器（単スレッドへ落ちていたら検証にならない）"
+    );
+
+    assert!(
+        ecs.try_tick_world(),
+        "システム登録済みの World は tick する"
+    );
+    let expected = ecs.world().resource::<FrameCount>().0;
+    assert_eq!(expected, 1, "1 周で FrameCount は 1 になる");
+
+    let observations = sink.0.lock().expect("観測バッファの毒化なし").clone();
+    assert_eq!(observations.len(), 4, "4 本の観測系システムが全て走る");
+    for observation in &observations {
+        assert_eq!(
+            observation.from_world, expected,
+            "多スレッド実行でも資源から組んだ刻印は FrameCount とずれない: {observation:?}"
+        );
+    }
+
+    // ワーカースレッドに載った観測があれば、そこでは写しが見えない（frame=0）ことを
+    // その場の実測で示す。載らなかった場合の恒久的な証拠は
+    // `the_mirror_does_not_reach_other_threads_but_the_resource_does` が持つ。
+    let ui_thread = std::thread::current().id();
+    for observation in observations.iter().filter(|o| o.thread != ui_thread) {
+        assert_eq!(
+            observation.from_mirror, 0,
+            "ワーカースレッドからは写しが読めない（World を持つ点が stamp() を呼ぶ退行の検出）: {observation:?}"
+        );
+    }
+
+    // UI スレッド（tick を回した側）の写しは資源と同じフレーム番号を指す。
+    assert_eq!(
+        current_frame(),
+        expected,
+        "写しは FrameCount 増分と同一点で同じ値に更新される"
+    );
+
+    reset_for_test();
+}
+
+#[test]
+fn each_tick_advances_the_resource_and_the_mirror_together() {
+    let mut ecs = EcsWorld::new();
+    // tick が空回りしないようにダミーのシステムを 1 本置く（`has_systems` の条件）。
+    ecs.add_systems(Update, || {});
+
+    for expected in 1..=3u32 {
+        assert!(ecs.try_tick_world());
+        let frame = ecs.world().resource::<FrameCount>().0;
+        let tick_start = *ecs.world().resource::<TickStart>();
+        assert_eq!(frame, expected, "FrameCount は tick ごとに 1 進む");
+        assert_eq!(
+            current_frame(),
+            expected,
+            "写しも同じ点で同じ値へ進む（1 系列が保たれる）"
+        );
+        assert_eq!(
+            stamp_from_world(&FrameCount(frame), &tick_start).frame,
+            stamp().frame,
+            "資源から組んだ刻印と写しから組んだ刻印は同じフレーム番号になる"
+        );
+    }
+
+    reset_for_test();
 }

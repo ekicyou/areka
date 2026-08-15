@@ -14,7 +14,7 @@
   - 観察可能な完了条件: 5 種のレコード行が固定文字列として再現でき、既定設定で無音・専用指定で発行されることがテストで示される
   - _Requirements: 2.5, 2.6, 2.7_
 
-- [ ] 1.2 フレーム刻印の権威を配管する
+- [x] 1.2 フレーム刻印の権威を配管する
   - フレーム計数の増分点で tick 開始時刻も資源として更新し、同じ値をスレッド局所の写しへ配る
   - World を持つ観測点は資源から刻印を組み、World を持たない点（一括書込・ウィンドウメッセージ処理）だけが写しを読む取り決めを実装する
   - テスト冒頭で写しと時刻基準を初期化できる口を用意する
@@ -249,3 +249,5 @@
 - **`FlushRecord.total_us` は `Option<u64>`** — task 1.1 のレビューで確定。`stage=begin` では総所要が未確定であり、`0` を出すと「0µs で完了」と「未計測」が同一文字列になって番兵規則（欠損は `-`）と矛盾する。設計の C1 Service Interface は追随済み。
 - **観測レコードの定数はすべて `crates/wintf/src/ecs/window/transition_diag.rs` が単一の定義元** — `kind`／`stage`／`msg` 語と全フィールド名の `pub const`、および `KIND_ALL`／`STAGE_ALL`／`MSG_ALL`／per-kind の必須フィールド列（`MONITOR_FIELDS` 等）。判定器（task 3.1/3.2）はこれらを参照し、文字列リテラルを二重定義しない。
 - **ログ濾過テストはスレッド局所の subscriber で書く** — `crate::ecs::test_support::capture_under_filter`（`crates/wintf/src/ecs/test_support.rs:96`・既存）が `tracing::subscriber::with_default` を使う。大域 subscriber を使うとテスト間で状態が汚染される（要件 7.7）。また「既定で無音」を主張するテストには同じ捕捉窓の内側に必ず出るはずの対照行を置き、捕捉が死んでいるだけで緑になる形にしない。
+- **`cargo fmt -p wintf -- <パス>` はパス列を無視してクレート全体を整形する** — task 1.2 で 75 本の無関係ファイルが書き換わった。個別ファイルの整形は `rustfmt --edition 2024 --style-edition 2024 <パス>` を使うこと。整形の巻き添えが差分に混ざっていないか、報告前に必ず `git status` で確認する。なお本ブランチでは `crates/wintf/examples/*.rs` と `world/mod.rs` の `tick_order_tests` 内 2 行が既に rustfmt 未整形であり、これらは触らない。
+- **多スレッド実行器の相でログ捕捉に依る検証をしない** — 既定の bevy スケジュールはワーカースレッドに載るため `tracing` 捕捉に届かず、検証が空振りのまま緑になる（要件 7.6）。刻印の検証は共有資源へ値を書き出してデータで突き合わせる形にし、観測件数の非空assertと `ExecutorKind::MultiThreaded` の事前assertを置く。task 1.2 の `world_stamps_match_frame_count_under_the_default_multi_threaded_executor` が雛形。
