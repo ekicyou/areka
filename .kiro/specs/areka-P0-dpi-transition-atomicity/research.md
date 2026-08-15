@@ -265,3 +265,75 @@
 14. `FrameCount`（u32）の周回——観測レコードの突合と有界フレーム数の判定は差分のみで行い、絶対値比較を判定語に使わない（要件ディスカッションで追加・§4 研究項目 6）。
 15. Requirement 5.8「一度の窓書込」の実現形——C-1 の system 配置（dpi 相より前の同一 tick）で足りるか、経路 (a) が `WM_DISPLAYCHANGE` より先に届く場合に A-3（経路 (a) の反映を tick 冒頭へ寄せる）が要るか（要件ディスカッションで追加・§3(c) 注意点 (1)）。
 16. Requirement 6.2 の除外判定——「明示操作のみを根拠」とするための既定位置の追跡規則（項目 9 と同じ問い。要件ディスカッションで R6.2 に義務として明記済み）。
+
+---
+
+# 設計フェーズの追記（2026-08-15・kiro-spec-design）
+
+- **Discovery Scope**: Extension（既存 tick 構造・観測流儀・配置機構の拡張）。研究の主眼は (i) 現行ツリーでの全アンカー再検証、(ii) 先行 5 spec の設計慣行、(iii) Win32／DWM の文書調査、(iv) 上記 §7 の設計判断項目 16 件の裁定。
+- **Key Findings**:
+  1. **依存方向は wintf ← areka-emo-present ← areka**（`crates/areka-emo-present/Cargo.toml:17`・`crates/areka/Cargo.toml:19,51`）。ゆえに観測 target 定数・フレーム番号ミラー・共通レコード接頭語は wintf に置いて 3 crate で共有でき、`RUST_LOG` の directive は 1 語で済む（設計判断 2 の決着）。
+  2. **全窓の enqueue は既に同一 tick 内**（`emo2_frame_system` の 1 回の排他 system で全 `Changed<DPI>` を処理）。第 1 段の「逐次適用」は tick 跨ぎではなく**一括 flush の内側の実時間**（`SetWindowPos` 1 回 16〜78ms・初回最重・当該窓の最初の `SetWindowPos` の内側で `WM_DPICHANGED` を同期受理 24/24）。したがって tick 単位のフレーム差は 0 が期待値で、実時間の内訳（未特定）を名指しするには **tick 開始基準の µs・各書込の所要 µs・flush 中に受理したメッセージ**を同じレコード系列へ載せる必要がある（設計 C1／C2）。
+  3. **`SetWindowPosCommand` は hwnd・矩形・flags・insert_after のみ**（`command.rs:116-125`）で entity も要求語彙も持たない。`new()` は 7 引数（呼出 3 箇所＝areka `window_move.rs:559`・zorder `:199-205`・graphics `:89-97`）。ビルダ `with_tag` で追加すれば呼出側は 1 行の変更で済む。
+  4. **`MonitorSnapshot` の構築リテラルは 18 ファイル 51 箇所**（テスト含む）→ フィールド追加は不採用。DPI 表は別 Resource `MonitorDpiTable` として同じ `Monitor` 列から同時構築する。
+  5. **`judge-perf.py`（`tools/perf/judge-perf.py`）は `名前=値` 辞書化＋必須フィールド存在チェックのみ**→ perf 行末尾への `frame=` 追加は互換（DoD で `--selftest`）。
+  6. **`chain_finalize` の既定位置判定は「現在位置＝既定位置」**（`chain_finalize.rs:108`）。DPI 再射影の中央保存で X が動くと全スコープが除外されるため、解き直しには「システム由来の書込で、書込前に既定位置と一致していた場合のみ追随」の追跡規則が要る。
+  7. **Win32 文書調査**（詳細は §8.3）: `DeferWindowPos` 群は per-window の flags／`hwndInsertAfter`・同一 parent（top-level は NULL）・`EndDeferWindowPos` が各窓へ `WM_WINDOWPOSCHANGING/CHANGED` を送る、まで文書化。**原子性・部分適用・所要**は非文書化。`WM_DPICHANGED` の送達形式（同期／post）と `WM_DISPLAYCHANGE` との順序も非文書化。HWND 矩形と swap chain `Present` を同一 DWM フレームへ揃える API は無い（Electron／Avalonia の同旨報告）。
+
+## 8. Research Log（設計フェーズ）
+
+### 8.1 現行ツリーでのアンカー再検証（2026-08-15）
+- **Context**: brief 棚卸⑨の rebase 点と要件・研究の file:line を、設計が引用する前に全て開いて確認する（doc 主張は書く前に裏取り）。
+- **Findings**（訂正のあったもの）: `show.rs` 予算域は :96-170（:95 ではない）／`resize_window_to` の limit クランプは :822（:806-808 は作業領域の取得）／`reproject_char_window_at_current_size` は `dpi.rs:335`（`window_move.rs` ではない）／`enqueue_window_set_pos` の route 引数は :520・署名 :514-521／`MonitorSnapshot` の構築は `main.rs:573-574`・挿入は :611・seam は :530-538・注記は :569／`BalloonKeywordBase` は `spawn.rs:237-243`／`ScopeWindows.default_char_pos` は `spawn.rs:266`・spawn 時設定は :514／`Stage` は `timing.rs:59-71`／`chain.upload` は `Result<(), PresentError>` でリサイズの有無を返さない／`redrive_window_dpi_for_updated_monitors` の定義は `monitor_systems.rs:438-480`（private）／`WM_DISPLAYCHANGE` は `lifecycle.rs:122-138`・戻り `None`／`FrameCount(pub u32)`（`schedule_labels.rs:8`）／`command.rs` に `#[cfg(test)]` の覗き口は無い／`capture_under_filter` は `pub(crate)`。
+- **Implications**: 設計の File Structure Plan と Modified Files 表の全 file:line はこの再検証値。
+
+### 8.2 先行 spec の設計慣行
+- **Sources**: `completed/areka-P0-dpi-window-vanish/design.md`（専用 target・既定 OFF・純関数レコード・番兵 `-`・確定台帳 2 証跡クラス・File Structure Plan の突合台帳義務・サインオフ §6.2）／`completed/areka-P0-recompose-budget/design.md`（`FrameTiming`／`EmitContext`／perf 行契約・定常アロケーション 0 の判定式）／`completed/areka-P0-scope-chain-gap/design.md`（`ChainFinalized`・landing guard・`ChainFinalizeStall`・R7.3 の既定位置判定・DPI 遷移は atom へ申し送りと明記）／`completed/areka-P0-windowposition-limit/design.md`＋`tasks.md:233`（キーワード基本位置の一度きり・「拡大率をまたぐ保存追従はしない」裁定）／`completed/areka-P0-surface-resize-resnap/design.md`（`enqueue_window_set_pos` の size 契約・bypass ミラー・同一 tick 直接呼出）／`areka-P0-balloon-offset-dpi/brief.md`（offset 単位空間・atom 従属）。
+- **Implications**: 設計は同じ節構成（Boundary Commitments → File Structure Plan → Traceability → Components）と、`*_with(source, world)` の依存注入・偽装境界・語彙固定テストの流儀を踏襲した。
+
+### 8.3 Win32／DWM 文書調査（研究項目 §4-1・§4-2・§4-3・§4-4）
+- **Sources**: Microsoft Learn — [DeferWindowPos](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-deferwindowpos)・[BeginDeferWindowPos](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-begindeferwindowpos)・[EndDeferWindowPos](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-enddeferwindowpos)・[Window Features](https://learn.microsoft.com/en-us/windows/win32/winmsg/window-features)・[SetWindowPos](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowpos)・[WM_DPICHANGED](https://learn.microsoft.com/en-us/windows/win32/hidpi/wm-dpichanged)・[WM_GETDPISCALEDSIZE](https://learn.microsoft.com/en-us/windows/win32/hidpi/wm-getdpiscaledsize)・[High DPI development](https://learn.microsoft.com/en-us/windows/win32/hidpi/high-dpi-desktop-application-development-on-windows)・[WM_DISPLAYCHANGE](https://learn.microsoft.com/en-us/windows/win32/gdi/wm-displaychange)・[WM_SYNCPAINT](https://learn.microsoft.com/en-us/windows/win32/gdi/wm-syncpaint)・[DirectComposition basic concepts](https://learn.microsoft.com/en-us/windows/win32/directcomp/basic-concepts)・[DwmFlush](https://learn.microsoft.com/en-us/windows/win32/api/dwmapi/nf-dwmapi-dwmflush)／[Electron: window resize behavior](https://www.electronjs.org/blog/tech-talk-window-resize-behavior)／[Avalonia #9103](https://github.com/AvaloniaUI/Avalonia/issues/9103)／ReactOS `winpos.c`（参考・保証ではない）。
+- **Findings**:
+  - `DeferWindowPos` は per-window に `hWndInsertAfter`・flags を取り、Z 専用（`SWP_NOMOVE|SWP_NOSIZE`）と位置＋寸を 1 バッチに混在できる。「同一 parent」制約は top-level（NULL）で満たす。`EndDeferWindowPos` は「single screen-refreshing cycle で同時更新」と記すが、メッセージ送達の一括化や部分適用の扱いは非文書化（ReactOS 実装は逐次適用・先頭失敗で打ち切り）。
+  - `WM_DPICHANGED` は PMv2 で OS が窓を動かさない（アプリの責任）。送達形式（同期／post）と `WM_DISPLAYCHANGE` との順序は非文書化。`lParam` が RECT へのポインタゆえ同期送達（`SendMessage` 系）と推定。第 1 段の実測「当該窓の最初の `SetWindowPos` の内側で受理」と整合するが、断定はしない。
+  - `SetWindowPos` の内側で同期に送られるメッセージ: `WM_GETMINMAXINFO`・`WM_NCCALCSIZE`（寸変化時）・`WM_WINDOWPOSCHANGING/CHANGED`・`WM_SYNCPAINT`（他スレッド）。`SWP_ASYNCWINDOWPOS` は他スレッド所有窓にだけ効く（同一スレッドでは無効）。DWM／`WS_EX_NOREDIRECTIONBITMAP` 固有の所要は非文書化。
+  - HWND の移動・寸変更と swap chain `Present`／WUC commit を同一 DWM フレームへ揃える文書化 API は無い。DirectComposition は「1 commit 内の変更は 1 フレームへ」までで、HWND 幾何とは別パイプ。
+- **Implications**: B-2b（`DeferWindowPos` 一括）は API 上は適用可能だが効果は測るまで不明→段階裁定。B-3（2 相化）でも同一 DWM フレームの保証は得られない→最後の手段。「窓内下端中央補償」（B-4）は同一フレーム保証に依存しない代替として候補に載せた。
+
+### 8.4 逐次 `SetWindowPos` の内訳を名指しするための観測要件
+- **Context**: 第 1 段の未特定 §8-1（1 回 16〜78ms の内訳）・§8-2（enqueue→flush の 20〜80ms）。
+- **Findings**: 遷移 1 の間隔は 78／35／21／16／16ms と初回が最重、位置のみ書込（flags=21）は 2ms（+216→+218）。`WM_DPICHANGED` は各窓の最初の書込の内側で受理。ゆえに (i) 各書込の所要 µs、(ii) flush 開始の tick 開始基準 µs、(iii) flush 中に受理したメッセージ（`in_swp`・flush 開始基準 µs）、(iv) サーフェス可視化の tick 開始基準 µs、を同じフレーム番号系列に載せれば「OS 同期処理／自前 handler／flush 前の残り system」のどこに消えたかを区別できる。
+- **Implications**: 設計 C1 の `Stamp { frame, t_us }`・`WriteRecord.call_us`・`FlushRecord.since_tick_us`・`MsgRecord.since_flush_us`。
+
+## 9. Design Decisions（§7 の 16 項目の裁定）
+
+| # | 項目 | 裁定 | 代替案と却下理由 |
+|---|---|---|---|
+| 1 | フレーム番号の配管 | **(ii) スレッド局所ミラー**（`try_tick_world` が `FrameCount` 増分直後に `begin_tick`） | (i) コマンド焼込みは enqueue と flush が同一 tick ゆえ冗長・wndproc 経路に届かない／(iii) 引数渡しは flush だけにしか届かない |
+| 2 | 観測 target | **単一定数 `wintf::transition` を wintf に置き 3 crate で共有** | crate ごとの target は directive が 3 語になり手順書と判定が散る。依存方向 wintf←emo-present←areka で共有可能と確認 |
+| 3 | 書込レコードの一本化 | **コマンドに `WriteTag { origin, scope, kind }` を載せ flush 側 1 行**。`[diag.window_move]` は不変 | 2 段 grep はサインオフの手間と判定の二重化を招く。タグは `&'static str`＋数値のみで wintf は areka の型を知らない |
+| 4 | 2.2 の記録点 | **`show.rs`**（frame と target が揃う）。`chain.upload` は `UploadOutcome { resized }` を返す。:297-301 の字面不変 | `chain.rs` 直接発行は frame と target_id を持たない |
+| 5 | 作業領域源の更新主体 | **C-1**（`Monitor` 表から `MonitorSnapshot`／`MonitorDpiTable` を作り直す）。置き場＝`emo2_frame_system` 先頭（dpi 相の前・同一 tick）。変化時のみ再構築・`WorkAreaResnap` で現寸再射影・DD15 撤回 | C-2（消費者が `Monitor` 直読）は偽装境界を壊す／C-3（dpi 相だけ別源）は二重権威。`Update` 後段への system 追加は排他 system 内の 1 呼出より順序が読みにくい |
+| 6 | tick 跨ぎ分裂 | **A-1＋窓ごとの整合ゲート `DpiSyncHold`** | A-2（遷移バリア）は tick 構造への介入で要件の裁定に反する／A-3 は `dpi-window-vanish` の受理契約を変える上に (a) 先行時の旧 snapshot 読みを解かない |
+| 7 | 1 tick 内の DWM 境界 | **B-2a 合流は確定、B-2b／B-4／B-3 は段階裁定**（採用条件を台帳の数量で固定） | 内訳未特定のまま選ぶと `dpi-window-vanish` 07-18 の偽陰性を再生産する |
+| 8 | `ChainFinalized` の解除条件と遷移完了 | **解除しない。別機構 `ChainRealign`（武装＝k 変化のある `DpiReproject`・解決＝landing かつ hold なし・停滞は `ChainFinalizeStall` を武装時に初期化して再利用）** | 解除方式は起動時一度きりの意味と `finalize_chain_once_with` の一度きりガードを崩し、scg のテストへ波及する |
+| 9 | 既定位置の追跡 | **キャラ窓・システム由来 route・書込前に既定位置と一致していた場合のみ追随。`None` は `None`** | 無条件追随はドラッグ後の DPI 再射影で明示配置を連鎖に取り込んでしまう。追跡なしは全スコープ除外で解き直しが空振り |
+| 10 | キーワード基本位置と bod | **再導出しない。offset を k 倍（bod が実装）** | 再導出は素材保持と 2 度目の書込を要し、k 倍と ≤1px の差しか生まない |
+| 11 | flush 検査口 | **`drain_window_pos_commands()`（実行せず取り出す）＋合流純関数** | enqueue レコードだけでは合流結果を検証できない／実行子注入は flush の形を変えすぎる |
+| 12 | perf 行 `frame=` と互換 | **末尾追加・`judge-perf.py --selftest` を DoD に含める** | 解析規則は `名前=値` 辞書化＋必須存在チェックのみ（確認済み） |
+| 13 | 4.5 の回数 | **キャラ 1・バルーン 1・経路 A 0（合流後）** | 合流前（バルーン 2）を上限にすると R6 同一 tick 解決で 3 になり得る |
+| 14 | `FrameCount` 周回 | **差分のみ（`wrapping_sub`）** | — |
+| 15 | 5.8 一度書き | **D5 配置で経路 (b) を保証、経路 (a) 先行は `DpiSyncHold`（上限 30 フレーム・超過は warn の上で続行）** | 上限なしは表更新が来ない異常で寸法追従が止まる／保持なしは旧下端の中間矩形が可視化される。静的証跡: zorder の Z 書込→当該窓 `WM_DPICHANGED`（SWP 内で受理・実機 24/24）→`window_pos.rs:352-363`→`dpi.rs:242-252`→`window_move.rs:288` の旧 snapshot 読み |
+| 16 | 6.2 の除外判定 | 項目 9 と同一 | — |
+
+### 合成の記録（design-synthesis）
+- **一般化**: 「窓書込・メッセージ・モニタ表・サーフェス・配置判断」を**単一の観測チャネル**（共通刻印 `frame`＋`t_us`・`kind` 判別）へ一般化し、判定は 1 つの純関数へ集約（決定論テストと実機サインオフで同一実装）。
+- **Build vs Adopt**: tracing の target 濾過（adopt）／`DeferWindowPos`（adopt 候補・段階裁定）／DWM 同一フレーム同期は文書化 API が無く build もしない（B-4 は同期に依存しない補償）。Python の判定スクリプトは作らず Rust 純関数＋`#[ignore]` ランナーで一本化。
+- **簡素化**: 遷移バリア・2 相コミット・`ChainFinalized` の解除機構・`MonitorSnapshot` の型変更（51 箇所）・コマンドへの frame 焼込み・enqueue／flush の 2 段 grep を採らない。
+
+## 10. Risks & Mitigations（設計フェーズ）
+- 合流が実時間を減らさない → 回数の下限化と R6 同一 tick 解決に要るため採用維持。時間は R3 で測り、B-2b 以降で扱う。
+- 整合ゲートが縁の配置で最大 30 フレーム待つ → warn で可視化。表に既在の dpi へ移す別モニタドラッグは即通過（10.7）。
+- 不可視のキャラ窓が旧幅で landing を通る → scg R7.4 と同じ受容。emo2 実機では発生しない。
+- 観測行の追加が定常アロケーションを増やす → 表示成立点の記録は寸変化時のみ・`tracing::enabled!` で守る・perf 行は末尾追加のみ。既存 `presenter_budget_steady_state_tests` を維持。
+- レコード語彙の散逸 → `kind`／`stage`／フィールド名は wintf・emo-present・areka の各レコード純関数の `pub const` に一元化し、C7 が同じ定数で解析。

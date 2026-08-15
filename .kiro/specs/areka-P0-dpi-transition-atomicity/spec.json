@@ -1,17 +1,20 @@
 {
   "feature_name": "areka-P0-dpi-transition-atomicity",
   "created_at": "2026-08-15T20:14:49+09:00",
-  "updated_at": "2026-08-15T20:40:00+09:00",
+  "updated_at": "2026-08-15T23:30:00+09:00",
   "language": "ja",
-  "phase": "requirements-generated",
+  "phase": "design-generated",
   "approvals": {
     "requirements": {
       "generated": true,
       "generated_at": "2026-08-15T20:40:00+09:00",
-      "approved": false
+      "approved": true,
+      "approved_at": "2026-08-15T23:30:00+09:00",
+      "note": "kiro-spec-design -y による自動承認（第 1 段再観測＝残存で確定済み）"
     },
     "design": {
-      "generated": false,
+      "generated": true,
+      "generated_at": "2026-08-15T23:30:00+09:00",
       "approved": false
     },
     "tasks": {
