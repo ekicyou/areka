@@ -62,6 +62,24 @@ impl ComposedSurface {
         self.bytes
     }
 
+    /// バイト列**そのものの確保量**（`Vec::capacity`・バイト）。
+    ///
+    /// 消費側（`areka-emo-present` の `FrameBudget`）が「この呼び出しで確保が起きたか」を
+    /// **厳密に**観測するための口である。`Vec` の容量は再確保でしか増えず縮みもしないため、
+    /// 呼び出しの前後で読み比べれば「増えた＝確保した／変わらない＝確保していない」が
+    /// 過大にも過小にもならずに決まる（[`ResampleScratch::capacity`] と同じ形）。
+    ///
+    /// [`bytes`] の長さ（`stride * height`）とは別物である——長さは外形が決めるが、容量は
+    /// 「これまでに到達した最大」を保つ。**役割ではなく実体に紐づく**値ゆえ、バッファが
+    /// 複数本で入れ替わる経路（キャッシュの追い出しバッファを回して使う形）でも、器側で
+    /// 到達済み寸法を覚える必要が無くなる。
+    ///
+    /// [`bytes`]: ComposedSurface::bytes
+    /// [`ResampleScratch::capacity`]: crate::scale::ResampleScratch::capacity
+    pub fn bytes_capacity(&self) -> usize {
+        self.bytes.capacity()
+    }
+
     /// バッファを `w×h`（`stride = w*4`）へ再確保し、全画素を 0（全透明）へクリアする。
     ///
     /// 既存の `Vec<u8>` 容量を**再利用**する（要件 10.3・毎フレーム経路のゼロアロケーション）:

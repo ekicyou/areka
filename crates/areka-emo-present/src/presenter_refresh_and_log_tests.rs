@@ -289,6 +289,16 @@ fn refresh_scale_without_dpi_change_does_nothing() {
         tampered_bytes, scaled_1000,
         "プローブ前提: 別の絵であること"
     );
+    // 原寸は改竄前のエントリのものを引き継ぐ（キーも原寸も変えず**絵だけ**を差し替えるプローブ
+    // である）。原寸は `CacheEntry` の中に在るため、差し替えるときも対で渡す必要がある。
+    let tampered_native = presenter
+        .targets
+        .get(&TargetId(0))
+        .unwrap()
+        .cache
+        .get(1000, &BindSet::default(), &PatternState::default(), k2)
+        .expect("初回表示でエントリが在る")
+        .native;
     presenter
         .targets
         .get_mut(&TargetId(0))
@@ -301,6 +311,7 @@ fn refresh_scale_without_dpi_change_does_nothing() {
             k2,
             tampered,
             tampered_mask,
+            tampered_native,
         );
 
     // DPI は据え置き（k 不変）。

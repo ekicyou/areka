@@ -33,48 +33,58 @@
 //! |---|---|---|
 //! | 合成先の常設席（`ComposedSurface`） | A1 | [`FrameBudget::native_scratch`]・恒等 k の交代は [`FrameBudget::swap_native_scratch`] |
 //! | リサンプル作業領域の席（`ResampleScratch`） | A3 | [`FrameBudget::resample_native_into`] |
-//! | マスクの輪番（`Option<Arc<AlphaMask>>`・2 スロット） | A4/A7 | [`FrameBudget::regenerate_mask`] |
+//! | マスクの輪番（`Option<Arc<AlphaMask>>`・空き 1 枚） | A4/A7 | [`FrameBudget::regenerate_mask`] |
 //!
 //! 表示バッファ（A2/A6）だけは本器が所有しない——所有はキャッシュ側にあり、追い出しエントリの
 //! 容量を [`ComposeCache::take_recycled`] で回収して回す。本器は
 //! [`FrameBudget::display_buffer`] でその仲介と計数だけを担う。
 //!
-//! # 何をもって「確保した」と数えるか（席ごとに 2 通り）
+//! # 回る実体の本数（キャッシュ容量 3 での形）
 //!
-//! ## ⑴ 容量を席から直接読める席は、呼び出しの前後の差で数える（厳密）
+//! キャッシュが最大 3 エントリを保持するため、毎コマ経路を回る実体の本数は容量 1 の頃から増えた:
 //!
-//! リサンプル作業領域は [`ResampleScratch::capacity`] で**席そのものの容量**を読める。`Vec` の
-//! 容量は再確保でしか増えないため、`resample_with` の前後で容量を読み比べれば
-//! 「増えた＝確保が起きた／変わらない＝起きていない」が厳密に決まる。過大にも過小にも振れない。
+//! - **表示バッファ**: キャッシュの 3 本 ＋（恒等 k では合成先席の 1 本）＝ 最大 4 本
+//! - **マスク**: キャッシュの 3 本 ＋ 輪番の空き 1 枚 ＝ 4 本
 //!
-//! この形にしてある理由は、器側で高水位を覚える形が**席の差し替えを 1 件も検出できない**
-//! ためである（§到達済み寸法の落とし穴）。
+//! いずれも本数が有限で、追い出し 1 件が次の適用の入力になるという形は変わらない。**本器が
+//! 実体ごとの状態を覚えないのはこのためである**——覚える形は本数が増えた瞬間に破綻する
+//! （§なぜ「到達済み寸法（高水位）を器が覚える」形をやめたのか）。立ち上がりに要する適用数は
+//! 「本数ぶん」であり、Requirement 3.2 の「一度だけ」は**確保対象ごとに一度**の意味で読む。
 //!
-//! ## ⑵ 容量を読めない席は、**その実体に紐づけた**到達済み寸法（高水位）で数える
+//! # 何をもって「確保した」と数えるか（**全ての席で 1 通り**＝実体の容量差）
 //!
-//! `ComposedSurface` のバイト列と `AlphaMask` の詰めバイト列は容量を公開していない。ゆえに
-//! これらの席は**到達済みの最大長**を実体と分離不能に束ねて持ち、要求がそれを超えたときにだけ
-//! 計数する。
+//! 席（あるいは席を通り抜けるバッファ）そのものの `Vec` 容量を、呼び出しの**前後で読み比べる**。
+//! `Vec` の容量は再確保でしか増えず、`clear`／`truncate`／`resize` で縮みもしないため、
+//! 「増えた＝この呼び出しで確保が起きた／変わらない＝起きていない」が厳密に決まる。過大にも
+//! 過小にも振れない。読み口は 3 つで、いずれも本 spec が additive に足した観測専用の getter である:
 //!
-//! この規則は片側にのみ誤差を持つ: `Vec` の容量は一度到達した長さを下回らない（`clear`＋`resize`
-//! も `reserve` も容量を縮めない）ため、**到達済み以下の要求は確保が起き得ない**——見逃しは
-//! 構造的に起こらない。逆に、到達済みを超える要求は `Vec` の余裕次第で実際には確保が起きない
-//! ことがあり、その場合は 1 件多く数える。**安全側（多めに数える）へ倒してある**のは、
-//! 定常アロケーション 0（Requirement 3.1）が「数え漏れによる偽の成立」で通ることを防ぐためである。
+//! | 対象 | 読み口 |
+//! |---|---|
+//! | リサンプル作業領域（x 軸写像表） | [`ResampleScratch::capacity`] |
+//! | 合成先席・表示バッファ | [`ComposedSurface::bytes_capacity`] |
+//! | 当たり判定マスクの詰めバイト列 | [`AlphaMask::packed_capacity`] |
 //!
-//! ## 到達済み寸法の落とし穴（レビューの変異検査が暴いた欠陥）
+//! ## なぜ「到達済み寸法（高水位）を器が覚える」形をやめたのか
 //!
-//! 高水位を「実体」ではなく「役割」に紐づけると、**席の実体を差し替える改変が計数へ 1 件も
-//! 現れない**——高水位が前の実体の値を覚えたままなので、確保し直した席が同じ寸法へ伸びても
-//! 「到達済み以下」と判定されるためである。ゆえに本モジュールでは
+//! 高水位を器のフィールドとして持つ形は、**高水位が役割に紐づき実体に紐づかない**。バッファが
+//! 1 本しか無いうちは両者が一致するので成立していたが、次の 2 つの理由で成立しなくなった:
 //!
-//! - 高水位は必ず席の実体と同じ入れ物に置き、実体と一緒に入れ替える（[`seat::SurfaceSeat`]・
-//!   [`seat::MaskRotation`]・表示バッファの [`FrameBudget::swap_native_scratch`]）
-//! - 容量を読める席は高水位を持たず、席から直接読む（[`seat::XmapSeat`]）
+//! 1. **キャッシュ容量が 1 → 3 になった**（要件 7.1・2026-08-15 開発者裁定）。表示バッファは
+//!    3 本＋合成先席 1 本の計 4 本が入れ替わりながら回る。器が持つ 1 個の高水位はそのうちどれの
+//!    値なのかを言えず、**寸法変化の途中で他の本の高水位を当てて成長を見逃す**（＝黙って確保する）
+//! 2. 実体を差し替えつつ高水位を持ち越す改変（`display_buffer` が回収バッファを捨てて空を返す・
+//!    `SurfaceSeat::lend` が席を作り直す）が**計数へ 1 件も現れなかった**。番地の一致という
+//!    走ごとに揺れる傍証しか検出器が無く、決定論的に殺せていなかった
 //!
-//! の 2 つだけを許す。特にリサンプル作業領域は**高水位を出力幅で代用していた**ため、
-//! 「毎回まっさらな作業領域で呼ぶ」改変（席への代入・使い捨てローカルの受け渡しの両方）が
-//! 檻を 1 本も赤にしなかった。⑴ の形はその 2 種をどちらも殺す。
+//! 容量を実体から直接読む形は 2 つとも構造で殺す——差し替えられた実体の容量は 0 から始まるので、
+//! 同じ寸法へ伸びた時点で必ず 1 件計数される。
+//!
+//! ## 誤差の向き（安全側）
+//!
+//! この形の誤差は片側だけである。縮小したバッファは容量を保つため、後で元の寸法へ戻す要求では
+//! 容量が動かず**確保なし**と正しく判定される。逆に「新しい実体を同じ寸法で確保し直す」改変は、
+//! 容量が 0 から伸びるぶんを必ず計数する。見逃し（＝定常アロケーション 0 の偽の成立）は
+//! 構造的に起こらない。
 //!
 //! # 席が期待どおり再利用できない境界（design.md §Error Handling）
 //!
@@ -246,18 +256,13 @@ impl BudgetCounters {
 ///
 /// # なぜ入れ物へ閉じ込めるのか（変異検査が暴いた欠陥）
 ///
-/// 到達済み寸法（高水位）を席と別のフィールドに置くと、**席だけを差し替える改変が計数へ 1 件も
-/// 現れない**——高水位が前の実体の値を覚えたままなので、確保し直した席が同じ寸法へ伸びても
-/// 「到達済み以下」と判定されるためである。実際、分離形で「席を毎回まっさらに起こす」変異を
-/// 当てたところ、リサンプル作業領域の側は檻が 1 本も赤にならなかった。
-///
+/// 観測を席と別の場所に置くと、**席だけを差し替える改変が計数へ現れない**経路ができる。ゆえに
 /// 本入れ物はフィールドを私有にし、**席へ触れる唯一の道**を観測込みのメソッドにする。
-/// 観測の形は席ごとに 2 通りある（本モジュール冒頭 §何をもって「確保した」と数えるか）:
 ///
-/// - [`SurfaceSeat`]・[`MaskRotation`]: 容量を読めないので到達済み長を**実体と同じ入れ物に**
-///   置き、実体を入れ替えるときは高水位も一緒に動かす
-/// - [`XmapSeat`]: 高水位を**持たない**。[`ResampleScratch::capacity`] で席そのものの容量を
-///   呼び出しの前後で読み比べる（`Vec` は再確保でしか容量が増えない＝厳密な観測）
+/// 観測の形は 3 席とも同一で、**実体そのものの `Vec` 容量を呼び出しの前後で読み比べる**
+/// （本モジュール冒頭 §何をもって「確保した」と数えるか）。到達済み寸法（高水位）を器が覚える
+/// 形は 1 つも残っていない——覚える形は実体が複数本で入れ替わる経路（キャッシュ容量 3）で
+/// 破綻し、実体の差し替えを見逃す。
 mod seat {
     use std::sync::Arc;
 
@@ -265,28 +270,24 @@ mod seat {
 
     use super::{ComposedSurface, ResampleScratch, ScaleRatio, resample_with};
 
-    /// 合成先の常設席（A1）＋到達済みバイト長。
+    /// 合成先の常設席（A1）。**高水位を持たない**——観測は席の実体の容量そのもので行う。
     #[derive(Debug, Default)]
     pub(super) struct SurfaceSeat {
         surface: ComposedSurface,
-        /// 到達済みバイト長（高水位）。`Vec` の容量は一度到達した長さを下回らないため、
-        /// これ以下の要求では確保が起き得ない。
-        reached: usize,
     }
 
     impl SurfaceSeat {
-        /// 席を閉包へ貸す。閉包の中で到達済みを超えて伸びたら `true`（＝確保が起きた）。
+        /// 席を閉包へ貸す。閉包の中で**席の容量が増えたら** `true`（＝確保が起きた）。
+        ///
+        /// 容量は再確保でしか増えないため、この観測は厳密である。席の実体を差し替える改変は
+        /// 容量 0 から始まる新品を作ることになり、外形まで伸びた時点で必ず計数される。
         pub(super) fn lend<R>(
             &mut self,
             borrow: impl FnOnce(&mut ComposedSurface) -> R,
         ) -> (R, bool) {
+            let before = self.surface.bytes_capacity();
             let produced = borrow(&mut self.surface);
-            let len = self.surface.bytes().len();
-            let grew = len > self.reached;
-            if grew {
-                self.reached = len;
-            }
-            (produced, grew)
+            (produced, self.surface.bytes_capacity() > before)
         }
 
         /// 読み取り用の参照（リサンプル元）。
@@ -294,10 +295,10 @@ mod seat {
             &self.surface
         }
 
-        /// 恒等 k の交代（design.md Flow 2）。到達済みは実体に紐づく値ゆえ一緒に入れ替える。
-        pub(super) fn swap(&mut self, buffer: &mut ComposedSurface, reached: &mut usize) {
+        /// 恒等 k の交代（design.md Flow 2）。観測は実体の容量から読むため、席と一緒に
+        /// 動かすべき付随状態は 1 つも無い。
+        pub(super) fn swap(&mut self, buffer: &mut ComposedSurface) {
             std::mem::swap(&mut self.surface, buffer);
-            std::mem::swap(&mut self.reached, reached);
         }
     }
 
@@ -339,55 +340,43 @@ mod seat {
         }
     }
 
-    /// `AlphaMask` の詰めバイト長（`wintf` の `AlphaMask` と同じ式）。
+    /// マスクの輪番（A4/A7）。器が握るのは**空き 1 枚**だけで、残りはキャッシュ側に在る。
     ///
-    /// 出典: `wintf/src/ecs/widget/bitmap_source/alpha_mask.rs` の `from_pbgra32`
-    /// （`row_bytes = width.div_ceil(8)`・`data = vec![0; row_bytes * height]`）と
-    /// `regenerate_from_pbgra32`（同式で `clear`＋`resize`）。この式が向こうで変われば
-    /// 本器の計数は安全側（多め）に振れるだけで、見逃しにはならない。
-    fn packed_len(width: u32, height: u32) -> usize {
-        width.div_ceil(8) as usize * height as usize
-    }
-
-    /// マスクの輪番（A4/A7・2 スロット）＋**各バッファの**到達済み詰めバイト長。
+    /// # 輪番の形（キャッシュ容量 3）
     ///
-    /// # なぜ高水位が要るのか（レビューが暴いた黙った確保）
+    /// 1 適用の流れは「追い出しエントリのマスクを空きとして受け取り、いま在る空きを再生成先として
+    /// 取り出す」である。ゆえに実体はキャッシュの 3 本＋空き 1 枚の計 4 本が順に回る。取り出す
+    /// 空きは**下流が既に手放している**（新しいマスクが `set_shared` で置き換えたため）ので
+    /// 単独所有が成立し、`Arc::get_mut` による in-place 再生成が通る。
+    ///
+    /// # 確保の観測は実体の容量そのもの（高水位を持たない）
     ///
     /// `AlphaMask::regenerate_from_pbgra32` は `clear`＋`resize(詰め長, 0)` である。詰め長が
-    /// そのバッファの容量を超えれば、これは**紛れもない新規確保**である。以前の形は輪番に
-    /// 高水位を持たず「in-place 再生成なら確保なし」と決め打ちしていたため、寸法拡大
-    /// （例: 40×20 → 60×30 の k=2/1 で詰め長 400→900 バイト）が 1 件も計数へ現れなかった。
-    /// 「黙っては確保しない」（design.md §Error Handling）に反する唯一の席だった。
+    /// そのバッファの容量を超えれば、これは**紛れもない新規確保**である（例: 40×20 → 60×30 の
+    /// k=2/1 で詰め長 400→900 バイト）。[`AlphaMask::packed_capacity`] を再生成の前後で読み
+    /// 比べれば、それが厳密に決まる。器側で到達済み詰めバイト長を覚える形は採らない——回る実体が
+    /// 4 本ある以上、器が持つ 1 個の値は**どの実体のものでもない**（本モジュール冒頭 §なぜ
+    /// 「到達済み寸法（高水位）を器が覚える」形をやめたのか）。
     ///
-    /// # 高水位はスロットと一緒に回る
+    /// **寸法拡大の代金は回る本数ぶんの適用に分かれて 1 件ずつ現れる**。Requirement 3.2 の
+    /// 「一度だけ」は確保対象ごとに一度、という読みである。
     ///
-    /// 輪番は 2 本の `Arc` が 1 適用ずつずれて空きスロットへ入る。高水位は**その実体**に紐づく
-    /// 値ゆえ、`Arc` と同じ組で持ち、実体と一緒に次のスロットへ送る。器が握るのは空きスロット
-    /// 1 本だけなので、もう 1 本（呼び手へ返した現行マスク）の高水位を [`Self::live_reached`]
-    /// として預かり、それが `retired` として戻ってきたときに組み直す。
-    ///
-    /// ゆえに**寸法拡大の代金は 2 適用に分かれて 1 件ずつ現れる**（バッファが 2 本あるので
-    /// 2 本とも伸びる必要がある）。Requirement 3.2 の「一度だけ」は確保対象ごとに一度、
-    /// という読みであり、恒等 k の交代席が立ち上がりに 2 適用ぶんかかるのと同じ形である。
-    ///
-    /// [`Self::live_reached`]: MaskRotation::live_reached
+    /// [`AlphaMask::packed_capacity`]: wintf::ecs::widget::bitmap_source::AlphaMask::packed_capacity
     #[derive(Debug, Default)]
     pub(super) struct MaskRotation {
-        /// 空きスロット（前々回のマスク）と、そのバッファの到達済み詰めバイト長。
-        spare: Option<(Arc<AlphaMask>, usize)>,
-        /// 直前に返したマスクの到達済み詰めバイト長（次の適用で `retired` として戻ってくる）。
-        live_reached: usize,
+        /// 空きスロット（下流が手放し済みのマスク）。
+        spare: Option<Arc<AlphaMask>>,
     }
 
     impl MaskRotation {
         /// 輪番を 1 つ進めてマスクを作り直す。第 2 要素が `true` なら確保が起きた。
         ///
-        /// `retired` は直前の適用で表示に使ったマスク（回収エントリが束ねていたもの）。これを
-        /// 次の空きスロットとして受け取り、代わりに前々回のマスクを再生成先に取り出す。
+        /// `retired` は追い出しエントリが束ねていたマスク。これを次の空きスロットとして受け取り、
+        /// 代わりにいま在る空きを再生成先に取り出す。
         ///
         /// 確保になるのは 3 つの場合で、いずれも `true` を返す（黙って確保しない）:
         /// ⑴ 空きスロットがまだ無い（輪番の立ち上がり） ⑵ 空きスロットが単独所有でない
-        /// ⑶ 要求する詰め長がそのバッファの到達済みを超える（`resize` が伸びる）。
+        /// ⑶ 要求する詰め長がそのバッファの容量を超える（`resize` が伸びる）。
         pub(super) fn regenerate(
             &mut self,
             retired: Option<Arc<AlphaMask>>,
@@ -396,13 +385,11 @@ mod seat {
             height: u32,
             stride: u32,
         ) -> (Arc<AlphaMask>, bool) {
-            let needed = packed_len(width, height);
             let slot = self.spare.take();
-            // 直前に返したマスクが次の空きスロットへ回る（高水位も実体と一緒に動かす）。
-            self.spare = retired.map(|mask| (mask, self.live_reached));
+            // 追い出しエントリのマスクが次の空きスロットへ回る。
+            self.spare = retired;
 
-            let fresh = |this: &mut Self| {
-                this.live_reached = needed;
+            let fresh = || {
                 (
                     Arc::new(AlphaMask::from_pbgra32(pixels, width, height, stride)),
                     true,
@@ -410,19 +397,19 @@ mod seat {
             };
 
             match slot {
-                Some((mut shared, reached)) => match Arc::get_mut(&mut shared) {
+                Some(mut shared) => match Arc::get_mut(&mut shared) {
                     Some(mask) => {
-                        // `clear`＋`resize` は到達済みを超えるときだけ確保する（容量は縮まない）。
-                        let grew = needed > reached;
+                        // `clear`＋`resize` は容量を超えるときだけ確保する（容量は縮まない）。
+                        let before = mask.packed_capacity();
                         mask.regenerate_from_pbgra32(pixels, width, height, stride);
-                        self.live_reached = reached.max(needed);
+                        let grew = mask.packed_capacity() > before;
                         (shared, grew)
                     }
                     // 単独所有が不成立（第三者が参照を握っている）: 確保するが黙ってはいない。
-                    None => fresh(self),
+                    None => fresh(),
                 },
-                // 空きスロットがまだ無い（輪番の立ち上がり 2 回ぶん）: 確保して計数する。
-                None => fresh(self),
+                // 空きスロットがまだ無い（輪番の立ち上がり）: 確保して計数する。
+                None => fresh(),
             }
         }
     }
@@ -449,13 +436,6 @@ pub(super) struct FrameBudget {
     total: BudgetCounters,
     /// 合成先の常設席（A1・`compose_into` の出力先）。
     native: seat::SurfaceSeat,
-    /// 表示バッファが到達済みのバイト長（高水位）。席そのものは持たない——バッファの所有は
-    /// キャッシュ側にあり、本器は回収の仲介と計数だけを担う（A2/A6）。ゆえにここだけは
-    /// 実体と束ねられない（実体の素通しは `budget_tests.rs` の外形一致の檻が守る）。
-    ///
-    /// 恒等 k の交代（[`FrameBudget::swap_native_scratch`]）では**バッファと一緒にこの高水位も
-    /// 入れ替える**。高水位は「その役割」ではなく「その実体」に紐づく値だからである。
-    display_reached: usize,
     /// リサンプル作業領域の席（A3・`resample_with` の x 軸写像表）。
     xmap: seat::XmapSeat,
     /// マスクの輪番（A4/A7・2 スロット＋各バッファの到達済み詰めバイト長）。
@@ -511,10 +491,10 @@ impl FrameBudget {
     /// コピーも確保も起きない（`Vec` の所有ごと交換する）。交代後は「いま合成した中身」が表示
     /// バッファに、「回収した容量」が合成先席になり、次の適用はそちらへ合成する。
     ///
-    /// 到達済みバイト長も一緒に入れ替える——高水位は役割ではなく**実体**に紐づく値であり、
-    /// 交換し忘れると交代先の席で伸長を見逃す（＝黙って確保する）ためである。
+    /// 付随して動かす状態は 1 つも無い——確保の観測は実体の容量から直接読むため、交代で
+    /// 取り違える値が存在しない（本モジュール冒頭 §何をもって「確保した」と数えるか）。
     pub(super) fn swap_native_scratch(&mut self, display: &mut ComposedSurface) {
-        self.native.swap(display, &mut self.display_reached);
+        self.native.swap(display);
     }
 
     /// 表示バッファを整える（A2/A6・design.md D2⑵）。
@@ -524,11 +504,15 @@ impl FrameBudget {
     /// バッファとして返し、エントリが束ねていたマスクを第 2 要素で返す——呼び手はそれを
     /// [`FrameBudget::regenerate_mask`] へ渡し、輪番の空きスロットとして戻す。
     ///
-    /// 回収が成立しなかった場合（初回・[`invalidate_all`] 直後）は空のバッファから始める。この
-    /// バッファは以後の k 適用で外形まで伸びる＝**そこで必ず確保が起きる**ため、到達済みバイト長を
-    /// 0 へ戻して次の伸長が漏れなく計数されるようにする（黙って確保しない）。確保そのものを
-    /// 計数するのは伸長が起きる席メソッド（[`resample_native_into`]／[`swap_native_scratch`] 経由の
-    /// [`native_scratch`]）側であり、ここで先回りして数えると 1 適用で二重に数えることになる。
+    /// 回収が成立しなかった場合（キャッシュにまだ空きがある暖機中・[`invalidate_all`] 直後）は
+    /// 空のバッファから始める。このバッファは以後の k 適用で外形まで伸びる＝**そこで必ず確保が
+    /// 起きる**が、その計数は伸長が起きる席メソッド（[`resample_native_into`]／
+    /// [`swap_native_scratch`] 経由の [`native_scratch`]）側が実体の容量差として拾う。ここで
+    /// 先回りして数えると 1 適用で二重に数えることになる。
+    ///
+    /// 本メソッドが状態を持たない（`&mut self` を使わない）のは、確保の観測が**実体の容量**から
+    /// 読めるようになったためである。以前は「新しい実体で回り直す」ことを器のフィールドへ
+    /// 記録していたが、回るバッファが 4 本になった今それは取り違えの元でしかない。
     ///
     /// [`ComposeCache::take_recycled`]: crate::cache::ComposeCache::take_recycled
     /// [`invalidate_all`]: crate::cache::ComposeCache::invalidate_all
@@ -540,12 +524,14 @@ impl FrameBudget {
         recycled: Option<CacheEntry>,
     ) -> (ComposedSurface, Option<Arc<AlphaMask>>) {
         match recycled {
-            Some(CacheEntry { composed, mask }) => (composed, Some(mask)),
-            None => {
-                // 新しい実体で回り直す＝この実体の到達済みは 0 から数え直す。
-                self.display_reached = 0;
-                (ComposedSurface::default(), None)
-            }
+            // 追い出しエントリの native 原寸は使わない——新しいエントリの原寸は今回の合成が
+            // 決めるので、回収するのはバッファの確保だけである。
+            Some(CacheEntry {
+                composed,
+                mask,
+                native: _,
+            }) => (composed, Some(mask)),
+            None => (ComposedSurface::default(), None),
         }
     }
 
@@ -555,17 +541,20 @@ impl FrameBudget {
     /// `resample_with` を使う唯一の理由がこれである。出力バイトは `resample` と 1 バイトも
     /// 違わない（emo-compose 側の等価檻が固定している）。
     ///
-    /// 計数は 2 系統で、観測の形が異なる:
-    /// [`AllocSite::ResampleDst`] は `out` のバイト長が到達済みを超えたとき（`out` の容量は読めない）、
-    /// [`AllocSite::Xmap`] は写像表の**容量がこの呼び出しで増えたとき**（席から直接読める）。
-    /// 写像表は恒等 k と外形ゼロでは触られない（`resample_with` が先に復帰する）ため容量が動かず、
-    /// その 2 経路は自動的に計数されない——触っていない席の確保を数えると定常ゼロの主張が濁る。
+    /// 計数は 2 系統で、どちらも**実体の容量を呼び出しの前後で読み比べる**同じ形である:
+    /// [`AllocSite::ResampleDst`] は `out` のバイト列の容量が増えたとき、[`AllocSite::Xmap`] は
+    /// 写像表の容量が増えたとき。写像表は恒等 k と外形ゼロでは触られない（`resample_with` が
+    /// 先に復帰する）ため容量が動かず、その 2 経路は自動的に計数されない——触っていない席の
+    /// 確保を数えると定常ゼロの主張が濁る。
+    ///
+    /// `out` は毎回同じ実体とは限らない（キャッシュの追い出しバッファが順に回ってくる）。ゆえに
+    /// 器側で到達済みを覚える形は採れず、**その回に渡された実体の容量**だけを見る。回収されずに
+    /// 空バッファが渡ってきた回は容量 0 から伸びるので、必ず 1 件計数される。
     pub(super) fn resample_native_into(&mut self, scale: ScaleRatio, out: &mut ComposedSurface) {
+        let before = out.bytes_capacity();
         let grew_x_map = self.xmap.resample(self.native.get(), scale, out);
 
-        let reached = out.bytes().len();
-        if reached > self.display_reached {
-            self.display_reached = reached;
+        if out.bytes_capacity() > before {
             self.note_alloc(AllocSite::ResampleDst);
         }
         if grew_x_map {
@@ -575,30 +564,30 @@ impl FrameBudget {
 
     /// マスクを再生成して `Arc` で返す（A4/A7・design.md D3・Flow 2 の輪番）。
     ///
-    /// `retired` は [`display_buffer`] が回収エントリから外したマスク——**直前の適用で表示に
-    /// 使ったマスク**であり、下流（`AlphaMaskResource`）がまだ握っているため参照数は 2 である。
-    /// これを次の空きスロットとして受け取り、代わりに**前々回**のマスク（下流が既に手放して
-    /// いる＝単独所有）を再生成先として取り出す。これで輪番が 2 スロットで決定論的に回る。
+    /// `retired` は [`display_buffer`] が回収エントリから外したマスク——**追い出されたエントリが
+    /// 束ねていたマスク**であり、下流（`AlphaMaskResource`）は既により新しいマスクへ差し替わって
+    /// いるため単独所有である。これを次の空きスロットとして受け取り、代わりにいま在る空きを
+    /// 再生成先として取り出す。これで輪番が決定論的に回る（回る本数はキャッシュ容量＋1）。
     ///
     /// 単独所有が成立すれば `Arc::get_mut` で中身を借りて `regenerate_from_pbgra32` により
-    /// 内容を作り直す。成立しない境界——初回（空きスロットがまだ無い）・第三者が参照を握って
-    /// いる——では新規に確保し、**必ず [`AllocSite::Mask`] を計数する**
+    /// 内容を作り直す。成立しない境界——立ち上がり（空きスロットがまだ無い）・第三者が参照を
+    /// 握っている——では新規に確保し、**必ず [`AllocSite::Mask`] を計数する**
     /// （design.md §Error Handling・黙って確保しない）。
     ///
     /// # in-place 再生成も「確保しない」とは限らない
     ///
     /// `regenerate_from_pbgra32` は `clear`＋`resize(詰め長, 0)` である。詰め長がそのバッファの
-    /// 到達済みを超えれば `resize` は伸び、それは新規確保そのものである（寸法拡大で必ず起きる）。
-    /// ゆえに輪番はスロットごとに到達済み詰めバイト長を持ち、超えたときは in-place 経路でも
-    /// [`AllocSite::Mask`] を計数する（[`seat::MaskRotation`]）。**輪番の 2 本は 1 適用ずつ
-    /// ずれて再生成される**ため、寸法拡大の代金は 2 適用に分かれて 1 件ずつ現れる。
+    /// **容量**を超えれば `resize` は伸び、それは新規確保そのものである（寸法拡大で必ず起きる）。
+    /// ゆえに輪番は再生成の前後で [`AlphaMask::packed_capacity`] を読み比べ、増えたときは
+    /// in-place 経路でも [`AllocSite::Mask`] を計数する（[`seat::MaskRotation`]）。**回る実体は
+    /// 1 適用ずつずれて再生成される**ため、寸法拡大の代金は本数ぶんの適用に分かれて 1 件ずつ現れる。
     ///
-    /// 本器が保持する `Arc` は常に高々 1 本（空きスロット）であり、呼び手へ返した 1 本と合わせて
-    /// 輪番は 2 本を超えない（Invariants）。単独所有が不成立だったスロットは輪番から外れる
-    /// （所有者は他に居るので解放はされない）ため、次の適用で `retired` が新しい空きになり、
-    /// 輪番は自力で 2 本へ戻る。
+    /// 本器が保持する `Arc` は常に高々 1 本（空きスロット）であり、残りはキャッシュのエントリが
+    /// 握る。単独所有が不成立だったスロットは輪番から外れる（所有者は他に居るので解放はされない）
+    /// ため、次の適用で `retired` が新しい空きになり、輪番は自力で立ち直る。
     ///
     /// [`display_buffer`]: FrameBudget::display_buffer
+    /// [`AlphaMask::packed_capacity`]: wintf::ecs::widget::bitmap_source::AlphaMask::packed_capacity
     pub(super) fn regenerate_mask(
         &mut self,
         retired: Option<Arc<AlphaMask>>,

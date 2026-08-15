@@ -76,10 +76,13 @@ impl EmoPresenter {
         // しない（R4.2/R5.2・要件 2.4）。ミスのみ合成する。pattern は指令が運ぶ現在コマ集合をそのまま
         // 透過する（presenter は新しい判断を持たず輸送のみ）。空 PatternState なら拡張前と観測等価
         // （R5.4）。k が変われば必ずミスするため、旧 k の絵とマスクを表示に載せることはない（設計 D6）。
-        let cache_hit = target
-            .cache
-            .get(surface_id, &binds, &pattern, scale)
-            .is_some();
+        //
+        // **`touch` であって `get` ではない**（要件 7.1・容量 3 の LRU）。ここが 1 適用に 1 回の
+        // 引き当て点＝最近使用順を動かす唯一の場所である。`get`（順序を動かさない読み取り）へ
+        // 替えると置換は挿入順（FIFO）へ静かに退化し、容量 3 の裁定の根拠である LRU 再生の
+        // 命中率と実装が対応しなくなる——表示バイトも確保計数も変わらないため、その退化は
+        // 専用の檻（`presenter_cache_capacity_tests.rs`）だけが捕まえる。
+        let cache_hit = target.cache.touch(surface_id, &binds, &pattern, scale);
         timing.mark(Stage::CacheLookup);
         if !cache_hit {
             // 合成先は [`FrameBudget`] の常設席（設計 D2⑴・Flow 2）。`compose_into` は席の容量を
@@ -149,6 +152,9 @@ impl EmoPresenter {
                     );
                     // pattern は binds と同格のキー要素として挿入キーへ透過する（R5.2）。マスクは
                     // k 適用済み bytes 由来ゆえ物理 px 契約が無修正で整合する（設計 D6）。
+                    // native 原寸は絵・マスクと**同じエントリ**へ束ねる（要件 7.1・容量 3）。
+                    // 容量 1 の頃は target 側の 1 フィールドで対を保てたが、3 件を保持する今は
+                    // ヒットしたエントリが直前の挿入とは限らない（`CacheEntry::native` の doc）。
                     target.cache.insert(
                         surface_id,
                         binds.clone(),
@@ -156,15 +162,12 @@ impl EmoPresenter {
                         scale,
                         display,
                         mask,
+                        native_extent,
                     );
                     // `Stage::MaskGen` の区間はマスク生成＋挿入全体（スロット置換）を含む。是正後は
                     // 旧エントリが `take_recycled` で先に回収されているため、この区間から対の解放
                     // churn（is-a A6）が消えている。恒等 k の交代（O(1) の入れ替え）もこの区間に入る。
                     timing.mark(Stage::MaskGen);
-                    // スロットの中身と対で原寸を控える（`insert` と同じ場所＝対が崩れない唯一の書き方）。
-                    // 以降この回が失敗して early return しても、後からヒットで表示が成立した時点で
-                    // 正しい原寸が照会契約へ渡る。
-                    target.cached_native = Some(native_extent);
                 }
                 Err(ComposeError::EmptyComposition(id)) => {
                     // 全透明退化（外形 0×0）: 許容される正常退化として Hide 縮退＋reply Ok（skip ではない）。
@@ -356,7 +359,15 @@ impl EmoPresenter {
         target.applied = Some(scale);
         // いま表示に使ったエントリ由来の原寸をそのまま写す（合成した回か否かで分岐しない——分岐させると
         // 「insert 済みのまま失敗 → 後からヒットで成立」の経路で照会値が画面と乖離する）。
-        target.native_size = target.cached_native;
+        //
+        // **エントリから直接読む**（要件 7.1・容量 3）。容量 1 の頃は「保持しているエントリ＝直前に
+        // 挿入したエントリ」ゆえ target 側の 1 フィールドで対を保てたが、3 件を保持する今はヒットした
+        // エントリが直前の挿入とは限らない。ここの再照会は借用のみで確保を行わず、[`ComposeCache::get`]
+        // は最近使用順を動かさない（LRU を打ち直すのは手順 (1) の `touch` 1 箇所だけである）。
+        target.native_size = target
+            .cache
+            .get(surface_id, &binds, &pattern, scale)
+            .map(|entry| entry.native);
         // 合成キーの安定ハッシュ（perf サマリ行の `key_hash`・Requirement 7.2 の裁定材料）は
         // `last_show` への move の**直前**に取る。全段の `mark` が済んだ後なので、この走査
         // （借用のみ・確保なし）は段別所要へ混入せず `t_total_us` にだけ含まれる。
@@ -369,8 +380,8 @@ impl EmoPresenter {
         // `scaled_*`）が揃うことで、2 水準（125%/200%）の実行が「異なる物理寸で描かれた」ことを
         // ログだけで決定論的に判定できる。
         //
-        // `native_*` の供給源 `native_size` は直上で `cached_native` から写しており、スロットと対の
-        // 不変条件によりこの経路では必ず `Some` である（引き当てが成立した＝スロットに中身がある）。
+        // `native_*` の供給源 `native_size` は直上でエントリから写しており、この経路では必ず `Some`
+        // である（引き当てが成立した＝当該キーのエントリが表に在る）。
         // 万一崩れた場合の `0×0` は**実在し得ない外形**（0 外形は上流 `EmptyComposition` が先行遮断する）
         // ゆえ、値を捏造せず「対が壊れた」ことを示す診断番兵として機能する。
         let (native_w, native_h) = target.native_size.unwrap_or((0, 0));

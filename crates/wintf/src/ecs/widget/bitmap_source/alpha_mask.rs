@@ -155,6 +155,25 @@ impl AlphaMask {
     pub fn height(&self) -> u32 {
         self.height
     }
+
+    /// 詰めビット列**そのものの確保量**（`Vec::capacity`・バイト）を取得
+    ///
+    /// [`regenerate_from_pbgra32`] を呼ぶ側が「この再生成で確保が起きたか」を厳密に観測する
+    /// ための口である。再生成は `clear`＋`resize(詰め長, 0)` ゆえ、詰め長が現容量を超えた
+    /// ときにだけ確保が起きる——呼び出しの前後でこの値を読み比べれば、増えた／変わらないが
+    /// そのまま「確保した／していない」になる。`Vec` の容量は再確保でしか増えず、縮小方向の
+    /// 再生成でも縮まないため、過大にも過小にも振れない。
+    ///
+    /// [`width`]／[`height`] から詰め長を推し量る形と違い、**この値はマスクの実体に紐づく**。
+    /// 複数のマスクを入れ替えて使い回す呼び手（当たり判定マスクの輪番）でも、器側で到達済み
+    /// 寸法を覚える必要が無くなる。
+    ///
+    /// [`regenerate_from_pbgra32`]: AlphaMask::regenerate_from_pbgra32
+    /// [`width`]: AlphaMask::width
+    /// [`height`]: AlphaMask::height
+    pub fn packed_capacity(&self) -> usize {
+        self.data.capacity()
+    }
 }
 
 // Send + Sync は自動導出（Vec<u8> と u32 のみ）

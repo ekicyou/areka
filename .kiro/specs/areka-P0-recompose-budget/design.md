@@ -8,7 +8,7 @@
 
 **Users**: ゴーストを常駐させるエンドユーザー（軽く滑らかな再生）と、以後の全 spec で実機サインオフを行う開発者（CPU 税の除去・再利用可能な計測資産）。
 
-**Impact**: `areka-emo-present` の `presenter/show.rs` ホットパスを `compose_into`＋再利用バッファ束へ再配線し、`cache.rs` にスロット容量リサイクルを加える。上流 2 クレートへは **additive な API 追加のみ**（emo-compose: リサンプル作業領域受け取り形／wintf: マスクの in-place 再生成と共有供給）。リポジトリ級の性能計測資産 `tools/perf/` を新設する。承認済み契約（キャッシュ容量 1・完全一致キー・表示とマスクの原子対・`compose_into` の意味・既存 info! ログ契約）は 1 つも書き換えない。
+**Impact**: `areka-emo-present` の `presenter/show.rs` ホットパスを `compose_into`＋再利用バッファ束へ再配線し、`cache.rs` にスロット容量リサイクルを加える。上流 2 クレートへは **additive な API 追加のみ**（emo-compose: リサンプル作業領域受け取り形／wintf: マスクの in-place 再生成と共有供給）。リポジトリ級の性能計測資産 `tools/perf/` を新設する。承認済み契約（完全一致キー・表示とマスクの原子対・`compose_into` の意味・既存 info! ログ契約）は 1 つも書き換えない。**キャッシュ容量だけは例外**で、2026-08-15 の開発者裁定を経て 1 → 3・置換方式 LRU へ改訂した（要件 7.1／7.3・裁定ゲートを通した唯一の承認済み契約の変更）。
 
 ### Goals
 
@@ -20,7 +20,7 @@
 
 ### Non-Goals
 
-- 合成キャッシュ容量（承認済み要件で容量 1）の変更——Requirement 7 の裁定ゲートを通った場合のみ本 spec 内で実施
+- 合成キャッシュ容量の変更——Requirement 7 の裁定ゲートを通った場合のみ本 spec 内で実施。**2026-08-15 に裁定が下り、容量 1 → 3・置換方式 LRU として実施した**
 - SERIKO のアニメ発火頻度・アニメ定義・ゴースト fixture の改変（互換性違反・症状隠し）
 - 合成アルゴリズム本体（`build_plan`／`blit::execute`）の最適化——O(elements) 契約は満たされている前提
   - **※ task 3.2 追記（2026-08-14）**: `scale.rs` の `resample` はこの列挙に**含まれていない**。第 1 段実測で `resample` の計算そのものが支配項（1 コマ適用の約 50%）と確定したため、これを本 spec の範囲に含めるかは開発者裁定に委ねる。決定は行っていない——下記「実測に基づく是正設計の追補（task 3.2）」§A4 を参照
@@ -33,15 +33,15 @@
 
 - `areka-emo-present` の毎フレーム経路（`presenter/show.rs`）のアロケーション予算と再配線
 - `presenter/` 配下の観測基盤（段階別計時・確保計数）と、その固定文言・フィールドスキーマ
-- `cache.rs` のスロット容量リサイクル API（容量 1・完全一致・原子対の意味論は不変のまま）
-- 上流への additive API 追加: emo-compose `resample_with`＋`ResampleScratch`／wintf `AlphaMask::regenerate_from_pbgra32`・`AlphaMaskResource::set_shared`（内部表現の `Arc` 化を含む・公開挙動不変）
+- `cache.rs` のスロット容量リサイクル API と**容量政策そのもの**（容量は 2026-08-15 の開発者裁定で 1 → 3・置換方式 LRU＝要件 7.1。完全一致・原子対の意味論は不変のまま）
+- 上流への additive API 追加: emo-compose `resample_with`＋`ResampleScratch`・`ComposedSurface::bytes_capacity`／wintf `AlphaMask::regenerate_from_pbgra32`・`AlphaMask::packed_capacity`・`AlphaMaskResource::set_shared`（内部表現の `Arc` 化を含む・公開挙動不変）。容量読み口の 2 つ（`bytes_capacity`／`packed_capacity`）は**観測専用の getter**で、確保が起きたかを実体の容量差で厳密に決めるために task 7.3 で足した
 - リポジトリ共通の性能計測資産 `tools/perf/`（採取ランナー・判定スクリプト・手順書・自己較正 fixture）
 - **リサンプル出力の冗長なゼロ埋めの除去と、リサンプル計算そのものの是正**（追補 §A2／§A3・2026-08-14 の開発者裁定で本 spec の担当になった。表示バイトは 1 バイトも変えない＝要件 3.3／6.4）
 - 定常アロケーション 0 とバイト等価を固定する決定論檻
 
 ### Out of Boundary
 
-- キャッシュ容量政策の変更（R7 裁定が下りるまで実装しない・自律ループの唯一の例外）
+- ~~キャッシュ容量政策の変更（R7 裁定が下りるまで実装しない・自律ループの唯一の例外）~~ → **2026-08-15 の開発者裁定で本 spec の担当になった**（要件 7.1／7.3）。容量 1 → 3・置換方式 LRU。ゲートは今も生きており、この値をさらに動かすには改めて裁定が要る
 - SERIKO・ghost・kanade の駆動側（発火頻度・スケジュール・`ticker.rs`／`looper.rs` のコード）——判定スクリプトが既存ログを grep するのみで、コードには触れない
 - `show.rs` :215-235 帯（スワップ〜upload 域）の**構造**——atom（W6.75）の観測対象。upload エラー分岐 :227-231 は cage④（W6.9）の観測点であり移動しない。本帯への変更は :240 のマスク供給 1 文の置換（`set` → `set_shared`）に限る
 - ~~`scale.rs` の既存項目の変更——追加は関数＋opaque 型のみ~~ → **2026-08-14 の開発者裁定で改訂**（追補 §A4）。支配項の是正（追補 §A2 のゼロ埋め除去・§A3 のリサンプル計算）に必要な範囲で**既存項目への変更を許可する**。ただし公開名の削除・意味変更は引き続き禁止で、exact（`areka-P0-scale-exact-rational`）との先着後 rebase の登記も不変
@@ -58,10 +58,12 @@
 
 - perf サマリ行の固定文言・フィールド名の変更 → `tools/perf/judge-perf.py` と計時檻の再検証
 - 判定式⑴の判定粒度（系列単位）・系列鍵（`FRAME_INTERVAL_SERIES_KEY`）・判定対象の確定方法（`FRAME_INTERVAL_JUDGED_SERIES`）・判定窓の条件（`FRAME_INTERVAL_WINDOW` の 1〜4・`FRAME_INTERVAL_IDLE_MAX_ACTIVE`）の変更 → `judge-perf.py` の判定式⑴と自己較正 fixture の再検証。とくに次の対を必ず両方走らせること: 合格の陽性対照 `H11_healthy_judged_series` / 境界の対 `H12_judged_series_at_boundary`＋`H13_judged_series_over_boundary` / 明示指定の空振り `H20_judged_series_absent`＋`H21_judged_series_outside_window` / **同一鍵重畳の両側** `P12_same_key_two_animations`（偽の不合格側）＋`P13_same_key_two_animations_pass_side`（偽の合格側）/ **cross-scope の陽性対照** `P14_other_scope_animation_overlap`（条件 4 が数える範囲を広げると不合格が合格へ反転する）
-- `ComposeCache` の公開シグネチャ変更（`insert`／`take_recycled`）→ `cache_tests.rs`・presenter 檻の再検証
+- `ComposeCache` の公開シグネチャ変更（`insert`／`take_recycled`／`touch`）→ `cache_tests.rs`・presenter 檻の再検証
 - `AlphaMaskResource` の内部表現変更 → wintf hit_test 檻・emo-present 表示檻の再検証
 - `scale.rs` への追加が exact（scale-exact-rational）着地後に rebase された場合 → `resample_with` 等価檻の再実行
-- R7 裁定でキャッシュ容量が変わる場合 → 上流 `completed/areka-P0-emo-present` requirements R4.1 の改訂＋本設計のキャッシュ節・檻の全面再検証
+- R7 裁定でキャッシュ容量が変わる場合 → 上流 `completed/areka-P0-emo-present` requirements R4.1 の改訂＋本設計のキャッシュ節・檻の全面再検証（**2026-08-15 の 1 → 3 では実施済み**）。容量を動かすと次の 3 つが連動する: ⑴**巡回するキーの本数を容量より大きく保つ**（`presenter_budget_steady_state_tests.rs` の `ROTATING_KEYS`・`presenter_budget_equivalence_tests.rs` の `ROTATING_FACES`。容量以下へ落ちるとミス経路の檻が静かにヒット経路の檻へ化ける）⑵回る実体の本数が変わるので暖機の指紋（`[1,1,1,1] → [0,1,0,1] → [0,1,0,1] → [0,0,0,1]` など）が全て動く ⑶檻に写した容量の定数（`CACHE_CAPACITY`）
+- `ComposeCache` の**置換方式**の変更（LRU 以外へ）→ 要件 7.1 の裁定ゲート。命中率の裁定材料が LRU 再生で得られているため、方式を変えると容量 3 の根拠が失われる。**表示バイトも確保計数も動かない退化**なので、`presenter_cache_capacity_tests.rs`（実 `apply_show` の上で `touch` が呼ばれていることを見る継ぎ目の檻）だけが検出する
+- 上流 additive の容量読み口（`ComposedSurface::bytes_capacity`／`AlphaMask::packed_capacity`）の意味変更 → `FrameBudget` の確保観測が丸ごとこれに依っているため、`budget_tests.rs`・`presenter_budget_steady_state_tests.rs` の全面再検証
 - `resample` の内部実装または `ComposedSurface` の初期化規約の変更（追補 §A2／§A3） → バイト等価テスト（task 6.2）・`resample_with` 等価檻・emo-compose の既存 golden の再検証
 - `BindSet` の等価比較コストを線形から短絡形（ハッシュ保持・要素数や指紋による早期打ち切り・ポインタ同一性判定など）へ変える変更 → `presenter_perf_log_tests.rs` の `t_cache_us` 非 0 主張（`timing.mark(Stage::CacheLookup)` の唯一の固定点）の再検証
 
@@ -87,7 +89,7 @@ graph TB
         Show[apply_show 毎フレーム漏斗]
         Budget[FrameBudget 再利用席と確保計数]
         Timing[FrameTiming 段階計時とサマリemit]
-        Cache[ComposeCache 容量1 スロットリサイクル]
+        Cache[ComposeCache 容量3 LRU スロットリサイクル]
     end
     subgraph Upstream[上流 additive API]
         ComposeInto[Composer compose_into 既存]
@@ -162,7 +164,7 @@ tools/perf/
 - `crates/areka-emo-present/src/presenter/show.rs` — ミス経路を `compose_into`＋budget 席へ再配線（:66-101 帯）・:240 を `set_shared` へ置換・段階計時点の挿入とサマリ行 emit。**:215-235 帯の構造・:227-231 の upload エラー分岐・:303-320 の info! は不変**
 - `crates/areka-emo-present/src/presenter/target.rs` — `PresentTarget` へ `budget: FrameBudget` 席を追加（:53 `composer` の隣・他フィールド不変）
 - `crates/areka-emo-present/src/presenter.rs` — ファサードへ `mod budget;`／`mod timing;` と新テスト接続宣言を追加
-- `crates/areka-emo-present/src/cache.rs` — `CacheEntry.mask` を `Arc<AlphaMask>` へ・`take_recycled` 新設・`insert` がマスクを引数で受ける形へ（容量 1・完全一致・原子対の意味論不変・`from_pbgra32` 呼出は budget シームへ移動）
+- `crates/areka-emo-present/src/cache.rs` — `CacheEntry.mask` を `Arc<AlphaMask>` へ・`take_recycled` 新設・`insert` がマスクを引数で受ける形へ（完全一致・原子対の意味論不変・`from_pbgra32` 呼出は budget シームへ移動）。**task 7.3 で容量 3・LRU へ**（`CAPACITY` 定数・`touch` 新設・`CacheEntry.native` 追加・`insert` が `native` を受ける）
 - `crates/areka-emo-present/src/cache_tests.rs` — 署名追随＋リサイクル檻の追加
 - `crates/areka-emo-compose/src/scale.rs` — **additive のみ**: `pub struct ResampleScratch`（opaque・Default）＋`pub fn resample_with(src, scale, out, scratch)`。既存 `resample` は新形へ委譲（挙動不変）。exact（W6.5 並走）と同一ファイル＝先着後 rebase を登記
 - `crates/areka-emo-compose/src/scale_resample_tests.rs`（scale.rs の既存リサンプルテスト群）— `resample == resample_with` 等価檻＋scratch 容量非成長檻を追加
@@ -205,7 +207,7 @@ sequenceDiagram
 
     Show->>Compose: compose_into 合成先は budget.native_scratch
     Note over Compose: 失敗時は early return キャッシュは旧エントリのまま不変
-    Show->>Cache: take_recycled 追い出しエントリの容量回収
+    Show->>Cache: take_recycled 満杯なら最も古い引き当て 1 件だけ回収
     alt k が恒等
         Show->>Budget: native_scratch と回収バッファを swap コピーなし
     else k が非恒等
@@ -216,7 +218,13 @@ sequenceDiagram
     Show->>Mask: set_shared Arc クローン 参照カウント増のみ
 ```
 
-**流れ上の決定**: `take_recycled` は合成成功後にのみ呼ぶ——合成失敗時にキャッシュが空になる挙動変化（現行「表示は適用前のまま」の破壊）を構造的に防ぐ。マスク輪番は「現行マスク（エントリ＋リソースが共有・参照 2）」「前々回マスク（参照 1＝unique・次の再生成先）」の 2 スロットで決定論的に回る。unique でない場合（初回・境界条件）は新規確保し、必ず計数する（黙って確保しない）。
+**流れ上の決定**: `take_recycled` は合成成功後にのみ呼ぶ——合成失敗時に生きているエントリを失う挙動変化（現行「表示・キャッシュは適用前のまま」の破壊）を構造的に防ぐ。
+
+**容量 3 での形**（要件 7.1 の裁定を受けた改訂）: 追い出しは**満杯のときだけ・最も古い引き当ての 1 件だけ**である。残りのエントリは据え置かれ、回収したその 1 件のバッファが次の表示バッファになる——これで定常アロケーション 0（Requirement 3.1）が容量 3 でも成立する。表に空きがあるあいだ（暖機）は回収が成立せず新しいバッファを起こすが、それは Requirement 3.2 の裁定済みの読み「確保対象ごとに一度」に収まる。
+
+回る実体の本数は容量に比例して増える: **表示バッファ**＝キャッシュの 3 本（恒等 k では合成先席も `swap` で加わり 4 本）、**マスク**＝キャッシュの 3 本＋輪番の空き 1 枚＝4 本。マスク輪番は「追い出しエントリのマスクを空きとして受け取り、いま在る空きを再生成先に取り出す」形で決定論的に回る——取り出す空きは下流が既に手放しているので unique が成立する。unique でない場合（立ち上がり・境界条件）は新規確保し、必ず計数する（黙って確保しない）。
+
+**確保の観測は実体の容量差で行う**（`ComposedSurface::bytes_capacity`／`AlphaMask::packed_capacity`／`ResampleScratch::capacity` を呼び出しの前後で読み比べる）。到達済み寸法（高水位）を器のフィールドで覚える形は容量 3 で破綻する——回る実体が複数本ある以上、器が持つ 1 個の値はどの実体のものでもなく、寸法変化の途中で他の本の値を当てて成長を見逃す（＝黙って確保する）。
 
 ## Requirements Traceability
 
@@ -251,9 +259,9 @@ sequenceDiagram
 | 6.2 | 実時間を檻の合否に使わない | 全新設テスト | 檻は回数・ポインタ・バイトのみ |
 | 6.3 | 純 x64 常設テスト | 全新設テスト | `cargo test` 常設（env-gate なし） |
 | 6.4 | 是正後経路のバイト等価固定 | presenter_budget_equivalence_tests・上流等価檻 | D8 |
-| 7.1 | 容量変更は裁定なしに実装しない | プロセス（本設計は容量 1 を前提に構築） | Flow 1 R7 ゲート |
+| 7.1 | 容量変更は裁定なしに実装しない（裁定済みの値＝容量 3・LRU） | プロセス＋ComposeCache（`CAPACITY` 定数・LRU 順序） | Flow 1 R7 ゲート・§ComposeCache |
 | 7.2 | 容量拡大選択肢の実測つき提示 | perf サマリ行の key_hash フィールド（異なりキー数の機械抽出） | Data Models |
-| 7.3 | 裁定承認時は本 spec 内で実施・上流文書追随 | プロセス（Revalidation Triggers 記載） | — |
+| 7.3 | 裁定承認時は本 spec 内で実施・上流文書追随 | ComposeCache 容量 3・LRU（task 7.3 で実施済み） | §ComposeCache・Revalidation Triggers |
 
 ## Components and Interfaces
 
@@ -370,23 +378,32 @@ impl FrameBudget {
 
 | Field | Detail |
 |-------|--------|
-| Intent | 容量 1・完全一致・原子対の意味論を不変に保ったまま、追い出しエントリの容量を回収可能にする |
-| Requirements | 3.1 |
+| Intent | 完全一致・原子対の意味論を不変に保ったまま、追い出しエントリの容量を回収可能にする。容量は要件 7.1 の裁定で **3**・置換方式は **LRU** |
+| Requirements | 3.1・7.1・7.3 |
 
 **Responsibilities & Constraints**
-- **不変の承認済み意味論**（completed/areka-P0-emo-present R4.1）: 容量 1 のメモ化スロット・キー完全一致のみヒット・表示バッファとマスクの原子対
+- **不変の承認済み意味論**（completed/areka-P0-emo-present R4.1）: キー完全一致のみヒット・表示バッファとマスクの原子対
+- **容量は 1 → 3・置換方式は LRU**（2026-08-15 開発者裁定・要件 7.1／7.3）。根拠は requirements.md の Requirement 7 改訂欄と `remeasure-2026-08-15.md` §4（LRU 再生の命中率の膝が 3）。**置換方式が LRU であることは load-bearing** ——命中率 56.2% という裁定材料が LRU 再生で得られているため、FIFO へ替えると根拠が実装と対応しなくなる
+- **最近使用順を動かすのは引き当ての 1 箇所だけ**: `touch`（ヒット時に最近使用へ引き上げる）と `insert`（末尾へ置く）。`get` は順序を動かさない読み取りで、同一適用内の再照会と檻の観測がこれを使う（読み取りが置換順を書き換えないため）
+- `CacheEntry` は表示バッファ・マスクに加えて **k 適用前の native 原寸**を束ねる。容量 1 の頃は「保持しているエントリ＝直前の挿入」ゆえ提示段側の 1 フィールド（`cached_native`）で対を保てたが、3 件を保持するとヒットしたエントリが直前の挿入とは限らない
 - `CacheEntry.mask` の型を `AlphaMask` → `Arc<AlphaMask>` へ（クレート内部の表現変更・原子対は不変）
 - `insert` は生成済みマスクを引数で受ける形へ（`from_pbgra32` 呼出は budget シームへ移動＝D4。「1 apply 1 回生成・原子対で挿入」は apply 単位で不変）
+- 表の確保は構築時 1 回だけ（`Vec::with_capacity(CAPACITY)`）で、以後上限を超えないため毎コマ経路で伸びない
 
 ##### Service Interface
 
 ```rust
+/// 保持するエントリ数の上限（要件 7.1 の裁定値・変更には裁定ゲートを通す）。
+const CAPACITY: usize = 3;
+
 impl ComposeCache {
-    /// スロットを取り出して容量を回収する（キーは破棄・スロットは空になる）。
-    /// 呼出は合成成功後に限る（失敗時にキャッシュを空にしない規律は呼び手 show.rs が保証）。
+    /// 満杯なら**最も古い引き当ての 1 件だけ**を追い出して返す（容量を回収する）。
+    /// 空きがあるあいだは `None` を返し表に触れない（生きているエントリを剥がさない）。
+    /// 呼出は合成成功後に限る（失敗時にエントリを失わない規律は呼び手 show.rs が保証）。
     pub fn take_recycled(&mut self) -> Option<CacheEntry>;
 
-    /// 従来と同一の意味論で挿入する（容量 1・完全一致キー・表示＋マスク原子対）。
+    /// 完全一致キー・表示＋マスク＋native 原寸の原子対として挿入し、最近使用の末尾へ置く。
+    /// 同一キーが在れば置き換える（重複を作らない）。満杯かつ新キーなら最も古い引き当てを捨てる。
     pub fn insert(
         &mut self,
         surface_id: u32,
@@ -395,9 +412,19 @@ impl ComposeCache {
         scale: ScaleRatio,
         composed: ComposedSurface,
         mask: Arc<AlphaMask>,
+        native: (u32, u32),
     ) -> &CacheEntry;
 
-    // get / invalidate_all は不変
+    /// 引き当てて**最近使用へ引き上げる**（LRU 順序を動かす唯一の口・show.rs 手順 (1)）。
+    pub fn touch(
+        &mut self,
+        surface_id: u32,
+        binds: &BindSet,
+        pattern: &PatternState,
+        scale: ScaleRatio,
+    ) -> bool;
+
+    // get（順序を動かさない読み取り）／invalidate_all は意味論不変
 }
 ```
 
@@ -513,7 +540,7 @@ impl AlphaMaskResource {
 
 ### プロセス（コード外の設計拘束）
 
-- **R7 裁定ゲート**: 本設計は容量 1 を前提に構築されており、キャッシュ容量変更のコードパスを一切持たない。再測の残余最大項が再合成コストの場合、judge-perf.py の集計（異なりキー数・段階別内訳）を根拠資料として開発者へ容量拡大の選択肢（容量根拠・置換方式・上流 R4.1 改訂手続き）を提示する（7.1/7.2）。承認された場合のみ本 spec 内で実施し、Revalidation Triggers に従い上流要件文書・関連宣言を追随改訂する（7.3）
+- **R7 裁定ゲート**: キャッシュ容量は開発者の明示的な裁定なしに変更しない。再測の残余最大項が再合成コストの場合、judge-perf.py の集計（異なりキー数・段階別内訳）を根拠資料として開発者へ容量拡大の選択肢（容量根拠・置換方式・上流 R4.1 改訂手続き）を提示する（7.1/7.2）。承認された場合のみ本 spec 内で実施し、Revalidation Triggers に従い上流要件文書・関連宣言を追随改訂する（7.3）。**2026-08-15 にこの経路を 1 度通した**——ゲート成立（残余最大項＝再合成コスト・キャラ面命中率 0.0%）→ 提示（LRU 再生の命中率・膝は容量 3）→ 裁定（容量 3・LRU）→ 実施と追随改訂（task 7.3）。ゲート自体は今も生きており、容量をさらに動かすには改めて裁定が要る
 - **R3.4／D10**: 実測内訳が本設計の仮説（確保 churn 支配）と異なる支配項を示した場合、当該段の是正設計を design.md へ追補してから着手する（設計文書と実装の乖離を作らない）
 
 ## Data Models
@@ -571,7 +598,9 @@ impl AlphaMaskResource {
 2. **FrameBudget 席の再利用と計数**（budget_tests）: 初回確保後の再取得で計数増分 0／寸法拡大で 1 回だけ増えて戻る（R3.2）／マスク輪番が 2 本を超えない・unique 不成立時に計数される
 3. **resample_with ≡ resample**（emo-compose scale テスト群）: 同一入力バイト等価＋scratch 容量が到達後成長しない
 4. **regenerate_from_pbgra32 ≡ from_pbgra32**（wintf alpha_mask テスト群）: 同一入力等価（`PartialEq`）＋再利用時の内容残留なし（サイズ縮小方向を含む）
-5. **ComposeCache リサイクル**（cache_tests）: `take_recycled` 後の insert で意味論（容量 1・完全一致・原子対）不変・回収バッファの容量が引き継がれる
+5. **ComposeCache リサイクル**（cache_tests）: `take_recycled` 後の insert で意味論（上限 3 件・完全一致・原子対）不変・回収バッファの容量が引き継がれる
+6. **容量と置換方式**（cache_tests・要件 7.1）: 異なる 3 キーが同時に保持される／4 本目でちょうど 1 本落ちる（「3 つ入る」だけでは容量 3 と 4 を区別できないため追い出しも固定する）／追い出し先が **LRU であって FIFO でない**（挿入順の最古を引き当て直して 2 つの順序を食い違わせ、結果が反転する形で弁別する）／`get` は最近使用順を動かさない／`touch` と `get` の引き当て判定がキー 4 成分すべてで一致する／同一キーの再挿入が重複エントリを作らない
+7. **容量と置換方式の継ぎ目**（presenter_cache_capacity_tests・要件 7.1）: 実 `apply_show` を通した引き当てのヒットが最近使用順を引き上げる。`show.rs` が `touch` を `get` へ替える退化は**表示バイトも当たり判定マスクも確保計数も変えない**ため、この檻だけが検出する（実測: 当該変異でクレート全 202 件のうち赤は本檻 1 本のみ）
 
 ### Integration Tests（presenter 経由）
 
@@ -715,6 +744,12 @@ premultiplied 不変条件・決定論）を 1 本も緩めない。加えて **
 必要メモリは 1 スロットあたり表示バッファ 3.3MB＋マスク 105KB。
 
 **R7.1 により、容量変更は開発者の明示的な裁定なしに実装しない。** 本節は材料の提示のみである。
+
+> **※ task 7.3 追記（2026-08-15）**: ゲートは**成立し、裁定が下りた**。本節はベースライン
+> （2026-08-14）時点の材料であり、是正後の再測でも同じ形が再現した（キャラ面は長時間走行
+> 1066 適用すべて外れ・LRU 再生の膝は容量 3 で 56.2%）。裁定は **容量 1 → 3・置換方式 LRU** で、
+> 実施と追随改訂は task 7.3 が行った。判断の正本は requirements.md の Requirement 7 改訂欄、
+> 実測の正本は `remeasure-2026-08-15.md` §4 である。
 
 ### A6. 判定式⑴の較正値の確定（R4.5・較正値台帳の追随）
 

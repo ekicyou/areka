@@ -133,3 +133,7 @@ mod budget_steady_state_tests;
 #[cfg(test)]
 #[path = "presenter_budget_equivalence_tests.rs"]
 mod budget_equivalence_tests;
+
+#[cfg(test)]
+#[path = "presenter_cache_capacity_tests.rs"]
+mod cache_capacity_tests;

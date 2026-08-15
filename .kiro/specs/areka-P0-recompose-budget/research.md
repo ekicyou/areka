@@ -117,6 +117,7 @@ file-slimming（PR#103）で `presenter.rs` は 118 行のファサードとな�
 - **第 3-4 段（R4/5/6)**: 同一スクリプトで再測・機械判定し、確定した構造をポインタ/容量不変檻＋バイト等価檻で固定。
 - ✅ 要件の段階ループ（brief ⑷）と 1:1 対応・各段が独立にコミット可能（areka-commit-as-you-go）
 - ✅ 上流クレートへの変更が「additive な API 追加」に限定され、completed spec の承認済み契約（compose_into の意味・R4.1 容量 1・AlphaMask 物理 px 契約）を 1 つも書き換えない
+  - **※ task 7.3 追記（2026-08-15）**: 本チェックのうち **R4.1 容量 1 だけは開発者裁定を経て書き換えた**（容量 1 → 3・置換方式 LRU・要件 7.1／7.3）。上流 `completed/areka-P0-emo-present` requirements R4.1 を同日付で改訂済み。他の 2 つ（compose_into の意味・AlphaMask 物理 px 契約）は不変で、上流への変更は additive のまま（容量読み口 `ComposedSurface::bytes_capacity`／`AlphaMask::packed_capacity` を追加）。本文書の他の箇所が述べる「容量 1」は**調査時点（設計前）の実装状態**の記録である
 - ❌ 計画の複雑さは最大（ただし要件が既にループ構造を規定しており追加コストは小さい）
 
 ## 5. 設計判断アイテム（要件ディスカッションへ送る論点）

@@ -1613,8 +1613,9 @@ def render_cpu(report: Report, agg: Aggregation, section: str = "10") -> None:
 
 def render_compose_keys(report: Report, agg: Aggregation, section: str = "11") -> None:
     report.head(f"[{section}] 合成キーの異なり数（要件 7.2・キャッシュ容量の裁定材料）")
-    report.line("  キャッシュ容量は承認済み要件で 1 である。以下は「容量 1 で足りるのか」を")
-    report.line("  実測で示すための材料であり、容量変更は開発者の明示的な裁定なしに行わない。")
+    report.line("  キャッシュ容量は承認済み要件で 3・置換方式は LRU である（2026-08-15 の開発者裁定で")
+    report.line("  1 から改訂）。以下は「その容量で足りるのか」を実測で示すための材料であり、")
+    report.line("  容量変更は開発者の明示的な裁定なしに行わない。")
     for label, records in (("全区間", agg.scan.perf), ("定常状態", agg.steady_perf)):
         report.sub(label)
         if not records:

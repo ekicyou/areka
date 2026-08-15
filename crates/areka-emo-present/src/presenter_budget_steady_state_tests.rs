@@ -8,14 +8,15 @@
 //! # 固定する 6 点
 //!
 //! 1. **確保計数の増分 0**（Requirement 3.1）: 暖機後の反復で 4 発生点の累積が 1 も動かない
-//! 2. **暖機の形**（Requirement 3.2）: 立ち上がりの確保が「席ごとに一度」の裁定済みの形どおりに
-//!    現れて 0 へ落ちる。**1 適用へ丸めない**——交代する 2 本のバッファは 1 適用ずれて伸びるため、
-//!    暖機を 1 適用と決め打つと片方の成長が黙って隠れる
+//! 2. **暖機の形**（Requirement 3.2）: 立ち上がりの確保が「実体ごとに一度」の裁定済みの形どおりに
+//!    現れて 0 へ落ちる。**1 適用へ丸めない**——回る実体は 1 適用ずつずれて伸びるため、
+//!    暖機を 1 適用と決め打つと残りの成長が黙って隠れる
 //! 3. **合成先と表示バッファの先頭位置**: 実体そのものが回り続けている……**ただしこの主張は
 //!    傍証であって単独の検出器ではない**。計数を動かさずに実体だけ作り直す実装は、解放直後の
 //!    再確保が同じ番地を返すと素通りする。実測と、確実に殺す側の檻の所在は下の
 //!    §番地の主張はどこまで効くか（実測）に置く
-//! 4. **マスク輪番の 2 本集合不変**: 実体はちょうど 2 種類で、そこに新顔が混じらない
+//! 4. **マスク輪番の集合不変**: 実体はちょうど [`WARMUP`] 種類（キャッシュの 3 本＋輪番の
+//!    空き 1 枚）で、そこに新顔が混じらない
 //! 5. **下流供給は共有であって複製でない**（Requirement 3.1 の「マスクの下流供給（複製）」・
 //!    追補 §A7）: `AlphaMaskResource` が握る実体がキャッシュスロットの `Arc` と同一番地であり、
 //!    参照数がちょうど 2 である
@@ -39,54 +40,55 @@
 //! 書き、番地の一致は計数の据え置きと**必ず対で**主張する（番地は解放直後の再確保で偶然一致し
 //! 得るため単独では証拠にならない）。
 //!
-//! # 番地の主張はどこまで効くか（実測・本ファイルの弱点の登記）
+//! # 番地の主張はどこまで効くか（実測・登記）
 //!
-//! 上の但し書きは一般論ではなく、本ファイルに**実際に開いている穴**である。番地だけが頼りになる
-//! 変異——実体を作り直しつつ到達済みバイト長（高水位）を持ち越すため計数が 1 件も動かない形——を
-//! 2 種類当てて実測した（既定の走らせ方は `cargo test -p areka-emo-present --lib`・既定の並列度）。
+//! 上の但し書きは一般論ではなく、本ファイルに**実際に開いていた（一部は今も開いている）穴**で
+//! ある。番地だけが頼りになりうる変異——実体を作り直す形——を 2 種類当てて実測した
+//! （走らせ方は `cargo test -p areka-emo-present --lib`・全走・既定の並列度。各変異 4 走）。
 //! **走ごとの赤の回数（x/y）を書くのは本節の表だけである**——他の節は自分のどの assert が鳴るかを
 //! 質的に書き、回数が要るときはここを見る。
 //!
 //! - **変異 A**: `presenter/budget.rs` の `FrameBudget::display_buffer` が回収した `composed` を
-//!   捨てて `ComposedSurface::default()` を返す（`display_reached` は持ち越す）
-//! - **変異 B**: `presenter/budget.rs` の `seat::SurfaceSeat::lend` の冒頭で `surface` だけを
-//!   `ComposedSurface::default()` へ差し替える（`reached` は持ち越す）
+//!   捨てて `ComposedSurface::default()` を返す
+//! - **変異 B**: `presenter/budget.rs` の `seat::SurfaceSeat::lend` で、**容量を読んだ直後・
+//!   閉包へ貸す直前**に `self.surface` を `ComposedSurface::default()` へ差し替える
+//!   （読み取りより後に置くのが要点で、前に置くと計数へ現れて A と同じ形になる）
 //!
-//! どちらも計数には 1 件も現れない。出所は [`FrameBudget`] の高水位が**バッファの実体に束ねられて
-//! いない**ことである（`display_reached` は器のフィールドで、表示バッファ自身はキャッシュが
-//! 所有する）。実体を差し替えても高水位は前の実体の値を覚えたままなので、伸長が「到達済み以下」と
-//! 判定されて計数へ現れない。ゆえに番地だけが頼りになる。
-//!
-//! | 変異 | 検出器（檻・assert の文言） | 走らせ方 | 赤の走数 |
+//! | 変異 | 検出器（檻・assert の文言） | 何を見ているか | 赤の走数 |
 //! |---|---|---|---|
-//! | A | k=2/1 の檻 `a_steady_scaled_run_reuses_every_buffer_and_allocates_nothing` の「表示バッファが別の実体になった」 | `--lib` 全走 | 0/4 |
-//! | A | 恒等 k の檻 `a_steady_identity_run_alternates_between_exactly_two_buffers_and_allocates_nothing` の交代関係「前回の表示バッファが合成先席へ回っていない」「前回の合成先席が表示バッファへ回っていない」 | `--lib` 全走 | 4/4 |
-//! | A | `presenter/budget_tests.rs` の席単体の檻（下記 3 本） | `--lib` 全走 | 4/4 |
-//! | B | k=2/1 の檻の「合成先席が別の実体になった」 | 本ファイル絞り込み | 0/4 |
-//! | B | 同上 | `--lib` 全走（実装時の計測） | 1/5 |
-//! | B | 同上 | `--lib` 全走（レビューの再計測） | 2/4 |
-//! | B | 恒等 k の檻 | `--lib` 全走 | 3/4 |
-//! | B | `presenter/budget_tests.rs` の席単体の檻（下記 3 本） | `--lib` 全走 | 4/4 |
+//! | A | 本ファイル k=2/1 の檻の「暖機の確保の形が……」 | 計数 | 4/4 |
+//! | A | 本ファイル恒等 k の檻の「暖機の確保の形が……」 | 計数 | 4/4 |
+//! | A | `presenter/budget_tests.rs` の `the_warm_up_allocates_once_per_rotating_buffer_then_settles` ほか計 10 本 | 計数・外形 | 4/4 |
+//! | A | `presenter_budget_equivalence_tests.rs` の器の本数 | 番地 | 4/4 |
+//! | B | `presenter/budget_tests.rs` の `a_smaller_extent_and_the_regrowth_allocate_nothing` | 計数 | 4/4 |
+//! | B | `presenter/budget_tests.rs` の `the_compose_destination_seat_is_allocated_once_and_then_lent_again` | 番地 | 4/4 |
+//! | B | 本ファイル恒等 k の檻の交代関係「前回の合成先席が表示バッファへ回っていない」 | 同時に生きている 2 実体の関係 | 4/4 |
+//! | B | 本ファイル k=2/1 の檻の「合成先席が別の実体になった」 | 番地 | **1/4** |
 //!
-//! 席単体の檻の 3 本は `the_display_buffer_hands_back_the_recycled_allocation_unchanged`・
-//! `the_compose_destination_seat_is_allocated_once_and_then_lent_again`・
-//! `the_steady_state_keeps_handing_back_the_same_allocations` である（3 本のうちどの assert が
-//! 鳴ったかまでは記録していない）。走らせ方の欄は上記の既定（`--lib` 全走）で、「本ファイル
-//! 絞り込み」と明記した行だけが例外である。B の 1/5 と 2/4 は**同じ変異・同じ走らせ方の別々の
-//! 計測**（実装時とレビューの再計測）であり、どちらも消さずに並べてある。
+//! **変異 A は要件 7.1（容量 3）の実装で計数側へ移った。** 出所は `FrameBudget` が到達済み寸法
+//! （高水位）を器のフィールドで覚えるのをやめ、**実体そのものの `Vec` 容量**を呼び出しの前後で
+//! 読み比べる形になったことである（`presenter/budget.rs` 冒頭 §何をもって「確保した」と数えるか）。
+//! 回収バッファを捨てて空を返せば容量 0 から伸びるので、必ず 1 件計数される——**以前は高水位が
+//! 前の実体の値を覚えていたため計数に 1 件も現れず、走ごとに揺れる番地の一致（0/4）だけが
+//! 頼りだった**。
 //!
-//! **読み方: 決定論的と呼べるのは表で 4/4 の行だけである。** それ以外の行は傍証であり、単独では
-//! 再利用の証拠にならない。本ファイル自身の番地主張は 0/4・1/5・2/4 の行であって、この意味で
-//! 傍証である。
+//! **変異 B は計数では捕まらない**（上の表のとおり本ファイルの k=2/1 の檻は 1/4）。理由は、容量の
+//! 読み取りが**貸し出しの前**に行われるため、貸し出しの最中に実体を差し替えると「前の実体の容量」と
+//! 「新しい実体が伸びた後の容量」を比べることになり、両者が一致すれば増えたと判定されないからで
+//! ある。決定論的に殺すのは ⑴縮小 → 再拡大の檻（新しい実体は容量 0 から始まるので再拡大で必ず
+//! 計数される）⑵席単体の番地の檻 ⑶恒等 k の交代関係、の 3 本である。
+//!
+//! 本ファイルに残る番地の主張（合成先席の同一性・表示バッファの集合・マスクの集合）は独立な
+//! 裏取りとして置いてある。番地は解放直後の再確保で偶然一致し得るため、**単独では証拠に
+//! ならない**という読み方は変わらない。
 //!
 //! # 再計測の手順（信用ではなく測り直しで確かめる）
 //!
 //! 変異 A は `presenter/budget.rs` の `FrameBudget::display_buffer` へ、変異 B は同ファイルの
-//! `seat::SurfaceSeat::lend` の冒頭へ、上の定義どおりに当てる。走らせ方は
-//! `cargo test -p areka-emo-present --lib budget_steady_state_tests`（本ファイル絞り込み）と
-//! `cargo test -p areka-emo-present --lib`（全走）の**両方**を踏むこと——表のとおり両者で結果が
-//! 食い違う。番地の主張は走ごとに揺れるため、いずれも最低 4 走して赤の回数で読む
-//! （1 走の緑は何も言わない）。
+//! `seat::SurfaceSeat::lend` へ、上の定義どおりに当てる。走らせ方は
+//! `cargo test -p areka-emo-present --lib`（全走）で、**赤になった檻の一覧を毎走まるごと記録する**
+//! （上の表は 1 本ずつ絞り込むのではなく全走の失敗一覧から作った）。計数で死ぬ主張は 1 走で
+//! 決まるが、番地の主張は走ごとに揺れるため最低 4 走して赤の回数で読む。
 //!
 //! [`FrameBudget`]: super::budget::FrameBudget
 //!
@@ -116,30 +118,38 @@ use super::test_support::{build_target_assets, spawn_window_with_dpi};
 const NATIVE_W: u32 = 240;
 const NATIVE_H: u32 = 180;
 
-/// 暖機の適用回数。交代する 2 本のバッファ（恒等 k の合成先席・マスク輪番）が
-/// **1 適用ずつずれて**立ち上がるため、2 適用では足りない回がある。4 で全席が定常へ入る。
-const WARMUP: usize = 4;
+/// 巡回するキーの本数。**キャッシュ容量（3・要件 7.1）より大きい**こと自体が要件である。
+///
+/// 容量 1 の頃は 2 パターンの交互適用で毎回ミスした。容量 3 では 2 パターンは**両方とも表に
+/// 収まってしまい、以後すべてヒットする**——ミス経路を主張する本ファイルの檻が空虚になる。
+/// 巡回長を容量より 1 大きくすると、入ってくるキーが必ず 1 手前で追い出されているため
+/// **毎適用がミスかつ毎適用で追い出しが 1 件成立する**（本番の「毎コマ引き当て外れ」と同じ形）。
+const ROTATING_KEYS: usize = 4;
+
+/// 合成キャッシュの容量（`cache.rs` の `CAPACITY`・要件 7.1 の裁定値）。
+///
+/// `cache.rs` 側は私有定数ゆえここから参照できない。値が食い違えば
+/// [`a_steady_scaled_run_reuses_every_buffer_and_allocates_nothing`] の表示バッファ本数の主張が
+/// 赤になる（＝黙ってずれない）。
+const CACHE_CAPACITY: usize = 3;
+
+/// 暖機の適用回数＝回る実体の本数。
+///
+/// 表示バッファ（キャッシュの 3 本）・マスク（3 本＋輪番の空き 1 枚）・恒等 k の交代（4 本）は
+/// いずれも **1 適用ずつずれて**立ち上がるため、全ての実体が定常へ入るまでにこれだけかかる。
+const WARMUP: usize = ROTATING_KEYS;
 
 /// 定常状態の観測反復数。
 const STEADY: usize = 8;
 
-/// 交互適用の 2 パターン（引き当てを毎回外すための異なるキー）。
+/// 巡回適用の n 回目に使う bind 集合（引き当てを毎回外すための異なるキー）。
 ///
 /// surface 1000 は `animations` を 1 件も持たないため、bind 集合は `build_plan` の走査対象に
 /// 一度も現れない——**合成結果にも外形にも影響しない**。ゆえに「毎回ミスするが毎回同じ絵・同じ
 /// 寸法」という、定常状態の観測にちょうど要る入力になる。
-fn binds_a() -> BindSet {
-    BindSet::from_ids(1..=1)
-}
-
-/// [`binds_a`] と 1 ビット異なる集合（キーが違えば必ずミス＝再合成する）。
-fn binds_b() -> BindSet {
-    BindSet::from_ids(2..=2)
-}
-
-/// 交互適用の n 回目に使う bind 集合。
 fn binds_at(i: usize) -> BindSet {
-    if i % 2 == 0 { binds_a() } else { binds_b() }
+    let id = 1 + (i % ROTATING_KEYS) as u32;
+    BindSet::from_ids(id..=id)
 }
 
 /// GPU World ＋ DPI 付き窓 ＋ 装着済み target を 1 組作る（`author_dpi` は 96 固定）。
@@ -266,6 +276,14 @@ fn apply_and_observe(
     observe(presenter, world, &binds, scale)
 }
 
+/// 相異なり（順序は問わない・番地の集合を数えるための補助）。
+fn distinct<T: Ord + Copy>(items: impl Iterator<Item = T>) -> Vec<T> {
+    let mut v: Vec<T> = items.collect();
+    v.sort_unstable();
+    v.dedup();
+    v
+}
+
 /// 累積計数の差（この適用で起きた確保）。
 fn delta(before: [u64; 4], after: [u64; 4]) -> [u64; 4] {
     [
@@ -306,50 +324,57 @@ fn assert_not_empty(seen: &Seen, at: &str) {
 
 // ── 檻 ────────────────────────────────────────────────────────────────────────────────
 
-/// Requirement 3.1／3.2／6.1 観測完了（**リサンプル経路・k=2/1**）: 2 パターンの交互適用
-/// （毎回ミス）で暖機した後、定常状態の反復が 1 件も確保せず、合成先席・表示バッファの実体が
-/// 動かず、マスク輪番がちょうど 2 本で回り、下流供給が共有のままである。
+/// Requirement 3.1／3.2／6.1 観測完了（**リサンプル経路・k=2/1**）: 4 パターンの巡回適用
+/// （毎回ミス）で暖機した後、定常状態の反復が 1 件も確保せず、合成先席の実体が動かず、表示
+/// バッファがキャッシュの 3 本を回り、マスク輪番がちょうど 4 本で回り、下流供給が共有のままである。
 ///
 /// # 暖機の形を丸めない（Requirement 3.2）
 ///
-/// 立ち上がりの確保は `[1,1,1,1]` → `[0,0,0,1]` → 以後 0 という形で現れる。2 適用目のマスク 1 件は
-/// **輪番の 2 本目**であり、「交代する 2 本は 1 適用ずれて伸びる」という裁定済みの形そのものである。
-/// 暖機を 1 適用へ丸めるとこの 1 件が観測の外へ落ち、片方のバッファの成長が黙って隠れる。
+/// 立ち上がりの確保は `[1,1,1,1]` → `[0,1,0,1]` → `[0,1,0,1]` → `[0,0,0,1]` → 以後 0 という形で
+/// 現れる（要件 7.1・容量 3）。読み方は
 ///
-/// # 殺す誤実装（**変異を実際に当てて、鳴った主張を書き取った**）
+/// - `alloc_resample_dst` の 3 件＝**キャッシュが保持する表示バッファの本数**。表に空きがある
+///   あいだは回収が成立しないので、3 本が 1 適用ずつ順に起こされる
+/// - `alloc_mask` の 4 件＝キャッシュの 3 本＋輪番の空き 1 枚
+/// - `alloc_compose_dst`・`alloc_xmap` は初回のみ（どちらも 1 本で固定）
+///
+/// 暖機を 1 適用へ丸めるとこれらが観測の外へ落ち、残りのバッファの成長が黙って隠れる。
+///
+/// # 殺す誤実装（**変異を実際に当てて、鳴った主張を書き取った**・task 7.3 で全件再測）
 ///
 /// 推測で書かない——本 spec は「同じ寸法の反復では再利用を主張できない」を 4 度踏んでおり、
 /// 5 度目は「どの主張が鳴るか」を取り違えた doc として現れた。以下は全て実行して観測した結果で
-/// ある（走らせ方は `cargo test -p areka-emo-present --lib budget_steady_state_tests`。番地に
-/// 関わる 2 件だけは全走 `--lib` でも測った＝上の §番地の主張はどこまで効くか）。
+/// ある（走らせ方は `cargo test -p areka-emo-present --lib`・全走）。
 ///
-/// 目を引くのは、**6 件のうち 3 件が定常の番地主張ではなく暖機の形（計数の指紋）で落ちる**
-/// ことである。立ち上がりの `[1,1,1,1]` → `[0,0,0,1]` → 0 という形は再利用の成立をきわめて細く
-/// 縛るため、定常の反復へ入る前にそこで死ぬ。裏を返せば、**定常の番地主張が単独で仕留めた変異は
-/// 1 件も無い**——これが上の「番地は傍証」という位置づけの実測上の根拠である。
+/// 目を引くのは、**全件が定常の番地主張ではなく暖機の形（計数の指紋）で落ちる**ことである。
+/// 立ち上がりの `[1,1,1,1]` → `[0,1,0,1]` → `[0,1,0,1]` → `[0,0,0,1]` という形は再利用の成立を
+/// きわめて細く縛るため、定常の反復へ入る前にそこで死ぬ。裏を返せば、**定常の番地主張が単独で
+/// 仕留めた変異は 1 件も無い**——これが上の「番地は傍証」という位置づけの実測上の根拠である。
 ///
-/// - `seat::SurfaceSeat::lend` の冒頭で席も高水位も作り直す（`*self = Self::default()`）
-///   → 暖機の形が `[[1,1,1,1],[1,0,0,1],[1,0,0,0],[1,0,0,0]]` になり
-///     **「暖機の確保の形が Requirement 3.2 の……から外れている」で RED**
-/// - 席の実体だけ差し替えて高水位を持ち越す（`self.surface = ComposedSurface::default()`＝上の
-///   §番地の主張はどこまで効くか の**変異 B**）
-///   → 計数は 1 件も動かない。鳴り得るのは「合成先席が別の実体になった」だが**走ごとに揺れる**。
-///     確実に殺すのは `presenter/budget_tests.rs` の席単体の檻である
-///     （赤の走数は §番地の主張はどこまで効くか の表の B の行）
-/// - 容量回収（`ComposeCache::take_recycled`）が常に `None` を返す
-///   → 暖機の形が `[[1,1,1,1],[0,1,0,1],[0,1,0,1],[0,1,0,1]]` になり
-///     **「暖機の確保の形が……」で RED**。`display` の番地主張はそこへ到達する前に落ちる
-/// - `FrameBudget::display_buffer` が回収した `composed` を捨てて空バッファを返す
-///   （`display_reached` は持ち越す＝計数が動かない形。上の §番地の主張はどこまで効くか の
-///   **変異 A**）
-///   → **本檻は緑のまま**。殺すのは恒等 k の檻の交代関係と `presenter/budget_tests.rs` の
-///     席単体の檻である（赤の走数は §番地の主張はどこまで効くか の表の A の行）
+/// - `seat::SurfaceSeat::lend` の冒頭で席を丸ごと作り直す（`*self = Self::default()`＝容量の
+///   読み取りより**前**に差し替えるので計数へ現れる形）
+///   → **「暖機の確保の形が Requirement 3.2 の……から外れている」で RED**（クレート全 202 件中
+///     13 件が赤・本檻と恒等 k の檻を含む）
+/// - 席の実体だけ差し替える（`self.surface = ComposedSurface::default()`＝上の §番地の主張は
+///   どこまで効くか の**変異 B**）
+///   → **本檻の計数の主張は鳴らない**。本檻で鳴り得るのは「合成先席が別の実体になった」（番地）
+///     だが**走ごとに揺れる（1/4）**。決定論的に殺すのは `presenter/budget_tests.rs` の
+///     `a_smaller_extent_and_the_regrowth_allocate_nothing`（計数）・
+///     `the_compose_destination_seat_is_allocated_once_and_then_lent_again`（番地）と、
+///     恒等 k の檻の交代関係である（いずれも 4/4・§番地の主張はどこまで効くか の表）
+/// - 容量回収（`ComposeCache::take_recycled`）が満杯でなくても剥がす
+///   → 暖機の形が崩れて **「暖機の確保の形が……」で RED**（全 17 件赤）。`display` の番地主張は
+///     そこへ到達する前に落ちる
+/// - `FrameBudget::display_buffer` が回収した `composed` を捨てて空バッファを返す（上の
+///   §番地の主張はどこまで効くか の**変異 A**）
+///   → 同じ「暖機の確保の形が……」で RED（4/4・クレート全 202 件中 13 件が赤）。**要件 7.1 の
+///     実装で計数側へ移った**——以前は本檻が緑のままで、恒等 k の檻と席単体の檻だけが頼りだった
 /// - マスク輪番を止めて毎コマ `AlphaMask::from_pbgra32` する
-///   → 暖機の形が `[[1,1,1,1],[0,0,0,1],[0,0,0,1],[0,0,0,1]]` になり
-///     **「暖機の確保の形が……」で RED**。実体集合の主張までは到達しない
+///   → 同じ「暖機の確保の形が……」で RED（全 12 件赤）。実体集合の主張までは到達しない
 /// - 下流供給を `set`（実体の複製）へ戻す
 ///   → [`assert_mask_is_shared_not_copied`] の**番地の側**（「当たり判定へ供給したマスクが
 ///     キャッシュスロットの実体と別物」）で RED。参照数の側より先にこちらが鳴る
+///   （全 3 件赤＝本檻・恒等 k の檻・A7 専用の檻）
 #[test]
 fn a_steady_scaled_run_reuses_every_buffer_and_allocates_nothing() {
     let mut world = super::test_support::make_world_with_gpu();
@@ -357,7 +382,7 @@ fn a_steady_scaled_run_reuses_every_buffer_and_allocates_nothing() {
     attach(&mut presenter, &mut world, 192, 0xD1);
     let scale = ScaleRatio::new(2, 1).expect("2/1 は構築できる");
 
-    // 暖機: 立ち上がりの確保が「席ごとに一度」の形で現れて 0 へ落ちる。
+    // 暖機: 立ち上がりの確保が「実体ごとに一度」の形で現れて 0 へ落ちる。
     let mut prev = [0_u64; 4];
     let mut warm_shape: Vec<[u64; 4]> = Vec::new();
     for i in 0..WARMUP {
@@ -367,9 +392,9 @@ fn a_steady_scaled_run_reuses_every_buffer_and_allocates_nothing() {
     }
     assert_eq!(
         warm_shape,
-        vec![[1, 1, 1, 1], [0, 0, 0, 1], [0, 0, 0, 0], [0, 0, 0, 0]],
-        "暖機の確保の形が Requirement 3.2 の「席ごとに一度」から外れている\
-         （2 適用目のマスク 1 件＝輪番の 2 本目を含む）"
+        vec![[1, 1, 1, 1], [0, 1, 0, 1], [0, 1, 0, 1], [0, 0, 0, 1]],
+        "暖機の確保の形が Requirement 3.2 の「実体ごとに一度」から外れている\
+         （表示バッファ 3 本＋マスク 4 本が 1 適用ずつずれて立ち上がる形）"
     );
 
     // 供給面の readback が非ゼロ（GPU まで実際に絵が載っていることの 1 度きりの確認）。
@@ -379,52 +404,58 @@ fn a_steady_scaled_run_reuses_every_buffer_and_allocates_nothing() {
         "供給面の readback が空（表示が実際には成立していない＝以後の観測が空虚）"
     );
 
-    // 定常状態の基準を 2 適用で取る——輪番は 2 本が交互に出るため、基準 1 本では「もう 1 本」を
-    // 新顔と誤認する。ここで 2 本が**実際に異なる**ことも同時に固定する（1 本へ潰れた実装＝
-    // 毎回同じバッファを再生成する形は、下流が握っている最中の実体を書き換えることになる）。
-    let first = apply_and_observe(&mut presenter, &mut world, WARMUP, scale);
-    let second = apply_and_observe(&mut presenter, &mut world, WARMUP + 1, scale);
-    for (seen, at) in [(&first, "定常の基準適用 1"), (&second, "定常の基準適用 2")] {
-        assert_not_empty(seen, at);
-        assert_mask_is_shared_not_copied(seen, at);
+    // 定常状態の基準を「一巡ぶん」（＝回る実体の本数）で取る——マスクは 4 本、表示バッファは
+    // キャッシュの 3 本が順に出るため、基準 1 本では残りを新顔と誤認する。
+    let mut base: Vec<Seen> = Vec::new();
+    for i in 0..WARMUP {
+        let seen = apply_and_observe(&mut presenter, &mut world, WARMUP + i, scale);
+        let at = format!("定常の基準適用 {i}");
+        assert_not_empty(&seen, &at);
+        assert_mask_is_shared_not_copied(&seen, &at);
+        base.push(seen);
     }
+    let cumulative = base[0].cumulative;
+    for (i, seen) in base.iter().enumerate() {
+        assert_eq!(
+            seen.cumulative, cumulative,
+            "基準の適用 {i} で確保が起きた（暖機が終わっていない＝以後の比較が空虚）"
+        );
+    }
+    let known_masks: Vec<*const AlphaMask> = distinct(base.iter().map(|s| s.mask));
     assert_eq!(
-        second.cumulative, first.cumulative,
-        "基準の 2 適用の間で確保が起きた（暖機が終わっていない＝以後の比較が空虚）"
+        known_masks.len(),
+        WARMUP,
+        "マスク輪番が {WARMUP} 本で回っていない（1 本へ潰れている／新しい実体を作っている）"
     );
-    assert_ne!(
-        first.mask, second.mask,
-        "マスク輪番の 2 本が交代していない（1 本を使い回している）"
+    let known_displays: Vec<*const u8> = distinct(base.iter().map(|s| s.display));
+    assert_eq!(
+        known_displays.len(),
+        CACHE_CAPACITY,
+        "表示バッファがキャッシュの {CACHE_CAPACITY} 本で回っていない"
     );
-    let known_masks = [first.mask, second.mask];
 
     for i in 0..STEADY {
-        let seen = apply_and_observe(&mut presenter, &mut world, WARMUP + 2 + i, scale);
+        let seen = apply_and_observe(&mut presenter, &mut world, WARMUP * 2 + i, scale);
         let at = format!("定常 {i} 回目");
 
         assert_eq!(
-            seen.cumulative, first.cumulative,
+            seen.cumulative, cumulative,
             "{at}: 累積計数が動いた（定常状態で確保が起きている）"
         );
-        // 次の 2 本は**傍証**である（上の §番地の主張はどこまで効くか）。高水位
-        // （`FrameBudget::display_reached`・`seat::SurfaceSeat::reached`）はバッファの実体に
-        // 束ねられていないため、実体を作り直しつつ高水位を持ち越す実装は計数を 1 件も動かさず、
-        // 解放直後の再確保が同じ番地を返せばこの 2 本も素通りする（実測済み）。この 2 本を
-        // 素通りする形を決定論的に殺す檻は変異ごとに違う——表示バッファ側（変異 A）は恒等 k の
-        // 檻の交代関係と `presenter/budget_tests.rs` の席単体の檻、合成先席側（変異 B）は席単体
-        // の檻だけである（赤の走数は §番地の主張はどこまで効くか の表）。ここに残しているのは、
-        // それらが同時に緩んだときの追加の網としてである。
+        // 次の 3 本は計数の主張と**対で**読む（上の §番地の主張はどこまで効くか）。実体を作り
+        // 直す変異は計数側で決定論的に死ぬようになったが、番地は解放直後の再確保で偶然一致し
+        // 得るため単独では証拠にならない——独立な裏取りとして残している。
         assert_eq!(
-            seen.native, first.native,
+            seen.native, base[0].native,
             "{at}: 合成先席が別の実体になった（常設席で回っていない）"
         );
-        assert_eq!(
-            seen.display, first.display,
-            "{at}: 表示バッファが別の実体になった（回収した容量で回っていない）"
+        assert!(
+            known_displays.contains(&seen.display),
+            "{at}: 表示バッファが既知の {CACHE_CAPACITY} 本のどれでもない（回収した容量で回っていない）"
         );
         assert!(
             known_masks.contains(&seen.mask),
-            "{at}: マスクが輪番の 2 本のどちらでもない（新しい実体を作っている）"
+            "{at}: マスクが輪番の {WARMUP} 本のどれでもない（新しい実体を作っている）"
         );
         assert_mask_is_shared_not_copied(&seen, &at);
         assert_not_empty(&seen, &at);
@@ -432,38 +463,31 @@ fn a_steady_scaled_run_reuses_every_buffer_and_allocates_nothing() {
 }
 
 /// Requirement 3.1／3.2／6.1 観測完了（**交代経路・恒等 k**）: 拡大率が等倍（100% 表示の一般条件）
-/// でも定常状態の確保は 0 で、合成先席と表示バッファは**ちょうど 2 本の実体を交代し続ける**。
+/// でも定常状態の確保は 0 で、合成先席と表示バッファは**ちょうど 4 本の実体を回し続ける**
+/// （キャッシュの 3 本＋合成先席 1 本・要件 7.1）。
 ///
 /// 恒等 k は合成先席と表示バッファを `swap` で入れ替える（コピーもリサンプルも起きない）。ゆえに
-/// 番地は「不変」ではなく「2 本集合の交互」になる——集合が 2 本を超えれば確保し直しており、
-/// 1 本へ潰れれば交代が起きていない（＝どこかで複写している）。
+/// 番地は「不変」ではなく「4 本集合の巡回」になる——集合が 4 本を超えれば確保し直しており、
+/// 減れば交代が起きていない（＝どこかで複写している）。
 ///
 /// # 暖機の形
 ///
-/// `[1,0,0,1]` → `[1,0,0,1]` → 以後 0。合成先の 1 件が 2 適用に分かれるのが交代する 2 本ぶんで
-/// あり、マスクの 1 件が 2 適用に分かれるのが輪番 2 本ぶんである。リサンプル経路を通らないため
-/// `alloc_resample_dst`／`alloc_xmap` は全適用で 0 のままである。
-///
-/// # 殺す誤実装（**変異を実際に当てて、鳴った主張を書き取った**）
-///
-/// - `seat::SurfaceSeat::swap` を複写（`*buffer = self.surface.clone()`）へ戻す
-///   → 席が永久に 1 本になるので合成先の代金が 2 適用に分かれず、暖機の形が
-///     `[[1,0,0,1],[0,0,0,1],[0,0,0,0],[0,0,0,0]]` になって**「恒等 k の暖機は交代する 2 本・
-///     輪番 2 本ぶんが 1 適用ずつずれて現れる形のはず」で RED**。定常の 2 本集合の
-///     主張までは到達しない
-/// - 交代のたびに席へ新しいバッファを起こす（`swap` の直後に `surface`／`reached` を作り直す）
-///   → 暖機の形が `[[1,0,0,1],[1,0,0,1],[1,0,0,0],[1,0,0,0]]` になって**同じ「恒等 k の暖機は
-///     ……」で RED**
+/// `[1,0,0,1]` が 4 適用ぶん、以後 0。合成先の代金が 4 適用に分かれるのが巡回する 4 本ぶんであり、
+/// マスクも同じく 4 本ぶんである。リサンプル経路を通らないため `alloc_resample_dst`／`alloc_xmap`
+/// は全適用で 0 のままである。
 ///
 /// # 本檻が担う固有の役割（番地の偶然一致に強い唯一の関係）
 ///
-/// 下の交代関係——「前回の表示バッファが合成先席へ回り、前回の合成先席が表示バッファへ回る」
-/// ——は、**同時に生きている 2 つの実体**の役割入れ替えを主張する。解放も再確保も介在しないため、
-/// k≠1 の檻の番地不変主張を素通りする変異（`display_buffer` が回収バッファを捨てて空から
-/// 作り直す形＝ファイル冒頭の §番地の主張はどこまで効くか の**変異 A**）をここが決定論的に
-/// 捕まえる（赤の走数は同節の表の A の行）。
+/// 下の交代関係——「**前回の合成先席が今回の表示バッファへ回る**」——は、同時に生きている
+/// 2 つの実体の役割入れ替えを主張する。解放も再確保も介在しないため、番地の偶然一致が入り込む
+/// 余地が無い。`swap` を複写へ戻す変異はここで死ぬ。
+///
+/// なお逆向き（前回の表示バッファが今回の合成先席へ回る）は**もはや成り立たない**——容量 3 では
+/// 追い出されるのは最も古い引き当てであって直前の挿入ではないため、合成先席へ回ってくるのは
+/// 3 適用前に表示したバッファである。巡回の周期はその代わりに「連続する 4 適用の合成先席が
+/// 互いに異なる」で固定する。
 #[test]
-fn a_steady_identity_run_alternates_between_exactly_two_buffers_and_allocates_nothing() {
+fn a_steady_identity_run_rotates_through_exactly_four_buffers_and_allocates_nothing() {
     let mut world = super::test_support::make_world_with_gpu();
     let mut presenter = EmoPresenter::new();
     // 窓 DPI ＝ author_dpi ＝ 96 ゆえ恒等 k（swap 交代経路）。
@@ -479,75 +503,88 @@ fn a_steady_identity_run_alternates_between_exactly_two_buffers_and_allocates_no
     }
     assert_eq!(
         warm_shape,
-        vec![[1, 0, 0, 1], [1, 0, 0, 1], [0, 0, 0, 0], [0, 0, 0, 0]],
-        "恒等 k の暖機は交代する 2 本・輪番 2 本ぶんが 1 適用ずつずれて現れる形のはず"
+        vec![[1, 0, 0, 1], [1, 0, 0, 1], [1, 0, 0, 1], [1, 0, 0, 1]],
+        "恒等 k の暖機は巡回する 4 本・マスク 4 本ぶんが 1 適用ずつずれて現れる形のはず"
     );
 
-    // 基準を 2 適用で取る（交代する 2 本・輪番の 2 本はいずれも 2 適用で一巡する）。
-    let first = apply_and_observe(&mut presenter, &mut world, WARMUP, scale);
-    let second = apply_and_observe(&mut presenter, &mut world, WARMUP + 1, scale);
-    for (seen, at) in [(&first, "恒等 k 基準適用 1"), (&second, "恒等 k 基準適用 2")] {
-        assert_not_empty(seen, at);
-        assert_mask_is_shared_not_copied(seen, at);
+    // 基準を一巡ぶん（4 適用）で取る。
+    let mut base: Vec<Seen> = Vec::new();
+    for i in 0..WARMUP {
+        let seen = apply_and_observe(&mut presenter, &mut world, WARMUP + i, scale);
+        let at = format!("恒等 k 基準適用 {i}");
+        assert_not_empty(&seen, &at);
+        assert_mask_is_shared_not_copied(&seen, &at);
         assert_ne!(
             seen.native, seen.display,
             "{at}: 合成先席と表示バッファが同一実体（交代が成立していない）"
         );
+        base.push(seen);
     }
+    let cumulative = base[0].cumulative;
+    for (i, seen) in base.iter().enumerate() {
+        assert_eq!(
+            seen.cumulative, cumulative,
+            "恒等 k の基準の適用 {i} で確保が起きた（暖機が終わっていない＝以後の比較が空虚）"
+        );
+    }
+    // 交代の実体そのもの: 前回の合成先席が今回の表示バッファへ回る（複写化するとここが崩れる）。
+    for i in 1..base.len() {
+        assert_eq!(
+            base[i].display, base[i - 1].native,
+            "基準 {i}: 前回の合成先席が表示バッファへ回っていない（swap になっていない）"
+        );
+    }
+    // 巡回の周期: 連続する 4 適用の合成先席は互いに異なる（1 本へ潰れた・本数が減った形を殺す）。
+    let known_buffers: Vec<*const u8> = distinct(
+        base.iter()
+            .map(|s| s.native)
+            .chain(base.iter().map(|s| s.display)),
+    );
     assert_eq!(
-        second.cumulative, first.cumulative,
-        "基準の 2 適用の間で確保が起きた（暖機が終わっていない＝以後の比較が空虚）"
+        known_buffers.len(),
+        WARMUP,
+        "恒等 k で巡回する実体が {WARMUP} 本でない（確保し直している／潰れている）"
     );
-    // 交代の実体そのもの: 1 適用で役割がちょうど入れ替わる。
+    let known_masks: Vec<*const AlphaMask> = distinct(base.iter().map(|s| s.mask));
     assert_eq!(
-        second.native, first.display,
-        "前回の表示バッファが合成先席へ回っていない（swap になっていない）"
+        known_masks.len(),
+        WARMUP,
+        "恒等 k でマスク輪番が {WARMUP} 本で回っていない"
     );
-    assert_eq!(
-        second.display, first.native,
-        "前回の合成先席が表示バッファへ回っていない（swap になっていない）"
-    );
-    assert_ne!(
-        first.mask, second.mask,
-        "恒等 k でマスク輪番の 2 本が交代していない"
-    );
-    let known_buffers = [first.native, first.display];
-    let known_masks = [first.mask, second.mask];
 
-    let mut prev = second;
+    let mut prev = base[base.len() - 1].native;
     for i in 0..STEADY {
-        let seen = apply_and_observe(&mut presenter, &mut world, WARMUP + 2 + i, scale);
+        let seen = apply_and_observe(&mut presenter, &mut world, WARMUP * 2 + i, scale);
         let at = format!("恒等 k 定常 {i} 回目");
 
         assert_eq!(
-            seen.cumulative, first.cumulative,
+            seen.cumulative, cumulative,
             "{at}: 累積計数が動いた（恒等 k の定常状態で確保が起きている）"
         );
-        // 2 本集合の交互を許容する形（不変ではなく「集合が 2 本のまま」＋「毎回入れ替わる」）。
         assert!(
             known_buffers.contains(&seen.native),
-            "{at}: 合成先席が既知の 2 本のどちらでもない（確保し直している）"
+            "{at}: 合成先席が既知の {WARMUP} 本のどれでもない（確保し直している）"
         );
         assert!(
             known_buffers.contains(&seen.display),
-            "{at}: 表示バッファが既知の 2 本のどちらでもない（確保し直している）"
+            "{at}: 表示バッファが既知の {WARMUP} 本のどれでもない（確保し直している）"
         );
         assert_eq!(
-            seen.native, prev.display,
-            "{at}: 前回の表示バッファが合成先席へ回っていない（複写化・交代の消失）"
-        );
-        assert_eq!(
-            seen.display, prev.native,
+            seen.display, prev,
             "{at}: 前回の合成先席が表示バッファへ回っていない（複写化・交代の消失）"
+        );
+        assert_ne!(
+            seen.native, seen.display,
+            "{at}: 合成先席と表示バッファが同一実体（交代が成立していない）"
         );
         assert!(
             known_masks.contains(&seen.mask),
-            "{at}: マスクが輪番の 2 本のどちらでもない（新しい実体を作っている）"
+            "{at}: マスクが輪番の {WARMUP} 本のどれでもない（新しい実体を作っている）"
         );
         assert_mask_is_shared_not_copied(&seen, &at);
         assert_not_empty(&seen, &at);
 
-        prev = seen;
+        prev = seen.native;
     }
 }
 

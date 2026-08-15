@@ -559,6 +559,16 @@ fn same_scale_hits_cache_and_window_dpi_change_misses_and_resamples() {
         tampered_bytes, scaled_1000,
         "プローブ前提: 別の絵であること"
     );
+    // 原寸は改竄前のエントリのものを引き継ぐ（キーも原寸も変えず**絵だけ**を差し替えるプローブ
+    // である）。原寸は `CacheEntry` の中に在るため、差し替えるときも対で渡す必要がある。
+    let tampered_native = presenter
+        .targets
+        .get(&TargetId(0))
+        .unwrap()
+        .cache
+        .get(1000, &BindSet::default(), &PatternState::default(), k2)
+        .expect("初回表示でエントリが在る")
+        .native;
     presenter
         .targets
         .get_mut(&TargetId(0))
@@ -571,6 +581,7 @@ fn same_scale_hits_cache_and_window_dpi_change_misses_and_resamples() {
             k2,
             tampered,
             tampered_mask,
+            tampered_native,
         );
 
     // 2 回目（同一入力・同一 k）: ヒットゆえ再合成せず、改竄された絵がそのまま表示される。
@@ -610,11 +621,15 @@ fn same_scale_hits_cache_and_window_dpi_change_misses_and_resamples() {
         Some(native_size),
         "native 原寸は k に依らず不変"
     );
-    assert!(
+    // 容量 3（要件 7.1）では旧 k のエントリも表に残る。**正しさはキー完全一致だけに依っている**
+    // ——上の照会値・表示バイトが新 k のものであることが、旧 k の絵が載っていないことの証拠である。
+    // 残った旧 k のエントリが**旧 k の絵のまま**であること（新 k で上書きされていないこと）を見る。
+    assert_eq!(
         t.cache
             .get(1000, &BindSet::default(), &PatternState::default(), k2)
-            .is_none(),
-        "容量 1 スロットは新 k のエントリへ置き換わる"
+            .map(|e| (e.composed.width(), e.composed.height())),
+        Some(scaled_size),
+        "旧 k のエントリは旧 k の表示寸のまま残る（k をまたいで上書きしない・設計 D6）"
     );
 }
 
@@ -687,7 +702,10 @@ fn build_two_sized_face_assets(w1: u32, h1: u32, w2: u32, h2: u32) -> (EmoWorld,
 /// `text_slot_view` が永続的に `None` を返してしまう。
 ///
 /// 「合成した回だけ `native_size` を書く」実装ではここが RED になる（`native_size` が `None` のまま）。
-/// `cached_native`（cache スロットと対の原寸）を表示成立点で**無条件に**写す実装だけが緑になる。
+/// [`CacheEntry::native`]（エントリと同じ入れ物に在る原寸）を表示成立点で**無条件に**写す実装
+/// だけが緑になる。
+///
+/// [`CacheEntry::native`]: crate::cache::CacheEntry::native
 ///
 /// device 失敗は `WucGraphicsResource` を**一時的に外す**ことで再現する（2 個目の Compositor を
 /// 生成しない＝要件 5.3 の AV 非再導入を守る）。
@@ -735,16 +753,14 @@ fn native_size_recovers_when_failed_show_is_followed_by_cache_hit() {
 
     {
         let t = presenter.targets.get(&TargetId(0)).unwrap();
-        assert!(
-            t.cache
-                .get(1000, &BindSet::default(), &PatternState::default(), k2)
-                .is_some(),
-            "失敗前に insert 済み＝次回の同一入力は必ずキャッシュヒットになる（本テストの前提）"
-        );
+        let entry = t
+            .cache
+            .get(1000, &BindSet::default(), &PatternState::default(), k2)
+            .expect("失敗前に insert 済み＝次回の同一入力は必ずキャッシュヒットになる（本テストの前提）");
         assert_eq!(
-            t.cached_native,
-            Some((4, 3)),
-            "スロットと対の native 原寸は insert と同時に控えられている"
+            entry.native,
+            (4, 3),
+            "native 原寸は絵・マスクと同じエントリへ束ねて控えられている（要件 7.1・容量 3）"
         );
         assert_eq!(t.applied, None, "表示は成立していない（R4.4: 前値のまま）");
         assert_eq!(t.native_size, None, "表示未成立ゆえ照会値も未確定");

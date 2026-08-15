@@ -25,6 +25,18 @@
 //! - **黙って確保しない**（design.md §Error Handling）: 席が期待どおり再利用できない境界
 //!   （回収不成立・マスク輪番の単独所有が不成立）でも確保は必ず計数に現れる
 //!
+//! # 回る実体の本数（キャッシュ容量 3・要件 7.1）
+//!
+//! キャッシュ容量が 1 → 3 になったため、毎コマ経路を回る実体の本数が増えた。本ファイルの
+//! [`Flow2`] は **4 種類のキーを巡回**させてミス経路を演じる（巡回長 4 > 容量 3 ゆえ毎適用が
+//! ミスし、毎適用で追い出しが 1 件成立する＝本番の「毎コマ引き当て外れ」と同じ形）。ゆえに
+//!
+//! - 非恒等 k: 表示バッファは**キャッシュの 3 本**が回り、合成先席は 1 本で固定
+//! - 恒等 k: 合成先席と表示バッファが交代するので **4 本**が両方の役を回る
+//! - マスク: キャッシュの 3 本＋輪番の空き 1 枚＝**4 本**
+//!
+//! 立ち上がり（暖機）に要する適用数は本数ぶんであり、[`WARMUP`] はそれに合わせてある。
+//!
 //! # 「同じ寸法の反復」だけでは再利用を主張できない（本 spec が 3 度踏んだ罠）
 //!
 //! 毎回まっさらに確保する実装は、同じ寸法の反復では毎回**同じ容量**に着地するため、容量比較の
@@ -292,12 +304,32 @@ struct Applied {
 /// `resource` を持つのが要点である。下流が現行マスクを保持し続けるからこそ現行マスクの
 /// 参照数は 2 になり、**前々回のマスクだけが単独所有（＝in-place 再生成できる）**という
 /// 輪番の前提（design.md D3）が本物になる。ここを省くと輪番の主張が空虚になる。
+///
+/// # 毎回ミスさせるにはキーを 4 種類回す（キャッシュ容量 3・要件 7.1）
+///
+/// 本装置は**ミス経路**を演じる。ところがキャッシュ容量が 1 → 3 になった今、同じキーを繰り返し
+/// 挿入する形では表が 1 件で埋まらず、追い出しが一度も起きない（本番なら同じキーは 2 回目から
+/// ヒットするので、ミス経路の反復として成立しない）。ゆえに **surface id を 4 種類**巡回させる:
+/// 巡回長 4 > 容量 3 なので、LRU では入ってくるキーが必ず 1 手前で追い出されており、
+/// **毎適用がミスかつ毎適用で追い出しが 1 件成立する**——これが本番の「毎コマ引き当て外れ」に
+/// 対応する定常状態である。
 struct Flow2 {
     budget: FrameBudget,
     cache: ComposeCache,
     /// `AlphaMaskResource` 相当（下流が現行マスクの `Arc` を保持し続ける）。
     resource: Option<Arc<AlphaMask>>,
+    /// 適用回数（巡回するキーの選択に使う）。
+    applies: usize,
 }
+
+/// 巡回するキーの本数。**キャッシュ容量より大きい**こと自体が要件である（毎適用ミスの条件）。
+const ROTATING_KEYS: usize = 4;
+
+/// 暖機に要する適用数＝回る実体の本数。
+///
+/// 表示バッファ（キャッシュの 3 本）・マスク（3 本＋空き 1 枚）・恒等 k の交代（4 本）は
+/// いずれも 1 適用ずつずれて外形へ伸びるので、全ての実体が定常へ入るまでにこれだけかかる。
+const WARMUP: usize = ROTATING_KEYS;
 
 impl Flow2 {
     fn new() -> Self {
@@ -305,11 +337,21 @@ impl Flow2 {
             budget: FrameBudget::new(),
             cache: ComposeCache::new(),
             resource: None,
+            applies: 0,
         }
     }
 
     /// ミス経路を 1 適用ぶん演じ、この適用の増分と実体を返す。
     fn apply(&mut self, native_w: u32, native_h: u32, scale: ScaleRatio) -> Applied {
+        // 巡回長 4 > 容量 3 ゆえ、この id は 1 手前で追い出されている＝必ずミスする。
+        let surface_id = 1000 + (self.applies % ROTATING_KEYS) as u32;
+        self.applies += 1;
+        assert!(
+            !self
+                .cache
+                .touch(surface_id, &BindSet::default(), &PatternState::default(), scale),
+            "前提: 本装置はミス経路を演じる（巡回長 {ROTATING_KEYS} > 容量ゆえ必ずミスする）"
+        );
         // (1) 合成: 常設席へ native 外形の結果を書く（`compose_into` 相当）。
         let native_ptr = self.budget.native_scratch(|dst| {
             fill_extent(dst, native_w, native_h);
@@ -340,14 +382,15 @@ impl Flow2 {
         );
         let mask_ptr = Arc::as_ptr(&mask);
 
-        // (6) 表示バッファと `Arc` マスクを原子対で挿入。
+        // (6) 表示バッファと `Arc` マスクを原子対で挿入（native 原寸も同じエントリへ束ねる）。
         self.cache.insert(
-            1000,
+            surface_id,
             BindSet::default(),
             PatternState::default(),
             scale,
             display,
             Arc::clone(&mask),
+            (native_w, native_h),
         );
 
         // (7) 下流供給（参照カウント増のみ）。旧マスクはここで手放され、輪番の空きが単独所有になる。
@@ -364,14 +407,14 @@ impl Flow2 {
 
 /// Requirement 3.1: 非恒等 k の定常状態で **4 フィールドとも増分 0**（完全ゼロ）。
 ///
-/// ウォームアップ（席の初回確保・マスク輪番の 2 枚立ち上げ）が済んだ後は、同一寸法の反復で
-/// 1 件の確保も起きない。累積も据え置きであることを同時に見る（増分だけ 0 で累積が伸びる
+/// ウォームアップ（合成先席・キャッシュの 3 本・マスク 4 枚の立ち上げ）が済んだ後は、同一寸法の
+/// 反復で 1 件の確保も起きない。累積も据え置きであることを同時に見る（増分だけ 0 で累積が伸びる
 /// 片肺実装を通さない）。
 #[test]
 fn a_steady_run_allocates_nothing_at_all() {
     let mut rig = Flow2::new();
-    // ウォームアップ 3 適用（合成先・表示バッファ・作業領域は 1 回、マスク輪番は 2 枚ぶん）。
-    for _ in 0..3 {
+    // ウォームアップ（回る実体の本数ぶん）。
+    for _ in 0..WARMUP {
         rig.apply(40, 20, k(2, 1));
     }
     let warm = *rig.budget.cumulative();
@@ -391,14 +434,67 @@ fn a_steady_run_allocates_nothing_at_all() {
     );
 }
 
+/// Requirement 3.2 観測完了（**立ち上がりの形を丸めない**・非恒等 k）: 確保は「実体ごとに一度」の
+/// 形で現れて 0 へ落ちる。
+///
+/// 実測の形は `[1,1,1,1]` → `[0,1,0,1]` → `[0,1,0,1]` → `[0,0,0,1]` → 以後 0 である。読み方:
+///
+/// - `alloc_compose_dst` は初回のみ（非恒等 k の合成先席は 1 本で固定・交代しない）
+/// - `alloc_resample_dst` が 3 回＝**キャッシュが保持する表示バッファの本数**。キャッシュに空きが
+///   あるあいだは回収が成立しないので、3 本が 1 適用ずつ順に起こされる
+/// - `alloc_xmap` は初回のみ（作業席は 1 本）
+/// - `alloc_mask` が 4 回＝キャッシュの 3 本＋輪番の空き 1 枚
+///
+/// 立ち上がりを 1 適用へ丸めるとこれらの成長が観測の外へ落ち、黙って確保する実装を通してしまう。
+#[test]
+fn the_warm_up_allocates_once_per_rotating_buffer_then_settles() {
+    let mut rig = Flow2::new();
+    let shape: Vec<[u32; 4]> = (0..WARMUP + 3)
+        .map(|_| {
+            let d = rig.apply(40, 20, k(2, 1)).delta;
+            [
+                d.alloc_compose_dst,
+                d.alloc_resample_dst,
+                d.alloc_xmap,
+                d.alloc_mask,
+            ]
+        })
+        .collect();
+    assert_eq!(
+        shape,
+        vec![
+            [1, 1, 1, 1],
+            [0, 1, 0, 1],
+            [0, 1, 0, 1],
+            [0, 0, 0, 1],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+        ],
+        "立ち上がりが「実体ごとに一度」の形から外れている（Requirement 3.2）"
+    );
+    // 実体の本数として読み直す（形の丸暗記ではなく由来を主張する）。
+    let total = *rig.budget.cumulative();
+    assert_eq!(
+        total.alloc_resample_dst, 3,
+        "表示バッファの起こし直しはキャッシュが保持する本数ぶんのはず"
+    );
+    assert_eq!(
+        total.alloc_mask, 4,
+        "マスクはキャッシュの 3 本＋輪番の空き 1 枚ぶん"
+    );
+    assert_eq!(total.alloc_compose_dst, 1, "非恒等 k の合成先席は 1 本で固定");
+    assert_eq!(total.alloc_xmap, 1, "作業席は 1 本");
+}
+
 /// Requirement 3.1: 恒等 k（常設席と表示バッファの swap 経路）でも定常状態は完全ゼロ。
 ///
-/// swap 経路は 2 本のバッファが役割を交代し続けるため、**立ち上がりに 2 適用ぶんの確保が要る**
+/// swap 経路はバッファが役割を交代し続けるため、**立ち上がりに本数ぶんの確保が要る**
 /// （各バッファが一度ずつ外形へ伸びる）。それが済めば以後は 1 件も確保しない。
 #[test]
 fn a_steady_run_with_identity_scale_allocates_nothing_at_all() {
     let mut rig = Flow2::new();
-    for _ in 0..3 {
+    for _ in 0..WARMUP {
         rig.apply(40, 20, identity());
     }
     let warm = *rig.budget.cumulative();
@@ -412,97 +508,106 @@ fn a_steady_run_with_identity_scale_allocates_nothing_at_all() {
         );
     }
     assert_eq!(*rig.budget.cumulative(), warm, "恒等 k で累積が伸びた");
-    // 交代する 2 本ぶん。リサンプル経路を通らないので表示バッファ席・作業領域は動かない。
+    // 交代する 4 本ぶん（キャッシュの 3 本＋合成先席 1 本）。恒等 k では全ての伸長が合成先席の
+    // 側で起きるため `alloc_compose_dst` に集まる。リサンプル経路を通らないので表示バッファ席・
+    // 作業領域は動かない。
     assert_eq!(
-        warm.alloc_compose_dst, 2,
-        "恒等 k の立ち上がりは交代する 2 本ぶんのはず: {warm:?}"
+        warm.alloc_compose_dst, 4,
+        "恒等 k の立ち上がりは交代する 4 本ぶんのはず: {warm:?}"
     );
     assert_eq!(warm.alloc_resample_dst, 0, "恒等 k はリサンプル先を持たない");
     assert_eq!(warm.alloc_xmap, 0, "恒等 k は作業領域に触れない");
 }
 
-/// Requirement 3.1 の再利用が**名目でなく実体**であること（ポインタ同一性）。
+/// Requirement 3.1 の再利用が**名目でなく実体**であること（ポインタの集合）。
 ///
-/// 定常状態では合成先席も表示バッファも同じ実体が回り続ける。
+/// 定常状態では合成先席は**同じ 1 本**が貸し出され続け、表示バッファは**キャッシュが保持する
+/// 3 本の中だけ**を回る（容量 3・要件 7.1）。本数が増えれば確保し直しており、1 本へ潰れれば
+/// 追い出しと回収が噛み合っていない。
 ///
-/// # 計数の檻だけでは足りない
+/// # 計数の檻と対で読む
 ///
-/// 席を毎回まっさらに確保する実装でも、到達済み寸法（高水位）は前回の値を覚えたままなので
-/// **計数は 1 件も増えない**——定常ゼロの檻は緑のままになる。実体の同一性を見るこの檻だけが
-/// その変異を殺す。[`fill_extent`] が転写元を先に確保するため、解放された席の番地は転写元に
-/// 取られ、確保し直した席は別の番地に載る（同じ番地を引き当てて偽の緑になる余地が小さい）。
+/// 実体を差し替える変異は、確保の観測が実体の容量差になった今では計数側でも捕まる（新しい実体は
+/// 容量 0 から伸びるため）。本檻はその独立な裏取りであり、[`fill_extent`] が転写元を先に確保する
+/// ため解放された席の番地は転写元に取られる（同じ番地を引き当てて偽の緑になる余地が小さい）。
 #[test]
 fn the_steady_state_keeps_handing_back_the_same_allocations() {
     let mut rig = Flow2::new();
-    for _ in 0..3 {
+    for _ in 0..WARMUP {
         rig.apply(40, 20, k(2, 1));
     }
 
     let first = rig.apply(40, 20, k(2, 1));
-    for i in 0..6 {
+    let mut displays = vec![first.display];
+    for i in 0..7 {
         let seen = rig.apply(40, 20, k(2, 1));
         assert_eq!(
             seen.native, first.native,
             "{i} 回目の合成先席が別の実体になった（常設席になっていない）"
         );
-        assert_eq!(
-            seen.display, first.display,
-            "{i} 回目の表示バッファが別の実体になった（回収した容量で回っていない）"
-        );
+        displays.push(seen.display);
     }
+    let mut distinct = displays.clone();
+    distinct.sort_unstable();
+    distinct.dedup();
+    assert_eq!(
+        distinct.len(),
+        3,
+        "表示バッファが回る実体はキャッシュが保持する 3 本のはず（確保し直している／潰れている）"
+    );
+    assert!(
+        displays.len() > distinct.len(),
+        "同じ器が一度も再登場しない（回収した容量で回っていない）"
+    );
 }
 
 /// Requirement 3.2: 寸法拡大は **確保対象ごとに一度だけ**計数され、その後また 0 に戻る。
 ///
-/// # マスクの代金は 2 適用に分かれる（in-place 再生成＝確保なし、ではない）
+/// # 代金は実体の本数ぶんの適用に分かれる（in-place 再生成＝確保なし、ではない）
 ///
 /// `AlphaMask::regenerate_from_pbgra32` は `clear`＋`resize(詰め長, 0)` であり、詰め長が
-/// そのバッファの到達済みを超えれば `resize` は**確実に確保する**（40×20 → 60×30・k=2/1 では
-/// 表示 80×40 → 120×60 で詰め長 400 → 900 バイト）。輪番は 2 本のバッファが 1 適用ずつずれて
-/// 再生成されるため、2 本とも伸びるまでに 2 適用かかり、各適用でちょうど 1 件ずつ計数される。
+/// そのバッファの容量を超えれば `resize` は**確実に確保する**（40×20 → 60×30・k=2/1 では
+/// 表示 80×40 → 120×60 で詰め長 400 → 900 バイト）。回る実体は 1 適用ずつずれて再生成される
+/// ため、全部が伸びるまでに本数ぶんの適用がかかり、各適用でちょうど 1 件ずつ計数される。
 ///
 /// 以前この檻は拡大時の `alloc_mask` を 0 と書いていた。それは「in-place なら確保なし」という
 /// 誤った決め打ちを正解として焼き付けたもので、**実測 400→900 バイトの成長がどこにも数えられて
 /// いなかった**（レビューが検出）。design.md §Error Handling の「黙って確保しない」に反する
 /// 唯一の席だった。
+///
+/// 立ち上がりと同じ形が出るのは偶然ではない——寸法が変われば「その寸法では初めて」なので、
+/// どの実体も一度ずつ伸び直す（表示バッファ 3 本・マスク 4 本・合成先席 1 本・作業席 1 本）。
 #[test]
-fn a_larger_extent_costs_exactly_one_allocation_per_seat_then_returns_to_zero() {
+fn a_larger_extent_costs_exactly_one_allocation_per_buffer_then_returns_to_zero() {
     let mut rig = Flow2::new();
-    for _ in 0..3 {
+    for _ in 0..WARMUP {
         rig.apply(40, 20, k(2, 1));
     }
 
-    let grown = rig.apply(60, 30, k(2, 1));
+    let shape: Vec<[u32; 4]> = (0..WARMUP + 3)
+        .map(|_| {
+            let d = rig.apply(60, 30, k(2, 1)).delta;
+            [
+                d.alloc_compose_dst,
+                d.alloc_resample_dst,
+                d.alloc_xmap,
+                d.alloc_mask,
+            ]
+        })
+        .collect();
     assert_eq!(
-        grown.delta,
-        BudgetDelta {
-            alloc_compose_dst: 1,
-            alloc_resample_dst: 1,
-            alloc_xmap: 1,
-            alloc_mask: 1,
-        },
-        "寸法拡大で各席がちょうど 1 回だけ再確保するはず（マスクの詰めバッファ成長を含む）"
+        shape,
+        vec![
+            [1, 1, 1, 1],
+            [0, 1, 0, 1],
+            [0, 1, 0, 1],
+            [0, 0, 0, 1],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+        ],
+        "寸法拡大の代金が「実体ごとに一度」の形から外れている（Requirement 3.2）"
     );
-
-    // 輪番のもう 1 本が同じ寸法へ伸びる適用。マスクだけが 1 で、他の席は既に伸び終えている。
-    assert_eq!(
-        rig.apply(60, 30, k(2, 1)).delta,
-        BudgetDelta {
-            alloc_compose_dst: 0,
-            alloc_resample_dst: 0,
-            alloc_xmap: 0,
-            alloc_mask: 1,
-        },
-        "輪番のもう 1 本の詰めバッファ成長が計数へ現れていない（黙って確保している）"
-    );
-
-    for i in 0..4 {
-        assert_eq!(
-            rig.apply(60, 30, k(2, 1)).delta,
-            BudgetDelta::default(),
-            "寸法拡大の {i} 適用後に確保が残っている（一度だけ再確保になっていない）"
-        );
-    }
 }
 
 /// Requirement 3.2 の要の檻: **より小さい寸法の後続要求で容量が縮まない**。
@@ -514,12 +619,12 @@ fn a_larger_extent_costs_exactly_one_allocation_per_seat_then_returns_to_zero() 
 #[test]
 fn a_smaller_extent_and_the_regrowth_allocate_nothing() {
     let mut rig = Flow2::new();
-    for _ in 0..3 {
+    for _ in 0..WARMUP {
         rig.apply(60, 30, k(2, 1));
     }
 
     // 縮小: 容量は足りている＝再確保は要らない。
-    for i in 0..3 {
+    for i in 0..WARMUP {
         assert_eq!(
             rig.apply(20, 10, k(2, 1)).delta,
             BudgetDelta::default(),
@@ -527,7 +632,7 @@ fn a_smaller_extent_and_the_regrowth_allocate_nothing() {
         );
     }
     // 再拡大: 既に到達済みの寸法ゆえ容量が残っている＝やはり再確保は要らない。
-    for i in 0..3 {
+    for i in 0..WARMUP {
         assert_eq!(
             rig.apply(60, 30, k(2, 1)).delta,
             BudgetDelta::default(),
@@ -538,71 +643,75 @@ fn a_smaller_extent_and_the_regrowth_allocate_nothing() {
 
 /// design.md §Error Handling: **回収が成立しなかったら黙って確保せず必ず計数へ現す**。
 ///
-/// キャッシュが無効化された直後の適用は回収エントリを得られない。ここで無言のまま確保すると
-/// 「定常アロケーション 0」が観測上は成立しているのに実際は確保している、という隠れた縮退に
-/// なる。無効化が捨てるのは表示バッファとマスクの原子対**まるごと**ゆえ、代金は 2 適用に
-/// 分かれて現れる:
+/// キャッシュが無効化されると表が空になり、再び満杯になるまで回収エントリを得られない。ここで
+/// 無言のまま確保すると「定常アロケーション 0」が観測上は成立しているのに実際は確保している、
+/// という隠れた縮退になる。無効化が捨てるのは表示バッファとマスクの原子対**まるごと**（3 対）
+/// ゆえ、代金は複数の適用に分かれて現れる。実測の形は
+/// `[0,1,0,0]` → `[0,1,0,1]` → `[0,1,0,1]` → `[0,0,0,1]` → 以後 0 である。読み方:
 ///
-/// - 無効化直後の適用: 表示バッファを新しい実体で起こす（`alloc_resample_dst` が 1）
-/// - その次の適用: 対で捨てられたマスクのぶん輪番のスロットが 1 枚欠けており、埋め直す
-///   （`alloc_mask` が 1）
+/// - `alloc_resample_dst` が 3 回＝捨てられた表示バッファ 3 本を起こし直すぶん
+/// - `alloc_mask` が 3 回＝捨てられたマスク 3 枚ぶん（無効化の直前に輪番が握っていた空き 1 枚は
+///   生き残るので、1 適用目のマスクだけが確保なしで済む）
+/// - 合成先席と作業席は無効化の影響を受けない（キャッシュの外に在る）
 ///
-/// どちらも計数に現れ、そこから先はまた完全ゼロへ戻る。**代金が 2 適用に分かれること自体を
-/// 固定する**のは、片方を黙って確保する実装を通さないためである。
+/// **代金が複数の適用に分かれること自体を固定する**のは、一部を黙って確保する実装を通さない
+/// ためである。
 #[test]
 fn a_failed_recycle_is_counted_never_swallowed() {
     let mut rig = Flow2::new();
-    for _ in 0..3 {
+    for _ in 0..WARMUP {
         rig.apply(40, 20, k(2, 1));
     }
 
     // 回収元を断つ（アトラス再構築・ghost 再読込に相当）。
     rig.cache.invalidate_all();
+    let shape: Vec<[u32; 4]> = (0..WARMUP + 3)
+        .map(|_| {
+            let d = rig.apply(40, 20, k(2, 1)).delta;
+            [
+                d.alloc_compose_dst,
+                d.alloc_resample_dst,
+                d.alloc_xmap,
+                d.alloc_mask,
+            ]
+        })
+        .collect();
     assert_eq!(
-        rig.apply(40, 20, k(2, 1)).delta,
-        BudgetDelta {
-            alloc_compose_dst: 0,
-            alloc_resample_dst: 1,
-            alloc_xmap: 0,
-            alloc_mask: 0,
-        },
-        "回収不成立が表示バッファの計数へ現れていない（黙って確保している）"
+        shape,
+        vec![
+            [0, 1, 0, 0],
+            [0, 1, 0, 1],
+            [0, 1, 0, 1],
+            [0, 0, 0, 1],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+        ],
+        "回収不成立の代金が計数へ現れていない（黙って確保している）"
     );
-    assert_eq!(
-        rig.apply(40, 20, k(2, 1)).delta,
-        BudgetDelta {
-            alloc_compose_dst: 0,
-            alloc_resample_dst: 0,
-            alloc_xmap: 0,
-            alloc_mask: 1,
-        },
-        "対で捨てられたマスクの埋め直しが計数へ現れていない"
-    );
-
-    for i in 0..4 {
-        assert_eq!(
-            rig.apply(40, 20, k(2, 1)).delta,
-            BudgetDelta::default(),
-            "回収不成立の {i} 適用後も確保が続いている（新しい席で回り直していない）"
-        );
-    }
 }
 
-/// design.md D3: マスク輪番は 2 枚で回り、定常状態では in-place 再生成だけになる。
+/// design.md D3: マスク輪番は**キャッシュの 3 本＋空き 1 枚**で回り、定常状態では in-place
+/// 再生成だけになる。
 ///
-/// 立ち上がりは 2 適用ぶん（1 枚目・2 枚目の確保）。3 適用目からは前々回のマスクが単独所有に
-/// なるため確保は起きない。実体が **ちょうど 2 種類** で交互に現れることを同時に固定する
-/// （計数だけでは「毎回確保しているのに数え忘れている」実装と区別できない）。
+/// 立ち上がりは 4 適用ぶん（4 枚の確保）。以後は空きスロットのマスクが単独所有なので確保は
+/// 起きない。実体が **ちょうど 4 種類**で回ることを同時に固定する（計数だけでは「毎回確保して
+/// いるのに数え忘れている」実装と区別できない）。
 #[test]
 fn the_mask_rotation_settles_into_in_place_regeneration() {
     let mut rig = Flow2::new();
 
-    let first = rig.apply(40, 20, k(2, 1));
-    assert_eq!(first.delta.alloc_mask, 1, "1 枚目のマスクは確保される");
-    let second = rig.apply(40, 20, k(2, 1));
-    assert_eq!(second.delta.alloc_mask, 1, "2 枚目のマスクは確保される");
+    let mut seen = Vec::new();
+    for i in 0..WARMUP {
+        let now = rig.apply(40, 20, k(2, 1));
+        assert_eq!(
+            now.delta.alloc_mask, 1,
+            "立ち上がりの {i} 枚目のマスクが確保されていない"
+        );
+        seen.push(now.mask);
+    }
+    let known = seen.clone();
 
-    let mut seen = vec![first.mask, second.mask];
     for i in 0..8 {
         let now = rig.apply(40, 20, k(2, 1));
         assert_eq!(
@@ -610,8 +719,8 @@ fn the_mask_rotation_settles_into_in_place_regeneration() {
             "輪番が立ち上がった後の {i} 回目でマスクを確保した"
         );
         assert!(
-            seen.contains(&now.mask),
-            "{i} 回目のマスクが既知の 2 枚のどちらでもない（輪番が新しい実体を作っている）"
+            known.contains(&now.mask),
+            "{i} 回目のマスクが既知の {WARMUP} 枚のどれでもない（輪番が新しい実体を作っている）"
         );
         seen.push(now.mask);
     }
@@ -620,8 +729,8 @@ fn the_mask_rotation_settles_into_in_place_regeneration() {
     seen.dedup();
     assert_eq!(
         seen.len(),
-        2,
-        "マスクの実体は高々 2 本のはず（輪番が無限成長している）"
+        WARMUP,
+        "マスクの実体はキャッシュの 3 本＋空き 1 枚のはず（輪番が無限成長している）"
     );
 }
 
@@ -631,12 +740,13 @@ fn the_mask_rotation_settles_into_in_place_regeneration() {
 /// 適用で `Arc::get_mut` が成立しない。ここで無言のまま新規確保すると、計数上は定常ゼロのまま
 /// 実際には毎回確保する縮退が作れてしまう。
 ///
-/// 余分な複製を握った適用の **2 つ後**（そのマスクが空きスロットへ回る適用）でちょうど 1 件
-/// 計数され、複製を手放せば輪番が自力で立ち直ることまで見る。
+/// 余分な複製を握った適用の **4 つ後**（そのマスクが空きスロットへ回る適用）でちょうど 1 件
+/// 計数され、複製を手放せば輪番が自力で立ち直ることまで見る。「4 つ後」は回る実体の本数
+/// （キャッシュの 3 本＋空き 1 枚）そのもので、容量 1 の頃の「2 つ後」がここへ移った。
 #[test]
 fn a_mask_slot_that_is_not_uniquely_owned_allocates_and_is_counted() {
     let mut rig = Flow2::new();
-    for _ in 0..4 {
+    for _ in 0..WARMUP + 4 {
         rig.apply(40, 20, k(2, 1));
     }
 
@@ -644,22 +754,19 @@ fn a_mask_slot_that_is_not_uniquely_owned_allocates_and_is_counted() {
     rig.apply(40, 20, k(2, 1));
     let hostage = Arc::clone(rig.resource.as_ref().expect("下流へ供給済み"));
 
-    // 次の適用の再生成先は**もう一方**のマスクで、そちらは単独所有ゆえ in-place で通る。
+    // 人質のマスクが空きスロットへ回るまでの適用は、他の実体が単独所有ゆえ in-place で通る。
+    let held: Vec<u32> = (0..WARMUP + 4)
+        .map(|_| rig.apply(40, 20, k(2, 1)).delta.alloc_mask)
+        .collect();
     assert_eq!(
-        rig.apply(40, 20, k(2, 1)).delta.alloc_mask,
-        0,
-        "もう一方のスロットは単独所有のはず"
-    );
-    // その次で人質のマスクが空きスロットへ回る＝単独所有が不成立＝確保して計数する。
-    assert_eq!(
-        rig.apply(40, 20, k(2, 1)).delta.alloc_mask,
-        1,
-        "単独所有の不成立が計数へ現れていない（黙って確保している）"
+        held,
+        vec![0, 0, 0, 1, 0, 0, 0, 0],
+        "単独所有の不成立がちょうど 1 件・輪番の一巡後に現れるはず（黙って確保していないか）"
     );
 
-    // 人質を手放せば輪番は自力で立ち直る（新しい 2 枚で回り続ける）。
+    // 人質を手放せば輪番は自力で立ち直る。
     drop(hostage);
-    for i in 0..4 {
+    for i in 0..WARMUP + 4 {
         assert_eq!(
             rig.apply(40, 20, k(2, 1)).delta.alloc_mask,
             0,
@@ -693,7 +800,11 @@ fn the_display_buffer_hands_back_the_recycled_allocation_unchanged() {
     ));
     let mask_ptr = Arc::as_ptr(&mask);
 
-    let (display, retired) = budget.display_buffer(Some(CacheEntry { composed, mask }));
+    let (display, retired) = budget.display_buffer(Some(CacheEntry {
+        composed,
+        mask,
+        native: (7, 3),
+    }));
 
     assert_eq!(display.width(), 7, "回収した外形が返っていない（新品を返した）");
     assert_eq!(display.height(), 3, "回収した外形が返っていない（新品を返した）");
@@ -804,34 +915,40 @@ fn the_resample_scratch_is_the_budgets_own_seat_not_a_throwaway() {
     );
 }
 
-/// 恒等 k（swap 経路）の寸法拡大は交代する 2 本ぶん＝2 適用に分かれて 1 件ずつ計数される。
+/// 恒等 k（swap 経路）の寸法拡大は交代する 4 本ぶん＝4 適用に分かれて 1 件ずつ計数される。
 ///
-/// 恒等 k では合成先席と表示バッファが役割を交代し続けるため、確保対象は 2 本ある。寸法が
-/// 変われば 2 本とも伸びる必要があり、代金は 2 適用に分かれる（Requirement 3.2 の「一度だけ」＝
-/// **確保対象ごとに一度**）。3 適用目からはまた完全ゼロへ戻る。
+/// 恒等 k では合成先席と表示バッファが役割を交代し続けるため、確保対象は**キャッシュの 3 本＋
+/// 合成先席 1 本**の 4 本ある。寸法が変われば 4 本とも伸びる必要があり、代金は 4 適用に分かれる
+/// （Requirement 3.2 の「一度だけ」＝**確保対象ごとに一度**）。5 適用目からはまた完全ゼロへ戻る。
 ///
 /// リサンプル経路を通らないので `alloc_resample_dst`・`alloc_xmap` は全適用で 0 のままである。
 #[test]
 fn an_identity_scale_dimension_change_costs_one_allocation_per_swapped_buffer() {
     let mut rig = Flow2::new();
-    for _ in 0..3 {
+    for _ in 0..WARMUP {
         rig.apply(40, 20, identity());
     }
 
-    let seen: Vec<BudgetDelta> = (0..4).map(|_| rig.apply(60, 30, identity()).delta).collect();
+    let seen: Vec<BudgetDelta> = (0..WARMUP + 2)
+        .map(|_| rig.apply(60, 30, identity()).delta)
+        .collect();
     let composed: Vec<u32> = seen.iter().map(|d| d.alloc_compose_dst).collect();
     assert_eq!(
         composed,
-        vec![1, 1, 0, 0],
-        "恒等 k の寸法拡大は交代する 2 本ぶんで打ち止めのはず: {seen:?}"
+        vec![1, 1, 1, 1, 0, 0],
+        "恒等 k の寸法拡大は交代する 4 本ぶんで打ち止めのはず: {seen:?}"
     );
     for (i, delta) in seen.iter().enumerate() {
         assert_eq!(delta.alloc_resample_dst, 0, "{i}: 恒等 k はリサンプル先を持たない");
         assert_eq!(delta.alloc_xmap, 0, "{i}: 恒等 k は作業領域に触れない");
     }
-    // マスクも輪番 2 本ぶん（詰め長 100 → 240 バイト）で、その後は 0 に戻る。
+    // マスクも輪番 4 本ぶん（詰め長 100 → 240 バイト）で、その後は 0 に戻る。
     let masks: Vec<u32> = seen.iter().map(|d| d.alloc_mask).collect();
-    assert_eq!(masks, vec![1, 1, 0, 0], "マスク輪番 2 本ぶんの成長: {seen:?}");
+    assert_eq!(
+        masks,
+        vec![1, 1, 1, 1, 0, 0],
+        "マスク輪番 4 本ぶんの成長: {seen:?}"
+    );
 }
 
 /// 恒等 k で回収が不成立になったときの代金は **`ComposeDst` に・1 適用遅れて**現れる。
@@ -848,40 +965,42 @@ fn an_identity_scale_dimension_change_costs_one_allocation_per_swapped_buffer() 
 /// の宣言と一致しない。これは実装の欠陥ではなく design.md の記述が swap 経路を織り込んで
 /// いないことによる。本檻は**実挙動を正**として固定する（フィールドの割り当てを変えるのは
 /// 判定スクリプトとの契約変更であり、実装判断で行える範囲を超える）。
+///
+/// 実測の形は `[0,0,0,0]` → `[1,0,0,1]` → `[1,0,0,1]` → `[1,0,0,1]` → 以後 0 である。
+/// 3 対が捨てられたので代金は 3 適用ぶんあり、いずれも 1 適用遅れて合成先席へ載る。
 #[test]
 fn an_identity_scale_failed_recycle_lands_on_the_compose_seat_one_apply_later() {
     let mut rig = Flow2::new();
-    for _ in 0..3 {
+    for _ in 0..WARMUP {
         rig.apply(40, 20, identity());
     }
 
     rig.cache.invalidate_all();
 
-    // 無効化直後: swap で容量が席と表示バッファの間を移るだけ＝確保は 1 件も起きない。
+    let shape: Vec<[u32; 4]> = (0..WARMUP + 3)
+        .map(|_| {
+            let d = rig.apply(40, 20, identity()).delta;
+            [
+                d.alloc_compose_dst,
+                d.alloc_resample_dst,
+                d.alloc_xmap,
+                d.alloc_mask,
+            ]
+        })
+        .collect();
     assert_eq!(
-        rig.apply(40, 20, identity()).delta,
-        BudgetDelta::default(),
-        "恒等 k の回収不成立の適用そのものでは確保は起きないはず（swap で容量が入れ替わるだけ）"
+        shape,
+        vec![
+            [0, 0, 0, 0],
+            [1, 0, 0, 1],
+            [1, 0, 0, 1],
+            [1, 0, 0, 1],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+        ],
+        "恒等 k の回収不成立の代金が合成先席とマスクへ現れていない（黙って確保している）"
     );
-    // 次の適用: 空になった合成先席が外形まで伸びる＋対で捨てられたマスクの埋め直し。
-    assert_eq!(
-        rig.apply(40, 20, identity()).delta,
-        BudgetDelta {
-            alloc_compose_dst: 1,
-            alloc_resample_dst: 0,
-            alloc_xmap: 0,
-            alloc_mask: 1,
-        },
-        "回収不成立の代金が合成先席とマスクへ現れていない（黙って確保している）"
-    );
-
-    for i in 0..4 {
-        assert_eq!(
-            rig.apply(40, 20, identity()).delta,
-            BudgetDelta::default(),
-            "恒等 k の回収不成立の {i} 適用後も確保が続いている"
-        );
-    }
 }
 
 /// リサンプル作業領域の席（A3）は出力幅の最大へ一度だけ到達し、以後は成長しない。

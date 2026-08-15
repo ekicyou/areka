@@ -81,7 +81,6 @@ impl EmoPresenter {
                 policy: ScalePolicy::new(author_dpi, ScaleRatio::ONE),
                 applied: None,
                 native_size: None,
-                cached_native: None,
                 last_show: None,
                 pending_resize: None,
             },
@@ -140,11 +139,12 @@ impl EmoPresenter {
             return;
         };
 
+        // エントリを全て捨てる。原寸はエントリの中に在るので、対を崩さないために別途落とす
+        // フィールドは無い（要件 7.1・容量 3 で `cached_native` はエントリへ移った）。表示中の
+        // `native_size` は触らない——表が空でも画面には前回の絵が残っており、照会契約はその絵の
+        // 原寸を返し続けるのが正しい（R4.3: キャッシュ無効化は表示を変えない）。以後は必ずミス＝
+        // 再合成が走り、対が再構築される。
         target.cache.invalidate_all();
-        // スロットと対の原寸も落とす（対を崩さない）。表示中の `native_size` は触らない——スロットが
-        // 空でも画面には前回の絵が残っており、照会契約はその絵の原寸を返し続けるのが正しい（R4.3:
-        // キャッシュ無効化は表示を変えない）。以後は必ずミス＝再合成が走り、対が再構築される。
-        target.cached_native = None;
         tracing::debug!(?target_id, "apply(InvalidateCache): キャッシュ全破棄（表示は継続）");
         Self::reply(reply, Ok(()));
     }

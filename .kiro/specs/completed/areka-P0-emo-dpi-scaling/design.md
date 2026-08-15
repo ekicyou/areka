@@ -447,7 +447,7 @@ pub fn insert(&mut self, surface_id: u32, binds: BindSet, pattern: PatternState,
               scale: ScaleRatio, composed: ComposedSurface) -> &CacheEntry;
 ```
 
-- State model: 容量 1 スロット維持。k 変化＝キー相違＝ミス（再合成＋再サンプル・稀イベント許容・D6）。
+- State model: 容量 1 スロット維持。k 変化＝キー相違＝ミス（再合成＋再サンプル・稀イベント許容・D6）。**※ 2026-08-15 追記**: 容量は `areka-P0-recompose-budget` 要件 7.1／7.3 の裁定で **3・LRU** へ改訂された。D6 の要点である「k はキー要素として弁別する（命令的な全無効化で二重化しない）」は不変で、旧 k のエントリが表に残り得ても引き当ては完全一致のみゆえ旧 k の絵は表示に載らない。
 - 「キー＝合成入力の全体」不変条件は「合成入力＋表示スケール」へ拡張されるが、1 ビット相違＝必ずミスの規律は不変。
 
 ### emo-present / presenter.rs（k 適用の単一漏斗）
