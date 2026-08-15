@@ -326,6 +326,14 @@
 | 15 | 5.8 一度書き | **D5 配置で経路 (b) を保証、経路 (a) 先行は `DpiSyncHold`（上限 30 フレーム・超過は warn の上で続行）** | 上限なしは表更新が来ない異常で寸法追従が止まる／保持なしは旧下端の中間矩形が可視化される。静的証跡: zorder の Z 書込→当該窓 `WM_DPICHANGED`（SWP 内で受理・実機 24/24）→`window_pos.rs:352-363`→`dpi.rs:242-252`→`window_move.rs:288` の旧 snapshot 読み |
 | 16 | 6.2 の除外判定 | 項目 9 と同一 | — |
 
+### 設計討議での改訂（2026-08-15・design.md が正本）
+- 項目 1（フレーム番号）: **World を持つ観測点は `Res<FrameCount>`＋新 Resource `TickStart` から刻印を組む。スレッド局所ミラーは World 外（flush・wndproc）専用**。`Update` の `detect_display_change_system` は多スレッド実行器上で走り得るため、ミラー統一だと `monitor` レコードの frame だけが壊れる（検証レポート Critical 1）。
+- 項目 4（2.2 の記録点）: `UploadOutcome` は撤回。**upload 直前の `chain.size()` と :306 の `size` の比較で `resized` を得る**（`chain.rs` 無改変・:297-301 字面不変と両立。検証 付録 B-1）。
+- 項目 5（作業領域源）: 資源差替は dpi 相の前のまま、**再射影 `WorkAreaResnap` は dpi 相の後**（経路 (b) の二重 enqueue／二重レコード回避。付録 B-2）。
+- 項目 6／15（`DpiSyncHold`）: 保証範囲の裁定は設計討議 議題 1（後述・design.md「設計討議の裁定」節）。
+- C7 判定量: 決定論量に加えて**実機サインオフ専用の `visualize_to_write_us`／`flush_total_us`（`Bounds::signoff`）**を追加（検証 Critical 2）。C8 の Q2／Q3 はこの量で分岐する。
+- 帰属規則の共有（付録 B-3）・証跡クラスの分離表記（B-4）・`drain_window_pos_commands` の `#[doc(hidden)]`（B-5）・C8 表の対テスト列（B-6）を反映。
+
 ### 合成の記録（design-synthesis）
 - **一般化**: 「窓書込・メッセージ・モニタ表・サーフェス・配置判断」を**単一の観測チャネル**（共通刻印 `frame`＋`t_us`・`kind` 判別）へ一般化し、判定は 1 つの純関数へ集約（決定論テストと実機サインオフで同一実装）。
 - **Build vs Adopt**: tracing の target 濾過（adopt）／`DeferWindowPos`（adopt 候補・段階裁定）／DWM 同一フレーム同期は文書化 API が無く build もしない（B-4 は同期に依存しない補償）。Python の判定スクリプトは作らず Rust 純関数＋`#[ignore]` ランナーで一本化。

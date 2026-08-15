@@ -44,7 +44,7 @@
 ### Out of Boundary
 
 - OS 提案位置の採否判定（`window_pos.rs:372-374`）・可視性ガード・寸未確定時の現状維持＝`dpi-window-vanish` の規約。本設計は観測レコードを足すだけで判定を変えない。
-- `presenter/show.rs` の予算域 :96-170（compose／resample／mask／insert）と定常アロケーション 0 の不変量＝`recompose-budget`。本設計が触るのは :297 以降（upload 成功後・可視化後）の観測 2 行と `chain.upload` の戻り値型のみ。**upload エラー分岐 :297-301 は移動しない**（`test-cage-determinism` ④の観測点）。
+- `presenter/show.rs` の予算域 :96-170（compose／resample／mask／insert）と定常アロケーション 0 の不変量＝`recompose-budget`。本設計が触るのは upload 直前の `chain.size()` 読取 1 行と :297 以降（upload 成功後・可視化後）の観測 2 行のみ（`chain.rs` 無改変）。**upload エラー分岐 :297-301 は移動しない**（`test-cage-determinism` ④の観測点）。
 - `windowposition-limit` の表示位置補正（`window_move.rs:822`）とキーワード基本位置の一度きり再導出（`keyword_base.rs:59-163`）＝本設計は呼ばない・変えない。
 - `scope-chain-gap` の起動時確定（`drain_resnap.rs:294-344`）＝`collect_chain_states` の可視性を広げて再利用するが判定・標識・停滞診断の意味は変えない。
 - `BalloonFollow.offset` の単位空間と k 倍実装＝`areka-P0-balloon-offset-dpi`。
@@ -76,7 +76,7 @@
 | 1 | `WM_DISPLAYCHANGE` → `App::mark_display_change` → 次 tick の `Update` で `detect_display_change_system` がモニタ表を更新し、同一 system で全窓の DPI を再導出（`Changed<DPI>`） | `lifecycle.rs:122-138`・`app.rs:20-23`・`world/mod.rs:213`・`monitor_systems.rs:195-239,253-381,438-480` |
 | 2 | 同 tick の `FrameFinalize` で `emo2_frame_system` が dpi 相を回し、`Changed<DPI>` の全窓を 1 回の排他 system で処理（サーフェス寸変更 → 可視化 → 窓書込 enqueue）＝**全窓の enqueue は同一 tick 内** | `frame.rs:155,168`・`dpi.rs:232,242-252,287-301`・`show.rs:297,306,322,328` |
 | 3 | 窓書込は thread_local キューに積まれ、World 借用解放後の `tick_one_frame` 末尾で enqueue 順に `SetWindowPos` される | `command.rs:127-130,155-167,173-206`・`tick_bridge.rs:181-202` |
-| 4 | 実機: 6 回の `SetWindowPos`（キャラ 1×2・バルーン 2×2）が 1 枚ずつ 16〜78ms（初回最重）を要し、各窓の最初の書込の内側で当該窓の `WM_DPICHANGED` が同期処理される（24/24）。経路 A の書込は 0/24 | `reobservation-2026-08-15.md` §3.1・§5 |
+| 4 | 【静的構造証跡】全窓の `Changed<DPI>` は 1 回の排他 system（`emo2_frame_system`）で処理され enqueue は同一 tick 内（事実 2・3）。【実機・時刻列】6 回の `SetWindowPos`（キャラ 1×2・バルーン 2×2）が 1 枚ずつ 16〜78ms（初回最重）を要し、各窓の最初の書込の内側で当該窓の `WM_DPICHANGED` が同期処理される（24/24）。経路 A の書込は 0/24。**「6 回が同一 tick 内」はフレーム番号未採取ゆえ構造からの推定であり、実機確定は実装フェーズ 2 の再採取で行う** | 事実 2・3／`reobservation-2026-08-15.md` §3.1・§5 |
 | 5 | フレーム番号はどのログにも無い。flush 点は World 借用外ゆえ `FrameCount` を直接読めない | 研究 §1.2 |
 | 6 | `MonitorSnapshot` は起動時 1 回構築・以後不変。作業領域変化を契機とする再スナップ経路は無い（`Resnap` 0 件） | `main.rs:530-538,569,573-574,611`・`work_area.rs:12-24` |
 | 7 | 連鎖確定は一度きり（`ChainFinalized`）。既定位置は spawn 時値で、DPI 再射影の中央保存で X が動くと全スコープが「明示再配置」扱いになる | `drain_resnap.rs:299-301,333,370`・`chain_finalize.rs:108`・`spawn.rs:266,514` |
@@ -95,7 +95,6 @@ graph TB
     end
     subgraph emo_present
         SHOW[presenter show.rs<br/>surfaceレコード]
-        CHAIN[chain.rs upload<br/>UploadOutcome]
         TIM[timing.rs<br/>perf行 frame]
     end
     subgraph areka
@@ -114,7 +113,6 @@ graph TB
     DPI --> TD
     REALIGN --> TD
     WM --> CMD
-    CHAIN --> SHOW
     SYNC --> DPI
     DPI --> REALIGN
     MS --> SYNC
@@ -130,11 +128,11 @@ graph TB
 
 **キー決定（D 番号は研究 §7 の設計判断項目番号に対応）**:
 
-- **D1 フレーム番号の配管＝(ii) スレッド局所ミラー**。`try_tick_world` が `FrameCount` を +1 した直後（`world/mod.rs:503-505`）に `transition_diag::begin_tick(frame)` でミラーと tick 開始時刻を更新する。World を借りられない flush（`tick_bridge.rs:200` は借用解放後）と wndproc の同期経路も同じ番号を読める（tick 外は「直近 tick の番号」）。World を持つ観測点も**統一してミラーを読む**（1 系列保証）。コマンドへの焼き込み（i）は不要（enqueue と flush は同一 tick）。
+- **D1 フレーム番号の配管＝World 資源を正、スレッド局所ミラーは World 外専用**（設計討議 A-1 で改訂）。`try_tick_world` が `FrameCount` を +1 する点（`world/mod.rs:503-505`）で、同時に Resource `TickStart(Instant)` を更新し、`transition_diag::begin_tick(frame, start)` で**スレッド局所ミラー**にも同じ値を写す。**World を持つ観測点（`monitor_systems`・`emo2_frame_system`・presenter・areka 側レコード）は `Res<FrameCount>`＋`Res<TickStart>` から `Stamp` を組む**——`Update` の `detect_display_change_system`（`monitor_systems.rs:195`）は既定の多スレッド実行器（`world/mod.rs:102`）でワーカースレッドに載り得るため、スレッド局所ミラーは読めない。**ミラーを読むのは World を借りられない点だけ**＝flush（`tick_bridge.rs:200` は借用解放後）と wndproc の同期経路（いずれも UI スレッド・tick 外は「直近 tick の番号」）。両者は同一点で同一値に更新されるので 1 系列が保たれる。コマンドへの焼き込み（i）は不要（enqueue と flush は同一 tick）。プロセス大域 atomic は 7.7（テスト間の状態汚染なし）と衝突するため採らない。
 - **D2 観測 target＝単一定数を wintf に置く**: `TRANSITION_TARGET = "wintf::transition"`。3 crate が同じ文字列で emit し、`RUST_LOG` の directive は 1 語（`wintf::transition=debug`）。既定 OFF（`RUST_LOG=info` では無音）。
 - **D3 書込レコードの一本化＝コマンドに要求語彙タグを載せる**: `SetWindowPosCommand.tag: WriteTag { origin: &'static str, scope: Option<u32>, kind: &'static str }`。flush 側の 1 行で「フレーム・窓（scope・種別）・矩形・同期／flush・経路語彙・所要 µs」が揃い、2 段 grep を要しない。`[diag.window_move]`（`diag.rs:355-374`）は変更しない。
-- **D4 サーフェス記録点＝`show.rs`**（frame と target が揃う）。`chain.upload` の戻りを `Result<UploadOutcome, PresentError>`（`UploadOutcome { resized: bool }`）へ変え、:297-301 の `if let Err(e) = chain.upload(...)` の**字面は変えない**（`Err(e)` の束縛は不変）。
-- **D5 作業領域源の更新主体＝C-1（`MonitorSnapshot` を `Monitor` 表から作り直す）**。置き場は `emo2_frame_system` の**先頭（`run_dpi_phase` の前・同一 World 借用）**。同一 tick 内で dpi 相が新 snapshot を読むため、経路 (b) 由来の遷移は追加書込なしで新下端へ着地する。変化フレームだけ再構築し、変化があれば全キャラ窓を現寸で再射影（`WorkAreaResnap`・べき等 skip で無変化は書込 0）。`work_area.rs:17` と `main.rs:569` の「セッション内固定」記述を撤回する。
+- **D4 サーフェス記録点＝`show.rs`**（frame と target が揃う）。`resized` は **upload の直前に `let prev = chain.size();` を読み、:306 の `size` と比べて `size != prev` で得る**（設計討議 A-3 で改訂）。`chain.upload` の戻り値型も `chain.rs` も変えず、:297-301 の `if let Err(e) = chain.upload(...)` は**字面どおり不動**（旧案 `UploadOutcome` は `Ok` の中身を受け取るために :297 の字面を変えざるを得ず両立しなかった）。
+- **D5 作業領域源の更新主体＝C-1（`MonitorSnapshot` を `Monitor` 表から作り直す）**。置き場は 2 点に分ける（設計討議 A-4 で改訂）: **資源の差替（`sync`）は `emo2_frame_system` の先頭（`run_dpi_phase` の前・同一 World 借用）**——同一 tick 内で dpi 相が新 snapshot を読むため、経路 (b) 由来の遷移は追加書込なしで新下端へ着地する。**変化契機の再射影（`WorkAreaResnap`）は dpi 相の後**——`Changed<DPI>` の窓は dpi 相が新 snapshot で 1 本書き終えているので べき等 skip で 0、DPI が変わらず作業領域だけ変わった窓だけが現寸で再射影される。旧案（再射影も先頭）は経路 (b) で同一窓に 2 度の enqueue（旧寸・新下端 → 新寸）を積み、`[diag.window_move]`／`ground` レコードが 2 件ずつ出て bypass ミラーに中間値が載るため退けた（SetWindowPos は合流で 1 回だったが記録が濁る）。変化フレームだけ再構築し、無変化は無操作。`work_area.rs:17` と `main.rs:569` の「セッション内固定」記述を撤回する。
 - **D6 tick 跨ぎ分裂＝A-1（バリアを置かない）＋窓ごとの整合ゲート**。実測は全窓同一 tick（事実 2）。A-2（遷移バリア）は tick 構造への介入ゆえ却下、A-3（`WM_DPICHANGED` の反映を tick 冒頭へ寄せる）は `dpi-window-vanish` の受理契約を変える上に (a)-先行の問題を解かないため却下。
 - **D7 1 tick 内の DWM 境界＝段階裁定**。合流（B-2a）は本設計で確定。OS 一括適用 `DeferWindowPos`（B-2b）・窓内下端中央補償（B-4）・可視化 2 相化（B-3）は観測基盤で内訳を名指ししてから選ぶ（「原子性の段階裁定」節）。
 - **D8 連鎖は DPI 遷移後に解き直す（6.1 の裁定＝⑴）。`ChainFinalized` は解除しない**。理由: 実測で 100% の隙間が 359px（再観測 §7・幅変化の半分の和）と製品品質を損なう量であり、`scope-chain-gap` R7.4「確定後のサーフェス切替では再解決しない」は会話中の表情差替を守るための規定で DPI 遷移は想定外（brief 追記(63)）。起動時一度きりの意味を保ったまま、DPI 遷移後の解き直しを別機構 `ChainRealign` が担う。「遷移完了」＝全スコープが landing（既存条件）**かつ** どの窓も `DpiSyncHold` 中でない。停滞診断は `ChainFinalizeStall` を武装時に初期化して再利用する（6.3）。
@@ -167,8 +165,7 @@ crates/wintf/src/ecs/window/
 ├── command.rs                         # MOD: SetWindowPosCommand.tag／enqueue合流／flush観測／drain_window_pos_commands
 ├── command_coalesce_tests.rs          # NEW: 合流の純関数テスト（Z専用は不合流・順序保存・フラグ非対称）
 crates/areka-emo-present/src/
-├── chain.rs                           # MOD: upload → Result<UploadOutcome, PresentError>
-├── presenter/show.rs                  # MOD: upload成功後／可視化後に surface レコード（:297-301 不動）
+├── presenter/show.rs                  # MOD: upload 直前に prev=chain.size()／成功後・可視化後に surface レコード（:297-301 不動・chain.rs 無改変）
 ├── presenter/refresh.rs               # MOD: 見送り（k不変・不可視）に surface stage=skipped
 ├── presenter/timing.rs                # MOD: EmitContext.frame・perf行末尾に frame=
 ├── presenter/transition_record.rs     # NEW: surface レコード純関数（target_id・stage・寸）
@@ -206,7 +203,7 @@ crates/areka/src/main.rs               # MOD: 起動時に MonitorDpiTable も�
 
 | ファイル | 変更内容 | 所有権メモ |
 |---|---|---|
-| `crates/wintf/src/ecs/world/mod.rs` | `try_tick_world` の `FrameCount` 増分直後（:503-505）に `transition_diag::begin_tick(frame)` | tick 構造は変えない（13 スケジュール順不変） |
+| `crates/wintf/src/ecs/world/mod.rs` | `try_tick_world` の `FrameCount` 増分直後（:503-505）で Resource `TickStart` を更新し `transition_diag::begin_tick(frame, start)`（ミラーへ写す）。World 構築時（:76-77 の `FrameTime` 挿入と同所）に `TickStart` を初期挿入 | tick 構造は変えない（13 スケジュール順不変） |
 | `crates/wintf/src/ecs/window/mod.rs` | `pub mod transition_diag;` 再輸出 | — |
 | `crates/wintf/src/ecs/window/command.rs` | `tag` フィールド＋`with_tag`／`enqueue` の合流／`flush` の begin・write・end レコード／`drain_window_pos_commands` | `new()` の 7 引数は不変。Z 専用指令は合流対象外 |
 | `crates/wintf/src/ecs/window/zorder_pair_maintain.rs` | `pair_fix_command`（:187-207）にタグ `origin="zorder-pair"` | zorder の判定・順序不変 |
@@ -214,14 +211,13 @@ crates/areka/src/main.rs               # MOD: 起動時に MonitorDpiTable も�
 | `crates/wintf/src/ecs/window_proc/window_pos.rs` | `WM_DPICHANGED`（:303）と `WM_WINDOWPOSCHANGED`（:36）に `msg` レコード／採用時の同期書込（:420-430）に `write stage=sync` レコード | 採否判定（:372-374）不変（`dpi-window-vanish`） |
 | `crates/wintf/src/ecs/window_proc/lifecycle.rs` | `WM_DISPLAYCHANGE`（:122）に `msg` レコード | 戻り値 `None` 不変 |
 | `crates/wintf/src/ecs/layout/systems/monitor_systems.rs` | 値変化更新（:280-316）の直後に `monitor` レコード | 既存 debug 行と `redrive` は不変 |
-| `crates/areka-emo-present/src/chain.rs` | `upload` の戻り `UploadOutcome { resized }` | ResizeBuffers／Present の順序不変 |
-| `crates/areka-emo-present/src/presenter/show.rs` | :302 以降に `surface stage=upload`（`resized`）／:328 以降に `surface stage=visualize`（`size_changed \|\| resized` のときのみ・`tracing::enabled!` で守る） | 予算域 :96-170 と :297-301 は不動 |
+| `crates/areka-emo-present/src/presenter/show.rs` | upload 直前に `prev = chain.size()`／:302 以降に `surface stage=upload`（`resized = size != prev`）／:328 以降に `surface stage=visualize`（`size_changed \|\| resized` のときのみ・`tracing::enabled!` で守る） | 予算域 :96-170 と :297-301 は不動。`chain.rs` 無改変 |
 | `crates/areka-emo-present/src/presenter/refresh.rs` | :70-73（k 不変）・:74-77（不可視）で `surface stage=skipped reason=` | 見送り判定は不変 |
 | `crates/areka-emo-present/src/presenter/timing.rs` | `EmitContext.frame: u32`・perf 行末尾に `frame=` | 既存フィールド順・文言不変 |
 | `crates/areka/src/placement/diag.rs` | `PlacementRoute::WorkAreaResnap`／`ChainRealign` 追加・`ALL` 12 | 1 語＝1 実在トリガ（D13）維持 |
 | `crates/areka/src/placement/follow/work_area.rs` | `MonitorDpiTable`／`dpi_for_point`／`same_monitors`（順序非依存比較）／doc :12-19 の DD15 撤回 | `MonitorSnapshot` の型と 51 箇所の構築リテラルは不変 |
 | `crates/areka/src/placement/follow/window_move.rs` | `enqueue_window_set_pos`（:514-611）: タグ付与・既定位置追跡・キャラ Bottom の `ground` レコード／`move_window_with_route` 追加（`move_window_to` は委譲で不変） | 単一ライター維持。limit 関門（:549,:822）・手順 5a（:342）不変 |
-| `crates/areka/src/emo2_boot/frame.rs` | :168 の前に `sync_monitor_snapshot`、:199 の後に `realign_chain_once` | 既存 4 段の順序不変 |
+| `crates/areka/src/emo2_boot/frame.rs` | :168 の前に `sync_monitor_snapshot`、:168 の直後に `resnap_for_work_area_change`、:199 の後に `realign_chain_once` | 既存 4 段の順序不変 |
 | `crates/areka/src/emo2_boot/frame/dpi.rs` | `dpi_phase_with`（:232）に hold ゲート・武装トリガ、`reproject_char_window_at_current_size`（:335）に route 引数 | `reconcile_window_size`（:124）不変 |
 | `crates/areka/src/emo2_boot/frame/drain_resnap.rs` | `collect_chain_states`（:353）を `pub(super)`・`ChainDeferReason::DpiSyncHold` | `finalize_chain_once_with` の一度きり不変 |
 | `crates/areka/src/placement/chain_finalize.rs` | `ChainFinalizeStall::reset()`・`ChainDeferReason` 1 変種 | `finalize_chain` 不変 |
@@ -246,6 +242,7 @@ sequenceDiagram
     Upd->>Upd: 全窓DPI再導出 Changed DPI
     FF->>FF: sync_monitor_snapshot 新snapshot snapshotレコード
     FF->>FF: dpi相 各窓 DPI==表dpi ゲート通過
+    Note over FF: dpi相の後 resnap_for_work_area_change は べき等skipで書込0
     FF->>FF: apply_show upload visualize surfaceレコード
     FF->>Q: resize_window_to 1指令 groundレコード
     FF->>Q: follow_balloon KeepPositionResize 合流で1指令
@@ -285,16 +282,16 @@ flowchart TD
     L --> Q1{call_us の大半が SetWindowPos 内 OS同期処理か}
     Q1 -->|yes| B2b[B-2b DeferWindowPos 一括 試行 command.rs局所]
     Q1 -->|no 自前handler| H[wintf handler側の是正 window_proc局所]
-    B2b --> Q2{目視とt_usで食い違い区間が残るか}
+    B2b --> Q2{visualize_to_write_us max が signoff 上限超か}
     H --> Q2
     Q2 -->|yes| B4[B-4 窓内下端中央補償 show.rs set_bounds mount 接触]
-    B4 --> Q3{なお残るか}
+    B4 --> Q3{なお上限超か}
     Q3 -->|yes| B3[B-3 可視化2相化 最後の手段 cage4 budget申し送り]
     Q2 -->|no| DONE[サインオフ]
     Q3 -->|no| DONE
 ```
 
-- 判定条件は台帳の数量で書く: `Σcall_us`／`flush begin since_tick_us − 最終 surface t_us`／`msg` レコードの位置。「合成コスト」帰着（perf 行）なら 3.5 に従い引受先へ申し送る（現状 30〜40ms・帰着せず）。
+- 判定条件は台帳の数量で書く: Q1＝`Σcall_us` と `msg` レコードの位置（`write` の内側か）／Q2・Q3＝**`visualize_to_write_us` の窓ごとの最大値が `Bounds::signoff` の上限を超えるか**（C7 の実機専用量。「目視」は併記であって分岐条件そのものではない）。「合成コスト」帰着（perf 行）なら 3.5 に従い引受先へ申し送る（現状 30〜40ms・帰着せず）。
 - 各候補の接触集合と申し送り先は「Components」節 C8 に列挙する。採用したら本設計へ追記し `Revalidation Triggers` を発火する。
 
 ## Requirements Traceability
@@ -404,9 +401,11 @@ flowchart TD
 ##### Service Interface
 ```rust
 pub const TRANSITION_TARGET: &str = "wintf::transition";
-pub fn begin_tick(frame: u32);            // try_tick_world が FrameCount 増分直後に呼ぶ（frame と tick 開始時刻）
-pub fn current_frame() -> u32;            // 直近 tick の番号
-pub fn since_tick_start_us() -> u64;
+#[derive(Resource, Clone, Copy)] pub struct TickStart(pub Instant);   // FrameCount と同じ点で更新される tick 開始時刻（World 資源）
+pub fn begin_tick(frame: u32, start: Instant);   // try_tick_world が FrameCount 増分・TickStart 更新の直後に呼び、スレッド局所ミラーへ写す
+pub fn current_frame() -> u32;            // 直近 tick の番号（World 外＝flush・wndproc 専用）
+pub fn since_tick_start_us() -> u64;      // 同上
+pub fn stamp_from_world(frame: &FrameCount, start: &TickStart) -> Stamp;   // World を持つ観測点はこちら（ワーカースレッドでも正しい）
 pub fn begin_flush() -> FlushEpoch;       // flush 開始時刻（RAII・終了で解除）
 pub fn since_flush_us() -> Option<u64>;   // flush 外は None（レコードでは "-"）
 #[doc(hidden)] pub fn reset_for_test();   // ミラーと時刻基準を初期化（テスト冒頭）
@@ -418,7 +417,7 @@ impl WriteTag { pub const UNTAGGED: WriteTag; }
 /// 全レコード共通の刻印。発行点は `stamp()` で埋め、純関数は値を受け取るだけ（テストは任意の値で組める）。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Stamp { pub frame: u32, pub t_us: u64 }
-pub fn stamp() -> Stamp;                  // (current_frame(), since_tick_start_us())
+pub fn stamp() -> Stamp;                  // (current_frame(), since_tick_start_us())＝World 外専用。World を持つ点は stamp_from_world
 
 pub enum WriteStage { Flush, Sync }
 pub struct MonitorRecord { pub stamp: Stamp, pub entity: Entity, pub old_dpi: u32, pub new_dpi: u32, pub old_work_area: RECT, pub new_work_area: RECT }
@@ -448,8 +447,8 @@ pub fn enqueue_line(&EnqueueRecord) -> String;
 
 **Implementation Notes**
 - Integration: `begin_tick` は `FrameCount` 増分（`world/mod.rs:503-505`）の直後 1 行。flush の時刻基準は `command.rs::flush` 冒頭で `begin_flush()`。
-- Validation: 実濾過テスト（既定 directive で 0 行・`wintf::transition=debug` で 1 行以上）、語彙固定（各 `*_line` の逐語一致・破壊した入力の不一致）、`reset_for_test` 後 `current_frame()==0`。
-- Risks: tick 外の番号は近似（wndproc の同期経路が tick 境界を跨ぐ場合）。判定は差分で行い、絶対値比較を判定語にしない（D14）。
+- Validation: 実濾過テスト（既定 directive で 0 行・`wintf::transition=debug` で 1 行以上）、語彙固定（各 `*_line` の逐語一致・破壊した入力の不一致）、`reset_for_test` 後 `current_frame()==0`。**多スレッド実行器のまま `Update` を回し、`monitor` レコードの `frame` が `FrameCount` と一致すること**（ログ捕捉に依らず、レコード純関数へ渡した `Stamp` の値を検査する形＝ワーカースレッド上でも `stamp_from_world` が正しいことの証拠）。
+- Risks: tick 外の番号は近似（wndproc の同期経路が tick 境界を跨ぐ場合）。判定は差分で行い、絶対値比較を判定語にしない（D14）。World を持つ点がうっかり `stamp()` を呼ぶ退行は、上記の多スレッドテストで赤になる。
 
 #### C2 `command.rs` 合流＋flush 観測
 
@@ -465,7 +464,7 @@ pub fn enqueue_line(&EnqueueRecord) -> String;
   - 新指令が合流可能で、キュー内に同一 hwnd の合流可能な指令があれば**先着の枠**へ畳む: 位置は新指令が `NOMOVE` でなければ新指令の値、寸は `NOSIZE` でなければ新指令の値、`NOMOVE`／`NOSIZE` は双方が持つときだけ残す。タグは先着の値を保つ（`enqueue` レコードに `merged_into_seq` を出す）。
   - Z 専用指令（`NOMOVE|NOSIZE|NOACTIVATE`・`hwnd_insert_after` あり／なし）と `SHOWWINDOW`／`HIDEWINDOW`／`FRAMECHANGED` 等を含む指令は**合流対象にも合流先にもならない**＝enqueue 順のまま（10.3）。
 - `flush`: `begin_flush()`→`flush stage=begin count since_tick_us`→各指令を `Instant` で囲んで `write stage=flush seq call_us ok`（target 有効時のみ `GetWindowRect` で書込後矩形を読み戻して `after` に載せる＝2.1 の「書込後の物理矩形」）→`flush stage=end total_us`。失敗時の `warn!` は現行維持。target 無効時は計時も読み戻しも行わない（`tracing::enabled!` で分岐）。
-- `pub fn drain_window_pos_commands() -> Vec<SetWindowPosCommand>`: 実行せずに取り出す（テスト・診断用のシーム。本番からは呼ばない）。
+- `#[doc(hidden)] pub fn drain_window_pos_commands() -> Vec<SetWindowPosCommand>`: 実行せずに取り出す。**areka 側の決定論テスト（別 crate）が一括 flush キューの中身を検査するために `pub` が要る**（crate 境界＝`#[cfg(test)]` では届かない）。本番からは呼ばない旨を doc に明記（設計討議 A-7）。
 
 **Dependencies**
 - Inbound: areka 単一ライター（`window_move.rs:559`）、zorder 維持系（`zorder_pair_maintain.rs:475`）、`apply_window_pos_changes`（`graphics/systems/window_pos.rs:98`）（P0）
@@ -480,7 +479,7 @@ impl SetWindowPosCommand {
     pub fn enqueue(cmd: SetWindowPosCommand);        // 合流を内包
     pub fn flush();                                   // 観測を内包
 }
-pub fn drain_window_pos_commands() -> Vec<SetWindowPosCommand>;
+#[doc(hidden)] pub fn drain_window_pos_commands() -> Vec<SetWindowPosCommand>;   // テスト専用シーム（別 crate から検査するため pub）
 pub(crate) fn coalesce_geometry(queue: &mut Vec<SetWindowPosCommand>, cmd: SetWindowPosCommand) -> Option<u32>;
 ```
 - 事後条件: 合流後の flush が生む最終ジオメトリは、合流しない逐次適用の最終ジオメトリと一致する（各フィールド「後勝ち」）。Z 専用指令の相対順序は不変。
@@ -492,7 +491,7 @@ pub(crate) fn coalesce_geometry(queue: &mut Vec<SetWindowPosCommand>, cmd: SetWi
 
 ### 表示成立点（areka-emo-present）
 
-#### C3 `transition_record`＋`show.rs`／`refresh.rs`／`chain.rs`／`timing.rs`
+#### C3 `transition_record`＋`show.rs`／`refresh.rs`／`timing.rs`
 
 | Field | Detail |
 |---|---|
@@ -500,7 +499,7 @@ pub(crate) fn coalesce_geometry(queue: &mut Vec<SetWindowPosCommand>, cmd: SetWi
 | Requirements | 2.2, 2.8, 4.6, 10.4 |
 
 **Responsibilities & Constraints**
-- `chain.upload` → `Result<UploadOutcome, PresentError>`、`UploadOutcome { resized: bool }`（`chain.rs:178-194` の分岐が `resized` を立てる）。:297-301 の `if let Err(e) = chain.upload(&entry.composed)` は字面不変。
+- `resized` は upload 直前の `chain.size()` と :306 の `size` の比較で得る（`chain.rs:178-194` の `ResizeBuffers` 分岐は外形変化のときだけ走るので同値）。`chain.rs` は無改変・:297-301 の `if let Err(e) = chain.upload(&entry.composed)` は字面不変。
 - `show.rs`: `Stage::Upload` 到達後（:302 以降）に `surface stage=upload target_id w h resized`、可視化後（:328 以降）に `surface stage=visualize target_id w h`。**`size_changed || resized` のときのみ**、かつ `tracing::enabled!(target: TRANSITION_TARGET, Level::DEBUG)` の内側で組む（定常フレームでの確保 0 を維持・10.4）。
 - `refresh.rs`: k 不変（:70-73）・不可視（:74-77）の見送りで `surface stage=skipped target_id reason=k-unchanged|invisible`（判定が 4.6 の窓を除外するため）。
 - `timing.rs`: `EmitContext { .., frame: u32 }`・perf 行の**末尾**に `frame=`（既存フィールド順・文言不変）。
@@ -513,7 +512,7 @@ pub(crate) fn coalesce_geometry(queue: &mut Vec<SetWindowPosCommand>, cmd: SetWi
 **Contracts**: Event [x]
 
 **Implementation Notes**
-- Validation: 既存 `presenter_perf_log_tests`／`presenter_budget_steady_state_tests` を維持（perf 行は末尾追加のみ）。新規: `surface_line` 語彙固定、`resized` の真偽（寸変化なしの再 upload で `resized=false`）。
+- Validation: 既存 `presenter_perf_log_tests`／`presenter_budget_steady_state_tests` を維持（perf 行は末尾追加のみ）。新規: `surface_line` 語彙固定、`resized` の真偽（寸変化なしの再 upload で `resized=false`・`prev` 比較で判定）。
 - Risks: emo-present が `TRANSITION_TARGET` を参照することで wintf への依存面が 1 定数増える（既に依存済み・許容）。
 
 ### 配置（areka）
@@ -556,7 +555,7 @@ pub(crate) fn coalesce_geometry(queue: &mut Vec<SetWindowPosCommand>, cmd: SetWi
 - Component `DpiSyncHold { since_frame: u32 }`（ゴースト窓 entity）。定数 `DPI_SYNC_HOLD_MAX_FRAMES: u32 = 30`。
 - 純関数 `dpi_sync_decision(window_dpi: u32, table_dpi: Option<u32>, held_since: Option<u32>, now: u32) -> DpiSyncDecision { Proceed, Hold, ProceedAfterTimeout }`: `table_dpi` が `None`（表なし・帰属モニタなし）または一致→`Proceed`；不一致で `held_since` から `wrapping_sub` が上限未満→`Hold`；上限以上→`ProceedAfterTimeout`（`warn!`）。
 - dpi 相での適用: `Changed<DPI>` の窓と `DpiSyncHold` を持つ窓の和集合を対象に、`Proceed*` なら hold を外して現行処理へ、`Hold` なら hold を付けて（既存なら据え置き）`refresh_scale` も再導出も呼ばない（`hold` レコード）。
-- 帰属モニタの dpi は `MonitorDpiTable::dpi_for_point(cx, cy)`（窓矩形の中心・`work_area_for_window` と同じ half-open 規則）。
+- 帰属モニタの dpi は `MonitorDpiTable::dpi_for_point(cx, cy)`（窓矩形の中心）。**帰属規則は wintf 側の `redrive_window_dpi_for_updated_monitors` の `monitor_containing`（`monitor_systems.rs:438-480`・含有のみ・非含有は skip）と同一の純関数を共有する**（設計討議 A-5）——含有のみ規則で `None`（帰属なし）を返し、C5 は `None` を `Proceed` と扱う。`work_area_for_window` の最近傍フォールバックとは規則が違うため流用しない（食い違うと、どのモニタにも中心が乗らない窓で毎回上限まで待つ）。
 
 **Dependencies**
 - Inbound: dpi 相（P0）
@@ -578,7 +577,7 @@ pub(crate) fn coalesce_geometry(queue: &mut Vec<SetWindowPosCommand>, cmd: SetWi
 **Responsibilities & Constraints**
 - `sync_monitor_snapshot(world) -> Option<SnapshotChange>`: `Monitor` component（`monitor.rs:66-74`）を読み、`MonitorSnapshot::from_monitors`（`work_area.rs:31`）と `MonitorDpiTable::from_monitors` で作り直す。**順序非依存の比較**（`same_monitors`）で不変なら何もしない（定常フレームで書込 0・4.7・5.4）。変化時は両 Resource を差し替え、`snapshot` レコード（frame・台数・各 dpi と work_area）と `[diag.monitor_snapshot]` を出す。0 台・帰属不能は `warn!` の上で現状維持（5.5）。
 - `resnap_for_work_area_change(world, change)`: 変化した作業領域に属する Bottom アンカーのキャラ窓を `reproject_char_window_at_current_size(.., PlacementRoute::WorkAreaResnap)`（`dpi.rs:335` に route 引数を追加）で現寸再射影。べき等 skip（`window_move.rs:310-318`）で無変化は書込 0。同一 tick に dpi 相が続く窓は dpi 相の書込 1 本に吸収される（合流）。
-- 置き場: `emo2_frame_system` の先頭（`frame.rs:168` の前・同一 World 借用）。
+- 置き場: `sync_monitor_snapshot` は `emo2_frame_system` の先頭（`frame.rs:168` の前・同一 World 借用）、`resnap_for_work_area_change` は `run_dpi_phase` の直後（`frame.rs:168` の後・`reconcile_reported_sizes` :187 の前）。
 - 起動時: `main.rs:530-538` の `boot_monitor_snapshot` が `MonitorDpiTable` も返し :611 で挿入（構築関数は同一＝二重権威にならない）。
 
 **Dependencies**
@@ -608,7 +607,8 @@ pub(crate) fn coalesce_geometry(queue: &mut Vec<SetWindowPosCommand>, cmd: SetWi
 - 入力: `[transition]` 行の列（他の行は無視）。出力: `Vec<TransitionSummary>`＋`Verdict`。I/O を持たない。
 - 遷移の切り出し: `kind=monitor` で `old_dpi != new_dpi` の行を起点、次の起点の直前まで。
 - 判定量（`TransitionSummary`）: `frames_to_last_write`（起点 frame → 最終 `write` frame の `wrapping_sub`）／`writes_per_window: BTreeMap<(scope, kind), u32>`／`path_a_writes`（`stage=sync`）／`balloon_same_frame: bool`（キャラ write frame == 同 scope バルーン write frame）／`mismatch_frames_per_window`（`surface stage=visualize` の frame と当該窓 write frame の差）／`holds`／`chain_realigned: u32`／`ground_diff_max`（`ground` レコードの `|diff|` 最大）／`skipped_windows`（`stage=skipped` の target を除外）／参考値 `wall: { first_write_t_us, last_write_t_us, sum_call_us }`。
-- 定数（回帰テストが固定）: `TRANSITION_FRAME_BOUND = 0`、`WRITES_PER_WINDOW_MAX = 1`、`PATH_A_WRITES_MAX = 0`、`GROUND_DIFF_MAX = 0`、`CHAIN_REALIGN_PER_TRANSITION = 1`（k 変化のある遷移）。hold を含む遷移は `frames_to_last_write ≤ DPI_SYNC_HOLD_MAX_FRAMES`。
+- 定数（回帰テストが固定・`Bounds::deterministic`）: `TRANSITION_FRAME_BOUND = 0`、`WRITES_PER_WINDOW_MAX = 1`、`PATH_A_WRITES_MAX = 0`、`GROUND_DIFF_MAX = 0`、`CHAIN_REALIGN_PER_TRANSITION = 1`（k 変化のある遷移）。hold を含む遷移は `frames_to_last_write ≤ DPI_SYNC_HOLD_MAX_FRAMES`。
+- **実機サインオフ専用の判定量（`Bounds::signoff`・設計討議 A-2 で追加）**: 第 1 段で確定した症状「描画内容は +13〜47ms に新寸・窓矩形は +63〜309ms まで旧寸」は**同一 tick の内側**の食い違いであり、上のフレーム単位の量では是正前でも 0 になる（`TRANSITION_FRAME_BOUND = 0` は現行コードで既に成立）。そこで `TransitionSummary` に窓ごとの `visualize_to_write_us`（同一 frame の `surface stage=visualize` の `t_us` から当該窓の `write` の `t_us` まで）と `flush_total_us`（`flush stage=end` の `total_us`）を持たせ、`Bounds::signoff` に上限を置く。**上限値は実装フェーズ 2 の再採取で確定**する（目安: 実測 vblank 周期 1〜2 回分。8.3ms@120Hz／16.7ms@60Hz を候補とし、台帳へ根拠つきで登記）。この量は非決定なので**回帰テストでは固定しない**——サインオフ手順書（C10）の合否と C8 の Q2 条件（B-2b→B-4→B-3 の分岐）にだけ使う。判定は決定論量と実機量の**両方**を Report に列挙し、`judge(summary, &Bounds::deterministic)` と `judge(summary, &Bounds::signoff)` を別々に呼ぶ。
 - 語彙: `kind`／`stage`／フィールド名は C1・C3・areka 側レコード純関数から `pub const` を参照して解析（判定語の二重定義をしない）。
 
 **Contracts**: Service [x]
@@ -634,13 +634,15 @@ pub fn judge_transition_log(log: &str) -> Report;   // 上 4 つの合成
 | Intent | 逐次 `SetWindowPos` の内訳を名指ししてから是正を選ぶ手順と、候補ごとの接触集合を固定する |
 | Requirements | 4.2, 3.4, 9.3 |
 
-| 候補 | 内容 | 接触集合 | 採用条件（台帳の数量） | 申し送り |
-|---|---|---|---|---|
-| B-2a 合流（**確定**） | 同一 tick・同一 hwnd のジオメトリ指令を 1 本へ | `command.rs` | 回数 6→4 は静的に確定。時間効果は R3 で測る | zorder（Z 専用不変） |
-| B-2b `DeferWindowPos` 一括 | flush を `Begin/Defer/EndDeferWindowPos` の 1 バッチへ（Z 専用は per-window flags で同居） | `command.rs::flush` のみ | `msg` レコードが各 `write` の内側に OS 同期処理（`WM_DPICHANGED` 等）を示し、`Σcall_us` が所要の大半 | dlp（W8）・zorder |
-| B-4 窓内下端中央補償 | 遷移中、サーフェスの visual を窓内で下端中央に置く（オフセット `((win_w−surf_w)/2, win_h−surf_h)`）→ 窓書込後に原点へ戻す | `show.rs:328` `set_bounds`／`mount.rs`／αマスク原点（`collision-dpi-hittest`） | B-2 後も目視と `t_us` で食い違い区間が残る | col（当たり判定原点）・cage |
-| B-3 可視化 2 相化 | `Present`／`set_visible`／`set_bounds` を窓書込直前へ遅らせる | `show.rs:297-330`（cage④・budget 隣接） | B-4 でも残る場合の最後の手段 | budget・cage④ |
-| 自前 handler 是正 | `WM_WINDOWPOSCHANGED` 等の wintf 側処理が所要の主因のとき | `window_proc/window_pos.rs` | `msg` と `call_us` の突合で自前区間が主 | — |
+| 候補 | 内容 | 接触集合 | 採用条件（台帳の数量） | 7.3 の対テスト（是正前赤／後緑） | 申し送り |
+|---|---|---|---|---|---|
+| B-2a 合流（**確定**） | 同一 tick・同一 hwnd のジオメトリ指令を 1 本へ | `command.rs` | 回数 6→4 は静的に確定。時間効果は R3 で測る | 決定論: `writes_per_window` 2→1（キュー検査） | zorder（Z 専用不変） |
+| B-2b `DeferWindowPos` 一括 | flush を `Begin/Defer/EndDeferWindowPos` の 1 バッチへ（Z 専用は per-window flags で同居） | `command.rs::flush` のみ | `msg` レコードが各 `write` の内側に OS 同期処理（`WM_DPICHANGED` 等）を示し、`Σcall_us` が所要の大半 | 決定論: flush が 1 バッチ（`flush count` と `write` の `in_batch=1`）／時間効果は実機のみ（`flush_total_us`） | dlp（W8）・zorder |
+| B-4 窓内下端中央補償 | 遷移中、サーフェスの visual を窓内で下端中央に置く（オフセット `((win_w−surf_w)/2, win_h−surf_h)`）→ 窓書込後に原点へ戻す | `show.rs:328` `set_bounds`／`mount.rs`／αマスク原点（`collision-dpi-hittest`） | B-2 後も `visualize_to_write_us` max が signoff 上限超 | 決定論: 遷移中の visual オフセット純関数（寸差から下端中央）／可視効果は実機のみ | col（当たり判定原点）・cage |
+| B-3 可視化 2 相化 | `Present`／`set_visible`／`set_bounds` を窓書込直前へ遅らせる | `show.rs:297-330`（cage④・budget 隣接） | B-4 でも上限超が残る場合の最後の手段 | 決定論: 可視化が書込と同一 flush 内（`surface stage=visualize` の `t_us` ≥ `flush begin`）／実機で `visualize_to_write_us` | budget・cage④ |
+| 自前 handler 是正 | `WM_WINDOWPOSCHANGED` 等の wintf 側処理が所要の主因のとき | `window_proc/window_pos.rs` | `msg` と `call_us` の突合で自前区間が主 | 内容次第（採用時に列を埋める） | — |
+
+> 4.4 の決定論値 `TRANSITION_FRAME_BOUND = 0` は現行コードで既に成立するため、L1（逐次 flush）には**この量での対テストは存在しない**。L1 の是正候補を採る段で、上の列にある候補ごとの対テスト（または「実機のみ」）を必ず埋める（設計討議 A-8）。
 
 - 採用は設計討議で確定し、本設計へ追記する。R4.2 の可視判定は実機サインオフ（目視＋`t_us` 参考値）で確定する。
 
