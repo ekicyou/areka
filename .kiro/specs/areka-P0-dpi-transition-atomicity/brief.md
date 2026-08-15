@@ -4,6 +4,14 @@
 > 本 brief は**実測証跡・踏査結果・所有権判断を全て内包**する。別セッションはこの brief 単体で再開できる（会話ログは不要）。
 > **機序は未確定である。** 本 brief は仮説を仮説として書く。断定している箇所は実測引用を必ず添えてある。
 
+> **📌 2026-08-15 棚卸⑨（W6.5 完走後の申し送り・本ブロックが以下の全追記より優先）**:
+> - **着手ゲート全開**: W6.5 の 3 本が全て main 着地（exact PR#110＝08-14／wpl PR#111＝08-15／budget＝08-15）。第 1 段再観測は requirements の research として settled main 上で即実施可。**W6.75＝本 spec 単独フルライフサイクル**（2026-08-14 直列裁定・文書併走は不採用）。
+> - **859ms の帰着切り分けの材料が揃った**: budget が 1 コマ適用を 22,210→1,240µs（18 分の 1）へ是正済み（実測正本＝`completed/areka-P0-recompose-budget/remeasure-2026-08-15.md`）。旧「1 合成 ≒143ms」前提は**失効**——多段適用が残っていても合成コストでは説明できない＝**再観測で跳ねが残れば、それはほぼ純粋に遷移経路（本 spec）の取り分**。
+> - **観測基盤は budget が新設済み**: `presenter/timing.rs`（Stage マーカー Compose/Resample/MaskGen/Upload＋計時ログ）が本番配線済み＝第 0 段計時ログを自作する必要はおそらく消えた。再観測設計はこの流用を第一候補にすること。
+> - **アンカー全面再実測（budget が show.rs を改稿・旧 :220-270 帯／presenter.rs :360-614 は全て失効）**: `apply_show`＝`presenter/show.rs:43` 起点・budget 域（compose/resample/mask/insert）:95-170・**本 spec の関心＝chain 生成〜upload〜可視化域 :280-330**（chain swap :281-282・upload :297・`chain.size()` :306・mask set :313）。cage④ の観測点は upload エラー分岐 :297-301。
+> - **wpl 着地の rebase 点**: `follow/window_move.rs` の **`resize_window_to` 内側に wpl の step 5a（limit 再クランプ）が入った**・`follow/keyword_base.rs` 新設。wpl は「実表示寸確定時に一度だけ再導出」する機構（キーワード中央揃えの 26px ずれ是正）を持ち込んだ——**scg の `finalize_chain_once` に続く one-shot 確定の 2 例目**。`ChainFinalized` の寿命裁定（下記追記(63)）と同じ問い（DPI 遷移で one-shot を解き直すか）が keyword_base にも立つ＝**併せて裁定すること**。
+> - **W6 申し送り⑷（zorder）**: flush 経路（`tick_bridge`／`command.rs`）を改造する場合、zorder の維持系が同経路へ指令を積む点を確認（zorder 自身は flush 非接触で完了）。
+>
 > **📌 2026-08-06 追記(60)再実測（棚卸⑥・col=collision-dpi-hittest PR#100 マージ後）**: 本 spec の全アンカーは現物一致を再確認（dpi 相 :796-950 帯・`run_dpi_phase` :976・`resnap_shell_targets` :1305/:1488・`flush_window_pos_commands` command.rs :210）。干渉先の presenter.rs `apply_show` は col で +17 シフト＝現在 **:360-614**（budget 檻点 :394-409・cage④ :527-531）。requirements 着手（W6 文書同居）の条件に変更なし。
 >
 > **📌 2026-08-01 追記(58)陳腐化補正（棚卸⑤・W5 3本マージ後の実測・本ブロックが以下の本文より優先）**:
