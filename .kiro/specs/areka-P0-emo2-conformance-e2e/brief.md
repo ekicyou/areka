@@ -12,7 +12,7 @@
 >
 > **📌 2026-07-31 追記(52)棚卸更新（W4 完走・本ブロックが㊹以下より優先）**:
 > - **completed 追補（㊹以降）**: wintf-gpu-test-crash（割込）✅・position-persist✅・choice-interact✅・emo-dpi-scaling✅＝**W4 完走**。**残ウェーブ改訂**: W5（dpi-window-vanish ∥ collision-dpi-hittest ∥ choice-select-events ∥ kero-balloon）→ **W6（balloon-visibility ∥ bindoption-exclusivity の2本・追記(52)裁定）**→ **W6.5（scale-exact-rational ∥ test-cage-determinism・追記(51)起票）**→ W7=本 spec。
-> - **上流列へ追補3本**: `bindoption-exclusivity`（表情固着バグ＝**適合 #3「着せ替え表情」の前提充足**・bindoption 3値正典準拠）・`scale-exact-rational`（**適合 #1 の DPI 検証を絶対値で書ける前提**＝画素演算の有理数化）・`test-cage-determinism`（M1 宣言を支える檻の決定性）。
+> - **上流列へ追補3本**: `bindoption-exclusivity`（表情固着バグ＝**適合 #3「着せ替え表情」の前提充足**・bindoption 3値正典準拠）・`scale-exact-rational`（**適合 #1 の DPI 検証を絶対値で書ける前提**＝画素演算の有理数化。**【2026-08-14 失効・下記追記(68) が正本】**——有理数化は却下され、供給面寸の判定には **+1 の許容が要る**）・`test-cage-determinism`（M1 宣言を支える檻の決定性）。
 > - **着手時義務**: 本 brief の全面再監査（追記㊹時点で唯一補正無しだった経緯・調査日 2026-07-16 の実測は全面陳腐化前提で読む）・適合表へバルーン表示ライフサイクル項目追補・㉘(E)「OnFirstBoot 限定 `\![move]` の2回目起動蒸発は許容仕様」の実機判断・#7（冒頭空行＝pasta 上流未解決）は M1 完成を妨げない扱いの確認。
 > - アンカー: spawn.rs `GhostWindows` :109-130 → **:115**（`ScopeWindows` :101）・target_map.rs `shell_target` :19 不変。
 
@@ -27,6 +27,13 @@
 > - **参照実装との関係**: SSP は `\![move]` を無スケールで適用するため、⑵ は**意図的な SSP 非互換**である（`ssp-oracle-notes.md` の SSP 自己不整合 #2）。適合検証で SSP と突き合わせる場合、この 1 点は差が出るのが正しい。
 > - 併せて `#12`（初回ゲート）と項目 9 の相互作用（本 brief 末尾の申し送り）を判断する際は、要件 7 の「明示的に再配置されたスコープは既定連鎖へ引き戻さない」（現在位置と既定位置の一致で判定）も前提に入れること。
 > - scg 側の正本: `.kiro/specs/completed/areka-P0-scope-chain-gap/`（要件 1/2/7・`real-run-signoff-2026-08-13.log` §5.5）。
+
+> **📌 2026-08-14 追記(68)（`areka-P0-scale-exact-rational` からの申し送り・適合 #1 の DPI 判定式）**: **供給面寸（文字供給面の確保寸）を判定に使う場合、絶対値一致では書けない。** 本ブロックが上記追記(52) の「絶対値で書ける前提」記述より優先する。
+> - **⑴ 供給面寸は期待値 +1 の許容が要る**。誤りが出るのは拡大率 **6/5 と 12/5 の 2 比のみ**（各 81 件・寸 1..=1200）で、残る 21 比は 0 件・差は常に **0 か 1**（−1 は起きない）——ただし**判定式は一律 +1 許容で書くのが安全**（比ごとに場合分けすると、比の集合が変わったときに黙って割れる）。
+> - **⑵ 窓 client 寸は従来どおり絶対値で書ける**。こちらは丸め権威（`ScaleRatio::scaled_extent`）経由であり、⑴ の許容は**持ち込まない**。適合 #1 の判定を書く際は供給面寸と窓 client 寸を混ぜず、許容を付けるのは前者だけにすること。
+> - **⑶ 失効**: 追記(52) 上流列の `scale-exact-rational`「**適合 #1 の DPI 検証を絶対値で書ける前提**＝画素演算の有理数化」は**失効**。有理数の文字層配管は 2026-08-14 に却下され、当該 spec は裁定の登記・前提の決定論テスト・申し送りへ縮小された（実行時の挙動は不変ゆえ、適合表の他項目の期待値は変わらない）。
+> - **⑷ 根拠**: 再説明しない。spec **`areka-P0-scale-exact-rational`** の裁定登記（emo-text `region.rs` の `ScaleContract::physical_extent` doc）を参照。前提（差は 0 か 1・−1 は起きない・件数 81/81/0×21）は決定論テスト `crates/areka-emo-text/tests/physical_extent_arbitration_test.rs` が固定している。
+> - 判定式の最終形（どの項目でどこまで許容を書くか）は**本 spec が決める**——上記は前提の申し送りであって、適合 e2e の要件裁定ではない。
 
 ## Problem
 
