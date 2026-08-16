@@ -174,8 +174,11 @@ crates/areka-emo-present/src/
 crates/areka/src/placement/
 ├── transition_diag.rs                 # NEW: areka側レコード純関数（snapshot/hold/ground/chain）
 ├── transition_diag_tests.rs           # NEW
-├── transition_judge.rs                # NEW: 行パーサ・遷移切り出し・判定量・合否（純関数・I/O無し）
+├── transition_judge.rs                # NEW: 行パーサ・遷移切り出し・判定量（純関数・I/O無し）
 ├── transition_judge_tests.rs          # NEW: 再観測ログ整形の正例／判定語破壊の負例／周回差分
+├── transition_judge_verdict.rs        # NEW: 上限 2 系統・違反の列・judge/judge_transition_log/Report
+├── transition_judge_verdict_tests.rs  # NEW: 2 系統の分離／上限の各分岐／是正前の赤
+├── transition_judge_negative_tests.rs # NEW: 判定語破壊・欠落・量が静かに消える行・周回境界
 ├── transition_signoff_tests.rs        # NEW: #[ignore] 実機ログ判定ランナー（AREKA_TRANSITION_LOG）
 ├── dpi_sync.rs                        # NEW: DpiSyncHold component・純関数 dpi_sync_decision・MAX_FRAMES
 ├── dpi_sync_tests.rs                  # NEW
@@ -251,11 +254,15 @@ crates/areka/src/main.rs               # MOD: 起動時に MonitorDpiTable も�
 | `crates/areka/src/placement/diag_tests.rs` | MOD: 経路語彙 12 種・`ALL` 12・一意性／空白なし／非番兵 | 2.4 |
 | `crates/areka/src/placement/follow_visibility_char_wiring_tests.rs` | MOD: 発火 route 表 4 → 6 に追随 | 2.4 |
 | `crates/areka/src/placement/follow_visibility_balloon_wiring_tests.rs` | MOD: 発火する引き金 4 → 6 に追随（キャラ窓表の写し） | 2.4 |
-| `crates/areka/src/placement/transition_judge.rs` | NEW: 行パーサ（`judge-perf.py` と同一の辞書化・同名フィールドは欠陥）・遷移切り出し・判定量の集計。消費者がテストとサインオフランナーだけなので `#[cfg(test)]` のモジュールとして置く（bin crate ゆえ本番ビルドでは全項目 dead_code になり、項目ごとの許可属性が以後の真の dead code を隠すため）。**`visualize_to_write_us` は遷移区間内の全ての（可視化, 同一フレームの書込）組にわたる真の最大**（最後の 1 組ではない）＝task 3.2 は `Bounds::signoff` の上限をこの最大に対して置く。`frames_indeterminate` は「一様に 0」と「`frame` が 1 つも読めなかった」の両方で立つ | 3.1 |
-| `crates/areka/src/placement/transition_judge_tests.rs` | NEW: 解析・切り出し・集計の分岐テスト（`win_kind` 由来の窓キー・経路 A は `origin` で計数・見送り窓の除外・`target_id` 往復を `emo2_boot::target_map` の正本と突合） | 3.1 |
+| `crates/areka/src/placement/transition_judge.rs` | NEW: 行パーサ（`judge-perf.py` と同一の辞書化・同名フィールドは欠陥）・遷移切り出し・判定量の集計。消費者がテストとサインオフランナーだけなので `#[cfg(test)]` のモジュールとして置く（bin crate ゆえ本番ビルドでは全項目 dead_code になり、項目ごとの許可属性が以後の真の dead code を隠すため）。**`visualize_to_write_us` は遷移区間内の全ての（可視化, 同一フレームの書込）組にわたる真の最大**（最後の 1 組ではない）＝task 3.2 は `Bounds::signoff` の上限をこの最大に対して置く。`frames_indeterminate` は「一様に 0」と「`frame` が 1 つも読めなかった」の両方で立つ。MOD(3.2): 意味の裁定 2 件を持つ——⑴ 随伴の同一フレーム性は**バルーンの `origin=BalloonFollow` の書込**で測る（要件 4.3 の義務は位置の追従であり、`KeepPositionResize` の遅れは要件 4.6 の見送りゆえ欠陥ではない）、⑵ `frames_to_last_write` は**見送り窓への書込を数えない**（4.6 で現状維持となった窓が後で可視化された際の書込は当該遷移の続きではない。抜け穴にならないのは、見送り窓の随伴位置は `balloon_same_frame` が引き続き見張るため） | 3.1, 3.2 |
+| `crates/areka/src/placement/transition_judge_tests.rs` | NEW: 解析・切り出し・集計の分岐テスト（`win_kind` 由来の窓キー・経路 A は `origin` で計数・見送り窓の除外・`target_id` 往復を `emo2_boot::target_map` の正本と突合）。MOD(3.2): 随伴の同一フレーム性は**バルーン側の見送りでは降りない**へ是正（要件 4.3 の引き金はキャラ窓の可視化であり、随伴の窓書込は不可視のバルーンにも出る）——`summarize_excludes_windows_whose_redisplay_was_skipped` の当該 2 行が追随。同テストの模す形は「**随伴の追従（`BalloonFollow`）そのものが遅れた場合**」＝要件 4.3 の欠陥形であり、再観測 §3.2 の遷移 2（位置は定刻・寸 `KeepPositionResize` だけが遅延＝非欠陥）**ではない**（コメントを是正） | 3.1, 3.2 |
 | `crates/areka/src/placement/transition_judge_frame_tests.rs` | NEW: フレーム刻印の扱い（欠落と読めない値の区別・読めない系列の判定不能・一様 0 の判定不能・2 つの量の周回差分・実機専用量の同一フレーム条件と最大） | 3.1 |
 | `crates/areka/src/placement/transition_judge_test_support.rs` | NEW: 種別ごとの観測行組立（フィールド名は発行側の `pub const` を参照）＋テーマ間で共有する助走 | 3.1 |
-| `crates/areka/src/placement/transition_judge_reobservation_tests.rs` | NEW: 再観測 §3.1 を新語彙へ整形した埋め込みログの逐語再現（書込 6・経路 A 0・接地点差 −48px・フレーム量は是正前でも 0） | 3.1 |
+| `crates/areka/src/placement/transition_judge_reobservation_tests.rs` | NEW: 再観測 §3.1 を新語彙へ整形した埋め込みログの逐語再現（書込 6・経路 A 0・接地点差 −48px・フレーム量は是正前でも 0）。MOD(3.2): 埋め込みログを `pub(super)` にして上限判定・負例の入力として共有。**あわせて §3.2 の 6 遷移すべてを再構成し、レポートが「欠陥」と記述したものだけが違反として出ることを固定する**（判定の規則をテストの作った形に合わせて書き、レポートが「欠陥ではない」と明記した遷移を不合格にする事故が 2 度起きたため）。`t_us` の並びは忠実でないので実機専用側の判定には流用しない | 3.1, 3.2 |
+| `crates/areka/src/placement/transition_judge_verdict.rs` | NEW: 上限（`Bounds::deterministic`／`Bounds::signoff`）・違反（`Violation`／`Quantity`）・`judge`／`judge_transition_log`／`Report`。実機専用の上限は**暫定値**で置き task 4.3 が実測から差し替える。判定量の集計（`transition_judge.rs`）と分けるのは、量が語彙に追随し上限が要件に追随する＝変更の理由が異なるため（1,000 行の目安も満たす） | 3.2 |
+| `crates/areka/src/placement/transition_judge_verdict_tests.rs` | NEW: 2 系統の分離（片方の量がもう片方の合否を動かさない）・上限の各分岐・整合待ちの許容・違反が列で返ること・再観測ログが窓ごとの書込回数と接地点差で違反すること。実機専用の上限は**値を固定せず**結線と ±1 の分岐だけを固定する | 3.2 |
+| `crates/areka/src/placement/transition_judge_negative_tests.rs` | NEW: 判定語の破壊（起点語・種別語）・必須フィールドの欠落・**本体側の数値だけが壊れた行**（`diff`／`total_us`／`target_id`＝`malformed_records` は 0 のまま量が消える）・書込 0 件・周回境界（`u32::MAX`→`0` で差 1）・一様 0 の判定不能 | 3.2 |
+| `crates/areka/src/placement/transition_signoff_tests.rs` | NEW: `#[ignore]` の実機ログ判定ランナー（`AREKA_TRANSITION_LOG`）。判定は同一の純関数を回すだけで自前の判定を 1 行も持たない。環境変数未設定・パス不達・観測行 0 行はいずれも失敗（既定で走る 4 本がこの失敗経路を固定する） | 3.2 |
 
 > 本表は Requirement 10 の突合台帳である。触ったファイルの集合が本表（2 つの表の合併）と一致していなければならない。ファイルを 1 つでも触ったら同時に行を足すこと。
 >

@@ -11,7 +11,7 @@
 
 use areka_emo_present::presenter::{
     KIND_SURFACE, SURFACE_FIELD_H, SURFACE_FIELD_REASON, SURFACE_FIELD_RESIZED,
-    SURFACE_FIELD_TARGET_ID, SURFACE_FIELD_W,
+    SURFACE_FIELD_TARGET_ID, SURFACE_FIELD_W, SURFACE_STAGE_VISUALIZE,
 };
 use wintf::ecs::window::transition_diag::{
     FIELD_AH, FIELD_AW, FIELD_AX, FIELD_AY, FIELD_CALL_US, FIELD_COUNT, FIELD_CX, FIELD_CY,
@@ -19,10 +19,11 @@ use wintf::ecs::window::transition_diag::{
     FIELD_MERGED_INTO_SEQ, FIELD_MSG, FIELD_NEW_DPI, FIELD_NEW_WA, FIELD_OK, FIELD_OLD_DPI,
     FIELD_OLD_WA, FIELD_ORIGIN, FIELD_SCOPE, FIELD_SEQ, FIELD_SINCE_FLUSH_US, FIELD_SINCE_TICK_US,
     FIELD_STAGE, FIELD_T_US, FIELD_TOTAL_US, FIELD_WIN_KIND, FIELD_X, FIELD_Y, KIND_ENQUEUE,
-    KIND_FLUSH, KIND_MONITOR, KIND_MSG, KIND_WRITE, MISSING, RECORD_PREFIX_TAG,
+    KIND_FLUSH, KIND_MONITOR, KIND_MSG, KIND_WRITE, MISSING, RECORD_PREFIX_TAG, STAGE_BEGIN,
+    STAGE_END, STAGE_FLUSH,
 };
 
-use super::super::diag::WindowKind;
+use super::super::diag::{PlacementRoute, WindowKind};
 use super::super::transition_diag::{
     FIELD_DECISION, FIELD_DIFF, FIELD_GROUND_Y, FIELD_MOVED, FIELD_REASON, FIELD_ROUTE,
     FIELD_SCOPES, FIELD_SINCE_FRAME, FIELD_SITE, FIELD_TABLE_DPI, FIELD_WA_BOTTOM,
@@ -216,6 +217,94 @@ pub fn parse_ok(line: &str) -> TransitionRecord {
         record.defects
     );
     record
+}
+
+/// 上限を 1 つも破らない遷移 1 本（task 3.2 の対照）。
+///
+/// 2 系統（[`super::Bounds::deterministic`]／[`super::Bounds::signoff`]）の**どちらでも合格**
+/// する形にしてある。上限判定のテストはここから 1 箇所だけを壊して赤を作るので、この対照が
+/// 緑でなくなると「常に赤い判定器」を緑と取り違える危険がそのまま入る。
+///
+/// scope 0 のキャラ窓（`target_id=0`）と随伴バルーン（`target_id=1`）を、モニタ表更新と同一
+/// フレームで 1 回ずつ書く（可視化 → 書込の順）。
+pub fn compliant_transition_lines() -> Vec<String> {
+    compliant_transition_lines_at(COMPLIANT_FRAME, COMPLIANT_FRAME)
+}
+
+/// 起点と本体のフレーム番号を別に指定した [`compliant_transition_lines`]。
+///
+/// 周回境界（D14）の負例が `origin_frame = u32::MAX`・`body_frame = 0` で使う。
+pub fn compliant_transition_lines_at(origin_frame: u32, body_frame: u32) -> Vec<String> {
+    vec![
+        monitor(origin_frame, 96, 192, 1752, 1704),
+        surface(
+            body_frame,
+            1_000,
+            SURFACE_STAGE_VISUALIZE,
+            0,
+            "764",
+            "1094",
+            MISSING,
+            MISSING,
+        ),
+        surface(
+            body_frame,
+            1_100,
+            SURFACE_STAGE_VISUALIZE,
+            1,
+            "576",
+            "406",
+            MISSING,
+            MISSING,
+        ),
+        ground(
+            body_frame,
+            0,
+            1704,
+            1704,
+            PlacementRoute::DpiReproject.as_str(),
+        ),
+        flush(body_frame, 1_200, STAGE_BEGIN, 2, MISSING),
+        write(
+            body_frame,
+            1_300,
+            STAGE_FLUSH,
+            0,
+            "0x1",
+            PlacementRoute::DpiReproject.as_str(),
+            "0",
+            char_kind(),
+            500,
+        ),
+        write(
+            body_frame,
+            1_400,
+            STAGE_FLUSH,
+            1,
+            "0x2",
+            PlacementRoute::BalloonFollow.as_str(),
+            "0",
+            balloon_kind(),
+            400,
+        ),
+        flush(body_frame, 1_500, STAGE_END, 2, "300"),
+    ]
+}
+
+/// [`compliant_transition_lines`] のフレーム番号。
+pub const COMPLIANT_FRAME: u32 = 10;
+
+/// 行の列の 1 箇所だけを置換する（見つからない／2 箇所以上あれば落とす）。
+///
+/// 変異の作法⑵と同じ理由——置換パターンが陳腐化して静かに空振りすると、**壊していない入力に
+/// 対して赤を測った**ことになり、負例が負例でなくなる。
+pub fn replace_once(lines: &[String], needle: &str, replacement: &str) -> Vec<String> {
+    let hits = lines.iter().filter(|line| line.contains(needle)).count();
+    assert_eq!(hits, 1, "置換対象 `{needle}` はちょうど 1 行にあるはず");
+    lines
+        .iter()
+        .map(|line| line.replace(needle, replacement))
+        .collect()
 }
 
 /// 行の列を解析して遷移 1 本へ切り出し、集計まで通す。

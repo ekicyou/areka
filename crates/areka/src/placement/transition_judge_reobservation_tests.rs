@@ -1,4 +1,14 @@
-//! 第 1 段再観測 §3.1（遷移 1・192→96）を**新語彙へ整形した埋め込みログ**からの逐語再現。
+//! 第 1 段再観測 §3.1（遷移 1・192→96）を**新語彙へ整形した埋め込みログ**からの逐語再現と、
+//! §3.2 の**6 遷移すべて**に対する判定の突合（task 3.2 で後半を追加）。
+//!
+//! 後半が要るのは、判定の上限をテストの作った形に合わせて書くと、レポートが「欠陥ではない」と
+//! 明記した遷移を不合格にしてしまうからである（task 3.2 のレビューで 2 度起きた）。判定器を
+//! 触ったら、まず 6 遷移すべての判定をレポートの記述と突き合わせること。
+//!
+//! **この治具を実機専用側（`Bounds::signoff`）の判定へ流用しないこと。** `t_us` の並びは忠実で
+//! ないためである——最初の窓書込が `t_us=13,800`、`flush stage=begin` が `100,500` で、書込が
+//! 一括書込の開始より前に現れる。決定論側の判定は `t_us` を判定語に使わないので無害だが、
+//! `visualize_to_write_us`／`flush_total_us` を測る用途に使うなら先に時刻の並びを直すこと。
 //!
 //! 正本は `.kiro/specs/areka-P0-dpi-transition-atomicity/reobservation-2026-08-15.md` の §3.1
 //! （全行を引用した代表例）である。当時のログにはフレーム番号が無く順序と遅れは時刻近似
@@ -35,11 +45,18 @@
 //! 食い違いは µs でしか見えないので、実機サインオフ専用の量
 //! （`visualize_to_write_us`・`flush_total_us_max`）が要る——設計討議 A-2 の裁定そのものである。
 
-use areka_emo_present::presenter::SURFACE_STAGE_VISUALIZE;
-use wintf::ecs::window::transition_diag::{FIELD_STAGE, KIND_WRITE};
+use areka_emo_present::presenter::{
+    SURFACE_REASON_INVISIBLE, SURFACE_STAGE_SKIPPED, SURFACE_STAGE_VISUALIZE,
+};
+use wintf::ecs::window::transition_diag::{
+    FIELD_STAGE, KIND_WRITE, MISSING, STAGE_BEGIN, STAGE_END, STAGE_FLUSH,
+};
 
-use super::super::diag::WindowKind;
-use super::{WindowKey, parse_transition_log, split_transitions, summarize};
+use super::super::diag::{PlacementRoute, WindowKind};
+use super::test_support::{flush, ground, monitor, surface, write};
+use super::{
+    Bounds, Violation, WindowKey, judge, parse_transition_log, split_transitions, summarize,
+};
 
 /// 起点のフレーム番号（整形時に与えた 1 つの値）。
 const ORIGIN_FRAME: u32 = 41231;
@@ -48,7 +65,11 @@ const ORIGIN_FRAME: u32 = 41231;
 ///
 /// `[transition]` を持たない 3 行（`info` の本文・`[diag.window_move]`・段階別計時）は
 /// 実機ログの混ざり方をそのまま再現するために残してある。判定器はこれを 1 件も数えない。
-const REOBSERVATION_TRANSITION_1: &str = "\
+///
+/// 姉妹モジュール `transition_judge_verdict_tests`／`transition_judge_negative_tests` が
+/// **同じ字面**を上限判定と負例の入力に使う（task 3.2）。複製すると片方だけが語彙の変更に
+/// 追随しなくなるので、可視性を広げて 1 本を共有する。
+pub(super) const REOBSERVATION_TRANSITION_1: &str = "\
 2026-08-15T11:54:14.327101Z DEBUG wintf::transition: [transition] frame=41231 t_us=214 kind=monitor entity=2v0 old_dpi=192 new_dpi=96 old_wa=0,0,2880,1704 new_wa=0,0,2880,1752
 2026-08-15T11:54:14.327400Z  INFO wintf::ecs::layout: Redriving window DPI from updated Monitor (no WM_DPICHANGED required) entity=5v0 192->96
 [transition] frame=41231 t_us=13000 kind=surface stage=upload target_id=3 w=288 h=203 resized=true reason=-
@@ -259,5 +280,217 @@ fn the_visualize_stage_precedes_every_window_write_in_the_same_frame() {
     assert!(
         last_visualize < first_write,
         "4 窓とも可視化が済んでから 1 枚目の窓書込が出る（{last_visualize} < {first_write}）"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// 6 遷移すべての突合（再観測 §3.2 の一覧）
+// ---------------------------------------------------------------------------
+//
+// 上の逐語再現は §3.1（遷移 1）だけを見る。判定の上限（task 3.2）を書くときに見なければ
+// ならないのは**残り 5 遷移**であり、とりわけ §3.2 がただ 1 つ「Requirement 4.6 の現状維持
+// 挙動＝欠陥ではない」と明記した遷移 2 である。判定器がそれを不合格にしたら、それは
+// ゴーストの欠陥ではなく判定器の欠陥である——2 度の是正はどちらもこの突合を先にしていれば
+// 防げた（判定を「テストの作った形」に合わせて書いたのが機序）。
+
+/// 見送られた寸書込が届くまでのフレーム差（レポートの +649〜660ms ≒ 60Hz で 40 フレーム）。
+const DEFERRED_RESIZE_FRAMES: u32 = 40;
+
+/// §3.2 の 1 行ぶん（2 スコープ・書込 6 回）を新語彙で組む。
+///
+/// `deferred_balloon_scope` を与えると、そのスコープのバルーンは**遷移時点で不可視**として
+/// 再表示を見送られ（`stage=skipped reason=invisible`）、寸書込だけが
+/// [`DEFERRED_RESIZE_FRAMES`] 後に届く——随伴の位置書込は他の窓と同じフレームに残る。
+/// これが遷移 2 の外れ値の形そのものである。
+fn baseline_transition(
+    frame: u32,
+    old_dpi: u32,
+    new_dpi: u32,
+    deferred_balloon_scope: Option<u32>,
+) -> Vec<String> {
+    // 接地点は全 12 件で 1704 固定（§6）。作業領域下端は 96 で 1752・192 で 1704。
+    let wa_bottom = if new_dpi == 96 { 1752 } else { 1704 };
+    let old_bottom = if new_dpi == 96 { 1704 } else { 1752 };
+    let mut lines = vec![monitor(frame, old_dpi, new_dpi, old_bottom, wa_bottom)];
+    let mut t_us = 13_000_u64;
+    for scope in [1_u32, 0] {
+        let deferred = deferred_balloon_scope == Some(scope);
+        lines.push(surface(
+            frame,
+            t_us,
+            SURFACE_STAGE_VISUALIZE,
+            scope * 2,
+            "336",
+            "400",
+            MISSING,
+            MISSING,
+        ));
+        t_us += 200;
+        if deferred {
+            lines.push(surface(
+                frame,
+                t_us,
+                SURFACE_STAGE_SKIPPED,
+                scope * 2 + 1,
+                MISSING,
+                MISSING,
+                MISSING,
+                SURFACE_REASON_INVISIBLE,
+            ));
+        } else {
+            lines.push(surface(
+                frame,
+                t_us,
+                SURFACE_STAGE_VISUALIZE,
+                scope * 2 + 1,
+                "288",
+                "203",
+                MISSING,
+                MISSING,
+            ));
+        }
+        t_us += 200;
+        lines.push(ground(
+            frame,
+            scope,
+            1704,
+            wa_bottom,
+            PlacementRoute::DpiReproject.as_str(),
+        ));
+    }
+    lines.push(flush(frame, 100_500, STAGE_BEGIN, 6, MISSING));
+    for scope in [1_u32, 0] {
+        let deferred = deferred_balloon_scope == Some(scope);
+        // バルーンの寸（要件 4.6 が先送りを許す側）。
+        lines.push(write(
+            if deferred {
+                frame + DEFERRED_RESIZE_FRAMES
+            } else {
+                frame
+            },
+            t_us,
+            STAGE_FLUSH,
+            scope * 3,
+            "0xB",
+            PlacementRoute::KeepPositionResize.as_str(),
+            &scope.to_string(),
+            WindowKind::Balloon.as_str(),
+            20_000,
+        ));
+        t_us += 60_000;
+        // キャラ窓（位置＋寸を 1 回で）。
+        lines.push(write(
+            frame,
+            t_us,
+            STAGE_FLUSH,
+            scope * 3 + 1,
+            "0xC",
+            PlacementRoute::DpiReproject.as_str(),
+            &scope.to_string(),
+            WindowKind::Char.as_str(),
+            57_000,
+        ));
+        t_us += 35_000;
+        // 随伴の位置（要件 4.3 が同一フレームで求める側）——見送られた遷移でも定刻に届く。
+        lines.push(write(
+            frame,
+            t_us,
+            STAGE_FLUSH,
+            scope * 3 + 2,
+            "0xB",
+            PlacementRoute::BalloonFollow.as_str(),
+            &scope.to_string(),
+            WindowKind::Balloon.as_str(),
+            34_000,
+        ));
+        t_us += 2_000;
+    }
+    lines.push(flush(frame, t_us, STAGE_END, 6, "171000"));
+    lines
+}
+
+/// §3.2 の 6 遷移（方向と、遷移 2 の外れ値だけが違う）。
+fn baseline_transitions() -> Vec<(usize, Vec<String>)> {
+    [
+        (1, 192, 96, None),
+        (2, 96, 192, Some(1)),
+        (3, 192, 96, None),
+        (4, 96, 192, None),
+        (5, 192, 96, None),
+        (6, 96, 192, None),
+    ]
+    .into_iter()
+    .enumerate()
+    .map(|(index, (number, old_dpi, new_dpi, deferred))| {
+        (
+            number,
+            baseline_transition(1_000 + index as u32 * 100, old_dpi, new_dpi, deferred),
+        )
+    })
+    .collect()
+}
+
+/// 1 遷移ぶんを決定論の上限で判定する。
+fn deterministic_verdict(lines: &[String]) -> Result<(), Vec<Violation>> {
+    let records = parse_transition_log(&lines.join("\n"));
+    let transitions = split_transitions(&records);
+    assert_eq!(transitions.len(), 1);
+    judge(&summarize(&transitions[0]), &Bounds::deterministic())
+}
+
+#[test]
+fn every_baseline_transition_is_judged_exactly_as_the_report_describes_it() {
+    // レポートが是正対象として記した量だけが出ること。6 遷移すべてでバルーン窓の書込 2 回
+    // （§3.2「バルーン窓 2 回（`KeepPositionResize` 寸＋`BalloonFollow` 位置）」→ task 5.3）、
+    // 192→96 の 3 遷移だけ接地点差 −48px（§6 の表・3/3 → task 5.1／5.2）。
+    // フレーム量は是正前でも 0 なので、フレーム由来の違反は 1 件も出てはならない。
+    for (number, lines) in baseline_transitions() {
+        let violations = deterministic_verdict(&lines).expect_err("是正前なので合格しない");
+        let shrinking = number % 2 == 1;
+        let mut expected: Vec<Violation> = Vec::new();
+        for scope in [0_u32, 1] {
+            expected.push(Violation::WritesPerWindow {
+                window: WindowKey::of(scope, WindowKind::Balloon),
+                writes: 2,
+                max: super::WRITES_PER_WINDOW_MAX,
+            });
+        }
+        if shrinking {
+            expected.push(Violation::GroundDiff {
+                diff: -48,
+                max: super::GROUND_DIFF_MAX,
+            });
+        }
+        assert_eq!(
+            violations, expected,
+            "遷移 {number} の判定がレポートと食い違う"
+        );
+    }
+}
+
+#[test]
+fn the_deferred_resize_of_transition_two_is_not_judged_as_a_defect() {
+    // §3.2 の注「バルーン 1 …は遷移時点で不可視…だったため見送られ、+649ms に表示された
+    // 時点で新寸へ（**Requirement 4.6 の現状維持挙動＝欠陥ではない**）」。判定器がこれを
+    // 欠陥と呼ばないことは、同じ方向（96→192）の他の 2 遷移と**判定が一致する**ことで示す
+    // ——「違反が少ない」ではなく「外れ値が判定に現れない」が主張である。
+    let all = baseline_transitions();
+    let outlier = deterministic_verdict(&all[1].1);
+    for sibling in [3_usize, 5] {
+        assert_eq!(
+            outlier,
+            deterministic_verdict(&all[sibling].1),
+            "遷移 2 の外れ値（見送られた寸の遅延）が判定へ漏れている"
+        );
+    }
+    let violations = outlier.expect_err("是正前なので合格しない");
+    assert!(
+        !violations.iter().any(|violation| matches!(
+            violation,
+            Violation::FramesToLastWrite { .. }
+                | Violation::BalloonWrittenInAnotherFrame
+                | Violation::Unmeasured(_)
+        )),
+        "先送りされた寸書込がフレーム量・随伴・未測定へ化けている: {violations:?}"
     );
 }

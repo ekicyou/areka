@@ -536,9 +536,16 @@ fn summarize_excludes_windows_whose_redisplay_was_skipped() {
             char_kind(),
             1,
         ),
-        // 再観測 §3.2 の遷移 2 と同じ形——見送られた窓は後のフレームで表示され、
-        // そこで初めて新寸になる。可視化も書込も**在る**ので、除外していなければ
-        // 食い違いの表へ載ってしまう。
+        // 見送られた窓が後のフレームで表示され、そこで初めて新寸になる形。可視化も書込も
+        // **在る**ので、除外していなければ食い違いの表へ載ってしまう。
+        //
+        // ここで遅れているのは**随伴の位置（`BalloonFollow`）そのもの**である＝要件 4.3 の
+        // 欠陥形。再観測 §3.2 の遷移 2 とは**別物**なので混同しないこと——あちらは位置が
+        // 定刻に届き寸（`KeepPositionResize`）だけが +660ms に届いた形で、レポートが
+        // 「Requirement 4.6 の現状維持挙動＝欠陥ではない」と明記している。両者を分けるのは
+        // 遅れた書込の**経路語**だけであり、§3.2 の形は
+        // `transition_judge_verdict_tests::a_deferred_resize_after_a_punctual_follow_is_not_a_companion_defect`
+        // が持つ。
         surface(
             20,
             5,
@@ -586,13 +593,18 @@ fn summarize_excludes_windows_whose_redisplay_was_skipped() {
             .contains_key(&WindowKey::of(1, WindowKind::Char)),
         "見送られていない窓は従来どおり測る（除外が広がりすぎていないこと）"
     );
+    // 随伴の同一フレーム性だけは**バルーン側の見送りでは降りない**（task 3.2 のレビューで
+    // 是正）。見送りは「サーフェスの再表示をしなかった」という事実であって、随伴の窓書込は
+    // 不可視のバルーンにも出る——ここで降りると、実機サインオフの定常の形（発話させないので
+    // バルーンは常に `stage=skipped reason=invisible`）で要件 4.3 が 1 度も検査されない。
+    // 本例はまさにその欠陥形（キャラは frame 10・随伴は frame 20）であり、検査される。
     assert_eq!(
-        summary.balloon_pairs_checked, 0,
-        "随伴の同一フレーム性は見送り窓の対では検査できない"
+        summary.balloon_pairs_checked, 1,
+        "両窓とも書込があるので対は検査できる（キャラ側は `last_write_frame_per_window`・バルーン側は `last_follow_frame_per_window` 由来）"
     );
     assert!(
-        summary.balloon_same_frame,
-        "検査できなかった対は違反にしない"
+        !summary.balloon_same_frame,
+        "随伴が 10 フレーム遅れて動いたことは要件 4.3 の違反として見えなければならない"
     );
 }
 

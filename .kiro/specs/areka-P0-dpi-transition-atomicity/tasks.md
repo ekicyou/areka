@@ -71,7 +71,7 @@
   - _Requirements: 2.4, 2.7, 7.1_
   - _Depends: 2.1, 2.2, 2.3, 2.4_
 
-- [ ] 3.2 判定の上限を 2 系統に分けて合否を出す
+- [x] 3.2 判定の上限を 2 系統に分けて合否を出す
   - 決定論の上限（フレーム差・窓ごとの回数・同期書込・接地点差・連鎖再解決の回数）と、実機専用の上限（可視化から書込までの経過・一括書込の総所要）を別々に持つ。実機専用の上限は暫定値で置き、task 4.3 が実測から確定値へ差し替える
   - 違反は列で返し、沈黙を合格にしない
   - 判定語を壊した入力・フィールド欠落・フレーム番号の周回境界の負例を加える
@@ -266,3 +266,7 @@
 - **申告された RED を額面で受け取らない** — task 2.4 で実装者の「是正前は 2 件とも緑だった」は過大申告で、実際は 1 件が緑・1 件は既に赤だった（もう 1 件が生きた対照として働いていた）。レビュアーが自分で是正前の状態を復元して測り直したことで判明。検証の道具そのものが壊れることがあるのと同様、**申告された赤も再現して確かめる**。
 - **task 3.2 への申し送り: `judge` は「量が無いこと」を合格の根拠にしない** — `frames_indeterminate`・`malformed_records > 0`・上限を当てる対象が欠けていること（`ground_diff_max`／`frames_to_last_write`／`flush_total_us_max` が `None`、`writes_per_window` に居る窓が `mismatch_frames_per_window` に居ない）は**それぞれ別の `Violation`** として返し、1 つの判定へ畳まない。理由は `RecordDefect::UnreadableField` が接頭語（`frame`／`t_us`）にしか立たないためで、本体側の数値（`diff`・`total_us`・`target_id`）が壊れた行は `is_well_formed() == true`・`malformed_records == 0` のまま当該量だけが静かに消える。
 - **変異検査の作法** — task 3.1 で実装者・レビュアーの双方が同じ罠を踏みかけた。⑴ **変異用のスクリプトを共有スクラッチパッドへ置かない**（2 本が同時に走ると互いの復元を潰し、変異が残ったコードに対して緑を測ることになる）。⑵ 結果を信じる前に**パッチが当たったことを確かめる**（`rustfmt` 後は置換パターンが陳腐化して静かに SKIP する）。⑶ 失敗テスト名の帰属は `--test-threads=1` で採る（並列だと `FAILED` 行が交ざり、無関係な名前が混入して見える）。⑷ **生き残った変異は「テストの穴」と「論理的に等価な変異」を区別する**——後者は如何なるテストでも殺せないので穴ではない。
+- **task 5.4 への申し送り: `HOLD_FRAME_ALLOWANCE` の二重定義を解消すること** — task 3.2 の時点で C5 の `DPI_SYNC_HOLD_MAX_FRAMES` は本番コードに存在せず（設計 C7 の記述のみ）、判定器が同じ値 30 を `transition_judge_verdict.rs` に暫定で持っている。5.4 が `dpi_sync.rs` に定数を置いたら、判定器側をその定数への参照へ書き換え、`the_deterministic_constants_hold_the_values_c7_fixes` も本番の定数を読む形へ直す。判定語の単一定義元の原則はこの定数にも及ぶ。
+- **同一ワークツリーで複数セッションが `cargo` を走らせると測定が壊れる** — task 3.2 のレビュー中、別の Claude Code セッションが同じワークツリーへ `cargo test --workspace` を掛け、変異を当てた状態の測定と衝突した。変異検査の作法⑴（スクリプトを共有スクラッチパッドへ置かない）のセッション跨ぎ版。長い掃引を始める前に競合する `cargo` プロセスの有無を確かめること。
+- **task 5.3 への申し送り: 見送り窓の書込回数は別 tick の 2 本を合流できない** — 5.3 の完了条件（バルーン窓の書込が 2 回→1 回）は、`skipped_windows` に居る窓が別 tick に 2 本書く再観測 §3.2 の形では満たせない。**5.3 が着地したら、`frames_to_last_write` に既に適用した「見送り窓への書込を数えない」規則を `writes_per_window` へも広げること。** ただし窓ごと丸ごと除外すると上限が消えて抜け穴になるので、見送り窓については当該遷移のフレームに落ちる書込だけを数える形にする。現行挙動を固定しているテストは 3 本あり同時に直す: `transition_judge_tests.rs::summarize_excludes_windows_whose_redisplay_was_skipped`・`transition_judge_verdict_tests.rs::a_deferred_resize_after_a_punctual_follow_is_not_a_companion_defect`・`transition_judge_reobservation_tests.rs::every_baseline_transition_is_judged_exactly_as_the_report_describes_it`。**task 7.3（実機サインオフ）で見つけるのでは遅い。**
+- **判定の規則はテストの治具ではなく再観測レポートに対して書く** — task 3.2 で同じ形を 2 度踏んだ。1 度目は「バルーンは喋っていないとき不可視」を見落として実質全遷移を落とす規則を書き、2 度目は経路語を取り違えてレポートが「欠陥ではない」と明記した遅延を違反にした。いずれも治具に対しては緑だった。**是正は `transition_judge_reobservation_tests.rs` の 6 遷移再構成へ昇華済み**——判定器を触ったら、まず 6 遷移すべての判定をレポートの記述と突き合わせること。

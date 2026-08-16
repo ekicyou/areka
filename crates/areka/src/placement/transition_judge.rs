@@ -63,7 +63,7 @@ use wintf::ecs::window::transition_diag::{
     Stamp, WRITE_FIELDS,
 };
 
-use super::diag::WindowKind;
+use super::diag::{PlacementRoute, WindowKind};
 use super::transition_diag::{
     CHAIN_FIELDS, CHAIN_STAGE_REALIGNED, FIELD_DECISION, FIELD_DIFF, GROUND_FIELDS,
     HOLD_DECISION_HOLD, HOLD_FIELDS, KIND_CHAIN, KIND_GROUND, KIND_HOLD, KIND_SNAPSHOT,
@@ -205,6 +205,16 @@ impl WindowKey {
     }
 }
 
+impl std::fmt::Display for WindowKey {
+    /// 違反の列挙で読める形（フィールド名は発行側の `pub const` を参照する）。
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.scope {
+            Some(scope) => write!(f, "{FIELD_SCOPE}={scope} {FIELD_WIN_KIND}={}", self.kind),
+            None => write!(f, "{FIELD_SCOPE}={MISSING} {FIELD_WIN_KIND}={}", self.kind),
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // 遷移の判定量
 // ---------------------------------------------------------------------------
@@ -260,10 +270,20 @@ pub struct TransitionSummary {
     pub path_a_writes: u32,
     /// `stage=sync` の書込件数（経路 A の裏取り。`path_a_writes` と食い違えば札か段のどちらかが壊れている）。
     pub sync_stage_writes: u32,
-    /// 随伴の同一フレーム性（両方の書込を持つ全スコープで最終書込フレームが一致するか）。
+    /// 随伴の同一フレーム性（キャラ窓の書込フレームと、同一 scope のバルーンの**位置**書込
+    /// フレームが一致するか）。
+    ///
+    /// 比べる相手が「最後の書込」ではなく `origin=BalloonFollow` の書込であることが要点で
+    /// ある——バルーンの寸書込（`KeepPositionResize`）は要件 4.6 が先送りを許す別の義務なので、
+    /// 混ぜると先送りが随伴の遅れに化ける（[`TransitionSummary::balloon_follow_windows`]）。
     pub balloon_same_frame: bool,
     /// 上を実際に検査できたスコープ数（0 なら `balloon_same_frame` は空虚な真）。
     pub balloon_pairs_checked: u32,
+    /// 随伴の位置書込（`origin=BalloonFollow`）を 1 度でも受けた窓。
+    ///
+    /// 判定側が「対を検査できるはずか」を独立に数え直すために持つ。寸だけが届いて位置が
+    /// 1 度も来ていない窓は、要件 4.3 を**満たした**のではなく検査できていない。
+    pub balloon_follow_windows: BTreeSet<WindowKey>,
     /// 窓ごとの「可視化フレームと書込フレームの差」（見送り窓は除く）。
     pub mismatch_frames_per_window: BTreeMap<WindowKey, u32>,
     /// 整合待ち（`decision=hold`）の件数。
@@ -302,6 +322,7 @@ impl TransitionSummary {
             sync_stage_writes: 0,
             balloon_same_frame: true,
             balloon_pairs_checked: 0,
+            balloon_follow_windows: BTreeSet::new(),
             mismatch_frames_per_window: BTreeMap::new(),
             holds: 0,
             chain_realigned: 0,
@@ -535,6 +556,14 @@ pub fn summarize(transition: &[&TransitionRecord]) -> TransitionSummary {
 
     let mut last_write_frame: Option<u32> = None;
     let mut last_write_frame_per_window: BTreeMap<WindowKey, u32> = BTreeMap::new();
+    // 窓ごとの「随伴の位置書込（`origin=BalloonFollow`）」の最後のフレーム。
+    //
+    // バルーン窓の 2 本の書込は**別の義務**を果たす——位置（`BalloonFollow`）は要件 4.3 が
+    // キャラ窓と同一フレームで求め、寸（`KeepPositionResize`）は要件 4.6 が先送りを許す。
+    // 経路語で選り分けずに「最後の書込」で測ると、見送られた寸が後のフレームで届いただけの
+    // 遷移（再観測 §3.2 の遷移 2＝レポートが「欠陥ではない」と明記した形）が随伴の遅れに
+    // 化ける。
+    let mut last_follow_frame_per_window: BTreeMap<WindowKey, u32> = BTreeMap::new();
     // 窓ごと・フレームごとの「最後の書込 t_us」（実機専用量 visualize_to_write_us 用）。
     let mut last_write_us_per_window_frame: BTreeMap<(WindowKey, u32), u64> = BTreeMap::new();
     let mut last_visualize_per_window: BTreeMap<WindowKey, (u32, u64)> = BTreeMap::new();
@@ -560,7 +589,19 @@ pub fn summarize(transition: &[&TransitionRecord]) -> TransitionSummary {
                 if record.raw_field(FIELD_STAGE) == Some(STAGE_SYNC) {
                     summary.sync_stage_writes += 1;
                 }
-                last_write_frame = Some(record.stamp.frame);
+                if record.raw_field(FIELD_ORIGIN) == Some(PlacementRoute::BalloonFollow.as_str()) {
+                    summary.balloon_follow_windows.insert(window.clone());
+                    last_follow_frame_per_window.insert(window.clone(), record.stamp.frame);
+                }
+                // 遷移の所要（要件 4.4 の「全ゴースト窓の遷移」）には**見送り窓への書込を
+                // 数えない**。要件 4.6 は当該窓を「位置と寸を変更せずに現状を維持」させる
+                // 規定であり、後から表示された時点の書込はその遷移の続きではない（再観測
+                // §3.2 の遷移 2 の +660ms がこれ）。数えると、レポートが非欠陥と明記した
+                // 遷移がフレーム上限で不合格になる。見送り窓でも**随伴の位置**は
+                // `balloon_same_frame` が見張り続けるので、抜け穴にはならない。
+                if !summary.skipped_windows.contains(&window) {
+                    last_write_frame = Some(record.stamp.frame);
+                }
                 last_write_frame_per_window.insert(window.clone(), record.stamp.frame);
                 last_write_us_per_window_frame
                     .insert((window, record.stamp.frame), record.stamp.t_us);
@@ -665,17 +706,27 @@ pub fn summarize(transition: &[&TransitionRecord]) -> TransitionSummary {
         }
     }
 
-    // 随伴の同一フレーム性（キャラ窓と同一 scope のバルーン窓の最終書込フレーム）。
+    // 随伴の同一フレーム性（キャラ窓の書込フレームと、同一 scope のバルーン窓の**位置**書込
+    // フレーム）。
+    //
+    // 除外はキャラ窓側だけである。要件 4.3 の When 節は「キャラ窓が遷移後の寸法・位置で
+    // **可視化されるとき**」であり、キャラ窓の再表示が見送られていれば引き金そのものが
+    // 立たない。逆に**バルーン側の見送りでは降りない**——見送りは「サーフェスの再表示を
+    // しなかった」という事実であって、随伴の窓書込（`BalloonFollow`）は不可視のバルーンにも
+    // 出る（再観測 §3.1 の実ログがそう）。実機サインオフの手順（発話させず拡大率だけ変える）
+    // ではバルーンはほぼ常に不可視＝`stage=skipped reason=invisible` なので、ここで降りると
+    // 要件 4.3 が**定常の形で 1 度も検査されない**まま合格になる。
+    //
+    // 比べるのは `last_follow_frame_per_window`＝**位置の書込だけ**であって「最後の書込」では
+    // ない。バルーンの寸書込（`KeepPositionResize`）は要件 4.6 が先送りを許す別の義務であり、
+    // 混ぜると再観測 §3.2 の遷移 2（位置は定刻・寸だけ +660ms）が随伴の遅れに化ける。
     for (window, char_frame) in &last_write_frame_per_window {
         if !window.is_char() || summary.skipped_windows.contains(window) {
             continue;
         }
         let Some(scope) = window.scope else { continue };
         let balloon = WindowKey::of(scope, WindowKind::Balloon);
-        if summary.skipped_windows.contains(&balloon) {
-            continue;
-        }
-        if let Some(balloon_frame) = last_write_frame_per_window.get(&balloon) {
+        if let Some(balloon_frame) = last_follow_frame_per_window.get(&balloon) {
             summary.balloon_pairs_checked += 1;
             if balloon_frame != char_frame {
                 summary.balloon_same_frame = false;
@@ -694,6 +745,17 @@ pub fn parse_transition_log(log: &str) -> Vec<TransitionRecord> {
     log.lines().filter_map(parse_transition_line).collect()
 }
 
+/// 上限と合否（判定量の集計とは変更の理由が異なるので分けてある）。
+#[path = "transition_judge_verdict.rs"]
+mod verdict;
+
+pub use verdict::{
+    Bounds, CHAIN_REALIGN_PER_TRANSITION, GROUND_DIFF_MAX, HOLD_FRAME_ALLOWANCE, PATH_A_WRITES_MAX,
+    PROVISIONAL_FLUSH_TOTAL_US_MAX, PROVISIONAL_VISUALIZE_TO_WRITE_US_MAX, Quantity, Report,
+    TRANSITION_FRAME_BOUND, TRANSITION_LOG_ENV, TransitionVerdict, Violation,
+    WRITES_PER_WINDOW_MAX, judge, judge_transition_log,
+};
+
 #[cfg(test)]
 #[path = "transition_judge_test_support.rs"]
 mod test_support;
@@ -709,3 +771,15 @@ mod transition_judge_frame_tests;
 #[cfg(test)]
 #[path = "transition_judge_reobservation_tests.rs"]
 mod transition_judge_reobservation_tests;
+
+#[cfg(test)]
+#[path = "transition_judge_verdict_tests.rs"]
+mod transition_judge_verdict_tests;
+
+#[cfg(test)]
+#[path = "transition_judge_negative_tests.rs"]
+mod transition_judge_negative_tests;
+
+#[cfg(test)]
+#[path = "transition_signoff_tests.rs"]
+mod transition_signoff_tests;
