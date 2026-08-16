@@ -210,6 +210,12 @@ pub fn emo2_frame_system(world: &mut World) {
 #[path = "frame_test_support.rs"]
 mod test_support;
 
+// 多フレーム駆動ハーネスそのものの檻（task 3.3）。**x64 のみ**で接続する——常時テストに
+// x86 を用いない（要件 7.5）という実行形態を、属性 1 つで構造的に守る。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_harness_tests.rs"]
+mod harness_tests;
+
 #[cfg(test)]
 #[path = "frame_attach_tests.rs"]
 mod attach_tests;

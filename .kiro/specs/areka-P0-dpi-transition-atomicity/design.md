@@ -263,6 +263,9 @@ crates/areka/src/main.rs               # MOD: 起動時に MonitorDpiTable も�
 | `crates/areka/src/placement/transition_judge_verdict_tests.rs` | NEW: 2 系統の分離（片方の量がもう片方の合否を動かさない）・上限の各分岐・整合待ちの許容・違反が列で返ること・再観測ログが窓ごとの書込回数と接地点差で違反すること。実機専用の上限は**値を固定せず**結線と ±1 の分岐だけを固定する | 3.2 |
 | `crates/areka/src/placement/transition_judge_negative_tests.rs` | NEW: 判定語の破壊（起点語・種別語）・必須フィールドの欠落・**本体側の数値だけが壊れた行**（`diff`／`total_us`／`target_id`＝`malformed_records` は 0 のまま量が消える）・書込 0 件・周回境界（`u32::MAX`→`0` で差 1）・一様 0 の判定不能 | 3.2 |
 | `crates/areka/src/placement/transition_signoff_tests.rs` | NEW: `#[ignore]` の実機ログ判定ランナー（`AREKA_TRANSITION_LOG`）。判定は同一の純関数を回すだけで自前の判定を 1 行も持たない。環境変数未設定・パス不達・観測行 0 行はいずれも失敗（既定で走る 4 本がこの失敗経路を固定する） | 3.2 |
+| `crates/areka/src/emo2_boot/frame_test_support.rs` | MOD: 多フレーム駆動ハーネス `FrameHarness`（`advance_frame`＝World 資源＋写しを同一点で進める／作業領域源・実行時モニタ表・窓の拡大率の 3 差替口／二体ぶんのスコープ／`drain_writes`／DPI 相・再スナップ・連鎖確定の駆動）・`single_threaded_schedule`（要件 7.6）・x64 限定の `const _` assert（要件 7.5）。あわせて `PerTargetSizes`／`SPAWN_SIZE_*`／`settled_sizes` を `frame_chain_finalize_tests.rs` から集約（テーマ間共有ヘルパの置き場） | 3.3 |
+| `crates/areka/src/emo2_boot/frame_harness_tests.rs` | NEW: ハーネスそのものの檻——残留の非持越（写し・キュー）・同一プロセス連続 2 シナリオの判定不変・刻印 2 権威の一致・3 源の独立差替・二体同時／片方のみの駆動・単一スレッド実行器での捕捉・接続宣言の x64 門の本文走査・**再スナップの陽性駆動**（実表示寸が食い違うスコープだけを書き直す＋べき等）。最後の 1 本が要るのは、姉妹の「同寸なら書かない」が零件の主張ゆえ `run_resnap` を丸ごと無操作にしても恒真で通ってしまうため（task 3.3 のレビューで実測） | 3.3 |
+| `crates/areka/src/emo2_boot/frame_chain_finalize_tests.rs` | MOD: `PerTargetSizes`／`SPAWN_SIZE_*`／`settled_sizes` の定義を `frame_test_support.rs` へ移し import に置換（本文の判定は不変） | 3.3 |
 
 > 本表は Requirement 10 の突合台帳である。触ったファイルの集合が本表（2 つの表の合併）と一致していなければならない。ファイルを 1 つでも触ったら同時に行を足すこと。
 >

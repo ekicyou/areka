@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::sync::mpsc::Receiver;
 use std::sync::{mpsc, Arc, Mutex};
+use std::time::Instant;
 use areka_emo_atlas::AtlasTable;
 use areka_emo_compose::{BindSet, EmoWorld};
 use areka_emo_text::state::TextLayerConfig;
@@ -8,15 +9,20 @@ use areka_seriko::{AnimationTable, BindResolver, SurfaceResolver};
 use tracing::field::{Field, Visit};
 use tracing_subscriber::prelude::*;
 use bevy_ecs::prelude::Entity;
-use windows::Win32::Foundation::{HINSTANCE, HWND};
+use bevy_ecs::schedule::{ExecutorKind, Schedule};
+use bevy_ecs::system::SystemState;
+use windows::Win32::Foundation::{HINSTANCE, HWND, RECT};
 use crate::placement::follow::MonitorSnapshot;
 use crate::placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
 use crate::placement::source::GhostTitles;
 use crate::placement::spawn::spawn_ghost_windows;
 use crate::placement::diag::WINDOW_MOVE_RECORD_TAG;
 use crate::placement::test_support::LogEvent;
-use wintf::ecs::{Point, SizeI, WindowHandle, WindowPos};
+use wintf::ecs::{FrameCount, Point, SizeI, WindowHandle, WindowPos};
 use wintf::ecs::layout::{Arrangement, Offset};
+use wintf::ecs::window::monitor::Monitor;
+use wintf::ecs::window::transition_diag::{self, TickStart};
+use wintf::ecs::window::{SetWindowPosCommand, drain_window_pos_commands};
 use wintf::ecs::DPI;
 use crate::emo2_boot::assets::{BalloonScopeAssets, BootAssets, LoopTables, ScopeAssets};
 
@@ -455,6 +461,292 @@ pub(super) fn s2_assert_work_area_bottom_moves(from_dpi: u16, to_dpi: u16) {
         from, to,
         "探針が退化している: dpi {from_dpi}→{to_dpi} で work area 下端が動かない（この合成レイアウトでは S2 を観測できない）"
     );
+}
+
+// ── task 3.3: 多フレーム駆動ハーネス（要件 7.2／7.5／7.6／7.7）────────────────
+//
+// 遷移は 1 フレームでは終わらない——作業領域源の差替・窓の拡大率の変化・報告寸の landing・
+// 連鎖の解き直しが**別々のフレーム**に落ちる。本節はそれを決定論で並べるための駆動口を
+// 与える（実 GPU も実高 DPI モニタも要らない＝要件 7.2）。
+
+/// 常時テストは純 x64（要件 7.5）。i686 で本ハーネスを組もうとしたらビルドで止める
+/// ——「32bit でも走ってしまった」を実行時の観察に委ねない。
+const _: () = assert!(
+    cfg!(target_pointer_width = "64"),
+    "多フレーム駆動ハーネスの常時テストは x64 のみで走る（要件 7.5）"
+);
+
+/// scope ごとに物理寸を作り分ける [`PhysicalSizeSource`] の fake。
+///
+/// [`FakeSizes`] は shell／balloon の 2 値しか返せず、「全スコープの寸が窓と一致しているか」を
+/// 扱う連鎖・再スナップの檻には粒度が足りない。値 `None` は「表示未成立（初回 `ShowSurface`
+/// 前）」を表す。
+pub(super) struct PerTargetSizes(BTreeMap<u32, Option<(u32, u32)>>);
+
+impl PerTargetSizes {
+    /// scope → shell 物理寸（`None` は未表示）を与える。
+    pub(super) fn new<I: IntoIterator<Item = (usize, Option<(u32, u32)>)>>(entries: I) -> Self {
+        Self(
+            entries
+                .into_iter()
+                .map(|(scope, size)| (shell_target(scope as u32).0, size))
+                .collect(),
+        )
+    }
+}
+
+impl PhysicalSizeSource for PerTargetSizes {
+    fn physical_size(&self, target: TargetId) -> Option<(u32, u32)> {
+        self.0.get(&target.0).copied().flatten()
+    }
+}
+
+/// spawn 時の実寸（[`resnap_placements`] と一致）。窓の `WindowPos.size` と揃える基準値。
+pub(super) const SPAWN_SIZE_0: (u32, u32) = (434, 687);
+/// 同上（後続スコープ）。
+pub(super) const SPAWN_SIZE_1: (u32, u32) = (278, 357);
+
+/// 全スコープが表示成立し、寸が窓と一致している状態の fake。
+pub(super) fn settled_sizes() -> PerTargetSizes {
+    PerTargetSizes::new([(0, Some(SPAWN_SIZE_0)), (1, Some(SPAWN_SIZE_1))])
+}
+
+/// **単一スレッド実行器**を明示した空スケジュール（要件 7.6）。
+///
+/// ログ捕捉（`tracing::subscriber::with_default`＝スレッドローカルの dispatcher 差替）に依る
+/// 検証を既定の多スレッド実行器で回すと、システムがワーカースレッドへ載って 1 行も捕捉
+/// できず、檻が空虚に緑になる。捕捉に依る検証はここから組んだスケジュールで走らせ、
+/// 「捕捉できる実行形態」を呼び出し側の字面に残す。
+pub(super) fn single_threaded_schedule() -> Schedule {
+    let mut schedule = Schedule::default();
+    schedule.set_executor_kind(ExecutorKind::SingleThreaded);
+    schedule
+}
+
+/// 合成モニタ 1 台（実行時のモニタ表＝`Monitor` entity 群の要素）。
+fn harness_monitor(handle: isize, work_area: RectPx, monitor_bottom: i32, dpi: u32) -> Monitor {
+    Monitor {
+        handle,
+        bounds: RECT {
+            left: work_area.left,
+            top: work_area.top,
+            right: work_area.right,
+            bottom: monitor_bottom,
+        },
+        work_area: RECT {
+            left: work_area.left,
+            top: work_area.top,
+            right: work_area.right,
+            bottom: work_area.bottom,
+        },
+        dpi,
+        is_primary: handle == 1,
+    }
+}
+
+/// 多フレーム駆動ハーネス。
+///
+/// [`dpi_world`] の檻（2 スコープ・偽 `WindowHandle`・書込 witness・`DPI` 96）を土台に、
+/// **フレームを進めながら 3 つの源を差し替える**口を足したもの:
+///
+/// | 源 | 差替口 | 実体 |
+/// |---|---|---|
+/// | 作業領域源 | [`set_work_area_source`](Self::set_work_area_source) | `MonitorSnapshot` 資源 |
+/// | 実行時のモニタ表 | [`set_monitor_table`](Self::set_monitor_table) | `Monitor` entity 群 |
+/// | 窓の拡大率 | [`set_window_dpi`](Self::set_window_dpi)／[`set_scope_dpi`](Self::set_scope_dpi) | 各窓の `DPI` |
+///
+/// # テスト間で状態を残さない（要件 7.7）
+///
+/// 後始末は **[`FrameHarness::new`] と `Drop` の両側**にある——窓書込キューの取り出し
+/// （`drain_window_pos_commands`）と観測の写しの初期化（`transition_diag::reset_for_test`）を
+/// 冒頭と末尾の双方で行う。
+///
+/// `new` の側が要るのは、ハーネスを使わない経路が残した汚れも掬うためである（この向きだけを
+/// 残留の検査が固定している）。`Drop` の側が要るのは、ハーネスを使ったテストの**次に走るのが
+/// ハーネスでない**場合に、キューと写しが汚れたまま渡ってしまうためである——この向きは
+/// areka 側に現在読み手が居ないので**どのテストでも赤にできない**（task 3.3 のレビューで確認）。
+/// 検査できない残留を「隔離済み」と言わないために、両側で閉じる。
+/// なお `Drop` はスコープ末尾で走るので、ハーネスを生かしたまま次を組む形（残留の検査そのもの）
+/// は壊れない。
+///
+/// スコープを跨ぐ資源はほかに World 単位の `FrameCount`／`TickStart` があるが、これらは
+/// ハーネスが**自前の `World`** に持つので、そもそもテスト間で共有されない。
+///
+/// # モニタ別拡大率表は持たない
+///
+/// 表そのものを新設するのは task 5.1 であり、その注入口は表の導入と同時に足す。
+pub(super) struct FrameHarness {
+    /// 駆動対象の World（2 スコープぶんのゴースト窓・作業領域源・モニタ表を持つ）。
+    pub(super) world: World,
+    /// 窓 entity の正本（`GhostWindows` 資源と同じ内容の写し）。
+    ghost_windows: GhostWindows,
+    /// スコープ番号（昇順）。
+    scopes: Vec<usize>,
+    /// 進めたフレーム番号（`new` 直後は 0＝tick 前）。
+    frame: u32,
+    /// DPI 相の永続 `SystemState`（run を跨いで `last_run` を保つ＝毎 run 全窓誤マッチの回避）。
+    dpi_state: Option<SystemState<DpiChangedQuery>>,
+    /// 実行時のモニタ表として spawn した entity 群（差替時に消す対象）。
+    monitors: Vec<Entity>,
+}
+
+impl FrameHarness {
+    /// 残留の無い状態から多フレーム駆動を始める（要件 7.7）。
+    pub(super) fn new() -> Self {
+        // 前のテストが残した窓書込指令を捨てる（**実行はしない**＝実 `SetWindowPos` を呼ばない）。
+        let _residue = drain_window_pos_commands();
+        // 観測の写し（直近 tick のフレーム番号・flush 区間の起点）を初期化する。
+        transition_diag::reset_for_test();
+
+        let (world, ghost_windows) = dpi_world();
+        let scopes: Vec<usize> = ghost_windows.scopes().collect();
+        FrameHarness {
+            world,
+            ghost_windows,
+            scopes,
+            frame: 0,
+            dpi_state: None,
+            monitors: Vec::new(),
+        }
+    }
+
+    /// 直近に進めたフレーム番号（`new` 直後は 0）。
+    pub(super) fn frame(&self) -> u32 {
+        self.frame
+    }
+
+    /// 駆動対象のスコープ（昇順）。
+    pub(super) fn scopes(&self) -> &[usize] {
+        &self.scopes
+    }
+
+    /// 当該スコープのキャラ窓。
+    pub(super) fn char_window(&self, scope: usize) -> Entity {
+        self.ghost_windows
+            .char_window(scope)
+            .expect("char 窓がある")
+    }
+
+    /// 当該スコープのバルーン窓。
+    pub(super) fn balloon_window(&self, scope: usize) -> Entity {
+        self.ghost_windows
+            .balloon_window(scope)
+            .expect("balloon 窓がある")
+    }
+
+    /// フレームを 1 つ進め、新しいフレーム番号を返す。
+    ///
+    /// 刻印の 2 つの権威を `try_tick_world` と**同一の規律**で進める（D1）: World 資源
+    /// （`FrameCount`＋`TickStart`）を更新し、同じ値をスレッド局所の写しへ配る。片方だけ
+    /// 進めると、World を借りる観測点と借りない観測点でフレーム系列が割れる。
+    pub(super) fn advance_frame(&mut self) -> u32 {
+        self.frame += 1;
+        let tick_start = Instant::now();
+        self.world.insert_resource(FrameCount(self.frame));
+        self.world.insert_resource(TickStart(tick_start));
+        transition_diag::begin_tick(self.frame, tick_start);
+        self.frame
+    }
+
+    /// 作業領域源（`MonitorSnapshot` 資源）を差し替える。
+    pub(super) fn set_work_area_source(&mut self, snapshot: MonitorSnapshot) {
+        self.world.insert_resource(snapshot);
+    }
+
+    /// 当該 DPI 水準の合成マルチモニタ（[`s2_snapshot`]）を作業領域源に据える。
+    pub(super) fn set_work_area_source_for_dpi(&mut self, dpi: u16) {
+        self.set_work_area_source(s2_snapshot(dpi));
+    }
+
+    /// 実行時のモニタ表（`Monitor` entity 群）を差し替える（既存の表は消える）。
+    pub(super) fn set_monitor_table(&mut self, monitors: Vec<Monitor>) {
+        for entity in std::mem::take(&mut self.monitors) {
+            self.world.despawn(entity);
+        }
+        self.monitors = monitors
+            .into_iter()
+            .map(|monitor| self.world.spawn(monitor).id())
+            .collect();
+    }
+
+    /// 当該 DPI 水準の合成マルチモニタを実行時のモニタ表に据える（[`s2_snapshot`] と同一
+    /// レイアウト・**作業領域源とは独立に**差し替わる）。
+    pub(super) fn set_monitor_table_for_dpi(&mut self, dpi: u16) {
+        let neighbor = s2_neighbor_work_area();
+        self.set_monitor_table(vec![
+            harness_monitor(
+                1,
+                s2_work_area_for_dpi(dpi),
+                S2_MONITOR_BOTTOM,
+                u32::from(dpi),
+            ),
+            harness_monitor(2, neighbor, neighbor.bottom, u32::from(dpi)),
+        ]);
+    }
+
+    /// 全スコープの全窓（キャラ・バルーン）の拡大率を差し替える（OS 設定の拡大率変更）。
+    pub(super) fn set_window_dpi(&mut self, dpi: u16) {
+        for scope in self.scopes.clone() {
+            self.set_scope_dpi(scope, dpi);
+        }
+    }
+
+    /// 当該スコープの 2 窓だけ拡大率を差し替える（別モニタ・段階的な受理の再現）。
+    pub(super) fn set_scope_dpi(&mut self, scope: usize, dpi: u16) {
+        for entity in [self.char_window(scope), self.balloon_window(scope)] {
+            self.world
+                .entity_mut(entity)
+                .insert(DPI::from_dpi(dpi, dpi));
+        }
+    }
+
+    /// DPI 相を 1 回回す（`SystemState` はハーネスが run を跨いで保持する）。
+    pub(super) fn run_dpi_phase<S: ScaleReportSource>(&mut self, source: &mut S) {
+        dpi_phase_with(source, &mut self.dpi_state, &mut self.world);
+    }
+
+    /// 再スナップを 1 回回す。
+    pub(super) fn run_resnap<S: PhysicalSizeSource + ?Sized>(&mut self, source: &S) {
+        resnap_with(source, &mut self.world);
+    }
+
+    /// 連鎖確定を 1 回回す（一度きりの契約は本番同様・`ChainFinalized` で守られる）。
+    pub(super) fn run_chain_finalize<S: PhysicalSizeSource + ?Sized>(&mut self, source: &S) {
+        finalize_chain_once_with(source, &mut self.world);
+    }
+
+    /// 積まれた窓書込指令を**実行せずに**取り出す（D11 の検査口）。
+    ///
+    /// 取り出す先はスレッド全体で 1 本のキューであり、ハーネスごとに分かれていない。
+    /// 同一スレッドで 2 つのハーネスを同時に生かすと、どちらの `drain_writes` も
+    /// 両者の書込を取り出す。
+    pub(super) fn drain_writes(&mut self) -> Vec<SetWindowPosCommand> {
+        drain_window_pos_commands()
+    }
+
+    /// 全窓の書込 witness を sentinel へ戻す（フェーズ境界で「以降の書込」だけを見る）。
+    pub(super) fn reset_write_witness(&mut self) {
+        reset_write_witness(&mut self.world, &self.ghost_windows);
+    }
+
+    /// 当該スコープのキャラ窓の接地点（下端中央・物理 px）。
+    pub(super) fn ground_point(&self, scope: usize) -> (i32, i32) {
+        s2_ground_point(&self.world, self.char_window(scope))
+    }
+}
+
+impl Drop for FrameHarness {
+    /// 次に走るのがハーネスでない場合に備えて、末尾でも閉じる（要件 7.7）。
+    ///
+    /// `new` 側の後始末だけだと、ハーネスを使ったテストの次にハーネスを使わないテストが
+    /// 来たとき、キューと観測の写しが汚れたまま渡る。この向きは areka 側に現在読み手が
+    /// 居ないため**どのテストでも赤にできない**——検査できない残留を放置しないために、
+    /// 構築と破棄の両側で閉じる。`Drop` はスコープ末尾で走るので、ハーネスを生かしたまま
+    /// 次を組む形（残留の検査そのもの）は壊れない。
+    fn drop(&mut self) {
+        let _residue = drain_window_pos_commands();
+        transition_diag::reset_for_test();
+    }
 }
 
 /// 捕捉イベントから窓移動レコード行だけを抜く（他の debug ログは無視）。
