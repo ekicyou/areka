@@ -64,12 +64,12 @@ fn cursor_over_demo_window(demo: &Demo, world: &World) -> bool {
 
 pub(super) fn drive_demo_system(world: &mut World) {
     // 未挿入 or 完了済みなら何もしない。
-    match world.get_non_send_resource::<Demo>() {
+    match world.get_non_send::<Demo>() {
         Some(d) if !d.finished => {}
         _ => return,
     }
     let mut demo = world
-        .remove_non_send_resource::<Demo>()
+        .remove_non_send::<Demo>()
         .expect("直上で存在確認済み");
 
     if !demo.attached {
@@ -82,7 +82,7 @@ pub(super) fn drive_demo_system(world: &mut World) {
         drive_scenario(&mut demo, world);
     }
 
-    world.insert_non_send_resource(demo);
+    world.insert_non_send(demo);
 }
 
 /// GPU 資源到達フレームで attach→ShowSurface→結線（text_slot_view→spawn_emo_text→routing 登録）

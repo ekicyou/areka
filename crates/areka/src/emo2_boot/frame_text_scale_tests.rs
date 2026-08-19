@@ -111,7 +111,7 @@ fn emo2_frame_system_drives_text_scale_phase_every_frame() {
     wiring
         .balloon_models
         .insert(0, areka_parsers::balloon::parse_str("", None));
-    world.insert_non_send_resource(wiring);
+    world.insert_non_send(wiring);
 
     let first = capture_logs(|| emo2_frame_system(&mut world));
     assert_eq!(
@@ -127,7 +127,7 @@ fn emo2_frame_system_drives_text_scale_phase_every_frame() {
         "2 フレーム目は同一状態ゆえ鳴らない（エッジガードが system 越しに効く）: {second:?}"
     );
     assert!(
-        world.get_non_send_resource::<Emo2Wiring>().is_some(),
+        world.get_non_send::<Emo2Wiring>().is_some(),
         "wiring は remove→insert で必ず戻る"
     );
 }
@@ -213,7 +213,7 @@ fn run_dpi_phase_persists_system_state_across_frames_in_production_path() {
 fn emo2_frame_system_runs_dpi_phase_without_writes_when_unattached() {
     let (mut world, gw) = dpi_world();
     let (_tx, rx) = mpsc::channel::<PresentCommand>();
-    world.insert_non_send_resource(headless_wiring_with(rx, zero_clock()));
+    world.insert_non_send(headless_wiring_with(rx, zero_clock()));
 
     // DPI 差替（Changed 発火）→ 排他 system を 2 フレーム回す。
     world
@@ -223,7 +223,7 @@ fn emo2_frame_system_runs_dpi_phase_without_writes_when_unattached() {
     emo2_frame_system(&mut world);
 
     assert!(
-        world.get_non_send_resource::<Emo2Wiring>().is_some(),
+        world.get_non_send::<Emo2Wiring>().is_some(),
         "wiring は remove→insert で必ず戻る"
     );
     for scope in [0usize, 1] {

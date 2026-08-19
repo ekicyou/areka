@@ -216,7 +216,7 @@ fn build_and_spawn(world: &mut World) {
         ))
         .id();
 
-    world.insert_non_send_resource(Demo {
+    world.insert_non_send(Demo {
         presenter: EmoPresenter::new(),
         win,
         assets: Some(assets),
@@ -254,13 +254,13 @@ fn on_balloon_pressed(
 fn drive_system(world: &mut World) {
     // ダブルクリック終了要求を最優先で回収する。
     if world.get_resource::<QuitRequested>().map(|q| q.0).unwrap_or(false) {
-        if let Some(demo) = world.remove_non_send_resource::<Demo>() {
+        if let Some(demo) = world.remove_non_send::<Demo>() {
             world.despawn(demo.win); // registry 空遷移で run() が復帰する。
         }
         return;
     }
 
-    let Some(mut demo) = world.remove_non_send_resource::<Demo>() else {
+    let Some(mut demo) = world.remove_non_send::<Demo>() else {
         return;
     };
     if !demo.attached {
@@ -268,7 +268,7 @@ fn drive_system(world: &mut World) {
     } else {
         drive_typewriter(&mut demo, world);
     }
-    world.insert_non_send_resource(demo);
+    world.insert_non_send(demo);
 }
 
 /// GPU 資源到達フレームで attach→ShowSurface→結線を 1 回だけ行う。

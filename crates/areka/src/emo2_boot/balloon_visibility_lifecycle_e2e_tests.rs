@@ -97,7 +97,7 @@ fn script_occupancy_end_becomes_the_measurement_anchor_in_the_decision_core() {
 
     // ── 表示層は headless（`attach_target` は GPU 資源を要さず、可視状態の照会はそのまま通る） ──
     let mut world = World::new();
-    world.insert_non_send_resource(BalloonWiring::new(mpsc::channel().0));
+    world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
     let window = world.spawn_empty().id();
     wiring
         .presenter

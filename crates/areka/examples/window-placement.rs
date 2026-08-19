@@ -334,7 +334,7 @@ fn build_and_spawn(world: &mut World) {
         }
     }
 
-    world.insert_non_send_resource(PlacementBoot {
+    world.insert_non_send(PlacementBoot {
         presenter: EmoPresenter::new(),
         pending,
         attached: false,
@@ -391,7 +391,7 @@ fn build_shell_material(
 /// GPU 資源（`GraphicsCore`/`WucGraphicsResource`）が揃うまで保留し次 tick で再試行）。
 fn boot_present_system(world: &mut World) {
     // 未挿入 or 装着済みなら何もしない（装着後の remove/insert churn を避ける）。
-    match world.get_non_send_resource::<PlacementBoot>() {
+    match world.get_non_send::<PlacementBoot>() {
         Some(b) if !b.attached => {}
         _ => return,
     }
@@ -407,7 +407,7 @@ fn boot_present_system(world: &mut World) {
     }
 
     let mut boot = world
-        .remove_non_send_resource::<PlacementBoot>()
+        .remove_non_send::<PlacementBoot>()
         .expect("直上で存在確認済み");
 
     for t in boot.pending.iter_mut() {
@@ -440,7 +440,7 @@ fn boot_present_system(world: &mut World) {
     }
 
     boot.attached = true;
-    world.insert_non_send_resource(boot);
+    world.insert_non_send(boot);
     tracing::info!("window-placement: 全 target の装着処理を完了");
 }
 

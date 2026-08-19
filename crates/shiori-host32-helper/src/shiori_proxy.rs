@@ -59,12 +59,12 @@ const GMEM_FIXED: GLOBAL_ALLOC_FLAGS = GLOBAL_ALLOC_FLAGS(0);
 ///
 /// `i686-pc-windows-msvc` では C ABI＝cdecl。pasta の `extern "C"` と ABI 同一。戻り `bool` は
 /// **Rust bool 1 byte**（Win32 BOOL(i32) ではない）。
-type LoadFn = unsafe extern "cdecl" fn(hdir: HGLOBAL, len: usize) -> bool;
+type LoadFn = unsafe extern "C" fn(hdir: HGLOBAL, len: usize) -> bool;
 /// `unload() -> bool`（引数なし・cdecl）。Drop の courtesy unload で呼ぶ。
-type UnloadFn = unsafe extern "cdecl" fn() -> bool;
+type UnloadFn = unsafe extern "C" fn() -> bool;
 /// `request(req: HGLOBAL, len: *mut usize) -> HGLOBAL`（`len` は in/out）。
 /// **本仕様では解決のみ・呼出しない**（呼出 API は下流 host32-request が追加する）。
-type RequestFn = unsafe extern "cdecl" fn(req: HGLOBAL, len: *mut usize) -> HGLOBAL;
+type RequestFn = unsafe extern "C" fn(req: HGLOBAL, len: *mut usize) -> HGLOBAL;
 
 /// SHIORI DLL 確立の失敗種別（design §366-371）。観測可能な形で返す（panic しない）。
 #[derive(Debug)]
@@ -273,7 +273,8 @@ impl Drop for ShioriByteProxy {
 fn global_alloc_copy(bytes: &[u8]) -> Result<HGLOBAL, ProxyError> {
     // 空バッファでも 0 バイト確保は有効（len==0 の load_dir は運用上ないが防御的に許容）。
     // SAFETY: GlobalAlloc は失敗時 Err を返す（下で map）。GMEM_FIXED ゆえハンドル＝先頭ポインタ。
-    let h = unsafe { GlobalAlloc(GMEM_FIXED, bytes.len()) }.map_err(|_| ProxyError::EncodingFailed)?;
+    let h =
+        unsafe { GlobalAlloc(GMEM_FIXED, bytes.len()) }.map_err(|_| ProxyError::EncodingFailed)?;
     if h.is_invalid() {
         return Err(ProxyError::EncodingFailed);
     }
@@ -311,7 +312,8 @@ fn ansi_encode(path: &Path) -> Result<Vec<u8>, ProxyError> {
     let mut buf = vec![0u8; needed as usize];
     // SAFETY: `buf` は `needed` バイトの可変領域（i8 として渡す）。`wide` は有効な UTF-16 スライス。
     // WideCharToMultiByte は `&mut [u8]` を i8 バッファとして受ける（windows 0.62.2 の Some(&mut buf)）。
-    let written = unsafe { WideCharToMultiByte(CP_ACP, 0, &wide, Some(&mut buf), PCSTR::null(), None) };
+    let written =
+        unsafe { WideCharToMultiByte(CP_ACP, 0, &wide, Some(&mut buf), PCSTR::null(), None) };
     if written <= 0 {
         return Err(ProxyError::EncodingFailed);
     }
@@ -481,8 +483,7 @@ mod tests {
         }
 
         // load 成功（testdll の load は入力 HGLOBAL を GlobalFree し true 返し）。
-        let proxy = ShioriByteProxy::load(&dll_path, &load_dir)
-            .expect("testdll load must succeed");
+        let proxy = ShioriByteProxy::load(&dll_path, &load_dir).expect("testdll load must succeed");
 
         // まだ Drop していないのでマーカーは未作成。
         assert!(!marker.exists(), "unload はまだ呼ばれていない");
@@ -543,8 +544,7 @@ mod tests {
         std::fs::copy(&src_dll, &dll_path).expect("copy shiori.dll into load_dir");
 
         // load 成功（testdll の load は入力 HGLOBAL を callee-free し true 返し）。
-        let proxy =
-            ShioriByteProxy::load(&dll_path, &load_dir).expect("testdll load must succeed");
+        let proxy = ShioriByteProxy::load(&dll_path, &load_dir).expect("testdll load must succeed");
 
         // GET(OnTestValue) → 200 OK＋固定 Value。
         let get_req =

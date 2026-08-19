@@ -312,7 +312,7 @@ fn releasing_outside_the_work_area_persists_the_raw_offset_and_corrects_only_the
     });
 
     let (mut world, char_window, balloon) = base_world(true);
-    world.insert_non_send_resource(PersistWiring {
+    world.insert_non_send(PersistWiring {
         publisher: parts.publisher.clone(),
     });
     let released_at = release_outside();

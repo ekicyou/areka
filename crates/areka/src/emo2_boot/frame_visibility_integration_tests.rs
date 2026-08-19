@@ -65,7 +65,7 @@ fn gpu_frame_world() -> (World, crate::placement::spawn::GhostWindows) {
     let wuc = WucGraphicsResource::new(d2d).expect("WucGraphicsResource::new 失敗");
     world.insert_resource(core);
     world.insert_resource(wuc);
-    world.insert_non_send_resource(BalloonWiring::new(mpsc::channel().0));
+    world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
     (world, gw)
 }
 
@@ -94,10 +94,10 @@ fn boot_wiring(
 /// 相を個別に呼ばないのが要点である——相順の性質を見たい檻が相を自分で並べたら、檻は自分の
 /// 並べ方を検査するだけになる。
 fn advance_frame(world: &mut World, wiring: Emo2Wiring) -> Emo2Wiring {
-    world.insert_non_send_resource(wiring);
+    world.insert_non_send(wiring);
     emo2_frame_system(world);
     world
-        .remove_non_send_resource::<Emo2Wiring>()
+        .remove_non_send::<Emo2Wiring>()
         .expect("emo2_frame_system は取り出した結線資源を必ず戻す")
 }
 

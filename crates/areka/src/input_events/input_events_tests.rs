@@ -32,7 +32,7 @@ fn world_with_wiring(
     let (tx, rx) = mpsc::channel::<KanadeMsg>();
     let wiring = MouseWiring::with_clock(tx, RegionSource::Mock(region), clock);
     let mut world = World::new();
-    world.insert_non_send_resource(wiring);
+    world.insert_non_send(wiring);
     (world, rx)
 }
 
@@ -202,12 +202,12 @@ fn wire_mouse_input_inserts_mouse_wiring_non_send() {
     let (tx, _rx) = mpsc::channel::<KanadeMsg>();
     let mut world = World::new();
     assert!(
-        world.get_non_send_resource::<MouseWiring>().is_none(),
+        world.get_non_send::<MouseWiring>().is_none(),
         "挿入前は MouseWiring 不在"
     );
     wire_mouse_input(&mut world, tx);
     assert!(
-        world.get_non_send_resource::<MouseWiring>().is_some(),
+        world.get_non_send::<MouseWiring>().is_some(),
         "wire_mouse_input 後は MouseWiring が NonSend 挿入されている"
     );
 }

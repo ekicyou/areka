@@ -179,7 +179,7 @@ fn bind_mustselect_second_on_replaces_prior_part_in_category() {
     let records = out.records();
 
     // 1 度目: 目=笑（1301）を着衣 → {1100,1207,1301}。
-    handle_message(
+    let _ = handle_message(
         &resolver,
         &bind_resolver,
         &mut states,
@@ -188,7 +188,7 @@ fn bind_mustselect_second_on_replaces_prior_part_in_category() {
         SerikoMsg::Cue(bind_carrier_cue("0", &["目", "笑", "1"])),
     );
     // 2 度目: 目=閉（1304）を着衣 → 排他置換で 1301 が外れ {1100,1207,1304}。
-    handle_message(
+    let _ = handle_message(
         &resolver,
         &bind_resolver,
         &mut states,
@@ -608,7 +608,7 @@ fn bind_cross_category_accumulates_via_actor() {
     let mut loop_runtime = inert_runtime();
     let records = out.records();
 
-    handle_message(
+    let _ = handle_message(
         &resolver,
         &bind_resolver,
         &mut states,
@@ -616,7 +616,7 @@ fn bind_cross_category_accumulates_via_actor() {
         &mut out,
         SerikoMsg::Cue(bind_carrier_cue("0", &["腕", "伸び", "1"])),
     );
-    handle_message(
+    let _ = handle_message(
         &resolver,
         &bind_resolver,
         &mut states,

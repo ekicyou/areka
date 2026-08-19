@@ -34,7 +34,7 @@ pub(super) fn on_probe_pointer_moved(
 
     // presenter・char 窓は ProbeBoot から得る（ハンドラ実行時は insert 済み＝Input schedule と
     // FrameFinalize は同一 tick 内で直列ゆえ remove 中と重ならない）。
-    let Some(boot) = world.get_non_send_resource::<ProbeBoot>() else {
+    let Some(boot) = world.get_non_send::<ProbeBoot>() else {
         return false;
     };
     let char_window = boot.char_window;

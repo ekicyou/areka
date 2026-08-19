@@ -257,7 +257,7 @@ fn observe_hover_wiring<'w>(
     world: &'w World,
     state: &mut BalloonVisibilityState,
 ) -> Option<&'w BalloonWiring> {
-    match world.get_non_send_resource::<BalloonWiring>() {
+    match world.get_non_send::<BalloonWiring>() {
         Some(wiring) => {
             state.observation_failure_logged.hover_wiring = false;
             Some(wiring)
@@ -503,7 +503,7 @@ fn clear_hover_residency(world: &mut World, scopes: &[u32]) {
     if scopes.is_empty() {
         return;
     }
-    let Some(mut wiring) = world.get_non_send_resource_mut::<BalloonWiring>() else {
+    let Some(mut wiring) = world.get_non_send_mut::<BalloonWiring>() else {
         return;
     };
     for &scope in scopes {

@@ -93,14 +93,14 @@ fn forward_all(inbox: &Receiver<ChoiceSelection>, kanade: &Sender<KanadeMsg>) ->
 /// [`wire_choice_drain`] は `wire_balloon_choice` の直後に呼ばれるため理論上不到達だが、
 /// 毎フレーム走る排他システムゆえ panic せず無記録でもなく縮退する（log-first）。
 pub(crate) fn drain_choice_selections(world: &mut World) {
-    let Some(inbox) = world.get_non_send_resource::<ChoiceSelectionInbox>() else {
+    let Some(inbox) = world.get_non_send::<ChoiceSelectionInbox>() else {
         tracing::trace!(
             event = "choice_drain_no_inbox",
             "ChoiceSelectionInbox 不在（wire_balloon_choice 前）: drain を no-op 縮退"
         );
         return;
     };
-    let Some(forwarder) = world.get_non_send_resource::<ChoiceForwarder>() else {
+    let Some(forwarder) = world.get_non_send::<ChoiceForwarder>() else {
         tracing::trace!(
             event = "choice_drain_no_forwarder",
             "ChoiceForwarder 不在（wire_choice_drain 前）: drain を no-op 縮退"
@@ -124,7 +124,7 @@ pub(crate) fn drain_choice_selections(world: &mut World) {
 /// Precondition: `wire_balloon_choice` 済み（[`ChoiceSelectionInbox`] 存在）。
 /// Postcondition: 以降のフレームで受信済み通知は全件送出試行済み・失敗は warn 記録。
 pub(crate) fn wire_choice_drain(world: &mut World, kanade: Sender<KanadeMsg>) {
-    world.insert_non_send_resource(ChoiceForwarder { kanade });
+    world.insert_non_send(ChoiceForwarder { kanade });
     world.resource_mut::<Schedules>().add_systems(
         Input,
         drain_choice_selections.after(dispatch_pointer_events),

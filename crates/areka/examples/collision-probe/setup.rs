@@ -96,7 +96,7 @@ fn build_and_spawn(world: &mut World) {
         return;
     };
 
-    world.insert_non_send_resource(ProbeBoot {
+    world.insert_non_send(ProbeBoot {
         presenter: EmoPresenter::new(),
         char_window,
         assets: Some((emo_world, atlas)),

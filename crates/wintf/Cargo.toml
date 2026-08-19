@@ -22,6 +22,7 @@ bevy_app = { workspace = true }
 bevy_ecs = { workspace = true }
 bevy_tasks = { workspace = true }
 bevy_utils = { workspace = true }
+bitflags = { workspace = true }
 dola = { path = "../dola" }
 nonmax = { workspace = true }
 serde = { version = "1", optional = true, features = ["derive"] }

@@ -87,7 +87,7 @@ fn moved_balloon_wiring_absent_degrades_with_error() {
     let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
     // Emo2Wiring は present（空 runtime）・BalloonWiring は挿入しない。
     let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default())));
-    world.insert_non_send_resource(headless_emo2_wiring(Rc::clone(&runtime)));
+    world.insert_non_send(headless_emo2_wiring(Rc::clone(&runtime)));
     let ev = bubble_move(10, 20);
 
     let logs = capture_logs(|| {
@@ -138,13 +138,13 @@ fn moved_active_choice_transition_injects_and_updates_own_state() {
         runtime.borrow().choice_active(&ActorKey::from("0")),
         "前提: choice_active=true（選択肢スパンあり）"
     );
-    world.insert_non_send_resource(headless_emo2_wiring(Rc::clone(&runtime)));
+    world.insert_non_send(headless_emo2_wiring(Rc::clone(&runtime)));
 
     // 前回注入値 Some(2) を仕込む（遷移検出のため・現行 hit=None ゆえ Inject(None) へ遷移）。
     let (tx, _rx) = mpsc::channel::<ChoiceSelection>();
     let mut bw = BalloonWiring::new(tx);
     bw.set_hover(0, Some(2));
-    world.insert_non_send_resource(bw);
+    world.insert_non_send(bw);
 
     let ev = bubble_move(10, 20);
     let logs = capture_logs(|| {
@@ -156,7 +156,7 @@ fn moved_active_choice_transition_injects_and_updates_own_state() {
 
     assert_eq!(
         world
-            .get_non_send_resource::<BalloonWiring>()
+            .get_non_send::<BalloonWiring>()
             .unwrap()
             .hover(0),
         None,
@@ -187,12 +187,12 @@ fn moved_inactive_with_prior_injection_resets_own_state_without_inject() {
         !runtime.borrow().choice_active(&ActorKey::from("0")),
         "前提: choice_active=false（選択肢スパン無し）"
     );
-    world.insert_non_send_resource(headless_emo2_wiring(Rc::clone(&runtime)));
+    world.insert_non_send(headless_emo2_wiring(Rc::clone(&runtime)));
 
     let (tx, _rx) = mpsc::channel::<ChoiceSelection>();
     let mut bw = BalloonWiring::new(tx);
     bw.set_hover(0, Some(3));
-    world.insert_non_send_resource(bw);
+    world.insert_non_send(bw);
 
     let ev = bubble_move(10, 20);
     let logs = capture_logs(|| {
@@ -204,7 +204,7 @@ fn moved_inactive_with_prior_injection_resets_own_state_without_inject() {
 
     assert_eq!(
         world
-            .get_non_send_resource::<BalloonWiring>()
+            .get_non_send::<BalloonWiring>()
             .unwrap()
             .hover(0),
         None,
@@ -224,10 +224,10 @@ fn moved_inactive_no_prior_injection_is_full_noop() {
     let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
 
     let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default())));
-    world.insert_non_send_resource(headless_emo2_wiring(Rc::clone(&runtime)));
+    world.insert_non_send(headless_emo2_wiring(Rc::clone(&runtime)));
 
     let (tx, _rx) = mpsc::channel::<ChoiceSelection>();
-    world.insert_non_send_resource(BalloonWiring::new(tx)); // hover 空（未注入）
+    world.insert_non_send(BalloonWiring::new(tx)); // hover 空（未注入）
 
     let ev = bubble_move(10, 20);
     let logs = capture_logs(|| {
@@ -239,7 +239,7 @@ fn moved_inactive_no_prior_injection_is_full_noop() {
 
     assert_eq!(
         world
-            .get_non_send_resource::<BalloonWiring>()
+            .get_non_send::<BalloonWiring>()
             .unwrap()
             .hover(0),
         None,
@@ -311,9 +311,9 @@ fn pressed_non_left_button_is_noop_false() {
 
     // Emo2Wiring/BalloonWiring を present にしても、left_down=false なら手前で false 短絡する。
     let runtime = runtime_with_active_choice("0");
-    world.insert_non_send_resource(headless_emo2_wiring(Rc::clone(&runtime)));
+    world.insert_non_send(headless_emo2_wiring(Rc::clone(&runtime)));
     let (bw, rx) = wiring_with_inbox();
-    world.insert_non_send_resource(bw);
+    world.insert_non_send(bw);
 
     // 右ボタン down（left_down=false）——確定ではない。
     let right = Phase::Bubble(PointerState {
@@ -371,7 +371,7 @@ fn pressed_balloon_wiring_absent_degrades_with_error() {
     let mut world = World::new();
     let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
     let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default())));
-    world.insert_non_send_resource(headless_emo2_wiring(Rc::clone(&runtime)));
+    world.insert_non_send(headless_emo2_wiring(Rc::clone(&runtime)));
     let ev = bubble_left_press(10, 20);
 
     let logs = capture_logs(|| {
@@ -422,9 +422,9 @@ fn pressed_inactive_choice_rejected_with_reason_inactive() {
         !runtime.borrow().choice_active(&ActorKey::from("0")),
         "前提: choice_active=false（選択肢スパン無し）"
     );
-    world.insert_non_send_resource(headless_emo2_wiring(Rc::clone(&runtime)));
+    world.insert_non_send(headless_emo2_wiring(Rc::clone(&runtime)));
     let (bw, rx) = wiring_with_inbox();
-    world.insert_non_send_resource(bw);
+    world.insert_non_send(bw);
 
     let ev = bubble_left_press(10, 20);
     let logs = capture_logs(|| {
@@ -466,9 +466,9 @@ fn pressed_active_non_hit_rejected_with_reason_no_hit() {
         runtime.borrow().choice_hit_rows(&ActorKey::from("0")).is_empty(),
         "前提: headless では choice_hit_rows は空（GPU 未実行）＝常に非ヒット"
     );
-    world.insert_non_send_resource(headless_emo2_wiring(Rc::clone(&runtime)));
+    world.insert_non_send(headless_emo2_wiring(Rc::clone(&runtime)));
     let (bw, rx) = wiring_with_inbox();
-    world.insert_non_send_resource(bw);
+    world.insert_non_send(bw);
 
     let ev = bubble_left_press(10, 20);
     let logs = capture_logs(|| {
@@ -545,7 +545,7 @@ fn moved_tunnel_and_resource_degrade_are_side_effect_free() {
         let runtime = match scenario {
             Degrade::Tunnel | Degrade::BalloonWiringAbsent => {
                 let rt = runtime_with_active_choice("0");
-                world.insert_non_send_resource(headless_emo2_wiring(Rc::clone(&rt)));
+                world.insert_non_send(headless_emo2_wiring(Rc::clone(&rt)));
                 Some(rt)
             }
             Degrade::Emo2Absent => None,
@@ -557,7 +557,7 @@ fn moved_tunnel_and_resource_degrade_are_side_effect_free() {
                 let (tx, rx) = mpsc::channel::<ChoiceSelection>();
                 let mut bw = BalloonWiring::new(tx);
                 bw.set_hover(0, Some(2));
-                world.insert_non_send_resource(bw);
+                world.insert_non_send(bw);
                 Some(rx)
             }
             Degrade::BalloonWiringAbsent => None,
@@ -615,7 +615,7 @@ fn moved_tunnel_and_resource_degrade_are_side_effect_free() {
         if let Some(rx) = &inbox_rx {
             assert_eq!(
                 world
-                    .get_non_send_resource::<BalloonWiring>()
+                    .get_non_send::<BalloonWiring>()
                     .unwrap()
                     .hover(0),
                 Some(2),
@@ -655,7 +655,7 @@ fn pressed_tunnel_and_resource_degrade_are_side_effect_free() {
         let runtime = match scenario {
             Degrade::Tunnel | Degrade::BalloonWiringAbsent => {
                 let rt = runtime_with_active_choice("0");
-                world.insert_non_send_resource(headless_emo2_wiring(Rc::clone(&rt)));
+                world.insert_non_send(headless_emo2_wiring(Rc::clone(&rt)));
                 Some(rt)
             }
             Degrade::Emo2Absent => None,
@@ -666,7 +666,7 @@ fn pressed_tunnel_and_resource_degrade_are_side_effect_free() {
                 let (tx, rx) = mpsc::channel::<ChoiceSelection>();
                 let mut bw = BalloonWiring::new(tx);
                 bw.set_hover(0, Some(2));
-                world.insert_non_send_resource(bw);
+                world.insert_non_send(bw);
                 Some(rx)
             }
             Degrade::BalloonWiringAbsent => None,
@@ -726,7 +726,7 @@ fn pressed_tunnel_and_resource_degrade_are_side_effect_free() {
         if let Some(rx) = &inbox_rx {
             assert_eq!(
                 world
-                    .get_non_send_resource::<BalloonWiring>()
+                    .get_non_send::<BalloonWiring>()
                     .unwrap()
                     .hover(0),
                 Some(2),

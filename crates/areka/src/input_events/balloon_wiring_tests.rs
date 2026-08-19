@@ -46,7 +46,7 @@ fn clone_equals_original_and_debug_is_usable() {
 /// **NonSend 挿入**でき、`ChoiceSelectionInbox` の `Receiver` 経由で発行シンクへ送った
 /// `ChoiceSelection` を一度だけ観測できる（送信値と等価・2 度目は `Empty`）。
 ///
-/// mpsc `Sender`/`Receiver` は `!Sync` ゆえ NonSend 資源として挿入する（`insert_non_send_resource`）。
+/// mpsc `Sender`/`Receiver` は `!Sync` ゆえ NonSend 資源として挿入する（`insert_non_send`）。
 /// 受信処理は M1 未消費（下流 W6 `choice-select-events` が置換する seam・5.3）。ここでは
 /// 発行が mpsc 上で観測できることのみを固定し、`resolve_choice` は一切呼ばない（5.4）。
 #[test]
@@ -55,25 +55,25 @@ fn wiring_inserts_non_send_and_selection_observed_via_inbox() {
     let wiring = BalloonWiring::new(tx);
 
     let mut world = World::new();
-    world.insert_non_send_resource(wiring);
-    world.insert_non_send_resource(ChoiceSelectionInbox(rx));
+    world.insert_non_send(wiring);
+    world.insert_non_send(ChoiceSelectionInbox(rx));
 
     assert!(
-        world.get_non_send_resource::<BalloonWiring>().is_some(),
+        world.get_non_send::<BalloonWiring>().is_some(),
         "BalloonWiring は NonSend 挿入されている"
     );
 
     // 発行シンク経由で ChoiceSelection を送る。
     let sel = sample();
     let sent = world
-        .get_non_send_resource::<BalloonWiring>()
+        .get_non_send::<BalloonWiring>()
         .expect("直上で存在確認済み")
         .send_selection(sel.clone());
     assert!(sent, "Receiver 生存中の発行は成功する（Err にならない・5.3）");
 
     // seam の Receiver 経由で送信値を観測する。
     let inbox = world
-        .get_non_send_resource::<ChoiceSelectionInbox>()
+        .get_non_send::<ChoiceSelectionInbox>()
         .expect("ChoiceSelectionInbox は NonSend 挿入されている");
     let received = inbox.0.try_recv().expect("発行した ChoiceSelection が届く");
     assert_eq!(received, sel, "受信値は送信値と等価（task 2.1 の PartialEq 再利用）");
@@ -227,27 +227,27 @@ fn attach_installs_handlers_on_all_balloon_windows_and_leaves_char_unchanged() {
 
 /// NonSend 結線檻（R5.5）: wire_balloon_choice が BalloonWiring＋ChoiceSelectionInbox を NonSend 挿入。
 #[test]
-fn wire_inserts_both_non_send_resources() {
+fn wire_inserts_both_non_sends() {
     let mut world = World::new();
     world.init_resource::<Schedules>(); // wire は schedule 登録も行うため Schedules 既在が前提。
 
     assert!(
-        world.get_non_send_resource::<BalloonWiring>().is_none(),
+        world.get_non_send::<BalloonWiring>().is_none(),
         "挿入前は BalloonWiring 不在"
     );
     assert!(
-        world.get_non_send_resource::<ChoiceSelectionInbox>().is_none(),
+        world.get_non_send::<ChoiceSelectionInbox>().is_none(),
         "挿入前は ChoiceSelectionInbox 不在"
     );
 
     wire_balloon_choice(&mut world);
 
     assert!(
-        world.get_non_send_resource::<BalloonWiring>().is_some(),
+        world.get_non_send::<BalloonWiring>().is_some(),
         "wire 後は BalloonWiring が NonSend 挿入されている"
     );
     assert!(
-        world.get_non_send_resource::<ChoiceSelectionInbox>().is_some(),
+        world.get_non_send::<ChoiceSelectionInbox>().is_some(),
         "wire 後は ChoiceSelectionInbox が NonSend 挿入されている（発行 seam・5.3）"
     );
 }
@@ -282,17 +282,17 @@ fn registered_leave_system_runs_in_input_schedule_and_clears_balloon_hover() {
     // バルーン所有 leave（scope 0）＋表示中 choice の実 runtime。
     spawn_balloon_leave_child(&mut world, 0);
     let runtime = runtime_with_active_choice("0");
-    world.insert_non_send_resource(headless_emo2_wiring(Rc::clone(&runtime)));
+    world.insert_non_send(headless_emo2_wiring(Rc::clone(&runtime)));
 
     // wire で BalloonWiring／Inbox 挿入＋leave system 登録。
     wire_balloon_choice(&mut world);
     // wire が挿入した BalloonWiring に前回注入値 Some(2) を仕込む（解除対象）。
     world
-        .get_non_send_resource_mut::<BalloonWiring>()
+        .get_non_send_mut::<BalloonWiring>()
         .expect("wire で BalloonWiring 挿入済み")
         .set_hover(0, Some(2));
     assert_eq!(
-        world.get_non_send_resource::<BalloonWiring>().unwrap().hover(0),
+        world.get_non_send::<BalloonWiring>().unwrap().hover(0),
         Some(2),
         "前提: hover[0]=Some(2)"
     );
@@ -301,7 +301,7 @@ fn registered_leave_system_runs_in_input_schedule_and_clears_balloon_hover() {
     world.run_schedule(Input);
 
     assert_eq!(
-        world.get_non_send_resource::<BalloonWiring>().unwrap().hover(0),
+        world.get_non_send::<BalloonWiring>().unwrap().hover(0),
         None,
         "Input 実行で登録済み clear_balloon_hover_on_leave が走り hover を解除する（登録の行動的証明）"
     );

@@ -17,7 +17,7 @@ use super::{
 /// 分離する——`SetWindowPosCommand` は発行 tick の World 借用解放後に flush されるため（`tick_bridge.rs:199-200`）、
 /// 同 tick 内の `GetClientRect` は旧寸を返す。ゆえに resize と検証は別フレームに分ける。
 pub(super) fn boot_probe_system(world: &mut World) {
-    let phase = match world.get_non_send_resource::<ProbeBoot>() {
+    let phase = match world.get_non_send::<ProbeBoot>() {
         Some(b) => b.phase,
         None => return,
     };
@@ -43,7 +43,7 @@ fn attach_show_and_resize(world: &mut World) {
     }
 
     let mut boot = world
-        .remove_non_send_resource::<ProbeBoot>()
+        .remove_non_send::<ProbeBoot>()
         .expect("直上で存在確認済み");
 
     let target = target_map::shell_target(0);
@@ -51,7 +51,7 @@ fn attach_show_and_resize(world: &mut World) {
         // 装着アセットが無い（想定外）。前値保持で Done へ倒す。
         tracing::error!("collision-probe: 装着アセットが空（想定外）— 中止");
         boot.phase = ProbePhase::Done;
-        world.insert_non_send_resource(boot);
+        world.insert_non_send(boot);
         return;
     };
 
@@ -69,7 +69,7 @@ fn attach_show_and_resize(world: &mut World) {
     ) {
         tracing::error!(error = %e, "collision-probe: scope0 char target の attach に失敗 — 中止");
         boot.phase = ProbePhase::Done;
-        world.insert_non_send_resource(boot);
+        world.insert_non_send(boot);
         return;
     }
 
@@ -91,7 +91,7 @@ fn attach_show_and_resize(world: &mut World) {
             "collision-probe: 表示成立後に text_slot_view が None（surface1000 の表示に失敗）— 中止"
         );
         boot.phase = ProbePhase::Done;
-        world.insert_non_send_resource(boot);
+        world.insert_non_send(boot);
         return;
     };
     let native = view.surface_size();
@@ -158,7 +158,7 @@ fn attach_show_and_resize(world: &mut World) {
     );
 
     boot.phase = ProbePhase::WaitingVerify;
-    world.insert_non_send_resource(boot);
+    world.insert_non_send(boot);
 }
 
 /// WaitingVerify（本番 resize の次フレーム以降）: 実窓 `GetClientRect` が
@@ -170,7 +170,7 @@ fn attach_show_and_resize(world: &mut World) {
 /// 引き戻される欠陥をむしろ「正常」と誤判定する（旧実装の陳腐化点）。
 fn verify_physical_size_match(world: &mut World) {
     let mut boot = world
-        .remove_non_send_resource::<ProbeBoot>()
+        .remove_non_send::<ProbeBoot>()
         .expect("直上で存在確認済み");
 
     let target = target_map::shell_target(0);
@@ -181,7 +181,7 @@ fn verify_physical_size_match(world: &mut World) {
             "collision-probe: WaitingVerify で target_physical_size が None（想定外）— 中止"
         );
         boot.phase = ProbePhase::Done;
-        world.insert_non_send_resource(boot);
+        world.insert_non_send(boot);
         return;
     };
     let native = boot
@@ -198,7 +198,7 @@ fn verify_physical_size_match(world: &mut World) {
     let Some(handle) = world.get::<WindowHandle>(boot.char_window).copied() else {
         tracing::error!("collision-probe: char 窓に WindowHandle 未付与（GetClientRect 不能）— 中止");
         boot.phase = ProbePhase::Done;
-        world.insert_non_send_resource(boot);
+        world.insert_non_send(boot);
         return;
     };
     let mut rect = RECT::default();
@@ -236,7 +236,7 @@ fn verify_physical_size_match(world: &mut World) {
     );
 
     boot.phase = ProbePhase::Done;
-    world.insert_non_send_resource(boot);
+    world.insert_non_send(boot);
     tracing::info!(
         "collision-probe: 自動 assert（③④）完了。マウスで頭/胸/背景を目視で狙い解決結果とペア列を記録してください（⑤）"
     );

@@ -62,7 +62,7 @@ pub(crate) struct ChoiceSelection {
 
 /// バルーン選択肢対話の配線資源（NonSend・donor `MouseWiring` 同型・2.2）。
 ///
-/// UI スレッド所有の資源として `World` へ NonSend 挿入し（`insert_non_send_resource`）、Input
+/// UI スレッド所有の資源として `World` へ NonSend 挿入し（`insert_non_send`）、Input
 /// スケジュール排他システム内でのみ借用する（donor `MouseWiring` と同型）。mpsc `Sender` は
 /// `Send` だが `hover` 追跡と一体で UI スレッド固定運用ゆえ NonSend 1 個に束ねる。
 ///
@@ -389,7 +389,7 @@ pub(crate) fn on_balloon_pointer_moved(
     // ── 借用規律 ① Emo2Wiring 共有借用→runtime() で Rc clone→world 側借用解放 ─────────────────
     // Emo2Wiring 不在（boot 前／失敗）は正常縮退＝debug!＋no-op（donor presenter=None 同型・R4.1）。
     let Some(runtime) = world
-        .get_non_send_resource::<Emo2Wiring>()
+        .get_non_send::<Emo2Wiring>()
         .map(|w| Rc::clone(w.runtime()))
     else {
         tracing::debug!(
@@ -408,7 +408,7 @@ pub(crate) fn on_balloon_pointer_moved(
     // 読み口 `is_balloon_hovered` はバルーン可視性の相が毎フレーム読む（抑止条件の観測）。
     // BalloonWiring 不在は結線漏れ＝構成異常 error!（配線存在檻が開発時に検出）＋no-op。
     let Some(last_injected) = world
-        .get_non_send_resource_mut::<BalloonWiring>()
+        .get_non_send_mut::<BalloonWiring>()
         .map(|mut bw| {
             bw.set_balloon_hover(scope);
             bw.hover(scope)
@@ -450,7 +450,7 @@ pub(crate) fn on_balloon_pointer_moved(
         // 消滅時整合（R3.4）: 自前状態のみ None 整合・inject はしない（上流原子性が正本）。
         HoverAction::ResetOwnState => {
             let mut bw = world
-                .get_non_send_resource_mut::<BalloonWiring>()
+                .get_non_send_mut::<BalloonWiring>()
                 .expect("BalloonWiring は直上（②）で存在確認済み（donor self-gating 同型）");
             bw.set_hover(scope, None);
         }
@@ -470,7 +470,7 @@ pub(crate) fn on_balloon_pointer_moved(
             }
             // ⑤ 可変借用は上で解放済み。BalloonWiring の自前 last-injected を更新する。
             let mut bw = world
-                .get_non_send_resource_mut::<BalloonWiring>()
+                .get_non_send_mut::<BalloonWiring>()
                 .expect("BalloonWiring は直上（②）で存在確認済み（donor self-gating 同型）");
             bw.set_hover(scope, value);
             // hover 遷移注入の marker（DD-CI-7・トラブルシュート用・info ではない）。
@@ -559,7 +559,7 @@ pub(crate) fn on_balloon_pointer_pressed(
     // ── 借用規律 ① Emo2Wiring 共有借用→runtime() で Rc clone→world 側借用解放 ─────────────────
     // Emo2Wiring 不在（boot 前／失敗）は正常縮退＝debug!＋no-op（donor presenter=None 同型・R4.1）。
     let Some(runtime) = world
-        .get_non_send_resource::<Emo2Wiring>()
+        .get_non_send::<Emo2Wiring>()
         .map(|w| Rc::clone(w.runtime()))
     else {
         tracing::debug!(
@@ -572,7 +572,7 @@ pub(crate) fn on_balloon_pointer_pressed(
 
     // ── 借用規律 ② BalloonWiring 存在確認（共有借用即解放）──────────────────────────────────
     // BalloonWiring 不在は結線漏れ＝構成異常 error!（配線存在檻が開発時に検出）＋no-op。
-    if world.get_non_send_resource::<BalloonWiring>().is_none() {
+    if world.get_non_send::<BalloonWiring>().is_none() {
         tracing::error!(
             event = "balloon_wiring_missing",
             scope,
@@ -624,7 +624,7 @@ pub(crate) fn on_balloon_pointer_pressed(
             let references_len = sel.references.len();
             // ② で存在確認済みの BalloonWiring を借りて発行シンクへ送る（reuse・task 2.2）。
             let sent = world
-                .get_non_send_resource::<BalloonWiring>()
+                .get_non_send::<BalloonWiring>()
                 .expect("BalloonWiring は直上（②）で存在確認済み（donor self-gating 同型）")
                 .send_selection(sel);
             if sent {
@@ -726,7 +726,7 @@ pub(crate) fn clear_balloon_hover_on_leave(world: &mut World) {
     // 上流 `Emo2Wiring` が揃うときだけ行い（抑止を増やす側は保守的）、解除はその可否に依らず行う
     // （抑止を解く側は積極的）。滞在が真のまま残ると恒久抑止へ固着し Requirement 5.5 に反するため。
     // BalloonWiring 不在は結線漏れ＝構成異常 error!＋no-op（silent failure 禁止）。
-    if let Some(mut bw) = world.get_non_send_resource_mut::<BalloonWiring>() {
+    if let Some(mut bw) = world.get_non_send_mut::<BalloonWiring>() {
         for &scope in &scopes {
             bw.clear_balloon_hover(scope);
         }
@@ -743,7 +743,7 @@ pub(crate) fn clear_balloon_hover_on_leave(world: &mut World) {
     // runtime は単一グローバル資源ゆえ 1 度 clone して全 scope で共有する（ハンドラの per-event clone と
     // 等価・per-scope 再取得は不要）。
     let Some(runtime) = world
-        .get_non_send_resource::<Emo2Wiring>()
+        .get_non_send::<Emo2Wiring>()
         .map(|w| Rc::clone(w.runtime()))
     else {
         tracing::debug!(
@@ -760,7 +760,7 @@ pub(crate) fn clear_balloon_hover_on_leave(world: &mut World) {
         // ── 借用規律 ② BalloonWiring から last_injected を copy（共有借用即解放）─────────────────
         // BalloonWiring 不在は結線漏れ＝構成異常 error!（配線存在檻が開発時に検出）＋skip。
         let Some(last_injected) = world
-            .get_non_send_resource::<BalloonWiring>()
+            .get_non_send::<BalloonWiring>()
             .map(|bw| bw.hover(scope))
         else {
             tracing::error!(
@@ -793,7 +793,7 @@ pub(crate) fn clear_balloon_hover_on_leave(world: &mut World) {
             // 消滅時整合（R3.4）: 自前状態のみ None 整合・inject はしない（上流原子性が正本）。
             HoverAction::ResetOwnState => {
                 let mut bw = world
-                    .get_non_send_resource_mut::<BalloonWiring>()
+                    .get_non_send_mut::<BalloonWiring>()
                     .expect("BalloonWiring は直上（②）で存在確認済み（donor self-gating 同型）");
                 bw.set_hover(scope, None);
             }
@@ -813,7 +813,7 @@ pub(crate) fn clear_balloon_hover_on_leave(world: &mut World) {
                 }
                 // ⑤ 可変借用は上で解放済み。BalloonWiring の自前 last-injected を更新する。
                 let mut bw = world
-                    .get_non_send_resource_mut::<BalloonWiring>()
+                    .get_non_send_mut::<BalloonWiring>()
                     .expect("BalloonWiring は直上（②）で存在確認済み（donor self-gating 同型）");
                 bw.set_hover(scope, value);
                 // hover 遷移注入の marker（DD-CI-7・トラブルシュート用・info ではない）。
@@ -876,8 +876,8 @@ pub(crate) fn attach_balloon_pointer_handlers(world: &mut World) {
 /// `wire_choice_drain` が毎フレームの drain を登録する（5.3 の seam は消費済み）。
 pub(crate) fn wire_balloon_choice(world: &mut World) {
     let (tx, rx) = channel::<ChoiceSelection>();
-    world.insert_non_send_resource(BalloonWiring::new(tx));
-    world.insert_non_send_resource(ChoiceSelectionInbox(rx));
+    world.insert_non_send(BalloonWiring::new(tx));
+    world.insert_non_send(ChoiceSelectionInbox(rx));
     register_balloon_leave_system(world);
 }
 

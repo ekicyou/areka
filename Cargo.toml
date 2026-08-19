@@ -31,6 +31,7 @@ toml = "1"
 wintf-winmsg-executor = "=0.0.5"
 event-listener = "5"
 async-channel = "2"
+bitflags = "2"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 pasta_core = "0.3"
 

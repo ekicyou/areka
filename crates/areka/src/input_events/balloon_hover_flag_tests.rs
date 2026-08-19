@@ -39,7 +39,7 @@ fn bubble_move(x: i32, y: i32) -> Phase<PointerState> {
 /// 空の `BalloonWiring` を World へ NonSend 挿入する（`Receiver` は檻の生存期間だけ保持する）。
 fn insert_wiring(world: &mut World) -> mpsc::Receiver<ChoiceSelection> {
     let (tx, rx) = mpsc::channel::<ChoiceSelection>();
-    world.insert_non_send_resource(BalloonWiring::new(tx));
+    world.insert_non_send(BalloonWiring::new(tx));
     rx
 }
 
@@ -53,7 +53,7 @@ fn empty_runtime() -> Rc<RefCell<TextLayerRuntime>> {
 /// World 中の `BalloonWiring` へ滞在を照会する短縮形。
 fn hovered(world: &World, scope: usize) -> bool {
     world
-        .get_non_send_resource::<BalloonWiring>()
+        .get_non_send::<BalloonWiring>()
         .expect("BalloonWiring は檻が挿入済み")
         .is_balloon_hovered(scope)
 }
@@ -78,7 +78,7 @@ fn moved_over_balloon_records_hover_without_any_choice() {
         !rt.borrow().choice_active(&ActorKey::from("0")),
         "前提: 選択肢は非表示（choice_active=false）"
     );
-    world.insert_non_send_resource(headless_emo2_wiring(Rc::clone(&rt)));
+    world.insert_non_send(headless_emo2_wiring(Rc::clone(&rt)));
     let _rx = insert_wiring(&mut world);
 
     assert!(
@@ -109,7 +109,7 @@ fn moved_records_hover_when_choice_active_but_no_row_hit() {
         rt.borrow().choice_hit_rows(&ActorKey::from("0")).is_empty(),
         "前提: headless では行ジオメトリが空＝どの座標でも hit なし"
     );
-    world.insert_non_send_resource(headless_emo2_wiring(Rc::clone(&rt)));
+    world.insert_non_send(headless_emo2_wiring(Rc::clone(&rt)));
     let _rx = insert_wiring(&mut world);
 
     on_balloon_pointer_moved(&mut world, e, e, &bubble_move(10, 20));
@@ -117,7 +117,7 @@ fn moved_records_hover_when_choice_active_but_no_row_hit() {
     assert!(hovered(&world, 0), "行に当たらない移動でも滞在は真（5.2）");
     assert_eq!(
         world
-            .get_non_send_resource::<BalloonWiring>()
+            .get_non_send::<BalloonWiring>()
             .unwrap()
             .hover(0),
         None,
@@ -159,7 +159,7 @@ fn moved_records_hover_per_scope_independently() {
     let mut world = World::new();
     let e0 = world.spawn(BalloonWindowMarker { scope: 0 }).id();
     let e1 = world.spawn(BalloonWindowMarker { scope: 1 }).id();
-    world.insert_non_send_resource(headless_emo2_wiring(empty_runtime()));
+    world.insert_non_send(headless_emo2_wiring(empty_runtime()));
     let _rx = insert_wiring(&mut world);
 
     on_balloon_pointer_moved(&mut world, e0, e0, &bubble_move(1, 1));
@@ -178,7 +178,7 @@ fn moved_records_hover_before_choice_snapshot_degrades() {
     let mut world = World::new();
     let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
     let rt = runtime_with_active_choice("0");
-    world.insert_non_send_resource(headless_emo2_wiring(Rc::clone(&rt)));
+    world.insert_non_send(headless_emo2_wiring(Rc::clone(&rt)));
     let _rx = insert_wiring(&mut world);
 
     // 選択肢側スナップショット（try_borrow）を失敗させる（可変借用を保持したままハンドラを呼ぶ）。
@@ -223,10 +223,10 @@ fn moved_without_emo2_wiring_does_not_record_hover() {
 fn leave_on_balloon_window_clears_balloon_hover() {
     let mut world = World::new();
     spawn_balloon_leave_child(&mut world, 0);
-    world.insert_non_send_resource(headless_emo2_wiring(empty_runtime()));
+    world.insert_non_send(headless_emo2_wiring(empty_runtime()));
     let _rx = insert_wiring(&mut world);
     world
-        .get_non_send_resource_mut::<BalloonWiring>()
+        .get_non_send_mut::<BalloonWiring>()
         .unwrap()
         .set_balloon_hover(0);
     assert!(hovered(&world, 0), "前提: 滞在は真");
@@ -244,7 +244,7 @@ fn leave_clears_balloon_hover_even_without_emo2_wiring() {
     spawn_balloon_leave_child(&mut world, 0);
     let _rx = insert_wiring(&mut world); // Emo2Wiring は挿入しない
     world
-        .get_non_send_resource_mut::<BalloonWiring>()
+        .get_non_send_mut::<BalloonWiring>()
         .unwrap()
         .set_balloon_hover(0);
 
@@ -266,10 +266,10 @@ fn leave_on_non_balloon_window_keeps_balloon_hover() {
     let mut world = World::new();
     let win = world.spawn(Window::default()).id(); // BalloonWindowMarker 無し
     world.spawn((PointerLeave, ChildOf(win)));
-    world.insert_non_send_resource(headless_emo2_wiring(empty_runtime()));
+    world.insert_non_send(headless_emo2_wiring(empty_runtime()));
     let _rx = insert_wiring(&mut world);
     world
-        .get_non_send_resource_mut::<BalloonWiring>()
+        .get_non_send_mut::<BalloonWiring>()
         .unwrap()
         .set_balloon_hover(0);
 
@@ -291,10 +291,10 @@ fn leave_clears_only_the_leaving_scope() {
         BalloonWindowMarker { scope: 1 },
         wintf::ecs::Window::default(),
     ));
-    world.insert_non_send_resource(headless_emo2_wiring(empty_runtime()));
+    world.insert_non_send(headless_emo2_wiring(empty_runtime()));
     let _rx = insert_wiring(&mut world);
     {
-        let mut bw = world.get_non_send_resource_mut::<BalloonWiring>().unwrap();
+        let mut bw = world.get_non_send_mut::<BalloonWiring>().unwrap();
         bw.set_balloon_hover(0);
         bw.set_balloon_hover(1);
     }

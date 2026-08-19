@@ -63,7 +63,7 @@ pub(super) fn build_and_spawn(world: &mut World, vertical: bool, hold: bool) {
         h,
     );
 
-    world.insert_non_send_resource(Demo {
+    world.insert_non_send(Demo {
         presenter: EmoPresenter::new(),
         win0,
         win1,

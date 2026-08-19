@@ -450,7 +450,7 @@ pub fn wire_emo2_boot(
     };
 
     // 手順6: Emo2Wiring を NonSend 挿入＋emo2_frame_system を FrameFinalize へ登録（placement の
-    // click-through 登録と同位置・self-gating・順序依存なし）。EcsWorld は insert_non_send_resource を
+    // click-through 登録と同位置・self-gating・順序依存なし）。EcsWorld は insert_non_send を
     // 直接持たないため world_mut() 経由で bevy World へ載せる（add_systems は EcsWorld 直メソッド）。
     let wiring = Emo2Wiring::new(
         presenter,
@@ -464,7 +464,7 @@ pub fn wire_emo2_boot(
     app.world()
         .borrow_mut()
         .world_mut()
-        .insert_non_send_resource(wiring);
+        .insert_non_send(wiring);
     app.world()
         .borrow_mut()
         .add_systems(FrameFinalize, emo2_frame_system);
