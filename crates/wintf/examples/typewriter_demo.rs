@@ -272,7 +272,7 @@ fn create_typewriter_demo_window(world: &mut World) {
                     top: LengthPercentageAuto::Px(10.0),
                     bottom: LengthPercentageAuto::Px(10.0),
                 })),
-                align_self: Some(wintf::ecs::layout::AlignSelf::FlexEnd), // 右寄せ
+                align_self: Some(wintf::ecs::layout::AlignSelf::FLEX_END), // 右寄せ
                 ..Default::default()
             },
             ChildOf(background),

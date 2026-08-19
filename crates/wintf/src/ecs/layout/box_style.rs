@@ -113,8 +113,8 @@ pub use taffy::{AlignContent, AlignItems, AlignSelf, FlexDirection, JustifyConte
 ///             height: Some(Dimension::Percent(100.0)),
 ///         }),
 ///         flex_direction: Some(FlexDirection::Row),
-///         justify_content: Some(JustifyContent::SpaceEvenly),
-///         align_items: Some(AlignItems::Center),
+///         justify_content: Some(JustifyContent::SPACE_EVENLY),
+///         align_items: Some(AlignItems::CENTER),
 ///         ..Default::default()
 ///     },
 /// ));

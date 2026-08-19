@@ -33,7 +33,7 @@
 //! 実行器では [`capture_under_filter`] が 1 行も拾えず、記録の検査が空虚に緑になる）。
 
 use bevy_ecs::prelude::*;
-use bevy_ecs::schedule::{ExecutorKind, Schedule};
+use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
 use windows::Win32::Foundation::{HINSTANCE, HWND};
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DestroyWindow, HWND_TOP, HWND_TOPMOST, SET_WINDOW_POS_FLAGS, SWP_NOACTIVATE,
@@ -198,7 +198,7 @@ fn request_reassert(world: &mut World, balloon: Entity) {
 /// 維持系だけを載せた 1 巡分の schedule。
 fn maintain_schedule() -> Schedule {
     let mut schedule = Schedule::default();
-    schedule.set_executor_kind(ExecutorKind::SingleThreaded);
+    schedule.set_executor(SingleThreadedExecutor::new());
     schedule.add_systems(apply_zorder_pair_maintenance);
     schedule
 }

@@ -33,7 +33,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use bevy_ecs::prelude::*;
-use bevy_ecs::schedule::{ExecutorKind, Schedule};
+use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
 use windows::Win32::Foundation::{HINSTANCE, HWND, LPARAM, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DestroyWindow, SW_SHOWNA, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
@@ -192,7 +192,7 @@ fn declare_pair(world: &mut World, balloon: Entity, character: Entity) {
 /// 維持系だけを載せた 1 巡分の schedule（沈降観測は維持系の中で回る）。
 fn maintain_schedule() -> Schedule {
     let mut schedule = Schedule::default();
-    schedule.set_executor_kind(ExecutorKind::SingleThreaded);
+    schedule.set_executor(SingleThreadedExecutor::new());
     schedule.add_systems(apply_zorder_pair_maintenance);
     schedule
 }

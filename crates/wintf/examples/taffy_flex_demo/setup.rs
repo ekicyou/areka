@@ -9,11 +9,7 @@ use super::region::{on_normal_hit_box_pressed, on_region_box_moved, on_region_bo
 use super::*;
 
 /// Flexboxデモウィンドウを作成（パラメータ化）
-pub(crate) fn create_flexbox_window(
-    world: &mut World,
-    title: &str,
-    position: Point,
-) -> Entity {
+pub(crate) fn create_flexbox_window(world: &mut World, title: &str, position: Point) -> Entity {
     // Window Entity (ルート)
     // WindowPos.position でクライアント領域の位置を指定
     let window_entity = world
@@ -55,8 +51,8 @@ pub(crate) fn create_flexbox_window(
             }),
             BoxStyle {
                 flex_direction: Some(taffy::FlexDirection::Row),
-                justify_content: Some(taffy::JustifyContent::SpaceEvenly),
-                align_items: Some(taffy::AlignItems::Center),
+                justify_content: Some(taffy::JustifyContent::SPACE_EVENLY),
+                align_items: Some(taffy::AlignItems::CENTER),
                 size: Some(BoxSize {
                     width: None,
                     height: Some(Dimension::Px(160.0)),
@@ -245,8 +241,8 @@ pub(crate) fn create_flexbox_window(
             }),
             BoxStyle {
                 flex_direction: Some(taffy::FlexDirection::Row),
-                justify_content: Some(taffy::JustifyContent::SpaceEvenly),
-                align_items: Some(taffy::AlignItems::Center),
+                justify_content: Some(taffy::JustifyContent::SPACE_EVENLY),
+                align_items: Some(taffy::AlignItems::CENTER),
                 size: Some(BoxSize {
                     width: None,
                     height: None,
@@ -470,8 +466,8 @@ pub(crate) fn create_flexbox_window(
             }),
             BoxStyle {
                 flex_direction: Some(taffy::FlexDirection::Row),
-                justify_content: Some(taffy::JustifyContent::SpaceEvenly),
-                align_items: Some(taffy::AlignItems::Center),
+                justify_content: Some(taffy::JustifyContent::SPACE_EVENLY),
+                align_items: Some(taffy::AlignItems::CENTER),
                 size: Some(BoxSize {
                     width: None,
                     height: Some(Dimension::Px(120.0)),

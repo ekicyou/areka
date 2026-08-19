@@ -241,6 +241,7 @@ pub(super) fn dpi_phase_with<S: ScaleReportSource>(
     // （`anchor_changed_system` と同じ collect→release→&mut ループ）。
     let changed: Vec<(Entity, Option<usize>, Option<usize>)> = state
         .get(world)
+        .expect("DPI changed query validation should succeed")
         .iter()
         .map(|(entity, char_marker, balloon_marker)| {
             (

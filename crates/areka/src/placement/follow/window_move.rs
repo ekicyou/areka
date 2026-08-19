@@ -417,7 +417,11 @@ pub fn anchor_changed_system(
     let state = state.get_or_insert_with(|| SystemState::new(world));
     // 変更窓を collect して borrow を即解放してから &mut World ループへ（先例
     // create_windows の collect→release→&mut World ループを Changed 対応にしたもの）。
-    let changed: Vec<Entity> = state.get(world).iter().collect();
+    let changed: Vec<Entity> = state
+        .get(world)
+        .expect("anchor changed query validation should succeed")
+        .iter()
+        .collect();
     for entity in changed {
         // 現在の表示寸法（新寸ではない）を読む。size 不在／未生成は skip（panic しない）。
         let Some(size) = world.get::<WindowPos>(entity).and_then(|wp| wp.size) else {

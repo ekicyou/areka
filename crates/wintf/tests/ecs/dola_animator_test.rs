@@ -113,7 +113,9 @@ fn tick_dola_animators_system_updates_all_entities() {
     let mut system_state =
         SystemState::<(Query<&mut DolaAnimator>, Res<FrameTime>)>::new(&mut world);
     {
-        let (mut query, frame_time) = system_state.get_mut(&mut world);
+        let (mut query, frame_time) = system_state
+            .get_mut(&mut world)
+            .expect("animator query validation should succeed");
         for mut animator in query.iter_mut() {
             animator.tick(frame_time.0);
         }

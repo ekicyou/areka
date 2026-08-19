@@ -33,7 +33,7 @@
 //! トップレベル窓で作る（印の読み戻しは割り込みの影響を受けず決定論的である）。
 
 use bevy_ecs::prelude::*;
-use bevy_ecs::schedule::{ExecutorKind, Schedule};
+use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
 use windows::Win32::Foundation::{HINSTANCE, HWND};
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DestroyWindow, GWL_EXSTYLE, GetWindowLongPtrW, HWND_BOTTOM, HWND_NOTOPMOST,
@@ -216,7 +216,7 @@ fn spawn_window(world: &mut World, hwnd: HWND) -> Entity {
 /// 維持系だけを載せた 1 巡分の schedule（単一スレッド実行器は記録の捕捉に必須）。
 fn maintain_schedule() -> Schedule {
     let mut schedule = Schedule::default();
-    schedule.set_executor_kind(ExecutorKind::SingleThreaded);
+    schedule.set_executor(SingleThreadedExecutor::new());
     schedule.add_systems(apply_zorder_pair_maintenance);
     schedule
 }
@@ -224,7 +224,7 @@ fn maintain_schedule() -> Schedule {
 /// 本番と同じ順（確立 → 維持）で並べた schedule。
 fn pair_schedule() -> Schedule {
     let mut schedule = Schedule::default();
-    schedule.set_executor_kind(ExecutorKind::SingleThreaded);
+    schedule.set_executor(SingleThreadedExecutor::new());
     schedule.add_systems((establish_owner_links, apply_zorder_pair_maintenance).chain());
     schedule
 }

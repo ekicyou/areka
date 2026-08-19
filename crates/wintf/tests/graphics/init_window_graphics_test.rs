@@ -9,7 +9,7 @@
 //! WUC 移行: init_window_graphics は WucGraphicsResource を遅延初期化する（init.rs）。
 
 use bevy_ecs::prelude::*;
-use bevy_ecs::schedule::ExecutorKind;
+use bevy_ecs::schedule::SingleThreadedExecutor;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use wintf::ecs::window::{Window, WindowHandle};
 use wintf::ecs::world::FrameCount;
@@ -30,7 +30,7 @@ fn setup() -> (World, Schedule) {
     world.insert_resource(FrameCount(1));
 
     let mut schedule = Schedule::default();
-    schedule.set_executor_kind(ExecutorKind::SingleThreaded);
+    schedule.set_executor(SingleThreadedExecutor::new());
     schedule.add_systems(init_window_graphics);
     (world, schedule)
 }

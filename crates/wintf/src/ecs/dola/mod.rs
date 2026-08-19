@@ -64,7 +64,7 @@ pub struct DolaAnimator {
 //      ワークスペースは bevy_ecs の "multi_threaded" feature を有効化しており
 //      （ルート Cargo.toml [workspace.dependencies.bevy_ecs] features）、Schedule の
 //      既定 ExecutorKind は MultiThreaded（bevy_ecs schedule/executor/mod.rs:65-66）。
-//      ecs/world/mod.rs では UISetup のみ set_executor_kind(SingleThreaded) で固定し、
+//      ecs/world/mod.rs では UISetup のみ set_executor(SingleThreadedExecutor) で固定し、
 //      Input/Update 等の他スケジュールは既定 = マルチスレッドエグゼキュータで走る。
 //      Send である本型を読むシステム（Query<&mut DolaAnimator>）は is_send==true と
 //      判定され（function_system.rs:84 / multi_threaded.rs:545）メインスレッドに固定されず

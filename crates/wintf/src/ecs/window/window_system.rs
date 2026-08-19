@@ -41,7 +41,11 @@ pub fn create_windows(world: &mut World) {
             ),
         >,
     > = SystemState::new(world);
-    let entities_to_create: Vec<Entity> = system_state.get(world).iter().collect();
+    let entities_to_create: Vec<Entity> = system_state
+        .get(world)
+        .expect("window query validation should succeed")
+        .iter()
+        .collect();
 
     // 各 Entity をファクトリ経由で生成（ライブラリ生成・registry 格納・handle 反映）。
     for entity in entities_to_create {

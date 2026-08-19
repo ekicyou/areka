@@ -33,7 +33,7 @@
 //! シングルスレッド実行器を明示する理由は他の維持系テストと同じである。
 
 use bevy_ecs::prelude::*;
-use bevy_ecs::schedule::{ExecutorKind, Schedule};
+use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
 use windows::Win32::Foundation::{HINSTANCE, HWND};
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DestroyWindow, SW_SHOWNA, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
@@ -168,7 +168,7 @@ fn request_reassert(world: &mut World, balloon: Entity) {
 /// 維持系だけを載せた 1 巡分の schedule。
 fn maintain_schedule() -> Schedule {
     let mut schedule = Schedule::default();
-    schedule.set_executor_kind(ExecutorKind::SingleThreaded);
+    schedule.set_executor(SingleThreadedExecutor::new());
     schedule.add_systems(apply_zorder_pair_maintenance);
     schedule
 }

@@ -80,6 +80,8 @@ pub struct InsertBitmapSourceResource {
 unsafe impl Send for InsertBitmapSourceResource {}
 
 impl Command for InsertBitmapSourceResource {
+    type Out = ();
+
     fn apply(self, world: &mut World) {
         // エンティティが存在するか確認（読み込み中にdespawnされた場合の対応）
         if let Ok(mut entity_ref) = world.get_entity_mut(self.entity) {
@@ -306,6 +308,8 @@ struct SetAlphaMaskCommand {
 }
 
 impl Command for SetAlphaMaskCommand {
+    type Out = ();
+
     fn apply(self, world: &mut World) {
         // エンティティが存在し、BitmapSourceResourceを持っているか確認
         if let Ok(mut entity_ref) = world.get_entity_mut(self.entity) {

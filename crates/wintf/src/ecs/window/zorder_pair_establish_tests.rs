@@ -35,7 +35,7 @@
 //! 余計に出る側（N+1 本）でも赤になる形にしてある。
 
 use bevy_ecs::prelude::*;
-use bevy_ecs::schedule::{ExecutorKind, Schedule};
+use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
 use windows::Win32::Foundation::{HINSTANCE, HWND};
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DestroyWindow, GW_OWNER, GetWindow, WINDOW_EX_STYLE, WINDOW_STYLE, WS_POPUP,
@@ -146,7 +146,7 @@ fn retrigger_handle(world: &mut World, entity: Entity) {
 /// 1 行も拾えず、記録の検査が空虚に緑になる。
 fn establish_schedule() -> Schedule {
     let mut schedule = Schedule::default();
-    schedule.set_executor_kind(ExecutorKind::SingleThreaded);
+    schedule.set_executor(SingleThreadedExecutor::new());
     schedule.add_systems(establish_owner_links);
     schedule
 }

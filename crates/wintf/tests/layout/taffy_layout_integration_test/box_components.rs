@@ -94,8 +94,8 @@ fn test_flex_container_component() {
     let entity = world
         .spawn(BoxStyle {
             flex_direction: Some(FlexDirection::Column),
-            justify_content: Some(JustifyContent::Center),
-            align_items: Some(AlignItems::Center),
+            justify_content: Some(JustifyContent::CENTER),
+            align_items: Some(AlignItems::CENTER),
             ..Default::default()
         })
         .id();
@@ -104,8 +104,8 @@ fn test_flex_container_component() {
     // BoxStyleからプロパティを取得して検証
     let style = world.get::<BoxStyle>(entity).unwrap();
     assert_eq!(style.flex_direction, Some(FlexDirection::Column));
-    assert_eq!(style.justify_content, Some(JustifyContent::Center));
-    assert_eq!(style.align_items, Some(AlignItems::Center));
+    assert_eq!(style.justify_content, Some(JustifyContent::CENTER));
+    assert_eq!(style.align_items, Some(AlignItems::CENTER));
 
     // FlexContainer値オブジェクトのDefaultチェック
     let default_container = FlexContainer::default();
@@ -125,7 +125,7 @@ fn test_flex_item_component() {
             flex_grow: Some(1.0),
             flex_shrink: Some(0.5),
             flex_basis: Some(Dimension::Px(100.0)),
-            align_self: Some(AlignSelf::End),
+            align_self: Some(AlignSelf::END),
             ..Default::default()
         })
         .id();
@@ -136,7 +136,7 @@ fn test_flex_item_component() {
     assert_eq!(style.flex_grow, Some(1.0));
     assert_eq!(style.flex_shrink, Some(0.5));
     assert_eq!(style.flex_basis, Some(Dimension::Px(100.0)));
-    assert_eq!(style.align_self, Some(AlignSelf::End));
+    assert_eq!(style.align_self, Some(AlignSelf::END));
 
     // FlexItem値オブジェクトのDefaultチェック
     let default_item = FlexItem::default();

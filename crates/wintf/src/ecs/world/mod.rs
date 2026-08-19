@@ -107,7 +107,7 @@ impl EcsWorld {
             // UISetupだけメインスレッド固定
             {
                 let mut sc = Schedule::new(UISetup);
-                sc.set_executor_kind(ExecutorKind::SingleThreaded);
+                sc.set_executor(SingleThreadedExecutor::new());
                 schedules.insert(sc);
             }
 
@@ -125,28 +125,28 @@ impl EcsWorld {
             // 内容だけ出ない／ECS 非依存でメインスレッド生成の wuc_spike: 表示される、で切り分け確定）。
             {
                 let mut sc = Schedule::new(GraphicsSetup);
-                sc.set_executor_kind(ExecutorKind::SingleThreaded);
+                sc.set_executor(SingleThreadedExecutor::new());
                 schedules.insert(sc);
             }
             schedules.insert(Schedule::new(Draw));
             {
                 let mut sc = Schedule::new(PreRenderSurface);
-                sc.set_executor_kind(ExecutorKind::SingleThreaded);
+                sc.set_executor(SingleThreadedExecutor::new());
                 schedules.insert(sc);
             }
             {
                 let mut sc = Schedule::new(RenderSurface);
-                sc.set_executor_kind(ExecutorKind::SingleThreaded);
+                sc.set_executor(SingleThreadedExecutor::new());
                 schedules.insert(sc);
             }
             {
                 let mut sc = Schedule::new(Composition);
-                sc.set_executor_kind(ExecutorKind::SingleThreaded);
+                sc.set_executor(SingleThreadedExecutor::new());
                 schedules.insert(sc);
             }
             {
                 let mut sc = Schedule::new(CommitComposition);
-                sc.set_executor_kind(ExecutorKind::SingleThreaded);
+                sc.set_executor(SingleThreadedExecutor::new());
                 schedules.insert(sc);
             }
             schedules.insert(Schedule::new(FrameFinalize));
