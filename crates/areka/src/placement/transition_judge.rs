@@ -52,8 +52,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use areka_emo_present::presenter::{
-    KIND_SURFACE, SURFACE_FIELD_TARGET_ID, SURFACE_FIELDS, SURFACE_STAGE_SKIPPED,
-    SURFACE_STAGE_VISUALIZE,
+    KIND_SURFACE, SURFACE_FIELD_REASON, SURFACE_FIELD_TARGET_ID, SURFACE_FIELDS,
+    SURFACE_REASON_INVISIBLE, SURFACE_STAGE_SKIPPED, SURFACE_STAGE_VISUALIZE,
 };
 use wintf::ecs::window::transition_diag::{
     ENQUEUE_FIELDS, FIELD_CALL_US, FIELD_FRAME, FIELD_KIND, FIELD_NEW_DPI, FIELD_OLD_DPI,
@@ -292,7 +292,11 @@ pub struct TransitionSummary {
     pub chain_realigned: u32,
     /// 接地点差の最大（絶対値が最大のものを**符号つき**で持つ。負＝浮き）。
     pub ground_diff_max: Option<i32>,
-    /// 再表示を見送られた窓（要件 4.6 で合否から除外する）。
+    /// **不可視ゆえ**再表示を見送られた窓（要件 4.6 で合否から除外する）。
+    ///
+    /// 見送りの理由は 2 語あるが、除外へ数えるのは
+    /// [`areka_emo_present::presenter::SURFACE_REASON_INVISIBLE`] だけである（理由の選り分けは
+    /// [`summarize`] の当該箇所に記す）。
     pub skipped_windows: BTreeSet<WindowKey>,
     /// 参考値（実時間）。
     pub wall: WallClock,
@@ -545,9 +549,28 @@ pub fn summarize(transition: &[&TransitionRecord]) -> TransitionSummary {
     summary.records = transition.len();
 
     // 見送り窓は以後の除外に使うので先に集める。
+    //
+    // # 除外に使えるのは `reason=invisible` **だけ**である
+    //
+    // 発行側の見送りには理由が 2 語ある（`areka-emo-present` の `refresh_scale`）:
+    //
+    // - `invisible`——対象が不可視（Hide／全透明退化）。**要件 4.6 が意図した除外**である。
+    //   遷移時点で見えていない窓は「位置と寸を変更せずに現状を維持」が正しい振舞いであり、
+    //   後から表示された時点の書込はその遷移の続きではない。
+    // - `k-unchanged`——再導出した拡大率が前回適用値と等しい。これは**定常状態の空振り**で
+    //   あって現状維持の対象ではない。遷移が落ち着いた次フレームから、拡大率が変わらない
+    //   限り全窓が毎フレーム出し続ける。
+    //
+    // 遷移の区間は**次の起点まで伸びる**（[`split_transitions`]）ので、`k-unchanged` を除外の
+    // 理由にすると遷移ごとに全窓が除外側へ入り、[`TransitionSummary::frames_to_last_write`]・
+    // [`TransitionSummary::mismatch_frames_per_window`]・
+    // [`TransitionSummary::visualize_to_write_us`] の 3 つが**静かに空になる**。task 4.2 の実機
+    // ログ（12 遷移・`k-unchanged` 49 件／`invisible` 4 件）が実際にそうなり、可視化から書込
+    // まで 20 万µs 級の隔たりが 1 件も違反として立たなかった。
     for record in transition {
         if record.kind == KIND_SURFACE
             && record.raw_field(FIELD_STAGE) == Some(SURFACE_STAGE_SKIPPED)
+            && record.raw_field(SURFACE_FIELD_REASON) == Some(SURFACE_REASON_INVISIBLE)
             && let Some(window) = record.surface_window()
         {
             summary.skipped_windows.insert(window);
@@ -595,10 +618,13 @@ pub fn summarize(transition: &[&TransitionRecord]) -> TransitionSummary {
                 }
                 // 遷移の所要（要件 4.4 の「全ゴースト窓の遷移」）には**見送り窓への書込を
                 // 数えない**。要件 4.6 は当該窓を「位置と寸を変更せずに現状を維持」させる
-                // 規定であり、後から表示された時点の書込はその遷移の続きではない（再観測
-                // §3.2 の遷移 2 の +660ms がこれ）。数えると、レポートが非欠陥と明記した
-                // 遷移がフレーム上限で不合格になる。見送り窓でも**随伴の位置**は
-                // `balloon_same_frame` が見張り続けるので、抜け穴にはならない。
+                // 規定であり、後から表示された時点の書込はその遷移の続きではない。事例は
+                // 再観測 §3.2 の遷移 2 の +660ms で、レポートはその窓を
+                // 「遷移時点で不可視（`refresh_scale: 不可視ゆえ再表示しない`）だったため
+                // 見送られ」と書く＝**`reason=invisible` の側**である（`k-unchanged` では
+                // ない。だからこそ集計の入口で理由を選り分けている）。数えると、レポートが
+                // 非欠陥と明記した遷移がフレーム上限で不合格になる。見送り窓でも**随伴の
+                // 位置**は `balloon_same_frame` が見張り続けるので、抜け穴にはならない。
                 if !summary.skipped_windows.contains(&window) {
                     last_write_frame = Some(record.stamp.frame);
                 }

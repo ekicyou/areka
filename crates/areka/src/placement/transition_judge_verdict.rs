@@ -295,6 +295,17 @@ pub enum Violation {
         /// 上限（µs）。
         max: u64,
     },
+    /// 書込のあった窓が**1 つ残らず**除外され、窓ごとの量を 1 つも測っていない。
+    ///
+    /// ⑼ の被覆検査は「除外されなかった窓」を回るので、除外が全窓へ広がると**検査そのものが
+    /// 1 度も回らない**——番人が、番をすべき当の欠陥で無効化される形である（task 4.2 の実機
+    /// 採取で実際に起きた。`reason=k-unchanged` を除外に使っていたため 12 遷移すべてで
+    /// 全窓が除外され、窓ごとの量が 1 件も判定されないまま実機専用系統が合格していた）。
+    /// 全窓除外は「上限を満たした」ではなく**測っていない**なので、ここで違反として立てる。
+    AllWrittenWindowsExcluded {
+        /// 書込のあった窓の件数（すべて除外された）。
+        windows: u32,
+    },
 }
 
 impl fmt::Display for Violation {
@@ -347,6 +358,10 @@ impl fmt::Display for Violation {
             Self::FlushTotalUs { us, max } => {
                 write!(f, "一括書込の総所要 {us}µs > 上限 {max}µs")
             }
+            Self::AllWrittenWindowsExcluded { windows } => write!(
+                f,
+                "書込のあった窓 {windows} 件がすべて除外され、窓ごとの量を 1 つも測っていない"
+            ),
         }
     }
 }
@@ -503,6 +518,19 @@ pub fn judge(summary: &TransitionSummary, bounds: &Bounds) -> Result<(), Vec<Vio
 
     // ⑼ 窓ごとの量の被覆——書込のあった窓が当該の量を 1 つも持たないことは、上限
     // （`≤ 0`）を満たしたのではなく**測っていない**。見送り窓は要件 4.6 で合否から外す。
+    //
+    // 先に**除外が全窓へ広がっていないこと**を見る。下の走査は `judged_windows` を回るので、
+    // 全窓が除外されると 1 度も回らず、被覆検査は恒真になる（＝「零件だから合格」）。
+    // 書込のあった窓が居るのに判定対象が 1 つも残らないなら、それは合格ではなく未測定である。
+    let judges_windows = bounds.frame_bound.is_some() || bounds.visualize_to_write_us_max.is_some();
+    if judges_windows
+        && !summary.writes_per_window.is_empty()
+        && judged_windows(summary).next().is_none()
+    {
+        violations.push(Violation::AllWrittenWindowsExcluded {
+            windows: summary.writes_per_window.len() as u32,
+        });
+    }
     for window in judged_windows(summary) {
         if bounds.frame_bound.is_some() && !summary.mismatch_frames_per_window.contains_key(window)
         {

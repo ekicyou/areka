@@ -9,7 +9,8 @@
 
 use areka_emo_present::presenter::{
     KIND_SURFACE, SURFACE_FIELD_H, SURFACE_FIELD_W, SURFACE_REASON_INVISIBLE,
-    SURFACE_STAGE_SKIPPED, SURFACE_STAGE_UPLOAD, SURFACE_STAGE_VISUALIZE,
+    SURFACE_REASON_K_UNCHANGED, SURFACE_STAGE_SKIPPED, SURFACE_STAGE_UPLOAD,
+    SURFACE_STAGE_VISUALIZE,
 };
 use wintf::ecs::window::transition_diag::{
     FIELD_NEW_DPI, FIELD_NEW_WA, FIELD_OLD_DPI, FIELD_SCOPE, FIELD_WIN_KIND, KIND_ALL,
@@ -889,4 +890,150 @@ fn summarize_ignores_records_that_are_not_part_of_the_judged_quantities() {
         "起点の新旧 DPI は要約が持つ"
     );
     assert_ne!(KIND_MSG, KIND_MONITOR);
+}
+
+// ---------------------------------------------------------------------------
+// 見送りの理由による選り分け（task 4.2 の実機採取で判明した判定器の欠陥）
+// ---------------------------------------------------------------------------
+
+/// 遷移の後続フレームに全窓の「拡大率が前回と同じ」見送りが続く系列（実機ログの形）。
+///
+/// 実機ログ（`atom-20260820-193457`）は 12 遷移で `reason=k-unchanged` を 49 件出す。
+/// 遷移の区間は次の起点まで伸びるので、**遷移が落ち着いた次フレーム以降**に出るこの
+/// 空振りが毎回 4 窓すべてに付く。理由を問わず除外していると、除外が全窓へ広がって
+/// 窓ごとの量が 1 つも残らない。
+fn steady_state_k_unchanged_lines() -> Vec<String> {
+    let mut lines = vec![
+        monitor(10, 192, 96, 1704, 1752),
+        surface(
+            10,
+            1_000,
+            SURFACE_STAGE_VISUALIZE,
+            0,
+            "382",
+            "547",
+            MISSING,
+            MISSING,
+        ),
+        surface(
+            10,
+            1_100,
+            SURFACE_STAGE_VISUALIZE,
+            1,
+            "400",
+            "224",
+            MISSING,
+            MISSING,
+        ),
+        ground(10, 0, 1752, 1752, PlacementRoute::DpiReproject.as_str()),
+        flush(10, 1_200, STAGE_BEGIN, 2, MISSING),
+        write(
+            10,
+            1_300,
+            STAGE_FLUSH,
+            0,
+            "0x1",
+            PlacementRoute::DpiReproject.as_str(),
+            "0",
+            char_kind(),
+            500,
+        ),
+        write(
+            10,
+            1_400,
+            STAGE_FLUSH,
+            1,
+            "0x2",
+            PlacementRoute::BalloonFollow.as_str(),
+            "0",
+            balloon_kind(),
+            400,
+        ),
+        flush(10, 1_500, STAGE_END, 2, "300"),
+    ];
+    // 遷移が落ち着いた後の定常状態——毎フレーム全窓が「k 不変」で見送られ続ける。
+    for frame in 11..14_u32 {
+        for target_id in 0..2_u32 {
+            lines.push(surface(
+                frame,
+                2_000 + u64::from(frame) * 10 + u64::from(target_id),
+                SURFACE_STAGE_SKIPPED,
+                target_id,
+                MISSING,
+                MISSING,
+                MISSING,
+                SURFACE_REASON_K_UNCHANGED,
+            ));
+        }
+    }
+    lines
+}
+
+#[test]
+fn summarize_does_not_exclude_windows_whose_redisplay_was_skipped_as_k_unchanged() {
+    // `reason=k-unchanged` は「拡大率が前回と同じだから再表示しない」という**定常状態の
+    // 空振り**であり、要件 4.6 が言う「再導出結果が得られない窓」ではない。除外に使うと
+    // 遷移の判定量が丸ごと消える。
+    let summary = summarize_lines(&steady_state_k_unchanged_lines());
+    // 是正前はここが順に `None`・空・空になる（3 つの判定量が静かに消える）。
+    assert_eq!(
+        summary.frames_to_last_write,
+        Some(0),
+        "最終書込までのフレーム差が測れなければならない"
+    );
+    for window in [
+        WindowKey::of(0, WindowKind::Char),
+        WindowKey::of(0, WindowKind::Balloon),
+    ] {
+        assert!(
+            summary.mismatch_frames_per_window.contains_key(&window),
+            "食い違いフレーム差が測れなければならない（{window}）: {:?}",
+            summary.mismatch_frames_per_window
+        );
+        assert!(
+            summary.visualize_to_write_us.contains_key(&window),
+            "可視化から書込までの経過が測れなければならない（{window}）: {:?}",
+            summary.visualize_to_write_us
+        );
+    }
+    assert!(
+        summary.skipped_windows.is_empty(),
+        "k 不変の空振りを見送り窓として数えてはならない: {:?}",
+        summary.skipped_windows
+    );
+}
+
+#[test]
+fn summarize_still_excludes_windows_that_were_skipped_because_they_are_invisible() {
+    // 上の陽性の対（零件の主張には必ず対を置く）。同じ駆動口（`stage=skipped` の行）で
+    // 理由だけを `invisible` へ替えれば、除外は従来どおり効かなければならない
+    // ——再観測 §3.2 の遷移 2（バルーン 1 が不可視ゆえ見送られ +660ms に届いた形。
+    // レポートが「Requirement 4.6 の現状維持挙動＝欠陥ではない」と明記した形）が
+    // ここで守られる。
+    let lines: Vec<String> = steady_state_k_unchanged_lines()
+        .iter()
+        .map(|line| line.replace(SURFACE_REASON_K_UNCHANGED, SURFACE_REASON_INVISIBLE))
+        .collect();
+    let summary = summarize_lines(&lines);
+    for window in [
+        WindowKey::of(0, WindowKind::Char),
+        WindowKey::of(0, WindowKind::Balloon),
+    ] {
+        assert!(
+            summary.skipped_windows.contains(&window),
+            "不可視ゆえの見送りは従来どおり除外する（{window}）"
+        );
+        assert!(
+            !summary.mismatch_frames_per_window.contains_key(&window),
+            "除外された窓の食い違いは測らない（{window}）"
+        );
+        assert!(
+            !summary.visualize_to_write_us.contains_key(&window),
+            "除外された窓の実機専用量は測らない（{window}）"
+        );
+    }
+    assert_eq!(
+        summary.frames_to_last_write, None,
+        "全窓が除外されればフレーム差は測れない（それを違反として立てるのは判定側）"
+    );
 }

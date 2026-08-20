@@ -854,3 +854,114 @@ fn a_log_that_fails_only_the_signoff_family_still_fails_the_report() {
     assert!(report.transitions[0].signoff.is_err());
     assert!(report.failed(), "実機専用側だけの違反でも不合格");
 }
+
+// ---------------------------------------------------------------------------
+// ⑼ の被覆検査が自分の番をできること（task 4.2 の実機採取で判明した穴）
+// ---------------------------------------------------------------------------
+
+/// 書込のあった窓が**1 つ残らず**除外される遷移（2 窓とも不可視ゆえの見送り）。
+///
+/// 除外そのものは要件 4.6 に沿っている。問題は、この形で ⑼ の被覆検査が
+/// `judged_windows` を 1 度も回らないことである——「窓ごとの量が 1 件も無い」が
+/// 合格として通ってしまう（恒真の主張）。
+fn every_written_window_excluded() -> Vec<String> {
+    vec![
+        monitor(COMPLIANT_FRAME, 96, 192, 1752, 1704),
+        surface(
+            COMPLIANT_FRAME,
+            1_000,
+            SURFACE_STAGE_SKIPPED,
+            0,
+            MISSING,
+            MISSING,
+            MISSING,
+            SURFACE_REASON_INVISIBLE,
+        ),
+        surface(
+            COMPLIANT_FRAME,
+            1_050,
+            SURFACE_STAGE_SKIPPED,
+            1,
+            MISSING,
+            MISSING,
+            MISSING,
+            SURFACE_REASON_INVISIBLE,
+        ),
+        ground(
+            COMPLIANT_FRAME,
+            0,
+            1704,
+            1704,
+            PlacementRoute::DpiReproject.as_str(),
+        ),
+        flush(COMPLIANT_FRAME, 1_200, STAGE_BEGIN, 2, MISSING),
+        write(
+            COMPLIANT_FRAME,
+            1_300,
+            STAGE_FLUSH,
+            0,
+            "0x1",
+            PlacementRoute::DpiReproject.as_str(),
+            "0",
+            WindowKind::Char.as_str(),
+            500,
+        ),
+        write(
+            COMPLIANT_FRAME,
+            1_400,
+            STAGE_FLUSH,
+            1,
+            "0x2",
+            PlacementRoute::BalloonFollow.as_str(),
+            "0",
+            WindowKind::Balloon.as_str(),
+            400,
+        ),
+        flush(COMPLIANT_FRAME, 1_500, STAGE_END, 2, "300"),
+    ]
+}
+
+#[test]
+fn excluding_every_written_window_is_a_violation_not_a_pass() {
+    // 実機専用系統は窓ごとの量（`visualize_to_write_us`）だけを窓へ当てるので、全窓が
+    // 除外されると被覆検査が 1 度も回らず、**何も測っていない遷移が合格になる**。
+    let summary = summarize_lines(&every_written_window_excluded());
+    assert_eq!(summary.writes_per_window.len(), 2, "書込のあった窓は 2 つ");
+    assert!(
+        summary.visualize_to_write_us.is_empty(),
+        "窓ごとの量は 1 件も無い"
+    );
+    let violations = violations(&summary, &Bounds::signoff());
+    assert!(
+        violations.contains(&Violation::AllWrittenWindowsExcluded { windows: 2 }),
+        "全窓除外を違反として立てていない: {violations:?}"
+    );
+}
+
+#[test]
+fn a_transition_that_still_judges_one_window_does_not_raise_the_exclusion_violation() {
+    // 上の陽性の対。除外が全窓に及んでいなければこの違反は立たない——立つようにすると、
+    // 定常の形（発話していないバルーンだけが不可視で見送られる）が毎回不合格になる。
+    let summary = summarize_lines(&one_scope_with_a_skipped_balloon(COMPLIANT_FRAME));
+    assert_eq!(summary.writes_per_window.len(), 2);
+    assert_eq!(summary.skipped_windows.len(), 1, "除外は 1 窓だけ");
+    for bounds in [Bounds::deterministic(), Bounds::signoff()] {
+        assert_eq!(
+            judge(&summary, &bounds),
+            Ok(()),
+            "1 窓でも判定対象が残っていれば合格である"
+        );
+    }
+}
+
+#[test]
+fn the_exclusion_violation_is_silent_when_no_window_quantity_is_armed() {
+    // 窓ごとの量を 1 つも当てない組（`writes_per_window_max` だけ）では、全窓除外は
+    // 「測れていない」ことにならない——armed な項目に応じてしか鳴らさない。
+    let summary = summarize_lines(&every_written_window_excluded());
+    let bounds = Bounds {
+        writes_per_window_max: Some(super::WRITES_PER_WINDOW_MAX),
+        ..Bounds::nothing()
+    };
+    assert_eq!(judge(&summary, &bounds), Ok(()));
+}

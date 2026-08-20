@@ -76,8 +76,15 @@ pub const SURFACE_REASON_INVISIBLE: &str = "invisible";
 
 /// emo-present が発行する `reason` 語の全体。
 ///
-/// 判定側はこの語を持つ窓を Requirement 4.6（再導出結果が得られない窓は現状維持）の対象として
-/// 合否から除外する。語が増えたら除外の意味が変わるため、一覧を単一の定義元に置く。
+/// 発行側は 2 語とも記録するが、**判定側が Requirement 4.6（再導出結果が得られない窓は現状維持）の
+/// 対象として合否から除外するのは [`SURFACE_REASON_INVISIBLE`] だけ**である。
+/// [`SURFACE_REASON_K_UNCHANGED`] は記録されるが除外しない——あれは拡大率が変わらない限り定常
+/// フレームで全窓が出し続ける空振りであり、判定側の遷移区間は次の起点まで伸びるので、除外に使うと
+/// 毎遷移で全窓が除外側へ入って窓ごとの判定量が静かに消える（task 4.2 の実機採取で判明。裁定は
+/// 仕様 `areka-P0-dpi-transition-atomicity` の requirements.md 4.6 直下の注記〔2026-08-20〕。
+/// 除外の選り分けの実装は `areka` の `placement::transition_judge::summarize`）。
+///
+/// 語が増えたら除外の意味が変わるため、一覧を単一の定義元に置く。
 pub const SURFACE_REASON_ALL: &[&str] = &[SURFACE_REASON_K_UNCHANGED, SURFACE_REASON_INVISIBLE];
 
 // ---------------------------------------------------------------------------
