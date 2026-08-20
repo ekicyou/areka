@@ -2,15 +2,15 @@ use crate::numerics::*;
 use bevy_ecs::prelude::*;
 
 #[derive(Component, Clone, Copy, Debug, PartialEq)]
-pub enum Clip {
+pub enum VisualClip {
     Rect(Aabb),
 }
 
-impl Clip {
+impl VisualClip {
     #[inline]
     pub fn local_aabb(&self) -> Aabb {
         match self {
-            Clip::Rect(r) => *r,
+            VisualClip::Rect(r) => *r,
         }
     }
 }

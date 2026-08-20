@@ -4,12 +4,12 @@ use windows::Win32::Graphics::Direct2D::ID2D1CommandList;
 use crate::numerics::*;
 
 #[derive(Component, Clone, Debug, PartialEq)]
-pub struct DrawContent {
+pub struct VisualDrawContent {
     pub local_aabb: Aabb,
     pub command_list: ID2D1CommandList,
 }
 
-impl DrawContent {
+impl VisualDrawContent {
     #[inline]
     pub fn new(local_aabb: Aabb, command_list: ID2D1CommandList) -> Self {
         Self {
