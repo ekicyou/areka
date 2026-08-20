@@ -64,9 +64,15 @@ pub(crate) use self::drag_follow::{
     on_balloon_drag, on_balloon_drag_end, on_char_drag, on_char_drag_end,
 };
 pub use self::work_area::{
-    MonitorDpiTable, MonitorSnapshot, MonitorSources, WorkAreaResolution, same_monitors,
-    work_area_for_window, work_area_for_window_with_origin,
+    MonitorSnapshot, WorkAreaResolution, work_area_for_window, work_area_for_window_with_origin,
 };
+// 2 源の型と比較（task 5.1 で新設）。本番の消費者は `emo2_boot::frame::work_area_sync` が
+// 定義元から直接 import するため、この再輸出を**名前で呼ぶ**のはテストと起動シームだけである。
+// examples は `#[path]` で src を取り込むが本番項目しか使わないので、そちらのビルドでは
+// 未使用に見える——下の `MonitorDpiEntry` と同じ事情なので同じ扱いにする。公開面の維持
+// （要件 2.5）のため再輸出そのものは残す。
+#[allow(unused_imports)]
+pub use self::work_area::{MonitorDpiTable, MonitorSources, same_monitors};
 // モニタ別拡大率表の要素型。`MonitorDpiTable::entries` の要素として本番でも運ばれるが、
 // **名前で呼ぶ**のはテストだけ（本番の消費者は表ごと受け渡す）ゆえ非 test ビルドでは未使用に
 // 見える。表の外から要素を組めないと `entries` が事実上読めない型になるので再輸出は残す。

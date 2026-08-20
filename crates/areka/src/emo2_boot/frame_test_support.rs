@@ -26,7 +26,7 @@ use wintf::ecs::window::{SetWindowPosCommand, drain_window_pos_commands};
 use wintf::ecs::DPI;
 use crate::emo2_boot::assets::{BalloonScopeAssets, BootAssets, LoopTables, ScopeAssets};
 
-use super::work_area_sync::{SnapshotChange, sync_monitor_snapshot};
+use super::work_area_sync::{SnapshotChange, resnap_for_work_area_change, sync_monitor_snapshot};
 
 use super::*;
 
@@ -426,7 +426,7 @@ pub(super) fn s2_work_area_for_dpi(dpi: u16) -> RectPx {
 /// ゴースト窓の中心は決してここへ入らない。work area 解決が**帰属**（`Contains`）で決まって
 /// いることを [`s2_resolved_work_area`] が毎回自己検査するため、単一モニタで回したときの
 /// 「解決するモニタが 1 つしか無いから自明に当たる」退化を排除できる。
-fn s2_neighbor_work_area() -> RectPx {
+pub(super) fn s2_neighbor_work_area() -> RectPx {
     RectPx {
         left: 2574,
         top: -140,
@@ -463,6 +463,50 @@ pub(super) fn s2_monitors(dpi: u16) -> Vec<Monitor> {
 /// 当該 DPI 水準の 2 源（作業領域源＋モニタ別拡大率表）を、本番と同じ構築関数で作る。
 pub(super) fn s2_sources(dpi: u16) -> MonitorSources {
     MonitorSources::from_monitors(&s2_monitors(dpi))
+}
+
+/// タスクバーを隠したときの、ゴーストが居るモニタの作業領域（下端＝モニタ物理下端）。
+///
+/// **拡大率を一切変えずに作業領域だけが動く**構成変更の代表例である（タスクバーの自動的に
+/// 隠す設定・位置の変更・多段の表示切替）。この向きの変化では窓の `DPI` が 1 つも変わらない
+/// ので `Changed<DPI>` は立たず、拡大率の相は何もしない——だから作業領域変化を契機とする
+/// 再スナップが要る（task 5.2・要件 5.1／5.2）。
+pub(super) fn s2_taskbar_hidden_work_area(dpi: u16) -> RectPx {
+    RectPx {
+        bottom: S2_MONITOR_BOTTOM,
+        ..s2_work_area_for_dpi(dpi)
+    }
+}
+
+/// ゴーストが居るモニタ（index 0）の作業領域だけを差し替えた実行時のモニタ表。
+///
+/// 拡大率（`Monitor.dpi`）とモニタ矩形（`bounds`）は [`s2_monitors`] のまま据え置く
+/// ——動くのは作業領域だけである。
+pub(super) fn s2_monitors_with_work_area(dpi: u16, work_area: RectPx) -> Vec<Monitor> {
+    let mut monitors = s2_monitors(dpi);
+    monitors[0].work_area = RECT {
+        left: work_area.left,
+        top: work_area.top,
+        right: work_area.right,
+        bottom: work_area.bottom,
+    };
+    monitors
+}
+
+/// 隣接モニタ（index 1・ゴーストが決して居ない側）の作業領域だけを差し替えた表。
+///
+/// 表そのものは変わる（同期段は作り直す）が、ゴースト窓の接地点に関わる作業領域は 1px も
+/// 動かない——「表が変わっただけでは窓を書かない」を、同期段が実際に発火した状態で問う
+/// ための構成である（要件 5.2 の「変化が無ければ再射影そのものを行わない」の窓ごとの側）。
+pub(super) fn s2_monitors_with_neighbor_work_area(dpi: u16, work_area: RectPx) -> Vec<Monitor> {
+    let mut monitors = s2_monitors(dpi);
+    monitors[1].work_area = RECT {
+        left: work_area.left,
+        top: work_area.top,
+        right: work_area.right,
+        bottom: work_area.bottom,
+    };
+    monitors
 }
 
 /// 窓の**接地点**（下端中央・物理 px）。伺かの立ち絵は足元中央が原点であり、寸法変動でも
@@ -751,6 +795,31 @@ impl FrameHarness {
     /// DPI 相を 1 回回す（`SystemState` はハーネスが run を跨いで保持する）。
     pub(super) fn run_dpi_phase<S: ScaleReportSource>(&mut self, source: &mut S) {
         dpi_phase_with(source, &mut self.dpi_state, &mut self.world);
+    }
+
+    /// 作業領域変化を契機とする再スナップを 1 回回す（本番の拡大率の相の直後の段）。
+    pub(super) fn run_work_area_resnap(&mut self, change: &SnapshotChange) {
+        resnap_for_work_area_change(&mut self.world, change);
+    }
+
+    /// 配置に関わる相を**本番と同じ順**で 1 フレームぶん回す
+    /// （同期段 → 拡大率の相 → 作業領域再スナップ）。
+    ///
+    /// 相を 1 つずつ呼ぶ形だと、本番（`emo2_frame_system`）の並びが入れ替わってもテストは
+    /// 自分の並びで緑になる。ここに順序を 1 箇所だけ写し、置き場を主題にするテストは
+    /// この口から駆動する（本番の字面そのものは本文走査のテストが別に固定する）。
+    ///
+    /// 戻り値は同期段が作業領域源を差し替えたか（`None`＝表に変化が無かったフレーム）。
+    pub(super) fn run_placement_phases<S: ScaleReportSource>(
+        &mut self,
+        source: &mut S,
+    ) -> Option<SnapshotChange> {
+        let change = self.run_work_area_sync();
+        self.run_dpi_phase(source);
+        if let Some(change) = &change {
+            self.run_work_area_resnap(change);
+        }
+        change
     }
 
     /// 再スナップを 1 回回す。

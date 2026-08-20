@@ -215,9 +215,9 @@ pub enum PlacementRoute {
     /// [`DpiReproject`](Self::DpiReproject) とも**実在のトリガが違う**ため専用語を持つ
     /// （D13 の 1 語＝1 実在トリガ）。混同すると「作業領域が動いたから移した」のか
     /// 「毎フレームの再スナップが動かした」のかがログ上で切り分けられない。
-    // 発行者は task 5.2（作業領域の変化を契機とする再スナップ）が新設する。語彙を先に建てる
-    // のは、判定器（task 3.1）と単一の窓書込口の札が同じ語を見るためである。
-    #[allow(dead_code)]
+    // 発行者は `emo2_boot::frame::work_area_sync::resnap_for_work_area_change`（task 5.2 で
+    // 着地）。語彙を task 2.4 で先に建てたのは、判定器（task 3.1）と単一の窓書込口の札が
+    // 同じ語を見るためである。
     WorkAreaResnap,
     /// DPI 遷移後の連鎖（隣接ペア）再解決
     /// （areka-P0-dpi-transition-atomicity C4 `chain_realign::realign_chain_once_with`）。

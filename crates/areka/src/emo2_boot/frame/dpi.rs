@@ -294,7 +294,12 @@ pub(super) fn dpi_phase_with<S: ScaleReportSource>(
             // [`follow_balloon`]＝`resize_window_to` 手順 6/7 が随伴させる）。
             None => match kind {
                 GhostWindowKind::Char => {
-                    reproject_char_window_at_current_size(world, window);
+                    // 経路タグ: 本フェーズは `Changed<DPI>` エッジ駆動＝真に DPI 由来（D13）。
+                    reproject_char_window_at_current_size(
+                        world,
+                        window,
+                        PlacementRoute::DpiReproject,
+                    );
                 }
                 GhostWindowKind::Balloon => {}
             },
@@ -330,19 +335,36 @@ pub(super) fn dpi_phase_with<S: ScaleReportSource>(
 /// - **entity 破棄済み**: 終了処理の**正常終了系**ゆえ `debug!`（[`DESPAWNED_SKIP_TAG`]）。
 /// - **実在するが `WindowPos.size` 不在**（窓生成前）: 真の異常ゆえ `warn!`。
 ///
+/// # `route` は呼び手が名乗る（task 5.2 で引数化・D13 の 1 語＝1 実在トリガ）
+///
+/// 本関数は「現寸のまま射影 T を一度通す」という**手続き**であって、トリガではない。
+/// 呼び手は 2 つあり、実在するトリガが違う——拡大率の相は `Changed<DPI>` エッジ
+/// （[`DpiReproject`](PlacementRoute::DpiReproject)）、作業領域変化を契機とする再スナップは
+/// 作業領域源の差し替え（[`WorkAreaResnap`](PlacementRoute::WorkAreaResnap)）である。
+/// ここで語を固定すると、ログ上で「拡大率が動いたから移した」のか「作業領域が動いたから
+/// 移した」のかが切り分けられなくなる。
+///
 /// 戻り値は**窓へ書込が起きたか**（`false` はべき等 skip・縮退の双方を含み、失敗とは限らない
 /// ＝[`reconcile_window_size`] と同じ流儀）。panic しない。
-pub(super) fn reproject_char_window_at_current_size(world: &mut World, window: Entity) -> bool {
+pub(super) fn reproject_char_window_at_current_size(
+    world: &mut World,
+    window: Entity,
+    route: PlacementRoute,
+) -> bool {
     let Some(current) = world.get::<WindowPos>(window).and_then(|wp| wp.size) else {
+        // 経路語を載せる（task 5.2 で呼び手が 2 つになった）——載せないと、拡大率の相と
+        // 作業領域再スナップのどちらが打ち切ったのかがログから判らない。
         if world.get_entity(window).is_err() {
             debug!(
                 entity = ?window,
-                "{DESPAWNED_SKIP_TAG} dpi reproject: 窓 entity が破棄済み（despawn）→ 位置再射影を正常系として打ち切り"
+                ?route,
+                "{DESPAWNED_SKIP_TAG} reproject: 窓 entity が破棄済み（despawn）→ 位置再射影を正常系として打ち切り"
             );
         } else {
             warn!(
                 entity = ?window,
-                "dpi reproject: WindowPos.size 未確定（窓生成前）のため現寸を読めず、位置を再射影せず現状維持"
+                ?route,
+                "reproject: WindowPos.size 未確定（窓生成前）のため現寸を読めず、位置を再射影せず現状維持"
             );
         }
         return false;
@@ -354,7 +376,7 @@ pub(super) fn reproject_char_window_at_current_size(world: &mut World, window: E
             w: current.width,
             h: current.height,
         },
-        PlacementRoute::DpiReproject,
+        route,
     )
 }
 

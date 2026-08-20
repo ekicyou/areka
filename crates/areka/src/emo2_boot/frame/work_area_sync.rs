@@ -22,34 +22,39 @@
 //!
 //! # ここがしないこと
 //!
-//! - **窓を動かさない**。同期は資源を差し替えるだけで、窓書込を 1 件も出さない。拡大率が
-//!   変わらず作業領域だけが変わった窓の再射影は作業領域変化を契機とする再スナップ
-//!   （task 5.2）が持つ。
+//! - **同期そのものは窓を動かさない**。[`sync_monitor_snapshot`] は資源を差し替えるだけで、
+//!   窓書込を 1 件も出さない。拡大率が変わらず作業領域だけが変わった窓の再射影は、同一
+//!   フレームの**拡大率の相の後**に置かれる [`resnap_for_work_area_change`]（task 5.2）が
+//!   持つ。
 //! - **保存位置の復元判定に効かない**（要件 5.7）。復元は起動時に 1 度だけ源を読む契約で
 //!   あり、拡大率をまたぐ保存位置の追従は行わない（`windowposition-limit` の開発者裁定）。
 
 use bevy_ecs::prelude::*;
 use tracing::warn;
+use wintf::ecs::WindowPos;
 use wintf::ecs::window::monitor::Monitor;
 
-use crate::placement::follow::{MonitorDpiTable, MonitorSnapshot, MonitorSources, same_monitors};
+use crate::placement::diag::PlacementRoute;
+use crate::placement::follow::{
+    Anchored, MonitorDpiTable, MonitorSnapshot, MonitorSources, project_anchor, same_monitors,
+};
+use crate::placement::resolver::{Anchor, PointPx, SizePx};
+use crate::placement::spawn::CharWindowMarker;
 use crate::placement::transition_diag::{self, MonitorEntry};
 use crate::placement::{WORK_AREA_SYNC_CONTEXT, diag, monitor_records};
+
+use super::dpi::reproject_char_window_at_current_size;
 
 /// 作業領域源が実際に差し替わったこと（＝作業領域が動いたフレームであること）。
 ///
 /// 差分の中身（どの作業領域がどう動いたか）は**呼び手が両者を突き合わせて読む**。
-/// 作業領域変化を契機とする再スナップ（task 5.2）がこの値を受け取り、動いた作業領域に
-/// 属する下端吸着のキャラ窓だけを現寸で射影し直す。
+/// 消費者は [`resnap_for_work_area_change`]（task 5.2）で、動いた作業領域に属する下端吸着の
+/// キャラ窓だけを現寸で射影し直す。
 #[derive(Debug, Clone)]
 pub(super) struct SnapshotChange {
     /// 差し替え**前**の作業領域源（資源が無かった場合は空）。
-    // 消費者は task 5.2（作業領域変化を契機とする再スナップ）。areka は bin crate ゆえ
-    // `pub` でも dead_code 免除されない（`placement::diag` と同じ事情）。
-    #[allow(dead_code)]
     pub(super) previous: MonitorSnapshot,
     /// 差し替え**後**の作業領域源。
-    #[allow(dead_code)]
     pub(super) current: MonitorSnapshot,
 }
 
@@ -132,4 +137,83 @@ pub(super) fn sync_monitor_snapshot_with(
     diag::log_monitor_snapshot(&monitor_records(monitors), WORK_AREA_SYNC_CONTEXT);
 
     Some(change)
+}
+
+// ---------------------------------------------------------------------------
+// 作業領域変化を契機とする再スナップ（task 5.2・設計 C6・要件 5.1／5.2／5.3／5.4／4.7）
+// ---------------------------------------------------------------------------
+
+/// 作業領域が動いた窓を、**現在の寸のまま**新しい下端へ射影し直す（設計 C6）。
+///
+/// 呼ぶのは [`sync_monitor_snapshot`] が差し替えを報告したフレームだけである——変化が
+/// 無ければ呼び手が [`SnapshotChange`] を持たないので、本関数は**そもそも走らない**
+/// （要件 5.2・4.7 の「変化の無いフレームで窓書込 0」はこの構造が担う）。
+///
+/// # なぜ拡大率の相の**後**なのか
+///
+/// 拡大率も一緒に動いたフレームでは、拡大率の相（`Changed<DPI>` 駆動）が同じ窓を既に
+/// 新しい下端へ書き終えている。相の**前**に置くと、まだ旧寸のままの窓を先に動かして
+/// から相が書き直す 2 段書込になる。後に置けば、相が書き終えた窓は導出値が現在値と
+/// 一致して [`resize_window_to`](crate::placement::follow::resize_window_to) の
+/// べき等 skip が書込ゼロで抜ける（＝合流）。
+///
+/// # 対象の選び方——**射影 T の値が動くか**で決める
+///
+/// 窓ごとに、差し替え**前**の源と**後**の源で [`project_anchor`] を 1 度ずつ通し、結果が
+/// 変わる窓だけを再射影する。帰属の規則（どのモニタに属するか）をここで発明しないための
+/// 形である——判定は本番の射影がそのまま使う 1 つの関数に委ねてあり、二重権威にならない
+/// （帰属規則そのものの共有は task 5.4 の持ち分）。
+///
+/// この選び方は「作業領域が変わった窓」より狭い側へ倒れている: 作業領域の左端だけが動いた
+/// ような、下端吸着の位置に影響しない変化では射影値が変わらず、再射影を行わない。書込が
+/// 出ないことは変わらないが、**呼び出しごと省ける**ぶん要件 5.2 に忠実である。
+///
+/// 対象は**下端吸着（`Anchor::Bottom`）のキャラ窓**に限る（設計 C6）。バルーン窓は位置が
+/// 従属量ゆえ触らない——キャラ窓が動けば同一の [`resize_window_to`] 呼出の内側で随伴が
+/// 追従する（窓左上相対・追従 offset は補正しない・要件 10.1）。
+///
+/// # 確保（要件 10.4）
+///
+/// 対象の収集で `Vec` を 1 つ使うが、走るのは作業領域が動いたフレームだけであり、定常
+/// フレームでは本関数に到達しない（＝定常状態の確保は増えない）。
+pub(super) fn resnap_for_work_area_change(world: &mut World, change: &SnapshotChange) {
+    // World の不変借用（query）を `&mut World` のループへ跨がせないため、先に対象を
+    // collect して借用を解放する（`dpi_phase_with` と同じ collect→release→&mut ループ）。
+    let mut targets: Vec<Entity> = Vec::new();
+    let mut query =
+        world.query_filtered::<(Entity, &Anchored, &WindowPos), With<CharWindowMarker>>();
+    for (window, &Anchored(anchor), window_pos) in query.iter(world) {
+        // 下端吸着だけが対象（設計 C6）。Free は「位置を一切動かさない」契約であり、
+        // Top／Left／Right は下端以外の辺が原点なので本タスクの守備範囲外である。
+        if !matches!(anchor, Anchor::Bottom) {
+            continue;
+        }
+        // 位置か寸が未確定（窓生成前）の窓は接地点そのものが存在しない。射影値を比べる
+        // 材料が無いので対象に入れない——ここで無理に射影を通すと、窓が出来ていないだけの
+        // 正常な起動途中に警告が並ぶ。窓が生えた後の変化は次の差し替えで拾える。
+        let (Some(position), Some(size)) = (window_pos.position, window_pos.size) else {
+            continue;
+        };
+        let raw = PointPx {
+            x: position.x,
+            y: position.y,
+        };
+        let size = SizePx {
+            w: size.width,
+            h: size.height,
+        };
+        // 射影 T を 2 つの源で 1 度ずつ通す（本番の射影と同一関数＝規則を二重に持たない）。
+        let before = project_anchor(anchor, raw, size, Some(&change.previous));
+        let after = project_anchor(anchor, raw, size, Some(&change.current));
+        if before != after {
+            targets.push(window);
+        }
+    }
+
+    for window in targets {
+        // 現寸のまま射影 T を一度通す。同値ならべき等 skip で書込ゼロ（＝拡大率の相が
+        // 既に書き終えた窓）、動くべき窓だけが 1 回書かれる。縮退（破棄済み・寸未確定）は
+        // 当該関数が log-first で吸収する。
+        reproject_char_window_at_current_size(world, window, PlacementRoute::WorkAreaResnap);
+    }
 }

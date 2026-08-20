@@ -163,8 +163,8 @@ pub fn emo2_frame_system(world: &mut World) {
     // 1 回で書ける（相の後に同期すると旧下端へ書いてから源が変わり 2 段書込になる）。
     // 表の内容が変わらないフレームでは作り直さない＝定常フレームは無操作である。
     // 戻り値（差し替えの有無）を受けるのは作業領域変化を契機とする再スナップ（task 5.2）で、
-    // その置き場は拡大率の相の**後**になる。
-    let _work_area_change = work_area_sync::sync_monitor_snapshot(world);
+    // その置き場は拡大率の相の**後**である（下の `resnap_for_work_area_change`）。
+    let work_area_change = work_area_sync::sync_monitor_snapshot(world);
     // donor 慣行: remove して &mut World を各フェーズへ排他に渡し、全フェーズ駆動後に必ず戻す。
     run_attach_phase(&mut wiring, world);
     // DPI 追従（attach → dpi → drain …の順・design「run_dpi_phase（frame.rs）」）: attach の**後**に
@@ -174,6 +174,15 @@ pub fn emo2_frame_system(world: &mut World) {
     // 未消費要求（初回表示の k₀ 補正）を後段の状態照合経路が拾う（両経路は presenter の
     // 消費規約により二重にも取りこぼしにもならない＝どちらの順でも整合する）。
     run_dpi_phase(&mut wiring, world);
+    // 作業領域変化を契機とする再スナップ（atom 設計 C6・要件 5.1／5.2／5.3／5.4／4.7）:
+    // 拡大率の相の**直後**に置く。拡大率が変わらず作業領域だけが変わった窓は `Changed<DPI>`
+    // が立たず相を素通りするので、ここで現寸のまま新しい下端へ射影し直す。相の**前**に置くと
+    // 旧寸のまま先に動かしてから相が書き直す 2 段書込になり、後に置けば相が書き終えた窓は
+    // 導出値が現在値と一致してべき等 skip で抜ける（＝同一フレームで 1 回に合流する）。
+    // 作業領域が動かなかったフレームは同期段が `None` を返す＝**呼び出しごと起きない**。
+    if let Some(work_area_change) = &work_area_change {
+        work_area_sync::resnap_for_work_area_change(world, work_area_change);
+    }
     run_drain_phase(&mut wiring, world);
     // バルーン可視性（areka-P0-balloon-visibility design 決定 D5・Requirement 3.5／6.6）: 本フレームの
     // 表示指令をすべて適用し終えた**後**に置く——判断の根拠は「指令適用後の実状態」でなければならず、
@@ -229,6 +238,12 @@ mod harness_tests;
 #[cfg(all(test, target_pointer_width = "64"))]
 #[path = "frame_work_area_sync_tests.rs"]
 mod work_area_sync_tests;
+
+// 作業領域変化を契機とする再スナップ（task 5.2）の統合テスト。同じくハーネスに乗るので
+// **x64 のみ**で接続する（常時テストに x86 を用いない・要件 7.5）。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_work_area_resnap_tests.rs"]
+mod work_area_resnap_tests;
 
 #[cfg(test)]
 #[path = "frame_attach_tests.rs"]
