@@ -83,7 +83,12 @@ fn clean_slate() {
 /// 実窓を掴んでいないことを `IsWindow` で毎回確かめる。
 fn fake_hwnd(tag: u8) -> HWND {
     // 下位に識別子を載せ、必ず奇数にする（ハンドル値の粒度に載らない）。
-    let value = 0xFFFF_FF00_usize | usize::from(tag) | 1;
+    //
+    // 識別子は**左へ 1 桁ずらしてから**奇数化する。`usize::from(tag) | 1` だと 0x20 と
+    // 0x21 が同じ値へ潰れ、「別の窓」を意図した呼び分けが同一窓を指してしまう
+    // （合流の導入で `drain_returns_the_enqueued_commands_verbatim_without_executing_them`
+    //  が偽の失敗を出して露見した・task 5.3）。
+    let value = 0xFFFF_FE00_usize | (usize::from(tag) << 1) | 1;
     let hwnd = HWND(value as *mut core::ffi::c_void);
     // SAFETY: `IsWindow` は任意のハンドル値に対して安全に真偽を返す読み取り専用 API で
     // あり、無効値でも未定義動作を起こさない。
@@ -556,7 +561,7 @@ fn enqueue_records_the_command_with_the_merge_sentinel() {
     );
     assert!(
         enqueues[0].contains("merged_into_seq=-"),
-        "先着の枠へ畳んでいないので合流先は番兵: {}",
+        "畳む先が無いので合流先は番兵: {}",
         enqueues[0]
     );
 }
@@ -565,12 +570,18 @@ fn enqueue_records_the_command_with_the_merge_sentinel() {
 // 既存挙動の維持
 // ---------------------------------------------------------------------------
 
+/// 同一窓の寸指令と位置指令は**先着の枠へ畳まれて 1 本**になる。
+///
+/// 本テストは是正前まで「積み上げは指令を畳まない」を固定していた。task 5.3 の合流で当の
+/// 主張が**退役**したので、逆側を固定する形へ書き換えてある（削らずに残すのは、ここが
+/// 「既存挙動の維持」の節であり、どの挙動が意図的に反転したのかを一覧で辿れるようにする
+/// ため）。合流規則そのものの網羅は `command_coalesce_tests` が持つ。
 #[test]
-fn enqueue_keeps_every_command_in_order_including_two_for_the_same_window() {
+fn enqueue_folds_a_size_command_and_a_move_command_for_the_same_window() {
     clean_slate();
     let hwnd = fake_hwnd(0x50);
 
-    // 寸のみ → 位置のみ（同一窓）。積み上げは指令をそのまま保つ。
+    // 寸のみ → 位置のみ（同一窓）。
     SetWindowPosCommand::enqueue(SetWindowPosCommand::new(
         hwnd,
         0,
@@ -591,9 +602,14 @@ fn enqueue_keeps_every_command_in_order_including_two_for_the_same_window() {
     ));
 
     let drained = drain_window_pos_commands();
-    assert_eq!(drained.len(), 2, "積み上げは指令を畳まない");
-    assert_eq!(drained[0].width, 100);
-    assert_eq!(drained[1].x, 10);
+    assert_eq!(drained.len(), 1, "同一窓のジオメトリ指令は 1 本へ畳まれる");
+    assert_eq!(drained[0].width, 100, "寸は先着の値");
+    assert_eq!(drained[0].x, 10, "位置は後勝ち");
+    assert_eq!(
+        drained[0].flags,
+        SWP_NOZORDER | SWP_NOACTIVATE,
+        "移動なし／寸なしはどちらも双方が持たないので落ちる"
+    );
 }
 
 #[test]

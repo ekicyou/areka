@@ -211,7 +211,7 @@ crates/areka/src/main.rs               # MOD: 起動時に MonitorDpiTable も�
 | `crates/wintf/src/ecs/world/mod.rs` | `try_tick_world` の `FrameCount` 増分直後（:503-505）で Resource `TickStart` を更新し `transition_diag::begin_tick(frame, start)`（ミラーへ写す）。World 構築時（:76-77 の `FrameTime` 挿入と同所）に `TickStart` を初期挿入 | tick 構造は変えない（13 スケジュール順不変） |
 | `crates/wintf/src/ecs/window/mod.rs` | `pub mod transition_diag;` 再輸出 | — |
 | `crates/wintf/src/runtime/tick_bridge.rs` | MOD(4.3): doc 3 箇所＋起動時 `debug!` の文字列 1 箇所（挙動不変・この文字列を読む消費者はコード上に無い）。`AsyncTickTask`（:136）・`spawn`（:160）・`run_async_tick`（:212）と起動時の `debug!`（:213）が「60Hz tick ループ」と書いていたのを **vblank 駆動**へ是正し、実効のフレーム周期は画面の更新周期であること・固定 60Hz は DWM 失敗時のフォールバック（`vsync_loop` の `Err` 腕 :127-131）だけであることを明記した。**挙動は 1 つも変えていない**（判定の上限を「1 コマ」で置くときに 16.7ms を無条件の値と読む誤りが実際に起きたため・確定台帳 §4） | tick 構造は変えない |
-| `crates/wintf/src/ecs/window/command.rs` | `tag` フィールド＋`with_tag`／`enqueue` の合流／`flush` の begin・write・end レコード／`drain_window_pos_commands` | `new()` の 7 引数は不変。Z 専用指令は合流対象外 |
+| `crates/wintf/src/ecs/window/command.rs` | `tag` フィールド＋`with_tag`／`enqueue` の合流／`flush` の begin・write・end レコード／`drain_window_pos_commands`。MOD(5.3): 合流が着地（`COALESCIBLE_FLAGS`／`REQUIRED_FOR_COALESCE`／`is_coalescible`／`find_merge_target`／`merge_into`／`coalesce_geometry`）。`enqueue` は記録を**合流の後**に組む（合流先の通し番号は畳んでみるまで判らない） | `new()` の 7 引数は不変。Z 専用指令は合流対象外。**同一窓の畳めない指令は仕切りとして働く**（C2 の合流規則を参照） |
 | `crates/wintf/src/ecs/window/zorder_pair_maintain.rs` | `pair_fix_command`（:187-207）にタグ `origin="zorder-pair"` | zorder の判定・順序不変 |
 | `crates/wintf/src/ecs/graphics/systems/window_pos.rs` | enqueue（:89-98）にタグ `origin="window-pos"` | — |
 | `crates/wintf/src/ecs/window_proc/window_pos.rs` | `WM_DPICHANGED`（:303）と `WM_WINDOWPOSCHANGED`（:36）に `msg` レコード／採用時の同期書込（:420-430）に `write stage=sync` レコード | 採否判定（:372-374）不変（`dpi-window-vanish`） |
@@ -236,7 +236,8 @@ crates/areka/src/main.rs               # MOD: 起動時に MonitorDpiTable も�
 |---|---|---|
 | `crates/wintf/src/ecs/window/transition_diag.rs` | NEW: target 定数・frame ミラー・TickStart・入れ子する flush epoch・`WriteTag`・レコード純関数・経路語 3 つ | 1.1・1.2・2.1・2.2 |
 | `crates/wintf/src/ecs/window/transition_diag_tests.rs` | NEW: 語彙固定（正例／負例）・実濾過・刻印の権威 | 1.1・1.2 |
-| `crates/wintf/src/ecs/window/command_transition_tests.rs` | NEW: 札・flush 観測・drain・入れ子 epoch・前置ガードの構造テスト | 2.1 |
+| `crates/wintf/src/ecs/window/command_transition_tests.rs` | NEW: 札・flush 観測・drain・入れ子 epoch・前置ガードの構造テスト。MOD(5.3): 偽ハンドル生成が 0x20 と 0x21 を同一値へ潰していたのを是正（識別子を左へ 1 桁ずらしてから奇数化）／「積み上げは指令を畳まない」を固定していた 1 本を**退役**させ、畳まれる側を固定する形へ書き換え | 2.1, 5.3 |
+| `crates/wintf/src/ecs/window/command_coalesce_tests.rs` | NEW: 合流の決定論テスト（窓ごとの書込回数・後勝ちと札の合成・逐次適用との一致（4 種の全並び 256 通り）・Z 専用／表示状態／挿入位置／活性化／Z 移動／別窓の各不合流とその陽性の対・仕切りを跨がないこと・先着の選択・`merged_into_seq` の記録） | 5.3 |
 | `crates/wintf/src/ecs/window_proc/window_pos_transition_tests.rs` | NEW: 3 メッセージ受理・同期書込・`WM_WINDOWPOSCHANGED` 再入 | 2.2 |
 | `crates/wintf/src/ecs/window_proc/window_pos_tests.rs` | MOD: `dispatch_dpichanged*` 助走関数へ直列化の錠 | 2.2 |
 | `crates/wintf/src/ecs/layout/systems/monitor_systems_transition_tests.rs` | NEW: モニタ表レコード・多スレッド刻印・構造テスト | 2.2 |
@@ -533,6 +534,7 @@ pub fn enqueue_line(&EnqueueRecord) -> String;
   - 合流可能 := `hwnd_insert_after == None` かつ flags ⊇ {`SWP_NOZORDER`, `SWP_NOACTIVATE`} かつ flags ⊆ {`SWP_NOZORDER`, `SWP_NOACTIVATE`, `SWP_NOMOVE`, `SWP_NOSIZE`}。
   - 新指令が合流可能で、キュー内に同一 hwnd の合流可能な指令があれば**先着の枠**へ畳む: 位置は新指令が `NOMOVE` でなければ新指令の値、寸は `NOSIZE` でなければ新指令の値、`NOMOVE`／`NOSIZE` は双方が持つときだけ残す。タグは先着の値を保つ（`enqueue` レコードに `merged_into_seq` を出す）。
   - Z 専用指令（`NOMOVE|NOSIZE|NOACTIVATE`・`hwnd_insert_after` あり／なし）と `SHOWWINDOW`／`HIDEWINDOW`／`FRAMECHANGED` 等を含む指令は**合流対象にも合流先にもならない**＝enqueue 順のまま（10.3）。
+  - **同一窓の畳めない指令は仕切りとして働く**（task 5.3 で確定）。畳めない指令を跨いで畳むと、当該窓のジオメトリ書込がその指令より**前へ移る**——最終状態は変わらないが Z 指令との相対順は変わり、10.3 の「適用順を変えない」に当たらない。よって畳み先の探索は同一 hwnd の畳めない指令に当たったところで仕切り直す。**別の窓**の指令は仕切りにならない（`SWP_NOZORDER` 付きの書込は他窓の状態に触れない）。
 - `flush`: `begin_flush()`→`flush stage=begin count since_tick_us`→各指令を `Instant` で囲んで `write stage=flush seq call_us ok`（target 有効時のみ `GetWindowRect` で書込後矩形を読み戻して `after` に載せる＝2.1 の「書込後の物理矩形」）→`flush stage=end total_us`。失敗時の `warn!` は現行維持。target 無効時は計時も読み戻しも行わない（`tracing::enabled!` で分岐）。
 - `#[doc(hidden)] pub fn drain_window_pos_commands() -> Vec<SetWindowPosCommand>`: 実行せずに取り出す。**areka 側の決定論テスト（別 crate）が一括 flush キューの中身を検査するために `pub` が要る**（crate 境界＝`#[cfg(test)]` では届かない）。本番からは呼ばない旨を doc に明記（設計討議 A-7）。
 

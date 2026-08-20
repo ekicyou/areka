@@ -3,6 +3,7 @@
 //! - `is_self_initiated`: 自アプリ由来の SetWindowPos 呼び出し判定
 //! - `guarded_set_window_pos`: RAII ガード付き SetWindowPos ラッパー
 //! - `SetWindowPosCommand`: SetWindowPos 遅延実行キュー
+//! - `coalesce_geometry`: 同一 tick・同一窓のジオメトリ指令を 1 本へ畳む純関数
 //! - `find_owner_window`: エンティティの所属ウィンドウ特定
 //!
 //! # 遷移観測（`transition_diag`）
@@ -203,6 +204,131 @@ pub(crate) fn read_back_window_rect(hwnd: HWND) -> Option<RECT> {
     }
 }
 
+// ============================================================================
+// 合流（同一 tick・同一窓のジオメトリ指令を 1 本へ畳む）
+// ============================================================================
+
+/// 合流に関わり得るフラグの全体（この 4 つ以外を 1 つでも持つ指令は畳まない）。
+///
+/// `SWP_SHOWWINDOW`／`SWP_HIDEWINDOW`／`SWP_FRAMECHANGED` などは**表示状態や非クライアント
+/// 領域を動かす**副作用を持ち、位置・寸の「後勝ち」では合成できない。ゆえに許可集合を
+/// 列挙し、**知らないフラグは畳まない**側へ倒す（新しいフラグが増えても既定で安全）。
+const COALESCIBLE_FLAGS: u32 = SWP_NOZORDER.0 | SWP_NOACTIVATE.0 | SWP_NOMOVE.0 | SWP_NOSIZE.0;
+
+/// 合流に**必要**なフラグ。
+///
+/// `SWP_NOZORDER` を欠く指令は Z 順を動かす＝`ghost-window-zorder` の維持系が積む Z 専用
+/// 指令がこれに当たる（要件 10.3）。`SWP_NOACTIVATE` を欠く指令は活性化という副作用を持つ。
+/// どちらも位置・寸の合成では保存できないので合流の対象にも先にもしない。
+const REQUIRED_FOR_COALESCE: u32 = SWP_NOZORDER.0 | SWP_NOACTIVATE.0;
+
+/// 指令が合流に関与してよいか（対象にも先にもなり得るか）。
+///
+/// 3 条件すべてを満たすときだけ真: ⑴ 挿入位置を持たない、⑵ [`REQUIRED_FOR_COALESCE`] を
+/// すべて持つ、⑶ [`COALESCIBLE_FLAGS`] 以外のフラグを 1 つも持たない。
+fn is_coalescible(cmd: &SetWindowPosCommand) -> bool {
+    cmd.hwnd_insert_after.is_none()
+        && (cmd.flags.0 & REQUIRED_FOR_COALESCE) == REQUIRED_FOR_COALESCE
+        && (cmd.flags.0 & !COALESCIBLE_FLAGS) == 0
+}
+
+/// 畳み先を探す——同一 hwnd の**先着**の合流可能な指令。
+///
+/// 同一 hwnd に合流できない指令（Z 専用・表示状態を変えるもの）があれば、そこで探索を
+/// **仕切り直す**。畳むと当該窓のジオメトリ書込がその指令より前へ移り、Z 指令との相対順が
+/// 変わってしまうためである（要件 10.3 が禁じるのは順序と結果の変化であって、最終状態の
+/// 一致だけではない）。別の窓の指令は仕切りにならない——`SWP_NOZORDER` 付きの書込は
+/// 他窓の状態に触れないからである。
+fn find_merge_target(queue: &[SetWindowPosCommand], hwnd: HWND) -> Option<usize> {
+    let mut first = None;
+    for (index, existing) in queue.iter().enumerate() {
+        if existing.hwnd != hwnd {
+            continue;
+        }
+        if is_coalescible(existing) {
+            if first.is_none() {
+                first = Some(index);
+            }
+        } else {
+            first = None;
+        }
+    }
+    first
+}
+
+/// 先着の枠へ後着を畳み込む（各項目は**後勝ち**）。
+///
+/// 呼び出し側は両者が [`is_coalescible`] であることを保証すること——本関数は合流後の
+/// フラグを 4 ビットから組み直すので、それ以外のフラグが載っていると黙って落ちる。
+fn merge_into(base: &mut SetWindowPosCommand, later: &SetWindowPosCommand) {
+    let base_nomove = (base.flags.0 & SWP_NOMOVE.0) != 0;
+    let base_nosize = (base.flags.0 & SWP_NOSIZE.0) != 0;
+    let later_nomove = (later.flags.0 & SWP_NOMOVE.0) != 0;
+    let later_nosize = (later.flags.0 & SWP_NOSIZE.0) != 0;
+
+    // 後着が動かす項目だけを上書きする＝逐次適用の最終ジオメトリと一致する。
+    if !later_nomove {
+        base.x = later.x;
+        base.y = later.y;
+    }
+    if !later_nosize {
+        base.width = later.width;
+        base.height = later.height;
+    }
+
+    // 「移動なし」「寸なし」の札は**双方が持つときだけ**残る（片方が動かすなら動く）。
+    let mut flags = SWP_NOZORDER | SWP_NOACTIVATE;
+    if base_nomove && later_nomove {
+        flags |= SWP_NOMOVE;
+    }
+    if base_nosize && later_nosize {
+        flags |= SWP_NOSIZE;
+    }
+    base.flags = flags;
+
+    // タグは先着の値を保つ（`base.tag` を触らない）。合流後の 1 本が「どの経路の枠か」を
+    // 先着で名乗るのは、`merged_into_seq` が指す先と同じ枠を指すためである。
+}
+
+/// 積み上げ 1 件を、可能なら先着の枠へ畳む（純関数・design.md C2）。
+///
+/// 畳んだときは**先着の通し番号**を返し、畳まなかったときはキューの末尾へ押し込んで
+/// `None` を返す。通し番号は一括書込の `write` レコードの `seq`（キュー内の位置）と
+/// 同じ数え方である。
+///
+/// # 事後条件
+///
+/// 合流後の適用が生む最終ジオメトリは、合流しない逐次適用の最終ジオメトリと一致する
+/// （各項目「後勝ち」）。Z 専用指令の相対順序と引数は不変である（要件 10.3）。
+pub(crate) fn coalesce_geometry(
+    queue: &mut Vec<SetWindowPosCommand>,
+    cmd: SetWindowPosCommand,
+) -> Option<u32> {
+    let target = if is_coalescible(&cmd) {
+        find_merge_target(queue, cmd.hwnd)
+    } else {
+        None
+    };
+
+    match target {
+        Some(index) => {
+            merge_into(&mut queue[index], &cmd);
+            // 4G 件を超えるキューは起こり得ないが、`as` の暗黙切り捨てで別の枠を指すより
+            // 飽和させて上限に張り付かせる（`flush` の `seq` と同じ扱い）。
+            //
+            // この腕は**到達不能**であって「どう書いても等価」ではない——`unwrap_or(0)` や
+            // `as` へ替えれば別の枠を指す。変異検査で殺せないのは到達しないからであり、
+            // テストの穴ではない。**`as` へ単純化しないこと**（この保険が防いでいるのは
+            // まさにその静かな取り違えである）。
+            Some(u32::try_from(index).unwrap_or(u32::MAX))
+        }
+        None => {
+            queue.push(cmd);
+            None
+        }
+    }
+}
+
 impl SetWindowPosCommand {
     /// 新しいSetWindowPosCommandを作成
     ///
@@ -237,8 +363,12 @@ impl SetWindowPosCommand {
 
     /// コマンドをキューに追加
     ///
-    /// 積み上げは指令を**そのまま**押し込む（先着の枠へ畳まない）。よって観測レコードの
-    /// `merged_into_seq` は常に番兵＝「合流しなかった」になる。
+    /// 積み上げは [`coalesce_geometry`] を通す——同一 tick・同一窓のジオメトリ指令は
+    /// **先着の枠へ畳まれ**、窓ごとの書込が 1 本になる（要件 4.5）。畳まれた場合は観測
+    /// レコードの `merged_into_seq` に**先着の通し番号**が載り、畳まれなければ番兵になる。
+    ///
+    /// Z のみの指令と表示状態を変える指令は畳まれない（要件 10.3）。判定と理由は
+    /// [`coalesce_geometry`] の doc を見ること。
     pub fn enqueue(cmd: SetWindowPosCommand) {
         trace!(
             hwnd = ?cmd.hwnd,
@@ -248,17 +378,19 @@ impl SetWindowPosCommand {
             height = cmd.height,
             "SetWindowPosCommand::enqueue"
         );
+        // 記録は合流の**後**に組む——合流先の通し番号は畳んでみるまで判らない。
+        let hwnd = cmd.hwnd;
+        let tag = cmd.tag;
+        let merged_into_seq =
+            WINDOW_POS_COMMANDS.with(|cell| coalesce_geometry(&mut cell.borrow_mut(), cmd));
         if transition_diag::is_enabled() {
             transition_diag::emit_line(&transition_diag::enqueue_line(&EnqueueRecord {
                 stamp: transition_diag::stamp(),
-                hwnd: cmd.hwnd,
-                tag: cmd.tag,
-                merged_into_seq: None,
+                hwnd,
+                tag,
+                merged_into_seq,
             }));
         }
-        WINDOW_POS_COMMANDS.with(|cell| {
-            cell.borrow_mut().push(cmd);
-        });
     }
 
     /// キュー内の全コマンドを実行し、キューをクリア
@@ -435,6 +567,10 @@ pub fn find_owner_window(world: &World, entity: Entity) -> Option<Entity> {
 #[cfg(test)]
 #[path = "command_transition_tests.rs"]
 mod command_transition_tests;
+
+#[cfg(test)]
+#[path = "command_coalesce_tests.rs"]
+mod command_coalesce_tests;
 
 #[cfg(test)]
 mod tests {
