@@ -201,6 +201,7 @@ crates/areka/src/main.rs               # MOD: 起動時に MonitorDpiTable も�
 .kiro/specs/areka-P0-dpi-transition-atomicity/
 ├── mechanism-ledger.md                # NEW: 確定台帳（2 証跡クラス）
 ├── signoff-procedure.md               # NEW: サインオフ手順書
+├── baseline-2026-08-20.md             # NEW(4.2): 是正前の基準値（フレーム番号つき時系列・§6.3 の 9 量・要件 1.3/1.4/1.6 と 9.1 の確認・task 7.3 への比較の単位）。生ログ・Report 全文・meta.txt はリポジトリ外（手順書 §7）で、本書へは引用と数字だけを転記する
 ```
 
 ### Modified Files
