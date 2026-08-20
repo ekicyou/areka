@@ -173,6 +173,7 @@ $env:AREKA_PROFILE_DIR       = $PROFILE_DIR
 | T7 | `kind=surface`（`stage=upload`／`visualize`／`skipped`） | `crates/areka-emo-present/src/presenter/show.rs:349` / `:390`・`crates/areka-emo-present/src/presenter/refresh.rs:83` / `:100` | 同上 | `debug` | 描画内容が新しい寸になった時刻。**窓矩形との食い違い**を測る片側 |
 | T8 | `kind=ground` | `crates/areka/src/placement/follow/window_move.rs:342` → `crates/areka/src/placement/transition_diag.rs:539` | 同上 | `debug` | 接地点と作業領域下端の差（`diff`）。下端吸着のキャラ窓のみ |
 | T9 | `kind=snapshot` | `crates/areka/src/emo2_boot/frame/work_area_sync.rs:127` → `crates/areka/src/placement/transition_diag.rs:459` | 同上 | `debug` | 作業領域源を作り直したフレームと、作り直した後の全モニタの拡大率・作業領域。**差し替えが起きたフレームにだけ出る**（同じ表のフレームでは 1 行も出ない＝それが正常） |
+| T10 | `kind=hold` | `crates/areka/src/emo2_boot/frame/dpi.rs:279`（`site=dpi`）・`crates/areka/src/emo2_boot/frame/scale_text.rs:170`（`site=reconcile`）・`crates/areka/src/emo2_boot/frame/drain_resnap.rs:233`（`site=resnap`）→ いずれも `crates/areka/src/placement/dpi_sync.rs:253` → `crates/areka/src/placement/transition_diag.rs:456` | 同上 | `debug` | 窓の拡大率とモニタ表の**整合待ち**。`decision=` が `hold`／`proceed`／`proceed-after-timeout`、`site=` が判定を下した点。**判定が下ったフレームにだけ出る**（待ちの起きないフレームでは 1 行も出ない＝それが正常） |
 | A1 | `[diag.window_move] route= entity= kind= scope= …` | `crates/areka/src/placement/diag.rs` | `areka::placement::diag` | `debug` | スコープ ↔ キャラ窓 entity の対応（§4.3 の裏取り） |
 | A2 | `perf(apply_show): 段階別計時`（末尾に `frame=`） | `crates/areka-emo-present/src/presenter/timing.rs:201-220` | `areka_emo_present` | `debug` | 描画側の段階別所要をフレーム番号で突き合わせる |
 
@@ -182,12 +183,13 @@ $env:AREKA_PROFILE_DIR       = $PROFILE_DIR
 
 | `kind=` | 純関数 | 発行点が入るタスク |
 | --- | --- | --- |
-| `kind=hold` | `crates/areka/src/placement/transition_diag.rs:338` | task 5.4（拡大率と表の整合待ちを設ける） |
 | `kind=chain` | `crates/areka/src/placement/transition_diag.rs:374` | task 5.6（遷移後に連鎖を一度だけ解き直す） |
 
-> **task 4.2（是正前の基準値）の採取では、この 2 種は必ず 0 件になる。** これを「整合待ちは 1 度も起きなかった」「連鎖の解き直しは 0 回だった」と読んではならない——**観測点が無いだけ**である（要件 8.5）。task 7.3 の採取では 2 種とも点いているはずなので、**まず 2 種が 1 行でも出ていることを確かめてから**件数の議論に入る。
+> **task 4.2（是正前の基準値）の採取では、この種は必ず 0 件になる。** これを「連鎖の解き直しは 0 回だった」と読んではならない——**観測点が無いだけ**である（要件 8.5）。task 7.3 の採取では点いているはずなので、**まず 1 行でも出ていることを確かめてから**件数の議論に入る。
 >
 > `kind=snapshot` は **task 5.1 の着地で点灯した**（§3.1 の T9 へ移動済み）。ただし出るのは**モニタ表が変わったフレームだけ**なので、定常運転で 0 件なのは正常である——遷移を 1 度も起こさずに採取したログで 0 件だったことを「同期が動いていない」根拠にしない。
+>
+> `kind=hold` は **task 5.4 の着地で点灯した**（§3.1 の T10 へ移動済み）。出るのは**整合ゲートが判定を下したフレームだけ**——拡大率の相が窓を触ったフレーム（＝遷移）である。ゆえに遷移を含む採取なら `decision=proceed` の行は必ず出る（**遷移を採ったのに `kind=hold` が 0 件ならゲートが走っていない**）。一方 `decision=hold` の行が 0 件なのは正常であり得る——実機の 12 遷移はすべて表更新が先で、待ちの起きない順序だったからである（確定台帳 L2）。**`decision=` の値まで見ずに件数だけで語らないこと。**
 
 ### 3.3 観測レコードの書式（**形の例**・値は実測ではない）
 
@@ -226,7 +228,7 @@ foreach ($k in 'monitor','enqueue','flush','write','msg','surface','ground','sna
 }
 ```
 
-`monitor`〜`ground` の 8 種が 0 件なら **`wintf::transition=debug` の入れ忘れ**を最初に疑う（§2.2）。`hold`／`chain` の 0 件は §3.2 のとおり是正前では正常である。`snapshot` は task 5.1 の着地後に点いた観測点だが、**モニタ表が変わったフレームにしか出ない**——遷移を含む採取で 0 件なら同期段を疑う。
+`monitor`〜`ground` の 8 種が 0 件なら **`wintf::transition=debug` の入れ忘れ**を最初に疑う（§2.2）。`chain` の 0 件は §3.2 のとおり是正前では正常である。`hold` は遷移を含む採取なら 0 件になってはならない（§3.2 の注記＝0 件はゲートが走っていない徴候。`decision=hold` **だけ**が 0 件なのは正常）。`snapshot` は task 5.1 の着地後に点いた観測点だが、**モニタ表が変わったフレームにしか出ない**——遷移を含む採取で 0 件なら同期段を疑う。
 
 ---
 
@@ -349,7 +351,7 @@ cargo test -p areka transition_signoff -- --ignored --nocapture
 - **フレームを単位に測る量はすべて `deterministic` 側である。** 「可視化と書込のフレーム差」と「随伴バルーンが別フレームで書かれた」は名前が実機の症状に似ているが、`signoff` の下には**出得ない**（`signoff` はフレーム差の上限を 1 つも当てないため）。同じ食い違いを µs で測るのが `signoff` 側の「可視化から書込まで」であり、**両者は別の量である**。§6.6 の 2 行を埋めるとき、違反行がどちらのブロックの下にあったかで系統を判断すること——文言から推測しない。
 - **判定量は合否によらず刷られる**（`量:`／`量(参考):`／`量(窓):`／`量(見送り窓):` の各行）。task 4.3 の裁定でこうなった——是正の前後で並べるのは上限の合否ではなく**量そのもの**なので、`PASS` の系統の量が消えると比較の側が毎回生ログから手で起こす羽目になる（task 4.2 で実際に起きた）。欠けている量は番兵 `-` で刷られる（`0` ではない。「測っていない」と「測って 0 だった」は別の事実である）。違反があった量は、それに加えて実測値と上限つきで `- ` の行に並ぶ。
 - 実機専用の上限（`Bounds::signoff` の 2 値）は task 4.3 が確定させた。**確定値は両量とも `16667` µs（= 1/60 秒）**であり、根拠は**採取機に依らない**——画面に提示される 1 フレームはリフレッシュレートが 60Hz を下回らない限り高々 1/60 秒なので、これを超えた食い違い（および 1 フレームを超える一括書込）は**どの機械でも必ず 1 枚以上の提示フレームをまたぐ**。要件 4.2／4.5 を µs で言い直した形である。全文は確定台帳 `mechanism-ledger.md` §4（L9）。**リフレッシュレートが 60Hz を下回る表示で採ったときだけ**、この上限は厳しすぎる側へ倒れる——そのときは実測周期を添えて台帳で再裁定する（**目視に合わせて緩めない**・§6.5）。
-- 整合待ち（`kind=hold`）を含む遷移だけがフレーム差の許容に待ちフレーム数を足せる。この許容も本書作成時点では判定器側の**暫定値**であり、本番定数は task 5.4 で入る。
+- 整合待ち（`kind=hold`）を含む遷移だけがフレーム差の許容に待ちフレーム数を足せる。この許容の正本は**本番の整合ゲートの上限**（`crates/areka/src/placement/dpi_sync.rs` の `DPI_SYNC_HOLD_MAX_FRAMES`）であり、判定器の `HOLD_FRAME_ALLOWANCE` はそれを参照する（task 5.4 で二重定義を解消済み）。
 
 ### 6.3 判定量を生ログから起こす（記録用）
 
@@ -441,6 +443,6 @@ ATOM-SIGNOFF: PASS|FAIL
 ## 8. 本書のメンテ規約
 
 - 観測レコードの語（`kind=`・`stage=`・フィールド名）と、ランナーの入口の語（環境変数名・観測 target・行頭タグ・Report の 2 系統名と合格語・ランナーのテスト名）、および **§6.2 の Report 出力例に並ぶ違反行がどちらの上限系統に属するか**は、**`crates/areka/src/placement/transition_signoff_procedure_tests.rs` が本書を読んで一致を検査している**（§0.2 の検査 ⑴〜⑷）。発行側の語を変えるなら、同じコミットで本書も直すこと。とりわけ §6.2 の出力例へ違反行を足す・動かすときは、その系統で実際に出得る違反かをテストが確かめるので、通してから報告すること。
-- §3.2 の「発行点が未着地」の表は、task 5.1／5.4／5.6 が着地したら**その行を §3.1 へ移し、発行点の file:line を埋める**。移し忘れると、点いている観測点を「出ないもの」として扱い続けることになる。
+- §3.2 の「発行点が未着地」の表は、task 5.1／5.4／5.6 が着地したら**その行を §3.1 へ移し、発行点の file:line を埋める**。移し忘れると、点いている観測点を「出ないもの」として扱い続けることになる。task 5.1（`kind=snapshot`＝T9）と task 5.4（`kind=hold`＝T10）は移動済みで、残るのは `kind=chain`（task 5.6）だけである。
 - §6.2 の実機専用の上限は task 4.3 が確定値（`16667` µs）へ差し替え済みである。以後この値を動かすなら、確定台帳 `mechanism-ledger.md` §4（L9）の根拠を先に書き換え、判定器の定数（`crates/areka/src/placement/transition_judge_verdict.rs` の `VISUALIZE_TO_WRITE_US_MAX`／`FLUSH_TOTAL_US_MAX`）と本書の 3 箇所（§6.2 の出力例・§6.2 の上限の項・§6.6 の `SIGNOFF-BOUNDS` 行）を同じコミットで揃えること。**実測に合わせて緩めるのは禁じられている**（§6.5）。
 - file:line の参照は本書作成時点（群 1〜3 着地）のものである。ずれたら本書を直す——ずらしたまま放置すると、本書は読めるが辿れない文書になる。

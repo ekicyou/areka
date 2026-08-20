@@ -1,6 +1,8 @@
 //! モニタ work area 解決（[`MonitorSnapshot`]・[`work_area_for_window`]・[`WorkAreaResolution`]）。
 
 use bevy_ecs::prelude::*;
+use windows::Win32::Foundation::RECT;
+use wintf::ecs::layout::systems::monitor_systems::{MonitorBounds, monitor_containing};
 use wintf::ecs::window::monitor::Monitor;
 
 use super::RectPx;
@@ -181,18 +183,47 @@ pub struct MonitorDpiEntry {
 /// 2 つは**同一の `Monitor` 列から同時に**作られる（[`MonitorSources::from_monitors`]）——
 /// 別々に作ると、片方だけが古い運転が生まれる。
 ///
-/// # 引き当ての規則はまだ持たない
+/// # 引き当ての規則は表示基盤側と**同一の関数**である（task 5.4 の裁定）
 ///
-/// 窓中心からモニタを引き当てる規則（表示基盤側の `monitor_containing` と共有すべきもの）は
-/// 拡大率と表の整合待ち（task 5.4）が所有する。本表は task 5.1 の時点では**純データ**であり、
-/// 引き当て規則を先に発明して二重権威にしない。
+/// 窓中心からモニタを引き当てる規則は表示基盤側の [`monitor_containing`] をそのまま呼ぶ
+/// （[`MonitorDpiTable::dpi_for_point`]）。areka 側に同規則の述語を置く案は採らなかった
+/// ——areka から呼べない可視性のままでは「両者が同一判定を返す」ことを実行テストで確かめる
+/// 術が無く、規則の写しが 2 つある状態を散文でしか守れないためである。ゆえに wintf 側で
+/// 当該関数をクレート外へ開き、行の型の違いは [`MonitorBounds`] 実装 1 つで吸収した。
 #[derive(Resource, Debug, Clone, PartialEq, Eq, Default)]
 pub struct MonitorDpiTable {
     /// モニタ列挙順の拡大率と矩形。
     pub entries: Vec<MonitorDpiEntry>,
 }
 
+/// 帰属判定の入力（表示基盤側の [`monitor_containing`] へ渡すための実装）。
+///
+/// 読むのは **`bounds`**（モニタ全体）であって `work_area` ではない——`Monitor` 側の実装と
+/// 同じ成分でなければ、同じ点に対して 2 つの答えが出る。両者が同一判定を返すことは
+/// `follow_work_area_tests.rs` の対比テストが実行で固定する。
+impl MonitorBounds for MonitorDpiEntry {
+    fn monitor_bounds(&self) -> RECT {
+        RECT {
+            left: self.bounds.left,
+            top: self.bounds.top,
+            right: self.bounds.right,
+            bottom: self.bounds.bottom,
+        }
+    }
+}
+
 impl MonitorDpiTable {
+    /// 点（窓矩形の中心）が属するモニタの拡大率（要件 5.8・設計 C5）。
+    ///
+    /// 帰属規則は表示基盤側の [`monitor_containing`] **そのもの**（半開区間・昇順先勝ち）で
+    /// あり、ここには規則が 1 行も無い。どのモニタにも属さない点と、表そのものが空の場合は
+    /// いずれも `None`——整合ゲートはこれを「表を引けない」として素通しする（待ちに入れると
+    /// 引けない窓が毎回上限まで待つ）。最近傍フォールバック（[`work_area_for_window`]）は
+    /// 規則が違うので流用しない。
+    pub fn dpi_for_point(&self, cx: i32, cy: i32) -> Option<u32> {
+        monitor_containing(&self.entries, (cx, cy)).map(|entry| entry.dpi)
+    }
+
     /// 実モニタ列挙結果から拡大率と矩形を列挙順のまま忠実転写する
     /// （[`MonitorSnapshot::from_monitors`] と同じ U 契約＝物理 px・単位変換なし）。
     pub fn from_monitors(monitors: &[Monitor]) -> Self {

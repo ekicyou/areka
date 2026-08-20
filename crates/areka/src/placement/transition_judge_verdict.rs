@@ -49,10 +49,12 @@ pub const TRANSITION_FRAME_BOUND: u32 = 0;
 
 /// 整合待ち（`hold`）を含む遷移でフレーム差に足す許容（C7）。
 ///
-/// 値の正本は設計 C5 の `DPI_SYNC_HOLD_MAX_FRAMES`（design.md の C5＝待ち札の上限 30）で
-/// あり、C5 の定数が本番側へ着地した時点で本定数はそれを参照して二重定義を解消する。
+/// 値の正本は**本番の整合ゲートの上限**（`dpi_sync::DPI_SYNC_HOLD_MAX_FRAMES`）である。
+/// task 3.2 の時点では本番側に定数が無く同じ値をここに置いていたが、task 5.4 でゲートが
+/// 着地したので参照へ替えた——判定の許容が本番の待ちより短ければ、規約どおりに待った遷移が
+/// 不合格になる（判定語の単一定義元と同じ理屈が値にも及ぶ）。
 /// hold を含まない遷移（`holds == 0`）では 1 フレームも足さない。
-pub const HOLD_FRAME_ALLOWANCE: u32 = 30;
+pub const HOLD_FRAME_ALLOWANCE: u32 = crate::placement::dpi_sync::DPI_SYNC_HOLD_MAX_FRAMES;
 
 /// 1 つの窓に対する遷移 1 回ぶんの窓書込回数の上限（C7・要件 4.5）。
 pub const WRITES_PER_WINDOW_MAX: u32 = 1;

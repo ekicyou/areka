@@ -110,6 +110,9 @@ use self::window_move::enqueue_window_set_pos;
 // `window_move` は `super::transition_diag` としてここを辿る（兄弟モジュールへの
 // 直接参照はファサード分割では届かない・structure.md「ファサード形式」の注意点）。
 use super::transition_diag;
+// 整合待ちの札（atom 設計 C5）のファサード再束縛。単一の窓書込口（`window_move` の
+// `enqueue_window_set_pos`）が待ち札の適用範囲の不変条件を見張るために読む。
+use super::dpi_sync::DpiSyncHold;
 
 // =============================================================================
 // Tests（TDD RED: 実装前に振る舞いを固定する）

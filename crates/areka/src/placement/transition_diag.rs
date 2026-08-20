@@ -24,10 +24,10 @@
 //!
 //! # 発行点はまだ全種そろっていない
 //!
-//! 本ファイルは task 2.4（観測の増設）で建てた語彙であり、`hold`／`chain` を出す状態機械は
-//! 後続タスクが新設する（整合待ち＝task 5.4、連鎖再解決＝task 5.6）。今このリポジトリで
-//! 実際に到達できる発行点は 2 つ——[`log_char_ground`]（`resize_window_to` から）と
-//! [`log_monitor_snapshot_sync`]（作業領域源の同期＝task 5.1 から）である。
+//! 本ファイルは task 2.4（観測の増設）で建てた語彙であり、`chain` を出す状態機械は後続タスク
+//! が新設する（連鎖再解決＝task 5.6）。今このリポジトリで実際に到達できる発行点は 3 つ——
+//! [`log_char_ground`]（`resize_window_to` から）・[`log_monitor_snapshot_sync`]（作業領域源の
+//! 同期＝task 5.1 から）・[`log_hold`]（整合ゲートの 3 点＝task 5.4 から）である。
 //!
 //! # 語彙は先に建てる（未消費の `#[allow(dead_code)]` の根拠）
 //!
@@ -91,13 +91,10 @@ pub const PLACEMENT_KIND_ALL: &[&str] = &[KIND_SNAPSHOT, KIND_HOLD, KIND_GROUND,
 // ---------------------------------------------------------------------------
 
 /// 表と一致（または表を引けない）ため、そのまま処理する。
-#[allow(dead_code)] // 語彙先着（module doc「語彙は先に建てる」）
 pub const HOLD_DECISION_PROCEED: &str = "proceed";
 /// 不一致ゆえ当該窓の窓書込を見送る。
-#[allow(dead_code)] // 語彙先着（module doc「語彙は先に建てる」）
 pub const HOLD_DECISION_HOLD: &str = "hold";
 /// 上限フレームを超えたので警告の上で処理する。
-#[allow(dead_code)] // 語彙先着（module doc「語彙は先に建てる」）
 pub const HOLD_DECISION_PROCEED_AFTER_TIMEOUT: &str = "proceed-after-timeout";
 
 /// 整合待ちの判定語の全体。
@@ -109,13 +106,10 @@ pub const HOLD_DECISION_ALL: &[&str] = &[
 ];
 
 /// 判定を下した観測点: 拡大率の相。
-#[allow(dead_code)] // 語彙先着（module doc「語彙は先に建てる」）
 pub const HOLD_SITE_DPI: &str = "dpi";
 /// 判定を下した観測点: 報告寸の突合。
-#[allow(dead_code)] // 語彙先着（module doc「語彙は先に建てる」）
 pub const HOLD_SITE_RECONCILE: &str = "reconcile";
 /// 判定を下した観測点: 再スナップ。
-#[allow(dead_code)] // 語彙先着（module doc「語彙は先に建てる」）
 pub const HOLD_SITE_RESNAP: &str = "resnap";
 
 /// 観測点語の全体（design C5 の「3 点すべて」＝待ち札の守備範囲そのもの）。
@@ -230,7 +224,6 @@ pub struct SnapshotRecord<'a> {
 
 /// 整合待ちの判定 1 件の記録。
 #[derive(Clone, Copy, Debug)]
-#[allow(dead_code)] // 発行側は task 5.4（拡大率と表の整合待ち）
 pub struct HoldRecord {
     /// 刻印。
     pub stamp: Stamp,
@@ -334,7 +327,6 @@ pub fn snapshot_line(record: &SnapshotRecord<'_>) -> String {
 }
 
 /// 整合待ちの記録行。
-#[allow(dead_code)] // 発行側は task 5.4
 pub fn hold_line(record: &HoldRecord) -> String {
     format!(
         "{prefix} {FIELD_ENTITY}={entity:?} {FIELD_SCOPE}={scope} {FIELD_WIN_KIND}={win_kind} \
@@ -425,6 +417,19 @@ pub fn stamp_of(world: &World) -> Stamp {
 /// `Option<u32>`）ためである。窓書込そのものが遷移でしか起きない（要件 10.6＝定常フレームの
 /// 窓書込ゼロ）ので、既定運転での費用は 0 に留まる。
 pub fn write_tag(world: &World, window: Entity, route: Option<PlacementRoute>) -> WriteTag {
+    let (scope, kind) = window_identity(world, window);
+    WriteTag {
+        origin: route.map_or(MISSING, PlacementRoute::as_str),
+        scope,
+        kind,
+    }
+}
+
+/// 窓の marker から `(scope, win_kind)` を読む（placement 生成の窓でなければ番兵）。
+///
+/// スコープ番号は実運用で 1 桁だが、`u32` へ収まらない値を黙って丸めない
+/// （収まらなければ番兵＝「読めなかった」として出す）。
+fn window_identity(world: &World, window: Entity) -> (Option<u32>, &'static str) {
     let identity = world
         .get::<CharWindowMarker>(window)
         .map(|m| (WindowKind::Char, m.scope))
@@ -433,13 +438,43 @@ pub fn write_tag(world: &World, window: Entity, route: Option<PlacementRoute>) -
                 .get::<BalloonWindowMarker>(window)
                 .map(|m| (WindowKind::Balloon, m.scope))
         });
-    WriteTag {
-        origin: route.map_or(MISSING, PlacementRoute::as_str),
-        // スコープ番号は実運用で 1 桁だが、`u32` へ収まらない値を黙って丸めない
-        // （収まらなければ番兵＝「読めなかった」として出す）。
-        scope: identity.and_then(|(_, scope)| u32::try_from(scope).ok()),
-        kind: identity.map_or(MISSING, |(kind, _)| kind.as_str()),
-    }
+    (
+        identity.and_then(|(_, scope)| u32::try_from(scope).ok()),
+        identity.map_or(MISSING, |(kind, _)| kind.as_str()),
+    )
+}
+
+// ---------------------------------------------------------------------------
+// 整合待ちレコードの発行
+// ---------------------------------------------------------------------------
+
+/// 整合待ちの記録を 1 行出す（拡大率の相・報告寸の突合・再スナップの 3 点が呼ぶ）。
+///
+/// 呼出側は [`is_enabled`] で前置ガードすること（本関数は行を組む＝確保する）。判定語
+/// （`decision`）と観測点語（`site`）は本モジュールの定数が単一の定義元であり、呼出側は
+/// enum からその定数を引いて渡す——字面をリテラルで持たせない。
+pub fn log_hold(
+    world: &World,
+    window: Entity,
+    window_dpi: u32,
+    table_dpi: Option<u32>,
+    since_frame: u32,
+    decision: &'static str,
+    site: &'static str,
+) {
+    let (scope, win_kind) = window_identity(world, window);
+    let record = HoldRecord {
+        stamp: stamp_of(world),
+        entity: window,
+        scope,
+        win_kind,
+        window_dpi,
+        table_dpi,
+        since_frame,
+        decision,
+        site,
+    };
+    base::emit_line(&hold_line(&record));
 }
 
 // ---------------------------------------------------------------------------

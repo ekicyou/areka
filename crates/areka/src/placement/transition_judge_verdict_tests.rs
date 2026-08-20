@@ -77,9 +77,12 @@ fn the_deterministic_constants_hold_the_values_c7_fixes() {
     assert_eq!(super::PATH_A_WRITES_MAX, 0);
     assert_eq!(super::GROUND_DIFF_MAX, 0);
     assert_eq!(super::CHAIN_REALIGN_PER_TRANSITION, 1);
-    // 待ちの許容は設計 C5 の `DPI_SYNC_HOLD_MAX_FRAMES` と同値（task 5.4 がその定数を本番側へ
-    // 置いたら、本定数はそれを参照して二重定義を解消する）。
-    assert_eq!(super::HOLD_FRAME_ALLOWANCE, 30);
+    // 待ちの許容だけは**値を固定しない**——正本は本番の整合ゲートの上限であり、ここで値を
+    // 二度書くと task 5.4 が解消した二重定義が檻の側で復活する。固定するのは結線である。
+    assert_eq!(
+        super::HOLD_FRAME_ALLOWANCE,
+        crate::placement::dpi_sync::DPI_SYNC_HOLD_MAX_FRAMES
+    );
 }
 
 #[test]

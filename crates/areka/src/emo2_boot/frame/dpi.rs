@@ -1,7 +1,7 @@
 //! DPI 追従フェーズ（[`AuthorDpis`]・[`classify_ghost_window`]・[`run_dpi_phase`] ほか）。
 
 use bevy_ecs::entity::Entity;
-use bevy_ecs::prelude::{Changed, Query};
+use bevy_ecs::prelude::{Changed, Query, With};
 use bevy_ecs::system::SystemState;
 use bevy_ecs::world::World;
 use tracing::{debug, error, warn};
@@ -10,6 +10,7 @@ use areka_emo_present::{EmoPresenter, TargetId};
 use wintf::ecs::{WindowPos, DPI};
 
 use crate::placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
+use crate::placement::dpi_sync::{self, DpiSyncHold};
 use crate::placement::follow::{resize_window_keep_position, resize_window_to};
 use crate::placement::resolver::SizePx;
 use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker};
@@ -239,22 +240,31 @@ pub(super) fn dpi_phase_with<S: ScaleReportSource>(
     let state = state.get_or_insert_with(|| SystemState::new(world));
     // 変化窓を collect して World の不変借用を即解放してから `&mut World` のループへ入る
     // （`anchor_changed_system` と同じ collect→release→&mut ループ）。
-    let changed: Vec<(Entity, Option<usize>, Option<usize>)> = state
-        .get(world)
-        .iter()
-        .map(|(entity, char_marker, balloon_marker)| {
-            (
-                entity,
-                char_marker.map(|m| m.scope),
-                balloon_marker.map(|m| m.scope),
-            )
-        })
+    let mut targets: Vec<Entity> = state.get(world).iter().map(|(entity, ..)| entity).collect();
+    // 整合待ちの札を持つ窓は、`Changed<DPI>` が立たなくても対象へ入れる（設計 C5）——前フレーム
+    // までに見送った窓は変化を既に消費済みであり、和集合にしないと札が永遠に外れない。
+    let held: Vec<Entity> = world
+        .query_filtered::<Entity, With<DpiSyncHold>>()
+        .iter(world)
         .collect();
+    for window in held {
+        if !targets.contains(&window) {
+            targets.push(window);
+        }
+    }
 
-    for (window, char_scope, balloon_scope) in changed {
+    // 第 1 巡（ゲート）: 全対象の札の付け外しを**処理より前に**済ませる。処理と混ぜて 1 巡に
+    // すると、先に解除・処理されたキャラ窓の随伴書込が、まだ札の付いたバルーン窓へ届く
+    // （＝待ち札の適用範囲の不変条件を自分で破る）。順序に依らせないための 2 巡である。
+    let now = dpi_sync::current_frame(world);
+    let mut proceed: Vec<(Entity, usize, GhostWindowKind)> = Vec::new();
+    for window in targets {
+        let char_scope = world.get::<CharWindowMarker>(window).map(|m| m.scope);
+        let balloon_scope = world.get::<BalloonWindowMarker>(window).map(|m| m.scope);
         let (scope, kind) = match classify_ghost_window(char_scope, balloon_scope) {
             GhostWindowClass::Ghost(scope, kind) => (scope, kind),
             // ゴースト窓でない窓の DPI 変化は本フェーズの対象外（正常・静穏に読み飛ばす）。
+            // ゲートにも掛けない——待ち札はゴースト窓の持ち物である（設計 C5）。
             GhostWindowClass::NotGhost => continue,
             GhostWindowClass::Ambiguous => {
                 error!(
@@ -264,6 +274,16 @@ pub(super) fn dpi_phase_with<S: ScaleReportSource>(
                 continue;
             }
         };
+        // 整合ゲート（設計 C5・要件 5.8）: 窓の拡大率と帰属モニタの表が揃うまで、当該窓の
+        // 再導出も窓書込も行わない。**描画は止めない**（drain 相は素通り）。
+        if !dpi_sync::apply_dpi_phase_gate(world, window, now) {
+            continue;
+        }
+        proceed.push((window, scope, kind));
+    }
+
+    // 第 2 巡（処理）: 通過した窓だけを従来どおり再導出・反映する。
+    for (window, scope, kind) in proceed {
         // target 採番（DD-3: shell=2*scope／balloon=2*scope+1）は u32 域。収まらない scope は
         // 如何なる target とも対応しない（plan_attachments の usize→u32 境界と同じ扱い）。
         let Ok(scope) = u32::try_from(scope) else {

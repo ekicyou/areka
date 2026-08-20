@@ -12,9 +12,9 @@ use wintf::ecs::{DPI, Point, SetWindowPosCommand, SizeI, WindowHandle, WindowPos
 use super::{
     Anchor, Anchored, BALLOON_LIMIT_CLAMP_TAG, BALLOON_LIMIT_RUNTIME_CONTEXT,
     BALLOON_LIMIT_UNRESOLVED_TAG, BalloonFollow, BalloonFollowTrigger, BalloonLimit,
-    BalloonWindowMarker, CharWindowMarker, DESPAWNED_SKIP_TAG, GhostWindows, MonitorSnapshot,
-    PlacementRoute, PointPx, RectPx, SizePx, WindowKind, WindowMoveRecord, apply_visibility_guard,
-    diag, follow_balloon, limit_correction, project_anchor, rect_at,
+    BalloonWindowMarker, CharWindowMarker, DESPAWNED_SKIP_TAG, DpiSyncHold, GhostWindows,
+    MonitorSnapshot, PlacementRoute, PointPx, RectPx, SizePx, WindowKind, WindowMoveRecord,
+    apply_visibility_guard, diag, follow_balloon, limit_correction, project_anchor, rect_at,
     rederive_keyword_balloon_offset, transition_diag, work_area_for_window,
 };
 
@@ -543,6 +543,39 @@ pub(super) fn enqueue_window_set_pos(
         );
         return false;
     }
+    // 待ち札の適用範囲の不変条件（atom 設計 C5・要件 5.8）: 「[`DpiSyncHold`] を持つ窓への
+    // 窓書込は 0」。見送りは 3 つの点（拡大率の相・報告寸の突合・再スナップ）で行うが、
+    // **書込口は本関数 1 つ**なので、すり抜け経路が増えたかどうかはここでしか構造的に見張れない。
+    // 実機では `warn!` として見え、テストビルドでは `debug_assert!` がその場で落とす。
+    //
+    // **随伴バルーンの追従（[`PlacementRoute::BalloonFollow`]）だけは対象外**である。ここで
+    // 外しているのは**この監視**であって見送りではない——随伴の追従はそもそも 3 つの見送り点を
+    // 通らないので、対象外にしなくても止まりはしない。外す理由は、止まらない書込をこの監視が
+    // 「漏れ」として鳴らしてしまうからである（偽の警報を防ぐ）。
+    //
+    // 2 窓の中心が別々のモニタに乗る配置（キャラ窓は表と揃い、バルーンだけまだ食い違う）では、
+    // 待ち札の付いたバルーンへ随伴が正当に届く。バルーンの位置は独立した量ではなくキャラ窓の
+    // 従属量であり、キャラ窓が動いた同一書込の一部として動くからである。しかも
+    // [`dpi_sync_decision`] は拡大率と表の値だけを見て作業領域を見ないので、表が古くても
+    // 随伴の位置は壊れない。バルーン**自身**の書込（拡大率の相・報告寸の突合・再スナップ）は
+    // 将来 3 点以外の書込口が増えれば、それはここで鳴る（本関数で握り潰さない）。
+    if route != Some(PlacementRoute::BalloonFollow)
+        && let Some(hold) = world.get::<DpiSyncHold>(window)
+    {
+        let since_frame = hold.since_frame;
+        warn!(
+            entity = ?window,
+            ?route,
+            since_frame,
+            x, y,
+            "整合待ちの札がある窓へ窓書込が到達した（待ち札の適用範囲に漏れがある）"
+        );
+        debug_assert!(
+            false,
+            "DpiSyncHold のある窓へ窓書込が到達した: entity={window:?} route={route:?} since_frame={since_frame}"
+        );
+    }
+
     let Some(handle) = world.get::<WindowHandle>(window).copied() else {
         warn!(
             entity = ?window,

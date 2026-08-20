@@ -13,6 +13,7 @@ use crate::placement::chain_finalize::{
     moved_default_pos, note_chain_deferral,
 };
 use crate::placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
+use crate::placement::dpi_sync::{self, HoldSite};
 use crate::placement::follow::{move_window_to, resize_window_to};
 use crate::placement::resolver::{PointPx, SizePx};
 use crate::placement::spawn::GhostWindows;
@@ -222,6 +223,15 @@ pub(super) fn resnap_with<S: PhysicalSizeSource + ?Sized>(source: &S, world: &mu
                 entity = ?char_window,
                 "{DESPAWNED_SKIP_TAG} resnap: char 窓 entity が破棄済み（despawn）→ 本 scope を正常系として打ち切り（他 scope は継続）"
             );
+            continue;
+        }
+        // 整合ゲート（設計 C5・要件 5.8）: 待ち札のある窓へはこの経路からも書かない。
+        // 見送った寸は持ち越し用に溜めない——本関数は毎フレーム**表示側の現物理寸を読み直す**
+        // ので、待ちが解けたフレームに同じ食い違いがそのまま再び見える（拡大率の相が先に
+        // 1 本書けば、そこで一致してべき等 skip で抜ける）。
+        if let Some(char_window) = ghost_windows.char_window(scope)
+            && dpi_sync::defers_window_write(world, char_window, HoldSite::Resnap)
+        {
             continue;
         }
         // shell target（偶数=2*scope）のみを読む（balloon_target は読まない＝shell 限定・Req4.5）。

@@ -8,6 +8,7 @@ use areka_sakura::ActorKey;
 use wintf::ecs::FrameTime;
 
 use crate::placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
+use crate::placement::dpi_sync::{self, HoldSite};
 use crate::placement::spawn::GhostWindows;
 
 use super::{
@@ -162,6 +163,14 @@ pub(super) fn reconcile_reported_sizes<S: ScaleReportSource>(source: &mut S, wor
                 GhostWindowKind::Balloon,
             ),
         ] {
+            // 整合ゲート（設計 C5・要件 5.8）: 待ち札のある窓へはこの経路からも書かない。
+            // **報告を取り出す前**に見送る——取り出すと消えるので、待ちが解けた後に反映する
+            // 材料が失われる（次フレームへ持ち越すには presenter に残しておくほかない）。
+            if let Some(window) = window
+                && dpi_sync::defers_window_write(world, window, HoldSite::Reconcile)
+            {
+                continue;
+            }
             // 報告が無い（＝物理寸が変わっていない／未表示／既に消費済み）なら何もしない。
             let Some(new_size) = source.take_scale_report(target) else {
                 continue;

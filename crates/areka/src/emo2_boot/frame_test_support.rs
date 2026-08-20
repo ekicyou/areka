@@ -822,6 +822,15 @@ impl FrameHarness {
         change
     }
 
+    /// 報告寸の突合を 1 回回す（本番の drain 相・可視性の相の後段と同一の関数）。
+    ///
+    /// 待ち札のある窓へは、この口からも窓書込が出ないことを問う（設計 C5 の「3 点すべて」の
+    /// 2 つ目）。会話中の表情差替（`ShowSurface`）が積む窓寸要求は本番ではこの経路で
+    /// landing するので、待ち中の表情差替を組むにはこの駆動口が要る。
+    pub(super) fn run_reconcile<S: ScaleReportSource>(&mut self, source: &mut S) {
+        reconcile_reported_sizes(source, &mut self.world);
+    }
+
     /// 再スナップを 1 回回す。
     pub(super) fn run_resnap<S: PhysicalSizeSource + ?Sized>(&mut self, source: &S) {
         resnap_with(source, &mut self.world);

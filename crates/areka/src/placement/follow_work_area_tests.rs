@@ -233,6 +233,7 @@ fn work_area_for_window_delegates_to_with_origin() {
 
 use super::{MonitorDpiEntry, MonitorDpiTable, MonitorSources, same_monitors};
 use windows::Win32::Foundation::RECT;
+use wintf::ecs::layout::systems::monitor_systems::monitor_containing;
 use wintf::ecs::window::monitor::Monitor;
 
 /// 合成モニタ 1 台（`bounds` と `work_area` を別々に与える＝両者の取り違えを検出できる形）。
@@ -379,4 +380,70 @@ fn same_monitors_compares_as_a_multiset_not_a_set() {
         &one,
         &MonitorSources::from_monitors(&duplicated)
     ));
+}
+
+// -------------------------------------------------------------------------
+// 帰属規則の共有（areka-P0-dpi-transition-atomicity task 5.4・設計 C5）
+// -------------------------------------------------------------------------
+
+/// 表からの拡大率の引き当ては、表示基盤側の再導出が使う帰属規則と**同一の関数**を通る。
+///
+/// 配置側に同規則の述語を置く案は採らなかったので、ここが確かめるのは「同じ答えを返すか」
+/// ではなく「同じ関数へ届いているか」である——`Monitor` の列に対する
+/// `monitor_containing` と、同じ列から作った表に対する [`MonitorDpiTable::dpi_for_point`] が
+/// 全ての探針で一致することを問う。片方が `work_area` を読むように書き換われば
+/// （`MonitorBounds` の実装は表側だけが自前で持つ唯一の部分である）ここが落ちる。
+#[test]
+fn the_table_lookup_agrees_with_the_display_layer_attribution_rule() {
+    let monitors = two_monitors();
+    let table = MonitorSources::from_monitors(&monitors).dpi_table;
+
+    // 半開区間の両端・共有辺・どこにも属さない点・作業領域と矩形が食い違う帯を通す。
+    let probes = [
+        (0, 0),               // 台 1 の左上端（含む）
+        (2559, 1439),         // 台 1 の右下端の内側（含む）
+        (2560, 700),          // 台 1 の右端（含まない）
+        (1000, 1440),         // 台 1 の下端（含まない）
+        (1000, 1400),         // 台 1 の矩形内・作業領域の外（bounds を読んでいれば台 1）
+        (-1920, -40),         // 台 2 の左上端（含む）
+        (-1, 1039),           // 台 2 の右下端の内側（含む）
+        (-1900, 1020),        // 台 2 の矩形内・作業領域の外（同上）
+        (5000, 5000),         // どのモニタにも属さない
+        (i32::MIN, i32::MAX), // 極端値でも規則は同じ（溢れない）
+    ];
+    for (x, y) in probes {
+        assert_eq!(
+            table.dpi_for_point(x, y),
+            monitor_containing(&monitors, (x, y)).map(|m| m.dpi),
+            "点 ({x},{y}) の帰属が表示基盤側と食い違う"
+        );
+    }
+
+    // 探針の非退化: 上の列には `Some` と `None` の双方が実際に出る（全部 `None` なら
+    // 「どちらも何も返さない」で恒真に通ってしまう）。
+    let answers: Vec<Option<u32>> = probes
+        .iter()
+        .map(|&(x, y)| table.dpi_for_point(x, y))
+        .collect();
+    assert!(
+        answers.iter().any(Option::is_some) && answers.iter().any(Option::is_none),
+        "探針が退化している（帰属する点と帰属しない点の両方が要る）: {answers:?}"
+    );
+    assert!(
+        answers.contains(&Some(192)) && answers.contains(&Some(96)),
+        "探針が退化している（2 台とも引き当てる点が要る）: {answers:?}"
+    );
+}
+
+/// どこにも属さない点と空の表は、いずれも架空の拡大率を発明せず `None` を返す
+/// （最近傍フォールバックを持つ [`work_area_for_window`] とは規則が違う）。
+#[test]
+fn the_table_lookup_is_none_outside_every_bounds() {
+    let table = MonitorSources::from_monitors(&two_monitors()).dpi_table;
+    assert_eq!(table.dpi_for_point(2560, 0), None, "右端は含まない");
+    assert_eq!(
+        MonitorDpiTable::default().dpi_for_point(0, 0),
+        None,
+        "空の表は架空の拡大率を発明しない"
+    );
 }

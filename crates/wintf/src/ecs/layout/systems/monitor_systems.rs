@@ -438,7 +438,14 @@ pub(crate) fn apply_monitor_snapshot(
 /// （`graphics/systems/window_pos.rs` の `apply_window_pos_changes`・
 /// `layout/systems/window_pos_systems.rs` の `sync_window_arrangement_from_window_pos`・
 /// `window_pos/mod.rs` の `to_window_rect`）と揃えてある。
-pub(crate) fn window_center(pos: &crate::ecs::WindowPos) -> Option<(i32, i32)> {
+///
+/// # クレート外へ開いてある理由（areka-P0-dpi-transition-atomicity C5・task 5.4）
+///
+/// 上位クレートの整合ゲート（配置側が「窓の拡大率と帰属モニタの表が揃ったか」を判定する
+/// 点）も、帰属を決めるには**同じ中心**を要る。素直に `position + size / 2` と書くと
+/// 上の `CW_USEDEFAULT` の扱いが落ちて、窓生成前の窓で整数桁溢れを起こす（dev ビルドでは
+/// panic）。中心の求め方は 1 箇所でなければならない。
+pub fn window_center(pos: &crate::ecs::WindowPos) -> Option<(i32, i32)> {
     let position = pos.position?;
     let size = pos.size?;
 
@@ -450,14 +457,38 @@ pub(crate) fn window_center(pos: &crate::ecs::WindowPos) -> Option<(i32, i32)> {
     Some((position.x + size.width / 2, position.y + size.height / 2))
 }
 
-/// 中心点を含むモニタを返す（境界矩形は左上を含み右下を含まない半開区間）。
-pub(crate) fn monitor_containing(
-    monitors: &[crate::ecs::Monitor],
-    center: (i32, i32),
-) -> Option<&crate::ecs::Monitor> {
+/// 帰属判定の入力＝モニタの**境界矩形**（`work_area` ではない）。
+///
+/// 表示基盤の [`Monitor`](crate::ecs::Monitor) と、上位クレートが持つモニタ別の表とでは
+/// 行の型が違う。だが「どのモニタに属するか」の規則は 1 つでなければならない——別々に
+/// 書けば、片方だけが半開区間の端や先勝ちの向きを変えたときに静かに食い違う。本トレイトは
+/// [`monitor_containing`] を型に依らない形で使えるようにするためだけに在る。
+pub trait MonitorBounds {
+    /// 境界矩形（画面座標・物理 px）。
+    fn monitor_bounds(&self) -> windows::Win32::Foundation::RECT;
+}
+
+impl MonitorBounds for crate::ecs::Monitor {
+    fn monitor_bounds(&self) -> windows::Win32::Foundation::RECT {
+        self.bounds
+    }
+}
+
+/// 中心点を含むモニタを返す（境界矩形は左上を含み右下を含まない半開区間・昇順先勝ち）。
+///
+/// # クレート外へ開いてある理由（areka-P0-dpi-transition-atomicity C5・task 5.4）
+///
+/// 本関数は表示基盤側の DPI 再導出（[`redrive_window_dpi_for_updated_monitors`]）が使う
+/// 帰属規則そのものである。上位クレートの整合ゲートは「窓の拡大率と、窓が属するモニタの
+/// 表の拡大率が揃ったか」を判定するので、**同じ帰属規則**を使わなければならない——
+/// 別規則を置くと、どちらのモニタに属するかの答えが 2 つになり、ゲートが永遠に解けない
+/// 窓が生まれ得る。要素の型が違うだけなので [`MonitorBounds`] 越しに受ける
+/// （呼出側は自分の行型へ実装を 1 つ書く）。
+pub fn monitor_containing<M: MonitorBounds>(monitors: &[M], center: (i32, i32)) -> Option<&M> {
     let (x, y) = center;
     monitors.iter().find(|m| {
-        x >= m.bounds.left && x < m.bounds.right && y >= m.bounds.top && y < m.bounds.bottom
+        let bounds = m.monitor_bounds();
+        x >= bounds.left && x < bounds.right && y >= bounds.top && y < bounds.bottom
     })
 }
 
