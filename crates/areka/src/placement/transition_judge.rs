@@ -783,3 +783,7 @@ mod transition_judge_negative_tests;
 #[cfg(test)]
 #[path = "transition_signoff_tests.rs"]
 mod transition_signoff_tests;
+
+#[cfg(test)]
+#[path = "transition_signoff_procedure_tests.rs"]
+mod transition_signoff_procedure_tests;
