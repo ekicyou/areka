@@ -147,6 +147,17 @@ pub const MONITOR_SNAPSHOT_CONTEXT: &str = "monitor_snapshot";
 /// grep 突合で構成の食い違いを検出できる（D12: 専用の突合機構は新設しない）。
 pub const PREPARE_GHOST_WINDOWS_CONTEXT: &str = "prepare_ghost_windows";
 
+/// 作業領域源の**実行時同期**（`emo2_boot::frame::work_area_sync`）の呼出点タグ
+/// （areka-P0-dpi-transition-atomicity 要件 5.1・設計 C6）。
+///
+/// 起動時の構築点（[`MONITOR_SNAPSHOT_CONTEXT`]）と列挙点（[`PREPARE_GHOST_WINDOWS_CONTEXT`]）に
+/// 続く 3 つ目の出所である。同じ共有ヘルパ [`diag::log_monitor_snapshot`] を呼び、タグだけを
+/// 違える（D12: 語彙は共有したまま出所を弁別する）——起動時の構成と同期後の構成が
+/// 同じ語彙で並ぶので、どのフレームで何が変わったかを grep 突合で追える。
+///
+/// 同期の警告（モニタ 0 台）も同じ語を行頭に名乗る（`[work_area_sync] …`）。
+pub const WORK_AREA_SYNC_CONTEXT: &str = "work_area_sync";
+
 /// wintf のモニタ列挙結果を診断レコードへ**忠実転写**する純関数（要件 1.1）。
 ///
 /// [`diag`] は placement の最下流であり `World`・wintf の型を知らない（design

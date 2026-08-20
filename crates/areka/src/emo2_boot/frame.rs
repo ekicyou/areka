@@ -37,6 +37,7 @@ mod dpi;
 mod drain_resnap;
 mod scale_text;
 mod wiring;
+mod work_area_sync;
 
 // 移設前の本モジュール本体が使っていた import 一式をそのまま保持する。本番項目は各サブモジュール
 // へ移り、そちらが同じ経路を直接 import するため、ここに残る束縛の役目は 2 つである——
@@ -157,6 +158,13 @@ pub fn emo2_frame_system(world: &mut World) {
     let Some(mut wiring) = world.remove_non_send_resource::<Emo2Wiring>() else {
         return;
     };
+    // 作業領域源の実行時同期（atom 設計 C6・要件 5.1／5.4／5.5）: **各相より前**に置く。
+    // 拡大率の相が読む作業領域源を同一フレームの先頭で新しくしておくと、相は新しい下端へ
+    // 1 回で書ける（相の後に同期すると旧下端へ書いてから源が変わり 2 段書込になる）。
+    // 表の内容が変わらないフレームでは作り直さない＝定常フレームは無操作である。
+    // 戻り値（差し替えの有無）を受けるのは作業領域変化を契機とする再スナップ（task 5.2）で、
+    // その置き場は拡大率の相の**後**になる。
+    let _work_area_change = work_area_sync::sync_monitor_snapshot(world);
     // donor 慣行: remove して &mut World を各フェーズへ排他に渡し、全フェーズ駆動後に必ず戻す。
     run_attach_phase(&mut wiring, world);
     // DPI 追従（attach → dpi → drain …の順・design「run_dpi_phase（frame.rs）」）: attach の**後**に
@@ -215,6 +223,12 @@ mod test_support;
 #[cfg(all(test, target_pointer_width = "64"))]
 #[path = "frame_harness_tests.rs"]
 mod harness_tests;
+
+// 作業領域源の同期（task 5.1）の統合テスト。ハーネスに乗るので**x64 のみ**で接続する
+// （常時テストに x86 を用いない・要件 7.5）。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_work_area_sync_tests.rs"]
+mod work_area_sync_tests;
 
 #[cfg(test)]
 #[path = "frame_attach_tests.rs"]

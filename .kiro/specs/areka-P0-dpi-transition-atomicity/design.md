@@ -221,13 +221,13 @@ crates/areka/src/main.rs               # MOD: 起動時に MonitorDpiTable も�
 | `crates/areka-emo-present/src/presenter/refresh.rs` | :70-73（k 不変）・:74-77（不可視）で `surface stage=skipped reason=` | 見送り判定は不変 |
 | `crates/areka-emo-present/src/presenter/timing.rs` | `EmitContext.frame: u32`・perf 行末尾に `frame=` | 既存フィールド順・文言不変 |
 | `crates/areka/src/placement/diag.rs` | `PlacementRoute::WorkAreaResnap`／`ChainRealign` 追加・`ALL` 12 | 1 語＝1 実在トリガ（D13）維持 |
-| `crates/areka/src/placement/follow/work_area.rs` | `MonitorDpiTable`／`dpi_for_point`／`same_monitors`（順序非依存比較）／doc :12-19 の DD15 撤回 | `MonitorSnapshot` の型と 51 箇所の構築リテラルは不変 |
+| `crates/areka/src/placement/follow/work_area.rs` | `MonitorDpiTable`／`dpi_for_point`／`same_monitors`（順序非依存比較）／doc :12-19 の DD15 撤回。MOD(5.1): `MonitorDpiEntry`／`MonitorDpiTable`／**`MonitorSources`（2 源を同時に作る単一の構築関数＝起動時と同期段が共有）**／`same_monitors`（台の多重集合として比較・作業領域と矩形と拡大率の全成分）／`MonitorSnapshot` の doc から「セッション内固定＝M1 受容」を撤回。**`dpi_for_point` は入れていない**——帰属規則を表示基盤側の `monitor_containing` と共有するか同規則の述語を置くかの裁定は task 5.4 が持つので、先に別規則を発明して二重権威にしない | `MonitorSnapshot` の型と 51 箇所の構築リテラルは不変 |
 | `crates/areka/src/placement/follow/window_move.rs` | `enqueue_window_set_pos`（:514-611）: タグ付与・既定位置追跡・キャラ Bottom の `ground` レコード／`move_window_with_route` 追加（`move_window_to` は委譲で不変） | 単一ライター維持。limit 関門（:549,:822）・手順 5a（:342）不変 |
-| `crates/areka/src/emo2_boot/frame.rs` | :168 の前に `sync_monitor_snapshot`、:168 の直後に `resnap_for_work_area_change`、:187 `reconcile_reported_sizes` で `DpiSyncHold` の窓を見送り（`hold site=reconcile`）、:199 の後に `realign_chain_once` | 既存 4 段の順序不変 |
+| `crates/areka/src/emo2_boot/frame.rs` | :168 の前に `sync_monitor_snapshot`、:168 の直後に `resnap_for_work_area_change`、:187 `reconcile_reported_sizes` で `DpiSyncHold` の窓を見送り（`hold site=reconcile`）、:199 の後に `realign_chain_once`。MOD(5.1): `mod work_area_sync;` ＋ `emo2_frame_system` の**先頭**（`run_attach_phase` の前・`Emo2Wiring` 取得の直後）で `work_area_sync::sync_monitor_snapshot(world)`。戻り値は task 5.2 が受ける（現時点は `let _`）。兄弟テスト `frame_work_area_sync_tests.rs` を x64 限定で接続 | 既存 4 段の順序不変 |
 | `crates/areka/src/emo2_boot/frame/dpi.rs` | `dpi_phase_with`（:232）に hold ゲート・武装トリガ、`reproject_char_window_at_current_size`（:335）に route 引数 | `reconcile_window_size`（:124）不変 |
 | `crates/areka/src/emo2_boot/frame/drain_resnap.rs` | `collect_chain_states`（:353）を `pub(super)`・`ChainDeferReason::DpiSyncHold`・`resnap_with` で `DpiSyncHold` の窓を見送り（`hold site=resnap`） | `finalize_chain_once_with` の一度きり不変 |
 | `crates/areka/src/placement/chain_finalize.rs` | `ChainFinalizeStall::reset()`・`ChainDeferReason` 1 変種 | `finalize_chain` 不変 |
-| `crates/areka/src/main.rs` | `boot_monitor_snapshot`（:530-538）が `MonitorDpiTable` も返し :611 で挿入／:569 注記撤回 | 復元判定シーム不変 |
+| `crates/areka/src/main.rs` | `boot_monitor_snapshot`（:530-538）が `MonitorDpiTable` も返し :611 で挿入／:569 注記撤回。MOD(5.1): 戻り値を `MonitorSources` へ（構築は `MonitorSources::from_monitors` 1 本＝同期段と同一）・2 源を同時に `insert_resource`・「セッション内固定」の注記を撤回・復元マージへ渡すのは `sources.snapshot`（起動時に 1 度だけ読む契約を明記・要件 5.7） | 復元判定シーム不変 |
 | `tools/perf/judge-perf.py` | 変更なし（`--selftest` で互換確認のみ） | budget 所有 |
 
 **兄弟テストファイル・統合テストの行**（本表は「触ったファイル」の突合台帳ゆえテストも登記する。task 2.2 のレビューで漏れが判明し追記）:
@@ -247,14 +247,14 @@ crates/areka/src/main.rs               # MOD: 起動時に MonitorDpiTable も�
 | `crates/areka-emo-present/src/presenter/transition_record_tests.rs` | NEW: 語彙固定（正例／負例）・本文走査（前置ガード・ミラー禁止・perf 行末尾）・実駆動 | 2.3 |
 | `crates/areka-emo-present/src/presenter/timing_tests.rs` | MOD: `EmitContext` の `frame` フィールド追加に追随（`ctx()` 助走関数） | 2.3 |
 | `crates/areka-emo-present/src/presenter_perf_log_tests.rs` | MOD: `PERF_LINE_FIELDS` 15 → 16（`frame` 追加・完全一致照合ゆえ追加も RED） | 2.3 |
-| `crates/areka/src/placement/transition_diag.rs` | NEW: areka 側レコード純関数（`snapshot`／`hold`／`ground`／`chain`）・語彙定数・World からの刻印取得（`stamp_of`）・書込タグ組立（`write_tag`）・**実行時 `Monitor` 表からの作業領域下端**（`live_work_area_bottom`＝観測専用。同源から引くと差が定義上 0 になり 5.3 が何も観測しないため） | 2.4 |
+| `crates/areka/src/placement/transition_diag.rs` | NEW: areka 側レコード純関数（`snapshot`／`hold`／`ground`／`chain`）・語彙定数・World からの刻印取得（`stamp_of`）・書込タグ組立（`write_tag`）・**実行時 `Monitor` 表からの作業領域下端**（`live_work_area_bottom`＝観測専用。同源から引くと差が定義上 0 になり 5.3 が何も観測しないため）。MOD(5.1): `kind=snapshot` の**発行点** `log_monitor_snapshot_sync`（:454）を新設し `MonitorEntry`／`SnapshotRecord`／`snapshot_line` の `#[allow(dead_code)]` を撤去。`live_work_area_bottom` の doc を「task 5.1 が入れば差は 0 になる」から「**入った・撤去しない・源の陳腐化を見張る口として残る**」へ是正 | 2.4, 5.1 |
 | `crates/areka/src/placement/transition_diag_tests.rs` | NEW: 語彙固定（正例／負例）・上流 2 crate の `kind` 語との非交差・同名フィールド禁止・刻印と書込タグの転写 | 2.4 |
-| `crates/areka/src/placement/follow_transition_diag_tests.rs` | NEW: 接地点レコードが**現行の −48px をそのまま出す**こと（task 5.1 の是正前の赤）・単一書込口の札・実濾過（既定 OFF／directive で点灯）・前置ガードと既存 3 チャネル不動の本文走査 | 2.4 |
-| `crates/areka/src/placement/mod.rs` | MOD: `pub mod transition_diag;`（起動時 snapshot 構築点は task 5.1） | 2.4 |
-| `crates/areka/src/placement/follow.rs` | MOD: ファサード再束縛 `use super::transition_diag;`（`window_move` が `super::` で辿る）＋兄弟テスト接続 | 2.4 |
-| `crates/areka/src/placement/follow/visibility.rs` | MOD: `route_applies_visibility_guard` の網羅 match に `WorkAreaResnap`／`ChainRealign` を**発火側**で追加（D9 のシステム由来 6 経路と同区分。書込元が未着地ゆえ現時点で挙動は不変） | 2.4 |
+| `crates/areka/src/placement/follow_transition_diag_tests.rs` | NEW: 接地点レコードが**源が古いとき −48px をそのまま出す**こと・単一書込口の札・実濾過（既定 OFF／directive で点灯）・前置ガードと既存 3 チャネル不動の本文走査。MOD(5.1): **module doc の見込みを実行で訂正**——「是正が入れば本ファイルは赤へ倒れる」は誤りだった（本ファイルは源が古い World を手で組んで `resize_window_to` を直接呼ぶので同期段を通らず、是正後も緑）。要件 7.3 の対テストは `frame_work_area_sync_tests.rs` が持つ旨を明記 | 2.4, 5.1 |
+| `crates/areka/src/placement/mod.rs` | MOD: `pub mod transition_diag;`。MOD(5.1): 同期段の呼出点タグ `WORK_AREA_SYNC_CONTEXT`（起動時の構築点・列挙点に続く 3 つ目の出所） | 2.4, 5.1 |
+| `crates/areka/src/placement/follow.rs` | MOD: ファサード再束縛 `use super::transition_diag;`（`window_move` が `super::` で辿る）＋兄弟テスト接続。MOD(5.1): `MonitorDpiEntry`／`MonitorDpiTable`／`MonitorSources`／`same_monitors` の再輸出 | 2.4, 5.1 |
+| `crates/areka/src/placement/follow/visibility.rs` | MOD: `route_applies_visibility_guard` の網羅 match に `WorkAreaResnap`／`ChainRealign` を**発火側**で追加（D9 のシステム由来 6 経路と同区分。書込元が未着地ゆえ現時点で挙動は不変）。MOD(5.1): 判定語 `VISIBILITY_OFFSCREEN_PULL_TAG`（`[visibility-guard] OffscreenPull`）を新設し、**clamp 先の解決で捨てられていた判別**（`evaluate_visibility_guard` の `raw × size` 側）を非ドラッグ経路で `warn!` へ昇格（要件 5.5 の記録側）。**位置は 1 bit も変えない**（裁定 2026-08-20）。発火条件は「帰属しない**かつ**どの work area とも交差しない」＝真に画面外に居た窓に限る——帰属だけを条件にすると下端吸着の正常な resize（入力の中心が work area 下端にちょうど載る）を叩く偽陽性になり、実装中に既存の檻 `frame_diag_route_tests` が実際に捕まえた。既存の「決めた位置」側の警告と語を分けたのは、あちらの檻が件数で判定しているため | 2.4, 5.1 |
 | `crates/areka/src/placement/diag_tests.rs` | MOD: 経路語彙 12 種・`ALL` 12・一意性／空白なし／非番兵 | 2.4 |
-| `crates/areka/src/placement/follow_visibility_char_wiring_tests.rs` | MOD: 発火 route 表 4 → 6 に追随 | 2.4 |
+| `crates/areka/src/placement/follow_visibility_char_wiring_tests.rs` | MOD: 発火 route 表 4 → 6 に追随。MOD(5.1): 射影の**入力**側の帰属不能を非ドラッグ経路で警告する檻 3 本（陽性＝画面外の窓が最近傍へ寄せられたとき 1 件・否定＝帰属している入力では 0 件・適用外 route では 0 件）。探針は「入力は最近傍・決めた位置は帰属」を毎回自己検査する（既存の「決めた位置」側の観測と区別が付かない形にしない） | 2.4, 5.1 |
 | `crates/areka/src/placement/follow_visibility_balloon_wiring_tests.rs` | MOD: 発火する引き金 4 → 6 に追随（キャラ窓表の写し） | 2.4 |
 | `crates/areka/src/placement/transition_judge.rs` | NEW: 行パーサ（`judge-perf.py` と同一の辞書化・同名フィールドは欠陥）・遷移切り出し・判定量の集計。消費者がテストとサインオフランナーだけなので `#[cfg(test)]` のモジュールとして置く（bin crate ゆえ本番ビルドでは全項目 dead_code になり、項目ごとの許可属性が以後の真の dead code を隠すため）。**`visualize_to_write_us` は遷移区間内の全ての（可視化, 同一フレームの書込）組にわたる真の最大**（最後の 1 組ではない）＝task 3.2 は `Bounds::signoff` の上限をこの最大に対して置く。`frames_indeterminate` は「一様に 0」と「`frame` が 1 つも読めなかった」の両方で立つ。MOD(3.2)＋MOD(4.2): 意味の裁定 3 件を持つ——⑴ 随伴の同一フレーム性は**バルーンの `origin=BalloonFollow` の書込**で測る（要件 4.3 の義務は位置の追従であり、`KeepPositionResize` の遅れは要件 4.6 の見送りゆえ欠陥ではない）、⑵ `frames_to_last_write` は**見送り窓への書込を数えない**（4.6 で現状維持となった窓が後で可視化された際の書込は当該遷移の続きではない。抜け穴にならないのは、見送り窓の随伴位置は `balloon_same_frame` が引き続き見張るため）、⑶ **理由による除外の限定**（MOD(4.2)）＝除外を駆動するのは `reason=invisible` のみで `reason=k-unchanged` は使わない（定常状態の空振りゆえ・4.6 の裁定の注記 2026-08-20）。併せて `transition_judge_verdict.rs` へ `Violation::AllWrittenWindowsExcluded` を新設した（同ファイルの行に登記） | 3.1, 3.2, 4.2 |
 | `crates/areka/src/placement/transition_judge_tests.rs` | NEW: 解析・切り出し・集計の分岐テスト（`win_kind` 由来の窓キー・経路 A は `origin` で計数・見送り窓の除外・`target_id` 往復を `emo2_boot::target_map` の正本と突合）。MOD(3.2): 随伴の同一フレーム性は**バルーン側の見送りでは降りない**へ是正（要件 4.3 の引き金はキャラ窓の可視化であり、随伴の窓書込は不可視のバルーンにも出る）——`summarize_excludes_windows_whose_redisplay_was_skipped` の当該 2 行が追随。同テストの模す形は「**随伴の追従（`BalloonFollow`）そのものが遅れた場合**」＝要件 4.3 の欠陥形であり、再観測 §3.2 の遷移 2（位置は定刻・寸 `KeepPositionResize` だけが遅延＝非欠陥）**ではない**（コメントを是正） | 3.1, 3.2 |
@@ -266,8 +266,13 @@ crates/areka/src/main.rs               # MOD: 起動時に MonitorDpiTable も�
 | `crates/areka/src/placement/transition_judge_negative_tests.rs` | NEW: 判定語の破壊（起点語・種別語）・必須フィールドの欠落・**本体側の数値だけが壊れた行**（`diff`／`total_us`／`target_id`＝`malformed_records` は 0 のまま量が消える）・書込 0 件・周回境界（`u32::MAX`→`0` で差 1）・一様 0 の判定不能 | 3.2 |
 | `crates/areka/src/placement/transition_signoff_tests.rs` | NEW: `#[ignore]` の実機ログ判定ランナー（`AREKA_TRANSITION_LOG`）。判定は同一の純関数を回すだけで自前の判定を 1 行も持たない。環境変数未設定・パス不達・観測行 0 行はいずれも失敗（既定で走る 4 本がこの失敗経路を固定する） | 3.2 |
 | `crates/areka/src/placement/transition_signoff_procedure_tests.rs` | NEW: サインオフ手順書（C10 `signoff-procedure.md`）の判定語が発行側・判定器の単一定義元と一致することの檻。⑴ 手順書に載る観測行の例が発行側の語彙だけで書かれていること（種別・段階・per-kind の必須フィールド）、⑵ レコード種別 10 種が**すべて**手順書に現れること（片側だけだと「例を書かなければ緑」の恒真になる）、⑶ ランナーの入口の語（環境変数名・観測 target・行頭タグ・Report の 2 系統名・ランナーのテスト名）が**トークン境界つき**で載っていること、⑷ Report の出力例に並ぶ違反行が**その上限系統で実際に出得る**ものであること——⑷ の分類は手書きせず、最大違反の判定量へ `Bounds::deterministic()`／`Bounds::signoff()` を当てて**判定器が実際に積んだ違反**から起こす（`frame_bound` の門の内外が変われば分類も自動で追随する）。検査述語そのものの較正（壊した行が落ちる／後ろに字が付いた誤記が通らない／帰属を入れ替えた例が両方向とも捕まる／門の外の共有違反は両系統で許される）を同ファイルに置く | 4.1 |
-| `crates/areka/src/emo2_boot/frame_test_support.rs` | MOD: 多フレーム駆動ハーネス `FrameHarness`（`advance_frame`＝World 資源＋写しを同一点で進める／作業領域源・実行時モニタ表・窓の拡大率の 3 差替口／二体ぶんのスコープ／`drain_writes`／DPI 相・再スナップ・連鎖確定の駆動）・`single_threaded_schedule`（要件 7.6）・x64 限定の `const _` assert（要件 7.5）。あわせて `PerTargetSizes`／`SPAWN_SIZE_*`／`settled_sizes` を `frame_chain_finalize_tests.rs` から集約（テーマ間共有ヘルパの置き場） | 3.3 |
+| `crates/areka/src/emo2_boot/frame_test_support.rs` | MOD: 多フレーム駆動ハーネス `FrameHarness`（`advance_frame`＝World 資源＋写しを同一点で進める／作業領域源・実行時モニタ表・窓の拡大率の 3 差替口／二体ぶんのスコープ／`drain_writes`／DPI 相・再スナップ・連鎖確定の駆動）・`single_threaded_schedule`（要件 7.6）・x64 限定の `const _` assert（要件 7.5）。あわせて `PerTargetSizes`／`SPAWN_SIZE_*`／`settled_sizes` を `frame_chain_finalize_tests.rs` から集約（テーマ間共有ヘルパの置き場）。MOD(5.1): **モニタ別拡大率表の注入口**（`set_monitor_dpi_table`／`set_monitor_sources_for_dpi`）・2 源の読み口（`work_area_source`／`monitor_dpi_table`）・同期段の駆動口（`run_work_area_sync`）・`s2_monitors`／`s2_sources`（実行時のモニタ表と 2 源を同一の合成列から作る）。doc の「モニタ別拡大率表は持たない」節を撤回 | 3.3, 5.1 |
 | `crates/areka/src/emo2_boot/frame_harness_tests.rs` | NEW: ハーネスそのものの檻——残留の非持越（写し・キュー）・同一プロセス連続 2 シナリオの判定不変・刻印 2 権威の一致・3 源の独立差替・二体同時／片方のみの駆動・単一スレッド実行器での捕捉・接続宣言の x64 門の本文走査・**再スナップの陽性駆動**（実表示寸が食い違うスコープだけを書き直す＋べき等）。最後の 1 本が要るのは、姉妹の「同寸なら書かない」が零件の主張ゆえ `run_resnap` を丸ごと無操作にしても恒真で通ってしまうため（task 3.3 のレビューで実測） | 3.3 |
+| `crates/areka/src/emo2_boot/frame/work_area_sync.rs` | NEW(5.1): 作業領域源の実行時同期。`sync_monitor_snapshot`（World の `Monitor` 群を読む本番の入口）／`sync_monitor_snapshot_with`（合成表を渡せる形）／`SnapshotChange`（差し替え前後の作業領域源＝消費者は task 5.2）。0 台は `warn!`＋現状維持、順序非依存比較で不変なら無操作、差し替え時だけ `kind=snapshot` と `[diag.monitor_snapshot]` を出す。**窓書込は 1 件も出さない**（再スナップは task 5.2） | 5.1 |
+| `crates/areka/src/emo2_boot/frame_work_area_sync_tests.rs` | NEW(5.1): 是正の対テスト（拡大率を下げた遷移で接地点差 −48px→0・キャラ窓の書込 1 回）／零件の主張と陽性の対（無変化で作り直さない ↔ 変化で作り直す・順序だけの違い ↔ 1px の違い・0 台の警告 ↔ 正常表で無警告・同期単独で窓書込 0 ↔ 拡大率が動けば書く）／`kind=snapshot` の発行と非発行／呼出順（同期は拡大率の相より前）の本文走査／起動シームと同一構築関数 | 5.1 |
+| `crates/areka/src/placement/follow_test_support.rs` | MOD(5.1): 判定語 `OFFSCREEN_PULL_TAG`（本番側は `visibility.rs:173` の `VISIBILITY_OFFSCREEN_PULL_TAG`）を檻側にも literal で持つ（既存 3 語と同じ流儀・手順書の grep 語と字面を揃える） | 5.1 |
+| `crates/areka/src/placement/follow_work_area_tests.rs` | MOD(5.1): `MonitorDpiTable` の忠実転写（`bounds` と拡大率・列挙順・0 台）／`MonitorSources` が 1 つの列から 2 源を作ること／`same_monitors` の分岐（順序無視・1px・拡大率のみ・矩形のみ・台数・多重集合） | 5.1 |
+| `crates/areka/src/main_monitor_snapshot_seam_tests.rs` | MOD(5.1): `boot_monitor_snapshot` の戻り値が `MonitorSources` になったことへ追随（権威一致の檻）＋2 源が同一のモニタ列から作られる檻を追加 | 5.1 |
 | `crates/areka/src/emo2_boot/frame_chain_finalize_tests.rs` | MOD: `PerTargetSizes`／`SPAWN_SIZE_*`／`settled_sizes` の定義を `frame_test_support.rs` へ移し import に置換（本文の判定は不変） | 3.3 |
 
 > 本表は Requirement 10 の突合台帳である。触ったファイルの集合が本表（2 つの表の合併）と一致していなければならない。ファイルを 1 つでも触ったら同時に行を足すこと。
@@ -392,7 +397,7 @@ flowchart TD
 | 5.2 | 随伴バルーン | 既存 `follow_balloon` | — |
 | 5.3 | 差 0 を観測出力 | `ground` レコード（ground_y・wa_bottom・diff） | C7 判定 |
 | 5.4 | 変化なしなら書込 0 | C6 順序非依存比較・べき等 skip | 決定論テスト |
-| 5.5 | 解決不能時は現状維持＋warn | C6（`Monitor` 0 台・帰属なし） | `warn!` |
+| 5.5 | 解決不能時は現状維持＋warn | C6（`Monitor` 0 台のみ。**帰属なしは適用対象外**＝最近傍で解決するのが正・開発者の裁定 2026-08-20・requirements.md 要件 5 項目 5 直下の注記） | `warn!`（`[work_area_sync]`）＋画面外から引き寄せた事実の記録 `[visibility-guard] OffscreenPull` |
 | 5.6 | 位置権威不変・是正主体＝snapshot 更新 | D5 | — |
 | 5.7 | 保存位置の追従なし | Allowed Dependencies 禁止項 | `persist.rs` 無改変 |
 | 5.8 | 一度書き | D5 配置＋C5 hold（D15） | 経路 (a)/(b) 両順序の決定論テスト |
@@ -640,7 +645,9 @@ pub(crate) fn coalesce_geometry(queue: &mut Vec<SetWindowPosCommand>, cmd: SetWi
 | Requirements | 5.1, 5.3, 5.4, 5.5, 4.7 |
 
 **Responsibilities & Constraints**
-- `sync_monitor_snapshot(world) -> Option<SnapshotChange>`: `Monitor` component（`monitor.rs:66-74`）を読み、`MonitorSnapshot::from_monitors`（`work_area.rs:31`）と `MonitorDpiTable::from_monitors` で作り直す。**順序非依存の比較**（`same_monitors`）で不変なら何もしない（定常フレームで書込 0・4.7・5.4）。変化時は両 Resource を差し替え、`snapshot` レコード（frame・台数・各 dpi と work_area）と `[diag.monitor_snapshot]` を出す。0 台・帰属不能は `warn!` の上で現状維持（5.5）。
+- `sync_monitor_snapshot(world) -> Option<SnapshotChange>`: `Monitor` component（`monitor.rs:66-74`）を読み、`MonitorSnapshot::from_monitors`（`work_area.rs:31`）と `MonitorDpiTable::from_monitors` で作り直す。**順序非依存の比較**（`same_monitors`）で不変なら何もしない（定常フレームで書込 0・4.7・5.4）。変化時は両 Resource を差し替え、`snapshot` レコード（frame・台数・各 dpi と work_area）と `[diag.monitor_snapshot]` を出す。**モニタ 0 台**は `warn!` の上で現状維持（5.5）。
+
+- **「帰属不能」の扱い（開発者の裁定 2026-08-20・requirements.md 要件 5 項目 5 直下の注記と対）**: 窓中心がどのモニタにも属さない場合は 5.5 の「解決できない」に**当たらない**——それは最近傍フォールバックによる**解決**であり、現行挙動が正である（判断の軸＝ゴーストが触れなくなる事態を避ける。副モニタを引き抜いたとき現状維持を選ぶとゴーストが画面外に取り残される）。ゆえに C6 が持つ 5.5 の腕は**モニタ 0 台のときだけ**であり、位置権威（要件 5.6）には触れない。最近傍へ落ちたことは**警告として記録する**（位置は変えない）——発行は C6 ではなく可視性ガードの層で、射影が決めた位置（`[visibility-guard] NearestFallback`）と射影の入力（`[visibility-guard] OffscreenPull`・task 5.1 が追加。**画面外＝どの work area とも非交差**のときに限る）の 2 矩形に対して出す。
 - `resnap_for_work_area_change(world, change)`: 変化した作業領域に属する Bottom アンカーのキャラ窓を `reproject_char_window_at_current_size(.., PlacementRoute::WorkAreaResnap)`（`dpi.rs:335` に route 引数を追加）で現寸再射影。べき等 skip（`window_move.rs:310-318`）で無変化は書込 0。同一 tick に dpi 相が続く窓は dpi 相の書込 1 本に吸収される（合流）。
 - 置き場: `sync_monitor_snapshot` は `emo2_frame_system` の先頭（`frame.rs:168` の前・同一 World 借用）、`resnap_for_work_area_change` は `run_dpi_phase` の直後（`frame.rs:168` の後・`reconcile_reported_sizes` :187 の前）。
 - 起動時: `main.rs:530-538` の `boot_monitor_snapshot` が `MonitorDpiTable` も返し :611 で挿入（構築関数は同一＝二重権威にならない）。
@@ -761,7 +768,7 @@ pub fn judge_transition_log(log: &str) -> Report;   // 上 4 つの合成
 ## Error Handling
 
 - 観測点は失敗しない（純関数＋`debug!`）。`SetWindowPos` 失敗は現行どおり `warn!`＋`write ok=0`。
-- `sync_monitor_snapshot`: `Monitor` 0 台／帰属モニタなし → `warn!`（`[work_area_sync]`）＋現状維持（5.5）。
+- `sync_monitor_snapshot`: `Monitor` 0 台 → `warn!`（`[work_area_sync]`）＋現状維持（5.5）。**帰属モニタなしはここへ来ない**——最近傍で解決するのが正（開発者の裁定 2026-08-20・C6 の該当項）で、記録は可視性ガードの層が `[visibility-guard] OffscreenPull` として出す。
 - `DpiSyncHold` 上限超過 → `warn!`（entity・scope・待ちフレーム数）＋処理続行（ログ無し失敗経路の禁止）。
 - `ChainRealign` の見送りが `CHAIN_FINALIZE_STALL_FRAMES` を超えたら一度だけ `warn!`（既存 `note_chain_deferral` の再利用・武装時に初期化）。
 - `judge`: 判定違反は `Violation` の列で返し、ランナーが列挙して失敗させる（沈黙を PASS にしない）。

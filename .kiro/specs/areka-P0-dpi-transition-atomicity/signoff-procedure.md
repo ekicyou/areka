@@ -171,7 +171,8 @@ $env:AREKA_PROFILE_DIR       = $PROFILE_DIR
 | T5 | `kind=write`（`stage=sync`） | `crates/wintf/src/ecs/window_proc/window_pos.rs:468` | 同上 | `debug` | **経路 A の裏取り**（OS 提案位置の同期書込）。`origin=dpi-suggested` と対で読む |
 | T6 | `kind=msg` | `crates/wintf/src/ecs/window_proc/window_pos.rs:59` / `:336`・`crates/wintf/src/ecs/window_proc/lifecycle.rs:140` | 同上 | `debug` | 窓書込の内側で OS 同期処理が走っているか（`in_swp`・`since_flush_us`） |
 | T7 | `kind=surface`（`stage=upload`／`visualize`／`skipped`） | `crates/areka-emo-present/src/presenter/show.rs:349` / `:390`・`crates/areka-emo-present/src/presenter/refresh.rs:83` / `:100` | 同上 | `debug` | 描画内容が新しい寸になった時刻。**窓矩形との食い違い**を測る片側 |
-| T8 | `kind=ground` | `crates/areka/src/placement/follow/window_move.rs:341` → `crates/areka/src/placement/transition_diag.rs:525` | 同上 | `debug` | 接地点と作業領域下端の差（`diff`）。下端吸着のキャラ窓のみ |
+| T8 | `kind=ground` | `crates/areka/src/placement/follow/window_move.rs:342` → `crates/areka/src/placement/transition_diag.rs:539` | 同上 | `debug` | 接地点と作業領域下端の差（`diff`）。下端吸着のキャラ窓のみ |
+| T9 | `kind=snapshot` | `crates/areka/src/emo2_boot/frame/work_area_sync.rs:127` → `crates/areka/src/placement/transition_diag.rs:459` | 同上 | `debug` | 作業領域源を作り直したフレームと、作り直した後の全モニタの拡大率・作業領域。**差し替えが起きたフレームにだけ出る**（同じ表のフレームでは 1 行も出ない＝それが正常） |
 | A1 | `[diag.window_move] route= entity= kind= scope= …` | `crates/areka/src/placement/diag.rs` | `areka::placement::diag` | `debug` | スコープ ↔ キャラ窓 entity の対応（§4.3 の裏取り） |
 | A2 | `perf(apply_show): 段階別計時`（末尾に `frame=`） | `crates/areka-emo-present/src/presenter/timing.rs:201-220` | `areka_emo_present` | `debug` | 描画側の段階別所要をフレーム番号で突き合わせる |
 
@@ -181,11 +182,12 @@ $env:AREKA_PROFILE_DIR       = $PROFILE_DIR
 
 | `kind=` | 純関数 | 発行点が入るタスク |
 | --- | --- | --- |
-| `kind=snapshot` | `crates/areka/src/placement/transition_diag.rs:321` | task 5.1（作業領域源を実行時に同期する） |
-| `kind=hold` | `crates/areka/src/placement/transition_diag.rs:343` | task 5.4（拡大率と表の整合待ちを設ける） |
-| `kind=chain` | `crates/areka/src/placement/transition_diag.rs:379` | task 5.6（遷移後に連鎖を一度だけ解き直す） |
+| `kind=hold` | `crates/areka/src/placement/transition_diag.rs:338` | task 5.4（拡大率と表の整合待ちを設ける） |
+| `kind=chain` | `crates/areka/src/placement/transition_diag.rs:374` | task 5.6（遷移後に連鎖を一度だけ解き直す） |
 
-> **task 4.2（是正前の基準値）の採取では、この 3 種は必ず 0 件になる。** これを「整合待ちは 1 度も起きなかった」「連鎖の解き直しは 0 回だった」と読んではならない——**観測点が無いだけ**である（要件 8.5）。task 7.3 の採取では 3 種とも点いているはずなので、**まず 3 種が 1 行でも出ていることを確かめてから**件数の議論に入る。
+> **task 4.2（是正前の基準値）の採取では、この 2 種は必ず 0 件になる。** これを「整合待ちは 1 度も起きなかった」「連鎖の解き直しは 0 回だった」と読んではならない——**観測点が無いだけ**である（要件 8.5）。task 7.3 の採取では 2 種とも点いているはずなので、**まず 2 種が 1 行でも出ていることを確かめてから**件数の議論に入る。
+>
+> `kind=snapshot` は **task 5.1 の着地で点灯した**（§3.1 の T9 へ移動済み）。ただし出るのは**モニタ表が変わったフレームだけ**なので、定常運転で 0 件なのは正常である——遷移を 1 度も起こさずに採取したログで 0 件だったことを「同期が動いていない」根拠にしない。
 
 ### 3.3 観測レコードの書式（**形の例**・値は実測ではない）
 
@@ -224,7 +226,7 @@ foreach ($k in 'monitor','enqueue','flush','write','msg','surface','ground','sna
 }
 ```
 
-`monitor`〜`ground` の 8 種が 0 件なら **`wintf::transition=debug` の入れ忘れ**を最初に疑う（§2.2）。`snapshot`／`hold`／`chain` の 0 件は §3.2 のとおり是正前では正常である。
+`monitor`〜`ground` の 8 種が 0 件なら **`wintf::transition=debug` の入れ忘れ**を最初に疑う（§2.2）。`hold`／`chain` の 0 件は §3.2 のとおり是正前では正常である。`snapshot` は task 5.1 の着地後に点いた観測点だが、**モニタ表が変わったフレームにしか出ない**——遷移を含む採取で 0 件なら同期段を疑う。
 
 ---
 

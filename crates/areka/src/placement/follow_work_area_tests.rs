@@ -225,3 +225,158 @@ fn work_area_for_window_delegates_to_with_origin() {
         }
     }
 }
+
+// -------------------------------------------------------------------------
+// MonitorDpiTable / MonitorSources / same_monitors
+// （areka-P0-dpi-transition-atomicity task 5.1・設計 C6・要件 5.1／5.4）
+// -------------------------------------------------------------------------
+
+use super::{MonitorDpiEntry, MonitorDpiTable, MonitorSources, same_monitors};
+use windows::Win32::Foundation::RECT;
+use wintf::ecs::window::monitor::Monitor;
+
+/// 合成モニタ 1 台（`bounds` と `work_area` を別々に与える＝両者の取り違えを検出できる形）。
+fn monitor(
+    handle: isize,
+    bounds: (i32, i32, i32, i32),
+    work_area: (i32, i32, i32, i32),
+    dpi: u32,
+) -> Monitor {
+    Monitor {
+        handle,
+        bounds: RECT {
+            left: bounds.0,
+            top: bounds.1,
+            right: bounds.2,
+            bottom: bounds.3,
+        },
+        work_area: RECT {
+            left: work_area.0,
+            top: work_area.1,
+            right: work_area.2,
+            bottom: work_area.3,
+        },
+        dpi,
+        is_primary: handle == 1,
+    }
+}
+
+/// 混在 DPI・負座標の 2 台（作業領域と矩形が別値＝転写の取り違えが値で判る）。
+fn two_monitors() -> Vec<Monitor> {
+    vec![
+        monitor(1, (0, 0, 2560, 1440), (0, 0, 2560, 1344), 192),
+        monitor(2, (-1920, -40, 0, 1040), (-1840, -40, 0, 1000), 96),
+    ]
+}
+
+/// モニタ別拡大率表は列挙順のまま、**`bounds`**（`work_area` ではない）と拡大率を
+/// 単位変換なしで忠実転写する。
+#[test]
+fn monitor_dpi_table_transcribes_bounds_and_dpi_in_enumeration_order() {
+    let table = MonitorDpiTable::from_monitors(&two_monitors());
+    assert_eq!(
+        table.entries,
+        vec![
+            MonitorDpiEntry {
+                bounds: rect(0, 0, 2560, 1440),
+                dpi: 192,
+            },
+            MonitorDpiEntry {
+                bounds: rect(-1920, -40, 0, 1040),
+                dpi: 96,
+            },
+        ],
+        "拡大率表が矩形（bounds）と拡大率を列挙順で忠実転写していない"
+    );
+}
+
+/// 0 台は空表（panic しない・`MonitorSnapshot::from_monitors` の 0 台契約と同じ）。
+#[test]
+fn monitor_dpi_table_from_no_monitors_is_empty() {
+    assert!(MonitorDpiTable::from_monitors(&[]).entries.is_empty());
+    assert!(MonitorSources::from_monitors(&[]).is_empty());
+}
+
+/// 2 源は同じ列から同時に作られ、台数と並びが一致する（片方だけ古い運転を作らない）。
+#[test]
+fn monitor_sources_build_both_sides_from_one_list() {
+    let monitors = two_monitors();
+    let sources = MonitorSources::from_monitors(&monitors);
+    assert_eq!(sources.len(), 2);
+    assert_eq!(
+        sources.snapshot,
+        MonitorSnapshot::from_monitors(&monitors),
+        "作業領域源が単独構築と食い違う（構築関数が二重化している）"
+    );
+    assert_eq!(sources.dpi_table, MonitorDpiTable::from_monitors(&monitors));
+}
+
+/// 順序非依存の比較: 同じ台の集合なら**並びが逆でも同じ**と見なす。
+#[test]
+fn same_monitors_ignores_the_order_of_the_table() {
+    let forward = MonitorSources::from_monitors(&two_monitors());
+    let mut reversed_list = two_monitors();
+    reversed_list.reverse();
+    let reversed = MonitorSources::from_monitors(&reversed_list);
+    assert_ne!(
+        forward.snapshot, reversed.snapshot,
+        "前提: 並びが違えば素の等価比較は偽になる（この前提が崩れると本檻は何も見ていない）"
+    );
+    assert!(same_monitors(&forward, &reversed));
+}
+
+/// 対（比較が恒真に潰れていない）: 作業領域が 1px 違えば別物。
+#[test]
+fn same_monitors_sees_a_one_pixel_work_area_difference() {
+    let a = MonitorSources::from_monitors(&two_monitors());
+    let mut moved = two_monitors();
+    moved[0].work_area.bottom -= 1;
+    assert!(!same_monitors(&a, &MonitorSources::from_monitors(&moved)));
+}
+
+/// 対: 作業領域も矩形も同じで**拡大率だけ**違えば別物。
+///
+/// 作業領域だけを比べていると、この構成変更を静かに取りこぼして拡大率表が古いまま残る。
+#[test]
+fn same_monitors_sees_a_scale_only_difference() {
+    let a = MonitorSources::from_monitors(&two_monitors());
+    let mut rescaled = two_monitors();
+    rescaled[0].dpi = 144;
+    let b = MonitorSources::from_monitors(&rescaled);
+    assert_eq!(
+        a.snapshot, b.snapshot,
+        "前提: 作業領域は同じ（拡大率だけが違う構成を組めている）"
+    );
+    assert!(!same_monitors(&a, &b));
+}
+
+/// 対: 作業領域も拡大率も同じで**矩形だけ**違えば別物（解像度変更で作業領域が偶然一致する形）。
+#[test]
+fn same_monitors_sees_a_bounds_only_difference() {
+    let a = MonitorSources::from_monitors(&two_monitors());
+    let mut resized = two_monitors();
+    resized[0].bounds.bottom += 96;
+    assert!(!same_monitors(&a, &MonitorSources::from_monitors(&resized)));
+}
+
+/// 対: 台数が違えば別物（同じ内容の台が 1 台増えても取りこぼさない）。
+#[test]
+fn same_monitors_sees_a_count_difference() {
+    let a = MonitorSources::from_monitors(&two_monitors());
+    let mut added = two_monitors();
+    added.push(monitor(3, (2560, 0, 4480, 1080), (2560, 0, 4480, 1040), 96));
+    assert!(!same_monitors(&a, &MonitorSources::from_monitors(&added)));
+}
+
+/// 同一の台が 2 度並ぶ表（複製）と 1 台だけの表を「同じ」と言わない
+/// ——集合ではなく**多重集合**として比べていること。
+#[test]
+fn same_monitors_compares_as_a_multiset_not_a_set() {
+    let one = MonitorSources::from_monitors(&two_monitors()[..1]);
+    let mut duplicated = two_monitors()[..1].to_vec();
+    duplicated.push(duplicated[0].clone());
+    assert!(!same_monitors(
+        &one,
+        &MonitorSources::from_monitors(&duplicated)
+    ));
+}

@@ -244,6 +244,16 @@ pub(super) const NEAREST_TAG: &str = "[visibility-guard] NearestFallback";
 /// 同上（work area を解決できず判定不能・Req 3.3）。
 pub(super) const UNRESOLVED_TAG: &str = "[visibility-guard] WorkAreaUnresolved";
 /// 3 語に共通の接頭辞（「ガードが何かを言った」ことの一括検出）。
+/// **どの work area とも交差しない位置に居た窓**を最近傍モニタへ引き寄せたことを表す
+/// 判定語（areka-P0-dpi-transition-atomicity 要件 5.5・task 5.1 が新設）。
+///
+/// [`NEAREST_TAG`] とは観測する矩形が違う——あちらは射影が**決めた位置**、こちらは射影の
+/// **入力**である。画面外に居た窓は、決めた位置がモニタ内へ収まってしまえばあちらの腕には
+/// 入らない（＝無観測で吸収される）。語が `[visibility-guard] NearestFallback` を
+/// **部分文字列として含まない**のは、`expect_one(&events, NEAREST_TAG)` の件数がこの語で
+/// 狂わないようにするためである。
+pub(super) const OFFSCREEN_PULL_TAG: &str = "[visibility-guard] OffscreenPull";
+
 pub(super) const GUARD_TAG_PREFIX: &str = "[visibility-guard]";
 
 /// 幅広のキャラ窓寸（論理 320×400）。論理 320／32 はいずれも 8 の倍数ゆえ、

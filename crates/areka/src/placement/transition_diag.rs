@@ -22,12 +22,12 @@
 //! ここは**参照するだけ**である。areka が足すのは 4 つの種別語と、この 4 種にしか出ない
 //! フィールド名・判定語だけ（wintf は上位 crate の語彙を持たない＝依存方向 wintf ← areka）。
 //!
-//! # 発行はまだ 1 種だけ
+//! # 発行点はまだ全種そろっていない
 //!
-//! 本ファイルは task 2.4（観測の増設）で建てた語彙であり、`snapshot`／`hold`／`chain` を出す
-//! 状態機械は後続タスクが新設する（作業領域源の同期＝task 5.1、整合待ち＝task 5.4、
-//! 連鎖再解決＝task 5.6）。今このリポジトリで実際に到達できる発行点は
-//! [`log_char_ground`]（`resize_window_to` から）だけである。
+//! 本ファイルは task 2.4（観測の増設）で建てた語彙であり、`hold`／`chain` を出す状態機械は
+//! 後続タスクが新設する（整合待ち＝task 5.4、連鎖再解決＝task 5.6）。今このリポジトリで
+//! 実際に到達できる発行点は 2 つ——[`log_char_ground`]（`resize_window_to` から）と
+//! [`log_monitor_snapshot_sync`]（作業領域源の同期＝task 5.1 から）である。
 //!
 //! # 語彙は先に建てる（未消費の `#[allow(dead_code)]` の根拠）
 //!
@@ -212,9 +212,6 @@ pub const CHAIN_FIELDS: &[&str] = &[FIELD_STAGE, FIELD_SCOPES, FIELD_MOVED, FIEL
 
 /// 作業領域源に載るモニタ 1 台ぶん（拡大率＋作業領域）。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-// 発行側（task 5.1 の作業領域源の同期）は未着地。areka は bin crate ゆえ `pub` でも
-// dead_code 免除されない（`diag.rs` の同型 allow と同じ事情）。
-#[allow(dead_code)]
 pub struct MonitorEntry {
     /// モニタの拡大率。
     pub dpi: u32,
@@ -224,7 +221,6 @@ pub struct MonitorEntry {
 
 /// 作業領域源を作り直した記録。
 #[derive(Clone, Copy, Debug)]
-#[allow(dead_code)] // 発行側は task 5.1（作業領域源の実行時同期）
 pub struct SnapshotRecord<'a> {
     /// 刻印。
     pub stamp: Stamp,
@@ -317,7 +313,6 @@ fn opt_field<T: std::fmt::Display>(value: Option<T>) -> String {
 /// モニタは `m<i>=<dpi>:<l,t,r,b>` の形で 1 台 1 フィールドに畳む——台数が可変でも
 /// フィールド名が衝突せず（`m0`／`m1`／…）、値に空白が入らないので `名前=値` の
 /// 辞書化規則をそのまま通せる。
-#[allow(dead_code)] // 発行側は task 5.1
 pub fn snapshot_line(record: &SnapshotRecord<'_>) -> String {
     let mut line = format!(
         "{prefix} {FIELD_MONITORS}={count}",
@@ -448,6 +443,23 @@ pub fn write_tag(world: &World, window: Entity, route: Option<PlacementRoute>) -
 }
 
 // ---------------------------------------------------------------------------
+// 作業領域源レコードの発行
+// ---------------------------------------------------------------------------
+
+/// 作業領域源を作り直した記録を 1 行出す（同期段が実際に**差し替えた**フレームだけ）。
+///
+/// 呼出側は [`is_enabled`] で前置ガードすること（本関数は行を組む＝確保する）。
+/// 同じ表で差し替えが起きなかったフレームでは呼ばれない——「毎フレーム出る行」にすると、
+/// 判定側が遷移を切り出すときの雑音になるうえ、定常状態の確保ゼロという契約も壊れる。
+pub fn log_monitor_snapshot_sync(world: &World, monitors: &[MonitorEntry]) {
+    let record = SnapshotRecord {
+        stamp: stamp_of(world),
+        monitors,
+    };
+    base::emit_line(&snapshot_line(&record));
+}
+
+// ---------------------------------------------------------------------------
 // 接地点レコードの発行
 // ---------------------------------------------------------------------------
 
@@ -457,17 +469,19 @@ pub fn write_tag(world: &World, window: Entity, route: Option<PlacementRoute>) -
 ///
 /// 要件 5.3 が求めるのは「遷移後の接地点と**作業領域下端**の差」である。接地点は
 /// [`MonitorSnapshot`] から導出されるので、同じ源から下端を引いたら差は定義上つねに 0 に
-/// なり、**この観測は何も観測しない**。現在の欠陥はまさに「作業領域源が起動時のまま更新
-/// されない」ことであり（`main.rs` の起動シーム・`follow/work_area.rs` の「セッション内固定」）、
-/// 差を意味あるものにするには 2 つ目の源＝実行時のモニタ表と突き合わせるほかない。
+/// なり、**この観測は何も観測しない**。是正前の欠陥はまさに「作業領域源が起動時のまま更新
+/// されない」ことであり（確定台帳 L3）、差を意味あるものにするには 2 つ目の源＝実行時の
+/// モニタ表と突き合わせるほかない。
 ///
 /// # 位置の決め方は 1 bit も変えない
 ///
 /// 本関数は**観測専用**である。接地点そのものは従来どおり [`MonitorSnapshot`] を読む
 /// `project_anchor` が決める（design Allowed Dependencies の禁止項「`MonitorSnapshot` の
 /// 消費者を wintf `Monitor` 直読へ変えること」は位置権威の話であり、ここには掛からない）。
-/// task 5.1 が作業領域源を実行時同期すれば 2 つの源は一致し、本レコードの差は 0 になる
-/// ——以後は「源が再び古びていないか」を常時見張る口として残る。
+/// task 5.1（作業領域源の実行時同期）が着地したので 2 つの源は通常一致し、本レコードの差は
+/// 0 になる——**この読み取りは撤去しない**。同期段が止まる・取りこぼす・順序が入れ替わる、
+/// のいずれでも差が再び 0 でなくなる形で見える、源の陳腐化を常時見張る口だからである
+/// （同じ源から引いたら差は定義上つねに 0 で、何も見張らなくなる）。
 ///
 /// 帰属規則は [`work_area_for_window`] をそのまま使う（別規則を発明しない）。
 /// モニタ 0 台・表そのものが無い World は `None`＝架空の矩形を発明しない。

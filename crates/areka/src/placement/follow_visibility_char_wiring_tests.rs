@@ -4,9 +4,10 @@ use wintf::ecs::pointer::Phase;
 use wintf::ecs::{Point, WindowPos};
 
 use super::test_support::{
-    CLAMP_TAG, DPIS, GUARD_TAG_PREFIX, NEAREST_TAG, UNRESOLVED_TAG, drag_event_at, dragging_state,
-    fake_handle, gap_center_x, guard_events, left_wa, mixed_layout, narrow_char_size, point_of,
-    px, right_wa, unguarded_projection, visible_in, wide_char_size, win, window_pos_sized,
+    CLAMP_TAG, DPIS, GUARD_TAG_PREFIX, NEAREST_TAG, OFFSCREEN_PULL_TAG, UNRESOLVED_TAG,
+    drag_event_at, dragging_state, fake_handle, gap_center_x, guard_events, left_wa, mixed_layout,
+    narrow_char_size, point_of, px, right_wa, unguarded_projection, visible_in, wide_char_size,
+    win, window_pos_sized,
 };
 use super::super::test_support::{capture_logs, expect_one};
 use super::{
@@ -311,6 +312,200 @@ fn nearest_fallback_warns_on_non_drag_route_even_without_clamping() {
         assert!(
             guard_events(&events, CLAMP_TAG).is_empty(),
             "dpi={dpi}: clamp していないのに ClampX が出ている: {events:?}"
+        );
+    }
+}
+
+// -------------------------------------------------------------------------
+// 画面外からの引き寄せの記録（areka-P0-dpi-transition-atomicity 要件 5.5・task 5.1）
+//
+// 上の `nearest_fallback_warns_on_non_drag_route_even_without_clamping` が見ているのは
+// 射影が**決めた位置**の帰属である。射影の**入力**（＝Y を決めるのに使った矩形）が
+// どの work area とも交差しない位置に在った場合、決めた位置がモニタ内へ収まってしまえば
+// あちらの腕には入らない——窓は画面の外から黙って最近傍のモニタへ引き寄せられ、観測が
+// 1 行も残らない（実測で 0 行だった）。副モニタを引き抜いたときにゴーストが主モニタへ
+// 引き寄せられるのは**正しい挙動**（開発者の裁定 2026-08-20・位置は変えない）だが、
+// 勝手に飛んだことは後から追えねばならない。
+//
+// **帰属だけを条件にしてはならない**——下端吸着の正常な resize では、旧位置に背の高い
+// 新寸を当てた矩形の中心が work area 下端へちょうど載る（半開区間で非該当）ことが
+// 珍しくなく、偽陽性になる。下の 4 本目がその形を名指しで固定する。
+// -------------------------------------------------------------------------
+
+/// 全 work area の**外**（上方）に居るキャラ窓。射影の入力は帰属せず、射影が決めた位置は
+/// 最近傍モニタの下端＝帰属する（＝決めた位置側の腕には入らない構図）。
+fn offscreen_char_world(dpi: i32) -> (World, Entity, PointPx, SizePx) {
+    let size = wide_char_size(dpi);
+    // x は右モニタの内側（帯や左モニタに引かれない）・y は全 work area の遥か上。
+    let pos = PointPx {
+        x: px(600, dpi),
+        y: -px(3000, dpi),
+    };
+    let mut world = World::new();
+    world.insert_resource(mixed_layout(dpi));
+    let e = world
+        .spawn((
+            fake_handle(0x1600),
+            window_pos_sized(pos.x, pos.y, size.w, size.h),
+            Anchored(Anchor::Bottom),
+        ))
+        .id();
+    (world, e, pos, size)
+}
+
+/// 探針の自己検査＋実行を 1 つにまとめる（入力側は最近傍・決めた位置は帰属、を毎回確かめる）。
+fn run_offscreen_reprojection(
+    dpi: i32,
+    route: PlacementRoute,
+) -> Vec<crate::placement::test_support::LogEvent> {
+    let layout = mixed_layout(dpi);
+    let (mut world, e, pos, size) = offscreen_char_world(dpi);
+
+    // (1) 射影の**入力**は帰属しない（`Contains` なら本檻は何も見ていない）。
+    let (_, input) = work_area_for_window_with_origin(&layout, win(pos, size))
+        .expect("合成レイアウトは空でない");
+    assert_eq!(
+        input,
+        WorkAreaResolution::NearestFallback,
+        "dpi={dpi}: 探針の入力が帰属してしまっている＝観測すべき腕を通らない"
+    );
+    // (2) 射影が**決めた位置**は帰属する＝既存の観測（`NEAREST_TAG`）は鳴らない構図。
+    let decided = project_anchor(Anchor::Bottom, pos, size, Some(&layout));
+    let (_, resolved) = work_area_for_window_with_origin(&layout, win(decided, size))
+        .expect("合成レイアウトは空でない");
+    assert_eq!(
+        resolved,
+        WorkAreaResolution::Contains,
+        "dpi={dpi}: 決めた位置まで帰属しない探針＝既存の観測と区別が付かない"
+    );
+
+    let (ok, events) = capture_logs(|| resize_window_to(&mut world, e, size, route));
+    assert!(ok, "dpi={dpi}: 書込が成立していない（前提が崩れている）");
+    events
+}
+
+/// **要件 5.5（記録の側）**: どの work area とも交差しない位置に居た窓が最近傍モニタへ
+/// 引き寄せられたことを、非ドラッグ経路で `warn!` として残す（位置は変えない）。
+#[test]
+fn an_offscreen_projection_input_warns_on_a_non_drag_route() {
+    for dpi in DPIS {
+        let events = run_offscreen_reprojection(dpi, PlacementRoute::WorkAreaResnap);
+
+        let warned = expect_one(&events, OFFSCREEN_PULL_TAG);
+        assert_eq!(
+            warned.level,
+            tracing::Level::WARN,
+            "dpi={dpi}: 画面外からの引き寄せが warn として残っていない"
+        );
+        // 決めた位置は帰属しているので、既存の観測は鳴らない＝2 語が別の事象を指している。
+        assert!(
+            guard_events(&events, NEAREST_TAG).is_empty(),
+            "dpi={dpi}: 決めた位置の観測まで鳴っている＝2 語が同じ事象を二重に報告している: {events:?}"
+        );
+    }
+}
+
+/// 対（零件の主張の陽性側と対になる否定）: 入力が帰属している通常の配置では鳴らない。
+///
+/// これが無いと「毎回鳴る警告」でも上の檻は緑になる。
+#[test]
+fn an_onscreen_projection_input_stays_silent() {
+    for dpi in DPIS {
+        let new = narrow_char_size(dpi);
+        let (mut world, e, old_pos) = gap_bound_char_world(dpi);
+        // 入力（帯の中の窓）ではなく、右モニタの内側へ置き直した状態から始める。
+        let inside = PointPx {
+            x: right_wa(dpi).left + px(100, dpi),
+            y: right_wa(dpi).bottom - wide_char_size(dpi).h,
+        };
+        world.entity_mut(e).insert(window_pos_sized(
+            inside.x,
+            inside.y,
+            wide_char_size(dpi).w,
+            wide_char_size(dpi).h,
+        ));
+        let _ = old_pos;
+
+        let (_, events) =
+            capture_logs(|| resize_window_to(&mut world, e, new, PlacementRoute::WorkAreaResnap));
+        assert!(
+            guard_events(&events, OFFSCREEN_PULL_TAG).is_empty(),
+            "dpi={dpi}: 画面内の入力で引き寄せの警告が出ている: {events:?}"
+        );
+    }
+}
+
+/// 明示操作の経路（ガード適用外）には効かせない——ドラッグ中や `\![move]` の最近傍落ちは
+/// 正常な挙動であり、毎イベント warn を出すと本物の異常が埋まる。
+#[test]
+fn an_offscreen_projection_input_stays_silent_on_a_non_applying_route() {
+    for dpi in DPIS {
+        let events = run_offscreen_reprojection(dpi, PlacementRoute::MoveCue);
+        assert!(
+            guard_events(&events, GUARD_TAG_PREFIX).is_empty(),
+            "dpi={dpi}: 適用外 route でガードの観測が出ている: {events:?}"
+        );
+    }
+}
+
+/// **偽陽性の檻**: 下端吸着の正常な resize——旧位置に背の高い新寸を当てた入力矩形の中心が
+/// work area 下端へちょうど載る形——では鳴らない。
+///
+/// 帰属（半開区間）だけを条件にすると、この正常系が「どのモニタにも属さない」と判定されて
+/// 警告が鳴り続ける。実装中に既存の檻（`frame_diag_route_tests`）が実際にこの偽陽性を
+/// 捕まえたので、同じ形をここで名指しして固定する（別ファイルの檻に守りを預けない）。
+#[test]
+fn a_bottom_snapped_resize_whose_input_center_sits_on_the_work_area_bottom_stays_silent() {
+    for dpi in DPIS {
+        let wa = right_wa(dpi);
+        let old = SizePx {
+            w: px(300, dpi),
+            h: px(200, dpi),
+        };
+        // 旧位置は接地済み。新寸は背が高く、旧位置に当てると中心が下端の外（半開）へ出る。
+        let pos = PointPx {
+            x: wa.left + px(100, dpi),
+            y: wa.bottom - old.h,
+        };
+        let new = SizePx {
+            w: old.w,
+            h: (wa.bottom - pos.y) * 2,
+        };
+        let layout = mixed_layout(dpi);
+
+        // 探針の自己検査: 入力の中心は帰属しない（＝帰属だけを条件にすると鳴る形）が、
+        // 入力矩形は work area と交差している（＝画面外ではない）。
+        let raw = PointPx {
+            x: pos.x + old.w / 2 - new.w / 2,
+            y: pos.y,
+        };
+        let (_, input) = work_area_for_window_with_origin(&layout, win(raw, new))
+            .expect("合成レイアウトは空でない");
+        assert_eq!(
+            input,
+            WorkAreaResolution::NearestFallback,
+            "dpi={dpi}: 探針の入力が帰属している＝偽陽性の形になっていない"
+        );
+        assert!(
+            visible_in(&layout, raw, new),
+            "dpi={dpi}: 探針の入力が本当に画面外＝偽陽性の形ではなく真陽性を見ている"
+        );
+
+        let mut world = World::new();
+        world.insert_resource(layout);
+        let e = world
+            .spawn((
+                fake_handle(0x1601),
+                window_pos_sized(pos.x, pos.y, old.w, old.h),
+                Anchored(Anchor::Bottom),
+            ))
+            .id();
+        let (ok, events) =
+            capture_logs(|| resize_window_to(&mut world, e, new, PlacementRoute::DpiReproject));
+        assert!(ok, "dpi={dpi}: 書込が成立していない（前提が崩れている）");
+        assert!(
+            guard_events(&events, OFFSCREEN_PULL_TAG).is_empty(),
+            "dpi={dpi}: 下端吸着の正常な resize で引き寄せの警告が出ている（偽陽性）: {events:?}"
         );
     }
 }

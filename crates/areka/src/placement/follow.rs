@@ -64,8 +64,14 @@ pub(crate) use self::drag_follow::{
     on_balloon_drag, on_balloon_drag_end, on_char_drag, on_char_drag_end,
 };
 pub use self::work_area::{
-    MonitorSnapshot, WorkAreaResolution, work_area_for_window, work_area_for_window_with_origin,
+    MonitorDpiTable, MonitorSnapshot, MonitorSources, WorkAreaResolution, same_monitors,
+    work_area_for_window, work_area_for_window_with_origin,
 };
+// モニタ別拡大率表の要素型。`MonitorDpiTable::entries` の要素として本番でも運ばれるが、
+// **名前で呼ぶ**のはテストだけ（本番の消費者は表ごと受け渡す）ゆえ非 test ビルドでは未使用に
+// 見える。表の外から要素を組めないと `entries` が事実上読めない型になるので再輸出は残す。
+#[allow(unused_imports)]
+pub use self::work_area::MonitorDpiEntry;
 
 // 公開面の維持（要件 2.5）だけを担う再輸出。本体からは定義元のサブモジュール内で直接
 // 呼ばれるため、`follow::` 経由で参照するのは `#[cfg(test)]` のテストモジュールと

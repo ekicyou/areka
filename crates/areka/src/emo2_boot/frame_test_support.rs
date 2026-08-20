@@ -12,7 +12,7 @@ use bevy_ecs::prelude::Entity;
 use bevy_ecs::schedule::{ExecutorKind, Schedule};
 use bevy_ecs::system::SystemState;
 use windows::Win32::Foundation::{HINSTANCE, HWND, RECT};
-use crate::placement::follow::MonitorSnapshot;
+use crate::placement::follow::{MonitorDpiTable, MonitorSnapshot, MonitorSources};
 use crate::placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
 use crate::placement::source::GhostTitles;
 use crate::placement::spawn::spawn_ghost_windows;
@@ -25,6 +25,8 @@ use wintf::ecs::window::transition_diag::{self, TickStart};
 use wintf::ecs::window::{SetWindowPosCommand, drain_window_pos_commands};
 use wintf::ecs::DPI;
 use crate::emo2_boot::assets::{BalloonScopeAssets, BootAssets, LoopTables, ScopeAssets};
+
+use super::work_area_sync::{SnapshotChange, sync_monitor_snapshot};
 
 use super::*;
 
@@ -440,6 +442,29 @@ pub(super) fn s2_snapshot(dpi: u16) -> MonitorSnapshot {
     }
 }
 
+/// 当該 DPI 水準における合成マルチモニタの**実行時のモニタ表**（`Monitor` 2 台）。
+///
+/// [`s2_snapshot`] と同一レイアウトであり、[`MonitorSources::from_monitors`] へ通すと
+/// 同じ作業領域集合になる——同期段の「表と源が一致していれば作り直さない」を、偶然の
+/// 一致ではなく**同じ列から作られたこと**として組める。
+pub(super) fn s2_monitors(dpi: u16) -> Vec<Monitor> {
+    let neighbor = s2_neighbor_work_area();
+    vec![
+        harness_monitor(
+            1,
+            s2_work_area_for_dpi(dpi),
+            S2_MONITOR_BOTTOM,
+            u32::from(dpi),
+        ),
+        harness_monitor(2, neighbor, neighbor.bottom, u32::from(dpi)),
+    ]
+}
+
+/// 当該 DPI 水準の 2 源（作業領域源＋モニタ別拡大率表）を、本番と同じ構築関数で作る。
+pub(super) fn s2_sources(dpi: u16) -> MonitorSources {
+    MonitorSources::from_monitors(&s2_monitors(dpi))
+}
+
 /// 窓の**接地点**（下端中央・物理 px）。伺かの立ち絵は足元中央が原点であり、寸法変動でも
 /// 動かない（記憶〈キャラ窓の原点は下端中央〉・[`resize_window_to`] 手順 3b）。
 pub(super) fn s2_ground_point(world: &World, e: Entity) -> (i32, i32) {
@@ -552,8 +577,13 @@ fn harness_monitor(handle: isize, work_area: RectPx, monitor_bottom: i32, dpi: u
 /// | 源 | 差替口 | 実体 |
 /// |---|---|---|
 /// | 作業領域源 | [`set_work_area_source`](Self::set_work_area_source) | `MonitorSnapshot` 資源 |
+/// | モニタ別拡大率表 | [`set_monitor_dpi_table`](Self::set_monitor_dpi_table) | `MonitorDpiTable` 資源 |
 /// | 実行時のモニタ表 | [`set_monitor_table`](Self::set_monitor_table) | `Monitor` entity 群 |
 /// | 窓の拡大率 | [`set_window_dpi`](Self::set_window_dpi)／[`set_scope_dpi`](Self::set_scope_dpi) | 各窓の `DPI` |
+///
+/// 前 2 者は同期段（[`run_work_area_sync`](Self::run_work_area_sync)）が作り直す側であり、
+/// 3 つ目はその入力である。**独立に**差し替えられることが要件 5.3 の観測（接地点と作業領域
+/// 下端の差）の前提である——同じ源から両方を引いたら差は定義上つねに 0 になる。
 ///
 /// # テスト間で状態を残さない（要件 7.7）
 ///
@@ -572,9 +602,6 @@ fn harness_monitor(handle: isize, work_area: RectPx, monitor_bottom: i32, dpi: u
 /// スコープを跨ぐ資源はほかに World 単位の `FrameCount`／`TickStart` があるが、これらは
 /// ハーネスが**自前の `World`** に持つので、そもそもテスト間で共有されない。
 ///
-/// # モニタ別拡大率表は持たない
-///
-/// 表そのものを新設するのは task 5.1 であり、その注入口は表の導入と同時に足す。
 pub(super) struct FrameHarness {
     /// 駆動対象の World（2 スコープぶんのゴースト窓・作業領域源・モニタ表を持つ）。
     pub(super) world: World,
@@ -672,16 +699,37 @@ impl FrameHarness {
     /// 当該 DPI 水準の合成マルチモニタを実行時のモニタ表に据える（[`s2_snapshot`] と同一
     /// レイアウト・**作業領域源とは独立に**差し替わる）。
     pub(super) fn set_monitor_table_for_dpi(&mut self, dpi: u16) {
-        let neighbor = s2_neighbor_work_area();
-        self.set_monitor_table(vec![
-            harness_monitor(
-                1,
-                s2_work_area_for_dpi(dpi),
-                S2_MONITOR_BOTTOM,
-                u32::from(dpi),
-            ),
-            harness_monitor(2, neighbor, neighbor.bottom, u32::from(dpi)),
-        ]);
+        self.set_monitor_table(s2_monitors(dpi));
+    }
+
+    /// モニタ別拡大率表（`MonitorDpiTable` 資源）を差し替える（task 5.1 で新設した源）。
+    pub(super) fn set_monitor_dpi_table(&mut self, table: MonitorDpiTable) {
+        self.world.insert_resource(table);
+    }
+
+    /// 当該 DPI 水準の 2 源（作業領域源＋モニタ別拡大率表）を**同時に**据える。
+    ///
+    /// 起動直後の状態（本番の起動シームが 2 源を同時に挿す形）を 1 行で作るための口。
+    /// 片方だけを古くした状態を組みたいときは 2 つの差替口を別々に呼ぶ。
+    pub(super) fn set_monitor_sources_for_dpi(&mut self, dpi: u16) {
+        let sources = s2_sources(dpi);
+        self.set_work_area_source(sources.snapshot);
+        self.set_monitor_dpi_table(sources.dpi_table);
+    }
+
+    /// 現在の作業領域源（差し替えが起きたかを値で確かめるための読み口）。
+    pub(super) fn work_area_source(&self) -> Option<&MonitorSnapshot> {
+        self.world.get_resource::<MonitorSnapshot>()
+    }
+
+    /// 現在のモニタ別拡大率表（同上）。
+    pub(super) fn monitor_dpi_table(&self) -> Option<&MonitorDpiTable> {
+        self.world.get_resource::<MonitorDpiTable>()
+    }
+
+    /// 作業領域源の同期を 1 回回す（本番の毎フレーム先頭の相と同一の関数）。
+    pub(super) fn run_work_area_sync(&mut self) -> Option<SnapshotChange> {
+        sync_monitor_snapshot(&mut self.world)
     }
 
     /// 全スコープの全窓（キャラ・バルーン）の拡大率を差し替える（OS 設定の拡大率変更）。
