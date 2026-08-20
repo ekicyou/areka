@@ -9,6 +9,9 @@ pub struct VisualDrawContent {
     pub command_list: ID2D1CommandList,
 }
 
+unsafe impl Send for VisualDrawContent {}
+unsafe impl Sync for VisualDrawContent {}
+
 impl VisualDrawContent {
     #[inline]
     pub fn new(local_aabb: Aabb, command_list: ID2D1CommandList) -> Self {
