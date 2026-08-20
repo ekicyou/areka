@@ -13,14 +13,14 @@
 //! # 実機専用の上限の**値**は固定しない
 //!
 //! C7 は `visualize_to_write_us`／`flush_total_us` を「非決定なので回帰テストでは固定しない」と
-//! 定める（確定値は task 4.3 が実測から差し替える）。よって本モジュールは暫定値の数字を
-//! 1 度も書かず、[`Bounds`] が持つ値を読んでその ±1 で分岐を作る。
+//! 定める。task 4.3 が値を確定させた後も同じで、根拠は確定台帳 L9 と定数の doc が持つ。よって
+//! 本モジュールは上限の数字を 1 度も書かず、[`Bounds`] が持つ値を読んでその ±1 で分岐を作る。
 
 use areka_emo_present::presenter::{
     SURFACE_REASON_INVISIBLE, SURFACE_STAGE_SKIPPED, SURFACE_STAGE_VISUALIZE,
 };
 use wintf::ecs::window::transition_diag::{
-    FIELD_T_US, FIELD_WIN_KIND, MISSING, STAGE_BEGIN, STAGE_END, STAGE_FLUSH,
+    FIELD_SCOPE, FIELD_T_US, FIELD_WIN_KIND, MISSING, STAGE_BEGIN, STAGE_END, STAGE_FLUSH,
 };
 
 use super::super::diag::{PlacementRoute, WindowKind};
@@ -30,8 +30,8 @@ use super::test_support::{
 };
 use super::transition_judge_reobservation_tests::REOBSERVATION_TRANSITION_1;
 use super::{
-    Bounds, PROVISIONAL_FLUSH_TOTAL_US_MAX, PROVISIONAL_VISUALIZE_TO_WRITE_US_MAX, Quantity,
-    TransitionVerdict, Violation, WindowKey, judge, judge_transition_log,
+    Bounds, FLUSH_TOTAL_US_MAX, Quantity, Report, TransitionVerdict, VISUALIZE_TO_WRITE_US_MAX,
+    Violation, WindowKey, judge, judge_transition_log,
 };
 
 /// 対照（上限を 1 つも破らない遷移）の判定量。
@@ -85,16 +85,13 @@ fn the_deterministic_constants_hold_the_values_c7_fixes() {
 #[test]
 fn the_signoff_bounds_arm_only_the_real_machine_quantities() {
     let bounds = Bounds::signoff();
-    // 固定するのは**結線**（暫定値の定数から引いていること）であって値ではない。task 4.3 が
-    // 定数を実測値へ差し替えても、この檻は書き換えずに緑のまま追随する。
+    // 固定するのは**結線**（当該の定数から引いていること）であって値ではない。task 4.3 が
+    // 定数を確定値へ差し替えても、この檻は書き換えずに緑のまま追随した。
     assert_eq!(
         bounds.visualize_to_write_us_max,
-        Some(PROVISIONAL_VISUALIZE_TO_WRITE_US_MAX)
+        Some(VISUALIZE_TO_WRITE_US_MAX)
     );
-    assert_eq!(
-        bounds.flush_total_us_max,
-        Some(PROVISIONAL_FLUSH_TOTAL_US_MAX)
-    );
+    assert_eq!(bounds.flush_total_us_max, Some(FLUSH_TOTAL_US_MAX));
     assert_eq!(bounds.frame_bound, None);
     assert_eq!(bounds.writes_per_window_max, None);
     assert_eq!(bounds.path_a_writes_max, None);
@@ -103,8 +100,10 @@ fn the_signoff_bounds_arm_only_the_real_machine_quantities() {
 }
 
 #[test]
-fn the_provisional_signoff_bounds_are_positive_but_their_values_are_not_fixed_here() {
-    // 値そのものは task 4.3 が実測から差し替える（C7: 非決定量は回帰テストで固定しない）。
+fn the_signoff_bounds_are_positive_but_their_values_are_not_fixed_here() {
+    // 値そのものは檻に書かない（C7: 非決定量は回帰テストで固定しない）。task 4.3 が
+    // 確定させた後も同じで、上限の根拠は確定台帳 L9 と定数の doc が持つ——ここへ値を
+    // 写すと、根拠を持たない 2 つ目の正本ができる。
     // 固定してよいのは「0 でないこと」だけ——0 の上限はあらゆる遷移を違反にし、判定を
     // 「常に赤」へ倒して合否の情報を消す。
     let bounds = Bounds::signoff();
@@ -819,6 +818,74 @@ fn the_report_carries_both_families_and_fails_the_log() {
 }
 
 #[test]
+fn the_report_prints_the_quantities_even_when_both_families_pass() {
+    // task 4.3 の裁定: 判定量は**合否によらず**刷る。違反の列挙だけだと `PASS` の系統の量が
+    // 1 つも残らず、是正の前後を「量そのもの」で並べる側（基準値 §7・task 7.3）が生ログから
+    // 手で起こす羽目になる（task 4.2 で実際に起きた）。
+    //
+    // 対照の遷移は 2 系統とも合格するので、違反の列挙は 1 行も出ない——ここで量が読めるなら
+    // 「刷られているのは違反ではなく量である」ことが確かめられる。
+    let report = judge_transition_log(&compliant_transition_lines().join("\n"));
+    assert_eq!(report.transitions[0].deterministic, Ok(()));
+    assert_eq!(report.transitions[0].signoff, Ok(()));
+    assert!(!report.failed(), "対照は合格する");
+
+    let rendered = report.to_string();
+    // 手順書 §6.3 の 9 量が、合格の遷移でも字面で読めること。
+    for needle in [
+        "frames_to_last_write=",
+        "path_a_writes=",
+        "sync_stage_writes=",
+        "balloon_same_frame=",
+        "chain_realigned=",
+        "ground_diff_max=",
+        "flush_total_us_max=",
+        "writes=",
+        "mismatch_frames=",
+        "visualize_to_write_us=",
+        "量(見送り窓):",
+    ] {
+        assert!(
+            rendered.contains(needle),
+            "{needle} が刷られない:\n{rendered}"
+        );
+    }
+    // 窓ごとの行は窓の鍵つきで出る（どの窓の量かが読めないと比較に使えない）。
+    assert!(
+        rendered.contains(&format!("{FIELD_SCOPE}=0 {FIELD_WIN_KIND}=char")),
+        "窓ごとの量に窓の鍵が無い:\n{rendered}"
+    );
+}
+
+#[test]
+fn a_missing_quantity_is_printed_as_a_sentinel_not_as_a_zero() {
+    // 「測っていない」と「測って 0 だった」は別の事実である。空欄や 0 で刷ると、是正後の
+    // 比較で「量が消えた」ことが「0 になった」と読めてしまう（本仕様で 2 度出た形）。
+    let summary = super::summarize(&[]);
+    assert!(summary.frames_to_last_write.is_none());
+    assert!(summary.ground_diff_max.is_none());
+    let report = Report {
+        records: 0,
+        unassigned_records: 0,
+        unassigned_malformed_records: 0,
+        transitions: vec![TransitionVerdict {
+            deterministic: judge(&summary, &Bounds::deterministic()),
+            signoff: judge(&summary, &Bounds::signoff()),
+            summary,
+        }],
+    };
+    let rendered = report.to_string();
+    assert!(
+        rendered.contains("frames_to_last_write=-") && rendered.contains("ground_diff_max=-"),
+        "欠けている量が番兵で刷られていない:\n{rendered}"
+    );
+    assert!(
+        !rendered.contains("frames_to_last_write=0"),
+        "欠けている量が 0 に化けている:\n{rendered}"
+    );
+}
+
+#[test]
 fn a_log_that_fails_only_the_deterministic_family_still_fails_the_report() {
     // バルーン窓を 2 回書く（合流前の形）。フレームも µs も動かないので実機専用側は合格する。
     let mut lines = compliant_transition_lines();
@@ -843,7 +910,7 @@ fn a_log_that_fails_only_the_deterministic_family_still_fails_the_report() {
 fn a_log_that_fails_only_the_signoff_family_still_fails_the_report() {
     // 可視化から書込までを上限の外へ引き伸ばす。フレームは同一のままなので決定論側は合格する
     // ——「同一 tick の内側の食い違いは実機専用の量でしか見えない」形そのものである。
-    let stretched_us = 1_000 + PROVISIONAL_VISUALIZE_TO_WRITE_US_MAX + 1;
+    let stretched_us = 1_000 + VISUALIZE_TO_WRITE_US_MAX + 1;
     let lines = replace_once(
         &compliant_transition_lines(),
         &format!("{FIELD_T_US}=1300"),

@@ -69,17 +69,32 @@ pub const GROUND_DIFF_MAX: i32 = 0;
 /// 遷移 1 回あたりの連鎖再解決の回数の上限（C7・要件 6.6「一度だけ」）。
 pub const CHAIN_REALIGN_PER_TRANSITION: u32 = 1;
 
-/// **暫定値**: 可視化から当該窓の窓書込までの経過（µs）の上限。
+/// 可視化から当該窓の窓書込までの経過（µs）の上限。**確定値**（task 4.3・確定台帳 L9）。
 ///
-/// 実機サインオフ専用（[`Bounds::signoff`]）。C7 の目安「実測 vblank 周期 1〜2 回分
-/// （8.3ms@120Hz／16.7ms@60Hz を候補）」のうち緩い側を暫定で置いてある。**確定値は
-/// task 4.3 が task 4.2 の実測から決めて台帳へ根拠つきで登記し、本定数を差し替える**。
-/// 非決定量ゆえ回帰テストはこの**値**を固定しない（C7）。
-pub const PROVISIONAL_VISUALIZE_TO_WRITE_US_MAX: u64 = 16_700;
+/// 実機サインオフ専用（[`Bounds::signoff`]）。値の根拠は**採取機に依らない**——表示に
+/// 提示される 1 フレームは、リフレッシュレートが 60Hz を下回らない限り高々 1/60 秒＝
+/// 16,667µs である。ゆえにこれを超えた食い違いは**どの機械でも**必ず 1 枚以上の提示
+/// フレームをまたぐ（要件 4.2「食い違い可視フレームを提示しない」を µs の側から**一方向に**
+/// 押さえた形——超えていれば必ずまたぐが、逆に超えていないことは 4.2 の成立を意味しない）。
+/// 逆に上限以下の隔たりは 1 フレームに収まり**得る**ので違反として立てない。
+///
+/// 採取機の実測周期（本仕様の再採取は 8.37〜8.82ms＝113〜119 フレーム/秒）を定数にしない
+/// のは、リフレッシュレートの違う機械で判定が変わるからである。60Hz を下回る表示では
+/// 1 フレームが本値より長くなり上限は厳しすぎる側へ倒れる——そのときは実測周期を添えて
+/// 台帳で再裁定する（**目視に合わせて緩めない**・手順書 §6.5）。
+///
+/// 非決定量ゆえ回帰テストはこの**値**を固定しない（C7）。固定するのは [`Bounds::signoff`]
+/// がこの定数から引いていること（結線）と、値が 0 でないことだけである。
+pub const VISUALIZE_TO_WRITE_US_MAX: u64 = 16_667;
 
-/// **暫定値**: 一括書込 1 区間の総所要（µs）の上限。根拠と差し替え時期は
-/// [`PROVISIONAL_VISUALIZE_TO_WRITE_US_MAX`] と同じ。
-pub const PROVISIONAL_FLUSH_TOTAL_US_MAX: u64 = 16_700;
+/// 一括書込 1 区間の総所要（µs）の上限。**確定値**（task 4.3・確定台帳 L9）。
+///
+/// 根拠は [`VISUALIZE_TO_WRITE_US_MAX`] と同一である。一括書込が 1 フレームを超えると、
+/// 区間の前半で書いた窓と後半で書いた窓が**別の提示フレーム**に現れる＝要件 4.5 が
+/// 「1 回の書込」で消そうとしている逐次適用が、書込の回数を下限化しても時間の側に
+/// 残る形になる。ゆえに上限は窓の枚数に比例させない（枚数ぶん緩めると、枚数を増やす
+/// だけで合格する上限になる）。
+pub const FLUSH_TOTAL_US_MAX: u64 = 16_667;
 
 /// 実機ログの受け渡しに使う環境変数（C7 の起動手順）。
 pub const TRANSITION_LOG_ENV: &str = "AREKA_TRANSITION_LOG";
@@ -145,14 +160,14 @@ impl Bounds {
         }
     }
 
-    /// 実機サインオフ専用の上限（**暫定値**・task 4.3 が実測から差し替える）。
+    /// 実機サインオフ専用の上限（**確定値**・task 4.3 が台帳 L9 で裁定した）。
     ///
     /// 決定論の項目は `None` のままにする——同一 tick の内側の食い違いはフレーム単位の量では
     /// 是正前でも 0 になるので、この系統だけが C8 の Q2／Q3 を分岐できる。
     pub const fn signoff() -> Self {
         Self {
-            visualize_to_write_us_max: Some(PROVISIONAL_VISUALIZE_TO_WRITE_US_MAX),
-            flush_total_us_max: Some(PROVISIONAL_FLUSH_TOTAL_US_MAX),
+            visualize_to_write_us_max: Some(VISUALIZE_TO_WRITE_US_MAX),
+            flush_total_us_max: Some(FLUSH_TOTAL_US_MAX),
             ..Self::nothing()
         }
     }
@@ -633,11 +648,88 @@ impl fmt::Display for Report {
                 )?,
                 None => writeln!(f, "  transition #{} (起点なし)", index + 1)?,
             }
+            write_quantities(f, &verdict.summary)?;
             write_family(f, "deterministic", &verdict.deterministic)?;
             write_family(f, "signoff", &verdict.signoff)?;
         }
         Ok(())
     }
+}
+
+/// 遷移 1 回ぶんの判定量を**合否によらず**書き出す（task 4.3 の裁定）。
+///
+/// 違反の列挙だけでは `PASS` になった系統の量が 1 つも残らない。是正の前後を並べるのは
+/// 「上限の合否」ではなく**量そのもの**なので（基準値 §7）、合否で刷り分けると比較の側が
+/// 毎回**生ログから手で起こす**羽目になる——task 4.2 が実際にそうなり、9 量 × 12 遷移を
+/// 手で起こした。ここで無条件に刷れば task 7.3 は同じ表を機械で得られる。
+///
+/// 上限は当てない（当てるのは [`judge`] の仕事）。ここは量を読める形に並べるだけである。
+fn write_quantities(f: &mut fmt::Formatter<'_>, summary: &TransitionSummary) -> fmt::Result {
+    writeln!(
+        f,
+        "    量: frames_to_last_write={} writes={} path_a_writes={} sync_stage_writes={} \
+         balloon_same_frame={}(pairs={}) holds={} chain_realigned={} ground_diff_max={} \
+         flush_total_us_max={} malformed={} frames_indeterminate={}",
+        opt_u32(summary.frames_to_last_write),
+        summary.writes,
+        summary.path_a_writes,
+        summary.sync_stage_writes,
+        summary.balloon_same_frame,
+        summary.balloon_pairs_checked,
+        summary.holds,
+        summary.chain_realigned,
+        summary
+            .ground_diff_max
+            .map_or_else(|| "-".to_owned(), |diff| diff.to_string()),
+        opt_u64(summary.flush_total_us_max),
+        summary.malformed_records,
+        summary.frames_indeterminate,
+    )?;
+    writeln!(
+        f,
+        "    量(参考): first_write_t_us={} last_write_t_us={} sum_call_us={}",
+        opt_u64(summary.wall.first_write_t_us),
+        opt_u64(summary.wall.last_write_t_us),
+        summary.wall.sum_call_us,
+    )?;
+
+    // 窓ごとの量は 3 つの表に散っているので、窓の鍵で 1 行へ束ねる（書込・食い違い
+    // フレーム・可視化から書込までの µs）。どれか 1 つしか無い窓も落とさない。
+    let mut windows: BTreeSet<&WindowKey> = BTreeSet::new();
+    windows.extend(summary.writes_per_window.keys());
+    windows.extend(summary.mismatch_frames_per_window.keys());
+    windows.extend(summary.visualize_to_write_us.keys());
+    for window in windows {
+        writeln!(
+            f,
+            "    量(窓): {window} writes={} mismatch_frames={} visualize_to_write_us={}",
+            opt_u32(summary.writes_per_window.get(window).copied()),
+            opt_u32(summary.mismatch_frames_per_window.get(window).copied()),
+            opt_u64(summary.visualize_to_write_us.get(window).copied()),
+        )?;
+    }
+
+    // 見送り窓は「量が無い」ことの理由なので、0 件でも行を出す（黙って消えると
+    // 「測っていない」と「測って 0 だった」が区別できない）。
+    write!(f, "    量(見送り窓):")?;
+    if summary.skipped_windows.is_empty() {
+        writeln!(f, " なし")
+    } else {
+        for window in &summary.skipped_windows {
+            write!(f, " [{window}]")?;
+        }
+        writeln!(f)
+    }
+}
+
+/// 欠けている量は番兵で刷る（空欄にすると「0 だった」と読めてしまう）。
+fn opt_u32(value: Option<u32>) -> String {
+    value.map_or_else(|| "-".to_owned(), |value| value.to_string())
+}
+
+/// [`opt_u32`] の 64bit 版。
+fn opt_u64(value: Option<u64>) -> String {
+    value.map_or_else(|| "-".to_owned(), |value| value.to_string())
 }
 
 /// 1 系統ぶんの合否を書き出す。

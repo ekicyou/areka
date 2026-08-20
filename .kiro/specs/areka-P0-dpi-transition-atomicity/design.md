@@ -199,7 +199,7 @@ crates/areka/src/emo2_boot/
 ├── frame_chain_realign_tests.rs       # NEW
 crates/areka/src/main.rs               # MOD: 起動時に MonitorDpiTable も挿入・:569 注記の撤回
 .kiro/specs/areka-P0-dpi-transition-atomicity/
-├── mechanism-ledger.md                # NEW: 確定台帳（2 証跡クラス）
+├── mechanism-ledger.md                # NEW(4.3): 確定台帳（2 証跡クラス・L1〜L9）。L7（窓書込 1 回の内訳）と L8（積み上げ→一括書込）を名指しし、分解できない部分は「未特定」として残す。実機専用の上限の確定値（16,667µs）と採取機に依らない根拠、判定器を触った裁定、再判定の突合もここ
 ├── signoff-procedure.md               # NEW: サインオフ手順書
 ├── baseline-2026-08-20.md             # NEW(4.2): 是正前の基準値（フレーム番号つき時系列・§6.3 の 9 量・要件 1.3/1.4/1.6 と 9.1 の確認・task 7.3 への比較の単位）。生ログ・Report 全文・meta.txt はリポジトリ外（手順書 §7）で、本書へは引用と数字だけを転記する
 ```
@@ -210,6 +210,7 @@ crates/areka/src/main.rs               # MOD: 起動時に MonitorDpiTable も�
 |---|---|---|
 | `crates/wintf/src/ecs/world/mod.rs` | `try_tick_world` の `FrameCount` 増分直後（:503-505）で Resource `TickStart` を更新し `transition_diag::begin_tick(frame, start)`（ミラーへ写す）。World 構築時（:76-77 の `FrameTime` 挿入と同所）に `TickStart` を初期挿入 | tick 構造は変えない（13 スケジュール順不変） |
 | `crates/wintf/src/ecs/window/mod.rs` | `pub mod transition_diag;` 再輸出 | — |
+| `crates/wintf/src/runtime/tick_bridge.rs` | MOD(4.3): doc 3 箇所＋起動時 `debug!` の文字列 1 箇所（挙動不変・この文字列を読む消費者はコード上に無い）。`AsyncTickTask`（:136）・`spawn`（:160）・`run_async_tick`（:212）と起動時の `debug!`（:213）が「60Hz tick ループ」と書いていたのを **vblank 駆動**へ是正し、実効のフレーム周期は画面の更新周期であること・固定 60Hz は DWM 失敗時のフォールバック（`vsync_loop` の `Err` 腕 :127-131）だけであることを明記した。**挙動は 1 つも変えていない**（判定の上限を「1 コマ」で置くときに 16.7ms を無条件の値と読む誤りが実際に起きたため・確定台帳 §4） | tick 構造は変えない |
 | `crates/wintf/src/ecs/window/command.rs` | `tag` フィールド＋`with_tag`／`enqueue` の合流／`flush` の begin・write・end レコード／`drain_window_pos_commands` | `new()` の 7 引数は不変。Z 専用指令は合流対象外 |
 | `crates/wintf/src/ecs/window/zorder_pair_maintain.rs` | `pair_fix_command`（:187-207）にタグ `origin="zorder-pair"` | zorder の判定・順序不変 |
 | `crates/wintf/src/ecs/graphics/systems/window_pos.rs` | enqueue（:89-98）にタグ `origin="window-pos"` | — |
@@ -260,8 +261,8 @@ crates/areka/src/main.rs               # MOD: 起動時に MonitorDpiTable も�
 | `crates/areka/src/placement/transition_judge_frame_tests.rs` | NEW: フレーム刻印の扱い（欠落と読めない値の区別・読めない系列の判定不能・一様 0 の判定不能・2 つの量の周回差分・実機専用量の同一フレーム条件と最大） | 3.1 |
 | `crates/areka/src/placement/transition_judge_test_support.rs` | NEW: 種別ごとの観測行組立（フィールド名は発行側の `pub const` を参照）＋テーマ間で共有する助走 | 3.1 |
 | `crates/areka/src/placement/transition_judge_reobservation_tests.rs` | NEW: 再観測 §3.1 を新語彙へ整形した埋め込みログの逐語再現（書込 6・経路 A 0・接地点差 −48px・フレーム量は是正前でも 0）。MOD(3.2): 埋め込みログを `pub(super)` にして上限判定・負例の入力として共有。**あわせて §3.2 の 6 遷移すべてを再構成し、レポートが「欠陥」と記述したものだけが違反として出ることを固定する**（判定の規則をテストの作った形に合わせて書き、レポートが「欠陥ではない」と明記した遷移を不合格にする事故が 2 度起きたため）。`t_us` の並びは忠実でないので実機専用側の判定には流用しない | 3.1, 3.2 |
-| `crates/areka/src/placement/transition_judge_verdict.rs` | NEW: 上限（`Bounds::deterministic`／`Bounds::signoff`）・違反（`Violation`／`Quantity`）・`judge`／`judge_transition_log`／`Report`。実機専用の上限は**暫定値**で置き task 4.3 が実測から差し替える。判定量の集計（`transition_judge.rs`）と分けるのは、量が語彙に追随し上限が要件に追随する＝変更の理由が異なるため（1,000 行の目安も満たす）。MOD(4.2): `Violation::AllWrittenWindowsExcluded` を新設し、書込のあった窓が 1 つ残らず除外された遷移を「合格」ではなく**未測定**として立てる（⑼ の被覆検査が `judged_windows` を回る形ゆえ、全窓除外では 1 度も回らず恒真になっていた） | 3.2, 4.2 |
-| `crates/areka/src/placement/transition_judge_verdict_tests.rs` | NEW: 2 系統の分離（片方の量がもう片方の合否を動かさない）・上限の各分岐・整合待ちの許容・違反が列で返ること・再観測ログが窓ごとの書込回数と接地点差で違反すること。実機専用の上限は**値を固定せず**結線と ±1 の分岐だけを固定する | 3.2 |
+| `crates/areka/src/placement/transition_judge_verdict.rs` | NEW: 上限（`Bounds::deterministic`／`Bounds::signoff`）・違反（`Violation`／`Quantity`）・`judge`／`judge_transition_log`／`Report`。実機専用の上限は**暫定値**で置き task 4.3 が実測から差し替える。判定量の集計（`transition_judge.rs`）と分けるのは、量が語彙に追随し上限が要件に追随する＝変更の理由が異なるため（1,000 行の目安も満たす）。MOD(4.2): `Violation::AllWrittenWindowsExcluded` を新設し、書込のあった窓が 1 つ残らず除外された遷移を「合格」ではなく**未測定**として立てる（⑼ の被覆検査が `judged_windows` を回る形ゆえ、全窓除外では 1 度も回らず恒真になっていた）。**MOD(4.3)**: ⑴ 実機専用の上限を確定値へ差し替え（`PROVISIONAL_*_US_MAX = 16_700` → `VISUALIZE_TO_WRITE_US_MAX`／`FLUSH_TOTAL_US_MAX` = `16_667`）。根拠は採取機に依らない形へ替えた＝「提示される 1 フレームは 60Hz を下回らない限り高々 1/60 秒」（全文は `mechanism-ledger.md` §4・L9）。名から `PROVISIONAL_` を落としたのは確定後も「暫定」と読ませないため。⑵ `Report` の `Display` が**合否によらず判定量を刷る**ようにした（`量:`／`量(参考):`／`量(窓):`／`量(見送り窓):`・欠けた量は番兵 `-`）——`PASS` の系統の量が消えると是正前後の比較が毎回生ログからの手起こしになる（task 4.2 で実際に起きた） | 3.2, 4.2, 4.3 |
+| `crates/areka/src/placement/transition_judge_verdict_tests.rs` | NEW: 2 系統の分離（片方の量がもう片方の合否を動かさない）・上限の各分岐・整合待ちの許容・違反が列で返ること・再観測ログが窓ごとの書込回数と接地点差で違反すること。実機専用の上限は**値を固定せず**結線と ±1 の分岐だけを固定する（この形ゆえ task 4.3 の確定値への差し替えは檻を 1 行も書き換えずに緑のまま通った）。MOD(4.3): 判定量が**合否によらず**刷られることの対テスト 2 本——⑴ 2 系統とも合格する対照で 9 量が字面で読めること（違反が 1 行も出ない入力なので「刷られているのは違反ではなく量」だと確かめられる）、⑵ 欠けている量が番兵 `-` で刷られ `0` に化けないこと | 3.2, 4.3 |
 | `crates/areka/src/placement/transition_judge_negative_tests.rs` | NEW: 判定語の破壊（起点語・種別語）・必須フィールドの欠落・**本体側の数値だけが壊れた行**（`diff`／`total_us`／`target_id`＝`malformed_records` は 0 のまま量が消える）・書込 0 件・周回境界（`u32::MAX`→`0` で差 1）・一様 0 の判定不能 | 3.2 |
 | `crates/areka/src/placement/transition_signoff_tests.rs` | NEW: `#[ignore]` の実機ログ判定ランナー（`AREKA_TRANSITION_LOG`）。判定は同一の純関数を回すだけで自前の判定を 1 行も持たない。環境変数未設定・パス不達・観測行 0 行はいずれも失敗（既定で走る 4 本がこの失敗経路を固定する） | 3.2 |
 | `crates/areka/src/placement/transition_signoff_procedure_tests.rs` | NEW: サインオフ手順書（C10 `signoff-procedure.md`）の判定語が発行側・判定器の単一定義元と一致することの檻。⑴ 手順書に載る観測行の例が発行側の語彙だけで書かれていること（種別・段階・per-kind の必須フィールド）、⑵ レコード種別 10 種が**すべて**手順書に現れること（片側だけだと「例を書かなければ緑」の恒真になる）、⑶ ランナーの入口の語（環境変数名・観測 target・行頭タグ・Report の 2 系統名・ランナーのテスト名）が**トークン境界つき**で載っていること、⑷ Report の出力例に並ぶ違反行が**その上限系統で実際に出得る**ものであること——⑷ の分類は手書きせず、最大違反の判定量へ `Bounds::deterministic()`／`Bounds::signoff()` を当てて**判定器が実際に積んだ違反**から起こす（`frame_bound` の門の内外が変われば分類も自動で追随する）。検査述語そのものの較正（壊した行が落ちる／後ろに字が付いた誤記が通らない／帰属を入れ替えた例が両方向とも捕まる／門の外の共有違反は両系統で許される）を同ファイルに置く | 4.1 |
@@ -721,6 +722,7 @@ pub fn judge_transition_log(log: &str) -> Report;   // 上 4 つの合成
 - 様式: `ID | 項目 | 証跡クラス（実機／静的構造） | 根拠（ログ行引用 or file:line） | 状態（確定／未特定）| 是正の有無`。
 - 初期登記（本設計時点）: L1 逐次 flush（実機・再観測 §3.1）／L2 経路 A 書込 0（実機 24/24）／L3 作業領域非追随（静的 `main.rs:573-574`＋実機 −48px）／L4 連鎖非再解決（静的 `drain_resnap.rs:299-301`＋実機 359px）／L5 同一 hwnd 2 指令（静的 `command.rs:164-166`＋実機）／L6 (a) 先行時の 2 段書込経路（静的: `zorder_pair_maintain.rs:475` の Z 書込 → 当該窓 `WM_DPICHANGED` が SWP 内で受理（実機 24/24）→ `window_pos.rs:352-363` → `dpi.rs:242-252` → 旧 snapshot 読み `window_move.rs:288`）／L7 `SetWindowPos` 1 回の内訳＝**未特定**／L8 enqueue→flush の 20〜80ms＝**未特定**。
 - 3.5: 合成コスト帰着なら引受先は `.kiro/specs/` 直下に brief を持つ仕様（`areka-P0-draw-load-parity`）へ。
+- **上の初期登記の file:line は本設計時点の値であり、群 1〜3 の観測点設置で 4 件がずれた**（L5 `command.rs:164-166`→`:240-242`／L6 `zorder_pair_maintain.rs:475`→`:483`・クレート名 `crates/wintf/src/ecs/window/` が落ちていた／L6 `window_pos.rs:352-363`→`:387-389`／L6 `dpi.rs:242-252`→`crates/areka/src/emo2_boot/frame/dpi.rs:232`。L3・L4 は記載のままで正しい）。**task 4.3 以降は `mechanism-ledger.md` が file:line の正本**であり、本節は初期登記の記録として読む。
 
 #### C10 サインオフ手順書 `signoff-procedure.md`
 

@@ -776,9 +776,9 @@ pub fn parse_transition_log(log: &str) -> Vec<TransitionRecord> {
 mod verdict;
 
 pub use verdict::{
-    Bounds, CHAIN_REALIGN_PER_TRANSITION, GROUND_DIFF_MAX, HOLD_FRAME_ALLOWANCE, PATH_A_WRITES_MAX,
-    PROVISIONAL_FLUSH_TOTAL_US_MAX, PROVISIONAL_VISUALIZE_TO_WRITE_US_MAX, Quantity, Report,
-    TRANSITION_FRAME_BOUND, TRANSITION_LOG_ENV, TransitionVerdict, Violation,
+    Bounds, CHAIN_REALIGN_PER_TRANSITION, FLUSH_TOTAL_US_MAX, GROUND_DIFF_MAX,
+    HOLD_FRAME_ALLOWANCE, PATH_A_WRITES_MAX, Quantity, Report, TRANSITION_FRAME_BOUND,
+    TRANSITION_LOG_ENV, TransitionVerdict, VISUALIZE_TO_WRITE_US_MAX, Violation,
     WRITES_PER_WINDOW_MAX, judge, judge_transition_log,
 };
 

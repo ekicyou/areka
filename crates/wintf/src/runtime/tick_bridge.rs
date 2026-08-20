@@ -133,11 +133,17 @@ fn vsync_loop(event: Arc<event_listener::Event>, stop: Arc<AtomicBool>) {
     }
 }
 
-/// 60Hz UI スレッド async tick タスク（要件 4.2 / 4.3 / 4.5）。
+/// vblank 駆動の UI スレッド async tick タスク（要件 4.2 / 4.3 / 4.5）。
 ///
 /// `VsyncEventBridge` が共有する `event_listener::Event` の起床通知を待ち、起床ごとに
 /// 1 フレーム分の ECS tick（`try_tick_world` の 13 本スケジュール）を実行して再待機する
 /// ループを `spawn_local` で UI スレッドに投入する。複数 tick タスクは不要（単一 World）。
+///
+/// **固定周期ではない。** 起床は `vsync_loop` の `DwmFlush()`（次 vblank まで待つ）が出す
+/// ので、実効のフレーム周期は**画面の更新周期**である（120Hz の実機なら約 8.3ms）。
+/// 固定 60Hz なのは DWM が使えないときのフォールバック（`vsync_loop` の `Err` 腕）だけで
+/// ある。この注記は areka-P0-dpi-transition-atomicity task 4.3 が付けた——判定の上限を
+/// 「1 コマ」で置くときに 16.7ms を無条件の値と読む誤りが実際に起きたため。
 ///
 /// # 再入の二重防御（要件 4.3）
 /// 本タスクの 1 フレーム実行は [`tick_one_frame`] を通し、`IS_TICK_FLUSH_IN_PROGRESS`
@@ -151,7 +157,7 @@ fn vsync_loop(event: Arc<event_listener::Event>, stop: Arc<AtomicBool>) {
 pub(crate) struct AsyncTickTask;
 
 impl AsyncTickTask {
-    /// 60Hz tick ループを UI スレッドの `spawn_local` で投入する。
+    /// vblank 駆動の tick ループを UI スレッドの `spawn_local` で投入する。
     ///
     /// - `event`: `VsyncEventBridge::event()` から得た共有 vblank 通知（`Arc<Event>`）。
     /// - `world`: 共有 World への `Weak`（強参照を持たない・設計 State Management）。
@@ -203,14 +209,14 @@ pub(crate) fn tick_one_frame(world: &Rc<RefCell<EcsWorld>>) -> bool {
     // _guard drop で IS_TICK_FLUSH_IN_PROGRESS = false に戻る
 }
 
-/// 60Hz tick ループ本体（`spawn_local` で UI スレッドに駆動される async タスク）。
+/// vblank 駆動の tick ループ本体（`spawn_local` で UI スレッドに駆動される async タスク）。
 ///
 /// notify 取りこぼし防止規律（設計）: await の **前** に `listener = event.listen()` を
 /// arm する。これにより `tick_one_frame` 実行中に届いた notify も次の `listener.await`
 /// で捕捉でき、1 フレームを取りこぼさない。World の `Weak` は毎フレーム `upgrade()` し、
 /// `None`（shutdown で strong 所有者が drop 済み）なら安全にループを終了する。
 async fn run_async_tick(event: Arc<Event>, world: Weak<RefCell<EcsWorld>>) {
-    debug!("AsyncTickTask started (60Hz UI-thread tick loop)");
+    debug!("AsyncTickTask started (vblank-driven UI-thread tick loop)");
     loop {
         // 先に listen() を arm（処理中に届く notify を落とさない）。
         let listener = event.listen();
