@@ -284,6 +284,12 @@ mod chain_realign_arm_tests;
 #[path = "frame_transition_atomicity_tests.rs"]
 mod transition_atomicity_tests;
 
+// 整合待ちと作業領域追随の判断分岐（task 6.2）の統合テスト。同じくハーネスに乗るので
+// **x64 のみ**で接続する（常時テストに x86 を用いない・要件 7.5）。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_transition_branch_tests.rs"]
+mod transition_branch_tests;
+
 #[cfg(test)]
 #[path = "frame_attach_tests.rs"]
 mod attach_tests;

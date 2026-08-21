@@ -193,7 +193,7 @@
   - _Requirements: 4.1, 4.3, 4.4, 4.5, 7.2_
   - _Depends: 5.3, 5.6_
 
-- [ ] 6.2 整合待ちと作業領域追随の分岐を検証する
+- [x] 6.2 整合待ちと作業領域追随の分岐を検証する
   - 拡大率通知が表更新より先に届く順序で、待ち→解除→書込 1 回になり、旧下端の中間矩形が出ないことを検証する
   - 待ちのあいだに表情差替が来ても当該窓への書込が 0 のままであることを検証する
   - 上限フレーム超過で警告の上で進むこと、別モニタへ移した窓は待たずに通ることを検証する
@@ -217,6 +217,17 @@
   - 観察可能な完了条件: ワークスペース全体が緑で、触ったファイルが設計の一覧と過不足なく一致し、4 仕様の brief に申し送りが残る
   - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7_
   - _Depends: 6.3_
+
+- [ ] 6.5 整合ゲートの守備範囲に 4 つ目の窓書込口があることを裁定する
+  - **task 6.2 のレビューで新規に確定した欠陥**（本タスクは要件・設計フェーズの計画には無く、群 6 の検証中に見つかったものを引受先として起票した）
+  - 作業領域変化を契機とする再スナップ（`frame/work_area_sync.rs` の `resnap_for_work_area_change`）が整合ゲートの見送り 3 点（`frame/dpi.rs` の `apply_dpi_phase_gate`／`frame/scale_text.rs` の `defers_window_write(.., Reconcile)`／`frame/drain_resnap.rs` の同 `Resnap`）に入っておらず、待ち札の付いた窓へ届き得る 4 つ目の窓書込口になっている
+  - 到達条件は ⑴ 窓中心が属するモニタと OS が拡大率を決めるモニタが食い違う配置（設計 Residual Risks が「上限 30 フレームまで待つ」構成として既に記録している）で札が残ること ⑵ その 30 フレーム内に作業領域が動いて同期段が `Some` を返すこと。書込の route は `WorkAreaResnap` ゆえ随伴バルーンの例外（`BalloonFollow`）に当たらず、`follow/window_move.rs` の不変条件監視が `warn!` の直後に `debug_assert!(false, ..)` を撃つ＝**debug ビルドでは panic する**
+  - 4 点目を足す（見送り対象に含める）か、足さない裁定を根拠つきで登記するかを選び、選んだ側の対テストを付ける
+  - 足さない裁定を採る場合は、`follow/window_move.rs` の監視が `WorkAreaResnap` を偽の警報として鳴らさない形へ同時に是正する（現状のコメントは「3 点以外の書込口が増えればここで鳴る」と予告しており、鳴ったままにすると debug ビルドが落ちる）
+  - 観察可能な完了条件: 上記 2 条件を満たす配置を決定論テストで組み、採った側の挙動が実行で示され、`debug_assert!` が撃たれないこと
+  - _Requirements: 5.8_
+  - _Boundary: placement/dpi_sync.rs, emo2_boot/frame/work_area_sync.rs, placement/follow/window_move.rs（監視のみ）_
+  - _Depends: 6.2_
 
 - [ ] 7. 段階裁定と実機サインオフ
 - [ ] 7.1 台帳の数量で残る候補の採否を確定する
@@ -317,3 +328,7 @@
 - **経路 A の書込はキューを通らない——数えるのは観測行の側** — task 6.1 で差し戻し 1 回。`origin=dpi-suggested` を `SetWindowPosCommand.tag` へ載せる経路は**本番に 1 つも無い**（タグを付けるのは `follow/window_move.rs` の `write_tag`＝`PlacementRoute` 12 語／`graphics/systems/window_pos.rs` の `ORIGIN_WINDOW_POS`／`zorder_pair_maintain.rs` の `ORIGIN_ZORDER_PAIR` の 3 箇所だけ）。経路 A の実体は `crates/wintf/src/ecs/window_proc/window_pos.rs:464` で `guarded_set_window_pos` を**直呼び**し、`origin=dpi-suggested` は観測行（`write_line`・同 :468-489）にしか現れない。**キュー上で `tag.origin` を数える形は如何なる退行でも赤にならない。** 正しい形＝`parse_transition_line` で捕捉行を解析し `kind=write` で絞って `origin=dpi-suggested` と `stage=sync` を**別々に**数える（判定器 `transition_judge.rs:609/612` と同一の述語）。**陽性の対は本番の `write_line` を通した行で作る**（手組み文字列だと発行側の書式変更で対照だけが生き残り、零件の空虚さを隠す）。
 - **零件の主張は「なぜ 0 なのか」の理由まで正しく書く** — task 6.1。当初 doc は経路 A の 0 を「本ハーネスは window_proc を回さないから」と説明したが、これは真だが**作用している理由ではない**（window_proc を回しても経路 A は指令を積まないので、キュー側の数え方では永久に観測できない）。読み手は「ハーネスを 1 歩拡張すれば生きる主張」と誤読する。**決定論側が買っている射程と、実機側の持ち分（確定台帳 L2・実機サインオフ）の境界を明記すること。**
 - **接地点 Y は経路 (b) で二重に守られている** — task 6.1 のレビューで確定（許容）。拡大率の相の再射影と作業領域再スナップの両方が接地点 Y を新下端へ載せるため、**片方だけ潰しても `ground diff=0` は他方が回復させる**。単一是正の退行は接地点 **X** 側の主張が先に拾う。作業領域再スナップ単独の対テストは `frame_work_area_resnap_tests.rs`（task 5.2）と task 6.2 の持ち分。
+- **【解消済】task 6.1・6.2 への申し送り「到達不能な呼出は素通りする」** — task 6.2 が (a) を採って閉じた。`frame_transition_branch_tests.rs` の `the_production_frame_system_reaches_all_three_placement_call_sites` が `emo2_frame_system` を**そのまま 2 フレーム回し**、3 呼出（同期段・拡大率の相・作業領域再スナップ）の**到達可能性**を実行の結果（資源の中身・書込の経路語）で問う。`if false` で到達不能にする 3 通りのミューテーションで**本番入口の 1 本だけが赤・他 19 本は緑**になることをレビュアーが独立に再現済み。**フレームを A／B に分ける必要がある**——同一フレームでは合流でべき等 skip となり経路語の帰属が読めない（本番コメント `frame.rs:182-183`・実装・兄弟テスト `frame_work_area_resnap_tests.rs:396` の 3 点で裏取り済み）。
+- **【task 6.5 へ起票済み】整合ゲートに 4 つ目の窓書込口がある** — task 6.2 のレビューで新規確定。`resnap_for_work_area_change` が見送り 3 点に入っておらず、待ち札の付いた窓へ届くと `follow/window_move.rs` の `debug_assert!(false, ..)` を撃つ（debug ビルドで panic）。**task 5.2／5.4 着地時点から在る欠陥**で 6.2 が作ったものではなく、今日どのテストも赤にしていない。引受先の検証: `placement/dpi_sync.rs`・`frame/work_area_sync.rs` を担当ファイル集合に持つ**他仕様は存在しない**（両ファイルとも本 spec が新設）。7.1 は「候補表の内側でのみ」・7.2 は「7.1 で採用した 1 案のみ」ゆえ受けられず、6.3／6.4 は本番コードを触るバレットを持たない。ゆえに本 spec 内の新規タスク 6.5 が唯一の受け皿。
+- **【task 7.3 への申し送り】警告文を grep 語へ足す** — 上記 6.5 の欠陥の**検出側**。要件 8.1 が「判定に用いる grep 語」の記録を義務づけているので、`整合待ちの札がある窓へ窓書込が到達した` を `signoff-procedure.md` の grep 語へ加えること（担当ファイル集合＝`signoff-procedure.md`／`mechanism-ledger.md` で受けられることを確認済み）。
+- **本番入口を通す檻は他の檻を汚染しない** — task 6.2 のレビューで確定。`emo2_frame_system` を実駆動しても ⑴ `SELF_INITIATED_DEPTH` は `guarded_set_window_pos`（実 flush 経路）でしか動かず D11 によりテストは通らない、⑵ `transition_diag` のスレッド局所写しは `begin_tick` でしか汚れず `emo2_frame_system` はそれを呼ばない（呼び手は `frame_test_support.rs:718` と `wintf/ecs/world/mod.rs:534` のみ）、⑶ `FrameHarness::new()` が毎回 `reset_for_test()` する。加えて檻の先頭と末尾で `drain_window_pos_commands()` を空読みする（要件 7.7）。
