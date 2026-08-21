@@ -184,7 +184,7 @@
   - _Requirements: 6.5_
   - _Boundary: 追跡仕様の brief_
 
-- [ ] 6. 是正の検証
+- [x] 6. 是正の検証
 - [x] 6.1 遷移の原子性と随伴を多フレーム駆動で検証する
   - 表更新が先の順序で、全窓の書込が同一フレーム・キャラ窓 1 回・バルーン窓 1 回・同期書込 0 になることを検証する
   - 随伴バルーンがキャラ窓と同一フレームで移ること、遷移中の接地点が規約値から外れないことを検証する
@@ -229,7 +229,7 @@
   - _Boundary: placement/dpi_sync.rs, emo2_boot/frame/work_area_sync.rs, placement/follow/window_move.rs（監視のみ）_
   - _Depends: 6.2_
 
-- [ ] 6.6 合流後も随伴の同一フレーム性を測れるようにする（判定器の是正）
+- [x] 6.6 合流後も随伴の同一フレーム性を測れるようにする（判定器の是正）
   - **task 7.1 の実機再採取（2026-08-21・7 遷移）で新規に確定した判定器の欠陥**。要件・設計フェーズの計画には無い
   - 判定器の裁定⑴「随伴の同一フレーム性はバルーンの `origin=BalloonFollow` の**書込**で測る」が、task 5.3 の合流の着地によって空振りするようになった——随伴の位置書込は同一窓の `KeepPositionResize` へ畳まれ、`kind=write` に `origin=BalloonFollow` の行が残らない
   - 実機ログの証跡: `frame=14884` の `kind=enqueue` に `scope=0 balloon origin=BalloonFollow merged_into_seq=1`／`scope=1 balloon origin=BalloonFollow merged_into_seq=0` があり、対応する `kind=write` は `origin=KeepPositionResize` 1 本だけ。7 遷移中 5 遷移で `pairs=0` になり、要件 4.3 の合否が**未測定**として落ちた（12 件）
