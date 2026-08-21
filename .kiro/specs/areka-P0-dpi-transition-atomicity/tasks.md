@@ -184,7 +184,7 @@
   - _Requirements: 6.5_
   - _Boundary: 追跡仕様の brief_
 
-- [ ] 6. 是正の検証
+- [x] 6. 是正の検証
 - [x] 6.1 遷移の原子性と随伴を多フレーム駆動で検証する
   - 表更新が先の順序で、全窓の書込が同一フレーム・キャラ窓 1 回・バルーン窓 1 回・同期書込 0 になることを検証する
   - 随伴バルーンがキャラ窓と同一フレームで移ること、遷移中の接地点が規約値から外れないことを検証する
@@ -209,7 +209,7 @@
   - _Requirements: 7.3_
   - _Depends: 6.1, 6.2_
 
-- [ ] 6.4 既存の規約を壊していないことを確認する
+- [x] 6.4 既存の規約を壊していないことを確認する
   - 位置権威・原点・追従基準・丸め権威・Z 指令の適用・定常のアロケーション 0 と計時行・表示位置補正と起動時確定・ドラッグ追従・別モニタへ移した窓の寸法追従の各既存テストを通す
   - 触ったファイルの集合が設計の一覧と一致することを差分で確かめる
   - 32bit ホスト成果物を先に用意してからワークスペース全体のテストを走らせる
@@ -339,3 +339,8 @@
 - **整合ゲートの見送りは 4 点になった** — task 6.5 で着地。⑴ 拡大率の相（`frame/dpi.rs` の `apply_dpi_phase_gate`）⑵ 報告寸の突合（`frame/scale_text.rs`）⑶ **実表示寸の**再スナップ（`frame/drain_resnap.rs` の `resnap_shell_targets`）⑷ **作業領域変化を契機とする**再スナップ（`frame/work_area_sync.rs` の `resnap_for_work_area_change`）。観測点語は `site=work-area-resnap`（3 つ目の `site=resnap` とは別語＝どちらの「再スナップ」が見送ったかがログで判る）。**穴が入り込んだ機序＝日本語の「再スナップ」が別の 2 関数を指していた**——C5 Risks は `resnap_shell_targets` のつもりで書かれており、task 5.2 が新設した `resnap_for_work_area_change` を覆っていなかった。**列挙で守る規約は、語が一意でないと静かに穴を持つ。**
 - **見送った窓は解除フレームで拾い直される（作業領域変化を捨てない）** — task 6.5 のレビューで鎖 3 リンクを検証済み。⑴ `frame/dpi.rs` の対象は `Changed<DPI>` と `With<DpiSyncHold>` の**和集合**＝解除フレームには必ず入る ⑵ 同期段（`frame.rs`）は札に関係なく**毎フレーム源を差し替える** ⑶ 解除後の `reproject_char_window_at_current_size` → `window_move.rs` の `world.get_resource::<MonitorSnapshot>()` は**呼出時読み**なので差し替え済みの源を読む。**見送りは変化を捨てるのではなく解除フレームの 1 本へ合流させる＝要件 5.8 の一度書きそのもの**。待ちは有界（30 フレーム）ゆえ取り残しの上限も有界。
 - **`#[should_panic]` の対は「同じハーネス・同じ整地・同じ札」で分けること** — task 6.5。`should_panic` は別の理由で panic しても緑になるので、⑴ `expected` の文字列を十分に特異にする（`"DpiSyncHold"`）⑵ 鳴る側と鳴らない側を同一条件から 1 点だけ変えて作る ⑶ `debug_assert!` の条件を反転する変異で**鳴る側だけ**が赤になることを実行で確かめる。
+- **台帳の主張の陳腐化は 4 度目——集合一致は原理的に捕まえない** — task 6.4 で約 20 箇所の file:line が古びていた（`world/mod.rs` の `FrameCount` 増分 :503-505→:517-524／`window_proc/window_pos.rs` の 4 箇所／`show.rs` の 4 箇所／`refresh.rs` の 2 箇所／`frame.rs` の 9 呼出行／`transition_diag.rs`(areka) の 2 発行点／`main.rs`・`monitor_systems.rs`・`lifecycle.rs`・`zorder_pair_maintain.rs`・`graphics/systems/window_pos.rs`・`spawn.rs`・`work_area.rs`・`transition_judge.rs`）。**数値の主張も 1 件古びていた**（`window_move.rs` 行の「随伴の追従は 3 つの見送り点を通らない」＝task 6.5 で 4 点になったのに本文だけ 3 点のまま・同じ行の末尾の MOD(6.5) は「4 点へ是正」と書いていた）。**`comm` は集合しか見ないので、上流ファイルを触ったら既載行の主張を file:line で読み直す運用を守るしかない。**
+- **`### Existing Architecture Analysis` は現在値へ書き換えない** — task 6.4 の裁定（レビュアーも妥当と判定）。同表の行 6・行 8 は**本仕様が意図して変えた当の挙動**なので、現在の file:line へ更新すると「変える前の姿」という表の意味そのものが壊れる。**設計時点（実装前）の値であることを注記で明示**し、現在の正本は突合台帳と `mechanism-ledger.md` である旨を書く形にした。
+- **【規律違反の記録】task 6.4 の実装者が `git checkout -- <brief.md>` を 1 回使った** — 禁止事項の違反。Perl のエンコーディング取り違え（decode 済み文字列と生バイトの連結）で既存本文が二重符号化されたための復元。**損害はゼロと独立検証で確定**（純追加 `10 insertions / 0 deletions`・消失行 0・4 ファイルとも VALID_UTF8／U+FFFD 0／二重符号化署名 0・`crates/` 非接触）。ただし**「復元対象が直前まで無変更だったことが幸いした、という以上の保証はない」**（レビュアーの但し書き）。Markdown への挿入も全経路 `:raw`／`newline=''` で行い、`count==1` を assert してから適用すること。
+- **Z 維持系（`ghost-window-zorder`）は completed ゆえ申し送りを消化できない** — task 6.4 で確定。生存 spec 9 本を `zorder_pair_maintain`／`SetWindowPosCommand`／`flush_window_pos_commands` で grep してヒット 0＝**当該ファイルを担当ファイル集合に持つ生存 spec は存在しない**。ゆえに ⑴ コード側（適用順が決まる一括 flush）は `areka-P0-draw-load-parity` へ（同 brief の Scope「In」が `wintf` の `runtime`／`ecs::world` を含み、flush 呼出は `tick_bridge.rs:206`）、⑵ 見た目側（バルーンが埋もれない）は `areka-P0-emo2-conformance-e2e` へ（同 brief 追記(58) が既に上流列に zorder を持つ）と**分けて登記**した。両追記は相互参照している。**これは「最良の受け皿」であって「所有者」ではない**——zorder 用の追跡 spec を起こす余地は残る（開発者の裁定事項）。
+- **要件 10.6 の「比 1.000」は決定論では測っていない** — task 6.4 で明示（レビュアーが誠実と判定）。この数値は `dpi-window-vanish` セッション①の実機測定値であり、決定論が固定しているのは ⑴ ドラッグ追従の挙動 ⑵ 観測が既定運転で 1 バイトも費用を払わないこと（前置ガードの本文走査）の 2 つ。**比そのものの再確認は群 7 の実機サインオフの持ち分**で、6.4 の緑はそれを代替しない。

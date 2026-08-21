@@ -35,6 +35,17 @@
 > - **⑷ 根拠**: 再説明しない。spec **`areka-P0-scale-exact-rational`** の裁定登記（emo-text `region.rs` の `ScaleContract::physical_extent` doc）を参照。前提（差は 0 か 1・−1 は起きない・件数 81/81/0×21）は決定論テスト `crates/areka-emo-text/tests/physical_extent_arbitration_test.rs` が固定している。
 > - 判定式の最終形（どの項目でどこまで許容を書くか）は**本 spec が決める**——上記は前提の申し送りであって、適合 e2e の要件裁定ではない。
 
+> **📌 2026-08-21 追記(73)（`areka-P0-dpi-transition-atomicity` からの申し送り・一周走行で使える遷移観測チャネルが増え、上流 `ghost-window-zorder` の実機確認をここで受ける）**: **拡大率を切り替えたときの窓の動きを 1 本の時系列で機械判定できる観測チャネルとランナーが常設された。一周走行の適合表へ「拡大率切替」の項目を足せる材料が揃っている。**
+> - **⑴ 恒久観測（削除しない・後続 spec が再利用する契約）**: 既定 OFF の target `wintf::transition`（`crates/wintf/src/ecs/window/transition_diag.rs:54`）に、モニタ表更新（`kind=monitor`）・メッセージ受理（`msg`）・指令の積み上げ（`enqueue`）・一括 flush（`flush`）・窓書込（`write`）・サーフェス寸（`surface`）・作業領域源の差し替え（`snapshot`）・整合待ち（`hold`）・接地点（`ground`）・連鎖の解き直し（`chain`）の 10 種が出る。**点灯手順・grep 語・判定の全文は `.kiro/specs/areka-P0-dpi-transition-atomicity/signoff-procedure.md`**（手順書の語が発行側の単一定義元と一致することは `crates/areka/src/placement/transition_signoff_procedure_tests.rs` が檻で固定している＝手順書が陳腐化したら赤くなる）。
+> - **⑵ 実機ログの機械判定ランナーがある**: `AREKA_TRANSITION_LOG=<絶対パス> cargo test -p areka transition_signoff -- --ignored --nocapture`（`crates/areka/src/placement/transition_signoff_tests.rs:10,57`）。ランナーは自前の判定を 1 行も持たず、決定論テストと**同一の純関数**を回す。環境変数未設定・パス不達・観測行 0 行はいずれも失敗（無言スキップで緑を偽装しない）。**一周走行のログをそのまま食わせられる。**
+> - **⑶ 上流 `ghost-window-zorder` の実機確認をここで受ける（受け先の判断）**: 本 brief は追記(58) で `ghost-window-zorder` を上流列へ追補済み（「バルーン埋もれ＝一周走行の可視性前提」）。当該 spec は `.kiro/specs/completed/` にあり**申し送りを消化できない**ため、**実機の見た目の側（バルーンがキャラの手前に居続けること）は本 spec が受ける**。本 spec は既に zorder の残件を 1 件抱えている——「再表示直後の隣接が実機未確認」。**拡大率の切替は再表示を伴うので、一周走行に拡大率切替を含めれば同時に確認できる。** コード側の適用順・適用回数の前提は `areka-P0-draw-load-parity` の追記(71) が受けている（そちらが flush 経路を In-scope に持つ）。
+> - **⑷ Z の適用順は変えていない（確認の観点）**: 窓書込指令は同一窓のジオメトリ指令が積む時点で合流するようになったが、**挿入位置を持つ Z 指令は合流対象外**で、畳めない指令は同一窓の仕切りとして働く（`crates/wintf/src/ecs/window/command.rs:229` の 3 連言）。ゆえに一周走行で見るべきは「Z が崩れていないか」であって「合流で順序が入れ替わったか」ではない。
+> - **⑸ 適合表へ足せる項目（本 spec が裁定すること）**: 拡大率を切り替えたとき、⒜ キャラの接地点が新しい作業領域の下端に載る（タスクバーへ潜らない）、⒝ 随伴バルーンが**同一フレームで**追従し追従 offset が変わらない、⒞ 遷移の途中で中間矩形（旧下端の位置）が提示されない、⒟ 二体の隣接（隙間 0）が遷移後に解け直る、の 4 点が決定論テストで固定済みである。**実機で残るのは目視の側**（跳ねが見えないこと）で、それは本 spec の一周走行の射程に入る。
+> - **⑹ 二体の隣接は遷移後に解き直される（追記(63) の期待値に条件が 1 つ増えた）**: `scope-chain-gap` 由来の追記(63)⑴ は「二体の既定間隔＝隣接（隙間 0）が正典」「初期配置は実表示サーフェス寸が確定するまで暫定・確定時に一度きり解く」と書いている。本 spec の是正で、**拡大率遷移のたびに同じ判定器で一度きり解き直す**ようになった（実機で 359px 開いていた隙間が 0 になる。決定論の対応物は `crates/areka/src/emo2_boot/frame_chain_realign_tests.rs`）。ただし**ドラッグ等で明示的に動かされたスコープは対象外のまま**（既定位置と現在位置の一致で判定）で、この規約は追記(63) から変わっていない。適合表の「二体の位置」の期待値は**遷移後も隣接**で読むこと。
+> - **⑺ perf 行に `frame=` が末尾追加された**: `perf(apply_show)`（`crates/areka-emo-present/src/presenter/timing.rs:220`）。既存フィールドの順序・名前・文言は不変で `tools/perf/judge-perf.py` とは互換。一周走行のログで perf 行と遷移観測行を**同一フレームで**突合できる。
+> - **⑻ 語彙の不変条件**: 窓種別は `win_kind=`（`transition_diag.rs:167`）で、`kind=` はレコード種別（:143）。**1 行に同じフィールド名を 2 度出さない**（`judge-perf.py::parse_fields` が後勝ちで潰すため）。ログを読む道具を足すときはこの規律に従うこと。
+> - **⑼ 正本**: `.kiro/specs/areka-P0-dpi-transition-atomicity/`（要件 2／4／5／8・`signoff-procedure.md`・`mechanism-ledger.md` が file:line の正本）。
+
 ## Problem
 
 M1 ゴール「emo2 が**そのまま** boot→talk→touch→menu→close まで E2E 実走する」を**証明する仕様が無所属**。各ユニットは自分の観測（決定論檻＋個別実機サインオフ）を持つが:
