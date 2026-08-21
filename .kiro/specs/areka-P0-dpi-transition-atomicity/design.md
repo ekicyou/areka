@@ -412,7 +412,7 @@ flowchart TD
 | 3.4 | 確定項目以外を変更しない | C9＋File Structure Plan の突合台帳 | — |
 | 3.5 | 合成コスト帰着時の申し送り | C9 | 引受先＝`.kiro/specs/` 直下 brief 実在確認 |
 | 4.1 | 接地点を規約値に保つ | C5 dpi_sync（hold）・C6 work_area_sync・`resize_window_to` | `ground` レコード・hold |
-| 4.2 | 食い違い可視フレームを提示しない | C8 段階裁定（B-2a 確定・B-2b/B-4/B-3 段階）・C7 判定 | 段階裁定フロー・サインオフ目視 |
+| 4.2 | 食い違い可視フレームを提示しない | C8 段階裁定（B-2a・**B-2b 確定**〔task 7.1〕・B-4/B-3 は次段）・C7 判定 | 段階裁定フロー・サインオフ目視 |
 | 4.3 | 随伴バルーン同一フレーム | 既存 `follow_balloon`（同一 dpi 相）＋合流 | 判定: バルーン write frame == キャラ write frame |
 | 4.4 | 有界フレーム数 | C7 `TRANSITION_FRAME_BOUND = 0`（hold 中窓は `+DPI_SYNC_HOLD_MAX_FRAMES`） | 決定論テスト |
 | 4.5 | 窓ごとの書込回数 | C2 合流・C7 `WRITES_PER_WINDOW_MAX = 1`・経路 A 0 | 決定論テスト |
@@ -742,14 +742,21 @@ pub fn judge_transition_log(log: &str) -> Report;   // 上 4 つの合成
 | 候補 | 内容 | 接触集合 | 採用条件（台帳の数量） | 7.3 の対テスト（是正前赤／後緑） | 申し送り |
 |---|---|---|---|---|---|
 | B-2a 合流（**確定**） | 同一 tick・同一 hwnd のジオメトリ指令を 1 本へ | `command.rs` | 回数 6→4 は静的に確定。時間効果は R3 で測る | 決定論: `writes_per_window` 2→1（キュー検査） | zorder（Z 専用不変） |
-| B-2b `DeferWindowPos` 一括 | flush を `Begin/Defer/EndDeferWindowPos` の 1 バッチへ（Z 専用は per-window flags で同居） | `command.rs::flush` のみ | `msg` レコードが各 `write` の内側に OS 同期処理（`WM_DPICHANGED` 等）を示し、`Σcall_us` が所要の大半 | 決定論: flush が 1 バッチ（`flush count` と `write` の `in_batch=1`）／時間効果は実機のみ（`flush_total_us`） | dlp（W8）・zorder |
-| B-4 窓内下端中央補償 | 遷移中、サーフェスの visual を窓内で下端中央に置く（オフセット `((win_w−surf_w)/2, win_h−surf_h)`）→ 窓書込後に原点へ戻す | `show.rs:328` `set_bounds`／`mount.rs`／αマスク原点（`collision-dpi-hittest`） | B-2 後も `visualize_to_write_us` max が signoff 上限超 | 決定論: 遷移中の visual オフセット純関数（寸差から下端中央）／可視効果は実機のみ | col（当たり判定原点）・cage |
-| B-3 可視化 2 相化 | `Present`／`set_visible`／`set_bounds` を窓書込直前へ遅らせる | `show.rs:295-401`（cage④・budget 隣接） | B-4 でも上限超が残る場合の最後の手段 | 決定論: 可視化が書込と同一 flush 内（`surface stage=visualize` の `t_us` ≥ `flush begin`）／実機で `visualize_to_write_us` | budget・cage④ |
-| 自前 handler 是正 | `WM_WINDOWPOSCHANGED` 等の wintf 側処理が所要の主因のとき | `window_proc/window_pos.rs` | `msg` と `call_us` の突合で自前区間が主 | 内容次第（採用時に列を埋める） | — |
+| B-2b `DeferWindowPos` 一括（**確定**・task 7.1 で採用） | flush を `Begin/Defer/EndDeferWindowPos` の 1 バッチへ（Z 専用は per-window flags で同居） | `crates/wintf/src/ecs/window/command.rs:425-505`（`SetWindowPosCommand::flush` 1 関数のみ） | **満たした**（2026-08-21 再採取・7 遷移: 書込 **28/28** が `(WPC, DPICHANGED, WPC)` を内側に持ち中間形 0 本／`WM_DPICHANGED` 28/28 が `in_swp=true`／Σ`call_us`／`total_us` ＝ **99.82〜99.92%**。台帳 §10.3・§10.5） | 決定論: flush が 1 バッチ（`flush count` と `write` の `in_batch=1`）／時間効果は実機のみ（`flush_total_us`）。**是正前赤／後緑の対は task 7.2 が作る**（確定台帳 L1・L7 の引受先） | dlp（W8）＝brief 追記(74)。`ghost-window-zorder` は `completed/` ゆえ消化できず、受け先も dlp が兼ねる（同 brief 追記(71)⑷） |
+| B-4 窓内下端中央補償（**本段では採らない**・梯子の次段） | 遷移中、サーフェスの visual を窓内で下端中央に置く（オフセット `((win_w−surf_w)/2, win_h−surf_h)`）→ 窓書込後に原点へ戻す | `crates/areka-emo-present/src/presenter/show.rs:381`（`mount.set_bounds`）／`mount.rs`／αマスク原点（`collision-dpi-hittest`） | B-2 後も `visualize_to_write_us` max が signoff 上限超 → **前段（B-2 系統）が未消化ゆえ本段では評価しない**。現況 max 291,980µs＝上限の 17.5 倍（台帳 §10.5） | 決定論: 遷移中の visual オフセット純関数（寸差から下端中央）／可視効果は実機のみ | col（当たり判定原点）・cage |
+| B-3 可視化 2 相化（**本段では採らない**・最後の手段） | `Present`／`set_visible`／`set_bounds` を窓書込直前へ遅らせる | `crates/areka-emo-present/src/presenter/show.rs:375`（`set_visible`）・`:381`（`set_bounds`）（cage④・budget 隣接） | B-4 でも上限超が残る場合の最後の手段 → **B-4 が未評価ゆえ順番が来ていない**（台帳 §10.5） | 決定論: 可視化が書込と同一 flush 内（`surface stage=visualize` の `t_us` ≥ `flush begin`）／実機で `visualize_to_write_us` | budget・cage④ |
+| 自前 handler 是正（**採らない**・task 7.1 で確定） | `WM_WINDOWPOSCHANGED` 等の wintf 側処理が所要の主因のとき | `crates/wintf/src/ecs/window_proc/window_pos.rs` | `msg` と `call_us` の突合で自前区間が主 → **満たさない**。自前プロシージャが 1 行も走っていない区間だけで **47.5%**（639,106／1,344,271µs）、自前ハンドラ 1 回ぶんの実測代理は中央値 2,749.5µs で呼出中央値 51,666µs の **10.6%**（台帳 §10.5） | 対テストなし（不採用） | — |
 
 > 4.4 の決定論値 `TRANSITION_FRAME_BOUND = 0` は現行コードで既に成立するため、L1（逐次 flush）には**この量での対テストは存在しない**。L1 の是正候補を採る段で、上の列にある候補ごとの対テスト（または「実機のみ」）を必ず埋める（設計討議 A-8）。
 
 - 採用は設計討議で確定し、本設計へ追記する。R4.2 の可視判定は実機サインオフ（目視＋`t_us` 参考値）で確定する。
+
+> **段階裁定の確定（task 7.1・2026-08-21）**: 是正後の実機再採取（7 遷移・観測行 438・コミット `4fd2fb3c`）の数量で、上の候補表の**内側でのみ**採否を確定した。結論は **B-2b の採用**である。根拠と全数量は `mechanism-ledger.md` §10（§10.3 が名指しの 3 量・§10.5 が 4 案の突合・§10.6 が 7.2 への受け渡し）。
+>
+> - **本表は梯子である**——B-4 の条件は「**B-2 後も**上限超」、B-3 は「**B-4 でも**上限超が残る場合の最後の手段」であり、前段を消化しないと次段の条件が評価できない。ゆえに本段で条件を**肯定的に**満たすのは B-2b の 1 案だけであり、採否は一意に決まる。
+> - **B-2b の採用は「これで 4.2 が成立する」という主張ではない。** 1 本目の `SetWindowPos` の内側で最初のメッセージが届くまでですら 14,795〜56,713µs（上限 16,667µs の 0.89〜3.40 倍）かかっており、上限へ届く保証は数量から出ない。届かなければ梯子は B-4 へ進む。
+> - **要件 9.3 の再裁定は不要**（task 7.1 で判定）。B-2b の接触集合は `command.rs:425-505` の 1 関数でありスケジュール構成・相の並び・tick の駆動に触れない。B-3 まで進んだときは接触集合が `presenter/show.rs` の可視化経路へ移り budget・cage の予算域に隣接するので、**そのときに 9.3 を再裁定する**。
+> - **7.2 が先に読むべき静的事実**（台帳 §10.6 に file:line つきで登記）: ⑴ `EndDeferWindowPos` も `SetWindowPosGuard`（`command.rs:138`）の内側で呼ばないと `is_self_initiated()` が偽になり echo 判定が壊れる、⑵ `WM_WINDOWPOSCHANGED` ハンドラ（`window_proc/window_pos.rs:41`）が手順③で `flush_window_pos_commands()` を無条件に呼ぶ（`:290`）ので**バッチの内側で入れ子 flush が起き得る**、⑶ Z 専用指令は合流の対象外（`is_coalescible` の 3 連言・`command.rs:229`）であり `DeferWindowPos` でも per-window flags で同居させ適用順と結果を変えない（要件 10.3）。
 
 **Open Questions / Risks（C8 に固有）**
 - 逐次 `SetWindowPos` の内訳（L7）と enqueue→flush の 20〜80ms（L8）は本設計時点で未特定であり、B-2b／B-4／B-3／自前 handler のいずれを採るかは C1〜C3 着地後の再採取（実装フェーズ 2）で確定する。**採用候補は本表の外へ広げない**。
