@@ -71,6 +71,14 @@ fn fields_by_kind() -> BTreeMap<&'static str, &'static [&'static str]> {
     ])
 }
 
+/// レコード種別 → その種別の**任意**フィールド列。
+///
+/// 表は判定器（`transition_judge::optional_fields`）が持つ 1 枚を引くだけで、語は 1 つも
+/// 自前で書かない。
+fn optional_fields(kind: &str) -> &'static [&'static str] {
+    crate::placement::transition_judge::optional_fields(kind)
+}
+
 /// 発行側が持つレコード種別の全体（3 crate の `*_ALL` の和）。
 fn all_kinds() -> BTreeSet<&'static str> {
     KIND_ALL
@@ -143,6 +151,9 @@ fn validate_record_line(record: &str) -> Result<(), String> {
 
     let mut allowed: BTreeSet<&str> = required_fields.iter().copied().collect();
     allowed.extend([FIELD_FRAME, FIELD_T_US, FIELD_KIND]);
+    // 任意フィールド（発行側は必ず載せるが、是正前の採取ログには無いので必須にしていない）。
+    // 手順書がこれを引用できないと、採取者は行に在る語を手順書で確かめられなくなる。
+    allowed.extend(optional_fields(kind).iter().copied());
     for (name, _) in &fields {
         // `snapshot` だけは可変長の `m<i>=` を持つ（`snapshot_line` の実装どおり）。
         let is_monitor_slot = kind == KIND_SNAPSHOT

@@ -165,10 +165,10 @@ $env:AREKA_PROFILE_DIR       = $PROFILE_DIR
 | # | `kind=` | 発行点（file:line） | ログ target | 水準 | この観測点で読むもの |
 | --- | --- | --- | --- | --- | --- |
 | T1 | `kind=monitor` | `crates/wintf/src/ecs/layout/systems/monitor_systems.rs:347-348` | `wintf::transition` | `debug` | **遷移の起点**。`old_dpi`／`new_dpi` が異なる行が 1 遷移の先頭 |
-| T2 | `kind=enqueue` | `crates/wintf/src/ecs/window/command.rs:251-252` | 同上 | `debug` | 窓へのジオメトリ指令が積まれた点。`merged_into_seq` が合流の先着 seq |
-| T3 | `kind=flush`（`stage=begin`／`stage=end`） | `crates/wintf/src/ecs/window/command.rs:309` / `:364` | 同上 | `debug` | 一括書込 1 区間。`stage=end` の `total_us` が**実機専用の判定量**の 1 つ |
-| T4 | `kind=write`（`stage=flush`） | `crates/wintf/src/ecs/window/command.rs:335` | 同上 | `debug` | 窓ごとの書込回数・書込フレーム・書込後矩形（`ax`〜`ah`）・`call_us` |
-| T5 | `kind=write`（`stage=sync`） | `crates/wintf/src/ecs/window_proc/window_pos.rs:468` | 同上 | `debug` | **経路 A の裏取り**（OS 提案位置の同期書込）。`origin=dpi-suggested` と対で読む |
+| T2 | `kind=enqueue` | `crates/wintf/src/ecs/window/command.rs:671-678` | 同上 | `debug` | 窓へのジオメトリ指令が積まれた点。`merged_into_seq` が合流の先着 seq |
+| T3 | `kind=flush`（`stage=begin`／`stage=end`） | `crates/wintf/src/ecs/window/command.rs:739-746` / `:796-803` | 同上 | `debug` | 一括書込 1 区間。`stage=end` の `total_us` が**実機専用の判定量**の 1 つ。**バッチ化（task 7.2）以後、窓が実際に動く時間はここへ集まる** |
+| T4 | `kind=write`（`stage=flush`） | `crates/wintf/src/ecs/window/command.rs:777-792` | 同上 | `debug` | 窓ごとの書込回数・書込フレーム・書込後矩形（`ax`〜`ah`）・`call_us`・**`in_batch`**（`DeferWindowPos` の 1 バッチで投入されたか・task 7.2）。`in_batch=true` のとき `call_us` は**投入だけ**の所要である |
+| T5 | `kind=write`（`stage=sync`） | `crates/wintf/src/ecs/window_proc/window_pos.rs:467-491` | 同上 | `debug` | **経路 A の裏取り**（OS 提案位置の同期書込）。`origin=dpi-suggested` と対で読む |
 | T6 | `kind=msg` | `crates/wintf/src/ecs/window_proc/window_pos.rs:59` / `:336`・`crates/wintf/src/ecs/window_proc/lifecycle.rs:140` | 同上 | `debug` | 窓書込の内側で OS 同期処理が走っているか（`in_swp`・`since_flush_us`） |
 | T7 | `kind=surface`（`stage=upload`／`visualize`／`skipped`） | `crates/areka-emo-present/src/presenter/show.rs:349` / `:390`・`crates/areka-emo-present/src/presenter/refresh.rs:83` / `:100` | 同上 | `debug` | 描画内容が新しい寸になった時刻。**窓矩形との食い違い**を測る片側 |
 | T8 | `kind=ground` | `crates/areka/src/placement/follow/window_move.rs:342` → `crates/areka/src/placement/transition_diag.rs:539` | 同上 | `debug` | 接地点と作業領域下端の差（`diff`）。下端吸着のキャラ窓のみ |
@@ -201,7 +201,7 @@ $env:AREKA_PROFILE_DIR       = $PROFILE_DIR
 [transition] frame=250 t_us=90 kind=surface stage=skipped target_id=1 w=- h=- resized=- reason=k-unchanged
 [transition] frame=118 t_us=1402 kind=enqueue hwnd=0x1234 origin=DpiReproject scope=0 win_kind=char merged_into_seq=-
 [transition] frame=118 t_us=1500 kind=flush stage=begin count=4 since_tick_us=1450 total_us=-
-[transition] frame=118 t_us=1512 kind=write stage=flush seq=0 hwnd=0x1234 origin=DpiReproject scope=0 win_kind=char x=1120 y=315 cx=382 cy=537 flags=0x14 ax=1120 ay=315 aw=382 ah=537 call_us=6100 ok=true
+[transition] frame=118 t_us=1512 kind=write stage=flush seq=0 hwnd=0x1234 origin=DpiReproject scope=0 win_kind=char x=1120 y=315 cx=382 cy=537 flags=0x14 ax=1120 ay=315 aw=382 ah=537 call_us=6100 ok=true in_batch=true
 [transition] frame=118 t_us=1520 kind=ground scope=0 ground_y=852 wa_bottom=852 diff=0 route=DpiReproject
 [transition] frame=118 t_us=1530 kind=msg msg=WM_WINDOWPOSCHANGED hwnd=0x1234 in_swp=true since_flush_us=30
 [transition] frame=118 t_us=1786 kind=flush stage=end count=4 since_tick_us=1450 total_us=286
@@ -210,6 +210,7 @@ $env:AREKA_PROFILE_DIR       = $PROFILE_DIR
 
 読み方の要点:
 
+- **`in_batch=` は一括書込がバッチで投入されたか**（task 7.2 の B-2b）。`true` なら当該区間の全書込が `BeginDeferWindowPos`／`EndDeferWindowPos` の 1 バッチで適用されており、`call_us` は**投入だけ**の所要である（窓が実際に動く時間は同じ区間の `kind=flush stage=end` の `total_us` に入る）。`false` はバッチが使えず 1 本ずつへ**縮退**した徴候で、同じ区間に `DeferWindowPos batch unavailable` の `WARN` が必ず並ぶ。**是正前（task 4.2 の基準ログ）にはこのフィールドが 1 行も無い**——欠けていることを「縮退した」と読まない。
 - **`win_kind=` が窓の種別**（`char`／`balloon`／読めなければ `-`）。接頭語の `kind=` は**レコード種別**であって窓の種別ではない。1 行に同じ名前を 2 度出さないための命名であり、混同すると遷移の切り出しそのものが壊れる。
 - **窓の写像**は `kind=surface` の `target_id` の偶奇で決まる（偶数＝キャラ窓／奇数＝バルーン窓、スコープは `target_id / 2`）。`kind=surface` の行はスコープも種別も運ばない。
 - `t_us` は tick 開始からの経過であってフレーム間で連続しない。**判定にはフレーム番号を使い、`t_us` は同一フレーム内の順序と所要にだけ使う。**
@@ -363,6 +364,8 @@ cargo test -p areka transition_signoff -- --ignored --nocapture
 | 可視化と窓書込の食い違い（フレーム） | 当該窓の `kind=surface stage=visualize` の `frame=` と、当該窓の `kind=write` の `frame=` の差（見送り窓は除く）＝`deterministic` 側の量 |
 | 可視化と窓書込の食い違い（時間） | 同一フレームの `kind=surface stage=visualize` の `t_us` と、当該窓の `kind=write` の `t_us` の差（µs）＝`signoff` 側の量。窓ごとに遷移区間内の**最大**を採る |
 | 一括書込の総所要 | `kind=flush stage=end` の `total_us` |
+| 一括書込がバッチで投入されたか | その遷移の `kind=write stage=flush` の `in_batch=` を数える（**全件 `true`** が期待。1 件でも `false` なら同じ区間の `DeferWindowPos batch unavailable` の `WARN` を読み、縮退の理由語（`BeginDeferWindowPos-failed`／`DeferWindowPos-failed`／`EndDeferWindowPos-failed`）を記録する。`total_us` を是正前後で比べるときは、まず両者が同じ投入形であることをここで確かめる）。**task 7.2 で増えた量**なので、是正前のログにこのフィールドは 1 行も無い |
+| 縮退したときの書込の実施ログ | `[guarded_set_window_pos] Calling SetWindowPos` の行を数える（**指令 1 件につき 1 行**が両経路の不変条件。`via="DeferWindowPos"` ならバッチ、`via="SetWindowPos"` なら1 本ずつ。**破棄されたバッチの指令は 1 行も残らない**——残っていれば実施していない書込を数えている）|
 | 接地点差 | `kind=ground` の `diff`（負＝浮き） |
 | 連鎖の解き直し回数 | その遷移の `kind=chain stage=realigned` の件数（**task 5.6 の着地で点灯**。是正前ログとの差分には使えない＝§3.2） |
 

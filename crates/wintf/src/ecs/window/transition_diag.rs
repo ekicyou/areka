@@ -187,6 +187,8 @@ pub const FIELD_AH: &str = "ah";
 pub const FIELD_CALL_US: &str = "call_us";
 /// 書込の成否。
 pub const FIELD_OK: &str = "ok";
+/// 当該の書込が `DeferWindowPos` の 1 バッチで投入されたか（偽なら 1 本ずつの書込）。
+pub const FIELD_IN_BATCH: &str = "in_batch";
 
 /// 一括 flush の指令数。
 pub const FIELD_COUNT: &str = "count";
@@ -234,6 +236,20 @@ pub const WRITE_FIELDS: &[&str] = &[
     FIELD_CALL_US,
     FIELD_OK,
 ];
+
+/// `kind=write` 行の**任意**フィールド（接頭語を除く）。
+///
+/// # なぜ必須（[`WRITE_FIELDS`]）ではないのか
+///
+/// [`FIELD_IN_BATCH`] は一括書込のバッチ化（設計 C8 の候補 B-2b・task 7.2）と同時に増えた
+/// フィールドであり、**それ以前に採取した実機ログには 1 行も載っていない**。必須列へ入れると
+/// 判定器（`transition_judge::required_fields`）が過去の逐語ログを軒並み「壊れた行」として
+/// 数え、確定済みの証跡（`mechanism-ledger.md` §3・§10 の採取）を後から否定してしまう。
+///
+/// 発行側が本フィールドを**必ず**載せることは行の逐語テスト
+/// （`transition_diag_tests::write_line_is_verbatim`）が固定する——任意なのは
+/// 「読む側が古いログを受け入れる」という意味であって、「書く側が省いてよい」ではない。
+pub const WRITE_OPTIONAL_FIELDS: &[&str] = &[FIELD_IN_BATCH];
 
 /// `kind=flush` 行の必須フィールド（接頭語を除く）。
 pub const FLUSH_FIELDS: &[&str] = &[
@@ -392,9 +408,19 @@ pub struct WriteRecord {
     /// 書込後の物理矩形。読み戻せなかった場合は `None`（4 フィールドとも番兵になる）。
     pub after: Option<RECT>,
     /// 書込 1 回の所要（µs・参考値）。
+    ///
+    /// [`in_batch`](Self::in_batch) が真のときは**投入（`DeferWindowPos`）だけの所要**であり、
+    /// 実際に窓が動く時間は入っていない（それは 1 バッチぶんまとめて
+    /// `flush stage=end` の `total_us` に載る）。偽のときは `SetWindowPos` 呼出 1 本の所要である。
     pub call_us: u64,
     /// 書込の成否。
     pub ok: bool,
+    /// `DeferWindowPos` の 1 バッチで投入されたか（設計 C8 の候補 B-2b）。
+    ///
+    /// 偽になるのは ⑴ メッセージ受理時の同期書込（`stage=sync`）と ⑵ バッチ投入に失敗して
+    /// 1 本ずつの `SetWindowPos` へ**縮退**した一括 flush の 2 つである。縮退は
+    /// `warn!` を伴う（無音で形が変わらない）。
+    pub in_batch: bool,
 }
 
 /// 一括 flush 区間の端。
@@ -528,7 +554,7 @@ pub fn write_line(record: &WriteRecord) -> String {
     format!(
         "{prefix} {FIELD_STAGE}={stage} {FIELD_SEQ}={seq} {FIELD_HWND}={hwnd} {tag} \
          {FIELD_X}={x} {FIELD_Y}={y} {FIELD_CX}={cx} {FIELD_CY}={cy} {FIELD_FLAGS}=0x{flags:X} \
-         {after} {FIELD_CALL_US}={call_us} {FIELD_OK}={ok}",
+         {after} {FIELD_CALL_US}={call_us} {FIELD_OK}={ok} {FIELD_IN_BATCH}={in_batch}",
         prefix = record_prefix(record.stamp, KIND_WRITE),
         stage = record.stage.as_str(),
         seq = record.seq,
@@ -542,6 +568,7 @@ pub fn write_line(record: &WriteRecord) -> String {
         after = after_fields(record.after),
         call_us = record.call_us,
         ok = record.ok,
+        in_batch = record.in_batch,
     )
 }
 

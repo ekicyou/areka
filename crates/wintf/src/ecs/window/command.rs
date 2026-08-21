@@ -137,18 +137,62 @@ pub unsafe fn guarded_set_window_pos(
 ) -> windows::core::Result<()> {
     let _guard = SetWindowPosGuard::new(); // Drop でカウンタ -1
 
-    // Req 1.3: 実際の窓位置書込を行う共通経路の実施ログ。診断手順書が有効化する水準
-    // （`wintf::ecs::window=debug`）で「どの窓へどの座標を書いたか」が必ず残るよう、
-    // 旧 `trace!` から是正した（提案位置の実施可否と同じ水準・2026-07-18 偽陰性の是正）。
-    debug!(
-        hwnd = format!("0x{:X}", hwnd.0 as usize),
-        x = x, y = y, cx = cx, cy = cy,
-        flags = ?flags,
-        "[guarded_set_window_pos] Calling SetWindowPos"
+    log_window_write(
+        &WindowPosArgs {
+            hwnd,
+            hwnd_insert_after,
+            x,
+            y,
+            cx,
+            cy,
+            flags,
+        },
+        VIA_SET_WINDOW_POS,
     );
 
     unsafe { SetWindowPos(hwnd, hwnd_insert_after, x, y, cx, cy, flags) }?;
     Ok(())
+}
+
+/// 窓書込 1 回の実施ログ（**診断手順の固定トークン**）。
+///
+/// Req 1.3（`dpi-window-vanish`）: 実際の窓位置書込を行う共通経路の実施ログであり、
+/// 診断手順書が有効化する水準（`wintf::ecs::window=debug`）で「どの窓へどの座標を
+/// 書いたか」が必ず残る。
+///
+/// # 字面を変えてはならない
+///
+/// この 1 行は `dpi-window-vanish` の診断手順書の観測点 **O9** であり、`ghost-window-zorder`
+/// の維持系の檻 16 本（`zorder_pair_*_tests.rs` の `SET_WINDOW_POS_TAG`）が本数を数えて
+/// 「是正の指令が何本出たか」を測っている。ゆえに**投入に使う API が変わっても字面は
+/// 変えない**——実際に呼んだ API は `via=` フィールドが名乗る（実ログの字面は
+/// `via="SetWindowPos"` か `via="DeferWindowPos"`。`tracing` が文字列を引用符で囲む）。
+///
+/// # 本数の不変条件: 1 指令につき 1 行
+///
+/// 数えられている以上、**実施していない書込をこの行で名乗ってはならない**。バッチ経路は
+/// 積み上げ（`DeferWindowPos`）の時点では書いていない——`EndDeferWindowPos` が成って初めて
+/// 窓が動く——ので、[`apply_as_batch`] は**適用が成った後に**まとめて出す。積み上げの途中で
+/// 出すと、破棄されたバッチの指令が縮退で書き直されたときに同じ指令が 2 度数えられる
+/// （本仕様の task 7.2 のレビューが実測で見つけた形）。対テストは
+/// `command_batch_tests::the_write_log_line_is_emitted_once_per_command_on_both_paths`。
+const WINDOW_WRITE_LOG_MESSAGE: &str = "[guarded_set_window_pos] Calling SetWindowPos";
+
+/// `via=` の値: 1 本ずつの `SetWindowPos` で書いた。
+const VIA_SET_WINDOW_POS: &str = "SetWindowPos";
+
+/// `via=` の値: `DeferWindowPos` の 1 バッチへ積んだ。
+const VIA_DEFER_WINDOW_POS: &str = "DeferWindowPos";
+
+/// 窓書込 1 回の実施ログを出す（両経路で**同一の字面**）。
+fn log_window_write(args: &WindowPosArgs, via: &'static str) {
+    debug!(
+        hwnd = format!("0x{:X}", args.hwnd.0 as usize),
+        x = args.x, y = args.y, cx = args.cx, cy = args.cy,
+        flags = ?args.flags,
+        via = via,
+        "{WINDOW_WRITE_LOG_MESSAGE}"
+    );
 }
 
 // ============================================================================
@@ -201,6 +245,247 @@ pub(crate) fn read_back_window_rect(hwnd: HWND) -> Option<RECT> {
         Some(rect)
     } else {
         None
+    }
+}
+
+// ============================================================================
+// 一括投入（`Begin/Defer/EndDeferWindowPos` の 1 バッチ）
+// ============================================================================
+
+/// 窓書込 1 回ぶんの引数（`DeferWindowPos`／`SetWindowPos` へそのまま渡る値）。
+///
+/// バッチ化（設計 C8 の候補 B-2b）が変えるのは**投入の仕方**だけであり、渡す引数と
+/// その並びは 1 つも変えない（要件 10.3）。この型はその「変えない引数」を 1 箇所で
+/// 組むためだけに在る——バッチ経路と縮退経路が別々に組み立てると、片方だけが
+/// `hwnd_insert_after` や flags を落としたときに静かに食い違う。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct WindowPosArgs {
+    /// 対象ウィンドウ。
+    pub hwnd: HWND,
+    /// Z 順の挿入位置（`None` で変更なし）。**Z 専用指令はここに値を持つ**。
+    pub hwnd_insert_after: Option<HWND>,
+    /// 位置 X。
+    pub x: i32,
+    /// 位置 Y。
+    pub y: i32,
+    /// 幅。
+    pub cx: i32,
+    /// 高さ。
+    pub cy: i32,
+    /// `SetWindowPos` フラグ（per-window に持てるので Z 専用も同居できる）。
+    pub flags: SET_WINDOW_POS_FLAGS,
+}
+
+/// 指令 1 件を書込引数へ写す（純関数）。
+///
+/// **7 項目をそのまま運ぶだけ**である。観測専用の `tag` は引数に影響しない（design.md D3）。
+pub(crate) fn window_pos_args(cmd: &SetWindowPosCommand) -> WindowPosArgs {
+    WindowPosArgs {
+        hwnd: cmd.hwnd,
+        hwnd_insert_after: cmd.hwnd_insert_after,
+        x: cmd.x,
+        y: cmd.y,
+        cx: cmd.width,
+        cy: cmd.height,
+        flags: cmd.flags,
+    }
+}
+
+/// バッチ投入が使えなかった理由（縮退の記録に載せる語）。
+///
+/// 3 つとも**無音にしない**——`warn!` を伴い、当該 flush の書込レコードは
+/// `in_batch=false` になる（要件 3.4 の「失敗経路にログを持たせる」）。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum BatchDegrade {
+    /// `BeginDeferWindowPos` がバッチを確保できなかった（1 件も適用されていない）。
+    BeginFailed,
+    /// `DeferWindowPos` が失敗した。**それまでに積んだ指令はバッチごと失われる**ため、
+    /// 部分適用は起きていない（Win32 の仕様: 失敗したハンドルへ `End` を呼んではならない）。
+    DeferFailed {
+        /// 失敗した指令のキュー内位置。
+        seq: u32,
+    },
+    /// `EndDeferWindowPos` が失敗した。**部分適用の可能性がある**ので、縮退では
+    /// 全件を 1 本ずつ書き直す（同一引数の再適用は最終状態を変えない）。
+    EndFailed,
+}
+
+impl BatchDegrade {
+    /// 記録に載せる理由語。
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::BeginFailed => "BeginDeferWindowPos-failed",
+            Self::DeferFailed { .. } => "DeferWindowPos-failed",
+            Self::EndFailed => "EndDeferWindowPos-failed",
+        }
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// テスト専用: バッチ確保を失敗させる札。
+    ///
+    /// `BeginDeferWindowPos` は実運用では滅多に失敗しないので、縮退経路の一方を
+    /// 決定論で踏むにはここを倒すほかない（`DeferWindowPos` の失敗は偽ハンドルで
+    /// 自然に踏める）。
+    static FORCE_BATCH_BEGIN_FAILURE: RefCell<bool> = const { RefCell::new(false) };
+}
+
+/// テスト専用: バッチ確保を失敗させたまま `body` を走らせる。
+#[cfg(test)]
+pub(crate) fn with_forced_batch_begin_failure<R>(body: impl FnOnce() -> R) -> R {
+    struct Restore;
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            FORCE_BATCH_BEGIN_FAILURE.with(|cell| *cell.borrow_mut() = false);
+        }
+    }
+    FORCE_BATCH_BEGIN_FAILURE.with(|cell| *cell.borrow_mut() = true);
+    let _restore = Restore;
+    body()
+}
+
+/// バッチを確保する（テストは失敗側へ倒せる）。
+fn begin_batch(count: usize) -> Option<HDWP> {
+    #[cfg(test)]
+    if FORCE_BATCH_BEGIN_FAILURE.with(|cell| *cell.borrow()) {
+        return None;
+    }
+    // SAFETY: Win32 境界。確保するだけで所有権も生存参照も持ち出さない。失敗は
+    // `Result` で返り、無効ハンドルは windows crate 側で `Err` へ畳まれている。
+    unsafe { BeginDeferWindowPos(i32::try_from(count).unwrap_or(i32::MAX)) }.ok()
+}
+
+/// 指令列を **1 バッチ**で投入して一度に適用する（設計 C8 の候補 B-2b）。
+///
+/// 成功したら `Ok(())`、投入できなかったら `Err(理由)` を返す。並びはキューの順のまま、
+/// 引数は [`window_pos_args`] が組んだものそのままである（要件 10.3）。
+///
+/// # 自発書込の判定（要件 10.2）
+///
+/// `EndDeferWindowPos` は全窓ぶんの `WM_WINDOWPOSCHANGING`／`WM_WINDOWPOSCHANGED` を
+/// **同期送達**する。よって [`SetWindowPosGuard`] をバッチ全体に掛ける——掛けないと
+/// `is_self_initiated()` が偽になり、`dpi-window-vanish` が確立した位置権威（自発の書込を
+/// 外部由来と取り違えない）が壊れる。
+///
+/// # 所要の測り方
+///
+/// `call_us` には**投入 1 件ぶん**（`DeferWindowPos`）の所要を書く。実際に窓が動く時間は
+/// 1 バッチぶんまとめて `flush stage=end` の `total_us` に入る。
+///
+/// # 実施ログ（O9）は適用の後
+///
+/// 窓書込の実施ログ（[`WINDOW_WRITE_LOG_MESSAGE`]）は `EndDeferWindowPos` が成ってから
+/// 指令の順にまとめて出す。積み上げの途中で出すと、`Defer` や `End` が失敗して
+/// [`apply_sequentially`] へ縮退したときに**同じ指令が 2 度**名乗ることになり、この行の
+/// 本数を数えている 16 本の檻と診断手順 O9 が静かに狂う。
+///
+/// # Safety
+/// Win32 境界。渡すのは呼び出し側が保持する `HWND` と整数だけであり、無効なハンドルに
+/// 対しては API が安全に失敗を返す。
+unsafe fn apply_as_batch(
+    commands: &[SetWindowPosCommand],
+    observe: bool,
+    call_us: &mut [u64],
+) -> Result<(), BatchDegrade> {
+    let mut batch = begin_batch(commands.len()).ok_or(BatchDegrade::BeginFailed)?;
+
+    // ガードはバッチ全体に掛ける（`End` の同期送達まで自発の内側であること）。
+    let _guard = SetWindowPosGuard::new();
+
+    for (index, cmd) in commands.iter().enumerate() {
+        let args = window_pos_args(cmd);
+        let started = observe.then(Instant::now);
+        // SAFETY: Win32 境界。`batch` は直前の確保／積み上げが返した有効なハンドルであり、
+        // 失敗時は下で `Err` へ落として二度と使わない。
+        let next = unsafe {
+            DeferWindowPos(
+                batch,
+                args.hwnd,
+                args.hwnd_insert_after,
+                args.x,
+                args.y,
+                args.cx,
+                args.cy,
+                args.flags,
+            )
+        };
+        if observe && let Some(slot) = call_us.get_mut(index) {
+            *slot = started.map_or(0, transition_diag::elapsed_us);
+        }
+        match next {
+            Ok(handle) => batch = handle,
+            Err(error) => {
+                // 失敗したハンドルへ `End` を呼んではならない——積んだぶんは失われる。
+                warn!(
+                    seq = index,
+                    hwnd = ?args.hwnd,
+                    error = ?error,
+                    "DeferWindowPos failed; the whole batch is discarded"
+                );
+                return Err(BatchDegrade::DeferFailed {
+                    seq: u32::try_from(index).unwrap_or(u32::MAX),
+                });
+            }
+        }
+    }
+
+    // SAFETY: Win32 境界。`batch` はここまでの積み上げが返した有効なハンドルである。
+    if let Err(error) = unsafe { EndDeferWindowPos(batch) } {
+        warn!(error = ?error, "EndDeferWindowPos failed");
+        return Err(BatchDegrade::EndFailed);
+    }
+
+    // 実施ログ（O9）は**適用が成った後にだけ**出す。積み上げの途中で出すと、破棄された
+    // バッチの指令が「書いた」と名乗り、縮退で書き直した本番の行と二重に数えられる
+    // ——`WINDOW_WRITE_LOG_MESSAGE` の doc が言うとおり、この行の**本数**は既存 16 本の
+    // 檻と診断手順 O9 が数えている量である。
+    for cmd in commands {
+        log_window_write(&window_pos_args(cmd), VIA_DEFER_WINDOW_POS);
+    }
+    Ok(())
+}
+
+/// 指令列を**キューの順のまま 1 本ずつ**書き込む（縮退経路・是正前と同じ形）。
+///
+/// # Safety
+/// Win32 境界（[`guarded_set_window_pos`] に同じ）。
+unsafe fn apply_sequentially(
+    commands: &[SetWindowPosCommand],
+    observe: bool,
+    call_us: &mut [u64],
+    ok: &mut [bool],
+) {
+    for (index, cmd) in commands.iter().enumerate() {
+        let args = window_pos_args(cmd);
+        let started = observe.then(Instant::now);
+        // SAFETY: Win32 境界。ラッパーが自発カウンタを持ち上げたうえで呼ぶ。
+        let result = unsafe {
+            guarded_set_window_pos(
+                args.hwnd,
+                args.hwnd_insert_after,
+                args.x,
+                args.y,
+                args.cx,
+                args.cy,
+                args.flags,
+            )
+        };
+        if observe && let Some(slot) = call_us.get_mut(index) {
+            *slot = started.map_or(0, transition_diag::elapsed_us);
+        }
+        if let Some(slot) = ok.get_mut(index) {
+            *slot = result.is_ok();
+        }
+        if let Err(e) = result {
+            warn!(
+                hwnd = ?args.hwnd,
+                error = ?e,
+                "SetWindowPos failed"
+            );
+        } else {
+            trace!(hwnd = ?args.hwnd, "SetWindowPos succeeded");
+        }
     }
 }
 
@@ -396,7 +681,20 @@ impl SetWindowPosCommand {
     /// キュー内の全コマンドを実行し、キューをクリア
     ///
     /// World借用解放後に呼び出すこと。
-    /// 内部で `guarded_set_window_pos()` を使用し、TLS フラグによるフィードバック防止を適用する。
+    ///
+    /// # 投入は 1 バッチ（設計 C8 の候補 B-2b・task 7.2）
+    ///
+    /// 取り出した指令列は [`apply_as_batch`] が `Begin`／`Defer`／`EndDeferWindowPos` の
+    /// **1 バッチ**で投入する。Z 専用指令は合流の対象外だが、`DeferWindowPos` は
+    /// per-window に `hwndInsertAfter` と flags を取れるので**同じバッチに同居**でき、
+    /// 適用の並びも引数もキューのままである（要件 10.3）。
+    ///
+    /// バッチが使えなかったときは 1 本ずつの `guarded_set_window_pos` へ**縮退**する
+    /// （[`apply_sequentially`]）。縮退は `warn!` を伴い、当該区間の書込レコードは
+    /// `in_batch=false` になる——静かに形が変わることはない。
+    ///
+    /// 自発書込カウンタはどちらの経路でも持ち上がる（バッチ側は `EndDeferWindowPos` が
+    /// 同期送達するメッセージまで含めてガードの内側・要件 10.2）。
     ///
     /// # 観測
     ///
@@ -447,23 +745,35 @@ impl SetWindowPosCommand {
                 }));
             }
 
-            for (index, cmd) in commands.into_iter().enumerate() {
-                let call_started = observe.then(Instant::now);
-                let result = unsafe {
-                    guarded_set_window_pos(
-                        cmd.hwnd,
-                        cmd.hwnd_insert_after,
-                        cmd.x,
-                        cmd.y,
-                        cmd.width,
-                        cmd.height,
-                        cmd.flags,
-                    )
-                };
-                let ok = result.is_ok();
+            // 所要と成否は指令ごとに持つ。**どちらも観測レコードにしか使わない**ので、
+            // 観測が無効なら器は長さ 0 のまま＝確保が 1 度も起きない（要件 10.4）。
+            // 失敗そのものは観測の有無によらず `warn!` が残す。
+            let mut call_us = vec![0u64; if observe { count } else { 0 }];
+            let mut ok = vec![false; if observe { count } else { 0 }];
 
-                if observe {
-                    let call_us = call_started.map_or(0, transition_diag::elapsed_us);
+            // SAFETY: Win32 境界。バッチ投入も縮退も、渡すのは呼び出し側が保持する
+            // `HWND` と整数だけである。
+            let batched = unsafe { apply_as_batch(&commands, observe, &mut call_us) };
+            let in_batch = match batched {
+                Ok(()) => {
+                    ok.fill(true);
+                    true
+                }
+                Err(reason) => {
+                    // 縮退は無音にしない（要件 3.4・steering `logging.md`）。
+                    warn!(
+                        count = count,
+                        reason = reason.as_str(),
+                        "DeferWindowPos batch unavailable; falling back to one SetWindowPos per command"
+                    );
+                    // SAFETY: Win32 境界（上に同じ）。
+                    unsafe { apply_sequentially(&commands, observe, &mut call_us, &mut ok) };
+                    false
+                }
+            };
+
+            if observe {
+                for (index, cmd) in commands.iter().enumerate() {
                     transition_diag::emit_line(&transition_diag::write_line(&WriteRecord {
                         stamp: transition_diag::stamp(),
                         stage: WriteStage::Flush,
@@ -476,19 +786,10 @@ impl SetWindowPosCommand {
                         cy: cmd.height,
                         flags: cmd.flags.0,
                         after: read_back_window_rect(cmd.hwnd),
-                        call_us,
-                        ok,
+                        call_us: call_us.get(index).copied().unwrap_or(0),
+                        ok: ok.get(index).copied().unwrap_or(false),
+                        in_batch,
                     }));
-                }
-
-                if let Err(e) = result {
-                    warn!(
-                        hwnd = ?cmd.hwnd,
-                        error = ?e,
-                        "SetWindowPos failed"
-                    );
-                } else {
-                    trace!(hwnd = ?cmd.hwnd, "SetWindowPos succeeded");
                 }
             }
 
@@ -571,6 +872,10 @@ mod command_transition_tests;
 #[cfg(test)]
 #[path = "command_coalesce_tests.rs"]
 mod command_coalesce_tests;
+
+#[cfg(test)]
+#[path = "command_batch_tests.rs"]
+mod command_batch_tests;
 
 #[cfg(test)]
 mod tests {

@@ -60,7 +60,7 @@ use wintf::ecs::window::transition_diag::{
     FIELD_OLD_DPI, FIELD_ORIGIN, FIELD_SCOPE, FIELD_SEQ, FIELD_STAGE, FIELD_T_US, FIELD_TOTAL_US,
     FIELD_WIN_KIND, FLUSH_FIELDS, KIND_ENQUEUE, KIND_FLUSH, KIND_MONITOR, KIND_MSG, KIND_WRITE,
     MISSING, MONITOR_FIELDS, MSG_FIELDS, ORIGIN_DPI_SUGGESTED, RECORD_PREFIX_TAG, STAGE_END,
-    STAGE_SYNC, Stamp, WRITE_FIELDS,
+    STAGE_SYNC, Stamp, WRITE_FIELDS, WRITE_OPTIONAL_FIELDS,
 };
 
 use super::diag::{PlacementRoute, WindowKind};
@@ -350,9 +350,27 @@ impl TransitionSummary {
 // 語彙の照合表
 // ---------------------------------------------------------------------------
 
+/// 当該種別の**任意**フィールド列（任意フィールドを持たない種別は空）。
+///
+/// 必須（[`required_fields`]）と分けるのは、**フィールドが後から増えるから**である。
+/// `kind=write` の `in_batch`（task 7.2 のバッチ化と同時に増えた）を必須にすると、
+/// それ以前に採取した実機ログの書込行が軒並み `MissingField` として
+/// `malformed_records` に載り、確定済みの証跡（`mechanism-ledger.md` §3・§10）を
+/// 判定器が後から否定してしまう。読む側は欠けていても受け入れ、**書く側が必ず載せる**
+/// ことは発行側の逐語テスト（`transition_diag_tests::write_line_is_verbatim`）が固定する。
+///
+/// 一覧はすべて発行側の `pub const` であり、ここは**並べるだけ**である。
+pub(crate) fn optional_fields(kind: &str) -> &'static [&'static str] {
+    match kind {
+        KIND_WRITE => WRITE_OPTIONAL_FIELDS,
+        _ => &[],
+    }
+}
+
 /// 当該種別の必須フィールド列（未知の種別語は `None`）。
 ///
 /// 一覧はすべて発行側の `pub const` であり、ここは**並べるだけ**である。
+/// 任意フィールドは [`optional_fields`] が別に持つ（欠けていても壊れた行にしない）。
 fn required_fields(kind: &str) -> Option<&'static [&'static str]> {
     match kind {
         KIND_MONITOR => Some(MONITOR_FIELDS),

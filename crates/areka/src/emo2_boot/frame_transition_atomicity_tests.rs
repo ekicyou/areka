@@ -512,6 +512,7 @@ fn transition_is_atomic_at(dpi: u16) {
             after: None,
             call_us: 0,
             ok: true,
+            in_batch: false,
         }));
     });
     assert_eq!(

@@ -34,9 +34,10 @@ use super::{
     ENQUEUE_FIELDS, EnqueueRecord, FIELD_KIND, FLUSH_FIELDS, FlushRecord, FlushStage, KIND_ALL,
     KIND_ENQUEUE, KIND_FLUSH, KIND_MONITOR, KIND_MSG, KIND_WRITE, MONITOR_FIELDS, MSG_DPICHANGED,
     MSG_FIELDS, MonitorRecord, MsgRecord, STAGE_ALL, Stamp, TRANSITION_TARGET, TickStart,
-    WRITE_FIELDS, WriteRecord, WriteStage, WriteTag, begin_flush, begin_tick, current_frame,
-    emit_line, enqueue_line, flush_line, is_enabled, monitor_line, msg_line, record_prefix,
-    reset_for_test, since_flush_us, since_tick_start_us, stamp, stamp_from_world, write_line,
+    WRITE_FIELDS, WRITE_OPTIONAL_FIELDS, WriteRecord, WriteStage, WriteTag, begin_flush,
+    begin_tick, current_frame, emit_line, enqueue_line, flush_line, is_enabled, monitor_line,
+    msg_line, record_prefix, reset_for_test, since_flush_us, since_tick_start_us, stamp,
+    stamp_from_world, write_line,
 };
 use crate::ecs::test_support::capture_under_filter;
 use crate::ecs::world::{EcsWorld, FrameCount, Update};
@@ -183,14 +184,32 @@ fn write_line_is_verbatim() {
         after: Some(rect(10, 20, 310, 420)),
         call_us: 61_000,
         ok: true,
+        in_batch: true,
     };
     assert_eq!(
         write_line(&record),
         "[transition] frame=7 t_us=1234 kind=write stage=flush seq=3 hwnd=0x1234 \
          origin=DpiReproject scope=0 win_kind=shell x=10 y=20 cx=300 cy=400 flags=0x14 \
-         ax=10 ay=20 aw=300 ah=400 call_us=61000 ok=true"
+         ax=10 ay=20 aw=300 ah=400 call_us=61000 ok=true in_batch=true"
     );
     assert!(matches(&write_line(&record), KIND_WRITE, WRITE_FIELDS));
+    // 任意フィールドも**発行側は必ず載せる**（読む側が古いログを受け入れるだけ）。
+    assert!(
+        matches(&write_line(&record), KIND_WRITE, WRITE_OPTIONAL_FIELDS),
+        "`in_batch` が行から落ちている: {}",
+        write_line(&record)
+    );
+
+    // 縮退した書込は同じ位置に偽で載る（フィールドごと消えない）。
+    let degraded = WriteRecord {
+        in_batch: false,
+        ..record
+    };
+    assert!(
+        write_line(&degraded).ends_with("call_us=61000 ok=true in_batch=false"),
+        "縮退した書込の札: {}",
+        write_line(&degraded)
+    );
 }
 
 #[test]
@@ -209,6 +228,7 @@ fn write_line_marks_the_synchronous_path() {
         after: None,
         call_us: 0,
         ok: true,
+        in_batch: false,
     };
     let line = write_line(&record);
     assert!(
@@ -308,6 +328,7 @@ fn missing_values_render_as_sentinel_and_keep_their_fields() {
         after: None,
         call_us: 0,
         ok: false,
+        in_batch: false,
     };
     let line = write_line(&record);
     let fields = parse_fields(&line);
@@ -385,6 +406,7 @@ fn no_line_repeats_a_field_name() {
             after: Some(rect(0, 0, 1, 1)),
             call_us: 1,
             ok: true,
+            in_batch: false,
         }),
         flush_line(&FlushRecord {
             stamp: STAMP,

@@ -486,6 +486,8 @@ pub(super) fn WM_DPICHANGED(
                 after: crate::ecs::window::read_back_window_rect(hwnd),
                 call_us,
                 ok: result.is_ok(),
+                // 経路 A はメッセージ受理時の同期書込であり、一括 flush のバッチを通らない。
+                in_batch: false,
             }));
         }
 
