@@ -107,7 +107,7 @@ pub fn msg(frame: u32, t_us: u64, name: &str, hwnd: &str) -> String {
     )
 }
 
-/// 窓書込指令の積み上げ。
+/// 窓書込指令の積み上げ（**畳まれなかった**形＝`merged_into_seq` は番兵）。
 pub fn enqueue(
     frame: u32,
     t_us: u64,
@@ -116,13 +116,33 @@ pub fn enqueue(
     scope: &str,
     win_kind: &str,
 ) -> String {
+    enqueue_merged_into(frame, t_us, hwnd, origin, scope, win_kind, MISSING)
+}
+
+/// 窓書込指令の積み上げ（合流先の通し番号を字面で受け取る＝番兵も渡せる）。
+///
+/// 合流（C2）を通ると後着の指令は先着の枠へ畳まれ、`merged_into_seq` に**先着の通し番号**
+/// （一括書込の `write` の `seq` と同じ数え方）が載る。畳まれた側の経路語は書込の行に残ら
+/// ないので、この形を組めないと「合流で書込が消えた随伴」を檻へ入れられない
+/// （task 6.6 の欠陥そのもの）。
+// 引数はそのまま `enqueue` レコードの必須フィールドであり、束ねると呼出側でどの
+// フィールドを番兵にしたのかが読めなくなる。
+pub fn enqueue_merged_into(
+    frame: u32,
+    t_us: u64,
+    hwnd: &str,
+    origin: &str,
+    scope: &str,
+    win_kind: &str,
+    merged_into_seq: &str,
+) -> String {
     record(
         frame,
         t_us,
         KIND_ENQUEUE,
         &format!(
             "{FIELD_HWND}={hwnd} {FIELD_ORIGIN}={origin} {FIELD_SCOPE}={scope} \
-             {FIELD_WIN_KIND}={win_kind} {FIELD_MERGED_INTO_SEQ}={MISSING}"
+             {FIELD_WIN_KIND}={win_kind} {FIELD_MERGED_INTO_SEQ}={merged_into_seq}"
         ),
     )
 }

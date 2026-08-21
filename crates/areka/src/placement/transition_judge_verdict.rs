@@ -815,8 +815,13 @@ struct CompanionExpectation<'a> {
 ///
 /// 判定の鍵は**経路語**である。対を検査できるのはバルーンが
 /// [`TransitionSummary::balloon_follow_windows`] に居るとき——つまり `origin=BalloonFollow` の
-/// 位置書込を受けたときだけであって、寸書込（`KeepPositionResize`）が届いただけでは
-/// 要件 4.3 の義務は 1 度も観測されていない。
+/// **位置指令が書込へ着地した**ときだけであって、寸の指令（`KeepPositionResize`）が届いた
+/// だけでは要件 4.3 の義務は 1 度も観測されていない。
+///
+/// 着地は経路語を名乗る書込に限らない。C2 の合流は**先着の経路語を残す**ので、畳まれた
+/// 随伴の指令は `kind=enqueue` の `merged_into_seq` から合流先の書込を引き当てて数える
+/// （集計側の [`super::summarize`] が行う）。本関数はその結果である
+/// [`TransitionSummary::balloon_follow_windows`] を読むだけで、引き当ての規則は持たない。
 fn companion_expectations(summary: &TransitionSummary) -> Vec<CompanionExpectation<'_>> {
     let mut expectations = Vec::new();
     for character in summary.writes_per_window.keys() {

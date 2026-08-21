@@ -184,7 +184,7 @@
   - _Requirements: 6.5_
   - _Boundary: 追跡仕様の brief_
 
-- [x] 6. 是正の検証
+- [ ] 6. 是正の検証
 - [x] 6.1 遷移の原子性と随伴を多フレーム駆動で検証する
   - 表更新が先の順序で、全窓の書込が同一フレーム・キャラ窓 1 回・バルーン窓 1 回・同期書込 0 になることを検証する
   - 随伴バルーンがキャラ窓と同一フレームで移ること、遷移中の接地点が規約値から外れないことを検証する
@@ -228,6 +228,19 @@
   - _Requirements: 5.8_
   - _Boundary: placement/dpi_sync.rs, emo2_boot/frame/work_area_sync.rs, placement/follow/window_move.rs（監視のみ）_
   - _Depends: 6.2_
+
+- [ ] 6.6 合流後も随伴の同一フレーム性を測れるようにする（判定器の是正）
+  - **task 7.1 の実機再採取（2026-08-21・7 遷移）で新規に確定した判定器の欠陥**。要件・設計フェーズの計画には無い
+  - 判定器の裁定⑴「随伴の同一フレーム性はバルーンの `origin=BalloonFollow` の**書込**で測る」が、task 5.3 の合流の着地によって空振りするようになった——随伴の位置書込は同一窓の `KeepPositionResize` へ畳まれ、`kind=write` に `origin=BalloonFollow` の行が残らない
+  - 実機ログの証跡: `frame=14884` の `kind=enqueue` に `scope=0 balloon origin=BalloonFollow merged_into_seq=1`／`scope=1 balloon origin=BalloonFollow merged_into_seq=0` があり、対応する `kind=write` は `origin=KeepPositionResize` 1 本だけ。7 遷移中 5 遷移で `pairs=0` になり、要件 4.3 の合否が**未測定**として落ちた（12 件）
+  - 追従そのものは成立している（同一の offset が両拡大率で一致＝`scope=0 (-268,-258)`・`scope=1 (+292,-150)`）ので、**製品の欠陥ではなく測り方の欠陥**である
+  - 合流された随伴を数に入れる形へ判定器を直す。`kind=enqueue` は `origin` と `merged_into_seq` を持つので**本番の観測語彙を増やさずに再構成できる**（増やす必要があると判断したら、その根拠を示してから増やすこと）
+  - 決定論テストが本欠陥を捕まえられなかった機序（観測行を手で組むので「合流で書込が消えた形」を一度も作っていない）を是正する。**合流を通した形の入力**を檻へ入れること
+  - 設計 C7 の裁定⑴の記述と、`transition_judge.rs` の当該 doc を同時に追随させる（片肺にしない）
+  - 観察可能な完了条件: 上記の実機ログ（`%LOCALAPPDATA%\areka-diag\atom-71-recapture-1\atom-signoff.log`）に対して `balloon_same_frame` の「量が欠けている」違反が 0 件になり、かつ随伴が**本当に遅れた**形では従来どおり違反として立つ
+  - _Requirements: 4.3, 7.3, 8.3, 8.5_
+  - _Boundary: placement/transition_judge.rs, placement/transition_judge_verdict.rs, それらのテスト, design.md（C7 裁定⑴）_
+  - _Depends: 6.4_
 
 - [ ] 7. 段階裁定と実機サインオフ
 - [ ] 7.1 台帳の数量で残る候補の採否を確定する
@@ -344,3 +357,7 @@
 - **【規律違反の記録】task 6.4 の実装者が `git checkout -- <brief.md>` を 1 回使った** — 禁止事項の違反。Perl のエンコーディング取り違え（decode 済み文字列と生バイトの連結）で既存本文が二重符号化されたための復元。**損害はゼロと独立検証で確定**（純追加 `10 insertions / 0 deletions`・消失行 0・4 ファイルとも VALID_UTF8／U+FFFD 0／二重符号化署名 0・`crates/` 非接触）。ただし**「復元対象が直前まで無変更だったことが幸いした、という以上の保証はない」**（レビュアーの但し書き）。Markdown への挿入も全経路 `:raw`／`newline=''` で行い、`count==1` を assert してから適用すること。
 - **Z 維持系（`ghost-window-zorder`）は completed ゆえ申し送りを消化できない** — task 6.4 で確定。生存 spec 9 本を `zorder_pair_maintain`／`SetWindowPosCommand`／`flush_window_pos_commands` で grep してヒット 0＝**当該ファイルを担当ファイル集合に持つ生存 spec は存在しない**。ゆえに ⑴ コード側（適用順が決まる一括 flush）は `areka-P0-draw-load-parity` へ（同 brief の Scope「In」が `wintf` の `runtime`／`ecs::world` を含み、flush 呼出は `tick_bridge.rs:206`）、⑵ 見た目側（バルーンが埋もれない）は `areka-P0-emo2-conformance-e2e` へ（同 brief 追記(58) が既に上流列に zorder を持つ）と**分けて登記**した。両追記は相互参照している。**これは「最良の受け皿」であって「所有者」ではない**——zorder 用の追跡 spec を起こす余地は残る（開発者の裁定事項）。
 - **要件 10.6 の「比 1.000」は決定論では測っていない** — task 6.4 で明示（レビュアーが誠実と判定）。この数値は `dpi-window-vanish` セッション①の実機測定値であり、決定論が固定しているのは ⑴ ドラッグ追従の挙動 ⑵ 観測が既定運転で 1 バイトも費用を払わないこと（前置ガードの本文走査）の 2 つ。**比そのものの再確認は群 7 の実機サインオフの持ち分**で、6.4 の緑はそれを代替しない。
+- **合流が判定器の測り方を静かに壊した——`kind=write` の origin は先着のもの** — task 6.6 で確定（実機再採取が暴いた）。task 5.3 の合流は `merge_into` が `base.tag` を触らず**タグを先着のまま保つ**ので、畳まれた側の経路語（`origin=BalloonFollow`）は `kind=write` から消える。判定器の裁定⑴「随伴の同一フレーム性は `origin=BalloonFollow` の**書込**で測る」は合流の着地前に書かれた規則で、着地の瞬間から空振りしていた（実機 7 遷移中 5 遷移で `pairs=0`・要件 4.3 が未測定 12 件）。**是正＝`kind=enqueue` の `merged_into_seq` から合流先の書込へ引き当てる**（同一窓・同一 `seq`・当該 enqueue より後 の 3 条件）。`enqueue` は `origin` と `merged_into_seq` を持つので**本番の観測語彙を増やさずに再構成できた**。
+- **`seq` は一括書込ごとに 0 から振り直され、キュー全体の位置である（窓ごとではない）** — task 6.6 で確定。`coalesce_geometry` が返すのはキュー内の index、`flush` の `seq` も `u32::try_from(index)` で同じ数え方。合流は末尾 push か in-place merge のみで drain まで要素が消えないので、index は enqueue 時点と flush 時点で一致する。**ゆえに引き当ては「同一 `seq`」だけでは足りず、窓条件と観測位置条件の両方が要る**（レビュアーが 3 条件とも変異で load-bearing を実証）。
+- **檻が本番の形を模していないと欠陥は通り抜ける（実例）** — task 6.6。判定器の決定論テストは観測行を**手で組む**ので、`merged_into_seq` が番兵固定のままで「合流で書込が消えた形」を**一度も作っていなかった**。だから合流の着地から実機採取まで誰も気づかなかった。`transition_judge_test_support.rs` へ `enqueue_merged_into` を新設して形を作れるようにした。**新しい本番機構を入れたら、既存の檻がその形を組めるかを確かめること。**
+- **判定器を緩める是正は「見張りが生きているか」を敵対的に確かめる** — task 6.6 のレビュー。測れる範囲を広げる変更は「測れたことにして全部通す」へ倒れやすい。レビュアーは ⒜ 実機ログ全 7 遷移のバルーン書込を +1 フレームした変異ログで 7/7 が `false(pairs=2)` になること ⒝ 合流先書込を削除し `seq` を衝突させた罠で誤引き当てが起きず**未測定**として立つこと ⒞ 3 条件の個別変異 の 3 本立てで確認した。**µs の違反件数が是正前と同一のまま残ることも合格条件に含めた**（減っていたら判定を緩めた徴候）。

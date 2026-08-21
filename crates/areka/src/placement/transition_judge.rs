@@ -56,11 +56,11 @@ use areka_emo_present::presenter::{
     SURFACE_REASON_INVISIBLE, SURFACE_STAGE_SKIPPED, SURFACE_STAGE_VISUALIZE,
 };
 use wintf::ecs::window::transition_diag::{
-    ENQUEUE_FIELDS, FIELD_CALL_US, FIELD_FRAME, FIELD_KIND, FIELD_NEW_DPI, FIELD_OLD_DPI,
-    FIELD_ORIGIN, FIELD_SCOPE, FIELD_STAGE, FIELD_T_US, FIELD_TOTAL_US, FIELD_WIN_KIND,
-    FLUSH_FIELDS, KIND_ENQUEUE, KIND_FLUSH, KIND_MONITOR, KIND_MSG, KIND_WRITE, MISSING,
-    MONITOR_FIELDS, MSG_FIELDS, ORIGIN_DPI_SUGGESTED, RECORD_PREFIX_TAG, STAGE_END, STAGE_SYNC,
-    Stamp, WRITE_FIELDS,
+    ENQUEUE_FIELDS, FIELD_CALL_US, FIELD_FRAME, FIELD_KIND, FIELD_MERGED_INTO_SEQ, FIELD_NEW_DPI,
+    FIELD_OLD_DPI, FIELD_ORIGIN, FIELD_SCOPE, FIELD_SEQ, FIELD_STAGE, FIELD_T_US, FIELD_TOTAL_US,
+    FIELD_WIN_KIND, FLUSH_FIELDS, KIND_ENQUEUE, KIND_FLUSH, KIND_MONITOR, KIND_MSG, KIND_WRITE,
+    MISSING, MONITOR_FIELDS, MSG_FIELDS, ORIGIN_DPI_SUGGESTED, RECORD_PREFIX_TAG, STAGE_END,
+    STAGE_SYNC, Stamp, WRITE_FIELDS,
 };
 
 use super::diag::{PlacementRoute, WindowKind};
@@ -270,19 +270,26 @@ pub struct TransitionSummary {
     pub path_a_writes: u32,
     /// `stage=sync` の書込件数（経路 A の裏取り。`path_a_writes` と食い違えば札か段のどちらかが壊れている）。
     pub sync_stage_writes: u32,
-    /// 随伴の同一フレーム性（キャラ窓の書込フレームと、同一 scope のバルーンの**位置**書込
-    /// フレームが一致するか）。
+    /// 随伴の同一フレーム性（キャラ窓の書込フレームと、同一 scope のバルーンの**位置**指令が
+    /// 着地したフレームが一致するか）。
     ///
-    /// 比べる相手が「最後の書込」ではなく `origin=BalloonFollow` の書込であることが要点で
-    /// ある——バルーンの寸書込（`KeepPositionResize`）は要件 4.6 が先送りを許す別の義務なので、
-    /// 混ぜると先送りが随伴の遅れに化ける（[`TransitionSummary::balloon_follow_windows`]）。
+    /// 比べる相手が「最後の書込」ではなく `origin=BalloonFollow` の**位置指令**であることが
+    /// 要点である——バルーンの寸書込（`KeepPositionResize`）は要件 4.6 が先送りを許す別の
+    /// 義務なので、混ぜると先送りが随伴の遅れに化ける
+    /// （[`TransitionSummary::balloon_follow_windows`]）。
     pub balloon_same_frame: bool,
     /// 上を実際に検査できたスコープ数（0 なら `balloon_same_frame` は空虚な真）。
     pub balloon_pairs_checked: u32,
-    /// 随伴の位置書込（`origin=BalloonFollow`）を 1 度でも受けた窓。
+    /// 随伴の位置指令（`origin=BalloonFollow`）が 1 度でも**書込へ着地した**窓。
     ///
     /// 判定側が「対を検査できるはずか」を独立に数え直すために持つ。寸だけが届いて位置が
     /// 1 度も来ていない窓は、要件 4.3 を**満たした**のではなく検査できていない。
+    ///
+    /// 着地は 2 通りで見つかる（[`summarize`] の当該箇所）——⑴ `kind=write` が
+    /// `origin=BalloonFollow` を名乗る（畳まれなかった指令）、⑵ `kind=enqueue` の
+    /// `merged_into_seq` が指す先の書込（合流された指令。C2 の合流は先着の経路語を残すので、
+    /// 畳まれた側の経路語は書込の行から消える）。**指令が積まれただけで書込に届かなかった
+    /// 窓はどちらにも入らない**。
     pub balloon_follow_windows: BTreeSet<WindowKey>,
     /// 窓ごとの「可視化フレームと書込フレームの差」（見送り窓は除く）。
     pub mismatch_frames_per_window: BTreeMap<WindowKey, u32>,
@@ -579,14 +586,25 @@ pub fn summarize(transition: &[&TransitionRecord]) -> TransitionSummary {
 
     let mut last_write_frame: Option<u32> = None;
     let mut last_write_frame_per_window: BTreeMap<WindowKey, u32> = BTreeMap::new();
-    // 窓ごとの「随伴の位置書込（`origin=BalloonFollow`）」の最後のフレーム。
+    // 窓ごとの「随伴の位置指令（`origin=BalloonFollow`）が着地した書込」——観測順で最後の
+    // 1 件（書込の観測位置とそのフレーム）。
     //
-    // バルーン窓の 2 本の書込は**別の義務**を果たす——位置（`BalloonFollow`）は要件 4.3 が
+    // バルーン窓の 2 本の指令は**別の義務**を果たす——位置（`BalloonFollow`）は要件 4.3 が
     // キャラ窓と同一フレームで求め、寸（`KeepPositionResize`）は要件 4.6 が先送りを許す。
     // 経路語で選り分けずに「最後の書込」で測ると、見送られた寸が後のフレームで届いただけの
     // 遷移（再観測 §3.2 の遷移 2＝レポートが「欠陥ではない」と明記した形）が随伴の遅れに
     // 化ける。
-    let mut last_follow_frame_per_window: BTreeMap<WindowKey, u32> = BTreeMap::new();
+    let mut follow_landing_per_window: BTreeMap<WindowKey, (usize, u32)> = BTreeMap::new();
+    // 合流された随伴の指令（窓・合流先の通し番号・当該 `enqueue` の観測位置）。
+    //
+    // 合流（C2）を通ると後着の指令は**先着の枠へ畳まれ**、合流後の 1 本は先着の経路語を
+    // 名乗る（`command.rs` の `merge_into`＝「タグは先着の値を保つ」）。バルーン窓は寸の
+    // 指令が先に積まれるので、随伴の位置指令の経路語は `kind=write` から消える。ここを
+    // 数えないと、合流が効いている遷移では要件 4.3 が**未測定**として落ちる（task 6.6・
+    // 2026-08-21 の実機再採取で 7 遷移中 5 遷移がこの形だった）。
+    let mut merged_follow_commands: Vec<(WindowKey, u32, usize)> = Vec::new();
+    // 観測順の窓書込（観測位置・窓・通し番号・フレーム）。合流先の引き当てに使う。
+    let mut writes_in_order: Vec<(usize, WindowKey, Option<u32>, u32)> = Vec::new();
     // 窓ごと・フレームごとの「最後の書込 t_us」（実機専用量 visualize_to_write_us 用）。
     let mut last_write_us_per_window_frame: BTreeMap<(WindowKey, u32), u64> = BTreeMap::new();
     let mut last_visualize_per_window: BTreeMap<WindowKey, (u32, u64)> = BTreeMap::new();
@@ -594,7 +612,7 @@ pub fn summarize(transition: &[&TransitionRecord]) -> TransitionSummary {
     let mut visualizes_per_window: BTreeMap<WindowKey, Vec<(u32, u64)>> = BTreeMap::new();
     let mut nonzero_frames_seen = 0_u32;
 
-    for record in transition {
+    for (index, record) in transition.iter().enumerate() {
         if !record.is_well_formed() {
             summary.malformed_records += 1;
         }
@@ -612,9 +630,20 @@ pub fn summarize(transition: &[&TransitionRecord]) -> TransitionSummary {
                 if record.raw_field(FIELD_STAGE) == Some(STAGE_SYNC) {
                     summary.sync_stage_writes += 1;
                 }
+                writes_in_order.push((
+                    index,
+                    window.clone(),
+                    record.int_field::<u32>(FIELD_SEQ),
+                    record.stamp.frame,
+                ));
                 if record.raw_field(FIELD_ORIGIN) == Some(PlacementRoute::BalloonFollow.as_str()) {
                     summary.balloon_follow_windows.insert(window.clone());
-                    last_follow_frame_per_window.insert(window.clone(), record.stamp.frame);
+                    note_follow_landing(
+                        &mut follow_landing_per_window,
+                        window.clone(),
+                        index,
+                        record.stamp.frame,
+                    );
                 }
                 // 遷移の所要（要件 4.4 の「全ゴースト窓の遷移」）には**見送り窓への書込を
                 // 数えない**。要件 4.6 は当該窓を「位置と寸を変更せずに現状を維持」させる
@@ -640,6 +669,15 @@ pub fn summarize(transition: &[&TransitionRecord]) -> TransitionSummary {
                     .wall
                     .sum_call_us
                     .saturating_add(record.int_field(FIELD_CALL_US).unwrap_or(0));
+            }
+            KIND_ENQUEUE => {
+                // 畳まれた随伴の指令だけを控える（畳まれていない指令は、その枠がそのまま
+                // 書かれるので `kind=write` の側に `origin=BalloonFollow` が残る）。
+                if record.raw_field(FIELD_ORIGIN) == Some(PlacementRoute::BalloonFollow.as_str())
+                    && let Some(seq) = record.int_field::<u32>(FIELD_MERGED_INTO_SEQ)
+                {
+                    merged_follow_commands.push((record.tagged_window(), seq, index));
+                }
             }
             KIND_SURFACE => {
                 if record.raw_field(FIELD_STAGE) == Some(SURFACE_STAGE_VISUALIZE)
@@ -685,6 +723,40 @@ pub fn summarize(transition: &[&TransitionRecord]) -> TransitionSummary {
                 }
             }
             _ => {}
+        }
+    }
+
+    // 合流された随伴の指令を、その**合流先の書込**へ引き当てる。
+    //
+    // `merged_into_seq` は先着の枠のキュー内の位置であり、一括書込の `write` の `seq` と
+    // 同じ数え方である（`command.rs` の `coalesce_geometry` と `flush`）。ゆえに「同じ窓の・
+    // その通し番号の・当該 `enqueue` より後に現れる最初の書込」がその指令の着地である。
+    //
+    // 3 つの条件はどれも外せない:
+    //
+    // - **窓**——`seq` は同一 tick のキュー全体の位置なので、番号だけで引き当てると別の窓の
+    //   書込を随伴の着地と取り違える。
+    // - **観測位置**——`seq` は一括書込ごとに 0 から振り直されるため、番号だけでは当該指令が
+    //   積まれる**前**の一括書込を掴み、遅れた随伴が定刻に見える。
+    // - **書込の存在**——引き当てられなければ数に入れない。指令が積まれただけで一括書込に
+    //   届かなかった随伴を「追従した」と数えると、書かれていない窓が合格の根拠になる。
+    for (window, seq, enqueue_index) in &merged_follow_commands {
+        if let Some((write_index, _, _, frame)) =
+            writes_in_order
+                .iter()
+                .find(|(write_index, write_window, write_seq, _)| {
+                    write_index > enqueue_index
+                        && write_window == window
+                        && *write_seq == Some(*seq)
+                })
+        {
+            summary.balloon_follow_windows.insert(window.clone());
+            note_follow_landing(
+                &mut follow_landing_per_window,
+                window.clone(),
+                *write_index,
+                *frame,
+            );
         }
     }
 
@@ -743,16 +815,17 @@ pub fn summarize(transition: &[&TransitionRecord]) -> TransitionSummary {
     // ではバルーンはほぼ常に不可視＝`stage=skipped reason=invisible` なので、ここで降りると
     // 要件 4.3 が**定常の形で 1 度も検査されない**まま合格になる。
     //
-    // 比べるのは `last_follow_frame_per_window`＝**位置の書込だけ**であって「最後の書込」では
-    // ない。バルーンの寸書込（`KeepPositionResize`）は要件 4.6 が先送りを許す別の義務であり、
-    // 混ぜると再観測 §3.2 の遷移 2（位置は定刻・寸だけ +660ms）が随伴の遅れに化ける。
+    // 比べるのは `follow_landing_per_window`＝**位置の指令が着地した書込だけ**であって
+    // 「最後の書込」ではない。バルーンの寸書込（`KeepPositionResize`）は要件 4.6 が先送りを
+    // 許す別の義務であり、混ぜると再観測 §3.2 の遷移 2（位置は定刻・寸だけ +660ms）が
+    // 随伴の遅れに化ける。
     for (window, char_frame) in &last_write_frame_per_window {
         if !window.is_char() || summary.skipped_windows.contains(window) {
             continue;
         }
         let Some(scope) = window.scope else { continue };
         let balloon = WindowKey::of(scope, WindowKind::Balloon);
-        if let Some(balloon_frame) = last_follow_frame_per_window.get(&balloon) {
+        if let Some((_, balloon_frame)) = follow_landing_per_window.get(&balloon) {
             summary.balloon_pairs_checked += 1;
             if balloon_frame != char_frame {
                 summary.balloon_same_frame = false;
@@ -761,6 +834,25 @@ pub fn summarize(transition: &[&TransitionRecord]) -> TransitionSummary {
     }
 
     summary
+}
+
+/// 随伴の着地を「観測順で最後の 1 件」として控える。
+///
+/// 直の書込（`origin=BalloonFollow`）と合流先から引き当てた書込が同じ窓に混ざり得るので、
+/// どちらであるかではなく**書込レコードの観測位置**で新旧を決める（引き当ては本文の走査の
+/// 後に行うため、到着順では新旧を決められない）。
+fn note_follow_landing(
+    landings: &mut BTreeMap<WindowKey, (usize, u32)>,
+    window: WindowKey,
+    write_index: usize,
+    frame: u32,
+) {
+    match landings.get(&window) {
+        Some((current_index, _)) if *current_index >= write_index => {}
+        _ => {
+            landings.insert(window, (write_index, frame));
+        }
+    }
 }
 
 /// ログ全文を行へ分け、観測行だけを解析する。
@@ -797,6 +889,10 @@ mod transition_judge_frame_tests;
 #[cfg(test)]
 #[path = "transition_judge_reobservation_tests.rs"]
 mod transition_judge_reobservation_tests;
+
+#[cfg(test)]
+#[path = "transition_judge_coalesced_follow_tests.rs"]
+mod transition_judge_coalesced_follow_tests;
 
 #[cfg(test)]
 #[path = "transition_judge_verdict_tests.rs"]
