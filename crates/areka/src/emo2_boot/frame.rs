@@ -278,6 +278,12 @@ mod chain_realign_tests;
 #[path = "frame_chain_realign_arm_tests.rs"]
 mod chain_realign_arm_tests;
 
+// 遷移の原子性と随伴（task 6.1）の統合テスト。同じくハーネスに乗るので**x64 のみ**で
+// 接続する（常時テストに x86 を用いない・要件 7.5）。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_transition_atomicity_tests.rs"]
+mod transition_atomicity_tests;
+
 #[cfg(test)]
 #[path = "frame_attach_tests.rs"]
 mod attach_tests;
