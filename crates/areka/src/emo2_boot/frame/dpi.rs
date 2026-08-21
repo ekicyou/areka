@@ -7,8 +7,9 @@ use bevy_ecs::world::World;
 use tracing::{debug, error, warn};
 
 use areka_emo_present::{EmoPresenter, TargetId};
-use wintf::ecs::{WindowPos, DPI};
+use wintf::ecs::{SizeI, WindowPos, DPI};
 
+use crate::placement::chain_realign;
 use crate::placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
 use crate::placement::dpi_sync::{self, DpiSyncHold};
 use crate::placement::follow::{resize_window_keep_position, resize_window_to};
@@ -159,6 +160,28 @@ pub(super) fn reconcile_window_size(
     }
 }
 
+/// 報告された物理寸が**書込前の窓寸と違う**か（遷移後の連鎖再解決の武装条件・設計 C4）。
+///
+/// 窓寸が引けない（窓生成前）ときは「変わった」とは言わない——比較の相手が無い状態を
+/// 変化として数えると、起動直後の初回 landing で毎回武装してしまう（遷移は起きていない）。
+/// 報告寸は `u32`・窓寸は `i32` の通貨ゆえ、超過は変換失敗として同じ腕へ落とす。
+///
+/// # 可視性を `pub(super)` に上げてある理由（決定論テスト網羅の必達）
+///
+/// 3 分岐のうち **i32 変換失敗の腕は [`dpi_phase_with`] からは構造的に踏めない**——
+/// [`reconcile_window_size`] が先に超過を弾いて `false` を返すため、武装条件の `&&` が
+/// 短絡して本関数まで到達しない。駆動テストからは永久に届かない腕を無検査で残さないため、
+/// 兄弟テストが直接呼べる可視性にしてある（`frame_chain_realign_arm_tests.rs`）。
+pub(super) fn size_changed(before: Option<SizeI>, new_size: (u32, u32)) -> bool {
+    let Some(before) = before else {
+        return false;
+    };
+    let (Ok(w), Ok(h)) = (i32::try_from(new_size.0), i32::try_from(new_size.1)) else {
+        return false;
+    };
+    before.width != w || before.height != h
+}
+
 /// 再スケール報告の供給源（本番実装は [`EmoPresenter`]）。
 ///
 /// frame 側の結線が presenter へ求めるのは 2 つの報告だけである——(1) `Changed<DPI>` エッジで
@@ -307,7 +330,24 @@ pub(super) fn dpi_phase_with<S: ScaleReportSource>(
         match source.refresh_scale_report(world, target) {
             // 経路タグ: 本フェーズは `Changed<DPI>` エッジ駆動＝真に DPI 由来（Req 1.2・D13）。
             Some(new_size) => {
-                reconcile_window_size(world, window, kind, new_size, PlacementRoute::DpiReproject);
+                // 書込**前**の窓寸（下で `reconcile_window_size` が bypass ミラーを書き換える
+                // ので、後から読むと必ず新寸と一致する＝寸変化を検知できなくなる）。
+                let before = world.get::<WindowPos>(window).and_then(|wp| wp.size);
+                let wrote = reconcile_window_size(
+                    world,
+                    window,
+                    kind,
+                    new_size,
+                    PlacementRoute::DpiReproject,
+                );
+                // 遷移後の連鎖再解決の武装（atom 設計 C4・要件 6.1）: **キャラ窓が寸変化を
+                // 伴って書込を起こしたとき**だけ武装する。3 条件のいずれを落としても意味が
+                // 変わる——寸が変わらなければ隣接は崩れず（表情差替と同じ）、書込が起きて
+                // いなければ位置は動いておらず、バルーン窓は連鎖の構成要素ではない。
+                if wrote && matches!(kind, GhostWindowKind::Char) && size_changed(before, new_size)
+                {
+                    chain_realign::arm_chain_realign(world);
+                }
             }
             // 再導出結果なし: 寸は触らないが、**位置は現寸のまま射影 T を一度通す**。
             // バルーン窓は位置据置きのまま（位置は従属量ゆえ、キャラ窓確定後の

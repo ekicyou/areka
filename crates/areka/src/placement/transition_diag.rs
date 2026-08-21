@@ -22,18 +22,18 @@
 //! ここは**参照するだけ**である。areka が足すのは 4 つの種別語と、この 4 種にしか出ない
 //! フィールド名・判定語だけ（wintf は上位 crate の語彙を持たない＝依存方向 wintf ← areka）。
 //!
-//! # 発行点はまだ全種そろっていない
+//! # 発行点は 4 種そろっている
 //!
-//! 本ファイルは task 2.4（観測の増設）で建てた語彙であり、`chain` を出す状態機械は後続タスク
-//! が新設する（連鎖再解決＝task 5.6）。今このリポジトリで実際に到達できる発行点は 3 つ——
+//! 本ファイルは task 2.4（観測の増設）で建てた語彙であり、実際に到達できる発行点は 4 つ——
 //! [`log_char_ground`]（`resize_window_to` から）・[`log_monitor_snapshot_sync`]（作業領域源の
-//! 同期＝task 5.1 から）・[`log_hold`]（整合ゲートの 3 点＝task 5.4 から）である。
+//! 同期＝task 5.1 から）・[`log_hold`]（整合ゲートの 3 点＝task 5.4 から）・[`log_chain`]
+//! （遷移後の連鎖再解決＝task 5.6 から）である。
 //!
 //! # 語彙は先に建てる（未消費の `#[allow(dead_code)]` の根拠）
 //!
-//! 判定語の一覧（`*_ALL`）と per-kind の必須フィールド列（`*_FIELDS`）、および `hold`／`chain`
-//! にしか出ない語は、**判定器（task 3.1／3.2）と発行側（task 5.1／5.4／5.6）が同じ字面を見る**
-//! ための単一の定義元である。どちらもまだ着地していないので、非 test ビルドでは未消費に見える
+//! 判定語の一覧（`*_ALL`）と per-kind の必須フィールド列（`*_FIELDS`）は、**判定器
+//! （task 3.1／3.2）と発行側が同じ字面を見る**ための単一の定義元である。判定器は
+//! `#[cfg(test)]` 限定の配置ゆえ、非 test ビルドでは未消費に見える
 //! （areka は lib ターゲットを持たない bin crate ゆえ `pub` でも dead_code 免除されない）。
 //! 個別に `#[allow(dead_code)]` を置くのはモジュール大の allow が**以後の真の dead code を隠す**
 //! ためで、`placement::diag` が同じ理由でモジュール大の allow を撤去したのに倣う。
@@ -121,13 +121,10 @@ pub const HOLD_SITE_ALL: &[&str] = &[HOLD_SITE_DPI, HOLD_SITE_RECONCILE, HOLD_SI
 // ---------------------------------------------------------------------------
 
 /// 遷移を検知して解き直しを武装した。
-#[allow(dead_code)] // 語彙先着（module doc「語彙は先に建てる」）
 pub const CHAIN_STAGE_ARMED: &str = "armed";
 /// 解き直しを実行した。
-#[allow(dead_code)] // 語彙先着（module doc「語彙は先に建てる」）
 pub const CHAIN_STAGE_REALIGNED: &str = "realigned";
 /// 条件未達で見送った。
-#[allow(dead_code)] // 語彙先着（module doc「語彙は先に建てる」）
 pub const CHAIN_STAGE_DEFERRED: &str = "deferred";
 
 /// 連鎖レコードの段階語の全体。
@@ -271,7 +268,6 @@ pub struct GroundRecord {
 
 /// 連鎖再解決の記録。
 #[derive(Clone, Copy, Debug)]
-#[allow(dead_code)] // 発行側は task 5.6（遷移後の連鎖再解決）
 pub struct ChainRecord {
     /// 刻印。
     pub stamp: Stamp,
@@ -362,7 +358,6 @@ pub fn ground_line(record: &GroundRecord) -> String {
 }
 
 /// 連鎖再解決の記録行。
-#[allow(dead_code)] // 発行側は task 5.6
 pub fn chain_line(record: &ChainRecord) -> String {
     format!(
         "{prefix} {FIELD_STAGE}={stage} {FIELD_SCOPES}={scopes} {FIELD_MOVED}={moved} \
@@ -492,6 +487,36 @@ pub fn log_monitor_snapshot_sync(world: &World, monitors: &[MonitorEntry]) {
         monitors,
     };
     base::emit_line(&snapshot_line(&record));
+}
+
+// ---------------------------------------------------------------------------
+// 連鎖再解決レコードの発行
+// ---------------------------------------------------------------------------
+
+/// 連鎖再解決の記録を 1 行出す（武装・解き直し・見送りの 3 段階が呼ぶ）。
+///
+/// 呼出側は [`is_enabled`] で前置ガードすること（本関数は行を組む＝確保する）。段階語
+/// （`stage`）と見送り理由（`reason`）はそれぞれ本モジュールの定数と
+/// [`ChainDeferReason::as_str`](super::chain_finalize::ChainDeferReason::as_str) が単一の
+/// 定義元であり、呼出側は字面をリテラルで持たない。
+///
+/// `reason` は見送り以外では `None`＝番兵で埋める（落とすと「記録が出ていない」と
+/// 「その段階にはその値が無い」の区別が事後に付かない）。
+pub fn log_chain(
+    world: &World,
+    stage: &'static str,
+    scopes: usize,
+    moved: usize,
+    reason: Option<&'static str>,
+) {
+    let record = ChainRecord {
+        stamp: stamp_of(world),
+        stage,
+        scopes,
+        moved,
+        reason,
+    };
+    base::emit_line(&chain_line(&record));
 }
 
 // ---------------------------------------------------------------------------

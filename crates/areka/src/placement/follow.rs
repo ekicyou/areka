@@ -93,7 +93,8 @@ pub use self::visibility::{VisibilityVerdict, guard_visibility};
 // このグループ全体に付く。
 #[allow(unused_imports)]
 pub use self::window_move::{
-    anchor_changed_system, move_window_to, resize_window_keep_position, resize_window_to,
+    anchor_changed_system, move_window_to, move_window_with_route, resize_window_keep_position,
+    resize_window_to,
 };
 
 // 私有項目のファサード再束縛（クレート内可視性のみ・公開面は増やさない）。

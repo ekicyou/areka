@@ -173,6 +173,18 @@ pub struct ChainFinalizeStall {
     pub reported: bool,
 }
 
+impl ChainFinalizeStall {
+    /// 停滞の計数と一発フラグを初期化する（`areka-P0-dpi-transition-atomicity` 要件 6.3）。
+    ///
+    /// 起動時の確定は文字どおり一度きりなので、本資源も一度使い切れば足りた。DPI 遷移後の
+    /// 連鎖再解決（`placement::chain_realign`）は**遷移のたびに**待ちが始まるため、武装の
+    /// 時点でここを初期化しないと、2 度目以降の待ちが `reported` の立ったまま無音になる
+    /// ——「見送り続けている」という一番知りたい事実が、2 度目からログに出なくなる。
+    pub fn reset(&mut self) {
+        *self = ChainFinalizeStall::default();
+    }
+}
+
 /// 確定を見送った理由（診断ログの本文・scg 6.5）。
 ///
 /// 「どのスコープが」「どの条件で」見送られたかを一意に表す。走査は最初に躓いた条件で
@@ -199,6 +211,11 @@ pub enum ChainDeferReason {
         shown: (i32, i32),
         window: (i32, i32),
     },
+    /// 整合待ちの札（`DpiSyncHold`）を持つゴースト窓がまだ残っている
+    /// （`areka-P0-dpi-transition-atomicity` 設計 C4・遷移後の解き直し専用の理由）。
+    ///
+    /// 起動時の確定（`scope-chain-gap`）では起こらない——待ち札は拡大率の遷移でしか付かない。
+    DpiSyncHeld { scope: usize },
 }
 
 impl ChainDeferReason {
@@ -211,7 +228,27 @@ impl ChainDeferReason {
             | ChainDeferReason::UnusableShownSize { scope, .. }
             | ChainDeferReason::NoWindowPos { scope }
             | ChainDeferReason::IncompleteWindowPos { scope }
-            | ChainDeferReason::ResnapNotLanded { scope, .. } => Some(scope),
+            | ChainDeferReason::ResnapNotLanded { scope, .. }
+            | ChainDeferReason::DpiSyncHeld { scope } => Some(scope),
+        }
+    }
+
+    /// 観測レコード（`kind=chain` の `reason=`）に載せる語。
+    ///
+    /// [`fmt::Display`] の本文は人が読む説明であり、値（寸・座標）を含むので機械判定には
+    /// 使えない。判定側が辞書引きするのはこちらの**固定語**である。定義元はこの 1 箇所で、
+    /// 発行側は字面をリテラルで持たない。
+    pub fn as_str(&self) -> &'static str {
+        match *self {
+            ChainDeferReason::NoGhostWindows => "no-ghost-windows",
+            ChainDeferReason::NoScopes => "no-scopes",
+            ChainDeferReason::NoCharWindow { .. } => "no-char-window",
+            ChainDeferReason::NotShownYet { .. } => "not-shown-yet",
+            ChainDeferReason::UnusableShownSize { .. } => "unusable-shown-size",
+            ChainDeferReason::NoWindowPos { .. } => "no-window-pos",
+            ChainDeferReason::IncompleteWindowPos { .. } => "incomplete-window-pos",
+            ChainDeferReason::ResnapNotLanded { .. } => "resnap-not-landed",
+            ChainDeferReason::DpiSyncHeld { .. } => "dpi-sync-held",
         }
     }
 }
@@ -246,6 +283,9 @@ impl fmt::Display for ChainDeferReason {
                 f,
                 "scope {scope}: 再アンカーが未 landing（実表示寸 {sw}x{sh} ≠ 窓寸 {ww}x{wh}）"
             ),
+            ChainDeferReason::DpiSyncHeld { scope } => {
+                write!(f, "scope {scope}: 整合待ちの札が残っている（拡大率と表が未整合）")
+            }
         }
     }
 }

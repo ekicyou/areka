@@ -125,12 +125,13 @@ use self::dpi::{
     reproject_char_window_at_current_size,
 };
 // 同上。未使用は `PhysicalSizeSource`・`resnap_from_sizes`・`resnap_with`・
-// `finalize_chain_once_with` の 4 名で、`resnap_shell_targets` と `finalize_chain_once` は
+// `finalize_chain_once_with`・`realign_chain_once_with_source` の 5 名で、
+// `resnap_shell_targets`・`finalize_chain_once`・`realign_chain_once` は
 // 下の `emo2_frame_system` が呼ぶ。
 #[allow(unused_imports)]
 use self::drain_resnap::{
-    PhysicalSizeSource, finalize_chain_once, finalize_chain_once_with, resnap_from_sizes,
-    resnap_shell_targets, resnap_with,
+    PhysicalSizeSource, finalize_chain_once, finalize_chain_once_with, realign_chain_once,
+    realign_chain_once_with_source, resnap_from_sizes, resnap_shell_targets, resnap_with,
 };
 // 同上。`reconcile_reported_sizes` は下の `emo2_frame_system` が非 test ビルドでも呼ぶ
 // （呼び出しは task 4.3 で `run_drain_phase` から相順の所有者であるこちらへ移した・design 決定 D5）。
@@ -144,7 +145,8 @@ pub(super) use self::scale_text::resolve_talk_time;
 /// `FrameFinalize` 登録の排他 system（donor パターン: remove→各フェーズ→insert・DD-1/DD-4）。
 ///
 /// `Emo2Wiring`（NonSend）を [`World::remove_non_send_resource`] で取り出してから
-/// attach→dpi→drain→balloon-visibility→窓寸 reconcile→move-drain→resnap→連鎖確定→text-scale→text
+/// attach→dpi→drain→balloon-visibility→窓寸 reconcile→move-drain→resnap→連鎖確定→連鎖再解決→
+/// text-scale→text
 /// の順に各フェーズを駆動し、[`World::insert_non_send_resource`] で戻す。
 /// remove→insert は `&mut World` を各フェーズへ排他に渡すための donor 慣行（借用衝突回避・
 /// `examples/emo-present.rs::boot_present_system` と同型）。本番の text フェーズは override 無し
@@ -214,6 +216,13 @@ pub fn emo2_frame_system(world: &mut World) {
     // 確定したフレームで**一度だけ**連鎖を解き直し、サーフェス差替で崩れた隣接を戻す。
     // resnap の**後**に置く（各窓の再アンカー結果を入力として受け取るため）。
     finalize_chain_once(&wiring.presenter, world);
+    // 遷移後の連鎖再解決（atom 設計 C4・要件 6.1／6.2／6.3／6.6）: 起動時確定の**直後**に
+    // 置く。拡大率の遷移では全スコープの幅が変わり、下端中央保存の再射影だけでは隣接が
+    // 幅変化の半分の和だけ開く——起動時の確定は一度きりでこれを直さないので、遷移ごとに
+    // 一度だけ解き直す別機構が要る。resnap・確定の**後**である必要は確定と同じ理由
+    // （各窓の再射影結果と、全スコープの窓寸が遷移後の実表示寸へ揃ったことを入力に取る）。
+    // 武装していないフレームは早期 return＝定常フレームは無操作である（要件 4.7）。
+    realign_chain_once(&wiring.presenter, world);
     // 文字層 k 追従（emo-dpi-scaling task 7.2・D11-4・Req8）: 適用 k の更新点（dpi 相の `refresh_scale`
     // ／drain 相の `apply_show`）の**両方の下流**、かつ `present_frame` の**上流**に置く。こうすると
     // どちらの経路で k が跳ねても同一フレーム内で binding が新 k へ組み直され、直後の描画が新しい物理寸
@@ -256,6 +265,18 @@ mod dpi_sync_hold_tests;
 #[cfg(all(test, target_pointer_width = "64"))]
 #[path = "frame_default_pos_track_tests.rs"]
 mod default_pos_track_tests;
+
+// 遷移後の連鎖再解決（task 5.6）の統合テスト。同じくハーネスに乗るので**x64 のみ**で
+// 接続する（常時テストに x86 を用いない・要件 7.5）。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_chain_realign_tests.rs"]
+mod chain_realign_tests;
+
+// 遷移後の連鎖再解決の**武装条件**（task 5.6・3 連言の特異性）の檻。同じくハーネスに乗るので
+// **x64 のみ**で接続する（常時テストに x86 を用いない・要件 7.5）。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_chain_realign_arm_tests.rs"]
+mod chain_realign_arm_tests;
 
 #[cfg(test)]
 #[path = "frame_attach_tests.rs"]

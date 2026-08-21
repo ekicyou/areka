@@ -225,8 +225,7 @@ pub enum PlacementRoute {
     /// 起動時一度きりの連鎖確定（`scope-chain-gap`）とは別機構で、遷移 1 回につき一度だけ
     /// 隣接を解き直す書込である。起動時確定は `SpawnInitial`／`Restore` の後段で位置を決める
     /// のに対し、こちらは遷移後の新しい幅で左端を連ね直す——由来が違うので語も分ける。
-    // 発行者は task 5.6（遷移後の連鎖再解決）が新設する（上と同じ理由で語彙が先着する）。
-    #[allow(dead_code)]
+    // 発行者は `placement::chain_realign::realign_chain_once_with`（task 5.6 で着地）。
     ChainRealign,
 }
 

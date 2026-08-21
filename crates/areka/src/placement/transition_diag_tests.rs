@@ -20,6 +20,7 @@ use wintf::ecs::window::transition_diag::{
 };
 
 use super::*;
+use crate::placement::chain_finalize::ChainDeferReason;
 use crate::placement::diag::{PlacementRoute, WindowKind};
 use crate::placement::resolver::{PointPx, RectPx, SizePx};
 use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker};
@@ -552,5 +553,42 @@ fn log_char_ground_emits_exactly_one_record_from_the_live_table() {
         hits[0].contains("scope=0 ground_y=1704 wa_bottom=1752 diff=-48 route=DpiReproject"),
         "接地点レコードの中身が違う: {}",
         hits[0]
+    );
+}
+
+/// 連鎖再解決の記録が 1 段階につき 1 行だけ出る（発行の口・task 5.6）。
+///
+/// 見送りの行は理由語を載せ、見送り以外は番兵で埋める——落とすと「記録が出ていない」と
+/// 「その段階にはその値が無い」の区別が事後に付かない。
+#[test]
+fn log_chain_emits_exactly_one_record_per_stage() {
+    let world = World::new();
+
+    let (_, events) = crate::placement::test_support::capture_logs(|| {
+        log_chain(&world, CHAIN_STAGE_REALIGNED, 2, 1, None);
+        log_chain(
+            &world,
+            CHAIN_STAGE_DEFERRED,
+            2,
+            0,
+            Some(ChainDeferReason::DpiSyncHeld { scope: 1 }.as_str()),
+        );
+    });
+
+    let hits: Vec<&str> = events
+        .iter()
+        .map(|e| e.message())
+        .filter(|m| m.contains("kind=chain"))
+        .collect();
+    assert_eq!(hits.len(), 2, "連鎖レコードが 2 行でない: {events:?}");
+    assert!(
+        hits[0].contains("stage=realigned scopes=2 moved=1 reason=-"),
+        "解き直しの行の中身が違う: {}",
+        hits[0]
+    );
+    assert!(
+        hits[1].contains("stage=deferred scopes=2 moved=0 reason=dpi-sync-held"),
+        "見送りの行の中身が違う: {}",
+        hits[1]
     );
 }

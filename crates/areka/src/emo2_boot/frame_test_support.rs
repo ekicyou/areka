@@ -841,6 +841,14 @@ impl FrameHarness {
         finalize_chain_once_with(source, &mut self.world);
     }
 
+    /// 遷移後の連鎖再解決を 1 回回す（本番の連鎖確定の直後の段と同一の関数）。
+    ///
+    /// 一度きりの契約（遷移 1 回につき武装→解決の 1 往復）は本番同様
+    /// `ChainRealignPending` で守られるので、この口を何度呼んでも 2 度目以降は無操作である。
+    pub(super) fn run_chain_realign<S: PhysicalSizeSource + ?Sized>(&mut self, source: &S) {
+        realign_chain_once_with_source(source, &mut self.world);
+    }
+
     /// 積まれた窓書込指令を**実行せずに**取り出す（D11 の検査口）。
     ///
     /// 取り出す先はスレッド全体で 1 本のキューであり、ハーネスごとに分かれていない。

@@ -21,6 +21,8 @@
 
 pub(crate) mod balloon_limit;
 pub mod chain_finalize;
+/// DPI／拡大率の遷移後に連鎖を一度だけ解き直す機構（設計 C4・要件 6.1〜6.3／6.6）。
+pub mod chain_realign;
 pub mod config;
 pub mod diag;
 /// 窓ごとの整合ゲート（窓の拡大率とモニタ別拡大率表が揃うまで窓書込を見送る・設計 C5）。

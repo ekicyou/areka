@@ -12,6 +12,7 @@ use crate::placement::chain_finalize::{
     ChainDeferReason, ChainFinalizeStall, ChainFinalized, ScopeChainState, finalize_chain,
     moved_default_pos, note_chain_deferral,
 };
+use crate::placement::chain_realign;
 use crate::placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
 use crate::placement::dpi_sync::{self, HoldSite};
 use crate::placement::follow::{move_window_to, resize_window_to};
@@ -355,6 +356,34 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
         moved = moves.len(),
         "chain_finalize: 初期配置を確定（以後のサーフェス切替では駆動しない・scg 7.4）"
     );
+}
+
+// ---------------------------------------------------------------------------
+// DPI 遷移後の連鎖再解決（atom 設計 C4・要件 6.1／6.2／6.3／6.6）
+// ---------------------------------------------------------------------------
+
+/// 遷移後の連鎖の解き直しを 1 回試みる（`emo2_frame_system` が連鎖確定の**直後**に呼ぶ）。
+///
+/// 本番経路は [`finalize_chain_once`] と同じく本体を持たず
+/// [`realign_chain_once_with_source`] へ委譲する（実装を 2 つに割らない）。
+pub(super) fn realign_chain_once(presenter: &EmoPresenter, world: &mut World) {
+    realign_chain_once_with_source(presenter, world)
+}
+
+/// [`realign_chain_once`] の本体（[`PhysicalSizeSource`] 越しに寸を引く形へ一般化したもの）。
+///
+/// 判断そのもの（武装しているか・待ち札が残っていないか・解き直して武装を解く）は
+/// [`crate::placement::chain_realign`] が持つ。ここが供給するのは走査だけである——
+/// 「全スコープの窓寸が実表示寸へ揃ったか」の判定を起動時確定と**同一の実装**
+/// （[`collect_chain_states`]）で行うために、走査を関数として渡す。
+///
+/// 走査を配置層へ移さないのは、表示側の寸の引き口（[`PhysicalSizeSource`]）と target 採番
+/// （`shell_target`）が表示層の語彙だからである（配置層はどちらも知らない）。
+pub(super) fn realign_chain_once_with_source<S: PhysicalSizeSource + ?Sized>(
+    source: &S,
+    world: &mut World,
+) {
+    chain_realign::realign_chain_once_with(world, |world| collect_chain_states(source, world));
 }
 
 /// 確定の走査結果——判定へ渡す状態列と、反映へ渡す `(scope, char 窓 entity, 現在位置)` の列。

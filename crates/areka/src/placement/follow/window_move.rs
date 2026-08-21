@@ -40,9 +40,33 @@ use super::{
 /// 増やす＝`resize_window_keep_position` と同じ判断）。**スクリプトの明示操作**ゆえ
 /// 遷移ガードは適用しない（ドラッグ・`Restore` と同族・D13 帰結⑵）。
 pub fn move_window_to(world: &mut World, window: Entity, x: i32, y: i32) -> bool {
+    move_window_with_route(world, window, x, y, PlacementRoute::MoveCue)
+}
+
+/// [`move_window_to`] の経路引数版（対象窓の書込 route だけを呼び手が名乗る）。
+///
+/// 幾何の扱いは [`move_window_to`] と**完全に同一**である——変わるのは対象窓の書込へ載る
+/// [`PlacementRoute`] だけで、随伴バルーンは従来どおり [`PlacementRoute::BalloonFollow`] を
+/// 名乗る（随伴はキャラ窓の従属量であって、キャラ窓を動かした由来を名乗る主体ではない）。
+///
+/// # なぜ経路を引数で受けるか（D13 の 1 語＝1 実在トリガ）
+///
+/// 「寸を変えずに位置だけを書く」手続きの呼び手は 2 つある——`\![move]` cue（明示操作＝
+/// [`PlacementRoute::MoveCue`]）と、DPI 遷移後の連鎖再解決（システム由来＝
+/// [`PlacementRoute::ChainRealign`]・`areka-P0-dpi-transition-atomicity` C4）である。
+/// 由来が違えば**挙動も違う**: 既定位置の追跡（[`track_default_char_pos`]・D9／D16）は
+/// システム由来の書込にだけ効くので、遷移後の解き直しを `MoveCue` で書くと既定位置が
+/// 置き去りになり、次の遷移で当該スコープが「明示的に動かされた」へ倒れる。
+pub fn move_window_with_route(
+    world: &mut World,
+    window: Entity,
+    x: i32,
+    y: i32,
+    route: PlacementRoute,
+) -> bool {
     let follow = world.get::<BalloonFollow>(window).copied();
 
-    if !enqueue_window_set_pos(world, window, x, y, None, Some(PlacementRoute::MoveCue)) {
+    if !enqueue_window_set_pos(world, window, x, y, None, Some(route)) {
         return false;
     }
 
