@@ -338,7 +338,7 @@ fn scale_notice_first_lands_in_one_write_at_192() {
 
 /// 待ちのあいだに表情差替（drain 相の `ShowSurface` が積む新 k・寸変化の窓寸要求）が来ても、
 /// 報告寸の突合と再スナップの**どちらからも**当該窓への書込は 0 のままである
-/// （設計 C5 議題 1・D15 の「3 点すべて」）。
+/// （設計 C5 議題 1・D15 の「4 点すべて」のうち、この 2 点）。
 ///
 /// 陽性の対は同じ本体の後半——待ちが解けた後は、**同じ 2 つの駆動口**が書く。
 fn a_surface_swap_during_the_wait_writes_nothing_at(dpi: u16) {
@@ -493,12 +493,12 @@ fn the_wait_gives_up_after_the_bounded_number_of_frames_at_192() {
     the_wait_gives_up_after_the_bounded_number_of_frames_at(SCALE_192);
 }
 
-/// 待ち札が見送るのは**窓書込の 3 点だけ**であり、描画の相（`run_drain_phase`）は素通しである
+/// 待ち札が見送るのは**窓書込の 4 点だけ**であり、描画の相（`run_drain_phase`）は素通しである
 /// （設計 D15「描画そのものは止めない」）。
 ///
 /// 決定論テストが買える射程はここまでである——本ハーネスは GPU を持たないので `apply_show` が
 /// 実際に画を出したことは検証できない。ゆえに問うのは**構造**——描画の相の本文に整合ゲートの
-/// 参照が 1 つも無く、逆に 3 つの見送り点にはあること（陽性の対）である。発話・アニメが実機で
+/// 参照が 1 つも無く、逆に 4 つの見送り点にはあること（陽性の対）である。発話・アニメが実機で
 /// 遅れていないことの持ち分は実機サインオフ（要件 8.4 の目視所見併記）にある。
 #[test]
 fn the_wait_defers_window_writes_only_and_leaves_the_drawing_phase_untouched() {
@@ -524,7 +524,7 @@ fn the_wait_defers_window_writes_only_and_leaves_the_drawing_phase_untouched() {
         );
     }
 
-    // 陽性の対: 3 つの見送り点にはゲートがある（無ければ上の「無い」は空虚）。
+    // 陽性の対: 4 つの見送り点にはゲートがある（無ければ上の「無い」は空虚）。
     assert!(
         include_str!("frame/dpi.rs").contains("dpi_sync::apply_dpi_phase_gate(world, window, now)"),
         "拡大率の相にゲートが無い（見送り点の 1 つ目）"
@@ -537,7 +537,12 @@ fn the_wait_defers_window_writes_only_and_leaves_the_drawing_phase_untouched() {
     assert!(
         drain_resnap
             .contains("dpi_sync::defers_window_write(world, char_window, HoldSite::Resnap)"),
-        "再スナップにゲートが無い（見送り点の 3 つ目）"
+        "実表示寸の再スナップにゲートが無い（見送り点の 3 つ目）"
+    );
+    assert!(
+        include_str!("frame/work_area_sync.rs")
+            .contains("dpi_sync::defers_window_write(world, window, HoldSite::WorkAreaResnap)"),
+        "作業領域変化を契機とする再スナップにゲートが無い（見送り点の 4 つ目・task 6.5）"
     );
 }
 

@@ -108,6 +108,13 @@ fn the_decision_and_site_words_come_from_the_single_source() {
         transition_diag::HOLD_SITE_RECONCILE
     );
     assert_eq!(HoldSite::Resnap.as_str(), transition_diag::HOLD_SITE_RESNAP);
+    assert_eq!(
+        HoldSite::WorkAreaResnap.as_str(),
+        transition_diag::HOLD_SITE_WORK_AREA_RESNAP
+    );
+    // 2 つの「再スナップ」は**別語**である（同じ語だと、ログ上でどちらの点が見送ったのか
+    // 判らない＝task 6.5 が解いた曖昧さがそのまま観測面へ戻る）。
+    assert_ne!(HoldSite::Resnap.as_str(), HoldSite::WorkAreaResnap.as_str());
 }
 
 // ---------------------------------------------------------------------------

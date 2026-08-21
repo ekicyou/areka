@@ -290,6 +290,12 @@ mod transition_atomicity_tests;
 #[path = "frame_transition_branch_tests.rs"]
 mod transition_branch_tests;
 
+// 整合ゲートの 4 つ目の窓書込口（task 6.5）の統合テスト。同じくハーネスに乗るので
+// **x64 のみ**で接続する（常時テストに x86 を用いない・要件 7.5）。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_work_area_resnap_hold_tests.rs"]
+mod work_area_resnap_hold_tests;
+
 #[cfg(test)]
 #[path = "frame_attach_tests.rs"]
 mod attach_tests;

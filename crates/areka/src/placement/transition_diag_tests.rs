@@ -97,6 +97,7 @@ fn hold_and_chain_words_are_fixed_and_distinct() {
     assert_eq!(HOLD_SITE_DPI, "dpi");
     assert_eq!(HOLD_SITE_RECONCILE, "reconcile");
     assert_eq!(HOLD_SITE_RESNAP, "resnap");
+    assert_eq!(HOLD_SITE_WORK_AREA_RESNAP, "work-area-resnap");
     assert_eq!(CHAIN_STAGE_ARMED, "armed");
     assert_eq!(CHAIN_STAGE_REALIGNED, "realigned");
     assert_eq!(CHAIN_STAGE_DEFERRED, "deferred");

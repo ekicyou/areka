@@ -26,7 +26,7 @@
 //!
 //! 本ファイルは task 2.4（観測の増設）で建てた語彙であり、実際に到達できる発行点は 4 つ——
 //! [`log_char_ground`]（`resize_window_to` から）・[`log_monitor_snapshot_sync`]（作業領域源の
-//! 同期＝task 5.1 から）・[`log_hold`]（整合ゲートの 3 点＝task 5.4 から）・[`log_chain`]
+//! 同期＝task 5.1 から）・[`log_hold`]（整合ゲートの 4 点＝task 5.4 の 3 点＋task 6.5 の 4 点目）・[`log_chain`]
 //! （遷移後の連鎖再解決＝task 5.6 から）である。
 //!
 //! # 語彙は先に建てる（未消費の `#[allow(dead_code)]` の根拠）
@@ -109,12 +109,24 @@ pub const HOLD_DECISION_ALL: &[&str] = &[
 pub const HOLD_SITE_DPI: &str = "dpi";
 /// 判定を下した観測点: 報告寸の突合。
 pub const HOLD_SITE_RECONCILE: &str = "reconcile";
-/// 判定を下した観測点: 再スナップ。
+/// 判定を下した観測点: **実表示寸**の再スナップ（`resnap_shell_targets`＝表示側の物理寸が
+/// 窓寸と食い違う窓を書き直す点）。
 pub const HOLD_SITE_RESNAP: &str = "resnap";
+/// 判定を下した観測点: **作業領域変化を契機とする**再スナップ（`resnap_for_work_area_change`
+/// ＝作業領域源が差し替わったフレームに現寸のまま接地点を引き直す点）。
+///
+/// [`HOLD_SITE_RESNAP`] と別語なのは、日本語の「再スナップ」が別々の 2 関数を指すからである
+/// ——同じ語にすると、ログ上でどちらの点が見送ったのかが判らない（task 6.5）。
+pub const HOLD_SITE_WORK_AREA_RESNAP: &str = "work-area-resnap";
 
-/// 観測点語の全体（design C5 の「3 点すべて」＝待ち札の守備範囲そのもの）。
+/// 観測点語の全体（design C5 の「4 点すべて」＝待ち札の守備範囲そのもの）。
 #[allow(dead_code)] // 語彙先着（module doc「語彙は先に建てる」）
-pub const HOLD_SITE_ALL: &[&str] = &[HOLD_SITE_DPI, HOLD_SITE_RECONCILE, HOLD_SITE_RESNAP];
+pub const HOLD_SITE_ALL: &[&str] = &[
+    HOLD_SITE_DPI,
+    HOLD_SITE_RECONCILE,
+    HOLD_SITE_RESNAP,
+    HOLD_SITE_WORK_AREA_RESNAP,
+];
 
 // ---------------------------------------------------------------------------
 // 連鎖再解決の段階語（stage）
@@ -443,7 +455,8 @@ fn window_identity(world: &World, window: Entity) -> (Option<u32>, &'static str)
 // 整合待ちレコードの発行
 // ---------------------------------------------------------------------------
 
-/// 整合待ちの記録を 1 行出す（拡大率の相・報告寸の突合・再スナップの 3 点が呼ぶ）。
+/// 整合待ちの記録を 1 行出す（拡大率の相・報告寸の突合・実表示寸の再スナップ・作業領域変化を
+/// 契機とする再スナップの 4 点が呼ぶ）。
 ///
 /// 呼出側は [`is_enabled`] で前置ガードすること（本関数は行を組む＝確保する）。判定語
 /// （`decision`）と観測点語（`site`）は本モジュールの定数が単一の定義元であり、呼出側は

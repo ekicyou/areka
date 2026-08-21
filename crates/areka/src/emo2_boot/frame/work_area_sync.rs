@@ -35,6 +35,7 @@ use wintf::ecs::WindowPos;
 use wintf::ecs::window::monitor::Monitor;
 
 use crate::placement::diag::PlacementRoute;
+use crate::placement::dpi_sync::{self, HoldSite};
 use crate::placement::follow::{
     Anchored, MonitorDpiTable, MonitorSnapshot, MonitorSources, project_anchor, same_monitors,
 };
@@ -172,6 +173,25 @@ pub(super) fn sync_monitor_snapshot_with(
 /// 従属量ゆえ触らない——キャラ窓が動けば同一の [`resize_window_to`] 呼出の内側で随伴が
 /// 追従する（窓左上相対・追従 offset は補正しない・要件 10.1）。
 ///
+/// # 整合待ちの窓は書かない（設計 C5 の 4 点目・task 6.5）
+///
+/// 対象に選ばれても [`DpiSyncHold`](crate::placement::dpi_sync::DpiSyncHold) の付いた窓へは
+/// 書かない。設計 D15 の原則は「待ち札のある窓への**すべての**窓書込を見送る」であり、例外は
+/// 随伴バルーンの追従 1 つだけである。本関数は設計 C5 が当初列挙した 3 点に入っていなかったが、
+/// それは列挙の抜けであった——C5 の言う「再スナップ」は
+/// [`resnap_shell_targets`](super::drain_resnap::resnap_shell_targets) を指しており、日本語の
+/// 同じ語が別々の 2 関数を指していたためである。
+///
+/// # 見送った窓は取り残されない（次の機会は**別の点**が持つ）
+///
+/// ほかの 3 点は毎フレーム走るが、本関数は作業領域源が差し替わったフレームだけ走る。ゆえに
+/// 見送ったフレームの [`SnapshotChange`] は二度と来ない。それでも取り残されないのは、
+/// **札を外すのが拡大率の相だけ**であり、その相が `Changed<DPI>` と札を持つ窓の**和集合**を
+/// 対象に取るからである。解除フレームには当該窓が必ず対象へ入り、
+/// [`reproject_char_window_at_current_size`] が**差し替え済みの作業領域源**（同期段は札に
+/// 関係なく源を差し替える）で接地点を引き直す。つまり見送りは作業領域の変化を捨てるのでは
+/// なく、反映を解除フレームの 1 本へ合流させる（要件 5.8 の一度書きそのもの）。
+///
 /// # 確保（要件 10.4）
 ///
 /// 対象の収集で `Vec` を 1 つ使うが、走るのは作業領域が動いたフレームだけであり、定常
@@ -211,6 +231,13 @@ pub(super) fn resnap_for_work_area_change(world: &mut World, change: &SnapshotCh
     }
 
     for window in targets {
+        // 整合ゲート（設計 C5・要件 5.8・task 6.5 の 4 点目）: 待ち札のある窓へはこの経路
+        // からも書かない。ここに置くのは対象の選定を終えた**後**である——選定は純粋な射影の
+        // 突き合わせで何も消費しないので、見送りの記録が「本当に書くはずだった窓」だけに
+        // 対応する（選定の前に置くと、自分の作業領域が動いていない窓にも見送り行が並ぶ）。
+        if dpi_sync::defers_window_write(world, window, HoldSite::WorkAreaResnap) {
+            continue;
+        }
         // 現寸のまま射影 T を一度通す。同値ならべき等 skip で書込ゼロ（＝拡大率の相が
         // 既に書き終えた窓）、動くべき窓だけが 1 回書かれる。縮退（破棄済み・寸未確定）は
         // 当該関数が log-first で吸収する。

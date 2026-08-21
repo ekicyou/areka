@@ -16,7 +16,13 @@
 //! # 見送るのは窓書込であって描画ではない（設計討議 議題 1）
 //!
 //! 待ち札のある窓でも `apply_show`（描画）は止めない——発話もアニメも遅らせない。止めるのは
-//! 窓の矩形を書く 3 点だけである: 拡大率の相・報告寸の突合・再スナップ（[`HoldSite`] の 3 語）。
+//! 窓の矩形を書く 4 点だけである: 拡大率の相・報告寸の突合・**実表示寸の**再スナップ・
+//! **作業領域変化を契機とする**再スナップ（[`HoldSite`] の 4 語）。
+//!
+//! 「再スナップ」は日本語の同じ語が別々の 2 関数を指す——`resnap_shell_targets`（表示側の
+//! 物理寸が窓寸と食い違う窓を書き直す）と `resnap_for_work_area_change`（作業領域源が
+//! 差し替わったフレームに現寸のまま接地点を引き直す）である。設計 C5 の当初の列挙は前者だけを
+//! 指しており、後者が守備範囲の外に落ちていた（task 6.5 で 4 点目として加えた）。
 //!
 //! # 有界（要件 4.4）
 //!
@@ -32,7 +38,7 @@ use wintf::ecs::{DPI, WindowPos};
 use super::follow::MonitorDpiTable;
 use super::transition_diag::{
     self, HOLD_DECISION_HOLD, HOLD_DECISION_PROCEED, HOLD_DECISION_PROCEED_AFTER_TIMEOUT,
-    HOLD_SITE_DPI, HOLD_SITE_RECONCILE, HOLD_SITE_RESNAP,
+    HOLD_SITE_DPI, HOLD_SITE_RECONCILE, HOLD_SITE_RESNAP, HOLD_SITE_WORK_AREA_RESNAP,
 };
 
 /// 整合待ちの上限フレーム数（設計 C5・C7）。
@@ -43,7 +49,7 @@ pub(crate) const DPI_SYNC_HOLD_MAX_FRAMES: u32 = 30;
 
 /// 整合待ちの札（ゴースト窓 entity へ付く）。
 ///
-/// 付いているあいだ、当該窓への窓書込は 3 つの点すべてで見送られる。付け外しは拡大率の相が
+/// 付いているあいだ、当該窓への窓書込は 4 つの点すべてで見送られる。付け外しは拡大率の相が
 /// 一元的に行い、ほかの点は**読むだけ**である（2 箇所で外すと、解除フレームに書込が 2 本出る）。
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct DpiSyncHold {
@@ -78,15 +84,20 @@ impl DpiSyncDecision {
     }
 }
 
-/// 判定を下した観測点（設計 C5 の「3 点すべて」＝待ち札の守備範囲そのもの）。
+/// 判定を下した観測点（設計 C5 の「4 点すべて」＝待ち札の守備範囲そのもの）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum HoldSite {
     /// 拡大率の相（札の付け外しを行う唯一の点）。
     Dpi,
     /// 報告寸の突合。
     Reconcile,
-    /// 再スナップ。
+    /// **実表示寸**の再スナップ（`resnap_shell_targets`）。
     Resnap,
+    /// **作業領域変化を契機とする**再スナップ（`resnap_for_work_area_change`・task 6.5）。
+    ///
+    /// [`Resnap`](HoldSite::Resnap) と別の語を持つ——「再スナップ」という日本語が別々の
+    /// 2 関数を指しており、同じ語にするとログ上でどちらが見送ったのか判らないからである。
+    WorkAreaResnap,
 }
 
 impl HoldSite {
@@ -96,6 +107,7 @@ impl HoldSite {
             HoldSite::Dpi => HOLD_SITE_DPI,
             HoldSite::Reconcile => HOLD_SITE_RECONCILE,
             HoldSite::Resnap => HOLD_SITE_RESNAP,
+            HoldSite::WorkAreaResnap => HOLD_SITE_WORK_AREA_RESNAP,
         }
     }
 }
@@ -221,12 +233,25 @@ pub(crate) fn apply_dpi_phase_gate(world: &mut World, window: Entity, now: u32) 
     !outcome.decision.is_hold()
 }
 
-/// ほかの窓書込点（報告寸の突合・再スナップ）のゲート——**読むだけ**で札は触らない。
+/// ほかの窓書込点（報告寸の突合・実表示寸の再スナップ・作業領域変化を契機とする再スナップ）の
+/// ゲート——**読むだけ**で札は触らない。
 ///
 /// 戻り値は**当該窓の窓書込を見送るか**（`true`＝この点では何も書かない）。見送った要求は
-/// 消費せず次フレームへ持ち越す（報告寸は presenter が保持し、再スナップは実表示寸を毎フレーム
-/// 読み直す）。解除フレームに拡大率の相が新しい源・新しい寸で 1 本書き、持ち越された要求は
+/// 消費せず次フレームへ持ち越す（報告寸は presenter が保持し、実表示寸の再スナップは毎フレーム
+/// 表示側を読み直し、作業領域変化を契機とする再スナップは差し替え済みの作業領域源をそのまま
+/// 残す）。解除フレームに拡大率の相が新しい源・新しい寸で 1 本書き、持ち越された要求は
 /// べき等 skip で吸収される。
+///
+/// # 作業領域変化を契機とする再スナップだけは「次の機会」が自動では来ない（task 6.5）
+///
+/// ほかの 2 点は毎フレーム走るが、この点は**作業領域源が差し替わったフレームだけ**走る。
+/// 見送ったフレームで捨てた `SnapshotChange` は二度と来ないので、この点だけを見ると
+/// 取り残されるように読める。取り残されない理由は**別の点が拾うから**である——札を外すのは
+/// 拡大率の相だけであり、その相は `Changed<DPI>` と札を持つ窓の**和集合**を対象に取る。
+/// 解除フレームには当該窓が必ず対象に入り、`reproject_char_window_at_current_size` が
+/// **差し替え済みの作業領域源**（同期段は札に関係なく毎フレーム源を差し替える）で接地点を
+/// 引き直す。ゆえに見送りは「作業領域の変化を捨てる」のではなく「反映を解除フレームの
+/// 1 本へ合流させる」ことになる（要件 5.8 の一度書きそのもの）。
 pub(crate) fn defers_window_write(world: &World, window: Entity, site: HoldSite) -> bool {
     let Some(hold) = world.get::<DpiSyncHold>(window) else {
         return false;

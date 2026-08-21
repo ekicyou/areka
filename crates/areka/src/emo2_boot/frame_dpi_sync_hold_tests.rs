@@ -288,8 +288,12 @@ fn the_wait_gives_up_after_the_bounded_number_of_frames_and_proceeds() {
 // 零件の主張の陽性の対（同じ駆動口）
 // ---------------------------------------------------------------------------
 
-/// 待ち札が 1 つも無ければ、**同じ 3 つの駆動口**（拡大率の相・報告寸の突合・再スナップ）は
-/// すべて窓を書く。
+/// 待ち札が 1 つも無ければ、本ファイルが駆動する **3 つの口**（拡大率の相・報告寸の突合・
+/// 実表示寸の再スナップ）はすべて窓を書く。
+///
+/// 見送り点は task 6.5 で 4 つになった（4 点目＝作業領域変化を契機とする再スナップ）。その点の
+/// 零件と陽性の対は `frame_work_area_resnap_hold_tests.rs` が持つ——ここへ足さないのは、4 点目の
+/// 駆動には「札が残ったまま作業領域が動く」という別の配置が要るからである。
 #[test]
 fn the_same_drive_ports_write_when_nothing_is_waiting() {
     let mut harness = FrameHarness::new();
@@ -456,7 +460,8 @@ fn transition_lines(drive: impl FnOnce()) -> Vec<String> {
         .collect()
 }
 
-/// 3 つの点それぞれが `kind=hold` を出し、**どの点で見送ったか**が `site=` で判る。
+/// 本ファイルが駆動する 3 つの点それぞれが `kind=hold` を出し、**どの点で見送ったか**が
+/// `site=` で判る（4 点目 `site=work-area-resnap` は `frame_work_area_resnap_hold_tests.rs` が持つ）。
 #[test]
 fn each_of_the_three_sites_emits_its_own_hold_record() {
     let mut harness = FrameHarness::new();
