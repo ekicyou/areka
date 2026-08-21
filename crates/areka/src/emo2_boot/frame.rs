@@ -251,6 +251,12 @@ mod work_area_resnap_tests;
 #[path = "frame_dpi_sync_hold_tests.rs"]
 mod dpi_sync_hold_tests;
 
+// 既定位置の追跡（task 5.5）の統合テスト。同じくハーネスに乗るので**x64 のみ**で接続する
+// （常時テストに x86 を用いない・要件 7.5）。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_default_pos_track_tests.rs"]
+mod default_pos_track_tests;
+
 #[cfg(test)]
 #[path = "frame_attach_tests.rs"]
 mod attach_tests;

@@ -185,10 +185,15 @@ pub(super) const VISIBILITY_UNRESOLVED_TAG: &str = "[visibility-guard] WorkAreaU
 /// その否定であり、**同じ矩形・同じ幾何でも判定が反転する**。ゆえに発火条件は幾何では
 /// 表現できず、書込の由来＝route を見るしかない。
 ///
-/// # 網羅 `match` で書く理由
+/// # 区分の定義元は [`PlacementRoute::is_system_reanchor`] 1 本である（atom task 5.5）
 ///
-/// 既定腕（`_ => false` 等）を置くと、[`PlacementRoute`] へ語彙が増えたとき新経路が
-/// 黙って片側へ倒れる。網羅 `match` ならコンパイラが判断を要求する（D14 帰結⑵と同じ流儀）。
+/// 「システム由来の再アンカーか、利用者・台本の明示操作か」という区分は、本述語と**既定位置の
+/// 追跡**（design D9／D16・`enqueue_window_set_pos`）の 2 箇所で読まれる。設計が両者を同じ
+/// 集合と明言しているため、列を 2 本持つと片方だけ直したときに静かに食い違う——ゆえに本述語は
+/// [`PlacementRoute::is_system_reanchor`] へ**委譲する**（判断の腕はあちら側の網羅 `match` が
+/// 持ち、語彙が増えればコンパイラがそこで判断を要求する・D14 帰結⑵と同じ流儀）。
+///
+/// 2 つの区分を意図的に割る日が来たら、そのときに列を割って理由を設計へ登記すること。
 ///
 /// # 適用外の内訳
 ///
@@ -207,25 +212,9 @@ pub(super) const VISIBILITY_UNRESOLVED_TAG: &str = "[visibility-guard] WorkAreaU
 ///   [`Placement`](BalloonFollowTrigger::Placement) 腕が**引き金の route** に対して
 ///   本述語を引く形にした（本述語へ `BalloonFollow` を渡す形にはしていない）。
 pub(super) fn route_applies_visibility_guard(route: PlacementRoute) -> bool {
-    match route {
-        // 非ドラッグの自動配置（S3 の保護対象・D13 帰結⑴）
-        PlacementRoute::AnchorChange
-        | PlacementRoute::Resnap
-        | PlacementRoute::DpiReproject
-        | PlacementRoute::ReportedSizeReconcile
-        // 作業領域の変化・遷移後の連鎖再解決も**システム由来の再アンカー**であり、
-        // ユーザーの明示操作ではない（design D9 が既定位置の追跡対象として同じ 6 経路を
-        // 挙げているのと同じ区分）。ゆえに S3 の保護対象＝ガードは発火する。
-        | PlacementRoute::WorkAreaResnap
-        | PlacementRoute::ChainRealign => true,
-        // 明示操作・別 spec 所有・バルーン窓側（上記 doc の内訳）
-        PlacementRoute::SpawnInitial
-        | PlacementRoute::Restore
-        | PlacementRoute::KeepPositionResize
-        | PlacementRoute::BalloonFollow
-        | PlacementRoute::MoveCue
-        | PlacementRoute::BalloonLimitRelease => false,
-    }
+    // 非ドラッグの自動配置（S3 の保護対象・D13 帰結⑴）＝システム由来の再アンカー 6 経路。
+    // 明示操作・別 spec 所有・バルーン窓側（上記 doc の内訳）はあちらで `false` に落ちる。
+    route.is_system_reanchor()
 }
 
 /// 射影 T の**下流・外側**で可視性の遷移ガードを適用する（D5: `project_anchor` の

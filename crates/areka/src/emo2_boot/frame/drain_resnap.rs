@@ -335,6 +335,10 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
     }
 
     // 台帳の既定位置を確定値へ揃える（以後の「既定配置のまま」判定が確定後を基準に働く）。
+    //
+    // ここを明示的に書くのは、上の反映が `move_window_to`＝`PlacementRoute::MoveCue`
+    // ＝**明示操作**の経路を通るからである。単一の窓書込口の追随規則（atom D9／D16）は
+    // システム由来の再アンカーにしか効かないので、両者は重ならない（二重に書かない）。
     if !moves.is_empty()
         && let Some(mut ghost_windows) = world.get_resource_mut::<GhostWindows>()
     {
@@ -377,6 +381,11 @@ fn collect_chain_states<S: PhysicalSizeSource + ?Sized>(
         };
         // `None` は「既定配置ではない」（保存位置の復元）。判定側が常に対象外として扱う
         // ため、ここでは打ち切らずそのまま渡す（scg 7.3）。
+        //
+        // 読む値は「起動時の既定」ではなく**「最後にシステムが置いた既定位置」**である
+        // （atom D9／D16・要件 6.2）。拡大率の遷移では単一の窓書込口が同じ量を書込先へ
+        // 運ぶので、誰も触っていないスコープは遷移後も一致したまま＝対象に残る。運ばないと
+        // 全スコープが「明示的に動かされた」へ倒れて解き直しが空振りする。
         let default_x = ghost_windows.default_char_pos(scope).map(|p| p.x);
         // 表示未成立（初回 ShowSurface 前）は実表示寸が未確定＝まだ確定できない。
         let Some((w, h)) = source.physical_size(shell_target(scope as u32)) else {

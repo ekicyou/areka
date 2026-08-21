@@ -608,6 +608,11 @@ pub(super) fn enqueue_window_set_pos(
             .with_tag(transition_diag::write_tag(world, window, route)),
     );
 
+    // 既定位置の追跡（design D9／D16・要件 6.2）: **ミラーを書き換える前**に呼ぶ——本関数が
+    // 見るのは「書込**前**の現在位置」であり、下の bypass ミラーが `WindowPos.position` を
+    // 新位置へ書いた後では一致判定が常に成立してしまう（明示操作で動かした窓まで追随する）。
+    track_default_char_pos(world, window, route, PointPx { x, y });
+
     match world.get_mut::<WindowPos>(window) {
         Some(mut wp) => {
             let wp = wp.bypass_change_detection();
@@ -653,6 +658,101 @@ pub(super) fn enqueue_window_set_pos(
     }
 
     true
+}
+
+/// 「まだ誰にも動かされていない」の基準（`ScopeWindows.default_char_pos`）を、**システム由来の
+/// 再アンカー**が動かした先へ追随させる（design D9／D16・要件 6.2）。
+///
+/// # なぜ要るか
+///
+/// 連鎖の再解決は「明示的に再配置されたスコープを対象から外す」ために、現在位置が既定位置と
+/// 一致するかを見る（`scope-chain-gap` 7.3・`drain_resnap::collect_chain_states`）。ところが
+/// 拡大率が変われば**全スコープ**の位置がシステム側の都合で動く——既定位置を据え置いたままだと
+/// 全件が「明示的に動かされた」へ倒れ、遷移後の解き直しが丸ごと空振りする（要件 6.2 が
+/// 名指しで禁じる状態）。ゆえに、システム由来の書込に限って基準そのものを一緒に運ぶ。
+///
+/// # 追随させる条件（3 つすべて）
+///
+/// 1. **route がシステム由来**（[`PlacementRoute::is_system_reanchor`]）。明示操作
+///    （`MoveCue`・`Restore`・`BalloonLimitRelease`）と route を持たない書込（ドラッグ＝
+///    `None`）では追随させない——これらは「利用者が置いた位置」であって、既定位置との
+///    食い違いこそが除外の根拠だからである。
+/// 2. **対象がキャラ窓**（[`CharWindowMarker`] を持つ）。既定位置はスコープのキャラ窓に対して
+///    のみ定義される量で、バルーン窓は従属量ゆえ持たない。
+/// 3. **書込前の現在位置が既定位置と一致**。一致しない窓は既にドラッグ・台本で動かされて
+///    おり、そこへ追随させると「動かされた」という事実そのものを消してしまう。
+///
+/// 既定位置が `None`（保存位置が復元されたスコープ）は `None` のままにする——`None` は
+/// 「そもそも既定配置ではない」を表す標であって、位置の欠落ではない（`scope-chain-gap` 7.3）。
+///
+/// # 連鎖確定の書込とは重ならない
+///
+/// 起動時の連鎖確定（`drain_resnap::finalize_chain_once_with`）は反映を
+/// [`move_window_to`]＝[`PlacementRoute::MoveCue`]＝**明示操作**の経路で行い、確定値を自分で
+/// [`GhostWindows::set_default_char_pos`] へ書く。本関数はその経路に効かないので、2 つの
+/// 書き手が同じ量を別々の値で書くことはない。
+///
+/// # 追随させないときは何もしない（無音）
+///
+/// 上の 3 条件は**常時**評価される（窓書込のたびに通る）ので、外れた場合は正常な素通りである。
+/// 一方、キャラ窓かつシステム由来なのに台帳・位置が引けない形は結線の異常ゆえ `debug!` を残す
+/// ——書込そのものは成立しており失敗ではないが、無音にすると「追随したのか対象外だったのか」が
+/// 事後に判らなくなる。
+fn track_default_char_pos(
+    world: &mut World,
+    window: Entity,
+    route: Option<PlacementRoute>,
+    written: PointPx,
+) {
+    // 条件 1: システム由来の再アンカーだけが基準を運ぶ。
+    if !route.is_some_and(PlacementRoute::is_system_reanchor) {
+        return;
+    }
+    // 条件 2: 既定位置を持つのはスコープのキャラ窓だけ。
+    let Some(scope) = world.get::<CharWindowMarker>(window).map(|m| m.scope) else {
+        return;
+    };
+    // 条件 3 の左辺: 書込**前**の現在位置。
+    let Some(current) = world.get::<WindowPos>(window).and_then(|wp| wp.position) else {
+        debug!(
+            entity = ?window,
+            scope,
+            ?route,
+            "WindowPos／position 未付与のため既定位置の追跡を見送る（書込は成立）"
+        );
+        return;
+    };
+    let Some(mut ghost_windows) = world.get_resource_mut::<GhostWindows>() else {
+        debug!(
+            entity = ?window,
+            scope,
+            ?route,
+            "GhostWindows 未挿入のため既定位置の追跡を見送る（書込は成立）"
+        );
+        return;
+    };
+    // `None`（保存位置の復元）は `None` のまま——「既定配置ではない」の標を位置で塗り潰さない。
+    let Some(default_pos) = ghost_windows.default_char_pos(scope) else {
+        return;
+    };
+    // 条件 3: 一致していた窓だけが追随する。
+    if default_pos.x != current.x || default_pos.y != current.y {
+        return;
+    }
+    if default_pos == written {
+        return;
+    }
+    ghost_windows.set_default_char_pos(scope, written);
+    debug!(
+        entity = ?window,
+        scope,
+        ?route,
+        from_x = default_pos.x,
+        from_y = default_pos.y,
+        to_x = written.x,
+        to_y = written.y,
+        "既定位置をシステム由来の再アンカー先へ追随させた（D9／D16・要件 6.2）"
+    );
 }
 
 /// 窓移動レコード（Req 1.2）を World から転写して組み、専用 target へ出す

@@ -270,6 +270,50 @@ impl PlacementRoute {
             PlacementRoute::ChainRealign => "ChainRealign",
         }
     }
+
+    /// **システム由来の再アンカー**か（design D9／D16・要件 6.2）。
+    ///
+    /// 表示環境の変化（拡大率・作業領域・報告寸・アンカー）を受けて**基盤が**窓を置き直した
+    /// 書込が `true`、利用者やゴースト台本の**明示操作**による書込が `false` である。
+    ///
+    /// # なぜ 1 箇所で持つか
+    ///
+    /// この区分は 2 つの判断で読まれる——既定位置の追跡（単一の窓書込口
+    /// `follow::window_move::enqueue_window_set_pos` が既定位置を書込先へ追随させるか）と、
+    /// 可視性の遷移ガード（`follow::visibility::route_applies_visibility_guard` が
+    /// 「可視 → 全 work area 非交差」を阻止するか）。**両者は同一の区分**であることを設計が
+    /// 明言している（D9 が挙げる 6 経路と S3 の保護対象が同じ集合）ので、列を 2 本持つと
+    /// 片方だけを直したときに静かに食い違う。ゆえに定義をここ 1 本にし、可視性側は本関数へ
+    /// 委譲する。
+    ///
+    /// 将来この 2 つの区分を**意図的に**割るなら、そのときは列を割ったうえで理由を設計へ
+    /// 登記すること（黙って片方へ腕を足さない）。
+    ///
+    /// # 網羅 match である理由
+    ///
+    /// 経路語彙が増えたとき、新しい語をどちら側へ置くかを**必ず**書かせるため。既定の腕
+    /// （`_ => false`）を置くと、新設経路が黙って「明示操作」に倒れて既定位置が追随しなくなる。
+    pub const fn is_system_reanchor(self) -> bool {
+        match self {
+            // 表示環境の変化を受けた基盤側の置き直し（D9 の 6 経路）。
+            PlacementRoute::AnchorChange
+            | PlacementRoute::Resnap
+            | PlacementRoute::DpiReproject
+            | PlacementRoute::ReportedSizeReconcile
+            | PlacementRoute::WorkAreaResnap
+            | PlacementRoute::ChainRealign => true,
+            // 明示操作（`MoveCue`・`Restore`・`BalloonLimitRelease`。ドラッグは route を
+            // 持たない＝`None` ゆえ呼び手側で除かれる）と、既定位置を持たない窓側の経路
+            // （`SpawnInitial` は既定位置そのものを作る点・`KeepPositionResize`／
+            // `BalloonFollow` はバルーン窓の従属量）。
+            PlacementRoute::SpawnInitial
+            | PlacementRoute::Restore
+            | PlacementRoute::KeepPositionResize
+            | PlacementRoute::BalloonFollow
+            | PlacementRoute::MoveCue
+            | PlacementRoute::BalloonLimitRelease => false,
+        }
+    }
 }
 
 impl fmt::Display for PlacementRoute {

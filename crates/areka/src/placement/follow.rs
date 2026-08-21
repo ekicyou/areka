@@ -166,3 +166,7 @@ mod keyword_base_tests;
 #[cfg(test)]
 #[path = "follow_transition_diag_tests.rs"]
 mod transition_diag_tests;
+// 既定位置の追跡規則（task 5.5・design D9／D16・要件 6.2）。
+#[cfg(test)]
+#[path = "follow_default_pos_track_tests.rs"]
+mod default_pos_track_tests;
