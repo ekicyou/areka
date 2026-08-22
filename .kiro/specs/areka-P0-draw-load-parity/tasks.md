@@ -50,7 +50,7 @@
   - _Depends: 2.1, 2.3_
 
 - [ ] 3. tick の門（変化が無いとき 13 本を回さない・無条件に実装し既定値は周 1 の A/B で決める）
-- [ ] 3.1 (P) 旗（tick_wake）とメッセージ→旗の写像
+- [x] 3.1 (P) 旗（tick_wake）とメッセージ→旗の写像
   - プロセス共有のビット集合（POINTER・DRAG・WINDOW_CMD・ZORDER・WM_GEOMETRY・PRESENT・ANIM・REARM・GRAPHICS・FORCE）へ任意スレッドから原子的に立てる口・最も早い期限を保持する口・読んで倒す口（期限到来の有無を添える）
   - 純関数 wake_bits_for_message: 幾何・DPI・表示構成・活性化・表示/破棄系のメッセージ→WM_GEOMETRY、ポインタ系→POINTER、未知→FORCE（疑わしいときは回す）
   - `ecs/world/mod.rs` へは自分の `mod` 宣言 1 行のみ追加
@@ -271,3 +271,4 @@
 - (2.2) `ui_cpu_us` は `GetThreadTimes` 由来で 15,625µs 量子の整数倍（1 秒窓で ±1 量子≒1.6 ポイントの分解能）。順位表は壁時計を主に読み `ui_cpu_us` は目安として扱う。実走の `[tick]` 行には既存の span 文脈 `actor{actor=emo-text}:` が前置される（フィールド名とは重ならない）。
 - (全般) `.claude/skills/*/SKILL.md` は CRLF。素の書き換えは全行差分になるので行末を保つこと。areka bin の in-crate テストは `cargo test -p areka --bin areka` で走る。
 - (2.4) 初回の実走（debug・15 秒・周期 5 秒）で `unregistered_rest`（名簿外＝bevy タスクプール等）がプロセス CPU の 24〜38% を占め、名簿内は `ui` が約 74%。名簿方式（段②）だけではタスクプールの内訳は出ないので、順位表の段③（WPT サンプリング）が要る。`perf(thread)` の値は累積（読み手 `perf-rank.py` が差分を取る・Rust 側 `delta` が意味論の権威）。
+- (3.1) `tick_wake` の期限は「最も早い 1 つ」だけを保持する（設計どおり）。期限到来で回った tick の中で待ち手が**毎回再装填**しないと後の期限が黙って落ちる——3.3／3.5 の結線はこれを前提に書くこと。`WM_PAINT`／`WM_ERASEBKGND`／`WM_TIMER` は未知→FORCE で全走になるので、周 1 の A/B で FORCE が門を無効化していないか `[tick]` 行の skipped で確かめること。`WM_MOUSELEAVE` は `windows::Win32::UI::Controls`、`WM_NCMOUSELEAVE` は `WindowsAndMessaging` にある。

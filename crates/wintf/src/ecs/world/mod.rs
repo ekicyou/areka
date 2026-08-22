@@ -8,6 +8,7 @@ mod vsync;
 pub mod schedule_labels;
 pub mod thread_registry;
 pub mod tick_diag;
+pub mod tick_wake;
 
 pub use schedule_labels::*;
 pub use vsync::*;
