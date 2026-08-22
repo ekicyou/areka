@@ -236,13 +236,14 @@
   - _Boundary: COMPAT, briefs_
 
 - [ ] 9. 自走ループの実施（仕組みを回す・1 周＝SELECT→IMPLEMENT→TEST→REMEASURE→DECIDE→RECORD を単位に検証する）
-- [ ] 9.1 ループ起動前の統合確認
+- [x] 9.1 ループ起動前の統合確認
   - origin/main を取り込み、設計の file:line と実装の一致を再突合。ワークスペース全テスト緑・`perf-loop.ps1 selftest` 緑・`preflight` を実行して能力（昇格・xperf・PDB・版・check-in 実効値）を台帳へ。goal-text でトークン入りの条件文を出力（4,000 字未満）
   - 観測可能な完了状態: 台帳に PREFLIGHT の capabilities 行と最初の STATUS 行があり、/goal に貼る条件文が得られている
   - _Requirements: 1.6, 1.11, 2.11, 8.1_
   - _Depends: 7.5, 8.1_
 
 - [ ] 9.2 ベースラインと周 1（tick の門の A/B）
+  - _Blocked: 環境起因（2026-08-23 kiro-impl 自律実行で確定）。本セッションでは ⒜ 利用者の VS Code が起動する `rust-analyzer`（pid 32516・遊休）が目標定義 `[quiet].heavy_process_names` に当たり、静寂確認が 4/4 回 NOT_QUIET → `measure-baseline` が exit 2（根拠: `%LOCALAPPDATA%reka-diag\perf-loop\draw-load-parityaseline-20260823elease-FAILED\quiet-before.txt`）。利用者のエディタのプロセスは止めない。⒝ 非対話セッションのため `SetCursorPos`/`SendInput` が ACCESS_DENIED → 追随チェックの clickthrough/drag/balloon_follow が INCONCLUSIVE＝設計 C13 により 1 周も採用できない。⒞ 非昇格のため段③（関数別）は UNAVAILABLE。解除条件: rust-analyzer を止め（または開発者裁定で名前一覧から外し）、**対話デスクトップかつ昇格した PowerShell から起動した Claude Code セッション**で `/goal` に `results/goal-text-2026-08-23.md` の本文（トークン 87696907）を貼る。台帳は `WAIT_BASELINE`（pending_run=…aseline-20260823elease）で待機中＝スキルの再起動規則で `measure-baseline -Build release -Date 20260823 -Resume` から続く。_
   - BASELINE: release 25 分・dev 25 分・順位付け 7 分を別コマンド・別ターンで回し `results/baseline-<date>/` へ判定出力と順位表。周 1 は門の既定 ON（B）対 OFF（A）の交互比較で既定値を決め、台帳に `hypothesis: tick gate default ON` と「周 1 は仕組みの A/B」を記す（順位表からの選択は周 2 以降）
   - ADOPTED なら既定 ON を 1 コミット、NO_DIFF／WORSE なら既定 OFF のまま残す（純関数とテストは残す）
   - 観測可能な完了状態: `results/baseline-<date>/` に両ビルドの verdict と rank.txt、台帳に周 1 の採否と前後の数値・ばらつき、STATUS 行が毎ターン印字されている
@@ -250,6 +251,7 @@
   - _Depends: 9.1_
 
 - [ ] 9.3 周 2 以降の周回（順位表→候補→採否）を停止条件まで
+  - _Blocked: 環境起因（2026-08-23 kiro-impl 自律実行で確定）。本セッションでは ⒜ 利用者の VS Code が起動する `rust-analyzer`（pid 32516・遊休）が目標定義 `[quiet].heavy_process_names` に当たり、静寂確認が 4/4 回 NOT_QUIET → `measure-baseline` が exit 2（根拠: `%LOCALAPPDATA%reka-diag\perf-loop\draw-load-parityaseline-20260823elease-FAILED\quiet-before.txt`）。利用者のエディタのプロセスは止めない。⒝ 非対話セッションのため `SetCursorPos`/`SendInput` が ACCESS_DENIED → 追随チェックの clickthrough/drag/balloon_follow が INCONCLUSIVE＝設計 C13 により 1 周も採用できない。⒞ 非昇格のため段③（関数別）は UNAVAILABLE。解除条件: rust-analyzer を止め（または開発者裁定で名前一覧から外し）、**対話デスクトップかつ昇格した PowerShell から起動した Claude Code セッション**で `/goal` に `results/goal-text-2026-08-23.md` の本文（トークン 87696907）を貼る。台帳は `WAIT_BASELINE`（pending_run=…aseline-20260823elease）で待機中＝スキルの再起動規則で `measure-baseline -Build release -Date 20260823 -Resume` から続く。_
   - 1 周の単位: SELECT（順位表の最上位から候補＝実行器の単スレッド化〔前提テスト 2 本の字面検査を同じコミットで新しい構築形へ改訂〕・文字層レイアウトの変化時のみ化・visual 走査の絞り込み・ポインタ状態の既定値時非書込・カーソル監視の二段周期・ループ ticker 周期〔SERIKO の最短 interval を README へ・⑴ p95 必見〕・flush 駆動）→IMPLEMENT→TEST（全テスト＋追随チェック）→REMEASURE→DECIDE→RECORD。周ごとに台帳 1 エントリと STATUS 行で検証できる
   - 別 spec の担当ファイルは稼働確認のうえ、稼働中なら触らず報告・非稼働なら変更して brief へ申し送り。大きい変更は 3 条件規則で採否。catch-up の系統別突合の結果を台帳に記し、仮説の成立／不成立を数値で
   - 観測可能な完了状態: 各周が台帳に 1 エントリ・採用は 1 コミット・不採用は差分ゼロ・STATUS 行が毎周印字され、頭打ち 3 周か主指標 3.0％ 未満での採用か周数上限 30 で FINAL へ入る
@@ -258,6 +260,7 @@
   - _Depends: 9.2_
 
 - [ ] 9.4 最終判定と未達の登記
+  - _Blocked: 環境起因（2026-08-23 kiro-impl 自律実行で確定）。本セッションでは ⒜ 利用者の VS Code が起動する `rust-analyzer`（pid 32516・遊休）が目標定義 `[quiet].heavy_process_names` に当たり、静寂確認が 4/4 回 NOT_QUIET → `measure-baseline` が exit 2（根拠: `%LOCALAPPDATA%reka-diag\perf-loop\draw-load-parityaseline-20260823elease-FAILED\quiet-before.txt`）。利用者のエディタのプロセスは止めない。⒝ 非対話セッションのため `SetCursorPos`/`SendInput` が ACCESS_DENIED → 追随チェックの clickthrough/drag/balloon_follow が INCONCLUSIVE＝設計 C13 により 1 周も採用できない。⒞ 非昇格のため段③（関数別）は UNAVAILABLE。解除条件: rust-analyzer を止め（または開発者裁定で名前一覧から外し）、**対話デスクトップかつ昇格した PowerShell から起動した Claude Code セッション**で `/goal` に `results/goal-text-2026-08-23.md` の本文（トークン 87696907）を貼る。台帳は `WAIT_BASELINE`（pending_run=…aseline-20260823elease）で待機中＝スキルの再起動規則で `measure-baseline -Build release -Date 20260823 -Resume` から続く。_
   - 25 分 release／dev→verdict を `results/final-<date>/` へ、summary.md（brief の旧数値との対比表）。GOAL_MET か STOPPED の FINAL 行（トークン入り）を印字
   - 未達（⑵ または ⑷a）なら requirements.md の改訂欄に残る最大項と引受先を登記。触った場所の改訂欄登記と各 brief の申し送りを最終形へ更新（SELF_INITIATED_DEPTH の着地形・tick 構造・`Cargo.toml` に触れたか）
   - 観測可能な完了状態: FINAL 行が会話に出て、`results/final-<date>/` と summary.md が存在し、未達の場合は改訂欄に登記がある
@@ -293,3 +296,4 @@
 - (7.4 追記) 本セッション後半で登録簿が更新され `perf-*` が呼べるようになった。Fable から `perf-measure` を呼ぶと 1 行目に `[agent-model] Opus 5 (1M context)` が出た＝観測可能な完了状態を実証済み。
 - (7.3) `perf-loop.ps1`（683 行）＋`perf-loop.common.ps1`（554）＋`perf-loop.measure.ps1`（998＝**残り 2 行・以後の追加は分割前提**）。`followup` は子の exit 3→3、判定成立＝`followup-verdict.txt` があり報告行が中止の形（4 検査とも `-`）でない→0（PASS/FAIL/INCONCLUSIVE とも）、それ以外は 1 回採り直して 4。`-Resume` の完了印＝`probe.log`∧`followup-verdict.txt`。**絶対値の合否（measure-baseline／final）は run-meta の `shiori_helper_present` が True でなければ judge を回さず exit 4**（32bit helper 欠落＝発話無しの走行を合否に混ぜない）。`measure-ab` は `[levels] iteration_build != release` を exit 3 で拒む（要件 5.3）。段③の理由語に `dry_run`（rank-run の DryRun）を追加（C8 語彙外・頭書に明記）。実物 `iter-91`（`%LOCALAPPDATA%\areka-diag\perf-loop\draw-load-parity\iter-91\{rank,bin-A}`）＝7 分 rank-run（dev）と prepare-ab（release＋PDB 16MB・4.3 分）の成果物を残置。実走に要した静寂条件: rust-analyzer が動いていると既定閾値（10%）で NOT_QUIET＝ループ実施時は rust-analyzer を止めること。
 - (7.5) スキル `perf-loop-iteration`（377 行）＋`templates/{agent-prompts.md,entry.json}`。台帳に `previous_phase`／`toolfix_used` を追加（`set-phase --previous-phase/--toolfix-used`・`next-phase` は `--previous` 省略時に台帳から読む）。`iteration`＝**今まわしている周の番号**（`iter-<n>`／`## 周 <n>`／`results/iter-<n>` は同数・`append --iteration <n>` 必須・周を進めるのは RECORD 4 の `set-phase RANK --iteration <n+1>` だけ）。`files_changed` は `(new)` の印ごと台帳へ（不採用時の削除根拠）。`PHASE_TRANSITIONS["IMPLEMENT"]["implement_blocked"]=RECORD` を追加（**設計 C2 の表に未記載→9.4 で追補**）。FINAL に入って 25 分判定が全 PASS でなければ RANK へ戻る（設計 Flow 1 の「FINAL は終端」と異なる＝要件 1.4 の停止理由に当たらないため・9.4 で設計注記）。**`pwsh -Command` 内の `$LASTEXITCODE` は外側を単引用符にして渡す**（二重引用符だと bash は空・PowerShell は自分の値を埋め、テスト赤が `code=0` に化ける＝実射で確認）。`cargo test` は `-Resume` を持たない唯一の背景コマンド：ログはあるが `PERF-LOOP TESTS code=` 行が無い＝起動失敗→tests_red。`perf-ledger.py` は 990 行＝次の変更は分割必須。
+- (9.1) 統合確認の結果: origin/main は着手時（`f6b81078`）から進まず取り込み不要。ワークスペース全テスト **86 バイナリ・5,756 passed・0 failed**。`perf-loop.ps1 selftest` 9/9 緑・`preflight` 緑（`capabilities=elevated:false;xperf:true;pdb:true;function_stage:UNAVAILABLE;reason:not_elevated;judge:0.4.0;python:3.13.15;pwsh:7.6.4;checkin_min:30;selftest:ok`）を台帳へ。走行トークン `87696907`・条件文 1,012 字＝`results/goal-text-2026-08-23.md`。設計 file:line の再突合＝`results/reconcile-2026-08-23.md`（68 件中 OK 21・SHIFTED/STALE 47＝9.4 の登記材料）。スキルを実際に 1 回呼んで PREFLIGHT→BASELINE 起動→WAIT_BASELINE まで回り STATUS 行が最終行に出た（7.5 の観測可能な完了状態も成立）。**スキルに再開の穴を 1 つ追補**: 別セッション再開などで背景タスクがこのセッションに無く成果物も無い WAIT_ は「進行中」でなく `-Resume` 付きで起動し直す。
