@@ -240,7 +240,7 @@ flowchart TD
 ```
 
 - 失敗し得る操作（テクスチャ作成・`ResizeBuffers`・cast・`GetBuffer`）をすべて先に済ませ、内部状態の更新（commit）は **`UpdateSubresource` の直前**に一括で行う。これにより 7 失敗点のうち `Present` 以外の 6 点では struct の 4 項目（`source_tex`・`staging`・`size`・swap chain 寸の記録）が旧値のまま自己整合し、`read_back()` は旧内容・旧寸を返す。
-- **残余 2 件（設計で登記・実行テストは現状を期待値として固定）**: ⒜ `Present` 失敗＝表示（backbuffer）は前フレームのまま、`source_tex` は試行内容を持つ（Flow の Y）。⒝ 外形変更経路で `ResizeBuffers` 成功後に `SourceTexCast`／`GetBuffer`／`BackbufferCast` が失敗＝struct は旧値で自己整合だが swap chain の backbuffer だけが新寸・未描画になる（表示は未定義＝次回 `upload` が `self.size` 不一致で `ResizeBuffers` を再度通り回復する）。⒝ は実デバイスでは実質起こらない経路（有効な COM オブジェクトの cast・有効な swap chain の `GetBuffer(0)`）だが、注入テストの期待値表には（失敗点 × 経路）で明記する。
+- **残余 2 件（設計で登記・実行テストは現状を期待値として固定・2026-08-22 設計ディスカッション 議題 2 で開発者が「記録のみ・直さない」を裁定）**: ⒜ `Present` 失敗＝表示（backbuffer）は前フレームのまま、`source_tex` は試行内容を持つ（Flow の Y）。⒝ 外形変更経路で `ResizeBuffers` 成功後に `SourceTexCast`／`GetBuffer`／`BackbufferCast` が失敗＝struct は旧値で自己整合だが swap chain の backbuffer だけが新寸・未描画になる（表示は未定義＝次回 `upload` が `self.size` 不一致で `ResizeBuffers` を再度通り回復する）。⒝ は実デバイスでは実質起こらない経路（有効な COM オブジェクトの cast・有効な swap chain の `GetBuffer(0)`）だが、注入テストの期待値表には（失敗点 × 経路）で明記する。
 - 期待値表（`chain_fault_tests.rs` が固定）: 外形不変経路＝`SourceTexCast`／`GetBuffer`／`BackbufferCast` 失敗で 4 項目不変・`read_back` 旧内容、`Present` 失敗で `size` 不変・`read_back` 試行内容／外形変更経路＝`CreateSourceTex`／`CreateStaging`／`ResizeBuffers` 失敗で 4 項目不変・`read_back` 旧内容・旧寸、`SourceTexCast`／`GetBuffer`／`BackbufferCast` 失敗で struct 4 項目不変・`read_back` 旧内容・旧寸（残余 ⒝）、`Present` 失敗で `size` 新値・`read_back` 試行内容・新寸。いずれの場合も次回の成功 `upload` で `read_back` は新内容・`size` は新寸（回復）。
 - `show.rs:306-310` の早期 return により presenter 側の状態（`visible`／`applied`／`native_size`／`current_surface`／bounds）は書かれない——この分岐は動かさない（要件 5.6）。
 
