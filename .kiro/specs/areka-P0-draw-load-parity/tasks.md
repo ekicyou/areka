@@ -102,7 +102,7 @@
   - _Boundary: command.rs_
 
 - [ ] 5. 計測の道具（基盤: 静寂・採取・サンプリング・台帳）
-- [ ] 5.1 (P) 静寂確認の自動化（check-quiet.ps1）
+- [x] 5.1 (P) 静寂確認の自動化（check-quiet.ps1）
   - マシン全体の CPU を指定秒数・1 秒刻みで採って平均と最大、既知の重いプロセス名の有無（測定対象の areka は PID で除外）。閾値は目標定義ファイルまたは引数
   - `quiet-<stage>.txt` へ平均・最大・該当プロセス一覧・判定・時刻。exit 0（静か）／2（静かでない）。決定論（同じ入力から同じ文面）
   - 観測可能な完了状態: 静かな状態で exit 0・`cargo build` 中に exit 2 となり、どちらも出力ファイルが残る
@@ -276,3 +276,4 @@
 - (3.4) 本番経路（`enqueue`／`dispatch_window_message`／`apply_zorder_pair_maintenance`／pointer 投入）が旗を立てるようになったので、**共有の旗の上で「立っていないはず」を主張するテストは書けない**（錠は他の検査からしか守らない）。省略側の主張は `tick_one_frame_with`／`decide_tick_with` の注入口で行う。ZORDER は `apply_zorder_pair_maintenance` の巡の頭で「要求が残っていれば立てる」形（確立系は `areka/src/placement/spawn.rs:642` の chain で維持系の直前）。`tick_dola_animators` は本番未登録で ANIM は当面立たない。本セッションでは `SetCursorPos` が拒否される（headless 条件）ため実カーソル注入は不可＝ポインタ経路は `PostMessage(WM_MOUSEMOVE)` で検証した。ドラッグの実走確認は 6.4 へ。
 - (3.5) 「talk 進行中」の判定は時刻起点ではなく**未リビールのグリフの有無**（`reveal_pending`）——起点は一度立つと消えないので、設計 C16 の字面どおり「起点確立」で REARM すると放置時に省略しない。文字 cue ごとの起床は `BalloonLifecycleSink::send`（占有終端の伸長＝cue 到着ごと）の PRESENT が担うため、`sinks` の順序は clocked_text_sink → lifecycle_sink を保つこと（`emo2_boot/mod.rs` に登記）。旗は `tx.send` の**後**に立てる。45 秒実走: 定常 UI スレッド CPU ON 69,079 対 OFF 305,921 µs/秒（約 4.4 分の 1）・判定式⑴ p95 ON 808ms 対 OFF 810ms・放置時省略 116〜118 回/秒。候補メモ: 期限超過かつ抑止中（ドラッグ／滞在／選択肢）は毎フレーム REARM＝省略しない（安全側・解除はポインタ駆動なので `None` でも足りる可能性＝周回で検討）。
 - (4) `SELF_INITIATED_DEPTH` の着地形＝`thread_local! Cell<i32>`（`command.rs`）。錠 `lock_self_initiated_for_test` は残置（実呼出 21 箇所／5 ファイル＝command.rs 2・command_batch_tests 5・command_transition_tests 4・window_pos_tests 5・window_pos_transition_tests 5）で退役候補。兄弟テスト 4 ファイルの module doc（`command_batch_tests.rs:25`・`command_transition_tests.rs:28`・`window_pos_tests.rs:41`・`window_pos_transition_tests.rs:21`）は「プロセス共有」のまま陳腐化＝錠の退役と同じ塊で cage へ申し送る（8.2）。`frame_transition_atomicity_tests` の実本数は 3（設計の 4 は doc 内の `#[test]` 字面を数えた誤り）＝既存群は計 57 本。
+- (5.1) `check-quiet.ps1` の判定語は `QUIET`／`NOT_QUIET` に加えて計測失敗時 `MEASURE_FAILED`（exit 4・ファイルは残る・失敗原文は標準出力の `counter_error=` のみ）。理由語 5 種（ok／cpu_mean_over_threshold／heavy_process_present／both／counter_read_failed）。TOML `[quiet]` は**配列を 1 行に保つ**こと（複数行や壊れた値は警告なく既定値へ落ちる）——7.1 の目標定義ファイルはこの制約で書く。PowerShell の変数名は大小無視＝`-SampleSec` パラメータと `$sampleSec` ローカルが衝突する（実装中に踏んだ）。
