@@ -537,7 +537,7 @@ fn the_attribution_check_catches_a_violation_placed_under_the_wrong_family() {
     deterministic: 1 件の違反
       - 可視化と書込のフレーム差 1 > 上限 0（scope=0 win_kind=char）
     signoff: 1 件の違反
-      - 一括書込の総所要 286000µs > 上限 16700µs
+      - 一括書込の総所要 286000µs > 上限 16667µs
 ";
     assert!(
         misattributed_violations(correct).is_empty(),
@@ -546,7 +546,7 @@ fn the_attribution_check_catches_a_violation_placed_under_the_wrong_family() {
 
     let swapped = "\
     deterministic: 1 件の違反
-      - 一括書込の総所要 286000µs > 上限 16700µs
+      - 一括書込の総所要 286000µs > 上限 16667µs
     signoff: 1 件の違反
       - 可視化と書込のフレーム差 1 > 上限 0（scope=0 win_kind=char）
 ";

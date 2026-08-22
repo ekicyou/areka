@@ -159,7 +159,7 @@ settled main（コミット `7ee3394c`・release）で 100% ↔ 200% を 3 往�
    >
    > - **判断の軸＝ゴーストが触れなくなる事態を避けること。** 開発者の言により「ゴーストは主モニタへ引き寄せられます」が安全な挙動である。副モニタを引き抜いたときに現状維持を選ぶと、ゴーストは画面外に取り残されて見えず触れなくなる——それが最悪の結果だからである。
    > - **ゆえに「窓がどのモニタにも属さない」は 5.5 の適用対象ではない。** それは解決の失敗ではなく**最近傍フォールバックによる解決**であり、現行挙動が正である。`WorkAreaResolution::NearestFallback` は「解決できなかった」ではなく「最近傍で解決した」と読む。
-   > - **5.5 の「現状維持」が効くのはモニタ表が空のときに限る。** 実装上も一致している——`work_area_for_window_with_origin`（`crates/areka/src/placement/follow/work_area.rs:131`）が `None` を返すのは `work_areas` が空で `min_by_key`（同 :152-162）が `None` になるときだけであり、空でない表に対しては必ずどこかの矩形へ寄せる。括弧書きの 2 例のうち `None` になるのは**前者だけ**である。
+   > - **5.5 の「現状維持」が効くのはモニタ表が空のときに限る。** 実装上も一致している——`work_area_for_window_with_origin`（`crates/areka/src/placement/follow/work_area.rs:133`）が `None` を返すのは `work_areas` が空で `min_by_key`（同 :154・最近傍の式全体は :151-164）が `None` になるときだけであり、空でない表に対しては必ずどこかの矩形へ寄せる。括弧書きの 2 例のうち `None` になるのは**前者だけ**である。
    > - **最近傍へ落ちたことは警告として記録する**（位置は変えない）。「勝手に飛んだ」ことを後から追えるようにするためである。射影が**決めた位置**と、射影の**入力に使った矩形**の 2 つに対して別々に出し、いずれもガード適用外の経路（ドラッグ・移動のさくらスクリプト）には効かせない。**発行点・発火条件・そう決めた経緯は `mechanism-ledger.md` の §6 に書く**（要件の注記は裁定とその適用範囲までを持ち、実装の経緯は台帳が持つ）。
    > - **モニタ表が空のときの現状維持＋警告**は 2 箇所で成立している: 作業領域源の同期（`crates/areka/src/emo2_boot/frame/work_area_sync.rs:83-85` の 0 台の腕＝源を差し替えず `[work_area_sync]` を警告）と、可視性ガードの縮退（`visibility.rs` の `[visibility-guard] WorkAreaUnresolved`＝位置に手を入れず警告）。
    > - **要件 5.6 との衝突は本裁定で解消した。** 5.6 が守る位置権威（最近傍フォールバック）には触れない。同趣旨は design.md の C6 と Requirements Traceability の 5.5 の行にも記す（片肺にしない）。
@@ -256,4 +256,13 @@ settled main（コミット `7ee3394c`・release）で 100% ↔ 200% を 3 往�
 4. The 是正 shall `recompose-budget` が成立させた定常状態のアロケーション 0 と段階別計時ログの発行を維持する。
 5. The 是正 shall `windowposition-limit` の表示位置補正（作業領域内へのクランプ）と、`scope-chain-gap` の初期配置確定（明示再配置スコープの除外を含む）を、Requirement 6 で裁定した寿命の範囲外では変更しない。
 6. The 是正 shall ドラッグ中の追従（比 1.000・暴走なし）と、遷移を伴わない定常フレームの窓書込ゼロを維持する。
+
+   > **注記（本項がどう検証され、どこが未測定のまま残ったか・2026-08-22 最終ゲートで確定）**
+   >
+   > - **「比 1.000」は決定論では維持が示されている。** 既存の `crates/areka/src/placement/follow_drag_tests.rs`（とりわけ `on_char_drag_writes_only_policy_applied_positions`・`on_char_drag_balloon_follows_policy_applied_position`）が、生ドラッグ座標が射影 T を通って窓書込指令へ 1:1 で写ることを固定している。本仕様の全タスク着地後もワークスペース全体が緑である。
+   > - **ただしそれは指令キューまでである。** これらの檻は `drain_window_pos_commands()` でキューを直接読むので、**一括 flush（task 7.2 が `Begin/Defer/EndDeferWindowPos` の 1 バッチへ移した経路）から先は構造的に通らない**（設計 D11）。
+   > - **実機サインオフでも測っていない。** 手順書 §4.4 は採取中にドラッグしないことを条件とし、2026-08-22 の採取は `ATOM-NO-DRAG: PASS` である。つまり**ドラッグは判定の外に置かれている**。
+   > - **かつドラッグは隔離されていない。** アンカーが `Free` 以外のキャラ窓（本番のゴースト窓＝`Anchor::Bottom`）のドラッグ追従は `crates/areka/src/placement/follow/drag_follow.rs:89`・`:183` が `enqueue_window_set_pos` を呼ぶ＝**合流も一括バッチも通る**。本仕様が変えた経路そのものである。構造的に隔離されているのは `Free`／`Anchored` 不在の側だけで、そちらは `crates/wintf/src/ecs/window_proc/mouse_move.rs:438-450` が `guarded_set_window_pos` を直接呼び、本仕様による同関数の変更は `debug!` を `log_window_write(.., VIA_SET_WINDOW_POS)` へ置き換えた 1 点のみ（`SetWindowPos` の呼出自体は無改変）である。
+   > - **ゆえに「ドラッグ追従が一括バッチ経路を通っても比 1.000 のままか」は本仕様では未測定のまま残る。** 引受先は `areka-P0-emo2-conformance-e2e`（一周走行の実機項目・追記(77) で登記済み）。**本仕様の内側で追加採取はしない**——サインオフの条件（ドラッグ禁止）を緩めると要件 8 の採取条件が変わり、既に確定した task 7.3 の合否の意味が動くためである。
+   > - 本項後段の「遷移を伴わない定常フレームの窓書込ゼロ」は決定論で測っており、実機サインオフの `writes=4`（遷移フレームのみ）でも裏が取れている。
 7. The 是正 shall キャラ窓を DPI の異なる別モニタへドラッグで移したときの寸法追従（`WM_DPICHANGED` 単独で届く遷移）を変更しない。

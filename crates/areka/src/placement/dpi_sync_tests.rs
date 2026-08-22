@@ -6,7 +6,10 @@ use wintf::ecs::layout::{Arrangement, Offset};
 use wintf::ecs::{DPI, Point, SizeI, WindowHandle, WindowPos};
 
 use super::*;
-use crate::placement::follow::{MonitorDpiEntry, MonitorDpiTable, move_window_to};
+use crate::placement::diag::PlacementRoute;
+use crate::placement::follow::{
+    MonitorDpiEntry, MonitorDpiTable, move_window_to, move_window_with_route,
+};
 use crate::placement::resolver::RectPx;
 
 /// 遷移前後の 2 水準（値そのものは主題でない・**異なる**ことだけが要る）。
@@ -310,15 +313,22 @@ fn writable_world(hold: bool) -> (World, Entity) {
     (world, window)
 }
 
-/// 待ち札のある窓へ窓書込が到達したら、単一の窓書込口が**その場で**鳴る。
+/// **見送りが覆うべき経路**の書込が待ち札のある窓へ到達したら、単一の窓書込口が
+/// **その場で**鳴る。
 ///
 /// `debug_assert!` ゆえテストビルドでは panic する——すり抜け経路が増えたときに、実機ログを
 /// 待たずに檻が落ちる（実機では `warn!` として見える）。
+///
+/// 経路語が `ChainRealign`（システム由来・遷移後の連鎖の解き直し）なのは task 7.5 の是正に
+/// 追随したものである。本テストは当初 `move_window_to`（＝`MoveCue`）で書いていたが、
+/// スクリプトの明示操作は**見送らないことが正しい**と本番コードが裁定しており、鳴らすのは
+/// 偽の警報だった。監視が生きていることを示す役目は経路語を差し替えて保つ——分類そのものは
+/// `follow_window_move_hold_watch_tests.rs` が 12 語＋route 無しで固定する。
 #[test]
 #[should_panic(expected = "DpiSyncHold")]
 fn a_write_reaching_a_waiting_window_trips_the_single_writer() {
     let (mut world, window) = writable_world(true);
-    move_window_to(&mut world, window, 30, 40);
+    move_window_with_route(&mut world, window, 30, 40, PlacementRoute::ChainRealign);
 }
 
 /// 陽性の対——札が無ければ同じ書込は素通りする（上の panic が「常に落ちる」ではないこと）。
@@ -326,8 +336,20 @@ fn a_write_reaching_a_waiting_window_trips_the_single_writer() {
 fn the_same_write_passes_when_the_window_is_not_waiting() {
     let (mut world, window) = writable_world(false);
     assert!(
-        move_window_to(&mut world, window, 30, 40),
+        move_window_with_route(&mut world, window, 30, 40, PlacementRoute::ChainRealign),
         "札の無い窓への書込が通らない（監視が無条件に塞いでいる）"
+    );
+    let _residue = wintf::ecs::window::drain_window_pos_commands();
+}
+
+/// 明示操作（`\![move]`＝`MoveCue`）は同じ札のある窓へ届いても鳴らない——上の 2 本と
+/// **同じ土台**で、変えるのは経路語 1 点だけである（task 7.5）。
+#[test]
+fn the_explicit_move_is_not_watched_on_a_waiting_window() {
+    let (mut world, window) = writable_world(true);
+    assert!(
+        move_window_to(&mut world, window, 30, 40),
+        "明示操作の書込が通らない（見送られてしまっている）"
     );
     let _residue = wintf::ecs::window::drain_window_pos_commands();
 }

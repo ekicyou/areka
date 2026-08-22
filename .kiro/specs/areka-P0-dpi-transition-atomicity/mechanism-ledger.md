@@ -665,7 +665,7 @@ ground_diff_max=0   malformed=0   frames_indeterminate=false
 `tasks.md:346` の**【task 7.3 への申し送り】警告文を grep 語へ足す**を本タスクで閉じた。受け皿のファイル集合（`signoff-procedure.md`／`mechanism-ledger.md`）は申し送り自身が指定していたとおりである。
 
 - **足した先**: 手順書に **§3.5「整合待ちの札の破れを見る警告語（task 6.5 の検出側・要件 8.1）」** を新設した（§3 の点灯表の末尾）。あわせて §5 の手順 8（回す検査の列挙）と §7 の受け渡し契約の「点灯確認」の行にも `ATOM-HOLD-BREACH` を通した。**手順書は決定論テスト `crates/areka/src/placement/transition_signoff_procedure_tests.rs` が逐語一致を検査している文書なので、加筆後に同テスト 8 本が緑であることを確かめてある。**
-- **検査語**: `整合待ちの札がある窓へ窓書込が到達した`（発行点 `crates/areka/src/placement/follow/window_move.rs`。`warn!` は `:594` から始まり、検査語を含むメッセージ行は `:599` である＝grep の錨は `:599`。同 `:601` に `debug_assert!(false, ..)` が並ぶ）。task 6.5 が塞いだ穴——整合ゲートの見送りが 3 点では足りず `resnap_for_work_area_change` が 4 つ目の窓書込口だった件——の**検出側**である。
+- **検査語**: `整合待ちの札がある窓へ窓書込が到達した`（発行点 `crates/areka/src/placement/follow/window_move.rs`。`warn!` は `:682` から始まり、検査語を含むメッセージ行は `:687` である＝grep の錨は `:687`。同 `:689` に `debug_assert!(false, ..)` が並ぶ。行番号は task 7.5 の是正で `:594`／`:599`／`:601` から移った＝§12）。task 6.5 が塞いだ穴——整合ゲートの見送りが 3 点では足りず `resnap_for_work_area_change` が 4 つ目の窓書込口だった件——の**検出側**である。
 - **閉じ方＝この観測点は D-ATOM で点いている（消灯ではない）**。ここが本件の要点なので根拠を残す。
   - target は `warn!` に `target=` を与えていないので**モジュールパス既定** `areka::placement::follow::window_move`、水準は `warn`。D-ATOM の先頭セグメント `info` が既定水準であり（手順書 §2.1 の `info` の行＝「`warn!`／`error!` は常に通る」）、`warn` はそれを上回るので通る。`areka::placement::diag=debug` はこの target の接頭辞に**ならない**ので影響しない。
   - **較正（推測で書かない）**: 同じく `target=` を与えていない兄弟モジュール `areka::placement::measure` の `warn!` が、D-ATOM で採った実機ログ（`atom-73-signoff-1`）に**実際に出ている**（`WARN areka::placement::measure: measure: shell bake で脱落した element…`）。`areka::placement::` 配下の既定 target の `warn` が D-ATOM で通ることの実証である。
@@ -679,3 +679,116 @@ ground_diff_max=0   malformed=0   frames_indeterminate=false
 - **上限 16,667µs（L9）は動かしていない。** §4.3 の再裁定条件（採取機のリフレッシュレートが 60Hz を下回る）に当たる事実は本採取に無い。手順書 §6.5 の「目視に合わせて上限を緩めてはならない」に従う。
 - **判定器のコードにも本番コードにも触れていない。** 本節は登記である。
 - **§10.5 の採否（B-2b の採用）を動かさない。** §11.6 の数量は B-2b が「1 バッチであること」を実機で満たしたことを示しており、採用条件そのものは §10.5 で既に確定している。時間効果が出なかったことは、C8 が梯子として書かれていた理由の裏づけである。
+
+## 12. 整合待ちの札の監視が偽の警報を鳴らしていた（task 7.5・2026-08-22）
+
+最終ゲート（`/kiro-validate-impl`）のタスク横断検査が確定させた欠陥である。task 6.5 と**同型**——「列挙で守る規約が静かに穴を持つ」形だが、穴が空いていたのは**見送り**ではなく**監視**の側であった。
+
+### 12.1 機序
+
+単一の窓書込口 `enqueue_window_set_pos`（`crates/areka/src/placement/follow/window_move.rs:634`）の入口には、待ち札の適用範囲の不変条件を見張る `warn!`＋`debug_assert!` がある（設計 C5・要件 5.8）。この監視の免除は **`route != Some(PlacementRoute::BalloonFollow)` の 1 語だけ**だった。
+
+ところが本番には、整合ゲートの見送り 4 点（`frame/dpi.rs` の `apply_dpi_phase_gate`／`frame/scale_text.rs:170`／`frame/drain_resnap.rs:234`／`frame/work_area_sync.rs:238`）を**通らない**窓書込口が他にもある。札の付いた窓へそれが届くと、`warn!` の直後の `debug_assert!(false, ..)` で **debug ビルドが panic** した。
+
+到達条件は task 6.5 と同一（窓中心が属するモニタと OS が拡大率を決めるモニタが食い違う配置で札が残り、有界の待ち＝30 フレームの内側に書込が届く）だが、**到達しやすさが違う**——⑴ 利用者のドラッグ（`follow/drag_follow.rs:89`・`:183`・route 無し）⑵ ドラッグ解放時のバルーン位置補正（同 `:902`・`BalloonLimitRelease`）⑶ `\![move]`（`emo2_boot/move_cue.rs:643` → `move_window_to`・`MoveCue`）は、**利用者・スクリプトが任意の時点で起こせる**。実際、決定論テストでは札のある窓を 1 回ドラッグしただけで落ちた（§12.4 の RED）。
+
+### 12.2 裁定——直すのは監視であって見送りではない
+
+**本番コード自身が既に裁定を書いていた。** `move_window_to` の doc（`window_move.rs:40-41`）は「**スクリプトの明示操作**ゆえ遷移ガードは適用しない（ドラッグ・`Restore` と同族・D13 帰結⑵）」と述べる。すなわち明示操作は**見送らないことが正しい**。止まらないことが正しい書込を「漏れ」として鳴らすのは欠陥の通報ではなく**偽の警報**である。
+
+ゆえに是正は「監視が鳴る対象を、**見送りが覆うべき経路**へ限定する」——見送りの 4 点は 1 bit も変えていない。判定は新設の純関数 `deferral_covers_route`（`window_move.rs:508`・`Option<PlacementRoute>` の**網羅 match**）が 1 本で持ち、監視の条件は `:678` でそれを呼ぶ。`warn!`（`:682`・メッセージ行 `:687`）と `debug_assert!`（`:689`）は両方そのまま残す（log-first・silent failure を作らない）。
+
+### 12.3 全 12 語＋route 無しの分類と根拠
+
+**鳴る（見送りが覆う）7 語**
+
+| 経路語 | 覆っている見送り | 根拠 |
+|---|---|---|
+| `DpiReproject` | 拡大率の相 `apply_dpi_phase_gate`（`frame/dpi.rs:302`） | 4 点の 1 |
+| `ReportedSizeReconcile` | `frame/scale_text.rs:170` | 4 点の 2 |
+| `Resnap` | `frame/drain_resnap.rs:234` | 4 点の 3 |
+| `WorkAreaResnap` | `frame/work_area_sync.rs:238` | 4 点の 4（task 6.5） |
+| `KeepPositionResize` | 上の 1・2 の**内側** | 唯一の発行元 `reconcile_window_size`（`frame/dpi.rs:159` のバルーン腕）は拡大率の相と報告寸の突合からしか呼ばれない |
+| `ChainRealign` | **自前の見送り**（C4 の解決条件 2・`chain_realign.rs:144` の `held_ghost_window_scope`） | 4 点は通らないが、札を持つゴースト窓が 1 つでもあれば解き直しごと見送る。窓ごとではなく全窓一括で止める点だけが 4 点と違う |
+| `AnchorChange` | 現状どの見送りも通らない | **本番では未結線**（`anchor_changed_system` を schedule へ登録している箇所は無く、呼ぶのは決定論テストだけ＝`window_move.rs` の `#[allow(dead_code)]` の理由）ゆえ現に到達しない。由来は基盤側の置き直しなので、結線した瞬間に「見送りを足すか」を必ず決めさせるため鳴る側に置く |
+
+**鳴らない（見送らないことが正しい）5 語＋route 無し**
+
+| 経路語 | 根拠 |
+|---|---|
+| `MoveCue` | `\![move]` のスクリプト明示移動（`move_window_to` の doc の裁定）。起動時の連鎖確定（`frame/drain_resnap.rs:335`）も同じ語で書く |
+| `Restore` | 位置永続化の復元マージ。D13 が `MoveCue`・ドラッグと同族の明示操作と定める。現状どこからも構築されない（語彙のみ保持） |
+| `BalloonLimitRelease` | バルーンドラッグ**解放時**の `windowposition.limit` 補正＝ドラッグの一部。見送ると画面外のバルーンが引き戻されないまま残る |
+| `BalloonFollow` | task 5.4 で確定した例外。バルーンの位置はキャラ窓の従属量であり、そもそも 4 点を通らない |
+| `SpawnInitial` | 位置**そのものを作る**書込。保つべき「遷移前の値」が無く、見送れば窓が置かれないまま残る。現状は単一ライターを通らない |
+| route 無し（`None`） | **ドラッグ経路のキャラ窓書込のみ**（`on_char_drag`／`on_char_drag_end`）。利用者の明示操作 |
+
+**`is_system_reanchor` を流用しない。** あちらが答えるのは「誰が動かしたか」（既定位置の追跡と可視性ガードが読む区分・D9／D16）、こちらは「見送りが覆うか」である。実際に `KeepPositionResize` の 1 語で割れる（あちらは `false`・こちらは `true`）。`diag.rs` の doc が求める「2 つの区分を意図的に割るなら理由を設計へ登記する」に従い、設計 C5 と本節へ登記した。
+
+### 12.4 実行で示したこと（要件 5.8）
+
+新設 `crates/areka/src/placement/follow_window_move_hold_watch_tests.rs`（9 本）。
+
+- **RED（是正前）**: 札のある窓へ `\![move]`（`MoveCue`）と**本物のドラッグ経路**（`on_char_drag`・route 無し）で書く 2 本が `DpiSyncHold のある窓へ窓書込が到達した: ... route=None since_frame=3` などで panic して赤。同じ土台の鳴る側 2 本と分類 3 本は緑のまま。
+- **GREEN（是正後）**: 免除側は `debug_assert!` が撃たれず `warn!` も 0 件・窓は実際に動く（零件が空虚にならない対）。鳴る側（`ChainRealign`・`KeepPositionResize`）は `#[should_panic(expected = "DpiSyncHold")]` で従来どおり落ち、札を外した対では通る。
+- **分類の網羅**: `PlacementRoute::ALL` の 12 語を表と突き合わせ、語数一致・重複無し・route 無しを別々に主張する（テスト側にも独立に書き下す二重記帳）。
+- **ミューテーション検証**: `debug_assert!` の条件を反転（`false`→`true`）すると**鳴る側 4 本だけ**が赤になり免除側は 1 本も動かない／分類の使い方を反転（`if !deferral_covers_route`）すると免除側・鳴る側あわせて 12 本が赤。本番はいずれも復元済みで、`cargo test -p areka` は 1,192 passed。
+
+### 12.5 既存テスト 2 本の経路語を差し替えた
+
+`placement/dpi_sync_tests.rs` と `emo2_boot/frame_work_area_resnap_hold_tests.rs` の「監視が生きていることを示す陽性の対」は、いずれも `move_window_to`（＝`MoveCue`）で鳴らしていた。是正後は鳴らないのが正しいので `move_window_with_route(.., ChainRealign)` へ差し替え、役目（監視が無条件に黙っていないことの証明）を保った。前者には「明示操作は同じ札のある窓へ届いても鳴らない」対を同一土台で 1 本足した。**退役ではなく更新**である——測っていた性質は今も生きている。
+
+### 12.6 本節が動かさないもの
+
+- **整合ゲートの見送り 4 点は 1 bit も変えていない。** 直したのは監視である。
+- **判定器（`transition_judge*.rs`）と上限 16,667µs に触れていない。** task 7.3 の確定した合否（`ATOM-SIGNOFF: FAIL` だが開発者裁定 GO）も変えていない。
+- **`ChainRealign` を見送りの 4 点へ足していない。** 自前の見送り（C4 の解決条件 2）が既にあるからであり、足すと同じ量を 2 箇所が止めることになる。
+
+### 12.7 申し送り（本仕様では扱わない）
+
+- **`MoveCue` は 1 語で 2 つの実在トリガを指している**——`\![move]`（`emo2_boot/move_cue.rs:643`）と**起動時の連鎖確定**（`emo2_boot/frame/drain_resnap.rs:335`）。D13 の「1 語＝1 実在トリガ」に照らすと語彙側の未完了だが、本タスクの分類では両者とも「見送らない」側で答えが一致するため判断は割れない。切り分けが要るのは、起動時確定にだけ別の扱いを与えたくなったときである。
+
+## 13. 最終ゲート（`/kiro-validate-impl`）が残した申し送りの処理（2026-08-22）
+
+群 7 の全タスク着地後の最終ゲートで、**タスク横断の整合検査が本番の欠陥 1 件（→ task 7.5 として起票・着地）と、引受先の無い申し送り 4 件**を掘り当てた。本節は後者 4 件の処理を登記する。**「先送りは担当 spec の実在検証＋即報告」の規律に従い、引受先はすべてファイル集合で実測して決めた。**
+
+### 13.1 見送り窓の規則を `writes_per_window` へ広げない裁定
+
+`tasks.md` の**【task 5.3 への申し送り】**は「`frames_to_last_write` に既に適用した『見送り窓への書込を数えない』規則を `writes_per_window` へも広げること」を求め、**「task 7.3（実機サインオフ）で見つけるのでは遅い」**と明記していた。5.3 の着地後、広げる作業も広げない裁定も行われないまま 7.3 が通過した。
+
+**裁定＝広げない。** 根拠は 3 点である。
+
+- **触発条件が実機で 1 度も成立していない。** 広げる必要が生じるのは「見送り窓（再表示が `invisible` で見送られた窓）が 1 遷移の中で**別々の tick に 2 本**書く」形である。実機採取 2 回（7.1＝`atom-71-recapture-1`・7 遷移／7.3＝`atom-73-signoff-1`・8 遷移＝**計 15 遷移**）で、`writes_per_window` の違反は **0 件**だった。偽の違反は一度も立っていない。
+- **広げる方向は判定を緩める向きである。** 見送り窓の書込を数えないのだから、違反が消えることはあっても増えることはない。7.3 の `writes_per_window` は 8 遷移すべて PASS ゆえ、**今広げても 7.3 の合否は 1 文字も動かない**——つまり合否の正しさのために急ぐ理由が無い。
+- **広げると確定済みの記録を書き換える。** 現行挙動を固定しているテストは 3 本ある（`transition_judge_tests.rs::summarize_excludes_windows_whose_redisplay_was_skipped`・`transition_judge_verdict_tests.rs::a_deferred_resize_after_a_punctual_follow_is_not_a_companion_defect`・`transition_judge_reobservation_tests.rs::every_baseline_transition_is_judged_exactly_as_the_report_describes_it`）。最後の 1 本は**基準値の採取を逐語で再現する檻**であり、規則を変えれば過去の採取に対する判定が変わる。task 7.4 のレビューで確認したのと同じ形——**判定規約を後から緩めると、過去の採取の確定記録を書き換えてしまう**——であり、実機で 1 度も触発していない改良のためにそれを踏むのは筋が悪い。
+
+**引受先＝`areka-P0-emo2-conformance-e2e`（承知の登記のみ・コードの持ち分は渡さない）。** 一周走行が本仕様のランナーと判定器を流用するので、**限界を知らずに使うことがないよう** brief 追記(77) ⑹ へ「`writes_per_window` の違反を見たら、まず当該窓が `skipped_windows` に居ないかを確かめる」と書いた。**判定器そのものを直す持ち分は誰にも渡していない**——直すべき形（当該遷移のフレームに落ちる書込だけを数える）は上の申し送りが既に具体で書いており、触発する採取が現れた時点で本節を根拠に起票すれば足りる。
+
+### 13.2 自発書込カウンタの型（`SELF_INITIATED_DEPTH`）——引受先が決まっていなかった
+
+`tasks.md` の**【task 4.3 の台帳へ登記する項目】**は `crates/wintf/src/ecs/window/command.rs:48` の `SELF_INITIATED_DEPTH` について「プロセス共有の `AtomicI32` だが意味論はスレッド局所・是正は `Cell<i32>` 1 手・挙動変更ゆえ要件 3.4 により本仕様の対象外——**台帳へ登記して申し送る**」と述べていた。**台帳への登記が行われておらず、引受先も 0 だった**（最終ゲートの実測）。
+
+- **本節が登記そのものである。** 内容は上の申し送りのとおりで、**本番の欠陥ではない**（wintf に `thread::spawn` は 1 つも無く、メッセージポンプは `com/wuc.rs:110` の現スレッド 1 本、`world/mod.rs:123-125` が WUC 接触を UI スレッドへ構造的に固定し、ランタイムは `!Send`／`spawn_local`）。効くのは**テストの並列実行**であり、カウンタを読む／上げるテストが互いを汚染する（実測 60 回中 11 失敗）。
+- **引受先＝2 本へ登記した。** 症状の側（檻どうしの汚染・錠 `lock_self_initiated_for_test()` の退役・zorder 系 3 ファイル約 35 箇所の汚染源）は `areka-P0-test-cage-determinism` の brief 追記(76) ⑹。本番コード 1 行の側は `command.rs` を接触集合に持つ `areka-P0-draw-load-parity` の brief 追記(78) ⑹。**着手する側がもう一方へ知らせる**と両方に書いた。
+
+### 13.3 1 ファイル 1,000 行の目安が漂流している
+
+`tasks.md` の**【task 5.5 への申し送り】**は「`window_move.rs` は 974 行で 1,000 行の目安まで残り 26 行・**着手前にファイル分割が要る**」と述べていたが、分割も裁定も行われないまま群 5〜7 が進み、**最終ゲートまで誰も気づかなかった**。
+
+- **規則の所在**: `.kiro/steering/structure.md:176`「1 ファイル 1,000 行以下の目安は本番ファイル・テストファイルの双方に適用する」。`file-slimming`（W5.95・PR#103）が 1,000 行超 54→0 本まで落として達成した。
+- **実測（2026-08-22・`crates/**/*.rs` 全数）**: **9 本**が超えている。うち **5 本は本ブランチの分岐点（`git merge-base origin/main HEAD`）で既に超えていた**（`cache_tests.rs` 1,604／`actor_bind_loop_tests.rs` 1,330／`plan_ops_tests.rs` 1,076／`budget_tests.rs` 1,047／`bind.rs` 1,033）。本仕様が足したのは 4 本（`frame_transition_branch_tests.rs` 1,255／`window_move.rs` **965→1,135**／`transition_judge_tests.rs` 1,039／`transition_judge_verdict_tests.rs` 1,037）。**つまり「本仕様が生きた不変量を壊した」のではなく「既に破れていて本仕様が積み増した」。守っているテストも lint も 1 つも無い。**
+- **本仕様の内側では割らない。** `window_move.rs` を割ると spec 文書 7 本に散る **50 箇所**の `window_move.rs:<行>` が全部動く。**file:line の陳腐化は本仕様が 4 度踏んだ失敗そのもの**であり、実機サインオフを閉じた直後にそれを自ら仕込む判断はしない。**現に task 7.5 は +85 行を挿しただけで design.md の 6 箇所を陳腐化させ、レビューで差し戻された**——分割の規模ならこの比ではない。
+- **引受先は存在しない。** `file-slimming` は `.kiro/specs/completed/` にあり申し送りを消化できない。上の 9 本のいずれかを名指ししている**生存 spec は 1 本も無い**（`.kiro/specs/` の completed を除く全ディレクトリを 5 本のファイル名で走査して 0 件）。**ゆえにこれを「先送り」とは呼ばない**——`.kiro/steering/roadmap.md` の**追記(79)** へ全数量と 3 択（番人を置く／掃除 spec を起票する／規則を実態へ合わせる）を出して開発者の裁定を仰いだ。本節はその写しである。
+
+### 13.4 要件 10.6 の「ドラッグ追従の比 1.000」は、どちらの系統でも測っていない
+
+- **決定論では維持が示されている**——`crates/areka/src/placement/follow_drag_tests.rs`（とりわけ `on_char_drag_writes_only_policy_applied_positions`・`on_char_drag_balloon_follows_policy_applied_position`）が、生ドラッグ座標が射影 T を通って窓書込指令へ 1:1 で写ることを固定しており、全タスク着地後もワークスペース全体が緑である。
+- **ただしそれは指令キューまでである。** これらの檻は `drain_window_pos_commands()` でキューを直接読むので、**task 7.2 が新設した一括バッチから先は構造的に通らない**（設計 D11）。
+- **実機サインオフでも測っていない。** 手順書 §4.4 は採取中にドラッグしないことを条件とし、2026-08-22 の採取は `ATOM-NO-DRAG: PASS` である。
+- **かつドラッグは隔離されていない。** アンカーが `Free` 以外のキャラ窓（本番のゴースト窓＝`Anchor::Bottom`）のドラッグ追従は `crates/areka/src/placement/follow/drag_follow.rs:89`・`:183` が `enqueue_window_set_pos` を呼ぶ＝**合流も一括バッチも通る**。構造的に隔離されているのは `Free`／`Anchored` 不在の側だけで、そちらは `crates/wintf/src/ecs/window_proc/mouse_move.rs:438-450` が `guarded_set_window_pos` を直接呼ぶ（本仕様による同関数の変更は `debug!` を `log_window_write(.., VIA_SET_WINDOW_POS)` へ置き換えた 1 点のみで、`SetWindowPos` の呼出自体は無改変）。
+- **引受先＝`areka-P0-emo2-conformance-e2e`**（brief 追記(77) ⑸・要件 10.6 直下の注記と対）。**本仕様の内側で追加採取はしない**——サインオフの条件（ドラッグ禁止）を緩めると要件 8 の採取条件が変わり、既に確定した task 7.3 の合否の意味が動く。
+
+### 13.5 本節が動かさないもの
+
+- **判定器のコードにも上限 16,667µs にも触れていない。** task 7.3 の確定した合否（`ATOM-SIGNOFF: FAIL` だが開発者裁定 GO）も、task 7.4 が確定した手順書 §6.5 の 4 行の表も変えていない。
+- **13.1〜13.4 はいずれも本番の挙動を 1 bit も変えない。** 変えたのは記録と引受先の割り当てだけである。

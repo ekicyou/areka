@@ -113,6 +113,11 @@ use self::window_move::enqueue_window_set_pos;
 use super::transition_diag;
 // 整合待ちの札（atom 設計 C5）のファサード再束縛。単一の窓書込口（`window_move` の
 // `enqueue_window_set_pos`）が待ち札の適用範囲の不変条件を見張るために読む。
+//
+// 見張る相手は**見送りが覆うべき経路**に限る（task 7.5）——利用者のドラッグ（route 無し）や
+// `\![move]`・ドラッグ解放時の補正といった**明示操作**は設計上そもそも見送らないので、鳴らせば
+// 偽の警報になる（debug ビルドではドラッグ 1 回で落ちていた）。どの経路語で鳴るかの分類は
+// `window_move::deferral_covers_route` が 12 語＋route 無しの網羅 match で 1 本に持つ。
 use super::dpi_sync::DpiSyncHold;
 
 // =============================================================================
@@ -171,3 +176,7 @@ mod transition_diag_tests;
 #[cfg(test)]
 #[path = "follow_default_pos_track_tests.rs"]
 mod default_pos_track_tests;
+// 整合待ちの札の監視が鳴る対象の分類（task 7.5・design C5・要件 5.8）。
+#[cfg(test)]
+#[path = "follow_window_move_hold_watch_tests.rs"]
+mod window_move_hold_watch_tests;

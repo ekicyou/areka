@@ -48,7 +48,7 @@ use crate::placement::diag::{PlacementRoute, WindowKind};
 use crate::placement::dpi_sync::{
     DPI_SYNC_HOLD_MAX_FRAMES, DpiSyncDecision, DpiSyncHold, evaluate,
 };
-use crate::placement::follow::move_window_to;
+use crate::placement::follow::move_window_with_route;
 use crate::placement::test_support::{LogEvent, capture_logs};
 use crate::placement::transition_diag::HOLD_SITE_WORK_AREA_RESNAP;
 
@@ -416,11 +416,17 @@ fn the_invariant_watch_no_longer_fires_for_work_area_resnap() {
     );
 }
 
-/// 陽性の対——監視そのものは生きている。見送り点を**通らない**経路（`\![move]` の明示移動）で
-/// 札のある窓へ書けば、`enqueue_window_set_pos` 入口の `debug_assert!` がその場で落ちる。
+/// 陽性の対——監視そのものは生きている。**見送りが覆うべき経路**（`ChainRealign`＝遷移後の
+/// 連鎖の解き直し）で札のある窓へ書けば、`enqueue_window_set_pos` 入口の `debug_assert!` が
+/// その場で落ちる。反映の手続きを直接呼ぶことで、本番側の見送り（`realign_chain_once_with`
+/// の解決条件 2＝札を持つゴースト窓が 1 つも無いこと）を迂回した形である。
 ///
 /// 上の零件と**同じ土台**（同じハーネス・同じ整地・同じ札）で組んであるのが要点である。
 /// 監視を丸ごと削れば本テストが赤くなり、上の零件だけが空虚に緑になることはない。
+///
+/// 経路語は当初 `move_window_to`（＝`MoveCue`）だったが、task 7.5 で「明示操作は見送らない
+/// ことが正しい＝鳴らすのは偽の警報」と裁定したため差し替えた（分類の全体は
+/// `placement/follow_window_move_hold_watch_tests.rs`）。
 #[test]
 #[should_panic(expected = "DpiSyncHold")]
 fn the_invariant_watch_still_fires_for_a_write_that_bypasses_the_sites() {
@@ -439,5 +445,11 @@ fn the_invariant_watch_still_fires_for_a_write_that_bypasses_the_sites() {
         .get::<WindowPos>(char0)
         .and_then(|wp| wp.position)
         .expect("WindowPos.position がある");
-    move_window_to(&mut harness.world, char0, position.x + 17, position.y);
+    move_window_with_route(
+        &mut harness.world,
+        char0,
+        position.x + 17,
+        position.y,
+        PlacementRoute::ChainRealign,
+    );
 }

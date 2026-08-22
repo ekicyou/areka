@@ -279,6 +279,22 @@
   - _Requirements: 8.3, 8.4_
   - _Depends: 7.3_
 
+- [x] 7.5 整合待ちの札の監視が「見送らない書込」を偽の警報として鳴らす形を裁定する
+  - **最終ゲート（`/kiro-validate-impl`）のタスク横断検査で新規に確定した欠陥**。task 6.5 と**同型**であり、本タスクは要件・設計フェーズの計画には無く、引受先として起票した
+  - `follow/window_move.rs:590` の不変条件監視は `route != Some(PlacementRoute::BalloonFollow)` を唯一の免除としており、**免除は 1 語しか無い**。ところが本番には整合ゲートの見送り 4 点を通らない窓書込口が他にもあり、待ち札の付いた窓へ届けば `warn!` の直後に `debug_assert!(false, ..)` を撃つ＝**debug ビルドで panic する**
+  - 確定している到達可能な書込口（本タスクで網羅を取り直すこと。以下は最終ゲートが挙げた出発点であって完全な一覧ではない）——⑴ ドラッグ追従 `follow/drag_follow.rs:89`・`:183`（route は `None`）⑵ ドラッグ解放時のバルーン表示位置補正 `follow/drag_follow.rs:902`（`BalloonLimitRelease`）⑶ `\![move]` の適用 `emo2_boot/move_cue.rs` → `move_window_to`（`MoveCue`）⑷ 連鎖の解き直し `placement/chain_realign.rs:170`（`ChainRealign`・**システム由来なのに 4 点のどれも通らない**）⑸ アンカー変更 `follow/window_move.rs:463`（`AnchorChange`）
+  - **本番コード自身が既に裁定を書いている**——`move_window_to` の doc（`window_move.rs:40-41`）は「**スクリプトの明示操作**ゆえ遷移ガードは適用しない（ドラッグ・`Restore` と同族・D13 帰結⑵）」と述べる。すなわち明示操作は**見送らないことが正しい**。欠陥は見送りの側ではなく、**監視の免除がその裁定に追随していない**ことである。ゆえに既定の解は「監視が鳴る対象を、見送りが覆うべき経路へ限定する」であるが、⑷ の `ChainRealign` だけは明示操作ではないので**別に裁定が要る**（見送りへ入れるのか、入れずに済む根拠があるのか）
+  - 到達条件は task 6.5 と同一——窓中心が属するモニタと OS が拡大率を決めるモニタが食い違う配置で札が残り、その有界の待ち（30 フレーム）の内側に上記いずれかの書込が届くこと。⑴⑵⑶ は**利用者・スクリプトが任意の時点で起こせる**ので、6.5 の「作業領域が動いたら」より到達しやすい
+  - 免除を広げる側を採るなら、`PlacementRoute` の**全 12 語を 1 つも落とさずに**「鳴る／鳴らない」を分類し、分類の根拠を各語について書くこと（列挙で守る規約が静かに穴を持つ機序は task 6.5 の学びとして登記済み）。route `None`（名乗らない書込）の扱いも明示的に決める
+  - 決定論テストで、免除した経路が待ち札の付いた窓へ届いても `debug_assert!` が撃たれないこと、および**鳴るべき経路では従来どおり撃たれる**ことの両方を実行で示す（`#[should_panic]` の対は「同じハーネス・同じ整地・同じ札」で分ける——Implementation Notes の task 6.5 の学びに従うこと）
+  - 設計 C5 の見送り／監視の記述と `follow.rs`・`window_move.rs` の doc を同時に追随させる（片肺にしない）。確定台帳へ機序と裁定を登記する
+  - 観察可能な完了条件: 上記の配置を決定論テストで組み、確定した各経路について採った側の挙動が実行で示され、`cargo test -p areka` が緑
+  - _Requirements: 5.8_
+  - _Boundary: placement/follow/window_move.rs（監視のみ）, placement/follow.rs（doc）, それらのテスト, design.md（C5）, mechanism-ledger.md_
+  - _Depends: 6.5_
+  - **実施結果（2026-08-22）**: 裁定＝**直すのは監視であって見送りではない**。`move_window_to` の doc（`window_move.rs:40-41`）が既に「スクリプトの明示操作ゆえ遷移ガードは適用しない」と述べており、明示操作は見送らないことが正しい。**見送りの 4 点は 1 bit も変えていない。** 分類は新設の純関数 `deferral_covers_route`（同 `:508`・`Option<PlacementRoute>` の網羅 match・既定の腕なし）が 1 本で持ち、監視は `:678` で呼ぶ。`warn!`（`:682`）と `debug_assert!`（`:689`）は両方残した。**鳴る 7 語**＝`DpiReproject`／`ReportedSizeReconcile`／`Resnap`／`WorkAreaResnap`／`KeepPositionResize`／`ChainRealign`／`AnchorChange`。**鳴らない 5 語＋route 無し**＝`MoveCue`／`Restore`／`BalloonLimitRelease`／`BalloonFollow`／`SpawnInitial`／ドラッグ。全文は確定台帳 §12
+  - **起票時の見立てが 2 つ外れていた（記録として残す）**: ⑴ `ChainRealign` は「4 点のどれも通らない」が**見送られてはいた**——`chain_realign.rs:144` の `held_ghost_window_scope` が「札を持つゴースト窓が 1 つでもあれば解き直さない」という**全窓一括の自前の見送り**を持つ。ゆえに 4 点へ足さず、届けば漏れなので鳴る側へ置いた ⑵ `AnchorChange` は**本番未結線**（`add_systems(anchor_changed_system)` は本番に 0 件・呼ぶのは決定論テストのみ）。既存 spec が承知済みで新規の欠陥ではない（`completed/areka-P0-surface-resize-resnap/design-validation.md:80` が producer 不在として登記）。結線した瞬間に判断を強制するため鳴る側へ置いた
+
 ## Implementation Notes
 
 - **窓種別のフィールド名は `win_kind=`（`kind=` ではない）** — task 1.1 のレビューで確定。`tools/perf/judge-perf.py:562,588-596` の `parse_fields` は同名キーを後勝ちで上書きするため、接頭語の `kind=<レコード種別>` と衝突してレコード種別が消え、判定器の起点判定（`kind=monitor`）が壊れる。設計の Data Models 表（`write`／`enqueue`／`hold` の行）と C7 の `writes_per_window` は追随済み。**1 行に同じフィールド名を 2 度出さない**が語彙の不変条件であり、`transition_diag_tests.rs::no_line_repeats_a_field_name` が固定している。task 2.1・2.4・3.1 はこの語彙に従うこと。
@@ -393,3 +409,7 @@
 - **判定規約を後から緩めると、過去の採取の確定記録を書き換えてしまう** — task 7.4 で確定。レビュアーは「3 行目の条件を『症状に対応する量では違反していない』へ緩めよ」と提案したが、それを採ると **task 4.2 の基準採取が `食い違い` へ再分類される**（4.2 の確定記録は `baseline-2026-08-20.md:287` で `AGREEMENT: 一致`・`mismatch_frames` は 12 遷移すべて 0）。台帳 §3.9／§11.3 の機序説明（7.3 が食い違いへ転じた理由＝**是正で決定論系統が PASS になった**こと）とも矛盾する。**判定規約を触るときは、過去の採取記録を新しい規約で分類し直して結論が変わらないことを先に確かめる。** 是正は行の条件を緩めるのではなく **4 行目の新設**（食い違いでないことを明示する行）で閉じた。
 - **表の分岐は「上から順に当てる問い」として書き、見出しの語を分岐の正本にしない** — task 7.4。判定は 2 系統に割れて刷られ**両系統の違反は同時に並び得る**（手順書 §6.2 の出力例がその形）ので、「機械が何と言ったか」を 1 語へ潰すと行を取り違える。(決定論, 実機専用, 目視) の **8 通り全部**を当てて、1 つに定まり重複も取りこぼしも無いことを確かめること。**問いの順序は load-bearing である**——`ATOM-HOLD-BREACH` のような別項目の決定論違反を先に見るか後に見るかで 4.2 の分類が反転する。
 - **`ground_diff_abs_max` は決定論系統だけが当てる上限である** — task 7.4 のレビューで確認。`transition_judge_verdict.rs:158` の `Bounds::deterministic()` だけが `Some(GROUND_DIFF_MAX)` を入れ、`signoff()` は `..Self::nothing()` で `None` のまま。**系統の分類を語るときは変種の定義ではなく `Bounds` のどのフィールドが武装されるかを追う**（task 4.1 で同じ取り違えが起きている）。
+- **監視の免除リストは本番の裁定に自動では追随しない** — task 7.5 で確定。整合待ちの札の監視は免除を `BalloonFollow` 1 語しか持たず、`move_window_to` の doc（`window_move.rs:40-41`）が「明示操作は遷移ガードを適用しない」と**既に裁定を書いていた**のに、監視の条件式はそれを知らなかった。結果、ドラッグ・`\![move]`・解放時補正が札の付いた窓へ届くと debug ビルドが落ちる形になっていた。**task 6.5（「再スナップ」の語が 2 関数を指していた）に続いて 2 度目の「列挙で守る規約が静かに穴を持つ」形である。** 対策として分類を純関数（網羅 match・既定の腕なし）へ出し、12 語＋route 無しの全件について根拠を確定台帳 §12.3 へ表で残した——**列挙を式ではなく表にしておけば、語が増えたときに埋めるべき欄が見える。**
+- **行を挿したら、自分が編集したその行の中の錨も測り直す** — task 7.5 のレビューで差し戻し。`window_move.rs` へ +85 行を挿した結果 `design.md` の参照 6 箇所が陳腐化し、**うち 4 つは実装者が MOD(7.5) を書き足した当の Modified Files 行の中にあった**（`enqueue_window_set_pos`（:549-689）→ 実際は :634-777 等）。**MOD 行に追記するときは、同じ行に並ぶ他の file:line を必ず測り直すこと。** 関数の終端行は列 0 の `}` を数えて取ること（見た目で数えると必ず外す）。**台帳の陳腐化はこれで 5 度目である。**
+- **`design.md` の Data Models の表は誰も測っていない** — task 7.5 の B-1 で確定。`hold` 行の `site=` が `dpi|reconcile|resnap` の 3 語のまま残っており、task 6.5 が 4 語目（`work-area-resnap`）を足したときに取り残されていた。**機械的に捕まらない機序**: 逐語検査 `transition_signoff_procedure_tests.rs` の `validate_record_line`（`:119` 定義・語彙照合は `:177-184`）は **`stage=` の値しか検査せず**、`site` という文字列がファイル中に 1 度も現れない。しかも読む先は `signoff-procedure.md` 1 本（`:41` の定数を `:44` の `procedure_text` が `include_str!`）で **`design.md` は 1 行も読まない**。語彙の正本は `transition_diag.rs:124` の `HOLD_SITE_ALL` である。**表の直後にこの事実を注記として置いた**——次に語が増えたときに同じ穴へ落ちないため。
+- **最終ゲート（`/kiro-validate-impl`）が本番の欠陥を掘り当てたのは 2 度目** — 1 度目は task 6.2 のレビュー（→ task 6.5）、2 度目が本ゲート（→ task 7.5）。**どちらも「整合ゲートの守備範囲の列挙に穴がある」という同じ形**で、どちらも当日どのテストも赤にしていなかった。**検証タスクが本番の欠陥を出したら、引受先が spec 内に無いことを理由に見送らず、新規タスクを起票して閉じること**（6.5・7.5 とも実際にそうした）。

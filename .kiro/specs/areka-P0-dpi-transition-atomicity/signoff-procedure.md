@@ -240,11 +240,11 @@ foreach ($k in 'monitor','enqueue','flush','write','msg','surface','ground','sna
 | 項目 | 値 |
 | --- | --- |
 | 意味 | **整合待ちの札（`DpiSyncHold`）が付いている窓へ窓書込が到達した**＝待ち札の適用範囲に漏れがある。整合ゲートの見送りは 4 点（`site=dpi`／`reconcile`／`resnap`／`work-area-resnap`）で覆っているが、5 つ目の窓書込口が増えるとここで鳴る |
-| 発行点 | `crates/areka/src/placement/follow/window_move.rs`。`warn!` は **`:594` から始まり**、上の**検査語を含むメッセージ行は `:599`** である（grep の錨としては `:599` が正しい）。同 `:601` に `debug_assert!(false, ..)` が並ぶ |
+| 発行点 | `crates/areka/src/placement/follow/window_move.rs`。`warn!` は **`:682` から始まり**、上の**検査語を含むメッセージ行は `:687`** である（grep の錨としては `:687` が正しい）。同 `:689` に `debug_assert!(false, ..)` が並ぶ（行番号は task 7.5 の是正で `:594`／`:599`／`:601` から移った） |
 | ログ target | **`areka::placement::follow::window_move`**（`warn!` に `target=` を与えていないのでモジュールパス既定） |
 | 水準 | `warn` |
 | **D-ATOM で点くか** | **点く。消灯ではない**（下記） |
-| 対象外 | 随伴バルーンの追従（`PlacementRoute::BalloonFollow`）は本監視の対象外（`window_move.rs:590` の条件）。随伴は 4 点の見送りを通らないので、対象にすると正当な到達で偽の警報が出る |
+| 対象外 | **見送りが覆わない経路は本監視の対象外**（`window_move.rs:678` の条件＝純関数 `deferral_covers_route`・:508）。随伴バルーンの追従（`BalloonFollow`）に加え、**明示操作**——`\![move]`（`MoveCue`）・復元（`Restore`）・バルーンドラッグ解放時の補正（`BalloonLimitRelease`）・route を名乗らないドラッグ——と `SpawnInitial` が対象外である。いずれも設計上そもそも見送らないので、対象にすると正当な到達で偽の警報が出る（task 7.5。是正前は利用者が窓を 1 回ドラッグしただけで debug ビルドが落ちた）。鳴る 7 語は `DpiReproject`／`ReportedSizeReconcile`／`Resnap`／`WorkAreaResnap`／`KeepPositionResize`／`ChainRealign`／`AnchorChange` |
 
 **`release` では panic しない——警告行だけが出る。** `[profile.release]`（リポジトリ直下 `Cargo.toml:95-105`。末尾は `strip = false`）は `debug-assertions` を指定しておらず、既定は off である。ゆえに `debug_assert!` は `release` ビルドで無効化され、本採取のような `release` の実機採取では**この警告行が唯一の徴候**になる。`debug` ビルド（常時テスト）ではその場で落ちるので、**実機採取でだけ静かに通り抜ける形**であり、だからこの grep 語が要る。
 
@@ -512,6 +512,6 @@ ATOM-SIGNOFF: PASS|FAIL
 ## 8. 本書のメンテ規約
 
 - 観測レコードの語（`kind=`・`stage=`・フィールド名）と、ランナーの入口の語（環境変数名・観測 target・行頭タグ・Report の 2 系統名と合格語・ランナーのテスト名）、および **§6.2 の Report 出力例に並ぶ違反行がどちらの上限系統に属するか**は、**`crates/areka/src/placement/transition_signoff_procedure_tests.rs` が本書を読んで一致を検査している**（§0.2 の検査 ⑴〜⑷）。発行側の語を変えるなら、同じコミットで本書も直すこと。とりわけ §6.2 の出力例へ違反行を足す・動かすときは、その系統で実際に出得る違反かをテストが確かめるので、通してから報告すること。
-- §3.2 の「発行点が未着地」の表は **task 5.1／5.4／5.6 の着地で空になり、§3.2 は「0 件の読み方」へ書き替えた**（10 種すべて §3.1 にある）。以後に観測点を足したら**同じ要領で §3.1 へ行を足す**こと。移し忘れると、点いている観測点を「出ないもの」として扱い続けることになる。task 5.1（`kind=snapshot`＝T9）と task 5.4（`kind=hold`＝T10）は移動済みで、残るのは `kind=chain`（task 5.6）だけである。
+- §3.2 の「発行点が未着地」の表は **task 5.1／5.4／5.6 の着地で空になり、§3.2 は「0 件の読み方」へ書き替えた**（10 種すべて §3.1 にある）。以後に観測点を足したら**同じ要領で §3.1 へ行を足す**こと。移し忘れると、点いている観測点を「出ないもの」として扱い続けることになる。task 5.1（`kind=snapshot`＝T9）・task 5.4（`kind=hold`＝T10）・task 5.6（`kind=chain`）はいずれも移動済みで、**残りは 0 種である**（§3.2:183 が「0 件の読み方」として書いているとおり）。
 - §6.2 の実機専用の上限は task 4.3 が確定値（`16667` µs）へ差し替え済みである。以後この値を動かすなら、確定台帳 `mechanism-ledger.md` §4（L9）の根拠を先に書き換え、判定器の定数（`crates/areka/src/placement/transition_judge_verdict.rs` の `VISUALIZE_TO_WRITE_US_MAX`／`FLUSH_TOTAL_US_MAX`）と本書の 3 箇所（§6.2 の出力例・§6.2 の上限の項・§6.6 の `SIGNOFF-BOUNDS` 行）を同じコミットで揃えること。**実測に合わせて緩めるのは禁じられている**（§6.5）。
 - file:line の参照は本書作成時点（群 1〜3 着地）のものである。ずれたら本書を直す——ずらしたまま放置すると、本書は読めるが辿れない文書になる。
