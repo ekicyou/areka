@@ -339,3 +339,97 @@ fn is_run_distinguishes_run_from_skip() {
     assert!(TickDecision::Run(RunReason::Heartbeat).is_run());
     assert!(!TickDecision::Skip.is_run());
 }
+
+// ================================================== 生産者一覧の字面検査
+
+// ここから下は「旗を立てる側が現に在るか」の字面検査である。判断の中身は見ない
+// ——判断の正しさは上の全組合せが見ており、ここが守るのは配線の抜けだけである
+// （旗を立て忘れると、門は正しく判断したまま反応しない画面更新を作ってしまう）。
+
+/// 旗を立てる側（wintf 内）の一覧。（見出し・中身・期待する旗の名前）。
+///
+/// 並びは見出しの辞書順。areka 側の生産者は別クレートなのでここからは読めず、
+/// areka 側の同種の検査が受け持つ。
+const WINTF_PRODUCERS: [(&str, &str, &str); 8] = [
+    ("app.rs", include_str!("../app.rs"), "WM_GEOMETRY"),
+    ("dola/mod.rs", include_str!("../dola/mod.rs"), "ANIM"),
+    (
+        "drag/systems.rs",
+        include_str!("../drag/systems.rs"),
+        "DRAG",
+    ),
+    (
+        "graphics/systems/init.rs",
+        include_str!("../graphics/systems/init.rs"),
+        "GRAPHICS",
+    ),
+    (
+        "pointer/buffers.rs",
+        include_str!("../pointer/buffers.rs"),
+        "POINTER",
+    ),
+    (
+        "window/command.rs",
+        include_str!("../window/command.rs"),
+        "WINDOW_CMD",
+    ),
+    (
+        "window/zorder_pair_maintain.rs",
+        include_str!("../window/zorder_pair_maintain.rs"),
+        "ZORDER",
+    ),
+    // 配送点は個別の旗ではなく写像表で立てる（旗の名前は次の検査が見る）。
+    (
+        "window_proc/mod.rs",
+        include_str!("../window_proc/mod.rs"),
+        "",
+    ),
+];
+
+/// 註釈の行を落とす——説明文に書いてあるだけの綴りを「在る」と数えないため。
+fn code_only(src: &str) -> String {
+    src.lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[test]
+fn every_wintf_producer_marks_the_tick_wake() {
+    for (label, src, flag) in WINTF_PRODUCERS {
+        let code = code_only(src);
+        assert!(
+            code.contains("tick_wake::mark("),
+            "{label}: 旗を立てる呼出（tick_wake::mark(）が無い"
+        );
+        if !flag.is_empty() {
+            assert!(
+                code.contains(&format!("tick_wake::{flag}")),
+                "{label}: 期待する旗 {flag} を立てていない"
+            );
+        }
+    }
+}
+
+/// `pointer/buffers.rs` は投入の入口が 6 つあり、旗を立てるのはその全部である。
+///
+/// 呼出は私設ヘルパー 1 本に束ねてあるので、`tick_wake::mark(` が在るだけでは
+/// 「ヘルパーは残っているが誰も呼んでいない」形を見逃す。呼び元の数を直に数える。
+#[test]
+fn every_pointer_entry_point_calls_the_wake_helper() {
+    let code = code_only(include_str!("../pointer/buffers.rs"));
+    let call_sites = code.matches("wake_pointer();").count();
+    assert!(
+        call_sites >= 6,
+        "pointer/buffers.rs: 投入の入口 6 つから旗を立てるはずが {call_sites} 箇所しかない"
+    );
+}
+
+#[test]
+fn window_proc_dispatch_maps_the_message_to_bits() {
+    let code = code_only(include_str!("../window_proc/mod.rs"));
+    assert!(
+        code.contains("tick_wake::wake_bits_for_message("),
+        "window_proc/mod.rs: 配送点がメッセージ→旗の写像を通っていない"
+    );
+}

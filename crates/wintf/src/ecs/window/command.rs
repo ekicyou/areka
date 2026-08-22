@@ -655,6 +655,8 @@ impl SetWindowPosCommand {
     /// Z のみの指令と表示状態を変える指令は畳まれない（要件 10.3）。判定と理由は
     /// [`coalesce_geometry`] の doc を見ること。
     pub fn enqueue(cmd: SetWindowPosCommand) {
+        // 窓書込が積まれた＝次の画面更新に仕事がある（設計 C16 の `WINDOW_CMD`）。
+        crate::ecs::world::tick_wake::mark(crate::ecs::world::tick_wake::WINDOW_CMD);
         trace!(
             hwnd = ?cmd.hwnd,
             x = cmd.x,

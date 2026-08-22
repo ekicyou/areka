@@ -77,7 +77,7 @@
   - _Boundary: tick gate wiring (wintf ecs/world/mod.rs, runtime/tick_bridge.rs, areka startup)_
   - _Depends: 2.2, 3.1, 3.2_
 
-- [ ] 3.4 wintf 側の生産者を結線（旗を立てる 1 行ずつ）
+- [x] 3.4 wintf 側の生産者を結線（旗を立てる 1 行ずつ）
   - ウィンドウプロシージャの配送点（写像で立てる）・入力バッファへの投入（POINTER）・窓書込指令の積み上げ（WINDOW_CMD・`command.rs` の enqueue に 1 行＝タスク 4 と同一ファイル・タスク 4 が後に続く）・Z 順要求（ZORDER）・ドラッグ中の tick 末（DRAG の自己再予約）・活性アニメータ（ANIM）・GraphicsCore 無効（GRAPHICS）・表示構成変更（WM_GEOMETRY）
   - 生産者一覧の字面検査（各生産者ファイルに旗を立てる呼出が在ること）をテストに置く
   - 観測可能な完了状態: 字面検査テストが緑、門 ON の実走でドラッグ中は毎フレーム回り（その窓の skipped が 0）放置時は省略される
@@ -273,3 +273,4 @@
 - (2.4) 初回の実走（debug・15 秒・周期 5 秒）で `unregistered_rest`（名簿外＝bevy タスクプール等）がプロセス CPU の 24〜38% を占め、名簿内は `ui` が約 74%。名簿方式（段②）だけではタスクプールの内訳は出ないので、順位表の段③（WPT サンプリング）が要る。`perf(thread)` の値は累積（読み手 `perf-rank.py` が差分を取る・Rust 側 `delta` が意味論の権威）。
 - (3.1) `tick_wake` の期限は「最も早い 1 つ」だけを保持する（設計どおり）。期限到来で回った tick の中で待ち手が**毎回再装填**しないと後の期限が黙って落ちる——3.3／3.5 の結線はこれを前提に書くこと。`WM_PAINT`／`WM_ERASEBKGND`／`WM_TIMER` は未知→FORCE で全走になるので、周 1 の A/B で FORCE が門を無効化していないか `[tick]` 行の skipped で確かめること。`WM_MOUSELEAVE` は `windows::Win32::UI::Controls`、`WM_NCMOUSELEAVE` は `WindowsAndMessaging` にある。
 - (3.3) 共有の起床旗に触る／`decide_tick` に到達するテストは、`ecs::world::TICK_WAKE_TEST_LOCK`（唯一の錠・`world/mod.rs`）を毒化耐性つきで取ること。自前の錠を作ると直列化が成立しない（3.1 と 3.3 で錠が 2 本に分裂した実例）。`Skip` を主張するテストは注入経路 `decide_tick_with` を使う。心拍は「省略 30 回→31 回目が Run(Heartbeat)」（実効約 3.87 回/秒）。門 ON・生産者未結線の実走で UI スレッド CPU は 1 秒窓あたり約 45 万µs→約 4 万µs（債務＝3.4/3.5 の結線後に再確認）。`world/mod.rs` は 929 行で余白が小さい——以後ここへ足す場合は doc ブロックを `tick_gate.rs` 側へ寄せるか分割を検討。
+- (3.4) 本番経路（`enqueue`／`dispatch_window_message`／`apply_zorder_pair_maintenance`／pointer 投入）が旗を立てるようになったので、**共有の旗の上で「立っていないはず」を主張するテストは書けない**（錠は他の検査からしか守らない）。省略側の主張は `tick_one_frame_with`／`decide_tick_with` の注入口で行う。ZORDER は `apply_zorder_pair_maintenance` の巡の頭で「要求が残っていれば立てる」形（確立系は `areka/src/placement/spawn.rs:642` の chain で維持系の直前）。`tick_dola_animators` は本番未登録で ANIM は当面立たない。本セッションでは `SetCursorPos` が拒否される（headless 条件）ため実カーソル注入は不可＝ポインタ経路は `PostMessage(WM_MOUSEMOVE)` で検証した。ドラッグの実走確認は 6.4 へ。

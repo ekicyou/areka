@@ -193,7 +193,7 @@ crates/wintf/src/
 ├── ecs/pointer/buffers.rs            # 変更: 入力バッファ投入で mark(POINTER)
 ├── ecs/window/zorder_pair_maintain.rs# 変更: Z 順要求で mark(ZORDER)
 ├── ecs/drag/（ドラッグ状態の更新点）  # 変更: ドラッグ中は mark(DRAG)（self-rearm）
-├── ecs/dola/mod.rs                   # 変更: 活性アニメータがあれば mark(REARM)
+├── ecs/dola/mod.rs                   # 変更: 活性アニメータがあれば mark(ANIM)
 └── api.rs                            # 変更（必要時）: GetThreadTimes / GetProcessTimes / DuplicateHandle の安全ラッパ（既存 feature の範囲）
 ├── ecs/graphics/systems/visual_sync.rs # 変更（候補 C18 採用時）: Added/Changed フィルタで母集合を絞る
 ├── ecs/pointer/systems.rs            # 変更（候補 C18 採用時）: 既定値のときは書かない

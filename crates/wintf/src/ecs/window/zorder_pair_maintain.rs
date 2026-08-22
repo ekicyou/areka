@@ -360,6 +360,20 @@ pub fn apply_zorder_pair_maintenance(
     // （確立系 `establish_owner_links` と同じ形）。
     handles: HandleQuery,
 ) {
+    // 要求が 1 つでも残っている巡は、次の画面更新も回す（設計 C16 の `ZORDER`）。
+    // 是正の指令は tick 後の flush で書かれ、実測照合は**次の巡**で行うため、ここで
+    // 立て直さないと検証待ちの要求が省略された画面更新の向こうで足踏みする。要求が
+    // 尽きれば旗も立たなくなる（自分で立て直す形は `drag` と同じ）。
+    //
+    // 見ているのは**この巡の頭**の状態である。同じ巡でこの system より後に挿入された
+    // 要求はここには映らず、次に回る画面更新——最悪でも心拍（30 フレーム）——まで待つ。
+    // 現状の確立系は本 system の前に走る（areka `placement/spawn.rs:642` の
+    // `(establish_owner_links, apply_zorder_pair_maintenance).chain()`）ので、その巡の
+    // うちに拾われる。後ろに置く生産者を足すときは、その側で旗を立てること。
+    if !requests.is_empty() || !orphans.is_empty() {
+        crate::ecs::world::tick_wake::mark(crate::ecs::world::tick_wake::ZORDER);
+    }
+
     // ストラテジ未挿入は結線前の状態。既定（案 A）で動く（design.md「State」の既定値）。
     let strategy = strategy.map(|s| *s).unwrap_or_default();
 

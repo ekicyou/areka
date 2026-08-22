@@ -369,6 +369,9 @@ impl EcsWorld {
                 crate::ecs::pointer::clear_transient_pointer_state,
             );
 
+            // FrameFinalizeスケジュール: ドラッグ中は次の画面更新を予約（tick の末尾）
+            schedules.add_systems(FrameFinalize, crate::ecs::drag::rearm_tick_while_dragging);
+
             // FrameFinalizeスケジュール: Messagesの更新
             schedules.add_systems(
                 FrameFinalize,
@@ -909,9 +912,18 @@ mod tick_order_tests {
 ///
 /// **錠は 1 つでなければ意味がない。** 守る対象が 1 つしか無いのに錠が 2 つあれば、
 /// どちらを取っても相手を締め出せず、直列化は成立しない。共有の旗に触る検査は現在
-/// 3 箇所——`world_tick_gate_tests.rs`（共有経由の判断）・`tick_wake_tests.rs`
-/// （共有の入口の往復）・`runtime/tick_bridge.rs`（省略の 1 フレーム）——で、いずれも
-/// ここを参照する。新たに共有の旗へ触る検査を足すときも、自前の錠を作らずここを使う。
+/// 4 箇所——`world_tick_gate_tests.rs`（共有経由の判断）・`tick_wake_tests.rs`
+/// （共有の入口の往復）・`runtime/tick_bridge.rs`（門が無効な 1 フレーム）・
+/// `ecs/drag/systems.rs`（ドラッグ中の予約）——で、いずれもここを参照する。新たに
+/// 共有の旗へ触る検査を足すときも、自前の錠を作らずここを使う。
+///
+/// **錠でも防げないものがある。** 旗を立てるのは本番の経路（窓書込指令の積み上げ・
+/// ウィンドウメッセージの配送・Z 順の要求・ポインタ入力の投入）であり、そちらは錠を
+/// 知らない。ゆえに「旗が立っていない**はず**」＝省略になるはず、を共有の旗の上で
+/// 主張してはならない。省略の側を確かめる検査は、読み取り結果を直に渡す差し替え口
+/// （`runtime::tick_bridge::tick_one_frame_with`）を使うこと。共有の旗の上で主張して
+/// よいのは「立てた旗が含まれる」「回る側になる」——余分な旗で結論が変わらない側だけ
+/// である。
 ///
 /// 取るときは毒化に耐えること（`lock().unwrap_or_else(|p| p.into_inner())`）——
 /// 錠を持ったまま 1 本が落ちたときに、無関係な検査まで連鎖して赤くしないため。

@@ -108,6 +108,13 @@ pub fn init_graphics_core(
     mut commands: Commands,
     frame_count: Res<crate::ecs::world::FrameCount>,
 ) {
+    // 描画基盤が無効・未挿入の間は、次の画面更新でも必ず回して再試行する
+    // （設計 C16 の `GRAPHICS`）。初期化はコマンドキュー越しなので、成功した巡でも
+    // 実際に使えるようになるのは次の巡であり、その 1 回を省略に持っていかれない。
+    if !graphics.as_ref().is_some_and(|gc| gc.is_valid()) {
+        crate::ecs::world::tick_wake::mark(crate::ecs::world::tick_wake::GRAPHICS);
+    }
+
     match graphics {
         Some(mut gc) => {
             if gc.is_valid() {

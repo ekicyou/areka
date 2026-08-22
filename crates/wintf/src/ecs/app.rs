@@ -18,6 +18,8 @@ impl App {
 
     /// ディスプレイ構成が変更されたことをマーク
     pub fn mark_display_change(&mut self) {
+        // 表示構成が変わった＝幾何をやり直す仕事がある（設計 C16 の `WM_GEOMETRY`）。
+        crate::ecs::world::tick_wake::mark(crate::ecs::world::tick_wake::WM_GEOMETRY);
         self.display_configuration_changed = true;
         info!("[App] Display configuration changed");
     }

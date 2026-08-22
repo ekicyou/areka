@@ -206,6 +206,31 @@ impl AsyncTickTask {
 /// `flush_window_pos_commands()` は World 借用解放後に呼ぶ（同期 `WM_WINDOWPOSCHANGED`
 /// が World を借用しても競合しない）。レガシー `try_tick_on_vsync` と同じ規律。
 pub(crate) fn tick_one_frame(world: &Rc<RefCell<EcsWorld>>) -> bool {
+    // 門は 1 フレームに 1 度だけ問う（プロセス共有の旗を読んで倒すのはこの 1 箇所）。
+    tick_one_frame_with(world, |world| world.decide_tick(Instant::now()))
+}
+
+/// [`tick_one_frame`] の本体。門への問い方だけを差し替えられる形にしてある。
+///
+/// 手順（ガード → 借用 → 問う → 回す／省略 → 常に flush）は本番と完全に同一で、
+/// 違うのは `decide` が何を返すかだけである。本番は
+/// [`EcsWorld::decide_tick`](crate::ecs::world::EcsWorld::decide_tick)——プロセス共有の
+/// 旗を読んで倒す——を渡す。
+///
+/// # なぜ差し替え口を置くか
+///
+/// 旗は**プロセスにただ 1 つ**の実体で、本番の経路（窓書込指令の積み上げ・ウィンドウ
+/// メッセージの配送・Z 順の要求・ポインタ入力の投入）が立てる。同じテストバイナリの
+/// 中で並列に走る他の検査がそれらの経路を通れば、こちらが旗を倒した直後に旗が立つ
+/// ——**省略になるはず**を主張する検査は、それだけで赤くなる。錠では防げない: 旗を
+/// 立てる側は本番コードであって錠を知らないからである。
+///
+/// そこで「省略の側」を確かめる検査は、共有の旗を経由せず、読み取り結果を直に渡す。
+/// 「回す側」は旗が余分に立っても結論が変わらないので、共有の経路のままでよい。
+fn tick_one_frame_with(
+    world: &Rc<RefCell<EcsWorld>>,
+    decide: impl FnOnce(&mut EcsWorld) -> crate::ecs::world::tick_gate::TickDecision,
+) -> bool {
     // ── 再入防止ガード（レガシー vsync.rs と共有・二重防御）─────────
     let Some(_guard) = crate::ecs::world::engage_tick_flush_guard() else {
         trace!("[tick_one_frame] Re-entry blocked by IS_TICK_FLUSH_IN_PROGRESS");
@@ -215,10 +240,9 @@ pub(crate) fn tick_one_frame(world: &Rc<RefCell<EcsWorld>>) -> bool {
     // RefCell 借用を試みる。既に借用中（再入）なら安全側スキップ（false）。
     let processed = match world.try_borrow_mut() {
         Ok(mut world) => {
-            // 門は 1 フレームに 1 度だけ問う（旗を読んで倒すのはこの 1 箇所）。
             // 毎フレームのログはここでは出さない（熱い経路）——省略率は `[tick]` の
             // 観測行（既定 OFF）が 1 秒窓でまとめて出す。
-            if world.decide_tick(Instant::now()).is_run() {
+            if decide(&mut world).is_run() {
                 world.try_tick_world();
             } else {
                 world.note_skipped_tick();
@@ -409,21 +433,29 @@ mod tests {
 
     /// (要件 3.2/3.4) 門が有効で回す理由が 1 つも無ければ、1 フレームは 13 本を回さない
     /// ——フレーム番号は進まないが、関数は「このフレームは処理した」として true を返す。
+    ///
+    /// # 共有の旗を経由しない理由
+    ///
+    /// 旗はプロセスにただ 1 つで、**本番の経路**（窓書込指令の積み上げ・ウィンドウ
+    /// メッセージの配送・Z 順の要求・ポインタ入力の投入）が立てる。同じテストバイナリの
+    /// 中で並列に走る他の検査がそれらを通れば、こちらが旗を倒した直後に旗が立ち得る
+    /// ——錠を取っても防げない（立てる側は本番コードで、錠を知らない）。「省略になる
+    /// はず」を主張できるのは読み取り結果を直に渡したときだけなので、ここは
+    /// [`tick_one_frame_with`] へ旗ゼロ・期限なしの読み取り結果を渡す。手順（ガード →
+    /// 借用 → 問う → 回す／省略 → 常に flush）は本番と同一である。
     #[test]
     fn tick_one_frame_skips_the_world_tick_when_the_gate_finds_no_reason() {
-        let _lock = crate::ecs::world::TICK_WAKE_TEST_LOCK
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-
         let world = Rc::new(RefCell::new(crate::ecs::world::EcsWorld::new()));
         world.borrow_mut().set_tick_gate(true);
         fast_forward_warmup(&world);
 
-        // 溜まっている旗を倒してから 1 フレーム進める（旗ゼロ・期限なしの状態を作る）。
-        let _ = crate::ecs::world::tick_wake::take(std::time::Instant::now());
-
         let before = world.borrow().world().resource::<FrameCount>().0;
-        let processed = tick_one_frame(&world);
+        let processed = tick_one_frame_with(&world, |world| {
+            world.decide_tick_with(WakeSnapshot {
+                bits: 0,
+                deadline_due: false,
+            })
+        });
 
         assert!(
             processed,
@@ -433,6 +465,12 @@ mod tests {
             world.borrow().world().resource::<FrameCount>().0,
             before,
             "省略の回は 13 本を回さないのでフレーム番号は進まない"
+        );
+        // 窓書込の掃き出しはガードが外れる**前**に呼ばれる。ガードが戻っていることは
+        // 「省略の回でも関数が flush まで通り抜けた」ことの証跡である（D-3）。
+        assert!(
+            !crate::ecs::world::is_tick_flush_in_progress(),
+            "省略の回も flush まで進んでから再入ガードが外れているべき"
         );
     }
 
