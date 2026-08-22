@@ -40,7 +40,7 @@
 - 検証の反復スクリプトとログ（`.kiro/specs/areka-P0-test-cage-determinism/verification/`）、本仕様の申し送り台帳（requirements.md への登記）。
 
 ### Out of Boundary
-- `presenter/show.rs`（観測点 :299-310 を含め一切動かさない・`present-write-coherence` が可視化の段を所有）・`presenter/target.rs`・`mount.rs`。
+- `presenter/show.rs`（観測点 :305-310 を含め一切動かさない・`present-write-coherence` が可視化の段を所有）・`presenter/target.rs`・`mount.rs`。
 - `crates/wintf/src/ecs/window/command.rs`（`draw-load-parity` 所有。錠の**定義**削除と `SELF_INITIATED_DEPTH` の `Cell<i32>` 化は dlp）。
 - 既存 11 ファイルの分割、`spine` 系テストの削除、e2e（実窓）での隣接確認、実機 GPU 失敗の再現。
 - 改善ループ（開発者別セッション）が触れる範囲——着手時の再計測で突合するだけで、本仕様は取り込み後の実形に合わせる。
@@ -219,18 +219,18 @@ sequenceDiagram
 ```mermaid
 flowchart TD
     A[upload 開始] --> B{外形が変わるか}
-    B -- はい --> C[fault CreateSourceTex → create_source_tex]
-    C --> D[fault CreateStaging → create_staging]
+    B -- はい --> C[fault CreateSourceTex → 新 source_tex を作る]
+    C --> D[fault CreateStaging → 新 staging を作る]
     D --> E[fault ResizeBuffers → ResizeBuffers]
-    E --> F[commit source_tex staging size を一括更新]
     B -- いいえ --> G
-    F --> G[fault SourceTexCast → cast]
+    E --> G[fault SourceTexCast → cast 対象は新または現 source_tex]
     G --> H[fault GetBuffer → GetBuffer 0]
     H --> I[fault BackbufferCast → cast]
-    I --> J[UpdateSubresource と CopyResource 失敗しない]
+    I --> F[commit 外形変更時のみ source_tex staging size を一括更新]
+    F --> J[UpdateSubresource と CopyResource 失敗しない]
     J --> K[fault Present → Present 0]
     K --> L[Ok]
-    C -. Err .-> X[状態不変 size read_back 旧内容]
+    C -. Err .-> X[struct 4 項目すべて旧値で自己整合 read_back 旧内容 旧寸]
     D -. Err .-> X
     E -. Err .-> X
     G -. Err .-> X
@@ -239,7 +239,9 @@ flowchart TD
     K -. Err .-> Y[size 不変 表示は前フレーム read_back は未提示の試行内容]
 ```
 
-- 失敗し得る操作をすべて先に済ませ、内部状態の更新を最後に一括で行う。7 失敗点のうち 6 点で「状態不変」が成立し、残る `Present` は表示（backbuffer）が前フレームのままである一方 `source_tex` は試行内容を持つ（残余として登記・Flow の Y）。
+- 失敗し得る操作（テクスチャ作成・`ResizeBuffers`・cast・`GetBuffer`）をすべて先に済ませ、内部状態の更新（commit）は **`UpdateSubresource` の直前**に一括で行う。これにより 7 失敗点のうち `Present` 以外の 6 点では struct の 4 項目（`source_tex`・`staging`・`size`・swap chain 寸の記録）が旧値のまま自己整合し、`read_back()` は旧内容・旧寸を返す。
+- **残余 2 件（設計で登記・実行テストは現状を期待値として固定）**: ⒜ `Present` 失敗＝表示（backbuffer）は前フレームのまま、`source_tex` は試行内容を持つ（Flow の Y）。⒝ 外形変更経路で `ResizeBuffers` 成功後に `SourceTexCast`／`GetBuffer`／`BackbufferCast` が失敗＝struct は旧値で自己整合だが swap chain の backbuffer だけが新寸・未描画になる（表示は未定義＝次回 `upload` が `self.size` 不一致で `ResizeBuffers` を再度通り回復する）。⒝ は実デバイスでは実質起こらない経路（有効な COM オブジェクトの cast・有効な swap chain の `GetBuffer(0)`）だが、注入テストの期待値表には（失敗点 × 経路）で明記する。
+- 期待値表（`chain_fault_tests.rs` が固定）: 外形不変経路＝`SourceTexCast`／`GetBuffer`／`BackbufferCast` 失敗で 4 項目不変・`read_back` 旧内容、`Present` 失敗で `size` 不変・`read_back` 試行内容／外形変更経路＝`CreateSourceTex`／`CreateStaging`／`ResizeBuffers` 失敗で 4 項目不変・`read_back` 旧内容・旧寸、`SourceTexCast`／`GetBuffer`／`BackbufferCast` 失敗で struct 4 項目不変・`read_back` 旧内容・旧寸（残余 ⒝）、`Present` 失敗で `size` 新値・`read_back` 試行内容・新寸。いずれの場合も次回の成功 `upload` で `read_back` は新内容・`size` は新寸（回復）。
 - `show.rs:306-310` の早期 return により presenter 側の状態（`visible`／`applied`／`native_size`／`current_surface`／bounds）は書かれない——この分岐は動かさない（要件 5.6）。
 
 ### Flow 4: settle の有界化（②）
@@ -258,7 +260,7 @@ flowchart TD
     U -- いいえ --> W[短い sleep] --> R
 ```
 
-- Tick を兼ねる呼出点（`spine_display_tests.rs:410`）では `step` の内側で呼出側が単調カウンタから Tick を注入し、カウンタは旧範囲の終端 `1_000_000 + 5_000` で頭打ちにする（注入時刻が観測を追い越さない・要件 4.3）。ヘルパは panic せず、判定は従来どおり呼出側の assert（要件 4.5・4.6）。
+- Tick を兼ねていた呼出点（`spine_display_tests.rs:410`）は **Tick 注入と待機を完全に分離**する: 前段として旧範囲 `1_000_000..1_000_000 + 5_000` を毎回すべて決定論的に注入し（各 Tick 後に drain・待機しない＝旧ループと同じ注入列）、その後に `settle_bounded(|| drain のみ)` を置く。注入する時刻の範囲は旧テストと同一（壁時計に依存しない）・時刻は観測（drain）より先に進まない（要件 4.3）・待機だけが壁時計＋観測量で有界化される（設計バリデーション指摘 3 の反映）。ヘルパは panic せず、判定は従来どおり呼出側の assert（要件 4.5・4.6）。
 
 ## Requirements Traceability
 
@@ -353,7 +355,7 @@ flowchart TD
 - `tracing::subscriber::with_default`・`set_global_default`・`Dispatch::new`（probe）の呼出は本 crate の内側にだけ存在する（C6 が機械的に守る）。
 - ワークスペース内 crate へ依存しない（leaf）。`publish = false`。`[features] env-filter = ["dep:tracing-subscriber"]`（既定 off）。
 - 既定 API はスレッド局所（捕捉窓の外・他スレッドのイベントを混入させない）。全スレッド捕捉は別名 API に分け、同じバイナリで両者を混同しない。
-- 正準イベント型はフィールドの**訪問順**を保持する（行整形の byte 一致のため）。
+- 正準イベント型はフィールドの**訪問順**を保持し（行整形の byte 一致のため）、値は Debug 表現と `record_str` の生値の**両方**を持つ（keeper 3 crate の `assert_logged` が生値の完全一致で判定しているため。引用符剥がしをアダプタ側で再実装しない＝設計バリデーション指摘 2 の反映）。
 
 **Dependencies**
 - Outbound: `tracing` 0.1（P0）— `Subscriber` 実装・`Dispatch`・`callsite::rebuild_interest_cache`。
@@ -364,17 +366,23 @@ flowchart TD
 
 ##### Service Interface
 ```rust
+/// フィールド 1 個の値。`debug` は `record_debug` 経路の `{:?}` 表現（行整形はこちら）。
+/// `str_raw` は `record_str` 経路で渡された生文字列（引用符・エスケープ無し。keeper 3 crate の
+/// `event`／`outcome` 完全一致判定はこちら）。文字列リテラルのフィールドは両方が埋まる。
+pub struct FieldValue { pub debug: String, pub str_raw: Option<String> }
+
 /// 捕捉した 1 イベント。`fields` は `record()` の訪問順（行整形の byte 一致に必要）。
 pub struct CapturedEvent {
     pub level: tracing::Level,
     pub target: String,
-    pub fields: Vec<(String, String)>,   // (名前, Debug 表現)
+    pub fields: Vec<(String, FieldValue)>,   // (名前, 値)
 }
 impl CapturedEvent {
-    pub fn message(&self) -> &str;                         // `message` フィールド。無ければ ""
-    pub fn field(&self, name: &str) -> Option<&str>;
+    pub fn message(&self) -> &str;                         // `message` フィールド（Debug 表現＝fmt::Arguments の本文）。無ければ ""
+    pub fn field(&self, name: &str) -> Option<&str>;       // Debug 表現
+    pub fn field_str(&self, name: &str) -> Option<&str>;   // record_str の生値（kanade/ghost の `event`／`outcome` 用）
     pub fn field_names_sorted(&self) -> Vec<&str>;         // emo-present `field_names()` 互換
-    pub fn fields_map(&self) -> BTreeMap<&str, &str>;       // placement `LogEvent.fields` 互換
+    pub fn fields_map(&self) -> BTreeMap<&str, &str>;       // placement `LogEvent.fields` 互換（Debug 表現）
 }
 
 /// 行整形 2 形（現行の文字列形を byte 一致で再現する）。
@@ -416,7 +424,7 @@ pub fn ensure_interest_probes();
 
 **Implementation Notes**
 - Integration: lib.rs の module doc を**利用手順**として書く（要件 11.6）: ⒜ `[dev-dependencies] log-capture-kit = { path = "../log-capture-kit" }`（wintf は `features = ["env-filter"]`）、⒝ 存在主張は `capture` → `message()`／`field()` で照合、⒞ 不在主張は `capture` がそのまま対照を内蔵する（番兵）ことの説明、⒟ 全スレッド捕捉は `install_global_capture_all` と両立条件、⒠ 統合テスト（`tests/`）からも同じ `use`。原典 `placement/test_support.rs:6-52` の機序説明を移設し、「`with_default` はスレッドローカルゆえ安全」という誤りを正す文を置く。
-- Validation（自己テスト・in-crate）: ⒜ 窓内で別スレッドが同じ発行点を先に踏んでも捕捉できる（要件 3.4-a）、⒝ 番兵が捕捉されない subscriber を差すと panic する（番兵検査の較正）、⒞ TRACE が捕れる（3.5）、⒟ 別スレッド発火を混入させない（3.6）、⒠ `LineFormat` 2 形の逐語期待値（既存 4 形の実出力をコピーした fixture）、⒡ `count_levels` の件数。Flow 2 の較正は `tests/capture_calibration_test.rs`。
+- Validation（自己テスト・in-crate）: ⒜ 窓内で別スレッドが同じ発行点を先に踏んでも捕捉できる（要件 3.4-a）、⒝ 番兵が捕捉されない subscriber を差すと panic する（番兵検査の較正）、⒞ TRACE が捕れる（3.5）、⒟ 別スレッド発火を混入させない（3.6）、⒠ `LineFormat` 2 形の逐語期待値（既存 4 形の実出力をコピーした fixture）、⒡ `count_levels` の件数、⒢ `event = "x"` を `field_str("event")` で `x`（引用符なし）・`field("event")` で `"x"`（Debug 表現）として取り出せる。Flow 2 の較正は `tests/capture_calibration_test.rs`。
 - Risks: `Interest::sometimes` 常態化の所要時間（R-3）は 9.1 の反復で計測して記録。`capture_under_filter` の directive 追加は番兵 target にのみ効く。
 
 #### C6 番人テスト（kit `tests/`）
@@ -450,7 +458,7 @@ pub fn ensure_interest_probes();
 
 **Responsibilities & Constraints**
 - 移行の単位は crate。各 crate で「本体削除＋`use`＋アダプタ 1〜3 行」→ `cargo test -p <crate>` 緑 → 次の crate（要件 1.7 の判定不変を crate ごとに確認）。
-- アダプタの型対応（File Structure Plan ① と対）: `Vec<String>` 行＝`capture_lines(LevelTargetFields | LevelFields)`・`String` 改行連結＝同 `.join("\n")`・構造体＝`CapturedEvent`（`LogEvent` は型別名・keeper 3 crate の `CapturedEvent` は `field("event")`／`field("outcome")`／`message()` から組み立て）・件数＝`count_levels`・EnvFilter＝`capture_under_filter`。**呼出側の assert 文・戻り値の意味は不変**。
+- アダプタの型対応（File Structure Plan ① と対）: `Vec<String>` 行＝`capture_lines(LevelTargetFields | LevelFields)`・`String` 改行連結＝同 `.join("\n")`・構造体＝`CapturedEvent`（`LogEvent` は型別名・keeper 3 crate の `CapturedEvent` は `field_str("event")`／`field_str("outcome")`（生値）／`message()` から組み立て、`fields` マップは生値優先・無ければ Debug 表現で現行の `record_str`／`record_debug` 二経路と同じ内容にする）・件数＝`count_levels`・EnvFilter＝`capture_under_filter`。**呼出側の assert 文・戻り値の意味は不変**。
 - 説明文の是正は「スレッドローカルゆえ安全」類の否認文を削除し、「interest キャッシュはプロセス共有・先着が勝つ・kit が probe 常駐＋窓内 rebuild＋番兵で保証する」へ置き換える。由来表示（`table.rs:206-208`「emo-compose/actor.rs の流儀」）は kit を指す。
 - `frame_test_support.rs`（`FrameHarness` の土台）は捕捉層（`Capture`／`capture_logs` :103-131）だけを差し替え、ハーネス本体と `frame_harness_tests.rs` の逐語（`include_str!("frame_test_support.rs")` :39）が見張る項目（`single_threaded_schedule`）は動かさない（要件 11.3）。
 - kit の自己テストは `wintf::transition` 行を出さず、窓書込の計数も行わない（要件 11.1／11.2 は「移行で語彙を増やさない・既存の逐語テストを緑に保つ」として満たす）。
@@ -474,14 +482,14 @@ pub fn ensure_interest_probes();
 **Contracts**: Service [x]
 ##### Service Interface
 ```rust
-/// 「尽きるのが正常」の回収ループ。`step` は 1 反復分の処理（必要なら Tick 注入）を行い回収件数を返す。
+/// 「尽きるのが正常」の回収ループ。`step` は 1 反復分の回収（drain）を行い回収件数を返す（Tick 注入は含めない＝注入は呼出側の前段で決定論的に済ませる）。
 /// 終了: 最小持続 SETTLE_MIN を満たし かつ 連続 SETTLE_QUIET_ROUNDS 回 0 件。上限 SPIN_WAIT で必ず返る。
 /// 反復間は BACKOFF_SLEEP 相当の短い sleep（有界 poll-backoff）。panic しない（判定は呼出側の assert）。
 fn settle_bounded(step: impl FnMut() -> usize);
 const SETTLE_MIN: Duration;          // 初期値 200ms（tasks で実測調整）
 const SETTLE_QUIET_ROUNDS: u32;      // 初期値 50
 ```
-- `spine_display_tests.rs:410-414`: `let mut now = 1_000_000u64; settle_bounded(|| { harness.inject_dispatcher_tick(now); now = (now + 1).min(1_000_000 + 5_000); let got = harness.wiring.drain_received(); received.extend(got.iter().cloned()); got.len() })` の形（Tick 値の範囲は旧テストと同一・頭打ち）。
+- `spine_display_tests.rs:410-414`: 前段 `for now in 1_000_000u64..1_000_000 + 5_000 { harness.inject_dispatcher_tick(now); received.extend(harness.wiring.drain_received()); }`（旧ループと同じ注入列・`yield_now` は不要）→ 後段 `settle_bounded(|| { let got = harness.wiring.drain_received(); received.extend(got.iter().cloned()); got.len() })`。Tick 生成と打ち切り条件は別の文になり、注入範囲は旧テストと同一。
 - `spine_seriko_loop_tests.rs:372-375`: 外側の seriko tick 注入はそのまま、内側を `settle_bounded(|| { let got = drain; emitted.extend(..); got.len() })` に。
 - module doc `spine.rs:20-21` の「負検証の settle drain だけは従来どおり `yield_now` のみ」を本ヘルパの説明へ更新。
 
@@ -499,9 +507,9 @@ const SETTLE_QUIET_ROUNDS: u32;      // 初期値 50
 | Requirements | 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8 |
 
 **Responsibilities & Constraints**
-- 接触は `chain.rs`（＋新設テスト 3 ファイル・`presenter.rs` の接続宣言 1 本）に閉じる。`show.rs`（:299-310 を含む）・`target.rs`・`mount.rs` は非接触（要件 5.6・5.7）。
+- 接触は `chain.rs`（＋新設テスト 3 ファイル・`presenter.rs` の接続宣言 1 本）に閉じる。`show.rs`（:305-310 を含む）・`target.rs`・`mount.rs` は非接触（要件 5.6・5.7）。
 - 「前状態」の定義: ⒜ `SwapChainPresenter` 内部＝`size()` 不変・`read_back()` が成功する（`source_tex`／`staging` の寸が一致）・`Present` 以外の失敗では `read_back()` の内容も直前成功時と一致／⒝ presenter 側＝`visible`／`applied`／`native_size`／`current_surface`／`mount.set_bounds` 未呼出・`reply` は `Err`。backbuffer の実表示内容は flip model で読み戻せないため観測外（`read_back` は `source_tex` を読む）と明記する。
-- **残余（設計で登記）**: `Present` 失敗時は `source_tex` と backbuffer に新内容が書かれ未提示。復元には提示済み内容の複製テクスチャと定常経路の毎フレーム `CopyResource` が要り要件 5.5 に抵触するため採らない。テストは「`size()` 不変・presenter 側不変・`read_back()` は未提示の試行内容」を assert し、`read_back` の doc（`chain.rs:243`「表示中画素の CPU 読み戻し」）を「直近に upload へ渡された内容（`Present` 失敗時は未提示の内容を含む）」へ訂正する。
+- **残余 2 件（設計で登記・Flow 3 参照）**: ⒜ `Present` 失敗時は `source_tex` と backbuffer に新内容が書かれ未提示。復元には提示済み内容の複製テクスチャと定常経路の毎フレーム `CopyResource` が要り要件 5.5 に抵触するため採らない。テストは「`size()` 不変（外形不変経路）・presenter 側不変・`read_back()` は未提示の試行内容」を assert し、`read_back` の doc（`chain.rs:243`「表示中画素の CPU 読み戻し」）を「直近に upload へ渡された内容（`Present` 失敗時は未提示の内容を含む）」へ訂正する。⒝ 外形変更経路で `ResizeBuffers` 成功後の後段失敗は swap chain の backbuffer だけが新寸・未描画（struct は旧値で自己整合・次回 `upload` で回復）。
 
 **Contracts**: Service [x] / State [x]
 ##### Service Interface
@@ -520,16 +528,16 @@ fn fault_point(at: UploadFault) -> Result<(), PresentError>;
 #[cfg(test)] pub(crate) fn arm_upload_fault(at: UploadFault);
 #[cfg(test)] pub(crate) fn clear_upload_fault();
 ```
-- `upload` の順序（Flow 3）: 外形変更時 `fault(CreateSourceTex)`→`create_source_tex` → `fault(CreateStaging)`→`create_staging` → `fault(ResizeBuffers)`→`ResizeBuffers` → **commit（`source_tex`／`staging`／`size` 一括）**；共通部 `fault(SourceTexCast)`→`cast` → `fault(GetBuffer)`→`GetBuffer(0)` → `fault(BackbufferCast)`→`cast` → `UpdateSubresource` → `CopyResource` → `fault(Present)`→`Present`。成功経路の D3D 呼出の集合と回数は現行と同一（`ResizeBuffers` 前に新テクスチャを作るため一時的に新旧が併存するのは現行の代入順でも同じ）。
+- `upload` の順序（Flow 3）: 外形変更時 `fault(CreateSourceTex)`→`create_source_tex`（ローカル変数へ） → `fault(CreateStaging)`→`create_staging`（同） → `fault(ResizeBuffers)`→`ResizeBuffers`；共通部 `fault(SourceTexCast)`→`cast`（外形変更時は新 `source_tex`・不変時は現 `source_tex`） → `fault(GetBuffer)`→`GetBuffer(0)` → `fault(BackbufferCast)`→`cast` → **commit（外形変更時のみ `source_tex`／`staging`／`size` を一括代入）** → `UpdateSubresource` → `CopyResource` → `fault(Present)`→`Present`。成功経路の D3D 呼出の集合と回数は現行と同一（`ResizeBuffers` 前に新テクスチャを作るため一時的に新旧が併存するのは現行の代入順でも同じ）。commit を `UpdateSubresource` の直前まで遅らせるのは、失敗し得る操作のすべてを commit より前に終えるため（設計バリデーション指摘 1 の反映）。
 - 定常経路（外形不変）に新しい確保は無い（`cast`／`GetBuffer` は現行でも毎回行う）。
 
 ##### State Management
-- State model: `(swapchain 寸, source_tex, staging, size)`。不変条件「commit は失敗し得る操作の後にのみ・一括で」により、失敗点 6 箇所で 4 つとも不変、`Present` で `source_tex` 内容のみ新。
+- State model: `(swapchain 寸, source_tex, staging, size)`。不変条件「commit は失敗し得る操作のすべての後に・`UpdateSubresource` の直前で一括」により、`Present` 以外の失敗点 6 箇所で struct の 4 項目は旧値で自己整合（`read_back` は旧内容・旧寸）。swap chain 実体だけは `ResizeBuffers` 成功後に戻せない（残余 ⒝・次回 `upload` で回復）。`Present` 失敗は `source_tex` 内容のみ新（残余 ⒜）。
 - Concurrency: UI スレッド上の同期処理（現行どおり）。注入フラグはスレッド局所。
 
 **Implementation Notes**
 - Integration: `chain.rs` の in-file `mod tests`（:297-）の共有ヘルパ `make_dispatcher_and_compositor`／`composed_of_size` を `chain_test_support.rs`（`pub(super)`）へ移設し、`mod tests` と新設 `mod fault_tests`（`#[path = "chain_fault_tests.rs"]`）の両方から引く（`structure.md`「テーマ間で共有するヘルパは `<stem>_test_support.rs`」）。`presenter_upload_failure_tests.rs` は `presenter.rs` に接続し、`presenter_test_support.rs` の `make_world_with_gpu`／`attach_hit_target`／`show_ok` 系で表示を確立してから `arm_upload_fault` → `ShowSurface` → `reply` が `Err`・`visible`／`applied`／`native_size`／`current_surface`／bounds 不変を見る。
-- Validation: `chain_fault_tests.rs`＝7 失敗点 × {外形不変, 外形変更} のうち意味のある組（寸法変更 3 点は外形変更時のみ）で ⒜ を検証・注入後の次回 `upload` 成功で回復（`read_back` が新内容）・`size` 整合。`presenter_budget_steady_state_tests.rs` の定常アロケーション 0 テストが緑のまま（要件 5.5）。`transition_record_tests.rs:327-347` が緑のまま（要件 5.6）。
+- Validation: `chain_fault_tests.rs`＝7 失敗点 × {外形不変, 外形変更} のうち意味のある組（寸法変更 3 点は外形変更時のみ＝計 11 組）を Flow 3 の期待値表どおりに検証・注入後の次回 `upload` 成功で回復（`read_back` が新内容・`size` が新寸）。`presenter_budget_steady_state_tests.rs` の定常アロケーション 0 テストが緑のまま（要件 5.5）。`transition_record_tests.rs:327-347` が緑のまま（要件 5.6）。
 - Risks: 実 D3D で `Present` 失敗の表示内容は観測不能→残余として明記。並べ替えが `chain.rs` の外へ波及する発見があれば要件 5.8 に従い起票し、テストは現状の挙動を記録する形で残す。
 
 ### 錠・検証・文書

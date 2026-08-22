@@ -322,14 +322,14 @@ tracing-core 0.1.36（`Cargo.lock` 実測）・tracing-subscriber 0.3.23。
 - **Implications**: kit の統合テスト 1 本が `std::env::current_exe()` を `--exact <子テスト名> --ignored --test-threads=1` で起動し、環境変数 `AREKA_LOG_CAPTURE_CALIBRATION=bare|hardened` で子のモードを切り替える。子は `#[ignore]`・環境変数が無ければ即 return（`--include-ignored` の誤実行で親プロセス内で走っても probe の有無に依存しない）。bare 子は捕捉 0 件を、hardened 子は 1 件を assert。親は子の stdout に `test result: ok. 1 passed` を要求（0 件実行の空振りを排除＝道具の較正）。
 
 ### 9.6 ④ `upload` の状態遷移と「前状態」の定義（R-4 の決着）
-- **Sources**: `chain.rs:185-241`（`upload`）・`:244`（`read_back`）・`:292`（`size`）・`:122`（struct）・`presenter/show.rs:299-310`（観測点・`prev_size`／エラー分岐）・`presenter/target.rs:73`・`presenter/transition_record_tests.rs:327-347`（本文走査）・`mount_test_support.rs:60`（生成点）。
-- **Findings**: 現行順序は `ResizeBuffers`(:192-200) → `source_tex` 差替(:203) → `staging` 差替(:204) → `size`(:205) → `UpdateSubresource`(:214-223・失敗しない) → `cast`(:211 は UpdateSubresource の前) → `GetBuffer`(:228) → `cast`(:231) → `Present`(:236-238)。**是正後の順序**: 寸法変更時は `create_source_tex` → `create_staging` → `ResizeBuffers` → **3 フィールド一括更新**（失敗し得る操作をすべて先に済ませ、最後に一括で差し替える）。寸法不変部は `cast` → `GetBuffer` → `cast` → `UpdateSubresource` → `CopyResource` → `Present`。この順なら 7 失敗点のうち `Present` 以外の 6 点で `size()`／`source_tex`／`staging`／swap chain のいずれも変わらない。`Present` 失敗時は `source_tex` と backbuffer に新内容が書かれ未提示（表示＝直前フレームのまま・`read_back()` は新内容）。これを「前状態を保つ」の外に置く残余として記録する——復元には提示済み内容の複製テクスチャが要り、定常経路に毎フレーム 1 `CopyResource` を足す（要件 5.5 の性能特性に抵触）ため採らない。
+- **Sources**: `chain.rs:185-241`（`upload`）・`:244`（`read_back`）・`:292`（`size`）・`:122`（struct）・`presenter/show.rs:305-310`（観測点・`prev_size`／エラー分岐）・`presenter/target.rs:73`・`presenter/transition_record_tests.rs:327-347`（本文走査）・`mount_test_support.rs:60`（生成点）。
+- **Findings**: 現行順序は `ResizeBuffers`(:192-200) → `source_tex` 差替(:203) → `staging` 差替(:204) → `size`(:205) → `UpdateSubresource`(:214-223・失敗しない) → `cast`(:211 は UpdateSubresource の前) → `GetBuffer`(:228) → `cast`(:231) → `Present`(:236-238)。**是正後の順序**（設計バリデーション指摘 1 を反映）: 寸法変更時は `create_source_tex`（ローカル） → `create_staging`（ローカル） → `ResizeBuffers`；共通部 `cast`（新または現 `source_tex`） → `GetBuffer` → `cast` → **commit（寸法変更時のみ 3 フィールド一括代入・`UpdateSubresource` の直前）** → `UpdateSubresource` → `CopyResource` → `Present`。失敗し得る操作のすべてが commit より前に終わるので、`Present` 以外の 6 点で struct の 4 項目（`size`／`source_tex`／`staging`／寸の記録）は旧値で自己整合。swap chain 実体だけは `ResizeBuffers` 成功後に戻せない（後段失敗時は backbuffer が新寸・未描画＝残余 ⒝・次回 `upload` で回復）。（当初案「`ResizeBuffers` 直後に commit」は寸法変更経路の `cast`／`GetBuffer` 失敗で `size` 新・`source_tex` 空の不整合を残すため退けた。）`Present` 失敗時は `source_tex` と backbuffer に新内容が書かれ未提示（表示＝直前フレームのまま・`read_back()` は新内容）。これを「前状態を保つ」の外に置く残余として記録する——復元には提示済み内容の複製テクスチャが要り、定常経路に毎フレーム 1 `CopyResource` を足す（要件 5.5 の性能特性に抵触）ため採らない。
 - **「前状態」の定義**（設計で固定）: ⒜ `SwapChainPresenter` 内部＝`size()` 不変・`read_back()` が成功し（`source_tex`／`staging` の寸が一致）・`Present` 以外の失敗では `read_back()` の内容も不変／⒝ presenter 側＝`target.visible`／`applied`／`native_size`／`current_surface`／`mount.set_bounds` 未呼出・`reply` が `Err`（`show.rs:306-310` の早期 return）。backbuffer の実表示内容は readback 不能（flip model）のため観測外と明記する。
 - **Implications**: 注入は `#[cfg(test)]` で実体化するスレッド局所の一発フラグ（`chain.rs` 内 `fault_point(UploadFault::…)?` を 7 点の直前に置く・非 test ビルドでは常に `Ok(())` の空関数）。`show.rs` 非接触・`target.rs` 非接触。ログは既存 `device_err` 経由（要件 5.3）。
 
 ### 9.7 ② settle の有界化の形
 - **Sources**: `spine.rs:329`（`SPIN_WAIT` 30s）・`:347`（`SPIN_YIELD_BUDGET`）・`:350`（`BACKOFF_SLEEP`）・`:358`（`spin_wait_until`）・`spine_display_tests.rs:410-414`・`spine_seriko_loop_tests.rs:369-375`・先例 `spine_display_tests.rs:28-40`（deadline＋200µs poll）。
-- **Findings**: 2 箇所はどちらも「尽きるのが正常」。負荷下で縮まない回収機会は「壁時計の最小持続」**かつ**「連続して空だった観測回数」の両立で与えるのが最も単純（片方だけだと、極端に速い／遅い環境でどちらかが空振りする）。Tick 兼用形（`spine_display_tests.rs:410`）は Tick 値を呼出側の単調カウンタで生成し、**上限（旧範囲の終端 `1_000_000 + 5_000`）で頭打ち**にする——反復回数が時刻依存になっても注入時刻の範囲は旧テストと同一に保たれ、同一 Tick の再注入は cue の発火に影響しない（観測を追い越さない）。
+- **Findings**: 2 箇所はどちらも「尽きるのが正常」。負荷下で縮まない回収機会は「壁時計の最小持続」**かつ**「連続して空だった観測回数」の両立で与えるのが最も単純（片方だけだと、極端に速い／遅い環境でどちらかが空振りする）。Tick 兼用形（`spine_display_tests.rs:410`）は、設計バリデーション指摘 3 を受けて **Tick 注入を前段へ完全分離**する——旧範囲 `1_000_000..+5_000` を毎回すべて注入（各 Tick 後に drain・待機なし）し、その後に `settle_bounded(|| drain)` を置く。注入範囲は壁時計に依存せず旧テストと同一、時刻は観測より先に進まない。（当初案の「`step` 内で Tick 注入＋頭打ち」は、壁時計次第で注入 Tick 数が 5,000 に届かず模擬時間の被覆が縮むため退けた。）
 - **Implications**: `spine.rs` に `settle_bounded(step)` を 1 本追加（§10 D6）。
 
 ### 9.8 錠の退役（⑦）と `command.rs` の扱い
@@ -357,8 +357,8 @@ tracing-core 0.1.36（`Cargo.lock` 実測）・tracing-subscriber 0.3.23。
 - **Rationale**: §9.2。**Trade-offs**: crate が 1 つ増え `structure.md` の crate 一覧に追記が要る。消費 10 crate の `Cargo.toml` に dev-deps 1 行（要件 11.5 の範囲内）。
 - **Follow-up**: kit の検知テストが「`[dependencies]` に `log-capture-kit` が現れない」ことも走査する（依存方向の規律を機械化）。
 
-### D3: 正準イベント型は訪問順保持・行整形 2 形を kit が byte 一致で提供・crate 固有派生はアダプタに残す
-- **Rationale**: §9.3。**Trade-offs**: アダプタ（`capture_logs` 等の既存名）は各 crate に残るが、本体は kit への 1〜3 行の委譲になる（「定義箇所 1 箇所」は**硬化機構**についての要件であり、整形アダプタは対象外＝要件 1.1 の読み）。
+### D3: 正準イベント型は訪問順保持・値は Debug 表現と `record_str` 生値の両方・行整形 2 形を kit が byte 一致で提供・crate 固有派生はアダプタに残す
+- **Rationale**: §9.3。値型は `FieldValue { debug, str_raw: Option<String> }`（設計バリデーション指摘 2 の反映＝kanade／ghost の `assert_logged` は `record_str` の生値で完全一致判定しており、Debug 表現だけでは引用符剥がしの再実装が要る）。**Trade-offs**: アダプタ（`capture_logs` 等の既存名）は各 crate に残るが、本体は kit への 1〜3 行の委譲になる（「定義箇所 1 箇所」は**硬化機構**についての要件であり、整形アダプタは対象外＝要件 1.1 の読み）。
 
 ### D4: 不在主張の対照観測＝kit が番兵イベントを内蔵
 - **Rationale**: §9.4。**Trade-offs**: 窓ごとに TRACE 1 件の発火（コスト無視可）。`capture_under_filter` は directive 追加＋行除去で同じ保証を得る。
@@ -366,13 +366,13 @@ tracing-core 0.1.36（`Cargo.lock` 実測）・tracing-subscriber 0.3.23。
 ### D5: 較正テスト＝子プロセス方式
 - **Rationale**: §9.5。**Trade-offs**: テスト 1 本が子プロセスを 2 回起動（数百 ms）。Windows で `current_exe()` は安定。
 
-### D6: ② settle ヘルパ＝「最小持続 かつ 連続空観測」＋ Tick 頭打ち
-- **Rationale**: §9.7。**Selected**: `settle_bounded(step: FnMut() -> usize)`（`step` は 1 反復分の処理を行い回収件数を返す・Tick 注入は `step` の内側で呼出側が行う）。終了条件＝最小持続 `SETTLE_MIN`（壁時計）を満たし**かつ**連続 `SETTLE_QUIET_ROUNDS` 回 0 件。上限 `SPIN_WAIT` で必ず返る（返った後の判定は呼出側の assert・ヘルパは panic しない）。反復間は `BACKOFF_SLEEP` 相当の短い sleep（4.4 の有界 poll-backoff）。
+### D6: ② settle ヘルパ＝「最小持続 かつ 連続空観測」・Tick 注入は前段で決定論的に分離
+- **Rationale**: §9.7。**Selected**: `settle_bounded(step: FnMut() -> usize)`（`step` は 1 反復分の回収のみを行い件数を返す・Tick 注入は含めない）。Tick を兼ねていた `spine_display_tests.rs:410` は前段で旧範囲 `1_000_000..+5_000` を毎回すべて注入（各 Tick 後に drain）してから `settle_bounded(|| drain)` を呼ぶ（設計バリデーション指摘 3 の反映＝注入範囲を壁時計に依存させない）。終了条件＝最小持続 `SETTLE_MIN`（壁時計）を満たし**かつ**連続 `SETTLE_QUIET_ROUNDS` 回 0 件。上限 `SPIN_WAIT` で必ず返る（返った後の判定は呼出側の assert・ヘルパは panic しない）。反復間は `BACKOFF_SLEEP` 相当の短い sleep（4.4 の有界 poll-backoff）。
 - **Trade-offs**: 2 テストの所要が各 `SETTLE_MIN` 分伸びる（値は tasks で実測調整・初期値 200ms／quiet 50 回を提案）。
 
 ### D7: ④ 注入＝`#[cfg(test)]` スレッド局所の一発フラグ＋ prepare→commit 並べ替え（要件 5.7 の是正）
 - **Rationale**: §9.6。**Selected**: `UploadFault` 7 値（分類: 寸法変更 `ResizeBuffers`／`CreateSourceTex`／`CreateStaging`・資源取得 `SourceTexCast`／`GetBuffer`／`BackbufferCast`・提示 `Present`）。`fault_point(at) -> Result<(), PresentError>` は test ビルドでスレッド局所 `Cell<Option<UploadFault>>` を消費し、一致すれば `device_err("<injected …>")(E_FAIL)` を返す。非 test ビルドは常に `Ok(())`。
-- **Trade-offs**: `upload` 本文に 7 行の `fault_point(...)?;` が入る（可読性のコスト・各行は 1 行）。`Present` 失敗後の `read_back()` は試行内容を返す残余を文書化して残す。
+- **Trade-offs**: `upload` 本文に 7 行の `fault_point(...)?;` が入る（可読性のコスト・各行は 1 行）。残余 2 件（⒜ `Present` 失敗後の `read_back()` は試行内容を返す・⒝ 寸法変更経路の `ResizeBuffers` 成功後の後段失敗は backbuffer だけ新寸・未描画）を文書化して残す。commit は `UpdateSubresource` の直前（設計バリデーション指摘 1 の反映）。
 
 ### D8: ⑦・⑩ は条件付き／独立タスク・⑧は kit の統合テスト
 - **Rationale**: §9.8・§9.9。
@@ -393,5 +393,5 @@ tracing-core 0.1.36（`Cargo.lock` 実測）・tracing-subscriber 0.3.23。
 - `crates/areka/src/placement/test_support.rs:6-52` — probe 方式の機序説明（原典）。
 - `crates/areka-sylphya/src/test_log_capture.rs:98-136`・`crates/areka-kanade/src/schedule/log_capture.rs:145-184`・`crates/areka-ghost/src/test_log_capture.rs:119-131` — keeper 方式。
 - `crates/areka-ghost/tests/ghost/spine_e2e_test_global_log_probe.rs:75-93`・`crates/areka-seriko/tests/loop_integration.rs:590-608` — 全スレッド capture-all。
-- `crates/areka-emo-present/src/chain.rs:185-241` — `upload`。`crates/areka-emo-present/src/presenter/show.rs:299-310` — 観測点。
+- `crates/areka-emo-present/src/chain.rs:185-241` — `upload`。`crates/areka-emo-present/src/presenter/show.rs:305-310` — 観測点。
 - `crates/areka/src/emo2_boot/spine.rs:329-375` — 有界待機の先例。
