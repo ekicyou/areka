@@ -19,7 +19,7 @@
 
 ## Current State
 
-> **数量の正本は atom の確定台帳 `.kiro/specs/areka-P0-dpi-transition-atomicity/mechanism-ledger.md` §11 である。**
+> **数量の正本は atom の確定台帳 `.kiro/specs/completed/areka-P0-dpi-transition-atomicity/mechanism-ledger.md` §11 である。**
 > 本節の値は 2026-08-22 に atom の task 7.3 が両採取の生ログを再走査して確定させた実測へ差し替えてある（初稿の 5 箇所は遷移 #1 だけの値を 8 遷移の域として書く等の誤りだった）。以後この表を更新するときは台帳 §11.3・§11.6 と突き合わせること。
 
 atom（`areka-P0-dpi-transition-atomicity`）が着地させたもの:
