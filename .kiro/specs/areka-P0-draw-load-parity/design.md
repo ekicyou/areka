@@ -43,7 +43,7 @@
 
 ### Allowed Dependencies
 - **下向き**: areka → wintf（旗を立てる結線は areka 側に置く）。wintf は areka／emo-text／seriko を知らない
-- **道具**: Windows Performance Toolkit（`xperf.exe`・測定マシンに実在）・PowerShell 7・Python 3 標準ライブラリ（ビルドグラフ外）・Win32（`GetThreadTimes`・`GetThreadDescription`・`CreateToolhelp32Snapshot`・`GetProcessTimes`）
+- **道具**: Windows Performance Toolkit（`xperf.exe`・測定マシンに実在）・PowerShell 7・Python 3 標準ライブラリ（ビルドグラフ外）・Win32（`GetThreadTimes`・`GetProcessTimes`・`GetCurrentThread`／`DuplicateHandle`＝いずれも既存 feature `Win32_System_Threading`／`Win32_Foundation` の範囲。**ToolHelp は使わない**＝feature が無く `Cargo.toml` 非接触と両立しないため）
 - **既存資産**: `invoke-perf-run.ps1` の出力ファイル規約（`run.log`・`cpu.csv`・`run-meta.txt`）・`judge-perf.py` の `parse_fields`／終了コード体系・`transition_diag` の前置ガード作法（`is_enabled`＝`tracing::enabled!`）・`AREKA_APP_SMOKE_EXIT_MS` の有界終了
 - **禁止**: 実時間閾値をテストコードへ持ち込むこと・既存 perf 行／遷移観測行のフィールド名・順序・文言の変更・1 行内のフィールド名重複
 
@@ -138,9 +138,9 @@ graph TB
 | 道具（制御） | PowerShell 7（`#Requires -Version 7.0`・既存ランナーと同じ） | 実走・採取・xperf・操作注入・静寂確認 | `Add-Type` で user32（`SetCursorPos`・`SendInput`・`SetWindowPos`・`GetWindowLongPtr`） |
 | 道具（解析） | Python 3 標準ライブラリのみ（既存 `judge-perf.py` と同じ制約） | 順位表・採否・台帳・追随判定・自己較正 | ビルドグラフ外。決定論的フォーマット |
 | プロファイラ | Windows Performance Toolkit `xperf.exe`（測定マシンに実在） | CPU サンプリング＋呼出スタック・記号解決・テキスト dump | 記号は `CARGO_PROFILE_RELEASE_DEBUG=line-tables-only`（環境変数）で付与。代替 `wpaexporter` |
-| 実行体 | Rust 2024・bevy_ecs 0.19.1（multi_threaded）・`tracing`・windows 0.62 | tick 門・相別観測・スレッド報告・`command.rs` | `Cargo.toml` 非接触。新規 crate 依存無し。`GetThreadTimes`／`GetThreadDescription`／ToolHelp の呼出は `windows` crate の feature を既に持つ側（wintf `api.rs`）に置く（下の補足） |
+| 実行体 | Rust 2024・bevy_ecs 0.19.1（multi_threaded）・`tracing`・windows 0.62 | tick 門・相別観測・スレッド報告・`command.rs` | `Cargo.toml` 非接触。新規 crate 依存無し。スレッド別 CPU は**自前の名簿＋`GetThreadTimes`**（既存 feature `Win32_System_Threading` の範囲）。ToolHelp は使わない（下の補足） |
 
-> 補足（上表の末尾）: `Cargo.toml` 非接触は要件 8.6 の要請である。`windows` crate の feature が足りない場合、feature 追加は `Cargo.toml` の変更になるので、**Win32 呼出は既に feature を持つ crate（wintf の `api.rs`）へ置き、areka はそれを呼ぶ**。実装時に `cargo tree -e features` で確認し、それでも足りなければ改訂欄に理由を登記し cage の brief へ申し送る（要件 8.6 の規定どおり）。
+> 補足（上表の末尾・**確認済みの結論**）: `Cargo.toml` 非接触は要件 8.6 の要請である。現行 `Cargo.toml:63-93` の `windows` feature 一覧に `Win32_System_Diagnostics_ToolHelp` は**無く**、全 crate が `windows = { workspace = true }` を共有するので「feature を持つ crate へ置く」逃げ道は存在しない（設計バリデーション Critical 2）。よってスレッド列挙に ToolHelp を使わず、**自前のスレッド名簿**（C14）で採る。`GetThreadTimes`／`GetProcessTimes`／`DuplicateHandle` は既存 feature（`Win32_System_Threading`・`Win32_Foundation`）の範囲で足りる（2026-08-22 設計ディスカッション議題 1 裁定＝選択肢 (a)）。
 
 ## File Structure Plan
 
@@ -183,6 +183,8 @@ crates/wintf/src/
 ├── ecs/world/tick_gate_tests.rs      # 新規: 全組合せ・省略直後の反映・生産者一覧の字面検査
 ├── ecs/world/tick_diag.rs            # 新規: target wintf::tick・is_enabled・TickWindow 集約・行の組立
 ├── ecs/world/tick_diag_tests.rs      # 新規: 行の語彙（重複なし）・窓の切れ目・OFF で費用 0 の構造検査
+├── ecs/world/thread_registry.rs      # 新規: スレッド名簿（役割名・TID・複製ハンドル）・register / snapshot・役割語彙の定数
+├── ecs/world/thread_registry_tests.rs # 新規: 登録→一覧・語彙・別スレッド登録の可視性
 ├── ecs/world/mod.rs                  # 変更: decide_tick / try_tick_world の計時点・note_skipped / 再輸出
 ├── runtime/tick_bridge.rs            # 変更: tick_one_frame に門の分岐（Skip でも flush は呼ぶ）
 ├── ecs/window/command.rs             # 変更: SELF_INITIATED_DEPTH → thread_local! Cell<i32>・enqueue で mark(WINDOW_CMD)
@@ -192,7 +194,7 @@ crates/wintf/src/
 ├── ecs/window/zorder_pair_maintain.rs# 変更: Z 順要求で mark(ZORDER)
 ├── ecs/drag/（ドラッグ状態の更新点）  # 変更: ドラッグ中は mark(DRAG)（self-rearm）
 ├── ecs/dola/mod.rs                   # 変更: 活性アニメータがあれば mark(REARM)
-└── api.rs                            # 変更（必要時）: GetThreadTimes / GetThreadDescription / ToolHelp の安全ラッパ
+└── api.rs                            # 変更（必要時）: GetThreadTimes / GetProcessTimes / DuplicateHandle の安全ラッパ（既存 feature の範囲）
 ├── ecs/graphics/systems/visual_sync.rs # 変更（候補 C18 採用時）: Added/Changed フィルタで母集合を絞る
 ├── ecs/pointer/systems.rs            # 変更（候補 C18 採用時）: 既定値のときは書かない
 ├── ecs/clickthrough/monitor.rs       # 変更（候補 C19 採用時）: 二段のポーリング周期
@@ -322,7 +324,7 @@ flowchart TD
 | 1.13 | kiro-impl 改修 | C4 | 派遣モデルの規則 | — |
 | 2.1 | 4 段の順位表 | C9, C14, C15, C8 | `rank.txt` 書式 | Flow 2 |
 | 2.2 | プロセス全体は既存手段 | C7, C12 | `% Processor Time`・判定式不変 | Flow 2 |
-| 2.3 | スレッド別 CPU＋役割名 | C14 | `perf(thread)` 行・役割写像 | Flow 2 |
+| 2.3 | スレッド別 CPU＋役割名 | C14 | `perf(thread)` 行・スレッド名簿（登録時の役割宣言）・`unregistered_rest` | Flow 2 |
 | 2.4 | 関数別＝WPT サンプリング 1 コマンド | C8, C9 | `invoke-cpu-sample.ps1`・`CARGO_PROFILE_RELEASE_DEBUG` | Flow 2 |
 | 2.5 | 相別の所要（既定 OFF・前置ガード） | C15 | `[tick] kind=window` 行 | Flow 3 |
 | 2.6 | 壁時計と CPU の区別 | C14, C15, C9 | `wall_us`／`ui_cpu_us`・`perf(process)` | Flow 2 |
@@ -394,7 +396,7 @@ flowchart TD
 | C11 `perf-ledger.py` | 道具 | 台帳の追記・読取・STATUS 行 | 1.3, 1.4, 1.9, 5.4, 6.7, 7.6 | — | Batch, State |
 | C12 `judge-perf.py` 0.4.0 | 道具 | catch-up 系統別・任意種読取・参考値注記 | 2.2, 2.9, 2.11, 2.12, 5.1–5.3, 5.5, 5.8, 7.5 | — | Batch |
 | C13 追随チェック | 道具 | 実走＋操作注入＋ログ照合 | 1.5, 4.7 | C7 (P1) | Batch |
-| C14 `perf_thread_report` | 実行体 areka | スレッド別 CPU 行（既定 OFF） | 2.3, 2.6, 2.12, 3.8 | wintf `api.rs` (P1) | Event |
+| C14 `perf_thread_report` | 実行体 areka（名簿は wintf） | スレッド別 CPU 行（既定 OFF）・自前名簿 | 2.3, 2.6, 2.12, 3.8 | wintf `thread_registry` (P0) | Event, State |
 | C15 `tick_diag` | 実行体 wintf | 相別の所要行（既定 OFF） | 2.5, 2.6, 2.12, 3.8, 6.5 | — | Event |
 | C16 tick の門 | 実行体 wintf＋areka 結線 | 変化が無いとき 13 本を回さない | 3.2, 3.4, 3.7, 4.1–4.6, 6.1–6.3, 6.5 | C15 (P1) | Service, State |
 | C17 実行器見直し（候補） | 実行体 wintf | 7 本の多スレッド実行器 | 3.3 | — | — |
@@ -739,10 +741,11 @@ main_model_recommended = "fable"       # README に記す推奨（Opus 5 でも�
 
 ##### Event Contract
 - 点灯: `tracing::enabled!(target: "areka::perf", DEBUG)` を起動時に 1 度評価。OFF なら報告スレッドを**起こさない**（費用 0）。ON なら `areka-perf-report` スレッドが 60 秒ごと（`AREKA_PERF_THREAD_REPORT_SEC` で変更可）と終了直前にスナップショットを出す。
-- 採り方: `CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD)` → 自 PID のスレッドを `OpenThread(THREAD_QUERY_LIMITED_INFORMATION)` → `GetThreadTimes`＋`GetThreadDescription`。プロセス全体は `GetProcessTimes`。Win32 呼出の安全ラッパは wintf `api.rs`（feature を持つ crate）に置き、areka は呼ぶだけ。
+- 採り方（**自前のスレッド名簿**＝2026-08-22 議題 1 裁定 (a)）: wintf に `ecs/world/thread_registry.rs`（プロセス共有・`Mutex<Vec<ThreadEntry{ role: &'static str, name: String, tid: u32, handle: OwnedHandle }>>`）を置き、**スレッドの生成点で 1 行ずつ登録**する（生成側が `GetCurrentThread`→`DuplicateHandle` で自分のハンドルを複製して渡す）。登録点: `wintf-vsync`（`tick_bridge.rs:65-66`）・`wintf-cursor-monitor`（`clickthrough/monitor.rs:87-88`）・UI スレッド（`WinApp` 起動点）・`ticker`／`loop-ticker`（`areka-ghost/src/ticker.rs:179,289`）・アクター（`areka-actor/src/spawn.rs:48-49`）・`areka-perf-report` 自身。役割名は**登録時の宣言**（推測の写像ではない）。報告器は名簿を舐めて `GetThreadTimes` を呼び、プロセス全体は `GetProcessTimes`。**名簿に無い残り**（bevy の `TaskPool (N)` など）は `perf(process)` の CPU から名簿合計を引いた差として `perf(thread): … role=unregistered_rest` の **1 行**で出す（消えない・黙らない）。Win32 呼出は既存 feature（`Win32_System_Threading`・`Win32_Foundation`）の範囲で、`Cargo.toml` 非接触。
+- 段③が利用可のとき（昇格あり）: `perf-rank.py` は `dump.txt` の `SampledProfile` 行を TID 別に集計し、`[2] スレッド` に「サンプリング由来のスレッド別（TaskPool 個別を含む）」を**併記**する（名簿由来と二系統・出所を見出しで区別）。
 - 行（1 スレッド 1 行・フィールド名重複なし）: `perf(thread): スレッド別 CPU snap=<n> t_s=<経過秒> tid=<id> name=<OS 名 or -> role=<役割> cpu_us=<k+u> kernel_us=<k> user_us=<u>`。
 - 行（プロセス）: `perf(process): プロセス CPU snap=<n> t_s=<経過秒> wall_ms=<壁時計> cpu_us=<k+u> kernel_us= user_us= threads=<数>`。
-- 役割写像（純関数・`role_of(name, is_main)`）: `wintf-vsync`→`vblank`・`wintf-cursor-monitor`→`cursor_monitor`・`ticker`→`ticker_dispatcher_kanade`・`loop-ticker`→`ticker_loop`・`TaskPool (N)`→`taskpool`・main thread→`ui`・`areka-perf-report`→`perf_report`・その他の名前→`actor:<name>`・無名→`unnamed`。
+- 役割名（登録時の宣言・固定語彙）: `vblank`（`wintf-vsync`）・`cursor_monitor`・`ui`（main）・`ticker_dispatcher_kanade`・`ticker_loop`・`actor:<name>`・`perf_report`・`unregistered_rest`（名簿外の差分 1 行）。語彙は `thread_registry.rs` の定数にあり、`perf_thread_report_tests.rs` が全語を固定する。
 - 費用: ON でも 60 秒に 1 回・スレッド数 ×数 µs。
 
 #### C15 `tick_diag`（wintf・target `wintf::tick`）
@@ -891,7 +894,7 @@ impl EcsWorld {
 - `tick_wake_tests.rs`: `mark`／`take` の原子性（別スレッドからの `mark` が次の `take` で見える）・`arm_deadline` の最小保持・`wake_bits_for_message` の表（既知メッセージ全件の期待ビット・`WM_DPICHANGED`→`WM_GEOMETRY`・未知→`FORCE`）。
 - `tick_diag_tests.rs`: 行のフィールド名に重複なし・13 本の名前と順序・窓の切れ目・OFF 時に `Instant::now` を呼ばない構造検査（`include_str!` で `is_enabled()` が `Instant::now()` より前に在る）。
 - `command_threadlocal_tests.rs`: スレッド隔離。既存 `command_*_tests.rs`・`window_pos_*_tests.rs` 全緑。
-- `perf_thread_report_tests.rs`: 役割写像の全分岐・行の語彙・スナップショット差分の計算。
+- `perf_thread_report_tests.rs`: 役割語彙の全件・行の語彙・スナップショット差分の計算・`unregistered_rest` の算出。`thread_registry_tests.rs`: 登録→一覧・別スレッドからの登録が見える・語彙の固定。
 - Python `--selftest`: `judge-perf.py`（既存 17＋追加）・`perf-rank.py`・`perf-compare.py`（4 判定）・`perf-ledger.py`（往復・遷移表）・`judge-followup.py`（3 ケース）。
 - 1 ファイル 1,000 行以下・テストは本番ファイルの兄弟（`<stem>_<module>.rs`）。
 
