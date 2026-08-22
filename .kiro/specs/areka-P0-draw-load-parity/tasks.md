@@ -32,7 +32,7 @@
   - _Requirements: 2.5, 2.6, 2.12, 3.8, 6.5, 6.8_
   - _Boundary: tick_diag, ecs/world/mod.rs_
 
-- [ ] 2.3 スレッドの生成点で名簿へ登録（wintf・ghost・actor をまたぐ結線）
+- [x] 2.3 スレッドの生成点で名簿へ登録（wintf・ghost・actor をまたぐ結線）
   - vblank 検出・カーソル監視・UI スレッド・ticker 2 系統（dispatcher/kanade・ループ）・アクター生成点で、1 行ずつ役割名を宣言して名簿へ登録する
   - 依存方向は areka 系→wintf のまま（wintf は areka を知らない）。登録以外の挙動は変えない
   - 観測可能な完了状態: 名簿のスナップショットを読む決定論テスト（wintf 側は vblank／cursor_monitor／ui の登録を、ghost／actor 側は ticker_*／actor:* の登録を、それぞれ自 crate のテストで固定）が緑で、全登録の役割名が固定語彙に含まれる
@@ -263,3 +263,10 @@
   - 観測可能な完了状態: FINAL 行が会話に出て、`results/final-<date>/` と summary.md が存在し、未達の場合は改訂欄に登記がある
   - _Requirements: 1.4, 5.3, 5.5, 5.6, 5.7, 7.6, 8.2, 8.3_
   - _Depends: 9.3_
+
+## Implementation Notes
+
+- (2.3) `areka-actor`／`areka-ghost` は wintf に依存せず `Cargo.toml` は非接触（要件 8.6）のため、設計 C14 の「ticker.rs／spawn.rs の生成点で wintf の名簿へ直接登録」は不可能。着地形＝`areka_actor::install_thread_start_hook(fn(&str))`（依存ゼロ・OnceLock・先着勝ち）を `spawn_actor` が新スレッド内で呼び、`areka` bin の `thread_roles.rs` が「名前→役割」（`ticker`→`ticker_dispatcher_kanade`・`loop-ticker`→`ticker_loop`・他→`actor:<name>`）を 1 箇所で宣言して `main()` 冒頭（tracing 初期化直後・`WinApp::new()` 前）で導入する。`areka-ghost` は非接触。`examples/*` は導入しないので実走計測は `areka` 本体で行うこと。
+- (2.1/2.3) 名簿は登録解除を持たず、終了済みスレッドも最終 CPU 値つきで残る（同一 TID の再登録は置き換え）。2.4 の報告行は「終了済みスレッドも 1 行出る」前提で設計すること。
+- (2.2) `ui_cpu_us` は `GetThreadTimes` 由来で 15,625µs 量子の整数倍（1 秒窓で ±1 量子≒1.6 ポイントの分解能）。順位表は壁時計を主に読み `ui_cpu_us` は目安として扱う。実走の `[tick]` 行には既存の span 文脈 `actor{actor=emo-text}:` が前置される（フィールド名とは重ならない）。
+- (全般) `.claude/skills/*/SKILL.md` は CRLF。素の書き換えは全行差分になるので行末を保つこと。areka bin の in-crate テストは `cargo test -p areka --bin areka` で走る。

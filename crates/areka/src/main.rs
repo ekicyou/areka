@@ -68,6 +68,11 @@ mod emo2_boot;
 /// per-scope 状態保持（`MouseWiring`）は task 2.6／2.7 で増設される。
 mod input_events;
 
+/// アクタースレッドの役割名の宣言（areka-P0-draw-load-parity task 2.3）。
+/// `areka-actor` のスレッド開始フックを導入し、生成されるアクタースレッド 1 本ごとに
+/// 役割名を宣言して wintf のスレッド名簿へ登録する。
+mod thread_roles;
+
 /// 遅延応答と push 経路の end-to-end 結合テスト。
 /// モック脳が `SHIORI_S_PENDING`＋token を返し、後で保持 host へ safe `complete`/`raise` を発火する
 /// 一連の流れを `ShioriSession` 越しに 1 シナリオで通す（sink/session の単体テストと重複させない）。
@@ -128,6 +133,12 @@ fn main() -> Result<()> {
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
         )
         .init();
+
+    // アクタースレッドの役割宣言フックを導入する（draw-load-parity 要件 2.3）。
+    // 以後 `spawn_actor` で起きるスレッド（ticker／loop-ticker／各アクター）は走り始めに
+    // 自分の役割名を宣言して wintf のスレッド名簿へ載る。**すべての結線より前**に置くのは、
+    // これより前に起きたスレッドが名簿から漏れるため。登録以外の挙動は何も変わらない。
+    thread_roles::install();
 
     // 構成入力（ゴースト／バルーンのルートパス）の解決とログ出力（R3.1/3.3/3.4・マウントしない）。
     let args: Vec<String> = std::env::args().collect();

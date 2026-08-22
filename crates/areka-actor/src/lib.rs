@@ -81,7 +81,9 @@
 //! 本クレートの最終的な公開面は以下に限定される（これ以外の公開面を持たない・Req 7.1）。各シンボルは
 //! 後続タスクで実装され次第、本モジュールから re-export される。
 //!
-//! - 純粋層 [`spawn`]: `spawn_actor`・`run_inbox`・`ActorHandle`・`ActorError`
+//! - 純粋層 [`spawn`]: `spawn_actor`・`run_inbox`・`ActorHandle`・`ActorError`・
+//!   `install_thread_start_hook`・`ThreadStartHook`・`ThreadStartHookAlreadyInstalled`
+//!   （スレッド開始フック＝生成点で 1 度呼ばれる呼ばれ口。何を登録するかは統合側が決める）
 //! - 純粋層 [`reply`]: `reply_channel`・`ReplySender`・`ReplyReceiver`・`ReplyError`
 //! - UI ブリッジ層 [`ui`]: `spawn_ui`・`UiSender`・`UiSendError`・`UiSpawnError`
 
@@ -90,5 +92,8 @@ pub mod spawn;
 pub mod ui;
 
 pub use reply::{ReplyError, ReplyReceiver, ReplySender, reply_channel};
-pub use spawn::{ActorError, ActorHandle, run_inbox, spawn_actor};
+pub use spawn::{
+    ActorError, ActorHandle, ThreadStartHook, ThreadStartHookAlreadyInstalled,
+    install_thread_start_hook, run_inbox, spawn_actor,
+};
 pub use ui::{UiSendError, UiSender, UiSpawnError, spawn_ui};

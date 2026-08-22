@@ -27,7 +27,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{self, JoinHandle};
 
 use event_listener::Event;
-use tracing::{debug, trace};
+use tracing::{debug, error, trace};
 use windows::Win32::Graphics::Dwm::DwmFlush;
 
 use crate::ecs::world::EcsWorld;
@@ -112,6 +112,15 @@ impl Drop for VsyncEventBridge {
 /// VSync スレッド本体。`DwmFlush()` で vblank を待ち、毎回 `Event` を全リスナ起床
 /// で notify する。`stop` が立つまでループする。
 fn vsync_loop(event: Arc<event_listener::Event>, stop: Arc<AtomicBool>) {
+    // 走り始めに 1 度だけ、自分の役割を宣言してスレッド名簿へ載せる（要件 2.3）。
+    // 失敗しても vblank 検出は続ける——このスレッドの CPU が `unregistered_rest` へ
+    // 回るだけで、観測の道具の不調が観測対象を止める理由にはならない。
+    if let Err(e) = crate::ecs::world::thread_registry::register_current_thread(
+        crate::ecs::world::thread_registry::ROLE_VBLANK,
+    ) {
+        error!(error = %e, "[vsync_loop] スレッド名簿への登録に失敗した（vblank 検出は継続）");
+    }
+
     while !stop.load(Ordering::Acquire) {
         // SAFETY: Win32 境界。`DwmFlush` は引数を取らず、DWM 合成の次フレーム
         // （vblank）まで現スレッドをブロックして `windows::core::Result<()>` を返す。
@@ -238,8 +247,53 @@ async fn run_async_tick(event: Arc<Event>, world: Weak<RefCell<EcsWorld>>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ecs::world::thread_registry::{self, ROLE_VBLANK, ThreadEntry};
     use event_listener::Listener;
     use std::time::Duration;
+
+    /// 名簿に当該役割名の項目が現れるまで待ち、現れた項目を返す（現れなければ `None`）。
+    ///
+    /// 待ち時間は合否の対象ではなく、登録が起きなかったときに無限に待たないための上限で
+    /// ある（要件 6.5 が禁じる「実時間の閾値による判定」ではない）。
+    fn wait_for_role(role: &str, limit: Duration) -> Option<ThreadEntry> {
+        let deadline = std::time::Instant::now() + limit;
+        loop {
+            let found = thread_registry::snapshot()
+                .into_iter()
+                .find(|entry| entry.role == role);
+            if found.is_some() {
+                return found;
+            }
+            if std::time::Instant::now() >= deadline {
+                return None;
+            }
+            thread::sleep(Duration::from_millis(5));
+        }
+    }
+
+    /// vblank 検出スレッドは走り始めに自分をスレッド名簿へ登録する（役割名 `vblank`・要件 2.3）。
+    ///
+    /// 名簿はプロセス共有で、テストは並列に走る——**全体の件数は当てにせず**、登録された
+    /// 役割名の項目だけを検査する。観測はスレッドを生かしたまま行う（終了した TID が別の
+    /// スレッドへ再利用されて項目が置き換わる余地を残さないため）。
+    #[test]
+    fn vsync_thread_registers_itself_with_the_vblank_role() {
+        let bridge = VsyncEventBridge::new();
+
+        let found = wait_for_role(ROLE_VBLANK, Duration::from_secs(5))
+            .expect("wintf-vsync スレッドは走り始めに vblank として名簿へ載るはず");
+        assert_eq!(
+            found.name.as_deref(),
+            Some("wintf-vsync"),
+            "名簿の OS 名は生成時に付けたスレッド名であるはず"
+        );
+        assert!(
+            thread_registry::is_known_role(ROLE_VBLANK),
+            "登録した役割名は固定語彙に含まれるはず"
+        );
+
+        drop(bridge);
+    }
 
     /// 完了状態の検証: vblank ごとに Event が notify され、待機リスナを起床できる。
     /// さらに drop でスレッドが clean に join することを確認する（ハングしない）。
