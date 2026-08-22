@@ -414,7 +414,7 @@ flowchart TD
 | 3.4 | 確定項目以外を変更しない | C9＋File Structure Plan の突合台帳 | — |
 | 3.5 | 合成コスト帰着時の申し送り | C9 | 引受先＝`.kiro/specs/` 直下 brief 実在確認 |
 | 4.1 | 接地点を規約値に保つ | C5 dpi_sync（hold）・C6 work_area_sync・`resize_window_to` | `ground` レコード・hold |
-| 4.2 | 食い違い可視フレームを提示しない | C8 段階裁定（B-2a・**B-2b 確定**〔task 7.1〕・B-4/B-3 は次段）・C7 判定 | 段階裁定フロー・サインオフ目視 |
+| 4.2 | 食い違い可視フレームを提示しない | C8 段階裁定（B-2a・**B-2b 確定**〔task 7.1〕・B-4/B-3 は次段）・C7 判定 | 段階裁定フロー・サインオフ目視。**task 7.3 の実機で未達＝決定論 PASS／実機 FAIL（`visualize_to_write_us` 210,329〜306,301µs＝上限の 12.6〜18.4 倍）。引受先は `areka-P0-present-write-coherence`**（requirements.md 4.2 直下の注記・C7・C8 の 2026-08-22 の注記・台帳 §11） |
 | 4.3 | 随伴バルーン同一フレーム | 既存 `follow_balloon`（同一 dpi 相）＋合流 | 判定: バルーン write frame == キャラ write frame |
 | 4.4 | 有界フレーム数 | C7 `TRANSITION_FRAME_BOUND = 0`（hold 中窓は `+DPI_SYNC_HOLD_MAX_FRAMES`） | 決定論テスト |
 | 4.5 | 窓ごとの書込回数 | C2 合流・C7 `WRITES_PER_WINDOW_MAX = 1`・経路 A 0 | 決定論テスト |
@@ -444,7 +444,7 @@ flowchart TD
 | 8.1 | 起動コマンド・target・水準・自動終了・grep 語 | C10 signoff-procedure | — |
 | 8.2 | 充足＝遷移回数（各方向 3 回以上） | C10・C7 `split_transitions` で起点を数える | — |
 | 8.3 | 4・5 の機械判定 | C7 `#[ignore]` ランナー | Report |
-| 8.4 | 目視所見の併記・食い違いは不合格 | C10 | — |
+| 8.4 | 目視所見の併記・食い違いは不合格 | C10 | **task 7.3 実施済み＝`ATOM-SIGNOFF: FAIL`（AGREEMENT 食い違い・SIGNOFF-BOUNDS 違反 40 件）。上限も判定器も動かしていない**（requirements.md 要件 8 直下の注記・台帳 §11） |
 | 8.5 | 消灯の観測点を「0 回」の根拠にしない | C10 点灯表 | — |
 | 9.1 | 縮退／残存の判定 | 要件で確定（残存） | — |
 | 9.2 | （縮退分岐）該当なし | — | — |
@@ -715,6 +715,10 @@ pub(crate) fn coalesce_geometry(queue: &mut Vec<SetWindowPosCommand>, cmd: SetWi
 - 判定量（`TransitionSummary`）: `frames_to_last_write`（起点 frame → 最終 `write` frame の `wrapping_sub`）／`writes_per_window: BTreeMap<(scope, kind), u32>`（キーの窓種別は行の **`win_kind=`** フィールドから読む＝下記「フィールド名の一意性」）／`path_a_writes`（**`origin=dpi-suggested` で数える**・`stage=sync` は裏取りとして別フィールド `sync_stage_writes` に持ち、両者の食い違いが均されずに見えるようにする＝task 2.2 の裁定）／`balloon_same_frame: bool`（キャラ write frame == 同 scope バルーンの**随伴の位置指令が着地した** write frame。着地は `origin=BalloonFollow` の write か、合流されたときは `kind=enqueue` の `merged_into_seq` が指す先の write＝MOD(6.6)）／`mismatch_frames_per_window`（`surface stage=visualize` の frame と当該窓 write frame の差）／`holds`／`chain_realigned: u32`／`ground_diff_max`（`ground` レコードの `|diff|` 最大）／`skipped_windows`（`stage=skipped` **かつ `reason=invisible`** の target だけを除外。`reason=k-unchanged` は除外に使わない——あれは拡大率が変わらない限り定常フレームで全窓が出し続ける空振りであり、遷移区間が次の起点まで伸びるので除外に使うと毎遷移で全窓が除外側へ入り、`frames_to_last_write`・`mismatch_frames_per_window`・`visualize_to_write_us` の 3 つが静かに空になる＝要件 4.6 の裁定の注記〔2026-08-20〕）／参考値 `wall: { first_write_t_us, last_write_t_us, sum_call_us }`。
 - 定数（回帰テストが固定・`Bounds::deterministic`）: `TRANSITION_FRAME_BOUND = 0`、`WRITES_PER_WINDOW_MAX = 1`、`PATH_A_WRITES_MAX = 0`、`GROUND_DIFF_MAX = 0`、`CHAIN_REALIGN_PER_TRANSITION = 1`（k 変化のある遷移）。hold を含む遷移は `frames_to_last_write ≤ DPI_SYNC_HOLD_MAX_FRAMES`。
 - **実機サインオフ専用の判定量（`Bounds::signoff`・設計討議 A-2 で追加）**: 第 1 段で確定した症状「描画内容は +13〜47ms に新寸・窓矩形は +63〜309ms まで旧寸」は**同一 tick の内側**の食い違いであり、上のフレーム単位の量では是正前でも 0 になる（`TRANSITION_FRAME_BOUND = 0` は現行コードで既に成立）。そこで `TransitionSummary` に窓ごとの `visualize_to_write_us`（同一 frame の `surface stage=visualize` の `t_us` から当該窓の `write` の `t_us` まで）と `flush_total_us`（`flush stage=end` の `total_us`）を持たせ、`Bounds::signoff` に上限を置く。**上限値は実装フェーズ 2 の再採取で確定**する（目安: 実測 vblank 周期 1〜2 回分。8.3ms@120Hz／16.7ms@60Hz を候補とし、台帳へ根拠つきで登記）。この量は非決定なので**回帰テストでは固定しない**——サインオフ手順書（C10）の合否と C8 の Q2 条件（B-2b→B-4→B-3 の分岐）にだけ使う。判定は決定論量と実機量の**両方**を Report に列挙し、`judge(summary, &Bounds::deterministic)` と `judge(summary, &Bounds::signoff)` を別々に呼ぶ。
+- **2 系統の判定量が実機で別々の答えを出した（task 7.3・2026-08-22・requirements.md の 4.2 直下の注記と対）**: 実機サインオフ（`atom-73-signoff-1`・遷移 8 回・release）で、`judge(summary, &Bounds::deterministic)` は 8 遷移すべて PASS（窓ごとの `mismatch_frames` も 32 窓すべて 0）、`judge(summary, &Bounds::signoff)` は 8 遷移すべてで 5 件ずつ違反（合計 40 件・`visualize_to_write_us` 210,329〜306,301µs＝上限 16,667µs の 12.6〜18.4 倍／`flush_total_us` 143,231〜231,910µs）。**開発者の実機目視は `signoff` 側と一致し、`deterministic` 側と食い違った**——「1 フレームだけ絵は旧寸のまま位置だけ新しい」が見えている。
+  - **これは判定器の欠陥ではない。** `mismatch_frames_per_window` は**アプリ側の tick 内順序**（同じ `frame=` のレコード列に `surface stage=visualize` と `write` の両方が揃っているか）を測る量であり、目視が見ているのは**合成器が画面へ出す順序**である。同一 tick の内側に µs の隙間があれば両立する。その隙間を測るのが `visualize_to_write_us`（`signoff` 側）であり、**現に捉えて上限超を宣言している**。
+  - ゆえに本節が既に定める「判定は決定論量と実機量の**両方**を Report に列挙し、`judge(summary, &Bounds::deterministic)` と `judge(summary, &Bounds::signoff)` を**別々に呼ぶ**」という形が、実機で load-bearing であることが確認された。片方だけを呼ぶ設計だったなら、この採取は `deterministic` の PASS だけを見て合格と読まれていた。手順書 `signoff-procedure.md` §6.2 が同じ趣旨を読み手向けに言い直している（「**どちらか一方の `PASS` を全体の合格と読まない**」「フレームを単位に測る量はすべて `deterministic` 側である」「同じ食い違いを µs で測るのが `signoff` 側であり、**両者は別の量である**」）。**この設計を後から「フレーム差が 0 なのだから 4.2 は成立している」と読み替えてはならない。**
+  - 機序・数量・引受先（`areka-P0-present-write-coherence`）は確定台帳 `mechanism-ledger.md` §11。**上限（`VISUALIZE_TO_WRITE_US_MAX`／`FLUSH_TOTAL_US_MAX`）も判定器の実装も、本裁定では 1 行も変えていない。**
 - **要件 4.6 の適用範囲（裁定の注記 2026-08-20・requirements.md の 4.6 直下と対）**: 4.6 の「寸変化なし」は**遷移時点で**再導出結果が得られない窓を指す。遷移の冒頭で書かれた窓がその後の定常フレームで `k-unchanged` を出すことは 4.6 の現状維持ではない（区別は時間的）。ゆえに合否からの除外を駆動するのは `SURFACE_REASON_INVISIBLE` **のみ**であり、`SURFACE_REASON_K_UNCHANGED` は記録されるが除外しない。実装位置は `transition_judge.rs` の `summarize`（見送り窓の収集）。
 - 語彙: `kind`／`stage`／フィールド名は C1・C3・areka 側レコード純関数から `pub const` を参照して解析（判定語の二重定義をしない）。
 
@@ -768,6 +772,15 @@ pub fn judge_transition_log(log: &str) -> Report;   // 上 4 つの合成
 > - **速くなる保証は無い**（台帳 §10.6 の再掲）。本タスクは決定論で測れる形（1 バッチであること・引数と順序が不変であること・縮退が無音でないこと）だけを固定する。**時間効果の判定は task 7.3 の実機採取が持つ**。
 > - **窓書込の実施ログの字面は変えていない**。`[guarded_set_window_pos] Calling SetWindowPos` は `dpi-window-vanish` の診断手順書の観測点 O9 であり、`ghost-window-zorder` の維持系の檻 16 本が本数を数えている固定トークンである。実際に呼んだ API は `via=` という**新しいフィールド**が名乗る（実ログの字面は `via="SetWindowPos"`／`via="DeferWindowPos"`＝`tracing` が文字列を引用符で囲む）。字面を変えると、完了済み spec の診断手順が黙って動かなくなる。**加えて本行は「1 指令につき 1 行」でなければならない**——バッチの積み上げ時点で出すと、破棄されたバッチの指令が縮退で書き直されたときに 2 度数えられる（レビュー第 1 巡が実測で検出。是正は `EndDeferWindowPos` が成った後にまとめて出す形で、対テストは `command_batch_tests::the_write_log_line_is_emitted_once_per_command_on_both_paths`）。
 
+> **梯子はここで止まる（task 7.3・2026-08-22・開発者裁定）**: 実機サインオフ（`atom-73-signoff-1`・遷移 8 回・release・コミット `06ea39f0`）の結果、**B-2b の効果と限界の両方が実機で確定した**。数量の全文は確定台帳 `mechanism-ledger.md` §11（とくに §11.6 が B-2b 前後の突合）。
+>
+> - **B-2b は成立している**: `in_batch=true` **37 件／`false` 0 件**・縮退 WARN 0 件。実機でバッチが崩れていないので、下の時間比較は同じ投入形どうしの比較である。
+> - **達成されたのは同時性である**: 1 遷移内の書込の散らばり（`last_write_t_us − first_write_t_us`）が **93,152〜157,684µs → 40〜101µs**（約 1,500〜2,000 分の 1）。台帳 §10.4 が L1 の残りとして記録した「窓が 1 枚ずつ進む」構造は消えた。要件 4.3・4.4 は 8 遷移とも成立している。
+> - **達成されなかったのは時間である**: `flush_total_us` の平均は **192,247 → 188,711µs（−1.8%）** で実質変わらない。§10.5 の予告どおり、遅さは `SetWindowPos` 呼出の内側の OS 側にある。窓ごとの `visualize_to_write_us` はむしろ平均 **201,478 → 255,345µs（+27%）**——全窓の書込がバッチ末尾へ揃った帰結であり、欠陥ではなく**同時性と引き換えの設計上の帰結**だが、要件 4.2 の観点では隙間が均一に長くなったことを意味する。
+> - **ゆえに B-4 の採用条件（「B-2 後も `visualize_to_write_us` max が signoff 上限超」）は満たされた**。現況 max は **306,301µs＝上限 16,667µs の 18.4 倍**である。
+> - **それでも本仕様では次段へ進まない。** 開発者裁定（2026-08-22）＝**「大改造が必要なら無理に治さなくて良い」**。拡大率の切り替えは滅多に起こらない事象であり、M1 の完成を妨げない。**梯子の続き（B-4／B-3）は `areka-P0-present-write-coherence`**（`.kiro/specs/areka-P0-present-write-coherence/brief.md`・2026-08-22 起票・W8・優先度低。本注記の作成時点で実在を確認した）**が引き受ける。** 上表の接触集合・対テストの形・要件 9.3 の再裁定条件（B-3 まで進むと接触集合が `presenter/show.rs` の可視化経路へ移り budget・cage の予算域に隣接する）は、そのまま引受先の入力である。
+> - **上限は動かしていない。** 16,667µs は採取機に依らない確定値（台帳 §4＝L9）であり、手順書 §6.5 は「目視に合わせて上限を緩めてはならない」と定める。**未達を上限の側で消さない。**
+
 **Open Questions / Risks（C8 に固有）**
 - 逐次 `SetWindowPos` の内訳（L7）と enqueue→flush の 20〜80ms（L8）は本設計時点で未特定であり、B-2b／B-4／B-3／自前 handler のいずれを採るかは C1〜C3 着地後の再採取（実装フェーズ 2）で確定する。**採用候補は本表の外へ広げない**。
 - B-4 は当たり判定の原点（`collision-dpi-hittest` の αマスク）と `mount.rs` の配置契約に触れるため、採用時は 10.1 の再確認と col への申し送りを伴う。B-3 は cage④・budget 予算域に隣接するため最後の手段とし、採用が tick 構造の大改造に及ぶ場合は 9.3 に従い分割を再裁定する。
@@ -785,6 +798,7 @@ pub fn judge_transition_log(log: &str) -> Report;   // 上 4 つの合成
 - `dpi-window-vanish` 手順書 §6.2 と同形（ドラッグ・クリック禁止・`[start_preparing]` 0 件で有効）。`RUST_LOG=info,wintf::transition=debug,areka::placement::diag=debug,areka_emo_present=debug`・`AREKA_APP_SMOKE_EXIT_MS`（唯一の終了経路）・絶対パス起動。
 - 充足: キャラ窓の各 scope・低→高／高→低 各 3 回以上（`kind=monitor` の起点で数える）。
 - 判定: C7 ランナーの Report（`frames_to_last_write`・回数・経路 A・接地点差・連鎖）＋開発者目視の併記。食い違えば不合格。観測点×target×水準の点灯表を持ち、消灯の観測点を「0 回」の根拠にしない。
+- **grep 語をもう 1 つ持つ（task 7.3・2026-08-22。`tasks.md` が 7.3 へ名指しした申し送りの消化）**: 手順書 §3.5 の `ATOM-HOLD-BREACH`＝`整合待ちの札がある窓へ窓書込が到達した`（発行点 `crates/areka/src/placement/follow/window_move.rs:599` の `warn!`）。task 6.5 が塞いだ「整合ゲートの見送りの外側にある窓書込口」の**検出側**であり、要件 8.1 の「判定に用いる grep 語」に当たる。**`release` では併設の `debug_assert!` が無効化される**（`[profile.release]` に `debug-assertions` の指定が無く既定 off）ので、実機採取ではこの警告行が唯一の徴候になる。**この観測点は D-ATOM で点いている**——target はモジュールパス既定 `areka::placement::follow::window_move`・水準 `warn` で、D-ATOM の先頭 `info` が通す（同 crate の既定 target の `warn` が実機ログに出ていることで較正済み）。ゆえに `[start_preparing]` と違い、**0 件を発生 0 回の根拠に使ってよい**。判定語は §6.6 の内訳 6 行には足さず記録票へ併記する（合否の内訳ではなく採取の健全性の前提。1 件でも出たら本番の欠陥として `ATOM-SIGNOFF` を FAIL にする旨は手順書 §3.5・§5 の手順 8 に明記）。台帳 §11.7。
 
 ## Data Models
 

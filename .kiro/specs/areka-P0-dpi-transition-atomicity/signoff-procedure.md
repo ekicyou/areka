@@ -228,6 +228,37 @@ foreach ($k in 'monitor','enqueue','flush','write','msg','surface','ground','sna
 
 `monitor`〜`ground` の 8 種が 0 件なら **`wintf::transition=debug` の入れ忘れ**を最初に疑う（§2.2）。`chain` の 0 件は §3.2 のとおり是正前では正常である。`hold` は遷移を含む採取なら 0 件になってはならない（§3.2 の注記＝0 件はゲートが走っていない徴候。`decision=hold` **だけ**が 0 件なのは正常）。`snapshot` は task 5.1 の着地後に点いた観測点だが、**モニタ表が変わったフレームにしか出ない**——遷移を含む採取で 0 件なら同期段を疑う。
 
+
+### 3.5 整合待ちの札の破れを見る警告語（task 6.5 の検出側・要件 8.1）
+
+**`kind=` のレコードではなく、素の警告行を 1 語だけ数える検査である。** 要件 8.1 が「判定に用いる grep 語」の記録を義務づけているので、本節に置く。
+
+```
+整合待ちの札がある窓へ窓書込が到達した
+```
+
+| 項目 | 値 |
+| --- | --- |
+| 意味 | **整合待ちの札（`DpiSyncHold`）が付いている窓へ窓書込が到達した**＝待ち札の適用範囲に漏れがある。整合ゲートの見送りは 4 点（`site=dpi`／`reconcile`／`resnap`／`work-area-resnap`）で覆っているが、5 つ目の窓書込口が増えるとここで鳴る |
+| 発行点 | `crates/areka/src/placement/follow/window_move.rs:599`（`warn!`）。同 `:601` に `debug_assert!(false, ..)` が並ぶ |
+| ログ target | **`areka::placement::follow::window_move`**（`warn!` に `target=` を与えていないのでモジュールパス既定） |
+| 水準 | `warn` |
+| **D-ATOM で点くか** | **点く。消灯ではない**（下記） |
+| 対象外 | 随伴バルーンの追従（`PlacementRoute::BalloonFollow`）は本監視の対象外（`window_move.rs:590` の条件）。随伴は 4 点の見送りを通らないので、対象にすると正当な到達で偽の警報が出る |
+
+**`release` では panic しない——警告行だけが出る。** `[profile.release]`（リポジトリ直下 `Cargo.toml:95-103`）は `debug-assertions` を指定しておらず、既定は off である。ゆえに `debug_assert!` は `release` ビルドで無効化され、本採取のような `release` の実機採取では**この警告行が唯一の徴候**になる。`debug` ビルド（常時テスト）ではその場で落ちるので、**実機採取でだけ静かに通り抜ける形**であり、だからこの grep 語が要る。
+
+**この観測点は消灯していない（§0.3 の但し書きは不要）。** D-ATOM の先頭セグメント `info` が既定水準であり（§2.1 の `info` の行＝「`warn!`／`error!` は常に通る」）、`warn` はそれを上回る。`areka::placement::diag=debug` は `areka::placement::follow::window_move` の接頭辞に**ならない**ので影響しない。
+
+> **較正（この主張を実測で裏づける）**: 同じく `target=` を与えていない兄弟モジュール `areka::placement::measure` の `warn!` が、D-ATOM で採った実機ログに**実際に出ている**（`WARN areka::placement::measure: measure: shell bake で脱落した element…`）。`areka::placement::` 配下の既定 target の `warn` が D-ATOM で通ることの実証である。ゆえに本語の 0 件は「消灯した観測点の 0 件」ではなく、**発生 0 回の根拠として使ってよい**——`[start_preparing]`（§4.4）とはここが違う。
+
+```powershell
+$breach = (Select-String -Path $LOG -SimpleMatch '整合待ちの札がある窓へ窓書込が到達した' | Measure-Object).Count
+if ($breach -eq 0) { 'ATOM-HOLD-BREACH: PASS' } else { "ATOM-HOLD-BREACH: FAIL ($breach 件)" }
+```
+
+**1 件でも出たら本番の欠陥である。** 採取のやり直しでは消えない——`ATOM-SIGNOFF` を FAIL とし、鳴った行の `entity`／`route`／`since_frame` を記録票へ書き写して引受先を決めること（5 つ目の窓書込口を名指しできる唯一の材料である）。**§6.6 の内訳 6 行はこの語を持たない**——本検査は合否の内訳ではなく採取の健全性の前提として §3 側に属するので、判定語は記録票の点灯確認の節へ併記する。
+
 ---
 
 ## 4. 充足条件（要件 8.2）
@@ -308,7 +339,7 @@ if ($drag -eq 0) { 'ATOM-NO-DRAG: PASS' } else { "ATOM-NO-DRAG: FAIL ($drag 件)
 5. **ゴースト窓に一切触れずに**、OS 設定でゴーストの載るモニタの拡大率を **200% ↔ 100% で 3 往復以上**切り替える。1 回切り替えるごとに数秒待ち、窓の動きが落ち着いてから次へ進む。
 6. 各切り替えの直後、**目視所見**を `$LOGDIR\meta.txt` へ書く（§6.5 の様式）。少なくとも「跳ね（旧寸の窓が一瞬見える／窓が段階的に動く）の有無」と「二体の隙間の有無」と「接地点の浮きの有無」を毎回記録する。
 7. **`AREKA_APP_SMOKE_EXIT_MS` の自動終了を待つ。これが唯一の正規終了経路である**（§2.3）。
-8. §3.4・§4.2・§4.4 を回し、`ATOM-QUOTA` と `ATOM-NO-DRAG` を記録する。充足していなければ**採り直す**（同じログへ追記しない）。
+8. §3.4・**§3.5**・§4.2・§4.4 を回し、`ATOM-QUOTA` と `ATOM-NO-DRAG` と **`ATOM-HOLD-BREACH`** を記録する。充足していなければ**採り直す**（同じログへ追記しない）。**`ATOM-HOLD-BREACH` の FAIL だけは採り直しでは消えない**——本番の欠陥なので §3.5 に従って記録し、`ATOM-SIGNOFF` を FAIL とする。
 
 ---
 
@@ -448,7 +479,7 @@ ATOM-SIGNOFF: PASS|FAIL
 | 採取日時 | 開始・終了 |
 | ゴースト／バルーン | 絶対パス |
 | 生ログ | 絶対パス・行数 |
-| 点灯確認 | §3.4 の 10 行の出力そのまま |
+| 点灯確認 | §3.4 の 10 行の出力そのまま ＋ **§3.5 の `ATOM-HOLD-BREACH:` の 1 行**（要件 8.1 の grep 語。0 件でも必ず書く——この観測点は D-ATOM で点いているので 0 件が発生 0 回の根拠になる＝§3.5 の較正） |
 | 充足 | `ATOM-QUOTA:` の 1 行＋遷移一覧（フレーム・old・new・スコープ） |
 | 無効化チェック | `ATOM-NO-DRAG:` の 1 行＋「窓へ触れていない」旨の宣言 |
 | 判定 | ランナーの `--nocapture` 出力全文 |
