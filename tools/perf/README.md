@@ -16,6 +16,11 @@
 
 対応する要件: 2.1・2.4・2.6・2.7・4.5・5.2、および設計の Key decision D7。
 
+上の表は先行 spec から引き継いだ 4 つです。**自走改善ループのために足した道具**
+（`perf-loop.ps1`・`check-quiet.ps1`・`invoke-cpu-sample.ps1`・`invoke-followup-checks.ps1`・
+`perf-rank.py`・`perf-compare.py`・`perf-ledger.py`・`judge-followup.py`・`goals/`）は
+第 13 節以降で扱います（spec `areka-P0-draw-load-parity`・対応する要件 4.7・5.2・7.1〜7.4・8.4）。
+
 ---
 
 ## 1. 早わかり
@@ -63,6 +68,10 @@ python tools/perf/judge-perf.py --selftest
 - ウイルス対策ソフトの全体スキャンなど、定期処理が走っていないこと
 
 確認できたら `-ConfirmQuiet` を付けて実行します。
+
+**この確認は機械にもさせられます。** `check-quiet.ps1` と `-AutoQuiet` を使うと、人に尋ねずに
+マシン全体の CPU と重いプロセスの有無を測って判定し、静かでなければ待って確かめ直します
+（§15）。自走ループはこちらを使います。
 
 **これは合否の判断に人の目を戻すものではありません。** 確かめているのは「測定条件」だけで、
 測ったあとの合否は `judge-perf.py` が機械的に出します。人が数字を見て「まあ良さそう」と
@@ -494,7 +503,30 @@ fixture は `fixtures/generate.py` で作り直せます。作り直したあと
 つまり、いま areka 側で採っている値と、比較相手の SSP の値が **同じ物差しで測られている保証が
 ありません**。areka 側は「1 コア換算・約 1 秒幅の瞬時値・定常区間の平均」です。
 SSP を測り直して比べるときは、**先に採取方法をそろえてから**測ってください。そろえずに
-比べた数字は、大小が逆に出ても気づけません。この穴は既知であり、埋めるまで残ります。
+比べた数字は、大小が逆に出ても気づけません。
+
+> **この穴は 2026-08-15 の同一手順実測で埋まりました（§16）。** 同じマシン・同じゴースト・
+> 同じ拡大率・同じ 25 分で採り直した SSP の値は **アイドル 3.05%・発話中の頂 4.64%** です。
+> 採取条件と、なお残っている食い違い（採取の刻みが areka 側 15 秒・SSP 側 1 分）は §16 に
+> 書いてあります。**なお、目標そのものは SSP との比較ではなく CPU の絶対値（release アイドル
+> 3.0% 未満）で置き直されています**（2026-08-22 裁定・§16）。
+
+### この文書が扱う計測の合否に載せないもの（申し送り）
+
+次の 2 つは「重い場所」として実測で分かっていますが、**`areka-P0-draw-load-parity` の
+合否判定には載せません**。どちらも DPI 遷移が起きるフレームの山であって、常駐アイドルの
+CPU ではないためです。引受先は `present-write-coherence` です。
+
+- **DPI 遷移フレームの、誰の仕事か分かっていない区間（47.5%）**——`SetWindowPos` 呼出の
+  内側で、areka 自身のウィンドウプロシージャが 1 行も走っていない時間が
+  639,106／1,344,271µs（中央値 18,059µs）ありました。そこが DWM の再合成待ちなのか、
+  レイヤ化ウィンドウの再構成なのか、DPI 変更に伴う OS 側の同期なのかは**分解できていません**
+  （ハンドラの出口を記録していないため）。分解するには観測点を足すか OS 側のトレースが要ります。
+  **憶測で埋めないでください。**
+- **文字層の再構築とテキスト測定の所要**——積み上げから一括書込までの区間の前半で
+  8,518〜82,416µs（中央値 25,899µs）。
+
+出典はいずれも `areka-P0-dpi-transition-atomicity` の再計測です。
 
 ---
 
@@ -545,3 +577,509 @@ SSP を測り直して比べるときは、**先に採取方法をそろえて�
    列は 20 本を切って**判定不能**へ倒れます（合格ではありません）。ただし「減るだけ」は
    「安全側」を意味しません——落ちた中に上限超過が入っていれば、残りの上位 5% は
    下がります。それが上で反転した経路そのものです。
+
+---
+
+## 13. 自走ループの回し方（要件 7.1）
+
+第 12 節までは「1 回測って読む」ための道具です。ここから先の 5 節は、**その測定を目標に
+達するまで機械が自分で繰り返す仕組み**（spec `areka-P0-draw-load-parity`）の使い方です。
+
+ループの 1 周は 「測る → 重い場所の順位表を作る → 上位から候補を 1 つ選ぶ → 直す →
+テストと見た目の追随を確かめる → 変更前後を交互に測り直す → 採否を決める → 台帳へ書く」
+です。採用した周だけがコミットとして残り、採用しなかった変更は元へ戻ります。人がするのは
+**開始の指示と、停止後の報告を受け取ること**の 2 つだけです。
+
+### 始める前に（セッション側の用意）
+
+- **hooks を無効にしない。** 組み込みの `/goal` は hooks が切られていると使えません
+  （本リポジトリの設定に `disableAllHooks` はありません）。
+- **各ターンで確認を求めない設定（auto mode）で起動する。** ループは開発者へ質問しません。
+- **メインは Fable での起動を推奨します。** 重い作業（計測・順位付け・実装・差し戻し判定）は
+  `.claude/agents/perf-*.md`（`model: opus`）のサブエージェントへ委ねます。**Opus 5 を
+  メインにしても手順はまったく同じです**——目標定義・台帳・道具の側に手順が置いてあるので、
+  メインのモデルによって順序が変わることはありません。
+- **エージェント定義とスキルはセッションの開始時に読み込まれます。** 取り出した直後や、
+  それらを足したのと同じセッションからは呼び出せません（`Agent type not found` になります）。
+  **必ず新しいセッションを開き直してから**ループを起動してください。
+- **`CLAUDE_CODE_GOAL_CHECKIN_MINUTES=60` を設定する。** 既定は 30 分で、25 分水準の計測が
+  背景で走っている最中に様子うかがい（check-in）が割り込みます。`preflight` が実効値を読み、
+  25 分未満なら警告を出します。
+- **昇格した PowerShell から起動すると段③（関数別の帰属）が使えます。** 非昇格でも止まりません
+  ——段③だけを `UNAVAILABLE reason=not_elevated` と記して段①②④で続きます（能力不足の
+  終了コード 5 は停止の理由にしません）。
+
+### 手順（周 0・ここだけ人が打ちます）
+
+```powershell
+# ① 台帳を作る（初回だけ。作り直すなら --force）
+python tools/perf/perf-ledger.py init --goal draw-load-parity
+
+# ② この機械でループを回せるかを確かめる（能力確認＋全道具の自己較正）
+pwsh -NoProfile -File tools/perf/perf-loop.ps1 preflight -Goal draw-load-parity
+
+# ③ 目標定義を検査し、走行固有の 8 桁トークンを台帳へ書く
+python tools/perf/perf-ledger.py goal-check --goal draw-load-parity
+
+# ④ /goal へ貼る条件文を出す
+python tools/perf/perf-ledger.py goal-text --goal draw-load-parity
+```
+
+④ の出力を**丸ごとコピーして** `/goal` の引数として貼ります。
+
+- **② の `preflight`** は、昇格の有無・`xperf.exe` の実在・記号解決に要る PDB の有無・
+  判定スクリプトの版一致・Python と PowerShell の版・`CLAUDE_CODE_GOAL_CHECKIN_MINUTES` の
+  実効値を調べ、続けて全道具の自己較正を回します。結果は `preflight.txt` と標準出力に出ます。
+  台帳が既にあればこの中で ③ も呼ぶので、③ は「まだトークンが無ければ作る」だけの冪等な
+  操作になります（既にあるトークンは書き換えません）。
+- **③ が確かめるのは**、目標定義ファイルの必須キーがそろっていること・`[goal].judge_version` が
+  `judge-perf.py` の `SCRIPT_VERSION` と一致すること・`[target].idle_cpu_release_max_pct` が
+  `IDLE_CPU_MAX_RELEASE_PCT` と一致することです。違えば exit 3 で止まります（目標と判定式が
+  別の数を見ていると、合格の意味が 2 つになるためです）。
+- **条件文の字面はこの文書に書きません。** 所在は 1 か所（`tools/perf/perf_ledger_goal.py` の
+  `GOAL_TEXT_TEMPLATE`）で、その写しが `tools/perf/goals/draw-load-parity.goal.md` の
+  区切り線より下にあります。README に写しを置くと、テンプレートを直したときに黙ってずれます。
+  写しとテンプレートが一致していることは `perf-loop.ps1 selftest` が毎回確かめています。
+
+### 毎ターン何が起きるか
+
+`/goal` に貼った条件文が、毎ターン **プロジェクトスキル `perf-loop-iteration` を 1 回だけ
+呼ぶ**ことを求めます（`.claude/skills/perf-loop-iteration/`）。スキルは台帳の
+`phase` を読んで続きの相を進め、相の境界ごとに台帳を更新し、**最後に状態の 1 行を印字**します。
+
+```
+  PERF-LOOP STATUS iter=<n> phase=<相> judge=<PASS|FAIL|INCONCLUSIVE|NA> idle_cpu=<x.xx>
+      baseline=<x.xx> delta=<±x.xx> noise=<x.xx> verdict=<ADOPTED|NO_DIFF|WORSE|TESTS_RED|
+      FOLLOWUP_FAIL|MEASURE_FAILED|NA> streak=<k>/<max> iters_left=<m> next=<相>
+```
+
+（上は**山括弧つきの見本**で、実際の出力とは一字も一致しません。実出力は 1 行です。
+見本と実出力の並びは `python tools/perf/perf-ledger.py --samples` で見比べられます。）
+
+この 1 行を会話へ出すのは飾りではありません。`/goal` の判定役は**会話に現れた文字列しか
+見ない**ので、ファイルに書いただけの結果は判定に届きません。
+
+計測は 7 分・25 分と長いので、スキルは**背景コマンドを起動したところでターンを終えます**。
+その間に様子うかがい（check-in）が届いたら、背景出力の末尾を読んで「進行中なので待つ」と
+答えます。背景コマンドの終了は新しいターンとして届き、そこで結果を回収して次の相へ進みます。
+
+### 止まるとき
+
+停止条件は 4 つです。⒜ 目標達成（25 分の最終判定で判定式⑴〜⑷b がすべて合格）
+⒝ 連続 3 周（`[stop].max_no_gain_streak`）で採用に至る改善が無い（頭打ち）
+⒞ 安全上の理由（テストが赤で元へ戻せない・道具が壊れて直らない）
+⒟ 周数が上限 30（`[stop].max_iterations`）に達した。
+
+止まると終端の 1 行が出ます。
+
+```
+  PERF-LOOP FINAL: GOAL_MET run=<token> idle_cpu=<x.xx> judge=PASS iters=<n> commits=<k>
+  PERF-LOOP FINAL: STOPPED run=<token> reason=<plateau|safety|measure_failed|iteration_cap>
+      best_idle_cpu=<x.xx> top_remaining=<stage:item:share> iters=<n>
+```
+
+`<token>` は ③ で作った走行固有の 8 桁です。**終端行にトークンを入れているのは、判定役が
+テンプレートと実出力を区別できないからです。** 文書・スキル本文・この README の見本は常に
+山括弧のままにしてあり、判定は実トークン込みの字面でしか成立しません（この不一致は
+`python tools/perf/perf-ledger.py --selftest` が 1 件として固定しています）。
+
+### 途中で切れたときの再開
+
+**判断の記憶は台帳 1 ファイルにしかありません。** 会話が切れても要約されても、台帳の
+`phase` から続きが回ります。
+
+```
+## 状態
+- goal: draw-load-parity      ← 目標の名前
+- iteration: 3                ← 何周目か
+- phase: REMEASURE            ← どこまで進んだか（背景待ちは WAIT_ を冠する）
+- pending_run: C:\...\iter-3  ← 待っている走行の出力先
+- streak_no_gain: 1           ← 採用に至らなかった連続周数
+- best_idle_cpu_pct: 6.12
+- baseline_idle_cpu_pct: 9.31
+- started_at: 2026-08-23T00:00:00Z
+- run: <token>                ← 走行固有のトークン（実物は 8 桁の数字）
+- capabilities: -             ← preflight が測った道具の可否
+- previous_phase: -           ← 道具を直す相（TOOLFIX）から戻る先
+- toolfix_used: 0             ← 道具を直した回数（[stop].toolfix_retry と突き合わせる）
+
+## 周 3 — 2026-08-23T01:23:45Z
+- hypothesis / candidate / files_changed / runs / before_idle_cpu_pct / after_idle_cpu_pct /
+  delta_pct / noise_pct / secondary / tests / followup / verdict / commit /
+  skipped_candidates / duration_min / reason
+```
+
+`baseline_idle_cpu_pct` に入るのは**このループの 1 周目（ベースライン）で実測した値**です。
+brief に載っている古い数値ではありません（§16 の警告を参照）。
+
+台帳の在り処は目標定義ファイルの `[goal].spec_dir` ＋ `[goal].ledger` です
+（`.kiro/specs/areka-P0-draw-load-parity/loop-ledger.md`）。走行の成果物は
+`%LOCALAPPDATA%\areka-diag\perf-loop\<goal>\` の下に、
+`preflight.txt`・`baseline-<日付>\`・`iter-<n>\{rank,A1,B1,A2,B2,bin-A,bin-B,followup}\`・
+`final-<日付>\` として置かれます。同じ出力先へ `-Resume` を付けて呼び直すと、既にある
+成果物を作り直さず再利用します（冪等）。
+
+### 別の目標で同じ仕組みを回す
+
+目標定義ファイルは areka の性能目標に固有ではありません。`tools/perf/goals/` に
+`<名前>.toml` を足し、`[goal]` の `name`・`spec_dir`・`ledger`・`results_dir`・
+`judge_script`・`judge_version` と `[target]` を書き換えれば、道具は `-Goal <名前>` /
+`--goal <名前>` でそちらを読みます。書き方には 2 つだけ制約があります。
+
+- **配列は 1 行に収める。** 複数行の配列は PowerShell 側の読み口が解さず、警告なく既定値へ落ちます。
+- **節の見出し行の後ろに注釈を書かない**（`[quiet]` のように素のまま）。行内注釈があると節を見失います。
+
+### `perf-loop.ps1` のサブコマンド一覧
+
+| サブコマンド | 何をするか |
+|---|---|
+| `preflight` | 能力確認＋全道具の自己較正。`preflight.txt` を書く |
+| `selftest` | 全道具の自己較正だけを回す |
+| `measure-baseline -Build release\|dev` | 25 分 × 1 本 |
+| `rank-run` | 順位付けの 7 分（段②④を点灯・段③を採取）。段③の可否は `sampling.txt` へ残し、`rank` が後から読む（二重に測らない） |
+| `rank` | `perf-rank.py` → `rank.txt` |
+| `prepare-ab` | A 側の実行体・PDB・32bit ヘルパを `bin-A` へ複製 |
+| `measure-ab` | B をビルドし A1 B1 A2 B2 を交互に採り、**そのまま `compare` まで**回す |
+| `compare` | `perf-compare.py` → `compare.txt`／`compare.json`（`measure-ab` の後にやり直すときに使う） |
+| `followup` | 見た目の追随 4 検査（§17） |
+| `final` | 25 分 × release／dev → `judge-perf.py --mode verdict`。判定の出力は spec の `results/final-<日付>/<ビルド>/` へも写す |
+
+どのサブコマンドも、標準出力の**末尾に必ず** `PERF-LOOP RESULT <sub> code=<n> dir=<path>` の
+1 行を出します（上は山括弧つきの見本です）。背景で走らせたときに、この 1 行だけで結果と
+出力先が会話へ届くようにするためです。
+
+---
+
+## 14. 4 段の採り方（要件 7.2）
+
+「どこが重いか」は、**プロセス全体 → スレッド別 → 関数別 → フレーム駆動の相別**の 4 段で
+絞ります。段が下がるほど細かくなり、費用と前提も増えます。
+
+| 段 | 何が分かるか | 出どころ | 有効化 | 前置ガード |
+|---|---|---|---|---|
+| ① プロセス | プロセス全体の CPU（定常平均・p50・p95・最大・発話中の頂） | `cpu.csv`（`% Processor Time`・1 コア換算・15 秒ごと） | 既定で採る | — |
+| ② スレッド | 役割別・スレッド別の CPU 時間と占有率 | `perf(thread)` / `perf(process)` 行 | `RUST_LOG` に `areka::perf=debug` | 起動時に 1 度（消灯なら報告スレッドを起こさない） |
+| ③ 関数 | 関数・コード領域別の自己時間と包含時間 | `dump.txt`（CPU サンプリング＋呼出スタック） | 昇格した PowerShell ＋ `xperf` | — |
+| ④ 相 | tick 回数・省略率・13 本のスケジュール別の所要 | `[tick] kind=window` 行 | `RUST_LOG` に `wintf::tick=debug` | tick の冒頭で 1 度（消灯なら時刻取得もしない） |
+
+**読み口は 1 つです。** 4 段とも `perf-rank.py` が読み、`rank.txt` の
+`[1] プロセス` / `[2] スレッド` / `[3] 関数` / `[4] 相` に並べます。
+
+```powershell
+python tools/perf/perf-rank.py <走行の出力先> --top 10        # rank.txt をその場に書く
+```
+
+「採って順位表まで」を回す道は `perf-loop.ps1 rank-run` → `rank` の 2 本です。`rank-run` は
+段③が使えたかどうかを走行の出力先の `sampling.txt`（`available=` と `reason=`）へ残し、
+`rank` がそれを読みます（同じことを二度測らないため）。
+
+**点灯した走行を合否に使ってはいけません。** 段②③④ を有効にすると、観測とサンプリング
+そのものが CPU を押し上げます。順位付けは点灯した走行で、採否と最終判定は素の走行で行います。
+
+### 段① プロセス
+
+第 4 節・第 5 節の採取と判定がそのまま段①です。ビルドは `-Build release|dev` で明示し、
+CPU の数値目標は release にだけ課します（第 5 節）。順位表の `[1] プロセス` には
+SSP 参考値（§16）が併記されますが、**合否には載りません**。
+
+### 段② スレッド別
+
+```powershell
+pwsh -File tools/perf/invoke-perf-run.ps1 -Profile short -Build release `
+    -GhostRoot C:\絶対パス\emo2 -OutDir C:\出力先\rank-001 `
+    -RustLogExtra 'areka::perf=debug' -AutoQuiet -Goal draw-load-parity
+```
+
+- 点灯の判定（`areka::perf` が debug で通るか）は**起動時に 1 度だけ**行い、消えていれば
+  報告スレッドを起こしません。有効にしなければ費用は 0 です。
+- 有効なときは 60 秒ごと（`AREKA_PERF_THREAD_REPORT_SEC` に秒で指定すると変えられます）と
+  終了直前に、`perf(thread)`（1 スレッド 1 行）と `perf(process)`（1 行）を出します。
+- 役割名は**スレッドを作る側が宣言した固定語彙**です：`vblank`・`cursor_monitor`・`ui`・
+  `ticker_dispatcher_kanade`・`ticker_loop`・`actor:<名前>`・`perf_report`・`unregistered_rest`。
+  推測の当てはめではありません。
+- **名簿に載っていない残りは `unregistered_rest` の 1 行で必ず出ます**（プロセス全体の CPU から
+  名簿の合計を引いた差）。初回の実走ではここが 24〜38% を占めました——bevy のタスクプール等で、
+  名簿の側だけでは内訳が出ません。**その内訳を見たいときが段③の出番です。**
+- **値は累積です。** 読み手（`perf-rank.py`）が 2 つのスナップショットの差を取ります。
+- **粒度に注意**: CPU 時間の出どころは `GetThreadTimes` で、値は **15.625 ミリ秒の量子**の
+  整数倍です。1 秒あたりに直すと ±1 量子で約 1.6 ポイント動きます。細かい差を段②だけで
+  論じないでください。
+- 名簿は登録を消しません。終了したスレッドも最後の CPU 値つきで 1 行残ります。
+
+### 段③ 関数別（昇格が要る）
+
+```powershell
+pwsh -File tools/perf/invoke-cpu-sample.ps1 -Probe                     # 採れるか（必ず exit 0）
+pwsh -File tools/perf/invoke-cpu-sample.ps1 -Start -Etl C:\出力\cpu.etl
+pwsh -File tools/perf/invoke-cpu-sample.ps1 -Stop  -Etl C:\出力\cpu.etl `
+    -Out C:\出力\dump.txt -PdbDir C:\repo\target\release
+pwsh -File tools/perf/invoke-cpu-sample.ps1 -SelfTest                   # 道具の点検
+```
+
+- **記号（関数名）はビルド時の環境変数で付けます。** `Cargo.toml` には触れません。
+
+  ```powershell
+  $env:CARGO_PROFILE_RELEASE_DEBUG = 'line-tables-only'
+  cargo build -p areka --release
+  ```
+
+- **インライン化の注意**: このワークスペースの release は `lto = true`・`opt-level = 'z'` です。
+  呼び元が呼び先へ畳み込まれるので、**スタックは実際の呼出関係より浅く出ます**（1 段に潰れて
+  見える）。段③の「自己時間」は信じてよく、「誰が呼んだか」は段④や実装の読みと突き合わせて
+  ください。
+- 段③が使えないときの理由語は `not_elevated`（昇格していない）・`no_xperf`（`xperf.exe` が無い）・
+  `no_pdb`（記号が無い）・`start_failed`（採取を始められない）・`probe_failed`（可否の確認
+  そのものが回らなかった）です。**能力不足は exit 5 で、計測失敗の exit 4 とは区別します。**
+  順位表は `[3] 関数 UNAVAILABLE reason=<語>` と見出しだけを書き、空欄を黙って出しません。
+- **逆に、段③が使える環境で走ったのに `areka.exe!` の解決フレームが 0 なら計測失敗（exit 4）です。**
+  記号の解けていない dump は、見た目が正常でも中身が空だからです。
+- **初めて昇格して実採取したときの宿題**: 自己較正が読む同梱の dump 断片
+  （`fixtures-loop/rank/sample_ok/dump.txt`）は手書きの見本です。実採取の断片へ差し替えるときは、
+  **同じ塊で次の 4 つを全部そろえてください**（1 つでも取り残すと `perf-loop.ps1 selftest` が
+  赤になります）。
+  1. `fixtures-loop/rank/sample_ok/dump.txt` — 断片そのもの
+  2. `invoke-cpu-sample.ps1` の `FIXTURE_EXPECT_*` 定数 — 断片の既知の内訳
+  3. `fixtures-loop/rank/sample_ok/README.md` の内訳の表 — 上と同じ数を人が読む形で宣言している
+  4. `fixtures-loop/rank/full_ok/expected_rank.txt` と
+     `fixtures-loop/rank/sample_ok_counts/expected_rank.txt` — **どちらも同じ断片
+     （`../sample_ok/dump.txt`）を読み、期待出力と 1 バイト単位で突き合わせます**。
+     断片を替えれば期待出力も作り直しが要ります。
+
+  この二重化は意図したものです。`invoke-cpu-sample.ps1` と `perf-rank.py` は同じ断片を
+  **別の実装で**数えており、2 つが違う数を出したらどちらかが壊れている、と分かります。
+
+### 段④ フレーム駆動の相別
+
+```powershell
+pwsh -File tools/perf/invoke-perf-run.ps1 ... -RustLogExtra 'wintf::tick=debug'
+```
+
+- 前置ガードは `try_tick_world` の**冒頭で 1 度だけ**評価され、消えていれば時刻取得も行の
+  組立も行いません（消灯時の費用は 0）。
+- 1 秒窓で集計し、窓が閉じるたびに `[tick] kind=window` を 1 行出します。フィールドは
+  `frame` `t_ms` `ticks` `skipped` `heartbeat` `wall_us` `max_us` `ui_cpu_us` と、
+  13 本のスケジュール別の所要（`input_us` `update_us` `prelayout_us` `layout_us`
+  `postlayout_us` `uisetup_us` `graphicssetup_us` `draw_us` `prerendersurface_us`
+  `rendersurface_us` `composition_us` `commitcomposition_us` `framefinalize_us`）です。
+- **13 本は壁時計（経過時間）です**（GPU 待ちを含みます）。`ui_cpu_us` だけが UI スレッドの
+  CPU 時間で、これも `GetThreadTimes` 由来なので 15,625µs の量子の整数倍です
+  （1 秒窓で ±1 量子＝約 1.6 ポイント）。**順位表は壁時計を主に読み、`ui_cpu_us` は目安として
+  扱ってください。**
+- 実走の `[tick]` 行には `actor{actor=emo-text}:` のような文脈が前に付きます（フィールド名とは
+  重なりません）。
+- **変化が無いときに 13 本を回さない「門」**は `AREKA_TICK_GATE=1|0` で起動時に上書きできます
+  （A/B 比較と安全弁）。門が効いている走行では `skipped` が 0 より大きくなります。
+
+---
+
+## 15. 交互取得と静寂の自動確認（要件 7.3）
+
+### 交互取得（A→B→A→B）
+
+変更前後を比べるときは、**同じセッションの中で A→B→A→B の順に各 7 分**を採ります。
+A が変更前、B が変更後です。
+
+```powershell
+pwsh -File tools/perf/perf-loop.ps1 prepare-ab -Goal draw-load-parity -Iter 3   # A を bin-A へ退避
+pwsh -File tools/perf/perf-loop.ps1 measure-ab -Goal draw-load-parity -Iter 3   # B をビルドし 4 本採る
+pwsh -File tools/perf/perf-loop.ps1 compare    -Goal draw-load-parity -Iter 3   # 採否
+```
+
+**`measure-ab` は 4 本を採ったあと、そのまま採否まで回します。** 3 行目の `compare` は
+「同じ 4 本で採否をやり直す」ためのもので、通常の 1 周では要りません（判定の値だけを
+作り直したいときに使います）。
+
+A と B の取り違えを防ぐため、走行ごとに `-BinDir` で実行体一式（`areka.exe` と 32bit の
+SHIORI ヘルパ）の所在を明示し、`run-meta.txt` に所在と実行体の SHA-256 を残します。
+**同じ形を 2 回ずつ採るのは、ばらつきの大きさをその 2 本から得るためです。**
+
+採否は `perf-compare.py` が決めます。
+
+```powershell
+python tools/perf/perf-compare.py --a <A1> <A2> --b <B1> <B2> --goal draw-load-parity --out-dir <出力先>
+```
+
+- ばらつき `noise = max(|A1−A2|, 床値 0.30%)`、差 `delta = mean(B) − mean(A)`（負が改善）。
+- `delta ≤ −noise` かつ副指標が悪化しない → **ADOPTED**（採用）
+- `|delta| < noise` → **NO_DIFF**（差なし。採用せず元へ戻す）
+- `delta ≥ noise` または副指標の悪化 → **WORSE**
+- いずれかの走行が判定不能 → **MEASURE_FAILED**
+- 副指標は `frame_interval_p95_ms`・`catchup_count`・`alloc_count` です。判定の細目は
+  設計に無かったので次のように決めてあります。**⒜ 測っていない副指標（`-`）は採用を止めないが
+  必ず表に並べる ⒝ 差が無い帯で副指標だけが悪化したら WORSE（安全側） ⒞ 名前が `_ms`／`_pct`
+  で終わる指標は率で見る（+5% 以内）、それ以外は件数の増減で見る。**
+- 発話中の頂（`talk_peak`）は並べて記録するだけで、合否には載せません。
+- 出力は `compare.txt`（人が読む表）と `compare.json`（採否と数値）です。終了コードは
+  0（判定できた）／3（入力不正＝走行の指定が足りない・目標定義を読めない）／4（計測失敗）。
+  **`ADOPTED` でも `WORSE` でも終了コードは 0 です**——採否は `compare.json` の `verdict` で
+  読みます（終了コードは「判定できたか」しか語りません）。
+
+### 静寂の自動確認
+
+第 2 節の「測ってよい状態か」の確認は、機械にもさせられます。
+
+```powershell
+pwsh -File tools/perf/check-quiet.ps1 -Stage before -OutDir C:\出力先 -Goal draw-load-parity
+```
+
+- マシン全体の CPU（`\Processor(_Total)\% Processor Time`）を 20 秒・1 秒刻みで採った平均と最大、
+  および既知の重いプロセスの有無を見ます（測る対象の areka は `-TargetPid` で除外します）。
+- 出力は `quiet-<段階>.txt`（平均・最大・該当プロセス一覧・判定・時刻）。判定語は
+  `QUIET`／`NOT_QUIET`／`MEASURE_FAILED`、理由語は `ok`／`cpu_mean_over_threshold`／
+  `heavy_process_present`／`both`／`counter_read_failed` の 5 つです。
+- 終了コードは 0（静か）／2（静かでない）／3（引数の誤り）／4（性能カウンタが読めない）。
+  **このスクリプト自身は待ちも再試行もしません。**
+- 採取ランナーに任せる形が `-AutoQuiet` です（`-ConfirmQuiet` とは同時に指定できません）。
+  起動前に上の確認を呼び、`quiet-before.txt` を出力先へ残し、静かでなければ 60 秒
+  （`[quiet].retry_wait_sec`）待って確かめ直します。回数は `[quiet].retry_max = 3`＝
+  **最初の 1 回の後に 3 回**、合計 4 回です。使い切っても静かにならなければ exit 2 で止まります。
+- **失敗した採取のフォルダは `-FAILED` を付けた名前へ退避されます**（第 4 節）。`-AutoQuiet` で
+  起動前に失敗したときは `quiet-before.txt` がその退避先に残ります（`run-meta.txt` は起動前
+  なので在りません）。静寂の根拠を読むときは退避先も見てください。
+- **重いプロセス名に `python` と `areka` が入っています。** ループ自身の道具（判定スクリプトや
+  順位表）が動いている最中に確認を呼ぶと `heavy_process_present` になります。確認は計測の
+  直前・直後に置き、解析と重ねないでください。
+
+---
+
+## 16. SSP 参考値（要件 7.4・5.2）
+
+同じゴースト emo2 を表示中の SSP を、2026-08-15 に実測した値です。
+
+| | 値 |
+|---|---:|
+| アイドル（25 分の平均・1 コア換算） | **3.05%** |
+| 発話中の頂 | **4.64%** |
+| 底 | 1.77% |
+| Private メモリ | 54.2 MB |
+| スレッド数 | 32 |
+
+採取条件として記録されているのは次までです：**同一マシン（NAGI）・同一ゴースト emo2・
+同一拡大率 200%・25 分走行・1 分ごとの採取・1 コア換算 %**。同条件の areka（当時）は
+平均 10.97%・底 3.60%・頂 20.42%（Private 163.4MB・スレッド 83）でした。
+
+> **⚠ この areka 側の数値（10.97%／3.60%／20.42%／163.4MB／83 スレッド）は現在値ではありません。**
+> いずれも **Bevy 0.19・Taffy 0.13 への更新（2026-08-19）より前**の実測です。この更新で
+> フレーム駆動の実行器そのものが書き換わったため、**数値どころか傾向も持ち越せません**。
+> 現在値は**ループの 1 周目（ベースライン）の実測**が権威で、それが出た時点で上の数値は
+> 履歴になります。**今の areka の姿としてこの数字を引用しないでください。**
+> （SSP 側の 3.05%／4.64% は areka の更新と無関係なので、参考値としてはそのまま有効です。）
+
+**この値は参考であって、合否には使いません。**
+
+- 目標は **CPU の絶対値**で置いてあります（release アイドル 3.0% 未満・狭義の未満比較）。
+  SSP の値はその隣に並べるだけです。
+- **描画方式の差で正規化しません**（2026-08-22 の開発者裁定）。SSP は GDI 描画、areka は
+  D2D 描画で、SSP が 100% で描いて 200% へ引き伸ばしている疑いもありますが、
+  **SSP の描き方は調査の対象にせず、目標の根拠にもしません。** 分かっているのは CPU が
+  3% 台であることだけです。
+- 発話中の頂は、参考値の頂（4.64%）と並べて記録します。大きく超える場合は機序を記録しますが、
+  これも合否には載せません。
+- **登記の所在は 3 か所です。** 2 つの道具がそれぞれ**自分の写し**を持っているので、
+  片方だけ直すとレポートと順位表が違う値を印字します。
+  - `judge-perf.py` の較正値バナー — `SSP_REFERENCE_IDLE_PCT`・`SSP_REFERENCE_TALK_PEAK_PCT`・
+    `SSP_REFERENCE_MEASURED_ON`・`SSP_REFERENCE_USE`。判定レポートの `[2] 較正値` はここから出ます。
+  - `perf-rank.py` の写し — `SSP_REFERENCE_IDLE_PCT`・`SSP_REFERENCE_TALK_PEAK_PCT`・
+    **`SSP_REFERENCE_DATE`**（日付の定数名が `judge-perf.py` の `..._MEASURED_ON` と**違います**）。
+    順位表 `[1] プロセス` の注記はここから出ます——`perf-rank.py` は `judge-perf.py` を
+    import せず（同じ周に別の担当が触っていると 2 つの道具が同時に倒れるため）、較正値を
+    写しとして持つ作りです。**値を動かすときは両方を同時に動かしてください**
+    （`perf-rank.py` のヘッダにも同じ注意が書いてあります）。
+  - 本節（この文書）。
+
+### 第 11 節の「採取方法が未記録」はこの実測で埋まりました
+
+第 11 節は、旧い較正根拠 2.2〜2.8% について「どうやって採ったのかが記録されていない」と
+書いています。**その穴は上の 2026-08-15 の同一手順実測で埋まりました**——同じマシン・
+同じゴースト・同じ拡大率・同じ長さで採り直した結果が 3.05% です。ただし**採取の刻みは
+areka 側（15 秒ごと）と SSP 側（1 分ごと）で違い**、SSP 側でウォームアップ区間を除いたか
+どうかは記録されていません。**1 ポイント未満の差を論じる用途には使わないでください。**
+
+### 再採取する場合の手順
+
+**SSP 側の再採取は本 spec の要件ではありません**（要件 5.2）。それでも必要になったときのために
+手順を残します。
+
+1. **配置**: 測定マシンへ SSP を導入し、SSP の作法で**同じゴースト emo2 と同じバルーン**を
+   入れます（areka 側の走行で `-GhostRoot` / `-BalloonRoot` に渡している一式と同じもの）。
+   別のゴーストで採った値を並べてはいけません。
+2. **拡大率**: areka 側の走行と**同じモニタ・同じ拡大率（200%）**で走らせます。areka は
+   DPI 追従が基本設計なので、拡大率が違う走行は別の条件です。
+3. **採り方**: `invoke-perf-run.ps1` は areka を起動する作りなので SSP には使えません。
+   SSP は手で起動し、**同じカウンタ**（`\Process(<SSP のプロセス名>)\% Processor Time`）を
+   **同じ刻み**（15 秒ごと）で 25 分採ります。このカウンタは 1 コアを 100% とする値なので、
+   論理プロセッサ数で割らないでください（第 11 節）。
+4. **記録するもの**: 平均・底・頂・Private メモリ・スレッド数に加えて、**採取の刻み・走行の
+   長さ・ウォームアップを除いたか・マシン名・拡大率・ゴーストとバルーンの版**を必ず書きます。
+   この 6 つが無いと、次に読む人が同じ穴に落ちます。
+5. **測定後は SSP を測定マシンから削除します。** 常駐が残ると、以後の走行と静寂確認に混じります。
+   **`[quiet].heavy_process_names` に SSP のプロセス名は入っていません**——消し忘れても
+   「静かでない」とは判定されないので、削除は手順として必ず踏んでください。
+6. **採った値を 3 か所へ書きます**（1 つでも取り残すと、レポート・順位表・文書が違う値を語ります）。
+   - `judge-perf.py` の `SSP_REFERENCE_IDLE_PCT`・`SSP_REFERENCE_TALK_PEAK_PCT`・
+     **`SSP_REFERENCE_MEASURED_ON`**（実測日）
+   - `perf-rank.py` の `SSP_REFERENCE_IDLE_PCT`・`SSP_REFERENCE_TALK_PEAK_PCT`・
+     **`SSP_REFERENCE_DATE`**（実測日。`judge-perf.py` と定数名が違うので、名前で検索すると
+     取り零します）
+   - 本節の表と採取条件
+
+---
+
+## 17. 見た目の追随チェック（要件 4.7）
+
+負荷を下げた代わりに反応が鈍っていないかを、**目視や立会いに頼らずに**確かめる道具です。
+有界の自動終了つきで areka を起動し、表示が成立するのを待ってから実際に操作を当てます。
+
+```powershell
+pwsh -NoProfile -File tools/perf/invoke-followup-checks.ps1 -OutDir C:\出力先
+pwsh -NoProfile -File tools/perf/invoke-followup-checks.ps1 -OutDir C:\出力先 `
+    -BinDir C:\...\iter-3\bin-B -ExitMs 120000
+pwsh -NoProfile -File tools/perf/invoke-followup-checks.ps1 -SelfTest
+python tools/perf/judge-followup.py C:\出力先        # 判定だけをやり直す
+```
+
+ループから呼ぶ形は `perf-loop.ps1 followup -Goal draw-load-parity -Iter <n>` です。
+こちらの終了コードは「**検査が回ったか**」だけを語ります（回れば 0）。PASS／FAIL／判定不能の
+読み取りは、周の手順を進める側が `followup-verdict.txt` から行います。
+
+### 4 つの検査
+
+| 検査 | 何を当てて、何を見るか |
+|---|---|
+| `clickthrough` | 透明な画素の上と不透明な画素の上へカーソルを置き、`WS_EX_TRANSPARENT` の有無が期待どおりに切り替わるか（本番のトグル記録が両方向で出ているか） |
+| `drag` | 不透明な点から右へ 80px ドラッグし、キャラ窓とバルーン窓の新しい位置が同じだけ（±2px）動くか |
+| `dpi` | DPI の違うモニタへキャラ窓を移して戻し、DPI 変更の受理と拡大率 `k=` の変化が出るか |
+| `balloon_follow` | 上の 2 つの前後で、バルーンのキャラ窓相対位置が変わっていないか（±2px） |
+
+### 判定
+
+- 各検査は `PASS`／`FAIL`／`INCONCLUSIVE`（判定不能）のいずれか。**総合が PASS になるのは
+  4 つすべてが PASS のときだけです。**
+- **判定不能は採用の根拠になりません。**「確かめられなかった」を「確かめた」と読み替えないための
+  区別です。
+- 終了コードは 0（総合 PASS）／1（FAIL あり・実走そのものの失敗を含む）／2（FAIL は無いが
+  判定不能あり）／3（引数不正・読取不能）。
+- 出力は `run.log`（実走のログ）・`probe.log`（1 行 1 手の操作記録）・`followup.txt`（観測の要約）・
+  `followup-verdict.txt`（判定）。標準出力の末尾に
+  `FOLLOWUP RESULT overall=<…> clickthrough=<…> drag=<…> dpi=<…> balloon_follow=<…> code=<n> dir=<path>`
+  の 1 行が出ます。
+
+### 実行する場所を選びます
+
+- **対話しているデスクトップのセッションから走らせてください。** 対話していないセッション
+  （サービス起動・別セッションからの実行・入力が遮断された画面）では `SetCursorPos` と
+  `SendInput` が拒否され（アクセス拒否・`lasterr=5`）、`clickthrough`・`drag`・`balloon_follow` は
+  **判定不能**で止まります。道具は注入が効くかどうかを推測せず、起動直後に 1 回試して
+  確かめます（`SetCursorPos` は呼んだあと `GetCursorPos` で本当に動いたかを読み戻します——
+  戻り値だけでは偽の成功を弾けません）。
+- **`dpi` の検査には DPI の違うモニタが 2 面要ります。** 混在が無ければ判定不能です
+  （実機 2 面〔192／144〕では合格しています）。
+
+### 設計との差分・注意
+
+- モニタの一覧は観測行からではなく **OS から採ります**（`EnumDisplayMonitors` ＋
+  `GetDpiForMonitor`）。`[transition] kind=monitor` は**値が変わったときだけ**出るので、
+  一覧の出どころには使えません。
+- 窓の種別の実値は `char`／`balloon` です（`shell` ではありません）。
+- **窓の基準が `alignment,free` のゴーストでは、`drag` が健全なコードでも FAIL し得ます**
+  （areka がキャラ窓の書込行を出さないため）。計測に使っている emo2 は下端固定なので問題ありません。

@@ -222,7 +222,7 @@
   - _Depends: 7.3, 7.4_
 
 - [ ] 8. 登記（測り方・回し方・目標・申し送り）
-- [ ] 8.1 (P) README §13〜§17
+- [x] 8.1 (P) README §13〜§17
   - §13 自走ループの回し方（条件文の作り方と貼り方・推奨「Fable で起動」と Opus 5 での起動手順・`CLAUDE_CODE_GOAL_CHECKIN_MINUTES=60`・auto mode・スキル名・目標定義ファイル・台帳の形・停止条件・再開・「昇格した PowerShell から起動すると段③が使える」）／§14 4 段の採り方（コマンド・ビルド指定・RUST_LOG の target・前置ガードの有無・GetThreadTimes の粒度・インライン化の注意）／§15 交互取得と静寂の自動確認／§16 SSP 参考値（採取条件・再採取の配置・拡大率・測定後の削除と記録）／§17 追随チェック。遷移フレームの未特定区間と文字層再構築は合否外として §11 の隣に登記
   - 観測可能な完了状態: README に 5 節があり、§13 の手順どおりに条件文を作ると 7.1 の goal-text の出力と一致する
   - _Requirements: 5.2, 7.1, 7.2, 7.3, 7.4, 8.4_
@@ -289,3 +289,5 @@
 - (6.2) `perf-rank.py`（957 行）＋`perf_rank_dump.py`（443 行・段③と共通基盤）。dump は列名行から既知列（TimeStamp／ThreadID／Image!Function）を引き、欠けていれば exit 4 でイベントと列名を名指し。`sample_ok` の 16/8/16/22/2 を `sample_ok_counts` ケースで固定（5.3 との相互較正）。判定スクリプトの較正値（`WARMUP_EXCLUDE_SEC`・CSV ヘッダ・正規表現・`percentile`）は**写し**（出典コメントあり・機械で束縛していない）＝較正値を動かすときは両方を同時に。dump の短い行・空値・`!` 無しは黙って読み飛ばす（`samples_total` は印字する）。共有 scratchpad は揮発物（並走の別実装者が消す）。
 - (6.3) `perf-compare.py` の規則（設計が無記述の 3 点を決めて fixture で固定）: 測っていない副指標（`-`）は NA＝採用を止めないが必ず列挙／差なしの帯で副指標だけ悪化→WORSE（安全側）／judge exit 1 は判定不能にしない（集計モードは 1 を返さないので到達不能・`judge-perf.py:715`）。副指標の判定: `_ms`/`_pct` 接尾辞は率（+5%）・それ以外は増減。`compare.json` は台帳の鍵（before/after/delta/noise/secondary/verdict）と同綴りだが**`perf-ledger.py append --from-json` へそのままは渡せない**（ENTRY_KEYS 外の鍵を拒む）＝7.5 の RECORD で 6 鍵を抜き出す。`talk_peak_cpu_pct` を副指標に挙げると要件 5.4（合否に載せない）の外に出る＝本番 TOML は挙げない。
 - (7.2) **端末のコードページ（既定 CP932）で子プロセスの UTF-8 出力を復号すると日本語が壊れ、一字比較の検査が偽の MEASURE_FAILED を返す**（goal-text 一致検査で実際に踏んだ）。`perf-loop.common.ps1` の `Invoke-Child` は `ProcessStartInfo` で標準出力/エラーを UTF-8 固定で読む（python 子は `PYTHONIOENCODING=utf-8`・`PYTHONUTF8=1`、pwsh 子は `-Command` 内で自分の OutputEncoding だけ UTF-8）。**子プロセスの出力を `& $exe` で直に捕捉しない**こと。`perf-loop.ps1` 自身の説明行は端末のコードページで出る（RESULT 行は ASCII）＝7.5 のスキルが標準出力を台帳へ回すときは読み側の文字コードを決めておく。preflight は台帳があれば goal-check を呼び、トークン未生成なら作る（7.5 の周 0 は init→preflight/goal-check→goal-text の順）。`function_stage` の reason に `probe_failed`（-Probe 自体が回らなかった）を足している（C8 語彙外・頭書に明記）。
+- (8.1) README §13〜§17 着地。SSP 参考値の登記は **3 か所**（`judge-perf.py` の `SSP_REFERENCE_*`／`perf-rank.py` の写し `SSP_REFERENCE_IDLE_PCT`・`_TALK_PEAK_PCT`・`_DATE`／README §16）。段③ fixture `sample_ok/dump.txt` を差し替えるときは `invoke-cpu-sample.ps1` の `FIXTURE_EXPECT_*`・`sample_ok/README.md`・`fixtures-loop/rank/{full_ok,sample_ok_counts}/expected_rank.txt` の 4 点を同時更新。brief 由来の areka 側数値は Bevy 0.19／Taffy 0.13 更新（`bf2d7950`・2026-08-19）前＝周 0 のベースラインが権威。
+- (7.4 追記) 本セッション後半で登録簿が更新され `perf-*` が呼べるようになった。Fable から `perf-measure` を呼ぶと 1 行目に `[agent-model] Opus 5 (1M context)` が出た＝観測可能な完了状態を実証済み。
