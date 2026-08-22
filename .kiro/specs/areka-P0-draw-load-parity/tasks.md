@@ -204,7 +204,7 @@
   - _Boundary: perf-loop_
   - _Depends: 5.1, 5.2, 7.2_
 
-- [ ] 7.4 (P) 役割別エージェント定義（perf-measure／perf-analyze／perf-implement／perf-review）
+- [x] 7.4 (P) 役割別エージェント定義（perf-measure／perf-analyze／perf-implement／perf-review）
   - 4 本とも frontmatter `model: opus`・tools は最小・本文冒頭で `[agent-model] <自分のモデル名>` を印字（黙って継承しない）
   - perf-analyze は候補カタログ（tick の門・実行器の単スレッド化・文字層レイアウトの変化時のみ化・visual 走査の絞り込み・ポインタ状態の既定値時非書込・カーソル監視の二段周期・ループ ticker 周期・flush 駆動）と順位表の段→候補の対応、担当 spec の稼働確認（spec.json の phase と brief の担当ファイル集合）を規則として持ち、最上位から選び選ばなかった理由を列挙して返す
   - perf-implement は `Cargo.toml` 非接触・破壊的 git 禁止・決定論テストを兄弟ファイルへ・触ったファイル一覧を返す。perf-review は制約一覧（13 本の順序・Z 指令テスト緑・既存行の語彙・前置ガード・1,000 行・兄弟配置・`Cargo.toml`）で APPROVED／REJECTED
@@ -279,3 +279,4 @@
 - (5.1) `check-quiet.ps1` の判定語は `QUIET`／`NOT_QUIET` に加えて計測失敗時 `MEASURE_FAILED`（exit 4・ファイルは残る・失敗原文は標準出力の `counter_error=` のみ）。理由語 5 種（ok／cpu_mean_over_threshold／heavy_process_present／both／counter_read_failed）。TOML `[quiet]` は**配列を 1 行に保つ**こと（複数行や壊れた値は警告なく既定値へ落ちる）——7.1 の目標定義ファイルはこの制約で書く。PowerShell の変数名は大小無視＝`-SampleSec` パラメータと `$sampleSec` ローカルが衝突する（実装中に踏んだ）。
 - (5.4) `perf-ledger.py` は 934 行——**5.5 着手時に分割必須**（自己較正の節（約 200 行）を `perf_ledger_selftest.py` 等へ切り出し、`--selftest` 入口は本体に残す）。状態ブロックは設計の 8 鍵＋`run`・`capabilities`。小数は 2 桁丸め（STATUS 行の `<x.xx>` と同精度＝`compare.json` の 3 桁以上は台帳で落ちる）。`steps.txt` の引数は空白区切りのみ。**穴 1 件を 5.5 で塞ぐ**: 状態の `iteration`／`streak_no_gain`／`best_idle_cpu_pct`／`baseline_idle_cpu_pct` が `-`（`init` が書く正規の空値）の台帳を読む経路で `int()`/`float()` が未捕捉例外（exit 1・生トレース）になり得る（CLI からは到達不能だが 5.5 の status/final が同型を踏む）→ `bad_input`（exit 3）で包むこと。
 - (5.3) 本セッションは非昇格のため実採取は未実施＝`fixtures-loop/rank/sample_ok/dump.txt` は xperf dumper 書式（`perf_nt_c.dll` の書式文字列で裏取り・末尾列は推定）の**手書き断片**で、初回の昇格採取（7.2 preflight／9.1）で差し替え、同時に `invoke-cpu-sample.ps1` の `FIXTURE_EXPECT_*` 6 定数（16/8/16/22/2・TID 18332,18420,18512）を更新すること。fixture は `ThreadStartImage!Function` 列にも `areka.exe!` を 16 個仕込んであり、素朴な文字列数えだと 32 になる＝6.2 の `perf-rank.py` は列名行から `Image!Function` 列を引き、同じ 16/8/16/22/2 を再現すること。`-Stop` は非昇格だと exit 1（5 でない）・`no_pdb` の検出は preflight（7.2）の担当。
+- (7.4) `.claude/agents/perf-*.md` はセッション開始時に読み込まれる登録簿に載るため、**作成したセッション内からは Agent で呼べない**（本セッションで `perf-measure` を呼ぶと "Agent type not found"）。「Fable から呼ぶと `[agent-model]` が opus 系で出る」の実証は次セッション（9.1 統合確認）で行うこと。定義は頭書の規則（出典指定・`unknown` 退避・前置き禁止）を満たしている。
