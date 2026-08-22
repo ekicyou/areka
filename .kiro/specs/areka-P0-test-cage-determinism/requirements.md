@@ -29,7 +29,7 @@
 - `bindoption-exclusivity`: ログ存在主張で間欠赤だったテスト 6 本（`bind_apply_on_shown_emits_show_and_info_marker`・`bind_default_exclusive_replace_emits_show_and_info_marker`・`non_shell_broadcast_reception_is_benign_debug_no_warn_error`・`wait_broadcast_reception_is_benign_debug_no_warn_error`・`progress_phase_bind_drop_emits_info_marker`・`residual_frame_removal_emits_info_marker`）を本仕様の担当クラスとして登記。現行ツリーではいずれも硬化済みヘルパ経由になっているが、**反復実行で緑が安定したことは未確認**。
 - `ghost-window-zorder`／W6: `balloon-visibility` が再表示シーム `ReassertZOrder` を消費せずに着地（再表示直後のバルーン隣接は実機未確認）。決定論テストで拾える範囲を本仕様で検討し、拾えなければ e2e へ申し送る。
 - `kero-balloon`: `cargo test -p areka` が 1 回だけ 553/1 で赤（テスト名不明・ログ未保存）。①硬化後に再現しなくなるかを反復検証で確認する。
-- roadmap 追記(79): 「1 ファイル 1,000 行以下」の目安（`structure.md:176`）に機械的な番人が無く漂流している（現行ツリーで 1,000 行超は **11 ファイル**＝roadmap 表の 9 本に `plan_ops_tests.rs` の再増・`inproc_e2e_test.rs`・`pilot` example が加わる）。3 択（⒜ 番人テスト／⒝ 掃除 spec／⒞ 目安の緩和）は**開発者裁定待ち**で、⒜ の置き場候補が本仕様。要件 10 は ⒜ が採られた場合にのみ有効な条件付き要件として置く。
+- roadmap 追記(79): 「1 ファイル 1,000 行以下」の目安（`structure.md:176`）に機械的な番人が無く漂流している（現行ツリーで 1,000 行超は **11 ファイル**＝roadmap 表の 9 本に `plan_ops_tests.rs` の再増・`inproc_e2e_test.rs`・`pilot` example が加わる）。3 択（⒜ 番人テスト／⒝ 掃除 spec／⒞ 目安の緩和）は **2026-08-22 の要件ディスカッションで ⒜ に裁定**され、置き場は本仕様。要件 10 は採用確定の要件として置く（見張りだけを作り、既存ファイルの分割はしない）。
 
 ## Boundary Context
 
@@ -40,12 +40,13 @@
   - ④ 表示更新（`upload`）の失敗を実行テストから注入できる形を設け、「失敗時に表示は前状態を保つ」を実行テストで証明する。
   - 共有機構を迂回する新規の捕捉ヘルパ／直書きが増えたら赤になる再発防止。
   - `SELF_INITIATED_DEPTH` 是正（`draw-load-parity` 実施）後の錠 `lock_self_initiated_for_test()` の退役。
-  - （条件付き）追記(79) ⒜ が採られた場合の 1,000 行番人テスト。
+  - 1 ファイル 1,000 行の目安の番人テスト（追記(79) ⒜＝2026-08-22 開発者裁定で採用確定。作るのは見張りだけ）。
 - **Out of scope**:
   - 本番の挙動変更（④ の注入点以外）。とくに `crates/wintf/src/ecs/window/command.rs` は**非接触**（`draw-load-parity` 所有）。
   - 既存テストの**判定内容**の変更（直すのは観測機構と待機機構だけ）。観測が正しくなった結果として落ちるテストは本物の欠陥の発見であり、テストを緩めて通さず別途起票する。
   - `spine` 系テストの削除・`areka-ghost` 側の待機（2026-07-30 に是正済み）・`dpi-transition-atomicity` の実機未達 µs 2 系統（`present-write-coherence` 所有）・`presenter/show.rs` の可視化の段（:375-392・`present-write-coherence` 所有）。
   - 新規外部依存の追加（`tracing-subscriber` は既出）。
+  - 既存の 1,000 行超ファイル（11 件）の分割・縮小（番人テストの例外表に載せるのみ。並走 spec との衝突を避けるため）。
 - **Adjacent expectations**:
   - `draw-load-parity`（W6.9 同居）: `command.rs` の `SELF_INITIATED_DEPTH` を `Cell<i32>` 化し着地形を本仕様へ申し送る。見送る場合は本仕様へ即報告（その時点で着手順を再調整）。共有ファイルは実測 0（本仕様が各 crate の `Cargo.toml` dev-dependencies へ 1 行足す見込みのみ）。
   - `present-write-coherence`（W6.95）・`balloon-offset-dpi`（W6.95）: 本仕様の後着。`present-write-coherence` は同じ `apply_show` 鎖（可視化の段）を触るので、本仕様は ④ の観測点（:306-310）以外の `show.rs` を動かさない。`balloon-offset-dpi` は一本化済みの共有機構でテストを書く。
@@ -148,14 +149,17 @@
 5. When 反復検証が完了する, the 検証 shall `cargo test -p areka` の正体不明の 553/1 赤が①硬化後に再現しなくなったか（あるいは別系統として残るか）を記録する。
 6. The 検証 shall 結果を「道具の較正」（要件 3.4・8.4）込みで報告し、緑が道具の故障で出ていないことを示す。
 
-### Requirement 10: 1 ファイル 1,000 行の目安の機械的な番人（条件付き・開発者裁定待ち）
-**Objective:** リポジトリの構造規律を保つ開発者として、roadmap 追記(79) で ⒜（番人テスト）が採られた場合に、「1 ファイル 1,000 行以下」の目安が機械的に守られることを求める。それにより規則があるのに誰も測っていない状態が解消される。
+### Requirement 10: 1 ファイル 1,000 行の目安の機械的な番人（採用確定・2026-08-22 開発者裁定＝追記(79) ⒜）
+**Objective:** リポジトリの構造規律を保つ開発者として、「1 ファイル 1,000 行以下」の目安（`structure.md:176`）が機械的に見張られることを求める。それにより規則があるのに誰も測っていない状態が解消され、新たな超過に即座に気づける。
+
+**裁定の要点（要件ディスカッション 議題 1）**: 本仕様が作るのは**見張り（番人テスト）だけ**である。現に超過している既存ファイルの分割・修正は本仕様では行わない（並走 spec との衝突を避けるため）。例外表は既知の超過ファイルで始めるので、番人の導入時点でテストは赤にならない。番人が `main` に入った後に合流する spec が新たに 1,000 行を超えるファイルを作れば、その spec 側で赤になる（それが番人の役割）。roadmap 追記(79) への裁定の反映は次回の棚卸（別セッション）で行う。
 
 #### Acceptance Criteria
-1. Where 開発者が追記(79) の ⒜ を採用する, the テスト基盤 shall `crates/**/*.rs`（`src/`・`tests/`・`examples/` を含む）の各ファイルの行数を測り、1,000 行を超え例外表に無いファイルがあれば失敗する実行テストを 1 本置く。
-2. Where ⒜ が採用される, the 例外表 shall 着手時点の超過ファイル（2026-08-22 時点 11 ファイル）を列挙して開始し、項目の追加は明示的な編集としてのみ許し、削除（分割による解消）のみを自然な方向とする。
-3. Where ⒜ が採用される, the 番人テスト shall 既知の超過ファイルを一時的に例外表から外したとき赤になることを自己テストで固定する。
-4. Where 開発者が ⒝ または ⒞ を採用する, the 本仕様 shall 番人テストを実装せず、本要件を「不採用」として記録する。
+1. The テスト基盤 shall `crates/**/*.rs`（`src/`・`tests/`・`examples/` を含む）の各ファイルの行数を測り、1,000 行を超え例外表に無いファイルがあれば失敗する実行テストを 1 本置く。
+2. The 例外表 shall 着手時点の超過ファイル（2026-08-22 時点 11 ファイル＝`pilot` の example と `areka-ghost/tests/ghost/inproc_e2e_test.rs` を含む）を列挙して開始し、項目の追加は明示的な編集としてのみ許し、削除（分割による解消）のみを自然な方向とする。
+3. The 番人テスト shall 既知の超過ファイルを一時的に例外表から外したとき赤になることを自己テストで固定する。
+4. The 本仕様 shall 例外表に載る既存の超過ファイルを分割・縮小しない（既存ファイルの分割は本仕様の範囲外であり、必要なら別途起票する）。
+5. When 番人テストが導入される, the 本仕様 shall 並走中の `draw-load-parity` へ「合流後に新規の 1,000 行超ファイルは赤になる」ことを申し送る。
 
 ### Requirement 11: 隣接 spec からの申し送りの遵守
 **Objective:** 並走・後続 spec（`draw-load-parity`・`present-write-coherence`・`balloon-offset-dpi`・`emo2-conformance-e2e`）の実装者として、本仕様が上流の語彙・前提を壊さず、拾えなかった確認事項を明示的に引き渡すことを求める。それにより本仕様の後で各 spec の前提が食い違わない。

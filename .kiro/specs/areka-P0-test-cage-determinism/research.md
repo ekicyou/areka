@@ -251,7 +251,7 @@ tracing-core 0.1.36（`Cargo.lock` 実測）・tracing-subscriber 0.3.23。
 9. **④ 注入手段**: ④-a（`#[cfg(test)]` 注入点・`chain.rs` 単独）／④-c（enum ラッパ）／④-b（trait）。および「前状態」の定義（`read_back` は `source_tex` を読む＝backbuffer ではない・`size()`・presenter 側の `visible`／`current_surface`／`set_bounds` 未呼出）。
 10. **④ で現行コードの主張が破れた場合の扱い**: 要件 6.2 に従い起票（候補: 寸変更を伴う後段失敗で swap chain／`source_tex`／`size` の不整合）。本仕様で `upload` の順序を直すか（本番挙動変更＝Out of scope に抵触）／申し送りか。
 11. **⑦ 錠の退役の待ち方**: dlp 着地を本仕様のブランチへ取り込む時点（wave 内合流 or rebase）と、見送り時の 7.3 適用の判断点。
-12. **⑩ 番人の採否と置き場**（追記(79) ⒜⒝⒞）: 採る場合、例外表 11 件の初期値（`pilot` example・`inproc_e2e_test.rs` を含めるか）と置き場（共有 crate 自己テスト／areka in-crate）。
+12. **⑩ 番人の置き場**（採否は要件ディスカッション議題 1 で **⒜ 採用に確定**・例外表 11 件は `pilot` example・`inproc_e2e_test.rs` を含めて開始・既存ファイルの分割は本仕様で行わない）: 置き場（共有 crate 自己テスト／areka in-crate）のみ設計で決める。
 13. **11.4 `ReassertZOrder` 再表示**: 本仕様で「現状（再表示は再断行を要求しない）」を配線テストで記録するに留めるか、全面的に e2e へ申し送るか。再表示で要求を挿す本番配線は本仕様の範囲外。
 14. **wintf の `capture_under_filter`（EnvFilter 濾過）の扱い**: 共有 crate の feature で提供するか、wintf 側に薄い包み（probe は共有・濾過は wintf）を残すか。96 呼出の import 影響。
 
