@@ -7,6 +7,7 @@ mod vsync;
 
 pub mod schedule_labels;
 pub mod thread_registry;
+pub mod tick_diag;
 
 pub use schedule_labels::*;
 pub use vsync::*;
@@ -45,6 +46,8 @@ pub struct EcsWorld {
     // デバッグ用: フレームレート計測
     frame_count: u64,
     last_log_time: Option<Instant>,
+    /// フレーム駆動の相別観測（既定 OFF・`RUST_LOG` に `wintf::tick=debug` で点く）。
+    tick_diag: tick_diag::TickDiag,
 }
 
 impl EcsWorld {
@@ -379,6 +382,7 @@ impl EcsWorld {
             message_window: None,
             frame_count: 0,
             last_log_time: None,
+            tick_diag: tick_diag::TickDiag::default(),
         }
     }
 
@@ -490,6 +494,11 @@ impl EcsWorld {
         // デバッグ: フレームレート計測（不要になったらコメントアウト）
         self.measure_and_log_framerate();
 
+        // 相別観測の前置ガード（要件 3.8）。tick 1 回につきここで 1 度だけ評価し、
+        // 以後はこの bool を配る。偽のときこの観測のために時刻を取らず、行も組まない
+        // （兄弟テストが「ガードは最初の時刻取得より前」を本文の並びで固定する）。
+        let diag_on = tick_diag::is_enabled();
+
         // システムが登録されていない場合はスキップ
         if !self.has_systems {
             return false;
@@ -545,23 +554,57 @@ impl EcsWorld {
         // これにより、マルチスレッドで実行されるシステムでもデータにアクセス可能になる
         crate::ecs::pointer::transfer_buffers_to_world(&mut self.world);
 
+        // 相別観測（既定 OFF）: 点いているときだけ UI スレッドのハンドルを 1 度確保する。
+        if diag_on {
+            self.tick_diag.ensure_ui_thread();
+        }
+
         // 各Scheduleを順番に実行
+        //
+        // 13 本の呼び出しと順序は不変（要件 3.4／既存の順序テスト 2 本）。間に挟まる
+        // `phase.lap()` は相別観測の区切りで、OFF のときは何もしない（時刻も取らない）。
+        let mut phase = tick_diag::PhaseTimer::start(diag_on);
         let _ = self.world.try_run_schedule(Input);
+        phase.lap();
         let _ = self.world.try_run_schedule(Update);
+        phase.lap();
         let _ = self.world.try_run_schedule(PreLayout);
+        phase.lap();
         let _ = self.world.try_run_schedule(Layout);
+        phase.lap();
         let _ = self.world.try_run_schedule(PostLayout);
+        phase.lap();
         let _ = self.world.try_run_schedule(UISetup);
+        phase.lap();
         let _ = self.world.try_run_schedule(GraphicsSetup);
+        phase.lap();
         let _ = self.world.try_run_schedule(Draw);
+        phase.lap();
         let _ = self.world.try_run_schedule(PreRenderSurface);
+        phase.lap();
         let _ = self.world.try_run_schedule(RenderSurface);
+        phase.lap();
         let _ = self.world.try_run_schedule(Composition);
+        phase.lap();
         let _ = self.world.try_run_schedule(CommitComposition);
+        phase.lap();
         let _ = self.world.try_run_schedule(FrameFinalize);
+        phase.lap();
 
         // Layout スケジュール実行後のタイミングで NCHITTEST キャッシュをクリア
         crate::ecs::pointer::nchittest_cache::clear_nchittest_cache();
+
+        // 相別観測の集計と、1 秒窓が閉じたときの 1 行（要件 2.5／2.6）。
+        // 心拍は tick の門（後続タスク）が入るまで常に偽。
+        if diag_on {
+            let ended = Instant::now();
+            let wall_us = ended.saturating_duration_since(tick_start).as_micros() as u64;
+            self.tick_diag
+                .record_run(ended, frame, wall_us, phase.per_schedule(), false);
+            if let Some(line) = self.tick_diag.maybe_close(ended) {
+                tick_diag::emit_line(&line);
+            }
+        }
 
         true
     }

@@ -23,7 +23,7 @@
   - _Requirements: 2.3, 2.12, 6.8, 8.6_
   - _Boundary: thread_registry, api.rs_
 
-- [ ] 2.2 フレーム駆動の相別観測（tick_diag）を新設し tick に計時点を置く（`ecs/world/mod.rs` の本文を触るため 2.1 と並列にしない）
+- [x] 2.2 フレーム駆動の相別観測（tick_diag）を新設し tick に計時点を置く（`ecs/world/mod.rs` の本文を触るため 2.1 と並列にしない）
   - target `wintf::tick` の前置ガードを tick の冒頭で 1 度だけ評価し、偽なら時刻取得も行の組立も行わない
   - 1 秒窓で tick 回数・省略数・心拍で回った数・壁時計の合計と最大・UI スレッド CPU の差分・13 本のスケジュール別の壁時計 µs を集約し、窓が閉じたら `[tick] kind=window …` を 1 行出す（壁時計と CPU を別フィールドで区別）
   - 13 本の呼出の前後で（点灯時のみ）計時して窓へ加算する。13 本の順序と FrameCount の進め方は変えない
