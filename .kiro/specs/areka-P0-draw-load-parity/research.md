@@ -196,7 +196,7 @@ bevy には「World 全体で何か変わったか」を O(1) で引く口が無
 1. **D-1 実行器**: 多スレッド 7 本（Input／Update／PreLayout／Layout／PostLayout／Draw／FrameFinalize）を単スレッドへ寄せる案を「大改造」（4.7）と見るか。採る場合、前提テスト 2 本（`monitor_systems_transition_tests.rs:362-369`・`transition_diag_tests.rs:774-781`）の改訂方針。
 2. **D-2 省略フレームの番号と時刻**: 省略した tick で `FrameCount`／`FrameTime`／`TickStart` を進めるか。`transition_diag` の刻印・`perf` 行末尾の `frame`・`FrameHarness::advance_frame` が同じ規律を共有しているので、どちらに決めても全員へ波及する。
 3. **D-3 省略時の flush**: 省略フレームでも `flush_window_pos_commands()` を呼ぶか（空なら `trace!` 1 行で安い）。wndproc 経路（`window_pos.rs:290`）は自前で flush するので必須ではないが、4.5 の「Z 指令の適用順不変」を崩さない最小は「常に呼ぶ」。
-4. **D-4 FrameFinalize の中身が areka 側だったときの境界**: `emo2_frame_system` の文字層提示（`areka-emo-text/src/actor.rs:744-805`）が上位項に出た場合、本 spec で触るか（9.5 の担当確認→即報告）。`frame.rs` は atom（完了）の産物、`show.rs` は pwc、`placement/follow` は bod の所有。
+4. **D-4 FrameFinalize の中身が areka 側だったときの境界**（**✅ 要件ディスカッション議題 1 で解決＝調査は無制限・担当者不在の場所は本 spec で是正可・requirements 改訂欄参照**）: `emo2_frame_system` の文字層提示（`areka-emo-text/src/actor.rs:744-805`）が上位項に出た場合、本 spec で触るか（9.5 の担当確認→即報告）。`frame.rs` は atom（完了）の産物、`show.rs` は pwc、`placement/follow` は bod の所有。
 5. **D-5 観測行の形**: 新 target 名（例 `wintf::tick`）・集約の周期（N tick または 1 秒）・フィールド語彙（`frame` 先頭・`kind=tick`・13 本の名前）・`RUST_LOG_VALUE` の改訂と `SCRIPT_VERSION` の版上げ・judge-perf.py では必須種（`J_REQUIRED_LOG_KINDS`）にせず任意種として読む（既存 fixture を判定不能にしないため）。
 6. **D-6 CPU 時間の測り方**（1.3）: `GetThreadTimes`／`QueryThreadCycleTime`／ETW のどれで「壁時計」と「CPU」を分けるか。スレッド別の帰属（1.8）をランナー側に足すか。
 7. **D-7 アイドル時の起床方針**: 120/s の vblank 起床は維持して門で落とす（4.2 を守る）か、起床そのものを間引く（4.2 と衝突）か。
