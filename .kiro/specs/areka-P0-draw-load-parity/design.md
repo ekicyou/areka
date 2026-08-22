@@ -1,6 +1,6 @@
 # Technical Design: areka-P0-draw-load-parity
 
-> 作成 2026-08-22（`/kiro-spec-design`・Bevy 0.19.1 更新後の現行ツリー＝origin/main と同期済み・file:line は本日再突合）。表記: 決定論テスト＝実機なしで走るテスト。「テスト間の状態汚染」＝並列実行する別テストの書き換えが見えてしまう問題。
+> 作成 2026-08-22（`/kiro-spec-design`・Bevy 0.19.1 更新後の現行ツリー＝origin/main と同期済み・file:line は本日再突合）。**同日 設計ディスカッション（カテゴリ A）で反映**: 設計バリデーション Critical 1（終端行に走行固有トークン・見本は山括弧）・Critical 3（`PREFLIGHT` 相・段③の `UNAVAILABLE` 降格・`-Probe`）・軽微所見 2（`wake_bits_for_message` 純関数＋表のテスト）・3（ベースラインを 3 コマンド 3 ターンへ分割・check-in 実効値の確認）・4（catch-up は 3 系統とも `target=`）・file:line のずれ 5 件。Critical 2（スレッド別 CPU の採り方）は議題として別途解決。表記: 決定論テスト＝実機なしで走るテスト。「テスト間の状態汚染」＝並列実行する別テストの書き換えが見えてしまう問題。
 
 ## Overview
 
@@ -52,18 +52,18 @@
 - `command.rs` の `SELF_INITIATED_DEPTH`／`flush` の意味論を変えたとき（`test-cage-determinism`）
 - perf 行・遷移観測行・新設の `[tick]`／`perf(thread)` 行の語彙を変えたとき（`judge-perf.py` 0.4.0・fixture）
 - `invoke-perf-run.ps1` の引数や `run-meta.txt` の項目を変えたとき（README・`perf-loop.ps1`）
-- STATUS 行／FINAL 行の字面を変えたとき（`/goal` 条件文テンプレート・`perf-ledger.py`）
+- STATUS 行／FINAL 行の字面や `run=` トークンの形を変えたとき（`/goal` 条件文テンプレート・`perf-ledger.py`・README の見本）
 
 ## Architecture
 
 ### Existing Architecture Analysis
 - **フレーム駆動は 1 系統**: vblank 検出スレッド `wintf-vsync`（`crates/wintf/src/runtime/tick_bridge.rs:65-68,114-134`・`DwmFlush` 待ち→全リスナ起床）と UI スレッドの `run_async_tick`（同 `:218-236`）→ `tick_one_frame`（同 `:187-210`・再入ガード→`try_borrow_mut`→`try_tick_world`→`flush_window_pos_commands`）。**スキップ判断は無い**。
 - **`EcsWorld::try_tick_world`**（`crates/wintf/src/ecs/world/mod.rs:488-566`）: `measure_and_log_framerate`（:490・10 秒ごと `trace!`）→ `has_systems` 早期脱出（:493）→ `FrameCount` +1（:517-524）→ `TickStart`（:525-534）→ `FrameTime`（:536-541）→ ポインタ転送（:545）→ `try_run_schedule` ×13（:548-560）→ NCHITTEST キャッシュ消去（:563）。順序不変のテストは同 `:657-702`。
-- **実行器**: `Cargo.toml:48-56` が `bevy_ecs` の `multi_threaded` を有効化。`world/mod.rs:104-160` で単スレッド固定は UISetup／GraphicsSetup／PreRenderSurface／RenderSurface／Composition／CommitComposition の 6 本（:117,135,141,146,151,156）。Input／Update／PreLayout／Layout／PostLayout／Draw／FrameFinalize の 7 本は既定（多スレッド・`bevy_ecs-0.19.1/src/schedule/executor/multi_threaded.rs:274` が毎 `run` でタスクプールの scope を開く）。`monitor_systems_transition_tests.rs:362-369` と `transition_diag_tests.rs:774-781` が「`schedules.insert(Schedule::new(Update));` の字面」を前提として固定している。
-- **毎フレーム本体が走るもの**: `visual_hierarchy_sync_system`（`graphics/systems/visual_sync.rs:25-70`・全 `VisualGraphics` 走査）・`clear_transient_pointer_state`（`pointer/systems.rs:17-31`・全 `PointerState` 毎回書込）・areka `emo2_frame_system`（`crates/areka/src/emo2_boot/frame.rs:158-233`）→ `run_text_phase`（`frame/scale_text.rs:255-275`）→ `present_actor`（`crates/areka-emo-text/src/actor.rs:744-805`・毎フレーム行レイアウト）・`run_balloon_visibility_phase`（`balloon_visibility_phase.rs:64-95`・毎フレーム観測）。
+- **実行器**: `Cargo.toml:48-56` が `bevy_ecs` の `multi_threaded` を有効化。`world/mod.rs:104-160` で単スレッド固定は UISetup／GraphicsSetup／PreRenderSurface／RenderSurface／Composition／CommitComposition の 6 本（:117,135,141,146,151,156）。Input／Update／PreLayout／Layout／PostLayout／Draw／FrameFinalize の 7 本は既定（多スレッド・`bevy_ecs-0.19.1/src/schedule/executor/multi_threaded.rs:274` が毎 `run` でタスクプールの scope を開く）。`monitor_systems_transition_tests.rs:367-371` と `transition_diag_tests.rs:778-782` が「`schedules.insert(Schedule::new(Update));` の字面」を `assert!` で前提として固定している。
+- **毎フレーム本体が走るもの**: `visual_hierarchy_sync_system`（`graphics/systems/visual_sync.rs:25-70`・全 `VisualGraphics` 走査）・`clear_transient_pointer_state`（`pointer/systems.rs:17-33`・全 `PointerState` 毎回書込）・areka `emo2_frame_system`（`crates/areka/src/emo2_boot/frame.rs:158-233`）→ `run_text_phase`（`frame/scale_text.rs:255-275`）→ `present_actor`（`crates/areka-emo-text/src/actor.rs:640` 起点・行レイアウト〜`render` は同 `:744-805`・毎フレーム再計算）・`run_balloon_visibility_phase`（`balloon_visibility_phase.rs:64-95`・毎フレーム観測）。
 - **tick と独立に動くもの**: クリック透過の中継（`runtime/mod.rs:307-328`・vblank ごとに `click_wake` を叩く）と評価ループ（`clickthrough/controller.rs:416-457`）・カーソル監視 `wintf-cursor-monitor`（`clickthrough/monitor.rs:34` `POLL_INTERVAL=12ms`・`:87-88`）・ticker 3 系統（`crates/areka-ghost/src/ticker.rs:57-65`＝dispatcher 50ms／kanade 1000ms・`:262` ループ 16ms・catch-up 文言 `:203-206,223-226,305-308`・`target=` フィールドで系統を名乗る）・bevy タスクプール（`TaskPool (N)`）。
-- **一括 flush と `command.rs`**: `SELF_INITIATED_DEPTH`（`command.rs:49`・`AtomicI32`）・錠 `lock_self_initiated_for_test`（`:76-79`・呼出 21 箇所／5 ファイル）・`SetWindowPosGuard`（`:99-114`）・`guarded_set_window_pos`（`:129-155`）。合流・1 バッチ適用・Z 指令不合流は atom が着地済み。
-- **観測と道具**: `transition_diag.rs:54`（target `wintf::transition`）・`:622-627 is_enabled`・`:633-635 emit_line`。`invoke-perf-run.ps1:102-105`（`RUST_LOG_VALUE='info,areka_emo_present=debug'`・`-ConfirmQuiet` 必須・exit 2）。`judge-perf.py`: `SCRIPT_VERSION` :106・`WARMUP_EXCLUDE_SEC` :364・`IDLE_CPU_MAX_RELEASE_PCT` :380・`LONG_RUN_MIN_SPAN_SEC` :396・`J_CATCHUP_*` :451-452・`J_REQUIRED_LOG_KINDS` :466・`parse_fields` :588・`--selftest` :3470-3490。`crates/areka/src/main.rs:126-128`（subscriber）・`:794`（`AREKA_APP_SMOKE_EXIT_MS`）。
+- **一括 flush と `command.rs`**: `SELF_INITIATED_DEPTH`（`command.rs:49`・`AtomicI32`）・錠 `lock_self_initiated_for_test`（`:76-79`・呼出 21 箇所／5 ファイル）・`SetWindowPosGuard`（`:96-114`）・`guarded_set_window_pos`（`:129-155`）。合流・1 バッチ適用・Z 指令不合流は atom が着地済み。
+- **観測と道具**: `transition_diag.rs:54`（target `wintf::transition`）・`:622-627 is_enabled`・`:633-635 emit_line`。`invoke-perf-run.ps1:102-105`（`RUST_LOG_VALUE='info,areka_emo_present=debug'`・`-ConfirmQuiet` 必須・exit 2）。`judge-perf.py`: `SCRIPT_VERSION` :106・`WARMUP_EXCLUDE_SEC` :364・`IDLE_CPU_MAX_RELEASE_PCT` :380・`LONG_RUN_MIN_SPAN_SEC` :396・`J_CATCHUP_*` :451-452・`J_REQUIRED_LOG_KINDS` :466・`parse_fields` :588・`--selftest` :3470-3490。`crates/areka/src/main.rs:126-128`（subscriber）・`:793`（`AREKA_APP_SMOKE_EXIT_MS` の読取点）。
 - **kiro-impl**: `.claude/skills/kiro-impl/SKILL.md` の Agent 派遣は実装者・レビュアー・デバッガーの 3 箇所（`model` 指定無し＝継承）。最終検証 `kiro-validate-impl` も subagent を派遣する（同 SKILL.md:72-84）。`.claude/agents/` は未作成。
 
 ### Architecture Pattern & Boundary Map
@@ -177,7 +177,7 @@ tools/perf/
 ├── skills/kiro-impl/SKILL.md             # 既存: Preflight に「派遣モデルの決定」・派遣 3 箇所へ規則
 └── skills/kiro-validate-impl/SKILL.md    # 既存: subagent 派遣へ同規則 1 節
 crates/wintf/src/
-├── ecs/world/tick_wake.rs            # 新規: 旗（AtomicU32 ビット集合＋期限）・mark / arm_deadline / take
+├── ecs/world/tick_wake.rs            # 新規: 旗（AtomicU32 ビット集合＋期限）・mark / arm_deadline / take・wake_bits_for_message（純関数）
 ├── ecs/world/tick_wake_tests.rs      # 新規
 ├── ecs/world/tick_gate.rs            # 新規: TickGateInputs / TickDecision / should_run 純関数・定数
 ├── ecs/world/tick_gate_tests.rs      # 新規: 全組合せ・省略直後の反映・生産者一覧の字面検査
@@ -221,9 +221,9 @@ doc/COMPAT_ARCHITECTURE.md            # 変更: §8 に「areka 裁量の性能�
 ### Modified Files（要点）
 - `crates/wintf/src/ecs/world/mod.rs` — `try_tick_world` の各 `try_run_schedule` の前後で（点灯時のみ）計時し `TickWindow` へ加算、`FrameCount` 更新点は不変。新設 `decide_tick(now) -> TickDecision`（旗の `take`・心拍・起動直後）と `note_skipped_tick()`。既存テスト 2 本（:657,:707）は不変。
 - `crates/wintf/src/runtime/tick_bridge.rs` — `tick_one_frame`: 再入ガード → `try_borrow_mut` → **`decide_tick`** → Run なら `try_tick_world`／Skip なら `note_skipped_tick` → 借用解放 → `flush_window_pos_commands()`（常に）。
-- `crates/wintf/src/ecs/window/command.rs` — `static SELF_INITIATED_DEPTH: AtomicI32` → `thread_local! { static SELF_INITIATED_DEPTH: Cell<i32> }`。読み書き 3 箇所（`is_self_initiated` :86-88・`SetWindowPosGuard::new/drop` :99-114）のみ変更。`lock_self_initiated_for_test` は残し doc に「退役候補（cage が受ける）」を記す。`enqueue`（:657-679）で `tick_wake::mark(WINDOW_CMD)`。
+- `crates/wintf/src/ecs/window/command.rs` — `static SELF_INITIATED_DEPTH: AtomicI32` → `thread_local! { static SELF_INITIATED_DEPTH: Cell<i32> }`。読み書き 3 箇所（`is_self_initiated` :86-88・`SetWindowPosGuard::new/drop` :96-114）のみ変更。`lock_self_initiated_for_test` は残し doc に「退役候補（cage が受ける）」を記す。`enqueue`（:657-679）で `tick_wake::mark(WINDOW_CMD)`。
 - `tools/perf/invoke-perf-run.ps1` — 引数追加 `-AutoQuiet`（`-ConfirmQuiet` と排他・`check-quiet.ps1` を呼び `quiet-before.txt` を残す）・`-BinDir <dir>`（実行体の所在を上書き・run-meta に記録）・`-RustLogExtra <str>`（`RUST_LOG_VALUE` の末尾へ `,` 連結・run-meta に記録）。`SCRIPT_VERSION 1.1.0`。既存の引数・出力ファイル・CSV ヘッダは不変。
-- `tools/perf/judge-perf.py` — `SCRIPT_VERSION 0.4.0`。集計モード §9 に catch-up の系統別（`target=dispatcher|kanade` と loop の文言）・各発生の時刻・直前の表示成立点との差・直前の `[tick]` 窓の壁時計を併記。`[tick]`／`perf(thread)` は**任意種**（`J_REQUIRED_LOG_KINDS` 不変）。較正値バナーへ SSP 参考値の注記。判定式は不変。fixture を両側で追加。
+- `tools/perf/judge-perf.py` — `SCRIPT_VERSION 0.4.0`。集計モード §9 に catch-up の系統別（3 系統とも `target=` フィールドで識別）・各発生の時刻・直前の表示成立点との差・直前の `[tick]` 窓の壁時計を併記。`[tick]`／`perf(thread)` は**任意種**（`J_REQUIRED_LOG_KINDS` 不変）。較正値バナーへ SSP 参考値の注記。判定式は不変。fixture を両側で追加。
 - `.claude/skills/kiro-impl/SKILL.md`・`.claude/skills/kiro-validate-impl/SKILL.md` — 下記 C4。
 
 ## System Flows
@@ -232,7 +232,8 @@ doc/COMPAT_ARCHITECTURE.md            # 変更: §8 に「areka 裁量の性能�
 
 ```mermaid
 stateDiagram-v2
-    [*] --> BASELINE: 周 0 開始
+    [*] --> PREFLIGHT: 周 0 開始
+    PREFLIGHT --> BASELINE: 能力確認を台帳へ（昇格・xperf・PDB・版・check-in 実効値）
     BASELINE --> RANK: 25 分 release と dev の判定出力を保存
     RANK --> SELECT: 順位表 4 段
     SELECT --> IMPLEMENT: 仮説と変更計画を台帳へ
@@ -414,6 +415,7 @@ flowchart TD
 **Responsibilities & Constraints**
 - `tools/perf/goals/<goal>.toml` が唯一の所在。道具とスキルはこれだけを読む。人の判断を合否に使わない。
 - `<goal>.goal.md` は `/goal` に貼る条件文（4,000 字以内）。達成／不可能の判定は **FINAL 行の字面**で行う形に書く。条件文と STATUS／FINAL 行の語は `perf-ledger.py` の定数から生成する（字面の二重管理を避ける）。
+- **終端行には走行固有トークンを入れる**（設計バリデーション Critical 1）: 判定役は会話に現れた文字列しか見ず、テンプレートと実出力を区別できない。そこで `perf-ledger.py goal-check`（周 0）が 8 桁の乱数 `run=<token>` を生成して台帳の `状態` へ書き、FINAL 行は `PERF-LOOP FINAL: GOAL_MET run=<token> …`／`PERF-LOOP FINAL: STOPPED run=<token> reason=…` の形でのみ出す。`/goal` の条件文はこのトークン込みの字面を要求する（`draw-load-parity.goal.md` はテンプレートで、起動時に `perf-ledger.py goal-text` がトークンを埋めた文を出力し、それを `/goal` へ貼る）。**スキル本文・README・design・goal テンプレートの書式見本は実出力と一致しない書き方（山括弧プレースホルダ）に統一し、`perf-ledger.py --selftest` に「見本行が判定の正規表現に一致しないこと」を 1 ケース固定する**（`fixtures-loop/ledger/`）。
 
 **Dependencies**: Outbound — C11（STATUS 行の語・P0）・C12（判定スクリプト版・P0）。
 
@@ -472,8 +474,9 @@ main_model_recommended = "fable"       # README に記す推奨（Opus 5 でも�
 ```
 目標: areka の release アイドル CPU（1 コア換算・定常平均）を 3.0% 未満にし、判定式⑴〜⑷b が 25 分の最終判定で全て合格すること。
 毎ターンの手順: プロジェクトスキル `perf-loop-iteration` を引数 `draw-load-parity` で 1 回だけ呼び、その最後に出る `PERF-LOOP STATUS …` 行を一字も変えずに返答の最後の行として書く。スキルが相を 1 つ進めるので、1 ターンで 2 相以上進めない。背景コマンドが走っている間は待つ（check-in が届いたら出力を読んで待つと答える）。
-達成の判定: 会話に `PERF-LOOP FINAL: GOAL_MET` で始まる行が現れたとき。
-不可能の判定: 会話に `PERF-LOOP FINAL: STOPPED reason=` で始まる行が現れたとき（頭打ち・安全停止・道具の故障・周数上限 30 のいずれか）。
+達成の判定: 会話に `PERF-LOOP FINAL: GOAL_MET run=<token>`（<token> は起動時に埋めた 8 桁）で始まる行が現れたとき。
+不可能の判定: 会話に `PERF-LOOP FINAL: STOPPED run=<token> reason=` で始まる行が現れたとき（頭打ち・安全停止・道具の故障・周数上限 30 のいずれか）。
+注意: 上の 2 行は山括弧つきの見本であり、実出力とは一致しない（判定は実トークン込みの字面でのみ行う）。
 制約: 開発者へ質問しない・合否は judge-perf.py 0.4.0 の出力だけで決める・Cargo.toml を変更しない・採用は 1 周 1 コミット・採用しない変更は戻す・台帳 loop-ledger.md 以外に判断の記憶を持たない。
 ```
 
@@ -498,7 +501,8 @@ main_model_recommended = "fable"       # README に記す推奨（Opus 5 でも�
 ##### 相の遷移表（Batch 契約）
 | 相 | 実行内容（誰が） | 終了条件 → 次の相 |
 |---|---|---|
-| `BASELINE` | `perf-loop.ps1 measure-baseline`（background・release と dev の 25 分＋順位付け 1 本） | 完了 → `RANK`（結果は `results/baseline-<date>/`） |
+| `PREFLIGHT` | `perf-loop.ps1 preflight`（同期・1 回）: 昇格の有無・`xperf.exe` の実在・`CARGO_PROFILE_RELEASE_DEBUG` で PDB が出るか（直近ビルドの PDB 有無）・`judge_version` と `SCRIPT_VERSION` の一致・Python／PowerShell 版・`CLAUDE_CODE_GOAL_CHECKIN_MINUTES` の**実効値**（環境変数を読む）・`perf-loop.ps1 selftest`。結果を台帳 `状態` の `capabilities` 行と STATUS 行へ。**段③不可（昇格なし）は停止ではなく `function_stage=UNAVAILABLE` として記録**し、以後の順位表は段①②④で続行 | 道具の自己較正が赤／版不一致 → `TOOLFIX`。それ以外 → `BASELINE` |
+| `BASELINE` | `perf-loop.ps1 measure-baseline -Build release`（background・25 分）→ 次ターン `-Build dev`（25 分）→ 次ターン `rank-run`（順位付け 7 分＋点灯＋サンプリング）。**3 コマンドに分け、各 1 ターン**（どれも check-in 間隔 30 分以内に収める＝要件 1.11） | 3 本完了 → `RANK`（結果は `results/baseline-<date>/`） |
 | `RANK` | perf-measure エージェント: `perf-loop.ps1 rank <run>` → `rank.txt` | → `SELECT` |
 | `SELECT` | perf-analyze エージェント: 順位表＋候補カタログ（C16〜C20）＋台帳の既試行を読み、仮説・変更計画・触るファイル・選ばなかった理由・規模見立てを返す | 候補が無い（全て Out of scope／稼働中／既試行）→ `FINAL`（`STOPPED reason=plateau`）。あれば → `IMPLEMENT` |
 | `IMPLEMENT` | `perf-loop.ps1 prepare-ab`（A の実行体を退避）→ perf-implement エージェント（変更＋テスト追加） | → `TEST` |
@@ -506,7 +510,7 @@ main_model_recommended = "fable"       # README に記す推奨（Opus 5 でも�
 | `REMEASURE` | `perf-loop.ps1 measure-ab`（background・A1 B1 A2 B2） | 完了 → `DECIDE` |
 | `DECIDE` | `perf-loop.ps1 compare` → `ADOPTED`／`NO_DIFF`／`WORSE`／`MEASURE_FAILED` | → `RECORD` |
 | `RECORD` | 採用はコミット・不採用は戻す・台帳へ追記・streak 更新・`results/iter-<n>/` へ判定出力を複製 | streak≥3 or iter≥上限 → `FINAL`。主指標が目標未満で採用 → `FINAL`。それ以外 → `RANK` |
-| `TOOLFIX` | 計測失敗時に 1 回だけ: perf-implement エージェントが道具を直し `perf-loop.ps1 selftest` | 緑 → 直前の相へ戻る。赤 → `FINAL`（`STOPPED reason=measure_failed`） |
+| `TOOLFIX` | 計測失敗（exit 4・自己較正赤・版不一致）時に 1 回だけ（能力不足 exit 5 はここへ来ない）: perf-implement エージェントが道具を直し `perf-loop.ps1 selftest` | 緑 → 直前の相へ戻る。赤 → `FINAL`（`STOPPED reason=measure_failed`） |
 | `FINAL` | `perf-loop.ps1 final`（background・25 分 × release/dev）→ verdict 保存 → `results/summary.md`（brief 旧数値との対比表）→ 未達なら requirements.md 改訂欄へ登記 | FINAL 行を印字して終了 |
 
 **Implementation Notes**
@@ -564,15 +568,15 @@ main_model_recommended = "fable"       # README に記す推奨（Opus 5 でも�
 
 ##### Batch / Job Contract
 - 呼び方: `pwsh -File tools/perf/perf-loop.ps1 <subcommand> -Goal <name> [-Iter <n>] [-RunDir <dir>] [-Resume]`。
-- サブコマンド: `measure-baseline`（25 分 release・25 分 dev・順位付け 7 分＋サンプリング）／`rank -RunDir`（`perf-rank.py` → `rank.txt`）／`prepare-ab`（`cargo build --release` with `CARGO_PROFILE_RELEASE_DEBUG`・実行体と PDB と 32bit helper を `<iter>/bin-A/` へ複製）／`measure-ab`（B をビルド→`bin-B/`→A1 B1 A2 B2 を `-AutoQuiet -BinDir`）／`compare`（`perf-compare.py` → `compare.txt`＋`compare.json`）／`followup`（C13）／`final`（25 分 × release/dev→`judge-perf.py --mode verdict`）／`selftest`（`judge-perf.py --selftest`・`perf-rank.py --selftest`・`perf-compare.py --selftest`・`perf-ledger.py --selftest`・`judge-followup.py --selftest`・`invoke-cpu-sample.ps1 -SelfTest`）。
+- サブコマンド: `preflight`（能力確認＝昇格・`xperf.exe`・PDB・版一致・Python／PowerShell 版・`CLAUDE_CODE_GOAL_CHECKIN_MINUTES` 実効値・selftest。結果は `preflight.txt`＋標準出力。段③不可は exit 0 のまま `function_stage=UNAVAILABLE reason=<not_elevated|no_xperf|no_pdb>` を報告）／`measure-baseline -Build release|dev`（25 分 × 1 本）／`rank-run`（順位付け 7 分＋点灯＋サンプリング〔段③が UNAVAILABLE なら採取を省く〕）／`rank -RunDir`（`perf-rank.py` → `rank.txt`）／`prepare-ab`（`cargo build --release` with `CARGO_PROFILE_RELEASE_DEBUG`・実行体と PDB と 32bit helper を `<iter>/bin-A/` へ複製）／`measure-ab`（B をビルド→`bin-B/`→A1 B1 A2 B2 を `-AutoQuiet -BinDir`）／`compare`（`perf-compare.py` → `compare.txt`＋`compare.json`）／`followup`（C13）／`final`（25 分 × release/dev→`judge-perf.py --mode verdict`）／`selftest`（`judge-perf.py --selftest`・`perf-rank.py --selftest`・`perf-compare.py --selftest`・`perf-ledger.py --selftest`・`judge-followup.py --selftest`・`invoke-cpu-sample.ps1 -SelfTest`）。
 - 出力先: `%LOCALAPPDATA%\areka-diag\perf-loop\<goal>\iter-<n>\{rank,A1,B1,A2,B2,bin-A,bin-B,followup}\`。各走行は既存ランナーの 3 ファイル＋`quiet-before.txt`／`quiet-after.txt`。
-- 終了コード: 0 完了／1 実走失敗／2 静寂でない（再試行上限超）／3 引数／4 計測失敗（空採取・記号解決ゼロ・自己較正赤・判定スクリプト版不一致）。**4 は `MEASURE_FAILED`** として台帳へ。
+- 終了コード: 0 完了／1 実走失敗／2 静寂でない（再試行上限超）／3 引数／4 計測失敗（空採取・記号解決ゼロ・自己較正赤・判定スクリプト版不一致）／5 能力不足（昇格なし等＝`UNAVAILABLE`・段③のみ省いて続行可）。**4 は `MEASURE_FAILED`** として台帳へ。**5 は停止の理由にしない**（順位表の段③に `UNAVAILABLE` を記して続行）。
 - 標準出力の末尾に必ず `PERF-LOOP RESULT <subcommand> code=<n> dir=<path>` の 1 行（背景終了で会話へ届く形）。
 - 冪等: 同じ `-RunDir` で `-Resume` を付けると既存の成果物を再利用する。
 
 **Implementation Notes**
 - Integration: `cargo test --workspace` はスキル側で回す（道具ではない）。
-- Risks: 25 分 × 2 ＋ 7 分の `measure-baseline` は約 60 分 → background で 1 コマンドにすると check-in が 1 回入る。スキルはそれを「待つ」で受ける。
+- Risks: ベースラインは release 25 分・dev 25 分・順位付け 7 分を**別コマンド・別ターン**で回す（1 コマンド約 60 分にまとめると check-in が割り込む＝要件 1.11）。`preflight` が読んだ `CLAUDE_CODE_GOAL_CHECKIN_MINUTES` の実効値が 25 分未満なら台帳に警告を書き、25 分水準の背景実行中に届く check-in は「待つ」で受ける。
 
 #### C6 `check-quiet.ps1`
 
@@ -607,9 +611,10 @@ main_model_recommended = "fable"       # README に記す推奨（Opus 5 でも�
 | Requirements | 2.4, 2.11, 8.6 |
 
 ##### Batch / Job Contract
-- `-Start -Etl <path>`: `xperf -on PROC_THREAD+LOADER+PROFILE -stackwalk Profile -SetProfInt 1221 -BufferSize 1024 -MaxBuffers 512 -f <path>`（管理者権限が要る。無ければ exit 4 と文言）。
+- `-Probe`: 昇格の有無（`WindowsPrincipal.IsInRole(Administrator)`）・`xperf.exe` の実在・5 秒だけ実採取して停止できるかを確かめ、`available=true|false reason=<not_elevated|no_xperf|start_failed>` を 1 行で返す（exit 0。`preflight` と `-SelfTest` が呼ぶ＝**自己較正が実採取の可否を含む**）。
+- `-Start -Etl <path>`: `xperf -on PROC_THREAD+LOADER+PROFILE -stackwalk Profile -SetProfInt 1221 -BufferSize 1024 -MaxBuffers 512 -f <path>`（管理者権限が要る。無ければ exit 5＝`UNAVAILABLE`（計測失敗 4 とは区別）。呼び出し側 `rank-run` は段③を省いて続行し、順位表の `[3] 関数` を `UNAVAILABLE reason=not_elevated` とする）。
 - `-Stop -Etl <path> -Out <dump.txt> -PdbDir <target/release>`: `xperf -d <merged.etl>` → `_NT_SYMBOL_PATH="srv*<cache>*https://msdl.microsoft.com/download/symbols;<PdbDir>"` → `xperf -i <merged.etl> -symbols -a dumper -o <dump.txt>`。
-- `-SelfTest`: 同梱の小さな dump 断片（`fixtures-loop/rank/sample_ok/dump.txt`）を `perf-rank.py` に通し、`areka.exe!` を含むフレームが ≥1 であることを確かめる。**実採取後も同じ関門**: `perf-rank.py` が `areka.exe!` 解決フレーム 0 なら exit 4（計測失敗）。
+- `-SelfTest`: ⒜ 同梱の小さな dump 断片（`fixtures-loop/rank/sample_ok/dump.txt`）を `perf-rank.py` に通し、`areka.exe!` を含むフレームが ≥1 であることを確かめる ⒝ `-Probe` で実採取の可否を確かめる（不可は赤ではなく `UNAVAILABLE` の報告）。**実採取後も同じ関門**: 段③が利用可で走ったのに `perf-rank.py` が `areka.exe!` 解決フレーム 0 なら exit 4（計測失敗＝道具の不具合）。
 - 記号: ループの release ビルドは `CARGO_PROFILE_RELEASE_DEBUG=line-tables-only`（環境変数・`Cargo.toml` 非接触）で行う。README に「`lto=true`・`opt-level='z'` のインライン化でスタックが浅くなる」注記。
 - 代替（第一候補が環境で記号解決できない場合のみ）: `wpaexporter -i <etl> -profile tools/perf/wpa/cpu-sampled.wpaProfile -outputfolder <dir>`（`.wpaProfile` は版管理）。切替は TOML `[sampling] backend = "xperf-dumper" | "wpaexporter"`。
 
@@ -625,7 +630,7 @@ main_model_recommended = "fable"       # README に記す推奨（Opus 5 でも�
 - 出力 `rank.txt`（決定論・固定幅）:
   - `[1] プロセス`: 定常平均／p50／p95／最大（1 コア換算 %）・発話中の頂（`apply(ShowSurface)` の前後 10 秒に重なる採取点の最大）・SSP 参考値（3.05／4.64）を併記（合否には載せない）。
   - `[2] スレッド`: `perf(thread)` 行の最終スナップショットと 60 秒前との差から、役割別・スレッド別の CPU 秒と占有率（プロセス CPU に対する %）・上位 N。壁時計と CPU の別を見出しに明記。
-  - `[3] 関数`: dump の `SampledProfile`／`Stack` 行から、自己時間（最上位フレーム）と包含時間（スタックに含まれる）の上位 N を `module!function`（Rust legacy mangling は展開・ハッシュ除去）で、スレッド別の上位も併記。サンプル総数と `areka.exe!` 解決率。解決率 0 → exit 4。
+  - `[3] 関数`: 段③が `UNAVAILABLE` のときは見出し行に `UNAVAILABLE reason=<…>` とだけ書き（空欄を黙って出さない・台帳へも同じ語）、利用可なら dump の `SampledProfile`／`Stack` 行から、自己時間（最上位フレーム）と包含時間（スタックに含まれる）の上位 N を `module!function`（Rust legacy mangling は展開・ハッシュ除去）で、スレッド別の上位も併記。サンプル総数と `areka.exe!` 解決率。解決率 0 → exit 4。
   - `[4] 相`: `[tick] kind=window` 行を集計し、tick/秒・省略率（`skipped/(ticks+skipped)`）・心拍率・1 tick 平均壁時計・UI スレッド CPU/秒・13 本別の平均 µs と割合の上位 N。
 - 自己較正: `fixtures-loop/rank/<case>/`（合格側＝既知の順位・不合格側＝dump 未解決・tick 行なし）。
 
@@ -685,11 +690,12 @@ main_model_recommended = "fable"       # README に記す推奨（Opus 5 でも�
 - duration_min: 41
 - reason: …
 ```
-- サブコマンド: `state`（JSON）／`set-phase`／`append --from-json <file>`／`status`（STATUS 行 1 本）／`final`（FINAL 行）／`next-phase`（純関数・遷移表）／`goal-check`／`summary`（`results/summary.md`＝brief 旧数値との対比表）／`--selftest`。
+- サブコマンド: `state`（JSON）／`set-phase`／`append --from-json <file>`／`status`（STATUS 行 1 本）／`final`（FINAL 行・`run=` トークン込み）／`next-phase`（純関数・遷移表）／`goal-check`（必須キー・版一致・**トークン生成**）／`goal-text`（トークンを埋めた `/goal` 条件文を出力）／`summary`（`results/summary.md`＝brief 旧数値との対比表）／`--selftest`（往復・遷移表・**見本行が判定の正規表現に一致しないこと**）。
 - **STATUS 行の文法**（`/goal` 条件文と同じ定数）:
   `PERF-LOOP STATUS iter=<n> phase=<相> judge=<PASS|FAIL|INCONCLUSIVE|NA> idle_cpu=<x.xx> baseline=<x.xx> delta=<±x.xx> noise=<x.xx> verdict=<ADOPTED|NO_DIFF|WORSE|TESTS_RED|FOLLOWUP_FAIL|MEASURE_FAILED|NA> streak=<k>/<max> iters_left=<m> next=<相>`
-  `PERF-LOOP FINAL: GOAL_MET idle_cpu=<x.xx> judge=PASS iters=<n> commits=<k>`
-  `PERF-LOOP FINAL: STOPPED reason=<plateau|safety|measure_failed|iteration_cap> best_idle_cpu=<x.xx> top_remaining=<stage:item:share> iters=<n>`
+  `PERF-LOOP FINAL: GOAL_MET run=<token> idle_cpu=<x.xx> judge=PASS iters=<n> commits=<k>`
+  `PERF-LOOP FINAL: STOPPED run=<token> reason=<plateau|safety|measure_failed|iteration_cap> best_idle_cpu=<x.xx> top_remaining=<stage:item:share> iters=<n>`
+  （`<token>` は周 0 に生成した走行固有の 8 桁。文書中の見本は常に山括弧のまま書き、実出力と一致させない）
 - 自己較正: `fixtures-loop/ledger/`（追記→読取の往復・壊れた行の拒否・遷移表の全遷移）。
 
 #### C12 `judge-perf.py` 0.4.0
@@ -699,7 +705,7 @@ main_model_recommended = "fable"       # README に記す推奨（Opus 5 でも�
 | Intent | 判定式は不変のまま、catch-up の系統別・時刻突合と任意種の読取を足す |
 | Requirements | 2.2, 2.9, 2.11, 2.12, 5.1, 5.2, 5.3, 5.5, 5.8, 7.5 |
 
-- 集計モード §9: `target=dispatcher|kanade`（`parse_fields` で読む）と loop（文言）で 3 系統に分け、各発生の `t`・直前の表示成立点との差（秒）・直前 10 秒の表示成立点数（発話再生中の代理）・同時刻の `[tick]` 窓の `wall_us`／`skipped`（あれば）を 1 行ずつ表に出す。「フレーム駆動の負荷が起床を遅らせる」仮説は、catch-up 発生秒の `wall_us` 平均と全体平均の比を数値で記す（成立／不成立の語を機械が付ける）。
+- 集計モード §9: 3 系統とも `target=` フィールド（`dispatcher`／`kanade`／`loop_ticker`・`ticker.rs:203-206,223-226,305-308`）を `parse_fields` で読んで分け（文言による識別は不要）、各発生の `t`・直前の表示成立点との差（秒）・直前 10 秒の表示成立点数（発話再生中の代理）・同時刻の `[tick]` 窓の `wall_us`／`skipped`（あれば）を 1 行ずつ表に出す。「フレーム駆動の負荷が起床を遅らせる」仮説は、catch-up 発生秒の `wall_us` 平均と全体平均の比を数値で記す（成立／不成立の語を機械が付ける）。
 - `--emit-metrics`: `metric=steady_idle_cpu_mean_pct value=…` などの行を末尾に出す（C10 が読む）。
 - `[tick]`／`perf(thread)`／`perf(process)` は任意種（`J_REQUIRED_LOG_KINDS` 不変）。1 行内のフィールド名重複はテストで固定。
 - 較正値バナー: `SSP_REFERENCE_IDLE_PCT = 3.05`／`SSP_REFERENCE_TALK_PEAK_PCT = 4.64`（2026-08-15・参考値・合否に不使用）を注記つきで追加。`IDLE_CPU_MAX_RELEASE_PCT = 3.0` の注記に「2026-08-22 裁定＝CPU 絶対値・SSP の描画方式で正規化しない」を追記。
@@ -803,24 +809,24 @@ impl EcsWorld {
 - Preconditions: `mark` は任意スレッドから何度でも呼べる（冪等）。Postconditions: `take` 後に立った旗は次の `take` で読める。Invariants: `should_run` は `gate_enabled=false`／`frames_since_boot < WARMUP`／`bits != 0`／`deadline_due`／`frames_since_run >= HEARTBEAT` のいずれかで必ず `Run`。
 
 **生産者の結線（全て 1 行・依存方向は areka→wintf）**
-- wintf: `window_proc` の配送点でメッセージ種別→旗の写像表（`WM_WINDOWPOSCHANGED/CHANGING`・`WM_SIZE`・`WM_MOVE`・`WM_DPICHANGED`・`WM_DISPLAYCHANGE`・`WM_SETTINGCHANGE`・`WM_ACTIVATE*`・`WM_SHOWWINDOW`・`WM_NCDESTROY`→`WM_GEOMETRY`／ポインタ系→`POINTER`／未知→`FORCE`＝疑わしいときは回す）・`pointer/buffers.rs` 投入→`POINTER`・`command.rs::enqueue`→`WINDOW_CMD`・`zorder_pair_maintain`／`ReassertZOrder`→`ZORDER`・`drag` 状態が `Dragging` の tick 末→`DRAG`・`tick_dola_animators` で活性あり→`ANIM`・`GraphicsCore::is_valid()` 偽→`GRAPHICS`・`App::display_configuration_changed` 設定点→`WM_GEOMETRY`。
+- wintf: `window_proc` の配送点で純関数 `tick_wake::wake_bits_for_message(msg: u32) -> WakeBits`（既知メッセージの表・未知は `FORCE`）を呼ぶ。表の中身は決定論テストで固定する（`tick_wake_tests.rs`: 既知メッセージごとの期待ビット・`WM_DPICHANGED`→`WM_GEOMETRY`・未知→`FORCE`）。写像表（`WM_WINDOWPOSCHANGED/CHANGING`・`WM_SIZE`・`WM_MOVE`・`WM_DPICHANGED`・`WM_DISPLAYCHANGE`・`WM_SETTINGCHANGE`・`WM_ACTIVATE*`・`WM_SHOWWINDOW`・`WM_NCDESTROY`→`WM_GEOMETRY`／ポインタ系→`POINTER`／未知→`FORCE`＝疑わしいときは回す）・`pointer/buffers.rs` 投入→`POINTER`・`command.rs::enqueue`→`WINDOW_CMD`・`zorder_pair_maintain`／`ReassertZOrder`→`ZORDER`・`drag` 状態が `Dragging` の tick 末→`DRAG`・`tick_dola_animators` で活性あり→`ANIM`・`GraphicsCore::is_valid()` 偽→`GRAPHICS`・`App::display_configuration_changed` 設定点→`WM_GEOMETRY`。
 - areka: `PresentBridge::send`（`emo2_boot/adapter.rs:87-94`）・`MoveCueSink`・lifecycle 送信端→`PRESENT`。`run_text_phase`（`scale_text.rs:255`）で talk 進行中（epoch 確立かつ未完）→`REARM`。`run_balloon_visibility_phase` の待ち時間→`arm_deadline`。`hover_inject` 有効時→`REARM`。
 - 生産者一覧は `tick_gate_tests.rs` が `include_str!` で字面検査（各ファイルに `tick_wake::mark(` が在ること）。
 
 **Implementation Notes**
 - Integration: `tick_one_frame`（`tick_bridge.rs:187-210`）の分岐のみ。`try_tick_on_vsync`（旧経路・常に偽）は触らない。`FrameHarness` は `try_tick_world` を直接呼ばず自前で進めるので無関係。
-- Validation: ⑴ `should_run` 全組合せ（bits 2^10 × deadline 2 × heartbeat 境界 × warmup 境界 × enabled 2）⑵ headless `EcsWorld`: 省略 → `mark(PRESENT)` → 次 `decide_tick` が Run・`FrameCount` が省略中に進まない ⑶ 既存 `:657,:707` 緑・省略経路でも 13 本の順序（門が Run を返した tick の記録が `EXPECTED_ORDER`）⑷ 実走の追随チェック（C13）。
+- Validation: ⑴ `should_run` 全組合せ（bits 2^10 × deadline 2 × heartbeat 境界 × warmup 境界 × enabled 2）⑴' `wake_bits_for_message` の表（既知メッセージ全件＋未知 1 件＝要件 6.1 の DPI 分岐を字面でなく値で固定）⑵ headless `EcsWorld`: 省略 → `mark(PRESENT)` → 次 `decide_tick` が Run・`FrameCount` が省略中に進まない ⑶ 既存 `:657,:707` 緑・省略経路でも 13 本の順序（門が Run を返した tick の記録が `EXPECTED_ORDER`）⑷ 実走の追随チェック（C13）。
 - Risks: 旗の立て忘れ → 心拍・起動直後・未知メッセージは `FORCE`・字面検査。`Messages::update`／`RemovedComponents` は tick を挟まない限り消えない（研究 §7.3）。
 
 #### C17 実行器の見直し（候補）
 - 内容: Input／Update／PreLayout／Layout／PostLayout／Draw／FrameFinalize の 7 本を `SingleThreadedExecutor` へ（`world/mod.rs:108-112,138,159`）。構築側に `fn single_threaded(label) -> Schedule` を置いて 13 本を同じ形で挿入する。
-- 前提テストの改訂（削除しない）: `monitor_systems_transition_tests.rs:362-369`・`transition_diag_tests.rs:774-781` の字面検査を新しい構築形（`single_threaded(Update)`）へ。`frame_harness_tests.rs:397` は不変。
+- 前提テストの改訂（削除しない）: `monitor_systems_transition_tests.rs:367-371`・`transition_diag_tests.rs:778-782` の字面検査を新しい構築形（`single_threaded(Update)`）へ。`frame_harness_tests.rs:397` は不変。
 - 効果量は順位表（相別 UI CPU と関数別 `TaskPool` スレッドの占有）で判断。`propagate_global_arrangements` の並列伝播（`common/tree_system.rs`）は別経路で不変。
 
 #### C18 areka 側の毎フレーム処理の変化時のみ化（候補）
-- 文字層の提示（`actor.rs:744-805`）: 入力鍵（可視グリフ数・region・mode・font・wrap・hover・choices 署名・k）を保持し、前回と同じなら `layout`〜`render` を省略（`Present` は既に変化時のみ）。担当 spec は無い（要件 8.5 の確認を SELECT で行う）。
+- 文字層の提示（`present_actor`＝`actor.rs:640` 起点・レイアウト〜描画は `:744-805`）: 入力鍵（可視グリフ数・region・mode・font・wrap・hover・choices 署名・k）を保持し、前回と同じなら `layout`〜`render` を省略（`Present` は既に変化時のみ）。担当 spec は無い（要件 8.5 の確認を SELECT で行う）。
 - `visual_hierarchy_sync_system`（`visual_sync.rs:25-70`）: `Added<VisualGraphics>`／`Changed<ChildOf>` のフィルタで母集合を絞る（P47 の再ペアレント未検出の現行挙動は変えない＝同じ検出条件を保つ）。
-- `clear_transient_pointer_state`（`pointer/systems.rs:17-31`）: 既定値のときは書かない（`Changed` を汚さない）。
+- `clear_transient_pointer_state`（`pointer/systems.rs:17-33`）: 既定値のときは書かない（`Changed` を汚さない）。
 
 #### C19 tick 外の周期（候補）
 - カーソル監視 `POLL_INTERVAL=12ms`（`monitor.rs:34`）: ゴースト窓の外接矩形＋余白の外では 50ms・内では 12ms の二段（要件 4.2＝内側の周期は現行と同じ）。
@@ -872,7 +878,8 @@ impl EcsWorld {
 - 引数・前提（exit 3）: 文言で不足を列挙（既存ランナー踏襲）。
 - 実走失敗（exit 1）: 起動不能・早期終了・応答なし → 1 回だけ再試行し、なお失敗なら `MEASURE_FAILED`。
 - 静寂でない（exit 2）: `retry_max` 回まで待って再確認、超えたら `MEASURE_FAILED`（開発者に問わない）。
-- 計測失敗（exit 4）: 空採取・記号解決ゼロ・`[tick]` 行ゼロ（点灯したのに）・判定不能。
+- 計測失敗（exit 4）: 空採取・記号解決ゼロ（段③が利用可で走ったのに）・`[tick]` 行ゼロ（点灯したのに）・判定不能。
+- 能力不足（exit 5・`UNAVAILABLE`）: 昇格なし・`xperf.exe` 無し・PDB 無し。段③だけを省いて段①②④で続行し、台帳と順位表に理由を明記（黙って続けない＝要件 2.11 は満たす）。README §13 に「昇格した PowerShell から起動すると段③が使える」と書く。
 
 ### Monitoring
 - 台帳の各周に `reason` と所要。STATUS 行に `verdict`。`results/` に判定出力。エージェントの `[agent-model]` 行を台帳へ。
@@ -881,7 +888,7 @@ impl EcsWorld {
 
 ### Unit Tests（決定論・実機なし）
 - `tick_gate_tests.rs`: `should_run` の全組合せ（入力の列挙は C16）・各 `RunReason` の優先順位・`Skip` は旗ゼロかつ期限なしかつ心拍未満かつ起動直後でないときのみ。
-- `tick_wake_tests.rs`: `mark`／`take` の原子性（別スレッドからの `mark` が次の `take` で見える）・`arm_deadline` の最小保持。
+- `tick_wake_tests.rs`: `mark`／`take` の原子性（別スレッドからの `mark` が次の `take` で見える）・`arm_deadline` の最小保持・`wake_bits_for_message` の表（既知メッセージ全件の期待ビット・`WM_DPICHANGED`→`WM_GEOMETRY`・未知→`FORCE`）。
 - `tick_diag_tests.rs`: 行のフィールド名に重複なし・13 本の名前と順序・窓の切れ目・OFF 時に `Instant::now` を呼ばない構造検査（`include_str!` で `is_enabled()` が `Instant::now()` より前に在る）。
 - `command_threadlocal_tests.rs`: スレッド隔離。既存 `command_*_tests.rs`・`window_pos_*_tests.rs` 全緑。
 - `perf_thread_report_tests.rs`: 役割写像の全分岐・行の語彙・スナップショット差分の計算。
