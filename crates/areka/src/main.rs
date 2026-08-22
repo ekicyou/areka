@@ -73,6 +73,11 @@ mod input_events;
 /// 役割名を宣言して wintf のスレッド名簿へ登録する。
 mod thread_roles;
 
+/// スレッド別・プロセス全体の CPU 報告器（areka-P0-draw-load-parity task 2.4）。
+/// target `areka::perf` が点いているときだけ報告スレッドを起こし、名簿を舐めた
+/// `perf(thread)` 行と `perf(process)` 行を周期＋終了直前に出す。消灯時は費用 0。
+mod perf_thread_report;
+
 /// 遅延応答と push 経路の end-to-end 結合テスト。
 /// モック脳が `SHIORI_S_PENDING`＋token を返し、後で保持 host へ safe `complete`/`raise` を発火する
 /// 一連の流れを `ShioriSession` 越しに 1 シナリオで通す（sink/session の単体テストと重複させない）。
@@ -139,6 +144,11 @@ fn main() -> Result<()> {
     // 自分の役割名を宣言して wintf のスレッド名簿へ載る。**すべての結線より前**に置くのは、
     // これより前に起きたスレッドが名簿から漏れるため。登録以外の挙動は何も変わらない。
     thread_roles::install();
+
+    // スレッド別 CPU の報告器（draw-load-parity 要件 2.3/3.8・task 2.4）。点灯の判定は
+    // ここで 1 度だけ行い、`RUST_LOG` に `areka::perf=debug` が無ければ報告スレッドを
+    // 起こさない（既定運転の費用 0）。取っ手は終了直前まで持ち回り、最後の 1 枚を出す。
+    let perf_report = perf_thread_report::start();
 
     // 構成入力（ゴースト／バルーンのルートパス）の解決とログ出力（R3.1/3.3/3.4・マウントしない）。
     let args: Vec<String> = std::env::args().collect();
@@ -348,6 +358,13 @@ fn main() -> Result<()> {
                 windows::Win32::Foundation::E_FAIL,
             ));
         }
+    }
+
+    // ④ スレッド別 CPU の最後のスナップショット（task 2.4）。終了直前に 1 枚出してから
+    // 報告スレッドを畳む。ここへ来ない早期 `return Err` の経路では最後の 1 枚が出ない
+    // （その場合は周期のスナップショットまでが記録として残る）。消灯時は `None` で何もしない。
+    if let Some(handle) = perf_report {
+        handle.stop_and_report_final();
     }
 
     Ok(())

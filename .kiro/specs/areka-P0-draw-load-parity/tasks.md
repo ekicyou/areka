@@ -39,7 +39,7 @@
   - _Requirements: 2.3_
   - _Depends: 2.1_
 
-- [ ] 2.4 スレッド別・プロセス CPU の報告器（perf_thread_report）を areka に新設
+- [x] 2.4 スレッド別・プロセス CPU の報告器（perf_thread_report）を areka に新設
   - target `areka::perf` を起動時に 1 度評価し、OFF なら報告スレッドを起こさない（費用 0）。ON なら 60 秒ごと（`AREKA_PERF_THREAD_REPORT_SEC` で変更可）と終了直前にスナップショットを出す
   - 2.1 のラッパで名簿を舐めて GetThreadTimes、プロセス全体は GetProcessTimes。名簿に無い残り（タスクプール等）はプロセス CPU から名簿合計を引いた差として `unregistered_rest` の 1 行で出す（黙らない）
   - 行の語彙: perf(thread) は 1 スレッド 1 行・perf(process) は 1 行・1 行内のフィールド名重複なし・既存の perf 行と遷移観測行は不変
@@ -270,3 +270,4 @@
 - (2.1/2.3) 名簿は登録解除を持たず、終了済みスレッドも最終 CPU 値つきで残る（同一 TID の再登録は置き換え）。2.4 の報告行は「終了済みスレッドも 1 行出る」前提で設計すること。
 - (2.2) `ui_cpu_us` は `GetThreadTimes` 由来で 15,625µs 量子の整数倍（1 秒窓で ±1 量子≒1.6 ポイントの分解能）。順位表は壁時計を主に読み `ui_cpu_us` は目安として扱う。実走の `[tick]` 行には既存の span 文脈 `actor{actor=emo-text}:` が前置される（フィールド名とは重ならない）。
 - (全般) `.claude/skills/*/SKILL.md` は CRLF。素の書き換えは全行差分になるので行末を保つこと。areka bin の in-crate テストは `cargo test -p areka --bin areka` で走る。
+- (2.4) 初回の実走（debug・15 秒・周期 5 秒）で `unregistered_rest`（名簿外＝bevy タスクプール等）がプロセス CPU の 24〜38% を占め、名簿内は `ui` が約 74%。名簿方式（段②）だけではタスクプールの内訳は出ないので、順位表の段③（WPT サンプリング）が要る。`perf(thread)` の値は累積（読み手 `perf-rank.py` が差分を取る・Rust 側 `delta` が意味論の権威）。
