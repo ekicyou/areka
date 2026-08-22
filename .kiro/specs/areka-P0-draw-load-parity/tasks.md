@@ -109,7 +109,7 @@
   - _Requirements: 1.5, 2.8_
   - _Boundary: check-quiet_
 
-- [ ] 5.2 採取ランナー 1.1.0（追加のみ・既存の呼び方は不変）
+- [x] 5.2 採取ランナー 1.1.0（追加のみ・既存の呼び方は不変）
   - `-AutoQuiet`（`-ConfirmQuiet` と排他・5.1 を起動前に呼び `quiet-before.txt` を出力先へ・静かでなければ exit 2）・`-BinDir`（実行体と helper の所在を上書き・run-meta に所在と実行体の SHA-256）・`-RustLogExtra`（既定の RUST_LOG の末尾へ連結・run-meta は連結後の値）
   - 既存の引数・終了コード・出力ファイル名・CSV ヘッダ・RUST_LOG の既定値・SMOKE ゲートの文言は不変。版は 1.1.0
   - 観測可能な完了状態: 既存の呼び方が同じ 3 ファイルを出し、新引数つきで run-meta に quiet_mode／bin_dir／env_RUST_LOG が記録される
@@ -280,3 +280,4 @@
 - (5.4) `perf-ledger.py` は 934 行——**5.5 着手時に分割必須**（自己較正の節（約 200 行）を `perf_ledger_selftest.py` 等へ切り出し、`--selftest` 入口は本体に残す）。状態ブロックは設計の 8 鍵＋`run`・`capabilities`。小数は 2 桁丸め（STATUS 行の `<x.xx>` と同精度＝`compare.json` の 3 桁以上は台帳で落ちる）。`steps.txt` の引数は空白区切りのみ。**穴 1 件を 5.5 で塞ぐ**: 状態の `iteration`／`streak_no_gain`／`best_idle_cpu_pct`／`baseline_idle_cpu_pct` が `-`（`init` が書く正規の空値）の台帳を読む経路で `int()`/`float()` が未捕捉例外（exit 1・生トレース）になり得る（CLI からは到達不能だが 5.5 の status/final が同型を踏む）→ `bad_input`（exit 3）で包むこと。
 - (5.3) 本セッションは非昇格のため実採取は未実施＝`fixtures-loop/rank/sample_ok/dump.txt` は xperf dumper 書式（`perf_nt_c.dll` の書式文字列で裏取り・末尾列は推定）の**手書き断片**で、初回の昇格採取（7.2 preflight／9.1）で差し替え、同時に `invoke-cpu-sample.ps1` の `FIXTURE_EXPECT_*` 6 定数（16/8/16/22/2・TID 18332,18420,18512）を更新すること。fixture は `ThreadStartImage!Function` 列にも `areka.exe!` を 16 個仕込んであり、素朴な文字列数えだと 32 になる＝6.2 の `perf-rank.py` は列名行から `Image!Function` 列を引き、同じ 16/8/16/22/2 を再現すること。`-Stop` は非昇格だと exit 1（5 でない）・`no_pdb` の検出は preflight（7.2）の担当。
 - (7.4) `.claude/agents/perf-*.md` はセッション開始時に読み込まれる登録簿に載るため、**作成したセッション内からは Agent で呼べない**（本セッションで `perf-measure` を呼ぶと "Agent type not found"）。「Fable から呼ぶと `[agent-model]` が opus 系で出る」の実証は次セッション（9.1 統合確認）で行うこと。定義は頭書の規則（出典指定・`unknown` 退避・前置き禁止）を満たしている。
+- (5.2) `invoke-perf-run.ps1 -AutoQuiet` で確かめ直しを使い切った失敗時は既存の `Stop-Run` 作法で出力先が `<leaf>-FAILED` へ退避され、`quiet-before.txt` はその中に残る（run-meta は起動前失敗なので無い）。7.3 の `perf-loop.ps1` が静寂の根拠を読むときは退避先も見ること。`retry_max` は「最初の 1 回の後に確かめ直す回数」（合計 retry_max+1）。
