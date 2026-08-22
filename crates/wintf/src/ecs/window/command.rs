@@ -16,11 +16,22 @@
 //! `GetWindowRect` の読み戻しも `Instant` の読み取りも一切行わない——flush 区間の時刻基準
 //! （`begin_flush`）を開くことすら行わない。ここは毎 tick 走る経路であり、定常状態の
 //! アロケーション 0（要件 10.4）を壊さないための分岐である。
+//!
+//! # コードが強制していない前提: 窓手続き側は Z 指令を積まない
+//!
+//! `WM_WINDOWPOSCHANGED` のハンドラは、その場で再び一括 flush を呼ぶ（`window_proc/window_pos.rs:290`）。
+//! この再入 flush が Z 指令の適用順と噛み合わないという事故が起きていないのは、**窓手続き側の
+//! 経路が Z 指令を積まない**からにすぎない。Z 指令は合流の対象外であり同一窓の仕切りとして
+//! 働くので、再入した flush が Z 指令を含むキューを掴めば、順序の意味が外側の区間と分かれる。
+//!
+//! **この前提をコードは一切強制していない**（型でも表明でもテストでも縛っていない）。よって
+//! 一括 flush の**駆動（誰がいつ呼ぶか）・順序（どの並びで適用するか）に手を入れるときは、
+//! この前提が依然として成立しているかを確かめる義務がある**（要件 3.5）。確かめずに駆動を
+//! 変えると、Z 順の破れは実機でしか出ない形で静かに入り込む。
 
 use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::prelude::*;
-use std::cell::RefCell;
-use std::sync::atomic::{AtomicI32, Ordering};
+use std::cell::{Cell, RefCell};
 use std::time::Instant;
 use tracing::{debug, trace, warn};
 use windows::Win32::Foundation::*;
@@ -32,38 +43,55 @@ use super::transition_diag::{
 };
 
 // ============================================================================
-// SELF_INITIATED_DEPTH - SetWindowPos ネストカウンタ (AtomicI32)
+// SELF_INITIATED_DEPTH - SetWindowPos ネストカウンタ (スレッド局所)
 // ============================================================================
 
-/// `guarded_set_window_pos` のネスト深度カウンタ。
-///
-/// 0 より大きい場合、自アプリ由来の `SetWindowPos` 呼び出し中であることを示す。
-/// `SetWindowPos` → `WM_WINDOWPOSCHANGED` は同期的に発火するため、
-/// Relaxed ordering で十分。
-///
-/// ## ライフサイクル
-/// 1. `guarded_set_window_pos()` 呼び出し → カウンタ +1
-/// 2. `SetWindowPos` Win32 API 呼び出し（同期的に `WM_WINDOWPOSCHANGED` が発火）
-/// 3. ハンドラ内で `is_self_initiated()` を参照 → カウンタ > 0 なら echo
-/// 4. `SetWindowPosGuard` の Drop でカウンタ -1（RAII 保証）
-static SELF_INITIATED_DEPTH: AtomicI32 = AtomicI32::new(0);
+thread_local! {
+    /// `guarded_set_window_pos` のネスト深度カウンタ（**スレッドごとに独立**）。
+    ///
+    /// 0 より大きい場合、そのスレッドが自アプリ由来の `SetWindowPos` 呼び出しの内側に
+    /// いることを示す。
+    ///
+    /// ## なぜスレッド局所でよいのか（意味論は不変・設計 C20）
+    ///
+    /// このカウンタが答える問いは「**いま自分が**書いた結果の通知を受けているか」である。
+    /// `SetWindowPos` も `EndDeferWindowPos` も、`WM_WINDOWPOSCHANGING`／
+    /// `WM_WINDOWPOSCHANGED` を**呼び出したスレッドの上で同期送達**する——持ち上げ・送達・
+    /// 判定・解放がすべて 1 本のスレッドの内側で閉じる。つまり「自発の内側か」は元より
+    /// スレッドごとの性質であり、プロセス全体で 1 個の値を共有する理由が無かった。
+    /// 共有していた間は、別スレッドの書込が持ち上げた値を無関係な読み手が拾う経路が
+    /// 開いていただけである（テスト間の状態汚染の出所＝要件 6.6）。
+    ///
+    /// ## ライフサイクル
+    /// 1. `guarded_set_window_pos()` 呼び出し → 当該スレッドのカウンタ +1
+    /// 2. `SetWindowPos` Win32 API 呼び出し（同期的に `WM_WINDOWPOSCHANGED` が発火）
+    /// 3. ハンドラ内で `is_self_initiated()` を参照 → カウンタ > 0 なら echo
+    /// 4. `SetWindowPosGuard` の Drop でカウンタ -1（RAII 保証）
+    static SELF_INITIATED_DEPTH: Cell<i32> = const { Cell::new(0) };
+}
 
-/// テスト専用: 上の**プロセス共有**カウンタを触る／読むテストを直列化する錠。
+/// テスト専用: カウンタを触る／読むテストを直列化する錠。**退役候補**。
 ///
-/// # なぜ要るのか（要件 7.7・7.1）
+/// # スレッド局所化後は不要である（要件 6.6・8.2）
 ///
-/// [`SELF_INITIATED_DEPTH`] はスレッド局所ではなく**プロセス共有の `AtomicI32`** である。
-/// `cargo test` はテストを並列に走らせるため、あるテストの [`guarded_set_window_pos`] が
-/// 持ち上げた値を、別スレッドで走る無関係なテストの [`is_self_initiated`]／観測レコードの
-/// `in_swp` 判定が読んでしまう。是正前の実測では `cargo test -p wintf --lib` を 60 周して
-/// **11 周が赤**になり、`test_flush_empty_queue_is_noop` の `assert!(!is_self_initiated())`
-/// と `msg` レコードの `in_swp=false` 検査がいずれも落ちた。
+/// この錠は [`SELF_INITIATED_DEPTH`] が**プロセス共有の `AtomicI32`** だった頃の産物である。
+/// 当時は、あるテストの [`guarded_set_window_pos`] が持ち上げた値を、並列に走る無関係な
+/// テストの [`is_self_initiated`]／観測レコードの `in_swp` 判定が読んでしまっていた
+/// （実測では `cargo test -p wintf --lib` を 60 周して **11 周が赤**になり、
+/// `test_flush_empty_queue_is_noop` の `assert!(!is_self_initiated())` と `msg` レコードの
+/// `in_swp=false` 検査がいずれも落ちた）。
 ///
-/// カウンタ自体の意味論（プロセス共有・`Relaxed`）は本仕様の変更対象ではない
-/// （観測の増設だけが本仕様の取り分＝Requirement 3.4）。よって**テスト側を直列化**して
-/// 決定論を取り戻す。
+/// カウンタは**スレッド局所になった**（`areka-P0-draw-load-parity` task 4）。持ち上げも
+/// 読み取りも同じスレッドの内側で閉じるので、テストを直列化する必要はもう無い——錠なしで
+/// 並列に走らせても緑であることは `command_threadlocal_tests.rs` が固定している。
 ///
-/// # 使い方
+/// # それでも今は残す
+///
+/// 呼出が **21 箇所／5 ファイル**あり、撤去は本仕様の取り分（`command.rs` 1 ファイル）を
+/// 越えてテストハーネス側へ及ぶ。撤去の可否と実施は `areka-P0-test-cage-determinism` が
+/// rebase で受ける。それまでは**取っても無害**（ただの直列化）なので現状のまま残す。
+///
+/// # 使い方（残っている間）
 ///
 /// ⑴ カウンタを**持ち上げる**側（[`guarded_set_window_pos`]／[`flush_window_pos_commands`]
 /// を呼ぶテスト）と ⑵ カウンタを**読む**側（[`is_self_initiated`]／`in_swp` を検査する
@@ -83,30 +111,37 @@ pub(crate) fn lock_self_initiated_for_test() -> std::sync::MutexGuard<'static, (
 /// `WM_WINDOWPOSCHANGED` ハンドラ内で echo 判定に使用する。
 /// `true` の場合、自アプリの `guarded_set_window_pos()` 経由の呼び出しであり、
 /// `apply_window_pos_changes` での再送信は不要。
+///
+/// 見るのは**このスレッドの**深度だけである（同期送達なので、判定はガードを持ち上げた
+/// スレッドの上でしか起きない）。
 pub fn is_self_initiated() -> bool {
-    SELF_INITIATED_DEPTH.load(Ordering::Relaxed) > 0
+    SELF_INITIATED_DEPTH.with(|depth| depth.get()) > 0
 }
 
-/// RAII ガード: スコープ終了時にネストカウンタをデクリメントする。
+/// RAII ガード: スコープ終了時に**そのスレッドの**ネストカウンタをデクリメントする。
 ///
 /// `guarded_set_window_pos()` 内で使用され、正常終了・`?` early return・
 /// パニック時のいずれでもカウンタが確実に復元されることを保証する。
+///
+/// 持ち上げと解放は必ず同一スレッド上で対になる（ガードは `Send` でないスコープ値として
+/// 使われ、`SetWindowPos`／`EndDeferWindowPos` の同期送達を挟むだけである）。
 struct SetWindowPosGuard;
 
 impl SetWindowPosGuard {
     fn new() -> Self {
-        SELF_INITIATED_DEPTH.fetch_add(1, Ordering::Relaxed);
+        SELF_INITIATED_DEPTH.with(|depth| depth.set(depth.get() + 1));
         Self
     }
 }
 
 impl Drop for SetWindowPosGuard {
     fn drop(&mut self) {
-        let prev = SELF_INITIATED_DEPTH.fetch_sub(1, Ordering::Relaxed);
-        trace!(
-            depth = prev - 1,
-            "SELF_INITIATED_DEPTH decremented by guard"
-        );
+        let depth = SELF_INITIATED_DEPTH.with(|cell| {
+            let next = cell.get() - 1;
+            cell.set(next);
+            next
+        });
+        trace!(depth, "SELF_INITIATED_DEPTH decremented by guard");
     }
 }
 
@@ -880,6 +915,10 @@ mod command_coalesce_tests;
 mod command_batch_tests;
 
 #[cfg(test)]
+#[path = "command_threadlocal_tests.rs"]
+mod command_threadlocal_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -915,11 +954,10 @@ mod tests {
     fn test_is_self_initiated_false_at_rest() {
         // guarded_set_window_pos スコープ外（ネストカウンタ 0）では false
         //
-        // 注: SELF_INITIATED_DEPTH は**プロセス共有**の AtomicI32 である。旧注記は
-        // 「テストスレッドで guarded_set_window_pos を呼ばない限り 0 のまま」としていたが、
-        // これは誤りだった——カウンタはスレッドごとではないので、並列に走る**別テスト**の
-        // 書込経路が持ち上げた値がそのまま見える（実測: 是正前 60 周中 11 周が赤）。
-        // ゆえに読む側も `lock_self_initiated_for_test` を取って直列化する（要件 7.7）。
+        // 注: SELF_INITIATED_DEPTH は**スレッド局所**になった（draw-load-parity task 4）ので、
+        // このテストスレッドで guarded_set_window_pos を呼ばない限り 0 のままである。錠は
+        // もう要らないが、退役は cage が rebase で受けるまで保留なのでそのまま取っておく
+        // （取っても無害）。スレッド局所であることの本体は `command_threadlocal_tests.rs`。
         let _serialized = lock_self_initiated_for_test();
         assert!(!is_self_initiated());
     }
@@ -930,8 +968,8 @@ mod tests {
         // （このテスト内では enqueue していないため WINDOW_POS_COMMANDS は空。
         //  thread_local かつ同一テストスレッドのため他テストの enqueue 残留はない）
         //
-        // 末尾の `is_self_initiated()` はプロセス共有カウンタを読むため直列化が要る
-        // （`lock_self_initiated_for_test` の doc）。
+        // 末尾の `is_self_initiated()` はスレッド局所カウンタを読むので直列化は要らない。
+        // 錠は退役待ちのため残置（`lock_self_initiated_for_test` の doc）。
         let _serialized = lock_self_initiated_for_test();
         SetWindowPosCommand::flush();
         // 便利関数経由でも同様に no-op

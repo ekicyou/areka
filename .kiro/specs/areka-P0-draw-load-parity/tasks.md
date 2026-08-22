@@ -93,7 +93,7 @@
   - _Boundary: tick_wake producers (areka)_
   - _Depends: 3.4_
 
-- [ ] 4. command.rs の所有: SELF_INITIATED_DEPTH をスレッド局所へ（3.4 と同じファイルのため並列不可・3.4 の後）
+- [x] 4. command.rs の所有: SELF_INITIATED_DEPTH をスレッド局所へ（3.4 と同じファイルのため並列不可・3.4 の後）
   - プロセス共有の整数 → スレッド局所の整数。読み書き 3 箇所（判定・ガードの生成・解放）のみ変更。錠 lock_self_initiated_for_test は残し、doc を「スレッド局所化後は不要＝退役候補（test-cage-determinism が受ける・呼出 21 箇所／5 ファイル）」へ
   - module doc に「ウィンドウプロシージャ側が Z 指令を積まない」という現状の前提（コードは強制していない）と、flush の駆動・順序を変えるときはこの前提の成立を確かめる義務を登記
   - 決定論テスト（兄弟ファイル）: 別スレッドでガードを持ち上げている間、主スレッドの判定が偽（錠なしで並列に走らせても緑）
@@ -275,3 +275,4 @@
 - (3.3) 共有の起床旗に触る／`decide_tick` に到達するテストは、`ecs::world::TICK_WAKE_TEST_LOCK`（唯一の錠・`world/mod.rs`）を毒化耐性つきで取ること。自前の錠を作ると直列化が成立しない（3.1 と 3.3 で錠が 2 本に分裂した実例）。`Skip` を主張するテストは注入経路 `decide_tick_with` を使う。心拍は「省略 30 回→31 回目が Run(Heartbeat)」（実効約 3.87 回/秒）。門 ON・生産者未結線の実走で UI スレッド CPU は 1 秒窓あたり約 45 万µs→約 4 万µs（債務＝3.4/3.5 の結線後に再確認）。`world/mod.rs` は 929 行で余白が小さい——以後ここへ足す場合は doc ブロックを `tick_gate.rs` 側へ寄せるか分割を検討。
 - (3.4) 本番経路（`enqueue`／`dispatch_window_message`／`apply_zorder_pair_maintenance`／pointer 投入）が旗を立てるようになったので、**共有の旗の上で「立っていないはず」を主張するテストは書けない**（錠は他の検査からしか守らない）。省略側の主張は `tick_one_frame_with`／`decide_tick_with` の注入口で行う。ZORDER は `apply_zorder_pair_maintenance` の巡の頭で「要求が残っていれば立てる」形（確立系は `areka/src/placement/spawn.rs:642` の chain で維持系の直前）。`tick_dola_animators` は本番未登録で ANIM は当面立たない。本セッションでは `SetCursorPos` が拒否される（headless 条件）ため実カーソル注入は不可＝ポインタ経路は `PostMessage(WM_MOUSEMOVE)` で検証した。ドラッグの実走確認は 6.4 へ。
 - (3.5) 「talk 進行中」の判定は時刻起点ではなく**未リビールのグリフの有無**（`reveal_pending`）——起点は一度立つと消えないので、設計 C16 の字面どおり「起点確立」で REARM すると放置時に省略しない。文字 cue ごとの起床は `BalloonLifecycleSink::send`（占有終端の伸長＝cue 到着ごと）の PRESENT が担うため、`sinks` の順序は clocked_text_sink → lifecycle_sink を保つこと（`emo2_boot/mod.rs` に登記）。旗は `tx.send` の**後**に立てる。45 秒実走: 定常 UI スレッド CPU ON 69,079 対 OFF 305,921 µs/秒（約 4.4 分の 1）・判定式⑴ p95 ON 808ms 対 OFF 810ms・放置時省略 116〜118 回/秒。候補メモ: 期限超過かつ抑止中（ドラッグ／滞在／選択肢）は毎フレーム REARM＝省略しない（安全側・解除はポインタ駆動なので `None` でも足りる可能性＝周回で検討）。
+- (4) `SELF_INITIATED_DEPTH` の着地形＝`thread_local! Cell<i32>`（`command.rs`）。錠 `lock_self_initiated_for_test` は残置（実呼出 21 箇所／5 ファイル＝command.rs 2・command_batch_tests 5・command_transition_tests 4・window_pos_tests 5・window_pos_transition_tests 5）で退役候補。兄弟テスト 4 ファイルの module doc（`command_batch_tests.rs:25`・`command_transition_tests.rs:28`・`window_pos_tests.rs:41`・`window_pos_transition_tests.rs:21`）は「プロセス共有」のまま陳腐化＝錠の退役と同じ塊で cage へ申し送る（8.2）。`frame_transition_atomicity_tests` の実本数は 3（設計の 4 は doc 内の `#[test]` 字面を数えた誤り）＝既存群は計 57 本。
