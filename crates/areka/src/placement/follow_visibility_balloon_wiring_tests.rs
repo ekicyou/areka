@@ -119,7 +119,7 @@ fn balloon_follow_trigger_table_mirrors_the_char_window_table() {
         .into_iter()
         .filter(|r| BalloonFollowTrigger::Placement(*r).applies_visibility_guard())
         .count();
-    assert_eq!(fired, 4, "発火する引き金が 4 種でない（表が潰れている）");
+    assert_eq!(fired, 6, "発火する引き金が 6 種でない（表が潰れている）");
 }
 
 /// **Req 3.4 の本体**: 非ドラッグの配置系 4 経路が引き金のとき、offset 恒等式が出した

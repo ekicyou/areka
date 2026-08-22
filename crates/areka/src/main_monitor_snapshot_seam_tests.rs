@@ -3,7 +3,7 @@ use placement::diag::{
     MONITOR_RECORD_TAG, MONITOR_SNAPSHOT_TAG, MonitorRecord, monitor_record_line,
     monitor_snapshot_header_line,
 };
-use placement::follow::MonitorSnapshot;
+use placement::follow::MonitorSources;
 use placement::test_support::capture_logs;
 use windows::Win32::Foundation::RECT;
 use wintf::ecs::window::monitor::Monitor;
@@ -129,15 +129,40 @@ fn boot_snapshot_tag_differs_from_the_prepare_call_site_tag() {
     );
 }
 
-/// シームは観測を足すだけで、`MonitorSnapshot` の中身（placement の全判断が読む権威）を
+/// シームは観測を足すだけで、権威 Resource の中身（placement の全判断が読む値）を
 /// 一切変えない（D2: 観測増設は挙動変更に数えない）。
+///
+/// 起動時が作るのは作業領域源と**モニタ別拡大率表**の 2 源であり、実行時の同期段
+/// （`emo2_boot::frame::work_area_sync`）と**同一の構築関数**を通る（atom task 5.1・
+/// 要件 5.1）——起動時だけが別の作り方をすると、同期が入った後も起動時の値だけが違う
+/// 形になり得る。
 #[test]
 fn boot_snapshot_returns_the_same_authority_resource_as_before() {
     let monitors = synthetic_monitors();
     assert_eq!(
         boot_monitor_snapshot(&monitors),
-        MonitorSnapshot::from_monitors(&monitors),
+        MonitorSources::from_monitors(&monitors),
         "観測増設が権威 Resource の中身を変えている"
+    );
+}
+
+/// 起動時に挿す 2 源は**同じモニタ列**から作られ、台数も並びも一致する（片方だけ古い運転を
+/// 作らない・atom C6）。
+#[test]
+fn boot_snapshot_builds_both_sources_from_the_same_monitor_list() {
+    let monitors = synthetic_monitors();
+    let sources = boot_monitor_snapshot(&monitors);
+    assert_eq!(sources.len(), monitors.len(), "台数が列挙と食い違っている");
+    assert_eq!(
+        sources.snapshot.work_areas.len(),
+        sources.dpi_table.entries.len(),
+        "2 源の台数が食い違っている（同じ列から作られていない）"
+    );
+    let dpis: Vec<u32> = sources.dpi_table.entries.iter().map(|e| e.dpi).collect();
+    assert_eq!(
+        dpis,
+        monitors.iter().map(|m| m.dpi).collect::<Vec<u32>>(),
+        "モニタ別拡大率表が列挙順の拡大率を忠実転写していない"
     );
 }
 
@@ -145,8 +170,8 @@ fn boot_snapshot_returns_the_same_authority_resource_as_before() {
 /// （レコード不在では「出力が無効だった」と区別できない）。
 #[test]
 fn boot_snapshot_with_no_monitors_still_reports_count_zero() {
-    let (snapshot, events) = capture_logs(|| boot_monitor_snapshot(&[]));
-    assert!(snapshot.work_areas.is_empty());
+    let (sources, events) = capture_logs(|| boot_monitor_snapshot(&[]));
+    assert!(sources.is_empty());
     assert_eq!(
         diag_lines(&events),
         vec!["[diag.monitor_snapshot] context=monitor_snapshot count=0"]

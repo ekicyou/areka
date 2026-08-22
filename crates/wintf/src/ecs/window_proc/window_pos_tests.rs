@@ -37,6 +37,11 @@ fn dpichanged_message(new_dpi: u16, suggested: &RECT) -> WindowMessage {
 /// `hwnd` は null ゆえ `SetWindowPos` は失敗するが、観測点はいずれも呼び出し前後に
 /// 置かれており本檻の対象（水準とフィールド）には影響しない。
 fn dispatch_dpichanged(new_dpi: u16, suggested: RECT) -> Entity {
+    // 政策未宣言の窓では `guarded_set_window_pos` が走り、**プロセス共有**の
+    // `SELF_INITIATED_DEPTH` を一時的に持ち上げる。並列に走る他テストの
+    // `is_self_initiated()`／`in_swp` 検査が偽の失敗を起こさないよう、配送の区間を
+    // 直列化する（`crate::ecs::window::lock_self_initiated_for_test` の doc・要件 7.7）。
+    let _serialized = crate::ecs::window::lock_self_initiated_for_test();
     let world = Rc::new(RefCell::new(EcsWorld::new()));
     let entity = world
         .borrow_mut()
@@ -272,6 +277,8 @@ fn dispatch_dpichanged_logged(
     suggested: RECT,
     policy: Option<DpiSuggestedRectPolicy>,
 ) -> String {
+    // 書込経路を通り得るので直列化する（`dispatch_dpichanged` と同じ理由）。
+    let _serialized = crate::ecs::window::lock_self_initiated_for_test();
     let world = Rc::new(RefCell::new(EcsWorld::new()));
     let entity = {
         let mut w = world.borrow_mut();
@@ -304,6 +311,8 @@ fn dispatch_dpichanged_observed(
     suggested: RECT,
     policy: Option<DpiSuggestedRectPolicy>,
 ) -> DpiChangedOutcome {
+    // 書込経路を通り得るので直列化する（`dispatch_dpichanged` と同じ理由）。
+    let _serialized = crate::ecs::window::lock_self_initiated_for_test();
     let world = Rc::new(RefCell::new(EcsWorld::new()));
     let entity = {
         let mut w = world.borrow_mut();
@@ -603,9 +612,15 @@ fn s1_decision_line_reports_unreachable_when_policy_cannot_be_read() {
         e
     };
     let m = dpichanged_message(192, &suggested);
-    let out = capture_under_filter(PROCEDURE_DIRECTIVES, || {
-        let _ = crate::ecs::dispatch_window_message(&world, despawned, &m);
-    });
+    // 到達不能時のフォールバックは「書く」ので、この配送も書込経路を通る。錠は**この区間
+    // だけ**で持つ——末尾の `dispatch_dpichanged_logged` が自分で取るため、テスト全体で
+    // 抱えたままにすると再入で自分自身と競合する（`std::sync::Mutex` は再入不可）。
+    let out = {
+        let _serialized = crate::ecs::window::lock_self_initiated_for_test();
+        capture_under_filter(PROCEDURE_DIRECTIVES, || {
+            let _ = crate::ecs::dispatch_window_message(&world, despawned, &m);
+        })
+    };
     let _ = crate::ecs::window::DpiChangeContext::take();
     let line = decision_line(&out);
     assert!(
@@ -629,10 +644,13 @@ fn s1_decision_line_reports_unreachable_when_policy_cannot_be_read() {
         ))
         .id();
     let m2 = dpichanged_message(192, &suggested);
-    let out2 = capture_under_filter(PROCEDURE_DIRECTIVES, || {
-        let _held = world2.borrow_mut(); // 借用を保持したまま配送する
-        let _ = crate::ecs::dispatch_window_message(&world2, entity2, &m2);
-    });
+    let out2 = {
+        let _serialized = crate::ecs::window::lock_self_initiated_for_test();
+        capture_under_filter(PROCEDURE_DIRECTIVES, || {
+            let _held = world2.borrow_mut(); // 借用を保持したまま配送する
+            let _ = crate::ecs::dispatch_window_message(&world2, entity2, &m2);
+        })
+    };
     let _ = crate::ecs::window::DpiChangeContext::take();
     let line2 = decision_line(&out2);
     assert!(

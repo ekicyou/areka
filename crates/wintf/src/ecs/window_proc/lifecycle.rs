@@ -15,6 +15,7 @@ use bevy_ecs::prelude::Entity;
 use tracing::debug;
 use windows::Win32::Foundation::*;
 
+use crate::ecs::window::transition_diag::{self, MSG_DISPLAYCHANGE, MsgRecord};
 use crate::ecs::world::EcsWorld;
 
 /// メッセージハンドラの戻り値型
@@ -118,14 +119,33 @@ pub(super) fn WM_CLOSE(
 /// WM_DISPLAYCHANGE: ディスプレイ構成変更通知
 ///
 /// Appリソースのmark_display_changeを呼び出す
+///
+/// # 遷移観測（要件 2.1）
+///
+/// 受理を `msg` レコードとして残す。モニタ表の更新は**次 tick の `Update`** で
+/// `detect_display_change_system` が行うため、受理の刻印（直近 tick の番号）と
+/// `monitor` レコードの刻印は 1 フレームずれ得る——1 本の時系列に並べたときに
+/// 「受理はいつで、表の更新はどのフレームか」が読めることが本記録の目的である。
+///
+/// 戻り値（`None`＝`DefWindowProcW` へ委譲）と `App` への標識は変えない。
 #[inline]
 pub(super) fn WM_DISPLAYCHANGE(
     world: &Rc<RefCell<EcsWorld>>,
     _entity: Entity,
-    _hwnd: HWND,
+    hwnd: HWND,
     _wparam: WPARAM,
     _lparam: LPARAM,
 ) -> HandlerResult {
+    if transition_diag::is_enabled() {
+        transition_diag::emit_line(&transition_diag::msg_line(&MsgRecord {
+            stamp: transition_diag::stamp(),
+            msg: MSG_DISPLAYCHANGE,
+            hwnd,
+            in_swp: crate::ecs::window::is_self_initiated(),
+            since_flush_us: transition_diag::since_flush_us(),
+        }));
+    }
+
     if let Ok(mut world_borrow) = world.try_borrow_mut() {
         if let Some(mut app) = world_borrow
             .world_mut()

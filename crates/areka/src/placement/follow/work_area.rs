@@ -1,6 +1,8 @@
 //! モニタ work area 解決（[`MonitorSnapshot`]・[`work_area_for_window`]・[`WorkAreaResolution`]）。
 
 use bevy_ecs::prelude::*;
+use windows::Win32::Foundation::RECT;
+use wintf::ecs::layout::systems::monitor_systems::{MonitorBounds, monitor_containing};
 use wintf::ecs::window::monitor::Monitor;
 
 use super::RectPx;
@@ -9,14 +11,26 @@ use super::RectPx;
 // MonitorSnapshot（task 8.1・DD15 基盤・4.7）
 // =============================================================================
 
-/// 全モニタの work area 集合（物理 px・起動時取得のセッション内固定 snapshot・DD15）。
+/// 全モニタの work area 集合（物理 px・**実行時に同期される**）。
 ///
-/// 起動時に seam（main.rs）／example が [`MonitorSnapshot::from_monitors`] で実モニタ
+/// 起動時に seam（main.rs）／example が [`MonitorSources::from_monitors`] で実モニタ
 /// から忠実転写して Resource 挿入し、bottom 吸着ドラッグ（task 8.2）が
 /// [`work_area_for_window`] で「窓が現在属するモニタの work area」を引くのに使う。
-/// snapshot はセッション内固定＝M1 受容（`WM_DISPLAYCHANGE` 追随は後続・DD15）。
 /// 中身は `RectPx` のみの純粋データで、headless テストは合成値を直接構築して
 /// 注入する（偽装境界・wintf に触れるのは挿入サイトだけ）。
+///
+/// # 「セッション内固定」の撤回（areka-P0-dpi-transition-atomicity task 5.1・DD15 撤回）
+///
+/// 以前ここには「snapshot はセッション内固定＝M1 受容（`WM_DISPLAYCHANGE` 追随は後続・
+/// DD15）」と書いてあった。**その受容は撤回された**——拡大率を下げるとタスクバーの物理高が
+/// 縮んで実際の作業領域下端は下がるのに、起動時の下端が焼き付いたままキャラ窓が接地し
+/// 続け、実機で 6/6 の遷移が接地点 −48px の浮きを出した（確定台帳 L3）。
+/// 現在は毎フレーム先頭の同期段（`emo2_boot::frame::work_area_sync`）が実行時のモニタ表
+/// から本 Resource を作り直す。**変化したフレームだけ**差し替わり、同じ表なら無操作である
+/// （順序の揺れは [`same_monitors`] が吸収する）。
+///
+/// ただし**保存位置の復元判定は起動時に 1 度だけ読む契約**を維持する（要件 5.7・
+/// `main.rs` の復元マージ）——拡大率をまたいで保存位置を追従させる裁定は採っていない。
 #[derive(Resource, Debug, Clone, PartialEq, Eq)]
 pub struct MonitorSnapshot {
     /// モニタ列挙順の work area（物理 px）。
@@ -90,8 +104,32 @@ pub enum WorkAreaResolution {
 /// snapshot は `None`）。違いは「どちらの規則で決まったか」を
 /// [`WorkAreaResolution`] として併せて返す点だけである。
 ///
-/// 消費側（task 6.1 で配線）は `NearestFallback` を非ドラッグ経路でのみ `warn!` へ
-/// 昇格させる（ドラッグ経路は毎イベント発火ゆえ従来 `debug!` 水準を維持・Req 3.3）。
+/// # 消費側（実在の配線・file:line で辿れる形にしてある）
+///
+/// 判別を消費するのは [`super::visibility::evaluate_visibility_guard`] **1 箇所だけ**で、
+/// そこが `NearestFallback` を非ドラッグ経路でのみ `warn!` へ昇格させる（ドラッグ経路は
+/// そもそも本関数を通らないので、毎イベント発火の spam にならない）。昇格は**2 つの矩形**に
+/// 対して別々に行う——射影が**決めた位置**（`[visibility-guard] NearestFallback`・
+/// areka-P0-dpi-window-vanish が配線）と、射影の**入力**＝Y を決めるのに使った矩形
+/// （`[visibility-guard] OffscreenPull`・areka-P0-dpi-transition-atomicity
+/// task 5.1 が追加）である。後者が要るのは、入力が帰属しない窓でも決めた位置がモニタ内へ
+/// 収まれば前者の腕に入らず、**画面外から最近傍モニタへ引き寄せられた事実が無観測で
+/// 消える**ためである（実測で 0 行だった）。
+///
+/// # 帰属できない窓の**位置**（開発者の裁定 2026-08-20・現行挙動が正）
+///
+/// 本関数は空でない snapshot に対して `None` を返さない——どの矩形にも属さない中心は
+/// 必ず最近傍へ寄せられる（`None` になるのは `work_areas` が空のときだけ＝下の
+/// `min_by_key` が `None` を返す経路）。**この挙動が正である**というのが裁定である:
+/// 副モニタを引き抜いたときに現状維持を選ぶと、ゴーストは画面外に取り残されて見えず
+/// 触れなくなる——判断の軸は**ゴーストが触れなくなる事態を避ける**ことで、主モニタへ
+/// 引き寄せられる方が安全である。
+///
+/// ゆえに `NearestFallback` は「解決できなかった」ではなく「**最近傍で解決した**」であり、
+/// areka-P0-dpi-transition-atomicity 要件 5.5 の「位置を変更せずに現状を維持」が効くのは
+/// **モニタ表が空のときに限る**。同 要件 5.6 が守る位置権威との衝突は本裁定で解消した。
+/// 記録だけは残す（上の警告）——勝手に飛んだことを後から追えるようにするためで、位置は
+/// 変えない。全文は同 spec の `requirements.md` 要件 5 の項目 5 直下の裁定の注記にある。
 pub fn work_area_for_window_with_origin(
     snapshot: &MonitorSnapshot,
     window: RectPx,
@@ -124,4 +162,162 @@ pub fn work_area_for_window_with_origin(
         })
         .copied()
         .map(|wa| (wa, WorkAreaResolution::NearestFallback))
+}
+
+// =============================================================================
+// モニタ別拡大率表と 2 源の同時構築（task 5.1・C6・要件 5.1/5.5/5.6）
+// =============================================================================
+
+/// モニタ 1 台ぶんの拡大率と画面矩形（物理 px・列挙順のまま忠実転写）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MonitorDpiEntry {
+    /// モニタの矩形（`work_area` ではなく `bounds`＝タスクバーを含む全体）。
+    pub bounds: RectPx,
+    /// モニタの拡大率。
+    pub dpi: u32,
+}
+
+/// モニタ別の拡大率表（[`MonitorSnapshot`] と対になる実行時同期の Resource）。
+///
+/// 作業領域源が「どこに置けるか」を答えるのに対し、本表は「そこはどの拡大率か」を答える。
+/// 2 つは**同一の `Monitor` 列から同時に**作られる（[`MonitorSources::from_monitors`]）——
+/// 別々に作ると、片方だけが古い運転が生まれる。
+///
+/// # 引き当ての規則は表示基盤側と**同一の関数**である（task 5.4 の裁定）
+///
+/// 窓中心からモニタを引き当てる規則は表示基盤側の [`monitor_containing`] をそのまま呼ぶ
+/// （[`MonitorDpiTable::dpi_for_point`]）。areka 側に同規則の述語を置く案は採らなかった
+/// ——areka から呼べない可視性のままでは「両者が同一判定を返す」ことを実行テストで確かめる
+/// 術が無く、規則の写しが 2 つある状態を散文でしか守れないためである。ゆえに wintf 側で
+/// 当該関数をクレート外へ開き、行の型の違いは [`MonitorBounds`] 実装 1 つで吸収した。
+#[derive(Resource, Debug, Clone, PartialEq, Eq, Default)]
+pub struct MonitorDpiTable {
+    /// モニタ列挙順の拡大率と矩形。
+    pub entries: Vec<MonitorDpiEntry>,
+}
+
+/// 帰属判定の入力（表示基盤側の [`monitor_containing`] へ渡すための実装）。
+///
+/// 読むのは **`bounds`**（モニタ全体）であって `work_area` ではない——`Monitor` 側の実装と
+/// 同じ成分でなければ、同じ点に対して 2 つの答えが出る。両者が同一判定を返すことは
+/// `follow_work_area_tests.rs` の対比テストが実行で固定する。
+impl MonitorBounds for MonitorDpiEntry {
+    fn monitor_bounds(&self) -> RECT {
+        RECT {
+            left: self.bounds.left,
+            top: self.bounds.top,
+            right: self.bounds.right,
+            bottom: self.bounds.bottom,
+        }
+    }
+}
+
+impl MonitorDpiTable {
+    /// 点（窓矩形の中心）が属するモニタの拡大率（要件 5.8・設計 C5）。
+    ///
+    /// 帰属規則は表示基盤側の [`monitor_containing`] **そのもの**（半開区間・昇順先勝ち）で
+    /// あり、ここには規則が 1 行も無い。どのモニタにも属さない点と、表そのものが空の場合は
+    /// いずれも `None`——整合ゲートはこれを「表を引けない」として素通しする（待ちに入れると
+    /// 引けない窓が毎回上限まで待つ）。最近傍フォールバック（[`work_area_for_window`]）は
+    /// 規則が違うので流用しない。
+    pub fn dpi_for_point(&self, cx: i32, cy: i32) -> Option<u32> {
+        monitor_containing(&self.entries, (cx, cy)).map(|entry| entry.dpi)
+    }
+
+    /// 実モニタ列挙結果から拡大率と矩形を列挙順のまま忠実転写する
+    /// （[`MonitorSnapshot::from_monitors`] と同じ U 契約＝物理 px・単位変換なし）。
+    pub fn from_monitors(monitors: &[Monitor]) -> Self {
+        Self {
+            entries: monitors
+                .iter()
+                .map(|m| MonitorDpiEntry {
+                    bounds: RectPx {
+                        left: m.bounds.left,
+                        top: m.bounds.top,
+                        right: m.bounds.right,
+                        bottom: m.bounds.bottom,
+                    },
+                    dpi: m.dpi,
+                })
+                .collect(),
+        }
+    }
+}
+
+/// モニタ表から作られる 2 つの源（作業領域源＋モニタ別拡大率表）の組。
+///
+/// **起動時（`main.rs` のシーム）も実行時の同期（`emo2_boot::frame::work_area_sync`）も
+/// この 1 つの構築関数を通る**（要件 5.1・設計 C6「構築関数は同一＝二重権威にならない」）。
+/// 起動時だけが別の作り方をすると、同期が入った後も起動時の値だけが違う形になり得る。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MonitorSources {
+    /// 全モニタの作業領域集合。
+    pub snapshot: MonitorSnapshot,
+    /// モニタ別の拡大率表。
+    pub dpi_table: MonitorDpiTable,
+}
+
+impl MonitorSources {
+    /// 実モニタ列挙結果から 2 源を**同時に**作る（列挙順は両者で一致する）。
+    pub fn from_monitors(monitors: &[Monitor]) -> Self {
+        Self {
+            snapshot: MonitorSnapshot::from_monitors(monitors),
+            dpi_table: MonitorDpiTable::from_monitors(monitors),
+        }
+    }
+
+    /// 台数（両源で同じ＝同一の列から作られる）。
+    pub fn len(&self) -> usize {
+        self.snapshot.work_areas.len()
+    }
+
+    /// 1 台も無い（列挙異常・[`MonitorSnapshot::from_monitors`] の 0 台契約と同義）。
+    // 同期段は 0 台を `Monitor` 列の側で弾く（表を作る前に警告して現状維持する）ので、
+    // 本判定を名前で呼ぶのは今のところ檻だけである。`len` を持つ型に `is_empty` が無いのは
+    // API として不自然なので残す（areka は bin crate ゆえ `pub` でも dead_code 免除されない）。
+    #[allow(dead_code)]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// 比較用の正規形——**台ごとの (作業領域, 矩形, 拡大率) を昇順に並べた列**。
+    ///
+    /// `RectPx` は順序を持たないので、成分をそのまま組にして並べる（型へ `Ord` を足すと
+    /// 矩形に「大小」という意味を与えることになり、幾何の型としては誤解を招く）。
+    fn normalized(&self) -> Vec<(i32, i32, i32, i32, i32, i32, i32, i32, u32)> {
+        let mut rows: Vec<_> = self
+            .snapshot
+            .work_areas
+            .iter()
+            .zip(self.dpi_table.entries.iter())
+            .map(|(wa, entry)| {
+                (
+                    wa.left,
+                    wa.top,
+                    wa.right,
+                    wa.bottom,
+                    entry.bounds.left,
+                    entry.bounds.top,
+                    entry.bounds.right,
+                    entry.bounds.bottom,
+                    entry.dpi,
+                )
+            })
+            .collect();
+        rows.sort_unstable();
+        rows
+    }
+}
+
+/// 2 つのモニタ源が**順序に依らず**同じ内容か（要件 5.4・設計 C6「順序非依存の比較」）。
+///
+/// 実行時のモニタ表（`Monitor` entity 群）の走査順は列挙順と一致する保証が無く、
+/// 素の `==` で比べると**中身が同じなのに毎フレーム作り直す**運転が生まれ得る
+/// （定常フレームの窓書込ゼロという契約を、順序という無関係な理由で壊す）。
+/// ゆえに比較は台の集合として行い、順序の揺れをここで吸収する。
+///
+/// 比べるのは台ごとの (作業領域, 矩形, 拡大率) の全成分である——作業領域だけを比べると、
+/// 拡大率だけが変わった構成変更（表の値が変わって作業領域は同じ）を取りこぼす。
+pub fn same_monitors(a: &MonitorSources, b: &MonitorSources) -> bool {
+    a.len() == b.len() && a.normalized() == b.normalized()
 }

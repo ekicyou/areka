@@ -92,13 +92,20 @@ const INFO_LINE_FIELDS: [&str; 13] = [
 ];
 
 /// perf サマリ行のフィールド集合（design.md §Data Models「perf サマリ行スキーマ」の 14 項目
-/// ＋ `message`）。判定スクリプト `tools/perf/judge-perf.py` との唯一のデータ契約である。
-const PERF_LINE_FIELDS: [&str; 15] = [
+/// ＋ `areka-P0-dpi-transition-atomicity` D12 が末尾へ足した `frame` ＋ `message`）。
+/// 判定スクリプト `tools/perf/judge-perf.py` との唯一のデータ契約である。
+///
+/// 本配列は**昇順の集合**であり行の順序は語らない。`frame` が行の**末尾**に出ること
+/// （既存フィールドの順序を崩していないこと）は
+/// `presenter/transition_record_tests.rs::the_perf_line_appends_the_frame_field_at_the_very_end`
+/// が本文走査で固定している。
+const PERF_LINE_FIELDS: [&str; 16] = [
     "alloc_compose_dst",
     "alloc_mask",
     "alloc_resample_dst",
     "alloc_xmap",
     "cache_hit",
+    "frame",
     "key_hash",
     "message",
     "surface_id",

@@ -76,6 +76,13 @@ impl EcsWorld {
         // FrameTime初期化（dola::runtime::clock::now() の値を保持）
         world.insert_resource(crate::ecs::graphics::FrameTime(dola::runtime::clock::now()));
 
+        // TickStart初期化（遷移観測の刻印の時刻基準・D1）
+        // 最初の tick で FrameCount と同じ点から更新されるが、tick 前に World を借りる
+        // 観測点が資源を引けるよう構築時に置いておく。
+        world.insert_resource(crate::ecs::window::transition_diag::TickStart(
+            Instant::now(),
+        ));
+
         // WintfTaskPool初期化（非同期タスク実行基盤）
         world.insert_resource(crate::ecs::widget::bitmap_source::WintfTaskPool::new());
 
@@ -500,9 +507,32 @@ impl EcsWorld {
         // 用いられないため、ラップしても観測挙動はログ値が 0 に戻るだけで正当性に影響しない。
         // debug panic 化を避ける堅牢化（saturating/wrapping_add）は debug 挙動を変えるため
         // P66 として記録。
-        if let Some(mut frame_count) = self.world.get_resource_mut::<FrameCount>() {
+        //
+        // 遷移観測の刻印（D1）: フレーム番号の権威はここで進む 1 系列だけである。
+        // 同一点で Resource `TickStart` を更新し、同じ値をスレッド局所の写しへ配る
+        // （`transition_diag::begin_tick`）。World を借りられる観測点は資源から、
+        // 借りられない観測点（一括 flush・wndproc）だけが写しから刻印を組む。
+        // スケジュール構成（13 本の順序）はここでは変えない。
+        let tick_start = Instant::now();
+        let frame = if let Some(mut frame_count) = self.world.get_resource_mut::<FrameCount>() {
             frame_count.0 += 1;
+            frame_count.0
+        } else {
+            // FrameCount を持たない World（`EcsWorld::new` 以外で組まれた場合）では
+            // 番号を進める先が無いので 0 のまま配る（資源と写しが食い違わない）。
+            0
+        };
+        match self
+            .world
+            .get_resource_mut::<crate::ecs::window::transition_diag::TickStart>()
+        {
+            Some(mut start) => start.0 = tick_start,
+            None => self
+                .world
+                .insert_resource(crate::ecs::window::transition_diag::TickStart(tick_start)),
         }
+        crate::ecs::window::transition_diag::begin_tick(frame, tick_start);
+
         if let Some(mut frame_time) = self
             .world
             .get_resource_mut::<crate::ecs::graphics::FrameTime>()

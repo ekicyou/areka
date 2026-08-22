@@ -37,6 +37,7 @@ mod dpi;
 mod drain_resnap;
 mod scale_text;
 mod wiring;
+mod work_area_sync;
 
 // 移設前の本モジュール本体が使っていた import 一式をそのまま保持する。本番項目は各サブモジュール
 // へ移り、そちらが同じ経路を直接 import するため、ここに残る束縛の役目は 2 つである——
@@ -124,12 +125,13 @@ use self::dpi::{
     reproject_char_window_at_current_size,
 };
 // 同上。未使用は `PhysicalSizeSource`・`resnap_from_sizes`・`resnap_with`・
-// `finalize_chain_once_with` の 4 名で、`resnap_shell_targets` と `finalize_chain_once` は
+// `finalize_chain_once_with`・`realign_chain_once_with_source` の 5 名で、
+// `resnap_shell_targets`・`finalize_chain_once`・`realign_chain_once` は
 // 下の `emo2_frame_system` が呼ぶ。
 #[allow(unused_imports)]
 use self::drain_resnap::{
-    PhysicalSizeSource, finalize_chain_once, finalize_chain_once_with, resnap_from_sizes,
-    resnap_shell_targets, resnap_with,
+    PhysicalSizeSource, finalize_chain_once, finalize_chain_once_with, realign_chain_once,
+    realign_chain_once_with_source, resnap_from_sizes, resnap_shell_targets, resnap_with,
 };
 // 同上。`reconcile_reported_sizes` は下の `emo2_frame_system` が非 test ビルドでも呼ぶ
 // （呼び出しは task 4.3 で `run_drain_phase` から相順の所有者であるこちらへ移した・design 決定 D5）。
@@ -143,7 +145,8 @@ pub(super) use self::scale_text::resolve_talk_time;
 /// `FrameFinalize` 登録の排他 system（donor パターン: remove→各フェーズ→insert・DD-1/DD-4）。
 ///
 /// `Emo2Wiring`（NonSend）を [`World::remove_non_send`] で取り出してから
-/// attach→dpi→drain→balloon-visibility→窓寸 reconcile→move-drain→resnap→連鎖確定→text-scale→text
+/// attach→dpi→drain→balloon-visibility→窓寸 reconcile→move-drain→resnap→連鎖確定→連鎖再解決→
+/// text-scale→text
 /// の順に各フェーズを駆動し、[`World::insert_non_send`] で戻す。
 /// remove→insert は `&mut World` を各フェーズへ排他に渡すための donor 慣行（借用衝突回避・
 /// `examples/emo-present.rs::boot_present_system` と同型）。本番の text フェーズは override 無し
@@ -157,6 +160,13 @@ pub fn emo2_frame_system(world: &mut World) {
     let Some(mut wiring) = world.remove_non_send::<Emo2Wiring>() else {
         return;
     };
+    // 作業領域源の実行時同期（atom 設計 C6・要件 5.1／5.4／5.5）: **各相より前**に置く。
+    // 拡大率の相が読む作業領域源を同一フレームの先頭で新しくしておくと、相は新しい下端へ
+    // 1 回で書ける（相の後に同期すると旧下端へ書いてから源が変わり 2 段書込になる）。
+    // 表の内容が変わらないフレームでは作り直さない＝定常フレームは無操作である。
+    // 戻り値（差し替えの有無）を受けるのは作業領域変化を契機とする再スナップ（task 5.2）で、
+    // その置き場は拡大率の相の**後**である（下の `resnap_for_work_area_change`）。
+    let work_area_change = work_area_sync::sync_monitor_snapshot(world);
     // donor 慣行: remove して &mut World を各フェーズへ排他に渡し、全フェーズ駆動後に必ず戻す。
     run_attach_phase(&mut wiring, world);
     // DPI 追従（attach → dpi → drain …の順・design「run_dpi_phase（frame.rs）」）: attach の**後**に
@@ -166,6 +176,15 @@ pub fn emo2_frame_system(world: &mut World) {
     // 未消費要求（初回表示の k₀ 補正）を後段の状態照合経路が拾う（両経路は presenter の
     // 消費規約により二重にも取りこぼしにもならない＝どちらの順でも整合する）。
     run_dpi_phase(&mut wiring, world);
+    // 作業領域変化を契機とする再スナップ（atom 設計 C6・要件 5.1／5.2／5.3／5.4／4.7）:
+    // 拡大率の相の**直後**に置く。拡大率が変わらず作業領域だけが変わった窓は `Changed<DPI>`
+    // が立たず相を素通りするので、ここで現寸のまま新しい下端へ射影し直す。相の**前**に置くと
+    // 旧寸のまま先に動かしてから相が書き直す 2 段書込になり、後に置けば相が書き終えた窓は
+    // 導出値が現在値と一致してべき等 skip で抜ける（＝同一フレームで 1 回に合流する）。
+    // 作業領域が動かなかったフレームは同期段が `None` を返す＝**呼び出しごと起きない**。
+    if let Some(work_area_change) = &work_area_change {
+        work_area_sync::resnap_for_work_area_change(world, work_area_change);
+    }
     run_drain_phase(&mut wiring, world);
     // バルーン可視性（areka-P0-balloon-visibility design 決定 D5・Requirement 3.5／6.6）: 本フレームの
     // 表示指令をすべて適用し終えた**後**に置く——判断の根拠は「指令適用後の実状態」でなければならず、
@@ -197,6 +216,13 @@ pub fn emo2_frame_system(world: &mut World) {
     // 確定したフレームで**一度だけ**連鎖を解き直し、サーフェス差替で崩れた隣接を戻す。
     // resnap の**後**に置く（各窓の再アンカー結果を入力として受け取るため）。
     finalize_chain_once(&wiring.presenter, world);
+    // 遷移後の連鎖再解決（atom 設計 C4・要件 6.1／6.2／6.3／6.6）: 起動時確定の**直後**に
+    // 置く。拡大率の遷移では全スコープの幅が変わり、下端中央保存の再射影だけでは隣接が
+    // 幅変化の半分の和だけ開く——起動時の確定は一度きりでこれを直さないので、遷移ごとに
+    // 一度だけ解き直す別機構が要る。resnap・確定の**後**である必要は確定と同じ理由
+    // （各窓の再射影結果と、全スコープの窓寸が遷移後の実表示寸へ揃ったことを入力に取る）。
+    // 武装していないフレームは早期 return＝定常フレームは無操作である（要件 4.7）。
+    realign_chain_once(&wiring.presenter, world);
     // 文字層 k 追従（emo-dpi-scaling task 7.2・D11-4・Req8）: 適用 k の更新点（dpi 相の `refresh_scale`
     // ／drain 相の `apply_show`）の**両方の下流**、かつ `present_frame` の**上流**に置く。こうすると
     // どちらの経路で k が跳ねても同一フレーム内で binding が新 k へ組み直され、直後の描画が新しい物理寸
@@ -209,6 +235,66 @@ pub fn emo2_frame_system(world: &mut World) {
 #[cfg(test)]
 #[path = "frame_test_support.rs"]
 mod test_support;
+
+// 多フレーム駆動ハーネスそのものの檻（task 3.3）。**x64 のみ**で接続する——常時テストに
+// x86 を用いない（要件 7.5）という実行形態を、属性 1 つで構造的に守る。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_harness_tests.rs"]
+mod harness_tests;
+
+// 作業領域源の同期（task 5.1）の統合テスト。ハーネスに乗るので**x64 のみ**で接続する
+// （常時テストに x86 を用いない・要件 7.5）。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_work_area_sync_tests.rs"]
+mod work_area_sync_tests;
+
+// 作業領域変化を契機とする再スナップ（task 5.2）の統合テスト。同じくハーネスに乗るので
+// **x64 のみ**で接続する（常時テストに x86 を用いない・要件 7.5）。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_work_area_resnap_tests.rs"]
+mod work_area_resnap_tests;
+
+// 拡大率と表の整合待ち（task 5.4）の統合テスト。同じくハーネスに乗るので**x64 のみ**で
+// 接続する（常時テストに x86 を用いない・要件 7.5）。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_dpi_sync_hold_tests.rs"]
+mod dpi_sync_hold_tests;
+
+// 既定位置の追跡（task 5.5）の統合テスト。同じくハーネスに乗るので**x64 のみ**で接続する
+// （常時テストに x86 を用いない・要件 7.5）。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_default_pos_track_tests.rs"]
+mod default_pos_track_tests;
+
+// 遷移後の連鎖再解決（task 5.6）の統合テスト。同じくハーネスに乗るので**x64 のみ**で
+// 接続する（常時テストに x86 を用いない・要件 7.5）。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_chain_realign_tests.rs"]
+mod chain_realign_tests;
+
+// 遷移後の連鎖再解決の**武装条件**（task 5.6・3 連言の特異性）の檻。同じくハーネスに乗るので
+// **x64 のみ**で接続する（常時テストに x86 を用いない・要件 7.5）。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_chain_realign_arm_tests.rs"]
+mod chain_realign_arm_tests;
+
+// 遷移の原子性と随伴（task 6.1）の統合テスト。同じくハーネスに乗るので**x64 のみ**で
+// 接続する（常時テストに x86 を用いない・要件 7.5）。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_transition_atomicity_tests.rs"]
+mod transition_atomicity_tests;
+
+// 整合待ちと作業領域追随の判断分岐（task 6.2）の統合テスト。同じくハーネスに乗るので
+// **x64 のみ**で接続する（常時テストに x86 を用いない・要件 7.5）。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_transition_branch_tests.rs"]
+mod transition_branch_tests;
+
+// 整合ゲートの 4 つ目の窓書込口（task 6.5）の統合テスト。同じくハーネスに乗るので
+// **x64 のみ**で接続する（常時テストに x86 を用いない・要件 7.5）。
+#[cfg(all(test, target_pointer_width = "64"))]
+#[path = "frame_work_area_resnap_hold_tests.rs"]
+mod work_area_resnap_hold_tests;
 
 #[cfg(test)]
 #[path = "frame_attach_tests.rs"]

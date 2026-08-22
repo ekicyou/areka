@@ -12,10 +12,10 @@ use wintf::ecs::{DPI, Point, SetWindowPosCommand, SizeI, WindowHandle, WindowPos
 use super::{
     Anchor, Anchored, BALLOON_LIMIT_CLAMP_TAG, BALLOON_LIMIT_RUNTIME_CONTEXT,
     BALLOON_LIMIT_UNRESOLVED_TAG, BalloonFollow, BalloonFollowTrigger, BalloonLimit,
-    BalloonWindowMarker, CharWindowMarker, DESPAWNED_SKIP_TAG, GhostWindows, MonitorSnapshot,
-    PlacementRoute, PointPx, RectPx, SizePx, WindowKind, WindowMoveRecord, apply_visibility_guard,
-    diag, follow_balloon, limit_correction, project_anchor, rect_at,
-    rederive_keyword_balloon_offset, work_area_for_window,
+    BalloonWindowMarker, CharWindowMarker, DESPAWNED_SKIP_TAG, DpiSyncHold, GhostWindows,
+    MonitorSnapshot, PlacementRoute, PointPx, RectPx, SizePx, WindowKind, WindowMoveRecord,
+    apply_visibility_guard, diag, follow_balloon, limit_correction, project_anchor, rect_at,
+    rederive_keyword_balloon_offset, transition_diag, work_area_for_window,
 };
 
 /// R7 公開 API: UI スレッド上で呼ばれる窓移動関数（物理 px・スクリーン座標直渡し・7.1）。
@@ -39,10 +39,37 @@ use super::{
 /// ため route は引数で受けない（呼出側が渡せる値が 1 つしか無く、取り違えの余地だけを
 /// 増やす＝`resize_window_keep_position` と同じ判断）。**スクリプトの明示操作**ゆえ
 /// 遷移ガードは適用しない（ドラッグ・`Restore` と同族・D13 帰結⑵）。
+/// 整合待ちの札（[`DpiSyncHold`]）のある窓へ届いても [`enqueue_window_set_pos`] の監視は
+/// 鳴らない——見送らないことが正しい書込だからである（分類は [`deferral_covers_route`] が
+/// 1 本で持つ・task 7.5）。
 pub fn move_window_to(world: &mut World, window: Entity, x: i32, y: i32) -> bool {
+    move_window_with_route(world, window, x, y, PlacementRoute::MoveCue)
+}
+
+/// [`move_window_to`] の経路引数版（対象窓の書込 route だけを呼び手が名乗る）。
+///
+/// 幾何の扱いは [`move_window_to`] と**完全に同一**である——変わるのは対象窓の書込へ載る
+/// [`PlacementRoute`] だけで、随伴バルーンは従来どおり [`PlacementRoute::BalloonFollow`] を
+/// 名乗る（随伴はキャラ窓の従属量であって、キャラ窓を動かした由来を名乗る主体ではない）。
+///
+/// # なぜ経路を引数で受けるか（D13 の 1 語＝1 実在トリガ）
+///
+/// 「寸を変えずに位置だけを書く」手続きの呼び手は 2 つある——`\![move]` cue（明示操作＝
+/// [`PlacementRoute::MoveCue`]）と、DPI 遷移後の連鎖再解決（システム由来＝
+/// [`PlacementRoute::ChainRealign`]・`areka-P0-dpi-transition-atomicity` C4）である。
+/// 由来が違えば**挙動も違う**: 既定位置の追跡（[`track_default_char_pos`]・D9／D16）は
+/// システム由来の書込にだけ効くので、遷移後の解き直しを `MoveCue` で書くと既定位置が
+/// 置き去りになり、次の遷移で当該スコープが「明示的に動かされた」へ倒れる。
+pub fn move_window_with_route(
+    world: &mut World,
+    window: Entity,
+    x: i32,
+    y: i32,
+    route: PlacementRoute,
+) -> bool {
     let follow = world.get::<BalloonFollow>(window).copied();
 
-    if !enqueue_window_set_pos(world, window, x, y, None, Some(PlacementRoute::MoveCue)) {
+    if !enqueue_window_set_pos(world, window, x, y, None, Some(route)) {
         return false;
     }
 
@@ -331,6 +358,17 @@ pub fn resize_window_to(
         return false;
     }
 
+    // 5b. 接地点の観測（要件 5.3・design Data Models `ground`）: **下端吸着のキャラ窓に限り**、
+    //     いま書いた接地点（窓矩形の下端）と実行時のモニタ表が持つ作業領域下端の差を 1 行残す。
+    //     接地点そのものは上の射影 T が決めた値を読むだけで、位置の決め方には触れない
+    //     （要件 10.1 の原点規約は不変）。ガードを組立の外側に置くのは、既定運転で
+    //     モニタ表の走査も `String` の確保も一切行わないためである（要件 10.4/10.6）。
+    //     手順 5a より前に置くのは、5a が offset を書き換える前の**書いた通りの**接地点を
+    //     残すため（5a はバルーン側の量であって接地点を動かさないが、順序の意図を明示する）。
+    if matches!(anchor, Anchor::Bottom) && transition_diag::is_enabled() {
+        transition_diag::log_char_ground(world, char_window, new_pos, new_size, route);
+    }
+
     // 5a. キーワード由来のバルーン基本位置の**一度きり**の再導出
     //     （windowposition-limit 要件 4.2/4.3/4.7・2026-08-14 実機サインオフ是正）。
     //     手順 6 の追従より**前**に置く——offset を直してから追従させないと、
@@ -441,6 +479,88 @@ pub fn anchor_changed_system(
     }
 }
 
+/// この経路の書込は、整合待ちの札（[`DpiSyncHold`]）のある窓へは**届かないはず**か
+/// （＝見送りが覆うべき経路か・task 7.5・設計 C5・要件 5.8）。
+///
+/// [`enqueue_window_set_pos`] 入口の不変条件の監視が鳴る相手を、この 1 本が決める。
+///
+/// # なぜ「すべての経路」ではないのか
+///
+/// 監視が守る不変条件は「札のある窓への窓書込は 0」だが、その 0 を作るのは**見送り**の側で
+/// あって監視ではない。そして見送りは、設計上**すべての書込を止める建て付けではない**——
+/// [`move_window_to`] の doc が述べるとおり、利用者やゴースト台本の**明示操作**は
+/// 「スクリプトの明示操作ゆえ遷移ガードは適用しない」（ドラッグ・`Restore` と同族・D13
+/// 帰結⑵）。止まらないことが正しい書込を監視が「漏れ」として鳴らせば、それは欠陥の通報では
+/// なく**偽の警報**であり、debug ビルドでは利用者のドラッグや `\![move]` 1 回で落ちる。
+///
+/// ゆえに分類の軸は「見送りが覆うべき経路か」である。`true` の語が札のある窓へ届いたときだけ
+/// 「見送りに漏れがある」と言えるのであって、`false` の語が届くのは**仕様どおり**である。
+///
+/// # `is_system_reanchor` を流用しない理由
+///
+/// あちらが答えるのは「誰が動かしたか」（既定位置の追跡と可視性ガードが読む区分）であり、
+/// 本関数が答えるのは「見送りが覆うか」である。実際に 1 語で割れている——
+/// [`PlacementRoute::KeepPositionResize`] は `is_system_reanchor` が `false`（バルーン窓の
+/// 従属量）でありながら、唯一の発行元が見送り点の**内側**にあるので本関数では `true` に
+/// なる。区分を 2 つに割ったことは設計 C5 と確定台帳 §12 に登記してある。
+///
+/// # 網羅 match である理由
+///
+/// 経路語が増えたときに「鳴る／鳴らない」を**必ず**書かせるためである。既定の腕を置くと
+/// 新設経路が黙ってどちらかへ倒れ、列挙で守る規約が静かに穴を持つ（task 6.5 の学び——
+/// あのときは日本語の「再スナップ」が別々の 2 関数を指していて見送りが 1 点落ちた）。
+pub(super) const fn deferral_covers_route(route: Option<PlacementRoute>) -> bool {
+    let Some(route) = route else {
+        // route を名乗らない書込＝**ドラッグ経路のキャラ窓書込のみ**（`on_char_drag`／
+        // `on_char_drag_end`・本関数の doc の `None` の節）。利用者の明示操作ゆえ見送らない。
+        return false;
+    };
+    match route {
+        // ---- 見送りが覆う経路（届いたら見送りに漏れがある＝鳴る）----
+        //
+        // 拡大率の相（`frame/dpi.rs` の `apply_dpi_phase_gate`）。
+        PlacementRoute::DpiReproject
+        // 報告寸の突合（`frame/scale_text.rs` の `defers_window_write(.., Reconcile)`）。
+        | PlacementRoute::ReportedSizeReconcile
+        // 実表示寸の再スナップ（`frame/drain_resnap.rs` の同 `Resnap`）。
+        | PlacementRoute::Resnap
+        // 作業領域変化を契機とする再スナップ（`frame/work_area_sync.rs` の同 `WorkAreaResnap`）。
+        | PlacementRoute::WorkAreaResnap
+        // バルーン窓の位置据置きリサイズ。唯一の発行元 `frame/dpi.rs` の
+        // `reconcile_window_size` は上の 2 点（拡大率の相・報告寸の突合）の**内側**にしか
+        // 無く、見送りが覆っている（`is_system_reanchor` と割れる 1 語＝上の節）。
+        | PlacementRoute::KeepPositionResize
+        // 遷移後の連鎖の解き直し。4 点は通らないが**自前の見送り**を持つ——
+        // `chain_realign::realign_chain_once_with` は「札を持つゴースト窓が 1 つも無い」を
+        // 解決の条件に置く（設計 C4 の条件 2）。窓ごとではなく全窓一括で止める点だけが
+        // 4 点と違い、覆われていることに変わりはない。ゆえに届けば漏れである。
+        | PlacementRoute::ChainRealign
+        // アンカー変化トリガ。**本番では未結線**（`anchor_changed_system` は schedule へ
+        // 登録されておらず、呼ぶのは決定論テストだけ）ゆえ現に到達しないが、由来は表示環境の
+        // 変化を受けた基盤側の置き直しであり、結線されたときに見送りが要る側である。鳴る側に
+        // 置いておけば、結線した瞬間に「どちらへ倒すか」を必ず決めさせられる。
+        | PlacementRoute::AnchorChange => true,
+
+        // ---- 見送らないことが正しい経路（届くのは仕様どおり＝鳴らない）----
+        //
+        // `\![move]` によるスクリプトの明示移動（[`move_window_to`] の doc の裁定）。
+        // 起動時の連鎖確定（`frame/drain_resnap.rs` の反映）も同じ語で書く。
+        PlacementRoute::MoveCue
+        // 位置永続化の復元マージ。D13 が `MoveCue`・ドラッグと同族の明示操作と定めている。
+        | PlacementRoute::Restore
+        // バルーン窓ドラッグ**解放時**の `windowposition.limit` 補正。ドラッグの一部＝
+        // 明示操作であり、見送ると画面外のバルーンが引き戻されないまま残る。
+        | PlacementRoute::BalloonLimitRelease
+        // 随伴バルーンの追従（task 5.4 で確定・task 7.5 まで唯一の例外だった・設計 C5）。位置は
+        // キャラ窓の従属量であり、キャラ窓が動いた同一書込の一部として動く。そもそも
+        // 4 点を通らないので止まりはせず、鳴らせば偽の警報になる。
+        | PlacementRoute::BalloonFollow
+        // spawn 初期配置。位置**そのものを作る**書込であり、見送れば窓が置かれないまま
+        // 残る（保つべき「遷移前の値」が存在しない）。現状は単一ライターを通らない。
+        | PlacementRoute::SpawnInitial => false,
+    }
+}
+
 /// 1 窓ぶんの位置（と任意で寸法）を enqueue する共通経路（物理 px 素通し・
 /// 単一ライター・task 2.3 で move 専用から size 対応へ一般化）。
 ///
@@ -536,6 +656,46 @@ pub(super) fn enqueue_window_set_pos(
         );
         return false;
     }
+    // 待ち札の適用範囲の不変条件（atom 設計 C5・要件 5.8）: 「[`DpiSyncHold`] を持つ窓への
+    // 窓書込は 0」。ただし**その 0 を作るのは見送りの側**であって本監視ではない。ゆえに鳴らす
+    // 相手は「見送りが覆うべき経路」に限る——判定は [`deferral_covers_route`] が 1 本で持ち、
+    // 12 の経路語と route 無しを網羅 match で分類している（task 7.5）。**書込口は本関数 1 つ**
+    // なので、覆うべき経路がすり抜けたかどうかはここでしか構造的に見張れない。実機では
+    // `warn!` として見え、テストビルドでは `debug_assert!` がその場で落とす。
+    //
+    // 免除が [`PlacementRoute::BalloonFollow`] の 1 語だけだった頃、本監視は**止まらないことが
+    // 正しい書込**まで「漏れ」として鳴らしていた——利用者のドラッグ（route 無し）・`\![move]`
+    // （[`PlacementRoute::MoveCue`]）・バルーンドラッグ解放時の補正
+    // （[`PlacementRoute::BalloonLimitRelease`]）は、いずれも**明示操作ゆえ見送らないことが
+    // 正しい**（[`move_window_to`] の doc の裁定・D13 帰結⑵）。偽の警報であり、debug ビルドでは
+    // 利用者が窓を 1 回ドラッグしただけで落ちていた。是正したのは**監視の側**であって、
+    // 見送りの 4 点は 1 bit も変えていない（task 7.5）。
+    //
+    // 随伴バルーンの追従が外れる理由は従来どおりである——2 窓の中心が別々のモニタに乗る配置
+    // （キャラ窓は表と揃い、バルーンだけまだ食い違う）では、待ち札の付いたバルーンへ随伴が
+    // 正当に届く。バルーンの位置は独立した量ではなくキャラ窓の従属量であり、キャラ窓が動いた
+    // 同一書込の一部として動くからである。しかも [`dpi_sync_decision`] は拡大率と表の値だけを
+    // 見て作業領域を見ないので、表が古くても随伴の位置は壊れない。バルーン**自身**の書込
+    // （拡大率の相・報告寸の突合・2 つの再スナップ）は 4 点の見送りが引き続き覆う。
+    //
+    // 覆うべき経路が増えたときに黙って通さないための錨が網羅 match である（task 6.5 の学び）。
+    if deferral_covers_route(route)
+        && let Some(hold) = world.get::<DpiSyncHold>(window)
+    {
+        let since_frame = hold.since_frame;
+        warn!(
+            entity = ?window,
+            ?route,
+            since_frame,
+            x, y,
+            "整合待ちの札がある窓へ窓書込が到達した（待ち札の適用範囲に漏れがある）"
+        );
+        debug_assert!(
+            false,
+            "DpiSyncHold のある窓へ窓書込が到達した: entity={window:?} route={route:?} since_frame={since_frame}"
+        );
+    }
+
     let Some(handle) = world.get::<WindowHandle>(window).copied() else {
         warn!(
             entity = ?window,
@@ -560,15 +720,18 @@ pub(super) fn enqueue_window_set_pos(
         None => (SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE, 0, 0),
     };
 
-    SetWindowPosCommand::enqueue(SetWindowPosCommand::new(
-        handle.hwnd,
-        x,
-        y,
-        w,
-        h,
-        flags,
-        None,
-    ));
+    // 要求語彙タグ（要件 2.1・design D3）: 「どの経路が・どの窓へ」を書込指令へ載せる。
+    // 単一ライターがここ 1 箇所で付けるので、経路が増えても札の付け忘れが構造的に起きない
+    // （生成の 7 引数は不変＝`with_tag` はビルダで足すだけ）。
+    SetWindowPosCommand::enqueue(
+        SetWindowPosCommand::new(handle.hwnd, x, y, w, h, flags, None)
+            .with_tag(transition_diag::write_tag(world, window, route)),
+    );
+
+    // 既定位置の追跡（design D9／D16・要件 6.2）: **ミラーを書き換える前**に呼ぶ——本関数が
+    // 見るのは「書込**前**の現在位置」であり、下の bypass ミラーが `WindowPos.position` を
+    // 新位置へ書いた後では一致判定が常に成立してしまう（明示操作で動かした窓まで追随する）。
+    track_default_char_pos(world, window, route, PointPx { x, y });
 
     match world.get_mut::<WindowPos>(window) {
         Some(mut wp) => {
@@ -615,6 +778,101 @@ pub(super) fn enqueue_window_set_pos(
     }
 
     true
+}
+
+/// 「まだ誰にも動かされていない」の基準（`ScopeWindows.default_char_pos`）を、**システム由来の
+/// 再アンカー**が動かした先へ追随させる（design D9／D16・要件 6.2）。
+///
+/// # なぜ要るか
+///
+/// 連鎖の再解決は「明示的に再配置されたスコープを対象から外す」ために、現在位置が既定位置と
+/// 一致するかを見る（`scope-chain-gap` 7.3・`drain_resnap::collect_chain_states`）。ところが
+/// 拡大率が変われば**全スコープ**の位置がシステム側の都合で動く——既定位置を据え置いたままだと
+/// 全件が「明示的に動かされた」へ倒れ、遷移後の解き直しが丸ごと空振りする（要件 6.2 が
+/// 名指しで禁じる状態）。ゆえに、システム由来の書込に限って基準そのものを一緒に運ぶ。
+///
+/// # 追随させる条件（3 つすべて）
+///
+/// 1. **route がシステム由来**（[`PlacementRoute::is_system_reanchor`]）。明示操作
+///    （`MoveCue`・`Restore`・`BalloonLimitRelease`）と route を持たない書込（ドラッグ＝
+///    `None`）では追随させない——これらは「利用者が置いた位置」であって、既定位置との
+///    食い違いこそが除外の根拠だからである。
+/// 2. **対象がキャラ窓**（[`CharWindowMarker`] を持つ）。既定位置はスコープのキャラ窓に対して
+///    のみ定義される量で、バルーン窓は従属量ゆえ持たない。
+/// 3. **書込前の現在位置が既定位置と一致**。一致しない窓は既にドラッグ・台本で動かされて
+///    おり、そこへ追随させると「動かされた」という事実そのものを消してしまう。
+///
+/// 既定位置が `None`（保存位置が復元されたスコープ）は `None` のままにする——`None` は
+/// 「そもそも既定配置ではない」を表す標であって、位置の欠落ではない（`scope-chain-gap` 7.3）。
+///
+/// # 連鎖確定の書込とは重ならない
+///
+/// 起動時の連鎖確定（`drain_resnap::finalize_chain_once_with`）は反映を
+/// [`move_window_to`]＝[`PlacementRoute::MoveCue`]＝**明示操作**の経路で行い、確定値を自分で
+/// [`GhostWindows::set_default_char_pos`] へ書く。本関数はその経路に効かないので、2 つの
+/// 書き手が同じ量を別々の値で書くことはない。
+///
+/// # 追随させないときは何もしない（無音）
+///
+/// 上の 3 条件は**常時**評価される（窓書込のたびに通る）ので、外れた場合は正常な素通りである。
+/// 一方、キャラ窓かつシステム由来なのに台帳・位置が引けない形は結線の異常ゆえ `debug!` を残す
+/// ——書込そのものは成立しており失敗ではないが、無音にすると「追随したのか対象外だったのか」が
+/// 事後に判らなくなる。
+fn track_default_char_pos(
+    world: &mut World,
+    window: Entity,
+    route: Option<PlacementRoute>,
+    written: PointPx,
+) {
+    // 条件 1: システム由来の再アンカーだけが基準を運ぶ。
+    if !route.is_some_and(PlacementRoute::is_system_reanchor) {
+        return;
+    }
+    // 条件 2: 既定位置を持つのはスコープのキャラ窓だけ。
+    let Some(scope) = world.get::<CharWindowMarker>(window).map(|m| m.scope) else {
+        return;
+    };
+    // 条件 3 の左辺: 書込**前**の現在位置。
+    let Some(current) = world.get::<WindowPos>(window).and_then(|wp| wp.position) else {
+        debug!(
+            entity = ?window,
+            scope,
+            ?route,
+            "WindowPos／position 未付与のため既定位置の追跡を見送る（書込は成立）"
+        );
+        return;
+    };
+    let Some(mut ghost_windows) = world.get_resource_mut::<GhostWindows>() else {
+        debug!(
+            entity = ?window,
+            scope,
+            ?route,
+            "GhostWindows 未挿入のため既定位置の追跡を見送る（書込は成立）"
+        );
+        return;
+    };
+    // `None`（保存位置の復元）は `None` のまま——「既定配置ではない」の標を位置で塗り潰さない。
+    let Some(default_pos) = ghost_windows.default_char_pos(scope) else {
+        return;
+    };
+    // 条件 3: 一致していた窓だけが追随する。
+    if default_pos.x != current.x || default_pos.y != current.y {
+        return;
+    }
+    if default_pos == written {
+        return;
+    }
+    ghost_windows.set_default_char_pos(scope, written);
+    debug!(
+        entity = ?window,
+        scope,
+        ?route,
+        from_x = default_pos.x,
+        from_y = default_pos.y,
+        to_x = written.x,
+        to_y = written.y,
+        "既定位置をシステム由来の再アンカー先へ追随させた（D9／D16・要件 6.2）"
+    );
 }
 
 /// 窓移動レコード（Req 1.2）を World から転写して組み、専用 target へ出す

@@ -79,6 +79,7 @@ use bevy_ecs::prelude::*;
 use bevy_ecs::system::NonSendMarker;
 use windows::Win32::Foundation::HWND;
 
+use super::transition_diag::{ORIGIN_ZORDER_PAIR, WriteTag};
 use super::zorder_pair::{
     InsertSpec, PairFixDecision, PairObservation, PairTrigger, PeerLoss, SkipReason,
     decide_pair_fix, log_orphan_request_dropped, log_owner_detach_failed, log_owner_detached,
@@ -205,6 +206,13 @@ pub(crate) fn pair_fix_command(hwnd: HWND, insert_after: InsertSpec) -> SetWindo
         pos.build_flags_for_system(),
         pos.get_hwnd_insert_after(),
     )
+    // 観測専用の札。どの経路が積んだ書込かを 1 行で見分けるためだけのもので、
+    // 判定・挿入位置・フラグ・適用順のいずれも変わらない（要件 10.3）。
+    // スコープと窓種別は表示基盤側では判らないため番兵のままにする。
+    .with_tag(WriteTag {
+        origin: ORIGIN_ZORDER_PAIR,
+        ..WriteTag::UNTAGGED
+    })
 }
 
 // ============================================================================

@@ -7,10 +7,10 @@ areka はバイナリ配布時に、以下の第三者パッケージのライ�
 areka 自身のライセンスは MIT です（ルートの `LICENSE-MIT` を参照）。
 
 使用ライセンス一覧:
-- MIT License (210 crate)
+- MIT License (200 crate)
+- BSD 3-Clause "New" or "Revised" License (2 crate)
 - zlib License (2 crate)
 - Apache License 2.0 (1 crate)
-- BSD 3-Clause "New" or "Revised" License (1 crate)
 - Unicode License v3 (1 crate)
 
 ---
@@ -231,6 +231,70 @@ areka 自身のライセンスは MIT です（ルートの `LICENSE-MIT` を参
 - encoding_rs 0.8.35
 
 ```
+// Copyright © WHATWG (Apple, Google, Mozilla, Microsoft).
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+//
+// 1. Redistributions of source code must retain the above copyright notice, this
+//    list of conditions and the following disclaimer.
+//
+// 2. Redistributions in binary form must reproduce the above copyright notice,
+//    this list of conditions and the following disclaimer in the documentation
+//    and/or other materials provided with the distribution.
+//
+// 3. Neither the name of the copyright holder nor the names of its
+//    contributors may be used to endorse or promote products derived from
+//    this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+// SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+// CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+// OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+/// The PUA code points special-cased in the GB18030 encoder.
+pub(crate) static GB18030_2022_OVERRIDE_PUA: [u16; 18] = [
+    0xE78D, 0xE78E, 0xE78F, 0xE790, 0xE791, 0xE792, 0xE793, 0xE794, 0xE795, 0xE796, 0xE81E, 0xE826,
+    0xE82B, 0xE82C, 0xE832, 0xE843, 0xE854, 0xE864,
+];
+
+/// The bytes corresponding to the PUA code points special-cased in the GB18030 encoder.
+pub(crate) static GB18030_2022_OVERRIDE_BYTES: [[u8; 2]; 18] = [
+    [0xA6, 0xD9],
+    [0xA6, 0xDA],
+    [0xA6, 0xDB],
+    [0xA6, 0xDC],
+    [0xA6, 0xDD],
+    [0xA6, 0xDE],
+    [0xA6, 0xDF],
+    [0xA6, 0xEC],
+    [0xA6, 0xED],
+    [0xA6, 0xF3],
+    [0xFE, 0x59],
+    [0xFE, 0x61],
+    [0xFE, 0x66],
+    [0xFE, 0x67],
+    [0xFE, 0x6D],
+    [0xFE, 0x7E],
+    [0xFE, 0x90],
+    [0xFE, 0xA0],
+];
+
+```
+
+---
+## BSD 3-Clause "New" or "Revised" License
+
+対象 crate:
+- encoding_rs 0.8.35
+
+```
 Copyright © WHATWG (Apple, Google, Mozilla, Microsoft).
 
 Redistribution and use in source and binary forms, with or without
@@ -257,6 +321,98 @@ SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
 CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+```
+
+---
+## MIT License
+
+対象 crate:
+- cfg_aliases 0.2.2
+
+```
+# 3rd Party Notices
+
+The `cfg_aliases!` macro uses a lot of the code from [`tectonic_cfg_support::target_cfg!`] macro which is under the following license:
+
+[`tectonic_cfg_support::target_cfg!`]: https://github.com/tectonic-typesetting/tectonic/blob/f2439b936470ad27bdf92882064bc4702ee01899/cfg_support/src/lib.rs#L166
+
+    tectonic_cfg_support is licensed under the MIT License.
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the “Software”), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+---
+
+```
+
+---
+## MIT License
+
+対象 crate:
+- atomic-waker 1.1.2
+- futures-lite 2.6.1
+
+```
+===============================================================================
+
+Copyright (c) 2016 Alex Crichton
+Copyright (c) 2017 The Tokio Authors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+===============================================================================
+
+Copyright (c) 2016 Alex Crichton
+Copyright (c) 2017 The Tokio Authors
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
 
 ```
 
@@ -310,6 +466,42 @@ DEALINGS IN THE SOFTWARE.
 
 ```
 Copyright (c) 2014 Alex Crichton
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+```
+
+---
+## MIT License
+
+対象 crate:
+- web-task 1.1.3
+
+```
+Copyright (c) 2014 Alex Crichton
+Copyright (c) 2025 Miles Silberling-Cook
 
 Permission is hereby granted, free of charge, to any
 person obtaining a copy of this software and associated
@@ -625,6 +817,8 @@ SOFTWARE.
 - futures-channel 0.3.34
 - futures-core 0.3.34
 - futures-io 0.3.34
+- futures-task 0.3.34
+- futures-util 0.3.34
 
 ```
 Copyright (c) 2016 Alex Crichton
@@ -1046,42 +1240,6 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 対象 crate:
-- getrandom 0.3.4
-
-```
-Copyright (c) 2018-2025 The rust-random Project Developers
-Copyright (c) 2014 The Rust Project Developers
-
-Permission is hereby granted, free of charge, to any
-person obtaining a copy of this software and associated
-documentation files (the "Software"), to deal in the
-Software without restriction, including without
-limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of
-the Software, and to permit persons to whom the Software
-is furnished to do so, subject to the following
-conditions:
-
-The above copyright notice and this permission notice
-shall be included in all copies or substantial portions
-of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
-ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
-TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
-PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
-SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
-IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-
-```
-
----
-## MIT License
-
-対象 crate:
 - rand_core 0.10.1
 
 ```
@@ -1250,41 +1408,6 @@ SOFTWARE.
 
 ```
 Copyright (c) 2019 Nick Fitzgerald
-
-Permission is hereby granted, free of charge, to any
-person obtaining a copy of this software and associated
-documentation files (the "Software"), to deal in the
-Software without restriction, including without
-limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of
-the Software, and to permit persons to whom the Software
-is furnished to do so, subject to the following
-conditions:
-
-The above copyright notice and this permission notice
-shall be included in all copies or substantial portions
-of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
-ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
-TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
-PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
-SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
-IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-
-```
-
----
-## MIT License
-
-対象 crate:
-- ppv-lite86 0.2.21
-
-```
-Copyright (c) 2019 The CryptoCorrosion Contributors
 
 Permission is hereby granted, free of charge, to any
 person obtaining a copy of this software and associated
@@ -1532,17 +1655,11 @@ DEALINGS IN THE SOFTWARE.
 - human-panic 2.0.8
 - is_terminal_polyfill 1.70.2
 - once_cell_polyfill 1.70.2
-- serde_spanned 0.6.9
 - serde_spanned 1.1.1
-- toml 0.8.23
 - toml 1.1.4+spec-1.1.0
-- toml_datetime 0.6.11
-- toml_datetime 0.7.5+spec-1.1.0
 - toml_datetime 1.1.1+spec-1.1.0
-- toml_edit 0.22.27
-- toml_edit 0.23.10+spec-1.0.0
+- toml_edit 0.25.13+spec-1.1.0
 - toml_parser 1.1.3+spec-1.1.0
-- toml_write 0.1.2
 - toml_writer 1.1.2+spec-1.1.0
 
 ```
@@ -1643,9 +1760,6 @@ DEALINGS IN THE SOFTWARE.
 
 対象 crate:
 - rand 0.10.2
-- rand 0.9.5
-- rand_chacha 0.9.0
-- rand_core 0.9.5
 
 ```
 Copyright 2018 Developers of the Rand project
@@ -1674,42 +1788,6 @@ CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
-
-```
-
----
-## MIT License
-
-対象 crate:
-- zerocopy 0.8.56
-
-```
-Copyright 2023 The Fuchsia Authors
-
-Permission is hereby granted, free of charge, to any
-person obtaining a copy of this software and associated
-documentation files (the "Software"), to deal in the
-Software without restriction, including without
-limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of
-the Software, and to permit persons to whom the Software
-is furnished to do so, subject to the following
-conditions:
-
-The above copyright notice and this permission notice
-shall be included in all copies or substantial portions
-of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
-ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
-TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
-PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
-SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
-IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-
 
 ```
 
@@ -1854,7 +1932,6 @@ SOFTWARE.
 - shiori-host32-testdll 0.0.1
 - shiori4-testdll 0.0.1
 - wintf 0.0.1
-- pasta_core 0.1.6
 - ambassador 0.5.1
 - block2 0.6.2
 - dispatch2 0.3.1
@@ -1862,9 +1939,9 @@ SOFTWARE.
 - objc2-encode 4.1.0
 - objc2-io-kit 0.3.2
 - objc2 0.6.4
-- r-efi 5.3.0
+- pasta_core 0.3.3
 - r-efi 6.0.0
-- taffy 0.9.2
+- taffy 0.13.0
 - winapi-i686-pc-windows-gnu 0.4.0
 - winapi-x86_64-pc-windows-gnu 0.4.0
 - windows-collections 0.3.2
@@ -1941,21 +2018,15 @@ SOFTWARE.
 ## MIT License
 
 対象 crate:
-- bevy_app 0.18.1
-- bevy_derive 0.18.1
-- bevy_ecs 0.18.1
-- bevy_ecs_macros 0.18.1
-- bevy_macro_utils 0.18.1
-- bevy_platform 0.18.1
-- bevy_ptr 0.18.1
-- bevy_reflect 0.18.1
-- bevy_reflect_derive 0.18.1
-- bevy_tasks 0.18.1
-- bevy_utils 0.18.1
-- disqualified 1.0.0
+- miniz_oxide 0.8.9
 
 ```
 MIT License
+
+Copyright 2013-2014 RAD Game Tools and Valve Software
+Copyright 2010-2014 Rich Geldreich and Tenacious Software LLC
+Copyright (c) 2017 Frommi
+Copyright (c) 2017-2024 oyvindln
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -1981,12 +2052,22 @@ SOFTWARE.
 ## MIT License
 
 対象 crate:
-- grid 1.0.1
+- bevy_app 0.19.1
+- bevy_derive 0.19.1
+- bevy_ecs 0.19.1
+- bevy_ecs_macro_logic 0.19.1
+- bevy_ecs_macros 0.19.1
+- bevy_macro_utils 0.19.1
+- bevy_platform 0.19.1
+- bevy_ptr 0.19.1
+- bevy_reflect 0.19.1
+- bevy_reflect_derive 0.19.1
+- bevy_tasks 0.19.1
+- bevy_utils 0.19.1
+- disqualified 1.0.0
 
 ```
 MIT License
-
-Copyright (c) 2020 Armin Becher
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -2091,9 +2172,7 @@ SOFTWARE.
 - linux-raw-sys 0.12.1
 - once_cell 1.21.4
 - parking 2.2.1
-- pin-project-internal 1.1.13
 - pin-project-lite 0.2.17
-- pin-project 1.1.13
 - polling 3.11.0
 - portable-atomic-util 0.2.7
 - portable-atomic 1.15.0
@@ -2112,8 +2191,6 @@ SOFTWARE.
 - thiserror 2.0.20
 - typeid 1.0.3
 - unicode-ident 1.0.24
-- wasip2 1.0.4+wasi-0.2.12
-- wit-bindgen 0.57.1
 - zmij 1.0.23
 
 ```
@@ -2147,7 +2224,6 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 対象 crate:
-- winnow 0.7.15
 - winnow 1.0.4
 
 ```
@@ -2258,6 +2334,37 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+```
+
+---
+## MIT License
+
+対象 crate:
+- tracing-core 0.1.36
+
+```
+The MIT License (MIT)
+
+Copyright (c) 2014 Mathijs van de Nes
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
 ```
 
 ---

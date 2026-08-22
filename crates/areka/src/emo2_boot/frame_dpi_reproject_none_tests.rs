@@ -285,7 +285,9 @@ fn s2_reproject_on_despawned_entity_is_debug_only_normal_termination() {
     world.despawn(char0);
 
     let (wrote, events) =
-        capture_diag_logs(|| reproject_char_window_at_current_size(&mut world, char0));
+        capture_diag_logs(|| {
+            reproject_char_window_at_current_size(&mut world, char0, PlacementRoute::DpiReproject)
+        });
 
     assert!(!wrote, "破棄済み窓へは書けない（false・panic しない）");
     // `tracing::Level` の Ord は ERROR < WARN < INFO < DEBUG < TRACE ゆえ

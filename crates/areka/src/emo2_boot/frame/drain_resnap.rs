@@ -12,7 +12,9 @@ use crate::placement::chain_finalize::{
     ChainDeferReason, ChainFinalizeStall, ChainFinalized, ScopeChainState, finalize_chain,
     moved_default_pos, note_chain_deferral,
 };
+use crate::placement::chain_realign;
 use crate::placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
+use crate::placement::dpi_sync::{self, HoldSite};
 use crate::placement::follow::{move_window_to, resize_window_to};
 use crate::placement::resolver::{PointPx, SizePx};
 use crate::placement::spawn::GhostWindows;
@@ -224,6 +226,15 @@ pub(super) fn resnap_with<S: PhysicalSizeSource + ?Sized>(source: &S, world: &mu
             );
             continue;
         }
+        // 整合ゲート（設計 C5・要件 5.8）: 待ち札のある窓へはこの経路からも書かない。
+        // 見送った寸は持ち越し用に溜めない——本関数は毎フレーム**表示側の現物理寸を読み直す**
+        // ので、待ちが解けたフレームに同じ食い違いがそのまま再び見える（拡大率の相が先に
+        // 1 本書けば、そこで一致してべき等 skip で抜ける）。
+        if let Some(char_window) = ghost_windows.char_window(scope)
+            && dpi_sync::defers_window_write(world, char_window, HoldSite::Resnap)
+        {
+            continue;
+        }
         // shell target（偶数=2*scope）のみを読む（balloon_target は読まない＝shell 限定・Req4.5）。
         // 窓 client に合わせるべき寸は **物理寸**（k 倍後）であって native 原寸ではない。両者を
         // 選べる `text_slot_view()`（`surface_size()`／`physical_size()` が隣り合う）ではなく、
@@ -325,6 +336,10 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
     }
 
     // 台帳の既定位置を確定値へ揃える（以後の「既定配置のまま」判定が確定後を基準に働く）。
+    //
+    // ここを明示的に書くのは、上の反映が `move_window_to`＝`PlacementRoute::MoveCue`
+    // ＝**明示操作**の経路を通るからである。単一の窓書込口の追随規則（atom D9／D16）は
+    // システム由来の再アンカーにしか効かないので、両者は重ならない（二重に書かない）。
     if !moves.is_empty()
         && let Some(mut ghost_windows) = world.get_resource_mut::<GhostWindows>()
     {
@@ -341,6 +356,34 @@ pub(super) fn finalize_chain_once_with<S: PhysicalSizeSource + ?Sized>(
         moved = moves.len(),
         "chain_finalize: 初期配置を確定（以後のサーフェス切替では駆動しない・scg 7.4）"
     );
+}
+
+// ---------------------------------------------------------------------------
+// DPI 遷移後の連鎖再解決（atom 設計 C4・要件 6.1／6.2／6.3／6.6）
+// ---------------------------------------------------------------------------
+
+/// 遷移後の連鎖の解き直しを 1 回試みる（`emo2_frame_system` が連鎖確定の**直後**に呼ぶ）。
+///
+/// 本番経路は [`finalize_chain_once`] と同じく本体を持たず
+/// [`realign_chain_once_with_source`] へ委譲する（実装を 2 つに割らない）。
+pub(super) fn realign_chain_once(presenter: &EmoPresenter, world: &mut World) {
+    realign_chain_once_with_source(presenter, world)
+}
+
+/// [`realign_chain_once`] の本体（[`PhysicalSizeSource`] 越しに寸を引く形へ一般化したもの）。
+///
+/// 判断そのもの（武装しているか・待ち札が残っていないか・解き直して武装を解く）は
+/// [`crate::placement::chain_realign`] が持つ。ここが供給するのは走査だけである——
+/// 「全スコープの窓寸が実表示寸へ揃ったか」の判定を起動時確定と**同一の実装**
+/// （[`collect_chain_states`]）で行うために、走査を関数として渡す。
+///
+/// 走査を配置層へ移さないのは、表示側の寸の引き口（[`PhysicalSizeSource`]）と target 採番
+/// （`shell_target`）が表示層の語彙だからである（配置層はどちらも知らない）。
+pub(super) fn realign_chain_once_with_source<S: PhysicalSizeSource + ?Sized>(
+    source: &S,
+    world: &mut World,
+) {
+    chain_realign::realign_chain_once_with(world, |world| collect_chain_states(source, world));
 }
 
 /// 確定の走査結果——判定へ渡す状態列と、反映へ渡す `(scope, char 窓 entity, 現在位置)` の列。
@@ -367,6 +410,11 @@ fn collect_chain_states<S: PhysicalSizeSource + ?Sized>(
         };
         // `None` は「既定配置ではない」（保存位置の復元）。判定側が常に対象外として扱う
         // ため、ここでは打ち切らずそのまま渡す（scg 7.3）。
+        //
+        // 読む値は「起動時の既定」ではなく**「最後にシステムが置いた既定位置」**である
+        // （atom D9／D16・要件 6.2）。拡大率の遷移では単一の窓書込口が同じ量を書込先へ
+        // 運ぶので、誰も触っていないスコープは遷移後も一致したまま＝対象に残る。運ばないと
+        // 全スコープが「明示的に動かされた」へ倒れて解き直しが空振りする。
         let default_x = ghost_windows.default_char_pos(scope).map(|p| p.x);
         // 表示未成立（初回 ShowSurface 前）は実表示寸が未確定＝まだ確定できない。
         let Some((w, h)) = source.physical_size(shell_target(scope as u32)) else {

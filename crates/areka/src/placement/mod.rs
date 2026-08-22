@@ -21,14 +21,28 @@
 
 pub(crate) mod balloon_limit;
 pub mod chain_finalize;
+/// DPI／拡大率の遷移後に連鎖を一度だけ解き直す機構（設計 C4・要件 6.1〜6.3／6.6）。
+pub mod chain_realign;
 pub mod config;
 pub mod diag;
+/// 窓ごとの整合ゲート（窓の拡大率とモニタ別拡大率表が揃うまで窓書込を見送る・設計 C5）。
+pub(crate) mod dpi_sync;
 pub mod follow;
 pub mod measure;
 pub mod persist;
 pub mod resolver;
 pub mod source;
 pub mod spawn;
+pub mod transition_diag;
+/// 遷移観測ログの判定器（純関数・I/O 無し）。
+///
+/// 消費者は決定論テストと実機サインオフのランナー（`#[ignore]` テスト）だけで、本番の
+/// 実行経路からは 1 度も呼ばれない。areka は lib ターゲットを持たない bin crate ゆえ
+/// `pub` でも dead_code 免除されず、本番ビルドへ置くと項目ごとに許可属性を貼る羽目に
+/// なる（それは以後の真の dead code を隠す）。[`test_support`] と同じ形にして、許可属性を
+/// 1 つも置かずに済ませる。
+#[cfg(test)]
+pub(crate) mod transition_judge;
 mod windowposition;
 
 /// 作者空間の符号付きオフセットを k 倍する唯一の写像（大きさは `ScaleRatio::scale_len`
@@ -136,6 +150,17 @@ pub const MONITOR_SNAPSHOT_CONTEXT: &str = "monitor_snapshot";
 /// 呼びつつタグだけを違えることで、ログ上で出所を弁別でき、かつ**同じ語彙**ゆえ
 /// grep 突合で構成の食い違いを検出できる（D12: 専用の突合機構は新設しない）。
 pub const PREPARE_GHOST_WINDOWS_CONTEXT: &str = "prepare_ghost_windows";
+
+/// 作業領域源の**実行時同期**（`emo2_boot::frame::work_area_sync`）の呼出点タグ
+/// （areka-P0-dpi-transition-atomicity 要件 5.1・設計 C6）。
+///
+/// 起動時の構築点（[`MONITOR_SNAPSHOT_CONTEXT`]）と列挙点（[`PREPARE_GHOST_WINDOWS_CONTEXT`]）に
+/// 続く 3 つ目の出所である。同じ共有ヘルパ [`diag::log_monitor_snapshot`] を呼び、タグだけを
+/// 違える（D12: 語彙は共有したまま出所を弁別する）——起動時の構成と同期後の構成が
+/// 同じ語彙で並ぶので、どのフレームで何が変わったかを grep 突合で追える。
+///
+/// 同期の警告（モニタ 0 台）も同じ語を行頭に名乗る（`[work_area_sync] …`）。
+pub const WORK_AREA_SYNC_CONTEXT: &str = "work_area_sync";
 
 /// wintf のモニタ列挙結果を診断レコードへ**忠実転写**する純関数（要件 1.1）。
 ///

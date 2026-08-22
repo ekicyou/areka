@@ -1,7 +1,10 @@
 //! `ShowSurface` の適用（`EmoPresenter::apply_show`）——k 導出・引き当て／合成・供給面遅延生成・
 //! アップロード＋マスク同期＋可視化・表示成立点の状態更新を 1 呼び出しで行う単一漏斗。
 
+use wintf::ecs::window::transition_diag;
+
 use super::timing::{EmitContext, FrameTiming, Stage, compose_key_hash};
+use super::transition_record::{SurfaceRecord, SurfaceStage, frame_of, stamp_of, surface_line};
 use super::{
     AlphaMaskResource, BindSet, ComposeError, DPI, EmoPresenter, GraphicsCore, PatternState,
     PresentError, PresentOutcome, ReplySender, SwapChainPresenter, TargetId, VisibilityOwnership,
@@ -294,6 +297,12 @@ impl EmoPresenter {
             .get(surface_id, &binds, &pattern, scale)
             .expect("直前に引き当て済み");
         let chain = target.chain.as_mut().expect("直上で生成済み");
+        // (3a) 遷移観測の `resized`（design D4）: **upload の直前**の供給面寸を控える。upload の
+        // 内側の `ResizeBuffers` は外形が変わったときだけ走る（`chain.rs`）ので、前後比較は
+        // 「バッファ寸が変わったか」と同値である。戻り値型を変えて成否と一緒に受け取る形
+        // （旧案 `UploadOutcome`）は、下のエラー分岐の字面を動かさざるを得ず両立しなかった
+        // ——この分岐は `test-cage-determinism` ④の観測点であり、本 spec は移動させない。
+        let prev_size = chain.size();
         if let Err(e) = chain.upload(&entry.composed) {
             // upload は内部で error! 済み（chain.rs）。表示は前状態を保つ（成功まで旧状態不変）。
             Self::reply(reply, Err(e));
@@ -304,6 +313,50 @@ impl EmoPresenter {
         // 値＝k 適用済み composed の外形）。エントリ外形から別途組み立てないことで、供給面・visual
         // 境界・マスクが同一の物理寸に揃うことを構造で担保する（R3.2・k 追従は A2 の自動追従）。
         let size = chain.size();
+        // 供給面のバッファ寸が実際に変わった回（前後比較・design D4）。
+        let resized = size != prev_size;
+
+        // (3b) 状態照合の前値導出（design Flow 1 キー決定・議題 #2 裁定）。**前値を上書きする前に**
+        // 前回適用の物理寸を組み立てる。組み立ては契約式
+        // `物理寸 == applied.scaled_extent(native_size)`（design §State Management）に従う——別
+        // フィールドで物理寸を二重に持つと更新点が 2 つになり、片方だけが書かれる欠陥（本 spec で
+        // 既出）を招く。両者は表示成立点で必ず揃って更新されるため、この導出は常に「前回この経路が
+        // 表示へ載せた物理寸」に一致する（`resample` の事後条件が `出力外形 == scaled_extent(入力外形)`
+        // ゆえ `chain.size()` と厳密に等しい）。
+        //
+        // 前値なし（初回表示）は `None` ≠ `Some(size)` ゆえ**必ず差分扱い**になる。これは意図した
+        // 設計である——窓は起動時 k₀ 見積もり寸で生成されており実窓 DPI 由来の k と一致する保証が
+        // ないため、初回を黙らせると Flow 3 手順 5 の補正が永久に走らない。
+        //
+        // 導出をここ（要求の積み上げ地点ではなく upload 直後）に置くのは、下の遷移観測が
+        // `size_changed` を判定材料に要るためである。`applied`／`native_size` はこの点から要求の
+        // 積み上げまでのあいだ 1 度も書かれないので、導出位置の移動で値は変わらない。
+        let prev_physical = target
+            .applied
+            .zip(target.native_size)
+            .map(|(k, (nw, nh))| k.scaled_extent(nw, nh));
+        let size_changed = prev_physical != Some(size);
+
+        // (3c) 遷移観測: サーフェス更新の記録（Requirement 2.2・design C3）。
+        //
+        // **寸が動いた回だけ**、かつ**観測が有効なときだけ**組む。前置ガードが行の組立より外側に
+        // 無いと、既定 OFF の運転でも毎フレーム `String` を確保することになり、`recompose-budget` が
+        // 成立させた定常状態のアロケーション 0（Requirement 10.4）が壊れる。発行は `debug!` ゆえ
+        // ガードの有無で**出力は 1 文字も変わらない**——この退行を捕まえるのは
+        // `transition_record_tests.rs` の本文走査だけである。
+        let observe_surface = (size_changed || resized) && transition_diag::is_enabled();
+        if observe_surface {
+            transition_diag::emit_line(&surface_line(&SurfaceRecord {
+                // 刻印は World 資源から組む（D1）。本経路は `&mut World` を持つ観測点であり、
+                // スレッド局所ミラーは World を借りられない点の専用口である。
+                stamp: stamp_of(world),
+                stage: SurfaceStage::Upload,
+                target_id,
+                size: Some(size),
+                resized: Some(resized),
+                reason: None,
+            }));
+        }
 
         let mount = target.mount.as_ref().expect("直上で生成済み");
         if let Some(mut mask_res) = world.get_mut::<AlphaMaskResource>(mount.surface_entity()) {
@@ -329,6 +382,21 @@ impl EmoPresenter {
         if visualize {
             target.visible = true;
         }
+        // 可視化後の記録（design C3）。境界を新物理寸へ合わせ終えた点＝「描画内容がこの寸で見える
+        // ようになった」瞬間であり、判定側はこの行の `t_us` と当該窓の窓書込の `t_us` の差
+        // （`visualize_to_write_us`）で「窓矩形と描画内容が食い違う区間」を測る（C7・設計討議 A-2）。
+        // 条件は upload の記録と同じ 1 つの札を使う—— 2 度評価すると片方だけが変わる形を作れる。
+        if observe_surface {
+            transition_diag::emit_line(&surface_line(&SurfaceRecord {
+                stamp: stamp_of(world),
+                stage: SurfaceStage::Visualize,
+                target_id,
+                size: Some(size),
+                // 段階の意味を持たない 2 フィールドは番兵で残す（落とさない）。
+                resized: None,
+                reason: None,
+            }));
+        }
         // 表示確立＝この id が現サーフェス（全透明でも成立・α 非依存の単一真実源・R3.1/3.3・Key decisions）。
         target.current_surface_id = Some(surface_id);
         // ここが**表示成立点**＝ k・native 原寸・再表示入力の唯一の更新点（design Flow 1 キー決定）。
@@ -336,20 +404,10 @@ impl EmoPresenter {
 
         // (3.5) 状態照合＝窓寸 reconcile 要求の生成（design Flow 1 キー決定・議題 #2 裁定）。
         //
-        // **前値を上書きする前に**前回適用の物理寸を組み立てる。組み立ては契約式
-        // `物理寸 == applied.scaled_extent(native_size)`（design §State Management）に従う——別フィールドで
-        // 物理寸を二重に持つと更新点が 2 つになり、片方だけ書かれる欠陥（本 spec で既出）を招く。両者は
-        // 表示成立点で必ず揃って更新されるため、この導出は常に「前回この経路が表示へ載せた物理寸」に一致する
-        // （`resample` の事後条件が `出力外形 == scaled_extent(入力外形)` ゆえ `chain.size()` と厳密に等しい）。
-        //
-        // 前値なし（初回表示）は `None` ≠ `Some(size)` ゆえ**必ず差分扱い**になる。これは意図した設計である
-        // ——窓は起動時 k₀ 見積もり寸で生成されており実窓 DPI 由来の k と一致する保証がないため、初回を
-        // 黙らせると Flow 3 手順 5 の補正が永久に走らない。
-        let prev_physical = target
-            .applied
-            .zip(target.native_size)
-            .map(|(k, (nw, nh))| k.scaled_extent(nw, nh));
-        let size_changed = prev_physical != Some(size);
+        // 判定材料（`prev_physical`／`size_changed`）は upload 直後の手順 (3b) で既に導いてある
+        // ——遷移観測がそれを要るためであり、値の意味も算出式も (3b) の説明のとおりである。
+        // 要求を積むのは従来どおりここ（表示成立が確定した後）で、`applied`／`native_size` の
+        // 上書きより手前である。
         if size_changed {
             // 差分あり＝呼び手（frame drain フェーズ）へ新物理寸を報告する。同寸のときは**何も触らない**
             // ——`None` を書き戻すと未消費の要求を殺してしまう（取りこぼしを作らない・べき等）。
@@ -417,6 +475,9 @@ impl EmoPresenter {
                 surface_id,
                 cache_hit,
                 key_hash,
+                // 遷移観測と**同じ資源**から読む（Requirement 2.8・D12）。供給元が 2 つになると
+                // 「perf 行と surface 行が同一フレームで突合できる」が静かに壊れる。
+                frame: frame_of(world),
             },
             allocs,
         );

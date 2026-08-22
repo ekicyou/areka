@@ -207,6 +207,26 @@ pub enum PlacementRoute {
     /// **元書込の route を保つ**。補正は同一書込の一部であって別書込ではないからである（DD7）。
     // 発行者は `follow::drag_follow::apply_release_limit_correction`（task 3.4）ただ 1 箇所。
     BalloonLimitRelease,
+    /// 作業領域の変化を契機とする現寸での再スナップ
+    /// （areka-P0-dpi-transition-atomicity C6 `work_area_sync::resnap_for_work_area_change`）。
+    ///
+    /// 拡大率は変わらず**作業領域だけ**が変わった窓を、現在の寸のまま新しい下端へ移す書込で
+    /// ある。毎フレーム走る [`Resnap`](Self::Resnap) とも、拡大率変化に伴う
+    /// [`DpiReproject`](Self::DpiReproject) とも**実在のトリガが違う**ため専用語を持つ
+    /// （D13 の 1 語＝1 実在トリガ）。混同すると「作業領域が動いたから移した」のか
+    /// 「毎フレームの再スナップが動かした」のかがログ上で切り分けられない。
+    // 発行者は `emo2_boot::frame::work_area_sync::resnap_for_work_area_change`（task 5.2 で
+    // 着地）。語彙を task 2.4 で先に建てたのは、判定器（task 3.1）と単一の窓書込口の札が
+    // 同じ語を見るためである。
+    WorkAreaResnap,
+    /// DPI 遷移後の連鎖（隣接ペア）再解決
+    /// （areka-P0-dpi-transition-atomicity C4 `chain_realign::realign_chain_once_with`）。
+    ///
+    /// 起動時一度きりの連鎖確定（`scope-chain-gap`）とは別機構で、遷移 1 回につき一度だけ
+    /// 隣接を解き直す書込である。起動時確定は `SpawnInitial`／`Restore` の後段で位置を決める
+    /// のに対し、こちらは遷移後の新しい幅で左端を連ね直す——由来が違うので語も分ける。
+    // 発行者は `placement::chain_realign::realign_chain_once_with`（task 5.6 で着地）。
+    ChainRealign,
 }
 
 impl PlacementRoute {
@@ -217,7 +237,7 @@ impl PlacementRoute {
     // 消費者は in-source 檻（`#[cfg(test)]`）だけゆえ本番ビルドでは dead。檻専用の列である
     // ことが存在理由そのもの（語彙の網羅・一意性の単一の錨）ゆえ本属性を残す。
     #[allow(dead_code)]
-    pub const ALL: [PlacementRoute; 10] = [
+    pub const ALL: [PlacementRoute; 12] = [
         PlacementRoute::SpawnInitial,
         PlacementRoute::Restore,
         PlacementRoute::AnchorChange,
@@ -228,6 +248,8 @@ impl PlacementRoute {
         PlacementRoute::ReportedSizeReconcile,
         PlacementRoute::MoveCue,
         PlacementRoute::BalloonLimitRelease,
+        PlacementRoute::WorkAreaResnap,
+        PlacementRoute::ChainRealign,
     ];
 
     /// ログ上の表示語（診断手順書の grep 判定語と 1:1）。
@@ -243,6 +265,52 @@ impl PlacementRoute {
             PlacementRoute::ReportedSizeReconcile => "ReportedSizeReconcile",
             PlacementRoute::MoveCue => "MoveCue",
             PlacementRoute::BalloonLimitRelease => "BalloonLimitRelease",
+            PlacementRoute::WorkAreaResnap => "WorkAreaResnap",
+            PlacementRoute::ChainRealign => "ChainRealign",
+        }
+    }
+
+    /// **システム由来の再アンカー**か（design D9／D16・要件 6.2）。
+    ///
+    /// 表示環境の変化（拡大率・作業領域・報告寸・アンカー）を受けて**基盤が**窓を置き直した
+    /// 書込が `true`、利用者やゴースト台本の**明示操作**による書込が `false` である。
+    ///
+    /// # なぜ 1 箇所で持つか
+    ///
+    /// この区分は 2 つの判断で読まれる——既定位置の追跡（単一の窓書込口
+    /// `follow::window_move::enqueue_window_set_pos` が既定位置を書込先へ追随させるか）と、
+    /// 可視性の遷移ガード（`follow::visibility::route_applies_visibility_guard` が
+    /// 「可視 → 全 work area 非交差」を阻止するか）。**両者は同一の区分**であることを設計が
+    /// 明言している（D9 が挙げる 6 経路と S3 の保護対象が同じ集合）ので、列を 2 本持つと
+    /// 片方だけを直したときに静かに食い違う。ゆえに定義をここ 1 本にし、可視性側は本関数へ
+    /// 委譲する。
+    ///
+    /// 将来この 2 つの区分を**意図的に**割るなら、そのときは列を割ったうえで理由を設計へ
+    /// 登記すること（黙って片方へ腕を足さない）。
+    ///
+    /// # 網羅 match である理由
+    ///
+    /// 経路語彙が増えたとき、新しい語をどちら側へ置くかを**必ず**書かせるため。既定の腕
+    /// （`_ => false`）を置くと、新設経路が黙って「明示操作」に倒れて既定位置が追随しなくなる。
+    pub const fn is_system_reanchor(self) -> bool {
+        match self {
+            // 表示環境の変化を受けた基盤側の置き直し（D9 の 6 経路）。
+            PlacementRoute::AnchorChange
+            | PlacementRoute::Resnap
+            | PlacementRoute::DpiReproject
+            | PlacementRoute::ReportedSizeReconcile
+            | PlacementRoute::WorkAreaResnap
+            | PlacementRoute::ChainRealign => true,
+            // 明示操作（`MoveCue`・`Restore`・`BalloonLimitRelease`。ドラッグは route を
+            // 持たない＝`None` ゆえ呼び手側で除かれる）と、既定位置を持たない窓側の経路
+            // （`SpawnInitial` は既定位置そのものを作る点・`KeepPositionResize`／
+            // `BalloonFollow` はバルーン窓の従属量）。
+            PlacementRoute::SpawnInitial
+            | PlacementRoute::Restore
+            | PlacementRoute::KeepPositionResize
+            | PlacementRoute::BalloonFollow
+            | PlacementRoute::MoveCue
+            | PlacementRoute::BalloonLimitRelease => false,
         }
     }
 }

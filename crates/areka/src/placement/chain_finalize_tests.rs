@@ -410,8 +410,88 @@ fn defer_reason_names_the_scope_and_the_condition() {
         },
         ChainDeferReason::NoWindowPos { scope: 0 },
         ChainDeferReason::IncompleteWindowPos { scope: 0 },
+        ChainDeferReason::DpiSyncHeld { scope: 0 },
         landing,
     ] {
         assert!(!reason.to_string().is_empty(), "理由 {reason:?} の本文が空");
     }
+}
+
+/// 見送り理由の**固定語**（観測レコードの `reason=`）が全経路そろい、互いに異なる
+/// （`areka-P0-dpi-transition-atomicity` 設計 Data Models の `chain` 行）。
+///
+/// 本文（[`std::fmt::Display`]）は値を含むので機械判定に使えない。判定側が辞書引きするのは
+/// こちらの語である——重複すると 2 つの原因が 1 語に潰れて切り分けが効かなくなる。
+#[test]
+fn every_defer_reason_has_a_distinct_machine_word() {
+    let all = [
+        ChainDeferReason::NoGhostWindows,
+        ChainDeferReason::NoScopes,
+        ChainDeferReason::NoCharWindow { scope: 0 },
+        ChainDeferReason::NotShownYet { scope: 0 },
+        ChainDeferReason::UnusableShownSize {
+            scope: 0,
+            w: 0,
+            h: 0,
+        },
+        ChainDeferReason::NoWindowPos { scope: 0 },
+        ChainDeferReason::IncompleteWindowPos { scope: 0 },
+        ChainDeferReason::ResnapNotLanded {
+            scope: 0,
+            shown: (1, 1),
+            window: (2, 2),
+        },
+        ChainDeferReason::DpiSyncHeld { scope: 0 },
+    ];
+    let mut words: Vec<&str> = all.iter().map(|reason| reason.as_str()).collect();
+    let count = words.len();
+    words.sort_unstable();
+    words.dedup();
+    assert_eq!(words.len(), count, "見送り理由の語が重複している: {words:?}");
+    for word in &words {
+        assert!(!word.is_empty(), "空の理由語がある");
+        assert!(
+            !word.contains(' '),
+            "理由語に空白がある（1 行 1 レコードの分解が壊れる）: {word}"
+        );
+    }
+    // 遷移後の解き直し専用の理由（起動時確定では起こらない）。
+    assert_eq!(
+        ChainDeferReason::DpiSyncHeld { scope: 3 }.as_str(),
+        "dpi-sync-held"
+    );
+    assert_eq!(ChainDeferReason::DpiSyncHeld { scope: 3 }.scope(), Some(3));
+}
+
+/// 停滞診断の初期化で、**2 度目の待ちでも警告が一度は出る**ようになる
+/// （`areka-P0-dpi-transition-atomicity` 要件 6.3）。
+///
+/// 初期化しないと `reported` が立ったままで、2 度目以降の遷移で見送りが続いても無音になる
+/// ——「見送り続けている」という一番知りたい事実がログから消える。
+#[test]
+fn resetting_the_stall_lets_a_second_wait_report_once_again() {
+    let mut stall = ChainFinalizeStall::default();
+    for _ in 1..CHAIN_FINALIZE_STALL_FRAMES {
+        assert!(!note_chain_deferral(&mut stall));
+    }
+    assert!(note_chain_deferral(&mut stall), "1 度目の待ちで報告する");
+
+    // 初期化しない限り 2 度目は永久に黙る（初期化が必要であることの対照）。
+    for _ in 0..CHAIN_FINALIZE_STALL_FRAMES {
+        assert!(!note_chain_deferral(&mut stall), "初期化前は黙ったまま");
+    }
+
+    stall.reset();
+    assert_eq!(
+        stall,
+        ChainFinalizeStall::default(),
+        "初期化で計数も一発フラグも消える"
+    );
+    for _ in 1..CHAIN_FINALIZE_STALL_FRAMES {
+        assert!(!note_chain_deferral(&mut stall), "2 度目も閾値までは無音");
+    }
+    assert!(
+        note_chain_deferral(&mut stall),
+        "2 度目の待ちでも閾値でちょうど 1 度報告する（要件 6.3）"
+    );
 }

@@ -120,6 +120,9 @@ fn ctx() -> EmitContext {
         surface_id: 1410,
         cache_hit: false,
         key_hash: 0xdead_beef,
+        // 遷移観測と突合するためのフレーム番号（`areka-P0-dpi-transition-atomicity` Requirement 2.8）。
+        // 本ファイルは注入時刻シームで `FrameTiming` を単体検査するだけなので、値は任意の固定値でよい。
+        frame: 909,
     }
 }
 

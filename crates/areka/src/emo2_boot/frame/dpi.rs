@@ -1,15 +1,17 @@
 //! DPI 追従フェーズ（[`AuthorDpis`]・[`classify_ghost_window`]・[`run_dpi_phase`] ほか）。
 
 use bevy_ecs::entity::Entity;
-use bevy_ecs::prelude::{Changed, Query};
+use bevy_ecs::prelude::{Changed, Query, With};
 use bevy_ecs::system::SystemState;
 use bevy_ecs::world::World;
 use tracing::{debug, error, warn};
 
 use areka_emo_present::{EmoPresenter, TargetId};
-use wintf::ecs::{WindowPos, DPI};
+use wintf::ecs::{SizeI, WindowPos, DPI};
 
+use crate::placement::chain_realign;
 use crate::placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
+use crate::placement::dpi_sync::{self, DpiSyncHold};
 use crate::placement::follow::{resize_window_keep_position, resize_window_to};
 use crate::placement::resolver::SizePx;
 use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker};
@@ -158,6 +160,28 @@ pub(super) fn reconcile_window_size(
     }
 }
 
+/// 報告された物理寸が**書込前の窓寸と違う**か（遷移後の連鎖再解決の武装条件・設計 C4）。
+///
+/// 窓寸が引けない（窓生成前）ときは「変わった」とは言わない——比較の相手が無い状態を
+/// 変化として数えると、起動直後の初回 landing で毎回武装してしまう（遷移は起きていない）。
+/// 報告寸は `u32`・窓寸は `i32` の通貨ゆえ、超過は変換失敗として同じ腕へ落とす。
+///
+/// # 可視性を `pub(super)` に上げてある理由（決定論テスト網羅の必達）
+///
+/// 3 分岐のうち **i32 変換失敗の腕は [`dpi_phase_with`] からは構造的に踏めない**——
+/// [`reconcile_window_size`] が先に超過を弾いて `false` を返すため、武装条件の `&&` が
+/// 短絡して本関数まで到達しない。駆動テストからは永久に届かない腕を無検査で残さないため、
+/// 兄弟テストが直接呼べる可視性にしてある（`frame_chain_realign_arm_tests.rs`）。
+pub(super) fn size_changed(before: Option<SizeI>, new_size: (u32, u32)) -> bool {
+    let Some(before) = before else {
+        return false;
+    };
+    let (Ok(w), Ok(h)) = (i32::try_from(new_size.0), i32::try_from(new_size.1)) else {
+        return false;
+    };
+    before.width != w || before.height != h
+}
+
 /// 再スケール報告の供給源（本番実装は [`EmoPresenter`]）。
 ///
 /// frame 側の結線が presenter へ求めるのは 2 つの報告だけである——(1) `Changed<DPI>` エッジで
@@ -239,23 +263,36 @@ pub(super) fn dpi_phase_with<S: ScaleReportSource>(
     let state = state.get_or_insert_with(|| SystemState::new(world));
     // 変化窓を collect して World の不変借用を即解放してから `&mut World` のループへ入る
     // （`anchor_changed_system` と同じ collect→release→&mut ループ）。
-    let changed: Vec<(Entity, Option<usize>, Option<usize>)> = state
+    let mut targets: Vec<Entity> = state
         .get(world)
         .expect("DPI changed query validation should succeed")
         .iter()
-        .map(|(entity, char_marker, balloon_marker)| {
-            (
-                entity,
-                char_marker.map(|m| m.scope),
-                balloon_marker.map(|m| m.scope),
-            )
-        })
+        .map(|(entity, ..)| entity)
         .collect();
+    // 整合待ちの札を持つ窓は、`Changed<DPI>` が立たなくても対象へ入れる（設計 C5）——前フレーム
+    // までに見送った窓は変化を既に消費済みであり、和集合にしないと札が永遠に外れない。
+    let held: Vec<Entity> = world
+        .query_filtered::<Entity, With<DpiSyncHold>>()
+        .iter(world)
+        .collect();
+    for window in held {
+        if !targets.contains(&window) {
+            targets.push(window);
+        }
+    }
 
-    for (window, char_scope, balloon_scope) in changed {
+    // 第 1 巡（ゲート）: 全対象の札の付け外しを**処理より前に**済ませる。処理と混ぜて 1 巡に
+    // すると、先に解除・処理されたキャラ窓の随伴書込が、まだ札の付いたバルーン窓へ届く
+    // （＝待ち札の適用範囲の不変条件を自分で破る）。順序に依らせないための 2 巡である。
+    let now = dpi_sync::current_frame(world);
+    let mut proceed: Vec<(Entity, usize, GhostWindowKind)> = Vec::new();
+    for window in targets {
+        let char_scope = world.get::<CharWindowMarker>(window).map(|m| m.scope);
+        let balloon_scope = world.get::<BalloonWindowMarker>(window).map(|m| m.scope);
         let (scope, kind) = match classify_ghost_window(char_scope, balloon_scope) {
             GhostWindowClass::Ghost(scope, kind) => (scope, kind),
             // ゴースト窓でない窓の DPI 変化は本フェーズの対象外（正常・静穏に読み飛ばす）。
+            // ゲートにも掛けない——待ち札はゴースト窓の持ち物である（設計 C5）。
             GhostWindowClass::NotGhost => continue,
             GhostWindowClass::Ambiguous => {
                 error!(
@@ -265,6 +302,16 @@ pub(super) fn dpi_phase_with<S: ScaleReportSource>(
                 continue;
             }
         };
+        // 整合ゲート（設計 C5・要件 5.8）: 窓の拡大率と帰属モニタの表が揃うまで、当該窓の
+        // 再導出も窓書込も行わない。**描画は止めない**（drain 相は素通り）。
+        if !dpi_sync::apply_dpi_phase_gate(world, window, now) {
+            continue;
+        }
+        proceed.push((window, scope, kind));
+    }
+
+    // 第 2 巡（処理）: 通過した窓だけを従来どおり再導出・反映する。
+    for (window, scope, kind) in proceed {
         // target 採番（DD-3: shell=2*scope／balloon=2*scope+1）は u32 域。収まらない scope は
         // 如何なる target とも対応しない（plan_attachments の usize→u32 境界と同じ扱い）。
         let Ok(scope) = u32::try_from(scope) else {
@@ -288,14 +335,36 @@ pub(super) fn dpi_phase_with<S: ScaleReportSource>(
         match source.refresh_scale_report(world, target) {
             // 経路タグ: 本フェーズは `Changed<DPI>` エッジ駆動＝真に DPI 由来（Req 1.2・D13）。
             Some(new_size) => {
-                reconcile_window_size(world, window, kind, new_size, PlacementRoute::DpiReproject);
+                // 書込**前**の窓寸（下で `reconcile_window_size` が bypass ミラーを書き換える
+                // ので、後から読むと必ず新寸と一致する＝寸変化を検知できなくなる）。
+                let before = world.get::<WindowPos>(window).and_then(|wp| wp.size);
+                let wrote = reconcile_window_size(
+                    world,
+                    window,
+                    kind,
+                    new_size,
+                    PlacementRoute::DpiReproject,
+                );
+                // 遷移後の連鎖再解決の武装（atom 設計 C4・要件 6.1）: **キャラ窓が寸変化を
+                // 伴って書込を起こしたとき**だけ武装する。3 条件のいずれを落としても意味が
+                // 変わる——寸が変わらなければ隣接は崩れず（表情差替と同じ）、書込が起きて
+                // いなければ位置は動いておらず、バルーン窓は連鎖の構成要素ではない。
+                if wrote && matches!(kind, GhostWindowKind::Char) && size_changed(before, new_size)
+                {
+                    chain_realign::arm_chain_realign(world);
+                }
             }
             // 再導出結果なし: 寸は触らないが、**位置は現寸のまま射影 T を一度通す**。
             // バルーン窓は位置据置きのまま（位置は従属量ゆえ、キャラ窓確定後の
             // [`follow_balloon`]＝`resize_window_to` 手順 6/7 が随伴させる）。
             None => match kind {
                 GhostWindowKind::Char => {
-                    reproject_char_window_at_current_size(world, window);
+                    // 経路タグ: 本フェーズは `Changed<DPI>` エッジ駆動＝真に DPI 由来（D13）。
+                    reproject_char_window_at_current_size(
+                        world,
+                        window,
+                        PlacementRoute::DpiReproject,
+                    );
                 }
                 GhostWindowKind::Balloon => {}
             },
@@ -331,19 +400,36 @@ pub(super) fn dpi_phase_with<S: ScaleReportSource>(
 /// - **entity 破棄済み**: 終了処理の**正常終了系**ゆえ `debug!`（[`DESPAWNED_SKIP_TAG`]）。
 /// - **実在するが `WindowPos.size` 不在**（窓生成前）: 真の異常ゆえ `warn!`。
 ///
+/// # `route` は呼び手が名乗る（task 5.2 で引数化・D13 の 1 語＝1 実在トリガ）
+///
+/// 本関数は「現寸のまま射影 T を一度通す」という**手続き**であって、トリガではない。
+/// 呼び手は 2 つあり、実在するトリガが違う——拡大率の相は `Changed<DPI>` エッジ
+/// （[`DpiReproject`](PlacementRoute::DpiReproject)）、作業領域変化を契機とする再スナップは
+/// 作業領域源の差し替え（[`WorkAreaResnap`](PlacementRoute::WorkAreaResnap)）である。
+/// ここで語を固定すると、ログ上で「拡大率が動いたから移した」のか「作業領域が動いたから
+/// 移した」のかが切り分けられなくなる。
+///
 /// 戻り値は**窓へ書込が起きたか**（`false` はべき等 skip・縮退の双方を含み、失敗とは限らない
 /// ＝[`reconcile_window_size`] と同じ流儀）。panic しない。
-pub(super) fn reproject_char_window_at_current_size(world: &mut World, window: Entity) -> bool {
+pub(super) fn reproject_char_window_at_current_size(
+    world: &mut World,
+    window: Entity,
+    route: PlacementRoute,
+) -> bool {
     let Some(current) = world.get::<WindowPos>(window).and_then(|wp| wp.size) else {
+        // 経路語を載せる（task 5.2 で呼び手が 2 つになった）——載せないと、拡大率の相と
+        // 作業領域再スナップのどちらが打ち切ったのかがログから判らない。
         if world.get_entity(window).is_err() {
             debug!(
                 entity = ?window,
-                "{DESPAWNED_SKIP_TAG} dpi reproject: 窓 entity が破棄済み（despawn）→ 位置再射影を正常系として打ち切り"
+                ?route,
+                "{DESPAWNED_SKIP_TAG} reproject: 窓 entity が破棄済み（despawn）→ 位置再射影を正常系として打ち切り"
             );
         } else {
             warn!(
                 entity = ?window,
-                "dpi reproject: WindowPos.size 未確定（窓生成前）のため現寸を読めず、位置を再射影せず現状維持"
+                ?route,
+                "reproject: WindowPos.size 未確定（窓生成前）のため現寸を読めず、位置を再射影せず現状維持"
             );
         }
         return false;
@@ -355,7 +441,7 @@ pub(super) fn reproject_char_window_at_current_size(world: &mut World, window: E
             w: current.width,
             h: current.height,
         },
-        PlacementRoute::DpiReproject,
+        route,
     )
 }
 
