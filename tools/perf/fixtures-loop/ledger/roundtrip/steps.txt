@@ -1,0 +1,10 @@
+# <期待終了コード> :: <引数…>
+# @LEDGER@=この case の台帳（複製先）・@DIR@=この case の複製先ディレクトリ
+# 引数は空白で区切るだけ（引用符・エスケープは解さない）。
+0 :: init --goal-name draw-load-parity --ledger @LEDGER@ --now 2026-08-23T00:00:00Z
+0 :: append --ledger @LEDGER@ --from-json @DIR@/entry.json --now 2026-08-23T01:23:45Z
+0 :: state --ledger @LEDGER@
+0 :: read --ledger @LEDGER@ --iteration 1
+0 :: entries --ledger @LEDGER@
+0 :: set-phase REMEASURE --ledger @LEDGER@ --pending-run C:\runs\iter-1 --streak 1 --best 6.12 --baseline 9.31
+0 :: state --ledger @LEDGER@

@@ -124,7 +124,7 @@
   - _Requirements: 2.4, 2.11, 8.6_
   - _Boundary: invoke-cpu-sample_
 
-- [ ] 5.4 (P) 台帳の本体（perf-ledger.py: 状態ブロック・追記・読取）
+- [x] 5.4 (P) 台帳の本体（perf-ledger.py: 状態ブロック・追記・読取）
   - 台帳の構造（先頭の状態ブロック＝固定キー行・以後は `## 周 <n> — <ISO 日時>` の追記）とサブコマンド state（JSON）／set-phase／append --from-json／--selftest
   - 自己較正（fixtures-loop/ledger）: 追記→読取の往復・壊れた行の拒否・状態ブロックの書き換えが周の記録を壊さない
   - 観測可能な完了状態: --selftest 緑、append した周が state と台帳ファイルの両方から同じ値で読める
@@ -277,3 +277,4 @@
 - (3.5) 「talk 進行中」の判定は時刻起点ではなく**未リビールのグリフの有無**（`reveal_pending`）——起点は一度立つと消えないので、設計 C16 の字面どおり「起点確立」で REARM すると放置時に省略しない。文字 cue ごとの起床は `BalloonLifecycleSink::send`（占有終端の伸長＝cue 到着ごと）の PRESENT が担うため、`sinks` の順序は clocked_text_sink → lifecycle_sink を保つこと（`emo2_boot/mod.rs` に登記）。旗は `tx.send` の**後**に立てる。45 秒実走: 定常 UI スレッド CPU ON 69,079 対 OFF 305,921 µs/秒（約 4.4 分の 1）・判定式⑴ p95 ON 808ms 対 OFF 810ms・放置時省略 116〜118 回/秒。候補メモ: 期限超過かつ抑止中（ドラッグ／滞在／選択肢）は毎フレーム REARM＝省略しない（安全側・解除はポインタ駆動なので `None` でも足りる可能性＝周回で検討）。
 - (4) `SELF_INITIATED_DEPTH` の着地形＝`thread_local! Cell<i32>`（`command.rs`）。錠 `lock_self_initiated_for_test` は残置（実呼出 21 箇所／5 ファイル＝command.rs 2・command_batch_tests 5・command_transition_tests 4・window_pos_tests 5・window_pos_transition_tests 5）で退役候補。兄弟テスト 4 ファイルの module doc（`command_batch_tests.rs:25`・`command_transition_tests.rs:28`・`window_pos_tests.rs:41`・`window_pos_transition_tests.rs:21`）は「プロセス共有」のまま陳腐化＝錠の退役と同じ塊で cage へ申し送る（8.2）。`frame_transition_atomicity_tests` の実本数は 3（設計の 4 は doc 内の `#[test]` 字面を数えた誤り）＝既存群は計 57 本。
 - (5.1) `check-quiet.ps1` の判定語は `QUIET`／`NOT_QUIET` に加えて計測失敗時 `MEASURE_FAILED`（exit 4・ファイルは残る・失敗原文は標準出力の `counter_error=` のみ）。理由語 5 種（ok／cpu_mean_over_threshold／heavy_process_present／both／counter_read_failed）。TOML `[quiet]` は**配列を 1 行に保つ**こと（複数行や壊れた値は警告なく既定値へ落ちる）——7.1 の目標定義ファイルはこの制約で書く。PowerShell の変数名は大小無視＝`-SampleSec` パラメータと `$sampleSec` ローカルが衝突する（実装中に踏んだ）。
+- (5.4) `perf-ledger.py` は 934 行——**5.5 着手時に分割必須**（自己較正の節（約 200 行）を `perf_ledger_selftest.py` 等へ切り出し、`--selftest` 入口は本体に残す）。状態ブロックは設計の 8 鍵＋`run`・`capabilities`。小数は 2 桁丸め（STATUS 行の `<x.xx>` と同精度＝`compare.json` の 3 桁以上は台帳で落ちる）。`steps.txt` の引数は空白区切りのみ。**穴 1 件を 5.5 で塞ぐ**: 状態の `iteration`／`streak_no_gain`／`best_idle_cpu_pct`／`baseline_idle_cpu_pct` が `-`（`init` が書く正規の空値）の台帳を読む経路で `int()`/`float()` が未捕捉例外（exit 1・生トレース）になり得る（CLI からは到達不能だが 5.5 の status/final が同型を踏む）→ `bad_input`（exit 3）で包むこと。

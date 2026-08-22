@@ -1,0 +1,3 @@
+0 :: init --goal-name draw-load-parity --ledger @LEDGER@ --now 2026-08-23T00:00:00Z
+3 :: set-phase NOPE --ledger @LEDGER@
+0 :: set-phase WAIT_REMEASURE --ledger @LEDGER@

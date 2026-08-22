@@ -1,0 +1,3 @@
+title=語彙にないキーを含む追記は拒む（語彙を固定するため）
+stderr_substr=知らないキー
+stderr_substr=gpu_time_ms
