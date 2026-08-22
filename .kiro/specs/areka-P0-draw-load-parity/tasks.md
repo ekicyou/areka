@@ -4,7 +4,7 @@
 >
 > 同一ファイルの注意: `crates/wintf/src/ecs/world/mod.rs` は 2.1／2.2／3.1／3.2／3.3 が触る（2.1／3.1／3.2 は自分の `mod` 宣言 1 行のみ）。`crates/wintf/src/ecs/window/command.rs` は 3.4（旗を立てる 1 行）と 4（スレッド局所化）が触る。並列印 `(P)` はこの前提の下で付けている。
 
-- [ ] 1. 開発プロセスの前提: kiro-impl と kiro-validate-impl に「派遣モデルの決定」を追加
+- [x] 1. 開発プロセスの前提: kiro-impl と kiro-validate-impl に「派遣モデルの決定」を追加
   - kiro-impl の Preflight に、自分のモデル名（システムプロンプトの「You are powered by the model named …」）を読み、Fable 系または判別不能なら派遣モデルを opus、それ以外（既に Opus 以下）なら継承（`model` 引数を省略）とする規則を置く
   - 実装者・レビュアー・デバッガーの 3 つの派遣箇所と、kiro-impl から呼ぶ最終検証（kiro-validate-impl）の派遣へ同じ規則を適用し、決定を 1 度だけ実行出力に印字する（`dispatch model: opus` または `dispatch model: inherit`）
   - kiro-validate-impl の Subagent Dispatch 節に「呼び出し元から opus を渡されたら各派遣に付ける・単独実行時は自分で同じ判別を行う」の 1 節を足す
