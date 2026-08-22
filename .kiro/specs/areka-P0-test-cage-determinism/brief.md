@@ -21,6 +21,16 @@
 > **出自**: `completed/areka-P0-emo-dpi-scaling` の `/kiro-validate-impl` ゲートが「無名の別タスク宛て＝実質未所有」として記録した 4 件（tasks.md:222）。
 > 2026-07-30 に**全件の実在を再検証**したところ 4 件とも健在で、うち 1 件は記録より**悪化**していた。担当 spec は 10 本の active spec のいずれにも存在しない。
 
+> **📌 2026-08-22 棚卸⑩（毒化インベントリの両方向ドリフト実測・本ブロックの数値が①の旧数値〔95 呼出/12 モジュール〕より優先）**:
+> - **①のインベントリは両方向に動いた**。機械判定（「`fn capture_logs` を定義し `rebuild_interest_cache()` を含まないファイル」・2026-08-22 実測）:
+>   - **域外で硬化済みへ転じたもの**: `areka-emo-atlas/src/log_capture.rs`・`areka-emo-compose/src/log_capture.rs`（各 rebuild 2 箇所）・seriko は `log_interest_probe.rs` 新設＋`actor_test_support.rs:82`／`looper_tests.rs:886` が rebuild 済み（旧 actor.rs の捕捉層は slimming で `actor_test_support.rs` へ改組）。**旧表 7・9・10 の大半は消化済み**。
+>   - **未硬化ヘルパ定義 10 ファイル**（旧表からの残存＋新顔）: `areka/src/emo2_boot/adapter.rs`・`spine.rs`（残存）／**新顔 7 本**＝`emo2_boot/frame_chain_finalize_tests.rs`・**`frame_test_support.rs`（atom 新設・FrameHarness の捕捉層）**・`move_cue_move_severity_log_tests.rs`・`talk_lifecycle_tests.rs`（以上 slimming 分割＋atom 由来）・`input_events/balloon_test_support.rs`・`input_events/choice_drain.rs`（旧 balloon.rs 18 呼出の改組先）／`areka-seriko/src/table.rs`（残存）／`wintf/src/ecs/window_proc/dpi_helpers_tests.rs`（旧 dpi_helpers.rs の分割先）。
+>   - `capture_logs(` 呼出はワークスペース総計 **238 箇所**（硬化済み含む・定義行除く）。**「後置するほどコピーが増える」の 3 度目の実証**（W5 で+1・追記(59) で+50・今回 slimming/atom で新顔 7 ファイル）。
+>   - 本スナップショットはファイル粒度の機械判定であり呼出数の精査ではない——**着手時の全面再計数義務（追記(59)）は不変**。判定式も不変（`rebuild_interest_cache()` の有無 1 点）。
+> - **④の観測点は :306-310 へドリフト**（fmt PR#115＋atom 改稿後・2026-08-22 実測・旧 :297-301 失効）。atom は同分岐を「cage④ の観測点だから」意図的に不動と登記済み（下記追記(72)⑸）＝字面ごと保存されている。
+> - **追記(79)（1,000 行目安の漂流・roadmap 正本）の裁定が⒜（行数番人テスト）に決まった場合、置き場候補は本 spec**——「檻の決定性」ミッションと同系・例外表方式（既存 9 本を載せて漸減）。要件段階でスコープに入れるかを最初に確定させること。
+> - **`SELF_INITIATED_DEPTH` のスレッド局所化（下記追記(76)⑹）は本 spec では実施しない【2026-08-22 追記(81) 同居裁定】**——本 spec は **dlp と W6.9 で 2 本並走**し、`command.rs` は**丸ごと dlp 所有・本 spec は非接触**（`Cell<i32>` 化は dlp が flush 接触のついでに実施し着地形を申し送ってくる）。本 spec が受け持つのは**症状側のみ**＝dlp 着地後の rebase（または wave 内合流）で錠 `lock_self_initiated_for_test()` の退役を実施。dlp が見送った場合は本 spec へ差し戻し（その時点で着手順調整）。
+
 > **📌 2026-08-21 追記(72)（`areka-P0-dpi-transition-atomicity` からの申し送り・観測チャネルが 1 本増え、窓書込の檻の前提が変わった）**: **既定 OFF の観測チャネル `wintf::transition` が新設され、窓書込指令に要求元の札が付き、同一窓のジオメトリ指令が合流するようになった。** ① tracing 毒化の射程・②「零件の主張」の扱い・④ `apply_show` 鎖の 3 点それぞれに効く。
 > - **⑴ 新しい観測 target が 1 本**: `wintf::transition`（`crates/wintf/src/ecs/window/transition_diag.rs:54`）。既定水準では 1 行も出ず、前置ガード `transition_diag::is_enabled()`（同 :595＝`tracing::enabled!` の薄い包み）が偽なら**行の組立も時刻の読み取りも一切行わない**。**「既定で無音」を主張する檻は、同じ捕捉窓の内側に必ず出るはずの対照行を置く形にしてある**（本 spec で「既定で無音」が恒真だった事故が実際に起きたため）。①の毒化表へこの target を足すかどうかは本 spec の裁定だが、**濾過テストはスレッド局所 subscriber（`crate::ecs::test_support::capture_under_filter`＝`crates/wintf/src/ecs/test_support.rs:96`）で書く**規律に従っている。
 > - **⑵ 語彙の不変条件が 2 つ増えた（檻が固定している）**: ⒜ 窓種別のフィールド名は **`win_kind=`**（`transition_diag.rs:167`）であって `kind=`（:143＝レコード種別）ではない。⒝ **1 行に同じフィールド名を 2 度出さない**——`tools/perf/judge-perf.py::parse_fields` が同名キーを後勝ちで上書きするため、重複するとレコード種別が消えて判定器が壊れる。⒜⒝ とも `crates/wintf/src/ecs/window/transition_diag_tests.rs`（`no_line_repeats_a_field_name` :362）が固定している。**本 spec が観測行を足す・共有ヘルパへ寄せるときも同じ規律を保つこと。**
