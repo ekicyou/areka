@@ -13,7 +13,7 @@
   - _Boundary: kiro-impl, kiro-validate-impl_
 
 - [ ] 2. 実行体の観測（既定 OFF・有効化しなければ費用 0）
-- [ ] 2.1 (P) スレッド名簿（役割名・TID・複製ハンドル）と Win32 の安全ラッパを wintf に新設
+- [x] 2.1 (P) スレッド名簿（役割名・TID・複製ハンドル）と Win32 の安全ラッパを wintf に新設
   - プロセス共有の名簿に、生成側が自分のハンドルを複製して役割名つきで登録する口と、一覧（スナップショット）を取り出す口を置く
   - 役割名は固定語彙（vblank・cursor_monitor・ui・ticker_dispatcher_kanade・ticker_loop・actor:<name>・perf_report・unregistered_rest）の定数として持つ
   - GetThreadTimes／GetProcessTimes／DuplicateHandle の安全ラッパは wintf の Win32 ラッパ層（`api.rs`）に置き、既存 feature の範囲に収める（ToolHelp は使わない・`Cargo.toml` 非接触）。2.4 の報告器はこのラッパを呼ぶだけにする
