@@ -25,6 +25,7 @@ use std::rc::{Rc, Weak};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{self, JoinHandle};
+use std::time::Instant;
 
 use event_listener::Event;
 use tracing::{debug, error, trace};
@@ -182,14 +183,25 @@ impl AsyncTickTask {
     }
 }
 
-/// 1 フレーム分の ECS tick を同期実行する（独立テスト可能なコア・要件 4.3）。
+/// 1 フレーム分の ECS tick を同期実行する（独立テスト可能なコア・要件 4.3／3.2）。
 ///
 /// 1. `IS_TICK_FLUSH_IN_PROGRESS` 再入ガードを engage する。既に進行中なら（再入）
 ///    `false` を返して安全側スキップする（二重 tick なし）。
 /// 2. World を `try_borrow_mut` する。借用失敗（再入・別経路が借用中）なら tick せず
 ///    `false` を返す（安全側スキップ・二重 tick なし）。
-/// 3. 借用成功時のみ `try_tick_world()`（13 本スケジュール・順序不変）→
-///    `flush_window_pos_commands()` を実行し `true` を返す。
+/// 3. 借用成功時は tick の門（`EcsWorld::decide_tick`）へ 1 度だけ問い、
+///    **回す**なら `try_tick_world()`（13 本スケジュール・順序不変）、**省略**なら
+///    `note_skipped_tick()`（数を記録するだけ・`FrameCount`／`FrameTime`／`TickStart` は
+///    進めない）を実行する。
+/// 4. どちらの側でも `flush_window_pos_commands()` は**常に**呼ぶ。積まれている窓書込
+///    指令は、この画面更新で 13 本を回したかどうかとは無関係に掃き出す。
+///
+/// 門の既定は無効なので、既定の運転では毎フレーム `Run(Disabled)` が返り、挙動は門を
+/// 入れる前と同じである（`AREKA_TICK_GATE=1` で有効化する）。
+///
+/// # 戻り値
+/// `true` = このフレームを門が処理した（**回した／省略した**のいずれか）。
+/// `false` = 再入ガードまたは World 借用に失敗して何もしなかった。
 ///
 /// `flush_window_pos_commands()` は World 借用解放後に呼ぶ（同期 `WM_WINDOWPOSCHANGED`
 /// が World を借用しても競合しない）。レガシー `try_tick_on_vsync` と同じ規律。
@@ -201,9 +213,16 @@ pub(crate) fn tick_one_frame(world: &Rc<RefCell<EcsWorld>>) -> bool {
     };
 
     // RefCell 借用を試みる。既に借用中（再入）なら安全側スキップ（false）。
-    let ticked = match world.try_borrow_mut() {
+    let processed = match world.try_borrow_mut() {
         Ok(mut world) => {
-            world.try_tick_world();
+            // 門は 1 フレームに 1 度だけ問う（旗を読んで倒すのはこの 1 箇所）。
+            // 毎フレームのログはここでは出さない（熱い経路）——省略率は `[tick]` の
+            // 観測行（既定 OFF）が 1 秒窓でまとめて出す。
+            if world.decide_tick(Instant::now()).is_run() {
+                world.try_tick_world();
+            } else {
+                world.note_skipped_tick();
+            }
             true
         }
         Err(_) => {
@@ -211,10 +230,10 @@ pub(crate) fn tick_one_frame(world: &Rc<RefCell<EcsWorld>>) -> bool {
             false
         }
     };
-    // World 借用スコープ終了後に SetWindowPos コマンドをフラッシュ。
+    // World 借用スコープ終了後に SetWindowPos コマンドをフラッシュ（省略の回も必ず）。
     crate::ecs::window::flush_window_pos_commands();
 
-    ticked
+    processed
     // _guard drop で IS_TICK_FLUSH_IN_PROGRESS = false に戻る
 }
 
@@ -247,7 +266,10 @@ async fn run_async_tick(event: Arc<Event>, world: Weak<RefCell<EcsWorld>>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ecs::world::FrameCount;
     use crate::ecs::world::thread_registry::{self, ROLE_VBLANK, ThreadEntry};
+    use crate::ecs::world::tick_gate::TICK_GATE_WARMUP_FRAMES;
+    use crate::ecs::world::tick_wake::WakeSnapshot;
     use event_listener::Listener;
     use std::time::Duration;
 
@@ -341,6 +363,76 @@ mod tests {
         assert!(
             !crate::ecs::world::is_tick_flush_in_progress(),
             "安全スキップ後は再入ガードが false に戻っているべき"
+        );
+    }
+
+    // ── tick の門の結線 (task 3.3) ────────────────────────────────
+
+    /// 起動直後の全走ぶんだけ判定を進める（回さずに数だけ進める）。
+    fn fast_forward_warmup(world: &Rc<RefCell<crate::ecs::world::EcsWorld>>) {
+        let mut world = world.borrow_mut();
+        for _ in 0..TICK_GATE_WARMUP_FRAMES {
+            let decision = world.decide_tick_with(WakeSnapshot {
+                bits: 0,
+                deadline_due: false,
+            });
+            assert!(decision.is_run(), "起動直後は無条件で回すべき");
+        }
+    }
+
+    /// (要件 3.2) 門が無効（既定）なら、1 フレームは今までどおり 13 本を回す
+    /// ——フレーム番号がちょうど 1 進む。
+    #[test]
+    fn tick_one_frame_ticks_the_world_when_the_gate_is_disabled() {
+        // 門が無効でも `decide_tick` は共有の旗を読んで**倒す**——自分の合否は旗に
+        // 依らないが、倒した旗は他の検査から奪ったことになる。だから読む側も錠を取る。
+        let _lock = crate::ecs::world::TICK_WAKE_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+        let world = Rc::new(RefCell::new(crate::ecs::world::EcsWorld::new()));
+        assert!(
+            !world.borrow().tick_gate_enabled(),
+            "門の既定は無効であるべき"
+        );
+
+        let before = world.borrow().world().resource::<FrameCount>().0;
+        let processed = tick_one_frame(&world);
+
+        assert!(processed, "借用できたフレームは処理済みとして true を返す");
+        assert_eq!(
+            world.borrow().world().resource::<FrameCount>().0,
+            before + 1,
+            "門が無効なら 13 本を回してフレーム番号が 1 進む"
+        );
+    }
+
+    /// (要件 3.2/3.4) 門が有効で回す理由が 1 つも無ければ、1 フレームは 13 本を回さない
+    /// ——フレーム番号は進まないが、関数は「このフレームは処理した」として true を返す。
+    #[test]
+    fn tick_one_frame_skips_the_world_tick_when_the_gate_finds_no_reason() {
+        let _lock = crate::ecs::world::TICK_WAKE_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+        let world = Rc::new(RefCell::new(crate::ecs::world::EcsWorld::new()));
+        world.borrow_mut().set_tick_gate(true);
+        fast_forward_warmup(&world);
+
+        // 溜まっている旗を倒してから 1 フレーム進める（旗ゼロ・期限なしの状態を作る）。
+        let _ = crate::ecs::world::tick_wake::take(std::time::Instant::now());
+
+        let before = world.borrow().world().resource::<FrameCount>().0;
+        let processed = tick_one_frame(&world);
+
+        assert!(
+            processed,
+            "省略も「このフレームは門が処理した」なので true を返す"
+        );
+        assert_eq!(
+            world.borrow().world().resource::<FrameCount>().0,
+            before,
+            "省略の回は 13 本を回さないのでフレーム番号は進まない"
         );
     }
 

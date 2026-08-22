@@ -5,23 +5,26 @@
 //! 見えることはない。プロセス共有の入口（[`mark`]／[`take`]）を通す 1 本だけは錠で直列化し、
 //! 「立てた旗が含まれる」ことだけを見る（他所が同時に立てた旗まで否定しない）。
 //!
+//! その錠は **`ecs::world::TICK_WAKE_TEST_LOCK` ただ 1 つ**である。プロセス共有の旗は
+//! 1 つしか無いので、錠も 1 つでなければ意味がない——同じテストバイナリの中で共有の旗に
+//! 触る検査（本ファイル・`world_tick_gate_tests.rs`・`runtime/tick_bridge.rs`）は、全部
+//! この同じ錠を取ってから触る。ここに自前の錠を作ってはならない。
+//!
 //! 実時間の閾値は 1 つも使わない（要件 6.5）。期限の検査は「今」を引数で与える合成時刻
 //! だけで組み、`sleep` を一切挟まない。
 
 use super::*;
 
 use std::collections::BTreeSet;
-use std::sync::Mutex;
 use std::time::{Duration, Instant};
+
+use crate::ecs::world::TICK_WAKE_TEST_LOCK as GLOBAL_TEST_LOCK;
 
 use windows::Win32::UI::Controls::WM_MOUSELEAVE;
 use windows::Win32::UI::WindowsAndMessaging::{
     WM_DPICHANGED, WM_ERASEBKGND, WM_KEYDOWN, WM_MOUSEMOVE, WM_NCMOUSELEAVE, WM_PAINT, WM_TIMER,
     WM_USER, WM_WINDOWPOSCHANGED,
 };
-
-/// プロセス共有の旗を触るテストを互いに直列化する錠。
-static GLOBAL_TEST_LOCK: Mutex<()> = Mutex::new(());
 
 /// 合成時刻の基点。実時刻より十分に先へ置くことで、内部の基準時刻（プロセス開始時に
 /// 一度だけ確定する）より必ず後になり、飽和（基準時刻より前は 0 に丸める）に当たらない。
@@ -188,7 +191,10 @@ fn every_flag_marked_from_its_own_thread_survives_into_one_take() {
 
 #[test]
 fn the_process_wide_entry_points_round_trip_a_flag() {
-    let _guard = GLOBAL_TEST_LOCK.lock().expect("錠は毒化しないはず");
+    // 錠の毒化（他のテストが持ったまま panic した）で連鎖的に赤くしない。
+    let _guard = GLOBAL_TEST_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     let now = base();
 
     let _ = take(now);

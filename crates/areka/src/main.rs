@@ -56,6 +56,9 @@ mod shiori_demo;
 /// シーム（task 6.2）が `prepare_ghost_windows`→`spawn_ghost_windows` を結線する。
 mod placement;
 
+/// tick の門の既定を起動時に上書きする読み口（`AREKA_TICK_GATE=1|0`）。
+mod tick_gate_config;
+
 /// emo2 統合結線（areka-P0-emo2-boot）。完成済み 5 トラックのエンジンを束ね、シェル
 /// アニメーション側の表示指令を表示層の指令へ変換するアダプタ＋各エンジン結線＋観測を
 /// 所有する（`target_map`／`adapter`／`talk_clock`／`assets`／`frame`＋`BootWiringError`・
@@ -181,6 +184,9 @@ fn main() -> Result<()> {
     // DD-7/R7.1: 実 sink 結線（`wire_emo2_boot`）は UI 基盤の後に行うため、`WinApp::new()` を
     // すべての boot より前へ移動した（旧・task 3.3 の boot 先行順序を再編）。
     let app = WinApp::new()?;
+
+    // tick の門の既定を起動時に一度だけ上書きする（`AREKA_TICK_GATE=1|0`・A/B と安全弁）。
+    tick_gate_config::apply_from_env(&mut app.world().borrow_mut());
 
     // リファレンス脳の実走デモ（要件 5.3/5.4）。環境変数 `AREKA_SHIORI_DEMO` が有効な
     // ときのみ main スレッドで同期駆動する（既定 OFF）。診断目的のため失敗しても通常

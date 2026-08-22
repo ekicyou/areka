@@ -67,7 +67,7 @@
   - _Requirements: 3.2, 3.7, 6.1, 6.5, 6.8_
   - _Boundary: tick_gate_
 
-- [ ] 3.3 門を tick 駆動に組み込む（統合タスク: wintf の World と tick_bridge・areka の起動時読取）
+- [x] 3.3 門を tick 駆動に組み込む（統合タスク: wintf の World と tick_bridge・areka の起動時読取）
   - EcsWorld に門の有効切替・decide_tick（旗を読んで倒す→純関数→カウンタ更新→点灯時は tick_diag へ記録）・省略の記録を置く。旗の取得に失敗し得る経路は error! を残して「回す」へ倒す
   - フレーム 1 回の処理: 再入ガード→借用→decide_tick→回すなら 13 本（FrameCount 進む）／省略なら FrameCount・FrameTime・TickStart を進めない。窓書込の flush は常に呼ぶ。旧経路と FrameHarness は触らない
   - `AREKA_TICK_GATE=1|0` を areka の起動時に読んで門の有効を上書きできる（A/B 比較と安全弁）。周 1 の A/B まで既定は OFF
@@ -272,3 +272,4 @@
 - (全般) `.claude/skills/*/SKILL.md` は CRLF。素の書き換えは全行差分になるので行末を保つこと。areka bin の in-crate テストは `cargo test -p areka --bin areka` で走る。
 - (2.4) 初回の実走（debug・15 秒・周期 5 秒）で `unregistered_rest`（名簿外＝bevy タスクプール等）がプロセス CPU の 24〜38% を占め、名簿内は `ui` が約 74%。名簿方式（段②）だけではタスクプールの内訳は出ないので、順位表の段③（WPT サンプリング）が要る。`perf(thread)` の値は累積（読み手 `perf-rank.py` が差分を取る・Rust 側 `delta` が意味論の権威）。
 - (3.1) `tick_wake` の期限は「最も早い 1 つ」だけを保持する（設計どおり）。期限到来で回った tick の中で待ち手が**毎回再装填**しないと後の期限が黙って落ちる——3.3／3.5 の結線はこれを前提に書くこと。`WM_PAINT`／`WM_ERASEBKGND`／`WM_TIMER` は未知→FORCE で全走になるので、周 1 の A/B で FORCE が門を無効化していないか `[tick]` 行の skipped で確かめること。`WM_MOUSELEAVE` は `windows::Win32::UI::Controls`、`WM_NCMOUSELEAVE` は `WindowsAndMessaging` にある。
+- (3.3) 共有の起床旗に触る／`decide_tick` に到達するテストは、`ecs::world::TICK_WAKE_TEST_LOCK`（唯一の錠・`world/mod.rs`）を毒化耐性つきで取ること。自前の錠を作ると直列化が成立しない（3.1 と 3.3 で錠が 2 本に分裂した実例）。`Skip` を主張するテストは注入経路 `decide_tick_with` を使う。心拍は「省略 30 回→31 回目が Run(Heartbeat)」（実効約 3.87 回/秒）。門 ON・生産者未結線の実走で UI スレッド CPU は 1 秒窓あたり約 45 万µs→約 4 万µs（債務＝3.4/3.5 の結線後に再確認）。`world/mod.rs` は 929 行で余白が小さい——以後ここへ足す場合は doc ブロックを `tick_gate.rs` 側へ寄せるか分割を検討。
