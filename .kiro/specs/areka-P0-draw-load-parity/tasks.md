@@ -186,7 +186,7 @@
   - _Boundary: goals_
   - _Depends: 5.5, 6.1_
 
-- [ ] 7.2 1 入口の骨格（perf-loop.ps1: 引数・終了コード・RESULT 行・preflight・selftest）
+- [x] 7.2 1 入口の骨格（perf-loop.ps1: 引数・終了コード・RESULT 行・preflight・selftest）
   - サブコマンドの受け口と共通規約: 終了コード 0／1／2／3／4（計測失敗＝MEASURE_FAILED）／5（能力不足＝UNAVAILABLE・停止理由にしない）、標準出力の末尾に必ず `PERF-LOOP RESULT <sub> code=<n> dir=<path>` の 1 行、出力先の配置（`%LOCALAPPDATA%\areka-diag\perf-loop\<goal>\…`）、同じ出力先に `-Resume` で成果物を再利用（冪等）
   - preflight: 昇格・xperf・PDB の有無・判定スクリプトの版一致・Python／PowerShell の版・`CLAUDE_CODE_GOAL_CHECKIN_MINUTES` の実効値（25 分未満は警告）・selftest → preflight.txt と標準出力。段③不可は `function_stage=UNAVAILABLE reason=…` として exit 0 で続行
   - selftest: 5.3／5.4／5.5／6.1／6.2／6.3／6.4 の自己較正を順に呼び、1 つでも赤なら exit 4
@@ -288,3 +288,4 @@
 - (7.1) `tools/perf/goals/draw-load-parity.goal.md` の本文は `GOAL_TEXT_TEMPLATE` の写し（`goal-text` 出力の token を `<token>` に置換）。テンプレートを編集すると黙ってずれる→**7.2 の `selftest` に「goal-text 出力（token 置換）＝ .goal.md の `---` 以降の本文」の一致検査を足す**こと。ヘッダの「1,012 字」も同じ理由で数値依存（検査で覆う）。
 - (6.2) `perf-rank.py`（957 行）＋`perf_rank_dump.py`（443 行・段③と共通基盤）。dump は列名行から既知列（TimeStamp／ThreadID／Image!Function）を引き、欠けていれば exit 4 でイベントと列名を名指し。`sample_ok` の 16/8/16/22/2 を `sample_ok_counts` ケースで固定（5.3 との相互較正）。判定スクリプトの較正値（`WARMUP_EXCLUDE_SEC`・CSV ヘッダ・正規表現・`percentile`）は**写し**（出典コメントあり・機械で束縛していない）＝較正値を動かすときは両方を同時に。dump の短い行・空値・`!` 無しは黙って読み飛ばす（`samples_total` は印字する）。共有 scratchpad は揮発物（並走の別実装者が消す）。
 - (6.3) `perf-compare.py` の規則（設計が無記述の 3 点を決めて fixture で固定）: 測っていない副指標（`-`）は NA＝採用を止めないが必ず列挙／差なしの帯で副指標だけ悪化→WORSE（安全側）／judge exit 1 は判定不能にしない（集計モードは 1 を返さないので到達不能・`judge-perf.py:715`）。副指標の判定: `_ms`/`_pct` 接尾辞は率（+5%）・それ以外は増減。`compare.json` は台帳の鍵（before/after/delta/noise/secondary/verdict）と同綴りだが**`perf-ledger.py append --from-json` へそのままは渡せない**（ENTRY_KEYS 外の鍵を拒む）＝7.5 の RECORD で 6 鍵を抜き出す。`talk_peak_cpu_pct` を副指標に挙げると要件 5.4（合否に載せない）の外に出る＝本番 TOML は挙げない。
+- (7.2) **端末のコードページ（既定 CP932）で子プロセスの UTF-8 出力を復号すると日本語が壊れ、一字比較の検査が偽の MEASURE_FAILED を返す**（goal-text 一致検査で実際に踏んだ）。`perf-loop.common.ps1` の `Invoke-Child` は `ProcessStartInfo` で標準出力/エラーを UTF-8 固定で読む（python 子は `PYTHONIOENCODING=utf-8`・`PYTHONUTF8=1`、pwsh 子は `-Command` 内で自分の OutputEncoding だけ UTF-8）。**子プロセスの出力を `& $exe` で直に捕捉しない**こと。`perf-loop.ps1` 自身の説明行は端末のコードページで出る（RESULT 行は ASCII）＝7.5 のスキルが標準出力を台帳へ回すときは読み側の文字コードを決めておく。preflight は台帳があれば goal-check を呼び、トークン未生成なら作る（7.5 の周 0 は init→preflight/goal-check→goal-text の順）。`function_stage` の reason に `probe_failed`（-Probe 自体が回らなかった）を足している（C8 語彙外・頭書に明記）。
