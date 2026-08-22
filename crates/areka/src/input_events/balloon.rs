@@ -258,7 +258,7 @@ pub(crate) enum HoverAction {
 
 pub(crate) fn hover_action(
     active: bool,
-    hit_ordinal: Option<usize>,   // hit_choice_row の結果を ordinal へ展開した値
+    hit_ordinal: Option<usize>, // hit_choice_row の結果を ordinal へ展開した値
     last_injected: Option<usize>, // BalloonWiring.hover[scope]
 ) -> HoverAction {
     if !active {
@@ -407,13 +407,10 @@ pub(crate) fn on_balloon_pointer_moved(
     // （`clear_balloon_hover_on_leave`）と非表示遷移時の掃除（`BalloonWiring::clear_balloon_hover`）。
     // 読み口 `is_balloon_hovered` はバルーン可視性の相が毎フレーム読む（抑止条件の観測）。
     // BalloonWiring 不在は結線漏れ＝構成異常 error!（配線存在檻が開発時に検出）＋no-op。
-    let Some(last_injected) = world
-        .get_non_send_mut::<BalloonWiring>()
-        .map(|mut bw| {
-            bw.set_balloon_hover(scope);
-            bw.hover(scope)
-        })
-    else {
+    let Some(last_injected) = world.get_non_send_mut::<BalloonWiring>().map(|mut bw| {
+        bw.set_balloon_hover(scope);
+        bw.hover(scope)
+    }) else {
         tracing::error!(
             event = "balloon_wiring_missing",
             scope,
@@ -898,23 +895,23 @@ fn register_balloon_leave_system(world: &mut World) {
 }
 
 #[cfg(test)]
-#[path = "balloon_test_support.rs"]
-mod test_support;
-#[cfg(test)]
-#[path = "balloon_pure_core_tests.rs"]
-mod pure_core_tests;
-#[cfg(test)]
-#[path = "balloon_pointer_handler_tests.rs"]
-mod pointer_handler_tests;
+#[path = "balloon_hover_flag_tests.rs"]
+mod hover_flag_tests;
 #[cfg(test)]
 #[path = "balloon_leave_tests.rs"]
 mod leave_tests;
 #[cfg(test)]
-#[path = "balloon_wiring_tests.rs"]
-mod wiring_tests;
-#[cfg(test)]
 #[path = "balloon_pass_through_tests.rs"]
 mod pass_through_tests;
 #[cfg(test)]
-#[path = "balloon_hover_flag_tests.rs"]
-mod hover_flag_tests;
+#[path = "balloon_pointer_handler_tests.rs"]
+mod pointer_handler_tests;
+#[cfg(test)]
+#[path = "balloon_pure_core_tests.rs"]
+mod pure_core_tests;
+#[cfg(test)]
+#[path = "balloon_test_support.rs"]
+mod test_support;
+#[cfg(test)]
+#[path = "balloon_wiring_tests.rs"]
+mod wiring_tests;

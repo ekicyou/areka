@@ -145,7 +145,10 @@ mod tests {
         assert_eq!(held_old.epoch, 0);
         assert!(held_old.flat_global.is_empty());
         assert_eq!(shared.load().epoch, 1);
-        assert_eq!(shared.load().flat_global.get("k").map(String::as_str), Some("v"));
+        assert_eq!(
+            shared.load().flat_global.get("k").map(String::as_str),
+            Some("v")
+        );
     }
 
     #[test]
@@ -204,7 +207,10 @@ mod tests {
         shared.publish(Arc::new(next));
         // クローンは同一ロックを共有するので publish が見える
         assert_eq!(clone.load().epoch, 1);
-        assert_eq!(clone.load().flat_global.get("x").map(String::as_str), Some("1"));
+        assert_eq!(
+            clone.load().flat_global.get("x").map(String::as_str),
+            Some("1")
+        );
     }
 
     #[test]

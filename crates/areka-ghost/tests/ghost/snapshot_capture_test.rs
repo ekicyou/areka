@@ -42,14 +42,14 @@ use crate::recorder::{ExchangeKind, ExchangeOutcome, ExchangeRecord};
 /// `OnFirstBoot.txt` の正準形式と一致する（PROVISIONAL マーカは含めない）。
 fn reconstruct_envelope(outcome: &ExchangeOutcome) -> Option<String> {
     match outcome {
-        ExchangeOutcome::Value(s) => {
-            Some(format!("SHIORI/3.0 200 OK\r\nCharset: UTF-8\r\nValue: {s}\r\n\r\n"))
-        }
+        ExchangeOutcome::Value(s) => Some(format!(
+            "SHIORI/3.0 200 OK\r\nCharset: UTF-8\r\nValue: {s}\r\n\r\n"
+        )),
         ExchangeOutcome::NoContent => Some("SHIORI/3.0 204 No Content\r\n\r\n".to_string()),
         // narrowing（GET only）: NOTIFY 成功・失敗・unload 結果は採取対象外。
-        ExchangeOutcome::Failed(_)
-        | ExchangeOutcome::NotifyOk
-        | ExchangeOutcome::Unloaded(_) => None,
+        ExchangeOutcome::Failed(_) | ExchangeOutcome::NotifyOk | ExchangeOutcome::Unloaded(_) => {
+            None
+        }
     }
 }
 
@@ -237,7 +237,8 @@ fn write_real_pasta_ghost_fixture(root: &Path, dll_path: &Path) {
     // DLL は上のコピーに含まれるが、親不明時の保険として単体コピーも冪等に行う。
     let dll_dst = ghost_master.join(&dll_file_name);
     if !dll_dst.is_file() {
-        std::fs::copy(dll_path, &dll_dst).expect("実 pasta DLL を ghost/master へコピーできませんでした");
+        std::fs::copy(dll_path, &dll_dst)
+            .expect("実 pasta DLL を ghost/master へコピーできませんでした");
     }
 
     std::fs::write(
@@ -313,7 +314,8 @@ fn capture_real_pasta_snapshots() {
     );
     let helper_exe = resolve_helper_exe().expect("i686 helper exe の解決に失敗");
     let out_path = PathBuf::from(&out_dir);
-    std::fs::create_dir_all(&out_path).expect("AREKA_SNAPSHOT_OUT ディレクトリを作成できませんでした");
+    std::fs::create_dir_all(&out_path)
+        .expect("AREKA_SNAPSHOT_OUT ディレクトリを作成できませんでした");
 
     // --- 実 pasta fixture を組立（DLL をフィクスチャ ghost/master へ持ち込む）---
     let root = unique_temp_dir("capture_real_pasta_snapshots");
@@ -386,8 +388,9 @@ fn capture_real_pasta_snapshots() {
     let snapshots = collect_first_get_snapshots(&records);
     for (id, envelope) in &snapshots {
         let file = out_path.join(format!("{id}.txt"));
-        std::fs::write(&file, envelope)
-            .unwrap_or_else(|e| panic!("スナップショット {} の書き出しに失敗: {e}", file.display()));
+        std::fs::write(&file, envelope).unwrap_or_else(|e| {
+            panic!("スナップショット {} の書き出しに失敗: {e}", file.display())
+        });
     }
     eprintln!(
         "snapshot capture: {} 件の GET 初出応答を {} へ書き出した（正準 envelope・上書き）。",
@@ -435,13 +438,10 @@ mod tests {
 
     #[test]
     fn reconstruct_value_produces_canonical_200_envelope() {
-        let env = reconstruct_envelope(&ExchangeOutcome::Value(
-            r"\0\s[0]おはよう\e".to_string(),
-        ))
-        .expect("Value は 200 envelope へ再構成される");
+        let env = reconstruct_envelope(&ExchangeOutcome::Value(r"\0\s[0]おはよう\e".to_string()))
+            .expect("Value は 200 envelope へ再構成される");
         assert_eq!(
-            env,
-            "SHIORI/3.0 200 OK\r\nCharset: UTF-8\r\nValue: \\0\\s[0]おはよう\\e\r\n\r\n",
+            env, "SHIORI/3.0 200 OK\r\nCharset: UTF-8\r\nValue: \\0\\s[0]おはよう\\e\r\n\r\n",
             "200 envelope は status line＋Charset UTF-8＋Value 行＋空行終端（CRLF・PROVISIONAL マーカ無し）"
         );
     }

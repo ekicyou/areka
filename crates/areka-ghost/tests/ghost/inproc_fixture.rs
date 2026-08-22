@@ -96,10 +96,11 @@ fn copy_dir_recursive(src: &Path, dst: &Path) {
     std::fs::create_dir_all(dst)
         .unwrap_or_else(|e| panic!("create dir {} に失敗: {e}", dst.display()));
 
-    for entry in std::fs::read_dir(src)
-        .unwrap_or_else(|e| panic!("read_dir {} に失敗: {e}", src.display()))
+    for entry in
+        std::fs::read_dir(src).unwrap_or_else(|e| panic!("read_dir {} に失敗: {e}", src.display()))
     {
-        let entry = entry.unwrap_or_else(|e| panic!("dir entry 取得に失敗（{}）: {e}", src.display()));
+        let entry =
+            entry.unwrap_or_else(|e| panic!("dir entry 取得に失敗（{}）: {e}", src.display()));
         let file_type = entry
             .file_type()
             .unwrap_or_else(|e| panic!("file_type 取得に失敗（{:?}）: {e}", entry.path()));
@@ -136,8 +137,13 @@ fn materialize_file(from: &Path, to: &Path) {
         return;
     }
     // 別ボリューム等でハードリンク不可なら実コピーへフォールバック（機能的等価・忠実度同等）。
-    std::fs::copy(from, to)
-        .unwrap_or_else(|e| panic!("materialize {} -> {} に失敗: {e}", from.display(), to.display()));
+    std::fs::copy(from, to).unwrap_or_else(|e| {
+        panic!(
+            "materialize {} -> {} に失敗: {e}",
+            from.display(),
+            to.display()
+        )
+    });
 }
 
 /// emo2 実物 shell 資産のアンカー（`crates/areka-ghost` = `CARGO_MANIFEST_DIR` 相対・
@@ -176,7 +182,9 @@ pub fn assemble_test_ghost(tag: &str) -> TempGhost {
     // 組立の FS 実体化区間をプロセス全体で直列化（同時メタデータ churn を避ける・上記 rationale）。
     // poison は無視（組立途中 panic 後も後続組立は健全にやり直せる——各 root は tag で独立）。
     static ASSEMBLE_FS_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-    let _fs_guard = ASSEMBLE_FS_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _fs_guard = ASSEMBLE_FS_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
 
     // 1. 一意 temp root＋事前削除（冪等・Idempotency）。
     let root = std::env::temp_dir().join(format!("areka_shiori4_test_ghost_{tag}"));
@@ -209,7 +217,10 @@ pub fn assemble_test_ghost(tag: &str) -> TempGhost {
     //    ハードリンク優先（フォールバック copy）——新規 DLL バイト列の書き込みを避け、Defender の
     //    実行可能ファイル再走査による FS 飽和＝spine starvation を根絶する（`materialize_file` 参照）。
     let built_dll = locate_built_test_dll();
-    materialize_file(&built_dll, &ghost_master.join(shiori4_testdll::DLL_FILE_NAME));
+    materialize_file(
+        &built_dll,
+        &ghost_master.join(shiori4_testdll::DLL_FILE_NAME),
+    );
 
     // 5. balloon は非同梱（要件 4.2）——何も配置しない。
 
@@ -247,24 +258,23 @@ pub fn assemble_test_ghost(tag: &str) -> TempGhost {
 ///   とみなし作り直す。後続タスク 5.x が DLL を実ロードしても常に最新実体を掴む）。
 pub fn shared_test_ghost() -> &'static Path {
     static SHARED: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
-    let root = SHARED
-        .get_or_init(|| {
-            let root = std::env::temp_dir().join("areka_shiori4_test_ghost_shared");
+    let root = SHARED.get_or_init(|| {
+        let root = std::env::temp_dir().join("areka_shiori4_test_ghost_shared");
 
-            // 前プロセスがリークした健全な共有ゴーストが残っていれば、FS 変更ゼロで再利用する
-            // （反復起動での残余 churn＝spine starvation の除去・上記ドキュメント参照）。
-            if shared_ghost_is_fresh(&root) {
-                return root;
-            }
+        // 前プロセスがリークした健全な共有ゴーストが残っていれば、FS 変更ゼロで再利用する
+        // （反復起動での残余 churn＝spine starvation の除去・上記ドキュメント参照）。
+        if shared_ghost_is_fresh(&root) {
+            return root;
+        }
 
-            // 無いか陳腐化していれば固定タグで**ちょうど一度**組み立てる（get_or_init が初期化を直列化）。
-            let temp = assemble_test_ghost("shared");
-            let root = temp.root().to_path_buf();
-            // TempGhost の Drop（remove_dir_all）を抑止して root をリーク＝プロセス寿命存置。
-            // static に格納する PathBuf は Drop されないため temp dir は残る（上記ドキュメント参照）。
-            std::mem::forget(temp);
-            root
-        });
+        // 無いか陳腐化していれば固定タグで**ちょうど一度**組み立てる（get_or_init が初期化を直列化）。
+        let temp = assemble_test_ghost("shared");
+        let root = temp.root().to_path_buf();
+        // TempGhost の Drop（remove_dir_all）を抑止して root をリーク＝プロセス寿命存置。
+        // static に格納する PathBuf は Drop されないため temp dir は残る（上記ドキュメント参照）。
+        std::mem::forget(temp);
+        root
+    });
 
     // 永続状態を**毎呼出し**でリセットする（「shared_test_ghost は永続ファイルを持たない＝常に
     // 初回扱い」不変条件の回復・i1/i2 等が明示依存）。position-persist で永続書込が実際に効くように
@@ -297,7 +307,10 @@ pub fn shared_test_ghost() -> &'static Path {
 /// mtime 取得不能などの疑わしいケースは**安全側**（false＝作り直す）へ倒す。
 fn shared_ghost_is_fresh(root: &Path) -> bool {
     let surfaces = root.join("shell").join("master").join("surfaces.txt");
-    let cached_dll = root.join("ghost").join("master").join(shiori4_testdll::DLL_FILE_NAME);
+    let cached_dll = root
+        .join("ghost")
+        .join("master")
+        .join(shiori4_testdll::DLL_FILE_NAME);
     let balloon = root.join("balloon");
 
     if !surfaces.is_file() || !cached_dll.is_file() || balloon.exists() {
@@ -325,7 +338,11 @@ mod tests {
         let dll = super::locate_built_test_dll();
 
         // (a) 実在（不在なら locate 自身が明示 panic するので、成功戻り値は必ず実在）。
-        assert!(dll.exists(), "locate は実在するパスを返すこと: {}", dll.display());
+        assert!(
+            dll.exists(),
+            "locate は実在するパスを返すこと: {}",
+            dll.display()
+        );
 
         // (b) ファイル名 == 契約定数 DLL_FILE_NAME。
         assert_eq!(
@@ -337,7 +354,9 @@ mod tests {
 
         // (c) 親ディレクトリ名 == "deps"（単一正準位置＝deps・design.md D-1）。
         assert_eq!(
-            dll.parent().and_then(|p| p.file_name()).and_then(|s| s.to_str()),
+            dll.parent()
+                .and_then(|p| p.file_name())
+                .and_then(|s| s.to_str()),
             Some("deps"),
             "locate 戻り値の親ディレクトリは deps であること: {}",
             dll.display()
@@ -348,7 +367,11 @@ mod tests {
     #[test]
     fn locate_returns_absolute_path_inside_target_tree() {
         let dll = super::locate_built_test_dll();
-        assert!(dll.is_absolute(), "locate 戻り値は絶対パスであること: {}", dll.display());
+        assert!(
+            dll.is_absolute(),
+            "locate 戻り値は絶対パスであること: {}",
+            dll.display()
+        );
         assert!(
             dll.components().any(|c| c.as_os_str() == "target"),
             "locate 戻り値は target ツリー内を指すこと: {}",
@@ -434,7 +457,11 @@ mod tests {
         let root_path = {
             let temp = super::assemble_test_ghost("drop_cleanup");
             let p = temp.root().to_path_buf();
-            assert!(p.is_dir(), "組立直後は temp root が存在するべき: {}", p.display());
+            assert!(
+                p.is_dir(),
+                "組立直後は temp root が存在するべき: {}",
+                p.display()
+            );
             p
             // ここで temp が drop され、Drop が root を remove_dir_all する。
         };

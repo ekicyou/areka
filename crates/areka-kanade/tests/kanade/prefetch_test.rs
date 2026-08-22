@@ -173,7 +173,9 @@ fn prefetch_timeout_delivers_failed_to_sink_and_boot_continues_not_fault() {
             reason.contains("timeout"),
             "Failed の理由に失敗語彙（timeout）が載るはず: {reason}"
         ),
-        other => panic!("タイムアウトは sink へ ('username', Failed(..)) として届くべき: {other:?}"),
+        other => {
+            panic!("タイムアウトは sink へ ('username', Failed(..)) として届くべき: {other:?}")
+        }
     }
 
     // criterion 2（boot 続行）: 失敗した username prefetch の後に boot が前進する（終了系列へ倒れない）。

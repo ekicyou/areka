@@ -343,7 +343,10 @@ pub(super) fn assert_startup_golden(
 /// フレームだけ `EmoBoot` を remove→駆動→insert する（未到達フレームは peek のみで churn を避ける）。
 pub(super) fn cycle_present_system(world: &mut World) {
     // 現在時刻（フレームクロック）。未挿入時は 0.0（切替は起きない）。
-    let now = world.get_resource::<FrameTime>().map(|ft| ft.0).unwrap_or(0.0);
+    let now = world
+        .get_resource::<FrameTime>()
+        .map(|ft| ft.0)
+        .unwrap_or(0.0);
 
     // 装着済み・巡回対象・切替時刻到達を peek で確認（未到達なら remove/insert しない）。
     let due = match world.get_non_send::<EmoBoot>() {

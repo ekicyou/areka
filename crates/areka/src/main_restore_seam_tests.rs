@@ -82,7 +82,8 @@ fn restore_seam_prefers_saved_position_over_default() {
         }],
     };
 
-    let (out, restored) = restore_merged_placements(&root, placements, &snapshot, DefaultEncoding::Ansi);
+    let (out, restored) =
+        restore_merged_placements(&root, placements, &snapshot, DefaultEncoding::Ansi);
 
     assert_eq!(out.len(), 1);
     // 保存位置が採用された scope は「既定配置ではない」として報告される（scg 7.3）。
@@ -124,7 +125,8 @@ fn restore_seam_without_persist_is_identity_default() {
         }],
     };
 
-    let (out, restored) = restore_merged_placements(&root, placements, &snapshot, DefaultEncoding::Ansi);
+    let (out, restored) =
+        restore_merged_placements(&root, placements, &snapshot, DefaultEncoding::Ansi);
 
     assert_eq!(
         out, expected,

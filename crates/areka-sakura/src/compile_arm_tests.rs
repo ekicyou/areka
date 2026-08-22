@@ -1,8 +1,8 @@
+use super::test_support::{assert_clear_all_prefix_and_rest, command_of, compile, cue_eq};
 use super::*;
 use crate::duration::text_playback_duration;
 use crate::sysvar::SystemVarSnapshot;
 use areka_parsers::sakura::{NewLineRatio, SurfaceArg};
-use super::test_support::{assert_clear_all_prefix_and_rest, command_of, compile, cue_eq};
 
 /// サーフェス切替命令の引数を解釈・変換せず値のまま転写する（R3.1/3.2）。
 /// `"0,1,foo"` はカンマ区切りを一切パースせず `Emote{key}` へバイト完全転写される。
@@ -132,7 +132,11 @@ fn catch_all_ignored_set_is_raw_only() {
         Instruction::Text("hi".into()),
     ]);
     let cues = assert_clear_all_prefix_and_rest(compiled.sheet.cues());
-    assert_eq!(cues.len(), 1, "Raw は cue を生成しない（除外集合は Raw のみ）");
+    assert_eq!(
+        cues.len(),
+        1,
+        "Raw は cue を生成しない（除外集合は Raw のみ）"
+    );
     match command_of(&cues[0]) {
         CueCommand::Text(s) => assert_eq!(s, "hi"),
         other => panic!("expected Text, got {other:?}"),
@@ -196,14 +200,21 @@ fn graduated_arms_emit_while_raw_remains_ignored() {
     // 内容: carrier(move) / Text(username 既定値) / carrier(raise) / Text(tail) の 4 件。
     // Raw のみ破棄される（冒頭に ClearAll が前置される）。
     let cues = assert_clear_all_prefix_and_rest(compiled.sheet.cues());
-    assert_eq!(cues.len(), 4, "卒業アーム 3 種＋末尾 Text の 4 cue（Raw のみ破棄）");
+    assert_eq!(
+        cues.len(),
+        4,
+        "卒業アーム 3 種＋末尾 Text の 4 cue（Raw のみ破棄）"
+    );
     assert_eq!(
         command_of(&cues[0]).as_command_carrier(),
         Some(("move", vec!["100", "200"])),
         "Move はキャリア cue へ卒業（R4.1）"
     );
     match command_of(&cues[1]) {
-        CueCommand::Text(s) => assert_eq!(s, "ユーザーさん", "SystemVar は Text cue へ卒業（R7.1/7.4）"),
+        CueCommand::Text(s) => assert_eq!(
+            s, "ユーザーさん",
+            "SystemVar は Text cue へ卒業（R7.1/7.4）"
+        ),
         other => panic!("expected Text, got {other:?}"),
     }
     assert_eq!(
@@ -373,10 +384,7 @@ fn move_maps_to_command_carrier_preserving_empty_tokens() {
     assert_eq!(cues.len(), 1, "move は単一の汎用キャリア cue を生成する");
     assert_eq!(
         command_of(&cues[0]).as_command_carrier(),
-        Some((
-            "move",
-            vec!["-353", "", "", "0", "base", "base"]
-        )),
+        Some(("move", vec!["-353", "", "", "0", "base", "base"])),
         "Move → command_carrier(\"move\", args)（空トークン保持・R4.1/4.2）"
     );
     assert_eq!(cues[0].duration, 0.0, "汎用キャリアは瞬時（duration 0）");
@@ -443,11 +451,11 @@ fn system_var_present_maps_to_text_cue_with_playback_duration() {
         "duration = text_playback_duration(展開文字列)（R7.2）"
     );
     // [1] 後続 Emote は展開テキスト再生完了後（offset += D）へ整列する。
+    assert_eq!(command_of(&cues[1]), &CueCommand::Emote { key: "1".into() });
     assert_eq!(
-        command_of(&cues[1]),
-        &CueCommand::Emote { key: "1".into() }
+        cues[1].start_time, d,
+        "SystemVar 由来 D の分だけ後続が遅れる（R7.2）"
     );
-    assert_eq!(cues[1].start_time, d, "SystemVar 由来 D の分だけ後続が遅れる（R7.2）");
 }
 
 /// `username` 欠落スナップショット → 既定値 `ユーザーさん` の Text cue（R7.4・生の `%username`
@@ -709,14 +717,21 @@ fn menu_script_compiles_to_exact_ordered_cue_sheet() {
 
     // at 整列: 全命令が瞬時ゆえ全 start_time は 0.0（完全整列・単調非減少の退化形）。
     for (i, cue) in cues.iter().enumerate() {
-        assert_eq!(cue.start_time, 0.0, "index {i} の start_time は 0.0（at 整列）");
+        assert_eq!(
+            cue.start_time, 0.0,
+            "index {i} の start_time は 0.0（at 整列）"
+        );
         assert_eq!(cue.duration, 0.0, "index {i} は瞬時（duration 0）");
     }
 
     // scope 帰属: 冒頭 ClearAll のみ "0"、内容＋barrier は エモ "1"。
     assert_eq!(cues[0].actor.as_str(), "0", "冒頭 ClearAll は scope 0");
     for (i, cue) in cues.iter().enumerate().skip(1) {
-        assert_eq!(cue.actor.as_str(), "1", "index {i} は エモ scope 1 帰属（R3.4）");
+        assert_eq!(
+            cue.actor.as_str(),
+            "1",
+            "index {i} は エモ scope 1 帰属（R3.4）"
+        );
     }
 
     // barrier の唯一性（ちょうど 1 個）と最終位置（末尾 index）。
@@ -784,7 +799,11 @@ fn scoped_move_carrier_transcribes_scope_and_preserves_empty_tokens() {
         }),
     ]);
     let cues = assert_clear_all_prefix_and_rest(compiled.sheet.cues());
-    assert_eq!(cues.len(), 1, "内容は move キャリア cue 1 件のみ（barrier なし）");
+    assert_eq!(
+        cues.len(),
+        1,
+        "内容は move キャリア cue 1 件のみ（barrier なし）"
+    );
     assert_eq!(
         command_of(&cues[0]).as_command_carrier(),
         Some(("move", vec!["-353", "", "", "0", "base", "base"])),
@@ -826,7 +845,11 @@ fn unknown_and_bare_carrier_forms_are_emitted_not_dropped() {
         },
     ]);
     let cues = assert_clear_all_prefix_and_rest(compiled.sheet.cues());
-    assert_eq!(cues.len(), 2, "未知名＋単独形の 2 キャリアが載る（無音落ちなし）");
+    assert_eq!(
+        cues.len(),
+        2,
+        "未知名＋単独形の 2 キャリアが載る（無音落ちなし）"
+    );
     assert_eq!(
         command_of(&cues[0]).as_command_carrier(),
         Some(("raise", vec!["OnBoot"])),
@@ -838,7 +861,10 @@ fn unknown_and_bare_carrier_forms_are_emitted_not_dropped() {
         "単独形 `\\![*]`（raw_args 空）もキャリア cue を発行（無音落ちしない・R8.2 卒業）"
     );
     for (i, cue) in cues.iter().enumerate() {
-        assert_eq!(cue.duration, 0.0, "index {i} のキャリアは瞬時（duration 0）");
+        assert_eq!(
+            cue.duration, 0.0,
+            "index {i} のキャリアは瞬時（duration 0）"
+        );
     }
 }
 

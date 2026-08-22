@@ -1,5 +1,5 @@
-use super::*;
 use super::test_support::row;
+use super::*;
 
 // -------------------------------------------------------------------------
 // hit_choice_row 純関数檻（task 3.1・design「純関数判定核」／Testing Strategy item 1/4）
@@ -62,9 +62,9 @@ fn hit_half_open_boundary_edges() {
 #[test]
 fn hit_multiple_non_overlapping_rows_returns_correct_index() {
     let rows = [
-        row(0, 0.0, 0.0, 100.0, 20.0),   // index 0
-        row(1, 0.0, 20.0, 100.0, 40.0),  // index 1
-        row(2, 0.0, 40.0, 100.0, 60.0),  // index 2
+        row(0, 0.0, 0.0, 100.0, 20.0),  // index 0
+        row(1, 0.0, 20.0, 100.0, 40.0), // index 1
+        row(2, 0.0, 40.0, 100.0, 60.0), // index 2
     ];
     assert_eq!(hit_choice_row(&rows, 50.0, 10.0), Some(0), "1 行目内");
     assert_eq!(hit_choice_row(&rows, 50.0, 30.0), Some(1), "2 行目内");
@@ -80,9 +80,9 @@ fn hit_multiple_non_overlapping_rows_returns_correct_index() {
 fn hit_pathological_overlap_returns_last_match_deterministically() {
     // 3 行が (50, 30) を共通に含む。スライス順（index 昇順）で最後の index 2 が返るべき。
     let rows = [
-        row(0, 0.0, 0.0, 100.0, 100.0),  // index 0: 点を含む
-        row(1, 40.0, 20.0, 60.0, 40.0),  // index 1: 点を含む
-        row(2, 45.0, 25.0, 80.0, 60.0),  // index 2: 点を含む（最後定義＝手前）
+        row(0, 0.0, 0.0, 100.0, 100.0), // index 0: 点を含む
+        row(1, 40.0, 20.0, 60.0, 40.0), // index 1: 点を含む
+        row(2, 45.0, 25.0, 80.0, 60.0), // index 2: 点を含む（最後定義＝手前）
     ];
     assert_eq!(
         hit_choice_row(&rows, 50.0, 30.0),
@@ -170,13 +170,7 @@ fn rows_lifted_by_real_k() -> Vec<ChoiceHitRow> {
                 id: format!("q{ordinal}"),
                 label: format!("label{ordinal}"),
                 references: Vec::new(),
-                rect: to_window_physical(
-                    &canvas,
-                    &region,
-                    WritingMode::HorizontalTb,
-                    0,
-                    &contract,
-                ),
+                rect: to_window_physical(&canvas, &region, WritingMode::HorizontalTb, 0, &contract),
             }
         })
         .collect()
@@ -394,7 +388,10 @@ fn click_hit_builds_selection_from_current_row() {
         .expect("表示中・ヒット座標では ChoiceSelection を構成する");
     assert_eq!(sel.id, "q1", "id は現行ヒット行から転写");
     assert_eq!(sel.label, "label1", "label は現行ヒット行から転写");
-    assert_eq!(sel.scope, 7, "scope は引数由来（BalloonWindowMarker.scope）");
+    assert_eq!(
+        sel.scope, 7,
+        "scope は引数由来（BalloonWindowMarker.scope）"
+    );
     assert_eq!(
         sel.references,
         vec!["r0".to_string(), "r1".to_string()],
@@ -446,12 +443,23 @@ fn click_stale_coords_not_in_current_rows_returns_none() {
 #[test]
 fn click_replaced_row_builds_from_current_not_cached() {
     // 現行 rows: 座標 (30, 30) を覆うのは ordinal 9 の別行のみ。
-    let current = [row_with_refs(9, 10.0, 20.0, 50.0, 40.0, vec!["z".to_string()])];
-    let sel = click_selection(true, &current, 30.0, 30.0, 3)
-        .expect("現行行がヒットするので構成される");
+    let current = [row_with_refs(
+        9,
+        10.0,
+        20.0,
+        50.0,
+        40.0,
+        vec!["z".to_string()],
+    )];
+    let sel =
+        click_selection(true, &current, 30.0, 30.0, 3).expect("現行行がヒットするので構成される");
     assert_eq!(sel.id, "q9", "確定は現行ヒット行（差替後）から構成される");
     assert_eq!(sel.label, "label9", "label も現行行から");
-    assert_eq!(sel.references, vec!["z".to_string()], "references も現行行から");
+    assert_eq!(
+        sel.references,
+        vec!["z".to_string()],
+        "references も現行行から"
+    );
     assert_eq!(sel.scope, 3, "scope は引数由来");
 }
 
@@ -460,5 +468,8 @@ fn click_replaced_row_builds_from_current_not_cached() {
 fn click_empty_references_transcribed_as_empty() {
     let rows = [row_with_refs(0, 0.0, 0.0, 100.0, 20.0, Vec::new())];
     let sel = click_selection(true, &rows, 50.0, 10.0, 0).expect("ヒットするので構成される");
-    assert!(sel.references.is_empty(), "空 references は空 Vec として転写");
+    assert!(
+        sel.references.is_empty(),
+        "空 references は空 Vec として転写"
+    );
 }

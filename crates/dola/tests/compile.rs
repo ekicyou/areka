@@ -1,8 +1,8 @@
 // tests/compile.rs — dola compile domain test entry point
-#[path = "compile/common/mod.rs"]
-mod common;
 #[path = "compile/boundary_test.rs"]
 mod boundary_test;
+#[path = "compile/common/mod.rs"]
+mod common;
 #[path = "compile/error_test.rs"]
 mod error_test;
 #[path = "compile/integration_test/mod.rs"]

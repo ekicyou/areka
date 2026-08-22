@@ -209,7 +209,9 @@ mod tests {
             panic!("boom in actor");
         });
 
-        let err = handle.join().expect_err("panicking body must surface as Err");
+        let err = handle
+            .join()
+            .expect_err("panicking body must surface as Err");
         match err {
             ActorError::Panicked { actor, message } => {
                 assert_eq!(actor, "panicky");
@@ -278,16 +280,20 @@ mod tests {
         tx.send("close").expect("send close");
 
         let (seen_tx, seen_rx) = mpsc::channel::<&'static str>();
-        run_bounded("run_inbox continue-after-err", Duration::from_secs(5), move || {
-            run_inbox::<&'static str, HandlerErr>(rx, move |msg| match msg {
-                "will-error" => Err(HandlerErr("intentional")),
-                "close" => Ok(ControlFlow::Break(())),
-                other => {
-                    seen_tx.send(other).expect("record seen");
-                    Ok(ControlFlow::Continue(()))
-                }
-            });
-        });
+        run_bounded(
+            "run_inbox continue-after-err",
+            Duration::from_secs(5),
+            move || {
+                run_inbox::<&'static str, HandlerErr>(rx, move |msg| match msg {
+                    "will-error" => Err(HandlerErr("intentional")),
+                    "close" => Ok(ControlFlow::Break(())),
+                    other => {
+                        seen_tx.send(other).expect("record seen");
+                        Ok(ControlFlow::Continue(()))
+                    }
+                });
+            },
+        );
 
         // Err を返したメッセージの後続が処理されていること＝ループは殺されていない。
         let seen = seen_rx

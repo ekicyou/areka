@@ -129,7 +129,9 @@ fn world_with(placement: ScopePlacement) -> (World, Entity, Entity) {
     world.insert_resource(snapshot());
     let titles = GhostTitles::from_scope_titles([(0, "むらさき".to_string())]);
     let ghost_windows = spawn_ghost_windows(&mut world, &[placement], &titles);
-    let char_window = ghost_windows.char_window(0).expect("キャラ窓が spawn される");
+    let char_window = ghost_windows
+        .char_window(0)
+        .expect("キャラ窓が spawn される");
     let balloon_window = ghost_windows
         .balloon_window(0)
         .expect("バルーン窓が spawn される");
@@ -253,7 +255,10 @@ fn reported_size_reconcile_rederives_the_keyword_offset_from_the_displayed_size(
             fresh,
             "mode={mode:?}: 実表示寸から導出し直されていない（採寸寸のまま据え置き＝本欠陥）"
         );
-        assert_ne!(fresh, stale, "mode={mode:?}: 再導出の前後が同値（檻が空虚）");
+        assert_ne!(
+            fresh, stale,
+            "mode={mode:?}: 再導出の前後が同値（檻が空虚）"
+        );
 
         // 表示位置でも中央が揃っていること（offset だけ直って追従が古いままを弾く）。
         let char_pos = point_of(&world, char_window);
@@ -333,7 +338,8 @@ fn rederivation_keeps_the_author_adjustment() {
 fn keyword_base_is_consumed_by_the_first_rederivation_and_never_fires_again() {
     let adjust = PointPx { x: 0, y: 0 };
     let mode = BalloonXMode::CenterTop;
-    let (mut world, char_window, _) = world_with(placement_measured_at(Some((mode, adjust)), false));
+    let (mut world, char_window, _) =
+        world_with(placement_measured_at(Some((mode, adjust)), false));
 
     assert!(
         world.get::<BalloonKeywordBase>(char_window).is_some(),
@@ -391,7 +397,8 @@ fn keyword_base_is_consumed_by_the_first_rederivation_and_never_fires_again() {
 fn a_write_that_does_not_change_the_size_preserves_the_material() {
     let adjust = PointPx { x: 0, y: 0 };
     let mode = BalloonXMode::CenterTop;
-    let (mut world, char_window, _) = world_with(placement_measured_at(Some((mode, adjust)), false));
+    let (mut world, char_window, _) =
+        world_with(placement_measured_at(Some((mode, adjust)), false));
     let before = offset_of(&world, char_window);
 
     // 接地していない位置へずらす——こうしないと同寸・同位置のべき等 skip が手前で
@@ -531,7 +538,11 @@ fn unresolvable_balloon_size_warns_and_leaves_the_offset_untouched() {
         });
 
         let warn = expect_one(&events, KEYWORD_UNRESOLVED_TAG);
-        assert_eq!(warn.level, tracing::Level::WARN, "[{label}] 縮退は warn 水準");
+        assert_eq!(
+            warn.level,
+            tracing::Level::WARN,
+            "[{label}] 縮退は warn 水準"
+        );
         assert_no_event(&events, REDERIVE_TAG);
         assert_eq!(
             offset_of(&world, char_window),

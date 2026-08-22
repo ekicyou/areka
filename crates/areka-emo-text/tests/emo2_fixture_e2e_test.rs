@@ -107,8 +107,12 @@ fn extract_main_menu_sakura() -> String {
     let line = pasta
         .lines()
         .find(|l| l.contains("\\q[おしゃべり頻度") && l.contains("\\q[閉じる"))
-        .expect("menu.pasta に メインメニュー選択肢 本文行（\\q[おしゃべり頻度…\\q[閉じる…）が在る");
-    let start = line.find('\\').expect("本文行はさくらスクリプト（\\）を含む");
+        .expect(
+            "menu.pasta に メインメニュー選択肢 本文行（\\q[おしゃべり頻度…\\q[閉じる…）が在る",
+        );
+    let start = line
+        .find('\\')
+        .expect("本文行はさくらスクリプト（\\）を含む");
     line[start..].to_string()
 }
 
@@ -174,8 +178,15 @@ fn real_emo2_fixture_descript_resolves_square_fill_style() {
 fn real_menu_pasta_compiles_to_choice_cursor_cue_sequence() {
     let sakura = extract_main_menu_sakura();
     // 実台本断片は 3 項目＋字下げ（\_l[5em,2lh]）＋改行（\n）を持つ。
-    assert!(sakura.contains("\\_l[5em,2lh]"), "実台本は字下げ \\_l[5em,2lh] を含む: {sakura}");
-    assert_eq!(sakura.matches("\\q[").count(), 3, "実台本は \\q 選択肢 3 項目: {sakura}");
+    assert!(
+        sakura.contains("\\_l[5em,2lh]"),
+        "実台本は字下げ \\_l[5em,2lh] を含む: {sakura}"
+    );
+    assert_eq!(
+        sakura.matches("\\q[").count(),
+        3,
+        "実台本は \\q 選択肢 3 項目: {sakura}"
+    );
 
     let instructions = areka_parsers::sakura::parse(&sakura);
     let compiled = compile(&instructions, &SystemVarSnapshot::default());
@@ -213,7 +224,10 @@ fn real_menu_pasta_compiles_to_choice_cursor_cue_sequence() {
         .iter()
         .filter(|c| matches!(&c.payload, CuePayload::Command(CueCommand::NewLine { .. })))
         .count();
-    assert_eq!(newlines, 1, "メインメニュー本文の \\n は 1 個（項目1と2の間）");
+    assert_eq!(
+        newlines, 1,
+        "メインメニュー本文の \\n は 1 個（項目1と2の間）"
+    );
 
     // (d) \q 存在ゆえ末尾に WaitForChoice barrier がちょうど 1 個（語彙シーム・選択待ち）。
     let barriers = cues
@@ -225,7 +239,10 @@ fn real_menu_pasta_compiles_to_choice_cursor_cue_sequence() {
             )
         })
         .count();
-    assert_eq!(barriers, 1, "\\q を持つ台本は WaitForChoice barrier を 1 個持つ");
+    assert_eq!(
+        barriers, 1,
+        "\\q を持つ台本は WaitForChoice barrier を 1 個持つ"
+    );
 }
 
 // ══ テスト 3: 実 fixture ＋ 実 cue 列を headless 描画し readback で検証する（GPU・headless） ══════
@@ -249,7 +266,11 @@ fn make_world_with_gpu() -> World {
 fn spawn_reserved_slot(world: &mut World) -> (bevy_ecs::entity::Entity, bevy_ecs::entity::Entity) {
     let window = world.spawn_empty().id();
     let slot = world
-        .spawn((Name::new("emo-text-layer-slot"), Visual::default(), ChildOf(window)))
+        .spawn((
+            Name::new("emo-text-layer-slot"),
+            Visual::default(),
+            ChildOf(window),
+        ))
         .id();
     world.flush();
     (window, slot)
@@ -279,7 +300,12 @@ fn command_talk_cues(sheet: &areka_sakura::contract::CueSheet) -> Vec<TalkCue> {
 /// （surface.rs「Arrangement offset＝validrect 原点×k」）。ゆえに read_back は canvas-local——
 /// 窓物理ヒット矩形から validrect 原点（`region` の left/top×k）を差し引いて probe 座標へ戻す。
 fn to_canvas_local(r: &ChoiceHitRow, ox: f32, oy: f32) -> (f32, f32, f32, f32) {
-    (r.rect.left - ox, r.rect.top - oy, r.rect.right - ox, r.rect.bottom - oy)
+    (
+        r.rect.left - ox,
+        r.rect.top - oy,
+        r.rect.right - ox,
+        r.rect.bottom - oy,
+    )
 }
 
 /// SquareFill 塗り色（105,25,25・premultiplied α=255 ゆえ BGRA=(25,25,105,255)）を矩形内で数える。
@@ -290,7 +316,12 @@ fn fill_pixels_in_rect(bytes: &[u8], width: u32, height: u32, rect: (f32, f32, f
 }
 
 /// 白文字（≈255,255,255・全チャネル閾値で AA 端を除いた芯）を矩形内で数える。
-fn white_pixels_in_rect(bytes: &[u8], width: u32, height: u32, rect: (f32, f32, f32, f32)) -> usize {
+fn white_pixels_in_rect(
+    bytes: &[u8],
+    width: u32,
+    height: u32,
+    rect: (f32, f32, f32, f32),
+) -> usize {
     count_in_rect(bytes, width, height, rect, |px| {
         px[0] >= 200 && px[1] >= 200 && px[2] >= 200 && px[3] == 255
     })
@@ -401,11 +432,18 @@ fn real_emo2_menu_cue_sequence_renders_and_hovers_headless() {
             .find(|r| r.ordinal == ordinal)
             .unwrap_or_else(|| panic!("ordinal {ordinal} のヒット行が在る: {rows:?}"));
         assert_eq!(&row.id, id, "ordinal {ordinal} の id は実台本 target");
-        assert_eq!(&row.label, label, "ordinal {ordinal} の label は実台本 disp");
+        assert_eq!(
+            &row.label, label,
+            "ordinal {ordinal} の label は実台本 disp"
+        );
     }
 
     let (w, h) = rt.surface(&actor).expect("供給面").size();
-    let base = rt.surface(&actor).expect("供給面").read_back().expect("read_back");
+    let base = rt
+        .surface(&actor)
+        .expect("供給面")
+        .read_back()
+        .expect("read_back");
     assert!(
         opaque_count(&base) > 0,
         "実フォント＋実 validrect で選択肢テキストが描画される（非退化）"
@@ -424,7 +462,11 @@ fn real_emo2_menu_cue_sequence_renders_and_hovers_headless() {
     // ── (c) ordinal 0 を hover 注入 → 再提示 → read_back ──
     rt.inject_choice_hover(&actor, Some(0));
     present_frame(&mut rt, &mut world, 100.0).expect("hover 提示");
-    let hover = rt.surface(&actor).expect("供給面").read_back().expect("read_back");
+    let hover = rt
+        .surface(&actor)
+        .expect("供給面")
+        .read_back()
+        .expect("read_back");
 
     // read_back（canvas-local）を probe するため、窓物理ヒット矩形から validrect 原点（×k=1.0）を差し引く。
     let region = TextRegion::resolve(&model, IMAGE_SIZE, WritingMode::HorizontalTb);
@@ -463,7 +505,10 @@ fn real_emo2_menu_cue_sequence_renders_and_hovers_headless() {
     let y0 = row0_cl.1.floor().max(0.0) as u32;
     // y 窓の下端＝次行（ordinal 1）の block 起点——帯寸に依存しないため RED/GREEN で同一窓になる。
     let y1 = (row1_cl.1.floor().max(0.0) as u32).min(h);
-    assert!(x0 < x1 && y0 < y1, "走査窓が非退化: x{x0}..{x1} y{y0}..{y1}");
+    assert!(
+        x0 < x1 && y0 < y1,
+        "走査窓が非退化: x{x0}..{x1} y{y0}..{y1}"
+    );
     let fill_span = y_span_where(&hover, w, x0, x1, y0, y1, |px| {
         px[0] == 25 && px[1] == 25 && px[2] == 105 && px[3] == 255
     })
@@ -490,8 +535,8 @@ fn real_emo2_menu_cue_sequence_renders_and_hovers_headless() {
     );
 
     // ── 診断: read_back（premultiplied BGRA）を白背景へ合成して PNG を保存する（実ジオメトリ目視） ──
-    let out_dir = std::env::var("AREKA_DIAG_OUT")
-        .unwrap_or_else(|_| env!("CARGO_TARGET_TMPDIR").to_string());
+    let out_dir =
+        std::env::var("AREKA_DIAG_OUT").unwrap_or_else(|_| env!("CARGO_TARGET_TMPDIR").to_string());
     let rgba = composite_on_white(&hover, w, h);
     let png = encode_png_rgba(&rgba, w, h);
     let path = format!("{out_dir}/emo2_fixture_menu_hover.png");

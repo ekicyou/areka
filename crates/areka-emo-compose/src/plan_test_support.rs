@@ -26,7 +26,11 @@ pub(super) fn surface(id: u32, elements: Vec<Element>) -> Surface {
 }
 
 /// element＋animation を持つ surface（collision 空・単一ターゲット）。
-pub(super) fn surface_with_anims(id: u32, elements: Vec<Element>, animations: Vec<Animation>) -> Surface {
+pub(super) fn surface_with_anims(
+    id: u32,
+    elements: Vec<Element>,
+    animations: Vec<Animation>,
+) -> Surface {
     Surface {
         id,
         targets: vec![AppendTarget::Single(id)],
@@ -72,7 +76,10 @@ pub(super) fn shell_of(surfaces: Vec<Surface>) -> Shell {
 }
 
 /// 与えた surface 群を `animation-sort` 指定つきで包む `Shell`。
-pub(super) fn shell_of_with_sort(surfaces: Vec<Surface>, animation_sort: Option<SortOrder>) -> Shell {
+pub(super) fn shell_of_with_sort(
+    surfaces: Vec<Surface>,
+    animation_sort: Option<SortOrder>,
+) -> Shell {
     let definitions = (0..surfaces.len()).map(DefRef::Surface).collect();
     Shell {
         surfaces,

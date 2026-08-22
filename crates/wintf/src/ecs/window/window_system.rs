@@ -32,15 +32,8 @@ pub fn create_windows(world: &mut World) {
         self_ref.0.clone();
 
     // 宣言的クエリで未生成 Window Entity を収集（borrow を即解放）。
-    let mut system_state: SystemState<
-        Query<
-            Entity,
-            (
-                With<Window>,
-                Without<WindowHandle>,
-            ),
-        >,
-    > = SystemState::new(world);
+    let mut system_state: SystemState<Query<Entity, (With<Window>, Without<WindowHandle>)>> =
+        SystemState::new(world);
     let entities_to_create: Vec<Entity> = system_state
         .get(world)
         .expect("window query validation should succeed")

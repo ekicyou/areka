@@ -62,15 +62,18 @@ const SHAPES: &[(u32, u32, u32)] = &[
     (16, 1, 64),
     (17, 5, 68),
     (32, 32, 128),
-    (2, 2, 12),  // 行末パディング付き stride
-    (9, 4, 44),  // 非バイト境界幅 + パディング
-    (0, 0, 0),   // 退化ケース（空マスク）
-    (4, 0, 16),  // height=0
+    (2, 2, 12), // 行末パディング付き stride
+    (9, 4, 44), // 非バイト境界幅 + パディング
+    (0, 0, 0),  // 退化ケース（空マスク）
+    (4, 0, 16), // height=0
 ];
 
 /// マスクの全内容が一致することを assert する（`PartialEq` に加えて全座標の判定も突合）
 fn assert_masks_identical(actual: &AlphaMask, expected: &AlphaMask, ctx: &str) {
-    assert_eq!(actual, expected, "{ctx}: マスク全体（data/width/height）が不一致");
+    assert_eq!(
+        actual, expected,
+        "{ctx}: マスク全体（data/width/height）が不一致"
+    );
     assert_eq!(actual.width(), expected.width(), "{ctx}: width 不一致");
     assert_eq!(actual.height(), expected.height(), "{ctx}: height 不一致");
     // 全有効座標＋範囲外 1 歩ずつで判定が一致すること（内容の突合を座標側からも固定）

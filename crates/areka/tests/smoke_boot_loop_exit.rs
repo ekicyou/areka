@@ -38,8 +38,7 @@ const POLL_INTERVAL: Duration = Duration::from_millis(50);
 
 /// emo2 fixture ルート（placement 単体テストと同一アンカー規約・task 4.1）。
 fn emo2_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../pilot/examples/shiori-host-32/fixtures/emo2")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../pilot/examples/shiori-host-32/fixtures/emo2")
 }
 
 /// env ゲートを立てた areka バイナリを与えた引数で起動し、番犬締切内の終了を待って
@@ -188,7 +187,9 @@ fn skeleton_boots_with_real_ghost_windows_and_exits_zero() {
 
     if all.contains("窓配置の準備に失敗しました") && all.contains("モニタ") {
         // モニタ 0 台環境（headless CI）: Monitor エラー→ error! フォールバックが契約どおり。
-        eprintln!("note: モニタ 0 台環境のため本物方向はフォールバック完走で受理（Monitor エラー）");
+        eprintln!(
+            "note: モニタ 0 台環境のため本物方向はフォールバック完走で受理（Monitor エラー）"
+        );
         assert!(
             all.contains("検証用ダミー窓を開きました（placement フォールバック）"),
             "Monitor エラー時はダミー窓フォールバックで完走すべき。\n--- child output ---\n{all}"

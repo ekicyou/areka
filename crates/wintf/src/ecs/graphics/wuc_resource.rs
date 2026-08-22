@@ -10,10 +10,10 @@
 
 use bevy_ecs::prelude::*;
 use tracing::{debug, info};
+use windows::System::{DispatcherQueue, DispatcherQueueController};
 use windows::UI::Composition::{CompositionGraphicsDevice, Compositor};
 use windows::Win32::Graphics::Direct2D::ID2D1Device;
 use windows::Win32::System::WinRT::DQTAT_COM_NONE;
-use windows::System::{DispatcherQueue, DispatcherQueueController};
 use windows::core::Result;
 
 use crate::com::wuc::{CompositorInteropExt, create_dispatcher_queue_controller};
@@ -154,9 +154,9 @@ impl WucGraphicsResource {
 
 #[cfg(test)]
 mod tests {
-    use crate::ecs::graphics::wuc_resource::WucGraphicsResource;
     use crate::ecs::graphics::GraphicsCore;
-    use windows::Win32::System::Com::{CoInitializeEx, COINIT_MULTITHREADED};
+    use crate::ecs::graphics::wuc_resource::WucGraphicsResource;
+    use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 
     /// WucGraphicsResource の遅延ライフサイクル統合テスト（要件 2.2 / 3.3）。
     ///

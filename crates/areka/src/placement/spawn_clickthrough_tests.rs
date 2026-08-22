@@ -2,7 +2,9 @@ use bevy_ecs::prelude::*;
 use wintf::ecs::Window;
 
 use super::spawn_ghost_windows;
-use super::test_support::{fake_window_handle, ghost_window_entities, titles, two_scope_placements};
+use super::test_support::{
+    fake_window_handle, ghost_window_entities, titles, two_scope_placements,
+};
 
 // -------------------------------------------------------------------------
 // stand-in 即終了（`on_ghost_pressed`）の退役（areka-P0-input-events task 3.2・6.1）
@@ -48,11 +50,7 @@ impl ClickThroughRegistrar for FakeRegistrar {
 }
 
 fn registrar_calls(world: &World) -> Vec<(Entity, isize)> {
-    world
-        .non_send::<FakeRegistrar>()
-        .calls
-        .borrow()
-        .clone()
+    world.non_send::<FakeRegistrar>().calls.borrow().clone()
 }
 
 fn register_schedule() -> Schedule {

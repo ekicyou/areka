@@ -34,23 +34,23 @@
 // ============================================================================
 
 #[cfg(test)]
-#[path = "common_recording.rs"]
-mod recording;
+#[path = "common_bounded.rs"]
+mod bounded;
 #[cfg(test)]
 #[path = "common_fixture.rs"]
 mod fixture;
 #[cfg(test)]
-#[path = "common_mock_shiori.rs"]
-mod mock_shiori;
+#[path = "common_harness.rs"]
+mod harness;
 #[cfg(test)]
 #[path = "common_mock_sakura.rs"]
 mod mock_sakura;
 #[cfg(test)]
-#[path = "common_bounded.rs"]
-mod bounded;
+#[path = "common_mock_shiori.rs"]
+mod mock_shiori;
 #[cfg(test)]
-#[path = "common_harness.rs"]
-mod harness;
+#[path = "common_recording.rs"]
+mod recording;
 
 // ============================================================================
 // 疎通テスト（観測可能な完了条件）

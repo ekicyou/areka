@@ -6,7 +6,7 @@
 
 use std::collections::BTreeMap;
 
-use super::{build_placement_config, BalloonSide, BalloonXMode, PlacementConfig, ScopeConfig};
+use super::{BalloonSide, BalloonXMode, PlacementConfig, ScopeConfig, build_placement_config};
 
 /// テスト補助: `(key, value)` ペア列から `parse_kv` 出力相当の `BTreeMap` を組む。
 fn kv(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
@@ -25,10 +25,7 @@ fn empty() -> BTreeMap<String, String> {
 /// 配置されるという既存契約をテスト側で逐語再現する。
 fn scope_config_for(cfg: &PlacementConfig, scope: usize) -> ScopeConfig {
     let default_scope_cfg = ScopeConfig::default();
-    cfg.scopes
-        .get(&scope)
-        .unwrap_or(&default_scope_cfg)
-        .clone()
+    cfg.scopes.get(&scope).unwrap_or(&default_scope_cfg).clone()
 }
 
 // ------------------------------------------------------------------
@@ -97,9 +94,15 @@ fn t_l2_build_placement_config_keeps_canonical_defaults_for_all_scopes() {
     ]);
     let cfg = build_placement_config(&ghost, &shell);
 
-    assert_eq!(cfg.scopes.keys().copied().collect::<Vec<_>>(), vec![0, 1, 2]);
+    assert_eq!(
+        cfg.scopes.keys().copied().collect::<Vec<_>>(),
+        vec![0, 1, 2]
+    );
     for (scope, sc) in &cfg.scopes {
-        assert!(sc.balloon_limit, "scope {scope} の limit が既定で無効になっている");
+        assert!(
+            sc.balloon_limit,
+            "scope {scope} の limit が既定で無効になっている"
+        );
         assert_eq!(sc.balloon_x_mode, BalloonXMode::Side, "scope {scope}");
     }
 }

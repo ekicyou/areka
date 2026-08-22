@@ -20,8 +20,7 @@ pub(super) fn with_com_initialized<F: FnOnce()>(f: F) {
 
 /// emo2 fixture ルート（source.rs／measure.rs テストと同一アンカー規約）。
 pub(super) fn emo2_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../pilot/examples/shiori-host-32/fixtures/emo2")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../pilot/examples/shiori-host-32/fixtures/emo2")
 }
 
 /// emo2 fixture のバルーンルート（task 4.1 テストの規約を踏襲）。

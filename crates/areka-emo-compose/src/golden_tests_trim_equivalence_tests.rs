@@ -1,10 +1,10 @@
 //! task 8.3（要件 11.3・6.2）: トリム等価の pixel テーマ。
 
+use super::test_support::{on_params, parse_emo2_shell, shell_master_dir};
 use super::{
     AtlasTable, BindSet, Composer, EmoWorld, MemoryDecoder, PackConfig, Path, PatternState, SetId,
     Shell, SurfaceSet, bake,
 };
-use super::test_support::{on_params, parse_emo2_shell, shell_master_dir};
 
 // ============================================================================
 // task 8.3: トリム等価の pixel テスト（要件 **11.3**・**6.2**）。
@@ -78,7 +78,14 @@ fn margined_core_image() -> (u32, u32, u32, Vec<u8>, bool) {
 fn build_atlas_margined_surface0(shell: &Shell, base: &Path) -> (AtlasTable, Vec<u8>) {
     let mut dec = MemoryDecoder::new();
     let (w, h, stride, bgra, has_alpha) = margined_core_image();
-    dec.insert(base.join("surface0.png"), w, h, stride, bgra.clone(), has_alpha);
+    dec.insert(
+        base.join("surface0.png"),
+        w,
+        h,
+        stride,
+        bgra.clone(),
+        has_alpha,
+    );
     let set = SurfaceSet {
         surfaces: &shell.surfaces,
         base_dir: base,
@@ -120,7 +127,10 @@ fn surface0_trimmed_composite_equals_untrimmed_placement() {
     let entry = atlas.entry(areka_emo_atlas::ElementId(0));
     assert_eq!(
         entry.original,
-        areka_emo_atlas::Size { w: ORIG_W, h: ORIG_H },
+        areka_emo_atlas::Size {
+            w: ORIG_W,
+            h: ORIG_H
+        },
         "original は原寸 40×40（トリム後コアではない・task 5.4 の外形母集合）"
     );
     let placement = entry
@@ -129,7 +139,10 @@ fn surface0_trimmed_composite_equals_untrimmed_placement() {
         .expect("透明マージン付きでも不透明コアがあるので placement は Some");
     assert_eq!(
         placement.trim_offset,
-        areka_emo_atlas::Point { x: INNER_X as i32, y: INNER_Y as i32 },
+        areka_emo_atlas::Point {
+            x: INNER_X as i32,
+            y: INNER_Y as i32
+        },
         "bake は原画像内 bbox 左上 (12,15) を trim_offset に記録"
     );
     assert_eq!(
@@ -142,12 +155,26 @@ fn surface0_trimmed_composite_equals_untrimmed_placement() {
     let mut world = EmoWorld::build(&shell);
     world.bind_atlas(&atlas, SetId(0));
     let out = Composer::new()
-        .compose(&world, &atlas, 0, &BindSet::default(), &PatternState::default())
+        .compose(
+            &world,
+            &atlas,
+            0,
+            &BindSet::default(),
+            &PatternState::default(),
+        )
         .expect("surface0 の単層合成は Ok（要件 11.1）");
 
     // 外形は原寸 40×40（有効 bind 非依存の静的外形＝原点+original・トリム後コアではない）。
-    assert_eq!(out.width(), ORIG_W, "合成幅 == 原寸 40（トリム後 10 ではない・要件 6.5）");
-    assert_eq!(out.height(), ORIG_H, "合成高 == 原寸 40（トリム後 10 ではない・要件 6.5）");
+    assert_eq!(
+        out.width(),
+        ORIG_W,
+        "合成幅 == 原寸 40（トリム後 10 ではない・要件 6.5）"
+    );
+    assert_eq!(
+        out.height(),
+        ORIG_H,
+        "合成高 == 原寸 40（トリム後 10 ではない・要件 6.5）"
+    );
     assert_eq!(out.stride(), ORIG_W * 4, "stride == 原寸*4");
 
     // トリム等価の中核（要件 6.2/11.3）: トリムありの合成結果は原画像（トリムなし理論配置）と
@@ -160,7 +187,10 @@ fn surface0_trimmed_composite_equals_untrimmed_placement() {
     );
 
     // 着弾位置の要点確認: コア左上 (12,15) は不透明・素の配置 (0,0) は透明。
-    let core_tl = ((INNER_Y * out.stride() + INNER_X * 4) as usize, [CORE_B, CORE_G, CORE_R, 255u8]);
+    let core_tl = (
+        (INNER_Y * out.stride() + INNER_X * 4) as usize,
+        [CORE_B, CORE_G, CORE_R, 255u8],
+    );
     assert_eq!(
         &out.bytes()[core_tl.0..core_tl.0 + 4],
         &core_tl.1,
@@ -188,7 +218,13 @@ fn surface0_trim_equivalence_is_non_vacuous() {
     let mut world = EmoWorld::build(&shell);
     world.bind_atlas(&atlas, SetId(0));
     let out = Composer::new()
-        .compose(&world, &atlas, 0, &BindSet::default(), &PatternState::default())
+        .compose(
+            &world,
+            &atlas,
+            0,
+            &BindSet::default(),
+            &PatternState::default(),
+        )
         .expect("Ok");
 
     // 誤った期待: コアを trim_offset を足さず原点 (0,0) に置いた 40×40 バッファ。
@@ -212,6 +248,14 @@ fn surface0_trim_equivalence_is_non_vacuous() {
     );
 
     // 誤バッファでコアが在る (0,0) は、実合成では透明（trim で (12,15) へ移動済み）＝差の直接証拠。
-    assert_eq!(&wrong[0..4], &[CORE_B, CORE_G, CORE_R, 255], "誤バッファは (0,0) にコア");
-    assert_eq!(&out.bytes()[0..4], &[0, 0, 0, 0], "実合成の (0,0) は透明（差が生じる画素）");
+    assert_eq!(
+        &wrong[0..4],
+        &[CORE_B, CORE_G, CORE_R, 255],
+        "誤バッファは (0,0) にコア"
+    );
+    assert_eq!(
+        &out.bytes()[0..4],
+        &[0, 0, 0, 0],
+        "実合成の (0,0) は透明（差が生じる画素）"
+    );
 }

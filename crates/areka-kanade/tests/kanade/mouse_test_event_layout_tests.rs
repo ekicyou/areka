@@ -121,16 +121,40 @@ fn onmousemove_layout_matches_events_table() {
     );
 
     // layout の要所を明示確認（設計 #1・退行の直接検出）。
-    assert_eq!(recorded_mouse.method, CallMethod::Get, "マウスは常に GET（NOTIFY 化しない）");
+    assert_eq!(
+        recorded_mouse.method,
+        CallMethod::Get,
+        "マウスは常に GET（NOTIFY 化しない）"
+    );
     assert_eq!(recorded_mouse.id, "OnMouseMove");
-    assert_eq!(recorded_mouse.references.len(), 7, "References は常に 7 要素（Ref0..6）");
+    assert_eq!(
+        recorded_mouse.references.len(),
+        7,
+        "References は常に 7 要素（Ref0..6）"
+    );
     assert_eq!(recorded_mouse.references[0], x.to_string(), "Ref0=x");
     assert_eq!(recorded_mouse.references[1], y.to_string(), "Ref1=y");
-    assert_eq!(recorded_mouse.references[2], "0", "Ref2=ホイール量（M1 固定 \"0\"）");
-    assert_eq!(recorded_mouse.references[3], scope.to_string(), "Ref3=scope");
-    assert_eq!(recorded_mouse.references[4], "Head", "Ref4=region（不透明転写）");
-    assert_eq!(recorded_mouse.references[5], "0", "Ref5=移動は常に \"0\"（ボタン非押下）");
-    assert_eq!(recorded_mouse.references[6], "mouse", "Ref6=デバイス種（M1 固定 \"mouse\"）");
+    assert_eq!(
+        recorded_mouse.references[2], "0",
+        "Ref2=ホイール量（M1 固定 \"0\"）"
+    );
+    assert_eq!(
+        recorded_mouse.references[3],
+        scope.to_string(),
+        "Ref3=scope"
+    );
+    assert_eq!(
+        recorded_mouse.references[4], "Head",
+        "Ref4=region（不透明転写）"
+    );
+    assert_eq!(
+        recorded_mouse.references[5], "0",
+        "Ref5=移動は常に \"0\"（ボタン非押下）"
+    );
+    assert_eq!(
+        recorded_mouse.references[6], "mouse",
+        "Ref6=デバイス種（M1 固定 \"mouse\"）"
+    );
     assert_eq!(
         recorded_mouse.status, None,
         "Steady{{None}}（INACTIVE）のマウス GET は Status 行を出さない"
@@ -175,7 +199,12 @@ fn onmousemove_region_none_ref4_empty() {
     ));
 
     let gets = mouse_gets(&driven.recorded);
-    assert_eq!(gets.len(), 1, "OnMouseMove GET はちょうど 1 件: {:?}", driven.recorded);
+    assert_eq!(
+        gets.len(),
+        1,
+        "OnMouseMove GET はちょうど 1 件: {:?}",
+        driven.recorded
+    );
     let recorded_mouse = gets[0];
     assert_eq!(
         *recorded_mouse, expected,
@@ -232,8 +261,14 @@ fn double_click_ref5_left_right() {
     ));
 
     // 左右 Ref5 の正典値（events 導出）を明示確認（ハードコードでなく構築子共有の裏取り）。
-    assert_eq!(expected_left.references[5], "0", "左ダブルクリックの Ref5 は \"0\"");
-    assert_eq!(expected_right.references[5], "1", "右ダブルクリックの Ref5 は \"1\"");
+    assert_eq!(
+        expected_left.references[5], "0",
+        "左ダブルクリックの Ref5 は \"0\""
+    );
+    assert_eq!(
+        expected_right.references[5], "1",
+        "右ダブルクリックの Ref5 は \"1\""
+    );
 
     // 記録された 2 件の OnMouseDoubleClick GET が左→右の順で期待値と一致する。
     let gets = mouse_gets(&driven.recorded);
@@ -274,7 +309,11 @@ fn no_content_produces_no_start_talk() {
         .without_boot_greeting()
         .with_mouse_response("OnMouseMove", MouseResponse::NoContent);
 
-    let driven = drive_mouse_steady_none(fixture, vec![move_input(x, y, scope, Some("Head"))], vec![true]);
+    let driven = drive_mouse_steady_none(
+        fixture,
+        vec![move_input(x, y, scope, Some("Head"))],
+        vec![true],
+    );
 
     // (1) マウス GET は現に記録された（発行はされている）。
     let gets = mouse_gets(&driven.recorded);
@@ -291,7 +330,10 @@ fn no_content_produces_no_start_talk() {
         Some("Head"),
         &ExecutionSnapshot::INACTIVE,
     ));
-    assert_eq!(*gets[0], expected, "記録 GET は events 表導出と一致（204 でも layout 同一）");
+    assert_eq!(
+        *gets[0], expected,
+        "記録 GET は events 表導出と一致（204 でも layout 同一）"
+    );
 
     // (2) 204 は StartTalk を生まない: 到達は close talk のみ（マウス由来 talk ゼロ＝Steady{None} 維持）。
     assert_eq!(

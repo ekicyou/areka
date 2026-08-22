@@ -65,8 +65,7 @@ fn loopback_hello_request_proxy_driven_and_bounded_loop() {
                     match copydata_payload(dw, len, &payload) {
                         Ok((MsgTag::Hello, p)) if p.len() == 4 => {
                             let bytes = [p[0], p[1], p[2], p[3]];
-                            hello_helper_hwnd
-                                .set(Some(shiori_host32_ipc::decode_hwnd_le(bytes)));
+                            hello_helper_hwnd.set(Some(shiori_host32_ipc::decode_hwnd_le(bytes)));
                         }
                         Ok((MsgTag::Response, p)) => {
                             responses.set(responses.get() + 1);
@@ -80,8 +79,7 @@ fn loopback_hello_request_proxy_driven_and_bounded_loop() {
         )
         .expect("stand-in parent 窓生成に失敗")
     };
-    let parent_hwnd_u32 =
-        u32::from_le_bytes(encode_hwnd_le(parent.hwnd()));
+    let parent_hwnd_u32 = u32::from_le_bytes(encode_hwnd_le(parent.hwnd()));
 
     // --- helper 窓生成（HELLO は create 内で親へ送出）---
     // LOAD 経路検証のため、testdll(shiori.dll) を入れた一時 load_dir で helper を構築する。
@@ -99,12 +97,9 @@ fn loopback_hello_request_proxy_driven_and_bounded_loop() {
     std::fs::create_dir_all(&load_dir).expect("create temp load_dir");
     std::fs::copy(&src_dll, load_dir.join("shiori.dll")).expect("copy shiori.dll into load_dir");
 
-    let helper = HelperMessageWindow::create(
-        parent_hwnd_u32,
-        load_dir.clone(),
-        "shiori.dll".to_string(),
-    )
-    .expect("HelperMessageWindow 生成に失敗");
+    let helper =
+        HelperMessageWindow::create(parent_hwnd_u32, load_dir.clone(), "shiori.dll".to_string())
+            .expect("HelperMessageWindow 生成に失敗");
     let helper_hwnd_u32 = u32::from_le_bytes(encode_hwnd_le(helper.hwnd()));
 
     // HELLO 送出経路が動いた: 親が helper HWND を復号一致で受領（要件 3.1）。
@@ -139,10 +134,14 @@ fn loopback_hello_request_proxy_driven_and_bounded_loop() {
         1,
         "未確立 REQUEST にも RESPONSE を 1 通返す（無応答でない・R3.1）"
     );
-    assert_eq!(responses.get(), 1, "親が未確立 REQUEST の RESPONSE を受領する");
+    assert_eq!(
+        responses.get(),
+        1,
+        "親が未確立 REQUEST の RESPONSE を受領する"
+    );
     {
-        let text = String::from_utf8(last_response.borrow().clone())
-            .expect("500 RESPONSE は UTF-8");
+        let text =
+            String::from_utf8(last_response.borrow().clone()).expect("500 RESPONSE は UTF-8");
         assert!(
             text.contains("SHIORI/3.0 500 Internal Server Error"),
             "未確立 proxy では識別可能な 500 を返す（echo ではない・R3.1）: {text:?}"
@@ -184,7 +183,11 @@ fn loopback_hello_request_proxy_driven_and_bounded_loop() {
         helper.shared().proxy.borrow().is_some(),
         "確立成功した proxy が常設保持される（要件 4.3）"
     );
-    assert_eq!(responses.get(), 2, "親が LOAD ack を 1 通受領する（未確立 REQUEST 500 と合わせ 2）");
+    assert_eq!(
+        responses.get(),
+        2,
+        "親が LOAD ack を 1 通受領する（未確立 REQUEST 500 と合わせ 2）"
+    );
     assert_eq!(
         &*last_response.borrow(),
         &[LOAD_ACK_OK],
@@ -193,8 +196,7 @@ fn loopback_hello_request_proxy_driven_and_bounded_loop() {
 
     // --- proxy 駆動 REQUEST(GET): 確立済み proxy で REQUEST を送ると testdll が固定 200 応答を返し、
     //     それが echo でなく proxy 駆動結果として親へ RESPONSE 返送される（R4.7・Observable）---
-    let get_req =
-        b"GET SHIORI/3.0\r\nCharset: UTF-8\r\nSender: areka\r\nID: OnTestValue\r\n\r\n";
+    let get_req = b"GET SHIORI/3.0\r\nCharset: UTF-8\r\nSender: areka\r\nID: OnTestValue\r\n\r\n";
     send_copydata(
         helper.hwnd(),
         parent.hwnd(),
@@ -209,10 +211,14 @@ fn loopback_hello_request_proxy_driven_and_bounded_loop() {
         2,
         "WndProc が proxy 駆動 GET REQUEST を処理する（要件 4.7）"
     );
-    assert_eq!(responses.get(), 3, "親が proxy 駆動 GET の RESPONSE を受領する（計 3）");
+    assert_eq!(
+        responses.get(),
+        3,
+        "親が proxy 駆動 GET の RESPONSE を受領する（計 3）"
+    );
     {
-        let text = String::from_utf8(last_response.borrow().clone())
-            .expect("GET RESPONSE は UTF-8");
+        let text =
+            String::from_utf8(last_response.borrow().clone()).expect("GET RESPONSE は UTF-8");
         assert!(
             text.contains("SHIORI/3.0 200 OK"),
             "proxy 駆動 GET は testdll の固定 200 応答を返す（R4.7・Observable）: {text:?}"
@@ -246,10 +252,14 @@ fn loopback_hello_request_proxy_driven_and_bounded_loop() {
         3,
         "WndProc が proxy 駆動 NOTIFY REQUEST も同経路で処理する（R4.8）"
     );
-    assert_eq!(responses.get(), 4, "親が proxy 駆動 NOTIFY の RESPONSE を受領する（計 4）");
+    assert_eq!(
+        responses.get(),
+        4,
+        "親が proxy 駆動 NOTIFY の RESPONSE を受領する（計 4）"
+    );
     {
-        let text = String::from_utf8(last_response.borrow().clone())
-            .expect("NOTIFY RESPONSE は UTF-8");
+        let text =
+            String::from_utf8(last_response.borrow().clone()).expect("NOTIFY RESPONSE は UTF-8");
         assert!(
             text.contains("SHIORI/3.0 204 No Content"),
             "proxy 駆動 NOTIFY は testdll の固定 204 応答を返す（helper は GET と同一駆動・R4.8）: {text:?}"
@@ -281,7 +291,11 @@ fn loopback_hello_request_proxy_driven_and_bounded_loop() {
         0,
         "冪等 LOAD でも ack[0] は送出しない"
     );
-    assert_eq!(responses.get(), 5, "親が冪等 LOAD ack を追加 1 通受領する（計 5）");
+    assert_eq!(
+        responses.get(),
+        5,
+        "親が冪等 LOAD ack を追加 1 通受領する（計 5）"
+    );
     assert_eq!(
         &*last_response.borrow(),
         &[LOAD_ACK_OK],
@@ -335,7 +349,9 @@ fn loopback_hello_request_proxy_driven_and_bounded_loop() {
     //     干渉しない）。quit_seen==true は quit 配線が正しいことに依存する実回帰ガードであり（配線を
     //     外すとループが flag で抜けず、上の RED 実測で確認済み）、shell ではない。---
     // SAFETY: helper.hwnd() は有効。WM_NULL(0) は無害な起こし用メッセージ。
-    unsafe { let _ = PostMessageW(Some(helper.hwnd()), 0, WPARAM(0), LPARAM(0)); }
+    unsafe {
+        let _ = PostMessageW(Some(helper.hwnd()), 0, WPARAM(0), LPARAM(0));
+    }
     {
         let quit_seen = Rc::new(Cell::new(false));
         let helper_ref = &helper;
@@ -381,7 +397,11 @@ fn loopback_hello_request_proxy_driven_and_bounded_loop() {
     );
     // 不正フレームでは RESPONSE を送らない（無応答）。
     // 未確立 REQUEST 500(1)＋LOAD ack(2)＋GET(3)＋NOTIFY(4)＋冪等 LOAD ack(5)＋UNLOAD ack(6) の計 6 のまま。
-    assert_eq!(responses.get(), 6, "不正フレームに応答しない（無応答・計 6 のまま）");
+    assert_eq!(
+        responses.get(),
+        6,
+        "不正フレームに応答しない（無応答・計 6 のまま）"
+    );
 
     // --- bounded ループ生存: 有限個の WM_NULL を撒いてから quit し、必ず抜ける（無クラッシュ）---
     let pumped = Rc::new(Cell::new(0u32));

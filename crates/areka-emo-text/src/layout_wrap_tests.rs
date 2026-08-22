@@ -1,10 +1,10 @@
+use super::test_support::{
+    IMAGE, broken_lines, glyphs, inline_positions, model, model_rect, window_for,
+};
 use super::{FixedMetrics, GlyphMetrics, LayoutEngine, LineRect, VisibleWindow, WrapPlan};
 use crate::region::TextRegion;
 use crate::state::TextItem;
 use crate::writing::WritingMode;
-use super::test_support::{
-    IMAGE, broken_lines, glyphs, inline_positions, model, model_rect, window_for,
-};
 
 // ── R4.5: FixedMetrics の決定論仮想値（全角=height・半角=height/2・pitch=ceil(×1.25)） ──
 

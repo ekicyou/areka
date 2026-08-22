@@ -22,9 +22,9 @@
 //! 握手開始＝`OnClose` GET 発行＋`ClosePending` への遷移（ClosePending 以降は close.rs＝
 //! タスク 2.5 の責務）。
 
-use super::choice::{choice_deadline, plan_cascade, CascadePlan};
+use super::choice::{CascadePlan, choice_deadline, plan_cascade};
 use super::{
-    events, Action, ActiveTalk, CascadeNext, ChoicePhase, ChoiceState, Input, Phase, State,
+    Action, ActiveTalk, CascadeNext, ChoicePhase, ChoiceState, Input, Phase, State, events,
 };
 use crate::msg::{
     ChoiceInput, CloseReason, KanadeConfig, MonotonicMs, MouseEventKind, MouseInput, ShioriCall,
@@ -302,7 +302,10 @@ pub(super) fn on_choice(mut state: State, input: ChoiceInput) -> (State, Vec<Act
                 talk_id = talk_id.0,
                 "M1 未対応カテゴリの選択肢 ID——イベントを発行せず選択解決のみ行う（Req2.7）"
             );
-            return (state, vec![resolve_choice(talk_id, input.id, "unsupported")]);
+            return (
+                state,
+                vec![resolve_choice(talk_id, input.id, "unsupported")],
+            );
         }
         // 任意名 1 段のみ（先行 Ex／無印を発行しない・裁定 1）。ID はイベント名側が運ぶため
         // Reference には付随参照列のみを載せる（Req3.3）。
@@ -693,7 +696,9 @@ fn on_tick(mut state: State, now: MonotonicMs) -> (State, Vec<Action>) {
                 // pump 問い合わせ（GET・Ref3=1）。応答待ちのまま Steady{None} を維持する。
                 (
                     state,
-                    vec![Action::ShioriRequest(events::on_second_change(now, &snapshot))],
+                    vec![Action::ShioriRequest(events::on_second_change(
+                        now, &snapshot,
+                    ))],
                 )
             }
         }
@@ -702,7 +707,9 @@ fn on_tick(mut state: State, now: MonotonicMs) -> (State, Vec<Action>) {
             // ここでは握手を開始しない——当該 talk の TalkDone を待つ（DD-6・補足遷移）。
             (
                 state,
-                vec![Action::ShioriRequest(events::on_second_change(now, &snapshot))],
+                vec![Action::ShioriRequest(events::on_second_change(
+                    now, &snapshot,
+                ))],
             )
         }
         // Steady 以外はルーティング上到達しない（防御アーム）。
@@ -764,7 +771,10 @@ fn on_reply(
                         script: script.clone(),
                     }),
                 };
-                (state, vec![Action::StartTalk(StartTalk::new(talk_id, script))])
+                (
+                    state,
+                    vec![Action::StartTalk(StartTalk::new(talk_id, script))],
+                )
             }
             ShioriOutcome::NoContent => {
                 // 204: talk なし（Req 2.3／4.2）。Steady{None} を維持し次 Tick で pump 再開。
@@ -799,7 +809,10 @@ fn on_reply(
                             script: script.clone(),
                         }),
                     };
-                    (state, vec![Action::StartTalk(StartTalk::new(talk_id, script))])
+                    (
+                        state,
+                        vec![Action::StartTalk(StartTalk::new(talk_id, script))],
+                    )
                 }
                 // DD-6 防御破棄（非マウス origin 限定）。本アームの意味は「全 origin 防御」から
                 // **「非マウス origin 限定の防御」へ狭まった**——マウス origin は上の置換アームへ

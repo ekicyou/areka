@@ -95,7 +95,11 @@ mod tests {
         assert_eq!(vars.get("username"), Some("アヒル"), "挿入値を読み戻せる");
         // 上書きも往復する。
         vars.insert("username", "カモ");
-        assert_eq!(vars.get("username"), Some("カモ"), "上書き後の値を読み戻せる");
+        assert_eq!(
+            vars.get("username"),
+            Some("カモ"),
+            "上書き後の値を読み戻せる"
+        );
     }
 
     /// 値ありスナップショット → `Text(その値)`（R7.1）。

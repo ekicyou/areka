@@ -63,12 +63,11 @@ pub(crate) fn resolve_conflicts_excluding(
             InterruptionPolicy::Cancel | InterruptionPolicy::Trim => timeline_manager
                 .evaluate_all_for_group(gid, start_time, instance_manager.instances()),
             // Conclude: 現在再生中セグメントの最終値にジャンプ
-            InterruptionPolicy::Conclude => timeline_manager
-                .collect_current_segment_final_values(
-                    gid,
-                    start_time,
-                    instance_manager.instances(),
-                ),
+            InterruptionPolicy::Conclude => timeline_manager.collect_current_segment_final_values(
+                gid,
+                start_time,
+                instance_manager.instances(),
+            ),
             // Compress: ストーリーボード全体最終値にジャンプ
             InterruptionPolicy::Compress => timeline_manager.collect_final_values(gid),
             InterruptionPolicy::Never => {
@@ -82,8 +81,8 @@ pub(crate) fn resolve_conflicts_excluding(
         };
 
         // Never 以外は終了状態に1対1対応する（上の match で Never は除外済み）
-        let terminal_state = InstanceState::from_policy(policy)
-            .expect("non-Never policy maps to a terminal state");
+        let terminal_state =
+            InstanceState::from_policy(policy).expect("non-Never policy maps to a terminal state");
 
         terminate_instance(
             gid,
@@ -186,4 +185,3 @@ fn detect_overlaps(
 
     conflicting
 }
-

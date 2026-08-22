@@ -343,7 +343,10 @@ mod tests {
         assert!(mask.is_hit(0, 0), "(0,0) should hit");
         assert!(!mask.is_hit(1, 0), "(1,0) should not hit");
         assert!(!mask.is_hit(0, 1), "(0,1) should not hit");
-        assert!(mask.is_hit(1, 1), "(1,1) should hit (padded stride row offset)");
+        assert!(
+            mask.is_hit(1, 1),
+            "(1,1) should hit (padded stride row offset)"
+        );
     }
 
     /// バイト境界跨ぎのビットパック: x=7（1バイト目末尾）と x=8（2バイト目先頭）

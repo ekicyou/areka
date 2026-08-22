@@ -196,7 +196,9 @@ fn verify_physical_size_match(world: &mut World) {
 
     // 実窓 client 矩形（GetClientRect・areka＋OS 窓パイプラインの出力）。WindowPos ミラーは読まない。
     let Some(handle) = world.get::<WindowHandle>(boot.char_window).copied() else {
-        tracing::error!("collision-probe: char 窓に WindowHandle 未付与（GetClientRect 不能）— 中止");
+        tracing::error!(
+            "collision-probe: char 窓に WindowHandle 未付与（GetClientRect 不能）— 中止"
+        );
         boot.phase = ProbePhase::Done;
         world.insert_non_send(boot);
         return;
@@ -286,11 +288,11 @@ fn physical_anchor(
     label: &str,
 ) -> (u32, u32) {
     let center = (((left + right) / 2) as u32, ((top + bottom) / 2) as u32);
-    let anchor = (
-        applied.scale_len(center.0),
-        applied.scale_len(center.1),
+    let anchor = (applied.scale_len(center.0), applied.scale_len(center.1));
+    let (pl, pt) = (
+        applied.scale_len(left as u32),
+        applied.scale_len(top as u32),
     );
-    let (pl, pt) = (applied.scale_len(left as u32), applied.scale_len(top as u32));
     let (pr, pb) = (
         applied.scale_len(right as u32),
         applied.scale_len(bottom as u32),

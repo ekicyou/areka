@@ -46,11 +46,7 @@ pub(super) enum Gate {
 impl Gate {
     pub(super) fn satisfied(self, rt: &TextLayerRuntime, actor: &ActorKey) -> bool {
         match self {
-            Gate::Items(n) => rt
-                .state()
-                .actor_state(actor)
-                .map(|s| s.items().len())
-                == Some(n),
+            Gate::Items(n) => rt.state().actor_state(actor).map(|s| s.items().len()) == Some(n),
             Gate::Empty => rt
                 .state()
                 .actor_state(actor)

@@ -180,7 +180,9 @@ mod tests {
         // talk1: 壁時刻 100.0 に cue.at=2.0 が到着 → epoch = 100.0 - 2.0 = 98.0。
         set_now(&now, 100.0);
         tc.observe_cue(2.0);
-        let epoch_talk1 = PROBE - tc.talk_time(PROBE).expect("epoch established after first cue");
+        let epoch_talk1 = PROBE
+            - tc.talk_time(PROBE)
+                .expect("epoch established after first cue");
         assert!(
             (epoch_talk1 - 98.0).abs() < 1e-9,
             "talk1 epoch should be 98.0, got {epoch_talk1}"
@@ -196,7 +198,9 @@ mod tests {
         // → candidate = 200.0 - 0.0 = 200.0 > 98.0 ゆえ epoch は前方 200.0 へリベース。
         set_now(&now, 200.0);
         tc.observe_cue(0.0);
-        let epoch_talk2 = PROBE - tc.talk_time(PROBE).expect("epoch established after new talk");
+        let epoch_talk2 = PROBE
+            - tc.talk_time(PROBE)
+                .expect("epoch established after new talk");
         assert!(
             (epoch_talk2 - 200.0).abs() < 1e-9,
             "talk2 epoch should rebase forward to 200.0, got {epoch_talk2}"
@@ -226,7 +230,10 @@ mod tests {
         set_now(&now, 100.0);
         tc.observe_cue(0.0);
         let epoch0 = PROBE - tc.talk_time(PROBE).expect("epoch established");
-        assert!((epoch0 - 100.0).abs() < 1e-9, "initial epoch 100.0, got {epoch0}");
+        assert!(
+            (epoch0 - 100.0).abs() < 1e-9,
+            "initial epoch 100.0, got {epoch0}"
+        );
 
         // talk 内ジッタ: 壁が 100.5 へ微増したが cue.at=1.0（遅れて届いた大きめ at）
         // → candidate = 100.5 - 1.0 = 99.5 < 100.0。単調 max ゆえ epoch は下がらない。
@@ -291,7 +298,11 @@ mod tests {
 
         // (a) 内側 sink が「全く同じ cue」を受け取る（at/actor/command 非改変）。
         let recorded = inner.recorded();
-        assert_eq!(recorded.len(), 1, "inner sink should receive exactly one cue");
+        assert_eq!(
+            recorded.len(),
+            1,
+            "inner sink should receive exactly one cue"
+        );
         assert_eq!(
             recorded[0], cue,
             "cue must be forwarded UNCHANGED (at/actor/command)"

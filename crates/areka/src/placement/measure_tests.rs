@@ -414,8 +414,8 @@ fn apply_scaling_identity_is_passthrough() {
         scope_input(0, (SCOPE0_W, SCOPE0_H), (BALLOON0_W, BALLOON0_H)),
         scope_input(1, (SCOPE1_W, SCOPE1_H), (BALLOON0_W, BALLOON0_H)),
     ];
-    let out = apply_scaling(natives.clone(), &MeasureScaling::IDENTITY)
-        .expect("恒等 k の適用は成功する");
+    let out =
+        apply_scaling(natives.clone(), &MeasureScaling::IDENTITY).expect("恒等 k の適用は成功する");
     assert_eq!(out, natives, "恒等 k は入力の恒等写像");
 
     // 既約化で 1/1 になる比（96/96）も同じ恒等経路。

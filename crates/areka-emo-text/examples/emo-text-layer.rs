@@ -72,21 +72,21 @@ use windows::Win32::UI::WindowsAndMessaging::{
     GetCursorPos, WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP, WS_VISIBLE,
 };
 
+use wintf::WinApp;
 use wintf::ecs::layout::HitTest;
 use wintf::ecs::{
     FrameFinalize, FrameTime, GraphicsCore, Point, SizeI, Window, WindowHandle, WindowPos,
     WindowStyle, WucGraphicsResource,
 };
-use wintf::WinApp;
 
 use areka_actor::reply_channel;
 use areka_emo_atlas::{AtlasTable, WicDecoderArm};
 use areka_emo_compose::{BindSet, Composer, EmoWorld};
 use areka_emo_present::{
-    build_balloon_target, EmoPresenter, PresentCommand, PresentOutcome, TargetId,
+    EmoPresenter, PresentCommand, PresentOutcome, TargetId, build_balloon_target,
 };
 use areka_emo_text::actor::{
-    present_frame, spawn_emo_text, ResolvedBalloonText, TextLayerRuntime, TextSlotBinding,
+    ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame, spawn_emo_text,
 };
 use areka_emo_text::draw::DWriteMetrics;
 use areka_emo_text::layout::{GlyphMetrics, LayoutEngine, WrapPlan};
@@ -94,8 +94,8 @@ use areka_emo_text::sink::EmoTextSink;
 use areka_emo_text::state::TextLayerConfig;
 use areka_emo_text::viewbox_draw::DrawStats;
 use areka_emo_text::writing::WritingMode;
-use areka_parsers::balloon::{parse_str, BalloonModel};
-use areka_parsers::charset::{decode, DefaultEncoding};
+use areka_parsers::balloon::{BalloonModel, parse_str};
+use areka_parsers::charset::{DefaultEncoding, decode};
 use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
 
 // 責務単位のサブモジュール。`examples/` 直下に置くと Cargo が別のサンプルターゲットとして
@@ -158,20 +158,30 @@ fn main() -> windows::core::Result<()> {
     });
 
     // 装着（GPU 資源到達で 1 回）＋シナリオ駆動（毎フレーム・注入時刻）を担う排他 system。
-    world.borrow_mut().add_systems(FrameFinalize, drive_demo_system);
+    world
+        .borrow_mut()
+        .add_systems(FrameFinalize, drive_demo_system);
 
     println!();
     println!("areka emo-text-layer 観測 example（task 9.2）");
     println!("================================================");
     println!(
         "  モード: {}（--vertical で縦書き fixture 変種へ切替）",
-        if vertical { "縦書き vertical_rl" } else { "横書き horizontal_tb（既定）" }
+        if vertical {
+            "縦書き vertical_rl"
+        } else {
+            "横書き horizontal_tb（既定）"
+        }
     );
     println!("  シナリオ: typewriter 進行 → 改行 → あふれスクロール → Clear（自動・約 4 秒）");
     if hold {
-        println!("  モード: --hold（目視確認）— talk をループ再生し、balloon 上でダブルクリックすると終了");
+        println!(
+            "  モード: --hold（目視確認）— talk をループ再生し、balloon 上でダブルクリックすると終了"
+        );
     } else {
-        println!("  判定: readback 述語で自動判定し、最後に PASS/FAIL を 1 行出力（exit code 連動）");
+        println!(
+            "  判定: readback 述語で自動判定し、最後に PASS/FAIL を 1 行出力（exit code 連動）"
+        );
     }
     println!();
 

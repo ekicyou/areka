@@ -478,7 +478,10 @@ impl FrameBudget {
     /// 知らない**。ゆえに伸長の観測は「席を使い終えた直後」にしか置けない。`&mut` を裸で返す形は
     /// この観測点を呼び手の記憶に委ねることになり、忘れれば**黙って確保する**経路ができる。
     /// 閉包で囲めば貸し出しと計数が構造的に対になり、シームが 1 箇所（D6）のまま保たれる。
-    pub(super) fn native_scratch<R>(&mut self, borrow: impl FnOnce(&mut ComposedSurface) -> R) -> R {
+    pub(super) fn native_scratch<R>(
+        &mut self,
+        borrow: impl FnOnce(&mut ComposedSurface) -> R,
+    ) -> R {
         let (produced, grew) = self.native.lend(borrow);
         if grew {
             self.note_alloc(AllocSite::ComposeDst);
@@ -596,9 +599,7 @@ impl FrameBudget {
         height: u32,
         stride: u32,
     ) -> Arc<AlphaMask> {
-        let (mask, allocated) = self
-            .mask
-            .regenerate(retired, pixels, width, height, stride);
+        let (mask, allocated) = self.mask.regenerate(retired, pixels, width, height, stride);
         if allocated {
             self.note_alloc(AllocSite::Mask);
         }

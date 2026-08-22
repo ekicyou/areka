@@ -66,9 +66,19 @@ pub(super) fn boot_present_system(world: &mut World) {
         // 起動時 golden（task 5.1・R6.2/R8.2）: 初回表示は Surface0（surface_id=0・bind 無し）ゆえ、
         // その surface を **直接合成**した ComposedSurface を golden として先に採取する。attach_target が
         // アセットを move 消費するため、合成は move の前に行う（read_back との突き合わせは表示直後）。
-        let shell_golden = Composer::new().compose(&emo_world, &atlas, 0, &BindSet::default(), &PatternState::default());
+        let shell_golden = Composer::new().compose(
+            &emo_world,
+            &atlas,
+            0,
+            &BindSet::default(),
+            &PatternState::default(),
+        );
         match boot.presenter.attach_target(
-            world, TargetId(0), boot.shell_window, emo_world, atlas,
+            world,
+            TargetId(0),
+            boot.shell_window,
+            emo_world,
+            atlas,
             // 作者基準 DPI は正典既定の 96（ukadoc・D1）。本番は boot が descript の実値を
             // 供給する。窓 DPI が 96 の環境では k=1.0（従来と同一の表示寸・描画結果）、
             // 非 96 DPI ではその比が k として表示へ掛かる。
@@ -105,7 +115,10 @@ pub(super) fn boot_present_system(world: &mut World) {
                 // surface1000 に合成表示し、まばたき（1400）を CYCLE_INTERVAL_SECS 周期で出し入れして目の開閉を
                 // 手動再現する（EyesOpen⇔EyesClosed）。まばたきの時間駆動アニメ本体は seriko エンジン領分（別 spec・未実装）。
                 boot.presenter.apply(world, boot.cycle_state.command()); // 初回＝EyesOpen（surface1000）
-                let now = world.get_resource::<FrameTime>().map(|ft| ft.0).unwrap_or(0.0);
+                let now = world
+                    .get_resource::<FrameTime>()
+                    .map(|ft| ft.0)
+                    .unwrap_or(0.0);
                 boot.shell_cycling = true;
                 boot.next_switch_at = now + CYCLE_INTERVAL_SECS;
             }
@@ -116,9 +129,19 @@ pub(super) fn boot_present_system(world: &mut World) {
     if let Some((emo_world, atlas)) = boot.balloon_assets.take() {
         // 起動時 golden（task 5.1・R6.2/R8.2）: バルーンの初回表示は surface_id=0・bind 無し。
         // attach_target が move 消費する前に golden を採取する。
-        let balloon_golden = Composer::new().compose(&emo_world, &atlas, 0, &BindSet::default(), &PatternState::default());
+        let balloon_golden = Composer::new().compose(
+            &emo_world,
+            &atlas,
+            0,
+            &BindSet::default(),
+            &PatternState::default(),
+        );
         match boot.presenter.attach_target(
-            world, TargetId(1), boot.balloon_window, emo_world, atlas,
+            world,
+            TargetId(1),
+            boot.balloon_window,
+            emo_world,
+            atlas,
             // 作者基準 DPI は正典既定の 96（ukadoc・D1）。本番は boot が balloon descript の
             // 実値を供給する。シェルと同一の分母を用いる（[`AUTHOR_DPI`]）。
             AUTHOR_DPI,

@@ -1,6 +1,6 @@
 use super::{
-    run_move_drain_phase, Duration, Entity, GhostWindows, Instant, Point, SpineHarness,
-    WindowHandle, WindowPos, World, HINSTANCE, HWND, SPIN_WAIT,
+    Duration, Entity, GhostWindows, HINSTANCE, HWND, Instant, Point, SPIN_WAIT, SpineHarness,
+    WindowHandle, WindowPos, World, run_move_drain_phase,
 };
 
 // ===========================================================================

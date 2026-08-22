@@ -192,9 +192,7 @@ impl ShioriHostSink {
 /// sink が生きている間はアクターも生存する（publisher の投函は失敗しない）。呼び出し側は join して
 /// panic を観測したい場合のみ handle を保持すればよく、本経路（in-proc serving surface）は join を
 /// 要さないため handle を drop（detach）してよい。
-pub(crate) fn spawn_app_sylphya_sink(
-    asker: AskerId,
-) -> (ShioriHostSink, areka_actor::ActorHandle) {
+pub(crate) fn spawn_app_sylphya_sink(asker: AskerId) -> (ShioriHostSink, areka_actor::ActorHandle) {
     let parts = areka_sylphya::spawn_sylphya(areka_sylphya::SylphyaInit {
         roots: areka_sylphya::ScopeRoots {
             app: Some(crate::default_app_profile_dir()),
@@ -474,11 +472,16 @@ mod tests {
         host.set_property(&key, &value).expect("set_property は Ok");
 
         // read-your-write の有界ラグを barrier で畳む（決定論・sleep なし）。
-        host_inner(&host).barrier().expect("barrier は Ok（アクター生存）");
+        host_inner(&host)
+            .barrier()
+            .expect("barrier は Ok（アクター生存）");
 
         // barrier 復帰後は set した値が同期即答で move-out される。
         let got = host.get_property(&key).expect("get_property は Ok");
-        assert_eq!(got, value, "set→barrier 後の値が同期即答で move-out されること");
+        assert_eq!(
+            got, value,
+            "set→barrier 後の値が同期即答で move-out されること"
+        );
 
         // 欠落 key は PropertyNotFound（暗黙の空値で続行しない・barrier 後も未 set は不在）。
         let err = host
@@ -501,12 +504,18 @@ mod tests {
         host_inner(&host).set_property_value("myghost.customflag", HSTRING::from("reference"));
 
         // 投函の反映を barrier で待ってから読む（決定論・sleep なし）。
-        host_inner(&host).barrier().expect("barrier は Ok（アクター生存）");
+        host_inner(&host)
+            .barrier()
+            .expect("barrier は Ok（アクター生存）");
 
         let got = host
             .get_property(&HSTRING::from("myghost.customflag"))
             .expect("充填済み key の get_property は Ok");
-        assert_eq!(got, HSTRING::from("reference"), "充填値が barrier 後に同期即答されること");
+        assert_eq!(
+            got,
+            HSTRING::from("reference"),
+            "充填値が barrier 後に同期即答されること"
+        );
     }
 
     /// (e) 別スレッドからの set＋`barrier` が sink 経由の `get_property` で可視になること（別スレッド
@@ -527,11 +536,7 @@ mod tests {
 
         let handle = std::thread::spawn(move || {
             // 別スレッドから同一 inbox・同一 asker へ set（任意スレッド可・投函のみ）。
-            publisher.set(
-                asker,
-                "threaded.key".to_string(),
-                "from-thread".to_string(),
-            );
+            publisher.set(asker, "threaded.key".to_string(), "from-thread".to_string());
         });
         handle.join().expect("スレッド join");
 
@@ -543,7 +548,11 @@ mod tests {
         let got = host
             .get_property(&HSTRING::from("threaded.key"))
             .expect("別スレッド set の値を get できること");
-        assert_eq!(got, HSTRING::from("from-thread"), "別スレッド set＋barrier が反映されること");
+        assert_eq!(
+            got,
+            HSTRING::from("from-thread"),
+            "別スレッド set＋barrier が反映されること"
+        );
     }
 
     /// `Get` 実装内から `get_property` を同一スレッドで呼び戻してもデッドロックしないこと（再入規約・要件 10.3）。
@@ -587,7 +596,9 @@ mod tests {
         let host: IShioriHost = sink.into();
         host_inner(&host).set_property_value("reentrant.key", HSTRING::from("reentrant-value"));
         // 充填の反映を barrier で待ってから再入経路を起動する（決定論・sleep なし）。
-        host_inner(&host).barrier().expect("barrier は Ok（アクター生存）");
+        host_inner(&host)
+            .barrier()
+            .expect("barrier は Ok（アクター生存）");
 
         let brain: IShiori = ReentrantBrain { host: host.clone() }.into();
 

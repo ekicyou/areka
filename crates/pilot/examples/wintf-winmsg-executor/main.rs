@@ -25,25 +25,25 @@
 use std::cell::{Cell, RefCell};
 use std::pin::Pin;
 use std::rc::Rc;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use event_listener::Event;
-use wintf_winmsg_executor::util::{Window, WindowMessage, WindowType};
-use wintf_winmsg_executor::{block_on, spawn_local};
 use windows::Win32::Foundation::{COLORREF, HWND, LRESULT, RECT};
 use windows::Win32::Graphics::Dwm::DwmFlush;
 use windows::Win32::Graphics::Gdi::{
-    BeginPaint, CreateSolidBrush, DeleteObject, EndPaint, FillRect, InvalidateRect, HGDIOBJ,
+    BeginPaint, CreateSolidBrush, DeleteObject, EndPaint, FillRect, HGDIOBJ, InvalidateRect,
     PAINTSTRUCT,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetClientRect, SendMessageW, SetWindowPos, ShowWindow, HWND_TOPMOST, SWP_NOACTIVATE,
-    SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW, SW_SHOW, WINDOW_EX_STYLE, WM_APP, WM_ERASEBKGND,
-    WM_PAINT, WM_WINDOWPOSCHANGED,
+    GetClientRect, HWND_TOPMOST, SW_SHOW, SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW,
+    SendMessageW, SetWindowPos, ShowWindow, WINDOW_EX_STYLE, WM_APP, WM_ERASEBKGND, WM_PAINT,
+    WM_WINDOWPOSCHANGED,
 };
+use wintf_winmsg_executor::util::{Window, WindowMessage, WindowType};
+use wintf_winmsg_executor::{block_on, spawn_local};
 
 /// tick 中に自ウィンドウへ撃ち込む再入プローブメッセージ。
 const WM_REENTRY_PROBE: u32 = WM_APP + 1;
@@ -65,9 +65,21 @@ struct Profile {
     rgb_axis: u8, // 0=R 1=G 2=B を脈動軸にする
 }
 const PROFILES: [Profile; 3] = [
-    Profile { period: 70, pulse_k: 7, rgb_axis: 0 },
-    Profile { period: 130, pulse_k: 3, rgb_axis: 1 },
-    Profile { period: 200, pulse_k: 5, rgb_axis: 2 },
+    Profile {
+        period: 70,
+        pulse_k: 7,
+        rgb_axis: 0,
+    },
+    Profile {
+        period: 130,
+        pulse_k: 3,
+        rgb_axis: 1,
+    },
+    Profile {
+        period: 200,
+        pulse_k: 5,
+        rgb_axis: 2,
+    },
 ];
 
 /// 窓ごとの共有状態（!Send で良い＝Rc）。ECS では Rc<RefCell<EcsWorld>> 相当。
@@ -114,7 +126,11 @@ fn frame(s: &Shared, hwnd: HWND) {
     let p = &PROFILES[s.idx];
     let phase = (f % (2 * p.period)) as i32;
     let period = p.period as i32;
-    let off = if phase < period { phase } else { 2 * period - phase };
+    let off = if phase < period {
+        phase
+    } else {
+        2 * period - phase
+    };
     let y = BASE_Y + s.idx as i32 * (WIN_H + GAP);
     unsafe {
         let _ = SetWindowPos(
@@ -213,10 +229,12 @@ fn main() {
 
     // 3 窓 ＋ 3 共有状態を生成・表示。Window ハンドルは block_on 後まで生かす（drop で破棄）。
     let shareds: Vec<Rc<Shared>> = (0..3).map(|i| Rc::new(Shared::new(i))).collect();
-    let _wins: Vec<Window<Rc<Shared>>> =
-        shareds.iter().map(|s| make_window(s.clone())).collect();
+    let _wins: Vec<Window<Rc<Shared>>> = shareds.iter().map(|s| make_window(s.clone())).collect();
     println!("3 visible windows shown @ x={BASE_X}, y={BASE_Y}.. (each {WIN_W}x{WIN_H}, topmost)");
-    println!("periods(frames) = {:?} — 約{RUN_SECS}秒・違う周期で横バウンス＋色脈動", PROFILES.map(|p| p.period));
+    println!(
+        "periods(frames) = {:?} — 約{RUN_SECS}秒・違う周期で横バウンス＋色脈動",
+        PROFILES.map(|p| p.period)
+    );
 
     // --- 1 本の vsync スレッド: DwmFlush → notify(MAX) で 3 タスク同時起床 ---
     let vsync = {
@@ -313,7 +331,10 @@ fn main() {
     let c3 = shareds.iter().all(|s| s.wpos_total.get() > 0);
 
     println!("\n--- criterion 一次判定（参考・最終は人間判断） ---");
-    println!("1/5 並行 tick 起床・破綻なし     : {}", verdict(all_ok_concurrency));
+    println!(
+        "1/5 並行 tick 起床・破綻なし     : {}",
+        verdict(all_ok_concurrency)
+    );
     println!("2  nested-message × RefCell     : {}", verdict(c2));
     println!("3  *_ex state アクセス           : {}", verdict(c3));
     println!("4  清掃終了(panic なし)          : {}", verdict(true));
@@ -328,9 +349,5 @@ fn main() {
 }
 
 fn verdict(ok: bool) -> &'static str {
-    if ok {
-        "PASS"
-    } else {
-        "FAIL"
-    }
+    if ok { "PASS" } else { "FAIL" }
 }

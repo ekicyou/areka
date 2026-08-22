@@ -1,28 +1,17 @@
+use crate::placement::diag::DESPAWNED_SKIP_TAG;
+use crate::placement::follow::BalloonFollow;
+use crate::placement::test_support::{capture_logs as capture_diag_logs, expect_one};
 use areka_emo_compose::ScaleRatio;
 use bevy_ecs::prelude::Entity;
-use crate::placement::follow::BalloonFollow;
-use crate::placement::diag::DESPAWNED_SKIP_TAG;
-use crate::placement::test_support::{capture_logs as capture_diag_logs, expect_one};
-use wintf::ecs::WindowPos;
 use wintf::ecs::DPI;
+use wintf::ecs::WindowPos;
 
-use super::*;
 use super::test_support::{
-    FakeReports,
-    WRITER_WITNESS,
-    arrangement_offset_of,
-    assert_no_write,
-    dpi_world,
-    pos_of,
-    reset_write_witness,
-    s2_assert_work_area_bottom_moves,
-    s2_ground_point,
-    s2_snapshot,
-    s2_work_area_for_dpi,
-    size_of,
-    window_move_lines,
-    window_move_routes_of,
+    FakeReports, WRITER_WITNESS, arrangement_offset_of, assert_no_write, dpi_world, pos_of,
+    reset_write_witness, s2_assert_work_area_bottom_moves, s2_ground_point, s2_snapshot,
+    s2_work_area_for_dpi, size_of, window_move_lines, window_move_routes_of,
 };
+use super::*;
 
 // ── task 5.2: S2 是正（位置の権威と寸の権威の分離）の檻 ──────────────────────
 //
@@ -68,8 +57,7 @@ fn s2_none_report_path_reprojects_position_without_touching_size() {
     for e in [char0, balloon0] {
         world.entity_mut(e).insert(DPI::from_dpi(192, 192));
     }
-    let (_, events) =
-        capture_diag_logs(|| dpi_phase_with(&mut source, &mut state, &mut world));
+    let (_, events) = capture_diag_logs(|| dpi_phase_with(&mut source, &mut state, &mut world));
 
     // 非空虚性: 両 target を実際に訪れ、いずれも `None` を受け取っている（空マップゆえ）。
     let refreshed = source.calls_of("refresh");
@@ -172,8 +160,7 @@ fn s2_none_report_path_leaves_the_balloon_in_place() {
     s2_assert_work_area_bottom_moves(96, 192);
     world.insert_resource(s2_snapshot(192));
     world.entity_mut(balloon0).insert(DPI::from_dpi(192, 192));
-    let (_, events) =
-        capture_diag_logs(|| dpi_phase_with(&mut source, &mut state, &mut world));
+    let (_, events) = capture_diag_logs(|| dpi_phase_with(&mut source, &mut state, &mut world));
 
     assert_eq!(
         source.calls_of("refresh"),
@@ -250,8 +237,7 @@ fn s2_none_report_path_holds_state_and_warns_when_the_window_size_is_undetermine
         .expect("WindowPos がある")
         .size = None;
 
-    let (_, events) =
-        capture_diag_logs(|| dpi_phase_with(&mut source, &mut state, &mut world));
+    let (_, events) = capture_diag_logs(|| dpi_phase_with(&mut source, &mut state, &mut world));
 
     assert!(
         source.calls_of("refresh").contains(&shell_target(0).0),
@@ -284,10 +270,9 @@ fn s2_reproject_on_despawned_entity_is_debug_only_normal_termination() {
     let char0 = gw.char_window(0).expect("char 窓がある");
     world.despawn(char0);
 
-    let (wrote, events) =
-        capture_diag_logs(|| {
-            reproject_char_window_at_current_size(&mut world, char0, PlacementRoute::DpiReproject)
-        });
+    let (wrote, events) = capture_diag_logs(|| {
+        reproject_char_window_at_current_size(&mut world, char0, PlacementRoute::DpiReproject)
+    });
 
     assert!(!wrote, "破棄済み窓へは書けない（false・panic しない）");
     // `tracing::Level` の Ord は ERROR < WARN < INFO < DEBUG < TRACE ゆえ

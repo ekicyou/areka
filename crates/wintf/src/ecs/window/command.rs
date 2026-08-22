@@ -885,15 +885,7 @@ mod tests {
     fn test_set_window_pos_command_new_stores_all_fields() {
         let hwnd = HWND(0x1000 as *mut _);
         let after = HWND(0x2000 as *mut _);
-        let cmd = SetWindowPosCommand::new(
-            hwnd,
-            10,
-            20,
-            300,
-            400,
-            SWP_NOACTIVATE,
-            Some(after),
-        );
+        let cmd = SetWindowPosCommand::new(hwnd, 10, 20, 300, 400, SWP_NOACTIVATE, Some(after));
         assert_eq!(cmd.hwnd, hwnd);
         assert_eq!(cmd.x, 10);
         assert_eq!(cmd.y, 20);

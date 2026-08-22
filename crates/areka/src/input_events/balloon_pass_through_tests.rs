@@ -1,5 +1,5 @@
-use super::*;
 use super::test_support::row;
+use super::*;
 use std::sync::mpsc;
 
 // -------------------------------------------------------------------------
@@ -117,7 +117,10 @@ fn injected_pointer_sequence_hover_follows_then_click_issues_once_via_inbox() {
 
     // seam の Receiver 経由で発行を一度だけ観測する（送信値は click 行から構成される・R6.2）。
     let received = inbox.0.try_recv().expect("発行した ChoiceSelection が届く");
-    assert_eq!(received.id, "q1", "発行値は click 行（ordinal 1）から構成される");
+    assert_eq!(
+        received.id, "q1",
+        "発行値は click 行（ordinal 1）から構成される"
+    );
     assert_eq!(received.label, "label1", "label も click 行から転写される");
     assert_eq!(
         received.scope, scope,

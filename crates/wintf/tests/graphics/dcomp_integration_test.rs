@@ -38,51 +38,51 @@ fn setup_world() -> World {
 #[test]
 fn test_dcomp_window_visual_gets_dcomp_components() {
     crate::common::on_gpu_owner_thread(move || {
-    let mut world = setup_world();
+        let mut world = setup_world();
 
-    // Window を生成
-    let window_entity = world.spawn(Window::default()).id();
+        // Window を生成
+        let window_entity = world.spawn(Window::default()).id();
 
-    // Window 配下に Visual を生成
-    let visual_entity = world
-        .spawn((Visual::default(), ChildOf(window_entity)))
-        .id();
+        // Window 配下に Visual を生成
+        let visual_entity = world
+            .spawn((Visual::default(), ChildOf(window_entity)))
+            .id();
 
-    // Commands をフラッシュ
-    world.flush();
+        // Commands をフラッシュ
+        world.flush();
 
-    // DComp モードの Visual は VisualGraphics, SurfaceGraphics, SurfaceGraphicsDirty が挿入される
-    assert!(
-        world.get::<VisualGraphics>(visual_entity).is_some(),
-        "DComp Visual should have VisualGraphics"
-    );
-    assert!(
-        world.get::<SurfaceGraphics>(visual_entity).is_some(),
-        "DComp Visual should have SurfaceGraphics"
-    );
-    assert!(
-        world.get::<SurfaceGraphicsDirty>(visual_entity).is_some(),
-        "DComp Visual should have SurfaceGraphicsDirty"
-    );
+        // DComp モードの Visual は VisualGraphics, SurfaceGraphics, SurfaceGraphicsDirty が挿入される
+        assert!(
+            world.get::<VisualGraphics>(visual_entity).is_some(),
+            "DComp Visual should have VisualGraphics"
+        );
+        assert!(
+            world.get::<SurfaceGraphics>(visual_entity).is_some(),
+            "DComp Visual should have SurfaceGraphics"
+        );
+        assert!(
+            world.get::<SurfaceGraphicsDirty>(visual_entity).is_some(),
+            "DComp Visual should have SurfaceGraphicsDirty"
+        );
     });
 }
 
 #[test]
 fn test_orphan_visual_does_not_get_dcomp_components() {
     crate::common::on_gpu_owner_thread(move || {
-    let mut world = setup_world();
+        let mut world = setup_world();
 
-    // orphan Visual（Window 祖先なし）
-    let visual_entity = world.spawn(Visual::default()).id();
+        // orphan Visual（Window 祖先なし）
+        let visual_entity = world.spawn(Visual::default()).id();
 
-    // Commands をフラッシュ
-    world.flush();
+        // Commands をフラッシュ
+        world.flush();
 
-    // orphan Visual は DComp コンポーネントが挿入されない
-    assert!(
-        world.get::<VisualGraphics>(visual_entity).is_none(),
-        "Orphan Visual should NOT have VisualGraphics"
-    );
+        // orphan Visual は DComp コンポーネントが挿入されない
+        assert!(
+            world.get::<VisualGraphics>(visual_entity).is_none(),
+            "Orphan Visual should NOT have VisualGraphics"
+        );
     });
 }
 
@@ -93,27 +93,27 @@ fn test_orphan_visual_does_not_get_dcomp_components() {
 #[test]
 fn test_invalidate_dependent_components_invalidates_wuc_resource() {
     crate::common::on_gpu_owner_thread(move || {
-    let mut world = setup_world();
+        let mut world = setup_world();
 
-    // WucGraphicsResource が valid であることを確認
-    {
+        // WucGraphicsResource が valid であることを確認
+        {
+            let wgr = world.resource::<WucGraphicsResource>();
+            assert!(wgr.is_valid(), "WucGraphicsResource should start valid");
+        }
+
+        // GraphicsCore を無効化
+        world.resource_mut::<GraphicsCore>().invalidate();
+
+        // invalidate_dependent_components を実行
+        let mut schedule = Schedule::default();
+        schedule.add_systems(wintf::ecs::invalidate_dependent_components);
+        schedule.run(&mut world);
+
+        // WucGraphicsResource が無効化されていることを確認
         let wgr = world.resource::<WucGraphicsResource>();
-        assert!(wgr.is_valid(), "WucGraphicsResource should start valid");
-    }
-
-    // GraphicsCore を無効化
-    world.resource_mut::<GraphicsCore>().invalidate();
-
-    // invalidate_dependent_components を実行
-    let mut schedule = Schedule::default();
-    schedule.add_systems(wintf::ecs::invalidate_dependent_components);
-    schedule.run(&mut world);
-
-    // WucGraphicsResource が無効化されていることを確認
-    let wgr = world.resource::<WucGraphicsResource>();
-    assert!(
-        !wgr.is_valid(),
-        "WucGraphicsResource should be invalidated after GraphicsCore invalidation"
-    );
+        assert!(
+            !wgr.is_valid(),
+            "WucGraphicsResource should be invalidated after GraphicsCore invalidation"
+        );
     });
 }

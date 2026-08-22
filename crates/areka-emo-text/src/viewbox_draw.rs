@@ -761,7 +761,10 @@ fn expand_overhang_for_band(
 /// **連続**グリフ subrange を採り、その手前までの累積を `startPosition`・subrange の累積長を
 /// `length` とする（境界がグリフ境界に一致するため中心判定が浮動小数誤差に頑健）。交差グリフ
 /// なしは `None`（効果を適用しない）。
-fn segment_text_range(glyphs: &[PositionedGlyph], inline_range: (f32, f32)) -> Option<DWRITE_TEXT_RANGE> {
+fn segment_text_range(
+    glyphs: &[PositionedGlyph],
+    inline_range: (f32, f32),
+) -> Option<DWRITE_TEXT_RANGE> {
     let (i0, i1) = inline_range;
     let mut acc: u32 = 0;
     let mut start: Option<u32> = None;
@@ -784,20 +787,20 @@ fn segment_text_range(glyphs: &[PositionedGlyph], inline_range: (f32, f32)) -> O
 }
 
 #[cfg(test)]
-#[path = "viewbox_draw_test_support.rs"]
-mod test_support;
+#[path = "viewbox_draw_choice_hover_tests.rs"]
+mod choice_hover_tests;
 #[cfg(test)]
 #[path = "viewbox_draw_frame_render_tests.rs"]
 mod frame_render_tests;
 #[cfg(test)]
-#[path = "viewbox_draw_choice_hover_tests.rs"]
-mod choice_hover_tests;
+#[path = "viewbox_draw_live_diff_tests.rs"]
+mod live_diff_tests;
 #[cfg(test)]
 #[path = "viewbox_draw_oracle_regression_tests.rs"]
 mod oracle_regression_tests;
 #[cfg(test)]
-#[path = "viewbox_draw_live_diff_tests.rs"]
-mod live_diff_tests;
-#[cfg(test)]
 #[path = "viewbox_draw_png_dump_tests.rs"]
 mod png_dump_tests;
+#[cfg(test)]
+#[path = "viewbox_draw_test_support.rs"]
+mod test_support;

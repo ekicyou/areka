@@ -49,7 +49,10 @@ fn add_child(parent: &Visual, child: &Visual) -> Result<()> {
 
 /// WUC 移行: DComp remove_visual 相当。
 fn remove_child(parent: &Visual, child: &Visual) -> Result<()> {
-    parent.cast::<ContainerVisual>()?.Children()?.Remove(child)?;
+    parent
+        .cast::<ContainerVisual>()?
+        .Children()?
+        .Remove(child)?;
     Ok(())
 }
 
@@ -86,139 +89,142 @@ fn make_surface(
 #[test]
 fn visual_graphics_default_is_invalid_and_empty() {
     crate::common::on_gpu_owner_thread(move || {
-    let vg = VisualGraphics::default();
-    assert!(!vg.is_valid(), "default は GPU リソースなし");
-    assert!(vg.visual().is_none());
-    assert!(vg.parent_visual().is_none());
+        let vg = VisualGraphics::default();
+        assert!(!vg.is_valid(), "default は GPU リソースなし");
+        assert!(vg.visual().is_none());
+        assert!(vg.parent_visual().is_none());
     });
 }
 
 #[test]
 fn visual_graphics_new_with_parent_holds_both_references() {
     crate::common::on_gpu_owner_thread(move || {
-    let resource = make_wuc();
-    let visual = make_visual(&resource);
-    let parent = make_visual(&resource);
+        let resource = make_wuc();
+        let visual = make_visual(&resource);
+        let parent = make_visual(&resource);
 
-    let vg = VisualGraphics::new_with_parent(visual, Some(parent));
-    assert!(vg.is_valid());
-    assert!(vg.visual().is_some());
-    assert!(vg.parent_visual().is_some(), "親 Visual がキャッシュされる");
+        let vg = VisualGraphics::new_with_parent(visual, Some(parent));
+        assert!(vg.is_valid());
+        assert!(vg.visual().is_some());
+        assert!(vg.parent_visual().is_some(), "親 Visual がキャッシュされる");
     });
 }
 
 #[test]
 fn visual_graphics_set_parent_visual_updates_cache() {
     crate::common::on_gpu_owner_thread(move || {
-    let resource = make_wuc();
-    let visual = make_visual(&resource);
-    let parent = make_visual(&resource);
+        let resource = make_wuc();
+        let visual = make_visual(&resource);
+        let parent = make_visual(&resource);
 
-    let mut vg = VisualGraphics::new(visual);
-    assert!(vg.parent_visual().is_none(), "new では親なし");
+        let mut vg = VisualGraphics::new(visual);
+        assert!(vg.parent_visual().is_none(), "new では親なし");
 
-    vg.set_parent_visual(Some(parent));
-    assert!(vg.parent_visual().is_some(), "親を後付け設定できる");
+        vg.set_parent_visual(Some(parent));
+        assert!(vg.parent_visual().is_some(), "親を後付け設定できる");
 
-    vg.set_parent_visual(None);
-    assert!(vg.parent_visual().is_none(), "None で解除できる");
+        vg.set_parent_visual(None);
+        assert!(vg.parent_visual().is_none(), "None で解除できる");
     });
 }
 
 #[test]
 fn visual_graphics_invalidate_clears_visual_and_parent() {
     crate::common::on_gpu_owner_thread(move || {
-    let resource = make_wuc();
-    let visual = make_visual(&resource);
-    let parent = make_visual(&resource);
+        let resource = make_wuc();
+        let visual = make_visual(&resource);
+        let parent = make_visual(&resource);
 
-    let mut vg = VisualGraphics::new_with_parent(visual, Some(parent));
-    vg.invalidate();
+        let mut vg = VisualGraphics::new_with_parent(visual, Some(parent));
+        vg.invalidate();
 
-    assert!(!vg.is_valid());
-    assert!(vg.visual().is_none(), "visual も解放される");
-    assert!(vg.parent_visual().is_none(), "parent_visual キャッシュも解放される");
+        assert!(!vg.is_valid());
+        assert!(vg.visual().is_none(), "visual も解放される");
+        assert!(
+            vg.parent_visual().is_none(),
+            "parent_visual キャッシュも解放される"
+        );
     });
 }
 
 #[test]
 fn visual_graphics_debug_reports_presence_flags() {
     crate::common::on_gpu_owner_thread(move || {
-    let resource = make_wuc();
-    let visual = make_visual(&resource);
+        let resource = make_wuc();
+        let visual = make_visual(&resource);
 
-    let vg = VisualGraphics::new(visual);
-    let dbg = format!("{:?}", vg);
-    assert!(dbg.contains("VisualGraphics"), "Debug 出力に型名: {dbg}");
-    assert!(
-        dbg.contains("inner: true") && dbg.contains("parent_visual: false"),
-        "COM ポインタではなく有無フラグを出力する: {dbg}"
-    );
+        let vg = VisualGraphics::new(visual);
+        let dbg = format!("{:?}", vg);
+        assert!(dbg.contains("VisualGraphics"), "Debug 出力に型名: {dbg}");
+        assert!(
+            dbg.contains("inner: true") && dbg.contains("parent_visual: false"),
+            "COM ポインタではなく有無フラグを出力する: {dbg}"
+        );
     });
 }
 
 #[test]
 fn visual_graphics_on_remove_detaches_from_parent_visual() {
     crate::common::on_gpu_owner_thread(move || {
-    let resource = make_wuc();
-    let parent = make_visual(&resource);
-    let child = make_visual(&resource);
+        let resource = make_wuc();
+        let parent = make_visual(&resource);
+        let child = make_visual(&resource);
 
-    // 親子関係を構築（compositor 階層同期と同じ子挿入経路）
-    add_child(&parent, &child).expect("add_child");
+        // 親子関係を構築（compositor 階層同期と同じ子挿入経路）
+        add_child(&parent, &child).expect("add_child");
 
-    let mut world = World::new();
-    let entity = world
-        .spawn(VisualGraphics::new_with_parent(
-            child.clone(),
-            Some(parent.clone()),
-        ))
-        .id();
+        let mut world = World::new();
+        let entity = world
+            .spawn(VisualGraphics::new_with_parent(
+                child.clone(),
+                Some(parent.clone()),
+            ))
+            .id();
 
-    // despawn で on_remove フックが parent.Children().Remove(child) を実行する
-    world.despawn(entity);
+        // despawn で on_remove フックが parent.Children().Remove(child) を実行する
+        world.despawn(entity);
 
-    // フックで既にデタッチ済みなら、再 remove は「非子 Visual の除去」として失敗する
-    assert!(
-        remove_child(&parent, &child).is_err(),
-        "on_remove フックが親 Visual から子をデタッチ済み"
-    );
+        // フックで既にデタッチ済みなら、再 remove は「非子 Visual の除去」として失敗する
+        assert!(
+            remove_child(&parent, &child).is_err(),
+            "on_remove フックが親 Visual から子をデタッチ済み"
+        );
     });
 }
 
 #[test]
 fn visual_graphics_on_remove_without_parent_is_safe() {
     crate::common::on_gpu_owner_thread(move || {
-    let resource = make_wuc();
-    let visual = make_visual(&resource);
+        let resource = make_wuc();
+        let visual = make_visual(&resource);
 
-    let mut world = World::new();
-    let entity = world.spawn(VisualGraphics::new(visual)).id();
+        let mut world = World::new();
+        let entity = world.spawn(VisualGraphics::new(visual)).id();
 
-    // parent_visual = None でも on_remove はパニックしない
-    world.despawn(entity);
+        // parent_visual = None でも on_remove はパニックしない
+        world.despawn(entity);
     });
 }
 
 #[test]
 fn visual_graphics_on_remove_after_invalidate_is_safe() {
     crate::common::on_gpu_owner_thread(move || {
-    let resource = make_wuc();
-    let parent = make_visual(&resource);
-    let child = make_visual(&resource);
-    add_child(&parent, &child).expect("add_child");
+        let resource = make_wuc();
+        let parent = make_visual(&resource);
+        let child = make_visual(&resource);
+        add_child(&parent, &child).expect("add_child");
 
-    let mut world = World::new();
-    let entity = world
-        .spawn(VisualGraphics::new_with_parent(child, Some(parent)))
-        .id();
+        let mut world = World::new();
+        let entity = world
+            .spawn(VisualGraphics::new_with_parent(child, Some(parent)))
+            .id();
 
-    // デバイスロスト相当: invalidate 後の despawn（inner = None）でもパニックしない
-    world
-        .get_mut::<VisualGraphics>(entity)
-        .unwrap()
-        .invalidate();
-    world.despawn(entity);
+        // デバイスロスト相当: invalidate 後の despawn（inner = None）でもパニックしない
+        world
+            .get_mut::<VisualGraphics>(entity)
+            .unwrap()
+            .invalidate();
+        world.despawn(entity);
     });
 }
 
@@ -229,39 +235,39 @@ fn visual_graphics_on_remove_after_invalidate_is_safe() {
 #[test]
 fn surface_graphics_set_surface_replaces_content_in_place() {
     crate::common::on_gpu_owner_thread(move || {
-    let resource = make_wuc();
-    let (surface1, brush1) = make_surface(&resource, 32, 32);
-    let (surface2, brush2) = make_surface(&resource, 64, 48);
+        let resource = make_wuc();
+        let (surface1, brush1) = make_surface(&resource, 32, 32);
+        let (surface2, brush2) = make_surface(&resource, 64, 48);
 
-    let mut sg = SurfaceGraphics::default();
-    assert!(!sg.is_valid());
+        let mut sg = SurfaceGraphics::default();
+        assert!(!sg.is_valid());
 
-    sg.set_surface(surface1, brush1, (32, 32));
-    assert!(sg.is_valid());
-    assert_eq!(sg.size, (32, 32));
+        sg.set_surface(surface1, brush1, (32, 32));
+        assert!(sg.is_valid());
+        assert_eq!(sg.size, (32, 32));
 
-    // commands.insert() を使わない直接更新（同一フレーム反映の設計）
-    sg.set_surface(surface2, brush2, (64, 48));
-    assert!(sg.is_valid());
-    assert_eq!(sg.size, (64, 48), "サイズも同時に更新される");
+        // commands.insert() を使わない直接更新（同一フレーム反映の設計）
+        sg.set_surface(surface2, brush2, (64, 48));
+        assert!(sg.is_valid());
+        assert_eq!(sg.size, (64, 48), "サイズも同時に更新される");
     });
 }
 
 #[test]
 fn surface_graphics_clear_resets_surface_and_size() {
     crate::common::on_gpu_owner_thread(move || {
-    let resource = make_wuc();
-    let (surface, brush) = make_surface(&resource, 32, 32);
+        let resource = make_wuc();
+        let (surface, brush) = make_surface(&resource, 32, 32);
 
-    let mut sg = SurfaceGraphics::new(surface, brush, (32, 32));
-    assert!(sg.is_valid());
-    assert!(sg.surface().is_some());
-    assert!(sg.brush().is_some());
+        let mut sg = SurfaceGraphics::new(surface, brush, (32, 32));
+        assert!(sg.is_valid());
+        assert!(sg.surface().is_some());
+        assert!(sg.brush().is_some());
 
-    sg.clear();
-    assert!(!sg.is_valid(), "クリア後は無効");
-    assert!(sg.surface().is_none());
-    assert!(sg.brush().is_none());
-    assert_eq!(sg.size, (0, 0), "サイズもリセットされる");
+        sg.clear();
+        assert!(!sg.is_valid(), "クリア後は無効");
+        assert!(sg.surface().is_none());
+        assert!(sg.brush().is_none());
+        assert_eq!(sg.size, (0, 0), "サイズもリセットされる");
     });
 }

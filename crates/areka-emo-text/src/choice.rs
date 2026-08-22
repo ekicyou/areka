@@ -366,7 +366,10 @@ pub fn decorate_canvas(
             .filter(|s| s.line_index == index)
             .map(|s| ChoiceRowSegment {
                 ordinal: s.ordinal,
-                inline_range: (s.inline_range.0 - inline_origin, s.inline_range.1 - inline_origin),
+                inline_range: (
+                    s.inline_range.0 - inline_origin,
+                    s.inline_range.1 - inline_origin,
+                ),
             })
             .collect();
         // セグメントを持たない GlyphRun 住人は素通し（無変更）。

@@ -12,8 +12,14 @@ use super::model::DefaultEncoding;
 fn declared_utf8_decodes_whole_content() {
     let bytes = b"charset,UTF-8\ntype,balloon\n";
     let out = decode(bytes, DefaultEncoding::Utf8);
-    assert!(out.contains("type,balloon"), "全内容がデコードされる: {out:?}");
-    assert!(out.contains("charset,UTF-8"), "宣言行も内容として復元される: {out:?}");
+    assert!(
+        out.contains("type,balloon"),
+        "全内容がデコードされる: {out:?}"
+    );
+    assert!(
+        out.contains("charset,UTF-8"),
+        "宣言行も内容として復元される: {out:?}"
+    );
 }
 
 /// R2.2（生き証人）: 宣言 Shift_JIS が既定 Utf8 に勝ち、文字化けしない。
@@ -22,8 +28,7 @@ fn declared_utf8_decodes_whole_content() {
 /// 「かくかく」が正しく復元される（宣言が既定に勝つ・SJIS を UTF-8 と誤読しない）。
 #[test]
 fn declared_shift_jis_beats_utf8_default() {
-    let (bytes, _, _) =
-        encoding_rs::SHIFT_JIS.encode("charset,Shift_JIS\r\nname,かくかく\r\n");
+    let (bytes, _, _) = encoding_rs::SHIFT_JIS.encode("charset,Shift_JIS\r\nname,かくかく\r\n");
     let out = decode(&bytes, DefaultEncoding::Utf8);
     assert!(
         out.contains("name,かくかく"),
@@ -88,7 +93,10 @@ fn malformed_bytes_absorbed_without_panic() {
 fn bom_is_tolerated_and_not_leaked() {
     let bytes = b"\xEF\xBB\xBFcharset,UTF-8\nname,x\n";
     let out = decode(bytes, DefaultEncoding::Utf8);
-    assert!(out.contains("name,x"), "BOM 付きでも内容をデコード: {out:?}");
+    assert!(
+        out.contains("name,x"),
+        "BOM 付きでも内容をデコード: {out:?}"
+    );
     assert!(
         !out.starts_with('\u{FEFF}'),
         "encoding_rs が BOM を sniff し先頭に残さない: {out:?}"

@@ -72,11 +72,24 @@ fn build_balloon_target_end_to_end_frames_only() {
     // 枠のみデコーダへ登録（非枠は登録しない＝もし列挙されれば decode 失敗で露見する）。
     let mut dec = MemoryDecoder::new();
     let (w, h, stride, bytes, has_alpha) = opaque_1x1();
-    dec.insert(dir.path().join("balloons0.png"), w, h, stride, bytes.clone(), has_alpha);
-    dec.insert(dir.path().join("balloons1.png"), w, h, stride, bytes, has_alpha);
+    dec.insert(
+        dir.path().join("balloons0.png"),
+        w,
+        h,
+        stride,
+        bytes.clone(),
+        has_alpha,
+    );
+    dec.insert(
+        dir.path().join("balloons1.png"),
+        w,
+        h,
+        stride,
+        bytes,
+        has_alpha,
+    );
 
-    let (world, table) =
-        build_balloon_target(dir.path(), &dec, 0).expect("枠 2 枚から Ok が返る");
+    let (world, table) = build_balloon_target(dir.path(), &dec, 0).expect("枠 2 枚から Ok が返る");
 
     // アトラスに枠 2 枚のエントリがあり placement を持つ（PNG α 尊重で焼かれる・R5.2）。
     for rel in ["balloons0.png", "balloons1.png"] {
@@ -95,8 +108,14 @@ fn build_balloon_target_end_to_end_frames_only() {
     assert_eq!(table.len(), 2, "生存エントリは枠 2 枚のみ");
 
     // World は surface id = N（balloons{N} の N）を常駐させる。
-    assert!(world.surface(0).is_some(), "surface id 0（balloons0）が World にある");
-    assert!(world.surface(1).is_some(), "surface id 1（balloons1）が World にある");
+    assert!(
+        world.surface(0).is_some(),
+        "surface id 0（balloons0）が World にある"
+    );
+    assert!(
+        world.surface(1).is_some(),
+        "surface id 1（balloons1）が World にある"
+    );
     assert!(world.surface(2).is_none(), "存在しない id は None");
 }
 
@@ -115,8 +134,22 @@ fn build_balloon_target_enumerates_multiple_even_id_faces() {
     // 両面をデコーダへ登録（MemoryDecoder 経路・実 PNG 不要）。
     let mut dec = MemoryDecoder::new();
     let (w, h, stride, bytes, has_alpha) = opaque_1x1();
-    dec.insert(dir.path().join("balloons0.png"), w, h, stride, bytes.clone(), has_alpha);
-    dec.insert(dir.path().join("balloons2.png"), w, h, stride, bytes, has_alpha);
+    dec.insert(
+        dir.path().join("balloons0.png"),
+        w,
+        h,
+        stride,
+        bytes.clone(),
+        has_alpha,
+    );
+    dec.insert(
+        dir.path().join("balloons2.png"),
+        w,
+        h,
+        stride,
+        bytes,
+        has_alpha,
+    );
 
     let (world, table) =
         build_balloon_target(dir.path(), &dec, 0).expect("偶数 id 2 面から Ok が返る");
@@ -134,8 +167,14 @@ fn build_balloon_target_enumerates_multiple_even_id_faces() {
     assert_eq!(table.len(), 2, "生存エントリは偶数 id 面 2 枚のみ");
 
     // 多面列挙の要（本タスクの主張）: surface 0 と surface 2 の **両面** が world に常駐する。
-    assert!(world.surface(0).is_some(), "surface id 0（balloons0）が World にある");
-    assert!(world.surface(2).is_some(), "surface id 2（balloons2）が World にある");
+    assert!(
+        world.surface(0).is_some(),
+        "surface id 0（balloons0）が World にある"
+    );
+    assert!(
+        world.surface(2).is_some(),
+        "surface id 2（balloons2）が World にある"
+    );
     // 飛び番の欠番 id 1 は列挙対象に無いゆえ常駐しない（面 id=N の同一性を固定）。
     assert!(world.surface(1).is_none(), "欠番 id 1 は World に無い");
 }
@@ -209,7 +248,10 @@ fn no_frames_returns_empty_composition() {
     match build_balloon_target(dir.path(), &dec, 0) {
         Ok(_) => panic!("枠 0 枚なら Err のはず"),
         Err(err) => assert!(
-            matches!(err, PresentError::Compose(ComposeError::EmptyComposition(0))),
+            matches!(
+                err,
+                PresentError::Compose(ComposeError::EmptyComposition(0))
+            ),
             "枠不在は EmptyComposition(0) へ畳む: {err:?}"
         ),
     }
@@ -277,8 +319,8 @@ fn scope_digest(
         .iter()
         .map(|f| (f.surface_id, f.file_name.clone()))
         .collect();
-    let (world, table) = build_balloon_target_from_faces(dir, dec, &faces)
-        .expect("採用面列からの構築は成功する");
+    let (world, table) =
+        build_balloon_target_from_faces(dir, dec, &faces).expect("採用面列からの構築は成功する");
     let resident: Vec<u32> = (0..8u32)
         .filter(|id| world.surface(*id).is_some())
         .collect();

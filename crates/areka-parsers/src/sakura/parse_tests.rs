@@ -10,8 +10,8 @@
 //! parse は lexer→decode の結線にすぎないため、ここでは個々の値正規化の境界値ではなく
 //! 「結線が順序保持で正しく行われること」を固定する（境界値は decode_tests の領分）。
 
-use super::parse::parse;
 use super::model::{Choice, Instruction, NewLineRatio};
+use super::parse::parse;
 use std::time::Duration;
 
 /// 空入力 → 空 `Vec`（要件 1.5）。命令を一切産まない。
@@ -67,7 +67,10 @@ fn same_input_yields_same_output_pure() {
 /// 純粋テキストのみ（タグ無し）→ 単一 `Text`（要件 9.1）。
 #[test]
 fn plain_text_only_yields_single_text() {
-    assert_eq!(parse("ただのテキスト"), vec![Instruction::Text("ただのテキスト".to_string())]);
+    assert_eq!(
+        parse("ただのテキスト"),
+        vec![Instruction::Text("ただのテキスト".to_string())]
+    );
 }
 
 /// 不正トークン（未閉じ `[`）の前にある正常命令は欠落しない（要件 10.3/10.2）。

@@ -98,7 +98,10 @@ fn boot_greeting_active_tick_emits_notify_talking() {
     // events 表から NOTIFY 期待値を導出（talk_active=true・DD-IT-3／DD-IT-12・ハードコードしない）。
     let expected_notify = expected_call(events::on_second_change(
         notify_now,
-        &ExecutionSnapshot { talk_active: true, choice_active: false },
+        &ExecutionSnapshot {
+            talk_active: true,
+            choice_active: false,
+        },
     ));
 
     // NOTIFY が記録に現れる（＝Tick が `Steady{Some(挨拶)}` で処理された）まで有界 yield で待つ。
@@ -112,8 +115,16 @@ fn boot_greeting_active_tick_emits_notify_talking() {
     );
 
     // NOTIFY の構成を明示確認（BOOT 挨拶由来の playing-semantics）。
-    assert_eq!(expected_notify.method, CallMethod::Notify, "active 窓の pump は NOTIFY");
-    assert_eq!(expected_notify.references.len(), 4, "OnSecondChange の References は 4 要素");
+    assert_eq!(
+        expected_notify.method,
+        CallMethod::Notify,
+        "active 窓の pump は NOTIFY"
+    );
+    assert_eq!(
+        expected_notify.references.len(),
+        4,
+        "OnSecondChange の References は 4 要素"
+    );
     assert_eq!(
         expected_notify.references[3], "0",
         "NOTIFY pump の Ref3 は \"0\"（active talk 中・応答無視）"
@@ -223,7 +234,10 @@ fn boot_greeting_talkdone_resumes_get_pump() {
 
     let expected_notify = expected_call(events::on_second_change(
         notify_now,
-        &ExecutionSnapshot { talk_active: true, choice_active: false },
+        &ExecutionSnapshot {
+            talk_active: true,
+            choice_active: false,
+        },
     ));
     assert!(
         wait_until(
@@ -232,8 +246,15 @@ fn boot_greeting_talkdone_resumes_get_pump() {
         ),
         "挨拶 talk active 中の Tick は OnSecondChange NOTIFY（Ref3=0・talking）を発行するはず（DD-IT-12）"
     );
-    assert_eq!(expected_notify.references[3], "0", "active 窓の pump は Ref3=\"0\"（NOTIFY）");
-    assert_eq!(expected_notify.status, Some("talking".to_string()), "active 窓は Status: talking");
+    assert_eq!(
+        expected_notify.references[3], "0",
+        "active 窓の pump は Ref3=\"0\"（NOTIFY）"
+    );
+    assert_eq!(
+        expected_notify.status,
+        Some("talking".to_string()),
+        "active 窓は Status: talking"
+    );
 
     // 保留した挨拶 talk の TalkDone{Ended}（quit:false）を解放 → slot と照合され `Steady{None}` へ復帰。
     gate.release_all();
@@ -276,13 +297,18 @@ fn boot_greeting_talkdone_resumes_get_pump() {
     // (b) 完了後の GET 再開（DD-IT-12 相関成立の統合証左）: active 窓（NOTIFY）より後に OnSecondChange
     //     GET が現れ、Ref3=1・Status なし（`Steady{None}`＝挨拶 slot と照合されて復帰した証左）。復帰後の
     //     GET の now はループ依存ゆえ、now 非依存の Ref3／Status のみを events から導出して照合する。
-    let resumed_get = resumed_get_after_notify(&recorded)
-        .expect("active 窓の後に pump 再開 GET が現れるはず（挨拶 TalkDone が slot と照合された証左）");
+    let resumed_get = resumed_get_after_notify(&recorded).expect(
+        "active 窓の後に pump 再開 GET が現れるはず（挨拶 TalkDone が slot と照合された証左）",
+    );
     let expected_shape = expected_call(events::on_second_change(
         MonotonicMs(0),
         &ExecutionSnapshot::INACTIVE,
     ));
-    assert_eq!(resumed_get.references.len(), 4, "OnSecondChange の References は 4 要素");
+    assert_eq!(
+        resumed_get.references.len(),
+        4,
+        "OnSecondChange の References は 4 要素"
+    );
     assert_eq!(
         resumed_get.references[3], expected_shape.references[3],
         "再開 pump の Ref3 は events 導出値（\"1\"・GET・talk 再生可能）"
@@ -373,7 +399,10 @@ fn boot_greeting_close_during_greeting_uses_close_handshake() {
 
     let expected_notify = expected_call(events::on_second_change(
         notify_now,
-        &ExecutionSnapshot { talk_active: true, choice_active: false },
+        &ExecutionSnapshot {
+            talk_active: true,
+            choice_active: false,
+        },
     ));
     assert!(
         wait_until(
@@ -382,8 +411,15 @@ fn boot_greeting_close_during_greeting_uses_close_handshake() {
         ),
         "挨拶保留中の Tick は OnSecondChange NOTIFY（Ref3=0・talking）を発行するはず（＝boot が Steady{{Some(挨拶)}} へ完了・DD-IT-12）"
     );
-    assert_eq!(expected_notify.references[3], "0", "active 窓の pump は Ref3=\"0\"（NOTIFY）");
-    assert_eq!(expected_notify.status, Some("talking".to_string()), "active 窓は Status: talking");
+    assert_eq!(
+        expected_notify.references[3], "0",
+        "active 窓の pump は Ref3=\"0\"（NOTIFY）"
+    );
+    assert_eq!(
+        expected_notify.status,
+        Some("talking".to_string()),
+        "active 窓は Status: talking"
+    );
 
     // (B) この時点（release 前・挨拶なお active）で OnClose 握手が始まっていない: 挨拶保留中は TalkDone が
     //     inbox へ入らず握手の消化点が来ないため OnClose GET は構造的に出得ない（race-free）。即 begin_close
@@ -404,8 +440,9 @@ fn boot_greeting_close_during_greeting_uses_close_handshake() {
     } = harness;
 
     // close talk（quit:true）で終了系列完走まで期限付き join。
-    join_bounded("kanade boot-greeting close join", DEFAULT_TIMEOUT, kanade)
-        .expect("kanade completes the deferred close handshake after the boot greeting and terminates");
+    join_bounded("kanade boot-greeting close join", DEFAULT_TIMEOUT, kanade).expect(
+        "kanade completes the deferred close handshake after the boot greeting and terminates",
+    );
 
     drop(sender);
     let started = sakura.started();
@@ -439,7 +476,11 @@ fn boot_greeting_close_during_greeting_uses_close_handshake() {
 
     // (d) 終了系列完走: 末尾は Unload（close talk quit:true→Unloading{Quit}→Unload）。OnClose→…→Unload の順。
     let last = recorded.last().expect("記録列は空でない");
-    assert_eq!(*last, expected_unload(), "末尾は Unload（close talk quit:true の終了系列完走）");
+    assert_eq!(
+        *last,
+        expected_unload(),
+        "末尾は Unload（close talk quit:true の終了系列完走）"
+    );
     assert!(
         onclose_index < recorded.len() - 1,
         "OnClose（{onclose_index}）は Unload（{}）より前に現れるはず",

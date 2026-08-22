@@ -83,7 +83,9 @@ where
     S: Subscriber + for<'a> LookupSpan<'a>,
 {
     fn on_event(&self, event: &Event<'_>, _ctx: Context<'_, S>) {
-        let mut visitor = MessageVisitor { message: String::new() };
+        let mut visitor = MessageVisitor {
+            message: String::new(),
+        };
         event.record(&mut visitor);
         let meta = event.metadata();
         self.sink.lock().unwrap().push(CapturedEvent {

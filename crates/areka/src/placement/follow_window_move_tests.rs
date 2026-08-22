@@ -1,11 +1,11 @@
 use bevy_ecs::prelude::*;
+use wintf::ecs::Point;
 use wintf::ecs::SizeI;
 use wintf::ecs::pointer::Phase;
-use wintf::ecs::{Point};
 
 use super::test_support::{
-    arrangement_at, arrangement_offset_of, drag_event_at, dragging_state, fake_handle,
-    position_of, single_monitor_snapshot, size_of, window_pos_at, window_pos_sized,
+    arrangement_at, arrangement_offset_of, drag_event_at, dragging_state, fake_handle, position_of,
+    single_monitor_snapshot, size_of, window_pos_at, window_pos_sized,
 };
 use super::{Anchored, BalloonFollow, move_window_to, on_char_drag};
 use crate::placement::resolver::{Anchor, PointPx, SizePx};
@@ -43,9 +43,7 @@ fn move_window_to_without_handle_returns_false() {
 #[test]
 fn move_window_to_on_despawned_entity_returns_false() {
     let mut world = World::new();
-    let window = world
-        .spawn((fake_handle(0x1234), window_pos_at(0, 0)))
-        .id();
+    let window = world.spawn((fake_handle(0x1234), window_pos_at(0, 0))).id();
     world.despawn(window);
 
     assert!(!move_window_to(&mut world, window, 100, 200));
@@ -56,9 +54,7 @@ fn move_window_to_on_despawned_entity_returns_false() {
 #[test]
 fn move_window_to_moves_balloon_with_offset_preserved() {
     let mut world = World::new();
-    let balloon = world
-        .spawn((fake_handle(0x2000), window_pos_at(0, 0)))
-        .id();
+    let balloon = world.spawn((fake_handle(0x2000), window_pos_at(0, 0))).id();
     let offset = PointPx { x: -412, y: -25 };
     let window = world
         .spawn((
@@ -223,7 +219,10 @@ fn move_window_to_syncs_arrangement_offset_of_target_and_balloon() {
 
     assert_eq!(
         arrangement_offset_of(&world, window),
-        Offset { x: 907.0, y: 1201.0 }
+        Offset {
+            x: 907.0,
+            y: 1201.0
+        }
     );
     assert_eq!(
         arrangement_offset_of(&world, balloon),
@@ -250,7 +249,10 @@ fn move_window_to_syncs_arrangement_offset_of_single_window() {
     assert!(move_window_to(&mut world, window, 1531, 883));
     assert_eq!(
         arrangement_offset_of(&world, window),
-        Offset { x: 1531.0, y: 883.0 }
+        Offset {
+            x: 1531.0,
+            y: 883.0
+        }
     );
 }
 

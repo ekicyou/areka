@@ -34,9 +34,7 @@ pub(super) fn dpi_suggested_position_decision(
 ) -> Option<(i32, i32)> {
     match policy {
         // 未付与 = 既定 = 従来挙動
-        None | Some(DpiSuggestedRectPolicy::ApplyPosition) => {
-            Some((suggested.left, suggested.top))
-        }
+        None | Some(DpiSuggestedRectPolicy::ApplyPosition) => Some((suggested.left, suggested.top)),
         Some(DpiSuggestedRectPolicy::ExternalAuthority) => None,
     }
 }

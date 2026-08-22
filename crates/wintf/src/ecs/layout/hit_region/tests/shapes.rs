@@ -233,10 +233,7 @@ fn test_shapes_extreme_and_nonfinite_rel_do_not_panic() {
     // 負座標 → 矩形外 → None
     assert_eq!(map.hit_test_region(-1e10, -1e10, &entity_size), None);
     // NaN → すべての比較が false → None（パニックなし）
-    assert_eq!(
-        map.hit_test_region(f32::NAN, f32::NAN, &entity_size),
-        None
-    );
+    assert_eq!(map.hit_test_region(f32::NAN, f32::NAN, &entity_size), None);
 }
 
 /// 退化矩形（幅0・高さ0 の Rect 領域）でも build を通過し、境界上の点で

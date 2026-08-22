@@ -1,11 +1,11 @@
+use super::test_support::{
+    assert_no_second_change, choice_input_of, config, expect_get_call, expect_ledger, status_wire,
+    steady_some, steady_with_ledger,
+};
 use super::*;
 use crate::msg::ShioriCall;
 use crate::schedule::step;
 use crate::talk::TalkEndReason;
-use super::test_support::{
-    assert_no_second_change, choice_input_of, config, expect_get_call, expect_ledger,
-    status_wire, steady_some, steady_with_ledger,
-};
 
 // ============================================================
 // 選択肢タイムアウト（タスク 4.5・C4 規則 5／6・Req7.3〜7.5・DD-10／DD-11）
@@ -46,7 +46,11 @@ fn step_capturing(
     state: State,
     input: Input,
     config: &KanadeConfig,
-) -> (State, Vec<Action>, Vec<crate::schedule::log_capture::CapturedEvent>) {
+) -> (
+    State,
+    Vec<Action>,
+    Vec<crate::schedule::log_capture::CapturedEvent>,
+) {
     let mut out = None;
     let ev = capture(|| {
         out = Some(step(state, input, config));
@@ -72,7 +76,10 @@ fn choice_timeout_fires_at_deadline_with_script_ref0_and_suppresses_pump() {
     );
     assert_eq!(actions.len(), 1, "期限到達 Tick は GET を 1 件だけ発行する");
     let (id, refs) = expect_get_call(&actions[0]);
-    assert_eq!(id, "OnChoiceTimeout", "期限到達で OnChoiceTimeout を発行（Req7.3）");
+    assert_eq!(
+        id, "OnChoiceTimeout",
+        "期限到達で OnChoiceTimeout を発行（Req7.3）"
+    );
     assert_eq!(
         refs,
         vec![script.to_string()],
@@ -140,7 +147,11 @@ fn choice_timeout_does_not_fire_before_deadline() {
     assert_eq!(actions.len(), 1);
     match &actions[0] {
         Action::ShioriRequest(ShioriCall::Notify { id, .. }) => {
-            assert_eq!(id.as_str(), "OnSecondChange", "期限前は通常の周期送出（NOTIFY）")
+            assert_eq!(
+                id.as_str(),
+                "OnSecondChange",
+                "期限前は通常の周期送出（NOTIFY）"
+            )
         }
         _ => panic!("期限前は選択待ち中の通常 pump（NOTIFY）が出る"),
     }
@@ -221,10 +232,7 @@ fn pump_resumes_on_the_tick_after_choice_timeout_fired() {
     assert_eq!(
         resumed
             .iter()
-            .filter(|a| matches!(
-                a,
-                Action::ShioriRequest(ShioriCall::Get { .. })
-            ))
+            .filter(|a| matches!(a, Action::ShioriRequest(ShioriCall::Get { .. })))
             .count(),
         0,
         "OnChoiceTimeout を二重発行しない"
@@ -248,9 +256,11 @@ fn choice_timeout_value_replaces_talk_via_existing_start_path() {
         &config(),
     );
     match actions.as_slice() {
-        [Action::StartTalk(StartTalk {
-            talk_id, script, ..
-        })] => {
+        [
+            Action::StartTalk(StartTalk {
+                talk_id, script, ..
+            }),
+        ] => {
             assert_eq!(*talk_id, TalkId(6), "新 talk_id を採番する（Req7.4／4.1）");
             assert_eq!(script, r"\0時間切れ\e");
         }
@@ -258,11 +268,12 @@ fn choice_timeout_value_replaces_talk_via_existing_start_path() {
     }
     match next.phase {
         Phase::Steady {
-            talk: Some(ActiveTalk {
-                talk_id,
-                origin,
-                ref script,
-            }),
+            talk:
+                Some(ActiveTalk {
+                    talk_id,
+                    origin,
+                    ref script,
+                }),
         } => {
             assert_eq!(talk_id, TalkId(6), "slot は新 talk へ差し替わる");
             assert_eq!(origin, "OnChoiceTimeout", "応答の出所を転記する");
@@ -408,7 +419,10 @@ fn choice_after_timeout_cancel_is_rejected() {
         Input::Choice(choice_input_of("OnMenu", "メニュー", &[])),
         &cfg,
     );
-    assert!(late.is_empty(), "解除後の選択確定は Action を発行しない（Req7.5）");
+    assert!(
+        late.is_empty(),
+        "解除後の選択確定は Action を発行しない（Req7.5）"
+    );
     assert!(s4.choice.is_none(), "棄却は帳簿を復活させない");
     assert_logged(&ev2, Level::WARN, "choice_rejected_no_wait");
 }
@@ -481,7 +495,10 @@ fn talk_done_of_target_talk_clears_choice_ledger() {
         &config(),
     );
     assert!(matches!(next.phase, Phase::Steady { talk: None }));
-    assert!(next.choice.is_none(), "対象トークの完了で帳簿は消える（規則 7）");
+    assert!(
+        next.choice.is_none(),
+        "対象トークの完了で帳簿は消える（規則 7）"
+    );
     assert!(actions.is_empty());
     assert_choice_invariant(&next);
 }
@@ -504,7 +521,10 @@ fn talk_done_quit_clears_choice_ledger() {
             cause: TermCause::Quit
         }
     ));
-    assert!(next.choice.is_none(), "終了系列（Quit）へ進む際も帳簿は消える");
+    assert!(
+        next.choice.is_none(),
+        "終了系列（Quit）へ進む際も帳簿は消える"
+    );
     assert!(matches!(actions.as_slice(), [Action::ShioriUnload]));
     assert_choice_invariant(&next);
 }
@@ -572,7 +592,10 @@ fn close_handshake_transition_clears_choice_ledger() {
     );
     assert!(matches!(next.phase, Phase::ClosePending { .. }));
     assert_eq!(close_actions.len(), 1, "握手開始は OnClose GET を発行する");
-    assert!(next.choice.is_none(), "close 系遷移で帳簿は消える（規則 7）");
+    assert!(
+        next.choice.is_none(),
+        "close 系遷移で帳簿は消える（規則 7）"
+    );
     assert_choice_invariant(&next);
 }
 
@@ -660,7 +683,10 @@ fn cascade_failed_via_step_does_not_fall_into_unloading_fault() {
         "免除アームは Unload を発行しない"
     );
     let (id, refs) = expect_get_call(&actions[0]);
-    assert_eq!(id, "OnChoiceSelect", "失敗は 204 と同一＝次段へ前進（Req2.3）");
+    assert_eq!(
+        id, "OnChoiceSelect",
+        "失敗は 204 と同一＝次段へ前進（Req2.3）"
+    );
     assert_eq!(refs, vec!["choice1".to_string()]);
     assert_logged(&ev, Level::ERROR, "choice_shiori_failed_as_204");
     assert_not_logged(&ev, "shiori_failed");

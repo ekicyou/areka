@@ -678,14 +678,14 @@ fn work_area_of(monitor: Option<&Monitor>) -> Result<RectPx, PlacementError> {
 }
 
 #[cfg(test)]
-#[path = "placement_shared_test_support.rs"]
-mod shared_test_support;
+#[path = "placement_monitor_tests.rs"]
+mod monitor_tests;
 #[cfg(test)]
 #[path = "placement_prepare_tests.rs"]
 mod prepare_tests;
 #[cfg(test)]
-#[path = "placement_monitor_tests.rs"]
-mod monitor_tests;
+#[path = "placement_shared_test_support.rs"]
+mod shared_test_support;
 #[cfg(test)]
 #[path = "placement_windowposition_tests.rs"]
 mod windowposition_tests;

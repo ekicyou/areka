@@ -209,7 +209,10 @@ mod tests {
 
         let input = to_choice_input(sel);
 
-        assert_eq!(input.id, id, "id は改変せず転写（トリム・正規化なし・Req1.5）");
+        assert_eq!(
+            input.id, id,
+            "id は改変せず転写（トリム・正規化なし・Req1.5）"
+        );
         assert_eq!(
             input.label, label,
             "label は改変せず転写（さくらスクリプト風・記号もそのまま・Req1.5）"
@@ -222,7 +225,11 @@ mod tests {
     fn to_choice_input_preserves_reference_order_and_empty_elements() {
         let sel = dirty_selection();
         let references = sel.references.clone();
-        assert_eq!(references.len(), 5, "fixture 前提（空文字・空白のみ要素を含む 5 件）");
+        assert_eq!(
+            references.len(),
+            5,
+            "fixture 前提（空文字・空白のみ要素を含む 5 件）"
+        );
 
         let input = to_choice_input(sel);
 
@@ -297,7 +304,10 @@ mod tests {
         }
 
         let forwarded = forward_all(&sel_rx, &kanade_tx);
-        assert_eq!(forwarded, 4, "滞留 4 件は全件送出される（暗黙に捨てない・Req1.2）");
+        assert_eq!(
+            forwarded, 4,
+            "滞留 4 件は全件送出される（暗黙に捨てない・Req1.2）"
+        );
 
         for expected in arrivals {
             let got = expect_choice(kanade_rx.try_recv().expect("到着順に届く"));

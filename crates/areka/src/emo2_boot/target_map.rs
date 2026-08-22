@@ -69,8 +69,14 @@ mod tests {
             assert_eq!(b.0 % 2, 1, "balloon target must be odd (scope {scope})");
             assert_ne!(s, b, "shell/balloon collide within scope {scope}");
             // 全 scope 横断でも一意（偶奇分離ゆえ shell 同士・balloon 同士も別 scope なら別値）。
-            assert!(seen.insert(s), "shell target {s:?} collided (scope {scope})");
-            assert!(seen.insert(b), "balloon target {b:?} collided (scope {scope})");
+            assert!(
+                seen.insert(s),
+                "shell target {s:?} collided (scope {scope})"
+            );
+            assert!(
+                seen.insert(b),
+                "balloon target {b:?} collided (scope {scope})"
+            );
         }
         assert_eq!(
             seen.len(),

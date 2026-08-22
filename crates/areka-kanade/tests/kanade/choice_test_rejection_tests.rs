@@ -272,9 +272,7 @@ fn choice_outside_the_candidate_set_is_rejected_and_keeps_the_wait_open() {
         "候補外 ID はカスケードを起こさず、候補内 ID のみが 1 段発行するはず: {recorded:?}"
     );
     assert!(
-        !recorded
-            .iter()
-            .any(|c| c.id == OUT_OF_CANDIDATE_CHOICE_ID),
+        !recorded.iter().any(|c| c.id == OUT_OF_CANDIDATE_CHOICE_ID),
         "候補外 ID を任意名イベントとして発火する退行はここで落ちる: {recorded:?}"
     );
 

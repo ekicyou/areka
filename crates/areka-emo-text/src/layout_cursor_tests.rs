@@ -1,11 +1,11 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
-use areka_sakura::contract::ActorKey;
-use super::{cursor_to_image_px, CursorWarnGuard, FixedMetrics, LayoutEngine, WrapPlan};
+use super::test_support::{IMAGE, inline_positions, model};
+use super::{CursorWarnGuard, FixedMetrics, LayoutEngine, WrapPlan, cursor_to_image_px};
 use crate::region::TextRegion;
 use crate::state::{CursorCoord, CursorUnit, TextItem};
 use crate::writing::WritingMode;
-use super::test_support::{IMAGE, inline_positions, model};
+use areka_sakura::contract::ActorKey;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 // ── R2.1/2.2/2.4: `\_l` カーソル座標 → image px 換算（cursor_to_image_px・タスク 4.1） ──
 //

@@ -379,9 +379,8 @@ mod builder_boundary_tests {
         };
 
         let errs = compile_storyboard(&doc, "test", 0.0).unwrap_err();
-        assert!(
-            errs.iter()
-                .any(|e| matches!(e, DolaError::UndefinedVariable { name, .. } if name == "undefined_var"))
-        );
+        assert!(errs.iter().any(
+            |e| matches!(e, DolaError::UndefinedVariable { name, .. } if name == "undefined_var")
+        ));
     }
 }

@@ -1,30 +1,30 @@
-use std::collections::BTreeMap;
-use std::sync::mpsc::Receiver;
-use std::sync::{mpsc, Arc, Mutex};
-use std::time::Instant;
-use areka_emo_atlas::AtlasTable;
-use areka_emo_compose::{BindSet, EmoWorld};
-use areka_emo_text::state::TextLayerConfig;
-use areka_seriko::{AnimationTable, BindResolver, SurfaceResolver};
-use tracing::field::{Field, Visit};
-use tracing_subscriber::prelude::*;
-use bevy_ecs::prelude::Entity;
-use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
-use bevy_ecs::system::SystemState;
-use windows::Win32::Foundation::{HINSTANCE, HWND, RECT};
+use crate::emo2_boot::assets::{BalloonScopeAssets, BootAssets, LoopTables, ScopeAssets};
+use crate::placement::diag::WINDOW_MOVE_RECORD_TAG;
 use crate::placement::follow::{MonitorDpiTable, MonitorSnapshot, MonitorSources};
 use crate::placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
 use crate::placement::source::GhostTitles;
 use crate::placement::spawn::spawn_ghost_windows;
-use crate::placement::diag::WINDOW_MOVE_RECORD_TAG;
 use crate::placement::test_support::LogEvent;
-use wintf::ecs::{FrameCount, Point, SizeI, WindowHandle, WindowPos};
+use areka_emo_atlas::AtlasTable;
+use areka_emo_compose::{BindSet, EmoWorld};
+use areka_emo_text::state::TextLayerConfig;
+use areka_seriko::{AnimationTable, BindResolver, SurfaceResolver};
+use bevy_ecs::prelude::Entity;
+use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
+use bevy_ecs::system::SystemState;
+use std::collections::BTreeMap;
+use std::sync::mpsc::Receiver;
+use std::sync::{Arc, Mutex, mpsc};
+use std::time::Instant;
+use tracing::field::{Field, Visit};
+use tracing_subscriber::prelude::*;
+use windows::Win32::Foundation::{HINSTANCE, HWND, RECT};
+use wintf::ecs::DPI;
 use wintf::ecs::layout::{Arrangement, Offset};
 use wintf::ecs::window::monitor::Monitor;
 use wintf::ecs::window::transition_diag::{self, TickStart};
 use wintf::ecs::window::{SetWindowPosCommand, drain_window_pos_commands};
-use wintf::ecs::DPI;
-use crate::emo2_boot::assets::{BalloonScopeAssets, BootAssets, LoopTables, ScopeAssets};
+use wintf::ecs::{FrameCount, Point, SizeI, WindowHandle, WindowPos};
 
 use super::work_area_sync::{SnapshotChange, resnap_for_work_area_change, sync_monitor_snapshot};
 
@@ -53,7 +53,10 @@ pub(super) fn synth_assets(shells: &[(u32, u32)]) -> BootAssets {
 }
 
 /// balloon scope 集合を shell と独立に指定できる版（`balloon_index` の `None` 経路検証用）。
-pub(super) fn synth_assets_with_balloons(shells: &[(u32, u32)], balloon_scopes: &[u32]) -> BootAssets {
+pub(super) fn synth_assets_with_balloons(
+    shells: &[(u32, u32)],
+    balloon_scopes: &[u32],
+) -> BootAssets {
     BootAssets {
         shells: shells
             .iter()
@@ -100,11 +103,7 @@ pub(super) fn synth_assets_with_balloons(shells: &[(u32, u32)], balloon_scopes: 
 struct Capture(Arc<Mutex<Vec<String>>>);
 
 impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Capture {
-    fn on_event(
-        &self,
-        ev: &tracing::Event<'_>,
-        _: tracing_subscriber::layer::Context<'_, S>,
-    ) {
+    fn on_event(&self, ev: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
         let meta = ev.metadata();
         let mut line = format!("level={} target={}", meta.level(), meta.target());
         struct V<'a>(&'a mut String);
@@ -148,7 +147,9 @@ pub(super) fn headless_wiring_with(rx: Receiver<PresentCommand>, clock: TalkCloc
         rx,
         mpsc::channel::<MoveDirective>().1,
         mpsc::channel::<crate::emo2_boot::talk_lifecycle::TalkLifecycleSignal>().1,
-        Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default()))),
+        Rc::new(RefCell::new(TextLayerRuntime::new(
+            TextLayerConfig::default(),
+        ))),
         clock,
         synth_assets(&[(0, 0)]),
     )
@@ -377,11 +378,7 @@ impl FakeReports {
 }
 
 impl ScaleReportSource for FakeReports {
-    fn refresh_scale_report(
-        &mut self,
-        _world: &mut World,
-        target: TargetId,
-    ) -> Option<(u32, u32)> {
+    fn refresh_scale_report(&mut self, _world: &mut World, target: TargetId) -> Option<(u32, u32)> {
         self.calls.push(("refresh", target.0));
         let report = self.refresh.remove(&target.0);
         if report.is_some() {

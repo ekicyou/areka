@@ -87,7 +87,10 @@ fn build_alpha_varying_assets(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasTable
         },
     };
     let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(baked.errors.is_empty(), "atlas bake セットアップは失敗しない");
+    assert!(
+        baked.errors.is_empty(),
+        "atlas bake セットアップは失敗しない"
+    );
 
     let mut world = EmoWorld::build(&shell_of(surfaces));
     world.bind_atlas(&baked.table, SetId(0));
@@ -489,8 +492,22 @@ fn build_layered_assets(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasTable) {
         }
         v
     };
-    dec.insert(base.join("q.png"), pw, ph, pw * 4, solid([0x11, 0x99, 0x22]), true);
-    dec.insert(base.join("r.png"), pw, ph, pw * 4, solid([0xEE, 0x33, 0xCC]), true);
+    dec.insert(
+        base.join("q.png"),
+        pw,
+        ph,
+        pw * 4,
+        solid([0x11, 0x99, 0x22]),
+        true,
+    );
+    dec.insert(
+        base.join("r.png"),
+        pw,
+        ph,
+        pw * 4,
+        solid([0xEE, 0x33, 0xCC]),
+        true,
+    );
 
     let set = SurfaceSet {
         surfaces: &surfaces,
@@ -500,7 +517,10 @@ fn build_layered_assets(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasTable) {
         },
     };
     let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(baked.errors.is_empty(), "atlas bake セットアップは失敗しない");
+    assert!(
+        baked.errors.is_empty(),
+        "atlas bake セットアップは失敗しない"
+    );
 
     let mut world = EmoWorld::build(&shell_of(surfaces));
     world.bind_atlas(&baked.table, SetId(0));
@@ -623,7 +643,10 @@ fn show_surface_scales_layered_bind_and_pattern_content_with_single_k() {
     let bind_px = px_at(&native_bytes, 16, 3, 3);
     let pattern_px = px_at(&native_bytes, 16, 6, 6);
     let base_px = px_at(&native_bytes, 16, 13, 10);
-    assert_ne!(bind_px, pattern_px, "前提: bind part と pattern part は異色");
+    assert_ne!(
+        bind_px, pattern_px,
+        "前提: bind part と pattern part は異色"
+    );
     assert_ne!(bind_px, base_px, "前提: bind part とベースは異色");
     assert_ne!(pattern_px, base_px, "前提: pattern part とベースは異色");
 
@@ -687,5 +710,9 @@ fn show_surface_scales_layered_bind_and_pattern_content_with_single_k() {
     // 照会契約（native 原寸・実適用 k）も 3 層構成で成立する。
     let t = presenter.targets.get(&TargetId(0)).unwrap();
     assert_eq!(t.applied, Some(k32), "applied が実適用 k と一致しない");
-    assert_eq!(t.native_size, Some(native_size), "native_size は k 適用前の原寸");
+    assert_eq!(
+        t.native_size,
+        Some(native_size),
+        "native_size は k 適用前の原寸"
+    );
 }

@@ -59,7 +59,12 @@ impl IShioriFactory {
         // - `host` は `Ref` 借用（`(&host).into()`）で AddRef されず、呼び出し中有効。
         // - `out` は本層がスタックに確保した書き込み可能領域（`(&mut out).into()` で OutRef 化）。
         let result = unsafe {
-            self.CreateInstance(load_dir, shiori_name, Ref::from(Some(host)), (&mut out).into())
+            self.CreateInstance(
+                load_dir,
+                shiori_name,
+                Ref::from(Some(host)),
+                (&mut out).into(),
+            )
         };
         match result {
             // 成功時のみ out から load 完了済み IShiori を取り出す。
@@ -133,11 +138,7 @@ impl IShioriHost {
     ///
     /// - `token`: 相関トークン（[`get`](IShiori::get) が遅延時に返した値）。
     /// - `response`: 応答内容（借用・host 保持は clone）。
-    pub fn complete(
-        &self,
-        token: CorrelationToken,
-        response: &HSTRING,
-    ) -> Result<(), ShioriError> {
+    pub fn complete(&self, token: CorrelationToken, response: &HSTRING) -> Result<(), ShioriError> {
         // Safety: pub vtable メソッド `Complete` の呼出。`self` は有効な `IShioriHost` COM ポインタ、
         // `response` は `[in]` 借用で呼び出しを覆って生存する。`token.0` は u64 値渡し。
         match unsafe { self.Complete(token.0, response) } {
@@ -194,9 +195,7 @@ mod tests {
 
     use super::*;
     use crate::error::{SHIORI_E_PROPERTY_NOT_FOUND, SHIORI_E_UNKNOWN_TOKEN};
-    use crate::interface::{
-        IShiori_Impl, IShioriFactory_Impl, IShioriHost_Impl,
-    };
+    use crate::interface::{IShiori_Impl, IShioriFactory_Impl, IShioriHost_Impl};
     use windows_core::{HRESULT, OutRef, Result as ComResult, implement};
 
     /// 即時応答時に move-out する固定文字列。
@@ -479,7 +478,9 @@ mod tests {
 
         host.set_property(&key, &value)
             .expect("set_property は Ok であること");
-        let got = host.get_property(&key).expect("get_property は Ok であること");
+        let got = host
+            .get_property(&key)
+            .expect("get_property は Ok であること");
         assert_eq!(got, value, "設定した値が move-out されること");
 
         let err = host

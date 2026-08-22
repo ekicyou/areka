@@ -237,7 +237,13 @@ fn the_trailing_balloon_follow_is_still_exempt() {
     let (mut world, balloon) = held_world(true);
 
     let (moved, events) = capture_logs(|| {
-        move_window_with_route(&mut world, balloon, 1301, 356, PlacementRoute::BalloonFollow)
+        move_window_with_route(
+            &mut world,
+            balloon,
+            1301,
+            356,
+            PlacementRoute::BalloonFollow,
+        )
     });
     drop_queued_writes();
 

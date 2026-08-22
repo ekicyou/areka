@@ -67,13 +67,13 @@ use tracing::{debug, error, info, warn};
 #[allow(unused_imports)]
 use areka_emo_present::{EmoPresenter, PresentCommand, TargetId, TextSlotView};
 #[allow(unused_imports)]
-use areka_emo_text::actor::{present_frame, TextLayerRuntime};
+use areka_emo_text::actor::{TextLayerRuntime, present_frame};
 #[allow(unused_imports)]
 use areka_parsers::balloon::BalloonModel;
 #[allow(unused_imports)]
 use areka_sakura::ActorKey;
 #[allow(unused_imports)]
-use wintf::ecs::{FrameTime, GraphicsCore, SizeI, WindowPos, WucGraphicsResource, DPI};
+use wintf::ecs::{DPI, FrameTime, GraphicsCore, SizeI, WindowPos, WucGraphicsResource};
 
 #[allow(unused_imports)]
 use crate::placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
@@ -90,7 +90,7 @@ use super::balloon_visibility::run_balloon_visibility_phase;
 // `scale_text::run_text_phase` が `super::hover_inject::drive` で辿る先（移設前は本ファイルから
 // `super::hover_inject` が emo2_boot を指していた）。呼び出し本文を書き換えないための束縛。
 use super::hover_inject;
-use super::move_cue::{apply_move_directive, MoveDirective};
+use super::move_cue::{MoveDirective, apply_move_directive};
 use super::talk_clock::TalkClock;
 use super::target_map::{balloon_target, shell_target};
 

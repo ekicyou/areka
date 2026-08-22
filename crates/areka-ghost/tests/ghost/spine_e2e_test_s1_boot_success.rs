@@ -80,8 +80,7 @@ fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: std::time::Dur
 fn s1_boot_success_plays_greeting_and_records_expected_cue_sequence() {
     const SHELL_NAME: &str = "S1BootShell";
 
-    let root =
-        unique_temp_dir("s1_boot_success_plays_greeting_and_records_expected_cue_sequence");
+    let root = unique_temp_dir("s1_boot_success_plays_greeting_and_records_expected_cue_sequence");
     let _ = std::fs::remove_dir_all(&root);
     write_ghost_fixture(&root, SHELL_NAME);
 
@@ -232,7 +231,11 @@ fn s1_boot_success_plays_greeting_and_records_expected_cue_sequence() {
         &mut now,
         tick,
         || {
-            surface_records.lock().expect("records mutex poisoned").len() >= expected.len()
+            surface_records
+                .lock()
+                .expect("records mutex poisoned")
+                .len()
+                >= expected.len()
                 && text_records.lock().expect("records mutex poisoned").len() >= expected.len()
         },
     );

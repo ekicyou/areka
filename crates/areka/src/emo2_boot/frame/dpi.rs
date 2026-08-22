@@ -7,7 +7,7 @@ use bevy_ecs::world::World;
 use tracing::{debug, error, warn};
 
 use areka_emo_present::{EmoPresenter, TargetId};
-use wintf::ecs::{SizeI, WindowPos, DPI};
+use wintf::ecs::{DPI, SizeI, WindowPos};
 
 use crate::placement::chain_realign;
 use crate::placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};

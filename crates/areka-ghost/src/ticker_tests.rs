@@ -34,8 +34,7 @@ fn starting_at_sets_first_deadline_strictly_after_now() {
     assert_eq!(schedule.next_deadline_ms, 1000);
 
     // ちょうど境界上でも次の境界へ進む（起動直後の即時発火を避ける）。
-    let schedule =
-        BoundarySchedule::starting_at(Duration::from_millis(1000), MonotonicMs(1000));
+    let schedule = BoundarySchedule::starting_at(Duration::from_millis(1000), MonotonicMs(1000));
     assert_eq!(schedule.next_deadline_ms, 2000);
 }
 
@@ -45,8 +44,7 @@ fn starting_at_aligns_to_absolute_grid_not_relative_to_spawn_time() {
     // 「起動時刻+interval」（3347）ではなく OS クロック絶対グリッド上の
     // 次の境界（3000）へ整列する——将来の複数 ticker インスタンスが
     // 共有機構なしで同一グリッドへ自然同期するための不変条件（design 参照）。
-    let schedule =
-        BoundarySchedule::starting_at(Duration::from_millis(1000), MonotonicMs(2347));
+    let schedule = BoundarySchedule::starting_at(Duration::from_millis(1000), MonotonicMs(2347));
     assert_eq!(
         schedule.next_deadline_ms, 3000,
         "絶対グリッド整列: 2347ms 起動でも次境界は 3000（3347 ではない）"
@@ -76,8 +74,7 @@ fn remaining_counts_down_to_zero_at_boundary() {
 
 #[test]
 fn poll_does_not_fire_before_boundary() {
-    let mut schedule =
-        BoundarySchedule::starting_at(Duration::from_millis(1000), MonotonicMs(0));
+    let mut schedule = BoundarySchedule::starting_at(Duration::from_millis(1000), MonotonicMs(0));
     let result = schedule.poll(MonotonicMs(999));
     assert_eq!(
         result,
@@ -92,8 +89,7 @@ fn poll_does_not_fire_before_boundary() {
 
 #[test]
 fn poll_fires_exactly_once_on_time_and_advances_one_boundary() {
-    let mut schedule =
-        BoundarySchedule::starting_at(Duration::from_millis(1000), MonotonicMs(0));
+    let mut schedule = BoundarySchedule::starting_at(Duration::from_millis(1000), MonotonicMs(0));
     let result = schedule.poll(MonotonicMs(1000));
     assert_eq!(
         result,
@@ -119,8 +115,7 @@ fn poll_fires_exactly_once_on_time_and_advances_one_boundary() {
 #[test]
 fn poll_skips_multiple_missed_boundaries_and_fires_only_once() {
     // サスペンド復帰等を模す: 次境界(1000)を大幅に過ぎた 8200 まで一気に進む。
-    let mut schedule =
-        BoundarySchedule::starting_at(Duration::from_millis(1000), MonotonicMs(0));
+    let mut schedule = BoundarySchedule::starting_at(Duration::from_millis(1000), MonotonicMs(0));
     let result = schedule.poll(MonotonicMs(8200));
     assert_eq!(
         result,

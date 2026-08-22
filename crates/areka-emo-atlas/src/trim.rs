@@ -266,7 +266,10 @@ mod tests {
         }
 
         // バイト単位で原画像に一致（bbox 外は両者とも全 0）。
-        assert_eq!(recon, orig, "reconstructed buffer equals original byte-for-byte");
+        assert_eq!(
+            recon, orig,
+            "reconstructed buffer equals original byte-for-byte"
+        );
     }
 
     /// 4.1: 閾値は α>0（128 ではない）。α==1 の画素は bbox に含まれる。

@@ -10,13 +10,13 @@
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::SingleThreadedExecutor;
+use windows::Win32::Foundation::{HINSTANCE, HWND};
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use wintf::ecs::window::{Window, WindowHandle};
 use wintf::ecs::world::FrameCount;
 use wintf::ecs::{
     GraphicsCore, HasGraphicsResources, WindowGraphics, WucGraphicsResource, init_window_graphics,
 };
-use windows::Win32::Foundation::{HINSTANCE, HWND};
 
 fn setup() -> (World, Schedule) {
     // init_window_graphics は内部で WucGraphicsResource::new（DQTAT_COM_NONE）を呼ぶため
@@ -53,63 +53,63 @@ fn spawn_window(world: &mut World) -> Entity {
 #[test]
 fn lazily_initializes_wuc_resource_when_window_exists() {
     crate::common::on_gpu_owner_thread(move || {
-    let (mut world, mut schedule) = setup();
-    spawn_window(&mut world);
+        let (mut world, mut schedule) = setup();
+        spawn_window(&mut world);
 
-    assert!(world.get_resource::<WucGraphicsResource>().is_none());
-    schedule.run(&mut world);
+        assert!(world.get_resource::<WucGraphicsResource>().is_none());
+        schedule.run(&mut world);
 
-    let resource = world
-        .get_resource::<WucGraphicsResource>()
-        .expect("ウィンドウ検出時に WucGraphicsResource が遅延初期化される");
-    assert!(resource.is_valid());
+        let resource = world
+            .get_resource::<WucGraphicsResource>()
+            .expect("ウィンドウ検出時に WucGraphicsResource が遅延初期化される");
+        assert!(resource.is_valid());
     });
 }
 
 #[test]
 fn does_not_initialize_wuc_resource_without_windows() {
     crate::common::on_gpu_owner_thread(move || {
-    let (mut world, mut schedule) = setup();
+        let (mut world, mut schedule) = setup();
 
-    schedule.run(&mut world);
+        schedule.run(&mut world);
 
-    assert!(
-        world.get_resource::<WucGraphicsResource>().is_none(),
-        "ウィンドウが無ければ WucGraphicsResource は作成されない"
-    );
+        assert!(
+            world.get_resource::<WucGraphicsResource>().is_none(),
+            "ウィンドウが無ければ WucGraphicsResource は作成されない"
+        );
     });
 }
 
 #[test]
 fn invalid_hwnd_fails_gracefully_without_window_graphics() {
     crate::common::on_gpu_owner_thread(move || {
-    let (mut world, mut schedule) = setup();
-    let entity = spawn_window(&mut world);
+        let (mut world, mut schedule) = setup();
+        let entity = spawn_window(&mut world);
 
-    // 1回目: WucGraphicsResource 遅延初期化（このフレームは return）
-    schedule.run(&mut world);
-    // 2回目: CreateDesktopWindowTarget(null HWND) が失敗 → error ログ + 継続
-    schedule.run(&mut world);
+        // 1回目: WucGraphicsResource 遅延初期化（このフレームは return）
+        schedule.run(&mut world);
+        // 2回目: CreateDesktopWindowTarget(null HWND) が失敗 → error ログ + 継続
+        schedule.run(&mut world);
 
-    assert!(
-        world.get::<WindowGraphics>(entity).is_none(),
-        "無効 HWND では WindowGraphics は挿入されない（パニックなし）"
-    );
+        assert!(
+            world.get::<WindowGraphics>(entity).is_none(),
+            "無効 HWND では WindowGraphics は挿入されない（パニックなし）"
+        );
     });
 }
 
 #[test]
 fn invalid_graphics_core_defers_initialization() {
     crate::common::on_gpu_owner_thread(move || {
-    let (mut world, mut schedule) = setup();
-    world.resource_mut::<GraphicsCore>().invalidate();
-    spawn_window(&mut world);
+        let (mut world, mut schedule) = setup();
+        world.resource_mut::<GraphicsCore>().invalidate();
+        spawn_window(&mut world);
 
-    schedule.run(&mut world);
+        schedule.run(&mut world);
 
-    assert!(
-        world.get_resource::<WucGraphicsResource>().is_none(),
-        "GraphicsCore 無効時は早期リターン"
-    );
+        assert!(
+            world.get_resource::<WucGraphicsResource>().is_none(),
+            "GraphicsCore 無効時は早期リターン"
+        );
     });
 }

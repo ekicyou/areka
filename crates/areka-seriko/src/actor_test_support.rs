@@ -56,11 +56,7 @@ pub(super) fn capture_logs<F: FnOnce()>(f: F) -> String {
     struct Capture(Arc<Mutex<Vec<String>>>);
 
     impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Capture {
-        fn on_event(
-            &self,
-            ev: &tracing::Event<'_>,
-            _: tracing_subscriber::layer::Context<'_, S>,
-        ) {
+        fn on_event(&self, ev: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
             let meta = ev.metadata();
             let mut line = format!("level={} target={}", meta.level(), meta.target());
             struct V<'a>(&'a mut String);

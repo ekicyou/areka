@@ -100,7 +100,9 @@ pub(super) fn headless_emo2_wiring(runtime: Rc<RefCell<TextLayerRuntime>>) -> Em
 /// 選択肢スパンを 1 つ載せて `choice_active(actor)==true` にした実 runtime を組む（GPU 不要）。
 /// `choice_hit_rows` は `present_frame`（GPU）未実行ゆえ空のまま（headless の既知制約）。
 pub(super) fn runtime_with_active_choice(actor: &str) -> Rc<RefCell<TextLayerRuntime>> {
-    let rt = Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default())));
+    let rt = Rc::new(RefCell::new(TextLayerRuntime::new(
+        TextLayerConfig::default(),
+    )));
     rt.borrow_mut().apply_cue(&TalkCue {
         at: 0.0,
         actor: ActorKey::from(actor),
@@ -119,11 +121,7 @@ pub(super) fn runtime_with_active_choice(actor: &str) -> Rc<RefCell<TextLayerRun
 struct Capture(Arc<Mutex<Vec<String>>>);
 
 impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Capture {
-    fn on_event(
-        &self,
-        ev: &tracing::Event<'_>,
-        _: tracing_subscriber::layer::Context<'_, S>,
-    ) {
+    fn on_event(&self, ev: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
         let meta = ev.metadata();
         let mut line = format!("level={}", meta.level());
         struct V<'a>(&'a mut String);

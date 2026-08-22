@@ -10,11 +10,11 @@ mod mouse_dblclick_wheel;
 mod mouse_move;
 mod window_pos;
 
+use crate::executor::util::WindowMessage;
 use bevy_ecs::prelude::*;
 use windows::Win32::Foundation::*;
 use windows::Win32::UI::Controls::WM_MOUSELEAVE;
 use windows::Win32::UI::WindowsAndMessaging::*;
-use crate::executor::util::WindowMessage;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -59,10 +59,18 @@ pub(crate) fn dispatch_window_message(
         WM_MBUTTONUP => mouse_click::WM_MBUTTONUP(world, entity, hwnd, wparam, lparam),
         WM_XBUTTONDOWN => mouse_click::WM_XBUTTONDOWN(world, entity, hwnd, wparam, lparam),
         WM_XBUTTONUP => mouse_click::WM_XBUTTONUP(world, entity, hwnd, wparam, lparam),
-        WM_LBUTTONDBLCLK => mouse_dblclick_wheel::WM_LBUTTONDBLCLK(world, entity, hwnd, wparam, lparam),
-        WM_RBUTTONDBLCLK => mouse_dblclick_wheel::WM_RBUTTONDBLCLK(world, entity, hwnd, wparam, lparam),
-        WM_MBUTTONDBLCLK => mouse_dblclick_wheel::WM_MBUTTONDBLCLK(world, entity, hwnd, wparam, lparam),
-        WM_XBUTTONDBLCLK => mouse_dblclick_wheel::WM_XBUTTONDBLCLK(world, entity, hwnd, wparam, lparam),
+        WM_LBUTTONDBLCLK => {
+            mouse_dblclick_wheel::WM_LBUTTONDBLCLK(world, entity, hwnd, wparam, lparam)
+        }
+        WM_RBUTTONDBLCLK => {
+            mouse_dblclick_wheel::WM_RBUTTONDBLCLK(world, entity, hwnd, wparam, lparam)
+        }
+        WM_MBUTTONDBLCLK => {
+            mouse_dblclick_wheel::WM_MBUTTONDBLCLK(world, entity, hwnd, wparam, lparam)
+        }
+        WM_XBUTTONDBLCLK => {
+            mouse_dblclick_wheel::WM_XBUTTONDBLCLK(world, entity, hwnd, wparam, lparam)
+        }
         WM_MOUSEWHEEL => mouse_dblclick_wheel::WM_MOUSEWHEEL(world, entity, hwnd, wparam, lparam),
         WM_MOUSEHWHEEL => mouse_dblclick_wheel::WM_MOUSEHWHEEL(world, entity, hwnd, wparam, lparam),
         WM_KEYDOWN => keyboard::WM_KEYDOWN(world, entity, hwnd, wparam, lparam),

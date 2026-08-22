@@ -53,8 +53,14 @@ fn device_err(context: &'static str) -> impl FnOnce(windows::core::Error) -> Tex
 /// `Option` が `None`（本来到達しない成功時 None・デバイス未初期化・entity 不在）を
 /// [`TextLayerError::Device`] にする（log-first）。
 fn none_err(context: &'static str) -> TextLayerError {
-    tracing::error!(context, "必須リソースが欠落（デバイス未初期化 または 前提 entity 不在）");
-    TextLayerError::Device { hresult: 0, context }
+    tracing::error!(
+        context,
+        "必須リソースが欠落（デバイス未初期化 または 前提 entity 不在）"
+    );
+    TextLayerError::Device {
+        hresult: 0,
+        context,
+    }
 }
 
 /// DEFAULT usage の B8G8R8A8 描画面テクスチャ（`sources` の 1 枚・D2D ターゲット兼）を
@@ -188,7 +194,10 @@ impl TextSurface {
         physical_offset: (f32, f32),
     ) -> Result<TextSurface, TextLayerError> {
         let (w, h) = physical_size;
-        let d3d = core.d3d().ok_or_else(|| none_err("GraphicsCore::d3d"))?.clone();
+        let d3d = core
+            .d3d()
+            .ok_or_else(|| none_err("GraphicsCore::d3d"))?
+            .clone();
         let dxgi = core
             .dxgi()
             .ok_or_else(|| none_err("GraphicsCore::dxgi"))?
@@ -476,8 +485,8 @@ mod tests {
     /// cargo test の各テストは専用スレッドで走り COM 未初期化ゆえ、ASTA を第一候補・失敗時
     /// NONE を保険とする（記憶 areka-wuc-runs-on-mta-thread: 未初期化スレッドでは ASTA が通る）。
     /// controller は Compositor より長寿命を要するため呼び出し側で保持する。
-    fn make_dispatcher_and_compositor()
-    -> (windows::System::DispatcherQueueController, Compositor) {
+    fn make_dispatcher_and_compositor() -> (windows::System::DispatcherQueueController, Compositor)
+    {
         let dq = create_dispatcher_queue_controller(DQTAT_COM_ASTA)
             .or_else(|e_asta| {
                 create_dispatcher_queue_controller(DQTAT_COM_NONE).map_err(|_| e_asta)
@@ -530,7 +539,10 @@ mod tests {
         let vg = world
             .get::<VisualGraphics>(slot)
             .expect("slot に VisualGraphics（emo 自前 brush）が装着される");
-        assert!(vg.is_valid(), "装着された VisualGraphics は有効（brush 装着済み）");
+        assert!(
+            vg.is_valid(),
+            "装着された VisualGraphics は有効（brush 装着済み）"
+        );
         let arr = world
             .get::<Arrangement>(slot)
             .expect("slot に Arrangement（物理 px 直接）が装着される");
@@ -551,7 +563,11 @@ mod tests {
 
         // --- 装着直後の読み戻し＝空（透明） ---
         let bytes = surface.read_back().expect("read_back（装着直後）失敗");
-        assert_eq!(bytes.len(), (4 * 3 * 4) as usize, "BGRA 密配列（stride=w*4）");
+        assert_eq!(
+            bytes.len(),
+            (4 * 3 * 4) as usize,
+            "BGRA 密配列（stride=w*4）"
+        );
         assert!(
             bytes.iter().all(|&b| b == 0),
             "装着直後の供給面は空（premultiplied 透明＝全 0）"
@@ -614,7 +630,10 @@ mod tests {
 
         surface.present().expect("present 失敗");
         let bytes = surface.read_back().expect("read_back 失敗");
-        assert_eq!(bytes, pattern, "read_back は source_tex の内容を全バイト一致で返す");
+        assert_eq!(
+            bytes, pattern,
+            "read_back は source_tex の内容を全バイト一致で返す"
+        );
     }
 
     /// log-first: slot entity が World に存在しない場合、attach は panic せず
@@ -629,10 +648,9 @@ mod tests {
         world.despawn(slot);
         let binding = TextSlotBinding::new(slot, window, 1.0, (10, 8), (10, 8));
 
-        let err =
-            TextSurface::attach(&mut world, &binding, &compositor, &core, (4, 3), (0.0, 0.0))
-                .err()
-                .expect("slot 不在で attach は Err を返す（panic しない）");
+        let err = TextSurface::attach(&mut world, &binding, &compositor, &core, (4, 3), (0.0, 0.0))
+            .err()
+            .expect("slot 不在で attach は Err を返す（panic しない）");
         assert!(
             matches!(err, TextLayerError::Device { .. }),
             "slot 不在は Device エラー（log-first）: {err:?}"
@@ -699,8 +717,7 @@ mod tests {
 
             // front（sources[front]・attach 直後は 0）へ既知パターンを直書きする。
             let pattern = premul_pattern(w, h);
-            let src_res: ID3D11Resource =
-                surface.front_tex().cast().expect("front->Resource cast");
+            let src_res: ID3D11Resource = surface.front_tex().cast().expect("front->Resource cast");
             unsafe {
                 surface.context.UpdateSubresource(
                     &src_res,

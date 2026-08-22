@@ -175,8 +175,8 @@ mod tests {
         // GetDesktopWindow はウィンドウ生成不要で常に有効な HWND を返す（GUI 非依存）。
         // デスクトップウィンドウは常に WS_VISIBLE を持つためスタイル値は非 0。
         let hwnd = unsafe { GetDesktopWindow() };
-        let style = get_window_long_ptr(hwnd, GWL_STYLE)
-            .expect("desktop window style must be readable");
+        let style =
+            get_window_long_ptr(hwnd, GWL_STYLE).expect("desktop window style must be readable");
         assert_ne!(style, 0);
     }
 

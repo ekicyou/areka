@@ -24,7 +24,9 @@
 //! canonical 変換 [`dola::cue::to_talk_schedule`] も相対 `start_time` を保存するため、先頭待ちは
 //! 台本〜スケジュールを通して保存される。
 
-use crate::contract::{ActorKey, BarrierKind, Cue, CueCommand, CuePayload, CueSheet, TalkEndReason};
+use crate::contract::{
+    ActorKey, BarrierKind, Cue, CueCommand, CuePayload, CueSheet, TalkEndReason,
+};
 use crate::sysvar::SystemVarSnapshot;
 use areka_parsers::sakura::Instruction;
 use areka_talk::EpilogueCommand;
@@ -209,12 +211,9 @@ pub fn compile(instructions: &[Instruction], vars: &SystemVarSnapshot) -> Compil
     // ちょうど 1 個 append する。同一 at の FIFO 挿入により全 cue より後に配送される（全 choice cue の
     // 後・R2.2）。`\q` の無い台本は barrier を発行せず既存完了挙動を変えない（R2.5）。barrier は
     // presentation でなく `emit`（CueCommand 専用）とは別の Barrier 用発行ヘルパで組む。
-    let has_choice = cues.iter().any(|cue| {
-        matches!(
-            &cue.payload,
-            CuePayload::Command(CueCommand::Choice { .. })
-        )
-    });
+    let has_choice = cues
+        .iter()
+        .any(|cue| matches!(&cue.payload, CuePayload::Command(CueCommand::Choice { .. })));
     if has_choice {
         cues.push(emit_barrier(
             scope,
@@ -320,11 +319,11 @@ pub struct CompiledTalk {
 }
 
 #[cfg(test)]
-#[path = "compile_test_support.rs"]
-mod test_support;
-#[cfg(test)]
 #[path = "compile_arm_tests.rs"]
 mod arm_tests;
 #[cfg(test)]
 #[path = "compile_sheet_tests.rs"]
 mod sheet_tests;
+#[cfg(test)]
+#[path = "compile_test_support.rs"]
+mod test_support;

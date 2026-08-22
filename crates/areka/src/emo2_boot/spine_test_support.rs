@@ -1,4 +1,4 @@
-use super::{Entity, GhostWindows, PresentCommand, SpineHarness, DPI};
+use super::{DPI, Entity, GhostWindows, PresentCommand, SpineHarness};
 
 // ===========================================================================
 // task 6.2 spine 観測ケース（S1 boot→表示／S3 `\b` 配送／S4 `\b` なし完走）

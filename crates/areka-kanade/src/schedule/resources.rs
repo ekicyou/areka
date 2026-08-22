@@ -118,7 +118,10 @@ mod tests {
             "M1 のリソース許可集合は username 1 件のみ"
         );
         for id in ALLOWED_RESOURCE_IDS {
-            assert!(is_allowed_resource_id(id), "{id} は集合にあるのに許可されない");
+            assert!(
+                is_allowed_resource_id(id),
+                "{id} は集合にあるのに許可されない"
+            );
         }
     }
 
@@ -150,7 +153,10 @@ mod tests {
                     EventId::Static("username"),
                     "リソース照会 id はスケジューラ起源の username リテラル（M1・DD-1）"
                 );
-                assert!(references.is_empty(), "Resource GET は References を持たない");
+                assert!(
+                    references.is_empty(),
+                    "Resource GET は References を持たない"
+                );
                 assert_eq!(
                     status.render(),
                     None,
@@ -168,7 +174,10 @@ mod tests {
     /// talk_active=true では Status: talking を snapshot から導出する（既存イベント構築子と同一規律）。
     #[test]
     fn resource_username_carries_talking_status_when_active() {
-        let call = resource_username(&ExecutionSnapshot { talk_active: true, choice_active: false });
+        let call = resource_username(&ExecutionSnapshot {
+            talk_active: true,
+            choice_active: false,
+        });
         let status = match call {
             ShioriCall::Get { status, .. } => status.render(),
             ShioriCall::Notify { .. } => panic!("expected GET"),
@@ -183,7 +192,10 @@ mod tests {
             ResourceOutcome::Value("bob".to_string()),
             ResourceOutcome::Value("bob".to_string())
         );
-        assert_ne!(ResourceOutcome::NoContent, ResourceOutcome::Value("x".to_string()));
+        assert_ne!(
+            ResourceOutcome::NoContent,
+            ResourceOutcome::Value("x".to_string())
+        );
         assert_ne!(
             ResourceOutcome::Failed("timeout".to_string()),
             ResourceOutcome::NoContent
@@ -195,7 +207,8 @@ mod tests {
     #[test]
     fn resource_sink_is_a_plain_closure_seam() {
         use std::sync::{Arc, Mutex};
-        let seen: Arc<Mutex<Vec<(&'static str, ResourceOutcome)>>> = Arc::new(Mutex::new(Vec::new()));
+        let seen: Arc<Mutex<Vec<(&'static str, ResourceOutcome)>>> =
+            Arc::new(Mutex::new(Vec::new()));
         let seen_body = Arc::clone(&seen);
         let sink: ResourceSink =
             Box::new(move |id, outcome| seen_body.lock().unwrap().push((id, outcome)));

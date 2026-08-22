@@ -71,7 +71,7 @@ fn restored_balloon_offset_is_raw_saved_value_for_all_anchors() {
             0,
             anchor,
             PointPx { x: 100, y: 100 },
-            CSZ, // 400x600（旧基準なら Bottom で +（200,600）されていた）
+            CSZ,                      // 400x600（旧基準なら Bottom で +（200,600）されていた）
             PointPx { x: -50, y: 0 }, // 既定（保存値で上書きされる）
             BSZ,
         )];

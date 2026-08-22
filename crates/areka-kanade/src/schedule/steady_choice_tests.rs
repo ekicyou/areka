@@ -1,10 +1,10 @@
+use super::test_support::{
+    choice_input_of, config, expect_get_call, expect_ledger, status_wire, steady_none, steady_some,
+    steady_with_ledger,
+};
 use super::*;
 use crate::msg::ShioriCall;
 use crate::schedule::step;
-use super::test_support::{
-    choice_input_of, config, expect_get_call, expect_ledger, status_wire, steady_none,
-    steady_some, steady_with_ledger,
-};
 
 // --- A. 棄却分岐（規則 1）: すべて状態不変・Action なし ---
 
@@ -260,11 +260,12 @@ fn cascade_value_emits_resolve_then_start_in_this_order() {
     }
     match next.phase {
         Phase::Steady {
-            talk: Some(ActiveTalk {
-                talk_id,
-                origin,
-                ref script,
-            }),
+            talk:
+                Some(ActiveTalk {
+                    talk_id,
+                    origin,
+                    ref script,
+                }),
         } => {
             assert_eq!(talk_id, TalkId(6), "slot は新 talk へ差し替わる（Req4.3）");
             assert_eq!(origin, "OnChoiceEvent", "応答の出所を転記する");
@@ -376,9 +377,7 @@ fn cascade_failed_is_treated_as_no_content_stage_advance() {
     let (next, actions) = super::step(
         s,
         Input::ShioriReply {
-            outcome: ShioriOutcome::Failed(crate::msg::ShioriFailure::Timeout(
-                "30s".to_string(),
-            )),
+            outcome: ShioriOutcome::Failed(crate::msg::ShioriFailure::Timeout("30s".to_string())),
             origin: "OnChoiceSelectEx",
         },
         &config(),
@@ -667,7 +666,10 @@ fn tick_after_choice_resolution_drops_choosing() {
             .any(|a| matches!(a, Action::ResolveChoice { .. })),
         "最終段 204 は選択解決を発行する"
     );
-    assert!(resolved.choice.is_none(), "解決で帳簿が消える（Req6.2 の源）");
+    assert!(
+        resolved.choice.is_none(),
+        "解決で帳簿が消える（Req6.2 の源）"
+    );
     let (_next, tick_actions) = step(
         resolved,
         Input::Tick {

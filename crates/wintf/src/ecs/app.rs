@@ -147,7 +147,11 @@ mod tests {
             was_last,
             "0 から破棄しても window_count==0 のため true（最後のウィンドウ扱い）"
         );
-        assert_eq!(app.window_count(), 0, "saturating_sub でアンダーフローしない");
+        assert_eq!(
+            app.window_count(),
+            0,
+            "saturating_sub でアンダーフローしない"
+        );
     }
 
     /// 作成・破棄の混在シーケンスで window_count が正しく増減し、

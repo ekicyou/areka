@@ -31,37 +31,167 @@ pub struct FlatEntry {
 ///   = RuntimeState（他エンジン所有の運行状態・出所は正典未規定＝縮退のまま予約）。
 pub const FLAT_VOCAB: &[FlatEntry] = &[
     // 暦時計（SystemEnv・縮退・素通し）。
-    FlatEntry { token: "month", layer: BackingLayer::SystemEnv, m1: M1Status::Degraded, degrade: DegradePolicy::PassThroughRaw },
-    FlatEntry { token: "day", layer: BackingLayer::SystemEnv, m1: M1Status::Degraded, degrade: DegradePolicy::PassThroughRaw },
-    FlatEntry { token: "hour", layer: BackingLayer::SystemEnv, m1: M1Status::Degraded, degrade: DegradePolicy::PassThroughRaw },
-    FlatEntry { token: "minute", layer: BackingLayer::SystemEnv, m1: M1Status::Degraded, degrade: DegradePolicy::PassThroughRaw },
-    FlatEntry { token: "second", layer: BackingLayer::SystemEnv, m1: M1Status::Degraded, degrade: DegradePolicy::PassThroughRaw },
+    FlatEntry {
+        token: "month",
+        layer: BackingLayer::SystemEnv,
+        m1: M1Status::Degraded,
+        degrade: DegradePolicy::PassThroughRaw,
+    },
+    FlatEntry {
+        token: "day",
+        layer: BackingLayer::SystemEnv,
+        m1: M1Status::Degraded,
+        degrade: DegradePolicy::PassThroughRaw,
+    },
+    FlatEntry {
+        token: "hour",
+        layer: BackingLayer::SystemEnv,
+        m1: M1Status::Degraded,
+        degrade: DegradePolicy::PassThroughRaw,
+    },
+    FlatEntry {
+        token: "minute",
+        layer: BackingLayer::SystemEnv,
+        m1: M1Status::Degraded,
+        degrade: DegradePolicy::PassThroughRaw,
+    },
+    FlatEntry {
+        token: "second",
+        layer: BackingLayer::SystemEnv,
+        m1: M1Status::Degraded,
+        degrade: DegradePolicy::PassThroughRaw,
+    },
     // M1 実導出（源着地済み）。username のみ ConsumerDefault。
-    FlatEntry { token: "username", layer: BackingLayer::ShioriQuery, m1: M1Status::Derived, degrade: DegradePolicy::ConsumerDefault },
-    FlatEntry { token: "selfname", layer: BackingLayer::StaticConfig, m1: M1Status::Derived, degrade: DegradePolicy::PassThroughRaw },
-    FlatEntry { token: "selfname2", layer: BackingLayer::StaticConfig, m1: M1Status::Derived, degrade: DegradePolicy::PassThroughRaw },
-    FlatEntry { token: "keroname", layer: BackingLayer::StaticConfig, m1: M1Status::Derived, degrade: DegradePolicy::PassThroughRaw },
+    FlatEntry {
+        token: "username",
+        layer: BackingLayer::ShioriQuery,
+        m1: M1Status::Derived,
+        degrade: DegradePolicy::ConsumerDefault,
+    },
+    FlatEntry {
+        token: "selfname",
+        layer: BackingLayer::StaticConfig,
+        m1: M1Status::Derived,
+        degrade: DegradePolicy::PassThroughRaw,
+    },
+    FlatEntry {
+        token: "selfname2",
+        layer: BackingLayer::StaticConfig,
+        m1: M1Status::Derived,
+        degrade: DegradePolicy::PassThroughRaw,
+    },
+    FlatEntry {
+        token: "keroname",
+        layer: BackingLayer::StaticConfig,
+        m1: M1Status::Derived,
+        degrade: DegradePolicy::PassThroughRaw,
+    },
     // 画面・OS 起動時間・時刻ネタ（SystemEnv・縮退・素通し）。
-    FlatEntry { token: "screenwidth", layer: BackingLayer::SystemEnv, m1: M1Status::Degraded, degrade: DegradePolicy::PassThroughRaw },
-    FlatEntry { token: "screenheight", layer: BackingLayer::SystemEnv, m1: M1Status::Degraded, degrade: DegradePolicy::PassThroughRaw },
-    FlatEntry { token: "exh", layer: BackingLayer::SystemEnv, m1: M1Status::Degraded, degrade: DegradePolicy::PassThroughRaw },
-    FlatEntry { token: "et", layer: BackingLayer::SystemEnv, m1: M1Status::Degraded, degrade: DegradePolicy::PassThroughRaw },
-    FlatEntry { token: "wronghour", layer: BackingLayer::SystemEnv, m1: M1Status::Degraded, degrade: DegradePolicy::PassThroughRaw },
+    FlatEntry {
+        token: "screenwidth",
+        layer: BackingLayer::SystemEnv,
+        m1: M1Status::Degraded,
+        degrade: DegradePolicy::PassThroughRaw,
+    },
+    FlatEntry {
+        token: "screenheight",
+        layer: BackingLayer::SystemEnv,
+        m1: M1Status::Degraded,
+        degrade: DegradePolicy::PassThroughRaw,
+    },
+    FlatEntry {
+        token: "exh",
+        layer: BackingLayer::SystemEnv,
+        m1: M1Status::Degraded,
+        degrade: DegradePolicy::PassThroughRaw,
+    },
+    FlatEntry {
+        token: "et",
+        layer: BackingLayer::SystemEnv,
+        m1: M1Status::Degraded,
+        degrade: DegradePolicy::PassThroughRaw,
+    },
+    FlatEntry {
+        token: "wronghour",
+        layer: BackingLayer::SystemEnv,
+        m1: M1Status::Degraded,
+        degrade: DegradePolicy::PassThroughRaw,
+    },
     // 単語ランダム系 10（RuntimeState・縮退・素通し・出所は正典未規定）。
     // `m?` は lexer で `?` がトークン化不能だが key モデル上は第一級（token に `?` を残す）。
-    FlatEntry { token: "ms", layer: BackingLayer::RuntimeState, m1: M1Status::Degraded, degrade: DegradePolicy::PassThroughRaw },
-    FlatEntry { token: "mz", layer: BackingLayer::RuntimeState, m1: M1Status::Degraded, degrade: DegradePolicy::PassThroughRaw },
-    FlatEntry { token: "ml", layer: BackingLayer::RuntimeState, m1: M1Status::Degraded, degrade: DegradePolicy::PassThroughRaw },
-    FlatEntry { token: "mc", layer: BackingLayer::RuntimeState, m1: M1Status::Degraded, degrade: DegradePolicy::PassThroughRaw },
-    FlatEntry { token: "mh", layer: BackingLayer::RuntimeState, m1: M1Status::Degraded, degrade: DegradePolicy::PassThroughRaw },
-    FlatEntry { token: "mt", layer: BackingLayer::RuntimeState, m1: M1Status::Degraded, degrade: DegradePolicy::PassThroughRaw },
-    FlatEntry { token: "me", layer: BackingLayer::RuntimeState, m1: M1Status::Degraded, degrade: DegradePolicy::PassThroughRaw },
-    FlatEntry { token: "mp", layer: BackingLayer::RuntimeState, m1: M1Status::Degraded, degrade: DegradePolicy::PassThroughRaw },
-    FlatEntry { token: "m?", layer: BackingLayer::RuntimeState, m1: M1Status::Degraded, degrade: DegradePolicy::PassThroughRaw },
-    FlatEntry { token: "dms", layer: BackingLayer::RuntimeState, m1: M1Status::Degraded, degrade: DegradePolicy::PassThroughRaw },
+    FlatEntry {
+        token: "ms",
+        layer: BackingLayer::RuntimeState,
+        m1: M1Status::Degraded,
+        degrade: DegradePolicy::PassThroughRaw,
+    },
+    FlatEntry {
+        token: "mz",
+        layer: BackingLayer::RuntimeState,
+        m1: M1Status::Degraded,
+        degrade: DegradePolicy::PassThroughRaw,
+    },
+    FlatEntry {
+        token: "ml",
+        layer: BackingLayer::RuntimeState,
+        m1: M1Status::Degraded,
+        degrade: DegradePolicy::PassThroughRaw,
+    },
+    FlatEntry {
+        token: "mc",
+        layer: BackingLayer::RuntimeState,
+        m1: M1Status::Degraded,
+        degrade: DegradePolicy::PassThroughRaw,
+    },
+    FlatEntry {
+        token: "mh",
+        layer: BackingLayer::RuntimeState,
+        m1: M1Status::Degraded,
+        degrade: DegradePolicy::PassThroughRaw,
+    },
+    FlatEntry {
+        token: "mt",
+        layer: BackingLayer::RuntimeState,
+        m1: M1Status::Degraded,
+        degrade: DegradePolicy::PassThroughRaw,
+    },
+    FlatEntry {
+        token: "me",
+        layer: BackingLayer::RuntimeState,
+        m1: M1Status::Degraded,
+        degrade: DegradePolicy::PassThroughRaw,
+    },
+    FlatEntry {
+        token: "mp",
+        layer: BackingLayer::RuntimeState,
+        m1: M1Status::Degraded,
+        degrade: DegradePolicy::PassThroughRaw,
+    },
+    FlatEntry {
+        token: "m?",
+        layer: BackingLayer::RuntimeState,
+        m1: M1Status::Degraded,
+        degrade: DegradePolicy::PassThroughRaw,
+    },
+    FlatEntry {
+        token: "dms",
+        layer: BackingLayer::RuntimeState,
+        m1: M1Status::Degraded,
+        degrade: DegradePolicy::PassThroughRaw,
+    },
     // インストール文脈（RuntimeState・縮退・素通し・M1 外）。
-    FlatEntry { token: "lastghostname", layer: BackingLayer::RuntimeState, m1: M1Status::Degraded, degrade: DegradePolicy::PassThroughRaw },
-    FlatEntry { token: "lastobjectname", layer: BackingLayer::RuntimeState, m1: M1Status::Degraded, degrade: DegradePolicy::PassThroughRaw },
+    FlatEntry {
+        token: "lastghostname",
+        layer: BackingLayer::RuntimeState,
+        m1: M1Status::Degraded,
+        degrade: DegradePolicy::PassThroughRaw,
+    },
+    FlatEntry {
+        token: "lastobjectname",
+        layer: BackingLayer::RuntimeState,
+        m1: M1Status::Degraded,
+        degrade: DegradePolicy::PassThroughRaw,
+    },
 ];
 
 /// 構文記録（`%*`・`%property[...]`）——解決対象外の別記法として語彙記録のみ行う（R1.6）。
@@ -83,11 +213,32 @@ mod tests {
     #[test]
     fn flat_vocab_tokens_match_exactly() {
         let expected: [&str; 26] = [
-            "month", "day", "hour", "minute", "second",
-            "username", "selfname", "selfname2", "keroname",
-            "screenwidth", "screenheight", "exh", "et", "wronghour",
-            "ms", "mz", "ml", "mc", "mh", "mt", "me", "mp", "m?", "dms",
-            "lastghostname", "lastobjectname",
+            "month",
+            "day",
+            "hour",
+            "minute",
+            "second",
+            "username",
+            "selfname",
+            "selfname2",
+            "keroname",
+            "screenwidth",
+            "screenheight",
+            "exh",
+            "et",
+            "wronghour",
+            "ms",
+            "mz",
+            "ml",
+            "mc",
+            "mh",
+            "mt",
+            "me",
+            "mp",
+            "m?",
+            "dms",
+            "lastghostname",
+            "lastobjectname",
         ];
         let mut got: Vec<&str> = FLAT_VOCAB.iter().map(|e| e.token).collect();
         got.sort_unstable();
@@ -112,7 +263,11 @@ mod tests {
             }
         }
         // NotFound はフラット語彙には出現しない。
-        assert!(FLAT_VOCAB.iter().all(|e| e.degrade != DegradePolicy::NotFound));
+        assert!(
+            FLAT_VOCAB
+                .iter()
+                .all(|e| e.degrade != DegradePolicy::NotFound)
+        );
     }
 
     /// M1 実導出は username/selfname/selfname2/keroname の 4 件のみ Derived。
@@ -140,7 +295,11 @@ mod tests {
         // `%*` は解決対象語彙に漏れない。
         assert!(FLAT_VOCAB.iter().all(|e| e.token != "*"));
         // `\%`（エスケープ）はいずれの表にも含まれない。
-        assert!(FLAT_VOCAB.iter().all(|e| e.token != "\\%" && e.token != "%"));
+        assert!(
+            FLAT_VOCAB
+                .iter()
+                .all(|e| e.token != "\\%" && e.token != "%")
+        );
         assert!(!SYNTAX_RECORDS.contains(&"\\%"));
         assert!(!SYNTAX_RECORDS.contains(&"%"));
     }

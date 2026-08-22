@@ -6,7 +6,6 @@
 ///
 /// R1-AC1: Changed<WindowPos> フィルタにより WindowPos が変更された Window のみ処理すること
 use bevy_ecs::prelude::*;
-use wintf::ecs::{Point, SizeI};
 use wintf::ecs::layout::{
     mark_dirty_arrangement_trees, propagate_global_arrangements, sync_simple_arrangements,
     sync_window_arrangement_from_window_pos, window_pos_sync_system,
@@ -14,6 +13,7 @@ use wintf::ecs::layout::{
 use wintf::ecs::window::{DPI, Window, WindowPos};
 use wintf::ecs::world::FrameCount;
 use wintf::ecs::{Arrangement, GlobalArrangement, LayoutScale, Offset, Size};
+use wintf::ecs::{Point, SizeI};
 
 // =============================================================================
 // Task 1.1: Changed<WindowPos> フィルタの検証
@@ -32,7 +32,10 @@ fn test_sync_window_arrangement_only_processes_changed_window_pos() {
             Window::default(),
             WindowPos {
                 position: Some(Point { x: 100, y: 200 }),
-                size: Some(SizeI { width: 800, height: 600 }),
+                size: Some(SizeI {
+                    width: 800,
+                    height: 600,
+                }),
                 ..Default::default()
             },
             DPI::default(), // 96 DPI → scale=1.0
@@ -116,7 +119,10 @@ fn test_sync_window_arrangement_dpi_192_no_division() {
             Window::default(),
             WindowPos {
                 position: Some(Point { x: 200, y: 400 }),
-                size: Some(SizeI { width: 1600, height: 1200 }),
+                size: Some(SizeI {
+                    width: 1600,
+                    height: 1200,
+                }),
                 ..Default::default()
             },
             DPI {
@@ -162,7 +168,10 @@ fn test_sync_window_arrangement_dpi_96_identity() {
             Window::default(),
             WindowPos {
                 position: Some(Point { x: 150, y: 250 }),
-                size: Some(SizeI { width: 800, height: 600 }),
+                size: Some(SizeI {
+                    width: 800,
+                    height: 600,
+                }),
                 ..Default::default()
             },
             DPI::default(), // 96 DPI → scale=1.0
@@ -209,7 +218,10 @@ fn test_sync_window_arrangement_skips_none_position() {
             Window::default(),
             WindowPos {
                 position: None,
-                size: Some(SizeI { width: 800, height: 600 }),
+                size: Some(SizeI {
+                    width: 800,
+                    height: 600,
+                }),
                 ..Default::default()
             },
             DPI::default(),
@@ -257,7 +269,10 @@ fn test_sync_window_arrangement_skips_cw_usedefault() {
                     x: CW_USEDEFAULT,
                     y: CW_USEDEFAULT,
                 }),
-                size: Some(SizeI { width: 800, height: 600 }),
+                size: Some(SizeI {
+                    width: 800,
+                    height: 600,
+                }),
                 ..Default::default()
             },
             DPI::default(),
@@ -301,7 +316,10 @@ fn test_sync_window_arrangement_skips_equal_offset() {
             Window::default(),
             WindowPos {
                 position: Some(Point { x: 100, y: 200 }),
-                size: Some(SizeI { width: 800, height: 600 }),
+                size: Some(SizeI {
+                    width: 800,
+                    height: 600,
+                }),
                 ..Default::default()
             },
             DPI::default(), // scale=1.0
@@ -345,7 +363,10 @@ fn test_feedback_loop_converges_in_one_frame_dpi_96() {
             Window::default(),
             WindowPos {
                 position: Some(Point { x: 0, y: 0 }),
-                size: Some(SizeI { width: 800, height: 600 }),
+                size: Some(SizeI {
+                    width: 800,
+                    height: 600,
+                }),
                 ..Default::default()
             },
             DPI::default(), // 96 DPI → scale=1.0
@@ -443,7 +464,10 @@ fn test_feedback_loop_converges_dpi_192() {
             Window::default(),
             WindowPos {
                 position: Some(Point { x: 0, y: 0 }),
-                size: Some(SizeI { width: 1600, height: 1200 }),
+                size: Some(SizeI {
+                    width: 1600,
+                    height: 1200,
+                }),
                 ..Default::default()
             },
             DPI {

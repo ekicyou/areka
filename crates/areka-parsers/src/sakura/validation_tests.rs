@@ -14,7 +14,7 @@
 //! - OnBoot 例に**現れない**タグ（`\q` / `\![move]` / `%username`）の個別手書き網羅。
 //! - `\s[""]`（唯一の空クォート引数）の strict 挙動（要件 13.4・タスク 3.2 追随）。
 
-use super::lexer::{lex, Token};
+use super::lexer::{Token, lex};
 use super::model::{Choice, Instruction, MoveArgs, NewLineRatio, SurfaceArg};
 use super::parse::parse;
 use std::time::Duration;

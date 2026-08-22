@@ -44,12 +44,9 @@ use windows::core::Interface;
 /// cargo test の各テストは専用スレッドで走り COM 未初期化ゆえ、design.md §2.1
 /// 「未初期化なら DQTAT_COM_ASTA」に従い ASTA を第一候補、失敗時 NONE を保険とする。
 /// controller は Compositor より長寿命であることを要するため呼び出し側で保持する。
-fn make_dispatcher_and_compositor()
--> (windows::System::DispatcherQueueController, Compositor) {
+fn make_dispatcher_and_compositor() -> (windows::System::DispatcherQueueController, Compositor) {
     let dq = create_dispatcher_queue_controller(DQTAT_COM_ASTA)
-        .or_else(|e_asta| {
-            create_dispatcher_queue_controller(DQTAT_COM_NONE).map_err(|_| e_asta)
-        })
+        .or_else(|e_asta| create_dispatcher_queue_controller(DQTAT_COM_NONE).map_err(|_| e_asta))
         .expect("DispatcherQueueController 生成失敗（ASTA/NONE いずれも不可）");
     let compositor = Compositor::new().expect("Compositor::new 失敗");
     (dq, compositor)
@@ -118,7 +115,8 @@ fn create_staging(d3d: &ID3D11Device, width: u32, height: u32) -> ID3D11Texture2
         MiscFlags: 0,
     };
     let mut tex: Option<ID3D11Texture2D> = None;
-    unsafe { d3d.CreateTexture2D(&desc, None, Some(&mut tex)) }.expect("staging（CPU_READ）生成失敗");
+    unsafe { d3d.CreateTexture2D(&desc, None, Some(&mut tex)) }
+        .expect("staging（CPU_READ）生成失敗");
     tex.expect("staging が None")
 }
 
@@ -138,14 +136,7 @@ fn upload(
     // ① UpdateSubresource(source_tex, bytes, stride) — 単一の真実源へ書込。
     let src_res: ID3D11Resource = source_tex.cast().expect("source_tex→Resource cast 失敗");
     unsafe {
-        ctx.UpdateSubresource(
-            &src_res,
-            0,
-            None,
-            pattern.as_ptr() as *const _,
-            stride,
-            0,
-        );
+        ctx.UpdateSubresource(&src_res, 0, None, pattern.as_ptr() as *const _, stride, 0);
     }
 
     // ② CopyResource(backbuffer, source_tex) — backbuffer 参照はこのスコープ内のみ保持。

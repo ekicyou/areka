@@ -623,7 +623,9 @@ mod tests {
 
     #[test]
     fn rightscrollbar_clears_leftscrollbar_bit() {
-        let s = WinStyle::default().WS_EX_LEFTSCROLLBAR().WS_EX_RIGHTSCROLLBAR();
+        let s = WinStyle::default()
+            .WS_EX_LEFTSCROLLBAR()
+            .WS_EX_RIGHTSCROLLBAR();
         assert_eq!(s.ex_style, WINDOW_EX_STYLE(0));
     }
 
@@ -657,7 +659,11 @@ mod tests {
 
     #[test]
     fn commit_to_null_hwnd_returns_err() {
-        assert!(WinStyle::WS_OVERLAPPEDWINDOW().commit(HWND::default()).is_err());
+        assert!(
+            WinStyle::WS_OVERLAPPEDWINDOW()
+                .commit(HWND::default())
+                .is_err()
+        );
     }
 
     //================================================================================
@@ -700,15 +706,24 @@ mod tests {
 
         // テスト本体を closure に包み、途中で panic しても必ず DestroyWindow する。
         let result = std::panic::catch_unwind(|| {
-            let before = get_window_long_ptr(hwnd, GWL_EXSTYLE).expect("read ex-style before") as u32;
+            let before =
+                get_window_long_ptr(hwnd, GWL_EXSTYLE).expect("read ex-style before") as u32;
             // 前提: 初期状態で TRANSPARENT は立っておらず、他ビットは立っている
-            assert_eq!(before & WS_EX_TRANSPARENT.0, 0, "TRANSPARENT must start clear");
+            assert_eq!(
+                before & WS_EX_TRANSPARENT.0,
+                0,
+                "TRANSPARENT must start clear"
+            );
             let non_transparent_before = before & !WS_EX_TRANSPARENT.0;
 
             // ON: TRANSPARENT を立てる
             apply_click_through(hwnd, true).expect("apply true");
             let on = get_window_long_ptr(hwnd, GWL_EXSTYLE).expect("read ex-style on") as u32;
-            assert_ne!(on & WS_EX_TRANSPARENT.0, 0, "TRANSPARENT must be set after true");
+            assert_ne!(
+                on & WS_EX_TRANSPARENT.0,
+                0,
+                "TRANSPARENT must be set after true"
+            );
             assert_eq!(
                 on & !WS_EX_TRANSPARENT.0,
                 non_transparent_before,
@@ -718,7 +733,11 @@ mod tests {
             // OFF: TRANSPARENT を落とす
             apply_click_through(hwnd, false).expect("apply false");
             let off = get_window_long_ptr(hwnd, GWL_EXSTYLE).expect("read ex-style off") as u32;
-            assert_eq!(off & WS_EX_TRANSPARENT.0, 0, "TRANSPARENT must be clear after false");
+            assert_eq!(
+                off & WS_EX_TRANSPARENT.0,
+                0,
+                "TRANSPARENT must be clear after false"
+            );
             assert_eq!(
                 off & !WS_EX_TRANSPARENT.0,
                 non_transparent_before,
@@ -784,14 +803,19 @@ mod tests {
         .expect("CreateWindowExW should create a hidden test window");
 
         let result = std::panic::catch_unwind(|| {
-            let before = get_window_long_ptr(hwnd, GWL_EXSTYLE).expect("read ex-style before") as u32;
+            let before =
+                get_window_long_ptr(hwnd, GWL_EXSTYLE).expect("read ex-style before") as u32;
             assert_eq!(before & WS_EX_LAYERED.0, 0, "LAYERED must start clear");
             let non_layered_before = before & !WS_EX_LAYERED.0;
 
             // 同伴フラグ適用: LAYERED が立つ。
             apply_layered_companion(hwnd).expect("apply companion");
             let on = get_window_long_ptr(hwnd, GWL_EXSTYLE).expect("read ex-style on") as u32;
-            assert_ne!(on & WS_EX_LAYERED.0, 0, "LAYERED must be set after companion");
+            assert_ne!(
+                on & WS_EX_LAYERED.0,
+                0,
+                "LAYERED must be set after companion"
+            );
             assert_eq!(
                 on & !WS_EX_LAYERED.0,
                 non_layered_before,
@@ -805,8 +829,13 @@ mod tests {
 
             // TRANSPARENT トグルと共存: トグル後も LAYERED は保持される。
             apply_click_through(hwnd, true).expect("toggle on");
-            let toggled = get_window_long_ptr(hwnd, GWL_EXSTYLE).expect("read ex-style toggled") as u32;
-            assert_ne!(toggled & WS_EX_LAYERED.0, 0, "LAYERED must survive TRANSPARENT toggle");
+            let toggled =
+                get_window_long_ptr(hwnd, GWL_EXSTYLE).expect("read ex-style toggled") as u32;
+            assert_ne!(
+                toggled & WS_EX_LAYERED.0,
+                0,
+                "LAYERED must survive TRANSPARENT toggle"
+            );
             assert_ne!(toggled & WS_EX_TRANSPARENT.0, 0, "TRANSPARENT must be set");
         });
 

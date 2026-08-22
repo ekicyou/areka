@@ -36,15 +36,15 @@
 //! ~25ms 間隔で `GetMessageW` を起こすため、echo が届かなくても deadline（5 秒）で必ず抜ける
 //! （ハングしない）。echo 受領で done が立ち、次の heartbeat 起床で即 quit する。
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use windows::Win32::Foundation::{LPARAM, WPARAM};
 use windows::Win32::System::Threading::GetCurrentThreadId;
 use windows::Win32::UI::WindowsAndMessaging::{PostThreadMessageW, WM_NULL};
 
-use wintf_winmsg_executor::{spawn_local, FilterResult, MessageLoop};
+use wintf_winmsg_executor::{FilterResult, MessageLoop, spawn_local};
 
 /// heartbeat（別スレッドからの `PostThreadMessageW(WM_NULL)`）の送信間隔。
 /// 無入力でも `GetMessageW` をブロックさせ続けず、filter が done / deadline を再評価できる

@@ -34,10 +34,10 @@
 
 use std::path::PathBuf;
 
-use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_MULTITHREADED};
+use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
 
 use crate::{
-    bake, AlphaParams, AtlasTable, ElementId, PackConfig, SurfaceSet, UseSelfAlpha, WicDecoderArm,
+    AlphaParams, AtlasTable, ElementId, PackConfig, SurfaceSet, UseSelfAlpha, WicDecoderArm, bake,
 };
 
 /// COM 初期化下でクロージャを実行するヘルパ（WIC は CPU-only だが COM init 必須）。
@@ -209,8 +209,7 @@ fn emo2_shell_matches_golden() {
         let result = bake_emo2_shell();
         let actual = snapshot_table(&result.table);
         assert_eq!(
-            actual,
-            expected,
+            actual, expected,
             "emo2 shell placement snapshot regressed against committed golden \
              (src/testdata/emo2_shell_golden.txt); regenerate intentionally via the \
              #[ignore] record_golden test if the change is expected"
@@ -230,7 +229,10 @@ fn record_golden() {
     with_com_initialized(|| {
         let result = bake_emo2_shell();
         let snapshot = snapshot_table(&result.table);
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/src/testdata/emo2_shell_golden.txt");
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/src/testdata/emo2_shell_golden.txt"
+        );
         // 末尾改行 1 つを付けて POSIX テキストとして書き込む。
         std::fs::write(path, format!("{snapshot}\n")).expect("write golden snapshot");
         eprintln!("wrote golden ({} bytes) to {path}", snapshot.len());

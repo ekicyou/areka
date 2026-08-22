@@ -11,7 +11,7 @@
 //! 期待値はすべてリテラル直書き（クレート跨ぎ `include_str!` 不使用・R7.3）。
 //! fixture 由来値には採取元の正本ファイル名・行をコメントで明示する。
 
-use crate::charset::{decode, DefaultEncoding};
+use crate::charset::{DefaultEncoding, decode};
 use crate::kv::parse_kv;
 
 // ───────────────────────────────────────────────────────────────────

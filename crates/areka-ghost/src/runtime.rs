@@ -586,9 +586,10 @@ pub fn boot(mut options: GhostBootOptions) -> Result<GhostRuntime, GhostBootErro
     //    provider の源を解決: FromSylphya＝reader＋自 asker 捕捉クロージャ（talk_snapshot→SystemVarSnapshot）／
     //    Custom＝注入された SystemVarSource をそのまま（R7.1・design「provider 差替」）。
     let system_var_source: SystemVarSource = match options.system_vars {
-        SystemVarWiring::FromSylphya => {
-            crate::sylphya_wiring::from_sylphya_provider(sylphya_reader.clone(), ghost_asker.clone())
-        }
+        SystemVarWiring::FromSylphya => crate::sylphya_wiring::from_sylphya_provider(
+            sylphya_reader.clone(),
+            ghost_asker.clone(),
+        ),
         SystemVarWiring::Custom(src) => src,
     };
     // 起動記録 SET sink 登録（design「C5 GhostRuntime 増分」boot() step 4・要件 3.4/6.2/7.1）。

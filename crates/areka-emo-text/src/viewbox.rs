@@ -612,9 +612,7 @@ fn line_fingerprint(resident: &Resident, mode: WritingMode) -> CommittedLine {
     // （R4.4）。
     let choice_marker = match &resident.content {
         ResidentContent::Choice(choice) => choice.hovered.map_or(0, |o| o as u32 + 1),
-        ResidentContent::GlyphRun(_)
-        | ResidentContent::Image(_)
-        | ResidentContent::Surface(_) => 0,
+        ResidentContent::GlyphRun(_) | ResidentContent::Image(_) | ResidentContent::Surface(_) => 0,
     };
     CommittedLine {
         text,
@@ -748,11 +746,11 @@ fn expand_guard_clamp(
 }
 
 #[cfg(test)]
-#[path = "viewbox_test_support.rs"]
-mod test_support;
-#[cfg(test)]
 #[path = "viewbox_axis_tests.rs"]
 mod axis_tests;
+#[cfg(test)]
+#[path = "viewbox_choice_marker_tests.rs"]
+mod choice_marker_tests;
 #[cfg(test)]
 #[path = "viewbox_dirty_tests.rs"]
 mod dirty_tests;
@@ -760,5 +758,5 @@ mod dirty_tests;
 #[path = "viewbox_plan_commit_tests.rs"]
 mod plan_commit_tests;
 #[cfg(test)]
-#[path = "viewbox_choice_marker_tests.rs"]
-mod choice_marker_tests;
+#[path = "viewbox_test_support.rs"]
+mod test_support;

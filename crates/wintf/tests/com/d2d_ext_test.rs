@@ -51,7 +51,9 @@ fn factory_creates_path_and_rounded_rectangle_geometry() {
     let core = make_core();
     let factory = core.d2d_factory().expect("factory");
 
-    factory.create_path_geometry().expect("create_path_geometry");
+    factory
+        .create_path_geometry()
+        .expect("create_path_geometry");
 
     let rounded = D2D1_ROUNDED_RECT {
         rect: unit_rect(),
@@ -104,7 +106,10 @@ fn command_list_close_succeeds_once_then_fails() {
     let cl = device.create_command_list().expect("command list");
 
     cl.close().expect("first close");
-    assert!(cl.close().is_err(), "second close should fail (wrong state)");
+    assert!(
+        cl.close().is_err(),
+        "second close should fail (wrong state)"
+    );
 }
 
 // ============================================================
@@ -328,9 +333,7 @@ fn create_bitmap_from_wic_bitmap_preserves_size() {
 fn command_struct_drop_does_not_release_original_com_object() {
     let core = make_core();
     let dc = core.device_context().expect("dc");
-    let brush = dc
-        .create_solid_color_brush(&red(), None)
-        .expect("brush");
+    let brush = dc.create_solid_color_brush(&red(), None).expect("brush");
     let brush_base: ID2D1Brush = brush.cast().expect("cast to ID2D1Brush");
 
     let cmd = FillRectangle::new(unit_rect(), &brush_base);
@@ -348,9 +351,7 @@ fn command_struct_drop_does_not_release_original_com_object() {
 fn draw_line_with_none_stroke_style_stores_none() {
     let core = make_core();
     let dc = core.device_context().expect("dc");
-    let brush = dc
-        .create_solid_color_brush(&red(), None)
-        .expect("brush");
+    let brush = dc.create_solid_color_brush(&red(), None).expect("brush");
     let brush_base: ID2D1Brush = brush.cast().expect("cast");
 
     let cmd = DrawLine::new(

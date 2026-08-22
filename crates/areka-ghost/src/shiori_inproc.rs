@@ -529,7 +529,12 @@ pub fn inproc_connect(
         // SAFETY: `factory` は shiori_factory が move-out した有効な IShioriFactory。host は Ref 借用、
         // out は OutRef 書込先（成功時のみ move-out・失敗時 out 未書込＝半構築非露出）。
         unsafe {
-            factory.CreateInstance(&load_dir_h, &shiori_name_h, (&host).into(), (&mut out).into())
+            factory.CreateInstance(
+                &load_dir_h,
+                &shiori_name_h,
+                (&host).into(),
+                (&mut out).into(),
+            )
         }
         .map_err(|e| {
             error!(

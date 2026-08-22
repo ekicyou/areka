@@ -1,8 +1,8 @@
+use super::test_support::{IMAGE, broken_lines, model, model_rect, window_for};
 use super::{FixedMetrics, LayoutEngine, VisibleWindow, WrapPlan};
 use crate::region::TextRegion;
 use crate::state::TextItem;
 use crate::writing::WritingMode;
-use super::test_support::{IMAGE, broken_lines, model, model_rect, window_for};
 
 /// 領域内に収まる間はあふれ非発火（先頭可視行 0・オフセット 0）。
 /// 最新行の下端が validrect.bottom とちょうど一致する境界は「超えていない」

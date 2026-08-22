@@ -233,7 +233,9 @@ mod hit_region;
 mod placement;
 
 use hit_region::resolve_hit_region;
-use placement::spawn::{GhostWindowMarker, register_ghost_windows_click_through, spawn_ghost_windows};
+use placement::spawn::{
+    GhostWindowMarker, register_ghost_windows_click_through, spawn_ghost_windows,
+};
 
 // ---------------------------------------------------------------------------
 // 本体分割の接続（`areka-P0-file-slimming` task 8.12・純移動）
@@ -310,11 +312,15 @@ fn main() -> Result<()> {
     println!(
         "  自動  : ③ 物理寸整合 assert（GetClientRect == target_physical_size）＋④ read_back 描画一致 anchor（物理座標へ写像）"
     );
-    println!("  手動  : ⑤ ゴーストの頭/胸/背景を目視で狙い、resolve 結果（Head/Bust/None）とペア列 Δ=(0,0) を記録");
+    println!(
+        "  手動  : ⑤ ゴーストの頭/胸/背景を目視で狙い、resolve 結果（Head/Bust/None）とペア列 Δ=(0,0) を記録"
+    );
     println!(
         "  期待k : env {EXPECT_K_ENV}（例 5/4・2）指定時のみ実適用 k を hard assert（未指定なら実測ログのみ）"
     );
-    println!("  ログ  : `collision-probe: k=` / `collision-probe: client=` を grep して採取（1 実行 = 1 DPI 水準）");
+    println!(
+        "  ログ  : `collision-probe: k=` / `collision-probe: client=` を grep して採取（1 実行 = 1 DPI 水準）"
+    );
     println!("  受け入れ: rustdoc プロトコル ①〜⑥（dpi≠96 を2水準必達・96 のみは不合格）");
     println!(
         "  終了  : {SMOKE_EXIT_ENV} の有界 auto-exit のみ（ダブルクリックでは終了しない＝OnPointerPressed 未装着）"

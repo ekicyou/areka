@@ -11,7 +11,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use tracing::warn;
 
 /// `seriko.alignmenttodesktop` の解釈（2.8: 未使用値はシーム受理）。
-#[allow(dead_code)] // scaffold（task 2.1）: resolver（task 3.1）が消費するまで非テストビルドでは未使用
+#[allow(dead_code)]
+// scaffold（task 2.1）: resolver（task 3.1）が消費するまで非テストビルドでは未使用
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Alignment {
     /// 既定（emo2 実使用）。Y は work area 下端固定・`defaulttop` 無視（2.2/2.4）。
@@ -24,7 +25,8 @@ pub enum Alignment {
 }
 
 /// バルーンの左右位置（暫定 offset の向きにのみ使用・DD7）。既定 `Left`。
-#[allow(dead_code)] // scaffold（task 2.1）: resolver（task 3.1）が消費するまで非テストビルドでは未使用
+#[allow(dead_code)]
+// scaffold（task 2.1）: resolver（task 3.1）が消費するまで非テストビルドでは未使用
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BalloonSide {
     /// バルーンをキャラ窓の左側へ（既定・emo2 scope0）。
@@ -51,7 +53,8 @@ pub enum BalloonXMode {
 }
 
 /// スコープ 1 つぶんのカスケード解決済み配置構成。
-#[allow(dead_code)] // scaffold（task 2.1）: resolver（task 3.1）が消費するまで非テストビルドでは未使用
+#[allow(dead_code)]
+// scaffold（task 2.1）: resolver（task 3.1）が消費するまで非テストビルドでは未使用
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScopeConfig {
     /// 4 層カスケード解決済み（既定 `Bottom`・2.2/2.3）。
@@ -91,7 +94,8 @@ impl Default for ScopeConfig {
 }
 
 /// ghost/shell descript KV から解決した配置構成の全体（スコープ別＋シーム転記）。
-#[allow(dead_code)] // scaffold（task 2.1）: resolver（task 3.1）が消費するまで非テストビルドでは未使用
+#[allow(dead_code)]
+// scaffold（task 2.1）: resolver（task 3.1）が消費するまで非テストビルドでは未使用
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlacementConfig {
     /// 検出済みスコープ（0 起点・`BTreeMap` で昇順）。emo2 → {0, 1}（DD6）。
@@ -215,10 +219,7 @@ fn resolve_scope(
     shell_kv: &BTreeMap<String, String>,
 ) -> ScopeConfig {
     // alignmenttodesktop の綴り（正典 ＞ 別綴 alignmentondesktop・正典表 row 1 注記）
-    const ALIGN_SUFFIXES: [&str; 2] = [
-        "seriko.alignmenttodesktop",
-        "seriko.alignmentondesktop",
-    ];
+    const ALIGN_SUFFIXES: [&str; 2] = ["seriko.alignmenttodesktop", "seriko.alignmentondesktop"];
     fn global_align(kv: &BTreeMap<String, String>) -> Option<&String> {
         ALIGN_SUFFIXES.iter().find_map(|k| kv.get(*k))
     }
@@ -250,7 +251,11 @@ fn resolve_scope(
         None | Some("left") => BalloonSide::Left,
         Some("right") => BalloonSide::Right,
         Some(other) => {
-            warn!(scope, value = other, "balloon.alignment の未知値（既定 left として続行）");
+            warn!(
+                scope,
+                value = other,
+                "balloon.alignment の未知値（既定 left として続行）"
+            );
             BalloonSide::Left
         }
     };
@@ -294,7 +299,12 @@ fn parse_i32(raw: Option<&str>, key: &str, scope: usize) -> Option<i32> {
     match raw.parse::<i32>() {
         Ok(v) => Some(v),
         Err(_) => {
-            warn!(scope, key, value = raw, "配置キーの数値化に失敗（None として続行）");
+            warn!(
+                scope,
+                key,
+                value = raw,
+                "配置キーの数値化に失敗（None として続行）"
+            );
             None
         }
     }

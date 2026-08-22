@@ -57,11 +57,9 @@ pub(crate) fn bind_atlas(world: &mut World, atlas: &AtlasTable, set: SetId) {
 mod tests {
     use super::*;
     use crate::world::{AtlasBinding, EmoWorld};
-    use areka_emo_atlas::{MemoryDecoder, PackConfig, SurfaceSet, bake};
     use areka_emo_atlas::{AlphaParams, UseSelfAlpha};
-    use areka_parsers::shell::{
-        AppendTarget, DefRef, Element, ElementPath, Shell, Surface,
-    };
+    use areka_emo_atlas::{MemoryDecoder, PackConfig, SurfaceSet, bake};
+    use areka_parsers::shell::{AppendTarget, DefRef, Element, ElementPath, Shell, Surface};
     use std::path::Path;
 
     // ---- 合成モデルビルダ（emo2 相当構造・実 fixture パースは統合 task 8 送り）----

@@ -187,7 +187,10 @@ fn paint_square_fill_returns_fill_and_text() {
         fill: (105, 25, 25),
         text: (255, 255, 255),
     };
-    assert_eq!(s.paint((77, 88, 99)), Some(((105, 25, 25), (255, 255, 255))));
+    assert_eq!(
+        s.paint((77, 88, 99)),
+        Some(((105, 25, 25), (255, 255, 255)))
+    );
 }
 
 /// Invert.paint（dfc=(0,0,0)）→ 塗り=(0,0,0)・文字=各成分 255−c=(255,255,255)（古典反転同観）。

@@ -7,8 +7,8 @@ use bevy_ecs::prelude::*;
 use std::sync::{Arc, Mutex};
 use windows::Win32::Foundation::HWND;
 
-use crate::ecs::Point;
 use super::DragConstraint;
+use crate::ecs::Point;
 
 /// wndprocスレッドでのドラッグに必要なWindow情報
 #[derive(Debug, Clone, Default)]

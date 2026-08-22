@@ -110,8 +110,7 @@ fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: std::time::Dur
 fn s5_close_deadline_exceeded_forces_termination_via_tick_injection() {
     const SHELL_NAME: &str = "S5DeadlineShell";
 
-    let root =
-        unique_temp_dir("s5_close_deadline_exceeded_forces_termination_via_tick_injection");
+    let root = unique_temp_dir("s5_close_deadline_exceeded_forces_termination_via_tick_injection");
     let _ = std::fs::remove_dir_all(&root);
     write_ghost_fixture(&root, SHELL_NAME);
 

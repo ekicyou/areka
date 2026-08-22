@@ -75,6 +75,9 @@ mod tests {
             DottedResolution::Value("a".into()),
             DottedResolution::Value("a".into())
         );
-        assert_ne!(DottedResolution::Value("a".into()), DottedResolution::NotFound);
+        assert_ne!(
+            DottedResolution::Value("a".into()),
+            DottedResolution::NotFound
+        );
     }
 }

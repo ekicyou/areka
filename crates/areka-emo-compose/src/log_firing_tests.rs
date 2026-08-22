@@ -154,8 +154,16 @@ fn cycle_detection_warn_fires_with_surface_id() {
     let logs = capture_logs(|| {
         // build_plan は compute_extent（extent 経路）→ derive_ops（ops 経路）の両方を走らせる。
         // ops 経路（flatten_surface）の循環 WARN を狙って結果自体も固定する。
-        let extent = build_plan(&mut ops, &mut visited, &world, &atlas, 1000, &binds, &PatternState::default())
-            .expect("自己参照でも部分結果で Ok（非パニック・要件 7.1）");
+        let extent = build_plan(
+            &mut ops,
+            &mut visited,
+            &world,
+            &atlas,
+            1000,
+            &binds,
+            &PatternState::default(),
+        )
+        .expect("自己参照でも部分結果で Ok（非パニック・要件 7.1）");
         // 部分結果: 静的 self.png 1 本が積まれ、自己参照枝は打ち切られる。
         assert_eq!(ops.len(), 1, "静的層のみ（自己参照枝は打ち切り）");
         assert_ne!(extent.w, 0, "外形は非ゼロ");
@@ -199,8 +207,16 @@ fn extent_cycle_warn_fires_with_surface_id() {
     let mut ops = Vec::new();
     let mut visited = Vec::new();
     let logs = capture_logs(|| {
-        build_plan(&mut ops, &mut visited, &world, &atlas, 2000, &binds, &PatternState::default())
-            .expect("自己参照でも Ok（外形は非ゼロ）");
+        build_plan(
+            &mut ops,
+            &mut visited,
+            &world,
+            &atlas,
+            2000,
+            &binds,
+            &PatternState::default(),
+        )
+        .expect("自己参照でも Ok（外形は非ゼロ）");
     });
 
     // extent 経路（flatten_extent）特有の循環 WARN を **行単位で判別**する（「外形算出」を含む
@@ -236,7 +252,14 @@ fn pattern0_less_bind_skip_fires_debug_and_no_warn_error() {
     let blink = Animation {
         id: 1400,
         interval: Interval::BindRandom { k: 4 },
-        patterns: vec![Pattern { index: 1, method: DrawMethod::new("overlay".to_string()), surface_id: 1412, wait: 0, x: 0, y: 0 }],
+        patterns: vec![Pattern {
+            index: 1,
+            method: DrawMethod::new("overlay".to_string()),
+            surface_id: 1412,
+            wait: 0,
+            x: 0,
+            y: 0,
+        }],
     };
     let host = surface_with_anims(1000, Vec::new(), vec![blink]);
     let part = surface(1412, vec![elem(0, "closed.png", 0, 0)]);
@@ -247,12 +270,23 @@ fn pattern0_less_bind_skip_fires_debug_and_no_warn_error() {
     let mut ops = Vec::new();
     let mut visited = Vec::new();
     let logs = capture_logs(|| {
-        build_plan(&mut ops, &mut visited, &world, &atlas, 1000, &binds, &PatternState::default())
-            .expect("pattern0 なし bind でも surface1000 存在＋外形非ゼロで Ok（要件 6.6）");
+        build_plan(
+            &mut ops,
+            &mut visited,
+            &world,
+            &atlas,
+            1000,
+            &binds,
+            &PatternState::default(),
+        )
+        .expect("pattern0 なし bind でも surface1000 存在＋外形非ゼロで Ok（要件 6.6）");
     });
 
     // 副作用: pattern0 なし bind は静的合成へ寄与しない＝描画命令ゼロ（要件 9.1）。
-    assert!(ops.is_empty(), "pattern0（index==0）なし bind は描画命令に現れない（要件 9.1）");
+    assert!(
+        ops.is_empty(),
+        "pattern0（index==0）なし bind は描画命令に現れない（要件 9.1）"
+    );
 
     // DEBUG skip ログを level＋target＋discriminating field（surface_id/animation_id）で突く
     // （この DEBUG 行を消せば必ず落ちる＝非空虚）。
@@ -268,10 +302,19 @@ fn pattern0_less_bind_skip_fires_debug_and_no_warn_error() {
     );
     // DEBUG は厳密に 1 本（ops 経路の skip のみ・extent 経路は DEBUG を出さない）。
     let debug_count = logs.lines().filter(|l| l.contains("level=DEBUG")).count();
-    assert_eq!(debug_count, 1, "pattern0 なし skip の DEBUG は 1 本のみ: {logs}");
+    assert_eq!(
+        debug_count, 1,
+        "pattern0 なし skip の DEBUG は 1 本のみ: {logs}"
+    );
     // 良性 skip ゆえ WARN/ERROR は出さない（要件 9.3）。
-    assert!(!logs.contains("level=WARN"), "良性 skip は WARN を出さない: {logs}");
-    assert!(!logs.contains("level=ERROR"), "良性 skip は ERROR を出さない: {logs}");
+    assert!(
+        !logs.contains("level=WARN"),
+        "良性 skip は WARN を出さない: {logs}"
+    );
+    assert!(
+        !logs.contains("level=ERROR"),
+        "良性 skip は ERROR を出さない: {logs}"
+    );
 }
 
 // ── 8.4: 未実装メソッド warn（blit.rs execute）────────────────────────────────────────
@@ -310,7 +353,16 @@ fn single_entry_table(page: AtlasPage, uv: Rect, trim: Point) -> AtlasTable {
 #[test]
 fn unimplemented_method_warn_fires_with_method_and_element() {
     let page = page_1px(200, 150, 100, 255);
-    let atlas = single_entry_table(page, Rect { x: 0, y: 0, w: 1, h: 1 }, Point { x: 0, y: 0 });
+    let atlas = single_entry_table(
+        page,
+        Rect {
+            x: 0,
+            y: 0,
+            w: 1,
+            h: 1,
+        },
+        Point { x: 0, y: 0 },
+    );
 
     let cases = [
         (ComposeMethod::Replace, "Replace"),
@@ -337,9 +389,18 @@ fn unimplemented_method_warn_fires_with_method_and_element() {
             "{marker}: 未実装は合成へ寄与しない（skip）",
         );
         // ログ: WARN・target・method（Debug 判別子）・element を同時に突く。
-        assert!(logs.contains("level=WARN"), "{marker}: 未実装は WARN: {logs}");
-        assert!(logs.contains("target=areka_emo_compose"), "{marker}: target: {logs}");
-        assert!(logs.contains("element=0"), "{marker}: element id を載せる: {logs}");
+        assert!(
+            logs.contains("level=WARN"),
+            "{marker}: 未実装は WARN: {logs}"
+        );
+        assert!(
+            logs.contains("target=areka_emo_compose"),
+            "{marker}: target: {logs}"
+        );
+        assert!(
+            logs.contains("element=0"),
+            "{marker}: element id を載せる: {logs}"
+        );
         assert!(
             logs.contains(&format!("method={marker}")),
             "{marker}: method の判別子を載せる: {logs}",
@@ -360,7 +421,12 @@ fn missing_page_warn_fires_with_element_and_page() {
         original: Size { w: 1, h: 1 },
         placement: Some(Placement {
             page: 5, // 頁が無い（pages 空）。
-            uv_rect: Rect { x: 0, y: 0, w: 1, h: 1 },
+            uv_rect: Rect {
+                x: 0,
+                y: 0,
+                w: 1,
+                h: 1,
+            },
             trim_offset: Point { x: 0, y: 0 },
         }),
     }];
@@ -376,7 +442,10 @@ fn missing_page_warn_fires_with_element_and_page() {
         crate::blit::execute(&mut out, crate::plan::Extent { w: 1, h: 1 }, &ops, &atlas);
     });
 
-    assert!(out.bytes().iter().all(|&b| b == 0), "頁欠落は skip（非パニック）");
+    assert!(
+        out.bytes().iter().all(|&b| b == 0),
+        "頁欠落は skip（非パニック）"
+    );
     assert!(logs.contains("level=WARN"), "頁欠落は WARN: {logs}");
     assert!(logs.contains("target=areka_emo_compose"), "target: {logs}");
     assert!(logs.contains("element=0"), "element id: {logs}");
@@ -425,9 +494,15 @@ fn surface_not_found_error_fires_with_surface_id() {
         "不在 surface は SurfaceNotFound",
     );
     // ログ: ERROR・target・surface_id を同時に突く。
-    assert!(logs.contains("level=ERROR"), "不在 surface は ERROR: {logs}");
+    assert!(
+        logs.contains("level=ERROR"),
+        "不在 surface は ERROR: {logs}"
+    );
     assert!(logs.contains("target=areka_emo_compose"), "target: {logs}");
-    assert!(logs.contains("surface_id=9999"), "不在 surface_id を載せる: {logs}");
+    assert!(
+        logs.contains("surface_id=9999"),
+        "不在 surface_id を載せる: {logs}"
+    );
     assert!(logs.contains("SurfaceNotFound"), "分類名が載る: {logs}");
 }
 
@@ -455,7 +530,10 @@ fn empty_composition_error_fires_with_surface_id() {
     // ログ: ERROR・target・surface_id を同時に突く。
     assert!(logs.contains("level=ERROR"), "退化データは ERROR: {logs}");
     assert!(logs.contains("target=areka_emo_compose"), "target: {logs}");
-    assert!(logs.contains("surface_id=7000"), "退化 surface_id を載せる: {logs}");
+    assert!(
+        logs.contains("surface_id=7000"),
+        "退化 surface_id を載せる: {logs}"
+    );
     assert!(logs.contains("EmptyComposition"), "分類名が載る: {logs}");
 }
 
@@ -511,9 +589,15 @@ fn nonexistent_append_target_warn_fires_with_id() {
         assert!(world.surface(999).is_none(), "未存在 999 は新設されない");
     });
 
-    assert!(logs.contains("level=WARN"), "未存在 append 対象は WARN: {logs}");
+    assert!(
+        logs.contains("level=WARN"),
+        "未存在 append 対象は WARN: {logs}"
+    );
     assert!(logs.contains("target=areka_emo_compose"), "target: {logs}");
-    assert!(logs.contains("id=999"), "未存在 append 対象 id を載せる: {logs}");
+    assert!(
+        logs.contains("id=999"),
+        "未存在 append 対象 id を載せる: {logs}"
+    );
     assert!(logs.contains("未存在"), "未存在メッセージ: {logs}");
 }
 
@@ -556,11 +640,20 @@ fn unbound_element_warn_fires_with_path() {
     assert_eq!(binding.0[bogus_idx], None, "未束縛 element は None");
 
     // ログ: WARN・target・path を同時に突く。
-    assert!(logs.contains("level=WARN"), "未束縛 element は WARN: {logs}");
+    assert!(
+        logs.contains("level=WARN"),
+        "未束縛 element は WARN: {logs}"
+    );
     assert!(logs.contains("target=areka_emo_compose"), "target: {logs}");
-    assert!(logs.contains("path=\"bogus.png\""), "未束縛 path を載せる: {logs}");
+    assert!(
+        logs.contains("path=\"bogus.png\""),
+        "未束縛 path を載せる: {logs}"
+    );
     // surface_id フィールドも載る（判別強化）。
-    assert!(logs.contains("surface_id=1000"), "surface_id も載る: {logs}");
+    assert!(
+        logs.contains("surface_id=1000"),
+        "surface_id も載る: {logs}"
+    );
 }
 
 // ── Part 3-9: ComposeError Display 文字列（決定論的・error.rs #[error("...")]）──────────
@@ -603,7 +696,12 @@ fn blit_reads_source_at_nonzero_uv_offset() {
     // uv.x=2（青の列）を 1×1 で切り出す。trim_offset=0 ゆえ着弾は配置 (0,0)。
     let atlas = single_entry_table(
         page,
-        Rect { x: 2, y: 0, w: 1, h: 1 },
+        Rect {
+            x: 2,
+            y: 0,
+            w: 1,
+            h: 1,
+        },
         Point { x: 0, y: 0 },
     );
     let ops = vec![BlitOp {
@@ -643,7 +741,12 @@ fn blit_reads_source_at_nonzero_uv_y_offset() {
     // uv.y=2（青の行）を 1×1 で切り出す。
     let atlas = single_entry_table(
         page,
-        Rect { x: 0, y: 2, w: 1, h: 1 },
+        Rect {
+            x: 0,
+            y: 2,
+            w: 1,
+            h: 1,
+        },
         Point { x: 0, y: 0 },
     );
     let ops = vec![BlitOp {

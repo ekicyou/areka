@@ -1,10 +1,10 @@
 //! task 8.4（要件 10.1・10.3）: 決定性と再合成予算の fixture テーマ。
 
-use super::{BindSet, ComposedSurface, Composer, EmoWorld, PatternState, SetId};
 use super::test_support::{
     build_atlas_for_surface1000, compose_surface1000, opaque_pixel_count, parse_emo2_shell,
     shell_master_dir, surface1000_bind_parts,
 };
+use super::{BindSet, ComposedSurface, Composer, EmoWorld, PatternState, SetId};
 
 // ============================================================================
 // task 8.4: 決定性（要件 **10.1**）と再合成予算（要件 **10.3**）の fixture 検証テスト。
@@ -73,7 +73,10 @@ fn surface1000_compose_is_byte_deterministic() {
         second.bytes(),
         "同一入力（surface1000＋固定 BindSet）→ 2 回合成はバイト等価（要件 10.1）"
     );
-    assert!(composed_byte_equal(&first, &second), "外形＋全バイトで完全等価");
+    assert!(
+        composed_byte_equal(&first, &second),
+        "外形＋全バイトで完全等価"
+    );
 
     // 非空虚性: 非空 bind 集合ゆえ結果は非空（α>0 の画素が存在する）。全透明同士の空虚一致でない。
     assert!(
@@ -100,12 +103,26 @@ fn surface1000_compose_into_two_fresh_buffers_are_byte_equal() {
 
     let mut out_a = ComposedSurface::new(0, 0);
     composer
-        .compose_into(&mut out_a, &world, &atlas, 1000, &binds, &PatternState::default())
+        .compose_into(
+            &mut out_a,
+            &world,
+            &atlas,
+            1000,
+            &binds,
+            &PatternState::default(),
+        )
         .expect("compose_into A は Ok");
 
     let mut out_b = ComposedSurface::new(0, 0);
     composer
-        .compose_into(&mut out_b, &world, &atlas, 1000, &binds, &PatternState::default())
+        .compose_into(
+            &mut out_b,
+            &world,
+            &atlas,
+            1000,
+            &binds,
+            &PatternState::default(),
+        )
         .expect("compose_into B は Ok");
 
     assert!(
@@ -141,7 +158,14 @@ fn surface1000_recompose_steady_state_zero_allocation() {
 
     // ウォームアップ（初回）: バッファ／スクラッチのサイズがここで確定する。
     composer
-        .compose_into(&mut out, &world, &atlas, 1000, &binds, &PatternState::default())
+        .compose_into(
+            &mut out,
+            &world,
+            &atlas,
+            1000,
+            &binds,
+            &PatternState::default(),
+        )
         .expect("初回 compose_into は Ok");
 
     let ptr0 = out.bytes().as_ptr();
@@ -152,7 +176,14 @@ fn surface1000_recompose_steady_state_zero_allocation() {
     // 定常状態: 同一 surface＋同一 BindSet を反復。初回で確定した容量から一切成長しないこと。
     for iter in 0..8 {
         composer
-            .compose_into(&mut out, &world, &atlas, 1000, &binds, &PatternState::default())
+            .compose_into(
+                &mut out,
+                &world,
+                &atlas,
+                1000,
+                &binds,
+                &PatternState::default(),
+            )
             .unwrap_or_else(|e| panic!("反復 {iter} 回目の compose_into は Ok: {e:?}"));
 
         assert_eq!(
@@ -160,7 +191,11 @@ fn surface1000_recompose_steady_state_zero_allocation() {
             ptr0,
             "反復 {iter}: out バッファ先頭ポインタ不変＝realloc なし（要件 10.3）"
         );
-        assert_eq!(out.bytes().len(), len0, "反復 {iter}: バッファ長不変（外形一定）");
+        assert_eq!(
+            out.bytes().len(),
+            len0,
+            "反復 {iter}: バッファ長不変（外形一定）"
+        );
         assert_eq!(
             composer.ops.capacity(),
             ops_cap0,
@@ -199,15 +234,31 @@ fn surface1000_build_plan_scratch_capacity_is_stable() {
     let mut visited = Vec::new();
 
     // 初回: 容量確定。
-    let extent0 = build_plan(&mut ops, &mut visited, &world, &atlas, 1000, &binds, &PatternState::default())
-        .expect("初回 build_plan は Ok（surface1000 存在＋外形非ゼロ）");
+    let extent0 = build_plan(
+        &mut ops,
+        &mut visited,
+        &world,
+        &atlas,
+        1000,
+        &binds,
+        &PatternState::default(),
+    )
+    .expect("初回 build_plan は Ok（surface1000 存在＋外形非ゼロ）");
     let ops_cap0 = ops.capacity();
     let visited_cap0 = visited.capacity();
     let ops_len0 = ops.len();
 
     for iter in 0..8 {
-        let extent = build_plan(&mut ops, &mut visited, &world, &atlas, 1000, &binds, &PatternState::default())
-            .unwrap_or_else(|e| panic!("反復 {iter} 回目の build_plan は Ok: {e:?}"));
+        let extent = build_plan(
+            &mut ops,
+            &mut visited,
+            &world,
+            &atlas,
+            1000,
+            &binds,
+            &PatternState::default(),
+        )
+        .unwrap_or_else(|e| panic!("反復 {iter} 回目の build_plan は Ok: {e:?}"));
 
         // 外形・命令数は決定的（毎回同一）。
         assert_eq!(extent, extent0, "反復 {iter}: 外形は決定的（要件 10.1）");
@@ -252,8 +303,16 @@ fn surface1000_instruction_count_is_linear_in_layers() {
 
     let mut ops = Vec::new();
     let mut visited = Vec::new();
-    let extent = build_plan(&mut ops, &mut visited, &world, &atlas, 1000, &binds, &PatternState::default())
-        .expect("build_plan は Ok（surface1000 存在＋外形非ゼロ）");
+    let extent = build_plan(
+        &mut ops,
+        &mut visited,
+        &world,
+        &atlas,
+        1000,
+        &binds,
+        &PatternState::default(),
+    )
+    .expect("build_plan は Ok（surface1000 存在＋外形非ゼロ）");
 
     // 命令数 == 描画層数（有効 bind 数）。線形＝非二次・非画素比例。
     assert_eq!(
@@ -262,7 +321,11 @@ fn surface1000_instruction_count_is_linear_in_layers() {
         "surface1000＋全有効 bind の命令数 == 描画層数（O(elements)・要件 10.3）"
     );
     // 具体値の固定（回帰検出）: 3 有効 bind → 3 命令。数十命令規模（design 記述）の下端。
-    assert_eq!(ops.len(), 3, "解決した 3 有効 bind（1100/1200/1302）→ 3 命令");
+    assert_eq!(
+        ops.len(),
+        3,
+        "解決した 3 有効 bind（1100/1200/1302）→ 3 命令"
+    );
 
     // 命令数が「画素数」に比例しないことの直接反証: 外形は数千〜数万画素だが命令は 3 本のみ。
     let pixels = extent.w as usize * extent.h as usize;
@@ -274,21 +337,41 @@ fn surface1000_instruction_count_is_linear_in_layers() {
 
     // 各命令の method は overlay（M1 実装対象）で、命令は実描画層（センチネル skip 済み）。
     for op in &ops {
-        assert_eq!(op.method, crate::method::ComposeMethod::Overlay, "全命令は overlay 層");
+        assert_eq!(
+            op.method,
+            crate::method::ComposeMethod::Overlay,
+            "全命令は overlay 層"
+        );
     }
 
     // 有効 bind を 1 本に絞ると命令も 1 本（層数に厳密比例＝線形係数 1 の追加確証）。
     let one = BindSet::from_ids([surface1000_bind_parts()[0].anim_id]);
     let mut ops1 = Vec::new();
     let mut visited1 = Vec::new();
-    build_plan(&mut ops1, &mut visited1, &world, &atlas, 1000, &one, &PatternState::default())
-        .expect("単一 bind でも Ok");
+    build_plan(
+        &mut ops1,
+        &mut visited1,
+        &world,
+        &atlas,
+        1000,
+        &one,
+        &PatternState::default(),
+    )
+    .expect("単一 bind でも Ok");
     assert_eq!(ops1.len(), 1, "有効 bind 1 本 → 命令 1 本（層数に線形）");
 
     // 空 bind 集合 → 命令ゼロ（静的 element ゼロゆえ描画層皆無・外形は非ゼロで Ok）。
     let mut ops0 = Vec::new();
     let mut visited0 = Vec::new();
-    build_plan(&mut ops0, &mut visited0, &world, &atlas, 1000, &BindSet::default(), &PatternState::default())
-        .expect("空 bind でも surface 存在＋外形非ゼロで Ok");
+    build_plan(
+        &mut ops0,
+        &mut visited0,
+        &world,
+        &atlas,
+        1000,
+        &BindSet::default(),
+        &PatternState::default(),
+    )
+    .expect("空 bind でも surface 存在＋外形非ゼロで Ok");
     assert_eq!(ops0.len(), 0, "空 bind 集合 → 描画命令ゼロ（層数 0）");
 }

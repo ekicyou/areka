@@ -202,15 +202,26 @@ mod tests {
     /// set 0 に 2 エントリ（1 つは placement あり・1 つは空）を持つ小テーブル。
     fn sample_table() -> AtlasTable {
         let keys = vec![
-            AtlasKey { set: SetId(0), rel_path: "surface0.png".into() },
-            AtlasKey { set: SetId(0), rel_path: "surface1.png".into() },
+            AtlasKey {
+                set: SetId(0),
+                rel_path: "surface0.png".into(),
+            },
+            AtlasKey {
+                set: SetId(0),
+                rel_path: "surface1.png".into(),
+            },
         ];
         let entries = vec![
             AtlasEntry {
                 original: Size { w: 100, h: 80 },
                 placement: Some(Placement {
                     page: 0,
-                    uv_rect: Rect { x: 4, y: 4, w: 60, h: 50 },
+                    uv_rect: Rect {
+                        x: 4,
+                        y: 4,
+                        w: 60,
+                        h: 50,
+                    },
                     trim_offset: Point { x: 10, y: 12 },
                 }),
             },
@@ -246,7 +257,15 @@ mod tests {
         assert_eq!(e0.original, Size { w: 100, h: 80 });
         let p = e0.placement.as_ref().expect("placement present");
         assert_eq!(p.page, 0);
-        assert_eq!(p.uv_rect, Rect { x: 4, y: 4, w: 60, h: 50 });
+        assert_eq!(
+            p.uv_rect,
+            Rect {
+                x: 4,
+                y: 4,
+                w: 60,
+                h: 50
+            }
+        );
         assert_eq!(p.trim_offset, Point { x: 10, y: 12 });
 
         // known-empty（全透明・転写スキップ）
@@ -264,7 +283,10 @@ mod tests {
         let id = t.resolve(SetId(0), "surface1.png").unwrap();
         assert_eq!(
             t.key(id),
-            &AtlasKey { set: SetId(0), rel_path: "surface1.png".into() }
+            &AtlasKey {
+                set: SetId(0),
+                rel_path: "surface1.png".into()
+            }
         );
         assert_eq!(t.len(), 2);
         assert!(!t.is_empty());

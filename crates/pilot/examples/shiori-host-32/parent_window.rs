@@ -19,11 +19,11 @@ use std::cell::Cell;
 use std::pin::Pin;
 use std::time::{Duration, Instant};
 
-use wintf_winmsg_executor::util::{Window, WindowMessage, WindowType};
-use wintf_winmsg_executor::{FilterResult, MessageLoop};
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::DataExchange::COPYDATASTRUCT;
 use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_COPYDATA};
+use wintf_winmsg_executor::util::{Window, WindowMessage, WindowType};
+use wintf_winmsg_executor::{FilterResult, MessageLoop};
 
 use crate::ipc::{self, MsgTag, ResponseSlot};
 
@@ -111,7 +111,10 @@ fn handle_message(s: &ParentShared, msg: &WindowMessage) -> Option<LRESULT> {
                 s.hellos.set(s.hellos.get() + 1);
             } else {
                 s.unexpected.set(s.unexpected.get() + 1);
-                eprintln!("[parent] HELLO payload 長が 4 でない（{} バイト・無視）", payload.len());
+                eprintln!(
+                    "[parent] HELLO payload 長が 4 でない（{} バイト・無視）",
+                    payload.len()
+                );
             }
             Some(LRESULT(0))
         }

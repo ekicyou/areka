@@ -147,10 +147,7 @@ impl std::fmt::Debug for DolaAnimator {
 /// app.add_systems(Update, tick_dola_animators);
 /// app.add_systems(Update, my_consumer.after(tick_dola_animators));
 /// ```
-pub fn tick_dola_animators(
-    mut query: Query<&mut DolaAnimator>,
-    frame_time: Res<FrameTime>,
-) {
+pub fn tick_dola_animators(mut query: Query<&mut DolaAnimator>, frame_time: Res<FrameTime>) {
     for mut animator in query.iter_mut() {
         animator.tick(frame_time.0);
     }
@@ -236,7 +233,10 @@ mod tests {
         // （DolaRuntime::new の last_update_result 初期値が委譲される）。
         let animator = DolaAnimator::new();
         let result = animator.last_result();
-        assert!(result.changes.is_empty(), "new() must start with no changes");
+        assert!(
+            result.changes.is_empty(),
+            "new() must start with no changes"
+        );
         assert!(
             result.triggered.is_empty(),
             "new() must start with no triggered results"
@@ -298,8 +298,14 @@ mod tests {
             first_len, second_len,
             "last_result() must be stable across repeated reads"
         );
-        assert_eq!(second_len, third_len, "last_result() must remain idempotent");
-        assert!(first_len > 0, "midpoint tick must produce at least one change");
+        assert_eq!(
+            second_len, third_len,
+            "last_result() must remain idempotent"
+        );
+        assert!(
+            first_len > 0,
+            "midpoint tick must produce at least one change"
+        );
     }
 
     #[test]
@@ -398,7 +404,7 @@ mod tests {
 
         let mut schedule = tick_schedule();
         schedule.run(&mut world); // パニックしないこと自体が契約
-                                  // 観測可能な状態変化はない（エンティティ不在）。
+        // 観測可能な状態変化はない（エンティティ不在）。
         assert_eq!(
             world.query::<&DolaAnimator>().iter(&world).count(),
             0,

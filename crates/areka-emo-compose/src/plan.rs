@@ -42,8 +42,8 @@ use bevy_ecs::entity::Entity;
 use crate::bind::BindSet;
 use crate::error::ComposeError;
 use crate::method::ComposeMethod;
-use crate::pattern::PatternState;
 use crate::normalized::{SurfaceMaster, Transform};
+use crate::pattern::PatternState;
 use crate::world::{AtlasBinding, EmoWorld, SurfaceIndex};
 
 /// バックエンド非依存の転写命令（これがバックエンド差替えシーム＝design 決定1）。
@@ -227,7 +227,9 @@ pub(crate) fn derive_ops(
     visited.clear();
     // top-level 合成対象。ここでのみ PatternState の現在コマを層(ii) へ合流させる（コマは表示中
     // surface のアニメに属す・design「top-level surface のみ」）。入れ子再帰は is_top_level=false。
-    flatten_surface(out_ops, visited, world, atlas, surface_id, binds, pattern, 0, 0, true);
+    flatten_surface(
+        out_ops, visited, world, atlas, surface_id, binds, pattern, 0, 0, true,
+    );
 }
 
 /// 合成対象 surface（top-level）／入れ子参照先 surface（再帰）を平坦化して `out_ops` へ積む。
@@ -486,7 +488,9 @@ pub(crate) fn compute_extent(
     // ops 経路と同じ祖先スタック規律で循環検出する（別走査・別集約器だが構造は共有）。visited は
     // 呼び手のスクラッチを借用して再利用する（要件 10.3）。走査開始前に空へ戻す。
     visited.clear();
-    flatten_extent(&mut max_x, &mut max_y, visited, world, atlas, surface_id, 0, 0);
+    flatten_extent(
+        &mut max_x, &mut max_y, visited, world, atlas, surface_id, 0, 0,
+    );
     Extent {
         // max_x/max_y は原点クリップ済みゆえ常に >= 0。u32 化は飽和で安全側（負にはならない）。
         w: max_x.max(0) as u32,
@@ -663,7 +667,11 @@ fn flatten_extent(
 
     // 枝離脱: 祖先スタックから pop（非循環の重複参照は別経路で再走査可能・要件 7.1）。
     let popped = visited.pop();
-    debug_assert_eq!(popped, Some(surface_id), "外形算出: visited は祖先スタック（LIFO）");
+    debug_assert_eq!(
+        popped,
+        Some(surface_id),
+        "外形算出: visited は祖先スタック（LIFO）"
+    );
 }
 
 /// interval が bind 種（`Interval::Bind`/`Interval::BindRandom`）か（要件 5.2・design 層列挙）。

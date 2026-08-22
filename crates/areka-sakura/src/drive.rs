@@ -529,8 +529,8 @@ where
 }
 
 #[cfg(test)]
-#[path = "drive_test_support.rs"]
-mod test_support;
+#[path = "drive_choice_tests.rs"]
+mod choice_tests;
 #[cfg(test)]
 #[path = "drive_delivery_tests.rs"]
 mod delivery_tests;
@@ -538,5 +538,5 @@ mod delivery_tests;
 #[path = "drive_lifecycle_tests.rs"]
 mod lifecycle_tests;
 #[cfg(test)]
-#[path = "drive_choice_tests.rs"]
-mod choice_tests;
+#[path = "drive_test_support.rs"]
+mod test_support;

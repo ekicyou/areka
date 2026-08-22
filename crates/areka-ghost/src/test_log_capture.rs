@@ -175,7 +175,12 @@ pub(crate) fn assert_logged_event(
         "期待ログ未検出: target={target:?} level={level} event={event_name:?}。\n捕捉={:?}",
         events
             .iter()
-            .map(|e| (e.target.clone(), e.level, e.event.clone(), e.message.clone()))
+            .map(|e| (
+                e.target.clone(),
+                e.level,
+                e.event.clone(),
+                e.message.clone()
+            ))
             .collect::<Vec<_>>()
     );
 }

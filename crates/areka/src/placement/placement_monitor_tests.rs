@@ -1,8 +1,8 @@
 use windows::Win32::Foundation::RECT;
 use wintf::ecs::window::monitor::Monitor;
 
-use super::shared_test_support::balloon_root;
 use super::resolver::RectPx;
+use super::shared_test_support::balloon_root;
 use super::*;
 
 /// テスト用合成 Monitor（実 HMONITOR 不要・wintf monitor.rs テストと同流儀）。
@@ -121,7 +121,6 @@ fn monitor_snapshot_from_monitors_empty_is_empty() {
             .is_empty()
     );
 }
-
 
 // ------------------------------------------------------------------
 // 起動時モニタスナップショット（areka-P0-dpi-window-vanish task 1.2・要件 1.1）
@@ -251,9 +250,13 @@ fn prepare_ghost_windows_logs_snapshot_with_its_own_call_site_tag() {
     let root = std::env::temp_dir()
         .join("areka_placement_prepare_snapshot_log")
         .join("no_such_ghost");
-    let (result, events) =
-        crate::placement::test_support::capture_logs(|| prepare_ghost_windows(&root, &balloon_root()));
-    assert!(result.is_err(), "不在 root は Err（列挙点の出力はその手前）");
+    let (result, events) = crate::placement::test_support::capture_logs(|| {
+        prepare_ghost_windows(&root, &balloon_root())
+    });
+    assert!(
+        result.is_err(),
+        "不在 root は Err（列挙点の出力はその手前）"
+    );
 
     let expected = monitor_records(&enumerate_monitors());
     let lines: Vec<&str> = events

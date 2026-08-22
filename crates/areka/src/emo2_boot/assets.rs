@@ -275,12 +275,11 @@ pub fn build_boot_assets(
 
     // シェル: surfaces.txt 読取 → parse → bake を **1 回**（donor build_shell_target・placement measure 同経路）。
     let surfaces_path = shell_dir.join(SURFACES_TXT);
-    let content = std::fs::read_to_string(&surfaces_path).map_err(|source| {
-        BootWiringError::ShellRead {
+    let content =
+        std::fs::read_to_string(&surfaces_path).map_err(|source| BootWiringError::ShellRead {
             path: surfaces_path.clone(),
             source,
-        }
-    })?;
+        })?;
     let shell = areka_parsers::shell::parse(&content);
     if shell.surfaces.is_empty() {
         return Err(BootWiringError::ShellEmpty {
@@ -313,7 +312,11 @@ pub fn build_boot_assets(
         if resolver_snapshot.is_none() {
             resolver_snapshot = Some(emo_world.alias_snapshot());
         }
-        let initial_surface_id = if scope == 0 { 0 } else { KERO_INITIAL_SURFACE_ID };
+        let initial_surface_id = if scope == 0 {
+            0
+        } else {
+            KERO_INITIAL_SURFACE_ID
+        };
         shells.push(ScopeAssets {
             scope,
             emo_world,

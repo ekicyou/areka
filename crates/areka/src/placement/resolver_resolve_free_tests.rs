@@ -107,7 +107,10 @@ fn t_r4_free_both_unspecified_equals_bottom() {
         assert_eq!(out_free.len(), 2, "dpi={dpi}: 空虚一致封じ");
         for (f, b) in out_free.iter().zip(&out_bottom) {
             assert_eq!(f.scope, b.scope, "dpi={dpi}");
-            assert_eq!(f.char_pos, b.char_pos, "dpi={dpi}: 全未指定 free ≡ bottom（幾何）");
+            assert_eq!(
+                f.char_pos, b.char_pos,
+                "dpi={dpi}: 全未指定 free ≡ bottom（幾何）"
+            );
             assert_eq!(f.char_size, b.char_size, "dpi={dpi}");
             assert_eq!(f.balloon_pos, b.balloon_pos, "dpi={dpi}");
             assert_eq!(f.balloon_size, b.balloon_size, "dpi={dpi}");
@@ -118,7 +121,11 @@ fn t_r4_free_both_unspecified_equals_bottom() {
                 Anchor::Free,
                 "dpi={dpi}: free は幾何フォールバックでも非吸着（Anchor::Free）"
             );
-            assert_eq!(b.anchor, Anchor::Bottom, "dpi={dpi}: bottom は吸着（Anchor::Bottom）");
+            assert_eq!(
+                b.anchor,
+                Anchor::Bottom,
+                "dpi={dpi}: bottom は吸着（Anchor::Bottom）"
+            );
         }
     }
 }
@@ -131,7 +138,10 @@ fn t_r4_free_is_clamped_into_work_area() {
         let wa = offset_work_area(dpi);
         let (w, h) = (px(400, dpi), px(600, dpi));
         let huge = px(40000, dpi);
-        let cfg = cfg_of(vec![(0, scope_cfg(Alignment::Free, Some(huge), Some(huge)))]);
+        let cfg = cfg_of(vec![(
+            0,
+            scope_cfg(Alignment::Free, Some(huge), Some(huge)),
+        )]);
 
         let out = resolve_placement(&cfg, wa, &[input(0, w, h)]);
 
@@ -174,4 +184,3 @@ fn t_r4_free_position_feeds_scope_chain() {
         );
     }
 }
-

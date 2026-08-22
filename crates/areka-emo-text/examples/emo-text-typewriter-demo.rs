@@ -30,24 +30,24 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP, WS_VISIBLE,
 };
 
+use wintf::WinApp;
 use wintf::ecs::layout::HitTest;
 use wintf::ecs::pointer::{DoubleClick, OnPointerPressed, Phase, PointerState};
 use wintf::ecs::{
     FrameFinalize, FrameTime, GraphicsCore, Point, SizeI, Window, WindowHandle, WindowPos,
     WindowStyle, WucGraphicsResource,
 };
-use wintf::WinApp;
 
 use areka_actor::reply_channel;
 use areka_emo_atlas::{AtlasTable, WicDecoderArm};
 use areka_emo_compose::{BindSet, Composer, EmoWorld};
 use areka_emo_present::{
-    build_balloon_target, EmoPresenter, PresentCommand, PresentOutcome, TargetId,
+    EmoPresenter, PresentCommand, PresentOutcome, TargetId, build_balloon_target,
 };
-use areka_emo_text::actor::{present_frame, TextLayerRuntime};
+use areka_emo_text::actor::{TextLayerRuntime, present_frame};
 use areka_emo_text::state::TextLayerConfig;
-use areka_parsers::balloon::{parse_str, BalloonModel};
-use areka_parsers::charset::{decode, DefaultEncoding};
+use areka_parsers::balloon::{BalloonModel, parse_str};
+use areka_parsers::charset::{DefaultEncoding, decode};
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 
 // ── 挨拶テキスト（さっきの画像と同じ・boot.pasta 起動朝 由来） ──
@@ -123,7 +123,9 @@ struct Demo {
 
 fn main() -> windows::core::Result<()> {
     tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+        )
         .init();
 
     let mgr = WinApp::new()?;
@@ -253,7 +255,11 @@ fn on_balloon_pressed(
 
 fn drive_system(world: &mut World) {
     // ダブルクリック終了要求を最優先で回収する。
-    if world.get_resource::<QuitRequested>().map(|q| q.0).unwrap_or(false) {
+    if world
+        .get_resource::<QuitRequested>()
+        .map(|q| q.0)
+        .unwrap_or(false)
+    {
         if let Some(demo) = world.remove_non_send::<Demo>() {
             world.despawn(demo.win); // registry 空遷移で run() が復帰する。
         }
@@ -322,17 +328,27 @@ fn try_attach(demo: &mut Demo, world: &mut World) {
 
     // 実モニタ DPI をログ（物理 1:1・k=1.0 恒常）。
     if let Some(handle) = world.get::<WindowHandle>(demo.win) {
-        info!(dpi = handle.get_dpi(), scale_k = view.scale(), "emo-text-typewriter-demo: 実モニタ DPI");
+        info!(
+            dpi = handle.get_dpi(),
+            scale_k = view.scale(),
+            "emo-text-typewriter-demo: 実モニタ DPI"
+        );
     }
 
-    demo.cycle_start = world.get_resource::<FrameTime>().map(|ft| ft.0).unwrap_or(0.0);
+    demo.cycle_start = world
+        .get_resource::<FrameTime>()
+        .map(|ft| ft.0)
+        .unwrap_or(0.0);
     demo.attached = true;
     info!("emo-text-typewriter-demo: 装着・結線完了 — タイプライター開始（ダブルクリックで終了）");
 }
 
 /// 実時間タイプライター駆動（毎フレーム）。cue を流し、フレーム経過時間を注入して提示する。
 fn drive_typewriter(demo: &mut Demo, world: &mut World) {
-    let now = world.get_resource::<FrameTime>().map(|ft| ft.0).unwrap_or(0.0);
+    let now = world
+        .get_resource::<FrameTime>()
+        .map(|ft| ft.0)
+        .unwrap_or(0.0);
     let t = now - demo.cycle_start;
 
     // サイクル頭で挨拶 cue を一度だけ流す（全 at=0.0＝リビールは配送 duration で連続進行）。
@@ -356,7 +372,9 @@ fn drive_typewriter(demo: &mut Demo, world: &mut World) {
 
     // サイクル満了で全消去し、次サイクルへ（打ち直しループ）。
     if t > CYCLE_SECS {
-        demo.runtime.borrow_mut().apply_cue(&cue(t, CueCommand::Clear));
+        demo.runtime
+            .borrow_mut()
+            .apply_cue(&cue(t, CueCommand::Clear));
         demo.cycle_start = now;
         demo.fed = false;
     }

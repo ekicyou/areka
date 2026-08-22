@@ -243,10 +243,16 @@ fn round_trip_request(shiori: &Sender<ShioriMsg>, call: ShioriCall) -> ShioriOut
     // 送出しようとしているイベントの Method／ID（出所カテゴリ込み）／参照値／実行状態を取り出す。
     // `status.render()` は `None` ⇔ Status ヘッダ行なし（Req6.2・DD-IT-5 の kanade 層観測）。
     let (method, event_id, references, status_wire) = match &call {
-        ShioriCall::Get { id, references, status } => ("GET", id, references, status.render()),
-        ShioriCall::Notify { id, references, status } => {
-            ("NOTIFY", id, references, status.render())
-        }
+        ShioriCall::Get {
+            id,
+            references,
+            status,
+        } => ("GET", id, references, status.render()),
+        ShioriCall::Notify {
+            id,
+            references,
+            status,
+        } => ("NOTIFY", id, references, status.render()),
     };
     // ログ証跡は wire 形（[`EventId::as_str`]）で残す——出所カテゴリは表現を変えない（DD-1）。
     let id = event_id.as_str();
@@ -291,7 +297,14 @@ fn round_trip_request(shiori: &Sender<ShioriMsg>, call: ShioriCall) -> ShioriOut
     );
 
     let (reply_tx, reply_rx) = reply_channel::<ShioriOutcome>();
-    round_trip(shiori, ShioriMsg::Request { call, reply: reply_tx }, reply_rx)
+    round_trip(
+        shiori,
+        ShioriMsg::Request {
+            call,
+            reply: reply_tx,
+        },
+        reply_rx,
+    )
 }
 
 /// unload の同期往復（送出＋応答受領）。失敗は error!＋`Failed(Ipc)` へ写像（宙吊りなし）。

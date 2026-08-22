@@ -26,7 +26,10 @@ fn golden_match_read_back_equals_direct_compose() {
     let window = spawn_window_with_dpi(&mut world, 96);
 
     let (emo_world, atlas, golden) = build_target_assets(3, 2, 0x11);
-    assert!(golden.iter().any(|&b| b != 0), "golden は非退化（全 0 でない）");
+    assert!(
+        golden.iter().any(|&b| b != 0),
+        "golden は非退化（全 0 でない）"
+    );
 
     let mut presenter = EmoPresenter::new();
     presenter
@@ -90,7 +93,9 @@ fn invalid_surface_id_replies_err_and_leaves_display_unchanged() {
         matches!(rx0.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
         "前提の有効 ShowSurface が Ok でない"
     );
-    let before = presenter.read_back(TargetId(0)).expect("read_back（前）失敗");
+    let before = presenter
+        .read_back(TargetId(0))
+        .expect("read_back（前）失敗");
 
     // 解決不能 id: error! ＋ 表示不変 ＋ reply Err（R3.4）。
     let (tx1, rx1) = reply_channel::<PresentOutcome>();
@@ -115,7 +120,9 @@ fn invalid_surface_id_replies_err_and_leaves_display_unchanged() {
         "無効 id は Err(Compose(SurfaceNotFound(9999))) を返す: {outcome:?}"
     );
 
-    let after = presenter.read_back(TargetId(0)).expect("read_back（後）失敗");
+    let after = presenter
+        .read_back(TargetId(0))
+        .expect("read_back（後）失敗");
     assert_eq!(
         before, after,
         "無効 id の適用で表示中バイトが変化した（表示不変の不変条件を破っている）"
@@ -163,7 +170,10 @@ fn build_assets_with_valid_and_empty(w: u32, h: u32, salt: u8) -> (EmoWorld, Atl
         },
     };
     let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(baked.errors.is_empty(), "atlas bake セットアップは失敗しない");
+    assert!(
+        baked.errors.is_empty(),
+        "atlas bake セットアップは失敗しない"
+    );
 
     let mut world = EmoWorld::build(&shell_of(surfaces));
     world.bind_atlas(&baked.table, SetId(0));
@@ -214,16 +224,25 @@ fn invalid_surface_skips_and_leaves_display_and_mask_unchanged() {
         .expect("有効表示後は mount が生成済み")
         .surface_entity();
 
-    let bytes_before = presenter.read_back(TargetId(0)).expect("read_back（前）失敗");
+    let bytes_before = presenter
+        .read_back(TargetId(0))
+        .expect("read_back（前）失敗");
     let hit_before = world
         .get::<HitTest>(surface_entity)
         .expect("surface entity に HitTest が無い")
         .mode;
-    assert_eq!(hit_before, HitTestMode::AlphaMask, "有効表示後は αマスク判定");
+    assert_eq!(
+        hit_before,
+        HitTestMode::AlphaMask,
+        "有効表示後は αマスク判定"
+    );
     let mask_dims_before = world
         .get::<AlphaMaskResource>(surface_entity)
         .and_then(|r| r.mask().map(|m| (m.width(), m.height())));
-    assert!(mask_dims_before.is_some(), "有効表示後は AlphaMask が供給済み");
+    assert!(
+        mask_dims_before.is_some(),
+        "有効表示後は AlphaMask が供給済み"
+    );
     assert!(
         world.get::<Visual>(surface_entity).unwrap().is_visible,
         "有効表示後は可視"
@@ -253,7 +272,9 @@ fn invalid_surface_skips_and_leaves_display_and_mask_unchanged() {
     );
 
     // (a) 表示バイト不変。
-    let bytes_after = presenter.read_back(TargetId(0)).expect("read_back（後）失敗");
+    let bytes_after = presenter
+        .read_back(TargetId(0))
+        .expect("read_back（後）失敗");
     assert_eq!(
         bytes_before, bytes_after,
         "無効 id の skip で表示中バイトが変化した（表示を乱さない不変条件違反）"
@@ -295,7 +316,13 @@ fn empty_composition_degrades_to_hidden_and_replies_ok() {
     // 前提固定: 7000 は「存在するが外形 0×0」＝EmptyComposition（SurfaceNotFound ではない）。
     {
         let mut composer = Composer::new();
-        let direct = composer.compose(&emo_world, &atlas, 7000, &BindSet::default(), &PatternState::default());
+        let direct = composer.compose(
+            &emo_world,
+            &atlas,
+            7000,
+            &BindSet::default(),
+            &PatternState::default(),
+        );
         assert_eq!(
             direct.err(),
             Some(ComposeError::EmptyComposition(7000)),
@@ -390,7 +417,12 @@ fn empty_composition_degrades_to_hidden_and_replies_ok() {
             .get(&TargetId(0))
             .unwrap()
             .cache
-            .get(7000, &BindSet::default(), &PatternState::default(), ScaleRatio::ONE)
+            .get(
+                7000,
+                &BindSet::default(),
+                &PatternState::default(),
+                ScaleRatio::ONE
+            )
             .is_none(),
         "EmptyComposition は cache へ 0×0 を挿入しない"
     );
@@ -433,7 +465,9 @@ fn hide_then_reshow_recovers_display_from_cache() {
         .and_then(|t| t.mount.as_ref())
         .expect("初回表示後は mount が生成済み")
         .surface_entity();
-    let bytes_shown = presenter.read_back(TargetId(0)).expect("read_back（初回）失敗");
+    let bytes_shown = presenter
+        .read_back(TargetId(0))
+        .expect("read_back（初回）失敗");
     assert_eq!(
         world.get::<HitTest>(surface_entity).unwrap().mode,
         HitTestMode::AlphaMask,
@@ -464,9 +498,20 @@ fn hide_then_reshow_recovers_display_from_cache() {
     );
     {
         let target = presenter.targets.get(&TargetId(0)).unwrap();
-        assert!(target.chain.is_some(), "Hide は swap chain を保持する（R3.3）");
         assert!(
-            target.cache.get(1000, &BindSet::default(), &PatternState::default(), ScaleRatio::ONE).is_some(),
+            target.chain.is_some(),
+            "Hide は swap chain を保持する（R3.3）"
+        );
+        assert!(
+            target
+                .cache
+                .get(
+                    1000,
+                    &BindSet::default(),
+                    &PatternState::default(),
+                    ScaleRatio::ONE
+                )
+                .is_some(),
             "Hide は合成キャッシュを保持する（R3.3）"
         );
         assert!(!target.visible, "Hide 後は target.visible=false");
@@ -505,7 +550,9 @@ fn hide_then_reshow_recovers_display_from_cache() {
     );
 
     // 観測可能な復帰: read_back が初回表示バイトと一致（キャッシュからの復帰）。
-    let bytes_reshown = presenter.read_back(TargetId(0)).expect("read_back（再表示）失敗");
+    let bytes_reshown = presenter
+        .read_back(TargetId(0))
+        .expect("read_back（再表示）失敗");
     assert_eq!(
         bytes_shown, bytes_reshown,
         "再表示のバイトが初回表示と一致しない（キャッシュからの表示復帰が壊れている）"
@@ -583,21 +630,37 @@ fn text_slot_view_returns_slot_window_size_scale_after_display() {
         .and_then(|t| t.mount.as_ref())
         .expect("表示確立後は mount が生成済み")
         .text_slot();
-    assert_eq!(view.slot(), expected_slot, "slot() が予約スロット entity と一致しない");
+    assert_eq!(
+        view.slot(),
+        expected_slot,
+        "slot() が予約スロット entity と一致しない"
+    );
     let name = world
         .get::<bevy_ecs::name::Name>(view.slot())
         .expect("予約スロットに Name が無い");
     assert_eq!(name.as_str(), "emo-text-layer-slot");
 
     // (b) window ＝ attach_target で渡した装着先窓。
-    assert_eq!(view.window(), window, "window() が装着先窓 entity と一致しない");
+    assert_eq!(
+        view.window(),
+        window,
+        "window() が装着先窓 entity と一致しない"
+    );
 
     // (c) surface_size ＝ 合成原寸（物理 px・本 fixture は 3×2）。
-    assert_eq!(view.surface_size(), (3, 2), "surface_size() が物理原寸と一致しない");
+    assert_eq!(
+        view.surface_size(),
+        (3, 2),
+        "surface_size() が物理原寸と一致しない"
+    );
 
     // (d) scale ＝ 本 fixture の窓 DPI（96）÷ author_dpi（96）＝ 1.0。
     //     恒常値ではなく**この入力での**期待値（k≠1.0 の檻は別テストが所有）。
-    assert_eq!(view.scale(), 1.0, "窓 DPI 96 / author_dpi 96 ゆえ scale() は 1.0");
+    assert_eq!(
+        view.scale(),
+        1.0,
+        "窓 DPI 96 / author_dpi 96 ゆえ scale() は 1.0"
+    );
 }
 
 /// `areka-P0-recompose-budget` Requirement 3.1 ／ 設計 Flow 2「容量回収は合成成功後に限る」観測完了:

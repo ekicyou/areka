@@ -102,25 +102,24 @@ pub fn segment_plan(items: &[TextItem]) -> SegmentPlan {
     let mut run_start = glyph_index;
 
     // 現在蓄積した run を budouy で分割し segments へ写す。空 run は何もしない。
-    let flush_run =
-        |segments: &mut Vec<Segment>, run_text: &str, run_start: usize| {
-            if run_text.is_empty() {
-                return;
+    let flush_run = |segments: &mut Vec<Segment>, run_text: &str, run_start: usize| {
+        if run_text.is_empty() {
+            return;
+        }
+        let mut chunk_start = run_start;
+        for chunk in parser.parse(run_text) {
+            let len = chunk.chars().count();
+            // budouy は非空チャンクのみ返す前提（spike で確認）。防御的に空はスキップ。
+            if len == 0 {
+                continue;
             }
-            let mut chunk_start = run_start;
-            for chunk in parser.parse(run_text) {
-                let len = chunk.chars().count();
-                // budouy は非空チャンクのみ返す前提（spike で確認）。防御的に空はスキップ。
-                if len == 0 {
-                    continue;
-                }
-                segments.push(Segment {
-                    start: chunk_start,
-                    len,
-                });
-                chunk_start += len;
-            }
-        };
+            segments.push(Segment {
+                start: chunk_start,
+                len,
+            });
+            chunk_start += len;
+        }
+    };
 
     for item in items {
         match item {
@@ -220,14 +219,20 @@ mod tests {
             assert!(seg.len >= 1, "空塊がある: {seg:?}");
             expected_start += seg.len;
         }
-        assert_eq!(expected_start, n, "全グリフを被覆していない（末尾に到達しない）");
+        assert_eq!(
+            expected_start, n,
+            "全グリフを被覆していない（末尾に到達しない）"
+        );
 
         // 無損失: 各塊の range から復元した char 連結が原グリフ列と一致。
         let mut reconstructed: Vec<char> = Vec::new();
         for seg in plan.segments() {
             reconstructed.extend_from_slice(&all[seg.start..seg.start + seg.len]);
         }
-        assert_eq!(reconstructed, all, "塊 range からの復元が原文と不一致（損失あり）");
+        assert_eq!(
+            reconstructed, all,
+            "塊 range からの復元が原文と不一致（損失あり）"
+        );
     }
 
     // ── R2.1: glyph 通し番号は LineBreak を数えない ──
@@ -309,7 +314,10 @@ mod tests {
         // panic せず、被覆は保たれる。
         let mut expected_start = 0usize;
         for seg in plan.segments() {
-            assert_eq!(seg.start, expected_start, "混在 run でも隙間/重複なし: {seg:?}");
+            assert_eq!(
+                seg.start, expected_start,
+                "混在 run でも隙間/重複なし: {seg:?}"
+            );
             assert!(seg.len >= 1);
             expected_start += seg.len;
         }

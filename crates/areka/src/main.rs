@@ -202,7 +202,9 @@ fn main() -> Result<()> {
         author_dpi,
     );
     let (ghost_runtime, seriko_handle, loop_ticker) = if outcome.wired {
-        tracing::info!("実 sink 結線で起動しました（emo2-boot wire 成立・SERIKO ループ ticker 稼働）");
+        tracing::info!(
+            "実 sink 結線で起動しました（emo2-boot wire 成立・SERIKO ループ ticker 稼働）"
+        );
         // マウス配信資源を World へ結線（task 3.1・design「main.rs＋wire_mouse_input」・
         // DD-IE-9）: kanade Sender クローンで MouseWiring（NonSend・Presenter）を挿入する。
         // 挿入は wire_emo2_boot 成功後＝Emo2Wiring 挿入済みゆえ presenter 経由の region 解決が
@@ -749,7 +751,10 @@ fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) -> Option<placement::Au
 /// 存在しないため、`smoke 自動 close` の `count=` が示す「消えた起動窓の数」は不変である。
 fn despawn_smoke_targets(world: &mut World) -> usize {
     let targets: Vec<Entity> = world
-        .query_filtered::<Entity, Or<(With<DummyWindowMarker>, With<placement::spawn::GhostWindowMarker>)>>()
+        .query_filtered::<Entity, Or<(
+            With<DummyWindowMarker>,
+            With<placement::spawn::GhostWindowMarker>,
+        )>>()
         .iter(world)
         .collect();
     let count = targets.len();

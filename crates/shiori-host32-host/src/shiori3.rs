@@ -175,7 +175,10 @@ pub struct ParsedResponse {
 ///   あり、Shift_JIS 復号は実装しない（シームのみ）。
 ///
 /// NUL 終端に依存せず、与えられたバイト長で解析する（len 厳守）。
-pub fn parse_response(bytes: &[u8], request_charset: Charset) -> Result<ParsedResponse, ShioriError> {
+pub fn parse_response(
+    bytes: &[u8],
+    request_charset: Charset,
+) -> Result<ParsedResponse, ShioriError> {
     // charset シーム: 本仕様は UTF-8 のみ実符号化。request_charset は継承先の宣言だが、
     // Utf8 以外の variant は存在しないため（Shift_JIS はシームのみ）、UTF-8 として復号する。
     match request_charset {
@@ -283,14 +286,16 @@ mod tests {
     #[test]
     fn parse_400_is_ok_status_preserved() {
         let resp = "SHIORI/3.0 400 Bad Request\r\nCharset: UTF-8\r\nSender: pasta\r\n\r\n";
-        let parsed = parse_response(resp.as_bytes(), Charset::Utf8).expect("400 is a parseable response, not a parse error");
+        let parsed = parse_response(resp.as_bytes(), Charset::Utf8)
+            .expect("400 is a parseable response, not a parse error");
         assert_eq!(parsed.status, 400);
     }
 
     /// 500 Internal Server Error: 同様に Ok で status=500 を保持（要件 2.4）。
     #[test]
     fn parse_500_is_ok_status_preserved() {
-        let resp = "SHIORI/3.0 500 Internal Server Error\r\nCharset: UTF-8\r\nSender: pasta\r\n\r\n";
+        let resp =
+            "SHIORI/3.0 500 Internal Server Error\r\nCharset: UTF-8\r\nSender: pasta\r\n\r\n";
         let parsed = parse_response(resp.as_bytes(), Charset::Utf8).expect("500 is parseable");
         assert_eq!(parsed.status, 500);
     }
@@ -299,7 +304,8 @@ mod tests {
     #[test]
     fn parse_311_and_312_not_dropped() {
         for code in [311u16, 312u16] {
-            let resp = format!("SHIORI/3.0 {code} Teach\r\nCharset: UTF-8\r\nSender: pasta\r\n\r\n");
+            let resp =
+                format!("SHIORI/3.0 {code} Teach\r\nCharset: UTF-8\r\nSender: pasta\r\n\r\n");
             let parsed = parse_response(resp.as_bytes(), Charset::Utf8).expect("3xx parseable");
             assert_eq!(parsed.status, code);
         }
@@ -319,7 +325,8 @@ mod tests {
     #[test]
     fn parse_unknown_headers_tolerated() {
         let resp = "SHIORI/3.0 200 OK\r\nCharset: UTF-8\r\nSender: pasta\r\nReference0: x\r\nMarker: y\r\nX-Weird: z\r\nValue: \\s[0]hi\\e\r\n\r\n";
-        let parsed = parse_response(resp.as_bytes(), Charset::Utf8).expect("unknown headers must not fail parse");
+        let parsed = parse_response(resp.as_bytes(), Charset::Utf8)
+            .expect("unknown headers must not fail parse");
         assert_eq!(parsed.status, 200);
         assert_eq!(parsed.value.as_deref(), Some(r"\s[0]hi\e"));
     }
@@ -446,7 +453,10 @@ mod tests {
         };
         let bytes = build_request(&req);
         let s = std::str::from_utf8(&bytes).expect("valid UTF-8");
-        assert!(!s.contains("Reference"), "unexpected Reference header:\n{s}");
+        assert!(
+            !s.contains("Reference"),
+            "unexpected Reference header:\n{s}"
+        );
         assert!(s.ends_with("\r\n\r\n"), "request:\n{s}");
     }
 
@@ -464,7 +474,10 @@ mod tests {
         };
         let bytes = build_request(&req);
         let s = std::str::from_utf8(&bytes).expect("output must be valid UTF-8");
-        assert!(s.contains("Reference0: こんにちは世界\r\n"), "request:\n{s}");
+        assert!(
+            s.contains("Reference0: こんにちは世界\r\n"),
+            "request:\n{s}"
+        );
     }
 
     /// 汎用 ID: 任意の ID（リソース照会系含む）が特別扱いなく `ID: <that>` になる（要件 1.5）。
@@ -481,7 +494,10 @@ mod tests {
             };
             let bytes = build_request(&req);
             let s = std::str::from_utf8(&bytes).expect("valid UTF-8");
-            assert!(s.contains(&format!("ID: {id}\r\n")), "id={id} request:\n{s}");
+            assert!(
+                s.contains(&format!("ID: {id}\r\n")),
+                "id={id} request:\n{s}"
+            );
         }
     }
 
@@ -539,7 +555,10 @@ mod tests {
         };
         let bytes = build_request(&req);
         let s = std::str::from_utf8(&bytes).expect("valid UTF-8");
-        assert!(!s.contains("Status:"), "None なら Status 行を出してはならない:\n{s}");
+        assert!(
+            !s.contains("Status:"),
+            "None なら Status 行を出してはならない:\n{s}"
+        );
     }
 
     /// Status 値は verbatim に写る（codec は解釈/分割/整形しない・DD-IT-6 語彙非漏洩）。
@@ -562,6 +581,9 @@ mod tests {
             "Status 値は verbatim でなければならない:\n{s}"
         );
         // 語彙非漏洩の確認: 値に "Reference" が無い限り Reference 行を捏造しない（既存檻と非衝突）。
-        assert!(!s.contains("Reference"), "Status 値が Reference 行を汚染してはならない:\n{s}");
+        assert!(
+            !s.contains("Reference"),
+            "Status 値が Reference 行を汚染してはならない:\n{s}"
+        );
     }
 }

@@ -1,9 +1,8 @@
-
 use super::test_support::{
     DPIS, char_size, grounded_y, left_wa, mixed_layout, point, px, rect, right_wa, win,
 };
 use super::{WorkAreaResolution, work_area_for_window_with_origin};
-use crate::placement::resolver::{SizePx};
+use crate::placement::resolver::SizePx;
 
 // -------------------------------------------------------------------------
 // MonitorSnapshot / work_area_for_window（task 8.1・DD15 基盤・4.7）

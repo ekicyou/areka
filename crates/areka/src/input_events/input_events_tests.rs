@@ -1,13 +1,18 @@
 use super::*;
-use areka_kanade::{KanadeMsg, MouseButton, MouseEventKind};
 use crate::emo2_boot::hit_region::HitRegion;
 use crate::placement::spawn::{CharWindowMarker, GhostWindowMarker};
+use areka_kanade::{KanadeMsg, MouseButton, MouseEventKind};
 use std::sync::mpsc;
 use wintf::ecs::Point;
 use wintf::ecs::pointer::{DoubleClick, Phase, PointerState};
 
 /// Bubble 相の合成 `PointerState`（client 物理 px・DoubleClick・Ctrl 押下）を組む。
-fn bubble_pointer(x: i32, y: i32, double_click: DoubleClick, ctrl_down: bool) -> Phase<PointerState> {
+fn bubble_pointer(
+    x: i32,
+    y: i32,
+    double_click: DoubleClick,
+    ctrl_down: bool,
+) -> Phase<PointerState> {
     Phase::Bubble(PointerState {
         client_point: Point { x, y },
         double_click,
@@ -62,7 +67,11 @@ fn mock_seam_plan_and_send_move_observed() {
 
     // Mock は presenter を無視して固定写像を返す。
     let hit = wiring.resolve_region(None, 0, 10, 20);
-    assert_eq!(hit.region, Some("Head".to_string()), "Mock は固定 region を返す");
+    assert_eq!(
+        hit.region,
+        Some("Head".to_string()),
+        "Mock は固定 region を返す"
+    );
 
     // 初回送出（moved=first_send）。恒等 mock ゆえ client px と surface px は同値。
     let sent = wiring.plan_and_send_move(0, (10, 20), hit.surface_point, hit.region.clone());
@@ -157,7 +166,12 @@ fn double_click_left_sends_unconditionally() {
             assert_eq!(m.x, 5);
             assert_eq!(m.y, 6);
             assert_eq!(m.region, Some("Head".to_string()));
-            assert_eq!(m.kind, MouseEventKind::DoubleClick { button: MouseButton::Left });
+            assert_eq!(
+                m.kind,
+                MouseEventKind::DoubleClick {
+                    button: MouseButton::Left
+                }
+            );
         }
         _ => panic!("Mouse(DoubleClick) を期待"),
     }
@@ -188,7 +202,12 @@ fn double_click_right_sends_with_right_button() {
             assert_eq!(m.x, 7);
             assert_eq!(m.y, 8);
             assert_eq!(m.region, None);
-            assert_eq!(m.kind, MouseEventKind::DoubleClick { button: MouseButton::Right });
+            assert_eq!(
+                m.kind,
+                MouseEventKind::DoubleClick {
+                    button: MouseButton::Right
+                }
+            );
         }
         _ => panic!("Mouse(DoubleClick) を期待"),
     }
@@ -221,11 +240,7 @@ fn wire_mouse_input_inserts_mouse_wiring_non_send() {
 #[test]
 fn presenter_absent_degrades_to_region_none() {
     let (tx, _rx) = mpsc::channel::<KanadeMsg>();
-    let wiring = MouseWiring::with_clock(
-        tx,
-        RegionSource::Presenter,
-        stepping_clock(1000, 1000),
-    );
+    let wiring = MouseWiring::with_clock(tx, RegionSource::Presenter, stepping_clock(1000, 1000));
 
     let hit = wiring.resolve_region(None, 3, 100, 200);
     assert_eq!(
@@ -262,7 +277,10 @@ fn handler_move_sends_then_suppresses_same_position() {
 
     // 初回移動 → 送出（内容一致）
     let ev = bubble_pointer(10, 20, DoubleClick::None, false);
-    assert!(on_char_pointer_moved(&mut world, e, e, &ev), "初回移動は送出");
+    assert!(
+        on_char_pointer_moved(&mut world, e, e, &ev),
+        "初回移動は送出"
+    );
     match rx.try_recv().expect("KanadeMsg が届く") {
         KanadeMsg::Mouse(m) => {
             assert_eq!(m.scope, 0);
@@ -465,7 +483,10 @@ fn wiring_throttles_scopes_independently_via_hashmap() {
 
     // scope 0 初回移動（now=1000）→ 送出。
     let ev = bubble_pointer(10, 20, DoubleClick::None, false);
-    assert!(on_char_pointer_moved(&mut world, e0, e0, &ev), "scope 0 初回は送出");
+    assert!(
+        on_char_pointer_moved(&mut world, e0, e0, &ev),
+        "scope 0 初回は送出"
+    );
     match rx.try_recv().expect("scope 0 の Move が届く") {
         KanadeMsg::Mouse(m) => assert_eq!(m.scope, 0),
         _ => panic!("Mouse(Move) を期待"),
@@ -579,7 +600,10 @@ fn move_delivers_surface_point_while_throttle_compares_client_px() {
 
     // (i) client (10,20) → 配信は surface (5,10)。
     let ev = bubble_pointer(10, 20, DoubleClick::None, false);
-    assert!(on_char_pointer_moved(&mut world, e, e, &ev), "初回移動は送出");
+    assert!(
+        on_char_pointer_moved(&mut world, e, e, &ev),
+        "初回移動は送出"
+    );
     match rx.try_recv().expect("KanadeMsg が届く") {
         KanadeMsg::Mouse(m) => {
             assert_eq!(m.scope, 0);
@@ -722,7 +746,12 @@ fn handlers_ignore_tunnel_phase() {
         ctrl_down: true,
         ..Default::default()
     });
-    assert!(!on_char_pointer_pressed(&mut world, w, w, &tunnel_ctrl_left));
+    assert!(!on_char_pointer_pressed(
+        &mut world,
+        w,
+        w,
+        &tunnel_ctrl_left
+    ));
     assert_eq!(ghost_count(&mut world), 1, "Tunnel 相では退避しない");
     assert!(rx.try_recv().is_err(), "Tunnel 相は何も送出しない");
 }

@@ -43,8 +43,7 @@ pub(super) const RATIO_PARTS_MAX_DEN: u32 = 4096;
 /// 続く `../pilot/...` はそのアンカーからの相対要素にすぎない。ゆえに**プロセスの作業ディレクトリに
 /// 依存せず常に絶対解決される**（要件 4.6・ヘッダ「# 起動時のパス（絶対パスの要否）」節）。
 pub(super) fn emo2_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../pilot/examples/shiori-host-32/fixtures/emo2")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../pilot/examples/shiori-host-32/fixtures/emo2")
 }
 
 /// emo2 fixture のバルーンルート（donor と同一規約）。

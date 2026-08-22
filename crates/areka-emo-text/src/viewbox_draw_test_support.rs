@@ -1,3 +1,10 @@
+use crate::actor::TextSlotBinding;
+use crate::canvas::ContentCanvas;
+use crate::layout::{FixedMetrics, LayoutEngine, VisibleWindow, WrapPlan};
+use crate::region::TextRegion;
+use crate::state::TextItem;
+use crate::surface::TextSurface;
+use crate::writing::WritingMode;
 use areka_parsers::balloon::{
     BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
 };
@@ -8,22 +15,13 @@ use windows::UI::Composition::Compositor;
 use windows::Win32::System::WinRT::{DQTAT_COM_ASTA, DQTAT_COM_NONE};
 use wintf::com::wuc::create_dispatcher_queue_controller;
 use wintf::ecs::{GraphicsCore, Visual};
-use crate::actor::TextSlotBinding;
-use crate::canvas::ContentCanvas;
-use crate::layout::{FixedMetrics, LayoutEngine, VisibleWindow, WrapPlan};
-use crate::region::TextRegion;
-use crate::state::TextItem;
-use crate::surface::TextSurface;
-use crate::writing::WritingMode;
 
 /// テスト用 WUC apartment/dispatcher（surface.rs/draw.rs テストと同一方針:
 /// COM 未初期化のテストスレッドでは ASTA 第一候補・NONE 保険）。
-pub(super) fn make_dispatcher_and_compositor() -> (windows::System::DispatcherQueueController, Compositor)
-{
+pub(super) fn make_dispatcher_and_compositor()
+-> (windows::System::DispatcherQueueController, Compositor) {
     let dq = create_dispatcher_queue_controller(DQTAT_COM_ASTA)
-        .or_else(|e_asta| {
-            create_dispatcher_queue_controller(DQTAT_COM_NONE).map_err(|_| e_asta)
-        })
+        .or_else(|e_asta| create_dispatcher_queue_controller(DQTAT_COM_NONE).map_err(|_| e_asta))
         .expect("DispatcherQueueController 生成失敗（ASTA/NONE いずれも不可）");
     let compositor = Compositor::new().expect("Compositor::new 失敗");
     (dq, compositor)
@@ -153,7 +151,12 @@ pub(super) fn opaque_count(bytes: &[u8]) -> usize {
 /// ブロック軸（行送り軸）方向のインク範囲 `(near, far)`（物理 px・両端含む・インクなしは `None`）。
 /// horizontal_tb＝y（上端〜下端）・vertical_rl/lr＝x（左端〜右端）——スクロールで content が
 /// 動く軸。k≠1.0 の許容差比較（G2）で oracle と viewbox のインク位置差を測る。
-pub(super) fn block_axis_ink_span(bytes: &[u8], w: u32, h: u32, mode: WritingMode) -> Option<(u32, u32)> {
+pub(super) fn block_axis_ink_span(
+    bytes: &[u8],
+    w: u32,
+    h: u32,
+    mode: WritingMode,
+) -> Option<(u32, u32)> {
     let mut lo: Option<u32> = None;
     let mut hi: u32 = 0;
     for y in 0..h {

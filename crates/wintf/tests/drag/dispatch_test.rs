@@ -19,7 +19,7 @@ use wintf::ecs::drag::{
 };
 use wintf::ecs::layout::{Arrangement, Offset};
 use wintf::ecs::window::{Window, WindowPos};
-use wintf::ecs::{Point, PhysicalPoint, SizeI};
+use wintf::ecs::{PhysicalPoint, Point, SizeI};
 
 /// dispatch_drag_events が必要とするリソースを登録した World を生成する。
 /// production の `EcsWorld::new`（src/ecs/world/mod.rs:59-67）と同じ登録を行う。
@@ -150,7 +150,10 @@ fn dispatch_started_writes_drag_context_resource() {
         .resource::<WindowDragContextResource>()
         .get()
         .expect("context が読めるべき");
-    assert!(ctx.move_window, "DragConfig.move_window=true が転送されるべき");
+    assert!(
+        ctx.move_window,
+        "DragConfig.move_window=true が転送されるべき"
+    );
     let c = ctx.constraint.expect("DragConstraint が転送されるべき");
     assert_eq!(c.min_x, Some(-50));
     assert_eq!(c.max_x, Some(1000));
@@ -262,7 +265,10 @@ fn dispatch_ended_cancelled_propagates_flag() {
 
     let events = drain_messages::<DragEndEvent>(&mut world);
     assert_eq!(events.len(), 1);
-    assert!(events[0].cancelled, "cancelled=true が DragEndEvent に伝播するべき");
+    assert!(
+        events[0].cancelled,
+        "cancelled=true が DragEndEvent に伝播するべき"
+    );
 
     // WindowDragContextResource はクリアされている
     let ctx = world
@@ -305,7 +311,11 @@ fn dispatch_emits_drag_event_when_delta_nonzero() {
     // DragEvent が書き込まれる（target は Window 祖先を持たないが、Started 処理は
     // window_entity=None でも DraggingState を挿入し、DragEvent 経路は別途デルタで発火する）
     let events = drain_messages::<DragEvent>(&mut world);
-    assert_eq!(events.len(), 1, "デルタ非ゼロで DragEvent が 1 件発火するべき");
+    assert_eq!(
+        events.len(),
+        1,
+        "デルタ非ゼロで DragEvent が 1 件発火するべき"
+    );
     assert_eq!(events[0].target, target);
     assert_eq!((events[0].position.x, events[0].position.y), (140, 160));
     assert_eq!(
@@ -338,7 +348,10 @@ fn dispatch_no_drag_event_when_delta_zero() {
     dispatch_drag_events(&mut world);
 
     let events = drain_messages::<DragEvent>(&mut world);
-    assert!(events.is_empty(), "デルタゼロでは DragEvent を発火しないべき");
+    assert!(
+        events.is_empty(),
+        "デルタゼロでは DragEvent を発火しないべき"
+    );
 }
 
 /// flush 結果がないと判断される条件はないが、遷移もデルタもない（current_dragging_entity=None）

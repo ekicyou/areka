@@ -140,7 +140,9 @@ fn dispatch_block(shell: &mut Shell, header: &[String], body: &[Vec<String>]) {
         let id = representative_id(&targets);
         let (elements, collisions, animations) = decode_surface_body(body);
         // 定義ストリームへ登場順に push（index は push 前の len＝これから積む位置・要件 12.5(d)）。
-        shell.definitions.push(DefRef::Surface(shell.surfaces.len()));
+        shell
+            .definitions
+            .push(DefRef::Surface(shell.surfaces.len()));
         shell.surfaces.push(Surface {
             id,
             targets,
@@ -475,9 +477,8 @@ fn parse_target_element(field: &str) -> AppendTarget {
 fn representative_id(targets: &[AppendTarget]) -> u32 {
     match targets.first() {
         Some(AppendTarget::Single(n)) | Some(AppendTarget::Exclude(n)) => *n,
-        Some(AppendTarget::Range { start, .. }) | Some(AppendTarget::ExcludeRange { start, .. }) => {
-            *start
-        }
+        Some(AppendTarget::Range { start, .. })
+        | Some(AppendTarget::ExcludeRange { start, .. }) => *start,
         _ => 0,
     }
 }

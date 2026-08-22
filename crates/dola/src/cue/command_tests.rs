@@ -164,11 +164,11 @@ fn cue_command_cursor_serde_roundtrip() {
 
     // 裸数値・相対（`@` 前置）・%・片側空のいずれも不透明のまま忠実に往復する（3.2）。
     for (x, y) in [
-        ("50", "100"),      // 裸数値
-        ("@10", "@-5"),     // 相対（`@` 前置）
-        ("50%", "25%"),     // パーセント
-        ("5em", ""),        // 片側のみ空（区別保持）
-        ("", "2lh"),        // もう片側のみ空
+        ("50", "100"),  // 裸数値
+        ("@10", "@-5"), // 相対（`@` 前置）
+        ("50%", "25%"), // パーセント
+        ("5em", ""),    // 片側のみ空（区別保持）
+        ("", "2lh"),    // もう片側のみ空
     ] {
         let cmd = CueCommand::Cursor {
             x: x.into(),
@@ -176,7 +176,10 @@ fn cue_command_cursor_serde_roundtrip() {
         };
         let json = serde_json::to_string(&cmd).unwrap();
         let parsed: CueCommand = serde_json::from_str(&json).unwrap();
-        assert_eq!(cmd, parsed, "Cursor(x={x:?}, y={y:?}) must roundtrip opaquely");
+        assert_eq!(
+            cmd, parsed,
+            "Cursor(x={x:?}, y={y:?}) must roundtrip opaquely"
+        );
     }
 }
 
@@ -352,8 +355,7 @@ fn choice_references_additive_wire_form() {
     };
     let json = serde_json::to_string(&with_refs).unwrap();
     assert_eq!(
-        json,
-        r#"{"Choice":{"id":"OnYes","text":"はい","references":["r0","r1"]}}"#,
+        json, r#"{"Choice":{"id":"OnYes","text":"はい","references":["r0","r1"]}}"#,
         "references ありは references キー付きで記述順を保ってシリアライズされる"
     );
     let parsed: CueCommand = serde_json::from_str(&json).unwrap();
@@ -534,7 +536,8 @@ fn cue_duration_defaults_to_zero_for_legacy_serialized_data() {
     );
 
     // Barrier / Routing ペイロード（duration 非該当）の旧資産も同様に読める。
-    let legacy_barrier = r#"{"actor":"0","start_time":1.0,"payload":{"Barrier":{"WaitForInput":{"timeout":null}}}}"#;
+    let legacy_barrier =
+        r#"{"actor":"0","start_time":1.0,"payload":{"Barrier":{"WaitForInput":{"timeout":null}}}}"#;
     let parsed: Cue = serde_json::from_str(legacy_barrier).unwrap();
     assert_eq!(parsed.duration, 0.0);
 }
@@ -607,8 +610,7 @@ fn duration_is_uniform_envelope_field_across_all_payloads() {
             payload: payload.clone(),
             duration: 0.0,
         };
-        let parsed: Cue =
-            serde_json::from_str(&serde_json::to_string(&instant).unwrap()).unwrap();
+        let parsed: Cue = serde_json::from_str(&serde_json::to_string(&instant).unwrap()).unwrap();
         assert_eq!(parsed.duration, 0.0, "瞬時 cue は明示的 0 を保持する");
         assert_eq!(parsed.payload, instant.payload);
 
@@ -619,8 +621,7 @@ fn duration_is_uniform_envelope_field_across_all_payloads() {
             payload,
             duration: 1.25,
         };
-        let parsed: Cue =
-            serde_json::from_str(&serde_json::to_string(&timed).unwrap()).unwrap();
+        let parsed: Cue = serde_json::from_str(&serde_json::to_string(&timed).unwrap()).unwrap();
         assert_eq!(parsed.duration, 1.25);
         assert_eq!(parsed.payload, timed.payload);
     }
@@ -739,7 +740,10 @@ fn cue_target_window_is_additive_unit_variant() {
 
     // `EntityKey` 参照非破壊（Window を含む Actor スロットも構築可）。
     let key = EntityKey::Actor(ActorKey::from("0"), CueTarget::Window);
-    assert_eq!(key, EntityKey::Actor(ActorKey::from("0"), CueTarget::Window));
+    assert_eq!(
+        key,
+        EntityKey::Actor(ActorKey::from("0"), CueTarget::Window)
+    );
 }
 
 // ── 配送エンベロープ（TalkCue）檻 ──

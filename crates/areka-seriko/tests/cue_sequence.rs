@@ -10,8 +10,8 @@
 use areka_emo_compose::{EmoWorld, PatternState};
 use areka_sakura::{ActorKey, CueCommand, CueSink, TalkCue};
 use areka_seriko::{
-    build_static_bindset, spawn_seriko, BindResolver, DisplayCommand, MockSurfaceOutput,
-    SerikoLoopConfig, SurfaceResolver,
+    BindResolver, DisplayCommand, MockSurfaceOutput, SerikoLoopConfig, SurfaceResolver,
+    build_static_bindset, spawn_seriko,
 };
 
 /// テスト用の Shell 系 `TalkCue`（`Emote{key}`・at/actor 込み）を組む。

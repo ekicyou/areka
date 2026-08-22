@@ -28,8 +28,8 @@
 // 監査結論: 両項目とも欠落・弱檻（トートロジー/部分網羅）なし。全 26 檻が具体 assert で緑。
 // =============================================================================
 
-use areka_emo_compose::ScaleRatio;
 use super::*;
+use areka_emo_compose::ScaleRatio;
 
 fn toks(items: &[&str]) -> Vec<String> {
     items.iter().map(|s| s.to_string()).collect()
@@ -60,8 +60,8 @@ fn canon_omission_defaults() {
 /// 裸 `base`（ドット無し）≡ `base.base`（正典形式 `X.Y` の de-facto・R5.2 対応表）。
 #[test]
 fn bare_base_equals_base_base() {
-    let bare = parse_move_directive(0, &toks(&["", "", "", "0", "base", "base"]))
-        .expect("裸 base は Ok");
+    let bare =
+        parse_move_directive(0, &toks(&["", "", "", "0", "base", "base"])).expect("裸 base は Ok");
     let dotted = parse_move_directive(0, &toks(&["", "", "", "0", "base.base", "base.base"]))
         .expect("base.base は Ok");
     assert_eq!(bare.base_offset, RefPoint::BASE_BASE);
@@ -135,8 +135,8 @@ fn base_vocab_acceptance_and_classification() {
     }
 
     // 未知の基準語は防御的に Err（非 panic）。
-    let err = parse_move_directive(0, &toks(&["", "", "", "nonsense"]))
-        .expect_err("未知基準は Err");
+    let err =
+        parse_move_directive(0, &toks(&["", "", "", "nonsense"])).expect_err("未知基準は Err");
     assert_eq!(err, MoveDegradation::UnknownBase("nonsense".to_string()));
 }
 
@@ -164,8 +164,7 @@ fn fixture_move_353_scope1() {
 /// 軸トークンが fix でも i32 でもない場合は防御的に Err（非 panic）。
 #[test]
 fn unparsable_axis_is_err() {
-    let err = parse_move_directive(0, &toks(&["abc"]))
-        .expect_err("非数値・非 fix の軸は Err");
+    let err = parse_move_directive(0, &toks(&["abc"])).expect_err("非数値・非 fix の軸は Err");
     assert_eq!(
         err,
         MoveDegradation::UnparsableAxis {
@@ -215,8 +214,14 @@ fn fixture_move_353_x_and_y_unchanged() {
     let base = win(1000, 500, 400, 687);
     let target = win(1200, 800, 300, 434);
 
-    let pos = resolve_move_target_position(&CanonDefaultBasepos, &base, &target, &directive, ScaleRatio::ONE)
-        .expect("位置・寸法が揃うので算出できる");
+    let pos = resolve_move_target_position(
+        &CanonDefaultBasepos,
+        &base,
+        &target,
+        &directive,
+        ScaleRatio::ONE,
+    )
+    .expect("位置・寸法が揃うので算出できる");
 
     // x' = 1000 + 200 − 353 − 150 = 697
     assert_eq!(pos.x, 697, "x' = pos0.x + w0/2 − 353 − w1/2");
@@ -280,20 +285,29 @@ fn script_offset_scaling_preserves_sign_on_both_axes() {
 /// x=Fix・y=Px(50) → x' は target.x 現状維持、y' = pos0.y + h0 + 50 − h1。
 #[test]
 fn y_px_axis_is_symmetric_not_hardcoded() {
-    let directive = parse_move_directive(1, &toks(&["", "50", "", "0", "base", "base"]))
-        .expect("y=Px は Ok");
+    let directive =
+        parse_move_directive(1, &toks(&["", "50", "", "0", "base", "base"])).expect("y=Px は Ok");
     assert_eq!(directive.x, AxisSpec::Fix);
     assert_eq!(directive.y, AxisSpec::Px(50));
 
     let base = win(1000, 500, 400, 687);
     let target = win(1200, 800, 300, 434);
-    let pos = resolve_move_target_position(&CanonDefaultBasepos, &base, &target, &directive, ScaleRatio::ONE)
-        .expect("算出できる");
+    let pos = resolve_move_target_position(
+        &CanonDefaultBasepos,
+        &base,
+        &target,
+        &directive,
+        ScaleRatio::ONE,
+    )
+    .expect("算出できる");
 
     // X=Fix → 現状維持
     assert_eq!(pos.x, 1200, "X=Fix は対象窓の現在 X を現状維持");
     // y' = 500 + 687 + 50 − 434 = 803
-    assert_eq!(pos.y, 803, "y' = pos0.y + h0 + dy − h1（下端 basepos で対称）");
+    assert_eq!(
+        pos.y, 803,
+        "y' = pos0.y + h0 + dy − h1（下端 basepos で対称）"
+    );
 }
 
 /// BaseposResolver はトレイト＝差替シーム。テストダブルが別 basepos を供給すると
@@ -316,26 +330,41 @@ fn computation_honors_resolver_seam() {
     let base = win(1000, 500, 400, 687);
     let target = win(1200, 800, 300, 434);
 
-    let pos = resolve_move_target_position(&FullSizeBasepos, &base, &target, &directive, ScaleRatio::ONE)
-        .expect("算出できる");
+    let pos = resolve_move_target_position(
+        &FullSizeBasepos,
+        &base,
+        &target,
+        &directive,
+        ScaleRatio::ONE,
+    )
+    .expect("算出できる");
     // x' = pos0.x + w0 − 353 − w1 = 1000 + 400 − 353 − 300 = 747（Canon の 697 とは別）
-    assert_eq!(pos.x, 747, "resolver の basepos 出力（幅そのもの）が使われる");
+    assert_eq!(
+        pos.x, 747,
+        "resolver の basepos 出力（幅そのもの）が使われる"
+    );
     assert_ne!(pos.x, 697, "正典既定（中央）とは異なる＝シームが効いている");
 }
 
 /// 両軸 Fix（現状維持のみ）は基準窓の寸法欠落でも対象窓の現在位置を返す（no-op 移動）。
 #[test]
 fn both_fix_returns_current_position() {
-    let directive = parse_move_directive(1, &toks(&["", "", "", "0", "base", "base"]))
-        .expect("両軸省略は Ok");
+    let directive =
+        parse_move_directive(1, &toks(&["", "", "", "0", "base", "base"])).expect("両軸省略は Ok");
     assert_eq!(directive.x, AxisSpec::Fix);
     assert_eq!(directive.y, AxisSpec::Fix);
 
     // 基準窓は寸法なし（現状維持のみゆえ basepos 不要）。
     let base = WindowPos::default();
     let target = win(1200, 800, 300, 434);
-    let pos = resolve_move_target_position(&CanonDefaultBasepos, &base, &target, &directive, ScaleRatio::ONE)
-        .expect("両軸 Fix は現状維持で算出できる");
+    let pos = resolve_move_target_position(
+        &CanonDefaultBasepos,
+        &base,
+        &target,
+        &directive,
+        ScaleRatio::ONE,
+    )
+    .expect("両軸 Fix は現状維持で算出できる");
     assert_eq!(pos, PointPx { x: 1200, y: 800 });
 }
 
@@ -352,7 +381,14 @@ fn missing_geometry_with_px_axis_is_none() {
         ..Default::default()
     };
     assert!(
-        resolve_move_target_position(&CanonDefaultBasepos, &base, &target, &directive, ScaleRatio::ONE).is_none(),
+        resolve_move_target_position(
+            &CanonDefaultBasepos,
+            &base,
+            &target,
+            &directive,
+            ScaleRatio::ONE
+        )
+        .is_none(),
         "Px 軸で寸法欠落は算出不能＝None"
     );
 }

@@ -284,7 +284,10 @@ impl fmt::Display for ChainDeferReason {
                 "scope {scope}: 再アンカーが未 landing（実表示寸 {sw}x{sh} ≠ 窓寸 {ww}x{wh}）"
             ),
             ChainDeferReason::DpiSyncHeld { scope } => {
-                write!(f, "scope {scope}: 整合待ちの札が残っている（拡大率と表が未整合）")
+                write!(
+                    f,
+                    "scope {scope}: 整合待ちの札が残っている（拡大率と表が未整合）"
+                )
             }
         }
     }

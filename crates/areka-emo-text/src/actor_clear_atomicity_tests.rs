@@ -3,9 +3,11 @@ use bevy_ecs::prelude::World;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use wintf::ecs::{GraphicsCore, WucGraphicsResource};
 
+use super::test_support::{
+    choice_cue, com_world, cue, geo_model, opaque_count, spawn_reserved_slot,
+};
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
 use crate::state::TextLayerConfig;
-use super::test_support::{choice_cue, com_world, cue, geo_model, opaque_count, spawn_reserved_slot};
 
 // ══ task 8.3: Clear/ClearAll の原子的無効化（hover リセット＋ヒット行スナップショット無効化・R5.1/5.2/5.4） ══
 
@@ -118,8 +120,16 @@ fn clear_all_resets_hover_and_hit_rows_for_every_actor() {
     );
 
     present_frame(&mut rt, &mut world, 10.0).expect("提示（population）");
-    assert_eq!(rt.choice_hit_rows(&a0).len(), 1, "ClearAll 前 actor0 ヒット行 1");
-    assert_eq!(rt.choice_hit_rows(&a1).len(), 1, "ClearAll 前 actor1 ヒット行 1");
+    assert_eq!(
+        rt.choice_hit_rows(&a0).len(),
+        1,
+        "ClearAll 前 actor0 ヒット行 1"
+    );
+    assert_eq!(
+        rt.choice_hit_rows(&a1).len(),
+        1,
+        "ClearAll 前 actor1 ヒット行 1"
+    );
     // 両 actor に hover 注入して再提示（両供給面へハイライトが載る）。
     rt.inject_choice_hover(&a0, Some(0));
     rt.inject_choice_hover(&a1, Some(0));
@@ -151,8 +161,16 @@ fn clear_all_resets_hover_and_hit_rows_for_every_actor() {
                 .expect("read_back"),
         )
     };
-    assert_eq!(rt.choice_hit_rows(&a0).len(), 1, "actor0 新選択肢ヒット行 1");
-    assert_eq!(rt.choice_hit_rows(&a1).len(), 1, "actor1 新選択肢ヒット行 1");
+    assert_eq!(
+        rt.choice_hit_rows(&a0).len(),
+        1,
+        "actor0 新選択肢ヒット行 1"
+    );
+    assert_eq!(
+        rt.choice_hit_rows(&a1).len(),
+        1,
+        "actor1 新選択肢ヒット行 1"
+    );
     let after_new_0 = read(&rt, &a0);
     let after_new_1 = read(&rt, &a1);
     // 両 actor の hover を明示 None にして再提示——ClearAll が既に None へ揃えていれば NoChange。
@@ -288,7 +306,10 @@ fn new_talk_clearall_then_new_choice_set_retains_only_new_set_atomic() {
         ("OnYes", "OnNo"),
         "集合1 の id"
     );
-    assert!(rt.choice_active(&actor), "集合1 提示後は choice_active=true");
+    assert!(
+        rt.choice_active(&actor),
+        "集合1 提示後は choice_active=true"
+    );
     let old_bytes = rt
         .surface(&actor)
         .expect("供給面")
@@ -350,7 +371,10 @@ fn new_talk_clearall_then_new_choice_set_retains_only_new_set_atomic() {
         !new_rows.iter().any(|r| r.id == "OnYes" || r.id == "OnNo"),
         "旧集合の id はヒット行に残らない（5.3）"
     );
-    assert!(rt.choice_active(&actor), "集合2 提示後は choice_active=true");
+    assert!(
+        rt.choice_active(&actor),
+        "集合2 提示後は choice_active=true"
+    );
 
     // 画素: 新集合の行バンドにインクがある＝新選択肢が描かれている（7.3/7.4）。
     let new_bytes = rt

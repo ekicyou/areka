@@ -93,7 +93,8 @@ pub(crate) fn on_char_drag(
                 }
                 _ => {
                     // Free・Anchored 不在: wndproc（move_window=true）が移動済みの位置を読むだけ
-                    let Some(pos) = world.get::<WindowPos>(entity).and_then(|wp| wp.position) else {
+                    let Some(pos) = world.get::<WindowPos>(entity).and_then(|wp| wp.position)
+                    else {
                         return false;
                     };
                     pos
@@ -170,7 +171,8 @@ pub(crate) fn on_char_drag_end(
             let mapped = match policy_mapped_position(world, entity, anchor, ev.position) {
                 Some(mapped) => mapped,
                 None => {
-                    let Some(pos) = world.get::<WindowPos>(entity).and_then(|wp| wp.position) else {
+                    let Some(pos) = world.get::<WindowPos>(entity).and_then(|wp| wp.position)
+                    else {
                         debug!(
                             ?entity,
                             "DraggingState も WindowPos.position も無いため位置保存を skip（防御・no-op）"
@@ -196,13 +198,14 @@ pub(crate) fn on_char_drag_end(
                     // サーフェス寸が変わったとき「同じ左上」が別の中央を指し、復元で
                     // キャラ・バルーンが横へずれる（実機: むらさき 382 で保存→434 で復元）。
                     // 現寸が読めないときは左上のまま（防御・従来挙動）。
-                    let char_size = world
-                        .get::<WindowPos>(entity)
-                        .and_then(|wp| wp.size)
-                        .map(|s| SizePx {
-                            w: s.width,
-                            h: s.height,
-                        });
+                    let char_size =
+                        world
+                            .get::<WindowPos>(entity)
+                            .and_then(|wp| wp.size)
+                            .map(|s| SizePx {
+                                w: s.width,
+                                h: s.height,
+                            });
                     let saved = match char_size {
                         Some(size) => char_pos_to_origin_x(
                             anchor,
@@ -271,10 +274,8 @@ fn policy_mapped_position(
     };
     let raw = PointPx {
         // 実カーソル・窓座標の範囲で溢れないが、極端入力でも panic しない契約
-        x: (ds.initial_inset.0 as i32)
-            .saturating_add(cursor.x.saturating_sub(ds.drag_start_pos.x)),
-        y: (ds.initial_inset.1 as i32)
-            .saturating_add(cursor.y.saturating_sub(ds.drag_start_pos.y)),
+        x: (ds.initial_inset.0 as i32).saturating_add(cursor.x.saturating_sub(ds.drag_start_pos.x)),
+        y: (ds.initial_inset.1 as i32).saturating_add(cursor.y.saturating_sub(ds.drag_start_pos.y)),
     };
     let size = world
         .get::<WindowPos>(entity)
@@ -618,7 +619,8 @@ pub(crate) fn on_balloon_drag_end(
 
             // 最終確定位置＝バルーン窓の WindowPos.position（wndproc が move_window=true で
             // 更新済み・on_balloon_drag と同源。ev.position(cursor) は使わない）。
-            let Some(balloon_pos) = world.get::<WindowPos>(entity).and_then(|wp| wp.position) else {
+            let Some(balloon_pos) = world.get::<WindowPos>(entity).and_then(|wp| wp.position)
+            else {
                 debug!(
                     ?entity,
                     "バルーン窓の WindowPos.position 不在のため offset 保存を skip（防御・no-op）"

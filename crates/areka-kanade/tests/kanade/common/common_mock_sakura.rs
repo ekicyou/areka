@@ -277,10 +277,7 @@ pub fn spawn_mock_sakura_gated(
     let releaser = thread::Builder::new()
         .name("mock-sakura-releaser".to_string())
         .spawn(move || {
-            let mut inner = shared_releaser
-                .inner
-                .lock()
-                .expect("sakura gate mutex");
+            let mut inner = shared_releaser.inner.lock().expect("sakura gate mutex");
             // 起床条件:
             //   (a) 解放済み かつ 全保留 talk が park された（＝正規の解放点）、または
             //   (b) recv ループ終了（安全弁・kanade 停止で二度と park は増えない）。

@@ -3,7 +3,10 @@ use super::*;
 // R3.4: arg 優先。arg=Some, env=Some → arg（parent_hwnd/load_dir/shiori_name 3 適用の共通観点）。
 #[test]
 fn arg_takes_priority_over_env() {
-    let got = resolve_param(Some("C:\\ghost\\master".to_string()), Some("C:\\env".to_string()));
+    let got = resolve_param(
+        Some("C:\\ghost\\master".to_string()),
+        Some("C:\\env".to_string()),
+    );
     assert_eq!(got.as_deref(), Some("C:\\ghost\\master"));
 }
 
@@ -30,7 +33,10 @@ fn blank_arg_falls_through_to_env() {
 // R3.4: arg も env も空白のみ → None（両欠落と等価に扱う）。
 #[test]
 fn blank_arg_and_blank_env_yield_none() {
-    assert_eq!(resolve_param(Some("  ".to_string()), Some("\t".to_string())), None);
+    assert_eq!(
+        resolve_param(Some("  ".to_string()), Some("\t".to_string())),
+        None
+    );
 }
 
 // R3.5: arg=None, env=None → None（必須パラメーター欠落＝呼出側が exit(2) の判定に用いる）。

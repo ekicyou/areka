@@ -1,7 +1,7 @@
 use super::test_support::{bump_char_window_dpi, opaque_count, variant_name};
 use super::{
-    capture_logs, run_attach_phase, run_dpi_phase, shell_target, spin_wait_until, Duration,
-    Instant, LoopRng, PresentCommand, SpineHarness, SPIN_WAIT,
+    Duration, Instant, LoopRng, PresentCommand, SPIN_WAIT, SpineHarness, capture_logs,
+    run_attach_phase, run_dpi_phase, shell_target, spin_wait_until,
 };
 
 // ===========================================================================
@@ -139,14 +139,21 @@ fn shell_pattern_frame(cmd: &PresentCommand, shown_surface: u32, anim_id: u32) -
             pattern,
             ..
         } => {
-            assert_eq!(*target, shell_target(0), "shell 表示対象（scope0・偶数 TargetId・DD-3）");
+            assert_eq!(
+                *target,
+                shell_target(0),
+                "shell 表示対象（scope0・偶数 TargetId・DD-3）"
+            );
             assert_eq!(
                 *surface_id, shown_surface,
                 "表示中 surface（seriko 数値解決の透過・pattern はこの面のアニメに従属）"
             );
             pattern.get(anim_id).map(|f| f.surface_id)
         }
-        other => panic!("ShowSurface を期待（golden の各 tick は面表示指令）: {}", variant_name(other)),
+        other => panic!(
+            "ShowSurface を期待（golden の各 tick は面表示指令）: {}",
+            variant_name(other)
+        ),
     }
 }
 
@@ -298,7 +305,8 @@ fn spine_e2e_kero_blink_one_cycle_golden() {
 fn spine_e2e_sakura_blink_after_bind_one_cycle_golden() {
     // \s[1000]（sakura 着せ替え surface）＋ \![bind,まばたき,通常,1]（1400 bindgroup ON）。常時発火 rng で
     // ループ活性化（bind ゲート ON の 1400 のみ発火・半目 1401/ジトー 1402 は OFF ゆえ非発火）。
-    let mut harness = SpineHarness::boot_live(r"\s[1000]\![bind,まばたき,通常,1]\e", always_fire_rng());
+    let mut harness =
+        SpineHarness::boot_live(r"\s[1000]\![bind,まばたき,通常,1]\e", always_fire_rng());
     // 表示中＋bind ON 前提: scope0 shell surface1000 が binds に 1400 を含んで表示される
     // （\![bind] 貫通で current_binds へ 1400 が書き込まれた end-to-end 証跡＝bind 再発行 Show）。
     drive_shell_shown(&mut harness, 1000, Some(1400));
@@ -450,7 +458,9 @@ fn seriko_tick_apply_one(
         .wiring
         .read_back_target(shell_target(0))
         .unwrap_or_else(|e| {
-            panic!("ループ指令適用後の shell scope0 read_back 失敗（表示が消えた・要件 4.3）: {e:?}")
+            panic!(
+                "ループ指令適用後の shell scope0 read_back 失敗（表示が消えた・要件 4.3）: {e:?}"
+            )
         });
     assert!(
         opaque_count(&px) > 0,
@@ -542,7 +552,9 @@ fn spine_dpi_change_during_live_seriko_loop_keeps_loop_progressing() {
     let frame1_k1 = harness
         .wiring
         .read_back_target(shell_target(0))
-        .unwrap_or_else(|e| panic!("DPI 変化直後の shell read_back 失敗（表示消失・要件 4.3）: {e:?}"));
+        .unwrap_or_else(|e| {
+            panic!("DPI 変化直後の shell read_back 失敗（表示消失・要件 4.3）: {e:?}")
+        });
     assert!(
         opaque_count(&frame1_k1) > 0,
         "DPI 変化直後の shell readback が全透明（表示消失・要件 4.3）: len={}",

@@ -29,29 +29,29 @@ use std::time::{Duration, Instant};
 
 use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
-use windows::core::{Result, PCWSTR};
 use windows::Foundation::Size;
 use windows::Graphics::DirectX::{DirectXAlphaMode, DirectXPixelFormat};
 use windows::UI::Composition::{CompositionDrawingSurface, Compositor};
 use windows::Win32::Foundation::{HINSTANCE, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
 use windows::Win32::Graphics::Direct2D::ID2D1DeviceContext3;
-use windows::Win32::System::Com::{CoInitializeEx, COINIT_MULTITHREADED};
+use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-use windows::Win32::System::WinRT::{DQTAT_COM_ASTA, DQTAT_COM_NONE};
 use windows::Win32::System::WinRT::Composition::{
     ICompositionDrawingSurfaceInterop, ICompositorDesktopInterop, ICompositorInterop,
 };
+use windows::Win32::System::WinRT::{DQTAT_COM_ASTA, DQTAT_COM_NONE};
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DispatchMessageW, PeekMessageW, RegisterClassExW,
-    TranslateMessage, CW_USEDEFAULT, MSG, PM_REMOVE, WM_QUIT, WNDCLASSEXW,
-    WS_EX_NOREDIRECTIONBITMAP, WS_POPUP, WS_VISIBLE,
+    CW_USEDEFAULT, CreateWindowExW, DefWindowProcW, DispatchMessageW, MSG, PM_REMOVE, PeekMessageW,
+    RegisterClassExW, TranslateMessage, WM_QUIT, WNDCLASSEXW, WS_EX_NOREDIRECTIONBITMAP, WS_POPUP,
+    WS_VISIBLE,
 };
+use windows::core::{PCWSTR, Result};
 use windows_numerics::Vector2;
 
 use wintf::com::wuc::{
-    create_dispatcher_queue_controller, CompositorDesktopInteropExt, CompositorInteropExt,
-    DrawingSurfaceInteropExt,
+    CompositorDesktopInteropExt, CompositorInteropExt, DrawingSurfaceInteropExt,
+    create_dispatcher_queue_controller,
 };
 use wintf::ecs::GraphicsCore;
 
@@ -61,7 +61,9 @@ const SURFACE_H: f32 = 240.0;
 fn main() -> Result<()> {
     human_panic::setup_panic!();
     tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+        )
         .init();
 
     // (0) 本番 UI スレッドと同一の COM 初期化（MTA）を再現する（要件 3.4・不変）。
@@ -133,10 +135,16 @@ fn main() -> Result<()> {
 
     // (6) SpriteVisual＋DrawingSurface＋SurfaceBrush（brush 一段・要件 5.1/6.1/6.3）。
     let sprite = compositor.CreateSpriteVisual()?;
-    sprite.SetSize(Vector2 { X: SURFACE_W, Y: SURFACE_H })?;
+    sprite.SetSize(Vector2 {
+        X: SURFACE_W,
+        Y: SURFACE_H,
+    })?;
 
     let surface: CompositionDrawingSurface = graphics_device.CreateDrawingSurface(
-        Size { Width: SURFACE_W, Height: SURFACE_H },
+        Size {
+            Width: SURFACE_W,
+            Height: SURFACE_H,
+        },
         DirectXPixelFormat::B8G8R8A8UIntNormalized,
         DirectXAlphaMode::Premultiplied,
     )?;
@@ -215,7 +223,12 @@ fn draw_surface(surface: &CompositionDrawingSurface) -> Result<()> {
         };
         dc.SetTransform(&m);
         // 半透明の背景でクリア（透過共存の目視素材・要件 1.4 の下地）。
-        dc.Clear(Some(&D2D1_COLOR_F { r: 0.10, g: 0.45, b: 0.85, a: 0.85 }));
+        dc.Clear(Some(&D2D1_COLOR_F {
+            r: 0.10,
+            g: 0.45,
+            b: 0.85,
+            a: 0.85,
+        }));
     }
     surface_interop.end_draw()?;
     Ok(())

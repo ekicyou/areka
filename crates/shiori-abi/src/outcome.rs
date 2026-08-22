@@ -134,7 +134,11 @@ mod tests {
         let mut seen = std::collections::HashSet::new();
         for _ in 0..1000 {
             let token = alloc.next();
-            assert!(seen.insert(token.0), "トークンは一意であること: {}", token.0);
+            assert!(
+                seen.insert(token.0),
+                "トークンは一意であること: {}",
+                token.0
+            );
         }
     }
 

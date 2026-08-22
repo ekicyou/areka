@@ -4,8 +4,8 @@ use bevy_ecs::prelude::*;
 use wintf::ecs::layout::{BoxSize, BoxStyle, Dimension, sync_window_arrangement_from_window_pos};
 use wintf::ecs::window::{DPI, Window, WindowPos};
 use wintf::ecs::world::FrameCount;
-use wintf::ecs::{Point, SizeI};
 use wintf::ecs::{Arrangement, GlobalArrangement};
+use wintf::ecs::{Point, SizeI};
 
 /// 位置のみ変更時に Changed<BoxStyle> が発火しないことを検証
 ///
@@ -21,7 +21,10 @@ fn test_changed_boxstyle_not_fired_on_position_only_change() {
             Window::default(),
             WindowPos {
                 position: Some(Point { x: 100, y: 200 }),
-                size: Some(SizeI { width: 800, height: 600 }),
+                size: Some(SizeI {
+                    width: 800,
+                    height: 600,
+                }),
                 ..Default::default()
             },
             DPI::default(),
@@ -84,7 +87,10 @@ fn test_changed_boxstyle_fired_on_size_change() {
             Window::default(),
             WindowPos {
                 position: Some(Point { x: 100, y: 200 }),
-                size: Some(SizeI { width: 800, height: 600 }),
+                size: Some(SizeI {
+                    width: 800,
+                    height: 600,
+                }),
                 ..Default::default()
             },
             DPI::default(),

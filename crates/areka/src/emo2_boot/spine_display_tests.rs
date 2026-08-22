@@ -1,7 +1,7 @@
 use super::test_support::{opaque_count, variant_name};
 use super::{
-    balloon_target, capture_logs, count_level, run_attach_phase, shell_target, BindSet, Duration,
-    Instant, PresentCommand, SpineHarness, TargetId, SPIN_WAIT,
+    BindSet, Duration, Instant, PresentCommand, SPIN_WAIT, SpineHarness, TargetId, balloon_target,
+    capture_logs, count_level, run_attach_phase, shell_target,
 };
 
 /// `PresentCommand`（`#[non_exhaustive]`）の表示対象 `TargetId` を取り出す（未知 variant は `None`）。
@@ -69,7 +69,8 @@ fn spine_s1_boot_to_display_attaches_all_targets_with_opaque_readback() {
     // attach は Tick 非依存（GPU 資源＋GhostWindows ゲートのみ）ゆえ boot 直後に直接駆動する。
     let logs = capture_logs(|| run_attach_phase(&mut harness.wiring, &mut harness.world));
     assert!(
-        logs.iter().any(|l| l.contains("planned=2") && l.contains("attached=2")),
+        logs.iter()
+            .any(|l| l.contains("planned=2") && l.contains("attached=2")),
         "DD-12: 計画件数＝実装着件数（planned=2 attached=2・期待 scope 数の全 target 完了）が観測できない: {logs:?}"
     );
     assert_eq!(
@@ -130,9 +131,18 @@ fn spine_s1_boot_to_display_attaches_all_targets_with_opaque_readback() {
         });
     let show = received.remove(show_idx);
     match &show {
-        PresentCommand::ShowSurface { target, surface_id, .. } => {
-            assert_eq!(*target, shell_target(0), "初回 \\s[0] は shell 表示対象（偶数 TargetId・DD-3）");
-            assert_eq!(*surface_id, 0, "surface_id は 0（\\s[0]・seriko 数値解決の透過）");
+        PresentCommand::ShowSurface {
+            target, surface_id, ..
+        } => {
+            assert_eq!(
+                *target,
+                shell_target(0),
+                "初回 \\s[0] は shell 表示対象（偶数 TargetId・DD-3）"
+            );
+            assert_eq!(
+                *surface_id, 0,
+                "surface_id は 0（\\s[0]・seriko 数値解決の透過）"
+            );
         }
         _ => unreachable!("position で ShowSurface を選別済み"),
     }
@@ -273,7 +283,11 @@ fn spine_s3_balloon_face_cue_delivers_hide_then_show_in_order() {
     // 受信列順序（R5.4/DD-5）: 1 件目 Hide{balloon(0)}・2 件目 ShowSurface{balloon(0),0,default}。
     match &received[0] {
         PresentCommand::Hide { target, reply } => {
-            assert_eq!(*target, balloon_target(0), "1 件目は balloon 表示対象の Hide（\\b[-1]）");
+            assert_eq!(
+                *target,
+                balloon_target(0),
+                "1 件目は balloon 表示対象の Hide（\\b[-1]）"
+            );
             assert!(reply.is_none(), "reply は None（撃ちっぱなし）");
         }
         other => panic!("1 件目は Hide{{balloon}} のはず: {}", variant_name(other)),
@@ -286,8 +300,15 @@ fn spine_s3_balloon_face_cue_delivers_hide_then_show_in_order() {
             pattern,
             reply,
         } => {
-            assert_eq!(*target, balloon_target(0), "2 件目は balloon 表示対象の ShowSurface（\\b[0]）");
-            assert_eq!(*surface_id, 0, "surface_id は 0（\\b[0]・seriko 解決済み数値の透過）");
+            assert_eq!(
+                *target,
+                balloon_target(0),
+                "2 件目は balloon 表示対象の ShowSurface（\\b[0]）"
+            );
+            assert_eq!(
+                *surface_id, 0,
+                "surface_id は 0（\\b[0]・seriko 解決済み数値の透過）"
+            );
             assert_eq!(
                 *binds,
                 BindSet::default(),
@@ -301,7 +322,10 @@ fn spine_s3_balloon_face_cue_delivers_hide_then_show_in_order() {
             );
             assert!(reply.is_none(), "reply は None（撃ちっぱなし）");
         }
-        other => panic!("2 件目は ShowSurface{{balloon,0,default}} のはず: {}", variant_name(other)),
+        other => panic!(
+            "2 件目は ShowSurface{{balloon,0,default}} のはず: {}",
+            variant_name(other)
+        ),
     }
 
     // 実 presenter へ apply（実描画→readback まで観測境界を延ばす・R8.2）。形状記録後に move で流す。
@@ -350,10 +374,15 @@ fn spine_s4_balloon_free_onboot_completes_without_balloon_face_switch() {
     // S1 経路: attach 完走（planned==attached==2）＋ shell/balloon readback 非全透明。
     let logs = capture_logs(|| run_attach_phase(&mut harness.wiring, &mut harness.world));
     assert!(
-        logs.iter().any(|l| l.contains("planned=2") && l.contains("attached=2")),
+        logs.iter()
+            .any(|l| l.contains("planned=2") && l.contains("attached=2")),
         "S4: boot→表示（attach 完走・planned=2 attached=2）が観測できない: {logs:?}"
     );
-    assert_eq!(count_level(&logs, "ERROR"), 0, "attach で ERROR なし: {logs:?}");
+    assert_eq!(
+        count_level(&logs, "ERROR"),
+        0,
+        "attach で ERROR なし: {logs:?}"
+    );
     // シェルは初回 `\s` cue まで非表示（defect #5・2026-07-13 実機#5）: attach 直後は供給面未生成
     // ＝`read_back` Err（合成面なし＝透過）。attach で surface0 を焼き付けない。
     assert!(

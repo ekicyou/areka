@@ -79,7 +79,11 @@ fn apply_bind_unknown_scope_set_change_is_state_only() {
         "未知 scope でも集合は積算保持"
     );
     // シェル状態を作らない（Show を強制しない）。
-    assert_eq!(states.scopes.get(&scope), None, "apply_bind はシェル状態を作らない");
+    assert_eq!(
+        states.scopes.get(&scope),
+        None,
+        "apply_bind はシェル状態を作らない"
+    );
 }
 
 /// 同一集合への変化 → Unchanged・状態書き込みなし・発行なし（冪等・R3.6・D9）。
@@ -233,7 +237,10 @@ fn apply_bind_exclusive_idempotent_second_is_unchanged() {
     states.apply(&scope, SurfaceTarget::Show(2100));
 
     let first = states.apply_bind_exclusive(&scope, &[1301, 1303, 1304], 1304);
-    assert!(matches!(first, BindApplyOutcome::Changed(_)), "初回は集合変化ゆえ Changed");
+    assert!(
+        matches!(first, BindApplyOutcome::Changed(_)),
+        "初回は集合変化ゆえ Changed"
+    );
 
     let second = states.apply_bind_exclusive(&scope, &[1301, 1303, 1304], 1304);
     assert_eq!(
@@ -272,7 +279,11 @@ fn apply_bind_exclusive_hidden_or_unknown_is_state_only() {
     let mut states2 = ScopeStates::new(BindSet::from_ids([1301, 1303, 1207]));
     let unknown = ActorKey::from("1");
     let outcome2 = states2.apply_bind_exclusive(&unknown, &[1301, 1303, 1304], 1304);
-    assert_eq!(outcome2, BindApplyOutcome::StateOnly, "未知 scope も StateOnly（D5）");
+    assert_eq!(
+        outcome2,
+        BindApplyOutcome::StateOnly,
+        "未知 scope も StateOnly（D5）"
+    );
     assert_eq!(
         states2.scopes.get(&unknown),
         None,
@@ -710,8 +721,7 @@ fn residual_frame_removal_emits_info_marker() {
     });
 
     assert!(
-        logs.contains("level=INFO")
-            && logs.contains("seriko: bind から外れた ID の保持コマを除去"),
+        logs.contains("level=INFO") && logs.contains("seriko: bind から外れた ID の保持コマを除去"),
         "除去は実機の既定ログ水準（info）で grep 可能な固定文言を残す（bindopt 7.5）: {logs}"
     );
     assert!(
@@ -794,7 +804,10 @@ fn shown_slots_enumerates_only_shown_shell_and_balloon() {
     states.apply(&s1, SurfaceTarget::Hide);
 
     let mut shown = states.shown_slots();
-    shown.sort_by(|a, b| a.0.cmp(&b.0).then(format!("{:?}", a.1).cmp(&format!("{:?}", b.1))));
+    shown.sort_by(|a, b| {
+        a.0.cmp(&b.0)
+            .then(format!("{:?}", a.1).cmp(&format!("{:?}", b.1)))
+    });
 
     // scope0 の Shell/Balloon 2 件のみ（scope1 は Hidden ゆえ除外）。
     assert_eq!(shown.len(), 2, "Shown な slot のみ列挙（Hidden は除外）");

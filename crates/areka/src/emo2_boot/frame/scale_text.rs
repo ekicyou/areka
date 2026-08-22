@@ -112,7 +112,10 @@ pub fn run_text_scale_phase(wiring: &mut Emo2Wiring) -> Vec<u32> {
         text_scale_warned.remove(&scope);
         // 判定（k 変化・未登録）は 7.1 の権威へ委ねる（本フェーズは第 2 のガードを持たない・R8.5）。
         let model = &balloon_models[&scope];
-        if runtime.borrow_mut().refresh_actor_scale(&actor, &view, model) {
+        if runtime
+            .borrow_mut()
+            .refresh_actor_scale(&actor, &view, model)
+        {
             refreshed.push(scope);
         }
     }

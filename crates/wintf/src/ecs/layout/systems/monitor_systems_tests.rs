@@ -104,7 +104,9 @@ fn apply_injected_monitors(
     injected: Res<InjectedMonitors>,
     mut redriven: ResMut<RedriveCount>,
 ) {
-    let root_entity = layout_root.single().expect("檻の LayoutRoot が単一で存在する");
+    let root_entity = layout_root
+        .single()
+        .expect("檻の LayoutRoot が単一で存在する");
     redriven.0 = apply_monitor_snapshot(
         &mut commands,
         root_entity,
@@ -176,7 +178,10 @@ fn assert_probe_is_not_a_fixed_point(before: &Monitor, after: &Monitor) {
         before.work_area.bottom, after.work_area.bottom,
         "探針が不動点: work area が実際に動いていない"
     );
-    assert_ne!(before.dpi, after.dpi, "探針が不動点: dpi が実際に動いていない");
+    assert_ne!(
+        before.dpi, after.dpi,
+        "探針が不動点: dpi が実際に動いていない"
+    );
     assert_eq!(
         *before, *after,
         "探針が S4 の穴を踏んでいない: PartialEq（同一性）では等価に見えなければならない"
@@ -299,15 +304,16 @@ fn value_only_change_updates_monitor_and_reports_old_and_new() {
     assert_probe_is_not_a_fixed_point(&probe_monitor_before(), &probe_monitor_after());
 
     let (mut world, monitor_entity) = probe_world(vec![probe_monitor_after()]);
-    let out = capture_under_filter("info,wintf::ecs::layout=debug", || {
-        run_apply(&mut world)
-    });
+    let out = capture_under_filter("info,wintf::ecs::layout=debug", || run_apply(&mut world));
 
     let stored = world
         .get::<Monitor>(monitor_entity)
         .expect("Monitor エンティティが生存している")
         .clone();
-    assert_eq!(stored.work_area.bottom, 2064, "work area が更新されていない");
+    assert_eq!(
+        stored.work_area.bottom, 2064,
+        "work area が更新されていない"
+    );
     assert_eq!(stored.dpi, 192, "dpi が更新されていない");
 
     assert!(
@@ -333,9 +339,7 @@ fn updated_monitor_redrives_window_dpi_and_reports_it() {
     let (mut world, _) = probe_world(vec![probe_monitor_after()]);
     let window = spawn_probe_window(&mut world, 1000, 500, 120);
 
-    let out = capture_under_filter("info,wintf::ecs::layout=debug", || {
-        run_apply(&mut world)
-    });
+    let out = capture_under_filter("info,wintf::ecs::layout=debug", || run_apply(&mut world));
 
     assert_eq!(
         *world.get::<DPI>(window).expect("窓の DPI"),
@@ -362,9 +366,7 @@ fn identical_snapshot_updates_nothing() {
     let (mut world, _) = probe_world(vec![probe_monitor_before()]);
     let window = spawn_probe_window(&mut world, 1000, 500, 120);
 
-    let out = capture_under_filter("info,wintf::ecs::layout=debug", || {
-        run_apply(&mut world)
-    });
+    let out = capture_under_filter("info,wintf::ecs::layout=debug", || run_apply(&mut world));
 
     assert!(
         !out.contains("[detect_display_change_system] Updating Monitor entity"),
@@ -429,9 +431,7 @@ fn window_with_cw_usedefault_is_skipped_before_overflow() {
         "WindowPos::default() が CW_USEDEFAULT でない＝本檻の前提が崩れている"
     );
 
-    let out = capture_under_filter("info,wintf::ecs::layout=debug", || {
-        run_apply(&mut world)
-    });
+    let out = capture_under_filter("info,wintf::ecs::layout=debug", || run_apply(&mut world));
 
     assert_eq!(
         *world.get::<DPI>(window).expect("窓の DPI"),
@@ -464,9 +464,7 @@ fn window_without_position_is_skipped_at_debug_level() {
         ))
         .id();
 
-    let out = capture_under_filter("info,wintf::ecs::layout=debug", || {
-        run_apply(&mut world)
-    });
+    let out = capture_under_filter("info,wintf::ecs::layout=debug", || run_apply(&mut world));
 
     assert_eq!(
         *world.get::<DPI>(window).expect("窓の DPI"),
@@ -491,10 +489,7 @@ fn window_center_requires_both_position_and_size() {
     };
     assert_eq!(window_center(&full), Some((300, 500)));
 
-    let no_size = WindowPos {
-        size: None,
-        ..full
-    };
+    let no_size = WindowPos { size: None, ..full };
     assert_eq!(window_center(&no_size), None);
 
     let no_pos = WindowPos {
@@ -549,7 +544,10 @@ fn monitor_containing_uses_half_open_bounds() {
     let m = probe_monitor_before();
     let monitors = [m.clone()];
 
-    assert!(monitor_containing(&monitors, (0, 0)).is_some(), "左上端は含む");
+    assert!(
+        monitor_containing(&monitors, (0, 0)).is_some(),
+        "左上端は含む"
+    );
     assert!(
         monitor_containing(&monitors, (3839, 2159)).is_some(),
         "右下端の 1px 内側は含む"

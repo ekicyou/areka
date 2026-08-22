@@ -45,11 +45,11 @@ use super::common::{
 // `close_test_test_support.rs` へ、観測ケースはテーマごとの兄弟ファイル `close_test_<テーマ>_tests.rs`
 // へ置く（子は `super::…` の明示 import で本ファイルの import 束縛と共有ヘルパを引く）。
 #[cfg(test)]
-#[path = "close_test_test_support.rs"]
-mod test_support;
+#[path = "close_test_boot_greeting_tests.rs"]
+mod boot_greeting_tests;
 #[cfg(test)]
 #[path = "close_test_handshake_tests.rs"]
 mod handshake_tests;
 #[cfg(test)]
-#[path = "close_test_boot_greeting_tests.rs"]
-mod boot_greeting_tests;
+#[path = "close_test_test_support.rs"]
+mod test_support;

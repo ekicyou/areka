@@ -210,9 +210,7 @@ impl FixtureState {
                 // 既存 talk 起動棚（Steady の StartTalk）へそのまま載る（Req 8.1(c)/(d)）。
                 mouse_id @ ("OnMouseMove" | "OnMouseDoubleClick") => {
                     match self.fixture.mouse_responses.get(mouse_id) {
-                        Some(MouseResponse::Script(script)) => {
-                            ShioriOutcome::Value(script.clone())
-                        }
+                        Some(MouseResponse::Script(script)) => ShioriOutcome::Value(script.clone()),
                         Some(MouseResponse::NoContent) | None => ShioriOutcome::NoContent,
                     }
                 }

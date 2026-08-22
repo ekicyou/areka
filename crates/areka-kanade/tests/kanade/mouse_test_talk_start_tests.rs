@@ -59,10 +59,12 @@ fn mouse_value_from_steady_none_starts_talk() {
     let (x, y, scope) = (10_i64, 20_i64, 0_u32);
     let harness = spawn_harness(
         KanadeConfig::new("master", "1.0.0"),
-        Fixture::quitting().without_boot_greeting().with_mouse_response(
-            "OnMouseMove",
-            MouseResponse::Script(FIXED_MOUSE_SCRIPT.to_string()),
-        ),
+        Fixture::quitting()
+            .without_boot_greeting()
+            .with_mouse_response(
+                "OnMouseMove",
+                MouseResponse::Script(FIXED_MOUSE_SCRIPT.to_string()),
+            ),
         // マウス起動 talk（受領 index 0）を quit:true にして終了駆動（close talk は生じない）。
         QuitPolicy::PerTalk(vec![true]),
     );
@@ -103,8 +105,14 @@ fn mouse_value_from_steady_none_starts_talk() {
         Some("Head"),
         &ExecutionSnapshot::INACTIVE,
     ));
-    assert_eq!(*gets[0], expected, "記録 GET は events 表導出（INACTIVE）と一致するはず");
-    assert_eq!(gets[0].status, None, "Steady{{None}} のマウス GET は Status 行を出さない");
+    assert_eq!(
+        *gets[0], expected,
+        "記録 GET は events 表導出（INACTIVE）と一致するはず"
+    );
+    assert_eq!(
+        gets[0].status, None,
+        "Steady{{None}} のマウス GET は Status 行を出さない"
+    );
 
     // (2) マウス GET Value → StartTalk 起動: 到達はマウス talk ちょうど 1 本（撫でスクリプト・id=1）。
     assert_eq!(
@@ -221,13 +229,20 @@ fn active_talk_mouse_value_replaces_with_new_talk_id() {
         scope,
         Some("Head"),
         // active talk 中＝talk_active:true スナップショット由来＝Status: talking。
-        &ExecutionSnapshot { talk_active: true, choice_active: false },
+        &ExecutionSnapshot {
+            talk_active: true,
+            choice_active: false,
+        },
     ));
     assert_eq!(
         *gets[0], expected_talking,
         "再生中のマウス GET は events 表導出（talk_active=true）と一致し Status: talking を帯びるはず"
     );
-    assert_eq!(gets[0].method, CallMethod::Get, "マウス系は常に GET（NOTIFY 化しない・DD-IE-1）");
+    assert_eq!(
+        gets[0].method,
+        CallMethod::Get,
+        "マウス系は常に GET（NOTIFY 化しない・DD-IE-1）"
+    );
     assert_eq!(
         gets[0].status,
         Some("talking".to_string()),
@@ -245,7 +260,11 @@ fn active_talk_mouse_value_replaces_with_new_talk_id() {
         started[0].script, FIXED_STEADY_SCRIPT,
         "1 本目は steady 起動 talk（OnSecondChange Value）"
     );
-    assert_eq!(started[0].talk_id, TalkId(1), "steady talk は id=1（最初の StartTalk）");
+    assert_eq!(
+        started[0].talk_id,
+        TalkId(1),
+        "steady talk は id=1（最初の StartTalk）"
+    );
     assert_eq!(
         started[1].script, FIXED_MOUSE_REPLACE_SCRIPT,
         "2 本目はマウス由来の置換 talk（置換スクリプト）"
@@ -355,9 +374,16 @@ fn active_talk_non_mouse_pump_is_notify_no_replacement_dd6_preserved() {
     //     （非マウス pump は再生中に GET でなく NOTIFY＝Value を運べない＝置換不能・DD-6 保存の構造前提）。
     let expected_notify = expected_call(events::on_second_change(
         MonotonicMs(2_000),
-        &ExecutionSnapshot { talk_active: true, choice_active: false },
+        &ExecutionSnapshot {
+            talk_active: true,
+            choice_active: false,
+        },
     ));
-    assert_eq!(expected_notify.method, CallMethod::Notify, "再生中の pump は NOTIFY");
+    assert_eq!(
+        expected_notify.method,
+        CallMethod::Notify,
+        "再生中の pump は NOTIFY"
+    );
     assert_eq!(
         expected_notify.references[3], "0",
         "NOTIFY pump の Ref3 は \"0\"（active talk 中・応答無視）"
@@ -490,7 +516,11 @@ fn mixed_mouse_and_second_change_talk_ids_are_monotonic() {
         started[0].script, FIXED_STEADY_SCRIPT,
         "1 本目は OnSecondChange 起動 talk（steady スクリプト）"
     );
-    assert_eq!(started[0].talk_id, TalkId(1), "OnSecondChange talk は先頭採番 id=1");
+    assert_eq!(
+        started[0].talk_id,
+        TalkId(1),
+        "OnSecondChange talk は先頭採番 id=1"
+    );
     assert_eq!(
         started[1].script, FIXED_MOUSE_SCRIPT,
         "2 本目はマウス起動 talk（撫でスクリプト）"

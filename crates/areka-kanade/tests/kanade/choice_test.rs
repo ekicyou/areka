@@ -84,23 +84,23 @@ use super::common::{
 // へ、観測ケースは群ごとの兄弟ファイル `choice_test_<テーマ>_tests.rs` へ置く（子は `super::…` で本ファイルの
 // import 束縛と共有ヘルパを引く）。
 #[cfg(test)]
-#[path = "choice_test_test_support.rs"]
-mod test_support;
-#[cfg(test)]
-#[path = "choice_test_named_event_tests.rs"]
-mod named_event_tests;
-#[cfg(test)]
 #[path = "choice_test_canonical_cascade_tests.rs"]
 mod canonical_cascade_tests;
-#[cfg(test)]
-#[path = "choice_test_stage_failure_tests.rs"]
-mod stage_failure_tests;
 #[cfg(test)]
 #[path = "choice_test_choosing_status_tests.rs"]
 mod choosing_status_tests;
 #[cfg(test)]
-#[path = "choice_test_timeout_tests.rs"]
-mod timeout_tests;
+#[path = "choice_test_named_event_tests.rs"]
+mod named_event_tests;
 #[cfg(test)]
 #[path = "choice_test_rejection_tests.rs"]
 mod rejection_tests;
+#[cfg(test)]
+#[path = "choice_test_stage_failure_tests.rs"]
+mod stage_failure_tests;
+#[cfg(test)]
+#[path = "choice_test_test_support.rs"]
+mod test_support;
+#[cfg(test)]
+#[path = "choice_test_timeout_tests.rs"]
+mod timeout_tests;

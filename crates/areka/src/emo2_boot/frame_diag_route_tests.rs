@@ -1,18 +1,12 @@
 use crate::placement::resolver::SizePx;
-use wintf::ecs::SizeI;
 use wintf::ecs::DPI;
+use wintf::ecs::SizeI;
 
-use super::*;
 use super::test_support::{
-    FakeReports,
-    FakeSizes,
-    dpi_world,
-    resnap_world,
-    size_of,
-    synth_assets,
-    window_move_lines,
+    FakeReports, FakeSizes, dpi_world, resnap_world, size_of, synth_assets, window_move_lines,
     window_move_routes_of,
 };
+use super::*;
 
 // ── task 1.4 是正: frame 側 route 割当の檻（Req 1.2／2.4・design D13）──────────
 //
@@ -64,8 +58,7 @@ fn dpi_phase_and_drain_phase_record_distinct_routes() {
     let mut source = FakeReports::default();
     source.refresh.insert(shell_target(0).0, (868, 1374));
     let mut state = None;
-    let (_, dpi_events) =
-        capture_diag_logs(|| dpi_phase_with(&mut source, &mut state, &mut world));
+    let (_, dpi_events) = capture_diag_logs(|| dpi_phase_with(&mut source, &mut state, &mut world));
     let dpi_routes = window_move_routes_of(&dpi_events, char0);
     assert_eq!(
         dpi_routes,
@@ -76,8 +69,7 @@ fn dpi_phase_and_drain_phase_record_distinct_routes() {
 
     // --- drain 後段の報告回収: `Changed<DPI>` を一切動かさずに報告だけを積む（＝表示成立由来）---
     source.pending.insert(shell_target(0).0, (900, 1400));
-    let (_, drain_events) =
-        capture_diag_logs(|| reconcile_reported_sizes(&mut source, &mut world));
+    let (_, drain_events) = capture_diag_logs(|| reconcile_reported_sizes(&mut source, &mut world));
     let drain_routes = window_move_routes_of(&drain_events, char0);
     assert_eq!(
         drain_routes,
@@ -216,7 +208,11 @@ fn resnap_skips_despawned_scope_at_debug_and_processes_surviving_scopes() {
         "生存 scope は最後まで処理される（Req 6.3「他の scope の処理を継続」）"
     );
     let skips = despawn_skip_lines(&events);
-    assert_eq!(skips.len(), 1, "破棄済み scope の打ち切りは 1 行: {events:?}");
+    assert_eq!(
+        skips.len(),
+        1,
+        "破棄済み scope の打ち切りは 1 行: {events:?}"
+    );
     assert_eq!(skips[0].level, tracing::Level::DEBUG);
     assert!(
         skips[0].message().contains("resnap:"),

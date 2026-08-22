@@ -1,8 +1,8 @@
 use super::test_support::{opaque_count, variant_name};
 use super::{
-    capture_logs, count_level, join_bounded, run_attach_phase, run_bounded, run_text_phase,
-    shell_target, spin_wait_until, ActorKey, CloseReason, Duration, Instant, PresentCommand,
-    RecordedCall, SpineHarness, SPIN_WAIT,
+    ActorKey, CloseReason, Duration, Instant, PresentCommand, RecordedCall, SPIN_WAIT,
+    SpineHarness, capture_logs, count_level, join_bounded, run_attach_phase, run_bounded,
+    run_text_phase, shell_target, spin_wait_until,
 };
 
 // ===========================================================================
@@ -72,10 +72,15 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
     // ── attach（shell/balloon 装着・text actor 登録）: S1 と同じ planned==attached==2 前提 ──
     let logs = capture_logs(|| run_attach_phase(&mut harness.wiring, &mut harness.world));
     assert!(
-        logs.iter().any(|l| l.contains("planned=2") && l.contains("attached=2")),
+        logs.iter()
+            .any(|l| l.contains("planned=2") && l.contains("attached=2")),
         "S2 前提: attach 完了（planned=2 attached=2）が観測できない: {logs:?}"
     );
-    assert_eq!(count_level(&logs, "ERROR"), 0, "attach で ERROR なし: {logs:?}");
+    assert_eq!(
+        count_level(&logs, "ERROR"),
+        0,
+        "attach で ERROR なし: {logs:?}"
+    );
 
     // ── シェルは初回 `\s` cue まで非表示（defect #5・2026-07-13 実機#5）: `\s[2100]` 適用前の shell
     //    scope0 は供給面未生成＝`read_back` Err（合成面なし＝透過）。attach で surface0 を焼き付けない。 ──
@@ -183,8 +188,15 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
             reply,
             ..
         } => {
-            assert_eq!(*target, shell_target(0), "シェル表示対象（偶数 TargetId・DD-3）");
-            assert_eq!(*surface_id, 2100, "surface_id は 2100（\\s[2100]・seriko 数値解決の透過）");
+            assert_eq!(
+                *target,
+                shell_target(0),
+                "シェル表示対象（偶数 TargetId・DD-3）"
+            );
+            assert_eq!(
+                *surface_id, 2100,
+                "surface_id は 2100（\\s[2100]・seriko 数値解決の透過）"
+            );
             assert!(reply.is_none(), "reply は None（撃ちっぱなし）");
         }
         _ => unreachable!("position で ShowSurface を選別済み"),
@@ -309,13 +321,17 @@ fn spine_s5_close_handshake_consumes_onclose_and_joins_all_handles_bounded() {
     } = harness;
 
     // (b) shutdown(User) が有界時間で Ok を返す（hang しない・ForceQuit→OnClose NOTIFY→Unload）。
-    run_bounded("spine s5 ghost shutdown", Duration::from_secs(10), move || {
-        let result = ghost.shutdown(CloseReason::User);
-        assert!(
-            result.is_ok(),
-            "S5: shutdown は close 握手後 Ok を返す（正規 clean shutdown）: {result:?}"
-        );
-    });
+    run_bounded(
+        "spine s5 ghost shutdown",
+        Duration::from_secs(10),
+        move || {
+            let result = ghost.shutdown(CloseReason::User);
+            assert!(
+                result.is_ok(),
+                "S5: shutdown は close 握手後 Ok を返す（正規 clean shutdown）: {result:?}"
+            );
+        },
+    );
 
     // loop tick 直接注入端の clone を明示 drop（task 9.4）: seriko の全 SerikoSink Sender（dispatcher 保持分は
     // shutdown が drop 済み）を落とし切って inbox を切断し worker を自然終了させる（join 前・shutdown_bounded と同旨）。

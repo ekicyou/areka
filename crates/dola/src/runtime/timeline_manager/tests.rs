@@ -45,7 +45,10 @@ fn make_float_compiled_storyboard(
 }
 
 /// 任意のセグメント列を持つ 1 変数 CompiledStoryboard を生成する。
-fn make_compiled_with_segments(var_name: &str, segments: Vec<CompiledSegment>) -> CompiledStoryboard {
+fn make_compiled_with_segments(
+    var_name: &str,
+    segments: Vec<CompiledSegment>,
+) -> CompiledStoryboard {
     let total = segments.last().map(|s| s.end_time).unwrap_or(0.0);
     let mut timelines = BTreeMap::new();
     timelines.insert(
@@ -357,7 +360,10 @@ fn collect_final_values_unknown_group_returns_empty() {
 fn evaluate_all_for_group_returns_all_variables() {
     let mut mgr = TimelineManager::new();
     // 同一 group_id に 2 変数を登録
-    mgr.insert_entries(1, &make_float_compiled_storyboard("x", 0.0, 100.0, 0.0, 1.0));
+    mgr.insert_entries(
+        1,
+        &make_float_compiled_storyboard("x", 0.0, 100.0, 0.0, 1.0),
+    );
     mgr.insert_entries(1, &make_float_compiled_storyboard("y", 0.0, 10.0, 0.0, 1.0));
 
     let mut instances = HashMap::new();
@@ -372,7 +378,10 @@ fn evaluate_all_for_group_returns_all_variables() {
 #[test]
 fn evaluate_all_for_group_missing_instance_returns_empty() {
     let mut mgr = TimelineManager::new();
-    mgr.insert_entries(1, &make_float_compiled_storyboard("x", 0.0, 100.0, 0.0, 1.0));
+    mgr.insert_entries(
+        1,
+        &make_float_compiled_storyboard("x", 0.0, 100.0, 0.0, 1.0),
+    );
 
     let instances = HashMap::new();
     let values = mgr.evaluate_all_for_group(1, 0.5, &instances);
@@ -382,7 +391,10 @@ fn evaluate_all_for_group_missing_instance_returns_empty() {
 #[test]
 fn evaluate_all_for_group_ignores_other_groups() {
     let mut mgr = TimelineManager::new();
-    mgr.insert_entries(1, &make_float_compiled_storyboard("x", 0.0, 100.0, 0.0, 1.0));
+    mgr.insert_entries(
+        1,
+        &make_float_compiled_storyboard("x", 0.0, 100.0, 0.0, 1.0),
+    );
     mgr.insert_entries(2, &make_float_compiled_storyboard("y", 0.0, 10.0, 0.0, 1.0));
 
     let mut instances = HashMap::new();
@@ -436,7 +448,10 @@ fn collect_current_segment_final_values_before_first_segment_is_empty() {
 #[test]
 fn collect_current_segment_final_values_missing_instance_returns_empty() {
     let mut mgr = TimelineManager::new();
-    mgr.insert_entries(1, &make_float_compiled_storyboard("x", 0.0, 100.0, 0.0, 1.0));
+    mgr.insert_entries(
+        1,
+        &make_float_compiled_storyboard("x", 0.0, 100.0, 0.0, 1.0),
+    );
 
     let instances = HashMap::new();
     let vals = mgr.collect_current_segment_final_values(1, 0.5, &instances);
@@ -460,7 +475,10 @@ fn collect_current_segment_final_values_after_all_segments_uses_last() {
 #[test]
 fn get_timeline_returns_some_for_known_variable() {
     let mut mgr = TimelineManager::new();
-    mgr.insert_entries(1, &make_float_compiled_storyboard("x", 0.0, 100.0, 0.0, 1.0));
+    mgr.insert_entries(
+        1,
+        &make_float_compiled_storyboard("x", 0.0, 100.0, 0.0, 1.0),
+    );
 
     assert!(mgr.get_timeline("x").is_some());
     assert_eq!(mgr.get_timeline("x").unwrap().entries.len(), 1);

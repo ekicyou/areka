@@ -35,11 +35,11 @@ use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::time::{Duration, Instant};
 
-use wintf_winmsg_executor::util::{Window, WindowMessage, WindowType};
-use wintf_winmsg_executor::{FilterResult, MessageLoop};
 use windows::Win32::Foundation::{HWND, LRESULT};
 use windows::Win32::System::DataExchange::COPYDATASTRUCT;
 use windows::Win32::UI::WindowsAndMessaging::WM_COPYDATA;
+use wintf_winmsg_executor::util::{Window, WindowMessage, WindowType};
+use wintf_winmsg_executor::{FilterResult, MessageLoop};
 
 use crate::ipc::{self, MsgTag};
 use crate::shiori_proxy::{ShioriByteProxy, ShioriEntries};
@@ -351,7 +351,8 @@ pub fn selftest_loop(secs: u64) -> Result<(), String> {
                 if msg.msg == WM_COPYDATA {
                     // SAFETY: WM_COPYDATA 契約。
                     if let Some((tag_raw, payload)) = unsafe { copydata_payload(msg.lparam) } {
-                        if MsgTag::try_from_u32(tag_raw) == Ok(MsgTag::Hello) && payload.len() == 4 {
+                        if MsgTag::try_from_u32(tag_raw) == Ok(MsgTag::Hello) && payload.len() == 4
+                        {
                             let bytes = [payload[0], payload[1], payload[2], payload[3]];
                             let helper_hwnd_u32 = ipc::decode_hwnd_le(bytes);
                             received.set(Some(helper_hwnd_u32));
@@ -416,9 +417,7 @@ pub fn selftest_loop(secs: u64) -> Result<(), String> {
     if helper.shared().state.get() != HelperState::CleanExit {
         return Err("clean_unload 後の状態が CleanExit でない".to_string());
     }
-    println!(
-        "[selftest] UNLOAD → ループ停止 → clean unload OK（要件 5.3・state=CleanExit）"
-    );
+    println!("[selftest] UNLOAD → ループ停止 → clean unload OK（要件 5.3・state=CleanExit）");
 
     // 窓は helper/parent の Drop で破棄。
     drop(helper);

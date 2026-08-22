@@ -44,8 +44,8 @@ use areka_parsers::shell::{
 };
 use areka_sakura::{ActorKey, CueCommand, CueSink, TalkCue};
 use areka_seriko::{
-    spawn_seriko, AnimationTable, BindResolver, DisplayCommand, LoopRng, MockSurfaceOutput,
-    SerikoLoopConfig, SurfaceResolver,
+    AnimationTable, BindResolver, DisplayCommand, LoopRng, MockSurfaceOutput, SerikoLoopConfig,
+    SurfaceResolver, spawn_seriko,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -73,7 +73,11 @@ fn emote(scope: &str, key: &str) -> Step {
 /// `static_binds` は各 scope の既定 bind 集合（BindRandom ゲート源＝Show 同梱 binds）。`loop_config`
 /// は実表＋注入乱数を運ぶ。resolver は空 alias 表（数値 key のみ使用）・bind resolver は空（`\![bind]`
 /// を使わない）。
-fn run(static_binds: BindSet, loop_config: SerikoLoopConfig, steps: Vec<Step>) -> Vec<DisplayCommand> {
+fn run(
+    static_binds: BindSet,
+    loop_config: SerikoLoopConfig,
+    steps: Vec<Step>,
+) -> Vec<DisplayCommand> {
     let out = MockSurfaceOutput::new();
     let records = out.records();
     let (mut sink, handle) = spawn_seriko(
@@ -184,8 +188,16 @@ fn shell_table(surfaces: Vec<Surface>) -> AnimationTable {
 }
 
 /// 単一 anim を持つ surface 1 件から shell 表を build する。
-fn table_single(surface_id: u32, anim_id: u32, interval: Interval, frames: &[(i64, u32)]) -> AnimationTable {
-    shell_table(vec![surface_with(surface_id, vec![anim(anim_id, interval, frames)])])
+fn table_single(
+    surface_id: u32,
+    anim_id: u32,
+    interval: Interval,
+    frames: &[(i64, u32)],
+) -> AnimationTable {
+    shell_table(vec![surface_with(
+        surface_id,
+        vec![anim(anim_id, interval, frames)],
+    )])
 }
 
 /// shell 表＋注入乱数から config を組む（バルーン表の写像は空＝emo2 データ事実・全 scope 不活性）。
@@ -239,28 +251,33 @@ fn always_fire() -> LoopRng {
 fn kero_negative_tail_restores_base_full_path() {
     let empty = BindSet::from_ids([]);
     // 2106(w0)/2110(w40)/-1(w80) ⇒ t=[0,40,120]。Random は無条件ゲート。
-    let table = table_single(10, 0, Interval::Random { k: 4 }, &[(2106, 0), (2110, 40), (-1, 80)]);
+    let table = table_single(
+        10,
+        0,
+        Interval::Random { k: 4 },
+        &[(2106, 0), (2110, 40), (-1, 80)],
+    );
     let (rng, probe) = counting_rng(&[0]); // 最初の境界で 1 回発火
 
     let records = run(
         empty.clone(),
         cfg(table, rng),
         vec![
-            emote("0", "10"),   // 表示 surface 10 を確定（初回 Show・空 pattern）
-            Step::Tick(0),      // 遅延初期化（境界 next=1000）・非跨ぎ・無発行
-            Step::Tick(1000),   // 境界跨ぎ＋発火・elapsed0 → 先頭コマ 2106
-            Step::Tick(1040),   // elapsed40 → 2110
-            Step::Tick(1120),   // elapsed120 → -1 → 停止・ベース復帰（空 pattern）
+            emote("0", "10"), // 表示 surface 10 を確定（初回 Show・空 pattern）
+            Step::Tick(0),    // 遅延初期化（境界 next=1000）・非跨ぎ・無発行
+            Step::Tick(1000), // 境界跨ぎ＋発火・elapsed0 → 先頭コマ 2106
+            Step::Tick(1040), // elapsed40 → 2110
+            Step::Tick(1120), // elapsed120 → -1 → 停止・ベース復帰（空 pattern）
         ],
     );
 
     assert_eq!(
         records,
         vec![
-            show("0", 10, &empty, PatternState::default()),   // Emote 初回 Show
-            show("0", 10, &empty, pattern(&[(0, 2106)])),     // 発火・先頭コマ
-            show("0", 10, &empty, pattern(&[(0, 2110)])),     // 次コマ
-            show("0", 10, &empty, PatternState::default()),   // -1 停止でベース復帰
+            show("0", 10, &empty, PatternState::default()), // Emote 初回 Show
+            show("0", 10, &empty, pattern(&[(0, 2106)])),   // 発火・先頭コマ
+            show("0", 10, &empty, pattern(&[(0, 2110)])),   // 次コマ
+            show("0", 10, &empty, PatternState::default()), // -1 停止でベース復帰
         ],
         "kero 型は発火→2106→2110→(-1)ベース復帰の発行列と PatternState 列が完全一致すること（4.3）"
     );
@@ -282,7 +299,12 @@ fn kero_negative_tail_restores_base_full_path() {
 fn sakura_residual_tail_keeps_frame_full_path() {
     let on = BindSet::from_ids([7]); // anim id 7 の bindgroup を ON（BindRandom ゲート通過）
     // 1412(w0)/1411(w150)/1410(w22) ⇒ t=[0,150,172]。末尾非負＝残留。
-    let table = table_single(10, 7, Interval::BindRandom { k: 4 }, &[(1412, 0), (1411, 150), (1410, 22)]);
+    let table = table_single(
+        10,
+        7,
+        Interval::BindRandom { k: 4 },
+        &[(1412, 0), (1411, 150), (1410, 22)],
+    );
     let (rng, _probe) = counting_rng(&[0]);
 
     let records = run(
@@ -291,20 +313,20 @@ fn sakura_residual_tail_keeps_frame_full_path() {
         vec![
             emote("0", "10"),
             Step::Tick(0),
-            Step::Tick(1000),   // 発火 → 1412
-            Step::Tick(1150),   // elapsed150 → 1411
-            Step::Tick(1172),   // elapsed172 → 末尾 1410 残留（playback 除去）
-            Step::Tick(1500),   // 残留は恒久＝無発行
+            Step::Tick(1000), // 発火 → 1412
+            Step::Tick(1150), // elapsed150 → 1411
+            Step::Tick(1172), // elapsed172 → 末尾 1410 残留（playback 除去）
+            Step::Tick(1500), // 残留は恒久＝無発行
         ],
     );
 
     assert_eq!(
         records,
         vec![
-            show("0", 10, &on, PatternState::default()),   // Emote 初回 Show（binds={7}）
-            show("0", 10, &on, pattern(&[(7, 1412)])),     // 発火・先頭コマ
-            show("0", 10, &on, pattern(&[(7, 1411)])),     // 次コマ
-            show("0", 10, &on, pattern(&[(7, 1410)])),     // 末尾非負＝残留
+            show("0", 10, &on, PatternState::default()), // Emote 初回 Show（binds={7}）
+            show("0", 10, &on, pattern(&[(7, 1412)])),   // 発火・先頭コマ
+            show("0", 10, &on, pattern(&[(7, 1411)])),   // 次コマ
+            show("0", 10, &on, pattern(&[(7, 1410)])),   // 末尾非負＝残留
         ],
         "sakura 型は bind ON 発火→1412→1411→1410 残留で終わり、以降 tick は無発行（残留恒久・4.4/6.2）"
     );
@@ -329,8 +351,8 @@ fn playing_anim_not_relotteried_across_boundary_full_path() {
         vec![
             emote("0", "10"),
             Step::Tick(0),
-            Step::Tick(1000),   // 発火（rng 1 回）→ 2106
-            Step::Tick(2000),   // 境界跨ぎだが再生中ゆえ再抽選しない・同一コマ継続で無発行
+            Step::Tick(1000), // 発火（rng 1 回）→ 2106
+            Step::Tick(2000), // 境界跨ぎだが再生中ゆえ再抽選しない・同一コマ継続で無発行
         ],
     );
 
@@ -410,7 +432,11 @@ fn bindrandom_on_fires_full_path() {
         ],
         "bind ON は発火し先頭コマ 1412 を発行（R3.2）"
     );
-    assert_eq!(probe.lock().unwrap().calls, 1, "bind ON では乱数を 1 回だけ消費（R3.2）");
+    assert_eq!(
+        probe.lock().unwrap().calls,
+        1,
+        "bind ON では乱数を 1 回だけ消費（R3.2）"
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -457,7 +483,14 @@ fn surface_switch_clears_playback_and_frame_full_path() {
     let empty = BindSet::from_ids([]);
     // surface 10 に長い再生アニメ（境界 2000 でも Active(0)）。surface 20 にはアニメなし。
     let table = shell_table(vec![
-        surface_with(10, vec![anim(0, Interval::Random { k: 4 }, &[(2106, 0), (2110, 3000)])]),
+        surface_with(
+            10,
+            vec![anim(
+                0,
+                Interval::Random { k: 4 },
+                &[(2106, 0), (2110, 3000)],
+            )],
+        ),
         surface_with(20, Vec::new()),
     ]);
 
@@ -465,11 +498,11 @@ fn surface_switch_clears_playback_and_frame_full_path() {
         empty.clone(),
         cfg(table, always_fire()),
         vec![
-            emote("0", "10"),   // surface 10 表示（初回 Show）
+            emote("0", "10"), // surface 10 表示（初回 Show）
             Step::Tick(0),
-            Step::Tick(1000),   // 発火 → 2106（再生中）
-            emote("0", "20"),   // surface 切替 → pattern クリア＋playback 除去（空 pattern の Show{20}）
-            Step::Tick(2000),   // surface20 にアニメ無し・陳腐 2106 は蘇生しない → 無発行
+            Step::Tick(1000), // 発火 → 2106（再生中）
+            emote("0", "20"), // surface 切替 → pattern クリア＋playback 除去（空 pattern の Show{20}）
+            Step::Tick(2000), // surface20 にアニメ無し・陳腐 2106 は蘇生しない → 無発行
         ],
     );
 
@@ -610,11 +643,11 @@ fn other_negative_surface_warns_once_and_spares_others_full_path() {
     assert_eq!(
         records,
         vec![
-            show("0", 10, &empty, PatternState::default()),          // Emote 初回
+            show("0", 10, &empty, PatternState::default()), // Emote 初回
             show("0", 10, &empty, pattern(&[(0, 2106), (1, 3000)])), // 両発火
-            show("0", 10, &empty, pattern(&[(1, 3000)])),            // id0 停止・id1 生存（R8.2）
+            show("0", 10, &empty, pattern(&[(1, 3000)])),   // id0 停止・id1 生存（R8.2）
             show("0", 10, &empty, pattern(&[(0, 2106), (1, 3000)])), // id0 再発火・id1 継続
-            show("0", 10, &empty, pattern(&[(1, 3000)])),            // id0 再停止・id1 なお生存（R8.2）
+            show("0", 10, &empty, pattern(&[(1, 3000)])),   // id0 再停止・id1 なお生存（R8.2）
         ],
         "`-2` は自アニメのみ停止し他アニメ（id1）は停止を跨いで生存する（R8.2）"
     );
@@ -628,8 +661,7 @@ fn other_negative_surface_warns_once_and_spares_others_full_path() {
         .filter(|line| line.contains("以外の負 surface"))
         .count();
     assert_eq!(
-        negative_warns,
-        1,
+        negative_warns, 1,
         "`-2` の warn! は 2 度の走査でも dedup で 1 回だけ発火する（warn-once・要件 8.2）"
     );
 }

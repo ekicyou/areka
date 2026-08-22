@@ -313,9 +313,7 @@ mod tests {
     use super::*;
     use core::cell::RefCell;
     use shiori_abi::error::SHIORI_S_PENDING;
-    use shiori_abi::interface::{
-        IShiori_Impl, IShioriFactory_Impl,
-    };
+    use shiori_abi::interface::{IShiori_Impl, IShioriFactory_Impl};
     use windows_core::{HRESULT, HSTRING, OutRef, Ref, Result as ComResult, implement};
 
     /// 遅延時に脳が発行する固定相関トークン。
@@ -373,9 +371,7 @@ mod tests {
         ) -> ComResult<()> {
             let host: IShioriHost = host
                 .as_ref()
-                .ok_or_else(|| {
-                    windows_core::Error::from(windows::Win32::Foundation::E_POINTER)
-                })?
+                .ok_or_else(|| windows_core::Error::from(windows::Win32::Foundation::E_POINTER))?
                 .clone();
             let brain: IShiori = MockBrain {
                 deferred: self.deferred,
@@ -501,7 +497,10 @@ mod tests {
         assert!(!session.is_pending(), "放棄後は保留状態が解除されること");
 
         let outcome = session.get(&content).expect("放棄後は次 get 可能");
-        assert_eq!(outcome, SessionRequest::Deferred(CorrelationToken(PENDING_TOKEN)));
+        assert_eq!(
+            outcome,
+            SessionRequest::Deferred(CorrelationToken(PENDING_TOKEN))
+        );
     }
 
     /// タイムアウト放棄後に遅れて来た `complete` は host が `UnknownToken` で弾くこと（議題3）。
@@ -582,8 +581,7 @@ mod tests {
         session.get(&content).expect("遅延 get");
         assert!(session.is_pending(), "遅延後は保留状態");
         // host 側突合枠にトークンがある。
-        let sink_impl =
-            unsafe { windows_core::AsImpl::<ShioriHostSink>::as_impl(&sink_handle) };
+        let sink_impl = unsafe { windows_core::AsImpl::<ShioriHostSink>::as_impl(&sink_handle) };
         assert_eq!(
             sink_impl.pending_token(),
             Some(CorrelationToken(PENDING_TOKEN)),

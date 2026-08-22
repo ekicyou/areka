@@ -1,15 +1,10 @@
 use std::sync::mpsc;
 use wintf::ecs::DPI;
 
-use super::*;
 use super::test_support::{
-    assert_no_write,
-    capture_logs,
-    count_level,
-    dpi_world,
-    headless_wiring_with,
-    zero_clock,
+    assert_no_write, capture_logs, count_level, dpi_world, headless_wiring_with, zero_clock,
 };
+use super::*;
 
 // ── task 7.2: 文字層 k 追従フェーズ（run_text_scale_phase・D11-3/D11-4・R8.1/8.5/8.6） ──
 //
@@ -46,8 +41,16 @@ fn text_scale_phase_without_balloon_models_is_silent_noop() {
         );
     });
 
-    assert_eq!(count_level(&logs, "WARN"), 0, "attach 前は何も鳴らさない: {logs:?}");
-    assert_eq!(count_level(&logs, "ERROR"), 0, "attach 前は何も鳴らさない: {logs:?}");
+    assert_eq!(
+        count_level(&logs, "WARN"),
+        0,
+        "attach 前は何も鳴らさない: {logs:?}"
+    );
+    assert_eq!(
+        count_level(&logs, "ERROR"),
+        0,
+        "attach 前は何も鳴らさない: {logs:?}"
+    );
 }
 
 /// R8.6 縮退（log-first だが log spam にしない）: `text_slot_view` が `None`（表示未確立）の
@@ -89,10 +92,17 @@ fn text_scale_phase_warns_once_per_scope_when_view_unavailable() {
         0,
         "同一状態が続く間は再度鳴らさない（エッジガード）: {rest:?}"
     );
-    assert_eq!(count_level(&rest, "ERROR"), 0, "縮退は失敗ではない: {rest:?}");
+    assert_eq!(
+        count_level(&rest, "ERROR"),
+        0,
+        "縮退は失敗ではない: {rest:?}"
+    );
 
     // 借用/poison を残さない（None 経路は runtime に触れない）。
-    assert!(wiring.runtime.try_borrow_mut().is_ok(), "runtime を汚さない");
+    assert!(
+        wiring.runtime.try_borrow_mut().is_ok(),
+        "runtime を汚さない"
+    );
 }
 
 /// **排他 system への組み込み**（call-site の檻）: [`emo2_frame_system`] は毎フレーム

@@ -13,23 +13,23 @@
 use std::time::{Duration, Instant};
 
 use tracing::warn;
+use windows::System::DispatcherQueueController;
 use windows::UI::Composition::CompositionGraphicsDevice;
 use windows::UI::Composition::Desktop::DesktopWindowTarget;
 use windows::UI::Composition::ICompositionSurface;
 use windows::Win32::Foundation::{HWND, POINT, RECT};
-use windows::Win32::Graphics::Dxgi::IDXGISwapChain1;
 use windows::Win32::Graphics::Direct2D::{ID2D1Device, ID2D1DeviceContext, ID2D1DeviceContext3};
+use windows::Win32::Graphics::Dxgi::IDXGISwapChain1;
+use windows::Win32::System::WinRT::Composition::{
+    ICompositionDrawingSurfaceInterop, ICompositorDesktopInterop, ICompositorInterop,
+};
 use windows::Win32::System::WinRT::{
     CreateDispatcherQueueController, DISPATCHERQUEUE_THREAD_APARTMENTTYPE, DQTYPE_THREAD_CURRENT,
     DispatcherQueueOptions,
 };
-use windows::Win32::System::WinRT::Composition::{
-    ICompositionDrawingSurfaceInterop, ICompositorDesktopInterop, ICompositorInterop,
-};
 use windows::Win32::UI::WindowsAndMessaging::{
     DispatchMessageW, MSG, PM_REMOVE, PeekMessageW, TranslateMessage, WM_QUIT,
 };
-use windows::System::DispatcherQueueController;
 use windows::core::{Interface, Result};
 
 /// [`drain_dispatcher_queue`] のドレインループ 1 反復の停止判定（純関数・決定論テスト対象）。
@@ -406,8 +406,8 @@ mod tests {
         let core = GraphicsCore::new().expect("GraphicsCore::new 失敗（HARDWARE デバイス生成）");
         let d3d = core.d3d().expect("d3d が None");
         let dxgi = core.dxgi().expect("dxgi が None");
-        let swapchain =
-            create_composition_swap_chain(d3d, dxgi, 64, 48).expect("create_composition_swap_chain 失敗");
+        let swapchain = create_composition_swap_chain(d3d, dxgi, 64, 48)
+            .expect("create_composition_swap_chain 失敗");
 
         // (4) 安全 wrapper 経由で ICompositionSurface を取得（本タスクの検証対象）。
         let surface = interop
