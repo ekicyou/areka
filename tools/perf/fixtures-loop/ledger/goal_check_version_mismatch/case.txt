@@ -1,0 +1,3 @@
+title=判定スクリプトの版が目標定義と違えば goal-check は exit 3
+stderr_substr=判定スクリプトの版
+stderr_substr=9.9.9

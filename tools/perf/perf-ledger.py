@@ -30,13 +30,23 @@
   設計 C1・C2 が状態ブロックに置くと決めた鍵で、`init` は `-` で作る。
 * 値に空白・コロン・読点を含んでよい（鍵と値は最初の `: ` だけで分ける）。改行は不可。
 
-サブコマンド:
+サブコマンド（台帳そのもの）:
     init      台帳を新しく作る（既にあれば拒む。作り直すなら --force）
     state     状態ブロックを JSON で出す（`-` は null・数の鍵は数として出す）
     set-phase 状態ブロックだけを書き換える（周の記録は 1 バイトも動かさない）
     append    周の記録を 1 つ追記する（--from-json で値を渡す）
     read      指定した周の記録を JSON で出す（append へそのまま戻せる形）
     entries   全ての周の記録を JSON 配列で出す（周番号と日時つき）
+
+サブコマンド（判定面・中身は `perf_ledger_goal.py`）:
+    status     STATUS 行を 1 本出す（`/goal` の判定役が読む唯一の形・要件 1.9）
+    final      FINAL 行を出す（走行固有の 8 桁トークン込みでのみ・要件 1.4）
+    next-phase 相の遷移表（純関数）。`--table` で表そのものを出す
+    goal-check 目標定義の必須キー・判定スクリプトの版・閾値を確かめ、周 0 にトークンを作る
+    goal-text  トークンを埋めた `/goal` 条件文を出す（4,000 字未満）
+    summary    results/summary.md（brief 旧数値との対比表・要件 7.6）
+
+    --samples  文書へ貼る書式見本（山括弧）と実出力の見本を並べる（台帳は要らない）
     --selftest 自己較正（fixtures-loop/ledger/ の既知ケースを逐語再現する）
 
 台帳の在り処は次の順で解く: `--ledger <path>` が最優先。無ければ目標定義ファイル
@@ -53,36 +63,49 @@
 目標定義ファイルが無い／4=読み書きの失敗。**2（判定不能）は返さない**——台帳は読めたか
 読めなかったかのどちらかで、途中まで読めた台帳を部分的に信じることはしない（要件 2.11）。
 
-task 5.5 で足すもの: `status`（STATUS 行）・`final`（FINAL 行・`run=` トークン込み）・
-`next-phase`（相の遷移表・純関数）・`goal-check`（目標定義の検査とトークン生成）・
-`goal-text`（`/goal` 条件文）・`summary`（results/summary.md）。呼ばれたら黙らずに
-「まだ無い」と述べて exit 3 する（`PLANNED_SUBCOMMANDS`）。足すときは定数節と
-`SUBCOMMANDS` に 1 行ずつ加えればよく、読み書き（`parse_ledger`／`replace_state_block`）
-には手を入れない。行数が 1,000 行に近づいたら、この節を別ファイルへ分けること。
+ファイルの分かれ方（1 ファイル 1,000 行以下・要件 6.8）:
+
+* `perf-ledger.py`（本ファイル）——**値の所在**（台帳の書式・語彙・相の遷移表・STATUS／FINAL
+  行の文法と正規表現・書式見本）と、台帳そのものの読み書き。
+* `perf_ledger_goal.py`——判定面の 6 つのサブコマンドの中身（本ファイルの定数を使う）。
+* `perf_ledger_selftest.py`——`--selftest` のハーネス。
+
+本ファイルの名前にはハイフンがあり Python のモジュールとして import できないので、依存は
+常に「本体 → 兄弟」の一方向に保つ。兄弟へは起動時に本体を渡す（`bind()`／`SelftestEnv`）。
+逆向きの import は作らない＝循環しない。定数を足すときは本ファイルの定数節へ足す。
 """
 
 from __future__ import annotations
 
 import argparse
 import contextlib
-import io
 import json
 import os
 import re
-import shutil
 import sys
-import tempfile
 import tomllib
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+
+# 兄弟モジュール（`perf_ledger_goal.py`／`perf_ledger_selftest.py`）は本ファイルと同じ
+# ディレクトリに置く。本ファイルの名前にはハイフンがあり import できないので、依存は
+# 常に「本体 → 兄弟」の一方向で、兄弟へは起動時に `bind(...)`／`SelftestEnv` で本体を渡す。
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import perf_ledger_goal  # noqa: E402
+import perf_ledger_selftest  # noqa: E402
 
 # =============================================================================
 # 定数（値の所在はすべてここ 1 箇所。task 5.5 はこの節へ足す）
 # =============================================================================
 
 #: 本スクリプトの版（台帳の書式か語彙を変えたら上げる）。
-SCRIPT_VERSION = "0.1.0 (task 5.4 / 状態ブロック・追記・読取・自己較正)"
+SCRIPT_VERSION = (
+    "0.2.0 (task 5.5 / STATUS・FINAL 行・相の遷移表・goal-check／goal-text・summary を追加。"
+    "自己較正のハーネスと判定面を兄弟モジュールへ分割 / "
+    "0.1.0: task 5.4 の状態ブロック・追記・読取・自己較正)"
+)
 
 EXIT_OK, EXIT_FAIL, EXIT_BAD_INPUT, EXIT_IO_ERROR = 0, 1, 3, 4
 
@@ -127,22 +150,104 @@ INITIAL_PHASE = "PREFLIGHT"
 #: 採否の語彙（設計 C10 の判定・STATUS 行の `verdict=`）。
 VERDICTS = ("ADOPTED", "NO_DIFF", "WORSE", "TESTS_RED", "FOLLOWUP_FAIL", "MEASURE_FAILED", "NA")
 
-#: 目標定義ファイル（リポジトリ根からの相対）。
+#: 相の遷移表（設計 C2・純関数）。`next-phase` と `status` の既定の `next=` はここだけを見る。
+#: 行き先 `@PREVIOUS@` は「直前の相へ戻る」（`--previous` で渡す）。`FINAL` は終端で行き先が無い。
+#: TOOLFIX を何回まで許すか（`[stop].toolfix_retry`）は台帳を持つ呼び手が数え、上限に達したら
+#: `toolfix_fail` を渡す——回数は相の関数の外にある（純関数を状態に依存させない）。
+PREVIOUS_PHASE_MARKER = "@PREVIOUS@"
+PHASE_TRANSITIONS: dict[str, dict[str, str]] = {
+    "PREFLIGHT": {"ok": "BASELINE", "toolfix_needed": "TOOLFIX"},
+    "BASELINE": {"ok": "RANK", "measure_failed": "TOOLFIX"},
+    "RANK": {"ok": "SELECT"},
+    "SELECT": {"ok": "IMPLEMENT", "no_candidate": "FINAL"},
+    "IMPLEMENT": {"ok": "TEST"},
+    "TEST": {
+        "tests_green_followup_pass": "REMEASURE",
+        "tests_red": "RECORD",
+        "followup_fail": "RECORD",
+        "review_rejected": "RECORD",
+    },
+    "REMEASURE": {"ok": "DECIDE", "measure_failed": "TOOLFIX"},
+    "DECIDE": {"adopted": "RECORD", "no_diff": "RECORD", "worse": "RECORD", "measure_failed": "RECORD"},
+    "RECORD": {"ok": "RANK", "plateau": "FINAL", "iteration_cap": "FINAL", "goal_met_candidate": "FINAL"},
+    "TOOLFIX": {"toolfix_ok": PREVIOUS_PHASE_MARKER, "toolfix_fail": "FINAL"},
+    "FINAL": {},
+}
+TERMINAL_PHASE_NOTE = "(終端・遷移なし)"
+
+#: 停止条件の既定（要件 1.4。目標定義ファイルの `[stop]` があればそちらが優先）。
+DEFAULT_MAX_NO_GAIN_STREAK = 3
+DEFAULT_MAX_ITERATIONS = 30
+
+# --- STATUS 行・FINAL 行の文法（設計 C11・`/goal` の条件文と同じ定数から作る） ---------
+#
+# **なぜ正規表現まで定数で持つか**: `/goal` の判定役は会話に現れた字面しか見ない。文書の
+# 書式見本（山括弧つき）が実出力と一致してしまうと、走らせる前に「達成」と判定され得る。
+# そこで「実出力は必ずこの正規表現に一致し、見本は必ず一致しない」を道具側で固定する
+# （`--samples` と自己較正ケース `samples_do_not_match`）。
+STATUS_PREFIX = "PERF-LOOP STATUS "
+FINAL_PREFIX = "PERF-LOOP FINAL: "
+JUDGE_RESULTS = ("PASS", "FAIL", "INCONCLUSIVE", "NA")
+FINAL_OUTCOMES = ("GOAL_MET", "STOPPED")
+FINAL_REASONS = ("plateau", "safety", "measure_failed", "iteration_cap")
+
+#: 走行固有トークン（周 0 に `goal-check` が作る 8 桁）。`00000000` は文書の見本専用で、
+#: `goal-check` は生成しない（見本が本物のトークンと衝突しないようにするため）。
+RUN_TOKEN_DIGITS = 8
+RUN_TOKEN_RE = re.compile(r"^\d{%d}$" % RUN_TOKEN_DIGITS)
+RESERVED_RUN_TOKEN = "0" * RUN_TOKEN_DIGITS
+
+_PHASE_PATTERN = f"(?:{WAIT_PHASE_PREFIX})?(?:{'|'.join(PHASES)})"
+_NUMBER_PATTERN = rf"(?:\d+\.\d{{2}}|{EMPTY_VALUE})"
+_SIGNED_PATTERN = rf"(?:[+-]\d+\.\d{{2}}|{EMPTY_VALUE})"
+#: `top_remaining` は `<stage:item:share>` の 1 語（空白と山括弧を含まない）か `-`。
+_TOP_REMAINING_PATTERN = r"[A-Za-z0-9_.:%+-]+"
+
+STATUS_RE = re.compile(
+    "^" + re.escape(STATUS_PREFIX)
+    + rf"iter=(\d+) phase=({_PHASE_PATTERN}) judge=({'|'.join(JUDGE_RESULTS)}) "
+    + rf"idle_cpu=({_NUMBER_PATTERN}) baseline=({_NUMBER_PATTERN}) "
+    + rf"delta=({_SIGNED_PATTERN}) noise=({_NUMBER_PATTERN}) "
+    + rf"verdict=({'|'.join(VERDICTS)}) streak=(\d+)/(\d+) iters_left=(\d+) next=({_PHASE_PATTERN})$"
+)
+FINAL_RE = re.compile(
+    "^" + re.escape(FINAL_PREFIX) + "(?:"
+    + rf"GOAL_MET run=(\d{{{RUN_TOKEN_DIGITS}}}) idle_cpu=({_NUMBER_PATTERN}) judge=PASS "
+    + r"iters=(\d+) commits=(\d+)"
+    + "|"
+    + rf"STOPPED run=(\d{{{RUN_TOKEN_DIGITS}}}) reason=({'|'.join(FINAL_REASONS)}) "
+    + rf"best_idle_cpu=({_NUMBER_PATTERN}) top_remaining=({_TOP_REMAINING_PATTERN}) iters=(\d+)"
+    + ")$"
+)
+
+#: 文書・スキル本文・README・goal テンプレートへ貼る書式見本。**判定の正規表現に一致しない**。
+SAMPLE_LINES_FOR_DOCS = (
+    STATUS_PREFIX + "iter=<n> phase=<相> judge=<" + "|".join(JUDGE_RESULTS) + "> "
+    "idle_cpu=<x.xx> baseline=<x.xx> delta=<±x.xx> noise=<x.xx> "
+    "verdict=<" + "|".join(VERDICTS) + "> streak=<k>/<max> iters_left=<m> next=<相>",
+    FINAL_PREFIX + "GOAL_MET run=<token> idle_cpu=<x.xx> judge=PASS iters=<n> commits=<k>",
+    FINAL_PREFIX + "STOPPED run=<token> reason=<" + "|".join(FINAL_REASONS) + "> "
+    "best_idle_cpu=<x.xx> top_remaining=<stage:item:share> iters=<n>",
+)
+#: 実出力の見本。**判定の正規表現に一致する**（見本と実出力の違いを目で確かめるため）。
+REAL_EXAMPLE_LINES = (
+    STATUS_PREFIX + "iter=1 phase=REMEASURE judge=NA idle_cpu=6.12 baseline=9.31 delta=-3.19 "
+    "noise=0.41 verdict=ADOPTED streak=1/3 iters_left=29 next=DECIDE",
+    FINAL_PREFIX + f"GOAL_MET run={RESERVED_RUN_TOKEN} idle_cpu=2.84 judge=PASS iters=7 commits=4",
+    FINAL_PREFIX + f"STOPPED run={RESERVED_RUN_TOKEN} reason=plateau best_idle_cpu=6.12 "
+    "top_remaining=phase:tick_all:0.41 iters=12",
+)
+
+#: 目標定義ファイル（リポジトリ根からの相対）。必須キーの全体は `perf_ledger_goal.GOAL_SCHEMA`。
 GOALS_RELATIVE_DIR = ("tools", "perf", "goals")
 GOAL_TABLE = "goal"
 GOAL_REQUIRED_KEYS = ("spec_dir", "ledger")
+#: `summary` の既定の書き出し先の名前（`<spec_dir>/<results_dir>/` の下）。
+SUMMARY_FILENAME = "summary.md"
 
-#: 自己較正の較正値（台帳の値の判断には一切関与しないため、所在はここ 1 箇所）。
+#: 自己較正のケース置き場（ハーネス本体は `perf_ledger_selftest.py`）。
 SELFTEST_FIXTURES_DIRNAME = "fixtures-loop"
 SELFTEST_LEDGER_SUBDIR = "ledger"
-SELFTEST_CASE_FILENAME = "case.txt"
-SELFTEST_STEPS_FILENAME = "steps.txt"
-SELFTEST_LEDGER_FILENAME = "ledger.md"
-SELFTEST_EXPECTED_LEDGER = "expected_ledger.md"
-SELFTEST_EXPECTED_STDOUT = "expected_stdout.txt"
-SELFTEST_STEP_SEPARATOR = " :: "
-SELFTEST_LEDGER_PLACEHOLDER = "@LEDGER@"
-SELFTEST_DIR_PLACEHOLDER = "@DIR@"
 #: 「緑だけの自己較正は較正になっていない」（D7）。ここに挙げた終了コードを期待する
 #: ケースが 1 つも再現していなければ、自己較正そのものを不合格にする。
 SELFTEST_REQUIRED_RED_EXITS = (EXIT_BAD_INPUT,)
@@ -383,6 +488,47 @@ def entry_to_json(entry: Entry, path: Path) -> dict:
     }
 
 
+def state_int(ledger: Ledger, key: str, default: int | None = None) -> int:
+    """状態ブロックの整数の鍵を読む。
+
+    `-`（`init` が書く正規の空値）は「値が無い」であって 0 ではない。`default` を渡した
+    呼び手（STATUS 行のように空でも 1 行出す側）にはそれを返し、渡さない呼び手（次の周番号を
+    決める `append` のように値が無ければ先へ進めない側）には理由つき exit 3 を返す。
+    **生の `ValueError` で落ちる経路は作らない**（task 5.4 のレビュー所見）。
+    """
+    raw = ledger.state.get(key, EMPTY_VALUE)
+    if raw == EMPTY_VALUE:
+        if default is not None:
+            return default
+        raise bad_input(
+            f"状態ブロックの {key} の値が空（{EMPTY_VALUE}）です: {ledger.path}",
+            [
+                f"`set-phase <相> --{key.replace('_', '-')} <値>` で値を入れてから、もう一度実行してください。",
+                "空の値を 0 と読み替えて先へ進むと、周番号が黙って巻き戻ります。",
+            ],
+        )
+    try:
+        return int(raw)
+    except ValueError as exc:
+        raise bad_input(f"状態ブロックの {key} が整数ではありません（{raw!r}）", [str(ledger.path)]) from exc
+
+
+def state_number_text(ledger: Ledger, key: str, signed: bool = False) -> str:
+    """状態ブロックの小数の鍵を STATUS 行の精度（2 桁）で返す。空なら `-` のまま。"""
+    return format_number_text(ledger.state.get(key, EMPTY_VALUE), signed, f"{ledger.path} の {key}")
+
+
+def format_number_text(raw: str | None, signed: bool, where: str) -> str:
+    """台帳の文字列を STATUS／FINAL 行の `<x.xx>`／`<±x.xx>` に整える。空なら `-`。"""
+    if raw is None or raw == EMPTY_VALUE:
+        return EMPTY_VALUE
+    try:
+        number = float(raw)
+    except ValueError as exc:
+        raise bad_input(f"数として読めません（{raw!r}）", [where]) from exc
+    return ("{:+.2f}" if signed else FLOAT_FORMAT).format(number)
+
+
 def emit_json(payload) -> None:
     print(json.dumps(payload, ensure_ascii=False, indent=2))
 
@@ -506,6 +652,48 @@ def load_ledger(args) -> Ledger:
     return parse_ledger(read_text(path), path)
 
 
+def resolve_judge_script(args, goal_table: dict) -> Path:
+    """判定スクリプトの位置（`--judge-file` → 目標定義の `[goal].judge_script`）。"""
+    if getattr(args, "judge_file", None):
+        return Path(args.judge_file)
+    return repo_root(args) / str(goal_table["judge_script"])
+
+
+def read_judge_text(path: Path) -> str:
+    """判定スクリプトを**字面として**読む（import しない。定数 2 つを読むためだけ）。"""
+    if not path.is_file():
+        raise bad_input(
+            f"判定スクリプトがありません: {path}",
+            ["目標定義の [goal].judge_script はリポジトリ根からの相対です（`--judge-file` で直に指せます）。"],
+        )
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise io_failure(f"判定スクリプトを読めません: {path}", [str(exc)]) from exc
+    except UnicodeDecodeError as exc:
+        raise bad_input(f"判定スクリプトが UTF-8 ではありません: {path}", [str(exc)]) from exc
+
+
+def resolve_summary_path(args) -> Path:
+    """まとめの書き出し先（`--out` → `<spec_dir>/<results_dir>/summary.md`）。"""
+    if getattr(args, "out", None):
+        return Path(args.out)
+    toml_path = goal_toml_path(args)
+    if toml_path is None:
+        raise bad_input(
+            "まとめの書き出し先が分かりません",
+            ["`--out <path>`、または [goal].spec_dir と results_dir のある目標定義ファイルを渡してください。"],
+        )
+    table = load_goal_toml(toml_path).get(GOAL_TABLE) or {}
+    missing = [key for key in ("spec_dir", "results_dir") if not table.get(key)]
+    if missing:
+        raise bad_input(
+            f"目標定義ファイルの [{GOAL_TABLE}] に {'・'.join(missing)} がありません: {toml_path}",
+            ["`--out <path>` で書き出し先を直に指すこともできます。"],
+        )
+    return repo_root(args) / table["spec_dir"] / table["results_dir"] / SUMMARY_FILENAME
+
+
 # =============================================================================
 # サブコマンド
 # =============================================================================
@@ -603,7 +791,7 @@ def cmd_append(args) -> int:
     ledger = load_ledger(args)
     values = load_entry_json(Path(args.from_json))
     timestamp = validate_timestamp(args.now) if args.now else now_iso()
-    iteration = args.iteration if args.iteration is not None else int(ledger.state["iteration"]) + 1
+    iteration = args.iteration if args.iteration is not None else state_int(ledger, "iteration") + 1
     if iteration < 1:
         raise bad_input(f"周番号は 1 以上です（{iteration}）")
     if any(entry.iteration == iteration for entry in ledger.entries):
@@ -636,12 +824,7 @@ def cmd_entries(args) -> int:
     return EXIT_OK
 
 
-def cmd_planned(args) -> int:
-    report(f"{args.subcommand} は task 5.5 で実装します（{PLANNED_SUBCOMMANDS[args.subcommand]}）。")
-    return EXIT_BAD_INPUT
-
-
-#: 実装済みのサブコマンド（task 5.5 はここへ 1 行ずつ足す）。
+#: サブコマンドの表（判定面の 6 つは `perf_ledger_goal` が持ち込む）。
 SUBCOMMANDS = {
     "init": cmd_init,
     "state": cmd_state,
@@ -651,193 +834,29 @@ SUBCOMMANDS = {
     "entries": cmd_entries,
 }
 
-#: まだ無いサブコマンド（求められたら黙らずに理由を述べて終わる）。
-PLANNED_SUBCOMMANDS = {
-    "status": "STATUS 行 1 本",
-    "final": "FINAL 行（run= トークン込み）",
-    "next-phase": "相の遷移表（純関数）",
-    "goal-check": "目標定義ファイルの検査とトークン生成",
-    "goal-text": "トークンを埋めた /goal 条件文",
-    "summary": "results/summary.md（旧数値との対比表）",
-}
+# 兄弟モジュールへ本体を渡す（本体は名前にハイフンがあり import できないため）。
+perf_ledger_goal.bind(sys.modules[__name__])
+SUBCOMMANDS.update(perf_ledger_goal.COMMANDS)
 
 
 # =============================================================================
-# 自己較正（--selftest）
+# 自己較正（--selftest）——ハーネスは perf_ledger_selftest.py（本体は道具立てを渡すだけ）
 # =============================================================================
-
-
-@dataclass
-class SelftestCase:
-    """1 ケース＝1 ディレクトリ。`steps.txt` の各行を実運用と同じ入口へ流す。"""
-
-    name: str
-    directory: Path
-    title: str
-    stderr_substrings: list[str]
-    steps: list[tuple[int, list[str]]]
-
-
-def _selftest_read_case(directory: Path) -> SelftestCase:
-    case_path = directory / SELFTEST_CASE_FILENAME
-    steps_path = directory / SELFTEST_STEPS_FILENAME
-    for path in (case_path, steps_path):
-        if not path.is_file():
-            raise bad_input(
-                f"自己較正のケースに {path.name} がありません: {directory}",
-                ["期待の書いていないケースは、走らせても合否を言えません。"],
-            )
-    title = ""
-    substrings: list[str] = []
-    for raw in case_path.read_text(encoding="utf-8").splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        if key == "title":
-            title = value
-        elif key == "stderr_substr":
-            substrings.append(value)
-        elif key != "note":
-            raise bad_input(
-                f"{case_path} の知らない項目です: {key!r}", ["使えるのは title・stderr_substr・note です。"]
-            )
-
-    steps: list[tuple[int, list[str]]] = []
-    for lineno, raw in enumerate(steps_path.read_text(encoding="utf-8").splitlines(), start=1):
-        line = raw.strip()
-        if not line or line.startswith("#"):
-            continue
-        head, separator, rest = line.partition(SELFTEST_STEP_SEPARATOR)
-        if not separator or not rest.split():
-            raise bad_input(
-                f"{steps_path}:{lineno}: 手順の書き方が違います",
-                [f"`<期待終了コード>{SELFTEST_STEP_SEPARATOR}<引数…>` の形で書きます（引数は空白区切り）。"],
-            )
-        try:
-            expected = int(head.strip())
-        except ValueError as exc:
-            raise bad_input(f"{steps_path}:{lineno}: 期待終了コードが整数ではありません（{head!r}）") from exc
-        steps.append((expected, rest.split()))
-    if not steps:
-        raise bad_input(f"{steps_path} に手順が 1 つもありません", ["何も走らせないケースは較正になりません。"])
-    return SelftestCase(directory.name, directory, title or "(説明なし)", substrings, steps)
-
-
-def _selftest_invoke(argv: list[str]) -> tuple[int, str, str]:
-    """実運用と同じ入口 `main(argv)` を呼ぶ（自己較正だけの近道は作らない）。"""
-    out, err = io.StringIO(), io.StringIO()
-    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-        try:
-            code = main(argv)
-        except SystemExit as exc:
-            code = exc.code if isinstance(exc.code, int) else EXIT_BAD_INPUT
-    return code, out.getvalue(), err.getvalue()
-
-
-def _entry_region(path: Path) -> str:
-    """台帳のうち「周の記録」の部分だけを取り出す（状態ブロック書き換えの検査用）。"""
-    if not path.is_file():
-        return ""
-    text = path.read_text(encoding="utf-8").replace("\r\n", "\n")
-    index = text.find("\n" + ENTRY_HEADING_FORMAT.split("{")[0])
-    return "" if index < 0 else text[index:]
-
-
-def _first_difference(label: str, want: str, got: str) -> str:
-    want_lines, got_lines = want.splitlines(), got.splitlines()
-    for index in range(max(len(want_lines), len(got_lines))):
-        a = want_lines[index] if index < len(want_lines) else "(行が無い)"
-        b = got_lines[index] if index < len(got_lines) else "(行が無い)"
-        if a != b:
-            return f"{label} {index + 1} 行目: 期待 {a!r} 実際 {b!r}"
-    return f"{label}: 差はありません"
-
-
-def _selftest_run_case(case: SelftestCase, workspace: Path) -> tuple[list[str], set[int]]:
-    """ケースを 1 つ走らせ、食い違いの一覧と「実際に再現した終了コード」を返す。"""
-    work = workspace / case.name
-    shutil.copytree(case.directory, work)
-    ledger = work / SELFTEST_LEDGER_FILENAME
-
-    reasons: list[str] = []
-    reproduced: set[int] = set()
-    stdout_all = stderr_all = ""
-    for expected, raw_argv in case.steps:
-        argv = [
-            token.replace(SELFTEST_LEDGER_PLACEHOLDER, str(ledger)).replace(
-                SELFTEST_DIR_PLACEHOLDER, str(work)
-            )
-            for token in raw_argv
-        ]
-        before = _entry_region(ledger)
-        code, out, err = _selftest_invoke(argv)
-        stdout_all += out
-        stderr_all += err
-        if code == expected:
-            reproduced.add(code)
-        else:
-            reasons.append(f"{argv[0]}: 期待 {expected} 実際 {code}")
-        if argv[0] == "set-phase" and _entry_region(ledger) != before:
-            reasons.append("set-phase が周の記録を書き換えました（状態ブロックだけを書き換えること）")
-
-    expected_stdout = case.directory / SELFTEST_EXPECTED_STDOUT
-    if expected_stdout.is_file():
-        want = expected_stdout.read_text(encoding="utf-8").replace("\r\n", "\n")
-        if want != stdout_all.replace("\r\n", "\n"):
-            reasons.append(_first_difference("標準出力", want, stdout_all.replace("\r\n", "\n")))
-
-    expected_ledger = case.directory / SELFTEST_EXPECTED_LEDGER
-    if expected_ledger.is_file():
-        want = expected_ledger.read_text(encoding="utf-8").replace("\r\n", "\n")
-        got = ledger.read_text(encoding="utf-8").replace("\r\n", "\n") if ledger.is_file() else ""
-        if want != got:
-            reasons.append(_first_difference("台帳", want, got))
-
-    for substring in case.stderr_substrings:
-        if substring not in stderr_all:
-            reasons.append(f"標準エラーに {substring!r} が出ていません")
-    return reasons, reproduced
 
 
 def run_selftest() -> int:
-    """fixtures-loop/ledger/ の既知ケースを逐語再現する（要件 6.7）。"""
-    root = script_dir() / SELFTEST_FIXTURES_DIRNAME / SELFTEST_LEDGER_SUBDIR
-    if not root.is_dir():
-        raise bad_input(f"自己較正のケース置き場がありません: {root}")
-    cases = [
-        _selftest_read_case(child)
-        for child in sorted(root.iterdir())
-        if child.is_dir() and not child.name.startswith((".", "_"))
-    ]
-    if not cases:
-        raise bad_input(
-            f"自己較正のケースが 1 件もありません: {root}",
-            ["ケースの無い自己較正は、何も確かめずに緑を返します。"],
+    """`fixtures-loop/ledger/` の既知ケースを逐語再現する（要件 6.7）。"""
+    return perf_ledger_selftest.run_selftest(
+        perf_ledger_selftest.SelftestEnv(
+            fixtures_root=script_dir() / SELFTEST_FIXTURES_DIRNAME / SELFTEST_LEDGER_SUBDIR,
+            invoke=main,
+            fail=bad_input,
+            entry_heading_prefix=ENTRY_HEADING_FORMAT.split("{")[0],
+            ok_code=EXIT_OK,
+            fail_code=EXIT_FAIL,
+            required_red_exits=SELFTEST_REQUIRED_RED_EXITS,
         )
-
-    ok_count = ng_count = 0
-    reproduced_all: set[int] = set()
-    with tempfile.TemporaryDirectory(prefix="perf-ledger-selftest-") as temporary:
-        for case in cases:
-            reasons, reproduced = _selftest_run_case(case, Path(temporary))
-            reproduced_all |= reproduced
-            if reasons:
-                ng_count += 1
-                print(f"[selftest] {case.name} NG  {case.title}")
-                for reason in reasons:
-                    print(f"           - {reason}")
-            else:
-                ok_count += 1
-                print(f"[selftest] {case.name} ok  {case.title}")
-
-    for code in SELFTEST_REQUIRED_RED_EXITS:
-        if code not in reproduced_all:
-            ng_count += 1
-            print(f"[selftest] (赤の較正) NG  終了コード {code} を再現したケースが 1 件もありません")
-
-    print(f"SELFTEST RESULT ok={ok_count} ng={ng_count}")
-    return EXIT_OK if ng_count == 0 else EXIT_FAIL
+    )
 
 
 # =============================================================================
@@ -863,6 +882,11 @@ def build_parser() -> Parser:
         "--selftest",
         action="store_true",
         help=f"自己較正: {SELFTEST_FIXTURES_DIRNAME}/{SELFTEST_LEDGER_SUBDIR}/ の既知ケースを逐語再現する",
+    )
+    parser.add_argument(
+        "--samples",
+        action="store_true",
+        help="文書へ貼る書式見本（山括弧）と実出力の見本を出す（台帳は要らない）",
     )
     # 台帳の在り処の指定は全サブコマンド共通（親パーサから継がせる）。
     location = argparse.ArgumentParser(add_help=False)
@@ -899,8 +923,7 @@ def build_parser() -> Parser:
 
     subparsers.add_parser("entries", parents=[location], help="全ての周の記録を JSON 配列で出す")
 
-    for name, what in PLANNED_SUBCOMMANDS.items():
-        subparsers.add_parser(name, parents=[location], help=f"（task 5.5 で実装）{what}")
+    perf_ledger_goal.add_parsers(subparsers, location)
     return parser
 
 
@@ -912,14 +935,16 @@ def main(argv: list[str]) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
-        if args.selftest:
+        if args.selftest or args.samples:
             if args.subcommand:
-                parser.error("--selftest はサブコマンドと一緒に使えません（ケース側が引数を持っています）")
-            return run_selftest()
+                parser.error("--selftest・--samples はサブコマンドと一緒に使えません")
+            if args.selftest and args.samples:
+                parser.error("--selftest と --samples は一緒に使えません")
+            return run_selftest() if args.selftest else perf_ledger_goal.print_samples()
         if not args.subcommand:
-            parser.error(f"サブコマンドがありません（{'・'.join(SUBCOMMANDS)}・--selftest のいずれか）")
-        if args.subcommand in PLANNED_SUBCOMMANDS:
-            return cmd_planned(args)
+            parser.error(
+                f"サブコマンドがありません（{'・'.join(SUBCOMMANDS)}・--selftest・--samples のいずれか）"
+            )
         return SUBCOMMANDS[args.subcommand](args)
     except LedgerError as exc:
         label = {EXIT_BAD_INPUT: "入力不正", EXIT_IO_ERROR: "入出力の失敗"}.get(exc.code, "失敗")

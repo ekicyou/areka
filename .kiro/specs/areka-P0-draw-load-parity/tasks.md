@@ -131,7 +131,7 @@
   - _Requirements: 1.3, 6.7, 7.6_
   - _Boundary: perf-ledger_
 
-- [ ] 5.5 台帳の判定面（perf-ledger.py: STATUS／FINAL 行・遷移表・goal-check／goal-text・summary）
+- [x] 5.5 台帳の判定面（perf-ledger.py: STATUS／FINAL 行・遷移表・goal-check／goal-text・summary）
   - STATUS 行と FINAL 行の文法を定数として持ち、status は 1 行、final は走行固有の 8 桁トークン込みでのみ出す（GOAL_MET／STOPPED reason=）。goal-check が周 0 にトークンを生成して状態ブロックへ書き、目標定義の必須キー・判定スクリプトの版一致・閾値と較正値の一致を確かめる（違えば exit 3）。goal-text はトークンを埋めた /goal 条件文を出力
   - next-phase は相の遷移表の純関数（PREFLIGHT→BASELINE→RANK→SELECT→IMPLEMENT→TEST→REMEASURE→DECIDE→RECORD→RANK／FINAL・TOOLFIX 1 回）。summary は results/summary.md（brief 旧数値との対比表）
   - 自己較正（fixtures-loop/ledger）: 遷移表の全遷移・「文書中の見本行（山括弧）は判定の正規表現に一致しない」・final の run= が状態ブロックのトークンと一致
@@ -281,3 +281,4 @@
 - (5.3) 本セッションは非昇格のため実採取は未実施＝`fixtures-loop/rank/sample_ok/dump.txt` は xperf dumper 書式（`perf_nt_c.dll` の書式文字列で裏取り・末尾列は推定）の**手書き断片**で、初回の昇格採取（7.2 preflight／9.1）で差し替え、同時に `invoke-cpu-sample.ps1` の `FIXTURE_EXPECT_*` 6 定数（16/8/16/22/2・TID 18332,18420,18512）を更新すること。fixture は `ThreadStartImage!Function` 列にも `areka.exe!` を 16 個仕込んであり、素朴な文字列数えだと 32 になる＝6.2 の `perf-rank.py` は列名行から `Image!Function` 列を引き、同じ 16/8/16/22/2 を再現すること。`-Stop` は非昇格だと exit 1（5 でない）・`no_pdb` の検出は preflight（7.2）の担当。
 - (7.4) `.claude/agents/perf-*.md` はセッション開始時に読み込まれる登録簿に載るため、**作成したセッション内からは Agent で呼べない**（本セッションで `perf-measure` を呼ぶと "Agent type not found"）。「Fable から呼ぶと `[agent-model]` が opus 系で出る」の実証は次セッション（9.1 統合確認）で行うこと。定義は頭書の規則（出典指定・`unknown` 退避・前置き禁止）を満たしている。
 - (5.2) `invoke-perf-run.ps1 -AutoQuiet` で確かめ直しを使い切った失敗時は既存の `Stop-Run` 作法で出力先が `<leaf>-FAILED` へ退避され、`quiet-before.txt` はその中に残る（run-meta は起動前失敗なので無い）。7.3 の `perf-loop.ps1` が静寂の根拠を読むときは退避先も見ること。`retry_max` は「最初の 1 回の後に確かめ直す回数」（合計 retry_max+1）。
+- (5.5) `perf-ledger.py` は本体（定数・読み書き）＋`perf_ledger_goal.py`（status/final/next-phase/goal-check/goal-text/summary）＋`perf_ledger_selftest.py` の 3 ファイル。**7.1 の `goals/draw-load-parity.toml` は `[sampling] backend = "xperf-dumper"` を必ず含める**（`GOAL_SCHEMA` が必須としており、設計 C1 の例にはない＝無いと周 0 の goal-check が exit 3）。**7.5 への申し送り**: `TOOLFIX` の「直前の相」と `toolfix_retry` の消費回数は台帳に置き場が無い（`next-phase --previous` は呼び出し側が渡す）→ 7.5 で `STATE_LATE_KEYS` に `previous_phase`／`toolfix_used` を足し、スキルが `set-phase` で書くこと（要件 1.10＝台帳だけから再開）。`next-phase` は RECORD に `adopted` を受けない（採否の出来事は DECIDE の行・設計 C2 どおり）。goal-text は 1,012 字。summary.md には「brief の数値は Bevy 0.19 更新前」の注記が無い（8.1 の README か summary の定数で補うこと）。

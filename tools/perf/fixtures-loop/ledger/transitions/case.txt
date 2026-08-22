@@ -1,0 +1,4 @@
+title=相の遷移表（純関数）の全遷移と、表に無い組の拒否
+stderr_substr=知らない相
+stderr_substr=遷移が定義されていません
+stderr_substr=直前の相
