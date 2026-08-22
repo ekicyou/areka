@@ -773,7 +773,7 @@ main_model_recommended = "fable"       # README に記す推奨（Opus 5 でも�
 **Responsibilities & Constraints**
 - `tick_wake`（プロセス共有・どのスレッドからでも `mark` できる）が旗を持つ。`tick_gate::should_run` は純関数で副作用なし。`EcsWorld::decide_tick` が両者をつなぐ。
 - 13 本の順序・`try_tick_world` の中身は不変（門は手前）。省略 tick で `FrameCount`／`FrameTime`／`TickStart` は進まない。`flush_window_pos_commands()` は常に呼ぶ。
-- **実装は無条件・既定値は採否で決める**: 旗・純関数・門の分岐・決定論テスト（要件 6.1〜6.3）は候補の採否に関わらず入れる。1 周の交互比較で `ADOPTED` なら既定 ON、`NO_DIFF`／`WORSE` なら既定 OFF のまま残す（要件 1.7 の「戻す」は既定値に適用し、判定の純関数とテストは残る）。`AREKA_TICK_GATE=1|0`（areka が起動時に読み `EcsWorld::set_tick_gate`）で上書きでき、同一実行体での A/B 比較と安全弁を兼ねる。
+- **実装は無条件・既定値は採否で決める**（2026-08-22 設計ディスカッション議題 2 裁定＝「設計どおり作り、ON/OFF して様子を見る」）: 旗・純関数・門の分岐・決定論テスト（要件 6.1〜6.3）は候補の採否に関わらず入れる。ループの台帳上は **周 1 の A/B＝門の既定 ON（B）対 OFF（A）** として記録し（`hypothesis: tick gate default ON`）、順位表からの選択は周 2 以降に適用する（要件 3.1 の「選ばなかった理由」欄には「周 1 は仕組みの A/B」と書く）。1 周の交互比較で `ADOPTED` なら既定 ON、`NO_DIFF`／`WORSE` なら既定 OFF のまま残す（要件 1.7 の「戻す」は既定値に適用し、判定の純関数とテストは残る）。`AREKA_TICK_GATE=1|0`（areka が起動時に読み `EcsWorld::set_tick_gate`）で上書きでき、同一実行体での A/B 比較と安全弁を兼ねる。
 
 ##### Service Interface
 ```rust
