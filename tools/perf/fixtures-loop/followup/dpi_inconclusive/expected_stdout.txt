@@ -1,0 +1,34 @@
+==============================================================================
+judge-followup.py 見た目の追随チェックの判定（要件 1.5 / 4.7・design C13）
+==============================================================================
+  スクリプト版 : 0.1.0
+  必須検査     : clickthrough・drag・dpi・balloon_follow
+  終了コード   : 0=総合 PASS / 1=FAIL あり / 2=FAIL 無しで判定不能あり / 3=読取不能
+
+-- 観測の前提 --
+  対象キャラ窓   : hwnd=0x11B04C0 scope=0
+  対象バルーン窓 : hwnd=0x1709EE
+  操作の注入     : available（SetCursorPos=true cursor_moved=true SendInput=1 lasterr=0）
+  probe.log 行数 : 24  /  run.log 行数 : 14
+
+-- 検査ごとの判定 --
+check=clickthrough verdict=PASS reason=-
+    transparent hwnd=0x11B04C0 ex=0x2800A0 WS_EX_TRANSPARENT=あり 期待=あり → 一致
+    opaque      hwnd=0x11B04C0 ex=0x280020 WS_EX_TRANSPARENT=なし 期待=なし → 一致
+    トグル記録  「clickthrough: ex-style トグル適用」 Transparent=1 行 / Opaque=1 行（観測窓 2026-08-23T00:00:20+00:00 〜 2026-08-23T00:00:21.400000+00:00）
+check=drag verdict=PASS reason=-
+    char     OS の実位置 (2064,610) → (2144,610) Δ=(+80,+0) 期待 (+80,+0) ± 2 → 一致
+    char     窓書込ログ kind=write hwnd=0x11B04C0 ax=2144 ± 2 … 1 行
+    balloon  OS の実位置 (1796,352) → (1876,352) Δ=(+80,+0) 期待 (+80,+0) ± 2 → 一致
+    balloon  窓書込ログ kind=write hwnd=0x1709EE ax=1876 ± 2 … 1 行
+    受理記録    kind=msg msg=WM_WINDOWPOSCHANGED hwnd=0x11B04C0 … 1 行
+check=dpi verdict=INCONCLUSIVE reason=single_dpi
+    probe.log の status=unavailable: 操作そのものを実施できていません（本番の合否ではない）。
+check=balloon_follow verdict=INCONCLUSIVE reason=depends_on_drag_dpi
+    probe.log の status=unavailable: 操作そのものを実施できていません（本番の合否ではない）。
+
+-- 総合 --
+  判定不能があります。**判定不能は採用しない**（安全側・design C13）。
+  確かめられなかった検査は、操作を注入できる対話セッションで実施してください。
+
+FOLLOWUP VERDICT overall=INCONCLUSIVE clickthrough=PASS drag=PASS dpi=INCONCLUSIVE balloon_follow=INCONCLUSIVE code=2

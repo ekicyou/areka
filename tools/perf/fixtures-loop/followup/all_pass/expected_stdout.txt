@@ -1,0 +1,38 @@
+==============================================================================
+judge-followup.py 見た目の追随チェックの判定（要件 1.5 / 4.7・design C13）
+==============================================================================
+  スクリプト版 : 0.1.0
+  必須検査     : clickthrough・drag・dpi・balloon_follow
+  終了コード   : 0=総合 PASS / 1=FAIL あり / 2=FAIL 無しで判定不能あり / 3=読取不能
+
+-- 観測の前提 --
+  対象キャラ窓   : hwnd=0x11B04C0 scope=0
+  対象バルーン窓 : hwnd=0x1709EE
+  操作の注入     : available（SetCursorPos=true cursor_moved=true SendInput=1 lasterr=0）
+  probe.log 行数 : 31  /  run.log 行数 : 21
+
+-- 検査ごとの判定 --
+check=clickthrough verdict=PASS reason=-
+    transparent hwnd=0x11B04C0 ex=0x2800A0 WS_EX_TRANSPARENT=あり 期待=あり → 一致
+    opaque      hwnd=0x11B04C0 ex=0x280020 WS_EX_TRANSPARENT=なし 期待=なし → 一致
+    トグル記録  「clickthrough: ex-style トグル適用」 Transparent=1 行 / Opaque=1 行（観測窓 2026-08-23T00:00:20+00:00 〜 2026-08-23T00:00:21.400000+00:00）
+check=drag verdict=PASS reason=-
+    char     OS の実位置 (2064,610) → (2144,610) Δ=(+80,+0) 期待 (+80,+0) ± 2 → 一致
+    char     窓書込ログ kind=write hwnd=0x11B04C0 ax=2144 ± 2 … 1 行
+    balloon  OS の実位置 (1796,352) → (1876,352) Δ=(+80,+0) 期待 (+80,+0) ± 2 → 一致
+    balloon  窓書込ログ kind=write hwnd=0x1709EE ax=1876 ± 2 … 1 行
+    受理記録    kind=msg msg=WM_WINDOWPOSCHANGED hwnd=0x11B04C0 … 1 行
+check=dpi verdict=PASS reason=-
+    モニタ表    2 面・DPI の種類 [144, 192]
+    受理記録    kind=msg msg=WM_DPICHANGED hwnd=0x11B04C0 … 2 行
+    表示成立点  観測窓の直前 k=2.0 → 観測窓 k=[1.5, 2.0]（k の変わった成立点 1 件）
+    モニタ移動  phase=out (-2400,400) 192→144 result=ok
+    モニタ移動  phase=back (2144,610) 144→192 result=ok
+check=balloon_follow verdict=PASS reason=-
+    ドラッグ     キャラ窓相対 (-268, -258) → (-268, -258) Δ=(+0,+0) 許容 ± 2 → 一致
+    DPI 往復   キャラ窓相対 (-268, -258) → (-268, -258) Δ=(+0,+0) 許容 ± 2 → 一致
+
+-- 総合 --
+  必須検査がすべて PASS。この変更は見た目の追随を劣化させていません。
+
+FOLLOWUP VERDICT overall=PASS clickthrough=PASS drag=PASS dpi=PASS balloon_follow=PASS code=0

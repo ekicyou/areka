@@ -169,7 +169,7 @@
   - _Boundary: perf-compare_
   - _Depends: 6.1_
 
-- [ ] 6.4 (P) 見た目の追随チェック（invoke-followup-checks.ps1＋judge-followup.py）
+- [x] 6.4 (P) 見た目の追随チェック（invoke-followup-checks.ps1＋judge-followup.py）
   - 有界実走（自動終了 ms・RUST_LOG にクリック透過／遷移／表示の debug）で表示成立点を待ってから、PID から窓を列挙して操作を時刻つきで probe.log へ
   - clickthrough（透明点と不透明点で WS_EX_TRANSPARENT の有無＋両方向のトグル適用ログ）・drag（不透明点から +80px ドラッグ→位置変更メッセージと窓書込の新位置 ±2px）・dpi（別 DPI のモニタへ移して戻す→DPI 変更メッセージと k= の変化・2 モニタ混在が無ければ INCONCLUSIVE）・balloon_follow（drag／dpi の前後でバルーンのキャラ窓相対位置 ±2px）
   - judge-followup.py: 各検査 PASS／FAIL／INCONCLUSIVE・総合は全 PASS のみ PASS（INCONCLUSIVE は採用しない）・exit 0／1／2。自己較正 3 ケース（all_pass／clickthrough_fail／dpi_inconclusive）
@@ -282,3 +282,4 @@
 - (7.4) `.claude/agents/perf-*.md` はセッション開始時に読み込まれる登録簿に載るため、**作成したセッション内からは Agent で呼べない**（本セッションで `perf-measure` を呼ぶと "Agent type not found"）。「Fable から呼ぶと `[agent-model]` が opus 系で出る」の実証は次セッション（9.1 統合確認）で行うこと。定義は頭書の規則（出典指定・`unknown` 退避・前置き禁止）を満たしている。
 - (5.2) `invoke-perf-run.ps1 -AutoQuiet` で確かめ直しを使い切った失敗時は既存の `Stop-Run` 作法で出力先が `<leaf>-FAILED` へ退避され、`quiet-before.txt` はその中に残る（run-meta は起動前失敗なので無い）。7.3 の `perf-loop.ps1` が静寂の根拠を読むときは退避先も見ること。`retry_max` は「最初の 1 回の後に確かめ直す回数」（合計 retry_max+1）。
 - (5.5) `perf-ledger.py` は本体（定数・読み書き）＋`perf_ledger_goal.py`（status/final/next-phase/goal-check/goal-text/summary）＋`perf_ledger_selftest.py` の 3 ファイル。**7.1 の `goals/draw-load-parity.toml` は `[sampling] backend = "xperf-dumper"` を必ず含める**（`GOAL_SCHEMA` が必須としており、設計 C1 の例にはない＝無いと周 0 の goal-check が exit 3）。**7.5 への申し送り**: `TOOLFIX` の「直前の相」と `toolfix_retry` の消費回数は台帳に置き場が無い（`next-phase --previous` は呼び出し側が渡す）→ 7.5 で `STATE_LATE_KEYS` に `previous_phase`／`toolfix_used` を足し、スキルが `set-phase` で書くこと（要件 1.10＝台帳だけから再開）。`next-phase` は RECORD に `adopted` を受けない（採否の出来事は DECIDE の行・設計 C2 どおり）。goal-text は 1,012 字。summary.md には「brief の数値は Bevy 0.19 更新前」の注記が無い（8.1 の README か summary の定数で補うこと）。
+- (6.4) 追随チェックの設計からの差分 2 点（8.1/8.2 で登記）: ① `[transition] kind=monitor` は値が**変化したときだけ**出る（`monitor_systems.rs:340-356`）ので、dpi 検査のモニタ表は `EnumDisplayMonitors`＋`GetDpiForMonitor` で OS から採る（`probe: check=dpi step=monitors`）。② `win_kind` の実値は `char`／`balloon`（`placement/diag.rs:337-344`・`transition_diag.rs:305` の doc 例 `"shell"` は陳腐化）。本セッションは `SetCursorPos`/`SendInput` が ACCESS_DENIED（lasterr=5）で clickthrough／drag／balloon_follow は INCONCLUSIVE 止まり＝**対話デスクトップのセッションで PASS を確認すること**（9.1／周 1）。dpi は実機 2 面（192/144）で PASS・バルーン相対 (-268,-258) 不変。申し送り候補: クリック透過トグル行（`controller.rs:212`）は `window=<Entity>` で hwnd を持たず、判定は観測窓内の両方向本数のみ→hwnd を足すと厳密化できる（wintf・境界外）。`alignment,free` のゴーストでは areka がキャラ窓の `kind=write` を書かないため drag 判定が健全なコードでも FAIL し得る（emo2 は bottom 固定で問題なし）。
