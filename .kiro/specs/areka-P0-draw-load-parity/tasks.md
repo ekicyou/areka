@@ -117,7 +117,7 @@
   - _Boundary: invoke-perf-run_
   - _Depends: 5.1_
 
-- [ ] 5.3 (P) CPU サンプリング 1 コマンド（invoke-cpu-sample.ps1）
+- [x] 5.3 (P) CPU サンプリング 1 コマンド（invoke-cpu-sample.ps1）
   - `-Probe`（昇格の有無・xperf の実在・5 秒の実採取と停止）→ `available=true|false reason=…` を 1 行・exit 0。`-Start`（サンプリング＋呼出スタック採取の開始・昇格なしは exit 5＝UNAVAILABLE で計測失敗 4 と区別）。`-Stop`（merge→記号解決→テキスト dump）。`-SelfTest`（同梱の dump 断片で `areka.exe!` フレーム ≥1・Probe）
   - 記号はビルド時の環境変数 `CARGO_PROFILE_RELEASE_DEBUG=line-tables-only` で付与（`Cargo.toml` 非接触）。代替 backend（wpaexporter）は目標定義ファイルで切替
   - 観測可能な完了状態: 昇格した PowerShell で 1 コマンドの採取→dump.txt が出来て `areka.exe!` フレームを含む。非昇格では exit 5 と reason を返す
@@ -278,3 +278,4 @@
 - (4) `SELF_INITIATED_DEPTH` の着地形＝`thread_local! Cell<i32>`（`command.rs`）。錠 `lock_self_initiated_for_test` は残置（実呼出 21 箇所／5 ファイル＝command.rs 2・command_batch_tests 5・command_transition_tests 4・window_pos_tests 5・window_pos_transition_tests 5）で退役候補。兄弟テスト 4 ファイルの module doc（`command_batch_tests.rs:25`・`command_transition_tests.rs:28`・`window_pos_tests.rs:41`・`window_pos_transition_tests.rs:21`）は「プロセス共有」のまま陳腐化＝錠の退役と同じ塊で cage へ申し送る（8.2）。`frame_transition_atomicity_tests` の実本数は 3（設計の 4 は doc 内の `#[test]` 字面を数えた誤り）＝既存群は計 57 本。
 - (5.1) `check-quiet.ps1` の判定語は `QUIET`／`NOT_QUIET` に加えて計測失敗時 `MEASURE_FAILED`（exit 4・ファイルは残る・失敗原文は標準出力の `counter_error=` のみ）。理由語 5 種（ok／cpu_mean_over_threshold／heavy_process_present／both／counter_read_failed）。TOML `[quiet]` は**配列を 1 行に保つ**こと（複数行や壊れた値は警告なく既定値へ落ちる）——7.1 の目標定義ファイルはこの制約で書く。PowerShell の変数名は大小無視＝`-SampleSec` パラメータと `$sampleSec` ローカルが衝突する（実装中に踏んだ）。
 - (5.4) `perf-ledger.py` は 934 行——**5.5 着手時に分割必須**（自己較正の節（約 200 行）を `perf_ledger_selftest.py` 等へ切り出し、`--selftest` 入口は本体に残す）。状態ブロックは設計の 8 鍵＋`run`・`capabilities`。小数は 2 桁丸め（STATUS 行の `<x.xx>` と同精度＝`compare.json` の 3 桁以上は台帳で落ちる）。`steps.txt` の引数は空白区切りのみ。**穴 1 件を 5.5 で塞ぐ**: 状態の `iteration`／`streak_no_gain`／`best_idle_cpu_pct`／`baseline_idle_cpu_pct` が `-`（`init` が書く正規の空値）の台帳を読む経路で `int()`/`float()` が未捕捉例外（exit 1・生トレース）になり得る（CLI からは到達不能だが 5.5 の status/final が同型を踏む）→ `bad_input`（exit 3）で包むこと。
+- (5.3) 本セッションは非昇格のため実採取は未実施＝`fixtures-loop/rank/sample_ok/dump.txt` は xperf dumper 書式（`perf_nt_c.dll` の書式文字列で裏取り・末尾列は推定）の**手書き断片**で、初回の昇格採取（7.2 preflight／9.1）で差し替え、同時に `invoke-cpu-sample.ps1` の `FIXTURE_EXPECT_*` 6 定数（16/8/16/22/2・TID 18332,18420,18512）を更新すること。fixture は `ThreadStartImage!Function` 列にも `areka.exe!` を 16 個仕込んであり、素朴な文字列数えだと 32 になる＝6.2 の `perf-rank.py` は列名行から `Image!Function` 列を引き、同じ 16/8/16/22/2 を再現すること。`-Stop` は非昇格だと exit 1（5 でない）・`no_pdb` の検出は preflight（7.2）の担当。
