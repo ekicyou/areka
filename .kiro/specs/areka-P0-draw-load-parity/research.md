@@ -296,3 +296,97 @@ bevy には「World 全体で何か変わったか」を O(1) で引く口が無
 | 前提 | hooks が有効（`disableAllHooks` 無し＝本リポジトリは可）・auto mode で無人化 | — | — |
 
 **裁定＝`/goal` を採用。** 理由: 目標が機械判定できる形で置かれる本 spec では「条件で止まる」「背景計測の終了で自動再開」「再開で条件復元」が決定的で、`/loop` にはどれも無い。「使わない」は文脈肥大と中断時の再開が弱い。**Opus 5 で回すための帰結**: ⒜ 1 周の手順をプロジェクトスキルとして明文化し（主モデルが毎ターン同じ順で回す）、⒝ 判定に要る事実を決まった書式で会話に表示する（判定役はファイルを読まない）、⒞ 台帳を正本にして会話の記憶に頼らない（要約・再開後も続く）、⒟ 重い解析はサブエージェントに逃がして主文脈を小さく保つ、⒠ `CLAUDE_CODE_GOAL_CHECKIN_MINUTES` を計測長より長く置く。`/loop` は fallback としても採らない（`/goal` が使えない環境では同じスキルを人が 1 周ずつ呼ぶ）。
+
+---
+
+## 7. 設計フェーズの調査記録（2026-08-22・`/kiro-spec-design`＝既存系への拡張として光の発見プロセスを適用）
+
+- **Discovery Scope**: Extension（既存の計測資産 `tools/perf/`・wintf フレーム駆動・kiro スキル群への拡張）。外部依存の新規追加は無し（WPT は測定マシンに実在・Python 標準ライブラリ・PowerShell 7）。
+- **Key Findings**（設計を動かした 3 点）:
+  1. **`/goal` は「条件文＝最初のターンの指示」であり、判定役は会話だけを見る。背景タスク（subagent・background Bash）が走っている間は判定を飛ばし、終了結果を新しいターンとして届ける。** よって 1 周は「ターン単位で再入できる相の列」として設計し、各相の終わりに決まった書式の STATUS 行を会話へ印字する（§7.2）。
+  2. **変化の有無は World から O(1) で引けない（bevy の変化検知はクエリ単位）ので、生産者が旗を立てる形にする。** 生産者は wintf の外（areka の `PresentBridge`・`MoveCueSink`・lifecycle 送信端）にも居るが、いずれも areka 側に実装があり wintf へ依存できる（依存方向は保てる）。表示層が「まだ仕事がある」ときは自分で次フレームを予約する（self-rearm）形が、タイプライタ・バルーン可視性の待ち時間・dola アニメを 1 つの形で覆う（§7.3）。
+  3. **スレッドの役割名は既に OS に届いている。** `wintf-vsync`（`tick_bridge.rs:65-66`）・`wintf-cursor-monitor`（`clickthrough/monitor.rs:87-88`）・アクタースレッド（`areka-actor/src/spawn.rs:48-49`・`ticker`／`loop-ticker` は `ticker.rs:179,289`）は `thread::Builder::name` で名付けられ、bevy のタスクプールは `TaskPool (N)` で名付く（`bevy_tasks-0.19.1/src/task_pool.rs:174-177`）。Rust の std は Windows で `SetThreadDescription` を呼ぶので、プロセス内から `GetThreadDescription` で読める＝**スレッド別 CPU の表は実行体の内側で組める**（ETW に頼らない）。
+
+### 7.1 `/goal` の受け取り方（公式文書 `code.claude.com/docs/en/goal.md`・2026-08-22 再確認）
+
+- 構文: `/goal <条件文>` で設定（**設定した瞬間に条件文を指示として最初のターンが始まる**）・引数無しで状態表示・`/goal clear` で解除。条件文は 4,000 字以内。1 セッションに 1 つ。
+- 判定役: 設定済みの小型モデル（Claude API では既定 Haiku・`ANTHROPIC_DEFAULT_HAIKU_MODEL` で変更）に**条件文と会話全体**を渡す。**道具を呼ばず、ファイルも読まない**。毎ターン終了時に「未達／達成／不可能」のいずれかと理由を返す。達成・不可能で目標は解除される。
+- 背景作業: 「subagent または background shell command が走っているターン末は判定を飛ばし、背景作業が無いターン末で判定する」「背景作業が終わると結果を新しいターンとして届ける」。
+- check-in: 背景作業で 30 分待つと「走っているタスクを列挙して出力を読み、進んでいれば待ち、止まっていれば直すか止める」指示が届く。`CLAUDE_CODE_GOAL_CHECKIN_MINUTES` で間隔を変える（0 で無効）。以後は 2 倍ずつ伸びる（上限 4 倍）。
+- 無進捗の番人: 「道具を使わないターンが数回続くと停止して制御を返す」——本ループは毎ターン道具を使うので該当しない。
+- 再開: `--continue`／`--resume`／セッションピッカーのいずれでも条件を復元（周回数・時間・トークンはリセット）。`-p` 非対話でも完走する。hooks が無効（`disableAllHooks`）だと使えない（本リポジトリの `.claude/settings.json` に同設定は無い＝使える）。権限は変わらないので**無人で回すには auto mode で起動**する。
+- 良い条件文: 「1 つの計測できる終端状態」「その証明のしかた」「途中で守る制約」を含め、「`or stop after 20 turns`」のような上限節を入れる。判定役は会話に現れたものしか見ないので、ファイルに書いただけでは判定されない。
+- `/loop`（`scheduled-tasks.md`）: 間隔駆動のみ・目標判定無し・7 日で失効。採らない（要件 1.6 の裁定どおり）。
+
+### 7.2 ループ 1 周の実現形（設計決定）
+
+| 論点 | 決定 | 根拠 |
+|---|---|---|
+| ターンの粒度 | **相（phase）単位で再入**する状態機械。台帳の `状態` ブロックに `iteration`／`phase`／`pending_run` を持ち、スキルは毎ターン「状態を読む → 相を 1 つ進める → STATUS 行を印字」だけを行う | 計測（7〜29 分）は background Bash で走らせてターンを終える。終了が新ターンとして届くので、相単位でなければ続きが回らない（要件 1.10「会話の記憶に頼らない」） |
+| 目標定義ファイル | `tools/perf/goals/draw-load-parity.toml`（機械読取）＋同 `draw-load-parity.goal.md`（`/goal` へ渡す条件文） | 要件 1.1・1.6（汎用の形）。判定式・閾値・判定スクリプト版・水準・停止条件・静寂閾値・check-in 値を 1 箇所に |
+| 台帳 | `.kiro/specs/areka-P0-draw-load-parity/loop-ledger.md` 1 ファイル（`状態` ブロック＋周ごとの固定キー行）。`perf-ledger.py` が追記・読取・STATUS 行生成を担う | 要件 1.3（1 ファイル・誰が読んでも同じ結論）・1.9（決まった書式） |
+| STATUS 行 | `PERF-LOOP STATUS iter=… phase=… judge=… idle_cpu=… delta=… noise=… verdict=… streak=…/3 next=…` と終端の `PERF-LOOP FINAL: GOAL_MET …`／`PERF-LOOP FINAL: STOPPED reason=…`。条件文はこの 2 行の字面で達成／不可能を判定する形に書く | 判定役は会話しか見ない（§7.1） |
+| 合否の採取と順位付けの採取 | **別走行**。順位付け用 1 本（tick 観測・スレッド報告を点灯＋CPU サンプリング同時）、採否用は A→B→A→B の 4 本（素の走行） | サンプリングと観測行は対象の CPU を押し上げる。A→A の差がばらつきの物差し（要件 1.7） |
+| A／B の実行体 | 周の冒頭で現在の release 実行体（＋PDB・32bit helper）を走行ディレクトリへ複製して A とし、変更後のビルドを B とする。ランナーに `-BinDir` を足す | 同一セッション内の交互取得には両実行体が同時に要る |
+| 記号 | ループの release ビルドは常に環境変数 `CARGO_PROFILE_RELEASE_DEBUG=line-tables-only` で行い、PDB を得る（`Cargo.toml` 非接触＝要件 8.6）。合否の走行も同じ実行体を使う | 最適化は変わらず PDB だけが増える。A と B の条件を揃える |
+| 採否 | `perf-compare.py` が前後 2 本ずつから差とばらつきを出し、`ADOPTED`／`NO_DIFF`／`WORSE` を返す。採用の必要条件＝⒜ ワークスペース全テスト緑 ⒝ 見た目の追随チェック全 PASS ⒞ 主指標（定常アイドル CPU）の改善が `max(ばらつき, 床値)` を超え、副指標（⑴ p95・⑵ catch-up・⑶ 確保）が悪化しない | 要件 1.7・3.6・4.7 |
+| 戻し方 | 台帳に記録したファイル一覧を `git restore --source=HEAD -- <files>`（新規ファイルは削除）。破壊的 reset は使わない | 要件 1.8（採用した変更だけがコミットとして残る） |
+| 停止 | ⒜ 25 分最終判定で全 PASS ⒝ 連続 3 周採用なし ⒞ 安全（テスト赤で戻せない・道具が壊れた）⒟ 周数上限（既定 30・目標定義ファイル）。いずれも FINAL 行を印字し、到達点と残る最大項を台帳と会話へ | 要件 1.4 |
+| check-in | `CLAUDE_CODE_GOAL_CHECKIN_MINUTES=60`（最長の背景コマンド＝交互 4 本 約 29 分＜60） | 要件 1.11 |
+| モデル | メインはセッション設定（README に推奨「Fable で起動」・Opus 5 でも同じ手順で回る）。重い作業は `.claude/agents/perf-{measure,analyze,implement,review}.md`（`model: opus`）へ。各エージェントは最初の行に自分のモデル名を印字する（`model` 指定が効かない環境で黙って継承しないため） | 要件 1.10・1.12 |
+
+### 7.3 「変化が無いときに回さない」の実現形（D-2・D-3・D-7 の決定）
+
+- **旗の置き場**: wintf に `ecs/world/tick_wake.rs`（プロセス共有の `AtomicU32` ビット集合＋期限 `AtomicU64`）。生産者は `mark(bit)`／`arm_deadline(instant)` を呼び、tick 入口が `take()` で読んで倒す。ビット＝ポインタ入力／ドラッグ中／窓書込指令の積み上げ／Z 順要求／幾何系メッセージ受理（`WM_WINDOWPOSCHANGED`・`WM_DPICHANGED`・`WM_DISPLAYCHANGE` 等）／表示指令の到着（`PresentBridge`・`MoveCueSink`・lifecycle 送信端）／次フレーム予約（self-rearm）／グラフィックス無効。
+- **判定は純関数** `tick_gate::should_run(&TickGateInputs) -> TickDecision`。入力は上のビット＋`deadline_due`＋`frames_since_run`（心拍）＋`warmup`（起動直後）。心拍 `TICK_HEARTBEAT_FRAMES=30`（120Hz で約 4 回/秒）と起動直後 `TICK_GATE_WARMUP_FRAMES=600` は「旗を立て忘れた生産者」に対する安全側の網（要件 3.2「疑わしいときは回す」・3.7）。
+- **D-2（省略フレームの番号と時刻）**: 省略した tick では `FrameCount`／`FrameTime`／`TickStart` を**進めない**。フレーム番号は「回った tick」の系列のまま。`FrameHarness::advance_frame`（`frame_test_support.rs:710-716`）は常に回す側なので影響なし。
+- **D-3（省略時の flush）**: `flush_window_pos_commands()` は**常に呼ぶ**（空なら安い）。wndproc 経路の再入 flush（`window_pos.rs:290`）と Z 指令の適用順は不変。
+- **D-7（起床）**: vblank 起床は維持し、門で落とす（起床間引き案 D は要件 3.2 の 1 画面更新周期以内と衝突するので採らない）。クリック透過の中継（`runtime/mod.rs:307-328`）は触らない。
+- **tick を省略しても壊れないことの根拠（R-6）**: bevy の変化ティックは World 単位で進むので、次に回った tick で `Changed`／`Added` は拾える。`RemovedComponents` は `Messages` と同じ二重バッファで、tick を挟まない限り消えない（省略中は `update` が走らない）。`Messages::update` の 3 本は FrameFinalize（回った tick のみ）。
+- **テスト**: `should_run` の全組合せ（ビット 2^10 × 期限 2 × 心拍 2 × 起動直後 2）を決定論テストで固定し、「省略の直後に変化→次 tick で反映」を `EcsWorld` の headless tick で固定する。生産者の一覧は `include_str!` の字面検査で見張る。
+
+### 7.4 4 段の計測手段（D-5・D-6・D-14・D-15 の決定）
+
+| 段 | 決定 | 出力 |
+|---|---|---|
+| ① プロセス | 既存ランナー（`% Processor Time`）と `judge-perf.py` をそのまま。**ランナーの `-ConfirmQuiet` は残し、`-AutoQuiet`（`check-quiet.ps1` を前後に走らせる）を足す** | `cpu.csv`・`run-meta.txt`（版 1.1.0） |
+| ② スレッド | **実行体の内側**で `CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD)`→`GetThreadTimes`＋`GetThreadDescription` を 60 秒ごとと終了時に採り、`perf(thread)` 行（target `areka::perf`・既定 OFF・`tracing::enabled!` の前置ガード）で出す。併せて `perf(process)` 行に壁時計と `GetProcessTimes` を併記 | 役割名の写像は純関数（`wintf-vsync`→vblank 検出・`wintf-cursor-monitor`→カーソル監視・`ticker`→ticker(dispatcher/kanade)・`loop-ticker`→SERIKO ループ・`TaskPool (n)`→タスクプール・main thread id→UI・その他アクター名） |
+| ③ 関数 | **`xperf`** を第一候補（採取と解析が同じ道具）: `xperf -on PROC_THREAD+LOADER+PROFILE -stackwalk Profile -f` → `xperf -d` → `xperf -i … -symbols -a dumper -o dump.txt`（`_NT_SYMBOL_PATH` に `target/release` と MS 公開シンボルサーバ）→ `perf-rank.py` が `SampledProfile`／`Stack` 行を集計（自己時間・包含時間・モジュール別・スレッド別）。Rust の legacy mangling（`_ZN…17h<hash>E`）は解析側で機械的に展開する。**記号解決が 1 フレームも `areka.exe!` を出さなければ計測失敗**（要件 2.11）。**代替**: `wpaexporter` ＋ 版管理した `.wpaProfile` | `stacks-rank.txt` |
+| ④ 相 | wintf に `ecs/world/tick_diag.rs`（target `wintf::tick`・既定 OFF・前置ガード）。`try_tick_world` の各 `try_run_schedule` を `Instant` で挟み、**1 秒窓で集約 1 行**（tick 回数・省略回数・心拍回数・壁時計合計/最大・UI スレッド CPU〔`GetThreadTimes` 差分〕・13 本別 µs）。フィールド名は 1 行に重複なし | `[tick] kind=window …` 行。`RUST_LOG_VALUE` は変えず、ランナーの `-RustLogExtra` で点灯 |
+
+- **合否の走行では ②〜④ を点灯しない**（素の走行）。順位付けの走行だけで点灯し、サンプリングも同時に採る。
+- D-16（分離と回数）: 1 周＝順位付け 1 本（7 分）＋採否 4 本（各 7 分）。ベースライン（周 0）と最終判定は 25 分 × release/dev。
+- D-17（静寂の閾値）: マシン全体 `% Processor Time (_Total)` を 20 秒・1 秒刻みで採り平均 10% 未満、既知の重いプロセス名（`cargo`・`rustc`・`rust-analyzer`・`msbuild`・`link`・`cl`・対象以外の `areka`・対象以外の `python`）が無いこと。超えたら 60 秒待って再確認（上限 3 回）。前後の結果を走行ディレクトリへ残す。
+
+### 7.5 見た目の追随をエージェント自身が確かめる形（要件 4.7）
+
+- `invoke-followup-checks.ps1`（有界 120 秒の実走・`AREKA_APP_SMOKE_EXIT_MS`）の中から PowerShell（`Add-Type` で user32）が順に操作し、`judge-followup.py` がログと操作記録を突合する: ⒜ クリック透過＝キャラ窓の角（透明）と足元中央（不透明）へ `SetCursorPos` → `GetWindowLongPtr(GWL_EXSTYLE)` の `WS_EX_TRANSPARENT` が立つ／落ちること（OS の実状態）と `clickthrough: ex-style トグル適用`（`controller.rs:212`）の記録 ⒝ ドラッグ＝`SendInput` で足元から +80px 引く → `WM_WINDOWPOSCHANGED` の `[transition] kind=msg` とキャラ・バルーンの `kind=write` の位置差が不変 ⒞ DPI＝`SetWindowPos` で別 DPI のモニタへ移す → `WM_DPICHANGED` の受理と表示成立点 `k=` の更新、戻す ⒟ バルーン追従＝⒝⒞ の前後で `win_kind=balloon` の位置がキャラ窓相対で一致。
+- 2 モニタ混在 DPI が前提（測定マシンの実形）。満たせないときは ⒞ を判定不能にし、**判定不能は採用しない**（安全側）。
+
+### 7.6 設計決定の台帳（研究テンプレート「Design Decisions」相当）
+
+| # | 決定 | 代替案 | 採った理由 | 追認点 |
+|---|---|---|---|---|
+| DD-1 | 1 周を相単位の状態機械にし台帳を正本にする | 1 ターンで 1 周を完走 | `/goal` は背景作業でターンを切る。要約・再開に強い | 相の遷移表を決定論テストで固定 |
+| DD-2 | 判定材料を STATUS 行 1 本に集約し、条件文はその字面で書く | 判定役にファイルを読ませる | 判定役はファイルを読まない（公式） | 条件文テンプレートの字面とスクリプトの出力を同じ定数から出す |
+| DD-3 | 旗方式の tick 門＋心拍＋起動直後の全走 | スケジュール単位の省略（案 B）／起床間引き（案 D） | 上限が最大・順序不変を保ちやすい・3.2 と両立 | 旗を立てる生産者の一覧を字面検査で固定 |
+| DD-4 | スレッド別 CPU は実行体の内側で採る | ETW の CSWITCH 集計 | 名前付きで決定論的に出る・道具の導入無し | `GetThreadTimes` の粒度（約 15.6ms）を README に注記 |
+| DD-5 | 関数別は `xperf` の dumper 出力を自前で集計 | `wpaexporter`＋`.wpaProfile`／`wpr` | 採取と解析が同じ道具・テキスト出力・記号解決の失敗を検出できる | 周 0（道具作り）で既知ケースを作り `--selftest` に載せる。代替は `wpaexporter` |
+| DD-6 | `SELF_INITIATED_DEPTH` は `thread_local! Cell<i32>` へ置換し、錠 `lock_self_initiated_for_test` は**残す**（退役可を cage へ申し送る） | 錠 21 箇所も本 spec で退役 | 同居裁定（roadmap 追記(81)）＝錠の退役は cage が rebase で受ける | スレッド隔離の決定論テストを足す |
+| DD-7 | 7 本の実行器見直し（案 C）は**候補**として持ち、順位表の結果で選ぶ。採る場合は前提テスト 2 本の字面検査を新しい構築形へ改訂 | 設計で一律に単スレッド化 | 効果量は測るまで不明（R-1） | `single_threaded(label)` 補助関数を構築側に置き、検査対象文字列を 1 つにする |
+| DD-8 | 目標定義・スキル・エージェント・道具は性能以外の目標でも使える汎用の形（goal 名で切替） | 本 spec 専用 | 要件 1.6 | `goals/<name>.toml` の読取を決定論テストで固定 |
+| DD-9 | kiro-impl の改修＝Preflight に「派遣モデルの決定」を 1 節足し、3 箇所の Agent 派遣と最終検証（kiro-validate-impl の subagent 派遣）へ `model: "opus"` を渡す規則を置く | Agent ツールの既定を変える（不可） | 要件 1.13 | 判別不能は `opus` 側へ倒す |
+
+### 7.7 リスクと緩和
+
+- 旗の立て忘れ＝見た目の遅れ → 心拍・起動直後の全走・生産者一覧の字面検査・実走の追随チェック（4 項目）。
+- サンプリングの記号解決が環境依存で失敗 → 失敗を「計測失敗」として止める（黙って続けない）・代替 `wpaexporter`。
+- 実行器見直しで既存テスト 2 本が赤 → 改訂（削除ではない）を候補の実装手順に含める。
+- `/goal` の check-in が計測中に割り込む → 60 分に設定・check-in の指示は「待つ」で答える形をスキルに書く。
+- 台帳の手書き汚染 → 機械が読む `- key: value` 行の書式を固定し、`perf-ledger.py` の読取を fixture で固定する。
+
+### 7.8 参照
+
+- `https://code.claude.com/docs/en/goal.md`・`https://code.claude.com/docs/en/scheduled-tasks.md`（2026-08-22 取得）
+- `bevy_tasks-0.19.1/src/task_pool.rs:174-177`（スレッド名 `TaskPool (N)`）・`bevy_ecs-0.19.1/src/schedule/executor/multi_threaded.rs:274`
+- 本書 §1〜§6（現況の file:line）・requirements.md 改訂欄
