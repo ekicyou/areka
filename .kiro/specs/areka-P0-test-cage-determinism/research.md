@@ -249,7 +249,7 @@ tracing-core 0.1.36（`Cargo.lock` 実測）・tracing-subscriber 0.3.23。
 7. **検知テスト（8.1-8.4）の走査語と例外表**: 走査語は `with_default(` のみか `set_global_default(`・`.init()` も含めるか。examples の本番初期化は除外。例外表の形式（`const` 配列で明示編集を要求）。
 8. **② settle の有界化の形**: 「壁時計の最小持続」か「連続して空だった観測回数」か。Tick 兼用形（`spine_display_tests.rs:410`）で注入時刻の頭打ち値をどう置くか（`injected-sim-time-must-not-outrun-observation`）。
 9. **④ 注入手段**: ④-a（`#[cfg(test)]` 注入点・`chain.rs` 単独）／④-c（enum ラッパ）／④-b（trait）。および「前状態」の定義（`read_back` は `source_tex` を読む＝backbuffer ではない・`size()`・presenter 側の `visible`／`current_surface`／`set_bounds` 未呼出）。
-10. **④ で現行コードの主張が破れた場合の扱い**: 要件 6.2 に従い起票（候補: 寸変更を伴う後段失敗で swap chain／`source_tex`／`size` の不整合）。本仕様で `upload` の順序を直すか（本番挙動変更＝Out of scope に抵触）／申し送りか。
+10. **④ で現行コードの主張が破れた場合の扱い**（要件ディスカッション議題 2 で**裁定済み＝要件 5.7／5.8**）: `chain.rs` の内側で閉じる是正は本仕様で行う（`show.rs` 非接触・定常アロケーション 0 維持）。`chain.rs` の外へ波及する場合のみ起票し、テストは現状を記録する形で残す。設計では是正の形（`upload` の状態更新順序＝失敗し得る操作を先に済ませてから `size`／`source_tex` を差し替える等）と「前状態」の観測手段を決める。
 11. **⑦ 錠の退役の待ち方**: dlp 着地を本仕様のブランチへ取り込む時点（wave 内合流 or rebase）と、見送り時の 7.3 適用の判断点。
 12. **⑩ 番人の置き場**（採否は要件ディスカッション議題 1 で **⒜ 採用に確定**・例外表 11 件は `pilot` example・`inproc_e2e_test.rs` を含めて開始・既存ファイルの分割は本仕様で行わない）: 置き場（共有 crate 自己テスト／areka in-crate）のみ設計で決める。
 13. **11.4 `ReassertZOrder` 再表示**: 本仕様で「現状（再表示は再断行を要求しない）」を配線テストで記録するに留めるか、全面的に e2e へ申し送るか。再表示で要求を挿す本番配線は本仕様の範囲外。

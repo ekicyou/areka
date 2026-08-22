@@ -42,12 +42,13 @@
   - `SELF_INITIATED_DEPTH` 是正（`draw-load-parity` 実施）後の錠 `lock_self_initiated_for_test()` の退役。
   - 1 ファイル 1,000 行の目安の番人テスト（追記(79) ⒜＝2026-08-22 開発者裁定で採用確定。作るのは見張りだけ）。
 - **Out of scope**:
-  - 本番の挙動変更（④ の注入点以外）。とくに `crates/wintf/src/ecs/window/command.rs` は**非接触**（`draw-load-parity` 所有）。
+  - 本番の挙動変更（④ の注入点と、要件 5.7 が許す `chain.rs` 内で閉じる `upload` の前状態保持の是正を除く）。とくに `crates/wintf/src/ecs/window/command.rs` は**非接触**（`draw-load-parity` 所有）。
   - 既存テストの**判定内容**の変更（直すのは観測機構と待機機構だけ）。観測が正しくなった結果として落ちるテストは本物の欠陥の発見であり、テストを緩めて通さず別途起票する。
   - `spine` 系テストの削除・`areka-ghost` 側の待機（2026-07-30 に是正済み）・`dpi-transition-atomicity` の実機未達 µs 2 系統（`present-write-coherence` 所有）・`presenter/show.rs` の可視化の段（:375-392・`present-write-coherence` 所有）。
   - 新規外部依存の追加（`tracing-subscriber` は既出）。
   - 既存の 1,000 行超ファイル（11 件）の分割・縮小（番人テストの例外表に載せるのみ。並走 spec との衝突を避けるため）。
 - **Adjacent expectations**:
+  - **実装の開始時期（2026-08-22 要件ディスカッションでの取り決め）**: 開発者が別セッションで修正範囲未定の改善ループを回す予定のため、本仕様の**実装はその結果が `main` へマージされた後に開始**する（要件・設計の文書作業は先行してよい）。本仕様は 24 ファイル以上のテストコードと各 crate の `Cargo.toml` に触れるので、範囲未定の並走とは衝突しやすい。着手時の全面再計測（要件 2.1・4.1）でマージ後の実形を取り込む。改善ループ側がログ捕捉テストの仕組みに触れないことが望ましい（触れた場合は二重作業になるため着手時に突合する）。
   - `draw-load-parity`（W6.9 同居）: `command.rs` の `SELF_INITIATED_DEPTH` を `Cell<i32>` 化し着地形を本仕様へ申し送る。見送る場合は本仕様へ即報告（その時点で着手順を再調整）。共有ファイルは実測 0（本仕様が各 crate の `Cargo.toml` dev-dependencies へ 1 行足す見込みのみ）。
   - `present-write-coherence`（W6.95）・`balloon-offset-dpi`（W6.95）: 本仕様の後着。`present-write-coherence` は同じ `apply_show` 鎖（可視化の段）を触るので、本仕様は ④ の観測点（:306-310）以外の `show.rs` を動かさない。`balloon-offset-dpi` は一本化済みの共有機構でテストを書く。
   - `emo2-conformance-e2e`（W7）: 決定論テストで拾えなかった `ReassertZOrder` 再表示隣接の確認先。
@@ -110,6 +111,8 @@
 4. When 失敗注入のテストが `cargo test` で実行される, the テスト基盤 shall 既存の headless 条件（実 GPU 個体を前提としない既存テストと同じ前提）で完走し、実機 GPU 失敗の再現を必要としない。
 5. The 表示機構 shall 注入手段が無効なとき（通常実行）の本番挙動・性能特性（定常状態のアロケーション 0 を含む）を変えない。
 6. The テスト基盤 shall 観測点である早期 return 分岐（`presenter/show.rs:306-310`）の位置・意味を動かさず、`dpi-transition-atomicity` が残した本文走査テスト（`transition_record_tests.rs`）の被覆を縮めない。
+7. If 失敗注入のテストが現行の `upload` で「前状態を保つ」が破れる経路（例: 寸法変更後の後段失敗で swap chain・`source_tex`・`size` が不整合のまま残る）を露見させる, then the 実装者 shall その是正を本仕様で行う（2026-08-22 要件ディスカッション 議題 2 の裁定）。ただし是正は `chain.rs` の内側で閉じ、`presenter/show.rs` には触れず、要件 5.5 の性能特性（定常状態のアロケーション 0）を保つ。
+8. If 上記の是正が `chain.rs` の外（`show.rs`・`target.rs` 等）へ波及しなければ成立しないと判明する, then the 実装者 shall 本仕様では是正せず、要件 6.2 に従い別途起票し、注入テストは現状の挙動を記録する形で残す（主張を弱めた緑にしない）。
 
 ### Requirement 6: 既存テストの判定内容の保存と本物の欠陥の扱い
 **Objective:** 本仕様の変更をレビューする開発者として、是正が「観測機構と待機機構」に限られ、テストの主張そのものが弱められていないことを求める。それにより是正後の緑が是正前より強い主張を意味する。
