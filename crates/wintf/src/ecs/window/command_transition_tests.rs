@@ -39,7 +39,7 @@
 //! 毎回確かめる。⑵ が破れたときはテストが失敗する（黙って実窓を動かさない）。
 
 use bevy_ecs::prelude::*;
-use bevy_ecs::schedule::ExecutorKind;
+use bevy_ecs::schedule::SingleThreadedExecutor;
 use windows::Win32::Foundation::{HINSTANCE, HWND};
 use windows::Win32::UI::WindowsAndMessaging::{
     IsWindow, SET_WINDOW_POS_FLAGS, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
@@ -211,7 +211,7 @@ fn the_generic_window_pos_site_tags_the_command_it_enqueues() {
     // 単一スレッド実行に固定する——積み上げ先はスレッド局所のキューであり、
     // ワーカースレッドへ載ると本スレッドからは取り出せない（要件 7.6）。
     let mut schedule = Schedule::default();
-    schedule.set_executor_kind(ExecutorKind::SingleThreaded);
+    schedule.set_executor(SingleThreadedExecutor::new());
     schedule.add_systems(apply_window_pos_changes);
     schedule.run(&mut world);
 

@@ -1118,7 +1118,7 @@ fn the_production_frame_system_reaches_all_three_placement_call_sites() {
     world.insert_resource(stale.dpi_table.clone());
     // 本番の相順所有者が要る結線資源（実 `EmoPresenter`・未装着・GPU 不要）。
     let (_tx, rx) = mpsc::channel::<PresentCommand>();
-    world.insert_non_send_resource(headless_wiring_with(rx, zero_clock()));
+    world.insert_non_send(headless_wiring_with(rx, zero_clock()));
 
     // ── フレーム A: 本番入口をそのまま 1 度回す ──────────────────────────
     emo2_frame_system(&mut world);

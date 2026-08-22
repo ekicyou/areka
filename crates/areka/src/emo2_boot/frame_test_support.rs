@@ -9,7 +9,7 @@ use areka_seriko::{AnimationTable, BindResolver, SurfaceResolver};
 use tracing::field::{Field, Visit};
 use tracing_subscriber::prelude::*;
 use bevy_ecs::prelude::Entity;
-use bevy_ecs::schedule::{ExecutorKind, Schedule};
+use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
 use bevy_ecs::system::SystemState;
 use windows::Win32::Foundation::{HINSTANCE, HWND, RECT};
 use crate::placement::follow::{MonitorDpiTable, MonitorSnapshot, MonitorSources};
@@ -588,7 +588,7 @@ pub(super) fn settled_sizes() -> PerTargetSizes {
 /// 「捕捉できる実行形態」を呼び出し側の字面に残す。
 pub(super) fn single_threaded_schedule() -> Schedule {
     let mut schedule = Schedule::default();
-    schedule.set_executor_kind(ExecutorKind::SingleThreaded);
+    schedule.set_executor(SingleThreadedExecutor::new());
     schedule
 }
 

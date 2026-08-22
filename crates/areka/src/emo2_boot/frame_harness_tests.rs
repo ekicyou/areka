@@ -32,7 +32,11 @@ use std::collections::BTreeSet;
 use std::time::Instant;
 
 use bevy_ecs::prelude::*;
-use bevy_ecs::schedule::ExecutorKind;
+
+/// 単一スレッド実行器の供給元（`frame_test_support::single_threaded_schedule`）の逐語。
+/// bevy 0.19 で `Schedule::get_executor_kind` が撤去されたため、「捕捉できる実行形態を
+/// 名指しする」要件 7.6 の要請を字面で見張る。
+const FRAME_TEST_SUPPORT_SRC: &str = include_str!("frame_test_support.rs");
 use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER};
 use wintf::ecs::FrameCount;
@@ -386,10 +390,12 @@ fn a_log_capture_verification_names_the_single_threaded_executor() {
     harness.advance_frame();
 
     let mut schedule = single_threaded_schedule();
-    assert_eq!(
-        schedule.get_executor_kind(),
-        ExecutorKind::SingleThreaded,
-        "捕捉できる実行形態の明示（要件 7.6）"
+    // bevy 0.19 で `Schedule::get_executor_kind` が撤去された（実行器は私有）。「捕捉できる
+    // 実行形態を名指しする」という要件 7.6 の要請は、供給元の字面で見張る——
+    // `single_threaded_schedule()` が単スレッド実行器を据えていることをそのまま固定する。
+    assert!(
+        FRAME_TEST_SUPPORT_SRC.contains("schedule.set_executor(SingleThreadedExecutor::new());"),
+        "捕捉できる実行形態の明示が供給元から消えている（要件 7.6）"
     );
     schedule.add_systems(emit_snapshot_probe);
 

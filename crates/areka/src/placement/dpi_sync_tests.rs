@@ -1,6 +1,5 @@
 //! 整合ゲートの純判定と、待ち札の適用範囲の不変条件（設計 C5・Unit Tests 3）。
 
-use bevy_ecs::prelude::*;
 use windows::Win32::Foundation::{HINSTANCE, HWND};
 use wintf::ecs::layout::{Arrangement, Offset};
 use wintf::ecs::{DPI, Point, SizeI, WindowHandle, WindowPos};

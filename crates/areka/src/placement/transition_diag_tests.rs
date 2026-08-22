@@ -12,7 +12,6 @@
 //! 接地点レコードを実際に発行する側（`resize_window_to`）の検証は
 //! `follow_transition_diag_tests.rs` が持つ（発行点は `follow` 配下ゆえ）。
 
-use bevy_ecs::prelude::*;
 use windows::Win32::Foundation::RECT;
 use wintf::ecs::window::monitor::Monitor;
 use wintf::ecs::window::transition_diag::{

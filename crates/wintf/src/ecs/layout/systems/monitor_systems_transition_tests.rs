@@ -25,7 +25,11 @@
 use std::sync::{Arc, Mutex};
 use std::thread::ThreadId;
 
-use bevy_ecs::schedule::{ExecutorKind, Schedules};
+use bevy_ecs::schedule::SingleThreadedExecutor;
+
+/// 本番の `World` 構築の逐語。`Update` が既定の実行器のまま挿入されていることを字面で
+/// 見張るために読む（bevy 0.19 で `Schedule::get_executor_kind` が撤去されたため）。
+const WORLD_CONSTRUCTION_SRC: &str = include_str!("../../world/mod.rs");
 use windows::Win32::Foundation::RECT;
 
 use super::*;
@@ -172,7 +176,7 @@ fn probe_world(injected: Vec<Monitor>) -> (World, Entity) {
 /// 差し替え）が 1 行も捕捉できずログ檻が空虚に緑になる（要件 7.6）。
 fn run_apply(world: &mut World) {
     let mut schedule = Schedule::default();
-    schedule.set_executor_kind(ExecutorKind::SingleThreaded);
+    schedule.set_executor(SingleThreadedExecutor::new());
     schedule.add_systems(apply_injected_with_stamp);
     schedule.run(world);
 }
@@ -356,16 +360,13 @@ fn monitor_stamps_match_frame_count_under_the_default_multi_threaded_executor() 
     ecs.add_systems(Update, observe_monitor_stamp);
 
     // 検証が空振りしていないこと——`Update` は既定の実行器（多スレッド）のままである。
-    let kind = ecs
-        .world()
-        .resource::<Schedules>()
-        .get(Update)
-        .expect("Update スケジュールは World 構築時に登録済み")
-        .get_executor_kind();
-    assert_eq!(
-        kind,
-        ExecutorKind::MultiThreaded,
-        "本テストの前提は既定の多スレッド実行器（単スレッドへ落ちていたら検証にならない）"
+    // bevy 0.19 で `Schedule::get_executor_kind` が撤去され（実行器は `Box<dyn SystemExecutor>`
+    // として私有）、実行形態を実行時に読む手段が無くなった。ゆえに**構築側の字面**で見張る——
+    // `Update` だけは実行器を差し替えずに挿入されている、という形をそのまま固定する。
+    // 誰かが `Update` を `set_executor` で単スレッドへ落とせば、この逐語が消えて赤になる。
+    assert!(
+        WORLD_CONSTRUCTION_SRC.contains("schedules.insert(Schedule::new(Update));"),
+        "本番の World 構築が `Update` の実行器を差し替えている。既定の多スレッド実行器を前提とする本テストは空振りする"
     );
 
     assert!(
