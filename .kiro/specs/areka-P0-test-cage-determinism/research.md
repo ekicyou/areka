@@ -57,7 +57,7 @@
 | ファイル | 形 | 同一バイナリ内の他 global | 備考 |
 |---|---|---|---|
 | `crates/areka-ghost/tests/ghost/spine_e2e_test_global_log_probe.rs:75-93`（`install`・`set_global_default` :81） | 一回限りの全スレッド capture-all（kanade アクタースレッド上の `boot_gate` ログを捕えるため） | 無し（統合テストバイナリ `ghost`） | **スレッド局所捕捉では原理的に代替できない**（別スレッド発火）。共有機構の「全スレッド捕捉」変種として吸収するか、例外表に載せるかの判断が要る |
-| `crates/areka-seriko/tests/loop_integration.rs:590-608`（`buffer`・`set_global_default` :602） | 一回限りの全スレッド capture-all | 無し（統合テストバイナリ） | 要件の Introduction 表に未登記。同上 |
+| `crates/areka-seriko/tests/loop_integration.rs:590-608`（`buffer`・`set_global_default` :602） | 一回限りの全スレッド capture-all | 無し（統合テストバイナリ） | 要件ディスカッション（自明修正）で Introduction ③ へ登記済み。同上 |
 | `crates/{areka,wintf,areka-emo-text}/examples/*.rs`・`areka/src/main.rs:130` | `.init()`（本番の Subscriber 初期化） | — | テストではない。検知テスト（要件 8.3）が examples を走査対象に含めるときの**偽陽性源**＝走査語を `with_default(` に限定するか、`.init()` を除外表へ |
 
 #### 1.1.4 呼出規模（参考）

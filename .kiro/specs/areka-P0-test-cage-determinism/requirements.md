@@ -14,18 +14,18 @@
   - 別名ヘルパの未硬化定義 7 ファイル: `crates/areka-emo-text/src/{draw_test_support.rs:61, actor_runtime_frame_tests.rs:53, sink.rs:170}`（`with_log_cage`）・`crates/areka-emo-text/src/region.rs:400`（`count_warns`）・`crates/areka-emo-text/src/{wrap.rs:114, writing.rs:128}`（`resolve_counting_warns`）・`crates/areka-ghost/src/sink.rs:224`（`capture`）
   - ヘルパ無しの直書き 7 ファイル／29 呼出: `crates/areka-emo-present/src/{presenter_refresh_and_log_tests.rs 7, presenter_perf_log_tests.rs 6, presenter/transition_record_tests.rs 5, presenter/timing_tests.rs 3}`（共有 `CaptureSubscriber` を使うが probe／rebuild 無し。代わりに「陰性主張は同一捕捉窓内の陽性 1 本と対にする」規律で自衛している）・`crates/areka-emo-text/src/{state_cue_apply_tests.rs 3, layout_cursor_tests.rs 2}`・`crates/areka/src/shiori_demo.rs 3`
 - 呼出規模: `capture_logs(` 238 箇所／64 ファイル（硬化済み含む）・`capture_logs_flow(` 18・`capture_under_filter(` 96（wintf）・`with_default(` 総計 62 箇所。
-- 硬化済み（`rebuild_interest_cache` を持つ）は 18 ファイル。brief 追記(59) の未硬化表のうち `areka-emo-atlas`／`areka-emo-compose` の `log_capture.rs`・`areka-seriko` の `actor_test_support.rs`／`looper_tests.rs`／`state_test_support.rs` は**域外で硬化済みへ転じた**（ただし `state_test_support.rs:12-13`・`looper_tests.rs:852-853`・`actor_test_support.rs:37/49` には硬化後も「スレッドローカルゆえ並行テスト安全」の旧説明文が残っている）。
+- 硬化済みは **16 ファイル／`with_default` 28 呼出**（`with_default(` を持ち、同一ファイルまたは委譲先に `rebuild_interest_cache()`／`ensure_interest_probes()`／`install_interest_keeper()` の印を持つ定義側。`rebuild_interest_cache` の字面だけなら消費側 2 ファイルを含めて 18 ファイル。16＋未硬化 24＝`with_default` を持つ全 40 ファイル）。brief 追記(59) の未硬化表のうち `areka-emo-atlas`／`areka-emo-compose` の `log_capture.rs`・`areka-seriko` の `actor_test_support.rs`／`looper_tests.rs`／`state_test_support.rs` は**域外で硬化済みへ転じた**（ただし `state_test_support.rs:12-13`・`looper_tests.rs:852-853`・`actor_test_support.rs:37/49` には硬化後も「スレッドローカルゆえ並行テスト安全」の旧説明文が残っている）。
 - 誤った説明（「`with_default` はスレッドローカルゆえ並行実行でも干渉しない」）は未硬化 10 ファイルのうち 9 ファイルに現存し（`table.rs:207`・`choice_drain.rs:161`・`balloon_test_support.rs:119`・`talk_lifecycle_tests.rs:72-73`・`spine.rs:499-500`・`move_cue_move_severity_log_tests.rs:11`・`frame_test_support.rs:96/582`・`frame_chain_finalize_tests.rs:215-216`・`adapter.rs:358-359`）、brief が「否認が残ると再発する」と 3 度実証したとおり、新設ファイルへ複製され続けている（W5 で +1・追記(59) で +50 呼出・slimming／atom で新顔 7 ファイル）。
 
 **② 反復回数固定の待機ループが残る**——`spine.rs` 本体は 872 行へ分割され（slimming）、本体には壁時計上限を持たないループは **0 箇所**（`spin_wait_until` :358 は `SPIN_WAIT`=30 秒 :329 で有界）。残りは分割先の 2 箇所: `crates/areka/src/emo2_boot/spine_display_tests.rs:410-414`（`for now in 1_000_000u64..1_000_000+5_000`＝ループ変数が注入 Tick を兼ねる settle）と `crates/areka/src/emo2_boot/spine_seriko_loop_tests.rs:372-375`（`for _ in 0..5_000`＝負検証の settle drain）。どちらも「尽きるのが正常」の settle であり、負荷下では与えられる機会が縮む＝不在主張が弱くなる方向の非決定性を持つ。donor の `spin_pumping_ticks` は `crates/areka-ghost/tests/ghost/spine_e2e_test.rs:48`。
 
-**③ ログ捕捉の硬化設計が 2 系統併存し正典が無い**——probe dispatcher 常駐方式（`ensure_interest_probes`＝probe dispatcher 2 個を `OnceLock` でプロセス寿命常駐・`set_global_default` 不使用）が **8 箇所に複製**（`areka/src/placement/test_support.rs`・`wintf/src/ecs/test_support.rs`・`areka-seriko/src/log_interest_probe.rs`・`areka-emo-atlas/src/log_capture.rs`・`areka-emo-compose/src/log_capture.rs`・`areka-emo-present/src/{scale_tests.rs, balloon_test_support.rs}`・`areka-emo-text/tests/attach_wiring_test.rs`。brief 当時の 3 コピーから増加）、global-default keeper 方式（`install_interest_keeper`＝素の registry を `set_global_default` で常駐）が 3 crate（`areka-sylphya`・`areka-kanade`・`areka-ghost`）、さらに一回限りの全スレッド global probe（`areka-ghost/tests/ghost/spine_e2e_test_global_log_probe.rs`）と上記「陽性と対にする」規律がある。意味論は近いが相互に排他的な前提（keeper は「先に別の global subscriber を置いてはならない」）を持ち、どれが正典か決まっていない。これは重複除去ではなく設計判断である。
+**③ ログ捕捉の硬化設計が 2 系統併存し正典が無い**——probe dispatcher 常駐方式（`ensure_interest_probes`＝probe dispatcher 2 個を `OnceLock` でプロセス寿命常駐・`set_global_default` 不使用）が **8 箇所に複製**（`areka/src/placement/test_support.rs`・`wintf/src/ecs/test_support.rs`・`areka-seriko/src/log_interest_probe.rs`・`areka-emo-atlas/src/log_capture.rs`・`areka-emo-compose/src/log_capture.rs`・`areka-emo-present/src/{scale_tests.rs, balloon_test_support.rs}`・`areka-emo-text/tests/attach_wiring_test.rs`。brief 当時の 3 コピーから増加）、global-default keeper 方式（`install_interest_keeper`＝素の registry を `set_global_default` で常駐）が 3 crate（`areka-sylphya`・`areka-kanade`・`areka-ghost`）、さらに一回限りの全スレッド global capture-all（`areka-ghost/tests/ghost/spine_e2e_test_global_log_probe.rs:75-93`・`areka-seriko/tests/loop_integration.rs:590-608`＝いずれも別スレッドで発火するログを捕える本物の需要で、`set_global_default` を統合テストバイナリ内で一度だけ置く）と上記「陽性と対にする」規律がある。意味論は近いが相互に排他的な前提（keeper は「先に別の global subscriber を置いてはならない」）を持ち、どれが正典か決まっていない。これは重複除去ではなく設計判断である。
 
 **④ 表示更新の失敗経路が実行テストで検証できない**——`crates/areka-emo-present/src/chain.rs` の `upload`（:185-241）は `ResizeBuffers`／`GetBuffer`／`Present` 等 **7 箇所**の `?` で実 D3D/DXGI 失敗を返し得るが、`SwapChainPresenter` は trait を持たない具体型（:122）で `presenter/target.rs:73` が `Option<SwapChainPresenter>` として直接保持し、注入点が無い。唯一の消費点 `presenter/show.rs:306-310` は失敗時「表示は前状態を保つ」と主張しているが未検証（既存 `upload` テストは成功経路のみ・実 GPU 必須）。この分岐は `dpi-transition-atomicity` が本仕様の観測点として意図的に不動で残した。
 
 ### 隣接 spec からの申し送り（本仕様が引き継ぐもの）
 - `dpi-transition-atomicity`（追記(72)(76)）: 観測 target `wintf::transition` の語彙不変条件（窓種別は `win_kind=`・1 行に同名フィールドを 2 度出さない）／決定論テストは一括 flush（実 `SetWindowPos`／`DeferWindowPos`）に到達しないので `kind=write` 行を数えるテストは退行を捕まえない／多フレーム駆動ハーネス `FrameHarness`（`frame_test_support.rs`）とその自己テスト（`frame_harness_tests.rs`）は作り直さない／`presenter/show.rs` の観測前置ガードは本文走査テスト（`transition_record_tests.rs`）だけが守っている。**µs の上限は引き継がない**。
-- `dpi-transition-atomicity` 追記(76)⑹＋W6.9 同居裁定: `crates/wintf/src/ecs/window/command.rs:49` の自発書込カウンタ `SELF_INITIATED_DEPTH` はプロセス共有 `AtomicI32` だが意味論はスレッド局所で、並列テストが互いを汚染する（上流実測 60 回中 11 失敗）。是正（`Cell<i32>` 化）は **`command.rs` を丸ごと所有する `draw-load-parity` が実施**し、本仕様は症状側＝テスト側の錠 `lock_self_initiated_for_test()`（定義 `command.rs:76`・呼出 23 箇所／5 ファイル）の退役だけを受ける。
+- `dpi-transition-atomicity` 追記(76)⑹＋W6.9 同居裁定: `crates/wintf/src/ecs/window/command.rs:49` の自発書込カウンタ `SELF_INITIATED_DEPTH` はプロセス共有 `AtomicI32` だが意味論はスレッド局所で、並列テストが互いを汚染する（上流実測 60 回中 11 失敗）。是正（`Cell<i32>` 化）は **`command.rs` を丸ごと所有する `draw-load-parity` が実施**し、本仕様は症状側＝テスト側の錠 `lock_self_initiated_for_test()`（定義 `command.rs:76`・実呼出 **21 箇所／5 ファイル**＝`command.rs` 2・`command_batch_tests.rs` 5・`command_transition_tests.rs` 4・`window_proc/window_pos_tests.rs` 5・`window_proc/window_pos_transition_tests.rs` 5。doc 言及 2 行を含めると 23）の退役だけを受ける。
 - `bindoption-exclusivity`: ログ存在主張で間欠赤だったテスト 6 本（`bind_apply_on_shown_emits_show_and_info_marker`・`bind_default_exclusive_replace_emits_show_and_info_marker`・`non_shell_broadcast_reception_is_benign_debug_no_warn_error`・`wait_broadcast_reception_is_benign_debug_no_warn_error`・`progress_phase_bind_drop_emits_info_marker`・`residual_frame_removal_emits_info_marker`）を本仕様の担当クラスとして登記。現行ツリーではいずれも硬化済みヘルパ経由になっているが、**反復実行で緑が安定したことは未確認**。
 - `ghost-window-zorder`／W6: `balloon-visibility` が再表示シーム `ReassertZOrder` を消費せずに着地（再表示直後のバルーン隣接は実機未確認）。決定論テストで拾える範囲を本仕様で検討し、拾えなければ e2e へ申し送る。
 - `kero-balloon`: `cargo test -p areka` が 1 回だけ 553/1 で赤（テスト名不明・ログ未保存）。①硬化後に再現しなくなるかを反復検証で確認する。
@@ -59,7 +59,7 @@
 #### Acceptance Criteria
 1. The テスト基盤 shall ログ捕捉の硬化機構（テスト間の interest 汚染を構造的に防ぐ仕組み）の定義箇所をワークスペースで **1 箇所**にする。
 2. The テスト基盤 shall その共有機構を `wintf`・bin crate `areka`（in-crate `#[cfg(test)]` テスト）・`areka-*` 各 crate・統合テスト（`tests/`）のいずれからも同じ形で利用できるようにする。
-3. While 共有機構が `wintf` から利用される, the テスト基盤 shall `wintf` に `areka-*` crate への依存を新たに持ち込まない。
+3. While 共有機構が `wintf` から利用される, the テスト基盤 shall `wintf` に本番コードを持つ上位 crate（`areka`・`areka-seriko`・`areka-emo-*` 等）への依存を新たに持ち込まない（依存方向の規律。ワークスペース内依存を持たないテスト専用の共有 crate を dev-dependency として引くことはこれに当たらず、その crate の命名は設計で決める）。
 4. The テスト基盤 shall 共有機構の導入によって新規の外部依存（`tracing`／`tracing-subscriber` 以外）を追加しない。
 5. When 共有機構が採用される, the テスト基盤 shall 不採用となった設計（probe dispatcher 方式・global-default keeper 方式・一回限りの global probe・直書き）の実装コピーをワークスペースから **0 件**にする（正典の採否の理由は設計文書に登記する）。
 6. If 共有機構と両立しない既存の subscriber 設置（例: テスト側で独自に `set_global_default` を置く箇所）が残る, then the テスト基盤 shall それを共有機構へ寄せるか、両立条件を明文化して違反時に明示的に失敗させる（黙って縮退しない）。
@@ -85,7 +85,7 @@
 3. When ログの**不在**を主張するテストが共有機構で書かれる, the 共有ログ捕捉機構 shall 「捕捉そのものが働いていた」ことを同じ捕捉窓の内側で示せる手段（対照となる陽性観測）を提供し、捕捉 0 件のまま不在主張が通る形を既定にしない。
 4. The 共有ログ捕捉機構 shall 自分自身の決定性を示す自己テストを持ち、（a）意図的に interest を焼き付けた状態でも対象イベントを捕捉できること、（b）硬化を外した素の捕捉では同じ条件で取りこぼすこと（較正＝毎回赤も作れること）、の両方を実行テストで固定する。
 5. The 共有ログ捕捉機構 shall TRACE を含む全レベルのイベントを捕捉対象にできる。
-6. The 共有ログ捕捉機構 shall スレッド局所の捕捉意味論（捕捉窓の外・他スレッドで発行されたイベントを混入させない）を保つ。
+6. The 共有ログ捕捉機構 shall 既定の捕捉 API でスレッド局所の捕捉意味論（捕捉窓の外・他スレッドで発行されたイベントを混入させない）を保つ（別スレッドで発火するログを捕える必要がある場合は、要件 1.6 に従い明示的に区別された別の API として提供し、既定の API と混同させない）。
 7. When `bindoption-exclusivity` が登記した間欠赤テスト 6 本（Introduction 参照）を含む `areka-seriko` のログ存在主張テストを反復実行する, the テスト基盤 shall 要件 9 の反復条件で失敗 0 件を示す。
 
 ### Requirement 4: 待機機構の有界化（反復回数に依存しない待機）
@@ -124,7 +124,7 @@
 
 #### Acceptance Criteria
 1. While `draw-load-parity` が `SELF_INITIATED_DEPTH` のスレッド局所化（`command.rs`）を着地させていない, the 本仕様 shall `command.rs` に触れず、錠 `lock_self_initiated_for_test()` の利用を現状のまま保つ。
-2. When `draw-load-parity` の着地形（スレッド局所化）が本仕様のブランチへ取り込まれる, the テスト基盤 shall 錠 `lock_self_initiated_for_test()` の呼出（2026-08-22 時点 23 箇所／5 ファイル）を退役させ、退役後も当該テスト群が並列実行で失敗 0 件であることを要件 9 の反復条件で示す。
+2. When `draw-load-parity` の着地形（スレッド局所化）が本仕様のブランチへ取り込まれる, the テスト基盤 shall 錠 `lock_self_initiated_for_test()` の呼出（2026-08-22 時点 実呼出 21 箇所／5 ファイル）を退役させ、退役後も当該テスト群が並列実行で失敗 0 件であることを要件 9 の反復条件で示す。
 3. If `draw-load-parity` がスレッド局所化を見送った, then the 本仕様 shall その旨を申し送りに登記し、錠を温存したまま完了できる（是正そのものは本仕様の範囲外のまま）。
 4. The テスト基盤 shall 錠の退役後に `command.rs` 本体の錠定義が不要になる場合でも、その削除は `command.rs` の所有者（`draw-load-parity`）へ申し送り、本仕様では行わない。
 
