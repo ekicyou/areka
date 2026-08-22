@@ -1,0 +1,8 @@
+title = 観測行を点けずに回した走行（段②③④が同時に UNAVAILABLE）
+exit = 0
+argv = --stage all --top 3
+
+note = 順位付けの走行は wintf::tick と areka::perf を点けるので、この形は
+note = 「点け忘れ」を意味する。黙って空欄を出さず、3 段とも理由を見出しに書いて
+note = 終了コード 0 で返す（止めるのは道具が壊れたときだけ）。
+note = run-meta.txt を置いていないので、実行条件の注記が「ありません」になることも固定する。

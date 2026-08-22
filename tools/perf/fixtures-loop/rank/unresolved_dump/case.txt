@@ -1,0 +1,11 @@
+title = 記号が 1 つも areka.exe へ解けない dump（道具の不具合として止める）
+exit = 4
+argv = --stage function --sampling-available true
+
+stderr_substr = areka.exe
+stderr_substr = 解決
+
+note = ThreadStartImage!Function 列には areka.exe が入っている。列名行を見ずに
+note = 素朴に areka.exe を数える実装はここで 2 と数えてしまい、緑になる。
+note = 数える列を取り違えていないことを、この不合格側が毎回確かめる。
+note = 段③が利用可と言いながら 1 フレームも解けないのは道具の不具合なので exit 4。

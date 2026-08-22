@@ -150,7 +150,7 @@
   - _Requirements: 2.2, 2.9, 2.11, 2.12, 5.1, 5.2, 5.3, 5.5, 5.8, 7.5_
   - _Boundary: judge-perf_
 
-- [ ] 6.2 (P) 4 段の順位表（perf-rank.py）
+- [x] 6.2 (P) 4 段の順位表（perf-rank.py）
   - [1] プロセス（定常平均／p50／p95／最大・発話中の頂・SSP 参考値を併記＝合否外）、[2] スレッド（perf(thread) の差分から役割別の CPU 秒と占有率・壁時計と CPU の別を見出しに・段③利用可なら dump の TID 別を併記）、[3] 関数（dump の自己時間と包含時間の上位・module!function・スレッド別・サンプル総数と `areka.exe!` 解決率。UNAVAILABLE は見出しに理由だけ・解決率 0 は exit 4）、[4] 相（`[tick]` 行から tick/秒・省略率・心拍率・1 tick 平均・UI スレッド CPU/秒・13 本別）
   - 決定論・固定幅。dump の列はヘッダ行で引き、既知列が無ければ exit 4 と文言
   - 自己較正（fixtures-loop/rank）: 合格側＝既知の順位・不合格側＝未解決 dump／tick 行なし。期待出力と byte 一致
@@ -286,3 +286,4 @@
 - (6.1) catch-up 3 系統は**文言では分けられない**（dispatcher と kanade は同一文言）。識別子は tracing の通常フィールド `target = "…"`（値は引用符つき＝`unquote_field` で外す）。`--emit-metrics` の名: `steady_idle_cpu_mean_pct`／`frame_interval_p95_ms`／`catchup_count`（定常）／`catchup_count_total`／`catchup_dispatcher|kanade|loop_ticker|other`／`alloc_count`／`talk_peak_cpu_pct`／`cpu_p50|p95|max_pct`／`tick_window_count`／`tick_skip_ratio`／`catchup_tick_load_ratio`／`catchup_tick_load_verdict`（成立／不成立／判定不能）。発話区間は kanade のログ標識（`J_TALK_START_EVENTS`/`J_TALK_END_EVENTS`）で定義。`CATCHUP_TICK_LOAD_RATIO_MIN=1.5`／`CATCHUP_SHOW_WINDOW_SEC=10.0` は暫定（合否不使用）。README §16 の SSP 参考値登記は 8.1。
 - (8.2) COMPAT §8 末尾に `### areka 裁量の性能目標` を追記・3 brief（cage／pwc／e2e）へ申し送り節。pwc brief の既存行 121-122 は dlp を「W8」と書いたまま（正は W6.9）＝9.4 で本節を更新する際に併せて直す。設計 C1 の TOML 例には `[sampling]` 節が無い（必須）＝9.4 で design.md C1 を追補。`tick_one_frame_with` は私有関数（cage が別ファイルから使うなら可視性調整）。
 - (7.1) `tools/perf/goals/draw-load-parity.goal.md` の本文は `GOAL_TEXT_TEMPLATE` の写し（`goal-text` 出力の token を `<token>` に置換）。テンプレートを編集すると黙ってずれる→**7.2 の `selftest` に「goal-text 出力（token 置換）＝ .goal.md の `---` 以降の本文」の一致検査を足す**こと。ヘッダの「1,012 字」も同じ理由で数値依存（検査で覆う）。
+- (6.2) `perf-rank.py`（957 行）＋`perf_rank_dump.py`（443 行・段③と共通基盤）。dump は列名行から既知列（TimeStamp／ThreadID／Image!Function）を引き、欠けていれば exit 4 でイベントと列名を名指し。`sample_ok` の 16/8/16/22/2 を `sample_ok_counts` ケースで固定（5.3 との相互較正）。判定スクリプトの較正値（`WARMUP_EXCLUDE_SEC`・CSV ヘッダ・正規表現・`percentile`）は**写し**（出典コメントあり・機械で束縛していない）＝較正値を動かすときは両方を同時に。dump の短い行・空値・`!` 無しは黙って読み飛ばす（`samples_total` は印字する）。共有 scratchpad は揮発物（並走の別実装者が消す）。
