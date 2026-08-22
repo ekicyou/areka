@@ -29,7 +29,7 @@
 >   - 本スナップショットはファイル粒度の機械判定であり呼出数の精査ではない——**着手時の全面再計数義務（追記(59)）は不変**。判定式も不変（`rebuild_interest_cache()` の有無 1 点）。
 > - **④の観測点は :306-310 へドリフト**（fmt PR#115＋atom 改稿後・2026-08-22 実測・旧 :297-301 失効）。atom は同分岐を「cage④ の観測点だから」意図的に不動と登記済み（下記追記(72)⑸）＝字面ごと保存されている。
 > - **追記(79)（1,000 行目安の漂流・roadmap 正本）の裁定が⒜（行数番人テスト）に決まった場合、置き場候補は本 spec**——「檻の決定性」ミッションと同系・例外表方式（既存 9 本を載せて漸減）。要件段階でスコープに入れるかを最初に確定させること。
-> - **`SELF_INITIATED_DEPTH` のスレッド局所化（下記追記(76)⑹）は `command.rs:49` の本番 1 行を触る**＝`draw-load-parity`（W8）と着手順調整。本 spec が先行するなら dlp の brief へ着地形を申し送ること。
+> - **`SELF_INITIATED_DEPTH` のスレッド局所化（下記追記(76)⑹）は本 spec では実施しない【2026-08-22 追記(81) 同居裁定】**——本 spec は **dlp と W6.9 で 2 本並走**し、`command.rs` は**丸ごと dlp 所有・本 spec は非接触**（`Cell<i32>` 化は dlp が flush 接触のついでに実施し着地形を申し送ってくる）。本 spec が受け持つのは**症状側のみ**＝dlp 着地後の rebase（または wave 内合流）で錠 `lock_self_initiated_for_test()` の退役を実施。dlp が見送った場合は本 spec へ差し戻し（その時点で着手順調整）。
 
 > **📌 2026-08-21 追記(72)（`areka-P0-dpi-transition-atomicity` からの申し送り・観測チャネルが 1 本増え、窓書込の檻の前提が変わった）**: **既定 OFF の観測チャネル `wintf::transition` が新設され、窓書込指令に要求元の札が付き、同一窓のジオメトリ指令が合流するようになった。** ① tracing 毒化の射程・②「零件の主張」の扱い・④ `apply_show` 鎖の 3 点それぞれに効く。
 > - **⑴ 新しい観測 target が 1 本**: `wintf::transition`（`crates/wintf/src/ecs/window/transition_diag.rs:54`）。既定水準では 1 行も出ず、前置ガード `transition_diag::is_enabled()`（同 :595＝`tracing::enabled!` の薄い包み）が偽なら**行の組立も時刻の読み取りも一切行わない**。**「既定で無音」を主張する檻は、同じ捕捉窓の内側に必ず出るはずの対照行を置く形にしてある**（本 spec で「既定で無音」が恒真だった事故が実際に起きたため）。①の毒化表へこの target を足すかどうかは本 spec の裁定だが、**濾過テストはスレッド局所 subscriber（`crate::ecs::test_support::capture_under_filter`＝`crates/wintf/src/ecs/test_support.rs:96`）で書く**規律に従っている。
