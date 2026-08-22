@@ -461,10 +461,7 @@ pub fn wire_emo2_boot(
         clock,
         wiring_assets,
     );
-    app.world()
-        .borrow_mut()
-        .world_mut()
-        .insert_non_send(wiring);
+    app.world().borrow_mut().world_mut().insert_non_send(wiring);
     app.world()
         .borrow_mut()
         .add_systems(FrameFinalize, emo2_frame_system);

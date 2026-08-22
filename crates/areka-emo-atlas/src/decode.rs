@@ -98,7 +98,13 @@ impl MemoryDecoder {
     ) {
         self.images.insert(
             path.into(),
-            DecodedImage { width, height, stride, bgra, has_alpha },
+            DecodedImage {
+                width,
+                height,
+                stride,
+                bgra,
+                has_alpha,
+            },
         );
     }
 
@@ -124,7 +130,9 @@ impl ElementDecoder for MemoryDecoder {
                 source: source.clone(),
             });
         }
-        Err(DecodeError::NotFound { path: path.to_path_buf() })
+        Err(DecodeError::NotFound {
+            path: path.to_path_buf(),
+        })
     }
 
     fn probe_pna(&self, path: &Path) -> bool {

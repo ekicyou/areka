@@ -234,7 +234,10 @@ mod tests {
 
         // ちょうど境界上でも次の境界へ進む（即時発火を避ける）。
         let mut b = LotteryBoundary::starting_at(1000);
-        assert!(!b.poll(1000), "起点ちょうど境界上は即時発火しない（次境界は 2000）");
+        assert!(
+            !b.poll(1000),
+            "起点ちょうど境界上は即時発火しない（次境界は 2000）"
+        );
         assert!(!b.poll(1999), "2000 未満は非跨ぎ");
         assert!(b.poll(2000), "2000 到達で跨ぎ");
     }
@@ -248,7 +251,10 @@ mod tests {
         assert!(!b.poll(999), "999 は非跨ぎ");
         assert!(b.poll(1000), "1000 ちょうどで発火");
         // スナップ後は次境界 2000 まで非跨ぎ。
-        assert!(!b.poll(1000), "同一時刻の再 poll は再発火しない（スナップ済み）");
+        assert!(
+            !b.poll(1000),
+            "同一時刻の再 poll は再発火しない（スナップ済み）"
+        );
         assert!(!b.poll(1999), "1999 は非跨ぎ");
         assert!(b.poll(2000), "2000 で発火");
     }
@@ -308,17 +314,45 @@ mod tests {
         let frames = vec![frame(1, 10), frame(2, 20), frame(3, 30)];
 
         // t_0 = 10 前後。
-        assert_eq!(frame_at(&frames, 9), FrameStatus::Pending, "t_0−1 は Pending");
-        assert_eq!(frame_at(&frames, 10), FrameStatus::Active(0), "t_0 ちょうどで Active(0)");
-        assert_eq!(frame_at(&frames, 11), FrameStatus::Active(0), "t_0+1 は Active(0)");
+        assert_eq!(
+            frame_at(&frames, 9),
+            FrameStatus::Pending,
+            "t_0−1 は Pending"
+        );
+        assert_eq!(
+            frame_at(&frames, 10),
+            FrameStatus::Active(0),
+            "t_0 ちょうどで Active(0)"
+        );
+        assert_eq!(
+            frame_at(&frames, 11),
+            FrameStatus::Active(0),
+            "t_0+1 は Active(0)"
+        );
 
         // t_1 = 30 前後。
-        assert_eq!(frame_at(&frames, 29), FrameStatus::Active(0), "t_1−1 は Active(0)");
-        assert_eq!(frame_at(&frames, 30), FrameStatus::Active(1), "t_1 ちょうどで Active(1)");
-        assert_eq!(frame_at(&frames, 31), FrameStatus::Active(1), "t_1+1 は Active(1)");
+        assert_eq!(
+            frame_at(&frames, 29),
+            FrameStatus::Active(0),
+            "t_1−1 は Active(0)"
+        );
+        assert_eq!(
+            frame_at(&frames, 30),
+            FrameStatus::Active(1),
+            "t_1 ちょうどで Active(1)"
+        );
+        assert_eq!(
+            frame_at(&frames, 31),
+            FrameStatus::Active(1),
+            "t_1+1 は Active(1)"
+        );
 
         // t_2 = 60 前後（末尾＝FinishedResidual）。
-        assert_eq!(frame_at(&frames, 59), FrameStatus::Active(1), "t_2−1 は Active(1)");
+        assert_eq!(
+            frame_at(&frames, 59),
+            FrameStatus::Active(1),
+            "t_2−1 は Active(1)"
+        );
         assert_eq!(
             frame_at(&frames, 60),
             FrameStatus::FinishedResidual(2),
@@ -343,9 +377,17 @@ mod tests {
         assert_eq!(frame_at(&frames, 40), FrameStatus::Active(1), "40 で 2110");
         assert_eq!(frame_at(&frames, 119), FrameStatus::Active(1));
         // t_2 = 120: -1 コマ → Stopped。
-        assert_eq!(frame_at(&frames, 120), FrameStatus::Stopped, "120 で -1 → 停止");
+        assert_eq!(
+            frame_at(&frames, 120),
+            FrameStatus::Stopped,
+            "120 で -1 → 停止"
+        );
         // 恒久: さらに時間が進んでも Stopped のまま。
-        assert_eq!(frame_at(&frames, 100_000), FrameStatus::Stopped, "-1 停止は恒久");
+        assert_eq!(
+            frame_at(&frames, 100_000),
+            FrameStatus::Stopped,
+            "-1 停止は恒久"
+        );
     }
 
     /// `-1` なし末尾 → `FinishedResidual(last)` 恒久（4.4/9.4）＝ sakura 実測列 0/150/22。
@@ -355,7 +397,11 @@ mod tests {
         let frames = vec![frame(1412, 0), frame(1411, 150), frame(1410, 22)];
         assert_eq!(frame_at(&frames, 0), FrameStatus::Active(0), "0 で 1412");
         assert_eq!(frame_at(&frames, 149), FrameStatus::Active(0));
-        assert_eq!(frame_at(&frames, 150), FrameStatus::Active(1), "150 で 1411");
+        assert_eq!(
+            frame_at(&frames, 150),
+            FrameStatus::Active(1),
+            "150 で 1411"
+        );
         assert_eq!(frame_at(&frames, 171), FrameStatus::Active(1));
         // t_2 = 172: 末尾（非負）→ FinishedResidual(2)。
         assert_eq!(
@@ -382,13 +428,20 @@ mod tests {
         // wait0 単一コマ。t = [0]。
         let frames = vec![frame(500, 0)];
         assert_eq!(frame_at(&frames, 0), FrameStatus::FinishedResidual(0));
-        assert_eq!(frame_at(&frames, u64::MAX), FrameStatus::FinishedResidual(0), "恒久");
+        assert_eq!(
+            frame_at(&frames, u64::MAX),
+            FrameStatus::FinishedResidual(0),
+            "恒久"
+        );
 
         // 先頭 wait > 0 の単一コマ: 到達前は Pending、到達後は残留。
         let frames = vec![frame(500, 30)];
         assert_eq!(frame_at(&frames, 29), FrameStatus::Pending);
         assert_eq!(frame_at(&frames, 30), FrameStatus::FinishedResidual(0));
-        assert_eq!(frame_at(&frames, 1_000_000), FrameStatus::FinishedResidual(0));
+        assert_eq!(
+            frame_at(&frames, 1_000_000),
+            FrameStatus::FinishedResidual(0)
+        );
     }
 
     /// 単一コマ・`-1` → 到達後は即 `Stopped` 恒久。
@@ -405,9 +458,17 @@ mod tests {
         let frames = vec![frame(100, 0), frame(-2, 40), frame(101, 40)];
         // t = [0, 40, 80]。中間コマが -2。
         assert_eq!(frame_at(&frames, 0), FrameStatus::Active(0));
-        assert_eq!(frame_at(&frames, 40), FrameStatus::Stopped, "-2 も負値ゆえ Stopped");
+        assert_eq!(
+            frame_at(&frames, 40),
+            FrameStatus::Stopped,
+            "-2 も負値ゆえ Stopped"
+        );
         // -2 コマで停止（frame_at は現在コマのみ見るので、その先の 80 でも 101 が現在コマ）。
-        assert_eq!(frame_at(&frames, 80), FrameStatus::FinishedResidual(2), "80 で末尾 101 残留");
+        assert_eq!(
+            frame_at(&frames, 80),
+            FrameStatus::FinishedResidual(2),
+            "80 で末尾 101 残留"
+        );
     }
 
     /// wait 0 連鎖: 全 wait 0 のとき elapsed 0 で末尾（最大 index）が現在コマ。
@@ -415,7 +476,11 @@ mod tests {
     fn frame_at_all_zero_waits_selects_last_index() {
         let frames = vec![frame(1, 0), frame(2, 0), frame(3, 0)];
         // t = [0, 0, 0]。elapsed 0 で t_k <= 0 を満たす最大 k = 2（末尾）。
-        assert_eq!(frame_at(&frames, 0), FrameStatus::FinishedResidual(2), "全 0 wait は末尾が現在コマ");
+        assert_eq!(
+            frame_at(&frames, 0),
+            FrameStatus::FinishedResidual(2),
+            "全 0 wait は末尾が現在コマ"
+        );
         // -1 が末尾に含まれる wait 0 連鎖 → Stopped。
         let frames = vec![frame(1, 0), frame(2, 0), frame(-1, 0)];
         assert_eq!(frame_at(&frames, 0), FrameStatus::Stopped, "末尾 -1 → 停止");

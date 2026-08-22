@@ -93,7 +93,10 @@ fn suggested_position_decision_carries_applied_flag_and_suggested_origin() {
         .find(|l| l.contains("[WM_DPICHANGED] suggested position write decision"))
         .unwrap_or_else(|| panic!("実施可否行が無い: {out}"));
 
-    assert!(line.contains("applied="), "実施可否フィールドが無い: {line}");
+    assert!(
+        line.contains("applied="),
+        "実施可否フィールドが無い: {line}"
+    );
     assert!(
         line.contains("suggested_left=3210") && line.contains("suggested_top=140"),
         "提案 left/top が復元できない: {line}"

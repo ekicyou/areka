@@ -10,7 +10,7 @@
 #![cfg(test)]
 
 use super::model::{
-    Animation, AppendTarget, AliasKey, Collision, CollisionName, DrawMethod, Element, ElementPath,
+    AliasKey, Animation, AppendTarget, Collision, CollisionName, DrawMethod, Element, ElementPath,
     Interval, Pattern, Shell, Surface, SurfaceAlias, SurfaceAppend,
 };
 
@@ -59,7 +59,11 @@ fn draw_method_is_opaque_and_verbatim() {
 #[test]
 fn interval_variants_construct_and_match() {
     // 定義クレート内からは #[non_exhaustive] enum も網羅 match 可能。
-    for iv in [Interval::Bind, Interval::Random { k: 5 }, Interval::BindRandom { k: 3 }] {
+    for iv in [
+        Interval::Bind,
+        Interval::Random { k: 5 },
+        Interval::BindRandom { k: 3 },
+    ] {
         match iv {
             Interval::Bind => {}
             Interval::Random { k } => assert_eq!(k, 5),
@@ -103,7 +107,10 @@ fn interval_other_is_distinct_variant_and_preserves_keyword() {
 #[test]
 fn append_target_single_and_range() {
     let single = AppendTarget::Single(10);
-    let range = AppendTarget::Range { start: 2100, end: 2110 };
+    let range = AppendTarget::Range {
+        start: 2100,
+        end: 2110,
+    };
     match single {
         AppendTarget::Single(id) => assert_eq!(id, 10),
         _ => panic!("expected Single"),
@@ -187,7 +194,10 @@ fn assembled_shell_preserves_structure_and_duplicate_alias_keys() {
         appends: vec![SurfaceAppend {
             targets: vec![
                 AppendTarget::Single(10),
-                AppendTarget::Range { start: 2100, end: 2110 },
+                AppendTarget::Range {
+                    start: 2100,
+                    end: 2110,
+                },
             ],
             elements: vec![],
             collisions: vec![],
@@ -228,7 +238,10 @@ fn assembled_shell_preserves_structure_and_duplicate_alias_keys() {
     assert_eq!(shell.appends[0].targets[0], AppendTarget::Single(10));
     assert_eq!(
         shell.appends[0].targets[1],
-        AppendTarget::Range { start: 2100, end: 2110 }
+        AppendTarget::Range {
+            start: 2100,
+            end: 2110
+        }
     );
 
     // 重複キーの alias が両方保持される（潰されない・要件 8.4）。

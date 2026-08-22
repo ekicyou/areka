@@ -531,12 +531,8 @@ mod tests {
         // 同一ウィンドウ配下の PointerState 保持者のうち、exclude 以外を収集する
         let mut world = World::new();
         let window = spawn_window(&mut world, "W");
-        let target = world
-            .spawn((ChildOf(window), PointerState::default()))
-            .id();
-        let other = world
-            .spawn((ChildOf(window), PointerState::default()))
-            .id();
+        let target = world.spawn((ChildOf(window), PointerState::default())).id();
+        let other = world.spawn((ChildOf(window), PointerState::default())).id();
 
         let result = collect_entities_to_leave(&mut world, window, target);
 
@@ -551,14 +547,15 @@ mod tests {
         // PointerState を持たないエンティティは収集対象外
         let mut world = World::new();
         let window = spawn_window(&mut world, "W");
-        let target = world
-            .spawn((ChildOf(window), PointerState::default()))
-            .id();
+        let target = world.spawn((ChildOf(window), PointerState::default())).id();
         // PointerState なしの子（収集されないはず）
         let _no_state = world.spawn(ChildOf(window)).id();
 
         let result = collect_entities_to_leave(&mut world, window, target);
-        assert!(result.is_empty(), "PointerState 不在エンティティは収集されない");
+        assert!(
+            result.is_empty(),
+            "PointerState 不在エンティティは収集されない"
+        );
     }
 
     #[test]
@@ -581,7 +578,10 @@ mod tests {
 
         let result = collect_entities_to_leave(&mut world, window_a, target_a);
 
-        assert!(result.contains(&widget_a), "同一ウィンドウ A の保持者は収集");
+        assert!(
+            result.contains(&widget_a),
+            "同一ウィンドウ A の保持者は収集"
+        );
         assert!(
             !result.contains(&widget_b),
             "別ウィンドウ B の PointerState は保護（非収集）"
@@ -594,9 +594,7 @@ mod tests {
         // PointerState 保持者が exclude 1件のみ → 空
         let mut world = World::new();
         let window = spawn_window(&mut world, "W");
-        let target = world
-            .spawn((ChildOf(window), PointerState::default()))
-            .id();
+        let target = world.spawn((ChildOf(window), PointerState::default())).id();
 
         let result = collect_entities_to_leave(&mut world, window, target);
         assert!(result.is_empty());

@@ -149,7 +149,8 @@ impl AnimationTable {
 
                 // コマ列を pattern index 昇順へ整列（疎 index 許容）し、method を構築時 1 回解決する
                 // （完全語彙の型値・要件 8.4）。
-                let mut patterns: Vec<&areka_parsers::shell::Pattern> = anim.patterns.iter().collect();
+                let mut patterns: Vec<&areka_parsers::shell::Pattern> =
+                    anim.patterns.iter().collect();
                 patterns.sort_by_key(|p| p.index);
                 let frames: Vec<LoopFrame> = patterns
                     .iter()
@@ -347,27 +348,48 @@ mod tests {
         assert_eq!(kero_anims[0].id, 0);
         assert_eq!(kero_anims[0].trigger, LoopTrigger::Random { k: 4 });
         let kero_surfaces: Vec<i64> = kero_anims[0].frames.iter().map(|f| f.surface_id).collect();
-        assert_eq!(kero_surfaces, vec![2106, 2110, -1], "index 昇順で 2106→2110→-1（停止センチネル保持）");
+        assert_eq!(
+            kero_surfaces,
+            vec![2106, 2110, -1],
+            "index 昇順で 2106→2110→-1（停止センチネル保持）"
+        );
         let kero_waits: Vec<u32> = kero_anims[0].frames.iter().map(|f| f.wait_ms).collect();
-        assert_eq!(kero_waits, vec![0, 40, 80], "wait は 1ms 単位で保持（要件 4.5）");
+        assert_eq!(
+            kero_waits,
+            vec![0, 40, 80],
+            "wait は 1ms 単位で保持（要件 4.5）"
+        );
 
         // sakura: 1 アニメ・BindRandom{4}・index 昇順 1/2/3。
         let sakura_anims = table.animations(20);
-        assert_eq!(sakura_anims.len(), 1, "surface20 は sakura アニメ 1 本のみ採録");
+        assert_eq!(
+            sakura_anims.len(),
+            1,
+            "surface20 は sakura アニメ 1 本のみ採録"
+        );
         assert_eq!(sakura_anims[0].id, 7);
         assert_eq!(sakura_anims[0].trigger, LoopTrigger::BindRandom { k: 4 });
-        let sakura_surfaces: Vec<i64> =
-            sakura_anims[0].frames.iter().map(|f| f.surface_id).collect();
+        let sakura_surfaces: Vec<i64> = sakura_anims[0]
+            .frames
+            .iter()
+            .map(|f| f.surface_id)
+            .collect();
         assert_eq!(sakura_surfaces, vec![1412, 1411, 1410]);
 
         // 非駆動 surface30 は 1 本も採録されない（Bind/Other 双方非採録）。
-        assert!(table.animations(30).is_empty(), "Bind/Other は非採録＝surface30 は空");
+        assert!(
+            table.animations(30).is_empty(),
+            "Bind/Other は非採録＝surface30 は空"
+        );
 
         // 全体で採録アニメは 2 本のみ（kero+sakura）。
         assert!(!table.is_empty());
 
         // debug! ログ: Bind と Other が非採録として記録され、Other は元語彙 sometimes を含む。
-        assert!(logs.contains("level=DEBUG"), "非採録は debug! で記録: {logs}");
+        assert!(
+            logs.contains("level=DEBUG"),
+            "非採録は debug! で記録: {logs}"
+        );
         assert!(
             logs.contains("interval,bind は静的着せ替え"),
             "Bind の非採録が debug! 記録される: {logs}"
@@ -391,7 +413,11 @@ mod tests {
         let degenerate = surface_with(
             40,
             vec![
-                anim(1, Interval::Random { k: 0 }, vec![pat(0, "overlay", 999, 0, 0, 0)]),
+                anim(
+                    1,
+                    Interval::Random { k: 0 },
+                    vec![pat(0, "overlay", 999, 0, 0, 0)],
+                ),
                 anim(2, Interval::Random { k: 4 }, Vec::new()),
             ],
         );
@@ -408,7 +434,10 @@ mod tests {
         assert!(table.is_empty(), "採録アニメ皆無＝表は空");
 
         // warn! が両ガードで発火する。
-        assert!(logs.contains("level=WARN"), "縮退ガードは warn! で記録: {logs}");
+        assert!(
+            logs.contains("level=WARN"),
+            "縮退ガードは warn! で記録: {logs}"
+        );
         assert!(
             logs.contains("k==0 は 1/N 抽選が定義不能"),
             "k==0 の非採録 warn!: {logs}"
@@ -451,7 +480,11 @@ mod tests {
 
         // pattern index 昇順へ整列（宣言順 5/2/0/1/4 → 0/1/2/4/5）。疎 index（3 欠番）許容。
         let ids: Vec<i64> = frames.iter().map(|f| f.surface_id).collect();
-        assert_eq!(ids, vec![500, 501, 502, 504, 505], "pattern index 昇順に整列（疎許容）");
+        assert_eq!(
+            ids,
+            vec![500, 501, 502, 504, 505],
+            "pattern index 昇順に整列（疎許容）"
+        );
 
         // method 解決（完全語彙の型値）。
         assert_eq!(frames[0].method, ComposeMethod::Overlay, "overlay→Overlay");

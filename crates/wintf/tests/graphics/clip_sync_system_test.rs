@@ -64,122 +64,120 @@ fn spawn_clip_entity(world: &mut World, visual: Visual, width: f32, height: f32)
 #[test]
 fn clip_sync_applies_all_clip_shape_variants() {
     crate::common::on_gpu_owner_thread(move || {
-    let mut world = setup_world();
-    let mut schedule = clip_schedule();
+        let mut world = setup_world();
+        let mut schedule = clip_schedule();
 
-    spawn_clip_entity(
-        &mut world,
-        Visual {
-            clip: Some(ClipShape::Rectangle),
-            ..Default::default()
-        },
-        100.0,
-        50.0,
-    );
-    spawn_clip_entity(
-        &mut world,
-        Visual {
-            clip: Some(ClipShape::RoundedRectangle { radius: 8.0 }),
-            ..Default::default()
-        },
-        100.0,
-        50.0,
-    );
-    spawn_clip_entity(
-        &mut world,
-        Visual {
-            clip: Some(ClipShape::RoundedRectangleIndividual {
-                top_left: 4.0,
-                top_right: 8.0,
-                bottom_left: 12.0,
-                bottom_right: 16.0,
-            }),
-            ..Default::default()
-        },
-        100.0,
-        50.0,
-    );
+        spawn_clip_entity(
+            &mut world,
+            Visual {
+                clip: Some(ClipShape::Rectangle),
+                ..Default::default()
+            },
+            100.0,
+            50.0,
+        );
+        spawn_clip_entity(
+            &mut world,
+            Visual {
+                clip: Some(ClipShape::RoundedRectangle { radius: 8.0 }),
+                ..Default::default()
+            },
+            100.0,
+            50.0,
+        );
+        spawn_clip_entity(
+            &mut world,
+            Visual {
+                clip: Some(ClipShape::RoundedRectangleIndividual {
+                    top_left: 4.0,
+                    top_right: 8.0,
+                    bottom_left: 12.0,
+                    bottom_right: 16.0,
+                }),
+                ..Default::default()
+            },
+            100.0,
+            50.0,
+        );
 
-    // 3 バリアントすべてが SetLeft/SetRight/角丸 8 パラメーター設定 → SetClip まで
-    // エラーなく完走する（COM エラー時は error! ログ + continue のため panic しない設計だが、
-    // 正常系では cast().expect が通ることを実行で確認する）
-    schedule.run(&mut world);
+        // 3 バリアントすべてが SetLeft/SetRight/角丸 8 パラメーター設定 → SetClip まで
+        // エラーなく完走する（COM エラー時は error! ログ + continue のため panic しない設計だが、
+        // 正常系では cast().expect が通ることを実行で確認する）
+        schedule.run(&mut world);
     });
 }
 
 #[test]
 fn clip_sync_clears_clip_when_clip_is_none() {
     crate::common::on_gpu_owner_thread(move || {
-    let mut world = setup_world();
-    let mut schedule = clip_schedule();
+        let mut world = setup_world();
+        let mut schedule = clip_schedule();
 
-    let entity = spawn_clip_entity(
-        &mut world,
-        Visual {
-            clip: Some(ClipShape::Rectangle),
-            ..Default::default()
-        },
-        100.0,
-        50.0,
-    );
+        let entity = spawn_clip_entity(
+            &mut world,
+            Visual {
+                clip: Some(ClipShape::Rectangle),
+                ..Default::default()
+            },
+            100.0,
+            50.0,
+        );
 
-    // 1回目: クリップ適用
-    schedule.run(&mut world);
+        // 1回目: クリップ適用
+        schedule.run(&mut world);
 
-    // clip = None に変更 → クリップ解除（clear_clip）経路
-    world.get_mut::<Visual>(entity).unwrap().clip = None;
-    schedule.run(&mut world);
+        // clip = None に変更 → クリップ解除（clear_clip）経路
+        world.get_mut::<Visual>(entity).unwrap().clip = None;
+        schedule.run(&mut world);
     });
 }
 
 #[test]
 fn clip_sync_clears_clip_when_size_is_zero() {
     crate::common::on_gpu_owner_thread(move || {
-    let mut world = setup_world();
-    let mut schedule = clip_schedule();
+        let mut world = setup_world();
+        let mut schedule = clip_schedule();
 
-    // clip はあるがサイズ (0, 0) → クリップ解除経路に分岐する
-    spawn_clip_entity(
-        &mut world,
-        Visual {
-            clip: Some(ClipShape::Rectangle),
-            ..Default::default()
-        },
-        0.0,
-        0.0,
-    );
+        // clip はあるがサイズ (0, 0) → クリップ解除経路に分岐する
+        spawn_clip_entity(
+            &mut world,
+            Visual {
+                clip: Some(ClipShape::Rectangle),
+                ..Default::default()
+            },
+            0.0,
+            0.0,
+        );
 
-    schedule.run(&mut world);
+        schedule.run(&mut world);
     });
 }
 
 #[test]
 fn clip_sync_skips_when_wuc_resource_is_absent() {
     crate::common::on_gpu_owner_thread(move || {
-    // WucGraphicsResource なし（ULW モード相当）→ 早期リターン
-    let core = GraphicsCore::new().expect("GraphicsCore 作成失敗");
-    let mut world = World::new();
-    world.insert_resource(core);
+        // WucGraphicsResource なし（ULW モード相当）→ 早期リターン
+        let core = GraphicsCore::new().expect("GraphicsCore 作成失敗");
+        let mut world = World::new();
+        world.insert_resource(core);
 
-    // VisualGraphics は default（COM なし）でクエリ成立だけさせる
-    let entity = world
-        .spawn(Visual {
-            clip: Some(ClipShape::Rectangle),
-            ..Default::default()
-        })
-        .id();
-    world.flush();
-    world.get_mut::<Arrangement>(entity).unwrap().size = Size {
-        width: 100.0,
-        height: 50.0,
-    };
-    world
-        .entity_mut(entity)
-        .insert(VisualGraphics::default());
-    // GlobalArrangement はフック挿入済みの default のまま
+        // VisualGraphics は default（COM なし）でクエリ成立だけさせる
+        let entity = world
+            .spawn(Visual {
+                clip: Some(ClipShape::Rectangle),
+                ..Default::default()
+            })
+            .id();
+        world.flush();
+        world.get_mut::<Arrangement>(entity).unwrap().size = Size {
+            width: 100.0,
+            height: 50.0,
+        };
+        world.entity_mut(entity).insert(VisualGraphics::default());
+        // GlobalArrangement はフック挿入済みの default のまま
 
-    let mut schedule = clip_schedule();
-    schedule.run(&mut world);
-    // パニックなしで完走すれば early return が機能している
+        let mut schedule = clip_schedule();
+        schedule.run(&mut world);
+        // パニックなしで完走すれば early return が機能している
     });
 }

@@ -7,9 +7,7 @@ use super::super::test_support::{LogEvent, capture_logs, expect_one};
 use super::test_support::{
     drag_end_event_at, drag_event_at, fake_handle, point_of, rect, window_pos_sized,
 };
-use super::{
-    BalloonFollow, MonitorSnapshot, PlacementRoute, on_balloon_drag, on_balloon_drag_end,
-};
+use super::{BalloonFollow, MonitorSnapshot, PlacementRoute, on_balloon_drag, on_balloon_drag_end};
 use crate::placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
 use crate::placement::source::GhostTitles;
 use crate::placement::spawn::{GhostWindows, spawn_ghost_windows};
@@ -126,7 +124,9 @@ fn world_with(placement: ScopePlacement, snapshot: MonitorSnapshot) -> (World, E
     world.insert_resource(snapshot);
     let titles = GhostTitles::from_scope_titles([(0, "むらさき".to_string())]);
     let ghost_windows = spawn_ghost_windows(&mut world, &[placement], &titles);
-    let char_window = ghost_windows.char_window(0).expect("キャラ窓が spawn される");
+    let char_window = ghost_windows
+        .char_window(0)
+        .expect("キャラ窓が spawn される");
     let balloon = ghost_windows
         .balloon_window(0)
         .expect("バルーン窓が spawn される");
@@ -407,10 +407,7 @@ fn releasing_outside_the_work_area_persists_the_raw_offset_and_corrects_only_the
         .barrier()
         .expect("barrier should resolve while actor is alive");
     let loaded = load_scope(PersistScope::Ghost, &roots, &SharedFakeIo(shared.clone()));
-    for (axis, value) in [
-        (Axis::X, expected_raw.x),
-        (Axis::Y, expected_raw.y),
-    ] {
+    for (axis, value) in [(Axis::X, expected_raw.x), (Axis::Y, expected_raw.y)] {
         assert!(
             loaded.contains(&(
                 PersistKey::BalloonOffset { scope: 0, axis },
@@ -531,11 +528,14 @@ fn unresolvable_reference_warns_and_skips_the_release_correction() {
         // `WindowPos::default()` の寸センチネル。`Option::Some` ゆえ上流の逆引きは
         // 通り抜け、矩形を組む段で初めて弾かれる（`Option::None` だけを未確定と見る
         // 実装だと逆転矩形のままモニタ帰属が意味を失う）。
-        ("キャラ窓の寸がセンチネル", |world, char_window, _b| {
-            let mut wp = *world.get::<WindowPos>(char_window).expect("WindowPos");
-            wp.size = Some(SizeI::new(CW_USEDEFAULT, CW_USEDEFAULT));
-            world.entity_mut(char_window).insert(wp);
-        }),
+        (
+            "キャラ窓の寸がセンチネル",
+            |world, char_window, _b| {
+                let mut wp = *world.get::<WindowPos>(char_window).expect("WindowPos");
+                wp.size = Some(SizeI::new(CW_USEDEFAULT, CW_USEDEFAULT));
+                world.entity_mut(char_window).insert(wp);
+            },
+        ),
         ("バルーンの寸が未確定", |world, _c, balloon| {
             let mut wp = *world.get::<WindowPos>(balloon).expect("WindowPos");
             wp.size = None;
@@ -560,7 +560,11 @@ fn unresolvable_reference_warns_and_skips_the_release_correction() {
         // 先に捕捉が成立していることを確かめてから「無いこと」を主張する。
         expect_one(&events, PERSIST_SAVE_TAG);
         let warn = expect_one(&events, LIMIT_UNRESOLVED_TAG);
-        assert_eq!(warn.level, tracing::Level::WARN, "{label}: 縮退は warn 水準");
+        assert_eq!(
+            warn.level,
+            tracing::Level::WARN,
+            "{label}: 縮退は warn 水準"
+        );
         assert_eq!(
             warn.field("context"),
             format!("{RELEASE_CONTEXT:?}"),

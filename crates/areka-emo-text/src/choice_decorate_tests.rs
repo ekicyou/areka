@@ -84,7 +84,10 @@ fn square_fill() -> ResolvedChoiceStyle {
 #[test]
 fn empty_segments_returns_canvas_unchanged() {
     let region = region(0, 0, 400, 224);
-    let input = canvas(vec![glyph_resident((0.0, 0.0)), glyph_resident((0.0, 13.0))]);
+    let input = canvas(vec![
+        glyph_resident((0.0, 0.0)),
+        glyph_resident((0.0, 13.0)),
+    ]);
     let out = decorate_canvas(
         input.clone(),
         &[],
@@ -104,7 +107,10 @@ fn empty_segments_returns_canvas_unchanged() {
 #[test]
 fn hover_sets_highlight_on_matching_line_only() {
     let region = region(0, 0, 400, 224);
-    let input = canvas(vec![glyph_resident((0.0, 0.0)), glyph_resident((0.0, 13.0))]);
+    let input = canvas(vec![
+        glyph_resident((0.0, 0.0)),
+        glyph_resident((0.0, 13.0)),
+    ]);
     let segments = [seg(0, 0, (0.0, 20.0)), seg(1, 1, (0.0, 20.0))];
     let out = decorate_canvas(
         input,
@@ -136,7 +142,10 @@ fn hover_sets_highlight_on_matching_line_only() {
 #[test]
 fn hover_none_still_records_segments_without_highlight() {
     let region = region(0, 0, 400, 224);
-    let input = canvas(vec![glyph_resident((0.0, 0.0)), glyph_resident((0.0, 13.0))]);
+    let input = canvas(vec![
+        glyph_resident((0.0, 0.0)),
+        glyph_resident((0.0, 13.0)),
+    ]);
     let segments = [seg(0, 0, (0.0, 20.0)), seg(1, 1, (0.0, 20.0))];
     let out = decorate_canvas(
         input,
@@ -191,7 +200,10 @@ fn segment_inline_range_is_resident_local_subtracting_line_origin() {
 #[test]
 fn decorate_bakes_band_extent_into_choice_residents() {
     let region = region(0, 0, 400, 224);
-    let input = canvas(vec![glyph_resident((0.0, 0.0)), glyph_resident((0.0, 13.0))]);
+    let input = canvas(vec![
+        glyph_resident((0.0, 0.0)),
+        glyph_resident((0.0, 13.0)),
+    ]);
     let segments = [seg(0, 0, (0.0, 20.0)), seg(1, 1, (0.0, 20.0))];
     let out = decorate_canvas(
         input,
@@ -319,7 +331,10 @@ fn two_choices_on_one_line_group_into_one_resident() {
 #[test]
 fn wrapped_choice_highlights_both_lines() {
     let region = region(0, 0, 400, 224);
-    let input = canvas(vec![glyph_resident((0.0, 0.0)), glyph_resident((0.0, 13.0))]);
+    let input = canvas(vec![
+        glyph_resident((0.0, 0.0)),
+        glyph_resident((0.0, 13.0)),
+    ]);
     // 同一 ordinal 0 が line0 末尾と line1 先頭に跨る（annotate_lines の行別分割）。
     let segments = [seg(0, 0, (20.0, 30.0)), seg(1, 0, (0.0, 10.0))];
     let out = decorate_canvas(
@@ -383,7 +398,10 @@ fn lines_without_segments_stay_glyph_run() {
 #[test]
 fn hover_stale_ordinal_yields_no_highlight() {
     let region = region(0, 0, 400, 224);
-    let input = canvas(vec![glyph_resident((0.0, 0.0)), glyph_resident((0.0, 13.0))]);
+    let input = canvas(vec![
+        glyph_resident((0.0, 0.0)),
+        glyph_resident((0.0, 13.0)),
+    ]);
     // セグメントは ordinal 0/1 のみ。hover はそのどちらでもない 99（stale）。
     let segments = [seg(0, 0, (0.0, 20.0)), seg(1, 1, (0.0, 20.0))];
     let out = decorate_canvas(
@@ -399,7 +417,10 @@ fn hover_stale_ordinal_yields_no_highlight() {
     for (i, ordinal) in [(0usize, 0usize), (1, 1)] {
         let c = choice(&out.residents[i]);
         assert_eq!(c.hovered, None, "行 {i}: stale ordinal は hovered None");
-        assert_eq!(c.highlight, None, "行 {i}: stale ordinal はどの行も塗らない");
+        assert_eq!(
+            c.highlight, None,
+            "行 {i}: stale ordinal はどの行も塗らない"
+        );
         // ただしセグメントは記録される（Choice 住人化は hover に依存しない）。
         assert_eq!(c.segments.len(), 1, "行 {i}: セグメントは記録される");
         assert_eq!(c.segments[0].ordinal, ordinal);

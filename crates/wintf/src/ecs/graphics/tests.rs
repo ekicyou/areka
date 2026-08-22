@@ -53,7 +53,9 @@ mod graphics_core_tests {
 
         let compositor = wuc_resource.compositor().expect("Compositorが無効");
         // DComp の create_visual に対応する WUC 生成（全 Visual を SpriteVisual で統一）。
-        let _visual = compositor.CreateSpriteVisual().expect("SpriteVisual作成失敗");
+        let _visual = compositor
+            .CreateSpriteVisual()
+            .expect("SpriteVisual作成失敗");
 
         println!("[TEST PASS] WUC SpriteVisual created successfully");
     }
@@ -91,9 +93,15 @@ mod graphics_core_tests {
         let compositor = wuc_resource.compositor().expect("Compositorが無効");
 
         // 複数のVisualを作成できることを確認
-        let _v1 = compositor.CreateSpriteVisual().expect("SpriteVisual1作成失敗");
-        let _v2 = compositor.CreateSpriteVisual().expect("SpriteVisual2作成失敗");
-        let _v3 = compositor.CreateSpriteVisual().expect("SpriteVisual3作成失敗");
+        let _v1 = compositor
+            .CreateSpriteVisual()
+            .expect("SpriteVisual1作成失敗");
+        let _v2 = compositor
+            .CreateSpriteVisual()
+            .expect("SpriteVisual2作成失敗");
+        let _v3 = compositor
+            .CreateSpriteVisual()
+            .expect("SpriteVisual3作成失敗");
 
         println!("[TEST PASS] Multiple WUC SpriteVisual created successfully");
     }

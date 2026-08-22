@@ -766,18 +766,14 @@ fn hover_residency_is_cleared_for_hidden_scopes_only() {
     let mut world = World::new();
     world.insert_non_send(BalloonWiring::new(mpsc::channel().0));
     {
-        let mut wiring = world
-            .get_non_send_mut::<BalloonWiring>()
-            .expect("挿入済み");
+        let mut wiring = world.get_non_send_mut::<BalloonWiring>().expect("挿入済み");
         wiring.set_balloon_hover(0);
         wiring.set_balloon_hover(1);
     }
 
     clear_hover_residency(&mut world, &[0]);
 
-    let wiring = world
-        .get_non_send::<BalloonWiring>()
-        .expect("挿入済み");
+    let wiring = world.get_non_send::<BalloonWiring>().expect("挿入済み");
     assert!(!wiring.is_balloon_hovered(0), "不可視へ落ちた scope は掃除");
     assert!(wiring.is_balloon_hovered(1), "他 scope の滞在は残る");
 }

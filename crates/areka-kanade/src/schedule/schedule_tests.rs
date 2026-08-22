@@ -41,7 +41,12 @@ fn known_quit_from_steady_goes_to_unloading_quit() {
         }),
         &config(),
     );
-    assert!(matches!(next.phase, Phase::Unloading { cause: TermCause::Quit }));
+    assert!(matches!(
+        next.phase,
+        Phase::Unloading {
+            cause: TermCause::Quit
+        }
+    ));
     assert_eq!(actions.len(), 1);
     assert!(matches!(actions[0], Action::ShioriUnload));
 }
@@ -60,7 +65,12 @@ fn known_quit_from_close_talk_wait_goes_to_unloading_quit() {
         }),
         &config(),
     );
-    assert!(matches!(next.phase, Phase::Unloading { cause: TermCause::Quit }));
+    assert!(matches!(
+        next.phase,
+        Phase::Unloading {
+            cause: TermCause::Quit
+        }
+    ));
     assert!(matches!(actions.as_slice(), [Action::ShioriUnload]));
 }
 
@@ -97,7 +107,12 @@ fn force_quit_emits_onclose_notify_then_unload() {
         },
         &config(),
     );
-    assert!(matches!(next.phase, Phase::Unloading { cause: TermCause::Forced }));
+    assert!(matches!(
+        next.phase,
+        Phase::Unloading {
+            cause: TermCause::Forced
+        }
+    ));
     assert_eq!(actions.len(), 2);
     match &actions[0] {
         Action::ShioriRequest(ShioriCall::Notify { id, references, .. }) => {
@@ -120,7 +135,12 @@ fn shiori_down_goes_to_unloading_fault() {
         },
         &config(),
     );
-    assert!(matches!(next.phase, Phase::Unloading { cause: TermCause::Fault }));
+    assert!(matches!(
+        next.phase,
+        Phase::Unloading {
+            cause: TermCause::Fault
+        }
+    ));
     assert!(matches!(actions.as_slice(), [Action::ShioriUnload]));
 }
 
@@ -136,7 +156,12 @@ fn shiori_reply_failed_goes_to_unloading_fault() {
         },
         &config(),
     );
-    assert!(matches!(next.phase, Phase::Unloading { cause: TermCause::Fault }));
+    assert!(matches!(
+        next.phase,
+        Phase::Unloading {
+            cause: TermCause::Fault
+        }
+    ));
     assert!(matches!(actions.as_slice(), [Action::ShioriUnload]));
 }
 
@@ -278,8 +303,16 @@ fn mouse_input_in_non_steady_phases_is_ignored() {
 fn assert_get(action: &Action, expected: &ShioriCall) {
     match (action, expected) {
         (
-            Action::ShioriRequest(ShioriCall::Get { id, references, status }),
-            ShioriCall::Get { id: eid, references: erefs, status: estatus },
+            Action::ShioriRequest(ShioriCall::Get {
+                id,
+                references,
+                status,
+            }),
+            ShioriCall::Get {
+                id: eid,
+                references: erefs,
+                status: estatus,
+            },
         ) => {
             assert_eq!(id, eid, "GET id 不一致");
             assert_eq!(references, erefs, "GET references 不一致");
@@ -299,8 +332,15 @@ fn mouse_input_in_steady_emits_get_via_crosscutting_arm() {
         Input::Mouse(mouse_move()),
         &config(),
     );
-    assert!(matches!(next.phase, Phase::Steady { talk: None }), "マウス GET は phase を変えない");
-    assert_eq!(actions.len(), 1, "マウス入力で GET を 1 件発行する（Task 2.2）");
+    assert!(
+        matches!(next.phase, Phase::Steady { talk: None }),
+        "マウス GET は phase を変えない"
+    );
+    assert_eq!(
+        actions.len(),
+        1,
+        "マウス入力で GET を 1 件発行する（Task 2.2）"
+    );
     assert_get(
         &actions[0],
         &events::on_mouse_move(10, 20, 0, Some("head"), &ExecutionSnapshot::INACTIVE),
@@ -312,11 +352,23 @@ fn mouse_input_in_steady_emits_get_via_crosscutting_arm() {
         Input::Mouse(mouse_move()),
         &config(),
     );
-    assert!(matches!(next.phase, Phase::Steady { talk: Some(_) }), "active talk は維持される");
+    assert!(
+        matches!(next.phase, Phase::Steady { talk: Some(_) }),
+        "active talk は維持される"
+    );
     assert_eq!(actions.len(), 1);
     assert_get(
         &actions[0],
-        &events::on_mouse_move(10, 20, 0, Some("head"), &ExecutionSnapshot { talk_active: true, choice_active: false }),
+        &events::on_mouse_move(
+            10,
+            20,
+            0,
+            Some("head"),
+            &ExecutionSnapshot {
+                talk_active: true,
+                choice_active: false,
+            },
+        ),
     );
 }
 
@@ -521,12 +573,7 @@ fn choice_waiting_of(
 fn choice_waiting_matching_talk_id_establishes_waiting_ledger() {
     let (next, actions) = step(
         state_in(steady_with_talk(TalkId(5))),
-        choice_waiting_of(
-            TalkId(5),
-            &["OnMenu", "choice1"],
-            MonotonicMs(2_000),
-            None,
-        ),
+        choice_waiting_of(TalkId(5), &["OnMenu", "choice1"], MonotonicMs(2_000), None),
         &config(),
     );
     assert!(
@@ -635,7 +682,10 @@ fn choice_waiting_without_active_talk_does_not_establish_ledger() {
         &config(),
     );
     assert!(matches!(next.phase, Phase::Steady { talk: None }));
-    assert!(next.choice.is_none(), "active talk 不在では帳簿を確立しない");
+    assert!(
+        next.choice.is_none(),
+        "active talk 不在では帳簿を確立しない"
+    );
     assert!(actions.is_empty());
 }
 
@@ -775,7 +825,10 @@ fn state_snapshot_preserves_the_talk_axis_of_phase() {
             snapshot.talk_active, expected,
             "talk 軸は Phase 由来のまま（DD-IT-3）"
         );
-        assert!(!snapshot.choice_active, "帳簿なしでは choosing は非アクティブ");
+        assert!(
+            !snapshot.choice_active,
+            "帳簿なしでは choosing は非アクティブ"
+        );
     }
 }
 

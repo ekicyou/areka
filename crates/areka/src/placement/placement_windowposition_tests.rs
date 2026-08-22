@@ -1,7 +1,7 @@
+use super::resolver::{PointPx, SizePx};
 use super::shared_test_support::{
     TempDir, WA, balloon_root, emo2_root, synth_declared_dpi_ghost, with_com_initialized,
 };
-use super::resolver::{PointPx, SizePx};
 use super::test_support::{LogEvent, capture_logs};
 use super::*;
 
@@ -100,9 +100,8 @@ fn prepare_emo2_matches_ssp_balloon_offsets_at_dpi_120() {
 
     with_com_initialized(|| {
         // 実機と同じ DPI 120（emo2 の作者基準 DPI は 96 ゆえ k=5/4）。
-        let p =
-            prepare_ghost_windows_with_work_area(&emo2_root(), &balloon_root(), WA, Some(120))
-                .expect("emo2 fixture の配置準備は成功する");
+        let p = prepare_ghost_windows_with_work_area(&emo2_root(), &balloon_root(), WA, Some(120))
+            .expect("emo2 fixture の配置準備は成功する");
 
         let s0 = &p.placements[0];
         let s1 = &p.placements[1];
@@ -304,9 +303,8 @@ fn prepare_windowposition_yields_to_persisted_balloon_offset() {
     use areka_sylphya::{Axis, PersistKey};
 
     with_com_initialized(|| {
-        let p =
-            prepare_ghost_windows_with_work_area(&emo2_root(), &balloon_root(), WA, Some(96))
-                .expect("emo2 fixture の配置準備は成功する");
+        let p = prepare_ghost_windows_with_work_area(&emo2_root(), &balloon_root(), WA, Some(96))
+            .expect("emo2 fixture の配置準備は成功する");
         // 前提: windowposition が実際に効いている（対照が空虚一致にならないことの確認）。
         assert_ne!(
             p.placements[0].balloon_offset,

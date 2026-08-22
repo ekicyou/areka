@@ -49,14 +49,14 @@ pub mod presenter;
 /// presenter の外で純関数化する層（k の**数学**は上流 `areka-emo-compose` の `scale` が担う）。
 pub mod scale;
 
-pub use balloon::{build_balloon_target, build_balloon_target_from_faces};
-pub use cache::{CacheEntry, ComposeCache};
-pub use command::{PresentCommand, PresentError, PresentOutcome, TargetId};
-pub use presenter::{ClientHit, EmoPresenter, TextSlotView};
-pub use scale::{DEFAULT_AUTHOR_DPI, ScalePolicy, derive_scale};
 /// 実適用 k の厳密型（上流 `areka-emo-compose` の正本を再輸出）。
 ///
 /// [`EmoPresenter::applied_ratio`] の戻り型・[`derive_scale`] の戻り型として既に公開署名へ現出して
 /// いるため、消費側（結線・実機 probe の期待ゲート）が上流 crate を直接依存に加えずとも型を名指し
 /// できるようにする（再輸出であって別型の新設ではない——`areka_emo_compose::ScaleRatio` と同一型）。
 pub use areka_emo_compose::ScaleRatio;
+pub use balloon::{build_balloon_target, build_balloon_target_from_faces};
+pub use cache::{CacheEntry, ComposeCache};
+pub use command::{PresentCommand, PresentError, PresentOutcome, TargetId};
+pub use presenter::{ClientHit, EmoPresenter, TextSlotView};
+pub use scale::{DEFAULT_AUTHOR_DPI, ScalePolicy, derive_scale};

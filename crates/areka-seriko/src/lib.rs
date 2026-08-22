@@ -36,10 +36,10 @@ mod timeline;
 #[cfg(test)]
 mod log_interest_probe;
 
-pub use actor::{spawn_seriko, SerikoMsg, SerikoSink};
+pub use actor::{SerikoMsg, SerikoSink, spawn_seriko};
 pub use bind::{
-    accumulate, build_static_bindset, parse_bind_directive, scope_namespace, BindChoicePolicy,
-    BindDirective, BindNamespace, BindOptionDecls, BindResolver,
+    BindChoicePolicy, BindDirective, BindNamespace, BindOptionDecls, BindResolver, accumulate,
+    build_static_bindset, parse_bind_directive, scope_namespace,
 };
 pub use looper::SerikoLoopConfig;
 pub use output::{DisplayCommand, MockSurfaceOutput, SurfaceOutput};
@@ -48,4 +48,4 @@ pub use state::{
     ApplyOutcome, BindApplyOutcome, PatternApplyOutcome, ScopeState, ScopeStates, Slot,
 };
 pub use table::{AnimationTable, LoopAnimation, LoopFrame, LoopTrigger};
-pub use timeline::{frame_at, seeded_rng, should_fire, FrameStatus, LoopRng, LotteryBoundary};
+pub use timeline::{FrameStatus, LoopRng, LotteryBoundary, frame_at, seeded_rng, should_fire};

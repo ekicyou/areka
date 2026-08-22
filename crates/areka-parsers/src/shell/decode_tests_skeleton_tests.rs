@@ -107,7 +107,8 @@ fn missing_header_does_not_fail() {
 /// 同一入力を 2 度 decode → 同一結果（決定性・要件 2.4 系）。
 #[test]
 fn decode_is_deterministic() {
-    let input = "charset,UTF-8\nsurface0\n{\nelement0,overlay,surface0.png,0,0\n}\nsurface1000\n{\n}\n";
+    let input =
+        "charset,UTF-8\nsurface0\n{\nelement0,overlay,surface0.png,0,0\n}\nsurface1000\n{\n}\n";
     let a = decode(lex(input));
     let b = decode(lex(input));
     assert_eq!(a, b);

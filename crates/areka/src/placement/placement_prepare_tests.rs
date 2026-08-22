@@ -1,9 +1,9 @@
 use std::fs;
 
+use super::resolver::{PointPx, SizePx};
 use super::shared_test_support::{
     TempDir, WA, balloon_root, emo2_root, synth_declared_dpi_ghost, with_com_initialized,
 };
-use super::resolver::{PointPx, SizePx};
 use super::*;
 
 /// emo2 fixture の native 採寸値（`measure.rs` テストの同名定数と同一の実測値）。
@@ -63,9 +63,8 @@ fn k(num: u32, den: u32) -> ScaleRatio {
 fn prepare_emo2_returns_two_scope_placements() {
     with_com_initialized(|| {
         // primary DPI 96＝emo2 の作者基準 DPI（無宣言＝96）ゆえ k₀=1/1（要件 7.2 の錨）。
-        let p =
-            prepare_ghost_windows_with_work_area(&emo2_root(), &balloon_root(), WA, Some(96))
-                .expect("emo2 fixture の配置準備は成功する");
+        let p = prepare_ghost_windows_with_work_area(&emo2_root(), &balloon_root(), WA, Some(96))
+            .expect("emo2 fixture の配置準備は成功する");
 
         assert_eq!(p.placements.len(), 2, "emo2 は 2 スコープ（DD6）");
 
@@ -136,9 +135,8 @@ fn prepare_emo2_returns_two_scope_placements() {
 fn prepare_emo2_at_dpi_120_places_scopes_adjacent() {
     with_com_initialized(|| {
         // 実機と同じ DPI 120（emo2 の作者基準 DPI は 96 ゆえ k=5/4）。
-        let p =
-            prepare_ghost_windows_with_work_area(&emo2_root(), &balloon_root(), WA, Some(120))
-                .expect("emo2 fixture の配置準備は成功する");
+        let p = prepare_ghost_windows_with_work_area(&emo2_root(), &balloon_root(), WA, Some(120))
+            .expect("emo2 fixture の配置準備は成功する");
 
         let s0 = &p.placements[0];
         let s1 = &p.placements[1];
@@ -218,7 +216,6 @@ fn prepare_ghost_windows_uses_primary_monitor() {
     });
 }
 
-
 // ------------------------------------------------------------------
 // Send 契約・失敗経路・永続化なし（2.11）
 // ------------------------------------------------------------------
@@ -238,8 +235,7 @@ fn prepare_missing_root_returns_mount_err_to_caller() {
     let root = std::env::temp_dir()
         .join("areka_placement_prepare_missing_root")
         .join("no_such_ghost");
-    let err =
-        prepare_ghost_windows(&root, &balloon_root()).expect_err("不在 root は Err");
+    let err = prepare_ghost_windows(&root, &balloon_root()).expect_err("不在 root は Err");
     assert!(
         matches!(err, PlacementError::Mount(_)),
         "Mount variant 以外が返った: {err:?}"
@@ -598,7 +594,6 @@ fn prepare_k0_rounding_matches_integer_authority_not_f32() {
     });
 }
 
-
 /// design Flow 3 手順1（**1 度だけ読む**）: 準備が読んだ作者基準 DPI が
 /// `PreparedPlacement` に載って attach 側（`wire_emo2_boot`→`attach_target`）へ渡る。
 ///
@@ -622,9 +617,8 @@ fn prepare_emo2_carries_author_dpi_read_once_for_attach() {
             "emo2 は shell/balloon とも DPI 無宣言＝正典既定 96（task 2.1 実測）"
         );
 
-        let p =
-            prepare_ghost_windows_with_work_area(&emo2_root(), &balloon_root(), WA, Some(192))
-                .expect("準備は成功する");
+        let p = prepare_ghost_windows_with_work_area(&emo2_root(), &balloon_root(), WA, Some(192))
+            .expect("準備は成功する");
         assert_eq!(
             p.author_dpi, expected,
             "採寸 k₀ に使った宣言値がそのまま attach 側へ搬送される（読取は 1 度）"

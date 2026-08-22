@@ -122,11 +122,7 @@ impl CueSink for PropSetCueSink {
         //    実機 grep 証跡の info を 1 本出す（design Monitoring: `prop_set_cue applied`）。
         self.publisher
             .persist_put(PersistScope::Ghost, vec![(key, value.to_string())]);
-        info!(
-            key = key_token,
-            value,
-            "prop_set_cue applied"
-        );
+        info!(key = key_token, value, "prop_set_cue applied");
     }
 }
 
@@ -136,7 +132,7 @@ mod tests {
     use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
     use areka_sylphya::persist::{FakePersistIo, PersistIo};
     use areka_sylphya::{
-        load_scope, spawn_sylphya, PersistKey, PersistScope, ScopeRoots, SylphyaInit,
+        PersistKey, PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya,
     };
     use std::path::PathBuf;
     use std::sync::Arc;
@@ -168,11 +164,7 @@ mod tests {
     }
 
     /// ghost root 付きの共有 FakeIo sylphya を起動する（write-through を別ハンドルで観測するため）。
-    fn spawn_with_shared_io() -> (
-        areka_sylphya::SylphyaParts,
-        ScopeRoots,
-        SharedFakeIo,
-    ) {
+    fn spawn_with_shared_io() -> (areka_sylphya::SylphyaParts, ScopeRoots, SharedFakeIo) {
         let shared = SharedFakeIo(Arc::new(FakePersistIo::new()));
         let roots = ScopeRoots {
             ghost: Some(PathBuf::from("/g")),
@@ -193,8 +185,15 @@ mod tests {
         let (parts, roots, shared) = spawn_with_shared_io();
         let mut sink = PropSetCueSink::new(parts.publisher.clone());
 
-        sink.emit(carrier_cue("0", PROP_SET_CUE_NAME, &["areka.boot.count", "1"]));
-        parts.publisher.barrier().expect("barrier while actor alive");
+        sink.emit(carrier_cue(
+            "0",
+            PROP_SET_CUE_NAME,
+            &["areka.boot.count", "1"],
+        ));
+        parts
+            .publisher
+            .barrier()
+            .expect("barrier while actor alive");
 
         let loaded = load_scope(PersistScope::Ghost, &roots, &shared);
         assert!(
@@ -212,7 +211,11 @@ mod tests {
         let (parts, roots, shared) = spawn_with_shared_io();
         let mut sink = PropSetCueSink::new(parts.publisher.clone());
 
-        sink.emit(carrier_cue("0", PROP_SET_CUE_NAME, &["areka.vanish.count", "7"]));
+        sink.emit(carrier_cue(
+            "0",
+            PROP_SET_CUE_NAME,
+            &["areka.vanish.count", "7"],
+        ));
         parts.publisher.barrier().expect("barrier");
 
         let loaded = load_scope(PersistScope::Ghost, &roots, &shared);
@@ -346,8 +349,8 @@ mod tests {
         };
         use areka_sakura::spawn_talk;
         use areka_talk::EpilogueCommand;
-        use std::sync::mpsc;
         use std::sync::Mutex;
+        use std::sync::mpsc;
         use std::time::Duration;
 
         /// `spawn_talk` の done ポート境界（`D: From<TalkDone> + From<ChoiceWaiting>`）を満たす
@@ -356,9 +359,9 @@ mod tests {
         enum TalkNotice {
             Done(TalkDone),
             /// 本 e2e は選択待ち通知を観測しないが、`spawn_talk` の `D` 境界
-        /// （`From<TalkDone> + From<ChoiceWaiting>`）を満たすため受け口だけ用意する。
-        #[allow(dead_code)]
-        ChoiceWaiting(ChoiceWaiting),
+            /// （`From<TalkDone> + From<ChoiceWaiting>`）を満たすため受け口だけ用意する。
+            #[allow(dead_code)]
+            ChoiceWaiting(ChoiceWaiting),
         }
         impl From<TalkDone> for TalkNotice {
             fn from(done: TalkDone) -> Self {
@@ -431,8 +434,7 @@ mod tests {
             let (observer, observed) = ObservingSink::new();
 
             let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
-            let sinks: Vec<Box<dyn CueSink + Send>> =
-                vec![Box::new(prop_sink), Box::new(observer)];
+            let sinks: Vec<Box<dyn CueSink + Send>> = vec![Box::new(prop_sink), Box::new(observer)];
             let handle = spawn_talk(
                 first_boot_start(),
                 done_tx,
@@ -459,7 +461,10 @@ mod tests {
             handle.actor.join().expect("body は正常終了する");
 
             // fire-and-forget の write-through を barrier で確定してから別ハンドルで観測する。
-            parts.publisher.barrier().expect("barrier while actor alive");
+            parts
+                .publisher
+                .barrier()
+                .expect("barrier while actor alive");
             let loaded = load_scope(PersistScope::Ghost, &roots, &shared);
             assert!(
                 loaded.contains(&(PersistKey::BootCount, "1".into())),
@@ -490,8 +495,7 @@ mod tests {
             let (observer, observed) = ObservingSink::new();
 
             let (done_tx, done_rx) = mpsc::channel::<TalkNotice>();
-            let sinks: Vec<Box<dyn CueSink + Send>> =
-                vec![Box::new(prop_sink), Box::new(observer)];
+            let sinks: Vec<Box<dyn CueSink + Send>> = vec![Box::new(prop_sink), Box::new(observer)];
             let handle = spawn_talk(
                 first_boot_start(),
                 done_tx,
@@ -518,7 +522,10 @@ mod tests {
             handle.actor.join().expect("body は正常終了する");
 
             // barrier で（あれば）write-through を確定させたうえでストア不変を観測する。
-            parts.publisher.barrier().expect("barrier while actor alive");
+            parts
+                .publisher
+                .barrier()
+                .expect("barrier while actor alive");
             let loaded = load_scope(PersistScope::Ghost, &roots, &shared);
             assert!(
                 loaded.is_empty(),

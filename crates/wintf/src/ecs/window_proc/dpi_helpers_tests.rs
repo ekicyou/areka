@@ -10,8 +10,14 @@ use crate::ecs::{Point, SizeI};
 #[test]
 fn test_center_correction_size_decrease() {
     // 200% → 125%: 800×600 → 500×375
-    let old = SizeI { width: 800, height: 600 };
-    let new = SizeI { width: 500, height: 375 };
+    let old = SizeI {
+        width: 800,
+        height: 600,
+    };
+    let new = SizeI {
+        width: 500,
+        height: 375,
+    };
     let (dx, dy) = calculate_center_correction(old, new);
     assert_eq!(dx, 150);
     assert_eq!(dy, 112); // (600 - 375) / 2 = 112 (integer division)
@@ -20,8 +26,14 @@ fn test_center_correction_size_decrease() {
 #[test]
 fn test_center_correction_size_increase() {
     // 125% → 200%: 500×375 → 800×600
-    let old = SizeI { width: 500, height: 375 };
-    let new = SizeI { width: 800, height: 600 };
+    let old = SizeI {
+        width: 500,
+        height: 375,
+    };
+    let new = SizeI {
+        width: 800,
+        height: 600,
+    };
     let (dx, dy) = calculate_center_correction(old, new);
     assert_eq!(dx, -150);
     assert_eq!(dy, -112);
@@ -29,7 +41,10 @@ fn test_center_correction_size_increase() {
 
 #[test]
 fn test_center_correction_same_size() {
-    let size = SizeI { width: 600, height: 400 };
+    let size = SizeI {
+        width: 600,
+        height: 400,
+    };
     let (dx, dy) = calculate_center_correction(size, size);
     assert_eq!(dx, 0);
     assert_eq!(dy, 0);
@@ -40,8 +55,14 @@ fn test_center_correction_preserves_center() {
     // 任意のケース: old_center ≈ new_center を数値で検証
     // 整数除算のため最大 1px の丸め誤差が生じうる（design.md 記載済み）
     let old_pos = Point { x: 100, y: 200 };
-    let old_size = SizeI { width: 800, height: 600 };
-    let new_size = SizeI { width: 500, height: 375 };
+    let old_size = SizeI {
+        width: 800,
+        height: 600,
+    };
+    let new_size = SizeI {
+        width: 500,
+        height: 375,
+    };
 
     let (dx, dy) = calculate_center_correction(old_size, new_size);
     let new_pos = Point {
@@ -168,17 +189,15 @@ fn make_dpi_context(dpi: DPI) -> DpiChangeContext {
 fn test_correct_position_returns_input_when_dpi_context_none() {
     // dpi_context が None（DPI 変更なし）→ client_pos をそのまま返す（補正不要）
     let client_pos = Point { x: 100, y: 200 };
-    let client_size = SizeI { width: 800, height: 600 };
+    let client_size = SizeI {
+        width: 800,
+        height: 600,
+    };
     let bs = make_box_style_px(400.0, 300.0);
     let dpi = DPI::from_dpi(120, 120);
 
-    let result = correct_position_for_dpi_center_preserve(
-        client_pos,
-        client_size,
-        &None,
-        Some(&bs),
-        &dpi,
-    );
+    let result =
+        correct_position_for_dpi_center_preserve(client_pos, client_size, &None, Some(&bs), &dpi);
     assert_eq!(result.x, 100);
     assert_eq!(result.y, 200);
 }
@@ -187,7 +206,10 @@ fn test_correct_position_returns_input_when_dpi_context_none() {
 fn test_correct_position_returns_input_when_box_style_none() {
     // dpi_context は Some だが box_style が None → フォールバックで client_pos 素通し
     let client_pos = Point { x: 50, y: 75 };
-    let client_size = SizeI { width: 800, height: 600 };
+    let client_size = SizeI {
+        width: 800,
+        height: 600,
+    };
     let dpi = DPI::from_dpi(192, 192);
     let ctx = Some(make_dpi_context(dpi));
 
@@ -201,7 +223,10 @@ fn test_correct_position_returns_input_when_box_style_none() {
 fn test_correct_position_returns_input_when_size_not_px() {
     // dpi_context は Some だが BoxStyle.size が非 Px → 物理サイズ計算不可でフォールバック
     let client_pos = Point { x: 10, y: 20 };
-    let client_size = SizeI { width: 800, height: 600 };
+    let client_size = SizeI {
+        width: 800,
+        height: 600,
+    };
     let dpi = DPI::from_dpi(192, 192);
     let ctx = Some(make_dpi_context(dpi));
     let bs = BoxStyle {
@@ -212,13 +237,8 @@ fn test_correct_position_returns_input_when_size_not_px() {
         ..Default::default()
     };
 
-    let result = correct_position_for_dpi_center_preserve(
-        client_pos,
-        client_size,
-        &ctx,
-        Some(&bs),
-        &dpi,
-    );
+    let result =
+        correct_position_for_dpi_center_preserve(client_pos, client_size, &ctx, Some(&bs), &dpi);
     assert_eq!(result.x, 10);
     assert_eq!(result.y, 20);
 }
@@ -228,18 +248,16 @@ fn test_correct_position_returns_input_when_correction_is_zero() {
     // 新旧サイズが一致（補正量 = (0,0)）→ client_pos 素通し
     // BoxStyle 400×300 @ 192dpi(200%) → 物理 800×600。client_size も 800×600 で一致。
     let client_pos = Point { x: 100, y: 200 };
-    let client_size = SizeI { width: 800, height: 600 };
+    let client_size = SizeI {
+        width: 800,
+        height: 600,
+    };
     let dpi = DPI::from_dpi(192, 192);
     let ctx = Some(make_dpi_context(dpi));
     let bs = make_box_style_px(400.0, 300.0);
 
-    let result = correct_position_for_dpi_center_preserve(
-        client_pos,
-        client_size,
-        &ctx,
-        Some(&bs),
-        &dpi,
-    );
+    let result =
+        correct_position_for_dpi_center_preserve(client_pos, client_size, &ctx, Some(&bs), &dpi);
     assert_eq!(result.x, 100);
     assert_eq!(result.y, 200);
 }
@@ -251,18 +269,16 @@ fn test_correct_position_applies_center_preserving_correction() {
     // corrected = (100+150, 200+112) = (250, 312)。
     // 新サイズ 500×375 は BoxStyle 400×300 @ 120dpi(125%) で導出される。
     let client_pos = Point { x: 100, y: 200 };
-    let client_size = SizeI { width: 800, height: 600 };
+    let client_size = SizeI {
+        width: 800,
+        height: 600,
+    };
     let dpi = DPI::from_dpi(120, 120);
     let ctx = Some(make_dpi_context(dpi));
     let bs = make_box_style_px(400.0, 300.0);
 
-    let result = correct_position_for_dpi_center_preserve(
-        client_pos,
-        client_size,
-        &ctx,
-        Some(&bs),
-        &dpi,
-    );
+    let result =
+        correct_position_for_dpi_center_preserve(client_pos, client_size, &ctx, Some(&bs), &dpi);
     assert_eq!(result.x, 250);
     assert_eq!(result.y, 312);
 
@@ -354,13 +370,8 @@ fn box_style_not_found_fallback_keeps_its_literal_and_warn_level() {
 
         // --- 陽性: BoxStyle 欠落 → 判定語がちょうど 1 行・水準は WARN ---
         let lines = capture_logs(|| {
-            let out = correct_position_for_dpi_center_preserve(
-                client_pos,
-                client_size,
-                &ctx,
-                None,
-                &dpi,
-            );
+            let out =
+                correct_position_for_dpi_center_preserve(client_pos, client_size, &ctx, None, &dpi);
             assert_eq!(
                 (out.x, out.y),
                 (client_pos.x, client_pos.y),
@@ -407,13 +418,7 @@ fn box_style_not_found_fallback_keeps_its_literal_and_warn_level() {
 
         // --- 陰性 2: DPI 変更コンテキストが無ければ分岐へ到達しない（無音）---
         let lines = capture_logs(|| {
-            correct_position_for_dpi_center_preserve(
-                client_pos,
-                client_size,
-                &None,
-                None,
-                &dpi,
-            );
+            correct_position_for_dpi_center_preserve(client_pos, client_size, &None, None, &dpi);
         });
         assert!(
             lines.is_empty(),
@@ -533,10 +538,8 @@ fn test_dpi_decision_at_96_hides_the_branch_difference() {
         Some(&DpiSuggestedRectPolicy::ApplyPosition),
         Some(&DpiSuggestedRectPolicy::ExternalAuthority),
     ] {
-        let final_pos = final_position(
-            dpi_suggested_position_decision(policy, &suggested),
-            current,
-        );
+        let final_pos =
+            final_position(dpi_suggested_position_decision(policy, &suggested), current);
         assert_eq!(
             final_pos, current,
             "dpi=96 では policy={policy:?} でも現位置が保存されるはず"
@@ -564,10 +567,8 @@ fn test_dpi_decision_at_120_and_192_separates_apply_from_external_authority() {
 
         // 未付与・ApplyPosition: 提案位置を書く = 接地点 X が保存されない
         for policy in [None, Some(&DpiSuggestedRectPolicy::ApplyPosition)] {
-            let final_pos = final_position(
-                dpi_suggested_position_decision(policy, &suggested),
-                current,
-            );
+            let final_pos =
+                final_position(dpi_suggested_position_decision(policy, &suggested), current);
             assert_eq!(
                 final_pos,
                 (shifted_x, shifted_y),

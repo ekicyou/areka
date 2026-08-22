@@ -161,4 +161,3 @@ pub(super) fn rederive_keyword_balloon_offset(
         "{KEYWORD_REDERIVE_TAG} 実表示寸が確定したのでキーワード由来のバルーン基本位置を一度だけ導出し直した（以後は静的 offset）"
     );
 }
-

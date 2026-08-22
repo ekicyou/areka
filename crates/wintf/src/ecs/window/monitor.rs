@@ -346,7 +346,10 @@ mod tests {
         let base = make_monitor(42, 0, 0, 800, 600);
 
         // 同一値なら差分なし（探針が不動点でないことの土台）。
-        assert!(!base.differs_in_value(&base.clone()), "同一値で差分ありは誤り");
+        assert!(
+            !base.differs_in_value(&base.clone()),
+            "同一値で差分ありは誤り"
+        );
 
         let mut bounds_changed = base.clone();
         bounds_changed.bounds.right = 1920;
@@ -364,7 +367,10 @@ mod tests {
 
         let mut dpi_changed = base.clone();
         dpi_changed.dpi = 192;
-        assert!(base.differs_in_value(&dpi_changed), "dpi の変化を検出できない");
+        assert!(
+            base.differs_in_value(&dpi_changed),
+            "dpi の変化を検出できない"
+        );
 
         let mut primary_changed = base.clone();
         primary_changed.is_primary = !base.is_primary;
@@ -397,7 +403,10 @@ mod tests {
         assert!(s.contains("Monitor"));
         assert!(s.contains("handle"));
         // bounds はカスタム整形 "(left,top,right,bottom)"
-        assert!(s.contains("(0,0,800,600)"), "bounds は (l,t,r,b) 形式で整形される: {s}");
+        assert!(
+            s.contains("(0,0,800,600)"),
+            "bounds は (l,t,r,b) 形式で整形される: {s}"
+        );
         assert!(s.contains("is_primary"));
     }
 

@@ -82,9 +82,7 @@ impl ShioriBackend for FakeBackend {
 /// GET だけを差し替えた fake（NOTIFY／unload は使われない前提で unreachable・status は常に
 /// `Running` を返し死活監視ノイズを起こさない）。
 fn fake_get(
-    f: impl Fn(&str, &[String], Option<&str>) -> Result<Option<String>, RequestError>
-    + Send
-    + 'static,
+    f: impl Fn(&str, &[String], Option<&str>) -> Result<Option<String>, RequestError> + Send + 'static,
 ) -> FakeBackend {
     FakeBackend {
         get_result: Box::new(f),
@@ -109,9 +107,7 @@ fn fake_notify(
 
 /// unload だけを差し替えた fake（GET／NOTIFY は使われない前提で unreachable・status は常に
 /// `Running`——死活検出は unload とは独立にテストする）。
-fn fake_unload(
-    f: impl FnMut() -> Result<ExitKind, ShutdownError> + Send + 'static,
-) -> FakeBackend {
+fn fake_unload(f: impl FnMut() -> Result<ExitKind, ShutdownError> + Send + 'static) -> FakeBackend {
     FakeBackend {
         get_result: Box::new(|_, _, _| unreachable!("get not expected in this test")),
         notify_result: Box::new(|_, _, _| unreachable!("notify not expected in this test")),
@@ -130,10 +126,10 @@ fn boxed(backend: FakeBackend) -> Box<dyn ShioriBackend> {
 fn round_trip_via_runner(backend: FakeBackend, call: ShioriCall) -> ShioriOutcome {
     let (tx, rx) = mpsc::channel::<ShioriMsg>();
     let (on_down_tx, _on_down_rx) = mpsc::channel::<KanadeMsg>();
-    let handle =
-        std::thread::spawn(move || run_shiori_loop(rx, boxed(backend), on_down_tx));
+    let handle = std::thread::spawn(move || run_shiori_loop(rx, boxed(backend), on_down_tx));
     let (reply, receiver) = reply_channel::<ShioriOutcome>();
-    tx.send(ShioriMsg::Request { call, reply }).expect("send Request");
+    tx.send(ShioriMsg::Request { call, reply })
+        .expect("send Request");
     let outcome = receiver.recv().expect("reply received");
     // 後片付け: Close で runner を止めて join（ハングしない）。
     tx.send(ShioriMsg::Close).expect("send Close");
@@ -217,7 +213,8 @@ fn get_ok_some_maps_to_value() {
     );
     assert!(
         matches!(outcome, ShioriOutcome::Value(ref s) if s == r"\0hi\e"),
-        "Ok(Some) は Value へ: got {}", describe(&outcome)
+        "Ok(Some) は Value へ: got {}",
+        describe(&outcome)
     );
 }
 
@@ -234,7 +231,8 @@ fn get_ok_none_maps_to_no_content() {
     );
     assert!(
         matches!(outcome, ShioriOutcome::NoContent),
-        "Ok(None) は NoContent へ: got {}", describe(&outcome)
+        "Ok(None) は NoContent へ: got {}",
+        describe(&outcome)
     );
 }
 
@@ -243,31 +241,46 @@ fn get_err_each_vocabulary_maps_to_failed() {
     // Timeout
     let outcome = round_trip_via_runner(
         fake_get(|_, _, _| Err(RequestError::Timeout)),
-        ShioriCall::Get { id: EventId::Static("OnBoot"), references: Vec::new(), status: inactive_status() },
+        ShioriCall::Get {
+            id: EventId::Static("OnBoot"),
+            references: Vec::new(),
+            status: inactive_status(),
+        },
     );
     assert!(
         matches!(outcome, ShioriOutcome::Failed(ShioriFailure::Timeout(_))),
-        "Timeout: got {}", describe(&outcome)
+        "Timeout: got {}",
+        describe(&outcome)
     );
 
     // Handshake
     let outcome = round_trip_via_runner(
         fake_get(|_, _, _| Err(RequestError::Handshake(HandshakeError::Timeout))),
-        ShioriCall::Get { id: EventId::Static("OnBoot"), references: Vec::new(), status: inactive_status() },
+        ShioriCall::Get {
+            id: EventId::Static("OnBoot"),
+            references: Vec::new(),
+            status: inactive_status(),
+        },
     );
     assert!(
         matches!(outcome, ShioriOutcome::Failed(ShioriFailure::Handshake(_))),
-        "Handshake: got {}", describe(&outcome)
+        "Handshake: got {}",
+        describe(&outcome)
     );
 
     // Ipc
     let outcome = round_trip_via_runner(
         fake_get(|_, _, _| Err(RequestError::Ipc(IpcError::SendFailed))),
-        ShioriCall::Get { id: EventId::Static("OnBoot"), references: Vec::new(), status: inactive_status() },
+        ShioriCall::Get {
+            id: EventId::Static("OnBoot"),
+            references: Vec::new(),
+            status: inactive_status(),
+        },
     );
     assert!(
         matches!(outcome, ShioriOutcome::Failed(ShioriFailure::Ipc(_))),
-        "Ipc: got {}", describe(&outcome)
+        "Ipc: got {}",
+        describe(&outcome)
     );
 
     // Shiori
@@ -279,11 +292,16 @@ fn get_err_each_vocabulary_maps_to_failed() {
                 error_description: None,
             }))
         }),
-        ShioriCall::Get { id: EventId::Static("OnBoot"), references: Vec::new(), status: inactive_status() },
+        ShioriCall::Get {
+            id: EventId::Static("OnBoot"),
+            references: Vec::new(),
+            status: inactive_status(),
+        },
     );
     assert!(
         matches!(outcome, ShioriOutcome::Failed(ShioriFailure::Shiori(_))),
-        "Shiori: got {}", describe(&outcome)
+        "Shiori: got {}",
+        describe(&outcome)
     );
 }
 
@@ -306,7 +324,8 @@ fn notify_ok_maps_to_notified() {
     );
     assert!(
         matches!(outcome, ShioriOutcome::Notified),
-        "Ok(()) は Notified へ: got {}", describe(&outcome)
+        "Ok(()) は Notified へ: got {}",
+        describe(&outcome)
     );
 }
 
@@ -315,11 +334,16 @@ fn notify_err_maps_to_failed() {
     let backend = fake_notify(|_, _, _| Err(RequestError::Ipc(IpcError::SendFailed)));
     let outcome = round_trip_via_runner(
         backend,
-        ShioriCall::Notify { id: EventId::Static("OnClose"), references: Vec::new(), status: inactive_status() },
+        ShioriCall::Notify {
+            id: EventId::Static("OnClose"),
+            references: Vec::new(),
+            status: inactive_status(),
+        },
     );
     assert!(
         matches!(outcome, ShioriOutcome::Failed(ShioriFailure::Ipc(_))),
-        "NOTIFY Err は Failed へ: got {}", describe(&outcome)
+        "NOTIFY Err は Failed へ: got {}",
+        describe(&outcome)
     );
 }
 
@@ -340,12 +364,16 @@ fn handle_call_forwards_rendered_status_to_backend() {
         ShioriCall::Notify {
             id: EventId::Static("OnSecondChange"),
             references: Vec::new(),
-            status: ExecutionStatus::derive(&ExecutionSnapshot { talk_active: true, choice_active: false }),
+            status: ExecutionStatus::derive(&ExecutionSnapshot {
+                talk_active: true,
+                choice_active: false,
+            }),
         },
     );
     assert!(
         matches!(outcome, ShioriOutcome::Notified),
-        "NOTIFY 往復は Notified: got {}", describe(&outcome)
+        "NOTIFY 往復は Notified: got {}",
+        describe(&outcome)
     );
     assert_eq!(
         talking_rx.recv_timeout(BOUND).expect("status captured"),
@@ -369,7 +397,8 @@ fn handle_call_forwards_rendered_status_to_backend() {
     );
     assert!(
         matches!(outcome, ShioriOutcome::NoContent),
-        "GET 往復（Ok(None)）は NoContent: got {}", describe(&outcome)
+        "GET 往復（Ok(None)）は NoContent: got {}",
+        describe(&outcome)
     );
     assert_eq!(
         idle_rx.recv_timeout(BOUND).expect("status captured"),
@@ -385,14 +414,14 @@ fn unload_ok_clean_returns_unloaded() {
     let backend = fake_unload(|| Ok(ExitKind::Clean));
     let (tx, rx) = mpsc::channel::<ShioriMsg>();
     let (on_down_tx, on_down_rx) = mpsc::channel::<KanadeMsg>();
-    let handle =
-        std::thread::spawn(move || run_shiori_loop(rx, boxed(backend), on_down_tx));
+    let handle = std::thread::spawn(move || run_shiori_loop(rx, boxed(backend), on_down_tx));
     let (reply, receiver) = reply_channel::<ShioriOutcome>();
     tx.send(ShioriMsg::Unload { reply }).expect("send Unload");
     let outcome = receiver.recv().expect("reply received");
     assert!(
         matches!(outcome, ShioriOutcome::Unloaded),
-        "Ok(Clean) は Unloaded を返す: got {}", describe(&outcome)
+        "Ok(Clean) は Unloaded を返す: got {}",
+        describe(&outcome)
     );
     tx.send(ShioriMsg::Close).expect("send Close");
     drop(tx);
@@ -410,14 +439,14 @@ fn unload_ok_non_clean_logs_warn_and_returns_unloaded() {
     let backend = fake_unload(|| Ok(ExitKind::Abnormal(3)));
     let (tx, rx) = mpsc::channel::<ShioriMsg>();
     let (on_down_tx, _on_down_rx) = mpsc::channel::<KanadeMsg>();
-    let handle =
-        std::thread::spawn(move || run_shiori_loop(rx, boxed(backend), on_down_tx));
+    let handle = std::thread::spawn(move || run_shiori_loop(rx, boxed(backend), on_down_tx));
     let (reply, receiver) = reply_channel::<ShioriOutcome>();
     tx.send(ShioriMsg::Unload { reply }).expect("send Unload");
     let outcome = receiver.recv().expect("reply received");
     assert!(
         matches!(outcome, ShioriOutcome::Unloaded),
-        "Ok(非 Clean) でも unload 完了として Unloaded を返す: got {}", describe(&outcome)
+        "Ok(非 Clean) でも unload 完了として Unloaded を返す: got {}",
+        describe(&outcome)
     );
     tx.send(ShioriMsg::Close).expect("send Close");
     drop(tx);
@@ -429,8 +458,7 @@ fn unload_err_logs_error_and_returns_failed_ipc() {
     let backend = fake_unload(|| Err(ShutdownError::ExitTimeout));
     let (tx, rx) = mpsc::channel::<ShioriMsg>();
     let (on_down_tx, _on_down_rx) = mpsc::channel::<KanadeMsg>();
-    let handle =
-        std::thread::spawn(move || run_shiori_loop(rx, boxed(backend), on_down_tx));
+    let handle = std::thread::spawn(move || run_shiori_loop(rx, boxed(backend), on_down_tx));
     let (reply, receiver) = reply_channel::<ShioriOutcome>();
     tx.send(ShioriMsg::Unload { reply }).expect("send Unload");
     let outcome = receiver.recv().expect("reply received");
@@ -457,13 +485,16 @@ fn death_detected_once_reports_shiori_down_and_only_once() {
     };
     let (tx, rx) = mpsc::channel::<ShioriMsg>();
     let (on_down_tx, on_down_rx) = mpsc::channel::<KanadeMsg>();
-    let handle =
-        std::thread::spawn(move || run_shiori_loop(rx, boxed(backend), on_down_tx));
+    let handle = std::thread::spawn(move || run_shiori_loop(rx, boxed(backend), on_down_tx));
 
     // 1 通目のメッセージ到達で死活検出される。
     let (reply1, receiver1) = reply_channel::<ShioriOutcome>();
     tx.send(ShioriMsg::Request {
-        call: ShioriCall::Get { id: EventId::Static("OnBoot"), references: Vec::new(), status: inactive_status() },
+        call: ShioriCall::Get {
+            id: EventId::Static("OnBoot"),
+            references: Vec::new(),
+            status: inactive_status(),
+        },
         reply: reply1,
     })
     .expect("send Request 1");
@@ -471,7 +502,10 @@ fn death_detected_once_reports_shiori_down_and_only_once() {
 
     match on_down_rx.recv_timeout(BOUND) {
         Ok(KanadeMsg::ShioriDown { reason }) => {
-            assert!(reason.contains("Abnormal"), "reason に終了種別を含む: {reason}");
+            assert!(
+                reason.contains("Abnormal"),
+                "reason に終了種別を含む: {reason}"
+            );
         }
         Ok(_) => panic!("expected ShioriDown variant"),
         Err(RecvTimeoutError::Timeout) => panic!("ShioriDown not reported within bound"),
@@ -483,7 +517,11 @@ fn death_detected_once_reports_shiori_down_and_only_once() {
     // 2 通目のメッセージ到達でも status は Exited のままだが、再報告しない（sticky）。
     let (reply2, receiver2) = reply_channel::<ShioriOutcome>();
     tx.send(ShioriMsg::Request {
-        call: ShioriCall::Get { id: EventId::Static("OnBoot"), references: Vec::new(), status: inactive_status() },
+        call: ShioriCall::Get {
+            id: EventId::Static("OnBoot"),
+            references: Vec::new(),
+            status: inactive_status(),
+        },
         reply: reply2,
     })
     .expect("send Request 2");
@@ -525,21 +563,28 @@ fn death_report_suppressed_after_successful_unload() {
     };
     let (tx, rx) = mpsc::channel::<ShioriMsg>();
     let (on_down_tx, on_down_rx) = mpsc::channel::<KanadeMsg>();
-    let handle =
-        std::thread::spawn(move || run_shiori_loop(rx, boxed(backend), on_down_tx));
+    let handle = std::thread::spawn(move || run_shiori_loop(rx, boxed(backend), on_down_tx));
 
     // 1 通目の Unload: 到達時点では status=Running（死活報告なし）→ unload 成功で unloaded=true。
     let (reply1, receiver1) = reply_channel::<ShioriOutcome>();
-    tx.send(ShioriMsg::Unload { reply: reply1 }).expect("send Unload 1");
+    tx.send(ShioriMsg::Unload { reply: reply1 })
+        .expect("send Unload 1");
     let outcome1 = receiver1.recv().expect("reply 1 received");
-    assert!(matches!(outcome1, ShioriOutcome::Unloaded), "1 通目は Unloaded");
+    assert!(
+        matches!(outcome1, ShioriOutcome::Unloaded),
+        "1 通目は Unloaded"
+    );
 
     // 2 通目の Unload: 到達時点で status は Exited(Clean) を返すはずだが、unloaded フラグに
     // より死活チェック自体が skip される——報告は発火しない。
     let (reply2, receiver2) = reply_channel::<ShioriOutcome>();
-    tx.send(ShioriMsg::Unload { reply: reply2 }).expect("send Unload 2");
+    tx.send(ShioriMsg::Unload { reply: reply2 })
+        .expect("send Unload 2");
     let outcome2 = receiver2.recv().expect("reply 2 received");
-    assert!(matches!(outcome2, ShioriOutcome::Unloaded), "2 通目も Unloaded（冪等）");
+    assert!(
+        matches!(outcome2, ShioriOutcome::Unloaded),
+        "2 通目も Unloaded（冪等）"
+    );
 
     tx.send(ShioriMsg::Close).expect("send Close");
     drop(tx);
@@ -560,8 +605,7 @@ fn all_senders_dropped_terminates_runner() {
     let backend = fake_get(|_, _, _| unreachable!("no request"));
     let (tx, rx) = mpsc::channel::<ShioriMsg>();
     let (on_down_tx, _on_down_rx) = mpsc::channel::<KanadeMsg>();
-    let handle =
-        std::thread::spawn(move || run_shiori_loop(rx, boxed(backend), on_down_tx));
+    let handle = std::thread::spawn(move || run_shiori_loop(rx, boxed(backend), on_down_tx));
     // 何も送らず全 Sender を drop → recv が Err → ループ正常終了。
     drop(tx);
     let (join_tx, join_rx) = mpsc::sync_channel::<()>(0);
@@ -581,8 +625,7 @@ fn all_senders_dropped_terminates_runner() {
 #[test]
 fn connect_failure_reports_shiori_down_and_does_not_loop() {
     let (on_down_tx, on_down_rx) = mpsc::channel::<KanadeMsg>();
-    let (shiori_tx, handle) =
-        spawn_shiori_actor(|| Err("boom".to_string()), on_down_tx);
+    let (shiori_tx, handle) = spawn_shiori_actor(|| Err("boom".to_string()), on_down_tx);
 
     // 死活報告を有界時間内に受領する（KanadeMsg は Debug 非実装ゆえ variant を明示照合）。
     match on_down_rx.recv_timeout(BOUND) {
@@ -597,7 +640,11 @@ fn connect_failure_reports_shiori_down_and_does_not_loop() {
     // 受信ループに入っていないこと: Request を送っても応答は来ない（reply が drop され Err）。
     let (reply, receiver) = reply_channel::<ShioriOutcome>();
     let _ = shiori_tx.send(ShioriMsg::Request {
-        call: ShioriCall::Get { id: EventId::Static("OnBoot"), references: Vec::new(), status: inactive_status() },
+        call: ShioriCall::Get {
+            id: EventId::Static("OnBoot"),
+            references: Vec::new(),
+            status: inactive_status(),
+        },
         reply,
     });
     assert!(
@@ -609,7 +656,9 @@ fn connect_failure_reports_shiori_down_and_does_not_loop() {
     drop(shiori_tx);
     let (join_tx, join_rx) = mpsc::sync_channel::<()>(0);
     std::thread::spawn(move || {
-        handle.join().expect("shiori actor joins after connect failure");
+        handle
+            .join()
+            .expect("shiori actor joins after connect failure");
         let _ = join_tx.send(());
     });
     assert_eq!(

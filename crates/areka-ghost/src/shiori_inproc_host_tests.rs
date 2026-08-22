@@ -42,7 +42,10 @@ fn get_missing_property_returns_property_not_found() {
         SHIORI_E_PROPERTY_NOT_FOUND,
         "欠落 key は SHIORI_E_PROPERTY_NOT_FOUND であること"
     );
-    assert_eq!(out_value, sentinel, "欠落 key では out_value を書き込まないこと");
+    assert_eq!(
+        out_value, sentinel,
+        "欠落 key では out_value を書き込まないこと"
+    );
 }
 
 /// Raise は消費者不在でも `Ok(())` を返すこと（warn 可視化・握りつぶさない・要件 7.4）。

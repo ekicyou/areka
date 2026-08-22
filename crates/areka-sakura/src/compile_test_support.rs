@@ -47,10 +47,9 @@ pub(super) fn assert_clear_all_prefix_and_rest(cues: &[Cue]) -> &[Cue] {
     // ClearAll は単一前置（内容側に重複しない・スコープ数に依らず 1 件）。barrier/routing の
     // 非 Command cue（choice 台本の末尾 barrier 等）は ClearAll ではあり得ないため走査から除く。
     assert!(
-        cues[1..].iter().all(|c| !matches!(
-            &c.payload,
-            CuePayload::Command(CueCommand::ClearAll)
-        )),
+        cues[1..]
+            .iter()
+            .all(|c| !matches!(&c.payload, CuePayload::Command(CueCommand::ClearAll))),
         "ClearAll は単一前置（内容 cue 側に重複しない）"
     );
     &cues[1..]

@@ -36,7 +36,7 @@ use std::collections::HashMap;
 use areka_ghost::dispatcher::DispatcherMsg;
 use areka_ghost::sylphya_wiring::ghost_asker_id;
 use areka_ghost::{
-    boot, GhostBootOptions, GhostHandles, GhostParts, ShioriWiring, SystemVarWiring, TickerMode,
+    GhostBootOptions, GhostHandles, GhostParts, ShioriWiring, SystemVarWiring, TickerMode, boot,
 };
 use areka_kanade::{MonotonicMs, ShioriBackend};
 use areka_parsers::charset::DefaultEncoding;
@@ -174,31 +174,35 @@ fn manual_teardown(parts: GhostParts) {
         sylphya: sylphya_handle,
     } = handles;
 
-    run_bounded("manual teardown after reader inspection", E2E_BOUND, move || {
-        let _ = kanade.send(areka_kanade::KanadeMsg::ForceQuit {
-            reason: areka_kanade::CloseReason::System,
-        });
-        kanade_handle
-            .join()
-            .expect("kanade should terminate normally after ForceQuit");
-        let _ = dispatcher.send(DispatcherMsg::Close);
-        dispatcher_handle
-            .join()
-            .expect("dispatcher should terminate normally after Close");
-        shiori_handle
-            .join()
-            .expect("shiori should terminate normally (shiori_tx dropped with kanade)");
-        start_relay_handle
-            .join()
-            .expect("start-relay should terminate naturally");
-        down_relay_handle
-            .join()
-            .expect("down-relay should terminate naturally");
-        sylphya.close();
-        sylphya_handle
-            .join()
-            .expect("sylphya should terminate normally after Close");
-    });
+    run_bounded(
+        "manual teardown after reader inspection",
+        E2E_BOUND,
+        move || {
+            let _ = kanade.send(areka_kanade::KanadeMsg::ForceQuit {
+                reason: areka_kanade::CloseReason::System,
+            });
+            kanade_handle
+                .join()
+                .expect("kanade should terminate normally after ForceQuit");
+            let _ = dispatcher.send(DispatcherMsg::Close);
+            dispatcher_handle
+                .join()
+                .expect("dispatcher should terminate normally after Close");
+            shiori_handle
+                .join()
+                .expect("shiori should terminate normally (shiori_tx dropped with kanade)");
+            start_relay_handle
+                .join()
+                .expect("start-relay should terminate naturally");
+            down_relay_handle
+                .join()
+                .expect("down-relay should terminate naturally");
+            sylphya.close();
+            sylphya_handle
+                .join()
+                .expect("sylphya should terminate normally after Close");
+        },
+    );
 }
 
 /// 初回 talk が発火するまで dispatcher へ Tick を注入し続ける（sleep 不使用・単調増加 `now` の
@@ -206,7 +210,10 @@ fn manual_teardown(parts: GhostParts) {
 /// prefetch（username GET＋barrier）→ OnBoot GET(Value) → StartTalk → dispatcher active slot →
 /// 全 broadcast、の順で進む。初回 cue が `records` に載れば return（happens-before 確立点:
 /// prefetch は OnBoot より厳密に前段ゆえ、cue 観測は barrier 反映後を含意する）。
-fn drive_until_first_cue(dispatcher: &std::sync::mpsc::Sender<DispatcherMsg>, records: &std::sync::Arc<std::sync::Mutex<Vec<areka_sakura::contract::TalkCue>>>) {
+fn drive_until_first_cue(
+    dispatcher: &std::sync::mpsc::Sender<DispatcherMsg>,
+    records: &std::sync::Arc<std::sync::Mutex<Vec<areka_sakura::contract::TalkCue>>>,
+) {
     let mut now: u64 = 1;
     let deadline = std::time::Instant::now() + E2E_BOUND;
     while std::time::Instant::now() < deadline {
@@ -294,7 +301,9 @@ fn boot_reader_resolves_selfname_family_and_baseware_real_values() {
 
     // --- baseware（大域点付き・実値・R5.1） ---
     assert_eq!(
-        parts.sylphya_reader.resolve_dotted_str(&ctx, "baseware.name"),
+        parts
+            .sylphya_reader
+            .resolve_dotted_str(&ctx, "baseware.name"),
         DottedResolution::Value("areka".to_string()),
         "baseware.name は実値 \"areka\" へ解決されるべき（R5.1）"
     );

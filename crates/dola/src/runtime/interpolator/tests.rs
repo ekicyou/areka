@@ -483,7 +483,10 @@ fn parametric_easing_overshoots_beyond_endpoints() {
     );
     match Interpolator::interpolate(&seg, &VariableTypeHint::Float, 0.5) {
         EvaluatedValue::Float(v) => {
-            assert!((v - 125.0).abs() < 1e-9, "expected 125.0 (overshoot), got {v}");
+            assert!(
+                (v - 125.0).abs() < 1e-9,
+                "expected 125.0 (overshoot), got {v}"
+            );
         }
         _ => panic!("expected Float"),
     }

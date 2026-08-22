@@ -14,7 +14,7 @@
 use super::*;
 use dola::DynamicValue;
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
-use std::sync::mpsc::{channel, TryRecvError};
+use std::sync::mpsc::{TryRecvError, channel};
 use std::sync::{Arc, Mutex};
 use tracing::field::{Field, Visit};
 use tracing_subscriber::prelude::*;
@@ -24,11 +24,7 @@ use tracing_subscriber::prelude::*;
 struct Capture(Arc<Mutex<Vec<String>>>);
 
 impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Capture {
-    fn on_event(
-        &self,
-        ev: &tracing::Event<'_>,
-        _: tracing_subscriber::layer::Context<'_, S>,
-    ) {
+    fn on_event(&self, ev: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
         let meta = ev.metadata();
         let mut line = format!("level={} target={}", meta.level(), meta.target());
         struct V<'a>(&'a mut String);
@@ -150,12 +146,18 @@ fn addressee_discriminates_warn_vs_debug_for_same_broken_shape() {
     });
 
     assert_eq!(
-        (count_level(&move_logs, "WARN"), count_level(&move_logs, "DEBUG")),
+        (
+            count_level(&move_logs, "WARN"),
+            count_level(&move_logs, "DEBUG")
+        ),
         (1, 0),
         "自分宛 move は WARN=1/DEBUG=0: {move_logs:?}"
     );
     assert_eq!(
-        (count_level(&other_logs, "WARN"), count_level(&other_logs, "DEBUG")),
+        (
+            count_level(&other_logs, "WARN"),
+            count_level(&other_logs, "DEBUG")
+        ),
         (0, 1),
         "他人宛 noexist は WARN=0/DEBUG=1: {other_logs:?}"
     );

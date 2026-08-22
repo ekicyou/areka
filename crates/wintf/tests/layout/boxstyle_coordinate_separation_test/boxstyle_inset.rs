@@ -4,8 +4,8 @@ use bevy_ecs::prelude::*;
 use wintf::ecs::layout::{BoxStyle, sync_window_arrangement_from_window_pos};
 use wintf::ecs::window::{DPI, Window, WindowPos};
 use wintf::ecs::world::FrameCount;
-use wintf::ecs::{Point, SizeI};
 use wintf::ecs::{Arrangement, GlobalArrangement, LayoutScale, Offset, Size};
+use wintf::ecs::{Point, SizeI};
 
 /// WM_WINDOWPOSCHANGED 相当の処理後（PostLayoutパイプライン経由）で
 /// Window entity の BoxStyle.inset が変更されていないことを検証
@@ -20,7 +20,10 @@ fn test_boxstyle_inset_unchanged_after_window_pos_update() {
             Window::default(),
             WindowPos {
                 position: Some(Point { x: 100, y: 200 }),
-                size: Some(SizeI { width: 800, height: 600 }),
+                size: Some(SizeI {
+                    width: 800,
+                    height: 600,
+                }),
                 ..Default::default()
             },
             DPI::default(),
@@ -66,7 +69,10 @@ fn test_boxstyle_inset_unaffected_by_window_position_change() {
             Window::default(),
             WindowPos {
                 position: Some(Point { x: 100, y: 200 }),
-                size: Some(SizeI { width: 800, height: 600 }),
+                size: Some(SizeI {
+                    width: 800,
+                    height: 600,
+                }),
                 ..Default::default()
             },
             DPI::default(),

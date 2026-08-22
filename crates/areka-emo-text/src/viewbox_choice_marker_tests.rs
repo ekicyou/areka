@@ -1,3 +1,4 @@
+use super::test_support::{phys, window};
 use super::{PhysicalRect, ScrollPlanner, line_fingerprint};
 use crate::canvas::{
     ChoiceLineContent, ChoiceRowSegment, ContentCanvas, GlyphRunContent, RegionTransform, Resident,
@@ -6,7 +7,6 @@ use crate::canvas::{
 use crate::layout::PositionedGlyph;
 use crate::region::ScaleContract;
 use crate::writing::WritingMode;
-use super::test_support::{phys, window};
 
 // ── 6.1 R4.4: 行指紋の hover 印（choice_marker）——hover 切替は当該行の指紋だけを変える ──
 
@@ -82,8 +82,14 @@ fn choice_marker_hover_switch_dirties_only_two_changed_lines() {
 
     // 変化したのは選択肢 2 行（index 1,2）のみ・他行は不変。
     assert_eq!(fp_before[0], fp_after[0], "非 Choice 見出し行は不変");
-    assert_ne!(fp_before[1], fp_after[1], "hover が外れた選択肢行は指紋差分");
-    assert_ne!(fp_before[2], fp_after[2], "hover が乗った選択肢行は指紋差分");
+    assert_ne!(
+        fp_before[1], fp_after[1],
+        "hover が外れた選択肢行は指紋差分"
+    );
+    assert_ne!(
+        fp_before[2], fp_after[2],
+        "hover が乗った選択肢行は指紋差分"
+    );
     assert_eq!(fp_before[3], fp_after[3], "非 Choice 脚注行は不変");
 
     // 非 Choice 行の choice_marker は常に 0・Choice 行は hovered.map_or(0, |o| o+1)。
@@ -212,7 +218,11 @@ fn choice_marker_hover_switch_derive_dirty_matches_only_the_two_switched_lines()
     ];
     let (changed, dirty, draw) = derive_dirty_for_hover(before, after);
     // 変化したのは選択肢 2 行（旧 hover 行 index 1・新 hover 行 index 2）。
-    assert_eq!(changed, vec![1, 2], "変化した choice_marker 行は index 1,2 の 2 行");
+    assert_eq!(
+        changed,
+        vec![1, 2],
+        "変化した choice_marker 行は index 1,2 の 2 行"
+    );
     assert_eq!(dirty.len(), changed.len(), "dirty 行数 == 変化行数（2）");
     // 旧行（{0,13}）・新行（{0,26}）の 2 矩形のみ・全域ダーティでない。
     assert_eq!(

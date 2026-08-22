@@ -1,9 +1,9 @@
 use areka_sakura::contract::{ActorKey, CueCommand};
 
+use super::test_support::{choice_cue, com_world, cue, cursor_model, geo_model, opaque_count};
 use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame};
 use crate::choice::ResolvedChoiceStyle;
 use crate::state::TextLayerConfig;
-use super::test_support::{choice_cue, com_world, cue, cursor_model, geo_model, opaque_count};
 
 /// Observable（3.5/4.1）: 現存しない ordinal で `inject_choice_hover` を呼んでもパニックせず、
 /// `choice_active` は選択肢スパンの実状態を反映し続ける（選択肢あり＝true）。
@@ -12,7 +12,10 @@ fn inject_choice_hover_nonexistent_ordinal_does_not_panic_and_choice_active_hold
     let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
     let actor = ActorKey::from("0");
     rt.apply_cue(&choice_cue("0", 0.0, "OnYes", "はい", &["r0"]));
-    assert!(rt.choice_active(&actor), "選択肢スパンありで choice_active=true");
+    assert!(
+        rt.choice_active(&actor),
+        "選択肢スパンありで choice_active=true"
+    );
 
     // 現存スパン（ordinal 0）に無い ordinal 999 を注入——panic せず縮退（debug ログ）。
     rt.inject_choice_hover(&actor, Some(999));
@@ -272,7 +275,11 @@ fn present_with_hover_adds_highlight_pixels_over_non_hover_frame() {
     };
     let plain = read(&rt);
     assert!(plain > 0, "選択肢テキストが描画される");
-    assert_eq!(rt.choice_hit_rows(&actor).len(), 2, "hover 前もヒット行は 2");
+    assert_eq!(
+        rt.choice_hit_rows(&actor).len(),
+        2,
+        "hover 前もヒット行は 2"
+    );
 
     // ordinal 0 を hover 注入→再提示（choice_marker 変化で per-line 増分ダーティ＝Update）。
     rt.inject_choice_hover(&actor, Some(0));
@@ -283,7 +290,11 @@ fn present_with_hover_adds_highlight_pixels_over_non_hover_frame() {
         "hover が decorate→render へ配線され、ハイライト塗りで非透明ピクセルが増える: {plain} -> {hovered}"
     );
     // ヒット行照会は hover 非依存（count 不変）。
-    assert_eq!(rt.choice_hit_rows(&actor).len(), 2, "hover 後もヒット行は 2");
+    assert_eq!(
+        rt.choice_hit_rows(&actor).len(),
+        2,
+        "hover 後もヒット行は 2"
+    );
 }
 
 // task 9.2: hover 画素檻＋ダーティ限定檻（COM・headless・R4.4/7.2/7.4）
@@ -372,7 +383,11 @@ fn hover_toggle_paints_fill_and_stays_dirty_limited_readback_pixel_cage() {
     present_frame(&mut rt, &mut world, 10.0).expect("ベースライン提示");
     let rows: Vec<super::ChoiceHitRow> = rt.choice_hit_rows(&actor).to_vec();
     assert_eq!(rows.len(), 3, "3 選択肢＝3 行（ダーティ限定を測る台）");
-    let base_bytes = rt.surface(&actor).expect("供給面").read_back().expect("read_back");
+    let base_bytes = rt
+        .surface(&actor)
+        .expect("供給面")
+        .read_back()
+        .expect("read_back");
     assert_eq!(
         fill_total(&base_bytes),
         0,
@@ -395,7 +410,11 @@ fn hover_toggle_paints_fill_and_stays_dirty_limited_readback_pixel_cage() {
         "全域再描画（全 {} 行）ではない: 増分 {hover_delta}",
         rows.len()
     );
-    let hover_bytes = rt.surface(&actor).expect("供給面").read_back().expect("read_back");
+    let hover_bytes = rt
+        .surface(&actor)
+        .expect("供給面")
+        .read_back()
+        .expect("read_back");
     // 7.2: ordinal-0 セグメント矩形へ塗り色＋白文字画素が出現する。
     assert!(
         fill_in_rect(&hover_bytes, &rows[0]) > 0,
@@ -421,8 +440,15 @@ fn hover_toggle_paints_fill_and_stays_dirty_limited_readback_pixel_cage() {
         hover_calls,
         "hover 状態不変の再提示は再描画しない（DrawTextLayout 不変）"
     );
-    let hover_bytes2 = rt.surface(&actor).expect("供給面").read_back().expect("read_back");
-    assert_eq!(hover_bytes, hover_bytes2, "決定論（hover 状態・バイト同一）");
+    let hover_bytes2 = rt
+        .surface(&actor)
+        .expect("供給面")
+        .read_back()
+        .expect("read_back");
+    assert_eq!(
+        hover_bytes, hover_bytes2,
+        "決定論（hover 状態・バイト同一）"
+    );
     let steady_calls = calls(&rt);
 
     // ── hover off: inject None → present → readback ──
@@ -439,7 +465,11 @@ fn hover_toggle_paints_fill_and_stays_dirty_limited_readback_pixel_cage() {
         off_delta < rows.len() as u64,
         "hover off も全域再描画ではない: 増分 {off_delta}"
     );
-    let off_bytes = rt.surface(&actor).expect("供給面").read_back().expect("read_back");
+    let off_bytes = rt
+        .surface(&actor)
+        .expect("供給面")
+        .read_back()
+        .expect("read_back");
     // 7.2: 塗り色画素が面全域から消滅する（素描画へ戻る）。
     assert_eq!(
         fill_total(&off_bytes),
@@ -449,8 +479,15 @@ fn hover_toggle_paints_fill_and_stays_dirty_limited_readback_pixel_cage() {
 
     // 決定論（hover off 状態の NoChange 再提示）: バイト同一。
     present_frame(&mut rt, &mut world, 10.0).expect("off NoChange 再提示");
-    let off_bytes2 = rt.surface(&actor).expect("供給面").read_back().expect("read_back");
-    assert_eq!(off_bytes, off_bytes2, "決定論（hover off 状態・バイト同一）");
+    let off_bytes2 = rt
+        .surface(&actor)
+        .expect("供給面")
+        .read_back()
+        .expect("read_back");
+    assert_eq!(
+        off_bytes, off_bytes2,
+        "決定論（hover off 状態・バイト同一）"
+    );
 }
 
 // task 9.3: 矩形反転縮退の pixel 檻（COM・headless・R4.3/6.1/7.2）。
@@ -571,7 +608,11 @@ fn invert_hover_paints_default_font_color_fill_and_inverted_text_readback_pixel_
     present_frame(&mut rt, &mut world, 10.0).expect("ベースライン提示");
     let rows: Vec<super::ChoiceHitRow> = rt.choice_hit_rows(&actor).to_vec();
     assert_eq!(rows.len(), 3, "3 選択肢＝3 行（hover 行限定を測る台）");
-    let base = rt.surface(&actor).expect("供給面").read_back().expect("read_back");
+    let base = rt
+        .surface(&actor)
+        .expect("供給面")
+        .read_back()
+        .expect("read_back");
     let r0_int = interior(&rows[0]);
     let r0_area = area(r0_int);
     assert!(r0_area > 0, "行 0 の interior 領域は非空");
@@ -605,7 +646,11 @@ fn invert_hover_paints_default_font_color_fill_and_inverted_text_readback_pixel_
         "全域再描画（全 {} 行）ではない: 増分 {hover_delta}",
         rows.len()
     );
-    let hov = rt.surface(&actor).expect("供給面").read_back().expect("read_back");
+    let hov = rt
+        .surface(&actor)
+        .expect("供給面")
+        .read_back()
+        .expect("read_back");
     // 7.2/4.3【背景塗り】: hover 行のセグメント矩形は既定文字色（黒）塗りで interior 全域が不透明化する。
     assert_eq!(
         opaque_in(&hov, r0_int),
@@ -648,7 +693,11 @@ fn invert_hover_paints_default_font_color_fill_and_inverted_text_readback_pixel_
         hover_calls,
         "hover 状態不変の再提示は再描画しない（DrawTextLayout 不変）"
     );
-    let hov2 = rt.surface(&actor).expect("供給面").read_back().expect("read_back");
+    let hov2 = rt
+        .surface(&actor)
+        .expect("供給面")
+        .read_back()
+        .expect("read_back");
     assert_eq!(hov, hov2, "決定論（hover 状態・バイト同一）");
     let steady_calls = calls(&rt);
 
@@ -661,7 +710,11 @@ fn invert_hover_paints_default_font_color_fill_and_inverted_text_readback_pixel_
         off_delta, 1,
         "hover off もダーティ限定＝当該行 1 枚のみ再描画（増分 1）: {off_delta}"
     );
-    let off = rt.surface(&actor).expect("供給面").read_back().expect("read_back");
+    let off = rt
+        .surface(&actor)
+        .expect("供給面")
+        .read_back()
+        .expect("read_back");
     // 7.2/4.3: 反転縮退の塗りが消える（素描画へ戻る）。interior は未充填へ・反転文字（白）消滅。
     assert!(
         opaque_in(&off, r0_int) < r0_area,
@@ -676,6 +729,10 @@ fn invert_hover_paints_default_font_color_fill_and_inverted_text_readback_pixel_
 
     // 決定論（hover off 状態の NoChange 再提示）: バイト同一。
     present_frame(&mut rt, &mut world, 10.0).expect("off NoChange 再提示");
-    let off2 = rt.surface(&actor).expect("供給面").read_back().expect("read_back");
+    let off2 = rt
+        .surface(&actor)
+        .expect("供給面")
+        .read_back()
+        .expect("read_back");
     assert_eq!(off, off2, "決定論（hover off 状態・バイト同一）");
 }

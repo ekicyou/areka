@@ -151,7 +151,11 @@ mod tests {
     #[test]
     fn generic_prop_names_no_duplicates() {
         let set: BTreeSet<&str> = GENERIC_PROP_NAMES.iter().copied().collect();
-        assert_eq!(GENERIC_PROP_NAMES.len(), set.len(), "GENERIC_PROP_NAMES に重複あり");
+        assert_eq!(
+            GENERIC_PROP_NAMES.len(),
+            set.len(),
+            "GENERIC_PROP_NAMES に重複あり"
+        );
     }
 
     /// 汎用名 17 種が過不足なく一致（brief.md Scope 節を逐語転記した集合）。
@@ -191,7 +195,11 @@ mod tests {
     #[test]
     fn set_effective_no_duplicate_keys() {
         let set: BTreeSet<&str> = SET_EFFECTIVE.iter().map(|(k, _)| *k).collect();
-        assert_eq!(SET_EFFECTIVE.len(), set.len(), "SET_EFFECTIVE に key 重複あり");
+        assert_eq!(
+            SET_EFFECTIVE.len(),
+            set.len(),
+            "SET_EFFECTIVE に key 重複あり"
+        );
     }
 
     /// SET 有効群「全項目の網羅」檻: task 2.3 が名指しする全群メンバーが登録済み（R3.4）。
@@ -244,7 +252,10 @@ mod tests {
             );
         }
         // 代表的な運行コマンド書込の意味論写像を確認（surface.num SET＝\s[] 等価）。
-        let surface = SET_EFFECTIVE.iter().find(|(k, _)| *k == "surface.num").unwrap();
+        let surface = SET_EFFECTIVE
+            .iter()
+            .find(|(k, _)| *k == "surface.num")
+            .unwrap();
         assert_eq!(surface.1, SetSemantics::RuntimeCommand);
     }
 
@@ -252,12 +263,20 @@ mod tests {
     #[test]
     fn menu_group_consistent_with_generic_names() {
         let set_keys: BTreeSet<&str> = SET_EFFECTIVE.iter().map(|(k, _)| *k).collect();
-        for menu_name in ["menu", "sakura.bind.menu", "kero.bind.menu", "char*.bind.menu"] {
+        for menu_name in [
+            "menu",
+            "sakura.bind.menu",
+            "kero.bind.menu",
+            "char*.bind.menu",
+        ] {
             assert!(
                 GENERIC_PROP_NAMES.contains(&menu_name),
                 "{menu_name} が GENERIC_PROP_NAMES に不在"
             );
-            assert!(set_keys.contains(menu_name), "{menu_name} が SET_EFFECTIVE に不在");
+            assert!(
+                set_keys.contains(menu_name),
+                "{menu_name} が SET_EFFECTIVE に不在"
+            );
         }
     }
 

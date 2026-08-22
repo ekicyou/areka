@@ -172,9 +172,17 @@ fn compose_returns_ok_composed_surface_for_valid_input() {
     assert_eq!(out.bytes().len() as u32, out.stride() * out.height());
 
     // 実合成の確認: bind part（赤）は (0,0) の 200×10 を覆う → (0,0) は赤（bind が base の上）。
-    assert_eq!(px(&out, 0, 0), [0, 0, 200, 255], "上層 bind part（赤）が (0,0) を覆う");
+    assert_eq!(
+        px(&out, 0, 0),
+        [0, 0, 200, 255],
+        "上層 bind part（赤）が (0,0) を覆う"
+    );
     // base（青）だけの領域 (0,20)（part の 10px 高さの外・base の 30px 高さ内）→ 青。
-    assert_eq!(px(&out, 0, 20), [200, 0, 0, 255], "part 非被覆域は base（青）");
+    assert_eq!(
+        px(&out, 0, 20),
+        [200, 0, 0, 255],
+        "part 非被覆域は base（青）"
+    );
 }
 
 // ── テスト2（要件 9.4）: Composer は合成結果を保持しない（構造的＋挙動的） ──
@@ -200,18 +208,36 @@ fn composer_holds_no_result_no_stale_cache() {
     let binds = BindSet::default();
     let mut composer = Composer::new();
 
-    let out_a = composer.compose(&world, &atlas, 100, &binds, &PatternState::default()).expect("A Ok");
+    let out_a = composer
+        .compose(&world, &atlas, 100, &binds, &PatternState::default())
+        .expect("A Ok");
     assert_eq!(out_a.width(), 10);
     assert_eq!(px(&out_a, 0, 0), [200, 0, 0, 255], "A は青");
 
     // 直後に B を compose → B（緑 20×20）を反映（A の残像・寸法を持ち越さない）。
-    let out_b = composer.compose(&world, &atlas, 200, &binds, &PatternState::default()).expect("B Ok");
-    assert_eq!(out_b.width(), 20, "B の外形（20）を反映＝A の 10 を持ち越さない");
-    assert_eq!(px(&out_b, 0, 0), [0, 200, 0, 255], "B は緑（stale な A の青でない）");
+    let out_b = composer
+        .compose(&world, &atlas, 200, &binds, &PatternState::default())
+        .expect("B Ok");
+    assert_eq!(
+        out_b.width(),
+        20,
+        "B の外形（20）を反映＝A の 10 を持ち越さない"
+    );
+    assert_eq!(
+        px(&out_b, 0, 0),
+        [0, 200, 0, 255],
+        "B は緑（stale な A の青でない）"
+    );
 
     // 再度 A → 依然 A（Composer は前回 B を保持しない）。
-    let out_a2 = composer.compose(&world, &atlas, 100, &binds, &PatternState::default()).expect("A2 Ok");
-    assert_eq!(out_a2.bytes(), out_a.bytes(), "A の再合成は初回 A とバイト等価（キャッシュ非依存）");
+    let out_a2 = composer
+        .compose(&world, &atlas, 100, &binds, &PatternState::default())
+        .expect("A2 Ok");
+    assert_eq!(
+        out_a2.bytes(),
+        out_a.bytes(),
+        "A の再合成は初回 A とバイト等価（キャッシュ非依存）"
+    );
 }
 
 // ── テスト3（要件 10.3・10.1）: compose_into は buffer を再利用し、繰り返しで再割り当てしない ──
@@ -230,7 +256,14 @@ fn compose_into_reuses_buffer_across_calls() {
     let mut out = ComposedSurface::new(0, 0);
 
     composer
-        .compose_into(&mut out, &world, &atlas, 5000, &binds, &PatternState::default())
+        .compose_into(
+            &mut out,
+            &world,
+            &atlas,
+            5000,
+            &binds,
+            &PatternState::default(),
+        )
         .expect("1 回目 Ok");
     let len1 = out.bytes().len();
     let ptr1 = out.bytes().as_ptr();
@@ -238,15 +271,29 @@ fn compose_into_reuses_buffer_across_calls() {
     let ops_cap1 = composer.ops.capacity();
 
     composer
-        .compose_into(&mut out, &world, &atlas, 5000, &binds, &PatternState::default())
+        .compose_into(
+            &mut out,
+            &world,
+            &atlas,
+            5000,
+            &binds,
+            &PatternState::default(),
+        )
         .expect("2 回目 Ok");
     let len2 = out.bytes().len();
     let ptr2 = out.bytes().as_ptr();
     let ops_cap2 = composer.ops.capacity();
 
     assert_eq!(len1, len2, "同一外形でバッファ長不変（要件 10.3）");
-    assert_eq!(ptr1, ptr2, "容量再利用ゆえ先頭ポインタ不変＝再割り当てなし（要件 10.3）");
-    assert_eq!(bytes1, out.bytes(), "同一入力→バイト等価（決定性・要件 10.1）");
+    assert_eq!(
+        ptr1, ptr2,
+        "容量再利用ゆえ先頭ポインタ不変＝再割り当てなし（要件 10.3）"
+    );
+    assert_eq!(
+        bytes1,
+        out.bytes(),
+        "同一入力→バイト等価（決定性・要件 10.1）"
+    );
     assert_eq!(
         ops_cap1, ops_cap2,
         "Composer 内部 ops スクラッチ容量も安定（定常状態ゼロアロケーション・要件 10.3）"
@@ -297,7 +344,14 @@ fn compose_into_a_prepainted_buffer_is_byte_equal_to_a_fresh_one() {
     // 対照（まっさらな出力先）。
     let mut fresh = ComposedSurface::new(0, 0);
     composer
-        .compose_into(&mut fresh, &world, &atlas, 1000, &binds, &PatternState::default())
+        .compose_into(
+            &mut fresh,
+            &world,
+            &atlas,
+            1000,
+            &binds,
+            &PatternState::default(),
+        )
         .expect("まっさらな出力先への compose_into は Ok");
     let (w, h) = (fresh.width(), fresh.height());
     let want = fresh.bytes().to_vec();
@@ -316,7 +370,14 @@ fn compose_into_a_prepainted_buffer_is_byte_equal_to_a_fresh_one() {
     let mut reused = ComposedSurface::new(w, h);
     reused.bytes_mut().fill(0xAA);
     composer
-        .compose_into(&mut reused, &world, &atlas, 1000, &binds, &PatternState::default())
+        .compose_into(
+            &mut reused,
+            &world,
+            &atlas,
+            1000,
+            &binds,
+            &PatternState::default(),
+        )
         .expect("使い回した出力先への compose_into は Ok");
     assert_eq!(
         (reused.width(), reused.height()),
@@ -336,7 +397,10 @@ fn compose_into_a_prepainted_buffer_is_byte_equal_to_a_fresh_one() {
 #[test]
 fn absent_surface_propagates_surface_not_found() {
     let world = EmoWorld::build(&shell_of(Vec::new()));
-    let atlas = bake_atlas_spec(Path::new("shell/master"), &[("dummy.png", (2, 2), Some((1, 2, 3)))]);
+    let atlas = bake_atlas_spec(
+        Path::new("shell/master"),
+        &[("dummy.png", (2, 2), Some((1, 2, 3)))],
+    );
 
     let binds = BindSet::default();
     let mut composer = Composer::new();
@@ -352,7 +416,10 @@ fn absent_surface_propagates_surface_not_found() {
 #[test]
 fn no_layers_degenerate_propagates_empty_composition() {
     let surf = surface(7000, Vec::new()); // element ゼロ・animation ゼロ。
-    let atlas = bake_atlas_spec(Path::new("shell/master"), &[("dummy.png", (2, 2), Some((1, 2, 3)))]);
+    let atlas = bake_atlas_spec(
+        Path::new("shell/master"),
+        &[("dummy.png", (2, 2), Some((1, 2, 3)))],
+    );
     let world = build_bound(shell_of(vec![surf]), &atlas);
 
     let binds = BindSet::default();
@@ -376,7 +443,10 @@ fn all_transparent_surface_is_ok_transparent_nonzero_extent() {
             ("ghost2.png", (20, 20), None),
         ],
     );
-    let surf = surface(3000, vec![elem(0, "ghost1.png", 0, 0), elem(1, "ghost2.png", 0, 0)]);
+    let surf = surface(
+        3000,
+        vec![elem(0, "ghost1.png", 0, 0), elem(1, "ghost2.png", 0, 0)],
+    );
     let world = build_bound(shell_of(vec![surf]), &atlas);
 
     let binds = BindSet::default();
@@ -389,7 +459,10 @@ fn all_transparent_surface_is_ok_transparent_nonzero_extent() {
     assert_eq!(out.width(), 300);
     assert_eq!(out.height(), 300);
     // 描画可能命令ゼロゆえ全画素透明（残像なし）。
-    assert!(out.bytes().iter().all(|&b| b == 0), "全透明 surface → 全透明バッファ（要件 6.6）");
+    assert!(
+        out.bytes().iter().all(|&b| b == 0),
+        "全透明 surface → 全透明バッファ（要件 6.6）"
+    );
 }
 
 // ── テスト5（等価性）: compose == compose_into into a fresh buffer ──
@@ -416,16 +489,29 @@ fn compose_equals_compose_into_fresh_buffer() {
     let binds = BindSet::from_ids([1]);
     let mut composer = Composer::new();
 
-    let via_compose = composer.compose(&world, &atlas, 1000, &binds, &PatternState::default()).expect("compose Ok");
+    let via_compose = composer
+        .compose(&world, &atlas, 1000, &binds, &PatternState::default())
+        .expect("compose Ok");
 
     let mut fresh = ComposedSurface::new(0, 0);
     composer
-        .compose_into(&mut fresh, &world, &atlas, 1000, &binds, &PatternState::default())
+        .compose_into(
+            &mut fresh,
+            &world,
+            &atlas,
+            1000,
+            &binds,
+            &PatternState::default(),
+        )
         .expect("compose_into Ok");
 
     assert_eq!(via_compose.width(), fresh.width());
     assert_eq!(via_compose.height(), fresh.height());
-    assert_eq!(via_compose.bytes(), fresh.bytes(), "compose と compose_into は等価");
+    assert_eq!(
+        via_compose.bytes(),
+        fresh.bytes(),
+        "compose と compose_into は等価"
+    );
 }
 
 // ── テスト6（要件 10.1）: 決定性 — 同一入力の 2 回合成はバイト等価 ──
@@ -453,11 +539,19 @@ fn compose_is_deterministic() {
     let binds = BindSet::from_ids([1, 2]);
     let mut c1 = Composer::new();
     let mut c2 = Composer::new();
-    let a = c1.compose(&world, &atlas, 1000, &binds, &PatternState::default()).expect("Ok");
-    let b = c2.compose(&world, &atlas, 1000, &binds, &PatternState::default()).expect("Ok");
+    let a = c1
+        .compose(&world, &atlas, 1000, &binds, &PatternState::default())
+        .expect("Ok");
+    let b = c2
+        .compose(&world, &atlas, 1000, &binds, &PatternState::default())
+        .expect("Ok");
     assert_eq!(a.width(), b.width());
     assert_eq!(a.height(), b.height());
-    assert_eq!(a.bytes(), b.bytes(), "同一入力→バイト等価（決定性・要件 10.1）");
+    assert_eq!(
+        a.bytes(),
+        b.bytes(),
+        "同一入力→バイト等価（決定性・要件 10.1）"
+    );
 }
 
 // ── テスト7（要件 4.3・hot path resolve-free）: multi-layer 実データの end-to-end 結線 ──
@@ -499,12 +593,18 @@ fn end_to_end_multilayer_ascend_wiring() {
 
     let binds = BindSet::from_ids([1, 2, 3]);
     let mut composer = Composer::new();
-    let out = composer.compose(&world, &atlas, 1000, &binds, &PatternState::default()).expect("Ok");
+    let out = composer
+        .compose(&world, &atlas, 1000, &binds, &PatternState::default())
+        .expect("Ok");
 
     assert_eq!(out.width(), 4);
     assert_eq!(out.height(), 4);
     // ascend → ID 降順描画: p3(3) 下 → p2(2) → p1(1) 上。全不透明ゆえ最上層 p1（B=11）が見える。
-    assert_eq!(px(&out, 0, 0), [11, 0, 0, 255], "ascend＝ID降順描画で最上層 p1 が見える（結線実証）");
+    assert_eq!(
+        px(&out, 0, 0),
+        [11, 0, 0, 255],
+        "ascend＝ID降順描画で最上層 p1 が見える（結線実証）"
+    );
 }
 
 /// hot path（compose/compose_into 経路）のソースに `atlas.resolve(` が現れないことを静的に確認する。
@@ -644,7 +744,13 @@ fn empty_pattern_golden_is_non_vacuous() {
     let world = build_bound(shell_of(vec![host, part]), &atlas);
 
     let out = Composer::new()
-        .compose(&world, &atlas, 1000, &BindSet::from_ids([1]), &PatternState::default())
+        .compose(
+            &world,
+            &atlas,
+            1000,
+            &BindSet::from_ids([1]),
+            &PatternState::default(),
+        )
         .expect("Ok");
 
     // 赤 part を (0,0) 起点に誤配置した期待（実合成は (1,1) 起点ゆえ不一致になるべき）。
@@ -718,7 +824,11 @@ fn transient_frame_replaces_same_id_pattern0_and_preserves_painter_order() {
         .expect("transient コマ込みの合成は Ok（要件 5.3）");
 
     // 外形 4×4（compute_extent は全 bind pattern0＝1100(4×4)∪1200(2×2) の和集合・コマ 1300 は外形不寄与）。
-    assert_eq!((out.width(), out.height()), (4, 4), "外形は bind pattern0 母集合どおり 4×4");
+    assert_eq!(
+        (out.width(), out.height()),
+        (4, 4),
+        "外形は bind pattern0 母集合どおり 4×4"
+    );
 
     // (a) コマが pattern0 を置換: id=1 の層は 1100(青) でなく 1300(赤)。緑(2×2)の外側 (2,2) は赤。
     assert_eq!(
@@ -765,7 +875,13 @@ fn transient_merge_is_pattern_driven_not_static() {
 
     // 空 PatternState → id=1 は青 pattern0(1100) のまま。緑外側 (2,2) は青（赤ではない）。
     let out = Composer::new()
-        .compose(&world, &atlas, 1000, &BindSet::from_ids([1, 2]), &PatternState::default())
+        .compose(
+            &world,
+            &atlas,
+            1000,
+            &BindSet::from_ids([1, 2]),
+            &PatternState::default(),
+        )
         .expect("Ok");
     assert_eq!(
         px(&out, 2, 2),

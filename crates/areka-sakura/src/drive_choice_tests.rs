@@ -1,9 +1,9 @@
+use super::test_support::*;
 use super::*;
 use crate::contract::{CueCommand, TalkCue, TalkId};
 use crate::duration::text_playback_duration;
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::time::Duration;
-use super::test_support::*;
 
 // ── task 5.2: ResolveChoice ハンドラ＋即時 settle の統合檻（R2.3/2.4/9.8） ──
 //
@@ -18,10 +18,7 @@ const MENU_SCRIPT: &str = r"\s[10]hello\w[2]\q[選択A,targetA]\e";
 /// Choice の着弾（＝barrier 到達）を決定的に観測するため、記録 sink に加えチャンネル sink を挟む
 /// ヘルパ。Tick(0.5) を送り、Choice(id=targetA) cue の着弾を待って返す（この時点で player は
 /// `WaitingForChoice`・後続 ResolveChoice は inbox FIFO でこの後に処理される）。
-fn drive_menu_to_barrier(
-    handle: &TalkHandle,
-    rx: &mpsc::Receiver<TalkCue>,
-) {
+fn drive_menu_to_barrier(handle: &TalkHandle, rx: &mpsc::Receiver<TalkCue>) {
     // 初回 Tick(0.0) 刻印: ClearAll/Emote/hello を配送（barrier 未到達）。
     handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
     // Tick(0.5): Wait@0.25・Choice@0.35 を配送し barrier@0.35 到達 → WaitingForChoice。
@@ -73,8 +70,7 @@ fn menu_barrier_withholds_talkdone_while_choice_unresolved() {
 
     // 片付け: Close で中断 ACK を取り body を畳む（テスト resource の後始末）。
     handle.inbox.send(SakuraMsg::Close).unwrap();
-    let done = recv_done(&done_rx, Duration::from_secs(5))
-        .expect("Close で中断 ACK");
+    let done = recv_done(&done_rx, Duration::from_secs(5)).expect("Close で中断 ACK");
     assert_eq!(done.reason, TalkEndReason::Interrupted);
     handle.actor.join().expect("body は正常終了する");
 }
@@ -110,8 +106,9 @@ fn resolve_choice_resumes_barrier_stopped_talk_and_settles_immediately() {
         .unwrap();
 
     // 追加 Tick なしで自然終端へ到達する（barrier 解決で offset(0.5) ≥ horizon(0.35) ＝即完了）。
-    let done = recv_done(&done_rx, Duration::from_secs(5))
-        .expect("ResolveChoice で talk が再開し、追加 Tick なしで TalkDone に到達すべき（R2.4/9.8）");
+    let done = recv_done(&done_rx, Duration::from_secs(5)).expect(
+        "ResolveChoice で talk が再開し、追加 Tick なしで TalkDone に到達すべき（R2.4/9.8）",
+    );
     assert_eq!(done.talk_id, talk_id, "talk_id エコー");
     assert_eq!(
         done.reason,

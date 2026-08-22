@@ -1,11 +1,11 @@
 //! task 8.1（要件 11.1・11.4）: emo2 surface0 の単層 base surface 合成が、`MemoryDecoder` へ
 //! 挿入した既知画像とバイト等価であることを固定する golden テーマ。
 
+use super::test_support::{on_params, parse_emo2_shell, shell_master_dir};
 use super::{
     AtlasTable, BindSet, ComposedSurface, Composer, EmoWorld, MemoryDecoder, PackConfig, Path,
     PatternState, SetId, Shell, SurfaceSet, bake,
 };
-use super::test_support::{on_params, parse_emo2_shell, shell_master_dir};
 
 /// 決定的な既知画像を tightly-packed premultiplied BGRA で生成する。
 ///
@@ -87,7 +87,11 @@ fn surface0_element0_single_layer_equals_inserted_image() {
         "surface0.png",
         "element0 の相対パスは surface0.png"
     );
-    assert_eq!((s0.elements[0].x, s0.elements[0].y), (0, 0), "element0 は原点配置");
+    assert_eq!(
+        (s0.elements[0].x, s0.elements[0].y),
+        (0, 0),
+        "element0 は原点配置"
+    );
     assert!(
         s0.animations.is_empty(),
         "surface0 は bind/animation を持たない（純 base surface）"
@@ -103,7 +107,13 @@ fn surface0_element0_single_layer_equals_inserted_image() {
     // 空 BindSet で surface0 を合成（着せ替え bind を一切適用しない単層経路）。
     let mut composer = Composer::new();
     let out: ComposedSurface = composer
-        .compose(&world, &atlas, 0, &BindSet::default(), &PatternState::default())
+        .compose(
+            &world,
+            &atlas,
+            0,
+            &BindSet::default(),
+            &PatternState::default(),
+        )
         .expect("surface0 の単層合成は Ok（要件 11.1）");
 
     // 外形一致: キャンバス外形 == 挿入画像外形（trim 恒等・原点配置ゆえ）。
@@ -138,14 +148,31 @@ fn surface0_golden_is_non_vacuous() {
     let mut world_ok = EmoWorld::build(&shell);
     world_ok.bind_atlas(&atlas_ok, SetId(0));
     let out_ok = Composer::new()
-        .compose(&world_ok, &atlas_ok, 0, &BindSet::default(), &PatternState::default())
+        .compose(
+            &world_ok,
+            &atlas_ok,
+            0,
+            &BindSet::default(),
+            &PatternState::default(),
+        )
         .expect("Ok");
-    assert_eq!(out_ok.bytes(), correct.as_slice(), "正しい挿入画像とはバイト等価");
+    assert_eq!(
+        out_ok.bytes(),
+        correct.as_slice(),
+        "正しい挿入画像とはバイト等価"
+    );
 
     // 異なる画像（別サイズ・別パターン）を挿入した場合の合成。
     let mut dec = MemoryDecoder::new();
     let (w2, h2, stride2, bgra2, has_alpha2) = distinctive_opaque(20, 24);
-    dec.insert(base.join("surface0.png"), w2, h2, stride2, bgra2, has_alpha2);
+    dec.insert(
+        base.join("surface0.png"),
+        w2,
+        h2,
+        stride2,
+        bgra2,
+        has_alpha2,
+    );
     let set = SurfaceSet {
         surfaces: &shell.surfaces,
         base_dir: &base,
@@ -155,7 +182,13 @@ fn surface0_golden_is_non_vacuous() {
     let mut world_other = EmoWorld::build(&shell);
     world_other.bind_atlas(&atlas_other, SetId(0));
     let out_other = Composer::new()
-        .compose(&world_other, &atlas_other, 0, &BindSet::default(), &PatternState::default())
+        .compose(
+            &world_other,
+            &atlas_other,
+            0,
+            &BindSet::default(),
+            &PatternState::default(),
+        )
         .expect("Ok");
 
     // 異なる挿入画像 → 合成結果は「正しい期待画像」と一致しない（byte-equality が識別する）。

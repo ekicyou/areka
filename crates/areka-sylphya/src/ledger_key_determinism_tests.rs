@@ -12,7 +12,7 @@
 
 #![cfg(test)]
 
-use crate::key::{parse_dotted, KeyParseError, PropPath, PathSeg, Selector};
+use crate::key::{KeyParseError, PathSeg, PropPath, Selector, parse_dotted};
 use crate::vocab::dotted::{
     DOTTED_ROOTS, EXT_EVENT_GET, EXT_EVENT_SET, GENERIC_PROP_NAMES, SET_EFFECTIVE,
 };
@@ -45,8 +45,14 @@ fn criterion_selector_five_forms_exact_proppath() {
         parse_dotted("activeghostlist(x).index(3)").unwrap(),
         PropPath {
             segs: vec![
-                PathSeg { name: "activeghostlist".into(), selector: Some(Selector::ByName("x".into())) },
-                PathSeg { name: "index".into(), selector: Some(Selector::ByIndex(3)) },
+                PathSeg {
+                    name: "activeghostlist".into(),
+                    selector: Some(Selector::ByName("x".into()))
+                },
+                PathSeg {
+                    name: "index".into(),
+                    selector: Some(Selector::ByIndex(3))
+                },
             ]
         },
         "②.index(ID)"
@@ -57,8 +63,14 @@ fn criterion_selector_five_forms_exact_proppath() {
         parse_dotted("currentghost.current").unwrap(),
         PropPath {
             segs: vec![
-                PathSeg { name: "currentghost".into(), selector: None },
-                PathSeg { name: "current".into(), selector: None },
+                PathSeg {
+                    name: "currentghost".into(),
+                    selector: None
+                },
+                PathSeg {
+                    name: "current".into(),
+                    selector: None
+                },
             ]
         },
         "③.current"
@@ -69,8 +81,14 @@ fn criterion_selector_five_forms_exact_proppath() {
         parse_dotted("ghostlist.count").unwrap(),
         PropPath {
             segs: vec![
-                PathSeg { name: "ghostlist".into(), selector: None },
-                PathSeg { name: "count".into(), selector: None },
+                PathSeg {
+                    name: "ghostlist".into(),
+                    selector: None
+                },
+                PathSeg {
+                    name: "count".into(),
+                    selector: None
+                },
             ]
         },
         "④.count"
@@ -81,10 +99,22 @@ fn criterion_selector_five_forms_exact_proppath() {
         parse_dotted("areka.window.scope(0).x").unwrap(),
         PropPath {
             segs: vec![
-                PathSeg { name: "areka".into(), selector: None },
-                PathSeg { name: "window".into(), selector: None },
-                PathSeg { name: "scope".into(), selector: Some(Selector::ByIndex(0)) },
-                PathSeg { name: "x".into(), selector: None },
+                PathSeg {
+                    name: "areka".into(),
+                    selector: None
+                },
+                PathSeg {
+                    name: "window".into(),
+                    selector: None
+                },
+                PathSeg {
+                    name: "scope".into(),
+                    selector: Some(Selector::ByIndex(0))
+                },
+                PathSeg {
+                    name: "x".into(),
+                    selector: None
+                },
             ]
         },
         "⑤数値括弧"
@@ -102,27 +132,60 @@ fn criterion_malformed_key_parse_errors() {
     // 空入力。
     assert_eq!(parse_dotted(""), Err(KeyParseError::Empty));
     // 空セグメント（連続ドット／先頭／末尾／括弧前空名）。
-    assert_eq!(parse_dotted("a..b"), Err(KeyParseError::EmptySegment { at: 1 }));
-    assert_eq!(parse_dotted(".a"), Err(KeyParseError::EmptySegment { at: 0 }));
-    assert_eq!(parse_dotted("a."), Err(KeyParseError::EmptySegment { at: 1 }));
-    assert_eq!(parse_dotted("(x)"), Err(KeyParseError::EmptySegment { at: 0 }));
+    assert_eq!(
+        parse_dotted("a..b"),
+        Err(KeyParseError::EmptySegment { at: 1 })
+    );
+    assert_eq!(
+        parse_dotted(".a"),
+        Err(KeyParseError::EmptySegment { at: 0 })
+    );
+    assert_eq!(
+        parse_dotted("a."),
+        Err(KeyParseError::EmptySegment { at: 1 })
+    );
+    assert_eq!(
+        parse_dotted("(x)"),
+        Err(KeyParseError::EmptySegment { at: 0 })
+    );
     // 括弧不閉。
-    assert_eq!(parse_dotted("foo(bar"), Err(KeyParseError::UnclosedParen { at: 0 }));
+    assert_eq!(
+        parse_dotted("foo(bar"),
+        Err(KeyParseError::UnclosedParen { at: 0 })
+    );
     // 非数値 index（index(...) は数値必須）＋ 数値括弧オーバーフロー。
-    assert_eq!(parse_dotted("index(abc)"), Err(KeyParseError::BadIndex { at: 0 }));
-    assert_eq!(parse_dotted("scope(99999999999999)"), Err(KeyParseError::BadIndex { at: 0 }));
+    assert_eq!(
+        parse_dotted("index(abc)"),
+        Err(KeyParseError::BadIndex { at: 0 })
+    );
+    assert_eq!(
+        parse_dotted("scope(99999999999999)"),
+        Err(KeyParseError::BadIndex { at: 0 })
+    );
 }
 
 #[test]
 fn criterion_parse_is_deterministic_same_input_same_result() {
     // 成功系: 同一入力 → 同一 Ok。
-    for input in ["areka.window.scope(2).y", "ghostlist(名前)", "system.baseware"] {
-        assert_eq!(parse_dotted(input), parse_dotted(input), "Ok 決定論: {input}");
+    for input in [
+        "areka.window.scope(2).y",
+        "ghostlist(名前)",
+        "system.baseware",
+    ] {
+        assert_eq!(
+            parse_dotted(input),
+            parse_dotted(input),
+            "Ok 決定論: {input}"
+        );
         assert!(parse_dotted(input).is_ok());
     }
     // 失敗系: 同一入力 → 同一 Err（エラー種別・位置とも一致）。
     for input in ["", "a..b", "foo(bar", "index(abc)"] {
-        assert_eq!(parse_dotted(input), parse_dotted(input), "Err 決定論: {input}");
+        assert_eq!(
+            parse_dotted(input),
+            parse_dotted(input),
+            "Err 決定論: {input}"
+        );
         assert!(parse_dotted(input).is_err());
     }
 }
@@ -146,14 +209,27 @@ fn criterion_set_effective_full_group_coverage() {
     use std::collections::BTreeSet;
     // design.md 確定の SET 有効群 全 21 項（基本 3＋mousecursor 10＋seriko.cursor/tooltip 4＋menu 4）。
     let required: [&str; 21] = [
-        "surface.num", "animation.num", "seriko.defaultsurface",
-        "mousecursor", "mousecursor.text", "mousecursor.wait",
-        "mousecursor.hand", "mousecursor.grip", "mousecursor.arrow",
-        "balloon.mousecursor", "balloon.mousecursor.text",
-        "balloon.mousecursor.wait", "balloon.mousecursor.arrow",
-        "seriko.cursor.path", "seriko.cursor.name",
-        "seriko.tooltip.text", "seriko.tooltip.name",
-        "menu", "sakura.bind.menu", "kero.bind.menu", "char*.bind.menu",
+        "surface.num",
+        "animation.num",
+        "seriko.defaultsurface",
+        "mousecursor",
+        "mousecursor.text",
+        "mousecursor.wait",
+        "mousecursor.hand",
+        "mousecursor.grip",
+        "mousecursor.arrow",
+        "balloon.mousecursor",
+        "balloon.mousecursor.text",
+        "balloon.mousecursor.wait",
+        "balloon.mousecursor.arrow",
+        "seriko.cursor.path",
+        "seriko.cursor.name",
+        "seriko.tooltip.text",
+        "seriko.tooltip.name",
+        "menu",
+        "sakura.bind.menu",
+        "kero.bind.menu",
+        "char*.bind.menu",
     ];
     let keys: BTreeSet<&str> = SET_EFFECTIVE.iter().map(|(k, _)| *k).collect();
     let exp: BTreeSet<&str> = required.iter().copied().collect();
@@ -161,7 +237,9 @@ fn criterion_set_effective_full_group_coverage() {
     assert_eq!(keys, exp, "SET 有効群 全項の網羅");
     // 全項 RuntimeCommand（StoreWrite は正準語彙外の自由 key 用ゆえ SET 有効群には現れない）。
     assert!(
-        SET_EFFECTIVE.iter().all(|(_, s)| *s == SetSemantics::RuntimeCommand),
+        SET_EFFECTIVE
+            .iter()
+            .all(|(_, s)| *s == SetSemantics::RuntimeCommand),
         "SET 有効群は全て RuntimeCommand"
     );
 }
@@ -178,11 +256,20 @@ fn criterion_username_is_sole_consumer_default() {
         .filter(|e| e.degrade == DegradePolicy::ConsumerDefault)
         .map(|e| e.token)
         .collect();
-    assert_eq!(consumer_defaults, vec!["username"], "ConsumerDefault は username 唯一");
+    assert_eq!(
+        consumer_defaults,
+        vec!["username"],
+        "ConsumerDefault は username 唯一"
+    );
     // 他は全て PassThroughRaw（NotFound はフラット語彙に出現しない）。
     for e in FLAT_VOCAB {
         if e.token != "username" {
-            assert_eq!(e.degrade, DegradePolicy::PassThroughRaw, "{} は PassThroughRaw", e.token);
+            assert_eq!(
+                e.degrade,
+                DegradePolicy::PassThroughRaw,
+                "{} は PassThroughRaw",
+                e.token
+            );
         }
     }
 }
@@ -196,13 +283,24 @@ fn criterion_username_is_sole_consumer_default() {
 
 #[test]
 fn criterion_star_not_a_resolution_target() {
-    assert_eq!(SYNTAX_RECORDS, &["*", "property[...]"], "構文記録は %* と %property[...]");
+    assert_eq!(
+        SYNTAX_RECORDS,
+        &["*", "property[...]"],
+        "構文記録は %* と %property[...]"
+    );
     // 解決語彙（FLAT_VOCAB）に `*`・`property[...]` は現れない。
     assert!(FLAT_VOCAB.iter().all(|e| e.token != "*"), "%* は解決対象外");
-    assert!(FLAT_VOCAB.iter().all(|e| e.token != "property[...]"), "%property[...] は解決対象外");
+    assert!(
+        FLAT_VOCAB.iter().all(|e| e.token != "property[...]"),
+        "%property[...] は解決対象外"
+    );
     // `\%`（エスケープ記法）はいずれの表にも含まれない。
     assert!(!SYNTAX_RECORDS.contains(&"\\%") && !SYNTAX_RECORDS.contains(&"%"));
-    assert!(FLAT_VOCAB.iter().all(|e| e.token != "\\%" && e.token != "%"));
+    assert!(
+        FLAT_VOCAB
+            .iter()
+            .all(|e| e.token != "\\%" && e.token != "%")
+    );
 }
 
 // ============================================================================
@@ -226,8 +324,14 @@ fn criterion_ext_event_names_reserved_only_not_resolution_vocab() {
             FLAT_VOCAB.iter().all(|e| e.token != reserved),
             "{reserved} はフラット解決語彙に混入しない"
         );
-        assert!(!DOTTED_ROOTS.contains(&reserved), "{reserved} はルート枝でない");
-        assert!(!GENERIC_PROP_NAMES.contains(&reserved), "{reserved} は汎用名でない");
+        assert!(
+            !DOTTED_ROOTS.contains(&reserved),
+            "{reserved} はルート枝でない"
+        );
+        assert!(
+            !GENERIC_PROP_NAMES.contains(&reserved),
+            "{reserved} は汎用名でない"
+        );
     }
 }
 
@@ -248,10 +352,24 @@ fn criterion_backing_layer_five_taxonomy_exists() {
     assert_eq!(all.len(), 5, "backing 実体層は 5 層");
     // フラット台帳が実際にこの層タクソノミーを使用している（型が飾りでない）。
     assert!(
-        FLAT_VOCAB.iter().any(|e| e.layer == BackingLayer::ShioriQuery),
+        FLAT_VOCAB
+            .iter()
+            .any(|e| e.layer == BackingLayer::ShioriQuery),
         "username は ShioriQuery 層"
     );
-    assert!(FLAT_VOCAB.iter().any(|e| e.layer == BackingLayer::StaticConfig));
-    assert!(FLAT_VOCAB.iter().any(|e| e.layer == BackingLayer::SystemEnv));
-    assert!(FLAT_VOCAB.iter().any(|e| e.layer == BackingLayer::RuntimeState));
+    assert!(
+        FLAT_VOCAB
+            .iter()
+            .any(|e| e.layer == BackingLayer::StaticConfig)
+    );
+    assert!(
+        FLAT_VOCAB
+            .iter()
+            .any(|e| e.layer == BackingLayer::SystemEnv)
+    );
+    assert!(
+        FLAT_VOCAB
+            .iter()
+            .any(|e| e.layer == BackingLayer::RuntimeState)
+    );
 }

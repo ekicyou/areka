@@ -137,11 +137,7 @@ impl Drop for CursorMonitorBridge {
 /// カーソル監視ワーカ本体。`GetCursorPos` で最新座標を取得し、前回と異なる時のみ
 /// `latest_pos.store` → `cursor_event.notify(usize::MAX)` の順序で UI を起床する。
 /// `stop` が立つまで固定短周期でループする。
-fn cursor_loop(
-    event: Arc<event_listener::Event>,
-    latest: Arc<AtomicI64>,
-    stop: Arc<AtomicBool>,
-) {
+fn cursor_loop(event: Arc<event_listener::Event>, latest: Arc<AtomicI64>, stop: Arc<AtomicBool>) {
     // 前回座標（差分ガード）。初回は必ず notify するため到達しない番兵で初期化する。
     let mut prev: Option<(i32, i32)> = None;
 
@@ -186,8 +182,18 @@ mod tests {
     /// pack/unpack が負値を含む座標で往復すること（マルチモニタ負座標対応）。
     #[test]
     fn pack_unpack_roundtrip() {
-        for (x, y) in [(0, 0), (100, 200), (-1, -1), (-1920, 1080), (i32::MIN, i32::MAX)] {
-            assert_eq!(unpack(pack(x, y)), (x, y), "pack/unpack roundtrip for ({x},{y})");
+        for (x, y) in [
+            (0, 0),
+            (100, 200),
+            (-1, -1),
+            (-1920, 1080),
+            (i32::MIN, i32::MAX),
+        ] {
+            assert_eq!(
+                unpack(pack(x, y)),
+                (x, y),
+                "pack/unpack roundtrip for ({x},{y})"
+            );
         }
     }
 
@@ -212,7 +218,11 @@ mod tests {
         let raw = bridge.latest_pos.load(Ordering::Acquire);
         let (ex, ey) = unpack(raw);
         let p = bridge.latest_cursor();
-        assert_eq!((p.x, p.y), (ex, ey), "latest_cursor は latest_pos の unpack と一致");
+        assert_eq!(
+            (p.x, p.y),
+            (ex, ey),
+            "latest_cursor は latest_pos の unpack と一致"
+        );
 
         drop(bridge);
     }

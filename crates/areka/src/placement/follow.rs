@@ -125,41 +125,11 @@ use super::dpi_sync::DpiSyncHold;
 // =============================================================================
 
 #[cfg(test)]
-#[path = "follow_test_support.rs"]
-mod test_support;
-#[cfg(test)]
 #[path = "follow_anchor_tests.rs"]
 mod anchor_tests;
 #[cfg(test)]
-#[path = "follow_drag_tests.rs"]
-mod drag_tests;
-#[cfg(test)]
 #[path = "follow_balloon_drag_tests.rs"]
 mod balloon_drag_tests;
-#[cfg(test)]
-#[path = "follow_drag_end_persist_tests.rs"]
-mod drag_end_persist_tests;
-#[cfg(test)]
-#[path = "follow_window_move_tests.rs"]
-mod window_move_tests;
-#[cfg(test)]
-#[path = "follow_resize_tests.rs"]
-mod resize_tests;
-#[cfg(test)]
-#[path = "follow_window_move_diag_tests.rs"]
-mod window_move_diag_tests;
-#[cfg(test)]
-#[path = "follow_work_area_tests.rs"]
-mod work_area_tests;
-#[cfg(test)]
-#[path = "follow_visibility_guard_tests.rs"]
-mod visibility_guard_tests;
-#[cfg(test)]
-#[path = "follow_visibility_char_wiring_tests.rs"]
-mod visibility_char_wiring_tests;
-#[cfg(test)]
-#[path = "follow_visibility_balloon_wiring_tests.rs"]
-mod visibility_balloon_wiring_tests;
 #[cfg(test)]
 #[path = "follow_balloon_limit_tests.rs"]
 mod balloon_limit_wiring_tests;
@@ -167,11 +137,41 @@ mod balloon_limit_wiring_tests;
 #[path = "follow_drag_end_limit_tests.rs"]
 mod drag_end_limit_tests;
 #[cfg(test)]
+#[path = "follow_drag_end_persist_tests.rs"]
+mod drag_end_persist_tests;
+#[cfg(test)]
+#[path = "follow_drag_tests.rs"]
+mod drag_tests;
+#[cfg(test)]
 #[path = "follow_keyword_base_tests.rs"]
 mod keyword_base_tests;
 #[cfg(test)]
+#[path = "follow_resize_tests.rs"]
+mod resize_tests;
+#[cfg(test)]
+#[path = "follow_test_support.rs"]
+mod test_support;
+#[cfg(test)]
 #[path = "follow_transition_diag_tests.rs"]
 mod transition_diag_tests;
+#[cfg(test)]
+#[path = "follow_visibility_balloon_wiring_tests.rs"]
+mod visibility_balloon_wiring_tests;
+#[cfg(test)]
+#[path = "follow_visibility_char_wiring_tests.rs"]
+mod visibility_char_wiring_tests;
+#[cfg(test)]
+#[path = "follow_visibility_guard_tests.rs"]
+mod visibility_guard_tests;
+#[cfg(test)]
+#[path = "follow_window_move_diag_tests.rs"]
+mod window_move_diag_tests;
+#[cfg(test)]
+#[path = "follow_window_move_tests.rs"]
+mod window_move_tests;
+#[cfg(test)]
+#[path = "follow_work_area_tests.rs"]
+mod work_area_tests;
 // 既定位置の追跡規則（task 5.5・design D9／D16・要件 6.2）。
 #[cfg(test)]
 #[path = "follow_default_pos_track_tests.rs"]

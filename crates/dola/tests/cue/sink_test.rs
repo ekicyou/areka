@@ -257,7 +257,16 @@ fn custom_type_level_none_defers_to_consumer_name_self_selection() {
 
     // 他のコマンド名（bind/raise/未知名）でも同じく型レベルは None——dola は名前で分岐せず、
     // 全 Custom を一様に「消費側が自己選別する」へ委譲する（中央の名前権威表は無い）。
-    for name in ["move", "bind", "raise", "set", "open", "close", "unknowncommand", ""] {
+    for name in [
+        "move",
+        "bind",
+        "raise",
+        "set",
+        "open",
+        "close",
+        "unknowncommand",
+        "",
+    ] {
         assert_eq!(
             cue_target_of(&CueCommand::command_carrier(name, vec![])),
             None,

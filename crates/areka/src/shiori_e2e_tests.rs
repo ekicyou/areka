@@ -129,11 +129,16 @@ fn deferred_completion_and_push_delivered_end_to_end() {
         SessionRequest::Deferred(CorrelationToken(DEFERRED_TOKEN)),
         "遅延はトークン付き Deferred を返すこと"
     );
-    assert!(session.is_pending(), "遅延後は保留状態（単一 in-flight）であること");
+    assert!(
+        session.is_pending(),
+        "遅延後は保留状態（単一 in-flight）であること"
+    );
 
     // --- 能動通知: 脳が保持 host へ raise を発火し、areka sink のメールボックスへ届くこと。
     let script = HSTRING::from(RAISE_SCRIPT);
-    brain_inner.fire_raise(&script).expect("脳→host->raise は Ok");
+    brain_inner
+        .fire_raise(&script)
+        .expect("脳→host->raise は Ok");
 
     // --- stale/未知トークン: 突合枠(DEFERRED_TOKEN)と不一致の complete は弾かれること（議題3）。
     let bogus = HSTRING::from("bogus");

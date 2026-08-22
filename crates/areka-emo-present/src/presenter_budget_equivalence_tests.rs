@@ -179,7 +179,10 @@ fn build_alpha_varying_faces(w: u32, h: u32) -> (EmoWorld, AtlasTable) {
         },
     };
     let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(baked.errors.is_empty(), "atlas bake セットアップは失敗しない");
+    assert!(
+        baked.errors.is_empty(),
+        "atlas bake セットアップは失敗しない"
+    );
 
     let mut world = EmoWorld::build(&shell_of(surfaces));
     world.bind_atlas(&baked.table, SetId(0));
@@ -208,7 +211,12 @@ fn expected_of(emo_world: &EmoWorld, atlas: &AtlasTable, id: u32, scale: ScaleRa
         &PatternState::default(),
         scale,
     );
-    let mask = AlphaMask::from_pbgra32(&g.scaled, g.scaled_size.0, g.scaled_size.1, g.scaled_size.0 * 4);
+    let mask = AlphaMask::from_pbgra32(
+        &g.scaled,
+        g.scaled_size.0,
+        g.scaled_size.1,
+        g.scaled_size.0 * 4,
+    );
     Expected {
         bytes: g.scaled,
         extent: g.scaled_size,
@@ -349,7 +357,11 @@ fn the_budget_path_produces_the_same_display_bytes_and_mask_as_a_fresh_buffer_pa
             );
             // ⑸ 非空虚性（本番側の実バイトについても毎回見る）。
             assert!(
-                entry.composed.bytes().chunks_exact(4).any(|px| px[3] == 0xFF),
+                entry
+                    .composed
+                    .bytes()
+                    .chunks_exact(4)
+                    .any(|px| px[3] == 0xFF),
                 "{at}: 表示バッファに不透明画素が 1 つも無い（空を回している）"
             );
 
@@ -468,7 +480,10 @@ fn repeating_the_same_surface_keeps_the_display_bytes_and_mask_equivalent() {
         }
         // 暖機の最後に出た面のマスク（この後の適用がミスであることの対照）。
         let mask_before_miss = {
-            let target = presenter.targets.get(&TargetId(0)).expect("装着済み target");
+            let target = presenter
+                .targets
+                .get(&TargetId(0))
+                .expect("装着済み target");
             let entry = target
                 .cache
                 .get(
@@ -482,7 +497,10 @@ fn repeating_the_same_surface_keeps_the_display_bytes_and_mask_equivalent() {
         };
         show_ok(&mut presenter, &mut world, TargetId(0), FACE_A);
         let missed_mask = {
-            let target = presenter.targets.get(&TargetId(0)).expect("装着済み target");
+            let target = presenter
+                .targets
+                .get(&TargetId(0))
+                .expect("装着済み target");
             let entry = target
                 .cache
                 .get(FACE_A, &BindSet::default(), &PatternState::default(), scale)
@@ -495,7 +513,10 @@ fn repeating_the_same_surface_keeps_the_display_bytes_and_mask_equivalent() {
         );
 
         show_ok(&mut presenter, &mut world, TargetId(0), FACE_A);
-        let target = presenter.targets.get(&TargetId(0)).expect("装着済み target");
+        let target = presenter
+            .targets
+            .get(&TargetId(0))
+            .expect("装着済み target");
         let entry = target
             .cache
             .get(FACE_A, &BindSet::default(), &PatternState::default(), scale)

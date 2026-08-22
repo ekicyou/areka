@@ -37,7 +37,7 @@ pub mod duration;
 pub mod error;
 pub mod sysvar;
 
-pub use compile::{compile, CompiledTalk};
+pub use compile::{CompiledTalk, compile};
 pub use drive::spawn_talk;
 pub use error::SakuraError;
 

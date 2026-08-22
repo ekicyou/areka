@@ -130,7 +130,7 @@ mod tests {
     use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
     use wintf_winmsg_executor::{FilterResult, MessageLoop};
 
-    use super::{handle_text_msg, EmoTextSink, TextMsg};
+    use super::{EmoTextSink, TextMsg, handle_text_msg};
 
     // ── ログ檻（WARN/ERROR 件数を数える最小 Subscriber・draw.rs の檻パターン踏襲） ──
 
@@ -285,7 +285,11 @@ mod tests {
             Ok(())
         });
         assert_eq!(result, Ok(ControlFlow::Continue(())));
-        assert_eq!(delivered.into_inner(), Some(sent), "cue は無変形で配送される");
+        assert_eq!(
+            delivered.into_inner(),
+            Some(sent),
+            "cue は無変形で配送される"
+        );
     }
 
     /// 個別配送失敗は `Err` として基盤へ返す（基盤が error!＋継続する・R1.5——
@@ -332,7 +336,10 @@ mod tests {
             drop(sink);
             drop(sink2);
         });
-        assert_eq!(errors, 0, "終了指示によるクリーン終了は error ログを伴わない");
+        assert_eq!(
+            errors, 0,
+            "終了指示によるクリーン終了は error ログを伴わない"
+        );
     }
 
     /// ケース2: 全送信元切断（全 `EmoTextSink` clone drop）——queue 済み cue を届け切った上で
@@ -362,7 +369,10 @@ mod tests {
                 "切断前に queue 済みの cue は破棄されず届く"
             );
         });
-        assert_eq!(errors, 0, "全送信元切断によるクリーン終了は error ログを伴わない");
+        assert_eq!(
+            errors, 0,
+            "全送信元切断によるクリーン終了は error ログを伴わない"
+        );
     }
 
     /// ケース3a: 個別配送失敗（handler の `Err`）——panic せず error ログ 1 件を記録した上で、
@@ -392,7 +402,10 @@ mod tests {
                 "失敗 cue の後続 cue も受理・配送される（失敗は継続・R1.5）"
             );
         });
-        assert_eq!(errors, 1, "個別配送失敗はちょうど 1 件の error ログとして記録される");
+        assert_eq!(
+            errors, 1,
+            "個別配送失敗はちょうど 1 件の error ログとして記録される"
+        );
     }
 
     /// ケース3b: 送信側の配送失敗（UI drain 停止後の `emit`／`close`）——panic せず

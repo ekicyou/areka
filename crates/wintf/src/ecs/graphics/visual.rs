@@ -82,7 +82,8 @@ fn on_visual_add(mut world: DeferredWorld, context: HookContext) {
     // owner Window が存在する場合のみ graphics コンポーネントを挿入対象にする
     let needs_visual_graphics = has_owner_window && world.get::<VisualGraphics>(entity).is_none();
     let needs_surface_graphics = has_owner_window && world.get::<SurfaceGraphics>(entity).is_none();
-    let needs_surface_dirty = has_owner_window && world.get::<SurfaceGraphicsDirty>(entity).is_none();
+    let needs_surface_dirty =
+        has_owner_window && world.get::<SurfaceGraphicsDirty>(entity).is_none();
 
     // コマンドを発行（チェック完了後に一度だけ commands を借用する）
     let mut cmds = world.commands();

@@ -184,11 +184,17 @@ fn current_binds_unbound_scope_returns_static_default() {
     let states = ScopeStates::new(BindSet::from_ids([1100, 1207]));
     let scope = ActorKey::from("0");
     // 動的 bind を一切適用していない scope は `new` で渡した既定集合（初期値）を返す。
-    assert_eq!(states.current_binds(&scope), &BindSet::from_ids([1100, 1207]));
+    assert_eq!(
+        states.current_binds(&scope),
+        &BindSet::from_ids([1100, 1207])
+    );
 
     // 別の未束縛 scope も同じ既定集合（per-scope エントリ不在時のフォールバック）。
     let other = ActorKey::from("1");
-    assert_eq!(states.current_binds(&other), &BindSet::from_ids([1100, 1207]));
+    assert_eq!(
+        states.current_binds(&other),
+        &BindSet::from_ids([1100, 1207])
+    );
 }
 
 /// 非退行ロック（要件 3.8）: 動的 bind 未適用時、Show の binds は `new` の静的既定集合と一致する。

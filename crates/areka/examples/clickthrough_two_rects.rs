@@ -44,9 +44,7 @@ use wintf::ecs::pointer::{DoubleClick, OnPointerPressed, Phase, PointerState};
 use wintf::ecs::widget::bitmap_source::{BitmapSource, CommandSender};
 use wintf::ecs::widget::brushes::Brushes;
 use wintf::ecs::widget::shapes::Rectangle;
-use wintf::ecs::{
-    ChildOf, FrameFinalize, Point, Window, WindowHandle, WindowPos, WindowStyle,
-};
+use wintf::ecs::{ChildOf, FrameFinalize, Point, Window, WindowHandle, WindowPos, WindowStyle};
 use wintf::*;
 
 /// 検証窓を識別するマーカー。

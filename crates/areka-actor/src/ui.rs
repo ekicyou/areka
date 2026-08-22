@@ -199,8 +199,12 @@ mod tests {
     #[test]
     fn send_stores_message_in_queue() {
         let (sender, rx) = ui_sender_for_test::<&'static str>();
-        sender.send("cmd-1").expect("send to a live inbox must succeed");
-        sender.send("cmd-2").expect("send to a live inbox must succeed");
+        sender
+            .send("cmd-1")
+            .expect("send to a live inbox must succeed");
+        sender
+            .send("cmd-2")
+            .expect("send to a live inbox must succeed");
 
         // unbounded ゆえ pump 非稼働でも queue に滞留し FIFO で取り出せる。
         assert_eq!(rx.try_recv().expect("first message queued"), "cmd-1");
@@ -243,6 +247,9 @@ mod tests {
         drop(sender);
         assert!(!rx.is_closed(), "one sender still alive → not closed");
         drop(clone);
-        assert!(rx.is_closed(), "all senders dropped → channel closed (drain will return)");
+        assert!(
+            rx.is_closed(),
+            "all senders dropped → channel closed (drain will return)"
+        );
     }
 }

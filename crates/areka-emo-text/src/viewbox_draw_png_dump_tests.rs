@@ -1,11 +1,11 @@
-use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 use super::ViewboxExecutor;
+use super::test_support::{Rig, glyph_items};
 use crate::canvas::ContentCanvas;
 use crate::draw::{DWriteMetrics, DrawExecutor};
 use crate::layout::{LayoutEngine, WrapPlan};
 use crate::region::ScaleContract;
 use crate::state::{TextItem, TextLayerConfig, TextLayerState};
-use super::test_support::{Rig, glyph_items};
+use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 
 // ════ 目視診断（PNG ダンプ・#[ignore]・開発者の「出力画像を見せて」要求への回答） ════
 //
@@ -430,64 +430,60 @@ fn diag_dump_budoux_wordwrap_pngs() {
     // 1 ケース（sentence を fully-revealed で描画）を PNG 保存するヘルパ。ON（use_budoux=true）は
     // actor.rs と同型の遅延初期化で segment_plan を計算し WrapPlan::Segmented を供給する（OFF は
     // segment_plan を呼ばず CharByChar）。戻り値＝(行数, 最右インク列 x)。
-    let dump_case =
-        |rig: &mut Rig, tag: &str, sentence: &str, use_budoux: bool| -> (usize, Option<u32>) {
-            let items = glyph_items(sentence);
-            let visible = items
-                .iter()
-                .filter(|i| matches!(i, TextItem::Glyph { .. }))
-                .count();
-            let plan; // ON アームでのみ束縛（借用 &plan が layout 呼出まで生存）。
-            let wrap = if use_budoux {
-                plan = crate::segment::segment_plan(&items);
-                let segs: Vec<(usize, usize)> =
-                    plan.segments().iter().map(|s| (s.start, s.len)).collect();
-                eprintln!("[diag-budoux]   segments(start,len)={segs:?}");
-                WrapPlan::Segmented(&plan)
-            } else {
-                WrapPlan::CharByChar
-            };
-            let lines = LayoutEngine::layout(
-                &items,
-                visible,
-                region,
-                mode,
-                font.height,
-                &metrics,
-                wrap,
-            );
-            let window = LayoutEngine::visible_window(&lines, region, mode);
-            let canvas = ContentCanvas::from_layout(&lines, region, mode);
-            let mut surface = rig.attach(image, 1.0);
-            let mut exec = DrawExecutor::new(&rig.core).expect("DrawExecutor");
-            exec.render(&canvas, &window, font, mode, &contract, &mut surface)
-                .expect("render");
-            let bytes = surface.read_back().expect("read_back");
-            let (w, h) = surface.size();
-            // 最右インク列（inline はみ出しの定量指標・供給面は validrect 寸ゆえ描画は自動クリップ＝
-            // w-1 に張り付くならはみ出しをクリップで隠している疑い）。
-            let rightmost = {
-                let mut r: Option<u32> = None;
-                for x in (0..w).rev() {
-                    let hit = (0..h).any(|y| bytes[((y * w + x) * 4 + 3) as usize] != 0);
-                    if hit {
-                        r = Some(x);
-                        break;
-                    }
-                }
-                r
-            };
-            let rgba = diag_composite_rgba(&bytes, w, h, pitch);
-            let png = diag_encode_png_rgba(&rgba, w, h);
-            let path = format!("{out_dir}/diag_budoux_{tag}.png");
-            std::fs::write(&path, &png).expect("PNG 書き込み");
-            eprintln!(
-                "[diag-budoux]   saved {path}  budoux={use_budoux} sentence=「{sentence}」 \
-                 visible={visible} lines={} rightmost_ink_x={rightmost:?} (surface_w={w} pitch={pitch})",
-                lines.len()
-            );
-            (lines.len(), rightmost)
+    let dump_case = |rig: &mut Rig,
+                     tag: &str,
+                     sentence: &str,
+                     use_budoux: bool|
+     -> (usize, Option<u32>) {
+        let items = glyph_items(sentence);
+        let visible = items
+            .iter()
+            .filter(|i| matches!(i, TextItem::Glyph { .. }))
+            .count();
+        let plan; // ON アームでのみ束縛（借用 &plan が layout 呼出まで生存）。
+        let wrap = if use_budoux {
+            plan = crate::segment::segment_plan(&items);
+            let segs: Vec<(usize, usize)> =
+                plan.segments().iter().map(|s| (s.start, s.len)).collect();
+            eprintln!("[diag-budoux]   segments(start,len)={segs:?}");
+            WrapPlan::Segmented(&plan)
+        } else {
+            WrapPlan::CharByChar
         };
+        let lines =
+            LayoutEngine::layout(&items, visible, region, mode, font.height, &metrics, wrap);
+        let window = LayoutEngine::visible_window(&lines, region, mode);
+        let canvas = ContentCanvas::from_layout(&lines, region, mode);
+        let mut surface = rig.attach(image, 1.0);
+        let mut exec = DrawExecutor::new(&rig.core).expect("DrawExecutor");
+        exec.render(&canvas, &window, font, mode, &contract, &mut surface)
+            .expect("render");
+        let bytes = surface.read_back().expect("read_back");
+        let (w, h) = surface.size();
+        // 最右インク列（inline はみ出しの定量指標・供給面は validrect 寸ゆえ描画は自動クリップ＝
+        // w-1 に張り付くならはみ出しをクリップで隠している疑い）。
+        let rightmost = {
+            let mut r: Option<u32> = None;
+            for x in (0..w).rev() {
+                let hit = (0..h).any(|y| bytes[((y * w + x) * 4 + 3) as usize] != 0);
+                if hit {
+                    r = Some(x);
+                    break;
+                }
+            }
+            r
+        };
+        let rgba = diag_composite_rgba(&bytes, w, h, pitch);
+        let png = diag_encode_png_rgba(&rgba, w, h);
+        let path = format!("{out_dir}/diag_budoux_{tag}.png");
+        std::fs::write(&path, &png).expect("PNG 書き込み");
+        eprintln!(
+            "[diag-budoux]   saved {path}  budoux={use_budoux} sentence=「{sentence}」 \
+                 visible={visible} lines={} rightmost_ink_x={rightmost:?} (surface_w={w} pitch={pitch})",
+            lines.len()
+        );
+        (lines.len(), rightmost)
+    };
 
     // ── 通常ケース: 狭いバルーンで char-by-char が文節を途中分割する和文（OFF/ON 並置）。 ──
     let normal = "今日はとても良い天気ですね一緒に近くの公園へ遊びに行きましょう";
@@ -498,7 +494,8 @@ fn diag_dump_budoux_wordwrap_pngs() {
 
     // ── 長大塊ケース: budoux 境界を持たない連続カナ（行頭からでも 1 行に収まらない）を ON で。 ──
     // 前後に通常の和文を置き「長大塊のみ縮退し前後は分かち書き継続」を目視できる形にする（R3.3）。
-    let longseg = "むかしむかしバアアアアアアアアアアアアアアアアアアアアアア山という所に住んでいました";
+    let longseg =
+        "むかしむかしバアアアアアアアアアアアアアアアアアアアアアア山という所に住んでいました";
     eprintln!("[diag-budoux] === 長大塊ケース（ON: 縮退＋はみ出しなし） ===");
     dump_case(&mut rig, "longseg_on", longseg, true);
 }

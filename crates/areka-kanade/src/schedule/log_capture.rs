@@ -81,7 +81,8 @@ struct EventFieldVisitor {
 
 impl Visit for EventFieldVisitor {
     fn record_str(&mut self, field: &Field, value: &str) {
-        self.fields.insert(field.name().to_string(), value.to_string());
+        self.fields
+            .insert(field.name().to_string(), value.to_string());
         match field.name() {
             "event" => self.event = Some(value.to_string()),
             "outcome" => self.outcome = Some(value.to_string()),
@@ -252,10 +253,7 @@ pub(crate) fn logged_once<'a>(
 /// "shiori resource prefetch done")`（design Postconditions・研究 §12-10）。target・level(INFO)・
 /// `outcome` フィールド値・message 本文の全一致で照合し、発火回数が 1 であることまで固定する
 /// （target が `kanade` でなく `areka_kanade::resource` ゆえ [`assert_logged`] は使えない・専用檻）。
-pub(crate) fn assert_resource_prefetch_logged_once(
-    events: &[CapturedEvent],
-    outcome_label: &str,
-) {
+pub(crate) fn assert_resource_prefetch_logged_once(events: &[CapturedEvent], outcome_label: &str) {
     let hits = events
         .iter()
         .filter(|e| {

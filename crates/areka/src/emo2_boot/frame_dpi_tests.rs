@@ -1,14 +1,9 @@
 use wintf::ecs::{Point, SizeI};
 
-use super::*;
 use super::test_support::{
-    FakeReports,
-    assert_no_write,
-    dpi_world,
-    pos_of,
-    reset_write_witness,
-    size_of,
+    FakeReports, assert_no_write, dpi_world, pos_of, reset_write_witness, size_of,
 };
+use super::*;
 
 // ── task 4.2: DPI 追従フェーズ（run_dpi_phase／窓寸 reconcile 二経路）の檻 ──────────
 //
@@ -164,7 +159,11 @@ fn reconcile_window_size_guards_and_idempotent_skip_write_nothing() {
         PlacementRoute::DpiReproject
     ));
 
-    assert_eq!(size_of(&world, char0), Some(SizeI::new(434, 687)), "char 寸不変");
+    assert_eq!(
+        size_of(&world, char0),
+        Some(SizeI::new(434, 687)),
+        "char 寸不変"
+    );
     assert_eq!(
         size_of(&world, balloon0),
         Some(SizeI::new(223, 158)),

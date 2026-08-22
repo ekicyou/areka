@@ -35,7 +35,8 @@ use crate::common::on_gpu_owner_thread;
 fn full_stack_cycle() {
     let core = GraphicsCore::new().expect("GraphicsCore::new（フルスタック生成）");
     let d2d = core.d2d_device().expect("d2d_device が None");
-    let wuc = WucGraphicsResource::new(d2d).expect("WucGraphicsResource::new（2 個目でも成功すべき）");
+    let wuc =
+        WucGraphicsResource::new(d2d).expect("WucGraphicsResource::new（2 個目でも成功すべき）");
 
     // 最小合成操作: Compositor から SpriteVisual を 1 個生成する（実 WUC 操作を通す）。
     let _visual: WucVisual = wuc

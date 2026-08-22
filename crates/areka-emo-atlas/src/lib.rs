@@ -53,11 +53,7 @@ pub struct BakeResult {
 /// マニフェスト採番（`SetId` 昇順・rel_path 昇順）→ 同一失敗集合 → 同一生存集合 →
 /// 同一密再採番、と各段が決定的ゆえ、同一入力（＋同一失敗）で同一 `AtlasTable` を返す
 /// （golden 安定・D7）。
-pub fn bake(
-    sets: &[SurfaceSet<'_>],
-    decoder: &impl ElementDecoder,
-    cfg: PackConfig,
-) -> BakeResult {
+pub fn bake(sets: &[SurfaceSet<'_>], decoder: &impl ElementDecoder, cfg: PackConfig) -> BakeResult {
     // 1. マニフェスト導出（列挙・重複排除・決定的採番）。
     let manifest = ManifestDeriver.derive(sets);
 
@@ -318,7 +314,10 @@ mod bake_entry_tests {
         let result: BakeResult = bake(&sets, &dec, PackConfig::default());
 
         // 失敗なし。
-        assert!(result.errors.is_empty(), "no decode/normalize failures expected");
+        assert!(
+            result.errors.is_empty(),
+            "no decode/normalize failures expected"
+        );
 
         // 各セットの present key が resolve→Some・placement あり（非透明ゆえ焼かれる）。
         for (set, rel) in [
@@ -338,7 +337,10 @@ mod bake_entry_tests {
         }
 
         // 頁バッファが値として得られている（焼付結果・非空）。
-        assert!(!result.table.pages().is_empty(), "pages materialized by value");
+        assert!(
+            !result.table.pages().is_empty(),
+            "pages materialized by value"
+        );
         assert_eq!(result.table.len(), 4, "4 survivors densely indexed");
     }
 
@@ -386,10 +388,7 @@ mod bake_entry_tests {
     #[test]
     fn all_transparent_is_empty_entry_not_error() {
         let base = Path::new("shell/master");
-        let shell = vec![surface(
-            0,
-            vec![elem(0, "solid.png"), elem(1, "clear.png")],
-        )];
+        let shell = vec![surface(0, vec![elem(0, "solid.png"), elem(1, "clear.png")])];
 
         let mut dec = MemoryDecoder::new();
         register(&mut dec, base, "solid.png", opaque_2x2());
@@ -411,7 +410,10 @@ mod bake_entry_tests {
             "all-transparent → empty entry (placement None)"
         );
         // 原寸は記録される（4.2/4.5）。
-        assert_eq!(result.table.entry(clear_id).original, crate::table::Size { w: 2, h: 2 });
+        assert_eq!(
+            result.table.entry(clear_id).original,
+            crate::table::Size { w: 2, h: 2 }
+        );
 
         // solid.png は placement あり（対照）。
         let solid_id = result.table.resolve(SetId(0), "solid.png").unwrap();
@@ -442,8 +444,14 @@ mod bake_entry_tests {
 
         // 生存 a,c は密 index 0..2 で resolve→entry/key 往復整合。
         for rel in ["a.png", "c.png"] {
-            let id = result.table.resolve(SetId(0), rel).expect("survivor resolves");
-            assert!((id.0 as usize) < result.table.len(), "id within dense range");
+            let id = result
+                .table
+                .resolve(SetId(0), rel)
+                .expect("survivor resolves");
+            assert!(
+                (id.0 as usize) < result.table.len(),
+                "id within dense range"
+            );
             // key(id) 逆引きが同じ rel_path を返す（往復）。
             assert_eq!(result.table.key(id).rel_path, rel);
             assert_eq!(result.table.key(id).set, SetId(0));
@@ -472,14 +480,23 @@ mod bake_entry_tests {
         });
 
         // warn が発火し、target・当該 element（rel_path）を名指ししている。
-        assert!(out.contains("level=WARN"), "全透明 element で warn 発火: {out}");
-        assert!(out.contains("target=areka_emo_atlas"), "target 正しい: {out}");
+        assert!(
+            out.contains("level=WARN"),
+            "全透明 element で warn 発火: {out}"
+        );
+        assert!(
+            out.contains("target=areka_emo_atlas"),
+            "target 正しい: {out}"
+        );
         assert!(out.contains("clear.png"), "問題の element を名指し: {out}");
 
         // bake 結果は既存挙動不変: 全透明はエラーでなく空エントリ（placement None・原寸記録）。
         let result = captured.unwrap();
         assert!(result.errors.is_empty(), "全透明は error ではない（不変）");
-        let clear_id = result.table.resolve(SetId(0), "clear.png").expect("空エントリも resolve");
+        let clear_id = result
+            .table
+            .resolve(SetId(0), "clear.png")
+            .expect("空エントリも resolve");
         assert!(
             result.table.entry(clear_id).placement.is_none(),
             "全透明 → 空エントリ（placement None・不変）"
@@ -506,8 +523,14 @@ mod bake_entry_tests {
         let out = crate::log_capture::capture_logs(|| {
             let _ = bake(&sets, &dec, PackConfig::default());
         });
-        assert!(out.contains("level=WARN"), "0 寸 element で warn 発火: {out}");
-        assert!(out.contains("target=areka_emo_atlas"), "target 正しい: {out}");
+        assert!(
+            out.contains("level=WARN"),
+            "0 寸 element で warn 発火: {out}"
+        );
+        assert!(
+            out.contains("target=areka_emo_atlas"),
+            "target 正しい: {out}"
+        );
         assert!(out.contains("zero.png"), "問題の element を名指し: {out}");
     }
 
@@ -527,15 +550,25 @@ mod bake_entry_tests {
         });
 
         // 正常 element では warn 経路に入らない。
-        assert!(!out.contains("level=WARN"), "正常 element では warn 皆無: {out}");
+        assert!(
+            !out.contains("level=WARN"),
+            "正常 element では warn 皆無: {out}"
+        );
 
         // 既存の bake 出力は不変（placement 有り・非零 uv・原寸 2×2）。
         let result = captured.unwrap();
         assert!(result.errors.is_empty());
         let id = result.table.resolve(SetId(0), "solid.png").unwrap();
         let entry = result.table.entry(id);
-        assert_eq!(entry.original, crate::table::Size { w: 2, h: 2 }, "原寸不変");
-        let placement = entry.placement.as_ref().expect("非零 → placement 有り（不変）");
+        assert_eq!(
+            entry.original,
+            crate::table::Size { w: 2, h: 2 },
+            "原寸不変"
+        );
+        let placement = entry
+            .placement
+            .as_ref()
+            .expect("非零 → placement 有り（不変）");
         assert_eq!(placement.uv_rect.w, 2, "trim 幅不変");
         assert_eq!(placement.uv_rect.h, 2, "trim 高不変");
     }

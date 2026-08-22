@@ -66,7 +66,9 @@ fn global(world: &World, e: Entity) -> GlobalArrangement {
 #[test]
 fn sync_simple_updates_orphan_root_from_local() {
     let mut world = World::new();
-    let e = world.spawn(node_bundle(arr(10.0, 20.0, 1.0, 1.0, 100.0, 50.0))).id();
+    let e = world
+        .spawn(node_bundle(arr(10.0, 20.0, 1.0, 1.0, 100.0, 50.0)))
+        .id();
 
     let mut s = Schedule::default();
     s.add_systems(sync_simple_transforms::<Arrangement, GlobalArrangement, ArrangementTreeChanged>);
@@ -87,7 +89,9 @@ fn sync_simple_updates_orphan_root_from_local() {
 #[test]
 fn sync_simple_applies_scale_to_root_global() {
     let mut world = World::new();
-    let e = world.spawn(node_bundle(arr(10.0, 20.0, 2.0, 3.0, 100.0, 50.0))).id();
+    let e = world
+        .spawn(node_bundle(arr(10.0, 20.0, 2.0, 3.0, 100.0, 50.0)))
+        .id();
 
     let mut s = Schedule::default();
     s.add_systems(sync_simple_transforms::<Arrangement, GlobalArrangement, ArrangementTreeChanged>);
@@ -110,8 +114,13 @@ fn sync_simple_applies_scale_to_root_global() {
 #[test]
 fn sync_simple_ignores_entity_with_children() {
     let mut world = World::new();
-    let parent = world.spawn(node_bundle(arr(10.0, 20.0, 2.0, 2.0, 100.0, 50.0))).id();
-    world.spawn((node_bundle(arr(0.0, 0.0, 1.0, 1.0, 10.0, 10.0)).0, ChildOf(parent)));
+    let parent = world
+        .spawn(node_bundle(arr(10.0, 20.0, 2.0, 2.0, 100.0, 50.0)))
+        .id();
+    world.spawn((
+        node_bundle(arr(0.0, 0.0, 1.0, 1.0, 10.0, 10.0)).0,
+        ChildOf(parent),
+    ));
 
     let mut s = Schedule::default();
     s.add_systems(sync_simple_transforms::<Arrangement, GlobalArrangement, ArrangementTreeChanged>);
@@ -128,9 +137,14 @@ fn sync_simple_ignores_entity_with_children() {
 #[test]
 fn sync_simple_resyncs_orphaned_entity_via_removed_components() {
     let mut world = World::new();
-    let parent = world.spawn(node_bundle(arr(0.0, 0.0, 2.0, 2.0, 100.0, 100.0))).id();
+    let parent = world
+        .spawn(node_bundle(arr(0.0, 0.0, 2.0, 2.0, 100.0, 100.0)))
+        .id();
     let child = world
-        .spawn((node_bundle(arr(5.0, 5.0, 1.0, 1.0, 10.0, 10.0)), ChildOf(parent)))
+        .spawn((
+            node_bundle(arr(5.0, 5.0, 1.0, 1.0, 10.0, 10.0)),
+            ChildOf(parent),
+        ))
         .id();
 
     let mut s = Schedule::default();
@@ -162,12 +176,20 @@ fn sync_simple_resyncs_orphaned_entity_via_removed_components() {
 #[test]
 fn mark_dirty_propagates_change_from_leaf_to_root() {
     let mut world = World::new();
-    let root = world.spawn(node_bundle(arr(0.0, 0.0, 1.0, 1.0, 100.0, 100.0))).id();
+    let root = world
+        .spawn(node_bundle(arr(0.0, 0.0, 1.0, 1.0, 100.0, 100.0)))
+        .id();
     let mid = world
-        .spawn((node_bundle(arr(0.0, 0.0, 1.0, 1.0, 50.0, 50.0)), ChildOf(root)))
+        .spawn((
+            node_bundle(arr(0.0, 0.0, 1.0, 1.0, 50.0, 50.0)),
+            ChildOf(root),
+        ))
         .id();
     let leaf = world
-        .spawn((node_bundle(arr(0.0, 0.0, 1.0, 1.0, 10.0, 10.0)), ChildOf(mid)))
+        .spawn((
+            node_bundle(arr(0.0, 0.0, 1.0, 1.0, 10.0, 10.0)),
+            ChildOf(mid),
+        ))
         .id();
 
     // 変更追跡をリセットするため一度 tick を進める。
@@ -213,10 +235,17 @@ struct DirtyProbe(bool);
 #[test]
 fn mark_dirty_reacts_to_childof_change() {
     let mut world = World::new();
-    let root_a = world.spawn(node_bundle(arr(0.0, 0.0, 1.0, 1.0, 100.0, 100.0))).id();
-    let root_b = world.spawn(node_bundle(arr(0.0, 0.0, 1.0, 1.0, 100.0, 100.0))).id();
+    let root_a = world
+        .spawn(node_bundle(arr(0.0, 0.0, 1.0, 1.0, 100.0, 100.0)))
+        .id();
+    let root_b = world
+        .spawn(node_bundle(arr(0.0, 0.0, 1.0, 1.0, 100.0, 100.0)))
+        .id();
     let child = world
-        .spawn((node_bundle(arr(0.0, 0.0, 1.0, 1.0, 10.0, 10.0)), ChildOf(root_a)))
+        .spawn((
+            node_bundle(arr(0.0, 0.0, 1.0, 1.0, 10.0, 10.0)),
+            ChildOf(root_a),
+        ))
         .id();
 
     // 一度実行して変更追跡をクリア。
@@ -260,9 +289,14 @@ fn mark_dirty_reacts_to_childof_change() {
 #[test]
 fn propagate_two_level_applies_parent_scale() {
     let mut world = World::new();
-    let root = world.spawn(node_bundle(arr(0.0, 0.0, 2.0, 2.0, 100.0, 100.0))).id();
+    let root = world
+        .spawn(node_bundle(arr(0.0, 0.0, 2.0, 2.0, 100.0, 100.0)))
+        .id();
     let child = world
-        .spawn((node_bundle(arr(10.0, 10.0, 1.0, 1.0, 30.0, 20.0)), ChildOf(root)))
+        .spawn((
+            node_bundle(arr(10.0, 10.0, 1.0, 1.0, 30.0, 20.0)),
+            ChildOf(root),
+        ))
         .id();
 
     let mut s = propagation_schedule();
@@ -287,14 +321,22 @@ fn propagate_two_level_applies_parent_scale() {
 fn propagate_three_level_chain_accumulates() {
     let mut world = World::new();
     // root: offset(10,20) scale(2,2) size(100,50)
-    let root = world.spawn(node_bundle(arr(10.0, 20.0, 2.0, 2.0, 100.0, 50.0))).id();
+    let root = world
+        .spawn(node_bundle(arr(10.0, 20.0, 2.0, 2.0, 100.0, 50.0)))
+        .id();
     // child: offset(5,10) scale(1,1) size(30,20)
     let child = world
-        .spawn((node_bundle(arr(5.0, 10.0, 1.0, 1.0, 30.0, 20.0)), ChildOf(root)))
+        .spawn((
+            node_bundle(arr(5.0, 10.0, 1.0, 1.0, 30.0, 20.0)),
+            ChildOf(root),
+        ))
         .id();
     // grandchild: offset(2,3) scale(1.5,1.5) size(10,8)
     let grandchild = world
-        .spawn((node_bundle(arr(2.0, 3.0, 1.5, 1.5, 10.0, 8.0)), ChildOf(child)))
+        .spawn((
+            node_bundle(arr(2.0, 3.0, 1.5, 1.5, 10.0, 8.0)),
+            ChildOf(child),
+        ))
         .id();
 
     let mut s = propagation_schedule();
@@ -321,15 +363,26 @@ fn propagate_three_level_chain_accumulates() {
 #[test]
 fn propagate_wide_tree_processes_all_children() {
     let mut world = World::new();
-    let root = world.spawn(node_bundle(arr(0.0, 0.0, 2.0, 2.0, 100.0, 100.0))).id();
+    let root = world
+        .spawn(node_bundle(arr(0.0, 0.0, 2.0, 2.0, 100.0, 100.0)))
+        .id();
     let c1 = world
-        .spawn((node_bundle(arr(1.0, 0.0, 1.0, 1.0, 10.0, 10.0)), ChildOf(root)))
+        .spawn((
+            node_bundle(arr(1.0, 0.0, 1.0, 1.0, 10.0, 10.0)),
+            ChildOf(root),
+        ))
         .id();
     let c2 = world
-        .spawn((node_bundle(arr(0.0, 2.0, 1.0, 1.0, 10.0, 10.0)), ChildOf(root)))
+        .spawn((
+            node_bundle(arr(0.0, 2.0, 1.0, 1.0, 10.0, 10.0)),
+            ChildOf(root),
+        ))
         .id();
     let c3 = world
-        .spawn((node_bundle(arr(3.0, 4.0, 1.0, 1.0, 10.0, 10.0)), ChildOf(root)))
+        .spawn((
+            node_bundle(arr(3.0, 4.0, 1.0, 1.0, 10.0, 10.0)),
+            ChildOf(root),
+        ))
         .id();
 
     let mut s = propagation_schedule();
@@ -354,9 +407,14 @@ fn propagate_wide_tree_processes_all_children() {
 #[test]
 fn propagate_is_idempotent_when_nothing_changes() {
     let mut world = World::new();
-    let root = world.spawn(node_bundle(arr(0.0, 0.0, 2.0, 2.0, 100.0, 100.0))).id();
+    let root = world
+        .spawn(node_bundle(arr(0.0, 0.0, 2.0, 2.0, 100.0, 100.0)))
+        .id();
     let child = world
-        .spawn((node_bundle(arr(10.0, 10.0, 1.0, 1.0, 30.0, 20.0)), ChildOf(root)))
+        .spawn((
+            node_bundle(arr(10.0, 10.0, 1.0, 1.0, 30.0, 20.0)),
+            ChildOf(root),
+        ))
         .id();
 
     let mut s = propagation_schedule();
@@ -368,7 +426,11 @@ fn propagate_is_idempotent_when_nothing_changes() {
     world.clear_trackers();
     s.run(&mut world);
 
-    assert_eq!(global(&world, child), c_first, "再実行で child global は不変");
+    assert_eq!(
+        global(&world, child),
+        c_first,
+        "再実行で child global は不変"
+    );
     assert_eq!(global(&world, root), r_first, "再実行で root global は不変");
 }
 
@@ -376,12 +438,20 @@ fn propagate_is_idempotent_when_nothing_changes() {
 #[test]
 fn propagate_single_branch_change_preserves_sibling() {
     let mut world = World::new();
-    let root = world.spawn(node_bundle(arr(0.0, 0.0, 1.0, 1.0, 100.0, 100.0))).id();
+    let root = world
+        .spawn(node_bundle(arr(0.0, 0.0, 1.0, 1.0, 100.0, 100.0)))
+        .id();
     let left = world
-        .spawn((node_bundle(arr(10.0, 0.0, 1.0, 1.0, 10.0, 10.0)), ChildOf(root)))
+        .spawn((
+            node_bundle(arr(10.0, 0.0, 1.0, 1.0, 10.0, 10.0)),
+            ChildOf(root),
+        ))
         .id();
     let right = world
-        .spawn((node_bundle(arr(50.0, 0.0, 1.0, 1.0, 10.0, 10.0)), ChildOf(root)))
+        .spawn((
+            node_bundle(arr(50.0, 0.0, 1.0, 1.0, 10.0, 10.0)),
+            ChildOf(root),
+        ))
         .id();
 
     let mut s = propagation_schedule();
@@ -395,7 +465,11 @@ fn propagate_single_branch_change_preserves_sibling() {
     s.run(&mut world);
 
     // left は更新、right は不変。
-    assert_eq!(global(&world, left).bounds.left, 25.0, "left は新 offset を反映");
+    assert_eq!(
+        global(&world, left).bounds.left,
+        25.0,
+        "left は新 offset を反映"
+    );
     assert_eq!(global(&world, right), right_before, "right（兄弟）は不変");
 }
 
@@ -404,10 +478,17 @@ fn propagate_single_branch_change_preserves_sibling() {
 fn propagate_recomputes_child_after_reparent() {
     let mut world = World::new();
     // root_a: scale 2、root_b: scale 3
-    let root_a = world.spawn(node_bundle(arr(0.0, 0.0, 2.0, 2.0, 100.0, 100.0))).id();
-    let root_b = world.spawn(node_bundle(arr(0.0, 0.0, 3.0, 3.0, 100.0, 100.0))).id();
+    let root_a = world
+        .spawn(node_bundle(arr(0.0, 0.0, 2.0, 2.0, 100.0, 100.0)))
+        .id();
+    let root_b = world
+        .spawn(node_bundle(arr(0.0, 0.0, 3.0, 3.0, 100.0, 100.0)))
+        .id();
     let child = world
-        .spawn((node_bundle(arr(10.0, 0.0, 1.0, 1.0, 10.0, 10.0)), ChildOf(root_a)))
+        .spawn((
+            node_bundle(arr(10.0, 0.0, 1.0, 1.0, 10.0, 10.0)),
+            ChildOf(root_a),
+        ))
         .id();
 
     let mut s = propagation_schedule();
@@ -423,7 +504,10 @@ fn propagate_recomputes_child_after_reparent() {
 
     // root_b(scale3) 下: scaled_offset=30, size*3=30 → left=30, right=60
     let g = global(&world, child);
-    assert_eq!(g.bounds.left, 30.0, "再ペアレント後は新親 root_b の scale で再計算");
+    assert_eq!(
+        g.bounds.left, 30.0,
+        "再ペアレント後は新親 root_b の scale で再計算"
+    );
     assert_eq!(g.bounds.right, 60.0);
 }
 
@@ -432,7 +516,9 @@ fn propagate_recomputes_child_after_reparent() {
 #[test]
 fn propagate_full_pipeline_handles_childless_root() {
     let mut world = World::new();
-    let e = world.spawn(node_bundle(arr(5.0, 7.0, 1.0, 1.0, 20.0, 30.0))).id();
+    let e = world
+        .spawn(node_bundle(arr(5.0, 7.0, 1.0, 1.0, 20.0, 30.0)))
+        .id();
 
     let mut s = propagation_schedule();
     s.run(&mut world);
@@ -451,15 +537,26 @@ fn propagate_full_pipeline_handles_childless_root() {
 fn propagate_deep_chain_propagates_all_levels() {
     let mut world = World::new();
     // すべて scale 1、各レベル offset +10 だけずらす。
-    let a = world.spawn(node_bundle(arr(10.0, 0.0, 1.0, 1.0, 10.0, 10.0))).id();
+    let a = world
+        .spawn(node_bundle(arr(10.0, 0.0, 1.0, 1.0, 10.0, 10.0)))
+        .id();
     let b = world
-        .spawn((node_bundle(arr(10.0, 0.0, 1.0, 1.0, 10.0, 10.0)), ChildOf(a)))
+        .spawn((
+            node_bundle(arr(10.0, 0.0, 1.0, 1.0, 10.0, 10.0)),
+            ChildOf(a),
+        ))
         .id();
     let c = world
-        .spawn((node_bundle(arr(10.0, 0.0, 1.0, 1.0, 10.0, 10.0)), ChildOf(b)))
+        .spawn((
+            node_bundle(arr(10.0, 0.0, 1.0, 1.0, 10.0, 10.0)),
+            ChildOf(b),
+        ))
         .id();
     let d = world
-        .spawn((node_bundle(arr(10.0, 0.0, 1.0, 1.0, 10.0, 10.0)), ChildOf(c)))
+        .spawn((
+            node_bundle(arr(10.0, 0.0, 1.0, 1.0, 10.0, 10.0)),
+            ChildOf(c),
+        ))
         .id();
 
     let mut s = propagation_schedule();

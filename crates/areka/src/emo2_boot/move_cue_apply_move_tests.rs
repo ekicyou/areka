@@ -8,15 +8,15 @@
 // Anchored ビット同一（第二位置ライター非混入の構造檻）を固定する。
 // =============================================================================
 
-use areka_emo_compose::ScaleRatio;
 use super::*;
+use areka_emo_compose::ScaleRatio;
 use bevy_ecs::prelude::{Entity, World};
 use windows::Win32::Foundation::{HINSTANCE, HWND};
 
 use crate::placement::follow::{Anchored, BalloonFollow};
 use crate::placement::resolver::{Anchor, ScopePlacement, SizePx};
 use crate::placement::source::GhostTitles;
-use crate::placement::spawn::{spawn_ghost_windows, GhostWindows};
+use crate::placement::spawn::{GhostWindows, spawn_ghost_windows};
 use wintf::ecs::{Point, WindowHandle, WindowPos};
 
 /// 偽 HWND の WindowHandle（実窓なし・headless 決定論シーム）。
@@ -128,7 +128,11 @@ fn apply_keeps_balloon_offset() {
         .expect("target に BalloonFollow")
         .offset;
 
-    assert!(apply_move_directive(&mut world, &fixture_directive(), ScaleRatio::ONE));
+    assert!(apply_move_directive(
+        &mut world,
+        &fixture_directive(),
+        ScaleRatio::ONE
+    ));
 
     let cpos = pos_of(&world, target);
     let bpos = pos_of(&world, balloon);
@@ -140,7 +144,14 @@ fn apply_keeps_balloon_offset() {
 #[test]
 fn apply_target_absent_returns_false_without_mutation() {
     // GhostWindows に scope0（基準）のみ。fixture の対象 scope1 は不在。
-    let placements = vec![placement(0, 1000, 500, 400, 687, PointPx { x: 285, y: -19 })];
+    let placements = vec![placement(
+        0,
+        1000,
+        500,
+        400,
+        687,
+        PointPx { x: 285, y: -19 },
+    )];
     let mut world = World::new();
     let gw = spawn_ghost_windows(
         &mut world,
@@ -174,7 +185,11 @@ fn apply_leaves_anchored_bit_identical() {
         .copied()
         .expect("base に Anchored（spawn が付与）");
 
-    assert!(apply_move_directive(&mut world, &fixture_directive(), ScaleRatio::ONE));
+    assert!(apply_move_directive(
+        &mut world,
+        &fixture_directive(),
+        ScaleRatio::ONE
+    ));
 
     assert_eq!(
         world.get::<Anchored>(target).copied(),
@@ -301,8 +316,16 @@ fn pipeline_sink_to_apply_moves_keeps_balloon_and_anchored() {
     // ② バルーン随伴 offset 維持（R5.3）——pipeline 越しに balloon_pos − char_pos ≡ offset。
     let cpos = pos_of(&world, target);
     let bpos = pos_of(&world, balloon);
-    assert_eq!(bpos.x - cpos.x, offset.x, "offset x が pipeline 越しに維持される");
-    assert_eq!(bpos.y - cpos.y, offset.y, "offset y が pipeline 越しに維持される");
+    assert_eq!(
+        bpos.x - cpos.x,
+        offset.x,
+        "offset x が pipeline 越しに維持される"
+    );
+    assert_eq!(
+        bpos.y - cpos.y,
+        offset.y,
+        "offset y が pipeline 越しに維持される"
+    );
 
     // ③ Anchored ビット同一（R6.1/6.2/9.5）——sink 経由でも永続確定系へ触れない。
     assert_eq!(
@@ -324,7 +347,14 @@ fn pipeline_sink_to_apply_moves_keeps_balloon_and_anchored() {
 #[test]
 fn pipeline_target_absent_warns_false_no_mutation() {
     // GhostWindows に scope0（基準）のみ挿入・fixture の対象 scope1 は不在。
-    let placements = vec![placement(0, 1000, 500, 400, 687, PointPx { x: 285, y: -19 })];
+    let placements = vec![placement(
+        0,
+        1000,
+        500,
+        400,
+        687,
+        PointPx { x: 285, y: -19 },
+    )];
     let mut world = World::new();
     let gw = spawn_ghost_windows(
         &mut world,
@@ -341,7 +371,10 @@ fn pipeline_target_absent_warns_false_no_mutation() {
 
     // sink 段は正常送出（actor=1・parse は通る）。対象不在の縮退は apply 段でのみ起きる。
     let directive = directive_via_sink("1", &["-353", "", "", "0", "base", "base"]);
-    assert_eq!(directive.scope, 1, "sink 段は対象不在を知らず directive を送出する");
+    assert_eq!(
+        directive.scope, 1,
+        "sink 段は対象不在を知らず directive を送出する"
+    );
 
     assert!(
         !apply_move_directive(&mut world, &directive, ScaleRatio::ONE),

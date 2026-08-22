@@ -10,21 +10,21 @@
 // -------------------------------------------------------------------------
 
 use bevy_ecs::hierarchy::ChildOf;
-use wintf::ecs::Window;
-use wintf::ecs::pointer::PointerLeave;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::mpsc;
+use wintf::ecs::Window;
+use wintf::ecs::pointer::PointerLeave;
 
 use areka_emo_text::actor::TextLayerRuntime;
 use areka_emo_text::state::TextLayerConfig;
 use areka_sakura::contract::ActorKey;
 use bevy_ecs::world::World;
 
-use super::*;
 use super::test_support::{
     capture_logs, headless_emo2_wiring, runtime_with_active_choice, spawn_balloon_leave_child,
 };
+use super::*;
 use crate::placement::spawn::BalloonWindowMarker;
 
 /// `hover[scope]=Some(k)`（`ordinal=Some`）を仕込んだ `BalloonWiring` を World へ NonSend 挿入する。
@@ -56,10 +56,7 @@ fn leave_balloon_owned_clears_hover_via_inject_none() {
     let logs = capture_logs(|| clear_balloon_hover_on_leave(&mut world));
 
     assert_eq!(
-        world
-            .get_non_send::<BalloonWiring>()
-            .unwrap()
-            .hover(0),
+        world.get_non_send::<BalloonWiring>().unwrap().hover(0),
         None,
         "バルーン所有 leave で hover[scope] が None へ解除される（Inject(None)・R1.3）"
     );
@@ -81,7 +78,9 @@ fn leave_balloon_owned_inactive_resets_own_state_without_inject() {
     let mut world = World::new();
     spawn_balloon_leave_child(&mut world, 0);
 
-    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default())));
+    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
+        TextLayerConfig::default(),
+    )));
     assert!(
         !runtime.borrow().choice_active(&ActorKey::from("0")),
         "前提: choice_active=false（選択肢スパン無し）"
@@ -92,10 +91,7 @@ fn leave_balloon_owned_inactive_resets_own_state_without_inject() {
     let logs = capture_logs(|| clear_balloon_hover_on_leave(&mut world));
 
     assert_eq!(
-        world
-            .get_non_send::<BalloonWiring>()
-            .unwrap()
-            .hover(0),
+        world.get_non_send::<BalloonWiring>().unwrap().hover(0),
         None,
         "消滅時は自前状態のみ None 整合（ResetOwnState・Some(3)→None・R3.4）"
     );
@@ -121,10 +117,7 @@ fn leave_non_balloon_window_is_ignored() {
     let logs = capture_logs(|| clear_balloon_hover_on_leave(&mut world));
 
     assert_eq!(
-        world
-            .get_non_send::<BalloonWiring>()
-            .unwrap()
-            .hover(0),
+        world.get_non_send::<BalloonWiring>().unwrap().hover(0),
         Some(5),
         "非バルーン窓の leave は hover を触らない（balloon 所有チェックの key assertion）"
     );
@@ -149,10 +142,7 @@ fn leave_no_marker_is_full_noop() {
     clear_balloon_hover_on_leave(&mut world);
 
     assert_eq!(
-        world
-            .get_non_send::<BalloonWiring>()
-            .unwrap()
-            .hover(0),
+        world.get_non_send::<BalloonWiring>().unwrap().hover(0),
         Some(1),
         "マーカー不在フレームは完全 no-op（hover 不変）"
     );
@@ -170,10 +160,7 @@ fn leave_emo2_absent_degrades_with_debug_and_leaves_hover() {
     let logs = capture_logs(|| clear_balloon_hover_on_leave(&mut world));
 
     assert_eq!(
-        world
-            .get_non_send::<BalloonWiring>()
-            .unwrap()
-            .hover(0),
+        world.get_non_send::<BalloonWiring>().unwrap().hover(0),
         Some(1),
         "Emo2Wiring 不在では hover を触らず縮退（no-op）"
     );

@@ -86,11 +86,11 @@ use wintf::ecs::{
     establish_owner_links,
 };
 
+use super::config::BalloonXMode;
 use super::diag::{log_zorder_pair_declared, log_zorder_pair_strategy};
 use super::follow::{
-    on_balloon_drag, on_balloon_drag_end, on_char_drag, on_char_drag_end, Anchored, BalloonFollow,
+    Anchored, BalloonFollow, on_balloon_drag, on_balloon_drag_end, on_char_drag, on_char_drag_end,
 };
-use super::config::BalloonXMode;
 use super::resolver::{PointPx, ScopePlacement};
 use super::source::GhostTitles;
 
@@ -423,7 +423,12 @@ pub fn spawn_ghost_windows(
                     ..Default::default()
                 },
                 window_style(),
-                window_pos(p.balloon_pos.x, p.balloon_pos.y, p.balloon_size.w, p.balloon_size.h),
+                window_pos(
+                    p.balloon_pos.x,
+                    p.balloon_pos.y,
+                    p.balloon_size.w,
+                    p.balloon_size.h,
+                ),
                 HitTest::none(),
                 // 位置権威の外部宣言（areka-P0-dpi-window-vanish 4.3・D3）。バルーン窓も
                 // OS 直書きから外す——キャラ窓だけ外すと、DPI 跨ぎでバルーンだけが OS 提案
@@ -700,9 +705,6 @@ fn register_ghost_windows_via<R: ClickThroughRegistrar>(
 }
 
 #[cfg(test)]
-#[path = "spawn_test_support.rs"]
-mod test_support;
-#[cfg(test)]
 #[path = "spawn_assembly_tests.rs"]
 mod assembly_tests;
 #[cfg(test)]
@@ -715,11 +717,14 @@ mod clickthrough_tests;
 #[path = "spawn_follow_pipeline_tests.rs"]
 mod follow_pipeline_tests;
 #[cfg(test)]
-#[path = "spawn_zorder_pair_export_tests.rs"]
-mod zorder_pair_export_tests;
+#[path = "spawn_test_support.rs"]
+mod test_support;
 #[cfg(test)]
 #[path = "spawn_zorder_pair_deferred_tests.rs"]
 mod zorder_pair_deferred_tests;
+#[cfg(test)]
+#[path = "spawn_zorder_pair_export_tests.rs"]
+mod zorder_pair_export_tests;
 #[cfg(test)]
 #[path = "spawn_zorder_pair_wiring_tests.rs"]
 mod zorder_pair_wiring_tests;

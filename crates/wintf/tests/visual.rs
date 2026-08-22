@@ -17,9 +17,9 @@ mod insert_visual_test;
 mod parent_visual_test;
 #[path = "visual/property_sync_test.rs"]
 mod property_sync_test;
-#[path = "visual/resource_management_gap_test.rs"]
-mod resource_management_gap_test;
 #[path = "visual/remove_visual_api_test.rs"]
 mod remove_visual_api_test;
+#[path = "visual/resource_management_gap_test.rs"]
+mod resource_management_gap_test;
 #[path = "visual/widget_visual_auto_insert_test.rs"]
 mod widget_visual_auto_insert_test;

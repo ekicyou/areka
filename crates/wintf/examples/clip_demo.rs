@@ -59,9 +59,7 @@ fn main() -> Result<()> {
     });
 
     println!("\nClip Demo:");
-    println!(
-        "  GPU 合成ウィンドウ — DirectComposition クリップ（タイトルバー有、リサイズ可能）"
-    );
+    println!("  GPU 合成ウィンドウ — DirectComposition クリップ（タイトルバー有、リサイズ可能）");
     println!("\nウィンドウに3種類のクリップが表示されます:");
     println!("  上段: Rectangle（矩形クリップ）");
     println!("  中段: RoundedRectangle（均一角丸 radius=20）");

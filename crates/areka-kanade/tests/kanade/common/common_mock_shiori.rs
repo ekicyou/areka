@@ -333,8 +333,7 @@ pub fn spawn_mock_shiori_blocking(fixture: Fixture, block_on: BlockOn) -> (MockS
                         let outcome = state.respond(&call);
                         // 受領を通知（wait_until_blocked を起こす）→ release まで待つ。
                         {
-                            let mut inner =
-                                shared_body.inner.lock().expect("shiori gate mutex");
+                            let mut inner = shared_body.inner.lock().expect("shiori gate mutex");
                             inner.blocked_arrived = true;
                             shared_body.cvar.notify_all();
                             while !inner.released {

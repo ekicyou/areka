@@ -24,15 +24,14 @@ use crate::ecs::clickthrough::{
 use crate::ecs::world::{EcsWorld, EcsWorldSelfRef, FrameFinalize};
 use crate::runtime::message_loop::{MessageLoopDriver, ShutdownPolicy};
 use crate::runtime::tick_bridge::{AsyncTickTask, VsyncEventBridge};
-use crate::runtime::window_registry::{reconcile_window_registry, WindowRegistry};
+use crate::runtime::window_registry::{WindowRegistry, reconcile_window_registry};
 use crate::runtime::wndproc_bridge::WndState;
 
 /// `WinApp` が World へ確保する本番 `WindowRegistry` の具体型。
 ///
 /// 既定の保持値 `Window<WndState>`（ライブラリ型・`!Send`＝UI スレッド束縛）で単相化した
 /// NonSend リソース型。`new()`/`get_non_send` の型推論を確定させるために用いる。
-type ProdWindowRegistry =
-    WindowRegistry<crate::executor::util::Window<WndState>>;
+type ProdWindowRegistry = WindowRegistry<crate::executor::util::Window<WndState>>;
 
 /// メッセージループ層。ライブラリ（`wintf-winmsg-executor`）の `block_on` /
 /// `MessageLoop::run` へ委譲する `MessageLoopDriver` を提供する。
@@ -499,9 +498,7 @@ mod tests {
             // 本番 reconcile（`Window<WndState>` 単相）を schedule 実行（FrameFinalize 相当）。
             // registry が空へ遷移し、注入済み hook が WinApp 所有 Event を notify する。
             let mut sched = Schedule::default();
-            sched.add_systems(
-                reconcile_window_registry::<crate::executor::util::Window<WndState>>,
-            );
+            sched.add_systems(reconcile_window_registry::<crate::executor::util::Window<WndState>>);
             sched.run(w);
 
             // 空遷移を確認（最後の窓が消えた）。

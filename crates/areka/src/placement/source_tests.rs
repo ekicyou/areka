@@ -37,28 +37,46 @@ fn unique_temp_dir(tag: &str) -> PathBuf {
 /// 実測キー（`seriko.alignmenttodesktop=bottom` 等・正典表検証行）が含まれる。
 #[test]
 fn t_i5_emo2_fixture_loads_descript_source() {
-    let src = load_descript_source(&emo2_root())
-        .expect("emo2 fixture は Ok(DescriptSource) を返す");
+    let src =
+        load_descript_source(&emo2_root()).expect("emo2 fixture は Ok(DescriptSource) を返す");
 
     // shell descript 実測キー（正典表「emo2 実測値による検証行」）
     assert_eq!(
-        src.shell_kv.get("seriko.alignmenttodesktop").map(String::as_str),
+        src.shell_kv
+            .get("seriko.alignmenttodesktop")
+            .map(String::as_str),
         Some("bottom")
     );
-    assert_eq!(src.shell_kv.get("sakura.defaultx").map(String::as_str), Some("0"));
-    assert_eq!(src.shell_kv.get("kero.defaultx").map(String::as_str), Some("0"));
     assert_eq!(
-        src.shell_kv.get("sakura.balloon.alignment").map(String::as_str),
+        src.shell_kv.get("sakura.defaultx").map(String::as_str),
+        Some("0")
+    );
+    assert_eq!(
+        src.shell_kv.get("kero.defaultx").map(String::as_str),
+        Some("0")
+    );
+    assert_eq!(
+        src.shell_kv
+            .get("sakura.balloon.alignment")
+            .map(String::as_str),
         Some("left")
     );
     assert_eq!(
-        src.shell_kv.get("kero.balloon.alignment").map(String::as_str),
+        src.shell_kv
+            .get("kero.balloon.alignment")
+            .map(String::as_str),
         Some("right")
     );
 
     // ghost descript 実測キー（scope1 検出シグナル kero.name を含む）
-    assert_eq!(src.ghost_kv.get("kero.name").map(String::as_str), Some("エモ"));
-    assert_eq!(src.ghost_kv.get("sakura.name").map(String::as_str), Some("むらさき"));
+    assert_eq!(
+        src.ghost_kv.get("kero.name").map(String::as_str),
+        Some("エモ")
+    );
+    assert_eq!(
+        src.ghost_kv.get("sakura.name").map(String::as_str),
+        Some("むらさき")
+    );
 
     // shell_dir は resolve の解決値（<root>/shell/master）
     assert_eq!(src.shell_dir, emo2_root().join("shell").join("master"));
@@ -68,8 +86,8 @@ fn t_i5_emo2_fixture_loads_descript_source() {
 /// 未定義スコープは既定 `"areka"` を返す（パニックしない）。
 #[test]
 fn t_i5_emo2_titles_from_names() {
-    let src = load_descript_source(&emo2_root())
-        .expect("emo2 fixture は Ok(DescriptSource) を返す");
+    let src =
+        load_descript_source(&emo2_root()).expect("emo2 fixture は Ok(DescriptSource) を返す");
 
     assert_eq!(src.titles.title(0), "むらさき");
     assert_eq!(src.titles.title(1), "エモ");
@@ -85,7 +103,10 @@ fn t_i5_emo2_titles_from_names() {
 /// 名前情報が全欠落でも全スコープで既定 `"areka"` を返す（常に文字列・panic しない）。
 #[test]
 fn titles_all_missing_default_to_areka() {
-    let titles = build_titles(&areka_parsers::package::GhostNames::default(), &BTreeMap::new());
+    let titles = build_titles(
+        &areka_parsers::package::GhostNames::default(),
+        &BTreeMap::new(),
+    );
     assert_eq!(titles.title(0), "areka");
     assert_eq!(titles.title(1), "areka");
     assert_eq!(titles.title(7), "areka");
@@ -283,8 +304,7 @@ fn load_balloon_author_dpi_reads_dpi_all_patterns() {
     let _ = fs::remove_dir_all(&zero);
 
     // shell 側キー `seriko.dpi` は balloon 側の正本ではない（キー取り違えの檻）
-    let wrong_key =
-        balloon_root_with("balloon_dpi_wrong_key", "charset,UTF-8\nseriko.dpi,192\n");
+    let wrong_key = balloon_root_with("balloon_dpi_wrong_key", "charset,UTF-8\nseriko.dpi,192\n");
     assert_eq!(load_balloon_author_dpi(&wrong_key), 96);
     let _ = fs::remove_dir_all(&wrong_key);
 }

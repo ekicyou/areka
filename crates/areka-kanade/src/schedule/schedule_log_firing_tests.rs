@@ -1,4 +1,4 @@
-use super::log_capture::{assert_logged, capture, logged_once, CapturedEvent};
+use super::log_capture::{CapturedEvent, assert_logged, capture, logged_once};
 use super::*;
 use crate::msg::{CloseReason, ShioriFailure};
 use crate::talk::TalkDone;
@@ -109,7 +109,13 @@ fn error_close_deadline_exceeded_logs() {
         choice_prev_talk: None,
     };
     let ev = capture(|| {
-        let _ = step(s, Input::Tick { now: MonotonicMs(2_000) }, &cfg);
+        let _ = step(
+            s,
+            Input::Tick {
+                now: MonotonicMs(2_000),
+            },
+            &cfg,
+        );
     });
     assert_logged(&ev, Level::ERROR, "close_deadline_exceeded");
 }
@@ -152,7 +158,12 @@ fn warn_unexpected_reply_logs() {
 #[test]
 fn warn_input_after_terminate_logs() {
     // 終了系列（Stopped）で受領した非横断入力（Tick）→ dispatch_phase input_after_terminate。
-    let ev = run_step(Phase::Stopped, Input::Tick { now: MonotonicMs(1_000) });
+    let ev = run_step(
+        Phase::Stopped,
+        Input::Tick {
+            now: MonotonicMs(1_000),
+        },
+    );
     assert_logged(&ev, Level::WARN, "input_after_terminate");
 }
 
@@ -163,7 +174,12 @@ fn warn_input_after_terminate_logs() {
 #[test]
 fn warn_boot_input_ignored_logs() {
     // boot フェーズ（BootInit）+ boot 無関係入力（Tick）→ dispatch_phase→boot::step _ アーム。
-    let ev = run_step(Phase::BootInit, Input::Tick { now: MonotonicMs(1_000) });
+    let ev = run_step(
+        Phase::BootInit,
+        Input::Tick {
+            now: MonotonicMs(1_000),
+        },
+    );
     assert_logged(&ev, Level::WARN, "boot_input_ignored");
 }
 
@@ -238,11 +254,7 @@ fn warn_steady_input_ignored_logs() {
     // アームゆえ steady::step を直接駆動して検証する。
     let cfg = config();
     let ev = capture(|| {
-        let _ = steady::step(
-            state_in(Phase::Steady { talk: None }),
-            Input::Boot,
-            &cfg,
-        );
+        let _ = steady::step(state_in(Phase::Steady { talk: None }), Input::Boot, &cfg);
     });
     assert_logged(&ev, Level::WARN, "steady_input_ignored");
 }
@@ -255,7 +267,9 @@ fn warn_steady_phase_unexpected_logs() {
     let ev = capture(|| {
         let _ = steady::step(
             state_in(Phase::BootMain),
-            Input::Tick { now: MonotonicMs(1_000) },
+            Input::Tick {
+                now: MonotonicMs(1_000),
+            },
             &cfg,
         );
     });
@@ -333,7 +347,9 @@ fn warn_close_phase_unexpected_logs() {
     let ev = capture(|| {
         let _ = close::step(
             state_in(Phase::Steady { talk: None }),
-            Input::Tick { now: MonotonicMs(1_000) },
+            Input::Tick {
+                now: MonotonicMs(1_000),
+            },
             &cfg,
         );
     });
@@ -421,7 +437,10 @@ fn warn_choice_rejected_busy_logs() {
         },
         ChoicePhase::TimeoutInFlight,
     ] {
-        let ev = run_step_state(state_with_ledger(&["OnMenu"], phase), choice_input_of("OnMenu"));
+        let ev = run_step_state(
+            state_with_ledger(&["OnMenu"], phase),
+            choice_input_of("OnMenu"),
+        );
         assert_logged(&ev, Level::WARN, "choice_rejected_busy");
     }
 }

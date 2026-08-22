@@ -1,17 +1,12 @@
-use std::path::PathBuf;
-use std::sync::{mpsc, Arc};
-use areka_emo_text::state::TextLayerConfig;
-use windows::Win32::System::Com::{CoInitializeEx, COINIT_MULTITHREADED};
 use crate::emo2_boot::assets::build_boot_assets;
 use crate::emo2_boot::talk_lifecycle::TalkLifecycleSignal;
+use areka_emo_text::state::TextLayerConfig;
+use std::path::PathBuf;
+use std::sync::{Arc, mpsc};
+use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 
+use super::test_support::{resnap_world, synth_assets, synth_assets_with_balloons, zero_clock};
 use super::*;
-use super::test_support::{
-    resnap_world,
-    synth_assets,
-    synth_assets_with_balloons,
-    zero_clock,
-};
 
 /// DD-12 完全一致: `window_scopes == 資産 scope` → 計画件数＝窓数・missing/unused 空。
 ///
@@ -37,7 +32,10 @@ fn plan_attachments_exact_match_plans_all_windows() {
     assert_eq!(plan.items[0].scope, 0);
     assert_eq!(plan.items[0].shell_target, shell_target(0));
     assert_eq!(plan.items[0].balloon_target, balloon_target(0));
-    assert_eq!(plan.items[0].initial_surface_id, 0, "scope0 初期面 0（DD-9）");
+    assert_eq!(
+        plan.items[0].initial_surface_id, 0,
+        "scope0 初期面 0（DD-9）"
+    );
     assert_eq!(plan.items[0].shell_index, 0);
     assert_eq!(plan.items[0].balloon_index, Some(0));
 
@@ -45,7 +43,10 @@ fn plan_attachments_exact_match_plans_all_windows() {
     assert_eq!(plan.items[1].scope, 1);
     assert_eq!(plan.items[1].shell_target, shell_target(1));
     assert_eq!(plan.items[1].balloon_target, balloon_target(1));
-    assert_eq!(plan.items[1].initial_surface_id, 10, "scope1 初期面 10（DD-9）");
+    assert_eq!(
+        plan.items[1].initial_surface_id, 10,
+        "scope1 初期面 10（DD-9）"
+    );
     assert_eq!(plan.items[1].shell_index, 1);
     assert_eq!(plan.items[1].balloon_index, Some(1));
 }
@@ -59,7 +60,11 @@ fn plan_attachments_window_without_asset_goes_to_missing() {
 
     let plan = plan_attachments(&window_scopes, &assets);
 
-    assert_eq!(plan.missing_assets, vec![2usize], "窓あり資産なしは missing 検出");
+    assert_eq!(
+        plan.missing_assets,
+        vec![2usize],
+        "窓あり資産なしは missing 検出"
+    );
     assert_eq!(plan.items.len(), 2, "資産のある 0,1 のみ装着計画に載る");
     assert!(
         plan.items.iter().all(|it| it.scope != 2),
@@ -77,7 +82,11 @@ fn plan_attachments_asset_without_window_goes_to_unused() {
 
     let plan = plan_attachments(&window_scopes, &assets);
 
-    assert_eq!(plan.unused_assets, vec![1u32], "資産あり窓なしは unused 検出（u32）");
+    assert_eq!(
+        plan.unused_assets,
+        vec![1u32],
+        "資産あり窓なしは unused 検出（u32）"
+    );
     assert_eq!(plan.items.len(), 1, "窓のある scope0 のみ装着計画に載る");
     assert_eq!(plan.items[0].scope, 0);
     assert!(plan.missing_assets.is_empty(), "全窓に資産がある");
@@ -117,8 +126,15 @@ fn plan_attachments_marks_missing_balloon_index_none() {
     let plan = plan_attachments(&[0usize, 1], &assets);
 
     assert_eq!(plan.items.len(), 2, "shell 資産の揃う 0,1 が計画に載る");
-    assert_eq!(plan.items[0].balloon_index, Some(0), "scope0 は balloon あり");
-    assert_eq!(plan.items[1].balloon_index, None, "scope1 は balloon なし → None");
+    assert_eq!(
+        plan.items[0].balloon_index,
+        Some(0),
+        "scope0 は balloon あり"
+    );
+    assert_eq!(
+        plan.items[1].balloon_index, None,
+        "scope1 は balloon なし → None"
+    );
 }
 
 /// R4.2 headless: `text_slot_view` が `None`（初回 ShowSurface 未合流）の経路では文字層を
@@ -131,9 +147,14 @@ fn connect_balloon_text_skips_when_view_none() {
     // 初回 ShowSurface 前の presenter は text_slot_view が None（R4.2 の遅延化を実源で再現）。
     let presenter = EmoPresenter::new();
     let view = presenter.text_slot_view(TargetId(1));
-    assert!(view.is_none(), "初回 ShowSurface 前の text_slot_view は None（前提）");
+    assert!(
+        view.is_none(),
+        "初回 ShowSurface 前の text_slot_view は None（前提）"
+    );
 
-    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default())));
+    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
+        TextLayerConfig::default(),
+    )));
     let model = areka_parsers::balloon::parse_str("", None);
 
     // None 経路: 文字層を接続せず false（次フレーム再試行へ委ねる）。panic しない。
@@ -162,7 +183,9 @@ fn run_attach_phase_without_gpu_does_not_attach_or_consume_assets() {
         mpsc::channel::<PresentCommand>().1,
         mpsc::channel::<MoveDirective>().1,
         mpsc::channel::<TalkLifecycleSignal>().1,
-        Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default()))),
+        Rc::new(RefCell::new(TextLayerRuntime::new(
+            TextLayerConfig::default(),
+        ))),
         TalkClock::new(Arc::new(|| 0.0)),
         synth_assets(&[(0, 0), (1, 10)]),
     );
@@ -170,7 +193,10 @@ fn run_attach_phase_without_gpu_does_not_attach_or_consume_assets() {
     let mut world = World::new();
 
     run_attach_phase(&mut wiring, &mut world);
-    assert!(!wiring.attached, "GPU 資源なしでは装着しない（attached=false）");
+    assert!(
+        !wiring.attached,
+        "GPU 資源なしでは装着しない（attached=false）"
+    );
     assert!(
         wiring.assets.is_some(),
         "ゲート不成立では assets を take しない（次フレーム再試行のため保持）"
@@ -196,8 +222,7 @@ fn run_attach_phase_without_gpu_does_not_attach_or_consume_assets() {
 
 /// emo2 fixture ルート（`CARGO_MANIFEST_DIR`＝`crates/areka` 相対・assets.rs テストと同一規約）。
 fn emo2_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../pilot/examples/shiori-host-32/fixtures/emo2")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../pilot/examples/shiori-host-32/fixtures/emo2")
 }
 
 /// emo2 fixture のバルーンルート（assets.rs テストと同一規約）。
@@ -258,7 +283,9 @@ fn attach_supplies_each_scope_its_own_balloon_model_to_map_and_text_layer() {
         "前提: 本体側／相方側の validrect が実際に異なる（同値なら本檻は何も弁別しない）"
     );
 
-    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default())));
+    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
+        TextLayerConfig::default(),
+    )));
     let mut wiring = Emo2Wiring::new(
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
@@ -340,7 +367,9 @@ fn attach_establishes_balloons_invisible_with_slot_and_surface() {
         mpsc::channel::<PresentCommand>().1,
         mpsc::channel::<MoveDirective>().1,
         mpsc::channel::<TalkLifecycleSignal>().1,
-        Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default()))),
+        Rc::new(RefCell::new(TextLayerRuntime::new(
+            TextLayerConfig::default(),
+        ))),
         zero_clock(),
         assets,
     );
@@ -384,14 +413,16 @@ fn attach_establishes_balloons_invisible_with_slot_and_surface() {
 /// `region: None` へ正常縮退する（hit_region.rs 4.4/5.3）。GPU/表示なしで決定論的に成立する。
 #[test]
 fn presenter_accessor_feeds_resolve_hit_region() {
-    use crate::emo2_boot::hit_region::{resolve_hit_region, HitRegion};
+    use crate::emo2_boot::hit_region::{HitRegion, resolve_hit_region};
 
     let wiring = Emo2Wiring::new(
         EmoPresenter::new(),
         mpsc::channel::<PresentCommand>().1,
         mpsc::channel::<MoveDirective>().1,
         mpsc::channel::<TalkLifecycleSignal>().1,
-        Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default()))),
+        Rc::new(RefCell::new(TextLayerRuntime::new(
+            TextLayerConfig::default(),
+        ))),
         TalkClock::new(Arc::new(|| 0.0)),
         synth_assets(&[(0, 0), (1, 10)]),
     );
@@ -429,7 +460,9 @@ fn move_cue_sink_reaches_emo2_wiring_receiver() {
         mpsc::channel::<PresentCommand>().1,
         move_rx,
         mpsc::channel::<TalkLifecycleSignal>().1,
-        Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default()))),
+        Rc::new(RefCell::new(TextLayerRuntime::new(
+            TextLayerConfig::default(),
+        ))),
         TalkClock::new(Arc::new(|| 0.0)),
         synth_assets(&[(0, 0)]),
     );
@@ -449,7 +482,11 @@ fn move_cue_sink_reaches_emo2_wiring_receiver() {
     });
 
     let drained = wiring.drain_move_directives();
-    assert_eq!(drained.len(), 1, "sink→Emo2Wiring の受信端へちょうど 1 件届く");
+    assert_eq!(
+        drained.len(),
+        1,
+        "sink→Emo2Wiring の受信端へちょうど 1 件届く"
+    );
     assert_eq!(drained[0].scope, 1, "scope は cue.actor（\\1）由来");
     assert_eq!(
         drained[0].base,
@@ -483,7 +520,9 @@ fn talk_playback_reaches_emo2_wiring_lifecycle_receiver() {
         mpsc::channel::<PresentCommand>().1,
         mpsc::channel::<MoveDirective>().1,
         lifecycle_rx,
-        Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default()))),
+        Rc::new(RefCell::new(TextLayerRuntime::new(
+            TextLayerConfig::default(),
+        ))),
         TalkClock::new(Arc::new(|| 0.0)),
         synth_assets(&[(0, 0)]),
     );

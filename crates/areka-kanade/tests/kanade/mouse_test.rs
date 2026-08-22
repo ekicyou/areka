@@ -42,9 +42,6 @@ use super::common::{
 // `mouse_test_test_support.rs` へ、観測ケースはテーマごとの兄弟ファイル `mouse_test_<テーマ>_tests.rs`
 // へ置く（子は `super::…` の明示 import で本ファイルの import 束縛と共有ヘルパを引く）。
 #[cfg(test)]
-#[path = "mouse_test_test_support.rs"]
-mod test_support;
-#[cfg(test)]
 #[path = "mouse_test_event_layout_tests.rs"]
 mod event_layout_tests;
 #[cfg(test)]
@@ -53,3 +50,6 @@ mod phase_guard_tests;
 #[cfg(test)]
 #[path = "mouse_test_talk_start_tests.rs"]
 mod talk_start_tests;
+#[cfg(test)]
+#[path = "mouse_test_test_support.rs"]
+mod test_support;

@@ -88,8 +88,9 @@ impl ShioriBackend for BoxedBackend {
 /// [`expected_greeting_sequence`] であり、凍結 Value が変われば DLL→compile が別列を産んで一致
 /// しなくなる。本値は I2 の交信列（OnFirstBoot GET の Value 結果）の照合にも用いる。
 fn expected_onfirstboot_value() -> String {
-    let snapshot = shiori4_testdll::snapshot_for("OnFirstBoot")
-        .expect("OnFirstBoot は shiori4-testdll のスナップショット表に収載されていること（narrowing: GET）");
+    let snapshot = shiori4_testdll::snapshot_for("OnFirstBoot").expect(
+        "OnFirstBoot は shiori4-testdll のスナップショット表に収載されていること（narrowing: GET）",
+    );
     snapshot
         .lines()
         .find_map(|l| l.strip_prefix("Value: "))
@@ -114,121 +115,510 @@ fn expected_onfirstboot_value() -> String {
 fn expected_greeting_sequence() -> Vec<(ActorKey, CueCommand)> {
     vec![
         (ActorKey::from("0"), CueCommand::ClearAll),
-        (ActorKey::from("1"), CueCommand::Emote { key: "静観".to_string() }),
-        (ActorKey::from("1"), CueCommand::command_carrier("move", vec!["-353".to_string(), "".to_string(), "".to_string(), "0".to_string(), "base".to_string(), "base".to_string()])),
+        (
+            ActorKey::from("1"),
+            CueCommand::Emote {
+                key: "静観".to_string(),
+            },
+        ),
+        (
+            ActorKey::from("1"),
+            CueCommand::command_carrier(
+                "move",
+                vec![
+                    "-353".to_string(),
+                    "".to_string(),
+                    "".to_string(),
+                    "0".to_string(),
+                    "base".to_string(),
+                    "base".to_string(),
+                ],
+            ),
+        ),
         (ActorKey::from("1"), CueCommand::NewLine { ratio: 1.5_f32 }),
-        (ActorKey::from("0"), CueCommand::Emote { key: "1000".to_string() }),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["腕".to_string(), "伸び".to_string(), "1".to_string()])),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["紅".to_string(), "差し".to_string(), "0".to_string()])),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["口".to_string(), "にこっ".to_string(), "1".to_string()])),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["眉".to_string(), "通常".to_string(), "1".to_string()])),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["目".to_string(), "笑顔".to_string(), "1".to_string()])),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["まばたき".to_string(), "----".to_string(), "1".to_string()])),
-        (ActorKey::from("0"), CueCommand::Text("はじめましてや！！".to_string())),
+        (
+            ActorKey::from("0"),
+            CueCommand::Emote {
+                key: "1000".to_string(),
+            },
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["腕".to_string(), "伸び".to_string(), "1".to_string()],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["紅".to_string(), "差し".to_string(), "0".to_string()],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["口".to_string(), "にこっ".to_string(), "1".to_string()],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["眉".to_string(), "通常".to_string(), "1".to_string()],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["目".to_string(), "笑顔".to_string(), "1".to_string()],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["まばたき".to_string(), "----".to_string(), "1".to_string()],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::Text("はじめましてや！！".to_string()),
+        ),
         (ActorKey::from("0"), CueCommand::Wait),
-        (ActorKey::from("0"), CueCommand::Text("うちは、".to_string())),
+        (
+            ActorKey::from("0"),
+            CueCommand::Text("うちは、".to_string()),
+        ),
         (ActorKey::from("0"), CueCommand::Wait),
         (ActorKey::from("0"), CueCommand::NewLine { ratio: 1.0_f32 }),
-        (ActorKey::from("0"), CueCommand::Text("むらさき。".to_string())),
+        (
+            ActorKey::from("0"),
+            CueCommand::Text("むらさき。".to_string()),
+        ),
         (ActorKey::from("0"), CueCommand::Wait),
         (ActorKey::from("0"), CueCommand::NewLine { ratio: 1.5_f32 }),
-        (ActorKey::from("1"), CueCommand::Emote { key: "笑顔".to_string() }),
-        (ActorKey::from("1"), CueCommand::Text("僕はエモ。".to_string())),
+        (
+            ActorKey::from("1"),
+            CueCommand::Emote {
+                key: "笑顔".to_string(),
+            },
+        ),
+        (
+            ActorKey::from("1"),
+            CueCommand::Text("僕はエモ。".to_string()),
+        ),
         (ActorKey::from("1"), CueCommand::Wait),
         (ActorKey::from("1"), CueCommand::NewLine { ratio: 1.0_f32 }),
-        (ActorKey::from("1"), CueCommand::Text("クール系の可愛い娘。".to_string())),
+        (
+            ActorKey::from("1"),
+            CueCommand::Text("クール系の可愛い娘。".to_string()),
+        ),
         (ActorKey::from("1"), CueCommand::Wait),
         (ActorKey::from("1"), CueCommand::NewLine { ratio: 1.5_f32 }),
-        (ActorKey::from("0"), CueCommand::Emote { key: "1000".to_string() }),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["腕".to_string(), "組み".to_string(), "1".to_string()])),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["紅".to_string(), "差し".to_string(), "0".to_string()])),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["口".to_string(), "口開".to_string(), "1".to_string()])),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["眉".to_string(), "シュン".to_string(), "1".to_string()])),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["目".to_string(), "ジトー".to_string(), "1".to_string()])),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["まばたき".to_string(), "ジトー".to_string(), "1".to_string()])),
-        (ActorKey::from("0"), CueCommand::Text("そこ自分でいう‥".to_string())),
+        (
+            ActorKey::from("0"),
+            CueCommand::Emote {
+                key: "1000".to_string(),
+            },
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["腕".to_string(), "組み".to_string(), "1".to_string()],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["紅".to_string(), "差し".to_string(), "0".to_string()],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["口".to_string(), "口開".to_string(), "1".to_string()],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["眉".to_string(), "シュン".to_string(), "1".to_string()],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["目".to_string(), "ジトー".to_string(), "1".to_string()],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec![
+                    "まばたき".to_string(),
+                    "ジトー".to_string(),
+                    "1".to_string(),
+                ],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::Text("そこ自分でいう‥".to_string()),
+        ),
         (ActorKey::from("0"), CueCommand::Wait),
         (ActorKey::from("0"), CueCommand::Text("‥".to_string())),
         (ActorKey::from("0"), CueCommand::Wait),
         (ActorKey::from("0"), CueCommand::Text("。".to_string())),
         (ActorKey::from("0"), CueCommand::Wait),
         (ActorKey::from("0"), CueCommand::NewLine { ratio: 1.5_f32 }),
-        (ActorKey::from("1"), CueCommand::Emote { key: "照れ怒り".to_string() }),
-        (ActorKey::from("1"), CueCommand::Text("イイジャン！".to_string())),
+        (
+            ActorKey::from("1"),
+            CueCommand::Emote {
+                key: "照れ怒り".to_string(),
+            },
+        ),
+        (
+            ActorKey::from("1"),
+            CueCommand::Text("イイジャン！".to_string()),
+        ),
         (ActorKey::from("1"), CueCommand::Wait),
         (ActorKey::from("1"), CueCommand::NewLine { ratio: 1.0_f32 }),
         (ActorKey::from("1"), CueCommand::Text("‥".to_string())),
         (ActorKey::from("1"), CueCommand::Wait),
         (ActorKey::from("1"), CueCommand::Text("‥".to_string())),
         (ActorKey::from("1"), CueCommand::Wait),
-        (ActorKey::from("1"), CueCommand::Text("ええと、".to_string())),
+        (
+            ActorKey::from("1"),
+            CueCommand::Text("ええと、".to_string()),
+        ),
         (ActorKey::from("1"), CueCommand::Wait),
         (ActorKey::from("1"), CueCommand::NewLine { ratio: 1.5_f32 }),
-        (ActorKey::from("0"), CueCommand::Emote { key: "1000".to_string() }),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["腕".to_string(), "伸び".to_string(), "1".to_string()])),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["紅".to_string(), "差し".to_string(), "0".to_string()])),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["口".to_string(), "にこっ".to_string(), "1".to_string()])),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["眉".to_string(), "通常".to_string(), "1".to_string()])),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["目".to_string(), "通常".to_string(), "1".to_string()])),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["まばたき".to_string(), "通常".to_string(), "1".to_string()])),
+        (
+            ActorKey::from("0"),
+            CueCommand::Emote {
+                key: "1000".to_string(),
+            },
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["腕".to_string(), "伸び".to_string(), "1".to_string()],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["紅".to_string(), "差し".to_string(), "0".to_string()],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["口".to_string(), "にこっ".to_string(), "1".to_string()],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["眉".to_string(), "通常".to_string(), "1".to_string()],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["目".to_string(), "通常".to_string(), "1".to_string()],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["まばたき".to_string(), "通常".to_string(), "1".to_string()],
+            ),
+        ),
         (ActorKey::from("0"), CueCommand::NewLine { ratio: 1.5_f32 }),
-        (ActorKey::from("1"), CueCommand::Emote { key: "静観".to_string() }),
-        (ActorKey::from("1"), CueCommand::Text("僕は日常から".to_string())),
+        (
+            ActorKey::from("1"),
+            CueCommand::Emote {
+                key: "静観".to_string(),
+            },
+        ),
+        (
+            ActorKey::from("1"),
+            CueCommand::Text("僕は日常から".to_string()),
+        ),
         (ActorKey::from("1"), CueCommand::NewLine { ratio: 1.0_f32 }),
-        (ActorKey::from("1"), CueCommand::Text("「感情」を".to_string())),
+        (
+            ActorKey::from("1"),
+            CueCommand::Text("「感情」を".to_string()),
+        ),
         (ActorKey::from("1"), CueCommand::NewLine { ratio: 1.0_f32 }),
-        (ActorKey::from("1"), CueCommand::Text("探してるんだ。".to_string())),
+        (
+            ActorKey::from("1"),
+            CueCommand::Text("探してるんだ。".to_string()),
+        ),
         (ActorKey::from("1"), CueCommand::Wait),
         (ActorKey::from("1"), CueCommand::NewLine { ratio: 1.5_f32 }),
-        (ActorKey::from("0"), CueCommand::Emote { key: "1000".to_string() }),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["腕".to_string(), "組み".to_string(), "1".to_string()])),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["紅".to_string(), "差し".to_string(), "0".to_string()])),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["口".to_string(), "にこっ".to_string(), "1".to_string()])),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["眉".to_string(), "通常".to_string(), "1".to_string()])),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["目".to_string(), "静観".to_string(), "1".to_string()])),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["まばたき".to_string(), "----".to_string(), "1".to_string()])),
-        (ActorKey::from("0"), CueCommand::Text("つまり、、".to_string())),
+        (
+            ActorKey::from("0"),
+            CueCommand::Emote {
+                key: "1000".to_string(),
+            },
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["腕".to_string(), "組み".to_string(), "1".to_string()],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["紅".to_string(), "差し".to_string(), "0".to_string()],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["口".to_string(), "にこっ".to_string(), "1".to_string()],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["眉".to_string(), "通常".to_string(), "1".to_string()],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["目".to_string(), "静観".to_string(), "1".to_string()],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["まばたき".to_string(), "----".to_string(), "1".to_string()],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::Text("つまり、、".to_string()),
+        ),
         (ActorKey::from("0"), CueCommand::Wait),
-        (ActorKey::from("0"), CueCommand::Emote { key: "1000".to_string() }),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["腕".to_string(), "組み".to_string(), "1".to_string()])),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["紅".to_string(), "差し".to_string(), "1".to_string()])),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["口".to_string(), "口開".to_string(), "1".to_string()])),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["眉".to_string(), "悲しみ".to_string(), "1".to_string()])),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["目".to_string(), "ジトー".to_string(), "1".to_string()])),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["まばたき".to_string(), "ジトー".to_string(), "1".to_string()])),
-        (ActorKey::from("0"), CueCommand::Text("エモを弄ってれば".to_string())),
+        (
+            ActorKey::from("0"),
+            CueCommand::Emote {
+                key: "1000".to_string(),
+            },
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["腕".to_string(), "組み".to_string(), "1".to_string()],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["紅".to_string(), "差し".to_string(), "1".to_string()],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["口".to_string(), "口開".to_string(), "1".to_string()],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["眉".to_string(), "悲しみ".to_string(), "1".to_string()],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["目".to_string(), "ジトー".to_string(), "1".to_string()],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec![
+                    "まばたき".to_string(),
+                    "ジトー".to_string(),
+                    "1".to_string(),
+                ],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::Text("エモを弄ってれば".to_string()),
+        ),
         (ActorKey::from("0"), CueCommand::NewLine { ratio: 1.0_f32 }),
         (ActorKey::from("0"), CueCommand::Text("OK？".to_string())),
         (ActorKey::from("0"), CueCommand::Wait),
         (ActorKey::from("0"), CueCommand::NewLine { ratio: 1.5_f32 }),
-        (ActorKey::from("1"), CueCommand::Emote { key: "照れ怒り".to_string() }),
-        (ActorKey::from("1"), CueCommand::Text("ちがうよう。".to_string())),
+        (
+            ActorKey::from("1"),
+            CueCommand::Emote {
+                key: "照れ怒り".to_string(),
+            },
+        ),
+        (
+            ActorKey::from("1"),
+            CueCommand::Text("ちがうよう。".to_string()),
+        ),
         (ActorKey::from("1"), CueCommand::Wait),
         (ActorKey::from("1"), CueCommand::NewLine { ratio: 1.5_f32 }),
-        (ActorKey::from("0"), CueCommand::Emote { key: "1000".to_string() }),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["腕".to_string(), "伸び".to_string(), "1".to_string()])),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["紅".to_string(), "差し".to_string(), "1".to_string()])),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["口".to_string(), "笑顔2".to_string(), "1".to_string()])),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["眉".to_string(), "通常".to_string(), "1".to_string()])),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["目".to_string(), "通常".to_string(), "1".to_string()])),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["まばたき".to_string(), "通常".to_string(), "1".to_string()])),
+        (
+            ActorKey::from("0"),
+            CueCommand::Emote {
+                key: "1000".to_string(),
+            },
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["腕".to_string(), "伸び".to_string(), "1".to_string()],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["紅".to_string(), "差し".to_string(), "1".to_string()],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["口".to_string(), "笑顔2".to_string(), "1".to_string()],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["眉".to_string(), "通常".to_string(), "1".to_string()],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["目".to_string(), "通常".to_string(), "1".to_string()],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["まばたき".to_string(), "通常".to_string(), "1".to_string()],
+            ),
+        ),
         (ActorKey::from("0"), CueCommand::Text("まあ、".to_string())),
         (ActorKey::from("0"), CueCommand::Wait),
-        (ActorKey::from("0"), CueCommand::Emote { key: "1000".to_string() }),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["腕".to_string(), "組み".to_string(), "1".to_string()])),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["紅".to_string(), "差し".to_string(), "0".to_string()])),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["口".to_string(), "にこっ".to_string(), "1".to_string()])),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["眉".to_string(), "通常".to_string(), "1".to_string()])),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["目".to_string(), "笑顔".to_string(), "1".to_string()])),
-        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["まばたき".to_string(), "----".to_string(), "1".to_string()])),
-        (ActorKey::from("0"), CueCommand::Text("これから、".to_string())),
+        (
+            ActorKey::from("0"),
+            CueCommand::Emote {
+                key: "1000".to_string(),
+            },
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["腕".to_string(), "組み".to_string(), "1".to_string()],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["紅".to_string(), "差し".to_string(), "0".to_string()],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["口".to_string(), "にこっ".to_string(), "1".to_string()],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["眉".to_string(), "通常".to_string(), "1".to_string()],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["目".to_string(), "笑顔".to_string(), "1".to_string()],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::command_carrier(
+                "bind",
+                vec!["まばたき".to_string(), "----".to_string(), "1".to_string()],
+            ),
+        ),
+        (
+            ActorKey::from("0"),
+            CueCommand::Text("これから、".to_string()),
+        ),
         (ActorKey::from("0"), CueCommand::Wait),
         (ActorKey::from("0"), CueCommand::NewLine { ratio: 1.0_f32 }),
-        (ActorKey::from("0"), CueCommand::Text("よろしゅうに！".to_string())),
+        (
+            ActorKey::from("0"),
+            CueCommand::Text("よろしゅうに！".to_string()),
+        ),
         (ActorKey::from("0"), CueCommand::Wait),
         (ActorKey::from("0"), CueCommand::NewLine { ratio: 1.5_f32 }),
-        (ActorKey::from("1"), CueCommand::Emote { key: "笑顔".to_string() }),
-        (ActorKey::from("1"), CueCommand::Text("よろしくね。".to_string())),
+        (
+            ActorKey::from("1"),
+            CueCommand::Emote {
+                key: "笑顔".to_string(),
+            },
+        ),
+        (
+            ActorKey::from("1"),
+            CueCommand::Text("よろしくね。".to_string()),
+        ),
         (ActorKey::from("1"), CueCommand::Wait),
         // 末尾の起動記録 SET cue（position-persist task 7.1 の behavioral ripple）: 起動記録が無い
         // 初回起動では `GhostRuntime::apply_boot_record_gate` が first_boot=true と判定し
@@ -268,8 +658,9 @@ fn i1_inproc_one_lap_records_frozen_onfirstboot_greeting_and_closes_cleanly() {
     //      （expected_greeting_sequence）——凍結 Value が差し替えられれば DLL→compile が別列を
     //      産み、cue 列 assert が確実に fail する。ここでは加えて凍結スナップショットが 200＋Value
     //      ＋非空であることを固定する（採取形の退行防止）。 ----
-    let snapshot = shiori4_testdll::snapshot_for("OnFirstBoot")
-        .expect("OnFirstBoot は shiori4-testdll のスナップショット表に収載されていること（narrowing: GET）");
+    let snapshot = shiori4_testdll::snapshot_for("OnFirstBoot").expect(
+        "OnFirstBoot は shiori4-testdll のスナップショット表に収載されていること（narrowing: GET）",
+    );
     assert!(
         snapshot.contains("200"),
         "ドリフト検出: 凍結 OnFirstBoot は 200 応答であること: {snapshot:?}"
@@ -301,7 +692,8 @@ fn i1_inproc_one_lap_records_frozen_onfirstboot_greeting_and_closes_cleanly() {
         ticker: TickerMode::Disabled,
     };
 
-    let runtime = boot(options).expect("boot should succeed through ShioriWiring::InProc（実テスト DLL）");
+    let runtime =
+        boot(options).expect("boot should succeed through ShioriWiring::InProc（実テスト DLL）");
 
     // 期待 broadcast 列（実 emo2 OnFirstBoot 挨拶）。二人掛け合い自己紹介が
     // ClearAll → Emote/Text/Wait/NewLine/Custom(bang) の全順序へコンパイルされる（構造導出＋実 compile
@@ -331,7 +723,10 @@ fn i1_inproc_one_lap_records_frozen_onfirstboot_greeting_and_closes_cleanly() {
             })
             .expect("dispatcher actor should still be alive while probing for the boot talk");
         now += 500;
-        let s = surface_records.lock().expect("records mutex poisoned").len();
+        let s = surface_records
+            .lock()
+            .expect("records mutex poisoned")
+            .len();
         let t = text_records.lock().expect("records mutex poisoned").len();
         if s >= expected.len() && t >= expected.len() {
             captured = true;
@@ -460,7 +855,8 @@ fn i2_inproc_one_lap_records_both_exchange_sequence_and_greeting_cues() {
         ticker: TickerMode::Disabled,
     };
 
-    let runtime = boot(options).expect("boot should succeed through Custom(Recorder(inproc_connect))");
+    let runtime =
+        boot(options).expect("boot should succeed through Custom(Recorder(inproc_connect))");
 
     // 期待演出列長（I1 と同一のハードコード golden）。列長は待機の十分条件（内容照合は後段 assert）。
     let expected_cue_len = expected_greeting_sequence().len();
@@ -481,7 +877,10 @@ fn i2_inproc_one_lap_records_both_exchange_sequence_and_greeting_cues() {
             })
             .expect("dispatcher actor should still be alive while probing for the boot talk");
         now += 500;
-        let s = surface_records.lock().expect("records mutex poisoned").len();
+        let s = surface_records
+            .lock()
+            .expect("records mutex poisoned")
+            .len();
         let t = text_records.lock().expect("records mutex poisoned").len();
         if s >= expected_cue_len && t >= expected_cue_len {
             captured = true;
@@ -613,10 +1012,7 @@ fn i2_inproc_one_lap_records_both_exchange_sequence_and_greeting_cues() {
 /// best-effort で削除する）。`dll_bytes` が `Some` なら resolve 後の `mount.shiori.dir`
 /// （=`ghost/master`・`inproc_connect` が `dir.join(file)` で組むロード元）へ指定バイト列を
 /// `shiori_line` の名前で書き出す（不正イメージ態様のため）。
-fn build_i3_mount(
-    shiori_line: Option<&str>,
-    dll_bytes: Option<&[u8]>,
-) -> (ShioriMount, PathBuf) {
+fn build_i3_mount(shiori_line: Option<&str>, dll_bytes: Option<&[u8]>) -> (ShioriMount, PathBuf) {
     let unique = format!(
         "areka-ghost-i3-load-failure-{}-{:?}-{}",
         std::process::id(),
@@ -629,7 +1025,8 @@ fn build_i3_mount(
     let root = std::env::temp_dir().join(unique);
     let master_dir = root.join("ghost").join("master");
     std::fs::create_dir_all(&master_dir).expect("fixture master dir 作成に失敗");
-    std::fs::create_dir_all(root.join("shell").join("master")).expect("fixture shell dir 作成に失敗");
+    std::fs::create_dir_all(root.join("shell").join("master"))
+        .expect("fixture shell dir 作成に失敗");
 
     let mut descript = String::new();
     if let Some(name) = shiori_line {
@@ -638,7 +1035,8 @@ fn build_i3_mount(
     std::fs::write(master_dir.join("descript.txt"), descript)
         .expect("fixture descript.txt 書き込みに失敗");
 
-    let mount = package::resolve(&root, DefaultEncoding::Ansi).expect("fixture ghost_root の resolve に失敗");
+    let mount = package::resolve(&root, DefaultEncoding::Ansi)
+        .expect("fixture ghost_root の resolve に失敗");
     let shiori = mount.shiori;
 
     // 不正イメージ態様: resolve 済み shiori.dir（ロード元 dir）へ非 PE バイト列を DLL 名で置く。
@@ -657,7 +1055,10 @@ fn build_i3_mount(
 #[test]
 fn i3_load_failure_missing_reference_returns_err() {
     let (shiori, root) = build_i3_mount(None, None);
-    assert_eq!(shiori.file, None, "fixture は shiori 行なし＝file:None のはず");
+    assert_eq!(
+        shiori.file, None,
+        "fixture は shiori 行なし＝file:None のはず"
+    );
 
     let connect = inproc_connect(shiori);
     let result = connect();
@@ -670,7 +1071,9 @@ fn i3_load_failure_missing_reference_returns_err() {
             err.contains("ファイル名"),
             "参照先未指定はファイル名未解決として顕在化すること（別理由の失敗でない）: {err}"
         ),
-        Ok(_) => panic!("参照先未指定（file:None）はロード失敗になるはず（inproc_connect は panic せず Err）"),
+        Ok(_) => panic!(
+            "参照先未指定（file:None）はロード失敗になるはず（inproc_connect は panic せず Err）"
+        ),
     }
 }
 

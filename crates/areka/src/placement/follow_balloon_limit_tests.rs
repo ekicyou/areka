@@ -107,7 +107,9 @@ fn world_with(placement: ScopePlacement, snapshot: MonitorSnapshot) -> (World, E
     world.insert_resource(snapshot);
     let titles = GhostTitles::from_scope_titles([(0, "むらさき".to_string())]);
     let ghost_windows = spawn_ghost_windows(&mut world, &[placement], &titles);
-    let char_window = ghost_windows.char_window(0).expect("キャラ窓が spawn される");
+    let char_window = ghost_windows
+        .char_window(0)
+        .expect("キャラ窓が spawn される");
     let balloon = ghost_windows
         .balloon_window(0)
         .expect("バルーン窓が spawn される");
@@ -284,9 +286,8 @@ fn move_window_to_clamps_the_trailing_balloon_but_never_the_char_window() {
     let (mut world, char_window, balloon) = base_world(true);
     let char_target = PointPx { x: 1500, y: 700 };
 
-    let (ok, events) = capture_logs(|| {
-        move_window_to(&mut world, char_window, char_target.x, char_target.y)
-    });
+    let (ok, events) =
+        capture_logs(|| move_window_to(&mut world, char_window, char_target.x, char_target.y));
 
     assert!(ok);
     assert_eq!(
@@ -559,9 +560,12 @@ fn unresolvable_reference_warns_and_lets_the_write_through() {
         ("GhostWindows 不在", |world, _c, _b| {
             let _ = world.remove_resource::<GhostWindows>();
         }),
-        ("キャラ窓の矩形が未確定", |world, char_window, _b| {
-            world.entity_mut(char_window).remove::<WindowPos>();
-        }),
+        (
+            "キャラ窓の矩形が未確定",
+            |world, char_window, _b| {
+                world.entity_mut(char_window).remove::<WindowPos>();
+            },
+        ),
     ];
 
     for (label, break_it) in cases {
@@ -580,7 +584,11 @@ fn unresolvable_reference_warns_and_lets_the_write_through() {
         });
 
         let warn = expect_one(&events, LIMIT_UNRESOLVED_TAG);
-        assert_eq!(warn.level, tracing::Level::WARN, "{label}: 縮退は warn 水準");
+        assert_eq!(
+            warn.level,
+            tracing::Level::WARN,
+            "{label}: 縮退は warn 水準"
+        );
         assert_eq!(
             warn.field("context"),
             format!("{RUNTIME_CONTEXT:?}"),

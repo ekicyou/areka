@@ -53,16 +53,18 @@ use std::time::{Duration, Instant};
 use areka_actor::{ActorError, ActorHandle};
 use areka_emo_compose::{BindSet, PatternState};
 use areka_emo_present::{EmoPresenter, PresentCommand, TargetId};
-use areka_emo_text::actor::{spawn_emo_text, TextLayerRuntime};
+use areka_emo_text::actor::{TextLayerRuntime, spawn_emo_text};
 use areka_emo_text::state::TextLayerConfig;
 use areka_ghost::dispatcher::DispatcherMsg;
-use areka_ghost::{boot, GhostBootOptions, GhostRuntime, ShioriWiring, SystemVarWiring, TickerMode};
+use areka_ghost::{
+    GhostBootOptions, GhostRuntime, ShioriWiring, SystemVarWiring, TickerMode, boot,
+};
 use areka_kanade::{CloseReason, MonotonicMs, ShioriBackend};
 use areka_parsers::charset::DefaultEncoding;
 use areka_sakura::ActorKey;
 use areka_seriko::{
-    spawn_seriko, AnimationTable, BindResolver, LoopRng, SerikoLoopConfig, SerikoSink,
-    SurfaceResolver,
+    AnimationTable, BindResolver, LoopRng, SerikoLoopConfig, SerikoSink, SurfaceResolver,
+    spawn_seriko,
 };
 use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
@@ -70,20 +72,20 @@ use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
 use tracing::field::{Field, Visit};
 use tracing_subscriber::prelude::*;
 use windows::Win32::Foundation::{HINSTANCE, HWND};
-use windows::Win32::System::Com::{CoInitializeEx, COINIT_MULTITHREADED};
+use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
-use wintf::ecs::{GraphicsCore, Point, WindowHandle, WindowPos, WucGraphicsResource, DPI};
+use wintf::ecs::{DPI, GraphicsCore, Point, WindowHandle, WindowPos, WucGraphicsResource};
 use wintf::executor::{FilterResult, JoinHandle, MessageLoop};
 
 use crate::placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
 use crate::placement::source::GhostTitles;
-use crate::placement::spawn::{spawn_ghost_windows, GhostWindows};
+use crate::placement::spawn::{GhostWindows, spawn_ghost_windows};
 
 use super::adapter::PresentBridge;
-use super::assets::{actor_keyed_balloon_tables, build_boot_assets, BootAssets, LoopTables};
+use super::assets::{BootAssets, LoopTables, actor_keyed_balloon_tables, build_boot_assets};
 use super::frame::{
-    run_attach_phase, run_dpi_phase, run_move_drain_phase, run_text_phase, run_text_scale_phase,
-    Emo2Wiring,
+    Emo2Wiring, run_attach_phase, run_dpi_phase, run_move_drain_phase, run_text_phase,
+    run_text_scale_phase,
 };
 use super::move_cue::{MoveCueSink, MoveDirective};
 use super::talk_clock::{ClockedTextSink, TalkClock};
@@ -133,14 +135,24 @@ impl ScriptedShioriBackendBuilder {
     }
 
     /// `id` に対する GET 応答を 1 件、応答列の末尾へ積む（複数回で FIFO 消費）。
-    fn get(mut self, id: impl Into<String>, response: Result<Option<String>, RequestError>) -> Self {
-        self.get_scripts.entry(id.into()).or_default().push_back(response);
+    fn get(
+        mut self,
+        id: impl Into<String>,
+        response: Result<Option<String>, RequestError>,
+    ) -> Self {
+        self.get_scripts
+            .entry(id.into())
+            .or_default()
+            .push_back(response);
         self
     }
 
     /// `id` に対する NOTIFY 応答を 1 件、応答列の末尾へ積む。
     fn notify(mut self, id: impl Into<String>, response: Result<(), RequestError>) -> Self {
-        self.notify_scripts.entry(id.into()).or_default().push_back(response);
+        self.notify_scripts
+            .entry(id.into())
+            .or_default()
+            .push_back(response);
         self
     }
 
@@ -204,13 +216,19 @@ impl ShioriBackend for ScriptedShioriBackend {
         references: &[String],
         _status: Option<&str>,
     ) -> Result<Option<String>, RequestError> {
-        self.calls.lock().expect("calls mutex poisoned").push(RecordedCall::Get {
-            id: id.to_string(),
-            references: references.to_vec(),
-        });
-        self.get_scripts.get_mut(id).and_then(VecDeque::pop_front).unwrap_or_else(|| {
-            panic!("ScriptedShioriBackend::get(\"{id}\"): no scripted response left")
-        })
+        self.calls
+            .lock()
+            .expect("calls mutex poisoned")
+            .push(RecordedCall::Get {
+                id: id.to_string(),
+                references: references.to_vec(),
+            });
+        self.get_scripts
+            .get_mut(id)
+            .and_then(VecDeque::pop_front)
+            .unwrap_or_else(|| {
+                panic!("ScriptedShioriBackend::get(\"{id}\"): no scripted response left")
+            })
     }
 
     fn notify(
@@ -219,24 +237,36 @@ impl ShioriBackend for ScriptedShioriBackend {
         references: &[String],
         _status: Option<&str>,
     ) -> Result<(), RequestError> {
-        self.calls.lock().expect("calls mutex poisoned").push(RecordedCall::Notify {
-            id: id.to_string(),
-            references: references.to_vec(),
-        });
-        self.notify_scripts.get_mut(id).and_then(VecDeque::pop_front).unwrap_or_else(|| {
-            panic!("ScriptedShioriBackend::notify(\"{id}\"): no scripted response left")
-        })
+        self.calls
+            .lock()
+            .expect("calls mutex poisoned")
+            .push(RecordedCall::Notify {
+                id: id.to_string(),
+                references: references.to_vec(),
+            });
+        self.notify_scripts
+            .get_mut(id)
+            .and_then(VecDeque::pop_front)
+            .unwrap_or_else(|| {
+                panic!("ScriptedShioriBackend::notify(\"{id}\"): no scripted response left")
+            })
     }
 
     fn unload(&mut self) -> Result<ExitKind, ShutdownError> {
-        self.calls.lock().expect("calls mutex poisoned").push(RecordedCall::Unload);
-        self.unload_script
-            .take()
-            .unwrap_or_else(|| panic!("ScriptedShioriBackend::unload(): no scripted response configured"))
+        self.calls
+            .lock()
+            .expect("calls mutex poisoned")
+            .push(RecordedCall::Unload);
+        self.unload_script.take().unwrap_or_else(|| {
+            panic!("ScriptedShioriBackend::unload(): no scripted response configured")
+        })
     }
 
     fn status(&mut self) -> HelperStatus {
-        self.calls.lock().expect("calls mutex poisoned").push(RecordedCall::Status);
+        self.calls
+            .lock()
+            .expect("calls mutex poisoned")
+            .push(RecordedCall::Status);
         self.status
     }
 }
@@ -371,8 +401,8 @@ fn make_world_with_gpu() -> World {
 /// （OnInitialize → username → OnFirstBoot → …）を期待する spine テストが落ちる。
 /// fixture は git 追跡外（gitignore 済み）ゆえ削除は安全で、テストを実行順・実機実走から独立させる。
 fn emo2_root() -> PathBuf {
-    let root =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../pilot/examples/shiori-host-32/fixtures/emo2");
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../pilot/examples/shiori-host-32/fixtures/emo2");
     let persist_dir = root
         .join("ghost")
         .join("master")
@@ -610,7 +640,9 @@ impl SpineHarness {
 
         // ── presenter／文字層ランタイム／実 EmoTextSink（テストスレッド＝UI pump スレッド） ──
         let presenter = EmoPresenter::new();
-        let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default())));
+        let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
+            TextLayerConfig::default(),
+        )));
         let (emo_text_sink, text_pump) =
             spawn_emo_text(Rc::clone(&runtime)).expect("spawn_emo_text on the pump (test) thread");
 
@@ -707,7 +739,9 @@ impl SpineHarness {
         let options = GhostBootOptions {
             ghost_root: emo2_root(),
             default_encoding: DefaultEncoding::Ansi,
-            shiori: ShioriWiring::Custom(Box::new(move || Ok(Box::new(backend) as Box<dyn ShioriBackend>))),
+            shiori: ShioriWiring::Custom(Box::new(move || {
+                Ok(Box::new(backend) as Box<dyn ShioriBackend>)
+            })),
             sinks: vec![
                 Box::new(surface_sink),
                 Box::new(clocked_text_sink),
@@ -737,7 +771,16 @@ impl SpineHarness {
             wiring_assets,
         );
 
-        SpineHarness { world, wiring, runtime, ghost, seriko, shiori_handle, text_pump, tick_sink }
+        SpineHarness {
+            world,
+            wiring,
+            runtime,
+            ghost,
+            seriko,
+            shiori_handle,
+            text_pump,
+            tick_sink,
+        }
     }
 
     /// 文字層 UI アクターの pending メッセージを headless に drain する（実 ClockedTextSink 経路）。
@@ -759,7 +802,9 @@ impl SpineHarness {
     fn inject_dispatcher_tick(&self, now: u64) {
         self.ghost
             .dispatcher()
-            .send(DispatcherMsg::Tick { now: MonotonicMs(now) })
+            .send(DispatcherMsg::Tick {
+                now: MonotonicMs(now),
+            })
             .expect("dispatcher actor should still be alive to accept an injected Tick");
     }
 
@@ -769,8 +814,16 @@ impl SpineHarness {
     /// join し、dispatcher が保持する `SerikoSink` クローンを drop する→seriko worker の inbox 切断→
     /// 自然終了。続けて seriko を有界 join する（ghost spine S1/S2 の後片付け技法）。
     fn shutdown_bounded(self) {
-        let SpineHarness { world, wiring, runtime, ghost, seriko, shiori_handle, text_pump, tick_sink } =
-            self;
+        let SpineHarness {
+            world,
+            wiring,
+            runtime,
+            ghost,
+            seriko,
+            shiori_handle,
+            text_pump,
+            tick_sink,
+        } = self;
 
         run_bounded("spine ghost shutdown", Duration::from_secs(10), move || {
             // 正規 close（DD-10 と同じ User）。ForceQuit ゆえ OnClose は NOTIFY で消化される。
@@ -780,8 +833,9 @@ impl SpineHarness {
         // SerikoSink クローンを drop しても、ハーネス保持の tick_sink clone が生きていると seriko inbox が
         // 切断されず worker が終了しない。全 Sender drop で自然終了させるため seriko join の前に drop する。
         drop(tick_sink);
-        join_bounded("spine seriko join", Duration::from_secs(10), seriko)
-            .expect("seriko worker should terminate once all SerikoSink clones drop after shutdown");
+        join_bounded("spine seriko join", Duration::from_secs(10), seriko).expect(
+            "seriko worker should terminate once all SerikoSink clones drop after shutdown",
+        );
 
         // 残り（!Send・テストスレッド常駐）を明示 drop（UI アクター/presenter/Rc runtime/World）。
         drop(wiring);
@@ -796,23 +850,23 @@ impl SpineHarness {
 // 本ファイルはハーネス本体（scripted backend・fixture・有界待機・ログ捕捉・SpineHarness）を保持し、
 // 観測ケースはテーマごとの兄弟ファイル `spine_<テーマ>_tests.rs` に置く。
 #[cfg(test)]
-#[path = "spine_test_support.rs"]
-mod test_support;
-#[cfg(test)]
 #[path = "spine_boot_smoke_tests.rs"]
 mod boot_smoke_tests;
 #[cfg(test)]
 #[path = "spine_display_tests.rs"]
 mod display_tests;
 #[cfg(test)]
-#[path = "spine_text_scale_tests.rs"]
-mod text_scale_tests;
-#[cfg(test)]
-#[path = "spine_talk_close_tests.rs"]
-mod talk_close_tests;
-#[cfg(test)]
 #[path = "spine_move_cue_tests.rs"]
 mod move_cue_tests;
 #[cfg(test)]
 #[path = "spine_seriko_loop_tests.rs"]
 mod seriko_loop_tests;
+#[cfg(test)]
+#[path = "spine_talk_close_tests.rs"]
+mod talk_close_tests;
+#[cfg(test)]
+#[path = "spine_test_support.rs"]
+mod test_support;
+#[cfg(test)]
+#[path = "spine_text_scale_tests.rs"]
+mod text_scale_tests;

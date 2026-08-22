@@ -1,9 +1,9 @@
+use super::test_support::{IMAGE, glyphs, inline_positions, model};
 use super::{FixedMetrics, LayoutEngine, LineRect, PositionedLine, WrapPlan};
 use crate::region::TextRegion;
 use crate::segment::{Segment, SegmentPlan};
 use crate::state::TextItem;
 use crate::writing::WritingMode;
-use super::test_support::{IMAGE, glyphs, inline_positions, model};
 
 // ── Task 4.1: 塊先決による折返し（WrapPlan::Segmented・手組み SegmentPlan 注入） ──
 //
@@ -325,7 +325,10 @@ fn char_by_char_is_off_path_non_regression_anchor() {
         WrapPlan::CharByChar,
     );
     assert_eq!(lines.len(), 2, "char 割り（5+1）どおり");
-    assert_eq!(inline_positions(&lines[0]), vec![0.0, 10.0, 20.0, 30.0, 40.0]);
+    assert_eq!(
+        inline_positions(&lines[0]),
+        vec![0.0, 10.0, 20.0, 30.0, 40.0]
+    );
     assert_eq!(inline_positions(&lines[1]), vec![0.0]);
     assert_eq!(
         lines[0].rect,
@@ -493,7 +496,11 @@ fn segmented_extremely_long_segment_places_all_glyphs() {
         WrapPlan::Segmented(&p),
     );
     // 全 50 グリフがちょうど一度ずつ配置される（欠落・重複なし）。
-    assert_eq!(flat_glyphs(&lines).len(), n, "全グリフが配置される（無損失）");
+    assert_eq!(
+        flat_glyphs(&lines).len(),
+        n,
+        "全グリフが配置される（無損失）"
+    );
     // 各行は行頭 1 グリフ以外は閾値内（3 グリフ/行＝30／30）——はみ出しが構造的に起きない。
     for line in &lines {
         assert!(
@@ -653,7 +660,11 @@ fn deferred_newline_semantics_unchanged_under_segmented() {
     );
     assert_eq!(seg_b.len(), 2, "ON でも連続改行は単一累算＝中間空行なし");
     let tops: Vec<f32> = seg_b.iter().map(|l| l.rect.top).collect();
-    assert_eq!(tops, vec![0.0, 22.5], "行間 = pitch(15) × Σratio(1.5)（ON でも不変）");
+    assert_eq!(
+        tops,
+        vec![0.0, 22.5],
+        "行間 = pitch(15) × Σratio(1.5)（ON でも不変）"
+    );
     assert_eq!(
         seg_b, ch_b,
         "ワードラップ非発火では連続改行の累算意味論が ON = OFF"

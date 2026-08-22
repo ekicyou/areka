@@ -60,9 +60,7 @@
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use shiori_host32_host::{
-    ExitKind, ParentMessageWindow, SendError, poll_exit_kind, spawn,
-};
+use shiori_host32_host::{ExitKind, ParentMessageWindow, SendError, poll_exit_kind, spawn};
 use shiori_host32_ipc::{IpcError, MsgTag, hwnd_from_u32, send_copydata};
 
 use windows::Win32::Foundation::{LPARAM, WPARAM};

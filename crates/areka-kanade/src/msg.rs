@@ -502,7 +502,10 @@ mod tests {
     #[test]
     fn event_id_as_str_is_verbatim_wire_form_for_both_origins() {
         assert_eq!(EventId::Static("OnBoot").as_str(), "OnBoot");
-        assert_eq!(EventId::Static("basewareversion").as_str(), "basewareversion");
+        assert_eq!(
+            EventId::Static("basewareversion").as_str(),
+            "basewareversion"
+        );
         // 選択起源は任意名を逐語で運ぶ（事前登録不要・Req2.6）。
         assert_eq!(
             EventId::Choice("OnMenuBack".to_string()).as_str(),
@@ -641,8 +644,14 @@ mod tests {
         // Task 5.1 / design C8: 追加3フィールドの既定は true / 0 / 空。
         // 既定により既存 boot happy-path 檻は意味論無改変で緑（3.1）。
         let config = KanadeConfig::new("master", "1.0.0");
-        assert!(config.first_boot, "first_boot default must be true (現行挙動不変)");
-        assert_eq!(config.vanish_count, 0, "vanish_count default must be 0 (OnFirstBoot Ref0)");
+        assert!(
+            config.first_boot,
+            "first_boot default must be true (現行挙動不変)"
+        );
+        assert_eq!(
+            config.vanish_count, 0,
+            "vanish_count default must be 0 (OnFirstBoot Ref0)"
+        );
         assert!(
             config.first_boot_epilogue.is_empty(),
             "first_boot_epilogue default must be empty (何も添付しない)"

@@ -90,9 +90,7 @@ fn on_balloon_drag_updates_offset_and_char_window_is_unmoved() {
 #[test]
 fn move_window_to_after_balloon_drag_follows_adjusted_offset() {
     let mut world = World::new();
-    let balloon = world
-        .spawn((fake_handle(0x2000), window_pos_at(0, 0)))
-        .id();
+    let balloon = world.spawn((fake_handle(0x2000), window_pos_at(0, 0))).id();
     let initial = PointPx { x: -412, y: -25 };
     let char_w = world
         .spawn((
@@ -114,7 +112,10 @@ fn move_window_to_after_balloon_drag_follows_adjusted_offset() {
         x: 613 - 1207,
         y: 407 - 653,
     };
-    assert_ne!(adjusted, initial, "檻の前提: 調整後 offset は初期値と異なる");
+    assert_ne!(
+        adjusted, initial,
+        "檻の前提: 調整後 offset は初期値と異なる"
+    );
     assert_eq!(world.get::<BalloonFollow>(char_w).unwrap().offset, adjusted);
 
     // 次のキャラ窓移動 API は調整後 offset で追従（consumer 無改変・DD16）

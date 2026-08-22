@@ -26,9 +26,9 @@
 
 use std::collections::HashMap;
 
+use crate::executor::util::Window as LibWindow;
 use bevy_ecs::prelude::{Entity, RemovedComponents};
 use bevy_ecs::system::NonSendMut;
-use crate::executor::util::Window as LibWindow;
 
 use crate::ecs::window::Window;
 use crate::runtime::wndproc_bridge::WndState;
@@ -167,10 +167,18 @@ mod tests {
         let e = world.spawn_empty().id();
         let mut reg: WindowRegistry<DropTracker> = WindowRegistry::new();
         let flag = Rc::new(Cell::new(false));
-        reg.insert(e, DropTracker { dropped: flag.clone() });
+        reg.insert(
+            e,
+            DropTracker {
+                dropped: flag.clone(),
+            },
+        );
         assert!(!reg.is_empty());
         let got = reg.remove(e);
-        assert!(got.is_some(), "remove は Entity キーで挿入済み要素を返すべき");
+        assert!(
+            got.is_some(),
+            "remove は Entity キーで挿入済み要素を返すべき"
+        );
         assert!(reg.is_empty());
         // 取り出した値はまだ生存（drop 未発火）。
         assert!(!flag.get());
@@ -185,7 +193,12 @@ mod tests {
         let e = world.spawn_empty().id();
         let mut reg: WindowRegistry<DropTracker> = WindowRegistry::new();
         let flag = Rc::new(Cell::new(false));
-        reg.insert(e, DropTracker { dropped: flag.clone() });
+        reg.insert(
+            e,
+            DropTracker {
+                dropped: flag.clone(),
+            },
+        );
         assert!(!flag.get());
         // remove の戻り値を即 drop（receiver 不在）→ Drop が走る。
         drop(reg.remove(e));
@@ -215,8 +228,18 @@ mod tests {
         let mut reg: WindowRegistry<DropTracker> = WindowRegistry::new();
         let d1 = Rc::new(Cell::new(false));
         let d2 = Rc::new(Cell::new(false));
-        reg.insert(e1, DropTracker { dropped: d1.clone() });
-        reg.insert(e2, DropTracker { dropped: d2.clone() });
+        reg.insert(
+            e1,
+            DropTracker {
+                dropped: d1.clone(),
+            },
+        );
+        reg.insert(
+            e2,
+            DropTracker {
+                dropped: d2.clone(),
+            },
+        );
 
         let fired = Rc::new(Cell::new(0u32));
         let f = fired.clone();
@@ -227,12 +250,13 @@ mod tests {
         world.entity_mut(e1).remove::<Window>();
         run_reconcile(&mut world);
         {
-            let reg = world
-                .get_non_send::<WindowRegistry<DropTracker>>()
-                .unwrap();
+            let reg = world.get_non_send::<WindowRegistry<DropTracker>>().unwrap();
             assert!(!reg.is_empty(), "1 件残るので非空のまま");
         }
-        assert!(d1.get(), "破棄 Entity の保持値が drop されるべき（DestroyWindow 相当）");
+        assert!(
+            d1.get(),
+            "破棄 Entity の保持値が drop されるべき（DestroyWindow 相当）"
+        );
         assert!(!d2.get(), "残存 Entity の保持値は drop されない");
         assert_eq!(fired.get(), 0, "非空のままなら shutdown フックは発火しない");
 
@@ -240,16 +264,22 @@ mod tests {
         world.entity_mut(e2).remove::<Window>();
         run_reconcile(&mut world);
         {
-            let reg = world
-                .get_non_send::<WindowRegistry<DropTracker>>()
-                .unwrap();
+            let reg = world.get_non_send::<WindowRegistry<DropTracker>>().unwrap();
             assert!(reg.is_empty(), "全 Window 破棄で registry は空になる");
         }
         assert!(d2.get(), "最後の保持値も drop される");
-        assert_eq!(fired.get(), 1, "空への遷移ちょうどで shutdown フックが発火する");
+        assert_eq!(
+            fired.get(),
+            1,
+            "空への遷移ちょうどで shutdown フックが発火する"
+        );
 
         // 既に空で reconcile（除去なし）→ 再発火しない。
         run_reconcile(&mut world);
-        assert_eq!(fired.get(), 1, "既に空での空振り reconcile では再発火しない");
+        assert_eq!(
+            fired.get(),
+            1,
+            "既に空での空振り reconcile では再発火しない"
+        );
     }
 }

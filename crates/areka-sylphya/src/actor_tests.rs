@@ -17,7 +17,10 @@ fn classify_set_effective_key_is_runtime_command() {
     // SET 有効群の正準語彙 → RuntimeCommand。
     assert_eq!(classify_set("surface.num"), SetClass::RuntimeCommand);
     assert_eq!(classify_set("menu"), SetClass::RuntimeCommand);
-    assert_eq!(classify_set("seriko.defaultsurface"), SetClass::RuntimeCommand);
+    assert_eq!(
+        classify_set("seriko.defaultsurface"),
+        SetClass::RuntimeCommand
+    );
 }
 
 #[test]
@@ -156,7 +159,11 @@ fn apply_publish_shiori_none_records_absent_no_default() {
             name: "username".into(),
         }]
     );
-    assert!(!effects.iter().any(|e| matches!(e, Effect::SetFlatPerAsker { .. })));
+    assert!(
+        !effects
+            .iter()
+            .any(|e| matches!(e, Effect::SetFlatPerAsker { .. }))
+    );
 }
 
 #[test]
@@ -201,7 +208,13 @@ fn apply_publish_static_flat_per_asker_and_dotted_global() {
 #[test]
 fn apply_persist_put_projects_to_dotted_global_and_saves() {
     let entries = vec![
-        (PersistKey::WindowPos { scope: 0, axis: Axis::X }, "10".to_string()),
+        (
+            PersistKey::WindowPos {
+                scope: 0,
+                axis: Axis::X,
+            },
+            "10".to_string(),
+        ),
         (PersistKey::BootCount, "3".to_string()),
     ];
     let msg = SylphyaMsg::PersistPut {

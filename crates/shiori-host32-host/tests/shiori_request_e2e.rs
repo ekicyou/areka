@@ -169,7 +169,10 @@ fn make_unique_temp_dir(tag: &str) -> PathBuf {
     use std::sync::atomic::{AtomicU64, Ordering};
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-    let dir = std::env::temp_dir().join(format!("host32-request-e2e-{tag}-{}-{n}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!(
+        "host32-request-e2e-{tag}-{}-{n}",
+        std::process::id()
+    ));
     std::fs::create_dir_all(&dir).expect("一時 dir の作成に失敗");
     dir
 }
@@ -340,7 +343,8 @@ fn request_e2e_real_pasta_optional() {
         .expect("OnBoot GET が Err（実 pasta との request 往復が失敗・R6.5）");
 
     // OnBoot は起動あいさつのさくらスクリプト Value を返す＝Some かつ非空を assert（R6.5）。
-    let value = value.expect("OnBoot は Value（起動あいさつ）を返すべき（Ok(None) ではない・R6.5）");
+    let value =
+        value.expect("OnBoot は Value（起動あいさつ）を返すべき（Ok(None) ではない・R6.5）");
     assert!(
         !value.is_empty(),
         "OnBoot の Value は非空である（起動あいさつのさくらスクリプト本体・R6.5）"

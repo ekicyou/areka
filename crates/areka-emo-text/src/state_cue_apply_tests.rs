@@ -1,8 +1,8 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
-use super::*;
 use super::test_support::{REVEAL_INTERVAL, cue, cue_dur, items_of, reveal_times_of};
+use super::*;
 
 // ── R2.1: Text 追記 ──
 

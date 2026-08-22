@@ -104,12 +104,7 @@ fn each_failure_vocabulary_drives_observable_termination() {
         } = harness;
 
         // 呼出失敗が観測可能な終了（停止）へ写像された証拠: kanade が期限内に join できる。
-        join_bounded(
-            "kanade failing-boot join",
-            DEFAULT_TIMEOUT,
-            kanade,
-        )
-        .unwrap_or_else(|_| {
+        join_bounded("kanade failing-boot join", DEFAULT_TIMEOUT, kanade).unwrap_or_else(|_| {
             panic!("kanade should terminate on injected OnInitialize failure ({kind:?})")
         });
 
@@ -296,10 +291,7 @@ fn unknown_talk_done_keeps_running_until_driven_close() {
 ///   確認する（Idle のまま切断する自明経路ではなく、運行途中からの切断を踏む）。
 #[test]
 fn all_command_senders_dropped_terminates_normally_without_hang() {
-    let harness = spawn_harness_no_sink(
-        KanadeConfig::new("master", "1.0.0"),
-        Fixture::default(),
-    );
+    let harness = spawn_harness_no_sink(KanadeConfig::new("master", "1.0.0"), Fixture::default());
 
     // 起動して定常運転へ落ち着かせる（運行中からの切断を踏む）。
     harness.sender.send(KanadeMsg::Boot).expect("send Boot");

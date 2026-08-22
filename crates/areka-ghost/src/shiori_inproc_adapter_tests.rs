@@ -27,7 +27,10 @@ fn resp(status_line: &str, headers: &[&str]) -> Vec<u8> {
 /// `S_OK`＋200＋`Value` → `Ok(Some(value))`（写像表 1 行目・要件 3.2）。
 #[test]
 fn map_s_ok_200_with_value_is_some() {
-    let bytes = resp("SHIORI/3.0 200 OK", &["Charset: UTF-8", r"Value: \s[0]hi\e"]);
+    let bytes = resp(
+        "SHIORI/3.0 200 OK",
+        &["Charset: UTF-8", r"Value: \s[0]hi\e"],
+    );
     let out = map_get_outcome(S_OK, &bytes).expect("200+Value は Ok");
     assert_eq!(out, Some(r"\s[0]hi\e".to_string()));
 }
@@ -54,7 +57,10 @@ fn map_s_ok_400_is_shiori_status_error() {
     let bytes = resp("SHIORI/3.0 400 Bad Request", &[]);
     let err = map_get_outcome(S_OK, &bytes).expect_err("400 は SHIORI エラー");
     assert!(
-        matches!(err, RequestError::Shiori(ShioriError::Status { status: 400, .. })),
+        matches!(
+            err,
+            RequestError::Shiori(ShioriError::Status { status: 400, .. })
+        ),
         "400 は Shiori(Status{{400}}): got {err:?}"
     );
 }
@@ -65,7 +71,10 @@ fn map_s_ok_500_is_shiori_status_error() {
     let bytes = resp("SHIORI/3.0 500 Internal Server Error", &[]);
     let err = map_get_outcome(S_OK, &bytes).expect_err("500 は SHIORI エラー");
     assert!(
-        matches!(err, RequestError::Shiori(ShioriError::Status { status: 500, .. })),
+        matches!(
+            err,
+            RequestError::Shiori(ShioriError::Status { status: 500, .. })
+        ),
         "500 は Shiori(Status{{500}}): got {err:?}"
     );
 }
@@ -73,12 +82,19 @@ fn map_s_ok_500_is_shiori_status_error() {
 /// `S_OK`＋200＋`ErrorLevel` → `Err(Shiori(Status{error_level}))`（写像表 3 行目・error_level 先読み）。
 #[test]
 fn map_s_ok_200_with_error_level_is_error() {
-    let bytes = resp("SHIORI/3.0 200 OK", &["ErrorLevel: warning", "Value: ignored"]);
+    let bytes = resp(
+        "SHIORI/3.0 200 OK",
+        &["ErrorLevel: warning", "Value: ignored"],
+    );
     let err = map_get_outcome(S_OK, &bytes).expect_err("ErrorLevel 付きはエラー");
     assert!(
         matches!(
             err,
-            RequestError::Shiori(ShioriError::Status { status: 200, error_level: Some(_), .. })
+            RequestError::Shiori(ShioriError::Status {
+                status: 200,
+                error_level: Some(_),
+                ..
+            })
         ),
         "ErrorLevel 付きは status に関わらず Shiori エラー: got {err:?}"
     );
@@ -135,8 +151,8 @@ fn build_real_backend() -> InProcBackend {
         dll_path.display()
     );
 
-    let (library, factory) =
-        InProcLibrary::load(&dll_path).expect("built cdylib は正常ロードされ factory を解決すること");
+    let (library, factory) = InProcLibrary::load(&dll_path)
+        .expect("built cdylib は正常ロードされ factory を解決すること");
     let host: IShioriHost = InProcHost::new().into();
     let load_dir_h = HSTRING::from(deps_dir.as_os_str());
     let name_h = HSTRING::from(shiori4_testdll::DLL_FILE_NAME);
@@ -207,7 +223,11 @@ fn adapter_roundtrips_through_real_ishiori() {
         .expect("NOTIFY は Ok");
 
     // status: ロード中は Running（別プロセスがなく死活監視対象なし・要件 3.3）。
-    assert_eq!(backend.status(), HelperStatus::Running, "ロード中は Running");
+    assert_eq!(
+        backend.status(),
+        HelperStatus::Running,
+        "ロード中は Running"
+    );
 
     // unload: 常に Ok(Clean)（構造的に不能失敗・D-7・要件 3.4）。
     assert!(
@@ -246,7 +266,10 @@ fn inproc_connect_missing_file_fails_immediately() {
 
     let mount = package::resolve(&root, DefaultEncoding::Ansi).expect("fixture の resolve");
     let _ = std::fs::remove_dir_all(&root);
-    assert_eq!(mount.shiori.file, None, "fixture は shiori 行なし＝file:None のはず");
+    assert_eq!(
+        mount.shiori.file, None,
+        "fixture は shiori 行なし＝file:None のはず"
+    );
 
     let connect = inproc_connect(mount.shiori);
     let result = connect();

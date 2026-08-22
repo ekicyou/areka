@@ -73,7 +73,9 @@ fn t_i1_spawn_assembles_four_windows_with_markers_and_ghost_windows() {
             char_pos.size,
             Some(SizeI::new(p.char_size.w, p.char_size.h))
         );
-        let balloon_pos = world.get::<WindowPos>(balloon_e).expect("balloon WindowPos");
+        let balloon_pos = world
+            .get::<WindowPos>(balloon_e)
+            .expect("balloon WindowPos");
         assert_eq!(
             balloon_pos.position,
             Some(Point {
@@ -110,10 +112,12 @@ fn t_i1_ghost_windows_resource_matches_return_value() {
     );
     for scope in returned.scopes() {
         assert_eq!(resource.char_window(scope), returned.char_window(scope));
-        assert_eq!(resource.balloon_window(scope), returned.balloon_window(scope));
+        assert_eq!(
+            resource.balloon_window(scope),
+            returned.balloon_window(scope)
+        );
     }
 }
-
 
 /// T-I1 補: 窓タイトルは `GhostTitles` 由来（欠落スコープは既定 "areka"）。
 #[test]
@@ -258,7 +262,9 @@ fn anchored_attached_to_all_char_windows_with_resolved_anchor() {
     // 転写元の placement と一致すること（値の取り違え封じ）
     for p in &placements {
         assert_eq!(
-            world.get::<Anchored>(gw.char_window(p.scope).unwrap()).copied(),
+            world
+                .get::<Anchored>(gw.char_window(p.scope).unwrap())
+                .copied(),
             Some(Anchored(p.anchor)),
             "scope{}: Anchored は ScopePlacement.anchor の転写",
             p.scope

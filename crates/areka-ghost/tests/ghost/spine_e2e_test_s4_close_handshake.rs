@@ -99,9 +99,8 @@ fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: std::time::Dur
 fn s4_close_handshake_completes_regular_shutdown_via_quit_ending_close_talk() {
     const SHELL_NAME: &str = "S4CloseShell";
 
-    let root = unique_temp_dir(
-        "s4_close_handshake_completes_regular_shutdown_via_quit_ending_close_talk",
-    );
+    let root =
+        unique_temp_dir("s4_close_handshake_completes_regular_shutdown_via_quit_ending_close_talk");
     let _ = std::fs::remove_dir_all(&root);
     write_ghost_fixture(&root, SHELL_NAME);
 

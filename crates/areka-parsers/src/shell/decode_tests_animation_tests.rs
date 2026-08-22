@@ -19,7 +19,8 @@ use super::{Animation, DrawMethod, Interval, Pattern, decode, lex};
 /// `animationN.interval,bind` ＋ 単一 pattern → interval Bind・pattern 正規化（要件 5.1/5.4）。
 #[test]
 fn animation_bind_interval_with_single_pattern() {
-    let input = "surface1\n{\nanimation100.interval,bind\nanimation100.pattern0,overlay,1100,0,0,0\n}\n";
+    let input =
+        "surface1\n{\nanimation100.interval,bind\nanimation100.pattern0,overlay,1100,0,0,0\n}\n";
     let shell = decode(lex(input));
     assert_eq!(shell.surfaces.len(), 1);
     assert_eq!(
@@ -42,18 +43,21 @@ fn animation_bind_interval_with_single_pattern() {
 /// `animationN.interval,random,K` → Interval::Random{k}（要件 5.2）。
 #[test]
 fn animation_random_interval_parses_k() {
-    let input = "surface1\n{\nanimation0.interval,random,4\nanimation0.pattern0,overlay,10,0,0,0\n}\n";
+    let input =
+        "surface1\n{\nanimation0.interval,random,4\nanimation0.pattern0,overlay,10,0,0,0\n}\n";
     let shell = decode(lex(input));
     assert_eq!(shell.surfaces[0].animations.len(), 1);
     assert_eq!(shell.surfaces[0].animations[0].id, 0);
-    assert_eq!(shell.surfaces[0].animations[0].interval, Interval::Random { k: 4 });
+    assert_eq!(
+        shell.surfaces[0].animations[0].interval,
+        Interval::Random { k: 4 }
+    );
 }
 
 /// `animationN.interval,bind+random,K` → Interval::BindRandom{k}（要件 5.3）。
 #[test]
 fn animation_bind_random_interval_parses_k() {
-    let input =
-        "surface1\n{\nanimation1400.interval,bind+random,4\nanimation1400.pattern1,overlay,1410,0,0,0\n}\n";
+    let input = "surface1\n{\nanimation1400.interval,bind+random,4\nanimation1400.pattern1,overlay,1410,0,0,0\n}\n";
     let shell = decode(lex(input));
     assert_eq!(shell.surfaces[0].animations.len(), 1);
     assert_eq!(shell.surfaces[0].animations[0].id, 1400);
@@ -88,7 +92,8 @@ animation0.pattern3,overlay,13,70,0,0
 /// 負のサーフェス参照 ID（`overlay,-1`）→ surface_id を i64 の -1 として失わず保持（要件 5.5）。
 #[test]
 fn negative_surface_id_is_preserved_as_sentinel() {
-    let input = "surface1\n{\nanimation0.interval,random,4\nanimation0.pattern3,overlay,-1,80,0,0\n}\n";
+    let input =
+        "surface1\n{\nanimation0.interval,random,4\nanimation0.pattern3,overlay,-1,80,0,0\n}\n";
     let shell = decode(lex(input));
     assert_eq!(shell.surfaces[0].animations.len(), 1);
     assert_eq!(
@@ -159,7 +164,10 @@ animation5.interval,random,2
     let shell = decode(lex(input));
     assert_eq!(shell.surfaces[0].animations.len(), 1);
     assert_eq!(shell.surfaces[0].animations[0].id, 5);
-    assert_eq!(shell.surfaces[0].animations[0].interval, Interval::Random { k: 2 });
+    assert_eq!(
+        shell.surfaces[0].animations[0].interval,
+        Interval::Random { k: 2 }
+    );
     assert_eq!(shell.surfaces[0].animations[0].patterns.len(), 2);
 }
 

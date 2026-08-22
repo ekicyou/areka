@@ -88,7 +88,8 @@ mod tests {
     #[test]
     fn round_trip_delivers_value() {
         let (tx, rx) = reply_channel::<u32>();
-        tx.send(42).expect("send should succeed while receiver is alive");
+        tx.send(42)
+            .expect("send should succeed while receiver is alive");
         assert_eq!(rx.recv().expect("value should be delivered"), 42);
     }
 
@@ -111,7 +112,10 @@ mod tests {
         let start = std::time::Instant::now();
         let result = rx.recv_timeout(Duration::from_millis(50));
         // Sender を応答後まで生かしておく（drop を timeout より後にする）。
-        assert!(start.elapsed() >= Duration::from_millis(50), "must wait the timeout");
+        assert!(
+            start.elapsed() >= Duration::from_millis(50),
+            "must wait the timeout"
+        );
         match result {
             Err(ReplyError::Timeout) => {}
             other => panic!("expected Err(Timeout), got {other:?}"),

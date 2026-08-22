@@ -83,7 +83,10 @@ fn test_d2drect_set_size() {
         bottom: 70.0,
     };
 
-    rect.set_size(Size { width: 200.0, height: 100.0 });
+    rect.set_size(Size {
+        width: 200.0,
+        height: 100.0,
+    });
     assert_eq!(rect.left, 10.0); // 左上を維持
     assert_eq!(rect.top, 20.0);
     assert_eq!(rect.right, 210.0); // 10 + 200

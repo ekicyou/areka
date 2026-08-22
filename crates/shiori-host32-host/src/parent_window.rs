@@ -37,12 +37,12 @@ use shiori_host32_ipc::{
 };
 
 use crate::error::HandshakeError;
-use wintf_winmsg_executor::util::{Window, WindowMessage, WindowType};
-use wintf_winmsg_executor::{FilterResult, MessageLoop};
 use windows::Win32::Foundation::HWND;
 use windows::Win32::Foundation::{LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::DataExchange::COPYDATASTRUCT;
 use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_COPYDATA};
+use wintf_winmsg_executor::util::{Window, WindowMessage, WindowType};
+use wintf_winmsg_executor::{FilterResult, MessageLoop};
 
 /// heartbeat（別スレッドからの `PostMessageW(WM_NULL)`）の送信間隔。
 ///
@@ -496,7 +496,11 @@ mod gate_tests {
     fn gate_allows_when_helper_hwnd_set() {
         let wire: u32 = 0x1234_5678;
         let target = resolve_send_target(Some(wire)).expect("確定なら Ok");
-        assert_eq!(target, hwnd_from_u32(wire), "確定 helper HWND を target とする");
+        assert_eq!(
+            target,
+            hwnd_from_u32(wire),
+            "確定 helper HWND を target とする"
+        );
     }
 
     // SendError の Display/Debug（要件 3.3 / 5.2 の一様報告）。
@@ -541,7 +545,10 @@ mod window_tests {
         // --- (a) HELLO 未受領 → 短い timeout で None（要件 3.4）---
         let before = Instant::now();
         let none = parent.pump_until_hello_or(Duration::from_millis(120));
-        assert_eq!(none, None, "HELLO 未受領なら pump は None を返す（要件 3.4）");
+        assert_eq!(
+            none, None,
+            "HELLO 未受領なら pump は None を返す（要件 3.4）"
+        );
         assert!(
             before.elapsed() < Duration::from_secs(5),
             "pump は timeout で bounded に抜ける（無限待機しない）"
@@ -635,7 +642,10 @@ mod window_tests {
             let before = Instant::now();
             let result = parent.send_request(MsgTag::Request, b"ping", Duration::from_millis(150));
             assert!(
-                matches!(result, Err(SendError::Ipc(shiori_host32_ipc::IpcError::Timeout))),
+                matches!(
+                    result,
+                    Err(SendError::Ipc(shiori_host32_ipc::IpcError::Timeout))
+                ),
                 "無応答時は Timeout で復帰する（要件 5.2）: got {result:?}"
             );
             assert!(

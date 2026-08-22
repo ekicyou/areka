@@ -1,11 +1,9 @@
+use super::test_support::*;
 use super::*;
 use crate::world::EmoWorld;
 use areka_emo_atlas::{AtlasTable, SetId};
-use areka_parsers::shell::{
-    Animation, DrawMethod, Element, Interval, Pattern, SortOrder, Surface,
-};
+use areka_parsers::shell::{Animation, DrawMethod, Element, Interval, Pattern, SortOrder, Surface};
 use std::path::Path;
-use super::test_support::*;
 
 /// テスト①（受入基準・要件 4.1）: layer [2,0,1]（登場順）→ ops は layer 昇順 0,1,2。
 ///
@@ -246,17 +244,32 @@ fn active_binds_descend_default_draws_in_id_ascending_order() {
         Vec::new(),
         &[],
         // 登場順は 3,1,2（描画順とは別）。各 pattern0 が別 surface を参照。
-        &[(3, 1300, "part3.png"), (1, 1100, "part1.png"), (2, 1200, "part2.png")],
+        &[
+            (3, 1300, "part3.png"),
+            (1, 1100, "part1.png"),
+            (2, 1200, "part2.png"),
+        ],
         None, // 未指定＝既定 descend。
     );
     let map = id_to_path(&atlas, &["part1.png", "part2.png", "part3.png"]);
 
     let binds = BindSet::from_ids([1, 2, 3]);
     let mut ops = Vec::new();
-    derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds, &PatternState::default());
+    derive_ops(
+        &mut ops,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        1000,
+        &binds,
+        &PatternState::default(),
+    );
 
     // descend（既定）→ ID 昇順描画: part1(1) → part2(2) → part3(3)。
-    assert_eq!(ops_to_paths(&ops, &map), vec!["part1.png", "part2.png", "part3.png"]);
+    assert_eq!(
+        ops_to_paths(&ops, &map),
+        vec!["part1.png", "part2.png", "part3.png"]
+    );
 }
 
 /// テスト②（要件 5.3）: animation-sort=ascend → ID 降順に描画（小 ID が上）。
@@ -266,17 +279,32 @@ fn active_binds_ascend_draws_in_id_descending_order() {
         1000,
         Vec::new(),
         &[],
-        &[(3, 1300, "part3.png"), (1, 1100, "part1.png"), (2, 1200, "part2.png")],
+        &[
+            (3, 1300, "part3.png"),
+            (1, 1100, "part1.png"),
+            (2, 1200, "part2.png"),
+        ],
         Some(SortOrder::Ascend),
     );
     let map = id_to_path(&atlas, &["part1.png", "part2.png", "part3.png"]);
 
     let binds = BindSet::from_ids([1, 2, 3]);
     let mut ops = Vec::new();
-    derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds, &PatternState::default());
+    derive_ops(
+        &mut ops,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        1000,
+        &binds,
+        &PatternState::default(),
+    );
 
     // ascend → ID 降順描画: part3(3) → part2(2) → part1(1)。
-    assert_eq!(ops_to_paths(&ops, &map), vec!["part3.png", "part2.png", "part1.png"]);
+    assert_eq!(
+        ops_to_paths(&ops, &map),
+        vec!["part3.png", "part2.png", "part1.png"]
+    );
 }
 
 /// テスト③（要件 5.2）: BindSet に含まれない bind animation は合成対象から除外される。
@@ -286,7 +314,11 @@ fn only_binds_in_bindset_are_included() {
         1000,
         Vec::new(),
         &[],
-        &[(1, 1100, "part1.png"), (2, 1200, "part2.png"), (3, 1300, "part3.png")],
+        &[
+            (1, 1100, "part1.png"),
+            (2, 1200, "part2.png"),
+            (3, 1300, "part3.png"),
+        ],
         None,
     );
     let map = id_to_path(&atlas, &["part1.png", "part2.png", "part3.png"]);
@@ -294,7 +326,15 @@ fn only_binds_in_bindset_are_included() {
     // id=2 のみ有効（1,3 は非活性）。
     let binds = BindSet::from_ids([2]);
     let mut ops = Vec::new();
-    derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds, &PatternState::default());
+    derive_ops(
+        &mut ops,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        1000,
+        &binds,
+        &PatternState::default(),
+    );
 
     // part2 のみ命令化される。
     assert_eq!(ops_to_paths(&ops, &map), vec!["part2.png"]);
@@ -316,15 +356,37 @@ fn bind_only_surface_produces_layers_from_nonempty_bindset() {
     // 非空 bind 集合 → 可視層が生成される（空白にしない）。
     let binds = BindSet::from_ids([1, 2]);
     let mut ops = Vec::new();
-    derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds, &PatternState::default());
-    assert!(!ops.is_empty(), "全 bind surface でも非空 bind 集合から可視層を生む");
+    derive_ops(
+        &mut ops,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        1000,
+        &binds,
+        &PatternState::default(),
+    );
+    assert!(
+        !ops.is_empty(),
+        "全 bind surface でも非空 bind 集合から可視層を生む"
+    );
     assert_eq!(ops_to_paths(&ops, &map), vec!["part1.png", "part2.png"]);
 
     // 空 bind 集合 → bind 命令なし（静的 element も無いので空・非パニック）。
     let empty = BindSet::default();
     let mut ops_empty = Vec::new();
-    derive_ops(&mut ops_empty, &mut Vec::new(), &world, &atlas, 1000, &empty, &PatternState::default());
-    assert!(ops_empty.is_empty(), "空 bind 集合では bind 命令ゼロ（非パニック）");
+    derive_ops(
+        &mut ops_empty,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        1000,
+        &empty,
+        &PatternState::default(),
+    );
+    assert!(
+        ops_empty.is_empty(),
+        "空 bind 集合では bind 命令ゼロ（非パニック）"
+    );
 }
 
 /// テスト⑤（要件 5.2・design 層列挙 i/ii）: 静的 element 層が bind 層の**前（下）**に来る。
@@ -341,7 +403,15 @@ fn static_elements_precede_bind_layers() {
 
     let binds = BindSet::from_ids([1]);
     let mut ops = Vec::new();
-    derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds, &PatternState::default());
+    derive_ops(
+        &mut ops,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        1000,
+        &binds,
+        &PatternState::default(),
+    );
 
     // 静的 base（下）→ bind part1（上）。
     assert_eq!(ops_to_paths(&ops, &map), vec!["base.png", "part1.png"]);
@@ -359,8 +429,8 @@ fn sentinel_pattern0_is_skipped() {
         1000,
         Vec::new(),
         vec![
-            bind_anim(1, 1100, 0, 0),  // 正常参照。
-            bind_anim(2, -2, 0, 0),    // センチネル（非描画）。
+            bind_anim(1, 1100, 0, 0), // 正常参照。
+            bind_anim(2, -2, 0, 0),   // センチネル（非描画）。
         ],
     );
     let part1 = surface(1100, vec![elem(0, "part1.png", 0, 0)]);
@@ -370,7 +440,15 @@ fn sentinel_pattern0_is_skipped() {
 
     let binds = BindSet::from_ids([1, 2]);
     let mut ops = Vec::new();
-    derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds, &PatternState::default());
+    derive_ops(
+        &mut ops,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        1000,
+        &binds,
+        &PatternState::default(),
+    );
 
     // センチネル bind id=2 は積まれず、part1 のみ（非パニック）。
     assert_eq!(ops_to_paths(&ops, &map), vec!["part1.png"]);
@@ -383,16 +461,36 @@ fn bind_derivation_is_deterministic() {
         1000,
         vec![elem(0, "base.png", 0, 0)],
         &["base.png"],
-        &[(3, 1300, "part3.png"), (1, 1100, "part1.png"), (2, 1200, "part2.png")],
+        &[
+            (3, 1300, "part3.png"),
+            (1, 1100, "part1.png"),
+            (2, 1200, "part2.png"),
+        ],
         None,
     );
     let _ = &atlas; // atlas は bind_atlas 済み（以降の resolve は不要）。
 
     let binds = BindSet::from_ids([1, 2, 3]);
     let mut ops1 = Vec::new();
-    derive_ops(&mut ops1, &mut Vec::new(), &world, &atlas, 1000, &binds, &PatternState::default());
+    derive_ops(
+        &mut ops1,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        1000,
+        &binds,
+        &PatternState::default(),
+    );
     let mut ops2 = Vec::new();
-    derive_ops(&mut ops2, &mut Vec::new(), &world, &atlas, 1000, &binds, &PatternState::default());
+    derive_ops(
+        &mut ops2,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        1000,
+        &binds,
+        &PatternState::default(),
+    );
 
     assert_eq!(ops1, ops2, "同一入力→同一 ops（バイト等価）");
     // base(静的1) ＋ bind 3 本＝4 命令。
@@ -415,7 +513,15 @@ fn nested_pattern0_offset_is_applied_to_element_transform() {
 
     let binds = BindSet::from_ids([1]);
     let mut ops = Vec::new();
-    derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds, &PatternState::default());
+    derive_ops(
+        &mut ops,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        1000,
+        &binds,
+        &PatternState::default(),
+    );
 
     assert_eq!(ops.len(), 1);
     assert_eq!(ops[0].element, part_id);
@@ -455,7 +561,15 @@ fn self_reference_does_not_overflow_and_yields_partial_result() {
     let binds = BindSet::from_ids([1]);
     let mut ops = Vec::new();
     // これが無限再帰すると本テストは完走できない（スタックオーバーフローで abort）。
-    derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds, &PatternState::default());
+    derive_ops(
+        &mut ops,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        1000,
+        &binds,
+        &PatternState::default(),
+    );
 
     // 静的層 self.png は積まれる（部分結果）。
     assert!(!ops.is_empty(), "自己参照でも静的層の部分結果が得られる");
@@ -496,12 +610,24 @@ fn mutual_reference_cycle_is_pruned_without_overflow() {
 
     let binds = BindSet::from_ids([1]);
     let mut ops = Vec::new();
-    derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds, &PatternState::default());
+    derive_ops(
+        &mut ops,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        1000,
+        &binds,
+        &PatternState::default(),
+    );
 
     // A 静的 → B 静的まで到達し、B→A の再入は打ち切り。a.png と b.png の各1本。
     let map = [(a_id, "a.png"), (b_id, "b.png")];
     let paths = ops_to_paths(&ops, &map);
-    assert_eq!(paths, vec!["a.png", "b.png"], "相互参照は A 再入で打ち切り＝有界");
+    assert_eq!(
+        paths,
+        vec!["a.png", "b.png"],
+        "相互参照は A 再入で打ち切り＝有界"
+    );
 }
 
 /// テスト5.3-③（要件 7.1・オフセット累積）: 非循環の多段入れ子 A→B→C でオフセットが累積する。
@@ -526,9 +652,21 @@ fn offset_accumulates_across_multilevel_nesting() {
 
     let binds = BindSet::from_ids([1]);
     let mut ops = Vec::new();
-    derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds, &PatternState::default());
+    derive_ops(
+        &mut ops,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        1000,
+        &binds,
+        &PatternState::default(),
+    );
 
-    assert_eq!(ops.len(), 1, "C の element 1 本のみ（A/B は静的 element なし）");
+    assert_eq!(
+        ops.len(),
+        1,
+        "C の element 1 本のみ（A/B は静的 element なし）"
+    );
     assert_eq!(ops[0].element, c_id);
     // 累積: A→B (10,5) ＋ B→C (100,50) ＋ C element 自 (2,3) ＝ (112, 58)。
     assert_eq!(ops[0].transform.offset(), (112, 58), "多段オフセット累積");
@@ -562,14 +700,30 @@ fn noncyclic_shared_child_expands_on_each_path() {
 
     let binds = BindSet::from_ids([1, 2]);
     let mut ops = Vec::new();
-    derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds, &PatternState::default());
+    derive_ops(
+        &mut ops,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        1000,
+        &binds,
+        &PatternState::default(),
+    );
 
     // S は2経路で展開＝s.png が 2 命令。祖先スタック（pop-on-exit）ゆえ非循環重複は刈られない。
-    assert_eq!(ops.len(), 2, "非循環の共有子は各経路で展開（祖先スタック規律）");
+    assert_eq!(
+        ops.len(),
+        2,
+        "非循環の共有子は各経路で展開（祖先スタック規律）"
+    );
     assert!(ops.iter().all(|op| op.element == s_id));
     let offsets: Vec<(i64, i64)> = ops.iter().map(|op| op.transform.offset()).collect();
     // id 昇順描画（既定 descend）: id=1（S 直下 at (10,0)）→ id=2（B→S at (0,20)）。
-    assert_eq!(offsets, vec![(10, 0), (0, 20)], "各経路で別オフセット＝重複展開");
+    assert_eq!(
+        offsets,
+        vec![(10, 0), (0, 20)],
+        "各経路で別オフセット＝重複展開"
+    );
 }
 
 /// テスト5.3-⑤（要件 4.5/10.1）: 循環を含む入力でも 2 回導出→バイト等価（決定性・有界）。
@@ -594,11 +748,30 @@ fn cyclic_derivation_is_deterministic() {
 
     let binds = BindSet::from_ids([1]);
     let mut ops1 = Vec::new();
-    derive_ops(&mut ops1, &mut Vec::new(), &world, &atlas, 1000, &binds, &PatternState::default());
+    derive_ops(
+        &mut ops1,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        1000,
+        &binds,
+        &PatternState::default(),
+    );
     let mut ops2 = Vec::new();
-    derive_ops(&mut ops2, &mut Vec::new(), &world, &atlas, 1000, &binds, &PatternState::default());
+    derive_ops(
+        &mut ops2,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        1000,
+        &binds,
+        &PatternState::default(),
+    );
 
-    assert_eq!(ops1, ops2, "循環入力でも同一入力→同一 ops（バイト等価・有界）");
+    assert_eq!(
+        ops1, ops2,
+        "循環入力でも同一入力→同一 ops（バイト等価・有界）"
+    );
 }
 
 // ── task 11.2: 静的合成の pattern0＝厳密 index==0 選択（実機第2欠陥・要件 9.1/9.2/9.5）──────
@@ -651,7 +824,15 @@ fn pattern0_less_bind_contributes_no_ops() {
 
     let binds = BindSet::from_ids([1400]);
     let mut ops = Vec::new();
-    derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds, &PatternState::default());
+    derive_ops(
+        &mut ops,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        1000,
+        &binds,
+        &PatternState::default(),
+    );
 
     // pattern0 を持たない有効 bind は静的合成へ寄与しない＝closed_eye.png 命令が現れない。
     assert!(
@@ -674,8 +855,22 @@ fn coexisting_pattern0_and_pattern1_composes_only_index0() {
         id: 1,
         interval: Interval::Bind,
         patterns: vec![
-            Pattern { index: 0, method: DrawMethod::new("overlay".to_string()), surface_id: 1100, wait: 0, x: 0, y: 0 },
-            Pattern { index: 1, method: DrawMethod::new("overlay".to_string()), surface_id: 1200, wait: 0, x: 0, y: 0 },
+            Pattern {
+                index: 0,
+                method: DrawMethod::new("overlay".to_string()),
+                surface_id: 1100,
+                wait: 0,
+                x: 0,
+                y: 0,
+            },
+            Pattern {
+                index: 1,
+                method: DrawMethod::new("overlay".to_string()),
+                surface_id: 1200,
+                wait: 0,
+                x: 0,
+                y: 0,
+            },
         ],
     };
     let host = surface_with_anims(1000, Vec::new(), vec![anim]);
@@ -687,7 +882,15 @@ fn coexisting_pattern0_and_pattern1_composes_only_index0() {
 
     let binds = BindSet::from_ids([1]);
     let mut ops = Vec::new();
-    derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds, &PatternState::default());
+    derive_ops(
+        &mut ops,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        1000,
+        &binds,
+        &PatternState::default(),
+    );
 
     // index==0（open_eye）のみ合成。index==1（closed_eye）は静的合成に現れない。
     assert_eq!(ops_to_paths(&ops, &map), vec!["open_eye.png"]);
@@ -705,7 +908,12 @@ use crate::pattern::PatternFrame;
 
 /// 現在コマ（PatternFrame）を 1 本組む（テスト補助・任意 method／オフセット）。
 fn koma(surface_id: u32, method: ComposeMethod, x: i64, y: i64) -> PatternFrame {
-    PatternFrame { surface_id, method, x, y }
+    PatternFrame {
+        surface_id,
+        method,
+        x,
+        y,
+    }
 }
 
 /// pattern0（index==0）1 本だけを持つ bind animation を任意 method で組む（pattern0 method ゲート檻用）。
@@ -753,7 +961,15 @@ fn non_overlay_koma_warns_and_is_not_drawn_replacing_pattern0() {
 
     let mut ops = Vec::new();
     let logs = capture_logs(|| {
-        derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds, &pattern);
+        derive_ops(
+            &mut ops,
+            &mut Vec::new(),
+            &world,
+            &atlas,
+            1000,
+            &binds,
+            &pattern,
+        );
     });
 
     // コマ（koma）は非駆動で不描画・pattern0（part1）はコマに置換され不描画 → base のみ。
@@ -763,10 +979,19 @@ fn non_overlay_koma_warns_and_is_not_drawn_replacing_pattern0() {
         "非 Overlay コマは不描画・pattern0 も置換で不描画（残るは base）"
     );
     // warn! が method 名込みで発火する（要件 8.4・完全形保持のまま非駆動）。
-    assert!(logs.contains("level=WARN"), "非 Overlay コマは WARN: {logs}");
+    assert!(
+        logs.contains("level=WARN"),
+        "非 Overlay コマは WARN: {logs}"
+    );
     assert!(logs.contains("target=areka_emo_compose"), "target: {logs}");
-    assert!(logs.contains("method=Replace"), "method 名（判別子）を載せる: {logs}");
-    assert!(logs.contains("animation_id=1"), "対象 animation id を載せる: {logs}");
+    assert!(
+        logs.contains("method=Replace"),
+        "method 名（判別子）を載せる: {logs}"
+    );
+    assert!(
+        logs.contains("animation_id=1"),
+        "対象 animation id を載せる: {logs}"
+    );
 }
 
 /// テスト7.2-②（要件 8.4・D-5 是正）: 非 Overlay の **bind pattern0**（静的経路）も warn!（method
@@ -793,7 +1018,15 @@ fn non_overlay_pattern0_warns_and_is_not_drawn() {
     let binds = BindSet::from_ids([1]);
     let mut ops = Vec::new();
     let logs = capture_logs(|| {
-        derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds, &PatternState::default());
+        derive_ops(
+            &mut ops,
+            &mut Vec::new(),
+            &world,
+            &atlas,
+            1000,
+            &binds,
+            &PatternState::default(),
+        );
     });
 
     // 非 Overlay pattern0（part1）は不描画 → base のみ。
@@ -802,9 +1035,18 @@ fn non_overlay_pattern0_warns_and_is_not_drawn() {
         vec!["base.png"],
         "非 Overlay pattern0 は不描画（残るは base）"
     );
-    assert!(logs.contains("level=WARN"), "非 Overlay pattern0 は WARN: {logs}");
-    assert!(logs.contains("method=Replace"), "method 名（判別子）を載せる: {logs}");
-    assert!(logs.contains("animation_id=1"), "対象 animation id を載せる: {logs}");
+    assert!(
+        logs.contains("level=WARN"),
+        "非 Overlay pattern0 は WARN: {logs}"
+    );
+    assert!(
+        logs.contains("method=Replace"),
+        "method 名（判別子）を載せる: {logs}"
+    );
+    assert!(
+        logs.contains("animation_id=1"),
+        "対象 animation id を載せる: {logs}"
+    );
 }
 
 /// テスト7.2-③（**受入基準**・要件 4.2）: Overlay の現在コマは描画され、同 id の pattern0 静的
@@ -830,7 +1072,15 @@ fn overlay_koma_is_drawn_and_replaces_same_id_pattern0() {
     pattern.set(1, koma(1200, ComposeMethod::Overlay, 0, 0)); // Overlay コマ。
 
     let mut ops = Vec::new();
-    derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds, &pattern);
+    derive_ops(
+        &mut ops,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        1000,
+        &binds,
+        &pattern,
+    );
 
     // コマ（closed_eye）が pattern0（open_eye）を置換 → closed_eye のみ。
     assert_eq!(
@@ -870,7 +1120,15 @@ fn merged_ids_preserve_id_ascending_painter_order() {
     pattern.set(2, koma(1200, ComposeMethod::Overlay, 0, 0));
 
     let mut ops = Vec::new();
-    derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds, &pattern);
+    derive_ops(
+        &mut ops,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        1000,
+        &binds,
+        &pattern,
+    );
 
     // 既定 descend → id 昇順描画: partA(1) → partB(2・コマ) → partC(3)。
     assert_eq!(
@@ -900,7 +1158,15 @@ fn empty_pattern_state_yields_identical_ops_to_pre_merge() {
 
     let binds = BindSet::from_ids([1]);
     let mut ops = Vec::new();
-    derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds, &PatternState::default());
+    derive_ops(
+        &mut ops,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        1000,
+        &binds,
+        &PatternState::default(),
+    );
 
     // 空 PatternState → 静的 base（下）＋ bind pattern0 part1（上）＝合流前と同一。
     assert_eq!(
@@ -936,7 +1202,15 @@ fn koma_only_id_without_bind_pattern0_is_drawn() {
     pattern.set(1400, koma(1412, ComposeMethod::Overlay, 0, 0));
 
     let mut ops = Vec::new();
-    derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds, &pattern);
+    derive_ops(
+        &mut ops,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        1000,
+        &binds,
+        &pattern,
+    );
 
     // pattern0 が無くてもコマは駆動される（union 合流・4.6 まばたき再生）。
     assert_eq!(
@@ -1009,7 +1283,15 @@ fn bind_kind_koma_outside_bindset_is_not_merged() {
     pattern.set(1500, koma(1501, ComposeMethod::Overlay, 0, 0));
 
     let mut ops = Vec::new();
-    derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds, &pattern);
+    derive_ops(
+        &mut ops,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        1000,
+        &binds,
+        &pattern,
+    );
     let paths = ops_to_paths(&ops, &map);
 
     // 負の錨: 外れた bind 種 id=1402 の層（jito.png）は現れない（bindopt 7.1）。
@@ -1040,7 +1322,15 @@ fn non_bind_koma_merges_regardless_of_bindset() {
     pattern.set(1500, koma(1501, ComposeMethod::Overlay, 0, 0));
 
     let mut ops = Vec::new();
-    derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds, &pattern);
+    derive_ops(
+        &mut ops,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        1000,
+        &binds,
+        &pattern,
+    );
 
     assert_eq!(
         ops_to_paths(&ops, &map),
@@ -1065,7 +1355,15 @@ fn bind_kind_koma_inside_bindset_still_merges() {
     pattern.set(1500, koma(1501, ComposeMethod::Overlay, 0, 0));
 
     let mut ops = Vec::new();
-    derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds, &pattern);
+    derive_ops(
+        &mut ops,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        1000,
+        &binds,
+        &pattern,
+    );
 
     // 既定 descend＝id 昇順描画で 1300 → 1402 → 1500（合成順は無改変）。
     assert_eq!(

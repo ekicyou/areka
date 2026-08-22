@@ -20,8 +20,8 @@ use areka_parsers::package::GhostNames;
 use areka_sakura::contract::SystemVarSnapshot;
 use areka_sylphya::persist::FsPersistIo;
 use areka_sylphya::{
-    spawn_sylphya, AskerContext, AskerId, ScopeRoots, SylphyaInit, SylphyaParts, SylphyaPublisher,
-    SylphyaReader,
+    AskerContext, AskerId, ScopeRoots, SylphyaInit, SylphyaParts, SylphyaPublisher, SylphyaReader,
+    spawn_sylphya,
 };
 
 use crate::runtime::SystemVarSource;
@@ -349,7 +349,10 @@ mod tests {
             vec![("selfname".into(), "さくら".into())],
             vec![],
         );
-        parts.publisher.barrier().expect("barrier while actor alive");
+        parts
+            .publisher
+            .barrier()
+            .expect("barrier while actor alive");
 
         let provider = from_sylphya_provider(parts.reader.clone(), asker);
 
@@ -368,12 +371,17 @@ mod tests {
         );
         // スナップショットの源が sylphya 読み口であること（publish した値が provider 像に載る）。
         assert_eq!(
-            snapshot.expect("provider produced a snapshot").get("selfname"),
+            snapshot
+                .expect("provider produced a snapshot")
+                .get("selfname"),
             Some("さくら"),
             "provider 像は sylphya 鏡像由来（publish した selfname が載る）"
         );
 
         parts.publisher.close();
-        parts.handle.join().expect("clean close joins without panic");
+        parts
+            .handle
+            .join()
+            .expect("clean close joins without panic");
     }
 }

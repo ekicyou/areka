@@ -99,12 +99,7 @@ fn holds(presenter: &EmoPresenter, n: u32) -> bool {
         .get(&TargetId(0))
         .expect("装着済み target")
         .cache
-        .get(
-            SURFACE,
-            &key(n),
-            &PatternState::default(),
-            ScaleRatio::ONE,
-        )
+        .get(SURFACE, &key(n), &PatternState::default(), ScaleRatio::ONE)
         .is_some()
 }
 

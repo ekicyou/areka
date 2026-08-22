@@ -242,9 +242,7 @@ fn s3_helper_liveness_detected_mid_scenario_drives_autonomous_fault_termination(
         BOUND,
         shiori_handle,
     )
-    .expect(
-        "shiori actor should terminate once kanade's fault sequence sends ShioriMsg::Close",
-    );
+    .expect("shiori actor should terminate once kanade's fault sequence sends ShioriMsg::Close");
 
     // ---- 副観測: 残る全コンポーネントも有界時間内に後始末される（design「全 join」）----
     // dispatcher は自身の Sender を保持し自然終了しない（「アクター別の停止経路」表）

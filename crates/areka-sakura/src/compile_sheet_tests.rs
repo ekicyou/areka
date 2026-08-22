@@ -1,8 +1,8 @@
+use super::test_support::{assert_clear_all_prefix_and_rest, command_of, compile, cue_eq};
 use super::*;
 use crate::duration::text_playback_duration;
 use areka_parsers::sakura::{NewLineRatio, SurfaceArg};
 use std::time::Duration;
-use super::test_support::{assert_clear_all_prefix_and_rest, command_of, compile, cue_eq};
 
 /// 多様な variant を織り交ぜた代表的な命令列（決定性・不変条件の両テストで共用）。
 /// 終端命令は含めず全命令を走査させる（末尾到達で end=Ended）。
@@ -453,7 +453,10 @@ fn append_epilogue_empty_is_identity() {
         "空 epilogue は cue 数を変えない（恒等）"
     );
     for (i, (a, b)) in after_cues.iter().zip(before.iter()).enumerate() {
-        assert!(cue_eq(a, b), "index {i} の cue が空 epilogue で変化した: {a:?} != {b:?}");
+        assert!(
+            cue_eq(a, b),
+            "index {i} の cue が空 epilogue で変化した: {a:?} != {b:?}"
+        );
     }
 }
 
@@ -554,7 +557,10 @@ fn append_epilogue_stable_sorts_after_same_time_barrier() {
     // 同一 at=1.0 で barrier が先・carrier が後（安定ソート FIFO＝barrier 解決後に発火）。
     assert_eq!(cues[1].start_time, 1.0);
     assert!(
-        matches!(&cues[1].payload, CuePayload::Barrier(BarrierKind::WaitForChoice { .. })),
+        matches!(
+            &cues[1].payload,
+            CuePayload::Barrier(BarrierKind::WaitForChoice { .. })
+        ),
         "同時刻群の先頭は既存 barrier（安定ソートで epilogue より前）"
     );
     assert_eq!(cues[2].start_time, 1.0, "carrier cue も同一 at=1.0");
@@ -596,7 +602,10 @@ fn append_epilogue_maps_each_command_to_one_carrier_cue() {
         Some(("areka.prop.set", vec!["areka.vanish.count", "0"])),
     );
     for cue in tail {
-        assert_eq!(cue.start_time, horizon, "全 carrier cue が同一末尾 horizon へ付加される");
+        assert_eq!(
+            cue.start_time, horizon,
+            "全 carrier cue が同一末尾 horizon へ付加される"
+        );
         assert_eq!(cue.duration, 0.0);
     }
 }

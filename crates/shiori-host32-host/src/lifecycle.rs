@@ -345,10 +345,7 @@ pub(crate) mod tests {
     /// 行5（生存）: `None` × `Handshake` → `Handshake`。
     #[test]
     fn classify_alive_handshake_is_handshake() {
-        let got = classify_failure(
-            &RequestError::Handshake(HandshakeError::Incomplete),
-            None,
-        );
+        let got = classify_failure(&RequestError::Handshake(HandshakeError::Incomplete), None);
         assert_eq!(got, FailureClass::Handshake);
     }
 
@@ -374,7 +371,10 @@ pub(crate) mod tests {
             if let HelperStatus::Exited(kind) = lc.status() {
                 return kind;
             }
-            assert!(Instant::now() < deadline, "stand-in が上限時間内に終了しなかった");
+            assert!(
+                Instant::now() < deadline,
+                "stand-in が上限時間内に終了しなかった"
+            );
             std::thread::sleep(Duration::from_millis(5));
         }
     }
@@ -424,7 +424,10 @@ pub(crate) mod tests {
         // 先に終了を観測してから二重 terminate（既存 HelperHandle::terminate が冪等）。
         let _ = wait_exited(&mut lc);
         assert!(lc.terminate().is_ok(), "1 回目の terminate は Ok");
-        assert!(lc.terminate().is_ok(), "2 回目の terminate も Ok（冪等・R5.2）");
+        assert!(
+            lc.terminate().is_ok(),
+            "2 回目の terminate も Ok（冪等・R5.2）"
+        );
     }
 
     // --- report_failure: request 失敗と死活の突合・統一報告（R2.1〜2.5, 4.4, 7.6）---
@@ -450,7 +453,11 @@ pub(crate) mod tests {
         let handle = spawn_command(cmd_alive()).expect("stand-in を spawn できる");
         let mut lc = HelperLifecycle::new(handle);
         // 生存確認: spawn 直後の長命 stand-in はまだ稼働中である（決定的）。
-        assert_eq!(lc.status(), HelperStatus::Running, "長命 stand-in は突合時点で生存");
+        assert_eq!(
+            lc.status(),
+            HelperStatus::Running,
+            "長命 stand-in は突合時点で生存"
+        );
 
         let report = lc.report_failure(RequestError::Timeout);
         // 生存中の timeout は死活起因でなく Unresponsive（R2.2）。
@@ -479,7 +486,10 @@ pub(crate) mod tests {
         let report = lc.report_failure(RequestError::Timeout);
         // 死は死: 表面 Timeout でも HelperDown(Abnormal(5))（R2.1・death precedence）。
         // この分岐が error! を発行する（R4.4/R7.6・戻り値検証で構造的に担保）。
-        assert_eq!(report.class, FailureClass::HelperDown(ExitKind::Abnormal(5)));
+        assert_eq!(
+            report.class,
+            FailureClass::HelperDown(ExitKind::Abnormal(5))
+        );
         // 原本 error は保持（R2.4/R2.5）。
         assert!(
             matches!(report.error, RequestError::Timeout),
@@ -523,14 +533,16 @@ pub(crate) mod tests {
     #[test]
     fn request_clean_shutdown_short_circuits_when_already_exited() {
         // 窓生成テストの直列化（並列窓生成の WindowCreationError 回避）。
-        let _guard = WINDOW_TEST_SERIAL
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let _guard = WINDOW_TEST_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
 
         // 既終了 stand-in（`cmd /c exit 0` → Clean）を組み、終了を bounded 観測する。
         let handle = spawn_command(cmd_exit(0)).expect("stand-in を spawn できる");
         let mut lc = HelperLifecycle::new(handle);
-        assert_eq!(wait_exited(&mut lc), ExitKind::Clean, "stand-in は Clean 終了");
+        assert_eq!(
+            wait_exited(&mut lc),
+            ExitKind::Clean,
+            "stand-in は Clean 終了"
+        );
 
         // 窓を立てる（送出面の借用先）。短絡経路では send_request は呼ばれない。
         let window = ParentMessageWindow::create().expect("親 message-only 窓生成に失敗");

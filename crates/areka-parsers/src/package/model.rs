@@ -261,8 +261,14 @@ mod bindgroup_name_tests {
             sakura_names: vec![name(1100, "腕", "伸び"), name(1200, "頬", "赤面")],
             ..Default::default()
         };
-        assert_eq!(defaults.resolve_name(BindScope::Sakura, "腕", "伸び"), Some(1100));
-        assert_eq!(defaults.resolve_name(BindScope::Sakura, "頬", "赤面"), Some(1200));
+        assert_eq!(
+            defaults.resolve_name(BindScope::Sakura, "腕", "伸び"),
+            Some(1100)
+        );
+        assert_eq!(
+            defaults.resolve_name(BindScope::Sakura, "頬", "赤面"),
+            Some(1200)
+        );
         // 未宣言の組は None（R1.4）。
         assert_eq!(defaults.resolve_name(BindScope::Sakura, "腕", "曲げ"), None);
     }
@@ -275,14 +281,23 @@ mod bindgroup_name_tests {
             kero_names: vec![name(2100, "腕", "伸び")],
             ..Default::default()
         };
-        assert_eq!(defaults.resolve_name(BindScope::Sakura, "腕", "伸び"), Some(1100));
-        assert_eq!(defaults.resolve_name(BindScope::Kero, "腕", "伸び"), Some(2100));
+        assert_eq!(
+            defaults.resolve_name(BindScope::Sakura, "腕", "伸び"),
+            Some(1100)
+        );
+        assert_eq!(
+            defaults.resolve_name(BindScope::Kero, "腕", "伸び"),
+            Some(2100)
+        );
         // sakura に宣言があっても kero 側では別集合として扱う。
         let sakura_only = BindGroupDefaults {
             sakura_names: vec![name(1100, "腕", "伸び")],
             ..Default::default()
         };
-        assert_eq!(sakura_only.resolve_name(BindScope::Kero, "腕", "伸び"), None);
+        assert_eq!(
+            sakura_only.resolve_name(BindScope::Kero, "腕", "伸び"),
+            None
+        );
     }
 
     /// 重複 (カテゴリ, パーツ) はキー昇順走査の後勝ち（D2）。
@@ -292,7 +307,10 @@ mod bindgroup_name_tests {
             sakura_names: vec![name(1100, "腕", "伸び"), name(1300, "腕", "伸び")],
             ..Default::default()
         };
-        assert_eq!(defaults.resolve_name(BindScope::Sakura, "腕", "伸び"), Some(1300));
+        assert_eq!(
+            defaults.resolve_name(BindScope::Sakura, "腕", "伸び"),
+            Some(1300)
+        );
     }
 
     /// category_ids はカテゴリ所属 ID を昇順・重複排除で返す（R1.3 後段）。
@@ -308,7 +326,10 @@ mod bindgroup_name_tests {
             ],
             ..Default::default()
         };
-        assert_eq!(defaults.category_ids(BindScope::Sakura, "腕"), vec![1100, 1200, 1300]);
+        assert_eq!(
+            defaults.category_ids(BindScope::Sakura, "腕"),
+            vec![1100, 1200, 1300]
+        );
         assert_eq!(defaults.category_ids(BindScope::Sakura, "頬"), vec![9000]);
         assert!(defaults.category_ids(BindScope::Sakura, "脚").is_empty());
     }
@@ -414,7 +435,10 @@ mod bindgroup_name_tests {
         };
         // 既存フィールドの意味は不変。
         assert_eq!(defaults.sakura_default_on, vec![1100]);
-        assert_eq!(defaults.resolve_name(BindScope::Sakura, "腕", "伸び"), Some(1100));
+        assert_eq!(
+            defaults.resolve_name(BindScope::Sakura, "腕", "伸び"),
+            Some(1100)
+        );
         assert!(defaults.is_mustselect(BindScope::Sakura, "腕"));
         // 追加フィールドは既定で空＝全カテゴリ「multiple 非宣言」。
         assert!(defaults.sakura_multiple.is_empty());

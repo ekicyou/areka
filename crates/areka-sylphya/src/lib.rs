@@ -57,14 +57,14 @@ mod test_log_capture;
 
 // --- 公開面 re-export（後続タスクが素直に使えるよう主要型を crate 直下へ）---
 pub use actor::{
-    classify_set, spawn_sylphya, Effect, RuntimeCommandSink, SetClass, SylphyaCore, SylphyaInit,
-    SylphyaMsg, SylphyaParts, SylphyaPublisher,
+    Effect, RuntimeCommandSink, SetClass, SylphyaCore, SylphyaInit, SylphyaMsg, SylphyaParts,
+    SylphyaPublisher, classify_set, spawn_sylphya,
 };
 pub use asker::{AskerContext, AskerId};
-pub use key::{parse_dotted, KeyParseError, PathSeg, PropPath, Selector};
+pub use key::{KeyParseError, PathSeg, PropPath, Selector, parse_dotted};
 pub use mirror::{MirrorImage, SharedMirror};
 pub use persist::{
-    load_scope, save_scope, Axis, PersistKey, PersistOutcome, PersistScope, ScopeRoots,
+    Axis, PersistKey, PersistOutcome, PersistScope, ScopeRoots, load_scope, save_scope,
 };
 pub use reader::SylphyaReader;
 pub use value::{DottedResolution, FlatResolution};

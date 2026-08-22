@@ -146,7 +146,11 @@ fn close_refused_resumes_pump_then_terminates_via_resumed_talk() {
         })
         .map(|(_, c)| c)
         .expect("再開後の OnSecondChange GET が存在するはず");
-    assert_eq!(resumed_get.references.len(), 4, "OnSecondChange の References は 4 要素");
+    assert_eq!(
+        resumed_get.references.len(),
+        4,
+        "OnSecondChange の References は 4 要素"
+    );
     assert_eq!(
         resumed_get.references[3], "1",
         "再開 pump の Ref3 は \"1\"（GET・talk 再生可能）"
@@ -261,7 +265,11 @@ fn silent_close_on_204_terminates_without_extra_events() {
         recorded
     );
     let last = recorded.last().expect("記録列は空でない");
-    assert_eq!(*last, expected_unload(), "記録列の末尾は Unload（無言終了の完走）");
+    assert_eq!(
+        *last,
+        expected_unload(),
+        "記録列の末尾は Unload（無言終了の完走）"
+    );
     assert_eq!(last.method, CallMethod::Unload);
 
     // OnClose 以降に追加イベント（GET/NOTIFY）が挟まっていないことを明示的に確認する。
@@ -283,16 +291,20 @@ fn silent_close_on_204_terminates_without_extra_events() {
     let onclose_count = recorded
         .iter()
         .filter(|c| {
-            **c == expected_call(events::on_close(CloseReason::User, &ExecutionSnapshot::INACTIVE))
+            **c == expected_call(events::on_close(
+                CloseReason::User,
+                &ExecutionSnapshot::INACTIVE,
+            ))
         })
         .count();
-    assert_eq!(onclose_count, 1, "OnClose GET はちょうど 1 度（再発行なし）");
+    assert_eq!(
+        onclose_count, 1,
+        "OnClose GET はちょうど 1 度（再発行なし）"
+    );
 
     // (c) close は StartTalk を一切生まない: sink には boot talk のみが届く（close talk 非起動）。
     assert!(
-        started
-            .iter()
-            .all(|s| s.script != FIXED_FAREWELL_SCRIPT),
+        started.iter().all(|s| s.script != FIXED_FAREWELL_SCRIPT),
         "204 無言終了では別れの close talk は起動しないはず: {:?}",
         started
     );
@@ -473,7 +485,11 @@ fn force_quit_terminates_directly_with_best_effort_onclose_notify() {
 
     // (a) 末尾は Unload（終了系列完走）で閉じる。
     let last = recorded.last().expect("記録列は空でない");
-    assert_eq!(*last, expected_unload(), "ForceQuit 終了系列の末尾は Unload で閉じる");
+    assert_eq!(
+        *last,
+        expected_unload(),
+        "ForceQuit 終了系列の末尾は Unload で閉じる"
+    );
     assert_eq!(last.method, CallMethod::Unload);
 
     // (b) DD-10 の best-effort OnClose NOTIFY（Ref0=user）が Unload の直前に現れる。
@@ -516,5 +532,8 @@ fn force_quit_terminates_directly_with_best_effort_onclose_notify() {
 /// [`ExecutionSnapshot::INACTIVE`]（Status 行なし・DD-IT-4）。events 表から導出することで、ハーネスに
 /// References/Status 文字列をハードコードしない。
 fn force_quit_onclose_notify(reason: CloseReason) -> RecordedCall {
-    expected_call(events::on_close_notify(reason, &ExecutionSnapshot::INACTIVE))
+    expected_call(events::on_close_notify(
+        reason,
+        &ExecutionSnapshot::INACTIVE,
+    ))
 }

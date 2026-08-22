@@ -4,7 +4,7 @@
 
 use super::*;
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
-use std::sync::mpsc::{channel, TryRecvError};
+use std::sync::mpsc::{TryRecvError, channel};
 
 /// `\![name,tokens...]` 汎用キャリア cue を組む（正準形＝`Custom` の String Array）。
 fn carrier_cue(actor: &str, name: &str, tokens: &[&str]) -> TalkCue {
@@ -22,8 +22,14 @@ fn carrier_cue(actor: &str, name: &str, tokens: &[&str]) -> TalkCue {
 fn move_carrier_sends_directive() {
     let (tx, rx) = channel::<MoveDirective>();
     let mut sink = MoveCueSink::new(tx);
-    sink.emit(carrier_cue("0", "move", &["-353", "", "", "0", "base", "base"]));
-    let d = rx.try_recv().expect("move キャリアは MoveDirective を送出する");
+    sink.emit(carrier_cue(
+        "0",
+        "move",
+        &["-353", "", "", "0", "base", "base"],
+    ));
+    let d = rx
+        .try_recv()
+        .expect("move キャリアは MoveDirective を送出する");
     assert_eq!(d.scope, 0);
     assert_eq!(d.x, AxisSpec::Px(-353));
     assert_eq!(d.base, MoveBase::Scope(0));
@@ -65,7 +71,11 @@ fn non_carrier_cue_is_benign_skip() {
 fn scope_reflects_actor() {
     let (tx, rx) = channel::<MoveDirective>();
     let mut sink = MoveCueSink::new(tx);
-    sink.emit(carrier_cue("1", "move", &["-353", "", "", "0", "base", "base"]));
+    sink.emit(carrier_cue(
+        "1",
+        "move",
+        &["-353", "", "", "0", "base", "base"],
+    ));
     let d = rx.try_recv().expect("送出される");
     assert_eq!(d.scope, 1, "scope は cue.actor（\\1）由来");
 }
@@ -103,7 +113,11 @@ fn clone_reaches_same_receiver() {
     let (tx, rx) = channel::<MoveDirective>();
     let sink = MoveCueSink::new(tx);
     let mut clone = sink.clone();
-    clone.emit(carrier_cue("0", "move", &["10", "", "", "0", "base", "base"]));
+    clone.emit(carrier_cue(
+        "0",
+        "move",
+        &["10", "", "", "0", "base", "base"],
+    ));
     let d = rx.try_recv().expect("clone からの送出も同一受信端へ届く");
     assert_eq!(d.x, AxisSpec::Px(10));
     drop(sink); // 元 sink 生存の確認（Clone は独立ハンドル）。

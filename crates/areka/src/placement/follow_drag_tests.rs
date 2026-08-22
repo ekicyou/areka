@@ -47,9 +47,7 @@ fn on_char_drag_tunnel_phase_is_ignored() {
 #[test]
 fn on_char_drag_bubble_moves_balloon_by_offset() {
     let mut world = World::new();
-    let balloon = world
-        .spawn((fake_handle(0x2000), window_pos_at(0, 0)))
-        .id();
+    let balloon = world.spawn((fake_handle(0x2000), window_pos_at(0, 0))).id();
     let offset = PointPx { x: 498, y: -37 };
     // wndproc がドラッグ中に更新した後のキャラ窓位置を模す
     let window = world
@@ -236,9 +234,7 @@ fn on_char_drag_resnaps_to_crossed_monitor_bottom() {
 fn on_char_drag_free_window_stays_wndproc_delegated() {
     let mut world = World::new();
     world.insert_resource(single_monitor_snapshot());
-    let balloon = world
-        .spawn((fake_handle(0x2000), window_pos_at(0, 0)))
-        .id();
+    let balloon = world.spawn((fake_handle(0x2000), window_pos_at(0, 0))).id();
     let offset = PointPx { x: 498, y: -37 };
     let window = world
         .spawn((
@@ -272,9 +268,7 @@ fn on_char_drag_free_window_stays_wndproc_delegated() {
 fn on_char_drag_without_anchored_stays_wndproc_delegated() {
     let mut world = World::new();
     world.insert_resource(single_monitor_snapshot());
-    let balloon = world
-        .spawn((fake_handle(0x2000), window_pos_at(0, 0)))
-        .id();
+    let balloon = world.spawn((fake_handle(0x2000), window_pos_at(0, 0))).id();
     let offset = PointPx { x: 498, y: -37 };
     let start = (1400, 600);
     let window = world
@@ -307,9 +301,7 @@ fn on_char_drag_without_anchored_stays_wndproc_delegated() {
 fn on_char_drag_balloon_follows_policy_applied_position() {
     let mut world = World::new();
     world.insert_resource(single_monitor_snapshot());
-    let balloon = world
-        .spawn((fake_handle(0x2000), window_pos_at(0, 0)))
-        .id();
+    let balloon = world.spawn((fake_handle(0x2000), window_pos_at(0, 0))).id();
     let offset = PointPx { x: -400, y: 25 };
     let start = (1400, 600);
     let window = world
@@ -344,9 +336,7 @@ fn on_char_drag_balloon_follows_policy_applied_position() {
 fn on_char_drag_end_applies_policy_at_final_cursor() {
     let mut world = World::new();
     world.insert_resource(single_monitor_snapshot());
-    let balloon = world
-        .spawn((fake_handle(0x2000), window_pos_at(0, 0)))
-        .id();
+    let balloon = world.spawn((fake_handle(0x2000), window_pos_at(0, 0))).id();
     let offset = PointPx { x: -400, y: 25 };
     let start = (1400, 600);
     let window = world
@@ -819,9 +809,7 @@ fn drag_handlers_ignore_events_targeting_other_entities() {
 #[test]
 fn on_char_drag_without_snapshot_moves_to_raw_position() {
     let mut world = World::new(); // Resource 未挿入
-    let balloon = world
-        .spawn((fake_handle(0x2000), window_pos_at(0, 0)))
-        .id();
+    let balloon = world.spawn((fake_handle(0x2000), window_pos_at(0, 0))).id();
     let offset = PointPx { x: 11, y: 22 };
     let start = (1400, 600);
     let window = world

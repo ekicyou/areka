@@ -1,28 +1,17 @@
-use areka_emo_compose::ScaleRatio;
-use bevy_ecs::prelude::Entity;
 use crate::placement::follow::MonitorSnapshot;
 use crate::placement::resolver::RectPx;
 use crate::placement::test_support::capture_logs as capture_diag_logs;
-use wintf::ecs::{Point, SizeI, WindowPos};
+use areka_emo_compose::ScaleRatio;
+use bevy_ecs::prelude::Entity;
 use wintf::ecs::DPI;
+use wintf::ecs::{Point, SizeI, WindowPos};
 
-use super::*;
 use super::test_support::{
-    FakeReports,
-    WRITER_WITNESS,
-    arrangement_offset_of,
-    assert_no_write,
-    dpi_world,
-    pos_of,
-    reset_write_witness,
-    s2_assert_work_area_bottom_moves,
-    s2_ground_point,
-    s2_snapshot,
-    s2_work_area_for_dpi,
-    size_of,
-    window_move_lines,
-    window_move_routes_of,
+    FakeReports, WRITER_WITNESS, arrangement_offset_of, assert_no_write, dpi_world, pos_of,
+    reset_write_witness, s2_assert_work_area_bottom_moves, s2_ground_point, s2_snapshot,
+    s2_work_area_for_dpi, size_of, window_move_lines, window_move_routes_of,
 };
+use super::*;
 
 // ── task 4.4: S2 の赤証跡＝DPI 相の位置再射影檻（Req 5.4・診断レポート §1.2／§3.2）──
 //
@@ -156,7 +145,9 @@ fn run_s2_probe(from_dpi: u16, to_dpi: u16) -> S2Probe {
         s2_shift_y(&mut world, char_e, dy);
         s2_shift_y(&mut world, balloon_e, dy);
         for e in [char_e, balloon_e] {
-            world.entity_mut(e).insert(DPI::from_dpi(from_dpi, from_dpi));
+            world
+                .entity_mut(e)
+                .insert(DPI::from_dpi(from_dpi, from_dpi));
         }
     }
 
@@ -304,8 +295,7 @@ fn s2_control_some_report_path_reprojects_and_keeps_balloon_offset() {
     let mut source = FakeReports::default();
     source.refresh.insert(shell_target(0).0, scaled);
     let mut state = None;
-    let (_, events) =
-        capture_diag_logs(|| dpi_phase_with(&mut source, &mut state, &mut world));
+    let (_, events) = capture_diag_logs(|| dpi_phase_with(&mut source, &mut state, &mut world));
 
     assert_eq!(
         size_of(&world, char0),
@@ -413,7 +403,9 @@ fn s2_some_report_path_preserves_the_balloon_ground_anchor_across_mixed_dpi_leve
             s2_shift_y(&mut world, char_e, dy);
             s2_shift_y(&mut world, balloon_e, dy);
             for e in [char_e, balloon_e] {
-                world.entity_mut(e).insert(DPI::from_dpi(from_dpi, from_dpi));
+                world
+                    .entity_mut(e)
+                    .insert(DPI::from_dpi(from_dpi, from_dpi));
             }
         }
 
@@ -469,8 +461,7 @@ fn s2_some_report_path_preserves_the_balloon_ground_anchor_across_mixed_dpi_leve
         }
         reset_write_witness(&mut world, &gw);
 
-        let (_, events) =
-            capture_diag_logs(|| dpi_phase_with(&mut source, &mut state, &mut world));
+        let (_, events) = capture_diag_logs(|| dpi_phase_with(&mut source, &mut state, &mut world));
 
         // --- 判定 ---
         let to_bottom = s2_work_area_for_dpi(to_dpi).bottom;

@@ -56,8 +56,15 @@ fn make_session_with_handle(timeout: Duration) -> (ShioriSession, IShiori, IShio
     let mut out: *mut c_void = ptr::null_mut();
     // 製品の純粋C コンストラクタを直呼びして refcount 1 の IShioriFactory を得る（in-tree シンボル直呼び）。
     let hr = unsafe { shiori_factory(&mut out) };
-    assert!(hr.is_ok(), "shiori_factory は成功時 S_OK を返すこと, got 0x{:08X}", hr.0);
-    assert!(!out.is_null(), "成功時は out へ非 NULL の IShioriFactory を書き出すこと");
+    assert!(
+        hr.is_ok(),
+        "shiori_factory は成功時 S_OK を返すこと, got 0x{:08X}",
+        hr.0
+    );
+    assert!(
+        !out.is_null(),
+        "成功時は out へ非 NULL の IShioriFactory を書き出すこと"
+    );
     let factory = unsafe { IShioriFactory::from_raw(out) };
 
     // host（sink）を明示生成し、脳と session で共有する。
@@ -124,7 +131,10 @@ fn full_roundtrip_immediate_deferred_raise_notify_teardown_through_session() {
         SessionRequest::Deferred(t) => t,
         other => panic!("遅延武装後の get は Deferred を返すこと, got {other:?}"),
     };
-    assert!(session.is_pending(), "遅延後は保留状態（単一 in-flight）であること");
+    assert!(
+        session.is_pending(),
+        "遅延後は保留状態（単一 in-flight）であること"
+    );
     assert_eq!(
         session.pending_token(),
         Some(token),
@@ -147,11 +157,16 @@ fn full_roundtrip_immediate_deferred_raise_notify_teardown_through_session() {
         }],
         "遅延 Completed が製品トークン突合・内容一致で drain されること（要件 12.1）"
     );
-    assert!(!session.is_pending(), "Complete 受領（poll）で保留が解除されること（単一 in-flight 解放）");
+    assert!(
+        !session.is_pending(),
+        "Complete 受領（poll）で保留が解除されること（単一 in-flight 解放）"
+    );
 
     // --- 往復3: 能動通知（製品 fire_raise → host へ safe raise）。
     let script = HSTRING::from(RAISE_SCRIPT);
-    brain.fire_raise(&script).expect("製品 fire_raise は host から Ok を受け取ること");
+    brain
+        .fire_raise(&script)
+        .expect("製品 fire_raise は host から Ok を受け取ること");
     let drained = session.poll_completions();
     assert_eq!(
         drained,
@@ -161,7 +176,9 @@ fn full_roundtrip_immediate_deferred_raise_notify_teardown_through_session() {
 
     // --- 往復4: 片道通知（製品 notify → 受領ログへ記録・応答なし・要件 9.3 追随）。
     let notify_content = HSTRING::from("NOTIFY SHIORI/3.0 OnOtherGhostBooted");
-    session.notify(&notify_content).expect("notify は Ok（片道）");
+    session
+        .notify(&notify_content)
+        .expect("notify は Ok（片道）");
     assert_eq!(
         brain.notifications(),
         vec![notify_content],
@@ -210,7 +227,9 @@ fn single_in_flight_rejects_second_get_until_cleared() {
 
     // 解消: 製品 complete_pending＋poll で保留を解く。
     let response = HSTRING::from(DEFERRED_RESPONSE);
-    brain.complete_pending(&response).expect("complete_pending は Ok");
+    brain
+        .complete_pending(&response)
+        .expect("complete_pending は Ok");
     let drained = session.poll_completions();
     assert_eq!(
         drained,
@@ -314,7 +333,10 @@ fn drop_cleans_up_outstanding_deferred_pending() {
     brain.arm_defer_next();
     let _ = session.get(&onboot).expect("遅延 get は Ok");
     assert!(session.is_pending(), "遅延後は保留状態であること");
-    assert!(sink_impl.pending_token().is_some(), "drop 前は host 側突合枠にトークンがあること");
+    assert!(
+        sink_impl.pending_token().is_some(),
+        "drop 前は host 側突合枠にトークンがあること"
+    );
 
     // 遅延が outstanding のまま drop すると保留が取消される（Drop teardown・要件 2.1/12.3）。
     drop(session);

@@ -216,7 +216,11 @@ fn pending_close_guard_suppresses_mouse_get() {
 
     // (2) close 握手は既存どおり完走: 挨拶 talk（id=1）と close talk が到達し、close talk は別れのスクリプト。
     assert!(!started.is_empty(), "少なくとも挨拶 talk が配送されるはず");
-    assert_eq!(started[0].talk_id, TalkId(1), "先頭 StartTalk は挨拶 talk（id=1）");
+    assert_eq!(
+        started[0].talk_id,
+        TalkId(1),
+        "先頭 StartTalk は挨拶 talk（id=1）"
+    );
     let farewell_started = started
         .iter()
         .filter(|s| s.script == FIXED_FAREWELL_SCRIPT)

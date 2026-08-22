@@ -35,7 +35,7 @@ use areka_sakura::ActorKey;
 use crate::output::DisplayCommand;
 use crate::state::{PatternApplyOutcome, ScopeStates, Slot};
 use crate::table::{AnimationTable, LoopFrame, LoopTrigger};
-use crate::timeline::{frame_at, seeded_rng, should_fire, FrameStatus, LoopRng, LotteryBoundary};
+use crate::timeline::{FrameStatus, LoopRng, LotteryBoundary, frame_at, seeded_rng, should_fire};
 
 /// SERIKO ループ構成（シェル表 1 面＋scope 別バルーン表＋乱数注入シーム）。boot 時に組み立てて
 /// [`LoopRuntime`] へ値渡しする。
@@ -187,7 +187,10 @@ impl LoopRuntime {
 
         // 表示中 slot を列挙し、固定消費順（scope 昇順→Shell→Balloon）へ整列する（D-7）。
         let mut shown = states.shown_slots();
-        shown.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| slot_rank(a.1).cmp(&slot_rank(b.1))));
+        shown.sort_by(|a, b| {
+            a.0.cmp(&b.0)
+                .then_with(|| slot_rank(a.1).cmp(&slot_rank(b.1)))
+        });
 
         // (2) 抽選（境界跨ぎ時のみ）: 表示中×非再生中×bind ゲート通過のアニメへ固定消費順で should_fire。
         if crossed {
@@ -224,10 +227,12 @@ impl LoopRuntime {
                     };
                     // (c) 1/N 抽選（ここで初めて乱数を消費）。
                     if should_fire(k, rng) {
-                        playback
-                            .entry(key)
-                            .or_default()
-                            .insert(anim.id, Playback { started_at_ms: now_ms });
+                        playback.entry(key).or_default().insert(
+                            anim.id,
+                            Playback {
+                                started_at_ms: now_ms,
+                            },
+                        );
                         tracing::info!(
                             scope = scope.as_str(),
                             slot = ?slot,
@@ -261,8 +266,9 @@ impl LoopRuntime {
             let mut new_pattern = states.current_pattern(scope, *slot).clone();
 
             // 再生中 animation id を昇順で処理（決定論の warn! 順・D-7 と同一方針）。
-            let mut playing_ids: Vec<u32> =
-                playback.get(&key).map_or(Vec::new(), |pb| pb.keys().copied().collect());
+            let mut playing_ids: Vec<u32> = playback
+                .get(&key)
+                .map_or(Vec::new(), |pb| pb.keys().copied().collect());
             playing_ids.sort_unstable();
 
             for anim_id in playing_ids {
@@ -381,7 +387,8 @@ impl LoopRuntime {
             }
 
             // (4) 差分反映: 変化した slot のみ指令を返す（Unchanged は無発行・要件 6.2）。
-            if let PatternApplyOutcome::Changed(cmd) = states.commit_pattern(scope, *slot, new_pattern)
+            if let PatternApplyOutcome::Changed(cmd) =
+                states.commit_pattern(scope, *slot, new_pattern)
             {
                 commands.push(cmd);
             }

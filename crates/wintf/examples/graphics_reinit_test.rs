@@ -10,7 +10,8 @@ use wintf::ecs::Window;
 use wintf::ecs::widget::brushes::{Brush, Brushes};
 use wintf::ecs::widget::shapes::Rectangle;
 use wintf::ecs::{
-    GraphicsCore, Point, SizeI, SurfaceGraphics, VisualGraphics, WindowGraphics, WindowHandle, WindowPos,
+    GraphicsCore, Point, SizeI, SurfaceGraphics, VisualGraphics, WindowGraphics, WindowHandle,
+    WindowPos,
 };
 use wintf::*;
 
@@ -47,7 +48,10 @@ fn main() -> Result<()> {
                 },
                 WindowPos {
                     position: Some(Point { x: 100, y: 100 }),
-                    size: Some(SizeI { width: 600, height: 400 }),
+                    size: Some(SizeI {
+                        width: 600,
+                        height: 400,
+                    }),
                     ..Default::default()
                 },
                 Rectangle::new(),
@@ -61,7 +65,10 @@ fn main() -> Result<()> {
                 },
                 WindowPos {
                     position: Some(Point { x: 750, y: 100 }),
-                    size: Some(SizeI { width: 600, height: 400 }),
+                    size: Some(SizeI {
+                        width: 600,
+                        height: 400,
+                    }),
                     ..Default::default()
                 },
                 Rectangle::new(),

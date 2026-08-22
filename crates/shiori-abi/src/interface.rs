@@ -372,7 +372,10 @@ mod tests {
             "遅延 Get は SHIORI_S_PENDING を返すこと: 0x{:08X}",
             hr.0
         );
-        assert_eq!(out_token, PENDING_TOKEN, "out_token に相関トークンが書かれること");
+        assert_eq!(
+            out_token, PENDING_TOKEN,
+            "out_token に相関トークンが書かれること"
+        );
     }
 
     /// host sink の全 4 面（Raise/Complete/GetProperty/SetProperty）が dispatch すること。
@@ -453,9 +456,21 @@ mod tests {
         // 旧 2 IID との不一致（旧 IShiori・旧 IShioriHost。旧 factory は存在しない）。
         let old_shiori = GUID::from_u128(0xE7887AB4_525D_4520_9474_577528758C79);
         let old_host = GUID::from_u128(0x03BB53C6_6496_47FB_B1B7_84356A94A9C7);
-        assert_ne!(shiori_iid, old_shiori, "新 IShiori IID は旧 IShiori IID と不一致");
-        assert_ne!(host_iid, old_host, "新 IShioriHost IID は旧 IShioriHost IID と不一致");
-        assert_ne!(factory_iid, old_shiori, "新 Factory IID は旧 IShiori IID と不一致");
-        assert_ne!(factory_iid, old_host, "新 Factory IID は旧 IShioriHost IID と不一致");
+        assert_ne!(
+            shiori_iid, old_shiori,
+            "新 IShiori IID は旧 IShiori IID と不一致"
+        );
+        assert_ne!(
+            host_iid, old_host,
+            "新 IShioriHost IID は旧 IShioriHost IID と不一致"
+        );
+        assert_ne!(
+            factory_iid, old_shiori,
+            "新 Factory IID は旧 IShiori IID と不一致"
+        );
+        assert_ne!(
+            factory_iid, old_host,
+            "新 Factory IID は旧 IShioriHost IID と不一致"
+        );
     }
 }

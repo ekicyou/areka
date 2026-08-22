@@ -18,12 +18,7 @@ fn decode_first_frame(filename: &str) -> (IWICImagingFactory2, IWICBitmapFrameDe
     let path = test_asset_path(filename);
     let path_h = HSTRING::from(path.as_os_str());
     let decoder = factory
-        .create_decoder_from_filename(
-            &path_h,
-            None,
-            GENERIC_READ,
-            WICDecodeMetadataCacheOnDemand,
-        )
+        .create_decoder_from_filename(&path_h, None, GENERIC_READ, WICDecodeMetadataCacheOnDemand)
         .expect("create_decoder_from_filename");
     let frame = decoder.frame(0).expect("frame(0)");
     (factory, frame)

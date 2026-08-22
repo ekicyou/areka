@@ -61,9 +61,7 @@ fn resolve_helper_exe() -> Result<PathBuf, String> {
         .and_then(|p| p.parent()) // ワークスペースルート
         .map(std::path::Path::to_path_buf)
         .unwrap_or_else(|| manifest_dir.clone());
-    let target_base = workspace_root
-        .join("target")
-        .join("i686-pc-windows-msvc");
+    let target_base = workspace_root.join("target").join("i686-pc-windows-msvc");
 
     for profile in ["debug", "release"] {
         let candidate = target_base.join(profile).join("shiori-host32-helper.exe");
@@ -103,8 +101,8 @@ fn connect_real_helper(
     shiori_name: String,
 ) -> Result<Box<dyn ShioriBackend>, String> {
     // 1. 親 message-only 窓（!Send・アクタースレッド上で生成される）。
-    let window = ParentMessageWindow::create()
-        .map_err(|e| format!("親 message-only 窓生成に失敗: {e}"))?;
+    let window =
+        ParentMessageWindow::create().map_err(|e| format!("親 message-only 窓生成に失敗: {e}"))?;
     let parent_hwnd = window.hwnd_u32();
 
     // 2. i686 helper を spawn（cwd=load_dir）。

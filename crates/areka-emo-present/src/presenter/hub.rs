@@ -124,7 +124,11 @@ impl EmoPresenter {
         if let Some(mount) = target.mount.as_ref() {
             mount.set_visible(world, false);
         }
-        tracing::debug!(?target_id, was_visible = target.visible, "apply(Hide): 非表示へ");
+        tracing::debug!(
+            ?target_id,
+            was_visible = target.visible,
+            "apply(Hide): 非表示へ"
+        );
         target.visible = false;
         // Hide（`\s[-1]` 相当）は表示していない＝現サーフェス無し（R3.2/4.4・Key decisions (a)）。
         target.current_surface_id = None;
@@ -132,7 +136,11 @@ impl EmoPresenter {
     }
 
     /// `InvalidateCache` の適用: 合成キャッシュ全破棄（R4.3）。表示中バッファ/マスクは反映済みゆえ表示は継続。
-    fn apply_invalidate(&mut self, target_id: TargetId, reply: Option<ReplySender<PresentOutcome>>) {
+    fn apply_invalidate(
+        &mut self,
+        target_id: TargetId,
+        reply: Option<ReplySender<PresentOutcome>>,
+    ) {
         let Some(target) = self.targets.get_mut(&target_id) else {
             tracing::error!(?target_id, "apply(InvalidateCache): 未装着ターゲット");
             Self::reply(reply, Err(PresentError::TargetNotAttached(target_id)));
@@ -145,7 +153,10 @@ impl EmoPresenter {
         // 原寸を返し続けるのが正しい（R4.3: キャッシュ無効化は表示を変えない）。以後は必ずミス＝
         // 再合成が走り、対が再構築される。
         target.cache.invalidate_all();
-        tracing::debug!(?target_id, "apply(InvalidateCache): キャッシュ全破棄（表示は継続）");
+        tracing::debug!(
+            ?target_id,
+            "apply(InvalidateCache): キャッシュ全破棄（表示は継続）"
+        );
         Self::reply(reply, Ok(()));
     }
 

@@ -46,15 +46,24 @@ fn mask_dims(world: &World, surface_entity: Entity) -> Option<(u32, u32)> {
 fn assert_entities_hidden(world: &World, presenter: &EmoPresenter, target: TargetId, ctx: &str) {
     let (surface, slot) = mount_entities(presenter, target);
     assert!(
-        !world.get::<Visual>(surface).expect("surface に Visual").is_visible,
+        !world
+            .get::<Visual>(surface)
+            .expect("surface に Visual")
+            .is_visible,
         "{ctx}: 枠の面 entity が可視のまま"
     );
     assert!(
-        !world.get::<Visual>(slot).expect("slot に Visual").is_visible,
+        !world
+            .get::<Visual>(slot)
+            .expect("slot に Visual")
+            .is_visible,
         "{ctx}: 文字層スロット entity が可視のまま"
     );
     assert_eq!(
-        world.get::<HitTest>(surface).expect("surface に HitTest").mode,
+        world
+            .get::<HitTest>(surface)
+            .expect("surface に HitTest")
+            .mode,
         HitTestMode::None,
         "{ctx}: 枠の面がポインタを受け続けている"
     );
@@ -69,15 +78,24 @@ fn assert_entities_hidden(world: &World, presenter: &EmoPresenter, target: Targe
 fn assert_entities_visible(world: &World, presenter: &EmoPresenter, target: TargetId, ctx: &str) {
     let (surface, slot) = mount_entities(presenter, target);
     assert!(
-        world.get::<Visual>(surface).expect("surface に Visual").is_visible,
+        world
+            .get::<Visual>(surface)
+            .expect("surface に Visual")
+            .is_visible,
         "{ctx}: 枠の面 entity が不可視のまま"
     );
     assert!(
-        world.get::<Visual>(slot).expect("slot に Visual").is_visible,
+        world
+            .get::<Visual>(slot)
+            .expect("slot に Visual")
+            .is_visible,
         "{ctx}: 文字層スロット entity が不可視のまま"
     );
     assert_eq!(
-        world.get::<HitTest>(surface).expect("surface に HitTest").mode,
+        world
+            .get::<HitTest>(surface)
+            .expect("surface に HitTest")
+            .mode,
         HitTestMode::AlphaMask,
         "{ctx}: 枠の面が αマスク判定へ復帰していない"
     );
@@ -646,7 +664,9 @@ fn hide_is_immediate_regardless_of_ownership() {
 fn external_target_can_be_shown_again_after_hide() {
     let (mut world, _window, mut presenter, target, golden) =
         external_target_after_first_show(96, 0x27);
-    presenter.show_target(&mut world, target).expect("可視化 Ok");
+    presenter
+        .show_target(&mut world, target)
+        .expect("可視化 Ok");
     hide_ok(&mut presenter, &mut world, target);
     assert_eq!(presenter.target_visible(target), Some(false));
 

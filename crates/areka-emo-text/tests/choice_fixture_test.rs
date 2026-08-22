@@ -69,11 +69,7 @@ fn plain_model() -> BalloonModel {
 
 fn font_color_tuple(model: &BalloonModel) -> (u8, u8, u8) {
     let c = model.font().color();
-    (
-        c.r().unwrap_or(0),
-        c.g().unwrap_or(0),
-        c.b().unwrap_or(0),
-    )
+    (c.r().unwrap_or(0), c.g().unwrap_or(0), c.b().unwrap_or(0))
 }
 
 // ══ テスト 1: fixture descript が実 parse で期待スタイルへ解決される（GPU 不要） ══════════════
@@ -91,7 +87,8 @@ fn fixtures_parse_to_expected_choice_styles() {
         Some("Yu Gothic UI"),
         "cursor fixture は実フォントを指定する（既定 ＭＳ ゴシック盲点の回避・7.6）"
     );
-    let cursor_style = ResolvedChoiceStyle::resolve(Some(cursor.cursor()), font_color_tuple(&cursor));
+    let cursor_style =
+        ResolvedChoiceStyle::resolve(Some(cursor.cursor()), font_color_tuple(&cursor));
     assert_eq!(
         cursor_style,
         ResolvedChoiceStyle::SquareFill {
@@ -135,7 +132,8 @@ fn fixtures_parse_to_expected_choice_styles() {
     let menu = read_decoded("menu.txt");
     let q_count = menu.matches("\\q[").count();
     assert_eq!(
-        q_count, MENU.len(),
+        q_count,
+        MENU.len(),
         "menu.txt の \\q 項目数が注入 cue 列（{} 項目）と一致する: {q_count}",
         MENU.len()
     );
@@ -170,7 +168,11 @@ fn make_world_with_gpu() -> World {
 fn spawn_reserved_slot(world: &mut World) -> (bevy_ecs::entity::Entity, bevy_ecs::entity::Entity) {
     let window = world.spawn_empty().id();
     let slot = world
-        .spawn((Name::new("emo-text-layer-slot"), Visual::default(), ChildOf(window)))
+        .spawn((
+            Name::new("emo-text-layer-slot"),
+            Visual::default(),
+            ChildOf(window),
+        ))
         .id();
     world.flush();
     (window, slot)
@@ -226,7 +228,8 @@ fn white_pixels_in_rect(bytes: &[u8], width: u32, height: u32, r: &ChoiceHitRow)
     for y in y0..y1 {
         for x in x0..x1 {
             let i = ((y * width + x) * 4) as usize;
-            if bytes[i] >= 200 && bytes[i + 1] >= 200 && bytes[i + 2] >= 200 && bytes[i + 3] == 255 {
+            if bytes[i] >= 200 && bytes[i + 1] >= 200 && bytes[i + 2] >= 200 && bytes[i + 3] == 255
+            {
                 n += 1;
             }
         }
@@ -299,7 +302,11 @@ fn real_font_menu_hover_render_dumps_png() {
     assert_eq!(rows.len(), MENU.len(), "4 選択肢＝4 ヒット行");
 
     let (w, h) = rt.surface(&actor).expect("供給面").size();
-    let base = rt.surface(&actor).expect("供給面").read_back().expect("read_back");
+    let base = rt
+        .surface(&actor)
+        .expect("供給面")
+        .read_back()
+        .expect("read_back");
     assert!(
         opaque_count(&base) > 0,
         "実フォントで選択肢テキストが描画される（非退化）"
@@ -308,7 +315,11 @@ fn real_font_menu_hover_render_dumps_png() {
     // ── ordinal 0 を hover 注入 → 再提示 → read_back ──
     rt.inject_choice_hover(&actor, Some(0));
     present_frame(&mut rt, &mut world, 100.0).expect("hover 提示");
-    let hover = rt.surface(&actor).expect("供給面").read_back().expect("read_back");
+    let hover = rt
+        .surface(&actor)
+        .expect("供給面")
+        .read_back()
+        .expect("read_back");
 
     // pixel 檻: hover 行（ordinal 0）へ SquareFill 塗り色＋白文字が載る。
     assert!(
@@ -338,13 +349,16 @@ fn real_font_menu_hover_render_dumps_png() {
     let x1 = (rows[0].rect.right.ceil() as u32).min(w);
     let y0 = rows[0].rect.top.floor().max(0.0) as u32;
     let y1 = (rows[1].rect.top.floor().max(0.0) as u32).min(h);
-    assert!(x0 < x1 && y0 < y1, "走査窓が非退化: x{x0}..{x1} y{y0}..{y1}");
+    assert!(
+        x0 < x1 && y0 < y1,
+        "走査窓が非退化: x{x0}..{x1} y{y0}..{y1}"
+    );
     let fill_span = y_span_where(&hover, w, x0, x1, y0, y1, |px| {
         px[0] == 25 && px[1] == 25 && px[2] == 105 && px[3] == 255
     })
     .expect("hover 行に塗り画素が在る");
-    let ink_span = y_span_where(&hover, w, x0, x1, y0, y1, |px| px[3] != 0)
-        .expect("hover 行にインクが在る");
+    let ink_span =
+        y_span_where(&hover, w, x0, x1, y0, y1, |px| px[3] != 0).expect("hover 行にインクが在る");
     assert!(
         ink_span.0 >= fill_span.0 && ink_span.1 <= fill_span.1,
         "hover 行のインク縦範囲 y{}..{} がハイライト矩形 y{}..{} の内側に収まる\
@@ -356,8 +370,8 @@ fn real_font_menu_hover_render_dumps_png() {
     );
 
     // ── 目視確認: read_back（premultiplied BGRA）を白背景へ合成して PNG を保存する ──
-    let out_dir = std::env::var("AREKA_DIAG_OUT")
-        .unwrap_or_else(|_| env!("CARGO_TARGET_TMPDIR").to_string());
+    let out_dir =
+        std::env::var("AREKA_DIAG_OUT").unwrap_or_else(|_| env!("CARGO_TARGET_TMPDIR").to_string());
     let rgba = composite_on_white(&hover, w, h);
     let png = encode_png_rgba(&rgba, w, h);
     let path = format!("{out_dir}/choice_menu_hover_realfont.png");

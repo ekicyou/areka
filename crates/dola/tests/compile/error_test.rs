@@ -267,7 +267,11 @@ mod error_tests {
             max: None,
         };
         let doc = make_doc_with_storyboard(
-            vec![("x", float_var(0.0)), ("y", float_var(0.0)), ("z", float_var(0.0))],
+            vec![
+                ("x", float_var(0.0)),
+                ("y", float_var(0.0)),
+                ("z", float_var(0.0)),
+            ],
             vec![],
             "test",
             StoryboardBuilder::new()

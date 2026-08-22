@@ -1,10 +1,10 @@
+use super::test_support::*;
 use super::*;
 use crate::contract::{CueCommand, TalkCue, TalkId};
 use crate::duration::text_playback_duration;
 use std::sync::mpsc::{self, TryRecvError};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use super::test_support::*;
 
 /// **broadcast**: 登録された全 sink が**同一の cue 列を同一順序で**受信する（中央振り分け廃止・
 /// 演者側 relevance が action 選別・D4/R2.1）。`\s[10]hello\w[2]world\e` を 2 つの記録 sink で
@@ -31,8 +31,7 @@ fn broadcast_delivers_identical_cue_stream_to_every_registered_sink() {
     // 初回 Tick(0.0) でアンカー刻印（0.0）、占有 horizon（world 再生完了＝0.35+0.25=0.60）を跨ぐ 1.0。
     handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
     handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
-    recv_done(&done_rx, Duration::from_secs(5))
-        .expect("自然終端で TalkDone");
+    recv_done(&done_rx, Duration::from_secs(5)).expect("自然終端で TalkDone");
     handle.actor.join().expect("body は正常終了する");
 
     // 期待 broadcast 列（両 sink が同一）: ClearAll@0 / Emote{10}@0 / hello@0 / Wait@0.25 / world@0.35。
@@ -77,11 +76,11 @@ fn same_sheet_started_at_different_times_delivers_cue_at_different_absolute_fire
         };
         let (tx, rx) = mpsc::channel::<TalkCue>();
         let handle = spawn_talk(
-        start,
-        done_tx,
-        two_sinks(ChannelSink { tx }, NoopSink),
-        SystemVarSnapshot::default(),
-    );
+            start,
+            done_tx,
+            two_sinks(ChannelSink { tx }, NoopSink),
+            SystemVarSnapshot::default(),
+        );
 
         // barrier 技法: 記録 sink を挟まず、bye の着弾のみをチャンネルで観測する。
         let bye_seen = |rx: &mpsc::Receiver<TalkCue>| -> bool {
@@ -134,8 +133,7 @@ fn same_sheet_started_at_different_times_delivers_cue_at_different_absolute_fire
         let mut bye_after_full = false;
         // 自然終端まで進めてから observe すると drain が確定する。horizon=0.75 を跨ぐ A+1.0。
         handle.inbox.send(SakuraMsg::Tick(anchor + 1.0)).unwrap();
-        recv_done(&done_rx, Duration::from_secs(5))
-            .expect("horizon 到達で TalkDone");
+        recv_done(&done_rx, Duration::from_secs(5)).expect("horizon 到達で TalkDone");
         handle.actor.join().expect("body 正常終了");
         while let Ok(cue) = rx.try_recv() {
             if cue.command == CueCommand::Text("bye".into()) {
@@ -258,8 +256,7 @@ fn undue_cues_are_withheld_until_their_at_is_reached() {
 
     // 占有 horizon（world 再生完了＝1.15+0.25=1.40）を跨ぐ Tick で自然終端。
     handle.inbox.send(SakuraMsg::Tick(2.0)).unwrap();
-    let done = recv_done(&done_rx, Duration::from_secs(5))
-        .expect("末尾到達で TalkDone");
+    let done = recv_done(&done_rx, Duration::from_secs(5)).expect("末尾到達で TalkDone");
     assert_eq!(done.talk_id, talk_id, "talk_id エコー");
     assert_eq!(done.reason, TalkEndReason::Ended, "`\\e` は Ended");
     handle.actor.join().expect("body は正常終了する");
@@ -290,8 +287,7 @@ fn same_at_cues_preserve_script_order_fifo() {
     // 初回 Tick(0.0) 刻印＋単一 Tick(0.5) で全 due（world 再生完了 horizon=0.50 到達）→自然終端。
     handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
     handle.inbox.send(SakuraMsg::Tick(0.5)).unwrap();
-    let done = recv_done(&done_rx, Duration::from_secs(5))
-        .expect("単一 Tick で自然終端");
+    let done = recv_done(&done_rx, Duration::from_secs(5)).expect("単一 Tick で自然終端");
     assert_eq!(done.reason, TalkEndReason::Ended);
     handle.actor.join().expect("body は正常終了する");
 
@@ -357,8 +353,7 @@ fn fixture_script_drives_broadcast_and_returns_ended() {
     handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
     handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
 
-    let done = recv_done(&done_rx, Duration::from_secs(5))
-        .expect("自然終端で TalkDone が返るべき");
+    let done = recv_done(&done_rx, Duration::from_secs(5)).expect("自然終端で TalkDone が返るべき");
     assert_eq!(done.talk_id, talk_id, "talk_id エコー（R6.6）");
     assert_eq!(done.reason, TalkEndReason::Ended, "`\\e` は Ended");
     handle.actor.join().expect("body は正常終了する");
@@ -451,8 +446,7 @@ fn duplicate_and_backward_tick_do_not_double_fire() {
 
     // 終端まで進める（hello D=0.25＋\w[10]=0.5 後 world@0.75・horizon=1.0 を跨ぐ）。
     handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
-    let done = recv_done(&done_rx, Duration::from_secs(5))
-        .expect("終端で TalkDone");
+    let done = recv_done(&done_rx, Duration::from_secs(5)).expect("終端で TalkDone");
     assert_eq!(done.reason, TalkEndReason::Ended);
     handle.actor.join().expect("body は正常終了する");
 
@@ -542,16 +536,15 @@ fn same_fixture_and_tick_sequence_produces_identical_observation_each_run() {
         let records = sink.records();
 
         let handle = spawn_talk(
-        start,
-        done_tx,
-        two_sinks(sink, NoopSink),
-        SystemVarSnapshot::default(),
-    );
+            start,
+            done_tx,
+            two_sinks(sink, NoopSink),
+            SystemVarSnapshot::default(),
+        );
         handle.inbox.send(SakuraMsg::Tick(0.0)).expect("Tick(0.0)");
         handle.inbox.send(SakuraMsg::Tick(1.0)).expect("Tick(1.0)");
 
-        let done = recv_done(&done_rx, Duration::from_secs(5))
-            .expect("自然終端で TalkDone");
+        let done = recv_done(&done_rx, Duration::from_secs(5)).expect("自然終端で TalkDone");
         handle.actor.join().expect("body 正常終了");
         (project(&records), done.reason)
     }
@@ -767,9 +760,8 @@ fn unknown_command_names_broadcast_and_benign_skip_then_talk_completes() {
     handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
 
     // R8.2 の帰結: 未知名キャリアが無音落ちせず talk が完走し TalkDone{Ended} を返す。
-    let done = recv_done(&done_rx, Duration::from_secs(5)).expect(
-        "未知名キャリアを含む talk も良性スキップして完了すべき（無音落ち／panic しない）",
-    );
+    let done = recv_done(&done_rx, Duration::from_secs(5))
+        .expect("未知名キャリアを含む talk も良性スキップして完了すべき（無音落ち／panic しない）");
     assert_eq!(done.talk_id, talk_id, "talk_id エコー（R1.3）");
     assert_eq!(
         done.reason,

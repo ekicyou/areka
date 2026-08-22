@@ -1,9 +1,9 @@
+use super::test_support::{broken_lines, canvas_for, commit_initial, expect_update, phys, window};
 use super::{FramePlan, PhysicalRect, ScrollPlanner, ScrollState};
 use crate::canvas::ContentCanvas;
 use crate::region::ScaleContract;
 use crate::state::TextItem;
 use crate::writing::WritingMode;
-use super::test_support::{broken_lines, canvas_for, commit_initial, expect_update, phys, window};
 
 // ── 3.3 R2.3/4.3: plan/commit 二相（純粋計画・確定・Clear・失敗フレーム再試行） ──
 //

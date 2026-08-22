@@ -246,7 +246,10 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
         // --- shell target: char_window → attach_target（EmoWorld を move）。初回 ShowSurface は
         //     発行しない（defect #5）: シェルは最初の `\s` cue まで非表示・target のみ生成する。 ---
         let Some(shell_window) = ghost_windows.char_window(scope as usize) else {
-            error!(scope, "emo2 attach: char_window が無い（GhostWindows 不整合）→ この scope を skip");
+            error!(
+                scope,
+                "emo2 attach: char_window が無い（GhostWindows 不整合）→ この scope を skip"
+            );
             continue;
         };
         let Some(shell_assets) = shells.get_mut(item.shell_index).and_then(|s| s.take()) else {
@@ -290,11 +293,17 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
         // --- balloon target（同 scope の資産がある場合）: attach → 可視性を外部所有へ →
         //     不可視のままの確立（ShowSurface 面0・default）→ text_slot_view → register_actor_view ---
         let Some(balloon_index) = item.balloon_index else {
-            warn!(scope, "emo2 attach: 同 scope の balloon 資産が無い（DD-12 balloon_index None）→ 文字層接続なし");
+            warn!(
+                scope,
+                "emo2 attach: 同 scope の balloon 資産が無い（DD-12 balloon_index None）→ 文字層接続なし"
+            );
             continue;
         };
         let Some(balloon_window) = ghost_windows.balloon_window(scope as usize) else {
-            warn!(scope, "emo2 attach: balloon_window が無い（GhostWindows 不整合）→ バルーン装着を skip");
+            warn!(
+                scope,
+                "emo2 attach: balloon_window が無い（GhostWindows 不整合）→ バルーン装着を skip"
+            );
             continue;
         };
         // 当該 scope の資産 1 件を take で消費する（World／アトラス／定義は同一資産から取り出す
@@ -404,7 +413,9 @@ pub(super) fn connect_balloon_text(
 ) -> bool {
     match view {
         Some(view) => {
-            runtime.borrow_mut().register_actor_view(actor, &view, model);
+            runtime
+                .borrow_mut()
+                .register_actor_view(actor, &view, model);
             true
         }
         None => {

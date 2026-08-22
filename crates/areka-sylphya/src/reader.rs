@@ -16,11 +16,11 @@
 //! ゆえに読み経路はシステム全体の直列化点にならない。
 
 use crate::asker::AskerContext;
-use crate::key::{parse_dotted, PropPath};
+use crate::key::{PropPath, parse_dotted};
 use crate::mirror::SharedMirror;
 use crate::value::{DottedResolution, FlatResolution};
-use crate::vocab::flat::FLAT_VOCAB;
 use crate::vocab::DegradePolicy;
+use crate::vocab::flat::FLAT_VOCAB;
 use std::collections::BTreeMap;
 
 /// 共有読みハンドル: 鏡像（[`SharedMirror`]）を包み、同期・無待機の読み口 2 形を提供する。
@@ -167,7 +167,9 @@ mod tests {
     use std::sync::Arc;
 
     fn ctx(id: &str) -> AskerContext {
-        AskerContext { asker: AskerId::new(id) }
+        AskerContext {
+            asker: AskerId::new(id),
+        }
     }
 
     #[test]
@@ -472,7 +474,9 @@ mod mirror_reader_criteria_cage {
     use std::sync::Arc;
 
     fn ctx(id: &str) -> AskerContext {
-        AskerContext { asker: AskerId::new(id) }
+        AskerContext {
+            asker: AskerId::new(id),
+        }
     }
 
     /// per-asker 区画が **フラット・点付きとも** asker 間で混ざらないこと（R2.6・両方向）。

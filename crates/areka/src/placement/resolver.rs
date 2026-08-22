@@ -15,7 +15,8 @@ use tracing::warn;
 use super::config::{Alignment, BalloonSide, BalloonXMode, PlacementConfig, ScopeConfig};
 
 /// 物理 px の矩形（スクリーン座標系・wintf 非依存）。
-#[allow(dead_code)] // scaffold（task 3.1）: main.rs シーム（task 6）が結線するまで非テストビルドでは未使用
+#[allow(dead_code)]
+// scaffold（task 3.1）: main.rs シーム（task 6）が結線するまで非テストビルドでは未使用
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RectPx {
     /// 左端（物理 px）。
@@ -377,7 +378,8 @@ pub fn virtual_desktop_union(monitor_bounds: &[RectPx]) -> Option<RectPx> {
 /// wintf/bevy 非依存で `resolver` に在住し（U5・純粋 DPI 檻が wintf 非依存で走る）、
 /// 後続で `ScopePlacement.anchor` として spawn へ運ばれ `Anchored(Anchor)` Component
 /// として char 窓へ焼き込まれる。射影 T（`project_anchor`）は follow 層が所有する。
-#[allow(dead_code)] // scaffold（task 1.1）: ScopePlacement への結線は task 1.2・射影消費は follow（task）
+#[allow(dead_code)]
+// scaffold（task 1.1）: ScopePlacement への結線は task 1.2・射影消費は follow（task）
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Anchor {
     /// 上端固定（`y = wa.top`・X 保持）。
@@ -431,17 +433,11 @@ impl Anchor {
 }
 
 #[cfg(test)]
-#[path = "resolver_test_support.rs"]
-mod test_support;
+#[path = "resolver_balloon_keyword_tests.rs"]
+mod balloon_keyword_tests;
 #[cfg(test)]
-#[path = "resolver_resolve_test_support.rs"]
-mod resolve_test_support;
-#[cfg(test)]
-#[path = "resolver_resolve_tests.rs"]
-mod resolve_tests;
-#[cfg(test)]
-#[path = "resolver_resolve_free_tests.rs"]
-mod resolve_free_tests;
+#[path = "resolver_from_alignment_tests.rs"]
+mod from_alignment_tests;
 #[cfg(test)]
 #[path = "resolver_resolve_balloon_tests.rs"]
 mod resolve_balloon_tests;
@@ -449,11 +445,17 @@ mod resolve_balloon_tests;
 #[path = "resolver_resolve_contract_tests.rs"]
 mod resolve_contract_tests;
 #[cfg(test)]
-#[path = "resolver_balloon_keyword_tests.rs"]
-mod balloon_keyword_tests;
+#[path = "resolver_resolve_free_tests.rs"]
+mod resolve_free_tests;
+#[cfg(test)]
+#[path = "resolver_resolve_test_support.rs"]
+mod resolve_test_support;
+#[cfg(test)]
+#[path = "resolver_resolve_tests.rs"]
+mod resolve_tests;
+#[cfg(test)]
+#[path = "resolver_test_support.rs"]
+mod test_support;
 #[cfg(test)]
 #[path = "resolver_union_tests.rs"]
 mod union_tests;
-#[cfg(test)]
-#[path = "resolver_from_alignment_tests.rs"]
-mod from_alignment_tests;

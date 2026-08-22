@@ -185,7 +185,11 @@ fn expand_targets(targets: &[AppendTarget]) -> Vec<u32> {
             AppendTarget::Single(id) => included.push(id),
             AppendTarget::Range { start, end } => {
                 // 記述子の向きに関わらず両端含みで昇順展開する（`a-b` は a..=b）。
-                let (lo, hi) = if start <= end { (start, end) } else { (end, start) };
+                let (lo, hi) = if start <= end {
+                    (start, end)
+                } else {
+                    (end, start)
+                };
                 included.extend(lo..=hi);
             }
             AppendTarget::Exclude(id) => {
@@ -193,7 +197,11 @@ fn expand_targets(targets: &[AppendTarget]) -> Vec<u32> {
             }
             AppendTarget::ExcludeRange { start, end } => {
                 // 除外範囲も両端含み（記述子の向き不問）。
-                let (lo, hi) = if start <= end { (start, end) } else { (end, start) };
+                let (lo, hi) = if start <= end {
+                    (start, end)
+                } else {
+                    (end, start)
+                };
                 excluded.extend(lo..=hi);
             }
             // `AppendTarget` は `#[non_exhaustive]`。未知の記述子はパニックせず観測可能化する（要件 1.4）。
@@ -218,11 +226,8 @@ fn expand_targets(targets: &[AppendTarget]) -> Vec<u32> {
 /// method は M1 契約により常に [`ComposeMethod::Overlay`] とする。collision/animation は転記のまま
 /// 複製する。
 fn normalize_surface(id: u32, surface: &Surface) -> SurfaceMaster {
-    let mut elements: Vec<NormalizedElement> = surface
-        .elements
-        .iter()
-        .map(normalize_element)
-        .collect();
+    let mut elements: Vec<NormalizedElement> =
+        surface.elements.iter().map(normalize_element).collect();
     // layer 昇順・同 layer は登場順（安定ソート）。
     elements.sort_by_key(|e| e.layer);
 

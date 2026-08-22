@@ -108,7 +108,10 @@ impl AxisPair {
 /// （空テーブルを書かない）。[`BTreeMap`] の昇順走査ゆえ出力は決定論的。
 pub fn to_toml_string(doc: &FormatDoc) -> String {
     let mut root = toml::Table::new();
-    root.insert("format-version".into(), toml::Value::Integer(FORMAT_VERSION));
+    root.insert(
+        "format-version".into(),
+        toml::Value::Integer(FORMAT_VERSION),
+    );
 
     if let Some(t) = axis_map_to_table(&doc.window) {
         root.insert("window".into(), toml::Value::Table(t));
@@ -151,11 +154,7 @@ fn axis_map_to_table(map: &BTreeMap<String, AxisPair>) -> Option<toml::Table> {
         }
         table.insert(id.clone(), toml::Value::Table(axis));
     }
-    if table.is_empty() {
-        None
-    } else {
-        Some(table)
-    }
+    if table.is_empty() { None } else { Some(table) }
 }
 
 /// `count = "<v>"` の 1 key テーブル（`[boot]` / `[vanish]` 用）。
@@ -186,7 +185,9 @@ pub fn read_toml_str(content: &str) -> FormatDoc {
     };
 
     // 未知/欠落バージョンは全不在（R6.4「未知バージョン→warn・旧形式判別可能」）。
-    let version = table.get("format-version").and_then(toml::Value::as_integer);
+    let version = table
+        .get("format-version")
+        .and_then(toml::Value::as_integer);
     match version {
         Some(v) if v == FORMAT_VERSION => {}
         _ => {
@@ -258,11 +259,17 @@ mod tests {
         let doc = FormatDoc {
             window: BTreeMap::from([(
                 "0".into(),
-                AxisPair { x: Some("1024".into()), y: Some("512".into()) },
+                AxisPair {
+                    x: Some("1024".into()),
+                    y: Some("512".into()),
+                },
             )]),
             balloon_offset: BTreeMap::from([(
                 "0".into(),
-                AxisPair { x: Some("30".into()), y: Some("-10".into()) },
+                AxisPair {
+                    x: Some("30".into()),
+                    y: Some("-10".into()),
+                },
             )]),
             boot_count: Some("3".into()),
             vanish_count: Some("0".into()),
@@ -276,9 +283,27 @@ mod tests {
     #[test]
     fn round_trip_multiple_scopes_and_negative_values() {
         let mut doc = FormatDoc::default();
-        doc.window.insert("0".into(), AxisPair { x: Some("-5".into()), y: Some("0".into()) });
-        doc.window.insert("1".into(), AxisPair { x: Some("100".into()), y: Some("200".into()) });
-        doc.balloon_offset.insert("1".into(), AxisPair { x: None, y: Some("-10".into()) });
+        doc.window.insert(
+            "0".into(),
+            AxisPair {
+                x: Some("-5".into()),
+                y: Some("0".into()),
+            },
+        );
+        doc.window.insert(
+            "1".into(),
+            AxisPair {
+                x: Some("100".into()),
+                y: Some("200".into()),
+            },
+        );
+        doc.balloon_offset.insert(
+            "1".into(),
+            AxisPair {
+                x: None,
+                y: Some("-10".into()),
+            },
+        );
 
         let back = read_toml_str(&to_toml_string(&doc));
         assert_eq!(doc, back);
@@ -293,7 +318,10 @@ mod tests {
     #[test]
     fn string_values_survive_as_strings() {
         // "1024" は往復後も文字列 "1024"（整数化しない）。
-        let doc = FormatDoc { boot_count: Some("1024".into()), ..FormatDoc::default() };
+        let doc = FormatDoc {
+            boot_count: Some("1024".into()),
+            ..FormatDoc::default()
+        };
         let back = read_toml_str(&to_toml_string(&doc));
         assert_eq!(back.boot_count.as_deref(), Some("1024"));
     }
@@ -328,7 +356,10 @@ mod tests {
         let doc = read_toml_str("format-version = 1\n[window.\"0\"]\nx = \"5\"\n");
         assert_eq!(doc.boot_count, None);
         assert_eq!(doc.vanish_count, None);
-        assert_eq!(doc.window.get("0").and_then(|p| p.x.clone()), Some("5".into()));
+        assert_eq!(
+            doc.window.get("0").and_then(|p| p.x.clone()),
+            Some("5".into())
+        );
         assert_eq!(doc.window.get("0").and_then(|p| p.y.clone()), None);
         assert!(doc.balloon_offset.is_empty());
     }
@@ -349,8 +380,20 @@ mod tests {
     #[test]
     fn determinism_same_doc_same_serialization() {
         let mut doc = FormatDoc::default();
-        doc.window.insert("2".into(), AxisPair { x: Some("9".into()), y: None });
-        doc.window.insert("0".into(), AxisPair { x: Some("1".into()), y: Some("2".into()) });
+        doc.window.insert(
+            "2".into(),
+            AxisPair {
+                x: Some("9".into()),
+                y: None,
+            },
+        );
+        doc.window.insert(
+            "0".into(),
+            AxisPair {
+                x: Some("1".into()),
+                y: Some("2".into()),
+            },
+        );
         assert_eq!(to_toml_string(&doc), to_toml_string(&doc));
     }
 
@@ -368,7 +411,12 @@ mod tests {
         });
         // 未知バージョンの縮退アームが LOG_TARGET・WARN で「unknown/absent format-version」を
         // 発火することを表明（ログ削除・語彙変更・レベル降格で赤になる）。
-        assert_logged(&events, Level::WARN, LOG_TARGET, "unknown/absent format-version");
+        assert_logged(
+            &events,
+            Level::WARN,
+            LOG_TARGET,
+            "unknown/absent format-version",
+        );
     }
 
     #[test]
@@ -379,7 +427,12 @@ mod tests {
         let events = capture(|| {
             let _ = read_toml_str("[boot]\ncount = \"1\"\n");
         });
-        assert_logged(&events, Level::WARN, LOG_TARGET, "unknown/absent format-version");
+        assert_logged(
+            &events,
+            Level::WARN,
+            LOG_TARGET,
+            "unknown/absent format-version",
+        );
     }
 
     #[test]
@@ -398,9 +451,14 @@ mod tests {
             let _ = read_toml_str("format-version = 1\n[window.\"0\"]\nx = \"5\"\n");
         });
         let warns = events.iter().filter(|e| e.level == Level::WARN).count();
-        assert_eq!(warns, 0, "key 欠落で warn が出た。捕捉={:?}", events
-            .iter()
-            .map(|e| (e.level, e.message.clone()))
-            .collect::<Vec<_>>());
+        assert_eq!(
+            warns,
+            0,
+            "key 欠落で warn が出た。捕捉={:?}",
+            events
+                .iter()
+                .map(|e| (e.level, e.message.clone()))
+                .collect::<Vec<_>>()
+        );
     }
 }

@@ -1,5 +1,7 @@
-use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 use super::ViewboxExecutor;
+use super::test_support::{
+    Rig, block_axis_ink_span, build, glyph_items, live_diff_model_font, opaque_count,
+};
 use crate::canvas::ContentCanvas;
 use crate::draw::{DWriteMetrics, DrawExecutor, ResolvedFont};
 use crate::layout::{FixedMetrics, LayoutEngine, VisibleWindow, WrapPlan};
@@ -7,9 +9,7 @@ use crate::region::{ScaleContract, TextRegion};
 use crate::state::{TextItem, TextLayerConfig, TextLayerState};
 use crate::surface::TextSurface;
 use crate::writing::WritingMode;
-use super::test_support::{
-    Rig, block_axis_ink_span, build, glyph_items, live_diff_model_font, opaque_count,
-};
+use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 
 // ════ live-diff pixel 等価主檻（task 10・R4.5/R6.1/R6.2/R6.3/R6.5/R8.1・design Testing
 //      Strategy「Integration Tests #1」） ════

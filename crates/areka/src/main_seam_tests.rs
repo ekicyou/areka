@@ -59,7 +59,10 @@ fn despawn_smoke_targets_hits_dummy_and_ghost_only() {
 
     let count = despawn_smoke_targets(&mut world);
 
-    assert_eq!(count, 2, "ダミー窓＋ゴースト窓の 2 entity を despawn すべき");
+    assert_eq!(
+        count, 2,
+        "ダミー窓＋ゴースト窓の 2 entity を despawn すべき"
+    );
     assert!(world.get_entity(dummy).is_err());
     assert!(world.get_entity(ghost).is_err());
     assert!(world.get_entity(other).is_ok());

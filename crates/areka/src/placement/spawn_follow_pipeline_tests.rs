@@ -28,7 +28,7 @@ use wintf::ecs::drag::DragEvent;
 
 use crate::placement::config::build_placement_config;
 use crate::placement::follow::move_window_to;
-use crate::placement::resolver::{resolve_placement, RectPx, ScopeInput};
+use crate::placement::resolver::{RectPx, ScopeInput, resolve_placement};
 
 /// ドラッグイベント（wndproc 移動済み後の Bubble 配送を模す・follow.rs と同型）。
 fn drag_event(target: Entity) -> DragEvent {
@@ -122,13 +122,20 @@ fn window_position(world: &World, e: Entity) -> Point {
 fn t_i4_follow_offset_matches_resolver_output_through_real_pipeline() {
     let (world, gw, placements) = real_pipeline_world();
 
-    assert_eq!(placements.len(), 2, "空虚一致封じ: 2 スコープが解決されること");
+    assert_eq!(
+        placements.len(),
+        2,
+        "空虚一致封じ: 2 スコープが解決されること"
+    );
 
     // config 由来の左右両変種が実際に効いている檻（resolver 幾何の正値を固定し、
     // 「resolver 出力のコピー同士の照合」への退化を防ぐ）
     assert_eq!(
         placements[0].balloon_offset,
-        PointPx { x: -401 + 29, y: -41 },
+        PointPx {
+            x: -401 + 29,
+            y: -41
+        },
         "scope0: left＝キャラ左隣（−balloon_w）＋balloon.offsetx/y 加算"
     );
     assert_eq!(
@@ -189,10 +196,7 @@ fn t_i4_move_window_to_keeps_balloon_offset_across_multiple_moves() {
         let char_e = gw.char_window(p.scope).unwrap();
         let balloon_e = gw.balloon_window(p.scope).unwrap();
         // 96 の倍数を避けた移動先を複数回（offset は配置時確定で静的・4.4）
-        let targets = [
-            (1237 + p.scope as i32, 941),
-            (533, 1189 + p.scope as i32),
-        ];
+        let targets = [(1237 + p.scope as i32, 941), (533, 1189 + p.scope as i32)];
         for (x, y) in targets {
             assert!(move_window_to(&mut world, char_e, x, y));
             assert_eq!(
@@ -248,10 +252,7 @@ fn t_i4_char_move_follows_adjusted_offset_after_balloon_solo_drag() {
 
     // バルーン単独ドラッグ: wndproc がバルーンを (613, 407) へ移動済みの状態を
     // 模し、spawn が付けた実 OnDrag ハンドラを Bubble で呼ぶ
-    world
-        .get_mut::<WindowPos>(balloon_e)
-        .unwrap()
-        .position = Some(Point { x: 613, y: 407 });
+    world.get_mut::<WindowPos>(balloon_e).unwrap().position = Some(Point { x: 613, y: 407 });
     let handler = world.get::<OnDrag>(balloon_e).expect("balloon OnDrag").0;
     let ev = Phase::Bubble(drag_event(balloon_e));
     assert!(!handler(&mut world, balloon_e, balloon_e, &ev));

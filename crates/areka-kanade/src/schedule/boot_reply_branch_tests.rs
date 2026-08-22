@@ -1,6 +1,6 @@
-use super::*;
-use crate::schedule::{step, ActiveTalk};
 use super::test_support::{assert_get, assert_notify, config, initial};
+use super::*;
+use crate::schedule::{ActiveTalk, step};
 
 // ========================================================================
 // タスク 6.2: username リソース照会 prefetch（OnInitialize 後・OnFirstBoot 前・R4.1/R9.3）
@@ -54,7 +54,10 @@ fn prefetch_username_get_is_issued_once_between_initialize_and_firstboot() {
     let cfg = config();
     // Idle+Boot → OnInitialize NOTIFY（username GET はまだ出ない）。
     let (s, actions) = step(initial(), Input::Boot, &cfg);
-    assert_notify(&actions[0], &events::on_initialize(&ExecutionSnapshot::INACTIVE));
+    assert_notify(
+        &actions[0],
+        &events::on_initialize(&ExecutionSnapshot::INACTIVE),
+    );
     assert!(
         !actions.iter().any(is_username_get),
         "OnInitialize 段では username GET を発行しない"
@@ -89,7 +92,10 @@ fn prefetch_username_get_is_issued_once_between_initialize_and_firstboot() {
         },
         &cfg,
     );
-    assert!(matches!(s.phase, Phase::BootType), "prefetch 完了後は BootType（OnFirstBoot 待ち）");
+    assert!(
+        matches!(s.phase, Phase::BootType),
+        "prefetch 完了後は BootType（OnFirstBoot 待ち）"
+    );
     // sink 呼出指示（ResourceOutcome）が OnFirstBoot GET より前に積まれる（design boot 図: sink 先行）。
     assert!(
         matches!(actions[0], Action::ResourceOutcome { .. }),
@@ -148,7 +154,10 @@ fn prefetch_maps_outcomes_to_resource_outcome() {
     );
     match resource_outcome_of(&actions) {
         ResourceOutcome::Failed(reason) => {
-            assert!(reason.contains("timeout"), "Failed の理由に失敗語彙が載る: {reason}");
+            assert!(
+                reason.contains("timeout"),
+                "Failed の理由に失敗語彙が載る: {reason}"
+            );
         }
         other => panic!("失敗応答は ResourceOutcome::Failed へ写像されるべき: {other:?}"),
     }
@@ -354,11 +363,20 @@ fn first_boot_true_204_falls_through_to_onboot() {
     let s = drive_to_prefetch(&cfg);
     // BootPrefetch 204 → OnFirstBoot GET / BootType（従来どおり）。
     let (s, actions) = step(s, reply(ShioriOutcome::NoContent), &cfg);
-    assert!(matches!(s.phase, Phase::BootType), "first_boot=true は BootType（OnFirstBoot 待ち）へ");
-    assert!(actions.iter().any(is_onfirstboot_get), "first_boot=true は OnFirstBoot GET を発行する（3.1）");
+    assert!(
+        matches!(s.phase, Phase::BootType),
+        "first_boot=true は BootType（OnFirstBoot 待ち）へ"
+    );
+    assert!(
+        actions.iter().any(is_onfirstboot_get),
+        "first_boot=true は OnFirstBoot GET を発行する（3.1）"
+    );
     // BootType 204 → OnBoot GET / BootMain（204 フォールスルー・3.2）。
     let (s, actions) = step(s, reply(ShioriOutcome::NoContent), &cfg);
-    assert!(matches!(s.phase, Phase::BootMain), "OnFirstBoot 204 は OnBoot へフォールスルー（3.2）");
+    assert!(
+        matches!(s.phase, Phase::BootMain),
+        "OnFirstBoot 204 は OnBoot へフォールスルー（3.2）"
+    );
     assert_eq!(
         actions.iter().filter(|a| is_onboot_get(a)).count(),
         1,
@@ -378,7 +396,10 @@ fn onfirstboot_ref0_reflects_config_vanish_count() {
         .iter()
         .find(|a| is_onfirstboot_get(a))
         .expect("first_boot=true は OnFirstBoot GET を発行する");
-    assert_get(onfirstboot, &events::on_first_boot(&ExecutionSnapshot::INACTIVE, 7));
+    assert_get(
+        onfirstboot,
+        &events::on_first_boot(&ExecutionSnapshot::INACTIVE, 7),
+    );
 }
 
 /// design C9 Some アーム: 挨拶 talk は `config.first_boot_epilogue` を添付して起動する。
@@ -418,7 +439,11 @@ fn first_boot_204_204_with_epilogue_emits_epilogue_only_tracked_talk() {
     let (s, actions) = step(s, reply(ShioriOutcome::NoContent), &cfg);
     let st = start_talk_of(&actions);
     assert_eq!(st.script, "", "epilogue-only talk の script は空");
-    assert_eq!(st.talk_id, TalkId(1), "epilogue-only talk も talk_id を採番する");
+    assert_eq!(
+        st.talk_id,
+        TalkId(1),
+        "epilogue-only talk も talk_id を採番する"
+    );
     assert_eq!(
         st.epilogue, cfg.first_boot_epilogue,
         "epilogue-only talk は first_boot_epilogue を運ぶ"
@@ -437,7 +462,10 @@ fn first_boot_204_204_with_epilogue_emits_epilogue_only_tracked_talk() {
         ),
         "epilogue-only talk は BootVersion{{talk: Some(origin=boot)}} で正規追跡される"
     );
-    assert_eq!(s.next_talk_id, 2, "epilogue-only talk も採番カウンタを進める");
+    assert_eq!(
+        s.next_talk_id, 2,
+        "epilogue-only talk も採番カウンタを進める"
+    );
 }
 
 /// design C9 None アーム（epilogue 空・通常 204）: 従来どおり StartTalk なし・`BootVersion{talk: None}`。
@@ -461,7 +489,10 @@ fn normal_204_with_empty_epilogue_emits_no_talk() {
         !actions.iter().any(|a| matches!(a, Action::StartTalk(_))),
         "epilogue 空の 204 は StartTalk を発行しない（既存挙動不変）"
     );
-    assert_eq!(s.next_talk_id, 1, "epilogue 空の 204 は採番カウンタを進めない");
+    assert_eq!(
+        s.next_talk_id, 1,
+        "epilogue 空の 204 は採番カウンタを進めない"
+    );
 }
 
 /// タスク 4.1・DD-10: boot 起動 talk も `ActiveTalk.script` に自ら作った script を保持する。

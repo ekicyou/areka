@@ -245,8 +245,7 @@ fn refresh_scale_without_dpi_change_does_nothing() {
     let (emo_world, atlas, _g1000, _g3000) = build_two_face_assets(6, 5);
     let (probe_world, probe_atlas, _, _) = build_two_face_assets(6, 5);
     let k2 = ScaleRatio::new(2, 1).unwrap();
-    let (scaled_1000, _native, scaled_size) =
-        scaled_golden(&probe_world, &probe_atlas, 1000, k2);
+    let (scaled_1000, _native, scaled_size) = scaled_golden(&probe_world, &probe_atlas, 1000, k2);
 
     let mut presenter = EmoPresenter::new();
     presenter

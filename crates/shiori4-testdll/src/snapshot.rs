@@ -127,10 +127,21 @@ mod tests {
 
     #[test]
     fn normalize_is_idempotent() {
-        for raw in ["a\nb", "a\r\nb", "a\r\nb\nc\r\n", "", "\n", "\r\n", "no endings"] {
+        for raw in [
+            "a\nb",
+            "a\r\nb",
+            "a\r\nb\nc\r\n",
+            "",
+            "\n",
+            "\r\n",
+            "no endings",
+        ] {
             let once = normalize_crlf(raw);
             let twice = normalize_crlf(&once);
-            assert_eq!(twice, once, "normalize_crlf は冪等であること（input={raw:?}）");
+            assert_eq!(
+                twice, once,
+                "normalize_crlf は冪等であること（input={raw:?}）"
+            );
         }
     }
 
@@ -167,7 +178,10 @@ mod tests {
         // task 6.2 実採取後: OnFirstBoot は 200＋起動挨拶さくらスクリプトの Value 行を持つ
         // （旧暫定は 204 だった）。
         let resp = snapshot_for("OnFirstBoot").unwrap();
-        assert!(resp.contains("200"), "OnFirstBoot は 200 応答であること: {resp:?}");
+        assert!(
+            resp.contains("200"),
+            "OnFirstBoot は 200 応答であること: {resp:?}"
+        );
         assert!(
             resp.contains("Value:"),
             "OnFirstBoot は Value 行を持つこと: {resp:?}"
@@ -188,7 +202,11 @@ mod tests {
     #[test]
     fn snapshot_for_unknown_id_is_none() {
         assert_eq!(snapshot_for("SomethingUnknown"), None);
-        assert_eq!(snapshot_for("OnInitialize"), None, "NOTIFY イベントは非収載（narrowing）");
+        assert_eq!(
+            snapshot_for("OnInitialize"),
+            None,
+            "NOTIFY イベントは非収載（narrowing）"
+        );
         assert_eq!(snapshot_for(""), None);
     }
 
@@ -217,12 +235,18 @@ mod tests {
         let first = snapshots();
         let second = snapshots();
         // 同一参照（OnceLock）＝呼び出し間で不変。
-        assert!(std::ptr::eq(first, second), "snapshots() は同一参照を返すこと");
+        assert!(
+            std::ptr::eq(first, second),
+            "snapshots() は同一参照を返すこと"
+        );
         // ID 昇順の固定順（決定論）。
         let ids: Vec<&str> = first.iter().map(|(id, _)| *id).collect();
         let mut sorted = ids.clone();
         sorted.sort_unstable();
-        assert_eq!(ids, sorted, "snapshots() は ID 昇順の決定論固定順であること");
+        assert_eq!(
+            ids, sorted,
+            "snapshots() は ID 昇順の決定論固定順であること"
+        );
     }
 
     #[test]

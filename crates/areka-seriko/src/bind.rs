@@ -271,9 +271,8 @@ pub enum BindDirective {
 /// 各区分の severity（実導出／`warn!`／`error!`）は付けない——アクター（task 6.1）が写す（D8）。
 pub fn parse_bind_directive(tokens: &[&str]) -> BindDirective {
     // トークンを trim して取り出す。不在または trim 後空を「空」とみなす（`None` へ畳む）。
-    let trimmed = |i: usize| -> Option<&str> {
-        tokens.get(i).map(|t| t.trim()).filter(|t| !t.is_empty())
-    };
+    let trimmed =
+        |i: usize| -> Option<&str> { tokens.get(i).map(|t| t.trim()).filter(|t| !t.is_empty()) };
     let category = trimmed(0);
     let part = trimmed(1);
     let value = trimmed(2);
@@ -344,7 +343,9 @@ pub fn accumulate(
 ) -> areka_emo_compose::BindSet {
     if on {
         // 既存 ID に id を連結。from_ids が整列＋dedup するため重複適用は集合として no-op。
-        areka_emo_compose::BindSet::from_ids(current.ids().iter().copied().chain(std::iter::once(id)))
+        areka_emo_compose::BindSet::from_ids(
+            current.ids().iter().copied().chain(std::iter::once(id)),
+        )
     } else {
         // id を除いた ID 群から再構築。含まない id の除去は集合として no-op。
         areka_emo_compose::BindSet::from_ids(current.ids().iter().copied().filter(|&x| x != id))
@@ -945,7 +946,11 @@ mod tests {
         let after_on = accumulate(&empty, 1100, true);
         assert_eq!(after_on.ids(), &[1100], "空集合に on で ID を追加（着衣）");
         let after_off = accumulate(&after_on, 1100, false);
-        assert_eq!(after_off.ids(), &[] as &[u32], "on 済みを off で除去（脱衣・R3.3）");
+        assert_eq!(
+            after_off.ids(),
+            &[] as &[u32],
+            "on 済みを off で除去（脱衣・R3.3）"
+        );
         assert_eq!(after_off, empty, "off で元の空集合へ戻る");
     }
 
@@ -975,11 +980,12 @@ mod tests {
         let base = BindSet::from_ids([1207]);
         let once = accumulate(&base, 1100, true);
         let twice = accumulate(&once, 1100, true);
+        assert_eq!(once, twice, "on→on の重複適用は結果集合が同値（冪等・D9）");
         assert_eq!(
-            once, twice,
-            "on→on の重複適用は結果集合が同値（冪等・D9）"
+            twice.ids(),
+            &[1100, 1207],
+            "重複適用でも 1100 は 1 件（dedup）"
         );
-        assert_eq!(twice.ids(), &[1100, 1207], "重複適用でも 1100 は 1 件（dedup）");
     }
 
     /// 冪等 off→off（D9）: 含まない ID を off しても不変、2 回連打でも不変。
@@ -999,8 +1005,9 @@ mod tests {
         let seq_a = [(1207u32, true), (1100u32, true)];
         let seq_b = [(1100u32, true), (1207u32, true)];
         let fold = |seq: &[(u32, bool)]| {
-            seq.iter()
-                .fold(BindSet::default(), |acc, &(id, on)| accumulate(&acc, id, on))
+            seq.iter().fold(BindSet::default(), |acc, &(id, on)| {
+                accumulate(&acc, id, on)
+            })
         };
         let result_a = fold(&seq_a);
         let result_b = fold(&seq_b);
@@ -1028,6 +1035,9 @@ mod tests {
     fn accumulate_off_absent_is_noop() {
         let base = BindSet::from_ids([1100, 1207]);
         let after = accumulate(&base, 9999, false);
-        assert_eq!(after, base, "存在しない ID の off は入力集合と同値（no-op）");
+        assert_eq!(
+            after, base,
+            "存在しない ID の off は入力集合と同値（no-op）"
+        );
     }
 }

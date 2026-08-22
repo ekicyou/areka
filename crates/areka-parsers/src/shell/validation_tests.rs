@@ -473,8 +473,10 @@ kero.surface.alias
         .appends
         .iter()
         .find(|a| {
-            a.targets
-                .contains(&AppendTarget::Range { start: 2100, end: 2110 })
+            a.targets.contains(&AppendTarget::Range {
+                start: 2100,
+                end: 2110,
+            })
         })
         .expect("範囲ターゲットの append が存在しない");
     // ヘッダ数値 10 は第1要素 Single、範囲は展開せず記述子保持（要件 7.2）。
@@ -482,8 +484,14 @@ kero.surface.alias
         range_append.targets,
         vec![
             AppendTarget::Single(10),
-            AppendTarget::Range { start: 2100, end: 2110 },
-            AppendTarget::Range { start: 2200, end: 2210 },
+            AppendTarget::Range {
+                start: 2100,
+                end: 2110
+            },
+            AppendTarget::Range {
+                start: 2200,
+                end: 2210
+            },
         ]
     );
     assert_eq!(range_append.collisions.len(), 2);
@@ -519,7 +527,11 @@ kero.surface.alias
         .expect("alias キー 6 が存在しない");
     assert_eq!(alias6.ids, vec![2106, 2206]);
     // 重複キー `100`（fixture に 2 回出現）は潰さず全保持（要件 8.4）。
-    let key100_count = shell.aliases.iter().filter(|a| a.key.as_str() == "100").count();
+    let key100_count = shell
+        .aliases
+        .iter()
+        .filter(|a| a.key.as_str() == "100")
+        .count();
     assert_eq!(key100_count, 2, "重複 alias キーが潰されている");
 }
 
@@ -607,16 +619,16 @@ element0,overlay,tail.png,7,8
         .expect("中間 surface200 が消えた");
 
     // element: base 吸収・overlay のみ残る。転記した唯一の overlay は face.png（layer 1）。
-    assert_eq!(s200.elements.len(), 1, "非 overlay element が吸収されていない");
+    assert_eq!(
+        s200.elements.len(),
+        1,
+        "非 overlay element が吸収されていない"
+    );
     assert_eq!(s200.elements[0].layer, 1);
     assert_eq!(s200.elements[0].path.as_str(), "face.png");
 
     // collision: collisionex 吸収・純 collision のみ残る。
-    assert_eq!(
-        s200.collisions.len(),
-        1,
-        "collisionex が吸収されていない"
-    );
+    assert_eq!(s200.collisions.len(), 1, "collisionex が吸収されていない");
     assert_eq!(s200.collisions[0].name.as_str(), "Bust");
     assert_eq!(s200.collisions[0].left, 30);
 

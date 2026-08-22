@@ -7,8 +7,8 @@
 //! テストスレッドでは実質的に no-op だが、パニック unwind 時に
 //! CaptureGuard::drop() が呼ばれること自体を検証する。
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use windows::Win32::Foundation::HWND;
 
 /// パニック時にスタック巻き戻しで CaptureGuard が正しく Drop されること
@@ -68,10 +68,7 @@ fn capture_guard_dropped_on_catch_unwind() {
         panic!("simulated panic during drag operation");
     }));
 
-    assert!(
-        result.is_err(),
-        "catch_unwind がパニックを捕捉したはず"
-    );
+    assert!(result.is_err(), "catch_unwind がパニックを捕捉したはず");
     // CaptureGuard の Drop が呼ばれたことは、
     // ReleaseCapture が呼ばれても副作用がないことで暗黙的に検証
     // (null HWND なので安全に完了する)

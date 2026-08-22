@@ -195,7 +195,12 @@ fn insert_id(cache: &mut ComposeCache, id: u32) {
 /// この観測は LRU の状態を乱さない——檻が自分の観測で置換順を書き換えてしまう罠を構造で避ける。
 fn holds(cache: &ComposeCache, id: u32) -> bool {
     cache
-        .get(id, &BindSet::default(), &PatternState::default(), ScaleRatio::ONE)
+        .get(
+            id,
+            &BindSet::default(),
+            &PatternState::default(),
+            ScaleRatio::ONE,
+        )
         .is_some()
 }
 
@@ -1374,7 +1379,10 @@ fn take_recycled_yields_one_entry_only_when_the_cache_is_full() {
         (4, 4),
         "回収したエントリは表示バッファを対のまま保持している"
     );
-    assert!(!holds(&cache, 1000), "追い出されたのは最も古い引き当ての 1 本");
+    assert!(
+        !holds(&cache, 1000),
+        "追い出されたのは最も古い引き当ての 1 本"
+    );
     assert!(holds(&cache, 1001), "残りのエントリは回収で剥がれない");
     assert!(holds(&cache, 1002), "残りのエントリは回収で剥がれない");
 
@@ -1530,7 +1538,13 @@ fn touch_and_get_agree_on_every_key_component() {
             pattern_of(2000, 1002),
             k54,
         ),
-        ("k 相違", id, binds.clone(), pattern.clone(), ScaleRatio::ONE),
+        (
+            "k 相違",
+            id,
+            binds.clone(),
+            pattern.clone(),
+            ScaleRatio::ONE,
+        ),
     ];
     for (what, pid, pbinds, ppattern, pscale) in probes {
         let by_get = cache.get(pid, &pbinds, &ppattern, pscale).is_some();

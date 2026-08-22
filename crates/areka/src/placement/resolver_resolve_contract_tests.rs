@@ -5,7 +5,7 @@
 use super::resolve_test_support::{cfg_of, input, scope_cfg};
 use super::test_support::{DPIS, px, work_area};
 use super::*;
-use crate::placement::config::{build_placement_config, Alignment};
+use crate::placement::config::{Alignment, build_placement_config};
 
 // ------------------------------------------------------------------
 // anchor 伝搬（4.2・DD15 基盤・task 1.2）
@@ -65,8 +65,16 @@ fn anchor_mixed_scopes_and_missing_config_defaults_to_bottom() {
                 input(2, px(200, dpi), px(400, dpi)), // 未収載 → 既定 Bottom
             ],
         );
-        assert_eq!(out[0].anchor, Anchor::Bottom, "dpi={dpi}: Bottom → Anchor::Bottom");
-        assert_eq!(out[1].anchor, Anchor::Free, "dpi={dpi}: Free → Anchor::Free");
+        assert_eq!(
+            out[0].anchor,
+            Anchor::Bottom,
+            "dpi={dpi}: Bottom → Anchor::Bottom"
+        );
+        assert_eq!(
+            out[1].anchor,
+            Anchor::Free,
+            "dpi={dpi}: Free → Anchor::Free"
+        );
         assert_eq!(
             out[2].anchor,
             Anchor::Bottom,

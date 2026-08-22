@@ -1,5 +1,5 @@
-use super::*;
 use super::test_support::*;
+use super::*;
 
 /// premultiplied BGRA 画素列（行優先）から `ComposedSurface` を組む（テスト補助）。
 fn surface_of(w: u32, h: u32, px: &[[u8; 4]]) -> ComposedSurface {
@@ -52,8 +52,7 @@ fn assert_matches_oracle(src: &ComposedSurface, scale: ScaleRatio, out: &Compose
     for dy in 0..out.height() {
         for dx in 0..out.width() {
             for c in 0..4usize {
-                let got =
-                    out.bytes()[dy as usize * out.stride() as usize + dx as usize * 4 + c];
+                let got = out.bytes()[dy as usize * out.stride() as usize + dx as usize * 4 + c];
                 let want = oracle(src, scale, dx, dy, c);
                 assert!(
                     (got as f64 - want).abs() <= 0.6,
@@ -659,14 +658,22 @@ fn scratch_capacity_reports_the_seats_capacity_not_its_length() {
     let src = deterministic_surface(64, 40);
     resample_with(&src, k, &mut out, &mut scratch);
     let big = scratch.capacity();
-    assert_eq!(big, scratch.x_map.capacity(), "私有フィールドの容量と食い違う");
+    assert_eq!(
+        big,
+        scratch.x_map.capacity(),
+        "私有フィールドの容量と食い違う"
+    );
     assert!(big >= 128, "初回で出力幅 128 ぶんへ到達している: {big}");
 
     // 小さい幅で呼ぶと長さだけが縮み、容量は据え置かれる＝両者が必ず食い違う。
     let small = deterministic_surface(9, 7);
     resample_with(&small, k, &mut out, &mut scratch);
     assert_eq!(scratch.x_map.len(), 18, "小さい幅の写像表の長さ");
-    assert_eq!(scratch.capacity(), big, "容量は縮まない（長さを返していないか）");
+    assert_eq!(
+        scratch.capacity(),
+        big,
+        "容量は縮まない（長さを返していないか）"
+    );
     assert!(
         scratch.capacity() > scratch.x_map.len(),
         "この状態で容量と長さは食い違うはず（容量 {} / 長さ {}）",

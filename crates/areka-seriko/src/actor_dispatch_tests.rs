@@ -1,8 +1,8 @@
 use super::test_support::*;
 use super::*;
+use crate::output::{DisplayCommand, MockSurfaceOutput};
 use areka_sakura::{ActorKey, CueCommand, TalkCue};
 use dola::cue::CueSink;
-use crate::output::{DisplayCommand, MockSurfaceOutput};
 
 /// 受信端が生きていれば `emit` が `SerikoMsg::Cue` を inbox へ橋渡しする（R1.1/1.2）。
 /// trait 実装＝結線契約（追加の口を設けず単一の出力契約 `CueSink` 経由でのみ届く）。
@@ -292,8 +292,13 @@ fn unclassifiable_input_is_logged_and_skipped_then_continues() {
     // (b) spawn 経由 observable: 悪 cue→有効 cue→close→join、記録は有効 Show のみ。
     let out2 = MockSurfaceOutput::new();
     let records2 = out2.records();
-    let (mut sink, handle) =
-        spawn_seriko(tiny_resolver(), BindSet::from_ids([1100, 1207]), BindResolver::empty(), SerikoLoopConfig::disabled(), out2);
+    let (mut sink, handle) = spawn_seriko(
+        tiny_resolver(),
+        BindSet::from_ids([1100, 1207]),
+        BindResolver::empty(),
+        SerikoLoopConfig::disabled(),
+        out2,
+    );
     CueSink::emit(&mut sink, entityref_cue(0.0, "0", 7)); // 防御枝＝skip
     CueSink::emit(&mut sink, emote_cue(1.0, "0", "2100")); // 有効
     sink.close().expect("Close を送れること");
@@ -370,8 +375,7 @@ fn numeric_boundary_is_unresolved() {
 #[test]
 fn emit_after_actor_stopped_logs_no_panic() {
     let out = MockSurfaceOutput::new();
-    let (mut sink, handle) =
-        spawn_seriko(
+    let (mut sink, handle) = spawn_seriko(
         tiny_resolver(),
         BindSet::from_ids([1100, 1207]),
         BindResolver::empty(),
@@ -811,8 +815,7 @@ fn wait_broadcast_reception_is_benign_debug_no_warn_error() {
 fn non_shell_and_wait_are_no_op_then_shell_cue_still_emits() {
     let out = MockSurfaceOutput::new();
     let records = out.records();
-    let (mut sink, handle) =
-        spawn_seriko(
+    let (mut sink, handle) = spawn_seriko(
         tiny_resolver(),
         BindSet::from_ids([1100, 1207]),
         BindResolver::empty(),

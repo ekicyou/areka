@@ -330,8 +330,20 @@ mod tests {
             "sorted by (SetId asc, rel_path asc)"
         );
         // ElementId == index 対応の確認
-        assert_eq!(m.keys[0], AtlasKey { set: SetId(0), rel_path: "a.png".into() });
-        assert_eq!(m.keys[2], AtlasKey { set: SetId(1), rel_path: "z.png".into() });
+        assert_eq!(
+            m.keys[0],
+            AtlasKey {
+                set: SetId(0),
+                rel_path: "a.png".into()
+            }
+        );
+        assert_eq!(
+            m.keys[2],
+            AtlasKey {
+                set: SetId(1),
+                rel_path: "z.png".into()
+            }
+        );
 
         // 決定性: 2 回目も同一
         let m2 = ManifestDeriver.derive(&sets);

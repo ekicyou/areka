@@ -44,11 +44,7 @@ enum Recorded {
 /// `answer` は (受領イベント要約) に対し返す ShioriOutcome を決める。
 fn spawn_mock_shiori(
     answer: impl Fn(&Recorded) -> ShioriOutcome + Send + 'static,
-) -> (
-    Sender<ShioriMsg>,
-    Receiver<Recorded>,
-    ActorHandle,
-) {
+) -> (Sender<ShioriMsg>, Receiver<Recorded>, ActorHandle) {
     let (rec_tx, rec_rx) = mpsc::channel::<Recorded>();
     let (tx, handle) = spawn_actor::<ShioriMsg, _>("mock-shiori", move |rx| {
         while let Ok(msg) = rx.recv() {
@@ -98,9 +94,15 @@ fn close_message_terminates_and_join_succeeds() {
     kanade_tx.send(KanadeMsg::Close).expect("send Close");
     drop(kanade_tx);
 
-    run_bounded("kanade join after Close", Duration::from_secs(5), move || {
-        kanade_handle.join().expect("kanade body completes normally after Close");
-    });
+    run_bounded(
+        "kanade join after Close",
+        Duration::from_secs(5),
+        move || {
+            kanade_handle
+                .join()
+                .expect("kanade body completes normally after Close");
+        },
+    );
     // mock shiori も後片付け（kanade は StopSelf 経路を通らないため Close は来ない→
     // shiori 送信端 drop で自然終了）。ここでは shiori_handle を join せず drop で detach。
     drop(shiori_handle);
@@ -223,11 +225,15 @@ fn mouse_msg_maps_to_input_and_is_ignored_in_idle_phase() {
     kanade_tx.send(KanadeMsg::Close).expect("send Close");
     drop(kanade_tx);
 
-    run_bounded("kanade join after Mouse+Close", Duration::from_secs(5), move || {
-        kanade_handle
-            .join()
-            .expect("kanade stops cleanly after Mouse in Idle");
-    });
+    run_bounded(
+        "kanade join after Mouse+Close",
+        Duration::from_secs(5),
+        move || {
+            kanade_handle
+                .join()
+                .expect("kanade stops cleanly after Mouse in Idle");
+        },
+    );
 
     // Idle でのマウスは SHIORI へ何も届けない（Close も StopSelf 経路を通らないため未受領）。
     assert!(
@@ -282,9 +288,15 @@ fn force_quit_emits_onclose_notify_then_unload_then_close_in_order() {
         "ForceQuit は OnClose NOTIFY → Unload → Close の順で shiori へ届く（execute-batch/reinject-last）"
     );
 
-    run_bounded("kanade join after ForceQuit", Duration::from_secs(5), move || {
-        kanade_handle.join().expect("kanade terminates after ForceQuit sequence");
-    });
+    run_bounded(
+        "kanade join after ForceQuit",
+        Duration::from_secs(5),
+        move || {
+            kanade_handle
+                .join()
+                .expect("kanade terminates after ForceQuit sequence");
+        },
+    );
     drop(shiori_handle);
 }
 
@@ -396,12 +408,7 @@ fn talk_command_send_failure_logs_error_and_continues() {
                 id: "x".to_string(),
             },
         );
-        send_talk_command(
-            &sakura_tx,
-            TalkCommand::CancelChoice {
-                talk_id: TalkId(1),
-            },
-        );
+        send_talk_command(&sakura_tx, TalkCommand::CancelChoice { talk_id: TalkId(1) });
     });
 
     // 規約の error! 発火（削除・語彙変更・レベル変更で失敗する回帰檻）。
@@ -544,10 +551,7 @@ fn disallowed_id_still_rejected_as_internal_after_resource_extension() {
     let outcome = round_trip_request(&shiori_tx, probe_resource_call("notaresource"));
 
     assert!(
-        matches!(
-            outcome,
-            ShioriOutcome::Failed(ShioriFailure::Internal(_))
-        ),
+        matches!(outcome, ShioriOutcome::Failed(ShioriFailure::Internal(_))),
         "許可外 ID は OR 拡張後も送出されず Failed(Internal) へ写像されるべき（既存不変量）"
     );
     // チャネルへ何も届かない＝許可外 ID は送出前に返る（従来挙動の保存）。
@@ -619,9 +623,15 @@ fn boot_prefetch_issues_username_between_initialize_and_firstboot_and_calls_sink
     kanade_tx.send(KanadeMsg::Close).expect("send Close");
     drop(kanade_tx);
 
-    run_bounded("kanade join after Boot+Close", Duration::from_secs(5), move || {
-        kanade_handle.join().expect("kanade stops cleanly after boot prefetch");
-    });
+    run_bounded(
+        "kanade join after Boot+Close",
+        Duration::from_secs(5),
+        move || {
+            kanade_handle
+                .join()
+                .expect("kanade stops cleanly after boot prefetch");
+        },
+    );
 
     // (i) mock 受領列の先頭 3 件: OnInitialize NOTIFY → username GET → OnFirstBoot GET。
     //     prefetch が OnInitialize 後・OnFirstBoot 前に 1 回だけ挟まる（design boot 図）。
@@ -846,9 +856,7 @@ fn talk_action_batch() -> Vec<Action> {
             id: "OnMenu".to_string(),
         },
         Action::StartTalk(StartTalk::new(TalkId(8), r"\0next\e")),
-        Action::CancelChoice {
-            talk_id: TalkId(8),
-        },
+        Action::CancelChoice { talk_id: TalkId(8) },
     ]
 }
 
@@ -871,7 +879,11 @@ fn choice_actions_map_to_talk_commands_and_preserve_order() {
     assert_eq!(got.len(), 3, "3 形すべてが同一チャンネルへ送出される");
     match &got[0] {
         TalkCommand::ResolveChoice { talk_id, id } => {
-            assert_eq!(*talk_id, TalkId(7), "ResolveChoice の talk_id をそのまま包む");
+            assert_eq!(
+                *talk_id,
+                TalkId(7),
+                "ResolveChoice の talk_id をそのまま包む"
+            );
             assert_eq!(id, "OnMenu", "ResolveChoice の id をそのまま包む");
         }
         other => panic!("commands[0] は ResolveChoice のはず: {other:?}"),
@@ -885,7 +897,11 @@ fn choice_actions_map_to_talk_commands_and_preserve_order() {
     }
     match &got[2] {
         TalkCommand::CancelChoice { talk_id } => {
-            assert_eq!(*talk_id, TalkId(8), "CancelChoice の talk_id をそのまま包む");
+            assert_eq!(
+                *talk_id,
+                TalkId(8),
+                "CancelChoice の talk_id をそのまま包む"
+            );
         }
         other => panic!("commands[2] は CancelChoice のはず: {other:?}"),
     }
@@ -913,9 +929,7 @@ fn talk_command_send_failure_does_not_abort_the_action_batch() {
                     talk_id: TalkId(7),
                     id: "OnMenu".to_string(),
                 },
-                Action::CancelChoice {
-                    talk_id: TalkId(7),
-                },
+                Action::CancelChoice { talk_id: TalkId(7) },
                 Action::ShioriUnload,
             ],
             &shiori_tx,

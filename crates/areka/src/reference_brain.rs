@@ -307,15 +307,26 @@ mod tests {
     fn make_brain(defer: bool) -> (IShiori, IShioriHost) {
         let mut out: *mut c_void = core::ptr::null_mut();
         let hr = unsafe { shiori_factory(&mut out) };
-        assert!(hr.is_ok(), "shiori_factory は成功時 S_OK, got 0x{:08X}", hr.0);
-        assert!(!out.is_null(), "成功時は out へ非 NULL の IShioriFactory を書き出すこと");
+        assert!(
+            hr.is_ok(),
+            "shiori_factory は成功時 S_OK, got 0x{:08X}",
+            hr.0
+        );
+        assert!(
+            !out.is_null(),
+            "成功時は out へ非 NULL の IShioriFactory を書き出すこと"
+        );
         let factory = unsafe { IShioriFactory::from_raw(out) };
 
         // sink は sylphya 委譲済み（第 2 ストア撤去・Task 9.1/9.3）。本テスト群はプロパティ経路を
         // 検査しないため hermetic な偽 IO sink（既知 asker）で足りる（`spawn_test_sylphya_sink`）。
         let host: IShioriHost = crate::shiori_host::spawn_test_sylphya_sink().sink.into();
         let brain = factory
-            .create(&HSTRING::from("C:/ghost/master"), &HSTRING::from("reference"), &host)
+            .create(
+                &HSTRING::from("C:/ghost/master"),
+                &HSTRING::from("reference"),
+                &host,
+            )
             .expect("create は Ok で IShiori 直返し");
         if defer {
             unsafe { AsImpl::<ReferenceBrain>::as_impl(&brain) }.arm_defer_next();
@@ -334,7 +345,11 @@ mod tests {
     fn shiori_factory_outputs_refcount_one_factory_on_success() {
         let mut out: *mut c_void = core::ptr::null_mut();
         let hr = unsafe { shiori_factory(&mut out) };
-        assert!(hr.is_ok(), "shiori_factory は成功時 S_OK, got 0x{:08X}", hr.0);
+        assert!(
+            hr.is_ok(),
+            "shiori_factory は成功時 S_OK, got 0x{:08X}",
+            hr.0
+        );
         assert!(!out.is_null(), "成功時は out へ非 NULL を書き出すこと");
 
         // 手渡された単一参照を adopt（from_raw は AddRef しない）。
@@ -344,7 +359,10 @@ mod tests {
         let unk: windows_core::IUnknown = factory.cast().expect("IUnknown へ cast");
         let after_add = unsafe { (Interface::vtable(&unk).AddRef)(unk.as_raw()) };
         let after_rel = unsafe { (Interface::vtable(&unk).Release)(unk.as_raw()) };
-        assert_eq!(after_add, 3, "AddRef は cast 後ベースライン 2 から 3, got {after_add}");
+        assert_eq!(
+            after_add, 3,
+            "AddRef は cast 後ベースライン 2 から 3, got {after_add}"
+        );
         assert_eq!(after_rel, 2, "Release は 3 から 2, got {after_rel}");
     }
 
@@ -397,7 +415,10 @@ mod tests {
             )
         };
         assert!(result.is_err(), "host 非在の create は Err（半構築非露出）");
-        assert!(brain_out.is_none(), "失敗時は out 未書込であること（半構築非露出・R8.6）");
+        assert!(
+            brain_out.is_none(),
+            "失敗時は out 未書込であること（半構築非露出・R8.6）"
+        );
     }
 
     /// 即時 `get` が受信 content の不解釈エコーであること（要件 9.3）。
@@ -427,7 +448,11 @@ mod tests {
             GetOutcome::Deferred(t) => t,
             other => panic!("遅延武装後の get は Deferred, got {other:?}"),
         };
-        assert_eq!(token, CorrelationToken(0), "初回の相関トークンは単調増加採番の 0");
+        assert_eq!(
+            token,
+            CorrelationToken(0),
+            "初回の相関トークンは単調増加採番の 0"
+        );
 
         // sink の突合枠へ採番トークンをセットする（突合準備）。
         let sink_impl = unsafe { AsImpl::<ShioriHostSink>::as_impl(&host) };

@@ -1,19 +1,13 @@
-use std::sync::{mpsc, Arc, Mutex};
 use areka_emo_text::state::TextLayerConfig;
+use std::sync::{Arc, Mutex, mpsc};
 use wintf::ecs::Point;
 
 use crate::emo2_boot::talk_lifecycle::TalkLifecycleSignal;
 
-use super::*;
 use super::test_support::{
-    capture_logs,
-    count_level,
-    headless_wiring_with,
-    pos_of,
-    resnap_world,
-    synth_assets,
-    zero_clock,
+    capture_logs, count_level, headless_wiring_with, pos_of, resnap_world, synth_assets, zero_clock,
 };
+use super::*;
 
 /// テスト用の可制御クロック: 返り値の `Arc<Mutex<f64>>` に「壁時刻」を書けば、`TalkClock` の
 /// クロックがその時刻を返す（決定論・talk_clock.rs のテストと同型の注入クロック）。
@@ -234,11 +228,14 @@ fn run_move_drain_phase_buffers_until_ghost_windows_present() {
         mpsc::channel::<PresentCommand>().1,
         rx,
         mpsc::channel::<TalkLifecycleSignal>().1,
-        Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default()))),
+        Rc::new(RefCell::new(TextLayerRuntime::new(
+            TextLayerConfig::default(),
+        ))),
         zero_clock(),
         synth_assets(&[(0, 0)]),
     );
-    tx.send(fixture_move_directive()).expect("送出は成功する（受信端は wiring 保持）");
+    tx.send(fixture_move_directive())
+        .expect("送出は成功する（受信端は wiring 保持）");
 
     // GhostWindows 未挿入の素の World → drain せず保留（try_iter を呼ばない）。
     let mut world = World::new();
@@ -251,7 +248,10 @@ fn run_move_drain_phase_buffers_until_ghost_windows_present() {
         1,
         "GhostWindows 未挿入では drain せず保留する（取りこぼしなし）"
     );
-    assert_eq!(remaining[0].scope, 1, "保留された directive は fixture（scope1）");
+    assert_eq!(
+        remaining[0].scope, 1,
+        "保留された directive は fixture（scope1）"
+    );
 }
 
 /// 9.2 apply 檻: `GhostWindows` 存在下で `move_rx` を drain すると `apply_move_directive` が
@@ -275,7 +275,9 @@ fn run_move_drain_phase_applies_directive_when_ghost_windows_present() {
         mpsc::channel::<PresentCommand>().1,
         rx,
         mpsc::channel::<TalkLifecycleSignal>().1,
-        Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default()))),
+        Rc::new(RefCell::new(TextLayerRuntime::new(
+            TextLayerConfig::default(),
+        ))),
         zero_clock(),
         synth_assets(&[(0, 0)]),
     );

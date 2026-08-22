@@ -133,10 +133,6 @@ kero.surface.alias
     assert_eq!(shell.aliases.len(), 1);
     assert_eq!(
         shell.definitions,
-        vec![
-            DefRef::Surface(0),
-            DefRef::Append(0),
-            DefRef::Alias(0),
-        ]
+        vec![DefRef::Surface(0), DefRef::Append(0), DefRef::Alias(0),]
     );
 }

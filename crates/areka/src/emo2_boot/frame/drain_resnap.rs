@@ -134,7 +134,11 @@ pub(super) fn resnap_from_sizes(world: &mut World, sizes: impl Iterator<Item = (
             continue;
         };
         if shown_size.w <= 0 || shown_size.h <= 0 {
-            debug!(scope, ?shown_size, "resnap: 非正寸のため skip（Req3.4・二重防波堤）");
+            debug!(
+                scope,
+                ?shown_size,
+                "resnap: 非正寸のため skip（Req3.4・二重防波堤）"
+            );
             continue;
         }
         targets.push((char_window, shown_size));

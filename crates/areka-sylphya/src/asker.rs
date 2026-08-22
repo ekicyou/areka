@@ -57,7 +57,9 @@ mod tests {
 
     #[test]
     fn asker_context_holds_asker() {
-        let ctx = AskerContext { asker: AskerId::new("ghost/foo") };
+        let ctx = AskerContext {
+            asker: AskerId::new("ghost/foo"),
+        };
         assert_eq!(ctx.asker.as_str(), "ghost/foo");
     }
 }

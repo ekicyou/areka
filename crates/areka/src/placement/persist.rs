@@ -484,8 +484,8 @@ pub fn persist_entries(world: &World, entries: Vec<(PersistKey, String)>) {
 #[path = "persist_entries_tests.rs"]
 mod entries_tests;
 #[cfg(test)]
-#[path = "persist_restore_tests.rs"]
-mod restore_tests;
-#[cfg(test)]
 #[path = "persist_io_wiring_tests.rs"]
 mod io_wiring_tests;
+#[cfg(test)]
+#[path = "persist_restore_tests.rs"]
+mod restore_tests;

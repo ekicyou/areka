@@ -3,13 +3,13 @@ use wintf::ecs::SizeI;
 use wintf::ecs::pointer::Phase;
 use wintf::ecs::{Point, WindowPos};
 
+use super::super::test_support::{capture_logs, expect_one};
 use super::test_support::{
     CLAMP_TAG, DPIS, GUARD_TAG_PREFIX, NEAREST_TAG, OFFSCREEN_PULL_TAG, UNRESOLVED_TAG,
     drag_event_at, dragging_state, fake_handle, gap_center_x, guard_events, left_wa, mixed_layout,
     narrow_char_size, point_of, px, right_wa, unguarded_projection, visible_in, wide_char_size,
     win, window_pos_sized,
 };
-use super::super::test_support::{capture_logs, expect_one};
 use super::{
     Anchored, MonitorSnapshot, PlacementRoute, WorkAreaResolution, on_char_drag, project_anchor,
     resize_window_to, work_area_for_window_with_origin,
@@ -798,7 +798,10 @@ fn negative_real_position_is_not_aborted_and_still_resizes() {
         // 探針の自己検査: ①本当に負座標であり ②センチネルではなく
         // ③旧矩形が実際に可視（＝「もともと留置」腕へ落ちない通常経路の入力）。
         assert!(start.x < 0, "dpi={dpi}: 探針が負座標になっていない");
-        assert_ne!(start.x, SENTINEL, "dpi={dpi}: 探針がセンチネルと衝突している");
+        assert_ne!(
+            start.x, SENTINEL,
+            "dpi={dpi}: 探針がセンチネルと衝突している"
+        );
         assert!(
             visible_in(
                 &layout,
@@ -870,17 +873,13 @@ fn single_axis_position_sentinel_also_aborts() {
                 },
             ),
         ] {
-            let (mut world, e) =
-                char_world_with_window_pos(dpi, position, Some(old_size_i(dpi)));
+            let (mut world, e) = char_world_with_window_pos(dpi, position, Some(old_size_i(dpi)));
             let before = *world.get::<WindowPos>(e).expect("WindowPos があるはず");
 
             let (ok, events) =
                 capture_logs(|| resize_window_to(&mut world, e, new, PlacementRoute::Resnap));
 
-            assert!(
-                !ok,
-                "dpi={dpi} {label}: 片軸センチネルが打ち切られていない"
-            );
+            assert!(!ok, "dpi={dpi} {label}: 片軸センチネルが打ち切られていない");
             assert_eq!(
                 *world.get::<WindowPos>(e).expect("WindowPos があるはず"),
                 before,

@@ -183,7 +183,10 @@ mod tests {
         assert_eq!((result.delta.x, result.delta.y), (0, 0));
         assert!(result.transition.is_none());
         assert!(result.current_dragging_entity.is_none());
-        assert_eq!((result.current_position.x, result.current_position.y), (0, 0));
+        assert_eq!(
+            (result.current_position.x, result.current_position.y),
+            (0, 0)
+        );
     }
 
     /// accumulate_delta は複数回の呼び出しで加算される。

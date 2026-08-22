@@ -157,4 +157,3 @@ pub(crate) fn is_benign_boot_error(err: &areka_ghost::GhostBootError) -> bool {
         _ => false,
     }
 }
-

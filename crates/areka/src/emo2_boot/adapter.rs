@@ -183,10 +183,17 @@ mod tests {
                 pattern: got_pattern,
                 reply,
             } => {
-                assert_eq!(target, shell_target(0), "Show は shell 表示対象（偶数）へ写像");
+                assert_eq!(
+                    target,
+                    shell_target(0),
+                    "Show は shell 表示対象（偶数）へ写像"
+                );
                 assert_eq!(surface_id, 2100, "surface_id は非改変で転写されること");
                 assert_eq!(got, binds, "binds はそのまま透過されること");
-                assert_eq!(got_pattern, pattern, "pattern はそのまま非改変で透過されること（R5.1）");
+                assert_eq!(
+                    got_pattern, pattern,
+                    "pattern はそのまま非改変で透過されること（R5.1）"
+                );
                 assert!(reply.is_none(), "reply は常に None（撃ちっぱなし）");
             }
             _ => panic!("Show は ShowSurface へ写像されるべき"),
@@ -236,8 +243,15 @@ mod tests {
                     "ShowBalloon は balloon 表示対象（奇数）へ写像"
                 );
                 assert_eq!(surface_id, 6, "surface_id は非改変で転写（alias 非再適用）");
-                assert_eq!(binds, BindSet::default(), "binds は既定（空集合）であること");
-                assert_eq!(got_pattern, pattern, "pattern はそのまま非改変で透過されること（R5.1）");
+                assert_eq!(
+                    binds,
+                    BindSet::default(),
+                    "binds は既定（空集合）であること"
+                );
+                assert_eq!(
+                    got_pattern, pattern,
+                    "pattern はそのまま非改変で透過されること（R5.1）"
+                );
                 assert!(reply.is_none(), "reply は常に None");
             }
             _ => panic!("ShowBalloon は ShowSurface へ写像されるべき"),
@@ -349,11 +363,7 @@ mod tests {
     struct Capture(Arc<Mutex<Vec<String>>>);
 
     impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Capture {
-        fn on_event(
-            &self,
-            ev: &tracing::Event<'_>,
-            _: tracing_subscriber::layer::Context<'_, S>,
-        ) {
+        fn on_event(&self, ev: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
             let meta = ev.metadata();
             let mut line = format!("level={} target={}", meta.level(), meta.target());
             struct V<'a>(&'a mut String);
@@ -402,7 +412,10 @@ mod tests {
         });
 
         // PresentCommand は #[non_exhaustive] かつ非 PartialEq ゆえフィールド分解＋`_` arm で照合。
-        match rx.try_recv().expect("変換済み PresentCommand が 1 件届くこと") {
+        match rx
+            .try_recv()
+            .expect("変換済み PresentCommand が 1 件届くこと")
+        {
             PresentCommand::ShowSurface {
                 target,
                 surface_id,
@@ -413,7 +426,10 @@ mod tests {
                 assert_eq!(target, shell_target(0), "Show は shell 表示対象へ配送");
                 assert_eq!(surface_id, 2100, "surface_id は非改変で転写");
                 assert_eq!(binds, BindSet::from_ids([1100]), "binds はそのまま透過");
-                assert_eq!(got_pattern, pattern, "pattern はそのまま非改変で透過（R5.1）");
+                assert_eq!(
+                    got_pattern, pattern,
+                    "pattern はそのまま非改変で透過（R5.1）"
+                );
                 assert!(reply.is_none(), "reply は常に None（撃ちっぱなし）");
             }
             _ => panic!("Show は ShowSurface へ写像されて届くべき"),

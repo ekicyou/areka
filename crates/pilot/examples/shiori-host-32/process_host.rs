@@ -201,7 +201,11 @@ mod tests {
     fn wait_captures_nonzero_and_classifies_abnormal() {
         let handle = spawn_exit(3);
         let kind = ProcessHost::wait_kind(handle).expect("wait must succeed");
-        assert_eq!(kind, ExitKind::Abnormal(3), "non-zero exit must be Abnormal(3)");
+        assert_eq!(
+            kind,
+            ExitKind::Abnormal(3),
+            "non-zero exit must be Abnormal(3)"
+        );
         assert!(!kind.is_clean());
     }
 

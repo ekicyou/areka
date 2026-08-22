@@ -10,10 +10,8 @@ use wintf::ecs::drag::{
 use wintf::ecs::pointer::PhysicalPoint;
 use wintf::ecs::window::{DPI, Window, WindowPos};
 use wintf::ecs::world::FrameCount;
+use wintf::ecs::{Arrangement, GlobalArrangement, LayoutScale, Offset, Size, dispatch_drag_events};
 use wintf::ecs::{Point, SizeI};
-use wintf::ecs::{
-    Arrangement, GlobalArrangement, LayoutScale, Offset, Size, dispatch_drag_events,
-};
 
 // =============================================================================
 // Task 7.3: ドラッグ終了同期テスト
@@ -39,7 +37,10 @@ fn test_drag_end_syncs_window_pos_changed() {
             Window::default(),
             WindowPos {
                 position: Some(Point { x: 500, y: 600 }),
-                size: Some(SizeI { width: 800, height: 600 }),
+                size: Some(SizeI {
+                    width: 800,
+                    height: 600,
+                }),
                 ..Default::default()
             },
             DPI::default(),
@@ -200,7 +201,10 @@ fn test_window_dragging_inserted_on_drag_start() {
             Window::default(),
             WindowPos {
                 position: Some(Point { x: 100, y: 200 }),
-                size: Some(SizeI { width: 800, height: 600 }),
+                size: Some(SizeI {
+                    width: 800,
+                    height: 600,
+                }),
                 ..Default::default()
             },
             DPI::default(),
@@ -260,7 +264,10 @@ fn test_window_dragging_removed_on_drag_end() {
             Window::default(),
             WindowPos {
                 position: Some(Point { x: 300, y: 400 }),
-                size: Some(SizeI { width: 800, height: 600 }),
+                size: Some(SizeI {
+                    width: 800,
+                    height: 600,
+                }),
                 ..Default::default()
             },
             DPI::default(),
@@ -317,7 +324,10 @@ fn test_window_dragging_full_lifecycle() {
             Window::default(),
             WindowPos {
                 position: Some(Point { x: 100, y: 200 }),
-                size: Some(SizeI { width: 800, height: 600 }),
+                size: Some(SizeI {
+                    width: 800,
+                    height: 600,
+                }),
                 ..Default::default()
             },
             DPI::default(),

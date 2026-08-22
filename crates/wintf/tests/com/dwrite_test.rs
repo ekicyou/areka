@@ -107,7 +107,10 @@ fn surrogate_pair_is_single_cluster_of_two_utf16_units() {
     let layout = make_layout(w!("𠮷"));
     let metrics = layout.get_cluster_metrics().expect("metrics");
     assert_eq!(metrics.len(), 1);
-    assert_eq!(metrics[0].length, 2, "surrogate pair occupies 2 UTF-16 units");
+    assert_eq!(
+        metrics[0].length, 2,
+        "surrogate pair occupies 2 UTF-16 units"
+    );
 }
 
 // ============================================================
@@ -155,7 +158,10 @@ fn hit_test_text_position_returns_leading_and_trailing_points() {
 fn hit_test_text_position_clamps_out_of_range_position() {
     let layout = make_layout(w!("AB"));
     let result = layout.hit_test_text_position(999, false);
-    assert!(result.is_ok(), "out-of-range position should clamp, not fail");
+    assert!(
+        result.is_ok(),
+        "out-of-range position should clamp, not fail"
+    );
 }
 
 // ============================================================

@@ -43,7 +43,8 @@ struct FieldGrab(std::collections::HashMap<String, String>);
 
 impl tracing::field::Visit for FieldGrab {
     fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
-        self.0.insert(field.name().to_string(), format!("{value:?}"));
+        self.0
+            .insert(field.name().to_string(), format!("{value:?}"));
     }
 }
 
@@ -81,7 +82,11 @@ fn perf_lines(cap: &CaptureSubscriber) -> Vec<CapturedEvent> {
         .lock()
         .expect("捕捉バッファ")
         .iter()
-        .filter(|e| e.fields.get("message").is_some_and(|m| m == PERF_LINE_MESSAGE))
+        .filter(|e| {
+            e.fields
+                .get("message")
+                .is_some_and(|m| m == PERF_LINE_MESSAGE)
+        })
         .cloned()
         .collect()
 }
@@ -90,9 +95,7 @@ fn perf_lines(cap: &CaptureSubscriber) -> Vec<CapturedEvent> {
 fn field(ev: &CapturedEvent, name: &str) -> String {
     ev.fields
         .get(name)
-        .unwrap_or_else(|| {
-            panic!("perf サマリ行にフィールド `{name}` が無い: {:?}", ev.fields)
-        })
+        .unwrap_or_else(|| panic!("perf サマリ行にフィールド `{name}` が無い: {:?}", ev.fields))
         .clone()
 }
 
@@ -190,7 +193,11 @@ fn emits_single_debug_line_with_all_stage_fields_and_zero_for_skipped_stages() {
         );
     }
     assert_eq!(field(ev, "t_cache_us"), "1000", "キャッシュ照会段の区間");
-    assert_eq!(field(ev, "t_compose_us"), "7000", "合成段の区間（累積でない）");
+    assert_eq!(
+        field(ev, "t_compose_us"),
+        "7000",
+        "合成段の区間（累積でない）"
+    );
     assert_eq!(
         field(ev, "t_resample_us"),
         "0",
@@ -239,14 +246,24 @@ fn all_stage_fields_appear_as_zero_when_nothing_was_marked() {
 
     let cap = CaptureSubscriber::default();
     tracing::subscriber::with_default(cap.clone(), || {
-        timing.emit_at(&ctx(), BudgetDelta::default(), t0 + Duration::from_micros(42));
+        timing.emit_at(
+            &ctx(),
+            BudgetDelta::default(),
+            t0 + Duration::from_micros(42),
+        );
     });
 
     let lines = perf_lines(&cap);
     assert_eq!(lines.len(), 1, "全段スキップでも 1 行は出ること");
     let ev = &lines[0];
 
-    for name in ["t_cache_us", "t_compose_us", "t_resample_us", "t_mask_us", "t_upload_us"] {
+    for name in [
+        "t_cache_us",
+        "t_compose_us",
+        "t_resample_us",
+        "t_mask_us",
+        "t_upload_us",
+    ] {
         assert_eq!(
             field(ev, name),
             "0",
@@ -433,7 +450,8 @@ fn compose_key_hash_is_stable_and_separates_every_key_element() {
         compose_key_hash(1000, &binds, &blend_screen, k),
         "Blend の内側ブレンド種別差（Multiply / Screen）が key_hash に現れていない"
     );
-    let blend_multiply_fast = with_method(ComposeMethod::Blend(BlendMode::fast(BlendKind::Multiply)));
+    let blend_multiply_fast =
+        with_method(ComposeMethod::Blend(BlendMode::fast(BlendKind::Multiply)));
     assert_ne!(
         compose_key_hash(1000, &binds, &blend_multiply, k),
         compose_key_hash(1000, &binds, &blend_multiply_fast, k),

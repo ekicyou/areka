@@ -75,7 +75,10 @@ mod tests {
 
     #[test]
     fn degrade_policy_variants() {
-        assert_ne!(DegradePolicy::PassThroughRaw, DegradePolicy::ConsumerDefault);
+        assert_ne!(
+            DegradePolicy::PassThroughRaw,
+            DegradePolicy::ConsumerDefault
+        );
         assert_ne!(DegradePolicy::ConsumerDefault, DegradePolicy::NotFound);
     }
 

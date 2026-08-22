@@ -132,7 +132,10 @@ mod tests {
     #[test]
     fn shiori_s_pending_is_success_with_customer_bit() {
         // 遅延は「成功」コード（severity=0）かつ customer bit セット。
-        assert!(SHIORI_S_PENDING.is_ok(), "SHIORI_S_PENDING は成功コードであること");
+        assert!(
+            SHIORI_S_PENDING.is_ok(),
+            "SHIORI_S_PENDING は成功コードであること"
+        );
         assert!(!SHIORI_S_PENDING.is_err());
         assert_eq!(
             SHIORI_S_PENDING.0 & CUSTOMER_BIT,
@@ -152,7 +155,10 @@ mod tests {
     fn shiori_e_unknown_token_is_failure_with_customer_bit() {
         assert!(SHIORI_E_UNKNOWN_TOKEN.is_err());
         assert_eq!(SHIORI_E_UNKNOWN_TOKEN.0 & CUSTOMER_BIT, CUSTOMER_BIT);
-        assert_eq!(SHIORI_E_UNKNOWN_TOKEN.0 & SEVERITY_FAILURE, SEVERITY_FAILURE);
+        assert_eq!(
+            SHIORI_E_UNKNOWN_TOKEN.0 & SEVERITY_FAILURE,
+            SEVERITY_FAILURE
+        );
         assert_eq!(SHIORI_E_UNKNOWN_TOKEN.0, 0xA0A1_0003u32 as i32);
     }
 

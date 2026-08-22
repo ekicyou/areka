@@ -19,16 +19,14 @@ use std::thread;
 use std::time::Duration;
 
 use event_listener::Event;
-use wintf_winmsg_executor::util::{Window, WindowMessage, WindowType};
-use wintf_winmsg_executor::{block_on, spawn_local};
 use windows::Win32::Foundation::{HMODULE, HWND, LRESULT, POINT, RECT};
 use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
 use windows::Win32::Graphics::Direct2D::{
-    D2D1CreateDevice, D2D1_ELLIPSE, ID2D1Device, ID2D1DeviceContext,
+    D2D1_ELLIPSE, D2D1CreateDevice, ID2D1Device, ID2D1DeviceContext,
 };
 use windows::Win32::Graphics::Direct3D::D3D_DRIVER_TYPE_HARDWARE;
 use windows::Win32::Graphics::Direct3D11::{
-    D3D11CreateDevice, D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_SDK_VERSION, ID3D11Device,
+    D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_SDK_VERSION, D3D11CreateDevice, ID3D11Device,
 };
 use windows::Win32::Graphics::DirectComposition::{
     DCompositionCreateDevice3, IDCompositionDesktopDevice, IDCompositionDevice2,
@@ -43,12 +41,13 @@ use windows::Win32::UI::HiDpi::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     GWL_EXSTYLE, GWL_STYLE, GetClientRect, GetCursorPos, GetWindowLongPtrW, GetWindowRect,
-    IDC_CROSS, LoadCursorW, SW_SHOW, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE,
-    SWP_NOSIZE, SWP_NOZORDER, SetCursor, SetWindowLongPtrW, SetWindowPos, ShowWindow,
-    WINDOW_EX_STYLE, WM_CLOSE, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE,
-    WM_SETCURSOR, WS_EX_LAYERED, WS_EX_NOREDIRECTIONBITMAP, WS_EX_TOPMOST, WS_EX_TRANSPARENT,
-    WS_POPUP,
+    IDC_CROSS, LoadCursorW, SW_SHOW, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+    SWP_NOZORDER, SetCursor, SetWindowLongPtrW, SetWindowPos, ShowWindow, WINDOW_EX_STYLE,
+    WM_CLOSE, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_SETCURSOR,
+    WS_EX_LAYERED, WS_EX_NOREDIRECTIONBITMAP, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
 };
+use wintf_winmsg_executor::util::{Window, WindowMessage, WindowType};
+use wintf_winmsg_executor::{block_on, spawn_local};
 // ClientToScreen は Gdi モジュール（read-only な client→screen 座標写像）。
 use windows::Win32::Graphics::Gdi::ClientToScreen;
 // SetCapture/ReleaseCapture は Input::KeyboardAndMouse モジュール（feature 有効済み）。
@@ -100,12 +99,13 @@ fn init_dpi_awareness() {
     // SAFETY: Win32 境界。`SetProcessDpiAwarenessContext` はプロセスグローバルな
     // DPI awareness をスレッドセーフに設定する。プロセス起動直後・他スレッド／
     // DPI 依存処理の前に一度だけ呼ぶ（main 冒頭）。
-    let result = unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
+    let result =
+        unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
     match result {
         Ok(()) => println!("[dpi] SetProcessDpiAwarenessContext(PER_MONITOR_AWARE_V2): Ok"),
-        Err(e) => eprintln!(
-            "[dpi][warn] SetProcessDpiAwarenessContext(PER_MONITOR_AWARE_V2) failed: {e}"
-        ),
+        Err(e) => {
+            eprintln!("[dpi][warn] SetProcessDpiAwarenessContext(PER_MONITOR_AWARE_V2) failed: {e}")
+        }
     }
 }
 
@@ -590,20 +590,26 @@ fn spawn_cursor_worker(
             // SAFETY: Win32 境界。`GetCursorPos`/`GetClientRect` はともに read-only で
             // out 引数へ書き込むのみ。`hwnd` は main が生かし続ける有効窓
             // （done+join で本ワーカ停止後に Window が drop される）。スタイル変更はしない。
-            let read_ok = unsafe {
-                GetCursorPos(&mut pt).is_ok() && GetClientRect(hwnd, &mut cr).is_ok()
-            };
+            let read_ok =
+                unsafe { GetCursorPos(&mut pt).is_ok() && GetClientRect(hwnd, &mut cr).is_ok() };
 
             if read_ok {
                 // 判定はクライアント領域基準（R4.1「クライアント中央」）。DComp は client area に
                 // 合成するため、見える円（client 中心に描画）と判定円を一致させるには client 矩形を
                 // スクリーン座標へ写して中心を求める（窓矩形だと枠ぶんズレる）。GetClientRect は
                 // (0,0,cw,ch) ゆえ ClientToScreen で左上・右下をスクリーン座標へ写す。
-                let mut tl = POINT { x: cr.left, y: cr.top };
-                let mut br = POINT { x: cr.right, y: cr.bottom };
+                let mut tl = POINT {
+                    x: cr.left,
+                    y: cr.top,
+                };
+                let mut br = POINT {
+                    x: cr.right,
+                    y: cr.bottom,
+                };
                 // SAFETY: Win32 境界。`ClientToScreen` は read-only な座標写像（point を in/out）。
                 let map_ok = unsafe {
-                    ClientToScreen(hwnd, &mut tl).as_bool() && ClientToScreen(hwnd, &mut br).as_bool()
+                    ClientToScreen(hwnd, &mut tl).as_bool()
+                        && ClientToScreen(hwnd, &mut br).as_bool()
                 };
 
                 if map_ok {
@@ -622,9 +628,17 @@ fn spawn_cursor_worker(
                         state_changed.notify(usize::MAX);
                         println!(
                             "[cursor] desired click-through = {} (cursor=({}, {}) client_screen=[{},{},{},{}])",
-                            if desired { "ON(透過)" } else { "OFF(不透過)" },
-                            pt.x, pt.y,
-                            client_screen.left, client_screen.top, client_screen.right, client_screen.bottom
+                            if desired {
+                                "ON(透過)"
+                            } else {
+                                "OFF(不透過)"
+                            },
+                            pt.x,
+                            pt.y,
+                            client_screen.left,
+                            client_screen.top,
+                            client_screen.right,
+                            client_screen.bottom
                         );
                         last = Some(desired);
                     }
@@ -776,7 +790,9 @@ fn main() {
     // 窓を生成（初期: NOREDIRECTIONBITMAP|TOPMOST|LAYERED|TRANSPARENT = クリック透過 ON）。
     // ハンドルは block_on 復帰まで生かす（Drop で DestroyWindow される）。
     let _window = make_window(state.clone());
-    println!("[window] NOREDIRECTIONBITMAP|TOPMOST|LAYERED|TRANSPARENT 窓を生成（初期クリック透過 ON・LAYERED はフラグのみ/実験）");
+    println!(
+        "[window] NOREDIRECTIONBITMAP|TOPMOST|LAYERED|TRANSPARENT 窓を生成（初期クリック透過 ON・LAYERED はフラグのみ/実験）"
+    );
 
     // 枠なし（WS_POPUP）にして「クライアント == ウィンドウ」を成立させる。
     // 非クライアント領域（タイトルバー/枠）があると、DComp（CreateTargetForHwnd は
@@ -840,7 +856,9 @@ fn main() {
         state_changed.clone(),
         worker_done.clone(),
     );
-    println!("[cursor] 監視ワーカ起動（別 std::thread・16ms ポーリング・desired 公開＋変化時 notify）");
+    println!(
+        "[cursor] 監視ワーカ起動（別 std::thread・16ms ポーリング・desired 公開＋変化時 notify）"
+    );
 
     // 状態変化適用タスク（StateApplier・タスク 4.2／ループ順序確定は 5.1）を UI スレッドへ
     // spawn_local。ワーカの desired/state_changed を消費し、差分時のみ WS_EX_TRANSPARENT を
@@ -863,7 +881,9 @@ fn main() {
         applier_done.clone(),
         dragging.clone(),
     );
-    println!("[applier] 状態変化適用タスク起動（spawn_local・UI スレッド・差分時のみ WS_EX_TRANSPARENT 加除）");
+    println!(
+        "[applier] 状態変化適用タスク起動（spawn_local・UI スレッド・差分時のみ WS_EX_TRANSPARENT 加除）"
+    );
 
     // メッセージループ：WM_CLOSE → shutdown notify → この future 完了でループ終了。
     let shutdown = state.shutdown.listen();

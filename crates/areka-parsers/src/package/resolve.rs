@@ -10,7 +10,7 @@
 use std::io::ErrorKind;
 use std::path::Path;
 
-use crate::charset::{decode, DefaultEncoding};
+use crate::charset::{DefaultEncoding, decode};
 use crate::kv::parse_kv;
 
 use super::model::{
@@ -85,7 +85,9 @@ pub fn resolve(
         .unwrap_or(DEFAULT_SHELL_DIR);
     let shell_dir = ghost_root.join(SHELL_ROOT).join(shell_name);
     if !shell_dir.is_dir() {
-        return Err(MountError::ShellDirMissing { expected: shell_dir });
+        return Err(MountError::ShellDirMissing {
+            expected: shell_dir,
+        });
     }
     // shell descript.txt から bindgroup default を転記（bindopt 1.1/1.2）。bindgroup default
     // （`sakura.bindgroup*.default,数値`／`kero.*`）は ukadoc カテゴリ `descript_shell`
@@ -141,7 +143,10 @@ const SHELL_DESCRIPT_FILE: &str = "descript.txt";
 /// 走査は `parse_kv` の `BTreeMap` 反復順（キー昇順）で決定的。名前は転記順（キー昇順）に
 /// push され、重複 (カテゴリ, パーツ) はアクセサ側の後勝ち（`resolve_name` の逆順走査・D2）
 /// と整合する。shell descript が不在・読取不能なら空を返す（致命でない）。
-fn read_bindgroup_defaults(shell_dir: &Path, default_encoding: DefaultEncoding) -> BindGroupDefaults {
+fn read_bindgroup_defaults(
+    shell_dir: &Path,
+    default_encoding: DefaultEncoding,
+) -> BindGroupDefaults {
     let descript = shell_dir.join(SHELL_DESCRIPT_FILE);
     // shell descript は存在確定していない。読めなければ空（bindgroup 定義なしと同義）。
     let Ok(bytes) = std::fs::read(&descript) else {
@@ -155,10 +160,14 @@ fn read_bindgroup_defaults(shell_dir: &Path, default_encoding: DefaultEncoding) 
     for (key, value) in &map {
         // --- .default 経路（従来挙動・値 "1" のみ・無改変・R1.6）---
         if value == "1" {
-            if let Some(id) = parse_bindgroup_id(key, SAKURA_BINDGROUP_PREFIX, BINDGROUP_DEFAULT_SUFFIX) {
+            if let Some(id) =
+                parse_bindgroup_id(key, SAKURA_BINDGROUP_PREFIX, BINDGROUP_DEFAULT_SUFFIX)
+            {
                 defaults.sakura_default_on.push(id);
                 continue;
-            } else if let Some(id) = parse_bindgroup_id(key, KERO_BINDGROUP_PREFIX, BINDGROUP_DEFAULT_SUFFIX) {
+            } else if let Some(id) =
+                parse_bindgroup_id(key, KERO_BINDGROUP_PREFIX, BINDGROUP_DEFAULT_SUFFIX)
+            {
                 defaults.kero_default_on.push(id);
                 continue;
             }
@@ -169,7 +178,8 @@ fn read_bindgroup_defaults(shell_dir: &Path, default_encoding: DefaultEncoding) 
         {
             defaults.sakura_names.push(name);
             continue;
-        } else if let Some(id) = parse_bindgroup_id(key, KERO_BINDGROUP_PREFIX, BINDGROUP_NAME_SUFFIX)
+        } else if let Some(id) =
+            parse_bindgroup_id(key, KERO_BINDGROUP_PREFIX, BINDGROUP_NAME_SUFFIX)
             && let Some(name) = parse_bindgroup_name(id, value)
         {
             defaults.kero_names.push(name);
@@ -328,7 +338,8 @@ mod ghost_names_transcription_tests {
         let _ = fs::remove_dir_all(&root);
         let master = root.join("ghost").join("master");
         fs::create_dir_all(&master).expect("create ghost/master");
-        fs::write(master.join("descript.txt"), descript_body.as_bytes()).expect("write descript.txt");
+        fs::write(master.join("descript.txt"), descript_body.as_bytes())
+            .expect("write descript.txt");
         // shell/master は存在確認（Req 3.3）を通すために用意する。
         fs::create_dir_all(root.join("shell").join("master")).expect("create shell/master");
         root
@@ -409,7 +420,10 @@ mod bindgroup_name_transcription_tests {
         assert_eq!(n.category, "腕");
         assert_eq!(n.part, "伸び");
         assert_eq!(n.thumbnail, Some("thumb".to_string()));
-        assert_eq!(defaults.resolve_name(BindScope::Sakura, "腕", "伸び"), Some(1100));
+        assert_eq!(
+            defaults.resolve_name(BindScope::Sakura, "腕", "伸び"),
+            Some(1100)
+        );
 
         let _ = fs::remove_dir_all(&shell);
     }
@@ -425,7 +439,10 @@ mod bindgroup_name_transcription_tests {
 
         assert_eq!(defaults.sakura_names.len(), 1);
         assert_eq!(defaults.sakura_names[0].thumbnail, None);
-        assert_eq!(defaults.resolve_name(BindScope::Sakura, "口", "笑い"), Some(1200));
+        assert_eq!(
+            defaults.resolve_name(BindScope::Sakura, "口", "笑い"),
+            Some(1200)
+        );
 
         let _ = fs::remove_dir_all(&shell);
     }
@@ -441,7 +458,10 @@ mod bindgroup_name_transcription_tests {
 
         assert!(defaults.sakura_names.is_empty(), "sakura 側は空であるべき");
         assert_eq!(defaults.kero_names.len(), 1);
-        assert_eq!(defaults.resolve_name(BindScope::Kero, "腕", "伸び"), Some(2100));
+        assert_eq!(
+            defaults.resolve_name(BindScope::Kero, "腕", "伸び"),
+            Some(2100)
+        );
         // sakura スコープでは解決できない（別集合）。
         assert_eq!(defaults.resolve_name(BindScope::Sakura, "腕", "伸び"), None);
 
@@ -493,7 +513,10 @@ mod bindgroup_name_transcription_tests {
         );
         let defaults = read_bindgroup_defaults(&shell, DefaultEncoding::Utf8);
 
-        assert_eq!(defaults.resolve_name(BindScope::Sakura, "腕", "伸び"), Some(1400));
+        assert_eq!(
+            defaults.resolve_name(BindScope::Sakura, "腕", "伸び"),
+            Some(1400)
+        );
 
         let _ = fs::remove_dir_all(&shell);
     }
@@ -514,7 +537,10 @@ mod bindgroup_name_transcription_tests {
         assert_eq!(defaults.sakura_default_on, vec![1100]);
         assert_eq!(defaults.kero_default_on, vec![2100]);
         // 名前も併せて転記されている（両経路が同一走査で共存）。
-        assert_eq!(defaults.resolve_name(BindScope::Sakura, "腕", "伸び"), Some(1100));
+        assert_eq!(
+            defaults.resolve_name(BindScope::Sakura, "腕", "伸び"),
+            Some(1100)
+        );
 
         let _ = fs::remove_dir_all(&shell);
     }
@@ -540,8 +566,14 @@ mod bindgroup_name_transcription_tests {
         assert_eq!(defaults.kero_default_on, vec![2100]);
 
         // 名前宣言が皆無 → 名前表は空（default,1 が名前を捏造しない・R1.5/R1.6）。
-        assert!(defaults.sakura_names.is_empty(), "名前宣言皆無なら sakura_names は空");
-        assert!(defaults.kero_names.is_empty(), "名前宣言皆無なら kero_names は空");
+        assert!(
+            defaults.sakura_names.is_empty(),
+            "名前宣言皆無なら sakura_names は空"
+        );
+        assert!(
+            defaults.kero_names.is_empty(),
+            "名前宣言皆無なら kero_names は空"
+        );
 
         // 名前解決は全スコープで None（着せ替え ID を捏造しない）。
         assert_eq!(defaults.resolve_name(BindScope::Sakura, "腕", "伸び"), None);
@@ -571,10 +603,22 @@ mod bindgroup_name_transcription_tests {
             defaults.sakura_names.len()
         );
         // 代表的な宣言が (カテゴリ, パーツ) → ID へ引ける。
-        assert_eq!(defaults.resolve_name(BindScope::Sakura, "腕", "伸び"), Some(1100));
-        assert_eq!(defaults.resolve_name(BindScope::Sakura, "口", "にこっ"), Some(1207));
-        assert_eq!(defaults.resolve_name(BindScope::Sakura, "目", "通常"), Some(1302));
-        assert_eq!(defaults.resolve_name(BindScope::Sakura, "髪飾り", "ボンボン"), Some(1801));
+        assert_eq!(
+            defaults.resolve_name(BindScope::Sakura, "腕", "伸び"),
+            Some(1100)
+        );
+        assert_eq!(
+            defaults.resolve_name(BindScope::Sakura, "口", "にこっ"),
+            Some(1207)
+        );
+        assert_eq!(
+            defaults.resolve_name(BindScope::Sakura, "目", "通常"),
+            Some(1302)
+        );
+        assert_eq!(
+            defaults.resolve_name(BindScope::Sakura, "髪飾り", "ボンボン"),
+            Some(1801)
+        );
         // 宣言済みの全組が漏れなく引ける（サムネ無し 2 フィールド形でも解決）。
         for n in &defaults.sakura_names {
             assert_eq!(
@@ -823,8 +867,14 @@ mod bindoption_options_tests {
         assert!(defaults.kero_multiple.is_empty());
         // 併存する `.default`／`.name` 経路は通常どおり成立する（読み取り失敗にしない）。
         assert_eq!(defaults.sakura_default_on, vec![1100]);
-        assert_eq!(defaults.resolve_name(BindScope::Sakura, "腕", "伸び"), Some(1100));
-        assert_eq!(defaults.resolve_name(BindScope::Kero, "腕", "伸び"), Some(2100));
+        assert_eq!(
+            defaults.resolve_name(BindScope::Sakura, "腕", "伸び"),
+            Some(1100)
+        );
+        assert_eq!(
+            defaults.resolve_name(BindScope::Kero, "腕", "伸び"),
+            Some(2100)
+        );
 
         let _ = fs::remove_dir_all(&shell);
     }
@@ -846,8 +896,14 @@ mod bindoption_options_tests {
 
         assert_eq!(first, second, "同一入力に同一結果（決定論）");
         // 収録順もキー昇順で固定（走査順維持）。
-        assert_eq!(first.sakura_mustselect, vec!["腕".to_string(), "口".to_string()]);
-        assert_eq!(first.sakura_multiple, vec!["口".to_string(), "紅".to_string()]);
+        assert_eq!(
+            first.sakura_mustselect,
+            vec!["腕".to_string(), "口".to_string()]
+        );
+        assert_eq!(
+            first.sakura_multiple,
+            vec!["口".to_string(), "紅".to_string()]
+        );
         assert_eq!(first.kero_multiple, vec!["尻尾飾り".to_string()]);
         assert!(first.kero_mustselect.is_empty());
 

@@ -3,8 +3,7 @@
 //! Task 6.2: tick/ready 2 フェーズ API、バリア管理、ルーティング収集の検証。
 
 use dola::cue::{
-    ActorKey, BarrierKind, CueCommand, CueTarget, Entry, EntityKey, RoutingCommand,
-    TimedSchedule,
+    ActorKey, BarrierKind, CueCommand, CueTarget, EntityKey, Entry, RoutingCommand, TimedSchedule,
 };
 
 // ============================================================================
@@ -203,7 +202,10 @@ fn clear_resets_horizon_so_cleared_schedule_is_completed() {
 fn barrier_stops_progress() {
     let mut sched = TimedSchedule::<String>::new(0.0);
     sched.insert(Entry::Payload(0.5, "before".into()));
-    sched.insert(Entry::Barrier(1.0, BarrierKind::WaitForInput { timeout: None }));
+    sched.insert(Entry::Barrier(
+        1.0,
+        BarrierKind::WaitForInput { timeout: None },
+    ));
     sched.insert(Entry::Payload(1.5, "after".into()));
 
     // 0.5 到達 → Payload 収集
@@ -225,7 +227,10 @@ fn barrier_stops_progress() {
 #[test]
 fn barrier_resolved_resumes_progress() {
     let mut sched = TimedSchedule::<String>::new(0.0);
-    sched.insert(Entry::Barrier(0.5, BarrierKind::WaitForInput { timeout: None }));
+    sched.insert(Entry::Barrier(
+        0.5,
+        BarrierKind::WaitForInput { timeout: None },
+    ));
     sched.insert(Entry::Payload(1.0, "after_barrier".into()));
 
     sched.tick(0.5);
@@ -245,9 +250,7 @@ fn barrier_timeout_auto_releases() {
     let mut sched = TimedSchedule::<String>::new(0.0);
     sched.insert(Entry::Barrier(
         1.0,
-        BarrierKind::WaitForInput {
-            timeout: Some(2.0),
-        },
+        BarrierKind::WaitForInput { timeout: Some(2.0) },
     ));
     sched.insert(Entry::Payload(4.0, "after_timeout".into()));
 
@@ -295,7 +298,10 @@ fn timeout_barrier_skipped_when_already_past() {
 #[test]
 fn barrier_not_completed_while_active() {
     let mut sched = TimedSchedule::<String>::new(0.0);
-    sched.insert(Entry::Barrier(0.0, BarrierKind::WaitForInput { timeout: None }));
+    sched.insert(Entry::Barrier(
+        0.0,
+        BarrierKind::WaitForInput { timeout: None },
+    ));
 
     sched.tick(0.0);
     assert!(sched.current_barrier().is_some());
@@ -350,9 +356,7 @@ fn input_barrier_with_timeout_skipped_when_jumped_past() {
     let mut sched = TimedSchedule::<String>::new(0.0);
     sched.insert(Entry::Barrier(
         1.0,
-        BarrierKind::WaitForInput {
-            timeout: Some(0.5),
-        },
+        BarrierKind::WaitForInput { timeout: Some(0.5) },
     ));
     sched.insert(Entry::Payload(2.0, "after".into()));
 
@@ -489,7 +493,10 @@ fn tick_with_nan_time_stops_at_barrier_then_normal_tick_recovers() {
     // 通常進行へ復帰する。
     let mut sched = TimedSchedule::<String>::new(0.0);
     sched.insert(Entry::Payload(1.0, "before".into()));
-    sched.insert(Entry::Barrier(2.0, BarrierKind::WaitForInput { timeout: None }));
+    sched.insert(Entry::Barrier(
+        2.0,
+        BarrierKind::WaitForInput { timeout: None },
+    ));
     sched.insert(Entry::Payload(3.0, "after".into()));
 
     sched.tick(f64::NAN);
@@ -620,7 +627,12 @@ fn multiple_routings_fifo_order() {
 fn timed_schedule_with_cue_command() {
     let mut sched = TimedSchedule::<CueCommand>::new(0.0);
     sched.insert(Entry::Payload(0.0, CueCommand::Text("hello".into())));
-    sched.insert(Entry::Payload(0.5, CueCommand::Emote { key: "smile".into() }));
+    sched.insert(Entry::Payload(
+        0.5,
+        CueCommand::Emote {
+            key: "smile".into(),
+        },
+    ));
     sched.insert(Entry::Payload(1.0, CueCommand::Clear));
 
     sched.tick(0.0);

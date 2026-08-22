@@ -1,5 +1,7 @@
+use super::test_support::{
+    headless_emo2_wiring, runtime_with_active_choice, spawn_balloon_leave_child,
+};
 use super::*;
-use super::test_support::{headless_emo2_wiring, runtime_with_active_choice, spawn_balloon_leave_child};
 use bevy_ecs::world::World;
 use std::sync::mpsc;
 
@@ -16,7 +18,10 @@ fn sample() -> ChoiceSelection {
 fn identical_field_contents_compare_equal() {
     let a = sample();
     let b = sample();
-    assert_eq!(a, b, "同一フィールド内容の ChoiceSelection は等価であるべき");
+    assert_eq!(
+        a, b,
+        "同一フィールド内容の ChoiceSelection は等価であるべき"
+    );
 }
 
 #[test]
@@ -29,17 +34,26 @@ fn differing_field_contents_compare_unequal() {
 
     let mut different_refs = sample();
     different_refs.references = vec!["ref0".to_string()];
-    assert_ne!(base, different_refs, "references が異なれば非等価であるべき");
+    assert_ne!(
+        base, different_refs,
+        "references が異なれば非等価であるべき"
+    );
 }
 
 #[test]
 fn clone_equals_original_and_debug_is_usable() {
     let original = sample();
     let cloned = original.clone();
-    assert_eq!(original, cloned, "clone は元と等価であるべき（Clone 導出の証跡）");
+    assert_eq!(
+        original, cloned,
+        "clone は元と等価であるべき（Clone 導出の証跡）"
+    );
 
     let rendered = format!("{original:?}");
-    assert!(!rendered.is_empty(), "Debug 出力は非空であるべき（Debug 導出の証跡）");
+    assert!(
+        !rendered.is_empty(),
+        "Debug 出力は非空であるべき（Debug 導出の証跡）"
+    );
 }
 
 /// NonSend 挿入＋シーム観測檻（2.2・design「NonSend 資源」）: `BalloonWiring` を `World` へ
@@ -69,14 +83,20 @@ fn wiring_inserts_non_send_and_selection_observed_via_inbox() {
         .get_non_send::<BalloonWiring>()
         .expect("直上で存在確認済み")
         .send_selection(sel.clone());
-    assert!(sent, "Receiver 生存中の発行は成功する（Err にならない・5.3）");
+    assert!(
+        sent,
+        "Receiver 生存中の発行は成功する（Err にならない・5.3）"
+    );
 
     // seam の Receiver 経由で送信値を観測する。
     let inbox = world
         .get_non_send::<ChoiceSelectionInbox>()
         .expect("ChoiceSelectionInbox は NonSend 挿入されている");
     let received = inbox.0.try_recv().expect("発行した ChoiceSelection が届く");
-    assert_eq!(received, sel, "受信値は送信値と等価（task 2.1 の PartialEq 再利用）");
+    assert_eq!(
+        received, sel,
+        "受信値は送信値と等価（task 2.1 の PartialEq 再利用）"
+    );
     assert!(
         inbox.0.try_recv().is_err(),
         "発行は一度きり（2 度目の try_recv は Empty・2.4）"
@@ -189,7 +209,11 @@ fn attach_installs_handlers_on_all_balloon_windows_and_leaves_char_unchanged() {
 
     let balloons = balloon_window_entities(&mut world);
     let chars = char_window_entities(&mut world);
-    assert_eq!(balloons.len(), 2, "2 スコープぶんのバルーン窓が spawn される");
+    assert_eq!(
+        balloons.len(),
+        2,
+        "2 スコープぶんのバルーン窓が spawn される"
+    );
     assert_eq!(chars.len(), 2, "2 スコープぶんのキャラ窓が spawn される");
 
     // 装着前: バルーン窓はハンドラ未装着（spawn.rs はバルーンに付けない・DD-IE-12）。

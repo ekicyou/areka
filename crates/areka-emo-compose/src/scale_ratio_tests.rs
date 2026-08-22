@@ -1,5 +1,5 @@
-use super::*;
 use super::test_support::*;
+use super::*;
 use std::collections::HashSet;
 
 /// 要件 1.1: 構築は gcd で既約正準化する（120/96 → 5/4）。
@@ -389,8 +389,7 @@ fn scale_len_half_tie_pairs_pin_round_half_away_from_zero() {
 /// 機構は本テストでは発火し得ない。
 #[test]
 fn mul_is_commutative_and_associative() {
-    const TABLE: [(u32, u32); 7] =
-        [(5, 4), (3, 2), (7, 4), (2, 1), (1, 3), (96, 120), (13, 17)];
+    const TABLE: [(u32, u32); 7] = [(5, 4), (3, 2), (7, 4), (2, 1), (1, 3), (96, 120), (13, 17)];
     for &(an, ad) in TABLE.iter() {
         let a = ScaleRatio::new(an, ad).unwrap();
         for &(bn, bd) in TABLE.iter() {
@@ -648,7 +647,11 @@ fn unscale_coord_k2_table_pins_pixel_center_inverse() {
 
     assert_eq!(k2.unscale_coord(100), 50, "DD-1 代表値");
     assert_eq!(k2.unscale_coord(101), 50, "DD-1 代表値（奇数座標）");
-    assert_ne!(k2.unscale_coord(101), 51, "候補 C（長さの丸めの鏡写し）ではない");
+    assert_ne!(
+        k2.unscale_coord(101),
+        51,
+        "候補 C（長さの丸めの鏡写し）ではない"
+    );
     assert_eq!(k2.unscale_coord(102), 51);
     assert_eq!(k2.unscale_coord(103), 51);
     assert_eq!(k2.unscale_coord(0), 0);

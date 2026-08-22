@@ -145,7 +145,10 @@ mod tests {
         });
         assert!(out.contains("level=WARN"), "WARN level を捕捉: {out}");
         assert!(out.contains("level=ERROR"), "ERROR level を捕捉: {out}");
-        assert!(out.contains("target=areka_emo_compose"), "target を捕捉: {out}");
+        assert!(
+            out.contains("target=areka_emo_compose"),
+            "target を捕捉: {out}"
+        );
         assert!(out.contains("surface_id=42"), "数値フィールドを捕捉: {out}");
         assert!(out.contains("key=\"k\""), "文字列フィールドを捕捉: {out}");
     }

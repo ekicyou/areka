@@ -179,7 +179,10 @@ fn make_unique_temp_dir(tag: &str) -> PathBuf {
     use std::sync::atomic::{AtomicU64, Ordering};
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-    let dir = std::env::temp_dir().join(format!("host32-cyclic-e2e-{tag}-{}-{n}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!(
+        "host32-cyclic-e2e-{tag}-{}-{n}",
+        std::process::id()
+    ));
     std::fs::create_dir_all(&dir).expect("一時 dir の作成に失敗");
     dir
 }
@@ -377,7 +380,9 @@ fn cyclic_real_pasta_optional() {
         // notify transport が成功すること（応答 status は破棄・内容に assert しない・R6.1）。
         client
             .notify("OnSecondChange", &[], None)
-            .unwrap_or_else(|e| panic!("反復 {i}: notify(OnSecondChange) の transport が Err（{e:?}）"));
+            .unwrap_or_else(|e| {
+                panic!("反復 {i}: notify(OnSecondChange) の transport が Err（{e:?}）")
+            });
 
         // helper 生存継続（sticky・非ブロッキング status()）。
         assert!(

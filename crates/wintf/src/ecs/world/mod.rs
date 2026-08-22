@@ -685,7 +685,10 @@ mod tick_order_tests {
 
         // 空 World を 1 周 tick（window/graphics は生成対象ゼロで no-op・headless 安全）。
         let ticked = ecs.try_tick_world();
-        assert!(ticked, "システム登録済みの World は try_tick_world が true を返すべき");
+        assert!(
+            ticked,
+            "システム登録済みの World は try_tick_world が true を返すべき"
+        );
 
         let order = ecs.world().resource::<TickOrderLog>().0.clone();
         assert_eq!(
@@ -733,7 +736,11 @@ mod tick_order_tests {
         let order = ecs.world().resource::<TickOrderLog>().0.clone();
         assert_eq!(order.len(), 26, "2 周で 13×2 本が実行されるべき");
         assert_eq!(&order[..13], EXPECTED_ORDER, "1 周目の順序が固定列と一致");
-        assert_eq!(&order[13..], EXPECTED_ORDER, "2 周目も同一順序で安定（順序不変）");
+        assert_eq!(
+            &order[13..],
+            EXPECTED_ORDER,
+            "2 周目も同一順序で安定（順序不変）"
+        );
     }
 }
 

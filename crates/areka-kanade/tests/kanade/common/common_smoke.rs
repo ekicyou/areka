@@ -141,9 +141,7 @@ fn mock_sakura_records_talk_command_arrival_order() {
         })
         .expect("send ResolveChoice");
     talk_tx
-        .send(TalkCommand::CancelChoice {
-            talk_id: TalkId(1),
-        })
+        .send(TalkCommand::CancelChoice { talk_id: TalkId(1) })
         .expect("send CancelChoice");
     talk_tx
         .send(TalkCommand::Start(StartTalk::new(TalkId(2), "second")))
@@ -158,7 +156,11 @@ fn mock_sakura_records_talk_command_arrival_order() {
 
     // 到着順の記録（投函順そのまま・解決系と起動系が同一の順序列に載る）。
     let commands = sakura.commands();
-    assert_eq!(commands.len(), 4, "4 件すべてが記録されるべき: {commands:?}");
+    assert_eq!(
+        commands.len(),
+        4,
+        "4 件すべてが記録されるべき: {commands:?}"
+    );
     match &commands[0] {
         TalkCommand::Start(s) => {
             assert_eq!(s.talk_id, TalkId(1));
@@ -204,8 +206,10 @@ fn mock_sakura_records_talk_command_arrival_order() {
 fn mock_shiori_injects_mouse_response() {
     const MOUSE_SCRIPT: &str = r"\0\s[0]なでなで\e";
     // OnMouseMove へ script を注入・OnMouseDoubleClick は未注入（既定 204）。
-    let fixture = Fixture::default()
-        .with_mouse_response("OnMouseMove", MouseResponse::Script(MOUSE_SCRIPT.to_string()));
+    let fixture = Fixture::default().with_mouse_response(
+        "OnMouseMove",
+        MouseResponse::Script(MOUSE_SCRIPT.to_string()),
+    );
     let shiori = spawn_mock_shiori(fixture);
 
     // (c) script 注入: OnMouseMove GET → Value（events 表から導出・ハードコードしない）。

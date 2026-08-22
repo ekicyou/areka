@@ -138,10 +138,10 @@ fn non_negative_values_preserved() {
 #[test]
 fn non_numeric_and_out_of_range_demote_to_none() {
     let descript = map(&[
-        ("validrect.top", "abc"),      // 非数値 → None
-        ("font.height", "-5"),         // u32 に負値 → parse Err → None
-        ("font.color.r", "300"),       // u8 範囲外 → parse Err → None
-        ("origin.x", "12"),            // 正常キーは継続して反映
+        ("validrect.top", "abc"), // 非数値 → None
+        ("font.height", "-5"),    // u32 に負値 → parse Err → None
+        ("font.color.r", "300"),  // u8 範囲外 → parse Err → None
+        ("origin.x", "12"),       // 正常キーは継続して反映
     ]);
 
     let got = parse(&descript, None);

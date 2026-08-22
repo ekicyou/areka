@@ -11,7 +11,7 @@
 //! ここでは検証しない（ドット付きキーは CSV 1 フィールドとして丸ごと保持されること
 //! のみ確認する）。
 
-use super::lexer::{lex, Token};
+use super::lexer::{Token, lex};
 
 /// `//` コメント行と空行はトークンを一切生じない（要件 9.1）。
 #[test]
@@ -205,7 +205,8 @@ fn negative_value_field_preserved() {
 /// **その前**の正常ブロックは失われない（要件 9.2）。
 #[test]
 fn unclosed_block_absorbed_as_raw_preserving_prior_block() {
-    let input = "surface0\n{\nelement0,overlay,a.png,0,0\n}\nsurface1\n{\nelement0,overlay,b.png,0,0\n";
+    let input =
+        "surface0\n{\nelement0,overlay,a.png,0,0\n}\nsurface1\n{\nelement0,overlay,b.png,0,0\n";
     let tokens = lex(input);
     // 先頭の正常ブロックは完全にトークン化される。
     assert_eq!(tokens[0], Token::BlockStart(vec!["surface0".to_string()]));
@@ -256,8 +257,7 @@ fn unknown_top_level_word_does_not_break_following_block() {
 /// トークン化される（要件 9.1）。
 #[test]
 fn comments_inside_block_are_ignored() {
-    let input =
-        "surface1000\n{\n// --- collision ---\ncollision0,93,62,271,130,Head\n\n}\n";
+    let input = "surface1000\n{\n// --- collision ---\ncollision0,93,62,271,130,Head\n\n}\n";
     assert_eq!(
         lex(input),
         vec![

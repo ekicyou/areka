@@ -165,11 +165,11 @@ pub(crate) fn execute(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::method::{BlendKind, BlendMode, ComposeMethod};
+    use crate::normalized::Transform;
     use areka_emo_atlas::{
         AtlasEntry, AtlasKey, AtlasPage, AtlasTable, ElementId, Placement, Point, Rect, SetId, Size,
     };
-    use crate::method::{BlendKind, BlendMode, ComposeMethod};
-    use crate::normalized::Transform;
     use std::sync::Arc;
 
     /// premultiplied BGRA 1 画素頁を組む（stride = width*4・tightly packed）。
@@ -243,15 +243,26 @@ mod tests {
         // dst 背景を先に置くため、下層＝不透明 dst / 上層＝部分透明 src の 2 命令で組む。
         // 下層 dst 用エントリ（ElementId(0)）・上層 src 用エントリ（ElementId(1)）を持つ table。
         let keys = vec![
-            AtlasKey { set: SetId(0), rel_path: "dst.png".into() },
-            AtlasKey { set: SetId(0), rel_path: "src.png".into() },
+            AtlasKey {
+                set: SetId(0),
+                rel_path: "dst.png".into(),
+            },
+            AtlasKey {
+                set: SetId(0),
+                rel_path: "src.png".into(),
+            },
         ];
         let entries = vec![
             AtlasEntry {
                 original: Size { w: 1, h: 1 },
                 placement: Some(Placement {
                     page: 0,
-                    uv_rect: Rect { x: 0, y: 0, w: 1, h: 1 },
+                    uv_rect: Rect {
+                        x: 0,
+                        y: 0,
+                        w: 1,
+                        h: 1,
+                    },
                     trim_offset: Point { x: 0, y: 0 },
                 }),
             },
@@ -259,7 +270,12 @@ mod tests {
                 original: Size { w: 1, h: 1 },
                 placement: Some(Placement {
                     page: 1,
-                    uv_rect: Rect { x: 0, y: 0, w: 1, h: 1 },
+                    uv_rect: Rect {
+                        x: 0,
+                        y: 0,
+                        w: 1,
+                        h: 1,
+                    },
                     trim_offset: Point { x: 0, y: 0 },
                 }),
             },
@@ -269,14 +285,26 @@ mod tests {
         let atlas = AtlasTable::new(keys, entries, vec![dst_page, src_page]);
 
         let ops = vec![
-            BlitOp { element: ElementId(0), transform: Transform::translate(0, 0), method: ComposeMethod::Overlay },
-            BlitOp { element: ElementId(1), transform: Transform::translate(0, 0), method: ComposeMethod::Overlay },
+            BlitOp {
+                element: ElementId(0),
+                transform: Transform::translate(0, 0),
+                method: ComposeMethod::Overlay,
+            },
+            BlitOp {
+                element: ElementId(1),
+                transform: Transform::translate(0, 0),
+                method: ComposeMethod::Overlay,
+            },
         ];
 
         let mut out = ComposedSurface::new(0, 0);
         execute(&mut out, Extent { w: 1, h: 1 }, &ops, &atlas);
 
-        assert_eq!(px(&out, 0, 0), [120, 90, 85, 255], "手計算した SourceOver 期待値とバイト一致");
+        assert_eq!(
+            px(&out, 0, 0),
+            [120, 90, 85, 255],
+            "手計算した SourceOver 期待値とバイト一致"
+        );
     }
 
     /// テスト②（要件 6.4）: 完全不透明 src（α=255）は dst を置換する（255−255=0 → out == src）。
@@ -284,17 +312,41 @@ mod tests {
     fn opaque_src_replaces_dst() {
         // 下層に別色不透明 dst、上層に不透明 src を重ねる。
         let keys = vec![
-            AtlasKey { set: SetId(0), rel_path: "dst.png".into() },
-            AtlasKey { set: SetId(0), rel_path: "src.png".into() },
+            AtlasKey {
+                set: SetId(0),
+                rel_path: "dst.png".into(),
+            },
+            AtlasKey {
+                set: SetId(0),
+                rel_path: "src.png".into(),
+            },
         ];
         let entries = vec![
             AtlasEntry {
                 original: Size { w: 1, h: 1 },
-                placement: Some(Placement { page: 0, uv_rect: Rect { x: 0, y: 0, w: 1, h: 1 }, trim_offset: Point { x: 0, y: 0 } }),
+                placement: Some(Placement {
+                    page: 0,
+                    uv_rect: Rect {
+                        x: 0,
+                        y: 0,
+                        w: 1,
+                        h: 1,
+                    },
+                    trim_offset: Point { x: 0, y: 0 },
+                }),
             },
             AtlasEntry {
                 original: Size { w: 1, h: 1 },
-                placement: Some(Placement { page: 1, uv_rect: Rect { x: 0, y: 0, w: 1, h: 1 }, trim_offset: Point { x: 0, y: 0 } }),
+                placement: Some(Placement {
+                    page: 1,
+                    uv_rect: Rect {
+                        x: 0,
+                        y: 0,
+                        w: 1,
+                        h: 1,
+                    },
+                    trim_offset: Point { x: 0, y: 0 },
+                }),
             },
         ];
         let dst_page = page_1px(11, 22, 33, 255);
@@ -302,29 +354,65 @@ mod tests {
         let atlas = AtlasTable::new(keys, entries, vec![dst_page, src_page]);
 
         let ops = vec![
-            BlitOp { element: ElementId(0), transform: Transform::translate(0, 0), method: ComposeMethod::Overlay },
-            BlitOp { element: ElementId(1), transform: Transform::translate(0, 0), method: ComposeMethod::Overlay },
+            BlitOp {
+                element: ElementId(0),
+                transform: Transform::translate(0, 0),
+                method: ComposeMethod::Overlay,
+            },
+            BlitOp {
+                element: ElementId(1),
+                transform: Transform::translate(0, 0),
+                method: ComposeMethod::Overlay,
+            },
         ];
         let mut out = ComposedSurface::new(0, 0);
         execute(&mut out, Extent { w: 1, h: 1 }, &ops, &atlas);
-        assert_eq!(px(&out, 0, 0), [200, 150, 100, 255], "不透明 src は dst を完全置換");
+        assert_eq!(
+            px(&out, 0, 0),
+            [200, 150, 100, 255],
+            "不透明 src は dst を完全置換"
+        );
     }
 
     /// テスト③（要件 6.4）: 完全透明 src（α=0・premultiplied ゆえ色も 0）は dst を残す。
     #[test]
     fn transparent_src_leaves_dst() {
         let keys = vec![
-            AtlasKey { set: SetId(0), rel_path: "dst.png".into() },
-            AtlasKey { set: SetId(0), rel_path: "src.png".into() },
+            AtlasKey {
+                set: SetId(0),
+                rel_path: "dst.png".into(),
+            },
+            AtlasKey {
+                set: SetId(0),
+                rel_path: "src.png".into(),
+            },
         ];
         let entries = vec![
             AtlasEntry {
                 original: Size { w: 1, h: 1 },
-                placement: Some(Placement { page: 0, uv_rect: Rect { x: 0, y: 0, w: 1, h: 1 }, trim_offset: Point { x: 0, y: 0 } }),
+                placement: Some(Placement {
+                    page: 0,
+                    uv_rect: Rect {
+                        x: 0,
+                        y: 0,
+                        w: 1,
+                        h: 1,
+                    },
+                    trim_offset: Point { x: 0, y: 0 },
+                }),
             },
             AtlasEntry {
                 original: Size { w: 1, h: 1 },
-                placement: Some(Placement { page: 1, uv_rect: Rect { x: 0, y: 0, w: 1, h: 1 }, trim_offset: Point { x: 0, y: 0 } }),
+                placement: Some(Placement {
+                    page: 1,
+                    uv_rect: Rect {
+                        x: 0,
+                        y: 0,
+                        w: 1,
+                        h: 1,
+                    },
+                    trim_offset: Point { x: 0, y: 0 },
+                }),
             },
         ];
         let dst_page = page_1px(70, 80, 90, 255);
@@ -332,13 +420,25 @@ mod tests {
         let atlas = AtlasTable::new(keys, entries, vec![dst_page, src_page]);
 
         let ops = vec![
-            BlitOp { element: ElementId(0), transform: Transform::translate(0, 0), method: ComposeMethod::Overlay },
-            BlitOp { element: ElementId(1), transform: Transform::translate(0, 0), method: ComposeMethod::Overlay },
+            BlitOp {
+                element: ElementId(0),
+                transform: Transform::translate(0, 0),
+                method: ComposeMethod::Overlay,
+            },
+            BlitOp {
+                element: ElementId(1),
+                transform: Transform::translate(0, 0),
+                method: ComposeMethod::Overlay,
+            },
         ];
         let mut out = ComposedSurface::new(0, 0);
         execute(&mut out, Extent { w: 1, h: 1 }, &ops, &atlas);
         // inv = 255 → out_c = 0 + div255(dst_c×255) = dst_c（div255(c×255)=c）。dst そのまま。
-        assert_eq!(px(&out, 0, 0), [70, 80, 90, 255], "全透明 src は dst を変えない");
+        assert_eq!(
+            px(&out, 0, 0),
+            [70, 80, 90, 255],
+            "全透明 src は dst を変えない"
+        );
     }
 
     /// テスト④（要件 6.2）: trim_offset が転写先へ加算され、素の配置位置には現れない。
@@ -349,7 +449,12 @@ mod tests {
         let page = page_1px(10, 20, 30, 255);
         let atlas = single_entry_table(
             page,
-            Rect { x: 0, y: 0, w: 1, h: 1 },
+            Rect {
+                x: 0,
+                y: 0,
+                w: 1,
+                h: 1,
+            },
             Point { x: 1, y: 2 }, // trim_offset。
         );
         let ops = vec![op_at(2, 1)]; // 配置 (2,1)。着弾は (3,3)。
@@ -357,7 +462,11 @@ mod tests {
         let mut out = ComposedSurface::new(0, 0);
         execute(&mut out, Extent { w: 6, h: 6 }, &ops, &atlas);
 
-        assert_eq!(px(&out, 3, 3), [10, 20, 30, 255], "配置+trim の (3,3) に着弾");
+        assert_eq!(
+            px(&out, 3, 3),
+            [10, 20, 30, 255],
+            "配置+trim の (3,3) に着弾"
+        );
         assert_eq!(px(&out, 2, 1), [0, 0, 0, 0], "素の配置 (2,1) には現れない");
     }
 
@@ -373,10 +482,20 @@ mod tests {
             7, 8, 9, 255, // (0,1)
             10, 11, 12, 255, // (1,1)
         ];
-        let page = AtlasPage { width: 2, height: 2, stride: 8, bytes: Arc::from(bytes) };
+        let page = AtlasPage {
+            width: 2,
+            height: 2,
+            stride: 8,
+            bytes: Arc::from(bytes),
+        };
         let atlas = single_entry_table(
             page,
-            Rect { x: 0, y: 0, w: 2, h: 2 },
+            Rect {
+                x: 0,
+                y: 0,
+                w: 2,
+                h: 2,
+            },
             Point { x: 0, y: 0 },
         );
         // (−1,−1) 配置 → 頁 (1,1)=[10,11,12] が out (0,0) に落ち、他 3 画素はクリップ。
@@ -386,14 +505,27 @@ mod tests {
         // extent 1×1 なので右下方向へのはみ出しも同時に突く。
         execute(&mut out, Extent { w: 1, h: 1 }, &ops, &atlas);
 
-        assert_eq!(px(&out, 0, 0), [10, 11, 12, 255], "頁の右下画素のみ範囲内・他はクリップ");
+        assert_eq!(
+            px(&out, 0, 0),
+            [10, 11, 12, 255],
+            "頁の右下画素のみ範囲内・他はクリップ"
+        );
     }
 
     /// テスト⑥（要件 10.3）: 同一 out・同一 extent で 2 回 execute → 容量不変・内容は上書き。
     #[test]
     fn buffer_is_reused_and_cleared_between_calls() {
         let page = page_1px(100, 110, 120, 255);
-        let atlas = single_entry_table(page, Rect { x: 0, y: 0, w: 1, h: 1 }, Point { x: 0, y: 0 });
+        let atlas = single_entry_table(
+            page,
+            Rect {
+                x: 0,
+                y: 0,
+                w: 1,
+                h: 1,
+            },
+            Point { x: 0, y: 0 },
+        );
         let ops = vec![op_at(0, 0)];
 
         let mut out = ComposedSurface::new(0, 0);
@@ -408,9 +540,16 @@ mod tests {
         let len2 = out.bytes().len();
         let cap2 = out.bytes().as_ptr();
         assert_eq!(len1, len2, "同一 extent でバッファ長不変（10.3）");
-        assert_eq!(cap1, cap2, "容量再利用ゆえ先頭ポインタ不変（再割り当てなし）");
+        assert_eq!(
+            cap1, cap2,
+            "容量再利用ゆえ先頭ポインタ不変（再割り当てなし）"
+        );
         // 上書きゆえ 1 回目と同一結果（累積で 2 倍にならない・SourceOver 冪等ではないが不透明置換で確認）。
-        assert_eq!(px(&out, 0, 0), [100, 110, 120, 255], "クリア後に上書き（残像なし）");
+        assert_eq!(
+            px(&out, 0, 0),
+            [100, 110, 120, 255],
+            "クリア後に上書き（残像なし）"
+        );
         assert_eq!(px(&out, 1, 1), [0, 0, 0, 0]);
     }
 
@@ -431,8 +570,22 @@ mod tests {
             41, 42, 43, 255, // (1,1)=D
             0, 0, 0, 0, // padding
         ];
-        let page = AtlasPage { width: 2, height: 2, stride: 12, bytes: Arc::from(bytes) };
-        let atlas = single_entry_table(page, Rect { x: 0, y: 0, w: 2, h: 2 }, Point { x: 0, y: 0 });
+        let page = AtlasPage {
+            width: 2,
+            height: 2,
+            stride: 12,
+            bytes: Arc::from(bytes),
+        };
+        let atlas = single_entry_table(
+            page,
+            Rect {
+                x: 0,
+                y: 0,
+                w: 2,
+                h: 2,
+            },
+            Point { x: 0, y: 0 },
+        );
         let ops = vec![op_at(0, 0)];
 
         let mut out = ComposedSurface::new(0, 0);
@@ -441,14 +594,21 @@ mod tests {
         assert_eq!(px(&out, 0, 0), [11, 12, 13, 255], "行0 px0");
         assert_eq!(px(&out, 1, 0), [21, 22, 23, 255], "行0 px1");
         // 行 1 は stride=12 で正しくオフセットされて読まれる（padding を跨がずに px を拾う）。
-        assert_eq!(px(&out, 0, 1), [31, 32, 33, 255], "行1 px0（stride padding 越え）");
+        assert_eq!(
+            px(&out, 0, 1),
+            [31, 32, 33, 255],
+            "行1 px0（stride padding 越え）"
+        );
         assert_eq!(px(&out, 1, 1), [41, 42, 43, 255], "行1 px1");
     }
 
     /// placement None エントリは防御的に skip される（要件 6.3・非パニック）。
     #[test]
     fn placement_none_op_is_skipped() {
-        let keys = vec![AtlasKey { set: SetId(0), rel_path: "empty.png".into() }];
+        let keys = vec![AtlasKey {
+            set: SetId(0),
+            rel_path: "empty.png".into(),
+        }];
         let entries = vec![AtlasEntry {
             original: Size { w: 4, h: 4 },
             placement: None, // 全透明（空エントリ）。
@@ -459,7 +619,10 @@ mod tests {
         let mut out = ComposedSurface::new(0, 0);
         execute(&mut out, Extent { w: 2, h: 2 }, &ops, &atlas);
         // 何も転写されず全透明のまま（パニックしない）。
-        assert!(out.bytes().iter().all(|&b| b == 0), "placement None は転写されない");
+        assert!(
+            out.bytes().iter().all(|&b| b == 0),
+            "placement None は転写されない"
+        );
     }
 
     /// 非実装メソッド用の BlitOp を組む（`ElementId(0)` を (x,y) へ・任意 method）。
@@ -478,7 +641,16 @@ mod tests {
     #[test]
     fn non_implemented_method_op_is_skipped() {
         let page = page_1px(100, 110, 120, 255);
-        let atlas = single_entry_table(page, Rect { x: 0, y: 0, w: 1, h: 1 }, Point { x: 0, y: 0 });
+        let atlas = single_entry_table(
+            page,
+            Rect {
+                x: 0,
+                y: 0,
+                w: 1,
+                h: 1,
+            },
+            Point { x: 0, y: 0 },
+        );
 
         // overlay 命令（実装済み・着弾 (0,0)）＋ Replace 命令（未実装・別画素 (1,0) を狙う）を混在。
         // 着弾位置を分けることで「Replace が合成に寄与しない」を画素で直接検出できる（同一画素だと
@@ -501,21 +673,42 @@ mod tests {
             "未実装 Replace は合成に寄与せず overlay のみと同一結果（skip・8.4）"
         );
         // 実装済み overlay の画素は確かに合成されている（skip が overlay まで巻き込まないことの確認）。
-        assert_eq!(px(&out_mixed, 0, 0), [100, 110, 120, 255], "overlay 命令は合成される");
+        assert_eq!(
+            px(&out_mixed, 0, 0),
+            [100, 110, 120, 255],
+            "overlay 命令は合成される"
+        );
         // 未実装 Replace の狙った (1,0) は全透明のまま（skip の直接証拠）。
-        assert_eq!(px(&out_mixed, 1, 0), [0, 0, 0, 0], "未実装 Replace は着弾しない（skip・8.4）");
+        assert_eq!(
+            px(&out_mixed, 1, 0),
+            [0, 0, 0, 0],
+            "未実装 Replace は着弾しない（skip・8.4）"
+        );
     }
 
     /// テスト（要件 8.4）: 全命令が非実装メソッドなら全 skip → クリア済み（全 0）バッファ・非パニック。
     #[test]
     fn all_non_implemented_ops_produce_cleared_buffer() {
         let page = page_1px(200, 150, 100, 255);
-        let atlas = single_entry_table(page, Rect { x: 0, y: 0, w: 1, h: 1 }, Point { x: 0, y: 0 });
+        let atlas = single_entry_table(
+            page,
+            Rect {
+                x: 0,
+                y: 0,
+                w: 1,
+                h: 1,
+            },
+            Point { x: 0, y: 0 },
+        );
 
         // 非実装メソッドのみ（Replace / Blend / Base）。どれも is_implemented()==false。
         let ops = vec![
             op_with_method(0, 0, ComposeMethod::Replace),
-            op_with_method(0, 0, ComposeMethod::Blend(BlendMode::new(BlendKind::Multiply))),
+            op_with_method(
+                0,
+                0,
+                ComposeMethod::Blend(BlendMode::new(BlendKind::Multiply)),
+            ),
             op_with_method(0, 0, ComposeMethod::Base),
         ];
         let mut out = ComposedSurface::new(0, 0);
@@ -531,23 +724,44 @@ mod tests {
     #[test]
     fn pure_overlay_ops_still_composite() {
         let page = page_1px(11, 22, 33, 255);
-        let atlas = single_entry_table(page, Rect { x: 0, y: 0, w: 1, h: 1 }, Point { x: 0, y: 0 });
+        let atlas = single_entry_table(
+            page,
+            Rect {
+                x: 0,
+                y: 0,
+                w: 1,
+                h: 1,
+            },
+            Point { x: 0, y: 0 },
+        );
         let ops = vec![op_at(0, 0)];
 
         let mut out = ComposedSurface::new(0, 0);
         execute(&mut out, Extent { w: 1, h: 1 }, &ops, &atlas);
-        assert_eq!(px(&out, 0, 0), [11, 22, 33, 255], "overlay 命令は従来どおり合成される");
+        assert_eq!(
+            px(&out, 0, 0),
+            [11, 22, 33, 255],
+            "overlay 命令は従来どおり合成される"
+        );
     }
 
     /// 頁欠落（placement.page が範囲外）でも warn＋skip・非パニック。
     #[test]
     fn missing_page_is_skipped_without_panic() {
-        let keys = vec![AtlasKey { set: SetId(0), rel_path: "e.png".into() }];
+        let keys = vec![AtlasKey {
+            set: SetId(0),
+            rel_path: "e.png".into(),
+        }];
         let entries = vec![AtlasEntry {
             original: Size { w: 1, h: 1 },
             placement: Some(Placement {
                 page: 5, // 頁が無い（pages は空）。
-                uv_rect: Rect { x: 0, y: 0, w: 1, h: 1 },
+                uv_rect: Rect {
+                    x: 0,
+                    y: 0,
+                    w: 1,
+                    h: 1,
+                },
                 trim_offset: Point { x: 0, y: 0 },
             }),
         }];
@@ -556,6 +770,9 @@ mod tests {
 
         let mut out = ComposedSurface::new(0, 0);
         execute(&mut out, Extent { w: 1, h: 1 }, &ops, &atlas);
-        assert!(out.bytes().iter().all(|&b| b == 0), "頁欠落は skip（非パニック）");
+        assert!(
+            out.bytes().iter().all(|&b| b == 0),
+            "頁欠落は skip（非パニック）"
+        );
     }
 }

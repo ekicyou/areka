@@ -1,10 +1,10 @@
 //! トリガー機能のテスト — 5.2: バリデーションユニットテスト（V9更新, V14t–V18t）
 
+use super::common::minimal_trigger_doc;
 use dola::{
     AnimationVariableDef, DolaDocumentBuilder, DolaError, StoryboardBuilder, StoryboardEntry,
     TransitionDef, TransitionRef, TransitionValue, Validate,
 };
-use super::common::minimal_trigger_doc;
 
 // ============================================================
 // 5.2: バリデーションユニットテスト
@@ -337,7 +337,11 @@ mod validation_tests {
         builder = builder.storyboard(format!("sb_{}", CHAIN_LEN - 1), terminal);
 
         let doc = builder.build();
-        assert!(doc.is_ok(), "200-link chain should validate: {:?}", doc.err());
+        assert!(
+            doc.is_ok(),
+            "200-link chain should validate: {:?}",
+            doc.err()
+        );
     }
 
     /// V15t 特性化（D3-T）: 循環エラーのパスは閉路（先頭 == 末尾）として報告される
@@ -373,8 +377,7 @@ mod validation_tests {
         // [x, y, x] 形式: DFS 開始点は HashMap 順序依存だが、閉路構造は不変
         assert_eq!(cycle.len(), 3, "cycle path should be [x, y, x]: {cycle:?}");
         assert_eq!(cycle.first(), cycle.last(), "cycle should be closed");
-        let members: std::collections::BTreeSet<&str> =
-            cycle.iter().map(|s| s.as_str()).collect();
+        let members: std::collections::BTreeSet<&str> = cycle.iter().map(|s| s.as_str()).collect();
         assert_eq!(
             members,
             ["sb_a", "sb_b"].into_iter().collect(),

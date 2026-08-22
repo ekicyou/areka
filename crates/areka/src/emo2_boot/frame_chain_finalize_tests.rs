@@ -9,10 +9,10 @@
 // 作り分ける `PhysicalSizeSource` の fake を組み合わせる。
 // =============================================================================
 
-use super::*;
 use super::test_support::{
     PerTargetSizes, SPAWN_SIZE_0, SPAWN_SIZE_1, pos_of, resnap_world, settled_sizes, size_of,
 };
+use super::*;
 
 use crate::placement::chain_finalize::{CHAIN_FINALIZE_STALL_FRAMES, ChainFinalized};
 
@@ -68,11 +68,7 @@ fn finalize_closes_the_gap_by_moving_the_follower_only() {
         "Y は動かさない（下端吸着は再アンカーが保つ・7.2）"
     );
     // 隣接不変量: scope1 の右端＝scope0 の左端。
-    assert_eq!(
-        1483 - (1205 + 278),
-        0,
-        "確定後は隙間 0（scg 7.1）"
-    );
+    assert_eq!(1483 - (1205 + 278), 0, "確定後は隙間 0（scg 7.1）");
     assert!(
         world.get_resource::<ChainFinalized>().is_some(),
         "確定標識が立つ（7.4）"
@@ -116,7 +112,11 @@ fn finalize_runs_only_once_even_if_sizes_change_again() {
     // 確定後に scope0 の窓を別寸へ変えても連鎖は解き直されない（7.4）。
     resnap_from_sizes(
         &mut world,
-        [(0usize, crate::placement::resolver::SizePx { w: 500, h: 687 })].into_iter(),
+        [(
+            0usize,
+            crate::placement::resolver::SizePx { w: 500, h: 687 },
+        )]
+        .into_iter(),
     );
     let moved_origin_x = pos_of(&world, gw.char_window(0).unwrap()).map(|p| p.x);
     finalize_chain_once_with(

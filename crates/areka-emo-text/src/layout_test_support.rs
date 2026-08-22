@@ -1,10 +1,10 @@
-use areka_parsers::balloon::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
-};
 use super::{FixedMetrics, LayoutEngine, PositionedLine, VisibleWindow, WrapPlan};
 use crate::region::TextRegion;
 use crate::state::TextItem;
 use crate::writing::WritingMode;
+use areka_parsers::balloon::{
+    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
+};
 
 /// テスト画像原寸（image px・region.rs の檻と同一値）。
 pub(super) const IMAGE: (u32, u32) = (400, 224);

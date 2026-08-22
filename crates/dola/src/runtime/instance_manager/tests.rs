@@ -174,7 +174,10 @@ fn operations_on_nonexistent_group_id_return_invalid_group_id() {
         mgr.transition(999, InstanceState::Playing).err(),
         Some(RuntimeError::InvalidGroupId(999))
     );
-    assert_eq!(mgr.pause(999).err(), Some(RuntimeError::InvalidGroupId(999)));
+    assert_eq!(
+        mgr.pause(999).err(),
+        Some(RuntimeError::InvalidGroupId(999))
+    );
     assert_eq!(
         mgr.set_pause_start(999, 1.0).err(),
         Some(RuntimeError::InvalidGroupId(999))
