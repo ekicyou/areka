@@ -178,7 +178,7 @@
   - _Boundary: followup-checks_
 
 - [ ] 7. 入口とループ駆動層（目標定義・1 入口・エージェント定義・1 周のスキル）
-- [ ] 7.1 目標定義ファイルと /goal 条件文テンプレート
+- [x] 7.1 目標定義ファイルと /goal 条件文テンプレート
   - 目標定義（goal／target／levels／primary_metric／secondary_metrics／stop／quiet／followup／goal_runtime／sampling の各節・設計 C1 のスキーマ・判定スクリプトの版 0.4.0・停止条件に周数上限 30 を含む）と、/goal へ貼る条件文テンプレート（4,000 字以内・達成と不可能は FINAL 行の字面で判定・見本は山括弧・開発者へ質問しない等の制約）
   - 条件文の語は 5.5 の定数から goal-text で生成（字面の二重管理をしない）
   - 観測可能な完了状態: goal-check が exit 0（6.1 の版 0.4.0 と一致）、goal-text がトークン入りの条件文を出力し、その文字数が 4,000 未満
@@ -285,3 +285,4 @@
 - (6.4) 追随チェックの設計からの差分 2 点（8.1/8.2 で登記）: ① `[transition] kind=monitor` は値が**変化したときだけ**出る（`monitor_systems.rs:340-356`）ので、dpi 検査のモニタ表は `EnumDisplayMonitors`＋`GetDpiForMonitor` で OS から採る（`probe: check=dpi step=monitors`）。② `win_kind` の実値は `char`／`balloon`（`placement/diag.rs:337-344`・`transition_diag.rs:305` の doc 例 `"shell"` は陳腐化）。本セッションは `SetCursorPos`/`SendInput` が ACCESS_DENIED（lasterr=5）で clickthrough／drag／balloon_follow は INCONCLUSIVE 止まり＝**対話デスクトップのセッションで PASS を確認すること**（9.1／周 1）。dpi は実機 2 面（192/144）で PASS・バルーン相対 (-268,-258) 不変。申し送り候補: クリック透過トグル行（`controller.rs:212`）は `window=<Entity>` で hwnd を持たず、判定は観測窓内の両方向本数のみ→hwnd を足すと厳密化できる（wintf・境界外）。`alignment,free` のゴーストでは areka がキャラ窓の `kind=write` を書かないため drag 判定が健全なコードでも FAIL し得る（emo2 は bottom 固定で問題なし）。
 - (6.1) catch-up 3 系統は**文言では分けられない**（dispatcher と kanade は同一文言）。識別子は tracing の通常フィールド `target = "…"`（値は引用符つき＝`unquote_field` で外す）。`--emit-metrics` の名: `steady_idle_cpu_mean_pct`／`frame_interval_p95_ms`／`catchup_count`（定常）／`catchup_count_total`／`catchup_dispatcher|kanade|loop_ticker|other`／`alloc_count`／`talk_peak_cpu_pct`／`cpu_p50|p95|max_pct`／`tick_window_count`／`tick_skip_ratio`／`catchup_tick_load_ratio`／`catchup_tick_load_verdict`（成立／不成立／判定不能）。発話区間は kanade のログ標識（`J_TALK_START_EVENTS`/`J_TALK_END_EVENTS`）で定義。`CATCHUP_TICK_LOAD_RATIO_MIN=1.5`／`CATCHUP_SHOW_WINDOW_SEC=10.0` は暫定（合否不使用）。README §16 の SSP 参考値登記は 8.1。
 - (8.2) COMPAT §8 末尾に `### areka 裁量の性能目標` を追記・3 brief（cage／pwc／e2e）へ申し送り節。pwc brief の既存行 121-122 は dlp を「W8」と書いたまま（正は W6.9）＝9.4 で本節を更新する際に併せて直す。設計 C1 の TOML 例には `[sampling]` 節が無い（必須）＝9.4 で design.md C1 を追補。`tick_one_frame_with` は私有関数（cage が別ファイルから使うなら可視性調整）。
+- (7.1) `tools/perf/goals/draw-load-parity.goal.md` の本文は `GOAL_TEXT_TEMPLATE` の写し（`goal-text` 出力の token を `<token>` に置換）。テンプレートを編集すると黙ってずれる→**7.2 の `selftest` に「goal-text 出力（token 置換）＝ .goal.md の `---` 以降の本文」の一致検査を足す**こと。ヘッダの「1,012 字」も同じ理由で数値依存（検査で覆う）。

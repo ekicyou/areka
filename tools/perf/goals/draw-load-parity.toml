@@ -1,0 +1,117 @@
+# =============================================================================
+# 目標定義ファイル — draw-load-parity（設計 C1・要件 1.1）
+#
+# この 1 ファイルが「合否・水準・停止・静寂・check-in」の唯一の所在である。
+# 道具とスキルはここだけを読み、人の判断（目視・裁定・その場の相談）を合否に使わない。
+#
+# 誰がどの節を読むか:
+#   perf-ledger.py   … [goal] [stop] [target] [goal_runtime]（台帳の在り処・停止条件・
+#                       判定スクリプトの版と閾値の突合・`/goal` 条件文の生成）
+#   judge-perf.py    … 直接は読まない。[goal].judge_version と [target] の閾値が
+#                       judge-perf.py の SCRIPT_VERSION / IDLE_CPU_MAX_RELEASE_PCT と
+#                       一致することを goal-check が確かめる（違えば exit 3）
+#   check-quiet.ps1  … [quiet]（静寂確認の閾値・採取秒数・重いプロセス名）
+#   invoke-perf-run.ps1 … [quiet] の retry_max / retry_wait_sec（確かめ直しの回数と間隔）
+#   invoke-cpu-sample.ps1 … [sampling].backend（記号解決の方式）
+#   perf-compare.py  … [primary_metric] [secondary_metrics]（採否の物差し）
+#   perf-loop.ps1／perf-loop-iteration スキル … [levels] [followup] [goal_runtime]
+#
+# 書き方の制約（道具側の読み口に合わせる）:
+#   * 節の見出し行は素のまま（`[quiet]` の後ろに注釈を書かない）。PowerShell 側の
+#     最小読みは見出し行を `^\[(.+)\]$` で見るので、行内注釈があると節を見失う。
+#   * 配列は 1 行に収める。check-quiet.ps1 の [quiet] 読みは複数行の配列を解さず、
+#     黙って既定値へ落ちる（tasks.md Implementation Notes (5.1)）。
+#   * 注釈は原則その値の上の行へ独立して置く。
+# =============================================================================
+
+# 目標そのものの所在（台帳・結果・判定スクリプト）。パスはリポジトリ根からの相対。
+[goal]
+# 目標の名前。台帳の状態ブロック `goal:` と一致していること（違えば goal-check が exit 3）。
+name = "draw-load-parity"
+# 台帳と結果の置き場（spec ディレクトリ）。
+spec_dir = ".kiro/specs/areka-P0-draw-load-parity"
+# 判断の記憶はこの 1 ファイルだけに持つ（spec_dir 相対・要件 1.3／1.10）。
+ledger = "loop-ledger.md"
+# 判定スクリプトの出力・順位表・比較の保存先（spec_dir 相対・要件 5.6）。
+results_dir = "results"
+# 合否を決める唯一の判定スクリプト（要件 1.1・5.3）。
+judge_script = "tools/perf/judge-perf.py"
+# 版が違えば判定式か較正値が違う＝合否の意味が変わるので MEASURE_FAILED として止める。
+judge_version = "0.4.0"
+
+# 合否の定義。判定式そのものは judge-perf.py が持ち、ここは「どの式を使うか」の宣言。
+[target]
+# release アイドル CPU（1 コア換算・定常平均）の上限。狭義の未満比較（要件 5.1）。
+# judge-perf.py の IDLE_CPU_MAX_RELEASE_PCT と一致していること。
+idle_cpu_release_max_pct = 3.0
+# 最終判定で全て PASS を要求する判定式（要件 5.3）。
+formulas = ["1_frame_interval_p95", "2_catchup_zero", "3_alloc_zero", "4a_idle_cpu_release", "4b_no_monotonic_rise"]
+# ⑴〜⑶ は release／dev の両方、⑷a・⑷b は release に適用する（要件 5.3・5.6）。
+builds_final = ["release", "dev"]
+
+# 測定の水準（要件 2.7）。2 分以下の窓は採らない。
+[levels]
+# 順位付け（解析）と 1 周の採否に使う短時間水準＝7 分。
+short_profile = "short"
+# ベースライン（1 周目）と最終判定に使う長時間水準＝25 分。
+long_profile = "long"
+# 採否は同一セッション内の交互取得で比べる（A=変更前・B=変更後）。
+ab_sequence = ["A", "B", "A", "B"]
+# 採否の走行ビルド（⑷a が release の判定式であるため）。
+iteration_build = "release"
+# release に記号（関数名）を付けるビルド時指定。Cargo.toml には触れない（要件 2.4）。
+release_debug_env = "line-tables-only"
+
+# 主指標＝採否と目標達成の物差し（perf-compare.py が読む）。
+[primary_metric]
+# judge-perf.py の集計モードが出す定常状態の平均（1 コア換算 %）。
+name = "steady_idle_cpu_mean_pct"
+# 同一形を 2 回測った差（|A1-A2|）がこれ未満でも、床値としてこの値を物差しに使う（要件 1.7）。
+noise_floor_pct = 0.30
+
+# 副指標＝悪化したら採用しない（WORSE）。要件 3 の「悪化を持ち込まない」。
+[secondary_metrics]
+must_not_regress = ["frame_interval_p95_ms", "catchup_count", "alloc_count"]
+
+# 停止条件（要件 1.4）。ここに無い理由でループを止めない。
+[stop]
+# 連続でこの周数だけ採用に至る改善が無ければ頭打ちとして止める（⒝）。
+max_no_gain_streak = 3
+# 周数の上限（⒞）。到達したら STOPPED reason=max_iterations で止める。
+max_iterations = 30
+# 計測失敗（exit 4・自己較正の赤・版不一致）のときに道具を直して良い回数。
+toolfix_retry = 1
+
+# 静寂確認（要件 2.8）。人に「静かですか」と尋ねる代わりに機械が測る。
+# check-quiet.ps1 と invoke-perf-run.ps1 -AutoQuiet が読む。配列は 1 行に保つこと。
+[quiet]
+# マシン全体 CPU（\Processor(_Total)\% Processor Time）の平均がこれを超えたら静かでない。
+machine_cpu_max_pct = 10.0
+# 上の平均を採る秒数（1 秒刻み）。
+sample_sec = 20
+# 走っていたら静かでないと見なすプロセス名（測る対象の areka は -TargetPid で除外される）。
+heavy_process_names = ["cargo", "rustc", "rust-analyzer", "msbuild", "link", "cl", "areka", "python"]
+# 最初の 1 回の後に確かめ直す回数（合計 retry_max + 1 回）。
+retry_max = 3
+# 確かめ直しまでの待ち秒数。
+retry_wait_sec = 60
+
+# 見た目の追随チェック（要件 4.7・設計 C13）。1 周のテスト相で全て PASS を要求する。
+[followup]
+required = ["clickthrough", "drag", "dpi", "balloon_follow"]
+# 追随チェックの実走を自動終了させる上限（ミリ秒）＝AREKA_APP_SMOKE_EXIT_MS。
+exit_ms = 120000
+
+# `/goal` を回すセッション側の設定（要件 1.11・1.12）。
+[goal_runtime]
+# CLAUDE_CODE_GOAL_CHECKIN_MINUTES の推奨値（分）。計測 1 本がこれを超えないよう分けて起動する。
+checkin_minutes = 60
+# メイン（各ターンを回す側）の推奨モデル。spec の中からは変えられないので README と
+# 条件文で示すだけ（Opus 5 でも同じ手順で回る）。重い作業は model: opus のサブエージェントへ。
+main_model_recommended = "fable"
+
+# CPU サンプリングの記号解決の方式（設計 C8）。invoke-cpu-sample.ps1 が読む。
+# xperf-dumper = xperf.exe の dumper で解決する既定の方式。
+# wpaexporter = 版管理された .wpaProfile を要する代替（プロファイルが無ければ拒否される）。
+[sampling]
+backend = "xperf-dumper"
