@@ -8,7 +8,9 @@
   "baseline_idle_cpu_pct": null,
   "started_at": "2026-08-23T00:00:00Z",
   "run": null,
-  "capabilities": null
+  "capabilities": null,
+  "previous_phase": null,
+  "toolfix_used": 0
 }
 {
   "hypothesis": "変化が無い tick で 13 本を回さない（tick gate）",
@@ -60,5 +62,7 @@
   "baseline_idle_cpu_pct": 9.31,
   "started_at": "2026-08-23T00:00:00Z",
   "run": null,
-  "capabilities": null
+  "capabilities": null,
+  "previous_phase": null,
+  "toolfix_used": 0
 }

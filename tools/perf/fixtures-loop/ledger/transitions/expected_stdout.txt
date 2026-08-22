@@ -6,6 +6,7 @@ RANK ok -> SELECT
 SELECT ok -> IMPLEMENT
 SELECT no_candidate -> FINAL
 IMPLEMENT ok -> TEST
+IMPLEMENT implement_blocked -> RECORD
 TEST tests_green_followup_pass -> REMEASURE
 TEST tests_red -> RECORD
 TEST followup_fail -> RECORD
@@ -31,6 +32,7 @@ SELECT
 IMPLEMENT
 FINAL
 TEST
+RECORD
 REMEASURE
 RECORD
 RECORD

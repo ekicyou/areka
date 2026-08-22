@@ -8,6 +8,7 @@
     status      STATUS 行を 1 本（`/goal` の判定役は会話に現れた字面しか見ない・要件 1.9）
     final       FINAL 行（走行固有の 8 桁トークン込みでのみ・要件 1.4）
     next-phase  相の遷移表の純関数（設計 C2）。`--table` で表そのものを出す
+                （`@PREVIOUS@` の行き先だけは `--previous` か台帳の `previous_phase` から採る）
     goal-check  目標定義の必須キー・判定スクリプトの版・閾値の一致（違えば exit 3）＋トークン生成
     goal-text   トークンを埋めた `/goal` 条件文（4,000 字未満・要件 1.6）
     summary     `results/summary.md`（brief 旧数値との対比表・要件 7.6）
@@ -304,8 +305,39 @@ def _adopted_commits(ledger) -> int:
     return sum(1 for entry in ledger.entries if entry.values.get("verdict") == "ADOPTED")
 
 
+def _resolve_previous_phase(args) -> str:
+    """`@PREVIOUS@`（TOOLFIX から戻る先）を解く。`--previous` が最優先・無ければ台帳。
+
+    遷移表そのものは相と出来事だけで決まる（純関数）。ここで台帳を読むのは「直前の相」＝
+    **呼び出し側の状態**の受け取り口が 1 本増えるだけで、表の中身には触れない。台帳を読む
+    経路を足した理由は要件 1.10——渡す側（スキル）は会話の記憶を持たないので、置き場が
+    台帳しかない。台帳の在り処が渡されていなければ、これまでどおり `--previous` を要求する。
+    """
+    if args.previous:
+        return CORE.validate_phase(args.previous)
+    stored = ""
+    if args.ledger or args.goal or args.goal_file:
+        ledger = CORE.load_ledger(args)
+        raw = ledger.state.get("previous_phase", CORE.EMPTY_VALUE)
+        stored = "" if raw == CORE.EMPTY_VALUE else raw
+    if not stored:
+        raise CORE.bad_input(
+            "TOOLFIX の toolfix_ok は直前の相へ戻ります（--previous <相> が要ります）",
+            [
+                "直前の相は台帳の記録から渡してください（道具は覚えていません）。",
+                "台帳（--ledger／--goal／--goal-file）の状態ブロックに `previous_phase` が"
+                "書いてあれば、--previous は省けます（`set-phase <相> --previous-phase <相>`）。",
+            ],
+        )
+    return CORE.validate_phase(stored)
+
+
 def cmd_next_phase(args) -> int:
-    """相の遷移表（純関数）。台帳も目標定義も読まない——入力は相と出来事だけ。"""
+    """相の遷移表（純関数）。入力は相と出来事だけ。
+
+    唯一の例外が `@PREVIOUS@` の行き先で、これは `--previous` か台帳の `previous_phase`
+    から受け取る（`_resolve_previous_phase`）。目標定義は台帳の在り処を解くためだけに読む。
+    """
     if args.table:
         for phase in CORE.PHASES:
             row = CORE.PHASE_TRANSITIONS.get(phase, {})
@@ -334,12 +366,7 @@ def cmd_next_phase(args) -> int:
         )
     target = row[args.event]
     if target == CORE.PREVIOUS_PHASE_MARKER:
-        if not args.previous:
-            raise CORE.bad_input(
-                f"{base} の {args.event} は直前の相へ戻ります（--previous <相> が要ります）",
-                ["直前の相は台帳の記録から渡してください（道具は覚えていません）。"],
-            )
-        target = CORE.validate_phase(args.previous)
+        target = _resolve_previous_phase(args)
     print(target)
     return CORE.EXIT_OK
 
@@ -649,7 +676,10 @@ def add_parsers(subparsers, location: argparse.ArgumentParser) -> None:
     next_phase = subparsers.add_parser("next-phase", parents=[location], help="相の遷移表（純関数）")
     next_phase.add_argument("--phase", help=f"今の相（{CORE.WAIT_PHASE_PREFIX} 冠も可）")
     next_phase.add_argument("--event", help="起きた出来事（表に無ければ exit 3）")
-    next_phase.add_argument("--previous", help=f"直前の相（{CORE.PREVIOUS_PHASE_MARKER} の行き先に要る）")
+    next_phase.add_argument(
+        "--previous",
+        help=f"直前の相（{CORE.PREVIOUS_PHASE_MARKER} の行き先。省くと台帳の previous_phase を読む）",
+    )
     next_phase.add_argument("--table", action="store_true", help="遷移表そのものを出す")
 
     goal_check = subparsers.add_parser("goal-check", parents=[location], help="目標定義の検査とトークン生成")

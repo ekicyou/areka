@@ -19,6 +19,8 @@
     - started_at: 2026-08-23T00:00:00Z
     - run: -
     - capabilities: -
+    - previous_phase: -
+    - toolfix_used: 0
 
     ## 周 1 — 2026-08-23T01:23:45Z
     - hypothesis: 変化が無い tick で 13 本を回さない（tick gate）
@@ -28,6 +30,11 @@
   拒む（黙って受け入れると、次に読む者が「書いたはずの値が無い」ことに気づけない）。
 * `run`（走行固有の 8 桁トークン）と `capabilities`（PREFLIGHT で測った道具の可否）は
   設計 C1・C2 が状態ブロックに置くと決めた鍵で、`init` は `-` で作る。
+* `previous_phase`（TOOLFIX から戻る先）と `toolfix_used`（道具を直した回数）は task 7.5 で
+  足した鍵である。**どちらもループの再開に要る記憶**——`next-phase` の `@PREVIOUS@` は
+  呼び出し側が渡す約束だったが、渡す側（スキル）が会話の記憶を持たない以上、置き場は台帳
+  しかない（要件 1.10）。`toolfix_used` は `[stop].toolfix_retry` と突き合わせる回数で、
+  `init` は `0` で作る。
 * 値に空白・コロン・読点を含んでよい（鍵と値は最初の `: ` だけで分ける）。改行は不可。
 
 サブコマンド（台帳そのもの）:
@@ -102,7 +109,9 @@ import perf_ledger_selftest  # noqa: E402
 
 #: 本スクリプトの版（台帳の書式か語彙を変えたら上げる）。
 SCRIPT_VERSION = (
-    "0.2.0 (task 5.5 / STATUS・FINAL 行・相の遷移表・goal-check／goal-text・summary を追加。"
+    "0.3.0 (task 7.5 / 状態ブロックに previous_phase・toolfix_used を追加。"
+    "next-phase の @PREVIOUS@ は --previous 省略時に台帳の previous_phase を読む / "
+    "0.2.0: task 5.5 / STATUS・FINAL 行・相の遷移表・goal-check／goal-text・summary を追加。"
     "自己較正のハーネスと判定面を兄弟モジュールへ分割 / "
     "0.1.0: task 5.4 の状態ブロック・追記・読取・自己較正)"
 )
@@ -122,9 +131,12 @@ EMPTY_VALUE = "-"
 STATE_KEYS = (
     "goal", "iteration", "phase", "pending_run", "streak_no_gain",
     "best_idle_cpu_pct", "baseline_idle_cpu_pct", "started_at", "run", "capabilities",
+    "previous_phase", "toolfix_used",
 )
-STATE_LATE_KEYS = ("run", "capabilities")
-STATE_INT_KEYS = ("iteration", "streak_no_gain")
+#: 後から足した鍵。**必須にしない**——これらの無い古い台帳も読めなければ、途中の周で
+#: 道具を更新した瞬間にループの記憶が読めなくなる（読むときは `-` を補う）。
+STATE_LATE_KEYS = ("run", "capabilities", "previous_phase", "toolfix_used")
+STATE_INT_KEYS = ("iteration", "streak_no_gain", "toolfix_used")
 STATE_FLOAT_KEYS = ("best_idle_cpu_pct", "baseline_idle_cpu_pct")
 
 #: 周の記録の鍵（この順で書く。設計 C11 の見本と同じ順・同じ語）。
@@ -151,7 +163,8 @@ INITIAL_PHASE = "PREFLIGHT"
 VERDICTS = ("ADOPTED", "NO_DIFF", "WORSE", "TESTS_RED", "FOLLOWUP_FAIL", "MEASURE_FAILED", "NA")
 
 #: 相の遷移表（設計 C2・純関数）。`next-phase` と `status` の既定の `next=` はここだけを見る。
-#: 行き先 `@PREVIOUS@` は「直前の相へ戻る」（`--previous` で渡す）。`FINAL` は終端で行き先が無い。
+#: 行き先 `@PREVIOUS@` は「直前の相へ戻る」（`--previous` で渡すか、台帳の `previous_phase` を読む）。
+#: `FINAL` は終端で行き先が無い。
 #: TOOLFIX を何回まで許すか（`[stop].toolfix_retry`）は台帳を持つ呼び手が数え、上限に達したら
 #: `toolfix_fail` を渡す——回数は相の関数の外にある（純関数を状態に依存させない）。
 PREVIOUS_PHASE_MARKER = "@PREVIOUS@"
@@ -160,7 +173,11 @@ PHASE_TRANSITIONS: dict[str, dict[str, str]] = {
     "BASELINE": {"ok": "RANK", "measure_failed": "TOOLFIX"},
     "RANK": {"ok": "SELECT"},
     "SELECT": {"ok": "IMPLEMENT", "no_candidate": "FINAL"},
-    "IMPLEMENT": {"ok": "TEST"},
+    # `implement_blocked` は task 7.5 の追加。実装係が計画を実物へ当てられずに止まった周も、
+    # 「差し戻して記録して次の周へ」の 1 本道へ戻す必要がある（行き先の無い出来事があると、
+    # スキルが表に聞かずに自分で行き先を決めることになる）。**設計 C2 の表には未記載**
+    # ——9.4（登記）で追補すること。
+    "IMPLEMENT": {"ok": "TEST", "implement_blocked": "RECORD"},
     "TEST": {
         "tests_green_followup_pass": "REMEASURE",
         "tests_red": "RECORD",
@@ -720,6 +737,8 @@ def cmd_init(args) -> int:
         "started_at": validate_timestamp(args.now) if args.now else now_iso(),
         "run": EMPTY_VALUE,
         "capabilities": EMPTY_VALUE,
+        "previous_phase": EMPTY_VALUE,
+        "toolfix_used": "0",
     }
     write_text(path, "\n".join(state_lines(state)) + "\n")
     report(f"台帳を作りました: {path}")
@@ -744,13 +763,20 @@ def cmd_set_phase(args) -> int:
         ("baseline_idle_cpu_pct", args.baseline),
         ("run", args.run),
         ("capabilities", args.capabilities),
+        ("previous_phase", args.previous_phase),
+        ("toolfix_used", args.toolfix_used),
     )
     for key, value in updates:
         if value is None:
             continue
+        if value == EMPTY_VALUE:
+            state[key] = EMPTY_VALUE
+            continue
+        # `previous_phase` は相の語彙でしか埋めない（語彙外を入れると、戻る先を
+        # 読んだ次の周が「知らない相」で止まる＝原因が 1 周ぶん遠くなる）。
         state[key] = (
-            EMPTY_VALUE
-            if value == EMPTY_VALUE
+            validate_phase(value)
+            if key == "previous_phase"
             else _to_ledger_value(key, value, STATE_INT_KEYS, STATE_FLOAT_KEYS)
         )
     write_text(ledger.path, replace_state_block(ledger, state))
@@ -912,6 +938,11 @@ def build_parser() -> Parser:
     set_phase.add_argument("--baseline", help="ベースラインのアイドル CPU（%%）")
     set_phase.add_argument("--run", help="走行固有のトークン（task 5.5 の goal-check が書く）")
     set_phase.add_argument("--capabilities", help="道具の可否（PREFLIGHT の結果）")
+    set_phase.add_argument(
+        "--previous-phase",
+        help=f"TOOLFIX から戻る先の相（{WAIT_PHASE_PREFIX} 冠も可・消すなら {EMPTY_VALUE}）",
+    )
+    set_phase.add_argument("--toolfix-used", help="道具を直した回数（[stop].toolfix_retry と突き合わせる）")
 
     append = subparsers.add_parser("append", parents=[location], help="周の記録を 1 つ追記する")
     append.add_argument("--from-json", required=True, help="追記する値の JSON ファイル")

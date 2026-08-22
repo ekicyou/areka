@@ -1,4 +1,4 @@
-# 遷移表の全 24 遷移を 1 つずつ通す（表の一括出力と個別の解決の両方を固定する）
+# 遷移表の全 25 遷移を 1 つずつ通す（表の一括出力と個別の解決の両方を固定する）
 0 :: next-phase --table
 0 :: next-phase --phase PREFLIGHT --event ok
 0 :: next-phase --phase PREFLIGHT --event toolfix_needed
@@ -8,6 +8,7 @@
 0 :: next-phase --phase SELECT --event ok
 0 :: next-phase --phase SELECT --event no_candidate
 0 :: next-phase --phase IMPLEMENT --event ok
+0 :: next-phase --phase IMPLEMENT --event implement_blocked
 0 :: next-phase --phase TEST --event tests_green_followup_pass
 0 :: next-phase --phase TEST --event tests_red
 0 :: next-phase --phase TEST --event followup_fail

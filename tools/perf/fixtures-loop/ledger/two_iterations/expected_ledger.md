@@ -9,6 +9,8 @@
 - started_at: 2026-08-23T00:00:00Z
 - run: -
 - capabilities: -
+- previous_phase: -
+- toolfix_used: 0
 
 ## 周 1 — 2026-08-23T01:00:00Z
 - hypothesis: 1 周目
