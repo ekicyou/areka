@@ -1,0 +1,18 @@
+# perf-compare.py --selftest の期待値台帳（人も機械もこの 1 ファイルを読む）
+title = 主指標がばらつきを超えて上がった（悪化）
+goal = ../goal.toml
+a1 = ../runs/idle_610_p95_150
+a2 = ../runs/idle_620_p95_150
+b1 = ../runs/idle_930_p95_150
+b2 = ../runs/idle_940_p95_150
+exit = 0
+verdict = WORSE
+
+before_idle_cpu_pct = 6.15
+after_idle_cpu_pct = 9.35
+delta_pct = 3.20
+noise_pct = 0.30
+secondary = p95_ms=150.000/150.000, catchup=0/0, allocs=0/0
+
+note = adopted の A と B を入れ替えただけのケース。同じ 4 本の走行から、どちらを
+note = 変更前と呼ぶかだけで採否が反転することを固定する（差の符号が判定を決める）。

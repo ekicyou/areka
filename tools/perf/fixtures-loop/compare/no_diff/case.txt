@@ -1,0 +1,19 @@
+# perf-compare.py --selftest の期待値台帳（人も機械もこの 1 ファイルを読む）
+title = 差がばらつきの内側（差なし・変更は戻す）
+goal = ../goal.toml
+a1 = ../runs/idle_930_p95_150
+a2 = ../runs/idle_940_p95_150
+b1 = ../runs/idle_932_p95_150
+b2 = ../runs/idle_940_p95_150
+exit = 0
+verdict = NO_DIFF
+
+before_idle_cpu_pct = 9.35
+after_idle_cpu_pct = 9.36
+delta_pct = 0.01
+noise_pct = 0.30
+secondary = p95_ms=150.000/150.000, catchup=0/0, allocs=0/0
+
+note = 差 +0.01 はばらつき 0.30 の内側なので「差なし」。B のほうがわずかに高いが、
+note = ばらつきの内側の上下に意味を読ませないための形である（要件 1.7）。
+note = 終了コードは 0——「判定できた」ことと「改善した」ことは別である。

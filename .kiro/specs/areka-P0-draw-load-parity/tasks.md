@@ -160,7 +160,7 @@
   - _Boundary: perf-rank_
   - _Depends: 2.2, 2.4_
 
-- [ ] 6.3 採否判定（perf-compare.py）
+- [x] 6.3 採否判定（perf-compare.py）
   - A1・A2・B1・B2 の各走行を 6.1 の `--emit-metrics` 経由で集計。ばらつき＝max(|A1−A2|, 床値)、差＝mean(B)−mean(A)。差≤−ばらつき かつ 副指標（⑴ p95 は +5％ 以内・⑵ ⑶ の件数は増えない）が悪化しない→ADOPTED、|差|<ばらつき→NO_DIFF、差≥ばらつき または副指標悪化→WORSE、いずれかの走行が判定不能→MEASURE_FAILED
   - compare.txt（表）と compare.json（verdict と数値）。exit 0／4
   - 自己較正（fixtures-loop/compare）: adopted／no_diff／worse／measure_failed
@@ -287,3 +287,4 @@
 - (8.2) COMPAT §8 末尾に `### areka 裁量の性能目標` を追記・3 brief（cage／pwc／e2e）へ申し送り節。pwc brief の既存行 121-122 は dlp を「W8」と書いたまま（正は W6.9）＝9.4 で本節を更新する際に併せて直す。設計 C1 の TOML 例には `[sampling]` 節が無い（必須）＝9.4 で design.md C1 を追補。`tick_one_frame_with` は私有関数（cage が別ファイルから使うなら可視性調整）。
 - (7.1) `tools/perf/goals/draw-load-parity.goal.md` の本文は `GOAL_TEXT_TEMPLATE` の写し（`goal-text` 出力の token を `<token>` に置換）。テンプレートを編集すると黙ってずれる→**7.2 の `selftest` に「goal-text 出力（token 置換）＝ .goal.md の `---` 以降の本文」の一致検査を足す**こと。ヘッダの「1,012 字」も同じ理由で数値依存（検査で覆う）。
 - (6.2) `perf-rank.py`（957 行）＋`perf_rank_dump.py`（443 行・段③と共通基盤）。dump は列名行から既知列（TimeStamp／ThreadID／Image!Function）を引き、欠けていれば exit 4 でイベントと列名を名指し。`sample_ok` の 16/8/16/22/2 を `sample_ok_counts` ケースで固定（5.3 との相互較正）。判定スクリプトの較正値（`WARMUP_EXCLUDE_SEC`・CSV ヘッダ・正規表現・`percentile`）は**写し**（出典コメントあり・機械で束縛していない）＝較正値を動かすときは両方を同時に。dump の短い行・空値・`!` 無しは黙って読み飛ばす（`samples_total` は印字する）。共有 scratchpad は揮発物（並走の別実装者が消す）。
+- (6.3) `perf-compare.py` の規則（設計が無記述の 3 点を決めて fixture で固定）: 測っていない副指標（`-`）は NA＝採用を止めないが必ず列挙／差なしの帯で副指標だけ悪化→WORSE（安全側）／judge exit 1 は判定不能にしない（集計モードは 1 を返さないので到達不能・`judge-perf.py:715`）。副指標の判定: `_ms`/`_pct` 接尾辞は率（+5%）・それ以外は増減。`compare.json` は台帳の鍵（before/after/delta/noise/secondary/verdict）と同綴りだが**`perf-ledger.py append --from-json` へそのままは渡せない**（ENTRY_KEYS 外の鍵を拒む）＝7.5 の RECORD で 6 鍵を抜き出す。`talk_peak_cpu_pct` を副指標に挙げると要件 5.4（合否に載せない）の外に出る＝本番 TOML は挙げない。

@@ -1,0 +1,23 @@
+# perf-compare.py --selftest の期待値台帳（人も機械もこの 1 ファイルを読む）
+title = 4 本のうち 1 本が判定不能（計測失敗・黙って 3 本で決めない）
+goal = ../goal.toml
+a1 = ../runs/idle_930_p95_150
+a2 = ../runs/idle_940_p95_150
+b1 = ../runs/idle_610_p95_150
+b2 = ../runs/no_show_lines
+exit = 4
+verdict = MEASURE_FAILED
+
+before_idle_cpu_pct = 9.35
+noise_pct = 0.30
+
+stderr_substr = 計測失敗
+stderr_substr = b2
+
+note = b2 は表示成立点の info! が 1 本も無い走行で、judge-perf.py が必要ログ種の欠落
+note = として終了コード 2（判定不能）を返す。3 本だけで平均を取れば「改善した」と
+note = 読める数字は作れるが、それは沈黙を合格として売ることである（要件 2.11）。
+note = 判定不能を含む側（B）の平均と差は空にし、A 側の平均とばらつきだけを残す——
+note = 測れた事実は残し、測れていない事実を数字で埋めない。
+note = judge-perf.py の終了コード 1（不合格）はここへ来ない。合否が付いたということは
+note = 数値は採れているという意味なので、比較の入力としては使える（集計モードは 1 を返さない）。
