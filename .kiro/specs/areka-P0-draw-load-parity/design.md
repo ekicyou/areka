@@ -249,7 +249,7 @@ stateDiagram-v2
     FINAL --> [*]: FINAL 行を印字
 ```
 
-- **各相の終わりに必ず STATUS 行**（`perf-ledger.py status`）を会話へ書き、ターンを終える。長い計測（BASELINE／REMEASURE／順位付け走行）は background Bash で起動し、相を `WAIT_<相名>` としてターンを終える。終了が新ターンとして届いたら `perf-loop.ps1 … --resume` で結果を回収して相を進める。
+- **各相の終わりに必ず STATUS 行**（`perf-ledger.py status`）を会話へ書く。背景待ちが要らない相（RANK→SELECT→IMPLEMENT→TEST）は 1 ターンで続けて進め、長い計測（BASELINE／REMEASURE／順位付け走行／FINAL）を background Bash で起動した時点で相を `WAIT_<相名>` としてターンを終える（議題 3 裁定）。終了が新ターンとして届いたら `perf-loop.ps1 … --resume` で結果を回収して相を進める。
 - **SELECT の規則**（要件 3.1）: 順位表の最上位から、⒜ Out of scope ⒝ 担当 spec が稼働中 ⒞ 台帳に「差なし／悪化」で既に記録、のいずれにも当たらない最初の項目。当たった項目は「選ばなかった理由」として台帳へ。
 - **RECORD の判定**（要件 1.4・1.7・3.6）: `ADOPTED` → `git add <files> && git commit`（1 周 1 コミット）・streak=0。`NO_DIFF`／`WORSE`／テスト赤／追随 FAIL → `git restore --source=HEAD -- <files>`（新規は削除）・streak+1。計測失敗 → 道具を直す相（`TOOLFIX`）へ 1 回だけ入り、直らなければ `STOPPED reason=measure_failed`。
 - **FINAL**: 短時間水準で採用が続き主指標が 3.0% を下回った周の次、または停止条件で入る。25 分 release＋dev を採り `judge-perf.py --mode verdict` を保存。全 PASS → `PERF-LOOP FINAL: GOAL_MET …`。それ以外 → `PERF-LOOP FINAL: STOPPED reason=… top_remaining=…` と requirements.md 改訂欄へ未達登記（要件 5.7）。
@@ -475,7 +475,7 @@ main_model_recommended = "fable"       # README に記す推奨（Opus 5 でも�
 ##### `/goal` 条件文テンプレート（要旨・全文は `draw-load-parity.goal.md`）
 ```
 目標: areka の release アイドル CPU（1 コア換算・定常平均）を 3.0% 未満にし、判定式⑴〜⑷b が 25 分の最終判定で全て合格すること。
-毎ターンの手順: プロジェクトスキル `perf-loop-iteration` を引数 `draw-load-parity` で 1 回だけ呼び、その最後に出る `PERF-LOOP STATUS …` 行を一字も変えずに返答の最後の行として書く。スキルが相を 1 つ進めるので、1 ターンで 2 相以上進めない。背景コマンドが走っている間は待つ（check-in が届いたら出力を読んで待つと答える）。
+毎ターンの手順: プロジェクトスキル `perf-loop-iteration` を引数 `draw-load-parity` で 1 回だけ呼び、その最後に出る `PERF-LOOP STATUS …` 行を一字も変えずに返答の最後の行として書く。スキルは**背景コマンド（計測・最終判定）を起動するところまで**相を進めてターンを終える（相の境界ごとに台帳を更新し状態行を印字する）。背景コマンドが走っている間は待つ（check-in が届いたら出力を読んで待つと答える）。
 達成の判定: 会話に `PERF-LOOP FINAL: GOAL_MET run=<token>`（<token> は起動時に埋めた 8 桁）で始まる行が現れたとき。
 不可能の判定: 会話に `PERF-LOOP FINAL: STOPPED run=<token> reason=` で始まる行が現れたとき（頭打ち・安全停止・道具の故障・周数上限 30 のいずれか）。
 注意: 上の 2 行は山括弧つきの見本であり、実出力とは一致しない（判定は実トークン込みの字面でのみ行う）。
@@ -494,7 +494,7 @@ main_model_recommended = "fable"       # README に記す推奨（Opus 5 でも�
 | Requirements | 1.2, 1.4, 1.8, 1.10, 3.1, 3.6, 5.6, 5.7, 7.6, 8.5 |
 
 **Responsibilities & Constraints**
-- 入力は goal 名のみ。手順: ⒈ `perf-ledger.py state --goal <goal>` で `iteration`／`phase`／`pending_run`／`streak` を読む ⒉ 相の遷移表（下）に従い**1 相だけ**実行 ⒊ `perf-ledger.py append`／`set-phase` で台帳を更新 ⒋ `perf-ledger.py status` の出力行を**返答の最後の行**として書く。
+- 入力は goal 名のみ。手順: ⒈ `perf-ledger.py state --goal <goal>` で `iteration`／`phase`／`pending_run`／`streak` を読む ⒉ 相の遷移表（下）に従い、**背景コマンドを起動する相（`BASELINE`・`REMEASURE`・`FINAL` の各起動、`TEST` の `cargo test` を背景にした場合）に達するまで相を続けて進める**（2026-08-22 議題 3 裁定＝1 ターン 1 相は採らない。節約の対象は LLM の推論トークンであり、毎ターンのスキル再読込の固定費を減らす） ⒊ 相の境界ごとに `perf-ledger.py append`／`set-phase` で台帳を更新し `perf-ledger.py status` を印字（途中で切れても台帳から再開できる形は不変） ⒋ 最後の `status` 行を**返答の最後の行**として書く。
 - 重い作業は Agent ツールで C3 のエージェントへ（`subagent_type` にエージェント名）。サブエージェントには結論だけを返させる。
 - 計測コマンドは background Bash で起動し `WAIT_*` 相で終える。再入時は `perf-loop.ps1 … --resume <run-dir>` で結果の存在を確かめる（未完なら STATUS に `waiting` を書いて終える）。
 - git 操作はスキル（メイン）だけが行う: 採用＝台帳の `files_changed` を選択的に `git add`＋`git commit -m "perf(<goal>): iter <n> <hypothesis>"`。不採用＝`git restore --source=HEAD -- <files>`・新規ファイルは削除。`git add -A`・`reset --hard` は使わない。
@@ -518,7 +518,8 @@ main_model_recommended = "fable"       # README に記す推奨（Opus 5 でも�
 **Implementation Notes**
 - Integration: スキルは `disable-model-invocation: true` にしない（`/goal` の条件文から名指しで呼ばれる）。
 - Validation: 遷移表は `perf-ledger.py next-phase` の純関数として実装し、fixture で全遷移を固定する（要件 6.7）。
-- Risks: メインが 1 ターンで相を 2 つ進めてしまう → 条件文とスキル冒頭の両方に「1 ターン 1 相」を明記する。機械的な強制はしない（ターン境界は道具から見えない）。STATUS 行の `phase` が毎ターン 1 つずつ進むことを判定役が会話で読める形に留める。
+- Risks: 1 ターンに複数の相を進めるので、相の途中でターンが切れる（文脈上限・エラー）と台帳の `phase` が最後に完了した相を指す → スキルは毎回「台帳の `phase` から再開」するだけでよい（未完の相はやり直し・冪等）。背景コマンドを起動したらその場でターンを終えることを条件文とスキル冒頭の両方に明記する。
+- 節約の方針（2026-08-22 議題 3）: 節約の対象は **LLM の推論トークン**。測定マシンが長く忙しいことは制約にしない（長い計測・多めの走行・重い自己較正は可）。よって判断が要る場面の回数（ターン数・サブエージェント往復）を減らし、計測の長さを削って節約しようとはしない。
 
 #### C3 役割別エージェント定義（`.claude/agents/perf-*.md`）
 
