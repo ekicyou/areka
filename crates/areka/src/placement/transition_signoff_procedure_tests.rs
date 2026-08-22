@@ -38,7 +38,7 @@ use crate::placement::transition_diag::{
 
 /// 手順書のリポジトリ相対パス（`crates/areka` から見た相対）。
 const PROCEDURE_RELATIVE_PATH: &str =
-    "../../.kiro/specs/areka-P0-dpi-transition-atomicity/signoff-procedure.md";
+    "../../.kiro/specs/completed/areka-P0-dpi-transition-atomicity/signoff-procedure.md";
 
 /// 手順書の本文を読む。読めなければ**失敗**（無い文書に対して緑を出さない）。
 fn procedure_text() -> String {
