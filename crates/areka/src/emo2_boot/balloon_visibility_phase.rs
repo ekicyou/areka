@@ -24,6 +24,7 @@ use std::cell::{Ref, RefCell};
 use std::collections::BTreeMap;
 use std::rc::Rc;
 use std::sync::mpsc::{Receiver, TryRecvError};
+use std::time::{Duration, Instant};
 
 use areka_emo_present::{EmoPresenter, PresentCommand};
 use areka_emo_text::actor::TextLayerRuntime;
@@ -31,6 +32,7 @@ use areka_sakura::ActorKey;
 use bevy_ecs::prelude::{Entity, With};
 use bevy_ecs::world::World;
 use tracing::{error, info, warn};
+use wintf::ecs::world::tick_wake;
 use wintf::ecs::{FrameTime, WindowDragging};
 
 use crate::input_events::balloon::BalloonWiring;
@@ -102,11 +104,70 @@ pub(in crate::emo2_boot) fn run_balloon_visibility_phase(
     let mut hidden = log_external_transitions(state, &observations);
 
     let decision = decide(state, &observations, now_talk_time, timeout_secs);
+
+    // 待ち時間の予約（設計 C16）: タイムアウト計測が動いている間だけ、満了の時刻に合わせて
+    // 次の起床を預ける。預けられる期限は最も早い 1 つだけで、到来すると倒れる——だから
+    // 待っている限り**本相が走るたびに預け直す**。1 度預けて済ませると、後から預けられた
+    // 別の期限に押し出されたときに黙って落ちる。
+    match visibility_wake(now_talk_time, state.deadline) {
+        VisibilityWake::After(wait) => tick_wake::arm_deadline(Instant::now() + wait),
+        VisibilityWake::Now => tick_wake::mark(tick_wake::REARM),
+        VisibilityWake::None => {}
+    }
+
     let issued = issue_actions(presenter, world, state, &observations, &decision.actions);
     hidden.extend(issued.hidden.iter().copied());
 
     emit_visibility_logs(&decision.logs, &issued.not_shown);
     clear_hover_residency(world, &hidden);
+}
+
+// ---------------------------------------------------------------------------
+// 待ち時間の預け方（純判断）
+// ---------------------------------------------------------------------------
+
+/// 桁外れに遠い期限の頭打ち（1 時間）。
+///
+/// 待ち時間は talk 相対秒の引き算であり、値そのものに上限は無い。時間の長さへ直すときに桁が
+/// あふれると panic するため、遠すぎる期限はここで切る——早く起きて預け直すだけで、可視性の
+/// 判断は 1 つも変わらない。
+const MAX_WAIT_SECS: f64 = 3600.0;
+
+/// 待ち時間の起こし方（[`visibility_wake`] の答え）。
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(in crate::emo2_boot) enum VisibilityWake {
+    /// まだ待ち時間が残っている——この長さだけ後に起こす。
+    After(Duration),
+    /// 期限は既に来ている（抑止で保留中など）——次の画面更新で見直す。
+    Now,
+    /// 計測していない——何も預けない。
+    None,
+}
+
+/// 満了予定と現在時刻から「次にいつ起きるか」を決める純判断（時計に触れない・引き算だけ）。
+///
+/// 時刻軸はどちらも talk 相対秒である。計測が動いていない（起点未確立・満了予定なし）フレーム
+/// では何も預けない——待つ相手が居ないのに起きても、判断は同じ答えを返すだけである。
+///
+/// 引き算が数にならない期限（非有限）も預けない。そういう期限は満了の比較そのものが成立せず
+/// （表示を保持したまま動かない）、起こしても判断が変わらないからである。素通ししても心拍が
+/// 定期的に見に来る。
+pub(in crate::emo2_boot) fn visibility_wake(
+    now_talk_time: Option<f64>,
+    deadline: Option<f64>,
+) -> VisibilityWake {
+    let (Some(now), Some(deadline)) = (now_talk_time, deadline) else {
+        return VisibilityWake::None;
+    };
+    let remaining = deadline - now;
+    if !remaining.is_finite() {
+        return VisibilityWake::None;
+    }
+    if remaining > 0.0 {
+        VisibilityWake::After(Duration::from_secs_f64(remaining.min(MAX_WAIT_SECS)))
+    } else {
+        VisibilityWake::Now
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -514,3 +575,8 @@ fn clear_hover_residency(world: &mut World, scopes: &[u32]) {
 #[cfg(test)]
 #[path = "balloon_visibility_phase_tests.rs"]
 mod tests;
+
+// 待ち時間の預け方（純判断）だけを見る決定論テスト。配線の檻とは相手が違うので分けてある。
+#[cfg(test)]
+#[path = "balloon_visibility_phase_wake_tests.rs"]
+mod wake_tests;

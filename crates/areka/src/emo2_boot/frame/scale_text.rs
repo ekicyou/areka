@@ -6,6 +6,7 @@ use tracing::{debug, error, warn};
 use areka_emo_text::actor::present_frame;
 use areka_sakura::ActorKey;
 use wintf::ecs::FrameTime;
+use wintf::ecs::world::tick_wake;
 
 use crate::placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
 use crate::placement::dpi_sync::{self, HoldSite};
@@ -242,6 +243,24 @@ pub(in crate::emo2_boot) fn resolve_talk_time(
     }
 }
 
+/// 発話の文字がまだ現れ切っていないか（純判断・時計にも GPU にも触れない）。
+///
+/// 引数は actor ごとのリビール時刻列（`RevealSchedule::times()`）で、単調非減少ゆえ末尾が
+/// 「その actor の最後の文字が現れる時刻」である。1 人でもそれが現在時刻より後なら、この発話は
+/// **まだ進行中**——次の画面更新でも文字が増える。
+///
+/// 「時刻が引ける＝進行中」ではないことに注意する。`TalkClock` の起点は一度立つとプロセスの
+/// 終わりまで残るため、`talk_time` が `Some` であることは発話が続いている証拠にならない。
+/// 進行中かどうかを決めるのは**まだ現れていない文字が在るか**だけである。
+pub(in crate::emo2_boot) fn reveal_pending<'a>(
+    reveals: impl Iterator<Item = &'a [f64]>,
+    talk_time: f64,
+) -> bool {
+    reveals
+        .filter_map(|times| times.last())
+        .any(|&last| last > talk_time)
+}
+
 /// フェーズ③（text・design「フェーズ③（text）」・R2.3）: `talk_time` が定まるフレームでのみ
 /// `present_frame` を駆動する（`Err` は `error!`＋継続＝次フレーム再試行）。
 ///
@@ -268,6 +287,18 @@ pub fn run_text_phase(wiring: &mut Emo2Wiring, world: &mut World, talk_time_over
             talk_time,
             "emo2 text: present_frame が失敗（他 actor 非破壊・次フレーム再試行・R2.3）"
         );
+    }
+    // 発話が進行中（まだ現れていない文字が在る）なら次の画面更新を予約する（設計 C16 の
+    // `REARM`・要件 4.6）。タイプライタは 1 コマごとに文字が増えるので、進行中は毎画面更新
+    // 回す必要がある。現れ切ったら予約を止める——放置中まで回り続けさせないためである。
+    if reveal_pending(
+        runtime
+            .state()
+            .actors()
+            .map(|(_, state)| state.reveal().times()),
+        talk_time,
+    ) {
+        tick_wake::mark(tick_wake::REARM);
     }
     // 実機サインオフ用 hover 注入導線（HoverInjectConduit・8.2/8.4/8.6）: present_frame の**後**に
     // 駆動し、`choice_active`／`choice_hit_rows` が当該フレームの提示を反映した状態で env ゲート

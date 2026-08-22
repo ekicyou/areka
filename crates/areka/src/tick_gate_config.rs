@@ -95,3 +95,9 @@ pub fn apply_from_env(world: &mut EcsWorld) {
 #[cfg(test)]
 #[path = "tick_gate_config_tests.rs"]
 mod tests;
+
+// 旗を立てる側（areka の生産者）が現に在るかの字面検査。wintf 側の同種の検査は別クレートの
+// ファイルを読めないため、areka の分はこちらが受け持つ。
+#[cfg(test)]
+#[path = "tick_gate_config_producers_tests.rs"]
+mod producers_tests;

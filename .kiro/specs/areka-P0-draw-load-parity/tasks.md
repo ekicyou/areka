@@ -85,7 +85,7 @@
   - _Boundary: tick_wake producers (wintf), command.rs enqueue_
   - _Depends: 3.1, 3.3_
 
-- [ ] 3.5 areka 側の生産者を結線（旗を立てる 1 行ずつ）
+- [x] 3.5 areka 側の生産者を結線（旗を立てる 1 行ずつ）
   - 表示指令の送信端（PresentBridge・MoveCueSink・lifecycle）→PRESENT、talk 進行中（時刻起点が確立し未完）→REARM、バルーン表示の待ち時間→期限、hover 注入が有効→REARM
   - 字面検査の一覧へ追加（3.4 と同じテストを広げるため 3.4 の後に順次）
   - 観測可能な完了状態: 門 ON の実走で発話中の表示成立点が省略に巻き込まれず（判定式⑴ p95 が OFF と同等）、放置時の省略率が上がる
@@ -274,3 +274,4 @@
 - (3.1) `tick_wake` の期限は「最も早い 1 つ」だけを保持する（設計どおり）。期限到来で回った tick の中で待ち手が**毎回再装填**しないと後の期限が黙って落ちる——3.3／3.5 の結線はこれを前提に書くこと。`WM_PAINT`／`WM_ERASEBKGND`／`WM_TIMER` は未知→FORCE で全走になるので、周 1 の A/B で FORCE が門を無効化していないか `[tick]` 行の skipped で確かめること。`WM_MOUSELEAVE` は `windows::Win32::UI::Controls`、`WM_NCMOUSELEAVE` は `WindowsAndMessaging` にある。
 - (3.3) 共有の起床旗に触る／`decide_tick` に到達するテストは、`ecs::world::TICK_WAKE_TEST_LOCK`（唯一の錠・`world/mod.rs`）を毒化耐性つきで取ること。自前の錠を作ると直列化が成立しない（3.1 と 3.3 で錠が 2 本に分裂した実例）。`Skip` を主張するテストは注入経路 `decide_tick_with` を使う。心拍は「省略 30 回→31 回目が Run(Heartbeat)」（実効約 3.87 回/秒）。門 ON・生産者未結線の実走で UI スレッド CPU は 1 秒窓あたり約 45 万µs→約 4 万µs（債務＝3.4/3.5 の結線後に再確認）。`world/mod.rs` は 929 行で余白が小さい——以後ここへ足す場合は doc ブロックを `tick_gate.rs` 側へ寄せるか分割を検討。
 - (3.4) 本番経路（`enqueue`／`dispatch_window_message`／`apply_zorder_pair_maintenance`／pointer 投入）が旗を立てるようになったので、**共有の旗の上で「立っていないはず」を主張するテストは書けない**（錠は他の検査からしか守らない）。省略側の主張は `tick_one_frame_with`／`decide_tick_with` の注入口で行う。ZORDER は `apply_zorder_pair_maintenance` の巡の頭で「要求が残っていれば立てる」形（確立系は `areka/src/placement/spawn.rs:642` の chain で維持系の直前）。`tick_dola_animators` は本番未登録で ANIM は当面立たない。本セッションでは `SetCursorPos` が拒否される（headless 条件）ため実カーソル注入は不可＝ポインタ経路は `PostMessage(WM_MOUSEMOVE)` で検証した。ドラッグの実走確認は 6.4 へ。
+- (3.5) 「talk 進行中」の判定は時刻起点ではなく**未リビールのグリフの有無**（`reveal_pending`）——起点は一度立つと消えないので、設計 C16 の字面どおり「起点確立」で REARM すると放置時に省略しない。文字 cue ごとの起床は `BalloonLifecycleSink::send`（占有終端の伸長＝cue 到着ごと）の PRESENT が担うため、`sinks` の順序は clocked_text_sink → lifecycle_sink を保つこと（`emo2_boot/mod.rs` に登記）。旗は `tx.send` の**後**に立てる。45 秒実走: 定常 UI スレッド CPU ON 69,079 対 OFF 305,921 µs/秒（約 4.4 分の 1）・判定式⑴ p95 ON 808ms 対 OFF 810ms・放置時省略 116〜118 回/秒。候補メモ: 期限超過かつ抑止中（ドラッグ／滞在／選択肢）は毎フレーム REARM＝省略しない（安全側・解除はポインタ駆動なので `None` でも足りる可能性＝周回で検討）。
