@@ -239,7 +239,7 @@ bevy には「World 全体で何か変わったか」を O(1) で引く口が無
 | 新要件 | 現況 | 不足 |
 |---|---|---|
 | 1.1 目標定義ファイル | 判定スクリプトの較正値（`judge-perf.py` 冒頭）と README に散在 | 1 ファイルに集約した目標定義（判定式・閾値・測定水準・スクリプト版）が無い |
-| 1.2／1.6 ループの起動口 `/goal` | `.claude/skills/` に該当スキル無し（2026-08-22 確認）。`/loop` は間隔実行のみで目標判定を持たない | 目標定義を読んで「計測→解析→実装→テスト→再計測→採否→記録」を 1 周として回し、停止条件で止まるスキル＋スクリプト |
+| 1.2／1.6 ループの起動口 `/goal` | 開発者指示＝**Claude Code の組み込みスキルとして存在する**（本セッションのスキル一覧・`ListSkills`・`SearchSkills`・npm 配下の検索には現れず、受け取り方は未確認）。`/loop` は間隔実行のみで目標判定を持たない | `/goal` に渡す目標文と、1 周「計測→解析→実装→テスト→再計測→採否→記録」を 1 コマンドで回す道具・停止条件の判定。`/goal` は新設しない |
 | 1.3 台帳 | 先行 spec は `remeasure-YYYY-MM-DD.md` を手書き | 周ごとの追記形式（機械で追記できる表）が無い |
 | 2.1〜2.4 4 段の帰属 | プロセス全体のみ（`invoke-perf-run.ps1` の `% Processor Time`） | スレッド別・関数別・相別のどれも無い |
 | 2.4 CPU サンプリング | **測定マシンに Windows Performance Toolkit が実在**（`C:\Windows\System32\wpr.exe`・`C:\Program Files (x86)\Windows Kits\Windows Performance Toolkit\{wpr,xperf}.exe`・2026-08-22 `where.exe` で確認） | 採取→記号解決→上位スタック一覧をテキストで出す 1 コマンド化。release に PDB が無い（`Cargo.toml:96-102` に `debug` 指定無し・`target/release/*.pdb` 不在）＝**`CARGO_PROFILE_RELEASE_DEBUG=line-tables-only`（環境変数）でビルド**すれば `Cargo.toml` 非接触で関数名が引ける。`lto=true`・`opt-level='z'` のインライン化でスタックが浅くなる点は読み方の注意として README へ |
@@ -266,7 +266,7 @@ bevy には「World 全体で何か変わったか」を O(1) で引く口が無
 
 ### 6.4 設計フェーズへ持ち越す判断（新要件分）
 
-13. **D-13 `/goal` スキルの形**: スキル本文（手順）＋目標定義ファイル（YAML/TOML/JSON）＋ループ駆動スクリプト（PowerShell/Python）の分担。`/loop` との関係（自己ペースの再入に `/loop` を使うか、スキル内で完結させるか）。
+13. **D-13 組み込み `/goal` との接続**: `/goal` の受け取り方（目標文の形・達成判定の返し方・再入の仕方）を設計時に対話セッションで確認し、目標定義ファイル（YAML/TOML/JSON）＋ループ駆動スクリプト（PowerShell/Python）を `/goal` から呼べる形にする。`/goal` は新設しない。
 14. **D-14 プロファイル採取の道具**: `wpr`（プロファイル指定が簡単・解析は `wpa`/`xperf -i` 依存）か `xperf`（採取と `-i` 解析が同じ道具・スタックウォーク指定が明示的）か。記号解決の `_NT_SYMBOL_PATH` と PDB の置き場。
 15. **D-15 スレッド別 CPU の取り方**: ETW のコンテキストスイッチ（`CSWITCH`）から算出／areka 側で `GetThreadTimes` を終了時に記録／両方。スレッドの役割名をどう付けるか（`SetThreadDescription` を areka 側で呼ぶ案＝wintf・areka-ghost のスレッド生成点に 1 行ずつ）。
 16. **D-16 合否の採取とプロファイル採取の分離**: 同一セッション内で「素の走行（合否）」と「プロファイル走行（順位付け）」をどの順で何回回すか（交互 A/B × 2 系統で 1 周あたり 7 分×4〜6＝30〜45 分）。
