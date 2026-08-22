@@ -123,8 +123,8 @@ fn test_flex_container_and_item_integration() {
     let container_entity = world
         .spawn(BoxStyle {
             flex_direction: Some(taffy::FlexDirection::Row),
-            align_items: Some(taffy::AlignItems::Center),
-            justify_content: Some(taffy::JustifyContent::SpaceBetween),
+            align_items: Some(taffy::AlignItems::CENTER),
+            justify_content: Some(taffy::JustifyContent::SPACE_BETWEEN),
             ..Default::default()
         })
         .id();
@@ -238,8 +238,8 @@ fn test_full_layout_pipeline_with_ecs_world() {
                         height: Some(Dimension::Px(600.0)),
                     }),
                     flex_direction: Some(FlexDirection::Column),
-                    justify_content: Some(JustifyContent::Start),
-                    align_items: Some(AlignItems::Stretch),
+                    justify_content: Some(JustifyContent::START),
+                    align_items: Some(AlignItems::STRETCH),
                     ..Default::default()
                 },
                 Arrangement::default(), // Arrangementを明示的に追加
@@ -255,8 +255,8 @@ fn test_full_layout_pipeline_with_ecs_world() {
                         height: Some(Dimension::Px(300.0)),
                     }),
                     flex_direction: Some(FlexDirection::Row),
-                    justify_content: Some(JustifyContent::Center),
-                    align_items: Some(AlignItems::Center),
+                    justify_content: Some(JustifyContent::CENTER),
+                    align_items: Some(AlignItems::CENTER),
                     ..Default::default()
                 },
                 Arrangement::default(), // Arrangementを明示的に追加

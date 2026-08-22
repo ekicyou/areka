@@ -9,7 +9,7 @@
 //! 旧 commit_composition テスト群は削除した。
 
 use bevy_ecs::prelude::*;
-use bevy_ecs::schedule::ExecutorKind;
+use bevy_ecs::schedule::SingleThreadedExecutor;
 use windows::Foundation::Size;
 use windows::Graphics::DirectX::{DirectXAlphaMode, DirectXPixelFormat};
 use windows::UI::Composition::Visual;
@@ -46,7 +46,7 @@ fn setup_world() -> World {
 
 fn single_system_schedule<M>(system: impl IntoScheduleConfigs<bevy_ecs::system::ScheduleSystem, M>) -> Schedule {
     let mut schedule = Schedule::default();
-    schedule.set_executor_kind(ExecutorKind::SingleThreaded);
+    schedule.set_executor(SingleThreadedExecutor::new());
     schedule.add_systems(system);
     schedule
 }

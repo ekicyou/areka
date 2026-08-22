@@ -24,7 +24,7 @@ use bevy_ecs::system::SystemState;
 ///   を insert）。これが設計公認の単一上向きエッジ（ecs→runtime）。
 pub fn create_windows(world: &mut World) {
     // self-ref（外側 World への Weak）を取得。未注入なら no-op（headless テスト等）。
-    let Some(self_ref) = world.get_non_send_resource::<crate::ecs::world::EcsWorldSelfRef>() else {
+    let Some(self_ref) = world.get_non_send::<crate::ecs::world::EcsWorldSelfRef>() else {
         // self-ref 不在では何もしない（panic なし・二重生成なし）。
         return;
     };
@@ -41,7 +41,11 @@ pub fn create_windows(world: &mut World) {
             ),
         >,
     > = SystemState::new(world);
-    let entities_to_create: Vec<Entity> = system_state.get(world).iter().collect();
+    let entities_to_create: Vec<Entity> = system_state
+        .get(world)
+        .expect("window query validation should succeed")
+        .iter()
+        .collect();
 
     // 各 Entity をファクトリ経由で生成（ライブラリ生成・registry 格納・handle 反映）。
     for entity in entities_to_create {

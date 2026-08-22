@@ -30,7 +30,7 @@ use crate::runtime::wndproc_bridge::WndState;
 /// `WinApp` が World へ確保する本番 `WindowRegistry` の具体型。
 ///
 /// 既定の保持値 `Window<WndState>`（ライブラリ型・`!Send`＝UI スレッド束縛）で単相化した
-/// NonSend リソース型。`new()`/`get_non_send_resource` の型推論を確定させるために用いる。
+/// NonSend リソース型。`new()`/`get_non_send` の型推論を確定させるために用いる。
 type ProdWindowRegistry =
     WindowRegistry<crate::executor::util::Window<WndState>>;
 
@@ -152,13 +152,13 @@ impl WinApp {
     fn wire_shutdown_hook(world: &Rc<RefCell<EcsWorld>>, shutdown: &Rc<event_listener::Event>) {
         let mut ecs = world.borrow_mut();
         let w = ecs.world_mut();
-        if w.get_non_send_resource::<ProdWindowRegistry>().is_none() {
-            w.insert_non_send_resource(ProdWindowRegistry::new());
+        if w.get_non_send::<ProdWindowRegistry>().is_none() {
+            w.insert_non_send(ProdWindowRegistry::new());
         }
         // capture 用に Event の Rc clone を hook へ move（registry が空遷移で発火）。
         let signal = Rc::clone(shutdown);
         let mut reg = w
-            .get_non_send_resource_mut::<ProdWindowRegistry>()
+            .get_non_send_mut::<ProdWindowRegistry>()
             .expect("WindowRegistry was just ensured present");
         reg.set_shutdown_hook(move || {
             // 最後の窓が消えた瞬間に全リスナ起床で notify（shutdown future を完了させる）。
@@ -201,7 +201,7 @@ impl WinApp {
         let mut ecs = self.world.borrow_mut();
         let w = ecs.world_mut();
         // self-ref（外側 Weak）を注入（create_windows の新経路分岐スイッチ）。
-        w.insert_non_send_resource(EcsWorldSelfRef(weak));
+        w.insert_non_send(EcsWorldSelfRef(weak));
         drop(ecs);
 
         // reconcile を遅め schedule（FrameFinalize）へ登録（runtime→World・上向き依存なし）。
@@ -226,7 +226,7 @@ impl WinApp {
     ///    （＝shutdown）で drop される（`bridge`/`_tick` と同じ寿命規律）。
     /// 3. 共有レジストリを [`ClickThroughRegistryHandle`]（`pub` NonSend リソース）に包んで World へ
     ///    挿入する。areka の `run_setup`（task 4.1・`&mut World` を持つ）が
-    ///    `get_non_send_resource::<ClickThroughRegistryHandle>()` で取得し 2 窓を登録する登録面。
+    ///    `get_non_send::<ClickThroughRegistryHandle>()` で取得し 2 窓を登録する登録面。
     ///
     /// # wake event を VSync とは別に専用化する理由（起床契機・post-tick）
     /// 機構は二重起床する: (a) カーソル移動 notify（ワーカが `start` 内で `wake_event` を叩く）、
@@ -260,7 +260,7 @@ impl WinApp {
         {
             let mut ecs = self.world.borrow_mut();
             ecs.world_mut()
-                .insert_non_send_resource(ClickThroughRegistryHandle::new(Rc::clone(&registry)));
+                .insert_non_send(ClickThroughRegistryHandle::new(Rc::clone(&registry)));
         }
 
         debug!("ClickThrough wired (worker + eval loop started, registry handle inserted)");
@@ -378,7 +378,7 @@ mod tests {
             let ecs = world.borrow();
             let reg = ecs
                 .world()
-                .get_non_send_resource::<ProdWindowRegistry>()
+                .get_non_send::<ProdWindowRegistry>()
                 .expect("WinApp::new should ensure a WindowRegistry NonSend resource");
             reg.fire_shutdown_hook();
         }
@@ -407,7 +407,7 @@ mod tests {
             // (1) EcsWorldSelfRef が注入され、外側 World を upgrade できる。
             let self_ref = ecs
                 .world()
-                .get_non_send_resource::<EcsWorldSelfRef>()
+                .get_non_send::<EcsWorldSelfRef>()
                 .expect("wire_new_path should inject EcsWorldSelfRef");
             assert!(
                 self_ref.0.upgrade().is_some(),
@@ -461,7 +461,7 @@ mod tests {
             let w = ecs.world_mut();
             // self-ref は wire_new_path で注入済みだが、明示確認（factory 分岐の前提）。
             assert!(
-                w.get_non_send_resource::<EcsWorldSelfRef>().is_some(),
+                w.get_non_send::<EcsWorldSelfRef>().is_some(),
                 "wire_new_path が EcsWorldSelfRef を注入しているべき"
             );
             let entity = w
@@ -483,7 +483,7 @@ mod tests {
                 "factory 生成後に WindowHandle が付与されるべき"
             );
             let reg = w
-                .get_non_send_resource::<ProdWindowRegistry>()
+                .get_non_send::<ProdWindowRegistry>()
                 .expect("ProdWindowRegistry が存在するべき");
             assert!(!reg.is_empty(), "生成直後の registry は非空（窓が在る）");
             entity
@@ -506,7 +506,7 @@ mod tests {
 
             // 空遷移を確認（最後の窓が消えた）。
             let reg = w
-                .get_non_send_resource::<ProdWindowRegistry>()
+                .get_non_send::<ProdWindowRegistry>()
                 .expect("ProdWindowRegistry が存在するべき");
             assert!(
                 reg.is_empty(),
@@ -522,7 +522,7 @@ mod tests {
     /// task 3.2: `wire_click_through` の結線を headless で検証する。
     /// 1. クリック透過機構が起動し（ワーカ＋判定ループ）、返る `ClickThroughHandle` を得る。
     /// 2. 登録面 `ClickThroughRegistryHandle`（NonSend リソース）が World へ挿入される
-    ///    （areka task 4.1 が `get_non_send_resource` で取得し窓登録する登録面）。
+    ///    （areka task 4.1 が `get_non_send` で取得し窓登録する登録面）。
     /// 3. 登録面経由の register/remove が反映される（共有レジストリ）。
     /// 4. `ClickThroughHandle` を drop するとワーカが stop/join されハングしない（RAII）。
     ///
@@ -544,7 +544,7 @@ mod tests {
             let ecs = world.borrow();
             let reg_handle = ecs
                 .world()
-                .get_non_send_resource::<ClickThroughRegistryHandle>()
+                .get_non_send::<ClickThroughRegistryHandle>()
                 .expect("wire_click_through は ClickThroughRegistryHandle を World へ挿入すべき");
             assert!(reg_handle.is_empty(), "初期の登録面は空");
 

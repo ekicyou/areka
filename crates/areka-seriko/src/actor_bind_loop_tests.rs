@@ -1,9 +1,9 @@
 use super::test_support::*;
 use super::*;
-use areka_emo_compose::{BindSet, PatternState};
-use areka_sakura::{ActorKey, CueCommand, TalkCue};
 use crate::bind::BindOptionDecls;
 use crate::output::{DisplayCommand, MockSurfaceOutput};
+use areka_emo_compose::{BindSet, PatternState};
+use areka_sakura::{ActorKey, CueCommand, TalkCue};
 use std::collections::{BTreeMap, BTreeSet};
 
 // ─────────────────────────────────────────────────────────────────────
@@ -179,7 +179,7 @@ fn bind_mustselect_second_on_replaces_prior_part_in_category() {
     let records = out.records();
 
     // 1 度目: 目=笑（1301）を着衣 → {1100,1207,1301}。
-    handle_message(
+    let _ = handle_message(
         &resolver,
         &bind_resolver,
         &mut states,
@@ -188,7 +188,7 @@ fn bind_mustselect_second_on_replaces_prior_part_in_category() {
         SerikoMsg::Cue(bind_carrier_cue("0", &["目", "笑", "1"])),
     );
     // 2 度目: 目=閉（1304）を着衣 → 排他置換で 1301 が外れ {1100,1207,1304}。
-    handle_message(
+    let _ = handle_message(
         &resolver,
         &bind_resolver,
         &mut states,
@@ -244,10 +244,7 @@ fn bind_default_category_second_on_replaces_prior_part() {
     let mut out = MockSurfaceOutput::new();
     let mut loop_runtime = inert_runtime();
 
-    for tokens in [
-        ["まばたき", "通常", "1"],
-        ["まばたき", "ジトー", "1"],
-    ] {
+    for tokens in [["まばたき", "通常", "1"], ["まばたき", "ジトー", "1"]] {
         let _ = handle_message(
             &resolver,
             &bind_resolver,
@@ -313,7 +310,8 @@ fn bind_mustselect_off_is_ignored_with_warn() {
         flow.0
     );
     assert!(
-        flow.0.contains("seriko: mustselect カテゴリの脱衣指示を無視（正典・解除不可・bindopt 3.2）"),
+        flow.0
+            .contains("seriko: mustselect カテゴリの脱衣指示を無視（正典・解除不可・bindopt 3.2）"),
         "固定文言（grep マーカー）を含む（bindopt D1）: {}",
         flow.0
     );
@@ -610,7 +608,7 @@ fn bind_cross_category_accumulates_via_actor() {
     let mut loop_runtime = inert_runtime();
     let records = out.records();
 
-    handle_message(
+    let _ = handle_message(
         &resolver,
         &bind_resolver,
         &mut states,
@@ -618,7 +616,7 @@ fn bind_cross_category_accumulates_via_actor() {
         &mut out,
         SerikoMsg::Cue(bind_carrier_cue("0", &["腕", "伸び", "1"])),
     );
-    handle_message(
+    let _ = handle_message(
         &resolver,
         &bind_resolver,
         &mut states,
@@ -1000,12 +998,12 @@ fn bind_noncanonical_addressee_severity_split() {
 // ─────────────────────────────────────────────────────────────────────
 mod tick_loop_tests {
     use super::*;
+    use crate::table::AnimationTable;
+    use crate::timeline::LoopRng;
     use areka_emo_compose::EmoWorld;
     use areka_parsers::shell::{
         Animation, AppendTarget, DefRef, DrawMethod, Interval, Pattern, Shell, Surface,
     };
-    use crate::table::AnimationTable;
-    use crate::timeline::LoopRng;
 
     /// コマ 1 本（overlay 固定・x/y=0）。
     fn pat(index: u32, surface_id: i64, wait: u32) -> Pattern {
@@ -1083,11 +1081,7 @@ mod tick_loop_tests {
         let mut calls: u32 = 0;
         Box::new(move |_bound: u32| {
             calls += 1;
-            if calls == 1 {
-                0
-            } else {
-                1
-            }
+            if calls == 1 { 0 } else { 1 }
         })
     }
 
@@ -1310,14 +1304,26 @@ mod tick_loop_tests {
             "切替後の非跨ぎ Tick は旧アニメの残再生を復活させない（playback リセット・R2.3）: {recorded:?}"
         );
         match &recorded[0] {
-            DisplayCommand::Show { surface_id, pattern, .. } => {
+            DisplayCommand::Show {
+                surface_id,
+                pattern,
+                ..
+            } => {
                 assert_eq!(*surface_id, 10, "1 件目は surface10 の発火");
-                assert_eq!(pattern.get(0).expect("コマ").surface_id, 500, "surface10 の先頭コマ 500");
+                assert_eq!(
+                    pattern.get(0).expect("コマ").surface_id,
+                    500,
+                    "surface10 の先頭コマ 500"
+                );
             }
             other => panic!("Show を期待: {other:?}"),
         }
         match &recorded[1] {
-            DisplayCommand::Show { surface_id, pattern, .. } => {
+            DisplayCommand::Show {
+                surface_id,
+                pattern,
+                ..
+            } => {
                 assert_eq!(*surface_id, 20, "2 件目は surface20 への切替");
                 assert!(
                     pattern.get(0).is_none(),

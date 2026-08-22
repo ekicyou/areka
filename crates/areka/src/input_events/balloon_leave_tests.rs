@@ -34,7 +34,7 @@ fn insert_wiring_with_hover(world: &mut World, scope: usize, ordinal: Option<usi
     if let Some(o) = ordinal {
         bw.set_hover(scope, Some(o));
     }
-    world.insert_non_send_resource(bw);
+    world.insert_non_send(bw);
 }
 
 /// バルーン所有 leave→hover 解除（Inject(None) アーム・R1.3）: choice 表示中・現行 hit=None
@@ -50,14 +50,14 @@ fn leave_balloon_owned_clears_hover_via_inject_none() {
         runtime.borrow().choice_active(&ActorKey::from("0")),
         "前提: choice_active=true（選択肢スパンあり）"
     );
-    world.insert_non_send_resource(headless_emo2_wiring(Rc::clone(&runtime)));
+    world.insert_non_send(headless_emo2_wiring(Rc::clone(&runtime)));
     insert_wiring_with_hover(&mut world, 0, Some(2));
 
     let logs = capture_logs(|| clear_balloon_hover_on_leave(&mut world));
 
     assert_eq!(
         world
-            .get_non_send_resource::<BalloonWiring>()
+            .get_non_send::<BalloonWiring>()
             .unwrap()
             .hover(0),
         None,
@@ -86,14 +86,14 @@ fn leave_balloon_owned_inactive_resets_own_state_without_inject() {
         !runtime.borrow().choice_active(&ActorKey::from("0")),
         "前提: choice_active=false（選択肢スパン無し）"
     );
-    world.insert_non_send_resource(headless_emo2_wiring(Rc::clone(&runtime)));
+    world.insert_non_send(headless_emo2_wiring(Rc::clone(&runtime)));
     insert_wiring_with_hover(&mut world, 0, Some(3));
 
     let logs = capture_logs(|| clear_balloon_hover_on_leave(&mut world));
 
     assert_eq!(
         world
-            .get_non_send_resource::<BalloonWiring>()
+            .get_non_send::<BalloonWiring>()
             .unwrap()
             .hover(0),
         None,
@@ -115,14 +115,14 @@ fn leave_non_balloon_window_is_ignored() {
     world.spawn((PointerLeave, ChildOf(win)));
 
     let runtime = runtime_with_active_choice("0");
-    world.insert_non_send_resource(headless_emo2_wiring(Rc::clone(&runtime)));
+    world.insert_non_send(headless_emo2_wiring(Rc::clone(&runtime)));
     insert_wiring_with_hover(&mut world, 0, Some(5));
 
     let logs = capture_logs(|| clear_balloon_hover_on_leave(&mut world));
 
     assert_eq!(
         world
-            .get_non_send_resource::<BalloonWiring>()
+            .get_non_send::<BalloonWiring>()
             .unwrap()
             .hover(0),
         Some(5),
@@ -143,14 +143,14 @@ fn leave_no_marker_is_full_noop() {
     world.spawn((BalloonWindowMarker { scope: 0 }, Window::default()));
 
     let runtime = runtime_with_active_choice("0");
-    world.insert_non_send_resource(headless_emo2_wiring(Rc::clone(&runtime)));
+    world.insert_non_send(headless_emo2_wiring(Rc::clone(&runtime)));
     insert_wiring_with_hover(&mut world, 0, Some(1));
 
     clear_balloon_hover_on_leave(&mut world);
 
     assert_eq!(
         world
-            .get_non_send_resource::<BalloonWiring>()
+            .get_non_send::<BalloonWiring>()
             .unwrap()
             .hover(0),
         Some(1),
@@ -171,7 +171,7 @@ fn leave_emo2_absent_degrades_with_debug_and_leaves_hover() {
 
     assert_eq!(
         world
-            .get_non_send_resource::<BalloonWiring>()
+            .get_non_send::<BalloonWiring>()
             .unwrap()
             .hover(0),
         Some(1),

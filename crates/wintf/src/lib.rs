@@ -1,6 +1,7 @@
 mod api;
 pub mod com;
 pub mod ecs;
+pub mod numerics;
 mod runtime;
 mod win_state;
 mod win_style;

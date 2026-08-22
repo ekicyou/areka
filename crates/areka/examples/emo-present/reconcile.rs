@@ -346,7 +346,7 @@ pub(super) fn cycle_present_system(world: &mut World) {
     let now = world.get_resource::<FrameTime>().map(|ft| ft.0).unwrap_or(0.0);
 
     // 装着済み・巡回対象・切替時刻到達を peek で確認（未到達なら remove/insert しない）。
-    let due = match world.get_non_send_resource::<EmoBoot>() {
+    let due = match world.get_non_send::<EmoBoot>() {
         Some(b) if b.attached && b.shell_cycling => now >= b.next_switch_at,
         _ => return,
     };
@@ -355,7 +355,7 @@ pub(super) fn cycle_present_system(world: &mut World) {
     }
 
     let mut boot = world
-        .remove_non_send_resource::<EmoBoot>()
+        .remove_non_send::<EmoBoot>()
         .expect("直上で存在確認済み");
 
     boot.cycle_state = boot.cycle_state.next();
@@ -370,5 +370,5 @@ pub(super) fn cycle_present_system(world: &mut World) {
     // 物理寸が変わらない切替（emo2 のまばたきは同寸）では要求が積まれず no-op＝窓を触らない。
     reconcile_present_sizes(&mut boot, world);
 
-    world.insert_non_send_resource(boot);
+    world.insert_non_send(boot);
 }

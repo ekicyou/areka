@@ -505,10 +505,10 @@ fn restore_merged_placements(
 ///
 /// 生きた runtime が無い経路（wired の `None` ghost・fallback の `Err`・prepare 失敗のダミー窓）
 /// では挿入しない＝従来どおり永続結線なし（`persist_entries` は `PersistWiring` 不在で debug!＋
-/// no-op へ縮退・6.2）。挿入は純粋な World 変異ゆえ headless 単体テスト可能（`insert_non_send_resource`
+/// no-op へ縮退・6.2）。挿入は純粋な World 変異ゆえ headless 単体テスト可能（`insert_non_send`
 /// を薄く包み `#[cfg(test)]` の檻に入れる）。
 fn insert_persist_wiring(world: &mut World, publisher: areka_sylphya::SylphyaPublisher) {
-    world.insert_non_send_resource(placement::persist::PersistWiring { publisher });
+    world.insert_non_send(placement::persist::PersistWiring { publisher });
 }
 
 /// 起動時モニタスナップショットの構築＋出力シーム（areka-P0-dpi-window-vanish task 1.2・

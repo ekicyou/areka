@@ -49,7 +49,7 @@ impl ClickThroughRegistrar for FakeRegistrar {
 
 fn registrar_calls(world: &World) -> Vec<(Entity, isize)> {
     world
-        .non_send_resource::<FakeRegistrar>()
+        .non_send::<FakeRegistrar>()
         .calls
         .borrow()
         .clone()
@@ -69,7 +69,7 @@ fn t_i4_register_system_registers_ghost_windows_on_added_window_handle_once() {
     let mut world = World::new();
     let placements = two_scope_placements();
     let gw = spawn_ghost_windows(&mut world, &placements, &titles());
-    world.insert_non_send_resource(FakeRegistrar::default());
+    world.insert_non_send(FakeRegistrar::default());
     let mut schedule = register_schedule();
 
     // spawn 直後は WindowHandle 不在 → 登録は起きない
@@ -105,7 +105,7 @@ fn t_i4_register_system_registers_ghost_windows_on_added_window_handle_once() {
 #[test]
 fn t_i4_register_system_ignores_non_ghost_windows() {
     let mut world = World::new();
-    world.insert_non_send_resource(FakeRegistrar::default());
+    world.insert_non_send(FakeRegistrar::default());
     let mut schedule = register_schedule();
 
     world.spawn((Window::default(), fake_window_handle(0x40)));

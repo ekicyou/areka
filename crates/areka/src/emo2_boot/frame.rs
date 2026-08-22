@@ -144,10 +144,10 @@ pub(super) use self::scale_text::resolve_talk_time;
 
 /// `FrameFinalize` 登録の排他 system（donor パターン: remove→各フェーズ→insert・DD-1/DD-4）。
 ///
-/// `Emo2Wiring`（NonSend）を [`World::remove_non_send_resource`] で取り出してから
+/// `Emo2Wiring`（NonSend）を [`World::remove_non_send`] で取り出してから
 /// attach→dpi→drain→balloon-visibility→窓寸 reconcile→move-drain→resnap→連鎖確定→連鎖再解決→
 /// text-scale→text
-/// の順に各フェーズを駆動し、[`World::insert_non_send_resource`] で戻す。
+/// の順に各フェーズを駆動し、[`World::insert_non_send`] で戻す。
 /// remove→insert は `&mut World` を各フェーズへ排他に渡すための donor 慣行（借用衝突回避・
 /// `examples/emo-present.rs::boot_present_system` と同型）。本番の text フェーズは override 無し
 /// （`FrameTime`＋`TalkClock` で `talk_time` を解決）。
@@ -157,7 +157,7 @@ pub(super) use self::scale_text::resolve_talk_time;
 /// `wire_emo2_boot`（task 5.1）が行い、本関数はここでは定義のみ（登録しない）。
 pub fn emo2_frame_system(world: &mut World) {
     // Emo2Wiring 未挿入（wire_emo2_boot=task 5.1 前・LogSink フォールバック boot 経路）なら no-op。
-    let Some(mut wiring) = world.remove_non_send_resource::<Emo2Wiring>() else {
+    let Some(mut wiring) = world.remove_non_send::<Emo2Wiring>() else {
         return;
     };
     // 作業領域源の実行時同期（atom 設計 C6・要件 5.1／5.4／5.5）: **各相より前**に置く。
@@ -229,7 +229,7 @@ pub fn emo2_frame_system(world: &mut World) {
     // で走る（旧寸の文字が 1 フレーム残らない）。戻り値（再構築 scope）は観測用ゆえ本番は捨てる。
     let _ = run_text_scale_phase(&mut wiring);
     run_text_phase(&mut wiring, world, None); // 本番: override なし（FrameTime＋clock で解決）。
-    world.insert_non_send_resource(wiring);
+    world.insert_non_send(wiring);
 }
 
 #[cfg(test)]

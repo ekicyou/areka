@@ -109,22 +109,22 @@ fn test_box_style_with_flex_properties_flat() {
 
     let style = BoxStyle {
         flex_direction: Some(FlexDirection::Row),
-        justify_content: Some(JustifyContent::SpaceBetween),
-        align_items: Some(AlignItems::Center),
+        justify_content: Some(JustifyContent::SPACE_BETWEEN),
+        align_items: Some(AlignItems::CENTER),
         flex_grow: Some(1.0),
         flex_shrink: Some(0.5),
         flex_basis: Some(Dimension::Px(100.0)),
-        align_self: Some(AlignSelf::FlexEnd),
+        align_self: Some(AlignSelf::FLEX_END),
         ..Default::default()
     };
 
     assert_eq!(style.flex_direction, Some(FlexDirection::Row));
-    assert_eq!(style.justify_content, Some(JustifyContent::SpaceBetween));
-    assert_eq!(style.align_items, Some(AlignItems::Center));
+    assert_eq!(style.justify_content, Some(JustifyContent::SPACE_BETWEEN));
+    assert_eq!(style.align_items, Some(AlignItems::CENTER));
     assert_eq!(style.flex_grow, Some(1.0));
     assert_eq!(style.flex_shrink, Some(0.5));
     assert_eq!(style.flex_basis, Some(Dimension::Px(100.0)));
-    assert_eq!(style.align_self, Some(AlignSelf::FlexEnd));
+    assert_eq!(style.align_self, Some(AlignSelf::FLEX_END));
 }
 
 // タスク1.3: From変換トレイトテスト

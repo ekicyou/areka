@@ -133,7 +133,7 @@ fn persist_entries_with_wiring_write_through_to_ghost_scope() {
 
     // World へ NonSend リソースとして挿入（UI スレッド常駐・MouseWiring/Emo2Wiring 先例）。
     let mut world = World::new();
-    world.insert_non_send_resource(PersistWiring {
+    world.insert_non_send(PersistWiring {
         publisher: parts.publisher.clone(),
     });
 

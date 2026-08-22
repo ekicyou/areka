@@ -199,7 +199,7 @@ fn probe_world(injected: Vec<Monitor>) -> (World, Entity) {
 /// 差し替え）が 1 行も捕捉できずログ檻が空虚に緑になる。
 fn run_apply(world: &mut World) {
     let mut schedule = Schedule::default();
-    schedule.set_executor_kind(bevy_ecs::schedule::ExecutorKind::SingleThreaded);
+    schedule.set_executor(bevy_ecs::schedule::SingleThreadedExecutor::new());
     schedule.add_systems(apply_injected_monitors);
     schedule.run(world);
 }

@@ -13,17 +13,17 @@
 //! 本ファイル群は Foundation タスク（tasks.md task 1）の骨格であり、各サブモジュールの
 //! 機能実装は後続タスク（2〜6）が担う。
 
-pub mod target_map;
-pub mod hit_region;
 pub mod adapter;
-pub mod talk_clock;
 pub mod assets;
-pub mod frame;
-pub mod move_cue;
-pub mod talk_lifecycle;
 pub mod balloon_visibility;
 pub mod consumer_ledger;
+pub mod frame;
+pub mod hit_region;
 pub mod hover_inject;
+pub mod move_cue;
+pub mod talk_clock;
+pub mod talk_lifecycle;
+pub mod target_map;
 
 // 決定論 spine テストハーネス（R8・task 6.1）。`areka` は [[bin]] のみ（[lib] 無し）で外部
 // tests/ から bin 内部項目へ到達できないため、既存 repo 慣行に従い in-crate #[cfg(test)]
@@ -295,7 +295,9 @@ pub fn wire_emo2_boot(
     // 手順2: presenter／文字層ランタイム（Rc<RefCell<>>）／文字層 UI アクター（UI スレッド前提）。
     // spawn_emo_text の Err（UI スレッド外呼び出し検出等）は SpawnUi 分類＋フォールバック（R7.3）。
     let presenter = EmoPresenter::new();
-    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default())));
+    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
+        TextLayerConfig::default(),
+    )));
     let (emo_text_sink, _emo_text_join) = match spawn_emo_text(Rc::clone(&runtime)) {
         Ok(pair) => pair,
         Err(err) => {
@@ -354,7 +356,10 @@ pub fn wire_emo2_boot(
             .finish()
     };
     // 再現可能性の観測点（R7.4/7.5）: 本番 seed を info! に出力し、同一 seed で run を再現可能にする。
-    info!(seed, "emo2-boot: SERIKO ループ乱数 seed（RandomState 由来・実 entropy・再現用）");
+    info!(
+        seed,
+        "emo2-boot: SERIKO ループ乱数 seed（RandomState 由来・実 entropy・再現用）"
+    );
     let loop_config = SerikoLoopConfig {
         shell_table,
         balloon_tables,
@@ -445,7 +450,7 @@ pub fn wire_emo2_boot(
     };
 
     // 手順6: Emo2Wiring を NonSend 挿入＋emo2_frame_system を FrameFinalize へ登録（placement の
-    // click-through 登録と同位置・self-gating・順序依存なし）。EcsWorld は insert_non_send_resource を
+    // click-through 登録と同位置・self-gating・順序依存なし）。EcsWorld は insert_non_send を
     // 直接持たないため world_mut() 経由で bevy World へ載せる（add_systems は EcsWorld 直メソッド）。
     let wiring = Emo2Wiring::new(
         presenter,
@@ -459,7 +464,7 @@ pub fn wire_emo2_boot(
     app.world()
         .borrow_mut()
         .world_mut()
-        .insert_non_send_resource(wiring);
+        .insert_non_send(wiring);
     app.world()
         .borrow_mut()
         .add_systems(FrameFinalize, emo2_frame_system);

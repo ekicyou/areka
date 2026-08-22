@@ -160,8 +160,8 @@ fn create_dcomp_demo_window(world: &mut World) {
             }),
             BoxStyle {
                 flex_direction: Some(taffy::FlexDirection::Row),
-                justify_content: Some(taffy::JustifyContent::SpaceEvenly),
-                align_items: Some(taffy::AlignItems::Center),
+                justify_content: Some(taffy::JustifyContent::SPACE_EVENLY),
+                align_items: Some(taffy::AlignItems::CENTER),
                 size: Some(BoxSize {
                     width: None,
                     height: Some(Dimension::Px(200.0)),

@@ -68,7 +68,7 @@ fn on_balloon_drag_end_persists_balloon_offset_for_scope() {
 
     let mut world = World::new();
     // UI スレッド常駐の保存投函口を挿入（persist_entries が引く NonSend リソース）。
-    world.insert_non_send_resource(PersistWiring {
+    world.insert_non_send(PersistWiring {
         publisher: parts.publisher.clone(),
     });
 
@@ -266,7 +266,7 @@ fn round_trip_save_restore_value_equivalence_over_real_fs() {
     };
 
     let mut world = World::new();
-    world.insert_non_send_resource(PersistWiring {
+    world.insert_non_send(PersistWiring {
         publisher: parts.publisher.clone(),
     });
     world.insert_resource(MonitorSnapshot {
@@ -525,7 +525,7 @@ fn dragged_char_persists_even_without_dragging_state_at_dragend() {
         work_areas: vec![rect(0, 0, 1920, 1200)],
     };
     let mut world = World::new();
-    world.insert_non_send_resource(PersistWiring {
+    world.insert_non_send(PersistWiring {
         publisher: parts.publisher.clone(),
     });
     world.insert_resource(MonitorSnapshot {

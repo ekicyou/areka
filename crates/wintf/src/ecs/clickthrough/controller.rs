@@ -358,7 +358,7 @@ impl ClickThroughHandle {
 /// クリック透過機構は `WinApp::run`（`runtime/mod.rs` 結線点）で起動され、その共有レジストリ
 /// （`Rc<RefCell<ClickThroughRegistry>>`）がこの newtype に包まれて World へ **NonSend リソース**
 /// として挿入される。areka の `run_setup`（`&mut World` を持つ）は
-/// `world.get_non_send_resource::<ClickThroughRegistryHandle>()` で取得し、生成した shell/balloon
+/// `world.get_non_send::<ClickThroughRegistryHandle>()` で取得し、生成した shell/balloon
 /// の 2 窓（window Entity ＋ HWND）を [`register`](Self::register) で登録する。
 ///
 /// # なぜ NonSend リソースか

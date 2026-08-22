@@ -53,7 +53,7 @@ const RESP_400: &[u8] = b"SHIORI/3.0 400 Bad Request\r\n\r\n";
 /// ホストが `GlobalAlloc(GMEM_FIXED)` した有効なハンドルであること。
 /// callee 解放規約により所有権は本関数へ移転する。
 #[unsafe(no_mangle)]
-pub unsafe extern "cdecl" fn load(hdir: HGLOBAL, _len: usize) -> bool {
+pub unsafe extern "C" fn load(hdir: HGLOBAL, _len: usize) -> bool {
     // 入力 HGLOBAL を callee 解放（pasta 規約の忠実再現・二重解放検出器）。
     // SAFETY: 呼出側が GlobalAlloc(GMEM_FIXED) した有効ハンドルを渡す契約。
     // 所有権は callee へ移転済み。GlobalFree の Result は best-effort で無視する。
@@ -75,7 +75,7 @@ pub unsafe extern "cdecl" fn load(hdir: HGLOBAL, _len: usize) -> bool {
 /// # Safety
 /// 引数を取らない flat-C エクスポート。呼出側の ABI 契約（cdecl）にのみ依存する。
 #[unsafe(no_mangle)]
-pub unsafe extern "cdecl" fn unload() -> bool {
+pub unsafe extern "C" fn unload() -> bool {
     if let Ok(path) = std::env::var("HOST32_TESTDLL_UNLOAD_MARKER") {
         let _ = std::fs::write(&path, b"unloaded");
     }
@@ -143,7 +143,7 @@ fn select_response(request_line: &str, id_value: &str) -> &'static [u8] {
 /// 入力 `req` は callee 解放規約の有効ハンドル（GMEM_FIXED ゆえハンドル＝先頭ポインタ）。
 /// `len` は呼出側が有効な in/out ポインタを渡す契約だが null 防御を行う。
 #[unsafe(no_mangle)]
-pub unsafe extern "cdecl" fn request(req: HGLOBAL, len: *mut usize) -> HGLOBAL {
+pub unsafe extern "C" fn request(req: HGLOBAL, len: *mut usize) -> HGLOBAL {
     // 手順 1: 入力長を読み取る（len null 防御）。null なら受領内容を検証できないため
     // 入力解放のみ行い 400 相当の空応答は返せない → null 応答で返す（防御的）。
     let in_len = if len.is_null() {
@@ -265,7 +265,8 @@ mod tests {
 
     #[test]
     fn notify_ontestnotify_returns_204() {
-        let req = b"NOTIFY SHIORI/3.0\r\nCharset: UTF-8\r\nSender: areka\r\nID: OnTestNotify\r\n\r\n";
+        let req =
+            b"NOTIFY SHIORI/3.0\r\nCharset: UTF-8\r\nSender: areka\r\nID: OnTestNotify\r\n\r\n";
         let resp = roundtrip(req);
         let text = String::from_utf8(resp).expect("response must be valid UTF-8");
         assert!(
@@ -329,7 +330,11 @@ mod tests {
         let mut len: usize = req.len();
         // SAFETY: 有効な入力 HGLOBAL と in/out ポインタ。
         let hresp = unsafe { request(hreq, &mut len as *mut usize) };
-        assert_eq!(len, RESP_NOTIFY_204.len(), "*len must equal response body length");
+        assert_eq!(
+            len,
+            RESP_NOTIFY_204.len(),
+            "*len must equal response body length"
+        );
         let _ = read_and_free(hresp, len);
     }
 }

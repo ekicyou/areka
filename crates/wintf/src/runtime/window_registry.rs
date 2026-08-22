@@ -221,14 +221,14 @@ mod tests {
         let fired = Rc::new(Cell::new(0u32));
         let f = fired.clone();
         reg.set_shutdown_hook(move || f.set(f.get() + 1));
-        world.insert_non_send_resource(reg);
+        world.insert_non_send(reg);
 
         // 1 つ目の Window を破棄 → reconcile で除去・drop されるが registry は非空のまま。
         world.entity_mut(e1).remove::<Window>();
         run_reconcile(&mut world);
         {
             let reg = world
-                .get_non_send_resource::<WindowRegistry<DropTracker>>()
+                .get_non_send::<WindowRegistry<DropTracker>>()
                 .unwrap();
             assert!(!reg.is_empty(), "1 件残るので非空のまま");
         }
@@ -241,7 +241,7 @@ mod tests {
         run_reconcile(&mut world);
         {
             let reg = world
-                .get_non_send_resource::<WindowRegistry<DropTracker>>()
+                .get_non_send::<WindowRegistry<DropTracker>>()
                 .unwrap();
             assert!(reg.is_empty(), "全 Window 破棄で registry は空になる");
         }

@@ -14,7 +14,7 @@ use super::{
 /// 送信するクロージャ本体は UI スレッド（MTA・COM 初期化済み）で実行されるため、その中で
 /// `WicDecoderArm`（COM 必要）を生成し実 PNG をデコードしてアセットを組める。クロージャは
 /// `Send` 境界（`BoxedCommand`）を満たすが、`!Send` な `EmoPresenter` はクロージャ本体内の
-/// ローカルとして生成し `insert_non_send_resource` で World へ載せる（キャプチャしない）。
+/// ローカルとして生成し `insert_non_send` で World へ載せる（キャプチャしない）。
 pub(super) async fn run_setup(tx: CommandSender) {
     let _ = tx.send(Box::new(|world: &mut World| {
         build_and_spawn(world);
@@ -76,7 +76,7 @@ fn build_and_spawn(world: &mut World) {
         boot.balloon_assets = Some((b_world, b_atlas));
     }
 
-    world.insert_non_send_resource(boot);
+    world.insert_non_send(boot);
     tracing::info!("emo-present: 窓生成とアセット構築を完了（GPU 資源到達で表示を装着）");
 }
 

@@ -177,7 +177,7 @@ impl EcsWindowFactory {
 
         // --- 5. WindowRegistry（NonSend）へ格納（要件 2.1） ---
         if let Some(mut registry) =
-            world.get_non_send_resource_mut::<WindowRegistry<LibWindow<WndState>>>()
+            world.get_non_send_mut::<WindowRegistry<LibWindow<WndState>>>()
         {
             registry.insert(entity, lib_window);
         } else {
@@ -186,7 +186,7 @@ impl EcsWindowFactory {
             // DestroyWindow されるため、忘れ込みを検知できるよう明示ログを残す。
             let mut registry = WindowRegistry::<LibWindow<WndState>>::new();
             registry.insert(entity, lib_window);
-            world.insert_non_send_resource(registry);
+            world.insert_non_send(registry);
             debug!(entity = ?entity, "WindowRegistry を遅延生成して格納");
         }
 
@@ -330,7 +330,7 @@ mod tests {
         // entity を共有 World 側に作り、宣言データを bevy World 側に揃える。
         // create_window は bevy World を直接受け取るため、宣言データもそこへ置く。
         let mut bevy_world = World::new();
-        bevy_world.insert_non_send_resource(WindowRegistry::<LibWindow<WndState>>::new());
+        bevy_world.insert_non_send(WindowRegistry::<LibWindow<WndState>>::new());
 
         let entity = bevy_world
             .spawn((
@@ -351,7 +351,7 @@ mod tests {
 
         // レジストリに格納され、有効な HWND を持つ。
         let registry = bevy_world
-            .get_non_send_resource::<WindowRegistry<LibWindow<WndState>>>()
+            .get_non_send::<WindowRegistry<LibWindow<WndState>>>()
             .expect("registry が存在するべき");
         // WindowHandle が反映されている。
         let handle = bevy_world
@@ -421,8 +421,8 @@ mod tests {
         //  - EcsWorldSelfRef（新経路分岐スイッチ＝在で factory 経路）
         //  - WindowRegistry<Window<WndState>>（本番単相・生成物の保持先）
         let mut bevy_world = World::new();
-        bevy_world.insert_non_send_resource(EcsWorldSelfRef(weak));
-        bevy_world.insert_non_send_resource(WindowRegistry::<LibWindow<WndState>>::new());
+        bevy_world.insert_non_send(EcsWorldSelfRef(weak));
+        bevy_world.insert_non_send(WindowRegistry::<LibWindow<WndState>>::new());
 
         // 宣言的に Window（+ Style/Pos）コンポーネントを spawn（生成前は WindowHandle 不在）。
         let entity = bevy_world
@@ -465,7 +465,7 @@ mod tests {
 
         // (b) WindowRegistry がその Entity の Window<WndState>（有効 HWND）を保持する。
         let registry = bevy_world
-            .get_non_send_resource::<WindowRegistry<LibWindow<WndState>>>()
+            .get_non_send::<WindowRegistry<LibWindow<WndState>>>()
             .expect("WindowRegistry が存在するべき");
         assert!(
             !registry.is_empty(),
@@ -477,7 +477,7 @@ mod tests {
         // （クエリ `Without<WindowHandle>` で除外される）。registry 件数は 1 のまま。
         create_windows(&mut bevy_world);
         let registry = bevy_world
-            .get_non_send_resource::<WindowRegistry<LibWindow<WndState>>>()
+            .get_non_send::<WindowRegistry<LibWindow<WndState>>>()
             .expect("WindowRegistry が存在するべき");
         assert!(
             !registry.is_empty(),

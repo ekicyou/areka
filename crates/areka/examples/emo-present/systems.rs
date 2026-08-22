@@ -43,7 +43,7 @@ pub(super) fn register_click_through_windows(
 /// 揃うまでは保留し次 tick で再試行する。装着後は `attached` で以降を no-op 化する。
 pub(super) fn boot_present_system(world: &mut World) {
     // 未挿入 or 装着済みなら何もしない（装着後の remove/insert churn を避ける）。
-    match world.get_non_send_resource::<EmoBoot>() {
+    match world.get_non_send::<EmoBoot>() {
         Some(b) if !b.attached => {}
         _ => return,
     }
@@ -59,7 +59,7 @@ pub(super) fn boot_present_system(world: &mut World) {
     }
 
     let mut boot = world
-        .remove_non_send_resource::<EmoBoot>()
+        .remove_non_send::<EmoBoot>()
         .expect("直上で存在確認済み");
 
     if let Some((emo_world, atlas)) = boot.shell_assets.take() {
@@ -154,6 +154,6 @@ pub(super) fn boot_present_system(world: &mut World) {
     reconcile_present_sizes(&mut boot, world);
 
     boot.attached = true;
-    world.insert_non_send_resource(boot);
+    world.insert_non_send(boot);
     tracing::info!("emo-present: 2 窓へ surface0/バルーン枠を装着・表示しました");
 }

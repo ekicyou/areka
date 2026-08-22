@@ -178,19 +178,19 @@ fn emo2_frame_system_removes_runs_and_reinserts_wiring() {
     let (_tx, rx) = mpsc::channel::<PresentCommand>();
     let wiring = headless_wiring_with(rx, zero_clock());
     let mut world = World::new();
-    world.insert_non_send_resource(wiring);
+    world.insert_non_send(wiring);
 
     // remove→attach/drain/text（いずれもゲート不成立の no-op）→ re-insert。panic しない。
     emo2_frame_system(&mut world);
     assert!(
-        world.get_non_send_resource::<Emo2Wiring>().is_some(),
+        world.get_non_send::<Emo2Wiring>().is_some(),
         "emo2_frame_system は wiring を取り出して駆動後に必ず戻す（配線の疎通）"
     );
 
     // 冪等: もう一度呼んでも remove→insert で wiring を保つ（panic しない）。
     emo2_frame_system(&mut world);
     assert!(
-        world.get_non_send_resource::<Emo2Wiring>().is_some(),
+        world.get_non_send::<Emo2Wiring>().is_some(),
         "再実行でも wiring を保つ（remove→insert の冪等）"
     );
 
@@ -198,7 +198,7 @@ fn emo2_frame_system_removes_runs_and_reinserts_wiring() {
     let mut empty_world = World::new();
     emo2_frame_system(&mut empty_world); // panic しない
     assert!(
-        empty_world.get_non_send_resource::<Emo2Wiring>().is_none(),
+        empty_world.get_non_send::<Emo2Wiring>().is_none(),
         "未挿入なら no-op（何も挿入しない）"
     );
 }

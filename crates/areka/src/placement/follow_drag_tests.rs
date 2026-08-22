@@ -438,7 +438,7 @@ fn on_char_drag_end_persists_char_pos_for_scope() {
 
     let mut world = World::new();
     // UI スレッド常駐の保存投函口を挿入（persist_entries が引く NonSend リソース）。
-    world.insert_non_send_resource(PersistWiring {
+    world.insert_non_send(PersistWiring {
         publisher: parts.publisher.clone(),
     });
     world.insert_resource(single_monitor_snapshot()); // 下端 1043・釘付け Y=1043−687=356
@@ -550,7 +550,7 @@ fn on_char_drag_end_persists_free_anchor_raw_position_for_scope() {
     });
 
     let mut world = World::new();
-    world.insert_non_send_resource(PersistWiring {
+    world.insert_non_send(PersistWiring {
         publisher: parts.publisher.clone(),
     });
     // snapshot 挿入（bottom=1043）。Free identity なら未使用だが、誤射影時に
@@ -672,7 +672,7 @@ fn non_dragend_operations_leave_persist_store_byte_invariant() {
     });
 
     let mut world = World::new();
-    world.insert_non_send_resource(PersistWiring {
+    world.insert_non_send(PersistWiring {
         publisher: parts.publisher.clone(),
     });
     world.insert_resource(single_monitor_snapshot()); // 下端 1043・釘付け Y=1043−687=356

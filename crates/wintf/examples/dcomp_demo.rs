@@ -169,8 +169,8 @@ fn create_card(world: &mut World, parent: Entity, row: usize, column: usize) {
             }),
             BoxStyle {
                 flex_direction: Some(taffy::FlexDirection::Column),
-                justify_content: Some(taffy::JustifyContent::Center),
-                align_items: Some(taffy::AlignItems::Center),
+                justify_content: Some(taffy::JustifyContent::CENTER),
+                align_items: Some(taffy::AlignItems::CENTER),
                 flex_grow: Some(1.0),
                 margin: Some(BoxMargin(wintf::ecs::layout::Rect {
                     left: LengthPercentageAuto::Px(15.0),

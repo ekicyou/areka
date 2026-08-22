@@ -27,7 +27,7 @@
 //! `SW_SHOWNA` で見せるので、画面にもタスクバーにも現れない。
 
 use bevy_ecs::prelude::*;
-use bevy_ecs::schedule::{ExecutorKind, Schedule};
+use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
 use windows::Win32::Foundation::{HINSTANCE, HWND};
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DestroyWindow, SW_SHOWNA, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetWindowPos,
@@ -371,7 +371,7 @@ fn request_reassert(world: &mut World, balloon: Entity) {
 /// [`capture_under_filter`] が 1 行も拾えず記録の検査が空虚に緑になるためである。
 fn maintain_schedule() -> Schedule {
     let mut schedule = Schedule::default();
-    schedule.set_executor_kind(ExecutorKind::SingleThreaded);
+    schedule.set_executor(SingleThreadedExecutor::new());
     schedule.add_systems(apply_zorder_pair_maintenance);
     schedule
 }

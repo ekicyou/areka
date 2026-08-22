@@ -425,6 +425,8 @@ pub(super) struct SetWindowParentToLayoutRoot {
 }
 
 impl Command for SetWindowParentToLayoutRoot {
+    type Out = ();
+
     fn apply(self, world: &mut World) {
         // LayoutRootを検索
         let mut query = world.query_filtered::<Entity, With<LayoutRoot>>();

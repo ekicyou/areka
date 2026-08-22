@@ -136,8 +136,8 @@ fn test_flex_container_to_taffy_style() {
     let entity = world
         .spawn(BoxStyle {
             flex_direction: Some(FlexDirection::Column),
-            justify_content: Some(JustifyContent::Center),
-            align_items: Some(AlignItems::FlexEnd),
+            justify_content: Some(JustifyContent::CENTER),
+            align_items: Some(AlignItems::FLEX_END),
             ..Default::default()
         })
         .id();
@@ -149,8 +149,8 @@ fn test_flex_container_to_taffy_style() {
     let taffy_style = world.get::<TaffyStyle>(entity).unwrap();
     let style = taffy_style.style();
     assert_eq!(style.flex_direction, FlexDirection::Column);
-    assert_eq!(style.justify_content, Some(JustifyContent::Center));
-    assert_eq!(style.align_items, Some(AlignItems::FlexEnd));
+    assert_eq!(style.justify_content, Some(JustifyContent::CENTER));
+    assert_eq!(style.align_items, Some(AlignItems::FLEX_END));
 }
 
 #[test]
@@ -162,7 +162,7 @@ fn test_flex_item_to_taffy_style() {
             flex_grow: Some(2.0),
             flex_shrink: Some(0.5),
             flex_basis: Some(Dimension::Px(100.0)),
-            align_self: Some(AlignSelf::Center),
+            align_self: Some(AlignSelf::CENTER),
             ..Default::default()
         })
         .id();
@@ -176,7 +176,7 @@ fn test_flex_item_to_taffy_style() {
     assert_eq!(style.flex_grow, 2.0);
     assert_eq!(style.flex_shrink, 0.5);
     assert_eq!(style.flex_basis, ::taffy::Dimension::length(100.0));
-    assert_eq!(style.align_self, Some(AlignSelf::Center));
+    assert_eq!(style.align_self, Some(AlignSelf::CENTER));
 }
 
 #[test]

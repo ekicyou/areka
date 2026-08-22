@@ -241,7 +241,7 @@ impl MouseWiring {
 /// `Emo2Wiring` 挿入済みゆえ presenter 経由の region 解決が成立する（万一 presenter 不在でも
 /// `resolve_region` が region None へ正常縮退する・DD-IE-9）。
 pub(crate) fn wire_mouse_input(world: &mut World, sender: Sender<KanadeMsg>) {
-    world.insert_non_send_resource(MouseWiring::new(sender, RegionSource::Presenter));
+    world.insert_non_send(MouseWiring::new(sender, RegionSource::Presenter));
 }
 
 /// キャラ窓へポインタハンドラ（[`on_char_pointer_moved`]／[`on_char_pointer_pressed`]）を装着する。
@@ -308,11 +308,11 @@ fn char_scope(world: &World, entity: Entity) -> Option<u32> {
 /// 呼び手はこれを `MouseInput{x,y}` へ載せ、throttle へは受領した client px を渡す（6.8）。
 fn resolve_hit_owned(world: &World, scope: u32, x: i64, y: i64) -> HitRegion {
     let wiring = world
-        .get_non_send_resource::<MouseWiring>()
+        .get_non_send::<MouseWiring>()
         .expect("MouseWiring は呼び手が存在確認済み（self-gating）");
     // 共有借用同士（&MouseWiring と &Emo2Wiring）ゆえ両立する。presenter は Emo2Wiring 不在で None。
     let presenter = world
-        .get_non_send_resource::<Emo2Wiring>()
+        .get_non_send::<Emo2Wiring>()
         .map(Emo2Wiring::presenter);
     wiring.resolve_region(presenter, scope, x, y)
 }
@@ -338,7 +338,7 @@ pub(crate) fn on_char_pointer_moved(
     };
 
     // self-gating: MouseWiring 不在（wiring 前）は no-op（trace）。
-    if world.get_non_send_resource::<MouseWiring>().is_none() {
+    if world.get_non_send::<MouseWiring>().is_none() {
         tracing::trace!(event = "mouse_moved_no_wiring", "MouseWiring 不在: no-op");
         return false;
     }
@@ -351,7 +351,7 @@ pub(crate) fn on_char_pointer_moved(
     // presenter 借用を解いて解決結果を owned で取り出してから &mut MouseWiring を取る（DD-IE-9）。
     let hit = resolve_hit_owned(world, scope, x, y);
     let mut wiring = world
-        .get_non_send_resource_mut::<MouseWiring>()
+        .get_non_send_mut::<MouseWiring>()
         .expect("MouseWiring は直上で存在確認済み");
     // throttle 比較＝client px（縮約前）／配信＝surface_point（縮約後）。
     wiring.plan_and_send_move(scope, (x, y), hit.surface_point, hit.region)
@@ -412,7 +412,7 @@ pub(crate) fn on_char_pointer_pressed(
     };
 
     // self-gating: MouseWiring 不在（wiring 前）は no-op（trace）。暫定退避は上で処理済み。
-    if world.get_non_send_resource::<MouseWiring>().is_none() {
+    if world.get_non_send::<MouseWiring>().is_none() {
         tracing::trace!(event = "mouse_pressed_no_wiring", "MouseWiring 不在: no-op");
         return false;
     }
@@ -424,7 +424,7 @@ pub(crate) fn on_char_pointer_pressed(
 
     let hit = resolve_hit_owned(world, scope, x, y);
     let mut wiring = world
-        .get_non_send_resource_mut::<MouseWiring>()
+        .get_non_send_mut::<MouseWiring>()
         .expect("MouseWiring は直上で存在確認済み");
     // 配信座標は surface_point（縮約後サーフェス px・1.8）。クリックは throttle を通らない。
     wiring.send_double_click(scope, hit.surface_point, hit.region, button);

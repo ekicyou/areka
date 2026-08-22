@@ -7,7 +7,7 @@
 //! （詳細は W3a-T 断片の R2.8 所見を参照）。
 
 use bevy_ecs::prelude::*;
-use bevy_ecs::schedule::ExecutorKind;
+use bevy_ecs::schedule::SingleThreadedExecutor;
 use windows::UI::Composition::Visual as WucVisual;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use windows::core::Interface;
@@ -33,7 +33,7 @@ fn setup_world() -> World {
 
 fn clip_schedule() -> Schedule {
     let mut schedule = Schedule::default();
-    schedule.set_executor_kind(ExecutorKind::SingleThreaded);
+    schedule.set_executor(SingleThreadedExecutor::new());
     schedule.add_systems(clip_sync_system);
     schedule
 }

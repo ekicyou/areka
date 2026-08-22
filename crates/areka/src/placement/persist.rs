@@ -468,7 +468,7 @@ pub struct PersistWiring {
 /// DragEnd フックは `&mut World` を保持するが `&World` へ暗黙 reborrow して渡せる。
 #[allow(dead_code)] // 結線（follow.rs DragEnd フック＝C2/C3・task 2.2/2.3）は後続タスクの領分
 pub fn persist_entries(world: &World, entries: Vec<(PersistKey, String)>) {
-    let Some(wiring) = world.get_non_send_resource::<PersistWiring>() else {
+    let Some(wiring) = world.get_non_send::<PersistWiring>() else {
         // fallback 未挿入等で PersistWiring が無い → debug!＋no-op（起動を止めない・6.2）。
         debug!(
             entry_count = entries.len(),

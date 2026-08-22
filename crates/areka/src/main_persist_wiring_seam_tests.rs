@@ -43,7 +43,7 @@ fn insert_persist_wiring_establishes_world_conduit_reaching_the_store() {
 
     // (a) NonSend リソース PersistWiring が World に存在する。
     assert!(
-        world.get_non_send_resource::<PersistWiring>().is_some(),
+        world.get_non_send::<PersistWiring>().is_some(),
         "insert_persist_wiring 後、World に PersistWiring が挿入されているべき（C4/C5）"
     );
 

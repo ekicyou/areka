@@ -42,8 +42,8 @@ fn test_taffy_flex_layout_pure() {
                         height: Some(Dimension::Percent(100.0)),
                     }),
                     flex_direction: Some(FlexDirection::Row),
-                    justify_content: Some(JustifyContent::SpaceEvenly),
-                    align_items: Some(AlignItems::Center),
+                    justify_content: Some(JustifyContent::SPACE_EVENLY),
+                    align_items: Some(AlignItems::CENTER),
                     ..Default::default()
                 },
                 Arrangement::default(),
@@ -124,7 +124,7 @@ fn test_taffy_flex_layout_pure() {
         // FlexContainerを縦並びに変更
         if let Some(mut style) = world.get_mut::<BoxStyle>(flex_container) {
             style.flex_direction = Some(FlexDirection::Column);
-            style.justify_content = Some(JustifyContent::SpaceAround);
+                    style.justify_content = Some(JustifyContent::SPACE_AROUND);
             println!("FlexContainer: Row → Column");
         }
 

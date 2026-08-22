@@ -1,6 +1,6 @@
 mod app;
-pub mod common;
 pub mod clickthrough;
+pub mod common;
 pub mod dola;
 pub mod drag;
 mod graphics;
@@ -9,13 +9,14 @@ pub mod pointer;
 #[cfg(test)]
 pub(crate) mod test_support;
 pub mod types;
+pub mod visual;
 pub mod widget;
 pub mod window;
 mod window_proc;
 pub mod world;
 
-pub use types::{Point, PointF, Rect, SizeI};
 pub use dola::{DolaAnimator, tick_dola_animators};
+pub use types::{Point, PointF, Rect, SizeI};
 
 pub use app::*;
 pub use bevy_ecs::hierarchy::{ChildOf, Children};
@@ -35,7 +36,6 @@ pub use pointer::{
     PointerLeave, PointerState, WheelDelta, WindowPointerTracking, clear_transient_pointer_state,
     debug_pointer_leave, debug_pointer_state_changes, dispatch_pointer_events,
 };
-pub use window::monitor::*;
 pub use widget::{
     BitmapSource, BitmapSourceGraphics, BitmapSourceResource, BoxedCommand, CommandSender, WicCore,
     WintfTaskPool, draw_bitmap_sources,
@@ -44,6 +44,7 @@ pub use widget::{
     Typewriter, TypewriterEvent, TypewriterEventKind, TypewriterState, TypewriterTalk,
     TypewriterTimeline, TypewriterToken, draw_typewriters, update_typewriters,
 };
+pub use window::monitor::*;
 pub use window::{
     DPI, DpiChangeContext, DpiSuggestedRectPolicy, ExpectedOrder, KeepDirectlyAbove,
     ReassertZOrder, SetWindowPosCommand, Window, WindowHandle, WindowPos, WindowStyle, ZOrder,

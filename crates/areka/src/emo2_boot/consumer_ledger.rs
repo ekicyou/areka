@@ -17,6 +17,7 @@
 //! [`LedgerError::Duplicate`] を返す（多重結線の検出を観測可能化する）。正準台帳
 //! [`ConsumerLedger::canonical`] はこの try_register を用いて `move`・`bind` を
 //! 登記し、重複があれば構築時に panic する（正準表は一意ゆえ実際には発火しない・回帰檻）。
+#![allow(dead_code)]
 
 use std::collections::BTreeMap;
 

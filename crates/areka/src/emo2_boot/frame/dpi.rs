@@ -263,7 +263,12 @@ pub(super) fn dpi_phase_with<S: ScaleReportSource>(
     let state = state.get_or_insert_with(|| SystemState::new(world));
     // 変化窓を collect して World の不変借用を即解放してから `&mut World` のループへ入る
     // （`anchor_changed_system` と同じ collect→release→&mut ループ）。
-    let mut targets: Vec<Entity> = state.get(world).iter().map(|(entity, ..)| entity).collect();
+    let mut targets: Vec<Entity> = state
+        .get(world)
+        .expect("DPI changed query validation should succeed")
+        .iter()
+        .map(|(entity, ..)| entity)
+        .collect();
     // 整合待ちの札を持つ窓は、`Changed<DPI>` が立たなくても対象へ入れる（設計 C5）——前フレーム
     // までに見送った窓は変化を既に消費済みであり、和集合にしないと札が永遠に外れない。
     let held: Vec<Entity> = world

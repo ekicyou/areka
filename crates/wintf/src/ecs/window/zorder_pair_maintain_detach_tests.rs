@@ -34,7 +34,7 @@
 //! [`capture_under_filter`] が 1 行も拾えず、記録の検査が空虚に緑になる）。
 
 use bevy_ecs::prelude::*;
-use bevy_ecs::schedule::{ExecutorKind, Schedule};
+use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
 use windows::Win32::Foundation::{HINSTANCE, HWND};
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DestroyWindow, GW_OWNER, GetWindow, IsWindow, WINDOW_EX_STYLE, WINDOW_STYLE,
@@ -129,7 +129,7 @@ fn spawn_window(world: &mut World, hwnd: HWND) -> Entity {
 /// 本番と同じ順（確立 → 維持）で並べる。切離しは維持系の中で走る。
 fn pair_schedule() -> Schedule {
     let mut schedule = Schedule::default();
-    schedule.set_executor_kind(ExecutorKind::SingleThreaded);
+    schedule.set_executor(SingleThreadedExecutor::new());
     schedule.add_systems((establish_owner_links, apply_zorder_pair_maintenance).chain());
     schedule
 }
