@@ -12,7 +12,7 @@
   - _Requirements: 1.13_
   - _Boundary: kiro-impl, kiro-validate-impl_
 
-- [ ] 2. 実行体の観測（既定 OFF・有効化しなければ費用 0）
+- [x] 2. 実行体の観測（既定 OFF・有効化しなければ費用 0）
 - [x] 2.1 (P) スレッド名簿（役割名・TID・複製ハンドル）と Win32 の安全ラッパを wintf に新設
   - プロセス共有の名簿に、生成側が自分のハンドルを複製して役割名つきで登録する口と、一覧（スナップショット）を取り出す口を置く
   - 役割名は固定語彙（vblank・cursor_monitor・ui・ticker_dispatcher_kanade・ticker_loop・actor:<name>・perf_report・unregistered_rest）の定数として持つ
@@ -49,7 +49,7 @@
   - _Boundary: perf_thread_report_
   - _Depends: 2.1, 2.3_
 
-- [ ] 3. tick の門（変化が無いとき 13 本を回さない・無条件に実装し既定値は周 1 の A/B で決める）
+- [x] 3. tick の門（変化が無いとき 13 本を回さない・無条件に実装し既定値は周 1 の A/B で決める）
 - [x] 3.1 (P) 旗（tick_wake）とメッセージ→旗の写像
   - プロセス共有のビット集合（POINTER・DRAG・WINDOW_CMD・ZORDER・WM_GEOMETRY・PRESENT・ANIM・REARM・GRAPHICS・FORCE）へ任意スレッドから原子的に立てる口・最も早い期限を保持する口・読んで倒す口（期限到来の有無を添える）
   - 純関数 wake_bits_for_message: 幾何・DPI・表示構成・活性化・表示/破棄系のメッセージ→WM_GEOMETRY、ポインタ系→POINTER、未知→FORCE（疑わしいときは回す）
@@ -101,7 +101,7 @@
   - _Requirements: 3.5, 4.5, 6.4, 6.6, 6.8, 8.2_
   - _Boundary: command.rs_
 
-- [ ] 5. 計測の道具（基盤: 静寂・採取・サンプリング・台帳）
+- [x] 5. 計測の道具（基盤: 静寂・採取・サンプリング・台帳）
 - [x] 5.1 (P) 静寂確認の自動化（check-quiet.ps1）
   - マシン全体の CPU を指定秒数・1 秒刻みで採って平均と最大、既知の重いプロセス名の有無（測定対象の areka は PID で除外）。閾値は目標定義ファイルまたは引数
   - `quiet-<stage>.txt` へ平均・最大・該当プロセス一覧・判定・時刻。exit 0（静か）／2（静かでない）。決定論（同じ入力から同じ文面）
@@ -140,7 +140,7 @@
   - _Boundary: perf-ledger_
   - _Depends: 5.4_
 
-- [ ] 6. 解析と判定の道具（判定スクリプト・順位表・採否・追随チェック）
+- [x] 6. 解析と判定の道具（判定スクリプト・順位表・採否・追随チェック）
 - [x] 6.1 (P) 判定スクリプト 0.4.0（判定式は不変・読み口の追加）
   - 集計モードに catch-up の系統別（3 系統とも `target=` フィールドで識別）・各発生の時刻・直前の表示成立点との差・直前 10 秒の成立点数・同時刻の `[tick]` 窓の壁時計と省略数の表を足し、「フレーム駆動の負荷が起床を遅らせる」仮説の成立／不成立を数値で記す
   - `--emit-metrics`（主要指標を `metric=<name> value=<v>` 行で末尾に）。`[tick]`／perf(thread)／perf(process) は任意種（必須種の一覧は不変）。1 行内のフィールド名重複はテストで固定
@@ -177,7 +177,7 @@
   - _Requirements: 1.5, 4.7_
   - _Boundary: followup-checks_
 
-- [ ] 7. 入口とループ駆動層（目標定義・1 入口・エージェント定義・1 周のスキル）
+- [x] 7. 入口とループ駆動層（目標定義・1 入口・エージェント定義・1 周のスキル）
 - [x] 7.1 目標定義ファイルと /goal 条件文テンプレート
   - 目標定義（goal／target／levels／primary_metric／secondary_metrics／stop／quiet／followup／goal_runtime／sampling の各節・設計 C1 のスキーマ・判定スクリプトの版 0.4.0・停止条件に周数上限 30 を含む）と、/goal へ貼る条件文テンプレート（4,000 字以内・達成と不可能は FINAL 行の字面で判定・見本は山括弧・開発者へ質問しない等の制約）
   - 条件文の語は 5.5 の定数から goal-text で生成（字面の二重管理をしない）
@@ -221,7 +221,7 @@
   - _Boundary: perf-loop-iteration_
   - _Depends: 7.3, 7.4_
 
-- [ ] 8. 登記（測り方・回し方・目標・申し送り）
+- [x] 8. 登記（測り方・回し方・目標・申し送り）
 - [x] 8.1 (P) README §13〜§17
   - §13 自走ループの回し方（条件文の作り方と貼り方・推奨「Fable で起動」と Opus 5 での起動手順・`CLAUDE_CODE_GOAL_CHECKIN_MINUTES=60`・auto mode・スキル名・目標定義ファイル・台帳の形・停止条件・再開・「昇格した PowerShell から起動すると段③が使える」）／§14 4 段の採り方（コマンド・ビルド指定・RUST_LOG の target・前置ガードの有無・GetThreadTimes の粒度・インライン化の注意）／§15 交互取得と静寂の自動確認／§16 SSP 参考値（採取条件・再採取の配置・拡大率・測定後の削除と記録）／§17 追随チェック。遷移フレームの未特定区間と文字層再構築は合否外として §11 の隣に登記
   - 観測可能な完了状態: README に 5 節があり、§13 の手順どおりに条件文を作ると 7.1 の goal-text の出力と一致する
