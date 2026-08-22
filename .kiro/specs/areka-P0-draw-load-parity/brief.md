@@ -29,8 +29,9 @@
 > - **⑶ ⚠ `Σcall_us／total_us` を是正前後で比べてはならない**: 追記(74) ⑴ の **99.82〜99.92%** は**是正前**の値である。task 7.2 以後の `call_us` は `DeferWindowPos` への**投入だけ**の所要へ意味が変わった（`command.rs:373` の doc が明記）ので、是正後の同比 **6.0〜18.1%** は OS 側のコストが減ったことを**意味しない**。比べられるのは `total_us` と `in_batch` である。
 > - **⑷ 追記(74) ⑹ の「未特定の 47.5%」は未解決のまま残る**: 本 spec の領分に近い量として引き続き有効である。バッチ化はこの区間を分解しない。
 > - **⑸ 上流はここで閉じた**: atom の実機サインオフは実機専用系統 FAIL のまま**開発者裁定 GO** で完了した。残った「絵が先・窓が後」の 210,329〜306,301µs は `areka-P0-present-write-coherence`（W8・本 spec と同格の優先度低）が引き受ける。**本 spec とは接触面が違う**——あちらは `presenter/show.rs` の提示の順序、本 spec は描画負荷そのものである。
-> - **⑹ `command.rs` に 1 行の在庫がある（実施は本 spec と cage の調整事項）**: `SELF_INITIATED_DEPTH`（`crates/wintf/src/ecs/window/command.rs:48`）はプロセス共有の `AtomicI32` だが意味論はスレッド局所であり、`Cell<i32>` へ移すのが正しい形である（本番の欠陥ではなく、**テスト間の汚染源**）。本 spec は `command.rs::flush` を接触集合に持つので、flush へ手を入れるついでに片づくなら安い。**症状の側（檻の汚染・錠の退役）は `areka-P0-test-cage-determinism` の追記(76) ⑹ が受けている**ので、着手する側がもう一方へ知らせること。
-> - **⑺ 正本**: `.kiro/specs/areka-P0-dpi-transition-atomicity/mechanism-ledger.md` **§11.6**（B-2b の効果の実測表）・**§10.6.1**（`call_us` の意味の変化）。
+> - **⑹ `command.rs` に 1 行の在庫がある（実施は本 spec と cage の調整事項）**: `SELF_INITIATED_DEPTH`（`crates/wintf/src/ecs/window/command.rs:49`）はプロセス共有の `AtomicI32` だが意味論はスレッド局所であり、`Cell<i32>` へ移すのが正しい形である（本番の欠陥ではなく、**テスト間の汚染源**）。本 spec は `command.rs::flush` を接触集合に持つので、flush へ手を入れるついでに片づくなら安い。**症状の側（檻の汚染・錠の退役）は `areka-P0-test-cage-determinism` の追記(76) ⑹ が受けている**ので、着手する側がもう一方へ知らせること。
+> - **⑺ ⚠ 要件 10.3（Z 指令の順序・結果不変）の成立には、コードが強制していない前提が 1 つある**（上流 task 5.3 のレビューの残余所見。**結論の側は今まで誰にも渡っていなかった**ので本 spec が受ける）: 各 `SetWindowPos` は `WM_WINDOWPOSCHANGED` を同期送出し、そのハンドラが `flush_window_pos_commands()` へ**再入**する（`crates/wintf/src/ecs/window_proc/window_pos.rs:290`・手順 ③）。ジオメトリ書込の順を入れ替えると、**再入 flush が他窓の Z 指令とどう噛み合うかの時点が変わる**。現状は無害だが、それは「**ウィンドウプロシージャ側が Z 指令を積まない**」という事実に依っているだけで、**コードはそれを強制していない**。**本 spec が flush の駆動・間引き・順序に手を入れるとき、あるいは wndproc 側から Z を積む経路を足すときは、この前提が壊れる。** 追記(74) ⑷② の入れ子 flush・⑷③ の Z 非合流と合わせて読むこと——部品はそちらに在ったが、「前提が未強制である」という結論だけが宙に浮いていた。
+> - **⑻ 正本**: `.kiro/specs/areka-P0-dpi-transition-atomicity/mechanism-ledger.md` **§11.6**（B-2b の効果の実測表）・**§10.6.1**（`call_us` の意味の変化）。
 
 
 ## Problem

@@ -328,7 +328,7 @@ fn the_line_validator_rejects_broken_records() {
 // 違反**から系統ごとの語を起こす。こうすると `Bounds` の armed 項目が変わった日に、
 // 本検査の分類も自動で追随する（表を 2 箇所に持つと必ず片方が腐る）。
 
-use super::{Bounds, TransitionSummary, Violation, WindowKey, judge};
+use super::{Bounds, Quantity, TransitionSummary, Violation, WindowKey, judge};
 
 /// 例示ブロックで系統を切り替える見出し（`transition_judge_verdict::write_family` の書式）。
 const FAMILY_DETERMINISTIC: &str = "deterministic:";
@@ -365,8 +365,25 @@ fn summary_with_every_quantity_out_of_bounds() -> TransitionSummary {
 }
 
 /// 量が**欠けている**判定量（「判定対象の量が欠けている」の腕を通す）。
+///
+/// 書込が 1 件も無い形なので、**窓ごと**の量の欠落だけは起こせない（下の変種が要る）。
 fn summary_with_every_quantity_missing() -> TransitionSummary {
     TransitionSummary::empty(None)
+}
+
+/// **書込は在るのに窓ごとの量が欠けている**判定量。
+///
+/// 判定器の被覆検査（`transition_judge_verdict.rs` の ⑼）は `judged_windows` を回るので、
+/// `writes_per_window` が空だと 1 度も回らない。窓ごとの 2 つの「量が欠けている」は
+/// 上の 2 変種のどちらからも起こせず、この第 3 の形だけが届く
+/// （`the_producible_signatures_cover_the_per_window_unmeasured_arms` が固定する）。
+///
+/// 書込回数は上限（`WRITES_PER_WINDOW_MAX`）の内側に置く——ここで上限超も同時に起こすと、
+/// 本変種が足す署名が「窓ごとの書込回数」の側なのか被覆の側なのか読めなくなる。
+fn summary_with_written_window_missing_its_quantities() -> TransitionSummary {
+    let mut summary = TransitionSummary::empty(None);
+    summary.writes_per_window.insert(sample_window(), 1);
+    summary
 }
 
 /// 違反 1 件の字面から、数値を除いた見出し（実測値に依らず種別を指す部分）を採る。
@@ -386,6 +403,7 @@ fn signatures_producible_by(bounds: &Bounds) -> BTreeSet<String> {
     for summary in [
         summary_with_every_quantity_out_of_bounds(),
         summary_with_every_quantity_missing(),
+        summary_with_written_window_missing_its_quantities(),
     ] {
         if let Err(violations) = judge(&summary, bounds) {
             for violation in violations {
@@ -507,6 +525,88 @@ fn the_two_bounds_families_produce_different_violations() {
         deterministic.contains(&shared) && signoff.contains(&shared),
         "壊れた観測はどちらの上限も支えないはずである: {shared}"
     );
+}
+
+#[test]
+fn the_producible_signatures_cover_the_per_window_unmeasured_arms() {
+    // `signatures_producible_by` は「その上限の組で出得る違反の**全体**」を名乗る集合であり、
+    // `misattributed_violations` はそこに載らない行を「出得ない」と断じる。ゆえに集合の
+    // 取りこぼしはそのまま**偽陽性**へ跳ね返る——手順書が正しく書いた行を誤りと報告する。
+    //
+    // 判定器の窓ごとの被覆検査（`transition_judge_verdict.rs:551-565` の走査）が積む 2 つの
+    // 「量が欠けている」は、変種を 2 つしか回さない間は**構造的に起こせなかった**——
+    // 量が揃った変種では欠落が無く、量が 1 つも無い変種では `writes_per_window` が空で
+    // `judged_windows`（同 `:857-863`）が 1 度も回らないためである。「書込は在るのに窓ごとの
+    // 量が欠けている」第 3 の形だけがこの 2 腕へ届く。
+    let deterministic = signatures_producible_by(&Bounds::deterministic());
+    let signoff = signatures_producible_by(&Bounds::signoff());
+
+    let mismatch = violation_signature(
+        &Violation::Unmeasured(Quantity::MismatchFrames(sample_window())).to_string(),
+    );
+    assert!(
+        deterministic.contains(&mismatch),
+        "窓ごとのフレーム差が欠けている違反を決定論系統が 1 度も出せていない\
+         （手順書がこの行を正しく置いても偽陽性になる）: {deterministic:?}"
+    );
+
+    let visualize = violation_signature(
+        &Violation::Unmeasured(Quantity::VisualizeToWriteUs(sample_window())).to_string(),
+    );
+    assert!(
+        signoff.contains(&visualize),
+        "窓ごとの可視化から書込までが欠けている違反を実機専用系統が 1 度も出せていない\
+         （手順書がこの行を正しく置いても偽陽性になる）: {signoff:?}"
+    );
+
+    // 2 腕は門の内外で分かれている（`frame_bound` 側と `visualize_to_write_us_max` 側）。
+    // 集合を広げた結果として系統の非対称が潰れていないことも同時に固定する。
+    assert!(
+        !signoff.contains(&mismatch),
+        "実機専用系統がフレーム単位の欠落を出している: {mismatch}"
+    );
+    assert!(
+        !deterministic.contains(&visualize),
+        "決定論系統が実機専用の量の欠落を出している: {visualize}"
+    );
+}
+
+#[test]
+fn the_two_families_share_exactly_the_input_sanity_violations() {
+    // §6.2 の帰属規則（「違反行がどちらのブロックの下にあったかで系統を判断する」）には
+    // 例外がある——**入力の健全性**を言う違反は上限の門の外で積まれるので、2 系統の下に
+    // 同時に並ぶ。規則はこの 3 つに対して「両方」を返し、それが正しい答えである。
+    //
+    // どれがその 3 つかを手順書の散文だけに置くと静かにずれる（`Bounds` の armed 項目を
+    // 動かした日に、門の内外が入れ替わっても文書は何も言わない）。ゆえに判定器から
+    // **共通部分として**起こし、手順書がその 3 つを字面で名指ししていることまで固定する。
+    let deterministic = signatures_producible_by(&Bounds::deterministic());
+    let signoff = signatures_producible_by(&Bounds::signoff());
+    let shared: BTreeSet<String> = deterministic.intersection(&signoff).cloned().collect();
+
+    let expected: BTreeSet<String> = [
+        Violation::MalformedRecords { count: 3 },
+        Violation::FramesIndeterminate,
+        Violation::MissingOrigin,
+    ]
+    .iter()
+    .map(|violation| violation_signature(&violation.to_string()))
+    .collect();
+    assert_eq!(
+        shared, expected,
+        "両系統の下に同時に並ぶ違反の集合が変わった。手順書 §6.2 の例外の段落を\
+         同じコミットで直すこと（門の内外が入れ替わった可能性がある）"
+    );
+
+    // 手順書が 3 つとも名指ししていること。字面は判定器から起こすので、Display を
+    // 書き換えた日に本検査が落ちる（文書が静かに嘘になる形を塞ぐ）。
+    let text = procedure_text();
+    for signature in &expected {
+        assert!(
+            text.contains(signature.as_str()),
+            "手順書が「両系統の下に並び得る」違反 `{signature}` を字面で名指ししていない"
+        );
+    }
 }
 
 #[test]

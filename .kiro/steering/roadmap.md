@@ -62,7 +62,7 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 | 種別 | ゴール（単一文） | ユニット | ウェーブ |
 |---|---|---|---|
 | 挙動バグ | 拡大率切替時の跳ね＝遷移の原子性＋work area 追随（+36px/24px 浮き） | `dpi-transition-atomicity` | **W6.75**（**次ウェーブ・単独**・再観測は要件の research＝budget 後の実測が帰着切り分けに最良） |
-| 挙動バグ | DPI 遷移時の `BalloonFollow.offset` スケール意味論確定 | `balloon-offset-dpi` | **W6.75**（atom 縮退時は atom と統合） |
+| 挙動バグ | DPI 遷移時の `BalloonFollow.offset` スケール意味論確定 | `balloon-offset-dpi` | **W6.75**（~~atom 縮退時は atom と統合~~＝**2026-08-21 失効**。atom は残存確定で 37 タスクを完走したため統合の前提が消えた。bod 側 brief は 4 箇所とも失効済み） |
 | 基盤 | 檻の決定性（毒化 **95 呼出/12 モジュール**・ハーネス 2 設計の一本化・注入シーム） | `test-cage-determinism` | **W6.9**（これ以上後送しない） |
 | M-e2e | 適合14項目一周＋DoD＝**M1 完成宣言** | `emo2-conformance-e2e` | **W7**（最終） |
 | 性能 | 描画・フレーム駆動の負荷を SSP 同等圏へ（現状 CPU 3.6 倍） | `draw-load-parity` | **W8**（**優先度低・M1 完成を妨げない**・2026-08-15 起票） |
@@ -84,7 +84,7 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 | **W8**（優先度低） | `present-write-coherence` | `/kiro-start areka-P0-present-write-coherence` | **M1 完成を妨げない**（2026-08-22 開発者裁定＝「大改造が必要なら無理に治さなくて良い」）。atom が要件 4.2 を**決定論では満たし実機では満たさずに**閉じたぶんの引受先。出発点は atom 設計 **C8 の B-3（可視化の 2 相化・第一候補）／B-4（窓内下端中央補償・緩和）** で、候補表の外へは広げない（atom 要件 3.4 を継承）。**実測の起点**（`atom-73-signoff-1`・8 遷移・全遷移を走査した値）: `visualize_to_write_us` **210,329〜306,301µs**（上限 16,667µs の **12.6〜18.4 倍**・違反 32 件）／`flush_total_us` 143,231〜231,910µs（同 8 件）＝**実機専用系統の違反は計 40 件**。**B-2b は隙間を縮めなかった**（`flush_total` 平均 192,247→**188,711**µs＝**−1.8%**・OS 側が過半＝L7）。**窓ごとの隙間はむしろ +27% 伸びた**（全窓の書込がバッチ末尾へ揃った帰結・台帳 §11.6）。接触面は `presenter/show.rs` の可視化の段（`apply_show`:46 の末尾＝`set_visible`:375／`set_bounds`:381／`Visualize` 発行:392）。**cage（W6.9）の後**に置く（同じ `apply_show` 鎖を触るため）。B-4 を採る場合は当たり判定の原点（`collision-dpi-hittest`）と `mount.rs` の配置契約に触れるので atom 要件 10.1 の再確認が要る。**tick 構造の大改造に及ぶなら atom 要件 9.3 に従い分割を再裁定する**（要件段階でまず規模を見積もること）。判定器・観測語彙・サインオフ手順書は atom の着地物を流用（新設不要） |
 
 **干渉台帳（生存ペアのみ・2026-08-15 棚卸⑨で W6.5 完走後の実形へ再解決・旧全文は history）**:
-- **atom⇄bod**〔follow 系共有＝**統合候補（縮退時は統合が既定路線）**: atom の主戦場は `follow/window_move.rs`・persist は `placement/persist.rs`。分離時は atom 先着→bod rebase。いずれにせよ W6.75 内で完結〕
+- **atom⇄bod**〔follow 系共有＝~~統合候補（縮退時は統合が既定路線）~~ **2026-08-21 失効・単独 2 本で確定**: atom の主戦場は `follow/window_move.rs`・persist は `placement/persist.rs`。**atom は 2026-08-22 に 37 タスクを完走した**（`window_move.rs` は 965→1,223 行）ので、bod は atom 着地後の rebase 前提で読むこと。いずれにせよ W6.75 内で完結〕
 - **atom⇄dlp（W8）**〔`tick_bridge` flush 経路で干渉しうる: 編成上 atom（W6.75）が dlp（W8＝M1 後）へ必ず先着するため直列は構造で成立。dlp 着手時に atom 実形へ rebase・順序調停〕
 - **軽微**: cage③の test_support 共有化で placement 系（bod）の import 行が追随＝実質共存可
 - **show.rs アンカー（2026-08-15 実測・budget 改稿で全面ドリフト）**: `apply_show` :43 起点・budget 域（compose/resample/mask/insert）:95-170・atom 関心域（chain 生成〜upload〜可視化）:280-330・cage④ :297-301。旧 :32／:68-88／:220-270／:227-232 は全て失効
@@ -128,7 +128,7 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 | 1,604 | `crates/areka-emo-present/src/cache_tests.rs` | **main に既存** |
 | 1,330 | `crates/areka-seriko/src/actor_bind_loop_tests.rs` | **main に既存** |
 | 1,255 | `crates/areka/src/emo2_boot/frame_transition_branch_tests.rs` | atom（新規） |
-| 1,135 | `crates/areka/src/placement/follow/window_move.rs` | atom（**965 → 1,135**） |
+| 1,223 | `crates/areka/src/placement/follow/window_move.rs` | atom（**965 → 1,223**） |
 | 1,076 | `crates/areka-emo-compose/src/plan_ops_tests.rs` | **main に既存** |
 | 1,047 | `crates/areka-emo-present/src/presenter/budget_tests.rs` | **main に既存** |
 | 1,039 | `crates/areka/src/placement/transition_judge_tests.rs` | atom（新規） |
@@ -138,7 +138,7 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 **要点は「atom が壊した」ではなく「既に 5 本破れていて atom が 4 本足した」ことである。** 5 本は本ブランチの分岐点（`git merge-base origin/main HEAD`）の時点で既に超えており、`recompose-budget`・`kero-balloon`・`bindoption-exclusivity` 等の後続 spec が積み上げたものである。**目安は「目安」と書かれており、テストも lint も守っていない。**
 
 - **atom は自分の申し送りを消化しなかった**——`tasks.md` の「task 5.5 への申し送り: `window_move.rs` は 974 行で 1,000 行の目安まで残り 26 行・着手前にファイル分割が要る」は実行されず、裁定の記録も残らないまま群 5〜7 が進んだ。**最終ゲートまで誰も気づかなかった。**
-- **atom の内側で今これを直すのは高くつく**——`window_move.rs` を割ると spec 文書 7 本に散る **50 箇所**の `window_move.rs:<行>` が全部動く。**file:line の陳腐化はこの spec が 4 度踏んだ失敗そのもの**であり、実機サインオフを閉じた直後にそれを自ら仕込むのは筋が悪い。ゆえに **atom の内側では割らず、数量つきで報告して裁定を仰ぐ**（本追記がその報告である）。
+- **atom の内側で今これを直すのは高くつく**——`window_move.rs` を割ると spec 文書 7 本に散る **41 箇所**の `window_move.rs:<行>` が全部動く。**file:line の陳腐化はこの spec が 4 度踏んだ失敗そのもの**であり、実機サインオフを閉じた直後にそれを自ら仕込むのは筋が悪い。ゆえに **atom の内側では割らず、数量つきで報告して裁定を仰ぐ**（本追記がその報告である）。
 - **引受先は現時点で存在しない。** `file-slimming` は `.kiro/specs/completed/` にあり申し送りを消化できない。上の 9 本のいずれかを名指ししている**生存 spec は 1 本も無い**（`.kiro/specs/` の completed を除く全ディレクトリを 5 本のファイル名で走査して 0 件・2026-08-22 実測）。**「ウェーブ名は担当者ではない」の規律に従い、実在の引受先が決まるまで先送りとは呼ばない——本追記が唯一の記録である。**
 - **開発者に問うべきは 3 択**: ⒜ 目安を機械で守る（行数の番人テストを 1 本置き、既存 9 本は例外表に載せて漸減させる。置き場所の候補は `test-cage-determinism`＝W6.9）／⒝ 掃除の spec を 1 本起票する（`file-slimming` 第 2 期）／⒞ 目安のままとし `structure.md:176` に「番人は無い・漂流は許容する」と明記して**期待値を実態へ合わせる**。**現状は「規則があるのに誰も測っていない」＝最も悪い形**である。
 

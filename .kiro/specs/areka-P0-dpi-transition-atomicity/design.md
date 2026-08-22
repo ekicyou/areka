@@ -457,7 +457,7 @@ flowchart TD
 | 10.3 | Z 指令の順序・結果不変 | C2 合流規則（Z 専用は不合流・`is_coalescible` の 3 連言＝`command.rs:514`）**＋一括 flush のバッチ経路**（task 7.2・C8 の B-2b）——`Begin/Defer/EndDeferWindowPos` の 1 バッチでも Z 専用指令は per-window の `hwndInsertAfter`＋flags として同じ位置に同居し、投入順も 7 引数も変わらない（本文「要件 10.3 の守り方」） | 合流の檻 21 本（`crates/wintf/src/ecs/window/command_coalesce_tests.rs`・1 行も変えず緑）＋実窓 2 組の A/B `crates/wintf/src/ecs/window/command_batch_tests.rs::a_batched_zorder_list_lands_in_the_same_order_as_one_write_per_command`（最終 Z 順序の一致を実測で固定） |
 | 10.4 | アロケーション 0・perf 行維持 | show.rs 観測は size 変化時のみ＋`enabled!` 守り・perf 行末尾追加のみ | 既存テスト維持 |
 | 10.5 | wpl／scg の一度きり不変 | 触らない（R6 範囲外） | — |
-| 10.6 | ドラッグ追従・定常書込 0 | 合流は終状態不変・C6 変化時のみ | — |
+| 10.6 | ドラッグ追従・定常書込 0 | 合流は終状態不変・C6 変化時のみ | 定常書込 0＝決定論＋実機（`writes=4` は遷移フレームのみ）。**ドラッグ追従の比 1.000 はどちらの系統でも測っていない**——決定論の檻（`follow_drag_tests.rs`）は指令キューまでで一括バッチを通らず（D11）、実機サインオフは §4.4 が採取中のドラッグを禁じる（`ATOM-NO-DRAG: PASS`）。かつアンカー付きキャラ窓のドラッグは `drag_follow.rs:89`・`:183` が `enqueue_window_set_pos` を通る＝**隔離もされていない**。引受先＝`areka-P0-emo2-conformance-e2e`（要件 10.6 直下の注記・台帳 §13.4） |
 | 10.7 | 別モニタドラッグの寸法追従 | hold は表 dpi 一致で即通過（移動先モニタの dpi は表に既在） | 決定論テスト |
 
 ## Components and Interfaces
@@ -831,7 +831,7 @@ pub fn judge_transition_log(log: &str) -> Report;   // 上 4 つの合成
 | `ground` | areka `resize_window_to`（Bottom） | `scope ground_y wa_bottom diff route` | — |
 | `chain` | areka C4 | `stage=armed\|realigned\|deferred scopes moved reason` | — |
 
-- **本表の `site=` 語彙は誰も測っていない（task 7.5 で判明・次に語が増えたときの注意）**: 手順書の行を逐語検査する `crates/areka/src/placement/transition_signoff_procedure_tests.rs` の `validate_record_line`（`:119` 定義・語彙照合は `:177-184`）が発行側の語彙と突き合わせるのは **`stage=` の値だけ**であり、`site=` は「語彙外フィールド名でない」ことしか見ない。しかも読む先は `signoff-procedure.md` 1 本（`:41` の定数を `procedure_text`（`:44`）が `include_str!` する）で、**`design.md` は 1 行も読まない**。そのため task 6.5 が 4 語目 `work-area-resnap`（`transition_diag.rs:120`）を足したとき、本表だけが 3 語のまま取り残され、テストは全緑のままだった（task 7.5 で 4 語へ是正）。**観測点語を増やしたら本表を手で追随させること**——正本は `transition_diag.rs:124` の `HOLD_SITE_ALL`（4 語）である。
+- **本表の `site=` 語彙は誰も測っていない（task 7.5 で判明・次に語が増えたときの注意）**: 手順書の行を逐語検査する `crates/areka/src/placement/transition_signoff_procedure_tests.rs` の `validate_record_line`（`:119` 定義・語彙照合は `:177-184`）が発行側の語彙と突き合わせるのは **`stage=` の値だけ**であり、`site=` は「語彙外フィールド名でない」ことしか見ない。しかも読む先は `signoff-procedure.md` 1 本（`:41` の定数が指す 1 本を `procedure_text`（`:44`）が実行時に `std::fs::read_to_string`（`:45`）で読む）で、**`design.md` は 1 行も読まない**。そのため task 6.5 が 4 語目 `work-area-resnap`（`transition_diag.rs:120`）を足したとき、本表だけが 3 語のまま取り残され、テストは全緑のままだった（task 7.5 で 4 語へ是正）。**観測点語を増やしたら本表を手で追随させること**——正本は `transition_diag.rs:124` の `HOLD_SITE_ALL`（4 語）である。
 - **必須と任意の別**: 必須列は発行側の `*_FIELDS`（`transition_diag.rs` の `pub const`）と 1 対 1 で、判定器の `required_fields` が**欠けていれば壊れた行**として数える。任意列は `WRITE_OPTIONAL_FIELDS` で、判定器の `optional_fields` が**欠けていても壊れた行にしない**——`in_batch` は task 7.2（C8 の B-2b）で増えたフィールドであり、必須にすると**それ以前に採取した実機ログ**（`mechanism-ledger.md` §3・§10 の逐語）を後から「壊れた行」として否定してしまうためである。**発行側は任意フィールドも必ず載せる**（任意なのは読む側の受け入れ方であって書く側の義務ではない）——そこは行の逐語テスト `transition_diag_tests::write_line_is_verbatim` が固定する。
 - 全行の接頭語 `[transition] frame=<u32> t_us=<u64> kind=<k>`。欠損は `-`。フィールドは `名前=値`・空白区切り（`judge-perf.py` と同じ辞書化規則で読める）。
 - **フィールド名の一意性（1 行に同じ名前を 2 度出さない）**: `tools/perf/judge-perf.py:562,588-596` の `parse_fields` は同名キーを**後勝ち**で上書きするため、接頭語の `kind=<レコード種別>` と同じ名前を窓種別に使うと**レコード種別が消え**、`split_transitions` の起点判定（`kind=monitor`）が壊れる。よって窓種別のフィールド名は **`win_kind=`** とする（Rust 側の `WriteTag.kind` はそのまま）。同様に値には空白を含めない（`origin` に載る `PlacementRoute::as_str()` は 1 語）。

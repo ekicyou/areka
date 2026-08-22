@@ -29,7 +29,7 @@
 | サーフェス更新の語 | `crates/areka-emo-present/src/presenter/transition_record.rs`（`presenter::` 再輸出） |
 | 上限・違反・合否の語・環境変数名 | `crates/areka/src/placement/transition_judge_verdict.rs` |
 
-一致は目視ではなく実行テストが固定している——`crates/areka/src/placement/transition_signoff_procedure_tests.rs` が本書を読み、⑴ 本書に載る観測行の例が発行側の語彙だけで書かれていること、⑵ 発行側のレコード種別 10 種が**すべて**本書に現れること、⑶ ランナーの入口の語が字面で載っていること、⑷ Report の出力例に並ぶ違反の行が、その上限系統で実際に出得るものであることを検査する。**本書の語を変えるなら、同じコミットでこのテストを通すこと。** 通らなければ本書は静かに嘘になる。
+一致は目視ではなく実行テストが固定している——`crates/areka/src/placement/transition_signoff_procedure_tests.rs` が本書を読み、⑴ 本書に載る観測行の例が発行側の語彙だけで書かれていること、⑵ 発行側のレコード種別 10 種が**すべて**本書に現れること、⑶ ランナーの入口の語が字面で載っていること、⑷ Report の出力例に並ぶ違反の行が、その上限系統で実際に出得るものであることを、⑸ どちらの系統の下にも並び得る違反（§6.2 の入力の健全性の 3 つ）が本書に字面で載っていることを検査する。**本書の語を変えるなら、同じコミットでこのテストを通すこと。** 通らなければ本書は静かに嘘になる。
 
 ### 0.3 消灯した観測点を「発生 0 回」の根拠に用いない（要件 8.5・本書が制度化する唯一の禁止）
 
@@ -171,8 +171,8 @@ $env:AREKA_PROFILE_DIR       = $PROFILE_DIR
 | T5 | `kind=write`（`stage=sync`） | `crates/wintf/src/ecs/window_proc/window_pos.rs:467-491` | 同上 | `debug` | **経路 A の裏取り**（OS 提案位置の同期書込）。`origin=dpi-suggested` と対で読む |
 | T6 | `kind=msg` | `crates/wintf/src/ecs/window_proc/window_pos.rs:59` / `:336`・`crates/wintf/src/ecs/window_proc/lifecycle.rs:140` | 同上 | `debug` | 窓書込の内側で OS 同期処理が走っているか（`in_swp`・`since_flush_us`） |
 | T7 | `kind=surface`（`stage=upload`／`visualize`／`skipped`） | `crates/areka-emo-present/src/presenter/show.rs:349` / `:390`・`crates/areka-emo-present/src/presenter/refresh.rs:83` / `:100` | 同上 | `debug` | 描画内容が新しい寸になった時刻。**窓矩形との食い違い**を測る片側 |
-| T8 | `kind=ground` | `crates/areka/src/placement/follow/window_move.rs:342` → `crates/areka/src/placement/transition_diag.rs:539` | 同上 | `debug` | 接地点と作業領域下端の差（`diff`）。下端吸着のキャラ窓のみ |
-| T9 | `kind=snapshot` | `crates/areka/src/emo2_boot/frame/work_area_sync.rs:127` → `crates/areka/src/placement/transition_diag.rs:459` | 同上 | `debug` | 作業領域源を作り直したフレームと、作り直した後の全モニタの拡大率・作業領域。**差し替えが起きたフレームにだけ出る**（同じ表のフレームでは 1 行も出ない＝それが正常） |
+| T8 | `kind=ground` | `crates/areka/src/placement/follow/window_move.rs:369` → `crates/areka/src/placement/transition_diag.rs:588`（`log_char_ground`・発行は `:612`） | 同上 | `debug` | 接地点と作業領域下端の差（`diff`）。下端吸着のキャラ窓のみ |
+| T9 | `kind=snapshot` | `crates/areka/src/emo2_boot/frame/work_area_sync.rs:133` → `crates/areka/src/placement/transition_diag.rs:497`（`log_monitor_snapshot_sync`・発行は `:502`） | 同上 | `debug` | 作業領域源を作り直したフレームと、作り直した後の全モニタの拡大率・作業領域。**差し替えが起きたフレームにだけ出る**（同じ表のフレームでは 1 行も出ない＝それが正常） |
 | T10 | `kind=hold` | `crates/areka/src/emo2_boot/frame/dpi.rs:302`（`site=dpi`・`apply_dpi_phase_gate` → `dpi_sync.rs:232`）・`crates/areka/src/emo2_boot/frame/scale_text.rs:170`（`site=reconcile`）・`crates/areka/src/emo2_boot/frame/drain_resnap.rs:234`（`site=resnap`）・**`crates/areka/src/emo2_boot/frame/work_area_sync.rs:238`（`site=work-area-resnap`・task 6.5 で追加）** → 後 3 者は `crates/areka/src/placement/dpi_sync.rs:270` → いずれも `crates/areka/src/placement/dpi_sync.rs:278` → `crates/areka/src/placement/transition_diag.rs:464` | 同上 | `debug` | 窓の拡大率とモニタ表の**整合待ち**。`decision=` が `hold`／`proceed`／`proceed-after-timeout`、`site=` が判定を下した点（**4 点**＝`dpi`／`reconcile`／`resnap`／`work-area-resnap`。task 6.5 で 4 点目が入った）。**判定が下ったフレームにだけ出る**（待ちの起きないフレームでは 1 行も出ない＝それが正常） |
 | T11 | `kind=chain`（`stage=armed`／`realigned`／`deferred`） | `crates/areka/src/placement/chain_realign.rs:117`（armed）/ `:181`（realigned）/ `:223`（deferred）→ いずれも `crates/areka/src/placement/transition_diag.rs:518` | 同上 | `debug` | DPI 遷移後の連鎖再解決。**task 5.6 の着地で点灯した**。`armed`＝武装（拡大率変化を伴う再射影）、`realigned`＝解き直し実施（`scopes`／`moved`）、`deferred`＝見送り（`reason`）。**武装・解決・見送りが起きたフレームにだけ出る**（会話中の表情差替では 1 行も出ない＝それが正常） |
 | A1 | `[diag.window_move] route= entity= kind= scope= …` | `crates/areka/src/placement/diag.rs` | `areka::placement::diag` | `debug` | スコープ ↔ キャラ窓 entity の対応（§4.3 の裏取り） |
@@ -378,6 +378,7 @@ cargo test -p areka transition_signoff -- --ignored --nocapture
 
 - **上限は 2 系統あり、別々に評価して両方が並ぶ。** `deterministic` は回帰テストが固定する決定論の量——起点から最終書込までのフレーム差・**可視化と窓書込のフレーム差**・**随伴バルーンの同一フレーム性**・窓ごとの書込回数・経路 A の件数（札と段の両方）・接地点差・連鎖の回数。`signoff` は**実機専用**の量——可視化から窓書込までの経過（µs）・一括書込の総所要（µs）で、非決定ゆえ回帰テストでは値を固定しない。**どちらか一方の `PASS` を全体の合格と読まない。**
 - **フレームを単位に測る量はすべて `deterministic` 側である。** 「可視化と書込のフレーム差」と「随伴バルーンが別フレームで書かれた」は名前が実機の症状に似ているが、`signoff` の下には**出得ない**（`signoff` はフレーム差の上限を 1 つも当てないため）。同じ食い違いを µs で測るのが `signoff` 側の「可視化から書込まで」であり、**両者は別の量である**。§6.6 の 2 行を埋めるとき、違反行がどちらのブロックの下にあったかで系統を判断すること——文言から推測しない。
+- **入力の健全性を言う違反だけは上限の門の外にあり、2 系統の下に同時に並ぶ。** `語彙の規約を破った行 N 件`・`フレーム差が判定不能（一様に 0／読めない）`・`区間の先頭が起点レコードでない` の 3 つがそれである——壊れた観測はどちらの上限も支えないので、どちらの系統も同じく落ちる。上の「どちらのブロックの下にあったか」で系統を決める規則は、この 3 つに対しては**両方**を返す。それが正しい答えであって、片方の系統へ寄せてはならない（§6.6 の 2 行はどちらも FAIL になる）。**この 3 つが何であるかは散文ではなく判定器から起こしてある**——`transition_signoff_procedure_tests::the_two_families_share_exactly_the_input_sanity_violations` が両系統の署名集合の共通部分を採り、本段落が 3 つとも字面で名指ししていることまで検査する。
 - **判定量は合否によらず刷られる**（`量:`／`量(参考):`／`量(窓):`／`量(見送り窓):` の各行）。task 4.3 の裁定でこうなった——是正の前後で並べるのは上限の合否ではなく**量そのもの**なので、`PASS` の系統の量が消えると比較の側が毎回生ログから手で起こす羽目になる（task 4.2 で実際に起きた）。欠けている量は番兵 `-` で刷られる（`0` ではない。「測っていない」と「測って 0 だった」は別の事実である）。違反があった量は、それに加えて実測値と上限つきで `- ` の行に並ぶ。
 - 実機専用の上限（`Bounds::signoff` の 2 値）は task 4.3 が確定させた。**確定値は両量とも `16667` µs（= 1/60 秒）**であり、根拠は**採取機に依らない**——画面に提示される 1 フレームはリフレッシュレートが 60Hz を下回らない限り高々 1/60 秒なので、これを超えた食い違い（および 1 フレームを超える一括書込）は**どの機械でも必ず 1 枚以上の提示フレームをまたぐ**。要件 4.2／4.5 を µs で言い直した形である。全文は確定台帳 `mechanism-ledger.md` §4（L9）。**リフレッシュレートが 60Hz を下回る表示で採ったときだけ**、この上限は厳しすぎる側へ倒れる——そのときは実測周期を添えて台帳で再裁定する（**目視に合わせて緩めない**・§6.5）。
 - 整合待ち（`kind=hold`）を含む遷移だけがフレーム差の許容に待ちフレーム数を足せる。この許容の正本は**本番の整合ゲートの上限**（`crates/areka/src/placement/dpi_sync.rs` の `DPI_SYNC_HOLD_MAX_FRAMES`）であり、判定器の `HOLD_FRAME_ALLOWANCE` はそれを参照する（task 5.4 で二重定義を解消済み）。
@@ -511,7 +512,7 @@ ATOM-SIGNOFF: PASS|FAIL
 
 ## 8. 本書のメンテ規約
 
-- 観測レコードの語（`kind=`・`stage=`・フィールド名）と、ランナーの入口の語（環境変数名・観測 target・行頭タグ・Report の 2 系統名と合格語・ランナーのテスト名）、および **§6.2 の Report 出力例に並ぶ違反行がどちらの上限系統に属するか**は、**`crates/areka/src/placement/transition_signoff_procedure_tests.rs` が本書を読んで一致を検査している**（§0.2 の検査 ⑴〜⑷）。発行側の語を変えるなら、同じコミットで本書も直すこと。とりわけ §6.2 の出力例へ違反行を足す・動かすときは、その系統で実際に出得る違反かをテストが確かめるので、通してから報告すること。
+- 観測レコードの語（`kind=`・`stage=`・フィールド名）と、ランナーの入口の語（環境変数名・観測 target・行頭タグ・Report の 2 系統名と合格語・ランナーのテスト名）、および **§6.2 の Report 出力例に並ぶ違反行がどちらの上限系統に属するか**は、**`crates/areka/src/placement/transition_signoff_procedure_tests.rs` が本書を読んで一致を検査している**（§0.2 の検査 ⑴〜⑸）。発行側の語を変えるなら、同じコミットで本書も直すこと。とりわけ §6.2 の出力例へ違反行を足す・動かすときは、その系統で実際に出得る違反かをテストが確かめるので、通してから報告すること。
 - §3.2 の「発行点が未着地」の表は **task 5.1／5.4／5.6 の着地で空になり、§3.2 は「0 件の読み方」へ書き替えた**（10 種すべて §3.1 にある）。以後に観測点を足したら**同じ要領で §3.1 へ行を足す**こと。移し忘れると、点いている観測点を「出ないもの」として扱い続けることになる。task 5.1（`kind=snapshot`＝T9）・task 5.4（`kind=hold`＝T10）・task 5.6（`kind=chain`）はいずれも移動済みで、**残りは 0 種である**（§3.2:183 が「0 件の読み方」として書いているとおり）。
 - §6.2 の実機専用の上限は task 4.3 が確定値（`16667` µs）へ差し替え済みである。以後この値を動かすなら、確定台帳 `mechanism-ledger.md` §4（L9）の根拠を先に書き換え、判定器の定数（`crates/areka/src/placement/transition_judge_verdict.rs` の `VISUALIZE_TO_WRITE_US_MAX`／`FLUSH_TOTAL_US_MAX`）と本書の 3 箇所（§6.2 の出力例・§6.2 の上限の項・§6.6 の `SIGNOFF-BOUNDS` 行）を同じコミットで揃えること。**実測に合わせて緩めるのは禁じられている**（§6.5）。
 - file:line の参照は本書作成時点（群 1〜3 着地）のものである。ずれたら本書を直す——ずらしたまま放置すると、本書は読めるが辿れない文書になる。
