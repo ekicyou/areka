@@ -16,9 +16,43 @@
 ------
     python judge-perf.py <run.log> <cpu.csv> --mode baseline [--build dev|release] [--meta <run-meta.txt>]
     python judge-perf.py <run.log> <cpu.csv> --mode verdict  --build dev|release   [--meta <run-meta.txt>]
+    python judge-perf.py ... --emit-metrics       # 末尾に主要指標を metric=<名前> value=<値> で出す
     python judge-perf.py --selftest
 
 判定モードでは `--build` の明示が要る（どの判定式を適用するかがビルド種別で変わるため）。
+
+`--emit-metrics`（0.4.0・両モードで使える）
+-------------------------------------------
+レポートの末尾に、1 行 1 指標で `metric=<名前> value=<値>` を出す。読み口は本文の
+`parse_fields` と同じ規則（`名前=値`・空白区切り）で、`perf-compare.py` が A/B の比較に読む。
+**判定も数値も 1 つも変わらない**——足すのは行だけである。値を出せない指標は `-` にする。
+`-` と `0` は違う（`0` は「数えて 0 だった」、`-` は「測っていない」）。
+主な指標: `steady_idle_cpu_mean_pct`（主指標）・`frame_interval_p95_ms`・`catchup_count`・
+`alloc_count`・`talk_peak_cpu_pct`・`cpu_p50_pct`／`cpu_p95_pct`／`cpu_max_pct`・
+`catchup_dispatcher`／`catchup_kanade`／`catchup_loop_ticker`・`tick_skip_ratio`。
+
+集計モード §9（catch-up）の読み方（0.4.0 で追補・要件 2.9）
+----------------------------------------------------------
+従来の件数に加えて、次を出す:
+
+  * **系統別**（`dispatcher`／`kanade`／`loop_ticker`）。分けるのは行末の `target=` フィールドで
+    あって文言ではない——dispatcher と kanade は同じ文言を出すので、文言で数えると
+    2 系統が 1 つに潰れる（`ticker.rs:203-206, 223-226, 305-308`）
+  * **各発生の周辺状況**: 時刻・定常状態かどうか・直前の表示成立点との差（秒）・
+    直前 10 秒の表示成立点数（発話再生中かどうかの代理）・その時刻を覆う `[tick]` 窓の
+    `wall_us` と `skipped`
+  * **仮説の数値**: 「フレーム駆動の負荷が CPU 競合でティッカーの起床を遅らせる」は要件 2.9 が
+    書いているとおり **仮説** である。catch-up を覆った `[tick]` 窓の `wall_us` 平均 ÷
+    全窓の平均を比として出し、成立／不成立／判定不能 の語を機械が付ける。
+    `[tick]` を点灯せずに採った走行は **判定不能** であって不成立ではない
+    （「調べたが違った」と「調べていない」を同じ語で書かない）
+
+任意種のログ（0.4.0・無くても判定は成立する）
+---------------------------------------------
+`[tick] kind=window`（design.md C15）・`perf(thread)`／`perf(process)`（同 C14）・発話区間の印
+（`event="steady_talk"` ほか）は **任意種** である。いずれも既定 OFF の観測なので、点灯せずに
+採った走行には 1 本も出ない。必要ログ種（`J_REQUIRED_LOG_KINDS`）は 0.3.2 から不変であり、
+任意種が無いことを欠落として扱わない。レポート [4] に「有る／無い」を必ず出す。
 
 `--selftest`（自己較正）は `fixtures/` の既知ログを **実運用と同じ入口（`main(argv)`）** で
 走らせ、各 fixture の `case.txt` に書いてある期待終了コードを逐語再現する（要件 2.4）。
@@ -91,6 +125,16 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+# 0.4.0 の §9 追補（表の組み立てと印字）は兄弟モジュールにある。判定式は 1 つも無く、
+# 較正値も持たない（値の所在は下のバナー 1 箇所のまま）。
+# スクリプトとして起動したときは自分の置き場が `sys.path[0]` なのでそのまま読めるが、
+# 他所から import されたときのために置き場を **末尾へ** 足す（先頭へ差し込むと、
+# 同名のモジュールがあったときに標準ライブラリを覆い隠しうる）。
+_TOOLS_DIR = str(Path(__file__).resolve().parent)
+if _TOOLS_DIR not in sys.path:
+    sys.path.append(_TOOLS_DIR)
+import judge_perf_catchup  # noqa: E402  （置き場を通してから読む）
+
 # =============================================================================
 # 較正値バナー（要件 2.6 / 4.5 / 5.3）
 # -----------------------------------------------------------------------------
@@ -104,11 +148,15 @@ from pathlib import Path
 
 #: 本スクリプトの版（レポート先頭に出す。較正値を変えたら上げる）。
 SCRIPT_VERSION = (
-    "0.3.2 (task 3.2 の裁定を反映 / 判定式⑴の窓を発火起点へ・"
-    "上限の土台を最大コマ待ち 150ms へ・判定対象系列を明示指定へ / "
-    "0.3.1: 窓 C に条件 4（同一鍵の重畳除外・FRAME_INTERVAL_IDLE_MAX_ACTIVE）を復帰 / "
-    "0.3.2: 条件 4 の活性本数を判定対象系列の scope に限定"
-    "（別 scope のアニメで判定対象の間隔が落ちるのを止める）)"
+    "0.4.0 (判定式と較正値は 0.3.2 から 1 つも変えていない——足したのは読み口だけ / "
+    "§9 に catch-up の系統別（target フィールド）と各発生の時刻突合・"
+    "「フレーム駆動の負荷が起床を遅らせる」仮説の比と語 / "
+    "--emit-metrics（主要指標を metric=<name> value=<v> 行で末尾に出す・C10 が読む） / "
+    "任意種 [tick] kind=window・perf(thread)・perf(process)・発話区間の印を読む"
+    "（必要ログ種 J_REQUIRED_LOG_KINDS は不変） / "
+    "SSP 参考値（アイドル 3.05% / 発話の頂 4.64%・2026-08-15・合否に不使用）をバナーへ登記 / "
+    "0.3.2: 判定式⑴の窓を発火起点へ・上限の土台を最大コマ待ち 150ms へ・"
+    "判定対象系列を明示指定へ・条件 4 の活性本数を判定対象系列の scope に限定)"
 )
 
 #: 終了コード表（バナーが唯一の所在であるため、docstring だけでなくここにも置く）。
@@ -377,7 +425,20 @@ VERDICT_MIN_STEADY_SEC = 60.0
 #: release ビルドのアイドル CPU 上限（1 コア換算パーセント）。
 #: 議題 2 裁定（同一ゴーストを表示中の SSP 実測 2.2〜2.8% の同等圏）。
 #: 判定は「< 3.0%」の **狭義** の比較である（要件 4.4 の文言が「3% 未満」であるため）。
+#: 【2026-08-22 裁定】この 3.0% は **CPU の絶対値** である。画素数や描画方式の差で
+#: 正規化した目標は置かない（要件 5.1・5.2: SSP は GDI 描画・areka は D2D 描画であり、
+#: 描画方式が違うことは areka が負けてよい理由にならない）。下の SSP 参考値と比べる際も、
+#: 参考値の側を割り引いたり掛け増したりしない。
 IDLE_CPU_MAX_RELEASE_PCT = 3.0
+
+#: SSP 側の参考値（2026-08-15 実測・同一ゴーストを同一手順で表示）。**合否には使わない**。
+#: 要件 5.2 は「SSP の描画方式を調査の対象にせず、目標の根拠にも使わない」と決めており、
+#: ここに置くのは「同じ手順で測るとこうだった」という記録のためだけである。
+#: 判定式は 1 つもこの値を読まない（読んでいないことは判定式の calibration 一覧で分かる）。
+SSP_REFERENCE_IDLE_PCT = 3.05
+SSP_REFERENCE_TALK_PEAK_PCT = 4.64
+SSP_REFERENCE_MEASURED_ON = "2026-08-15"
+SSP_REFERENCE_USE = "参考値・合否に不使用（要件 5.2・再採取は本 spec の要件ではない）"
 
 #: 判定式⑷の前半が閾値と比べる統計量。定常状態（ウォームアップ除外後）の平均を使う。
 #: 【なぜ平均か】要件 4.4 の較正の出所である SSP 実測 2.2〜2.8% は「定常値」として採られており、
@@ -459,6 +520,140 @@ J_SERIKO_STOP_MESSAGES = (
     "seriko: loop 停止",  # looper.rs:372 負 surface でベース復帰
     "seriko: loop bind から外れた ID の再生を停止",  # looper.rs:308
 )
+
+#: catch-up の発行元 3 系統（`ticker.rs:203-206, 223-226, 305-308` の `target = "…"`）。
+#: 【dispatcher と kanade は文言で分けられない】どちらも同じ短いほうの文言を出すので、
+#: 分けられるのは target の値だけである（要件 2.9 が「系統別に数える」と言う以上、
+#: 文言で数える実装はこの 2 系統を 1 つに潰す＝要求を満たさない）。
+J_CATCHUP_TARGETS = ("dispatcher", "kanade", "loop_ticker")
+
+#: 【target はフィールドである】`tracing::info!(target = "dispatcher", "…")` の `target =`
+#: （等号）は普通のフィールドであって、メタデータの target 指示子（`target:` コロン）では
+#: ない。ゆえに行末に `target="dispatcher"` の形で出る。実測の逐語（45 秒の実走ログ）:
+#:   …Z  INFO actor{actor=loop-ticker}: areka_ghost::ticker: loop ticker catch-up: #:   skipped multiple boundaries, firing once target="loop_ticker"
+#: 値は引用符付きなので `unquote_field` で落としてからこの語彙と突き合わせる。
+J_CATCHUP_TARGET_FIELD = "target"
+
+#: 【任意種】以下の 3 種は「有れば読む」行である。**必要ログ種ではない**——
+#: 1 本も無い走行でも判定は成立しなければならない（`J_REQUIRED_LOG_KINDS` は不変）。
+#: 既定 OFF の観測なので、点灯せずに採った走行には 1 本も出ない（design.md C14・C15）。
+
+#: フレーム駆動の 1 秒窓（wintf・target `wintf::tick`・design.md C15）。
+#: 行の時刻は **窓が閉じた時刻** であり、窓が覆う区間は `[時刻 − t_ms, 時刻]` である。
+J_TICK_LINE_MESSAGE = "[tick] kind=window"
+#: フィールドを切り出す位置。この文字列より後ろを `parse_fields` に渡す。
+J_TICK_FIELD_PREFIX = "[tick] "
+#: `[tick] kind=window` に載るフィールド（design.md C15 の順・末尾 13 本が相別 µs）。
+J_TICK_WINDOW_FIELDS = (
+    "kind", "frame", "t_ms", "ticks", "skipped", "heartbeat",
+    "wall_us", "max_us", "ui_cpu_us",
+    "input_us", "update_us", "prelayout_us", "layout_us", "postlayout_us",
+    "uisetup_us", "graphicssetup_us", "draw_us", "prerendersurface_us",
+    "rendersurface_us", "composition_us", "commitcomposition_us", "framefinalize_us",
+)
+
+#: スレッド別・プロセス全体の CPU 報告（areka・target `areka::perf`・design.md C14）。
+J_PERF_THREAD_MESSAGE = "perf(thread): スレッド別 CPU"
+J_PERF_PROCESS_MESSAGE = "perf(process): プロセス CPU"
+
+#: 発話（talk）区間の印。開始と終了で挟まれた区間の CPU 採取点が「発話中の頂」になる
+#: （要件 5.4・合否には載せない）。`areka-kanade/src/schedule/` の info! のフィールド
+#: `event = "…"` の値である（`target: "kanade"` は指示子なので target 位置に出る）。
+J_TALK_EVENT_FIELD = "event"
+J_TALK_START_EVENTS = (
+    "boot_talk",  # schedule/boot.rs:240,259
+    "steady_talk",  # schedule/steady.rs:763
+    "steady_talk_replace",  # schedule/steady.rs:799
+    "close_talk_start",  # schedule/close.rs:66
+)
+J_TALK_END_EVENTS = (
+    "steady_talk_done",  # schedule/steady.rs:851
+    "steady_talk_done_close",  # schedule/steady.rs:848
+    "talk_done_quit",  # schedule/mod.rs:523
+    "talk_done_interrupted_as_non_quit",  # schedule/mod.rs:538
+    "close_refused",  # schedule/close.rs:135
+)
+
+#: 任意種の一覧（レポート [4] に「有る／無い」を必ず出す。無いことは欠落ではない）。
+J_OPTIONAL_LOG_KINDS = (
+    ("フレーム駆動の窓 [tick]", J_TICK_LINE_MESSAGE),
+    ("スレッド別 CPU perf(thread)", J_PERF_THREAD_MESSAGE),
+    ("プロセス CPU perf(process)", J_PERF_PROCESS_MESSAGE),
+    ("発話区間の印 event=", "／".join(J_TALK_START_EVENTS[:2]) + " ほか"),
+)
+
+#: 【要件 2.12 の関門】1 行の中に同じフィールド名を 2 度出さないこと。`parse_fields` は
+#: 後勝ちで上書きするので、名前が重なった行は先に書いた値が黙って消える（数値が 1 つ
+#: 静かに入れ替わっても、どのテストも赤にならない種類の壊れ方である）。
+#: ここに置いた逐語サンプルを `--selftest` が毎回読み直し、名前の重複が無いことを確かめる。
+#: 【出所】`[tick]` と catch-up は 45 秒の実走ログからの逐語。`perf(thread)` /
+#: `perf(process)` は design.md C14 の行契約からの逐語（実装は別タスク）。
+J_LINE_VOCABULARY_SAMPLES = (
+    (
+        "perf(apply_show)（既存・不変）",
+        '2026-08-14T04:17:25.043998Z DEBUG actor{actor="emo-text"}: '
+        "areka_emo_present::presenter::timing: perf(apply_show): 段階別計時 "
+        "target_id=TargetId(0) surface_id=1000 cache_hit=false t_cache_us=83 "
+        "t_compose_us=0 t_resample_us=0 t_mask_us=0 t_upload_us=40 t_total_us=120 "
+        "alloc_compose_dst=0 alloc_resample_dst=0 alloc_xmap=0 alloc_mask=0 "
+        "key_hash=0x9f3a2b1c4d5e6f70",
+    ),
+    (
+        "catch-up（既存・target フィールドを 0.4.0 で読む）",
+        "2026-08-22T19:18:27.526356Z  INFO actor{actor=loop-ticker}: areka_ghost::ticker: "
+        'loop ticker catch-up: skipped multiple boundaries, firing once target="loop_ticker"',
+    ),
+    (
+        "[tick] kind=window（0.4.0 の任意種）",
+        "2026-08-22T19:18:18.470014Z DEBUG actor{actor=emo-text}: wintf::tick: "
+        "[tick] kind=window frame=38 t_ms=1006 ticks=38 skipped=0 heartbeat=0 "
+        "wall_us=1210594 max_us=680880 ui_cpu_us=1046875 input_us=33445 update_us=15447 "
+        "prelayout_us=122169 layout_us=23679 postlayout_us=24679 uisetup_us=41068 "
+        "graphicssetup_us=18288 draw_us=40755 prerendersurface_us=6711 rendersurface_us=1581 "
+        "composition_us=4315 commitcomposition_us=569 framefinalize_us=874920",
+    ),
+    (
+        "perf(thread)（0.4.0 の任意種）",
+        "2026-08-22T19:18:18.470014Z  INFO areka::perf: perf(thread): スレッド別 CPU "
+        "snap=1 t_s=5 tid=19224 name=main role=ui cpu_us=3343750 kernel_us=312500 "
+        "user_us=3031250",
+    ),
+    (
+        "perf(process)（0.4.0 の任意種）",
+        "2026-08-22T19:18:18.470014Z  INFO areka::perf: perf(process): プロセス CPU "
+        "snap=1 t_s=5 wall_ms=5001 cpu_us=4546875 kernel_us=781250 user_us=3765625 "
+        "threads=14",
+    ),
+)
+
+# --- §9 追補（catch-up の系統別・要件 2.9）------------------------------------
+
+#: 各発生の「直前 N 秒の表示成立点数」を数える窓（秒）。発話再生中かどうかの代理である
+#: （発話中はコマ適用が詰まるので、直前 10 秒の成立点数が跳ね上がる）。
+CATCHUP_SHOW_WINDOW_SEC = 10.0
+
+#: 仮説「フレーム駆動の負荷が起床を遅らせる」を 成立 と書く比の下限。
+#: catch-up を覆った `[tick]` 窓の wall_us 平均 ÷ 全窓の wall_us 平均がこれ以上なら 成立。
+#: 【暫定値】1.5 は「半分以上重い窓に偏っている」を成立の目安に採ったもので、実測で
+#: 見直しうる（要件 5.8: 見直したら根拠をここへ書く）。合否には一切関与しない。
+CATCHUP_TICK_LOAD_RATIO_MIN = 1.5
+
+#: `t_ms` を読めなかった `[tick]` 窓を「その時刻を覆っている」と見なす上限（秒）。
+#: 窓幅が分からないまま覆っていると言い切らないための歯止め。
+CATCHUP_TICK_MATCH_MAX_SEC = 2.0
+
+#: §9 追補の表に出す行数の上限（超えた分は件数だけ書く）。25 分走行でレポートが
+#: 読めない長さにならないようにするための表示上の都合であり、集計は全件から出す。
+CATCHUP_DETAIL_MAX_ROWS = 200
+
+# --- --emit-metrics（C10 が読む主要指標）---------------------------------------
+
+#: 値を出せないときに書く語。**0 とは違う**（0 は「数えて 0 だった」である）。
+METRIC_UNAVAILABLE = "-"
+
+#: 指標の桁。同じ入力からは同じ文面が出ること（要件 2.10）。
+METRIC_PCT_DECIMALS = 2
+METRIC_RATIO_DECIMALS = 3
 
 #: 必要ログ種の一覧（欠けたら部分集計を出さずに exit 2・要件 2.5）。
 #: `run.stderr.log` は必要ログ種では **ない**。標準出力と標準エラーは同一ファイルへ流せない
@@ -650,9 +845,21 @@ class LogScan:
 
     perf: list[PerfRecord] = field(default_factory=list)
     show_count: int = 0
+    #: 表示成立点の時刻（昇順・時刻を読めた行だけ）。§9 追補の「前表示差」「直前 N 秒の
+    #: 成立点数」がここから出る。`show_count` は時刻を読めない行も数えるので一致しない
+    #: ことがある（数の意味が違うので、片方をもう片方から引き算しないこと）。
+    show_times: list[datetime] = field(default_factory=list)
     first_at: datetime | None = None
     last_at: datetime | None = None
     catchup: list[tuple[datetime | None, str, str]] = field(default_factory=list)
+    #: 【任意種】フレーム駆動の 1 秒窓（`[tick] kind=window`）。無くても判定は成立する。
+    tick_windows: list[judge_perf_catchup.TickWindow] = field(default_factory=list)
+    #: 【任意種】スレッド別・プロセス全体の CPU 報告の行数（中身は 0.4.0 では読まない——
+    #: 読み口だけ開けておき、順位表を組むのは perf-rank.py の仕事である）。
+    thread_report_lines: int = 0
+    process_report_lines: int = 0
+    #: 【任意種】発話区間の印。`(時刻, "start"|"end", event 名)`。
+    talk_events: list[tuple[datetime, str, str]] = field(default_factory=list)
     seriko_events: list[tuple[datetime | None, str, str, str]] = field(default_factory=list)
     boot_dpi: dict[str, str] = field(default_factory=dict)
     show_dpi_variants: Counter = field(default_factory=Counter)
@@ -678,6 +885,66 @@ def _catchup_kind(line: str) -> str | None:
         return "loop_ticker"
     if J_CATCHUP_TICKER_MESSAGE in line:
         return "ticker"
+    return None
+
+
+def _catchup_target(line: str) -> str:
+    """catch-up 行の発行元（`target=` フィールドの値）。
+
+    3 系統を分けられるのはこの値だけである（dispatcher と kanade は文言が同一）。
+    値は引用符付きで出るので落とす。フィールドが無い行は、語彙に無い値として
+    そのまま名指しする——黙って既知の 3 系統のどれかへ寄せない（要件 2.11）。
+    """
+    fields = parse_fields(line)
+    raw = fields.get(J_CATCHUP_TARGET_FIELD)
+    if raw is None:
+        return "(target 欄なし)"
+    return unquote_field(raw)
+
+
+def _parse_tick_window(line: str, at: datetime | None):
+    """`[tick] kind=window` を 1 本読む。時刻を読めない行は捨てる（表に置けない）。
+
+    値が読めないフィールドは `None` のままにする。**0 で埋めない**——0 は「数えて 0
+    だった」であり、「読めなかった」とは違う（沈黙を観測として読ませない・D7）。
+    """
+    if at is None:
+        return None
+    fields = parse_fields(split_after_message(line, J_TICK_FIELD_PREFIX) or "")
+
+    def number(name: str) -> int | None:
+        raw = fields.get(name)
+        if raw is None:
+            return None
+        try:
+            return int(raw)
+        except ValueError:
+            return None
+
+    t_ms = number("t_ms")
+    return judge_perf_catchup.TickWindow(
+        at=at,
+        span_sec=(t_ms / 1000.0) if t_ms is not None else None,
+        wall_us=number("wall_us"),
+        max_us=number("max_us"),
+        ticks=number("ticks"),
+        skipped=number("skipped"),
+    )
+
+
+def _talk_kind(line: str) -> tuple[str, str] | None:
+    """発話区間の印なら `(種別, event 名)` を返す。それ以外は None。
+
+    `event="…"` を含む行だけを見て、値が語彙に載っているものだけを拾う。
+    語彙に無い `event=` の行（別の用途の観測行）は素通りさせる。
+    """
+    if f'{J_TALK_EVENT_FIELD}="' not in line:
+        return None
+    event = unquote_field(parse_fields(line).get(J_TALK_EVENT_FIELD, ""))
+    if event in J_TALK_START_EVENTS:
+        return ("start", event)
+    if event in J_TALK_END_EVENTS:
+        return ("end", event)
     return None
 
 
@@ -726,6 +993,8 @@ def scan_log(path: Path) -> LogScan:
 
         if J_SHOW_LINE_MESSAGE in line:
             scan.show_count += 1
+            if at is not None:
+                scan.show_times.append(at)
             fields = parse_fields(split_after_message(line, J_SHOW_LINE_MESSAGE) or "")
             variant = tuple(
                 f"{name}={fields.get(name, '(無し)')}" for name in J_DPI_SHOW_FIELDS
@@ -735,8 +1004,30 @@ def scan_log(path: Path) -> LogScan:
 
         kind = _catchup_kind(line)
         if kind is not None:
-            fields = parse_fields(line)
-            scan.catchup.append((at, kind, fields.get("target", "(target 欄なし)")))
+            # 0.4.0: 系統は target フィールドで分ける（文言では dispatcher と kanade を
+            # 区別できない）。値は引用符付きで出るので落としてから積む。
+            scan.catchup.append((at, kind, _catchup_target(line)))
+            continue
+
+        # --- ここから任意種（無くても判定は成立する・J_REQUIRED_LOG_KINDS は不変）---
+        if J_TICK_LINE_MESSAGE in line:
+            window = _parse_tick_window(line, at)
+            if window is not None:
+                scan.tick_windows.append(window)
+            continue
+
+        if J_PERF_THREAD_MESSAGE in line:
+            scan.thread_report_lines += 1
+            continue
+
+        if J_PERF_PROCESS_MESSAGE in line:
+            scan.process_report_lines += 1
+            continue
+
+        talk = _talk_kind(line)
+        if talk is not None:
+            if at is not None:
+                scan.talk_events.append((at, talk[0], talk[1]))
             continue
 
         skind = _seriko_kind(line)
@@ -1199,6 +1490,168 @@ def aggregate(scan: LogScan, cpu: list[CpuSample]) -> Aggregation:
 
 
 # =============================================================================
+# 0.4.0 で足した読み口（catch-up の系統別・発話区間・主要指標）
+# -----------------------------------------------------------------------------
+# ここにあるのは **集計だけ** である。判定式は 1 つも触っていない（0.3.2 と同じ合否が
+# 出ることは fixture の `--selftest` が押さえる）。
+# =============================================================================
+
+
+def catchup_analysis(agg: "Aggregation") -> judge_perf_catchup.CatchupAnalysis:
+    """§9 追補の材料。集計モード・判定モード・`--emit-metrics` で同じ 1 つを使い回す。
+
+    同じ走行から違う数字が出ないよう、走行あたり 1 度だけ計算して持ち回る。
+    """
+    cached = getattr(agg, "_catchup_analysis", None)
+    if cached is None:
+        cached = judge_perf_catchup.analyze(
+            events=[(at, target) for at, _kind, target in agg.scan.catchup],
+            show_times=agg.scan.show_times,
+            tick_windows=agg.scan.tick_windows,
+            steady_from=agg.steady_from,
+            show_window_sec=CATCHUP_SHOW_WINDOW_SEC,
+            ratio_min=CATCHUP_TICK_LOAD_RATIO_MIN,
+            tick_match_max_sec=CATCHUP_TICK_MATCH_MAX_SEC,
+        )
+        agg._catchup_analysis = cached  # type: ignore[attr-defined]
+    return cached
+
+
+def talk_spans(scan: LogScan) -> list[tuple[datetime, datetime]]:
+    """発話（talk）区間を `(開始, 終了)` の並びで返す。
+
+    開始が入れ子になっても区間は 1 本に畳む（`steady_talk_replace` は再生中の差し替えで
+    あって新しい発話の始まりではない）。終了の記録が無いまま走行が終わった発話は、
+    最後に読めた時刻で閉じる——開きっぱなしを捨てると、終了直前の頂が丸ごと消える。
+    """
+    spans: list[tuple[datetime, datetime]] = []
+    opened: datetime | None = None
+    for at, kind, _event in sorted(scan.talk_events, key=lambda e: (e[0], e[1])):
+        if kind == "start":
+            if opened is None:
+                opened = at
+        elif opened is not None:
+            spans.append((opened, at))
+            opened = None
+    if opened is not None and scan.last_at is not None and scan.last_at >= opened:
+        spans.append((opened, scan.last_at))
+    return spans
+
+
+def talk_peak_cpu_pct(agg: "Aggregation") -> float | None:
+    """発話中の CPU の頂（要件 5.4・**合否には載せない**）。
+
+    発話区間の印が 1 本も無い走行、あるいは区間に CPU 採取点が 1 点も入らない走行では
+    `None` を返す（0 ではない——測っていないことを 0 と書かない）。
+    """
+    spans = talk_spans(agg.scan)
+    if not spans:
+        return None
+    inside = [
+        sample.percent
+        for sample in agg.cpu
+        if any(start <= sample.at <= end for start, end in spans)
+    ]
+    return max(inside) if inside else None
+
+
+def judged_interval_pool(agg: "Aggregation") -> list[float]:
+    """判定式⑴と同じ窓（窓 C）の間隔を、判定対象の系列ぶんだけ集めた 1 本の列。
+
+    【合否には使わない】判定式⑴ は **系列ごとに** 判定する（FRAME_INTERVAL_JUDGE_GRANULARITY）。
+    ここで畳むのは `--emit-metrics` が A/B 比較へ渡す 1 つの数を作るためだけであり、
+    畳んだ p95 で合否を決めてはならない（系列をまたいで畳むと遅い系列が速い系列に隠れる）。
+    """
+    keys = list(FRAME_INTERVAL_JUDGED_SERIES) or list(agg.intervals_judge)
+    pool: list[float] = []
+    for key in keys:
+        pool.extend(agg.intervals_judge.get(tuple(key), []))
+    return pool
+
+
+def _metric(name: str, value: str) -> str:
+    return f"metric={name} value={value}"
+
+
+def _metric_num(name: str, value: float | None, decimals: int) -> str:
+    if value is None:
+        return _metric(name, METRIC_UNAVAILABLE)
+    return _metric(name, f"{value:.{decimals}f}")
+
+
+def render_metrics(agg: "Aggregation") -> list[str]:
+    """`--emit-metrics`: 主要指標を `metric=<name> value=<v>` の行で返す（C10 が読む）。
+
+    読み口の規則は `parse_fields` と同じ（`名前=値`・空白区切り・1 行 1 指標）。
+    値を出せない指標は `-` にする。**0 で埋めない**——0 は「数えて 0 だった」であり、
+    「測っていない」とは違う。この区別が消えると、観測の無い走行が「改善した走行」に化ける。
+
+    【catch-up の数え方】`catchup_count` は **定常状態**（判定式⑵ の入力）、
+    `catchup_count_total` と系統別（`catchup_<系統>`）は **全区間** である。
+    系統別の和 ＋ `catchup_other` ＝ `catchup_count_total` が常に成り立つ。
+    """
+    analysis = catchup_analysis(agg)
+    steady_cpu = [sample.percent for sample in agg.cpu if sample.at >= agg.steady_from]
+    intervals = judged_interval_pool(agg)
+    steady_allocs = sum(
+        record.allocs[name] for record in agg.steady_perf for name in J_PERF_ALLOC_FIELDS
+    )
+    steady_span = (
+        (agg.steady_perf[-1].at - agg.steady_from).total_seconds()
+        if agg.steady_perf
+        else 0.0
+    )
+    known = sum(analysis.total_by_target.get(t, 0) for t in J_CATCHUP_TARGETS)
+    other = sum(analysis.total_by_target.values()) - known
+
+    lines = [
+        "",
+        "=" * 78,
+        "主要指標（--emit-metrics・読み口は parse_fields と同じ「名前=値」・"
+        f"出せない値は {METRIC_UNAVAILABLE}）",
+        "  catchup_count は定常状態（判定式⑵ の入力）、catchup_count_total と系統別は全区間。",
+        "=" * 78,
+        _metric_num("steady_idle_cpu_mean_pct",
+                    (sum(steady_cpu) / len(steady_cpu)) if steady_cpu else None,
+                    METRIC_PCT_DECIMALS),
+        _metric_num("cpu_p50_pct",
+                    percentile(steady_cpu, 0.50) if steady_cpu else None,
+                    METRIC_PCT_DECIMALS),
+        _metric_num("cpu_p95_pct",
+                    percentile(steady_cpu, 0.95) if steady_cpu else None,
+                    METRIC_PCT_DECIMALS),
+        _metric_num("cpu_max_pct", max(steady_cpu) if steady_cpu else None,
+                    METRIC_PCT_DECIMALS),
+        _metric_num("talk_peak_cpu_pct", talk_peak_cpu_pct(agg), METRIC_PCT_DECIMALS),
+        _metric("ssp_reference_idle_pct", f"{SSP_REFERENCE_IDLE_PCT:.2f}"),
+        _metric("ssp_reference_talk_peak_pct", f"{SSP_REFERENCE_TALK_PEAK_PCT:.2f}"),
+        _metric_num("frame_interval_p95_ms",
+                    percentile(intervals, 0.95) if intervals else None,
+                    FRAME_INTERVAL_COMPARE_DECIMALS),
+        _metric("frame_interval_samples", str(len(intervals))),
+        _metric("catchup_count", str(len(
+            [e for e in agg.scan.catchup if e[0] is not None and e[0] >= agg.steady_from]
+        ))),
+        _metric("catchup_count_total", str(len(agg.scan.catchup))),
+    ]
+    for target in J_CATCHUP_TARGETS:
+        lines.append(_metric(f"catchup_{target}", str(analysis.total_by_target.get(target, 0))))
+    lines += [
+        _metric("catchup_other", str(other)),
+        _metric("alloc_count", str(steady_allocs)),
+        _metric("steady_apply_count", str(len(agg.steady_perf))),
+        _metric_num("steady_span_sec", steady_span, 1),
+        _metric("tick_window_count", str(analysis.tick_windows)),
+        _metric_num("tick_skip_ratio", analysis.skip_ratio, METRIC_RATIO_DECIMALS),
+        _metric_num("catchup_tick_load_ratio", analysis.ratio, METRIC_RATIO_DECIMALS),
+        _metric("catchup_tick_load_verdict", analysis.verdict_word),
+        _metric("cpu_samples_steady", str(len(steady_cpu))),
+        _metric("script_version", SCRIPT_VERSION.split(" ", 1)[0]),
+    ]
+    return lines
+
+
+# =============================================================================
 # レポート
 # =============================================================================
 
@@ -1324,7 +1777,38 @@ def render_calibration(report: Report) -> None:
         ("WARMUP_EXCLUDE_SEC", WARMUP_EXCLUDE_SEC, "task 3.2 の実測で 60 秒を据え置き"),
         ("VERDICT_MIN_STEADY_APPLIES", VERDICT_MIN_STEADY_APPLIES, "判定式⑵⑶の成立条件・暫定"),
         ("VERDICT_MIN_STEADY_SEC", VERDICT_MIN_STEADY_SEC, "判定式⑵⑶の成立条件・暫定"),
-        ("IDLE_CPU_MAX_RELEASE_PCT", IDLE_CPU_MAX_RELEASE_PCT, "判定式⑷前半・狭義の < 比較"),
+        (
+            "IDLE_CPU_MAX_RELEASE_PCT",
+            IDLE_CPU_MAX_RELEASE_PCT,
+            "判定式⑷前半・狭義の < 比較。"
+            "2026-08-22 裁定＝**CPU の絶対値**であり、SSP の描画方式（GDI）と areka（D2D）の"
+            "差で正規化しない（要件 5.1・5.2）",
+        ),
+        (
+            "SSP_REFERENCE_IDLE_PCT",
+            SSP_REFERENCE_IDLE_PCT,
+            f"SSP 参考値（{SSP_REFERENCE_MEASURED_ON} 実測・アイドル）・{SSP_REFERENCE_USE}",
+        ),
+        (
+            "SSP_REFERENCE_TALK_PEAK_PCT",
+            SSP_REFERENCE_TALK_PEAK_PCT,
+            f"SSP 参考値（{SSP_REFERENCE_MEASURED_ON} 実測・発話の頂）・{SSP_REFERENCE_USE}",
+        ),
+        (
+            "CATCHUP_SHOW_WINDOW_SEC",
+            CATCHUP_SHOW_WINDOW_SEC,
+            "§9 追補・直前 N 秒の表示成立点数を数える窓（発話再生中かの代理）・合否に不使用",
+        ),
+        (
+            "CATCHUP_TICK_LOAD_RATIO_MIN",
+            CATCHUP_TICK_LOAD_RATIO_MIN,
+            "§9 追補・仮説を 成立 と書く比の下限・暫定・合否に不使用（要件 2.9）",
+        ),
+        (
+            "CATCHUP_TICK_MATCH_MAX_SEC",
+            CATCHUP_TICK_MATCH_MAX_SEC,
+            "§9 追補・t_ms を読めない [tick] 窓を「覆っている」と見なす上限",
+        ),
         ("IDLE_CPU_STATISTIC", IDLE_CPU_STATISTIC, "判定式⑷前半が閾値と比べる量"),
         ("VERDICT_MIN_CPU_SAMPLES", VERDICT_MIN_CPU_SAMPLES, "判定式⑷前半の成立条件・暫定"),
         ("LONG_RUN_MIN_SPAN_SEC", LONG_RUN_MIN_SPAN_SEC, "判定式⑷後半の適用条件（20 分）"),
@@ -1376,10 +1860,30 @@ def render_calibration(report: Report) -> None:
         ),
         ("J_DPI_BOOT_FIELDS", list(J_DPI_BOOT_FIELDS), "run.log の起動時ログから"),
         ("J_DPI_SHOW_FIELDS", list(J_DPI_SHOW_FIELDS), "表示成立点 info! から"),
+        ("J_CATCHUP_TARGETS", list(J_CATCHUP_TARGETS), "catch-up の系統・target フィールドの値"),
+        (
+            "J_TICK_LINE_MESSAGE",
+            J_TICK_LINE_MESSAGE,
+            "任意種。行の時刻は窓が **閉じた** 時刻（覆う区間は [時刻 − t_ms, 時刻]）",
+        ),
+        ("J_PERF_THREAD_MESSAGE", J_PERF_THREAD_MESSAGE, "任意種"),
+        ("J_PERF_PROCESS_MESSAGE", J_PERF_PROCESS_MESSAGE, "任意種"),
+        (
+            "J_TALK_START_EVENTS",
+            list(J_TALK_START_EVENTS),
+            "任意種。発話中の頂（要件 5.4・合否に不使用）の区間の始まり",
+        ),
+        ("J_TALK_END_EVENTS", list(J_TALK_END_EVENTS), "同・区間の終わり"),
         (
             "J_REQUIRED_LOG_KINDS",
             [name for name, _ in J_REQUIRED_LOG_KINDS] + ["CPU 時系列 CSV", "run-meta.txt"],
-            "run.stderr.log は必要ログ種ではない",
+            "run.stderr.log は必要ログ種ではない。0.4.0 で足した 4 種は **任意種** であり"
+            "ここには入らない（無い走行でも判定は成立する）",
+        ),
+        (
+            "J_OPTIONAL_LOG_KINDS",
+            [name for name, _ in J_OPTIONAL_LOG_KINDS],
+            "有れば読む・無くても欠落ではない（既定 OFF の観測なので点灯しない走行には出ない）",
         ),
     ]
     for name, value, note in rows:
@@ -1554,6 +2058,16 @@ def render_catchup(report: Report, agg: Aggregation, section: str = "9") -> None
         report.line(f"  合計 {len(events)} 件")
         for (kind, target), count in sorted(counts.items()):
             report.line(f"    文言={kind}  target={target}: {count} 件")
+
+    # --- 0.4.0: 系統別・各発生の時刻突合と仮説の数値（要件 2.9）--------------
+    judge_perf_catchup.render(
+        report.line,
+        catchup_analysis(agg),
+        targets=J_CATCHUP_TARGETS,
+        show_window_sec=CATCHUP_SHOW_WINDOW_SEC,
+        ratio_min=CATCHUP_TICK_LOAD_RATIO_MIN,
+        max_rows=CATCHUP_DETAIL_MAX_ROWS,
+    )
 
 
 def render_cpu(report: Report, agg: Aggregation, section: str = "10") -> None:
@@ -2990,6 +3504,17 @@ def render_required_check(report: Report, inputs: Inputs) -> None:
         f"（最初の perf 行から {WARMUP_EXCLUDE_SEC:.0f} 秒後）"
     )
 
+    report.sub("任意種の有無（0.4.0・無いことは欠落ではない）")
+    report.line("  既定 OFF の観測なので、点灯せずに採った走行には 1 本も出ない。")
+    report.line("  判定式はどれもこれらを読まないので、有無は合否を動かさない。")
+    for label, count in (
+        ("フレーム駆動の窓 [tick] kind=window", len(scan.tick_windows)),
+        ("スレッド別 CPU perf(thread)", scan.thread_report_lines),
+        ("プロセス CPU perf(process)", scan.process_report_lines),
+        ("発話区間の印 event=", len(scan.talk_events)),
+    ):
+        report.line(f"  {label:<38s}: {count} 本" + ("" if count else "  → 無し"))
+
 
 # =============================================================================
 # 集計モード
@@ -3061,6 +3586,9 @@ def run_baseline(args: argparse.Namespace) -> int:
     report.line("集計は以上。合否判定（要件 4.2 の判定式⑴〜⑷）と収束判定（要件 5.1）は")
     report.line("--mode verdict が行う。")
     report.line("=" * 78)
+
+    if getattr(args, "emit_metrics", False):
+        report.lines.extend(render_metrics(agg))
 
     print(report.render())
     return EXIT_OK
@@ -3152,6 +3680,9 @@ def run_verdict(args: argparse.Namespace) -> int:
     report.line(f"判定は以上。終了コード {code}（{summary}）")
     report.line("=" * 78)
 
+    if getattr(args, "emit_metrics", False):
+        report.lines.extend(render_metrics(agg))
+
     print(report.render())
     return code
 
@@ -3184,6 +3715,12 @@ class SelftestCase:
     build: str | None
     expected: int
     twin: str | None
+    #: 標準出力に必ず現れる文字列（`case.txt` の `contains =` 行・0 件以上）。
+    #: 終了コードだけを見る自己較正は「レポートの中身が空になった」ことを検出できない。
+    #: 0.4.0 で足した §9 の表と仮説の語は終了コードを動かさないので、ここで固定する。
+    contains: tuple[str, ...] = ()
+    #: `--emit-metrics` を付けて呼ぶか（`case.txt` の `emit_metrics = yes`）。
+    emit_metrics: bool = False
 
     def argv(self) -> list[str]:
         args = [
@@ -3194,6 +3731,8 @@ class SelftestCase:
         ]
         if self.build:
             args += ["--build", self.build]
+        if self.emit_metrics:
+            args.append("--emit-metrics")
         return args
 
 
@@ -3214,6 +3753,7 @@ def _selftest_read_case(directory: Path) -> SelftestCase:
         raise bad_input(f"{path} を読めません", [str(exc)]) from exc
 
     fields: dict[str, str] = {}
+    contains: list[str] = []
     for line in text.splitlines():
         stripped = line.strip()
         if not stripped or stripped.startswith("#") or "=" not in stripped:
@@ -3221,6 +3761,9 @@ def _selftest_read_case(directory: Path) -> SelftestCase:
         key, _, value = stripped.partition("=")
         key = key.strip()
         if key == "note":  # 人が読む説明。機械は使わない
+            continue
+        if key == "contains":  # 何度でも書ける（上書きせず積む）
+            contains.append(value.strip())
             continue
         fields[key] = value.strip()
 
@@ -3248,6 +3791,8 @@ def _selftest_read_case(directory: Path) -> SelftestCase:
         build=fields.get("build") or None,
         expected=expected,
         twin=fields.get("twin") or None,
+        contains=tuple(contains),
+        emit_metrics=fields.get("emit_metrics", "").lower() in ("yes", "true", "1"),
     )
 
 
@@ -3321,6 +3866,62 @@ def run_selftest() -> int:
             f"期待 {case.expected} 実際 {code}  [{case.mode}{build}]  {case.title}"
         )
 
+    # --- レポート本文の固定（`contains =`）---------------------------------
+    # 終了コードは合っているのにレポートの中身が消えた、という壊れ方を捕まえる。
+    # 0.4.0 で足した §9 の表と仮説の語は終了コードを動かさないので、ここで固定する。
+    missing_text: list[tuple[str, str]] = []
+    checked_text = 0
+    for case in cases:
+        for needle in case.contains:
+            checked_text += 1
+            if needle not in outputs[case.name]:
+                missing_text.append((case.name, needle))
+    if checked_text:
+        report.sub("レポート本文の固定（case.txt の contains 行）")
+        report.line(
+            f"  {checked_text} 件の文字列を突き合わせ、"
+            f"{checked_text - len(missing_text)} 件が標準出力に現れました。"
+        )
+        for name, needle in missing_text:
+            report.line(f"  【欠落】{name}: {needle!r} がレポートにありません")
+
+    # --- 行の語彙（要件 2.12: 1 行に同じフィールド名を 2 度出さない）--------
+    # `parse_fields` は後勝ちで上書きするので、名前が重なると先の値が黙って消える。
+    # 逐語サンプルを毎回読み直し、名前の数と辞書の大きさが一致することを確かめる。
+    vocabulary_failures: list[str] = []
+    report.sub("行の語彙（1 行にフィールド名の重複が無いこと・要件 2.12）")
+    for label, sample in J_LINE_VOCABULARY_SAMPLES:
+        names = [m.group(1) for m in _FIELD_KEY_RE.finditer(strip_ansi(sample))]
+        parsed = parse_fields(strip_ansi(sample))
+        duplicated = sorted({n for n in names if names.count(n) > 1})
+        ok = not duplicated and len(names) == len(parsed)
+        report.line(
+            f"  {'一致  ' if ok else '不一致'} {label}: フィールド名 {len(names)} 個 / "
+            f"読み取り {len(parsed)} 個"
+            + (f"  【重複】{'・'.join(duplicated)}" if duplicated else "")
+        )
+        if not ok:
+            vocabulary_failures.append(label)
+
+    # 逐語サンプルの `[tick]` 行と、バナーに書いた名前の一覧が同じであること。
+    # 片方だけを直すと、レポートの説明が実物と静かにずれる（doc の主張は裏取りする）。
+    tick_sample = next(
+        (text for label, text in J_LINE_VOCABULARY_SAMPLES if J_TICK_LINE_MESSAGE in text),
+        None,
+    )
+    tick_names = (
+        tuple(parse_fields(split_after_message(tick_sample, J_TICK_FIELD_PREFIX) or ""))
+        if tick_sample
+        else ()
+    )
+    tick_ok = tick_names == J_TICK_WINDOW_FIELDS
+    report.line(
+        f"  {'一致  ' if tick_ok else '不一致'} J_TICK_WINDOW_FIELDS "
+        f"（{len(J_TICK_WINDOW_FIELDS)} 個）が [tick] の逐語サンプルと同じ名前・同じ順序"
+    )
+    if not tick_ok:
+        vocabulary_failures.append("J_TICK_WINDOW_FIELDS と [tick] 逐語サンプルの食い違い")
+
     # --- 双子の突き合わせ（色付きログが色なしと同じ結論になること）-----------
     twin_checks: list[tuple[str, str, bool, str]] = []
     for case in cases:
@@ -3391,7 +3992,22 @@ def run_selftest() -> int:
             "赤が出ない自己較正は、道具が壊れていても緑を返します（D7）。"
         )
 
-    code = EXIT_OK if not (mismatches or twin_failed or red_missing) else EXIT_FAIL
+    for name, needle in missing_text:
+        report.line(f"  【食い違い】{name}: レポートに {needle!r} がありません。")
+    for label in vocabulary_failures:
+        report.line(
+            f"  【食い違い】{label}: 1 行にフィールド名の重複があります（要件 2.12）。"
+            "parse_fields は後勝ちで上書きするので、先に書いた値が黙って消えます。"
+        )
+
+    code = (
+        EXIT_OK
+        if not (
+            mismatches or twin_failed or red_missing or missing_text
+            or vocabulary_failures
+        )
+        else EXIT_FAIL
+    )
     if code == EXIT_OK:
         report.line("  合格・不合格・判定不能・引数不正のいずれも期待どおり再現しました。")
     else:
@@ -3464,6 +4080,12 @@ def build_parser() -> Parser:
         "--meta",
         help="実行条件 run-meta.txt のパス（省略時は cpu.csv と同じディレクトリを探す）",
     )
+    parser.add_argument(
+        "--emit-metrics",
+        action="store_true",
+        help="レポートの末尾に主要指標を metric=<name> value=<v> の行で出す"
+        "（perf-compare.py が読む・両モードで使える。判定と数値は 1 つも変わらない）",
+    )
     return parser
 
 
@@ -3478,10 +4100,13 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
 
     if args.selftest:
-        if args.run_log or args.cpu_csv or args.mode or args.build or args.meta:
+        if (
+            args.run_log or args.cpu_csv or args.mode or args.build or args.meta
+            or args.emit_metrics
+        ):
             parser.error(
                 "--selftest は他の引数と一緒に使えません"
-                "（fixture 側が入力もモードもビルド種別も持っています）"
+                "（fixture 側が入力もモードもビルド種別も、--emit-metrics の要否も持っています）"
             )
         try:
             return run_selftest()
