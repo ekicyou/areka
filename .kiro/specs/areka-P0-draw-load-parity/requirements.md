@@ -15,8 +15,9 @@ brief の性能数値と機序の読みには、要件として据える前に�
 - **⚠ brief の全性能数値は更新前の実測である。** main に Bevy 0.19／Taffy 0.13 への更新（`bf2d7950`・2026-08-19・実行器改稿を含む）が着地した。`try_tick_world` 1 tick 578µs・壁時計 6.85%・FrameFinalize 182µs／Draw 143µs・SSP 比較の areka 側 10.97% は**いずれも更新前（2026-08-15 以前）**の値で、実行器が変わったため傾向すら持ち越せない。本書はこれらを「更新前の参考値」とのみ扱い、現況の確定は Requirement 1 の再計測に委ねる（roadmap 追記(80)⑤・棚卸⑩）。ワークスペースの `Cargo.toml:48-49` は `bevy_ecs = "0.19"` を宣言している（steering `tech.md:22-23` の「0.18.0」は陳腐化。ローカルの `Cargo.lock` は gitignore 対象で権威ではない）。
 - **tick は 1 系統であり、120 回/秒は画面の更新周期そのものである。** フレーム駆動は `crates/wintf/src/runtime/tick_bridge.rs:114-134` の vblank 検出スレッド（`DwmFlush` 待ち→全リスナ起床）と、起床ごとに 1 フレームを回す UI スレッドの非同期ループ（同 `:218-236`）の 1 系統だけで、同 `:142-146` が「固定周期ではない。実効のフレーム周期は画面の更新周期である（120Hz の実機なら約 8.3ms）」と明記している。brief 候補 C が疑った「16ms 設定なのに 120 回/秒＝二重起床」は現行ツリーに根拠が無い——wintf に 16ms の定数も Win32 タイマも無く、旧経路 `try_tick_on_vsync`（`crates/wintf/src/ecs/world/mod.rs:580`）は起床カウンタの生産者が撤去済みで常に tick しない（`ecs/world/vsync.rs:17-22` の注記）。したがって候補 C は「二重起床の是正」ではなく「**画面の更新周期に追従する tick を維持するか、表示に変化が無いあいだ別の周期へ落とすか**」という裁定として立て直す。
 - **1 tick の中身に早期脱出は無い。** `EcsWorld::try_tick_world`（`ecs/world/mod.rs:488-566`）は、システム未登録の場合を除き、毎 tick 無条件にフレーム番号を進め、13 本のスケジュールを固定順に `try_run_schedule` する（`:548-560`・順序不変の既存テスト `:657`）。「変化が無い tick を見分ける」判断は現在どこにも存在しない。
+- **13 本のうち 7 本は多スレッド実行器で走る。** ワークスペース `Cargo.toml:48-56` が `bevy_ecs` の `multi_threaded` を有効化しているため `Schedule::new` の既定実行器は多スレッドであり、`ecs/world/mod.rs:104-160` が `SingleThreadedExecutor` へ固定しているのは UISetup／GraphicsSetup／PreRenderSurface／RenderSurface／Composition／CommitComposition の 6 本だけ（同 `:117,135,141,146,151,156`）。Input／Update／PreLayout／Layout／PostLayout／Draw／FrameFinalize の 7 本は tick のたびにタスクプールの scope を開く多スレッド実行器のまま（`bevy_ecs-0.19.1` `executor/multi_threaded.rs:274`）。この固定費の大きさは Requirement 1 の内訳計測で確定する（更新前の実測には内訳が無い）。
 - **クリック透過の評価は「毎フレーム評価される」前提の上に乗っている。** `crates/wintf/src/runtime/mod.rs:230-236` は「(b) VSync tick 毎の再評価（静止カーソルでも表示更新＝αマスク変化に追随／R2.4、`JustEnded` 再収束／R5.2）」を理由として記し、vblank ごとに評価ループを起こす中継を `:296-330` に持つ。評価ループ（`crates/wintf/src/ecs/clickthrough/controller.rs:421-457`）はこの vblank 起床とカーソル監視（`clickthrough/monitor.rs:34`・12ms 周期）の二重起床で動く。tick の周期や中身を間引くなら、この前提の調停が要件として要る。
-- **catch-up は ECS の tick ではなく進行のティッカーが出す。** 判定式⑵ が数える文言 `ticker catch-up: skipped multiple boundaries, firing once`／`loop ticker catch-up: …` の発行元は `crates/areka-ghost/src/ticker.rs:205,225,307`（dispatcher／kanade／SERIKO ループの 3 系統）で、既定周期は `base_interval = 50ms`（同 `:58-61`）である。brief の「`ticker.rs` の設定は 16ms」は現行ツリーと一致しない。フレーム駆動の負荷が UI スレッドを塞ぐことでティッカー側の境界跨ぎが増える、という因果は**仮説**であり、Requirement 3 で実測確定する。
+- **catch-up は ECS の tick ではなく進行のティッカーが出す。** 判定式⑵ が数える文言 `ticker catch-up: skipped multiple boundaries, firing once`／`loop ticker catch-up: …` の発行元は `crates/areka-ghost/src/ticker.rs:205,225,307`（dispatcher／kanade／SERIKO ループの 3 系統）で、周期は系統ごとに異なる——dispatcher `base_interval = 50ms`（同 `:61`）・kanade `kanade_interval = 1000ms`（同 `:62`）・SERIKO ループ `16ms`（同 `:262`）。brief の「`ticker.rs` の設定は 16ms」はループ ticker にのみ当たる。ティッカーは UI スレッドではなく自前のアクタースレッドで `recv_timeout` により起きる（同 `:194,297`）ので、catch-up は「ティッカースレッドが 1 周期以上遅く起きた」ことを意味し、フレーム駆動の負荷は CPU 競合による起床遅延としてしか効かない（間接）。「フレーム駆動の負荷がティッカーの境界跨ぎを増やす」という因果は**仮説**であり、Requirement 3 で実測確定する。ループ ticker の 16ms は Windows 既定のタイマ分解能（約 15.6ms）に近く、起床遅れだけで 2 境界を跨ぎ得る。
 - **一括 flush の前提は atom 着地後の実形である。** 窓書込は同一窓のジオメトリ指令が積む時点で合流し（`crates/wintf/src/ecs/window/command.rs:514-560`）、1 バッチで一括適用され（同 `:349-440`・`SetWindowPosCommand::flush` は `:723`）、Z 専用指令は合流の対象外で順序・結果が不変である（brief 追記(71)⑶・(74)⑷・(78)⑺）。brief 追記(74) の「`flush` は `:425-505`」は陳腐化（現行 `:723`）。
 - **観測の道具は揃っている。** 既定 OFF の観測チャネル `wintf::transition`（`crates/wintf/src/ecs/window/transition_diag.rs:54`・前置ガード `:622` で既定水準の費用 0）、`perf(apply_show)` 段階別計時行（`crates/areka-emo-present/src/presenter/timing.rs:56,221`・末尾 `frame` 込み 16 フィールド）、採取ランナー `tools/perf/invoke-perf-run.ps1`（短時間 7 分＝420,000ms／長時間 25 分＝1,500,000ms・`-ConfirmQuiet` 必須）、判定スクリプト `tools/perf/judge-perf.py`（0.3.2・`IDLE_CPU_MAX_RELEASE_PCT = 3.0`・`WARMUP_EXCLUDE_SEC = 60.0`・`LONG_RUN_MIN_SPAN_SEC = 1200`・自己較正 fixture 17 件）。
 - **SSP 比較用の配置は現在存在しない。** brief が「測定後は削除すること」とした `C:\wintools\ssp\ghost\emo2-perf` は 2026-08-22 時点で無い（再配置が要る）。ukadoc は「ウインドウの拡大縮小表示はコストがかなり大きい」と注記しており（`descript_shell_surfaces` `scaling`）、SSP 側が 200% をどう描いているかは実測で確かめる価値がある。
@@ -60,7 +61,7 @@ brief の性能数値と機序の読みには、要件として据える前に�
 1. When 本 spec が是正に着手する前に, the 開発プロセス shall origin/main の現行ツリー（Bevy 0.19 更新および `dpi-transition-atomicity` の着地を含む）を release／dev 両ビルドで、先行 spec と同一手順（採取ランナー・判定スクリプト・同一ゴースト emo2・同一拡大率）により採取し、ベースラインとして spec ディレクトリへ記録する
 2. When ベースラインを採取する, the 計測 shall tick 1 回あたりの所要、tick 回数/秒、スケジュールごとの所要の内訳（13 本すべて）、表示 1 コマの適用回数/秒、クリック透過評価の回数/秒を同じ走行から得て、brief の更新前実測（tick 578µs・FrameFinalize 182µs・Draw 143µs・壁時計 6.85%）との対比表を作る
 3. When tick 所要を記録する, the 計測 shall 壁時計（経過時間）と CPU 時間を区別して記録し、GPU 待ちなどの待ち時間が混入する量を「壁時計」と明記する（brief の注記: UI スレッドの実測 CPU 約 3.1% に対し壁時計占有 6.85% ＝ 半分程度は待ちの可能性）
-4. When ベースラインを採取する, the 計測 shall 「表示に変化が無い tick」の割合——表示 1 コマの適用・入力・アニメ境界の跨ぎ・窓ジオメトリ変更・DPI 変更のいずれも無い tick の本数／全 tick 本数——を走行ごとに記録する
+4. When ベースラインを採取する, the 計測 shall 「表示に変化が無い tick」の割合——表示 1 コマの適用・入力・アニメ境界の跨ぎ・窓ジオメトリ変更・DPI 変更・Z 順変更のいずれも無い tick の本数／全 tick 本数（Requirement 4.1 の「表示に変化が無い」と同じ定義）——を走行ごとに記録する
 5. When 実機計測を開始する, the 開発プロセス shall 開発者へセッションを渡し、測定マシンが静寂状態（並行開発セッション等の他負荷がないこと）であることの確認を得てから実走を開始する（先行 spec R2.7 の関門を継承。判定に人の目視を使わない原則は不変）
 6. The 計測 shall 2 分以下の窓を採用しない（同一条件で 5.37% と 18.57% に振れた実測あり）。是正のたびの測り直しは短時間水準（7 分）、ベースラインと最終判定は長時間水準（25 分）とする
 7. When 2 つの形（是正前／是正後・ビルド設定の別）を比較する, the 計測 shall 同一セッション内の交互取得で比較し、一括順の前後比較を結論の根拠にしない（一括順では「O3 が 17% 速い」→交互で「33% 遅い」へ反転した実測あり）
@@ -86,7 +87,7 @@ brief の性能数値と機序の読みには、要件として据える前に�
 #### Acceptance Criteria
 
 1. When ベースラインを採取する, the 計測 shall catch-up の発生を発行元 3 系統（dispatcher／kanade／SERIKO ループ）別に数え、各発生の時刻と同時刻の状況（発話再生中か・複数面の同時更新か・DPI 遷移中か・表示 1 コマの適用直後か）を突合できる形で記録する
-2. When catch-up の出どころを特定する, the 計測 shall 「フレーム駆動の負荷が UI スレッドを塞いでティッカー側の境界跨ぎが増える」という因果を、tick 所要の分布と catch-up 発生時刻の重なりで検証し、成立・不成立を数値で記す
+2. When catch-up の出どころを特定する, the 計測 shall 「フレーム駆動の負荷が CPU 競合でティッカースレッドの起床を遅らせ、境界跨ぎが増える」という因果（ティッカーは UI スレッドとは別スレッドで動くので直接の閉塞ではない）を、tick 所要の分布と catch-up 発生時刻の重なり、およびティッカーの起床遅延の分布で検証し、成立・不成立を数値で記す
 3. If catch-up の主因がフレーム駆動の外（発話の実装・SHIORI 応答待ち・ティッカー自身の周期設計など）にある, the 開発プロセス shall 是正対象を本 spec の境界へ広げず、引受先の実在を確認した上で申し送り、判定式⑵ を「本 spec の手段で達し得る範囲」として開発者へ再提示する
 4. When 駆動の間引きを実装する, the 計測 shall 間引き前後で catch-up 件数が増えていないことを短時間水準の交互比較で確かめる（判定式⑵ は進行側のログを数えるので、間引きは件数を増やす向きにも働きうる）
 
@@ -129,7 +130,7 @@ brief の性能数値と機序の読みには、要件として据える前に�
 2. The 判定スクリプト shall ⑴〜⑶ を dev・release 両ビルドに、⑷a・⑷b を release に適用する
 3. When Requirement 2 の裁定が (A) 絶対値である, the areka 実行体 shall release ビルドでゴースト放置時のアイドル CPU（1 コア換算・定常状態の平均）を 3.0% 未満に収める
 4. When Requirement 2 の裁定が (B) 画素あたりである, the areka 実行体 shall release ビルドで実描画画素数で正規化したアイドル CPU を SSP 実測の同等圏（較正値として登記した比率以内）に収める
-5. The areka 実行体 shall 発話中の CPU の頂を SSP 実測の頂（4.64%・更新後に再採取）に対して説明可能な比（実描画画素数の差と発話実装の差で説明できる範囲・較正値として登記）に収め、説明できない残差があれば機序を記録する
+5. The areka 実行体 shall 発話中の CPU の頂を SSP 実測の頂（4.64%・Requirement 2.5 の同一手順比較で同一セッション内に再採取）に対して説明可能な比（実描画画素数の差と発話実装の差で説明できる範囲・較正値として登記）に収め、説明できない残差があれば機序を記録する
 6. The areka 実行体 shall メモリリークと負荷の単調上昇を再発させない（Private メモリ・ハンドル数・スレッド数が 25 分走行で増加傾向を示さず、⑷b の収束判定を満たす）
 7. When 最終判定を行う, the 開発プロセス shall 長時間水準（25 分）で release／dev を採取し、判定スクリプトの出力を spec ディレクトリへ保存する
 8. If 判定式⑵ または ⑷a が本 spec の手段でも未達のまま残る, the 開発プロセス shall 未達を本 spec の requirements.md に改訂欄として登記し、引受先の実在を確認した上で申し送る（「未達が spec の内側から見えない」形を繰り返さない）
