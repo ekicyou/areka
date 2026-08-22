@@ -1,35 +1,41 @@
 #Requires -Version 7.0
 <#
 ================================================================================
-perf-loop.ps1 — 自走改善ループの 1 入口（骨格・preflight・selftest）
-  spec: areka-P0-draw-load-parity（要件 1.2 / 2.10 / 2.11・design「計測の道具
-        （tools/perf/）→ C5 perf-loop.ps1 → Batch / Job Contract」）
+perf-loop.ps1 — 自走改善ループの 1 入口（10 サブコマンド）
+  spec: areka-P0-draw-load-parity（要件 1.2 / 2.7 / 2.10 / 2.11 / 5.6・design「計測の
+        道具（tools/perf/）→ C5 perf-loop.ps1 → Batch / Job Contract」・Flow 2）
 
 何をするか:
   採取・順位表・比較・追随・最終判定・自己較正を **1 つの入口**から回す（要件 2.10）。
   ループを回すスキル（perf-loop-iteration）と役割別エージェントは、道具を個別に
   呼ばずこのスクリプトのサブコマンドだけを呼ぶ。
 
-  本ファイル（task 7.2）が実装しているのは骨格の 2 本:
-    preflight … この機械でループを回せるかを確かめ、preflight.txt と能力の 1 行を出す
-    selftest  … 全ての道具の自己較正を順に回し、1 つでも赤なら計測失敗（4）で止める
-  残る 8 本（measure-baseline／rank-run／rank／prepare-ab／measure-ab／compare／
-  followup／final）は task 7.3 が同じ switch へ足す。今は受け口だけがあり、呼ぶと
-  「task 7.3 で実装します」と告げて 3（引数・前提の不正）で終わる——**入口の全面が
-  最初から文書化されている**ようにするためである。
+  入口（本ファイル）が持つのは引数の検証・出力先の決定・preflight・selftest。
+  実際に測る 8 本の本体は perf-loop.measure.ps1（1 ファイル 1,000 行の上限のため）。
 
-サブコマンド（`<sub>` は RESULT 行にそのまま出る）:
+サブコマンド（`<sub>` は RESULT 行にそのまま出る。所要は目安）:
   preflight        能力確認（昇格・xperf・PDB・判定スクリプトの版一致・Python／
                    PowerShell の版・CLAUDE_CODE_GOAL_CHECKIN_MINUTES の実効値・selftest）
-  selftest         道具の自己較正（下の一覧を順に回す）
-  measure-baseline 25 分 × 1 本（-Build release|dev）           … task 7.3
-  rank-run         順位付け 7 分＋点灯＋サンプリング             … task 7.3
-  rank             perf-rank.py → rank.txt                      … task 7.3
-  prepare-ab       A 側の実行体・PDB・32bit helper を bin-A へ   … task 7.3
-  measure-ab       B をビルドし A1 B1 A2 B2 を交互に採る         … task 7.3
-  compare          perf-compare.py → compare.txt／compare.json   … task 7.3
-  followup         invoke-followup-checks.ps1（見た目の追随）    … task 7.3
-  final            25 分 × release／dev → judge-perf.py --mode verdict … task 7.3
+  selftest         道具の自己較正（下の一覧を順に回す）                    約 1 分
+  measure-baseline 25 分 × 1 本（-Build release|dev）→ verdict.txt         約 26 分
+  rank-run         順位付け 7 分＋点灯（wintf::tick／areka::perf）＋段③の
+                   サンプリング（使えない機械では省く）→ rank.txt          約 8 分
+  rank             既にある走行から rank.txt を作り直す                    数秒
+  prepare-ab       A 側（変更前）の実行体・PDB・32bit helper を bin-A へ   ビルド次第
+  measure-ab       B をビルドし A1 B1 A2 B2 を交互に採り compare まで      約 30 分
+  compare          perf-compare.py → compare.txt／compare.json             数十秒
+  followup         invoke-followup-checks.ps1（見た目の追随 4 検査）        約 2 分
+                   ＝判定まで届けば 0（PASS／FAIL／INCONCLUSIVE の別は報告行で読む）
+  final            25 分 × release／dev → judge-perf.py --mode verdict     約 26 分 × 本数
+
+各サブコマンドが何を書くか（出力先は下の「出力先」の配置）:
+  measure-baseline  run.log／cpu.csv／run-meta.txt／quiet-before.txt／quiet-after.txt／
+                    verdict.txt
+  rank-run          上と同じ 5 つ＋sampling.txt＋rank.txt（段③が使えれば dump.txt も）
+  prepare-ab        bin-A/{areka.exe, areka.pdb, shiori-host32-helper.exe, BUILD.txt}
+  measure-ab        bin-B/…＋A1／B1／A2／B2 の各走行＋compare.txt／compare.json
+  followup          followup/{run.log, probe.log, followup.txt, followup-verdict.txt}
+  final             <build>/ ごとに走行 5 つ＋verdict.txt（spec の results へも写す）
 
 子の道具の出力は**必ず UTF-8 として読む**（perf-loop.common.ps1 の Invoke-Child）。
 端末の既定コードページが CP932 の環境でも、道具が UTF-8 で書いた文字が化けないため。
@@ -40,6 +46,8 @@ perf-loop.ps1 — 自走改善ループの 1 入口（骨格・preflight・selft
   no_pdb                                 … 記号解決に要る PDB が無い（preflight が足す語）
   probe_failed                           … -Probe そのものが回らなかった（道具の異常。
                                            C8 の語彙には無く、preflight が足す語）
+  dry_run                                … -DryRun なので採らなかった（C8 の語彙には
+                                           無く、rank-run が足す語。測定ではない）
 
 出力先（design C5 の配置。所在の唯一の定義は perf-loop.common.ps1 の Get-LoopDir）:
   %LOCALAPPDATA%\areka-diag\perf-loop\<goal>\preflight.txt
@@ -47,6 +55,13 @@ perf-loop.ps1 — 自走改善ループの 1 入口（骨格・preflight・selft
   %LOCALAPPDATA%\areka-diag\perf-loop\<goal>\iter-<n>\{rank,A1,B1,A2,B2,bin-A,bin-B,followup}\
   %LOCALAPPDATA%\areka-diag\perf-loop\<goal>\final-<date>\
   同じ出力先に -Resume を付けると、既にある成果物を作り直さず再利用する（冪等）。
+
+1 周の回し方（背景実行 1 本＝1 ターン。要件 1.11＝check-in を跨がせない）:
+  周 0   preflight → measure-baseline -Build release → measure-baseline -Build dev
+         → rank-run -Date <日付>（それぞれ別ターン）
+  周 n   rank-run -Iter n → prepare-ab -Iter n →（変更を実装）→ measure-ab -Iter n
+         → followup -Iter n
+  最後   final -Build release → final -Build dev -Resume
 
 --------------------------------------------------------------------------------
 較正値・調整値の一覧（変更する場合はここだけを書き換える）
@@ -81,7 +96,13 @@ perf-loop.ps1 — 自走改善ループの 1 入口（骨格・preflight・selft
 使い方:
   pwsh -NoProfile -File tools/perf/perf-loop.ps1 selftest
   pwsh -NoProfile -File tools/perf/perf-loop.ps1 preflight -Goal draw-load-parity
-  pwsh -NoProfile -File tools/perf/perf-loop.ps1 rank -Iter 3          # 7.3 で実装
+  pwsh -NoProfile -File tools/perf/perf-loop.ps1 rank-run -Iter 3
+  pwsh -NoProfile -File tools/perf/perf-loop.ps1 measure-ab -Iter 3 -Resume
+
+-DryRun（**試験専用**・測定にはならない）:
+  areka を起動せず、cargo build・サンプリング・追随チェック・静寂確認も行わずに、
+  出力先の階層と -Resume と RESULT 行だけを安く確かめる。証跡（quiet-*.txt）は
+  偽造しない。詳しくは perf-loop.measure.ps1 の頭書を見ること。
 ================================================================================
 #>
 
@@ -97,7 +118,7 @@ param(
     # 目標定義ファイルを直接指定する（-Goal の代わり。試験・別所在用）
     [string]$GoalFile,
 
-    # 周番号（iter-<n> の <n>）。task 7.3 の各サブコマンドが使う
+    # 周番号（iter-<n> の <n>）。周の作業場を使うサブコマンドが読む
     [int]$Iter = 0,
 
     # 走行の出力先を直接指定する（既定の配置を使わないとき）
@@ -116,7 +137,21 @@ param(
     [string]$Ledger,
 
     # 出力先の名前に使う日付（yyyyMMdd）。既定は実行日
-    [string]$Date
+    [string]$Date,
+
+    # 実行体と 32bit ヘルパの所在（省略時は target\<release|debug>）。
+    # measure-ab は bin-A／bin-B を自分で決めるので、ここは使わない
+    [string]$BinDir,
+
+    # ゴースト一式のルート（絶対パス。省略時は emo2 fixture）
+    [string]$GhostRoot,
+
+    # バルーンのルート（絶対パス。省略時は <GhostRoot>\emo2-kakukaku）
+    [string]$BalloonRoot,
+
+    # **試験専用**。areka を起動せず、配管（出力先・-Resume・RESULT 行）だけを確かめる。
+    # 静寂確認・cargo build・サンプリング・追随チェックも行わない（測定にはならない）
+    [switch]$DryRun
 )
 
 Set-StrictMode -Version 3.0
@@ -144,11 +179,13 @@ $SELFTEST_TOKEN             = '12345678'
 # サブコマンドの全面（RESULT 行の <sub> はこの語のいずれか）
 $SUB_PREFLIGHT = 'preflight'
 $SUB_SELFTEST  = 'selftest'
-$SUBCOMMANDS_IMPLEMENTED = @($SUB_PREFLIGHT, $SUB_SELFTEST)
-$SUBCOMMANDS_TASK_7_3    = @(
+#: 入口（本ファイル）が持つ 2 本
+$SUBCOMMANDS_ENTRY   = @($SUB_PREFLIGHT, $SUB_SELFTEST)
+#: perf-loop.measure.ps1 が持つ 8 本（実際に測る側）
+$SUBCOMMANDS_MEASURE = @(
     'measure-baseline', 'rank-run', 'rank', 'prepare-ab', 'measure-ab', 'compare', 'followup', 'final'
 )
-$SUBCOMMANDS = $SUBCOMMANDS_IMPLEMENTED + $SUBCOMMANDS_TASK_7_3
+$SUBCOMMANDS = $SUBCOMMANDS_ENTRY + $SUBCOMMANDS_MEASURE
 $BUILD_KINDS = @('dev', 'release')
 
 # 自己較正を回す道具の一覧（順序も較正値＝この順で回す）。
@@ -191,9 +228,25 @@ $script:OutRootPath = $null
 $script:GoalName    = if ($Goal) { $Goal } else { $DEFAULT_GOAL }
 $script:DateStamp   = $Date
 
+# 計測サブコマンド（perf-loop.measure.ps1）が読む引数。**引数を読む所在はここだけ**に
+# しておく——8 本の本体が $PSBoundParameters や param 変数を直に触ると、どの引数が
+# 効くのかが 8 か所に散るためである。
+$script:IterArg        = $Iter
+$script:RunDirArg      = $RunDir
+$script:BuildKind      = $Build
+$script:BuildExplicit  = $PSBoundParameters.ContainsKey('Build')
+$script:BinDirArg      = $BinDir
+$script:GhostRootArg   = $GhostRoot
+$script:BalloonRootArg = $BalloonRoot
+$script:ResumeMode     = [bool]$Resume
+$script:DryRunMode     = [bool]$DryRun
+
 . (Join-Path $PSScriptRoot 'perf-loop.common.ps1')
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+
+# 計測サブコマンド 8 本の本体（共通部品と較正値の後・$repoRoot の後に読むこと）
+. (Join-Path $PSScriptRoot 'perf-loop.measure.ps1')
 
 # =============================================================================
 # 自己較正（selftest）
@@ -568,18 +621,6 @@ function Invoke-SubPreflight {
 }
 
 # =============================================================================
-# task 7.3 が実装するサブコマンドの受け口
-# =============================================================================
-# 入口の全面を最初から文書化しておく（呼ぶ側のスキルとエージェントが、実装済みの語と
-# 未実装の語を推測せずに区別できるようにするため）。7.3 はこの関数を本体で置き換える。
-function Invoke-SubNotYetImplemented {
-    param([Parameter(Mandatory = $true)][string]$Name)
-    Write-Info "[perf-loop] $Name は task 7.3 で実装します（今は受け口だけがあります）。"
-    Write-Info "[perf-loop] 実装済みのサブコマンド: $($SUBCOMMANDS_IMPLEMENTED -join '・')"
-    Stop-Run -Code $EXIT_BAD_ARGS -Message "$Name は task 7.3 で実装します"
-}
-
-# =============================================================================
 # 引数の検証
 # =============================================================================
 if (-not $Sub) {
@@ -622,19 +663,19 @@ if (Test-Path -LiteralPath $goalCandidate -PathType Leaf) {
 }
 
 # =============================================================================
-# 振り分け（task 7.3 はここへ 8 本を足す。既存の 2 本と共通部品は触らない）
+# 振り分け（入口の 2 本は本ファイル・測る 8 本は perf-loop.measure.ps1）
 # =============================================================================
 switch ($Sub) {
     'preflight'        { Invoke-SubPreflight }
     'selftest'         { Invoke-SubSelfTest }
-    'measure-baseline' { Invoke-SubNotYetImplemented -Name $Sub }
-    'rank-run'         { Invoke-SubNotYetImplemented -Name $Sub }
-    'rank'             { Invoke-SubNotYetImplemented -Name $Sub }
-    'prepare-ab'       { Invoke-SubNotYetImplemented -Name $Sub }
-    'measure-ab'       { Invoke-SubNotYetImplemented -Name $Sub }
-    'compare'          { Invoke-SubNotYetImplemented -Name $Sub }
-    'followup'         { Invoke-SubNotYetImplemented -Name $Sub }
-    'final'            { Invoke-SubNotYetImplemented -Name $Sub }
+    'measure-baseline' { Invoke-SubMeasureBaseline }
+    'rank-run'         { Invoke-SubRankRun }
+    'rank'             { Invoke-SubRank }
+    'prepare-ab'       { Invoke-SubPrepareAb }
+    'measure-ab'       { Invoke-SubMeasureAb }
+    'compare'          { Invoke-SubCompare }
+    'followup'         { Invoke-SubFollowup }
+    'final'            { Invoke-SubFinal }
     default            { Stop-Run -Code $EXIT_BAD_ARGS -Message "未知のサブコマンドです: '$Sub'" -Sub '-' }
 }
 

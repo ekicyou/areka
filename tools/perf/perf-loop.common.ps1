@@ -29,10 +29,10 @@ perf-loop.common.ps1 — perf-loop.ps1 が dot-source する共通部品
                        %LOCALAPPDATA%\areka-diag\perf-loop\<goal>\… の唯一の所在
 
 なぜ別ファイルなのか:
-  task 7.3 が同じ入口へ計測サブコマンド 8 本（measure-baseline／rank-run／rank／
-  prepare-ab／measure-ab／compare／followup／final）を足す。1 ファイル 1,000 行の
-  上限（要件・steering）に収めるため、共通部品を先に切り出しておく。7.3 は
-  perf-loop.ps1 側へ関数を足すだけでよく、ここの部品を組み替える必要はない。
+  同じ入口が計測サブコマンド 8 本（measure-baseline／rank-run／rank／prepare-ab／
+  measure-ab／compare／followup／final）まで持つ。1 ファイル 1,000 行の上限
+  （要件・steering）に収めるため、入口（perf-loop.ps1）・共通部品（本ファイル）・
+  計測の本体（perf-loop.measure.ps1）の 3 枚に分けてある。
 
 呼び出し側が事前に置いておく script scope の変数（Exit-WithResult ほかが読む）:
   $script:CurrentSub   … 実行中のサブコマンド名（RESULT 行の <sub>）
@@ -471,7 +471,7 @@ function Get-LoopDateStamp {
 
 # 走行の出力先を決める唯一の口。-RunDir が与えられていればそれを使い（既定の配置の外へ
 # 出したいとき・既にある走行を読み直すとき）、無ければ Get-LoopDir の配置に従う。
-# task 7.3 の各サブコマンドは自分で Join-Path せず、必ずこれを通すこと。
+# 計測サブコマンドは自分で Join-Path せず、必ずこれを通すこと。
 function Resolve-RunDir {
     param(
         [string]$RunDir,
@@ -501,7 +501,7 @@ function New-LoopDir {
 
 # 冪等（-Resume）の判定。同じ出力先に成果物が既にあり、-Resume が付いていれば
 # 「作り直さず再利用する」と答える。-Resume が無ければ常に $false（採り直す）。
-# 何を成果物と見るかは呼び手が渡す（task 7.3 の各サブコマンドが自分の完了印を渡す）。
+# 何を成果物と見るかは呼び手が渡す（各サブコマンドが自分の完了印を渡す）。
 function Test-ResumeArtifact {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
