@@ -32,7 +32,7 @@
 ## Boundary Commitments
 
 ### This Spec Owns
-- 新規 crate `crates/log-capture-kit/`（ログ捕捉の硬化機構・正準イベント型・行整形・全スレッド捕捉 API・較正テスト・ワークスペース走査の番人テスト 3 種）。
+- 新規 crate `crates/log-capture-kit/`（ログ捕捉の硬化機構・正準イベント型・行整形・全スレッド捕捉 API・較正テスト・ワークスペース走査の番人テスト 3 種）。crate 名は 2026-08-22 設計ディスカッション 議題 1 で **`log-capture-kit` に確定**（`areka-` を冠さない・接頭辞なしの基盤 crate `dola`／`wintf` と同列）。
 - 上記への移行に伴う各 crate の**テスト専用コード**（捕捉ヘルパの本体削除・アダプタ化・説明文の是正）と各 crate `Cargo.toml` の `[dev-dependencies]` 1 行。
 - `crates/areka/src/emo2_boot/spine.rs` の settle ヘルパ 1 本と、その適用先 2 ファイル（`spine_display_tests.rs`・`spine_seriko_loop_tests.rs`）。
 - `crates/areka-emo-present/src/chain.rs` の `upload` 失敗注入点（`#[cfg(test)]`）と状態更新順序（prepare → commit）、および新設テスト `chain_fault_tests.rs`・`chain_test_support.rs`・`presenter_upload_failure_tests.rs`。
