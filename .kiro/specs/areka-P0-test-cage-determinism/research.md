@@ -276,3 +276,122 @@ tracing-core 0.1.36（`Cargo.lock` 実測）・tracing-subscriber 0.3.23。
 - **②** は settle 専用ヘルパ（最小持続＋連続空観測の両立形）を `spine.rs` に 1 本。
 - **⑦・⑩** は外部裁定・dlp 着地に従属する条件付きタスクとして tasks.md に分離。
 - 要件ディスカッションで §5 の 14 項目を順に裁定する。
+
+---
+
+# 設計フェーズの調査記録（Research & Design Decisions・2026-08-22 追記）
+
+> **対象ツリー**: HEAD `6ca62a40`（コードは `origin/main f6b81078` と byte 一致・spec 文書のみ差分）。本節の file:line は設計生成時に Grep／Read で再検証した（§1〜§7 の値と一致。差異があった項目は本節で明記）。
+> **Discovery Scope**: Extension（既存テスト基盤の統合・整理）＋ 局所的な本番接触 1 箇所（`chain.rs`）。外部ライブラリの新規導入は無く、WebSearch による外部調査は行っていない（`tracing` 0.1.44／`tracing-core` 0.1.36／`tracing-subscriber` 0.3.23 は `Cargo.lock` 実測・機序は §1.2 と原典 `placement/test_support.rs:6-52` の説明に依る）。
+> **要件ディスカッションの裁定（再掲・設計は再開しない）**: §5 項目 10（④ で主張が破れたら `chain.rs` 内で是正＝要件 5.7／5.8）・項目 12（1,000 行番人は採用・見張りのみ・例外表 11 件＝要件 10）・実装は開発者の改善ループのマージ後に開始（要件 Adjacent expectations）。
+
+## 8. Summary
+
+- **Feature**: `areka-P0-test-cage-determinism`
+- **Key Findings**:
+  - 正典は **probe 方式**（`tracing` 直実装・`set_global_default` 不使用）。keeper 方式は `Registry::enabled` が無条件 `true` のため、同一バイナリで `tracing::enabled!` の前置ガード（`wintf/src/ecs/window/transition_diag.rs:622-623` `is_enabled`・`areka/src/placement/dpi_sync.rs:279`・`areka-emo-present/src/presenter/show.rs:347`）の「既定 OFF」を崩す。probe 方式は `enabled!` を偽のまま保つ。
+  - 置き場は **新規 leaf crate**（A 案）。名前は `log-capture-kit`（`crates/log-capture-kit/`・lib 名 `log_capture_kit`）。`areka-` を冠さないことで `wintf` の `[dev-dependencies]` を `areka-*` 非依存のまま字面でも保ち、既存モジュール名（`test_log_capture`・`log_capture`）とも衝突しない（同名だと `use` が crate／module で曖昧になる）。
+  - 捕捉結果の正準型は **発火順を保つ** `Vec<(String, String)>` フィールド列でなければならない。既存の行整形（`level={} target={} k=v…`／`level={} k=v…`）は `record()` の訪問順で組まれており、`BTreeMap`／`HashMap` を正準にすると byte 一致で再現できない（`areka/src/emo2_boot/frame_test_support.rs:103-117`・`input_events/choice_drain.rs:162-177`・`wintf/.../dpi_helpers_tests.rs:326-341` で確認）。
+  - 3.4-b（硬化を外した素の捕捉で取りこぼす較正）は**同一プロセスでは再現不能**（probe は `OnceLock` でプロセス寿命・`has_just_one` は二度と真にならない）。**自身のテストバイナリを子プロセスで起動**し、`#[ignore]` 付きの子テストを `--exact --ignored` で走らせる形が決定論的に成立する（子は環境変数で bare／hardened の両モードを受け、親は出力の `1 passed` を確認して「0 件実行の空振り」を排除する）。
+  - ④ `upload`（`chain.rs:185-241`）は **prepare → commit** に並べ替えるだけで、7 経路中 6 経路で「失敗時の状態不変」が成立する（テクスチャ生成 → `ResizeBuffers` → 3 フィールド一括更新／`cast`・`GetBuffer`・`cast` → `UpdateSubresource` → `CopyResource` → `Present`）。残る `Present` 失敗だけは `source_tex` が新内容で未提示（`read_back()` は試行内容を返す）——これを「前状態」の定義（表示＝backbuffer・presenter 状態）の外の残余として記録する。
+  - ⑦は `draw-load-parity` 未着手（spec ディレクトリは `brief.md` のみ）。⑩は 11 ファイル超過を `wc -l` で再確認（§1.7 と同一）。
+
+## 9. Research Log（設計フェーズ）
+
+### 9.1 keeper 方式を正典にできない根拠（R-1 の決着）
+- **Context**: §5 項目 1（正典方式）。
+- **Sources**: `tracing-subscriber` 0.3.23 `registry/sharded.rs:222-235`（§1.2）・`wintf/src/ecs/window/transition_diag.rs:622-623`・`areka/src/placement/dpi_sync.rs:279`・`areka-emo-present/src/presenter/show.rs:347`・`presenter/timing.rs:14`／`presenter_perf_log_tests.rs:886`（「前置ガードを置かない」構造の実測）。
+- **Findings**: keeper を置いたバイナリでは `tracing::enabled!` が全スレッドで真になる。現行で keeper を持つ 3 crate（sylphya／kanade／ghost）は wintf 非依存なのでガード付き本番コードを含まず（依存グラフ §1.3）、**現状では判定が変わるテストは無い**。しかし正典を keeper にすると wintf／areka／emo-present のテストバイナリへ keeper が入り、`transition_diag::is_enabled()` が捕捉窓の外で真→観測行の組立と確保が走る（「既定で無音」「定常アロケーション 0」の前提が同一バイナリで崩れる）。逆に keeper 3 crate を probe へ寄せても `enabled!` に依存するテストは無い（keeper 3 crate のテストは `capture()` の戻り値のみを見る）。
+- **Implications**: 正典＝probe 方式。keeper 3 コピー・全スレッド capture-all 2 コピーは kit の API へ畳む（§10 D1）。
+
+### 9.2 置き場の最終比較（A vs C）
+- **Context**: §5 項目 2。
+- **Findings**: `#[path]` 単一ファイル（C 案）は in-crate `#[cfg(test)]`（`src/` 深さが crate ごとに違う）と `tests/`（別バイナリ）で相対パスが異なり、`rustfmt`／IDE が追跡しない。`tracing_subscriber` を使う形なら消費側の dev-deps は結局要る。統合テスト 3 本（`areka-emo-text/tests/attach_wiring_test.rs`・`areka-ghost/tests/ghost/*`・`areka-seriko/tests/loop_integration.rs`）と bin crate `areka`（`src/lib.rs` 無し・`[[bin]]` のみ＝in-crate テスト必須）の両方から同じ形で引けるのは crate だけである。新規 crate はワークスペース `members = ["crates/*"]` に自動包含され、テスト専用 crate の先例（`shiori4-testdll`・`pilot`）がある。
+- **Implications**: A 案採用。消費側は **10 crate**（`areka`・`wintf`・`areka-seriko`・`areka-kanade`・`areka-sylphya`・`areka-ghost`・`areka-emo-atlas`・`areka-emo-compose`・`areka-emo-present`・`areka-emo-text`＝`with_default(` を持つ crate の全数・§1.1 の 40 ファイルの所属を集計）の `[dev-dependencies]` に各 1 行。§1.3 の「11 crate」は本集計で 10 に確定した。
+
+### 9.3 捕捉結果の形と既存 assert の結合
+- **Findings**: 5 形の整形はすべて `record_debug` の `{value:?}` と `record()` の訪問順で決まる。`level={level} target={target}` の先頭＋` {name}={value:?}` の連結（seriko 3・atlas・compose・areka emo2_boot 6・`frame_test_support`）と `target=` 無し変種（`choice_drain`・`input_events/balloon_test_support`・`dpi_helpers_tests`・`shiori_demo`）の 2 形で**行整形は尽きる**。構造体形は `placement`（`BTreeMap`・`message()`／`field()`）・emo-present（`HashMap`・`message()`／`field_names()` 昇順）・keeper 3 crate（`target`／`level`／`message`／`event`／`outcome`／`fields`）。件数形は emo-text（WARN／ERROR 件数）。
+- **Implications**: kit の正準型は `CapturedEvent { level, target, fields: Vec<(String, String)> }`（訪問順保持）＋ `message()`／`field(name)`／`field_names_sorted()`／`fields_map()`。行整形 2 形は kit が byte 一致で提供（`LineFormat`）。crate 固有の派生（`event`／`outcome` の取り出し・`assert_logged*`・`count_level`）は**各 crate の薄いアダプタに残す**（要件 2.3＝判定内容不変）。呼出側の 238 箇所の `capture_logs(` は無改変で通る。
+
+### 9.4 不在主張の対照観測（3.3）の既定形
+- **Findings**: 呼出側へ「陽性 1 本を対にせよ」と規律で求める形（`transition_record_tests.rs` 型）は新設サイトで守られる保証が無い（brief が 3 度実証した再発構造と同じ）。kit の `capture()` が窓の内側で自前の番兵イベント（`trace!(target: "log_capture_kit::sentinel")`）を 1 件発火し、窓の終了時に捕捉列へ番兵が在ることを検査（無ければ panic＝「捕捉が働いていない」）して**返却前に取り除く**形なら、呼出側の assert・戻り値は不変のまま全サイトが自動で対照を持つ。
+- **Implications**: 既定 API に番兵を内蔵（§10 D4）。`capture_under_filter`（EnvFilter 濾過）では directive に `log_capture_kit::sentinel=trace` を足し、返却文字列から番兵行を除く（`is_empty()` 型の不在主張が壊れない）。
+
+### 9.5 較正テスト（3.4-b）の再現手段（R-2 の決着）
+- **Findings**: `tracing-core` の `Dispatchers::has_just_one` は `register_dispatch` で `len <= 1` に書かれる（probe の `Arc` を `OnceLock` が保持する限り `len >= 2`）。したがって probe 常駐後のプロセスでは「硬化前」へ戻せない。再現に必要な場面は**「捕捉窓の内側で、購読者を持たない別スレッドが同じ発行点をプロセス内で最初に踏む」**（素の `with_default` では `Rebuilder::JustOne` → その別スレッドの既定 `NoSubscriber` → `Interest::never()` が焼き付く→テストスレッドの発火が捨てられる）。窓の**前**に焼かれた `never` は素の `with_default` でも入口の `Dispatch::new`（登録＋全走査再計算）で治るため、較正場面は「窓内先着」でなければならない。
+- **Implications**: kit の統合テスト 1 本が `std::env::current_exe()` を `--exact <子テスト名> --ignored --test-threads=1` で起動し、環境変数 `AREKA_LOG_CAPTURE_CALIBRATION=bare|hardened` で子のモードを切り替える。子は `#[ignore]`・環境変数が無ければ即 return（`--include-ignored` の誤実行で親プロセス内で走っても probe の有無に依存しない）。bare 子は捕捉 0 件を、hardened 子は 1 件を assert。親は子の stdout に `test result: ok. 1 passed` を要求（0 件実行の空振りを排除＝道具の較正）。
+
+### 9.6 ④ `upload` の状態遷移と「前状態」の定義（R-4 の決着）
+- **Sources**: `chain.rs:185-241`（`upload`）・`:244`（`read_back`）・`:292`（`size`）・`:122`（struct）・`presenter/show.rs:299-310`（観測点・`prev_size`／エラー分岐）・`presenter/target.rs:73`・`presenter/transition_record_tests.rs:327-347`（本文走査）・`mount_test_support.rs:60`（生成点）。
+- **Findings**: 現行順序は `ResizeBuffers`(:192-200) → `source_tex` 差替(:203) → `staging` 差替(:204) → `size`(:205) → `UpdateSubresource`(:214-223・失敗しない) → `cast`(:211 は UpdateSubresource の前) → `GetBuffer`(:228) → `cast`(:231) → `Present`(:236-238)。**是正後の順序**: 寸法変更時は `create_source_tex` → `create_staging` → `ResizeBuffers` → **3 フィールド一括更新**（失敗し得る操作をすべて先に済ませ、最後に一括で差し替える）。寸法不変部は `cast` → `GetBuffer` → `cast` → `UpdateSubresource` → `CopyResource` → `Present`。この順なら 7 失敗点のうち `Present` 以外の 6 点で `size()`／`source_tex`／`staging`／swap chain のいずれも変わらない。`Present` 失敗時は `source_tex` と backbuffer に新内容が書かれ未提示（表示＝直前フレームのまま・`read_back()` は新内容）。これを「前状態を保つ」の外に置く残余として記録する——復元には提示済み内容の複製テクスチャが要り、定常経路に毎フレーム 1 `CopyResource` を足す（要件 5.5 の性能特性に抵触）ため採らない。
+- **「前状態」の定義**（設計で固定）: ⒜ `SwapChainPresenter` 内部＝`size()` 不変・`read_back()` が成功し（`source_tex`／`staging` の寸が一致）・`Present` 以外の失敗では `read_back()` の内容も不変／⒝ presenter 側＝`target.visible`／`applied`／`native_size`／`current_surface`／`mount.set_bounds` 未呼出・`reply` が `Err`（`show.rs:306-310` の早期 return）。backbuffer の実表示内容は readback 不能（flip model）のため観測外と明記する。
+- **Implications**: 注入は `#[cfg(test)]` で実体化するスレッド局所の一発フラグ（`chain.rs` 内 `fault_point(UploadFault::…)?` を 7 点の直前に置く・非 test ビルドでは常に `Ok(())` の空関数）。`show.rs` 非接触・`target.rs` 非接触。ログは既存 `device_err` 経由（要件 5.3）。
+
+### 9.7 ② settle の有界化の形
+- **Sources**: `spine.rs:329`（`SPIN_WAIT` 30s）・`:347`（`SPIN_YIELD_BUDGET`）・`:350`（`BACKOFF_SLEEP`）・`:358`（`spin_wait_until`）・`spine_display_tests.rs:410-414`・`spine_seriko_loop_tests.rs:369-375`・先例 `spine_display_tests.rs:28-40`（deadline＋200µs poll）。
+- **Findings**: 2 箇所はどちらも「尽きるのが正常」。負荷下で縮まない回収機会は「壁時計の最小持続」**かつ**「連続して空だった観測回数」の両立で与えるのが最も単純（片方だけだと、極端に速い／遅い環境でどちらかが空振りする）。Tick 兼用形（`spine_display_tests.rs:410`）は Tick 値を呼出側の単調カウンタで生成し、**上限（旧範囲の終端 `1_000_000 + 5_000`）で頭打ち**にする——反復回数が時刻依存になっても注入時刻の範囲は旧テストと同一に保たれ、同一 Tick の再注入は cue の発火に影響しない（観測を追い越さない）。
+- **Implications**: `spine.rs` に `settle_bounded(step)` を 1 本追加（§10 D6）。
+
+### 9.8 錠の退役（⑦）と `command.rs` の扱い
+- **Findings**: `lock_self_initiated_for_test()` の定義は `command.rs:76`、呼出は `command.rs` 2・`command_batch_tests.rs` 5・`command_transition_tests.rs` 4・`window_proc/window_pos_tests.rs` 5・`window_proc/window_pos_transition_tests.rs` 5＝**21**（設計時に `rg -c` で再確認）。`draw-load-parity` は spec ディレクトリに `brief.md` のみ（未着手）。ワークスペースに `-D warnings`／`deny(warnings)` の設定は無い（`.cargo/` 無し・`Cargo.toml`／`lib.rs` に無し）ため、定義だけが残って `dead_code` 警告になっても `cargo test` は赤にならない。
+- **Implications**: 退役は dlp の `Cell<i32>` 化が本ブランチへ取り込まれた後の条件付きタスク。兄弟テストファイル 4 本の 19 呼出を退役し、`command.rs` 内の 2 呼出と定義は「dlp 着地後に並走衝突が消えている」場合のみ呼出 2 箇所を退役・定義は要件 7.4 に従い申し送り。
+
+### 9.9 ⑧ 検知・⑩ 番人の走査方式
+- **Findings**: `include_str!` 逐語は列挙漏れで被覆が縮む（要件 8.3 の懸念そのもの）。`read_dir` 再帰（先例 `balloon_target_tests.rs:276`・`snapshot_capture_test.rs:205`）と `CARGO_MANIFEST_DIR` 相対でワークスペース根を辿る先例（`balloon_test_support.rs:194`）を組み合わせれば `crates/**/*.rs`（`src/`・`tests/`・`examples/`・兄弟ファイル）を漏れなく走査できる。走査語は `with_default(`・`set_global_default(`・`set_default(`（`tracing::dispatcher` 経由の別名を含む）。`.init()` は examples の本番初期化 14 箇所（`crates/*/examples/*.rs`・`areka/src/main.rs:130`）に在るため走査語に含めない。コメント行（`//`・`//!`・`///`）は除いて走査する（説明文中の言及が偽陽性にならないように）。kit 自身のディレクトリは走査対象外（正典の定義箇所）。
+- **Implications**: kit の `tests/` に走査器（純関数＋ walker）を置き、⑧・⑩・「kit は dev-dependencies 以外に現れない」の 3 検査を同じ walker で行う。
+
+### 9.10 11.4 `ReassertZOrder` 再表示
+- **Findings**: 挿入点は `wintf/src/ecs/window/zorder_pair_establish.rs:180`（確立時 1 発）のみ。areka 側の本番配線に再表示時の挿入は無く（`placement/spawn.rs:616` は doc 参照・`spawn_zorder_pair_*_tests.rs` は確立時の配線テスト）、再表示経路 `emo2_boot/balloon_visibility_phase.rs:385` → `EmoPresenter::show_target`（`presenter/visibility.rs:69`）は Z 順を扱わない。
+- **Implications**: 決定論テストで固定できる範囲は 0（固定対象の本番配線が無い＝本仕様の Out of scope）。全面的に `emo2-conformance-e2e` へ理由付きで申し送る（§10 D9）。
+
+## 10. Design Decisions（設計フェーズ）
+
+### D1: 正典＝probe 方式・keeper／capture-all／直書きは kit の API へ畳む
+- **Alternatives**: keeper 正典／probe 正典／両立併存。
+- **Selected**: probe 正典。全スレッド捕捉は kit の**別名 API** `install_global_capture_all()`（`set_global_default` の唯一の呼出点・一度きり・衝突時は `expect` で明示失敗）。
+- **Rationale**: §9.1。**Trade-offs**: `Interest::sometimes` 常態化でテストバイナリの全 callsite が毎回 `enabled()` を訊く（R-3・9.1 の反復で所要時間を測る）。
+- **Follow-up**: keeper 3 crate の移行後に `cargo test -p areka-sylphya/-kanade/-ghost` が全緑（要件 1.7）。
+
+### D2: 置き場＝新規 leaf crate `log-capture-kit`
+- **Alternatives**: §1.3 A〜E。**Selected**: A。deps は `tracing` のみ・feature `env-filter` で `tracing-subscriber`（wintf の `capture_under_filter` 用）。`publish = false`。
+- **Rationale**: §9.2。**Trade-offs**: crate が 1 つ増え `structure.md` の crate 一覧に追記が要る。消費 10 crate の `Cargo.toml` に dev-deps 1 行（要件 11.5 の範囲内）。
+- **Follow-up**: kit の検知テストが「`[dependencies]` に `log-capture-kit` が現れない」ことも走査する（依存方向の規律を機械化）。
+
+### D3: 正準イベント型は訪問順保持・行整形 2 形を kit が byte 一致で提供・crate 固有派生はアダプタに残す
+- **Rationale**: §9.3。**Trade-offs**: アダプタ（`capture_logs` 等の既存名）は各 crate に残るが、本体は kit への 1〜3 行の委譲になる（「定義箇所 1 箇所」は**硬化機構**についての要件であり、整形アダプタは対象外＝要件 1.1 の読み）。
+
+### D4: 不在主張の対照観測＝kit が番兵イベントを内蔵
+- **Rationale**: §9.4。**Trade-offs**: 窓ごとに TRACE 1 件の発火（コスト無視可）。`capture_under_filter` は directive 追加＋行除去で同じ保証を得る。
+
+### D5: 較正テスト＝子プロセス方式
+- **Rationale**: §9.5。**Trade-offs**: テスト 1 本が子プロセスを 2 回起動（数百 ms）。Windows で `current_exe()` は安定。
+
+### D6: ② settle ヘルパ＝「最小持続 かつ 連続空観測」＋ Tick 頭打ち
+- **Rationale**: §9.7。**Selected**: `settle_bounded(step: FnMut() -> usize)`（`step` は 1 反復分の処理を行い回収件数を返す・Tick 注入は `step` の内側で呼出側が行う）。終了条件＝最小持続 `SETTLE_MIN`（壁時計）を満たし**かつ**連続 `SETTLE_QUIET_ROUNDS` 回 0 件。上限 `SPIN_WAIT` で必ず返る（返った後の判定は呼出側の assert・ヘルパは panic しない）。反復間は `BACKOFF_SLEEP` 相当の短い sleep（4.4 の有界 poll-backoff）。
+- **Trade-offs**: 2 テストの所要が各 `SETTLE_MIN` 分伸びる（値は tasks で実測調整・初期値 200ms／quiet 50 回を提案）。
+
+### D7: ④ 注入＝`#[cfg(test)]` スレッド局所の一発フラグ＋ prepare→commit 並べ替え（要件 5.7 の是正）
+- **Rationale**: §9.6。**Selected**: `UploadFault` 7 値（分類: 寸法変更 `ResizeBuffers`／`CreateSourceTex`／`CreateStaging`・資源取得 `SourceTexCast`／`GetBuffer`／`BackbufferCast`・提示 `Present`）。`fault_point(at) -> Result<(), PresentError>` は test ビルドでスレッド局所 `Cell<Option<UploadFault>>` を消費し、一致すれば `device_err("<injected …>")(E_FAIL)` を返す。非 test ビルドは常に `Ok(())`。
+- **Trade-offs**: `upload` 本文に 7 行の `fault_point(...)?;` が入る（可読性のコスト・各行は 1 行）。`Present` 失敗後の `read_back()` は試行内容を返す残余を文書化して残す。
+
+### D8: ⑦・⑩ は条件付き／独立タスク・⑧は kit の統合テスト
+- **Rationale**: §9.8・§9.9。
+
+### D9: 11.4 は全面的に e2e へ申し送り
+- **Rationale**: §9.10。
+
+## 11. Risks & Mitigations（設計フェーズ）
+
+- **R-3 `sometimes` 常態化の所要時間**: 9.1 の 10 回反復で `cargo test --workspace` の所要を記録し、移行前（main）と比較する。
+- **行整形の byte 一致が崩れて assert が落ちる**: 移行は crate 単位で行い、各 crate の lib テストを移行直後に走らせる。`LineFormat` の単体テストに既存 4 形の逐語期待値を置く。
+- **`capture_under_filter` の出力差**: directive 追加は番兵 target のみに効く。wintf の 96 呼出がそのまま回帰スイートになる。
+- **④ の `Present` 残余を「前状態保持」と読み違える**: テスト名と assert メッセージで「未提示の試行内容」と明記し、design §Components に残余として登記。
+- **dlp の着地が本仕様の完了より遅れる**: 要件 7.3 により錠温存で完了できる（申し送りに登記）。
+- **`--include-ignored` で較正の子テストが親プロセスで走る**: 子は環境変数が無ければ即 return。
+
+## 12. References（設計フェーズ）
+- `crates/areka/src/placement/test_support.rs:6-52` — probe 方式の機序説明（原典）。
+- `crates/areka-sylphya/src/test_log_capture.rs:98-136`・`crates/areka-kanade/src/schedule/log_capture.rs:145-184`・`crates/areka-ghost/src/test_log_capture.rs:119-131` — keeper 方式。
+- `crates/areka-ghost/tests/ghost/spine_e2e_test_global_log_probe.rs:75-93`・`crates/areka-seriko/tests/loop_integration.rs:590-608` — 全スレッド capture-all。
+- `crates/areka-emo-present/src/chain.rs:185-241` — `upload`。`crates/areka-emo-present/src/presenter/show.rs:299-310` — 観測点。
+- `crates/areka/src/emo2_boot/spine.rs:329-375` — 有界待機の先例。
