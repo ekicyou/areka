@@ -55,14 +55,18 @@
 - `log-capture-kit` の公開 API（`capture`／`capture_lines`／`LineFormat`／`CapturedEvent`／`capture_under_filter`／`install_global_capture_all`）の署名・戻り値の意味が変わる → 消費 10 crate のアダプタと後続 spec（`balloon-offset-dpi` 等）の再確認。
 - 番人テストの例外表（`with_default` 直接呼出・1,000 行超・`install_global_capture_all` 利用ファイル）への項目追加は明示編集＝編集した spec が理由を書く。
 - `chain.rs` の `upload` の失敗点が増減する → `UploadFault` の値と分類表を更新し `chain_fault_tests.rs` を追随。
-- `draw-load-parity` が `SELF_INITIATED_DEPTH` のスレッド局所化を着地させる／見送る → 要件 7.2／7.3 の分岐。
+- ~~`draw-load-parity` が `SELF_INITIATED_DEPTH` のスレッド局所化を着地させる／見送る → 要件 7.2／7.3 の分岐。~~ **2026-08-23 に着地で解決（分岐⒝）**。
+- 共有の起床旗（`tick_wake`）に触るテストを新設する必要が生じる → 要件 11.7／11.8 の制約（唯一の錠・不在主張は注入口で）を再確認する。
 - `spine.rs` の待機定数（`SPIN_WAIT`・`BACKOFF_SLEEP`）の変更 → settle ヘルパの最小持続との整合を再確認。
 
 ## Architecture
 
 ### Existing Architecture Analysis
 - **ログ捕捉の硬化方式が 3 系統**: probe 方式（probe dispatcher 2 個を `OnceLock` で常駐＋捕捉窓内 `rebuild_interest_cache()`）が 8 コピー（`areka/src/placement/test_support.rs:153-180`・`wintf/src/ecs/test_support.rs:64-115`・`areka-seriko/src/log_interest_probe.rs:67`・`areka-emo-atlas/src/log_capture.rs`・`areka-emo-compose/src/log_capture.rs`・`areka-emo-present/src/balloon_test_support.rs:153-181`・`scale_tests.rs:398-412`・`areka-emo-text/tests/attach_wiring_test.rs:321-344`）、keeper 方式（素の `registry()` を `set_global_default`）が 3 コピー（`areka-sylphya/src/test_log_capture.rs:109-136`・`areka-kanade/src/schedule/log_capture.rs:156-184`・`areka-ghost/src/test_log_capture.rs:115-131`）、一回限りの全スレッド capture-all が 2 コピー（`areka-ghost/tests/ghost/spine_e2e_test_global_log_probe.rs:75-93`・`areka-seriko/tests/loop_integration.rs:590-608`）。未硬化の直書き／ヘルパは 24 ファイル（requirements.md Introduction の表・設計時に `with_default(` 40 ファイルのうち硬化の印を持つ 16 ファイルを除いて再確認）。
-- **機序差が正典を決める**: keeper は `Registry::enabled` が無条件 `true` のため同一バイナリで `tracing::enabled!` が全スレッド真になり、`wintf/src/ecs/window/transition_diag.rs:622-623`（`is_enabled`）・`areka/src/placement/dpi_sync.rs:279`・`areka-emo-present/src/presenter/show.rs:347` の「既定 OFF なら組立も確保もしない」契約と衝突する。probe 方式は `enabled!` を偽のまま保つ。
+- **機序差が正典を決める**: keeper は `Registry::enabled` が無条件 `true` のため同一バイナリで `tracing::enabled!` が全スレッド真になり、「既定 OFF なら組立も確保もしない」契約と衝突する。probe 方式は `enabled!` を偽のまま保つ。
+  - 契約を持つ判定式は **3 箇所**（2026-08-23 の `main` 取り込み後に再計測。`draw-load-parity` が 2 箇所を新設した）: `wintf/src/ecs/window/transition_diag.rs:623`（遷移観測）・`wintf/src/ecs/world/tick_diag.rs:92`（相別観測・新設）・`areka/src/perf_thread_report.rs:75`（スレッド別 CPU 報告・新設）。
+  - その消費点（判定が真になると組立・確保が走る側）は `areka/src/placement/dpi_sync.rs:279`・`areka-emo-present/src/presenter/show.rs:347`（いずれも `transition_diag::is_enabled()` 経由）。
+  - **この増加は正典の判断を変えず、むしろ補強する**（keeper を選ぶと壊れる契約が 1 系統から 3 系統へ増えた）。
 - **依存グラフ**: `wintf` のワークスペース内依存は `dola` のみ（`crates/wintf/Cargo.toml`）。`areka-seriko`／`-kanade`／`-sylphya`／`-ghost`／`-emo-atlas`／`-emo-compose` は `wintf` 非依存。bin crate `areka` は `src/lib.rs` を持たず `[[bin]]` のみ（in-crate テスト必須）。統合テストから lib 内 `#[cfg(test)]` は不可視。→ 既存のどの crate に置いても全消費者から引けない。
 - **テスト配置の規約**（`structure.md`）: 新規テストは本番ファイルに書かず兄弟ファイル `<stem>_<モジュール名>.rs` へ置き `#[cfg(test)] #[path] mod` で接続、テーマ間共有ヘルパは `<stem>_test_support.rs`。`chain.rs` には歴史的形式の in-file `mod tests`（:297）が残る。
 - **待機の先例**: `spine.rs:329-375`（`SPIN_WAIT` 30s・`SPIN_YIELD_BUDGET`・`BACKOFF_SLEEP` 1ms・`spin_wait_until`）と deadline＋200µs poll の先例（`spine_display_tests.rs:28-40`・`spine_seriko_loop_tests.rs:54-66`）。
@@ -329,6 +333,8 @@ flowchart TD
 | 11.4 | `ReassertZOrder` 再表示の扱い | 文書 | e2e への申し送り | — |
 | 11.5 | dlp と共有ファイル 0・Cargo は dev-deps のみ | C1 kit・C6 番人 | dev-deps-only 検査 | — |
 | 11.6 | 利用手順の文書 | C1 kit（lib.rs doc） | module doc | — |
+| 11.7 | 起床旗に触るテストは唯一の錠 | C3 settle・C5 錠 | `TICK_WAKE_TEST_LOCK` | — |
+| 11.8 | 共有の旗の上で不在主張をしない | C3 settle | 注入口経由 | — |
 
 ## Components and Interfaces
 
@@ -549,8 +555,10 @@ fn fault_point(at: UploadFault) -> Result<(), PresentError>;
 | Intent | `draw-load-parity` の `SELF_INITIATED_DEPTH` スレッド局所化が本ブランチへ取り込まれた後に、錠 `lock_self_initiated_for_test()` の呼出 21 箇所を退役し並列実行で 0 失敗を示す |
 | Requirements | 7.1, 7.2, 7.3, 7.4 |
 
-- 分岐: ⒜ 未着地 → `command.rs` 非接触・錠は現状維持（7.1）。⒝ 着地（main マージ・rebase で取り込み）→ 兄弟テストファイル 4 本の 19 呼出と `command.rs` 内の 2 呼出（並走衝突が消えているため）を退役し、`cargo test -p wintf --lib` を 30 回以上反復して 0 失敗（7.2・9 の条件）。定義 `command.rs:76` の削除は行わず申し送り（7.4・ワークスペースに `-D warnings` は無く `dead_code` 警告は赤にならない）。⒞ 見送り → 申し送りに登記し錠温存で完了（7.3）。
-- 判断点: tasks の最終群の着手時点で `.kiro/specs/areka-P0-draw-load-parity/` の状態と `command.rs:49` の型を実測する。
+- **2026-08-23 に分岐⒝で確定**（`main` 取り込み `76384c83`・PR#118）。カウンタは `thread_local! Cell<i32>`（`command.rs:70`）、錠の定義は `command.rs:104`、実呼出は 21 箇所／5 ファイルで不変、`command_threadlocal_tests.rs` が「錠なし並列でも緑」を固定済み。判断点（`draw-load-parity` の状態と型の実測）は充足済みだが、着手時の再計測（要件 7.1・タスク 7.1）では改めて型を確認する。
+- 分岐の記録: ⒜ 未着地 → `command.rs` 非接触・錠は現状維持（7.1）。**⒝ 着地（確定）** → 兄弟テストファイル 4 本の 19 呼出と `command.rs` 内の 2 呼出を退役し、`cargo test -p wintf --lib` を 30 回以上反復して 0 失敗（7.2・9 の条件）。定義 `command.rs:104` の削除は行わず申し送り（7.4・ワークスペースに `-D warnings` は無く `dead_code` 警告は赤にならない）。⒞ 見送り → 申し送りに登記し錠温存で完了（7.3・本ケースは不発）。
+- **同じ塊で是正する陳腐化**: 兄弟テスト 4 本の説明文が「**プロセス共有**の `SELF_INITIATED_DEPTH`」のまま（`command_batch_tests.rs:25`・`command_transition_tests.rs:28`・`window_pos_transition_tests.rs:21`・`window_pos_tests.rs:40`）。要件 2.4 の対象として錠の退役と同時に直す。
+- **起床旗の制約（要件 11.7・11.8）**: `draw-load-parity` が共有の起床旗（`wintf/src/ecs/world/tick_wake.rs`）を導入し、本番経路が旗を立てるようになった（本仕様の接触集合では `emo2_boot/adapter.rs:122`・`balloon_visibility_phase.rs:113-114`）。旗に触る／`EcsWorld::decide_tick`（`world/mod.rs:551`）へ到達するテストは唯一の錠 `TICK_WAKE_TEST_LOCK`（`world/mod.rs:931`）を取り、2 本目の錠を作らない。共有の旗の上で不在主張は書かず、注入口（`tick_bridge.rs:230`／`world/mod.rs:560`）で行う。**要件 4 の待機 2 箇所は旗を観測しないので現状のままで抵触しない**。
 
 #### C7 検証ハーネスと文書
 

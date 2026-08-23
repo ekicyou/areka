@@ -303,6 +303,7 @@ tracing-core 0.1.36（`Cargo.lock` 実測）・tracing-subscriber 0.3.23。
 - **Sources**: `tracing-subscriber` 0.3.23 `registry/sharded.rs:222-235`（§1.2）・`wintf/src/ecs/window/transition_diag.rs:622-623`・`areka/src/placement/dpi_sync.rs:279`・`areka-emo-present/src/presenter/show.rs:347`・`presenter/timing.rs:14`／`presenter_perf_log_tests.rs:886`（「前置ガードを置かない」構造の実測）。
 - **Findings**: keeper を置いたバイナリでは `tracing::enabled!` が全スレッドで真になる。現行で keeper を持つ 3 crate（sylphya／kanade／ghost）は wintf 非依存なのでガード付き本番コードを含まず（依存グラフ §1.3）、**現状では判定が変わるテストは無い**。しかし正典を keeper にすると wintf／areka／emo-present のテストバイナリへ keeper が入り、`transition_diag::is_enabled()` が捕捉窓の外で真→観測行の組立と確保が走る（「既定で無音」「定常アロケーション 0」の前提が同一バイナリで崩れる）。逆に keeper 3 crate を probe へ寄せても `enabled!` に依存するテストは無い（keeper 3 crate のテストは `capture()` の戻り値のみを見る）。
 - **Implications**: 正典＝probe 方式。keeper 3 コピー・全スレッド capture-all 2 コピーは kit の API へ畳む（§10 D1）。
+- **2026-08-23 追記（`main` 取り込み `76384c83`＝PR#118 後の再計測・結論は不変で根拠は強化）**: 既定 OFF の**判定式**は 1 → **3 箇所**へ増えた——`wintf/src/ecs/window/transition_diag.rs:623`（既出）に加え、`draw-load-parity` が新設した `wintf/src/ecs/world/tick_diag.rs:92`（相別観測・target `wintf::tick`）と `areka/src/perf_thread_report.rs:75`（スレッド別 CPU 報告・target `areka::perf`）。本文の §1.2 表・§7・R-1 が挙げる `dpi_sync.rs:279`／`show.rs:347` は判定式ではなく `transition_diag::is_enabled()` の**消費点**である（区別が曖昧だったので明記する）。keeper を正典にすると壊れる契約は 1 系統から 3 系統へ増えたので、**D1 の裁定はより強く支持される**。
 
 ### 9.2 置き場の最終比較（A vs C）
 - **Context**: §5 項目 2。
