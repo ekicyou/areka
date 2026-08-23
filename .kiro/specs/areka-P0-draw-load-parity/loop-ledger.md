@@ -11,3 +11,4 @@
 - capabilities: elevated:false;xperf:true;pdb:true;function_stage:UNAVAILABLE;reason:not_elevated;judge:0.4.0;python:3.13.15;pwsh:7.6.4;checkin_min:30;selftest:ok
 - previous_phase: -
 - toolfix_used: 0
+- not_quiet_retries: 1
