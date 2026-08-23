@@ -25,9 +25,10 @@ use std::rc::{Rc, Weak};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{self, JoinHandle};
+use std::time::Instant;
 
 use event_listener::Event;
-use tracing::{debug, trace};
+use tracing::{debug, error, trace};
 use windows::Win32::Graphics::Dwm::DwmFlush;
 
 use crate::ecs::world::EcsWorld;
@@ -112,6 +113,15 @@ impl Drop for VsyncEventBridge {
 /// VSync スレッド本体。`DwmFlush()` で vblank を待ち、毎回 `Event` を全リスナ起床
 /// で notify する。`stop` が立つまでループする。
 fn vsync_loop(event: Arc<event_listener::Event>, stop: Arc<AtomicBool>) {
+    // 走り始めに 1 度だけ、自分の役割を宣言してスレッド名簿へ載せる（要件 2.3）。
+    // 失敗しても vblank 検出は続ける——このスレッドの CPU が `unregistered_rest` へ
+    // 回るだけで、観測の道具の不調が観測対象を止める理由にはならない。
+    if let Err(e) = crate::ecs::world::thread_registry::register_current_thread(
+        crate::ecs::world::thread_registry::ROLE_VBLANK,
+    ) {
+        error!(error = %e, "[vsync_loop] スレッド名簿への登録に失敗した（vblank 検出は継続）");
+    }
+
     while !stop.load(Ordering::Acquire) {
         // SAFETY: Win32 境界。`DwmFlush` は引数を取らず、DWM 合成の次フレーム
         // （vblank）まで現スレッドをブロックして `windows::core::Result<()>` を返す。
@@ -173,18 +183,54 @@ impl AsyncTickTask {
     }
 }
 
-/// 1 フレーム分の ECS tick を同期実行する（独立テスト可能なコア・要件 4.3）。
+/// 1 フレーム分の ECS tick を同期実行する（独立テスト可能なコア・要件 4.3／3.2）。
 ///
 /// 1. `IS_TICK_FLUSH_IN_PROGRESS` 再入ガードを engage する。既に進行中なら（再入）
 ///    `false` を返して安全側スキップする（二重 tick なし）。
 /// 2. World を `try_borrow_mut` する。借用失敗（再入・別経路が借用中）なら tick せず
 ///    `false` を返す（安全側スキップ・二重 tick なし）。
-/// 3. 借用成功時のみ `try_tick_world()`（13 本スケジュール・順序不変）→
-///    `flush_window_pos_commands()` を実行し `true` を返す。
+/// 3. 借用成功時は tick の門（`EcsWorld::decide_tick`）へ 1 度だけ問い、
+///    **回す**なら `try_tick_world()`（13 本スケジュール・順序不変）、**省略**なら
+///    `note_skipped_tick()`（数を記録するだけ・`FrameCount`／`FrameTime`／`TickStart` は
+///    進めない）を実行する。
+/// 4. どちらの側でも `flush_window_pos_commands()` は**常に**呼ぶ。積まれている窓書込
+///    指令は、この画面更新で 13 本を回したかどうかとは無関係に掃き出す。
+///
+/// 門の既定は無効なので、既定の運転では毎フレーム `Run(Disabled)` が返り、挙動は門を
+/// 入れる前と同じである（`AREKA_TICK_GATE=1` で有効化する）。
+///
+/// # 戻り値
+/// `true` = このフレームを門が処理した（**回した／省略した**のいずれか）。
+/// `false` = 再入ガードまたは World 借用に失敗して何もしなかった。
 ///
 /// `flush_window_pos_commands()` は World 借用解放後に呼ぶ（同期 `WM_WINDOWPOSCHANGED`
 /// が World を借用しても競合しない）。レガシー `try_tick_on_vsync` と同じ規律。
 pub(crate) fn tick_one_frame(world: &Rc<RefCell<EcsWorld>>) -> bool {
+    // 門は 1 フレームに 1 度だけ問う（プロセス共有の旗を読んで倒すのはこの 1 箇所）。
+    tick_one_frame_with(world, |world| world.decide_tick(Instant::now()))
+}
+
+/// [`tick_one_frame`] の本体。門への問い方だけを差し替えられる形にしてある。
+///
+/// 手順（ガード → 借用 → 問う → 回す／省略 → 常に flush）は本番と完全に同一で、
+/// 違うのは `decide` が何を返すかだけである。本番は
+/// [`EcsWorld::decide_tick`](crate::ecs::world::EcsWorld::decide_tick)——プロセス共有の
+/// 旗を読んで倒す——を渡す。
+///
+/// # なぜ差し替え口を置くか
+///
+/// 旗は**プロセスにただ 1 つ**の実体で、本番の経路（窓書込指令の積み上げ・ウィンドウ
+/// メッセージの配送・Z 順の要求・ポインタ入力の投入）が立てる。同じテストバイナリの
+/// 中で並列に走る他の検査がそれらの経路を通れば、こちらが旗を倒した直後に旗が立つ
+/// ——**省略になるはず**を主張する検査は、それだけで赤くなる。錠では防げない: 旗を
+/// 立てる側は本番コードであって錠を知らないからである。
+///
+/// そこで「省略の側」を確かめる検査は、共有の旗を経由せず、読み取り結果を直に渡す。
+/// 「回す側」は旗が余分に立っても結論が変わらないので、共有の経路のままでよい。
+fn tick_one_frame_with(
+    world: &Rc<RefCell<EcsWorld>>,
+    decide: impl FnOnce(&mut EcsWorld) -> crate::ecs::world::tick_gate::TickDecision,
+) -> bool {
     // ── 再入防止ガード（レガシー vsync.rs と共有・二重防御）─────────
     let Some(_guard) = crate::ecs::world::engage_tick_flush_guard() else {
         trace!("[tick_one_frame] Re-entry blocked by IS_TICK_FLUSH_IN_PROGRESS");
@@ -192,9 +238,15 @@ pub(crate) fn tick_one_frame(world: &Rc<RefCell<EcsWorld>>) -> bool {
     };
 
     // RefCell 借用を試みる。既に借用中（再入）なら安全側スキップ（false）。
-    let ticked = match world.try_borrow_mut() {
+    let processed = match world.try_borrow_mut() {
         Ok(mut world) => {
-            world.try_tick_world();
+            // 毎フレームのログはここでは出さない（熱い経路）——省略率は `[tick]` の
+            // 観測行（既定 OFF）が 1 秒窓でまとめて出す。
+            if decide(&mut world).is_run() {
+                world.try_tick_world();
+            } else {
+                world.note_skipped_tick();
+            }
             true
         }
         Err(_) => {
@@ -202,10 +254,10 @@ pub(crate) fn tick_one_frame(world: &Rc<RefCell<EcsWorld>>) -> bool {
             false
         }
     };
-    // World 借用スコープ終了後に SetWindowPos コマンドをフラッシュ。
+    // World 借用スコープ終了後に SetWindowPos コマンドをフラッシュ（省略の回も必ず）。
     crate::ecs::window::flush_window_pos_commands();
 
-    ticked
+    processed
     // _guard drop で IS_TICK_FLUSH_IN_PROGRESS = false に戻る
 }
 
@@ -238,8 +290,56 @@ async fn run_async_tick(event: Arc<Event>, world: Weak<RefCell<EcsWorld>>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ecs::world::FrameCount;
+    use crate::ecs::world::thread_registry::{self, ROLE_VBLANK, ThreadEntry};
+    use crate::ecs::world::tick_gate::TICK_GATE_WARMUP_FRAMES;
+    use crate::ecs::world::tick_wake::WakeSnapshot;
     use event_listener::Listener;
     use std::time::Duration;
+
+    /// 名簿に当該役割名の項目が現れるまで待ち、現れた項目を返す（現れなければ `None`）。
+    ///
+    /// 待ち時間は合否の対象ではなく、登録が起きなかったときに無限に待たないための上限で
+    /// ある（要件 6.5 が禁じる「実時間の閾値による判定」ではない）。
+    fn wait_for_role(role: &str, limit: Duration) -> Option<ThreadEntry> {
+        let deadline = std::time::Instant::now() + limit;
+        loop {
+            let found = thread_registry::snapshot()
+                .into_iter()
+                .find(|entry| entry.role == role);
+            if found.is_some() {
+                return found;
+            }
+            if std::time::Instant::now() >= deadline {
+                return None;
+            }
+            thread::sleep(Duration::from_millis(5));
+        }
+    }
+
+    /// vblank 検出スレッドは走り始めに自分をスレッド名簿へ登録する（役割名 `vblank`・要件 2.3）。
+    ///
+    /// 名簿はプロセス共有で、テストは並列に走る——**全体の件数は当てにせず**、登録された
+    /// 役割名の項目だけを検査する。観測はスレッドを生かしたまま行う（終了した TID が別の
+    /// スレッドへ再利用されて項目が置き換わる余地を残さないため）。
+    #[test]
+    fn vsync_thread_registers_itself_with_the_vblank_role() {
+        let bridge = VsyncEventBridge::new();
+
+        let found = wait_for_role(ROLE_VBLANK, Duration::from_secs(5))
+            .expect("wintf-vsync スレッドは走り始めに vblank として名簿へ載るはず");
+        assert_eq!(
+            found.name.as_deref(),
+            Some("wintf-vsync"),
+            "名簿の OS 名は生成時に付けたスレッド名であるはず"
+        );
+        assert!(
+            thread_registry::is_known_role(ROLE_VBLANK),
+            "登録した役割名は固定語彙に含まれるはず"
+        );
+
+        drop(bridge);
+    }
 
     /// 完了状態の検証: vblank ごとに Event が notify され、待機リスナを起床できる。
     /// さらに drop でスレッドが clean に join することを確認する（ハングしない）。
@@ -287,6 +387,90 @@ mod tests {
         assert!(
             !crate::ecs::world::is_tick_flush_in_progress(),
             "安全スキップ後は再入ガードが false に戻っているべき"
+        );
+    }
+
+    // ── tick の門の結線 (task 3.3) ────────────────────────────────
+
+    /// 起動直後の全走ぶんだけ判定を進める（回さずに数だけ進める）。
+    fn fast_forward_warmup(world: &Rc<RefCell<crate::ecs::world::EcsWorld>>) {
+        let mut world = world.borrow_mut();
+        for _ in 0..TICK_GATE_WARMUP_FRAMES {
+            let decision = world.decide_tick_with(WakeSnapshot {
+                bits: 0,
+                deadline_due: false,
+            });
+            assert!(decision.is_run(), "起動直後は無条件で回すべき");
+        }
+    }
+
+    /// (要件 3.2) 門が無効（既定）なら、1 フレームは今までどおり 13 本を回す
+    /// ——フレーム番号がちょうど 1 進む。
+    #[test]
+    fn tick_one_frame_ticks_the_world_when_the_gate_is_disabled() {
+        // 門が無効でも `decide_tick` は共有の旗を読んで**倒す**——自分の合否は旗に
+        // 依らないが、倒した旗は他の検査から奪ったことになる。だから読む側も錠を取る。
+        let _lock = crate::ecs::world::TICK_WAKE_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+        let world = Rc::new(RefCell::new(crate::ecs::world::EcsWorld::new()));
+        assert!(
+            !world.borrow().tick_gate_enabled(),
+            "門の既定は無効であるべき"
+        );
+
+        let before = world.borrow().world().resource::<FrameCount>().0;
+        let processed = tick_one_frame(&world);
+
+        assert!(processed, "借用できたフレームは処理済みとして true を返す");
+        assert_eq!(
+            world.borrow().world().resource::<FrameCount>().0,
+            before + 1,
+            "門が無効なら 13 本を回してフレーム番号が 1 進む"
+        );
+    }
+
+    /// (要件 3.2/3.4) 門が有効で回す理由が 1 つも無ければ、1 フレームは 13 本を回さない
+    /// ——フレーム番号は進まないが、関数は「このフレームは処理した」として true を返す。
+    ///
+    /// # 共有の旗を経由しない理由
+    ///
+    /// 旗はプロセスにただ 1 つで、**本番の経路**（窓書込指令の積み上げ・ウィンドウ
+    /// メッセージの配送・Z 順の要求・ポインタ入力の投入）が立てる。同じテストバイナリの
+    /// 中で並列に走る他の検査がそれらを通れば、こちらが旗を倒した直後に旗が立ち得る
+    /// ——錠を取っても防げない（立てる側は本番コードで、錠を知らない）。「省略になる
+    /// はず」を主張できるのは読み取り結果を直に渡したときだけなので、ここは
+    /// [`tick_one_frame_with`] へ旗ゼロ・期限なしの読み取り結果を渡す。手順（ガード →
+    /// 借用 → 問う → 回す／省略 → 常に flush）は本番と同一である。
+    #[test]
+    fn tick_one_frame_skips_the_world_tick_when_the_gate_finds_no_reason() {
+        let world = Rc::new(RefCell::new(crate::ecs::world::EcsWorld::new()));
+        world.borrow_mut().set_tick_gate(true);
+        fast_forward_warmup(&world);
+
+        let before = world.borrow().world().resource::<FrameCount>().0;
+        let processed = tick_one_frame_with(&world, |world| {
+            world.decide_tick_with(WakeSnapshot {
+                bits: 0,
+                deadline_due: false,
+            })
+        });
+
+        assert!(
+            processed,
+            "省略も「このフレームは門が処理した」なので true を返す"
+        );
+        assert_eq!(
+            world.borrow().world().resource::<FrameCount>().0,
+            before,
+            "省略の回は 13 本を回さないのでフレーム番号は進まない"
+        );
+        // 窓書込の掃き出しはガードが外れる**前**に呼ばれる。ガードが戻っていることは
+        // 「省略の回でも関数が flush まで通り抜けた」ことの証跡である（D-3）。
+        assert!(
+            !crate::ecs::world::is_tick_flush_in_progress(),
+            "省略の回も flush まで進んでから再入ガードが外れているべき"
         );
     }
 

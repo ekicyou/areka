@@ -1,0 +1,10 @@
+0 :: init --goal-name draw-load-parity --ledger @LEDGER@ --now 2026-08-23T00:00:00Z
+0 :: append --ledger @LEDGER@ --from-json @DIR@/entry.json --now 2026-08-23T01:23:45Z
+3 :: final --ledger @LEDGER@ --outcome STOPPED --reason plateau
+0 :: set-phase FINAL --ledger @LEDGER@ --run 42424242 --best 6.12
+0 :: final --ledger @LEDGER@ --outcome STOPPED --reason plateau --top-remaining phase:tick_all:0.41
+0 :: final --ledger @LEDGER@ --outcome GOAL_MET --idle-cpu 2.84 --commits 4
+0 :: final --ledger @LEDGER@ --outcome GOAL_MET
+3 :: final --ledger @LEDGER@ --outcome GOAL_MET --reason plateau
+3 :: final --ledger @LEDGER@ --outcome STOPPED
+3 :: final --ledger @LEDGER@ --outcome STOPPED --reason nosuchreason

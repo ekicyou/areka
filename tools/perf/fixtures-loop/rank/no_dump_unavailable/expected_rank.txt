@@ -1,0 +1,55 @@
+perf-rank 0.1.0 run=no_dump_unavailable stages=process,thread,function,phase top=3
+
+[1] プロセス  unit=cpu  1 コア換算 %  出所=cpu.csv  基準=all
+  steady_mean_pct                     3.00
+  p50_pct                             3.00
+  p95_pct                             5.00
+  max_pct                             5.00
+  talk_peak_pct                       3.00
+  samples_total                          3
+  samples_steady                         0
+  注記: 定常＝起点から 60.0 秒（WARMUP_EXCLUDE_SEC）を除く。起点=first_log_line 2026-08-23T11:00:00Z ／ 定常の始まり 2026-08-23T11:01:00Z
+  注記: 定常状態に採取点が 1 つも無いので、全採取点で代用した（basis=all）
+  注記: 発話中の頂＝apply(ShowSurface) の前後 10.0 秒に重なる採取点の最大（合否外）
+  注記: SSP 参考値 idle=3.05 talk_peak=4.64（2026-08-15 実測・参考値・合否外）
+  注記: 実行条件 build=dev logical_processors=4
+
+[2] スレッド  unit=cpu  出所=perf(thread)／perf(process)  基準=cumulative
+  window_s                             5.0
+  process_cpu_s                      2.000
+  registry_cpu_s                     1.500
+  unregistered_rest_cpu_s            0.500
+  snapshots                              1
+  注記: スナップショットが 1 枚しかないので差が取れない。累積値をそのまま使った（basis=cumulative）
+  役割別（上位 3）
+    rank  role                             cpu_s    share_pct
+       1  ui                               1.500        75.00
+       2  unregistered_rest                0.500        25.00
+  スレッド別（上位 3）
+    rank       tid  name                      role                           cpu_s    share_pct
+       1     21000  main                      ui                             1.500        75.00
+       2         0  -                         unregistered_rest              0.500        25.00
+
+[3] 関数 UNAVAILABLE reason=no_dump
+  注記: 段③（CPU サンプリング）の成果物が無いので関数別の帰属は出せない。昇格した PowerShell から回すと採れる。
+
+[4] 相  unit=wall  出所=[tick] kind=window
+  windows                                1
+  ticks_total                           10
+  skipped_total                          5
+  heartbeat_total                        2
+  window_s                           1.000
+  ticks_per_s                        10.00
+  skip_ratio_pct                     33.33
+  heartbeat_ratio_pct                20.00
+  avg_tick_wall_us                   200.0
+  max_tick_wall_us                     500
+  ui_cpu_us_per_s                   1000.0
+  wall_us_total                       2000
+  13 本のスケジュール（上位 3）
+    rank  name                    sum_us   share_pct      avg_us
+       1  draw                       500       25.00        50.0
+       2  framefinalize              400       20.00        40.0
+       3  commitcomposition          100        5.00        10.0
+    … 他 10 件
+  注記: 13 本は壁時計 µs（GPU 待ちを含む）。ui_cpu_us だけが UI スレッドの CPU 時間。

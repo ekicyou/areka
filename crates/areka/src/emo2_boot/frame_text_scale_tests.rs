@@ -245,3 +245,60 @@ fn emo2_frame_system_runs_dpi_phase_without_writes_when_unattached() {
         );
     }
 }
+
+// ── task 3.5: 発話が進行中かの純判断（reveal_pending・設計 C16 の `REARM`・要件 4.6） ──
+//
+// 「次の画面更新でも文字が増えるか」だけを決める引き算である。時計にも表示層にも触れない。
+// どこで呼ぶか（text 相の末尾）は字面検査が受け持つ。
+
+use super::scale_text::reveal_pending;
+
+/// 描く相手が 1 人も居なければ進行中ではない。
+#[test]
+fn no_actor_is_not_in_progress() {
+    let none: [&[f64]; 0] = [];
+    assert!(!reveal_pending(none.iter().copied(), 0.0));
+}
+
+/// 文字が現れ切っていれば進行中ではない——時刻起点が残っていても予約しない。
+#[test]
+fn fully_revealed_text_is_not_in_progress() {
+    let times: [&[f64]; 1] = [&[0.0, 0.1, 0.2]];
+    assert!(
+        !reveal_pending(times.iter().copied(), 0.3),
+        "最後の文字より後の時刻では進行中ではない"
+    );
+    assert!(
+        !reveal_pending(times.iter().copied(), 0.2),
+        "ちょうど最後の文字が現れる時刻は「現れ済み」側（可視数の数え方と同じ向き）"
+    );
+}
+
+/// まだ現れていない文字が 1 つでもあれば進行中である。
+#[test]
+fn pending_glyph_makes_it_in_progress() {
+    let times: [&[f64]; 1] = [&[0.0, 0.1, 0.2]];
+    assert!(reveal_pending(times.iter().copied(), 0.19));
+    assert!(reveal_pending(times.iter().copied(), 0.0));
+}
+
+/// 相手が複数居るときは 1 人でも進行中なら進行中（他が現れ切っていても止めない）。
+#[test]
+fn any_actor_still_revealing_counts() {
+    let times: [&[f64]; 2] = [&[0.0, 0.1], &[0.0, 5.0]];
+    assert!(
+        reveal_pending(times.iter().copied(), 1.0),
+        "片方が現れ切っていても、もう片方が残っていれば進行中"
+    );
+    assert!(
+        !reveal_pending(times.iter().copied(), 5.0),
+        "全員が現れ切ったら止まる"
+    );
+}
+
+/// 時刻列が空の相手（cue 未着・`Clear` 直後）は判断に加わらない。
+#[test]
+fn empty_schedule_is_ignored() {
+    let times: [&[f64]; 2] = [&[], &[]];
+    assert!(!reveal_pending(times.iter().copied(), 0.0));
+}

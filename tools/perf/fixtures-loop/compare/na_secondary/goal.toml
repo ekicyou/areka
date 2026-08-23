@@ -1,0 +1,23 @@
+# =============================================================================
+# 自己較正用の目標定義（na_secondary ケース専用）
+#
+# ../goal.toml との違いは [secondary_metrics].must_not_regress の 1 行だけである。
+# 真ん中に talk_peak_cpu_pct を挟んである——素材の走行（runs/）は発話区間を持たないので
+# judge-perf.py はこの指標を `-`（測っていない）で出す。「片側でも `-` なら NA として
+# 扱い、採用を止めない」という決めを、この 1 件が固定する。
+# =============================================================================
+
+[goal]
+name = "selftest-na-secondary"
+judge_script = "tools/perf/judge-perf.py"
+judge_version = "0.4.0"
+
+[levels]
+iteration_build = "release"
+
+[primary_metric]
+name = "steady_idle_cpu_mean_pct"
+noise_floor_pct = 0.30
+
+[secondary_metrics]
+must_not_regress = ["frame_interval_p95_ms", "talk_peak_cpu_pct", "alloc_count"]

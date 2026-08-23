@@ -1,0 +1,9 @@
+title = 既知の列名行が欠けた dump（xperf の版ずれとして止める）
+exit = 4
+argv = --stage function
+
+stderr_substr = Stack
+stderr_substr = 列名行
+
+note = Stack の列名行が無い dump は、呼出スタックが 1 本も読めていないのに
+note = 黙って通ってしまう。列は必ず列名行で引き、既知列が無ければ止める（設計 C9 の Risks）。

@@ -1,0 +1,73 @@
+# areka 性能計測 実行条件（invoke-perf-run.ps1 が生成）
+# 判定スクリプト（judge-perf.py）はこの内容を測定マシンの条件として併記する（要件 4.5）。
+[実行]
+script = tools/perf/invoke-perf-run.ps1
+script_version = 1.1.0
+spec = areka-P0-recompose-budget（要件 2.1 / 2.3 / 2.6 / 2.7 / 4.5）
+dry_run = False
+quiet_confirmed = False
+profile = short
+build = release
+started_utc = 2026-08-23T03:45:41.737Z
+out_dir = C:\Users\maz-o\AppData\Local\areka-diag\perf-loop\draw-load-parity\baseline-20260823\rank
+quiet_mode = auto
+quiet_attempts = 1
+[対象]
+exe_path = C:\home\maz\git\areka\.claude\worktrees\areka-p0-scope-chain-gap-004c39\target\release\areka.exe
+exe_size_bytes = 4931072
+exe_last_write_utc = 2026-08-22T22:50:43Z
+working_directory = C:\home\maz\git\areka\.claude\worktrees\areka-p0-scope-chain-gap-004c39\target\release
+ghost_root = C:\home\maz\git\areka\.claude\worktrees\areka-p0-scope-chain-gap-004c39\crates\pilot\examples\shiori-host-32\fixtures\emo2
+balloon_root = C:\home\maz\git\areka\.claude\worktrees\areka-p0-scope-chain-gap-004c39\crates\pilot\examples\shiori-host-32\fixtures\emo2\emo2-kakukaku
+shiori_helper_path = C:\home\maz\git\areka\.claude\worktrees\areka-p0-scope-chain-gap-004c39\target\release\shiori-host32-helper.exe
+shiori_helper_present = True
+areka_profile_dir = C:\home\maz\git\areka\.claude\worktrees\areka-p0-scope-chain-gap-004c39\target\release\profile\areka
+command_line = "C:\home\maz\git\areka\.claude\worktrees\areka-p0-scope-chain-gap-004c39\target\release\areka.exe" "C:\home\maz\git\areka\.claude\worktrees\areka-p0-scope-chain-gap-004c39\crates\pilot\examples\shiori-host-32\fixtures\emo2" "C:\home\maz\git\areka\.claude\worktrees\areka-p0-scope-chain-gap-004c39\crates\pilot\examples\shiori-host-32\fixtures\emo2\emo2-kakukaku"
+env_smoke_exit_name = AREKA_APP_SMOKE_EXIT_MS
+env_smoke_exit_ms = 420000
+env_RUST_LOG = info,areka_emo_present=debug,wintf::tick=debug,areka::perf=debug
+env_NO_COLOR = 1
+bin_dir = -
+exe_sha256 = B4ED1B79CE03A2F0B9CEE49AC4DB2A831D6E2E8AAD93BB3D98D80E25F6DF29F2
+[較正値]
+SMOKE_EXIT_MS_SHORT = 420000
+SMOKE_EXIT_MS_LONG = 1500000
+CPU_SAMPLE_INTERVAL_SEC = 15
+COUNTER_PATH_PROC_ID = \Process(areka*)\ID Process
+COUNTER_PATH_PROC_CPU = \Process(areka*)\% Processor Time
+COUNTER_FIRST_SAMPLE_GRACE_SEC = 30
+COUNTER_RETRY_MAX = 3
+COUNTER_RETRY_WAIT_SEC = 2
+EXIT_WATCHDOG_MARGIN_SEC = 180
+EARLY_EXIT_TOLERANCE_SEC = 30
+DEFAULT_BALLOON_SUBDIR = emo2-kakukaku（emo2 fixture 固有・他ゴーストへ流用しないこと）
+LOG_MARKER_SMOKE_GATE = smoke 自動 close ゲート有効
+cpu_unit = cpu_percent_1core = 1 コアを 100% とする換算値（複数コア使用時は 100 超もあり得る）。1 行は約 1 秒幅の瞬時値で、15 秒の平均ではない
+[マシン]
+hostname = NAGI
+logical_processors = 22
+os_version = Microsoft Windows NT 10.0.26200.0
+powershell_version = 7.6.4
+dotnet_version = 10.0.10
+os_caption = Microsoft Windows 11 Pro
+os_build = 26200
+total_memory_mb = 32127
+cpu_model = Intel(R) Core(TM) Ultra 9 185H
+cpu_sockets = 1
+cpu_cores_physical = 16
+cpu_max_clock_mhz = 2500
+power_scheme = 電源設定の GUID: d7a728f8-6d8b-4ab7-a3e3-7aaeb0f9871c  (Sonos)
+[ソース]
+git_head = 28095957d9101eb94d5188dafb7f99d3ae548a42
+git_branch = claude/areka-p0-draw-load-parity-31d144
+git_dirty_files = 1
+
+[結果]
+ended_utc = 2026-08-23T03:52:44.454Z
+elapsed_sec = 420.6
+areka_exit_code = 0
+cpu_sample_count = 28
+run_log = C:\Users\maz-o\AppData\Local\areka-diag\perf-loop\draw-load-parity\baseline-20260823\rank\run.log
+run_stderr_log = C:\Users\maz-o\AppData\Local\areka-diag\perf-loop\draw-load-parity\baseline-20260823\rank\run.stderr.log
+cpu_csv = C:\Users\maz-o\AppData\Local\areka-diag\perf-loop\draw-load-parity\baseline-20260823\rank\cpu.csv
+

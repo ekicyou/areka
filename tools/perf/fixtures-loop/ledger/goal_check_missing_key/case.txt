@@ -1,0 +1,2 @@
+title=目標定義に必須キーが欠けていれば goal-check は欠けた鍵を挙げて exit 3
+stderr_substr=stop.max_iterations

@@ -1,0 +1,10 @@
+BeginHeader
+         SampledProfile,  TimeStamp,     Process Name ( PID),   ThreadID,           PrgrmCtr, CPU, ThreadStartImage!Function,            Image!Function, Count, SampledProfile type
+                Stack,  TimeStamp,   ThreadID, No.,            Address,            Image!Function
+EndHeader
+         SampledProfile,    2000001,        areka.exe (23140),       4444, 0x00007ff600001000,   3,        areka.exe!mainCRTStartup,        areka.exe!wintf::ecs::world::EcsWorld::try_tick_world,     1,     1
+         SampledProfile,    2000002,        areka.exe (23140),       4444, 0x00007ff600001000,   3,        areka.exe!mainCRTStartup,        areka.exe!wintf::ecs::world::EcsWorld::try_tick_world::h0123456789abcdef,     1,     1
+         SampledProfile,    2000003,        areka.exe (23140),       4444, 0x00007ff600001000,   3,        areka.exe!mainCRTStartup,        areka.exe!_ZN5wintf3ecs5world8EcsWorld14try_tick_world17h0123456789abcdefE,     1,     1
+         SampledProfile,    2000004,        areka.exe (23140),       4444, 0x00007ff600004000,   3,        areka.exe!mainCRTStartup,        areka.exe!_ZN47_$LT$wintf..App$u20$as$u20$core..fmt..Debug$GT$3fmt17habcdef0123456789E,     1,     1
+                  Stack,    2000001,       4444,   1, 0x00007ff600001000,        areka.exe!wintf::ecs::world::EcsWorld::try_tick_world
+                  Stack,    2000001,       4444,   2, 0x00007ff600002000,        areka.exe!mainCRTStartup

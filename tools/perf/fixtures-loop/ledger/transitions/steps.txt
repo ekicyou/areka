@@ -1,0 +1,35 @@
+# 遷移表の全 25 遷移を 1 つずつ通す（表の一括出力と個別の解決の両方を固定する）
+0 :: next-phase --table
+0 :: next-phase --phase PREFLIGHT --event ok
+0 :: next-phase --phase PREFLIGHT --event toolfix_needed
+0 :: next-phase --phase BASELINE --event ok
+0 :: next-phase --phase BASELINE --event measure_failed
+0 :: next-phase --phase RANK --event ok
+0 :: next-phase --phase SELECT --event ok
+0 :: next-phase --phase SELECT --event no_candidate
+0 :: next-phase --phase IMPLEMENT --event ok
+0 :: next-phase --phase IMPLEMENT --event implement_blocked
+0 :: next-phase --phase TEST --event tests_green_followup_pass
+0 :: next-phase --phase TEST --event tests_red
+0 :: next-phase --phase TEST --event followup_fail
+0 :: next-phase --phase TEST --event review_rejected
+0 :: next-phase --phase REMEASURE --event ok
+0 :: next-phase --phase REMEASURE --event measure_failed
+0 :: next-phase --phase DECIDE --event adopted
+0 :: next-phase --phase DECIDE --event no_diff
+0 :: next-phase --phase DECIDE --event worse
+0 :: next-phase --phase DECIDE --event measure_failed
+0 :: next-phase --phase RECORD --event ok
+0 :: next-phase --phase RECORD --event plateau
+0 :: next-phase --phase RECORD --event iteration_cap
+0 :: next-phase --phase RECORD --event goal_met_candidate
+0 :: next-phase --phase TOOLFIX --event toolfix_ok --previous IMPLEMENT
+0 :: next-phase --phase TOOLFIX --event toolfix_fail
+# WAIT_ を冠した相は素の相として解く（背景待ちは相の意味を変えない）
+0 :: next-phase --phase WAIT_REMEASURE --event ok
+# 表に無い組・終端・直前の相の指定漏れ・語彙外は黙って進めず exit 3
+3 :: next-phase --phase DECIDE --event ok
+3 :: next-phase --phase FINAL --event ok
+3 :: next-phase --phase TOOLFIX --event toolfix_ok
+3 :: next-phase --phase NOPE --event ok
+3 :: next-phase --phase RANK --event nosuchevent

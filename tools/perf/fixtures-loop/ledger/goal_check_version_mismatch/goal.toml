@@ -1,0 +1,50 @@
+# 自己較正用の目標定義（実物は tools/perf/goals/<goal>.toml・task 7.1 が置く）。
+[goal]
+name = "draw-load-parity"
+spec_dir = "spec"
+ledger = "loop-ledger.md"
+results_dir = "results"
+judge_script = "judge-stub.py"
+judge_version = "9.9.9"
+
+[target]
+idle_cpu_release_max_pct = 3.0
+formulas = ["1_frame_interval_p95", "2_catchup_zero", "3_alloc_zero", "4a_idle_cpu_release", "4b_no_monotonic_rise"]
+builds_final = ["release", "dev"]
+
+[levels]
+short_profile = "short"
+long_profile = "long"
+ab_sequence = ["A", "B", "A", "B"]
+iteration_build = "release"
+release_debug_env = "line-tables-only"
+
+[primary_metric]
+name = "steady_idle_cpu_mean_pct"
+noise_floor_pct = 0.30
+
+[secondary_metrics]
+must_not_regress = ["frame_interval_p95_ms", "catchup_count", "alloc_count"]
+
+[stop]
+max_no_gain_streak = 3
+max_iterations = 30
+toolfix_retry = 1
+
+[quiet]
+machine_cpu_max_pct = 10.0
+sample_sec = 20
+heavy_process_names = ["cargo", "rustc", "rust-analyzer", "msbuild", "link", "cl", "areka", "python"]
+retry_max = 3
+retry_wait_sec = 60
+
+[followup]
+required = ["clickthrough", "drag", "dpi", "balloon_follow"]
+exit_ms = 120000
+
+[goal_runtime]
+checkin_minutes = 60
+main_model_recommended = "fable"
+
+[sampling]
+backend = "xperf-dumper"

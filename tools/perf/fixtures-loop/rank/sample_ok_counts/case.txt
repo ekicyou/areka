@@ -1,0 +1,10 @@
+title = sample_ok の dump 断片の既知の内訳を、順位表の側からも数え直す
+exit = 0
+argv = --stage function --top 3
+dump_path = ../sample_ok/dump.txt
+
+note = fixtures-loop/rank/sample_ok/README.md が表で宣言している内訳
+note = （SampledProfile 16／Stack 8／areka.exe のフレーム 16／解決済み 22／未解決 2／
+note = ThreadID は 18332・18420・18512）を、invoke-cpu-sample.ps1 の
+note = FIXTURE_EXPECT_* とは別の実装で数え直す。2 つの道具が同じ断片を違う数に
+note = 数えたら、どちらかが壊れている。

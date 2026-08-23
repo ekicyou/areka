@@ -1,0 +1,5 @@
+0 :: init --goal-name draw-load-parity --ledger @LEDGER@ --now 2026-08-23T00:00:00Z
+0 :: goal-check --ledger @LEDGER@ --goal-file @DIR@/goal.toml --judge-file @DIR@/judge-stub.py --token 12345678
+0 :: state --ledger @LEDGER@
+0 :: goal-check --ledger @LEDGER@ --goal-file @DIR@/goal.toml --judge-file @DIR@/judge-stub.py
+3 :: goal-check --ledger @LEDGER@ --goal-file @DIR@/goal.toml --judge-file @DIR@/judge-stub.py --token 87654321

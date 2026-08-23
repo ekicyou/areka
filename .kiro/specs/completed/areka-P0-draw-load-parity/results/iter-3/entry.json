@@ -1,0 +1,18 @@
+{
+  "hypothesis": "C17 単スレッド実行器: 名簿外 51.8%（5.859 cpu_s/60s）は tick 駆動の ComputeTaskPool ワーカー（門 ON の残置実行体では tick 省略 87.6% に比例して 0.578 cpu_s へ落ちる＝tick 由来）。既定の多スレッド実行器のままの 7 本（Input/Update/PreLayout/Layout/PostLayout/Draw/FrameFinalize）を SingleThreadedExecutor へ寄せ、120 回/秒×7 回のワーカー起床・待機（1 tick 当たりワーカー側 815µs 対 UI 自身 695µs）を消す",
+  "candidate": "stage=thread rank=1 item=unregistered_rest share=51.8% catalog=C17",
+  "files_changed": "crates/wintf/src/ecs/world/mod.rs, crates/wintf/src/ecs/world/world_executor_tests.rs(new), crates/wintf/src/ecs/layout/systems/monitor_systems_transition_tests.rs, crates/wintf/src/ecs/window/transition_diag_tests.rs, crates/wintf/src/ecs/dola/mod.rs, crates/wintf/tests/ecs/world_lifecycle_test.rs",
+  "runs": "A1=iter-3\\A1(27.5・走行後 NOT_QUIET 21.4%) B1=iter-3\\B1(7.31・走行後 NOT_QUIET 20.5%) A2=iter-3\\A2(14.7) B2=iter-3\\B2(10.51)",
+  "before_idle_cpu_pct": 21.1,
+  "after_idle_cpu_pct": 8.91,
+  "delta_pct": -12.19,
+  "noise_pct": 12.8,
+  "secondary": "p95_ms=165.796/165.985, catchup=123/122, allocs=0/3",
+  "tests": "green (5,759 passed; cargo test --workspace code=0)",
+  "followup": "PASS clickthrough=PASS drag=PASS dpi=PASS balloon_follow=PASS（B 実行体 sha 82b11fd4… で実走・TOOLFIX 4 後）",
+  "verdict": "WORSE",
+  "commit": null,
+  "skipped_candidates": "thread#2 ui 44.2% already_tried(周 2 C16 WORSE); thread#3 ticker_loop 1.93% no_signal; thread#4 cursor_monitor 1.10% no_signal; thread#5-10 no_signal; phase#1 framefinalize 34.0% lower_rank(C18 次点); phase#2 draw 22.28% lower_rank(C18); phase#3-10 no_signal; function SetWindowPos系 no_signal(段③ UNAVAILABLE); function compose/blit out_of_scope",
+  "duration_min": 150,
+  "reason": "iteration3: B=13 本すべて single_threaded(label) 構築（挿入順不変・Cargo.toml 非接触・門の既定 OFF のまま）, A=HEAD; stage3=UNAVAILABLE(not_elevated); handoff:areka-P0-test-cage-determinism:crates/wintf/src/ecs/window/transition_diag_tests.rs; handoff:areka-P0-emo2-conformance-e2e:crates/wintf/src/ecs/world/mod.rs; handoff:areka-P0-present-write-coherence:crates/wintf/src/ecs/world/mod.rs; rank-run 1 回目は残置 B 実行体を測った（rank-STALE-Bbinary へ退避・TOOLFIX 4）; impl: ComputeTaskPool::get_or_init を EcsWorld::new() に明示（多スレッド実行器の副作用で立っていたプールが無くなり par_iter が初回 tick で panic する穴）→ par_iter のワーカー起床は今周では残る; not_quiet: measure-ab 1 回目は A1 の後の静寂確認で NOT_QUIET(exit 2)→ -Resume で 1 回やり直し; not_quiet(2): B1 の後も machine 20.5%（利用者の作業で機械が忙しい時間帯）→ 走行前の静寂待ちつきで -Resume を続ける（開発者指示「止めない」）; compare: 副指標が悪化した（allocs）（allocs A=0/0 B=1/5・catchup A=222/24 B=48/196＝B2 は静かな条件で catch-up 8 倍・単スレッド化で tick 壁時計が伸び進行境界を跨ぐ筋と整合）; 主指標 delta -12.19 は noise 12.8（A1=27.5 が忙しい時間帯）に埋没; A1/B1 は走行後 NOT_QUIET＝疑わしい走行（TOOLFIX 5 で以後は再利用しない）だが B2（静か）の allocs 5 だけで count 規則の WORSE は動かない"
+}

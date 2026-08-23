@@ -38,9 +38,19 @@ thread_local! {
 // バッファ操作ヘルパー（handlers.rs から使用）
 // ============================================================================
 
+/// 入力を投入したことを起床の旗へ伝える（設計 C16 の `POINTER`）。
+///
+/// 呼ぶのは WndProc スレッドである。旗は原子的な OR で錠を取らず、何度立てても
+/// 同じ（冪等）なので、投入のたびに素直に呼んでよい。
+#[inline]
+fn wake_pointer() {
+    crate::ecs::world::tick_wake::mark(crate::ecs::world::tick_wake::POINTER);
+}
+
 /// PointerBufferにサンプルを追加
 #[inline]
 pub(crate) fn push_pointer_sample(entity: Entity, x: f32, y: f32, timestamp: Instant) {
+    wake_pointer();
     tracing::trace!(
         entity = ?entity,
         x, y,
@@ -57,6 +67,7 @@ pub(crate) fn push_pointer_sample(entity: Entity, x: f32, y: f32, timestamp: Ins
 /// ButtonBufferにボタン押下を記録
 #[inline]
 pub(crate) fn record_button_down(entity: Entity, button: PointerButton) {
+    wake_pointer();
     BUTTON_BUFFERS.with(|buffers| {
         let mut buffers = buffers.borrow_mut();
         let buffer = buffers.entry((entity, button)).or_default();
@@ -73,6 +84,7 @@ pub(crate) fn record_button_down(entity: Entity, button: PointerButton) {
 /// ButtonBufferにボタン解放を記録
 #[inline]
 pub(crate) fn record_button_up(entity: Entity, button: PointerButton) {
+    wake_pointer();
     BUTTON_BUFFERS.with(|buffers| {
         let mut buffers = buffers.borrow_mut();
         let buffer = buffers.entry((entity, button)).or_default();
@@ -89,6 +101,7 @@ pub(crate) fn record_button_up(entity: Entity, button: PointerButton) {
 /// WheelBufferに垂直ホイール回転を累積
 #[inline]
 pub(crate) fn add_wheel_vertical(entity: Entity, delta: i16) {
+    wake_pointer();
     WHEEL_BUFFERS.with(|buffers| {
         let mut buffers = buffers.borrow_mut();
         let buffer = buffers.entry(entity).or_default();
@@ -99,6 +112,7 @@ pub(crate) fn add_wheel_vertical(entity: Entity, delta: i16) {
 /// WheelBufferに水平ホイール回転を累積
 #[inline]
 pub(crate) fn add_wheel_horizontal(entity: Entity, delta: i16) {
+    wake_pointer();
     WHEEL_BUFFERS.with(|buffers| {
         let mut buffers = buffers.borrow_mut();
         let buffer = buffers.entry(entity).or_default();
@@ -109,6 +123,7 @@ pub(crate) fn add_wheel_horizontal(entity: Entity, delta: i16) {
 /// 修飾キー状態を設定
 #[inline]
 pub(crate) fn set_modifier_state(entity: Entity, shift: bool, ctrl: bool) {
+    wake_pointer();
     MODIFIER_STATE.with(|state| {
         let mut state = state.borrow_mut();
         state.insert(entity, (shift, ctrl));

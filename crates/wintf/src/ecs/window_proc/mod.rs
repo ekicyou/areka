@@ -19,7 +19,7 @@ use windows::Win32::UI::WindowsAndMessaging::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::ecs::world::EcsWorld;
+use crate::ecs::world::{EcsWorld, tick_wake};
 
 /// Windows メッセージを Entity 配送する純関数（要件 2.4・設計 EntityWndprocBridge）。
 ///
@@ -38,6 +38,9 @@ pub(crate) fn dispatch_window_message(
     let hwnd = msg.hwnd;
     let wparam = msg.wparam;
     let lparam = msg.lparam;
+
+    // 入来したメッセージを起床の旗へ写す（表に無い種は `FORCE`＝疑わしいときは回す）。
+    tick_wake::mark(tick_wake::wake_bits_for_message(msg.msg));
 
     match msg.msg {
         WM_ERASEBKGND => lifecycle::WM_ERASEBKGND(world, entity, hwnd, wparam, lparam),

@@ -176,3 +176,34 @@ probe 方式（3 コピー・意味論はバイト等価で命名と prose だ�
 **2026-08-01 追補（kero-balloon task 7.1/7.2 の先行消化・roadmap 追記(56)）**: 本 brief の②「spine.rs 協調スピン 13 箇所」は **kero-balloon が 11 箇所を先行是正済み**（R7.8＝S2 注入時刻の観測窓頭打ち〔Clear@1.40s・導出式は同 spec requirements R7.8〕・R7.9＝壁時計 `Instant` deadline 10s＋200µs poll-backoff sleep×11 本）。残作業＝(a) 是正形の検収（台本・アサート無改変の確認）、(b) 意図的に `yield_now` のまま温存した **settle drain 2 箇所**（負検証「尽きるのが正常」）の扱い裁定、(c) 着手時に spine.rs を実測して取りこぼし確認。**②の規模見積りは縮む**。
 **監視項目の引き継ぎ**: kero-balloon 検証中に `cargo test -p areka` が **1 回だけ 553/1 で赤**（13 秒・S2 空回りパターンではない・**ログ未保存でテスト名不明**）。以後 15 回以上連続緑で再現せず。本 spec の反復検証（②は負荷下で数十走）中に赤を見たら**必ずログを tee してテスト名を採る**こと——これが正体不明のまま残っている唯一の非決定性候補。
 **2026-08-05 追記(59)**: 別途 `cargo test --workspace` が**約 1/6 で `areka-seriko` のログ捕捉檻で赤**になることが実測された（テスト名まで特定済み・①へ登記）。これは**上記 553/1（`cargo test -p areka`・13 秒・テスト名不明）とは別件**であり、553/1 の正体は依然不明のまま残る——ただし**同じ毒化機序で説明できる可能性がある**（`crates/areka` 側にも未硬化サイトが 6 モジュール 44 呼出ある）ため、①を硬化した後に 553/1 が再現しなくなるかを**反復検証で確認**すること。①硬化後も再現するなら別系統の非決定性が残っている証拠になる。
+
+---
+
+## 申し送り（areka-P0-draw-load-parity・2026-08-23）
+
+`areka-P0-draw-load-parity`（W6.9・本 spec と並走）が `command.rs` の所有者として着地させた形の報告（同 spec 要件 8.2）。本 spec は着手時の rebase でこれを受ける。
+
+**⑴ `SELF_INITIATED_DEPTH` はスレッド局所になった**
+
+- 形＝`thread_local! { static SELF_INITIATED_DEPTH: Cell<i32> = const { Cell::new(0) }; }`（`crates/wintf/src/ecs/window/command.rs:49-71`）。プロセス共有の `AtomicI32` はもう無い。
+- 意味論は不変。`SetWindowPos` も `EndDeferWindowPos` も `WM_WINDOWPOSCHANGING`／`WM_WINDOWPOSCHANGED` を**呼び出したスレッドの上で同期送達**するので、「いま自分が書いた結果の通知を受けているか」は元よりスレッドごとの性質だった（理由は同ファイルの説明文に登記済み）。
+- 変更点は `is_self_initiated`（`command.rs:118`）・`SetWindowPosGuard::new`（`:132`）・その `drop`（`:139`）の 3 箇所だけ。
+
+**⑵ 錠 `lock_self_initiated_for_test` は残置＝退役の判断は本 spec が持つ**
+
+- 定義＝`command.rs:104`（`#[cfg(test)]`）。説明文は「スレッド局所化後は不要＝退役候補・`areka-P0-test-cage-determinism` が rebase で受ける」へ改めてある（`command.rs:73-102`）。
+- 実呼出は **21 箇所／5 ファイル**＝`command.rs` 2（`:961`・`:973`）／`command_batch_tests.rs` 5（`:322,402,466,542,637`）／`command_transition_tests.rs` 4（`:302,372,408,426`）／`window_pos_tests.rs` 5（`:44,284,318,622,651`）／`window_pos_transition_tests.rs` 5（`:192,222,299,399,519`）。後ろ 2 ファイルは `crates/wintf/src/ecs/window_proc/` 配下（`window/` ではない）。
+- 錠を取らずに並列で走らせても緑であることは新テスト `command_threadlocal_tests.rs` が固定している。取っても無害（ただの直列化）なので、撤去の可否と実施は本 spec の取り分。
+
+**⑶ 兄弟テスト 4 ファイルの説明文が陳腐化している**（錠の退役と同じ塊で直すこと）
+
+- 「プロセス共有」と書いたまま＝`command_batch_tests.rs:25`・`command_transition_tests.rs:28`・`window_pos_transition_tests.rs:21`（いずれもファイル冒頭の説明）・`window_pos_tests.rs:40`（テスト内の注記。dlp のタスク記録は `:41` と書いているが 2026-08-23 の実測は `:40`）。
+
+**⑷ 起床旗に触るテストは唯一の錠を取ること**（別件・本 spec の担当クラスに新規追加）
+
+- 共有の起床旗（`crates/wintf/src/ecs/world/tick_wake.rs`）に触る、または `EcsWorld::decide_tick`（`crates/wintf/src/ecs/world/mod.rs:551`）へ到達するテストは、`ecs::world::TICK_WAKE_TEST_LOCK`（`world/mod.rs:931`・**唯一の錠**）を取ること（先に落ちたテストが錠を握ったままでも取れるよう `lock().unwrap_or_else(|p| p.into_inner())` の形で）。自前の錠を作ると直列化が成立しない（dlp の実装中に錠が 2 本へ分裂した実例あり）。
+- 本番経路が旗を立てるようになったため、**共有の旗の上で「旗が立っていないはず」を主張するテストは書けない**（錠は他の検査からしか守らない）。省略側の主張は注入口 `tick_one_frame_with`（`crates/wintf/src/runtime/tick_bridge.rs:230`）／`EcsWorld::decide_tick_with`（`world/mod.rs:560`）で行う。
+
+**変えていないもの**: `Cargo.toml` は非接触（dlp 要件 8.6）。13 本のスケジュールの順序・`try_tick_world` の中身・既存の窓書込テスト群（計 57 本）はいずれも不変で 1 本も赤にしていない。
+
+**着地（2026-08-23・dlp タスク 9.4 で更新）**: dlp の改善ループは周 3 で頭打ち（plateau）となり STOPPED・**採用 0**。門の既定は **OFF のまま**（`crates/wintf/src/ecs/world/mod.rs` の `tick_gate_enabled: false`）、tick 構造（13 本の順序・実行器）は着地前と同じ、`Cargo.toml` は非接触。本節の file:line は dlp のタスク 1〜8 着地時点のまま有効。未達（⑵ catch-up・⑶・⑷a 22.3%）と残る最大項（段② `unregistered_rest` 51.8%）・引受先なし（新規 spec 要）は dlp の `requirements.md` 改訂欄に登記済み。

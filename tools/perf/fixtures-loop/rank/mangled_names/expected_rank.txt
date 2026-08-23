@@ -1,0 +1,24 @@
+perf-rank 0.1.0 run=mangled_names stages=function top=3
+
+[3] 関数  unit=samples  出所=dump.txt（CPU サンプリング）
+  samples_total                          4
+  stack_rows                             2
+  frames_total                           6
+  areka_resolved_frames                  6
+  resolved_frames                        6
+  unresolved_frames                      0
+  resolution_rate_pct               100.00
+  自己時間（最上位フレーム・上位 3）
+    rank    self   share_pct  module!function
+       1       3       75.00  areka.exe!wintf::ecs::world::EcsWorld::try_tick_world
+       2       1       25.00  areka.exe!<wintf::App as core::fmt::Debug>::fmt
+  包含時間（スタックに含まれる・上位 3）
+    rank    incl   share_pct  module!function
+       1       3       75.00  areka.exe!wintf::ecs::world::EcsWorld::try_tick_world
+       2       1       25.00  areka.exe!<wintf::App as core::fmt::Debug>::fmt
+       3       1       25.00  areka.exe!mainCRTStartup
+  スレッド別 自己時間（上位 3）
+    tid=4444 samples=4
+    rank    self   share_pct  module!function
+       1       3       75.00  areka.exe!wintf::ecs::world::EcsWorld::try_tick_world
+       2       1       25.00  areka.exe!<wintf::App as core::fmt::Debug>::fmt

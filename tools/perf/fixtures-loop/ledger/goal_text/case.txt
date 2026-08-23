@@ -1,0 +1,3 @@
+title=goal-text は走行トークンを埋めた /goal 条件文を出す（トークンが無ければ拒む・4,000 字未満）
+stderr_substr=上限 4000
+stderr_substr=走行トークン

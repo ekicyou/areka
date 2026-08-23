@@ -34,6 +34,7 @@ use std::sync::mpsc::Sender;
 
 use dola::cue::TalkCue;
 use tracing::warn;
+use wintf::ecs::world::tick_wake;
 
 /// talk スレッドから UI スレッドへ流れる表示ライフサイクル信号（design「Event Contract」）。
 ///
@@ -100,6 +101,9 @@ impl BalloonLifecycleSink {
                 "BalloonLifecycleSink: 表示ライフサイクル信号の送出に失敗（受信端切断）——talk は継続する"
             );
         }
+        // 表示ライフサイクルの信号が UI へ届いた＝次の画面更新に仕事がある（設計 C16 の
+        // `PRESENT`）。送出の後に立てる理由は `PresentBridge::send` と同じ。
+        tick_wake::mark(tick_wake::PRESENT);
     }
 }
 

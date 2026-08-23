@@ -119,7 +119,7 @@ OS 側のコストは一括化では減らない（atom 確定台帳 L7「過半
 - **Extends**: なし（atom は本 spec の起票をもって 4.2 の実機側を手放す。atom 側には「実機で未達・引受先は本 spec」を登記する）
 - **Adjacent**:
   - `areka-P0-test-cage-determinism`（W6.9・`presenter/show.rs` `apply_show` 鎖の最後尾を自称。**本 spec は cage の後に置く**）
-  - `areka-P0-draw-load-parity`（W8・フレーム駆動の負荷。同 brief が「`presenter/show.rs` は対象外」と明記しているので責務は重ならない）
+  - `areka-P0-draw-load-parity`（W6.9・フレーム駆動の負荷。同 brief が「`presenter/show.rs` は対象外」と明記しているので責務は重ならない）
   - `areka-P0-balloon-offset-dpi`（W6.75・バルーン追従オフセットの k 倍。**同じ「100% で見た目が変」でも機序が別**——あちらは offset が k 倍されない話、こちらは提示のタイミングの話）
 
 ## Constraints
@@ -130,3 +130,41 @@ OS 側のコストは一括化では減らない（atom 確定台帳 L7「過半
 - 実機でしか測れない量（`visualize_to_write_us`・`flush_total_us`）が主たる判定量。**決定論だけでは合否が出ない**ので、
   atom のサインオフ手順書（`signoff-procedure.md`）に従った実機採取が要件に入る。
 - 実機採取は **OS 設定で拡大率を往復させる人手の作業**であり、エージェントには実行できない（atom の task 7.1／7.3 で実証済み）。
+
+---
+
+## 申し送り（areka-P0-draw-load-parity・2026-08-23）
+
+`areka-P0-draw-load-parity`（W6.9）が tick の周期・構造に加えた変更の報告（同 spec 要件 8.3）。本 spec（W6.95）は着手時にこの形へ rebase し、実機の µs 判定を読むときの前提として扱うこと。
+
+**⑴ tick に「門」が入った（既定 OFF）**
+
+- 画面更新 1 回ごとに、変化を示す旗が 1 つも立っていなければ 13 本のスケジュールを回さない、という判断を手前に挟む。判断は純関数 `tick_gate::should_run`（`crates/wintf/src/ecs/world/tick_gate.rs:154`）・つなぎは `EcsWorld::decide_tick`（`crates/wintf/src/ecs/world/mod.rs:551`）・入口は `tick_one_frame_with`（`crates/wintf/src/runtime/tick_bridge.rs:230`）。
+- **既定は OFF**（`world/mod.rs:405` の `tick_gate_enabled: false`）＝門を入れる前と同じ挙動。`AREKA_TICK_GATE=1|0`（`crates/areka/src/tick_gate_config.rs:25`）で同じ実行体のまま切り替えられ、A/B 比較と安全弁を兼ねる。既定を ON にするかは改善ループの周 1 の A/B が決める。
+- 必ず回す条件＝門が無効／起動から 600 回未満（`TICK_GATE_WARMUP_FRAMES`）／旗が 1 つでも立っている／期限到来／前回回してから 30 回（`TICK_HEARTBEAT_FRAMES`＝省略 30 回の次＝31 回目が心拍で回る・約 3.9 回/秒）。未知の窓メッセージは「疑わしいときは回す」側へ倒す。
+
+**⑵ 省略した回に何が起きないか（前提が変わる箇所）**
+
+- `FrameCount`／`FrameTime`／`TickStart` は**進まない**し、スケジュールは 1 本も回らない（`EcsWorld::note_skipped_tick`＝`world/mod.rs:593`）。フレーム番号や `FrameTime` を時間の代わりに読む観測・判定は、門が ON のとき意味が変わる。
+- `flush_window_pos_commands()` は**省略した回も必ず呼ぶ**（`tick_bridge.rs:258`）＝窓書込指令の一括 flush の駆動は不変。13 本の順序と `try_tick_world` の中身も不変（門は手前にある）。
+- 変化が生じたら次の画面更新までに反映する（遅れの上限は 1 画面更新周期＝120Hz の実機で約 8.3ms）。
+
+**⑶ 旗を立てる側（起床の生産者・全て 1 行）**
+
+- wintf: 窓メッセージ配送点（`ecs/window_proc/mod.rs`）・ポインタ投入（`ecs/pointer/buffers.rs`）・窓書込指令の積み上げ（`ecs/window/command.rs`）・Z 順（`ecs/window/zorder_pair_maintain.rs`）・ドラッグ（`ecs/drag/systems.rs`）・dola アニメ（`ecs/dola/mod.rs`）・GraphicsCore 無効（`ecs/graphics/systems/init.rs`）・表示構成の変化（`ecs/app.rs`）。
+- areka: 表示指令の到着（`emo2_boot/adapter.rs`・`move_cue.rs`・`talk_lifecycle.rs`）・文字の進行（`emo2_boot/frame/scale_text.rs`）・バルーンの待ち時間（`emo2_boot/balloon_visibility_phase.rs`）・`emo2_boot/hover_inject.rs`。旗は `tx.send` の**後**に立てる。`sinks` の順序（clocked_text_sink → lifecycle_sink）を保つこと。
+
+**⑷ 観測の口が増えた（いずれも既定 OFF・点けなければ費用 0）**
+
+- `[tick] kind=window frame= t_ms= ticks= skipped= heartbeat= wall_us= max_us= ui_cpu_us=` ＋ 13 本の相別 `<相>_us=`（1 秒窓で 1 行・`crates/wintf/src/ecs/world/tick_diag.rs:133`・target `wintf::tick`）。省略率はこの行の `skipped=` で読む。
+- `perf(thread)`／`perf(process)`（スレッド別・プロセス全体の CPU・`crates/areka/src/perf_thread_report.rs:51`・target `areka::perf`）。
+- 既存の `perf(apply_show)`（末尾 `frame`）と `[transition]` の文言・フィールド名は不変で、新しい行とは重ならない。
+
+**⑸ 本 spec に効きうる点**
+
+- 判定量 `visualize_to_write_us`／`flush_total_us` は壁時計であり、門の ON/OFF で意味は変わらない。ただし**同じ遷移が跨ぐフレーム数は門が ON だと減る**ので、フレーム番号でまとめる集計（`[transition]` の `frame=` を鍵にする突合）は再確認が要る。
+- 可視化→書込の隙間そのものを門は縮めない（省略した回も flush は呼ばれる＝上の⑵）。dlp は `presenter/show.rs`・`mount.rs` に触っていない。
+
+**dlp の合否に載せない申し送り（憶測で埋めないこと）**: 遷移フレームのうち自前の窓手続きが 1 行も走っていない**未特定区間 47.5%**（639,106／1,344,271µs・中央値 18,059µs）と、文字層の再構築の所要。どちらも dlp は測るだけで合否に載せない。
+
+**着地（2026-08-23・dlp タスク 9.4 で更新）**: dlp の改善ループは周 3 で頭打ち（plateau）となり STOPPED・**採用 0**。門の既定は **OFF のまま**（`crates/wintf/src/ecs/world/mod.rs` の `tick_gate_enabled: false`）、tick 構造（13 本の順序・実行器）は着地前と同じ、`Cargo.toml` は非接触。本節の file:line は dlp のタスク 1〜8 着地時点のまま有効。未達（⑵ catch-up・⑶・⑷a 22.3%）と残る最大項（段② `unregistered_rest` 51.8%）・引受先なし（新規 spec 要）は dlp の `requirements.md` 改訂欄に登記済み。

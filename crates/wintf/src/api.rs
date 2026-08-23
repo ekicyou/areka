@@ -1,3 +1,8 @@
+use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle, RawHandle};
+use windows::Win32::System::Threading::{
+    GetCurrentProcess, GetCurrentThread, GetCurrentThreadId, GetProcessTimes, GetThreadTimes,
+    THREAD_QUERY_LIMITED_INFORMATION,
+};
 use windows::Win32::{Foundation::*, UI::WindowsAndMessaging::*};
 use windows::core::*;
 
@@ -146,6 +151,151 @@ pub(crate) fn set_window_owner(hwnd: HWND, owner: HWND) -> Result<()> {
 #[inline(always)]
 pub(crate) fn clear_window_owner(hwnd: HWND) -> Result<()> {
     set_window_long_ptr(hwnd, GWLP_HWNDPARENT, 0).map(|_| ())
+}
+
+// ============================================================
+// CPU 時間の読み取り（スレッド名簿 `ecs::world::thread_registry` と
+// スレッド別 CPU 報告器のための Win32 ラッパ）
+//
+// 呼び出せる API は既存 feature（`Win32_Foundation`・`Win32_System_Threading`）の
+// 範囲に限る。スレッドの**列挙**（ToolHelp）は feature が無く `Cargo.toml` 非接触の
+// 制約（要件 8.6）と両立しないため使わない——列挙の代わりに、生成側が自分を名簿へ
+// 登録する。
+// ============================================================
+
+/// CPU 時間（カーネル／ユーザーの 2 本立て・単位は 100ns）。
+///
+/// Win32 の `GetThreadTimes`／`GetProcessTimes` が返す `FILETIME` は「1601 年からの
+/// 絶対時刻」ではなく**経過した CPU 時間そのもの**（100ns 単位の量）である。生成時刻と
+/// 終了時刻は本構造体に持たない——負荷の帰属に使うのはカーネルとユーザーの 2 本だけで、
+/// 持たない値は誤用されないため。
+///
+/// 壁時計（経過時間）とは別物である（要件 2.6）。待ち時間はここに現れない。
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct CpuTimes {
+    /// カーネルモードで消費した CPU 時間（100ns 単位）。
+    pub kernel_100ns: u64,
+    /// ユーザーモードで消費した CPU 時間（100ns 単位）。
+    pub user_100ns: u64,
+}
+
+impl CpuTimes {
+    /// カーネルとユーザーの合計（100ns 単位）。
+    pub const fn total_100ns(&self) -> u64 {
+        self.kernel_100ns + self.user_100ns
+    }
+
+    /// カーネルモードの CPU 時間（µs・切り捨て）。
+    pub const fn kernel_us(&self) -> u64 {
+        self.kernel_100ns / 10
+    }
+
+    /// ユーザーモードの CPU 時間（µs・切り捨て）。
+    pub const fn user_us(&self) -> u64 {
+        self.user_100ns / 10
+    }
+
+    /// 合計の CPU 時間（µs・切り捨て）。
+    pub const fn total_us(&self) -> u64 {
+        self.total_100ns() / 10
+    }
+}
+
+/// `FILETIME`（上位 32bit ＋ 下位 32bit）を 100ns 単位の u64 へ畳む。
+#[inline(always)]
+const fn filetime_to_100ns(ft: FILETIME) -> u64 {
+    ((ft.dwHighDateTime as u64) << 32) | ft.dwLowDateTime as u64
+}
+
+/// 呼び出しスレッドのスレッド ID（TID）を返す。
+///
+/// 失敗を持たない API であり `Result` では包まない。
+#[inline(always)]
+pub fn get_current_thread_id() -> u32 {
+    // SAFETY: Win32 境界。自スレッドの識別子を読むだけで、状態は一切変えない。
+    unsafe { GetCurrentThreadId() }
+}
+
+/// 呼び出しスレッドのハンドルを**複製して所有権つきで**返す。
+///
+/// `GetCurrentThread` が返すのは擬似ハンドル（「今このコードを走らせているスレッド」を
+/// 指す定数）であり、他スレッドへ渡すと**渡した先の**スレッドを指してしまう。名簿は
+/// 別スレッドから読むので、生成側で `DuplicateHandle` して実ハンドルへ変換する必要が
+/// ある。複製したハンドルはスレッドが終了した後も有効で、終了時点までの CPU 時間を
+/// 読み出せる。
+///
+/// 権限は `THREAD_QUERY_LIMITED_INFORMATION` だけを与える（`GetThreadTimes` にはこれで
+/// 足りる）。所有権は [`OwnedHandle`] が持ち、drop で `CloseHandle` される。
+///
+/// 失敗は握り潰さず `Err` で返す。
+pub fn duplicate_current_thread_handle() -> Result<OwnedHandle> {
+    // SAFETY: Win32 境界。自プロセス内で自スレッドのハンドルを複製するだけで、
+    // スレッドの実行状態は一切変えない。複製先の生ハンドルは直後に OwnedHandle へ
+    // 委ね、以後の解放は Drop が行う（複製の成功時のみ from_raw_handle へ渡す）。
+    unsafe {
+        let process = GetCurrentProcess();
+        let mut duplicated = HANDLE::default();
+        DuplicateHandle(
+            process,
+            GetCurrentThread(),
+            process,
+            &mut duplicated,
+            THREAD_QUERY_LIMITED_INFORMATION.0,
+            false,
+            DUPLICATE_HANDLE_OPTIONS(0),
+        )?;
+        Ok(OwnedHandle::from_raw_handle(duplicated.0 as RawHandle))
+    }
+}
+
+/// 指定スレッドの CPU 時間を返す（`GetThreadTimes`）。
+///
+/// 引数は [`duplicate_current_thread_handle`] が返す所有権つきハンドル——擬似ハンドルや
+/// 出所不明の生ハンドルを渡せない形にしてある。終了済みのスレッドでも、ハンドルが開いて
+/// いる限り最終値を読める。
+///
+/// 失敗は握り潰さず `Err` で返す。
+pub fn get_thread_times(thread: &OwnedHandle) -> Result<CpuTimes> {
+    let handle = HANDLE(thread.as_raw_handle() as _);
+    let mut creation = FILETIME::default();
+    let mut exit = FILETIME::default();
+    let mut kernel = FILETIME::default();
+    let mut user = FILETIME::default();
+    // SAFETY: Win32 境界。読み取り専用で、4 つの出力先はいずれもスタック上の実体。
+    unsafe {
+        GetThreadTimes(handle, &mut creation, &mut exit, &mut kernel, &mut user)?;
+    }
+    Ok(CpuTimes {
+        kernel_100ns: filetime_to_100ns(kernel),
+        user_100ns: filetime_to_100ns(user),
+    })
+}
+
+/// 自プロセス全体の CPU 時間を返す（`GetProcessTimes`）。
+///
+/// 名簿に載っているスレッドの合計との差が「名簿外の残り」（タスクプール等）であり、
+/// 報告器はその差を 1 行で出す（`unregistered_rest`）。
+///
+/// 失敗は握り潰さず `Err` で返す。
+pub fn get_process_times() -> Result<CpuTimes> {
+    let mut creation = FILETIME::default();
+    let mut exit = FILETIME::default();
+    let mut kernel = FILETIME::default();
+    let mut user = FILETIME::default();
+    // SAFETY: Win32 境界。自プロセスの擬似ハンドルに対する読み取り専用の呼び出し。
+    unsafe {
+        GetProcessTimes(
+            GetCurrentProcess(),
+            &mut creation,
+            &mut exit,
+            &mut kernel,
+            &mut user,
+        )?;
+    }
+    Ok(CpuTimes {
+        kernel_100ns: filetime_to_100ns(kernel),
+        user_100ns: filetime_to_100ns(user),
+    })
 }
 
 #[cfg(test)]

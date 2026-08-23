@@ -111,6 +111,101 @@ def show_line(at: datetime, target: str = "TargetId(0)", surface: str = "1000") 
     )
 
 
+def catchup_line(at: datetime, target: str) -> str:
+    """進行境界スキップ（catch-up）の info!（判定式⑵の入力・§9 の系統別の素材）。
+
+    実物の逐語（`loop_ticker`・45 秒の実走ログで確認）:
+        2026-08-22T19:18:27.526356Z  INFO actor{actor=loop-ticker}: areka_ghost::ticker:         loop ticker catch-up: skipped multiple boundaries, firing once target="loop_ticker"
+
+    `dispatcher` / `kanade` は `ticker.rs:203-206,223-226` の同じ形で、違うのは
+    (a) 文言が短いほう（"ticker catch-up: …"）(b) スパンが `actor{actor=ticker}`
+    （`ticker.rs:179` の `spawn_actor("ticker")`）(c) `target` の値、の 3 点だけである。
+
+    【重要】`target` は tracing の **フィールド**（`target = "…"`）であって、
+    メタデータの target 指示子（`target: "…"`）ではない。ゆえに行末に
+    `target="dispatcher"` の形で出る（値は引用符付き）。3 系統を分けるのはこの値であり、
+    文言では dispatcher と kanade を区別できない（どちらも同じ短いほうの文言である）。
+    """
+    if target == "loop_ticker":
+        span = "loop-ticker"
+        message = "loop ticker catch-up: skipped multiple boundaries, firing once"
+    else:
+        span = "ticker"
+        message = "ticker catch-up: skipped multiple boundaries, firing once"
+    return (
+        f"{ts(at)}  INFO actor{{actor={span}}}: areka_ghost::ticker: "
+        f'{message} target="{target}"'
+    )
+
+
+#: `[tick] kind=window` の相別フィールド（13 本・design.md C15 の順）。
+TICK_PHASE_FIELDS = (
+    "input_us", "update_us", "prelayout_us", "layout_us", "postlayout_us",
+    "uisetup_us", "graphicssetup_us", "draw_us", "prerendersurface_us",
+    "rendersurface_us", "composition_us", "commitcomposition_us", "framefinalize_us",
+)
+
+#: 相別の値（合計が wall_us と一致する必要はない——判定に使わない参考量である）。
+TICK_PHASE_VALUES = (
+    33445, 15447, 122169, 23679, 24679, 41068, 18288, 40755, 6711, 1581, 4315, 569, 874920,
+)
+
+
+def tick_line(at: datetime, frame: int, t_ms: int = 1000, ticks: int = 120,
+              skipped: int = 0, heartbeat: int = 0, wall_us: int = 200000,
+              max_us: int = 6888, ui_cpu_us: int = 150000) -> str:
+    """フレーム駆動の 1 秒窓（`[tick] kind=window`・design.md C15）。任意種である。
+
+    実物の逐語（45 秒の実走ログで確認）:
+        2026-08-22T19:18:18.470014Z DEBUG actor{actor=emo-text}: wintf::tick:         [tick] kind=window frame=38 t_ms=1006 ticks=38 skipped=0 heartbeat=0         wall_us=1210594 max_us=680880 ui_cpu_us=1046875 input_us=33445 … framefinalize_us=874920
+
+    行の時刻は **窓が閉じた時刻** である（窓が覆う区間は `[時刻 − t_ms, 時刻]`）。
+    """
+    phases = " ".join(
+        f"{name}={value}" for name, value in zip(TICK_PHASE_FIELDS, TICK_PHASE_VALUES)
+    )
+    return (
+        f"{ts(at)} DEBUG actor{{actor=emo-text}}: wintf::tick: "
+        f"[tick] kind=window frame={frame} t_ms={t_ms} ticks={ticks} skipped={skipped} "
+        f"heartbeat={heartbeat} wall_us={wall_us} max_us={max_us} ui_cpu_us={ui_cpu_us} "
+        f"{phases}"
+    )
+
+
+def thread_report_lines(at: datetime, snap: int, t_s: int) -> list[str]:
+    """スレッド別・プロセス全体の CPU 報告（design.md C14）。任意種である。"""
+    head = f"{ts(at)}  INFO areka::perf: "
+    return [
+        head + (
+            f"perf(process): プロセス CPU snap={snap} t_s={t_s} wall_ms={t_s * 1000 + 1} "
+            f"cpu_us=4546875 kernel_us=781250 user_us=3765625 threads=14"
+        ),
+        head + (
+            f"perf(thread): スレッド別 CPU snap={snap} t_s={t_s} tid=19224 name=main "
+            f"role=ui cpu_us=3343750 kernel_us=312500 user_us=3031250"
+        ),
+        head + (
+            f"perf(thread): スレッド別 CPU snap={snap} t_s={t_s} tid=19225 name=- "
+            f"role=unregistered_rest cpu_us=203125 kernel_us=46875 user_us=156250"
+        ),
+    ]
+
+
+def talk_line(at: datetime, event: str) -> str:
+    """発話（talk）の開始・終了 info!（`areka-kanade/src/schedule/steady.rs:763,851`）。
+
+    `target: "kanade"` は指示子なので target 位置に出る。`event` はフィールドなので
+    メッセージの後ろに引用符付きで出る。発話中の CPU の頂（要件 5.4）はこの 2 本で挟まれた
+    区間の採取点から採る。
+    """
+    if event == "steady_talk":
+        return (
+            f"{ts(at)}  INFO kanade: 応答にスクリプト——再生起動 "
+            f'event="{event}" talk_id=7 origin="mouse"'
+        )
+    return f'{ts(at)}  INFO kanade: talk 完了——定常運転へ復帰 event="{event}"'
+
+
 def boot_line(at: datetime) -> str:
     return (
         f"{ts(at)} INFO areka::placement: 起動時 DPI 構成 primary_dpi=96 "
@@ -277,6 +372,55 @@ class Fixture:
         self._add(stop, stop_line(stop, scope=scope, animation_id=animation_id))
         return self
 
+    def catchups(self, events: tuple[tuple[float, str], ...]) -> "Fixture":
+        """catch-up を `(発生秒, 系統)` の並びで置く（系統は target フィールドの値）。"""
+        for at_sec, target in events:
+            at = T0 + timedelta(seconds=at_sec)
+            self._add(at, catchup_line(at, target))
+        return self
+
+    def tick_windows(self, start_sec: float, count: int, wall_us: int = 200000,
+                     heavy_secs: tuple[float, ...] = (), heavy_wall_us: int = 900000,
+                     ticks: int = 120, skipped: int = 0) -> "Fixture":
+        """`[tick] kind=window` を 1 秒刻みで置く。
+
+        i 番目の窓は `[start_sec + i − 0.5, start_sec + i + 0.5]` を覆い、行の時刻は
+        その右端（＝窓が閉じた時刻）である。`heavy_secs` に挙げた時刻を覆う窓だけ
+        `wall_us` を `heavy_wall_us` にする——「catch-up が起きた窓は重かったか」という
+        仮説を、成立する側の入力で確かめるためである。
+        """
+        for i in range(count):
+            close_sec = start_sec + 0.5 + i
+            open_sec = close_sec - 1.0
+            value = (
+                heavy_wall_us
+                if any(open_sec <= h <= close_sec for h in heavy_secs)
+                else wall_us
+            )
+            at = T0 + timedelta(seconds=close_sec)
+            self._add(
+                at,
+                tick_line(at, frame=100 + i * ticks, ticks=ticks, skipped=skipped,
+                          wall_us=value),
+            )
+        return self
+
+    def thread_reports(self, at_secs: tuple[float, ...]) -> "Fixture":
+        """スレッド別・プロセス全体の CPU 報告を置く（任意種であることの素材）。"""
+        for snap, at_sec in enumerate(at_secs, start=1):
+            at = T0 + timedelta(seconds=at_sec)
+            for text in thread_report_lines(at, snap=snap, t_s=int(at_sec)):
+                self._add(at, text)
+        return self
+
+    def talk_span(self, start_sec: float, end_sec: float) -> "Fixture":
+        """発話（talk）の開始と終了を置く。この区間の CPU 採取点が「発話中の頂」になる。"""
+        start = T0 + timedelta(seconds=start_sec)
+        end = T0 + timedelta(seconds=end_sec)
+        self._add(start, talk_line(start, "steady_talk"))
+        self._add(end, talk_line(end, "steady_talk_done"))
+        return self
+
     def show_only(self, count: int = 3, start_sec: float = STEADY_START_SEC) -> "Fixture":
         for i in range(count):
             at = T0 + timedelta(seconds=start_sec + i)
@@ -293,6 +437,11 @@ class Fixture:
         for i in range(count):
             at = T0 + timedelta(seconds=start_sec + step_sec * i)
             self.cpu.append((at, value))
+        return self
+
+    def cpu_point(self, at_sec: float, value: float) -> "Fixture":
+        """CPU 採取点を 1 点だけ足す（山を作って統計量の違いを見分ける用）。"""
+        self.cpu.append((T0 + timedelta(seconds=at_sec), value))
         return self
 
     # --- 実行条件 ---
@@ -312,7 +461,16 @@ class Fixture:
 
     # --- 台帳 ---
     def declare(self, mode: str, exit_code: int, title: str, notes: list[str],
-                build: str | None = None, twin: str | None = None) -> "Fixture":
+                build: str | None = None, twin: str | None = None,
+                emit_metrics: bool = False,
+                contains: tuple[str, ...] = ()) -> "Fixture":
+        """`case.txt` を書く。
+
+        `contains` は「標準出力に必ず現れる文字列」で、何行でも書ける。終了コードだけを
+        見る自己較正は「レポートの中身が消えた」壊れ方を捕まえられない——0.4.0 で足した
+        §9 の表・仮説の語・`--emit-metrics` の行は、どれも終了コードを動かさないためである。
+        `emit_metrics` を立てると、その fixture は `--emit-metrics` 付きで呼ばれる。
+        """
         lines = [
             "# judge-perf.py --selftest の期待値台帳（人も機械もこの 1 ファイルを読む）",
             f"title = {title}",
@@ -323,8 +481,13 @@ class Fixture:
         lines.append(f"exit = {exit_code}")
         if twin is not None:
             lines.append(f"twin = {twin}")
+        if emit_metrics:
+            lines.append("emit_metrics = yes")
         lines.append("")
         lines += [f"note = {n}" for n in notes]
+        if contains:
+            lines.append("")
+            lines += [f"contains = {c}" for c in contains]
         self.case = lines
         return self
 
@@ -437,6 +600,152 @@ P14_SLOW_START_SEC = STEADY_START_SEC + P14_HEALTHY_CYCLES
 P14_OTHER_SCOPE_LEAD_MS = 10.0
 #: 別 scope のアニメが走っている長さ（発火から停止まで）。区間の両端を確実に覆う。
 P14_OTHER_SCOPE_SPAN_MS = P14_OTHER_SCOPE_LEAD_MS + P14_SLOW_INTERVAL_MS + 10.0
+
+
+# --- C1 / C2 / T2（0.4.0・catch-up の系統別と [tick] の有無）------------------
+#
+# 【何を塞ぐか】判定式⑵ は「定常状態の catch-up が 0 件か」しか見ないので、3 系統
+# （dispatcher／kanade／loop_ticker）を取り違えても、時刻の突合が壊れても、仮説の語が
+# 消えても、終了コードは 1 つも動かない。ゆえにこの 3 件は `contains` でレポート本文を
+# 直接固定する（case.txt の contains 行）。
+#
+# 【3 系統を分けるのは target フィールドだけである】dispatcher と kanade は文言が
+# 同一（"ticker catch-up: …"）で、違うのは `target="…"` の値だけである。文言で数える
+# 実装はこの 2 系統を 1 つに潰すので、C1／C2 はどちらも 3 系統を 1 件ずつ含む。
+
+#: catch-up を置く時刻（秒）。C1 は起動過渡（定常状態より前）＝判定式⑵ は合格側。
+C1_CATCHUP_SECS = ((10.0, "dispatcher"), (20.0, "kanade"), (30.0, "loop_ticker"))
+#: C2 は定常状態（＝判定式⑵ は不合格側）。定常開始は最初の perf 行 +60 秒＝T0+61 秒。
+C2_CATCHUP_SECS = ((80.0, "dispatcher"), (90.0, "kanade"), (100.0, "loop_ticker"))
+
+#: `[tick]` の窓を置き始める位置と本数。窓は 1 秒刻みで、i 番目は [start+i-0.5, start+i+0.5]。
+C1_TICK_START_SEC, C1_TICK_COUNT = 5.0, 36
+C2_TICK_START_SEC, C2_TICK_COUNT = 75.0, 36
+
+#: 平常の窓の壁時計合計と、catch-up が起きた窓の壁時計合計。
+#: C1 は 33 窓が 200,000 / 3 窓が 900,000 なので全体平均 258,333.3・比 3.484 ≧ 1.5＝成立。
+#: C2 は全窓が 200,000 で比 1.000 ＜ 1.5＝不成立。
+TICK_WALL_US_CALM = 200000
+TICK_WALL_US_HEAVY = 900000
+
+#: C1 の発話区間（秒）と、その内側に置く CPU の山。発話中の頂（要件 5.4）の素材。
+C1_TALK_FROM_SEC, C1_TALK_TO_SEC = 90.0, 95.0
+C1_TALK_PEAK_AT_SEC, C1_TALK_PEAK_PCT = 92.5, 4.20
+
+
+def case_C1() -> Fixture:
+    return (
+        Fixture("C1_catchup_by_target_pass")
+        .boot()
+        .cycle_series(JUDGED_TARGET, JUDGED_SURFACE, MAIN_WAITS_MS, MAIN_CYCLES)
+        .catchups(C1_CATCHUP_SECS)
+        .tick_windows(
+            C1_TICK_START_SEC, C1_TICK_COUNT, wall_us=TICK_WALL_US_CALM,
+            heavy_secs=tuple(sec for sec, _t in C1_CATCHUP_SECS),
+            heavy_wall_us=TICK_WALL_US_HEAVY,
+        )
+        .thread_reports((30.0,))
+        .talk_span(C1_TALK_FROM_SEC, C1_TALK_TO_SEC)
+        .cpu_series()
+        .cpu_point(C1_TALK_PEAK_AT_SEC, C1_TALK_PEAK_PCT)
+        .run_meta()
+        .declare(
+            "verdict", 0, "catch-up が 3 系統とも起動過渡だけにある（合格側）",
+            build="release", emit_metrics=True,
+            notes=[
+                "H11 と同じ健全な走行に、catch-up を 3 系統（dispatcher・kanade・",
+                "loop_ticker）から 1 件ずつ、いずれも起動過渡（定常状態より前）に置いた。",
+                "判定式⑵ が数えるのは定常状態だけなので合格（終了コード 0）である。",
+                "同時に、この走行には任意種の行（[tick] kind=window・perf(thread)・",
+                "perf(process)）と発話区間の印が入っている。任意種は 1 本も無くても",
+                "判定が成立しなければならず、有っても判定を動かしてはならない。",
+                "その「有る側」がこの fixture である（無い側は既存の 17 件すべて）。",
+                "[tick] の窓は catch-up が起きた 3 窓だけ壁時計合計が 4.5 倍あるので、",
+                "「フレーム駆動の負荷が起床を遅らせる」仮説は 成立 と印字されなければならない。",
+                "終了コードはこれらの中身を 1 つも反映しないため、contains 行で本文を固定する。",
+            ],
+            contains=(
+                "仮説: 成立",
+                "target=dispatcher",
+                "target=kanade",
+                "target=loop_ticker",
+                "metric=steady_idle_cpu_mean_pct value=1.61",
+                "metric=frame_interval_p95_ms value=150.000",
+                "metric=catchup_count value=0",
+                "metric=catchup_count_total value=3",
+                "metric=catchup_dispatcher value=1",
+                "metric=catchup_kanade value=1",
+                "metric=catchup_loop_ticker value=1",
+                "metric=alloc_count value=0",
+                "metric=talk_peak_cpu_pct value=4.20",
+                "metric=cpu_max_pct value=4.20",
+                "metric=tick_skip_ratio value=0.000",
+                "metric=catchup_tick_load_ratio value=3.484",
+            ),
+        )
+    )
+
+
+def case_C2() -> Fixture:
+    return (
+        Fixture("C2_catchup_by_target_fail")
+        .boot()
+        .cycle_series(JUDGED_TARGET, JUDGED_SURFACE, MAIN_WAITS_MS, MAIN_CYCLES)
+        .catchups(C2_CATCHUP_SECS)
+        .tick_windows(C2_TICK_START_SEC, C2_TICK_COUNT, wall_us=TICK_WALL_US_CALM)
+        .cpu_series()
+        .run_meta()
+        .declare(
+            "verdict", 1, "catch-up が 3 系統とも定常状態にある（不合格側）",
+            build="release",
+            notes=[
+                "C1 と同じ走行で、catch-up の 3 件だけを定常状態へ移したもの。",
+                "判定式⑵ は定常状態の catch-up 0 件を求めるので不合格（終了コード 1）である。",
+                "C1 と対にして置いてあるのは、合格側だけ・不合格側だけでは「数えているのか",
+                "数えていないのか」が区別できないためである。",
+                "[tick] の窓はどれも同じ壁時計合計なので、catch-up が起きた窓と全体の比は",
+                "1.000 であり、仮説は 不成立 と印字されなければならない。",
+                "仮説の語は終了コードを動かさないので contains 行で固定する。",
+            ],
+            contains=(
+                "仮説: 不成立",
+                "target=dispatcher",
+                "target=kanade",
+                "target=loop_ticker",
+            ),
+        )
+    )
+
+
+def case_T2() -> Fixture:
+    return (
+        Fixture("T2_tick_lines_absent")
+        .boot()
+        .cycle_series(JUDGED_TARGET, JUDGED_SURFACE, MAIN_WAITS_MS, MAIN_CYCLES)
+        .catchups(C1_CATCHUP_SECS)
+        .cpu_series()
+        .run_meta()
+        .declare(
+            "baseline", 0, "catch-up はあるが [tick] 行が 1 本も無い（仮説は判定不能）",
+            emit_metrics=True,
+            notes=[
+                "C1 から任意種の行（[tick]・perf(thread)・perf(process)）と発話区間の印を",
+                "すべて落とした走行。任意種が無くても集計は成立し、終了コードは 0 である",
+                "（任意種は必要ログ種ではない）。",
+                "ただし [tick] が無ければ「フレーム駆動の負荷が起床を遅らせる」仮説は",
+                "数値で確かめようがない。ここで 不成立 と書くと「調べたが違った」と読まれる",
+                "ので、判定不能 でなければならない。無観測を結論にしないという規律である。",
+                "同じ理由で、発話区間の印が無い走行の発話中の頂は 0 ではなく - である。",
+            ],
+            contains=(
+                "仮説: 判定不能",
+                "metric=talk_peak_cpu_pct value=-",
+                "metric=tick_skip_ratio value=-",
+                "metric=catchup_tick_load_ratio value=-",
+                "metric=catchup_count_total value=3",
+            ),
+        )
+    )
 
 
 def case_H11() -> Fixture:
@@ -917,6 +1226,7 @@ def case_B1() -> Fixture:
 CASES = (
     case_H11, case_H12, case_H12_colored, case_H13, case_H1b, case_H14,
     case_H20, case_H21, case_P12, case_P13, case_P14,
+    case_C1, case_C2, case_T2,
     case_E1, case_E2, case_E3, case_X1, case_X2, case_B1,
 )
 

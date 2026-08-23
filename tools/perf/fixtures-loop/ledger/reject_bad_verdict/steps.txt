@@ -1,0 +1,2 @@
+0 :: init --goal-name draw-load-parity --ledger @LEDGER@ --now 2026-08-23T00:00:00Z
+3 :: append --ledger @LEDGER@ --from-json @DIR@/entry.json --now 2026-08-23T01:00:00Z

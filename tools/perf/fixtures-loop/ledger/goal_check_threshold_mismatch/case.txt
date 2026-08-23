@@ -1,0 +1,3 @@
+title=目標の閾値が判定スクリプトの較正値と違えば goal-check は exit 3
+stderr_substr=IDLE_CPU_MAX_RELEASE_PCT
+stderr_substr=2.5

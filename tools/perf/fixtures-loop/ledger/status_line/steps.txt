@@ -1,0 +1,7 @@
+# <期待終了コード> :: <引数…>
+0 :: init --goal-name draw-load-parity --ledger @LEDGER@ --now 2026-08-23T00:00:00Z
+0 :: append --ledger @LEDGER@ --from-json @DIR@/entry.json --now 2026-08-23T01:23:45Z
+0 :: set-phase REMEASURE --ledger @LEDGER@ --streak 1 --best 6.12 --baseline 9.31
+0 :: status --ledger @LEDGER@
+0 :: status --ledger @LEDGER@ --judge PASS --next RECORD
+3 :: status --ledger @LEDGER@ --judge MAYBE
