@@ -108,11 +108,14 @@ impl tracing::Subscriber for SentinelDroppingSubscriber {
     fn event(&self, event: &tracing::Event<'_>) {
         let mut fields: Vec<(String, FieldValue)> = Vec::new();
         event.record(&mut FieldCollector(&mut fields));
-        self.0.lock().expect("捕捉バッファは毒化していない").push(CapturedEvent {
-            level: *event.metadata().level(),
-            target: event.metadata().target().to_string(),
-            fields,
-        });
+        self.0
+            .lock()
+            .expect("捕捉バッファは毒化していない")
+            .push(CapturedEvent {
+                level: *event.metadata().level(),
+                target: event.metadata().target().to_string(),
+                fields,
+            });
     }
     fn enter(&self, _span: &tracing::span::Id) {}
     fn exit(&self, _span: &tracing::span::Id) {}
@@ -178,7 +181,10 @@ fn sentinel_is_removed_before_returning() {
         events.iter().all(|e| e.target != SENTINEL_TARGET),
         "対照イベントが呼出側へ漏れている: {events:?}"
     );
-    assert!(events.is_empty(), "何も発火していない窓が空でない: {events:?}");
+    assert!(
+        events.is_empty(),
+        "何も発火していない窓が空でない: {events:?}"
+    );
 }
 
 // ---- 捕捉結果の取り出しは共有参照の解放に依存しない ----------------------

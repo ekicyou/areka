@@ -46,5 +46,7 @@ mod global;
 mod probe;
 
 pub use capture::capture;
-pub use event::{CapturedEvent, FieldValue};
+pub use event::{
+    CapturedEvent, FieldValue, LevelCounts, LineFormat, capture_lines, count_levels, format_line,
+};
 pub use probe::ensure_interest_probes;
