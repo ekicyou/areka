@@ -48,7 +48,7 @@
   - _Boundary: 共有ログ捕捉 crate（絞り込み）_
   - _Depends: 2.2_
 
-- [ ] 2.5 (P) 全スレッド横断の一回限り捕捉の窓口を分けて提供する
+- [x] 2.5 (P) 全スレッド横断の一回限り捕捉の窓口を分けて提供する
   - プロセス全体の既定の捕捉先を置く処理を本 crate の 1 箇所だけに閉じ込め、別スレッドで発火するログを捕える用途専用の窓口として公開する
   - 既に別の全体設定がある場合は黙って縮退せず、両立条件を示して明示的に失敗させる
   - この窓口を使うと同じテストバイナリ内でログ有効判定が全スレッドで真になることを、両立条件として利用手順に明記する
@@ -284,3 +284,5 @@
 - **タスク 2.3**: 行整形の出所は実測で `LevelTargetFields` が 13 サイト・`LevelFields` が 4 サイトの計 17（`grep -rn 'format!("level='`）。17 すべてで書式文字列が 1 文字も違わないので 2 形で足りる。
 - **タスク 2.4（罠・記録）**: `EnvFilter` の既定指令（`LevelFilter::ERROR`）は**解釈後の指令集合が完全に空のときだけ**足される（`tracing-subscriber-0.3.23/src/filter/env/builder.rs:322-339`・`mod.rs:350-354`）。よって `format!("{directives},...")` の文字列連結で番兵指令を足すと、`directives` が空文字列のときに既定の ERROR が黙って消え、**呼出側の `error!` が出力から失われる**。正解は `EnvFilter::new(directives).add_directive(...)`（呼出側の文字列を先に素で解釈させる）。wintf の 96 呼出はすべて非空（全部 `info` 始まり）なので現時点では潜在的な罠だが、是正は無償。
 - **タスク 2.4 → 2.6 宛**: 番兵行の判定は「行が番兵の宛先文字列を含む」なので、呼出側のログ本文が `log_capture_kit::sentinel` を字面で含むとその行ごと消える（wintf には該当なしを実測確認済み）。利用手順の注意書きへ 1 行入れること。
+- **タスク 2.5 → 3.1・3.2 宛（根拠の訂正）**: kit の `CaptureSubscriber` は素の `Subscriber`（span id 固定・enter/exit は no-op）で、移行元 2 者が今使っている `tracing_subscriber::registry().with(layer)` とは形が違う。**「移行対象に span は無い」は誤り**——`crates/areka-actor/src/spawn.rs` と `ui.rs` が `info_span!("actor", …)` を張り、areka-ghost／areka-seriko／areka-kanade はいずれも areka-actor に依存しているので、capture-all が観測したいまさにそのスレッドで span が流れる。**それでも無害**な理由は「移行元 2 者の layer が span の文脈を一切読まず、`event.metadata()` とイベント自身のフィールドしか見ないから」。3.1/3.2 で根拠を書くときはこちらを引くこと。
+- **タスク 2.5**: `install_into` 内の `ensure_interest_probes()` と `rebuild_interest_cache()` は保険であり、**どのテストにも縛られていない**（両方外しても緑）。`set_global_default` 自身が `Dispatch::new` 経由で全発行点を再計算し、以後どのスレッドも `NoSubscriber` に落ちないため、プロセス内の変異では露出しない。

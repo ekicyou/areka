@@ -37,6 +37,14 @@
 //!
 //! bin crate の in-crate `#[cfg(test)]` テスト・`areka-*` 各 crate・統合テスト（`tests/`）の
 //! いずれからも同じ形で `use` できる。
+//!
+//! # 全スレッド捕捉の両立条件
+//!
+//! 別スレッドで発火するログを捕える必要がある場合だけ [`install_global_capture_all`] を使う
+//! （既定の [`capture`] は呼出スレッド局所で、他スレッドの発火は入らない）。この窓口を呼んだ
+//! 後は、そのテストバイナリ内の `tracing::enabled!` が**全スレッドで真**になる。これが
+//! 両立条件であり、ログ有効判定の偽を前提にするテストや、独自に `set_global_default`／`init`
+//! を行うテストとは同じバイナリに置けない（違反すると窓口が明示的に失敗する）。
 
 mod capture;
 mod event;
@@ -51,4 +59,5 @@ pub use event::{
 };
 #[cfg(feature = "env-filter")]
 pub use filter::capture_under_filter;
+pub use global::install_global_capture_all;
 pub use probe::ensure_interest_probes;
