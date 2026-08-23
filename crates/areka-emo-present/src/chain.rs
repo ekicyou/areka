@@ -127,20 +127,12 @@ fn fault_point(_at: UploadFault) -> Result<(), PresentError> {
 
 /// テスト専用: 次の一致点で 1 回だけ失敗させる（同一スレッド）。
 #[cfg(test)]
-#[allow(
-    dead_code,
-    reason = "消費側は task 5.2/5.3 の注入テスト（本タスクでは注入点の設置まで）"
-)]
 pub(crate) fn arm_upload_fault(at: UploadFault) {
     ARMED_UPLOAD_FAULT.with(|armed| armed.set(Some(at)));
 }
 
 /// テスト専用: 武装を解除する（未消費のまま残った旗を次のテストへ持ち越さない）。
 #[cfg(test)]
-#[allow(
-    dead_code,
-    reason = "消費側は task 5.2/5.3 の注入テスト（本タスクでは注入点の設置まで）"
-)]
 pub(crate) fn clear_upload_fault() {
     ARMED_UPLOAD_FAULT.with(|armed| armed.set(None));
 }
@@ -426,6 +418,12 @@ impl SwapChainPresenter {
 #[cfg(test)]
 #[path = "chain_test_support.rs"]
 mod test_support;
+
+/// `upload` 失敗時の「前の状態を保つ」を失敗点 × 経路の 11 組で固定する実行テスト
+/// （design Flow 3 の期待値表・要件 5.2／既知の残余 2 件は現状の挙動を期待値として記録＝要件 5.9）。
+#[cfg(test)]
+#[path = "chain_fault_tests.rs"]
+mod fault_tests;
 
 #[cfg(test)]
 mod tests {
