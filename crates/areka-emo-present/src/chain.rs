@@ -56,6 +56,95 @@ fn none_err(context: &'static str) -> PresentError {
     }
 }
 
+/// `upload` が失敗し得る 7 点（分類: 外形変更 3・資源取得 3・提示 1）。
+///
+/// テストビルドでのみ実体を持つ注入点 [`fault_point`] の引数であり、通常ビルドでは「何もしない空の
+/// 処理」の識別子としてのみ現れる（実行時の分岐・確保・呼出は増えない＝要件 5.5）。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum UploadFault {
+    // ── 外形変更（寸法変更）────────────────────────────────────
+    /// 新寸 `source_tex` の作成直前。
+    CreateSourceTex,
+    /// 新寸 staging の作成直前。
+    CreateStaging,
+    /// `ResizeBuffers` の直前。
+    ResizeBuffers,
+    // ── 資源取得 ───────────────────────────────────────────────
+    /// `source_tex`→`ID3D11Resource` cast の直前。
+    SourceTexCast,
+    /// `GetBuffer(0)` の直前。
+    GetBuffer,
+    /// backbuffer→`ID3D11Resource` cast の直前。
+    BackbufferCast,
+    // ── 提示 ───────────────────────────────────────────────────
+    /// `Present(0)` の直前。
+    Present,
+}
+
+// 次に踏む一致点で 1 回だけ失敗させる旗（スレッド局所・テストビルド限定）。
+#[cfg(test)]
+thread_local! {
+    static ARMED_UPLOAD_FAULT: std::cell::Cell<Option<UploadFault>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// 注入された失敗の文脈文字列（`device_err` は `&'static str` を要するため変位ごとに定数を持つ。
+/// 字面は `<injected:{at:?}>`＝変位名の Debug 表現と一致する）。
+#[cfg(test)]
+fn injected_context(at: UploadFault) -> &'static str {
+    match at {
+        UploadFault::CreateSourceTex => "<injected:CreateSourceTex>",
+        UploadFault::CreateStaging => "<injected:CreateStaging>",
+        UploadFault::ResizeBuffers => "<injected:ResizeBuffers>",
+        UploadFault::SourceTexCast => "<injected:SourceTexCast>",
+        UploadFault::GetBuffer => "<injected:GetBuffer>",
+        UploadFault::BackbufferCast => "<injected:BackbufferCast>",
+        UploadFault::Present => "<injected:Present>",
+    }
+}
+
+/// 失敗の注入点（テストビルド）。
+///
+/// 武装中の失敗点と一致したときだけ旗を降ろし、**既存の失敗経路と同じ形**——`device_err` を通す
+/// ＝`error!` で記録を残してから [`PresentError::Device`]（`E_FAIL`）を返す——で失敗させる
+/// （要件 5.1・5.3）。一致しなければ旗はそのまま（後続の一致点まで武装が残る）。
+#[cfg(test)]
+fn fault_point(at: UploadFault) -> Result<(), PresentError> {
+    if ARMED_UPLOAD_FAULT.with(|armed| armed.get()) != Some(at) {
+        return Ok(());
+    }
+    ARMED_UPLOAD_FAULT.with(|armed| armed.set(None));
+    let e = windows::core::Error::from_hresult(windows::core::HRESULT(0x8000_4005u32 as i32));
+    Err(device_err(injected_context(at))(e))
+}
+
+/// 失敗の注入点（通常ビルド）。何もしない空の処理＝常に `Ok(())`（要件 5.5）。
+#[cfg(not(test))]
+#[inline(always)]
+fn fault_point(_at: UploadFault) -> Result<(), PresentError> {
+    Ok(())
+}
+
+/// テスト専用: 次の一致点で 1 回だけ失敗させる（同一スレッド）。
+#[cfg(test)]
+#[allow(
+    dead_code,
+    reason = "消費側は task 5.2/5.3 の注入テスト（本タスクでは注入点の設置まで）"
+)]
+pub(crate) fn arm_upload_fault(at: UploadFault) {
+    ARMED_UPLOAD_FAULT.with(|armed| armed.set(Some(at)));
+}
+
+/// テスト専用: 武装を解除する（未消費のまま残った旗を次のテストへ持ち越さない）。
+#[cfg(test)]
+#[allow(
+    dead_code,
+    reason = "消費側は task 5.2/5.3 の注入テスト（本タスクでは注入点の設置まで）"
+)]
+pub(crate) fn clear_upload_fault() {
+    ARMED_UPLOAD_FAULT.with(|armed| armed.set(None));
+}
+
 /// DEFAULT usage の B8G8R8A8 `source_tex`（単一の真実源）を作る。
 fn create_source_tex(
     d3d: &ID3D11Device,
@@ -182,12 +271,32 @@ impl SwapChainPresenter {
     }
 
     /// `ComposedSurface` の内容を供給面へ反映（外形が変われば内部リサイズ）。UI スレッド。
+    ///
+    /// **prepare → commit**（design Flow 3）: 失敗し得る操作（テクスチャ作成・`ResizeBuffers`・
+    /// cast・`GetBuffer`）をすべて先に済ませ、内部状態の更新（`source_tex`／`staging`／`size` の
+    /// 一括代入）は画素の書き込み＝`UpdateSubresource` の**直前**まで遅らせる。これにより 7 失敗点
+    /// のうち `Present` 以外の 6 点では struct の各項目が旧値のまま自己整合し、`read_back()` は
+    /// 旧内容・旧寸を返す（要件 5.2・5.7）。成功時の D3D 呼出の集合と回数は並べ替え前と同一で、
+    /// 外形不変の定常経路に新しい確保は無い（要件 5.5）。
+    ///
+    /// 既知の残余 2 件（設計で登記・是正しない）: ⒜ `Present` 失敗＝表示は前フレームのまま・
+    /// `source_tex` は未提示の試行内容を持つ／⒝ 外形変更経路で `ResizeBuffers` 成功後の後段失敗＝
+    /// struct は旧値で自己整合だが swap chain の表示バッファだけ新寸・未描画（次回 `upload` が
+    /// `self.size` 不一致で `ResizeBuffers` を再度通り回復する）。
     pub(crate) fn upload(&mut self, surface: &ComposedSurface) -> Result<(), PresentError> {
         let (w, h) = (surface.width(), surface.height());
 
-        // 外形が変われば内部リサイズ。backbuffer 参照は本メソッド外に持ち越さない（下の tight scope
-        // でのみ取得・即解放）ため、ResizeBuffers 前に別途解放する必要はない（R8.5 規約充足）。
-        if (w, h) != self.size {
+        // ── prepare ①: 外形が変われば新寸の資材を**ローカルへ**用意し、内部リサイズを済ませる。
+        // backbuffer 参照は本メソッド外に持ち越さず ResizeBuffers より後でのみ取得するため、
+        // ResizeBuffers 前に別途解放する必要はない（R8.5 規約充足）。
+        let resized = if (w, h) != self.size {
+            fault_point(UploadFault::CreateSourceTex)?;
+            // source_tex / staging を新寸で再作成。swapchain / ICompositionSurface は本体を包むため
+            // 作り直し不要（design §SwapChainPresenter・R8.5）。
+            let new_source_tex = create_source_tex(&self.d3d, w, h)?;
+            fault_point(UploadFault::CreateStaging)?;
+            let new_staging = create_staging(&self.d3d, w, h)?;
+            fault_point(UploadFault::ResizeBuffers)?;
             unsafe {
                 self.swapchain.ResizeBuffers(
                     2,
@@ -198,17 +307,35 @@ impl SwapChainPresenter {
                 )
             }
             .map_err(device_err("ResizeBuffers"))?;
-            // source_tex / staging を新寸で再作成。swapchain / ICompositionSurface は本体を包むため
-            // 作り直し不要（design §SwapChainPresenter・R8.5）。
-            self.source_tex = create_source_tex(&self.d3d, w, h)?;
-            self.staging = create_staging(&self.d3d, w, h)?;
-            self.size = (w, h);
-        }
+            Some((new_source_tex, new_staging))
+        } else {
+            None
+        };
 
-        let src_res: ID3D11Resource = self
-            .source_tex
+        // ── prepare ②: 資源取得。cast 対象は外形変更時は新 source_tex・不変時は現 source_tex。
+        fault_point(UploadFault::SourceTexCast)?;
+        let src_tex: &ID3D11Texture2D = match &resized {
+            Some((new_source_tex, _)) => new_source_tex,
+            None => &self.source_tex,
+        };
+        let src_res: ID3D11Resource = src_tex
             .cast()
             .map_err(device_err("source_tex->Resource cast"))?;
+
+        fault_point(UploadFault::GetBuffer)?;
+        let backbuffer: ID3D11Texture2D =
+            unsafe { self.swapchain.GetBuffer(0) }.map_err(device_err("GetBuffer(0)"))?;
+        fault_point(UploadFault::BackbufferCast)?;
+        let back_res: ID3D11Resource = backbuffer
+            .cast()
+            .map_err(device_err("backbuffer->Resource cast"))?;
+
+        // ── commit: 失敗し得る操作はここまでで全て終えている。外形変更時のみ一括代入する。
+        if let Some((new_source_tex, new_staging)) = resized {
+            self.source_tex = new_source_tex;
+            self.staging = new_staging;
+            self.size = (w, h);
+        }
 
         // ① UpdateSubresource(source_tex, bytes, stride) — 単一の真実源へ書込（無変換バイト転送）。
         unsafe {
@@ -222,17 +349,14 @@ impl SwapChainPresenter {
             );
         }
 
-        // ② CopyResource(backbuffer, source_tex) — backbuffer 参照はこのスコープ内のみ保持。
-        {
-            let backbuffer: ID3D11Texture2D =
-                unsafe { self.swapchain.GetBuffer(0) }.map_err(device_err("GetBuffer(0)"))?;
-            let back_res: ID3D11Resource = backbuffer
-                .cast()
-                .map_err(device_err("backbuffer->Resource cast"))?;
-            unsafe { self.context.CopyResource(&back_res, &src_res) };
-        } // backbuffer をここで drop（ResizeBuffers 前提）。
+        // ② CopyResource(backbuffer, source_tex)。
+        unsafe { self.context.CopyResource(&back_res, &src_res) };
+        // backbuffer 参照はここで解放する（Present より前・次回 ResizeBuffers 前提）。
+        drop(back_res);
+        drop(backbuffer);
 
         // ③ Present(0)。
+        fault_point(UploadFault::Present)?;
         unsafe { self.swapchain.Present(0, DXGI_PRESENT(0)) }
             .ok()
             .map_err(device_err("Present(0)"))?;
@@ -240,7 +364,10 @@ impl SwapChainPresenter {
         Ok(())
     }
 
-    /// 表示中画素の CPU 読み戻し（`stride = width*4` の密配列・BGRA）。
+    /// 直近に `upload` へ渡された内容の CPU 読み戻し（`stride = width*4` の密配列・BGRA）。
+    ///
+    /// 読む先は単一の真実源 `source_tex` であり、backbuffer の実表示内容は flip model では読み戻せ
+    /// ない。よって `Present` が失敗した回については**未提示の試行内容**を返す（残余 ⒜）。
     pub(crate) fn read_back(&self) -> Result<Vec<u8>, PresentError> {
         let (w, h) = self.size;
         let src_res: ID3D11Resource = self
@@ -294,126 +421,19 @@ impl SwapChainPresenter {
     }
 }
 
+/// テストの共有ヘルパ（WUC apartment・既知パターンの本物合成）。`tests` と失敗注入テストの
+/// 双方が引く（`structure.md`「テーマ間で共有するヘルパは `<stem>_test_support.rs`」）。
+#[cfg(test)]
+#[path = "chain_test_support.rs"]
+mod test_support;
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    use areka_emo_atlas::{
-        AlphaParams, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
-    };
-    use areka_emo_compose::{BindSet, Composer, EmoWorld, PatternState};
-    use areka_parsers::shell::{AppendTarget, DefRef, Element, ElementPath, Shell, Surface};
-    use std::path::Path;
-
-    use windows::Win32::System::WinRT::{DQTAT_COM_ASTA, DQTAT_COM_NONE};
-    use wintf::com::wuc::create_dispatcher_queue_controller;
     use wintf::ecs::GraphicsCore;
 
-    /// テスト用の WUC apartment / dispatcher を組む（spike / wintf 1.2 テストと同一方針）。
-    ///
-    /// cargo test の各テストは専用スレッドで走り COM 未初期化ゆえ、design §2.1「未初期化なら ASTA」
-    /// に従い ASTA を第一候補・失敗時 NONE を保険とする。controller は Compositor より長寿命を要する
-    /// ため呼び出し側で保持する。
-    fn make_dispatcher_and_compositor() -> (windows::System::DispatcherQueueController, Compositor)
-    {
-        let dq = create_dispatcher_queue_controller(DQTAT_COM_ASTA)
-            .or_else(|e_asta| {
-                create_dispatcher_queue_controller(DQTAT_COM_NONE).map_err(|_| e_asta)
-            })
-            .expect("DispatcherQueueController 生成失敗（ASTA/NONE いずれも不可）");
-        let compositor = Compositor::new().expect("Compositor::new 失敗");
-        (dq, compositor)
-    }
-
-    // ── ComposedSurface 生成補助（cache.rs テストと同技法）─────────────────────
-    // `ComposedSurface::bytes_mut` は emo-compose の pub(crate) ゆえ本クレートから画素を直接焼けない。
-    // よって「既知の非退化パターン」は上流公開 API（atlas bake → EmoWorld → Composer::compose）で
-    // 本物を合成して得る（模造バッファでの偽陽性を避ける）。
-
-    fn elem(path: &str, x: i64, y: i64) -> Element {
-        Element {
-            layer: 0,
-            path: ElementPath::new(path.to_string()),
-            x,
-            y,
-        }
-    }
-
-    fn surface(id: u32, elements: Vec<Element>) -> Surface {
-        Surface {
-            id,
-            targets: vec![AppendTarget::Single(id)],
-            elements,
-            collisions: Vec::new(),
-            animations: Vec::new(),
-        }
-    }
-
-    fn shell_of(surfaces: Vec<Surface>) -> Shell {
-        let definitions = (0..surfaces.len()).map(DefRef::Surface).collect();
-        Shell {
-            surfaces,
-            appends: Vec::new(),
-            aliases: Vec::new(),
-            animation_sort: None,
-            collision_sort: None,
-            definitions,
-        }
-    }
-
-    /// `w×h` の**全不透明・座標由来グラデーション**を単一 element として本物合成する。
-    ///
-    /// α=255（全不透明）ゆえ α=0 除外トリムは全域を残し、合成外形は正確に `w×h` になる。各画素は
-    /// 座標＋`salt` から決定論的に作り（成分 ≤ α=255 で premultiplied 不変を自明に満たす）、
-    /// リサイズ前後で異なるパターンとして区別できる。全 0 でない＝非退化を呼び出し側が assert する。
-    fn composed_of_size(w: u32, h: u32, salt: u8) -> ComposedSurface {
-        let base = Path::new("shell/master");
-        let surfaces = vec![surface(1000, vec![elem("p.png", 0, 0)])];
-
-        let mut dec = MemoryDecoder::new();
-        let stride = w * 4;
-        let mut img: Vec<u8> = Vec::with_capacity((stride * h) as usize);
-        for y in 0..h {
-            for x in 0..w {
-                let a: u8 = 0xFF;
-                let b = (x as u8).wrapping_mul(3).wrapping_add(salt);
-                let g = (y as u8).wrapping_mul(5).wrapping_add(salt);
-                let r = ((x + y) as u8).wrapping_mul(7).wrapping_add(salt);
-                img.push(b);
-                img.push(g);
-                img.push(r);
-                img.push(a);
-            }
-        }
-        dec.insert(base.join("p.png"), w, h, stride, img, true);
-
-        let set = SurfaceSet {
-            surfaces: &surfaces,
-            base_dir: base,
-            alpha_params: AlphaParams {
-                use_self_alpha: UseSelfAlpha::On,
-            },
-        };
-        let baked = bake(&[set], &dec, PackConfig::default());
-        assert!(
-            baked.errors.is_empty(),
-            "atlas bake セットアップは失敗しない"
-        );
-
-        let mut world = EmoWorld::build(&shell_of(surfaces));
-        world.bind_atlas(&baked.table, SetId(0));
-
-        let mut composer = Composer::new();
-        composer
-            .compose(
-                &world,
-                &baked.table,
-                1000,
-                &BindSet::default(),
-                &PatternState::default(),
-            )
-            .expect("静的 element 単体の合成は Ok")
-    }
+    use super::test_support::{composed_of_size, make_dispatcher_and_compositor};
 
     /// R8.2 観測完了: upload → read_back が `ComposedSurface.bytes()` と全バイト一致し、
     /// 外形変更時は内部リサイズを経て再度一致する（R1.5/R8.5）。純バイト往復の檻。
