@@ -66,7 +66,7 @@
   - 完了状態: 共有 crate の単体テストが緑で、利用手順を読んだだけで別 crate から捕捉テストが書ける状態になっている
   - _Requirements: 3.4, 3.5, 3.6, 11.6_
 
-- [ ] 2.7 硬化していない捕捉では取りこぼすことを別プロセスで示す較正テストを置く
+- [x] 2.7 硬化していない捕捉では取りこぼすことを別プロセスで示す較正テストを置く
   - 親テストが自身のテストバイナリを 2 通り（硬化なし／硬化あり）で子プロセス起動する形にし、区別は所定の接頭辞を持つ環境変数で渡す
   - 子テストは通常実行から除外し、環境変数が無ければ即座に終了する（親の実行順に依存しない）
   - 場面は「窓の内側で別スレッドが先に同じ発行点を登録する」に固定し、硬化なしでは捕捉 0 件・硬化ありでは 1 件を各子が自分で確かめる
@@ -286,3 +286,6 @@
 - **タスク 2.4 → 2.6 宛**: 番兵行の判定は「行が番兵の宛先文字列を含む」なので、呼出側のログ本文が `log_capture_kit::sentinel` を字面で含むとその行ごと消える（wintf には該当なしを実測確認済み）。利用手順の注意書きへ 1 行入れること。
 - **タスク 2.5 → 3.1・3.2 宛（根拠の訂正）**: kit の `CaptureSubscriber` は素の `Subscriber`（span id 固定・enter/exit は no-op）で、移行元 2 者が今使っている `tracing_subscriber::registry().with(layer)` とは形が違う。**「移行対象に span は無い」は誤り**——`crates/areka-actor/src/spawn.rs` と `ui.rs` が `info_span!("actor", …)` を張り、areka-ghost／areka-seriko／areka-kanade はいずれも areka-actor に依存しているので、capture-all が観測したいまさにそのスレッドで span が流れる。**それでも無害**な理由は「移行元 2 者の layer が span の文脈を一切読まず、`event.metadata()` とイベント自身のフィールドしか見ないから」。3.1/3.2 で根拠を書くときはこちらを引くこと。
 - **タスク 2.5**: `install_into` 内の `ensure_interest_probes()` と `rebuild_interest_cache()` は保険であり、**どのテストにも縛られていない**（両方外しても緑）。`set_global_default` 自身が `Dispatch::new` 経由で全発行点を再計算し、以後どのスレッドも `NoSubscriber` に落ちないため、プロセス内の変異では露出しない。
+- **タスク 2.7 → 6.1・6.2 宛（重要）**: 較正テスト `crates/log-capture-kit/tests/capture_calibration_test.rs` は**わざと素の `tracing::subscriber::with_default` を直接呼ぶ**（硬化なし側の経路。1 件だけ）。要件 8.3 は `tests/` も走査対象にするので、**この 1 ファイルを理由付きで例外表に載せること**。載せ忘れて「是正」すると較正が空振りになり、本仕様の中心的な主張が無証跡に戻る。
+- **タスク 2.7 → 8.3 宛（決着）**: 窓の内側の `rebuild_interest_cache()`（`capture.rs`）は**証明可能に冗長**で、正直な檻は作れない。実測: ⑴ rebuild だけを外しても窓前の焼き付きの場面は緑（`with_default` 自身の `Dispatch::new` → `register_dispatch` が全発行点を再計算するため。`tracing-core-0.1.36/src/callsite.rs:483-488`）、⑵ probe と rebuild の両方を外しても窓前の場面は緑、⑶ その状態で窓**内**の場面は赤。つまり窓前の焼き付きは rebuild の有無に関わらず治り、窓内の焼き付きは rebuild では治せない。**「引受先未定」ではなく「意図的な二重防御・檻は作れない」として台帳へ記録する**。要件 3.2 の機序自体は 2.7 の硬化あり子テストが縛っている。
+- **タスク 2.7（記録の訂正）**: `AREKA_` 接頭辞の実行時環境変数は実測 13 件（本タスクの追加で 14 件）。また接頭辞は例外なしではない——`HOST32_*`（7 件）・`GHOSTDIR`・`PARENT_HWND`・`WUC_SPIKE_HOLD_MS`・`WINTF_CROSSHAIR` が別系統で存在する。
