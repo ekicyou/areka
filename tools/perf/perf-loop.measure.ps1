@@ -237,6 +237,7 @@ function Invoke-MeasureRun {
     $ghostRoot   = Get-MeasureGhostRoot
     $balloonRoot = Get-MeasureBalloonRoot
     $attempts = $MEASURE_RUN_RETRY + 1
+    Sync-MeasureWorktreeBuild -Build $Build -BinDir $BinDir
     if (-not $script:DryRunMode) { Sync-MeasureShioriHelper -BinDir (Get-MeasureBinDir -BinDir $BinDir -Build $Build) }
 
     for ($attempt = 1; $attempt -le $attempts; $attempt++) {
@@ -852,6 +853,7 @@ function Invoke-SubFollowup {
     $iterDir = Get-LoopDir -Kind 'iter' -Iter $script:IterArg
     $dir = Join-Path $iterDir 'followup'
     $script:CurrentDir = $dir
+    Sync-MeasureWorktreeBuild -Build 'release' -BinDir $script:BinDirArg
     $binDir = if ($script:BinDirArg) {
         [System.IO.Path]::GetFullPath($script:BinDirArg).TrimEnd('\')
     } else {

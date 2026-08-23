@@ -1,7 +1,7 @@
 ## 状態
 - goal: draw-load-parity
 - iteration: 3
-- phase: WAIT_RANK
+- phase: TOOLFIX
 - pending_run: C:\Users\maz-o\AppData\Local\areka-diag\perf-loop\draw-load-parity\iter-3\rank
 - streak_no_gain: 2
 - best_idle_cpu_pct: 15.80
@@ -9,8 +9,8 @@
 - started_at: 2026-08-22T23:41:05Z
 - run: 87696907
 - capabilities: elevated:false;xperf:true;pdb:true;function_stage:UNAVAILABLE;reason:not_elevated;judge:0.4.0;python:3.13.15;pwsh:7.6.4;checkin_min:30;selftest:ok
-- previous_phase: TEST
-- toolfix_used: 3
+- previous_phase: RANK
+- toolfix_used: 4
 - not_quiet_retries: 2
 
 ## 周 1 — 2026-08-23T04:39:30Z
@@ -29,7 +29,7 @@
 - commit: -
 - skipped_candidates: none (周 1 は仕組みの A/B で候補選びをしない・tasks 9.2)
 - duration_min: 95
-- reason: iteration1 mechanism A/B: A=gate default OFF (HEAD), B=gate default ON; stage3=UNAVAILABLE(not_elevated); agent-model-warning:perf-measure=missing-first-line(model opus passed); agent-model-warning:perf-implement=missing-first-line(model opus passed); followup_fail: gate ON breaks drag (A control PASS) → 門の起床旗にドラッグ経路の穴（rearm_tick_while_dragging/pointer 生産者）が残る。周 2 以降の候補＝穴を塞いでから門 ON を再 A/B; followup は desktop lock 中に 2 度 INCONCLUSIVE（環境）→ 対話デスクトップ復帰を待って実走
+- reason: iteration1 mechanism A/B: A=gate default OFF (HEAD), B=gate default ON; stage3=UNAVAILABLE(not_elevated); agent-model-warning:perf-measure=missing-first-line(model opus passed); agent-model-warning:perf-implement=missing-first-line(model opus passed); followup_fail: gate ON breaks drag (A control PASS) → 門の起床旗にドラッグ経路の穴（rearm_tick_while_dragging/pointer 生産者）が残る。周 2 以降の候補＝穴を塞いでから門 ON を再 A/B; followup は desktop lock 中に 2 度 INCONCLUSIVE（環境）→ 対話デスクトップ復帰を待って実走; CORRECTION(周 3 で判明・2026-08-23): この周の followup は target\release＝prepare-ab が残した A 実行体（門 OFF・sha b4ed1b79…）で走っていた（道具の穴・TOOLFIX 4＝走行前に作業ツリーから作り直す）。drag FAIL は門 ON の欠陥ではなく門 OFF での不再現の失敗（ロック解除直後の 1 回）。「門 ON がドラッグ追随を壊す」は撤回＝B の追随は未検証
 
 ## 周 2 — 2026-08-23T06:31:33Z
 - hypothesis: tick gate default ON（再 A/B・ドラッグ穴を塞いで）: UI スレッド 56% の中身は 13 本を毎コマ全部回す tick（skip 0%・119.58 回/秒）。周 1 の drag FAIL の原因＝起床旗の生産者が DraggingState 成分に依存し、権威状態のスレッド局所 DragState（Preparing/JustStarted/JustEnded）を代表していない。旗を状態機械側へ寄せてから門 ON を再 A/B する
@@ -47,4 +47,4 @@
 - commit: -
 - skipped_candidates: thread#2 unregistered_rest 40.3% no_signal(帰属不明・段③待ち); thread#3 ticker_loop 1.7% no_signal; thread#4 cursor_monitor 1.2% no_signal; thread#5-10 no_signal; phase#1 framefinalize 34.8% no_signal(門の結論まで分離不能・C17/C18); phase#2 draw 22.6% no_signal; phase#3-6 no_signal; function SetWindowPos系 no_signal(段③ UNAVAILABLE); function compose/blit out_of_scope
 - duration_min: 170
-- reason: iteration2: B=drag 起床旗を DragState 起点へ＋門の既定 ON, A=HEAD(門 OFF); stage3=UNAVAILABLE(not_elevated); handoff:areka-P0-emo2-conformance-e2e:crates/wintf/src/ecs/drag/systems.rs; handoff:areka-P0-present-write-coherence:crates/wintf/src/ecs/drag/systems.rs; not_quiet: measure-ab 1 回目は A1/B1 の後で静寂確認 NOT_QUIET(exit 2)→ -Resume で 1 回やり直し; not_quiet(2): -Resume 後も B2 の走行後確認が NOT_QUIET(machine 10.8% vs 閾値 10.0・この機械の遊休 8〜9% に対し閾値が際どい)→ 4 走行とも走行前は QUIET・areka exit 0 なので -Resume で compare へ進めた（走行後の NOT_QUIET は B1=14.6%/B2=10.8%）; compare: 副指標が悪化した（catchup）（catchup A=15/18 B=19/19＝A 自身の散らばり内だが count 規則で悪化）; 主指標 delta -3.67 は noise 6.99(|A1-A2|・A2=13.28 が外れ値) に埋もれ差なし帯; 門 ON の省略率は measure-ab では点灯しないため未観測; SIZE small RISK low
+- reason: iteration2: B=drag 起床旗を DragState 起点へ＋門の既定 ON, A=HEAD(門 OFF); stage3=UNAVAILABLE(not_elevated); handoff:areka-P0-emo2-conformance-e2e:crates/wintf/src/ecs/drag/systems.rs; handoff:areka-P0-present-write-coherence:crates/wintf/src/ecs/drag/systems.rs; not_quiet: measure-ab 1 回目は A1/B1 の後で静寂確認 NOT_QUIET(exit 2)→ -Resume で 1 回やり直し; not_quiet(2): -Resume 後も B2 の走行後確認が NOT_QUIET(machine 10.8% vs 閾値 10.0・この機械の遊休 8〜9% に対し閾値が際どい)→ 4 走行とも走行前は QUIET・areka exit 0 なので -Resume で compare へ進めた（走行後の NOT_QUIET は B1=14.6%/B2=10.8%）; compare: 副指標が悪化した（catchup）（catchup A=15/18 B=19/19＝A 自身の散らばり内だが count 規則で悪化）; 主指標 delta -3.67 は noise 6.99(|A1-A2|・A2=13.28 が外れ値) に埋もれ差なし帯; 門 ON の省略率は measure-ab では点灯しないため未観測; SIZE small RISK low; CORRECTION(周 3 で判明): この周の followup PASS も A 実行体（sha e3d256c7…）で走っており、B（門 ON＋穴塞ぎ）の追随は未検証。compare は bin-A 対 bin-B で有効。周 3 の rank-run 1 回目は target\release に残っていた B 実行体（sha 3cadb820…）を測っていた＝点灯つき 7 分で定常 3.30%（p50 3.11・skipped 87.6%・heartbeat 20.8%）に対し周 2 の rank（A・点灯）は 17.04%＝門 ON の点灯走行は目標 3.0% 近傍（参考観測・合否外）

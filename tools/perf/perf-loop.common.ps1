@@ -610,3 +610,21 @@ function Sync-MeasureShioriHelper {
     Copy-Item -LiteralPath $src -Destination $dest -Force
     Write-Info "[perf-loop] 32bit SHIORI ヘルパを実行体の隣へ複製しました: $src -> $dest"
 }
+
+# 走行前に作業ツリーから実行体を作り直す（-BinDir 無しの走行＝followup／rank-run／measure-baseline／final）。
+# measure-ab は B 側を target\release に作って残すので、次の周の rank-run が前の周の B を黙って測り、
+# 逆に followup は prepare-ab が残した A（HEAD）を測っていた（2026-08-23 周 1〜3 で実際に起きた＝周 1 の
+# 「門 ON がドラッグを壊す」は A 実行体での失敗だった）。-BinDir が明示された走行と -DryRun は触らない。
+function Sync-MeasureWorktreeBuild {
+    param([Parameter(Mandatory = $true)][string]$Build, [string]$BinDir)
+    if ($BinDir) { return }
+    if ($script:DryRunMode) { return }
+    $manifest = Join-Path $repoRoot 'Cargo.toml'
+    $cargoArgs = @('build'); if ($Build -eq 'release') { $cargoArgs += '--release' }
+    $cargoArgs += @('-p', $MEASURE_AREKA_PACKAGE, '--manifest-path', $manifest)
+    $r = Invoke-MeasureCargo -Label "走行前に作業ツリーから $Build ビルド" -Arguments $cargoArgs
+    if ($r.Code -ne 0) { Stop-Run -Code $EXIT_MEASURE_FAILED -Message "走行前の $Build ビルドが失敗しました（終了コード $($r.Code)）: $($r.LastLine)" }
+    $exe = Join-Path (Get-MeasureBinDir -BinDir '' -Build $Build) $MEASURE_AREKA_EXE
+    $git = Get-MeasureGitFacts
+    Write-Info "[perf-loop] 走行する実行体: $exe sha256=$(Get-MeasureSha256 -Path $exe) git_head=$($git.Head) git_dirty=$($git.Dirty)"
+}
