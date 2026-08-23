@@ -230,6 +230,9 @@ before_idle_cpu_pct  after_idle_cpu_pct  delta_pct  noise_pct  secondary  verdic
    rm -- <(new) の付いていたパス>            # 台帳の印。git status --short の ?? と一致するはず
    git status --short                        # 何も残っていないことを確かめる
    ```
+   `git status --short` に ` M` が残るのに `git diff --quiet -- <パス>` が 0 なら、中身は同じで行末だけが
+   違う（実装係の書き込みが CRLF・HEAD は LF。2026-08-23 周 1 で実際に残った）。`git show HEAD:<パス> > <パス>`
+   で byte ごと戻す（bash で）。それでも差分が残るときだけ失敗と見なす。
    `--streak <前の値 + 1>`。`git restore` が失敗して差分が残るなら
    **`FINAL`（`STOPPED reason=safety`）**へ行く（要件 1.4 ⒞）。
 3. 台帳へ追記し、判定の出力を spec へ複製する。**`--iteration <n>` を必ず渡す**（`<n>` ＝ 今の
