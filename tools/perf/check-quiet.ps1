@@ -99,7 +99,7 @@ $ErrorActionPreference = 'Stop'
 # =============================================================================
 # 較正値・調整値（上部の一覧と対応。変更はここだけ）
 # =============================================================================
-$SCRIPT_VERSION              = '1.0.0'
+$SCRIPT_VERSION              = '1.0.1'
 $DEFAULT_MACHINE_CPU_MAX_PCT = 10.0
 $DEFAULT_SAMPLE_SEC          = 20
 $DEFAULT_HEAVY_PROCESS_NAMES = @('cargo', 'rustc', 'rust-analyzer', 'msbuild', 'link', 'cl', 'areka', 'python')
@@ -303,13 +303,26 @@ function Read-QuietSettingsFromToml {
 }
 
 # マシン全体 CPU を Seconds 秒・1 秒刻みで採る。先頭 Warmup 本（暖機）は捨てる。
-# 失敗は握り潰さない——例外はそのまま呼び手（try/catch）へ返す。
+# 失敗は握り潰さない——例外はそのまま呼び手（try/catch）へ返す。ただし PDH の一過性の
+# 失敗（「値のないカウンター」＝最初の 1 本が出ないだけで、数秒後には読める）は 3 回まで
+# 採り直す（2026-08-23 に 7 秒間隔で 2 度踏み、ベースラインの採り直し 2 回とも MEASURE_FAILED に
+# なった）。3 回とも失敗なら最後の例外をそのまま返す。
 function Measure-MachineCpu {
     param([int]$Seconds, [string]$CounterPath, [int]$Warmup)
-    $set = Get-Counter -Counter $CounterPath -SampleInterval 1 -MaxSamples ($Seconds + $Warmup) -ErrorAction Stop
-    $values = @($set | ForEach-Object { [double]$_.CounterSamples[0].CookedValue })
-    if ($values.Count -le $Warmup) { throw "採取本数が足りません（$($values.Count) 本）" }
-    return @($values[$Warmup..($values.Count - 1)])
+    $last = $null
+    for ($try = 1; $try -le 3; $try++) {
+        try {
+            $set = Get-Counter -Counter $CounterPath -SampleInterval 1 -MaxSamples ($Seconds + $Warmup) -ErrorAction Stop
+            $values = @($set | ForEach-Object { [double]$_.CounterSamples[0].CookedValue })
+            if ($values.Count -le $Warmup) { throw "採取本数が足りません（$($values.Count) 本）" }
+            return @($values[$Warmup..($values.Count - 1)])
+        } catch {
+            $last = $_
+            Write-Host "[check-quiet] 性能カウンタの採取に失敗しました（$try/3）: $($_.Exception.Message)"
+            if ($try -lt 3) { Start-Sleep -Seconds 3 }
+        }
+    }
+    throw $last
 }
 
 # 見張る名前のプロセスについて、今この瞬間の累積 CPU 時間（秒）を採る。

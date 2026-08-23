@@ -85,6 +85,8 @@ python tools/perf/judge-perf.py --selftest
 
 ---
 
+- 性能カウンタ（`\Processor(_Total)\% Processor Time`）の読みは一過性に失敗することがある（PDH の「値のないカウンター」。2026-08-23 に 7 秒間隔で 2 度踏み、採り直し 2 回とも MEASURE_FAILED になった）。`check-quiet.ps1` 1.0.1 は 3 回まで 3 秒おきに採り直し、3 回とも失敗したときだけ `reason=counter_read_failed`（exit 4）を出す。
+
 ## 3. 2 つの水準と、その使い分け（要件 2.1・議題 4 裁定）
 
 | 水準 | `-Profile` | 実走時間 | 使う場面 |
