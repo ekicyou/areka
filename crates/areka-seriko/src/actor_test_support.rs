@@ -1,6 +1,7 @@
 use super::*;
 use areka_emo_compose::BindSet;
 use areka_sakura::ActorKey;
+use log_capture_kit::{LineFormat, capture_lines};
 use std::collections::BTreeMap;
 
 /// テスト用の TalkCue（Shell 系 Emote・at/actor 込み）を組む。
@@ -31,57 +32,28 @@ pub(super) fn fresh_states() -> ScopeStates {
 pub(super) fn inert_runtime() -> LoopRuntime {
     LoopRuntime::new(SerikoLoopConfig::disabled())
 }
-
 /// `capture_logs` の変種: `f` の戻り値も併せて返す（同期 handler の `ControlFlow` 表明用）。
 ///
-/// スレッドローカル `with_default` 直下で `f` を実行し、`f` が発火した log 文字列と `f` の
-/// 戻り値を組で返す。既存 `capture_logs` と同一の捕捉層を用いる（重複ハーネスを作らない）。
+/// 捕捉層は `capture_logs` と同一（共有機構 `log-capture-kit` へ委譲）で、`f` が発火した
+/// log 文字列と `f` の戻り値を組で返す。重複ハーネスを作らない。
 pub(super) fn capture_logs_flow<T, F: FnOnce() -> T>(f: F) -> (String, T) {
-    use std::cell::RefCell;
-    let ret: RefCell<Option<T>> = RefCell::new(None);
-    let logs = capture_logs(|| {
-        *ret.borrow_mut() = Some(f());
-    });
-    (logs, ret.into_inner().expect("f は必ず値を返す"))
+    let (ret, lines) = capture_lines(LineFormat::LevelTargetFields, f);
+    (lines.join("\n"), ret)
 }
 
-/// テスト専用 tracing 捕捉ハーネス（emo-compose/kanade の log_capture 流儀・
-/// スレッドローカル `with_default` ゆえ並行テスト安全）。
+/// テスト専用 tracing 捕捉ハーネス（硬化機構の唯一の定義元 `log-capture-kit` へ委譲）。
+/// 1 イベント 1 行へ level／target／各フィールド（`name=value`）を整形し、改行連結で返す。
+///
+/// **「`with_default` はスレッドローカルだから並行実行でも干渉しない」は誤り**である。
+/// 差し替わるのはスレッドローカルの既定 dispatcher だけで、「そのログを評価するか」を決める
+/// callsite の interest キャッシュはプロセス全体で 1 つしかなく、その発行点をプロセス内で
+/// 最初に踏んだスレッドの判定が焼き付く。捕捉窓を持たないスレッド（既定は `NoSubscriber`）が
+/// 先に踏むと `never` が大域へ焼き付き、自分のスレッドへ捕捉先を差していても取りこぼす。
+/// 共有機構は ⑴ プロセス寿命の probe 常駐 ⑵ 窓の内側での interest 再計算 ⑶ 番兵イベントに
+/// よる空振り検出（捕捉できなければ panic）の 3 点でこれを塞ぐ。機序の逐条解説と
+/// `tracing-core` の実コード引用は `log_capture_kit` の crate doc および同 crate の
+/// `src/probe.rs` にある。
 pub(super) fn capture_logs<F: FnOnce()>(f: F) -> String {
-    use std::sync::{Arc, Mutex};
-    use tracing::field::{Field, Visit};
-    use tracing_subscriber::prelude::*;
-
-    #[derive(Clone, Default)]
-    struct Capture(Arc<Mutex<Vec<String>>>);
-
-    impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Capture {
-        fn on_event(&self, ev: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
-            let meta = ev.metadata();
-            let mut line = format!("level={} target={}", meta.level(), meta.target());
-            struct V<'a>(&'a mut String);
-            impl Visit for V<'_> {
-                fn record_debug(&mut self, f: &Field, v: &dyn std::fmt::Debug) {
-                    use std::fmt::Write;
-                    let _ = write!(self.0, " {}={:?}", f.name(), v);
-                }
-            }
-            ev.record(&mut V(&mut line));
-            self.0.lock().unwrap().push(line);
-        }
-    }
-
-    // 並行実行下の callsite interest 毒化対策（`log_interest_probe` のモジュール doc 参照）。
-    crate::log_interest_probe::ensure_interest_probes();
-
-    let cap = Capture::default();
-    let logs = cap.0.clone();
-    let subscriber = tracing_subscriber::registry().with(cap);
-    tracing::subscriber::with_default(subscriber, || {
-        // probe 常駐前に焼かれた `never` の掃き残しを、窓が開いた後にもう一度潰す。
-        tracing::callsite::rebuild_interest_cache();
-        f()
-    });
-    let guard = logs.lock().unwrap();
-    guard.join("\n")
+    let ((), lines) = capture_lines(LineFormat::LevelTargetFields, f);
+    lines.join("\n")
 }
