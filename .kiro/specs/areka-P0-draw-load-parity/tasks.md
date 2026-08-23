@@ -235,14 +235,14 @@
   - _Requirements: 5.9, 8.2, 8.3, 8.4_
   - _Boundary: COMPAT, briefs_
 
-- [ ] 9. 自走ループの実施（仕組みを回す・1 周＝SELECT→IMPLEMENT→TEST→REMEASURE→DECIDE→RECORD を単位に検証する）
+- [x] 9. 自走ループの実施（仕組みを回す・1 周＝SELECT→IMPLEMENT→TEST→REMEASURE→DECIDE→RECORD を単位に検証する）
 - [x] 9.1 ループ起動前の統合確認
   - origin/main を取り込み、設計の file:line と実装の一致を再突合。ワークスペース全テスト緑・`perf-loop.ps1 selftest` 緑・`preflight` を実行して能力（昇格・xperf・PDB・版・check-in 実効値）を台帳へ。goal-text でトークン入りの条件文を出力（4,000 字未満）
   - 観測可能な完了状態: 台帳に PREFLIGHT の capabilities 行と最初の STATUS 行があり、/goal に貼る条件文が得られている
   - _Requirements: 1.6, 1.11, 2.11, 8.1_
   - _Depends: 7.5, 8.1_
 
-- [ ] 9.2 ベースラインと周 1（tick の門の A/B）
+- [x] 9.2 ベースラインと周 1（tick の門の A/B）
   - _Unblocked 2026-08-23: 開発者指示「解除して結構。進めてください。今後は止めないように」。Blocked 注記（環境起因＝NOT_QUIET／非昇格／入力注入）は解除。非昇格は段③ UNAVAILABLE のまま続行（exit 5）。ループは本セッション（kiro-impl 9.2〜9.4）で perf-loop-iteration の手順どおりに回す。_
   - BASELINE: release 25 分・dev 25 分・順位付け 7 分を別コマンド・別ターンで回し `results/baseline-<date>/` へ判定出力と順位表。周 1 は門の既定 ON（B）対 OFF（A）の交互比較で既定値を決め、台帳に `hypothesis: tick gate default ON` と「周 1 は仕組みの A/B」を記す（順位表からの選択は周 2 以降）
   - ADOPTED なら既定 ON を 1 コミット、NO_DIFF／WORSE なら既定 OFF のまま残す（純関数とテストは残す）
@@ -250,7 +250,7 @@
   - _Requirements: 1.2, 1.7, 1.8, 2.7, 3.2, 5.4, 7.6_
   - _Depends: 9.1_
 
-- [ ] 9.3 周 2 以降の周回（順位表→候補→採否）を停止条件まで
+- [x] 9.3 周 2 以降の周回（順位表→候補→採否）を停止条件まで
   - _Unblocked 2026-08-23: 開発者指示「解除して結構。進めてください。今後は止めないように」。Blocked 注記（環境起因＝NOT_QUIET／非昇格／入力注入）は解除。非昇格は段③ UNAVAILABLE のまま続行（exit 5）。ループは本セッション（kiro-impl 9.2〜9.4）で perf-loop-iteration の手順どおりに回す。_
   - 1 周の単位: SELECT（順位表の最上位から候補＝実行器の単スレッド化〔前提テスト 2 本の字面検査を同じコミットで新しい構築形へ改訂〕・文字層レイアウトの変化時のみ化・visual 走査の絞り込み・ポインタ状態の既定値時非書込・カーソル監視の二段周期・ループ ticker 周期〔SERIKO の最短 interval を README へ・⑴ p95 必見〕・flush 駆動）→IMPLEMENT→TEST（全テスト＋追随チェック）→REMEASURE→DECIDE→RECORD。周ごとに台帳 1 エントリと STATUS 行で検証できる
   - 別 spec の担当ファイルは稼働確認のうえ、稼働中なら触らず報告・非稼働なら変更して brief へ申し送り。大きい変更は 3 条件規則で採否。catch-up の系統別突合の結果を台帳に記し、仮説の成立／不成立を数値で
@@ -259,7 +259,7 @@
   - _Boundary: perf-loop-iteration 駆動＋候補 C17–C19 の該当ファイル（wintf world／visual_sync／pointer systems／clickthrough monitor・areka-emo-text actor・areka-ghost ticker）_
   - _Depends: 9.2_
 
-- [ ] 9.4 最終判定と未達の登記
+- [x] 9.4 最終判定と未達の登記
   - _Unblocked 2026-08-23: 開発者指示「解除して結構。進めてください。今後は止めないように」。Blocked 注記（環境起因＝NOT_QUIET／非昇格／入力注入）は解除。非昇格は段③ UNAVAILABLE のまま続行（exit 5）。ループは本セッション（kiro-impl 9.2〜9.4）で perf-loop-iteration の手順どおりに回す。_
   - 25 分 release／dev→verdict を `results/final-<date>/` へ、summary.md（brief の旧数値との対比表）。GOAL_MET か STOPPED の FINAL 行（トークン入り）を印字
   - 未達（⑵ または ⑷a）なら requirements.md の改訂欄に残る最大項と引受先を登記。触った場所の改訂欄登記と各 brief の申し送りを最終形へ更新（SELF_INITIATED_DEPTH の着地形・tick 構造・`Cargo.toml` に触れたか）
@@ -300,3 +300,4 @@
 - (最終検証後の是正・2026-08-23) ⑴ 静寂確認を**負荷ベース**へ: `[quiet].heavy_process_names` は窓内の CPU（マシン全体％＝`machine_cpu_max_pct` と同じ土俵・Δ TotalProcessorTime÷(窓秒×論理 CPU 数)）が `heavy_process_cpu_min_pct`（既定 1.0）以上のときだけ該当、`heavy_process_presence`（既定 `["areka"]`）は在るだけで該当。遊休 rust-analyzer（6.0% の機械で名前だけで NOT_QUIET になっていた＝要件 1.5 との矛盾）を解消。出力は既存キー不変・末尾に `heavy_process_cpu_min_pct=`／`heavy_process_presence=`／`heavy_process_busy=` を追加。**`[target]` は 1 コア換算・`[quiet]` はマシン全体％と土俵が 2 つ同居**（読み違い注意・TOML 注釈に明記）。⑵ 台帳に `not_quiet_retries`（`set-phase --not-quiet-retries`）・スキルの code=2 規則と TOOLFIX 入場で 0 へ戻す。⑶ `[followup].required` は**どの道具も読んでいなかった**→ `perf-loop.ps1 followup` が読んで `-Checks` へ渡し、`judge-followup.py` の balloon_follow は必須の動かし手（drag/dpi の部分集合）だけに従属するよう修正。単一モニタ機は `required` から `dpi` を外せば採用可能に。`judge-followup.py` は自己較正を `judge_followup_selftest.py` へ分離（931 行）・fixture は **4 ケース**（`no_dpi_required` 追加＝設計 C13／tasks 6.4 の「3 ケース」は 9.4 で追随）。⑷ 解除条件へ `CLAUDE_CODE_GOAL_CHECKIN_MINUTES=60`・DPI 2 面（または required から dpi 除外）・残留 areka/python を追記。⑸ 設計 C1 の TOML 例は `[target]  # …` のように節見出しの後ろに注釈を置くが、PowerShell 側の簡易読取は `^\[...\]\s*$` なので**節見出し行に注釈を置くと節ごと読めなくなる**（出荷 TOML は回避済み・9.4 で設計例を直す）。`[followup] required = []` は既定 4 検査へ戻る（`heavy_process_presence = []` は「置かない」）＝空配列の意味が 2 通り（申し送り）。
 - (9.2/9.3 実施・2026-08-23) ループ実走で道具の穴を 4 つ踏んだ（いずれもコミット済み）: ① 合否判定の走行の隣に 32bit SHIORI ヘルパが無い→走行直前に複製（`Sync-MeasureShioriHelper`）② 性能カウンタの一過性失敗→`check-quiet` 1.0.1 で 3 回採り直し ③ `-Checks` を引用した 1 文字列で渡すと子が未知の検査名→子側で `,` 分割 ④ **`-BinDir` 無しの走行が前の周の B／A 実行体を黙って測る**→走行直前に作業ツリーから作り直す（`Sync-MeasureWorktreeBuild`）。④ のため周 1 の「門 ON がドラッグを壊す」は A 実行体での不再現の失敗と判明（台帳に CORRECTION を登記）。また実装係の書き込みが CRLF で `git restore` 後に行末差だけ残る→`git show HEAD:<f> > <f>` で byte 復元（スキルへ追記済み）。
 - (9.2 実施) 画面ロック中は `SetCursorPos`／`SendInput` が拒まれ追随チェックが INCONCLUSIVE になる。本セッションでは「デスクトップが触れる＋静か」を 90 秒おきに確かめてから起動する包み（scratchpad の `ready-wait-run.ps1`）で背景起動した。背景タスクでも入力注入は通る（ロックが原因であって背景実行が原因ではない）。
+- (9.2〜9.4 完了・2026-08-23) ループは周 3 で頭打ち（plateau）→ FINAL → STOPPED（採用 0・挙動不変）。未達 ⑵⑶⑷a（final release 22.3%）・残る最大項 段② unregistered_rest 51.8%・引受先なし（新規 spec 要）を requirements.md 改訂欄へ登記。証跡＝loop-ledger.md／results/{baseline-20260823,iter-1..3,final-20260823,summary.md}。合否外の手がかり＝門 ON＋点灯 7 分で 3.30%（目標近傍）。仕組み側の課題（A/B 7 分 n=2 の分解能・副指標 count 規則・昇格で段③）は改訂欄に列挙。
