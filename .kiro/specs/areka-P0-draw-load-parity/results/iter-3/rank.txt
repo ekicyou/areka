@@ -1,0 +1,78 @@
+perf-rank 0.1.0 run=rank stages=process,thread,function,phase top=10
+
+[1] プロセス  unit=cpu  1 コア換算 %  出所=cpu.csv  基準=steady
+  steady_mean_pct                    11.01
+  p50_pct                            10.89
+  p95_pct                            21.73
+  max_pct                            23.33
+  talk_peak_pct                      23.33
+  samples_total                         28
+  samples_steady                        24
+  注記: 定常＝起点から 60.0 秒（WARMUP_EXCLUDE_SEC）を除く。起点=perf_apply_show 2026-08-23T06:50:58Z ／ 定常の始まり 2026-08-23T06:51:58Z
+  注記: 発話中の頂＝apply(ShowSurface) の前後 10.0 秒に重なる採取点の最大（合否外）
+  注記: SSP 参考値 idle=3.05 talk_peak=4.64（2026-08-15 実測・参考値・合否外）
+  注記: 実行条件 build=release logical_processors=22
+
+[2] スレッド  unit=cpu  出所=perf(thread)／perf(process)  基準=delta
+  window_s                            60.0
+  process_cpu_s                     11.312
+  registry_cpu_s                     5.453
+  unregistered_rest_cpu_s            5.859
+  snapshots                              8
+  役割別（上位 10）
+    rank  role                             cpu_s    share_pct
+       1  unregistered_rest                5.859        51.80
+       2  ui                               5.000        44.20
+       3  ticker_loop                      0.219         1.93
+       4  cursor_monitor                   0.125         1.10
+       5  actor:seriko                     0.047         0.41
+       6  vblank                           0.047         0.41
+       7  ticker_dispatcher_kanade         0.016         0.14
+       8  actor:down-relay                 0.000         0.00
+       9  actor:ghost-dispatcher           0.000         0.00
+      10  actor:kanade                     0.000         0.00
+    … 他 22 件
+  スレッド別（上位 10）
+    rank       tid  name                      role                           cpu_s    share_pct
+       1         0  -                         unregistered_rest              5.859        51.80
+       2     36652  main                      ui                             5.000        44.20
+       3     24508  loop-ticker               ticker_loop                    0.219         1.93
+       4     21672  wintf-cursor-monitor      cursor_monitor                 0.125         1.10
+       5     34116  seriko                    actor:seriko                   0.047         0.41
+       6     35072  wintf-vsync               vblank                         0.047         0.41
+       7     36700  ticker                    ticker_dispatcher_kanade       0.016         0.14
+       8      3616  sakura-talk-13            actor:sakura-talk-13           0.000         0.00
+       9      8456  sakura-talk-7             actor:sakura-talk-7            0.000         0.00
+      10      8552  sakura-talk-5             actor:sakura-talk-5            0.000         0.00
+    … 他 22 件
+
+[3] 関数 UNAVAILABLE reason=not_elevated
+  注記: 段③（CPU サンプリング）の成果物が無いので関数別の帰属は出せない。昇格した PowerShell から回すと採れる。
+
+[4] 相  unit=wall  出所=[tick] kind=window
+  windows                              418
+  ticks_total                        50292
+  skipped_total                          0
+  heartbeat_total                        0
+  window_s                         419.694
+  ticks_per_s                       119.83
+  skip_ratio_pct                      0.00
+  heartbeat_ratio_pct                 0.00
+  avg_tick_wall_us                   614.1
+  max_tick_wall_us                  127646
+  ui_cpu_us_per_s                  53349.9
+  wall_us_total                   30885675
+  13 本のスケジュール（上位 10）
+    rank  name                    sum_us   share_pct      avg_us
+       1  framefinalize         10501695       34.00       208.8
+       2  draw                   6882236       22.28       136.8
+       3  input                  3215438       10.41        63.9
+       4  layout                 2870381        9.29        57.1
+       5  update                 2483637        8.04        49.4
+       6  postlayout             2098129        6.79        41.7
+       7  prelayout              1034863        3.35        20.6
+       8  uisetup                 656480        2.13        13.1
+       9  prerendersurface        319862        1.04         6.4
+      10  composition             211770        0.69         4.2
+    … 他 3 件
+  注記: 13 本は壁時計 µs（GPU 待ちを含む）。ui_cpu_us だけが UI スレッドの CPU 時間。
