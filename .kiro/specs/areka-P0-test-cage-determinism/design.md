@@ -500,7 +500,7 @@ fn settle_bounded(step: impl FnMut() -> usize);
 const SETTLE_MIN: Duration;          // 初期値 200ms（tasks で実測調整）
 const SETTLE_QUIET_ROUNDS: u32;      // 初期値 50
 ```
-- `spine_display_tests.rs:410-414`: 前段 `for now in 1_000_000u64..1_000_000 + 5_000 { harness.inject_dispatcher_tick(now); received.extend(harness.wiring.drain_received()); }`（旧ループと同じ注入列・`yield_now` は不要）→ 後段 `settle_bounded(|| { let got = harness.wiring.drain_received(); received.extend(got.iter().cloned()); got.len() })`。Tick 生成と打ち切り条件は別の文になり、注入範囲は旧テストと同一。
+- `spine_display_tests.rs:410-414`: 前段 `for now in 1_000_000u64..1_000_000 + 5_000 { harness.inject_dispatcher_tick(now); received.extend(harness.wiring.drain_received()); }`（旧ループと同じ注入列・`yield_now` は不要）→ 後段 `settle_bounded(|| { let got = harness.wiring.drain_received(); let n = got.len(); received.extend(got); n })`（**2026-08-24 実装時の訂正**: 当初 `received.extend(got.iter().cloned())` と書いたが**コンパイル不能**。`PresentCommand` は `Option<ReplySender<PresentOutcome>>` を持ち、`ReplySender::send(self)` は「返信は高々 1 回」を型で保証するため self を消費する。したがって `Clone` は未導出なのではなく**意味的に禁止**されている。所有権を移す形が正しく、複製も発生しない）。Tick 生成と打ち切り条件は別の文になり、注入範囲は旧テストと同一。
 - `spine_seriko_loop_tests.rs:372-375`: 外側の seriko tick 注入はそのまま、内側を `settle_bounded(|| { let got = drain; emitted.extend(..); got.len() })` に。
 - module doc `spine.rs:20-21` の「負検証の settle drain だけは従来どおり `yield_now` のみ」を本ヘルパの説明へ更新。
 

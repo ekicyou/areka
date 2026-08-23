@@ -1,7 +1,7 @@
 use super::test_support::{bump_char_window_dpi, opaque_count, variant_name};
 use super::{
     Duration, Instant, LoopRng, PresentCommand, SPIN_WAIT, SpineHarness, capture_logs,
-    run_attach_phase, run_dpi_phase, shell_target, spin_wait_until,
+    run_attach_phase, run_dpi_phase, settle_bounded, shell_target, spin_wait_until,
 };
 
 // ===========================================================================
@@ -368,11 +368,15 @@ fn spine_e2e_sakura_blink_default_off_emits_nothing() {
     let mut emitted: Vec<PresentCommand> = Vec::new();
     for now in [1000u64, 2000, 3000, 4000, 5000] {
         harness.inject_seriko_tick(now); // 各々 1000ms 絶対グリッド境界を跨ぐ
-        // 有界 settle drain（spine_s4 の負検証と同流儀・sleep 不使用・yield_now のみ）。
-        for _ in 0..5_000 {
-            emitted.extend(harness.wiring.drain_received());
-            std::thread::yield_now();
-        }
+        // 有界 settle drain（spine_s4 の負検証と同流儀）: 打ち切りは反復回数ではなく壁時計の
+        // 最小持続と連続空観測で決まる（要件 4.2・4.5）。時刻注入は外側のこの `for` が担い、
+        // ヘルパは回収しかしない＝時刻が観測を追い越さない（要件 4.3）。
+        settle_bounded(|| {
+            let got = harness.wiring.drain_received();
+            let n = got.len();
+            emitted.extend(got);
+            n
+        });
     }
     // R3.4 の檻: bind ゲート OFF は always_fire でも抽選を塞ぐ＝発行ゼロ（ゲート leak なら pattern 搬送指令が漏れる）。
     assert!(
