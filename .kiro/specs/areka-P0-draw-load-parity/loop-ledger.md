@@ -1,7 +1,7 @@
 ## 状態
 - goal: draw-load-parity
 - iteration: 3
-- phase: WAIT_FINAL
+- phase: FINAL
 - pending_run: C:\Users\maz-o\AppData\Local\areka-diag\perf-loop\draw-load-parity\final-20260823\dev
 - streak_no_gain: 3
 - best_idle_cpu_pct: 15.80
