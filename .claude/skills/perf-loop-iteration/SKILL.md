@@ -32,7 +32,7 @@ pwsh -NoProfile -File tools/perf/perf-loop.ps1 <sub> -Goal <goal> …
 |---|---|---|
 | 0 | 完了 | 次へ進む |
 | 1 | 実走の失敗 | 同じ引数で 1 回だけやり直す。なお失敗なら計測失敗と同じ扱い |
-| 2 | 静かでない | 周の記録の `reason` に `not_quiet` を書き、**次のターンで同じコマンドを 1 回だけ**やり直す。2 度目も 2 なら計測失敗 |
+| 2 | 静かでない | `set-phase <今の相> --goal <goal> --not-quiet-retries <n+1>`（`n` は台帳の `not_quiet_retries`。`-`／空なら 0）を書いてから、**次のターンで同じコマンドを 1 回やり直す**。`not_quiet_retries` が 1 を超えたら計測失敗（TOOLFIX へ）。周の記録の `reason` には `not_quiet` を残し、TOOLFIX に入ったら `--not-quiet-retries 0` で戻す |
 | 3 | 引数・前提の不正 | 自分の呼び方の誤り。引数を直して 1 回だけやり直す。直らなければ TOOLFIX |
 | 4 | 計測失敗（MEASURE_FAILED） | TOOLFIX へ |
 | 5 | 能力不足（UNAVAILABLE） | **止まらない。** 段③を欠いたまま続け、理由語を台帳へ書く |
@@ -47,7 +47,7 @@ pwsh -NoProfile -File tools/perf/perf-loop.ps1 <sub> -Goal <goal> …
 
 1. `python tools/perf/perf-ledger.py state --goal <goal>` を実行する。
    - **成功したら** `phase` `iteration` `pending_run` `streak_no_gain` `previous_phase`
-     `toolfix_used` `run` `baseline_idle_cpu_pct` `best_idle_cpu_pct` を控える。以下 `<n>` ＝
+     `toolfix_used` `not_quiet_retries` `run` `baseline_idle_cpu_pct` `best_idle_cpu_pct` を控える。以下 `<n>` ＝
      `iteration`（今の周）。「相ごとの手順」へ。
    - **台帳が無い（exit 3・「台帳の在り処」「ありません」）** → 下の「周 0」へ。
 2. 周 0（台帳が無いときだけ）:
@@ -252,7 +252,7 @@ before_idle_cpu_pct  after_idle_cpu_pct  delta_pct  noise_pct  secondary  verdic
 入るときに戻り先と回数を台帳へ書く。**ここを書かないと次のターンが戻り先を見失う。**
 
 ```
-python tools/perf/perf-ledger.py set-phase TOOLFIX --goal <goal> --previous-phase <計測が失敗した相> --toolfix-used <toolfix_used + 1>
+python tools/perf/perf-ledger.py set-phase TOOLFIX --goal <goal> --previous-phase <計測が失敗した相> --toolfix-used <toolfix_used + 1> --not-quiet-retries 0
 ```
 
 `toolfix_used`（更新後）が `[stop].toolfix_retry` を超えていたら、直さずに
@@ -326,7 +326,9 @@ pwsh -NoProfile -File tools/perf/perf-loop.ps1 selftest -Goal <goal>
    ターンを終える（待つ）。
    **例外——背景タスクがこのセッションに存在しない場合。** 起動した背景コマンドの完了通知が
    このセッションに無い（別のセッションで再開した・要約で失われた・前回の起動が `code=2`
-   で終わっていた）のに成果物も無いときは、進行中ではなく**起動し直す**。同じコマンドに
+   で終わっていた）のに成果物も無いときは、進行中ではなく**起動し直す**。`code=2`
+   で終わっていた場合は、起動し直す前に上の `code=2` の規則（`not_quiet_retries` を
+   1 つ増やし、1 を超えていれば TOOLFIX）を先に当てる。同じコマンドに
    `-Resume` を付けて背景起動する（完了済みの成果物は再利用され、無ければ走る）。`cargo test`
    だけは `-Resume` が無いので同じコマンドをもう一度起動する。
 3. 完了していれば、同じコマンドに `-Resume` を付けて 1 回だけ呼び、成果物を作り直さずに

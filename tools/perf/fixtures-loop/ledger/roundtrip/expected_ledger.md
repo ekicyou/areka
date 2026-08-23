@@ -11,6 +11,7 @@
 - capabilities: -
 - previous_phase: -
 - toolfix_used: 0
+- not_quiet_retries: 0
 
 ## 周 1 — 2026-08-23T01:23:45Z
 - hypothesis: 変化が無い tick で 13 本を回さない（tick gate）

@@ -89,8 +89,15 @@ toolfix_retry = 1
 machine_cpu_max_pct = 10.0
 # 上の平均を採る秒数（1 秒刻み）。
 sample_sec = 20
-# 走っていたら静かでないと見なすプロセス名（測る対象の areka は -TargetPid で除外される）。
+# 採取の窓の間に実際に働いていたら静かでないと見なすプロセス名
+# （測る対象の areka は -TargetPid で除外される。名前が当たるだけでは該当としない）。
 heavy_process_names = ["cargo", "rustc", "rust-analyzer", "msbuild", "link", "cl", "areka", "python"]
+# 上の名前を「働いている」と読む下限（％＝Δ CPU 時間 ÷（窓の秒数 × 論理 CPU 数））。
+# 遊休の rust-analyzer や待っているだけの python で採取をやり直させないため（要件 1.5）。
+heavy_process_cpu_min_pct = 1.0
+# 負荷によらず、在るだけで静かでないと見なす名前。別の areka は軽くても GPU と合成器を
+# 分け合うので、測定条件そのものが変わる。
+heavy_process_presence = ["areka"]
 # 最初の 1 回の後に確かめ直す回数（合計 retry_max + 1 回）。
 retry_max = 3
 # 確かめ直しまでの待ち秒数。

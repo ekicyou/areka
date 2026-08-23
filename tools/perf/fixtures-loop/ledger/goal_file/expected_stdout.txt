@@ -10,5 +10,6 @@
   "run": "4f2a91c7",
   "capabilities": "function_stage=UNAVAILABLE",
   "previous_phase": null,
-  "toolfix_used": null
+  "toolfix_used": null,
+  "not_quiet_retries": null
 }

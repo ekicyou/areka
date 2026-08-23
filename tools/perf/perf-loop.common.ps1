@@ -24,7 +24,10 @@ perf-loop.common.ps1 — perf-loop.ps1 が dot-source する共通部品
                        素の `& $exe` 捕捉は親の端末のコードページで復号するため、
                        CP932 の端末から回すと日本語が化けて字面の比較が偽の不一致になる
   ⒞ 目標定義の読み   … Read-TomlSections / Get-GoalConfig / Get-JudgeScriptVersion
-                       TOML は最小の解釈器（外部モジュールを使わない）
+                       Get-MeasureToml / Get-MeasureTomlInt / Get-MeasureTomlArray
+                       TOML は最小の解釈器（外部モジュールを使わない）。
+                       Get-Measure* は $script:GoalConfig.Toml を引く節・鍵の読み口で、
+                       呼び手は計測の本体（perf-loop.measure.ps1）＝置き場だけがここ
   ⒟ 出力先の配置     … Get-LoopDir / Resolve-RunDir / New-LoopDir / Test-ResumeArtifact
                        %LOCALAPPDATA%\areka-diag\perf-loop\<goal>\… の唯一の所在
 
@@ -386,6 +389,44 @@ function Get-GoalConfig {
         SamplingBackend = $backend
         Toml            = $toml
     }
+}
+
+# =============================================================================
+# 目標定義の読み（節・鍵が無ければ既定値。目標定義が唯一の所在＝要件 1.1）
+# =============================================================================
+# 読む対象は $script:GoalConfig.Toml（入口の perf-loop.ps1 が Get-GoalConfig で入れる）。
+# 計測サブコマンド（perf-loop.measure.ps1）から呼ばれるが、置き場はここ（行数上限）。
+function Get-MeasureToml {
+    param([Parameter(Mandatory = $true)][string]$Section, [Parameter(Mandatory = $true)][string]$Key, [string]$Default)
+    if (-not $script:GoalConfig) { return $Default }
+    $value = Get-TomlString -Toml $script:GoalConfig.Toml -Section $Section -Key $Key
+    if ($null -eq $value -or [string]::IsNullOrWhiteSpace($value)) { return $Default }
+    return $value
+}
+
+function Get-MeasureTomlInt {
+    param([Parameter(Mandatory = $true)][string]$Section, [Parameter(Mandatory = $true)][string]$Key, [int]$Default)
+    if (-not $script:GoalConfig) { return $Default }
+    $value = Get-TomlInt -Toml $script:GoalConfig.Toml -Section $Section -Key $Key
+    if ($null -eq $value) { return $Default }
+    return $value
+}
+
+# 1 行の配列（["A", "B", "A", "B"]）を文字列の配列へ。読めなければ既定値を返す
+# （目標定義ファイルは配列を 1 行に保つ決まり＝tasks.md Implementation Notes (5.1)）。
+function Get-MeasureTomlArray {
+    param([Parameter(Mandatory = $true)][string]$Section, [Parameter(Mandatory = $true)][string]$Key, [string[]]$Default)
+    $raw = Get-MeasureToml -Section $Section -Key $Key
+    if (-not $raw) { return $Default }
+    $text = $raw.Trim()
+    if (-not ($text.StartsWith('[') -and $text.EndsWith(']'))) { return $Default }
+    $items = @()
+    foreach ($part in ($text.Substring(1, $text.Length - 2) -split ',')) {
+        $piece = $part.Trim().Trim('"').Trim()
+        if ($piece) { $items += $piece }
+    }
+    if ($items.Count -eq 0) { return $Default }
+    return $items
 }
 
 # judge-perf.py の SCRIPT_VERSION の先頭語（例 "0.4.0"）を、スクリプトを起動せずに読む。

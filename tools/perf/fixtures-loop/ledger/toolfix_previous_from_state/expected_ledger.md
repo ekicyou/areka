@@ -11,3 +11,4 @@
 - capabilities: -
 - previous_phase: -
 - toolfix_used: 1
+- not_quiet_retries: 2

@@ -1,4 +1,4 @@
 title=TOOLFIX の戻り先を台帳から読む（--previous 省略時は状態の previous_phase・明示は台帳より強い）
 stderr_substr=直前の相
 stderr_substr=previous_phase
-note=道具を直した回数 toolfix_used も状態に置く（[stop].toolfix_retry と突き合わせるのは呼び手）。
+note=道具を直した回数 toolfix_used と、静かでないまま採り直した回数 not_quiet_retries も状態に置く（上限と突き合わせるのは呼び手）。

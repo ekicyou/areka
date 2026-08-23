@@ -10,7 +10,8 @@
   "run": null,
   "capabilities": null,
   "previous_phase": null,
-  "toolfix_used": 0
+  "toolfix_used": 0,
+  "not_quiet_retries": 0
 }
 {
   "hypothesis": "変化が無い tick で 13 本を回さない（tick gate）",
@@ -64,5 +65,6 @@
   "run": null,
   "capabilities": null,
   "previous_phase": null,
-  "toolfix_used": 0
+  "toolfix_used": 0,
+  "not_quiet_retries": 0
 }

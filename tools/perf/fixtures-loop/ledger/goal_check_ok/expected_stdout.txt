@@ -11,6 +11,7 @@ GOAL-CHECK ok judge_version=0.4.0 token=12345678
   "run": "12345678",
   "capabilities": null,
   "previous_phase": null,
-  "toolfix_used": 0
+  "toolfix_used": 0,
+  "not_quiet_retries": 0
 }
 GOAL-CHECK ok judge_version=0.4.0 token=12345678

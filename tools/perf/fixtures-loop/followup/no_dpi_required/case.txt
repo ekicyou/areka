@@ -1,0 +1,3 @@
+# 見た目の追随チェックの自己較正ケース（必須集合を狭めた側）
+title=DPI の違うモニタが 1 面しか無く required= から dpi を外した走行（balloon_follow は drag だけを見て PASS・総合 PASS）
+exit=0

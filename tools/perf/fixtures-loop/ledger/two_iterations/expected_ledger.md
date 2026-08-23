@@ -11,6 +11,7 @@
 - capabilities: -
 - previous_phase: -
 - toolfix_used: 0
+- not_quiet_retries: 0
 
 ## 周 1 — 2026-08-23T01:00:00Z
 - hypothesis: 1 周目

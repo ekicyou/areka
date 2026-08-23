@@ -604,7 +604,14 @@ CPU ではないためです。引受先は `present-write-coherence` です。
   **必ず新しいセッションを開き直してから**ループを起動してください。
 - **`CLAUDE_CODE_GOAL_CHECKIN_MINUTES=60` を設定する。** 既定は 30 分で、25 分水準の計測が
   背景で走っている最中に様子うかがい（check-in）が割り込みます。`preflight` が実効値を読み、
-  25 分未満なら警告を出します。
+  25 分未満なら警告を出します。**セッションを起動する前の環境変数として**設定してください
+  （`[goal_runtime].checkin_minutes` は推奨値の記載であって、道具が設定するものではありません）。
+- **DPI の違うモニタが 2 面あること。** 無ければ見た目の追随チェックの `dpi` が永久に
+  判定不能になり、**1 周も採用できません**（§17）。1 面しか無い機械で回すときは、開発者の
+  判断で目標定義の `[followup] required` から `dpi` を外してから始めます（この値は
+  `perf-loop.ps1 followup` が `-Checks` へ渡すので、書き換えるだけで効きます＝§17）。
+- **前回の走行が残した `areka.exe` と `python` を落としておく。** 別の areka は在るだけで、
+  働いている `python` は負荷で、静寂確認に引っかかります（§15）。
 - **昇格した PowerShell から起動すると段③（関数別の帰属）が使えます。** 非昇格でも止まりません
   ——段③だけを `UNAVAILABLE reason=not_elevated` と記して段①②④で続きます（能力不足の
   終了コード 5 は停止の理由にしません）。
@@ -702,6 +709,7 @@ python tools/perf/perf-ledger.py goal-text --goal draw-load-parity
 - capabilities: -             ← preflight が測った道具の可否
 - previous_phase: -           ← 道具を直す相（TOOLFIX）から戻る先
 - toolfix_used: 0             ← 道具を直した回数（[stop].toolfix_retry と突き合わせる）
+- not_quiet_retries: 0        ← 静かでないまま採取をやり直した回数（1 を超えたら計測失敗）
 
 ## 周 3 — 2026-08-23T01:23:45Z
 - hypothesis / candidate / files_changed / runs / before_idle_cpu_pct / after_idle_cpu_pct /
@@ -923,7 +931,8 @@ pwsh -File tools/perf/check-quiet.ps1 -Stage before -OutDir C:\出力先 -Goal d
 ```
 
 - マシン全体の CPU（`\Processor(_Total)\% Processor Time`）を 20 秒・1 秒刻みで採った平均と最大、
-  および既知の重いプロセスの有無を見ます（測る対象の areka は `-TargetPid` で除外します）。
+  および既知の重いプロセスが**実際に働いていたか**を見ます（測る対象の areka は `-TargetPid` で
+  除外します）。
 - 出力は `quiet-<段階>.txt`（平均・最大・該当プロセス一覧・判定・時刻）。判定語は
   `QUIET`／`NOT_QUIET`／`MEASURE_FAILED`、理由語は `ok`／`cpu_mean_over_threshold`／
   `heavy_process_present`／`both`／`counter_read_failed` の 5 つです。
@@ -936,9 +945,20 @@ pwsh -File tools/perf/check-quiet.ps1 -Stage before -OutDir C:\出力先 -Goal d
 - **失敗した採取のフォルダは `-FAILED` を付けた名前へ退避されます**（第 4 節）。`-AutoQuiet` で
   起動前に失敗したときは `quiet-before.txt` がその退避先に残ります（`run-meta.txt` は起動前
   なので在りません）。静寂の根拠を読むときは退避先も見てください。
-- **重いプロセス名に `python` と `areka` が入っています。** ループ自身の道具（判定スクリプトや
-  順位表）が動いている最中に確認を呼ぶと `heavy_process_present` になります。確認は計測の
-  直前・直後に置き、解析と重ねないでください。
+- **重いプロセスは「名前が在るか」ではなく「働いていたか」で見ます（2026-08-23 の是正）。**
+  `[quiet].heavy_process_names` に載っている名前でも、上の採取窓の間に使った CPU が
+  `[quiet].heavy_process_cpu_min_pct`（既定 1.0%）に満たなければ該当としません。使った量は
+  各プロセスの CPU 時間を窓の前後で読み、`Δ(CPU 時間) ÷（窓の秒数 × 論理 CPU 数）× 100` で
+  出します（マシン全体 CPU と同じ土俵の％）。**在るだけで落とす名前**は
+  `[quiet].heavy_process_presence`（既定 `["areka"]`）に別に並べます——別の areka は負荷が
+  軽くても GPU と合成器を分け合うので、測定条件そのものが変わるためです。CPU 時間を読めなかった
+  プロセス（別の利用者・保護されたプロセス）は遊休だと言えないので該当とし、`n/a` と記録します。
+  これは開発者の VS Code が常に起動している**遊休の `rust-analyzer` だけで採取が 4 回とも
+  やり直しになった**のを止めるための是正です（要件 1.5＝開発者の手作業を前提条件にしない）。
+  報告の末尾 3 行 `heavy_process_cpu_min_pct=`・`heavy_process_presence=`・
+  `heavy_process_busy=<pid:name:％;…>` にその根拠が残ります。
+- **ループ自身の道具（判定スクリプトや順位表）を計測と重ねない。** `python` は上の規則で
+  「働いていれば」該当になります。確認は計測の直前・直後に置いてください。
 
 ---
 
@@ -1073,7 +1093,17 @@ python tools/perf/judge-followup.py C:\出力先        # 判定だけをやり�
   確かめます（`SetCursorPos` は呼んだあと `GetCursorPos` で本当に動いたかを読み戻します——
   戻り値だけでは偽の成功を弾けません）。
 - **`dpi` の検査には DPI の違うモニタが 2 面要ります。** 混在が無ければ判定不能です
-  （実機 2 面〔192／144〕では合格しています）。
+  （実機 2 面〔192／144〕では合格しています）。**自走ループでは、これが 1 面の機械で回せない
+  理由になります**——判定不能は採用の根拠にならないので、`dpi` が判定不能のままだと総合が
+  永久に PASS にならず、1 周も採用できません。1 面しか無い機械で回すときは、開発者の判断で
+  目標定義の `[followup] required` から `dpi` を外してください。**この値は
+  `perf-loop.ps1 followup` が読み、`invoke-followup-checks.ps1` の `-Checks` へそのまま
+  渡します**（`perf-loop.measure.ps1` の `Invoke-SubFollowup`）——目標定義ファイルを
+  書き換えるだけで実走の必須集合が変わります。checker はその集合を `probe.log` の
+  `check=session step=begin required=` へ書き、`judge-followup.py` はその行だけを
+  「どれを必須とするか」の定義元として読むので、外した検査は総合判定に効きません。
+  固定語彙（`clickthrough`／`drag`／`dpi`／`balloon_follow`）以外を書くと
+  `perf-loop.ps1 followup` が終了コード 3 で止まります。
 
 ### 設計との差分・注意
 

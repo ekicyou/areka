@@ -33,20 +33,28 @@ spec: areka-P0-draw-load-parity（要件 1.5 / 4.7・design.md「計測の道具
 `CHECK_ALL`（検査の固定語彙・判定表の並び順）・`DRAG_DX_PX`／`DRAG_TOL_PX`（ドラッグの
 距離と許容差）・`WRITE_POS_TOL_PX`（窓書込ログと OS の実位置の許容差）・
 `BALLOON_REL_TOL_PX`（バルーンのキャラ窓相対位置の許容差）・`SELFTEST_*`（自己較正）。
+
+`--selftest` のハーネスは兄弟モジュール `judge_followup_selftest.py` に在る（本ファイルを
+1,000 行の目安に収めるため＝要件 6.8）。入口は変わらず `judge-followup.py --selftest` で、
+ケースの置き場も `fixtures-loop/followup/<名前>/` のままである。
 """
 
 from __future__ import annotations
 
 import argparse
 import contextlib
-import io
 import re
-import shutil
 import sys
-import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+
+# 兄弟モジュール（`judge_followup_selftest.py`）は本ファイルと同じディレクトリに在る。
+# 依存は常に「本体 → 兄弟」の一方向で、兄弟へは起動時に `SelftestEnv` で本体を渡す
+# （本ファイルの名前にはハイフンがあり、兄弟からは import できない＝循環しない）。
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import judge_followup_selftest  # noqa: E402
 
 # =============================================================================
 # 較正値
@@ -696,7 +704,19 @@ def judge_balloon_follow(obs: Observations, others: dict[str, Verdict]) -> Verdi
         return early
 
     # 相対位置は drag / dpi が実際に動かした前後で測る。動かせていなければ測る対象が無い。
-    depends = [name for name in (CHECK_DRAG, CHECK_DPI) if others.get(name) and others[name].verdict != PASS]
+    # 見るのは **必須の**（`required=` に在る）動かし手だけ。外された検査は道具が操作そのものを
+    # 行わない（invoke-followup-checks.ps1 は `-Checks` に無い検査を回さない）ので、一律に
+    # 見ると「dpi を外したのに balloon_follow が dpi 待ちで判定不能」となり、必須集合を狭めた
+    # 意味が消える——DPI の違うモニタが 1 面しか無い機械で 1 周も採れなくなる。
+    sources = [name for name in (CHECK_DRAG, CHECK_DPI) if name in obs.required]
+    if not sources:
+        return Verdict(
+            check,
+            INCONCLUSIVE,
+            "no_required_mover",
+            ["    required= に drag も dpi も無いため、前後で比べる操作そのものがありません。"],
+        )
+    depends = [name for name in sources if others.get(name) and others[name].verdict != PASS]
     if depends:
         return Verdict(
             check,
@@ -707,7 +727,9 @@ def judge_balloon_follow(obs: Observations, others: dict[str, Verdict]) -> Verdi
 
     details: list[str] = []
     failures: list[str] = []
-    for source, label in ((CHECK_DRAG, "ドラッグ"), (CHECK_DPI, "DPI 往復")):
+    labels = {CHECK_DRAG: "ドラッグ", CHECK_DPI: "DPI 往復"}
+    for source in sources:
+        label = labels[source]
         before = relative_offset(rects_by_phase(obs, source, "before"))
         after = relative_offset(rects_by_phase(obs, source, "after"))
         if before is None or after is None:
@@ -812,116 +834,27 @@ def render(obs: Observations, verdicts: dict[str, Verdict], overall: str, code: 
 #
 # 緑は道具が壊れていても出る。ゆえに合格を再現するケースと同格に、不合格・判定不能を
 # 再現するケースを置き、そのどちらも実際に走って期待どおりになったことを出力に出す。
-# 経路は実運用と同じ `main(argv)`（判定関数を直に叩く別経路は作らない）。期待値は各ケースの
-# `case.txt`（終了コード）と `expected_stdout.txt`（本文の逐語）。判定は出力ディレクトリへ
-# followup-verdict.txt を書くため、ケースは一時ディレクトリへ複製してから走らせる。
-
-
-@dataclass
-class SelftestCase:
-    name: str
-    directory: Path
-    title: str
-    expected: int
-
-
-def _selftest_read_case(directory: Path) -> SelftestCase:
-    path = directory / SELFTEST_CASE_FILENAME
-    if not path.is_file():
-        raise bad_input(
-            f"ケースに {SELFTEST_CASE_FILENAME} がありません: {directory}",
-            ["期待終了コードの書いていないケースは、走らせても合否を言えません。"],
-        )
-    fields: dict[str, str] = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#") or "=" not in stripped:
-            continue
-        key, _, value = stripped.partition("=")
-        fields[key.strip()] = value.strip()
-    if "exit" not in fields:
-        raise bad_input(f"{path} に exit がありません", ["必須項目: exit（任意: title）"])
-    try:
-        expected = int(fields["exit"])
-    except ValueError as exc:
-        raise bad_input(f"{path} の exit が整数ではありません（{fields['exit']!r}）") from exc
-    return SelftestCase(directory.name, directory, fields.get("title", "(説明なし)"), expected)
-
-
-def _selftest_invoke(argv: list[str]) -> tuple[int, str]:
-    out, err = io.StringIO(), io.StringIO()
-    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-        try:
-            code = main(argv)
-        except SystemExit as exc:
-            code = exc.code if isinstance(exc.code, int) else EXIT_BAD_INPUT
-    return code, out.getvalue()
-
-
-def _first_difference(want: str, got: str) -> str:
-    want_lines, got_lines = want.splitlines(), got.splitlines()
-    for index in range(max(len(want_lines), len(got_lines))):
-        a = want_lines[index] if index < len(want_lines) else "(行が無い)"
-        b = got_lines[index] if index < len(got_lines) else "(行が無い)"
-        if a != b:
-            return f"標準出力 {index + 1} 行目: 期待 {a!r} 実際 {b!r}"
-    return "差はありません"
+# 経路は実運用と同じ `main(argv)`（判定関数を直に叩く別経路は作らない）。
+#
+# ハーネスそのものは兄弟モジュール judge_followup_selftest.py に在る（本ファイルを
+# 1,000 行の目安に収めるため＝要件 6.8）。本体は道具立て（SelftestEnv）を渡すだけで、
+# 依存は常に「本体 → 兄弟」の一方向である。入口は変わらず --selftest。
 
 
 def run_selftest() -> int:
-    root = Path(__file__).resolve().parent / SELFTEST_FIXTURES_DIRNAME / SELFTEST_SUBDIR
-    if not root.is_dir():
-        raise bad_input(
-            f"自己較正のケース置き場がありません: {root}",
-            ["判定スクリプトと同じ場所の fixtures-loop/followup/ を見ます（相対位置のみ）。"],
+    return judge_followup_selftest.run_selftest(
+        judge_followup_selftest.SelftestEnv(
+            fixtures_root=Path(__file__).resolve().parent / SELFTEST_FIXTURES_DIRNAME / SELFTEST_SUBDIR,
+            invoke=main,
+            bad_input=bad_input,
+            required_red_exits=SELFTEST_REQUIRED_RED_EXITS,
+            case_filename=SELFTEST_CASE_FILENAME,
+            expected_stdout_filename=SELFTEST_EXPECTED_STDOUT,
+            ok_exit=EXIT_OK,
+            fail_exit=EXIT_FAIL,
+            bad_input_exit=EXIT_BAD_INPUT,
         )
-    cases = [
-        _selftest_read_case(child)
-        for child in sorted(root.iterdir())
-        if child.is_dir() and not child.name.startswith((".", "_"))
-    ]
-    if not cases:
-        raise bad_input(
-            f"自己較正のケースが 1 件もありません: {root}",
-            ["ケースの無い自己較正は、何も確かめずに緑を返します。"],
-        )
-
-    ok_count = ng_count = 0
-    reproduced: set[int] = set()
-    with tempfile.TemporaryDirectory(prefix="judge-followup-selftest-") as temporary:
-        for case in cases:
-            work = Path(temporary) / case.name
-            shutil.copytree(case.directory, work)
-            code, stdout = _selftest_invoke([str(work)])
-            reasons: list[str] = []
-            if code == case.expected:
-                reproduced.add(code)
-            else:
-                reasons.append(f"終了コード: 期待 {case.expected} 実際 {code}")
-            expected_stdout = case.directory / SELFTEST_EXPECTED_STDOUT
-            if expected_stdout.is_file():
-                want = expected_stdout.read_text(encoding="utf-8").replace("\r\n", "\n")
-                got = stdout.replace("\r\n", "\n")
-                if want != got:
-                    reasons.append(_first_difference(want, got))
-            else:
-                reasons.append(f"{SELFTEST_EXPECTED_STDOUT} がありません（本文の逐語再現を確かめられません）")
-            if reasons:
-                ng_count += 1
-                print(f"[selftest] {case.name} NG  {case.title}")
-                for reason in reasons:
-                    print(f"           - {reason}")
-            else:
-                ok_count += 1
-                print(f"[selftest] {case.name} ok  {case.title}")
-
-    for code in SELFTEST_REQUIRED_RED_EXITS:
-        if code not in reproduced:
-            ng_count += 1
-            print(f"[selftest] (赤の較正) NG  終了コード {code} を再現したケースが 1 件もありません")
-
-    print(f"SELFTEST RESULT ok={ok_count} ng={ng_count}")
-    return EXIT_OK if ng_count == 0 else EXIT_FAIL
+    )
 
 
 # =============================================================================

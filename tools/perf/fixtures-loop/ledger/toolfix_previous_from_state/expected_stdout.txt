@@ -10,7 +10,8 @@
   "run": null,
   "capabilities": null,
   "previous_phase": "WAIT_REMEASURE",
-  "toolfix_used": 1
+  "toolfix_used": 1,
+  "not_quiet_retries": 2
 }
 WAIT_REMEASURE
 IMPLEMENT

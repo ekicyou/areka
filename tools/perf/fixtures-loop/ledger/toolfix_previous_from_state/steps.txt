@@ -1,7 +1,7 @@
 # 7.5 の申し送り: 「直前の相」と「道具を直した回数」は台帳にしか置き場が無い（要件 1.10）。
 0 :: init --goal-name draw-load-parity --ledger @LEDGER@ --now 2026-08-23T00:00:00Z
 # 背景待ちの相から TOOLFIX へ入る（戻り先と消費回数を状態へ書く）
-0 :: set-phase TOOLFIX --ledger @LEDGER@ --previous-phase WAIT_REMEASURE --toolfix-used 1
+0 :: set-phase TOOLFIX --ledger @LEDGER@ --previous-phase WAIT_REMEASURE --toolfix-used 1 --not-quiet-retries 2
 0 :: state --ledger @LEDGER@
 # --previous を省いても台帳から戻り先が解ける（WAIT_ 冠はそのまま返る）
 0 :: next-phase --phase TOOLFIX --event toolfix_ok --ledger @LEDGER@

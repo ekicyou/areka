@@ -52,6 +52,7 @@ prepare-ab／measure-ab／compare／followup／final）が呼び出し側の sco
   MEASURE_RUN_RETRY            実走の採り直し回数（1＝合計 2 回まで）
   MEASURE_RANK_RUSTLOG_EXTRA   順位付け走行で点灯させる target（Flow 2）
   MEASURE_*_DEFAULT            目標定義ファイルに節・鍵が無いときの既定値
+  MEASURE_FOLLOWUP_CHECKS_ALL  見た目の追随チェックの固定語彙（[followup] required の検算）
 ================================================================================
 #>
 
@@ -77,6 +78,9 @@ $MEASURE_LONG_PROFILE_DEFAULT  = 'long'
 $MEASURE_ITER_BUILD_DEFAULT    = 'release'
 $MEASURE_RELEASE_DEBUG_DEFAULT = 'line-tables-only'
 $MEASURE_FOLLOWUP_EXIT_MS_DEFAULT = 120000
+#: 見た目の追随チェックの固定語彙（invoke-followup-checks.ps1 の $CHECK_ALL・
+#: judge-followup.py の CHECK_ALL と対。目標定義 [followup] required の検算に使う）
+$MEASURE_FOLLOWUP_CHECKS_ALL      = @('clickthrough', 'drag', 'dpi', 'balloon_follow')
 $MEASURE_QUIET_RETRY_MAX_DEFAULT  = 3
 $MEASURE_QUIET_RETRY_WAIT_DEFAULT = 60
 
@@ -102,40 +106,9 @@ $MEASURE_TRACE_SUFFIX      = '-trace.etl'
 $MEASURE_SIDE_LEAF = @{ 'A' = 'bin-A'; 'B' = 'bin-B' }
 
 # =============================================================================
-# 目標定義の読み（節・鍵が無ければ既定値。目標定義が唯一の所在＝要件 1.1）
+# 目標定義の引数（節・鍵そのものの読み口 Get-MeasureToml／-Int／-Array は
+# perf-loop.common.ps1 に置いてある。本ファイルの行数上限のため＝要件 2.10）
 # =============================================================================
-function Get-MeasureToml {
-    param([Parameter(Mandatory = $true)][string]$Section, [Parameter(Mandatory = $true)][string]$Key, [string]$Default)
-    if (-not $script:GoalConfig) { return $Default }
-    $value = Get-TomlString -Toml $script:GoalConfig.Toml -Section $Section -Key $Key
-    if ($null -eq $value -or [string]::IsNullOrWhiteSpace($value)) { return $Default }
-    return $value
-}
-
-function Get-MeasureTomlInt {
-    param([Parameter(Mandatory = $true)][string]$Section, [Parameter(Mandatory = $true)][string]$Key, [int]$Default)
-    if (-not $script:GoalConfig) { return $Default }
-    $value = Get-TomlInt -Toml $script:GoalConfig.Toml -Section $Section -Key $Key
-    if ($null -eq $value) { return $Default }
-    return $value
-}
-
-# 1 行の配列（["A", "B", "A", "B"]）を文字列の配列へ。読めなければ既定値を返す
-# （目標定義ファイルは配列を 1 行に保つ決まり＝tasks.md Implementation Notes (5.1)）。
-function Get-MeasureTomlArray {
-    param([Parameter(Mandatory = $true)][string]$Section, [Parameter(Mandatory = $true)][string]$Key, [string[]]$Default)
-    $raw = Get-MeasureToml -Section $Section -Key $Key
-    if (-not $raw) { return $Default }
-    $text = $raw.Trim()
-    if (-not ($text.StartsWith('[') -and $text.EndsWith(']'))) { return $Default }
-    $items = @()
-    foreach ($part in ($text.Substring(1, $text.Length - 2) -split ',')) {
-        $piece = $part.Trim().Trim('"').Trim()
-        if ($piece) { $items += $piece }
-    }
-    if ($items.Count -eq 0) { return $Default }
-    return $items
-}
 
 function Get-MeasureGoalArgsPwsh {
     if ($script:GoalFilePath) { return @('-GoalFile', $script:GoalFilePath) }
@@ -886,26 +859,43 @@ function Invoke-SubFollowup {
         else { Get-MeasureBinDir -Build 'release' }
     }
     $exitMs = Get-MeasureTomlInt -Section 'followup' -Key 'exit_ms' -Default $MEASURE_FOLLOWUP_EXIT_MS_DEFAULT
-    Write-Info "[perf-loop] followup 周 $($script:IterArg) / 実行体 $binDir / 上限 $exitMs ms / 出力先 $dir"
-
-    if ($script:ResumeMode -and (Test-MeasureFollowupComplete -Dir $dir)) {
-        Write-Info "[perf-loop] -Resume: 既にある追随チェックの判定を使います: $dir"
-        Exit-WithResult -Code $EXIT_OK -Dir $dir
+    # 必須の検査は目標定義 [followup] required が唯一の所在（要件 1.1）。ここで読んで
+    # -Checks へ渡さないと、実走の集合は checker の既定（4 検査）のまま動かない
+    # ——DPI の違うモニタが 1 面しか無い機械で dpi を外せず、判定不能のまま 1 周も
+    # 採用できなくなる（README §17）。checker はこの集合を probe.log の
+    # `check=session step=begin required=` へ書き、judge-followup.py はその行だけを
+    # 「どれを必須とするか」の定義元として読むので、外した検査は総合判定に効かない。
+    $checks = @(Get-MeasureTomlArray -Section 'followup' -Key 'required' -Default $MEASURE_FOLLOWUP_CHECKS_ALL)
+    $unknown = @($checks | Where-Object { $MEASURE_FOLLOWUP_CHECKS_ALL -notcontains $_ })
+    if ($unknown.Count -gt 0) {
+        Stop-Run -Code $EXIT_BAD_ARGS -Dir $dir -Message ("目標定義 [followup] required に未知の検査名があります: " +
+            "$($unknown -join '・')（使えるのは $($MEASURE_FOLLOWUP_CHECKS_ALL -join '・')）")
     }
-    if ($script:DryRunMode) {
-        Write-MeasureDryRunMark -Dir $dir -Reason '追随チェックは -DryRun では行いません（実走と操作注入が要ります）'
-        Write-Info '[perf-loop] -DryRun: 追随チェックは行いませんでした。'
-        Exit-WithResult -Code $EXIT_OK -Dir $dir
-    }
+    # 並びは固定語彙の順に揃える（目標定義の書き順で報告の並びが揺れないように）。
+    $checksArg = (@($MEASURE_FOLLOWUP_CHECKS_ALL | Where-Object { $checks -contains $_ }) -join ',')
 
     $checkerPath = Join-Path $PSScriptRoot 'invoke-followup-checks.ps1'
     $arguments = @(
         '-OutDir', $dir,
         '-BinDir', $binDir,
         '-ExitMs', "$exitMs",
+        '-Checks', $checksArg,
         '-GhostRoot', (Get-MeasureGhostRoot),
         '-BalloonRoot', (Get-MeasureBalloonRoot)
     )
+    Write-Info "[perf-loop] followup 周 $($script:IterArg) / 実行体 $binDir / 検査 $checksArg / 上限 $exitMs ms / 出力先 $dir"
+    Write-Info "[perf-loop] 追随チェックの呼び出し行: invoke-followup-checks.ps1 $($arguments -join ' ')"
+
+    if ($script:ResumeMode -and (Test-MeasureFollowupComplete -Dir $dir)) {
+        Write-Info "[perf-loop] -Resume: 既にある追随チェックの判定を使います: $dir"
+        Exit-WithResult -Code $EXIT_OK -Dir $dir
+    }
+    if ($script:DryRunMode) {
+        Write-MeasureDryRunMark -Dir $dir -Reason ('追随チェックは -DryRun では行いません（実走と操作注入が要ります）。' +
+            "渡す引数: invoke-followup-checks.ps1 $($arguments -join ' ')")
+        Write-Info '[perf-loop] -DryRun: 追随チェックは行いませんでした。'
+        Exit-WithResult -Code $EXIT_OK -Dir $dir
+    }
     $attempts = $MEASURE_RUN_RETRY + 1
     for ($attempt = 1; $attempt -le $attempts; $attempt++) {
         # 前の回の置き土産（中止したときの followup.txt・古い判定）を残さない。

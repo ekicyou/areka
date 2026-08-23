@@ -21,6 +21,7 @@
     - capabilities: -
     - previous_phase: -
     - toolfix_used: 0
+    - not_quiet_retries: 0
 
     ## 周 1 — 2026-08-23T01:23:45Z
     - hypothesis: 変化が無い tick で 13 本を回さない（tick gate）
@@ -34,7 +35,8 @@
   足した鍵である。**どちらもループの再開に要る記憶**——`next-phase` の `@PREVIOUS@` は
   呼び出し側が渡す約束だったが、渡す側（スキル）が会話の記憶を持たない以上、置き場は台帳
   しかない（要件 1.10）。`toolfix_used` は `[stop].toolfix_retry` と突き合わせる回数で、
-  `init` は `0` で作る。
+  `init` は `0` で作る。`not_quiet_retries`（静かでないまま採取をやり直した回数）も
+  同じ理由でここに置く（相の中で数える値であって、会話には置けない）。
 * 値に空白・コロン・読点を含んでよい（鍵と値は最初の `: ` だけで分ける）。改行は不可。
 
 サブコマンド（台帳そのもの）:
@@ -109,7 +111,8 @@ import perf_ledger_selftest  # noqa: E402
 
 #: 本スクリプトの版（台帳の書式か語彙を変えたら上げる）。
 SCRIPT_VERSION = (
-    "0.3.0 (task 7.5 / 状態ブロックに previous_phase・toolfix_used を追加。"
+    "0.4.0 (状態ブロックに not_quiet_retries を追加 / "
+    "0.3.0: task 7.5 / 状態ブロックに previous_phase・toolfix_used を追加。"
     "next-phase の @PREVIOUS@ は --previous 省略時に台帳の previous_phase を読む / "
     "0.2.0: task 5.5 / STATUS・FINAL 行・相の遷移表・goal-check／goal-text・summary を追加。"
     "自己較正のハーネスと判定面を兄弟モジュールへ分割 / "
@@ -131,12 +134,12 @@ EMPTY_VALUE = "-"
 STATE_KEYS = (
     "goal", "iteration", "phase", "pending_run", "streak_no_gain",
     "best_idle_cpu_pct", "baseline_idle_cpu_pct", "started_at", "run", "capabilities",
-    "previous_phase", "toolfix_used",
+    "previous_phase", "toolfix_used", "not_quiet_retries",
 )
 #: 後から足した鍵。**必須にしない**——これらの無い古い台帳も読めなければ、途中の周で
 #: 道具を更新した瞬間にループの記憶が読めなくなる（読むときは `-` を補う）。
-STATE_LATE_KEYS = ("run", "capabilities", "previous_phase", "toolfix_used")
-STATE_INT_KEYS = ("iteration", "streak_no_gain", "toolfix_used")
+STATE_LATE_KEYS = ("run", "capabilities", "previous_phase", "toolfix_used", "not_quiet_retries")
+STATE_INT_KEYS = ("iteration", "streak_no_gain", "toolfix_used", "not_quiet_retries")
 STATE_FLOAT_KEYS = ("best_idle_cpu_pct", "baseline_idle_cpu_pct")
 
 #: 周の記録の鍵（この順で書く。設計 C11 の見本と同じ順・同じ語）。
@@ -739,6 +742,7 @@ def cmd_init(args) -> int:
         "capabilities": EMPTY_VALUE,
         "previous_phase": EMPTY_VALUE,
         "toolfix_used": "0",
+        "not_quiet_retries": "0",
     }
     write_text(path, "\n".join(state_lines(state)) + "\n")
     report(f"台帳を作りました: {path}")
@@ -765,6 +769,7 @@ def cmd_set_phase(args) -> int:
         ("capabilities", args.capabilities),
         ("previous_phase", args.previous_phase),
         ("toolfix_used", args.toolfix_used),
+        ("not_quiet_retries", args.not_quiet_retries),
     )
     for key, value in updates:
         if value is None:
@@ -943,6 +948,7 @@ def build_parser() -> Parser:
         help=f"TOOLFIX から戻る先の相（{WAIT_PHASE_PREFIX} 冠も可・消すなら {EMPTY_VALUE}）",
     )
     set_phase.add_argument("--toolfix-used", help="道具を直した回数（[stop].toolfix_retry と突き合わせる）")
+    set_phase.add_argument("--not-quiet-retries", help="静かでないまま採取をやり直した回数")
 
     append = subparsers.add_parser("append", parents=[location], help="周の記録を 1 つ追記する")
     append.add_argument("--from-json", required=True, help="追記する値の JSON ファイル")
