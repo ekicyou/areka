@@ -1,0 +1,26 @@
+# =============================================================================
+# 自己較正用の目標定義（perf-compare.py --selftest だけが読む）
+#
+# 本番の tools/perf/goals/draw-load-parity.toml から、perf-compare.py が読む節
+# （[goal] [levels] [primary_metric] [secondary_metrics]）だけを写したもの。
+# 写しであるから、本番側の値を動かしたときはここも一緒に動かすこと——動かし忘れは
+# 「本番の物差しが変わったのに自己較正は古い物差しで緑」という形で表に出る。
+# 素材の走行（runs/）はこの値に合わせて作ってある。
+# =============================================================================
+
+[goal]
+name = "selftest-compare"
+judge_script = "tools/perf/judge-perf.py"
+# 版が違えば判定式か較正値が違う＝合否の意味が変わるので、その走行を判定不能にする。
+judge_version = "0.4.0"
+
+[levels]
+# 採否の走行ビルド。judge-perf.py へ --build として渡り、run-meta.txt と突き合う。
+iteration_build = "release"
+
+[primary_metric]
+name = "steady_idle_cpu_mean_pct"
+noise_floor_pct = 0.30
+
+[secondary_metrics]
+must_not_regress = ["frame_interval_p95_ms", "catchup_count", "alloc_count"]

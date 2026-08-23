@@ -1,0 +1,2 @@
+title=既にある台帳を init が黙って上書きしない（--force のときだけ作り直す）
+stderr_substr=既にあります

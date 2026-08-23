@@ -1,0 +1,20 @@
+# perf-compare.py --selftest の期待値台帳（人も機械もこの 1 ファイルを読む）
+title = CPU は下がったが定常状態の catch-up が 0 件から 2 件へ（件数の増加で不採用）
+goal = ../goal.toml
+a1 = ../runs/idle_930_p95_150
+a2 = ../runs/idle_940_p95_150
+b1 = ../runs/idle_610_catchup2
+b2 = ../runs/idle_620_catchup2
+exit = 0
+verdict = WORSE
+
+before_idle_cpu_pct = 9.35
+after_idle_cpu_pct = 6.15
+delta_pct = -3.20
+noise_pct = 0.30
+secondary = p95_ms=150.000/150.000, catchup=0/2, allocs=0/0
+
+note = 件数の副指標には許容率が無い——p95 の +5% と違い、増えたら悪化である
+note = （判定式⑵ は定常状態の catch-up 0 件を求めるので、増加に許容を与えられない）。
+note = worse_by_secondary と対にしてあるのは、2 つの規則（率で見る／増減で見る）が
+note = 別々に効いていることを見るためである。

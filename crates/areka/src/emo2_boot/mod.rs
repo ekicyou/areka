@@ -408,6 +408,9 @@ pub fn wire_emo2_boot(
     // 第 4 要素の lifecycle_sink（task 4.1）は cue を選別せず全件観測して占有区間の終端を集約し、
     // 会話の開始と表示終了時刻を lifecycle channel 経由で UI スレッド（Emo2Wiring の lifecycle_rx）
     // へ送出する。上流（ghost／kanade／dola）の署名も既存 3 sink の登録も変えない（決定 D4＝α）。
+    // 順序の制約（draw-load-parity 3.5）: lifecycle_sink は clocked_text_sink より**後**に置く。
+    // lifecycle_sink::send は起床旗 PRESENT を立てるので、文字 cue が先に積まれていないと
+    // 旗だけが先に倒されて文字が心拍待ちになる。
     let boot_options = GhostBootOptions {
         ghost_root: ghost_root.to_path_buf(),
         default_encoding: DefaultEncoding::Ansi,

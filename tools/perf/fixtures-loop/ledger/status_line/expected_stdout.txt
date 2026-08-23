@@ -1,0 +1,2 @@
+PERF-LOOP STATUS iter=1 phase=REMEASURE judge=NA idle_cpu=6.12 baseline=9.31 delta=-3.19 noise=0.41 verdict=ADOPTED streak=1/3 iters_left=29 next=DECIDE
+PERF-LOOP STATUS iter=1 phase=REMEASURE judge=PASS idle_cpu=6.12 baseline=9.31 delta=-3.19 noise=0.41 verdict=ADOPTED streak=1/3 iters_left=29 next=RECORD

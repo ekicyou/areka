@@ -1,0 +1,6 @@
+2026-08-23T11:00:00.000000Z INFO areka::placement: 起動時 DPI 構成 primary_dpi=96 shell_author_dpi=96 balloon_author_dpi=96 k_shell=1 k_balloon=1
+2026-08-23T11:00:05.000000Z DEBUG areka::perf: perf(process): プロセス CPU snap=1 t_s=5 wall_ms=5000 cpu_us=2000000 kernel_us=500000 user_us=1500000 threads=1
+2026-08-23T11:00:05.000000Z DEBUG areka::perf: perf(thread): スレッド別 CPU snap=1 t_s=5 tid=21000 name=main role=ui cpu_us=1500000 kernel_us=400000 user_us=1100000
+2026-08-23T11:00:05.000000Z DEBUG areka::perf: perf(thread): スレッド別 CPU snap=1 t_s=5 tid=0 name=- role=unregistered_rest cpu_us=500000 kernel_us=100000 user_us=400000
+2026-08-23T11:00:06.000000Z INFO areka_emo_present::presenter::show: apply(ShowSurface): 表示・マスクを更新 target_id=TargetId(0) surface_id=1000 author_dpi=96 window_dpi=96 k=1 k_ratio=1/1 native_w=478 native_h=684 scaled_w=478 scaled_h=684
+2026-08-23T11:00:07.000000Z DEBUG actor{actor=emo-text}: wintf::tick: [tick] kind=window frame=10 t_ms=1000 ticks=10 skipped=5 heartbeat=2 wall_us=2000 max_us=500 ui_cpu_us=1000 input_us=100 update_us=100 prelayout_us=100 layout_us=100 postlayout_us=100 uisetup_us=100 graphicssetup_us=100 draw_us=500 prerendersurface_us=100 rendersurface_us=100 composition_us=100 commitcomposition_us=100 framefinalize_us=400

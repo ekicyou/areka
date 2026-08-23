@@ -1,0 +1,34 @@
+# judge-perf.py --selftest の期待値台帳（人も機械もこの 1 ファイルを読む）
+title = catch-up が 3 系統とも起動過渡だけにある（合格側）
+mode = verdict
+build = release
+exit = 0
+emit_metrics = yes
+
+note = H11 と同じ健全な走行に、catch-up を 3 系統（dispatcher・kanade・
+note = loop_ticker）から 1 件ずつ、いずれも起動過渡（定常状態より前）に置いた。
+note = 判定式⑵ が数えるのは定常状態だけなので合格（終了コード 0）である。
+note = 同時に、この走行には任意種の行（[tick] kind=window・perf(thread)・
+note = perf(process)）と発話区間の印が入っている。任意種は 1 本も無くても
+note = 判定が成立しなければならず、有っても判定を動かしてはならない。
+note = その「有る側」がこの fixture である（無い側は既存の 17 件すべて）。
+note = [tick] の窓は catch-up が起きた 3 窓だけ壁時計合計が 4.5 倍あるので、
+note = 「フレーム駆動の負荷が起床を遅らせる」仮説は 成立 と印字されなければならない。
+note = 終了コードはこれらの中身を 1 つも反映しないため、contains 行で本文を固定する。
+
+contains = 仮説: 成立
+contains = target=dispatcher
+contains = target=kanade
+contains = target=loop_ticker
+contains = metric=steady_idle_cpu_mean_pct value=1.61
+contains = metric=frame_interval_p95_ms value=150.000
+contains = metric=catchup_count value=0
+contains = metric=catchup_count_total value=3
+contains = metric=catchup_dispatcher value=1
+contains = metric=catchup_kanade value=1
+contains = metric=catchup_loop_ticker value=1
+contains = metric=alloc_count value=0
+contains = metric=talk_peak_cpu_pct value=4.20
+contains = metric=cpu_max_pct value=4.20
+contains = metric=tick_skip_ratio value=0.000
+contains = metric=catchup_tick_load_ratio value=3.484

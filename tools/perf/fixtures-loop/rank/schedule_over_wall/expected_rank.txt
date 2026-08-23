@@ -1,0 +1,23 @@
+perf-rank 0.1.0 run=schedule_over_wall stages=phase top=3
+
+[4] 相  unit=wall  出所=[tick] kind=window
+  windows                                1
+  ticks_total                           10
+  skipped_total                          0
+  heartbeat_total                        0
+  window_s                           1.000
+  ticks_per_s                        10.00
+  skip_ratio_pct                      0.00
+  heartbeat_ratio_pct                 0.00
+  avg_tick_wall_us                   100.0
+  max_tick_wall_us                     200
+  ui_cpu_us_per_s                    800.0
+  wall_us_total                       1000
+  13 本のスケジュール（上位 3）
+    rank  name                    sum_us   share_pct      avg_us
+       1  commitcomposition          100       10.00        10.0
+       2  composition                100       10.00        10.0
+       3  draw                       100       10.00        10.0
+    … 他 10 件
+  注記: 13 本の合計 1200µs が wall_us_total 1000µs を超えている——share_pct の合計は 100% を超える（観測行が壊れている疑い）
+  注記: 13 本は壁時計 µs（GPU 待ちを含む）。ui_cpu_us だけが UI スレッドの CPU 時間。

@@ -4,9 +4,12 @@
 invoke-perf-run.ps1 — 有界実走＋CPU 時系列採取ランナー
   spec: areka-P0-recompose-budget（要件 2.1 / 2.3 / 2.6 / 2.7・design「計測資産
         （tools/perf/）→ invoke-perf-run.ps1 → Batch / Job Contract」・Key decision D7）
+  版 1.1.0 の追加分の spec: areka-P0-draw-load-parity（要件 2.2 / 2.8・design
+        「計測の道具（tools/perf/）→ C7 invoke-perf-run.ps1 1.1.0（追加のみ）」）
 
 何をするか:
-  1. 測定マシンが静寂状態であることの確認（-ConfirmQuiet）を関門として要求する（要件 2.7）
+  1. 測定マシンが静寂状態であることの確認（-ConfirmQuiet、または -AutoQuiet による
+     check-quiet.ps1 の自動確認）を関門として要求する（要件 2.7・2.8）
   2. 前提（ゴースト一式・実行体・出力先）を起動前に検証する
   3. areka 実行体を有界自動終了つきで直接起動し、標準出力・標準エラーをログへ収める
   4. 並行して対象プロセスの CPU（1 コア換算）を一定間隔で CSV へ採取する（要件 2.3）
@@ -40,6 +43,13 @@ invoke-perf-run.ps1 — 有界実走＋CPU 時系列採取ランナー
   LOG_MARKER_SMOKE_GATE           有界自動終了が有効化された証跡のログ文言。
                                   これが実行ログに無い実走は「有界でない」＝採取失敗とみなす
   CSV_HEADER                      CPU 時系列 CSV のヘッダ行（design「CPU 時系列 CSV スキーマ」）
+  CHECK_QUIET_SCRIPT              -AutoQuiet が呼ぶ自動静寂確認スクリプトのファイル名
+                                  （同じフォルダに置く。実装: tools/perf/check-quiet.ps1）
+  QUIET_STAGE_BEFORE  = 'before'  自動静寂確認の段階名。出力は quiet-before.txt（-OutDir 直下）
+  QUIET_RETRY_MAX_DEFAULT   = 3   「静かでない」ときに待って確かめ直す回数の既定。
+                                  目標定義ファイルの [quiet] retry_max があればそちらを使う
+  QUIET_RETRY_WAIT_SEC_DEFAULT=60 確かめ直すまでの待ち秒数の既定。
+                                  目標定義ファイルの [quiet] retry_wait_sec があればそちらを使う
 
 CPU の「1 コア換算」について:
   採取値は Windows のプロセス性能カウンタ `% Processor Time` の値をそのまま記録する。
@@ -53,9 +63,11 @@ CPU の「1 コア換算」について:
 終了コード:
   0 … 正常終了（採取完了、または -DryRun の検証完了）
   1 … 実走の失敗（起動できない・異常終了・予定より早い終了・応答なし）
-  2 … 静寂状態の確認がない（-ConfirmQuiet 欠落）＝起動拒否（要件 2.7）
-  3 … 引数・前提の不正（水準/ビルド種別の指定誤り・パス不正・出力先の作成不能）
-  4 … CPU カウンタの取得失敗
+  2 … 静寂状態の確認がない（-ConfirmQuiet 欠落）＝起動拒否（要件 2.7）。
+      -AutoQuiet のときは、待って確かめ直しても静かにならなかった場合もこの 2 を返す（要件 2.8）
+  3 … 引数・前提の不正（水準/ビルド種別の指定誤り・パス不正・出力先の作成不能。
+      -AutoQuiet と -ConfirmQuiet の同時指定・-BinDir の不正もここ）
+  4 … CPU カウンタの取得失敗（-AutoQuiet の自動静寂確認がカウンタを読めなかった場合を含む）
   ※ judge-perf.py の終了コード（0=合格 / 1=不合格 / 2=判定不能 / 3=引数不正）とは
      別体系である。本スクリプトは合否を判定しない。
 
@@ -67,6 +79,38 @@ CPU の「1 コア換算」について:
 
   起動せず前提の検証と実行条件の記録だけを行う（配管の確認用）:
   pwsh -File tools/perf/invoke-perf-run.ps1 -Profile short -Build dev -GhostRoot ... -DryRun
+
+--------------------------------------------------------------------------------
+版 1.1.0 で足した引数（既存の呼び方は何も変わらない）
+--------------------------------------------------------------------------------
+  -AutoQuiet
+      静寂状態の確認を人に求めず、check-quiet.ps1 で機械的に行う（要件 2.8）。
+      -ConfirmQuiet とは同時に指定できない（同時指定は 3 で終わる）。
+      起動の前に check-quiet.ps1 -Stage before を呼び、報告を -OutDir 直下の
+      quiet-before.txt に残す。静かでなければ待って確かめ直し（既定 3 回・60 秒間隔。
+      待つたびに quiet-before.txt は最新の 1 回で上書きされる）、それでも静かでなければ
+      「静寂状態の自動確認に失敗」として 2 で終わる。
+      閾値・採取秒数・重いプロセス名・確かめ直しの回数と待ち秒数は目標定義ファイル
+      （-Goal <名前> なら tools/perf/goals/<名前>.toml、-GoalFile <パス> なら直接指定）の
+      [quiet] 節から読む。どちらも省いたときは check-quiet.ps1 と本スクリプトの既定値。
+      -Goal / -GoalFile は -AutoQuiet のときだけ使う。
+      -DryRun と併せたときも確認そのものは実際に行う（配管の確認用）。
+  -BinDir <dir>
+      areka の実行体と 32bit SHIORI ヘルパの所在を target/<ビルド種別> から上書きする。
+      A/B 比較で「どちらの実行体を測ったのか」を取り違えないための引数であり、
+      run-meta.txt には所在（bin_dir）と実行体の SHA-256（exe_sha256）を記録する。
+      SHA-256 は -BinDir の有無にかかわらず常に記録する。
+  -RustLogExtra <str>
+      実走時の RUST_LOG の既定値の末尾へ「,」で連結する（例: wintf::tick=debug）。
+      run-meta.txt の env_RUST_LOG は連結したあとの実際の値になる。
+      較正値 RUST_LOG_VALUE 自体は変えない。
+
+  自動静寂確認つき・実行体の所在を指定・追加のログ指定つきで採る:
+  pwsh -File tools/perf/invoke-perf-run.ps1 `
+      -Profile short -Build release `
+      -GhostRoot C:\絶対パス\emo2 -OutDir C:\出力先\A1 `
+      -AutoQuiet -Goal draw-load-parity `
+      -BinDir C:\出力先\bin-A -RustLogExtra 'wintf::tick=debug,areka::perf=debug'
 ================================================================================
 #>
 
@@ -86,6 +130,16 @@ param(
     [string]$OutDir,
     # 測定マシンが静寂状態であることの確認（要件 2.7）。これが無ければ実走を起動しない
     [switch]$ConfirmQuiet,
+    # 静寂状態の確認を check-quiet.ps1 で機械的に行う（要件 2.8）。-ConfirmQuiet と排他
+    [switch]$AutoQuiet,
+    # 目標定義の名前。tools/perf/goals/<Goal>.toml の [quiet] を使う（-AutoQuiet のときだけ）
+    [string]$Goal,
+    # 目標定義ファイルを直接指定する（-Goal の代わり。試験・別所在用）
+    [string]$GoalFile,
+    # 実行体と 32bit SHIORI ヘルパの所在（省略時は target/<ビルド種別>）
+    [string]$BinDir,
+    # 実走時の RUST_LOG の既定値の末尾へ「,」で連結する追加指定
+    [string]$RustLogExtra,
     # 起動せず、前提検証と実行条件の記録だけを行う（測定にはならない）
     [switch]$DryRun
 )
@@ -98,7 +152,7 @@ $PSNativeCommandUseErrorActionPreference = $false
 # =============================================================================
 # 較正値・調整値（上部の一覧と対応。変更はここだけ）
 # =============================================================================
-$SCRIPT_VERSION                 = '1.0.0'
+$SCRIPT_VERSION                 = '1.1.0'
 $SMOKE_EXIT_MS_SHORT            = 420000
 $SMOKE_EXIT_MS_LONG             = 1500000
 $SMOKE_EXIT_ENV_NAME            = 'AREKA_APP_SMOKE_EXIT_MS'
@@ -121,6 +175,10 @@ $POLL_INTERVAL_MS               = 250
 $DEFAULT_BALLOON_SUBDIR         = 'emo2-kakukaku'
 $LOG_MARKER_SMOKE_GATE          = 'smoke 自動 close ゲート有効'
 $CSV_HEADER                     = 'timestamp,cpu_percent_1core'
+$CHECK_QUIET_SCRIPT             = 'check-quiet.ps1'
+$QUIET_STAGE_BEFORE             = 'before'
+$QUIET_RETRY_MAX_DEFAULT        = 3
+$QUIET_RETRY_WAIT_SEC_DEFAULT   = 60
 
 # 終了コード
 $EXIT_OK                = 0
@@ -289,6 +347,71 @@ function Get-SourceFacts {
     return $facts
 }
 
+# --- 版 1.1.0 で足した補助（自動静寂確認・実行体の所在・追加ログ指定） -------------
+
+# 目標定義ファイルの [quiet] 節から「確かめ直しの回数と待ち秒数」だけを読む最小の解釈器。
+# 閾値・採取秒数・重いプロセス名は check-quiet.ps1 が自分で同じファイルから読む（二重に
+# 解釈して食い違わせないため、本スクリプトはこの 2 つ以外を読まない）。
+# 他の節・他のキーは黙って読み飛ばす。引用符の外の # 以降は注釈として落とす。
+function Read-QuietRetrySettingsFromToml {
+    param([string]$Text)
+    $out = @{}
+    $inQuiet = $false
+    foreach ($raw in ($Text -split "`r?`n")) {
+        $line = $raw.Trim()
+        if ($line -eq '' -or $line.StartsWith('#')) { continue }
+        if ($line -match '^\[([^\]]+)\]\s*$') { $inQuiet = ($Matches[1].Trim() -eq 'quiet'); continue }
+        if (-not $inQuiet) { continue }
+        if ($line -notmatch '^([A-Za-z0-9_]+)\s*=\s*(.+)$') { continue }
+        $key = $Matches[1]
+        $val = ($Matches[2]).Trim()
+
+        $inStr = $false
+        $cut = -1
+        for ($i = 0; $i -lt $val.Length; $i++) {
+            $ch = $val[$i]
+            if ($ch -eq '"') { $inStr = -not $inStr }
+            elseif ($ch -eq '#' -and -not $inStr) { $cut = $i; break }
+        }
+        if ($cut -ge 0) { $val = $val.Substring(0, $cut).Trim() }
+
+        if ($key -eq 'retry_max' -or $key -eq 'retry_wait_sec') {
+            $parsed = 0
+            if ([int]::TryParse($val, [Globalization.NumberStyles]::Integer, [Globalization.CultureInfo]::InvariantCulture, [ref]$parsed)) {
+                $out[$key] = $parsed
+            }
+        }
+    }
+    return $out
+}
+
+# 本スクリプトを走らせている pwsh 自身を探す（子スクリプトも同じ版で走らせる）。
+function Get-PwshPath {
+    if ($PSHOME) {
+        $candidate = Join-Path $PSHOME 'pwsh.exe'
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) { return $candidate }
+    }
+    return 'pwsh'
+}
+
+# check-quiet.ps1 を 1 回呼ぶ。報告は quiet-<Stage>.txt として OutDir に残り、
+# 同じ内容を本スクリプトの標準出力にも書き写す（何を根拠に静かと判定したかを実行ログに残す）。
+# 返り値は check-quiet.ps1 の終了コード（0 静か / 2 静かでない / 3 引数 / 4 計測失敗）。
+#
+# 【落とし穴】子スクリプトの出力を関数の中でそのまま流すと、それが関数の戻り値に混ざって
+# 終了コードだけを受け取ったつもりの呼び手が配列を掴む（2026-08-23 に実測で踏んだ）。
+# ゆえに出力は必ず変数へ受け、書き写してから終了コードだけを返す。
+function Invoke-CheckQuietOnce {
+    param([string]$ScriptPath, [string]$TargetOutDir, [string]$Stage, [string]$GoalFilePath)
+
+    $quietArgs = @('-NoProfile', '-File', $ScriptPath, '-Stage', $Stage, '-OutDir', $TargetOutDir)
+    if ($GoalFilePath) { $quietArgs += @('-GoalFile', $GoalFilePath) }
+    $captured = & (Get-PwshPath) @quietArgs 2>&1
+    $code     = $LASTEXITCODE
+    foreach ($line in @($captured)) { Write-Info ([string]$line) }
+    return $code
+}
+
 function Format-Section {
     param([string]$Title, [System.Collections.IDictionary]$Items)
     $lines = New-Object System.Collections.Generic.List[string]
@@ -301,9 +424,14 @@ function Format-Section {
 }
 
 # =============================================================================
-# 1. 静寂状態の確認関門（要件 2.7）— 何よりも先に見る。既定値で素通りしない
+# 1. 静寂状態の確認関門（要件 2.7・2.8）— 何よりも先に見る。既定値で素通りしない
+#    -ConfirmQuiet は人の確認、-AutoQuiet は check-quiet.ps1 による機械の確認。
+#    どちらの経路を通ったかは run-meta.txt の quiet_mode に残る。
 # =============================================================================
-if (-not $ConfirmQuiet -and -not $DryRun) {
+if ($ConfirmQuiet -and $AutoQuiet) {
+    Stop-Run $EXIT_BAD_ARGS "-ConfirmQuiet と -AutoQuiet は同時に指定できません。人が確認したのなら -ConfirmQuiet、機械に確認させるのなら -AutoQuiet のどちらか一方だけを指定してください。"
+}
+if (-not $ConfirmQuiet -and -not $AutoQuiet -and -not $DryRun) {
     Write-Problem @"
 [invoke-perf-run] 実走を開始しませんでした。
 
@@ -347,12 +475,49 @@ if (-not $buildDirName) {
 }
 
 # 実行体の位置は tools/perf/ からリポジトリルートを 2 階層上へたどって決める。
+# -BinDir があるときだけ、その所在で上書きする（A/B 比較で実行体を取り違えないため）。
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$exePath  = Join-Path $repoRoot (Join-Path 'target' (Join-Path $buildDirName 'areka.exe'))
-if (-not (Test-Path -LiteralPath $exePath -PathType Leaf)) {
-    $buildHint = 'cargo build -p areka' + $(if ($runBuild -eq 'release') { ' --release' } else { '' })
-    Stop-Run $EXIT_BAD_ARGS "areka の実行体が見つかりません: $exePath — 先に「$buildHint」を実行してください。"
+if ($BinDir) {
+    if (-not (Test-Path -LiteralPath $BinDir -PathType Container)) {
+        Stop-Run $EXIT_BAD_ARGS "-BinDir のフォルダが存在しません: $BinDir"
+    }
+    $binDirFull = (Resolve-Path -LiteralPath $BinDir).Path.TrimEnd('\')
+    $exePath    = Join-Path $binDirFull 'areka.exe'
+    if (-not (Test-Path -LiteralPath $exePath -PathType Leaf)) {
+        Stop-Run $EXIT_BAD_ARGS "areka の実行体が -BinDir にありません: $exePath — A/B 比較では実行体一式（areka.exe と 32bit SHIORI ヘルパ）を先にこのフォルダへ複製してください。"
+    }
+} else {
+    $binDirFull = ''
+    $exePath    = Join-Path $repoRoot (Join-Path 'target' (Join-Path $buildDirName 'areka.exe'))
+    if (-not (Test-Path -LiteralPath $exePath -PathType Leaf)) {
+        $buildHint = 'cargo build -p areka' + $(if ($runBuild -eq 'release') { ' --release' } else { '' })
+        Stop-Run $EXIT_BAD_ARGS "areka の実行体が見つかりません: $exePath — 先に「$buildHint」を実行してください。"
+    }
 }
+
+# 目標定義ファイル（-AutoQuiet の閾値と確かめ直しの回数の出どころ）。
+# check-quiet.ps1 と同じ決まりで解決し、無ければここで止める（黙って既定値へ落とさない）。
+if ($Goal -and $GoalFile) {
+    Stop-Run $EXIT_BAD_ARGS "-Goal と -GoalFile は同時に指定できません。"
+}
+$goalFileFull    = ''
+$quietRetryMax   = $QUIET_RETRY_MAX_DEFAULT
+$quietRetryWait  = $QUIET_RETRY_WAIT_SEC_DEFAULT
+if ($Goal -or $GoalFile) {
+    $goalCandidate = if ($GoalFile) { $GoalFile } else { Join-Path $PSScriptRoot (Join-Path 'goals' "$Goal.toml") }
+    if (-not (Test-Path -LiteralPath $goalCandidate -PathType Leaf)) {
+        Stop-Run $EXIT_BAD_ARGS "目標定義ファイルが見つかりません: $goalCandidate"
+    }
+    $goalFileFull = (Resolve-Path -LiteralPath $goalCandidate).Path
+    $retrySettings = Read-QuietRetrySettingsFromToml ([IO.File]::ReadAllText($goalFileFull))
+    if ($retrySettings.ContainsKey('retry_max'))      { $quietRetryMax  = [int]$retrySettings['retry_max'] }
+    if ($retrySettings.ContainsKey('retry_wait_sec')) { $quietRetryWait = [int]$retrySettings['retry_wait_sec'] }
+    if (-not $AutoQuiet) {
+        Write-Info "[invoke-perf-run] 注意: 目標定義ファイル $goalFileFull は -AutoQuiet のときだけ使います（今回は使いません）。"
+    }
+}
+if ($quietRetryMax -lt 0)  { Stop-Run $EXIT_BAD_ARGS "確かめ直しの回数が不正です（0 以上が必要）: $quietRetryMax（目標定義ファイル $goalFileFull の [quiet] retry_max）" }
+if ($quietRetryWait -lt 0) { Stop-Run $EXIT_BAD_ARGS "確かめ直しの待ち秒数が不正です（0 以上が必要）: $quietRetryWait（目標定義ファイル $goalFileFull の [quiet] retry_wait_sec）" }
 
 # ゴーストのルート: 絶対パス必須（相対パスでは pasta.dll の読み込みに失敗する既知の要件）
 if (-not $GhostRoot) {
@@ -412,6 +577,46 @@ $runLogPath  = Join-Path $script:OutDirPath $FILE_RUN_LOG
 $errLogPath  = Join-Path $script:OutDirPath $FILE_RUN_ERRLOG
 $cpuCsvPath  = Join-Path $script:OutDirPath $FILE_CPU_CSV
 $metaPath    = Join-Path $script:OutDirPath $FILE_RUN_META
+$quietPath   = Join-Path $script:OutDirPath ("quiet-$QUIET_STAGE_BEFORE.txt")
+
+# =============================================================================
+# 3.5 静寂状態の自動確認（-AutoQuiet・要件 2.8）— 起動の直前に、機械で確かめる
+#     出力先が出来てからでないと報告を置けないので、ここで行う。
+#     静かでなければ待って確かめ直し、上限を超えたら 2 で終わる（人には問わない）。
+# =============================================================================
+$quietMode     = if ($AutoQuiet) { 'auto' } elseif ($ConfirmQuiet) { 'confirmed' } else { '-' }
+$quietAttempts = 0
+
+if ($AutoQuiet) {
+    $checkQuietPath = Join-Path $PSScriptRoot $CHECK_QUIET_SCRIPT
+    if (-not (Test-Path -LiteralPath $checkQuietPath -PathType Leaf)) {
+        Stop-Run $EXIT_BAD_ARGS "自動静寂確認のスクリプトが見つかりません: $checkQuietPath — -AutoQuiet はこのスクリプトを必要とします（人が確認して進めるなら -ConfirmQuiet を使ってください）。"
+    }
+    $maxQuietAttempts = $quietRetryMax + 1
+    while ($true) {
+        $quietAttempts++
+        Write-Info "[invoke-perf-run] 静寂状態の自動確認 $quietAttempts/$maxQuietAttempts 回目（$CHECK_QUIET_SCRIPT）…"
+        try {
+            $quietCode = Invoke-CheckQuietOnce -ScriptPath $checkQuietPath -TargetOutDir $script:OutDirPath `
+                -Stage $QUIET_STAGE_BEFORE -GoalFilePath $goalFileFull
+        } catch {
+            Stop-Run $EXIT_BAD_ARGS "自動静寂確認のスクリプトを起動できませんでした（$checkQuietPath）: $($_.Exception.Message)"
+        }
+        if ($quietCode -eq 0) { break }
+        if ($quietCode -eq 4) {
+            Stop-Run $EXIT_COUNTER_FAILED "静寂状態の自動確認で性能カウンタを読めませんでした（$CHECK_QUIET_SCRIPT が 4 で終了）。判断の根拠は quiet-$QUIET_STAGE_BEFORE.txt に残しています。"
+        }
+        if ($quietCode -ne 2) {
+            Stop-Run $EXIT_BAD_ARGS "静寂状態の自動確認を実行できませんでした（$CHECK_QUIET_SCRIPT が $quietCode で終了）。引数か前提が不正です。"
+        }
+        if ($quietAttempts -ge $maxQuietAttempts) {
+            Stop-Run $EXIT_QUIET_UNCONFIRMED "静寂状態の自動確認に失敗しました（$maxQuietAttempts 回確かめて、いずれも「静かでない」でした）。他の負荷が動いているマシンで採った CPU 時系列は areka の性能ではなくマシンの混み具合を測ったものになるため、起動しません。判断の根拠は quiet-$QUIET_STAGE_BEFORE.txt に残しています（下記の退避先を見てください）。"
+        }
+        Write-Info "[invoke-perf-run] まだ静かではありません。$quietRetryWait 秒待って確かめ直します（残り $($maxQuietAttempts - $quietAttempts) 回）。"
+        Start-Sleep -Seconds $quietRetryWait
+    }
+    Write-Info "[invoke-perf-run] 静寂状態を確認しました（$quietAttempts 回目・根拠は $quietPath）。"
+}
 
 # =============================================================================
 # 4. 実行条件の記録（run-meta.txt の前半・起動前に書く＝失敗しても条件は残る）
@@ -424,6 +629,12 @@ $profileDir   = if ($env:AREKA_PROFILE_DIR) { $env:AREKA_PROFILE_DIR } else { Jo
 $instanceName = [System.IO.Path]::GetFileNameWithoutExtension($exePath)
 $startedUtc   = Get-UtcStamp
 $commandLine  = '"{0}" "{1}" "{2}"' -f $exePath, $ghostRootFull, $balloonRootFull
+# 実行体の中身の指紋。A/B 比較で「どちらの実行体を測ったのか」を後から突き合わせるため、
+# -BinDir の有無にかかわらず必ず記録する（要件 2.2）。
+$exeSha256    = (Get-FileHash -LiteralPath $exePath -Algorithm SHA256).Hash
+$binDirShown  = if ($binDirFull) { $binDirFull } else { '-' }
+# -RustLogExtra は既定値の末尾へ「,」で連結する。較正値 RUST_LOG_VALUE 自体は変えない。
+$rustLogValue = if ($RustLogExtra) { "$RUST_LOG_VALUE,$RustLogExtra" } else { $RUST_LOG_VALUE }
 
 $runSection = [ordered]@{
     'script'                 = 'tools/perf/invoke-perf-run.ps1'
@@ -435,6 +646,8 @@ $runSection = [ordered]@{
     'build'                  = $runBuild
     'started_utc'            = $startedUtc
     'out_dir'                = $script:OutDirPath
+    'quiet_mode'             = $quietMode
+    'quiet_attempts'         = $quietAttempts
 }
 $targetSection = [ordered]@{
     'exe_path'               = $exePath
@@ -449,8 +662,10 @@ $targetSection = [ordered]@{
     'command_line'           = $commandLine
     'env_smoke_exit_name'    = $SMOKE_EXIT_ENV_NAME
     'env_smoke_exit_ms'      = $smokeExitMs
-    'env_RUST_LOG'           = $RUST_LOG_VALUE
+    'env_RUST_LOG'           = $rustLogValue
     'env_NO_COLOR'           = $NO_COLOR_VALUE
+    'bin_dir'                = $binDirShown
+    'exe_sha256'             = $exeSha256
 }
 $calibrationSection = [ordered]@{
     'SMOKE_EXIT_MS_SHORT'            = $SMOKE_EXIT_MS_SHORT
@@ -485,6 +700,12 @@ Write-Info "[invoke-perf-run] 実行体   : $exePath"
 Write-Info "[invoke-perf-run] ゴースト : $ghostRootFull"
 Write-Info "[invoke-perf-run] バルーン : $balloonRootFull"
 Write-Info "[invoke-perf-run] 出力先   : $($script:OutDirPath)"
+if ($BinDir) {
+    Write-Info "[invoke-perf-run] 実行体の所在は -BinDir で上書きしています（SHA-256 $exeSha256）。"
+}
+if ($RustLogExtra) {
+    Write-Info "[invoke-perf-run] RUST_LOG : $rustLogValue（-RustLogExtra を連結した値）"
+}
 if (-not $helperExists) {
     Write-Info "[invoke-perf-run] 注意: 32bit SHIORI ヘルパ $helperPath がありません。実 SHIORI なしの走行になり、発話のない別条件の計測になります（run-meta.txt に記録済み）。"
 }
@@ -516,7 +737,7 @@ $prevNoColor  = $env:NO_COLOR
 try {
     # 子プロセスへ渡す環境変数（本スクリプト自身のプロセスに設定して継承させる）。
     [Environment]::SetEnvironmentVariable($SMOKE_EXIT_ENV_NAME, "$smokeExitMs")
-    $env:RUST_LOG = $RUST_LOG_VALUE
+    $env:RUST_LOG = $rustLogValue
     $env:NO_COLOR = $NO_COLOR_VALUE
 
     $launchedAt = [DateTime]::UtcNow

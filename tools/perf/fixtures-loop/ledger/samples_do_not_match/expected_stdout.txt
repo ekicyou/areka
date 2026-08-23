@@ -1,0 +1,6 @@
+sample: PERF-LOOP STATUS iter=<n> phase=<相> judge=<PASS|FAIL|INCONCLUSIVE|NA> idle_cpu=<x.xx> baseline=<x.xx> delta=<±x.xx> noise=<x.xx> verdict=<ADOPTED|NO_DIFF|WORSE|TESTS_RED|FOLLOWUP_FAIL|MEASURE_FAILED|NA> streak=<k>/<max> iters_left=<m> next=<相>
+sample: PERF-LOOP FINAL: GOAL_MET run=<token> idle_cpu=<x.xx> judge=PASS iters=<n> commits=<k>
+sample: PERF-LOOP FINAL: STOPPED run=<token> reason=<plateau|safety|measure_failed|iteration_cap> best_idle_cpu=<x.xx> top_remaining=<stage:item:share> iters=<n>
+real: PERF-LOOP STATUS iter=1 phase=REMEASURE judge=NA idle_cpu=6.12 baseline=9.31 delta=-3.19 noise=0.41 verdict=ADOPTED streak=1/3 iters_left=29 next=DECIDE
+real: PERF-LOOP FINAL: GOAL_MET run=00000000 idle_cpu=2.84 judge=PASS iters=7 commits=4
+real: PERF-LOOP FINAL: STOPPED run=00000000 reason=plateau best_idle_cpu=6.12 top_remaining=phase:tick_all:0.41 iters=12

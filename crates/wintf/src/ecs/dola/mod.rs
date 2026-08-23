@@ -147,9 +147,22 @@ impl std::fmt::Debug for DolaAnimator {
 /// app.add_systems(Update, tick_dola_animators);
 /// app.add_systems(Update, my_consumer.after(tick_dola_animators));
 /// ```
+/// # 起床の旗
+///
+/// この tick で**活性があった**アニメータが 1 つでもあれば `ANIM` を立て、次の画面更新を
+/// 予約する（設計 C16）。活性の見分けは進行の結果——`tick` が置いた
+/// [`UpdateResult`] に変数の変化かトリガの発火が 1 件でも載っていること——で判じる。
+/// `DolaRuntime` に「走っているか」を直に問う口が無いためであり、走り終えたアニメータは
+/// 変化を出さなくなるので旗も自然に止まる。
 pub fn tick_dola_animators(mut query: Query<&mut DolaAnimator>, frame_time: Res<FrameTime>) {
+    let mut active = false;
     for mut animator in query.iter_mut() {
         animator.tick(frame_time.0);
+        let result = animator.last_result();
+        active |= !result.changes.is_empty() || !result.triggered.is_empty();
+    }
+    if active {
+        crate::ecs::world::tick_wake::mark(crate::ecs::world::tick_wake::ANIM);
     }
 }
 

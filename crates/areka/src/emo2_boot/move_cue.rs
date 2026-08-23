@@ -41,6 +41,7 @@ use std::sync::mpsc::Sender;
 use bevy_ecs::prelude::World;
 use dola::cue::{CueCommand, TalkCue};
 use tracing::{debug, info, warn};
+use wintf::ecs::world::tick_wake;
 use wintf::ecs::{SizeI, WindowPos};
 
 use areka_emo_compose::ScaleRatio;
@@ -537,6 +538,9 @@ impl dola::cue::CueSink for MoveCueSink {
                     // 受信端（Emo2Wiring）切断は talk を殺さない（log-first・非 panic・R5.5）。
                     warn!("MoveCueSink: MoveDirective の送出に失敗（受信端切断）");
                 }
+                // 窓を動かす指令が UI へ届いた＝次の画面更新に仕事がある（設計 C16 の
+                // `PRESENT`）。送出の後に立てる理由は `PresentBridge::send` と同じ。
+                tick_wake::mark(tick_wake::PRESENT);
             }
             Err(degradation) => {
                 warn!(

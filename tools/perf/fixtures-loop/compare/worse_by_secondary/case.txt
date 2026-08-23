@@ -1,0 +1,20 @@
+# perf-compare.py --selftest の期待値台帳（人も機械もこの 1 ファイルを読む）
+title = CPU は下がったがコマ適用間隔の p95 が +10%（副指標の悪化で不採用）
+goal = ../goal.toml
+a1 = ../runs/idle_930_p95_150
+a2 = ../runs/idle_940_p95_150
+b1 = ../runs/idle_610_p95_165
+b2 = ../runs/idle_620_p95_165
+exit = 0
+verdict = WORSE
+
+before_idle_cpu_pct = 9.35
+after_idle_cpu_pct = 6.15
+delta_pct = -3.20
+noise_pct = 0.30
+secondary = p95_ms=150.000/165.000, catchup=0/0, allocs=0/0
+
+note = 主指標だけを見れば adopted と同じ -3.20 である。違うのは p95 が 150.000 から
+note = 165.000（+10%）へ延びたことだけ。許容は +5%（157.500）なので悪化側であり、
+note = 主指標がどれだけ下がっても採用しない（要件 4.6＝発話中のタイミングを劣化させない）。
+note = 「軽くなった代わりに反応が鈍くなった」変更をここで止める。

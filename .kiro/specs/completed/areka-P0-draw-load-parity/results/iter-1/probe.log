@@ -1,0 +1,33 @@
+probe: check=session step=begin t=2026-08-23T04:34:05.421515Z script_version=0.1.1 required=clickthrough,drag,dpi,balloon_follow exit_ms=120000 bin_dir=C:\home\maz\git\areka\.claude\worktrees\areka-p0-scope-chain-gap-004c39\target\release
+probe: check=session step=show_ready t=2026-08-23T04:34:08.576835Z waited_ms=60000 result=ok
+probe: check=env step=injection t=2026-08-23T04:34:08.689918Z setcursorpos_ret=true cursor_moved=true sendinput_sent=1 sendinput_lasterr=0 cursor_injection=available input_injection=available injection=available
+probe: check=windows step=enumerate t=2026-08-23T04:34:08.796266Z hwnd=0xDB0BC2 win_kind=- scope=- x=1632 y=754 w=576 h=406 ex=0x2800A0
+probe: check=windows step=enumerate t=2026-08-23T04:34:08.812070Z hwnd=0x62100C win_kind=- scope=- x=1340 y=904 w=672 h=800 ex=0x2800A0
+probe: check=windows step=enumerate t=2026-08-23T04:34:08.826733Z hwnd=0xA00224 win_kind=balloon scope=0 x=1796 y=352 w=800 h=448 ex=0x2800A0
+probe: check=windows step=enumerate t=2026-08-23T04:34:08.844829Z hwnd=0xC603E0 win_kind=char scope=0 x=2064 y=610 w=764 h=1094 ex=0x2800A0
+probe: check=windows step=target t=2026-08-23T04:34:08.919231Z scope=0 char_hwnd=0xC603E0 balloon_hwnd=0xA00224
+probe: check=clickthrough step=probe_point t=2026-08-23T04:34:09.041233Z hwnd=0xC603E0 point=transparent x=2066 y=612 moved=true
+probe: check=clickthrough step=read t=2026-08-23T04:34:09.463888Z hwnd=0xC603E0 point=transparent ex=0x2800A0 transparent=true expected=true result=match
+probe: check=clickthrough step=probe_point t=2026-08-23T04:34:09.569070Z hwnd=0xC603E0 point=opaque x=2446 y=1694 moved=true
+probe: check=clickthrough step=read t=2026-08-23T04:34:09.996289Z hwnd=0xC603E0 point=opaque ex=0x280080 transparent=false expected=false result=match
+probe: check=clickthrough step=window t=2026-08-23T04:34:10.417309Z begin_t=2026-08-23T04:34:08.937943Z end_t=2026-08-23T04:34:10.417071Z
+probe: check=clickthrough step=status t=2026-08-23T04:34:10.432820Z status=done reason=-
+probe: check=drag step=rect t=2026-08-23T04:34:10.444304Z phase=before hwnd=0xC603E0 win_kind=char x=2064 y=610 w=764 h=1094
+probe: check=drag step=rect t=2026-08-23T04:34:10.456571Z phase=before hwnd=0xA00224 win_kind=balloon x=1796 y=352 w=800 h=448
+probe: check=drag step=gesture t=2026-08-23T04:34:11.416783Z hwnd=0xC603E0 from_x=2446 from_y=1694 to_x=2526 to_y=1694 dx=80 dy=0 moved=true
+probe: check=drag step=rect t=2026-08-23T04:34:11.835283Z phase=after hwnd=0xC603E0 win_kind=char x=2064 y=610 w=764 h=1094
+probe: check=drag step=rect t=2026-08-23T04:34:11.851109Z phase=after hwnd=0xA00224 win_kind=balloon x=1796 y=352 w=800 h=448
+probe: check=drag step=window t=2026-08-23T04:34:11.866227Z begin_t=2026-08-23T04:34:10.442005Z end_t=2026-08-23T04:34:11.866151Z
+probe: check=drag step=status t=2026-08-23T04:34:11.893774Z status=done reason=-
+probe: check=dpi step=monitors t=2026-08-23T04:34:11.942299Z mon=0 hmon=0x403D9 dpi=192 wa=0,0,2880,1704
+probe: check=dpi step=monitors t=2026-08-23T04:34:11.956981Z mon=1 hmon=0x50165 dpi=144 wa=-2560,195,0,1795
+probe: check=dpi step=rect t=2026-08-23T04:34:11.983268Z phase=before hwnd=0xC603E0 win_kind=char x=2064 y=610 w=764 h=1094
+probe: check=dpi step=rect t=2026-08-23T04:34:11.996819Z phase=before hwnd=0xA00224 win_kind=balloon x=1796 y=352 w=800 h=448
+probe: check=dpi step=move t=2026-08-23T04:34:12.045200Z phase=out hwnd=0xC603E0 x=-2520 y=235 from_dpi=192 to_dpi=144 result=ok
+probe: check=dpi step=move t=2026-08-23T04:34:13.288759Z phase=back hwnd=0xC603E0 x=2064 y=610 from_dpi=144 to_dpi=192 result=ok
+probe: check=dpi step=rect t=2026-08-23T04:34:15.101014Z phase=after hwnd=0xC603E0 win_kind=char x=1968 y=610 w=764 h=1094
+probe: check=dpi step=rect t=2026-08-23T04:34:15.119846Z phase=after hwnd=0xA00224 win_kind=balloon x=1700 y=352 w=800 h=448
+probe: check=dpi step=window t=2026-08-23T04:34:15.140752Z begin_t=2026-08-23T04:34:11.982795Z end_t=2026-08-23T04:34:15.140620Z
+probe: check=dpi step=status t=2026-08-23T04:34:15.154056Z status=done reason=-
+probe: check=balloon_follow step=status t=2026-08-23T04:34:15.182225Z status=done reason=-
+probe: check=session step=end t=2026-08-23T04:36:06.952149Z exit_code=0 elapsed_sec=121.5

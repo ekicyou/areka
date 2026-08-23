@@ -1,0 +1,1 @@
+title=summary が brief 旧数値との対比表を決定論的に組む（--out - で標準出力へ）

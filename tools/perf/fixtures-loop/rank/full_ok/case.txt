@@ -1,0 +1,11 @@
+title = 4 段そろった走行（dump は sample_ok の断片を借りる）
+exit = 0
+argv = --stage all --top 4
+dump_path = ../sample_ok/dump.txt
+
+note = 段①は cpu.csv、段②は perf(thread)／perf(process) の 2 スナップショット、
+note = 段③は sample_ok の dump 断片、段④は [tick] kind=window 2 本から作る。
+note = 段②には「前のスナップショットに居なかった TID（19500）」を入れてあり、
+note = 差分の規則（新しい TID はまるごと）が効いていることを期待出力が固定する。
+note = 同値の並び（cursor_monitor と vblank はどちらも 0.500 秒）で、役割別は名前順・
+note = スレッド別は TID 順という別々の同値規則が効くことも同時に固定する。

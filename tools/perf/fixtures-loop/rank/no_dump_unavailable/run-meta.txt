@@ -1,0 +1,7 @@
+# fixture の実行条件（実物は invoke-perf-run.ps1 が書き出す）
+[実行]
+build = dev
+profile = short
+[マシン]
+hostname = FIXTURE
+logical_processors = 4

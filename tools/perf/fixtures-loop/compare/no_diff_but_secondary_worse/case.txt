@@ -1,0 +1,24 @@
+# perf-compare.py --selftest の期待値台帳（人も機械もこの 1 ファイルを読む）
+title = 差なしの帯の中で副指標だけが悪化した（安全側に倒して WORSE）
+goal = ../goal.toml
+a1 = ../runs/idle_930_p95_150
+a2 = ../runs/idle_940_p95_150
+b1 = ../runs/idle_932_p95_165
+b2 = ../runs/idle_940_p95_165
+exit = 0
+verdict = WORSE
+
+before_idle_cpu_pct = 9.35
+after_idle_cpu_pct = 9.36
+delta_pct = 0.01
+noise_pct = 0.30
+secondary = p95_ms=150.000/165.000, catchup=0/0, allocs=0/0
+
+note = 主指標の差 +0.01 はばらつき 0.30 の内側なので、主指標だけを見れば no_diff と
+note = まったく同じである。違うのは p95 が 150.000 から 165.000（+10%）へ延びたこと。
+note = 設計 C10 の文面は「|差| < ばらつき → NO_DIFF」と「差 ≥ ばらつき または副指標悪化
+note = → WORSE」を並べて書いており、この帯の中の副指標悪化はどちらとも読める。
+note = ここでは安全側に倒して WORSE とする——差が無いのに副指標が悪化した変更を
+note = 残す理由が無いためである。NO_DIFF なら「差なし」として台帳に残るだけだが、
+note = WORSE なら悪化として残る。どちらでも変更は元へ戻るが、記録の意味が違う。
+note = 判定の順序（副指標の悪化を帯の判定より前に見る）をこのケースが固定する。

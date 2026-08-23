@@ -23,6 +23,7 @@ use std::sync::OnceLock;
 use areka_emo_text::actor::TextLayerRuntime;
 use areka_sakura::ActorKey;
 use tracing::{info, warn};
+use wintf::ecs::world::tick_wake;
 
 /// hover 注入導線を駆動する env 変数（`AREKA_` 名前空間規約）。
 const ENV_KEY: &str = "AREKA_CHOICE_HOVER_INJECT";
@@ -191,7 +192,13 @@ fn config() -> &'static HoverInjectConfig {
 /// （`inject_choice_hover` を一度も呼ばない・本番既定）。`frame_time` は text phase が解決した
 /// `talk_time`（`TalkClock::talk_time` と同源）。
 pub fn drive(runtime: &mut TextLayerRuntime, frame_time: f64) {
-    run_hover_inject(config(), runtime, frame_time);
+    let config = config();
+    // 注入が有効な間は周期巡回を進めるために毎画面更新で回る必要があるので、次の画面更新を
+    // 予約する（設計 C16 の `REARM`）。無効（本番既定）なら旗も立てない＝完全 no-op のまま。
+    if !matches!(config, HoverInjectConfig::Disabled) {
+        tick_wake::mark(tick_wake::REARM);
+    }
+    run_hover_inject(config, runtime, frame_time);
 }
 
 #[cfg(test)]

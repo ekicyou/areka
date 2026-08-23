@@ -1,0 +1,28 @@
+BeginHeader
+         SampledProfile,  TimeStamp,     Process Name ( PID),   ThreadID,           PrgrmCtr, CPU, ThreadStartImage!Function,            Image!Function, Count, SampledProfile type
+                Stack,  TimeStamp,   ThreadID, No.,            Address,            Image!Function
+EndHeader
+         SampledProfile,    1052388,        areka.exe (23140),      18332, 0x00007ff6c4a91b30,   6,        areka.exe!mainCRTStartup,        areka.exe!wintf::ecs::world::EcsWorld::try_tick_world,     1,     1
+         SampledProfile,    1053509,        areka.exe (23140),      18332, 0x00007ff6c4a3f210,   6,        areka.exe!mainCRTStartup,        areka.exe!wintf::ecs::graphics::systems::visual_sync::visual_hierarchy_sync_system,     1,     1
+         SampledProfile,    1054630,        areka.exe (23140),      18332, 0x00007ff6c4a3f2c4,   6,        areka.exe!mainCRTStartup,        areka.exe!wintf::ecs::graphics::systems::visual_sync::visual_hierarchy_sync_system,     1,     1
+         SampledProfile,    1055751,        areka.exe (23140),      18332, 0x00007ff6c4b02940,   6,        areka.exe!mainCRTStartup,        areka.exe!areka_emo_text::actor::present_actor,     1,     1
+         SampledProfile,    1056872,        areka.exe (23140),      18332, 0x00007ff6c4b02a18,   2,        areka.exe!mainCRTStartup,        areka.exe!areka_emo_text::actor::present_actor,     1,     1
+         SampledProfile,    1057993,        areka.exe (23140),      18332, 0x00007ff6c49f8874,   2,        areka.exe!mainCRTStartup,        areka.exe!wintf::ecs::pointer::systems::clear_transient_pointer_state,     1,     1
+         SampledProfile,    1059114,        areka.exe (23140),      18332, 0x00007ffb0d21c4a0,   2,        areka.exe!mainCRTStartup,       win32u.dll!NtUserPeekMessage,     1,     1
+         SampledProfile,    1060235,        areka.exe (23140),      18332, 0x00007ff6c4a91c88,   2,        areka.exe!mainCRTStartup,        areka.exe!bevy_ecs::schedule::executor::multi_threaded::MultiThreadedExecutor::run,     1,     1
+         SampledProfile,    1061356,        areka.exe (23140),      18332, 0x00007ffb1c2d3e4f,   2,        areka.exe!mainCRTStartup,          Unknown!0x00007ffb1c2d3e4f,     1,     1
+         SampledProfile,    1062477,        areka.exe (23140),      18420, 0x00007ffb0e114820,   4,        areka.exe!std::sys::pal::windows::thread::Thread::new::thread_start,       dwmapi.dll!DwmFlush,     1,     1
+         SampledProfile,    1063598,        areka.exe (23140),      18420, 0x00007ff6c4a7d130,   4,        areka.exe!std::sys::pal::windows::thread::Thread::new::thread_start,        areka.exe!wintf::runtime::tick_bridge::vsync_loop,     1,     1
+         SampledProfile,    1064719,        areka.exe (23140),      18420, 0x00007ff8a1c04d10,   4,        areka.exe!std::sys::pal::windows::thread::Thread::new::thread_start,     ntoskrnl.exe!KiPageFault,     1,     1
+         SampledProfile,    1065840,        areka.exe (23140),      18512, 0x00007ff6c4a5e0f0,   0,        areka.exe!std::sys::pal::windows::thread::Thread::new::thread_start,        areka.exe!wintf::ecs::clickthrough::monitor::cursor_monitor_loop,     1,     1
+         SampledProfile,    1066961,        areka.exe (23140),      18512, 0x00007ffb0d21b190,   0,        areka.exe!std::sys::pal::windows::thread::Thread::new::thread_start,       win32u.dll!NtUserGetCursorPos,     1,     1
+         SampledProfile,    1068082,        areka.exe (23140),      18512, 0x00007ff8a1c11a40,   0,        areka.exe!std::sys::pal::windows::thread::Thread::new::thread_start,     ntoskrnl.exe!KiDpcInterrupt,     1,     1
+         SampledProfile,    1069203,        areka.exe (23140),      18332, 0x00007ff6c4ac2058,   6,        areka.exe!mainCRTStartup,        areka.exe!areka_emo_compose::blit::execute,     1,     1
+                  Stack,    1069203,      18332,   1, 0x00007ff6c4ac2058,        areka.exe!areka_emo_compose::blit::execute
+                  Stack,    1069203,      18332,   2, 0x00007ff6c4ab9d14,        areka.exe!areka_emo_compose::plan::build_plan
+                  Stack,    1069203,      18332,   3, 0x00007ff6c4a91b30,        areka.exe!wintf::ecs::world::EcsWorld::try_tick_world
+                  Stack,    1069203,      18332,   4, 0x00007ff6c4a7d0a4,        areka.exe!wintf::runtime::tick_bridge::tick_one_frame
+                  Stack,    1069203,      18332,   5, 0x00007ffb1c2d3e4f,          Unknown!0x00007ffb1c2d3e4f
+                  Stack,    1069203,      18332,   6, 0x00007ff6c4c00110,        areka.exe!mainCRTStartup
+                  Stack,    1062477,      18420,   1, 0x00007ffb0e114820,       dwmapi.dll!DwmFlush
+                  Stack,    1062477,      18420,   2, 0x00007ff6c4a7d130,        areka.exe!wintf::runtime::tick_bridge::vsync_loop

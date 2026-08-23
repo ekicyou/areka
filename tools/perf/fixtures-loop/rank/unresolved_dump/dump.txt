@@ -1,0 +1,7 @@
+BeginHeader
+         SampledProfile,  TimeStamp,     Process Name ( PID),   ThreadID,           PrgrmCtr, CPU, ThreadStartImage!Function,            Image!Function, Count, SampledProfile type
+                Stack,  TimeStamp,   ThreadID, No.,            Address,            Image!Function
+EndHeader
+         SampledProfile,    3052388,        areka.exe (23140),      18332, 0x00007ffb0d21c4a0,   6,        areka.exe!mainCRTStartup,       win32u.dll!NtUserPeekMessage,     1,     1
+         SampledProfile,    3053509,        areka.exe (23140),      18332, 0x00007ffb1c2d3e4f,   6,        areka.exe!mainCRTStartup,          Unknown!0x00007ffb1c2d3e4f,     1,     1
+                  Stack,    3052388,      18332,   1, 0x00007ffb0d21c4a0,       win32u.dll!NtUserPeekMessage

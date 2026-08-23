@@ -1,0 +1,13 @@
+title = 列名行に既知の列が無い dump（列名行そのものは在る・xperf の版ずれとして止める）
+exit = 4
+argv = --stage thread
+
+stderr_substr = SampledProfile
+stderr_substr = ThreadID
+stderr_substr = 列名行
+
+note = 列名行が丸ごと欠けている場合（missing_header）とは別の壊れ方である。列名行は
+note = 在るのに既知の列だけが別名になっていると、列を引き当てられないまま黙って
+note = 進んでしまい、スレッド別の順位表が「空の TID 1 本に全サンプル」という
+note = もっともらしい嘘になる。段を問わず（thread でも function でも）同じ理由で
+note = 止まることを、この不合格側が固定する。

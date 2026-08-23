@@ -12,6 +12,7 @@
 use areka_emo_compose::BindSet;
 use areka_emo_present::PresentCommand;
 use areka_seriko::{DisplayCommand, SurfaceOutput};
+use wintf::ecs::world::tick_wake;
 
 use crate::emo2_boot::target_map::{balloon_target, scope_of, shell_target};
 
@@ -115,6 +116,10 @@ impl SurfaceOutput for PresentBridge {
                         "PresentBridge: PresentCommand の配送先（UI receiver）が drop 済み（shutdown 中）— 破棄"
                     );
                 }
+                // 表示指令が UI へ届いた＝次の画面更新に仕事がある（設計 C16 の `PRESENT`）。
+                // 送出の**後**に立てる——先に立てると、読み取りと送出の隙間で旗だけが倒れ、
+                // 指令が次の起床まで置き去りになる。逆順なら余分に 1 回回るだけで済む。
+                tick_wake::mark(tick_wake::PRESENT);
             }
             // 写像不能（非数値 scope）: 握り潰さず warn! で観測して drop（R3.6/R3.7・DD-5）。
             None => {

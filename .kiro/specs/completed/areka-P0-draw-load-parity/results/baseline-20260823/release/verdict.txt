@@ -1,0 +1,652 @@
+==============================================================================
+areka 性能計測 合否判定レポート（judge-perf.py）
+==============================================================================
+  モード       : verdict（要件 4.2 の判定式⑴〜⑷・収束判定 要件 5.1）
+  スクリプト版 : 0.4.0 (判定式と較正値は 0.3.2 から 1 つも変えていない——足したのは読み口だけ / §9 に catch-up の系統別（target フィールド）と各発生の時刻突合・「フレーム駆動の負荷が起床を遅らせる」仮説の比と語 / --emit-metrics（主要指標を metric=<name> value=<v> 行で末尾に出す・C10 が読む） / 任意種 [tick] kind=window・perf(thread)・perf(process)・発話区間の印を読む（必要ログ種 J_REQUIRED_LOG_KINDS は不変） / SSP 参考値（アイドル 3.05% / 発話の頂 4.64%・2026-08-15・合否に不使用）をバナーへ登記 / 0.3.2: 判定式⑴の窓を発火起点へ・上限の土台を最大コマ待ち 150ms へ・判定対象系列を明示指定へ・条件 4 の活性本数を判定対象系列の scope に限定)
+  ビルド種別   : release
+  水準         : long
+
+==============================================================================
+[1] 測定マシンの条件（要件 4.5）
+==============================================================================
+
+-- run-meta.txt [実行] ---------------------------------------------------------
+  script = tools/perf/invoke-perf-run.ps1
+  script_version = 1.1.0
+  spec = areka-P0-recompose-budget（要件 2.1 / 2.3 / 2.6 / 2.7 / 4.5）
+  dry_run = False
+  quiet_confirmed = False
+  profile = long
+  build = release
+  started_utc = 2026-08-23T02:46:50.220Z
+  out_dir = C:\Users\maz-o\AppData\Local\areka-diag\perf-loop\draw-load-parity\baseline-20260823\release
+  quiet_mode = auto
+  quiet_attempts = 1
+
+-- run-meta.txt [対象] ---------------------------------------------------------
+  exe_path = C:\home\maz\git\areka\.claude\worktrees\areka-p0-scope-chain-gap-004c39\target\release\areka.exe
+  exe_size_bytes = 4931072
+  exe_last_write_utc = 2026-08-22T22:50:43Z
+  working_directory = C:\home\maz\git\areka\.claude\worktrees\areka-p0-scope-chain-gap-004c39\target\release
+  ghost_root = C:\home\maz\git\areka\.claude\worktrees\areka-p0-scope-chain-gap-004c39\crates\pilot\examples\shiori-host-32\fixtures\emo2
+  balloon_root = C:\home\maz\git\areka\.claude\worktrees\areka-p0-scope-chain-gap-004c39\crates\pilot\examples\shiori-host-32\fixtures\emo2\emo2-kakukaku
+  shiori_helper_path = C:\home\maz\git\areka\.claude\worktrees\areka-p0-scope-chain-gap-004c39\target\release\shiori-host32-helper.exe
+  shiori_helper_present = True
+  areka_profile_dir = C:\home\maz\git\areka\.claude\worktrees\areka-p0-scope-chain-gap-004c39\target\release\profile\areka
+  command_line = "C:\home\maz\git\areka\.claude\worktrees\areka-p0-scope-chain-gap-004c39\target\release\areka.exe" "C:\home\maz\git\areka\.claude\worktrees\areka-p0-scope-chain-gap-004c39\crates\pilot\examples\shiori-host-32\fixtures\emo2" "C:\home\maz\git\areka\.claude\worktrees\areka-p0-scope-chain-gap-004c39\crates\pilot\examples\shiori-host-32\fixtures\emo2\emo2-kakukaku"
+  env_smoke_exit_name = AREKA_APP_SMOKE_EXIT_MS
+  env_smoke_exit_ms = 1500000
+  env_RUST_LOG = info,areka_emo_present=debug
+  env_NO_COLOR = 1
+  bin_dir = -
+  exe_sha256 = B4ED1B79CE03A2F0B9CEE49AC4DB2A831D6E2E8AAD93BB3D98D80E25F6DF29F2
+
+-- run-meta.txt [較正値] --------------------------------------------------------
+  SMOKE_EXIT_MS_SHORT = 420000
+  SMOKE_EXIT_MS_LONG = 1500000
+  CPU_SAMPLE_INTERVAL_SEC = 15
+  COUNTER_PATH_PROC_ID = \Process(areka*)\ID Process
+  COUNTER_PATH_PROC_CPU = \Process(areka*)\% Processor Time
+  COUNTER_FIRST_SAMPLE_GRACE_SEC = 30
+  COUNTER_RETRY_MAX = 3
+  COUNTER_RETRY_WAIT_SEC = 2
+  EXIT_WATCHDOG_MARGIN_SEC = 180
+  EARLY_EXIT_TOLERANCE_SEC = 30
+  DEFAULT_BALLOON_SUBDIR = emo2-kakukaku（emo2 fixture 固有・他ゴーストへ流用しないこと）
+  LOG_MARKER_SMOKE_GATE = smoke 自動 close ゲート有効
+  cpu_unit = cpu_percent_1core = 1 コアを 100% とする換算値（複数コア使用時は 100 超もあり得る）。1 行は約 1 秒幅の瞬時値で、15 秒の平均ではない
+
+-- run-meta.txt [マシン] --------------------------------------------------------
+  hostname = NAGI
+  logical_processors = 22
+  os_version = Microsoft Windows NT 10.0.26200.0
+  powershell_version = 7.6.4
+  dotnet_version = 10.0.10
+  os_caption = Microsoft Windows 11 Pro
+  os_build = 26200
+  total_memory_mb = 32127
+  cpu_model = Intel(R) Core(TM) Ultra 9 185H
+  cpu_sockets = 1
+  cpu_cores_physical = 16
+  cpu_max_clock_mhz = 2500
+  power_scheme = 電源設定の GUID: d7a728f8-6d8b-4ab7-a3e3-7aaeb0f9871c  (Sonos)
+
+-- run-meta.txt [ソース] --------------------------------------------------------
+  git_head = 28095957d9101eb94d5188dafb7f99d3ae548a42
+  git_branch = claude/areka-p0-draw-load-parity-31d144
+  git_dirty_files = 1
+
+-- run-meta.txt [結果] ---------------------------------------------------------
+  ended_utc = 2026-08-23T03:11:52.762Z
+  elapsed_sec = 1500.5
+  areka_exit_code = 0
+  cpu_sample_count = 100
+  run_log = C:\Users\maz-o\AppData\Local\areka-diag\perf-loop\draw-load-parity\baseline-20260823\release\run.log
+  run_stderr_log = C:\Users\maz-o\AppData\Local\areka-diag\perf-loop\draw-load-parity\baseline-20260823\release\run.stderr.log
+  cpu_csv = C:\Users\maz-o\AppData\Local\areka-diag\perf-loop\draw-load-parity\baseline-20260823\release\cpu.csv
+
+-- DPI 構成（run.log 由来・run-meta.txt には無い） --------------------------------------
+  合成コストは DPI に比例し、ベースラインは 2 モニタ混在 DPI で採取される。
+  DPI を書かないレポートは同一条件で再測できない。
+  primary_dpi = 192
+  shell_author_dpi = 96
+  balloon_author_dpi = 96
+  k_shell = 2.0
+  k_balloon = 2.0
+  表示成立点 info! に現れた DPI/寸法の組み合わせ（出現数の多い順）:
+    [1169 回] author_dpi=96  window_dpi=Some((192, 192))  k=2.0  k_ratio=ScaleRatio { num: 2, den: 1 }  native_w=382  native_h=547  scaled_w=764  scaled_h=1094
+    [407 回] author_dpi=96  window_dpi=Some((192, 192))  k=2.0  k_ratio=ScaleRatio { num: 2, den: 1 }  native_w=336  native_h=400  scaled_w=672  scaled_h=800
+    [54 回] author_dpi=96  window_dpi=Some((192, 192))  k=2.0  k_ratio=ScaleRatio { num: 2, den: 1 }  native_w=288  native_h=203  scaled_w=576  scaled_h=406
+    [15 回] author_dpi=96  window_dpi=Some((192, 192))  k=2.0  k_ratio=ScaleRatio { num: 2, den: 1 }  native_w=400  native_h=224  scaled_w=800  scaled_h=448
+
+==============================================================================
+[2] 較正値（要件 2.6 / 4.5 / 5.3・所在はスクリプト冒頭のバナー 1 箇所）
+==============================================================================
+  SCRIPT_VERSION = 0.4.0 (判定式と較正値は 0.3.2 から 1 つも変えていない——足したのは読み口だけ / §9 に catch-up の系統別（target フィールド）と各発生の時刻突合・「フレーム駆動の負荷が起床を遅らせる」仮説の比と語 / --emit-metrics（主要指標を metric=<name> value=<v> 行で末尾に出す・C10 が読む） / 任意種 [tick] kind=window・perf(thread)・perf(process)・発話区間の印を読む（必要ログ種 J_REQUIRED_LOG_KINDS は不変） / SSP 参考値（アイドル 3.05% / 発話の頂 4.64%・2026-08-15・合否に不使用）をバナーへ登記 / 0.3.2: 判定式⑴の窓を発火起点へ・上限の土台を最大コマ待ち 150ms へ・判定対象系列を明示指定へ・条件 4 の活性本数を判定対象系列の scope に限定)
+  FRAME_INTERVAL_MAX_WAIT_MS = 150.0   ← 上限の土台＝アニメ定義の最大コマ待ち・emo2 固有・流用禁止（task 3.2）
+  FRAME_INTERVAL_CYCLE_SPAN_MS = 172.0   ← 判定窓の条件 2＝サイクル全長・**上限ではない**・emo2 固有（task 3.2）
+  FRAME_INTERVAL_ANIMATION_WAITS_MS = [0.0, 150.0, 22.0]   ← 上の 2 値の出どころ（emo2 animation1400 のコマ待ち列）
+  FRAME_INTERVAL_TOLERANCE = 0.15
+  FRAME_INTERVAL_IDLE_MAX_ACTIVE = 1   ← 判定窓の条件 4＝両端の推定活性アニメ本数の上限。同じ鍵に 2 本のアニメが混ざるとその差はどちらのコマ間隔でもなくなる（位相しだいで偽の合格へ倒れる）。数えるのは **その系列に対応する scope だけ**（0.3.2）
+  FRAME_INTERVAL_SERIES_KEY = target_id x surface_id
+  FRAME_INTERVAL_WINDOW = 窓 C（発火起点）: 「loop 抽選発火」時刻 f を起点に、a - f <= FRAME_INTERVAL_CYCLE_SPAN_MS かつ区間 (a, b] に次の発火を含まず、さらに両端で **同じ scope の** 推定活性アニメ本数が FRAME_INTERVAL_IDLE_MAX_ACTIVE 以下の間隔だけを判定に使う（別 scope のアニメは数えない）。停止ログは終端に使わない（最後のコマの適用より先に出るため。活性本数の収支には使う）。窓 A（起動過渡のみ除外）は参考表示にとどめる
+  FRAME_INTERVAL_JUDGE_WINDOW = 窓 C（起動過渡を除外し、さらに発火起点でサイクルの内側へ絞った窓）   ← 判定式⑴が使う窓
+  FRAME_INTERVAL_SERIES_SCOPE = ['TargetId(0) / surface_id=1000 → scope=0']   ← 系列と発火ログの対応・emo2 固有
+  FRAME_INTERVAL_JUDGE_GRANULARITY = 系列ごと（target_id x surface_id）に判定し、1 系列でも上限超過なら不合格。同一 target の系列をまとめた p95 は参考表示にとどめる（速い系列の 5% 裾に遅い系列が丸ごと吸収されるため）   ← 判定式⑴の判定粒度
+  FRAME_INTERVAL_JUDGED_SERIES = ['TargetId(0) / surface_id=1000']   ← task 3.2 で確定・指定は all-or-nothing
+  FRAME_INTERVAL_MIN_SAMPLES = 20   ← 自動選別の除外閾値／明示指定では「合格を返さない」下限
+  FRAME_INTERVAL_MAX_MEAN_FACTOR = 10.0   ← 自動選別のみ（明示指定のときは使わない）
+  FRAME_INTERVAL_EXCLUSION_BLOCKS_PASS = 自動選別（FRAME_INTERVAL_JUDGED_SERIES が空）のあいだは、除外した系列が 1 つでもあれば判定式⑴は合格を返さない（判定不能）。除外には、閾値で外した系列だけでなく**判定窓に間隔が 1 本も残らなかった系列**（窓で全部落ちた／窓内の適用が 1 回以下）も含める（数えられずに消える経路を残さない）。不合格は除外の有無によらず優先する。明示指定へ切り替えた現在は除外が意図的になり合格が意味を持つが、**明示指定した系列自身を測れていないとき**（定常状態に perf 行が 1 本も無い／判定窓に間隔が 1 本も残らない／間隔が FRAME_INTERVAL_MIN_SAMPLES に満たない）は明示指定でも合格を返さない。   ← 判定対象から外した系列を合格に読み替えない規則（D7）
+  FRAME_INTERVAL_COMPARE_DECIMALS = 3   ← 判定式⑴の比較・表示を揃える桁（ms 小数点以下）
+  WARMUP_EXCLUDE_SEC = 60.0   ← task 3.2 の実測で 60 秒を据え置き
+  VERDICT_MIN_STEADY_APPLIES = 30   ← 判定式⑵⑶の成立条件・暫定
+  VERDICT_MIN_STEADY_SEC = 60.0   ← 判定式⑵⑶の成立条件・暫定
+  IDLE_CPU_MAX_RELEASE_PCT = 3.0   ← 判定式⑷前半・狭義の < 比較。2026-08-22 裁定＝**CPU の絶対値**であり、SSP の描画方式（GDI）と areka（D2D）の差で正規化しない（要件 5.1・5.2）
+  SSP_REFERENCE_IDLE_PCT = 3.05   ← SSP 参考値（2026-08-15 実測・アイドル）・参考値・合否に不使用（要件 5.2・再採取は本 spec の要件ではない）
+  SSP_REFERENCE_TALK_PEAK_PCT = 4.64   ← SSP 参考値（2026-08-15 実測・発話の頂）・参考値・合否に不使用（要件 5.2・再採取は本 spec の要件ではない）
+  CATCHUP_SHOW_WINDOW_SEC = 10.0   ← §9 追補・直前 N 秒の表示成立点数を数える窓（発話再生中かの代理）・合否に不使用
+  CATCHUP_TICK_LOAD_RATIO_MIN = 1.5   ← §9 追補・仮説を 成立 と書く比の下限・暫定・合否に不使用（要件 2.9）
+  CATCHUP_TICK_MATCH_MAX_SEC = 2.0   ← §9 追補・t_ms を読めない [tick] 窓を「覆っている」と見なす上限
+  IDLE_CPU_STATISTIC = 定常状態（ウォームアップ除外後）の平均（1 コア換算 %）   ← 判定式⑷前半が閾値と比べる量
+  VERDICT_MIN_CPU_SAMPLES = 5   ← 判定式⑷前半の成立条件・暫定
+  LONG_RUN_MIN_SPAN_SEC = 1200.0   ← 判定式⑷後半の適用条件（20 分）
+  CPU_SAMPLE_INTERVAL_EXPECTED_SEC = 15.0   ← 欠測報告のみに使用
+  CPU_SAMPLE_GAP_FACTOR = 1.5
+  CONVERGENCE_WINDOW_COUNT = 4   ← 収束判定・要件 5.1/5.3
+  CONVERGENCE_WINDOW_SPLIT = 定常状態の採取点を個数で等分（時間等分ではない）
+  CONVERGENCE_SLOPE_WINDOW_FROM = 窓3 〜 窓4（＝後半窓）
+  CONVERGENCE_MIDDLE_WINDOW_INDEX = 窓2（＝中間窓）
+  CONVERGENCE_SLOPE_METHOD = 最小二乗（x=経過分・y=1 コア換算 %）
+  CONVERGENCE_SLOPE_MAX_PCT_PER_MIN = 0.05   ← 収束判定・暫定・task 7.2 で確定
+  CONVERGENCE_WINDOW_DIFF_MAX_PCT = 0.3   ← 収束判定・暫定・task 7.2 で確定
+  CONVERGENCE_MIN_SAMPLES_PER_WINDOW = 3   ← 全体で 12 点未満なら判定不能
+  PERCENTILE_METHOD = nearest-rank（補間なし・ceil(q*n) 番目）
+  J_PERF_LINE_MESSAGE = perf(apply_show): 段階別計時
+  J_SHOW_LINE_MESSAGE = apply(ShowSurface): 表示・マスクを更新
+  J_CATCHUP_TICKER_MESSAGE = ticker catch-up: skipped multiple boundaries, firing once   ← dispatcher / kanade
+  J_CATCHUP_LOOP_MESSAGE = loop ticker catch-up: skipped multiple boundaries, firing once   ← loop_ticker
+  J_SERIKO_FIRE_MESSAGE = seriko: loop 抽選発火
+  J_SERIKO_STOP_MESSAGES = ['seriko: loop 末尾残留', 'seriko: loop 停止', 'seriko: loop bind から外れた ID の再生を停止']
+  J_CPU_CSV_HEADER = timestamp,cpu_percent_1core
+  J_PERF_IDENT_FIELDS = ['target_id', 'surface_id', 'cache_hit', 'key_hash']
+  J_PERF_STAGE_FIELDS = ['t_cache_us', 't_compose_us', 't_resample_us', 't_mask_us', 't_upload_us', 't_total_us']
+  J_PERF_ALLOC_FIELDS = ['alloc_compose_dst', 'alloc_resample_dst', 'alloc_xmap', 'alloc_mask']
+  J_PERF_REQUIRED_FIELDS = 14 個（上の 3 つの和・1 つでも欠ければ exit 2）
+  J_DPI_BOOT_FIELDS = ['primary_dpi', 'shell_author_dpi', 'balloon_author_dpi', 'k_shell', 'k_balloon']   ← run.log の起動時ログから
+  J_DPI_SHOW_FIELDS = ['author_dpi', 'window_dpi', 'k', 'k_ratio', 'native_w', 'native_h', 'scaled_w', 'scaled_h']   ← 表示成立点 info! から
+  J_CATCHUP_TARGETS = ['dispatcher', 'kanade', 'loop_ticker']   ← catch-up の系統・target フィールドの値
+  J_TICK_LINE_MESSAGE = [tick] kind=window   ← 任意種。行の時刻は窓が **閉じた** 時刻（覆う区間は [時刻 − t_ms, 時刻]）
+  J_PERF_THREAD_MESSAGE = perf(thread): スレッド別 CPU   ← 任意種
+  J_PERF_PROCESS_MESSAGE = perf(process): プロセス CPU   ← 任意種
+  J_TALK_START_EVENTS = ['boot_talk', 'steady_talk', 'steady_talk_replace', 'close_talk_start']   ← 任意種。発話中の頂（要件 5.4・合否に不使用）の区間の始まり
+  J_TALK_END_EVENTS = ['steady_talk_done', 'steady_talk_done_close', 'talk_done_quit', 'talk_done_interrupted_as_non_quit', 'close_refused']   ← 同・区間の終わり
+  J_REQUIRED_LOG_KINDS = ['perf サマリ行', '表示成立点 info!', 'CPU 時系列 CSV', 'run-meta.txt']   ← run.stderr.log は必要ログ種ではない。0.4.0 で足した 4 種は **任意種** でありここには入らない（無い走行でも判定は成立する）
+  J_OPTIONAL_LOG_KINDS = ['フレーム駆動の窓 [tick]', 'スレッド別 CPU perf(thread)', 'プロセス CPU perf(process)', '発話区間の印 event=']   ← 有れば読む・無くても欠落ではない（既定 OFF の観測なので点灯しない走行には出ない）
+
+  終了コード（EXIT_CODE_TABLE）:
+    0 = 合格（適用される判定式が全て合格。適用外だけで 0 にはしない）
+    1 = 不合格（判定式のいずれかが確定的に不合格）
+    2 = 判定不能（観測ゼロ・必要ログ種の欠落・定常状態が空・データ不足）
+    3 = 引数不正・ファイル読取不能
+  総合判定の決め方（VERDICT_PRECEDENCE）: 不合格が 1 つでもあれば 不合格(1)／なければ判定不能が 1 つでもあれば 判定不能(2)／合格が 1 つ以上あれば 合格(0)／全て適用外なら 判定不能(2)
+
+  【他ゴーストへ流用しないこと】「emo2 固有」と付した値は計測 fixture である
+  ゴースト emo2 のアニメ定義・実寸に由来する。別のゴーストでは測り直すこと。
+
+==============================================================================
+[3] 入力
+==============================================================================
+  実走ログ     : C:\Users\maz-o\AppData\Local\areka-diag\perf-loop\draw-load-parity\baseline-20260823\release\run.log
+  CPU 時系列   : C:\Users\maz-o\AppData\Local\areka-diag\perf-loop\draw-load-parity\baseline-20260823\release\cpu.csv
+  実行条件     : C:\Users\maz-o\AppData\Local\areka-diag\perf-loop\draw-load-parity\baseline-20260823\release\run-meta.txt
+  標準エラー   : C:\Users\maz-o\AppData\Local\areka-diag\perf-loop\draw-load-parity\baseline-20260823\release\run.stderr.log（0 バイト）
+    ※ 標準出力と標準エラーは同一ファイルへ流せないためランナーが分けている。
+       必要ログ種ではないので、無くても集計は成立する。
+
+==============================================================================
+[4] 必要ログ種の検査（要件 2.5）
+==============================================================================
+  perf サマリ行      : 1645 本  → OK
+  表示成立点 info!   : 1645 本  → OK
+  CPU 時系列         : 100 点  → OK
+  実行条件           : 63 項目 → OK
+  perf 行の全 14 フィールドが全行に揃っていることを確認済み。
+  ログの時間幅       : 2026-08-23T02:46:52.311764+00:00 〜 2026-08-23T03:11:52.683847+00:00
+  定常状態の開始     : 2026-08-23T02:47:52.790675+00:00（最初の perf 行から 60 秒後）
+
+-- 任意種の有無（0.4.0・無いことは欠落ではない） -------------------------------------------------
+  既定 OFF の観測なので、点灯せずに採った走行には 1 本も出ない。
+  判定式はどれもこれらを読まないので、有無は合否を動かさない。
+  フレーム駆動の窓 [tick] kind=window           : 0 本  → 無し
+  スレッド別 CPU perf(thread)                : 0 本  → 無し
+  プロセス CPU perf(process)                : 0 本  → 無し
+  発話区間の印 event=                         : 129 本
+
+-- 定常状態の成立（判定式⑵⑶の前提） ---------------------------------------------------------
+  定常状態の適用 1615 回・時間幅 1438.9 秒 → 判定を支えられる
+  下限: VERDICT_MIN_STEADY_APPLIES=30 回 / VERDICT_MIN_STEADY_SEC=60 秒
+
+==============================================================================
+[5] 判定結果（要件 4.2 の判定式⑴〜⑷・適用範囲は要件 4.3 / 4.4）
+==============================================================================
+  判定の語: 合格／不合格／判定不能（観測が無い・足りない）／適用外（この走行の対象外）
+  適用外は合格ではない。終了コードにも寄与しない。
+
+-- ⑴ コマ適用間隔の p95  →  合格 ------------------------------------------------------
+  適用ビルド : dev・release
+  実測値     : TargetId(0)/surface_id=1000: p95=161.946ms（491 本）
+  比べた閾値 : p95 <= 172.500ms（FRAME_INTERVAL_MAX_WAIT_MS=150ms x (1 + FRAME_INTERVAL_TOLERANCE=15%)・比較と表示は小数点以下 3 桁へ丸めて揃える）
+  観測集合   : 判定対象 1 系列・間隔 491 本（対象 1 個）／判定は系列ごと（target 別のまとめは参考表示）／判定対象から外した系列 8 本: TargetId(1) / surface_id=0（判定窓の間隔 0 本）: FRAME_INTERVAL_JUDGED_SERIES の明示指定に無い。窓 A（起動過渡のみ除外）の p95 193334.535ms（12 本・平均 96842.3ms） ＝ 平均が最大コマ待ち x FRAME_INTERVAL_MAX_MEAN_FACTOR=1500ms を超える。この水準では「鈍化したアニメ」と「もともと散発的な系列（バルーンの書き換え等）」を自動選別の閾値だけでは区別できない（どちらとも決めない。FRAME_INTERVAL_JUDGED_SERIES の明示指定で決めること） ／ TargetId(2) / surface_id=2100（判定窓の間隔 0 本）: FRAME_INTERVAL_JUDGED_SERIES の明示指定に無い。窓 A（起動過渡のみ除外）の p95 27934.364ms（327 本・平均 4376.5ms） ＝ 平均が最大コマ待ち x FRAME_INTERVAL_MAX_MEAN_FACTOR=1500ms を超える。この水準では「鈍化したアニメ」と「もともと散発的な系列（バルーンの書き換え等）」を自動選別の閾値だけでは区別できない（どちらとも決めない。FRAME_INTERVAL_JUDGED_SERIES の明示指定で決めること） ／ TargetId(2) / surface_id=2102（判定窓の間隔 0 本）: FRAME_INTERVAL_JUDGED_SERIES の明示指定に無い。窓 A（起動過渡のみ除外）の p95 757004.297ms（3 本・平均 372386.3ms） ＝ 平均が最大コマ待ち x FRAME_INTERVAL_MAX_MEAN_FACTOR=1500ms を超える。この水準では「鈍化したアニメ」と「もともと散発的な系列（バルーンの書き換え等）」を自動選別の閾値だけでは区別できない（どちらとも決めない。FRAME_INTERVAL_JUDGED_SERIES の明示指定で決めること） ／ TargetId(2) / surface_id=2105（判定窓の間隔 0 本）: FRAME_INTERVAL_JUDGED_SERIES の明示指定に無い。窓 A（起動過渡のみ除外）の p95 424352.922ms（8 本・平均 145243.5ms） ＝ 平均が最大コマ待ち x FRAME_INTERVAL_MAX_MEAN_FACTOR=1500ms を超える。この水準では「鈍化したアニメ」と「もともと散発的な系列（バルーンの書き換え等）」を自動選別の閾値だけでは区別できない（どちらとも決めない。FRAME_INTERVAL_JUDGED_SERIES の明示指定で決めること） ／ TargetId(2) / surface_id=2106（判定窓の間隔 0 本）: FRAME_INTERVAL_JUDGED_SERIES の明示指定に無い。窓 A（起動過渡のみ除外）の p95 106247.469ms（22 本・平均 60644.1ms） ＝ 平均が最大コマ待ち x FRAME_INTERVAL_MAX_MEAN_FACTOR=1500ms を超える。この水準では「鈍化したアニメ」と「もともと散発的な系列（バルーンの書き換え等）」を自動選別の閾値だけでは区別できない（どちらとも決めない。FRAME_INTERVAL_JUDGED_SERIES の明示指定で決めること） ／ TargetId(2) / surface_id=2108（判定窓の間隔 0 本）: FRAME_INTERVAL_JUDGED_SERIES の明示指定に無い。窓 A（起動過渡のみ除外）の p95 364706.420ms（6 本・平均 197392.9ms） ＝ 平均が最大コマ待ち x FRAME_INTERVAL_MAX_MEAN_FACTOR=1500ms を超える。この水準では「鈍化したアニメ」と「もともと散発的な系列（バルーンの書き換え等）」を自動選別の閾値だけでは区別できない（どちらとも決めない。FRAME_INTERVAL_JUDGED_SERIES の明示指定で決めること） ／ TargetId(2) / surface_id=2110（判定窓の間隔 0 本）: FRAME_INTERVAL_JUDGED_SERIES の明示指定に無い。窓 A（起動過渡のみ除外）の p95 305792.354ms（31 本・平均 35853.1ms） ＝ 平均が最大コマ待ち x FRAME_INTERVAL_MAX_MEAN_FACTOR=1500ms を超える。この水準では「鈍化したアニメ」と「もともと散発的な系列（バルーンの書き換え等）」を自動選別の閾値だけでは区別できない（どちらとも決めない。FRAME_INTERVAL_JUDGED_SERIES の明示指定で決めること） ／ TargetId(3) / surface_id=0（判定窓の間隔 0 本）: FRAME_INTERVAL_JUDGED_SERIES の明示指定に無い。窓 A（起動過渡のみ除外）の p95 50955.328ms（49 本・平均 27740.0ms） ＝ 平均が最大コマ待ち x FRAME_INTERVAL_MAX_MEAN_FACTOR=1500ms を超える。この水準では「鈍化したアニメ」と「もともと散発的な系列（バルーンの書き換え等）」を自動選別の閾値だけでは区別できない（どちらとも決めない。FRAME_INTERVAL_JUDGED_SERIES の明示指定で決めること）
+  空のときは : 判定対象の系列が 1 つも残らなければ判定不能（間隔が無いことを合格として読ませない）。判定窓に間隔が 1 本も残らなかった系列も、間隔の表に鍵が立たないだけで「無かったこと」にはせず、走行の perf レコードから数え直して除外として名指しする（窓 A の p95 併記）。明示指定した系列が定常状態の perf 行を 1 本も出していない場合は、数え直す元の表にも現れないので、指定と実測を直接突き合わせて判定不能にする。 さらに 自動選別（FRAME_INTERVAL_JUDGED_SERIES が空）のあいだは、除外した系列が 1 つでもあれば判定式⑴は合格を返さない（判定不能）。除外には、閾値で外した系列だけでなく**判定窓に間隔が 1 本も残らなかった系列**（窓で全部落ちた／窓内の適用が 1 回以下）も含める（数えられずに消える経路を残さない）。不合格は除外の有無によらず優先する。明示指定へ切り替えた現在は除外が意図的になり合格が意味を持つが、**明示指定した系列自身を測れていないとき**（定常状態に perf 行が 1 本も無い／判定窓に間隔が 1 本も残らない／間隔が FRAME_INTERVAL_MIN_SAMPLES に満たない）は明示指定でも合格を返さない。 鈍化したアニメほど出すコマ数が減って FRAME_INTERVAL_MIN_SAMPLES で落ちるため、除外を黙って合格に読み替えると本 spec が直そうとしている鈍化そのものを見逃す。
+  使った較正値: FRAME_INTERVAL_MAX_WAIT_MS, FRAME_INTERVAL_CYCLE_SPAN_MS, FRAME_INTERVAL_ANIMATION_WAITS_MS, FRAME_INTERVAL_TOLERANCE, FRAME_INTERVAL_IDLE_MAX_ACTIVE, FRAME_INTERVAL_JUDGE_WINDOW, FRAME_INTERVAL_JUDGE_GRANULARITY, FRAME_INTERVAL_SERIES_SCOPE, FRAME_INTERVAL_SERIES_KEY, FRAME_INTERVAL_JUDGED_SERIES, FRAME_INTERVAL_MIN_SAMPLES, FRAME_INTERVAL_MAX_MEAN_FACTOR, FRAME_INTERVAL_EXCLUSION_BLOCKS_PASS, FRAME_INTERVAL_COMPARE_DECIMALS, PERCENTILE_METHOD
+  根拠:
+    判定対象から外した系列:
+      - TargetId(1) / surface_id=0（判定窓の間隔 0 本）: FRAME_INTERVAL_JUDGED_SERIES の明示指定に無い。窓 A（起動過渡のみ除外）の p95 193334.535ms（12 本・平均 96842.3ms） ＝ 平均が最大コマ待ち x FRAME_INTERVAL_MAX_MEAN_FACTOR=1500ms を超える。この水準では「鈍化したアニメ」と「もともと散発的な系列（バルーンの書き換え等）」を自動選別の閾値だけでは区別できない（どちらとも決めない。FRAME_INTERVAL_JUDGED_SERIES の明示指定で決めること）
+      - TargetId(2) / surface_id=2100（判定窓の間隔 0 本）: FRAME_INTERVAL_JUDGED_SERIES の明示指定に無い。窓 A（起動過渡のみ除外）の p95 27934.364ms（327 本・平均 4376.5ms） ＝ 平均が最大コマ待ち x FRAME_INTERVAL_MAX_MEAN_FACTOR=1500ms を超える。この水準では「鈍化したアニメ」と「もともと散発的な系列（バルーンの書き換え等）」を自動選別の閾値だけでは区別できない（どちらとも決めない。FRAME_INTERVAL_JUDGED_SERIES の明示指定で決めること）
+      - TargetId(2) / surface_id=2102（判定窓の間隔 0 本）: FRAME_INTERVAL_JUDGED_SERIES の明示指定に無い。窓 A（起動過渡のみ除外）の p95 757004.297ms（3 本・平均 372386.3ms） ＝ 平均が最大コマ待ち x FRAME_INTERVAL_MAX_MEAN_FACTOR=1500ms を超える。この水準では「鈍化したアニメ」と「もともと散発的な系列（バルーンの書き換え等）」を自動選別の閾値だけでは区別できない（どちらとも決めない。FRAME_INTERVAL_JUDGED_SERIES の明示指定で決めること）
+      - TargetId(2) / surface_id=2105（判定窓の間隔 0 本）: FRAME_INTERVAL_JUDGED_SERIES の明示指定に無い。窓 A（起動過渡のみ除外）の p95 424352.922ms（8 本・平均 145243.5ms） ＝ 平均が最大コマ待ち x FRAME_INTERVAL_MAX_MEAN_FACTOR=1500ms を超える。この水準では「鈍化したアニメ」と「もともと散発的な系列（バルーンの書き換え等）」を自動選別の閾値だけでは区別できない（どちらとも決めない。FRAME_INTERVAL_JUDGED_SERIES の明示指定で決めること）
+      - TargetId(2) / surface_id=2106（判定窓の間隔 0 本）: FRAME_INTERVAL_JUDGED_SERIES の明示指定に無い。窓 A（起動過渡のみ除外）の p95 106247.469ms（22 本・平均 60644.1ms） ＝ 平均が最大コマ待ち x FRAME_INTERVAL_MAX_MEAN_FACTOR=1500ms を超える。この水準では「鈍化したアニメ」と「もともと散発的な系列（バルーンの書き換え等）」を自動選別の閾値だけでは区別できない（どちらとも決めない。FRAME_INTERVAL_JUDGED_SERIES の明示指定で決めること）
+      - TargetId(2) / surface_id=2108（判定窓の間隔 0 本）: FRAME_INTERVAL_JUDGED_SERIES の明示指定に無い。窓 A（起動過渡のみ除外）の p95 364706.420ms（6 本・平均 197392.9ms） ＝ 平均が最大コマ待ち x FRAME_INTERVAL_MAX_MEAN_FACTOR=1500ms を超える。この水準では「鈍化したアニメ」と「もともと散発的な系列（バルーンの書き換え等）」を自動選別の閾値だけでは区別できない（どちらとも決めない。FRAME_INTERVAL_JUDGED_SERIES の明示指定で決めること）
+      - TargetId(2) / surface_id=2110（判定窓の間隔 0 本）: FRAME_INTERVAL_JUDGED_SERIES の明示指定に無い。窓 A（起動過渡のみ除外）の p95 305792.354ms（31 本・平均 35853.1ms） ＝ 平均が最大コマ待ち x FRAME_INTERVAL_MAX_MEAN_FACTOR=1500ms を超える。この水準では「鈍化したアニメ」と「もともと散発的な系列（バルーンの書き換え等）」を自動選別の閾値だけでは区別できない（どちらとも決めない。FRAME_INTERVAL_JUDGED_SERIES の明示指定で決めること）
+      - TargetId(3) / surface_id=0（判定窓の間隔 0 本）: FRAME_INTERVAL_JUDGED_SERIES の明示指定に無い。窓 A（起動過渡のみ除外）の p95 50955.328ms（49 本・平均 27740.0ms） ＝ 平均が最大コマ待ち x FRAME_INTERVAL_MAX_MEAN_FACTOR=1500ms を超える。この水準では「鈍化したアニメ」と「もともと散発的な系列（バルーンの書き換え等）」を自動選別の閾値だけでは区別できない（どちらとも決めない。FRAME_INTERVAL_JUDGED_SERIES の明示指定で決めること）
+    系列 TargetId(0) / surface_id=1000: n=491  最小=6.252ms  p50=143.987ms  p95=161.946ms  最大=13155.802ms  平均=188.775ms → p95 161.946ms vs 上限 172.500ms（OK）
+      （参考・判定には使わない）対象 TargetId(0) の 1 系列をまとめた p95 161.946ms（491 本）
+
+-- ⑵ 定常状態の進行境界スキップ（catch-up）件数  →  不合格 ---------------------------------------
+  適用ビルド : dev・release
+  実測値     : 90 件
+  比べた閾値 : 定常状態の catch-up 件数 = 0 件
+  観測集合   : 定常状態の適用 1615 回・時間幅 1438.9 秒
+  空のときは : 定常区間が空（または薄すぎる）なら「0 件」が恒真になるため判定不能。合格にしない。
+  使った較正値: WARMUP_EXCLUDE_SEC, VERDICT_MIN_STEADY_APPLIES, VERDICT_MIN_STEADY_SEC, J_CATCHUP_TICKER_MESSAGE, J_CATCHUP_LOOP_MESSAGE
+  根拠:
+    全区間の catch-up: 92 件（うち定常状態 90 件・時刻を読めない行 0 件）
+    数え方: 長い文言（loop_ticker）を先に判定してから短い文言を数える（二重計上の罠）。
+      文言=loop_ticker  target=loop_ticker: 90 件
+
+-- ⑶ 定常状態の表示用バッファ新規確保  →  合格 -------------------------------------------------
+  適用ビルド : dev・release
+  実測値     : 合計 0
+  比べた閾値 : 定常状態の alloc_* 合計 = 0
+  観測集合   : 定常状態の適用 1615 回・時間幅 1438.9 秒
+  空のときは : 定常区間が空（または薄すぎる）なら「合計 0」が恒真になるため判定不能。合格にしない。
+  使った較正値: WARMUP_EXCLUDE_SEC, VERDICT_MIN_STEADY_APPLIES, VERDICT_MIN_STEADY_SEC, J_PERF_ALLOC_FIELDS
+  根拠:
+    内訳（定常状態）: alloc_compose_dst=0  alloc_resample_dst=0  alloc_xmap=0  alloc_mask=0
+
+-- ⑷a アイドル CPU（1 コア換算）  →  不合格 -----------------------------------------------
+  適用ビルド : release のみ
+  実測値     : 平均 15.79%
+  比べた閾値 : < 3.0%（IDLE_CPU_MAX_RELEASE_PCT・比べる量は 定常状態（ウォームアップ除外後）の平均（1 コア換算 %））
+  観測集合   : 定常状態の CPU 採取点 96 点・時間幅 1425 秒
+  空のときは : 定常状態の CPU 採取点が下限に満たなければ判定不能（無観測を合格にしない）。
+  使った較正値: IDLE_CPU_MAX_RELEASE_PCT, IDLE_CPU_STATISTIC, WARMUP_EXCLUDE_SEC, VERDICT_MIN_CPU_SAMPLES
+  根拠:
+    定常状態の CPU: n=96  最小=6.2%  p50=14.0%  p95=24.8%  最大=31.1%  平均=15.8%
+    1 行は約 1 秒幅の瞬時値であり刻み幅の平均ではない（2.1→2.4 申し送り）。
+    【読み方の注意】平均は 1 回の長い非アイドル区間に引きずられる（分位点と違って裾に強くない）。CPU の窓は判定式⑴の窓 C と違ってtalk 再生区間を落としていない（会話中の負荷も込みの定常値である）ので、上の p50 と平均を必ず突き合わせること。両者が離れていたら、比べる量ではなく窓の切り方を疑う。
+    平均 15.79% が上限 3.0% を下回っていません。要件 4.6 に従い残る最大内訳を特定して是正へ戻ること。
+
+-- ⑷b 20 分超で単調上昇しない  →  不合格 --------------------------------------------------
+  適用ビルド : release のみ・長時間水準（20 分超）のみ
+  実測値     : 収束判定=単調上昇（未知機序候補）
+  比べた閾値 : 傾き <= 0.05 %/分 かつ 末尾窓平均 − 中間窓平均 <= 0.3%
+  観測集合   : 定常状態の CPU 採取点 96 点・時間幅 1425 秒
+  空のときは : 20 分超に満たない走行では適用外（終了コードに寄与しない）。ただし profile=long の走行が 20 分に届かない場合は途中で切れた走行として判定不能。この分岐は profile に依存するため、判定モードは run-meta.txt に profile が無い入力を読み込み時点で判定不能(2) として拒む（適用外へ黙って落とさない）。
+  使った較正値: LONG_RUN_MIN_SPAN_SEC, CONVERGENCE_WINDOW_COUNT, CONVERGENCE_WINDOW_SPLIT, CONVERGENCE_SLOPE_METHOD, CONVERGENCE_SLOPE_MAX_PCT_PER_MIN, CONVERGENCE_WINDOW_DIFF_MAX_PCT, CONVERGENCE_MIN_SAMPLES_PER_WINDOW
+  根拠:
+    収束判定: 単調上昇（未知機序候補）
+    窓の切り方: 定常状態の採取点を個数で等分（時間等分ではない）（4 窓）
+    傾きの求め方: 最小二乗（x=経過分・y=1 コア換算 %）・対象は 窓3〜窓4（48 点）
+    後半窓の回帰傾き +0.0862 %/分 vs 上限 CONVERGENCE_SLOPE_MAX_PCT_PER_MIN=0.05 → 超過
+    末尾窓平均 16.42% − 中間窓（窓2）平均 16.29% = +0.13% vs 上限 CONVERGENCE_WINDOW_DIFF_MAX_PCT=0.3 → 以内
+    要件 5.2: 頭打ちに収束しない場合は未知の機序として実測データを添えて記録し、本 spec の範囲で是正可能かを判定のうえ、範囲外なら独立した課題として起票する。
+
+==============================================================================
+[6] 収束判定（要件 5.1・根拠は較正値つき＝要件 5.3）
+==============================================================================
+  定義（design.md「収束判定」）: ウォームアップ除外後の CPU 時系列を窓分割し、
+  後半窓の回帰傾き <= 上限 かつ 末尾窓平均 − 中間窓平均 <= 上限 なら「頭打ち」、
+  いずれか超過なら「単調上昇（未知機序候補）」。
+
+  判定: 単調上昇（未知機序候補）
+    - 窓の切り方: 定常状態の採取点を個数で等分（時間等分ではない）（4 窓）
+    - 傾きの求め方: 最小二乗（x=経過分・y=1 コア換算 %）・対象は 窓3〜窓4（48 点）
+    - 後半窓の回帰傾き +0.0862 %/分 vs 上限 CONVERGENCE_SLOPE_MAX_PCT_PER_MIN=0.05 → 超過
+    - 末尾窓平均 16.42% − 中間窓（窓2）平均 16.29% = +0.13% vs 上限 CONVERGENCE_WINDOW_DIFF_MAX_PCT=0.3 → 以内
+
+-- 窓別平均 ----------------------------------------------------------------------
+  窓1: n=24  平均=14.54%  （02:47:56 〜 02:53:41）
+  窓2: n=24  平均=16.29%  （02:53:56 〜 02:59:41）  ← 中間窓
+  窓3: n=24  平均=15.91%  （02:59:56 〜 03:05:41）  ← 後半窓
+  窓4: n=24  平均=16.42%  （03:05:56 〜 03:11:41）  ← 末尾窓・後半窓
+
+-- 傍証: seriko のループ発火・停止の窓別件数 -------------------------------------------------
+  【重要】活性アニメの集合サイズを直接出すログは存在しない。以下は発火・停止
+  info! の件数であり、活性集合の大きさは**間接推定**にとどまる（そのつもりで読むこと）。
+  窓1（02:47:56 〜 02:53:41）: 発火 94 件・停止 93 件・収支 +1
+  窓2（02:53:56 〜 02:59:41）: 発火 91 件・停止 91 件・収支 +0
+  窓3（02:59:56 〜 03:05:41）: 発火 94 件・停止 94 件・収支 +0
+  窓4（03:05:56 〜 03:11:41）: 発火 94 件・停止 93 件・収支 +1
+
+  窓別件数と全体件数の突合（窓の境界＝各窓の最初と最後の CPU 採取点の時刻）:
+    発火: 窓に入った 373 件 / 全体 389 件 → どの窓にも入らなかった 16 件
+    停止: 窓に入った 371 件 / 全体 387 件 → どの窓にも入らなかった 16 件
+    うち時刻を読めなかった行: 0 件（時刻が無いのでどの窓にも入らない）
+    窓に入らない残りの内訳: 定常状態の最初の採取点より前／最後の採取点より後／
+    窓と窓の隙間（隙間は最大でも CPU 刻み 1 つ分＝約 15 秒）。
+    窓別件数は傍証であり、全体件数と一致しないのは上の理由による（数え落としではない）。
+
+==============================================================================
+[7] 総合判定
+==============================================================================
+  ⑴ コマ適用間隔の p95: 合格
+  ⑵ 定常状態の進行境界スキップ（catch-up）件数: 不合格
+  ⑶ 定常状態の表示用バッファ新規確保: 合格
+  ⑷a アイドル CPU（1 コア換算）: 不合格
+  ⑷b 20 分超で単調上昇しない: 不合格
+
+  総合判定の決め方: 不合格が 1 つでもあれば 不合格(1)／なければ判定不能が 1 つでもあれば 判定不能(2)／合格が 1 つ以上あれば 合格(0)／全て適用外なら 判定不能(2)
+  総合           : 不合格（判定式 ⑵・⑷a・⑷b が確定的に不合格）
+  終了コード     : 1
+  要件 4.6: 残る最大内訳を特定して是正（要件 3）へ戻る。ただし残る最大内訳がキャッシュ不命中による再合成コストなら要件 7 の裁定ゲートへ回す。
+  下の参考集計（段階別所要・命中率）が内訳特定の材料である。
+
+==============================================================================
+[8] 参考: 集計（design.md「集計（両モード共通・R2.2）」）
+==============================================================================
+  以下は判定の根拠を追うための集計である。判定そのものは上の [5][6] にある。
+
+==============================================================================
+[8.1] 段階別所要（要件 2.2）
+==============================================================================
+  分位点の求め方: nearest-rank（補間なし・ceil(q*n) 番目）
+
+-- 全区間 -----------------------------------------------------------------------
+  t_cache_us       n=1645   p50=         2us p95=         5us  最大=        60us  平均=         3us
+  t_compose_us     n=1645   p50=         0us p95=      1888us  最大=      2726us  平均=       620us
+  t_resample_us    n=1645   p50=         0us p95=      4867us  最大=     13110us  平均=      1478us
+  t_mask_us        n=1645   p50=         0us p95=       876us  最大=      1630us  平均=       254us
+  t_upload_us      n=1645   p50=       473us p95=      1057us  最大=     25238us  平均=       536us
+  t_total_us       n=1645   p50=      1956us p95=      9108us  最大=     92037us  平均=      3856us
+
+  補足: 段の帯は名前より広い（1.3→3.2 申し送り）。
+    t_cache_us  はターゲット照会と k 導出を含む。
+    t_mask_us   は cache.insert 全体（マスク生成＋スロット置換＋旧エントリ解放）を含む。
+    t_upload_us は初回適用の chain/mount 遅延生成を含み、命中経路では照会以降の全部を含む。
+
+-- 定常状態（開始から 60 秒を除外） --------------------------------------------------------
+  t_cache_us       n=1615   p50=         2us p95=         5us  最大=        60us  平均=         3us
+  t_compose_us     n=1615   p50=         0us p95=      1864us  最大=      2726us  平均=       602us
+  t_resample_us    n=1615   p50=         0us p95=      4725us  最大=      6849us  平均=      1418us
+  t_mask_us        n=1615   p50=         0us p95=       862us  最大=      1630us  平均=       246us
+  t_upload_us      n=1615   p50=       474us p95=      1043us  最大=      1714us  平均=       509us
+  t_total_us       n=1615   p50=      1856us p95=      8977us  最大=     92037us  平均=      3747us
+
+  補足: 段の帯は名前より広い（1.3→3.2 申し送り）。
+    t_cache_us  はターゲット照会と k 導出を含む。
+    t_mask_us   は cache.insert 全体（マスク生成＋スロット置換＋旧エントリ解放）を含む。
+    t_upload_us は初回適用の chain/mount 遅延生成を含み、命中経路では照会以降の全部を含む。
+
+==============================================================================
+[8.2] キャッシュ命中率（要件 2.2）
+==============================================================================
+  全区間: 適用 1645 回中 命中 1006 回 （61.2%・不命中 639 回）
+  定常状態: 適用 1615 回中 命中 1002 回 （62.0%・不命中 613 回）
+
+-- 対象別（target_id x surface_id） -----------------------------------------------
+  TargetId(0) / surface_id=1000: 適用 1169 回・命中 619 回（53.0%）
+  TargetId(2) / surface_id=2100: 適用 329 回・命中 285 回（86.6%）
+  TargetId(3) / surface_id=0: 適用 54 回・命中 53 回（98.1%）
+  TargetId(2) / surface_id=2110: 適用 32 回・命中 23 回（71.9%）
+  TargetId(2) / surface_id=2106: 適用 24 回・命中 7 回（29.2%）
+  TargetId(1) / surface_id=0: 適用 15 回・命中 14 回（93.3%）
+  TargetId(2) / surface_id=2105: 適用 10 回・命中 3 回（30.0%）
+  TargetId(2) / surface_id=2108: 適用 7 回・命中 2 回（28.6%）
+  TargetId(2) / surface_id=2102: 適用 5 回・命中 0 回（0.0%）
+
+==============================================================================
+[8.3] コマ適用間隔（要件 2.2・判定式⑴の入力）
+==============================================================================
+  系列の分け方: target_id x surface_id
+  測定窓: 窓 C（発火起点）: 「loop 抽選発火」時刻 f を起点に、a - f <= FRAME_INTERVAL_CYCLE_SPAN_MS かつ区間 (a, b] に次の発火を含まず、さらに両端で **同じ scope の** 推定活性アニメ本数が FRAME_INTERVAL_IDLE_MAX_ACTIVE 以下の間隔だけを判定に使う（別 scope のアニメは数えない）。停止ログは終端に使わない（最後のコマの適用より先に出るため。活性本数の収支には使う）。窓 A（起動過渡のみ除外）は参考表示にとどめる
+  最大コマ待ち 150ms・許容率 15% → 判定式⑴の上限は 172.5ms（判定そのものは --mode verdict）
+  サイクル全長 172ms は窓 C の条件 2 に使う値であり上限ではない（task 3.2）。
+  窓 C の条件 4: 両端の推定活性アニメ本数 <= 1 本。同じ鍵に 2 本のアニメが混ざった区間の差は、どちらのアニメのコマ間隔でもない。
+  条件 4 が数えるのは **その系列に対応する scope のアニメだけ**（0.3.2）。別 scope（例: ケロ）のアニメは別の系列鍵へコマを出すので数えない。
+    scope=0 の推定活性本数（条件 4 が実際に見た値）: n=544  最小=0.0 本  p50=0.0 本  p95=1.0 本  最大=1.0 本  平均=0.5 本
+  窓 C の起点になった発火: scope=0: 272 件／scope=1: 117 件
+  系列と scope の対応: TargetId(0)/surface_id=1000 → scope=0
+
+-- 窓 A: 起動過渡のみ除外（参考表示・判定には使わない） ----------------------------------------------
+  TargetId(0) / surface_id=1000: n=1148  最小=0.9ms  p50=145.9ms  p95=5826.1ms  最大=28973.8ms  平均=1236.2ms
+  TargetId(2) / surface_id=2100: n=327  最小=15.0ms  p50=82.4ms  p95=27934.4ms  最大=146882.7ms  平均=4376.5ms
+  TargetId(3) / surface_id=0: n=49  最小=14855.6ms  p50=25094.0ms  p95=50955.3ms  最大=61643.2ms  平均=27740.0ms
+  TargetId(2) / surface_id=2110: n=31  最小=155.4ms  p50=832.8ms  p95=305792.4ms  最大=453362.7ms  平均=35853.1ms
+  TargetId(2) / surface_id=2106: n=22  最小=15156.1ms  p50=55758.4ms  p95=106247.5ms  最大=158294.0ms  平均=60644.1ms
+  TargetId(1) / surface_id=0: n=12  最小=15797.7ms  p50=61045.0ms  p95=193334.5ms  最大=193334.5ms  平均=96842.3ms
+  TargetId(2) / surface_id=2105: n=8  最小=23636.0ms  p50=82547.5ms  p95=424352.9ms  最大=424352.9ms  平均=145243.5ms
+  TargetId(2) / surface_id=2108: n=6  最小=44111.5ms  p50=166851.2ms  p95=364706.4ms  最大=364706.4ms  平均=197392.9ms
+  TargetId(2) / surface_id=2102: n=3  最小=79901.5ms  p50=280253.1ms  p95=757004.3ms  最大=757004.3ms  平均=372386.3ms
+
+  対象（target_id）別のまとめ:
+    TargetId(0): n=1148  最小=0.9ms  p50=145.9ms  p95=5826.1ms  最大=28973.8ms  平均=1236.2ms
+    TargetId(1): n=12  最小=15797.7ms  p50=61045.0ms  p95=193334.5ms  最大=193334.5ms  平均=96842.3ms
+    TargetId(2): n=397  最小=15.0ms  p50=90.8ms  p95=87798.1ms  最大=757004.3ms  平均=18489.2ms
+    TargetId(3): n=49  最小=14855.6ms  p50=25094.0ms  p95=50955.3ms  最大=61643.2ms  平均=27740.0ms
+
+-- 窓 C: さらに発火起点でサイクルの内側へ限定（判定式⑴が使う窓） -----------------------------------------
+  TargetId(0) / surface_id=1000: n=491  最小=6.3ms  p50=144.0ms  p95=161.9ms  最大=13155.8ms  平均=188.8ms
+
+  対象（target_id）別のまとめ:
+    TargetId(0): n=491  最小=6.3ms  p50=144.0ms  p95=161.9ms  最大=13155.8ms  平均=188.8ms
+
+==============================================================================
+[8.4] 表示用バッファの新規確保 計数（要件 2.2・判定式⑶の入力）
+==============================================================================
+
+-- 全区間 -----------------------------------------------------------------------
+  alloc_compose_dst    合計        4  （発生した適用 4 回）
+  alloc_resample_dst   合計        8  （発生した適用 8 回）
+  alloc_xmap           合計        4  （発生した適用 4 回）
+  alloc_mask           合計       10  （発生した適用 10 回）
+  合計                   合計       26
+
+-- 定常状態 ----------------------------------------------------------------------
+  alloc_compose_dst    合計        0  （発生した適用 0 回）
+  alloc_resample_dst   合計        0  （発生した適用 0 回）
+  alloc_xmap           合計        0  （発生した適用 0 回）
+  alloc_mask           合計        0  （発生した適用 0 回）
+  合計                   合計        0
+
+==============================================================================
+[8.5] 進行境界スキップ（catch-up）件数（要件 2.2・判定式⑵の入力）
+==============================================================================
+  数え方: 長い文言（loop_ticker）を先に判定してから短い文言を数える。
+  短いほうは長いほうの部分文字列であり、素朴に数えると二重計上になる。
+
+-- 全区間 -----------------------------------------------------------------------
+  合計 92 件
+    文言=loop_ticker  target=loop_ticker: 92 件
+
+-- 定常状態 ----------------------------------------------------------------------
+  合計 90 件
+    文言=loop_ticker  target=loop_ticker: 90 件
+
+-- 系統別・各発生の突合（要件 2.9・0.4.0 で追加） ------------------------------
+  系統は行末の target フィールド（tracing のフィールドであってメタデータの
+  target 指示子ではない）で分ける。dispatcher と kanade は文言が同一なので、
+  文言では分けられない（ticker.rs:203-206, 223-226, 305-308）。
+    系統 target=dispatcher: 全区間 0 件（うち定常状態 0 件）
+    系統 target=kanade: 全区間 0 件（うち定常状態 0 件）
+    系統 target=loop_ticker: 全区間 92 件（うち定常状態 90 件）
+
+  各発生の周辺状況（前表示差＝直前の表示成立点からの秒数／10s表示＝直前 10 秒の表示成立点数＝発話再生中かどうかの代理）:
+    時刻              区間  系統            前表示差   10s表示  tick.wall_us  tick.skipped
+    02:47:04.466007  過渡  loop_ticker     8.115s        9             -             -
+    02:47:49.779257  過渡  loop_ticker     0.443s       10             -             -
+    02:47:57.092118  定常  loop_ticker     6.701s        9             -             -
+    02:48:08.451004  定常  loop_ticker     1.848s        9             -             -
+    02:48:10.451565  定常  loop_ticker     0.857s        9             -             -
+    02:48:16.451858  定常  loop_ticker     1.059s       20             -             -
+    02:48:19.795433  定常  loop_ticker     4.403s       14             -             -
+    02:48:25.795342  定常  loop_ticker     5.134s        3             -             -
+    02:48:26.451954  定常  loop_ticker     5.790s        3             -             -
+    02:48:28.435736  定常  loop_ticker     7.774s        3             -             -
+    02:48:32.466871  定常  loop_ticker     3.805s        3             -             -
+    02:49:22.467696  定常  loop_ticker     1.864s       10             -             -
+    02:49:52.467897  定常  loop_ticker    16.061s        0             -             -
+    02:50:07.796196  定常  loop_ticker     1.005s        8             -             -
+    02:50:30.421288  定常  loop_ticker     1.231s       19             -             -
+    02:51:03.780949  定常  loop_ticker     0.151s       11             -             -
+    02:51:19.109365  定常  loop_ticker     0.446s       28             -             -
+    02:51:41.797194  定常  loop_ticker     0.120s       22             -             -
+    02:51:51.109421  定常  loop_ticker     0.446s       12             -             -
+    02:51:52.468740  定常  loop_ticker     1.805s        9             -             -
+    02:52:14.469651  定常  loop_ticker     0.864s       15             -             -
+    02:52:19.797125  定常  loop_ticker     1.133s       15             -             -
+    02:52:44.469973  定常  loop_ticker     5.807s        6             -             -
+    02:52:54.469303  定常  loop_ticker     1.401s       13             -             -
+    02:53:10.454851  定常  loop_ticker     0.916s        1             -             -
+    02:54:08.470620  定常  loop_ticker    14.864s        0             -             -
+    02:54:23.799044  定常  loop_ticker     8.251s        2             -             -
+    02:54:52.470470  定常  loop_ticker     2.797s       20             -             -
+    02:54:54.439314  定常  loop_ticker     1.833s       18             -             -
+    02:55:11.799204  定常  loop_ticker     0.142s       14             -             -
+    02:55:30.440044  定常  loop_ticker     1.996s       22             -             -
+    02:55:55.799139  定常  loop_ticker     1.133s        6             -             -
+    02:56:00.471476  定常  loop_ticker     1.806s        6             -             -
+    02:56:17.799608  定常  loop_ticker     3.192s        3             -             -
+    02:56:20.424442  定常  loop_ticker     0.817s        9             -             -
+    02:57:10.472549  定常  loop_ticker     1.807s        9             -             -
+    02:57:23.112431  定常  loop_ticker     0.649s       10             -             -
+    02:58:45.128863  定常  loop_ticker     1.387s       12             -             -
+    02:58:56.457330  定常  loop_ticker     0.816s       10             -             -
+    02:58:57.113309  定常  loop_ticker     1.472s        8             -             -
+    02:59:24.473409  定常  loop_ticker     1.806s        9             -             -
+    02:59:30.473075  定常  loop_ticker     1.806s       15             -             -
+    02:59:32.457455  定常  loop_ticker     1.537s       20             -             -
+    03:00:06.442431  定常  loop_ticker     0.774s       22             -             -
+    03:00:10.442134  定常  loop_ticker     4.773s       18             -             -
+    03:00:27.129869  定常  loop_ticker    21.461s        0             -             -
+    03:01:08.474914  定常  loop_ticker    10.798s        0             -             -
+    03:01:09.802813  定常  loop_ticker    12.126s        0             -             -
+    03:01:22.475294  定常  loop_ticker     1.806s       22             -             -
+    03:01:58.443163  定常  loop_ticker     1.291s       16             -             -
+    03:02:22.474808  定常  loop_ticker     0.798s       10             -             -
+    03:02:38.475576  定常  loop_ticker     0.798s       12             -             -
+    03:02:43.804265  定常  loop_ticker     3.135s        9             -             -
+    03:02:45.803229  定常  loop_ticker     5.134s        9             -             -
+    03:02:49.771773  定常  loop_ticker     1.109s       13             -             -
+    03:03:07.131299  定常  loop_ticker     2.461s        6             -             -
+    03:03:21.772512  定常  loop_ticker     1.103s       12             -             -
+    03:03:32.476232  定常  loop_ticker     2.798s        9             -             -
+    03:03:34.475609  定常  loop_ticker     1.865s       12             -             -
+    03:03:41.115945  定常  loop_ticker     1.513s       26             -             -
+    03:03:41.804520  定常  loop_ticker     2.202s       26             -             -
+    03:03:51.804216  定常  loop_ticker     5.193s        6             -             -
+    03:03:58.475926  定常  loop_ticker     0.857s        6             -             -
+    03:04:51.757352  定常  loop_ticker     0.544s       13             -             -
+    03:05:10.476537  定常  loop_ticker     0.797s       15             -             -
+    03:05:53.805660  定常  loop_ticker     9.135s        3             -             -
+    03:05:59.805112  定常  loop_ticker     1.231s       10             -             -
+    03:06:22.477265  定常  loop_ticker     0.482s        4             -             -
+    03:06:34.477013  定常  loop_ticker     0.806s        9             -             -
+    03:06:56.446116  定常  loop_ticker     0.767s       14             -             -
+    03:07:02.477637  定常  loop_ticker     5.807s       14             -             -
+    03:07:11.806425  定常  loop_ticker     4.136s        6             -             -
+    03:07:18.430727  定常  loop_ticker     4.751s        3             -             -
+    03:07:59.806184  定常  loop_ticker     0.225s        5             -             -
+    03:08:30.478121  定常  loop_ticker     0.865s       26             -             -
+    03:08:36.479241  定常  loop_ticker     0.866s       21             -             -
+    03:08:51.134838  定常  loop_ticker     3.522s       25             -             -
+    03:09:11.119132  定常  loop_ticker     3.279s       13             -             -
+    03:09:21.119277  定常  loop_ticker     2.447s       17             -             -
+    03:09:28.479279  定常  loop_ticker     0.798s       22             -             -
+    03:09:40.481782  定常  loop_ticker     6.801s        6             -             -
+    03:09:42.479793  定常  loop_ticker     8.799s        3             -             -
+    03:09:52.479283  定常  loop_ticker     0.438s       16             -             -
+    03:10:22.480499  定常  loop_ticker    10.009s        0             -             -
+    03:10:39.104521  定常  loop_ticker    26.633s        0             -             -
+    03:10:45.807548  定常  loop_ticker     1.134s       15             -             -
+    03:11:14.479982  定常  loop_ticker     3.799s       12             -             -
+    03:11:20.480123  定常  loop_ticker     0.798s       12             -             -
+    03:11:23.120664  定常  loop_ticker     0.448s       13             -             -
+    03:11:29.777043  定常  loop_ticker     0.096s       11             -             -
+    03:11:38.464282  定常  loop_ticker     0.841s       15             -             -
+    03:11:49.792600  定常  loop_ticker     0.178s       21             -             -
+
+  仮説「フレーム駆動の負荷が CPU 競合でティッカーの起床を遅らせる」（要件 2.9）:
+    規則: catch-up を覆った [tick] 窓の wall_us 平均 ÷ 全 [tick] 窓の wall_us 平均。
+          比 >= 1.500 なら 成立・下回れば 不成立・[tick] 行が無ければ 判定不能。
+    [tick] 窓 0 個（wall_us を読めた窓 0 個・catch-up を覆った窓 0 個）
+    仮説: 判定不能（[tick] kind=window の行が 1 本も無い（点灯せずに採った走行では「調べたが違った」と「調べていない」を区別できない））
+    この仮説は因果の主張ではない。比が大きいことは「重い窓と catch-up が同じ秒に
+    居合わせた」ことしか言わない（要件 2.9 が「仮説」と書いているのはこのためである）。
+
+==============================================================================
+[8.6] CPU 時系列（要件 2.2 / 2.3・判定式⑷と収束判定の入力）
+==============================================================================
+  採取点 100 点・2026-08-23T02:46:55.007000+00:00 〜 2026-08-23T03:11:41.219000+00:00（1486 秒）
+  単位: 1 コアを 100% とする換算値（複数コア使用時は 100 超もあり得る）。
+  1 行は約 1 秒幅の瞬時値であり、刻み幅の平均ではない。
+
+-- 刻み（均等と仮定しない・2.1→2.2 申し送り 1） -----------------------------------------------
+  実測の刻み（秒）: n=99  最小=14.8s  p50=15.1s  p95=15.1s  最大=16.1s  平均=15.0s
+  期待刻み 15s x 1.5 = 22.5s を超えた刻み: 0 箇所
+  ランナーは絶対時刻へ積み上げるためドリフトしないが、
+  マシンが詰まったときの欠測は印を残さない。上の件数がその痕跡である。
+
+-- 全区間 -----------------------------------------------------------------------
+  CPU: n=100  最小=6.2%  p50=14.0%  p95=24.8%  最大=36.9%  平均=16.0%
+
+-- 定常状態 ----------------------------------------------------------------------
+  CPU: n=96  最小=6.2%  p50=14.0%  p95=24.8%  最大=31.1%  平均=15.8%
+
+-- 窓別平均（4 等分・収束判定の入力） --------------------------------------------------------
+  窓1: n=24  平均=14.54%  （02:47:56 〜 02:53:41）
+  窓2: n=24  平均=16.29%  （02:53:56 〜 02:59:41）
+  窓3: n=24  平均=15.91%  （02:59:56 〜 03:05:41）
+  窓4: n=24  平均=16.42%  （03:05:56 〜 03:11:41）
+
+==============================================================================
+[8.7] 合成キーの異なり数（要件 7.2・キャッシュ容量の裁定材料）
+==============================================================================
+  キャッシュ容量は承認済み要件で 3・置換方式は LRU である（2026-08-15 の開発者裁定で
+  1 から改訂）。以下は「その容量で足りるのか」を実測で示すための材料であり、
+  容量変更は開発者の明示的な裁定なしに行わない。
+
+-- 全区間 -----------------------------------------------------------------------
+  異なり数（key_hash x surface_id）: 239
+  異なり数（key_hash のみ）        : 239
+  異なり数（surface_id のみ）      : 8
+    TargetId(0): 異なりキー 229 個
+    TargetId(1): 異なりキー 1 個
+    TargetId(2): 異なりキー 9 個
+    TargetId(3): 異なりキー 1 個
+  出現の多いキー（上位 10）:
+    key_hash=3642423647188943603 surface_id=2100: 123 回
+    key_hash=17915755770174082848 surface_id=2100: 103 回
+    key_hash=12402237811591831732 surface_id=2100: 103 回
+    key_hash=6192849677814476413 surface_id=1000: 87 回
+    key_hash=8655498248121183799 surface_id=1000: 72 回
+    key_hash=15275265270152992928 surface_id=1000: 72 回
+    key_hash=13102276831350446470 surface_id=0: 69 回
+    key_hash=14858404138814314608 surface_id=1000: 56 回
+    key_hash=11231711388040246994 surface_id=1000: 40 回
+    key_hash=5775988546475798093 surface_id=1000: 39 回
+
+-- 定常状態 ----------------------------------------------------------------------
+  異なり数（key_hash x surface_id）: 229
+  異なり数（key_hash のみ）        : 229
+  異なり数（surface_id のみ）      : 8
+    TargetId(0): 異なりキー 219 個
+    TargetId(1): 異なりキー 1 個
+    TargetId(2): 異なりキー 9 個
+    TargetId(3): 異なりキー 1 個
+  出現の多いキー（上位 10）:
+    key_hash=3642423647188943603 surface_id=2100: 122 回
+    key_hash=17915755770174082848 surface_id=2100: 103 回
+    key_hash=12402237811591831732 surface_id=2100: 103 回
+    key_hash=6192849677814476413 surface_id=1000: 87 回
+    key_hash=8655498248121183799 surface_id=1000: 72 回
+    key_hash=15275265270152992928 surface_id=1000: 72 回
+    key_hash=13102276831350446470 surface_id=0: 63 回
+    key_hash=14858404138814314608 surface_id=1000: 56 回
+    key_hash=11231711388040246994 surface_id=1000: 40 回
+    key_hash=5775988546475798093 surface_id=1000: 39 回
+
+==============================================================================
+[8.8] seriko のループ発火・停止（要件 5.1 の傍証・窓 C の起点）
+==============================================================================
+  活性アニメ本数を直接出すログは無い。以下は発火・停止 info! の収支からの
+  **間接推定** であり、そのつもりで読むこと。
+  発火 389 件・停止 387 件
+  推定活性本数の推移（全 scope 合算・**参考表示**）: n=776  最小=0.0 本  p50=1.0 本  p95=1.0 本  最大=2.0 本  平均=0.6 本
+  末尾時点の推定活性本数（全 scope 合算）: 0 本
+  【判定はこの合算値を使わない】窓 C の条件 4 は判定対象系列の scope だけを数える（0.3.2）。条件 4 が実際に見た scope 別の値は「コマ適用間隔」の節に出る。
+  scope 別の発火・停止の件数: scope=0: 544 件／scope=1: 232 件
+
+==============================================================================
+判定は以上。終了コード 1（不合格（判定式 ⑵・⑷a・⑷b が確定的に不合格））
+==============================================================================

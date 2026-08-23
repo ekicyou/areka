@@ -1,0 +1,1 @@
+title=台帳の在り処を目標定義ファイル（[goal].spec_dir + ledger）から解く

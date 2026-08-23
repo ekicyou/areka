@@ -1,0 +1,104 @@
+{
+  "script_version": "0.1.0",
+  "verdict": "WORSE",
+  "exit_code": 0,
+  "reason": "副指標が悪化した（allocs）",
+  "before_idle_cpu_pct": 21.1,
+  "after_idle_cpu_pct": 8.91,
+  "delta_pct": -12.19,
+  "noise_pct": 12.8,
+  "secondary": "p95_ms=165.796/165.985, catchup=123/122, allocs=0/3",
+  "noise_floor_pct": 0.3,
+  "primary_metric": "steady_idle_cpu_mean_pct",
+  "must_not_regress": [
+    "frame_interval_p95_ms",
+    "catchup_count",
+    "alloc_count"
+  ],
+  "worse_secondaries": [
+    "alloc_count"
+  ],
+  "secondary_detail": [
+    {
+      "name": "frame_interval_p95_ms",
+      "label": "p95_ms",
+      "rule": "ratio",
+      "mean_a": 165.796,
+      "mean_b": 165.985,
+      "threshold": 174.0858,
+      "status": "同等"
+    },
+    {
+      "name": "catchup_count",
+      "label": "catchup",
+      "rule": "count",
+      "mean_a": 123.0,
+      "mean_b": 122.0,
+      "threshold": 123.0,
+      "status": "改善"
+    },
+    {
+      "name": "alloc_count",
+      "label": "allocs",
+      "rule": "count",
+      "mean_a": 0.0,
+      "mean_b": 3.0,
+      "threshold": 0.0,
+      "status": "悪化"
+    }
+  ],
+  "undecidable": [],
+  "goal_name": "draw-load-parity",
+  "goal_file": "C:\\home\\maz\\git\\areka\\.claude\\worktrees\\areka-p0-scope-chain-gap-004c39\\tools\\perf\\goals\\draw-load-parity.toml",
+  "iteration_build": "release",
+  "judge_script": "C:\\home\\maz\\git\\areka\\.claude\\worktrees\\areka-p0-scope-chain-gap-004c39\\tools\\perf\\judge-perf.py",
+  "judge_version": "0.4.0",
+  "a1": {
+    "dir": "C:\\Users\\maz-o\\AppData\\Local\\Packages\\Claude_pzs8sxrjxfjjc\\LocalCache\\Local\\areka-diag\\perf-loop\\draw-load-parity\\iter-3\\A1",
+    "judge_exit": 0,
+    "primary": 27.5,
+    "secondaries": {
+      "frame_interval_p95_ms": "161.526",
+      "catchup_count": "222",
+      "alloc_count": "0"
+    },
+    "talk_peak": "61.55",
+    "undecidable_reason": null
+  },
+  "a2": {
+    "dir": "C:\\Users\\maz-o\\AppData\\Local\\Packages\\Claude_pzs8sxrjxfjjc\\LocalCache\\Local\\areka-diag\\perf-loop\\draw-load-parity\\iter-3\\A2",
+    "judge_exit": 0,
+    "primary": 14.7,
+    "secondaries": {
+      "frame_interval_p95_ms": "170.066",
+      "catchup_count": "24",
+      "alloc_count": "0"
+    },
+    "talk_peak": "27.86",
+    "undecidable_reason": null
+  },
+  "b1": {
+    "dir": "C:\\Users\\maz-o\\AppData\\Local\\Packages\\Claude_pzs8sxrjxfjjc\\LocalCache\\Local\\areka-diag\\perf-loop\\draw-load-parity\\iter-3\\B1",
+    "judge_exit": 0,
+    "primary": 7.31,
+    "secondaries": {
+      "frame_interval_p95_ms": "162.102",
+      "catchup_count": "48",
+      "alloc_count": "1"
+    },
+    "talk_peak": "17.10",
+    "undecidable_reason": null
+  },
+  "b2": {
+    "dir": "C:\\Users\\maz-o\\AppData\\Local\\Packages\\Claude_pzs8sxrjxfjjc\\LocalCache\\Local\\areka-diag\\perf-loop\\draw-load-parity\\iter-3\\B2",
+    "judge_exit": 0,
+    "primary": 10.51,
+    "secondaries": {
+      "frame_interval_p95_ms": "169.868",
+      "catchup_count": "196",
+      "alloc_count": "5"
+    },
+    "talk_peak": "22.59",
+    "undecidable_reason": null
+  }
+}

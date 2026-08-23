@@ -1,0 +1,5 @@
+{
+  "hypothesis": "語彙にないキーを混ぜた",
+  "gpu_time_ms": 3,
+  "verdict": "NO_DIFF"
+}

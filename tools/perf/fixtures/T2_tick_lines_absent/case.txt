@@ -1,0 +1,19 @@
+# judge-perf.py --selftest の期待値台帳（人も機械もこの 1 ファイルを読む）
+title = catch-up はあるが [tick] 行が 1 本も無い（仮説は判定不能）
+mode = baseline
+exit = 0
+emit_metrics = yes
+
+note = C1 から任意種の行（[tick]・perf(thread)・perf(process)）と発話区間の印を
+note = すべて落とした走行。任意種が無くても集計は成立し、終了コードは 0 である
+note = （任意種は必要ログ種ではない）。
+note = ただし [tick] が無ければ「フレーム駆動の負荷が起床を遅らせる」仮説は
+note = 数値で確かめようがない。ここで 不成立 と書くと「調べたが違った」と読まれる
+note = ので、判定不能 でなければならない。無観測を結論にしないという規律である。
+note = 同じ理由で、発話区間の印が無い走行の発話中の頂は 0 ではなく - である。
+
+contains = 仮説: 判定不能
+contains = metric=talk_peak_cpu_pct value=-
+contains = metric=tick_skip_ratio value=-
+contains = metric=catchup_tick_load_ratio value=-
+contains = metric=catchup_count_total value=3

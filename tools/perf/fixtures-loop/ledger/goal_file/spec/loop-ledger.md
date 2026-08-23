@@ -1,0 +1,11 @@
+## 状態
+- goal: demo-goal
+- iteration: 2
+- phase: WAIT_REMEASURE
+- pending_run: results/iter-2
+- streak_no_gain: 1
+- best_idle_cpu_pct: 6.12
+- baseline_idle_cpu_pct: 9.31
+- started_at: 2026-08-23T00:00:00Z
+- run: 4f2a91c7
+- capabilities: function_stage=UNAVAILABLE

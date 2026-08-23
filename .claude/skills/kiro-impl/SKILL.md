@@ -42,6 +42,13 @@ After all parallel research completes, synthesize implementation brief before st
 
 #### Preflight
 
+**Determine dispatch model** (added by areka-P0-draw-load-parity):
+- Read your own system prompt line "You are powered by the model named <NAME>".
+- If `<NAME>` contains "Fable" (case-insensitive) OR the line cannot be found → `DISPATCH_MODEL = "opus"`.
+- Else (already Opus/Sonnet/Haiku) → `DISPATCH_MODEL = inherit` (omit the `model` argument).
+- Apply to EVERY Agent tool dispatch made by this skill run: implementer (Step 3a), reviewer (Step 3c), debugger (Step 3g), and the subagents dispatched by `/kiro-validate-impl` when it is run from this skill (Step 4 — pass the rule on in its prompt).
+- Record the decision once in the run output: `dispatch model: opus` or `dispatch model: inherit`.
+
 **Validate approvals**:
 - Verify tasks are approved in spec.json (stop if not, see Safety & Fallback)
 
@@ -90,7 +97,7 @@ For each task (one at a time):
   - Whether the task is behavioral (Feature Flag Protocol) or non-behavioral
   - **Previous learnings**: Include any `## Implementation Notes` entries from tasks.md that are relevant to this task's boundary or dependencies (e.g., "better-sqlite3 requires separate rebuild for Electron"). This prevents the same mistakes from recurring.
 - The implementer subagent will read the spec files and build its own Task Brief (acceptance criteria, completion definition, design constraints, verification method) before implementation
-- Dispatch via **Agent tool** as a fresh subagent
+- Dispatch via **Agent tool** as a fresh subagent; pass `model: "opus"` when `DISPATCH_MODEL = opus`, otherwise omit `model` (see Preflight)
 
 **b) Handle implementer status**:
 - Parse implementer status only from the exact `## Status Report` block and `- STATUS:` field.
@@ -108,7 +115,7 @@ For each task (one at a time):
 - The reviewer must apply the `kiro-review` protocol to this task-local review.
 - Preserve the existing task-specific context: task text, spec refs, `_Boundary:_` scope, validation commands, implementer report, and the actual `git diff` as the primary source of truth.
 - The reviewer subagent will run `git diff` itself to read the actual code changes and verify against the spec
-- Dispatch via **Agent tool** as a fresh subagent
+- Dispatch via **Agent tool** as a fresh subagent; pass `model: "opus"` when `DISPATCH_MODEL = opus`, otherwise omit `model` (see Preflight)
 
 **d) Handle reviewer verdict**:
 - Parse reviewer verdict only from the exact `## Review Verdict` block and `- VERDICT:` field.
@@ -139,7 +146,7 @@ The debug subagent runs in a **fresh context** — it receives only the error in
 - The debugger must apply the `kiro-debug` protocol to this failure investigation.
 - Preserve rich failure context: error output, reviewer findings, current `git diff`, task/spec refs, and any relevant Implementation Notes.
 - When available, the debugger should inspect runtime/config state and use web or official documentation research to validate root-cause hypotheses before proposing a fix plan.
-- Dispatch via **Agent tool** as a fresh subagent
+- Dispatch via **Agent tool** as a fresh subagent; pass `model: "opus"` when `DISPATCH_MODEL = opus`, otherwise omit `model` (see Preflight)
 
 **Handle debug report**:
 - Parse `NEXT_ACTION` from the debug report's exact structured field.
@@ -178,6 +185,7 @@ Before writing any code, read the relevant sections of requirements.md and desig
 
 **Autonomous mode**:
 - After all tasks complete, run `/kiro-validate-impl {feature}` as a GO/NO-GO gate
+- Pass the Preflight decision along: when `DISPATCH_MODEL = opus`, state `DISPATCH_MODEL=opus` in the `/kiro-validate-impl` invocation so its own subagent dispatches use `model: "opus"`
 - If validation returns GO → before reporting feature success, apply `kiro-verify-completion` to the feature-level claim using the validation result and fresh supporting evidence
 - If validation returns NO-GO:
   - Fix only concrete findings from the validation report

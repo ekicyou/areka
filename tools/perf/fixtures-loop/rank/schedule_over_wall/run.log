@@ -1,0 +1,2 @@
+2026-08-23T17:00:00.000000Z INFO areka::placement: 起動時 DPI 構成 primary_dpi=96 shell_author_dpi=96 balloon_author_dpi=96 k_shell=1 k_balloon=1
+2026-08-23T17:00:05.000000Z DEBUG actor{actor=emo-text}: wintf::tick: [tick] kind=window frame=5 t_ms=1000 ticks=10 skipped=0 heartbeat=0 wall_us=1000 max_us=200 ui_cpu_us=800 input_us=100 update_us=100 prelayout_us=100 layout_us=100 postlayout_us=100 uisetup_us=100 graphicssetup_us=100 draw_us=100 prerendersurface_us=100 rendersurface_us=100 composition_us=100 commitcomposition_us=100 framefinalize_us=0
