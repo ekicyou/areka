@@ -79,12 +79,11 @@ impl WritingMode {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-    use std::sync::atomic::{AtomicUsize, Ordering};
 
     use areka_parsers::balloon::{
         BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
     };
+    use log_capture_kit::count_levels;
 
     use super::{RESERVED_KEY_TEXT_COMBINE_UPRIGHT, RESERVED_KEY_TEXT_ORIENTATION, WritingMode};
 
@@ -101,39 +100,13 @@ mod tests {
         )
     }
 
-    /// WARN イベント数を数える最小 Subscriber（決定論的なログ檻・state.rs の檻パターン踏襲）。
-    struct WarnCounter {
-        warns: Arc<AtomicUsize>,
-    }
-
-    impl tracing::Subscriber for WarnCounter {
-        fn enabled(&self, _: &tracing::Metadata<'_>) -> bool {
-            true
-        }
-        fn new_span(&self, _: &tracing::span::Attributes<'_>) -> tracing::span::Id {
-            tracing::span::Id::from_u64(1)
-        }
-        fn record(&self, _: &tracing::span::Id, _: &tracing::span::Record<'_>) {}
-        fn record_follows_from(&self, _: &tracing::span::Id, _: &tracing::span::Id) {}
-        fn event(&self, event: &tracing::Event<'_>) {
-            if *event.metadata().level() == tracing::Level::WARN {
-                self.warns.fetch_add(1, Ordering::SeqCst);
-            }
-        }
-        fn enter(&self, _: &tracing::span::Id) {}
-        fn exit(&self, _: &tracing::span::Id) {}
-    }
-
-    /// resolve を WARN 檻の中で実行し、（解決結果, WARN 件数）を返す。
+    /// resolve を共有のログ捕捉窓の中で実行し、（解決結果, WARN 件数）を返す。
+    ///
+    /// 件数の集計は硬化機構の唯一の定義元 `log-capture-kit` の [`count_levels`] に委ねる。
+    /// 戻り値の組は移行前と同一で、呼出側の判定内容は変わらない。
     fn resolve_counting_warns(writing_mode: Option<&str>) -> (WritingMode, usize) {
-        let warns = Arc::new(AtomicUsize::new(0));
-        let subscriber = WarnCounter {
-            warns: Arc::clone(&warns),
-        };
-        let mode = tracing::subscriber::with_default(subscriber, || {
-            WritingMode::resolve(&model(writing_mode))
-        });
-        (mode, warns.load(Ordering::SeqCst))
+        let (mode, counts) = count_levels(|| WritingMode::resolve(&model(writing_mode)));
+        (mode, counts.warn)
     }
 
     // ── R5.1/R5.5: 3 語彙の受理と方向写像 1:1（CSS 語彙 snake_case→3 variant 単射） ──

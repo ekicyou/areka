@@ -4,8 +4,7 @@ use crate::region::TextRegion;
 use crate::state::{CursorCoord, CursorUnit, TextItem};
 use crate::writing::WritingMode;
 use areka_sakura::contract::ActorKey;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use log_capture_kit::count_levels;
 
 // ── R2.1/2.2/2.4: `\_l` カーソル座標 → image px 換算（cursor_to_image_px・タスク 4.1） ──
 //
@@ -540,29 +539,6 @@ fn cursor_all_axes_degraded_is_complete_noop() {
 
 // ── Task 4.2: `\_l` 縮退 4 分岐の actor ごと warn-once（layout_with_cursor_warn・6.5） ──
 
-/// WARN イベント数を数える最小 Subscriber（state.rs/region.rs の檻パターン踏襲・決定論）。
-struct WarnCounter {
-    warns: Arc<AtomicUsize>,
-}
-
-impl tracing::Subscriber for WarnCounter {
-    fn enabled(&self, _: &tracing::Metadata<'_>) -> bool {
-        true
-    }
-    fn new_span(&self, _: &tracing::span::Attributes<'_>) -> tracing::span::Id {
-        tracing::span::Id::from_u64(1)
-    }
-    fn record(&self, _: &tracing::span::Id, _: &tracing::span::Record<'_>) {}
-    fn record_follows_from(&self, _: &tracing::span::Id, _: &tracing::span::Id) {}
-    fn event(&self, event: &tracing::Event<'_>) {
-        if *event.metadata().level() == tracing::Level::WARN {
-            self.warns.fetch_add(1, Ordering::SeqCst);
-        }
-    }
-    fn enter(&self, _: &tracing::span::Id) {}
-    fn exit(&self, _: &tracing::span::Id) {}
-}
-
 /// `\_l` 換算の 4 縮退分岐（負値絶対／`%`／`@` 相対／パース不能）は actor ごと・分岐ごとに
 /// 厳密 1 回だけ `warn!` する（6.5）。同一 actor の再訪では追加警告なし、別 actor では再び
 /// 全分岐が警告される（持続 guard による per-actor once）。x 軸に縮退座標・y は Omitted
@@ -593,63 +569,60 @@ fn cursor_degrade_warns_once_per_actor_per_branch() {
     let a0 = ActorKey::from("0");
     let a1 = ActorKey::from("1");
 
-    let warns = Arc::new(AtomicUsize::new(0));
-    let subscriber = WarnCounter {
-        warns: Arc::clone(&warns),
+    // guard は 3 段を通して持ち越し（per-actor once の観測対象そのもの）、警告件数は
+    // 段ごとの捕捉窓の合計で数える（窓の外から観測するため段を分ける・累計は同じ）。
+    let mut guard = CursorWarnGuard::default();
+    let run = |actor: &ActorKey, coord: CursorCoord, guard: &mut CursorWarnGuard| {
+        let items = [
+            TextItem::CursorMove {
+                x: coord,
+                y: CursorCoord::Omitted,
+            },
+            TextItem::Glyph { ch: 'あ' },
+        ];
+        LayoutEngine::layout_with_cursor_warn(
+            &items,
+            1,
+            &region,
+            WritingMode::HorizontalTb,
+            10.0,
+            &FixedMetrics,
+            WrapPlan::CharByChar,
+            actor,
+            guard,
+        );
     };
-    tracing::subscriber::with_default(subscriber, || {
-        let mut guard = CursorWarnGuard::default();
-        let mut run = |actor: &ActorKey, coord: CursorCoord| {
-            let items = [
-                TextItem::CursorMove {
-                    x: coord,
-                    y: CursorCoord::Omitted,
-                },
-                TextItem::Glyph { ch: 'あ' },
-            ];
-            LayoutEngine::layout_with_cursor_warn(
-                &items,
-                1,
-                &region,
-                WritingMode::HorizontalTb,
-                10.0,
-                &FixedMetrics,
-                WrapPlan::CharByChar,
-                actor,
-                &mut guard,
-            );
-        };
+    let mut warns = 0usize;
 
-        // actor "0" 初回: 4 分岐がそれぞれ 1 回警告 → 計 4。
+    // actor "0" 初回: 4 分岐がそれぞれ 1 回警告 → 計 4。
+    let ((), counts) = count_levels(|| {
         for c in branches {
-            run(&a0, c);
+            run(&a0, c, &mut guard);
         }
-        assert_eq!(
-            warns.load(Ordering::SeqCst),
-            4,
-            "actor0 初回は 4 分岐×1 回＝4 警告"
-        );
-
-        // actor "0" 再訪: 同一 (actor, 分岐) は既出＝追加警告なし。
-        for c in branches {
-            run(&a0, c);
-        }
-        assert_eq!(
-            warns.load(Ordering::SeqCst),
-            4,
-            "actor0 再訪では追加警告なし（per-actor once）"
-        );
-
-        // actor "1": 別 actor は guard が独立＝再び 4 分岐が警告 → 計 8。
-        for c in branches {
-            run(&a1, c);
-        }
-        assert_eq!(
-            warns.load(Ordering::SeqCst),
-            8,
-            "別 actor では再び全 4 分岐が警告される（actor ごと once）"
-        );
     });
+    warns += counts.warn;
+    assert_eq!(warns, 4, "actor0 初回は 4 分岐×1 回＝4 警告");
+
+    // actor "0" 再訪: 同一 (actor, 分岐) は既出＝追加警告なし。
+    let ((), counts) = count_levels(|| {
+        for c in branches {
+            run(&a0, c, &mut guard);
+        }
+    });
+    warns += counts.warn;
+    assert_eq!(warns, 4, "actor0 再訪では追加警告なし（per-actor once）");
+
+    // actor "1": 別 actor は guard が独立＝再び 4 分岐が警告 → 計 8。
+    let ((), counts) = count_levels(|| {
+        for c in branches {
+            run(&a1, c, &mut guard);
+        }
+    });
+    warns += counts.warn;
+    assert_eq!(
+        warns, 8,
+        "別 actor では再び全 4 分岐が警告される（actor ごと once）"
+    );
 }
 
 /// `Omitted`（軸省略）・実導出成功（非負 Px/Em/Lh）は縮退でなく無音（warn しない・R2.4）。
@@ -662,11 +635,7 @@ fn cursor_omitted_and_valid_axes_do_not_warn() {
         WritingMode::HorizontalTb,
     );
     let a0 = ActorKey::from("0");
-    let warns = Arc::new(AtomicUsize::new(0));
-    let subscriber = WarnCounter {
-        warns: Arc::clone(&warns),
-    };
-    tracing::subscriber::with_default(subscriber, || {
+    let ((), counts) = count_levels(|| {
         let mut guard = CursorWarnGuard::default();
         let items = [
             TextItem::CursorMove {
@@ -695,8 +664,7 @@ fn cursor_omitted_and_valid_axes_do_not_warn() {
         );
     });
     assert_eq!(
-        warns.load(Ordering::SeqCst),
-        0,
+        counts.warn, 0,
         "軸省略・実導出成功は縮退でない（警告しない）"
     );
 }

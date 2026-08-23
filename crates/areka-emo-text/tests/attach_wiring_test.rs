@@ -11,10 +11,8 @@
 //! - 時刻は常に注入（`talk_time`）・実時間 sleep 不使用（決定論）。
 
 use std::cell::RefCell;
-use std::collections::BTreeMap;
 use std::path::Path;
 use std::rc::Rc;
-use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use areka_actor::reply_channel;
@@ -35,7 +33,7 @@ use areka_parsers::shell::{AppendTarget, DefRef, Element, ElementPath, Shell, Su
 use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::World;
-use tracing::subscriber::Interest;
+use log_capture_kit::{CapturedEvent, capture};
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
 use wintf::ecs::{DPI, GraphicsCommandList, GraphicsCore, VisualGraphics, WucGraphicsResource};
@@ -225,121 +223,39 @@ fn setup_target_with_dpis(
     (presenter, window)
 }
 
-// ── ログ捕捉ハーネス（R8.7 の檻・`crates/areka/src/placement/test_support.rs` の硬化版を移植） ──
+// ── ログ捕捉（R8.7 の観測・共有機構 `log-capture-kit` を統合テストからそのまま引く） ──
 //
-// **素朴な `tracing::subscriber::with_default` だけでは非決定的に取りこぼす**（再現率 12%）。
-// `with_default` はスレッドローカルだが callsite の interest キャッシュは**プロセス大域**で、
-// 「最初に踏んだスレッドが勝つ」——subscriber を持たない別テストが当該 callsite を先に踏むと
-// `NoSubscriber` → `Interest::never()` が焼き付き、以後イベントが捨てられる。対策は
-// (1) probe dispatcher を **2 個**常駐させて `has_just_one` を恒久的に偽へ落とし、
-// (2) 捕捉窓の**内側**で `rebuild_interest_cache()` を 1 回叩いて焼き残りを解毒すること。
-// 単体実行や `--test-threads=1` では 0% ＝素朴な検証では絶対に見つからない毒ゆえ、
-// 先例（areka placement / emo-compose log_capture）と同一の構造をここでも採る。
+// 捕捉窓・常駐の仕掛け・空振り検出はすべて `log_capture_kit::capture` が持つ。統合テスト
+// （`tests/`）は消費 crate の外側から `use` する別 crate だが、引き方は in-crate テストと
+// 同一で、`[dev-dependencies]` に kit を 1 行足すだけでよい（本ファイルがその実例である）。
+//
+// **素朴な `tracing::subscriber::with_default` だけでは非決定的に取りこぼす**（本ファイルの
+// 旧ハーネスで再現率 12%）。`with_default` が差し替えるのはスレッドローカルの既定 dispatcher
+// だけで、「そのログを評価するか」を決める callsite の**有効判定（interest）キャッシュは
+// プロセス全体で 1 つ**しかなく、最初に踏んだスレッドの判定が焼き付く——捕捉窓を持たない
+// 別テストが当該発行点を先に踏むと `NoSubscriber` → `never` が大域へ焼き付き、以後は自分の
+// スレッドへ捕捉先を差していてもイベントが捨てられる。kit は ⑴ probe の常駐 ⑵ 窓の内側での
+// 有効判定の再計算 ⑶ 番兵イベントによる空振り検出、の 3 点でこれを塞ぐ（機序の逐条解説は
+// `log_capture_kit` の crate doc と同 crate の `src/probe.rs`）。
 
-/// 捕捉した 1 イベント（level ＋ フィールド名 → Debug 表現）。
-#[derive(Debug, Clone)]
-struct LogEvent {
-    level: tracing::Level,
-    fields: BTreeMap<String, String>,
+/// 捕捉した 1 イベント。共有機構の正準型をそのまま使う（`level` ＋ フィールド）。
+type LogEvent = CapturedEvent;
+
+/// 構造化フィールドの Debug 表現を取り出し、**欠落は失敗**とする判定アダプタ
+/// （フィールド名も 7.4 の判定契約のうち）。
+///
+/// `field` ではなく別名にしてあるのは、[`CapturedEvent`] が同名の固有メソッドを持つためで
+/// ある。拡張トレイトに `field` を生やすと固有メソッドが黙って優先され、欠落時に panic する
+/// はずの判定が `None` を返すだけになる（緑のまま契約が消える）。
+trait ExpectField {
+    fn expect_field(&self, name: &str) -> &str;
 }
 
-impl LogEvent {
-    /// `message` フィールド（本文）。無ければ空文字（panic しない）。
-    fn message(&self) -> &str {
-        self.fields.get("message").map(String::as_str).unwrap_or("")
-    }
-
-    /// 構造化フィールドの Debug 表現。**欠落は失敗**（フィールド名も 7.4 の判定契約のうち）。
-    fn field(&self, name: &str) -> &str {
-        self.fields
-            .get(name)
+impl ExpectField for LogEvent {
+    fn expect_field(&self, name: &str) -> &str {
+        self.field(name)
             .unwrap_or_else(|| panic!("ログフィールド `{name}` が無い: {:?}", self.fields))
     }
-}
-
-/// 全フィールドを Debug 表現で拾う visitor（`record_u64`／`record_f64`／`record_str` の
-/// 既定実装がすべて `record_debug` へ転送するため 1 本で型を問わず捕捉できる）。
-struct FieldGrab<'a>(&'a mut BTreeMap<String, String>);
-
-impl tracing::field::Visit for FieldGrab<'_> {
-    fn record_debug(&mut self, f: &tracing::field::Field, v: &dyn std::fmt::Debug) {
-        self.0.insert(f.name().to_string(), format!("{v:?}"));
-    }
-}
-
-/// イベントを溜めるだけの最小 subscriber。
-#[derive(Clone, Default)]
-struct CaptureSubscriber(Arc<Mutex<Vec<LogEvent>>>);
-
-impl tracing::Subscriber for CaptureSubscriber {
-    fn enabled(&self, _meta: &tracing::Metadata<'_>) -> bool {
-        true
-    }
-    fn new_span(&self, _attrs: &tracing::span::Attributes<'_>) -> tracing::span::Id {
-        tracing::span::Id::from_u64(1)
-    }
-    fn record(&self, _span: &tracing::span::Id, _values: &tracing::span::Record<'_>) {}
-    fn record_follows_from(&self, _span: &tracing::span::Id, _follows: &tracing::span::Id) {}
-    fn event(&self, event: &tracing::Event<'_>) {
-        let mut fields = BTreeMap::new();
-        event.record(&mut FieldGrab(&mut fields));
-        self.0
-            .lock()
-            .expect("捕捉バッファの毒化なし")
-            .push(LogEvent {
-                level: *event.metadata().level(),
-                fields,
-            });
-    }
-    fn enter(&self, _span: &tracing::span::Id) {}
-    fn exit(&self, _span: &tracing::span::Id) {}
-}
-
-/// interest キャッシュへ `never` を焼かせないための常駐 dispatcher
-/// （`register_callsite` が常に `sometimes` を返すことだけが仕事）。
-struct InterestProbe;
-
-impl tracing::Subscriber for InterestProbe {
-    fn register_callsite(&self, _meta: &'static tracing::Metadata<'static>) -> Interest {
-        Interest::sometimes()
-    }
-    fn enabled(&self, _meta: &tracing::Metadata<'_>) -> bool {
-        false
-    }
-    fn new_span(&self, _attrs: &tracing::span::Attributes<'_>) -> tracing::span::Id {
-        tracing::span::Id::from_u64(1)
-    }
-    fn record(&self, _span: &tracing::span::Id, _values: &tracing::span::Record<'_>) {}
-    fn record_follows_from(&self, _span: &tracing::span::Id, _follows: &tracing::span::Id) {}
-    fn event(&self, _event: &tracing::Event<'_>) {}
-    fn enter(&self, _span: &tracing::span::Id) {}
-    fn exit(&self, _span: &tracing::span::Id) {}
-}
-
-/// probe dispatcher を **2 個**プロセス寿命で常駐させる（冪等）。
-/// 2 個必要なのは `has_just_one = (len <= 1)` ゆえ——1 個では毒の経路が残る。
-fn ensure_interest_probes() {
-    static PROBES: OnceLock<(tracing::Dispatch, tracing::Dispatch)> = OnceLock::new();
-    PROBES.get_or_init(|| {
-        (
-            tracing::Dispatch::new(InterestProbe),
-            tracing::Dispatch::new(InterestProbe),
-        )
-    });
-}
-
-/// クロージャ実行中に**現在のスレッド**で発火した tracing イベントを戻り値と共に返す。
-fn capture_logs<R, F: FnOnce() -> R>(f: F) -> (R, Vec<LogEvent>) {
-    ensure_interest_probes();
-    let cap = CaptureSubscriber::default();
-    let sink = cap.0.clone();
-    let out = tracing::subscriber::with_default(cap, || {
-        // probe 常駐前に焼かれた `never` の掃き残しを、窓が開いた**後**に確定的に潰す。
-        tracing::callsite::rebuild_interest_cache();
-        f()
-    });
-    let events = sink.lock().expect("捕捉バッファの毒化なし").clone();
-    (out, events)
 }
 
 /// メッセージに `needle` を含むイベントが**ちょうど 1 件**在ることを主張して返す。
@@ -785,7 +701,7 @@ fn from_view_keeps_image_size_exact_at_sub_unity_scale() {
 ///
 /// **判定は絶対値でなく比で行う**（7.4 本文）——ここでも `physical_size` の比が
 /// `k_new / k_old` に一致することまで固定する。フィールド名の改名・ログ削除は 7.4 の判定基準を
-/// 静かに壊すため、名前と値の双方を檻に入れる（[`LogEvent::field`] は欠落で panic する）。
+/// 静かに壊すため、名前と値の双方を実行テストで固定する（`expect_field` は欠落で panic する）。
 ///
 /// 併せて「装着 `info!` は `ActorRender` 不在時のみ」（7.1 で doc を改訂した契約）も
 /// 実測する: 同一 actor で装着ログが**2 回**出るのは、間に再追従による破棄が挟まったときだけ。
@@ -806,7 +722,7 @@ fn scale_refresh_logs_k_transition_and_reattach_physical_size() {
     // ── 1 回目の装着ログ: physical_size は k=1 の native 寸 ──
     let attach_msg = "テキスト供給面を予約スロットへ装着した";
     let (_, attach_events) =
-        capture_logs(|| present_frame(&mut rt, &mut world, 1.0).expect("初回提示（装着）"));
+        capture(|| present_frame(&mut rt, &mut world, 1.0).expect("初回提示（装着）"));
     let first_attach = expect_one(&attach_events, attach_msg);
     assert_eq!(
         first_attach.level,
@@ -814,7 +730,7 @@ fn scale_refresh_logs_k_transition_and_reattach_physical_size() {
         "装着は info!（既定 RUST_LOG=info で実機ログに残る水準・log-first）"
     );
     assert_eq!(
-        first_attach.field("physical_size"),
+        first_attach.expect_field("physical_size"),
         "(140, 80)",
         "k=1 の供給面寸（7.4 の比較基準）"
     );
@@ -828,8 +744,7 @@ fn scale_refresh_logs_k_transition_and_reattach_physical_size() {
     assert_eq!(view2.scale(), 2.0, "前提: 再表示で適用 k が 2.0 へ跳ぶ");
 
     // ── 再追従ログ: actor ／ k_old ／ k_new（R8.7 の本体） ──
-    let (refreshed, refresh_events) =
-        capture_logs(|| rt.refresh_actor_scale(&sakura, &view2, &model));
+    let (refreshed, refresh_events) = capture(|| rt.refresh_actor_scale(&sakura, &view2, &model));
     assert!(refreshed, "k 変化の再追従は true");
     let refresh_log = expect_one(&refresh_events, "文字層の再追従");
     assert_eq!(
@@ -837,24 +752,24 @@ fn scale_refresh_logs_k_transition_and_reattach_physical_size() {
         tracing::Level::INFO,
         "再追従は info!（実機 grep の水準・R8.7）"
     );
-    assert_eq!(refresh_log.field("actor"), "0", "actor フィールド");
+    assert_eq!(refresh_log.expect_field("actor"), "0", "actor フィールド");
     assert_eq!(
-        refresh_log.field("k_old").parse::<f64>().ok(),
+        refresh_log.expect_field("k_old").parse::<f64>().ok(),
         Some(1.0),
         "k_old フィールド（旧 k）"
     );
     assert_eq!(
-        refresh_log.field("k_new").parse::<f64>().ok(),
+        refresh_log.expect_field("k_new").parse::<f64>().ok(),
         Some(2.0),
         "k_new フィールド（新 k）"
     );
 
     // ── 2 回目の装着ログ: physical_size が新 k 寸（比 = k_new / k_old = 2.0） ──
     let (_, reattach_events) =
-        capture_logs(|| present_frame(&mut rt, &mut world, 1.0).expect("再追従後の提示"));
+        capture(|| present_frame(&mut rt, &mut world, 1.0).expect("再追従後の提示"));
     let second_attach = expect_one(&reattach_events, attach_msg);
     assert_eq!(
-        second_attach.field("physical_size"),
+        second_attach.expect_field("physical_size"),
         "(280, 160)",
         "再装着の供給面寸は新 k 寸——140×80 に対し比 2.0（7.4 は絶対値でなくこの比で判定する）"
     );
@@ -865,7 +780,7 @@ fn scale_refresh_logs_k_transition_and_reattach_physical_size() {
         "k・面実寸・文字描画領域が全同値の再追従は no-op（churn ガード・R4.5/R8.5）"
     );
     let (_, idle_events) =
-        capture_logs(|| present_frame(&mut rt, &mut world, 1.0).expect("同値 k 後の提示"));
+        capture(|| present_frame(&mut rt, &mut world, 1.0).expect("同値 k 後の提示"));
     assert!(
         !idle_events.iter().any(|e| e.message().contains(attach_msg)),
         "破棄が挟まらないフレームでは装着 info! は出ない（毎フレーム再生成の禁止）: {idle_events:?}"

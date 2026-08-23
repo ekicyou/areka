@@ -123,63 +123,35 @@ pub fn handle_text_msg<E>(
 #[cfg(test)]
 mod tests {
     use std::ops::ControlFlow;
-    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Arc, Mutex};
 
     use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
+    use log_capture_kit::count_levels;
     use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
     use wintf_winmsg_executor::{FilterResult, MessageLoop};
 
     use super::{EmoTextSink, TextMsg, handle_text_msg};
 
-    // ── ログ檻（WARN/ERROR 件数を数える最小 Subscriber・draw.rs の檻パターン踏襲） ──
+    // ── ログ捕捉（WARN/ERROR 件数の集計は共有機構 `log-capture-kit` へ委譲） ──
 
-    struct LevelCounter {
-        warns: Arc<AtomicUsize>,
-        errors: Arc<AtomicUsize>,
-    }
-
-    impl tracing::Subscriber for LevelCounter {
-        fn enabled(&self, _: &tracing::Metadata<'_>) -> bool {
-            true
-        }
-        fn new_span(&self, _: &tracing::span::Attributes<'_>) -> tracing::span::Id {
-            tracing::span::Id::from_u64(1)
-        }
-        fn record(&self, _: &tracing::span::Id, _: &tracing::span::Record<'_>) {}
-        fn record_follows_from(&self, _: &tracing::span::Id, _: &tracing::span::Id) {}
-        fn event(&self, event: &tracing::Event<'_>) {
-            match *event.metadata().level() {
-                tracing::Level::WARN => {
-                    self.warns.fetch_add(1, Ordering::SeqCst);
-                }
-                tracing::Level::ERROR => {
-                    self.errors.fetch_add(1, Ordering::SeqCst);
-                }
-                _ => {}
-            }
-        }
-        fn enter(&self, _: &tracing::span::Id) {}
-        fn exit(&self, _: &tracing::span::Id) {}
-    }
-
-    /// クロージャをログ檻の中で実行し、（結果, WARN 件数, ERROR 件数）を返す。
+    /// クロージャを共有のログ捕捉窓の中で実行し、（結果, WARN 件数, ERROR 件数）を返す。
     ///
-    /// `with_default` はスレッドスコープ。drain タスクは本テストスレッド（＝pump スレッド）
-    /// 上で走るため、handler／基盤 drain ループ／`emit` 失敗経路の全ログが檻に入る。
+    /// 件数の集計は硬化機構の唯一の定義元 `log-capture-kit` の [`count_levels`] に委ねる。
+    /// 戻り値の組は移行前と同一で、呼出側の判定内容は変わらない。
+    ///
+    /// 捕捉の範囲は**呼出スレッド**に閉じる。drain タスクは本テストスレッド（＝pump スレッド）
+    /// 上で走るため、handler／基盤 drain ループ／`emit` 失敗経路の全ログが窓に入る。
+    /// ただし「スレッドの範囲に閉じるから並行実行でも安全」は誤りである——差し替わるのは
+    /// スレッドローカルの既定 dispatcher だけで、そのログを評価するかどうかを決める callsite の
+    /// **有効判定（interest）キャッシュはプロセス全体で 1 つ**しかなく、その発行点を最初に
+    /// 踏んだスレッドの判定が焼き付く。捕捉窓を持たないスレッドが先に踏むと `never` が
+    /// 大域へ焼き付き、自分のスレッドへ捕捉先を差していても取りこぼす。共有機構は
+    /// ⑴ probe の常駐 ⑵ 窓の内側での有効判定の再計算 ⑶ 番兵イベントによる空振り検出の
+    /// 3 点でこれを塞ぐ（機序は `log_capture_kit` の crate doc）。
     fn with_log_cage<T>(f: impl FnOnce() -> T) -> (T, usize, usize) {
-        let warns = Arc::new(AtomicUsize::new(0));
-        let errors = Arc::new(AtomicUsize::new(0));
-        let subscriber = LevelCounter {
-            warns: Arc::clone(&warns),
-            errors: Arc::clone(&errors),
-        };
-        let out = tracing::subscriber::with_default(subscriber, f);
-        (
-            out,
-            warns.load(Ordering::SeqCst),
-            errors.load(Ordering::SeqCst),
-        )
+        let (out, counts) = count_levels(f);
+        (out, counts.warn, counts.error)
     }
 
     // ── テスト土台（実 channel・実 spawn_ui・bounded pump） ──
