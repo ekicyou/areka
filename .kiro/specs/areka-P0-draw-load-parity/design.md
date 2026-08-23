@@ -433,7 +433,8 @@ results_dir = "results"                # spec_dir 相対
 judge_script = "tools/perf/judge-perf.py"
 judge_version = "0.4.0"                # 版が違えば MEASURE_FAILED
 
-[target]                               # 合否の定義（判定式は judge-perf.py のもの）
+# 合否の定義（判定式は judge-perf.py のもの）。節の見出し行に注釈を置かない（PowerShell 側の最小読みが節を見失う）
+[target]
 idle_cpu_release_max_pct = 3.0         # 狭義の未満・IDLE_CPU_MAX_RELEASE_PCT と一致していること
 formulas = ["1_frame_interval_p95", "2_catchup_zero", "3_alloc_zero", "4a_idle_cpu_release", "4b_no_monotonic_rise"]
 builds_final = ["release", "dev"]      # ⑴〜⑶ は両方・⑷ は release
@@ -508,12 +509,14 @@ main_model_recommended = "fable"       # README に記す推奨（Opus 5 でも�
 | `RANK` | perf-measure エージェント: `perf-loop.ps1 rank <run>` → `rank.txt` | → `SELECT` |
 | `SELECT` | perf-analyze エージェント: 順位表＋候補カタログ（C16〜C20）＋台帳の既試行を読み、仮説・変更計画・触るファイル・選ばなかった理由・規模見立てを返す | 候補が無い（全て Out of scope／稼働中／既試行）→ `FINAL`（`STOPPED reason=plateau`）。あれば → `IMPLEMENT` |
 | `IMPLEMENT` | `perf-loop.ps1 prepare-ab`（A の実行体を退避）→ perf-implement エージェント（変更＋テスト追加） | → `TEST` |
+| `IMPLEMENT`（実装係 BLOCKED） | perf-implement が `STATUS: BLOCKED` を返した（実装をやり直させない） | → `RECORD`（verdict=`NA`・reason=`implement_blocked: <BLOCKER>`・差分は戻す）※2026-08-23 実装時に追加（タスク 7.5） |
 | `TEST` | perf-review エージェント（差分レビュー・制約検査）→ `cargo test --workspace`（background 可）→ `perf-loop.ps1 followup` | 緑＋PASS → `REMEASURE`。赤／FAIL／REJECTED → `RECORD`（verdict=`TESTS_RED` or `FOLLOWUP_FAIL`） |
 | `REMEASURE` | `perf-loop.ps1 measure-ab`（background・A1 B1 A2 B2） | 完了 → `DECIDE` |
 | `DECIDE` | `perf-loop.ps1 compare` → `ADOPTED`／`NO_DIFF`／`WORSE`／`MEASURE_FAILED` | → `RECORD` |
 | `RECORD` | 採用はコミット・不採用は戻す・台帳へ追記・streak 更新・`results/iter-<n>/` へ判定出力を複製 | streak≥3 or iter≥上限 → `FINAL`。主指標が目標未満で採用 → `FINAL`。それ以外 → `RANK` |
 | `TOOLFIX` | 計測失敗（exit 4・自己較正赤・版不一致）時に 1 回だけ（能力不足 exit 5 はここへ来ない）: perf-implement エージェントが道具を直し `perf-loop.ps1 selftest` | 緑 → 直前の相へ戻る。赤 → `FINAL`（`STOPPED reason=measure_failed`） |
 | `FINAL` | `perf-loop.ps1 final`（background・25 分 × release/dev）→ verdict 保存 → `results/summary.md`（brief 旧数値との対比表）→ 未達なら requirements.md 改訂欄へ登記 | FINAL 行を印字して終了 |
+| `FINAL`（全 PASS でない・`goal_met_candidate` で来た・頭打ちにも上限にも未達） | 結果を台帳へ残す | → `RANK`（`--iteration n+1`）※要件 1.4 に無い理由で止めないため（2026-08-23 実装時に追加・タスク 7.5）。実装の目標定義は設計の例に加えて `[goal]`／`[sampling]`／`[levels]`／`[primary_metric]`／`[secondary_metrics]`／`[goal_runtime]` を持つ（`tools/perf/goals/draw-load-parity.toml` が正）。 |
 
 **Implementation Notes**
 - Integration: スキルは `disable-model-invocation: true` にしない（`/goal` の条件文から名指しで呼ばれる）。

@@ -119,7 +119,7 @@ OS 側のコストは一括化では減らない（atom 確定台帳 L7「過半
 - **Extends**: なし（atom は本 spec の起票をもって 4.2 の実機側を手放す。atom 側には「実機で未達・引受先は本 spec」を登記する）
 - **Adjacent**:
   - `areka-P0-test-cage-determinism`（W6.9・`presenter/show.rs` `apply_show` 鎖の最後尾を自称。**本 spec は cage の後に置く**）
-  - `areka-P0-draw-load-parity`（W8・フレーム駆動の負荷。同 brief が「`presenter/show.rs` は対象外」と明記しているので責務は重ならない）
+  - `areka-P0-draw-load-parity`（W6.9・フレーム駆動の負荷。同 brief が「`presenter/show.rs` は対象外」と明記しているので責務は重ならない）
   - `areka-P0-balloon-offset-dpi`（W6.75・バルーン追従オフセットの k 倍。**同じ「100% で見た目が変」でも機序が別**——あちらは offset が k 倍されない話、こちらは提示のタイミングの話）
 
 ## Constraints
@@ -167,4 +167,4 @@ OS 側のコストは一括化では減らない（atom 確定台帳 L7「過半
 
 **dlp の合否に載せない申し送り（憶測で埋めないこと）**: 遷移フレームのうち自前の窓手続きが 1 行も走っていない**未特定区間 47.5%**（639,106／1,344,271µs・中央値 18,059µs）と、文字層の再構築の所要。どちらも dlp は測るだけで合否に載せない。
 
-**まだ動く**: dlp は改善ループ（タスク 9.x）が続いており、最終の着地（門の既定 ON/OFF・tick 構造がさらに変わったか・`Cargo.toml` に触れたか＝現時点では非接触）は同 spec のタスク 9.4 が本節を更新して報告する。
+**着地（2026-08-23・dlp タスク 9.4 で更新）**: dlp の改善ループは周 3 で頭打ち（plateau）となり STOPPED・**採用 0**。門の既定は **OFF のまま**（`crates/wintf/src/ecs/world/mod.rs` の `tick_gate_enabled: false`）、tick 構造（13 本の順序・実行器）は着地前と同じ、`Cargo.toml` は非接触。本節の file:line は dlp のタスク 1〜8 着地時点のまま有効。未達（⑵ catch-up・⑶・⑷a 22.3%）と残る最大項（段② `unregistered_rest` 51.8%）・引受先なし（新規 spec 要）は dlp の `requirements.md` 改訂欄に登記済み。

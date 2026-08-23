@@ -172,7 +172,7 @@
 - [x] 6.4 (P) 見た目の追随チェック（invoke-followup-checks.ps1＋judge-followup.py）
   - 有界実走（自動終了 ms・RUST_LOG にクリック透過／遷移／表示の debug）で表示成立点を待ってから、PID から窓を列挙して操作を時刻つきで probe.log へ
   - clickthrough（透明点と不透明点で WS_EX_TRANSPARENT の有無＋両方向のトグル適用ログ）・drag（不透明点から +80px ドラッグ→位置変更メッセージと窓書込の新位置 ±2px）・dpi（別 DPI のモニタへ移して戻す→DPI 変更メッセージと k= の変化・2 モニタ混在が無ければ INCONCLUSIVE）・balloon_follow（drag／dpi の前後でバルーンのキャラ窓相対位置 ±2px）
-  - judge-followup.py: 各検査 PASS／FAIL／INCONCLUSIVE・総合は全 PASS のみ PASS（INCONCLUSIVE は採用しない）・exit 0／1／2。自己較正 3 ケース（all_pass／clickthrough_fail／dpi_inconclusive）
+  - judge-followup.py: 各検査 PASS／FAIL／INCONCLUSIVE・総合は全 PASS のみ PASS（INCONCLUSIVE は採用しない）・exit 0／1／2。自己較正 4 ケース（all_pass／clickthrough_fail／dpi_inconclusive／no_dpi_required＝実装時に追加）
   - 観測可能な完了状態: 現行の実行体で clickthrough／drag／balloon_follow が PASS（dpi は環境により PASS か INCONCLUSIVE）、--selftest 緑
   - _Requirements: 1.5, 4.7_
   - _Boundary: followup-checks_

@@ -539,12 +539,31 @@ def cmd_goal_text(args) -> int:
 # =============================================================================
 
 
+def _final_release_idle_text(ledger):
+    """results/final-<date>/release/verdict.txt の「定常状態の CPU: … 平均=xx.x%」を読む（最新の日付・無ければ None）。"""
+    try:
+        results_dir = ledger.path.parent / "results"
+        finals = sorted(results_dir.glob("final-*/release/verdict.txt"))
+        if not finals:
+            return None
+        text = finals[-1].read_text(encoding="utf-8", errors="replace")
+        m = re.search(r"定常状態の CPU:.*?平均=([0-9.]+)%", text)
+        return (m.group(1) + "（25 分最終判定・" + finals[-1].parent.parent.name + "）") if m else None
+    except OSError:
+        return None
+
+
+
+
 def build_summary(ledger, goal_name: str) -> str:
     """まとめの Markdown を組む（純関数・時計を読まないので何度走らせても同じ）。"""
     baseline = CORE.state_number_text(ledger, "baseline_idle_cpu_pct")
     best = CORE.state_number_text(ledger, "best_idle_cpu_pct")
     latest = _latest_entry(ledger)
-    final = _entry_number(latest, "after_idle_cpu_pct", ledger)
+    # 最終列は 25 分の最終判定（results/final-*/release/verdict.txt の定常平均）を優先する。
+    # 無ければ最後の周の 7 分 A/B の値（after_idle_cpu_pct）。2026-08-23 に 7 分値 8.91 が 25 分の
+    # 不合格 22.3% を隠して読める形になった穴（要件 5.7「未達が内側から見えない」）の是正。
+    final = _final_release_idle_text(ledger) or _entry_number(latest, "after_idle_cpu_pct", ledger)
 
     lines = [
         f"# {goal_name} — 改善ループの結果まとめ",
