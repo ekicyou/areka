@@ -593,3 +593,20 @@ function Format-LoopValue {
     if ($text.Trim() -eq '') { return $PERF_LOOP_EMPTY }
     return $text
 }
+
+# 32bit SHIORI ヘルパを実行体の隣へそろえる（合否判定の走行は shiori_helper_present=true が関門）。
+# measure-baseline／rank-run／final は target\<release|debug> の areka.exe を直に使うが、ヘルパは
+# --target i686 で別ディレクトリに出るので、在るのに隣に無い＝実 SHIORI 無しの走行になって exit 4 で
+# 25 分を失う（2026-08-23 baseline-20260823\release で実際に起きた）。無ければ何もしない（既存の関門が止める）。
+function Sync-MeasureShioriHelper {
+    param([Parameter(Mandatory = $true)][string]$BinDir)
+    $dest = Join-Path $BinDir $MEASURE_HELPER_EXE
+    if (Test-Path -LiteralPath $dest -PathType Leaf) { return }
+    $src = Join-Path $repoRoot (Join-Path 'target' (Join-Path $MEASURE_HELPER_TARGET (Join-Path 'release' $MEASURE_HELPER_EXE)))
+    if (-not (Test-Path -LiteralPath $src -PathType Leaf)) {
+        Write-Problem "[perf-loop] 警告: 32bit SHIORI ヘルパが $dest にも $src にもありません。cargo build --release -p $MEASURE_HELPER_PACKAGE --target $MEASURE_HELPER_TARGET を先に回してください（合否判定の走行は exit 4 で止まります）。"
+        return
+    }
+    Copy-Item -LiteralPath $src -Destination $dest -Force
+    Write-Info "[perf-loop] 32bit SHIORI ヘルパを実行体の隣へ複製しました: $src -> $dest"
+}

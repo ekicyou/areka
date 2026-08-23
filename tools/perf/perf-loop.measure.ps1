@@ -237,6 +237,7 @@ function Invoke-MeasureRun {
     $ghostRoot   = Get-MeasureGhostRoot
     $balloonRoot = Get-MeasureBalloonRoot
     $attempts = $MEASURE_RUN_RETRY + 1
+    if (-not $script:DryRunMode) { Sync-MeasureShioriHelper -BinDir (Get-MeasureBinDir -BinDir $BinDir -Build $Build) }
 
     for ($attempt = 1; $attempt -le $attempts; $attempt++) {
         Clear-MeasureDryRunDir -Dir $OutDir

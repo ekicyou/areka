@@ -530,6 +530,8 @@ CPU ではないためです。引受先は `present-write-coherence` です。
 
 ---
 
+- **32bit SHIORI ヘルパは実行体の隣に要る。** 合否判定の走行（measure-baseline／rank-run／final）は `run-meta.txt` の `shiori_helper_present=true` が関門で、偽なら発話の無い別条件として exit 4（25 分を失う）。ヘルパは `--target i686-pc-windows-msvc` で別ディレクトリに出るので、`perf-loop.measure.ps1` は走行の直前に `target\i686-pc-windows-msvc\release\shiori-host32-helper.exe` を `target\<release|debug>\` へ複製する（`Sync-MeasureShioriHelper`・2026-08-23 の baseline で実際に踏んだ穴）。どちらにも無ければ警告だけ出して既存の関門に任せる。
+
 ## 12. 測り直すたびに確かめること（コマの間隔を見る判定式）
 
 「コマの間隔」を見る判定式の較正は、最初のベースライン（2026-08-14 の 3 走行）で
