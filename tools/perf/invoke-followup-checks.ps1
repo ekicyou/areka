@@ -104,7 +104,7 @@ $ErrorActionPreference = 'Stop'
 # =============================================================================
 # 較正値
 # =============================================================================
-$SCRIPT_VERSION        = '0.1.0'
+$SCRIPT_VERSION        = '0.1.1'
 $RUST_LOG_VALUE        = 'info,wintf::ecs::clickthrough=debug,wintf::transition=debug,areka_emo_present=debug'
 $SMOKE_EXIT_ENV_NAME   = 'AREKA_APP_SMOKE_EXIT_MS'
 $DEFAULT_BALLOON_SUBDIR = 'emo2-kakukaku'
@@ -343,8 +343,10 @@ $runLogPath          = Join-Path $script:OutDirPath 'run.log'
 $errLogPath          = Join-Path $script:OutDirPath 'run-stderr.log'
 Set-Content -LiteralPath $script:ProbeLogPath -Value '' -Encoding utf8 -NoNewline
 
+# -Checks は配列でも 'a,b,c' の 1 文字列でも受ける（perf-loop.measure.ps1 は子 pwsh へ引用した
+# 1 文字列で渡す＝2026-08-23 周 1 の followup が exit 3「未知の検査名 'clickthrough,drag,…'」で止まった穴）。
 $requested = @()
-foreach ($name in $Checks) {
+foreach ($name in @($Checks | ForEach-Object { [string]$_ -split ',' })) {
     $trimmed = $name.Trim()
     if (-not $trimmed) { continue }
     if ($CHECK_ALL -notcontains $trimmed) {
