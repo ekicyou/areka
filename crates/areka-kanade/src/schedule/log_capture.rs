@@ -6,50 +6,38 @@
 //! その発行を**実行可能なテストで**捕捉し、各アームが規約どおりの `target="kanade"`・
 //! `event=<語彙>`・レベル（ERROR/WARN）でログを出していることを検証可能にする。
 //!
-//! # 決定性の要（PITFALL）
-//! [`capture`] は [`tracing::subscriber::with_default`] でスレッドローカルに subscriber を
-//! 差し込み、クロージャ内で発行されたイベントのみを捕える。`step()` はテストスレッド上で
-//! 同期的に走る純粋関数ゆえ、そのイベントは確実に同一スレッドで捕捉される（spawn した
-//! アクタースレッドのログは捕えない——それはタスク 6.2 の担当）。
+//! # 硬化機構は 1 箇所にしかない
+//! 捕捉窓そのものは**共有 crate [`log_capture_kit`] へ委譲**する（spec:
+//! areka-P0-test-cage-determinism・要件 1.5／2.2）。本モジュールが持つのは
+//! 「この crate の檻が照合する形（[`CapturedEvent`]）への変換」と表明ヘルパだけで、
+//! subscriber の設置も interest の管理も自前では行わない。以前ここにあった
+//! interest-keeper（プロセス全体の既定 subscriber を常駐させる方式）は、同じ機構が
+//! crate ごとに写し取られて写し損ねた側だけが静かに嘘をつく形だったため、共有 crate へ
+//! 一本化して撤去した。
 //!
-//! ## 並列負荷下の確率欠陥と interest-keeper による根治
-//! `with_default` は呼出ごとに transient dispatcher を登録/破棄する。`cargo test --workspace`
-//! の並列負荷下では **live dispatcher が 0 個になる瞬間**が生じ、その窓で別スレッドの
-//! callsite が初回 `register()` されると tracing-core が Interest を `Never` に**焼き付ける**
-//! （tracing-core 0.1.36 `callsite.rs:505` の `unwrap_or_else(Interest::never)`・sticky で
-//! 次の dispatcher 登録まで復活しない）。焼き付いた callsite のイベントは以降マクロの静的
-//! チェックで捨てられ、対象檻が ~1/10〜1/20 の確率で偽赤する。これは areka-P0-kanade 時代から
-//! main に存在した欠陥で、並列度が上がると露呈する。
+//! 捕捉されるのは**呼出スレッド**で同期的に発火したイベントだけである。`step()` は
+//! テストスレッド上で同期的に走る純粋関数ゆえ確実に捕えられる（spawn したアクター
+//! スレッドのログは捕えない——それはタスク 6.2 の担当）。
 //!
-//! 根治は [`install_interest_keeper`] が初回 [`capture`] で一度だけ確立する
-//! **プロセスグローバル interest-keeper**（[`INTEREST_KEEPER`]）。素の
-//! `tracing_subscriber::registry()`（per-layer filter 無し・`register_callsite=always`・
-//! `event` は no-op＝`sharded.rs:222-235` の bare registry 挙動）を
-//! `set_global_default` で常駐させると、その subscriber Arc は leak され
-//! （`dispatcher.rs:314-319`）**プロセス生存期間ずっと registrar が生き続ける**。以後は
-//! live dispatcher 数が 0 になる瞬間が構造的に存在しなくなり、`callsite.rs:505` の
-//! `Interest::never` 焼き付きが**到達不能**になる。確立の瞬間に全 callsite が rebuild され
-//! （`callsite.rs:484-488`）、確立以前に焼き付いた callsite も治癒される。
+//! # 機序（「スレッドローカルゆえ安全」は誤り）
+//! `tracing::subscriber::with_default` が差し替えるのはスレッドローカルの既定 dispatcher
+//! だけで、そこは確かにスレッドごとに独立している。しかし「そのログを評価するか」を決める
+//! callsite の **interest キャッシュはプロセス全体で 1 つ**であり、その発行点をプロセス内で
+//! 最初に踏んだスレッドの判定が焼き付く。捕捉窓を持たないスレッドの既定は `NoSubscriber` で
+//! 判定は「不要」なので、先に踏まれると `never` が大域へ焼き付き、自分のスレッドへ捕捉先を
+//! 差していても以後そのイベントは早期 return で捨てられる。結果、不在の主張は捕捉 0 件のまま
+//! 静かに緑になり（偽陰性）、存在の主張は捕捉 0 件で確率的に赤になる（偽陽性）。
 //!
-//! ## 不変条件
-//! **本モジュール（interest-keeper）より先に、別のグローバル subscriber を設定してはならない。**
-//! フィルタ付きの global を先に置くと callsite Interest がそちらの評価で `Never` へ焼き付き直され
-//! capture が壊れる。違反時は [`install_interest_keeper`] が `set_global_default` の `Err` を
-//! `.expect()` で受けて**大声で panic** する（silent 縮退なし・log-first）。
-//!
-//! bare registry を global 常駐させても capture の意味論は不変: capture 外のイベントは Registry の
-//! `event` no-op へ落ち（従来の `NoSubscriber` と観測差なし）、capture 内のイベントは
-//! `with_default` の thread-local subscriber が global を shadow する（`dispatcher.rs:379-398`）
-//! ため thread-local のみへ配送され、捕捉列が相互に混在しない。
+//! [`log_capture_kit::capture`] はこれを ⑴ プロセス寿命の probe 常駐 ⑵ 窓の内側での
+//! interest 再計算 ⑶ 窓の内側で発火する対照イベント（番兵）による空振り検出、の 3 点で塞ぐ。
+//! 番兵は返却前に取り除かれるので、呼出側の件数・主張は変わらない。機序の逐条解説と
+//! `tracing-core` の実コード引用は `log_capture_kit` の crate doc および同 crate の
+//! `src/probe.rs` にある。
 
 use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex, OnceLock};
 
-use tracing::field::{Field, Visit};
-use tracing::{Event, Level, Subscriber};
-use tracing_subscriber::layer::{Context, Layer};
-use tracing_subscriber::prelude::*;
-use tracing_subscriber::registry::LookupSpan;
+use log_capture_kit::CapturedEvent as CanonicalEvent;
+use tracing::Level;
 
 /// 捕捉した 1 イベント（照合対象は target／event／outcome／message／level）。
 #[derive(Debug, Clone)]
@@ -64,123 +52,89 @@ pub(crate) struct CapturedEvent {
     pub level: Level,
     /// 構造化フィールドの全記録（フィールド名 → 値の文字列表現）。
     ///
-    /// 文字列フィールドは素の値、それ以外（数値・`?expr` の Debug 記録）は `Debug` 表現が入る。
-    /// 「ログに載っていること」自体が要求である値（例: 選択待ち帳簿確立の候補数・期限）を
-    /// 檻から突合するために使う。
+    /// 文字列フィールドは素の値、それ以外（数値・`?expr`／`%expr` の Debug 記録）は `Debug`
+    /// 表現が入る。「ログに載っていること」自体が要求である値（例: 選択待ち帳簿確立の候補数・
+    /// 期限）を檻から突合するために使う。
     pub fields: BTreeMap<String, String>,
 }
 
-/// 照合対象フィールド（`event`・`outcome`）とメッセージ本文（`message`）を取り出しつつ、
-/// 全フィールドを [`CapturedEvent::fields`] へ記録する訪問子。
-struct EventFieldVisitor {
-    event: Option<String>,
-    outcome: Option<String>,
-    message: Option<String>,
-    fields: BTreeMap<String, String>,
-}
-
-impl Visit for EventFieldVisitor {
-    fn record_str(&mut self, field: &Field, value: &str) {
-        self.fields
-            .insert(field.name().to_string(), value.to_string());
-        match field.name() {
-            "event" => self.event = Some(value.to_string()),
-            "outcome" => self.outcome = Some(value.to_string()),
-            "message" => self.message = Some(value.to_string()),
-            _ => {}
+/// 正準イベントから 1 フィールドの値を、移行前の visitor と同じ規則で取り出す。
+///
+/// 移行前の `EventFieldVisitor` は `record_str` 経路を `insert`（後勝ち）で、`record_debug`
+/// 経路を `or_insert_with`（先勝ち・生値があれば上書きしない）で記録していた。すなわち
+/// **生値が 1 つでもあれば最後の生値、無ければ最初の Debug 表現**である。ここではその規則を
+/// そのまま再現する。
+///
+/// 戻り値の第 2 要素は「生値（`record_str` 経路）だったか」で、`event`／`outcome` の
+/// 引用符剥がしを Debug 経路だけに限るために使う。
+///
+/// **`log_capture_kit::CapturedEvent::field_str` だけで書いてはならない**——`?expr`／`%expr`
+/// で渡されたフィールドは `record_str` を通らないため `None` になり、その経路の値が黙って
+/// 落ちて判定が空振りになる（`log_capture_kit` の crate doc「注意」節）。
+fn field_of(ev: &CanonicalEvent, name: &str) -> Option<(String, bool)> {
+    let mut last_str: Option<&str> = None;
+    let mut first_debug: Option<&str> = None;
+    for (field_name, value) in &ev.fields {
+        if field_name != name {
+            continue;
+        }
+        match &value.str_raw {
+            Some(raw) => last_str = Some(raw.as_str()),
+            None if first_debug.is_none() => first_debug = Some(value.debug.as_str()),
+            None => {}
         }
     }
+    match (last_str, first_debug) {
+        (Some(raw), _) => Some((raw.to_string(), true)),
+        (None, Some(debug)) => Some((debug.to_string(), false)),
+        (None, None) => None,
+    }
+}
 
-    // `event`／`outcome` は文字列リテラルで渡す規約だが Debug 経路でも拾えるよう保険を掛ける。
-    // メッセージ本文（tracing の `message` フィールド）は fmt::Arguments ゆえ Debug 経路で拾う。
-    // 数値・`?expr` など非文字列のフィールドも `Visit` の既定実装が本経路へ落ちるため、
-    // ここで全フィールドを記録すれば取りこぼしがない。
-    fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
-        self.fields
-            .entry(field.name().to_string())
-            .or_insert_with(|| format!("{value:?}"));
-        match field.name() {
-            "event" if self.event.is_none() => {
-                self.event = Some(format!("{value:?}").trim_matches('"').to_string());
+/// `event`／`outcome` の語彙値。生値はそのまま、Debug 表現は囲みの引用符を剥がして返す
+/// （移行前の `format!("{value:?}").trim_matches('"')` と同じ保険）。
+fn label_of(ev: &CanonicalEvent, name: &str) -> Option<String> {
+    field_of(ev, name).map(|(value, from_str)| {
+        if from_str {
+            value
+        } else {
+            value.trim_matches('"').to_string()
+        }
+    })
+}
+
+impl CapturedEvent {
+    /// 共有機構の正準イベントから、本 crate の檻が照合する形へ変換する。
+    fn from_canonical(ev: &CanonicalEvent) -> Self {
+        let mut fields: BTreeMap<String, String> = BTreeMap::new();
+        for (name, _) in &ev.fields {
+            if fields.contains_key(name.as_str()) {
+                continue;
             }
-            "outcome" if self.outcome.is_none() => {
-                self.outcome = Some(format!("{value:?}").trim_matches('"').to_string());
+            if let Some((value, _)) = field_of(ev, name) {
+                fields.insert(name.clone(), value);
             }
-            "message" if self.message.is_none() => {
-                self.message = Some(format!("{value:?}"));
-            }
-            _ => {}
+        }
+        Self {
+            target: ev.target.clone(),
+            event: label_of(ev, "event"),
+            outcome: label_of(ev, "outcome"),
+            // メッセージ本文は `fmt::Arguments` ゆえ Debug 経路で届き、その `{:?}` は整形済みの
+            // 本文そのもの（引用符なし）になる——移行前も引用符は剥がしていない。
+            message: field_of(ev, "message").map(|(value, _)| value),
+            level: ev.level,
+            fields,
         }
     }
-}
-
-/// 捕捉先へイベントを積む Layer。
-struct CaptureLayer {
-    sink: Arc<Mutex<Vec<CapturedEvent>>>,
-}
-
-impl<S> Layer<S> for CaptureLayer
-where
-    S: Subscriber + for<'a> LookupSpan<'a>,
-{
-    fn on_event(&self, event: &Event<'_>, _ctx: Context<'_, S>) {
-        let mut visitor = EventFieldVisitor {
-            event: None,
-            outcome: None,
-            message: None,
-            fields: BTreeMap::new(),
-        };
-        event.record(&mut visitor);
-        let meta = event.metadata();
-        self.sink.lock().unwrap().push(CapturedEvent {
-            target: meta.target().to_string(),
-            event: visitor.event,
-            outcome: visitor.outcome,
-            message: visitor.message,
-            level: *meta.level(),
-            fields: visitor.fields,
-        });
-    }
-}
-
-/// プロセスグローバル interest-keeper（一度だけ確立・leak されて永久生存）。
-///
-/// 確立済みか否かの二値のみを保持する（中身なし）。`OnceLock` が初期化競合を直列化するため、
-/// 並行初回呼出でも `set_global_default` はプロセスで高々 1 回しか走らない。
-static INTEREST_KEEPER: OnceLock<()> = OnceLock::new();
-
-/// tracing callsite Interest の `Never` 焼き付きを根絶する（機構の詳細はモジュール doc「決定性の要」）。
-///
-/// [`capture`] の先頭から呼ぶ。初回のみ素の `registry()` を global default として常駐させ、
-/// 全 callsite の Interest を再評価する。2 回目以降は `OnceLock` の no-op 参照で即返る。
-fn install_interest_keeper() {
-    INTEREST_KEEPER.get_or_init(|| {
-        // bare registry（per-layer filter 無し）を global default として leak・常駐させる。
-        // 以降 live dispatcher 数が 0 になる瞬間が消え、Interest::never 焼き付きが到達不能になる。
-        tracing::subscriber::set_global_default(tracing_subscriber::registry()).expect(
-            "log_capture の interest-keeper より先に別のグローバル subscriber を設定してはならない: \
-             フィルタ付き global は callsite Interest を Never へ焼き付け直し capture を壊す。\
-             対処: テストプロセスで log_capture 以外の set_global_default / init を行わないこと",
-        );
-        // 登録時 rebuild で理論上は十分だが、確立以前に焼き付いた callsite の再評価保険＋意図の
-        // 自己文書化として明示呼出する（コスト 0）。
-        tracing::callsite::rebuild_interest_cache();
-    });
 }
 
 /// `f` を実行し、その間にテストスレッドで発行された `tracing` イベントを捕捉して返す。
+///
+/// 捕捉窓は [`log_capture_kit::capture`]（硬化機構の唯一の定義元）。捕捉が働いていなければ
+/// 空の結果を静かに返さず panic する。
 pub(crate) fn capture<F: FnOnce()>(f: F) -> Vec<CapturedEvent> {
-    install_interest_keeper();
-    let sink: Arc<Mutex<Vec<CapturedEvent>>> = Arc::new(Mutex::new(Vec::new()));
-    let layer = CaptureLayer { sink: sink.clone() };
-    let subscriber = tracing_subscriber::registry().with(layer);
-    tracing::subscriber::with_default(subscriber, f);
-    // NOTE: `with_default` 終了後も tracing は Dispatch（subscriber＝sink を内包する Layer を
-    // 保持）を一時的に clone し得るため、sink の strong_count が 1 に戻る保証はない。
-    // よって `Arc::try_unwrap` は並列テスト下で稀に失敗し panic する（タスク 6.2 レビューで
-    // 発覚した flaky race・~1/10〜1/20）。参照数に依存せず、ロック下で捕捉列を取り出して返す。
-    // f 完了後に本スレッドで新規イベントは発行されないため take で安全に確定できる。
-    std::mem::take(&mut *sink.lock().expect("capture sink mutex は毒化しない"))
+    let ((), events) = log_capture_kit::capture(f);
+    events.iter().map(CapturedEvent::from_canonical).collect()
 }
 
 /// 捕捉列に `target="kanade"`・`event=event_name`・`level` のイベントが存在することを表明する。

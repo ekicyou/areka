@@ -34,9 +34,10 @@ pub mod sink;
 pub mod sylphya_wiring;
 pub mod ticker;
 
-// Task 10.1: 固定ログイベント檻の共有基盤（interest-keeper で並列負荷下の Interest::never 焼き付きを
-// 根絶・決定論檻・R9.3／R8.1）。`crate::sylphya_wiring` の provider debug 固定ログテストが
-// `crate::test_log_capture::capture` から利用する。
+// Task 10.1: 固定ログイベント檻の共有基盤（捕捉窓は共有 crate `log-capture-kit` へ委譲し、
+// 並列負荷下の Interest::never 焼き付きを根絶・決定論檻・R9.3／R8.1）。`crate::sylphya_wiring` の
+// provider debug 固定ログテストが `crate::test_log_capture::capture` から、`crate::sink` の
+// 構造化ログ檻が `crate::test_log_capture::capture_events` から利用する（crate 内の捕捉窓は 1 箇所）。
 #[cfg(test)]
 mod test_log_capture;
 

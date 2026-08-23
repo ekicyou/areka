@@ -209,6 +209,7 @@ fn s7_record_present_skips_onfirstboot_and_logs_skip_first_boot() {
     while std::time::Instant::now() < deadline {
         let hit = log_buffer.lock().expect("log buffer mutex は毒化しない")[base_len..]
             .iter()
+            .map(super::global_log_probe::CapturedLine::from)
             .any(|e| {
                 e.target == "kanade"
                     && e.level == Level::INFO

@@ -464,7 +464,7 @@ pub fn ensure_interest_probes();
 
 **Responsibilities & Constraints**
 - 移行の単位は crate。各 crate で「本体削除＋`use`＋アダプタ 1〜3 行」→ `cargo test -p <crate>` 緑 → 次の crate（要件 1.7 の判定不変を crate ごとに確認）。
-- アダプタの型対応（File Structure Plan ① と対）: `Vec<String>` 行＝`capture_lines(LevelTargetFields | LevelFields)`・`String` 改行連結＝同 `.join("\n")`・構造体＝`CapturedEvent`（`LogEvent` は型別名・keeper 3 crate の `CapturedEvent` は `field_str("event")`／`field_str("outcome")`（生値）／`message()` から組み立て、`fields` マップは生値優先・無ければ Debug 表現で現行の `record_str`／`record_debug` 二経路と同じ内容にする）・件数＝`count_levels`・EnvFilter＝`capture_under_filter`。**呼出側の assert 文・戻り値の意味は不変**。
+- アダプタの型対応（File Structure Plan ① と対）: `Vec<String>` 行＝`capture_lines(LevelTargetFields | LevelFields)`・`String` 改行連結＝同 `.join("\n")`・構造体＝`CapturedEvent`（`LogEvent` は型別名・keeper 3 crate の `CapturedEvent` は `message()` と、**生値・Debug 表現の二経路**から組み立てる（**2026-08-24 実装時に訂正**: `field_str` 単独では不可。`?expr`／`%expr` のシジル形は `record_str` を通らず`field_str` が `None` を返すため、現行 visitor と同じ「生値があれば最後の生値、無ければ最初の Debug 表現を`trim_matches('"')` した値」の規則が要る。`field_str` だけにすると kanade 5 本・ghost `sink.rs` 2 本のテストが赤になることを変異注入で実測）。`fields` マップも同じ規則（生値優先・無ければ Debug 表現）で現行の `record_str`／`record_debug` 二経路と同じ内容にする）・件数＝`count_levels`・EnvFilter＝`capture_under_filter`。**呼出側の assert 文・戻り値の意味は不変**。
 - 説明文の是正は「スレッドローカルゆえ安全」類の否認文を削除し、「interest キャッシュはプロセス共有・先着が勝つ・kit が probe 常駐＋窓内 rebuild＋番兵で保証する」へ置き換える。由来表示（`table.rs:206-208`「emo-compose/actor.rs の流儀」）は kit を指す。
 - `frame_test_support.rs`（`FrameHarness` の土台）は捕捉層（`Capture`／`capture_logs` :103-131）だけを差し替え、ハーネス本体と `frame_harness_tests.rs` の逐語（`include_str!("frame_test_support.rs")` :39）が見張る項目（`single_threaded_schedule`）は動かさない（要件 11.3）。
 - kit の自己テストは `wintf::transition` 行を出さず、窓書込の計数も行わない（要件 11.1／11.2 は「移行で語彙を増やさない・既存の逐語テストを緑に保つ」として満たす）。

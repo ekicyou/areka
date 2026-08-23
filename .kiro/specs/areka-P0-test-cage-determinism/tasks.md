@@ -85,7 +85,7 @@
   - _Boundary: areka-seriko_
   - _Depends: 2.3, 2.5_
 
-- [ ] 3.2 (P) 全体設定を常駐させていた 3 crate を共有機構へ寄せる
+- [x] 3.2 (P) 全体設定を常駐させていた 3 crate を共有機構へ寄せる
   - 3 crate の常駐処理と捕捉層を削除し、共有機構の捕捉窓へ置き換える
   - 各 crate のイベント型（宛先・レベル・メッセージ・種別・結果・フィールド）は正準型からの変換で組み立て、種別と結果は**生値**で取り出して完全一致の判定を変えない
   - 同じ crate 内で硬化されていない捕捉が別に残っている箇所も同じ窓口へ寄せる
@@ -290,3 +290,5 @@
 - **タスク 2.7 → 8.3 宛（決着）**: 窓の内側の `rebuild_interest_cache()`（`capture.rs`）は**証明可能に冗長**で、正直な檻は作れない。実測: ⑴ rebuild だけを外しても窓前の焼き付きの場面は緑（`with_default` 自身の `Dispatch::new` → `register_dispatch` が全発行点を再計算するため。`tracing-core-0.1.36/src/callsite.rs:483-488`）、⑵ probe と rebuild の両方を外しても窓前の場面は緑、⑶ その状態で窓**内**の場面は赤。つまり窓前の焼き付きは rebuild の有無に関わらず治り、窓内の焼き付きは rebuild では治せない。**「引受先未定」ではなく「意図的な二重防御・檻は作れない」として台帳へ記録する**。要件 3.2 の機序自体は 2.7 の硬化あり子テストが縛っている。
 - **タスク 2.7（記録の訂正）**: `AREKA_` 接頭辞の実行時環境変数は実測 13 件（本タスクの追加で 14 件）。また接頭辞は例外なしではない——`HOST32_*`（7 件）・`GHOSTDIR`・`PARENT_HWND`・`WUC_SPIKE_HOLD_MS`・`WINTF_CROSSHAIR` が別系統で存在する。
 - **タスク 3.1 → 8.3 宛（群 3 全体で再発する）**: 移行の結果、`crates/areka-seriko/Cargo.toml:28` の `[dev-dependencies] tracing-subscriber` が**未使用**になった（crate 全域で参照 0）。要件 11.5 が Cargo.toml の変更を dev-dependency の**追加**に限っているので撤去は本仕様の裁量外で、**6.2 の Cargo.toml 検査も拾わない**（6.2 が見るのは「製品側依存に共有 crate が現れていないこと」だけ）。**8.3 の台帳へ引受先付きで登記すること**。同じ残渣が 3.2〜3.8 でも出る見込み。併せて同ファイル `:26-27` の存在理由コメントも陳腐化する。
+- **タスク 3.2 → 8.3 宛**: `crates/areka-ghost/src/test_log_capture.rs` の `event` ラベルの Debug 復旧経路は**どのテストにも縛られていない**（現行の ghost 側 `event = …` が全件文字列リテラルのため、外しても 107/107 緑）。移行前の visitor も同じ保険を持っていたので保険は残した。規則そのものは kit 側の `field_str_is_none_for_values_that_did_not_come_through_record_str` が縛っている。ghost へ新しい檻を足すと本数の同一性が崩れるので、**台帳に書くのが正しい引受先**。
+- **タスク 3.2（design.md 訂正済み）**: `#### C2` の「keeper 3 crate は `field_str("event")`／`field_str("outcome")` から組み立てる」は**誤り**だったので 2026-08-24 に訂正した。シジル形が `field_str` を通らないため、生値・Debug 表現の二経路が要る。

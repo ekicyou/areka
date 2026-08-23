@@ -728,7 +728,7 @@ mod actor_integration_tests;
 /// - **(B) アクター死亡後 send の WARN 記録**（R6.7/8.1・無音失敗禁止）: 死亡後投函が panic せず
 ///   縮退することは既存檻（[`actor_integration_tests::actor_death_via_close_makes_sends_observable_and_reader_continues`]）
 ///   が突くが、その縮退が **無音でない**（WARN を出す）ことは檻化されていない。本檻は
-///   [`crate::test_log_capture::capture`]（interest-keeper・決定論）で fire-and-forget send と
+///   [`crate::test_log_capture::capture`]（共有機構への委譲・決定論）で fire-and-forget send と
 ///   barrier の死亡縮退 WARN を捕捉する。
 ///
 /// ## 判断分岐 → 檻 の対応（criterion → test）

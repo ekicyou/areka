@@ -259,7 +259,7 @@ fn apply_barrier_emits_barrier() {
 /// SET store-write の適用時に、design Monitoring の固定ログ
 /// `debug!(target: "areka_sylphya::actor", ...)`（publish/SET/persist の適用記録）が発火する
 /// （R9.3 grep 証跡・無音でない適用記録・R8.1）。`apply` は純関数ゆえテストスレッド上で駆動でき、
-/// interest-keeper 経由 [`crate::test_log_capture::capture`] で並列負荷下でも決定論捕捉する
+/// 共有機構経由 [`crate::test_log_capture::capture`] で並列負荷下でも決定論捕捉する
 /// （bare `with_default` 不使用）。ログが削除・target/レベル変更されると本檻が落ちる。
 #[test]
 fn apply_store_write_emits_actor_debug_log() {
