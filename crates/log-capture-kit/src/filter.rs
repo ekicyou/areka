@@ -58,6 +58,27 @@ impl std::io::Write for VecWriter {
 ///   レベル・宛先・本文・フィールドが載る。
 /// - 戻り値に番兵行は含まれない（module doc 参照）。捕捉が働いていなければ panic する。
 /// - 窓の外・他スレッドで発火したイベントは混入しない。
+///
+/// # Examples
+///
+/// ```rust
+/// use log_capture_kit::capture_under_filter;
+///
+/// let out = capture_under_filter("info,areka_demo::quiet=warn", || {
+///     tracing::info!(target: "areka_demo::loud", stage = "begin", "見える本文");
+///     tracing::info!(target: "areka_demo::quiet", "濾過で消える本文");
+/// });
+///
+/// // 通った側（対照）。これが無いと「消えた」の主張が空振りでも緑になる。
+/// assert!(out.contains("見える本文"));
+/// assert!(out.contains("stage=\"begin\""));
+/// // 濾過された側。
+/// assert!(!out.contains("濾過で消える本文"));
+/// ```
+///
+/// # Panics
+///
+/// 窓の内側で対照イベント（番兵）を捕捉できなかった場合。
 pub fn capture_under_filter(directives: &str, f: impl FnOnce()) -> String {
     ensure_interest_probes();
 

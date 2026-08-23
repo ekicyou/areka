@@ -18,6 +18,7 @@ const TARGET_INSIDE: &str = "log_capture_kit::selftest::inside_window";
 const TARGET_TRACE: &str = "log_capture_kit::selftest::trace_level";
 const TARGET_OTHER_THREAD: &str = "log_capture_kit::selftest::other_thread";
 const TARGET_RETAINED: &str = "log_capture_kit::selftest::retained_sink";
+const TARGET_SAME_THREAD_CONTROL: &str = "log_capture_kit::selftest::same_thread_control";
 
 fn emit_before_window() {
     tracing::info!(target: TARGET_BEFORE, mark = "before", "窓の外で先に登録される発行点");
@@ -37,6 +38,10 @@ fn emit_other_thread() {
 
 fn emit_retained() {
     tracing::info!(target: TARGET_RETAINED, mark = "retained", "共有参照を握られたままの窓");
+}
+
+fn emit_same_thread_control() {
+    tracing::info!(target: TARGET_SAME_THREAD_CONTROL, mark = "control", "窓内・同一スレッドの対照");
 }
 
 fn count_target(events: &[CapturedEvent], target: &str) -> usize {
@@ -152,16 +157,27 @@ fn captures_trace_level_events() {
 
 /// 要件 3.6: 窓の外で発火したイベントも、窓の内側で**他スレッド**が発火したイベントも
 /// 混入しない（既定 API はスレッド局所の捕捉意味論）。
+///
+/// 不在の主張なので、同じ窓・同一スレッドで「入る側」を 1 件見る対照を隣に置く。番兵が
+/// 示すのは**窓**が生きていたことだけで、混入経路の発行点が生きていたことは示さないため、
+/// 対照が無いと被検査の発火ごと空振りしていても緑になる（`lib.rs` の利用手順が不在主張に
+/// 求めているのと同じ形を、機構自身の自己テストでも守る）。
 #[test]
 fn does_not_capture_events_from_outside_the_window_or_other_threads() {
     emit_other_thread(); // 窓の外
 
     let ((), events) = capture(|| {
+        emit_same_thread_control(); // 対照: 同一スレッド・窓内なら入る
         std::thread::spawn(emit_other_thread)
             .join()
             .expect("他スレッドは panic しない");
     });
 
+    assert_eq!(
+        count_target(&events, TARGET_SAME_THREAD_CONTROL),
+        1,
+        "対照が入っていない＝この窓は何も観測できていないので、不在の主張が空振りで緑になっている: {events:?}"
+    );
     assert_eq!(
         count_target(&events, TARGET_OTHER_THREAD),
         0,
