@@ -7,7 +7,7 @@
 
 ## brief 旧数値との対比
 
-出所: .kiro/specs/areka-P0-draw-load-parity/brief.md `## Problem`（2026-08-15 実測）
+出所: .kiro/specs/completed/areka-P0-draw-load-parity/brief.md `## Problem`（2026-08-15 実測）
 
 | 指標 | brief 旧数値（areka） | 参考（SSP） | ベースライン | 最良 | 最終 |
 |---|---:|---:|---:|---:|---:|

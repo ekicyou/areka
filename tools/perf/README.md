@@ -729,7 +729,7 @@ python tools/perf/perf-ledger.py goal-text --goal draw-load-parity
 brief に載っている古い数値ではありません（§16 の警告を参照）。
 
 台帳の在り処は目標定義ファイルの `[goal].spec_dir` ＋ `[goal].ledger` です
-（`.kiro/specs/areka-P0-draw-load-parity/loop-ledger.md`）。走行の成果物は
+（`.kiro/specs/completed/areka-P0-draw-load-parity/loop-ledger.md`）。走行の成果物は
 `%LOCALAPPDATA%\areka-diag\perf-loop\<goal>\` の下に、
 `preflight.txt`・`baseline-<日付>\`・`iter-<n>\{rank,A1,B1,A2,B2,bin-A,bin-B,followup}\`・
 `final-<日付>\` として置かれます。同じ出力先へ `-Resume` を付けて呼び直すと、既にある

@@ -93,7 +93,7 @@ GOAL_TEXT_TEMPLATE = """目標: {goal_name} — areka の release アイドル C
 
 #: brief `## Problem` の旧数値（2026-08-15 実測・emo2・拡大率 200%・25 分走行・1 コア換算 %）。
 #: `summary` の対比表の左半分。**値の所在はここ 1 箇所**で、brief を書き換えたらここも直す。
-BRIEF_SOURCE = ".kiro/specs/areka-P0-draw-load-parity/brief.md `## Problem`（2026-08-15 実測）"
+BRIEF_SOURCE = ".kiro/specs/completed/areka-P0-draw-load-parity/brief.md `## Problem`（2026-08-15 実測）"
 #: (指標, areka の旧値, SSP 参考値, 台帳のどの数と並べるか)
 BRIEF_ROWS = (
     ("アイドル CPU 平均（1 コア換算 %）", "10.97", "3.05", "primary"),

@@ -29,7 +29,7 @@
 # 目標の名前。台帳の状態ブロック `goal:` と一致していること（違えば goal-check が exit 3）。
 name = "draw-load-parity"
 # 台帳と結果の置き場（spec ディレクトリ）。
-spec_dir = ".kiro/specs/areka-P0-draw-load-parity"
+spec_dir = ".kiro/specs/completed/areka-P0-draw-load-parity"
 # 判断の記憶はこの 1 ファイルだけに持つ（spec_dir 相対・要件 1.3／1.10）。
 ledger = "loop-ledger.md"
 # 判定スクリプトの出力・順位表・比較の保存先（spec_dir 相対・要件 5.6）。

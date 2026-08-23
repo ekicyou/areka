@@ -25,8 +25,8 @@ model: opus
 
 - goal 名 ／ 周番号
 - 順位表 `rank.txt` のパス（または perf-measure の `## Measure` ブロック）
-- 台帳 `loop-ledger.md` のパス（既定 `.kiro/specs/areka-P0-draw-load-parity/loop-ledger.md`）
-- 設計 `.kiro/specs/areka-P0-draw-load-parity/design.md`（候補の中身は C16〜C20）
+- 台帳 `loop-ledger.md` のパス（既定 `.kiro/specs/completed/areka-P0-draw-load-parity/loop-ledger.md`）
+- 設計 `.kiro/specs/completed/areka-P0-draw-load-parity/design.md`（候補の中身は C16〜C20）
 
 ## 候補カタログ（順位表の段と項目 → 候補）
 
