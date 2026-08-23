@@ -57,3 +57,8 @@ areka-emo-present = { path = "../areka-emo-present" }
 # re-export しないため直接 dev-dep とする（既に areka-ghost/areka-kanade 経由で推移ビルド済み・
 # x64・新規外部（crates.io）依存ではない）。
 shiori-host32-host = { path = "../shiori-host32-host" }
+# ログ捕捉テストの硬化機構の唯一の定義元（spec: areka-P0-test-cage-determinism）。
+# ワークスペース内 crate に依存しない leaf・publish = false・テスト専用であり、
+# 出荷クロージャに新規外部依存を持ち込まない（必須依存は tracing のみ＝既出）。
+# 依存方向の規律により [dependencies] へは決して置かない。
+log-capture-kit = { path = "../log-capture-kit" }

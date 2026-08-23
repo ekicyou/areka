@@ -1,0 +1,23 @@
+[package]
+name = "log-capture-kit"
+workspace = "../.."
+description = "ログ捕捉テストの硬化機構をワークスペースで唯一定義するテスト専用の leaf crate（spec: areka-P0-test-cage-determinism）: 常駐 probe・捕捉窓・正準イベント型・行整形・全スレッド捕捉"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+# 硬化機構そのものの土台。Subscriber 実装・Dispatch（常駐 probe）・
+# callsite::rebuild_interest_cache を引く唯一の必須依存。
+# ワークスペース内 crate への依存は持たない（leaf・依存方向の規律）。
+tracing = { workspace = true }
+# `capture_under_filter`（RUST_LOG 相当 directive の実濾過）専用。feature `env-filter`
+# を有効にしたときだけ引く任意依存で、既定 off。有効化するのは wintf のみ。
+tracing-subscriber = { workspace = true, optional = true }
+
+[features]
+# EnvFilter 濾過つきの捕捉 API を有効にする。既定 off。
+env-filter = ["dep:tracing-subscriber"]

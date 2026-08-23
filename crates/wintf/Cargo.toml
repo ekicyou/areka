@@ -42,3 +42,10 @@ tracing-subscriber = { workspace = true }
 # デフォルトの exr/avif フィーチャが paste (RUSTSEC-2024-0436, non-maintained)
 # を pulp→exr / rav1e→ravif 経由で引き込むため。examples は png/webp のみ使用。
 image = { version = "0.25.9", default-features = false, features = ["png", "webp"] }
+# ログ捕捉テストの硬化機構の唯一の定義元（spec: areka-P0-test-cage-determinism）。
+# ワークスペース内 crate に依存しない leaf ゆえ、wintf が上位の本番 crate（areka／
+# areka-seriko／areka-emo-* 等）への依存を持つことなく同じ機構を共有できる。
+# feature `env-filter` は capture_under_filter（RUST_LOG 相当 directive の実濾過）用で、
+# 有効にするのは消費 10 crate のうち wintf のみ。
+# 依存方向の規律により [dependencies] へは決して置かない。
+log-capture-kit = { path = "../log-capture-kit", features = ["env-filter"] }
