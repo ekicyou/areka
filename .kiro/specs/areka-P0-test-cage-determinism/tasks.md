@@ -141,7 +141,7 @@
   - _Requirements: 1.5, 1.7, 2.2, 2.3, 2.4, 6.1_
   - _Depends: 2.3, 3.6_
 
-- [ ] 3.8 (P) 窓基盤 crate の捕捉を薄い再輸出へ縮める
+- [x] 3.8 (P) 窓基盤 crate の捕捉を薄い再輸出へ縮める
   - 常駐の仕掛けと書き込み先・絞り込み捕捉の本体を削除し、共有機構の絞り込み捕捉を薄く再輸出する形にする（96 呼出は無改変）
   - モジュール説明の「上位 crate に依存できないので同型を持つ」を「共有 crate を引く」へ改める
   - 同じ crate 内で共有機構を使わずに捕捉していた表示倍率まわりのテストも同じ窓口へ寄せる
@@ -299,3 +299,6 @@
 - **タスク 3.7 → 6.2 宛（必達・design.md 訂正済み）**: `ALLOWED_DIRECT_CALLS` は**初期値 空にできない**。`crates/areka/src/placement/{diag_tests.rs, follow_transition_diag_tests.rs, follow_window_move_diag_tests.rs}` の 3 件は実濾過に `EnvFilter` が要り、`capture_under_filter` は kit の `env-filter` feature 下で `areka` は当該 feature を有効にしない（実測 `cargo tree -p areka -e dev -i log-capture-kit -f "{p} FEATURES={f}"` → `FEATURES=` 空）。有効化は design の「wintf のみ」と要件 11.5 に反するので移行不能。2.7 の較正 1 件と合わせて**初期 4 件**。
 - **タスク 3.7 → 6.1・6.2 宛（見落とすと静かに壊れる）**: 上記 3 ファイルは移行後も窓の直前で `ensure_interest_probes()`（kit の再輸出）を呼んでおり、それによって `has_just_one` が偽に固定され `never` が焼き付かない＝硬化は保たれている。**この 3 呼出を「未使用」として外すと 3 つの窓が静かに硬化を失う**。番人の例外表の理由欄に明記すること。
 - **タスク 3.7（3.6 と同一の残余・8.3 宛）**: 行整形の variant 選択は areka 側でも縛られていない（`LevelFields`→`LevelTargetFields` の変異で 1234/0 のまま緑）。ワークスペース全域で同じ穴。
+- **タスク 3.8 → 6.1・6.2 宛（必須）**: 走査語 `set_default(` は**アンカーしないと偽陽性を出す**。`crates/wintf/src/ecs/types.rs` の `fn test_offset_default() {` が `test_off|set_default(` で部分一致する。`(^|[^A-Za-z0-9_])set_default\(` の形にすれば wintf のヒットは 0 件になる（実測）。`with_default(`／`set_global_default(` も同型の危険があるので同じくアンカーすること。
+- **タスク 3.8（残余・8.3 宛の 3 件目）**: 行整形の variant 選択が縛られていない件は wintf でも同じ（`LevelFields`→`LevelTargetFields` の変異で 22/22 緑）。**群 3 の 8 本を通じてワークスペース全域で同型**。8.3 の台帳へは 1 項目として（3.6・3.7・3.8 の 3 実例を挙げて）登記すれば足りる。
+- **群 3 完了時点の状態（2026-08-24）**: 自前で捕捉先を差す箇所はワークスペース全体で **4 箇所**のみ（`areka/src/placement/` の diag 系 3＋kit の較正 1）。いずれも移行不能または意図的で、6.2 の例外表の初期値になる。捕捉機構の定義（probe／`CaptureSubscriber`／捕捉 Layer）は kit の外に 0 件。

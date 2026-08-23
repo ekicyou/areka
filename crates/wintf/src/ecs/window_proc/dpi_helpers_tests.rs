@@ -314,41 +314,31 @@ fn test_correct_position_applies_center_preserving_correction() {
 // （[[檻の空虚性]]: 常に出るログを「分岐が働いた証拠」と読まない）。
 // ================================================================
 
-use std::sync::{Arc, Mutex};
+use log_capture_kit::{LineFormat, capture_lines};
 
 /// 手順書 §6.5 の grep 判定語（`boxstyle_warn`）。**本体の文言とは独立の literal**。
 const BOX_STYLE_NOT_FOUND_TAG: &str =
     "[WM_WINDOWPOSCHANGED] DPI center correction skipped: BoxStyle not found";
 
-/// イベントを `level=… message=…` の 1 行へ整形して溜める最小 Layer
-/// （`crates/areka-emo-compose/src/log_capture.rs` の実証済みパターン）。
-#[derive(Clone, Default)]
-struct Capture(Arc<Mutex<Vec<String>>>);
-
-impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Capture {
-    fn on_event(&self, ev: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
-        let mut line = format!("level={}", ev.metadata().level());
-        struct V<'a>(&'a mut String);
-        impl tracing::field::Visit for V<'_> {
-            fn record_debug(&mut self, f: &tracing::field::Field, v: &dyn std::fmt::Debug) {
-                use std::fmt::Write;
-                let _ = write!(self.0, " {}={:?}", f.name(), v);
-            }
-        }
-        ev.record(&mut V(&mut line));
-        self.0.lock().expect("捕捉バッファの毒化なし").push(line);
-    }
-}
+// ── 捕捉層は共有機構へ委譲 ───────────────────────────────────────────────
+//
+// 捕捉と行整形の実体はここに持たず、硬化機構の唯一の定義元 `log-capture-kit` へ委譲する。
+// 行の形（1 イベント 1 行・`level=…` に続けてフィールドを訪問順で ` name={value:?}`）も
+// 呼出側の判定内容も、移行前と 1 バイト変わらない。
+//
+// 「`with_default` はスレッドローカルゆえ並行実行でも干渉しない」は**誤り**である。差し替わる
+// のはスレッドローカルの既定 dispatcher だけで、「そのログを評価するか」を決める callsite の
+// interest キャッシュは**プロセス全体で 1 つ**しかなく、その発行点を最初に踏んだスレッドの
+// 判定が焼き付く（先着が勝つ）。捕捉窓を持たないスレッドの既定は `NoSubscriber` で判定は
+// 「不要」ゆえ、先に踏まれると `never` が大域へ焼き付き、自分のスレッドへ捕捉先を差していても
+// 取りこぼす。共有機構は ⑴ プロセス寿命の probe 常駐 ⑵ 捕捉窓の内側での interest 再計算
+// ⑶ 番兵イベントによる空振り検出 の 3 点でこれを塞ぐ（機序の逐条解説は `log_capture_kit` の
+// crate doc と同 crate の `src/probe.rs`）。
 
 /// クロージャ実行中に**現在のスレッド**で発火した tracing イベントを行として返す。
-/// `set_global_default`（プロセス全体・並行テストを壊す）は使わない。
 fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
-    use tracing_subscriber::layer::SubscriberExt;
-    let cap = Capture::default();
-    let logs = cap.0.clone();
-    tracing::subscriber::with_default(tracing_subscriber::registry().with(cap), f);
-    let guard = logs.lock().expect("捕捉バッファの毒化なし");
-    guard.clone()
+    let ((), lines) = capture_lines(LineFormat::LevelFields, f);
+    lines
 }
 
 /// `BoxStyle` 欠落フォールバックの**判定語と水準**を固定する（task 7.2・Req 1.5/5.1）。
