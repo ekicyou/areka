@@ -1,14 +1,32 @@
 ## 状態
 - goal: draw-load-parity
-- iteration: 1
-- phase: WAIT_IMPLEMENT
-- pending_run: C:\Users\maz-o\AppData\Local\areka-diag\perf-loop\draw-load-parity\iter-1\bin-A
-- streak_no_gain: 0
+- iteration: 2
+- phase: RANK
+- pending_run: C:\Users\maz-o\AppData\Local\areka-diag\perf-loop\draw-load-parity\iter-1\followup
+- streak_no_gain: 1
 - best_idle_cpu_pct: 15.80
 - baseline_idle_cpu_pct: 15.80
 - started_at: 2026-08-22T23:41:05Z
 - run: 87696907
 - capabilities: elevated:false;xperf:true;pdb:true;function_stage:UNAVAILABLE;reason:not_elevated;judge:0.4.0;python:3.13.15;pwsh:7.6.4;checkin_min:30;selftest:ok
-- previous_phase: BASELINE
-- toolfix_used: 2
+- previous_phase: TEST
+- toolfix_used: 3
 - not_quiet_retries: 1
+
+## 周 1 — 2026-08-23T04:39:30Z
+- hypothesis: tick gate default ON: try_tick_world が 13 スケジュールを 120 回/秒 全部回す（tick の 98% は表示に変化なし）。起床旗の無い tick を門で省けば UI スレッド（段② 48.91%）の定常 CPU が下がる。周 1 は仕組みの A/B（順位表からの選択は周 2 以降・tasks 9.2）
+- candidate: stage=thread rank=1 item=ui(main tid=22252) share=48.91% (stage4 ticks_per_sec=119.50 skipped_pct=0.00 top=framefinalize 31.41%/draw 22.62%)
+- files_changed: crates/wintf/src/ecs/world/mod.rs, crates/wintf/src/ecs/world/world_tick_gate_tests.rs, crates/wintf/src/ecs/world/tick_gate.rs, crates/wintf/src/runtime/tick_bridge.rs, crates/areka/src/tick_gate_config.rs, tools/perf/README.md
+- runs: -
+- before_idle_cpu_pct: -
+- after_idle_cpu_pct: -
+- delta_pct: -
+- noise_pct: -
+- secondary: -
+- tests: green (5,757 passed; cargo test --workspace code=0)
+- followup: FAIL clickthrough=PASS drag=FAIL(drag_not_followed: char/balloon Δ=+0 vs 期待 +80・kind=write 0 行) dpi=PASS balloon_follow=INCONCLUSIVE(depends_on_drag) — 対照: 同じ手順で A 側（門 OFF・bin-A）は全 PASS → 門 ON がドラッグ追随を壊す本物の欠陥
+- verdict: FOLLOWUP_FAIL
+- commit: -
+- skipped_candidates: none (周 1 は仕組みの A/B で候補選びをしない・tasks 9.2)
+- duration_min: 95
+- reason: iteration1 mechanism A/B: A=gate default OFF (HEAD), B=gate default ON; stage3=UNAVAILABLE(not_elevated); agent-model-warning:perf-measure=missing-first-line(model opus passed); agent-model-warning:perf-implement=missing-first-line(model opus passed); followup_fail: gate ON breaks drag (A control PASS) → 門の起床旗にドラッグ経路の穴（rearm_tick_while_dragging/pointer 生産者）が残る。周 2 以降の候補＝穴を塞いでから門 ON を再 A/B; followup は desktop lock 中に 2 度 INCONCLUSIVE（環境）→ 対話デスクトップ復帰を待って実走
