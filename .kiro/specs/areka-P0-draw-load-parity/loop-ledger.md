@@ -1,14 +1,14 @@
 ## 状態
 - goal: draw-load-parity
-- iteration: 0
-- phase: WAIT_BASELINE
-- pending_run: C:\Users\maz-o\AppData\Local\areka-diag\perf-loop\draw-load-parity\baseline-20260823\release
+- iteration: 1
+- phase: WAIT_IMPLEMENT
+- pending_run: C:\Users\maz-o\AppData\Local\areka-diag\perf-loop\draw-load-parity\iter-1\bin-A
 - streak_no_gain: 0
-- best_idle_cpu_pct: -
-- baseline_idle_cpu_pct: -
+- best_idle_cpu_pct: 15.80
+- baseline_idle_cpu_pct: 15.80
 - started_at: 2026-08-22T23:41:05Z
 - run: 87696907
 - capabilities: elevated:false;xperf:true;pdb:true;function_stage:UNAVAILABLE;reason:not_elevated;judge:0.4.0;python:3.13.15;pwsh:7.6.4;checkin_min:30;selftest:ok
-- previous_phase: -
-- toolfix_used: 0
+- previous_phase: BASELINE
+- toolfix_used: 2
 - not_quiet_retries: 1

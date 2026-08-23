@@ -1,0 +1,16 @@
+[check-quiet] version=1.0.1
+stage=after
+time_utc=2026-08-23T03:44:23.760Z
+sample_sec=20
+machine_cpu_mean_pct=9.2
+machine_cpu_max_pct=16.6
+threshold_mean_pct=10.0
+heavy_process_names=cargo,rustc,rust-analyzer,msbuild,link,cl,areka,python
+heavy_processes_found=0
+heavy_process_list=-
+target_pid_excluded=-
+verdict=QUIET
+reason=ok
+heavy_process_cpu_min_pct=1.0
+heavy_process_presence=areka
+heavy_process_busy=-
