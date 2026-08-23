@@ -68,9 +68,8 @@ use areka_seriko::{
 };
 use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
+use log_capture_kit::{LineFormat, capture_lines};
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
-use tracing::field::{Field, Visit};
-use tracing_subscriber::prelude::*;
 use windows::Win32::Foundation::{HINSTANCE, HWND};
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
@@ -494,41 +493,26 @@ fn join_bounded(what: &str, timeout: Duration, handle: ActorHandle) -> Result<()
 }
 
 // ===========================================================================
-// ログ捕捉（frame.rs/adapter.rs の確立パターンを単一ファイル境界内へ最小複製）
+// ログ捕捉（硬化機構の唯一の定義元 `log-capture-kit` への委譲）
 //
-// スレッドローカル `with_default` ゆえ `cargo test` 並行実行でも他スレッドの subscriber と
-// 干渉しない。`run_attach_phase` の `info!(planned, attached, ...)`（DD-12 の縮退がバグを
-// 隠さない檻の観測点）をこのスレッド上で捕捉して件数一致を assert する。
+// `run_attach_phase` の `info!(planned, attached, ...)`（DD-12 の縮退がバグを隠さない檻の
+// 観測点）をこのスレッド上で捕捉して件数一致を assert する。行の形（1 イベント 1 行・
+// `level=… target=…` に続けてフィールドを訪問順で ` name=value`）は移行前と 1 バイト変わらない。
+//
+// 「`with_default` はスレッドローカルゆえ並行実行でも干渉しない」は**誤り**である。差し替わる
+// のはスレッドローカルの既定 dispatcher だけで、「そのログを評価するか」を決める callsite の
+// interest キャッシュは**プロセス全体で 1 つ**しかなく、その発行点を最初に踏んだスレッドの判定が
+// 焼き付く（先着が勝つ）。捕捉窓を持たないスレッドの既定は `NoSubscriber` で判定は「不要」ゆえ、
+// 先に踏まれると `never` が大域へ焼き付き、自分のスレッドへ捕捉先を差していても取りこぼす。
+// 共有機構は ⑴ プロセス寿命の probe 常駐 ⑵ 捕捉窓の内側での interest 再計算 ⑶ 番兵イベントに
+// よる空振り検出 の 3 点でこれを塞ぐ（機序の逐条解説は `log_capture_kit` の crate doc と
+// 同 crate の `src/probe.rs`）。
 // ===========================================================================
-
-/// イベントの `level`＋各フィールドを 1 行文字列へ整形して共有 Vec へ push する最小 Layer。
-#[derive(Clone, Default)]
-struct Capture(Arc<Mutex<Vec<String>>>);
-
-impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Capture {
-    fn on_event(&self, ev: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
-        let meta = ev.metadata();
-        let mut line = format!("level={} target={}", meta.level(), meta.target());
-        struct V<'a>(&'a mut String);
-        impl Visit for V<'_> {
-            fn record_debug(&mut self, f: &Field, v: &dyn std::fmt::Debug) {
-                use std::fmt::Write;
-                let _ = write!(self.0, " {}={:?}", f.name(), v);
-            }
-        }
-        ev.record(&mut V(&mut line));
-        self.0.lock().unwrap().push(line);
-    }
-}
 
 /// クロージャ `f` 実行中に**現在のスレッド**で発火した tracing イベントを 1 行 1 件で返す。
 fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
-    let cap = Capture::default();
-    let logs = cap.0.clone();
-    let subscriber = tracing_subscriber::registry().with(cap);
-    tracing::subscriber::with_default(subscriber, f);
-    let guard = logs.lock().unwrap();
-    guard.clone()
+    let ((), lines) = capture_lines(LineFormat::LevelTargetFields, f);
+    lines
 }
 
 /// 捕捉行のうち指定 level（例 `"ERROR"`）の件数を数える。

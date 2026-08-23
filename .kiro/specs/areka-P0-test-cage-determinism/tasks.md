@@ -122,7 +122,7 @@
   - _Boundary: areka-emo-text_
   - _Depends: 2.3_
 
-- [ ] 3.6 (P) 本体 crate の起動系の捕捉を共有機構へ寄せる
+- [x] 3.6 (P) 本体 crate の起動系の捕捉を共有機構へ寄せる
   - 起動系 6 ファイルの捕捉ヘルパ本体を共有機構への委譲に置き換え、行形式を保つ
   - 多フレーム駆動のハーネスは捕捉層だけを差し替え、ハーネス本体とその逐語検査が見張る項目は動かさない
   - 誤った説明文（「スレッドローカルゆえ並行実行でも干渉しない」類）を正しい機序へ置き換える
@@ -293,3 +293,6 @@
 - **タスク 3.2 → 8.3 宛**: `crates/areka-ghost/src/test_log_capture.rs` の `event` ラベルの Debug 復旧経路は**どのテストにも縛られていない**（現行の ghost 側 `event = …` が全件文字列リテラルのため、外しても 107/107 緑）。移行前の visitor も同じ保険を持っていたので保険は残した。規則そのものは kit 側の `field_str_is_none_for_values_that_did_not_come_through_record_str` が縛っている。ghost へ新しい檻を足すと本数の同一性が崩れるので、**台帳に書くのが正しい引受先**。
 - **タスク 3.2（design.md 訂正済み）**: `#### C2` の「keeper 3 crate は `field_str("event")`／`field_str("outcome")` から組み立てる」は**誤り**だったので 2026-08-24 に訂正した。シジル形が `field_str` を通らないため、生値・Debug 表現の二経路が要る。
 - **タスク 3.4 → 群 3 の残り宛（重要・design.md 訂正済み）**: kit の `CapturedEvent` は**固有メソッド `field()` を持つ**。取り出しアダプタを `field` と同名の拡張トレイトで足すと**固有メソッドが黙って優先される**（Rust の解決順）。emo-present では balloon 側の引用符剥がしが消えて**緑のまま**になり、しかも当該フィールドは全件シジル渡しで trim が実質 no-op なので誰も気付かない。別名（`field_unquoted`／`expect_field` 等）で分けること。
+- **タスク 3.6 → 3.7 宛（必達）**: `crates/areka/src/emo2_boot/frame_harness_tests.rs` は `crate::placement::test_support::capture_logs` と `LogEvent::message()` を呼んでおり、これは**要件 11.3 の逐語検査の一部**。3.7 が `placement/test_support.rs` を書き換えるとき、`capture_logs` が `(R, Vec<LogEvent>)` を返し `LogEvent::message()` が使えることを保つこと。壊すと 11.3 の検査が落ちる。
+- **タスク 3.6 → 8.3 宛（残余）**: 行整形の**variant 選択**（`LevelTargetFields` か `LevelFields` か）は**どのテストにも縛られていない**。起動系 6 サイトを `LevelFields` へ変異させても 1234/0 で緑のまま（assert が `target=` を 1 箇所も見ていない）。正しさは ⑴ design.md が当該 6 ファイルへ `LevelTargetFields` を明示していること ⑵ 移行前 6 ファイルの整形が逐語で `format!("level={} target={}", …)` だったことからの導出で担保した。kit の逐語 fixture は「各 variant が何を出すか」は縛るが「呼出側がどの variant を選ぶか」は構造上縛れない。6.2（走査語は迂回呼出）・6.3（行数）・8.2（反復）のいずれも引受先にならないので**台帳へ残余として記録する**。
+- **道具の較正（全タスク共通・重要）**: `git diff | grep -c $'\r'` は**信用できない**。`core.autocrlf=true` のため git が diff を LF へ正規化するので常に 0 を返す。MSYS の `grep -c $'\r$'` もテキストモードで誤報する。改行の実態は **PowerShell の生バイト走査**でしか確認できない。編集ツールが CRLF ファイルを黙って bare LF に落とす事故が 3.6 で実装側・レビュー側の**両方**で起きた（いずれも検出・復元済み）。改行を含む逐語検査があれば静かに壊れる。

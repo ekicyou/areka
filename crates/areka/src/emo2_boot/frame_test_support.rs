@@ -12,12 +12,11 @@ use areka_seriko::{AnimationTable, BindResolver, SurfaceResolver};
 use bevy_ecs::prelude::Entity;
 use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
 use bevy_ecs::system::SystemState;
+use log_capture_kit::{LineFormat, capture_lines};
 use std::collections::BTreeMap;
 use std::sync::mpsc::Receiver;
-use std::sync::{Arc, Mutex, mpsc};
+use std::sync::{Arc, mpsc};
 use std::time::Instant;
-use tracing::field::{Field, Visit};
-use tracing_subscriber::prelude::*;
 use windows::Win32::Foundation::{HINSTANCE, HWND, RECT};
 use wintf::ecs::DPI;
 use wintf::ecs::layout::{Arrangement, Offset};
@@ -92,40 +91,25 @@ pub(super) fn synth_assets_with_balloons(
 
 // ── task 4.2: drain／text フェーズ＋emo2_frame_system の檻 ──────────────────────
 //
-// ログ発火を目視でなく実行テストで決定論的に檻へ入れるため、adapter.rs（task 2.5）と同じ
-// スレッドローカル capture subscriber を単一ファイル境界（frame.rs）内へ最小インライン複製する。
-// `EmoPresenter::apply` は未装着 target への `Hide`（reply: None）で `error!(?target_id, ...)` を
-// 発火するため（presenter.rs `apply_hide`・reply-less でも log-first）、この ERROR を観測して
-// drain の apply 到着順（FIFO）を強く檻に入れられる。
-
-/// イベントの `level`＋各フィールドを 1 行文字列へ整形して共有 Vec へ push する最小 Layer。
-#[derive(Clone, Default)]
-struct Capture(Arc<Mutex<Vec<String>>>);
-
-impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Capture {
-    fn on_event(&self, ev: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
-        let meta = ev.metadata();
-        let mut line = format!("level={} target={}", meta.level(), meta.target());
-        struct V<'a>(&'a mut String);
-        impl Visit for V<'_> {
-            fn record_debug(&mut self, f: &Field, v: &dyn std::fmt::Debug) {
-                use std::fmt::Write;
-                let _ = write!(self.0, " {}={:?}", f.name(), v);
-            }
-        }
-        ev.record(&mut V(&mut line));
-        self.0.lock().unwrap().push(line);
-    }
-}
+// ログ発火を目視でなく実行テストで決定論的に檻へ入れる。捕捉層そのものはここに持たず、
+// 硬化機構の唯一の定義元 `log-capture-kit` へ委譲する（行の形も呼出側の判定内容も移行前と
+// 1 バイト変わらない）。`EmoPresenter::apply` は未装着 target への `Hide`（reply: None）で
+// `error!(?target_id, ...)` を発火するため（presenter.rs `apply_hide`・reply-less でも
+// log-first）、この ERROR を観測して drain の apply 到着順（FIFO）を強く檻に入れられる。
+//
+// 「`with_default` はスレッドローカルゆえ並行実行でも干渉しない」は**誤り**である。差し替わる
+// のはスレッドローカルの既定 dispatcher だけで、「そのログを評価するか」を決める callsite の
+// interest キャッシュは**プロセス全体で 1 つ**しかなく、その発行点を最初に踏んだスレッドの判定が
+// 焼き付く（先着が勝つ）。捕捉窓を持たないスレッドの既定は `NoSubscriber` で判定は「不要」ゆえ、
+// 先に踏まれると `never` が大域へ焼き付き、自分のスレッドへ捕捉先を差していても取りこぼす。
+// 共有機構は ⑴ プロセス寿命の probe 常駐 ⑵ 捕捉窓の内側での interest 再計算 ⑶ 番兵イベントに
+// よる空振り検出 の 3 点でこれを塞ぐ（機序の逐条解説は `log_capture_kit` の crate doc と
+// 同 crate の `src/probe.rs`）。
 
 /// クロージャ `f` 実行中に**現在のスレッド**で発火した tracing イベントを 1 行 1 件で返す。
 pub(super) fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
-    let cap = Capture::default();
-    let logs = cap.0.clone();
-    let subscriber = tracing_subscriber::registry().with(cap);
-    tracing::subscriber::with_default(subscriber, f);
-    let guard = logs.lock().unwrap();
-    guard.clone()
+    let ((), lines) = capture_lines(LineFormat::LevelTargetFields, f);
+    lines
 }
 
 /// 捕捉行のうち指定 level（例 `"ERROR"`）の件数を数える。
@@ -579,7 +563,7 @@ pub(super) fn settled_sizes() -> PerTargetSizes {
 
 /// **単一スレッド実行器**を明示した空スケジュール（要件 7.6）。
 ///
-/// ログ捕捉（`tracing::subscriber::with_default`＝スレッドローカルの dispatcher 差替）に依る
+/// ログ捕捉（`log-capture-kit` の捕捉窓＝**呼出スレッド局所**の dispatcher 差替）に依る
 /// 検証を既定の多スレッド実行器で回すと、システムがワーカースレッドへ載って 1 行も捕捉
 /// できず、檻が空虚に緑になる。捕捉に依る検証はここから組んだスケジュールで走らせ、
 /// 「捕捉できる実行形態」を呼び出し側の字面に残す。

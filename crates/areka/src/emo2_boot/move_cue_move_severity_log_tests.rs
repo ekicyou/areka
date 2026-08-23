@@ -6,47 +6,29 @@
 // （自分宛 move＝WARN／他人宛・未知＝DEBUG）を、決定論的なログ捕捉で回帰檻に入れる
 // （目視でなく実行テストで網羅する必達方針）。入力依存の判断分岐ゆえ檻が要る。
 //
-// 定石: `tracing::subscriber::with_default`＋スレッドローカル Capture Layer
-// （adapter.rs:306-342／spine.rs／frame.rs にインライン複製された流儀の引き写し）。
-// `with_default` はスレッドローカルゆえ `cargo test` の並行実行でも干渉しない。
+// 定石: 硬化機構の唯一の定義元 `log-capture-kit` の捕捉窓へ委譲する（行の形も呼出側の判定内容も
+// 移行前と 1 バイト変わらない）。
+//
+// 「`with_default` はスレッドローカルゆえ並行実行でも干渉しない」は**誤り**である。差し替わる
+// のはスレッドローカルの既定 dispatcher だけで、「そのログを評価するか」を決める callsite の
+// interest キャッシュは**プロセス全体で 1 つ**しかなく、その発行点を最初に踏んだスレッドの判定が
+// 焼き付く（先着が勝つ）。捕捉窓を持たないスレッドの既定は `NoSubscriber` で判定は「不要」ゆえ、
+// 先に踏まれると `never` が大域へ焼き付き、自分のスレッドへ捕捉先を差していても取りこぼす。
+// 共有機構は ⑴ プロセス寿命の probe 常駐 ⑵ 捕捉窓の内側での interest 再計算 ⑶ 番兵イベントに
+// よる空振り検出 の 3 点でこれを塞ぐ（機序の逐条解説は `log_capture_kit` の crate doc と
+// 同 crate の `src/probe.rs`）。
 // =============================================================================
 
 use super::*;
 use dola::DynamicValue;
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
+use log_capture_kit::{LineFormat, capture_lines};
 use std::sync::mpsc::{TryRecvError, channel};
-use std::sync::{Arc, Mutex};
-use tracing::field::{Field, Visit};
-use tracing_subscriber::prelude::*;
-
-/// イベントの `level`＋各フィールドを 1 行文字列へ整形して共有 Vec へ push する最小 Layer。
-#[derive(Clone, Default)]
-struct Capture(Arc<Mutex<Vec<String>>>);
-
-impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Capture {
-    fn on_event(&self, ev: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
-        let meta = ev.metadata();
-        let mut line = format!("level={} target={}", meta.level(), meta.target());
-        struct V<'a>(&'a mut String);
-        impl Visit for V<'_> {
-            fn record_debug(&mut self, f: &Field, v: &dyn std::fmt::Debug) {
-                use std::fmt::Write;
-                let _ = write!(self.0, " {}={:?}", f.name(), v);
-            }
-        }
-        ev.record(&mut V(&mut line));
-        self.0.lock().unwrap().push(line);
-    }
-}
 
 /// クロージャ `f` 実行中に**現在のスレッド**で発火した tracing イベントを 1 行 1 件で返す。
 fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
-    let cap = Capture::default();
-    let logs = cap.0.clone();
-    let subscriber = tracing_subscriber::registry().with(cap);
-    tracing::subscriber::with_default(subscriber, f);
-    let guard = logs.lock().unwrap();
-    guard.clone()
+    let ((), lines) = capture_lines(LineFormat::LevelTargetFields, f);
+    lines
 }
 
 /// 捕捉行のうち指定 level（例 `"WARN"`／`"DEBUG"`）の件数を数える。
