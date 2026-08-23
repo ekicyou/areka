@@ -44,3 +44,7 @@ mod event;
 mod filter;
 mod global;
 mod probe;
+
+pub use capture::capture;
+pub use event::{CapturedEvent, FieldValue};
+pub use probe::ensure_interest_probes;
