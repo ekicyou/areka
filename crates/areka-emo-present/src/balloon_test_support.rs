@@ -51,135 +51,58 @@ impl Drop for TempDir {
 //
 // tier の割当自体は檻 1〜3 が固定しているが、warn を出すか出さないかの判断分岐そのものは
 // 実ログを観測しなければ固定できない（両述語を同時に反転しても tier 檻は全緑のまま通る）。
-// ここでは tracing の既定 subscriber を差し替えてイベントを捕捉し、発火条件を直に押さえる。
+// ここでは共有機構の捕捉窓でイベントを捕らえ、発火条件を直に押さえる。
 //
-// ログ捕捉ハーネスは同 crate `presenter.rs` の tests に同型のものが在るが、あちらは
-// test-local な private 型ゆえ本モジュールから参照できない。新規 dev-dependency を
-// 足さない方針ゆえ、`tracing` 本体のみで最小構成を再現する。
+// # 硬化機構は 1 箇所にしかない（「スレッドローカルゆえ安全」は誤り）
+//
+// 捕捉窓そのものは共有 crate `log-capture-kit` へ委譲する（spec:
+// areka-P0-test-cage-determinism・要件 1.5／2.2）。以前ここに在った常駐 probe と最小
+// subscriber は同 crate `scale.rs` の同型を本ファイル境界内へ写し取ったもので、写し損ねた
+// 側だけが静かに嘘をつく形だったため撤去した。
+//
+// 「`with_default` はスレッドローカルだから並行実行でも干渉しない」は**誤り**である。
+// 差し替わるのはスレッドローカルの既定 dispatcher だけで、「そのログを評価するか」を決める
+// callsite の interest キャッシュは**プロセス全体で 1 つ**しかなく、その発行点をプロセス内で
+// 最初に踏んだスレッドの判定が焼き付く。捕捉窓を持たないスレッドの既定は `NoSubscriber` で
+// 判定は「不要」なので、先に踏まれると `never` が大域へ焼き付き、自分のスレッドへ捕捉先を
+// 差していても以後そのイベントは早期 return で捨てられる——つまり混入ではなく**取りこぼし**が
+// 起きる。結果、不在の主張は捕捉 0 件のまま静かに緑になり（偽陰性）、存在の主張は捕捉 0 件で
+// 確率的に赤になる（偽陽性）。
+//
+// 共有機構は ⑴ プロセス寿命の probe 常駐 ⑵ 窓の内側での interest 再計算 ⑶ 窓の内側で発火する
+// 対照イベント（番兵）による空振り検出、の 3 点でこれを塞ぐ。番兵は返却前に取り除かれるので
+// 呼出側の件数・主張は変わらない。捕捉されるのは呼出スレッドで同期的に発火したイベントだけで
+// ある点は移行前と同じ。機序の逐条解説（`tracing-core` の実コード引用つき）は
+// `log_capture_kit` の crate doc と同 crate の `src/probe.rs` にある。
 
-/// 捕捉した 1 イベント（level ＋ フィールド名 → Debug 表現）。
-#[derive(Debug, Clone)]
-pub(super) struct CapturedEvent {
-    pub(super) level: tracing::Level,
-    pub(super) fields: std::collections::HashMap<String, String>,
-}
+pub(super) use log_capture_kit::CapturedEvent;
 
-impl CapturedEvent {
-    /// フィールド値を引用符抜きで引く（`%`（Display）記録は素の文字列・`?`（Debug）記録は
-    /// 引用符付きになり得るため、両表記に依存しない比較にする）。
-    pub(super) fn field(&self, name: &str) -> Option<&str> {
-        self.fields.get(name).map(|v| v.trim_matches('"'))
-    }
-}
-
-/// 全フィールドを Debug 表現で拾う visitor。
+/// フィールド値を**引用符抜き**で引く拡張（移行前の `CapturedEvent::field` と同一規則）。
 ///
-/// [`tracing::field::Visit`] の `record_u64`/`record_str` 等はすべて既定実装が `record_debug`
-/// へ転送するため、`record_debug` 1 本で型を問わず全フィールドを捕捉できる。
-struct FieldGrab(std::collections::HashMap<String, String>);
-
-impl tracing::field::Visit for FieldGrab {
-    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
-        self.0
-            .insert(field.name().to_string(), format!("{value:?}"));
-    }
-}
-
-/// イベントを溜めるだけの最小 subscriber（span は使わないので new_span は固定 id を返す）。
-#[derive(Clone, Default)]
-struct CaptureSubscriber(std::sync::Arc<std::sync::Mutex<Vec<CapturedEvent>>>);
-
-impl tracing::Subscriber for CaptureSubscriber {
-    fn enabled(&self, _meta: &tracing::Metadata<'_>) -> bool {
-        true
-    }
-    fn new_span(&self, _attrs: &tracing::span::Attributes<'_>) -> tracing::span::Id {
-        tracing::span::Id::from_u64(1)
-    }
-    fn record(&self, _span: &tracing::span::Id, _values: &tracing::span::Record<'_>) {}
-    fn record_follows_from(&self, _span: &tracing::span::Id, _follows: &tracing::span::Id) {}
-    fn event(&self, event: &tracing::Event<'_>) {
-        let mut grab = FieldGrab(std::collections::HashMap::new());
-        event.record(&mut grab);
-        self.0
-            .lock()
-            .expect("捕捉バッファの毒化なし")
-            .push(CapturedEvent {
-                level: *event.metadata().level(),
-                fields: grab.0,
-            });
-    }
-    fn enter(&self, _span: &tracing::span::Id) {}
-    fn exit(&self, _span: &tracing::span::Id) {}
-}
-
-/// interest キャッシュへ `never` を焼かせないための常駐 dispatcher（同 crate `scale.rs` の
-/// 確立した対策を本ファイル境界内へ最小複製したもの）。
+/// `%`（Display）記録は素の文字列・`?`（Debug）記録は引用符付きになり得るため、両表記に
+/// 依存しない比較にする。値は必ず Debug 表現（[`CapturedEvent::field`]）から取る——
+/// [`CapturedEvent::field_str`] は `record_str` 経路の生値だけを返すので、本ファイルの檻が
+/// 見る `%expr` のシジル形では `None` になり、判定が黙って空振りする。
 ///
-/// `register_callsite` が常に [`tracing::subscriber::Interest::sometimes`] を返すことだけが
-/// 仕事で、`enabled()` は偽・`event()` は no-op（他テストの観測へ副作用を与えない）。
-struct InterestProbe;
-
-impl tracing::Subscriber for InterestProbe {
-    fn register_callsite(
-        &self,
-        _meta: &'static tracing::Metadata<'static>,
-    ) -> tracing::subscriber::Interest {
-        // 既定実装は `enabled()` が偽なら `never` を返してしまう。ここを `sometimes` に
-        // 固定することが本 probe の唯一の存在理由。
-        tracing::subscriber::Interest::sometimes()
-    }
-    fn enabled(&self, _meta: &tracing::Metadata<'_>) -> bool {
-        false
-    }
-    fn new_span(&self, _attrs: &tracing::span::Attributes<'_>) -> tracing::span::Id {
-        tracing::span::Id::from_u64(1)
-    }
-    fn record(&self, _span: &tracing::span::Id, _values: &tracing::span::Record<'_>) {}
-    fn record_follows_from(&self, _span: &tracing::span::Id, _follows: &tracing::span::Id) {}
-    fn event(&self, _event: &tracing::Event<'_>) {}
-    fn enter(&self, _span: &tracing::span::Id) {}
-    fn exit(&self, _span: &tracing::span::Id) {}
+/// メソッド名を `field` にしないのは、[`CapturedEvent`] の固有メソッド `field`（引用符付きの
+/// Debug 表現）が拡張トレイトより優先され、規則が黙って入れ替わるためである。
+pub(super) trait FieldUnquoted {
+    /// フィールド値を引用符抜きで引く（欠落は `None`）。
+    fn field_unquoted(&self, name: &str) -> Option<&str>;
 }
 
-/// probe dispatcher を **2 個**プロセス寿命で常駐させる（冪等）。
-///
-/// 2 個必要なのは tracing-core の `has_just_one = (dispatchers.len() <= 1)` ゆえ——1 個では
-/// 登録直後も真のままとなり、interest 計算が「登録したスレッドの既定 dispatcher」
-/// （購読者を持たないテストスレッドでは `NoSubscriber`＝`never`）を参照する毒の経路が
-/// 生き残る。2 個目の登録で確定的に偽へ落とし、interest を「生存する登録済み dispatcher
-/// 全体の `and`」で決めさせる。probe は常に `sometimes` を返すゆえ合成結果は決して
-/// `never` にならない。
-fn ensure_interest_probes() {
-    static PROBES: std::sync::OnceLock<(tracing::Dispatch, tracing::Dispatch)> =
-        std::sync::OnceLock::new();
-    PROBES.get_or_init(|| {
-        // `Dispatch::new` が callsite の登録＋全走査再計算を行う。
-        (
-            tracing::Dispatch::new(InterestProbe),
-            tracing::Dispatch::new(InterestProbe),
-        )
-    });
+impl FieldUnquoted for CapturedEvent {
+    fn field_unquoted(&self, name: &str) -> Option<&str> {
+        self.field(name).map(|v| v.trim_matches('"'))
+    }
 }
 
 /// `f` の実行中に出たイベントを捕捉して `(戻り値, イベント列)` を返す。
 ///
-/// `with_default` が差し替えるのはスレッドローカルの既定 dispatcher だが、callsite の
-/// interest キャッシュは**プロセス大域**であり「その callsite をプロセス内で最初に踏んだ
-/// スレッドが勝つ」。本ファイルのログ callsite は捕捉しない他テストと共有されるため、
-/// probe 常駐（[`ensure_interest_probes`]）＋窓の内側での `rebuild_interest_cache` の
-/// 二段で毒化を潰す。詳細な機序は同 crate `scale.rs` の `mod tests` 冒頭コメントに在る。
+/// 捕捉と硬化は硬化機構の唯一の定義元 [`log_capture_kit::capture`] が行う。捕捉が働いて
+/// いなければ空の結果を静かに返さず panic する。
 pub(super) fn capture_events<T>(f: impl FnOnce() -> T) -> (T, Vec<CapturedEvent>) {
-    ensure_interest_probes();
-
-    let cap = CaptureSubscriber::default();
-    let out = tracing::subscriber::with_default(cap.clone(), || {
-        // probe 常駐前（プロセス起動〜初回捕捉）に焼かれた `never` の掃き残しを潰す。
-        tracing::callsite::rebuild_interest_cache();
-        f()
-    });
-    let events = cap.0.lock().expect("捕捉バッファの毒化なし").clone();
-    (out, events)
+    log_capture_kit::capture(f)
 }
 
 // ── 檻 8: scope 別バルーン定義の 2 層マージ（`load_scope_balloon_model`・R2.1/2.2/2.3/2.4/2.5・

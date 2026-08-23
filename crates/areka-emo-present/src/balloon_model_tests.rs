@@ -1,6 +1,8 @@
 use super::*;
 
-use super::test_support::{CapturedEvent, TempDir, capture_events, emo2_balloon_root};
+use super::test_support::{
+    CapturedEvent, FieldUnquoted, TempDir, capture_events, emo2_balloon_root,
+};
 
 /// 実 fixture の当該 scope の面 0 を解決するテストヘルパ（本体は権威経路そのもの）。
 fn emo2_face0(scope: u32) -> ResolvedFace {
@@ -166,11 +168,7 @@ fn load_scope_balloon_model_debug_logs_missing_override_and_continues() {
     // D8: 不在は debug!。warn!／error! を出さない。
     let missing: Vec<&CapturedEvent> = events
         .iter()
-        .filter(|e| {
-            e.fields
-                .get("message")
-                .is_some_and(|m| m.contains("面別上書き"))
-        })
+        .filter(|e| e.field("message").is_some_and(|m| m.contains("面別上書き")))
         .collect();
     assert_eq!(
         missing.len(),
@@ -184,7 +182,7 @@ fn load_scope_balloon_model_debug_logs_missing_override_and_continues() {
         missing[0]
     );
     assert_eq!(
-        missing[0].field("file"),
+        missing[0].field_unquoted("file"),
         Some("balloons0s.txt"),
         "D8: 不在だった上書きファイル名が乗る"
     );
@@ -222,11 +220,7 @@ fn load_scope_balloon_model_warns_on_non_notfound_override_error() {
 
     let hits: Vec<&CapturedEvent> = events
         .iter()
-        .filter(|e| {
-            e.fields
-                .get("message")
-                .is_some_and(|m| m.contains("面別上書き"))
-        })
+        .filter(|e| e.field("message").is_some_and(|m| m.contains("面別上書き")))
         .collect();
     assert_eq!(hits.len(), 1, "面別上書き層の事象は 1 イベント: {events:?}");
     assert_eq!(
@@ -236,7 +230,7 @@ fn load_scope_balloon_model_warns_on_non_notfound_override_error() {
         hits[0]
     );
     assert_eq!(
-        hits[0].field("scope"),
+        hits[0].field_unquoted("scope"),
         Some("0"),
         "どの scope の上書き層が読めなかったかが乗る"
     );
@@ -266,8 +260,7 @@ fn load_scope_balloon_model_warns_on_missing_descript() {
     let descript_warns: Vec<&CapturedEvent> = events
         .iter()
         .filter(|e| {
-            e.fields
-                .get("message")
+            e.field("message")
                 .is_some_and(|m| m.contains("バルーン既定設定"))
         })
         .collect();
@@ -299,39 +292,42 @@ fn load_scope_balloon_model_info_logs_scope_and_resolved_values() {
         .iter()
         .filter(|e| {
             e.level == tracing::Level::INFO
-                && e.fields
-                    .get("message")
+                && e.field("message")
                     .is_some_and(|m| m.contains("scope 別バルーン定義"))
         })
         .collect();
     assert_eq!(infos.len(), 1, "確定値の info! は 1 行: {events:?}");
     let info = infos[0];
 
-    assert_eq!(info.field("scope"), Some("1"), "R6.3: scope が乗る");
+    assert_eq!(
+        info.field_unquoted("scope"),
+        Some("1"),
+        "R6.3: scope が乗る"
+    );
     // 実値はモデルの確定値そのもの（ログと戻り値が乖離しないことを併せて固定する）。
     let wp = model.windowposition();
     let vr = model.validrect();
     assert_eq!((wp.x(), wp.y()), (Some(-190), Some(-75)));
     assert_eq!(
-        info.field("windowposition_x"),
+        info.field_unquoted("windowposition_x"),
         Some("Some(-190)"),
         "R6.3: windowposition の実値が乗る"
     );
-    assert_eq!(info.field("windowposition_y"), Some("Some(-75)"));
+    assert_eq!(info.field_unquoted("windowposition_y"), Some("Some(-75)"));
     assert_eq!(
         (vr.top(), vr.bottom(), vr.left(), vr.right()),
         (Some(40), Some(-70), Some(24), Some(-48))
     );
     assert_eq!(
-        info.field("validrect_top"),
+        info.field_unquoted("validrect_top"),
         Some("Some(40)"),
         "R6.3: validrect の実値が乗る"
     );
-    assert_eq!(info.field("validrect_bottom"), Some("Some(-70)"));
-    assert_eq!(info.field("validrect_left"), Some("Some(24)"));
-    assert_eq!(info.field("validrect_right"), Some("Some(-48)"));
+    assert_eq!(info.field_unquoted("validrect_bottom"), Some("Some(-70)"));
+    assert_eq!(info.field_unquoted("validrect_left"), Some("Some(24)"));
+    assert_eq!(info.field_unquoted("validrect_right"), Some("Some(-48)"));
     assert_eq!(
-        info.field("file"),
+        info.field_unquoted("file"),
         Some("balloonk0s.txt"),
         "どの上書き層で確定したかが乗る（scope 別化の突合点）"
     );

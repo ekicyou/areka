@@ -32,15 +32,25 @@
 //!
 //! `tracing` の callsite interest はプロセス大域にキャッシュされるため、subscriber 未設置の
 //! 並列テストが同一 callsite を先に踏むと「1 本も出ていない」が恒真になり得る。本ファイルの
-//! 陰性主張はすべて、**同一の `with_default` スコープ内で同一 callsite の陽性 1 本**を先に
-//! 観測したうえで成立させる（presenter_refresh_and_log_tests.rs :661-697 の前例）。
+//! 陰性主張はすべて、**同一の捕捉窓の内側で同一 callsite の陽性 1 本**を先に観測したうえで
+//! 成立させる（`presenter_refresh_and_log_tests.rs` の前例）。
 //!
 //! # 捕捉の流儀
 //!
-//! ログ捕捉は presenter 系テストの共有ヘルパ（`presenter_test_support.rs` の
-//! `CaptureSubscriber`／`CapturedEvent`）を使う。`tracing` 単体・
-//! `tracing::subscriber::with_default`（＝スレッドローカル）であり、`set_global_default` は
-//! プロセス大域で並列テストと混線するため使わない。
+//! ログ捕捉は presenter 系テストの共有引き口（`presenter_test_support.rs` が再輸出する
+//! `capture`／`CapturedEvent`）を使う。実体は硬化機構の唯一の定義元 `log-capture-kit` で、
+//! 本 crate は捕捉先を自前で差さない。
+//!
+//! 「`tracing::subscriber::with_default` はスレッドローカルだから並行実行でも干渉しない」は
+//! **誤り**である。差し替わるのはスレッドローカルの既定 dispatcher だけで、「そのログを
+//! 評価するか」を決める callsite の interest キャッシュは**プロセス全体で 1 つ**しかなく、
+//! その発行点をプロセス内で最初に踏んだスレッドの判定が焼き付く。捕捉窓を持たないスレッドの
+//! 既定は `NoSubscriber`＝判定は「不要」なので、先に踏まれると `never` が大域へ焼き付き、
+//! 自分のスレッドへ捕捉先を差していても以後そのイベントは早期 return で捨てられる。つまり
+//! 危険なのは他テストのイベントの**混入**ではなく、自分の観測の**取りこぼし**である。共有
+//! 機構は ⑴ プロセス寿命の probe 常駐 ⑵ 窓の内側での interest 再計算 ⑶ 窓の内側で発火する
+//! 対照イベント（番兵）による空振り検出、の 3 点でこれを塞ぐ（番兵は返却前に取り除かれるので
+//! 呼出側の件数・主張は変わらない）。
 //!
 //! # `t_cache_us` の非 0 主張が拠って立つ前提（変更時は再検証が要る）
 //!
@@ -61,8 +71,7 @@ use areka_emo_atlas::{
 use areka_parsers::shell::Surface;
 
 use super::test_support::{
-    CaptureSubscriber, CapturedEvent, build_target_assets, elem, shell_of, spawn_window_with_dpi,
-    surface,
+    CapturedEvent, build_target_assets, capture, elem, shell_of, spawn_window_with_dpi, surface,
 };
 use super::timing::{PERF_LINE_MESSAGE, compose_key_hash};
 
@@ -142,10 +151,9 @@ fn info_line_indices(events: &[CapturedEvent]) -> Vec<usize> {
 
 /// フィールドを引く（無ければ全フィールドを添えて落とす＝欠落が判る形）。
 fn field(ev: &CapturedEvent, name: &str) -> String {
-    ev.fields
-        .get(name)
+    ev.field(name)
         .unwrap_or_else(|| panic!("行にフィールド `{name}` が無い: {:?}", ev.fields))
-        .clone()
+        .to_string()
 }
 
 /// µs フィールドを数値で引く（0／非 0 の構造判定に使う。値の**大きさ**は一切見ない）。
@@ -197,7 +205,7 @@ fn assert_info_line_contract(ev: &CapturedEvent) {
         "表示成立点ログが info 水準でない（実機サインオフの RUST_LOG grep が既定条件で読めない）"
     );
     assert_eq!(
-        ev.field_names(),
+        ev.field_names_sorted(),
         INFO_LINE_FIELDS.to_vec(),
         "表示成立点 info! のフィールド集合が変わった（design.md「Out of Boundary」＝文言・水準・\
          フィールドとも不変の契約違反。実機サインオフの判定材料が静かに壊れる）"
@@ -212,7 +220,7 @@ fn assert_perf_line_contract(ev: &CapturedEvent) {
         "perf サマリ行が debug 水準でない（Requirement 1.2 の常設ログ水準の契約違反）"
     );
     assert_eq!(
-        ev.field_names(),
+        ev.field_names_sorted(),
         PERF_LINE_FIELDS.to_vec(),
         "perf サマリ行のフィールド集合が design.md §Data Models のスキーマと違う\
          （judge-perf.py との唯一のデータ契約の破壊）"
@@ -371,8 +379,7 @@ fn miss_apply_emits_adjacent_info_and_perf_pair_with_every_stage_and_alloc_wired
     let mut presenter = EmoPresenter::new();
     attach(&mut presenter, &mut world, TargetId(0), 192, 0xA1);
 
-    let cap = CaptureSubscriber::default();
-    tracing::subscriber::with_default(cap.clone(), || {
+    let ((), events) = capture(|| {
         assert!(
             show(
                 &mut presenter,
@@ -386,7 +393,6 @@ fn miss_apply_emits_adjacent_info_and_perf_pair_with_every_stage_and_alloc_wired
         );
     });
 
-    let events = cap.events();
     let (info, perf) = expect_single_adjacent_pair(&events);
     assert_info_line_contract(&info);
     assert_perf_line_contract(&perf);
@@ -489,14 +495,12 @@ fn cache_hit_apply_reports_exact_zero_for_skipped_stages_and_zero_allocs() {
     let mut presenter = EmoPresenter::new();
     attach(&mut presenter, &mut world, TargetId(0), 192, 0xA2);
 
-    let cap = CaptureSubscriber::default();
-    tracing::subscriber::with_default(cap.clone(), || {
+    let ((), events) = capture(|| {
         // 1 回目＝ミス（スロットを埋める）、2 回目＝完全一致ヒット。
         assert!(show(&mut presenter, &mut world, TargetId(0), 1000, heavy_binds()).is_ok());
         assert!(show(&mut presenter, &mut world, TargetId(0), 1000, heavy_binds()).is_ok());
     });
 
-    let events = cap.events();
     let infos = info_line_indices(&events);
     let perfs = perf_line_indices(&events);
     assert_eq!(infos.len(), 2, "2 適用で info! 行が 2 本でない: {events:?}");
@@ -583,8 +587,7 @@ fn identity_scale_miss_reports_exact_zero_resample_stage_and_no_resample_allocs(
     // 窓 DPI ＝ author_dpi ＝ 96 ゆえ k=1/1（resample を呼ばない経路）。
     attach(&mut presenter, &mut world, TargetId(0), 96, 0xA3);
 
-    let cap = CaptureSubscriber::default();
-    tracing::subscriber::with_default(cap.clone(), || {
+    let ((), events) = capture(|| {
         assert!(
             show(
                 &mut presenter,
@@ -597,7 +600,6 @@ fn identity_scale_miss_reports_exact_zero_resample_stage_and_no_resample_allocs(
         );
     });
 
-    let events = cap.events();
     let (info, perf) = expect_single_adjacent_pair(&events);
     assert_info_line_contract(&info);
     assert_perf_line_contract(&perf);
@@ -642,7 +644,7 @@ fn identity_scale_miss_reports_exact_zero_resample_stage_and_no_resample_allocs(
 /// 合成前後で早期復帰する 3 経路（未装着 target・合成失敗・全透明退化）は info! 行も perf 行も
 /// 1 本も出さない。
 ///
-/// 陰性主張（「出ないこと」）は、**同一の `with_default` スコープ内**で先に成立適用 1 本を
+/// 陰性主張（「出ないこと」）は、**同一の捕捉窓の内側**で先に成立適用 1 本を
 /// 観測してから行う。捕捉が生きていること・両 callsite が有効であることが同じ捕捉列で
 /// 証明されているため、陰性主張は恒真になり得ない。
 ///
@@ -665,43 +667,41 @@ fn early_returns_around_compose_emit_neither_info_nor_perf_line() {
         .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
         .expect("attach_target 失敗");
 
-    let cap = CaptureSubscriber::default();
-    let (ok, not_attached, compose_err, empty) =
-        tracing::subscriber::with_default(cap.clone(), || {
-            // 陽性: 表示が成立する適用 1 本（両 callsite が有効であることの証明）。
-            let ok = show(
-                &mut presenter,
-                &mut world,
-                TargetId(0),
-                1000,
-                BindSet::default(),
-            );
-            // 陰性 1: 未装着 target（show.rs 冒頭の早期復帰）。
-            let a = show(
-                &mut presenter,
-                &mut world,
-                TargetId(9),
-                1000,
-                BindSet::default(),
-            );
-            // 陰性 2: 解決不能 id（合成失敗の早期復帰）。
-            let b = show(
-                &mut presenter,
-                &mut world,
-                TargetId(0),
-                9999,
-                BindSet::default(),
-            );
-            // 陰性 3: 定義層皆無で外形 0×0（全透明退化 → Hide 縮退の早期復帰）。
-            let c = show(
-                &mut presenter,
-                &mut world,
-                TargetId(0),
-                7000,
-                BindSet::default(),
-            );
-            (ok, a, b, c)
-        });
+    let ((ok, not_attached, compose_err, empty), events) = capture(|| {
+        // 陽性: 表示が成立する適用 1 本（両 callsite が有効であることの証明）。
+        let ok = show(
+            &mut presenter,
+            &mut world,
+            TargetId(0),
+            1000,
+            BindSet::default(),
+        );
+        // 陰性 1: 未装着 target（show.rs 冒頭の早期復帰）。
+        let a = show(
+            &mut presenter,
+            &mut world,
+            TargetId(9),
+            1000,
+            BindSet::default(),
+        );
+        // 陰性 2: 解決不能 id（合成失敗の早期復帰）。
+        let b = show(
+            &mut presenter,
+            &mut world,
+            TargetId(0),
+            9999,
+            BindSet::default(),
+        );
+        // 陰性 3: 定義層皆無で外形 0×0（全透明退化 → Hide 縮退の早期復帰）。
+        let c = show(
+            &mut presenter,
+            &mut world,
+            TargetId(0),
+            7000,
+            BindSet::default(),
+        );
+        (ok, a, b, c)
+    });
 
     // 前提: 狙った 3 経路へ本当に落ちたこと（reply の形で確認する）。
     assert!(ok.is_ok(), "前提: 陽性の適用は成立する");
@@ -724,7 +724,6 @@ fn early_returns_around_compose_emit_neither_info_nor_perf_line() {
         "前提: 全透明退化は Hide 縮退＋reply Ok（早期復帰だが Err ではない）: {empty:?}"
     );
 
-    let events = cap.events();
     // 陽性: 成立した 1 適用の対だけが出ている（陰性 3 本は 1 行も足していない）。
     let (info, perf) = expect_single_adjacent_pair(&events);
     assert_info_line_contract(&info);
@@ -785,8 +784,7 @@ fn early_returns_before_swapchain_creation_emit_neither_info_nor_perf_line() {
             .expect("attach_target 失敗");
     }
 
-    let cap = CaptureSubscriber::default();
-    let (ok, no_gfx, no_compositor) = tracing::subscriber::with_default(cap.clone(), || {
+    let ((ok, no_gfx, no_compositor), events) = capture(|| {
         // 陽性: 資源が揃った target の成立適用（両 callsite の有効性の証明）。
         let ok = show(
             &mut presenter,
@@ -847,7 +845,6 @@ fn early_returns_before_swapchain_creation_emit_neither_info_nor_perf_line() {
         "前提: Compositor 不在経路へ落ちること: {no_compositor:?}"
     );
 
-    let events = cap.events();
     let (info, perf) = expect_single_adjacent_pair(&events);
     assert_info_line_contract(&info);
     assert_perf_line_contract(&perf);
@@ -894,8 +891,7 @@ fn display_result_is_independent_of_log_configuration() {
     attach(&mut presenter, &mut world, TargetId(1), 192, 0xC7);
 
     // (a) 捕捉 subscriber あり。
-    let cap = CaptureSubscriber::default();
-    tracing::subscriber::with_default(cap.clone(), || {
+    let ((), events) = capture(|| {
         assert!(
             show(
                 &mut presenter,
@@ -920,7 +916,6 @@ fn display_result_is_independent_of_log_configuration() {
     );
 
     // 前提: (a) では行が出ている（(b) との差がログ設定だけであることの担保）。
-    let events = cap.events();
     assert_eq!(
         perf_line_indices(&events).len(),
         1,

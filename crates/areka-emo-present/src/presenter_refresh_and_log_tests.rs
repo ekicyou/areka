@@ -6,9 +6,9 @@ use areka_actor::reply_channel;
 use areka_emo_compose::BindSet;
 
 use super::test_support::{
-    CaptureSubscriber, CapturedEvent, attach_hit_target, build_target_assets,
-    build_two_face_assets, force_current_surface, make_world_with_gpu, scaled_golden,
-    set_window_dpi, show_ok, spawn_window_with_dpi,
+    CapturedEvent, attach_hit_target, build_target_assets, build_two_face_assets, capture,
+    force_current_surface, make_world_with_gpu, scaled_golden, set_window_dpi, show_ok,
+    spawn_window_with_dpi,
 };
 
 // ── 表示成立点 info ログ（設計 D10・要件 6.1/6.3）の檻 ──────────────────────────────────
@@ -16,10 +16,14 @@ use super::test_support::{
 // 値**から「2 水準が異なる k・異なる物理寸で描かれた」ことを決定論的に判定する。ゆえに level が
 // `info` であることと D10 各フィールドが正しい値で在ることは観測状態と同格の契約であり、檻に入れる。
 //
-// 捕捉ハーネス（`CaptureSubscriber`／`CapturedEvent`）は presenter 系テストの共有ヘルパ
-// `presenter_test_support.rs` に置いてある。`tracing` 単体（本 crate の既存依存）で組んであり、
-// `with_default` は **スレッドローカル**の既定 subscriber を差すため、並列実行される他テストの
-// イベントを取り込まない（`set_global_default` はプロセス大域＝並列テストで混線するため使わない）。
+// 捕捉窓（`capture`／`CapturedEvent`）は presenter 系テストの共有引き口
+// `presenter_test_support.rs` が再輸出する。実体は硬化機構の唯一の定義元 `log-capture-kit` で、
+// 本 crate は捕捉先を自前で差さない。`with_default` がスレッドローカルなのは既定 dispatcher
+// だけで、「そのログを評価するか」を決める callsite の interest キャッシュは**プロセス全体で
+// 1 つ**しかない。先に踏んだスレッドの判定が焼き付くため、捕捉窓を持たないスレッドが先着すると
+// `never` が大域へ焼き付き、自分のスレッドへ捕捉先を差していても**取りこぼす**——問題は他テスト
+// のイベントの混入ではなく自分の観測の欠落である。共有機構は probe 常駐・窓内 interest 再計算・
+// 番兵による空振り検出の 3 点でこれを塞ぐ（詳細は `presenter_test_support.rs` の説明）。
 
 /// 要件 6.1/6.3 観測完了（設計 D10 の観測ログ）: 表示成立点で **`info` レベル**のログが出て、
 /// k 導出値（`k`・`k_ratio`）・`author_dpi`・`window_dpi`・native 寸・scaled 寸が揃う。
@@ -38,17 +42,14 @@ fn display_success_emits_d10_observation_log_at_info() {
         .attach_target(&mut world, TargetId(0), window, emo_world, atlas, 96)
         .expect("attach_target 失敗");
 
-    let cap = CaptureSubscriber::default();
-    tracing::subscriber::with_default(cap.clone(), || {
+    let ((), events) = capture(|| {
         show_ok(&mut presenter, &mut world, TargetId(0), 1000);
     });
 
-    let events = cap.events();
     let ev = events
         .iter()
         .find(|e| {
-            e.fields
-                .get("message")
+            e.field("message")
                 .is_some_and(|m| m.contains("表示・マスクを更新"))
         })
         .unwrap_or_else(|| panic!("表示成立点のログが出ていない: {events:?}"));
@@ -60,10 +61,9 @@ fn display_success_emits_d10_observation_log_at_info() {
     );
 
     let field = |name: &str| -> String {
-        ev.fields
-            .get(name)
+        ev.field(name)
             .unwrap_or_else(|| panic!("D10 フィールド `{name}` が無い: {:?}", ev.fields))
-            .clone()
+            .to_string()
     };
 
     // k 導出値: f32 の照会表現と、既約有理表現（num/den）の双方。
@@ -110,8 +110,7 @@ fn display_success_emits_d10_observation_log_at_info() {
 /// 「再表示したが同寸だった」と区別できないため、表示成立そのものの有無を観測する。
 fn has_display_success_log(events: &[CapturedEvent]) -> bool {
     events.iter().any(|e| {
-        e.fields
-            .get("message")
+        e.field("message")
             .is_some_and(|m| m.contains("表示・マスクを更新"))
     })
 }
@@ -314,10 +313,7 @@ fn refresh_scale_without_dpi_change_does_nothing() {
         );
 
     // DPI は据え置き（k 不変）。
-    let cap = CaptureSubscriber::default();
-    let got = tracing::subscriber::with_default(cap.clone(), || {
-        presenter.refresh_scale(&mut world, TargetId(0))
-    });
+    let (got, events) = capture(|| presenter.refresh_scale(&mut world, TargetId(0)));
 
     assert_eq!(got, None, "k 不変なのに新物理寸を返している");
     // (1) 改竄画が載っていない＝再表示していない。
@@ -327,7 +323,6 @@ fn refresh_scale_without_dpi_change_does_nothing() {
         "k 不変なのに再表示している（改竄画が画面へ載った＝無駄な表示更新）"
     );
     // (2) 表示成立点のログが 1 件も出ていない。
-    let events = cap.events();
     assert!(
         !has_display_success_log(&events),
         "k 不変なのに表示成立点のログが出ている（再表示が走った）: {events:?}"
@@ -367,13 +362,9 @@ fn refresh_scale_without_last_show_input_does_nothing() {
     // 一度も show していない状態で DPI を変える。
     set_window_dpi(&mut world, window, 192);
 
-    let cap = CaptureSubscriber::default();
-    let got = tracing::subscriber::with_default(cap.clone(), || {
-        presenter.refresh_scale(&mut world, TargetId(0))
-    });
+    let (got, events) = capture(|| presenter.refresh_scale(&mut world, TargetId(0)));
 
     assert_eq!(got, None, "再表示入力が無いのに新物理寸を返している");
-    let events = cap.events();
     assert!(
         !has_display_success_log(&events),
         "再表示入力が無いのに表示が成立している: {events:?}"
@@ -442,13 +433,9 @@ fn refresh_scale_does_not_resurrect_hidden_target() {
     );
 
     set_window_dpi(&mut world, window, 192);
-    let cap = CaptureSubscriber::default();
-    let got = tracing::subscriber::with_default(cap.clone(), || {
-        presenter.refresh_scale(&mut world, TargetId(0))
-    });
+    let (got, events) = capture(|| presenter.refresh_scale(&mut world, TargetId(0)));
 
     assert_eq!(got, None, "非表示 target が新物理寸を報告している");
-    let events = cap.events();
     assert!(
         !has_display_success_log(&events),
         "非表示 target が DPI 変化だけで再表示された（蘇生）: {events:?}"
@@ -509,16 +496,12 @@ fn refresh_scale_does_not_fabricate_dpi_when_component_is_absent() {
         "前提: DPI component 不在"
     );
 
-    let cap = CaptureSubscriber::default();
-    let got = tracing::subscriber::with_default(cap.clone(), || {
-        presenter.refresh_scale(&mut world, TargetId(0))
-    });
+    let (got, events) = capture(|| presenter.refresh_scale(&mut world, TargetId(0)));
 
     assert_eq!(
         got, None,
         "DPI 不在を 96 で捏造している（k=1/2 と誤導出して再表示が走った）"
     );
-    let events = cap.events();
     assert!(
         !has_display_success_log(&events),
         "DPI 不在の縮退で再表示が走っている: {events:?}"
@@ -574,10 +557,7 @@ fn refresh_scale_failure_keeps_previous_display_and_k() {
         .0 = 9999;
 
     set_window_dpi(&mut world, window, 192);
-    let cap = CaptureSubscriber::default();
-    let got = tracing::subscriber::with_default(cap.clone(), || {
-        presenter.refresh_scale(&mut world, TargetId(0))
-    });
+    let (got, events) = capture(|| presenter.refresh_scale(&mut world, TargetId(0)));
 
     assert_eq!(
         got, None,
@@ -611,12 +591,10 @@ fn refresh_scale_failure_keeps_previous_display_and_k() {
     );
 
     // 無言の失敗経路を作らない: refresh_scale 固有の error! が出ている。
-    let events = cap.events();
     let err = events
         .iter()
         .find(|e| {
-            e.fields
-                .get("message")
+            e.field("message")
                 .is_some_and(|m| m.contains("refresh_scale: 再表示が成立せず"))
         })
         .unwrap_or_else(|| panic!("refresh_scale の失敗が無言（専用ログが無い）: {events:?}"));
@@ -637,8 +615,7 @@ fn applied_absent_warn_count(events: &[CapturedEvent]) -> usize {
         .iter()
         .filter(|e| {
             e.level == tracing::Level::WARN
-                && e.fields
-                    .get("message")
+                && e.field("message")
                     .is_some_and(|m| m.contains("適用スケール未確定"))
         })
         .count()
@@ -654,7 +631,7 @@ fn applied_absent_warn_count(events: &[CapturedEvent]) -> usize {
 /// `tracing` の callsite interest はプロセス大域にキャッシュされるため、「ログが出ない」ことの
 /// 主張は subscriber 未設置の並列テストが同一 callsite を先に踏むと**恒真に**なり得る（檻が
 /// 何も守らなくなる）。本テストは陽性（1 件鳴る）と陰性（追加で鳴らない）を**同一の
-/// `with_default` スコープ・同一 callsite** で観測するため、陰性主張は「捕捉が死んでいない」
+/// 捕捉窓・同一 callsite** で観測するため、陰性主張は「捕捉が死んでいない」
 /// ことが同じ捕捉列で証明された上でのみ成立する。
 ///
 /// # 殺す誤実装
@@ -694,19 +671,15 @@ fn applied_absent_with_visible_surface_warns_once_and_degradations_stay_silent()
         "前提: T1 は未表示"
     );
 
-    let cap = CaptureSubscriber::default();
-    let (defensive_hit, defensive_miss, unshown, unregistered) =
-        tracing::subscriber::with_default(cap.clone(), || {
-            // (1) 防御分岐: 面あり・applied なし → 鳴る。
-            let a = presenter.hit_region_client(TargetId(0), 180, 96);
-            let b = presenter.hit_region_client(TargetId(0), 360, 192);
-            // (2) 正常縮退: 同一 callsite に対して鳴らない側を同一スコープで観測する。
-            let c = presenter.hit_region_client(TargetId(1), 180, 96);
-            let d = presenter.hit_region_client(TargetId(9), 180, 96);
-            (a, b, c, d)
-        });
-
-    let events = cap.events();
+    let ((defensive_hit, defensive_miss, unshown, unregistered), events) = capture(|| {
+        // (1) 防御分岐: 面あり・applied なし → 鳴る。
+        let a = presenter.hit_region_client(TargetId(0), 180, 96);
+        let b = presenter.hit_region_client(TargetId(0), 360, 192);
+        // (2) 正常縮退: 同一 callsite に対して鳴らない側を同一スコープで観測する。
+        let c = presenter.hit_region_client(TargetId(1), 180, 96);
+        let d = presenter.hit_region_client(TargetId(9), 180, 96);
+        (a, b, c, d)
+    });
 
     // (a) panic しない: ここへ到達している時点で 4 呼出すべてが値を返している。
     // (b) k=1.0 と同一結果（ScaleRatio::ONE 相当で続行している）。
@@ -747,22 +720,21 @@ fn applied_absent_with_visible_surface_warns_once_and_degradations_stay_silent()
             .iter()
             .find(|e| {
                 e.level == tracing::Level::WARN
-                    && e.fields
-                        .get("message")
+                    && e.field("message")
                         .is_some_and(|m| m.contains("適用スケール未確定"))
-                    && e.fields.get("client_x").map(String::as_str) == Some(want_x)
+                    && e.field("client_x") == Some(want_x)
             })
             .unwrap_or_else(|| {
                 panic!("client_x={want_x} の防御 warn が捕捉されていない: {events:?}")
             });
         assert_eq!(
-            warn.fields.get("target").map(String::as_str),
+            warn.field("target"),
             Some("TargetId(0)"),
             "warn が対象 target を載せていない（どの窓で不変条件が破れたか特定できない）: {:?}",
             warn.fields
         );
         assert_eq!(
-            warn.fields.get("client_y").map(String::as_str),
+            warn.field("client_y"),
             Some(want_y),
             "warn が client 座標を載せていない: {:?}",
             warn.fields

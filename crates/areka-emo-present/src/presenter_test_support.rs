@@ -451,80 +451,32 @@ pub(super) fn force_applied(presenter: &mut EmoPresenter, target: TargetId, k: O
 
 // ── ログ捕捉ハーネス（presenter 系テストモジュール共有）────────────────────────────────
 //
-// 捕捉は **`tracing` 単体**（本 crate の既存依存）で組む——`tracing-subscriber` は
-// dev-dependency に無く、要件 7.3（新規外部依存の禁止）ゆえ足さない。
-// `tracing::subscriber::with_default` は **スレッドローカル**の既定 subscriber を差すため、
-// 並列実行される他テストのイベントを取り込まない（`set_global_default` はプロセス大域＝
-// 並列テストで混線するため使わない）。
+// 捕捉窓そのものは本 module に持たず、硬化機構の唯一の定義元 `log-capture-kit` へ委譲する
+// （spec: areka-P0-test-cage-determinism・要件 1.5／2.2）。ここに在った最小 subscriber
+// （`CaptureSubscriber`）と visitor は撤去した——同型が本 crate の `scale.rs`・`balloon.rs`・
+// `presenter/timing.rs` の檻にも写し取られており、写し損ねた側だけが静かに嘘をつく形だった。
+//
+// # 「スレッドローカルゆえ安全」は誤り（起きるのは混入ではなく取りこぼし）
+//
+// `tracing::subscriber::with_default` が差し替えるのはスレッドローカルの既定 dispatcher
+// だけで、そこは確かにスレッドごとに独立している。しかし「そのログを評価するか」を決める
+// callsite の **interest キャッシュはプロセス全体で 1 つ**であり、その発行点をプロセス内で
+// 最初に踏んだスレッドの判定が焼き付く。捕捉窓を持たないスレッドの既定は `NoSubscriber` で
+// 判定は「不要」なので、先に踏まれると `never` が大域へ焼き付き、自分のスレッドへ捕捉先を
+// 差していても以後そのイベントは早期 return で捨てられる。ゆえに危険なのは「他テストの
+// イベントを取り込むこと」ではなく、**自分が見るはずのイベントを取りこぼすこと**である。
+// 不在の主張は捕捉 0 件のまま静かに緑になり（偽陰性）、存在の主張は捕捉 0 件で確率的に
+// 赤になる（偽陽性）。
+//
+// [`log_capture_kit::capture`] はこれを ⑴ プロセス寿命の probe 常駐 ⑵ 窓の内側での interest
+// 再計算 ⑶ 窓の内側で発火する対照イベント（番兵）による空振り検出、の 3 点で塞ぐ。番兵は
+// 返却前に取り除かれるので、呼出側の件数・主張は変わらない。捕捉されるのは呼出スレッドで
+// 同期的に発火したイベントだけである点は移行前と同じで、`set_global_default` によるプロセス
+// 大域の据え付けは使わない。機序の逐条解説は `log_capture_kit` の crate doc と同 crate の
+// `src/probe.rs` にある。
 //
 // presenter 系の複数テストモジュールが同じ道具を要するため、steering `structure.md` の
-// 「テーマ間で共有するヘルパは `<stem>_test_support.rs` へ集約する」に従い、ここへ 1 本化する。
+// 「テーマ間で共有するヘルパは `<stem>_test_support.rs` へ集約する」に従い、引き口をここへ
+// 1 本化する（`field_names()` は正準型の `field_names_sorted()` が同じ列を返す）。
 
-/// 捕捉した 1 イベント（level ＋ フィールド名 → Debug 表現）。
-#[derive(Debug, Clone)]
-pub(super) struct CapturedEvent {
-    pub(super) level: tracing::Level,
-    pub(super) fields: std::collections::HashMap<String, String>,
-}
-
-impl CapturedEvent {
-    /// メッセージ（`message` フィールドの Debug 表現）。フィールドが無ければ空文字。
-    pub(super) fn message(&self) -> &str {
-        self.fields.get("message").map_or("", String::as_str)
-    }
-
-    /// フィールド名の昇順一覧（フィールド集合を**ちょうど**で固定するための正準形）。
-    pub(super) fn field_names(&self) -> Vec<&str> {
-        let mut names: Vec<&str> = self.fields.keys().map(String::as_str).collect();
-        names.sort_unstable();
-        names
-    }
-}
-
-/// 全フィールドを Debug 表現で拾う visitor。
-///
-/// [`tracing::field::Visit`] の `record_u64`／`record_f64`／`record_bool` 等はすべて既定実装が
-/// `record_debug` へ転送するため、`record_debug` 1 本で型を問わず全フィールドを捕捉できる。
-struct FieldGrab(std::collections::HashMap<String, String>);
-
-impl tracing::field::Visit for FieldGrab {
-    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
-        self.0
-            .insert(field.name().to_string(), format!("{value:?}"));
-    }
-}
-
-/// イベントを溜めるだけの最小 subscriber（span は使わないので new_span は固定 id を返す）。
-#[derive(Clone, Default)]
-pub(super) struct CaptureSubscriber(std::sync::Arc<std::sync::Mutex<Vec<CapturedEvent>>>);
-
-impl CaptureSubscriber {
-    /// 捕捉列のスナップショット（発火順を保つ——対の隣接判定がこの順序に依存する）。
-    pub(super) fn events(&self) -> Vec<CapturedEvent> {
-        self.0.lock().expect("捕捉バッファの毒化なし").clone()
-    }
-}
-
-impl tracing::Subscriber for CaptureSubscriber {
-    fn enabled(&self, _meta: &tracing::Metadata<'_>) -> bool {
-        true
-    }
-    fn new_span(&self, _attrs: &tracing::span::Attributes<'_>) -> tracing::span::Id {
-        tracing::span::Id::from_u64(1)
-    }
-    fn record(&self, _span: &tracing::span::Id, _values: &tracing::span::Record<'_>) {}
-    fn record_follows_from(&self, _span: &tracing::span::Id, _follows: &tracing::span::Id) {}
-    fn event(&self, event: &tracing::Event<'_>) {
-        let mut grab = FieldGrab(std::collections::HashMap::new());
-        event.record(&mut grab);
-        self.0
-            .lock()
-            .expect("捕捉バッファの毒化なし")
-            .push(CapturedEvent {
-                level: *event.metadata().level(),
-                fields: grab.0,
-            });
-    }
-    fn enter(&self, _span: &tracing::span::Id) {}
-    fn exit(&self, _span: &tracing::span::Id) {}
-}
+pub(super) use log_capture_kit::{CapturedEvent, capture};

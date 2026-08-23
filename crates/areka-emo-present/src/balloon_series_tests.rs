@@ -1,6 +1,6 @@
 use super::*;
 
-use super::test_support::{CapturedEvent, TempDir, capture_events};
+use super::test_support::{CapturedEvent, FieldUnquoted, TempDir, capture_events};
 
 /// R1.5/R7.2 系列を明示した面判定: 面であるか否かは **どの系列（scope）で見るか**に依存する。
 ///
@@ -575,8 +575,7 @@ fn default_fallback_warns(events: &[CapturedEvent]) -> Vec<&CapturedEvent> {
         .iter()
         .filter(|e| {
             e.level == tracing::Level::WARN
-                && e.fields
-                    .get("message")
+                && e.field("message")
                     .is_some_and(|m| m.contains("デフォルト定義側"))
         })
         .collect()
@@ -614,19 +613,23 @@ fn resolve_warns_only_for_default_tier_face_at_scope1() {
         "warn は Default 採用の 1 面のみ（Own 採用の面 0 には出ない）: {events:?}"
     );
     let warned = warns[0];
-    assert_eq!(warned.field("scope"), Some("1"), "R6.2: scope が乗る");
     assert_eq!(
-        warned.field("surface_id"),
+        warned.field_unquoted("scope"),
+        Some("1"),
+        "R6.2: scope が乗る"
+    );
+    assert_eq!(
+        warned.field_unquoted("surface_id"),
         Some("1"),
         "R6.2: 縮退した面 ID が乗る（Own 採用の面 0 ではない）"
     );
     assert_eq!(
-        warned.field("file"),
+        warned.field_unquoted("file"),
         Some("balloons1.png"),
         "R6.2: 採用ファイルが乗る"
     );
     assert_eq!(
-        warned.field("prefix"),
+        warned.field_unquoted("prefix"),
         Some("balloons"),
         "採用接頭辞はデフォルト段のもの"
     );
@@ -680,9 +683,13 @@ fn resolve_does_not_warn_for_kero_named_tier_at_scope2() {
         "warn は Default 採用の面 1 のみ（KeroNamed 採用の面 0 には出ない）: {events:?}"
     );
     assert_eq!(
-        warns[0].field("surface_id"),
+        warns[0].field_unquoted("surface_id"),
         Some("1"),
         "KeroNamed 採用の面 0 ではなく Default 採用の面 1 が記録される"
     );
-    assert_eq!(warns[0].field("scope"), Some("2"), "R6.2: scope が乗る");
+    assert_eq!(
+        warns[0].field_unquoted("scope"),
+        Some("2"),
+        "R6.2: scope が乗る"
+    );
 }

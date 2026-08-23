@@ -262,167 +262,58 @@ fn derive_scale_never_panics_and_always_yields_usable_scale() {
 // `error!`／`warn!` が実際に発火するかは無検査だった（steering `logging.md` の
 // 「ログ無し失敗経路の禁止」＝縮退の唯一の観測点が空証明のまま）。ここで実行テストへ落とす。
 //
-// 捕捉は **`tracing` 単体**で組む——`tracing-subscriber` は本 crate の dev 依存に無く、
-// 要件 7.3（新規外部依存の禁止）ゆえ足さない（tasks.md Implementation Notes の
-// 「3.4: `areka-emo-present` でもログ発火を檻に入れられる」が 1.4 の申し送りを上書き済み）。
-// `presenter.rs` の同型ハーネスは同ファイルの `mod tests` に私有で import できないため、
-// 単一ファイル境界内へ最小複製する（`areka/src/emo2_boot/adapter.rs` が確立した流儀）。
+// # 硬化機構は 1 箇所にしかない（「スレッドローカルゆえ安全」は誤り）
 //
-// # `with_default` のスレッドローカル性だけでは足りない（callsite interest 毒化）
+// 捕捉窓そのものは共有 crate `log-capture-kit` へ委譲する（spec:
+// areka-P0-test-cage-determinism・要件 1.5／2.2）。以前ここに在った常駐 probe と最小
+// subscriber は、同 crate `balloon.rs` の檻へも写し取られており、写し損ねた側だけが静かに
+// 嘘をつく形だったため撤去した。硬化の定義はワークスペースで 1 箇所しか無い。
 //
-// `with_default` が差し替えるのはスレッドローカルの既定 dispatcher だが、
-// **callsite の interest キャッシュはプロセス大域**であり「その callsite をプロセス内で
-// 最初に踏んだスレッドが勝つ」。以下 `tracing-core-0.1.36` の実コード:
+// 「`with_default` はスレッドローカルだから並行実行でも干渉しない」は**誤り**である。
+// 差し替わるのはスレッドローカルの既定 dispatcher だけで、「そのログを評価するか」を決める
+// callsite の interest キャッシュは**プロセス全体で 1 つ**しかなく、その発行点をプロセス内で
+// 最初に踏んだスレッドの判定が焼き付く（`tracing-core` の `DefaultCallsite::interest()` →
+// `register()` → `Dispatchers::rebuilder()` の経路。捕捉窓を持たないスレッドの既定は
+// `NoSubscriber` で、その `register_callsite` は `Interest::never()` を返す）。焼き付いた
+// `never` は `interest.is_never()` の早期 return でイベントを捨てるため、**捕捉窓の内側でも
+// 取りこぼす**——起きるのは他テストのイベントの混入ではなく、自分の観測の欠落である。
+// 本ファイルの縮退ログ callsite は捕捉しない他テスト（`derive_scale_*` の値検査群・
+// `presenter.rs` の GPU テスト群）と共有されているため、この経路は実在する。結果、不在の
+// 主張は捕捉 0 件のまま静かに緑になり（偽陰性）、存在の主張は捕捉 0 件で確率的に赤になる
+// （偽陽性）。
 //
-// - `DefaultCallsite::interest()` はキャッシュ未設定（`0xFF`）のとき `register()` を呼ぶ。
-// - `register()`（`callsite.rs:307-318`）は
-//   `rebuild_callsite_interest(self, &DISPATCHERS.rebuilder())` を実行する。
-// - `Dispatchers::rebuilder()`（同 :544-549）は `has_just_one` が真のとき
-//   `Rebuilder::JustOne` を返し、`for_each`（同 :562-567）はこれを
-//   **`dispatcher::get_default(f)`＝登録したスレッドの既定 dispatcher**で評価する。
-// - subscriber を持たないスレッドの既定は `NoSubscriber` で、その `register_callsite` は
-//   **`Interest::never()`**（`subscriber.rs:676-678`）を返す。
-// - こうして焼かれた `never` は `interest.is_never()` の早期 return でイベントを捨てる。
-//   本ファイルの縮退ログ callsite は捕捉しない他テスト（`derive_scale_*` の値検査群・
-//   `presenter.rs` の GPU テスト群）と共有されているため、**捕捉窓の内側でも取りこぼす**。
-//
-// 対策（構造的）: **プロセス寿命の probe dispatcher を 2 個常駐**させて
-// `has_just_one`（＝`dispatchers.len() <= 1`・`callsite.rs:551-558`）を恒久的に偽へ落とす。
-// 偽になれば `rebuilder()` は `Rebuilder::Read` を返し、interest は「生存する登録済み
-// dispatcher 全体の `Interest::and`」で決まる——`get_default`（毒の入口）は二度と参照されない。
-// probe の `register_callsite` は常に `Interest::sometimes()` を返し、`Interest::and` は
-// 「両者が異なれば必ず `sometimes`」（`subscriber.rs:652-658`）ゆえ**合成結果は決して
-// `never` にならない**。`sometimes` は「毎回 `enabled()` を訊く」＝ interest キャッシュが
-// 実質無効化された状態であり、判定は現スレッドの dispatcher（＝捕捉 subscriber）へ委ねられる。
-// probe 導入前に焼かれた `never` は捕捉窓の内側で `rebuild_interest_cache()` 1 回で解毒する。
-//
-// `set_global_default` はプロセス大域の既定を1度きりで奪うため使わない（probe は
-// `Dispatch::new` による**登録**のみで、既定 dispatcher は差し替えない）。
+// 共有機構は ⑴ プロセス寿命の probe 常駐（`has_just_one` を恒久的に偽へ落として `never` の
+// 合成を封じる）⑵ 窓の内側での interest 再計算（常駐より前に焼かれた分の解消）⑶ 窓の内側で
+// 発火する対照イベント（番兵）による空振り検出、の 3 点でこれを塞ぐ。番兵は返却前に取り除か
+// れるので呼出側の件数・主張は変わらない。捕捉されるのは呼出スレッドで同期的に発火した
+// イベントだけである点は移行前と同じ。逐条解説（`tracing-core` の実コード引用つき）は
+// `log_capture_kit` の crate doc と同 crate の `src/probe.rs` にある。
 
-/// 捕捉した 1 イベント（level ＋ フィールド名 → Debug 表現）。
-#[derive(Debug, Clone)]
-struct CapturedEvent {
-    level: tracing::Level,
-    fields: std::collections::HashMap<String, String>,
+use log_capture_kit::CapturedEvent;
+
+/// 欠落を失敗にしてフィールドの **Debug 表現**を引く拡張（移行前の `CapturedEvent::field` と
+/// 同一規則——フィールド名も契約のうちなので、無ければ全フィールドを添えて落とす）。
+///
+/// メソッド名を `field` にしないのは、[`CapturedEvent`] の固有メソッド `field`
+/// （`Option<&str>` を返す）が拡張トレイトより優先され、拡張トレイト側が到達不能になるためである（この crate の呼出側は `assert_eq!` で `&str` と比べているので実際にはコンパイルが通らないが、balloon 側の同型は引用符剥がしが黙って消えて緑のままになる）。
+trait ExpectField {
+    /// フィールドの Debug 表現。欠落は panic。
+    fn expect_field(&self, name: &str) -> &str;
 }
 
-impl CapturedEvent {
-    /// `message` フィールド（本文）。無ければ空文字（panic しない）。
-    fn message(&self) -> &str {
-        self.fields.get("message").map(String::as_str).unwrap_or("")
-    }
-
-    /// 構造化フィールドの Debug 表現。欠落は失敗（フィールド名も契約のうち）。
-    fn field(&self, name: &str) -> &str {
-        self.fields
-            .get(name)
+impl ExpectField for CapturedEvent {
+    fn expect_field(&self, name: &str) -> &str {
+        self.field(name)
             .unwrap_or_else(|| panic!("ログフィールド `{name}` が無い: {:?}", self.fields))
     }
 }
 
-/// 全フィールドを Debug 表現で拾う visitor。
-///
-/// [`tracing::field::Visit`] の `record_u64`/`record_f64`/`record_str` 等はすべて既定実装が
-/// `record_debug` へ転送するため、`record_debug` 1 本で型を問わず全フィールドを捕捉できる。
-struct FieldGrab(std::collections::HashMap<String, String>);
-
-impl tracing::field::Visit for FieldGrab {
-    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
-        self.0
-            .insert(field.name().to_string(), format!("{value:?}"));
-    }
-}
-
-/// イベントを溜めるだけの最小 subscriber（span は使わないので new_span は固定 id を返す）。
-#[derive(Clone, Default)]
-struct CaptureSubscriber(std::sync::Arc<std::sync::Mutex<Vec<CapturedEvent>>>);
-
-impl tracing::Subscriber for CaptureSubscriber {
-    fn enabled(&self, _meta: &tracing::Metadata<'_>) -> bool {
-        true
-    }
-    fn new_span(&self, _attrs: &tracing::span::Attributes<'_>) -> tracing::span::Id {
-        tracing::span::Id::from_u64(1)
-    }
-    fn record(&self, _span: &tracing::span::Id, _values: &tracing::span::Record<'_>) {}
-    fn record_follows_from(&self, _span: &tracing::span::Id, _follows: &tracing::span::Id) {}
-    fn event(&self, event: &tracing::Event<'_>) {
-        let mut grab = FieldGrab(std::collections::HashMap::new());
-        event.record(&mut grab);
-        self.0
-            .lock()
-            .expect("捕捉バッファの毒化なし")
-            .push(CapturedEvent {
-                level: *event.metadata().level(),
-                fields: grab.0,
-            });
-    }
-    fn enter(&self, _span: &tracing::span::Id) {}
-    fn exit(&self, _span: &tracing::span::Id) {}
-}
-
-/// interest キャッシュへ `never` を焼かせないための常駐 dispatcher。
-///
-/// `register_callsite` が常に `Interest::sometimes()` を返すことだけが仕事で、
-/// `enabled()` は偽・`event()` は no-op（他テストの観測へ副作用を与えない）。
-struct InterestProbe;
-
-impl tracing::Subscriber for InterestProbe {
-    fn register_callsite(
-        &self,
-        _meta: &'static tracing::Metadata<'static>,
-    ) -> tracing::subscriber::Interest {
-        // 既定実装は `enabled()` が偽なら `never` を返してしまう。ここを `sometimes` に
-        // 固定することが本 probe の唯一の存在理由。
-        tracing::subscriber::Interest::sometimes()
-    }
-    fn enabled(&self, _meta: &tracing::Metadata<'_>) -> bool {
-        false
-    }
-    fn new_span(&self, _attrs: &tracing::span::Attributes<'_>) -> tracing::span::Id {
-        tracing::span::Id::from_u64(1)
-    }
-    fn record(&self, _span: &tracing::span::Id, _values: &tracing::span::Record<'_>) {}
-    fn record_follows_from(&self, _span: &tracing::span::Id, _follows: &tracing::span::Id) {}
-    fn event(&self, _event: &tracing::Event<'_>) {}
-    fn enter(&self, _span: &tracing::span::Id) {}
-    fn exit(&self, _span: &tracing::span::Id) {}
-}
-
-/// probe dispatcher を**2 個**プロセス寿命で常駐させる（冪等）。
-///
-/// 2 個必要なのは `has_just_one = (dispatchers.len() <= 1)` ゆえ——1 個では登録直後に
-/// `has_just_one` が真のままとなり、次の `register_dispatch` までの隙間で
-/// `Rebuilder::JustOne`（毒の経路）が生き残る。2 個目の登録で確定的に偽へ落とす。
-/// `OnceLock` が `Arc` をプロセス寿命で保持するので `retain(upgrade)` でも落ちない。
-fn ensure_interest_probes() {
-    static PROBES: std::sync::OnceLock<(tracing::Dispatch, tracing::Dispatch)> =
-        std::sync::OnceLock::new();
-    PROBES.get_or_init(|| {
-        // `Dispatch::new` が `callsite::register_dispatch` を呼ぶ（登録＋全走査再計算）。
-        let first = tracing::Dispatch::new(InterestProbe);
-        let second = tracing::Dispatch::new(InterestProbe);
-        (first, second)
-    });
-}
-
 /// クロージャ実行中に**現在のスレッド**で発火した tracing イベントを戻り値と共に返す。
 ///
-/// callsite interest 毒化への対策は本モジュール冒頭のコメントを参照。
+/// 捕捉と硬化は硬化機構の唯一の定義元 [`log_capture_kit::capture`] が行う。捕捉が働いて
+/// いなければ空の結果を静かに返さず panic する。
 fn capture<R, F: FnOnce() -> R>(f: F) -> (R, Vec<CapturedEvent>) {
-    ensure_interest_probes();
-
-    let cap = CaptureSubscriber::default();
-    // `with_default` は内部で `Dispatch::new`（＝register_dispatch＋全 callsite 再計算）を
-    // 行うため、この時点で既存の `never` は解毒されている。
-    let out = tracing::subscriber::with_default(cap.clone(), || {
-        // probe 常駐前（プロセス起動〜初回捕捉）に焼かれた `never` の掃き残しを、
-        // 窓が開いた**後**の時点でもう一度確定的に潰す。
-        tracing::callsite::rebuild_interest_cache();
-        f()
-    });
-    let events = cap.0.lock().expect("捕捉バッファの毒化なし").clone();
-    (out, events)
+    log_capture_kit::capture(f)
 }
 
 /// メッセージに `needle` を含むイベントが**ちょうど 1 件**在ることを主張して返す。
@@ -464,9 +355,9 @@ fn derive_scale_missing_dpi_emits_error_log() {
         tracing::Level::ERROR,
         "DPI 取得不能は error 格（warn/debug へ落とすと縮退が観測できない）: {ev:?}"
     );
-    assert_eq!(ev.field("author_dpi"), "96");
-    assert_eq!(ev.field("app_scale"), "1.0");
-    assert_eq!(ev.field("k"), "1.0");
+    assert_eq!(ev.expect_field("author_dpi"), "96");
+    assert_eq!(ev.expect_field("app_scale"), "1.0");
+    assert_eq!(ev.expect_field("k"), "1.0");
     assert_eq!(
         events.len(),
         1,
@@ -478,8 +369,8 @@ fn derive_scale_missing_dpi_emits_error_log() {
     let (k2, events2) = capture(|| derive_scale(app2, None));
     assert_eq!(k2.as_f32(), 2.0);
     let ev2 = expect_one(&events2, "窓 DPI を取得できない");
-    assert_eq!(ev2.field("k"), "2.0");
-    assert_eq!(ev2.field("app_scale"), "2.0");
+    assert_eq!(ev2.expect_field("k"), "2.0");
+    assert_eq!(ev2.expect_field("app_scale"), "2.0");
 }
 
 /// 要件 1.4／設計「Error Handling」: 窓 DPI 不正（0）縮退は **`error!`** を発火し、
@@ -496,10 +387,10 @@ fn derive_scale_zero_window_dpi_emits_error_log() {
         tracing::Level::ERROR,
         "窓 DPI 不正は error 格: {ev:?}"
     );
-    assert_eq!(ev.field("dpi_x"), "0");
-    assert_eq!(ev.field("dpi_y"), "0");
-    assert_eq!(ev.field("author_dpi"), "96");
-    assert_eq!(ev.field("k"), "1.0");
+    assert_eq!(ev.expect_field("dpi_x"), "0");
+    assert_eq!(ev.expect_field("dpi_y"), "0");
+    assert_eq!(ev.expect_field("author_dpi"), "96");
+    assert_eq!(ev.expect_field("k"), "1.0");
     assert_eq!(
         count_msg(&events, "取得できない"),
         0,
@@ -525,8 +416,8 @@ fn derive_scale_anisotropic_dpi_emits_warn_log() {
         tracing::Level::WARN,
         "異軸 DPI は warn 格（表示は成立するので error ではない）: {ev:?}"
     );
-    assert_eq!(ev.field("dpi_x"), "192");
-    assert_eq!(ev.field("dpi_y"), "96", "捨てた軸の値も残す");
+    assert_eq!(ev.expect_field("dpi_x"), "192");
+    assert_eq!(ev.expect_field("dpi_y"), "96", "捨てた軸の値も残す");
     assert_eq!(events.len(), 1, "1 分岐 1 ログ: {events:?}");
 }
 
@@ -546,11 +437,11 @@ fn derive_scale_zero_author_dpi_emits_warn_log() {
     let ev = expect_one(&events, "derive_scale: author_dpi=0");
     assert_eq!(ev.level, tracing::Level::WARN, "{ev:?}");
     assert_eq!(
-        ev.field("author_dpi"),
+        ev.expect_field("author_dpi"),
         "0",
         "生の宣言値（正規化前）を載せる"
     );
-    assert_eq!(ev.field("normalized"), "96");
+    assert_eq!(ev.expect_field("normalized"), "96");
     assert_eq!(events.len(), 1, "1 分岐 1 ログ: {events:?}");
 }
 
@@ -564,8 +455,8 @@ fn scale_policy_new_zero_author_dpi_emits_warn_log() {
 
     let ev = expect_one(&events, "ScalePolicy: author_dpi=0");
     assert_eq!(ev.level, tracing::Level::WARN, "{ev:?}");
-    assert_eq!(ev.field("author_dpi"), "0");
-    assert_eq!(ev.field("normalized"), "96");
+    assert_eq!(ev.expect_field("author_dpi"), "0");
+    assert_eq!(ev.expect_field("normalized"), "96");
     assert_eq!(events.len(), 1, "1 分岐 1 ログ: {events:?}");
 
     // 非ゼロ構築は無言（「常に warn」変異の非空虚性）。

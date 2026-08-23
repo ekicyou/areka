@@ -103,7 +103,7 @@
   - _Boundary: areka-emo-atlas, areka-emo-compose_
   - _Depends: 2.3_
 
-- [ ] 3.4 (P) 表示 crate の捕捉を共有機構へ寄せる
+- [x] 3.4 (P) 表示 crate の捕捉を共有機構へ寄せる
   - 常駐の仕掛けを持つヘルパ 2 種と、共有の捕捉先を自前で持つ 2 定義を削除し、共有機構へ委譲する
   - 捕捉先を直接差していた 4 ファイル 21 呼出を捕捉窓の呼出へ置き換える。フィールド名の整列列を返す補助は同じ意味のまま保つ
   - 「スレッドローカルなので他テストのイベントを取り込まない」という混入だけに触れた説明を、取りこぼしにも触れた正しい機序へ改める
@@ -292,3 +292,4 @@
 - **タスク 3.1 → 8.3 宛（群 3 全体で再発する）**: 移行の結果、`crates/areka-seriko/Cargo.toml:28` の `[dev-dependencies] tracing-subscriber` が**未使用**になった（crate 全域で参照 0）。要件 11.5 が Cargo.toml の変更を dev-dependency の**追加**に限っているので撤去は本仕様の裁量外で、**6.2 の Cargo.toml 検査も拾わない**（6.2 が見るのは「製品側依存に共有 crate が現れていないこと」だけ）。**8.3 の台帳へ引受先付きで登記すること**。同じ残渣が 3.2〜3.8 でも出る見込み。併せて同ファイル `:26-27` の存在理由コメントも陳腐化する。
 - **タスク 3.2 → 8.3 宛**: `crates/areka-ghost/src/test_log_capture.rs` の `event` ラベルの Debug 復旧経路は**どのテストにも縛られていない**（現行の ghost 側 `event = …` が全件文字列リテラルのため、外しても 107/107 緑）。移行前の visitor も同じ保険を持っていたので保険は残した。規則そのものは kit 側の `field_str_is_none_for_values_that_did_not_come_through_record_str` が縛っている。ghost へ新しい檻を足すと本数の同一性が崩れるので、**台帳に書くのが正しい引受先**。
 - **タスク 3.2（design.md 訂正済み）**: `#### C2` の「keeper 3 crate は `field_str("event")`／`field_str("outcome")` から組み立てる」は**誤り**だったので 2026-08-24 に訂正した。シジル形が `field_str` を通らないため、生値・Debug 表現の二経路が要る。
+- **タスク 3.4 → 群 3 の残り宛（重要・design.md 訂正済み）**: kit の `CapturedEvent` は**固有メソッド `field()` を持つ**。取り出しアダプタを `field` と同名の拡張トレイトで足すと**固有メソッドが黙って優先される**（Rust の解決順）。emo-present では balloon 側の引用符剥がしが消えて**緑のまま**になり、しかも当該フィールドは全件シジル渡しで trim が実質 no-op なので誰も気付かない。別名（`field_unquoted`／`expect_field` 等）で分けること。

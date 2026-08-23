@@ -21,9 +21,11 @@
 //!
 //! # 「出ないこと」の主張は同一スコープ内の陽性と対にする
 //!
-//! 陰性主張（定常フレームで `surface` 行 0 本）は、**同一の `with_default` スコープ内で**
-//! perf 行 1 本を観測したうえで成立させる。捕捉が死んでいるだけで緑になる形にしない
-//! （`presenter_perf_log_tests.rs` の前例と同じ規律）。
+//! 陰性主張（定常フレームで `surface` 行 0 本）は、**同一の捕捉窓の内側で** perf 行 1 本を
+//! 観測したうえで成立させる。捕捉が死んでいるだけで緑になる形にしない
+//! （`presenter_perf_log_tests.rs` の前例と同じ規律）。捕捉窓は硬化機構の唯一の定義元
+//! `log-capture-kit` で、番兵は「窓が生きていた」ことしか示さないため、この陽性 1 本の対照は
+//! 番兵とは別に要る（両者は重複せず、番兵は返却前に取り除かれるので件数も変わらない）。
 
 use super::*;
 
@@ -34,7 +36,7 @@ use areka_emo_compose::{BindSet, PatternState};
 
 use super::super::EmoPresenter;
 use super::super::test_support::{
-    CaptureSubscriber, CapturedEvent, build_target_assets, make_world_with_gpu, set_window_dpi,
+    CapturedEvent, build_target_assets, capture, make_world_with_gpu, set_window_dpi,
     spawn_window_with_dpi,
 };
 use crate::command::{PresentCommand, PresentOutcome};
@@ -532,15 +534,13 @@ fn a_transition_records_upload_then_visualize_on_the_same_frame_as_the_perf_line
     let mut presenter = EmoPresenter::new();
     attach(&mut presenter, &mut world, TargetId(3), 96);
 
-    let cap = CaptureSubscriber::default();
-    tracing::subscriber::with_default(cap.clone(), || {
+    let ((), events) = capture(|| {
         assert!(
             show(&mut presenter, &mut world, TargetId(3)).is_ok(),
             "前提: 初回表示は成立する"
         );
     });
 
-    let events = cap.events();
     let lines = surface_lines(&events);
     assert_eq!(lines.len(), 2, "遷移で 2 行でない: {lines:?}");
 
@@ -576,7 +576,7 @@ fn a_transition_records_upload_then_visualize_on_the_same_frame_as_the_perf_line
 
     let perf = perf_line(&events);
     assert_eq!(
-        perf.fields.get("frame").map(String::as_str),
+        perf.field("frame"),
         Some(TEST_FRAME.to_string().as_str()),
         "perf 行のフレーム番号が突合しない: {:?}",
         perf.fields
@@ -596,15 +596,13 @@ fn a_steady_reapply_with_an_unchanged_size_emits_no_surface_line() {
         "前提: 初回表示は成立する（ここまでは捕捉の外）"
     );
 
-    let cap = CaptureSubscriber::default();
-    tracing::subscriber::with_default(cap.clone(), || {
+    let ((), events) = capture(|| {
         assert!(
             show(&mut presenter, &mut world, TargetId(0)).is_ok(),
             "前提: 同一入力の再適用も成立する"
         );
     });
 
-    let events = cap.events();
     let _positive_control = perf_line(&events);
     assert_eq!(
         surface_lines(&events),
@@ -629,17 +627,14 @@ fn a_scale_change_records_the_buffer_resize() {
     );
 
     set_window_dpi(&mut world, window, 192);
-    let cap = CaptureSubscriber::default();
-    let reported = tracing::subscriber::with_default(cap.clone(), || {
-        presenter.refresh_scale(&mut world, TargetId(1))
-    });
+    let (reported, events) = capture(|| presenter.refresh_scale(&mut world, TargetId(1)));
     assert_eq!(
         reported,
         Some((NATIVE_W * 2, NATIVE_H * 2)),
         "前提: k=2/1 への再表示が成立し新物理寸が報告される"
     );
 
-    let lines = surface_lines(&cap.events());
+    let lines = surface_lines(&events);
     assert_eq!(lines.len(), 2, "遷移で 2 行でない: {lines:?}");
     assert_eq!(
         field_value(&lines[0], SURFACE_FIELD_RESIZED),
@@ -674,12 +669,9 @@ fn the_skipped_reapply_is_recorded_with_the_reason_that_gated_it() {
     );
 
     // ⑴ 拡大率不変（窓 DPI を変えない）。
-    let cap = CaptureSubscriber::default();
-    let unchanged = tracing::subscriber::with_default(cap.clone(), || {
-        presenter.refresh_scale(&mut world, TargetId(2))
-    });
+    let (unchanged, events) = capture(|| presenter.refresh_scale(&mut world, TargetId(2)));
     assert_eq!(unchanged, None, "前提: k 不変では再表示しない");
-    let lines = surface_lines(&cap.events());
+    let lines = surface_lines(&events);
     assert_eq!(lines.len(), 1, "見送りの記録が 1 行でない: {lines:?}");
     assert_eq!(field_value(&lines[0], FIELD_STAGE), SURFACE_STAGE_SKIPPED);
     assert_eq!(
@@ -695,12 +687,9 @@ fn the_skipped_reapply_is_recorded_with_the_reason_that_gated_it() {
     // ⑵ 不可視（k は変えたうえで隠す＝先のゲートを抜けて不可視ゲートへ届かせる）。
     hide(&mut presenter, &mut world, TargetId(2));
     set_window_dpi(&mut world, window, 192);
-    let cap = CaptureSubscriber::default();
-    let invisible = tracing::subscriber::with_default(cap.clone(), || {
-        presenter.refresh_scale(&mut world, TargetId(2))
-    });
+    let (invisible, events) = capture(|| presenter.refresh_scale(&mut world, TargetId(2)));
     assert_eq!(invisible, None, "前提: 不可視では再表示しない");
-    let lines = surface_lines(&cap.events());
+    let lines = surface_lines(&events);
     assert_eq!(lines.len(), 1, "見送りの記録が 1 行でない: {lines:?}");
     assert_eq!(
         field_value(&lines[0], SURFACE_FIELD_REASON),
