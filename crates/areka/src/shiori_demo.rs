@@ -237,41 +237,34 @@ pub fn run_demo_if_enabled() -> Result<(), DemoError> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, Mutex};
+    use log_capture_kit::{LineFormat, capture_lines};
 
-    use tracing::field::{Field, Visit};
-    use tracing_subscriber::prelude::*;
+    // 捕捉層そのものはここに持たず、硬化機構の唯一の定義元 `log-capture-kit` へ委譲する。
+    // 行の形（1 イベント 1 行・`level=…` に続けてフィールドを訪問順で ` name=value`）も
+    // 呼出側の判定内容も、移行前と 1 バイト変わらない。
+    //
+    // 「`with_default` はスレッドローカルゆえ並行実行でも干渉しない」は**誤り**である。差し替わる
+    // のはスレッドローカルの既定 dispatcher だけで、「そのログを評価するか」を決める callsite の
+    // interest キャッシュは**プロセス全体で 1 つ**しかなく、その発行点を最初に踏んだスレッドの
+    // 判定が焼き付く（先着が勝つ）。捕捉窓を持たないスレッドの既定は `NoSubscriber` で判定は
+    // 「不要」ゆえ、先に踏まれると `never` が大域へ焼き付き、自分のスレッドへ捕捉先を差していても
+    // 取りこぼす。共有機構は ⑴ プロセス寿命の probe 常駐 ⑵ 捕捉窓の内側での interest 再計算
+    // ⑶ 番兵イベントによる空振り検出 の 3 点でこれを塞ぐ（機序の逐条解説は `log_capture_kit` の
+    // crate doc と同 crate の `src/probe.rs`）。
 
-    /// イベントのレベル＋フィールドを文字列化して捕捉する最小 Layer。
-    #[derive(Clone, Default)]
-    struct Capture(Arc<Mutex<Vec<String>>>);
-
-    impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Capture {
-        fn on_event(&self, ev: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
-            let mut buf = format!("level={}", ev.metadata().level());
-            struct V<'a>(&'a mut String);
-            impl Visit for V<'_> {
-                fn record_debug(&mut self, f: &Field, v: &dyn std::fmt::Debug) {
-                    use std::fmt::Write;
-                    let _ = write!(self.0, " {}={:?}", f.name(), v);
-                }
-            }
-            ev.record(&mut V(&mut buf));
-            self.0.lock().unwrap().push(buf);
-        }
+    /// クロージャ `f` 実行中に発火した tracing イベントを 1 行 1 件へ整形し改行で連結する。
+    fn capture_lines_joined<F: FnOnce()>(f: F) -> String {
+        let ((), lines) = capture_lines(LineFormat::LevelFields, f);
+        lines.join("\n")
     }
 
     /// デモ駆動で即時・遅延+complete・raise・notify・teardown の各経路が tracing info ログとして
     /// 出力され、全体が `Ok(())` で完走すること（観測基準）。
     #[test]
     fn demo_drives_all_paths_and_emits_info_logs() {
-        let cap = Capture::default();
-        let logs = cap.0.clone();
-        let sub = tracing_subscriber::registry().with(cap);
-        tracing::subscriber::with_default(sub, || {
+        let all = capture_lines_joined(|| {
             super::run_demo().expect("demo ok");
         });
-        let all = logs.lock().unwrap().join("\n");
         assert!(
             all.contains("path=\"immediate\""),
             "immediate path logged: {all}"
@@ -295,13 +288,9 @@ mod tests {
     /// ゲート無効時はデモが起動しないこと（観測基準）。
     #[test]
     fn gate_disabled_does_not_drive() {
-        let cap = Capture::default();
-        let logs = cap.0.clone();
-        let sub = tracing_subscriber::registry().with(cap);
-        tracing::subscriber::with_default(sub, || {
+        let all = capture_lines_joined(|| {
             super::run_demo_if_enabled_with(false).expect("disabled gate returns Ok");
         });
-        let all = logs.lock().unwrap().join("\n");
         assert!(
             !all.contains("path=\"immediate\""),
             "disabled gate must not drive demo paths: {all}"
@@ -324,13 +313,9 @@ mod tests {
     /// ゲート有効時はデモが駆動され、各経路ログが出ること。
     #[test]
     fn gate_enabled_drives() {
-        let cap = Capture::default();
-        let logs = cap.0.clone();
-        let sub = tracing_subscriber::registry().with(cap);
-        tracing::subscriber::with_default(sub, || {
+        let all = capture_lines_joined(|| {
             super::run_demo_if_enabled_with(true).expect("enabled gate drives demo ok");
         });
-        let all = logs.lock().unwrap().join("\n");
         assert!(
             all.contains("path=\"immediate\""),
             "enabled gate drives immediate: {all}"

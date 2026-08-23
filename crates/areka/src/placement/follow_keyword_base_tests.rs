@@ -2,7 +2,7 @@ use bevy_ecs::prelude::*;
 use wintf::ecs::pointer::Phase;
 use wintf::ecs::{Point, SizeI, WindowPos};
 
-use super::super::test_support::{LogEvent, capture_logs, expect_one};
+use super::super::test_support::{ExpectField, LogEvent, capture_logs, expect_one};
 use super::test_support::{drag_end_event_at, drag_event, fake_handle, point_of, rect};
 use super::{
     BalloonFollow, MonitorSnapshot, PlacementRoute, on_balloon_drag, on_balloon_drag_end,
@@ -272,31 +272,35 @@ fn reported_size_reconcile_rederives_the_keyword_offset_from_the_displayed_size(
         // 再導出は観測できる（scope・新旧 offset・新旧キャラ寸・バルーン寸）。
         let rec = expect_one(&events, REDERIVE_TAG);
         assert_eq!(rec.level, tracing::Level::INFO, "再導出の記録は info 水準");
-        assert_eq!(rec.field("scope"), "0", "再導出ログに scope が載っていない");
         assert_eq!(
-            rec.field("old_offset"),
+            rec.expect_field("scope"),
+            "0",
+            "再導出ログに scope が載っていない"
+        );
+        assert_eq!(
+            rec.expect_field("old_offset"),
             format!("{stale:?}"),
             "再導出ログに再導出**前**の offset が載っていない"
         );
         assert_eq!(
-            rec.field("new_offset"),
+            rec.expect_field("new_offset"),
             format!("{fresh:?}"),
             "再導出ログに再導出**後**の offset が載っていない"
         );
         // 採寸寸は「窓生成直後で読めない」ことがあり得るため `Option` のまま載る
         // （読めなかったことを `Some` へ潰して嘘をつかない）。
         assert_eq!(
-            rec.field("old_char_size"),
+            rec.expect_field("old_char_size"),
             format!("{:?}", Some(measured_char())),
             "再導出ログに採寸寸が載っていない"
         );
         assert_eq!(
-            rec.field("new_char_size"),
+            rec.expect_field("new_char_size"),
             format!("{:?}", displayed_char()),
             "再導出ログに実表示寸が載っていない"
         );
         assert_eq!(
-            rec.field("balloon_size"),
+            rec.expect_field("balloon_size"),
             format!("{:?}", balloon()),
             "再導出ログにバルーン寸が載っていない"
         );

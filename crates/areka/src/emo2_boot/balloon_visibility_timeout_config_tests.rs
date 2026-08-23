@@ -17,7 +17,7 @@
 use tracing::Level;
 
 use super::*;
-use crate::placement::test_support::{capture_logs, expect_one};
+use crate::placement::test_support::{ExpectField, capture_logs, expect_one};
 
 // ---------------------------------------------------------------------------
 // ⑴⑵ 既定値の単一定義と環境変数名
@@ -76,7 +76,7 @@ fn parse_unset_or_blank_is_unspecified_and_silent() {
         "警告は較正に使った不正値の 1 件だけ（空白類は無音）: {events:?}"
     );
     assert!(
-        warned[0].field("value").contains("abc"),
+        warned[0].expect_field("value").contains("abc"),
         "捕捉された警告は較正値のもの: {:?}",
         warned[0]
     );
@@ -143,12 +143,12 @@ fn parse_rejects_zero_negative_non_numeric_and_overflow() {
             warned[0]
         );
         assert!(
-            warned[0].field("env").contains(TIMEOUT_ENV_KEY),
+            warned[0].expect_field("env").contains(TIMEOUT_ENV_KEY),
             "{value:?}: 警告が環境変数名を名指す: {:?}",
             warned[0]
         );
         assert!(
-            warned[0].field("value").contains(value.trim()),
+            warned[0].expect_field("value").contains(value.trim()),
             "{value:?}: 警告が受け取った指定を写す: {:?}",
             warned[0]
         );
@@ -170,12 +170,16 @@ fn resolve_without_env_adopts_default_and_records_source() {
     let recorded = expect_one(&events, "[balloon-visibility]");
     assert_eq!(recorded.level, Level::INFO, "採用値の記録は info 水準");
     assert!(
-        recorded.field("source").contains("default"),
+        recorded.expect_field("source").contains("default"),
         "供給源を記録する: {recorded:?}"
     );
-    assert_eq!(recorded.field("timeout_secs"), "30.0", "採用値を記録する");
     assert_eq!(
-        recorded.field("default_secs"),
+        recorded.expect_field("timeout_secs"),
+        "30.0",
+        "採用値を記録する"
+    );
+    assert_eq!(
+        recorded.expect_field("default_secs"),
         "30.0",
         "短縮の有無に依らず既定値を併記する（Requirement 9.5）"
     );
@@ -197,12 +201,16 @@ fn resolve_with_positive_env_shortens_and_records_source() {
     let recorded = expect_one(&events, "[balloon-visibility]");
     assert_eq!(recorded.level, Level::INFO);
     assert!(
-        recorded.field("source").contains("env"),
+        recorded.expect_field("source").contains("env"),
         "供給源を記録する: {recorded:?}"
     );
-    assert_eq!(recorded.field("timeout_secs"), "5.0", "短縮後の採用値");
     assert_eq!(
-        recorded.field("default_secs"),
+        recorded.expect_field("timeout_secs"),
+        "5.0",
+        "短縮後の採用値"
+    );
+    assert_eq!(
+        recorded.expect_field("default_secs"),
         "30.0",
         "短縮していない既定値が 30 秒であることを同じ 1 行で確かめられる（Requirement 9.5）"
     );
@@ -228,10 +236,10 @@ fn resolve_with_invalid_env_warns_and_degrades_to_default() {
         );
         let recorded = &events[1];
         assert!(
-            recorded.field("source").contains("default"),
+            recorded.expect_field("source").contains("default"),
             "{value:?}: 縮退後の供給源は既定: {recorded:?}"
         );
-        assert_eq!(recorded.field("timeout_secs"), "30.0");
+        assert_eq!(recorded.expect_field("timeout_secs"), "30.0");
     }
 }
 

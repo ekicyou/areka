@@ -2,7 +2,7 @@ use bevy_ecs::prelude::*;
 use windows::Win32::UI::WindowsAndMessaging::WS_VISIBLE;
 use wintf::ecs::{Point, SizeI, WindowPos, WindowStyle};
 
-use super::super::test_support::{LogEvent, capture_logs, expect_one};
+use super::super::test_support::{ExpectField, LogEvent, capture_logs, expect_one};
 use super::test_support::{CLAMP_TAG as GUARD_CLAMP_TAG, fake_handle, point_of, rect};
 use super::{
     BalloonFollowTrigger, MonitorSnapshot, PlacementRoute, enqueue_window_set_pos, follow_balloon,
@@ -196,19 +196,26 @@ fn enqueue_clamps_the_write_when_the_target_carries_balloon_limit_true() {
 
     let clamp = expect_one(&events, LIMIT_CLAMP_TAG);
     assert_eq!(clamp.level, tracing::Level::INFO, "補正の記録は info 水準");
-    assert_eq!(clamp.field("scope"), "0", "補正ログに scope が載っていない");
     assert_eq!(
-        clamp.field("context"),
+        clamp.expect_field("scope"),
+        "0",
+        "補正ログに scope が載っていない"
+    );
+    assert_eq!(
+        clamp.expect_field("context"),
         format!("{RUNTIME_CONTEXT:?}"),
         "3 関門を弁別する契機ラベルが runtime 関門のものでない"
     );
     assert_eq!(
-        clamp.field("route"),
+        clamp.expect_field("route"),
         format!("{:?}", Some(PlacementRoute::BalloonFollow)),
         "補正ログの契機 route が元書込のものでない（DD7）"
     );
-    assert_eq!(clamp.field("from"), format!("{proposed:?}"));
-    assert_eq!(clamp.field("to"), format!("{:?}", out_of_area_corrected()));
+    assert_eq!(clamp.expect_field("from"), format!("{proposed:?}"));
+    assert_eq!(
+        clamp.expect_field("to"),
+        format!("{:?}", out_of_area_corrected())
+    );
 }
 
 /// `BalloonLimit(false)` の scope は補正しない（2.7＝現行挙動の維持）。
@@ -306,7 +313,7 @@ fn move_window_to_clamps_the_trailing_balloon_but_never_the_char_window() {
     );
     assert_eq!(point_of(&world, balloon), out_of_area_corrected());
     let clamp = expect_one(&events, LIMIT_CLAMP_TAG);
-    assert_eq!(clamp.field("from"), format!("{proposed:?}"));
+    assert_eq!(clamp.expect_field("from"), format!("{proposed:?}"));
 }
 
 /// 経路④⑤: `follow_balloon` の随伴——**引き金によらず**同一に補正される。
@@ -367,7 +374,7 @@ fn resize_window_keep_position_clamps_when_the_new_size_overflows_the_work_area(
         "関門が寸を書き換えた（位置のみ補正の契約違反）"
     );
     let clamp = expect_one(&events, LIMIT_CLAMP_TAG);
-    assert_eq!(clamp.field("from"), format!("{before:?}"));
+    assert_eq!(clamp.expect_field("from"), format!("{before:?}"));
 }
 
 // -------------------------------------------------------------------------
@@ -399,7 +406,7 @@ fn visibility_guard_runs_first_and_the_limit_correction_has_the_last_word() {
     // ガードが実際に走り、素の提案位置を見て X を引き戻したこと。
     let guard = expect_one(&events, GUARD_CLAMP_TAG);
     assert_eq!(
-        guard.field("proposed"),
+        guard.expect_field("proposed"),
         format!("{proposed:?}"),
         "ガードが見た位置が素の提案位置でない（関門がガードより前に動いている）"
     );
@@ -408,15 +415,18 @@ fn visibility_guard_runs_first_and_the_limit_correction_has_the_last_word() {
         y: proposed.y,
     };
     assert_eq!(
-        guard.field("clamped"),
+        guard.expect_field("clamped"),
         format!("{guard_output:?}"),
         "ガードの出力が想定と違う（檻の前提が崩れている）"
     );
 
     // 関門の入力がガードの出力そのものであること＝順序の固定。
     let clamp = expect_one(&events, LIMIT_CLAMP_TAG);
-    assert_eq!(clamp.field("from"), format!("{guard_output:?}"));
-    assert_eq!(clamp.field("to"), format!("{:?}", out_of_area_corrected()));
+    assert_eq!(clamp.expect_field("from"), format!("{guard_output:?}"));
+    assert_eq!(
+        clamp.expect_field("to"),
+        format!("{:?}", out_of_area_corrected())
+    );
 
     // 最終位置は limit のもの（ガードが触れない Y が収まっている）。
     assert_eq!(point_of(&world, balloon), out_of_area_corrected());
@@ -470,8 +480,8 @@ fn runtime_gate_result_is_identical_for_hidden_and_visible_balloons() {
         results.push((
             variant,
             point_of(&world, balloon),
-            clamp.field("from").to_string(),
-            clamp.field("to").to_string(),
+            clamp.expect_field("from").to_string(),
+            clamp.expect_field("to").to_string(),
         ));
     }
     let (_, first_pos, first_from, first_to) = results[0].clone();
@@ -590,7 +600,7 @@ fn unresolvable_reference_warns_and_lets_the_write_through() {
             "{label}: 縮退は warn 水準"
         );
         assert_eq!(
-            warn.field("context"),
+            warn.expect_field("context"),
             format!("{RUNTIME_CONTEXT:?}"),
             "{label}: 契機ラベルが runtime 関門のものでない"
         );

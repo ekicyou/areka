@@ -4,7 +4,7 @@ use areka_parsers::charset::DefaultEncoding;
 use placement::balloon_limit::BALLOON_LIMIT_CLAMP_TAG;
 use placement::follow::MonitorSnapshot;
 use placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
-use placement::test_support::{capture_logs, expect_one};
+use placement::test_support::{ExpectField, capture_logs, expect_one};
 use std::path::Path;
 
 /// 復元テスト共通寸法（persist.rs の merge テストと同流儀）。
@@ -207,7 +207,7 @@ fn restore_seam_clamps_balloon_display_position_but_keeps_offset_raw() {
 
     let hit = expect_one(&events, BALLOON_LIMIT_CLAMP_TAG);
     assert_eq!(
-        hit.field("scope"),
+        hit.expect_field("scope"),
         "0",
         "補正した scope を記録する（要件 6.1）"
     );

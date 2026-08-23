@@ -5,6 +5,7 @@ use super::test_support::{titles, two_scope_placements};
 use super::{GhostWindowMarker, GhostWindows, ScopeWindows, spawn_ghost_windows};
 use crate::placement::follow::{Anchored, BalloonFollow};
 use crate::placement::resolver::{Anchor, PointPx};
+use crate::placement::test_support::ExpectField;
 
 // -------------------------------------------------------------------------
 // T-V1: despawn 掃除（areka-P0-dpi-window-vanish 要件 6.1/6.4・D8）
@@ -219,7 +220,7 @@ fn t_v1_cleanup_logs_are_debug_only_and_name_the_scope() {
         "placement: ゴースト窓レジストリから scope エントリを除去",
     );
     assert_eq!(removed.level, tracing::Level::DEBUG);
-    assert_eq!(removed.field("scope"), "0");
+    assert_eq!(removed.expect_field("scope"), "0");
 
     let noop = crate::placement::test_support::expect_one(
         &events,

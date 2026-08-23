@@ -21,7 +21,7 @@ use areka_emo_compose::ScaleRatio;
 
 use super::config::{BalloonXMode, PlacementConfig, ScopeConfig};
 use super::shared_test_support::{TempDir, synth_balloon_dir};
-use super::test_support::{LogEvent, capture_logs, expect_one};
+use super::test_support::{ExpectField, LogEvent, capture_logs, expect_one};
 use super::*;
 
 /// 観測点 4 の本文（実機サインオフの grep 対象・フィールド名ごと契約）。
@@ -88,7 +88,7 @@ fn apply_scope_windowpositions_reflects_accepted_limit_values() {
         );
         let hit = expect_one(&events, OBSERVATION);
         assert_eq!(
-            hit.field("limit"),
+            hit.expect_field("limit"),
             expected.to_string(),
             "観測点 4 の limit は解決済み実値（要件 6.2）"
         );
@@ -121,9 +121,9 @@ fn apply_scope_windowpositions_reflects_keyword_x_modes() {
             "キーワード時の x 調整量は 0（数値 x は存在しない）・y は従来どおり（要件 4.4）"
         );
         let hit = expect_one(&events, OBSERVATION);
-        assert_eq!(hit.field("x_mode"), format!("{expected:?}"));
+        assert_eq!(hit.expect_field("x_mode"), format!("{expected:?}"));
         assert_eq!(
-            hit.field("windowposition_x"),
+            hit.expect_field("windowposition_x"),
             "None",
             "キーワードは数値 x を作らない（C1 の不変量）"
         );
@@ -165,19 +165,19 @@ fn apply_scope_windowpositions_warns_and_degrades_on_invalid_limit_and_x() {
     // (b) 警告が 2 種とも出ており、どちらも scope と生値を伴う（要件 6.3）。
     let limit_warn = expect_one(&events, LIMIT_WARN);
     assert_eq!(limit_warn.level, tracing::Level::WARN);
-    assert_eq!(limit_warn.field("scope"), "0");
-    assert_eq!(limit_warn.field("limit_raw"), "Some(\"2\")");
+    assert_eq!(limit_warn.expect_field("scope"), "0");
+    assert_eq!(limit_warn.expect_field("limit_raw"), "Some(\"2\")");
 
     let x_warn = expect_one(&events, X_WARN);
     assert_eq!(x_warn.level, tracing::Level::WARN);
-    assert_eq!(x_warn.field("scope"), "0");
-    assert_eq!(x_warn.field("x_raw"), "Some(\"Center\")");
+    assert_eq!(x_warn.expect_field("scope"), "0");
+    assert_eq!(x_warn.expect_field("x_raw"), "Some(\"Center\")");
 
     // (c) 観測点 4 の解決値は既定値（要件 6.2）。
     let hit = expect_one(&events, OBSERVATION);
     assert_eq!(hit.level, tracing::Level::INFO);
-    assert_eq!(hit.field("limit"), "true");
-    assert_eq!(hit.field("x_mode"), "Side");
+    assert_eq!(hit.expect_field("limit"), "true");
+    assert_eq!(hit.expect_field("x_mode"), "Side");
 }
 
 /// 値が空（`windowposition.x,`）は**未指定ではなく不正値**である（要件 7.2）。
@@ -192,9 +192,12 @@ fn apply_scope_windowpositions_treats_empty_value_as_invalid_not_unspecified() {
     assert_eq!(cfg.scopes[&0].balloon_x_mode, BalloonXMode::Side);
     assert_eq!(cfg.scopes[&0].balloon_limit, true);
 
-    assert_eq!(expect_one(&events, X_WARN).field("x_raw"), "Some(\"\")");
     assert_eq!(
-        expect_one(&events, LIMIT_WARN).field("limit_raw"),
+        expect_one(&events, X_WARN).expect_field("x_raw"),
+        "Some(\"\")"
+    );
+    assert_eq!(
+        expect_one(&events, LIMIT_WARN).expect_field("limit_raw"),
         "Some(\"\")"
     );
 }
@@ -212,10 +215,10 @@ fn apply_scope_windowpositions_unspecified_vocab_is_silent_and_defaults() {
     let (cfg, events) = resolve("balloon-unspecified", "");
 
     let hit = expect_one(&events, OBSERVATION);
-    assert_eq!(hit.field("limit"), "true");
-    assert_eq!(hit.field("x_mode"), "Side");
+    assert_eq!(hit.expect_field("limit"), "true");
+    assert_eq!(hit.expect_field("x_mode"), "Side");
     assert_eq!(
-        hit.field("adjusted"),
+        hit.expect_field("adjusted"),
         "false",
         "どの軸も指定が無ければ調整量そのものが無い"
     );
@@ -246,8 +249,8 @@ fn apply_scope_windowpositions_numeric_x_keeps_side_mode_and_existing_adjust() {
     );
 
     let hit = expect_one(&events, OBSERVATION);
-    assert_eq!(hit.field("windowposition_x"), "Some(266)");
-    assert_eq!(hit.field("adjust_dx"), "266");
-    assert_eq!(hit.field("x_mode"), "Side");
+    assert_eq!(hit.expect_field("windowposition_x"), "Some(266)");
+    assert_eq!(hit.expect_field("adjust_dx"), "266");
+    assert_eq!(hit.expect_field("x_mode"), "Side");
     assert_no_event(&events, X_WARN);
 }

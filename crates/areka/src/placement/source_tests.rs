@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use super::*;
 use crate::placement::PlacementError;
-use crate::placement::test_support::{capture_logs, expect_one};
+use crate::placement::test_support::{ExpectField, capture_logs, expect_one};
 
 /// emo2 実フィクスチャのルート（`crates/pilot/examples/shiori-host-32/fixtures/emo2/`）。
 ///
@@ -334,8 +334,8 @@ fn load_balloon_author_dpi_emo2_fixture_is_default_96() {
 // キャッシュはプロセス大域かつ「最初に踏んだスレッドが勝つ」ため、subscriber を持たない
 // 他テスト（`read_kv_lenient_missing_returns_empty` 等）が同じ callsite を先に踏むと
 // `Interest::never()` が焼き付き、捕捉窓の内側でもイベントが捨てられる。
-// 機構と対策（probe dispatcher 常駐による `has_just_one` 恒久偽化）は
-// `test_support` のモジュール doc を参照。
+// 機構と対策（probe dispatcher 常駐による `has_just_one` 恒久偽化）は共有機構
+// `log_capture_kit` の crate doc（および `test_support` のモジュール doc）を参照。
 // ------------------------------------------------------------------
 
 /// 無宣言は **`debug!`**（正典の既定＝異常ではない）で、`source`／`default_dpi` を残す。
@@ -353,8 +353,8 @@ fn parse_author_dpi_absent_logs_debug_with_source() {
         tracing::Level::DEBUG,
         "無宣言は正典の既定＝異常ではない（warn 格上げ禁止）: {ev:?}"
     );
-    assert_eq!(ev.field("source"), SHELL_DPI_KEY);
-    assert_eq!(ev.field("default_dpi"), "96");
+    assert_eq!(ev.expect_field("source"), SHELL_DPI_KEY);
+    assert_eq!(ev.expect_field("default_dpi"), "96");
     assert_eq!(events.len(), 1, "1 分岐 1 ログ: {events:?}");
 }
 
@@ -380,11 +380,11 @@ fn parse_author_dpi_invalid_logs_warn_with_source_and_raw() {
 
         let ev = expect_one(&events, "数値として解釈できない");
         assert_eq!(ev.level, tracing::Level::WARN, "raw={raw:?}: {ev:?}");
-        assert_eq!(ev.field("source"), BALLOON_DPI_KEY);
-        assert_eq!(ev.field("raw"), raw, "捨てた生値をそのまま残す");
-        assert_eq!(ev.field("default_dpi"), "96");
+        assert_eq!(ev.expect_field("source"), BALLOON_DPI_KEY);
+        assert_eq!(ev.expect_field("raw"), raw, "捨てた生値をそのまま残す");
+        assert_eq!(ev.expect_field("default_dpi"), "96");
         assert!(
-            ev.fields.contains_key("error"),
+            ev.field("error").is_some(),
             "parse エラーを載せる（raw={raw:?}）: {ev:?}"
         );
         assert_eq!(events.len(), 1, "raw={raw:?}: {events:?}");
@@ -401,9 +401,9 @@ fn parse_author_dpi_zero_logs_warn_distinct_from_invalid() {
 
         let ev = expect_one(&events, "表示スケールの分母に使えない");
         assert_eq!(ev.level, tracing::Level::WARN, "raw={raw}: {ev:?}");
-        assert_eq!(ev.field("source"), SHELL_DPI_KEY);
-        assert_eq!(ev.field("raw"), raw);
-        assert_eq!(ev.field("default_dpi"), "96");
+        assert_eq!(ev.expect_field("source"), SHELL_DPI_KEY);
+        assert_eq!(ev.expect_field("raw"), raw);
+        assert_eq!(ev.expect_field("default_dpi"), "96");
         assert!(
             !ev.message().contains("数値として解釈できない"),
             "0 は解釈可能値ゆえ不正値と同じ文言にしない: {ev:?}"
@@ -451,7 +451,7 @@ fn author_dpi_log_source_field_attributes_shell_vs_balloon() {
         capture_logs(|| shell_source_with(&[("seriko.dpi", "abc")]).shell_author_dpi());
     assert_eq!(shell_dpi, DEFAULT_AUTHOR_DPI);
     assert_eq!(
-        expect_one(&shell_events, "数値として解釈できない").field("source"),
+        expect_one(&shell_events, "数値として解釈できない").expect_field("source"),
         "seriko.dpi",
         "shell 起因のログは seriko.dpi に帰属する"
     );
@@ -460,7 +460,7 @@ fn author_dpi_log_source_field_attributes_shell_vs_balloon() {
     let (balloon_dpi, balloon_events) = capture_logs(|| load_balloon_author_dpi(&zero));
     assert_eq!(balloon_dpi, DEFAULT_AUTHOR_DPI);
     assert_eq!(
-        expect_one(&balloon_events, "表示スケールの分母に使えない").field("source"),
+        expect_one(&balloon_events, "表示スケールの分母に使えない").expect_field("source"),
         "dpi",
         "balloon 起因のログは dpi に帰属する"
     );
@@ -482,7 +482,7 @@ fn load_balloon_author_dpi_missing_file_logs_read_warn_and_absent_debug() {
     let read_fail = expect_one(&events, "読み取りに失敗");
     assert_eq!(read_fail.level, tracing::Level::WARN, "{read_fail:?}");
     assert!(
-        read_fail.field("path").contains("no_such_balloon"),
+        read_fail.expect_field("path").contains("no_such_balloon"),
         "失敗したパスを残す: {read_fail:?}"
     );
     assert!(
@@ -492,7 +492,7 @@ fn load_balloon_author_dpi_missing_file_logs_read_warn_and_absent_debug() {
 
     let absent = expect_one(&events, "宣言なし");
     assert_eq!(absent.level, tracing::Level::DEBUG, "{absent:?}");
-    assert_eq!(absent.field("source"), BALLOON_DPI_KEY);
+    assert_eq!(absent.expect_field("source"), BALLOON_DPI_KEY);
 
     assert_eq!(events.len(), 2, "読取失敗と無宣言の 2 本: {events:?}");
 }

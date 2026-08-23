@@ -3,7 +3,7 @@ use wintf::ecs::SizeI;
 use wintf::ecs::pointer::Phase;
 use wintf::ecs::{Point, WindowPos};
 
-use super::super::test_support::{capture_logs, expect_one};
+use super::super::test_support::{ExpectField, capture_logs, expect_one};
 use super::test_support::{
     CLAMP_TAG, DPIS, GUARD_TAG_PREFIX, NEAREST_TAG, OFFSCREEN_PULL_TAG, UNRESOLVED_TAG,
     drag_event_at, dragging_state, fake_handle, gap_center_x, guard_events, left_wa, mixed_layout,
@@ -768,12 +768,12 @@ fn undetermined_position_aborts_resize_without_writing() {
                 "dpi={dpi} {label}: 打ち切りが warn として残っていない（log-first 違反）"
             );
             assert_eq!(
-                warned.field("entity"),
+                warned.expect_field("entity"),
                 format!("{e:?}"),
                 "dpi={dpi} {label}: 警告行が対象 entity を名乗っていない"
             );
             assert_eq!(
-                warned.field("position"),
+                warned.expect_field("position"),
                 format!("{position:?}"),
                 "dpi={dpi} {label}: 警告行が問題の位置を載せていない"
             );

@@ -132,7 +132,7 @@
   - _Boundary: areka（起動系）_
   - _Depends: 2.3_
 
-- [ ] 3.7 本体 crate の入力系・デモ・常駐の原典を共有機構へ寄せる
+- [x] 3.7 本体 crate の入力系・デモ・常駐の原典を共有機構へ寄せる
   - 入力系 2 ファイル・デモ 1 ファイルの捕捉ヘルパ本体と直接の捕捉を共有機構への委譲に置き換え、行形式を保つ
   - 常駐の仕掛けの原典ファイルは捕捉機構の本体を削除して判定用の補助だけを残し、イベント型は正準型の別名にする。原典を消費していた 3 ファイルの有効判定の作り直しの直接呼出も削除する
   - 「最小複製」の自認と誤った説明文を正しい機序へ置き換える
@@ -296,3 +296,6 @@
 - **タスク 3.6 → 3.7 宛（必達）**: `crates/areka/src/emo2_boot/frame_harness_tests.rs` は `crate::placement::test_support::capture_logs` と `LogEvent::message()` を呼んでおり、これは**要件 11.3 の逐語検査の一部**。3.7 が `placement/test_support.rs` を書き換えるとき、`capture_logs` が `(R, Vec<LogEvent>)` を返し `LogEvent::message()` が使えることを保つこと。壊すと 11.3 の検査が落ちる。
 - **タスク 3.6 → 8.3 宛（残余）**: 行整形の**variant 選択**（`LevelTargetFields` か `LevelFields` か）は**どのテストにも縛られていない**。起動系 6 サイトを `LevelFields` へ変異させても 1234/0 で緑のまま（assert が `target=` を 1 箇所も見ていない）。正しさは ⑴ design.md が当該 6 ファイルへ `LevelTargetFields` を明示していること ⑵ 移行前 6 ファイルの整形が逐語で `format!("level={} target={}", …)` だったことからの導出で担保した。kit の逐語 fixture は「各 variant が何を出すか」は縛るが「呼出側がどの variant を選ぶか」は構造上縛れない。6.2（走査語は迂回呼出）・6.3（行数）・8.2（反復）のいずれも引受先にならないので**台帳へ残余として記録する**。
 - **道具の較正（全タスク共通・重要）**: `git diff | grep -c $'\r'` は**信用できない**。`core.autocrlf=true` のため git が diff を LF へ正規化するので常に 0 を返す。MSYS の `grep -c $'\r$'` もテキストモードで誤報する。改行の実態は **PowerShell の生バイト走査**でしか確認できない。編集ツールが CRLF ファイルを黙って bare LF に落とす事故が 3.6 で実装側・レビュー側の**両方**で起きた（いずれも検出・復元済み）。改行を含む逐語検査があれば静かに壊れる。
+- **タスク 3.7 → 6.2 宛（必達・design.md 訂正済み）**: `ALLOWED_DIRECT_CALLS` は**初期値 空にできない**。`crates/areka/src/placement/{diag_tests.rs, follow_transition_diag_tests.rs, follow_window_move_diag_tests.rs}` の 3 件は実濾過に `EnvFilter` が要り、`capture_under_filter` は kit の `env-filter` feature 下で `areka` は当該 feature を有効にしない（実測 `cargo tree -p areka -e dev -i log-capture-kit -f "{p} FEATURES={f}"` → `FEATURES=` 空）。有効化は design の「wintf のみ」と要件 11.5 に反するので移行不能。2.7 の較正 1 件と合わせて**初期 4 件**。
+- **タスク 3.7 → 6.1・6.2 宛（見落とすと静かに壊れる）**: 上記 3 ファイルは移行後も窓の直前で `ensure_interest_probes()`（kit の再輸出）を呼んでおり、それによって `has_just_one` が偽に固定され `never` が焼き付かない＝硬化は保たれている。**この 3 呼出を「未使用」として外すと 3 つの窓が静かに硬化を失う**。番人の例外表の理由欄に明記すること。
+- **タスク 3.7（3.6 と同一の残余・8.3 宛）**: 行整形の variant 選択は areka 側でも縛られていない（`LevelFields`→`LevelTargetFields` の変異で 1234/0 のまま緑）。ワークスペース全域で同じ穴。

@@ -470,7 +470,6 @@ fn emit_all_under_filter(directives: &str) -> String {
         .finish();
 
     tracing::subscriber::with_default(subscriber, || {
-        tracing::callsite::rebuild_interest_cache();
         log_monitor_snapshot(&[rec(1, true)], "prepare_ghost_windows");
         log_window_move(&WindowMoveRecord {
             route: PlacementRoute::SpawnInitial,

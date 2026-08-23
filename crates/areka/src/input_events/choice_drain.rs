@@ -134,10 +134,8 @@ pub(crate) fn wire_choice_drain(world: &mut World, kanade: Sender<KanadeMsg>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use log_capture_kit::{LineFormat, capture_lines};
     use std::sync::mpsc::{self, TryRecvError};
-    use std::sync::{Arc, Mutex};
-    use tracing::field::{Field, Visit};
-    use tracing_subscriber::prelude::*;
 
     /// 不透明転写の弁別に足る「汚い」値を持つ選択確定通知を組む。
     ///
@@ -158,34 +156,25 @@ mod tests {
         }
     }
 
-    // ── スレッドローカル tracing capture（balloon.rs 檻の最小複製・ログ発火の決定論観測用）──
-    #[derive(Clone, Default)]
-    struct Capture(Arc<Mutex<Vec<String>>>);
-
-    impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Capture {
-        fn on_event(&self, ev: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
-            let meta = ev.metadata();
-            let mut line = format!("level={}", meta.level());
-            struct V<'a>(&'a mut String);
-            impl Visit for V<'_> {
-                fn record_debug(&mut self, f: &Field, v: &dyn std::fmt::Debug) {
-                    use std::fmt::Write;
-                    let _ = write!(self.0, " {}={:?}", f.name(), v);
-                }
-            }
-            ev.record(&mut V(&mut line));
-            self.0.lock().unwrap().push(line);
-        }
-    }
+    // ── ログ発火を決定論的に観測するための捕捉（捕捉層は共有機構へ委譲）──
+    //
+    // 捕捉層そのものはここに持たず、硬化機構の唯一の定義元 `log-capture-kit` へ委譲する。
+    // 行の形（1 イベント 1 行・`level=…` に続けてフィールドを訪問順で ` name=value`）も
+    // 呼出側の判定内容も、移行前と 1 バイト変わらない。
+    //
+    // 「`with_default` はスレッドローカルゆえ並行実行でも干渉しない」は**誤り**である。差し替わる
+    // のはスレッドローカルの既定 dispatcher だけで、「そのログを評価するか」を決める callsite の
+    // interest キャッシュは**プロセス全体で 1 つ**しかなく、その発行点を最初に踏んだスレッドの
+    // 判定が焼き付く（先着が勝つ）。捕捉窓を持たないスレッドの既定は `NoSubscriber` で判定は
+    // 「不要」ゆえ、先に踏まれると `never` が大域へ焼き付き、自分のスレッドへ捕捉先を差していても
+    // 取りこぼす。共有機構は ⑴ プロセス寿命の probe 常駐 ⑵ 捕捉窓の内側での interest 再計算
+    // ⑶ 番兵イベントによる空振り検出 の 3 点でこれを塞ぐ（機序の逐条解説は `log_capture_kit` の
+    // crate doc と同 crate の `src/probe.rs`）。
 
     /// クロージャ `f` 実行中に**現在のスレッド**で発火した tracing イベントを 1 行 1 件で返す。
     fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
-        let cap = Capture::default();
-        let logs = cap.0.clone();
-        let subscriber = tracing_subscriber::registry().with(cap);
-        tracing::subscriber::with_default(subscriber, f);
-        let guard = logs.lock().unwrap();
-        guard.clone()
+        let ((), lines) = capture_lines(LineFormat::LevelFields, f);
+        lines
     }
 
     /// `KanadeMsg` から `ChoiceInput` を取り出す（他 variant は檻失敗）。
