@@ -206,4 +206,4 @@ probe 方式（3 コピー・意味論はバイト等価で命名と prose だ�
 
 **変えていないもの**: `Cargo.toml` は非接触（dlp 要件 8.6）。13 本のスケジュールの順序・`try_tick_world` の中身・既存の窓書込テスト群（計 57 本）はいずれも不変で 1 本も赤にしていない。
 
-**まだ動く**: dlp は改善ループ（タスク 9.x）が続いており、最終の着地（tick の門の既定 ON/OFF・tick 構造・`Cargo.toml` に触れたか）は同 spec のタスク 9.4 が本節を更新して報告する。
+**着地（2026-08-23・dlp タスク 9.4 で更新）**: dlp の改善ループは周 3 で頭打ち（plateau）となり STOPPED・**採用 0**。門の既定は **OFF のまま**（`crates/wintf/src/ecs/world/mod.rs` の `tick_gate_enabled: false`）、tick 構造（13 本の順序・実行器）は着地前と同じ、`Cargo.toml` は非接触。本節の file:line は dlp のタスク 1〜8 着地時点のまま有効。未達（⑵ catch-up・⑶・⑷a 22.3%）と残る最大項（段② `unregistered_rest` 51.8%）・引受先なし（新規 spec 要）は dlp の `requirements.md` 改訂欄に登記済み。
