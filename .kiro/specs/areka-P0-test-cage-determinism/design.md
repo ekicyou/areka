@@ -533,7 +533,10 @@ pub(crate) enum UploadFault {
     Present,                                         // 提示
 }
 /// 注入点。test ビルド: スレッド局所 `Cell<Option<UploadFault>>` を消費し、一致すれば
-/// `device_err("<injected:{at:?}>")(E_FAIL)` を返す（error! 済み・PresentError::Device）。非 test: 常に Ok(())。
+/// `device_err(injected_context(at))(E_FAIL)` を返す（error! 済み・PresentError::Device）。非 test: 常に Ok(())。
+/// **2026-08-24 実装時の訂正**: 当初 `device_err("<injected:{at:?}>")` と書いたが、`device_err` の引数は `&'static str` で
+/// `PresentError::Device { context: &'static str }` へ渡るため `format!` は使えない（公開エラー型の変更が要る）。変位ごとの
+/// 静的文字列を返す `injected_context(at)` を置き、出力される字面は `{at:?}` の展開と変位ごとに完全一致させた。
 fn fault_point(at: UploadFault) -> Result<(), PresentError>;
 /// test 専用: 次の一致点で 1 回だけ失敗させる（同一スレッド）。
 #[cfg(test)] pub(crate) fn arm_upload_fault(at: UploadFault);
