@@ -628,3 +628,19 @@ function Sync-MeasureWorktreeBuild {
     $git = Get-MeasureGitFacts
     Write-Info "[perf-loop] 走行する実行体: $exe sha256=$(Get-MeasureSha256 -Path $exe) git_head=$($git.Head) git_dirty=$($git.Dirty)"
 }
+
+# 走行後の静寂確認（quiet-after.txt）が NOT_QUIET だった走行は -Resume で再利用しない（設計: 静寂の確認は
+# 前後 2 回＝後ろが落ちた走行は疑わしい）。2026-08-23 周 3 で A1/B1（走行後 21.4%/20.5%）がそのまま
+# compare に使われた穴。NOT_QUIET の走行は `<走行>-NOTQUIET-<時刻>` へ退避し（測ったものは消さない）、$false を返す。
+function Test-MeasureQuietAfterOk {
+    param([Parameter(Mandatory = $true)][string]$Dir)
+    $path = Join-Path $Dir $MEASURE_FILE_QUIET_AFTER
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $true }   # 後ろの確認を持たない走行（-DryRun 等）は対象外
+    $verdict = @(Get-Content -LiteralPath $path -Encoding utf8 | Where-Object { $_ -match '^verdict=' } | Select-Object -Last 1)
+    if ($verdict.Count -eq 0 -or $verdict[0] -match '^verdict=QUIET$') { return $true }
+    $stamp = (Get-UtcStamp) -replace '[^0-9]', ''
+    $aside = "$Dir-NOTQUIET-$stamp"
+    Move-Item -LiteralPath $Dir -Destination $aside -Force
+    Write-Problem "[perf-loop] 走行後の静寂確認が $($verdict[0]) だった走行は再利用せず退避しました: $aside（採り直します）"
+    return $false
+}

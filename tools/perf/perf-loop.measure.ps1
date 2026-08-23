@@ -189,7 +189,7 @@ function Test-MeasureRunComplete {
     foreach ($name in @($MEASURE_FILE_RUN_LOG, $MEASURE_FILE_CPU_CSV, $MEASURE_FILE_RUN_META)) {
         if (-not (Test-Path -LiteralPath (Join-Path $Dir $name) -PathType Leaf)) { return $false }
     }
-    return $true
+    return (Test-MeasureQuietAfterOk -Dir $Dir)
 }
 
 # -DryRun の置き土産（DRY-RUN.txt があって run.log が無い出力先）だけを作り直す。

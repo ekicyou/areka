@@ -536,6 +536,8 @@ CPU ではないためです。引受先は `present-write-coherence` です。
 
 - **`-BinDir` を渡さない走行（followup／rank-run／measure-baseline／final）は、走行の直前に作業ツリーから実行体を作り直す**（`Sync-MeasureWorktreeBuild`・2026-08-23 TOOLFIX 4）。`measure-ab` は B 側を `target\release` に作って残し、`prepare-ab` は A 側（HEAD）を残すので、これが無いと次の周の `rank-run` が前の周の B を測り、`followup` は B でなく A を測る（周 1〜3 で実際に起きた＝周 1 の「門 ON がドラッグを壊す」は A 実行体での失敗だった）。走行ログに `走行する実行体: … sha256=… git_head=… git_dirty=…` が 1 行出るので、run-meta の exe と突き合わせられる。
 
+- **走行後の静寂確認が NOT_QUIET だった走行は `-Resume` で再利用しない**（`Test-MeasureQuietAfterOk`・2026-08-23 TOOLFIX 5）。退避先は `<走行>-NOTQUIET-<時刻>`（測ったものは消さない）。周 3 で A1／B1（走行後 21.4%／20.5%）がそのまま compare に使われた穴。
+
 ## 12. 測り直すたびに確かめること（コマの間隔を見る判定式）
 
 「コマの間隔」を見る判定式の較正は、最初のベースライン（2026-08-14 の 3 走行）で
