@@ -264,15 +264,58 @@ crates\wintf\src\ecs\window_proc\window_pos_tests.rs:5
 crates\wintf\src\ecs\window_proc\window_pos_transition_tests.rs:5
 ```
 
-| 値 | 2026-08-23 | 2026-08-22 | 差 |
-|---|---|---|---|
-| 実呼出（22 − 定義 1） | **21** | 21 | 増減なし |
-| ファイル数 | **5** | 5 | 増減なし |
-| 定義位置 | **`command.rs:104`** | :104（`:76` から移動済み） | 増減なし |
-| カウンタの形 | **`thread_local!` の `Cell<i32>`（`command.rs:70`）** | 同じ（`76384c83` で取り込み済み） | 増減なし |
+| 値 | 2026-08-24 | 2026-08-23 | 2026-08-22 | 差 |
+|---|---|---|---|---|
+| 実呼出（22 − 定義 1） | **21** | 21 | 21 | 増減なし |
+| ファイル数 | **5** | 5 | 5 | 増減なし |
+| 定義位置 | **`command.rs:104`** | :104 | :104（`:76` から移動済み） | 増減なし |
+| カウンタの形 | **`thread_local!` の `Cell<i32>`（`command.rs:49`・`:70`）** | 同じ | 同じ（`76384c83` で取り込み済み） | 増減なし |
 
 要件 7 は分岐⒝（`draw-load-parity` 着地済み）で確定＝7.2 が実施対象、という前回の判断が
 現在値でも成立する。
+
+### 5-a. タスク 7.1 の判定用の再計測（2026-08-24・HEAD `79527213`）
+
+`rg -c` は doc コメント中の参照も数える（`command_threadlocal_tests.rs:19` が「錠を意図的に
+取らない」と述べている 1 件）。**実呼出だけ**を数えるときは実行行の形で当てる:
+
+```bash
+# 実呼出のみ（21）。ファイル別の行番号も出る
+rg -n 'let _serialized = .*lock_self_initiated_for_test\(\)' crates --glob '*.rs'
+rg -n 'let _serialized = .*lock_self_initiated_for_test\(\)' crates --glob '*.rs' | wc -l  # → 21
+
+# 陳腐化した説明文（要件 2.4 の対象・4 件）。母集団は「プロセス共有」の語を含む行
+rg -n 'プロセス共有' crates --glob '*.rs'
+```
+
+出力（2026-08-24）:
+
+| ファイル | 実呼出 | 行 |
+|---|---|---|
+| `crates/wintf/src/ecs/window/command.rs` | 2 | :961, :973 |
+| `crates/wintf/src/ecs/window/command_batch_tests.rs` | 5 | :322, :402, :466, :542, :637 |
+| `crates/wintf/src/ecs/window/command_transition_tests.rs` | 4 | :302, :372, :408, :426 |
+| `crates/wintf/src/ecs/window_proc/window_pos_tests.rs` | 5 | :44, :284, :318, :622, :651 |
+| `crates/wintf/src/ecs/window_proc/window_pos_transition_tests.rs` | 5 | :192, :222, :299, :399, :519 |
+| **合計** | **21**（兄弟テスト 4 本＝19） | |
+
+「プロセス共有」の語は `crates/**/*.rs` に **30 行 / 21 ファイル**あるが、その大半は起床旗・
+スレッド名簿・空 `PatternState` 等の**別の**共有物を正しく説明している。自発書込カウンタを
+指していて**かつ現在形で誤っている**のは次の 4 件だけ（7.2 の是正対象）:
+
+```
+crates/wintf/src/ecs/window/command_batch_tests.rs:25
+crates/wintf/src/ecs/window/command_transition_tests.rs:28
+crates/wintf/src/ecs/window_proc/window_pos_tests.rs:40
+crates/wintf/src/ecs/window_proc/window_pos_transition_tests.rs:21
+```
+
+同じカウンタを指していても `command.rs:77`・`command_threadlocal_tests.rs:35`・
+`areka/src/emo2_boot/frame_harness_tests.rs:10` は「**だった頃**／**是正前**」の**過去形**で
+書かれており誤りではない（`command.rs` は非接触の裁定下でもある）。**語で数えて 30 件を
+「是正対象」と読むと 26 件を余計に壊す**ので、必ず 1 件ずつ現在形かどうかを見ること。
+
+判定結果とその根拠は requirements.md の「申し送り台帳 ⑴」に登記した。
 
 ---
 

@@ -179,3 +179,49 @@
 6. When 本仕様が完了する, the 本仕様 shall 後続 spec が共有機構でテストを書くための利用手順（どこから引くか・不在主張の書き方）を文書に残す。
 7. If 本仕様のテストが共有の起床旗（`crates/wintf/src/ecs/world/tick_wake.rs`）に触る、または tick 実行判定（`EcsWorld::decide_tick`・`world/mod.rs:551`）へ到達する, then the テスト基盤 shall 既存の唯一の錠 `ecs::world::TICK_WAKE_TEST_LOCK`（`world/mod.rs:931`）を取り、2 本目の錠を新設しない（`draw-load-parity` の実装中に錠が 2 本へ分裂した実例がある）。
 8. The 本仕様 shall 共有の起床旗の上で「旗が立っていない」という不在主張を書かない（本番経路が旗を立てるようになったため成立しない）。省略側の主張が要る場合は注入口（`tick_one_frame_with`・`tick_bridge.rs:230`／`EcsWorld::decide_tick_with`・`world/mod.rs:560`）で行う。2026-08-23 時点で本仕様の接触集合のうち起床旗を立てる本番経路は `emo2_boot/adapter.rs:122` と `emo2_boot/balloon_visibility_phase.rs:113-114` の 2 箇所で、既存の待機テストはいずれも旗を観測しない（要件 4 の 2 箇所は現状のままで本条に抵触しない）。
+
+---
+
+## 申し送り台帳
+
+> 本仕様の実装中に確定した判定・残余・引受先の登記（design.md `#### C7`）。項目は「担当先未定」で残さない。
+> 以降のタスク（とくに 8.3）はこの節へ追記する。
+
+### ⑴ 要件 7 の分岐判定（タスク 7.1・2026-08-24 実測・HEAD `79527213`）
+
+**判定: 着地（分岐⒝）。したがってタスク 7.2 は実施対象**（錠を温存する分岐⒜・⒞ はいずれも不発）。
+
+| 判定材料 | 実測値（2026-08-24） | 根拠 |
+|---|---|---|
+| 自発書込カウンタの型 | **スレッド局所**＝`thread_local!` の `Cell<i32>` | `crates/wintf/src/ecs/window/command.rs:49`（`thread_local! {`）・`:70`（`static SELF_INITIATED_DEPTH: Cell<i32> = const { Cell::new(0) };`） |
+| 所有 spec の状態 | `areka-P0-draw-load-parity` は **completed**（アーカイブ済み） | `.kiro/specs/completed/areka-P0-draw-load-parity/spec.json`（`"phase": "completed"`・`implementation.completed_at` = `2026-08-23T10:30:00Z`） |
+| 着地したコミット | PR#118 の squash `327e7fd3`。`Cell<i32>` の行と `command_threadlocal_tests.rs` の新設はいずれも同コミットが初出で、本ブランチの先祖 | `git log -S 'static SELF_INITIATED_DEPTH: Cell<i32>'`／`git log --diff-filter=A`／`git merge-base --is-ancestor 327e7fd3 HEAD`。取り込みは `76384c83` |
+| 「錠なし並列でも緑」を固定する新テスト | 実在。3 本・**3 passed / 0 failed** | `crates/wintf/src/ecs/window/command_threadlocal_tests.rs:37`・`:90`・`:127`（`cargo test -p wintf --lib command_threadlocal_tests`） |
+| 錠の実呼出 | **21 箇所 / 5 ファイル**（2026-08-23 の `verification/remeasure.md` §5 と増減なし） | 内訳は下表 |
+| 錠の定義 | `crates/wintf/src/ecs/window/command.rs:104`（`pub(crate) fn lock_self_initiated_for_test()`） | 本仕様では削除しない（要件 7.4） |
+| 「プロセス共有のカウンタ」と書いたまま残る説明文 | **4 件**（要件 2.4 の対象・7.2 が是正） | `command_batch_tests.rs:25`・`command_transition_tests.rs:28`・`window_pos_tests.rs:40`・`window_pos_transition_tests.rs:21` |
+
+錠の実呼出の内訳（`let _serialized = …lock_self_initiated_for_test();` の実行行のみ。doc コメント中の参照は数えない）:
+
+| ファイル | 実呼出 | 行 |
+|---|---|---|
+| `crates/wintf/src/ecs/window/command.rs` | 2 | :961, :973 |
+| `crates/wintf/src/ecs/window/command_batch_tests.rs` | 5 | :322, :402, :466, :542, :637 |
+| `crates/wintf/src/ecs/window/command_transition_tests.rs` | 4 | :302, :372, :408, :426 |
+| `crates/wintf/src/ecs/window_proc/window_pos_tests.rs` | 5 | :44, :284, :318, :622, :651 |
+| `crates/wintf/src/ecs/window_proc/window_pos_transition_tests.rs` | 5 | :192, :222, :299, :399, :519 |
+| **合計** | **21**（うち兄弟テスト 4 本＝**19**） | |
+
+`draw-load-parity` 自身の台帳（`.kiro/specs/completed/areka-P0-draw-load-parity/tasks.md:281`）が同じ内訳と同じ 4 件の陳腐化した説明文を挙げており、独立に採った本実測と一致する。なお `command_threadlocal_tests.rs:19` にも錠の名前が現れるが、これは「意図的に取らない」ことを述べた doc コメントで実呼出ではない。**数え方で 3 通りの数字が出る**ので注意する: 名前を素で走査すると **6 ファイル / 28 行**、`verification/remeasure.md` §5 の `\(` 付きだと **5 ファイル / 22 件**（実呼出 21 ＋ 定義 1）、実行行の形（§5-a）で **21**。
+
+**道具の較正**: 上記 3 本が「スレッド局所であること」を本当に縛っているかを確かめた。`command.rs` は非接触の裁定下にあるので本体を変異させず、リポジトリ外（scratchpad）に ⒜ `thread_local! Cell<i32>` と ⒝ プロセス共有の `AtomicI32` の 2 つの形を再現し、当該テストと同じ 3 つの主張を両方へ掛けた。結果は ⒜ が 3 つとも真（緑）・⒝ が 3 つとも偽（赤）＝主張は 2 つの形を区別する。ただし本体の `nested_guards_on_one_thread_stay_true_until_the_last_is_dropped` は自分では同時に持ち上げる相手を作らないため、その「新しいスレッドのカウンタは 0 から始まる」の主張が共有を検知するのは他テストが同時に持ち上げているときだけである。無条件に検知するのは残る 2 本（別スレッドの持ち上げが見えないこと・2 本同時でも主スレッドへ漏れないこと）。
+
+**⚠ 要件 7.4 の引受先が実在しない（タスク 7.1 で発見・8.3 で決着が要る）**
+
+要件 7.4 は錠の**定義**（`command.rs:104`）の削除を所有者 `draw-load-parity` へ申し送ると定めるが、`draw-load-parity` は 2026-08-23 に完了しアーカイブ済みで、申し送りを消化できない。`.kiro/specs/` 直下の進行中 spec で `crates/wintf/src/ecs/window/command.rs` の所有を主張しているものも無い——当該パスに言及するのは `areka-P0-present-write-coherence/brief.md:154` と `areka-P0-emo2-conformance-e2e/brief.md:42,171` の 3 箇所だけで、いずれも**本番側の観測点の列挙**（窓書込指令の積み上げ点・Z 指令が合流対象外であること）であって、テスト専用の錠の定義を引き受ける宣言ではない。
+
+本仕様の範囲は変えない（**定義は削除しない**）。ただし 7.4 の「所有者へ申し送る」を満たすには実在する引受先が要るので、8.3 で次のいずれかを開発者裁定で決めること: ⒜ 進行中 spec のいずれかへ引き受けさせる／⒝ 新規に起票する／⒞ 定義の残置を裁定する。⒞ が成り立つ根拠は、定義が `#[cfg(test)]` でありワークスペースに `-D warnings` が無い（`.cargo/config.toml` 不在・root `Cargo.toml` と `crates/wintf/Cargo.toml` に `[lints]` 節が無い）ため、呼出が 0 になっても `dead_code` は警告どまりで赤にならないこと。
+
+### ⑵ 着手時点の `origin/main` との差（タスク 7.1 の付随確認）
+
+`origin/main` は `12afa8e6`（2026-08-24 16:37）で HEAD より 1 コミット先行しているが、当該コミットは要件 7 の対象 6 ファイル（`command.rs`・兄弟テスト 4 本・`command_threadlocal_tests.rs`）を 1 行も触っていない（`git diff --name-only HEAD...origin/main -- <6 ファイル>` が空）。判定には影響しない。
