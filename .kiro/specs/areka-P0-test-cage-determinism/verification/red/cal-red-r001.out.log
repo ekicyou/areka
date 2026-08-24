@@ -1,0 +1,38 @@
+
+running 2 tests
+test tests::redcal_this_one_passes ... ok
+test tests::redcal_this_one_fails_on_purpose ... FAILED
+
+failures:
+
+---- tests::redcal_this_one_fails_on_purpose stdout ----
+
+thread 'tests::redcal_this_one_fails_on_purpose' (27544) panicked at src\lib.rs:11:9:
+assertion `left == right` failed: わざと落とす較正用のテスト（実測 41）
+  left: 41
+ right: 42
+stack backtrace:
+   0: std::panicking::panic_handler
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\panicking.rs:679
+   1: core::panicking::panic_fmt
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:80
+   2: core::panicking::assert_failed_inner
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:434
+   3: core::panicking::assert_failed<i32,i32>
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:394
+   4: redcal::tests::redcal_this_one_fails_on_purpose
+             at .\src\lib.rs:11
+   5: redcal::tests::redcal_this_one_fails_on_purpose::closure$0
+             at .\src\lib.rs:9
+   6: core::ops::function::FnOnce::call_once<redcal::tests::redcal_this_one_fails_on_purpose::closure_env$0,tuple$<> >
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\core\src\ops\function.rs:250
+   7: core::ops::function::FnOnce::call_once
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\ops\function.rs:250
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+
+failures:
+    tests::redcal_this_one_fails_on_purpose
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+

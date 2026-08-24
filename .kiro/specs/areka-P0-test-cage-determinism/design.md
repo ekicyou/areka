@@ -173,7 +173,7 @@ crates/log-capture-kit/
 
 **⑦ 錠**（dlp 着地後のみ）: `crates/wintf/src/ecs/window/{command_batch_tests.rs, command_transition_tests.rs}`・`crates/wintf/src/ecs/window_proc/{window_pos_tests.rs, window_pos_transition_tests.rs}` の 19 呼出。`command.rs` 内の 2 呼出は dlp 着地が main マージ済みの場合のみ退役（定義は要件 7.4 で申し送り）。
 
-**文書・検証**: `.kiro/specs/areka-P0-test-cage-determinism/requirements.md`（着手時インベントリ更新・申し送り登記）、`verification/repeat-tests.ps1`（反復実行・ログ保存）、`verification/logs/`、`.kiro/steering/structure.md`（crate 一覧へ `log-capture-kit` を追記・完了時）。
+**文書・検証**: `.kiro/specs/areka-P0-test-cage-determinism/requirements.md`（着手時インベントリ更新・申し送り登記）、`verification/repeat-tests.ps1`（反復実行・ログ保存）、`verification/repeat-tests.md`（手順書）、`verification/summary.md`（走行の要約・追跡）、`verification/logs/`（生ログ・**非追跡**）、`verification/red/`（赤の回の生ログ・追跡）、`.kiro/steering/structure.md`（crate 一覧へ `log-capture-kit` を追記・完了時）。
 
 ## System Flows
 
@@ -578,7 +578,8 @@ fn fault_point(at: UploadFault) -> Result<(), PresentError>;
 | Intent | 着手時の再計測、反復実行（10 回 workspace・30 回 seriko／待機／錠）、ログ保存、申し送りの登記 |
 | Requirements | 2.1, 4.1, 3.7, 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 5.8, 6.2, 7.3, 7.4, 10.4, 10.5, 11.4 |
 
-- `verification/repeat-tests.ps1`: 引数（対象・回数）を受け、各回の出力を `verification/logs/<対象>-<回>.log` へ保存、赤ならテスト名を抽出して `summary.md` に登記（要件 9.4）。i686 成果物のビルド後・PowerShell で実行（`workspace-test-needs-i686-host32-artifacts`）。負荷は `cargo test --workspace` の並列既定に加え、別ウィンドウで同時に `cargo test -p areka` を回す等の手順を notes に固定する。
+- `verification/repeat-tests.ps1`: 引数（対象・回数）を受け、各回の出力を `verification/logs/` へ保存、赤ならテスト名と失敗内容を抽出して `summary.md` に登記（要件 9.4）。i686 成果物のビルド後・PowerShell で実行（`workspace-test-needs-i686-host32-artifacts`）。手順書は `verification/repeat-tests.md`。
+  - **2026-08-24 訂正（タスク 8.1 の実装に追随）**: ⑴ **負荷の定義**を「別ウィンドウで別の対象を同時に回す」から「**同じ対象を `-Parallel` 個のプロセスで同時に起動する**」へ改める。後者がタスク 7.2 の実測（4 プロセス同時 × 9 巡）と同じ形で、実測でも 1 回あたり 1.6 秒 → 4.4〜5.8 秒と競合が数字に出る。別対象の同時走行は補助手段として手順書 §3 に残す。⑵ ログのファイル名は `<札>-r<回>.out.log` / `.err.log`（stdout と stderr を分けて保存する）。⑶ **判定は 5 値**（緑／赤／空振り／件数不一致／ビルド失敗）で、緑と数えるのは「緑」だけ。終了コード 0 でも `0 passed` は「空振り」＝緑にしない（タスク 7.2 の申し送り ⑴）。⑷ `logs/` は非追跡（試走だけで 2.5MB）とし、**赤の回の生ログだけ `verification/red/` へ複写して追跡**する。⑸ 事前ビルド（`cargo test --no-run --message-format=json`）で実行体を解決して刻印を採る（古い実行体を測る事故・mtime 据え置きで再ビルドされない事故の検出）。⑹ 所要時間の移行前後比較（R-3）のために `-Root` で別ワークツリーを測れる。⑺ **ハーネスの待機はすべて有界**（各回・事前ビルド・停止確認）。`-TimeoutSec`（既定＝単独実測 × 同時数 × 10・下限 120 秒）に達した回はプロセス木を止めて **6 つ目の判定「打ち切り」**として記録する。要件 4 が待機の有界化そのものなので検証側にも同じ規律を当てる（8.2 は約 100 回を無人で回すため、1 回のハングで全体が止まり記録も残らない形を残さない）。⑻ 要約と `verification/red/` に書く本文は `TEMP` / `TMP` / `USERPROFILE` を伏せる（OS アカウント名やその場限りの一時ディレクトリ名を履歴へ入れない。無加工の生ログは非追跡の `logs/` に残る）。
 - 再計測（2.1／4.1）: `rg -l 'with_default\('`／硬化の印の有無・`spine*.rs` の `for _ in 0..`／`for now in` 走査・1,000 行超・錠呼出数を同じコマンドで採り requirements.md の表を現在値へ更新する。
 - 申し送り台帳（requirements.md 末尾に追記）: 5.8／6.2 の起票・7.3／7.4 の dlp 宛・10.5（合流後の新規 1,000 行超は赤）・11.4（`ReassertZOrder` 再表示隣接は e2e へ。理由: 再表示経路 `emo2_boot/balloon_visibility_phase.rs:385` → `presenter/visibility.rs:69` に Z 順の再断行要求は無く、挿入点は `wintf/src/ecs/window/zorder_pair_establish.rs:180` の確立時 1 発のみ＝固定対象の本番配線が無い・隣接の実測は実窓が要る）・9.5（553/1 の再現有無）・R-3（所要時間）。
 - 較正込みの報告（9.6）: 反復結果と並べて kit の較正テスト（Flow 2）と番人の較正テストの結果を記す。
