@@ -144,7 +144,7 @@ crates/log-capture-kit/
     ├── capture_calibration_test.rs # 親（子プロセス 2 モード起動・`1 passed` 検査）＋ #[ignore] 子テスト
     ├── workspace_scan/mod.rs       # 走査器: walk(crates/**/*.rs) と strip_comments と scan_tokens（純関数）
     ├── workspace_scan_test.rs      # **2026-08-24 実装時の追加**: 走査器の自己較正（8.4／10.3）。当初は「Unit（kit）＝src/」に置く想定だったが、走査器は `tests/` の共有 module なので `src/` からは見えない。較正だけを持つ試験対象を 1 本立て、下 2 本の見張りと同じ module を消費する
-    ├── with_default_guard_test.rs  # 要件 8: 直接呼出の検知＋例外表＋較正（既知陽性で赤）＋dev-deps-only 検査＋capture-all 利用ファイルの例外表
+    ├── with_default_guard_test.rs  # 要件 8: 直接呼出の検知＋例外表＋較正（既知陽性で赤）＋dev-deps-only 検査＋capture-all 利用ファイルの例外表。**2026-08-24 追加**: `env-filter` フィーチャを宣言する crate が `wintf` だけであることの検査（タスク 2.1 の申し送り＝フィーチャはワークスペースで統合されるので「有効にするのは wintf のみ」はコンパイラが強制しない宣言にすぎず、見張りが唯一の担保）
     └── file_length_guard_test.rs   # 要件 10: 1,000 行番人＋例外表 11 件＋較正（例外を外すと赤）
 ```
 
@@ -442,7 +442,7 @@ pub fn ensure_interest_probes();
 | Requirements | 1.3, 2.6, 8.1, 8.2, 8.3, 8.4, 10.1, 10.2, 10.3, 11.5 |
 
 **Responsibilities & Constraints**
-- 走査器（`workspace_scan/mod.rs`）: `env!("CARGO_MANIFEST_DIR")/../..` から `crates/**`（`src/`・`tests/`・`examples/`・兄弟ファイルを含む）の `.rs` を `read_dir` 再帰で列挙（`target/`・`vendors/` 除外、kit 自身のディレクトリは検知走査から除外）。`strip_comments(src)` で `//`・`//!`・`///` 行と行末コメントを除き、`scan_tokens(src, tokens) -> Vec<(line, token)>` で走査。純関数は fixture 文字列で自己テスト。
+- 走査器（`workspace_scan/mod.rs`）: `env!("CARGO_MANIFEST_DIR")/../..` から `crates/**`（`src/`・`tests/`・`examples/`・兄弟ファイルを含む）の `.rs` を `read_dir` 再帰で列挙（`target/`・`vendors/` 除外、**2026-08-24 訂正**: 検知走査から外すのは kit の `src/` だけで、kit の `tests/` は走査する。当初「kit 自身のディレクトリは検知走査から除外」と書いたが、同じ本節が `ALLOWED_DIRECT_CALLS` に `crates/log-capture-kit/tests/capture_calibration_test.rs` を載せていることと矛盾していた。実測（kit の `src/{capture,filter,global}.rs` が 3 件・`tests/capture_calibration_test.rs` が 1 件）と整合する読みは「`src/` は除外・`tests/` は走査」だけである。要件 10 の 1,000 行番人は kit のファイルも含めて測る）。`strip_comments(src)` で `//`・`//!`・`///` 行と行末コメントを除き、`scan_tokens(src, tokens) -> Vec<(line, token)>` で走査。純関数は fixture 文字列で自己テスト。
 - 検知（要件 8）: 走査語 `with_default(`・`set_global_default(`・`set_default(`。`const ALLOWED_DIRECT_CALLS: &[(&str, &str)]`（相対パス・理由）は**2026-08-24 実装時の訂正: 初期値は空ではなく 4 件**（当初「初期値 空」と書いたが、移行 3.7 の実測で 3 件が原理的に移行不能と判明し、2.7 の較正 1 件と合わせて 4 件になった）:
   - `crates/areka/src/placement/diag_tests.rs` — 実濾過（`EnvFilter`）の観測が要り、`capture_under_filter` は kit の `env-filter` feature 下。`areka` は当該 feature を有効にしない（有効にしてよいのは `wintf` のみ）ので `cargo test -p areka` では関数が存在しない。実測: `cargo tree -p areka -e dev -i log-capture-kit -f "{p} FEATURES={f}"` → `FEATURES=`（空）
   - `crates/areka/src/placement/follow_transition_diag_tests.rs` — 同上
