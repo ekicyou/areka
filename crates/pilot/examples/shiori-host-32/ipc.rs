@@ -19,9 +19,7 @@ use core::time::Duration;
 
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::DataExchange::COPYDATASTRUCT;
-use windows::Win32::UI::WindowsAndMessaging::{
-    SMTO_ABORTIFHUNG, SendMessageTimeoutW, WM_COPYDATA,
-};
+use windows::Win32::UI::WindowsAndMessaging::{SMTO_ABORTIFHUNG, SendMessageTimeoutW, WM_COPYDATA};
 
 // ============================================================================
 // 1. メッセージ種別タグ（MsgTag）
@@ -368,7 +366,11 @@ mod tests {
             let hwnd = hwnd_from_u32(sample);
             let bytes = encode_hwnd_le(hwnd);
             // リトルエンディアン並びの明示確認。
-            assert_eq!(bytes, sample.to_le_bytes(), "LE byte order for {sample:#010x}");
+            assert_eq!(
+                bytes,
+                sample.to_le_bytes(),
+                "LE byte order for {sample:#010x}"
+            );
             let decoded = decode_hwnd_le(bytes);
             assert_eq!(decoded, sample, "u32 LE round-trip for {sample:#010x}");
             // HWND まで戻して同値（当該プロセス幅へ zero-extend）。

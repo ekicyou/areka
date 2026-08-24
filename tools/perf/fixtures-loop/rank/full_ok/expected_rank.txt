@@ -1,0 +1,103 @@
+perf-rank 0.1.0 run=full_ok stages=process,thread,function,phase top=4
+
+[1] プロセス  unit=cpu  1 コア換算 %  出所=cpu.csv  基準=steady
+  steady_mean_pct                     5.33
+  p50_pct                             4.00
+  p95_pct                            10.00
+  max_pct                            10.00
+  talk_peak_pct                      10.00
+  samples_total                         10
+  samples_steady                         6
+  注記: 定常＝起点から 60.0 秒（WARMUP_EXCLUDE_SEC）を除く。起点=perf_apply_show 2026-08-23T10:00:10Z ／ 定常の始まり 2026-08-23T10:01:10Z
+  注記: 発話中の頂＝apply(ShowSurface) の前後 10.0 秒に重なる採取点の最大（合否外）
+  注記: SSP 参考値 idle=3.05 talk_peak=4.64（2026-08-15 実測・参考値・合否外）
+  注記: 実行条件 build=release logical_processors=8
+
+[2] スレッド  unit=cpu  出所=perf(thread)／perf(process)  基準=delta
+  window_s                            60.0
+  process_cpu_s                      6.000
+  registry_cpu_s                     4.400
+  unregistered_rest_cpu_s            1.600
+  snapshots                              2
+  役割別（上位 4）
+    rank  role                             cpu_s    share_pct
+       1  ui                               3.000        50.00
+       2  unregistered_rest                1.600        26.67
+       3  cursor_monitor                   0.500         8.33
+       4  vblank                           0.500         8.33
+    … 他 1 件
+  スレッド別（上位 4）
+    rank       tid  name                      role                           cpu_s    share_pct
+       1     19224  main                      ui                             3.000        50.00
+       2         0  -                         unregistered_rest              1.600        26.67
+       3     19300  wintf-vsync               vblank                         0.500         8.33
+       4     19400  wintf-cursor-monitor      cursor_monitor                 0.500         8.33
+    … 他 1 件
+  [2b] スレッド（サンプリング由来・unit=samples・出所=dump.txt）
+    rank         tid    samples    share_pct
+       1       18332         10        62.50
+       2       18420          3        18.75
+       3       18512          3        18.75
+
+[3] 関数  unit=samples  出所=dump.txt（CPU サンプリング）
+  samples_total                         16
+  stack_rows                             8
+  frames_total                          24
+  areka_resolved_frames                 16
+  resolved_frames                       22
+  unresolved_frames                      2
+  resolution_rate_pct                91.67
+  自己時間（最上位フレーム・上位 4）
+    rank    self   share_pct  module!function
+       1       2       12.50  areka.exe!areka_emo_text::actor::present_actor
+       2       2       12.50  areka.exe!wintf::ecs::graphics::systems::visual_sync::visual_hierarchy_sync_system
+       3       1        6.25  Unknown!0x00007ffb1c2d3e4f
+       4       1        6.25  areka.exe!areka_emo_compose::blit::execute
+    … 他 10 件
+  包含時間（スタックに含まれる・上位 4）
+    rank    incl   share_pct  module!function
+       1       2       12.50  Unknown!0x00007ffb1c2d3e4f
+       2       2       12.50  areka.exe!areka_emo_text::actor::present_actor
+       3       2       12.50  areka.exe!wintf::ecs::graphics::systems::visual_sync::visual_hierarchy_sync_system
+       4       2       12.50  areka.exe!wintf::ecs::world::EcsWorld::try_tick_world
+    … 他 13 件
+  スレッド別 自己時間（上位 4）
+    tid=18332 samples=10
+    rank    self   share_pct  module!function
+       1       2       20.00  areka.exe!areka_emo_text::actor::present_actor
+       2       2       20.00  areka.exe!wintf::ecs::graphics::systems::visual_sync::visual_hierarchy_sync_system
+       3       1       10.00  Unknown!0x00007ffb1c2d3e4f
+       4       1       10.00  areka.exe!areka_emo_compose::blit::execute
+    … 他 4 件
+    tid=18420 samples=3
+    rank    self   share_pct  module!function
+       1       1       33.33  areka.exe!wintf::runtime::tick_bridge::vsync_loop
+       2       1       33.33  dwmapi.dll!DwmFlush
+       3       1       33.33  ntoskrnl.exe!KiPageFault
+    tid=18512 samples=3
+    rank    self   share_pct  module!function
+       1       1       33.33  areka.exe!wintf::ecs::clickthrough::monitor::cursor_monitor_loop
+       2       1       33.33  ntoskrnl.exe!KiDpcInterrupt
+       3       1       33.33  win32u.dll!NtUserGetCursorPos
+
+[4] 相  unit=wall  出所=[tick] kind=window
+  windows                                2
+  ticks_total                          200
+  skipped_total                         20
+  heartbeat_total                        4
+  window_s                           2.000
+  ticks_per_s                       100.00
+  skip_ratio_pct                      9.09
+  heartbeat_ratio_pct                 2.00
+  avg_tick_wall_us                   400.0
+  max_tick_wall_us                     800
+  ui_cpu_us_per_s                  30000.0
+  wall_us_total                      80000
+  13 本のスケジュール（上位 4）
+    rank  name                    sum_us   share_pct      avg_us
+       1  framefinalize            32000       40.00       160.0
+       2  draw                     16000       20.00        80.0
+       3  layout                    8000       10.00        40.0
+       4  update                    6000        7.50        30.0
+    … 他 9 件
+  注記: 13 本は壁時計 µs（GPU 待ちを含む）。ui_cpu_us だけが UI スレッドの CPU 時間。

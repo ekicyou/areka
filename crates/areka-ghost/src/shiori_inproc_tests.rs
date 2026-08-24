@@ -42,7 +42,9 @@ fn invalid_image_returns_err() {
     // 後始末（best-effort）: assert より先に一時ファイルを掃除する。
     let _ = std::fs::remove_file(&path);
 
-    let err = result.err().expect("不正イメージ（非 PE）は Err を返すこと");
+    let err = result
+        .err()
+        .expect("不正イメージ（非 PE）は Err を返すこと");
     assert!(
         err.contains("LoadLibraryW failed"),
         "不正イメージはロード失敗として顕在化すること: {err}"
@@ -56,7 +58,9 @@ fn invalid_image_returns_err() {
 fn unresolved_symbol_returns_err() {
     // 名前ロード（system DLL はプロセス常駐・検索パスで解決）。
     let result = InProcLibrary::load(Path::new("kernel32.dll"));
-    let err = result.err().expect("shiori_factory を持たない DLL は Err を返すこと");
+    let err = result
+        .err()
+        .expect("shiori_factory を持たない DLL は Err を返すこと");
     // ロード失敗ではなくシンボル解決失敗であることを区別する。
     assert!(
         err.contains("shiori_factory") && err.contains("unresolved"),
@@ -92,12 +96,13 @@ fn happy_path_loads_and_resolves_factory() {
         dll_path.display()
     );
 
-    let (library, factory) =
-        InProcLibrary::load(&dll_path).expect("built cdylib は正常ロードされ factory を解決すること");
+    let (library, factory) = InProcLibrary::load(&dll_path)
+        .expect("built cdylib は正常ロードされ factory を解決すること");
 
     // 最小の生存確認: 生成した factory を IUnknown へ cast できる（＝有効な COM 参照）。
-    let _unknown: windows::core::IUnknown =
-        factory.cast().expect("IShioriFactory は IUnknown へ cast 可能な有効 COM 参照であること");
+    let _unknown: windows::core::IUnknown = factory
+        .cast()
+        .expect("IShioriFactory は IUnknown へ cast 可能な有効 COM 参照であること");
 
     // FreeLibrary 順序不変条件（モジュール doc）に従い、COM 参照（factory）を先に、
     // ロード済みライブラリを後に解放する。

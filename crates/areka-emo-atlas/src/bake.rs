@@ -63,8 +63,7 @@ impl Baker {
             (0..pack.page_count).map(|_| vec![0u8; page_len]).collect();
 
         // 2. id→Trimmed 逆引き（blit と trim_offset 参照用）。
-        let lookup: HashMap<ElementId, &Trimmed> =
-            items.iter().map(|(id, t)| (*id, t)).collect();
+        let lookup: HashMap<ElementId, &Trimmed> = items.iter().map(|(id, t)| (*id, t)).collect();
 
         // 3. 各 PackedEntry を対応頁へ blit（トリム後矩形のみ・premultiplied 素通し・4.3/D8）。
         let mut placements: Vec<(ElementId, Placement)> = Vec::with_capacity(pack.entries.len());
@@ -214,13 +213,31 @@ mod tests {
         let items = vec![(ElementId(0), t0.clone()), (ElementId(1), t1.clone())];
 
         // 手組み PackOutput: 非重複な既知 uv（page 0）。
-        let uv0 = Rect { x: 2, y: 2, w: 5, h: 4 };
-        let uv1 = Rect { x: 12, y: 8, w: 6, h: 3 };
+        let uv0 = Rect {
+            x: 2,
+            y: 2,
+            w: 5,
+            h: 4,
+        };
+        let uv1 = Rect {
+            x: 12,
+            y: 8,
+            w: 6,
+            h: 3,
+        };
         let pack = PackOutput {
             page_count: 1,
             entries: vec![
-                PackedEntry { id: ElementId(0), page: 0, uv_rect: uv0 },
-                PackedEntry { id: ElementId(1), page: 0, uv_rect: uv1 },
+                PackedEntry {
+                    id: ElementId(0),
+                    page: 0,
+                    uv_rect: uv0,
+                },
+                PackedEntry {
+                    id: ElementId(1),
+                    page: 0,
+                    uv_rect: uv1,
+                },
             ],
         };
 
@@ -243,13 +260,31 @@ mod tests {
         let items = vec![(ElementId(0), t0), (ElementId(1), t1)];
 
         // uv0 と uv1 の間に 1px 以上の隙間（gap）を空ける。
-        let uv0 = Rect { x: 2, y: 2, w: 4, h: 4 }; // 覆う x:2..6
-        let uv1 = Rect { x: 10, y: 2, w: 4, h: 4 }; // 覆う x:10..14
+        let uv0 = Rect {
+            x: 2,
+            y: 2,
+            w: 4,
+            h: 4,
+        }; // 覆う x:2..6
+        let uv1 = Rect {
+            x: 10,
+            y: 2,
+            w: 4,
+            h: 4,
+        }; // 覆う x:10..14
         let pack = PackOutput {
             page_count: 1,
             entries: vec![
-                PackedEntry { id: ElementId(0), page: 0, uv_rect: uv0 },
-                PackedEntry { id: ElementId(1), page: 0, uv_rect: uv1 },
+                PackedEntry {
+                    id: ElementId(0),
+                    page: 0,
+                    uv_rect: uv0,
+                },
+                PackedEntry {
+                    id: ElementId(1),
+                    page: 0,
+                    uv_rect: uv1,
+                },
             ],
         };
 
@@ -257,18 +292,34 @@ mod tests {
         let page = &pages[0];
 
         // gap 画素（x=7,y=3）は透明のまま。
-        assert_eq!(read_px(page, 7, 3), [0, 0, 0, 0], "gap pixel must stay transparent");
+        assert_eq!(
+            read_px(page, 7, 3),
+            [0, 0, 0, 0],
+            "gap pixel must stay transparent"
+        );
         // 隅（0,0）と（page_size-1, page_size-1）も透明。
-        assert_eq!(read_px(page, 0, 0), [0, 0, 0, 0], "top-left corner transparent");
+        assert_eq!(
+            read_px(page, 0, 0),
+            [0, 0, 0, 0],
+            "top-left corner transparent"
+        );
         assert_eq!(
             read_px(page, page_size - 1, page_size - 1),
             [0, 0, 0, 0],
             "bottom-right corner transparent"
         );
         // uv0 の直上（x=2,y=1）＝矩形の 1px 外も透明（bleed なし）。
-        assert_eq!(read_px(page, 2, 1), [0, 0, 0, 0], "pixel just above uv0 transparent");
+        assert_eq!(
+            read_px(page, 2, 1),
+            [0, 0, 0, 0],
+            "pixel just above uv0 transparent"
+        );
         // uv0 内部は塗られている（対照）。
-        assert_eq!(read_px(page, 2, 2), [10, 20, 30, 255], "uv0 interior blitted");
+        assert_eq!(
+            read_px(page, 2, 2),
+            [10, 20, 30, 255],
+            "uv0 interior blitted"
+        );
     }
 
     /// 3（6.3）: page_count==2 で両頁にエントリ。返り Vec 長 2・各頁 width/height/stride/len。
@@ -281,13 +332,31 @@ mod tests {
         let t1 = trimmed_filled(3, 3, Point { x: 0, y: 0 }, [99, 88, 77, 255]);
         let items = vec![(ElementId(0), t0), (ElementId(1), t1.clone())];
 
-        let uv0 = Rect { x: 1, y: 1, w: 3, h: 3 };
-        let uv1 = Rect { x: 5, y: 5, w: 3, h: 3 };
+        let uv0 = Rect {
+            x: 1,
+            y: 1,
+            w: 3,
+            h: 3,
+        };
+        let uv1 = Rect {
+            x: 5,
+            y: 5,
+            w: 3,
+            h: 3,
+        };
         let pack = PackOutput {
             page_count: 2,
             entries: vec![
-                PackedEntry { id: ElementId(0), page: 0, uv_rect: uv0 },
-                PackedEntry { id: ElementId(1), page: 1, uv_rect: uv1 },
+                PackedEntry {
+                    id: ElementId(0),
+                    page: 0,
+                    uv_rect: uv0,
+                },
+                PackedEntry {
+                    id: ElementId(1),
+                    page: 1,
+                    uv_rect: uv1,
+                },
             ],
         };
 
@@ -303,7 +372,11 @@ mod tests {
         // page 1 の uv1 に t1 が焼かれている。
         assert_region_matches(&pages[1], &uv1, &t1);
         // page 0 の uv1 位置（5,5）は透明のまま（page1 の blit が page0 に漏れていない）。
-        assert_eq!(read_px(&pages[0], 5, 5), [0, 0, 0, 0], "page 0 not touched by page 1 blit");
+        assert_eq!(
+            read_px(&pages[0], 5, 5),
+            [0, 0, 0, 0],
+            "page 0 not touched by page 1 blit"
+        );
     }
 
     /// 4（4.2/6.1）: 返る (id, Placement) が page/uv_rect（Packer 由来）・trim_offset
@@ -317,25 +390,51 @@ mod tests {
         let t1 = trimmed_filled(5, 2, off1, [4, 5, 6, 255]);
         let items = vec![(ElementId(7), t0), (ElementId(9), t1)];
 
-        let uv0 = Rect { x: 2, y: 2, w: 4, h: 4 };
-        let uv1 = Rect { x: 10, y: 10, w: 5, h: 2 };
+        let uv0 = Rect {
+            x: 2,
+            y: 2,
+            w: 4,
+            h: 4,
+        };
+        let uv1 = Rect {
+            x: 10,
+            y: 10,
+            w: 5,
+            h: 2,
+        };
         let pack = PackOutput {
             page_count: 1,
             entries: vec![
-                PackedEntry { id: ElementId(7), page: 0, uv_rect: uv0 },
-                PackedEntry { id: ElementId(9), page: 0, uv_rect: uv1 },
+                PackedEntry {
+                    id: ElementId(7),
+                    page: 0,
+                    uv_rect: uv0,
+                },
+                PackedEntry {
+                    id: ElementId(9),
+                    page: 0,
+                    uv_rect: uv1,
+                },
             ],
         };
 
         let (_pages, placements) = Baker.bake_pages(&items, &pack, page_size);
         assert_eq!(placements.len(), 2);
 
-        let p7 = placements.iter().find(|(id, _)| *id == ElementId(7)).map(|(_, p)| p).unwrap();
+        let p7 = placements
+            .iter()
+            .find(|(id, _)| *id == ElementId(7))
+            .map(|(_, p)| p)
+            .unwrap();
         assert_eq!(p7.page, 0);
         assert_eq!(p7.uv_rect, uv0, "uv_rect from PackOutput");
         assert_eq!(p7.trim_offset, off0, "trim_offset from Trimmed");
 
-        let p9 = placements.iter().find(|(id, _)| *id == ElementId(9)).map(|(_, p)| p).unwrap();
+        let p9 = placements
+            .iter()
+            .find(|(id, _)| *id == ElementId(9))
+            .map(|(_, p)| p)
+            .unwrap();
         assert_eq!(p9.page, 0);
         assert_eq!(p9.uv_rect, uv1);
         assert_eq!(p9.trim_offset, off1);
@@ -346,13 +445,19 @@ mod tests {
     fn stride_is_page_size_times_four() {
         let page_size = 48;
         let items: Vec<(ElementId, Trimmed)> = vec![];
-        let pack = PackOutput { page_count: 1, entries: vec![] };
+        let pack = PackOutput {
+            page_count: 1,
+            entries: vec![],
+        };
         let (pages, placements) = Baker.bake_pages(&items, &pack, page_size);
         assert_eq!(pages.len(), 1);
         assert_eq!(pages[0].stride, page_size * 4);
         assert_eq!(pages[0].bytes.len(), (page_size * 4 * page_size) as usize);
         // 空頁は全透明。
-        assert!(pages[0].bytes.iter().all(|&b| b == 0), "empty page fully transparent");
+        assert!(
+            pages[0].bytes.iter().all(|&b| b == 0),
+            "empty page fully transparent"
+        );
         assert!(placements.is_empty());
     }
 
@@ -361,7 +466,10 @@ mod tests {
     #[test]
     fn integration_pack_then_bake() {
         let page_size = 256;
-        let cfg = PackConfig { page_size, padding: 1 };
+        let cfg = PackConfig {
+            page_size,
+            padding: 1,
+        };
         let t0 = trimmed_pattern(20, 15, Point { x: 1, y: 1 }, 0x10);
         let t1 = trimmed_pattern(30, 10, Point { x: 2, y: 3 }, 0x20);
         let t2 = trimmed_pattern(12, 25, Point { x: 5, y: 6 }, 0x30);

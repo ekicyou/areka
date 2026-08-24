@@ -44,6 +44,9 @@ pub(super) fn install_smoke_exit(app: &WinApp) {
         for e in targets {
             w.despawn(e);
         }
-        tracing::info!(count, "collision-probe smoke 自動 close: ゴースト窓を despawn しました");
+        tracing::info!(
+            count,
+            "collision-probe smoke 自動 close: ゴースト窓を despawn しました"
+        );
     });
 }

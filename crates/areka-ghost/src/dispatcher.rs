@@ -419,11 +419,11 @@ pub fn spawn_dispatcher(
 }
 
 #[cfg(test)]
-#[path = "dispatcher_test_support.rs"]
-mod test_support;
+#[path = "dispatcher_choice_tests.rs"]
+mod choice_tests;
 #[cfg(test)]
 #[path = "dispatcher_slot_tests.rs"]
 mod slot_tests;
 #[cfg(test)]
-#[path = "dispatcher_choice_tests.rs"]
-mod choice_tests;
+#[path = "dispatcher_test_support.rs"]
+mod test_support;

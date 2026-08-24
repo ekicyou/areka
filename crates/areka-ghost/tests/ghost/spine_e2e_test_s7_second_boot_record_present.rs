@@ -188,11 +188,12 @@ fn s7_record_present_skips_onfirstboot_and_logs_skip_first_boot() {
         .filter(|c| !matches!(c, RecordedCall::Status))
         .cloned()
         .collect();
-    let is_get = |c: &RecordedCall, id: &str| {
-        matches!(c, RecordedCall::Get { id: got, .. } if got == id)
-    };
+    let is_get =
+        |c: &RecordedCall, id: &str| matches!(c, RecordedCall::Get { id: got, .. } if got == id);
     assert!(
-        !calls_without_status.iter().any(|c| is_get(c, "OnFirstBoot")),
+        !calls_without_status
+            .iter()
+            .any(|c| is_get(c, "OnFirstBoot")),
         "記録あり起動では OnFirstBoot GET を一度も発行しない（要件 3.3）: {calls_without_status:?}"
     );
     assert!(

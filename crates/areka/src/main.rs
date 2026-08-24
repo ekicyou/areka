@@ -56,6 +56,9 @@ mod shiori_demo;
 /// シーム（task 6.2）が `prepare_ghost_windows`→`spawn_ghost_windows` を結線する。
 mod placement;
 
+/// tick の門の既定を起動時に上書きする読み口（`AREKA_TICK_GATE=1|0`）。
+mod tick_gate_config;
+
 /// emo2 統合結線（areka-P0-emo2-boot）。完成済み 5 トラックのエンジンを束ね、シェル
 /// アニメーション側の表示指令を表示層の指令へ変換するアダプタ＋各エンジン結線＋観測を
 /// 所有する（`target_map`／`adapter`／`talk_clock`／`assets`／`frame`＋`BootWiringError`・
@@ -67,6 +70,16 @@ mod emo2_boot;
 /// 薄い配線層。現状は `throttle`（送出間引きの純粋判定・task 2.4）のみ。ポインタハンドラ結線と
 /// per-scope 状態保持（`MouseWiring`）は task 2.6／2.7 で増設される。
 mod input_events;
+
+/// アクタースレッドの役割名の宣言（areka-P0-draw-load-parity task 2.3）。
+/// `areka-actor` のスレッド開始フックを導入し、生成されるアクタースレッド 1 本ごとに
+/// 役割名を宣言して wintf のスレッド名簿へ登録する。
+mod thread_roles;
+
+/// スレッド別・プロセス全体の CPU 報告器（areka-P0-draw-load-parity task 2.4）。
+/// target `areka::perf` が点いているときだけ報告スレッドを起こし、名簿を舐めた
+/// `perf(thread)` 行と `perf(process)` 行を周期＋終了直前に出す。消灯時は費用 0。
+mod perf_thread_report;
 
 /// 遅延応答と push 経路の end-to-end 結合テスト。
 /// モック脳が `SHIORI_S_PENDING`＋token を返し、後で保持 host へ safe `complete`/`raise` を発火する
@@ -129,6 +142,17 @@ fn main() -> Result<()> {
         )
         .init();
 
+    // アクタースレッドの役割宣言フックを導入する（draw-load-parity 要件 2.3）。
+    // 以後 `spawn_actor` で起きるスレッド（ticker／loop-ticker／各アクター）は走り始めに
+    // 自分の役割名を宣言して wintf のスレッド名簿へ載る。**すべての結線より前**に置くのは、
+    // これより前に起きたスレッドが名簿から漏れるため。登録以外の挙動は何も変わらない。
+    thread_roles::install();
+
+    // スレッド別 CPU の報告器（draw-load-parity 要件 2.3/3.8・task 2.4）。点灯の判定は
+    // ここで 1 度だけ行い、`RUST_LOG` に `areka::perf=debug` が無ければ報告スレッドを
+    // 起こさない（既定運転の費用 0）。取っ手は終了直前まで持ち回り、最後の 1 枚を出す。
+    let perf_report = perf_thread_report::start();
+
     // 構成入力（ゴースト／バルーンのルートパス）の解決とログ出力（R3.1/3.3/3.4・マウントしない）。
     let args: Vec<String> = std::env::args().collect();
     let cfg = resolve_config_inputs(&args);
@@ -160,6 +184,9 @@ fn main() -> Result<()> {
     // DD-7/R7.1: 実 sink 結線（`wire_emo2_boot`）は UI 基盤の後に行うため、`WinApp::new()` を
     // すべての boot より前へ移動した（旧・task 3.3 の boot 先行順序を再編）。
     let app = WinApp::new()?;
+
+    // tick の門の既定を起動時に一度だけ上書きする（`AREKA_TICK_GATE=1|0`・A/B と安全弁）。
+    tick_gate_config::apply_from_env(&mut app.world().borrow_mut());
 
     // リファレンス脳の実走デモ（要件 5.3/5.4）。環境変数 `AREKA_SHIORI_DEMO` が有効な
     // ときのみ main スレッドで同期駆動する（既定 OFF）。診断目的のため失敗しても通常
@@ -202,7 +229,9 @@ fn main() -> Result<()> {
         author_dpi,
     );
     let (ghost_runtime, seriko_handle, loop_ticker) = if outcome.wired {
-        tracing::info!("実 sink 結線で起動しました（emo2-boot wire 成立・SERIKO ループ ticker 稼働）");
+        tracing::info!(
+            "実 sink 結線で起動しました（emo2-boot wire 成立・SERIKO ループ ticker 稼働）"
+        );
         // マウス配信資源を World へ結線（task 3.1・design「main.rs＋wire_mouse_input」・
         // DD-IE-9）: kanade Sender クローンで MouseWiring（NonSend・Presenter）を挿入する。
         // 挿入は wire_emo2_boot 成功後＝Emo2Wiring 挿入済みゆえ presenter 経由の region 解決が
@@ -335,6 +364,13 @@ fn main() -> Result<()> {
                 windows::Win32::Foundation::E_FAIL,
             ));
         }
+    }
+
+    // ④ スレッド別 CPU の最後のスナップショット（task 2.4）。終了直前に 1 枚出してから
+    // 報告スレッドを畳む。ここへ来ない早期 `return Err` の経路では最後の 1 枚が出ない
+    // （その場合は周期のスナップショットまでが記録として残る）。消灯時は `None` で何もしない。
+    if let Some(handle) = perf_report {
+        handle.stop_and_report_final();
     }
 
     Ok(())
@@ -527,14 +563,20 @@ fn insert_persist_wiring(world: &mut World, publisher: areka_sylphya::SylphyaPub
 /// 観測を足すだけで snapshot の中身は一切変えない（D2: 観測増設は Req 2.7 の
 /// 「変更」に数えない）。生きた `WinApp` を要する `open_startup_window` から切り出した
 /// シームゆえ、合成モニタで headless 檻に入る。
+///
+/// # 2 源を同じ構築関数で作る（atom task 5.1・要件 5.1）
+///
+/// 返すのは作業領域源と**モニタ別拡大率表**の組である。実行時の同期段
+/// （`emo2_boot::frame::work_area_sync`）も同じ [`placement::follow::MonitorSources::from_monitors`]
+/// を通る——起動時だけが別の作り方をすると、同期が入った後も起動時の値だけが違う形になり得る。
 fn boot_monitor_snapshot(
     monitors: &[wintf::ecs::window::monitor::Monitor],
-) -> placement::follow::MonitorSnapshot {
+) -> placement::follow::MonitorSources {
     placement::diag::log_monitor_snapshot(
         &placement::monitor_records(monitors),
         placement::MONITOR_SNAPSHOT_CONTEXT,
     );
-    placement::follow::MonitorSnapshot::from_monitors(monitors)
+    placement::follow::MonitorSources::from_monitors(monitors)
 }
 
 /// 起動窓シーム（task 6.2・要件 1.4・design「main.rs seam」）: `prepare_ghost_windows`
@@ -564,14 +606,15 @@ fn boot_monitor_snapshot(
 fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) -> Option<placement::AuthorDpi> {
     let author_dpi = match placement::prepare_ghost_windows(&cfg.ghost_root, &cfg.balloon_root) {
         Ok(prepared) => {
-            // MonitorSnapshot（task 8.1・DD15 基盤）: 起動時の実モニタ work area 集合を
-            // 忠実転写した Resource（物理 px・Send な純粋データ）。bottom 吸着ドラッグ
-            // （4.7・task 8.2）が消費する。セッション内固定＝M1 受容
-            // （WM_DISPLAYCHANGE 追随は後続・DD15）。
+            // モニタ 2 源（task 8.1・atom task 5.1）: 起動時の実モニタから忠実転写した
+            // 作業領域源とモニタ別拡大率表（物理 px・Send な純粋データ）。bottom 吸着ドラッグ
+            // （4.7・task 8.2）と拡大率の相が消費する。
+            // **セッション内固定ではない**（DD15 撤回・atom 要件 5.1）——毎フレーム先頭の
+            // 同期段（`emo2_boot::frame::work_area_sync`）が実行時のモニタ表から作り直す。
+            // ここが作るのは起動時の初期値であり、構築関数は同期段と同一である。
             // 構築と同時に全モニタの観測を 1 回出す（areka-P0-dpi-window-vanish 要件 1.1 の
             // **正典出力点**・D12）。既定 OFF・診断 `RUST_LOG` でのみ点灯する。
-            let snapshot =
-                boot_monitor_snapshot(&wintf::ecs::window::monitor::enumerate_monitors());
+            let sources = boot_monitor_snapshot(&wintf::ecs::window::monitor::enumerate_monitors());
 
             // clickthrough 登録 system を FrameFinalize へ結線（task 5.2 の donor slot・
             // emo-present と同位置）。`Added<WindowHandle>` 駆動のため窓 spawn より先に
@@ -596,10 +639,13 @@ fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) -> Option<placement::Au
             // （default_encoding は boot 結線・source.rs と同一の Ansi＝mount 解決の一貫性）。
             // 作者基準 DPI は `prepared` 分解の前に取り出して呼び手へ返す（`Copy` 値の転記）。
             let author_dpi = prepared.author_dpi;
+            // 復元は**起動時の作業領域源を 1 度だけ**読む（atom 要件 5.7）。以後の同期段は
+            // この判定へ効かせない——拡大率をまたぐ保存位置の追従は行わない裁定
+            // （`windowposition-limit` の開発者裁定）を踏襲する。
             let (placements, restored_scopes) = restore_merged_placements(
                 &cfg.ghost_root,
                 prepared.placements,
-                &snapshot,
+                &sources.snapshot,
                 areka_parsers::charset::DefaultEncoding::Ansi,
             );
             let titles = prepared.titles;
@@ -608,7 +654,9 @@ fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) -> Option<placement::Au
             // World 適用という既存 ECS コマンド経路（ダミー窓と同型）で本物窓を組み立てる。
             app.world().borrow().spawn(|tx: CommandSender| async move {
                 let _ = tx.send(Box::new(move |world: &mut World| {
-                    world.insert_resource(snapshot);
+                    // 2 源は同時に挿す（片方だけ古い運転を作らない・atom C6）。
+                    world.insert_resource(sources.snapshot);
+                    world.insert_resource(sources.dpi_table);
                     let windows = placement::spawn::spawn_ghost_windows(
                         world,
                         &placements,
@@ -737,7 +785,10 @@ fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) -> Option<placement::Au
 /// 存在しないため、`smoke 自動 close` の `count=` が示す「消えた起動窓の数」は不変である。
 fn despawn_smoke_targets(world: &mut World) -> usize {
     let targets: Vec<Entity> = world
-        .query_filtered::<Entity, Or<(With<DummyWindowMarker>, With<placement::spawn::GhostWindowMarker>)>>()
+        .query_filtered::<Entity, Or<(
+            With<DummyWindowMarker>,
+            With<placement::spawn::GhostWindowMarker>,
+        )>>()
         .iter(world)
         .collect();
     let count = targets.len();

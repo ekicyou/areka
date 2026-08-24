@@ -8,6 +8,8 @@ use super::super::taffy::TaffyLayoutResource;
 use super::super::{
     BoxInset, BoxPosition, BoxSize, BoxStyle, Dimension, LayoutRoot, LengthPercentageAuto, Rect,
 };
+use crate::ecs::window::transition_diag::{self, MonitorRecord, Stamp, TickStart};
+use crate::ecs::world::FrameCount;
 
 use windows::Win32::UI::WindowsAndMessaging::{
     CW_USEDEFAULT, GetSystemMetrics, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN,
@@ -192,6 +194,17 @@ pub fn update_monitor_layout_system(
 /// 実モニタ列挙（`enumerate_monitors`）はこの入口だけが行い、反映そのものは
 /// [`apply_monitor_snapshot`] が担う（合成モニタ表を注入して檻に入れられるようにするための
 /// 挙動不変の抽出・S4 是正の前提）。
+///
+/// # 遷移観測の刻印は World 資源から組む（design D1）
+///
+/// 本システムは `Update` に登録されており、`Update` は**既定の多スレッド実行器**で回る。
+/// ワーカースレッドからは `transition_diag` のスレッド局所ミラーが見えない（`frame=0` の
+/// 行が出る）ため、刻印は必ず `Res<FrameCount>`＋`Res<TickStart>` から
+/// [`transition_diag::stamp_from_world`] で組む——`transition_diag::stamp()` を呼ぶのは
+/// 退行である。
+// bevy のシステムは引数がそのまま World への要求（Query／Res）であり、束ねると
+// 要求が読めなくなる。刻印の 2 資源（D1）を足したことで 7 を超えるが、まとめない。
+#[allow(clippy::too_many_arguments)]
 pub fn detect_display_change_system(
     mut commands: Commands,
     mut app: ResMut<crate::ecs::App>,
@@ -199,6 +212,8 @@ pub fn detect_display_change_system(
     mut existing_monitors: Query<(Entity, &mut crate::ecs::Monitor), With<crate::ecs::Monitor>>,
     mut windows: Query<(Entity, &crate::ecs::WindowPos, &mut crate::ecs::DPI)>,
     mut taffy_res: ResMut<TaffyLayoutResource>,
+    frame: Res<FrameCount>,
+    tick_start: Res<TickStart>,
 ) {
     // ディスプレイ構成変更フラグをチェック
     if !app.display_configuration_changed() {
@@ -228,6 +243,7 @@ pub fn detect_display_change_system(
         &mut windows,
         &mut taffy_res,
         new_monitors,
+        transition_diag::stamp_from_world(&frame, &tick_start),
     );
     debug!(
         windows_redriven = windows_redriven,
@@ -250,6 +266,11 @@ pub fn detect_display_change_system(
 /// # 戻り値
 /// `DPI` を実際に書き換えた窓の数（＝再導出を駆動した窓の数）。呼出点の観測値であり、
 /// 檻はこれを判定語に用いる（0 なら駆動していない・1 なら 1 窓だけ駆動した）。
+///
+/// # `stamp`
+/// 値変化更新の `monitor` レコードに載せる刻印。**呼出側が World 資源から組んで渡す**
+/// （design D1）——本関数は多スレッド実行器でワーカースレッドに載り得るため、自分で
+/// スレッド局所ミラーを読んではならない。
 pub(crate) fn apply_monitor_snapshot(
     commands: &mut Commands,
     root_entity: Entity,
@@ -257,6 +278,7 @@ pub(crate) fn apply_monitor_snapshot(
     windows: &mut Query<(Entity, &crate::ecs::WindowPos, &mut crate::ecs::DPI)>,
     taffy_res: &mut TaffyLayoutResource,
     new_monitors: Vec<crate::ecs::Monitor>,
+    stamp: Stamp,
 ) -> usize {
     // 既存のMonitorエンティティをマップに変換（handle → entity）
     let mut existing_map: std::collections::HashMap<isize, (Entity, crate::ecs::Monitor)> =
@@ -317,6 +339,22 @@ pub(crate) fn apply_monitor_snapshot(
                 if let Ok((_, mut monitor)) = existing_monitors.get_mut(entity) {
                     *monitor = new_monitor.clone();
                 }
+
+                // 遷移観測（要件 2.3）。上の `debug` 行と同じ事実を、1 回の遷移の
+                // 時系列へ並べられる形（刻印つき・単一 target）で出す。既定 OFF ゆえ
+                // 前置ガードの内側でだけ組む。刻印は呼出側が World 資源から組んで
+                // 渡した値をそのまま使う（D1・本関数は時刻を読まない）。
+                if transition_diag::is_enabled() {
+                    transition_diag::emit_line(&transition_diag::monitor_line(&MonitorRecord {
+                        stamp,
+                        entity,
+                        old_dpi: existing_monitor.dpi,
+                        new_dpi: new_monitor.dpi,
+                        old_work_area: existing_monitor.work_area,
+                        new_work_area: new_monitor.work_area,
+                    }));
+                }
+
                 updated_monitors.push(new_monitor);
             }
         } else {
@@ -400,7 +438,14 @@ pub(crate) fn apply_monitor_snapshot(
 /// （`graphics/systems/window_pos.rs` の `apply_window_pos_changes`・
 /// `layout/systems/window_pos_systems.rs` の `sync_window_arrangement_from_window_pos`・
 /// `window_pos/mod.rs` の `to_window_rect`）と揃えてある。
-pub(crate) fn window_center(pos: &crate::ecs::WindowPos) -> Option<(i32, i32)> {
+///
+/// # クレート外へ開いてある理由（areka-P0-dpi-transition-atomicity C5・task 5.4）
+///
+/// 上位クレートの整合ゲート（配置側が「窓の拡大率と帰属モニタの表が揃ったか」を判定する
+/// 点）も、帰属を決めるには**同じ中心**を要る。素直に `position + size / 2` と書くと
+/// 上の `CW_USEDEFAULT` の扱いが落ちて、窓生成前の窓で整数桁溢れを起こす（dev ビルドでは
+/// panic）。中心の求め方は 1 箇所でなければならない。
+pub fn window_center(pos: &crate::ecs::WindowPos) -> Option<(i32, i32)> {
     let position = pos.position?;
     let size = pos.size?;
 
@@ -412,14 +457,38 @@ pub(crate) fn window_center(pos: &crate::ecs::WindowPos) -> Option<(i32, i32)> {
     Some((position.x + size.width / 2, position.y + size.height / 2))
 }
 
-/// 中心点を含むモニタを返す（境界矩形は左上を含み右下を含まない半開区間）。
-pub(crate) fn monitor_containing(
-    monitors: &[crate::ecs::Monitor],
-    center: (i32, i32),
-) -> Option<&crate::ecs::Monitor> {
+/// 帰属判定の入力＝モニタの**境界矩形**（`work_area` ではない）。
+///
+/// 表示基盤の [`Monitor`](crate::ecs::Monitor) と、上位クレートが持つモニタ別の表とでは
+/// 行の型が違う。だが「どのモニタに属するか」の規則は 1 つでなければならない——別々に
+/// 書けば、片方だけが半開区間の端や先勝ちの向きを変えたときに静かに食い違う。本トレイトは
+/// [`monitor_containing`] を型に依らない形で使えるようにするためだけに在る。
+pub trait MonitorBounds {
+    /// 境界矩形（画面座標・物理 px）。
+    fn monitor_bounds(&self) -> windows::Win32::Foundation::RECT;
+}
+
+impl MonitorBounds for crate::ecs::Monitor {
+    fn monitor_bounds(&self) -> windows::Win32::Foundation::RECT {
+        self.bounds
+    }
+}
+
+/// 中心点を含むモニタを返す（境界矩形は左上を含み右下を含まない半開区間・昇順先勝ち）。
+///
+/// # クレート外へ開いてある理由（areka-P0-dpi-transition-atomicity C5・task 5.4）
+///
+/// 本関数は表示基盤側の DPI 再導出（[`redrive_window_dpi_for_updated_monitors`]）が使う
+/// 帰属規則そのものである。上位クレートの整合ゲートは「窓の拡大率と、窓が属するモニタの
+/// 表の拡大率が揃ったか」を判定するので、**同じ帰属規則**を使わなければならない——
+/// 別規則を置くと、どちらのモニタに属するかの答えが 2 つになり、ゲートが永遠に解けない
+/// 窓が生まれ得る。要素の型が違うだけなので [`MonitorBounds`] 越しに受ける
+/// （呼出側は自分の行型へ実装を 1 つ書く）。
+pub fn monitor_containing<M: MonitorBounds>(monitors: &[M], center: (i32, i32)) -> Option<&M> {
     let (x, y) = center;
     monitors.iter().find(|m| {
-        x >= m.bounds.left && x < m.bounds.right && y >= m.bounds.top && y < m.bounds.bottom
+        let bounds = m.monitor_bounds();
+        x >= bounds.left && x < bounds.right && y >= bounds.top && y < bounds.bottom
     })
 }
 
@@ -482,3 +551,7 @@ fn redrive_window_dpi_for_updated_monitors(
 #[cfg(test)]
 #[path = "monitor_systems_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "monitor_systems_transition_tests.rs"]
+mod monitor_systems_transition_tests;

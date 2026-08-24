@@ -1,5 +1,5 @@
-use super::*;
 use super::test_support::{cue, cue_dur, items_of, reveal_times_of};
+use super::*;
 
 // ── R3.1/R3.2/R3.3/R7.1: r_i 式（先頭 r_0 = at・以降 prev + interval）・注入時刻駆動 ──
 

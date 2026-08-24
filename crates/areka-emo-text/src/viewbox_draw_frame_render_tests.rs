@@ -1,3 +1,4 @@
+use super::test_support::{Rig, build, geo_model, glyph_items, opaque_count};
 use super::{DrawStats, ViewboxExecutor};
 use crate::draw::ResolvedFont;
 use crate::layout::VisibleWindow;
@@ -5,7 +6,6 @@ use crate::region::{ScaleContract, TextRegion};
 use crate::state::TextItem;
 use crate::viewbox::{FramePlan, ScrollPlanner};
 use crate::writing::WritingMode;
-use super::test_support::{Rig, build, geo_model, glyph_items, opaque_count};
 
 /// 観測可能な完了状態 1: content ありの初回フレーム → render `Ok(true)`・read_back に
 /// content の非透明ピクセルが現れる（初回は全域ダーティ＝全行描画・blit=(0,0) ゆえ blits 増なし）。

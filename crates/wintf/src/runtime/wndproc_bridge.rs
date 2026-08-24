@@ -27,9 +27,9 @@ use std::cell::RefCell;
 use std::pin::Pin;
 use std::rc::Weak;
 
+use crate::executor::util::WindowMessage;
 use bevy_ecs::prelude::Entity;
 use windows::Win32::Foundation::LRESULT;
-use crate::executor::util::WindowMessage;
 
 use crate::ecs::dispatch_window_message;
 use crate::ecs::world::EcsWorld;
@@ -63,8 +63,7 @@ pub(crate) struct WndState {
 //
 // `EcsWindowFactory::create_window`（`create_windows` 経由）がウィンドウ生成時に呼び、
 // 返したクロージャをライブラリの `Window::new_ex` へ渡す（task 4.3 結線済み）。
-pub(crate) fn make_wndproc()
--> impl Fn(Pin<&WndState>, WindowMessage) -> Option<LRESULT> {
+pub(crate) fn make_wndproc() -> impl Fn(Pin<&WndState>, WindowMessage) -> Option<LRESULT> {
     move |state: Pin<&WndState>, msg: WindowMessage| -> Option<LRESULT> {
         // Entity は Copy のため pinned state から直接読める（手詰めなし・要件 2.3）。
         let entity = state.entity;

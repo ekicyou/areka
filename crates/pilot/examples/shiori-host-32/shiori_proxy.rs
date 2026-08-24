@@ -171,7 +171,8 @@ impl Drop for ShioriEntries {
 /// mod.rs:50–58）。`GMEM_FIXED` ゆえハンドル＝先頭ポインタで直接書き込める。
 fn global_alloc_copy(bytes: &[u8]) -> Result<HGLOBAL, ProxyError> {
     // SAFETY: GlobalAlloc は失敗時 null（HGLOBAL(null)）を返す＝下で検査する。
-    let h = unsafe { GlobalAlloc(GMEM_FIXED, bytes.len()) }.map_err(|_| ProxyError::GlobalAllocFailed)?;
+    let h = unsafe { GlobalAlloc(GMEM_FIXED, bytes.len()) }
+        .map_err(|_| ProxyError::GlobalAllocFailed)?;
     if h.is_invalid() {
         return Err(ProxyError::GlobalAllocFailed);
     }
@@ -195,9 +196,8 @@ fn ansi_encode(path: &Path) -> Result<Vec<u8>, ProxyError> {
     }
     // 必要バイト数を問い合わせる。
     // SAFETY: `wide` は有効な UTF-16 スライス。出力 null＝長さ問い合わせ。
-    let needed = unsafe {
-        WideCharToMultiByte(CP_ACP, WC_COMPOSITECHECK, &wide, None, PCSTR::null(), None)
-    };
+    let needed =
+        unsafe { WideCharToMultiByte(CP_ACP, WC_COMPOSITECHECK, &wide, None, PCSTR::null(), None) };
     if needed <= 0 {
         return Err(ProxyError::EncodeAnsiFailed);
     }

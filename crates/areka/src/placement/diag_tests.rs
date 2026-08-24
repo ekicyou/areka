@@ -42,7 +42,7 @@ fn record_tags_are_fixed() {
     assert_eq!(ZORDER_PAIR_STRATEGY_TAG, "[zorder-pair] strategy-selected");
 }
 
-/// 経路語彙 10 種の表示語がリテラル固定されている（Req 2.4 の結論語彙・D13）。
+/// 経路語彙 12 種の表示語がリテラル固定されている（Req 2.4 の結論語彙・D13）。
 #[test]
 fn placement_route_vocabulary_is_fixed() {
     assert_eq!(PlacementRoute::SpawnInitial.as_str(), "SpawnInitial");
@@ -64,16 +64,18 @@ fn placement_route_vocabulary_is_fixed() {
         PlacementRoute::BalloonLimitRelease.as_str(),
         "BalloonLimitRelease"
     );
+    assert_eq!(PlacementRoute::WorkAreaResnap.as_str(), "WorkAreaResnap");
+    assert_eq!(PlacementRoute::ChainRealign.as_str(), "ChainRealign");
 }
 
-/// `ALL` は 10 バリアント全部・重複なし（語彙が 1 つでも欠けたら落ちる・D13）。
+/// `ALL` は 12 バリアント全部・重複なし（語彙が 1 つでも欠けたら落ちる・D13）。
 #[test]
-fn placement_route_all_covers_ten_distinct_variants() {
+fn placement_route_all_covers_twelve_distinct_variants() {
     let all = PlacementRoute::ALL;
     assert_eq!(
         all.len(),
-        10,
-        "経路語彙は 10 種（design Service Interface・D13・windowposition-limit C10）"
+        12,
+        "経路語彙は 12 種（dpi-transition-atomicity 要件 9.4・D13・windowposition-limit C10）"
     );
     for route in [
         PlacementRoute::SpawnInitial,
@@ -86,6 +88,8 @@ fn placement_route_all_covers_ten_distinct_variants() {
         PlacementRoute::ReportedSizeReconcile,
         PlacementRoute::MoveCue,
         PlacementRoute::BalloonLimitRelease,
+        PlacementRoute::WorkAreaResnap,
+        PlacementRoute::ChainRealign,
     ] {
         assert!(all.contains(&route), "ALL に {route} が無い");
     }
@@ -94,6 +98,27 @@ fn placement_route_all_covers_ten_distinct_variants() {
     let before = names.len();
     names.dedup();
     assert_eq!(before, names.len(), "表示語が重複している: {names:?}");
+}
+
+/// 経路語は**行の値として**成立していなければならない（要件 2.7・判定側の辞書化規則）。
+///
+/// `judge-perf.py::parse_fields` と同形の切り出しは `名前=値` を空白で割るため、値に空白が
+/// 混じると `origin=` の値が途中で切れて経路の名指しが壊れる。番兵（`-`）と同じ字面も
+/// 「経路が判らなかった書込」と衝突するので禁じる。
+#[test]
+fn placement_route_words_are_single_tokens_and_never_the_sentinel() {
+    for route in PlacementRoute::ALL {
+        let word = route.as_str();
+        assert!(
+            !word.is_empty() && !word.contains(char::is_whitespace),
+            "経路語に空白が混じっている（`名前=値` の切り出しが壊れる）: {word:?}"
+        );
+        assert_ne!(
+            word,
+            wintf::ecs::window::transition_diag::MISSING,
+            "経路語が番兵と同じ字面（タグ付け忘れと区別が付かない）"
+        );
+    }
 }
 
 /// `Display` は `as_str` と同値（ログ組立の 2 経路が食い違わない）。

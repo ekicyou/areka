@@ -25,11 +25,12 @@
 
 use areka_emo_compose::{BindSet, PatternState};
 use areka_sakura::{
-    spawn_talk, ActorKey, ChoiceWaiting, CueSink, SakuraMsg, StartTalk, SystemVarSnapshot, TalkCue,
-    TalkDone, TalkEndReason, TalkId,
+    ActorKey, ChoiceWaiting, CueSink, SakuraMsg, StartTalk, SystemVarSnapshot, TalkCue, TalkDone,
+    TalkEndReason, TalkId, spawn_talk,
 };
 use areka_seriko::{
-    spawn_seriko, BindResolver, DisplayCommand, MockSurfaceOutput, SerikoLoopConfig, SurfaceResolver,
+    BindResolver, DisplayCommand, MockSurfaceOutput, SerikoLoopConfig, SurfaceResolver,
+    spawn_seriko,
 };
 use std::collections::BTreeMap;
 use std::time::Duration;
@@ -40,9 +41,9 @@ use std::time::Duration;
 enum TalkNotice {
     Done(TalkDone),
     /// 本 e2e は選択待ち通知を観測しないが、`spawn_talk` の `D` 境界
-/// （`From<TalkDone> + From<ChoiceWaiting>`）を満たすため受け口だけ用意する。
-#[allow(dead_code)]
-ChoiceWaiting(ChoiceWaiting),
+    /// （`From<TalkDone> + From<ChoiceWaiting>`）を満たすため受け口だけ用意する。
+    #[allow(dead_code)]
+    ChoiceWaiting(ChoiceWaiting),
 }
 impl From<TalkDone> for TalkNotice {
     fn from(done: TalkDone) -> Self {
@@ -117,10 +118,16 @@ fn run_scenario(script: &str, ticks: &[f64]) -> Vec<DisplayCommand> {
     else {
         panic!("選択肢を含まない fixture では ChoiceWaiting は流れない（TalkDone のみ）");
     };
-    assert_eq!(done.reason, TalkEndReason::Ended, "`\\e` は Ended で終端する");
+    assert_eq!(
+        done.reason,
+        TalkEndReason::Ended,
+        "`\\e` は Ended で終端する"
+    );
 
     // (2) talk スレッド終了→move 済み SerikoSink（唯一の Sender）drop→seriko inbox disconnect。
-    talk.actor.join().expect("talk body は Break 後に正常終了する");
+    talk.actor
+        .join()
+        .expect("talk body は Break 後に正常終了する");
     // (3) seriko join（唯一の同期点）。先送りの Cue は FIFO 単一スレッドゆえ join 復帰時に処理済み。
     seriko.join().expect("seriko は disconnect で正常終了する");
 

@@ -1,0 +1,3 @@
+title=語彙にない採否は append で拒む
+stderr_substr=知らない採否
+stderr_substr=MAYBE

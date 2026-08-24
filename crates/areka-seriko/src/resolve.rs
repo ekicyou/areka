@@ -287,7 +287,10 @@ mod tests {
     #[test]
     fn balloon_u32_max_is_show() {
         // 上端境界 u32::MAX は Show（範囲内）。
-        assert_eq!(resolve_balloon_key("4294967295"), BalloonResolve::Show(u32::MAX));
+        assert_eq!(
+            resolve_balloon_key("4294967295"),
+            BalloonResolve::Show(u32::MAX)
+        );
     }
 
     #[test]
@@ -301,6 +304,9 @@ mod tests {
     fn balloon_resolve_is_deterministic() {
         // 同一入力に対し常に同一出力（純関数・決定論）。
         assert_eq!(resolve_balloon_key("2"), resolve_balloon_key("2"));
-        assert_eq!(resolve_balloon_key("バルーン１"), resolve_balloon_key("バルーン１"));
+        assert_eq!(
+            resolve_balloon_key("バルーン１"),
+            resolve_balloon_key("バルーン１")
+        );
     }
 }

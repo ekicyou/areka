@@ -128,7 +128,11 @@ fn map_error(err: RequestError) -> ShioriFailure {
 /// （語彙は kanade 所有・Req 2.2/2.3・DD-IT-1）。
 fn handle_call(backend: &mut dyn ShioriBackend, call: ShioriCall) -> ShioriOutcome {
     match call {
-        ShioriCall::Get { id, references, status } => {
+        ShioriCall::Get {
+            id,
+            references,
+            status,
+        } => {
             let status_wire = status.render();
             // wire 形（`as_str()`）のみを backend へ渡す——出所カテゴリは境界を跨がない（DD-1）。
             match backend.get(id.as_str(), &references, status_wire.as_deref()) {
@@ -137,7 +141,11 @@ fn handle_call(backend: &mut dyn ShioriBackend, call: ShioriCall) -> ShioriOutco
                 Err(e) => ShioriOutcome::Failed(map_error(e)),
             }
         }
-        ShioriCall::Notify { id, references, status } => {
+        ShioriCall::Notify {
+            id,
+            references,
+            status,
+        } => {
             let status_wire = status.render();
             // GET と同じく wire 形のみを渡す（DD-1）。
             match backend.notify(id.as_str(), &references, status_wire.as_deref()) {

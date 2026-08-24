@@ -1,0 +1,2 @@
+title=status が決まった書式の 1 行を出す（状態ブロック＋最後の周から組む）
+note=既定の next= は遷移表の ok の行き先・streak の分母は [stop].max_no_gain_streak（TOML が無ければ 3）。

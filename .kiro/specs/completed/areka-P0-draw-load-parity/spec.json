@@ -1,0 +1,29 @@
+{
+  "feature_name": "areka-P0-draw-load-parity",
+  "created_at": "2026-08-22T12:54:15Z",
+  "updated_at": "2026-08-23T10:30:00Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-08-22T13:05:00Z"
+    },
+    "design": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-08-22T14:25:16Z"
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-08-22T15:06:41Z"
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-08-23T10:30:00Z"
+    }
+  },
+  "ready_for_implementation": true
+}

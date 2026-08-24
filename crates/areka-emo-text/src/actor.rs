@@ -528,9 +528,7 @@ impl TextLayerRuntime {
     /// （R3.3/5.2・population は present_actor＝task 8.2）。未装着・選択肢なし・スナップショット未
     /// population は空 slice。
     pub fn choice_hit_rows(&self, actor: &ActorKey) -> &[ChoiceHitRow] {
-        self.choice_snapshot
-            .get(actor)
-            .map_or(&[], Vec::as_slice)
+        self.choice_snapshot.get(actor).map_or(&[], Vec::as_slice)
     }
 
     /// 「選択肢表示中」照会（R1.3・照会のみ＝バリア解決はしない）。

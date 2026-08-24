@@ -53,6 +53,7 @@ mod refresh;
 mod show;
 mod target;
 mod timing;
+mod transition_record;
 mod visibility;
 
 // 分割前の `use` 一式はここに残す。テストファイル 8 本は `use super::*;` で本モジュールの束縛から
@@ -90,36 +91,33 @@ use crate::scale::{ScalePolicy, derive_scale};
 pub use self::hit::ClientHit;
 pub use self::hub::EmoPresenter;
 pub use self::read::TextSlotView;
-pub use self::target::VisibilityOwnership;
 use self::target::PresentTarget;
+pub use self::target::VisibilityOwnership;
+// 遷移観測のサーフェス記録の**語彙**（design C3・Requirement 2.7）。判定側（areka の
+// `transition_judge`）は文字列リテラルを二重定義せずここを参照する。レコード型と純関数は
+// 発行点の内部事情ゆえ再輸出しない（語だけを公開面へ出す）。
+pub use self::transition_record::{
+    KIND_SURFACE, SURFACE_FIELD_H, SURFACE_FIELD_REASON, SURFACE_FIELD_RESIZED,
+    SURFACE_FIELD_TARGET_ID, SURFACE_FIELD_W, SURFACE_FIELDS, SURFACE_REASON_ALL,
+    SURFACE_REASON_INVISIBLE, SURFACE_REASON_K_UNCHANGED, SURFACE_STAGE_ALL, SURFACE_STAGE_SKIPPED,
+    SURFACE_STAGE_UPLOAD, SURFACE_STAGE_VISUALIZE,
+};
 
 #[cfg(test)]
-#[path = "presenter_test_support.rs"]
-mod test_support;
-#[cfg(test)]
-#[path = "presenter_display_tests.rs"]
-mod display_tests;
+#[path = "presenter_budget_steady_state_tests.rs"]
+mod budget_steady_state_tests;
 #[cfg(test)]
 #[path = "presenter_compose_input_tests.rs"]
 mod compose_input_tests;
 #[cfg(test)]
-#[path = "presenter_read_accessor_tests.rs"]
-mod read_accessor_tests;
+#[path = "presenter_display_tests.rs"]
+mod display_tests;
 #[cfg(test)]
 #[path = "presenter_dpi_scale_tests.rs"]
 mod dpi_scale_tests;
 #[cfg(test)]
-#[path = "presenter_resize_report_tests.rs"]
-mod resize_report_tests;
-#[cfg(test)]
-#[path = "presenter_refresh_and_log_tests.rs"]
-mod refresh_and_log_tests;
-#[cfg(test)]
 #[path = "presenter_fractional_scale_tests.rs"]
 mod fractional_scale_tests;
-#[cfg(test)]
-#[path = "presenter_visibility_tests.rs"]
-mod visibility_tests;
 #[cfg(test)]
 #[path = "presenter_hide_contract_tests.rs"]
 mod hide_contract_tests;
@@ -127,8 +125,20 @@ mod hide_contract_tests;
 #[path = "presenter_perf_log_tests.rs"]
 mod perf_log_tests;
 #[cfg(test)]
-#[path = "presenter_budget_steady_state_tests.rs"]
-mod budget_steady_state_tests;
+#[path = "presenter_read_accessor_tests.rs"]
+mod read_accessor_tests;
+#[cfg(test)]
+#[path = "presenter_refresh_and_log_tests.rs"]
+mod refresh_and_log_tests;
+#[cfg(test)]
+#[path = "presenter_resize_report_tests.rs"]
+mod resize_report_tests;
+#[cfg(test)]
+#[path = "presenter_test_support.rs"]
+mod test_support;
+#[cfg(test)]
+#[path = "presenter_visibility_tests.rs"]
+mod visibility_tests;
 
 #[cfg(test)]
 #[path = "presenter_budget_equivalence_tests.rs"]

@@ -4,9 +4,9 @@ use areka_parsers::balloon::{
 use areka_sakura::contract::{ActorKey, CueCommand};
 use bevy_ecs::prelude::World;
 
+use super::test_support::{com_world, cue, geo_model, opaque_count, spawn_reserved_slot};
 use super::{TextLayerRuntime, TextSlotBinding, present_frame};
 use crate::state::TextLayerConfig;
-use super::test_support::{com_world, cue, geo_model, opaque_count, spawn_reserved_slot};
 
 // ══ task 7.1: 文字層 k 再追従シーム（R8.1/8.2/8.3/8.5/8.7・design D11） ══
 //
@@ -191,7 +191,10 @@ fn refresh_actor_scale_discards_render_and_preserves_reveal_state() {
         &geo_model(),
     );
     present_frame(&mut rt, &mut world, 10.0).expect("初回提示（装着）");
-    assert!(rt.is_attached(&actor), "初回提示で ActorRender が生成される");
+    assert!(
+        rt.is_attached(&actor),
+        "初回提示で ActorRender が生成される"
+    );
     assert_eq!(
         rt.surface(&actor).expect("供給面").size(),
         (120, 60),

@@ -160,7 +160,9 @@ impl PersistIo for FakePersistIo {
         let mut state = self.inner.lock().unwrap();
         if state.fail_next_read {
             state.fail_next_read = false;
-            return Err(std::io::Error::other("FakePersistIo: injected read failure"));
+            return Err(std::io::Error::other(
+                "FakePersistIo: injected read failure",
+            ));
         }
         Ok(state.store.get(path).cloned())
     }
@@ -170,7 +172,9 @@ impl PersistIo for FakePersistIo {
         if state.fail_next_commit {
             state.fail_next_commit = false;
             // 原子性の核心: 失敗時は store を一切変更しない（既存内容が無傷）。
-            return Err(std::io::Error::other("FakePersistIo: injected commit interruption"));
+            return Err(std::io::Error::other(
+                "FakePersistIo: injected commit interruption",
+            ));
         }
         state.store.insert(path.to_path_buf(), content.to_string());
         Ok(())
@@ -250,8 +254,15 @@ mod tests {
 
         io.fail_next_commit();
         let err = io.commit(&path, "B");
-        assert!(err.is_err(), "中断された commit は Err を返す（無音成功なし）");
-        assert_eq!(io.read(&path).unwrap().as_deref(), Some("A"), "既存内容は無傷");
+        assert!(
+            err.is_err(),
+            "中断された commit は Err を返す（無音成功なし）"
+        );
+        assert_eq!(
+            io.read(&path).unwrap().as_deref(),
+            Some("A"),
+            "既存内容は無傷"
+        );
     }
 
     #[test]
@@ -261,7 +272,11 @@ mod tests {
         io.commit(&path, "A").unwrap();
         io.fail_next_read();
         assert!(io.read(&path).is_err(), "注入した read 失敗は Err で表面化");
-        assert_eq!(io.read(&path).unwrap().as_deref(), Some("A"), "1 回限りの故障");
+        assert_eq!(
+            io.read(&path).unwrap().as_deref(),
+            Some("A"),
+            "1 回限りの故障"
+        );
     }
 
     #[test]

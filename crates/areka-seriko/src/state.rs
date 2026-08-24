@@ -504,7 +504,8 @@ impl ScopeStates {
         }
 
         // (2) 状態更新: pattern 表のみ書き込む（bind／表示状態機械は不変）。
-        self.pattern_states.insert((scope.clone(), slot), new.clone());
+        self.pattern_states
+            .insert((scope.clone(), slot), new.clone());
 
         // (3) 発行判定: 対象 slot の表示状態で決める（表示中 slot にのみ Show/ShowBalloon を発行）。
         let shown = match slot {
@@ -571,11 +572,11 @@ fn empty_pattern() -> &'static PatternState {
 }
 
 #[cfg(test)]
-#[path = "state_test_support.rs"]
-mod test_support;
+#[path = "state_bind_pattern_tests.rs"]
+mod bind_pattern_tests;
 #[cfg(test)]
 #[path = "state_surface_tests.rs"]
 mod surface_tests;
 #[cfg(test)]
-#[path = "state_bind_pattern_tests.rs"]
-mod bind_pattern_tests;
+#[path = "state_test_support.rs"]
+mod test_support;

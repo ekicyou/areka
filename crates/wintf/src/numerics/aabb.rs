@@ -116,6 +116,12 @@ impl Aabb {
     }
 }
 
+impl From<D2D_RECT_F> for Aabb {
+    fn from(r: D2D_RECT_F) -> Self {
+        Aabb(r)
+    }
+}
+
 use core::ops::{Add, BitAnd, BitAndAssign, BitOr, BitOrAssign};
 
 impl BitOr for Aabb {

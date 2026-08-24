@@ -2,11 +2,11 @@
 //! 有効 bind 集合の golden テーマ。区画バナーは共有ヘルパ `solid_opaque` に付随するため
 //! `test_support` 側に在る（本文一致の項目境界に従った結果）。
 
-use super::{BindSet, ComposedSurface};
 use super::test_support::{
     build_atlas_for_surface1000, compose_surface1000, opaque_pixel_count, parse_emo2_shell,
     shell_master_dir, surface1000_bind_parts,
 };
+use super::{BindSet, ComposedSurface};
 
 /// 合成結果の (x,y) 画素の α バイト（BGRA の index+3）を読む。
 fn alpha_at(s: &ComposedSurface, x: u32, y: u32) -> u8 {
@@ -75,12 +75,22 @@ fn surface1000_empty_bindset_is_fully_transparent_with_nonzero_extent() {
     let out = compose_surface1000(&shell, &atlas, &BindSet::default());
 
     // 外形は非ゼロ（bind 非依存の静的外形＝挿入パーツ原寸の和集合）。
-    assert!(out.width() > 0 && out.height() > 0, "外形は bind 非依存で非ゼロ（task 5.4）");
-    assert_eq!(out.stride(), out.width() * 4, "premultiplied BGRA stride 契約");
+    assert!(
+        out.width() > 0 && out.height() > 0,
+        "外形は bind 非依存で非ゼロ（task 5.4）"
+    );
+    assert_eq!(
+        out.stride(),
+        out.width() * 4,
+        "premultiplied BGRA stride 契約"
+    );
 
     // 全画素 α==0（描画命令ゼロ＝全透明）。α バイトを走査して 1 つも α>0 が無いことを固定する。
     let any_opaque = out.bytes().chunks_exact(4).any(|px| px[3] > 0);
-    assert!(!any_opaque, "空 BindSet では全画素が透明（α>0 の画素が存在しない・要件 5.4）");
+    assert!(
+        !any_opaque,
+        "空 BindSet では全画素が透明（α>0 の画素が存在しない・要件 5.4）"
+    );
     assert_eq!(opaque_pixel_count(&out), 0, "不透明画素は皆無");
 }
 
@@ -100,7 +110,10 @@ fn surface1000_nonempty_bindset_is_non_blank() {
     let out = compose_surface1000(&shell, &atlas, &binds);
 
     let opaque = opaque_pixel_count(&out);
-    assert!(opaque > 0, "非空 BindSet では α>0 の画素が存在する（非空・要件 5.4）");
+    assert!(
+        opaque > 0,
+        "非空 BindSet では α>0 の画素が存在する（非空・要件 5.4）"
+    );
     // 腕パーツ（80×20 全不透明）が原点 (0,0) に着弾するので、その内側の代表画素が不透明。
     assert!(alpha_at(&out, 0, 0) > 0, "パーツ左上 (0,0) は不透明");
     assert!(alpha_at(&out, 40, 10) > 0, "腕パーツ内部の代表画素は不透明");
@@ -174,5 +187,8 @@ fn surface1000_bind_count_overlap_point_sampling() {
     // 3 bind（腕＋口＋目）→ 2 bind 以上（口 1200 追加で不透明画素が減らない）。
     let out_three = compose_surface1000(&shell, &atlas, &BindSet::from_ids([1100, 1200, 1302]));
     let n_three = opaque_pixel_count(&out_three);
-    assert!(n_three >= n_both, "3 bind の不透明画素数は 2 bind 以上（単調・要件 11.2）");
+    assert!(
+        n_three >= n_both,
+        "3 bind の不透明画素数は 2 bind 以上（単調・要件 11.2）"
+    );
 }

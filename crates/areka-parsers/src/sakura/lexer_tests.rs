@@ -11,7 +11,7 @@
 //! エスケープ／クォート／寛容境界（未閉じ `[`/`"`）はタスク 3.2 の領分ゆえ
 //! ここでは検証しない。
 
-use super::lexer::{lex, Token};
+use super::lexer::{Token, lex};
 
 /// タスク 3.1 の観測基準（tasks.md L23）:
 /// `\s[1000]` `\p[0]` `%username` `\w2` `\![a,b,c]` `こんにちは` が
@@ -139,7 +139,10 @@ fn sysvar_keyword() {
 
 #[test]
 fn plain_text_run() {
-    assert_eq!(lex("こんにちは"), vec![Token::Text("こんにちは".to_string())]);
+    assert_eq!(
+        lex("こんにちは"),
+        vec![Token::Text("こんにちは".to_string())]
+    );
 }
 
 #[test]

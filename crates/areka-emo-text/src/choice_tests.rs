@@ -65,7 +65,12 @@ fn single_span_inline_range_uses_first_pos_and_last_pos_plus_advance() {
 /// 同一行に複数スパン（正典 `\q\q` 並置）→ スパン順に 2 セグメント（それぞれの行内範囲）。
 #[test]
 fn two_spans_on_one_line_yield_two_segments() {
-    let lines = [line(&[(0.0, 10.0), (10.0, 10.0), (20.0, 10.0), (30.0, 10.0)])];
+    let lines = [line(&[
+        (0.0, 10.0),
+        (10.0, 10.0),
+        (20.0, 10.0),
+        (30.0, 10.0),
+    ])];
     let spans = [span(0, 0..2), span(1, 2..4)];
     let segs = annotate_lines(&lines, &spans);
     assert_eq!(
@@ -137,7 +142,10 @@ fn empty_range_span_produces_no_segment() {
     // start == end（空範囲）。glyph_range が行内でも行末でも生まない。
     let spans = [span(0, 1..1), span(1, 2..2)];
     let segs = annotate_lines(&lines, &spans);
-    assert!(segs.is_empty(), "空範囲スパンはセグメントを生まない: {segs:?}");
+    assert!(
+        segs.is_empty(),
+        "空範囲スパンはセグメントを生まない: {segs:?}"
+    );
 }
 
 /// 部分リビール: 配置済みグリフ（可視 prefix）がスパン末尾より短いとき、
@@ -331,11 +339,35 @@ fn derive_multiple_segments_yield_rows_in_input_order() {
     let rows = derive_hit_rows(&lines, &segs, WritingMode::HorizontalTb, &region, HIT_BAND);
     assert_eq!(rows.len(), 3);
     assert_eq!(rows[0].ordinal, 0);
-    assert_eq!(rows[0].rect, LineRect { left: 0.0, top: 0.0, right: 20.0, bottom: 10.0 });
+    assert_eq!(
+        rows[0].rect,
+        LineRect {
+            left: 0.0,
+            top: 0.0,
+            right: 20.0,
+            bottom: 10.0
+        }
+    );
     assert_eq!(rows[1].ordinal, 1);
-    assert_eq!(rows[1].rect, LineRect { left: 20.0, top: 0.0, right: 40.0, bottom: 10.0 });
+    assert_eq!(
+        rows[1].rect,
+        LineRect {
+            left: 20.0,
+            top: 0.0,
+            right: 40.0,
+            bottom: 10.0
+        }
+    );
     assert_eq!(rows[2].ordinal, 2);
-    assert_eq!(rows[2].rect, LineRect { left: 0.0, top: 13.0, right: 30.0, bottom: 23.0 });
+    assert_eq!(
+        rows[2].rect,
+        LineRect {
+            left: 0.0,
+            top: 13.0,
+            right: 30.0,
+            bottom: 23.0
+        }
+    );
 }
 
 /// 空セグメント列 → 空のヒット行（非退行）。
@@ -364,7 +396,9 @@ fn derive_out_of_range_line_index_is_skipped() {
     let region = region(0, 0, 400, 224);
     let lines = [prow(0.0, 0.0, 30.0, 10.0)];
     let segs = [seg(5, 0, (0.0, 10.0))];
-    assert!(derive_hit_rows(&lines, &segs, WritingMode::HorizontalTb, &region, HIT_BAND).is_empty());
+    assert!(
+        derive_hit_rows(&lines, &segs, WritingMode::HorizontalTb, &region, HIT_BAND).is_empty()
+    );
 }
 
 // ── to_window_physical: §座標写像式（行内=(origin+inline)×k・ブロック=(origin+block)×k+committed） ──
@@ -375,17 +409,22 @@ fn to_window_physical_horizontal_applies_formula() {
     let region = region(36, 46, 356, 168);
     let row = CanvasHitRow {
         ordinal: 0,
-        rect: LineRect { left: 10.0, top: 0.0, right: 30.0, bottom: 10.0 },
+        rect: LineRect {
+            left: 10.0,
+            top: 0.0,
+            right: 30.0,
+            bottom: 10.0,
+        },
     };
     // k=2・committed=50: 行内 x=(36+inline)×2・ブロック y=(46+block)×2+50。
     let contract = ScaleContract::new(2.0, None);
     assert_eq!(
         to_window_physical(&row, &region, WritingMode::HorizontalTb, 50, &contract),
         HitRectPx {
-            left: 92.0,   // (36+10)×2
-            top: 142.0,   // (46+0)×2 + 50
-            right: 132.0, // (36+30)×2
-            bottom: 162.0 // (46+10)×2 + 50
+            left: 92.0,    // (36+10)×2
+            top: 142.0,    // (46+0)×2 + 50
+            right: 132.0,  // (36+30)×2
+            bottom: 162.0  // (46+10)×2 + 50
         }
     );
 }
@@ -396,17 +435,22 @@ fn to_window_physical_vertical_puts_committed_on_x_block_axis() {
     let region = region(36, 46, 356, 168);
     let row = CanvasHitRow {
         ordinal: 0,
-        rect: LineRect { left: 10.0, top: 0.0, right: 30.0, bottom: 10.0 },
+        rect: LineRect {
+            left: 10.0,
+            top: 0.0,
+            right: 30.0,
+            bottom: 10.0,
+        },
     };
     let contract = ScaleContract::new(2.0, None);
     for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
         assert_eq!(
             to_window_physical(&row, &region, mode, 50, &contract),
             HitRectPx {
-                left: 142.0,  // (36+10)×2 + 50（x=ブロック）
-                top: 92.0,    // (46+0)×2（y=行内・committed 非加算）
-                right: 182.0, // (36+30)×2 + 50
-                bottom: 112.0 // (46+10)×2
+                left: 142.0,   // (36+10)×2 + 50（x=ブロック）
+                top: 92.0,     // (46+0)×2（y=行内・committed 非加算）
+                right: 182.0,  // (36+30)×2 + 50
+                bottom: 112.0  // (46+10)×2
             },
             "{mode:?}: committed は x（ブロック軸）のみ"
         );
@@ -420,7 +464,12 @@ fn to_window_physical_parameterized_over_k_committed_and_modes() {
     let (ox, oy) = (36.0f32, 46.0f32);
     let row = CanvasHitRow {
         ordinal: 0,
-        rect: LineRect { left: 10.0, top: 2.0, right: 30.0, bottom: 12.0 },
+        rect: LineRect {
+            left: 10.0,
+            top: 2.0,
+            right: 30.0,
+            bottom: 12.0,
+        },
     };
     let r = row.rect;
     for k in [1.0f32, 2.0] {
@@ -462,12 +511,22 @@ fn to_window_physical_unit_scale_no_scroll_equals_absolute_image_px() {
     let region = region(36, 46, 356, 168);
     let row = CanvasHitRow {
         ordinal: 0,
-        rect: LineRect { left: 10.0, top: 0.0, right: 30.0, bottom: 10.0 },
+        rect: LineRect {
+            left: 10.0,
+            top: 0.0,
+            right: 30.0,
+            bottom: 10.0,
+        },
     };
     let contract = ScaleContract::new(1.0, None);
     assert_eq!(
         to_window_physical(&row, &region, WritingMode::HorizontalTb, 0, &contract),
-        HitRectPx { left: 46.0, top: 46.0, right: 66.0, bottom: 56.0 } // = 絶対 image px
+        HitRectPx {
+            left: 46.0,
+            top: 46.0,
+            right: 66.0,
+            bottom: 56.0
+        } // = 絶対 image px
     );
 }
 
@@ -554,7 +613,10 @@ fn hit_row_block_band_extends_beyond_em_box_when_band_is_larger() {
         &region,
         band,
     );
-    assert_eq!(rows[0].rect.top, 0.0, "帯の起点は行矩形 block 近端（46−46）");
+    assert_eq!(
+        rows[0].rect.top, 0.0,
+        "帯の起点は行矩形 block 近端（46−46）"
+    );
     assert_eq!(
         rows[0].rect.bottom, 35.0,
         "帯の終端は近端＋band_extent（em ボックス下端 28 ではない＝descent を覆う）"
@@ -575,7 +637,12 @@ fn hit_row_vertical_block_band_uses_band_extent_from_left_edge() {
         let rows = derive_hit_rows(&lines, &segs, mode, &region, 13.0);
         assert_eq!(
             rows[0].rect,
-            LineRect { left: 377.0, top: 5.0, right: 390.0, bottom: 15.0 },
+            LineRect {
+                left: 377.0,
+                top: 5.0,
+                right: 390.0,
+                bottom: 15.0
+            },
             "{mode:?}: block 帯は left から band_extent（13）分"
         );
     }

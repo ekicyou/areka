@@ -20,8 +20,8 @@
 use std::future::Future;
 use std::rc::Rc;
 
-use event_listener::Event;
 use crate::executor::{FilterResult, MessageLoop, block_on};
+use event_listener::Event;
 use windows::Win32::UI::WindowsAndMessaging::MSG;
 
 /// ライブラリのメッセージループへ委譲する driver。

@@ -228,17 +228,35 @@ mod tests {
     /// 収載 GET id（fake lookup が Some を返す）→ Snapshot（凍結応答全文をそのまま搬送）。
     #[test]
     fn select_listed_get_id_returns_snapshot() {
-        let parsed = ParsedRequest { line: RequestLine::Get, id: Some("OnBoot".to_string()) };
-        let lookup = |id: &str| if id == "OnBoot" { Some("SHIORI/3.0 200 OK\r\nValue: hi\r\n\r\n") } else { None };
+        let parsed = ParsedRequest {
+            line: RequestLine::Get,
+            id: Some("OnBoot".to_string()),
+        };
+        let lookup = |id: &str| {
+            if id == "OnBoot" {
+                Some("SHIORI/3.0 200 OK\r\nValue: hi\r\n\r\n")
+            } else {
+                None
+            }
+        };
         let sel = select_response(&parsed, lookup);
-        assert_eq!(sel, Selection::Snapshot("SHIORI/3.0 200 OK\r\nValue: hi\r\n\r\n"));
-        assert_eq!(response_text(&sel), "SHIORI/3.0 200 OK\r\nValue: hi\r\n\r\n");
+        assert_eq!(
+            sel,
+            Selection::Snapshot("SHIORI/3.0 200 OK\r\nValue: hi\r\n\r\n")
+        );
+        assert_eq!(
+            response_text(&sel),
+            "SHIORI/3.0 200 OK\r\nValue: hi\r\n\r\n"
+        );
     }
 
     /// 未知/未収載 GET id（fake lookup が None）→ NoContent（204 相当・要件 2.3）。
     #[test]
     fn select_unknown_get_id_returns_204() {
-        let parsed = ParsedRequest { line: RequestLine::Get, id: Some("OnNeverSeen".to_string()) };
+        let parsed = ParsedRequest {
+            line: RequestLine::Get,
+            id: Some("OnNeverSeen".to_string()),
+        };
         let sel = select_response(&parsed, |_| None);
         assert_eq!(sel, Selection::NoContent);
         assert_eq!(response_text(&sel), RESP_204_NO_CONTENT);
@@ -249,7 +267,10 @@ mod tests {
     /// 誤って Snapshot にならないことを確認。
     #[test]
     fn select_get_without_id_is_bad_request() {
-        let parsed = ParsedRequest { line: RequestLine::Get, id: None };
+        let parsed = ParsedRequest {
+            line: RequestLine::Get,
+            id: None,
+        };
         let sel = select_response(&parsed, |_| Some("SHOULD NOT BE USED"));
         assert_eq!(sel, Selection::BadRequest);
         assert_eq!(response_text(&sel), RESP_400_BAD_REQUEST);

@@ -21,7 +21,10 @@ fn add_child(parent: &Visual, child: &Visual) -> Result<()> {
 
 /// WUC 移行: DComp の remove_visual 相当。
 fn remove_child(parent: &Visual, child: &Visual) -> Result<()> {
-    parent.cast::<ContainerVisual>()?.Children()?.Remove(child)?;
+    parent
+        .cast::<ContainerVisual>()?
+        .Children()?
+        .Remove(child)?;
     Ok(())
 }
 

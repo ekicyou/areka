@@ -193,8 +193,8 @@ fn parse_non_finite_is_invalid() {
 #[test]
 fn parse_is_total_over_arbitrary_strings() {
     for raw in [
-        "", "0", "-0", "5", "-3", "5.0", "5em", "5lh", "50%", "@5", "@5em", "@5%", "@-2",
-        "abc", "em", "lh", "%", "@", "5xx", "@abc", "  ", "5 em", "e", "@@5", "1e3", "1.2.3",
+        "", "0", "-0", "5", "-3", "5.0", "5em", "5lh", "50%", "@5", "@5em", "@5%", "@-2", "abc",
+        "em", "lh", "%", "@", "5xx", "@abc", "  ", "5 em", "e", "@@5", "1e3", "1.2.3",
     ] {
         // パニックしないことを踏むのが主眼（戻り値の variant は各専用テストで固定）。
         let _ = parse_cursor_coord(raw);

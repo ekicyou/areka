@@ -81,6 +81,8 @@ The following validation dimensions are independent and can be dispatched as **s
 
 For simple features (few tasks, small scope), run checks in main context without subagent dispatch.
 
+**Dispatch model** (added by areka-P0-draw-load-parity): when the caller (`kiro-impl`) passes `DISPATCH_MODEL=opus`, attach `model: "opus"` to every Agent dispatch made here. When run standalone, perform the same determination yourself — read your own system prompt line "You are powered by the model named <NAME>"; if `<NAME>` contains "Fable" (case-insensitive) or the line cannot be found → `opus`, otherwise inherit (omit the `model` argument). Record the decision once in the run output: `dispatch model: opus` or `dispatch model: inherit`.
+
 #### Mechanical Checks (run commands, use results)
 
 These checks apply at the feature level. Use command output as the primary signal.

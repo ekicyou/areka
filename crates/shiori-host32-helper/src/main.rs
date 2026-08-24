@@ -42,11 +42,11 @@ use std::time::Duration;
 use shiori_host32_ipc::{
     FramingError, MsgTag, copydata_payload, encode_hwnd_le, hwnd_from_u32, send_copydata,
 };
-use wintf_winmsg_executor::util::{Window, WindowMessage, WindowType};
-use wintf_winmsg_executor::{FilterResult, MessageLoop};
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::DataExchange::COPYDATASTRUCT;
 use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_COPYDATA};
+use wintf_winmsg_executor::util::{Window, WindowMessage, WindowType};
+use wintf_winmsg_executor::{FilterResult, MessageLoop};
 
 /// 応答送出 `SendMessageTimeoutW` の上限時間。
 ///
@@ -273,7 +273,13 @@ fn handle_message(s: &HelperShared, self_hwnd: HWND, msg: &WindowMessage) -> Opt
             // 2) borrow を一切保持しない状態で RESPONSE を親へ 1 通だけ返す（ブロッキング SMTO・再入可・§200）→
             //    即 return（それ以上の跨プロセス SendMessage 不可）。
             let target = hwnd_from_u32(s.parent_hwnd);
-            match send_copydata(target, self_hwnd, MsgTag::Response, &response_bytes, REPLY_TIMEOUT) {
+            match send_copydata(
+                target,
+                self_hwnd,
+                MsgTag::Response,
+                &response_bytes,
+                REPLY_TIMEOUT,
+            ) {
                 Ok(()) => s.responses_sent.set(s.responses_sent.get() + 1),
                 Err(e) => eprintln!("[helper] RESPONSE 送出失敗（観測）: {e:?}"),
             }
@@ -342,9 +348,13 @@ fn handle_message(s: &HelperShared, self_hwnd: HWND, msg: &WindowMessage) -> Opt
             //    しない・ack[1]=「unload 完了・終了系列に入った」）。送出失敗は eprintln! 観測のみ
             //    （親は ack timeout で検出＝意図的逸脱・design §475/validation Issue 2）。
             let target = hwnd_from_u32(s.parent_hwnd);
-            if let Err(e) =
-                send_copydata(target, self_hwnd, MsgTag::Response, &[LOAD_ACK_OK], REPLY_TIMEOUT)
-            {
+            if let Err(e) = send_copydata(
+                target,
+                self_hwnd,
+                MsgTag::Response,
+                &[LOAD_ACK_OK],
+                REPLY_TIMEOUT,
+            ) {
                 eprintln!("[helper] unload-ack 送出失敗（観測）: {e:?}");
             }
             // 5) 自窓へ PostMessageW(WM_NULL) — posted メッセージで MessageLoop を起こす
@@ -400,9 +410,18 @@ impl HelperMessageWindow {
         let self_hwnd: HWND = window.hwnd();
         let hello_payload = encode_hwnd_le(self_hwnd);
         let target = hwnd_from_u32(parent_hwnd);
-        send_copydata(target, self_hwnd, MsgTag::Hello, &hello_payload, REPLY_TIMEOUT)
-            .map_err(|e| format!("HELLO 送出に失敗: {e:?}"))?;
-        window.state().hellos_sent.set(window.state().hellos_sent.get() + 1);
+        send_copydata(
+            target,
+            self_hwnd,
+            MsgTag::Hello,
+            &hello_payload,
+            REPLY_TIMEOUT,
+        )
+        .map_err(|e| format!("HELLO 送出に失敗: {e:?}"))?;
+        window
+            .state()
+            .hellos_sent
+            .set(window.state().hellos_sent.get() + 1);
 
         Ok(Self { window })
     }
@@ -446,8 +465,11 @@ fn resolve_param(arg: Option<String>, env: Option<String>) -> Option<String> {
 /// 取得し、10 進 u32 へ parse する。値の取得規約は [`resolve_param`] と共通（arg 優先・空 trim）。
 /// parse 不能なら `None`（呼出側が起動失敗として扱う）。
 fn parent_hwnd_arg_env() -> Option<u32> {
-    resolve_param(std::env::args().nth(1), std::env::var("HOST32_PARENT_HWND").ok())
-        .and_then(|s| s.parse::<u32>().ok())
+    resolve_param(
+        std::env::args().nth(1),
+        std::env::var("HOST32_PARENT_HWND").ok(),
+    )
+    .and_then(|s| s.parse::<u32>().ok())
 }
 
 /// 実 args/env を読む薄いラッパ（`resolve_param` へ委譲）。
@@ -456,7 +478,10 @@ fn parent_hwnd_arg_env() -> Option<u32> {
 /// env キー名は host 側（Task 2）が確定した `HOST32_LOAD_DIR` と厳密一致させる。
 /// **値は arg/env から取得し cwd から推測しない**（R3.4）。
 fn load_dir_arg_env() -> Option<String> {
-    resolve_param(std::env::args().nth(2), std::env::var("HOST32_LOAD_DIR").ok())
+    resolve_param(
+        std::env::args().nth(2),
+        std::env::var("HOST32_LOAD_DIR").ok(),
+    )
 }
 
 /// 実 args/env を読む薄いラッパ（`resolve_param` へ委譲）。
@@ -465,7 +490,10 @@ fn load_dir_arg_env() -> Option<String> {
 /// env キー名は host 側（Task 2）が確定した `HOST32_SHIORI_NAME` と厳密一致させる。
 /// helper は受領した SHIORI 名をそのまま使用し、descript.txt を自ら解釈しない（R3.6）。
 fn shiori_name_arg_env() -> Option<String> {
-    resolve_param(std::env::args().nth(3), std::env::var("HOST32_SHIORI_NAME").ok())
+    resolve_param(
+        std::env::args().nth(3),
+        std::env::var("HOST32_SHIORI_NAME").ok(),
+    )
 }
 
 fn main() {

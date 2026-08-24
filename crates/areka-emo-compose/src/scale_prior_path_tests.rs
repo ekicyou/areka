@@ -47,8 +47,8 @@
 //! subscriber 無しで先にその位置を踏むと捕捉判定が固定されて既存檻が偽陰性になる。ゆえに
 //! 本ファイルは外形ゼロを一切踏まない（4.1 が同じ理由で避けた形を踏襲する）。
 
-use super::*;
 use super::test_support::*;
+use super::*;
 
 // ── 凍結参照実装（是正前の意味論・テスト専用オラクル）────────────────────────────────────
 
@@ -406,7 +406,11 @@ fn resample_into_a_reused_output_is_byte_equal_to_a_fresh_output() {
         // ⑶ 伸長・縮小の両方向（外形もバイト長も違う出力先からの使い回し）。
         for (pw, ph, kind) in [
             (out_w + 5, out_h + 3, "より大きい"),
-            (out_w.div_ceil(2).max(1), out_h.div_ceil(2).max(1), "より小さい"),
+            (
+                out_w.div_ceil(2).max(1),
+                out_h.div_ceil(2).max(1),
+                "より小さい",
+            ),
         ] {
             let mut resized = prefilled(pw, ph, 0xAA);
             resample(&src, k, &mut resized);
@@ -513,7 +517,9 @@ fn the_fixture_generators_produce_distinguishable_non_empty_content() {
         "deterministic_surface の α が可変でない（α 特別扱いの変異を弁別できない）"
     );
     assert!(
-        v.bytes().chunks_exact(4).all(|px| px[0] <= px[3] && px[1] <= px[3] && px[2] <= px[3]),
+        v.bytes()
+            .chunks_exact(4)
+            .all(|px| px[0] <= px[3] && px[1] <= px[3] && px[2] <= px[3]),
         "deterministic_surface が premultiplied 不変条件（B,G,R ≤ A）を破っている"
     );
 }
@@ -533,13 +539,18 @@ fn the_frozen_reference_itself_satisfies_the_prior_contract() {
     assert_eq!(bytes, src.bytes(), "恒等の一般式がバイト恒等コピーでない");
 
     // ⑵ 外形は round half away from zero（切り捨てなら 6×5/4=7.5 → 7 になる）。
-    let (w, h, _) = prior_path_resample(&opaque_gradient_surface(6, 5, 1), ScaleRatio::new(5, 4).unwrap());
+    let (w, h, _) = prior_path_resample(
+        &opaque_gradient_surface(6, 5, 1),
+        ScaleRatio::new(5, 4).unwrap(),
+    );
     assert_eq!((w, h), (8, 6), "6×5/4=7.5→8・5×5/4=6.25→6 の丸め規約");
 
     // ⑶ premultiplied 不変条件（B,G,R ≤ A）が補間後も保たれる（凸結合＋単調丸め）。
-    let (_, _, up) = prior_path_resample(&deterministic_surface(7, 6), ScaleRatio::new(3, 2).unwrap());
+    let (_, _, up) =
+        prior_path_resample(&deterministic_surface(7, 6), ScaleRatio::new(3, 2).unwrap());
     assert!(
-        up.chunks_exact(4).all(|px| px[0] <= px[3] && px[1] <= px[3] && px[2] <= px[3]),
+        up.chunks_exact(4)
+            .all(|px| px[0] <= px[3] && px[1] <= px[3] && px[2] <= px[3]),
         "参照実装が premultiplied 不変条件を破った"
     );
 

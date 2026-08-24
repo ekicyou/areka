@@ -126,8 +126,7 @@ const SMOKE_EXIT_ENV: &str = "AREKA_APP_SMOKE_EXIT_MS";
 /// emo2 fixture のゴーストルート（`CARGO_MANIFEST_DIR`＝`crates/areka` 相対・
 /// donor emo-present／placement 統合テストと同一アンカー規約）。
 fn emo2_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../pilot/examples/shiori-host-32/fixtures/emo2")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../pilot/examples/shiori-host-32/fixtures/emo2")
 }
 
 /// emo2 fixture のバルーンルート（placement task 4.1／6.1 テストの規約を踏襲）。
@@ -201,7 +200,9 @@ fn main() -> Result<()> {
     println!("areka window-placement 実 DPI 受け入れ example");
     println!("=================================================");
     println!("  scope0: キャラ窓 surface0（むらさき・work area 右下）＋バルーン窓（左隣）");
-    println!("  scope1: キャラ窓 surface10（エモ・scope0 の左）＋バルーン窓（右隣・scope0 に重畳＝正常）");
+    println!(
+        "  scope1: キャラ窓 surface10（エモ・scope0 の左）＋バルーン窓（右隣・scope0 に重畳＝正常）"
+    );
     println!("  操作  : キャラ窓の不透明域ドラッグでバルーン追従／不透明域ダブルクリックで終了");
     println!("  受け入れ: rustdoc の手動観測プロトコル ①〜⑤（dpi≠96 必須・96 のみは不合格）");
     println!();
@@ -278,7 +279,9 @@ fn build_and_spawn(world: &mut World) {
     // 組み直す（`AtlasTable` は Arc 共有ゆえ clone は安価）。
     let shell_dir = ghost_root.join("shell/master"); // emo2 の shell dir（donor と同一）
     let Some((shell_parsed, shell_table)) = build_shell_material(&shell_dir, &decoder) else {
-        tracing::error!("window-placement: shell アセット素材の構築に失敗 — 装着を中止（窓は配置済み）");
+        tracing::error!(
+            "window-placement: shell アセット素材の構築に失敗 — 装着を中止（窓は配置済み）"
+        );
         return;
     };
 
@@ -489,6 +492,9 @@ fn install_smoke_exit(app: &WinApp) {
         for e in targets {
             w.despawn(e);
         }
-        tracing::info!(count, "window-placement smoke 自動 close: ゴースト窓を despawn しました");
+        tracing::info!(
+            count,
+            "window-placement smoke 自動 close: ゴースト窓を despawn しました"
+        );
     });
 }

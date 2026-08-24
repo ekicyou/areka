@@ -19,15 +19,17 @@
 //! 期待モデル値はすべて R5.1/R5.2/R5.3 のリテラル直書き。
 
 use super::parse::parse_str;
-use crate::charset::{decode, DefaultEncoding};
+use crate::charset::{DefaultEncoding, decode};
 
 /// emo2-kakukaku fixture ディレクトリ（本クレート manifest 相対）。
 ///
 /// fixture は `pilot` クレート配下に checked-in されているが、コンパイル時 `include_str!` では
 /// クレートをビルド時結合してしまうため、実行時に manifest 相対パスで `std::fs` 読みする
 /// （`charset` validation_tests の「クレート跨ぎ include_str! 不使用」流儀に倣う）。
-const FIXTURE_DIR: &str =
-    concat!(env!("CARGO_MANIFEST_DIR"), "/../pilot/examples/shiori-host-32/fixtures/emo2/emo2-kakukaku/");
+const FIXTURE_DIR: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../pilot/examples/shiori-host-32/fixtures/emo2/emo2-kakukaku/"
+);
 
 /// fixture ファイルを実物バイトで読み、charset デコードして文字列化する。
 ///

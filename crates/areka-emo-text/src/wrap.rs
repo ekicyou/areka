@@ -203,8 +203,14 @@ mod tests {
             let (m2, w2) = resolve_counting_warns(*input);
             assert_eq!(m1, m2, "input {input:?} の解決結果が非決定論的（mode）");
             assert_eq!(w1, w2, "input {input:?} の warn 件数が非決定論的");
-            assert_eq!(m1, *expected_mode, "input {input:?} の解決結果が期待と不一致");
-            assert_eq!(w1, *expected_warns, "input {input:?} の warn 件数が期待と不一致");
+            assert_eq!(
+                m1, *expected_mode,
+                "input {input:?} の解決結果が期待と不一致"
+            );
+            assert_eq!(
+                w1, *expected_warns,
+                "input {input:?} の warn 件数が期待と不一致"
+            );
         }
     }
 

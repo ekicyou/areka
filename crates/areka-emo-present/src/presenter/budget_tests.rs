@@ -80,7 +80,11 @@ fn a_fresh_budget_counts_nothing() {
         "新品の累積は全て 0"
     );
     for site in AllocSite::ALL {
-        assert_eq!(budget.cumulative().count(site), 0, "{site:?} の累積が 0 でない");
+        assert_eq!(
+            budget.cumulative().count(site),
+            0,
+            "{site:?} の累積が 0 でない"
+        );
     }
 }
 
@@ -126,7 +130,10 @@ fn each_site_increments_only_its_own_field() {
             AllocSite::Xmap => delta.alloc_xmap,
             AllocSite::Mask => delta.alloc_mask,
         };
-        assert_eq!(named, 1, "{site:?} の申告が対応フィールドへ載っていない: {delta:?}");
+        assert_eq!(
+            named, 1,
+            "{site:?} の申告が対応フィールドへ載っていない: {delta:?}"
+        );
 
         for other in AllocSite::ALL {
             if other != site {
@@ -203,7 +210,10 @@ fn take_delta_resets_the_increment_while_the_cumulative_keeps_growing() {
     budget.note_alloc(AllocSite::ResampleDst);
     let third = budget.take_delta();
     assert_eq!(third.alloc_resample_dst, 1, "適用 3 の増分");
-    assert_eq!(third.alloc_compose_dst, 0, "適用 3 で申告していない発生点は 0");
+    assert_eq!(
+        third.alloc_compose_dst, 0,
+        "適用 3 で申告していない発生点は 0"
+    );
     assert_eq!(
         *budget.cumulative(),
         BudgetCounters {
@@ -347,9 +357,12 @@ impl Flow2 {
         let surface_id = 1000 + (self.applies % ROTATING_KEYS) as u32;
         self.applies += 1;
         assert!(
-            !self
-                .cache
-                .touch(surface_id, &BindSet::default(), &PatternState::default(), scale),
+            !self.cache.touch(
+                surface_id,
+                &BindSet::default(),
+                &PatternState::default(),
+                scale
+            ),
             "前提: 本装置はミス経路を演じる（巡回長 {ROTATING_KEYS} > 容量ゆえ必ずミスする）"
         );
         // (1) 合成: 常設席へ native 外形の結果を書く（`compose_into` 相当）。
@@ -483,7 +496,10 @@ fn the_warm_up_allocates_once_per_rotating_buffer_then_settles() {
         total.alloc_mask, 4,
         "マスクはキャッシュの 3 本＋輪番の空き 1 枚ぶん"
     );
-    assert_eq!(total.alloc_compose_dst, 1, "非恒等 k の合成先席は 1 本で固定");
+    assert_eq!(
+        total.alloc_compose_dst, 1,
+        "非恒等 k の合成先席は 1 本で固定"
+    );
     assert_eq!(total.alloc_xmap, 1, "作業席は 1 本");
 }
 
@@ -515,7 +531,10 @@ fn a_steady_run_with_identity_scale_allocates_nothing_at_all() {
         warm.alloc_compose_dst, 4,
         "恒等 k の立ち上がりは交代する 4 本ぶんのはず: {warm:?}"
     );
-    assert_eq!(warm.alloc_resample_dst, 0, "恒等 k はリサンプル先を持たない");
+    assert_eq!(
+        warm.alloc_resample_dst, 0,
+        "恒等 k はリサンプル先を持たない"
+    );
     assert_eq!(warm.alloc_xmap, 0, "恒等 k は作業領域に触れない");
 }
 
@@ -806,8 +825,16 @@ fn the_display_buffer_hands_back_the_recycled_allocation_unchanged() {
         native: (7, 3),
     }));
 
-    assert_eq!(display.width(), 7, "回収した外形が返っていない（新品を返した）");
-    assert_eq!(display.height(), 3, "回収した外形が返っていない（新品を返した）");
+    assert_eq!(
+        display.width(),
+        7,
+        "回収した外形が返っていない（新品を返した）"
+    );
+    assert_eq!(
+        display.height(),
+        3,
+        "回収した外形が返っていない（新品を返した）"
+    );
     assert_eq!(display.bytes().len(), bytes, "回収した長さが返っていない");
     assert_eq!(
         retired.as_ref().map(Arc::as_ptr),
@@ -823,7 +850,11 @@ fn the_display_buffer_hands_back_the_recycled_allocation_unchanged() {
     // 回収不成立は新品（0×0）から始まり、マスクも渡されない。
     let (fresh, none) = budget.display_buffer(None);
     assert_eq!(fresh.width(), 0, "回収不成立の表示バッファは空から始まる");
-    assert_eq!(fresh.bytes().len(), 0, "回収不成立の表示バッファは空から始まる");
+    assert_eq!(
+        fresh.bytes().len(),
+        0,
+        "回収不成立の表示バッファは空から始まる"
+    );
     assert!(none.is_none(), "回収不成立で輪番へ返すマスクは無い");
 }
 
@@ -939,7 +970,10 @@ fn an_identity_scale_dimension_change_costs_one_allocation_per_swapped_buffer() 
         "恒等 k の寸法拡大は交代する 4 本ぶんで打ち止めのはず: {seen:?}"
     );
     for (i, delta) in seen.iter().enumerate() {
-        assert_eq!(delta.alloc_resample_dst, 0, "{i}: 恒等 k はリサンプル先を持たない");
+        assert_eq!(
+            delta.alloc_resample_dst, 0,
+            "{i}: 恒等 k はリサンプル先を持たない"
+        );
         assert_eq!(delta.alloc_xmap, 0, "{i}: 恒等 k は作業領域に触れない");
     }
     // マスクも輪番 4 本ぶん（詰め長 100 → 240 バイト）で、その後は 0 に戻る。

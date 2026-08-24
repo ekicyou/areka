@@ -26,9 +26,9 @@
 //! 必ず pump を抜ける。echo 受領で done が立ち、次の heartbeat 起床で即 quit する。
 //! deadline 超過・echo 内容不一致・応答不達はいずれも `assert!` 失敗として観測される（8.3）。
 
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 use std::ops::ControlFlow;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use windows::Win32::Foundation::{LPARAM, WPARAM};
@@ -37,7 +37,7 @@ use windows::Win32::UI::WindowsAndMessaging::{PostThreadMessageW, WM_NULL};
 
 use wintf_winmsg_executor::{FilterResult, MessageLoop};
 
-use areka_actor::{reply_channel, spawn_ui, ReplyError, ReplySender};
+use areka_actor::{ReplyError, ReplySender, reply_channel, spawn_ui};
 
 /// heartbeat（別スレッドからの `PostThreadMessageW(WM_NULL)`）の送信間隔。
 /// 無入力でも `GetMessageW` をブロックさせ続けず、filter が done / deadline を再評価できる
@@ -85,17 +85,20 @@ fn toy_b_worker_to_ui_pump_echo_round_trip() {
     // Echo → 返信端へ payload をそのまま返して受信継続（Continue）。Close → 即時終了（Break）。
     // handler は失敗しない（返信の送信不能＝要求側キャンセルは握り潰す）ため、エラー型は
     // `Infallible` を明示する（`spawn_ui` の `E: Display` を満たしつつ never を型で表す）。
-    let (ui_tx, _drain) = spawn_ui("toy-ui-echo", |msg: UiMsg| -> Result<ControlFlow<()>, std::convert::Infallible> {
-        match msg {
-            UiMsg::Echo { payload, reply } => {
-                // 返信端が生きていれば届く。要求側キャンセル（Receiver drop）は Err(value) だが
-                // handler はそれで死なない（値を捨てて継続・器の責務外）。
-                let _ = reply.send(payload);
-                Ok(ControlFlow::Continue(()))
+    let (ui_tx, _drain) = spawn_ui(
+        "toy-ui-echo",
+        |msg: UiMsg| -> Result<ControlFlow<()>, std::convert::Infallible> {
+            match msg {
+                UiMsg::Echo { payload, reply } => {
+                    // 返信端が生きていれば届く。要求側キャンセル（Receiver drop）は Err(value) だが
+                    // handler はそれで死なない（値を捨てて継続・器の責務外）。
+                    let _ = reply.send(payload);
+                    Ok(ControlFlow::Continue(()))
+                }
+                UiMsg::Close => Ok(ControlFlow::Break(())),
             }
-            UiMsg::Close => Ok(ControlFlow::Break(())),
-        }
-    })
+        },
+    )
     .expect("spawn_ui on the pump (test) thread must succeed");
 
     // --- worker スレッド: UiSender 経由で Echo を送り、返信を上限時間付きで待つ ---

@@ -1,0 +1,3 @@
+title=final は状態ブロックの走行トークン込みでのみ出す（トークンが無ければ拒む）
+stderr_substr=走行トークン
+stderr_substr=reason

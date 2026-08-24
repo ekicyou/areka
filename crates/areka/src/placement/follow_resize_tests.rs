@@ -176,9 +176,7 @@ fn resize_window_to_without_anchored_returns_false_and_leaves_state() {
 fn resize_window_to_bottom_preserves_balloon_follow_offset() {
     let mut world = World::new();
     world.insert_resource(single_monitor_snapshot()); // 下端 1043
-    let balloon = world
-        .spawn((fake_handle(0x2000), window_pos_at(0, 0)))
-        .id();
+    let balloon = world.spawn((fake_handle(0x2000), window_pos_at(0, 0))).id();
     let offset = PointPx { x: -412, y: -25 };
     let window = world
         .spawn((
@@ -206,7 +204,13 @@ fn resize_window_to_bottom_preserves_balloon_follow_offset() {
     ));
     let char_pos = position_of(&world, window);
     let balloon_pos = position_of(&world, balloon);
-    assert_eq!(char_pos, Point { x: 690, y: 1043 - 823 });
+    assert_eq!(
+        char_pos,
+        Point {
+            x: 690,
+            y: 1043 - 823
+        }
+    );
 
     // キャラ窓の原点（下端中央）は寸法変動で動かない（step 3b の契約・無改変）。
     let new_origin = (char_pos.x + 517 / 2, char_pos.y + 823);
@@ -297,7 +301,10 @@ fn resize_window_to_bottom_keeps_ssp_window_relative_balloon_offset() {
     // バルーンは**窓相対**: 新窓左上 + offset = (3329−167, 1416−161) = (3162,1255)。
     assert_eq!(
         balloon_pos,
-        Point { x: 3329 - 167, y: 1416 - 161 },
+        Point {
+            x: 3329 - 167,
+            y: 1416 - 161
+        },
         "バルーンは窓相対 offset で追随する（SSP と同セマンティクス）"
     );
     // 恒等式 balloon_pos − char_pos ≡ offset（resize で補正しない）。
@@ -417,7 +424,10 @@ fn resize_window_to_right_pins_right_edge_and_keeps_y() {
     ));
     assert_eq!(
         position_of(&world, window),
-        Point { x: 1877 - 517, y: 500 },
+        Point {
+            x: 1877 - 517,
+            y: 500
+        },
         "X=wa.right−w'（右端固定・Left と取り違えたら 53 で落ちる）・Y 保持"
     );
     assert_eq!(size_of(&world, window), SizeI::new(517, 823));
@@ -466,9 +476,7 @@ fn resize_window_to_free_keeps_position_and_updates_size_only() {
 fn resize_window_to_left_preserves_balloon_follow_offset() {
     let mut world = World::new();
     world.insert_resource(odd_edge_snapshot()); // 左端 53
-    let balloon = world
-        .spawn((fake_handle(0x2000), window_pos_at(0, 0)))
-        .id();
+    let balloon = world.spawn((fake_handle(0x2000), window_pos_at(0, 0))).id();
     let offset = PointPx { x: -412, y: -25 };
     let window = world
         .spawn((
@@ -622,7 +630,11 @@ fn anchor_changed_system_reprojects_to_new_anchor_edge_at_current_size() {
         Point { x: 731, y: 356 },
         "初回 run はべき等 skip（位置不変）"
     );
-    assert_eq!(size_of(&world, e), SizeI::new(434, 687), "初回 run: size 不変");
+    assert_eq!(
+        size_of(&world, e),
+        SizeI::new(434, 687),
+        "初回 run: size 不変"
+    );
 
     // Anchored を Top へ直接書換（producer=seriko の代替＝consumer 駆動の檻）。
     world.get_mut::<Anchored>(e).unwrap().0 = Anchor::Top;

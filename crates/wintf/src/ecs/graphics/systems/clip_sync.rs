@@ -66,8 +66,13 @@ pub fn clip_sync_system(
                 let physical_width = size.width * scale_x;
                 let physical_height = size.height * scale_y;
 
-                let clip_res =
-                    build_clip(compositor, clip_shape, physical_width, physical_height, scale_x);
+                let clip_res = build_clip(
+                    compositor,
+                    clip_shape,
+                    physical_width,
+                    physical_height,
+                    scale_x,
+                );
 
                 let clip = match clip_res {
                     Ok(c) => c,

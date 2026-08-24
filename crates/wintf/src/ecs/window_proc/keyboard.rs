@@ -90,8 +90,8 @@ pub(super) fn WM_CANCELMODE(
         if let Ok(world_borrow) = world.try_borrow() {
             if let Some(accumulator) = world_borrow
                 .world()
-                .get_resource::<crate::ecs::drag::DragAccumulatorResource>(
-            ) {
+                .get_resource::<crate::ecs::drag::DragAccumulatorResource>()
+            {
                 accumulator.set_transition(crate::ecs::drag::DragTransition::Ended {
                     entity,
                     end_pos: start_pos,
@@ -207,15 +207,9 @@ pub(super) fn WM_CAPTURECHANGED(
     // CaptureGuard Drop で ReleaseCapture が呼ばれないようにする
     let was_dragging = crate::ecs::drag::update_drag_state(|state| {
         match state {
-            crate::ecs::drag::DragState::Preparing {
-                capture_guard, ..
-            }
-            | crate::ecs::drag::DragState::JustStarted {
-                capture_guard, ..
-            }
-            | crate::ecs::drag::DragState::Dragging {
-                capture_guard, ..
-            } => {
+            crate::ecs::drag::DragState::Preparing { capture_guard, .. }
+            | crate::ecs::drag::DragState::JustStarted { capture_guard, .. }
+            | crate::ecs::drag::DragState::Dragging { capture_guard, .. } => {
                 capture_guard.mark_released();
                 true
             }

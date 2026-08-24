@@ -231,7 +231,10 @@ fn test_velocity_uses_latest_two_samples_only() {
 
     let (vx, _vy) = buffer.calculate_velocity();
     // 10px/0.1s = 100px/s（最初の大ジャンプは無視される）
-    assert!((vx - 100.0).abs() < 1.0, "最新2サンプルのみ: vx ≈ 100, got {vx}");
+    assert!(
+        (vx - 100.0).abs() < 1.0,
+        "最新2サンプルのみ: vx ≈ 100, got {vx}"
+    );
 }
 
 #[test]
@@ -315,5 +318,9 @@ fn test_hit_test_with_local_coords_passes_through_screen_coords() {
     let result = hit_test_with_local_coords(&world, window, 300, 400);
     let (entity, local) = result.expect("Phase 1 は常に Some");
     assert_eq!(entity, window);
-    assert_eq!(local, PhysicalPoint::new(300, 400), "ローカル = スクリーン座標");
+    assert_eq!(
+        local,
+        PhysicalPoint::new(300, 400),
+        "ローカル = スクリーン座標"
+    );
 }

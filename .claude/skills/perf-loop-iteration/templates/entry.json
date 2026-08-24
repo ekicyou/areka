@@ -1,0 +1,18 @@
+{
+  "hypothesis": "<1 行。何が重く、何を変えて何を減らそうとしたか。perf-analyze の HYPOTHESIS>",
+  "candidate": "<perf-analyze の CANDIDATE 行そのまま。stage=… rank=… item=… share=…>",
+  "files_changed": "<カンマ区切りのパス。perf-implement の FILES_CHANGED を (new) の印ごとそのまま。印は「戻すときに消すファイル」の唯一の記憶>",
+  "runs": "<A1=… B1=… A2=… B2=…（compare.json の各走行の dir の末尾）>",
+  "before_idle_cpu_pct": null,
+  "after_idle_cpu_pct": null,
+  "delta_pct": null,
+  "noise_pct": null,
+  "secondary": "<compare.json の secondary をそのまま>",
+  "tests": "<green (5,640 passed) / red: <落ちた本数と 1 本の名前>>",
+  "followup": "<followup.txt の総合と 4 検査。PASS clickthrough=PASS drag=PASS dpi=PASS balloon_follow=PASS>",
+  "verdict": "<ADOPTED|NO_DIFF|WORSE|TESTS_RED|FOLLOWUP_FAIL|MEASURE_FAILED|NA>",
+  "commit": "<採用したときだけ短い SHA。それ以外は null>",
+  "skipped_candidates": "<perf-analyze の SKIPPED をそのまま 1 行に。要件 3.1>",
+  "duration_min": null,
+  "reason": "<採否の根拠を 1 行。警告があればここへ足す（agent-model-warning:… / not_quiet / inconclusive）>"
+}

@@ -1,0 +1,52 @@
+PREFLIGHT ok -> BASELINE
+PREFLIGHT toolfix_needed -> TOOLFIX
+BASELINE ok -> RANK
+BASELINE measure_failed -> TOOLFIX
+RANK ok -> SELECT
+SELECT ok -> IMPLEMENT
+SELECT no_candidate -> FINAL
+IMPLEMENT ok -> TEST
+IMPLEMENT implement_blocked -> RECORD
+TEST tests_green_followup_pass -> REMEASURE
+TEST tests_red -> RECORD
+TEST followup_fail -> RECORD
+TEST review_rejected -> RECORD
+REMEASURE ok -> DECIDE
+REMEASURE measure_failed -> TOOLFIX
+DECIDE adopted -> RECORD
+DECIDE no_diff -> RECORD
+DECIDE worse -> RECORD
+DECIDE measure_failed -> RECORD
+RECORD ok -> RANK
+RECORD plateau -> FINAL
+RECORD iteration_cap -> FINAL
+RECORD goal_met_candidate -> FINAL
+TOOLFIX toolfix_ok -> @PREVIOUS@
+TOOLFIX toolfix_fail -> FINAL
+FINAL (終端・遷移なし)
+BASELINE
+TOOLFIX
+RANK
+TOOLFIX
+SELECT
+IMPLEMENT
+FINAL
+TEST
+RECORD
+REMEASURE
+RECORD
+RECORD
+RECORD
+DECIDE
+TOOLFIX
+RECORD
+RECORD
+RECORD
+RECORD
+RANK
+FINAL
+FINAL
+FINAL
+IMPLEMENT
+FINAL
+DECIDE

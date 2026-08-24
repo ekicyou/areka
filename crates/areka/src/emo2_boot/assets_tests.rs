@@ -21,8 +21,7 @@ fn kv(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
 /// emo2 fixture ルートを `CARGO_MANIFEST_DIR`（`crates/areka`）相対で解決する
 /// （placement source/measure・emo-present example と同一アンカー規約）。
 fn emo2_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../pilot/examples/shiori-host-32/fixtures/emo2")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../pilot/examples/shiori-host-32/fixtures/emo2")
 }
 
 /// emo2 fixture のバルーンルート（placement テストと同一規約）。
@@ -76,7 +75,10 @@ fn build_boot_assets_from_emo2_fixture() {
         "scope1 の World は初期 surface 10 を内包する"
     );
     // 共有アトラスは 1 回の bake 由来（Clone 共有）＝非空・全 scope 同一エントリ数。
-    assert!(!boot.shells[0].atlas.is_empty(), "shell アトラスは bake 済み（非空）");
+    assert!(
+        !boot.shells[0].atlas.is_empty(),
+        "shell アトラスは bake 済み（非空）"
+    );
     assert_eq!(
         boot.shells[0].atlas.len(),
         boot.shells[1].atlas.len(),
@@ -129,7 +131,11 @@ fn build_boot_assets_from_emo2_fixture() {
     assert_eq!(vr1.left(), Some(24));
     assert_eq!(vr1.right(), Some(-48));
     let wp1 = boot.balloons[1].model.windowposition();
-    assert_eq!(wp1.x(), Some(-190), "相方側 windowposition は balloonk0s.txt 実値");
+    assert_eq!(
+        wp1.x(),
+        Some(-190),
+        "相方側 windowposition は balloonk0s.txt 実値"
+    );
     assert_eq!(wp1.y(), Some(-75));
 
     // --- resolver: EmoWorld::alias_snapshot() 由来（emo2 実測 alias で決定論解決） ---
@@ -297,7 +303,11 @@ fn actor_keyed_balloon_tables_maps_every_scope() {
 
     let keyed = actor_keyed_balloon_tables(tables);
 
-    assert_eq!(keyed.len(), 3, "全エントリが転送される（取りこぼし・併合なし）");
+    assert_eq!(
+        keyed.len(),
+        3,
+        "全エントリが転送される（取りこぼし・併合なし）"
+    );
     for scope in [0u32, 1, 10] {
         assert!(
             keyed.contains_key(&ActorKey::from(scope.to_string())),
@@ -307,7 +317,11 @@ fn actor_keyed_balloon_tables_maps_every_scope() {
     // 逆写像で元の scope 集合へ戻る（別語彙 `"scope0"` 等を作っていない）。
     let mut round_tripped: Vec<u32> = keyed.keys().filter_map(scope_of).collect();
     round_tripped.sort_unstable();
-    assert_eq!(round_tripped, vec![0, 1, 10], "scope_of の逆写像で元の集合へ戻る");
+    assert_eq!(
+        round_tripped,
+        vec![0, 1, 10],
+        "scope_of の逆写像で元の集合へ戻る"
+    );
 }
 
 /// 空の scope 集合では balloon 表の写像も空になる（縮退・不変条件 (c) の degenerate 端）。
@@ -511,12 +525,14 @@ fn build_boot_assets_bind_resolver_resolves_emo2_names() {
         .expect("emo2 fixture の BootAssets 組立は成功する");
 
     assert_eq!(
-        boot.bind_resolver.resolve(BindNamespace::Sakura, "腕", "伸び"),
+        boot.bind_resolver
+            .resolve(BindNamespace::Sakura, "腕", "伸び"),
         Some(1100),
         "shell descript の名前宣言 `sakura.bindgroup1100.name,腕,伸び` が起動時資産から解決できる（7.1）"
     );
     assert_eq!(
-        boot.bind_resolver.resolve(BindNamespace::Sakura, "腕", "存在しない"),
+        boot.bind_resolver
+            .resolve(BindNamespace::Sakura, "腕", "存在しない"),
         None,
         "未宣言の (カテゴリ, パーツ) は None（捏造しない・R3.7）"
     );
@@ -748,9 +764,9 @@ fn default_bind_ids_ignores_unrelated_keys() {
 #[test]
 fn default_bind_ids_ignores_malformed_middle() {
     let map = kv(&[
-        ("sakura.bindgroupXYZ.default", "1"), // 非数値
-        ("sakura.bindgroup.default", "1"),    // 空（middle なし）
-        ("sakura.bindgroup-1.default", "1"),  // 負値は u32 parse 不可
+        ("sakura.bindgroupXYZ.default", "1"),  // 非数値
+        ("sakura.bindgroup.default", "1"),     // 空（middle なし）
+        ("sakura.bindgroup-1.default", "1"),   // 負値は u32 parse 不可
         ("sakura.bindgroup12ab.default", "1"), // 数字混在
     ]);
     assert_eq!(
@@ -764,9 +780,9 @@ fn default_bind_ids_ignores_malformed_middle() {
 #[test]
 fn default_bind_ids_requires_strict_prefix_and_suffix() {
     let map = kv(&[
-        ("xsakura.bindgroup1.default", "1"),   // prefix 前に余分
-        ("sakura.bindgroup2.defaultx", "1"),   // suffix 後に余分
-        ("sakura.bindgroup3.default.extra", "1"), // suffix の後に別セグメント
+        ("xsakura.bindgroup1.default", "1"),       // prefix 前に余分
+        ("sakura.bindgroup2.defaultx", "1"),       // suffix 後に余分
+        ("sakura.bindgroup3.default.extra", "1"),  // suffix の後に別セグメント
         ("prefix.sakura.bindgroup4.default", "1"), // 別 prefix 配下
         // 対照: 厳密一致は抽出される。
         ("sakura.bindgroup5.default", "1"),

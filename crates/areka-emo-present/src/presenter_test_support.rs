@@ -10,8 +10,8 @@ use areka_emo_atlas::{
 use areka_emo_compose::{BindSet, ComposeMethod, PatternFrame};
 use areka_parsers::shell::{AppendTarget, DefRef, Element, ElementPath, Shell, Surface};
 
-use wintf::ecs::{GraphicsCore, WucGraphicsResource};
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
+use wintf::ecs::{GraphicsCore, WucGraphicsResource};
 
 // ── GPU/WUC フィクスチャ（chain.rs / mount.rs / wuc_resource.rs テストと同一方針）──────────
 // 本番 UI スレッドは MTA（メモリ「areka WUC は MTA スレッドで動く」）。WucGraphicsResource::new は
@@ -126,7 +126,12 @@ pub(super) fn px_at(bytes: &[u8], width: u32, x: u32, y: u32) -> [u8; 4] {
 }
 
 /// 有効 `ShowSurface` を適用し、reply が `Ok(())` であることを確認する（テスト補助）。
-pub(super) fn show_ok(presenter: &mut EmoPresenter, world: &mut World, target: TargetId, surface_id: u32) {
+pub(super) fn show_ok(
+    presenter: &mut EmoPresenter,
+    world: &mut World,
+    target: TargetId,
+    surface_id: u32,
+) {
     let (tx, rx) = reply_channel::<PresentOutcome>();
     presenter.apply(
         world,
@@ -229,7 +234,10 @@ pub(super) fn build_target_assets(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasT
         },
     };
     let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(baked.errors.is_empty(), "atlas bake セットアップは失敗しない");
+    assert!(
+        baked.errors.is_empty(),
+        "atlas bake セットアップは失敗しない"
+    );
 
     let mut world = EmoWorld::build(&shell_of(surfaces));
     world.bind_atlas(&baked.table, SetId(0));
@@ -238,7 +246,13 @@ pub(super) fn build_target_assets(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasT
     // golden: presenter と同一入力を直接合成（move 前に計算する）。
     let mut composer = Composer::new();
     let golden = composer
-        .compose(&world, &atlas, 1000, &BindSet::default(), &PatternState::default())
+        .compose(
+            &world,
+            &atlas,
+            1000,
+            &BindSet::default(),
+            &PatternState::default(),
+        )
         .expect("静的 element 単体の合成は Ok");
     let golden_bytes = golden.bytes().to_vec();
 
@@ -286,7 +300,10 @@ pub(super) fn build_two_face_assets(w: u32, h: u32) -> (EmoWorld, AtlasTable, Ve
         },
     };
     let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(baked.errors.is_empty(), "atlas bake セットアップは失敗しない");
+    assert!(
+        baked.errors.is_empty(),
+        "atlas bake セットアップは失敗しない"
+    );
 
     let mut world = EmoWorld::build(&shell_of(surfaces));
     world.bind_atlas(&baked.table, SetId(0));
@@ -294,12 +311,24 @@ pub(super) fn build_two_face_assets(w: u32, h: u32) -> (EmoWorld, AtlasTable, Ve
 
     let mut composer = Composer::new();
     let golden_1000 = composer
-        .compose(&world, &atlas, 1000, &BindSet::default(), &PatternState::default())
+        .compose(
+            &world,
+            &atlas,
+            1000,
+            &BindSet::default(),
+            &PatternState::default(),
+        )
         .expect("面 1000 の合成は Ok")
         .bytes()
         .to_vec();
     let golden_3000 = composer
-        .compose(&world, &atlas, 3000, &BindSet::default(), &PatternState::default())
+        .compose(
+            &world,
+            &atlas,
+            3000,
+            &BindSet::default(),
+            &PatternState::default(),
+        )
         .expect("面 3000 の合成は Ok")
         .bytes()
         .to_vec();
@@ -399,7 +428,11 @@ pub(super) fn attach_hit_target(presenter: &mut EmoPresenter, world: &mut World,
 }
 
 /// 私有状態を直接書いて「表示中サーフェスあり」を作る（GPU なしで R1.6 分岐へ到達する唯一の手段）。
-pub(super) fn force_current_surface(presenter: &mut EmoPresenter, target: TargetId, surface_id: u32) {
+pub(super) fn force_current_surface(
+    presenter: &mut EmoPresenter,
+    target: TargetId,
+    surface_id: u32,
+) {
     presenter
         .targets
         .get_mut(&target)

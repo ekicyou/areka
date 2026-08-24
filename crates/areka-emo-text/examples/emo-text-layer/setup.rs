@@ -71,7 +71,9 @@ pub(super) fn build_and_spawn(world: &mut World, vertical: bool, hold: bool) {
         assets1: Some(assets1),
         model,
         attached: false,
-        runtime: Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default()))),
+        runtime: Rc::new(RefCell::new(TextLayerRuntime::new(
+            TextLayerConfig::default(),
+        ))),
         sink: None,
         _drain: None,
         resolved: None,
@@ -86,18 +88,14 @@ pub(super) fn build_and_spawn(world: &mut World, vertical: bool, hold: bool) {
         prev_lbutton: false,
         last_click_time: -10.0,
     });
-    info!(w, h, vertical, hold, "emo-text-layer: 窓生成とアセット構築を完了（GPU 資源到達で装着）");
+    info!(
+        w,
+        h, vertical, hold, "emo-text-layer: 窓生成とアセット構築を完了（GPU 資源到達で装着）"
+    );
 }
 
 /// バルーン窓 Entity を構築する（emo-present example の balloon 窓と同型・物理 px 採寸）。
-fn create_balloon_window(
-    world: &mut World,
-    label: &str,
-    x: i32,
-    y: i32,
-    w: u32,
-    h: u32,
-) -> Entity {
+fn create_balloon_window(world: &mut World, label: &str, x: i32, y: i32, w: u32, h: u32) -> Entity {
     world
         .spawn((
             Name::new(format!("EmoText-Balloon-{label}")),

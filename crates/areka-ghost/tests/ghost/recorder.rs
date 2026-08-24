@@ -254,7 +254,10 @@ mod tests {
         let (mut recorder, handle) = Recorder::new(fake);
 
         let r1 = recorder.get("OnFirstBoot", &[], None);
-        assert!(matches!(r1, Ok(None)), "駆動対象の戻り値は素通し（改変しない）");
+        assert!(
+            matches!(r1, Ok(None)),
+            "駆動対象の戻り値は素通し（改変しない）"
+        );
         let r2 = recorder.get("OnBoot", &["master".to_string()], Some("talking"));
         assert!(matches!(r2, Ok(Some(ref v)) if v == "greeting"));
         let r3 = recorder.notify("OnInitialize", &[], None);
@@ -317,9 +320,7 @@ mod tests {
 
     #[test]
     fn status_calls_are_not_recorded() {
-        let fake = FakeBackend::new()
-            .with_get(Ok(None))
-            .with_notify(Ok(()));
+        let fake = FakeBackend::new().with_get(Ok(None)).with_notify(Ok(()));
         let (mut recorder, handle) = Recorder::new(fake);
 
         // 交信の合間に status() を挟んでも記録には現れない（sticky 検査ノイズ除外）。
@@ -375,6 +376,10 @@ mod tests {
         let _ = recorder.get("OnFirstBoot", &[], None);
 
         assert_eq!(handle.records().len(), 1);
-        assert_eq!(handle2.records().len(), 1, "clone した handle も同一の記録を読める");
+        assert_eq!(
+            handle2.records().len(),
+            1,
+            "clone した handle も同一の記録を読める"
+        );
     }
 }

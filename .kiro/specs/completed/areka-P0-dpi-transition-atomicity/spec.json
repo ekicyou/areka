@@ -1,0 +1,32 @@
+{
+  "feature_name": "areka-P0-dpi-transition-atomicity",
+  "created_at": "2026-08-15T20:14:49+09:00",
+  "updated_at": "2026-08-22T21:00:00Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "generated_at": "2026-08-15T20:40:00+09:00",
+      "approved": true,
+      "approved_at": "2026-08-15T23:30:00+09:00",
+      "note": "kiro-spec-design -y による自動承認（第 1 段再観測＝残存で確定済み）"
+    },
+    "design": {
+      "generated": true,
+      "generated_at": "2026-08-15T23:30:00+09:00",
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "generated_at": "2026-08-16T00:24:45+09:00",
+      "approved": true
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-08-22T21:00:00Z",
+      "note": "37 タスク完走・最終ゲート GO。実機サインオフは ATOM-SIGNOFF: FAIL のまま開発者裁定 GO（未達の 2 系統の引受先＝areka-P0-present-write-coherence）"
+    }
+  },
+  "ready_for_implementation": true
+}

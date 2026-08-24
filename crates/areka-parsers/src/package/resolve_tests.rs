@@ -15,7 +15,7 @@ use std::path::PathBuf;
 
 use crate::charset::DefaultEncoding;
 
-use super::{resolve, MountError};
+use super::{MountError, resolve};
 
 /// このテスト専用の一意な一時ディレクトリを返す（関数名でユニーク化・衝突回避）。
 fn unique_temp_dir(tag: &str) -> PathBuf {
@@ -99,7 +99,10 @@ fn resolve_missing_descript_yields_start_point_missing() {
     match result {
         Err(MountError::StartPointMissing { expected }) => {
             // expected は起点 descript.txt のパスを指す（黙って空を返さない）。
-            assert_eq!(expected, root.join("ghost").join("master").join("descript.txt"));
+            assert_eq!(
+                expected,
+                root.join("ghost").join("master").join("descript.txt")
+            );
         }
         other => panic!("StartPointMissing を期待したが {other:?} が返った"),
     }
@@ -250,11 +253,8 @@ fn resolve_missing_shell_name_falls_back_to_master() {
 
     let descript = ghost_master.join("descript.txt");
     // seriko.defaultsurfacedirectoryname を **あえて含めない**。
-    fs::write(
-        &descript,
-        b"charset,UTF-8\ntype,ghost\nname,fallback\n",
-    )
-    .expect("write descript.txt");
+    fs::write(&descript, b"charset,UTF-8\ntype,ghost\nname,fallback\n")
+        .expect("write descript.txt");
 
     // --- Act ---
     let result = resolve(&root, DefaultEncoding::Utf8);
@@ -265,7 +265,10 @@ fn resolve_missing_shell_name_falls_back_to_master() {
         model.shell.dir, shell_master,
         "shell 名未指定は既定 master へフォールバックする"
     );
-    assert!(model.shell.dir.is_dir(), "フォールバックした shell dir は実在する");
+    assert!(
+        model.shell.dir.is_dir(),
+        "フォールバックした shell dir は実在する"
+    );
 
     // --- Cleanup（best-effort）---
     let _ = fs::remove_dir_all(&root);

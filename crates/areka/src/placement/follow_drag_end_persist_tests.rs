@@ -205,9 +205,7 @@ fn round_trip_save_restore_value_equivalence_over_real_fs() {
         Axis, PersistKey, PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya,
     };
 
-    use super::super::persist::{
-        PersistWiring, apply_restored_placements, load_restored_state,
-    };
+    use super::super::persist::{PersistWiring, apply_restored_placements, load_restored_state};
     use super::on_balloon_drag_end;
     use crate::placement::resolver::ScopePlacement;
     use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker};
@@ -324,7 +322,12 @@ fn round_trip_save_restore_value_equivalence_over_real_fs() {
 
     // --- balloon DragEnd（保存）: 最終確定位置から左上基準 offset を再導出しそのまま保存 ---
     let balloon_ev = Phase::Bubble(drag_end_event_at(balloon, (0, 0)));
-    assert!(!on_balloon_drag_end(&mut world, balloon, balloon, &balloon_ev));
+    assert!(!on_balloon_drag_end(
+        &mut world,
+        balloon,
+        balloon,
+        &balloon_ev
+    ));
 
     // 期待 persist＝左上基準 offset そのもの（保存基準＝ランタイム基準・変換なし）。
     let expected_offset_tl = PointPx {
@@ -479,9 +482,7 @@ fn dragged_char_persists_even_without_dragging_state_at_dragend() {
         Axis, PersistKey, PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya,
     };
 
-    use super::super::persist::{
-        PersistWiring, apply_restored_placements, load_restored_state,
-    };
+    use super::super::persist::{PersistWiring, apply_restored_placements, load_restored_state};
     use super::on_balloon_drag_end;
     use crate::placement::resolver::ScopePlacement;
     use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker};

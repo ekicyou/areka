@@ -155,16 +155,15 @@ fn observe(
             .unwrap_or_default();
         for &t in probe_times {
             let visible = state.visible_glyphs(actor, t);
-            let lines =
-                LayoutEngine::layout(
-                    &items,
-                    visible,
-                    region,
-                    mode,
-                    font_height,
-                    &FixedMetrics,
-                    WrapPlan::CharByChar,
-                );
+            let lines = LayoutEngine::layout(
+                &items,
+                visible,
+                region,
+                mode,
+                font_height,
+                &FixedMetrics,
+                WrapPlan::CharByChar,
+            );
             let window = LayoutEngine::visible_window(&lines, region, mode);
             out.push(Observation {
                 actor: actor.clone(),

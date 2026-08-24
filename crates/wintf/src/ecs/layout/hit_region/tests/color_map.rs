@@ -262,10 +262,7 @@ fn test_color_map_extreme_positive_rel_saturates_to_none() {
     // rel = 1e10 → pixel = (1e10 * 2) as u32 = u32::MAX（飽和）→ 範囲外 → None
     assert_eq!(map.hit_test_region(1e10, 1e10, &entity_size), None);
     // f32::MAX でも同様に飽和して範囲外
-    assert_eq!(
-        map.hit_test_region(f32::MAX, f32::MAX, &entity_size),
-        None
-    );
+    assert_eq!(map.hit_test_region(f32::MAX, f32::MAX, &entity_size), None);
 }
 
 /// 負の正規化座標は飽和キャストで 0 になり、境界(0,0)へ丸められて領域内に入り得る。

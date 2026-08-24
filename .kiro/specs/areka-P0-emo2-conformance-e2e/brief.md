@@ -35,6 +35,26 @@
 > - **⑷ 根拠**: 再説明しない。spec **`areka-P0-scale-exact-rational`** の裁定登記（emo-text `region.rs` の `ScaleContract::physical_extent` doc）を参照。前提（差は 0 か 1・−1 は起きない・件数 81/81/0×21）は決定論テスト `crates/areka-emo-text/tests/physical_extent_arbitration_test.rs` が固定している。
 > - 判定式の最終形（どの項目でどこまで許容を書くか）は**本 spec が決める**——上記は前提の申し送りであって、適合 e2e の要件裁定ではない。
 
+> **📌 2026-08-21 追記(73)（`areka-P0-dpi-transition-atomicity` からの申し送り・一周走行で使える遷移観測チャネルが増え、上流 `ghost-window-zorder` の実機確認をここで受ける）**: **拡大率を切り替えたときの窓の動きを 1 本の時系列で機械判定できる観測チャネルとランナーが常設された。一周走行の適合表へ「拡大率切替」の項目を足せる材料が揃っている。**
+> - **⑴ 恒久観測（削除しない・後続 spec が再利用する契約）**: 既定 OFF の target `wintf::transition`（`crates/wintf/src/ecs/window/transition_diag.rs:54`）に、モニタ表更新（`kind=monitor`）・メッセージ受理（`msg`）・指令の積み上げ（`enqueue`）・一括 flush（`flush`）・窓書込（`write`）・サーフェス寸（`surface`）・作業領域源の差し替え（`snapshot`）・整合待ち（`hold`）・接地点（`ground`）・連鎖の解き直し（`chain`）の 10 種が出る。**点灯手順・grep 語・判定の全文は `.kiro/specs/completed/areka-P0-dpi-transition-atomicity/signoff-procedure.md`**（手順書の語が発行側の単一定義元と一致することは `crates/areka/src/placement/transition_signoff_procedure_tests.rs` が檻で固定している＝手順書が陳腐化したら赤くなる）。
+> - **⑵ 実機ログの機械判定ランナーがある**: `AREKA_TRANSITION_LOG=<絶対パス> cargo test -p areka transition_signoff -- --ignored --nocapture`（`crates/areka/src/placement/transition_signoff_tests.rs:10,57`）。ランナーは自前の判定を 1 行も持たず、決定論テストと**同一の純関数**を回す。環境変数未設定・パス不達・観測行 0 行はいずれも失敗（無言スキップで緑を偽装しない）。**一周走行のログをそのまま食わせられる。**
+> - **⑶ 上流 `ghost-window-zorder` の実機確認をここで受ける（受け先の判断）**: 本 brief は追記(58) で `ghost-window-zorder` を上流列へ追補済み（「バルーン埋もれ＝一周走行の可視性前提」）。当該 spec は `.kiro/specs/completed/` にあり**申し送りを消化できない**ため、**実機の見た目の側（バルーンがキャラの手前に居続けること）は本 spec が受ける**。本 spec は既に zorder の残件を 1 件抱えている——「再表示直後の隣接が実機未確認」。**拡大率の切替は再表示を伴うので、一周走行に拡大率切替を含めれば同時に確認できる。** コード側の適用順・適用回数の前提は `areka-P0-draw-load-parity` の追記(71) が受けている（そちらが flush 経路を In-scope に持つ）。
+> - **⑷ Z の適用順は変えていない（確認の観点）**: 窓書込指令は同一窓のジオメトリ指令が積む時点で合流するようになったが、**挿入位置を持つ Z 指令は合流対象外**で、畳めない指令は同一窓の仕切りとして働く（`crates/wintf/src/ecs/window/command.rs:229` の 3 連言）。ゆえに一周走行で見るべきは「Z が崩れていないか」であって「合流で順序が入れ替わったか」ではない。
+> - **⑸ 適合表へ足せる項目（本 spec が裁定すること）**: 拡大率を切り替えたとき、⒜ キャラの接地点が新しい作業領域の下端に載る（タスクバーへ潜らない）、⒝ 随伴バルーンが**同一フレームで**追従し追従 offset が変わらない、⒞ 遷移の途中で中間矩形（旧下端の位置）が提示されない、⒟ 二体の隣接（隙間 0）が遷移後に解け直る、の 4 点が決定論テストで固定済みである。**実機で残るのは目視の側**（跳ねが見えないこと）で、それは本 spec の一周走行の射程に入る。
+> - **⑹ 二体の隣接は遷移後に解き直される（追記(63) の期待値に条件が 1 つ増えた）**: `scope-chain-gap` 由来の追記(63)⑴ は「二体の既定間隔＝隣接（隙間 0）が正典」「初期配置は実表示サーフェス寸が確定するまで暫定・確定時に一度きり解く」と書いている。本 spec の是正で、**拡大率遷移のたびに同じ判定器で一度きり解き直す**ようになった（実機で 359px 開いていた隙間が 0 になる。決定論の対応物は `crates/areka/src/emo2_boot/frame_chain_realign_tests.rs`）。ただし**ドラッグ等で明示的に動かされたスコープは対象外のまま**（既定位置と現在位置の一致で判定）で、この規約は追記(63) から変わっていない。適合表の「二体の位置」の期待値は**遷移後も隣接**で読むこと。
+> - **⑺ perf 行に `frame=` が末尾追加された**: `perf(apply_show)`（`crates/areka-emo-present/src/presenter/timing.rs:220`）。既存フィールドの順序・名前・文言は不変で `tools/perf/judge-perf.py` とは互換。一周走行のログで perf 行と遷移観測行を**同一フレームで**突合できる。
+> - **⑻ 語彙の不変条件**: 窓種別は `win_kind=`（`transition_diag.rs:167`）で、`kind=` はレコード種別（:143）。**1 行に同じフィールド名を 2 度出さない**（`judge-perf.py::parse_fields` が後勝ちで潰すため）。ログを読む道具を足すときはこの規律に従うこと。
+> - **⑼ 正本**: `.kiro/specs/completed/areka-P0-dpi-transition-atomicity/`（要件 2／4／5／8・`signoff-procedure.md`・`mechanism-ledger.md` が file:line の正本）。
+>
+> **📌 2026-08-22 追記(77)（`areka-P0-dpi-transition-atomicity` からの申し送り・追記(73) の続き。上流の実機サインオフが FAIL のまま裁定 GO で閉じたので、一周走行が見る「跳ね」の期待値が変わる）**: 追記(73) は「拡大率切替を適合表へ足せる材料が揃った」と渡したが、**その材料で実際に測った結果が出た**。適合表を書くときの期待値に直に効く。
+> - **⑴ 窓は 4 枚同時に動くようになった**: 1 遷移内の窓書込の散らばりは **93,152〜157,684µs → 40〜101µs**（約 1,500〜2,000 分の 1）。task 7.2 が一括 flush を `Begin/Defer/EndDeferWindowPos` の 1 バッチへ移した効果である。**「窓が 1 枚ずつ順にずれていく」形は一周走行では観測されないはず**であり、観測されたら退行である。
+> - **⑵ しかし目視では跳ねが残る**: 絵が新しい拡大率で描かれてから窓がその寸へ動くまでが **210,329〜306,301µs（0.21〜0.31 秒）**ある。**この「絵が先・窓が後」は本 spec の走行でも見える。**上流の欠陥として再起票しないこと——引受先は `areka-P0-present-write-coherence`（W8・優先度低・開発者裁定で M1 完成を妨げない扱い）である。
+> - **⑶ 機械判定と目視が食い違うのは正常な向きが 1 つある**: 上流の判定器は決定論系統（フレーム単位）で PASS を出しつつ、実機専用系統（µs）で FAIL を出した。**同じ症状を別の量で測っている**ためで、判定器の欠陥ではない。読み分けの手順は `signoff-procedure.md` **§6.5**（4 行の表＋3 問の分岐手順）にある。**本 spec が拡大率切替の項目を書くときは、この分岐手順をそのまま引くこと**——独自の突合規約を作ると上流と食い違う。
+> - **⑷ 追記(73) ⑹「二体の隣接は遷移後に解き直される」は実機で成立した**: 8 遷移すべてで連鎖の解き直しが 1 回だけ起き（`chain_realigned=1`）、接地点差は 0 だった。**再表示直後の隣接（本 spec が抱える zorder の残件）を確認する好機は拡大率切替の直後である。**
+> - **⑸ ドラッグ追従の比 1.000 を実機で確かめるのは本 spec の持ち分**（上流が明示的に未測定として渡す）: 上流の実機サインオフは**採取中のドラッグを禁じる**条件で成立しており（手順書 §4.4・`ATOM-NO-DRAG: PASS`）、ドラッグは判定の外に置かれている。一方でアンカー付きキャラ窓のドラッグ追従は `crates/areka/src/placement/follow/drag_follow.rs:89`・`:183` が指令キューへ積む＝**上流が変えた合流と一括バッチをそのまま通る**。決定論の檻（`follow_drag_tests.rs`）は指令キューまでしか測らない（一括 flush を通らない＝上流 design D11）ので、**「掴んで動かしたとき窓がカーソルに 1:1 で付いてくるか」を実機で見るのは本 spec が唯一の場所である。**一周走行の実機項目へ足すこと。根拠と経緯は上流 requirements.md 要件 10.6 の注記。
+> - **⑹ 判定器の既知の限界を 1 つ承知しておくこと（ランナーを流用する側の注意）**: 「見送り窓（再表示が `invisible` で見送られた窓）への書込を数えない」規則は `frames_to_last_write` には適用されているが、`writes_per_window`（窓ごと 1 回）には**広げていない**。よって**見送り窓が 1 遷移の中で別々の tick に 2 本書いた形**では、`writes_per_window` が偽の違反を立て得る。上流の実機採取 2 回（7.1＝7 遷移・7.3＝8 遷移＝計 15 遷移）でこの形は **1 度も起きていない**ので上流は広げずに閉じた（裁定と根拠は上流 `mechanism-ledger.md`）。**一周走行で `writes_per_window` の違反を見たら、まず当該窓が `skipped_windows` に居ないかを確かめること**——居るなら判定器側の限界であって製品の欠陥ではない。
+> - **⑺ 正本**: `.kiro/specs/completed/areka-P0-dpi-transition-atomicity/mechanism-ledger.md` **§11**・`signoff-procedure.md` **§6.5**／**§6.6**・requirements.md 要件 8 の注記（裁定 GO の全文）。
+
 ## Problem
 
 M1 ゴール「emo2 が**そのまま** boot→talk→touch→menu→close まで E2E 実走する」を**証明する仕様が無所属**。各ユニットは自分の観測（決定論檻＋個別実機サインオフ）を持つが:
@@ -127,3 +147,43 @@ M1 ゴール「emo2 が**そのまま** boot→talk→touch→menu→close ま�
 - **決定論 spine は実 pasta 非依存**（scripted backend・注入入力のみ・[[deterministic-test-coverage-mandate]]）／**実機走行は実 pasta・実 DPI・絶対パス起動**（[[areka-placement-real-ghost-first]]・MOD_NOT_FOUND 運用注意）。
 - DoD: `cargo test --workspace` exit 0（[[workspace-test-needs-i686-host32-artifacts]]）＋License Gate＋実機14項目（人間サインオフ・AI 単独で完成宣言しない）。
 - 正典は ukadoc・emo2 は最小適合 fixture（[[ukadoc-mcp-preferred-source]]）。
+
+---
+
+## 申し送り（areka-P0-draw-load-parity・2026-08-23）
+
+`areka-P0-draw-load-parity`（W6.9）が tick の周期・構造に加えた変更の報告（同 spec 要件 8.3）。本 spec（W7・最終）は適合 14 項目の一周走行の前提としてこれを読み、実機走行時の環境変数と観測行の扱いを決めること。
+
+**⑴ tick に「門」が入った（既定 OFF）**
+
+- 画面更新 1 回ごとに、変化を示す旗が 1 つも立っていなければ 13 本のスケジュールを回さない、という判断を手前に挟む。判断は純関数 `tick_gate::should_run`（`crates/wintf/src/ecs/world/tick_gate.rs:154`）・つなぎは `EcsWorld::decide_tick`（`crates/wintf/src/ecs/world/mod.rs:551`）・入口は `tick_one_frame_with`（`crates/wintf/src/runtime/tick_bridge.rs:230`）。
+- **既定は OFF**（`world/mod.rs:405` の `tick_gate_enabled: false`）＝門を入れる前と同じ挙動。`AREKA_TICK_GATE=1|0`（`crates/areka/src/tick_gate_config.rs:25`）で同じ実行体のまま切り替えられ、A/B 比較と安全弁を兼ねる。既定を ON にするかは改善ループの周 1 の A/B が決める。
+- 必ず回す条件＝門が無効／起動から 600 回未満（`TICK_GATE_WARMUP_FRAMES`）／旗が 1 つでも立っている／期限到来／前回回してから 30 回（`TICK_HEARTBEAT_FRAMES`＝省略 30 回の次＝31 回目が心拍で回る・約 3.9 回/秒）。未知の窓メッセージは「疑わしいときは回す」側へ倒す。
+
+**⑵ 省略した回に何が起きないか（前提が変わる箇所）**
+
+- `FrameCount`／`FrameTime`／`TickStart` は**進まない**し、スケジュールは 1 本も回らない（`EcsWorld::note_skipped_tick`＝`world/mod.rs:593`）。フレーム番号や `FrameTime` を時間の代わりに読む観測・判定は、門が ON のとき意味が変わる。
+- `flush_window_pos_commands()` は**省略した回も必ず呼ぶ**（`tick_bridge.rs:258`）＝窓書込指令の一括 flush の駆動は不変。13 本の順序と `try_tick_world` の中身も不変（門は手前にある）。
+- 変化が生じたら次の画面更新までに反映する（遅れの上限は 1 画面更新周期＝120Hz の実機で約 8.3ms）。
+
+**⑶ 旗を立てる側（起床の生産者・全て 1 行）**
+
+- wintf: 窓メッセージ配送点（`ecs/window_proc/mod.rs`）・ポインタ投入（`ecs/pointer/buffers.rs`）・窓書込指令の積み上げ（`ecs/window/command.rs`）・Z 順（`ecs/window/zorder_pair_maintain.rs`）・ドラッグ（`ecs/drag/systems.rs`）・dola アニメ（`ecs/dola/mod.rs`）・GraphicsCore 無効（`ecs/graphics/systems/init.rs`）・表示構成の変化（`ecs/app.rs`）。
+- areka: 表示指令の到着（`emo2_boot/adapter.rs`・`move_cue.rs`・`talk_lifecycle.rs`）・文字の進行（`emo2_boot/frame/scale_text.rs`）・バルーンの待ち時間（`emo2_boot/balloon_visibility_phase.rs`）・`emo2_boot/hover_inject.rs`。旗は `tx.send` の**後**に立てる。`sinks` の順序（clocked_text_sink → lifecycle_sink）を保つこと。
+
+**⑷ 観測の口が増えた（いずれも既定 OFF・点けなければ費用 0）**
+
+- `[tick] kind=window frame= t_ms= ticks= skipped= heartbeat= wall_us= max_us= ui_cpu_us=` ＋ 13 本の相別 `<相>_us=`（1 秒窓で 1 行・`crates/wintf/src/ecs/world/tick_diag.rs:133`・target `wintf::tick`）。省略率はこの行の `skipped=` で読む。
+- `perf(thread)`／`perf(process)`（スレッド別・プロセス全体の CPU・`crates/areka/src/perf_thread_report.rs:51`・target `areka::perf`）。
+- 既存の `perf(apply_show)`（末尾 `frame`）と `[transition]` の文言・フィールド名は不変で、新しい行とは重ならない。
+
+**⑸ 一周走行での扱い**
+
+- 走行時の `AREKA_TICK_GATE` を**明示して記録に残す**こと（未指定＝既定 OFF＝門を入れる前と同じ挙動）。門の既定がループの結果で ON へ変わる可能性があるため、「何も指定しなかった」だけでは後から条件を復元できない。
+- 門が ON の走行では、フレーム番号を時間の代わりに使う判定（「N フレーム待って現れること」の類）が成立しない場合がある——放置中は 1 秒あたり 116〜118 回ぶんの画面更新が省略される実測がある。時間で待つか、上の `[tick]` 行の `ticks=`／`skipped=` を併記すること。
+- 見た目の追随（クリック透過・αマスク・バルーン追従・Z 順）は門の ON/OFF で変わらないことを dlp 側で確かめているが、**実機の目視確認は本 spec の 14 項目が最終の関門**である。門 ON で 1 周する場合はその旨を記録に残すこと。
+- `[tick]`／`perf(thread)`／`perf(process)` は既定 OFF なので、点けない限り一周走行のログ量は変わらない。点ける場合の target は上記のとおり。
+
+**dlp の合否に載せない申し送り（憶測で埋めないこと）**: 遷移フレームのうち自前の窓手続きが 1 行も走っていない**未特定区間 47.5%**（639,106／1,344,271µs）と、文字層の再構築の所要。
+
+**着地（2026-08-23・dlp タスク 9.4 で更新）**: dlp の改善ループは周 3 で頭打ち（plateau）となり STOPPED・**採用 0**。門の既定は **OFF のまま**（`crates/wintf/src/ecs/world/mod.rs` の `tick_gate_enabled: false`）、tick 構造（13 本の順序・実行器）は着地前と同じ、`Cargo.toml` は非接触。本節の file:line は dlp のタスク 1〜8 着地時点のまま有効。未達（⑵ catch-up・⑶・⑷a 22.3%）と残る最大項（段② `unregistered_rest` 51.8%）・引受先なし（新規 spec 要）は dlp の `requirements.md` 改訂欄に登記済み。

@@ -9,10 +9,10 @@
 // 作り分ける `PhysicalSizeSource` の fake を組み合わせる。
 // =============================================================================
 
-use std::collections::BTreeMap;
-
+use super::test_support::{
+    PerTargetSizes, SPAWN_SIZE_0, SPAWN_SIZE_1, pos_of, resnap_world, settled_sizes, size_of,
+};
 use super::*;
-use super::test_support::{pos_of, resnap_world, size_of};
 
 use crate::placement::chain_finalize::{CHAIN_FINALIZE_STALL_FRAMES, ChainFinalized};
 
@@ -21,38 +21,9 @@ use tracing::field::{Field, Visit};
 use tracing_subscriber::prelude::*;
 use wintf::ecs::{Point, SizeI};
 
-/// scope ごとに物理寸を作り分ける fake（`FakeSizes` は shell/balloon の 2 値しか返せず、
-/// 「全スコープの寸が窓と一致しているか」を扱う本檻には粒度が足りない）。
-///
-/// 値 `None` は「表示未成立（初回 ShowSurface 前）」を表す。
-struct PerTargetSizes(BTreeMap<u32, Option<(u32, u32)>>);
-
-impl PerTargetSizes {
-    /// scope → shell 物理寸（`None` は未表示）を与える。
-    fn new<I: IntoIterator<Item = (usize, Option<(u32, u32)>)>>(entries: I) -> Self {
-        Self(
-            entries
-                .into_iter()
-                .map(|(scope, size)| (shell_target(scope as u32).0, size))
-                .collect(),
-        )
-    }
-}
-
-impl PhysicalSizeSource for PerTargetSizes {
-    fn physical_size(&self, target: TargetId) -> Option<(u32, u32)> {
-        self.0.get(&target.0).copied().flatten()
-    }
-}
-
-/// spawn 時の実寸（`resnap_placements` と一致）。窓の `WindowPos.size` と揃える基準値。
-const SPAWN_SIZE_0: (u32, u32) = (434, 687);
-const SPAWN_SIZE_1: (u32, u32) = (278, 357);
-
-/// 全スコープが表示成立し、寸が窓と一致している状態の fake。
-fn settled_sizes() -> PerTargetSizes {
-    PerTargetSizes::new([(0, Some(SPAWN_SIZE_0)), (1, Some(SPAWN_SIZE_1))])
-}
+// `PerTargetSizes`／`SPAWN_SIZE_*`／`settled_sizes` は多フレーム駆動ハーネス（task 3.3）と
+// 共有するため `frame_test_support.rs` へ集約した（テーマ間で共有するヘルパは
+// `<stem>_test_support.rs` へ・複製すると本文の同一性が壊れる）。
 
 // -----------------------------------------------------------------------------
 // 駆動して隣接を回復する
@@ -97,11 +68,7 @@ fn finalize_closes_the_gap_by_moving_the_follower_only() {
         "Y は動かさない（下端吸着は再アンカーが保つ・7.2）"
     );
     // 隣接不変量: scope1 の右端＝scope0 の左端。
-    assert_eq!(
-        1483 - (1205 + 278),
-        0,
-        "確定後は隙間 0（scg 7.1）"
-    );
+    assert_eq!(1483 - (1205 + 278), 0, "確定後は隙間 0（scg 7.1）");
     assert!(
         world.get_resource::<ChainFinalized>().is_some(),
         "確定標識が立つ（7.4）"
@@ -145,7 +112,11 @@ fn finalize_runs_only_once_even_if_sizes_change_again() {
     // 確定後に scope0 の窓を別寸へ変えても連鎖は解き直されない（7.4）。
     resnap_from_sizes(
         &mut world,
-        [(0usize, crate::placement::resolver::SizePx { w: 500, h: 687 })].into_iter(),
+        [(
+            0usize,
+            crate::placement::resolver::SizePx { w: 500, h: 687 },
+        )]
+        .into_iter(),
     );
     let moved_origin_x = pos_of(&world, gw.char_window(0).unwrap()).map(|p| p.x);
     finalize_chain_once_with(

@@ -185,7 +185,13 @@ mod tests {
             0, 0, 0, 0, // px3: 完全透明
         ];
         assert_eq!(bgra.len(), (stride * h) as usize);
-        DecodedImage { width: w, height: h, stride, bgra, has_alpha }
+        DecodedImage {
+            width: w,
+            height: h,
+            stride,
+            bgra,
+            has_alpha,
+        }
     }
 
     fn params(use_self_alpha: UseSelfAlpha) -> AlphaParams {

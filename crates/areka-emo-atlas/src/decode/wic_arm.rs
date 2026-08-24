@@ -15,13 +15,13 @@ use windows::Win32::Foundation::GENERIC_READ;
 // IWICImagingFactory2 は D2D サブモジュール経由で露出する（wintf の import 経路に倣う）。
 use windows::Win32::Graphics::Imaging::D2D::IWICImagingFactory2;
 use windows::Win32::Graphics::Imaging::{
-    CLSID_WICImagingFactory, GUID_WICPixelFormat128bppPRGBAFloat, GUID_WICPixelFormat128bppRGBAFloat,
-    GUID_WICPixelFormat32bppBGRA, GUID_WICPixelFormat32bppPBGRA, GUID_WICPixelFormat32bppPRGBA,
-    GUID_WICPixelFormat32bppRGBA, GUID_WICPixelFormat32bppRGBA1010102,
-    GUID_WICPixelFormat32bppRGBA1010102XR, GUID_WICPixelFormat64bppBGRA,
-    GUID_WICPixelFormat64bppPBGRA, GUID_WICPixelFormat64bppPRGBA, GUID_WICPixelFormat64bppRGBA,
-    IWICBitmapSource, WICBitmapDitherTypeNone, WICBitmapPaletteTypeMedianCut,
-    WICDecodeMetadataCacheOnDemand,
+    CLSID_WICImagingFactory, GUID_WICPixelFormat32bppBGRA, GUID_WICPixelFormat32bppPBGRA,
+    GUID_WICPixelFormat32bppPRGBA, GUID_WICPixelFormat32bppRGBA,
+    GUID_WICPixelFormat32bppRGBA1010102, GUID_WICPixelFormat32bppRGBA1010102XR,
+    GUID_WICPixelFormat64bppBGRA, GUID_WICPixelFormat64bppPBGRA, GUID_WICPixelFormat64bppPRGBA,
+    GUID_WICPixelFormat64bppRGBA, GUID_WICPixelFormat128bppPRGBAFloat,
+    GUID_WICPixelFormat128bppRGBAFloat, IWICBitmapSource, WICBitmapDitherTypeNone,
+    WICBitmapPaletteTypeMedianCut, WICDecodeMetadataCacheOnDemand,
 };
 use windows::Win32::System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance};
 use windows::core::{GUID, HSTRING, Interface};
@@ -97,7 +97,13 @@ impl WicDecoderArm {
         let mut bgra = vec![0u8; (stride * height) as usize];
         unsafe { source.CopyPixels(std::ptr::null(), stride, &mut bgra)? };
 
-        Ok(DecodedImage { width, height, stride, bgra, has_alpha })
+        Ok(DecodedImage {
+            width,
+            height,
+            stride,
+            bgra,
+            has_alpha,
+        })
     }
 }
 
@@ -105,7 +111,9 @@ impl ElementDecoder for WicDecoderArm {
     fn decode(&self, path: &Path) -> Result<DecodedImage, DecodeError> {
         // 不在は診断可能な NotFound として返す（2.2・panic しない）。
         if !path.exists() {
-            return Err(DecodeError::NotFound { path: path.to_path_buf() });
+            return Err(DecodeError::NotFound {
+                path: path.to_path_buf(),
+            });
         }
         // 在るが復号不能（破損等）は Decode として返す（2.2・panic しない）。
         self.decode_inner(path).map_err(|e| DecodeError::Decode {
@@ -148,7 +156,7 @@ fn pixel_format_has_alpha(format: &GUID) -> bool {
 mod tests {
     use super::*;
     use std::path::PathBuf;
-    use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_MULTITHREADED};
+    use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
 
     /// COM 初期化下でクロージャを実行するヘルパ（WIC は CPU-only だが COM init 必須）。
     /// wintf の既存 WIC テスト（MTA）と同じパターン。
@@ -209,7 +217,11 @@ mod tests {
         with_com_initialized(|| {
             let arm = WicDecoderArm::new().expect("WIC factory");
             let not_image = emo2_path("emo2-kakukaku/descript.txt");
-            assert!(not_image.exists(), "fixture must exist: {}", not_image.display());
+            assert!(
+                not_image.exists(),
+                "fixture must exist: {}",
+                not_image.display()
+            );
             match arm.decode(&not_image) {
                 Err(DecodeError::Decode { path, source }) => {
                     assert_eq!(path, not_image);

@@ -214,7 +214,11 @@ fn test_dispatch_tunnel_order_is_root_to_sender() {
     dispatch_pointer_events(&mut world);
 
     // Tunnel は root(0) → child(1) の順
-    assert_eq!(*ORDER.lock().unwrap(), vec![0, 1], "Tunnel は root→sender 順");
+    assert_eq!(
+        *ORDER.lock().unwrap(),
+        vec![0, 1],
+        "Tunnel は root→sender 順"
+    );
 }
 
 #[test]
@@ -296,7 +300,10 @@ fn test_dispatch_clears_button_state_after_dispatch() {
     dispatch_pointer_events(&mut world);
 
     let s = world.get::<PointerState>(e).unwrap();
-    assert!(!s.left_down && !s.right_down && !s.middle_down, "主ボタンクリア");
+    assert!(
+        !s.left_down && !s.right_down && !s.middle_down,
+        "主ボタンクリア"
+    );
     assert!(!s.xbutton1_down && !s.xbutton2_down, "XButton クリア");
     assert_eq!(
         s.double_click,

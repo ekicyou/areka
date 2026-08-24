@@ -21,11 +21,8 @@ use super::model::{
 // 宣言していたテーマ境界どおりに兄弟ファイル `decode_tests_<テーマ>_tests.rs` へ置く
 // （子は `use super::{…}` で本ファイルの import 束縛を引く）。
 #[cfg(test)]
-#[path = "decode_tests_skeleton_tests.rs"]
-mod skeleton_tests;
-#[cfg(test)]
-#[path = "decode_tests_element_collision_tests.rs"]
-mod element_collision_tests;
+#[path = "decode_tests_alias_tests.rs"]
+mod alias_tests;
 #[cfg(test)]
 #[path = "decode_tests_animation_tests.rs"]
 mod animation_tests;
@@ -33,17 +30,20 @@ mod animation_tests;
 #[path = "decode_tests_append_tests.rs"]
 mod append_tests;
 #[cfg(test)]
-#[path = "decode_tests_alias_tests.rs"]
-mod alias_tests;
+#[path = "decode_tests_element_collision_tests.rs"]
+mod element_collision_tests;
 #[cfg(test)]
 #[path = "decode_tests_lenient_input_tests.rs"]
 mod lenient_input_tests;
 #[cfg(test)]
-#[path = "decode_tests_transcription_gap_tests.rs"]
-mod transcription_gap_tests;
+#[path = "decode_tests_method_matrix_tests.rs"]
+mod method_matrix_tests;
 #[cfg(test)]
 #[path = "decode_tests_pattern_method_tests.rs"]
 mod pattern_method_tests;
 #[cfg(test)]
-#[path = "decode_tests_method_matrix_tests.rs"]
-mod method_matrix_tests;
+#[path = "decode_tests_skeleton_tests.rs"]
+mod skeleton_tests;
+#[cfg(test)]
+#[path = "decode_tests_transcription_gap_tests.rs"]
+mod transcription_gap_tests;

@@ -62,14 +62,14 @@
 use std::collections::HashSet;
 
 use areka_kanade::{
-    CloseReason, ExecutionSnapshot, KanadeConfig, KanadeMsg, MonotonicMs, StartTalk, TalkId, events,
-    resources,
+    CloseReason, ExecutionSnapshot, KanadeConfig, KanadeMsg, MonotonicMs, StartTalk, TalkId,
+    events, resources,
 };
 
 use super::common::{
     BlockOn, CallMethod, DEFAULT_TIMEOUT, FIXED_FAREWELL_SCRIPT, FIXED_STEADY_SCRIPT, Fixture,
-    Harness, QuitPolicy, RecordedCall, drive_ticks_until_disconnect, expected_call, expected_unload,
-    join_bounded, spawn_harness, spawn_harness_blocking, spawn_harness_gated,
+    Harness, QuitPolicy, RecordedCall, drive_ticks_until_disconnect, expected_call,
+    expected_unload, join_bounded, spawn_harness, spawn_harness_blocking, spawn_harness_gated,
 };
 
 /// 駆動結果: 確定した shiori 記録列と、宛先へ到達した StartTalk 列。
@@ -335,7 +335,10 @@ fn sporadic_value_starts_unique_talk() {
         id: "OnSecondChange".to_string(),
         references: match events::on_second_change(
             MonotonicMs(1_000),
-            &ExecutionSnapshot { talk_active: false, choice_active: false },
+            &ExecutionSnapshot {
+                talk_active: false,
+                choice_active: false,
+            },
         ) {
             areka_kanade::ShioriCall::Get { references, .. } => references,
             _ => panic!("on_second_change（talk 非アクティブ）は GET を返すはず"),
@@ -454,7 +457,10 @@ fn active_talk_tick_emits_notify_ref3_zero() {
         id: "OnSecondChange".to_string(),
         references: match events::on_second_change(
             MonotonicMs(2_000),
-            &ExecutionSnapshot { talk_active: true, choice_active: false },
+            &ExecutionSnapshot {
+                talk_active: true,
+                choice_active: false,
+            },
         ) {
             areka_kanade::ShioriCall::Notify { references, .. } => references,
             _ => panic!("on_second_change（talk アクティブ）は NOTIFY を返すはず"),
@@ -606,7 +612,10 @@ fn blocking_call_ticks_catch_up_in_order_without_loss_or_duplication() {
             id: "OnSecondChange".to_string(),
             references: match events::on_second_change(
                 tick_now,
-                &ExecutionSnapshot { talk_active: false, choice_active: false },
+                &ExecutionSnapshot {
+                    talk_active: false,
+                    choice_active: false,
+                },
             ) {
                 areka_kanade::ShioriCall::Get { references, .. } => references,
                 _ => panic!("on_second_change（talk 非アクティブ）は GET を返すはず"),
@@ -634,7 +643,10 @@ fn blocking_call_ticks_catch_up_in_order_without_loss_or_duplication() {
             id: "OnSecondChange".to_string(),
             references: match events::on_second_change(
                 n,
-                &ExecutionSnapshot { talk_active: false, choice_active: false },
+                &ExecutionSnapshot {
+                    talk_active: false,
+                    choice_active: false,
+                },
             ) {
                 areka_kanade::ShioriCall::Get { references, .. } => references,
                 _ => panic!("on_second_change（talk 非アクティブ）は GET を返すはず"),
@@ -860,9 +872,18 @@ fn talk_completion_resumes_get_pump_ref3_one_status_none() {
         started
     );
     let ids: HashSet<u64> = started.iter().map(|s| s.talk_id.0).collect();
-    assert_eq!(ids.len(), 2, "talk_id は一意（再利用しない）: {:?}", started);
+    assert_eq!(
+        ids.len(),
+        2,
+        "talk_id は一意（再利用しない）: {:?}",
+        started
+    );
     assert_eq!(started[0].talk_id, TalkId(1), "保留 talk は先頭採番 id=1");
-    assert_eq!(started[1].talk_id, TalkId(2), "復帰後 talk は id=2（単調増番）");
+    assert_eq!(
+        started[1].talk_id,
+        TalkId(2),
+        "復帰後 talk は id=2（単調増番）"
+    );
 
     // (2) 完了後の GET 再開（本 cage の核心・Req 4.4）: active 窓（OnSecondChange NOTIFY）より後に
     //     OnSecondChange GET が現れ、その Ref3・Status が events 表導出の shape（Steady{None}＝GET・Ref3=1・

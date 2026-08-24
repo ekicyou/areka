@@ -92,13 +92,20 @@ const INFO_LINE_FIELDS: [&str; 13] = [
 ];
 
 /// perf サマリ行のフィールド集合（design.md §Data Models「perf サマリ行スキーマ」の 14 項目
-/// ＋ `message`）。判定スクリプト `tools/perf/judge-perf.py` との唯一のデータ契約である。
-const PERF_LINE_FIELDS: [&str; 15] = [
+/// ＋ `areka-P0-dpi-transition-atomicity` D12 が末尾へ足した `frame` ＋ `message`）。
+/// 判定スクリプト `tools/perf/judge-perf.py` との唯一のデータ契約である。
+///
+/// 本配列は**昇順の集合**であり行の順序は語らない。`frame` が行の**末尾**に出ること
+/// （既存フィールドの順序を崩していないこと）は
+/// `presenter/transition_record_tests.rs::the_perf_line_appends_the_frame_field_at_the_very_end`
+/// が本文走査で固定している。
+const PERF_LINE_FIELDS: [&str; 16] = [
     "alloc_compose_dst",
     "alloc_mask",
     "alloc_resample_dst",
     "alloc_xmap",
     "cache_hit",
+    "frame",
     "key_hash",
     "message",
     "surface_id",
@@ -293,7 +300,10 @@ fn build_assets_with_empty_surface(w: u32, h: u32, salt: u8) -> (EmoWorld, Atlas
         },
     };
     let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(baked.errors.is_empty(), "atlas bake セットアップは失敗しない");
+    assert!(
+        baked.errors.is_empty(),
+        "atlas bake セットアップは失敗しない"
+    );
 
     let mut world = EmoWorld::build(&shell_of(surfaces));
     world.bind_atlas(&baked.table, SetId(0));
@@ -364,7 +374,14 @@ fn miss_apply_emits_adjacent_info_and_perf_pair_with_every_stage_and_alloc_wired
     let cap = CaptureSubscriber::default();
     tracing::subscriber::with_default(cap.clone(), || {
         assert!(
-            show(&mut presenter, &mut world, TargetId(0), 1000, BindSet::default()).is_ok(),
+            show(
+                &mut presenter,
+                &mut world,
+                TargetId(0),
+                1000,
+                BindSet::default()
+            )
+            .is_ok(),
             "前提: k=2/1 の初回表示は成立する"
         );
     });
@@ -434,14 +451,26 @@ fn miss_apply_emits_adjacent_info_and_perf_pair_with_every_stage_and_alloc_wired
     }
 
     // (iv) alloc_* は実 FrameBudget 由来。ミス＋k≠1 の初回適用は 4 発生点すべてを 1 回ずつ踏む。
-    assert_eq!(field(&perf, "alloc_compose_dst"), "1", "合成先の確保が計数されていない");
+    assert_eq!(
+        field(&perf, "alloc_compose_dst"),
+        "1",
+        "合成先の確保が計数されていない"
+    );
     assert_eq!(
         field(&perf, "alloc_resample_dst"),
         "1",
         "表示バッファ（リサンプル先）の確保が計数されていない"
     );
-    assert_eq!(field(&perf, "alloc_xmap"), "1", "リサンプル作業領域の確保が計数されていない");
-    assert_eq!(field(&perf, "alloc_mask"), "1", "当たり判定マスクの確保が計数されていない");
+    assert_eq!(
+        field(&perf, "alloc_xmap"),
+        "1",
+        "リサンプル作業領域の確保が計数されていない"
+    );
+    assert_eq!(
+        field(&perf, "alloc_mask"),
+        "1",
+        "当たり判定マスクの確保が計数されていない"
+    );
 }
 
 /// Requirement 1.1／1.3／1.4 観測完了（**配線の檻・ヒット経路**）: 引き当てが成立した適用では
@@ -477,8 +506,16 @@ fn cache_hit_apply_reports_exact_zero_for_skipped_stages_and_zero_allocs() {
         "2 適用で perf 行が 2 本でない（1 適用 1 行の契約違反）: {events:?}"
     );
     // (ii) emit-once: 2 適用がそれぞれ独立した隣接対を成す。
-    assert_eq!(perfs[0], infos[0] + 1, "1 適用目の対が隣接していない: {events:?}");
-    assert_eq!(perfs[1], infos[1] + 1, "2 適用目の対が隣接していない: {events:?}");
+    assert_eq!(
+        perfs[0],
+        infos[0] + 1,
+        "1 適用目の対が隣接していない: {events:?}"
+    );
+    assert_eq!(
+        perfs[1],
+        infos[1] + 1,
+        "2 適用目の対が隣接していない: {events:?}"
+    );
 
     for i in &infos {
         assert_info_line_contract(&events[*i]);
@@ -493,7 +530,11 @@ fn cache_hit_apply_reports_exact_zero_for_skipped_stages_and_zero_allocs() {
         "true",
         "前提: 2 回目の同一入力適用は引き当てで済むこと"
     );
-    assert_eq!(field(&events[infos[1]], "cache_hit"), "true", "info! 側も引き当てを報告する");
+    assert_eq!(
+        field(&events[infos[1]], "cache_hit"),
+        "true",
+        "info! 側も引き当てを報告する"
+    );
 
     // 実行されなかった段は**厳密に 0**（mark を無条件へ移すと非 0 になり RED）。
     for name in ["t_compose_us", "t_resample_us", "t_mask_us"] {
@@ -544,7 +585,16 @@ fn identity_scale_miss_reports_exact_zero_resample_stage_and_no_resample_allocs(
 
     let cap = CaptureSubscriber::default();
     tracing::subscriber::with_default(cap.clone(), || {
-        assert!(show(&mut presenter, &mut world, TargetId(0), 1000, BindSet::default()).is_ok());
+        assert!(
+            show(
+                &mut presenter,
+                &mut world,
+                TargetId(0),
+                1000,
+                BindSet::default()
+            )
+            .is_ok()
+        );
     });
 
     let events = cap.events();
@@ -619,20 +669,47 @@ fn early_returns_around_compose_emit_neither_info_nor_perf_line() {
     let (ok, not_attached, compose_err, empty) =
         tracing::subscriber::with_default(cap.clone(), || {
             // 陽性: 表示が成立する適用 1 本（両 callsite が有効であることの証明）。
-            let ok = show(&mut presenter, &mut world, TargetId(0), 1000, BindSet::default());
+            let ok = show(
+                &mut presenter,
+                &mut world,
+                TargetId(0),
+                1000,
+                BindSet::default(),
+            );
             // 陰性 1: 未装着 target（show.rs 冒頭の早期復帰）。
-            let a = show(&mut presenter, &mut world, TargetId(9), 1000, BindSet::default());
+            let a = show(
+                &mut presenter,
+                &mut world,
+                TargetId(9),
+                1000,
+                BindSet::default(),
+            );
             // 陰性 2: 解決不能 id（合成失敗の早期復帰）。
-            let b = show(&mut presenter, &mut world, TargetId(0), 9999, BindSet::default());
+            let b = show(
+                &mut presenter,
+                &mut world,
+                TargetId(0),
+                9999,
+                BindSet::default(),
+            );
             // 陰性 3: 定義層皆無で外形 0×0（全透明退化 → Hide 縮退の早期復帰）。
-            let c = show(&mut presenter, &mut world, TargetId(0), 7000, BindSet::default());
+            let c = show(
+                &mut presenter,
+                &mut world,
+                TargetId(0),
+                7000,
+                BindSet::default(),
+            );
             (ok, a, b, c)
         });
 
     // 前提: 狙った 3 経路へ本当に落ちたこと（reply の形で確認する）。
     assert!(ok.is_ok(), "前提: 陽性の適用は成立する");
     assert!(
-        matches!(not_attached, Err(PresentError::TargetNotAttached(TargetId(9)))),
+        matches!(
+            not_attached,
+            Err(PresentError::TargetNotAttached(TargetId(9)))
+        ),
         "前提: 未装着 target 経路へ落ちること: {not_attached:?}"
     );
     assert!(
@@ -652,8 +729,16 @@ fn early_returns_around_compose_emit_neither_info_nor_perf_line() {
     let (info, perf) = expect_single_adjacent_pair(&events);
     assert_info_line_contract(&info);
     assert_perf_line_contract(&perf);
-    assert_eq!(field(&info, "surface_id"), "1000", "陽性は surface 1000 の適用");
-    assert_eq!(field(&perf, "surface_id"), "1000", "陰性の適用が perf 行を出している");
+    assert_eq!(
+        field(&info, "surface_id"),
+        "1000",
+        "陽性は surface 1000 の適用"
+    );
+    assert_eq!(
+        field(&perf, "surface_id"),
+        "1000",
+        "陰性の適用が perf 行を出している"
+    );
 
     // 各早期復帰が実際に走ったことを、その経路固有のログで陽性観測する（空虚な緑の排除）。
     let has = |level: tracing::Level, needle: &str| {
@@ -662,7 +747,10 @@ fn early_returns_around_compose_emit_neither_info_nor_perf_line() {
             .any(|e| e.level == level && e.message().contains(needle))
     };
     assert!(
-        has(tracing::Level::ERROR, "apply(ShowSurface): 未装着ターゲット"),
+        has(
+            tracing::Level::ERROR,
+            "apply(ShowSurface): 未装着ターゲット"
+        ),
         "未装着 target 経路を通っていない（陰性が空虚）: {events:?}"
     );
     assert!(
@@ -700,20 +788,38 @@ fn early_returns_before_swapchain_creation_emit_neither_info_nor_perf_line() {
     let cap = CaptureSubscriber::default();
     let (ok, no_gfx, no_compositor) = tracing::subscriber::with_default(cap.clone(), || {
         // 陽性: 資源が揃った target の成立適用（両 callsite の有効性の証明）。
-        let ok = show(&mut presenter, &mut world, TargetId(0), 1000, BindSet::default());
+        let ok = show(
+            &mut presenter,
+            &mut world,
+            TargetId(0),
+            1000,
+            BindSet::default(),
+        );
 
         // 陰性 1: GraphicsCore 不在（Compositor は在る）。
         let gfx = world
             .remove_resource::<GraphicsCore>()
             .expect("前提: GraphicsCore が載っている");
-        let a = show(&mut presenter, &mut world, TargetId(1), 1000, BindSet::default());
+        let a = show(
+            &mut presenter,
+            &mut world,
+            TargetId(1),
+            1000,
+            BindSet::default(),
+        );
         world.insert_resource(gfx);
 
         // 陰性 2: WucGraphicsResource 不在（＝Compositor を取り出せない）。
         let wuc = world
             .remove_resource::<WucGraphicsResource>()
             .expect("前提: WucGraphicsResource が載っている");
-        let b = show(&mut presenter, &mut world, TargetId(2), 1000, BindSet::default());
+        let b = show(
+            &mut presenter,
+            &mut world,
+            TargetId(2),
+            1000,
+            BindSet::default(),
+        );
         world.insert_resource(wuc);
 
         (ok, a, b)
@@ -790,10 +896,28 @@ fn display_result_is_independent_of_log_configuration() {
     // (a) 捕捉 subscriber あり。
     let cap = CaptureSubscriber::default();
     tracing::subscriber::with_default(cap.clone(), || {
-        assert!(show(&mut presenter, &mut world, TargetId(0), 1000, BindSet::default()).is_ok());
+        assert!(
+            show(
+                &mut presenter,
+                &mut world,
+                TargetId(0),
+                1000,
+                BindSet::default()
+            )
+            .is_ok()
+        );
     });
     // (b) subscriber なし（既定の NoSubscriber ＝ perf 行も info! 行も一切出ない）。
-    assert!(show(&mut presenter, &mut world, TargetId(1), 1000, BindSet::default()).is_ok());
+    assert!(
+        show(
+            &mut presenter,
+            &mut world,
+            TargetId(1),
+            1000,
+            BindSet::default()
+        )
+        .is_ok()
+    );
 
     // 前提: (a) では行が出ている（(b) との差がログ設定だけであることの担保）。
     let events = cap.events();

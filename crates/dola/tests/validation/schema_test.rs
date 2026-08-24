@@ -79,11 +79,9 @@ mod error_accumulation_tests {
                 .iter()
                 .any(|e| matches!(e, DolaError::SchemaVersionMismatch { .. }))
         );
-        assert!(
-            errors
-                .iter()
-                .any(|e| matches!(e, DolaError::UndefinedVariable { name, .. } if name == "undefined_var"))
-        );
+        assert!(errors.iter().any(
+            |e| matches!(e, DolaError::UndefinedVariable { name, .. } if name == "undefined_var")
+        ));
     }
 }
 

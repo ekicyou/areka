@@ -68,9 +68,7 @@ pub(super) fn drive_demo_system(world: &mut World) {
         Some(d) if !d.finished => {}
         _ => return,
     }
-    let mut demo = world
-        .remove_non_send::<Demo>()
-        .expect("直上で存在確認済み");
+    let mut demo = world.remove_non_send::<Demo>().expect("直上で存在確認済み");
 
     if !demo.attached {
         try_attach(&mut demo, world);
@@ -103,7 +101,11 @@ fn try_attach(demo: &mut Demo, world: &mut World) {
         (TargetId(1), demo.win1, demo.assets1.take()),
     ] {
         let Some((emo_world, atlas)) = assets else {
-            fail_attach(demo, world, format!("{target:?} のアセットが二重消費された（構造不変の破れ）"));
+            fail_attach(
+                demo,
+                world,
+                format!("{target:?} のアセットが二重消費された（構造不変の破れ）"),
+            );
             return;
         };
         if let Err(e) = demo.presenter.attach_target(
@@ -112,7 +114,11 @@ fn try_attach(demo: &mut Demo, world: &mut World) {
             // 供給する（本 example は k=1.0 相当で従来と同一の表示寸・描画結果）。
             96,
         ) {
-            fail_attach(demo, world, format!("{target:?} の attach_target に失敗: {e}"));
+            fail_attach(
+                demo,
+                world,
+                format!("{target:?} の attach_target に失敗: {e}"),
+            );
             return;
         }
         let (tx, rx) = reply_channel::<PresentOutcome>();
@@ -129,7 +135,11 @@ fn try_attach(demo: &mut Demo, world: &mut World) {
         match rx.recv_timeout(Duration::from_secs(10)) {
             Ok(Ok(())) => {}
             other => {
-                fail_attach(demo, world, format!("{target:?} の ShowSurface が成立しない: {other:?}"));
+                fail_attach(
+                    demo,
+                    world,
+                    format!("{target:?} の ShowSurface が成立しない: {other:?}"),
+                );
                 return;
             }
         }
@@ -140,11 +150,19 @@ fn try_attach(demo: &mut Demo, world: &mut World) {
         demo.presenter.text_slot_view(TargetId(0)),
         demo.presenter.text_slot_view(TargetId(1)),
     ) else {
-        fail_attach(demo, world, "表示確立後の text_slot_view が None".to_string());
+        fail_attach(
+            demo,
+            world,
+            "表示確立後の text_slot_view が None".to_string(),
+        );
         return;
     };
     if view0.slot() == view1.slot() {
-        fail_attach(demo, world, "2 target の予約スロットが同一（振り分け不能）".to_string());
+        fail_attach(
+            demo,
+            world,
+            "2 target の予約スロットが同一（振り分け不能）".to_string(),
+        );
         return;
     }
 
@@ -195,11 +213,19 @@ fn try_attach(demo: &mut Demo, world: &mut World) {
             .get_resource::<GraphicsCore>()
             .and_then(|core| core.dwrite_factory().cloned())
         else {
-            fail_attach(demo, world, "dwrite_factory 不在（metrics を構築できない）".to_string());
+            fail_attach(
+                demo,
+                world,
+                "dwrite_factory 不在（metrics を構築できない）".to_string(),
+            );
             return;
         };
-        match DWriteMetrics::new(&factory, &resolved.font, resolved.mode, &TextLayerConfig::default())
-        {
+        match DWriteMetrics::new(
+            &factory,
+            &resolved.font,
+            resolved.mode,
+            &TextLayerConfig::default(),
+        ) {
             Ok(m) => m,
             Err(e) => {
                 fail_attach(demo, world, format!("DWriteMetrics 構築に失敗: {e}"));
@@ -258,7 +284,10 @@ fn drive_scenario(demo: &mut Demo, world: &mut World) {
 
     // watchdog: 進行不能（drain 停止等）を FAIL として観測する。
     if t > WATCHDOG_SECS {
-        let msg = format!("watchdog 超過（stage={} t={t:.1}s）——シナリオが進行しない", demo.stage);
+        let msg = format!(
+            "watchdog 超過（stage={} t={t:.1}s）——シナリオが進行しない",
+            demo.stage
+        );
         error!("{msg}");
         world.resource_mut::<Verdict>().failures.push(msg);
         finish(demo, world);
@@ -349,10 +378,9 @@ fn run_checkpoint(demo: &mut Demo, world: &mut World, stage: usize, t_check: f64
     {
         let mut rt = demo.runtime.borrow_mut();
         if let Err(e) = present_frame(&mut rt, world, t_check) {
-            world
-                .resource_mut::<Verdict>()
-                .failures
-                .push(format!("stage {stage}: present_frame({t_check}) が失敗: {e}"));
+            world.resource_mut::<Verdict>().failures.push(format!(
+                "stage {stage}: present_frame({t_check}) が失敗: {e}"
+            ));
             return;
         }
     }
@@ -385,7 +413,9 @@ fn run_checkpoint(demo: &mut Demo, world: &mut World, stage: usize, t_check: f64
         // C1: typewriter 進行の途中観測（R11.2）——インクが出始めている。
         0 => {
             let Some(bytes) = read(&actor0()) else {
-                verdict.failures.push("C1: \\0 供給面の readback 不能".into());
+                verdict
+                    .failures
+                    .push("C1: \\0 供給面の readback 不能".into());
                 *world.resource_mut::<Verdict>() = verdict;
                 return;
             };
@@ -395,7 +425,9 @@ fn run_checkpoint(demo: &mut Demo, world: &mut World, stage: usize, t_check: f64
         // C2: typewriter 単調増加（R11.2）＋折返し構造（横=1 行のまま／縦=縦書き閾値で折返し・R11.4）。
         1 => {
             let Some(bytes) = read(&actor0()) else {
-                verdict.failures.push("C2: \\0 供給面の readback 不能".into());
+                verdict
+                    .failures
+                    .push("C2: \\0 供給面の readback 不能".into());
                 *world.resource_mut::<Verdict>() = verdict;
                 return;
             };
@@ -418,12 +450,17 @@ fn run_checkpoint(demo: &mut Demo, world: &mut World, stage: usize, t_check: f64
                 demo.obs.lines_c2 = lines.len();
             }
             demo.obs.block_extent_c2 = block_extent(&bytes, w, h, mode);
-            verdict.check(demo.obs.block_extent_c2 > 0, "C2: 行送り軸のインク範囲が非零");
+            verdict.check(
+                demo.obs.block_extent_c2 > 0,
+                "C2: 行送り軸のインク範囲が非零",
+            );
         }
         // C3: 改行（NewLine）で行送り軸方向へインク範囲が拡大する（R11.1/改行）。
         2 => {
             let Some(bytes) = read(&actor0()) else {
-                verdict.failures.push("C3: \\0 供給面の readback 不能".into());
+                verdict
+                    .failures
+                    .push("C3: \\0 供給面の readback 不能".into());
                 *world.resource_mut::<Verdict>() = verdict;
                 return;
             };
@@ -433,24 +470,37 @@ fn run_checkpoint(demo: &mut Demo, world: &mut World, stage: usize, t_check: f64
                 "C3: NewLine 後に行送り軸のインク範囲が拡大（改行の readback 観測）",
             );
             if let Some((lines, window)) = layout_of(&actor0()) {
-                verdict.check(lines.len() > demo.obs.lines_c2, "C3: 行数が増加（改行の構造観測）");
-                verdict.check(window.first_visible_line == 0, "C3: あふれ前はスクロールしない");
+                verdict.check(
+                    lines.len() > demo.obs.lines_c2,
+                    "C3: 行数が増加（改行の構造観測）",
+                );
+                verdict.check(
+                    window.first_visible_line == 0,
+                    "C3: あふれ前はスクロールしない",
+                );
             }
         }
         // C4: あふれ直前の基準採取＋複数 actor 振り分け（R11.8）。
         3 => {
             let Some(bytes0) = read(&actor0()) else {
-                verdict.failures.push("C4: \\0 供給面の readback 不能".into());
+                verdict
+                    .failures
+                    .push("C4: \\0 供給面の readback 不能".into());
                 *world.resource_mut::<Verdict>() = verdict;
                 return;
             };
             let Some(bytes1) = read(&actor1()) else {
-                verdict.failures.push("C4: \\1 供給面の readback 不能（振り分け不成立）".into());
+                verdict
+                    .failures
+                    .push("C4: \\1 供給面の readback 不能（振り分け不成立）".into());
                 *world.resource_mut::<Verdict>() = verdict;
                 return;
             };
             if let Some((_, window)) = layout_of(&actor0()) {
-                verdict.check(window.first_visible_line == 0, "C4: 3 行時点ではスクロールしない");
+                verdict.check(
+                    window.first_visible_line == 0,
+                    "C4: 3 行時点ではスクロールしない",
+                );
             }
             demo.obs.inline_extent_c4 = inline_extent_first_band(&bytes0, w, h, mode, pitch);
             verdict.check(
@@ -470,12 +520,16 @@ fn run_checkpoint(demo: &mut Demo, world: &mut World, stage: usize, t_check: f64
         // C5: あふれ→スクロール（R11.3）＋ \0 更新が \1 へ波及しない独立性（R11.8）。
         4 => {
             let Some(bytes0) = read(&actor0()) else {
-                verdict.failures.push("C5: \\0 供給面の readback 不能".into());
+                verdict
+                    .failures
+                    .push("C5: \\0 供給面の readback 不能".into());
                 *world.resource_mut::<Verdict>() = verdict;
                 return;
             };
             let Some((lines, window)) = layout_of(&actor0()) else {
-                verdict.failures.push("C5: \\0 の layout 再導出に失敗".into());
+                verdict
+                    .failures
+                    .push("C5: \\0 の layout 再導出に失敗".into());
                 *world.resource_mut::<Verdict>() = verdict;
                 return;
             };
@@ -521,7 +575,9 @@ fn run_checkpoint(demo: &mut Demo, world: &mut World, stage: usize, t_check: f64
         // C6: \0 の Clear で全透明へ（R11.5）・\1 は残存（独立性）。
         5 => {
             let Some(bytes0) = read(&actor0()) else {
-                verdict.failures.push("C6: \\0 供給面の readback 不能".into());
+                verdict
+                    .failures
+                    .push("C6: \\0 供給面の readback 不能".into());
                 *world.resource_mut::<Verdict>() = verdict;
                 return;
             };
@@ -542,7 +598,9 @@ fn run_checkpoint(demo: &mut Demo, world: &mut World, stage: usize, t_check: f64
         // C7: \1 の Clear で全透明へ（R11.5・両バルーンの全消去完了）。
         6 => {
             let Some(bytes1) = read(&actor1()) else {
-                verdict.failures.push("C7: \\1 供給面の readback 不能".into());
+                verdict
+                    .failures
+                    .push("C7: \\1 供給面の readback 不能".into());
                 *world.resource_mut::<Verdict>() = verdict;
                 return;
             };
@@ -594,7 +652,8 @@ fn observe_redraw_less_stats(demo: &mut Demo, world: &mut World) {
     // ＝確定行がスクロール量に比例して蓄積再描画されないことを檻化する（再描画レスの核）。
     if complete.len() < 3 {
         world.resource_mut::<Verdict>().failures.push(
-            "C8: あふれ短行リビール区間で 1 行スクロールの完成プラトーが 3 つ未満（観測不能）".into(),
+            "C8: あふれ短行リビール区間で 1 行スクロールの完成プラトーが 3 つ未満（観測不能）"
+                .into(),
         );
         return;
     }
@@ -625,7 +684,10 @@ fn observe_redraw_less_stats(demo: &mut Demo, world: &mut World) {
             s_idle.line_layout_creations == s_base.line_layout_creations,
             "C8: 不変フレームは行レイアウト生成 増分 0",
         );
-        v.check(s_idle.blits == s_base.blits, "C8: 不変フレームは面内 blit 増分 0");
+        v.check(
+            s_idle.blits == s_base.blits,
+            "C8: 不変フレームは面内 blit 増分 0",
+        );
         v.check(
             s_idle.full_clears == s_base.full_clears,
             "C8: 不変フレームは FullClear 増分 0",
@@ -649,8 +711,15 @@ fn observe_redraw_less_stats(demo: &mut Demo, world: &mut World) {
     let blit2 = s2.blits - s1.blits;
     info!(
         p = complete[i0].fvl,
-        fvl1, fvl2, visible_line_count,
-        draw1, draw2, create1, create2, blit1, blit2,
+        fvl1,
+        fvl2,
+        visible_line_count,
+        draw1,
+        draw2,
+        create1,
+        create2,
+        blit1,
+        blit2,
         "C8: スクロールフレームの DrawStats 増分（R10.3 観測・可視窓のみ移動・2 段）"
     );
 
@@ -752,7 +821,11 @@ fn reveal_probe(demo: &Demo, actor: &ActorKey, t: f64) -> (usize, usize, usize) 
         WrapPlan::CharByChar,
     );
     let window = LayoutEngine::visible_window(&lines, &resolved.region, resolved.mode);
-    (visible, window.first_visible_line, lines.len() - window.first_visible_line)
+    (
+        visible,
+        window.first_visible_line,
+        lines.len() - window.first_visible_line,
+    )
 }
 
 /// 純粋 layout から `(first_visible_line, visible_line_count)` を導出する

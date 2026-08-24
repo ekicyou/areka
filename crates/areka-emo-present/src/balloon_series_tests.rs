@@ -124,7 +124,10 @@ fn prefix_chain_ge2_excludes_scope1_canonical_name() {
             .filter(|p| p.tier == ChainTier::KeroNamed)
             .collect();
         assert_eq!(kero.len(), 1, "scope {scope} の相方系列段は 1 段");
-        assert_eq!(kero[0].prefix, "balloonk", "相方系列段は正典名指しの balloonk");
+        assert_eq!(
+            kero[0].prefix, "balloonk",
+            "相方系列段は正典名指しの balloonk"
+        );
     }
 }
 

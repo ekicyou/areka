@@ -223,11 +223,7 @@ fn test_get_hwnd_insert_after_maps_each_zorder() {
 fn test_to_window_coords_for_creation_passes_through_cw_usedefault() {
     // CW_USEDEFAULT を含む既定 WindowPos は AdjustWindowRectExForDpi を呼ばず素通し
     let pos = WindowPos::default();
-    let (x, y, w, h) = pos.to_window_coords_for_creation(
-        WINDOW_STYLE(0),
-        WINDOW_EX_STYLE(0),
-        96,
-    );
+    let (x, y, w, h) = pos.to_window_coords_for_creation(WINDOW_STYLE(0), WINDOW_EX_STYLE(0), 96);
     assert_eq!(x, CW_USEDEFAULT);
     assert_eq!(y, CW_USEDEFAULT);
     assert_eq!(w, CW_USEDEFAULT);
@@ -246,8 +242,7 @@ fn test_to_window_coords_for_creation_passes_through_when_position_x_is_cw_usede
         width: 100,
         height: 100,
     });
-    let (x, y, w, h) =
-        pos.to_window_coords_for_creation(WINDOW_STYLE(0), WINDOW_EX_STYLE(0), 96);
+    let (x, y, w, h) = pos.to_window_coords_for_creation(WINDOW_STYLE(0), WINDOW_EX_STYLE(0), 96);
     assert_eq!((x, y, w, h), (CW_USEDEFAULT, 0, 100, 100));
 }
 
@@ -261,7 +256,6 @@ fn test_to_window_coords_for_creation_no_frame_style_is_identity() {
         width: 200,
         height: 150,
     });
-    let (x, y, w, h) =
-        pos.to_window_coords_for_creation(WS_POPUP, WINDOW_EX_STYLE(0), 96);
+    let (x, y, w, h) = pos.to_window_coords_for_creation(WS_POPUP, WINDOW_EX_STYLE(0), 96);
     assert_eq!((x, y, w, h), (50, 60, 200, 150));
 }

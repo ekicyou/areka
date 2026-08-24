@@ -1,0 +1,6 @@
+# 自己較正用の最小の目標定義（実物は tools/perf/goals/<goal>.toml）。
+[goal]
+name = "demo-goal"
+spec_dir = "spec"
+ledger = "loop-ledger.md"
+results_dir = "results"

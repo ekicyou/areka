@@ -112,7 +112,13 @@ impl EmoWorld {
 
     /// 常駐する surface id を昇順（決定的）で列挙する。
     pub fn surface_ids(&self) -> impl Iterator<Item = u32> + '_ {
-        let mut ids: Vec<u32> = self.world.resource::<SurfaceIndex>().0.keys().copied().collect();
+        let mut ids: Vec<u32> = self
+            .world
+            .resource::<SurfaceIndex>()
+            .0
+            .keys()
+            .copied()
+            .collect();
         ids.sort_unstable();
         ids.into_iter()
     }
@@ -238,9 +244,9 @@ mod tests {
 
         // 全キーを走査（spot-check しない）: 各キーで借用解決結果と所有スナップショットが一致。
         for (key, ids) in &snap {
-            let borrowed = world
-                .resolve_alias(key)
-                .unwrap_or_else(|| panic!("スナップショットのキー `{key}` は resolve_alias でも解決する"));
+            let borrowed = world.resolve_alias(key).unwrap_or_else(|| {
+                panic!("スナップショットのキー `{key}` は resolve_alias でも解決する")
+            });
             assert_eq!(
                 borrowed,
                 ids.as_slice(),

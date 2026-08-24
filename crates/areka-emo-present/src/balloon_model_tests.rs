@@ -4,8 +4,8 @@ use super::test_support::{CapturedEvent, TempDir, capture_events, emo2_balloon_r
 
 /// 実 fixture の当該 scope の面 0 を解決するテストヘルパ（本体は権威経路そのもの）。
 fn emo2_face0(scope: u32) -> ResolvedFace {
-    let faces = resolve_balloon_faces(&emo2_balloon_root(), scope)
-        .expect("emo2-kakukaku は面 0 を持つ");
+    let faces =
+        resolve_balloon_faces(&emo2_balloon_root(), scope).expect("emo2-kakukaku は面 0 を持つ");
     faces
         .into_iter()
         .find(|f| f.surface_id == 0)

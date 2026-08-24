@@ -48,14 +48,25 @@ fn epoch_increments_monotonically_through_actor_publishes() {
     publisher.publish_static(a("ghost/a"), vec![("selfname".into(), "x".into())], vec![]);
     publisher.barrier().expect("barrier while alive");
     let e1 = shared.load().epoch;
-    assert_eq!(e1, e0 + 1, "one mutating publish must advance epoch by exactly 1");
+    assert_eq!(
+        e1,
+        e0 + 1,
+        "one mutating publish must advance epoch by exactly 1"
+    );
 
     // 変異②: SET StoreWrite（自由 key → host 点付き区画書込）→ 後継 epoch = e1 + 1。
     publisher.set(a("ghost/a"), "myplugin.k".into(), "v".into());
     publisher.barrier().expect("barrier while alive");
     let e2 = shared.load().epoch;
-    assert_eq!(e2, e1 + 1, "second mutating publish must advance epoch by exactly 1");
-    assert!(e2 > e1 && e1 > e0, "epoch must be strictly monotonically increasing");
+    assert_eq!(
+        e2,
+        e1 + 1,
+        "second mutating publish must advance epoch by exactly 1"
+    );
+    assert!(
+        e2 > e1 && e1 > e0,
+        "epoch must be strictly monotonically increasing"
+    );
 
     // 非変異①: SET RuntimeCommand（sink 未登録 → 予約 seam・書込なし）→ epoch 据え置き。
     publisher.set(a("ghost/a"), "surface.num".into(), "5".into());
@@ -78,7 +89,11 @@ fn epoch_increments_monotonically_through_actor_publishes() {
     // 変異③: 再度の変異で単調増加が続く（据え置き後も +1 する）。
     publisher.publish_static(a("ghost/b"), vec![("selfname".into(), "y".into())], vec![]);
     publisher.barrier().expect("barrier while alive");
-    assert_eq!(shared.load().epoch, e2 + 1, "mutation after no-ops must resume +1");
+    assert_eq!(
+        shared.load().epoch,
+        e2 + 1,
+        "mutation after no-ops must resume +1"
+    );
 
     // 正典終了で確実に畳む（join で panic 不在も確認）。
     publisher.close();
@@ -132,14 +147,21 @@ fn send_after_death_logs_warn_not_silent() {
     });
     // 正典終了経路で確実に畳む（join 復帰 = body return = rx drop 済み = 以降 send は SendError）。
     parts.publisher.close();
-    parts.handle.join().expect("clean close joins without panic");
+    parts
+        .handle
+        .join()
+        .expect("clean close joins without panic");
 
     // 死亡後の fire-and-forget 投函: SendError → WARN 記録して縮退（無音でない）。
     let send_events = capture(|| {
+        parts.publisher.publish_static(
+            a("ghost/a"),
+            vec![("selfname".into(), "死後値".into())],
+            vec![],
+        );
         parts
             .publisher
-            .publish_static(a("ghost/a"), vec![("selfname".into(), "死後値".into())], vec![]);
-        parts.publisher.set(a("ghost/a"), "myplugin.x".into(), "y".into());
+            .set(a("ghost/a"), "myplugin.x".into(), "y".into());
     });
     assert_logged(
         &send_events,

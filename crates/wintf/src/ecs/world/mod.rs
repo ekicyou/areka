@@ -6,6 +6,10 @@
 mod vsync;
 
 pub mod schedule_labels;
+pub mod thread_registry;
+pub mod tick_diag;
+pub mod tick_gate;
+pub mod tick_wake;
 
 pub use schedule_labels::*;
 pub use vsync::*;
@@ -17,7 +21,7 @@ use bevy_ecs::system::*;
 use std::cell::RefCell;
 use std::rc::Weak;
 use std::time::Instant;
-use tracing::{error, trace};
+use tracing::{error, info, trace};
 use windows::Win32::Foundation::HWND;
 
 /// 外側 `Rc<RefCell<EcsWorld>>` への弱参照を保持する NonSend リソース（task 4.3）。
@@ -44,6 +48,22 @@ pub struct EcsWorld {
     // デバッグ用: フレームレート計測
     frame_count: u64,
     last_log_time: Option<Instant>,
+    /// フレーム駆動の相別観測（既定 OFF・`RUST_LOG` に `wintf::tick=debug` で点く）。
+    tick_diag: tick_diag::TickDiag,
+    /// tick の門が有効か（既定 **無効**＝門を入れる前と同じ挙動）。
+    ///
+    /// 既定値は周 1 の A/B（既定 ON 対 既定 OFF）で決める（設計 C16）。areka は起動時に
+    /// `AREKA_TICK_GATE=1|0` を読んで [`set_tick_gate`](Self::set_tick_gate) で上書きできる。
+    tick_gate_enabled: bool,
+    /// 起動からの画面更新の回数（**省略した回も含む**・起動直後かどうかの物差し）。
+    frames_since_boot: u32,
+    /// 前回**回した** tick からの画面更新の回数（心拍の物差し）。
+    frames_since_run: u32,
+    /// 直前の判断が心拍だったか（観測行の `heartbeat=` に載せるための印）。
+    ///
+    /// 判断が置き、`try_tick_world` が読んで倒す。門を通さない呼び出し（旧経路・テスト）が
+    /// 前回の印を引き継がないよう、読んだ側で必ず倒す。
+    last_run_was_heartbeat: bool,
 }
 
 impl EcsWorld {
@@ -75,6 +95,13 @@ impl EcsWorld {
 
         // FrameTime初期化（dola::runtime::clock::now() の値を保持）
         world.insert_resource(crate::ecs::graphics::FrameTime(dola::runtime::clock::now()));
+
+        // TickStart初期化（遷移観測の刻印の時刻基準・D1）
+        // 最初の tick で FrameCount と同じ点から更新されるが、tick 前に World を借りる
+        // 観測点が資源を引けるよう構築時に置いておく。
+        world.insert_resource(crate::ecs::window::transition_diag::TickStart(
+            Instant::now(),
+        ));
 
         // WintfTaskPool初期化（非同期タスク実行基盤）
         world.insert_resource(crate::ecs::widget::bitmap_source::WintfTaskPool::new());
@@ -342,6 +369,9 @@ impl EcsWorld {
                 crate::ecs::pointer::clear_transient_pointer_state,
             );
 
+            // FrameFinalizeスケジュール: ドラッグ中は次の画面更新を予約（tick の末尾）
+            schedules.add_systems(FrameFinalize, crate::ecs::drag::rearm_tick_while_dragging);
+
             // FrameFinalizeスケジュール: Messagesの更新
             schedules.add_systems(
                 FrameFinalize,
@@ -371,6 +401,11 @@ impl EcsWorld {
             message_window: None,
             frame_count: 0,
             last_log_time: None,
+            tick_diag: tick_diag::TickDiag::default(),
+            tick_gate_enabled: false,
+            frames_since_boot: 0,
+            frames_since_run: 0,
+            last_run_was_heartbeat: false,
         }
     }
 
@@ -476,11 +511,106 @@ impl EcsWorld {
         }
     }
 
+    // ────────────────────────────────────── tick の門（設計 C16・要件 3.2/3.7）
+
+    /// tick の門の有効を切り替える（起動時に 1 度・`AREKA_TICK_GATE` の上書き口）。
+    ///
+    /// 無効なら判断そのものを行わず必ず回す（＝門を入れる前と同じ挙動）。切り替えは
+    /// 起動時の 1 回を想定しているので、呼ばれたことを 1 行残す。
+    pub fn set_tick_gate(&mut self, enabled: bool) {
+        self.tick_gate_enabled = enabled;
+        info!("[set_tick_gate] tick gate enabled={enabled}");
+    }
+
+    /// tick の門が有効か。
+    pub fn tick_gate_enabled(&self) -> bool {
+        self.tick_gate_enabled
+    }
+
+    /// 数えている 2 つの回数（起動から, 前回回した tick から）。
+    ///
+    /// 観測と決定論テストのための読み出し口で、判断には使わない。
+    pub fn tick_gate_counters(&self) -> (u32, u32) {
+        (self.frames_since_boot, self.frames_since_run)
+    }
+
+    /// 直前の判断が心拍だったか（観測行の `heartbeat=` へ載る印）。
+    #[cfg(test)]
+    pub(crate) fn last_run_was_heartbeat(&self) -> bool {
+        self.last_run_was_heartbeat
+    }
+
+    /// 画面更新 1 回ぶんの判断（旗を読んで倒す → 純関数 → 数を数える）。
+    ///
+    /// 旗の読み取りは原子的な swap（[`tick_wake::take`]）で、**失敗しうる経路が無い**
+    /// ——錠を取らず、OS も呼ばず、`Result` も返さない。したがってここに `Err` の腕は
+    /// 存在しない。将来ここへ失敗しうる経路（別プロセスからの読み出し・OS 問い合わせ
+    /// など）を足すときは、要件 3.7 に従い **`error!` を残して「回す」側**
+    /// （[`TickDecision::Run`](tick_gate::TickDecision::Run)`(`[`RunReason::Disabled`](tick_gate::RunReason::Disabled)`)`）
+    /// へ倒すこと——黙って省略へ倒してはならない。作り物の `Result` は返さない。
+    pub fn decide_tick(&mut self, now: Instant) -> tick_gate::TickDecision {
+        self.decide_tick_with(tick_wake::take(now))
+    }
+
+    /// 読み取り済みの旗から判断する（[`decide_tick`](Self::decide_tick) の中身）。
+    ///
+    /// 旗を注入できるので、プロセス共有の実体に触れずに決定論テストが書ける。
+    /// 判断そのものは純関数 [`tick_gate::should_run`] に閉じており、ここがするのは
+    /// 入力を組むことと、答えに応じて 2 つの回数を進めることだけである。
+    pub fn decide_tick_with(
+        &mut self,
+        snapshot: tick_wake::WakeSnapshot,
+    ) -> tick_gate::TickDecision {
+        let inputs = tick_gate::TickGateInputs::from_snapshot(
+            &snapshot,
+            self.frames_since_run,
+            self.frames_since_boot,
+            self.tick_gate_enabled,
+        );
+        let decision = tick_gate::should_run(&inputs);
+
+        // 起動からの回数は省略した回も含めて進む（起動直後の物差しなので頭打ちで十分）。
+        self.frames_since_boot = self.frames_since_boot.saturating_add(1);
+        match decision {
+            tick_gate::TickDecision::Run(reason) => {
+                self.frames_since_run = 0;
+                self.last_run_was_heartbeat = matches!(reason, tick_gate::RunReason::Heartbeat);
+            }
+            tick_gate::TickDecision::Skip => {
+                self.frames_since_run = self.frames_since_run.saturating_add(1);
+            }
+        }
+
+        decision
+    }
+
+    /// 省略した画面更新を 1 件記録する（門が [`Skip`](tick_gate::TickDecision::Skip) を返した回）。
+    ///
+    /// `FrameCount`／`FrameTime`／`TickStart` は**進めない**し、スケジュールも 1 本も
+    /// 回さない。観測が点いているときだけ省略の数を積み、窓が閉じていれば 1 行出す
+    /// ——省略が長く続く間も窓は閉じる（`ticks=0` の窓は正当な観測結果である）。
+    /// 観測が消えているときは時刻を 1 度も取らない（要件 3.8）。
+    pub fn note_skipped_tick(&mut self) {
+        if !tick_diag::is_enabled() {
+            return;
+        }
+        let now = Instant::now();
+        self.tick_diag.record_skipped(now);
+        if let Some(line) = self.tick_diag.maybe_close(now) {
+            tick_diag::emit_line(&line);
+        }
+    }
+
     /// システムを1回実行
     /// システムが実行された場合はtrueを返す
     pub fn try_tick_world(&mut self) -> bool {
         // デバッグ: フレームレート計測（不要になったらコメントアウト）
         self.measure_and_log_framerate();
+
+        // 相別観測の前置ガード（要件 3.8）。tick 1 回につきここで 1 度だけ評価し、
+        // 以後はこの bool を配る。偽のときこの観測のために時刻を取らず、行も組まない
+        // （兄弟テストが「ガードは最初の時刻取得より前」を本文の並びで固定する）。
+        let diag_on = tick_diag::is_enabled();
 
         // システムが登録されていない場合はスキップ
         if !self.has_systems {
@@ -500,9 +630,32 @@ impl EcsWorld {
         // 用いられないため、ラップしても観測挙動はログ値が 0 に戻るだけで正当性に影響しない。
         // debug panic 化を避ける堅牢化（saturating/wrapping_add）は debug 挙動を変えるため
         // P66 として記録。
-        if let Some(mut frame_count) = self.world.get_resource_mut::<FrameCount>() {
+        //
+        // 遷移観測の刻印（D1）: フレーム番号の権威はここで進む 1 系列だけである。
+        // 同一点で Resource `TickStart` を更新し、同じ値をスレッド局所の写しへ配る
+        // （`transition_diag::begin_tick`）。World を借りられる観測点は資源から、
+        // 借りられない観測点（一括 flush・wndproc）だけが写しから刻印を組む。
+        // スケジュール構成（13 本の順序）はここでは変えない。
+        let tick_start = Instant::now();
+        let frame = if let Some(mut frame_count) = self.world.get_resource_mut::<FrameCount>() {
             frame_count.0 += 1;
+            frame_count.0
+        } else {
+            // FrameCount を持たない World（`EcsWorld::new` 以外で組まれた場合）では
+            // 番号を進める先が無いので 0 のまま配る（資源と写しが食い違わない）。
+            0
+        };
+        match self
+            .world
+            .get_resource_mut::<crate::ecs::window::transition_diag::TickStart>()
+        {
+            Some(mut start) => start.0 = tick_start,
+            None => self
+                .world
+                .insert_resource(crate::ecs::window::transition_diag::TickStart(tick_start)),
         }
+        crate::ecs::window::transition_diag::begin_tick(frame, tick_start);
+
         if let Some(mut frame_time) = self
             .world
             .get_resource_mut::<crate::ecs::graphics::FrameTime>()
@@ -514,23 +667,60 @@ impl EcsWorld {
         // これにより、マルチスレッドで実行されるシステムでもデータにアクセス可能になる
         crate::ecs::pointer::transfer_buffers_to_world(&mut self.world);
 
+        // 相別観測（既定 OFF）: 点いているときだけ UI スレッドのハンドルを 1 度確保する。
+        if diag_on {
+            self.tick_diag.ensure_ui_thread();
+        }
+
         // 各Scheduleを順番に実行
+        //
+        // 13 本の呼び出しと順序は不変（要件 3.4／既存の順序テスト 2 本）。間に挟まる
+        // `phase.lap()` は相別観測の区切りで、OFF のときは何もしない（時刻も取らない）。
+        let mut phase = tick_diag::PhaseTimer::start(diag_on);
         let _ = self.world.try_run_schedule(Input);
+        phase.lap();
         let _ = self.world.try_run_schedule(Update);
+        phase.lap();
         let _ = self.world.try_run_schedule(PreLayout);
+        phase.lap();
         let _ = self.world.try_run_schedule(Layout);
+        phase.lap();
         let _ = self.world.try_run_schedule(PostLayout);
+        phase.lap();
         let _ = self.world.try_run_schedule(UISetup);
+        phase.lap();
         let _ = self.world.try_run_schedule(GraphicsSetup);
+        phase.lap();
         let _ = self.world.try_run_schedule(Draw);
+        phase.lap();
         let _ = self.world.try_run_schedule(PreRenderSurface);
+        phase.lap();
         let _ = self.world.try_run_schedule(RenderSurface);
+        phase.lap();
         let _ = self.world.try_run_schedule(Composition);
+        phase.lap();
         let _ = self.world.try_run_schedule(CommitComposition);
+        phase.lap();
         let _ = self.world.try_run_schedule(FrameFinalize);
+        phase.lap();
 
         // Layout スケジュール実行後のタイミングで NCHITTEST キャッシュをクリア
         crate::ecs::pointer::nchittest_cache::clear_nchittest_cache();
+
+        // 心拍で回した回かどうかは、門の判断（`decide_tick_with`）が置いた印を読む。
+        // 読んだら倒す——門を通さない呼び出し（旧経路・テスト）が前回の印を引き継がない。
+        let heartbeat = std::mem::take(&mut self.last_run_was_heartbeat);
+
+        // 相別観測の集計と、1 秒窓が閉じたときの 1 行（要件 2.5／2.6）。
+        if diag_on {
+            let ended = Instant::now();
+            let wall_us = ended.saturating_duration_since(tick_start).as_micros() as u64;
+            self.tick_diag
+                .record_run(ended, frame, wall_us, phase.per_schedule(), heartbeat);
+            if let Some(line) = self.tick_diag.maybe_close(ended) {
+                tick_diag::emit_line(&line);
+            }
+        }
 
         true
     }
@@ -655,7 +845,10 @@ mod tick_order_tests {
 
         // 空 World を 1 周 tick（window/graphics は生成対象ゼロで no-op・headless 安全）。
         let ticked = ecs.try_tick_world();
-        assert!(ticked, "システム登録済みの World は try_tick_world が true を返すべき");
+        assert!(
+            ticked,
+            "システム登録済みの World は try_tick_world が true を返すべき"
+        );
 
         let order = ecs.world().resource::<TickOrderLog>().0.clone();
         assert_eq!(
@@ -703,9 +896,43 @@ mod tick_order_tests {
         let order = ecs.world().resource::<TickOrderLog>().0.clone();
         assert_eq!(order.len(), 26, "2 周で 13×2 本が実行されるべき");
         assert_eq!(&order[..13], EXPECTED_ORDER, "1 周目の順序が固定列と一致");
-        assert_eq!(&order[13..], EXPECTED_ORDER, "2 周目も同一順序で安定（順序不変）");
+        assert_eq!(
+            &order[13..],
+            EXPECTED_ORDER,
+            "2 周目も同一順序で安定（順序不変）"
+        );
     }
 }
+
+/// プロセス共有の旗（[`tick_wake`]）を触る決定論テストが取る錠（テスト専用）。
+///
+/// 旗は 1 つしかない実体をプロセス全体で共有するため、並列に走るテストは互いの旗を
+/// 読み倒してしまう。共有の旗（[`tick_wake::mark`]／[`tick_wake::take`]）に触る検査は、
+/// **この 1 つ**の錠を取ってから触ること。
+///
+/// **錠は 1 つでなければ意味がない。** 守る対象が 1 つしか無いのに錠が 2 つあれば、
+/// どちらを取っても相手を締め出せず、直列化は成立しない。共有の旗に触る検査は現在
+/// 4 箇所——`world_tick_gate_tests.rs`（共有経由の判断）・`tick_wake_tests.rs`
+/// （共有の入口の往復）・`runtime/tick_bridge.rs`（門が無効な 1 フレーム）・
+/// `ecs/drag/systems.rs`（ドラッグ中の予約）——で、いずれもここを参照する。新たに
+/// 共有の旗へ触る検査を足すときも、自前の錠を作らずここを使う。
+///
+/// **錠でも防げないものがある。** 旗を立てるのは本番の経路（窓書込指令の積み上げ・
+/// ウィンドウメッセージの配送・Z 順の要求・ポインタ入力の投入）であり、そちらは錠を
+/// 知らない。ゆえに「旗が立っていない**はず**」＝省略になるはず、を共有の旗の上で
+/// 主張してはならない。省略の側を確かめる検査は、読み取り結果を直に渡す差し替え口
+/// （`runtime::tick_bridge::tick_one_frame_with`）を使うこと。共有の旗の上で主張して
+/// よいのは「立てた旗が含まれる」「回る側になる」——余分な旗で結論が変わらない側だけ
+/// である。
+///
+/// 取るときは毒化に耐えること（`lock().unwrap_or_else(|p| p.into_inner())`）——
+/// 錠を持ったまま 1 本が落ちたときに、無関係な検査まで連鎖して赤くしないため。
+#[cfg(test)]
+pub(crate) static TICK_WAKE_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+#[cfg(test)]
+#[path = "world_tick_gate_tests.rs"]
+mod tick_gate_wiring_tests;
 
 impl std::fmt::Debug for EcsWorld {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

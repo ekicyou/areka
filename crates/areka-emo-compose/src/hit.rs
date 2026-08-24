@@ -152,7 +152,7 @@ pub fn hit_region_scaled<'a>(
 
 #[cfg(test)]
 mod tests {
-    use super::{hit_region, hit_region_scaled, RegionPriority};
+    use super::{RegionPriority, hit_region, hit_region_scaled};
     use crate::normalized::SurfaceMaster;
     use crate::scale::ScaleRatio;
     use areka_parsers::shell::{Collision, CollisionName};
@@ -183,8 +183,14 @@ mod tests {
             coll(0, 93, 62, 271, 130, "Head"),
             coll(1, 133, 270, 229, 326, "Bust"),
         ]);
-        assert_eq!(hit_region(&m, 180, 96, RegionPriority::Painter), Some("Head"));
-        assert_eq!(hit_region(&m, 180, 300, RegionPriority::Painter), Some("Bust"));
+        assert_eq!(
+            hit_region(&m, 180, 96, RegionPriority::Painter),
+            Some("Head")
+        );
+        assert_eq!(
+            hit_region(&m, 180, 300, RegionPriority::Painter),
+            Some("Bust")
+        );
     }
 
     #[test]
@@ -241,7 +247,10 @@ mod tests {
             coll(1, 0, 0, 100, 100, "Hand"),
             coll(2, 50, 50, 150, 150, "Hand"),
         ]);
-        assert_eq!(hit_region(&m, 75, 75, RegionPriority::Painter), Some("Hand"));
+        assert_eq!(
+            hit_region(&m, 75, 75, RegionPriority::Painter),
+            Some("Hand")
+        );
     }
 
     #[test]
@@ -414,7 +423,12 @@ mod tests {
             ((0, 0), (0, 0), None, "背景（原点）"),
             // (4) 矩形境界（縮約後に境界へ乗る＝当たり）。
             ((186, 124), (93, 62), Some("Head"), "境界に乗る（左上隅）"),
-            ((187, 125), (93, 62), Some("Head"), "境界に乗る（同一元画素の別物理点）"),
+            (
+                (187, 125),
+                (93, 62),
+                Some("Head"),
+                "境界に乗る（同一元画素の別物理点）",
+            ),
             ((543, 261), (271, 130), Some("Head"), "境界に乗る（右下隅）"),
             // (4') 境界の内側 1px。
             ((188, 126), (94, 63), Some("Head"), "内側 1px（左上）"),
@@ -449,7 +463,12 @@ mod tests {
             ((0, 0), (0, 0), None, "背景（原点）"),
             // (4) 矩形境界（縮約後に境界へ乗る）。
             ((116, 77), (93, 62), Some("Head"), "境界に乗る（左上隅）"),
-            ((116, 78), (93, 62), Some("Head"), "境界に乗る（y=77/78 が同一元画素 62）"),
+            (
+                (116, 78),
+                (93, 62),
+                Some("Head"),
+                "境界に乗る（y=77/78 が同一元画素 62）",
+            ),
             ((339, 163), (271, 130), Some("Head"), "境界に乗る（右下隅）"),
             // (4') 境界の内側 1px。
             ((117, 79), (94, 63), Some("Head"), "内側 1px（左上）"),
@@ -489,7 +508,10 @@ mod tests {
         // 反トートロジーの明示: 素通し (100,100) は `None`・×k (200,200) は別領域
         // `Some("Foot")` となり、いずれも上の `Some("Torso")` 期待とは一致しない。
         assert_eq!(hit_region(&m, 100, 100, RegionPriority::Painter), None);
-        assert_eq!(hit_region(&m, 200, 200, RegionPriority::Painter), Some("Foot"));
+        assert_eq!(
+            hit_region(&m, 200, 200, RegionPriority::Painter),
+            Some("Foot")
+        );
     }
 
     /// 要件 3.5（丸め期待値の固定・DD-1 代表値）: 割り切れない縮約と、整数倍 k で
@@ -534,13 +556,34 @@ mod tests {
             coll(2, 50, 50, 150, 150, "B"),
         ]);
         // k=2.0: 重なり域（surface 75,75）は後定義 B。
-        assert_scaled(&m, k2(), (150, 150), (75, 75), Some("B"), "k=2: 重なり域は B");
-        assert_scaled(&m, k2(), (151, 151), (75, 75), Some("B"), "k=2: 奇数座標も同一元画素");
+        assert_scaled(
+            &m,
+            k2(),
+            (150, 150),
+            (75, 75),
+            Some("B"),
+            "k=2: 重なり域は B",
+        );
+        assert_scaled(
+            &m,
+            k2(),
+            (151, 151),
+            (75, 75),
+            Some("B"),
+            "k=2: 奇数座標も同一元画素",
+        );
         // 重なりの外は各々の領域（重なり優先が「常に B」に潰れていないことの非空虚性）。
         assert_scaled(&m, k2(), (40, 40), (20, 20), Some("A"), "k=2: A 単独域");
         assert_scaled(&m, k2(), (280, 280), (140, 140), Some("B"), "k=2: B 単独域");
         // k=1.25 でも同一の重なり域へ落ちる（(8·94+4)/10 = 75）。
-        assert_scaled(&m, k125(), (94, 94), (75, 75), Some("B"), "k=5/4: 重なり域は B");
+        assert_scaled(
+            &m,
+            k125(),
+            (94, 94),
+            (75, 75),
+            Some("B"),
+            "k=5/4: 重なり域は B",
+        );
         assert_scaled(&m, k125(), (25, 25), (20, 20), Some("A"), "k=5/4: A 単独域");
     }
 
@@ -557,11 +600,39 @@ mod tests {
         let upright = master_with(vec![coll(0, 0, 0, 100, 100, "Ok")]);
 
         // k=2.0: client (100,100) → surface (50,50)。
-        assert_scaled(&inverted, k2(), (100, 100), (50, 50), None, "k=2: 反転は当たらない");
-        assert_scaled(&upright, k2(), (100, 100), (50, 50), Some("Ok"), "対照: 正立なら当たる");
+        assert_scaled(
+            &inverted,
+            k2(),
+            (100, 100),
+            (50, 50),
+            None,
+            "k=2: 反転は当たらない",
+        );
+        assert_scaled(
+            &upright,
+            k2(),
+            (100, 100),
+            (50, 50),
+            Some("Ok"),
+            "対照: 正立なら当たる",
+        );
         // k=1.25: client (63,63) → surface (50,50)（(8·63+4)/10 = 50）。
-        assert_scaled(&inverted, k125(), (63, 63), (50, 50), None, "k=5/4: 反転は当たらない");
-        assert_scaled(&upright, k125(), (63, 63), (50, 50), Some("Ok"), "対照: 正立なら当たる");
+        assert_scaled(
+            &inverted,
+            k125(),
+            (63, 63),
+            (50, 50),
+            None,
+            "k=5/4: 反転は当たらない",
+        );
+        assert_scaled(
+            &upright,
+            k125(),
+            (63, 63),
+            (50, 50),
+            Some("Ok"),
+            "対照: 正立なら当たる",
+        );
     }
 
     /// 要件 2.5（負値・窓外・i64 極値 × k≠1.0）: panic せず定義された結果を返す。
@@ -595,7 +666,14 @@ mod tests {
             "k=2: i64 極値（panic なし）",
         );
         // k=1.25。
-        assert_scaled(&m, k125(), (-7, -13), (-6, -10), None, "k=5/4: 負値（床方向）");
+        assert_scaled(
+            &m,
+            k125(),
+            (-7, -13),
+            (-6, -10),
+            None,
+            "k=5/4: 負値（床方向）",
+        );
         assert_scaled(&m, k125(), (5000, 5000), (4000, 4000), None, "k=5/4: 窓外");
         assert_scaled(
             &m,

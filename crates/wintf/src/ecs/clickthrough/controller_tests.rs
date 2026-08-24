@@ -116,11 +116,7 @@ fn just_ended_reconverges_to_transparent_when_hit_none() {
 
 #[test]
 fn just_ended_reconverges_to_opaque_when_hit_some() {
-    let out = resolve_transition(
-        Some(entity(3)),
-        &just_ended(),
-        DesiredState::Transparent,
-    );
+    let out = resolve_transition(Some(entity(3)), &just_ended(), DesiredState::Transparent);
     assert_eq!(out, Some(DesiredState::Opaque));
 }
 
@@ -223,7 +219,12 @@ fn is_transparent(hwnd: HWND) -> bool {
 /// 変換するが、状態機械テストは実 HWND 座標に依存させず決定的な模擬変換で検証する
 /// （座標変換の正しさは OS ScreenToClient に委ねる＝4.2 実動検証で確認）。
 fn sim_s2c(cursor: PhysicalPoint) -> impl Fn(HWND) -> Option<PointF> {
-    move |_hwnd| Some(PointF::new((cursor.x - 100) as f32, (cursor.y - 200) as f32))
+    move |_hwnd| {
+        Some(PointF::new(
+            (cursor.x - 100) as f32,
+            (cursor.y - 200) as f32,
+        ))
+    }
 }
 
 /// 原点 (100,200) の窓に、client (50,50)=screen (150,250) で当たる子を仕込んだ
@@ -303,7 +304,10 @@ fn eval_hit_none_from_opaque_becomes_transparent() {
             Some(DesiredState::Transparent),
             "hit=None は Transparent へ収束すべき"
         );
-        assert!(is_transparent(hwnd), "Transparent 適用後 TRANSPARENT はセット");
+        assert!(
+            is_transparent(hwnd),
+            "Transparent 適用後 TRANSPARENT はセット"
+        );
     }));
     destroy_test_hwnd(hwnd);
     if let Err(e) = result {
@@ -350,8 +354,8 @@ fn eval_diff_guard_stable_on_repeat() {
 /// 尊重することの確認）。Dragging 抑止自体は `resolve_transition` の in-source テストで網羅。
 #[test]
 fn eval_honors_drag_snapshot_just_ended_reconverges() {
-    use crate::ecs::drag::{reset_to_idle, snapshot_drag_state, update_drag_state};
     use crate::ecs::drag::DragState;
+    use crate::ecs::drag::{reset_to_idle, snapshot_drag_state, update_drag_state};
 
     let mut world = World::new();
     let window = world_with_hittable_window(&mut world);
@@ -605,7 +609,11 @@ fn start_then_drop_joins_worker_without_hanging() {
     let e = w.spawn_empty().id();
     let hwnd = create_test_hwnd();
     handle.register(e, hwnd);
-    assert_eq!(registry.borrow().len(), 1, "start 後の register が反映される");
+    assert_eq!(
+        registry.borrow().len(),
+        1,
+        "start 後の register が反映される"
+    );
     assert!(handle.remove(e), "start 後の remove が反映される");
     assert!(registry.borrow().is_empty());
     destroy_test_hwnd(hwnd);

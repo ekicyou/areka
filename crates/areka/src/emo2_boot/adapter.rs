@@ -12,6 +12,7 @@
 use areka_emo_compose::BindSet;
 use areka_emo_present::PresentCommand;
 use areka_seriko::{DisplayCommand, SurfaceOutput};
+use wintf::ecs::world::tick_wake;
 
 use crate::emo2_boot::target_map::{balloon_target, scope_of, shell_target};
 
@@ -115,6 +116,10 @@ impl SurfaceOutput for PresentBridge {
                         "PresentBridge: PresentCommand の配送先（UI receiver）が drop 済み（shutdown 中）— 破棄"
                     );
                 }
+                // 表示指令が UI へ届いた＝次の画面更新に仕事がある（設計 C16 の `PRESENT`）。
+                // 送出の**後**に立てる——先に立てると、読み取りと送出の隙間で旗だけが倒れ、
+                // 指令が次の起床まで置き去りになる。逆順なら余分に 1 回回るだけで済む。
+                tick_wake::mark(tick_wake::PRESENT);
             }
             // 写像不能（非数値 scope）: 握り潰さず warn! で観測して drop（R3.6/R3.7・DD-5）。
             None => {
@@ -183,10 +188,17 @@ mod tests {
                 pattern: got_pattern,
                 reply,
             } => {
-                assert_eq!(target, shell_target(0), "Show は shell 表示対象（偶数）へ写像");
+                assert_eq!(
+                    target,
+                    shell_target(0),
+                    "Show は shell 表示対象（偶数）へ写像"
+                );
                 assert_eq!(surface_id, 2100, "surface_id は非改変で転写されること");
                 assert_eq!(got, binds, "binds はそのまま透過されること");
-                assert_eq!(got_pattern, pattern, "pattern はそのまま非改変で透過されること（R5.1）");
+                assert_eq!(
+                    got_pattern, pattern,
+                    "pattern はそのまま非改変で透過されること（R5.1）"
+                );
                 assert!(reply.is_none(), "reply は常に None（撃ちっぱなし）");
             }
             _ => panic!("Show は ShowSurface へ写像されるべき"),
@@ -236,8 +248,15 @@ mod tests {
                     "ShowBalloon は balloon 表示対象（奇数）へ写像"
                 );
                 assert_eq!(surface_id, 6, "surface_id は非改変で転写（alias 非再適用）");
-                assert_eq!(binds, BindSet::default(), "binds は既定（空集合）であること");
-                assert_eq!(got_pattern, pattern, "pattern はそのまま非改変で透過されること（R5.1）");
+                assert_eq!(
+                    binds,
+                    BindSet::default(),
+                    "binds は既定（空集合）であること"
+                );
+                assert_eq!(
+                    got_pattern, pattern,
+                    "pattern はそのまま非改変で透過されること（R5.1）"
+                );
                 assert!(reply.is_none(), "reply は常に None");
             }
             _ => panic!("ShowBalloon は ShowSurface へ写像されるべき"),
@@ -349,11 +368,7 @@ mod tests {
     struct Capture(Arc<Mutex<Vec<String>>>);
 
     impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Capture {
-        fn on_event(
-            &self,
-            ev: &tracing::Event<'_>,
-            _: tracing_subscriber::layer::Context<'_, S>,
-        ) {
+        fn on_event(&self, ev: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
             let meta = ev.metadata();
             let mut line = format!("level={} target={}", meta.level(), meta.target());
             struct V<'a>(&'a mut String);
@@ -402,7 +417,10 @@ mod tests {
         });
 
         // PresentCommand は #[non_exhaustive] かつ非 PartialEq ゆえフィールド分解＋`_` arm で照合。
-        match rx.try_recv().expect("変換済み PresentCommand が 1 件届くこと") {
+        match rx
+            .try_recv()
+            .expect("変換済み PresentCommand が 1 件届くこと")
+        {
             PresentCommand::ShowSurface {
                 target,
                 surface_id,
@@ -413,7 +431,10 @@ mod tests {
                 assert_eq!(target, shell_target(0), "Show は shell 表示対象へ配送");
                 assert_eq!(surface_id, 2100, "surface_id は非改変で転写");
                 assert_eq!(binds, BindSet::from_ids([1100]), "binds はそのまま透過");
-                assert_eq!(got_pattern, pattern, "pattern はそのまま非改変で透過（R5.1）");
+                assert_eq!(
+                    got_pattern, pattern,
+                    "pattern はそのまま非改変で透過（R5.1）"
+                );
                 assert!(reply.is_none(), "reply は常に None（撃ちっぱなし）");
             }
             _ => panic!("Show は ShowSurface へ写像されて届くべき"),

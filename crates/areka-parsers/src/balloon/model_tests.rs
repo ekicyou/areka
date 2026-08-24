@@ -328,9 +328,15 @@ fn balloon_cursor_accessors_read_all_fields() {
         Some("none".to_string()),
     );
     assert_eq!(cursor.style(), Some("square"));
-    assert_eq!(cursor.brush_color(), CursorColor::new(Some(105), Some(25), Some(25)));
+    assert_eq!(
+        cursor.brush_color(),
+        CursorColor::new(Some(105), Some(25), Some(25))
+    );
     assert_eq!(cursor.pen_color().r(), Some(200));
-    assert_eq!(cursor.font_color(), CursorColor::new(Some(255), Some(255), Some(255)));
+    assert_eq!(
+        cursor.font_color(),
+        CursorColor::new(Some(255), Some(255), Some(255))
+    );
     assert_eq!(cursor.blendmethod(), Some("none"));
 }
 
@@ -433,10 +439,7 @@ fn cursor_unmodeled_subkeys_do_not_leak_into_modeled_fields() {
 /// （「cursor キーを font へ巻き込まない」既存不変条件の分離側・要件 6.2）。
 #[test]
 fn cursor_font_color_does_not_fold_into_font_color() {
-    let descript = kv_map(&[
-        ("font.color.r", "0"),
-        ("cursor.font.color.r", "255"),
-    ]);
+    let descript = kv_map(&[("font.color.r", "0"), ("cursor.font.color.r", "255")]);
     let got = parse(&descript, None);
 
     // font.color.r は descript の 0（cursor.font.color.r の 255 に汚染されない）。

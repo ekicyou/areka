@@ -1,0 +1,17 @@
+GOAL-CHECK ok judge_version=0.4.0 token=12345678
+{
+  "goal": "draw-load-parity",
+  "iteration": 0,
+  "phase": "PREFLIGHT",
+  "pending_run": null,
+  "streak_no_gain": 0,
+  "best_idle_cpu_pct": null,
+  "baseline_idle_cpu_pct": null,
+  "started_at": "2026-08-23T00:00:00Z",
+  "run": "12345678",
+  "capabilities": null,
+  "previous_phase": null,
+  "toolfix_used": 0,
+  "not_quiet_retries": 0
+}
+GOAL-CHECK ok judge_version=0.4.0 token=12345678

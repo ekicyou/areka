@@ -1,4 +1,5 @@
 use super::ViewboxExecutor;
+use super::test_support::{Rig, build, geo_model, glyph_items, opaque_count};
 use crate::canvas::{
     ChoiceLineContent, ChoiceRowSegment, ContentCanvas, HighlightPaint, Resident, ResidentContent,
 };
@@ -6,7 +7,6 @@ use crate::draw::ResolvedFont;
 use crate::region::{ScaleContract, TextRegion};
 use crate::state::TextItem;
 use crate::writing::WritingMode;
-use super::test_support::{Rig, build, geo_model, glyph_items, opaque_count};
 
 /// canvas の GlyphRun 住人を、内包 run が等価な非 hover の Choice 住人へ写す
 /// （`segments` 空・`hovered=None`・`highlight=None`）。transform/effects は不変。
@@ -76,7 +76,14 @@ fn choice_resident_renders_pixel_identical_to_glyph_run() {
     let mut surface_glyph = rig.attach(image, 1.0);
     let mut exec_glyph = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
     exec_glyph
-        .render(&glyph_canvas, &window, &font, mode, &contract, &mut surface_glyph)
+        .render(
+            &glyph_canvas,
+            &window,
+            &font,
+            mode,
+            &contract,
+            &mut surface_glyph,
+        )
         .expect("GlyphRun render 失敗");
     let bytes_glyph = surface_glyph.read_back().expect("read_back 失敗");
 
@@ -84,7 +91,14 @@ fn choice_resident_renders_pixel_identical_to_glyph_run() {
     let mut surface_choice = rig.attach(image, 1.0);
     let mut exec_choice = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
     exec_choice
-        .render(&choice_canvas, &window, &font, mode, &contract, &mut surface_choice)
+        .render(
+            &choice_canvas,
+            &window,
+            &font,
+            mode,
+            &contract,
+            &mut surface_choice,
+        )
         .expect("Choice render 失敗");
     let bytes_choice = surface_choice.read_back().expect("read_back 失敗");
 

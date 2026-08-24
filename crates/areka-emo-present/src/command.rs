@@ -143,9 +143,27 @@ mod tests {
         };
 
         // variant の識別を match で確認（構築が成立し所有されていること）。
-        assert!(matches!(show, PresentCommand::ShowSurface { surface_id: 1000, .. }));
-        assert!(matches!(hide, PresentCommand::Hide { target: TargetId(1), .. }));
-        assert!(matches!(invalidate, PresentCommand::InvalidateCache { target: TargetId(0), .. }));
+        assert!(matches!(
+            show,
+            PresentCommand::ShowSurface {
+                surface_id: 1000,
+                ..
+            }
+        ));
+        assert!(matches!(
+            hide,
+            PresentCommand::Hide {
+                target: TargetId(1),
+                ..
+            }
+        ));
+        assert!(matches!(
+            invalidate,
+            PresentCommand::InvalidateCache {
+                target: TargetId(0),
+                ..
+            }
+        ));
     }
 
     /// TargetId は `Copy` かつ `Hash` キーとして扱える（`Debug` 整形も `Device`/`TargetNotAttached`
@@ -169,7 +187,10 @@ mod tests {
     fn present_error_maps_compose_error_via_from() {
         let ce = ComposeError::SurfaceNotFound(1000);
         let pe: PresentError = ce.into();
-        assert!(matches!(pe, PresentError::Compose(ComposeError::SurfaceNotFound(1000))));
+        assert!(matches!(
+            pe,
+            PresentError::Compose(ComposeError::SurfaceNotFound(1000))
+        ));
 
         // EmptyComposition も同経路で写像される（Error Categories 双方）。
         let pe2: PresentError = ComposeError::EmptyComposition(42).into();

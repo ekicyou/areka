@@ -79,7 +79,10 @@ fn element_path_with_slash_is_verbatim() {
     let input = "surface0\n{\nelement0,overlay,purple/2/a.png,0,0\n}\n";
     let shell = decode(lex(input));
     assert_eq!(shell.surfaces[0].elements.len(), 1);
-    assert_eq!(shell.surfaces[0].elements[0].path.as_str(), "purple/2/a.png");
+    assert_eq!(
+        shell.surfaces[0].elements[0].path.as_str(),
+        "purple/2/a.png"
+    );
 }
 
 /// 非ゼロ・負値座標を i64 として保持する（要件 4.2）。

@@ -208,12 +208,7 @@ struct Seen {
 ///
 /// `binds`／`scale` はいま適用したキーそのもの——ここでの `cache.get` は必ずヒットする
 /// （ミスしたら「直前の適用がスロットを埋めていない」＝檻の前提が壊れている）。
-fn observe(
-    presenter: &EmoPresenter,
-    world: &World,
-    binds: &BindSet,
-    scale: ScaleRatio,
-) -> Seen {
+fn observe(presenter: &EmoPresenter, world: &World, binds: &BindSet, scale: ScaleRatio) -> Seen {
     let target = presenter
         .targets
         .get(&TargetId(0))
@@ -530,7 +525,8 @@ fn a_steady_identity_run_rotates_through_exactly_four_buffers_and_allocates_noth
     // 交代の実体そのもの: 前回の合成先席が今回の表示バッファへ回る（複写化するとここが崩れる）。
     for i in 1..base.len() {
         assert_eq!(
-            base[i].display, base[i - 1].native,
+            base[i].display,
+            base[i - 1].native,
             "基準 {i}: 前回の合成先席が表示バッファへ回っていない（swap になっていない）"
         );
     }

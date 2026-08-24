@@ -41,7 +41,9 @@ use shiori_host32_ipc::MsgTag;
 use crate::error::{RequestError, ShioriError};
 use crate::parent_window::{ParentMessageWindow, SendError};
 use crate::process_host::request_timeout_from_env;
-use crate::shiori3::{Charset, Method, ParsedResponse, ShioriRequest, build_request, parse_response};
+use crate::shiori3::{
+    Charset, Method, ParsedResponse, ShioriRequest, build_request, parse_response,
+};
 
 /// 送出ヘッダ `Sender` の既定値（design.md §送出ヘッダ最小集合）。
 ///

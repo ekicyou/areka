@@ -1,0 +1,18 @@
+# judge-perf.py --selftest の期待値台帳（人も機械もこの 1 ファイルを読む）
+title = catch-up が 3 系統とも定常状態にある（不合格側）
+mode = verdict
+build = release
+exit = 1
+
+note = C1 と同じ走行で、catch-up の 3 件だけを定常状態へ移したもの。
+note = 判定式⑵ は定常状態の catch-up 0 件を求めるので不合格（終了コード 1）である。
+note = C1 と対にして置いてあるのは、合格側だけ・不合格側だけでは「数えているのか
+note = 数えていないのか」が区別できないためである。
+note = [tick] の窓はどれも同じ壁時計合計なので、catch-up が起きた窓と全体の比は
+note = 1.000 であり、仮説は 不成立 と印字されなければならない。
+note = 仮説の語は終了コードを動かさないので contains 行で固定する。
+
+contains = 仮説: 不成立
+contains = target=dispatcher
+contains = target=kanade
+contains = target=loop_ticker

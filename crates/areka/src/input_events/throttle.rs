@@ -277,7 +277,10 @@ mod tests {
 
         // 3 回目でようやく間隔経過（1000→1100 で 100ms）＝送出。基準時刻が 1000 のままだった証拠。
         let (next3, send3) = plan_mouse_move(&next2, (13, 20), &region("Head"), 1100);
-        assert!(send3, "抑制中は基準時刻が動かないので 1100 で間隔経過し送出");
+        assert!(
+            send3,
+            "抑制中は基準時刻が動かないので 1100 で間隔経過し送出"
+        );
         assert_eq!(next3.last_sent_ms, Some(1100));
     }
 }

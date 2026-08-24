@@ -36,11 +36,13 @@ pub(super) fn steady_some(talk_id: TalkId, next_id: u64) -> State {
 /// Action 列に OnSecondChange の ShioriRequest が一切ないことを検証する（ゲート閉）。
 pub(super) fn assert_no_second_change(actions: &[Action]) {
     for a in actions {
-        if let Action::ShioriRequest(
-            ShioriCall::Get { id, .. } | ShioriCall::Notify { id, .. },
-        ) = a
+        if let Action::ShioriRequest(ShioriCall::Get { id, .. } | ShioriCall::Notify { id, .. }) = a
         {
-            assert_ne!(id.as_str(), "OnSecondChange", "ゲートが閉じておらず OnSecondChange を発行した");
+            assert_ne!(
+                id.as_str(),
+                "OnSecondChange",
+                "ゲートが閉じておらず OnSecondChange を発行した"
+            );
         }
     }
 }
@@ -79,9 +81,9 @@ pub(super) fn steady_with_ledger(
 /// GET Action から (イベント ID の wire 形, Reference 列) を取り出す（GET 以外は panic）。
 pub(super) fn expect_get_call(action: &Action) -> (String, Vec<String>) {
     match action {
-        Action::ShioriRequest(ShioriCall::Get {
-            id, references, ..
-        }) => (id.as_str().to_string(), references.clone()),
+        Action::ShioriRequest(ShioriCall::Get { id, references, .. }) => {
+            (id.as_str().to_string(), references.clone())
+        }
         _ => panic!("expected GET ShioriRequest"),
     }
 }

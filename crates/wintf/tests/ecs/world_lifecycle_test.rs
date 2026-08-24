@@ -16,7 +16,7 @@ use windows::Win32::Foundation::HWND;
 use wintf::ecs::App;
 use wintf::ecs::world::EcsWorld;
 use wintf::ecs::world::{
-    Composition, CommitComposition, Draw, FrameCount, FrameFinalize, GraphicsSetup, Input, Layout,
+    CommitComposition, Composition, Draw, FrameCount, FrameFinalize, GraphicsSetup, Input, Layout,
     PostLayout, PreLayout, PreRenderSurface, RenderSurface, UISetup, Update,
 };
 
@@ -74,10 +74,16 @@ fn new_ecs_world_registers_all_schedule_labels() {
     assert!(schedules.contains(UISetup), "UISetup 未登録");
     assert!(schedules.contains(GraphicsSetup), "GraphicsSetup 未登録");
     assert!(schedules.contains(Draw), "Draw 未登録");
-    assert!(schedules.contains(PreRenderSurface), "PreRenderSurface 未登録");
+    assert!(
+        schedules.contains(PreRenderSurface),
+        "PreRenderSurface 未登録"
+    );
     assert!(schedules.contains(RenderSurface), "RenderSurface 未登録");
     assert!(schedules.contains(Composition), "Composition 未登録");
-    assert!(schedules.contains(CommitComposition), "CommitComposition 未登録");
+    assert!(
+        schedules.contains(CommitComposition),
+        "CommitComposition 未登録"
+    );
     assert!(schedules.contains(FrameFinalize), "FrameFinalize 未登録");
 }
 

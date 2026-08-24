@@ -56,12 +56,18 @@ pub fn run_demo() -> Result<(), DemoError> {
     // Safety: `out` は有効な書込先スタックスロット。成功時 refcount 1 の IShioriFactory が書き込まれる。
     let hr = unsafe { shiori_factory(&mut out) };
     if hr.is_err() {
-        tracing::error!(hr = format!("0x{:08X}", hr.0), "[shiori-demo] shiori_factory failed");
+        tracing::error!(
+            hr = format!("0x{:08X}", hr.0),
+            "[shiori-demo] shiori_factory failed"
+        );
         return Err(DemoError::Create(hr));
     }
     // Safety: 成功 HRESULT のため `out` は refcount 1 の有効な IShioriFactory。from_raw は AddRef せず adopt。
     let factory: IShioriFactory = unsafe { IShioriFactory::from_raw(out) };
-    tracing::info!(path = "create", "[shiori-demo] shiori_factory succeeded, IShioriFactory adopted");
+    tracing::info!(
+        path = "create",
+        "[shiori-demo] shiori_factory succeeded, IShioriFactory adopted"
+    );
 
     // 2. host（sink）を生成し、その host を共有する脳を factory 経由で create する。
     //    脳（IShiori）で session を、脳実体（ReferenceBrain）で脳駆動を行う（同一インスタンス）。
@@ -92,7 +98,10 @@ pub fn run_demo() -> Result<(), DemoError> {
     //    ここでは activate ではなく、既に create 済みの brain/host で session を組み立てるため、
     //    session の内部生成をバイパスして同一インスタンスを共有する専用コンストラクタを用いる。
     let mut session = ShioriSession::from_parts(brain, host.clone());
-    tracing::info!(path = "activate", "[shiori-demo] session established (shared brain + sink)");
+    tracing::info!(
+        path = "activate",
+        "[shiori-demo] session established (shared brain + sink)"
+    );
 
     // 4. 駆動本体（即時→遅延+complete→raise→notify）。失敗しても drop teardown へ進む。
     let result = drive_paths(&mut session, ref_brain);
@@ -120,7 +129,10 @@ fn drive_paths(session: &mut ShioriSession, ref_brain: &ReferenceBrain) -> Resul
     let SessionRequest::Immediate(immediate_response) = immediate else {
         return Err(DemoError::Session(SessionError::RequestInFlight));
     };
-    debug_assert_eq!(immediate_response, onboot, "即時応答は OnBoot content のエコー");
+    debug_assert_eq!(
+        immediate_response, onboot,
+        "即時応答は OnBoot content のエコー"
+    );
     tracing::info!(
         path = "immediate",
         response_len = immediate_response.len(),
@@ -141,7 +153,9 @@ fn drive_paths(session: &mut ShioriSession, ref_brain: &ReferenceBrain) -> Resul
 
     // 脳→host complete を safe メソッドで発火（突合枠は session が get 時にセット済み）。
     let deferred_response = HSTRING::from(DEFERRED_RESPONSE);
-    ref_brain.complete_pending(&deferred_response).map_err(DemoError::Shiori)?;
+    ref_brain
+        .complete_pending(&deferred_response)
+        .map_err(DemoError::Shiori)?;
     // 同一ループで poll_completions を drain して遅延完了を待ち合わせる。
     let drained = session.poll_completions();
     let completed = drained.iter().find_map(|m| match m {
@@ -149,7 +163,10 @@ fn drive_paths(session: &mut ShioriSession, ref_brain: &ReferenceBrain) -> Resul
         _ => None,
     });
     let completed = completed.ok_or(DemoError::Timeout)?;
-    debug_assert!(!session.is_pending(), "Complete 受領で保留が解除されていること");
+    debug_assert!(
+        !session.is_pending(),
+        "Complete 受領で保留が解除されていること"
+    );
     tracing::info!(
         path = "complete",
         token = token.0,
@@ -159,7 +176,9 @@ fn drive_paths(session: &mut ShioriSession, ref_brain: &ReferenceBrain) -> Resul
 
     // 能動通知（raise）経路: 脳→host raise を safe メソッドで発火し、メールボックスから drain する。
     let raise_script = HSTRING::from(RAISE_SCRIPT);
-    ref_brain.fire_raise(&raise_script).map_err(DemoError::Shiori)?;
+    ref_brain
+        .fire_raise(&raise_script)
+        .map_err(DemoError::Shiori)?;
     let drained = session.poll_completions();
     let raised = drained.iter().find_map(|m| match m {
         HostMessage::Raised(script) => Some(script.clone()),
@@ -228,11 +247,7 @@ mod tests {
     struct Capture(Arc<Mutex<Vec<String>>>);
 
     impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Capture {
-        fn on_event(
-            &self,
-            ev: &tracing::Event<'_>,
-            _: tracing_subscriber::layer::Context<'_, S>,
-        ) {
+        fn on_event(&self, ev: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
             let mut buf = format!("level={}", ev.metadata().level());
             struct V<'a>(&'a mut String);
             impl Visit for V<'_> {
@@ -257,12 +272,24 @@ mod tests {
             super::run_demo().expect("demo ok");
         });
         let all = logs.lock().unwrap().join("\n");
-        assert!(all.contains("path=\"immediate\""), "immediate path logged: {all}");
-        assert!(all.contains("path=\"deferred\""), "deferred path logged: {all}");
-        assert!(all.contains("path=\"complete\""), "complete path logged: {all}");
+        assert!(
+            all.contains("path=\"immediate\""),
+            "immediate path logged: {all}"
+        );
+        assert!(
+            all.contains("path=\"deferred\""),
+            "deferred path logged: {all}"
+        );
+        assert!(
+            all.contains("path=\"complete\""),
+            "complete path logged: {all}"
+        );
         assert!(all.contains("path=\"raise\""), "raise path logged: {all}");
         assert!(all.contains("path=\"notify\""), "notify path logged: {all}");
-        assert!(all.contains("path=\"unload\""), "teardown (unload) path logged: {all}");
+        assert!(
+            all.contains("path=\"unload\""),
+            "teardown (unload) path logged: {all}"
+        );
     }
 
     /// ゲート無効時はデモが起動しないこと（観測基準）。
@@ -304,7 +331,13 @@ mod tests {
             super::run_demo_if_enabled_with(true).expect("enabled gate drives demo ok");
         });
         let all = logs.lock().unwrap().join("\n");
-        assert!(all.contains("path=\"immediate\""), "enabled gate drives immediate: {all}");
-        assert!(all.contains("path=\"unload\""), "enabled gate drives teardown: {all}");
+        assert!(
+            all.contains("path=\"immediate\""),
+            "enabled gate drives immediate: {all}"
+        );
+        assert!(
+            all.contains("path=\"unload\""),
+            "enabled gate drives teardown: {all}"
+        );
     }
 }

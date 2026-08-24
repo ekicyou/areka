@@ -21,6 +21,35 @@
 > **出自**: `completed/areka-P0-emo-dpi-scaling` の `/kiro-validate-impl` ゲートが「無名の別タスク宛て＝実質未所有」として記録した 4 件（tasks.md:222）。
 > 2026-07-30 に**全件の実在を再検証**したところ 4 件とも健在で、うち 1 件は記録より**悪化**していた。担当 spec は 10 本の active spec のいずれにも存在しない。
 
+> **📌 2026-08-22 棚卸⑩（毒化インベントリの両方向ドリフト実測・本ブロックの数値が①の旧数値〔95 呼出/12 モジュール〕より優先）**:
+> - **①のインベントリは両方向に動いた**。機械判定（「`fn capture_logs` を定義し `rebuild_interest_cache()` を含まないファイル」・2026-08-22 実測）:
+>   - **域外で硬化済みへ転じたもの**: `areka-emo-atlas/src/log_capture.rs`・`areka-emo-compose/src/log_capture.rs`（各 rebuild 2 箇所）・seriko は `log_interest_probe.rs` 新設＋`actor_test_support.rs:82`／`looper_tests.rs:886` が rebuild 済み（旧 actor.rs の捕捉層は slimming で `actor_test_support.rs` へ改組）。**旧表 7・9・10 の大半は消化済み**。
+>   - **未硬化ヘルパ定義 10 ファイル**（旧表からの残存＋新顔）: `areka/src/emo2_boot/adapter.rs`・`spine.rs`（残存）／**新顔 7 本**＝`emo2_boot/frame_chain_finalize_tests.rs`・**`frame_test_support.rs`（atom 新設・FrameHarness の捕捉層）**・`move_cue_move_severity_log_tests.rs`・`talk_lifecycle_tests.rs`（以上 slimming 分割＋atom 由来）・`input_events/balloon_test_support.rs`・`input_events/choice_drain.rs`（旧 balloon.rs 18 呼出の改組先）／`areka-seriko/src/table.rs`（残存）／`wintf/src/ecs/window_proc/dpi_helpers_tests.rs`（旧 dpi_helpers.rs の分割先）。
+>   - `capture_logs(` 呼出はワークスペース総計 **238 箇所**（硬化済み含む・定義行除く）。**「後置するほどコピーが増える」の 3 度目の実証**（W5 で+1・追記(59) で+50・今回 slimming/atom で新顔 7 ファイル）。
+>   - 本スナップショットはファイル粒度の機械判定であり呼出数の精査ではない——**着手時の全面再計数義務（追記(59)）は不変**。判定式も不変（`rebuild_interest_cache()` の有無 1 点）。
+> - **④の観測点は :306-310 へドリフト**（fmt PR#115＋atom 改稿後・2026-08-22 実測・旧 :297-301 失効）。atom は同分岐を「cage④ の観測点だから」意図的に不動と登記済み（下記追記(72)⑸）＝字面ごと保存されている。
+> - **追記(79)（1,000 行目安の漂流・roadmap 正本）の裁定が⒜（行数番人テスト）に決まった場合、置き場候補は本 spec**——「檻の決定性」ミッションと同系・例外表方式（既存 9 本を載せて漸減）。要件段階でスコープに入れるかを最初に確定させること。
+> - **`SELF_INITIATED_DEPTH` のスレッド局所化（下記追記(76)⑹）は本 spec では実施しない【2026-08-22 追記(81) 同居裁定】**——本 spec は **dlp と W6.9 で 2 本並走**し、`command.rs` は**丸ごと dlp 所有・本 spec は非接触**（`Cell<i32>` 化は dlp が flush 接触のついでに実施し着地形を申し送ってくる）。本 spec が受け持つのは**症状側のみ**＝dlp 着地後の rebase（または wave 内合流）で錠 `lock_self_initiated_for_test()` の退役を実施。dlp が見送った場合は本 spec へ差し戻し（その時点で着手順調整）。
+
+> **📌 2026-08-21 追記(72)（`areka-P0-dpi-transition-atomicity` からの申し送り・観測チャネルが 1 本増え、窓書込の檻の前提が変わった）**: **既定 OFF の観測チャネル `wintf::transition` が新設され、窓書込指令に要求元の札が付き、同一窓のジオメトリ指令が合流するようになった。** ① tracing 毒化の射程・②「零件の主張」の扱い・④ `apply_show` 鎖の 3 点それぞれに効く。
+> - **⑴ 新しい観測 target が 1 本**: `wintf::transition`（`crates/wintf/src/ecs/window/transition_diag.rs:54`）。既定水準では 1 行も出ず、前置ガード `transition_diag::is_enabled()`（同 :595＝`tracing::enabled!` の薄い包み）が偽なら**行の組立も時刻の読み取りも一切行わない**。**「既定で無音」を主張する檻は、同じ捕捉窓の内側に必ず出るはずの対照行を置く形にしてある**（本 spec で「既定で無音」が恒真だった事故が実際に起きたため）。①の毒化表へこの target を足すかどうかは本 spec の裁定だが、**濾過テストはスレッド局所 subscriber（`crate::ecs::test_support::capture_under_filter`＝`crates/wintf/src/ecs/test_support.rs:96`）で書く**規律に従っている。
+> - **⑵ 語彙の不変条件が 2 つ増えた（檻が固定している）**: ⒜ 窓種別のフィールド名は **`win_kind=`**（`transition_diag.rs:167`）であって `kind=`（:143＝レコード種別）ではない。⒝ **1 行に同じフィールド名を 2 度出さない**——`tools/perf/judge-perf.py::parse_fields` が同名キーを後勝ちで上書きするため、重複するとレコード種別が消えて判定器が壊れる。⒜⒝ とも `crates/wintf/src/ecs/window/transition_diag_tests.rs`（`no_line_repeats_a_field_name` :362）が固定している。**本 spec が観測行を足す・共有ヘルパへ寄せるときも同じ規律を保つこと。**
+> - **⑶ 窓書込の回数を数える檻は前提が変わった**: `SetWindowPosCommand::enqueue`（`crates/wintf/src/ecs/window/command.rs:372`）が積む前に同一 hwnd の畳める指令へ後勝ちで合流する（`is_coalescible` :229／`find_merge_target` :242／`merge_into` :263／純関数 `coalesce_geometry` :303）。**「窓書込が N 回出る」を数える既存の檻は、合流後の回数を見ている**——遷移 1 回で 4 窓に対し合流前 8 本・合流後 4 本。Z 専用指令（挿入位置を持つ）は合流対象外で、**畳めない指令は同一窓の仕切りとして働く**。
+> - **⑷ 決定論テストは flush を通らない**（D11）: 本 spec の多フレーム駆動ハーネスは `SetWindowPosCommand::drain_window_pos_commands()`（`command.rs:528`）でキューを直接取り出して数える。実 `SetWindowPos` を撃つ一括 flush（`flush_window_pos_commands` :509）は通らないので、**`kind=write` 行（flush 由来）を決定論テストで数える形にすると如何なる退行でも赤にならない**。数えるならキュー側で数え、固定する値は判定器の `pub const`（`crates/areka/src/placement/transition_judge_verdict.rs`）を引くこと——この落とし穴は本 spec の `crates/areka/src/emo2_boot/frame_transition_atomicity_tests.rs` の module doc に機序ごと書いてある。
+> - **⑸ ④ `apply_show` 鎖への影響（cage④ の観測点は動かしていない）**: `crates/areka-emo-present/src/presenter/show.rs` の upload 失敗の早期 return（:306-310）は本 spec が**意図的に動かしていない**（cage④ の観測点だから）。観測が入ったのは upload の後（:347-359）と可視化の後（:389-399）で、どちらも `size_changed || resized` かつ観測有効のときだけ組む共有の札 `observe_surface`（:347）で守られている——`recompose-budget` が成立させた**定常状態のアロケーション 0**（要件 10.4）を壊さないため。**この前置ガードは出力では示せないので、`crates/areka-emo-present/src/presenter/transition_record_tests.rs` の本文走査だけが退行を捕まえる**。cage④ が同ファイルを触るときはこの走査を残すこと。
+> - **⑹ perf 行が 1 列増えた**: `perf(apply_show)` に `frame=` が**末尾**追加（`crates/areka-emo-present/src/presenter/timing.rs:220`）。完全一致で照合する檻は列数を改める必要がある（本 spec は `crates/areka-emo-present/src/presenter_perf_log_tests.rs` の `PERF_LINE_FIELDS` を 15→16 にした）。
+> - **⑺ 本 spec が使える資産（作り直さないこと）**: 多フレーム駆動ハーネス `FrameHarness`（`crates/areka/src/emo2_boot/frame_test_support.rs`）は、World 資源と写しを同一点で進める `advance_frame`・3 つの源の差替口・`drain_writes`・`single_threaded_schedule`（要件 7.6）・x64 限定の `const _` assert（要件 7.5）・`transition_diag::reset_for_test`（要件 7.7 の状態非持越）を持ち、**ハーネスそのものの檻**（`crates/areka/src/emo2_boot/frame_harness_tests.rs`）が残留の非持越と同一プロセス連続 2 シナリオの判定不変を固定している。**「共有化の形」を設計するときの実例として読めるはず。**
+> - **⑻ 正本**: `.kiro/specs/completed/areka-P0-dpi-transition-atomicity/`（要件 7.6／7.7／10.4・design「Testing Strategy」・`mechanism-ledger.md` が file:line の正本）。
+>
+> **📌 2026-08-22 追記(76)（`areka-P0-dpi-transition-atomicity` からの申し送り・追記(72) の続き。一括 flush が `DeferWindowPos` の 1 バッチへ移り、`kind=write` に任意フィールドが 1 つ増えた）**: 追記(72) は task 6.4 時点の姿を渡したが、その後の **task 7.2** で flush の中身がもう一度変わった。**追記(72) ⑶⑷ の前提はそのまま生きているが、⑷ の「flush を通らない」の中身が濃くなっている。**
+> - **⑴ flush は逐次 `SetWindowPos` ではなくなった**: `SetWindowPosCommand::flush`（`crates/wintf/src/ecs/window/command.rs:723`）は取り出した指令列を `apply_as_batch`（同 `:391` が `BeginDeferWindowPos`・`:402` が `DeferWindowPos`・`:434` が `EndDeferWindowPos`）で **1 バッチ**として投入する。縮退は 3 種（`BeginDeferWindowPos-failed`／`DeferWindowPos-failed`／`EndDeferWindowPos-failed`＝同 `:317-319`）で、いずれも `warn!` を出して逐次経路へ落ちる（静かに形が変わらない）。
+> - **⑵ `kind=write` に任意フィールド `in_batch=` が増えた**: 単一定義元は `transition_diag.rs:191`（`FIELD_IN_BATCH`）で、`WRITE_OPTIONAL_FIELDS`（同 `:252`）に載る**唯一の任意フィールド**である。**任意なのは読む側の受け入れ方であって書く側の義務ではない**——発行側は必ず載せ、行の逐語テスト `transition_diag_tests::write_line_is_verbatim` が固定している。任意にした理由は、必須にすると task 7.2 **以前**に採った実機ログを後から「壊れた行」として否定してしまうためである（design.md の Data Models 直後の注記）。
+> - **⑶ ④ `apply_show` 鎖と本 spec の観測点は動いていない**（追記(72) ⑸ の判断をそのまま維持）。増えたのは `wintf` 側の flush だけである。
+> - **⑷ ⑷「決定論テストは flush を通らない」がより効く**: バッチ投入は実 `SetWindowPos`／`DeferWindowPos` を撃つので、**決定論テストからは構造的に到達できない**。`kind=write` を数える檻は如何なる退行でも赤にならない——数えるならキュー側（`drain_window_pos_commands()`）で数えること。バッチの**縮退**だけは決定論で踏める形が用意されている（`command.rs:328-329` の注記＝`BeginDeferWindowPos` を倒すテスト用フックと、偽ハンドルによる `DeferWindowPos` 失敗）。
+> - **⑸ 上流の合否**: atom の実機サインオフ（2026-08-22・`atom-73-signoff-1`・8 遷移）は**決定論系統 PASS・実機専用系統 FAIL** で、**開発者裁定 GO により閉じた**。未達（`visualize_to_write_us` 210,329〜306,301µs・`flush_total_us` 143,231〜231,910µs・上限 16,667µs）の引受先は `areka-P0-present-write-coherence`（W8）である。**本 spec は µs の上限を引き継がない**——引き継ぐのは語彙と檻の前提だけである。
+> - **⑹ 自発書込カウンタの型が広すぎる（本 spec の①②に直に効く・上流が引受先を持たずに残していた件）**: `crates/wintf/src/ecs/window/command.rs:49` の `SELF_INITIATED_DEPTH` はプロセス共有の `AtomicI32` だが、意味論は**スレッド局所**である（`SetWindowPos` → `WM_WINDOWPOSCHANGED` は呼出スレッド上で同期に起きる＝同 `:44-48` が `Relaxed` の根拠として自ら述べている）。**本番の欠陥ではない**——wintf に `thread::spawn` は 1 つも無く、メッセージポンプは `com/wuc.rs:110` の現スレッド 1 本、`world/mod.rs:123-125` が WUC 接触を UI スレッドへ構造的に固定し、ランタイムは `!Send`／`spawn_local` ゆえ第 2 のポンプスレッドは存在し得ない。**しかしテストは並列に走るので、このカウンタを読む／上げるテストが互いを汚染する（上流の実測で 60 回中 11 失敗）。** 是正は **`Cell<i32>` へのスレッド局所化 1 手**で、これを行えばテスト側の錠（`lock_self_initiated_for_test()`）はほぼ全て退役でき、zorder 系 3 ファイル（`CreateWindowExW`＋flush を持つ実窓の汚染源・約 35 箇所）を触る必要も消える。**上流（atom）は挙動変更ゆえ要件 3.4 で対象外とし、台帳へ登記して申し送るとしたが、2026-08-22 の最終ゲートまで引受先が決まっていなかった。**本 spec の①（tracing 毒化）②（零件の主張）と同じ「檻どうしの汚染」の系統なのでここへ登記する。**本番コード側の 1 行を触るので、実施するなら `command.rs` を接触集合に持つ `areka-P0-draw-load-parity` と着手順を調整すること。**
+> - **⑺ 正本**: `.kiro/specs/completed/areka-P0-dpi-transition-atomicity/mechanism-ledger.md` **§11.6**（B-2b の効果の実測表）・design.md の Data Models（`write` の行）。
+
 ## Problem
 
 **檻（テスト）が嘘をつき得る状態が 4 系統残っている。** いずれも本番挙動のバグではないが、「緑である」という信号の信頼性を損なう——本プロジェクトは [[deterministic-test-coverage-mandate]] を掲げており、檻の決定性そのものが成果物である。
@@ -147,3 +176,34 @@ probe 方式（3 コピー・意味論はバイト等価で命名と prose だ�
 **2026-08-01 追補（kero-balloon task 7.1/7.2 の先行消化・roadmap 追記(56)）**: 本 brief の②「spine.rs 協調スピン 13 箇所」は **kero-balloon が 11 箇所を先行是正済み**（R7.8＝S2 注入時刻の観測窓頭打ち〔Clear@1.40s・導出式は同 spec requirements R7.8〕・R7.9＝壁時計 `Instant` deadline 10s＋200µs poll-backoff sleep×11 本）。残作業＝(a) 是正形の検収（台本・アサート無改変の確認）、(b) 意図的に `yield_now` のまま温存した **settle drain 2 箇所**（負検証「尽きるのが正常」）の扱い裁定、(c) 着手時に spine.rs を実測して取りこぼし確認。**②の規模見積りは縮む**。
 **監視項目の引き継ぎ**: kero-balloon 検証中に `cargo test -p areka` が **1 回だけ 553/1 で赤**（13 秒・S2 空回りパターンではない・**ログ未保存でテスト名不明**）。以後 15 回以上連続緑で再現せず。本 spec の反復検証（②は負荷下で数十走）中に赤を見たら**必ずログを tee してテスト名を採る**こと——これが正体不明のまま残っている唯一の非決定性候補。
 **2026-08-05 追記(59)**: 別途 `cargo test --workspace` が**約 1/6 で `areka-seriko` のログ捕捉檻で赤**になることが実測された（テスト名まで特定済み・①へ登記）。これは**上記 553/1（`cargo test -p areka`・13 秒・テスト名不明）とは別件**であり、553/1 の正体は依然不明のまま残る——ただし**同じ毒化機序で説明できる可能性がある**（`crates/areka` 側にも未硬化サイトが 6 モジュール 44 呼出ある）ため、①を硬化した後に 553/1 が再現しなくなるかを**反復検証で確認**すること。①硬化後も再現するなら別系統の非決定性が残っている証拠になる。
+
+---
+
+## 申し送り（areka-P0-draw-load-parity・2026-08-23）
+
+`areka-P0-draw-load-parity`（W6.9・本 spec と並走）が `command.rs` の所有者として着地させた形の報告（同 spec 要件 8.2）。本 spec は着手時の rebase でこれを受ける。
+
+**⑴ `SELF_INITIATED_DEPTH` はスレッド局所になった**
+
+- 形＝`thread_local! { static SELF_INITIATED_DEPTH: Cell<i32> = const { Cell::new(0) }; }`（`crates/wintf/src/ecs/window/command.rs:49-71`）。プロセス共有の `AtomicI32` はもう無い。
+- 意味論は不変。`SetWindowPos` も `EndDeferWindowPos` も `WM_WINDOWPOSCHANGING`／`WM_WINDOWPOSCHANGED` を**呼び出したスレッドの上で同期送達**するので、「いま自分が書いた結果の通知を受けているか」は元よりスレッドごとの性質だった（理由は同ファイルの説明文に登記済み）。
+- 変更点は `is_self_initiated`（`command.rs:118`）・`SetWindowPosGuard::new`（`:132`）・その `drop`（`:139`）の 3 箇所だけ。
+
+**⑵ 錠 `lock_self_initiated_for_test` は残置＝退役の判断は本 spec が持つ**
+
+- 定義＝`command.rs:104`（`#[cfg(test)]`）。説明文は「スレッド局所化後は不要＝退役候補・`areka-P0-test-cage-determinism` が rebase で受ける」へ改めてある（`command.rs:73-102`）。
+- 実呼出は **21 箇所／5 ファイル**＝`command.rs` 2（`:961`・`:973`）／`command_batch_tests.rs` 5（`:322,402,466,542,637`）／`command_transition_tests.rs` 4（`:302,372,408,426`）／`window_pos_tests.rs` 5（`:44,284,318,622,651`）／`window_pos_transition_tests.rs` 5（`:192,222,299,399,519`）。後ろ 2 ファイルは `crates/wintf/src/ecs/window_proc/` 配下（`window/` ではない）。
+- 錠を取らずに並列で走らせても緑であることは新テスト `command_threadlocal_tests.rs` が固定している。取っても無害（ただの直列化）なので、撤去の可否と実施は本 spec の取り分。
+
+**⑶ 兄弟テスト 4 ファイルの説明文が陳腐化している**（錠の退役と同じ塊で直すこと）
+
+- 「プロセス共有」と書いたまま＝`command_batch_tests.rs:25`・`command_transition_tests.rs:28`・`window_pos_transition_tests.rs:21`（いずれもファイル冒頭の説明）・`window_pos_tests.rs:40`（テスト内の注記。dlp のタスク記録は `:41` と書いているが 2026-08-23 の実測は `:40`）。
+
+**⑷ 起床旗に触るテストは唯一の錠を取ること**（別件・本 spec の担当クラスに新規追加）
+
+- 共有の起床旗（`crates/wintf/src/ecs/world/tick_wake.rs`）に触る、または `EcsWorld::decide_tick`（`crates/wintf/src/ecs/world/mod.rs:551`）へ到達するテストは、`ecs::world::TICK_WAKE_TEST_LOCK`（`world/mod.rs:931`・**唯一の錠**）を取ること（先に落ちたテストが錠を握ったままでも取れるよう `lock().unwrap_or_else(|p| p.into_inner())` の形で）。自前の錠を作ると直列化が成立しない（dlp の実装中に錠が 2 本へ分裂した実例あり）。
+- 本番経路が旗を立てるようになったため、**共有の旗の上で「旗が立っていないはず」を主張するテストは書けない**（錠は他の検査からしか守らない）。省略側の主張は注入口 `tick_one_frame_with`（`crates/wintf/src/runtime/tick_bridge.rs:230`）／`EcsWorld::decide_tick_with`（`world/mod.rs:560`）で行う。
+
+**変えていないもの**: `Cargo.toml` は非接触（dlp 要件 8.6）。13 本のスケジュールの順序・`try_tick_world` の中身・既存の窓書込テスト群（計 57 本）はいずれも不変で 1 本も赤にしていない。
+
+**着地（2026-08-23・dlp タスク 9.4 で更新）**: dlp の改善ループは周 3 で頭打ち（plateau）となり STOPPED・**採用 0**。門の既定は **OFF のまま**（`crates/wintf/src/ecs/world/mod.rs` の `tick_gate_enabled: false`）、tick 構造（13 本の順序・実行器）は着地前と同じ、`Cargo.toml` は非接触。本節の file:line は dlp のタスク 1〜8 着地時点のまま有効。未達（⑵ catch-up・⑶・⑷a 22.3%）と残る最大項（段② `unregistered_rest` 51.8%）・引受先なし（新規 spec 要）は dlp の `requirements.md` 改訂欄に登記済み。

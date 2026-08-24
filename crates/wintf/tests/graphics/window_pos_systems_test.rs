@@ -59,26 +59,26 @@ fn create_test_bitmap(graphics: &GraphicsCore) -> ID2D1Bitmap1 {
 #[test]
 fn invalidate_invalidates_bitmap_source_when_graphics_invalid() {
     crate::common::on_gpu_owner_thread(move || {
-    let mut graphics = GraphicsCore::new().expect("GraphicsCore creation");
-    let bitmap = create_test_bitmap(&graphics);
+        let mut graphics = GraphicsCore::new().expect("GraphicsCore creation");
+        let bitmap = create_test_bitmap(&graphics);
 
-    let mut bsg = BitmapSourceGraphics::new();
-    bsg.set_bitmap(bitmap);
-    assert!(bsg.is_valid());
+        let mut bsg = BitmapSourceGraphics::new();
+        bsg.set_bitmap(bitmap);
+        assert!(bsg.is_valid());
 
-    graphics.invalidate();
+        graphics.invalidate();
 
-    let mut world = World::new();
-    world.insert_resource(graphics);
-    let entity = world.spawn(bsg).id();
+        let mut world = World::new();
+        world.insert_resource(graphics);
+        let entity = world.spawn(bsg).id();
 
-    run_invalidate(&mut world);
+        run_invalidate(&mut world);
 
-    let bsg = world.get::<BitmapSourceGraphics>(entity).unwrap();
-    assert!(
-        !bsg.is_valid(),
-        "bitmap source should be invalidated when GraphicsCore is invalid"
-    );
+        let bsg = world.get::<BitmapSourceGraphics>(entity).unwrap();
+        assert!(
+            !bsg.is_valid(),
+            "bitmap source should be invalidated when GraphicsCore is invalid"
+        );
     });
 }
 
@@ -91,74 +91,77 @@ fn invalidate_invalidates_bitmap_source_when_graphics_invalid() {
 #[test]
 fn invalidate_leaves_wuc_graphics_components_stale() {
     crate::common::on_gpu_owner_thread(move || {
-    use windows::Foundation::Size;
-    use windows::Graphics::DirectX::{DirectXAlphaMode, DirectXPixelFormat};
-    use windows::UI::Composition::Visual;
-    use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
-    use windows::core::Interface;
-    use wintf::ecs::{SurfaceGraphics, VisualGraphics, WucGraphicsResource};
+        use windows::Foundation::Size;
+        use windows::Graphics::DirectX::{DirectXAlphaMode, DirectXPixelFormat};
+        use windows::UI::Composition::Visual;
+        use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
+        use windows::core::Interface;
+        use wintf::ecs::{SurfaceGraphics, VisualGraphics, WucGraphicsResource};
 
-    unsafe {
-        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-    }
-    let mut graphics = GraphicsCore::new().expect("GraphicsCore creation");
-    let d2d = graphics.d2d_device().expect("d2d device");
-    let wuc_resource = WucGraphicsResource::new(d2d).expect("WucGraphicsResource");
-    let compositor = wuc_resource.compositor().expect("compositor").clone();
-    let gd = wuc_resource.graphics_device().expect("graphics_device").clone();
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        }
+        let mut graphics = GraphicsCore::new().expect("GraphicsCore creation");
+        let d2d = graphics.d2d_device().expect("d2d device");
+        let wuc_resource = WucGraphicsResource::new(d2d).expect("WucGraphicsResource");
+        let compositor = wuc_resource.compositor().expect("compositor").clone();
+        let gd = wuc_resource
+            .graphics_device()
+            .expect("graphics_device")
+            .clone();
 
-    let visual: Visual = compositor
-        .CreateSpriteVisual()
-        .expect("visual")
-        .cast()
-        .expect("cast to Visual");
-    let surface = gd
-        .CreateDrawingSurface(
-            Size {
-                Width: 4.0,
-                Height: 4.0,
-            },
-            DirectXPixelFormat::B8G8R8A8UIntNormalized,
-            DirectXAlphaMode::Premultiplied,
-        )
-        .expect("surface");
-    let brush = compositor
-        .CreateSurfaceBrushWithSurface(&surface)
-        .expect("brush");
+        let visual: Visual = compositor
+            .CreateSpriteVisual()
+            .expect("visual")
+            .cast()
+            .expect("cast to Visual");
+        let surface = gd
+            .CreateDrawingSurface(
+                Size {
+                    Width: 4.0,
+                    Height: 4.0,
+                },
+                DirectXPixelFormat::B8G8R8A8UIntNormalized,
+                DirectXAlphaMode::Premultiplied,
+            )
+            .expect("surface");
+        let brush = compositor
+            .CreateSurfaceBrushWithSurface(&surface)
+            .expect("brush");
 
-    // デバイスロストを模擬
-    graphics.invalidate();
+        // デバイスロストを模擬
+        graphics.invalidate();
 
-    let mut world = World::new();
-    world.insert_resource(graphics);
-    world.insert_resource(wuc_resource);
-    let entity = world
-        .spawn((
-            VisualGraphics::new(visual),
-            SurfaceGraphics::new(surface, brush, (4, 4)),
-        ))
-        .id();
+        let mut world = World::new();
+        world.insert_resource(graphics);
+        world.insert_resource(wuc_resource);
+        let entity = world
+            .spawn((
+                VisualGraphics::new(visual),
+                SurfaceGraphics::new(surface, brush, (4, 4)),
+            ))
+            .id();
 
-    run_invalidate(&mut world);
+        run_invalidate(&mut world);
 
-    // WucGraphicsResource は無効化される（既存設計どおり）
-    assert!(
-        !world.resource::<WucGraphicsResource>().is_valid(),
-        "WucGraphicsResource should be invalidated"
-    );
+        // WucGraphicsResource は無効化される（既存設計どおり）
+        assert!(
+            !world.resource::<WucGraphicsResource>().is_valid(),
+            "WucGraphicsResource should be invalidated"
+        );
 
-    // 一方 VisualGraphics / SurfaceGraphics は旧デバイス由来の COM ポインタを
-    // 保持したまま「有効」と判定され続ける（characterization: 再初期化トリガー不発）
-    let vg = world.get::<VisualGraphics>(entity).unwrap();
-    assert!(
-        vg.is_valid(),
-        "characterization: VisualGraphics stays stale-valid (not invalidated)"
-    );
-    let sg = world.get::<SurfaceGraphics>(entity).unwrap();
-    assert!(
-        sg.is_valid(),
-        "characterization: SurfaceGraphics stays stale-valid (not invalidated)"
-    );
+        // 一方 VisualGraphics / SurfaceGraphics は旧デバイス由来の COM ポインタを
+        // 保持したまま「有効」と判定され続ける（characterization: 再初期化トリガー不発）
+        let vg = world.get::<VisualGraphics>(entity).unwrap();
+        assert!(
+            vg.is_valid(),
+            "characterization: VisualGraphics stays stale-valid (not invalidated)"
+        );
+        let sg = world.get::<SurfaceGraphics>(entity).unwrap();
+        assert!(
+            sg.is_valid(),
+            "characterization: SurfaceGraphics stays stale-valid (not invalidated)"
+        );
     });
 }
 
@@ -166,23 +169,23 @@ fn invalidate_leaves_wuc_graphics_components_stale() {
 #[test]
 fn invalidate_noop_without_graphics_resource() {
     crate::common::on_gpu_owner_thread(move || {
-    let graphics = GraphicsCore::new().expect("GraphicsCore creation");
-    let bitmap = create_test_bitmap(&graphics);
-    let mut bsg = BitmapSourceGraphics::new();
-    bsg.set_bitmap(bitmap);
-    assert!(bsg.is_valid());
-    drop(graphics); // リソースとして挿入しない
+        let graphics = GraphicsCore::new().expect("GraphicsCore creation");
+        let bitmap = create_test_bitmap(&graphics);
+        let mut bsg = BitmapSourceGraphics::new();
+        bsg.set_bitmap(bitmap);
+        assert!(bsg.is_valid());
+        drop(graphics); // リソースとして挿入しない
 
-    let mut world = World::new();
-    let entity = world.spawn(bsg).id();
+        let mut world = World::new();
+        let entity = world.spawn(bsg).id();
 
-    run_invalidate(&mut world);
+        run_invalidate(&mut world);
 
-    let bsg = world.get::<BitmapSourceGraphics>(entity).unwrap();
-    assert!(
-        bsg.is_valid(),
-        "missing GraphicsCore resource must be a no-op"
-    );
+        let bsg = world.get::<BitmapSourceGraphics>(entity).unwrap();
+        assert!(
+            bsg.is_valid(),
+            "missing GraphicsCore resource must be a no-op"
+        );
     });
 }
 
@@ -194,25 +197,25 @@ fn invalidate_noop_without_graphics_resource() {
 #[test]
 fn apply_window_pos_skips_cw_usedefault() {
     crate::common::on_gpu_owner_thread(move || {
-    let mut world = World::new();
-    world.spawn((
-        Window::default(),
-        WindowHandle {
-            hwnd: HWND::default(),
-            instance: HINSTANCE::default(),
-        },
-        WindowPos {
-            position: Some(Point {
-                x: CW_USEDEFAULT,
-                y: 0,
-            }),
-            size: None,
-            ..Default::default()
-        },
-    ));
+        let mut world = World::new();
+        world.spawn((
+            Window::default(),
+            WindowHandle {
+                hwnd: HWND::default(),
+                instance: HINSTANCE::default(),
+            },
+            WindowPos {
+                position: Some(Point {
+                    x: CW_USEDEFAULT,
+                    y: 0,
+                }),
+                size: None,
+                ..Default::default()
+            },
+        ));
 
-    // CW_USEDEFAULT 検出で continue する経路。座標変換も enqueue も行われない。
-    run_apply_window_pos(&mut world);
+        // CW_USEDEFAULT 検出で continue する経路。座標変換も enqueue も行われない。
+        run_apply_window_pos(&mut world);
     });
 }
 
@@ -223,24 +226,24 @@ fn apply_window_pos_skips_cw_usedefault() {
 #[test]
 fn apply_window_pos_fallback_on_invalid_hwnd() {
     crate::common::on_gpu_owner_thread(move || {
-    let mut world = World::new();
-    world.spawn((
-        Window::default(),
-        WindowHandle {
-            hwnd: HWND::default(),
-            instance: HINSTANCE::default(),
-        },
-        WindowPos {
-            position: Some(Point { x: 10, y: 20 }),
-            size: Some(SizeI {
-                width: 100,
-                height: 50,
-            }),
-            ..Default::default()
-        },
-    ));
+        let mut world = World::new();
+        world.spawn((
+            Window::default(),
+            WindowHandle {
+                hwnd: HWND::default(),
+                instance: HINSTANCE::default(),
+            },
+            WindowPos {
+                position: Some(Point { x: 10, y: 20 }),
+                size: Some(SizeI {
+                    width: 100,
+                    height: 50,
+                }),
+                ..Default::default()
+            },
+        ));
 
-    run_apply_window_pos(&mut world);
+        run_apply_window_pos(&mut world);
     });
 }
 
@@ -248,19 +251,19 @@ fn apply_window_pos_fallback_on_invalid_hwnd() {
 #[test]
 fn apply_window_pos_ignores_non_window_entities() {
     crate::common::on_gpu_owner_thread(move || {
-    let mut world = World::new();
-    world.spawn((
-        WindowHandle {
-            hwnd: HWND::default(),
-            instance: HINSTANCE::default(),
-        },
-        WindowPos {
-            position: Some(Point { x: 1, y: 2 }),
-            size: None,
-            ..Default::default()
-        },
-    ));
+        let mut world = World::new();
+        world.spawn((
+            WindowHandle {
+                hwnd: HWND::default(),
+                instance: HINSTANCE::default(),
+            },
+            WindowPos {
+                position: Some(Point { x: 1, y: 2 }),
+                size: None,
+                ..Default::default()
+            },
+        ));
 
-    run_apply_window_pos(&mut world);
+        run_apply_window_pos(&mut world);
     });
 }

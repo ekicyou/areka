@@ -1,0 +1,11 @@
+invoke-followup-checks.ps1 0.1.1
+実行体: C:\home\maz\git\areka\.claude\worktrees\areka-p0-scope-chain-gap-004c39\target\release\areka.exe
+検査  : clickthrough, drag, dpi, balloon_follow
+操作の注入: available（SetCursorPos ret=True 実移動=True / SendInput 送出=1 lasterr=0）
+PID 12276 の可視窓 4 枚（うち種別の判った窓 2 枚）
+対象: キャラ窓 0xC603E0 / バルーン窓 0xA00224（scope=0）
+clickthrough transparent 点 (2066,612): ex=0x2800A0 transparent=true 期待=true → match
+clickthrough opaque 点 (2446,1694): ex=0x280080 transparent=false 期待=false → match
+drag: (2446,1694) → (2526,1694) カーソル到達=True
+モニタ 2 面・DPI の種類 144,192
+dpi: 192 → 144 へ移して戻した（出=True 戻=True）

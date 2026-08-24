@@ -1,8 +1,8 @@
+use super::test_support::{broken_lines, canvas_for, commit_initial, expect_update, phys, window};
 use super::{DIRTY_GUARD_IMG_PX, FramePlan, LineOverhang, ScrollPlanner};
 use crate::region::ScaleContract;
 use crate::state::TextItem;
 use crate::writing::WritingMode;
-use super::test_support::{broken_lines, canvas_for, commit_initial, expect_update, phys, window};
 
 // ── R2.2/3.2/5.1–5.3: 可視窓のみ移動 → dirty＝露出帯のみ（変化行ゼロ）・軸別の辺 ──
 

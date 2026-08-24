@@ -1,0 +1,3 @@
+title=語彙にない相は set-phase で拒む
+stderr_substr=知らない相
+stderr_substr=NOPE

@@ -392,7 +392,10 @@ mod runtime_error_tests {
         let err = RuntimeError::InvalidLoopCount(-2);
         let msg = format!("{err}");
         assert!(msg.contains("-2"), "should contain the value: {msg}");
-        assert!(msg.contains("loop_count"), "should mention loop_count: {msg}");
+        assert!(
+            msg.contains("loop_count"),
+            "should mention loop_count: {msg}"
+        );
     }
 
     /// D1b-T 追加: Display 未検証バリアントの固定（TooShortDurationWithInfiniteLoop）
@@ -403,9 +406,18 @@ mod runtime_error_tests {
             duration: 0.05,
         };
         let msg = format!("{err}");
-        assert!(msg.contains("spin"), "should contain storyboard name: {msg}");
-        assert!(msg.contains("0.050"), "should contain duration (3 digits): {msg}");
-        assert!(msg.contains("0.1"), "should contain MIN_LOOP_DURATION: {msg}");
+        assert!(
+            msg.contains("spin"),
+            "should contain storyboard name: {msg}"
+        );
+        assert!(
+            msg.contains("0.050"),
+            "should contain duration (3 digits): {msg}"
+        );
+        assert!(
+            msg.contains("0.1"),
+            "should contain MIN_LOOP_DURATION: {msg}"
+        );
     }
 
     /// D1b-T 追加: Display 未検証バリアントの固定（CompileError）
@@ -416,8 +428,14 @@ mod runtime_error_tests {
             name: "begin".to_string(),
         }]);
         let msg = format!("{err}");
-        assert!(msg.contains("compile error"), "should mention compile error: {msg}");
-        assert!(msg.contains("begin"), "should contain inner error detail: {msg}");
+        assert!(
+            msg.contains("compile error"),
+            "should mention compile error: {msg}"
+        );
+        assert!(
+            msg.contains("begin"),
+            "should contain inner error detail: {msg}"
+        );
     }
 
     /// D1b-T 追加: Display 未検証バリアントの固定（InvalidVariableId）
@@ -426,7 +444,10 @@ mod runtime_error_tests {
         let err = RuntimeError::InvalidVariableId(-7);
         let msg = format!("{err}");
         assert!(msg.contains("-7"), "should contain the id: {msg}");
-        assert!(msg.contains("variable_id"), "should mention variable_id: {msg}");
+        assert!(
+            msg.contains("variable_id"),
+            "should mention variable_id: {msg}"
+        );
     }
 
     #[test]

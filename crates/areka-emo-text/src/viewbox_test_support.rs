@@ -1,12 +1,12 @@
-use areka_parsers::balloon::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
-};
 use super::{FramePlan, PhysicalRect, ScrollPlanner};
 use crate::canvas::ContentCanvas;
 use crate::layout::{FixedMetrics, LayoutEngine, VisibleWindow, WrapPlan};
 use crate::region::{ScaleContract, TextRegion};
 use crate::state::TextItem;
 use crate::writing::WritingMode;
+use areka_parsers::balloon::{
+    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
+};
 
 // ── 3.2 R2.2/3.2/3.3/4.2: ダーティ導出（露出帯 ∪ 変化行 ∪ 全域）の檻 ──
 //
@@ -22,7 +22,9 @@ pub(super) fn phys(x: u32, y: u32, w: u32, h: u32) -> PhysicalRect {
 }
 
 /// テスト用 BalloonModel（origin (0,0)・折返し既定・validrect 指定）。
-pub(super) fn model_rect(validrect: (Option<i32>, Option<i32>, Option<i32>, Option<i32>)) -> BalloonModel {
+pub(super) fn model_rect(
+    validrect: (Option<i32>, Option<i32>, Option<i32>, Option<i32>),
+) -> BalloonModel {
     BalloonModel::new(
         WindowPosition::new(None, None),
         Origin::new(Some(0), Some(0)),

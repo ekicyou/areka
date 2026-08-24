@@ -19,9 +19,14 @@ const CHAR_SIZE: SizePx = SizePx { w: 434, h: 687 };
 #[test]
 fn bottom_snap_policy_pins_y_and_passes_x_through() {
     let snapshot = single_monitor_snapshot();
-    let mapped =
-        BottomSnapPolicy.resolve(PointPx { x: 1207, y: 217 }, CHAR_SIZE, Some(&snapshot));
-    assert_eq!(mapped, PointPx { x: 1207, y: 1043 - 687 });
+    let mapped = BottomSnapPolicy.resolve(PointPx { x: 1207, y: 217 }, CHAR_SIZE, Some(&snapshot));
+    assert_eq!(
+        mapped,
+        PointPx {
+            x: 1207,
+            y: 1043 - 687
+        }
+    );
     // 既に下端一致なら不動点（釘付け済み座標は変わらない）
     assert_eq!(
         BottomSnapPolicy.resolve(mapped, CHAR_SIZE, Some(&snapshot)),
@@ -93,7 +98,14 @@ fn project_anchor_bottom_delegates_to_bottom_snap_policy() {
     // 中心 (700+217, 300+343)=(917, 643) は単一モニタ内
     let raw = PointPx { x: 700, y: 300 };
     let mapped = project_anchor(Anchor::Bottom, raw, CHAR_SIZE, Some(&snapshot));
-    assert_eq!(mapped, PointPx { x: 700, y: 1043 - 687 }, "X 保持・Y=下端−h");
+    assert_eq!(
+        mapped,
+        PointPx {
+            x: 700,
+            y: 1043 - 687
+        },
+        "X 保持・Y=下端−h"
+    );
     assert_eq!(
         mapped,
         BottomSnapPolicy.resolve(raw, CHAR_SIZE, Some(&snapshot)),
@@ -130,7 +142,10 @@ fn project_anchor_right_pins_right_edge_and_keeps_y() {
     let raw = PointPx { x: 700, y: 300 };
     assert_eq!(
         project_anchor(Anchor::Right, raw, CHAR_SIZE, Some(&snapshot)),
-        PointPx { x: 1877 - 434, y: 300 }
+        PointPx {
+            x: 1877 - 434,
+            y: 300
+        }
     );
 }
 
@@ -225,23 +240,35 @@ fn project_anchor_resolves_per_crossed_monitor() {
     // Right: 属するモニタの右端で live 算出
     assert_eq!(
         project_anchor(Anchor::Right, raw_primary, CHAR_SIZE, Some(&snapshot)),
-        PointPx { x: 1920 - 434, y: 300 },
+        PointPx {
+            x: 1920 - 434,
+            y: 300
+        },
         "primary 帰属 → primary 右端"
     );
     assert_eq!(
         project_anchor(Anchor::Right, raw_right, CHAR_SIZE, Some(&snapshot)),
-        PointPx { x: 4477 - 434, y: 300 },
+        PointPx {
+            x: 4477 - 434,
+            y: 300
+        },
         "右モニタ帰属 → 右モニタ右端（跨ぎ再吸着）"
     );
     // Bottom: 属するモニタの下端で live 算出
     assert_eq!(
         project_anchor(Anchor::Bottom, raw_right, CHAR_SIZE, Some(&snapshot)),
-        PointPx { x: 2700, y: 1227 - 687 },
+        PointPx {
+            x: 2700,
+            y: 1227 - 687
+        },
         "右モニタ帰属 → 右モニタ下端"
     );
     assert_eq!(
         project_anchor(Anchor::Bottom, raw_primary, CHAR_SIZE, Some(&snapshot)),
-        PointPx { x: 700, y: 1040 - 687 },
+        PointPx {
+            x: 700,
+            y: 1040 - 687
+        },
         "primary 帰属 → primary 下端"
     );
 }
@@ -253,7 +280,10 @@ fn project_anchor_resolves_per_crossed_monitor() {
 fn project_anchor_is_idempotent_at_anchor_aligned_positions() {
     let snapshot = odd_edge_snapshot(); // rect(53, 37, 1877, 1043)
     // 各アンカー辺に既に一致する位置は不動点（中心はいずれも単一モニタ内）
-    let bottom_fixed = PointPx { x: 700, y: 1043 - 687 };
+    let bottom_fixed = PointPx {
+        x: 700,
+        y: 1043 - 687,
+    };
     assert_eq!(
         project_anchor(Anchor::Bottom, bottom_fixed, CHAR_SIZE, Some(&snapshot)),
         bottom_fixed,
@@ -271,7 +301,10 @@ fn project_anchor_is_idempotent_at_anchor_aligned_positions() {
         left_fixed,
         "Left 不動点"
     );
-    let right_fixed = PointPx { x: 1877 - 434, y: 300 };
+    let right_fixed = PointPx {
+        x: 1877 - 434,
+        y: 300,
+    };
     assert_eq!(
         project_anchor(Anchor::Right, right_fixed, CHAR_SIZE, Some(&snapshot)),
         right_fixed,
@@ -280,7 +313,12 @@ fn project_anchor_is_idempotent_at_anchor_aligned_positions() {
 
     // T∘T = T: 任意の生位置を一度射影した結果に再射影しても同値
     for anchor in [Anchor::Bottom, Anchor::Right] {
-        let once = project_anchor(anchor, PointPx { x: 700, y: 999 }, CHAR_SIZE, Some(&snapshot));
+        let once = project_anchor(
+            anchor,
+            PointPx { x: 700, y: 999 },
+            CHAR_SIZE,
+            Some(&snapshot),
+        );
         assert_eq!(
             project_anchor(anchor, once, CHAR_SIZE, Some(&snapshot)),
             once,

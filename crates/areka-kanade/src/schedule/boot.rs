@@ -5,11 +5,11 @@
 //! 2.1 では骨格（呼出面）のみを用意し、[`crate::schedule::mod`] の `step` から
 //! フェーズ分岐として呼び出せるようにする。
 
-use super::{events, resources, snapshot_of, Action, ActiveTalk, Input, Phase, State};
+use super::{Action, ActiveTalk, Input, Phase, State, events, resources, snapshot_of};
 use crate::msg::{CloseReason, KanadeConfig, ShioriOutcome};
-use resources::ResourceOutcome;
 use crate::status::ExecutionSnapshot;
 use crate::talk::{StartTalk, TalkId};
+use resources::ResourceOutcome;
 
 /// boot 系列（Idle / BootInit / BootType / BootMain / BootVersion）のフェーズ分岐。
 ///
@@ -43,7 +43,9 @@ fn boot_start(mut state: State) -> (State, Vec<Action>) {
     state.phase = Phase::BootInit;
     (
         state,
-        vec![Action::ShioriRequest(events::on_initialize(&ExecutionSnapshot::INACTIVE))],
+        vec![Action::ShioriRequest(events::on_initialize(
+            &ExecutionSnapshot::INACTIVE,
+        ))],
     )
 }
 
@@ -75,7 +77,13 @@ fn on_reply(state: State, outcome: ShioriOutcome, config: &KanadeConfig) -> (Sta
             ShioriOutcome::NoContent => {
                 let mut state = state;
                 state.phase = Phase::BootMain;
-                (state, vec![Action::ShioriRequest(events::on_boot(config, &ExecutionSnapshot::INACTIVE))])
+                (
+                    state,
+                    vec![Action::ShioriRequest(events::on_boot(
+                        config,
+                        &ExecutionSnapshot::INACTIVE,
+                    ))],
+                )
             }
             ShioriOutcome::Value(script) => {
                 tracing::info!(target: "kanade", event = "boot_type_script", "起動種別にスクリプト——OnBoot をスキップし basewareversion へ");

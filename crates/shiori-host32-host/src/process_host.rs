@@ -331,7 +331,10 @@ mod tests {
             if let Some(kind) = poll_exit_kind(handle) {
                 return kind;
             }
-            assert!(Instant::now() < deadline, "helper が上限時間内に終了しなかった");
+            assert!(
+                Instant::now() < deadline,
+                "helper が上限時間内に終了しなかった"
+            );
             std::thread::sleep(Duration::from_millis(5));
         }
     }
@@ -341,14 +344,18 @@ mod tests {
     #[test]
     fn classify_clean_from_exit_zero() {
         // 実プロセスで code() == Some(0) を作り Clean へ分類（要件 1.3）。
-        let status = cmd_exit(0).status().expect("cmd.exe /c exit 0 が起動できる");
+        let status = cmd_exit(0)
+            .status()
+            .expect("cmd.exe /c exit 0 が起動できる");
         assert_eq!(ExitKind::classify(&status), ExitKind::Clean);
     }
 
     #[test]
     fn classify_abnormal_from_nonzero_exit() {
         // 実プロセスで code() == Some(3) を作り Abnormal(3) へ分類（要件 1.4）。
-        let status = cmd_exit(3).status().expect("cmd.exe /c exit 3 が起動できる");
+        let status = cmd_exit(3)
+            .status()
+            .expect("cmd.exe /c exit 3 が起動できる");
         assert_eq!(ExitKind::classify(&status), ExitKind::Abnormal(3));
     }
 
@@ -456,12 +463,27 @@ mod tests {
         assert_eq!(resolve_request_timeout(None), Some(REQUEST_TIMEOUT));
         assert_eq!(resolve_request_timeout(None), Some(Duration::from_secs(60)));
         // 空文字・空白のみ。
-        assert_eq!(resolve_request_timeout(Some(String::new())), Some(Duration::from_secs(60)));
-        assert_eq!(resolve_request_timeout(Some("   ".to_string())), Some(Duration::from_secs(60)));
+        assert_eq!(
+            resolve_request_timeout(Some(String::new())),
+            Some(Duration::from_secs(60))
+        );
+        assert_eq!(
+            resolve_request_timeout(Some("   ".to_string())),
+            Some(Duration::from_secs(60))
+        );
         // parse 不能（非数値・負値・小数）はすべて既定へ（無限待ちへ暗黙昇格しない）。
-        assert_eq!(resolve_request_timeout(Some("abc".to_string())), Some(Duration::from_secs(60)));
-        assert_eq!(resolve_request_timeout(Some("-1".to_string())), Some(Duration::from_secs(60)));
-        assert_eq!(resolve_request_timeout(Some("1.5".to_string())), Some(Duration::from_secs(60)));
+        assert_eq!(
+            resolve_request_timeout(Some("abc".to_string())),
+            Some(Duration::from_secs(60))
+        );
+        assert_eq!(
+            resolve_request_timeout(Some("-1".to_string())),
+            Some(Duration::from_secs(60))
+        );
+        assert_eq!(
+            resolve_request_timeout(Some("1.5".to_string())),
+            Some(Duration::from_secs(60))
+        );
     }
 
     /// env `"0"` → `None`（無限待ち・デバッグ opt-in）。
@@ -504,15 +526,15 @@ mod tests {
         let parent_hwnd: u32 = 4_294_967_295; // u32::MAX（10進境界値）
         let decimal = parent_hwnd.to_string();
         // cwd 一致を検証できる実在ディレクトリ。canonicalize で表記ゆれを吸収。
-        let load_dir = std::fs::canonicalize(std::env::temp_dir())
-            .expect("temp_dir を canonicalize できる");
+        let load_dir =
+            std::fs::canonicalize(std::env::temp_dir()).expect("temp_dir を canonicalize できる");
         let shiori_name = "shiori.dll";
 
         // 位置引数を観測するバッチ stand-in を一時ファイルへ書く（テスト後に削除）。
         // 各面を "KEY=VALUE" 行で出力: %1..%3=位置引数・%VAR%=env・%CD%=cwd。
         let unique = std::process::id();
-        let batch_path = std::env::temp_dir()
-            .join(format!("areka_host32_spawn_contract_{unique}.bat"));
+        let batch_path =
+            std::env::temp_dir().join(format!("areka_host32_spawn_contract_{unique}.bat"));
         std::fs::write(
             &batch_path,
             "@echo off\r\n\

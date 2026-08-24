@@ -68,7 +68,14 @@ fn build_target_assets_with_bind(
     }
     dec.insert(base.join("p.png"), w, h, stride, img, true);
     // 1×1 の不透明 part（base 左上と必ず異なる色 → bind 有無でバイトが必ず変わる）。
-    dec.insert(base.join("q.png"), 1, 1, 4, vec![0xFF, 0xFF, 0xFF, 0xFF], true);
+    dec.insert(
+        base.join("q.png"),
+        1,
+        1,
+        4,
+        vec![0xFF, 0xFF, 0xFF, 0xFF],
+        true,
+    );
 
     let set = SurfaceSet {
         surfaces: &surfaces,
@@ -78,7 +85,10 @@ fn build_target_assets_with_bind(
         },
     };
     let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(baked.errors.is_empty(), "atlas bake セットアップは失敗しない");
+    assert!(
+        baked.errors.is_empty(),
+        "atlas bake セットアップは失敗しない"
+    );
 
     let mut world = EmoWorld::build(&shell_of(surfaces));
     world.bind_atlas(&baked.table, SetId(0));
@@ -86,12 +96,24 @@ fn build_target_assets_with_bind(
 
     let mut composer = Composer::new();
     let golden_plain = composer
-        .compose(&world, &atlas, 1000, &BindSet::default(), &PatternState::default())
+        .compose(
+            &world,
+            &atlas,
+            1000,
+            &BindSet::default(),
+            &PatternState::default(),
+        )
         .expect("bind 無し合成は Ok")
         .bytes()
         .to_vec();
     let golden_bound = composer
-        .compose(&world, &atlas, 1000, &BindSet::from_ids([2000]), &PatternState::default())
+        .compose(
+            &world,
+            &atlas,
+            1000,
+            &BindSet::from_ids([2000]),
+            &PatternState::default(),
+        )
         .expect("bind 有り合成は Ok")
         .bytes()
         .to_vec();
@@ -114,8 +136,7 @@ fn bind_change_on_same_surface_updates_display() {
     let mut world = make_world_with_gpu();
     let window = spawn_window_with_dpi(&mut world, 96);
 
-    let (emo_world, atlas, golden_plain, golden_bound) =
-        build_target_assets_with_bind(4, 3, 0x2B);
+    let (emo_world, atlas, golden_plain, golden_bound) = build_target_assets_with_bind(4, 3, 0x2B);
 
     let mut presenter = EmoPresenter::new();
     presenter
@@ -204,7 +225,9 @@ fn reshow_same_size_different_face_keeps_text_slot_stable() {
     );
     // 前提: 初回表示は面 1000 の golden（切替前の基準）。
     assert_eq!(
-        presenter.read_back(TargetId(0)).expect("read_back（面 1000）失敗"),
+        presenter
+            .read_back(TargetId(0))
+            .expect("read_back（面 1000）失敗"),
         golden_1000,
         "初回表示が面 1000 の golden と一致しない（前提が崩れている）"
     );
@@ -256,7 +279,9 @@ fn reshow_same_size_different_face_keeps_text_slot_stable() {
     );
 
     // (d) read_back が新面 3000 の golden と一致（新面が実際に提示された証跡・R6.1）。
-    let rb = presenter.read_back(TargetId(0)).expect("read_back（面 3000）失敗");
+    let rb = presenter
+        .read_back(TargetId(0))
+        .expect("read_back（面 3000）失敗");
     assert_eq!(
         rb, golden_3000,
         "再表示のバイトが新面 3000 の golden と一致しない（新面が提示されていない）"
@@ -312,7 +337,14 @@ fn build_target_assets_with_pattern(
     }
     dec.insert(base.join("p.png"), w, h, stride, img, true);
     // 1×1 の不透明 part（base 左上と必ず異なる色 → pattern 有無でバイトが必ず変わる）。
-    dec.insert(base.join("q.png"), 1, 1, 4, vec![0xFF, 0xFF, 0xFF, 0xFF], true);
+    dec.insert(
+        base.join("q.png"),
+        1,
+        1,
+        4,
+        vec![0xFF, 0xFF, 0xFF, 0xFF],
+        true,
+    );
 
     let set = SurfaceSet {
         surfaces: &surfaces,
@@ -322,7 +354,10 @@ fn build_target_assets_with_pattern(
         },
     };
     let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(baked.errors.is_empty(), "atlas bake セットアップは失敗しない");
+    assert!(
+        baked.errors.is_empty(),
+        "atlas bake セットアップは失敗しない"
+    );
 
     let mut world = EmoWorld::build(&shell_of(surfaces));
     world.bind_atlas(&baked.table, SetId(0));
@@ -330,12 +365,24 @@ fn build_target_assets_with_pattern(
 
     let mut composer = Composer::new();
     let golden_plain = composer
-        .compose(&world, &atlas, 1000, &BindSet::default(), &PatternState::default())
+        .compose(
+            &world,
+            &atlas,
+            1000,
+            &BindSet::default(),
+            &PatternState::default(),
+        )
         .expect("空 pattern 合成は Ok")
         .bytes()
         .to_vec();
     let golden_pattern = composer
-        .compose(&world, &atlas, 1000, &BindSet::default(), &pattern_overlay(2000, 5000))
+        .compose(
+            &world,
+            &atlas,
+            1000,
+            &BindSet::default(),
+            &pattern_overlay(2000, 5000),
+        )
         .expect("非空 pattern 合成は Ok")
         .bytes()
         .to_vec();

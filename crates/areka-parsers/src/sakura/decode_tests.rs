@@ -26,22 +26,40 @@ fn dec(input: &str) -> Vec<Instruction> {
 /// `\wN` 短縮の境界: `\w1` → 50ms、`\w9` → 450ms（n × 50ms・要件 3.2）。
 #[test]
 fn wait_shorthand_boundary_values() {
-    assert_eq!(dec(r"\w1"), vec![Instruction::Wait(Duration::from_millis(50))]);
-    assert_eq!(dec(r"\w9"), vec![Instruction::Wait(Duration::from_millis(450))]);
+    assert_eq!(
+        dec(r"\w1"),
+        vec![Instruction::Wait(Duration::from_millis(50))]
+    );
+    assert_eq!(
+        dec(r"\w9"),
+        vec![Instruction::Wait(Duration::from_millis(450))]
+    );
 }
 
 /// `\w[n]` 正準形: `\w[2]` → 100ms、`\w[9]` → 450ms（n × 50ms・要件 3.1）。
 #[test]
 fn wait_bracket_n_times_50ms() {
-    assert_eq!(dec(r"\w[2]"), vec![Instruction::Wait(Duration::from_millis(100))]);
-    assert_eq!(dec(r"\w[9]"), vec![Instruction::Wait(Duration::from_millis(450))]);
+    assert_eq!(
+        dec(r"\w[2]"),
+        vec![Instruction::Wait(Duration::from_millis(100))]
+    );
+    assert_eq!(
+        dec(r"\w[9]"),
+        vec![Instruction::Wait(Duration::from_millis(450))]
+    );
 }
 
 /// `\_w[ms]` 絶対ミリ秒: `\_w[450]` → 450ms、`\_w[950]` → 950ms（要件 3.3）。
 #[test]
 fn wait_underscore_absolute_ms() {
-    assert_eq!(dec(r"\_w[450]"), vec![Instruction::Wait(Duration::from_millis(450))]);
-    assert_eq!(dec(r"\_w[950]"), vec![Instruction::Wait(Duration::from_millis(950))]);
+    assert_eq!(
+        dec(r"\_w[450]"),
+        vec![Instruction::Wait(Duration::from_millis(450))]
+    );
+    assert_eq!(
+        dec(r"\_w[950]"),
+        vec![Instruction::Wait(Duration::from_millis(950))]
+    );
 }
 
 /// `\w`系/`\_w`系のいずれも同一 `Wait` variant（正規化済み Duration）で表現（要件 3.4）。
@@ -474,7 +492,9 @@ fn lenient_passthrough_never_aborts_keeps_valid_neighbors() {
 fn balloon_surface_bracket_numeric() {
     assert_eq!(
         dec(r"\b[10]"),
-        vec![Instruction::BalloonSurface(SurfaceArg::new("10".to_string()))],
+        vec![Instruction::BalloonSurface(SurfaceArg::new(
+            "10".to_string()
+        ))],
     );
 }
 
@@ -484,7 +504,9 @@ fn balloon_surface_bracket_numeric() {
 fn balloon_surface_bracket_name_form_opaque() {
     assert_eq!(
         dec(r"\b[バルーン１]"),
-        vec![Instruction::BalloonSurface(SurfaceArg::new("バルーン１".to_string()))],
+        vec![Instruction::BalloonSurface(SurfaceArg::new(
+            "バルーン１".to_string()
+        ))],
     );
 }
 
@@ -494,7 +516,9 @@ fn balloon_surface_bracket_name_form_opaque() {
 fn balloon_surface_hide_sentinel_opaque() {
     assert_eq!(
         dec(r"\b[-1]"),
-        vec![Instruction::BalloonSurface(SurfaceArg::new("-1".to_string()))],
+        vec![Instruction::BalloonSurface(SurfaceArg::new(
+            "-1".to_string()
+        ))],
     );
 }
 
@@ -504,7 +528,9 @@ fn balloon_surface_hide_sentinel_opaque() {
 fn balloon_surface_shorthand_single_digit() {
     assert_eq!(
         dec(r"\b1"),
-        vec![Instruction::BalloonSurface(SurfaceArg::new("1".to_string()))],
+        vec![Instruction::BalloonSurface(SurfaceArg::new(
+            "1".to_string()
+        ))],
     );
 }
 
@@ -527,7 +553,9 @@ fn balloon_surface_shorthand_digit_then_body_text() {
 fn balloon_surface_fallback_form_takes_first_arg() {
     assert_eq!(
         dec(r"\b[2,--fallback=4]"),
-        vec![Instruction::BalloonSurface(SurfaceArg::new("2".to_string()))],
+        vec![Instruction::BalloonSurface(SurfaceArg::new(
+            "2".to_string()
+        ))],
     );
 }
 
@@ -546,7 +574,10 @@ fn balloon_surface_inner_readable_via_as_str() {
 /// `b2` → `Raw`（既存 `\w2[x]` と同型・"b" arm 追加後も不変・R1.6 整合）。
 #[test]
 fn balloon_bracketed_digit_word_stays_raw() {
-    assert_eq!(dec(r"\b2[x]"), vec![Instruction::Raw(r"\b2[x]".to_string())]);
+    assert_eq!(
+        dec(r"\b2[x]"),
+        vec![Instruction::Raw(r"\b2[x]".to_string())]
+    );
 }
 
 /// 数字を伴わない裸 `\b` は bare タグ＝既存 passthrough のまま `Raw("\b")`（"b" arm は

@@ -125,7 +125,10 @@ pub fn project_anchor(
         return raw;
     }
     let Some(snapshot) = snapshot else {
-        debug!(?anchor, "MonitorSnapshot 未挿入（フォールバック経路）のため identity 縮退");
+        debug!(
+            ?anchor,
+            "MonitorSnapshot 未挿入（フォールバック経路）のため identity 縮退"
+        );
         return raw;
     };
     // wa＝生位置に置いた窓矩形の中心が属するモニタの work area（live 算出・跨ぎ再吸着）
@@ -142,9 +145,15 @@ pub fn project_anchor(
 
     match anchor {
         // 上端固定・X 保持（Req2.2）
-        Anchor::Top => PointPx { x: raw.x, y: wa.top },
+        Anchor::Top => PointPx {
+            x: raw.x,
+            y: wa.top,
+        },
         // 左端固定・Y 保持（Req2.3）
-        Anchor::Left => PointPx { x: wa.left, y: raw.y },
+        Anchor::Left => PointPx {
+            x: wa.left,
+            y: raw.y,
+        },
         // 右端固定（left_X = wa.right − w）・Y 保持（Req2.4）。極端入力でも panic
         // しない契約で saturating_sub（BottomSnapPolicy の bottom−h と同型の防波堤）
         Anchor::Right => PointPx {
@@ -169,6 +178,7 @@ pub fn project_anchor(
 /// ドラッグ（`on_char_drag`）とリサイズ（`resize_window_to`）の**両者がこの値を読んで**
 /// 同一射影 T（`project_anchor`）を呼ぶ——`Free` か否かで wndproc 委譲／単一ライターを
 /// 分岐する。
-#[allow(dead_code)] // spawn 付与（task 3.1）は後続 task の領分——構築が付くまで dead_code 警告を抑える
+#[allow(dead_code)]
+// spawn 付与（task 3.1）は後続 task の領分——構築が付くまで dead_code 警告を抑える
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Anchored(pub Anchor);

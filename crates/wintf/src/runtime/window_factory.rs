@@ -33,24 +33,24 @@
 use std::cell::RefCell;
 use std::rc::Weak;
 
+use crate::executor::util::{Window as LibWindow, WindowType, get_instance_handle};
 use bevy_ecs::prelude::Entity;
 use bevy_ecs::world::World;
 use tracing::{debug, error};
 use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::HiDpi::GetDpiForSystem;
 use windows::Win32::UI::WindowsAndMessaging::{
-    SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SW_SHOW, SetParent,
-    SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow, CW_USEDEFAULT, GWL_STYLE,
+    CW_USEDEFAULT, GWL_STYLE, SW_SHOW, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+    SWP_NOZORDER, SetParent, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow,
     WS_EX_LAYERED,
 };
 use windows::core::HSTRING;
-use crate::executor::util::{get_instance_handle, Window as LibWindow, WindowType};
 
 use crate::ecs::HasGraphicsResources;
 use crate::ecs::window::{Window, WindowHandle, WindowPos, WindowStyle};
 use crate::ecs::world::EcsWorld;
 use crate::runtime::window_registry::WindowRegistry;
-use crate::runtime::wndproc_bridge::{make_wndproc, WndState};
+use crate::runtime::wndproc_bridge::{WndState, make_wndproc};
 
 use windows::Win32::UI::WindowsAndMessaging::WINDOW_EX_STYLE;
 
@@ -133,14 +133,13 @@ impl EcsWindowFactory {
             entity,
         };
         let wndproc = make_wndproc();
-        let lib_window =
-            match LibWindow::new_ex(WindowType::TopLevel, ex_style, state, wndproc) {
-                Ok(w) => w,
-                Err(e) => {
-                    error!(entity = ?entity, error = ?e, "ライブラリウィンドウ生成に失敗");
-                    return;
-                }
-            };
+        let lib_window = match LibWindow::new_ex(WindowType::TopLevel, ex_style, state, wndproc) {
+            Ok(w) => w,
+            Err(e) => {
+                error!(entity = ?entity, error = ?e, "ライブラリウィンドウ生成に失敗");
+                return;
+            }
+        };
         let hwnd = lib_window.hwnd();
 
         // --- 4. 生成後初期化（style / pos / title 反映・要件 2.1） ---
@@ -176,8 +175,7 @@ impl EcsWindowFactory {
         }
 
         // --- 5. WindowRegistry（NonSend）へ格納（要件 2.1） ---
-        if let Some(mut registry) =
-            world.get_non_send_mut::<WindowRegistry<LibWindow<WndState>>>()
+        if let Some(mut registry) = world.get_non_send_mut::<WindowRegistry<LibWindow<WndState>>>()
         {
             registry.insert(entity, lib_window);
         } else {
@@ -276,8 +274,8 @@ mod tests {
     use std::rc::Rc;
 
     use windows::Win32::UI::WindowsAndMessaging::{
-        GetWindowLongPtrW, GetWindowTextW, WS_EX_NOREDIRECTIONBITMAP, WS_OVERLAPPEDWINDOW, WS_POPUP,
-        WS_VISIBLE,
+        GetWindowLongPtrW, GetWindowTextW, WS_EX_NOREDIRECTIONBITMAP, WS_OVERLAPPEDWINDOW,
+        WS_POPUP, WS_VISIBLE,
     };
 
     /// (1) ex_style 算出: 一本化後の唯一経路は NOREDIRECTIONBITMAP を立て LAYERED を除去する。
@@ -379,7 +377,10 @@ mod tests {
         let mut buf = [0u16; 64];
         let len = unsafe { GetWindowTextW(hwnd, &mut buf) };
         let text = String::from_utf16_lossy(&buf[..len as usize]);
-        assert_eq!(text, "FactoryTest", "SetWindowTextW でタイトルが反映されるべき");
+        assert_eq!(
+            text, "FactoryTest",
+            "SetWindowTextW でタイトルが反映されるべき"
+        );
 
         // クリーンアップ: registry を drop すると Window<WndState>::drop → DestroyWindow。
         drop(bevy_world);

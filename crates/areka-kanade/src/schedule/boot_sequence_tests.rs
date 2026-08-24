@@ -1,6 +1,6 @@
-use super::*;
-use crate::schedule::{step, ActiveTalk};
 use super::test_support::{assert_get, assert_notify, config, initial};
+use super::*;
+use crate::schedule::{ActiveTalk, step};
 
 // --- Full happy path: Idle→…→Steady（各段の Phase＋Action を厳密検証） ---
 
@@ -12,7 +12,10 @@ fn full_boot_sequence_carries_greeting_talk_into_steady() {
     let (s, actions) = step(initial(), Input::Boot, &cfg);
     assert!(matches!(s.phase, Phase::BootInit));
     assert_eq!(actions.len(), 1);
-    assert_notify(&actions[0], &events::on_initialize(&ExecutionSnapshot::INACTIVE));
+    assert_notify(
+        &actions[0],
+        &events::on_initialize(&ExecutionSnapshot::INACTIVE),
+    );
 
     // 2. BootInit + Notified → username リソース照会（prefetch）GET / BootPrefetch（R4.1）。
     let (s, actions) = step(
@@ -25,7 +28,10 @@ fn full_boot_sequence_carries_greeting_talk_into_steady() {
     );
     assert!(matches!(s.phase, Phase::BootPrefetch));
     assert_eq!(actions.len(), 1);
-    assert_get(&actions[0], &resources::resource_username(&ExecutionSnapshot::INACTIVE));
+    assert_get(
+        &actions[0],
+        &resources::resource_username(&ExecutionSnapshot::INACTIVE),
+    );
 
     // 2b. BootPrefetch + NoContent(204) → [ResourceOutcome, OnFirstBoot GET] / BootType（R4.1）。
     let (s, actions) = step(
@@ -38,8 +44,14 @@ fn full_boot_sequence_carries_greeting_talk_into_steady() {
     );
     assert!(matches!(s.phase, Phase::BootType));
     assert_eq!(actions.len(), 2, "sink 呼出指示＋OnFirstBoot GET の 2 件");
-    assert!(matches!(actions[0], Action::ResourceOutcome { .. }), "sink 先行");
-    assert_get(&actions[1], &events::on_first_boot(&ExecutionSnapshot::INACTIVE, 0));
+    assert!(
+        matches!(actions[0], Action::ResourceOutcome { .. }),
+        "sink 先行"
+    );
+    assert_get(
+        &actions[1],
+        &events::on_first_boot(&ExecutionSnapshot::INACTIVE, 0),
+    );
 
     // 3. BootType + NoContent(204) → OnBoot GET / BootMain（Req 1.3）。
     let (s, actions) = step(
@@ -52,7 +64,10 @@ fn full_boot_sequence_carries_greeting_talk_into_steady() {
     );
     assert!(matches!(s.phase, Phase::BootMain));
     assert_eq!(actions.len(), 1);
-    assert_get(&actions[0], &events::on_boot(&cfg, &ExecutionSnapshot::INACTIVE));
+    assert_get(
+        &actions[0],
+        &events::on_boot(&cfg, &ExecutionSnapshot::INACTIVE),
+    );
 
     // 4. BootMain + Value("greeting") → StartTalk(id=1) + basewareversion NOTIFY /
     //    BootVersion{talk: Some(挨拶)}（DD-IT-12: 挨拶を正規追跡）。
@@ -78,7 +93,9 @@ fn full_boot_sequence_carries_greeting_talk_into_steady() {
     );
     assert_eq!(actions.len(), 2);
     match &actions[0] {
-        Action::StartTalk(StartTalk { talk_id, script, .. }) => {
+        Action::StartTalk(StartTalk {
+            talk_id, script, ..
+        }) => {
             assert_eq!(*talk_id, TalkId(1), "初回 boot talk_id は 1");
             assert_eq!(script, "greeting");
         }
@@ -86,7 +103,10 @@ fn full_boot_sequence_carries_greeting_talk_into_steady() {
     }
     // baseware_version の id/references（Status の検証は専用檻
     // `baseware_version_status_reflects_greeting_tracking` が担う）。
-    assert_notify(&actions[1], &events::baseware_version(&cfg, &ExecutionSnapshot::INACTIVE));
+    assert_notify(
+        &actions[1],
+        &events::baseware_version(&cfg, &ExecutionSnapshot::INACTIVE),
+    );
     // 採番カウンタが進む。
     assert_eq!(s.next_talk_id, 2);
 
@@ -164,13 +184,18 @@ fn boot_type_value_skips_onboot_and_starts_talk() {
     );
     assert_eq!(actions.len(), 2);
     match &actions[0] {
-        Action::StartTalk(StartTalk { talk_id, script, .. }) => {
+        Action::StartTalk(StartTalk {
+            talk_id, script, ..
+        }) => {
             assert_eq!(*talk_id, TalkId(1));
             assert_eq!(script, "earlygreet");
         }
         _ => panic!("expected StartTalk first"),
     }
-    assert_notify(&actions[1], &events::baseware_version(&cfg, &ExecutionSnapshot::INACTIVE));
+    assert_notify(
+        &actions[1],
+        &events::baseware_version(&cfg, &ExecutionSnapshot::INACTIVE),
+    );
 
     // OnBoot GET が一切発行されていないことを確認（フォールスルー打ち切り）。
     for a in &actions {
@@ -207,7 +232,10 @@ fn boot_main_no_content_emits_no_talk() {
     );
     // basewareversion NOTIFY のみ（StartTalk なし）。
     assert_eq!(actions.len(), 1);
-    assert_notify(&actions[0], &events::baseware_version(&cfg, &ExecutionSnapshot::INACTIVE));
+    assert_notify(
+        &actions[0],
+        &events::baseware_version(&cfg, &ExecutionSnapshot::INACTIVE),
+    );
     assert!(
         !actions.iter().any(|a| matches!(a, Action::StartTalk(_))),
         "204 は talk 起動しない（Req 2.3）"

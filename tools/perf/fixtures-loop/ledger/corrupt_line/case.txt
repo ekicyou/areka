@@ -1,0 +1,3 @@
+title=壊れた行のある台帳は黙って読み飛ばさない（行番号つきで exit 3）
+stderr_substr=壊れた行
+stderr_substr=:13:

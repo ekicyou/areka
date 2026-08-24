@@ -101,7 +101,9 @@ fn create_activate_immediate_get_then_drop_teardown() {
 
     // 確立後は常に受理される（「未ロード状態」は無い）。即時応答が内容一致で返る。
     let content = HSTRING::from("hrequest");
-    let outcome = session.get(&content).expect("確立後の get は受理されること");
+    let outcome = session
+        .get(&content)
+        .expect("確立後の get は受理されること");
     assert_eq!(
         outcome,
         SessionRequest::Immediate(HSTRING::from(IMMEDIATE_RESPONSE)),
@@ -127,8 +129,7 @@ fn drop_cancels_pending_then_reactivate_serves_requests() {
         .create(&HSTRING::from("dir"), &HSTRING::from("name"), &host)
         .expect("create");
     let mut session = ShioriSession::from_parts(brain, host.clone());
-    let sink_impl =
-        unsafe { AsImpl::<crate::shiori_host::ShioriHostSink>::as_impl(&host) };
+    let sink_impl = unsafe { AsImpl::<crate::shiori_host::ShioriHostSink>::as_impl(&host) };
 
     // --- 遅延 get で保留枠を立てる（単一 in-flight・議題3）。
     let content = HSTRING::from("hrequest-deferred");
@@ -138,7 +139,10 @@ fn drop_cancels_pending_then_reactivate_serves_requests() {
         SessionRequest::Deferred(CorrelationToken(DEFERRED_TOKEN)),
         "遅延はトークン付き Deferred を返すこと"
     );
-    assert!(session.is_pending(), "遅延後は保留状態（単一 in-flight）であること");
+    assert!(
+        session.is_pending(),
+        "遅延後は保留状態（単一 in-flight）であること"
+    );
     assert_eq!(
         sink_impl.pending_token(),
         Some(CorrelationToken(DEFERRED_TOKEN)),
@@ -157,7 +161,10 @@ fn drop_cancels_pending_then_reactivate_serves_requests() {
     let mut session =
         ShioriSession::activate(&factory, &HSTRING::from("dir"), &HSTRING::from("name"))
             .expect("再 activate");
-    assert!(!session.is_pending(), "再確立直後は保留が持ち越されていないこと");
+    assert!(
+        !session.is_pending(),
+        "再確立直後は保留が持ち越されていないこと"
+    );
 
     let outcome = session
         .get(&content)
@@ -167,7 +174,10 @@ fn drop_cancels_pending_then_reactivate_serves_requests() {
         SessionRequest::Deferred(CorrelationToken(DEFERRED_TOKEN)),
         "再確立後も遅延 get が正常に受理されること"
     );
-    assert!(session.is_pending(), "再確立後の遅延 get で保留枠が立つこと（新規枠）");
+    assert!(
+        session.is_pending(),
+        "再確立後の遅延 get で保留枠が立つこと（新規枠）"
+    );
 
     // teardown（drop で保留取消）。
     drop(session);

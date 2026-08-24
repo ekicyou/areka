@@ -11,10 +11,12 @@ use bevy_ecs::prelude::World;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use wintf::ecs::{GraphicsCommandList, GraphicsCore, VisualGraphics, WucGraphicsResource};
 
-use super::{ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame, spawn_emo_text};
+use super::test_support::{cue, geo_model, opaque_count, pump_until_idle, spawn_reserved_slot};
+use super::{
+    ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame, spawn_emo_text,
+};
 use crate::state::TextLayerConfig;
 use crate::wrap::WrapMode;
-use super::test_support::{cue, geo_model, opaque_count, pump_until_idle, spawn_reserved_slot};
 
 // ── ログ檻（WARN/ERROR 件数を数える最小 Subscriber・sink.rs の檻パターン踏襲） ──
 
@@ -553,4 +555,3 @@ fn clear_all_clears_every_attached_actor_render_not_just_cue_actor() {
         "ClearAll は名指しされない actor（1）の描画実行部にも FullClear を起こす（request_clear が全 render へ届いた証跡）"
     );
 }
-

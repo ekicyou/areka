@@ -67,7 +67,9 @@ fn main() {
             .unwrap_or(3); // 既定 3 秒（ハーネスを塞がぬよう短く）。
         match helper_window::selftest_loop(secs) {
             Ok(()) => {
-                println!("selftest_loop OK: HELLO 受領＋{secs}s ループ生存＋clean unload（要件 5.1/5.2/5.3）");
+                println!(
+                    "selftest_loop OK: HELLO 受領＋{secs}s ループ生存＋clean unload（要件 5.1/5.2/5.3）"
+                );
                 std::process::exit(0);
             }
             Err(e) => {
@@ -85,12 +87,15 @@ fn main() {
     if let Some(parent_hwnd) = read_parent_hwnd(&args) {
         let ghostdir = read_ghostdir(&args).unwrap_or_else(default_fixture_ghostdir);
         // UNLOAD が来なくても暴走しないよう上限（先進坑・ハーネス保護）。親駆動時は UNLOAD で早期停止。
-        let code = helper_window::run_helper(parent_hwnd, &ghostdir, std::time::Duration::from_secs(30));
+        let code =
+            helper_window::run_helper(parent_hwnd, &ghostdir, std::time::Duration::from_secs(30));
         std::process::exit(code);
     }
 
     println!("pilot shiori-host-32-helper (i686 helper): skeleton placeholder");
-    println!("  modes: --selftest-load <ghostdir> | --selftest-loop <secs> | (env PARENT_HWND[+GHOSTDIR] で本番起動)");
+    println!(
+        "  modes: --selftest-load <ghostdir> | --selftest-loop <secs> | (env PARENT_HWND[+GHOSTDIR] で本番起動)"
+    );
     // 共有プロトコルが helper ターゲットへ取り込まれていることの最小確認。
     let _ = ipc::DEFAULT_TIMEOUT;
 }

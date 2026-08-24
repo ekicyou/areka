@@ -1,0 +1,3 @@
+available=false
+reason=not_elevated
+time_utc=2026-08-23T03:52:44.566

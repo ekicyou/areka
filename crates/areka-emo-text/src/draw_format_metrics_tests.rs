@@ -7,6 +7,7 @@ use windows::Win32::Graphics::DirectWrite::{
 };
 use wintf::com::dwrite::dwrite_create_factory;
 
+use super::test_support::{default_metrics, empty_font, model_with_font, with_log_cage};
 use super::{
     DEFAULT_FONT_HEIGHT, DEFAULT_FONT_NAME, DWriteMetrics, DirectionRecipe, FontDisableSeam,
     PROBE_MAX_EXTENT, RESERVED_KEY_DISABLE_FONT_PREFIX, ResolvedFont, create_text_format,
@@ -16,7 +17,6 @@ use crate::canvas::TextEffects;
 use crate::layout::GlyphMetrics;
 use crate::state::TextLayerConfig;
 use crate::writing::WritingMode;
-use super::test_support::{default_metrics, empty_font, model_with_font, with_log_cage};
 
 // ── R4.1/R4.2: フォント解決とフォールバック（純粋部・COM 不要） ──
 
@@ -82,8 +82,7 @@ fn comma_separated_names_adopt_first_and_keep_rest_as_seam() {
 fn empty_font_name_falls_back_to_default_with_warn() {
     for raw in ["", "  ", " , "] {
         let font = Font::new(Some(raw.to_owned()), None, FontColor::new(None, None, None));
-        let (resolved, warns, _) =
-            with_log_cage(|| ResolvedFont::resolve(&model_with_font(font)));
+        let (resolved, warns, _) = with_log_cage(|| ResolvedFont::resolve(&model_with_font(font)));
         assert_eq!(
             resolved.name, DEFAULT_FONT_NAME,
             "raw {raw:?} は既定フォントへ"

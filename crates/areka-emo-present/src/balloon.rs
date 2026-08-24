@@ -631,14 +631,14 @@ pub fn build_balloon_target_from_faces(
 }
 
 #[cfg(test)]
-#[path = "balloon_test_support.rs"]
-mod test_support;
+#[path = "balloon_model_tests.rs"]
+mod model_tests;
 #[cfg(test)]
 #[path = "balloon_series_tests.rs"]
 mod series_tests;
 #[cfg(test)]
-#[path = "balloon_model_tests.rs"]
-mod model_tests;
-#[cfg(test)]
 #[path = "balloon_target_tests.rs"]
 mod target_tests;
+#[cfg(test)]
+#[path = "balloon_test_support.rs"]
+mod test_support;

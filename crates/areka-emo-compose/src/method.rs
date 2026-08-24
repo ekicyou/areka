@@ -334,9 +334,18 @@ mod tests {
     /// 写像表準拠: ハイフン／連結の両書式・単純メソッド群。
     #[test]
     fn from_name_maps_simple_methods() {
-        assert_eq!(ComposeMethod::from_name("overlayfast"), ComposeMethod::OverlayFast);
-        assert_eq!(ComposeMethod::from_name("overlay-fast"), ComposeMethod::OverlayFast);
-        assert_eq!(ComposeMethod::from_name("interpolate"), ComposeMethod::Interpolate);
+        assert_eq!(
+            ComposeMethod::from_name("overlayfast"),
+            ComposeMethod::OverlayFast
+        );
+        assert_eq!(
+            ComposeMethod::from_name("overlay-fast"),
+            ComposeMethod::OverlayFast
+        );
+        assert_eq!(
+            ComposeMethod::from_name("interpolate"),
+            ComposeMethod::Interpolate
+        );
         assert_eq!(ComposeMethod::from_name("replace"), ComposeMethod::Replace);
         assert_eq!(ComposeMethod::from_name("asis"), ComposeMethod::Asis);
         assert_eq!(ComposeMethod::from_name("base"), ComposeMethod::Base);

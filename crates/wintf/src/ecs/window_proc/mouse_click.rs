@@ -175,7 +175,8 @@ fn handle_button_message(
 
                         let should_end = match &state_snapshot {
                             crate::ecs::drag::DragStateSnapshot::Dragging {
-                                hwnd: drag_hwnd, ..
+                                hwnd: drag_hwnd,
+                                ..
                             } => *drag_hwnd == hwnd,
                             crate::ecs::drag::DragStateSnapshot::Preparing { entity, .. }
                             | crate::ecs::drag::DragStateSnapshot::JustStarted { entity, .. } => {
@@ -186,10 +187,15 @@ fn handle_button_message(
                         };
 
                         if should_end {
-                            if let crate::ecs::drag::DragStateSnapshot::Dragging { entity, .. }
-                            | crate::ecs::drag::DragStateSnapshot::Preparing { entity, .. }
-                            | crate::ecs::drag::DragStateSnapshot::JustStarted { entity, .. } =
-                                &state_snapshot
+                            if let crate::ecs::drag::DragStateSnapshot::Dragging {
+                                entity, ..
+                            }
+                            | crate::ecs::drag::DragStateSnapshot::Preparing {
+                                entity, ..
+                            }
+                            | crate::ecs::drag::DragStateSnapshot::JustStarted {
+                                entity, ..
+                            } = &state_snapshot
                             {
                                 // DragAccumulatorResourceにEnded遷移を記録
                                 if let Some(accumulator) = world_borrow

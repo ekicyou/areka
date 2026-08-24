@@ -2,11 +2,11 @@
 
 use crate::plan::build_plan;
 
+use super::test_support::{on_params, parse_emo2_shell, shell_master_dir, solid_opaque};
 use super::{
     AtlasTable, BindSet, EmoWorld, MemoryDecoder, PackConfig, Path, PatternState, SetId, Shell,
     SurfaceSet, bake,
 };
-use super::test_support::{on_params, parse_emo2_shell, shell_master_dir, solid_opaque};
 
 // ============================================================================
 // task 11.2: emo2 まばたき bind（1400/1403・pattern0 なし）の静的不活性回帰檻
@@ -40,7 +40,11 @@ fn build_atlas_for_blink_cage(shell: &Shell, base: &Path) -> AtlasTable {
     dec.insert(base.join("purple/4/normal.png"), w, h, s, b, a);
     // 閉じ目パーツ（1400→surface1412=eyebase+toji、1403→surface1414=null）を解決可能にする。
     // これらが解決できることで、旧 min_by_key 実装なら閉じ目が composed され命令列が伸びる（非空虚）。
-    for rel in ["purple/a/eyebase.png", "purple/4/toji.png", "purple/a/null.png"] {
+    for rel in [
+        "purple/a/eyebase.png",
+        "purple/4/toji.png",
+        "purple/a/null.png",
+    ] {
         let (w, h, s, b, a) = solid_opaque(20, 90, 128, 128, 128);
         dec.insert(base.join(rel), w, h, s, b, a);
     }
@@ -69,8 +73,16 @@ fn emo2_blink_binds_are_statically_inactive() {
     // [1302] のみ（目/通常・pattern0 あり）。
     let mut ops_base = Vec::new();
     let mut vis_base = Vec::new();
-    build_plan(&mut ops_base, &mut vis_base, &world, &atlas, 1000, &BindSet::from_ids([1302]), &PatternState::default())
-        .expect("目/通常のみでも surface1000 存在＋外形非ゼロで Ok");
+    build_plan(
+        &mut ops_base,
+        &mut vis_base,
+        &world,
+        &atlas,
+        1000,
+        &BindSet::from_ids([1302]),
+        &PatternState::default(),
+    )
+    .expect("目/通常のみでも surface1000 存在＋外形非ゼロで Ok");
 
     // [1302,1400,1403]（＋まばたき・pattern0 なし）。
     let mut ops_blink = Vec::new();
@@ -92,7 +104,11 @@ fn emo2_blink_binds_are_statically_inactive() {
         "まばたき bind を足しても BlitOp 列は不変（pattern0 なしは静的不活性・要件 9.1/9.5）",
     );
     // 非空虚: 目/通常（1302）は pattern0 ありゆえ現に 1 命令を生む（空同士の空虚一致でない）。
-    assert_eq!(ops_base.len(), 1, "目/通常 1302 は pattern0 ありで 1 命令（檻は空虚でない）");
+    assert_eq!(
+        ops_base.len(),
+        1,
+        "目/通常 1302 は pattern0 ありで 1 命令（檻は空虚でない）"
+    );
 }
 
 /// まばたき檻の非空虚性の実データ確認: 1400/1403 が pattern0（index==0）を持たず、閉じ目パーツ
@@ -144,7 +160,11 @@ fn emo2_blink_binds_lack_pattern0_but_frames_are_resolvable() {
 
     // 閉じ目パーツ surface（1412=eyebase+toji）の element 画像が atlas に解決される（placement Some）。
     // ＝旧実装なら実際に composed され得た＝上檻の assert_eq は非空虚。
-    for rel in ["purple/a/eyebase.png", "purple/4/toji.png", "purple/a/null.png"] {
+    for rel in [
+        "purple/a/eyebase.png",
+        "purple/4/toji.png",
+        "purple/a/null.png",
+    ] {
         let id = atlas
             .resolve(SetId(0), rel)
             .unwrap_or_else(|| panic!("閉じ目パーツ {rel} が atlas に解決される"));

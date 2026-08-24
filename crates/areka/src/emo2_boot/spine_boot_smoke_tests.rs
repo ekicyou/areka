@@ -1,4 +1,6 @@
-use super::{capture_logs, count_level, run_attach_phase, spin_wait_until, RecordedCall, SpineHarness};
+use super::{
+    RecordedCall, SpineHarness, capture_logs, count_level, run_attach_phase, spin_wait_until,
+};
 
 // ===========================================================================
 // task 6.1 スモークテスト
@@ -68,7 +70,8 @@ fn spine_harness_boots_scripted_ghost_and_reaches_attach_ready() {
     //    「計画件数＝実装着件数」を装着サマリで観測する（縮退がバグを隠さない檻・R8.1）。 ──
     let logs = capture_logs(|| run_attach_phase(&mut harness.wiring, &mut harness.world));
     assert!(
-        logs.iter().any(|l| l.contains("planned=2") && l.contains("attached=2")),
+        logs.iter()
+            .any(|l| l.contains("planned=2") && l.contains("attached=2")),
         "attach 到達（planned=2 attached=2＝全 scope のシェル装着成功）が観測できない: {logs:?}"
     );
     assert_eq!(

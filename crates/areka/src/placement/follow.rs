@@ -66,6 +66,18 @@ pub(crate) use self::drag_follow::{
 pub use self::work_area::{
     MonitorSnapshot, WorkAreaResolution, work_area_for_window, work_area_for_window_with_origin,
 };
+// 2 源の型と比較（task 5.1 で新設）。本番の消費者は `emo2_boot::frame::work_area_sync` が
+// 定義元から直接 import するため、この再輸出を**名前で呼ぶ**のはテストと起動シームだけである。
+// examples は `#[path]` で src を取り込むが本番項目しか使わないので、そちらのビルドでは
+// 未使用に見える——下の `MonitorDpiEntry` と同じ事情なので同じ扱いにする。公開面の維持
+// （要件 2.5）のため再輸出そのものは残す。
+#[allow(unused_imports)]
+pub use self::work_area::{MonitorDpiTable, MonitorSources, same_monitors};
+// モニタ別拡大率表の要素型。`MonitorDpiTable::entries` の要素として本番でも運ばれるが、
+// **名前で呼ぶ**のはテストだけ（本番の消費者は表ごと受け渡す）ゆえ非 test ビルドでは未使用に
+// 見える。表の外から要素を組めないと `entries` が事実上読めない型になるので再輸出は残す。
+#[allow(unused_imports)]
+pub use self::work_area::MonitorDpiEntry;
 
 // 公開面の維持（要件 2.5）だけを担う再輸出。本体からは定義元のサブモジュール内で直接
 // 呼ばれるため、`follow::` 経由で参照するのは `#[cfg(test)]` のテストモジュールと
@@ -81,7 +93,8 @@ pub use self::visibility::{VisibilityVerdict, guard_visibility};
 // このグループ全体に付く。
 #[allow(unused_imports)]
 pub use self::window_move::{
-    anchor_changed_system, move_window_to, resize_window_keep_position, resize_window_to,
+    anchor_changed_system, move_window_to, move_window_with_route, resize_window_keep_position,
+    resize_window_to,
 };
 
 // 私有項目のファサード再束縛（クレート内可視性のみ・公開面は増やさない）。
@@ -94,47 +107,29 @@ use self::visibility::{
     route_applies_visibility_guard,
 };
 use self::window_move::enqueue_window_set_pos;
+// 遷移観測（`kind=ground` の発行口・書込指令の要求語彙タグ）のファサード再束縛。
+// `window_move` は `super::transition_diag` としてここを辿る（兄弟モジュールへの
+// 直接参照はファサード分割では届かない・structure.md「ファサード形式」の注意点）。
+use super::transition_diag;
+// 整合待ちの札（atom 設計 C5）のファサード再束縛。単一の窓書込口（`window_move` の
+// `enqueue_window_set_pos`）が待ち札の適用範囲の不変条件を見張るために読む。
+//
+// 見張る相手は**見送りが覆うべき経路**に限る（task 7.5）——利用者のドラッグ（route 無し）や
+// `\![move]`・ドラッグ解放時の補正といった**明示操作**は設計上そもそも見送らないので、鳴らせば
+// 偽の警報になる（debug ビルドではドラッグ 1 回で落ちていた）。どの経路語で鳴るかの分類は
+// `window_move::deferral_covers_route` が 12 語＋route 無しの網羅 match で 1 本に持つ。
+use super::dpi_sync::DpiSyncHold;
 
 // =============================================================================
 // Tests（TDD RED: 実装前に振る舞いを固定する）
 // =============================================================================
 
 #[cfg(test)]
-#[path = "follow_test_support.rs"]
-mod test_support;
-#[cfg(test)]
 #[path = "follow_anchor_tests.rs"]
 mod anchor_tests;
 #[cfg(test)]
-#[path = "follow_drag_tests.rs"]
-mod drag_tests;
-#[cfg(test)]
 #[path = "follow_balloon_drag_tests.rs"]
 mod balloon_drag_tests;
-#[cfg(test)]
-#[path = "follow_drag_end_persist_tests.rs"]
-mod drag_end_persist_tests;
-#[cfg(test)]
-#[path = "follow_window_move_tests.rs"]
-mod window_move_tests;
-#[cfg(test)]
-#[path = "follow_resize_tests.rs"]
-mod resize_tests;
-#[cfg(test)]
-#[path = "follow_window_move_diag_tests.rs"]
-mod window_move_diag_tests;
-#[cfg(test)]
-#[path = "follow_work_area_tests.rs"]
-mod work_area_tests;
-#[cfg(test)]
-#[path = "follow_visibility_guard_tests.rs"]
-mod visibility_guard_tests;
-#[cfg(test)]
-#[path = "follow_visibility_char_wiring_tests.rs"]
-mod visibility_char_wiring_tests;
-#[cfg(test)]
-#[path = "follow_visibility_balloon_wiring_tests.rs"]
-mod visibility_balloon_wiring_tests;
 #[cfg(test)]
 #[path = "follow_balloon_limit_tests.rs"]
 mod balloon_limit_wiring_tests;
@@ -142,5 +137,46 @@ mod balloon_limit_wiring_tests;
 #[path = "follow_drag_end_limit_tests.rs"]
 mod drag_end_limit_tests;
 #[cfg(test)]
+#[path = "follow_drag_end_persist_tests.rs"]
+mod drag_end_persist_tests;
+#[cfg(test)]
+#[path = "follow_drag_tests.rs"]
+mod drag_tests;
+#[cfg(test)]
 #[path = "follow_keyword_base_tests.rs"]
 mod keyword_base_tests;
+#[cfg(test)]
+#[path = "follow_resize_tests.rs"]
+mod resize_tests;
+#[cfg(test)]
+#[path = "follow_test_support.rs"]
+mod test_support;
+#[cfg(test)]
+#[path = "follow_transition_diag_tests.rs"]
+mod transition_diag_tests;
+#[cfg(test)]
+#[path = "follow_visibility_balloon_wiring_tests.rs"]
+mod visibility_balloon_wiring_tests;
+#[cfg(test)]
+#[path = "follow_visibility_char_wiring_tests.rs"]
+mod visibility_char_wiring_tests;
+#[cfg(test)]
+#[path = "follow_visibility_guard_tests.rs"]
+mod visibility_guard_tests;
+#[cfg(test)]
+#[path = "follow_window_move_diag_tests.rs"]
+mod window_move_diag_tests;
+#[cfg(test)]
+#[path = "follow_window_move_tests.rs"]
+mod window_move_tests;
+#[cfg(test)]
+#[path = "follow_work_area_tests.rs"]
+mod work_area_tests;
+// 既定位置の追跡規則（task 5.5・design D9／D16・要件 6.2）。
+#[cfg(test)]
+#[path = "follow_default_pos_track_tests.rs"]
+mod default_pos_track_tests;
+// 整合待ちの札の監視が鳴る対象の分類（task 7.5・design C5・要件 5.8）。
+#[cfg(test)]
+#[path = "follow_window_move_hold_watch_tests.rs"]
+mod window_move_hold_watch_tests;

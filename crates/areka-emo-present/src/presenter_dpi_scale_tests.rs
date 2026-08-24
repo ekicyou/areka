@@ -816,10 +816,9 @@ fn native_size_tracks_displayed_surface_across_size_changing_switch() {
         .expect("attach_target 失敗");
 
     // 3 回目は 2 回目と同一入力＝キャッシュヒット（ヒット回の照会値を固定する）。
-    for (step, (surface_id, native)) in
-        [(1000u32, (6u32, 5u32)), (3000, (4, 3)), (3000, (4, 3))]
-            .into_iter()
-            .enumerate()
+    for (step, (surface_id, native)) in [(1000u32, (6u32, 5u32)), (3000, (4, 3)), (3000, (4, 3))]
+        .into_iter()
+        .enumerate()
     {
         show_ok(&mut presenter, &mut world, TargetId(0), surface_id);
 

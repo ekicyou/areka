@@ -1,0 +1,2 @@
+title=追記→読取の往復（init→append→state→read→entries→set-phase→state）
+note=set-phase が周の記録を 1 バイトも動かさないことは、ハーネスの不変条件検査でも見る。

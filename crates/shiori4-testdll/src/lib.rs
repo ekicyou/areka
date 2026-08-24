@@ -185,8 +185,7 @@ impl IShioriFactory_Impl for ReplayFactory_Impl {
             .ok_or_else(|| windows_core::Error::from(E_POINTER))?
             .clone();
         // load_dir/shiori_name を束縛（観測用 clone・reference_brain と同律）。refcount 1 の脳を構築。
-        let brain: IShiori =
-            ReplayBrain::new(host, load_dir.clone(), shiori_name.clone()).into();
+        let brain: IShiori = ReplayBrain::new(host, load_dir.clone(), shiori_name.clone()).into();
         // load 完了済み brain を out へ move-out（callee 確保・caller Release）。
         out.write(Some(brain))?;
         Ok(())
@@ -330,8 +329,15 @@ mod tests {
     fn make_factory() -> IShioriFactory {
         let mut out: *mut c_void = core::ptr::null_mut();
         let hr = unsafe { shiori_factory(&mut out) };
-        assert!(hr.is_ok(), "shiori_factory は成功時 S_OK, got 0x{:08X}", hr.0);
-        assert!(!out.is_null(), "成功時は out へ非 NULL の IShioriFactory を書き出すこと");
+        assert!(
+            hr.is_ok(),
+            "shiori_factory は成功時 S_OK, got 0x{:08X}",
+            hr.0
+        );
+        assert!(
+            !out.is_null(),
+            "成功時は out へ非 NULL の IShioriFactory を書き出すこと"
+        );
         // 手渡された単一参照を adopt（from_raw は AddRef しない）。
         unsafe { IShioriFactory::from_raw(out) }
     }
@@ -375,7 +381,11 @@ mod tests {
     fn shiori_factory_outputs_refcount_one_factory_on_success() {
         let mut out: *mut c_void = core::ptr::null_mut();
         let hr = unsafe { shiori_factory(&mut out) };
-        assert!(hr.is_ok(), "shiori_factory は成功時 S_OK, got 0x{:08X}", hr.0);
+        assert!(
+            hr.is_ok(),
+            "shiori_factory は成功時 S_OK, got 0x{:08X}",
+            hr.0
+        );
         assert!(!out.is_null(), "成功時は out へ非 NULL を書き出すこと");
 
         let factory = unsafe { IShioriFactory::from_raw(out) };
@@ -384,7 +394,10 @@ mod tests {
         let unk: windows_core::IUnknown = factory.cast().expect("IUnknown へ cast");
         let after_add = unsafe { (Interface::vtable(&unk).AddRef)(unk.as_raw()) };
         let after_rel = unsafe { (Interface::vtable(&unk).Release)(unk.as_raw()) };
-        assert_eq!(after_add, 3, "AddRef は cast 後ベースライン 2 から 3, got {after_add}");
+        assert_eq!(
+            after_add, 3,
+            "AddRef は cast 後ベースライン 2 から 3, got {after_add}"
+        );
         assert_eq!(after_rel, 2, "Release は 3 から 2, got {after_rel}");
     }
 
@@ -423,7 +436,9 @@ mod tests {
         let (hr, out_response, _token) = drive_get(&brain, &get_request("OnNeverSeenEvent"));
         assert_eq!(hr, S_OK, "未知 GET は即時 S_OK, got 0x{:08X}", hr.0);
         assert!(
-            out_response.to_string().starts_with("SHIORI/3.0 204 No Content"),
+            out_response
+                .to_string()
+                .starts_with("SHIORI/3.0 204 No Content"),
             "未知 ID は 204 応答であること: {out_response}"
         );
     }
@@ -439,7 +454,9 @@ mod tests {
             hr.0
         );
         assert!(
-            out_response.to_string().starts_with("SHIORI/3.0 400 Bad Request"),
+            out_response
+                .to_string()
+                .starts_with("SHIORI/3.0 400 Bad Request"),
             "malformed 入力は 400 応答であること: {out_response}"
         );
     }
@@ -457,8 +474,15 @@ mod tests {
             get_request(""),
         ] {
             let (hr, _resp, _token) = drive_get(&brain, &input);
-            assert_eq!(hr, S_OK, "全経路で即時 S_OK, got 0x{:08X} for {input}", hr.0);
-            assert_ne!(hr, SHIORI_S_PENDING, "Get は遅延（PENDING）を返さないこと: {input}");
+            assert_eq!(
+                hr, S_OK,
+                "全経路で即時 S_OK, got 0x{:08X} for {input}",
+                hr.0
+            );
+            assert_ne!(
+                hr, SHIORI_S_PENDING,
+                "Get は遅延（PENDING）を返さないこと: {input}"
+            );
         }
     }
 
@@ -466,8 +490,12 @@ mod tests {
     #[test]
     fn notify_is_receipt_only_and_returns_ok() {
         let (brain, _host) = make_brain();
-        unsafe { brain.Notify(&HSTRING::from("NOTIFY SHIORI/3.0\r\nID: OnInitialize\r\n\r\n")) }
-            .expect("Notify は Ok（片道・応答なし）");
+        unsafe {
+            brain.Notify(&HSTRING::from(
+                "NOTIFY SHIORI/3.0\r\nID: OnInitialize\r\n\r\n",
+            ))
+        }
+        .expect("Notify は Ok（片道・応答なし）");
         // 内容不問: garbage でも Ok。
         unsafe { brain.Notify(&HSTRING::from("arbitrary opaque garbage")) }
             .expect("Notify は内容不問で Ok");
@@ -487,6 +515,9 @@ mod tests {
             )
         };
         assert!(result.is_err(), "host 非在の create は Err（半構築非露出）");
-        assert!(brain_out.is_none(), "失敗時は out 未書込であること（半構築非露出）");
+        assert!(
+            brain_out.is_none(),
+            "失敗時は out 未書込であること（半構築非露出）"
+        );
     }
 }

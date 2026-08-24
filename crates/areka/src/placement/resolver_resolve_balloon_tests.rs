@@ -70,7 +70,10 @@ fn t_r8_balloon_right_places_right_of_char_without_clamp() {
     for dpi in DPIS {
         let wa = work_area(dpi);
         let (w, h) = (px(400, dpi), px(600, dpi));
-        let cfg = cfg_of(vec![(0, scope_cfg_balloon(Some(0), BalloonSide::Right, None))]);
+        let cfg = cfg_of(vec![(
+            0,
+            scope_cfg_balloon(Some(0), BalloonSide::Right, None),
+        )]);
 
         let out = resolve_placement(&cfg, wa, &[input(0, w, h)]);
 
@@ -119,10 +122,7 @@ fn t_r8_balloon_offsetx_offsety_added() {
         );
         assert_eq!(
             out[0].balloon_offset,
-            PointPx {
-                x: -bw + ox,
-                y: oy
-            },
+            PointPx { x: -bw + ox, y: oy },
             "dpi={dpi}: balloon_offset ≡ balloon_pos − char_pos"
         );
     }
@@ -163,4 +163,3 @@ fn t_r8_resolver_does_not_clamp_balloon_outside_work_area() {
         );
     }
 }
-

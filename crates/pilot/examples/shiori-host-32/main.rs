@@ -80,7 +80,9 @@ fn main() {
     if std::env::args().any(|a| a == "--selftest-errors") {
         match drive_selftest_errors(ghostdir) {
             Ok(()) => {
-                println!("=== --selftest-errors: 両異常系 PASS（IPC Timeout ＋ helper 異常終了検出・いずれもハングせず） ===");
+                println!(
+                    "=== --selftest-errors: 両異常系 PASS（IPC Timeout ＋ helper 異常終了検出・いずれもハングせず） ==="
+                );
                 std::process::exit(0);
             }
             Err(e) => {
@@ -151,7 +153,11 @@ fn drive(helper_exe: &Path, ghostdir: &Path) -> Result<(), String> {
         "go(2): survived {:.2}s (poll={} 回 alive / probe: 生存後 REQUEST {}) → clean unload exit={} kind={:?} [PASS]",
         go2.survived.as_secs_f64(),
         go2.polls,
-        if go2.post_survival_response_bytes.is_some() { "応答あり" } else { "応答なし" },
+        if go2.post_survival_response_bytes.is_some() {
+            "応答あり"
+        } else {
+            "応答なし"
+        },
         go2.exit_code,
         go2.exit_kind,
     );
@@ -324,9 +330,7 @@ fn drive_go_criterion_1<'p>(
 /// clean unload 待ち（`wait_clean`）は helper が UNLOAD で即 clean 終了するため実質即返り、
 /// 最悪でも helper 側 backstop（`run_helper` 30s・helper.rs §88）が上限を保証する（ハングしない）。
 fn drive_go_criterion_2(session: &mut HelperSession) -> Result<Go2Record, String> {
-    println!(
-        "=== go 基準(2): メッセージループ {SURVIVAL_WINDOW:?} 生存 → clean unload を観測 ==="
-    );
+    println!("=== go 基準(2): メッセージループ {SURVIVAL_WINDOW:?} 生存 → clean unload を観測 ===");
 
     // --- 1. 生存窓: N 秒間 helper が生きていることを poll_exit で刻みごとに観測（要件 5.2）---
     let started = Instant::now();
@@ -372,7 +376,9 @@ fn drive_go_criterion_2(session: &mut HelperSession) -> Result<Go2Record, String
         Ok(()) => println!("[go(2)] UNLOAD 送出 OK（N 秒生存後・clean unload 指示）"),
         Err(e) => {
             // UNLOAD 送出失敗は致命ではない（helper は backstop で自律停止する）が、観測して記録。
-            eprintln!("[go(2)] UNLOAD 送出失敗（helper は backstop 上限で自律停止・観測のみ）: {e:?}");
+            eprintln!(
+                "[go(2)] UNLOAD 送出失敗（helper は backstop 上限で自律停止・観測のみ）: {e:?}"
+            );
         }
     }
 
@@ -498,7 +504,9 @@ fn drive_err_ipc_timeout() -> Result<(), String> {
         .recv_timeout(Duration::from_secs(5))
         .map_err(|_| "wedged 窓の HWND を受領できなかった（窓生成失敗の可能性）".to_string())?;
     let wedge_hwnd = ipc::hwnd_from_u32(wedge_hwnd_u32);
-    println!("[err(1)] wedged 窓（別スレッド・REQUEST で {ERR_WEDGE_SLEEP:?} ブロック）: hwnd(u32)={wedge_hwnd_u32:#010x}");
+    println!(
+        "[err(1)] wedged 窓（別スレッド・REQUEST で {ERR_WEDGE_SLEEP:?} ブロック）: hwnd(u32)={wedge_hwnd_u32:#010x}"
+    );
 
     // wedged 窓のループが回り始めるまで軽く待つ（heartbeat で WndProc が呼ばれる状態に）。
     // ここは短い固定待ち（bounded）で十分。
@@ -596,10 +604,14 @@ fn drive_err_helper_abnormal_exit(ghostdir: &Path) -> Result<(), String> {
     // HELLO 受領で稼働確認（bounded）。届かなくても kill は可能だが、稼働状態からの
     // 強制終了を観測するため HELLO を待つ。
     match parent.pump_until_hello_or(ERR_HELLO_TIMEOUT) {
-        Some(h) => println!("[err(2)] helper 稼働確認 OK（HELLO 受領・helper hwnd(u32)={h:#010x}）"),
+        Some(h) => {
+            println!("[err(2)] helper 稼働確認 OK（HELLO 受領・helper hwnd(u32)={h:#010x}）")
+        }
         None => {
             // 稼働確認できずとも観測は続行（強制終了自体は成立する）。ただし記録する。
-            eprintln!("[err(2)] HELLO を {ERR_HELLO_TIMEOUT:?} 内に受領できず（稼働確認省略・kill は続行）");
+            eprintln!(
+                "[err(2)] HELLO を {ERR_HELLO_TIMEOUT:?} 内に受領できず（稼働確認省略・kill は続行）"
+            );
         }
     }
 

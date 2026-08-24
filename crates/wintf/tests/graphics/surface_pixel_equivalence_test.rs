@@ -34,7 +34,7 @@
 use windows::Foundation::Size;
 use windows::Graphics::DirectX::{DirectXAlphaMode, DirectXPixelFormat};
 use windows::Win32::Graphics::Direct2D::Common::{
-    D2D1_ALPHA_MODE_PREMULTIPLIED, D2D1_COLOR_F, D2D1_PIXEL_FORMAT, D2D_RECT_F, D2D_SIZE_U,
+    D2D_RECT_F, D2D_SIZE_U, D2D1_ALPHA_MODE_PREMULTIPLIED, D2D1_COLOR_F, D2D1_PIXEL_FORMAT,
 };
 use windows::Win32::Graphics::Direct2D::{
     D2D1_BITMAP_OPTIONS_CANNOT_DRAW, D2D1_BITMAP_OPTIONS_CPU_READ, D2D1_BITMAP_OPTIONS_TARGET,
@@ -294,99 +294,104 @@ fn render_wuc(resource: &WucGraphicsResource) -> Result<Vec<u8>> {
 #[test]
 fn surface_pixel_equivalence_reference_vs_wuc() {
     crate::common::on_gpu_owner_thread(move || {
-    init_com_mta();
+        init_com_mta();
 
-    let core = GraphicsCore::new().expect("GraphicsCore::new 失敗（HARDWARE デバイス生成）");
-    let d2d = core.d2d_device().expect("d2d device");
+        let core = GraphicsCore::new().expect("GraphicsCore::new 失敗（HARDWARE デバイス生成）");
+        let d2d = core.d2d_device().expect("d2d device");
 
-    // teardown レース対策: WucGraphicsResource 構築後は warmup サーフェスを 1 枚保持して
-    // DispatcherQueue を安定化する（tests/visual/common/mod.rs の WucVisualFactory と同一 pattern）。
-    let resource = WucGraphicsResource::new(d2d).expect("WucGraphicsResource::new 失敗");
-    let warmup_surface = {
-        let gd = resource.graphics_device().expect("graphics_device");
-        gd.CreateDrawingSurface(
-            Size {
-                Width: 1.0,
-                Height: 1.0,
-            },
-            DirectXPixelFormat::B8G8R8A8UIntNormalized,
-            DirectXAlphaMode::Premultiplied,
-        )
-        .expect("warmup surface")
-    };
+        // teardown レース対策: WucGraphicsResource 構築後は warmup サーフェスを 1 枚保持して
+        // DispatcherQueue を安定化する（tests/visual/common/mod.rs の WucVisualFactory と同一 pattern）。
+        let resource = WucGraphicsResource::new(d2d).expect("WucGraphicsResource::new 失敗");
+        let warmup_surface = {
+            let gd = resource.graphics_device().expect("graphics_device");
+            gd.CreateDrawingSurface(
+                Size {
+                    Width: 1.0,
+                    Height: 1.0,
+                },
+                DirectXPixelFormat::B8G8R8A8UIntNormalized,
+                DirectXAlphaMode::Premultiplied,
+            )
+            .expect("warmup surface")
+        };
 
-    let reference = render_reference(&core).expect("(a) 参照基準の描画/読み戻し失敗");
-    let wuc = render_wuc(&resource).expect("(b) WUC 経路の描画/読み戻し失敗");
+        let reference = render_reference(&core).expect("(a) 参照基準の描画/読み戻し失敗");
+        let wuc = render_wuc(&resource).expect("(b) WUC 経路の描画/読み戻し失敗");
 
-    assert_eq!(
-        reference.len(),
-        wuc.len(),
-        "読み戻しバイト長が一致しない: ref={} wuc={}",
-        reference.len(),
-        wuc.len()
-    );
-    assert_eq!(
-        reference.len(),
-        (W as usize) * (H as usize) * 4,
-        "読み戻しバイト長が W*H*4 と一致しない"
-    );
+        assert_eq!(
+            reference.len(),
+            wuc.len(),
+            "読み戻しバイト長が一致しない: ref={} wuc={}",
+            reference.len(),
+            wuc.len()
+        );
+        assert_eq!(
+            reference.len(),
+            (W as usize) * (H as usize) * 4,
+            "読み戻しバイト長が W*H*4 と一致しない"
+        );
 
-    // 自己検証（ごまかしの空 assert でないことの担保）: 参照基準に既知色が実在すること。
-    // 背景（濃紺）ピクセル (0,0) と白棒 (64,102) が期待色であることを確認する。
-    let px = |buf: &[u8], x: u32, y: u32| -> [u8; 4] {
-        let i = ((y * W + x) * 4) as usize;
-        [buf[i], buf[i + 1], buf[i + 2], buf[i + 3]]
-    };
-    let bg = px(&reference, 0, 0);
-    // BGRA バイト順: [0]=B, [1]=G, [2]=R, [3]=A。濃紺は B > R かつ不透明。
-    assert!(
-        bg[3] == 255 && bg[0] > bg[2],
-        "参照基準の背景が期待の不透明濃紺でない: BGRA={:?}",
-        bg
-    );
-    let bar = px(&reference, 64, 102);
-    assert!(
-        bar == [255, 255, 255, 255],
-        "参照基準の白棒 (64,102) が白でない: BGRA={:?}",
-        bar
-    );
+        // 自己検証（ごまかしの空 assert でないことの担保）: 参照基準に既知色が実在すること。
+        // 背景（濃紺）ピクセル (0,0) と白棒 (64,102) が期待色であることを確認する。
+        let px = |buf: &[u8], x: u32, y: u32| -> [u8; 4] {
+            let i = ((y * W + x) * 4) as usize;
+            [buf[i], buf[i + 1], buf[i + 2], buf[i + 3]]
+        };
+        let bg = px(&reference, 0, 0);
+        // BGRA バイト順: [0]=B, [1]=G, [2]=R, [3]=A。濃紺は B > R かつ不透明。
+        assert!(
+            bg[3] == 255 && bg[0] > bg[2],
+            "参照基準の背景が期待の不透明濃紺でない: BGRA={:?}",
+            bg
+        );
+        let bar = px(&reference, 64, 102);
+        assert!(
+            bar == [255, 255, 255, 255],
+            "参照基準の白棒 (64,102) が白でない: BGRA={:?}",
+            bar
+        );
 
-    // 全画素ビット等価判定（差分ゼロ）。
-    if reference != wuc {
-        // 最初の不一致画素を特定して報告（ごまかさない・要件 10.2）。
-        let mut first_mismatch = None;
-        let mut mismatch_count = 0usize;
-        for i in (0..reference.len()).step_by(4) {
-            if reference[i..i + 4] != wuc[i..i + 4] {
-                mismatch_count += 1;
-                if first_mismatch.is_none() {
-                    let pixel = i / 4;
-                    let x = (pixel as u32) % W;
-                    let y = (pixel as u32) / W;
-                    first_mismatch = Some((
-                        x,
-                        y,
-                        [reference[i], reference[i + 1], reference[i + 2], reference[i + 3]],
-                        [wuc[i], wuc[i + 1], wuc[i + 2], wuc[i + 3]],
-                    ));
+        // 全画素ビット等価判定（差分ゼロ）。
+        if reference != wuc {
+            // 最初の不一致画素を特定して報告（ごまかさない・要件 10.2）。
+            let mut first_mismatch = None;
+            let mut mismatch_count = 0usize;
+            for i in (0..reference.len()).step_by(4) {
+                if reference[i..i + 4] != wuc[i..i + 4] {
+                    mismatch_count += 1;
+                    if first_mismatch.is_none() {
+                        let pixel = i / 4;
+                        let x = (pixel as u32) % W;
+                        let y = (pixel as u32) / W;
+                        first_mismatch = Some((
+                            x,
+                            y,
+                            [
+                                reference[i],
+                                reference[i + 1],
+                                reference[i + 2],
+                                reference[i + 3],
+                            ],
+                            [wuc[i], wuc[i + 1], wuc[i + 2], wuc[i + 3]],
+                        ));
+                    }
                 }
             }
+            panic!(
+                "サーフェス層ビット等価に失敗: 不一致画素数={} / 総画素数={} 最初の不一致={:?} (x,y,ref_BGRA,wuc_BGRA)",
+                mismatch_count,
+                (W * H),
+                first_mismatch
+            );
         }
-        panic!(
-            "サーフェス層ビット等価に失敗: 不一致画素数={} / 総画素数={} 最初の不一致={:?} (x,y,ref_BGRA,wuc_BGRA)",
-            mismatch_count,
-            (W * H),
-            first_mismatch
-        );
-    }
 
-    // warmup surface は DispatcherQueue 安定化のためテスト末尾まで保持する。
-    let _ = warmup_surface;
-    eprintln!(
-        "[surface_pixel_equivalence] PASS: {}x{} 全 {} 画素がビット等価",
-        W,
-        H,
-        W * H
-    );
+        // warmup surface は DispatcherQueue 安定化のためテスト末尾まで保持する。
+        let _ = warmup_surface;
+        eprintln!(
+            "[surface_pixel_equivalence] PASS: {}x{} 全 {} 画素がビット等価",
+            W,
+            H,
+            W * H
+        );
     });
 }

@@ -14,9 +14,9 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use areka_parsers::charset::{decode, DefaultEncoding};
+use areka_parsers::charset::{DefaultEncoding, decode};
 use areka_parsers::kv::parse_kv;
-use areka_parsers::package::{resolve, GhostNames};
+use areka_parsers::package::{GhostNames, resolve};
 use tracing::{debug, error, warn};
 
 use super::PlacementError;
@@ -55,7 +55,8 @@ const BALLOON_DPI_KEY: &str = "dpi";
 /// 「`char{n}.name`（あれば）」は同じ起点 descript を decode した `ghost_kv` から
 /// 補完する（正本は同一ファイル＝意味は等価・選択理由を本コメントに記録）。
 /// 欠落スコープは既定 [`DEFAULT_TITLE`]（パニックしない・常に文字列を返す）。
-#[allow(dead_code)] // scaffold（task 2.2）: spawn（task 5）が消費するまで非テストビルドでは未使用
+#[allow(dead_code)]
+// scaffold（task 2.2）: spawn（task 5）が消費するまで非テストビルドでは未使用
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GhostTitles {
     /// スコープ番号 → タイトル（非公開・アクセサ `title` 経由）。
@@ -93,7 +94,8 @@ impl GhostTitles {
 /// `ghost_kv`/`shell_kv` は `kv::parse_kv` の出力形（`BTreeMap<String, String>`）
 /// そのままで、`config::build_placement_config(&ghost_kv, &shell_kv)` へ直接
 /// 供給できる（task 2.1 との結線契約）。
-#[allow(dead_code)] // scaffold（task 2.2）: 後続タスク（3〜6）が消費するまで非テストビルドでは未使用
+#[allow(dead_code)]
+// scaffold（task 2.2）: 後続タスク（3〜6）が消費するまで非テストビルドでは未使用
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DescriptSource {
     /// ghost/master/descript.txt の生 KV（読取失敗時は空・継続）。

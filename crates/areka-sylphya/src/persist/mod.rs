@@ -33,7 +33,7 @@
 pub mod format;
 pub mod io;
 
-pub use format::{FormatDoc, FORMAT_VERSION};
+pub use format::{FORMAT_VERSION, FormatDoc};
 pub use io::{FakePersistIo, FsPersistIo, PersistIo};
 
 use format::AxisPair;
@@ -287,10 +287,18 @@ fn read_existing(scope: PersistScope, io: &dyn PersistIo, path: &Path) -> Format
 fn apply_entry(doc: &mut FormatDoc, key: PersistKey, value: String) {
     match key {
         PersistKey::WindowPos { scope, axis } => {
-            set_axis(doc.window.entry(scope.to_string()).or_default(), axis, value);
+            set_axis(
+                doc.window.entry(scope.to_string()).or_default(),
+                axis,
+                value,
+            );
         }
         PersistKey::BalloonOffset { scope, axis } => {
-            set_axis(doc.balloon_offset.entry(scope.to_string()).or_default(), axis, value);
+            set_axis(
+                doc.balloon_offset.entry(scope.to_string()).or_default(),
+                axis,
+                value,
+            );
         }
         PersistKey::BootCount => doc.boot_count = Some(value),
         PersistKey::VanishCount => doc.vanish_count = Some(value),
@@ -310,10 +318,16 @@ fn doc_to_entries(scope: PersistScope, doc: &FormatDoc) -> Vec<(PersistKey, Stri
     let mut out = Vec::new();
 
     push_axis_family(scope, &mut out, &doc.window, |scope_id, axis| {
-        PersistKey::WindowPos { scope: scope_id, axis }
+        PersistKey::WindowPos {
+            scope: scope_id,
+            axis,
+        }
     });
     push_axis_family(scope, &mut out, &doc.balloon_offset, |scope_id, axis| {
-        PersistKey::BalloonOffset { scope: scope_id, axis }
+        PersistKey::BalloonOffset {
+            scope: scope_id,
+            axis,
+        }
     });
 
     if let Some(v) = &doc.boot_count {
@@ -363,10 +377,22 @@ mod tests {
 
     fn all_families() -> Vec<PersistKey> {
         vec![
-            PersistKey::WindowPos { scope: 0, axis: Axis::X },
-            PersistKey::WindowPos { scope: 2, axis: Axis::Y },
-            PersistKey::BalloonOffset { scope: 0, axis: Axis::X },
-            PersistKey::BalloonOffset { scope: 1, axis: Axis::Y },
+            PersistKey::WindowPos {
+                scope: 0,
+                axis: Axis::X,
+            },
+            PersistKey::WindowPos {
+                scope: 2,
+                axis: Axis::Y,
+            },
+            PersistKey::BalloonOffset {
+                scope: 0,
+                axis: Axis::X,
+            },
+            PersistKey::BalloonOffset {
+                scope: 1,
+                axis: Axis::Y,
+            },
             PersistKey::BootCount,
             PersistKey::VanishCount,
         ]
@@ -386,19 +412,34 @@ mod tests {
     #[test]
     fn canonical_key_exact_strings() {
         assert_eq!(
-            PersistKey::WindowPos { scope: 0, axis: Axis::X }.to_canonical_key(),
+            PersistKey::WindowPos {
+                scope: 0,
+                axis: Axis::X
+            }
+            .to_canonical_key(),
             "areka.window.scope(0).x"
         );
         assert_eq!(
-            PersistKey::WindowPos { scope: 3, axis: Axis::Y }.to_canonical_key(),
+            PersistKey::WindowPos {
+                scope: 3,
+                axis: Axis::Y
+            }
+            .to_canonical_key(),
             "areka.window.scope(3).y"
         );
         assert_eq!(
-            PersistKey::BalloonOffset { scope: 0, axis: Axis::X }.to_canonical_key(),
+            PersistKey::BalloonOffset {
+                scope: 0,
+                axis: Axis::X
+            }
+            .to_canonical_key(),
             "areka.balloon.offset.scope(0).x"
         );
         assert_eq!(PersistKey::BootCount.to_canonical_key(), "areka.boot.count");
-        assert_eq!(PersistKey::VanishCount.to_canonical_key(), "areka.vanish.count");
+        assert_eq!(
+            PersistKey::VanishCount.to_canonical_key(),
+            "areka.vanish.count"
+        );
     }
 
     // --- 4 key 族 put→load 往復（R6.6・完了条件）---
@@ -406,12 +447,39 @@ mod tests {
     #[test]
     fn four_family_put_load_value_round_trip() {
         let io = FakePersistIo::new();
-        let roots = ScopeRoots { ghost: Some(PathBuf::from("/ghost")), ..ScopeRoots::default() };
+        let roots = ScopeRoots {
+            ghost: Some(PathBuf::from("/ghost")),
+            ..ScopeRoots::default()
+        };
         let entries = vec![
-            (PersistKey::WindowPos { scope: 0, axis: Axis::X }, "1024".to_string()),
-            (PersistKey::WindowPos { scope: 0, axis: Axis::Y }, "512".to_string()),
-            (PersistKey::BalloonOffset { scope: 0, axis: Axis::X }, "30".to_string()),
-            (PersistKey::BalloonOffset { scope: 0, axis: Axis::Y }, "-10".to_string()),
+            (
+                PersistKey::WindowPos {
+                    scope: 0,
+                    axis: Axis::X,
+                },
+                "1024".to_string(),
+            ),
+            (
+                PersistKey::WindowPos {
+                    scope: 0,
+                    axis: Axis::Y,
+                },
+                "512".to_string(),
+            ),
+            (
+                PersistKey::BalloonOffset {
+                    scope: 0,
+                    axis: Axis::X,
+                },
+                "30".to_string(),
+            ),
+            (
+                PersistKey::BalloonOffset {
+                    scope: 0,
+                    axis: Axis::Y,
+                },
+                "-10".to_string(),
+            ),
             (PersistKey::BootCount, "3".to_string()),
             (PersistKey::VanishCount, "0".to_string()),
         ];
@@ -421,18 +489,40 @@ mod tests {
         );
         let loaded = load_scope(PersistScope::Ghost, &roots, &io);
         for (k, v) in &entries {
-            let found = loaded.iter().find(|(lk, _)| lk == k).map(|(_, lv)| lv.clone());
-            assert_eq!(found.as_deref(), Some(v.as_str()), "family {k:?} did not round-trip");
+            let found = loaded
+                .iter()
+                .find(|(lk, _)| lk == k)
+                .map(|(_, lv)| lv.clone());
+            assert_eq!(
+                found.as_deref(),
+                Some(v.as_str()),
+                "family {k:?} did not round-trip"
+            );
         }
     }
 
     #[test]
     fn round_trip_preserves_negative_and_multi_scope() {
         let io = FakePersistIo::new();
-        let roots = ScopeRoots { ghost: Some(PathBuf::from("/g")), ..ScopeRoots::default() };
+        let roots = ScopeRoots {
+            ghost: Some(PathBuf::from("/g")),
+            ..ScopeRoots::default()
+        };
         let entries = vec![
-            (PersistKey::WindowPos { scope: 0, axis: Axis::X }, "-5".to_string()),
-            (PersistKey::WindowPos { scope: 1, axis: Axis::Y }, "200".to_string()),
+            (
+                PersistKey::WindowPos {
+                    scope: 0,
+                    axis: Axis::X,
+                },
+                "-5".to_string(),
+            ),
+            (
+                PersistKey::WindowPos {
+                    scope: 1,
+                    axis: Axis::Y,
+                },
+                "200".to_string(),
+            ),
         ];
         save_scope(PersistScope::Ghost, &roots, &io, entries.clone());
         let loaded = load_scope(PersistScope::Ghost, &roots, &io);
@@ -447,27 +537,54 @@ mod tests {
     fn toml_mapping_places_families_under_expected_tables() {
         let io = FakePersistIo::new();
         let path = PathBuf::from("/g/sylphya.toml");
-        let roots = ScopeRoots { ghost: Some(PathBuf::from("/g")), ..ScopeRoots::default() };
+        let roots = ScopeRoots {
+            ghost: Some(PathBuf::from("/g")),
+            ..ScopeRoots::default()
+        };
         save_scope(
             PersistScope::Ghost,
             &roots,
             &io,
             vec![
-                (PersistKey::WindowPos { scope: 0, axis: Axis::X }, "1024".into()),
-                (PersistKey::BalloonOffset { scope: 0, axis: Axis::Y }, "-10".into()),
+                (
+                    PersistKey::WindowPos {
+                        scope: 0,
+                        axis: Axis::X,
+                    },
+                    "1024".into(),
+                ),
+                (
+                    PersistKey::BalloonOffset {
+                        scope: 0,
+                        axis: Axis::Y,
+                    },
+                    "-10".into(),
+                ),
                 (PersistKey::BootCount, "3".into()),
                 (PersistKey::VanishCount, "0".into()),
             ],
         );
         let serialized = io.read(&path).unwrap().unwrap();
         // toml は数字のみの key を bare key として出力する（"0" → window.0）。
-        assert!(serialized.contains("[window.0]"), "serialized=\n{serialized}");
-        assert!(serialized.contains("[balloon-offset.0]"), "serialized=\n{serialized}");
+        assert!(
+            serialized.contains("[window.0]"),
+            "serialized=\n{serialized}"
+        );
+        assert!(
+            serialized.contains("[balloon-offset.0]"),
+            "serialized=\n{serialized}"
+        );
         assert!(serialized.contains("[boot]"), "serialized=\n{serialized}");
         assert!(serialized.contains("[vanish]"), "serialized=\n{serialized}");
-        assert!(serialized.contains("format-version = 1"), "serialized=\n{serialized}");
+        assert!(
+            serialized.contains("format-version = 1"),
+            "serialized=\n{serialized}"
+        );
         // 値の配置も確認（x は window 表下・count は boot/vanish 表下）。
-        assert!(serialized.contains("x = \"1024\""), "serialized=\n{serialized}");
+        assert!(
+            serialized.contains("x = \"1024\""),
+            "serialized=\n{serialized}"
+        );
     }
 
     // --- マージが無関係 key を温存（read-modify-write・clobber なし）---
@@ -475,17 +592,37 @@ mod tests {
     #[test]
     fn merge_preserves_unrelated_keys() {
         let io = FakePersistIo::new();
-        let roots = ScopeRoots { ghost: Some(PathBuf::from("/g")), ..ScopeRoots::default() };
+        let roots = ScopeRoots {
+            ghost: Some(PathBuf::from("/g")),
+            ..ScopeRoots::default()
+        };
         save_scope(
             PersistScope::Ghost,
             &roots,
             &io,
-            vec![(PersistKey::WindowPos { scope: 0, axis: Axis::X }, "7".into())],
+            vec![(
+                PersistKey::WindowPos {
+                    scope: 0,
+                    axis: Axis::X,
+                },
+                "7".into(),
+            )],
         );
-        save_scope(PersistScope::Ghost, &roots, &io, vec![(PersistKey::BootCount, "2".into())]);
+        save_scope(
+            PersistScope::Ghost,
+            &roots,
+            &io,
+            vec![(PersistKey::BootCount, "2".into())],
+        );
         let loaded = load_scope(PersistScope::Ghost, &roots, &io);
         assert!(
-            loaded.contains(&(PersistKey::WindowPos { scope: 0, axis: Axis::X }, "7".into())),
+            loaded.contains(&(
+                PersistKey::WindowPos {
+                    scope: 0,
+                    axis: Axis::X
+                },
+                "7".into()
+            )),
             "window.* が boot.count 保存で消えた: {loaded:?}"
         );
         assert!(
@@ -497,12 +634,31 @@ mod tests {
     #[test]
     fn overwrite_same_key_updates_value() {
         let io = FakePersistIo::new();
-        let roots = ScopeRoots { ghost: Some(PathBuf::from("/g")), ..ScopeRoots::default() };
-        save_scope(PersistScope::Ghost, &roots, &io, vec![(PersistKey::BootCount, "1".into())]);
-        save_scope(PersistScope::Ghost, &roots, &io, vec![(PersistKey::BootCount, "5".into())]);
+        let roots = ScopeRoots {
+            ghost: Some(PathBuf::from("/g")),
+            ..ScopeRoots::default()
+        };
+        save_scope(
+            PersistScope::Ghost,
+            &roots,
+            &io,
+            vec![(PersistKey::BootCount, "1".into())],
+        );
+        save_scope(
+            PersistScope::Ghost,
+            &roots,
+            &io,
+            vec![(PersistKey::BootCount, "5".into())],
+        );
         let loaded = load_scope(PersistScope::Ghost, &roots, &io);
         assert!(loaded.contains(&(PersistKey::BootCount, "5".into())));
-        assert_eq!(loaded.iter().filter(|(k, _)| *k == PersistKey::BootCount).count(), 1);
+        assert_eq!(
+            loaded
+                .iter()
+                .filter(|(k, _)| *k == PersistKey::BootCount)
+                .count(),
+            1
+        );
     }
 
     // --- スコープ分離（R6.5・別 root は非混同）---
@@ -510,9 +666,20 @@ mod tests {
     #[test]
     fn scope_isolation_distinct_ghost_roots_do_not_cross() {
         let io = FakePersistIo::new();
-        let roots_a = ScopeRoots { ghost: Some(PathBuf::from("/a")), ..ScopeRoots::default() };
-        let roots_b = ScopeRoots { ghost: Some(PathBuf::from("/b")), ..ScopeRoots::default() };
-        save_scope(PersistScope::Ghost, &roots_a, &io, vec![(PersistKey::BootCount, "9".into())]);
+        let roots_a = ScopeRoots {
+            ghost: Some(PathBuf::from("/a")),
+            ..ScopeRoots::default()
+        };
+        let roots_b = ScopeRoots {
+            ghost: Some(PathBuf::from("/b")),
+            ..ScopeRoots::default()
+        };
+        save_scope(
+            PersistScope::Ghost,
+            &roots_a,
+            &io,
+            vec![(PersistKey::BootCount, "9".into())],
+        );
         assert!(
             load_scope(PersistScope::Ghost, &roots_b, &io).is_empty(),
             "root B が root A の値を見た（混同）"
@@ -533,10 +700,16 @@ mod tests {
             ghost: Some(PathBuf::from("/ghost")),
             ..ScopeRoots::default()
         };
-        save_scope(PersistScope::App, &roots, &io, vec![(PersistKey::BootCount, "11".into())]);
+        save_scope(
+            PersistScope::App,
+            &roots,
+            &io,
+            vec![(PersistKey::BootCount, "11".into())],
+        );
         assert!(load_scope(PersistScope::Ghost, &roots, &io).is_empty());
         assert!(
-            load_scope(PersistScope::App, &roots, &io).contains(&(PersistKey::BootCount, "11".into()))
+            load_scope(PersistScope::App, &roots, &io)
+                .contains(&(PersistKey::BootCount, "11".into()))
         );
     }
 
@@ -567,8 +740,16 @@ mod tests {
     #[test]
     fn load_tolerates_read_failure() {
         let io = FakePersistIo::new();
-        let roots = ScopeRoots { ghost: Some(PathBuf::from("/g")), ..ScopeRoots::default() };
-        save_scope(PersistScope::Ghost, &roots, &io, vec![(PersistKey::BootCount, "1".into())]);
+        let roots = ScopeRoots {
+            ghost: Some(PathBuf::from("/g")),
+            ..ScopeRoots::default()
+        };
+        save_scope(
+            PersistScope::Ghost,
+            &roots,
+            &io,
+            vec![(PersistKey::BootCount, "1".into())],
+        );
         io.fail_next_read();
         assert!(
             load_scope(PersistScope::Ghost, &roots, &io).is_empty(),
@@ -579,16 +760,30 @@ mod tests {
     #[test]
     fn save_commit_failure_is_degraded_and_leaves_prior_intact() {
         let io = FakePersistIo::new();
-        let roots = ScopeRoots { ghost: Some(PathBuf::from("/g")), ..ScopeRoots::default() };
-        save_scope(PersistScope::Ghost, &roots, &io, vec![(PersistKey::BootCount, "1".into())]);
+        let roots = ScopeRoots {
+            ghost: Some(PathBuf::from("/g")),
+            ..ScopeRoots::default()
+        };
+        save_scope(
+            PersistScope::Ghost,
+            &roots,
+            &io,
+            vec![(PersistKey::BootCount, "1".into())],
+        );
         io.fail_next_commit();
         assert_eq!(
-            save_scope(PersistScope::Ghost, &roots, &io, vec![(PersistKey::BootCount, "2".into())]),
+            save_scope(
+                PersistScope::Ghost,
+                &roots,
+                &io,
+                vec![(PersistKey::BootCount, "2".into())]
+            ),
             PersistOutcome::Degraded
         );
         // 既存内容は無傷（原子的確定・R6.2）——1 のまま。
         assert!(
-            load_scope(PersistScope::Ghost, &roots, &io).contains(&(PersistKey::BootCount, "1".into()))
+            load_scope(PersistScope::Ghost, &roots, &io)
+                .contains(&(PersistKey::BootCount, "1".into()))
         );
     }
 
@@ -605,8 +800,16 @@ mod tests {
     #[test]
     fn load_read_failure_emits_warn_and_degrades() {
         let io = FakePersistIo::new();
-        let roots = ScopeRoots { ghost: Some(PathBuf::from("/g")), ..ScopeRoots::default() };
-        save_scope(PersistScope::Ghost, &roots, &io, vec![(PersistKey::BootCount, "1".into())]);
+        let roots = ScopeRoots {
+            ghost: Some(PathBuf::from("/g")),
+            ..ScopeRoots::default()
+        };
+        save_scope(
+            PersistScope::Ghost,
+            &roots,
+            &io,
+            vec![(PersistKey::BootCount, "1".into())],
+        );
         io.fail_next_read();
         let events = capture(|| {
             // 読み取れない → 空縮退（panic なし＝起動継続）。
@@ -622,8 +825,16 @@ mod tests {
     #[test]
     fn save_commit_failure_emits_error_log() {
         let io = FakePersistIo::new();
-        let roots = ScopeRoots { ghost: Some(PathBuf::from("/g")), ..ScopeRoots::default() };
-        save_scope(PersistScope::Ghost, &roots, &io, vec![(PersistKey::BootCount, "1".into())]);
+        let roots = ScopeRoots {
+            ghost: Some(PathBuf::from("/g")),
+            ..ScopeRoots::default()
+        };
+        save_scope(
+            PersistScope::Ghost,
+            &roots,
+            &io,
+            vec![(PersistKey::BootCount, "1".into())],
+        );
         io.fail_next_commit();
         let events = capture(|| {
             let outcome = save_scope(
@@ -632,7 +843,11 @@ mod tests {
                 &io,
                 vec![(PersistKey::BootCount, "2".into())],
             );
-            assert_eq!(outcome, PersistOutcome::Degraded, "commit 失敗は Degraded 縮退（panic なし）");
+            assert_eq!(
+                outcome,
+                PersistOutcome::Degraded,
+                "commit 失敗は Degraded 縮退（panic なし）"
+            );
         });
         // commit 失敗アームが LOG_TARGET・ERROR で「persist commit failed」を発火（R8.1 無音失敗禁止）。
         assert_logged(&events, Level::ERROR, LOG_TARGET, "persist commit failed");
@@ -650,7 +865,10 @@ mod tests {
     fn non_numeric_scope_id_in_file_is_skipped() {
         let io = FakePersistIo::new();
         let path = PathBuf::from("/g/sylphya.toml");
-        let roots = ScopeRoots { ghost: Some(PathBuf::from("/g")), ..ScopeRoots::default() };
+        let roots = ScopeRoots {
+            ghost: Some(PathBuf::from("/g")),
+            ..ScopeRoots::default()
+        };
         // 手書き TOML: window の ID が非数値 "main" ＋ 正常な boot。
         io.commit(
             &path,
@@ -660,7 +878,11 @@ mod tests {
         let loaded = load_scope(PersistScope::Ghost, &roots, &io);
         // 非数値 window は skip、boot は載る（panic なし）。
         assert!(loaded.contains(&(PersistKey::BootCount, "1".into())));
-        assert!(loaded.iter().all(|(k, _)| !matches!(k, PersistKey::WindowPos { .. })));
+        assert!(
+            loaded
+                .iter()
+                .all(|(k, _)| !matches!(k, PersistKey::WindowPos { .. }))
+        );
     }
 
     // --- 決定論（同一入力→同一結果）---
@@ -668,14 +890,29 @@ mod tests {
     #[test]
     fn load_is_deterministic() {
         let io = FakePersistIo::new();
-        let roots = ScopeRoots { ghost: Some(PathBuf::from("/g")), ..ScopeRoots::default() };
+        let roots = ScopeRoots {
+            ghost: Some(PathBuf::from("/g")),
+            ..ScopeRoots::default()
+        };
         save_scope(
             PersistScope::Ghost,
             &roots,
             &io,
             vec![
-                (PersistKey::WindowPos { scope: 2, axis: Axis::X }, "9".into()),
-                (PersistKey::WindowPos { scope: 0, axis: Axis::X }, "1".into()),
+                (
+                    PersistKey::WindowPos {
+                        scope: 2,
+                        axis: Axis::X,
+                    },
+                    "9".into(),
+                ),
+                (
+                    PersistKey::WindowPos {
+                        scope: 0,
+                        axis: Axis::X,
+                    },
+                    "1".into(),
+                ),
                 (PersistKey::VanishCount, "4".into()),
             ],
         );
@@ -688,7 +925,10 @@ mod tests {
     #[test]
     fn absent_file_loads_empty() {
         let io = FakePersistIo::new();
-        let roots = ScopeRoots { ghost: Some(PathBuf::from("/never-written")), ..ScopeRoots::default() };
+        let roots = ScopeRoots {
+            ghost: Some(PathBuf::from("/never-written")),
+            ..ScopeRoots::default()
+        };
         assert!(load_scope(PersistScope::Ghost, &roots, &io).is_empty());
     }
 }

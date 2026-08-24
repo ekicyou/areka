@@ -24,7 +24,10 @@ fn main() -> Result<()> {
         },
         WindowPos {
             position: Some(Point { x: 100, y: 100 }),
-            size: Some(SizeI { width: 400, height: 300 }),
+            size: Some(SizeI {
+                width: 400,
+                height: 300,
+            }),
             ..Default::default()
         },
     ));
@@ -36,7 +39,10 @@ fn main() -> Result<()> {
         },
         WindowPos {
             position: Some(Point { x: 550, y: 100 }),
-            size: Some(SizeI { width: 400, height: 300 }),
+            size: Some(SizeI {
+                width: 400,
+                height: 300,
+            }),
             ..Default::default()
         },
     ));
@@ -48,7 +54,10 @@ fn main() -> Result<()> {
         },
         WindowPos {
             position: Some(Point { x: 325, y: 450 }),
-            size: Some(SizeI { width: 400, height: 300 }),
+            size: Some(SizeI {
+                width: 400,
+                height: 300,
+            }),
             ..Default::default()
         },
     ));

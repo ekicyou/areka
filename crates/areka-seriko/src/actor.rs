@@ -39,14 +39,14 @@
 
 use std::ops::ControlFlow;
 
-use areka_sakura::{cue_target_of, CueCommand, CueTarget, TalkCue};
+use areka_sakura::{CueCommand, CueTarget, TalkCue, cue_target_of};
 
 use crate::bind::{
-    parse_bind_directive, scope_namespace, BindChoicePolicy, BindDirective, BindResolver,
+    BindChoicePolicy, BindDirective, BindResolver, parse_bind_directive, scope_namespace,
 };
 use crate::looper::{LoopRuntime, SerikoLoopConfig};
 use crate::output::{DisplayCommand, SurfaceOutput};
-use crate::resolve::{resolve_balloon_key, BalloonResolve, SurfaceResolver, SurfaceTarget};
+use crate::resolve::{BalloonResolve, SurfaceResolver, SurfaceTarget, resolve_balloon_key};
 use crate::state::{ApplyOutcome, BindApplyOutcome, ScopeStates, Slot};
 
 /// seriko アクターの inbox メッセージ（areka-actor inbox 規約・投函経路は inbox 一貫）。
@@ -511,11 +511,11 @@ fn handle_message<O: SurfaceOutput>(
 }
 
 #[cfg(test)]
-#[path = "actor_test_support.rs"]
-mod test_support;
+#[path = "actor_bind_loop_tests.rs"]
+mod bind_loop_tests;
 #[cfg(test)]
 #[path = "actor_dispatch_tests.rs"]
 mod dispatch_tests;
 #[cfg(test)]
-#[path = "actor_bind_loop_tests.rs"]
-mod bind_loop_tests;
+#[path = "actor_test_support.rs"]
+mod test_support;

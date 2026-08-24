@@ -1,3 +1,4 @@
+use super::test_support::*;
 use super::*;
 use crate::world::EmoWorld;
 use areka_emo_atlas::{
@@ -5,7 +6,6 @@ use areka_emo_atlas::{
 };
 use areka_parsers::shell::Element;
 use std::path::Path;
-use super::test_support::*;
 
 // ── task 5.4: placement None スキップ＋静的キャンバス外形算出（有効 bind 非依存） ─────────
 //
@@ -115,7 +115,10 @@ fn extent_is_independent_of_bindset() {
     };
 
     // compute_extent は BindSet を引数に取らない（＝構造的に有効 bind 非依存）。三者一致＋期待値一致。
-    assert_eq!(empty, expected, "空 BindSet 相当でも全 bind pattern0 を母集合に外形算出");
+    assert_eq!(
+        empty, expected,
+        "空 BindSet 相当でも全 bind pattern0 を母集合に外形算出"
+    );
     assert_eq!(partial, expected, "部分 BindSet でも外形不変");
     assert_eq!(full, expected, "全 BindSet でも外形不変");
     assert_eq!(empty, partial);
@@ -179,10 +182,19 @@ fn placement_none_skipped_from_ops_but_counted_in_extent() {
         atlas.entry(ghost_id).placement.is_none(),
         "全透明 element は bake で placement None（前提）"
     );
-    assert_eq!(atlas.entry(ghost_id).original, areka_emo_atlas::Size { w: 300, h: 300 });
-    assert!(atlas.entry(solid_id).placement.is_some(), "不透明 element は placement Some");
+    assert_eq!(
+        atlas.entry(ghost_id).original,
+        areka_emo_atlas::Size { w: 300, h: 300 }
+    );
+    assert!(
+        atlas.entry(solid_id).placement.is_some(),
+        "不透明 element は placement Some"
+    );
 
-    let surf = surface(3000, vec![elem(0, "solid.png", 0, 0), elem(1, "ghost.png", 0, 0)]);
+    let surf = surface(
+        3000,
+        vec![elem(0, "solid.png", 0, 0), elem(1, "ghost.png", 0, 0)],
+    );
     let shell = shell_of(vec![surf]);
     let mut world = EmoWorld::build(&shell);
     world.bind_atlas(&atlas, SetId(0));
@@ -190,8 +202,20 @@ fn placement_none_skipped_from_ops_but_counted_in_extent() {
     // 命令: ghost はスキップされ solid の 1 本のみ（要件 6.3）。
     let binds = BindSet::default();
     let mut ops = Vec::new();
-    derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 3000, &binds, &PatternState::default());
-    assert_eq!(ops.len(), 1, "placement None（ghost）は命令からスキップ（要件 6.3）");
+    derive_ops(
+        &mut ops,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        3000,
+        &binds,
+        &PatternState::default(),
+    );
+    assert_eq!(
+        ops.len(),
+        1,
+        "placement None（ghost）は命令からスキップ（要件 6.3）"
+    );
     assert_eq!(ops[0].element, solid_id, "残る命令は不透明 solid のみ");
 
     // 外形: ghost の原寸 300×300 を数える（要件 6.5・全透明でも寄与）。
@@ -249,7 +273,11 @@ fn extent_equals_base_original_when_no_larger_layers() {
     world.bind_atlas(&atlas, SetId(0));
 
     let extent = compute_extent(&mut Vec::new(), &world, &atlas, 5000);
-    assert_eq!(extent, Extent { w: 123, h: 45 }, "単一 element・(0,0)→外形＝原寸");
+    assert_eq!(
+        extent,
+        Extent { w: 123, h: 45 },
+        "単一 element・(0,0)→外形＝原寸"
+    );
 }
 
 /// テスト5.4-⑥（要件 10.1・決定性）: 同一入力で 2 回算出→ [`Extent`] が同値。
@@ -258,10 +286,7 @@ fn extent_is_deterministic() {
     let base = Path::new("shell/master");
     let atlas = bake_atlas_sized(
         base,
-        &[
-            ("base.png", (40, 30), true),
-            ("part.png", (200, 150), true),
-        ],
+        &[("base.png", (40, 30), true), ("part.png", (200, 150), true)],
     );
     let host = surface_with_anims(
         6000,
@@ -300,7 +325,15 @@ fn build_plan_absent_surface_is_surface_not_found() {
 
     let binds = BindSet::default();
     let mut ops = Vec::new();
-    let result = build_plan(&mut ops, &mut Vec::new(), &world, &atlas, 9999, &binds, &PatternState::default());
+    let result = build_plan(
+        &mut ops,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        9999,
+        &binds,
+        &PatternState::default(),
+    );
 
     assert_eq!(
         result,
@@ -325,20 +358,38 @@ fn build_plan_all_transparent_is_ok_empty_ops_nonzero_extent() {
         ],
     );
 
-    let surf = surface(3000, vec![elem(0, "ghost1.png", 0, 0), elem(1, "ghost2.png", 0, 0)]);
+    let surf = surface(
+        3000,
+        vec![elem(0, "ghost1.png", 0, 0), elem(1, "ghost2.png", 0, 0)],
+    );
     let shell = shell_of(vec![surf]);
     let mut world = EmoWorld::build(&shell);
     world.bind_atlas(&atlas, SetId(0));
 
     let binds = BindSet::default();
     let mut ops = Vec::new();
-    let result = build_plan(&mut ops, &mut Vec::new(), &world, &atlas, 3000, &binds, &PatternState::default());
+    let result = build_plan(
+        &mut ops,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        3000,
+        &binds,
+        &PatternState::default(),
+    );
 
     // 描画可能命令ゼロでも Err にしない（要件 6.6・議題2裁定）。
     let extent = result.expect("全透明でもエラーにせず Ok（要件 6.6）");
-    assert!(ops.is_empty(), "全 element 全透明 → 空 ops（描画可能命令ゼロ）");
+    assert!(
+        ops.is_empty(),
+        "全 element 全透明 → 空 ops（描画可能命令ゼロ）"
+    );
     // 外形は原寸で非ゼロ（全透明でも original で寄与＝300×300 が支配）。
-    assert_eq!(extent, Extent { w: 300, h: 300 }, "非ゼロの静的外形を返す（要件 6.6）");
+    assert_eq!(
+        extent,
+        Extent { w: 300, h: 300 },
+        "非ゼロの静的外形を返す（要件 6.6）"
+    );
     assert_ne!(extent.w, 0);
     assert_ne!(extent.h, 0);
 }
@@ -352,7 +403,10 @@ fn build_plan_empty_bindset_bind_only_is_ok_empty_ops_nonzero_extent() {
     let base = Path::new("shell/master");
     let atlas = bake_atlas_sized(
         base,
-        &[("part1.png", (200, 10), true), ("part2.png", (10, 150), true)],
+        &[
+            ("part1.png", (200, 10), true),
+            ("part2.png", (10, 150), true),
+        ],
     );
 
     // 静的 element なし・bind id=1/2 が part1/part2 を参照。
@@ -370,12 +424,27 @@ fn build_plan_empty_bindset_bind_only_is_ok_empty_ops_nonzero_extent() {
     // 空 BindSet → 有効 bind ゼロ＝描画可能命令ゼロ。
     let binds = BindSet::default();
     let mut ops = Vec::new();
-    let result = build_plan(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds, &PatternState::default());
+    let result = build_plan(
+        &mut ops,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        1000,
+        &binds,
+        &PatternState::default(),
+    );
 
     let extent = result.expect("空 BindSet でも正常（描画可能命令ゼロは失敗でない・要件 6.6）");
-    assert!(ops.is_empty(), "空 BindSet → bind 命令ゼロ・静的 element も無し → 空 ops");
+    assert!(
+        ops.is_empty(),
+        "空 BindSet → bind 命令ゼロ・静的 element も無し → 空 ops"
+    );
     // 外形は全 bind pattern0 の和集合（有効 bind 非依存）: w=max(200,10)=200・h=max(10,150)=150。
-    assert_eq!(extent, Extent { w: 200, h: 150 }, "有効 bind 非依存の非ゼロ外形");
+    assert_eq!(
+        extent,
+        Extent { w: 200, h: 150 },
+        "有効 bind 非依存の非ゼロ外形"
+    );
 }
 
 /// テスト5.5-④（要件 10.5・議題2裁定）: 定義層皆無で外形 0×0 → `Err(EmptyComposition)`。
@@ -401,7 +470,15 @@ fn build_plan_no_layers_degenerate_is_empty_composition() {
 
     let binds = BindSet::default();
     let mut ops = Vec::new();
-    let result = build_plan(&mut ops, &mut Vec::new(), &world, &atlas, 7000, &binds, &PatternState::default());
+    let result = build_plan(
+        &mut ops,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        7000,
+        &binds,
+        &PatternState::default(),
+    );
 
     assert_eq!(
         result,
@@ -416,7 +493,9 @@ fn build_plan_no_layers_degenerate_is_empty_composition() {
 fn build_plan_populated_surface_is_ok_with_nonempty_ops() {
     let base = Path::new("shell/master");
     let atlas = bake_atlas_sized(base, &[("visible.png", (80, 60), true)]);
-    let visible_id = atlas.resolve(SetId(0), "visible.png").expect("visible 解決");
+    let visible_id = atlas
+        .resolve(SetId(0), "visible.png")
+        .expect("visible 解決");
 
     let surf = surface(5000, vec![elem(0, "visible.png", 0, 0)]);
     let shell = shell_of(vec![surf]);
@@ -425,7 +504,15 @@ fn build_plan_populated_surface_is_ok_with_nonempty_ops() {
 
     let binds = BindSet::default();
     let mut ops = Vec::new();
-    let result = build_plan(&mut ops, &mut Vec::new(), &world, &atlas, 5000, &binds, &PatternState::default());
+    let result = build_plan(
+        &mut ops,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        5000,
+        &binds,
+        &PatternState::default(),
+    );
 
     let extent = result.expect("通常 surface は Ok");
     assert_eq!(ops.len(), 1, "可視 element 1 本 → 命令 1 本");
@@ -438,7 +525,9 @@ fn build_plan_populated_surface_is_ok_with_nonempty_ops() {
 fn build_plan_clears_scratch_and_is_deterministic() {
     let base = Path::new("shell/master");
     let atlas = bake_atlas_sized(base, &[("visible.png", (80, 60), true)]);
-    let visible_id = atlas.resolve(SetId(0), "visible.png").expect("visible 解決");
+    let visible_id = atlas
+        .resolve(SetId(0), "visible.png")
+        .expect("visible 解決");
 
     let surf = surface(5000, vec![elem(0, "visible.png", 0, 0)]);
     let shell = shell_of(vec![surf]);
@@ -454,14 +543,36 @@ fn build_plan_clears_scratch_and_is_deterministic() {
         method: ComposeMethod::Overlay,
     };
     let mut ops = vec![junk.clone(), junk.clone(), junk];
-    let e1 = build_plan(&mut ops, &mut Vec::new(), &world, &atlas, 5000, &binds, &PatternState::default()).expect("Ok");
+    let e1 = build_plan(
+        &mut ops,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        5000,
+        &binds,
+        &PatternState::default(),
+    )
+    .expect("Ok");
 
-    assert_eq!(ops.len(), 1, "エントリで clear ＝ この surface の命令のみが残る");
+    assert_eq!(
+        ops.len(),
+        1,
+        "エントリで clear ＝ この surface の命令のみが残る"
+    );
     assert_eq!(ops[0].element, visible_id, "ゴミは残らない");
 
     // 2 回目（別スクラッチ）→ バイト等価・同一 Extent（決定性）。
     let mut ops2 = Vec::new();
-    let e2 = build_plan(&mut ops2, &mut Vec::new(), &world, &atlas, 5000, &binds, &PatternState::default()).expect("Ok");
+    let e2 = build_plan(
+        &mut ops2,
+        &mut Vec::new(),
+        &world,
+        &atlas,
+        5000,
+        &binds,
+        &PatternState::default(),
+    )
+    .expect("Ok");
     assert_eq!(ops, ops2, "同一入力→同一 ops（バイト等価）");
     assert_eq!(e1, e2, "同一入力→同一 Extent");
 }

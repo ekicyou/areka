@@ -22,10 +22,10 @@ use bevy_ecs::world::World;
 use wintf::ecs::Point;
 use wintf::ecs::pointer::{Phase, PointerState};
 
-use super::*;
 use super::test_support::{
     capture_logs, headless_emo2_wiring, runtime_with_active_choice, spawn_balloon_leave_child,
 };
+use super::*;
 use crate::placement::spawn::BalloonWindowMarker;
 
 /// Bubble 相の合成 `PointerState`（client 物理 px・moved ハンドラは他フィールド非参照）。
@@ -116,10 +116,7 @@ fn moved_records_hover_when_choice_active_but_no_row_hit() {
 
     assert!(hovered(&world, 0), "行に当たらない移動でも滞在は真（5.2）");
     assert_eq!(
-        world
-            .get_non_send::<BalloonWiring>()
-            .unwrap()
-            .hover(0),
+        world.get_non_send::<BalloonWiring>().unwrap().hover(0),
         None,
         "滞在の記録は選択肢 hover ordinal を書き換えない（独立の軸）"
     );

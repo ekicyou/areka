@@ -20,11 +20,11 @@
 use std::path::PathBuf;
 
 use areka_parsers::shell::{AppendTarget, Element, ElementPath, Surface};
-use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_MULTITHREADED};
+use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
 
 use crate::{
-    bake, AlphaParams, BakeError, ManifestDeriver, PackConfig, SetId, SurfaceSet, UseSelfAlpha,
-    WicDecoderArm,
+    AlphaParams, BakeError, ManifestDeriver, PackConfig, SetId, SurfaceSet, UseSelfAlpha,
+    WicDecoderArm, bake,
 };
 
 /// COM 初期化下でクロージャを実行するヘルパ（WIC は CPU-only だが COM init 必須）。
@@ -320,7 +320,9 @@ fn emo2_nonexistent_path_isolated_others_continue() {
 
         // bogus key は索引表に不在（脱落）。
         assert_eq!(
-            result.table.resolve(SetId(0), "this_file_does_not_exist_xyz.png"),
+            result
+                .table
+                .resolve(SetId(0), "this_file_does_not_exist_xyz.png"),
             None,
             "nonexistent path absent from table"
         );

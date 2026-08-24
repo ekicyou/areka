@@ -1,0 +1,39 @@
+perf-rank 0.1.0 run=sample_ok_counts stages=function top=3
+
+[3] 関数  unit=samples  出所=dump.txt（CPU サンプリング）
+  samples_total                         16
+  stack_rows                             8
+  frames_total                          24
+  areka_resolved_frames                 16
+  resolved_frames                       22
+  unresolved_frames                      2
+  resolution_rate_pct                91.67
+  自己時間（最上位フレーム・上位 3）
+    rank    self   share_pct  module!function
+       1       2       12.50  areka.exe!areka_emo_text::actor::present_actor
+       2       2       12.50  areka.exe!wintf::ecs::graphics::systems::visual_sync::visual_hierarchy_sync_system
+       3       1        6.25  Unknown!0x00007ffb1c2d3e4f
+    … 他 11 件
+  包含時間（スタックに含まれる・上位 3）
+    rank    incl   share_pct  module!function
+       1       2       12.50  Unknown!0x00007ffb1c2d3e4f
+       2       2       12.50  areka.exe!areka_emo_text::actor::present_actor
+       3       2       12.50  areka.exe!wintf::ecs::graphics::systems::visual_sync::visual_hierarchy_sync_system
+    … 他 14 件
+  スレッド別 自己時間（上位 3）
+    tid=18332 samples=10
+    rank    self   share_pct  module!function
+       1       2       20.00  areka.exe!areka_emo_text::actor::present_actor
+       2       2       20.00  areka.exe!wintf::ecs::graphics::systems::visual_sync::visual_hierarchy_sync_system
+       3       1       10.00  Unknown!0x00007ffb1c2d3e4f
+    … 他 5 件
+    tid=18420 samples=3
+    rank    self   share_pct  module!function
+       1       1       33.33  areka.exe!wintf::runtime::tick_bridge::vsync_loop
+       2       1       33.33  dwmapi.dll!DwmFlush
+       3       1       33.33  ntoskrnl.exe!KiPageFault
+    tid=18512 samples=3
+    rank    self   share_pct  module!function
+       1       1       33.33  areka.exe!wintf::ecs::clickthrough::monitor::cursor_monitor_loop
+       2       1       33.33  ntoskrnl.exe!KiDpcInterrupt
+       3       1       33.33  win32u.dll!NtUserGetCursorPos

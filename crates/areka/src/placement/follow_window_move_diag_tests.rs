@@ -1,6 +1,6 @@
 use bevy_ecs::prelude::*;
+use wintf::ecs::Point;
 use wintf::ecs::pointer::Phase;
-use wintf::ecs::{Point};
 
 use super::test_support::{
     drag_event_at, dragging_state, fake_handle, odd_edge_snapshot, position_of,
@@ -94,7 +94,9 @@ fn resize_window_to_missing_anchored_on_living_entity_still_warns() {
         "実在 entity の Anchored 欠落は真の異常＝warn のまま（Req 6.2 の区別）"
     );
     assert!(
-        !events.iter().any(|e| e.message().contains(DESPAWNED_SKIP_TAG)),
+        !events
+            .iter()
+            .any(|e| e.message().contains(DESPAWNED_SKIP_TAG)),
         "実在 entity を『破棄済み』と誤判定している: {events:?}"
     );
 }
@@ -333,9 +335,8 @@ fn resize_window_keep_position_records_the_keep_position_route() {
         .id();
     world.entity_mut(window).insert(DPI::from_dpi(192, 192)); // on_add フックの後に入れる
 
-    let (ok, events) = capture_logs(|| {
-        resize_window_keep_position(&mut world, window, SizePx { w: 517, h: 823 })
-    });
+    let (ok, events) =
+        capture_logs(|| resize_window_keep_position(&mut world, window, SizePx { w: 517, h: 823 }));
     assert!(ok);
     assert_eq!(
         only_window_move_line(&events),

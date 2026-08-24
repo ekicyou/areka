@@ -47,7 +47,8 @@ const KERO_INITIAL_SURFACE_ID: u32 = 10;
 ///
 /// アセット（`EmoWorld`/`AtlasTable`）は持たない——素の物理 px 数値のみ
 /// （採寸後破棄の契約を型で担保する）。
-#[allow(dead_code)] // scaffold（task 4.1）: main.rs シーム（task 6）が結線するまで非テストビルドでは未使用
+#[allow(dead_code)]
+// scaffold（task 4.1）: main.rs シーム（task 6）が結線するまで非テストビルドでは未使用
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MeasuredSizes {
     /// スコープごとの採寸入力（`scope_ids` と同順・同長）。
@@ -178,12 +179,11 @@ fn measure_native_scope_sizes(
     let mut composer = Composer::new();
 
     // 基準採寸: scope0 初期 surface（id 0）。失敗は代替根拠が無い＝ hard Err。
-    let scope0_size = compose_size(&mut composer, &shell_world, &shell_atlas, 0).map_err(
-        |reason| {
+    let scope0_size =
+        compose_size(&mut composer, &shell_world, &shell_atlas, 0).map_err(|reason| {
             error!(reason = %reason, "measure: scope0（surface id 0）の採寸合成に失敗");
             PlacementError::Measure { scope: 0, reason }
-        },
-    )?;
+        })?;
 
     let mut scopes = Vec::with_capacity(scope_ids.len());
     for &scope in scope_ids {
@@ -350,7 +350,10 @@ fn build_shell_assets(
         );
         return Err(PlacementError::Measure {
             scope: 0,
-            reason: format!("surfaces.txt に surface 定義なし: {}", surfaces_txt.display()),
+            reason: format!(
+                "surfaces.txt に surface 定義なし: {}",
+                surfaces_txt.display()
+            ),
         });
     }
 
@@ -449,7 +452,13 @@ fn compose_size(
     // 静的採寸経路ゆえ SERIKO ループは駆動しない → 空 pattern（`PatternState::default()`）で合成する
     // （空 pattern は拡張前と観測等価・R5.4）。
     let composed = composer
-        .compose(world, atlas, surface_id, &BindSet::default(), &PatternState::default())
+        .compose(
+            world,
+            atlas,
+            surface_id,
+            &BindSet::default(),
+            &PatternState::default(),
+        )
         .map_err(|e| format!("surface {surface_id} の合成失敗: {e}"))?;
     let (w, h) = (composed.width(), composed.height());
     if w == 0 || h == 0 {
@@ -458,7 +467,9 @@ fn compose_size(
     // 物理 px は i32 通貨（resolver 契約）。表現不能な巨寸は採寸失敗として報告する
     // （silent wrap しない）。
     let (Ok(w), Ok(h)) = (i32::try_from(w), i32::try_from(h)) else {
-        return Err(format!("surface {surface_id} の合成外形が i32 を超過: {w}x{h}"));
+        return Err(format!(
+            "surface {surface_id} の合成外形が i32 を超過: {w}x{h}"
+        ));
     };
     Ok(SizePx { w, h })
 }

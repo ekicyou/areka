@@ -147,12 +147,22 @@ impl std::fmt::Debug for DolaAnimator {
 /// app.add_systems(Update, tick_dola_animators);
 /// app.add_systems(Update, my_consumer.after(tick_dola_animators));
 /// ```
-pub fn tick_dola_animators(
-    mut query: Query<&mut DolaAnimator>,
-    frame_time: Res<FrameTime>,
-) {
+/// # 起床の旗
+///
+/// この tick で**活性があった**アニメータが 1 つでもあれば `ANIM` を立て、次の画面更新を
+/// 予約する（設計 C16）。活性の見分けは進行の結果——`tick` が置いた
+/// [`UpdateResult`] に変数の変化かトリガの発火が 1 件でも載っていること——で判じる。
+/// `DolaRuntime` に「走っているか」を直に問う口が無いためであり、走り終えたアニメータは
+/// 変化を出さなくなるので旗も自然に止まる。
+pub fn tick_dola_animators(mut query: Query<&mut DolaAnimator>, frame_time: Res<FrameTime>) {
+    let mut active = false;
     for mut animator in query.iter_mut() {
         animator.tick(frame_time.0);
+        let result = animator.last_result();
+        active |= !result.changes.is_empty() || !result.triggered.is_empty();
+    }
+    if active {
+        crate::ecs::world::tick_wake::mark(crate::ecs::world::tick_wake::ANIM);
     }
 }
 
@@ -236,7 +246,10 @@ mod tests {
         // （DolaRuntime::new の last_update_result 初期値が委譲される）。
         let animator = DolaAnimator::new();
         let result = animator.last_result();
-        assert!(result.changes.is_empty(), "new() must start with no changes");
+        assert!(
+            result.changes.is_empty(),
+            "new() must start with no changes"
+        );
         assert!(
             result.triggered.is_empty(),
             "new() must start with no triggered results"
@@ -298,8 +311,14 @@ mod tests {
             first_len, second_len,
             "last_result() must be stable across repeated reads"
         );
-        assert_eq!(second_len, third_len, "last_result() must remain idempotent");
-        assert!(first_len > 0, "midpoint tick must produce at least one change");
+        assert_eq!(
+            second_len, third_len,
+            "last_result() must remain idempotent"
+        );
+        assert!(
+            first_len > 0,
+            "midpoint tick must produce at least one change"
+        );
     }
 
     #[test]
@@ -398,7 +417,7 @@ mod tests {
 
         let mut schedule = tick_schedule();
         schedule.run(&mut world); // パニックしないこと自体が契約
-                                  // 観測可能な状態変化はない（エンティティ不在）。
+        // 観測可能な状態変化はない（エンティティ不在）。
         assert_eq!(
             world.query::<&DolaAnimator>().iter(&world).count(),
             0,

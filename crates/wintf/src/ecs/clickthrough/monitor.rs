@@ -24,7 +24,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::thread::{self, JoinHandle};
 
-use tracing::{debug, trace};
+use tracing::{debug, error, trace};
 use windows::Win32::Foundation::POINT;
 use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
 
@@ -137,11 +137,16 @@ impl Drop for CursorMonitorBridge {
 /// カーソル監視ワーカ本体。`GetCursorPos` で最新座標を取得し、前回と異なる時のみ
 /// `latest_pos.store` → `cursor_event.notify(usize::MAX)` の順序で UI を起床する。
 /// `stop` が立つまで固定短周期でループする。
-fn cursor_loop(
-    event: Arc<event_listener::Event>,
-    latest: Arc<AtomicI64>,
-    stop: Arc<AtomicBool>,
-) {
+fn cursor_loop(event: Arc<event_listener::Event>, latest: Arc<AtomicI64>, stop: Arc<AtomicBool>) {
+    // 走り始めに 1 度だけ、自分の役割を宣言してスレッド名簿へ載せる（要件 2.3）。
+    // 失敗しても監視は続ける——このスレッドの CPU が `unregistered_rest` へ回るだけで、
+    // 観測の道具の不調が観測対象を止める理由にはならない。
+    if let Err(e) = crate::ecs::world::thread_registry::register_current_thread(
+        crate::ecs::world::thread_registry::ROLE_CURSOR_MONITOR,
+    ) {
+        error!(error = %e, "[cursor_loop] スレッド名簿への登録に失敗した（カーソル監視は継続）");
+    }
+
     // 前回座標（差分ガード）。初回は必ず notify するため到達しない番兵で初期化する。
     let mut prev: Option<(i32, i32)> = None;
 
@@ -179,15 +184,71 @@ fn cursor_loop(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ecs::world::thread_registry::{self, ROLE_CURSOR_MONITOR, ThreadEntry};
     use event_listener::{Event, Listener};
     use std::time::Duration;
     use windows::Win32::UI::WindowsAndMessaging::SetCursorPos;
 
+    /// 名簿に当該役割名の項目が現れるまで待ち、現れた項目を返す（現れなければ `None`）。
+    ///
+    /// 待ち時間は合否の対象ではなく、登録が起きなかったときに無限に待たないための上限で
+    /// ある（要件 6.5 が禁じる「実時間の閾値による判定」ではない）。
+    fn wait_for_role(role: &str, limit: Duration) -> Option<ThreadEntry> {
+        let deadline = std::time::Instant::now() + limit;
+        loop {
+            let found = thread_registry::snapshot()
+                .into_iter()
+                .find(|entry| entry.role == role);
+            if found.is_some() {
+                return found;
+            }
+            if std::time::Instant::now() >= deadline {
+                return None;
+            }
+            thread::sleep(Duration::from_millis(5));
+        }
+    }
+
+    /// カーソル監視ワーカは走り始めに自分をスレッド名簿へ登録する
+    /// （役割名 `cursor_monitor`・要件 2.3）。
+    ///
+    /// 名簿はプロセス共有で、テストは並列に走る——**全体の件数は当てにせず**、登録された
+    /// 役割名の項目だけを検査する。観測はワーカを生かしたまま行う（終了した TID が別の
+    /// スレッドへ再利用されて項目が置き換わる余地を残さないため）。
+    #[test]
+    fn cursor_monitor_thread_registers_itself_with_the_cursor_monitor_role() {
+        let bridge = CursorMonitorBridge::spawn(Arc::new(Event::new()));
+
+        let found = wait_for_role(ROLE_CURSOR_MONITOR, Duration::from_secs(5))
+            .expect("wintf-cursor-monitor スレッドは走り始めに名簿へ載るはず");
+        assert_eq!(
+            found.name.as_deref(),
+            Some("wintf-cursor-monitor"),
+            "名簿の OS 名は生成時に付けたスレッド名であるはず"
+        );
+        assert!(
+            thread_registry::is_known_role(ROLE_CURSOR_MONITOR),
+            "登録した役割名は固定語彙に含まれるはず"
+        );
+
+        drop(bridge);
+    }
+
     /// pack/unpack が負値を含む座標で往復すること（マルチモニタ負座標対応）。
     #[test]
     fn pack_unpack_roundtrip() {
-        for (x, y) in [(0, 0), (100, 200), (-1, -1), (-1920, 1080), (i32::MIN, i32::MAX)] {
-            assert_eq!(unpack(pack(x, y)), (x, y), "pack/unpack roundtrip for ({x},{y})");
+        for (x, y) in [
+            (0, 0),
+            (100, 200),
+            (-1, -1),
+            (-1920, 1080),
+            (i32::MIN, i32::MAX),
+        ] {
+            assert_eq!(
+                unpack(pack(x, y)),
+                (x, y),
+                "pack/unpack roundtrip for ({x},{y})"
+            );
         }
     }
 
@@ -212,7 +273,11 @@ mod tests {
         let raw = bridge.latest_pos.load(Ordering::Acquire);
         let (ex, ey) = unpack(raw);
         let p = bridge.latest_cursor();
-        assert_eq!((p.x, p.y), (ex, ey), "latest_cursor は latest_pos の unpack と一致");
+        assert_eq!(
+            (p.x, p.y),
+            (ex, ey),
+            "latest_cursor は latest_pos の unpack と一致"
+        );
 
         drop(bridge);
     }

@@ -134,8 +134,7 @@ impl CueSink for NoopSink {
 /// `boot_then_shutdown_joins_everything_and_returns_ok`（task 3.2）で確認する。
 #[test]
 fn boot_happy_path_wires_all_components_and_kicks_off_boot_sequence() {
-    let root =
-        unique_temp_dir("boot_happy_path_wires_all_components_and_kicks_off_boot_sequence");
+    let root = unique_temp_dir("boot_happy_path_wires_all_components_and_kicks_off_boot_sequence");
     let _ = std::fs::remove_dir_all(&root);
     write_minimal_resolvable_ghost_fixture(&root);
 
@@ -573,8 +572,7 @@ fn inproc_wiring_boots_drives_and_shuts_down_through_real_test_dll() {
         built_dll.display()
     );
 
-    let root =
-        unique_temp_dir("inproc_wiring_boots_drives_and_shuts_down_through_real_test_dll");
+    let root = unique_temp_dir("inproc_wiring_boots_drives_and_shuts_down_through_real_test_dll");
     let _ = std::fs::remove_dir_all(&root);
 
     // fixture: ghost/master/descript.txt（`shiori,` 行＝テスト DLL 名）＋ shell/master/descript.txt
@@ -601,8 +599,11 @@ fn inproc_wiring_boots_drives_and_shuts_down_through_real_test_dll() {
 
     // 実 cdylib を fixture の ghost/master/ へコピーする（`inproc_connect` が
     // `mount.shiori.dir.join(file)` でロードする位置・D-1）。
-    std::fs::copy(&built_dll, ghost_master.join(shiori4_testdll::DLL_FILE_NAME))
-        .expect("copy built test DLL into ghost/master");
+    std::fs::copy(
+        &built_dll,
+        ghost_master.join(shiori4_testdll::DLL_FILE_NAME),
+    )
+    .expect("copy built test DLL into ghost/master");
 
     let recording = RecordingSink::new();
     let records = recording.records();
@@ -680,7 +681,9 @@ fn inproc_wiring_boots_drives_and_shuts_down_through_real_test_dll() {
 // ---- apply_boot_record_gate 単体（task 7.1・position-persist・design「C5 GhostRuntime 増分」step 1-3） ----
 
 use areka_sylphya::persist::{FakePersistIo, PersistIo};
-use areka_sylphya::{save_scope, spawn_sylphya, PersistScope, ScopeRoots, SylphyaInit, SylphyaParts};
+use areka_sylphya::{
+    PersistScope, ScopeRoots, SylphyaInit, SylphyaParts, save_scope, spawn_sylphya,
+};
 
 /// 同一 [`FakePersistIo`] を `Arc` 共有する委譲 IO（prop_sink.rs 先例の再実装）。
 ///
@@ -799,7 +802,10 @@ fn gate_vanish_count_present_numeric_is_parsed() {
 
     let gated = apply_boot_record_gate(base_config(), &parts.reader, &asker);
 
-    assert_eq!(gated.vanish_count, 7, "areka.vanish.count=\"7\" → 7 が parse される");
+    assert_eq!(
+        gated.vanish_count, 7,
+        "areka.vanish.count=\"7\" → 7 が parse される"
+    );
 
     parts.publisher.close();
     parts.handle.join().expect("clean close joins");
@@ -842,7 +848,7 @@ fn gate_vanish_count_non_numeric_degrades_zero() {
 //      Tests §3」・要件 1.2/8.1・design 軸E: E1 write-through＋mpsc FIFO close／E2-lite 越境フェンス） ----
 
 use areka_sylphya::persist::FsPersistIo;
-use areka_sylphya::{load_scope, Axis};
+use areka_sylphya::{Axis, load_scope};
 
 /// シナリオ（task 8.4・position-persist）: 実 `FsPersistIo`（temp dir）上の実 sylphya アクターへ、
 /// **`PersistWiring` の clone 送信端**（UI スレッド常駐端の代役）から `barrier` を挟まずに複数回
@@ -894,15 +900,39 @@ fn exit_flush_reflects_barrierless_clone_puts_after_shutdown_sequence() {
     ui_send_end.persist_put(
         PersistScope::Ghost,
         vec![
-            (PersistKey::WindowPos { scope: 0, axis: Axis::X }, "1234".into()),
-            (PersistKey::WindowPos { scope: 0, axis: Axis::Y }, "841".into()),
+            (
+                PersistKey::WindowPos {
+                    scope: 0,
+                    axis: Axis::X,
+                },
+                "1234".into(),
+            ),
+            (
+                PersistKey::WindowPos {
+                    scope: 0,
+                    axis: Axis::Y,
+                },
+                "841".into(),
+            ),
         ],
     );
     ui_send_end.persist_put(
         PersistScope::Ghost,
         vec![
-            (PersistKey::WindowPos { scope: 0, axis: Axis::X }, "1777".into()),
-            (PersistKey::WindowPos { scope: 0, axis: Axis::Y }, "907".into()),
+            (
+                PersistKey::WindowPos {
+                    scope: 0,
+                    axis: Axis::X,
+                },
+                "1777".into(),
+            ),
+            (
+                PersistKey::WindowPos {
+                    scope: 0,
+                    axis: Axis::Y,
+                },
+                "907".into(),
+            ),
         ],
     );
     // clone 送信端では barrier を一切呼ばない（＝終了時フラッシュ安全網に委ねる・要件 1.2）。
@@ -934,14 +964,20 @@ fn exit_flush_reflects_barrierless_clone_puts_after_shutdown_sequence() {
     let loaded = load_scope(PersistScope::Ghost, &roots, &FsPersistIo);
     assert!(
         loaded.contains(&(
-            PersistKey::WindowPos { scope: 0, axis: Axis::X },
+            PersistKey::WindowPos {
+                scope: 0,
+                axis: Axis::X
+            },
             "1777".to_string()
         )),
         "終了フラッシュ後、scope 0 の X はファイルへ clone 投函の最終値 1777 で反映されるべき: {loaded:?}"
     );
     assert!(
         loaded.contains(&(
-            PersistKey::WindowPos { scope: 0, axis: Axis::Y },
+            PersistKey::WindowPos {
+                scope: 0,
+                axis: Axis::Y
+            },
             "907".to_string()
         )),
         "終了フラッシュ後、scope 0 の Y はファイルへ clone 投函の最終値 907 で反映されるべき: {loaded:?}"
@@ -951,7 +987,10 @@ fn exit_flush_reflects_barrierless_clone_puts_after_shutdown_sequence() {
     assert!(
         !loaded.iter().any(|(k, v)| matches!(
             k,
-            PersistKey::WindowPos { scope: 0, axis: Axis::X }
+            PersistKey::WindowPos {
+                scope: 0,
+                axis: Axis::X
+            }
         ) && v == "1234"),
         "中間値 1234 は最終値 1777 に上書きされているべき（last-write-wins）: {loaded:?}"
     );

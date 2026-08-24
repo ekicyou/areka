@@ -121,7 +121,11 @@ fn occupancy_horizon_is_observable_while_waiting_for_choice() {
     .with_absolute_start_time(50.0);
     let mut player = CuePlayer::from_sheet(&sheet);
 
-    assert_eq!(player.occupancy_horizon(), 51.5, "50.0 + max(1.0, 1.5) = 51.5");
+    assert_eq!(
+        player.occupancy_horizon(),
+        51.5,
+        "50.0 + max(1.0, 1.5) = 51.5"
+    );
 
     player.tick(51.0);
     assert_eq!(
@@ -140,8 +144,7 @@ fn occupancy_horizon_is_observable_while_waiting_for_choice() {
 /// （`is_completed()` と同一の horizon 権威を見ている）。
 #[test]
 fn occupancy_horizon_matches_completion_threshold() {
-    let sheet =
-        CueSheet::new(vec![text(0.0, "a", 2.0)]).with_absolute_start_time(10.0);
+    let sheet = CueSheet::new(vec![text(0.0, "a", 2.0)]).with_absolute_start_time(10.0);
     let mut player = CuePlayer::from_sheet(&sheet);
 
     player.tick(10.0);
@@ -158,8 +161,7 @@ fn occupancy_horizon_matches_completion_threshold() {
 /// 落ちる＝中断終端の talk に占有区間は残らない）。
 #[test]
 fn occupancy_horizon_after_stop_is_the_anchor() {
-    let sheet =
-        CueSheet::new(vec![text(0.0, "a", 2.0)]).with_absolute_start_time(10.0);
+    let sheet = CueSheet::new(vec![text(0.0, "a", 2.0)]).with_absolute_start_time(10.0);
     let mut player = CuePlayer::from_sheet(&sheet);
     assert_eq!(player.occupancy_horizon(), 12.0);
 

@@ -566,7 +566,10 @@ mod tests {
 
         let style = world.get::<WindowStyle>(shell).expect("WindowStyle");
         assert_eq!(style.style, WS_POPUP | WS_VISIBLE);
-        assert_eq!(style.ex_style, WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST);
+        assert_eq!(
+            style.ex_style,
+            WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST
+        );
 
         let pos = world.get::<WindowPos>(shell).expect("WindowPos");
         assert_eq!(
@@ -881,9 +884,7 @@ mod tests {
         // バルーン追従のオフセット加算（i32）が溢れずパニックしないことを
         // 境界値で固定する（仮想スクリーン座標の現実的上限を大きく超える値）。
         let mut world = World::new();
-        let shell = world
-            .spawn((ShellWindowMarker, WindowPos::default()))
-            .id();
+        let shell = world.spawn((ShellWindowMarker, WindowPos::default())).id();
         world.spawn((
             BalloonWindowMarker,
             WindowHandle {

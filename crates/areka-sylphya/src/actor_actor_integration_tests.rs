@@ -6,7 +6,9 @@ use crate::vocab::DegradePolicy;
 use std::path::PathBuf;
 
 fn ctx(id: &str) -> AskerContext {
-    AskerContext { asker: AskerId::new(id) }
+    AskerContext {
+        asker: AskerId::new(id),
+    }
 }
 
 fn a(id: &str) -> AskerId {
@@ -33,14 +35,19 @@ fn spawn_publish_static_barrier_then_read_sees_value() {
         vec![("baseware.name".into(), "areka".into())],
     );
     // barrier 復帰 = 上記 publish が鏡像へ反映済み（mpsc FIFO＋直列処理）。
-    parts.publisher.barrier().expect("barrier should resolve while actor is alive");
+    parts
+        .publisher
+        .barrier()
+        .expect("barrier should resolve while actor is alive");
 
     assert_eq!(
         parts.reader.resolve_flat(&ctx("ghost/a"), "selfname"),
         FlatResolution::Value("さくら".into())
     );
     assert_eq!(
-        parts.reader.resolve_dotted_str(&ctx("ghost/a"), "baseware.name"),
+        parts
+            .reader
+            .resolve_dotted_str(&ctx("ghost/a"), "baseware.name"),
         DottedResolution::Value("areka".into())
     );
 }
@@ -51,13 +58,22 @@ fn spawn_publish_static_barrier_then_read_sees_value() {
 fn initial_load_projects_persist_into_dotted_without_publish() {
     // fake IO に ghost スコープを事前確定（窓位置＋起動記録）。
     let io = FakePersistIo::new();
-    let roots = ScopeRoots { ghost: Some(PathBuf::from("/g")), ..ScopeRoots::default() };
+    let roots = ScopeRoots {
+        ghost: Some(PathBuf::from("/g")),
+        ..ScopeRoots::default()
+    };
     save_scope(
         PersistScope::Ghost,
         &roots,
         &io,
         vec![
-            (PersistKey::WindowPos { scope: 0, axis: Axis::X }, "100".into()),
+            (
+                PersistKey::WindowPos {
+                    scope: 0,
+                    axis: Axis::X,
+                },
+                "100".into(),
+            ),
             (PersistKey::BootCount, "7".into()),
         ],
     );
@@ -70,11 +86,15 @@ fn initial_load_projects_persist_into_dotted_without_publish() {
     // publish も barrier もせず即読み: 初期像は spawn 内で同期構築済みゆえレースなく見える
     // （＝読み経路はアクター処理を一切待たない・R2.7 無ブロック）。
     assert_eq!(
-        parts.reader.resolve_dotted_str(&ctx("ghost/a"), "areka.window.scope(0).x"),
+        parts
+            .reader
+            .resolve_dotted_str(&ctx("ghost/a"), "areka.window.scope(0).x"),
         DottedResolution::Value("100".into())
     );
     assert_eq!(
-        parts.reader.resolve_dotted_str(&ctx("ghost/a"), "areka.boot.count"),
+        parts
+            .reader
+            .resolve_dotted_str(&ctx("ghost/a"), "areka.boot.count"),
         DottedResolution::Value("7".into())
     );
 }
@@ -84,15 +104,21 @@ fn initial_load_projects_persist_into_dotted_without_publish() {
 #[test]
 fn set_free_key_store_writes_to_host_dotted_region() {
     let parts = spawn_sylphya(init_empty());
-    parts.publisher.set(a("ghost/a"), "myplugin.customstate".into(), "on".into());
+    parts
+        .publisher
+        .set(a("ghost/a"), "myplugin.customstate".into(), "on".into());
     parts.publisher.barrier().expect("barrier");
     assert_eq!(
-        parts.reader.resolve_dotted_str(&ctx("ghost/a"), "myplugin.customstate"),
+        parts
+            .reader
+            .resolve_dotted_str(&ctx("ghost/a"), "myplugin.customstate"),
         DottedResolution::Value("on".into())
     );
     // 別 asker からは見えない（per-asker host 区画）。
     assert_eq!(
-        parts.reader.resolve_dotted_str(&ctx("ghost/b"), "myplugin.customstate"),
+        parts
+            .reader
+            .resolve_dotted_str(&ctx("ghost/b"), "myplugin.customstate"),
         DottedResolution::NotFound
     );
 }
@@ -102,11 +128,15 @@ fn set_free_key_store_writes_to_host_dotted_region() {
 #[test]
 fn set_runtime_command_vocab_writes_nothing_in_m1() {
     let parts = spawn_sylphya(init_empty());
-    parts.publisher.set(a("ghost/a"), "surface.num".into(), "5".into());
+    parts
+        .publisher
+        .set(a("ghost/a"), "surface.num".into(), "5".into());
     parts.publisher.barrier().expect("barrier");
     // RuntimeCommand は reserved seam（sink 未登録）→ どの区画にも載らない。
     assert_eq!(
-        parts.reader.resolve_dotted_str(&ctx("ghost/a"), "surface.num"),
+        parts
+            .reader
+            .resolve_dotted_str(&ctx("ghost/a"), "surface.num"),
         DottedResolution::NotFound
     );
 }
@@ -116,8 +146,12 @@ fn set_runtime_command_vocab_writes_nothing_in_m1() {
 #[test]
 fn publish_shiori_some_sets_flat_none_records_absence() {
     let parts = spawn_sylphya(init_empty());
-    parts.publisher.publish_shiori(a("ghost/a"), "username".into(), Some("Alice".into()));
-    parts.publisher.publish_shiori(a("ghost/b"), "username".into(), None);
+    parts
+        .publisher
+        .publish_shiori(a("ghost/a"), "username".into(), Some("Alice".into()));
+    parts
+        .publisher
+        .publish_shiori(a("ghost/b"), "username".into(), None);
     parts.publisher.barrier().expect("barrier");
 
     // Some → per-asker フラットへ値が載る。
@@ -158,14 +192,17 @@ fn barrier_fences_all_prior_messages_last_write_wins() {
 #[test]
 fn persist_put_projects_to_mirror_areka_region() {
     let parts = spawn_sylphya(init_empty()); // roots 空 → save は Degraded だが鏡像投影は成る。
-    parts
-        .publisher
-        .persist_put(PersistScope::Ghost, vec![(PersistKey::BootCount, "3".into())]);
+    parts.publisher.persist_put(
+        PersistScope::Ghost,
+        vec![(PersistKey::BootCount, "3".into())],
+    );
     parts.publisher.barrier().expect("barrier");
     // 保存先 root が None でも（save_scope は Degraded・warn）鏡像 dotted 投影は独立に成立し、
     // アクターは panic せず継続する（R6.7）。
     assert_eq!(
-        parts.reader.resolve_dotted_str(&ctx("ghost/a"), "areka.boot.count"),
+        parts
+            .reader
+            .resolve_dotted_str(&ctx("ghost/a"), "areka.boot.count"),
         DottedResolution::Value("3".into())
     );
 }
@@ -191,7 +228,10 @@ impl PersistIo for SharedFakeIo {
 #[test]
 fn persist_put_write_through_commits_to_real_io() {
     let shared = SharedFakeIo(std::sync::Arc::new(FakePersistIo::new()));
-    let roots = ScopeRoots { ghost: Some(PathBuf::from("/g")), ..ScopeRoots::default() };
+    let roots = ScopeRoots {
+        ghost: Some(PathBuf::from("/g")),
+        ..ScopeRoots::default()
+    };
     let parts = spawn_sylphya(SylphyaInit {
         roots: roots.clone(),
         io: Box::new(shared.clone()),
@@ -219,7 +259,9 @@ fn persist_put_write_through_commits_to_real_io() {
     );
     // 鏡像 areka.* 投影も成る（write-through の両面）。
     assert_eq!(
-        parts.reader.resolve_dotted_str(&ctx("ghost/a"), "areka.boot.count"),
+        parts
+            .reader
+            .resolve_dotted_str(&ctx("ghost/a"), "areka.boot.count"),
         DottedResolution::Value("5".into())
     );
 }
@@ -228,19 +270,36 @@ fn persist_put_write_through_commits_to_real_io() {
 
 #[test]
 fn actor_death_via_close_makes_sends_observable_and_reader_continues() {
-    let SylphyaParts { reader, publisher, handle } = spawn_sylphya(init_empty());
+    let SylphyaParts {
+        reader,
+        publisher,
+        handle,
+    } = spawn_sylphya(init_empty());
     // 既知値を確立（後で最終鏡像として読めることを確認するため）。
-    publisher.publish_static(a("ghost/a"), vec![("selfname".into(), "生前値".into())], vec![]);
+    publisher.publish_static(
+        a("ghost/a"),
+        vec![("selfname".into(), "生前値".into())],
+        vec![],
+    );
     publisher.barrier().expect("barrier while alive");
 
     // 正典終了経路: Close → join で停止完了を待つ（join 復帰 = body return = rx drop 済み）。
     publisher.close();
-    handle.join().expect("clean Close should join without panic");
+    handle
+        .join()
+        .expect("clean Close should join without panic");
 
     // 死亡後の fire-and-forget 投函は panic しない（SendError → warn＋縮退）。
-    publisher.publish_static(a("ghost/a"), vec![("selfname".into(), "死後値".into())], vec![]);
+    publisher.publish_static(
+        a("ghost/a"),
+        vec![("selfname".into(), "死後値".into())],
+        vec![],
+    );
     publisher.set(a("ghost/a"), "myplugin.x".into(), "y".into());
-    publisher.persist_put(PersistScope::Ghost, vec![(PersistKey::BootCount, "9".into())]);
+    publisher.persist_put(
+        PersistScope::Ghost,
+        vec![(PersistKey::BootCount, "9".into())],
+    );
 
     // 死亡後の barrier は Err（送信端で死亡を観測可能・ハングしない）。
     assert!(
@@ -267,20 +326,30 @@ impl RuntimeCommandSink for PanicSink {
 
 #[test]
 fn actor_panic_is_detected_by_join_and_reader_continues() {
-    let SylphyaParts { reader, publisher, handle } = spawn_sylphya(SylphyaInit {
+    let SylphyaParts {
+        reader,
+        publisher,
+        handle,
+    } = spawn_sylphya(SylphyaInit {
         roots: ScopeRoots::default(),
         io: Box::new(FakePersistIo::new()),
         runtime_sink: Some(Box::new(PanicSink)),
     });
     // 先に既知値を確立（panic 前の最終鏡像）。
-    publisher.publish_static(a("ghost/a"), vec![("selfname".into(), "生前値".into())], vec![]);
+    publisher.publish_static(
+        a("ghost/a"),
+        vec![("selfname".into(), "生前値".into())],
+        vec![],
+    );
     publisher.barrier().expect("barrier before panic");
 
     // RuntimeCommand SET → apply が RuntimeCommandReserved → sink.dispatch で panic 誘発。
     publisher.set(a("ghost/a"), "surface.num".into(), "5".into());
 
     // join がアクタースレッドの panic を握り潰さず観測（バグ観測・areka-actor 規約 4）。
-    let err = handle.join().expect_err("panicking actor must surface at join");
+    let err = handle
+        .join()
+        .expect_err("panicking actor must surface at join");
     assert!(
         matches!(err, areka_actor::ActorError::Panicked { .. }),
         "expected Panicked, got {err:?}"
@@ -292,7 +361,10 @@ fn actor_panic_is_detected_by_join_and_reader_continues() {
         FlatResolution::Value("生前値".into())
     );
     // 死亡後の barrier は Err（ハングしない）。
-    assert!(publisher.barrier().is_err(), "dead actor barrier must be Err");
+    assert!(
+        publisher.barrier().is_err(),
+        "dead actor barrier must be Err"
+    );
 }
 
 // === reader 無ブロック（構造＋挙動）: アクター処理前でも読みは即確定・大域ロック不在 ===
@@ -307,7 +379,9 @@ fn reader_does_not_block_on_actor_supply() {
         FlatResolution::Degraded(DegradePolicy::ConsumerDefault)
     );
     assert_eq!(
-        parts.reader.resolve_dotted_str(&ctx("ghost/a"), "system.none"),
+        parts
+            .reader
+            .resolve_dotted_str(&ctx("ghost/a"), "system.none"),
         DottedResolution::NotFound
     );
     // reader は clone 可（複数消費エンジンが同一鏡像を共有・供給と独立）。

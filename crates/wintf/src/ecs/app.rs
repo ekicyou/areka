@@ -18,6 +18,8 @@ impl App {
 
     /// ディスプレイ構成が変更されたことをマーク
     pub fn mark_display_change(&mut self) {
+        // 表示構成が変わった＝幾何をやり直す仕事がある（設計 C16 の `WM_GEOMETRY`）。
+        crate::ecs::world::tick_wake::mark(crate::ecs::world::tick_wake::WM_GEOMETRY);
         self.display_configuration_changed = true;
         info!("[App] Display configuration changed");
     }
@@ -147,7 +149,11 @@ mod tests {
             was_last,
             "0 から破棄しても window_count==0 のため true（最後のウィンドウ扱い）"
         );
-        assert_eq!(app.window_count(), 0, "saturating_sub でアンダーフローしない");
+        assert_eq!(
+            app.window_count(),
+            0,
+            "saturating_sub でアンダーフローしない"
+        );
     }
 
     /// 作成・破棄の混在シーケンスで window_count が正しく増減し、

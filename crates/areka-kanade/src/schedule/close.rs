@@ -65,7 +65,10 @@ fn on_close_pending(mut state: State, input: Input, config: &KanadeConfig) -> (S
                 let deadline = deadline_from(state.last_now, config);
                 tracing::info!(target: "kanade", event = "close_talk_start", talk_id = talk_id.0, "OnClose 応答スクリプト——close talk を再生起動し完了を待機");
                 state.phase = Phase::CloseTalkWait { talk_id, deadline };
-                (state, vec![Action::StartTalk(StartTalk::new(talk_id, script))])
+                (
+                    state,
+                    vec![Action::StartTalk(StartTalk::new(talk_id, script))],
+                )
             }
             ShioriOutcome::NoContent => {
                 // 204 = 応答なし（≠拒否・DD-11）。追加イベントを発行せず無言終了へ直行する
@@ -243,14 +246,20 @@ mod tests {
         match s1.phase {
             Phase::CloseTalkWait { talk_id, deadline } => {
                 assert_eq!(talk_id, TalkId(5));
-                assert_eq!(deadline, Some(MonotonicMs(1_000 + d)), "deadline は入口で last_now + D");
+                assert_eq!(
+                    deadline,
+                    Some(MonotonicMs(1_000 + d)),
+                    "deadline は入口で last_now + D"
+                );
             }
             _ => panic!("expected CloseTalkWait"),
         }
         assert_eq!(s1.next_talk_id, 6, "talk_id 採番カウンタが進む");
         assert_eq!(actions1.len(), 1);
         match &actions1[0] {
-            Action::StartTalk(StartTalk { talk_id, script, .. }) => {
+            Action::StartTalk(StartTalk {
+                talk_id, script, ..
+            }) => {
                 assert_eq!(*talk_id, TalkId(5));
                 assert_eq!(script, "bye");
             }
@@ -266,7 +275,12 @@ mod tests {
             }),
             &config(),
         );
-        assert!(matches!(s2.phase, Phase::Unloading { cause: TermCause::Quit }));
+        assert!(matches!(
+            s2.phase,
+            Phase::Unloading {
+                cause: TermCause::Quit
+            }
+        ));
         assert!(matches!(actions2.as_slice(), [Action::ShioriUnload]));
     }
 
@@ -296,7 +310,10 @@ mod tests {
             }),
             &config(),
         );
-        assert!(matches!(s2.phase, Phase::Steady { talk: None }), "終了拒否で定常復帰");
+        assert!(
+            matches!(s2.phase, Phase::Steady { talk: None }),
+            "終了拒否で定常復帰"
+        );
         assert!(actions2.is_empty(), "TalkDone 自体は副作用なし");
 
         // 続く Tick で OnSecondChange GET（pump 再開・Req 4.5/3.4）。
@@ -306,7 +323,11 @@ mod tests {
         assert_eq!(actions3.len(), 1);
         match &actions3[0] {
             Action::ShioriRequest(ShioriCall::Get { id, .. }) => {
-                assert_eq!(id.as_str(), "OnSecondChange", "定常復帰後に pump が再開する");
+                assert_eq!(
+                    id.as_str(),
+                    "OnSecondChange",
+                    "定常復帰後に pump が再開する"
+                );
             }
             _ => panic!("expected OnSecondChange GET after resume"),
         }
@@ -359,10 +380,18 @@ mod tests {
             &config(),
         );
         assert!(
-            matches!(next.phase, Phase::Unloading { cause: TermCause::CloseSilent }),
+            matches!(
+                next.phase,
+                Phase::Unloading {
+                    cause: TermCause::CloseSilent
+                }
+            ),
             "204 は無言終了（DD-11）"
         );
-        assert_eq!(next.next_talk_id, 5, "無言終了は talk 起動しない・採番しない");
+        assert_eq!(
+            next.next_talk_id, 5,
+            "無言終了は talk 起動しない・採番しない"
+        );
         // ShioriUnload のみ・追加イベント（ShioriRequest = OnCloseAll 等）は発行しない（Req 4.6）。
         assert_eq!(actions.len(), 1);
         assert!(matches!(actions[0], Action::ShioriUnload));
@@ -387,9 +416,20 @@ mod tests {
             8,
         );
         // now = 1000 + D（>= deadline）→ 超過。
-        let (next, actions) = step(s, Input::Tick { now: MonotonicMs(1_000 + d) }, &config());
+        let (next, actions) = step(
+            s,
+            Input::Tick {
+                now: MonotonicMs(1_000 + d),
+            },
+            &config(),
+        );
         assert!(
-            matches!(next.phase, Phase::Unloading { cause: TermCause::DeadlineExceeded }),
+            matches!(
+                next.phase,
+                Phase::Unloading {
+                    cause: TermCause::DeadlineExceeded
+                }
+            ),
             "上限超過で終了系列（DeadlineExceeded）へ"
         );
         assert!(matches!(actions.as_slice(), [Action::ShioriUnload]));
@@ -405,13 +445,19 @@ mod tests {
         // 最初の Tick{now=500} → deadline = Some(500+100)・未超過・維持。
         let (s1, a1) = step(
             s,
-            Input::Tick { now: MonotonicMs(500) },
+            Input::Tick {
+                now: MonotonicMs(500),
+            },
             &config_with_deadline(small),
         );
         match s1.phase {
             Phase::CloseTalkWait { talk_id, deadline } => {
                 assert_eq!(talk_id, TalkId(2));
-                assert_eq!(deadline, Some(MonotonicMs(600)), "最初の Tick を起点に上限を設定");
+                assert_eq!(
+                    deadline,
+                    Some(MonotonicMs(600)),
+                    "最初の Tick を起点に上限を設定"
+                );
             }
             _ => panic!("expected CloseTalkWait with armed deadline"),
         }
@@ -421,10 +467,17 @@ mod tests {
         // 後続 Tick{now=600}（>= deadline）→ 超過 → Unloading{DeadlineExceeded}。
         let (s2, a2) = step(
             s1,
-            Input::Tick { now: MonotonicMs(600) },
+            Input::Tick {
+                now: MonotonicMs(600),
+            },
             &config_with_deadline(small),
         );
-        assert!(matches!(s2.phase, Phase::Unloading { cause: TermCause::DeadlineExceeded }));
+        assert!(matches!(
+            s2.phase,
+            Phase::Unloading {
+                cause: TermCause::DeadlineExceeded
+            }
+        ));
         assert!(matches!(a2.as_slice(), [Action::ShioriUnload]));
     }
 
@@ -458,14 +511,25 @@ mod tests {
     fn close_pending_tick_updates_last_now_and_stays() {
         let (next, actions) = step(
             close_pending(CloseReason::User, Some(MonotonicMs(1_000)), 5),
-            Input::Tick { now: MonotonicMs(2_000) },
+            Input::Tick {
+                now: MonotonicMs(2_000),
+            },
             &config(),
         );
         assert!(
-            matches!(next.phase, Phase::ClosePending { reason: CloseReason::User }),
+            matches!(
+                next.phase,
+                Phase::ClosePending {
+                    reason: CloseReason::User
+                }
+            ),
             "ClosePending を維持"
         );
-        assert_eq!(next.last_now, Some(MonotonicMs(2_000)), "last_now は更新される");
+        assert_eq!(
+            next.last_now,
+            Some(MonotonicMs(2_000)),
+            "last_now は更新される"
+        );
         assert!(actions.is_empty(), "close 中は pump しない");
     }
 
@@ -503,7 +567,12 @@ mod tests {
             },
             &config(),
         );
-        assert!(matches!(next.phase, Phase::ClosePending { reason: CloseReason::User }));
+        assert!(matches!(
+            next.phase,
+            Phase::ClosePending {
+                reason: CloseReason::User
+            }
+        ));
         assert!(actions.is_empty());
     }
 
@@ -511,7 +580,12 @@ mod tests {
 
     #[test]
     fn close_talk_wait_unexpected_reply_is_defensive() {
-        let s = close_talk_wait(TalkId(2), Some(MonotonicMs(5_000)), Some(MonotonicMs(1_000)), 3);
+        let s = close_talk_wait(
+            TalkId(2),
+            Some(MonotonicMs(5_000)),
+            Some(MonotonicMs(1_000)),
+            3,
+        );
         // CloseTalkWait は応答待ちではない（awaits_reply に含まれない）ため、mod.rs の
         // unexpected_reply アームで握り潰される想定だが、直接 close::step に渡した場合の
         // 防御も確認する（発行なし・維持）。
@@ -523,7 +597,13 @@ mod tests {
             },
             &config(),
         );
-        assert!(matches!(next.phase, Phase::CloseTalkWait { talk_id: TalkId(2), .. }));
+        assert!(matches!(
+            next.phase,
+            Phase::CloseTalkWait {
+                talk_id: TalkId(2),
+                ..
+            }
+        ));
         assert!(actions.is_empty());
     }
 }

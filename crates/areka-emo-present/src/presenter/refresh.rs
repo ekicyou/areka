@@ -1,6 +1,12 @@
 //! 窓 DPI 変化に伴う再スケール（`EmoPresenter::refresh_scale`）と、表示成立点が積んだ窓寸 reconcile
 //! 要求の取り出し（`EmoPresenter::take_pending_resize`）。
 
+use wintf::ecs::window::transition_diag;
+
+use super::transition_record::{
+    SURFACE_REASON_INVISIBLE, SURFACE_REASON_K_UNCHANGED, SurfaceRecord, SurfaceStage, stamp_of,
+    surface_line,
+};
 use super::{DPI, EmoPresenter, TargetId, World, derive_scale};
 
 impl EmoPresenter {
@@ -69,6 +75,20 @@ impl EmoPresenter {
 
         if previous == Some(scale) {
             tracing::trace!(?target_id, k_ratio = ?scale, "refresh_scale: k 不変（再表示しない）");
+            // 見送りを理由つきで記録する（Requirement 4.6・design C3）。判定側はこの行を持つ窓を
+            // 「再導出結果が得られない窓＝現状維持が正しい窓」として合否から除外する——記録が
+            // 無いと「書込が来ていない」と「そもそも対象外だった」の区別が付かず、遷移の
+            // 有界性判定が対象外の窓で不合格になる。判定そのものは 1 つも変えない。
+            if transition_diag::is_enabled() {
+                transition_diag::emit_line(&surface_line(&SurfaceRecord {
+                    stamp: stamp_of(world),
+                    stage: SurfaceStage::Skipped,
+                    target_id,
+                    size: None,
+                    resized: None,
+                    reason: Some(SURFACE_REASON_K_UNCHANGED),
+                }));
+            }
             return None;
         }
         if !visible {
@@ -76,6 +96,16 @@ impl EmoPresenter {
                 ?target_id,
                 "refresh_scale: 不可視ゆえ再表示しない（Hide/全透明退化を蘇らせない）"
             );
+            if transition_diag::is_enabled() {
+                transition_diag::emit_line(&surface_line(&SurfaceRecord {
+                    stamp: stamp_of(world),
+                    stage: SurfaceStage::Skipped,
+                    target_id,
+                    size: None,
+                    resized: None,
+                    reason: Some(SURFACE_REASON_INVISIBLE),
+                }));
+            }
             return None;
         }
         let Some((surface_id, binds, pattern)) = last_show else {

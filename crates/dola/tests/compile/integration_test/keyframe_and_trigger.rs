@@ -181,7 +181,9 @@ fn float_x_entry(duration: f64, kf: &str) -> StoryboardEntry {
 }
 
 fn simple_child_storyboard() -> Storyboard {
-    StoryboardBuilder::new().entry(float_x_entry(1.0, "ckf")).build()
+    StoryboardBuilder::new()
+        .entry(float_x_entry(1.0, "ckf"))
+        .build()
 }
 
 #[test]

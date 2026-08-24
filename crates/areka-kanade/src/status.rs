@@ -233,7 +233,10 @@ pub struct ExecutionSnapshot {
 
 impl ExecutionSnapshot {
     /// 全実行状態が非アクティブなスナップショット（boot 系列・close 系列・ForceQuit 後）。
-    pub const INACTIVE: ExecutionSnapshot = ExecutionSnapshot { talk_active: false, choice_active: false };
+    pub const INACTIVE: ExecutionSnapshot = ExecutionSnapshot {
+        talk_active: false,
+        choice_active: false,
+    };
 }
 
 #[cfg(test)]
@@ -318,7 +321,10 @@ mod tests {
         assert_eq!(idle.render(), None);
 
         // talk_active=true → `[Talking]` のみ（Req2.4/2.7）。
-        let talking = ExecutionStatus::derive(&ExecutionSnapshot { talk_active: true, choice_active: false });
+        let talking = ExecutionStatus::derive(&ExecutionSnapshot {
+            talk_active: true,
+            choice_active: false,
+        });
         assert_eq!(talking.render(), Some("talking".to_string()));
 
         // design 明記の Postconditions を明示的に固定する。
@@ -327,7 +333,11 @@ mod tests {
             None
         );
         assert_eq!(
-            ExecutionStatus::derive(&ExecutionSnapshot { talk_active: true, choice_active: false }).render(),
+            ExecutionStatus::derive(&ExecutionSnapshot {
+                talk_active: true,
+                choice_active: false
+            })
+            .render(),
             Some("talking".to_string())
         );
     }

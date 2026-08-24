@@ -146,9 +146,15 @@ mod tests {
         });
         assert!(out.contains("level=WARN"), "WARN level を捕捉: {out}");
         assert!(out.contains("level=ERROR"), "ERROR level を捕捉: {out}");
-        assert!(out.contains("target=areka_emo_atlas"), "target を捕捉: {out}");
+        assert!(
+            out.contains("target=areka_emo_atlas"),
+            "target を捕捉: {out}"
+        );
         assert!(out.contains("set=0"), "数値フィールドを捕捉: {out}");
-        assert!(out.contains("rel_path=\"clear.png\""), "文字列フィールドを捕捉: {out}");
+        assert!(
+            out.contains("rel_path=\"clear.png\""),
+            "文字列フィールドを捕捉: {out}"
+        );
     }
 
     /// クロージャ外（with_default スコープ外）のログは捕捉されない（スレッドローカル境界の実証）。

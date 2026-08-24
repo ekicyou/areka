@@ -68,7 +68,11 @@ fn dummy_window_has_visible_rectangle_child() {
     // Rectangle + Brushes を持つ子 entity が 1 枚あり、その ChildOf 親がダミー窓であること。
     let mut query = world.query::<(&Rectangle, &Brushes, &ChildOf)>();
     let children: Vec<_> = query.iter(&world).collect();
-    assert_eq!(children.len(), 1, "ダミー窓は可視の子 Rectangle を 1 枚持つべき");
+    assert_eq!(
+        children.len(),
+        1,
+        "ダミー窓は可視の子 Rectangle を 1 枚持つべき"
+    );
 
     let (_rect, _brushes, child_of) = children[0];
     assert_eq!(

@@ -1,0 +1,23 @@
+perf-rank 0.1.0 run=no_tick_lines stages=process,thread,function,phase top=3
+
+[1] プロセス  unit=cpu  1 コア換算 %  出所=cpu.csv  基準=steady
+  steady_mean_pct                     3.00
+  p50_pct                             2.00
+  p95_pct                             4.00
+  max_pct                             4.00
+  talk_peak_pct                          -
+  samples_total                          3
+  samples_steady                         2
+  注記: 定常＝起点から 60.0 秒（WARMUP_EXCLUDE_SEC）を除く。起点=first_log_line 2026-08-23T12:00:00Z ／ 定常の始まり 2026-08-23T12:01:00Z
+  注記: 発話中の頂＝apply(ShowSurface) の前後 10.0 秒に重なる採取点の最大（合否外）
+  注記: SSP 参考値 idle=3.05 talk_peak=4.64（2026-08-15 実測・参考値・合否外）
+  注記: 実行条件 run-meta.txt がありません
+
+[2] スレッド UNAVAILABLE reason=no_perf_thread_lines
+  注記: perf(thread) 行が 1 本も無い。順位付けの走行では areka::perf=debug を点けること。
+
+[3] 関数 UNAVAILABLE reason=no_dump
+  注記: 段③（CPU サンプリング）の成果物が無いので関数別の帰属は出せない。昇格した PowerShell から回すと採れる。
+
+[4] 相 UNAVAILABLE reason=no_tick_lines
+  注記: [tick] kind=window 行が 1 本も無い。順位付けの走行では wintf::tick=debug を点けること。

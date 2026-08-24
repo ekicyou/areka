@@ -101,11 +101,35 @@ pub(super) struct BindPart {
 pub(super) fn surface1000_bind_parts() -> [BindPart; 3] {
     [
         // 腕（surface1100 → purple/0/base1.png）: 横に広い（80×20）・青。
-        BindPart { anim_id: 1100, rel: "purple/0/base1.png", w: 80, h: 20, b: 255, g: 0, r: 0 },
+        BindPart {
+            anim_id: 1100,
+            rel: "purple/0/base1.png",
+            w: 80,
+            h: 20,
+            b: 255,
+            g: 0,
+            r: 0,
+        },
         // 口（surface1200 → purple/2/a.png）: 小さい（30×30）・緑。
-        BindPart { anim_id: 1200, rel: "purple/2/a.png", w: 30, h: 30, b: 0, g: 255, r: 0 },
+        BindPart {
+            anim_id: 1200,
+            rel: "purple/2/a.png",
+            w: 30,
+            h: 30,
+            b: 0,
+            g: 255,
+            r: 0,
+        },
         // 目（surface1302 → purple/4/normal.png）: 縦に長い（20×90）・赤。
-        BindPart { anim_id: 1302, rel: "purple/4/normal.png", w: 20, h: 90, b: 0, g: 0, r: 255 },
+        BindPart {
+            anim_id: 1302,
+            rel: "purple/4/normal.png",
+            w: 20,
+            h: 90,
+            b: 0,
+            g: 0,
+            r: 255,
+        },
     ]
 }
 
@@ -130,7 +154,11 @@ pub(super) fn build_atlas_for_surface1000(shell: &Shell, base: &Path) -> AtlasTa
 }
 
 /// surface1000 を有効 bind 集合で合成した結果を得る（world 構築＋bind_atlas＋compose）。
-pub(super) fn compose_surface1000(shell: &Shell, atlas: &AtlasTable, binds: &BindSet) -> ComposedSurface {
+pub(super) fn compose_surface1000(
+    shell: &Shell,
+    atlas: &AtlasTable,
+    binds: &BindSet,
+) -> ComposedSurface {
     let mut world = EmoWorld::build(shell);
     world.bind_atlas(atlas, SetId(0));
     Composer::new()

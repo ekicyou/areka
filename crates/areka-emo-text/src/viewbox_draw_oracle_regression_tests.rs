@@ -1,12 +1,12 @@
-use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 use super::ViewboxExecutor;
+use super::test_support::{Rig, geo_model};
 use crate::canvas::ContentCanvas;
 use crate::draw::{DWriteMetrics, DrawExecutor, ResolvedFont};
 use crate::layout::{LayoutEngine, WrapPlan};
 use crate::region::{ScaleContract, TextRegion};
 use crate::state::{TextItem, TextLayerConfig, TextLayerState};
 use crate::writing::WritingMode;
-use super::test_support::{Rig, geo_model};
+use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 
 /// D1 診断（実機で行間の文字欠けを観測）: example の共有 fixture（font 28px・pitch 35px・
 /// validrect 320×122・**実 DWriteMetrics**・行1「おっはよー！」行2「めっちゃええ朝やん！」）を

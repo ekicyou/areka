@@ -5,13 +5,13 @@ use windows::Win32::Graphics::DirectWrite::DWRITE_FACTORY_TYPE_SHARED;
 use wintf::com::dwrite::DWriteTextLayoutExt;
 use wintf::com::dwrite::dwrite_create_factory;
 
+use super::test_support::{default_metrics, empty_font, model_with_font, with_log_cage};
 use super::{DEFAULT_FONT_HEIGHT, DWriteMetrics, ResolvedFont};
 use crate::canvas::TextEffects;
 use crate::layout::{GlyphMetrics, LayoutEngine, WrapPlan};
 use crate::region::TextRegion;
 use crate::state::{TextItem, TextLayerConfig};
 use crate::writing::WritingMode;
-use super::test_support::{default_metrics, empty_font, model_with_font, with_log_cage};
 
 // ── task 6.3 R3.1/R7.3: DrawExecutor——可視窓の全域再描画を自前供給面へ焼き込む ──
 //
@@ -39,12 +39,9 @@ use crate::surface::TextSurface;
 
 /// テスト用 WUC apartment / dispatcher（surface.rs テストと同一方針:
 /// COM 未初期化のテストスレッドでは ASTA 第一候補・NONE 保険）。
-fn make_dispatcher_and_compositor() -> (windows::System::DispatcherQueueController, Compositor)
-{
+fn make_dispatcher_and_compositor() -> (windows::System::DispatcherQueueController, Compositor) {
     let dq = create_dispatcher_queue_controller(DQTAT_COM_ASTA)
-        .or_else(|e_asta| {
-            create_dispatcher_queue_controller(DQTAT_COM_NONE).map_err(|_| e_asta)
-        })
+        .or_else(|e_asta| create_dispatcher_queue_controller(DQTAT_COM_NONE).map_err(|_| e_asta))
         .expect("DispatcherQueueController 生成失敗（ASTA/NONE いずれも不可）");
     let compositor = Compositor::new().expect("Compositor::new 失敗");
     (dq, compositor)
@@ -531,9 +528,8 @@ fn image_and_surface_seam_residents_warn_and_skip() {
         block_offset: 0.0,
     };
 
-    let (result, warns, errors) = with_log_cage(|| {
-        executor.render(&canvas, &window, &font, mode, &contract, &mut surface)
-    });
+    let (result, warns, errors) =
+        with_log_cage(|| executor.render(&canvas, &window, &font, mode, &contract, &mut surface));
     result.expect("シーム住人があっても render は成功する（skip 継続）");
     assert!(warns >= 1, "シーム住人の描画要求は warn を記録する");
     assert_eq!(errors, 0);
@@ -543,9 +539,8 @@ fn image_and_surface_seam_residents_warn_and_skip() {
         "シーム住人は実挙動なし＝インクを一切描かない（R8.5）"
     );
 
-    let (result, warns2, _) = with_log_cage(|| {
-        executor.render(&canvas, &window, &font, mode, &contract, &mut surface)
-    });
+    let (result, warns2, _) =
+        with_log_cage(|| executor.render(&canvas, &window, &font, mode, &contract, &mut surface));
     result.expect("2 回目の render も成功する");
     assert_eq!(
         warns2, 0,
@@ -666,9 +661,8 @@ fn probe_advances_match_drawn_line_cluster_advances() {
             WritingMode::VerticalRl,
             WritingMode::VerticalLr,
         ] {
-            let metrics =
-                DWriteMetrics::new(&factory, &font, mode, &TextLayerConfig::default())
-                    .expect("DWriteMetrics 生成失敗");
+            let metrics = DWriteMetrics::new(&factory, &font, mode, &TextLayerConfig::default())
+                .expect("DWriteMetrics 生成失敗");
             let widths = drawn_line_cluster_widths(&mut executor, text, &font, mode);
             assert_eq!(
                 widths.len(),
@@ -708,9 +702,8 @@ fn advance_divergence_would_surface_as_wrap_position_drift() {
             WritingMode::VerticalRl,
             WritingMode::VerticalLr,
         ] {
-            let metrics =
-                DWriteMetrics::new(&factory, &font, mode, &TextLayerConfig::default())
-                    .expect("DWriteMetrics 生成失敗");
+            let metrics = DWriteMetrics::new(&factory, &font, mode, &TextLayerConfig::default())
+                .expect("DWriteMetrics 生成失敗");
             // 折返し閾値＝先頭 4 文字の probe 送り終端の floor——実測値が閾値と
             // 折返し位置の両方を駆動する形（metrics が違えば折返しもズレる）。
             let cum4: f32 = text
@@ -743,16 +736,15 @@ fn advance_divergence_would_surface_as_wrap_position_drift() {
             );
             let region = TextRegion::resolve(&model, (400, 224), mode);
             let items = glyph_items(text);
-            let lines =
-                LayoutEngine::layout(
-                    &items,
-                    items.len(),
-                    &region,
-                    mode,
-                    font.height,
-                    &metrics,
-                    WrapPlan::CharByChar,
-                );
+            let lines = LayoutEngine::layout(
+                &items,
+                items.len(),
+                &region,
+                mode,
+                font.height,
+                &metrics,
+                WrapPlan::CharByChar,
+            );
             assert!(
                 lines.len() >= 2,
                 "{} {mode:?}: 実測駆動の折返しが実際に発生する構成",

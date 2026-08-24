@@ -16,7 +16,7 @@
 
 use crate::charset::DefaultEncoding;
 
-use super::{resolve, MountModel};
+use super::{MountModel, resolve};
 use std::path::{Path, PathBuf};
 
 /// emo2 実フィクスチャのルート（`crates/pilot/examples/shiori-host-32/fixtures/emo2/`）。

@@ -117,7 +117,11 @@ fn is_legacy_q_head(word: &str, args: &[String], next: Option<&Token>) -> bool {
 /// 旧 2 連 `\q` を単一 `Raw` へ畳む。先頭タグ（`\q[ID]` / `\q*[ID]`）と直後の浮く
 /// `Text("[タイトル]")` を結合し、元の見かけを復元した `Raw` を 1 個だけ産む
 /// （Choice 化しない・情報を失わない・要件 5.3）。
-fn fold_legacy_q(word: &str, args: &[String], it: &mut Peekable<vec::IntoIter<Token>>) -> Instruction {
+fn fold_legacy_q(
+    word: &str,
+    args: &[String],
+    it: &mut Peekable<vec::IntoIter<Token>>,
+) -> Instruction {
     // 先頭タグの概形（`\q[ID]` 等）を復元。
     let mut raw = reconstruct_tag(word, args);
     // 直後の浮く `Text("[...]")` を取り込む（判定済みなので必ず存在する）。
@@ -201,7 +205,9 @@ fn decode_tag(word: String, args: Vec<String>) -> Instruction {
         // バルーン面切替（balloon-face-cue 要件 1.1/1.4/1.5）: `\b[...]` は `\s` と完全対称。
         // **第 1 引数のみ**を不透明保持する（fallback 形 `\b[2,--fallback=4]` は `"2"` に
         // 落ちる＝graceful）。数値化・範囲展開・alias 解決・`-1` 解釈は一切行わない。
-        "b" => Instruction::BalloonSurface(SurfaceArg::new(args.into_iter().next().unwrap_or_default())),
+        "b" => Instruction::BalloonSurface(SurfaceArg::new(
+            args.into_iter().next().unwrap_or_default(),
+        )),
         // カーソル絶対位置（要件 6.1）: `\_l[x,y]`（x/y は文字列のまま保持）。
         "_l" => decode_cursor(args),
         // 選択肢（要件 5.1/5.2）: `\q[disp,target,refs...]`。

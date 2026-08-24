@@ -65,8 +65,7 @@ fn on_boot_is_get_with_shell_name_ref0() {
 
 #[test]
 fn baseware_version_is_notify_with_version_and_name() {
-    let (id, references) =
-        expect_notify(baseware_version(&config(), &ExecutionSnapshot::INACTIVE));
+    let (id, references) = expect_notify(baseware_version(&config(), &ExecutionSnapshot::INACTIVE));
     assert_eq!(id, "basewareversion");
     assert_eq!(references, vec!["1.0.0".to_string(), "areka".to_string()]);
 }
@@ -74,7 +73,13 @@ fn baseware_version_is_notify_with_version_and_name() {
 #[test]
 fn on_second_change_playable_is_get_ref3_one() {
     // 7_200_000 ms = 2 hours。talk_active=false（再生可能）→ GET・Ref3=1・status 空（DD-IT-3）。
-    let call = on_second_change(MonotonicMs(7_200_000), &ExecutionSnapshot { talk_active: false, choice_active: false });
+    let call = on_second_change(
+        MonotonicMs(7_200_000),
+        &ExecutionSnapshot {
+            talk_active: false,
+            choice_active: false,
+        },
+    );
     assert_eq!(
         call_status(&call),
         None,
@@ -96,7 +101,13 @@ fn on_second_change_playable_is_get_ref3_one() {
 #[test]
 fn on_second_change_not_playable_is_notify_ref3_zero() {
     // 3_600_000 ms = 1 hour。talk_active=true（再生中）→ NOTIFY・Ref3=0・status talking（DD-IT-3）。
-    let call = on_second_change(MonotonicMs(3_600_000), &ExecutionSnapshot { talk_active: true, choice_active: false });
+    let call = on_second_change(
+        MonotonicMs(3_600_000),
+        &ExecutionSnapshot {
+            talk_active: true,
+            choice_active: false,
+        },
+    );
     assert_eq!(
         call_status(&call),
         Some("talking".to_string()),
@@ -120,7 +131,10 @@ fn on_second_change_ref0_truncates_toward_zero() {
     // 端数（1 時間未満）は切り捨てて "0"（3_599_999 ms < 1 hour）。
     let (_, references) = expect_get(on_second_change(
         MonotonicMs(3_599_999),
-        &ExecutionSnapshot { talk_active: false, choice_active: false },
+        &ExecutionSnapshot {
+            talk_active: false,
+            choice_active: false,
+        },
     ));
     assert_eq!(references[0], "0");
 }
@@ -134,8 +148,7 @@ fn on_close_user_maps_to_user() {
 
 #[test]
 fn on_close_system_maps_to_system() {
-    let (id, references) =
-        expect_get(on_close(CloseReason::System, &ExecutionSnapshot::INACTIVE));
+    let (id, references) = expect_get(on_close(CloseReason::System, &ExecutionSnapshot::INACTIVE));
     assert_eq!(id, "OnClose");
     assert_eq!(references, vec!["system".to_string()]);
 }
@@ -178,7 +191,10 @@ fn allowed_event_ids_are_exactly_the_eleven_and_exclude_ontalk_onhour() {
             "OnChoiceTimeout",
         ]
     );
-    assert!(is_allowed_event_id("OnMouseMove"), "OnMouseMove は許可集合に属する（Req7.1）");
+    assert!(
+        is_allowed_event_id("OnMouseMove"),
+        "OnMouseMove は許可集合に属する（Req7.1）"
+    );
     assert!(
         is_allowed_event_id("OnMouseDoubleClick"),
         "OnMouseDoubleClick は許可集合に属する（Req7.1）"
@@ -189,8 +205,14 @@ fn allowed_event_ids_are_exactly_the_eleven_and_exclude_ontalk_onhour() {
             "{id} は選択関連の正典固定 ID ゆえ許可集合に属する（DD-2）"
         );
     }
-    assert!(!is_allowed_event_id("OnTalk"), "OnTalk は恒久的に許可しない（Req3.2）");
-    assert!(!is_allowed_event_id("OnHour"), "OnHour は恒久的に許可しない（Req3.2）");
+    assert!(
+        !is_allowed_event_id("OnTalk"),
+        "OnTalk は恒久的に許可しない（Req3.2）"
+    );
+    assert!(
+        !is_allowed_event_id("OnHour"),
+        "OnHour は恒久的に許可しない（Req3.2）"
+    );
     // 表の全要素が許可判定を通ること。
     for id in ALLOWED_EVENT_IDS {
         assert!(is_allowed_event_id(id), "{id} は表にあるのに許可されない");
@@ -259,13 +281,13 @@ fn on_mouse_move_builds_canonical_seven_reference_layout() {
     assert_eq!(
         references,
         vec![
-            "10".to_string(),   // Ref0=x
-            "20".to_string(),   // Ref1=y
-            "0".to_string(),    // Ref2=wheel（M1 固定・Req2.4）
-            "0".to_string(),    // Ref3=scope（本体0）
-            "Head".to_string(), // Ref4=region（不透明転写）
-            "0".to_string(),    // Ref5=移動は常に "0"（Req2.5）
-            "mouse".to_string(),// Ref6=デバイス種（DD-IE-6）
+            "10".to_string(),    // Ref0=x
+            "20".to_string(),    // Ref1=y
+            "0".to_string(),     // Ref2=wheel（M1 固定・Req2.4）
+            "0".to_string(),     // Ref3=scope（本体0）
+            "Head".to_string(),  // Ref4=region（不透明転写）
+            "0".to_string(),     // Ref5=移動は常に "0"（Req2.5）
+            "mouse".to_string(), // Ref6=デバイス種（DD-IE-6）
         ]
     );
     assert_eq!(references.len(), 7, "Reference 数は常に 7");
@@ -328,7 +350,10 @@ fn on_mouse_double_click_right_builds_ref5_one() {
 /// talk_active=true では両構築子が `Status: talking` を snapshot から導出する（DD-IT-3）。
 #[test]
 fn mouse_constructors_carry_talking_status_when_active() {
-    let active = ExecutionSnapshot { talk_active: true, choice_active: false };
+    let active = ExecutionSnapshot {
+        talk_active: true,
+        choice_active: false,
+    };
     let mv = on_mouse_move(0, 0, 0, Some("Head"), &active);
     assert_eq!(call_status(&mv), Some("talking".to_string()));
     let dbl = on_mouse_double_click(0, 0, 0, None, MouseButton::Left, &active);
@@ -353,7 +378,13 @@ fn every_construction_function_returns_static_event_id() {
         on_boot(&cfg, &snap),
         baseware_version(&cfg, &snap),
         on_second_change(MonotonicMs(0), &snap),
-        on_second_change(MonotonicMs(0), &ExecutionSnapshot { talk_active: true, choice_active: false }),
+        on_second_change(
+            MonotonicMs(0),
+            &ExecutionSnapshot {
+                talk_active: true,
+                choice_active: false,
+            },
+        ),
         on_close(CloseReason::User, &snap),
         on_close_notify(CloseReason::System, &snap),
         on_mouse_move(0, 0, 0, Some("Head"), &snap),
@@ -385,7 +416,13 @@ fn every_construction_function_returns_an_allowed_id() {
         on_boot(&cfg, &snap),
         baseware_version(&cfg, &snap),
         on_second_change(MonotonicMs(0), &snap),
-        on_second_change(MonotonicMs(0), &ExecutionSnapshot { talk_active: true, choice_active: false }),
+        on_second_change(
+            MonotonicMs(0),
+            &ExecutionSnapshot {
+                talk_active: true,
+                choice_active: false,
+            },
+        ),
         on_close(CloseReason::User, &snap),
         on_close_notify(CloseReason::System, &snap),
         on_mouse_move(0, 0, 0, Some("Head"), &snap),
@@ -440,7 +477,11 @@ fn on_choice_select_ex_builds_label_id_then_references() {
             "\\q[x,y]".to_string(),
         ]
     );
-    assert_eq!(refs.len(), 2 + references.len(), "Reference 数は 2＋付随参照列長");
+    assert_eq!(
+        refs.len(),
+        2 + references.len(),
+        "Reference 数は 2＋付随参照列長"
+    );
 }
 
 /// 空参照列で Ref2 以降の位置が生えないこと（Req3.5）: Reference は Ref0/Ref1 の**2 個のみ**。
@@ -456,7 +497,11 @@ fn on_choice_select_ex_with_empty_references_stops_at_ref1() {
     ));
     assert_eq!(id, "OnChoiceSelectEx");
     assert_eq!(refs, vec!["ラベル".to_string(), "ID".to_string()]);
-    assert_eq!(refs.len(), 2, "空参照列は Ref2 以降の位置を作らない（空文字で埋めない）");
+    assert_eq!(
+        refs.len(),
+        2,
+        "空参照列は Ref2 以降の位置を作らない（空文字で埋めない）"
+    );
 }
 
 /// `OnChoiceSelect` 正典 layout（Req3.2）: Ref0=選択肢 ID の**1 個のみ**。
@@ -480,7 +525,10 @@ fn on_choice_named_builds_references_from_ref0_without_label_or_id() {
     );
     let (id, refs) = expect_get(call);
     assert_eq!(id, "Onおしゃべり頻度メニュー", "任意名は逐語で wire へ載る");
-    assert_eq!(refs, references, "Ref0 以降＝付随参照列そのもの（記述順・不透明転写）");
+    assert_eq!(
+        refs, references,
+        "Ref0 以降＝付随参照列そのもの（記述順・不透明転写）"
+    );
     assert!(
         !refs.contains(&"Onおしゃべり頻度メニュー".to_string()),
         "任意名イベントの Reference に選択肢 ID を含めない（Req3.3）"
@@ -519,7 +567,10 @@ fn on_choice_timeout_builds_script_ref0() {
 #[test]
 fn choice_constructors_carry_the_common_request_header() {
     let refs = opaque_references();
-    let active = ExecutionSnapshot { talk_active: true, choice_active: false };
+    let active = ExecutionSnapshot {
+        talk_active: true,
+        choice_active: false,
+    };
     let idle = ExecutionSnapshot::INACTIVE;
 
     let active_calls = [

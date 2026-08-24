@@ -238,7 +238,10 @@ fn immediate_response_roundtrips_with_bit_identical_content() {
 
     let expected = HSTRING::from(KNOWN_RESPONSE);
     // content 一致（論理等価・R12.6）。
-    assert_eq!(resp, expected, "往復した応答 content が脳の用意値と一致すること");
+    assert_eq!(
+        resp, expected,
+        "往復した応答 content が脳の用意値と一致すること"
+    );
     // (iii) ビット一致: UTF-16 コードユニット列が完全一致（in-proc 直 vtable=非マーシャリング）。
     // `HSTRING` は `Deref<Target = [u16]>`。`&*` で UTF-16 スライスを取得して比較する。
     assert_eq!(

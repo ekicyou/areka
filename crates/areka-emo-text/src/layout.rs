@@ -748,17 +748,17 @@ fn warn_cursor_degrade(
 }
 
 #[cfg(test)]
-#[path = "layout_test_support.rs"]
-mod test_support;
-#[cfg(test)]
-#[path = "layout_wrap_tests.rs"]
-mod wrap_tests;
-#[cfg(test)]
-#[path = "layout_visible_window_tests.rs"]
-mod visible_window_tests;
+#[path = "layout_cursor_tests.rs"]
+mod cursor_tests;
 #[cfg(test)]
 #[path = "layout_segmented_tests.rs"]
 mod segmented_tests;
 #[cfg(test)]
-#[path = "layout_cursor_tests.rs"]
-mod cursor_tests;
+#[path = "layout_test_support.rs"]
+mod test_support;
+#[cfg(test)]
+#[path = "layout_visible_window_tests.rs"]
+mod visible_window_tests;
+#[cfg(test)]
+#[path = "layout_wrap_tests.rs"]
+mod wrap_tests;

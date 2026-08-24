@@ -5,7 +5,7 @@
 //! ない実 fixture 由来入力の値が**文字列のまま保持**されること（数値化・型付け
 //! しない・R4.7）を固定する。期待値はリテラル直書き（`include_str!` 不使用・R7.3）。
 
-use crate::charset::{decode, DefaultEncoding};
+use crate::charset::{DefaultEncoding, decode};
 use crate::kv::parse_kv;
 
 // ───────────────────────────────────────────────────────────────────

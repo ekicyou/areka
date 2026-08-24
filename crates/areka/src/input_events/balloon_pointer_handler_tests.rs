@@ -26,8 +26,8 @@ use bevy_ecs::world::World;
 use wintf::ecs::Point;
 use wintf::ecs::pointer::{Phase, PointerState};
 
-use super::*;
 use super::test_support::{capture_logs, headless_emo2_wiring, runtime_with_active_choice};
+use super::*;
 use crate::placement::spawn::BalloonWindowMarker;
 
 /// Bubble 相の合成 `PointerState`（client 物理 px）を組む（moved ハンドラは double_click/ctrl 非参照）。
@@ -86,7 +86,9 @@ fn moved_balloon_wiring_absent_degrades_with_error() {
     let mut world = World::new();
     let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
     // Emo2Wiring は present（空 runtime）・BalloonWiring は挿入しない。
-    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default())));
+    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
+        TextLayerConfig::default(),
+    )));
     world.insert_non_send(headless_emo2_wiring(Rc::clone(&runtime)));
     let ev = bubble_move(10, 20);
 
@@ -155,10 +157,7 @@ fn moved_active_choice_transition_injects_and_updates_own_state() {
     });
 
     assert_eq!(
-        world
-            .get_non_send::<BalloonWiring>()
-            .unwrap()
-            .hover(0),
+        world.get_non_send::<BalloonWiring>().unwrap().hover(0),
         None,
         "Inject(None) 遷移で BalloonWiring.hover[scope] が None へ更新される（⑤）"
     );
@@ -182,7 +181,9 @@ fn moved_inactive_with_prior_injection_resets_own_state_without_inject() {
     let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
 
     // 選択肢無しの runtime（choice_active=false）。
-    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default())));
+    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
+        TextLayerConfig::default(),
+    )));
     assert!(
         !runtime.borrow().choice_active(&ActorKey::from("0")),
         "前提: choice_active=false（選択肢スパン無し）"
@@ -203,10 +204,7 @@ fn moved_inactive_with_prior_injection_resets_own_state_without_inject() {
     });
 
     assert_eq!(
-        world
-            .get_non_send::<BalloonWiring>()
-            .unwrap()
-            .hover(0),
+        world.get_non_send::<BalloonWiring>().unwrap().hover(0),
         None,
         "消滅時は自前状態のみ None 整合（ResetOwnState・Some(3)→None）"
     );
@@ -223,7 +221,9 @@ fn moved_inactive_no_prior_injection_is_full_noop() {
     let mut world = World::new();
     let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
 
-    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default())));
+    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
+        TextLayerConfig::default(),
+    )));
     world.insert_non_send(headless_emo2_wiring(Rc::clone(&runtime)));
 
     let (tx, _rx) = mpsc::channel::<ChoiceSelection>();
@@ -238,10 +238,7 @@ fn moved_inactive_no_prior_injection_is_full_noop() {
     });
 
     assert_eq!(
-        world
-            .get_non_send::<BalloonWiring>()
-            .unwrap()
-            .hover(0),
+        world.get_non_send::<BalloonWiring>().unwrap().hover(0),
         None,
         "NoopInactive は自前状態を触らない（未注入のまま None）"
     );
@@ -370,7 +367,9 @@ fn pressed_emo2_absent_degrades_with_debug_not_error() {
 fn pressed_balloon_wiring_absent_degrades_with_error() {
     let mut world = World::new();
     let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
-    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default())));
+    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
+        TextLayerConfig::default(),
+    )));
     world.insert_non_send(headless_emo2_wiring(Rc::clone(&runtime)));
     let ev = bubble_left_press(10, 20);
 
@@ -417,7 +416,9 @@ fn pressed_inactive_choice_rejected_with_reason_inactive() {
     let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
 
     // 選択肢無しの runtime（choice_active=false）。
-    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default())));
+    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
+        TextLayerConfig::default(),
+    )));
     assert!(
         !runtime.borrow().choice_active(&ActorKey::from("0")),
         "前提: choice_active=false（選択肢スパン無し）"
@@ -463,7 +464,10 @@ fn pressed_active_non_hit_rejected_with_reason_no_hit() {
         "前提: choice_active=true（選択肢スパンあり）"
     );
     assert!(
-        runtime.borrow().choice_hit_rows(&ActorKey::from("0")).is_empty(),
+        runtime
+            .borrow()
+            .choice_hit_rows(&ActorKey::from("0"))
+            .is_empty(),
         "前提: headless では choice_hit_rows は空（GPU 未実行）＝常に非ヒット"
     );
     world.insert_non_send(headless_emo2_wiring(Rc::clone(&runtime)));
@@ -537,7 +541,11 @@ enum Degrade {
 /// runtime 借用・active 不変）を固定する。判断分岐網羅は 4.1、本檻は副作用ゼロ観測を担う。
 #[test]
 fn moved_tunnel_and_resource_degrade_are_side_effect_free() {
-    for scenario in [Degrade::Tunnel, Degrade::Emo2Absent, Degrade::BalloonWiringAbsent] {
+    for scenario in [
+        Degrade::Tunnel,
+        Degrade::Emo2Absent,
+        Degrade::BalloonWiringAbsent,
+    ] {
         let mut world = World::new();
         let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
 
@@ -614,10 +622,7 @@ fn moved_tunnel_and_resource_degrade_are_side_effect_free() {
         // ── (3) 副作用ゼロ②③: BalloonWiring.hover 不変＋send なし（present の場合）─────────────
         if let Some(rx) = &inbox_rx {
             assert_eq!(
-                world
-                    .get_non_send::<BalloonWiring>()
-                    .unwrap()
-                    .hover(0),
+                world.get_non_send::<BalloonWiring>().unwrap().hover(0),
                 Some(2),
                 "縮退では BalloonWiring.hover[scope] を動かさない（仕込み Some(2) 不変）"
             );
@@ -648,7 +653,11 @@ fn moved_tunnel_and_resource_degrade_are_side_effect_free() {
 /// 判断分岐網羅は 4.2、本檻は副作用ゼロ観測を担う。
 #[test]
 fn pressed_tunnel_and_resource_degrade_are_side_effect_free() {
-    for scenario in [Degrade::Tunnel, Degrade::Emo2Absent, Degrade::BalloonWiringAbsent] {
+    for scenario in [
+        Degrade::Tunnel,
+        Degrade::Emo2Absent,
+        Degrade::BalloonWiringAbsent,
+    ] {
         let mut world = World::new();
         let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
 
@@ -699,9 +708,8 @@ fn pressed_tunnel_and_resource_degrade_are_side_effect_free() {
             ),
             Degrade::Emo2Absent => {
                 assert!(
-                    logs.iter().any(
-                        |l| l.contains("level=DEBUG") && l.contains("choice_pressed_no_emo2")
-                    ),
+                    logs.iter()
+                        .any(|l| l.contains("level=DEBUG") && l.contains("choice_pressed_no_emo2")),
                     "Emo2Wiring 不在は DEBUG で正常縮退（choice_pressed_no_emo2）: {logs:?}"
                 );
                 assert!(
@@ -725,10 +733,7 @@ fn pressed_tunnel_and_resource_degrade_are_side_effect_free() {
         // ── (3) 副作用ゼロ②③: BalloonWiring.hover 不変＋send なし（present の場合）─────────────
         if let Some(rx) = &inbox_rx {
             assert_eq!(
-                world
-                    .get_non_send::<BalloonWiring>()
-                    .unwrap()
-                    .hover(0),
+                world.get_non_send::<BalloonWiring>().unwrap().hover(0),
                 Some(2),
                 "縮退では BalloonWiring.hover[scope] を動かさない（pressed は元来非更新だが回帰固定）"
             );

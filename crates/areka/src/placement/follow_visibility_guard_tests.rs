@@ -18,7 +18,7 @@ use super::test_support::{
     right_wa, win,
 };
 use super::{MonitorSnapshot, VisibilityVerdict, guard_visibility};
-use crate::placement::resolver::{SizePx};
+use crate::placement::resolver::SizePx;
 
 // --- guard_visibility: キャラ矩形 -----------------------------------------
 

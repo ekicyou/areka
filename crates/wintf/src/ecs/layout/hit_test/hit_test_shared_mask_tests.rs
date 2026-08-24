@@ -37,7 +37,11 @@ fn assert_same_hits(a: &AlphaMask, b: &AlphaMask, ctx: &str) {
     assert_eq!(a.height(), b.height(), "{ctx}: height 不一致");
     for y in 0..=b.height() {
         for x in 0..=b.width() {
-            assert_eq!(a.is_hit(x, y), b.is_hit(x, y), "{ctx}: is_hit({x},{y}) 不一致");
+            assert_eq!(
+                a.is_hit(x, y),
+                b.is_hit(x, y),
+                "{ctx}: is_hit({x},{y}) 不一致"
+            );
         }
     }
 }
@@ -156,13 +160,21 @@ fn set_and_set_shared_replace_each_other() {
     let mut res = AlphaMaskResource::new();
     res.set(a.clone());
     res.set_shared(Arc::new(b.clone()));
-    assert_eq!(res.mask().expect("Some"), &b, "set → set_shared で後勝ちしない");
+    assert_eq!(
+        res.mask().expect("Some"),
+        &b,
+        "set → set_shared で後勝ちしない"
+    );
 
     // set_shared → set
     let mut res = AlphaMaskResource::new();
     res.set_shared(Arc::new(b.clone()));
     res.set(a.clone());
-    assert_eq!(res.mask().expect("Some"), &a, "set_shared → set で後勝ちしない");
+    assert_eq!(
+        res.mask().expect("Some"),
+        &a,
+        "set_shared → set で後勝ちしない"
+    );
 }
 
 /// 同一 `Arc` を複数のリソースへ供給しても各々が同じ内容を観測する（共有の非破壊性）
@@ -180,8 +192,7 @@ fn shared_mask_can_supply_multiple_resources() {
     let m2 = r2.mask().expect("Some");
     assert_eq!(m1, m2, "同一 Arc から異なる内容が観測された");
     assert_eq!(
-        m1 as *const AlphaMask,
-        m2 as *const AlphaMask,
+        m1 as *const AlphaMask, m2 as *const AlphaMask,
         "同一 Arc なのに確保位置が異なる"
     );
     assert_same_hits(m1, &arc, "共有マスクの判定一致");

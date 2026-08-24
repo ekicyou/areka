@@ -27,12 +27,12 @@ use crate::talk::{StartTalk, TalkDone, TalkEndReason, TalkId};
 pub(crate) mod boot;
 pub(crate) mod choice;
 pub(crate) mod close;
-/// タスク 6.1: 純粋 step 層の失敗・防御アームのログ発火検証（テスト専用）。
-#[cfg(test)]
-pub(crate) mod log_capture;
 /// ukadoc Reference 表の実装正本（純粋関数群）。DD-9 の例外として `pub`。
 /// クレート公開面への露出は [`crate::events`] ファサード経由（[`crate::lib`] 参照）。
 pub mod events;
+/// タスク 6.1: 純粋 step 層の失敗・防御アームのログ発火検証（テスト専用）。
+#[cfg(test)]
+pub(crate) mod log_capture;
 /// SHIORI Resource 照会の許可集合（イベント檻とは別族・Req4.1）。DD-9 の例外として `pub`。
 /// submit ガードはイベント許可 ∨ リソース許可で判定する（`crate::actor` の egress チョークポイント）。
 pub mod resources;
@@ -42,11 +42,19 @@ pub(crate) mod steady;
 /// `ShioriReply` が `KanadeMsg` に存在しないため、応答注入経路はシェル内部に閉じる。
 pub(crate) enum Input {
     Boot,
-    Tick { now: MonotonicMs },
+    Tick {
+        now: MonotonicMs,
+    },
     TalkDone(TalkDone),
-    CloseRequest { reason: CloseReason },
-    ForceQuit { reason: CloseReason },
-    ShioriDown { reason: String },
+    CloseRequest {
+        reason: CloseReason,
+    },
+    ForceQuit {
+        reason: CloseReason,
+    },
+    ShioriDown {
+        reason: String,
+    },
     /// マウス入力（移動／ダブルクリック）。Steady のみ `steady::on_mouse` へ委譲し、
     /// 他フェーズでは状態を変えず安全に無視する（DD-IE-8）。
     Mouse(MouseInput),
@@ -91,11 +99,22 @@ pub(crate) enum Phase {
     BootMain,
     /// basewareversion 応答待ち。起動挨拶を追跡する場合は `talk: Some(_)`（DD-IT-12）。
     /// 挨拶が無い（204）boot は `talk: None`＝従来どおり `Steady{talk: None}` へ完了する。
-    BootVersion { talk: Option<ActiveTalk> },
-    Steady { talk: Option<ActiveTalk> },
-    ClosePending { reason: CloseReason },
-    CloseTalkWait { talk_id: TalkId, deadline: Option<MonotonicMs> },
-    Unloading { cause: TermCause },
+    BootVersion {
+        talk: Option<ActiveTalk>,
+    },
+    Steady {
+        talk: Option<ActiveTalk>,
+    },
+    ClosePending {
+        reason: CloseReason,
+    },
+    CloseTalkWait {
+        talk_id: TalkId,
+        deadline: Option<MonotonicMs>,
+    },
+    Unloading {
+        cause: TermCause,
+    },
     Stopped,
 }
 
@@ -292,11 +311,16 @@ pub(crate) enum Action {
     /// `talk_id` は再生層／dispatcher の stale ガード用・`id` は確定した選択肢 ID。発行点は
     /// [`steady`] の選択調停（未対応カテゴリの即時解決・カスケード終端）に単一化されている
     /// （1 選択＝高々 1 解決・Req5.4）。
-    ResolveChoice { talk_id: TalkId, id: String },
+    ResolveChoice {
+        talk_id: TalkId,
+        id: String,
+    },
     /// 選択待ちの解除＋トーク終了指示（→ [`TalkCommand::CancelChoice`](crate::talk::TalkCommand)）。
     ///
     /// タイムアウト後に SHIORI が応答を返さなかった場合の解除（Req7.5）。発行点はタスク 4.5。
-    CancelChoice { talk_id: TalkId },
+    CancelChoice {
+        talk_id: TalkId,
+    },
 }
 
 /// 唯一の遷移入口。現在の [`State`] と [`Input`] から次の [`State`] と副作用指示
@@ -426,7 +450,10 @@ pub(crate) fn snapshot_of(phase: &Phase) -> ExecutionSnapshot {
     match phase {
         // アクティブな talk を運ぶ phase＝Steady{Some} と（挨拶追跡中の）BootVersion{Some}（DD-IT-12）。
         Phase::Steady { talk: Some(_) } | Phase::BootVersion { talk: Some(_) } => {
-            ExecutionSnapshot { talk_active: true, choice_active: false }
+            ExecutionSnapshot {
+                talk_active: true,
+                choice_active: false,
+            }
         }
         _ => ExecutionSnapshot::INACTIVE,
     }
@@ -462,8 +489,7 @@ fn force_quit(mut state: State, reason: CloseReason) -> (State, Vec<Action>) {
     };
     // close 系遷移の掃除点（C4 規則 7）: 現行トークは失われるため選択帳簿を残さない。
     clear_choice_ledger(&mut state, "force_quit");
-    let notify =
-        Action::ShioriRequest(events::on_close_notify(reason, &snapshot_of(&state.phase)));
+    let notify = Action::ShioriRequest(events::on_close_notify(reason, &snapshot_of(&state.phase)));
     (state, vec![notify, Action::ShioriUnload])
 }
 

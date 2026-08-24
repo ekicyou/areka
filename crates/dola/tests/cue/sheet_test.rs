@@ -3,8 +3,8 @@
 //! 昇順ソート・絶対アンカー保存・先頭待ち保存・duration clamp・占有 horizon を検証する。
 
 use dola::cue::{
-    ActorKey, BarrierKind, Cue, CueCommand, CuePayload, CueSheet, CueTarget,
-    RoutingCommand, to_talk_schedule,
+    ActorKey, BarrierKind, Cue, CueCommand, CuePayload, CueSheet, CueTarget, RoutingCommand,
+    to_talk_schedule,
 };
 
 // ============================================================================
@@ -95,10 +95,7 @@ fn cue_sheet_stable_sort_preserves_equal_start_time_order() {
         CuePayload::Command(CueCommand::Clear)
     ));
     match (&sheet.cues()[1].payload, &sheet.cues()[2].payload) {
-        (
-            CuePayload::Command(CueCommand::Text(t1)),
-            CuePayload::Command(CueCommand::Text(t2)),
-        ) => {
+        (CuePayload::Command(CueCommand::Text(t1)), CuePayload::Command(CueCommand::Text(t2))) => {
             assert_eq!(t1, "first");
             assert_eq!(t2, "second");
         }
@@ -122,7 +119,10 @@ fn filter_by_actor() {
         Cue {
             actor: ActorKey::from("kero"),
             start_time: 0.5,
-            payload: CueCommand::Emote { key: "grumble".into() }.into(),
+            payload: CueCommand::Emote {
+                key: "grumble".into(),
+            }
+            .into(),
             duration: 0.0,
         },
         Cue {

@@ -114,9 +114,7 @@ impl<T: Clone + Debug> TimedSchedule<T> {
         );
         // 降順ソート: 大きいオフセットが先頭、小さいオフセットが末尾
         let offset = entry.offset();
-        let pos = self
-            .entries
-            .partition_point(|e| e.offset() > offset);
+        let pos = self.entries.partition_point(|e| e.offset() > offset);
         self.entries.insert(pos, entry);
     }
 
@@ -135,8 +133,11 @@ impl<T: Clone + Debug> TimedSchedule<T> {
             self.entries.push(entry);
         }
         // 降順ソート
-        self.entries
-            .sort_by(|a, b| b.offset().partial_cmp(&a.offset()).unwrap_or(std::cmp::Ordering::Equal));
+        self.entries.sort_by(|a, b| {
+            b.offset()
+                .partial_cmp(&a.offset())
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
     }
 
     // ── 2 フェーズ API（DolaRuntime の tick/last_result と対称） ──

@@ -12,8 +12,8 @@
 //! 焼付は Baker（task 2.6）の責務。
 
 use rectangle_pack::{
-    contains_smallest_box, pack_rects, volume_heuristic, GroupedRectsToPlace, RectToInsert,
-    TargetBin,
+    GroupedRectsToPlace, RectToInsert, TargetBin, contains_smallest_box, pack_rects,
+    volume_heuristic,
 };
 use std::collections::BTreeMap;
 
@@ -119,8 +119,7 @@ impl Packer {
         }
 
         // id→実寸マップ（配置後に UV を実寸で復元するため）。
-        let size_of: BTreeMap<u32, Size> =
-            placeable.iter().map(|(id, sz)| (id.0, *sz)).collect();
+        let size_of: BTreeMap<u32, Size> = placeable.iter().map(|(id, sz)| (id.0, *sz)).collect();
 
         // padding を全周に足した寸で packer へ登録（RectId = ElementId.0・depth=1 の 2D）。
         let mut grouped: GroupedRectsToPlace<u32, u32> = GroupedRectsToPlace::new();
@@ -265,7 +264,10 @@ mod tests {
             page_size: 256,
             padding: 1,
         };
-        let out = Packer.pack(&items(&[(0, 30, 20), (1, 40, 40), (2, 10, 60), (3, 25, 25)]), cfg);
+        let out = Packer.pack(
+            &items(&[(0, 30, 20), (1, 40, 40), (2, 10, 60), (3, 25, 25)]),
+            cfg,
+        );
         assert_eq!(out.entries.len(), 4);
         // 全て同一頁に収まる想定（256×256 に小矩形 4 つ）。
         for e in &out.entries {
@@ -297,7 +299,13 @@ mod tests {
             padding: pad,
         };
         let out = Packer.pack(
-            &items(&[(0, 20, 20), (1, 20, 20), (2, 20, 20), (3, 20, 20), (4, 20, 20)]),
+            &items(&[
+                (0, 20, 20),
+                (1, 20, 20),
+                (2, 20, 20),
+                (3, 20, 20),
+                (4, 20, 20),
+            ]),
             cfg,
         );
         for i in 0..out.entries.len() {
@@ -328,7 +336,11 @@ mod tests {
         let specs = [(0u32, 30u32, 20u32), (1, 40, 15), (2, 12, 50)];
         let out = Packer.pack(&items(&specs), cfg);
         for e in &out.entries {
-            let (_, w, h) = specs.iter().find(|(id, _, _)| *id == e.id.0).copied().unwrap();
+            let (_, w, h) = specs
+                .iter()
+                .find(|(id, _, _)| *id == e.id.0)
+                .copied()
+                .unwrap();
             assert_eq!(e.uv_rect.w, w, "uv width == real trimmed width");
             assert_eq!(e.uv_rect.h, h, "uv height == real trimmed height");
         }
@@ -344,7 +356,11 @@ mod tests {
         // 40×40（padded 42×42）は 64×64 頁に 1 つしか入らない → 4 個で 4 頁。
         let specs: Vec<(u32, u32, u32)> = (0..4).map(|i| (i, 40, 40)).collect();
         let out = Packer.pack(&items(&specs), cfg);
-        assert!(out.page_count > 1, "expected multi-page, got {}", out.page_count);
+        assert!(
+            out.page_count > 1,
+            "expected multi-page, got {}",
+            out.page_count
+        );
         assert_eq!(out.entries.len(), 4, "every id has an entry");
         for e in &out.entries {
             assert!(e.page < out.page_count, "page index in range");
@@ -360,7 +376,13 @@ mod tests {
             page_size: 128,
             padding: 1,
         };
-        let specs = [(0u32, 30u32, 40u32), (1, 20, 20), (2, 50, 10), (3, 15, 35), (4, 22, 22)];
+        let specs = [
+            (0u32, 30u32, 40u32),
+            (1, 20, 20),
+            (2, 50, 10),
+            (3, 15, 35),
+            (4, 22, 22),
+        ];
         let out1 = Packer.pack(&items(&specs), cfg);
         let out2 = Packer.pack(&items(&specs), cfg);
         assert_eq!(out1, out2, "same input → identical output");
@@ -377,7 +399,10 @@ mod tests {
         let shuffled = [(3u32, 15u32, 35u32), (0, 30, 40), (2, 50, 10), (1, 20, 20)];
         let out_sorted = Packer.pack(&items(&sorted), cfg);
         let out_shuffled = Packer.pack(&items(&shuffled), cfg);
-        assert_eq!(out_sorted, out_shuffled, "input order must not affect output");
+        assert_eq!(
+            out_sorted, out_shuffled,
+            "input order must not affect output"
+        );
     }
 
     /// 5.6: 各入力 ElementId は正確に 1 エントリ（重複なし・欠落なし）。
@@ -392,10 +417,18 @@ mod tests {
         assert_eq!(out.entries.len(), specs.len());
         let mut ids: Vec<u32> = out.entries.iter().map(|e| e.id.0).collect();
         ids.sort_unstable();
-        assert_eq!(ids, vec![0, 2, 5, 9], "exactly the input ids, sorted, no dup/missing");
+        assert_eq!(
+            ids,
+            vec![0, 2, 5, 9],
+            "exactly the input ids, sorted, no dup/missing"
+        );
         // 出力は ElementId 昇順（7）。
         let out_ids: Vec<u32> = out.entries.iter().map(|e| e.id.0).collect();
-        assert_eq!(out_ids, vec![0, 2, 5, 9], "entries sorted by ElementId ascending");
+        assert_eq!(
+            out_ids,
+            vec![0, 2, 5, 9],
+            "entries sorted by ElementId ascending"
+        );
     }
 
     /// 7（空入力）: 頁ゼロ・エントリ空。

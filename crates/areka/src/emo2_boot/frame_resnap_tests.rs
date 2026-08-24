@@ -1,10 +1,5 @@
+use super::test_support::{FakeSizes, pos_of, resnap_world, size_of};
 use super::*;
-use super::test_support::{
-    FakeSizes,
-    pos_of,
-    resnap_world,
-    size_of,
-};
 
 // ── task 3.2: resnap シーム（resnap_from_sizes／resnap_shell_targets）の檻 ────────
 //
@@ -23,7 +18,11 @@ use wintf::ecs::{Point, SizeI};
 fn resnap_from_sizes_drives_resize_and_resnap_on_size_change() {
     let (mut world, gw) = resnap_world();
     let char0 = gw.char_window(0).unwrap();
-    assert_eq!(size_of(&world, char0), Some(SizeI::new(434, 687)), "前提: 初期寸");
+    assert_eq!(
+        size_of(&world, char0),
+        Some(SizeI::new(434, 687)),
+        "前提: 初期寸"
+    );
     assert_eq!(
         pos_of(&world, char0),
         Some(Point { x: 1483, y: 757 }),
@@ -31,10 +30,17 @@ fn resnap_from_sizes_drives_resize_and_resnap_on_size_change() {
     );
 
     // h 687→700 の異寸を注入。
-    resnap_from_sizes(&mut world, [(0usize, SizePx { w: 434, h: 700 })].into_iter());
+    resnap_from_sizes(
+        &mut world,
+        [(0usize, SizePx { w: 434, h: 700 })].into_iter(),
+    );
 
     // 新寸へ更新され、Bottom 再射影で下端固定（y=1444−700=744・x 保持）。
-    assert_eq!(size_of(&world, char0), Some(SizeI::new(434, 700)), "新寸へ更新");
+    assert_eq!(
+        size_of(&world, char0),
+        Some(SizeI::new(434, 700)),
+        "新寸へ更新"
+    );
     assert_eq!(
         pos_of(&world, char0),
         Some(Point { x: 1483, y: 744 }),
@@ -51,10 +57,17 @@ fn resnap_from_sizes_is_noop_on_same_size() {
     let pos_before = pos_of(&world, char0);
 
     // 現寸と同一（434×687）→ 冗長駆動を避ける（非発火）。
-    resnap_from_sizes(&mut world, [(0usize, SizePx { w: 434, h: 687 })].into_iter());
+    resnap_from_sizes(
+        &mut world,
+        [(0usize, SizePx { w: 434, h: 687 })].into_iter(),
+    );
 
     assert_eq!(size_of(&world, char0), size_before, "同寸は size 不変");
-    assert_eq!(pos_of(&world, char0), pos_before, "同寸は position 不変（非発火）");
+    assert_eq!(
+        pos_of(&world, char0),
+        pos_before,
+        "同寸は position 不変（非発火）"
+    );
 }
 
 /// 3.4: 非正/変換失敗→skip。非正寸（0・負）は resnap_from_sizes が弾き窓状態不変（二重防波堤）。
@@ -74,8 +87,16 @@ fn resnap_from_sizes_skips_non_positive_sizes() {
         resnap_from_sizes(&mut world, [(0usize, bad)].into_iter());
     }
 
-    assert_eq!(size_of(&world, char0), size_before, "非正寸は skip（size 不変）");
-    assert_eq!(pos_of(&world, char0), pos_before, "非正寸は skip（position 不変）");
+    assert_eq!(
+        size_of(&world, char0),
+        size_before,
+        "非正寸は skip（size 不変）"
+    );
+    assert_eq!(
+        pos_of(&world, char0),
+        pos_before,
+        "非正寸は skip（position 不変）"
+    );
 }
 
 /// 4.5: balloon で駆動しない。char 窓が resize されても同 scope の balloon 窓の
@@ -93,7 +114,10 @@ fn resnap_from_sizes_never_resizes_balloon_window() {
     );
 
     // char0 を異寸で駆動（balloon の寸へ仮に写せば 500×720 になるはずの値）。
-    resnap_from_sizes(&mut world, [(0usize, SizePx { w: 500, h: 720 })].into_iter());
+    resnap_from_sizes(
+        &mut world,
+        [(0usize, SizePx { w: 500, h: 720 })].into_iter(),
+    );
 
     // char は新寸へ（駆動された証拠）。
     assert_eq!(
@@ -190,8 +214,16 @@ fn resnap_shell_targets_is_noop_with_unattached_presenter() {
     // 未装着 presenter＝text_slot_view 全 None → 全 scope skip（窓状態不変・panic しない）。
     let presenter = EmoPresenter::new();
     resnap_shell_targets(&presenter, &mut world);
-    assert_eq!(size_of(&world, char0), size_before, "未装着は全 scope skip（size 不変）");
-    assert_eq!(pos_of(&world, char0), pos_before, "未装着は全 scope skip（position 不変）");
+    assert_eq!(
+        size_of(&world, char0),
+        size_before,
+        "未装着は全 scope skip（size 不変）"
+    );
+    assert_eq!(
+        pos_of(&world, char0),
+        pos_before,
+        "未装着は全 scope skip（position 不変）"
+    );
 
     // GhostWindows 未挿入の素の World でも安全（no-op・panic しない）。
     let mut empty = World::new();
@@ -221,27 +253,47 @@ fn resnap_from_sizes_is_idempotent_across_repeats_after_a_size_change() {
     let size_initial = size_of(&world, char0);
     let pos_initial = pos_of(&world, char0);
     assert_eq!(size_initial, Some(SizeI::new(434, 687)), "前提: 初期寸");
-    assert_eq!(pos_initial, Some(Point { x: 1483, y: 757 }), "前提: 初期位置");
+    assert_eq!(
+        pos_initial,
+        Some(Point { x: 1483, y: 757 }),
+        "前提: 初期位置"
+    );
 
     // (1) 現寸と異なる h=700 を 1 回駆動 → resize 発火（前提の確立）。
-    resnap_from_sizes(&mut world, [(0usize, SizePx { w: 434, h: 700 })].into_iter());
+    resnap_from_sizes(
+        &mut world,
+        [(0usize, SizePx { w: 434, h: 700 })].into_iter(),
+    );
     let size_after_first = size_of(&world, char0);
     let pos_after_first = pos_of(&world, char0);
 
     // 空虚一致でないことの担保: 1 回目で size・position が実際に変化した（新寸＋Bottom 再射影）。
-    assert_eq!(size_after_first, Some(SizeI::new(434, 700)), "1 回目で新寸へ更新");
+    assert_eq!(
+        size_after_first,
+        Some(SizeI::new(434, 700)),
+        "1 回目で新寸へ更新"
+    );
     assert_eq!(
         pos_after_first,
         Some(Point { x: 1483, y: 744 }),
         "1 回目で Bottom 再射影（y=1444−700=744・x 保持）"
     );
-    assert_ne!(size_after_first, size_initial, "1 回目は実際に size が変化した（空虚でない）");
-    assert_ne!(pos_after_first, pos_initial, "1 回目は実際に position が変化した（空虚でない）");
+    assert_ne!(
+        size_after_first, size_initial,
+        "1 回目は実際に size が変化した（空虚でない）"
+    );
+    assert_ne!(
+        pos_after_first, pos_initial,
+        "1 回目は実際に position が変化した（空虚でない）"
+    );
 
     // (2) 同一 shown_size を 2 回・3 回繰り返し駆動 → 窓の position・size が 1 回目適用後から
     //     一切変化しない（検知→反映の一連が多重には効かない＝冗長な再配置・再書込なし・Req3.1）。
     for repeat in 2..=3 {
-        resnap_from_sizes(&mut world, [(0usize, SizePx { w: 434, h: 700 })].into_iter());
+        resnap_from_sizes(
+            &mut world,
+            [(0usize, SizePx { w: 434, h: 700 })].into_iter(),
+        );
         assert_eq!(
             size_of(&world, char0),
             size_after_first,
@@ -267,8 +319,19 @@ fn resnap_from_sizes_same_size_repeats_never_change_window_state() {
 
     // 現寸（434×687）と同一を 3 回反復 → 毎回 no-op（窓状態不変・冗長駆動なし・Req3.1）。
     for repeat in 1..=3 {
-        resnap_from_sizes(&mut world, [(0usize, SizePx { w: 434, h: 687 })].into_iter());
-        assert_eq!(size_of(&world, char0), size_before, "同寸反復 {repeat}: size 不変");
-        assert_eq!(pos_of(&world, char0), pos_before, "同寸反復 {repeat}: position 不変");
+        resnap_from_sizes(
+            &mut world,
+            [(0usize, SizePx { w: 434, h: 687 })].into_iter(),
+        );
+        assert_eq!(
+            size_of(&world, char0),
+            size_before,
+            "同寸反復 {repeat}: size 不変"
+        );
+        assert_eq!(
+            pos_of(&world, char0),
+            pos_before,
+            "同寸反復 {repeat}: position 不変"
+        );
     }
 }

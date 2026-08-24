@@ -46,8 +46,14 @@ fn device_err(context: &'static str) -> impl FnOnce(windows::core::Error) -> Pre
 
 /// `Option` が `None`（本来到達しない成功時 None・デバイス未初期化）を [`PresentError::Device`] にする。
 fn none_err(context: &'static str) -> PresentError {
-    tracing::error!(context, "必須リソースが None（デバイス未初期化 または 成功時 None）");
-    PresentError::Device { hresult: 0, context }
+    tracing::error!(
+        context,
+        "必須リソースが None（デバイス未初期化 または 成功時 None）"
+    );
+    PresentError::Device {
+        hresult: 0,
+        context,
+    }
 }
 
 /// DEFAULT usage の B8G8R8A8 `source_tex`（単一の真実源）を作る。
@@ -136,8 +142,14 @@ impl SwapChainPresenter {
         width: u32,
         height: u32,
     ) -> Result<(Self, ICompositionSurface), PresentError> {
-        let d3d = gfx.d3d().ok_or_else(|| none_err("GraphicsCore::d3d"))?.clone();
-        let dxgi = gfx.dxgi().ok_or_else(|| none_err("GraphicsCore::dxgi"))?.clone();
+        let d3d = gfx
+            .d3d()
+            .ok_or_else(|| none_err("GraphicsCore::d3d"))?
+            .clone();
+        let dxgi = gfx
+            .dxgi()
+            .ok_or_else(|| none_err("GraphicsCore::dxgi"))?
+            .clone();
 
         // swap chain 生成 interop は wintf 1.2 ヘルパへ隔離済み（安全 wrapper のみ触る）。
         let swapchain = create_composition_swap_chain(&d3d, &dxgi, width, height)
@@ -153,8 +165,8 @@ impl SwapChainPresenter {
 
         let source_tex = create_source_tex(&d3d, width, height)?;
         let staging = create_staging(&d3d, width, height)?;
-        let context = unsafe { d3d.GetImmediateContext() }
-            .map_err(device_err("GetImmediateContext"))?;
+        let context =
+            unsafe { d3d.GetImmediateContext() }.map_err(device_err("GetImmediateContext"))?;
 
         Ok((
             Self {
@@ -290,22 +302,20 @@ mod tests {
         AlphaParams, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
     };
     use areka_emo_compose::{BindSet, Composer, EmoWorld, PatternState};
-    use areka_parsers::shell::{
-        AppendTarget, DefRef, Element, ElementPath, Shell, Surface,
-    };
+    use areka_parsers::shell::{AppendTarget, DefRef, Element, ElementPath, Shell, Surface};
     use std::path::Path;
 
+    use windows::Win32::System::WinRT::{DQTAT_COM_ASTA, DQTAT_COM_NONE};
     use wintf::com::wuc::create_dispatcher_queue_controller;
     use wintf::ecs::GraphicsCore;
-    use windows::Win32::System::WinRT::{DQTAT_COM_ASTA, DQTAT_COM_NONE};
 
     /// テスト用の WUC apartment / dispatcher を組む（spike / wintf 1.2 テストと同一方針）。
     ///
     /// cargo test の各テストは専用スレッドで走り COM 未初期化ゆえ、design §2.1「未初期化なら ASTA」
     /// に従い ASTA を第一候補・失敗時 NONE を保険とする。controller は Compositor より長寿命を要する
     /// ため呼び出し側で保持する。
-    fn make_dispatcher_and_compositor()
-    -> (windows::System::DispatcherQueueController, Compositor) {
+    fn make_dispatcher_and_compositor() -> (windows::System::DispatcherQueueController, Compositor)
+    {
         let dq = create_dispatcher_queue_controller(DQTAT_COM_ASTA)
             .or_else(|e_asta| {
                 create_dispatcher_queue_controller(DQTAT_COM_NONE).map_err(|_| e_asta)
@@ -385,14 +395,23 @@ mod tests {
             },
         };
         let baked = bake(&[set], &dec, PackConfig::default());
-        assert!(baked.errors.is_empty(), "atlas bake セットアップは失敗しない");
+        assert!(
+            baked.errors.is_empty(),
+            "atlas bake セットアップは失敗しない"
+        );
 
         let mut world = EmoWorld::build(&shell_of(surfaces));
         world.bind_atlas(&baked.table, SetId(0));
 
         let mut composer = Composer::new();
         composer
-            .compose(&world, &baked.table, 1000, &BindSet::default(), &PatternState::default())
+            .compose(
+                &world,
+                &baked.table,
+                1000,
+                &BindSet::default(),
+                &PatternState::default(),
+            )
             .expect("静的 element 単体の合成は Ok")
     }
 
@@ -432,7 +451,11 @@ mod tests {
         );
 
         presenter.upload(&s1).expect("upload(s1・リサイズ)失敗");
-        assert_eq!(presenter.size(), (5, 4), "size() がリサイズ後の新寸を反映する");
+        assert_eq!(
+            presenter.size(),
+            (5, 4),
+            "size() がリサイズ後の新寸を反映する"
+        );
         let rb1 = presenter.read_back().expect("read_back（リサイズ後）失敗");
         assert_eq!(
             rb1,

@@ -1,9 +1,9 @@
+use super::test_support::*;
 use super::*;
 use crate::contract::{CueCommand, TalkId};
 use crate::duration::text_playback_duration;
 use std::sync::mpsc;
 use std::time::Duration;
-use super::test_support::*;
 
 /// 空発火列（空 script）の talk は時間軸駆動せず、Tick を一切送らなくても
 /// コンパイル結果の終端理由（空 script＝`Ended`）を伴う `TalkDone` を**即座に**返す
@@ -78,8 +78,7 @@ fn duplicate_start_is_ignored_and_first_talk_plays_unchanged() {
     // A を駆動して自然終端（world 再生完了 horizon=0.60 を跨ぐ Tick(1.0) まで）。
     handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
     handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
-    let done = recv_done(&done_a_rx, Duration::from_secs(5))
-        .expect("A の TalkDone");
+    let done = recv_done(&done_a_rx, Duration::from_secs(5)).expect("A の TalkDone");
     assert_eq!(
         done.talk_id, id_a,
         "終端は A の talk_id（B に乗っ取られない）"
@@ -304,8 +303,8 @@ fn close_after_natural_end_produces_no_extra_talkdone() {
         .send(SakuraMsg::Tick(1.0))
         .expect("Tick(1.0) 投函");
 
-    let done = recv_done(&done_rx, Duration::from_secs(5))
-        .expect("自然終端で TalkDone{Ended} が返るべき");
+    let done =
+        recv_done(&done_rx, Duration::from_secs(5)).expect("自然終端で TalkDone{Ended} が返るべき");
     assert_eq!(done.talk_id, talk_id, "talk_id エコー");
     assert_eq!(done.reason, TalkEndReason::Ended, "`\\e` は Ended");
     handle
@@ -377,10 +376,10 @@ fn multiple_talks_echo_own_talk_id_without_cross_talk_mixing() {
         .send(SakuraMsg::Tick(1.0))
         .expect("B Tick(1.0)");
 
-    let done_a = recv_done(&done_a_rx, Duration::from_secs(5))
-        .expect("talk A は TalkDone を返すべき");
-    let done_b = recv_done(&done_b_rx, Duration::from_secs(5))
-        .expect("talk B は TalkDone を返すべき");
+    let done_a =
+        recv_done(&done_a_rx, Duration::from_secs(5)).expect("talk A は TalkDone を返すべき");
+    let done_b =
+        recv_done(&done_b_rx, Duration::from_secs(5)).expect("talk B は TalkDone を返すべき");
 
     assert_eq!(done_a.talk_id, id_a, "talk A の TalkDone は id_a をエコー");
     assert_eq!(done_b.talk_id, id_b, "talk B の TalkDone は id_b をエコー");

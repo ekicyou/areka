@@ -27,12 +27,12 @@ use crate::asker::AskerId;
 use crate::key::parse_dotted;
 use crate::mirror::{MirrorImage, SharedMirror};
 use crate::persist::{
-    load_scope, save_scope, PersistIo, PersistKey, PersistOutcome, PersistScope, ScopeRoots,
+    PersistIo, PersistKey, PersistOutcome, PersistScope, ScopeRoots, load_scope, save_scope,
 };
 use crate::reader::SylphyaReader;
 use crate::vocab::dotted::{DOTTED_ROOTS, GENERIC_PROP_NAMES, SET_EFFECTIVE};
-use std::sync::mpsc::Sender;
 use std::sync::Arc;
+use std::sync::mpsc::Sender;
 
 /// ログ target（steering: areka-log-first-no-silent-failure・design Monitoring 固定名）。
 const LOG_TARGET: &str = "areka_sylphya::actor";
@@ -255,7 +255,11 @@ impl SylphyaCore {
     /// 変えない・R8.1 を檻の内側で満たす）。
     pub fn apply(&self, msg: &SylphyaMsg) -> Vec<Effect> {
         match msg {
-            SylphyaMsg::PublishStatic { asker, flat, dotted } => {
+            SylphyaMsg::PublishStatic {
+                asker,
+                flat,
+                dotted,
+            } => {
                 let mut effects = Vec::with_capacity(flat.len() + dotted.len());
                 for (name, value) in flat {
                     effects.push(Effect::SetFlatPerAsker {
@@ -464,7 +468,11 @@ impl SylphyaPublisher {
         flat: Vec<(String, String)>,
         dotted: Vec<(String, String)>,
     ) {
-        self.send(SylphyaMsg::PublishStatic { asker, flat, dotted });
+        self.send(SylphyaMsg::PublishStatic {
+            asker,
+            flat,
+            dotted,
+        });
     }
 
     /// ④SHIORI 照会層を publish する（`value=None` は 204/失敗＝不在の観測記録）。
@@ -479,7 +487,11 @@ impl SylphyaPublisher {
 
     /// 永続 put を投函する（write-through・reply なし版＝fire-and-forget）。
     pub fn persist_put(&self, scope: PersistScope, entries: Vec<(PersistKey, String)>) {
-        self.send(SylphyaMsg::PersistPut { scope, entries, reply: None });
+        self.send(SylphyaMsg::PersistPut {
+            scope,
+            entries,
+            reply: None,
+        });
     }
 
     /// 反映フェンス: 投函→処理完了を待つ（有界: 呼び側がタイムアウトを課す・design）。
@@ -533,7 +545,11 @@ impl SylphyaPublisher {
 /// join 検出・拡張機構なし）に載る素のスレッド 1 本で、[`SylphyaCore::apply`] の効果列を直列
 /// 実行する（single-writer）。結線（どの供給者が何を publish するか）は呼び出し側の領分。
 pub fn spawn_sylphya(init: SylphyaInit) -> SylphyaParts {
-    let SylphyaInit { roots, io, runtime_sink } = init;
+    let SylphyaInit {
+        roots,
+        io,
+        runtime_sink,
+    } = init;
 
     // 1. 起動時: 全スコープを寛容ロードし初期鏡像を構築（永続 areka.* を大域点付き区画へ投影）。
     let initial = build_initial_image(&roots, io.as_ref());
@@ -608,7 +624,10 @@ fn run_actor(
         for effect in effects {
             match effect {
                 Effect::SetFlatPerAsker { asker, name, value } => {
-                    next.flat_per_asker.entry(asker).or_default().insert(name, value);
+                    next.flat_per_asker
+                        .entry(asker)
+                        .or_default()
+                        .insert(name, value);
                     mutated = true;
                 }
                 Effect::SetDottedGlobal { key, value } => {
@@ -616,7 +635,10 @@ fn run_actor(
                     mutated = true;
                 }
                 Effect::SetDottedPerAsker { asker, key, value } => {
-                    next.dotted_per_asker.entry(asker).or_default().insert(key, value);
+                    next.dotted_per_asker
+                        .entry(asker)
+                        .or_default()
+                        .insert(key, value);
                     mutated = true;
                 }
                 Effect::RecordAbsentFlat { .. } => {
@@ -658,7 +680,9 @@ fn run_actor(
                 // 反映済みをフェンスとして通知（受信端 drop 済みなら未達値を破棄・非 panic）。
                 let _ = reply.send(());
             }
-            SylphyaMsg::PersistPut { reply: Some(reply), .. } => {
+            SylphyaMsg::PersistPut {
+                reply: Some(reply), ..
+            } => {
                 let outcome = persist_outcome.unwrap_or(PersistOutcome::Degraded);
                 let _ = reply.send(outcome);
             }

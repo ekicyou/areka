@@ -168,7 +168,10 @@ mod tests {
         let p = parse_dotted("ghostlist(名前)").unwrap();
         assert_eq!(p.segs.len(), 1);
         assert_eq!(p.segs[0].name, "ghostlist");
-        assert_eq!(p.segs[0].selector, Some(Selector::ByName("名前".to_string())));
+        assert_eq!(
+            p.segs[0].selector,
+            Some(Selector::ByName("名前".to_string()))
+        );
     }
 
     #[test]
@@ -219,9 +222,18 @@ mod tests {
             p,
             PropPath {
                 segs: vec![
-                    PathSeg { name: "activeghostlist".into(), selector: Some(Selector::ByName("x".into())) },
-                    PathSeg { name: "ext".into(), selector: None },
-                    PathSeg { name: "property".into(), selector: None },
+                    PathSeg {
+                        name: "activeghostlist".into(),
+                        selector: Some(Selector::ByName("x".into()))
+                    },
+                    PathSeg {
+                        name: "ext".into(),
+                        selector: None
+                    },
+                    PathSeg {
+                        name: "property".into(),
+                        selector: None
+                    },
                 ]
             }
         );
@@ -234,8 +246,14 @@ mod tests {
             p,
             PropPath {
                 segs: vec![
-                    PathSeg { name: "system".into(), selector: None },
-                    PathSeg { name: "baseware".into(), selector: None },
+                    PathSeg {
+                        name: "system".into(),
+                        selector: None
+                    },
+                    PathSeg {
+                        name: "baseware".into(),
+                        selector: None
+                    },
                 ]
             }
         );
@@ -258,28 +276,43 @@ mod tests {
 
     #[test]
     fn err_double_dot_empty_segment() {
-        assert_eq!(parse_dotted("a..b"), Err(KeyParseError::EmptySegment { at: 1 }));
+        assert_eq!(
+            parse_dotted("a..b"),
+            Err(KeyParseError::EmptySegment { at: 1 })
+        );
     }
 
     #[test]
     fn err_leading_dot_empty_segment() {
-        assert_eq!(parse_dotted(".a"), Err(KeyParseError::EmptySegment { at: 0 }));
+        assert_eq!(
+            parse_dotted(".a"),
+            Err(KeyParseError::EmptySegment { at: 0 })
+        );
     }
 
     #[test]
     fn err_trailing_dot_empty_segment() {
-        assert_eq!(parse_dotted("a."), Err(KeyParseError::EmptySegment { at: 1 }));
+        assert_eq!(
+            parse_dotted("a."),
+            Err(KeyParseError::EmptySegment { at: 1 })
+        );
     }
 
     #[test]
     fn err_unclosed_paren() {
-        assert_eq!(parse_dotted("foo(bar"), Err(KeyParseError::UnclosedParen { at: 0 }));
+        assert_eq!(
+            parse_dotted("foo(bar"),
+            Err(KeyParseError::UnclosedParen { at: 0 })
+        );
     }
 
     #[test]
     fn err_bad_index_non_numeric() {
         // index(...) は数値必須（非数値 index → BadIndex・design §key.rs 裁定）
-        assert_eq!(parse_dotted("index(abc)"), Err(KeyParseError::BadIndex { at: 0 }));
+        assert_eq!(
+            parse_dotted("index(abc)"),
+            Err(KeyParseError::BadIndex { at: 0 })
+        );
     }
 
     #[test]
@@ -293,7 +326,10 @@ mod tests {
 
     #[test]
     fn err_empty_name_before_paren() {
-        assert_eq!(parse_dotted("(x)"), Err(KeyParseError::EmptySegment { at: 0 }));
+        assert_eq!(
+            parse_dotted("(x)"),
+            Err(KeyParseError::EmptySegment { at: 0 })
+        );
     }
 
     // --- 非 index 名の非数値括弧は ByName（design 写像）---
@@ -301,7 +337,10 @@ mod tests {
     #[test]
     fn non_index_non_numeric_paren_is_byname() {
         let p = parse_dotted("balloonlist(main)").unwrap();
-        assert_eq!(p.segs[0].selector, Some(Selector::ByName("main".to_string())));
+        assert_eq!(
+            p.segs[0].selector,
+            Some(Selector::ByName("main".to_string()))
+        );
     }
 
     // --- 決定論（同一入力→同一 Ok/Err）---

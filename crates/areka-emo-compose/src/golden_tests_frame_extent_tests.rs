@@ -1,9 +1,9 @@
 //! task 7.3（要件 5.4）: 採録まばたきコマがベース surface の外形内に収まることの実測テーマ。
 
+use super::test_support::{on_params, parse_emo2_shell, shell_master_dir};
 use super::{
     AtlasTable, EmoWorld, MemoryDecoder, PackConfig, Path, SetId, Shell, SurfaceSet, bake,
 };
-use super::test_support::{on_params, parse_emo2_shell, shell_master_dir};
 
 // ============================================================================
 // task 7.3: 外形前提の実測檻（要件 **5.4**・design「合成合流と method ゲート」の
@@ -31,7 +31,7 @@ use super::test_support::{on_params, parse_emo2_shell, shell_master_dir};
 // 合成画素を扱うのに対し、本檻は headless で**実寸外形**を扱う）。
 // ============================================================================
 
-use crate::plan::{compute_extent, Extent};
+use crate::plan::{Extent, compute_extent};
 
 /// PNG ファイルの IHDR から `(width, height)` を読む（COM/WIC 非依存の実原寸取得）。
 ///
@@ -95,14 +95,19 @@ fn recorded_frames(world: &EmoWorld, base_id: u32, anim_id: u32) -> Vec<(u32, i6
         .animations
         .iter()
         .find(|a| a.id == anim_id)
-        .unwrap_or_else(|| panic!("surface{base_id} に animation{anim_id}（採録まばたき）が存在する"));
+        .unwrap_or_else(|| {
+            panic!("surface{base_id} に animation{anim_id}（採録まばたき）が存在する")
+        });
     let frames: Vec<(u32, i64, i64)> = anim
         .patterns
         .iter()
         .filter(|p| p.surface_id >= 0) // -1 停止センチネルは非描画コマ＝外形対象外。
         .map(|p| (p.surface_id as u32, p.x, p.y))
         .collect();
-    assert!(!frames.is_empty(), "採録アニメ animation{anim_id} は描画コマを 1 枚以上持つ");
+    assert!(
+        !frames.is_empty(),
+        "採録アニメ animation{anim_id} は描画コマを 1 枚以上持つ"
+    );
     frames
 }
 
@@ -142,7 +147,12 @@ fn assert_frames_fit_base(
             right <= base_extent.w as i64 && bottom <= base_extent.h as i64,
             "コマ surface{fid}（原寸 {}x{} ＋オフセット ({x},{y})）は base surface{base_id} 外形 \
              {}x{} 内に収まる（右端 {right}<=幅{}／下端 {bottom}<=高{}）＝クリップ非発生（要件 5.4）",
-            fextent.w, fextent.h, base_extent.w, base_extent.h, base_extent.w, base_extent.h
+            fextent.w,
+            fextent.h,
+            base_extent.w,
+            base_extent.h,
+            base_extent.w,
+            base_extent.h
         );
         measured.push((fid, x, y, fextent));
     }
@@ -175,7 +185,11 @@ fn kero_blink_frames_fit_within_base_extent() {
     );
     // 採録コマは 2106/2110 の 2 枚（-1 センチネルは除外済み）。
     let ids: Vec<u32> = measured.iter().map(|(id, _, _, _)| *id).collect();
-    assert_eq!(ids, vec![2106, 2110], "kero animation0 の描画コマは 2106・2110（採録順）");
+    assert_eq!(
+        ids,
+        vec![2106, 2110],
+        "kero animation0 の描画コマは 2106・2110（採録順）"
+    );
     for (fid, x, y, fe) in &measured {
         assert_eq!(
             (fe.w, fe.h, *x, *y),
@@ -208,7 +222,8 @@ fn sakura_blink_frames_fit_within_base_extent() {
     assert!(
         base_extent.w >= 382 && base_extent.h >= 547,
         "sakura base surface1000 の外形（{}x{}）は eye パーツ原寸 382×547 以上",
-        base_extent.w, base_extent.h
+        base_extent.w,
+        base_extent.h
     );
     // 採録コマは 1412/1411/1410 の 3 枚（pattern1/2/3・pattern0 なしの再生専用アニメ）。
     let ids: Vec<u32> = measured.iter().map(|(id, _, _, _)| *id).collect();

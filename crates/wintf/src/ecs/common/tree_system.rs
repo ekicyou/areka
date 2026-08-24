@@ -261,9 +261,7 @@ unsafe fn propagate_descendants_unchecked<L, G, M>(
         // 互いに素なエンティティを訪問していることがわかり、これは安全である。
         #[expect(unsafe_code, reason = "Mutating disjoint entities in parallel")]
         let children_iter = unsafe {
-            nodes.iter_many_unique_unsafe(UniqueEntityIter::from_iter_unchecked(
-                p_children.iter(),
-            ))
+            nodes.iter_many_unique_unsafe(UniqueEntityIter::from_iter_unchecked(p_children.iter()))
         };
 
         let mut last_child = None;

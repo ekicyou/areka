@@ -344,7 +344,10 @@ fn t_r5_seam_output_identical_to_bottom() {
                     s.balloon_pos, b.balloon_pos,
                     "dpi={dpi} seam={seam_value}: Seam の balloon_pos は Bottom と同一"
                 );
-                assert_eq!(s.balloon_size, b.balloon_size, "dpi={dpi} seam={seam_value}");
+                assert_eq!(
+                    s.balloon_size, b.balloon_size,
+                    "dpi={dpi} seam={seam_value}"
+                );
                 assert_eq!(
                     s.balloon_offset, b.balloon_offset,
                     "dpi={dpi} seam={seam_value}"
@@ -484,4 +487,3 @@ fn t_r6_chain_uses_clamped_previous_position() {
         );
     }
 }
-

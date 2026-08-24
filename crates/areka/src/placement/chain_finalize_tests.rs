@@ -84,7 +84,11 @@ fn emo2_surface_swap_gap_is_closed_by_moving_the_follower_only() {
 
     let moves = finalize_chain(&states);
 
-    assert_eq!(moves.len(), 1, "動かすのは後続スコープだけ（起点は不動・7.2）");
+    assert_eq!(
+        moves.len(),
+        1,
+        "動かすのは後続スコープだけ（起点は不動・7.2）"
+    );
     assert_eq!(
         moves[0],
         ChainMove {
@@ -181,7 +185,10 @@ fn repositioned_scope_is_not_pulled_back_and_becomes_the_next_basis() {
     );
     let xs = apply(&states, &moves);
     assert_eq!(xs[1], 900, "実位置のまま据え置く");
-    assert_eq!(xs[2], 700, "以後の連鎖は実位置 900 を基準にする（900 − 200）");
+    assert_eq!(
+        xs[2], 700,
+        "以後の連鎖は実位置 900 を基準にする（900 − 200）"
+    );
 }
 
 /// **保存位置が復元されたスコープは、現在位置に関わらず常に対象外**（scg 7.3）。
@@ -208,7 +215,10 @@ fn restored_scope_is_never_pulled_back_even_when_it_sits_still() {
     );
     let xs = apply(&states, &moves);
     assert_eq!(xs[1], 900, "復元位置のまま据え置く");
-    assert_eq!(xs[2], 700, "以後の連鎖は復元位置 900 を基準にする（900 − 200）");
+    assert_eq!(
+        xs[2], 700,
+        "以後の連鎖は復元位置 900 を基準にする（900 − 200）"
+    );
     // 既定位置を持っていたら引き戻されていた値。ここへ動いてはならない。
     assert_ne!(
         xs[1], 680,
@@ -230,10 +240,7 @@ fn restored_scope_is_excluded_regardless_of_where_it_sits() {
 /// 起点スコープが動かされていても、後続は起点の実位置へ隣接する。
 #[test]
 fn follower_chains_from_the_actual_position_of_a_moved_origin() {
-    let states = [
-        repositioned(0, 1500, 400, 1000),
-        untouched(1, 680, 320),
-    ];
+    let states = [repositioned(0, 1500, 400, 1000), untouched(1, 680, 320)];
 
     let moves = finalize_chain(&states);
     let xs = apply(&states, &moves);
@@ -270,10 +277,7 @@ fn applying_twice_is_a_no_op_the_second_time() {
     assert!(!moves.is_empty(), "一度目は指示が出る");
 
     let xs = apply(&states, &moves);
-    let settled = [
-        untouched(0, xs[0], 400),
-        untouched(1, xs[1], 320),
-    ];
+    let settled = [untouched(0, xs[0], 400), untouched(1, xs[1], 320)];
     assert!(
         finalize_chain(&settled).is_empty(),
         "確定後の状態を再投入しても指示は出ない"
@@ -297,7 +301,10 @@ fn non_positive_width_is_skipped_and_keeps_its_place() {
     );
     let xs = apply(&states, &moves);
     assert_eq!(xs[1], 700, "実位置のまま");
-    assert_eq!(xs[2], 500, "700 − 200（非正寸スコープの実位置を基準にする）");
+    assert_eq!(
+        xs[2], 500,
+        "700 − 200（非正寸スコープの実位置を基準にする）"
+    );
 }
 
 /// 空入力・単一スコープは常に空（動かす相手が居ない）。
@@ -313,10 +320,7 @@ fn empty_and_single_scope_yield_no_moves() {
 /// 極端入力でも panic しない（飽和演算）。
 #[test]
 fn saturating_arithmetic_does_not_panic_on_extremes() {
-    let states = [
-        untouched(0, i32::MIN, 400),
-        untouched(1, 0, i32::MAX),
-    ];
+    let states = [untouched(0, i32::MIN, 400), untouched(1, 0, i32::MAX)];
     let moves = finalize_chain(&states);
     assert_eq!(moves.len(), 1, "指示は出る（値は飽和）");
     assert_eq!(moves[0].new_x, i32::MIN, "飽和して下限に張り付く");
@@ -410,8 +414,92 @@ fn defer_reason_names_the_scope_and_the_condition() {
         },
         ChainDeferReason::NoWindowPos { scope: 0 },
         ChainDeferReason::IncompleteWindowPos { scope: 0 },
+        ChainDeferReason::DpiSyncHeld { scope: 0 },
         landing,
     ] {
         assert!(!reason.to_string().is_empty(), "理由 {reason:?} の本文が空");
     }
+}
+
+/// 見送り理由の**固定語**（観測レコードの `reason=`）が全経路そろい、互いに異なる
+/// （`areka-P0-dpi-transition-atomicity` 設計 Data Models の `chain` 行）。
+///
+/// 本文（[`std::fmt::Display`]）は値を含むので機械判定に使えない。判定側が辞書引きするのは
+/// こちらの語である——重複すると 2 つの原因が 1 語に潰れて切り分けが効かなくなる。
+#[test]
+fn every_defer_reason_has_a_distinct_machine_word() {
+    let all = [
+        ChainDeferReason::NoGhostWindows,
+        ChainDeferReason::NoScopes,
+        ChainDeferReason::NoCharWindow { scope: 0 },
+        ChainDeferReason::NotShownYet { scope: 0 },
+        ChainDeferReason::UnusableShownSize {
+            scope: 0,
+            w: 0,
+            h: 0,
+        },
+        ChainDeferReason::NoWindowPos { scope: 0 },
+        ChainDeferReason::IncompleteWindowPos { scope: 0 },
+        ChainDeferReason::ResnapNotLanded {
+            scope: 0,
+            shown: (1, 1),
+            window: (2, 2),
+        },
+        ChainDeferReason::DpiSyncHeld { scope: 0 },
+    ];
+    let mut words: Vec<&str> = all.iter().map(|reason| reason.as_str()).collect();
+    let count = words.len();
+    words.sort_unstable();
+    words.dedup();
+    assert_eq!(
+        words.len(),
+        count,
+        "見送り理由の語が重複している: {words:?}"
+    );
+    for word in &words {
+        assert!(!word.is_empty(), "空の理由語がある");
+        assert!(
+            !word.contains(' '),
+            "理由語に空白がある（1 行 1 レコードの分解が壊れる）: {word}"
+        );
+    }
+    // 遷移後の解き直し専用の理由（起動時確定では起こらない）。
+    assert_eq!(
+        ChainDeferReason::DpiSyncHeld { scope: 3 }.as_str(),
+        "dpi-sync-held"
+    );
+    assert_eq!(ChainDeferReason::DpiSyncHeld { scope: 3 }.scope(), Some(3));
+}
+
+/// 停滞診断の初期化で、**2 度目の待ちでも警告が一度は出る**ようになる
+/// （`areka-P0-dpi-transition-atomicity` 要件 6.3）。
+///
+/// 初期化しないと `reported` が立ったままで、2 度目以降の遷移で見送りが続いても無音になる
+/// ——「見送り続けている」という一番知りたい事実がログから消える。
+#[test]
+fn resetting_the_stall_lets_a_second_wait_report_once_again() {
+    let mut stall = ChainFinalizeStall::default();
+    for _ in 1..CHAIN_FINALIZE_STALL_FRAMES {
+        assert!(!note_chain_deferral(&mut stall));
+    }
+    assert!(note_chain_deferral(&mut stall), "1 度目の待ちで報告する");
+
+    // 初期化しない限り 2 度目は永久に黙る（初期化が必要であることの対照）。
+    for _ in 0..CHAIN_FINALIZE_STALL_FRAMES {
+        assert!(!note_chain_deferral(&mut stall), "初期化前は黙ったまま");
+    }
+
+    stall.reset();
+    assert_eq!(
+        stall,
+        ChainFinalizeStall::default(),
+        "初期化で計数も一発フラグも消える"
+    );
+    for _ in 1..CHAIN_FINALIZE_STALL_FRAMES {
+        assert!(!note_chain_deferral(&mut stall), "2 度目も閾値までは無音");
+    }
+    assert!(
+        note_chain_deferral(&mut stall),
+        "2 度目の待ちでも閾値でちょうど 1 度報告する（要件 6.3）"
+    );
 }

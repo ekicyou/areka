@@ -24,15 +24,14 @@ use crate::ecs::clickthrough::{
 use crate::ecs::world::{EcsWorld, EcsWorldSelfRef, FrameFinalize};
 use crate::runtime::message_loop::{MessageLoopDriver, ShutdownPolicy};
 use crate::runtime::tick_bridge::{AsyncTickTask, VsyncEventBridge};
-use crate::runtime::window_registry::{reconcile_window_registry, WindowRegistry};
+use crate::runtime::window_registry::{WindowRegistry, reconcile_window_registry};
 use crate::runtime::wndproc_bridge::WndState;
 
 /// `WinApp` が World へ確保する本番 `WindowRegistry` の具体型。
 ///
 /// 既定の保持値 `Window<WndState>`（ライブラリ型・`!Send`＝UI スレッド束縛）で単相化した
 /// NonSend リソース型。`new()`/`get_non_send` の型推論を確定させるために用いる。
-type ProdWindowRegistry =
-    WindowRegistry<crate::executor::util::Window<WndState>>;
+type ProdWindowRegistry = WindowRegistry<crate::executor::util::Window<WndState>>;
 
 /// メッセージループ層。ライブラリ（`wintf-winmsg-executor`）の `block_on` /
 /// `MessageLoop::run` へ委譲する `MessageLoopDriver` を提供する。
@@ -125,6 +124,17 @@ impl WinApp {
                     "[SetProcessDpiAwarenessContext] failed (process continues with the inherited awareness)"
                 ),
             }
+        }
+
+        // 呼び出しスレッド＝UI スレッド（メッセージループを回す本体）である。ここで 1 度だけ
+        // 役割を宣言してスレッド名簿へ載せる（要件 2.3）。COM/DPI の初期化を済ませた後・
+        // World 生成の前に置くのは、`new()` が返る前に必ず 1 度通る点として最も早いため。
+        // 失敗しても起動は止めない——このスレッドの CPU が `unregistered_rest` へ回るだけで、
+        // 観測の道具の不調が観測対象を止める理由にはならない。
+        if let Err(e) = crate::ecs::world::thread_registry::register_current_thread(
+            crate::ecs::world::thread_registry::ROLE_UI,
+        ) {
+            tracing::error!(error = %e, "[WinApp::new] スレッド名簿への登録に失敗した（起動は継続）");
         }
 
         let world = Rc::new(RefCell::new(EcsWorld::new()));
@@ -356,6 +366,33 @@ mod tests {
     use super::*;
     use event_listener::Listener;
 
+    /// `WinApp::new()` は呼び出しスレッド（＝UI スレッド）を役割名 `ui` で名簿へ登録する
+    /// （要件 2.3）。
+    ///
+    /// 登録は同期的で、対象は自分自身のスレッド——待ちも件数の当てにも要らない。
+    #[test]
+    fn new_registers_the_calling_thread_as_the_ui_thread() {
+        use crate::ecs::world::thread_registry::{self, ROLE_UI, get_current_thread_id};
+
+        let app = WinApp::new().expect("WinApp::new should succeed headless");
+
+        let tid = get_current_thread_id();
+        let found = thread_registry::snapshot()
+            .into_iter()
+            .find(|entry| entry.tid == tid)
+            .expect("WinApp::new は呼び出しスレッドを名簿へ載せるはず");
+        assert_eq!(
+            found.role, ROLE_UI,
+            "WinApp を建てたスレッドの役割名は ui であるはず"
+        );
+        assert!(
+            thread_registry::is_known_role(ROLE_UI),
+            "登録した役割名は固定語彙に含まれるはず"
+        );
+
+        drop(app);
+    }
+
     /// `WinApp::new()` の shutdown 結線（task 4.2・要件 1.3/1.4/1.5）:
     /// 1. `WindowRegistry`（NonSend）が World に確保される。
     /// 2. その shutdown hook が発火すると WinApp 所有の終了シグナル `Event` が notify され、
@@ -499,9 +536,7 @@ mod tests {
             // 本番 reconcile（`Window<WndState>` 単相）を schedule 実行（FrameFinalize 相当）。
             // registry が空へ遷移し、注入済み hook が WinApp 所有 Event を notify する。
             let mut sched = Schedule::default();
-            sched.add_systems(
-                reconcile_window_registry::<crate::executor::util::Window<WndState>>,
-            );
+            sched.add_systems(reconcile_window_registry::<crate::executor::util::Window<WndState>>);
             sched.run(w);
 
             // 空遷移を確認（最後の窓が消えた）。

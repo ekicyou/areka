@@ -14,8 +14,8 @@
 //! 新規ハーネスを spawn する）。
 
 use areka_kanade::{
-    CloseReason, ExecutionSnapshot, KanadeConfig, KanadeMsg, MonotonicMs, StartTalk, TalkId, events,
-    resources,
+    CloseReason, ExecutionSnapshot, KanadeConfig, KanadeMsg, MonotonicMs, StartTalk, TalkId,
+    events, resources,
 };
 
 use super::common::{
@@ -96,11 +96,14 @@ fn drive_full_run() {
     let expected_boot_prefix = vec![
         expected_call(events::on_initialize(&ExecutionSnapshot::INACTIVE)), // NOTIFY
         expected_call(resources::resource_username(&ExecutionSnapshot::INACTIVE)), // GET（prefetch・R4.1）→204
-        expected_call(events::on_first_boot(&ExecutionSnapshot::INACTIVE, 0)), // GET →204
-        expected_call(events::on_boot(&config, &ExecutionSnapshot::INACTIVE)), // GET →Value
+        expected_call(events::on_first_boot(&ExecutionSnapshot::INACTIVE, 0)),     // GET →204
+        expected_call(events::on_boot(&config, &ExecutionSnapshot::INACTIVE)),     // GET →Value
         expected_call(events::baseware_version(
             &config,
-            &ExecutionSnapshot { talk_active: true, choice_active: false },
+            &ExecutionSnapshot {
+                talk_active: true,
+                choice_active: false,
+            },
         )), // NOTIFY（Status: talking）
     ];
     assert!(
@@ -129,7 +132,11 @@ fn drive_full_run() {
         boot_talk.script, FIXED_BOOT_SCRIPT,
         "boot talk の script は boot fixture スクリプトと一致するはず"
     );
-    assert_eq!(boot_talk.talk_id, TalkId(1), "boot talk の talk_id は 1（先頭採番）");
+    assert_eq!(
+        boot_talk.talk_id,
+        TalkId(1),
+        "boot talk の talk_id は 1（先頭採番）"
+    );
 
     // close talk: script は別れの fixture スクリプト。
     let close_talk: &StartTalk = &started[1];
@@ -152,7 +159,10 @@ fn drive_full_run() {
     // ========================================================================
     // OnClose GET（Ref0=user）が pump 群の後に現れ、記録列の末尾が Unload で閉じる。
     // 通常握手の OnClose は talk 非アクティブ（INACTIVE）で発行される（Status 行なし・begin_close）。
-    let onclose = expected_call(events::on_close(CloseReason::User, &ExecutionSnapshot::INACTIVE));
+    let onclose = expected_call(events::on_close(
+        CloseReason::User,
+        &ExecutionSnapshot::INACTIVE,
+    ));
     let onclose_index = recorded
         .iter()
         .position(|c| *c == onclose)

@@ -1,18 +1,62 @@
 //! 純粋層: 名前付きアクタースレッドの spawn／`ActorHandle`／受信ループヘルパ。
 //!
 //! `std`（[`std::sync::mpsc`]＋[`std::thread`]）のみを用い、wintf/executor 非依存で
-//! 実装される。提供物は次の 4 つ:
+//! 実装される。提供物は次の 5 つ:
 //!
 //! - [`spawn_actor`] — アクターを名前付きスレッドとして起動し、inbox の送信端と
 //!   [`ActorHandle`] を返す原語。
 //! - [`run_inbox`] — worker 側の正準受信ループヘルパ（使用は任意）。
 //! - [`ActorHandle`] — 非 RAII（detach）な join ハンドル。
 //! - [`ActorError`] — join 時に panic を観測可能な失敗として写像するエラー型。
+//! - [`install_thread_start_hook`] — 生成されたスレッドの走り始めに 1 度呼ばれる
+//!   [`ThreadStartHook`] の呼ばれ口（何を行うかは統合側が決める・依存の向きは不変）。
 
 use std::any::Any;
 use std::ops::ControlFlow;
+use std::sync::OnceLock;
 use std::sync::mpsc::{self, Receiver, RecvError, Sender};
 use std::thread::{self, JoinHandle};
+
+/// アクタースレッドの走り始めに 1 度だけ呼ばれるフック。引数はアクター名（＝スレッド名）。
+///
+/// # なぜフックなのか（依存の向き）
+///
+/// スレッド 1 本ごとの CPU を役割名で読むために、生成されたスレッドは自分を wintf の
+/// スレッド名簿へ登録する必要がある（areka-P0-draw-load-parity 要件 2.3）。ところが本
+/// クレートも `areka-ghost` も **wintf に依存していない**し、依存を足すこともできない
+/// （`Cargo.toml` 非接触＝同 spec 要件 8.6）。そこで本クレートは登録の**呼ばれ口**だけを
+/// 持ち、実際に何を登録するかは wintf と本クレートの双方を知る統合側（実行体 `areka` の
+/// `thread_roles`）が 1 箇所で宣言する。本クレートは相手を知らないままで済む。
+pub type ThreadStartHook = fn(&str);
+
+/// フックが既に導入済みだったことを表すエラー（最初の導入だけが効く）。
+#[derive(Debug, thiserror::Error)]
+#[error("thread start hook is already installed")]
+pub struct ThreadStartHookAlreadyInstalled;
+
+/// プロセス共有のスレッド開始フック。未導入なら [`spawn_actor`] は何もしない
+/// （費用は `OnceLock::get` 1 回だけ）。
+static THREAD_START_HOOK: OnceLock<ThreadStartHook> = OnceLock::new();
+
+/// スレッド開始フックを導入する（プロセスに 1 度きり・最初の導入が勝つ）。
+///
+/// 2 度目以降は導入されず [`ThreadStartHookAlreadyInstalled`] を返す。黙って上書きも
+/// panic もしない——導入の取り合いは記録に残す（`warn!`）だけで、アクターの挙動は
+/// 一切変わらない。
+///
+/// 導入前に起動済みのスレッドは対象外である（フックは spawn の時点で読まれる）。
+/// よって導入は起動のできるだけ早い段階で 1 度行うこと。
+pub fn install_thread_start_hook(
+    hook: ThreadStartHook,
+) -> Result<(), ThreadStartHookAlreadyInstalled> {
+    match THREAD_START_HOOK.set(hook) {
+        Ok(()) => Ok(()),
+        Err(_) => {
+            tracing::warn!("[actor] thread start hook is already installed; keeping the first one");
+            Err(ThreadStartHookAlreadyInstalled)
+        }
+    }
+}
 
 /// アクターを名前付きスレッドとして起動し、inbox の送信端と join ハンドルを返す。
 ///
@@ -24,6 +68,9 @@ use std::thread::{self, JoinHandle};
 ///
 /// 追加の常駐機構（レジストリ・監督・stop_flag）は持たない素の thread spawn である
 /// （Req 1.4）。停止はメッセージ Close／全 Sender drop の 2 経路が原語（Req 3.2/3.5）。
+///
+/// [`install_thread_start_hook`] でフックが導入されている場合のみ、生成されたスレッドの中
+/// で `body` より前に 1 度フックを呼ぶ（引数はアクター名）。未導入なら何もしない。
 ///
 /// # 運用規約（デッドロック注意）
 ///
@@ -50,6 +97,11 @@ where
         .spawn(move || {
             let span = tracing::info_span!("actor", actor = %span_name);
             let _enter = span.enter();
+            // 走り始めに 1 度だけフックを呼ぶ（body より前・生成された当のスレッドの中）。
+            // 未導入なら何も起きない。
+            if let Some(hook) = THREAD_START_HOOK.get() {
+                hook(&span_name);
+            }
             body(rx);
         });
 
@@ -165,6 +217,10 @@ pub enum ActorError {
 }
 
 #[cfg(test)]
+#[path = "spawn_hook_tests.rs"]
+mod hook_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use std::convert::Infallible;
@@ -209,7 +265,9 @@ mod tests {
             panic!("boom in actor");
         });
 
-        let err = handle.join().expect_err("panicking body must surface as Err");
+        let err = handle
+            .join()
+            .expect_err("panicking body must surface as Err");
         match err {
             ActorError::Panicked { actor, message } => {
                 assert_eq!(actor, "panicky");
@@ -278,16 +336,20 @@ mod tests {
         tx.send("close").expect("send close");
 
         let (seen_tx, seen_rx) = mpsc::channel::<&'static str>();
-        run_bounded("run_inbox continue-after-err", Duration::from_secs(5), move || {
-            run_inbox::<&'static str, HandlerErr>(rx, move |msg| match msg {
-                "will-error" => Err(HandlerErr("intentional")),
-                "close" => Ok(ControlFlow::Break(())),
-                other => {
-                    seen_tx.send(other).expect("record seen");
-                    Ok(ControlFlow::Continue(()))
-                }
-            });
-        });
+        run_bounded(
+            "run_inbox continue-after-err",
+            Duration::from_secs(5),
+            move || {
+                run_inbox::<&'static str, HandlerErr>(rx, move |msg| match msg {
+                    "will-error" => Err(HandlerErr("intentional")),
+                    "close" => Ok(ControlFlow::Break(())),
+                    other => {
+                        seen_tx.send(other).expect("record seen");
+                        Ok(ControlFlow::Continue(()))
+                    }
+                });
+            },
+        );
 
         // Err を返したメッセージの後続が処理されていること＝ループは殺されていない。
         let seen = seen_rx

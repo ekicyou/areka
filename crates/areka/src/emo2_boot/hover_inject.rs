@@ -23,6 +23,7 @@ use std::sync::OnceLock;
 use areka_emo_text::actor::TextLayerRuntime;
 use areka_sakura::ActorKey;
 use tracing::{info, warn};
+use wintf::ecs::world::tick_wake;
 
 /// hover 注入導線を駆動する env 変数（`AREKA_` 名前空間規約）。
 const ENV_KEY: &str = "AREKA_CHOICE_HOVER_INJECT";
@@ -191,7 +192,13 @@ fn config() -> &'static HoverInjectConfig {
 /// （`inject_choice_hover` を一度も呼ばない・本番既定）。`frame_time` は text phase が解決した
 /// `talk_time`（`TalkClock::talk_time` と同源）。
 pub fn drive(runtime: &mut TextLayerRuntime, frame_time: f64) {
-    run_hover_inject(config(), runtime, frame_time);
+    let config = config();
+    // 注入が有効な間は周期巡回を進めるために毎画面更新で回る必要があるので、次の画面更新を
+    // 予約する（設計 C16 の `REARM`）。無効（本番既定）なら旗も立てない＝完全 no-op のまま。
+    if !matches!(config, HoverInjectConfig::Disabled) {
+        tick_wake::mark(tick_wake::REARM);
+    }
+    run_hover_inject(config, runtime, frame_time);
 }
 
 #[cfg(test)]
@@ -205,9 +212,21 @@ mod tests {
     /// 未設定/空/空白のみ → Disabled（本番既定・完全無効）。
     #[test]
     fn parse_unset_or_blank_is_disabled() {
-        assert_eq!(parse_hover_inject(None), HoverInjectConfig::Disabled, "未設定は無効");
-        assert_eq!(parse_hover_inject(Some("")), HoverInjectConfig::Disabled, "空は無効");
-        assert_eq!(parse_hover_inject(Some("   ")), HoverInjectConfig::Disabled, "空白のみは無効");
+        assert_eq!(
+            parse_hover_inject(None),
+            HoverInjectConfig::Disabled,
+            "未設定は無効"
+        );
+        assert_eq!(
+            parse_hover_inject(Some("")),
+            HoverInjectConfig::Disabled,
+            "空は無効"
+        );
+        assert_eq!(
+            parse_hover_inject(Some("   ")),
+            HoverInjectConfig::Disabled,
+            "空白のみは無効"
+        );
     }
 
     /// `cycle`（周辺空白トリム込み）→ 既定周期 700ms の Cycle。
@@ -215,12 +234,16 @@ mod tests {
     fn parse_cycle_uses_default_period() {
         assert_eq!(
             parse_hover_inject(Some("cycle")),
-            HoverInjectConfig::Cycle { period_ms: DEFAULT_PERIOD_MS },
+            HoverInjectConfig::Cycle {
+                period_ms: DEFAULT_PERIOD_MS
+            },
             "cycle は既定 700ms"
         );
         assert_eq!(
             parse_hover_inject(Some("  cycle  ")),
-            HoverInjectConfig::Cycle { period_ms: DEFAULT_PERIOD_MS },
+            HoverInjectConfig::Cycle {
+                period_ms: DEFAULT_PERIOD_MS
+            },
             "周辺空白はトリムして cycle"
         );
     }
@@ -243,11 +266,31 @@ mod tests {
     /// 不正値（未知トークン・非数値/0/負値の周期）→ Disabled（warn＋無効）。
     #[test]
     fn parse_invalid_values_are_disabled() {
-        assert_eq!(parse_hover_inject(Some("bogus")), HoverInjectConfig::Disabled, "未知トークンは無効");
-        assert_eq!(parse_hover_inject(Some("cycle:")), HoverInjectConfig::Disabled, "周期欠落は無効");
-        assert_eq!(parse_hover_inject(Some("cycle:abc")), HoverInjectConfig::Disabled, "非数値周期は無効");
-        assert_eq!(parse_hover_inject(Some("cycle:0")), HoverInjectConfig::Disabled, "0 周期は無効");
-        assert_eq!(parse_hover_inject(Some("cycle:-5")), HoverInjectConfig::Disabled, "負値周期は無効");
+        assert_eq!(
+            parse_hover_inject(Some("bogus")),
+            HoverInjectConfig::Disabled,
+            "未知トークンは無効"
+        );
+        assert_eq!(
+            parse_hover_inject(Some("cycle:")),
+            HoverInjectConfig::Disabled,
+            "周期欠落は無効"
+        );
+        assert_eq!(
+            parse_hover_inject(Some("cycle:abc")),
+            HoverInjectConfig::Disabled,
+            "非数値周期は無効"
+        );
+        assert_eq!(
+            parse_hover_inject(Some("cycle:0")),
+            HoverInjectConfig::Disabled,
+            "0 周期は無効"
+        );
+        assert_eq!(
+            parse_hover_inject(Some("cycle:-5")),
+            HoverInjectConfig::Disabled,
+            "負値周期は無効"
+        );
     }
 
     // ── cycle_ordinal（時刻商→ordinal 系列・純粋・決定論）──────────────────────────
@@ -259,14 +302,14 @@ mod tests {
         let count = 3;
         // frame_time を 0.0,1.0,2.0,… と進め、各周期スロットの注入 ordinal を確認する。
         let expected: [Option<usize>; 8] = [
-            None,      // 商0 → スロット0 = None
-            Some(0),   // 商1 → スロット1 = ordinal0
-            Some(1),   // 商2 → スロット2 = ordinal1
-            Some(2),   // 商3 → スロット3 = ordinal2
-            None,      // 商4 → 巡回して None
-            Some(0),   // 商5
-            Some(1),   // 商6
-            Some(2),   // 商7
+            None,    // 商0 → スロット0 = None
+            Some(0), // 商1 → スロット1 = ordinal0
+            Some(1), // 商2 → スロット2 = ordinal1
+            Some(2), // 商3 → スロット3 = ordinal2
+            None,    // 商4 → 巡回して None
+            Some(0), // 商5
+            Some(1), // 商6
+            Some(2), // 商7
         ];
         for (q, want) in expected.iter().enumerate() {
             // 周期内の任意点で同一（商が同じ）: 中央 +0.5 でも境界と同じ結果になることも確認。
@@ -283,17 +326,33 @@ mod tests {
     #[test]
     fn cycle_ordinal_zero_rows_is_always_none() {
         for q in 0..5u32 {
-            assert_eq!(cycle_ordinal(q as f64 * 0.7 + 0.35, 0.7, 0), None, "0 行は常に None");
+            assert_eq!(
+                cycle_ordinal(q as f64 * 0.7 + 0.35, 0.7, 0),
+                None,
+                "0 行は常に None"
+            );
         }
     }
 
     /// 負の frame_time は 0.0 clamp（スロット0＝None）・非正/非有限 period は None（防御）。
     #[test]
     fn cycle_ordinal_defensive_clamps_and_guards() {
-        assert_eq!(cycle_ordinal(-10.0, 1.0, 3), None, "負 frame_time は 0.0 clamp → 商0 → None");
+        assert_eq!(
+            cycle_ordinal(-10.0, 1.0, 3),
+            None,
+            "負 frame_time は 0.0 clamp → 商0 → None"
+        );
         assert_eq!(cycle_ordinal(2.0, 0.0, 3), None, "period 0 は防御的に None");
-        assert_eq!(cycle_ordinal(2.0, -1.0, 3), None, "負 period は防御的に None");
-        assert_eq!(cycle_ordinal(2.0, f64::NAN, 3), None, "非有限 period は防御的に None");
+        assert_eq!(
+            cycle_ordinal(2.0, -1.0, 3),
+            None,
+            "負 period は防御的に None"
+        );
+        assert_eq!(
+            cycle_ordinal(2.0, f64::NAN, 3),
+            None,
+            "非有限 period は防御的に None"
+        );
     }
 
     /// 同一 frame 時刻→同一注入（純関数駆動の冪等・design Idempotency）。
@@ -315,10 +374,19 @@ mod tests {
             (ActorKey::from("0"), true, 3), // active・ヒット行あり
             (ActorKey::from("1"), true, 2),
         ];
-        run_hover_inject_with(&HoverInjectConfig::Disabled, 1.5, &actors, |_actor, _ord| {
-            calls.set(calls.get() + 1);
-        });
-        assert_eq!(calls.get(), 0, "Disabled は inject を一度も呼ばない（本番既定 no-op・8.6）");
+        run_hover_inject_with(
+            &HoverInjectConfig::Disabled,
+            1.5,
+            &actors,
+            |_actor, _ord| {
+                calls.set(calls.get() + 1);
+            },
+        );
+        assert_eq!(
+            calls.get(),
+            0,
+            "Disabled は inject を一度も呼ばない（本番既定 no-op・8.6）"
+        );
     }
 
     /// Cycle は `choice_active` な actor のみに注入し、非 active はスキップする。注入 ordinal は
@@ -336,7 +404,11 @@ mod tests {
             &HoverInjectConfig::Cycle { period_ms: 1000 },
             1.5,
             &actors,
-            |actor, ord| recorded.borrow_mut().push((actor.as_str().to_string(), ord)),
+            |actor, ord| {
+                recorded
+                    .borrow_mut()
+                    .push((actor.as_str().to_string(), ord))
+            },
         );
         let got = recorded.into_inner();
         assert_eq!(
@@ -358,6 +430,10 @@ mod tests {
             &actors,
             |_actor, ord| recorded.borrow_mut().push(ord),
         );
-        assert_eq!(recorded.into_inner(), vec![None], "商0 は None 注入（巡回の先頭）");
+        assert_eq!(
+            recorded.into_inner(),
+            vec![None],
+            "商0 は None 注入（巡回の先頭）"
+        );
     }
 }
