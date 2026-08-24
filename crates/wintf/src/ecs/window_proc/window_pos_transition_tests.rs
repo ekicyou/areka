@@ -16,18 +16,18 @@
 //!   これは出力では示せない（`emit_line` の水準を subscriber が濾すため既定では
 //!   どのみち無音になる）ので、本文の構造で固定する。
 //!
-//! # `in_swp` を見るテストと書込を撃つテストは直列化する（要件 7.7・7.1）
+//! # 自発書込カウンタはスレッド局所である（要件 7.7・7.1）
 //!
-//! `in_swp` の出所である `is_self_initiated()` は**プロセス共有**の `SELF_INITIATED_DEPTH`
-//! （`window/command.rs`）を読む。スレッド局所ではないので、並列に走る別テストの
-//! `guarded_set_window_pos` が持ち上げた値がそのまま見え、`in_swp=false` の検査が
-//! 気まぐれに落ちる（是正前の実測: `cargo test -p wintf --lib` 60 周中 11 周が赤）。
-//! よって ⑴ 値を読むテストと ⑵ 値を持ち上げるテスト（提案位置を採る配送・一括書込）の
-//! 両方が [`lock_self_initiated_for_test`](crate::ecs::window::lock_self_initiated_for_test)
-//! をテスト本体の先頭で取り、最後まで持つ。
+//! `in_swp` の出所である `is_self_initiated()` は `SELF_INITIATED_DEPTH`
+//! （`window/command.rs`）を読む。このカウンタは**スレッドごとに独立**であり、
+//! `SetWindowPos`／`EndDeferWindowPos` が `WM_WINDOWPOSCHANGED` を呼び出しスレッドの上で
+//! 同期送達することから、持ち上げ・送達・判定・解放が 1 本のスレッドの内側で閉じる。よって
+//! 並列に走る別テストの `guarded_set_window_pos` が持ち上げた値はこちらから見えず、値を読む
+//! テストも値を持ち上げるテストも直列化の錠を取らない。
 //!
-//! **錠は本体で取る（ヘルパでは取らない）**——`std::sync::Mutex` は再入不可であり、
-//! ヘルパと本体の両方で取ると自分自身と競合して止まる。
+//! （共有の `AtomicI32` だった頃は見えてしまい、`in_swp=false` の検査が気まぐれに落ちた
+//! ——是正前の実測: `cargo test -p wintf --lib` 60 周中 11 周が赤。スレッド局所であることの
+//! 本体は `window/command_threadlocal_tests.rs`。）
 //!
 //! # 実行形態の明示（要件 7.6）
 //!
@@ -189,7 +189,6 @@ fn capture_windowposchanged(directives: &str) -> String {
 
 #[test]
 fn dpichanged_receipt_is_recorded_with_handle_and_flush_context() {
-    let _serialized = crate::ecs::window::lock_self_initiated_for_test();
     let captured = capture_dpichanged(SIGNOFF_DIRECTIVES, None);
     assert!(
         captured.contains(CONTROL_LINE),
@@ -219,7 +218,6 @@ fn dpichanged_receipt_is_recorded_with_handle_and_flush_context() {
 
 #[test]
 fn windowposchanged_receipt_is_recorded_outside_a_window_write() {
-    let _serialized = crate::ecs::window::lock_self_initiated_for_test();
     let captured = capture_windowposchanged(SIGNOFF_DIRECTIVES);
     assert!(
         captured.contains(CONTROL_LINE),
@@ -295,8 +293,6 @@ fn displaychange_receipt_is_recorded_and_still_delegates_to_defwindowproc() {
 
 #[test]
 fn applied_suggested_position_is_recorded_as_a_synchronous_write() {
-    // 書込を撃つ側なので錠を取る（他テストの `in_swp` 検査を汚さない）。
-    let _serialized = crate::ecs::window::lock_self_initiated_for_test();
     // 政策未宣言＝従来どおり OS 提案位置を採る窓（`applied=true`）。
     let captured = capture_dpichanged(
         "info,wintf::ecs::window_proc=debug,wintf::transition=debug",
@@ -395,8 +391,6 @@ fn a_declined_suggested_position_records_the_receipt_but_no_write() {
 
 #[test]
 fn message_handlers_emit_nothing_under_the_default_directives() {
-    // 提案位置を採る配送が書込経路を通るので錠を取る。
-    let _serialized = crate::ecs::window::lock_self_initiated_for_test();
     for captured in [
         capture_dpichanged(DEFAULT_DIRECTIVES, None),
         capture_windowposchanged(DEFAULT_DIRECTIVES),
@@ -515,8 +509,6 @@ fn create_test_window() -> (HWND, HINSTANCE) {
 /// なるが、内側の解除が起点を消していれば `since_flush_us` が番兵に落ちて本檻が赤になる。
 #[test]
 fn windowposchanged_received_inside_a_window_write_carries_in_swp_and_flush_elapsed() {
-    // 一括書込を撃ちながら `in_swp` を読む——持ち上げる側と読む側の両方であり、錠は必須。
-    let _serialized = crate::ecs::window::lock_self_initiated_for_test();
     clean_slate();
     let (hwnd, instance) = create_test_window();
 

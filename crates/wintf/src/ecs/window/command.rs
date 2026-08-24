@@ -70,7 +70,7 @@ thread_local! {
     static SELF_INITIATED_DEPTH: Cell<i32> = const { Cell::new(0) };
 }
 
-/// テスト専用: カウンタを触る／読むテストを直列化する錠。**退役候補**。
+/// テスト専用: カウンタを触る／読むテストを直列化する錠。**退役済み（呼出 0）**。
 ///
 /// # スレッド局所化後は不要である（要件 6.6・8.2）
 ///
@@ -85,18 +85,13 @@ thread_local! {
 /// 読み取りも同じスレッドの内側で閉じるので、テストを直列化する必要はもう無い——錠なしで
 /// 並列に走らせても緑であることは `command_threadlocal_tests.rs` が固定している。
 ///
-/// # それでも今は残す
+/// # 呼出は 0 箇所である（退役済み・2026-08-24）
 ///
-/// 呼出が **21 箇所／5 ファイル**あり、撤去は本仕様の取り分（`command.rs` 1 ファイル）を
-/// 越えてテストハーネス側へ及ぶ。撤去の可否と実施は `areka-P0-test-cage-determinism` が
-/// rebase で受ける。それまでは**取っても無害**（ただの直列化）なので現状のまま残す。
-///
-/// # 使い方（残っている間）
-///
-/// ⑴ カウンタを**持ち上げる**側（[`guarded_set_window_pos`]／[`flush_window_pos_commands`]
-/// を呼ぶテスト）と ⑵ カウンタを**読む**側（[`is_self_initiated`]／`in_swp` を検査する
-/// テスト）の**両方**が取得すること。片側だけでは直列化にならない。読む側はテスト本体の
-/// 先頭で取得して最後まで持ち、持ち上げるだけの側は少なくとも当該呼出を含む区間で持つ。
+/// `areka-P0-test-cage-determinism` のタスク 7.2 で 5 ファイル 21 箇所の取得をすべて外した。
+/// 現在この関数を呼ぶコードはワークスペースに無く、`#[cfg(test)]` の未使用関数として
+/// `dead_code` 警告が出る（ワークスペースに `deny(warnings)`／`forbid(warnings)` は無いので
+/// テストは赤にならない）。定義そのものの扱い（削除するか残置するか）は同仕様のタスク 8.3
+/// で開発者が裁定する（要件 7.4 の引受先が実在しないため）。
 ///
 /// 毒化は無視する（`into_inner`）——1 本のテストの失敗が、以後の全テストを
 /// 「錠が毒化した」で連鎖失敗させないため。
@@ -955,10 +950,9 @@ mod tests {
         // guarded_set_window_pos スコープ外（ネストカウンタ 0）では false
         //
         // 注: SELF_INITIATED_DEPTH は**スレッド局所**になった（draw-load-parity task 4）ので、
-        // このテストスレッドで guarded_set_window_pos を呼ばない限り 0 のままである。錠は
-        // もう要らないが、退役は cage が rebase で受けるまで保留なのでそのまま取っておく
-        // （取っても無害）。スレッド局所であることの本体は `command_threadlocal_tests.rs`。
-        let _serialized = lock_self_initiated_for_test();
+        // このテストスレッドで guarded_set_window_pos を呼ばない限り 0 のままである。直列化の
+        // 錠は要らない（test-cage-determinism task 7.2 で退役）。スレッド局所であることの本体は
+        // `command_threadlocal_tests.rs`。
         assert!(!is_self_initiated());
     }
 
@@ -968,9 +962,8 @@ mod tests {
         // （このテスト内では enqueue していないため WINDOW_POS_COMMANDS は空。
         //  thread_local かつ同一テストスレッドのため他テストの enqueue 残留はない）
         //
-        // 末尾の `is_self_initiated()` はスレッド局所カウンタを読むので直列化は要らない。
-        // 錠は退役待ちのため残置（`lock_self_initiated_for_test` の doc）。
-        let _serialized = lock_self_initiated_for_test();
+        // 末尾の `is_self_initiated()` はスレッド局所カウンタを読むので直列化は要らない
+        // （錠は test-cage-determinism task 7.2 で退役）。
         SetWindowPosCommand::flush();
         // 便利関数経由でも同様に no-op
         flush_window_pos_commands();
