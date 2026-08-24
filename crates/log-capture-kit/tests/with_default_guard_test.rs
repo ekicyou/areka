@@ -475,6 +475,7 @@ const FILES_THAT_MUST_NOT_SPELL_THE_TOKENS: &[&str] = &[
     "crates/log-capture-kit/tests/with_default_guard_test.rs",
     "crates/log-capture-kit/tests/workspace_scan/mod.rs",
     "crates/log-capture-kit/tests/workspace_scan_test.rs",
+    "crates/log-capture-kit/tests/file_length_guard_test.rs",
 ];
 
 /// コメントを**除かずに**生テキストから走査語を探す（純関数）。
