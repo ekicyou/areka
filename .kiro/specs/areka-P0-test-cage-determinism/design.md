@@ -143,6 +143,7 @@ crates/log-capture-kit/
 └── tests/
     ├── capture_calibration_test.rs # 親（子プロセス 2 モード起動・`1 passed` 検査）＋ #[ignore] 子テスト
     ├── workspace_scan/mod.rs       # 走査器: walk(crates/**/*.rs) と strip_comments と scan_tokens（純関数）
+    ├── workspace_scan_test.rs      # **2026-08-24 実装時の追加**: 走査器の自己較正（8.4／10.3）。当初は「Unit（kit）＝src/」に置く想定だったが、走査器は `tests/` の共有 module なので `src/` からは見えない。較正だけを持つ試験対象を 1 本立て、下 2 本の見張りと同じ module を消費する
     ├── with_default_guard_test.rs  # 要件 8: 直接呼出の検知＋例外表＋較正（既知陽性で赤）＋dev-deps-only 検査＋capture-all 利用ファイルの例外表
     └── file_length_guard_test.rs   # 要件 10: 1,000 行番人＋例外表 11 件＋較正（例外を外すと赤）
 ```
@@ -590,8 +591,8 @@ fn fault_point(at: UploadFault) -> Result<(), PresentError>;
 
 ## Testing Strategy
 
-- **Unit（kit）**: 窓内先着で捕捉できる（3.4-a）／番兵欠落で panic／TRACE 捕捉（3.5）／他スレッド発火の非混入（3.6）／`LineFormat` 2 形の逐語（既存 4 形の実出力 fixture）／`count_levels`／`scan_tokens`・`strip_comments`・`over_limit` の純関数較正（8.4・10.3）。
-- **Integration（kit `tests/`）**: 較正の子プロセス 2 モード（3.4-b・9.6）／`with_default` 直接呼出 0 件＋例外表（2.6・8.1-8.3）／1,000 行番人＋例外表 11 件（10.1-10.3）／dev-deps-only（1.3・11.5）／capture-all 利用ファイルの例外表（1.6）。
+- **Unit（kit）**: 窓内先着で捕捉できる（3.4-a）／番兵欠落で panic／TRACE 捕捉（3.5）／他スレッド発火の非混入（3.6）／`LineFormat` 2 形の逐語（既存 4 形の実出力 fixture）／`count_levels`。
+- **Integration（kit `tests/`）**: 較正の子プロセス 2 モード（3.4-b・9.6）／`scan_tokens`・`strip_comments`・`over_limit`・`line_count` の純関数較正と列挙の被覆（8.3・8.4・10.3＝`workspace_scan_test.rs`。**2026-08-24 訂正**: 当初 Unit へ置くと書いたが走査器は `tests/` の共有 module なので `src/` からは見えない）／`with_default` 直接呼出 0 件＋例外表（2.6・8.1-8.3）／1,000 行番人＋例外表 11 件（10.1-10.3）／dev-deps-only（1.3・11.5）／capture-all 利用ファイルの例外表（1.6）。
 - **移行の回帰**: crate 単位で既存 lib テスト全緑（1.7・6.1）。wintf の 96 `capture_under_filter` 呼出が EnvFilter 契約の回帰スイート。
 - **④**: `chain_fault_tests.rs`（7 点・前状態 ⒜・回復）／`presenter_upload_failure_tests.rs`（presenter 側 ⒝・`reply` Err）／既存 `presenter_budget_steady_state_tests.rs`・`transition_record_tests.rs` 緑維持（5.5・5.6）。
 - **②**: 2 テストの assert 無改変＋30 回反復（4.6・9.3）。
