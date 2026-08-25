@@ -1,0 +1,92 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.88s
+     Running unittests src\main.rs (target\debug\deps\areka-f057fca863c678cf.exe)
+     Running tests\emo2_real_run.rs (target\debug\deps\emo2_real_run-468113a412155097.exe)
+     Running tests\smoke_boot_loop_exit.rs (target\debug\deps\smoke_boot_loop_exit-04750c5054a45dee.exe)
+     Running unittests src\lib.rs (target\debug\deps\areka_actor-b4ceab8699273335.exe)
+     Running tests\spike_ui_pump.rs (target\debug\deps\spike_ui_pump-db266f3100877c29.exe)
+     Running tests\toy_ui_pump_test.rs (target\debug\deps\toy_ui_pump_test-0ecdd65fc492cf4c.exe)
+     Running tests\toy_worker_test.rs (target\debug\deps\toy_worker_test-a248132aeaacc368.exe)
+     Running unittests src\lib.rs (target\debug\deps\areka_emo_atlas-e128a8600875e1ad.exe)
+     Running tests\atlas.rs (target\debug\deps\atlas-ef968e071d0f78f4.exe)
+     Running unittests src\lib.rs (target\debug\deps\areka_emo_compose-1f6a77d9a3775864.exe)
+     Running unittests src\lib.rs (target\debug\deps\areka_emo_present-b5199115fad96667.exe)
+     Running tests\swapchain_spike.rs (target\debug\deps\swapchain_spike-ef801f024da58505.exe)
+     Running unittests src\lib.rs (target\debug\deps\areka_emo_text-168663cc5c04d01b.exe)
+     Running tests\attach_wiring_test.rs (target\debug\deps\attach_wiring_test-0cc06d30364d0779.exe)
+     Running tests\choice_fixture_test.rs (target\debug\deps\choice_fixture_test-9b8a340e211190f4.exe)
+     Running tests\draw_readback_test.rs (target\debug\deps\draw_readback_test-f341c075e41be77a.exe)
+     Running tests\emo2_fixture_e2e_test.rs (target\debug\deps\emo2_fixture_e2e_test-ddfa107555f43996.exe)
+     Running tests\physical_extent_arbitration_test.rs (target\debug\deps\physical_extent_arbitration_test-81d8e6bf16c45214.exe)
+     Running tests\pipeline_test.rs (target\debug\deps\pipeline_test-c2bdf599edc7d8a7.exe)
+     Running tests\scale_invariance_test.rs (target\debug\deps\scale_invariance_test-011bbbbdf9bc0dfb.exe)
+     Running tests\vertical_fixture_test.rs (target\debug\deps\vertical_fixture_test-1eb6e27a26185d25.exe)
+     Running tests\viewbox_blit_spike.rs (target\debug\deps\viewbox_blit_spike-a7f07535a76da424.exe)
+     Running tests\viewbox_scroll_test.rs (target\debug\deps\viewbox_scroll_test-ff7a00af90d8b49c.exe)
+     Running unittests src\lib.rs (target\debug\deps\areka_ghost-9e4cb49911b3967e.exe)
+     Running tests\ghost.rs (target\debug\deps\ghost-9184353224186c51.exe)
+     Running unittests src\lib.rs (target\debug\deps\areka_kanade-08171ecd19ecaf05.exe)
+     Running tests\kanade.rs (target\debug\deps\kanade-14b351a7688b4bd0.exe)
+     Running unittests src\lib.rs (target\debug\deps\areka_parsers-dc3b845ad52ecb18.exe)
+     Running unittests src\lib.rs (target\debug\deps\areka_sakura-a48709eee542d572.exe)
+     Running unittests src\lib.rs (target\debug\deps\areka_seriko-55aca8020a742631.exe)
+     Running tests\balloon_face_e2e.rs (target\debug\deps\balloon_face_e2e-14ce4d9779342c5f.exe)
+     Running tests\bind_e2e.rs (target\debug\deps\bind_e2e-bdb7906373b5c80b.exe)
+     Running tests\cue_sequence.rs (target\debug\deps\cue_sequence-6f31c723590b1c71.exe)
+     Running tests\loop_integration.rs (target\debug\deps\loop_integration-c43e4353ffc8249b.exe)
+     Running tests\regression.rs (target\debug\deps\regression-3221144c91ce2c6e.exe)
+     Running unittests src\lib.rs (target\debug\deps\areka_sylphya-fe26250dcb109cb4.exe)
+     Running unittests src\lib.rs (target\debug\deps\areka_talk-4941156d25c72910.exe)
+     Running unittests src\lib.rs (target\debug\deps\dola-1ec3d11ec5158926.exe)
+     Running tests\compile.rs (target\debug\deps\compile-2dbde57616feb2ff.exe)
+     Running tests\cue.rs (target\debug\deps\cue-b0d6ffb2d1442bfc.exe)
+     Running tests\general.rs (target\debug\deps\general-2bf617ccbe462e8a.exe)
+     Running tests\runtime.rs (target\debug\deps\runtime-31a723c0d8165276.exe)
+     Running tests\trigger.rs (target\debug\deps\trigger-7e3a5e1ce0262288.exe)
+     Running tests\validation.rs (target\debug\deps\validation-3378460c92a53f41.exe)
+     Running unittests src\lib.rs (target\debug\deps\pilot-6e7198c788ac6091.exe)
+     Running unittests src\lib.rs (target\debug\deps\shiori_abi-71d1234b9b507339.exe)
+     Running tests\mock_brain_roundtrip.rs (target\debug\deps\mock_brain_roundtrip-604c3a1e73919c0c.exe)
+     Running unittests src\main.rs (target\debug\deps\shiori_host32_helper-e4475a935e163ae1.exe)
+     Running unittests src\lib.rs (target\debug\deps\shiori_host32_host-6d08bd0ebe26640d.exe)
+     Running tests\error_paths.rs (target\debug\deps\error_paths-0ce16925c370bc62.exe)
+     Running tests\lifecycle_cyclic_e2e.rs (target\debug\deps\lifecycle_cyclic_e2e-2d2a5ef6cca6e029.exe)
+     Running tests\lifecycle_kill_e2e.rs (target\debug\deps\lifecycle_kill_e2e-0694025aa9c69ffe.exe)
+     Running tests\shiori_load_e2e.rs (target\debug\deps\shiori_load_e2e-c7afadd23c4fa5f4.exe)
+[helper] LOAD 失敗（観測・ack[0]）: LoadReturnedFalse
+[helper] LOAD 失敗（観測・ack[0]）: LoadLibraryFailed(Error { code: HRESULT(0x8007007E), message: "指定されたモジュールが見つかりません。" })
+     Running tests\shiori_request_e2e.rs (target\debug\deps\shiori_request_e2e-8c14779cae4f529e.exe)
+     Running unittests src\lib.rs (target\debug\deps\shiori_host32_ipc-abba045eca446bf7.exe)
+     Running unittests src\lib.rs (target\debug\deps\shiori-70e72e2a527766ba.exe)
+     Running unittests src\lib.rs (target\debug\deps\shiori4_testdll-1bc6e4ce007be715.exe)
+     Running unittests src\lib.rs (target\debug\deps\wintf-3eff103fd1e70a51.exe)
+error: test failed, to rerun pass `-p wintf --lib`
+     Running tests\com.rs (target\debug\deps\com-2b4de4b7407fc3f8.exe)
+     Running tests\drag.rs (target\debug\deps\drag-6e1467f810fd97fa.exe)
+     Running tests\ecs.rs (target\debug\deps\ecs-643179c6b7b47cbf.exe)
+     Running tests\graphics.rs (target\debug\deps\graphics-601bb3272af3191b.exe)
+     Running tests\layout.rs (target\debug\deps\layout-24a82158c2b64805.exe)
+     Running tests\visual.rs (target\debug\deps\visual-3d305cae84ec3bc0.exe)
+     Running tests\widget.rs (target\debug\deps\widget-d9fd20ce0271c167.exe)
+     Running tests\win_app.rs (target\debug\deps\win_app-6c294ee792907555.exe)
+     Running tests\window.rs (target\debug\deps\window-8cd54964ff6e272b.exe)
+   Doc-tests areka_actor
+   Doc-tests areka_emo_atlas
+   Doc-tests areka_emo_compose
+   Doc-tests areka_emo_present
+   Doc-tests areka_emo_text
+   Doc-tests areka_ghost
+   Doc-tests areka_kanade
+   Doc-tests areka_parsers
+   Doc-tests areka_sakura
+   Doc-tests areka_seriko
+   Doc-tests areka_sylphya
+   Doc-tests areka_talk
+   Doc-tests dola
+   Doc-tests pilot
+   Doc-tests shiori_abi
+   Doc-tests shiori_host32_host
+   Doc-tests shiori_host32_ipc
+   Doc-tests shiori4_testdll
+   Doc-tests wintf
+error: 1 target failed:
+    `-p wintf --lib`
