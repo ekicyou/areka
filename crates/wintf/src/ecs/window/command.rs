@@ -70,37 +70,6 @@ thread_local! {
     static SELF_INITIATED_DEPTH: Cell<i32> = const { Cell::new(0) };
 }
 
-/// テスト専用: カウンタを触る／読むテストを直列化する錠。**退役済み（呼出 0）**。
-///
-/// # スレッド局所化後は不要である（要件 6.6・8.2）
-///
-/// この錠は [`SELF_INITIATED_DEPTH`] が**プロセス共有の `AtomicI32`** だった頃の産物である。
-/// 当時は、あるテストの [`guarded_set_window_pos`] が持ち上げた値を、並列に走る無関係な
-/// テストの [`is_self_initiated`]／観測レコードの `in_swp` 判定が読んでしまっていた
-/// （実測では `cargo test -p wintf --lib` を 60 周して **11 周が赤**になり、
-/// `test_flush_empty_queue_is_noop` の `assert!(!is_self_initiated())` と `msg` レコードの
-/// `in_swp=false` 検査がいずれも落ちた）。
-///
-/// カウンタは**スレッド局所になった**（`areka-P0-draw-load-parity` task 4）。持ち上げも
-/// 読み取りも同じスレッドの内側で閉じるので、テストを直列化する必要はもう無い——錠なしで
-/// 並列に走らせても緑であることは `command_threadlocal_tests.rs` が固定している。
-///
-/// # 呼出は 0 箇所である（退役済み・2026-08-24）
-///
-/// `areka-P0-test-cage-determinism` のタスク 7.2 で 5 ファイル 21 箇所の取得をすべて外した。
-/// 現在この関数を呼ぶコードはワークスペースに無く、`#[cfg(test)]` の未使用関数として
-/// `dead_code` 警告が出る（ワークスペースに `deny(warnings)`／`forbid(warnings)` は無いので
-/// テストは赤にならない）。定義そのものの扱い（削除するか残置するか）は同仕様のタスク 8.3
-/// で開発者が裁定する（要件 7.4 の引受先が実在しないため）。
-///
-/// 毒化は無視する（`into_inner`）——1 本のテストの失敗が、以後の全テストを
-/// 「錠が毒化した」で連鎖失敗させないため。
-#[cfg(test)]
-pub(crate) fn lock_self_initiated_for_test() -> std::sync::MutexGuard<'static, ()> {
-    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-    LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
-}
-
 /// 現在 `guarded_set_window_pos` 呼び出しスコープ内かどうかを返す。
 ///
 /// `WM_WINDOWPOSCHANGED` ハンドラ内で echo 判定に使用する。

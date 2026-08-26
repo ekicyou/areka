@@ -133,7 +133,7 @@
 1. While `draw-load-parity` が `SELF_INITIATED_DEPTH` のスレッド局所化（`command.rs`）を着地させていない, the 本仕様 shall `command.rs` に触れず、錠 `lock_self_initiated_for_test()` の利用を現状のまま保つ。
 2. When `draw-load-parity` の着地形（スレッド局所化）が本仕様のブランチへ取り込まれる, the テスト基盤 shall 錠 `lock_self_initiated_for_test()` の呼出（2026-08-22 時点 実呼出 21 箇所／5 ファイル）を退役させ、退役後も当該テスト群が並列実行で失敗 0 件であることを要件 9 の反復条件で示す。
 3. If `draw-load-parity` がスレッド局所化を見送った, then the 本仕様 shall その旨を申し送りに登記し、錠を温存したまま完了できる（是正そのものは本仕様の範囲外のまま）。
-4. **（2026-08-27 開発者裁定により改訂）** The 本仕様 shall 錠の退役後に不要となった錠の定義 `lock_self_initiated_for_test()`（`crates/wintf/src/ecs/window/command.rs:98-102`）を**本仕様で削除する**。**旧条文**（「その削除は `command.rs` の所有者（`draw-load-parity`）へ申し送り、本仕様では行わない」）は引受先が実在しないため破棄した——`draw-load-parity` は 2026-08-23 に完了・アーカイブ済みで申し送りを消化できず、かつ同 spec の `design.md:226` は逆に本仕様へ委ねており、**互いに相手へ委ねる閉ループの片端がアーカイブ済み**という形だった。同一項目は `dpi-transition-atomicity` でも 1 度落ちている（同 spec `mechanism-ledger.md:769` が「登記が行われておらず、引受先も 0 だった」と最終ゲートの実測で記録）。**呼出を 0 にしたのは本仕様のタスク 7.2 であり、死なせた側が片付ける**という裁定である。削除に伴い、同関数の doc コメントにある「定義そのものの扱いはタスク 8.3 で開発者が裁定する」の記述も同じ変更で除去する（裁定が済んだ後に残ると、存在しない判断を指し続けるため）。
+4. **（2026-08-27 開発者裁定により改訂）** The 本仕様 shall 錠の退役後に不要となった錠の定義 `lock_self_initiated_for_test()`（`crates/wintf/src/ecs/window/command.rs`。**起草時に記した `:98-102` は誤り**——それは `#[cfg(test)]` と関数本体だけを指しており、この関数の説明文 `:73-97` を残す。項目の実体は `:73-102` で、2026-08-27 のタスク 9.1 は直後の空行を含む 31 行を削除した）を**本仕様で削除する**。**旧条文**（「その削除は `command.rs` の所有者（`draw-load-parity`）へ申し送り、本仕様では行わない」）は引受先が実在しないため破棄した——`draw-load-parity` は 2026-08-23 に完了・アーカイブ済みで申し送りを消化できず、かつ同 spec の `design.md:226` は逆に本仕様へ委ねており、**互いに相手へ委ねる閉ループの片端がアーカイブ済み**という形だった。同一項目は `dpi-transition-atomicity` でも 1 度落ちている（同 spec `mechanism-ledger.md:769` が「登記が行われておらず、引受先も 0 だった」と最終ゲートの実測で記録）。**呼出を 0 にしたのは本仕様のタスク 7.2 であり、死なせた側が片付ける**という裁定である。削除に伴い、同関数の doc コメントにある「定義そのものの扱いはタスク 8.3 で開発者が裁定する」の記述も同じ変更で除去する（裁定が済んだ後に残ると、存在しない判断を指し続けるため）。
 
 ### Requirement 8: 再発防止（共有機構を迂回する捕捉の新設検知）
 **Objective:** 後続 spec の実装者として、共有機構を迂回した捕捉ヘルパや直書きを新設すると即座に赤になることを求める。それにより「後置するほどコピーが増える」構造が止まり、本仕様の成果が次の spec で崩れない。
@@ -224,7 +224,7 @@
 | 着地したコミット | PR#118 の squash `327e7fd3`。`Cell<i32>` の行と `command_threadlocal_tests.rs` の新設はいずれも同コミットが初出で、本ブランチの先祖 | `git log -S 'static SELF_INITIATED_DEPTH: Cell<i32>'`／`git log --diff-filter=A`／`git merge-base --is-ancestor 327e7fd3 HEAD`。取り込みは `76384c83` |
 | 「錠なし並列でも緑」を固定する新テスト | 実在。3 本・**3 passed / 0 failed** | `crates/wintf/src/ecs/window/command_threadlocal_tests.rs:37`・`:90`・`:127`（`cargo test -p wintf --lib command_threadlocal_tests`） |
 | 錠の実呼出 | **21 箇所 / 5 ファイル**（2026-08-23 の `verification/remeasure.md` §5 と増減なし） | 内訳は下表 |
-| 錠の定義 | `crates/wintf/src/ecs/window/command.rs:99`（`pub(crate) fn lock_self_initiated_for_test()`）。**2026-08-24 訂正**: 起草時の `:104` はタスク 7.2 の編集で `:99` へ動いた | **2026-08-27 開発者裁定で本仕様が削除する**（改訂後の要件 7.4）。旧記載「本仕様では削除しない」は引受先不在のため破棄 |
+| 錠の定義 | ~~`crates/wintf/src/ecs/window/command.rs:99`~~（`pub(crate) fn lock_self_initiated_for_test()`）。**2026-08-24 訂正**: 起草時の `:104` はタスク 7.2 の編集で `:99` へ動いた | **2026-08-27 削除済み**（タスク 9.1・改訂後の要件 7.4）。この行の file:line はもはや指す先を持たない。旧記載「本仕様では削除しない」は引受先不在のため破棄 |
 | 「プロセス共有のカウンタ」と書いたまま残る説明文 | **4 件**（要件 2.4 の対象・7.2 が是正） | `command_batch_tests.rs:25`・`command_transition_tests.rs:28`・`window_pos_tests.rs:40`・`window_pos_transition_tests.rs:21` |
 
 錠の実呼出の内訳（`let _serialized = …lock_self_initiated_for_test();` の実行行のみ。doc コメント中の参照は数えない）:
