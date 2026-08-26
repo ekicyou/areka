@@ -145,7 +145,14 @@ crates/log-capture-kit/
     ├── workspace_scan/mod.rs       # 走査器: walk(crates/**/*.rs) と strip_comments と scan_tokens（純関数）
     ├── workspace_scan_test.rs      # **2026-08-24 実装時の追加**: 走査器の自己較正（8.4／10.3）。当初は「Unit（kit）＝src/」に置く想定だったが、走査器は `tests/` の共有 module なので `src/` からは見えない。較正だけを持つ試験対象を 1 本立て、下 2 本の見張りと同じ module を消費する
     ├── with_default_guard_test.rs  # 要件 8: 直接呼出の検知＋例外表＋較正（既知陽性で赤）＋dev-deps-only 検査＋capture-all 利用ファイルの例外表。**2026-08-24 追加**: `env-filter` フィーチャを宣言する crate が `wintf` だけであることの検査（タスク 2.1 の申し送り＝フィーチャはワークスペースで統合されるので「有効にするのは wintf のみ」はコンパイラが強制しない宣言にすぎず、見張りが唯一の担保）
-    └── file_length_guard_test.rs   # 要件 10: 1,000 行番人＋例外表 11 件＋較正（例外を外すと赤）
+    ├── file_length_guard_test.rs   # 要件 10: 1,000 行番人＋例外表 11 件＋較正（例外を外すと赤）
+    └── temp_path_guard_test.rs     # **2026-08-27 追加（要件 12.4・12.5）**: 一時パスの固定名を検知する 4 本目の見張り＋例外表＋較正
+
+crates/temp-path-kit/               # **2026-08-27 新設（要件 12.1）**
+├── Cargo.toml                      # name = "temp-path-kit", publish = false, **依存 0**（std のみ）
+├── src/
+│   ├── lib.rs                      # TempPath（プロセス識別子＋連番＋Drop 後始末）と利用手順
+│   └── lib_tests.rs                # 自己テスト（同一プロセス内で名前が衝突しない・Drop で消える・別プロセス識別子なら別名）
 ```
 
 ### Modified Files（crate 別・責務 1 行）
@@ -312,7 +319,7 @@ flowchart TD
 | 7.1 | dlp 未着地では command.rs 非接触 | C5 錠 | 条件付きタスク | — |
 | 7.2 | 着地後に 21 呼出を退役＋反復 | C5 錠・C7 検証 | 19＋2 の退役 | — |
 | 7.3 | 見送りなら申し送りで完了 | C5 錠・文書 | 申し送り台帳 | — |
-| 7.4 | 定義削除は所有者へ | C5 錠・文書 | 申し送り台帳 | — |
+| 7.4 | **（改訂）定義削除は本仕様で行う** | C5 錠 | `command.rs:88-102` の削除・doc コメントの除去 | — |
 | 8.1 | 直接呼出の新設を検知 | C6 番人 | `with_default_guard_test` | — |
 | 8.2 | 例外表の追加は明示編集 | C6 番人 | `const ALLOWED` | — |
 | 8.3 | 兄弟ファイル・tests/・examples/ を走査 | C6 番人 | walker | — |
@@ -336,6 +343,18 @@ flowchart TD
 | 11.6 | 利用手順の文書 | C1 kit（lib.rs doc） | module doc | — |
 | 11.7 | 起床旗に触るテストは唯一の錠 | C3 settle・C5 錠 | `TICK_WAKE_TEST_LOCK` | — |
 | 11.8 | 共有の旗の上で不在主張をしない | C3 settle | 注入口経由 | — |
+| 12.1 | プロセス間で一意な一時パスの窓口 | C8 | `temp-path-kit` の `TempPath`（`process::id()`＋連番＋Drop） | — |
+| 12.2 | 書込 20 ファイルの移行 | C8 | `areka` 6・`areka-ghost` 12・`areka-parsers` 2 | — |
+| 12.3 | 判定内容を変えない | C8 | 主張・期待値・本数を保存／本番コード非接触 | — |
+| 12.4 | 迂回の新設を検知 | C6 番人 | `temp_path_guard_test.rs`＋例外表 | — |
+| 12.5 | 検知の較正 | C6 番人 | 既知陽性で赤になる自己テスト | — |
+| 12.6 | 同時 4 プロセス 30 回で 0 失敗 | C7 検証 | `repeat-tests.ps1 -Target custom`（`cargo test -p areka`） | — |
+| 12.7 | 走査式の較正 | C8・C6 番人 | `strip_comments` を用いる（コメント中の語で判定が反転した実例あり） | — |
+| 13.1 | 同一実行体・同一集合の A/B | C9 | `ensure_interest_probes` の環境変数による切替 | — |
+| 13.2 | 無効側の赤を除外して比較 | C9 | 対照イベントが赤を名乗る性質を利用・両側全緑で比較 | — |
+| 13.3 | 中央値と散らばりの両方 | C9 | 埋没する場合はそれを結論とする | — |
+| 13.4 | 反復の仕組みで実行し記録 | C9・C7 | `repeat-tests.ps1`／`summary.md` | — |
+| 13.5 | 何を測って何を測っていないかを登記 | C9・文書 | 申し送り台帳 | — |
 
 ## Components and Interfaces
 
@@ -345,9 +364,11 @@ flowchart TD
 | C2 捕捉サイトの移行 | 各 crate のテストコード | 24 未硬化＋16 硬化済み＋2 global を kit へ寄せ、説明文を是正 | 1.5, 1.7, 2.2-2.5, 6.1, 11.1-11.3 | C1（P0） | — |
 | C3 settle ヘルパ | `emo2_boot/spine.rs` | 「尽きるのが正常」の待機を壁時計＋観測量で有界化 | 4.2-4.6, 6.4 | `SPIN_WAIT`／`BACKOFF_SLEEP`（P1） | Service |
 | C4 `upload` 失敗注入と前状態保持 | `areka-emo-present/chain.rs` | 失敗 7 点の注入と prepare→commit・実行テスト | 5.1-5.8 | `GraphicsCore`／`Compositor`（P0）・`device_err`（P1） | Service, State |
-| C5 錠の退役 | `wintf` テストファイル 4 本 | dlp 着地後に 21 呼出を退役 | 7.1-7.4 | dlp の着地（P0・外部） | — |
-| C6 番人テスト | kit `tests/` | 直接呼出検知・1,000 行番人・dev-deps-only・較正 | 1.3, 2.6, 8.1-8.4, 10.1-10.3, 11.5 | walker（P0） | Batch |
+| C5 錠の退役 | `wintf` テストファイル 4 本 ＋ `command.rs` | 21 呼出を退役し、**定義も本仕様で削除**（2026-08-27 裁定で 7.4 改訂） | 7.1-7.4 | dlp の着地（P0・外部） | — |
+| C6 番人テスト | kit `tests/`（ワークスペース全体の見張りの置き場） | 直接呼出検知・1,000 行番人・**一時パスの固定名検知**・dev-deps-only・較正 | 1.3, 2.6, 8.1-8.4, 10.1-10.3, 11.5, **12.4, 12.5** | walker（P0） | Batch |
 | C7 検証ハーネスと文書 | `verification/`・requirements.md | 反復実行・ログ保存・再計測・申し送り | 2.1, 4.1, 3.7, 9.1-9.6, 5.8, 6.2, 7.3, 7.4, 10.4, 10.5, 11.4 | PowerShell（P1） | Batch |
+| C8 一時パスの共通窓口と全面移行 | テスト基盤（leaf crate `temp-path-kit`）＋各 crate のテストコード | プロセス間で一意な一時パスの窓口を 1 つ用意し、書込 20 ファイルを寄せる | 12.1-12.3, 12.6, 12.7 | std のみ（依存 0） | Service, State |
+| C9 常時化の費用の測定 | `verification/`・kit `probe.rs` | 同一実行体・同一集合で常駐 probe の有無だけを切り替える A/B | 13.1-13.5 | C7 ハーネス（P0） | Batch |
 
 ### テスト基盤層
 
@@ -439,7 +460,9 @@ pub fn ensure_interest_probes();
 | Field | Detail |
 |-------|--------|
 | Intent | ワークスペース `crates/**/*.rs` を走査し、共有機構の迂回・1,000 行超・依存方向違反を実行テストで検知する |
-| Requirements | 1.3, 2.6, 8.1, 8.2, 8.3, 8.4, 10.1, 10.2, 10.3, 11.5 |
+| Requirements | 1.3, 2.6, 8.1, 8.2, 8.3, 8.4, 10.1, 10.2, 10.3, 11.5, **12.4, 12.5**（2026-08-27 追加） |
+
+> **kit の `tests/` はワークスペース全体の見張りの置き場である**（2026-08-27 に明示的な決定として記録）。1,000 行の番人（要件 10）は既にログ捕捉と無関係であり、一時パスの見張り（要件 12.4）も同様である。3 本が同じ `workspace_scan/mod.rs`（ファイル列挙・コメント除去・語の走査）を共有できるのがこの配置の理由で、**見張りを別 crate へ分けると走査器が複製される**。crate 名が「ログ捕捉」だけを名乗っている点との食い違いは、crate 説明文の 1 行更新で解消する（タスク 8.3 の steering 登記と同じ塊で行う）。
 
 **Responsibilities & Constraints**
 - 走査器（`workspace_scan/mod.rs`）: `env!("CARGO_MANIFEST_DIR")/../..` から `crates/**`（`src/`・`tests/`・`examples/`・兄弟ファイルを含む）の `.rs` を `read_dir` 再帰で列挙（`target/`・`vendors/` 除外、**2026-08-24 訂正**: 検知走査から外すのは kit の `src/` だけで、kit の `tests/` は走査する。当初「kit 自身のディレクトリは検知走査から除外」と書いたが、同じ本節が `ALLOWED_DIRECT_CALLS` に `crates/log-capture-kit/tests/capture_calibration_test.rs` を載せていることと矛盾していた。実測（kit の `src/{capture,filter,global}.rs` が 3 件・`tests/capture_calibration_test.rs` が 1 件）と整合する読みは「`src/` は除外・`tests/` は走査」だけである。要件 10 の 1,000 行番人は kit のファイルも含めて測る）。`strip_comments(src)` で `//`・`//!`・`///` 行と行末コメントを除き、`scan_tokens(src, tokens) -> Vec<(line, token)>` で走査。純関数は fixture 文字列で自己テスト。
@@ -569,6 +592,7 @@ fn fault_point(at: UploadFault) -> Result<(), PresentError>;
 - **2026-08-24（タスク 7.1）に着手時の再計測で分岐⒝を再確認**（型・spec の状態・呼出数・新テストの緑をすべて実測。全数値は requirements.md「申し送り台帳 ⑴」）。同時に**要件 7.4 の引受先が実在しない**ことが判明した——`draw-load-parity` は 2026-08-23 に完了しアーカイブ済み（`.kiro/specs/completed/areka-P0-draw-load-parity/spec.json` の `"phase": "completed"`）で申し送りを消化できず、進行中 spec のうち `command.rs` の所有を主張するものも無い。本 C5 の範囲（定義は削除しない）は変えず、実在する引受先の確定はタスク 8.3 の開発者裁定へ回す（完了済み spec は申し送りを消化できないので引受先にならない）。
 - **同じ塊で是正する陳腐化（帰属の訂正・2026-08-24）**: 兄弟テスト 4 本の説明文が「**プロセス共有**の `SELF_INITIATED_DEPTH`」のままだった（`command_batch_tests.rs:25`・`command_transition_tests.rs:28`・`window_pos_transition_tests.rs:21`・`window_pos_tests.rs:40`）。錠の退役と同時に直す。**これは要件 2.4 の対象ではない**——要件 2.4（`requirements.md:78`）はログ捕捉サイトの「`with_default` はスレッドローカルゆえ並行実行でも干渉しない」型の誤説明に固有で、置換先も interest キャッシュの機序である。`SELF_INITIATED_DEPTH` の説明文に固有の受入基準は無く、是正の根拠は本 C5（「同じ塊で是正する陳腐化」）そのものである。起草時の本行と tasks.md 7.2 は要件 2.4 を挙げていたが、これは誤りなので取り下げる（タスク 7.2 は要件 2.4 の被覆を主張しない）。
 - **2026-08-24（タスク 7.2）に退役を実施**: 実呼出 21 箇所（兄弟テスト 4 本の 19＋`command.rs` の 2）をすべて削除し、`rg -n 'let _serialized = .*lock_self_initiated_for_test\(\)' crates --glob '*.rs'` は **0 件**。「プロセス共有」と現在形で述べる説明文も 4 件すべて書き換え（`crates/**/*.rs` の語ヒットは 30 行 / 21 ファイル → **26 行 / 17 ファイル**。残る 26 行は別の共有物の正しい説明と過去形の記述で、1 行も触っていない）。定義は削除せず残置（要件 7.4・処遇はタスク 8.3 の裁定）。doc の短縮により定義位置は `command.rs:104` → **`command.rs:99`** へ移動した。呼出 0 により `dead_code` 警告が 1 件増える（`cargo clippy -p wintf --all-targets` で `warning: function \`lock_self_initiated_for_test\` is never used` の 1 件。ワークスペースに `deny(warnings)`／`forbid(warnings)` は無く赤にならない）。
+- **2026-08-27 開発者裁定（要件 7.4 の改訂・本仕様で定義を削除する）**: 8.3 へ回していた「実在する引受先の確定」に決着が付いた。**⒜ 本仕様で削除する**が採られ、要件 7.4 は改訂済み（`requirements.md` の当該条文と申し送り台帳 ⑴ の該当行も同時に更新）。根拠は 3 点——⑴ 4 行の死んだコードのために新規 spec を立てるのは道具立てが荷物より重い、⑵ 進行中 spec への引受けは 2 度失敗した手の 3 度目（`draw-load-parity` と `dpi-transition-atomicity` の両方で落ちている）、⑶ **呼出を 0 にしたのは本仕様のタスク 7.2 であり、死なせた側が片付ける**。実施範囲は `crates/wintf/src/ecs/window/command.rs:88-102`（doc コメント 11 行＋関数 5 行）の削除のみ。**同じ変更で doc コメントの「扱いはタスク 8.3 で開発者が裁定する」も消える**（裁定後に残ると存在しない判断を指し続けるため）。削除後は `cargo clippy -p wintf --all-targets` の `dead_code` 警告 1 件（7.2 で増えたもの）が解消し 151 件へ戻る見込み。**本仕様が `command.rs` に触れる唯一の追加変更**であり、要件 11.5（`draw-load-parity` と共有ファイル 0）は同 spec が完了済みのため抵触しない。
 - **起床旗の制約（要件 11.7・11.8）**: `draw-load-parity` が共有の起床旗（`wintf/src/ecs/world/tick_wake.rs`）を導入し、本番経路が旗を立てるようになった（本仕様の接触集合では `emo2_boot/adapter.rs:122`・`balloon_visibility_phase.rs:113-114`）。旗に触る／`EcsWorld::decide_tick`（`world/mod.rs:551`）へ到達するテストは唯一の錠 `TICK_WAKE_TEST_LOCK`（`world/mod.rs:931`）を取り、2 本目の錠を作らない。共有の旗の上で不在主張は書かず、注入口（`tick_bridge.rs:230`／`world/mod.rs:560`）で行う。**要件 4 の待機 2 箇所は旗を観測しないので現状のままで抵触しない**。
 
 #### C7 検証ハーネスと文書
@@ -583,6 +607,50 @@ fn fault_point(at: UploadFault) -> Result<(), PresentError>;
 - 再計測（2.1／4.1）: `rg -l 'with_default\('`／硬化の印の有無・`spine*.rs` の `for _ in 0..`／`for now in` 走査・1,000 行超・錠呼出数を同じコマンドで採り requirements.md の表を現在値へ更新する。
 - 申し送り台帳（requirements.md 末尾に追記）: 5.8／6.2 の起票・7.3／7.4 の dlp 宛・10.5（合流後の新規 1,000 行超は赤）・11.4（`ReassertZOrder` 再表示隣接は e2e へ。理由: 再表示経路 `emo2_boot/balloon_visibility_phase.rs:385` → `presenter/visibility.rs:69` に Z 順の再断行要求は無く、挿入点は `wintf/src/ecs/window/zorder_pair_establish.rs:180` の確立時 1 発のみ＝固定対象の本番配線が無い・隣接の実測は実窓が要る）・9.5（553/1 の再現有無）・R-3（所要時間）。
 - 較正込みの報告（9.6）: 反復結果と並べて kit の較正テスト（Flow 2）と番人の較正テストの結果を記す。
+
+### 一時パス層（2026-08-27 開発者裁定で追加）
+
+#### C8 一時パスの共通窓口と全面移行
+
+| Field | Detail |
+|-------|--------|
+| Intent | テスト用の一時パスを**プロセス間で一意**に組み立てる窓口を 1 つ用意し、書込を行う 20 ファイルをそこへ寄せる |
+| Requirements | 12.1, 12.2, 12.3, 12.6, 12.7 |
+
+**設計判断: なぜ `log-capture-kit` へ相乗りせず新 crate を立てるか**
+
+- `log-capture-kit` の必須依存は `tracing`。一時パスの窓口は**依存 0（std のみ）**で足りる。相乗りすると `areka-parsers` のテストが理由なく `tracing` を引くことになる。
+- `log-capture-kit` の crate 説明文は「ログ捕捉テストの硬化機構をワークスペースで唯一定義する」であり、一時パスはその責務ではない。改称は 11 個の `Cargo.toml` と全 `use log_capture_kit::` サイトに波及するので採らない。
+- 新 crate `temp-path-kit` は `members = ["crates/*"]`（root `Cargo.toml:2-4`）で自動的に加わる。消費側は**パス依存 1 行**（`log-capture-kit` と同じ形＝`crates/areka/Cargo.toml:64`）。`areka` と `areka-ghost` は既に `log-capture-kit` の配線があるので同じ節へ 1 行、**`areka-parsers` だけが新規**。要件 11.5（`Cargo.toml` の変更は dev-dependencies の追加に限る）に適合する。
+- **見張り（要件 12.4）は本 crate ではなく `log-capture-kit/tests/` へ置く**（C6 参照）。走査器 `workspace_scan/mod.rs` を複製しないため。**窓口と見張りが別 crate に分かれるのは意図的な設計**である。
+
+**Responsibilities & Constraints**
+
+- 窓口の型（`temp-path-kit/src/lib.rs`）は既存の正解型の移植とする——`crates/areka/src/placement/placement_shared_test_support.rs:41-68` の `TempDir`＝`AtomicU32` の単調連番 ＋ `std::process::id()` ＋ `Drop` での再帰削除。**発明しない。** 同型は 2026-08-27 時点で 16 ファイルに実在する。
+- ディレクトリだけでなく**単一ファイル**の宛先も要る（`transition_signoff_tests.rs:102` は固定ファイル名 1 個）。窓口はディレクトリを配り、ファイルはその下に置く形へ寄せる（宛先の種類を増やさない）。
+- 移行対象は **`std::env::temp_dir()` を使い、かつ書込・削除を行う 20 ファイル**（`areka` 6・`areka-ghost` 12・`areka-parsers` 2）。読み出しのみの 2 ファイル（`placement_monitor_tests.rs`・`shiori-host32-host/tests/error_paths.rs`）は対象外で、その判定根拠を記録する。
+- 既存の主張・期待値・テスト本数を変えない（要件 12.3）。**本番コード（`#[cfg(test)]` の外）は 1 行も変えない**——`areka-ghost/src/config.rs`・`areka-ghost/src/shiori_wiring.rs`・`areka-parsers/src/package/resolve.rs` は製品ファイルなので、触るのはその中のテストモジュールだけである。
+- 移行済みで既に `std::process::id()` を使っている 16 ファイルは**本タスクの対象外**（既に正しい）。ただし見張りの例外表に載せるか窓口へ寄せるかは実装時に決め、根拠を記録する。
+- **走査式の較正（要件 12.7）**: 対象の絞り込みに使う式は必ず較正する。本仕様の調査中に、`main_restore_seam_tests.rs:15` の「外部 tempfile 非依存」という**コメント中の語**が絞り込みに拾われ、実際に落ちている当のファイルが候補から外れる事故が起きた。タスク 6.1 の `strip_comments` が同型の罠を既に解いているので、その部品を用いる。
+
+#### C9 ログ有効判定の常時化の費用の測定
+
+| Field | Detail |
+|-------|--------|
+| Intent | 硬化の代償として支払う実行時間を、**同一のテスト実行体・同一のテスト集合**で測る |
+| Requirements | 13.1, 13.2, 13.3, 13.4, 13.5 |
+
+**設計判断: R-3 の測り方を差し替える**
+
+旧 R-3（`## Performance & Scalability`・移行前 `main` との比較）は**タスク 8.2 が実施して分離不能に終わった**（移行前 39.6 秒 対 移行後 41.7 秒＝+2.1 秒 / +5.3%。移行後はテスト 111 件・実行体 6 本が多く、移行前側の散らばり 34.6〜77.8 秒が差の 20 倍。加えて移行前ツリーは素の `cargo test --workspace` で完走しない）。**ツリーを跨ぐ比較では集合が揃わない**ことが実証されたので、同一ツリー・同一実行体の A/B へ差し替える。
+
+**Responsibilities & Constraints**
+
+- 切替点は `crates/log-capture-kit/src/probe.rs:95` の `ensure_interest_probes()`。`OnceLock` の初期化の中で環境変数を 1 度だけ読み、無効指定なら probe を登録せずに戻る形にする。プロセス寿命で 1 度の判定なので測定対象への上乗せは無い。環境変数はワークスペースの規約どおり `AREKA_` 名前空間とし、既存の較正用変数（`AREKA_LOG_CAPTURE_CALIBRATION`・`tests/capture_calibration_test.rs:35`）と同じ流儀で命名する。
+- **無効側で赤になるテストは自ら名乗る**。要件 3.2 の対照イベントにより、硬化なしで取りこぼした窓は黙って空を返さず失敗を宣告するので、赤の集合は決定論的で特定可能である。この性質を利用して赤の集合を確定し、**両側から同じフィルタで除外して比較する**（要件 13.2）。除外後は**両側とも全緑**でなければ比較値として採らない。
+- 反復して中央値と散らばりの両方を採る（要件 13.3）。**差が散らばりに埋没する場合はそれをそのまま結論とする。** 8.2 の実測では移行前側単独の散らばりが差の 20 倍あったので、この結末は現実的な可能性である。
+- 実行は要件 9 の仕組み（`verification/repeat-tests.ps1`）で行い、記録は `verification/summary.md` へ（要件 13.4）。既存の `-Target custom` と `-Note` で足りる見込みだが、環境変数を渡す口が要る場合はハーネスに引数を 1 つ足す。
+- 得られた数字と**その数字が何を測っていて何を測っていないか**を申し送り台帳へ登記する（要件 13.5）。「測った、問題なかった」とは書かない。
 
 ## Error Handling
 
@@ -602,7 +670,7 @@ fn fault_point(at: UploadFault) -> Result<(), PresentError>;
 - **反復証跡（9.1-9.5）**: workspace 10 回・seriko 30 回・待機 30 回・（着地時）wintf lib 30 回。赤はログ保存とテスト名採取。553/1 の再現有無を記録。
 
 ## Performance & Scalability
-- `Interest::sometimes` 常態化はテストバイナリ限定。9.1 の反復で `cargo test --workspace` の所要時間を移行前（main）と比較して記録する（R-3）。
+- `Interest::sometimes` 常態化はテストバイナリ限定。**2026-08-27 改訂（R-3 の測り方の差し替え）**: 旧方針「9.1 の反復で `cargo test --workspace` の所要時間を移行前（main）と比較して記録する」は**タスク 8.2 が実施して分離不能に終わった**ため破棄する（+2.1 秒 / +5.3% は得たが、テスト集合が違い、移行前側の散らばりが差の 20 倍で、移行前ツリーは素の全体テストで完走すらしない）。差し替え後は**同一ツリー・同一実行体で常駐 probe の有無だけを切り替える A/B**（要件 13・C9）で測る。
 - ④ の定常経路（外形不変）に新しい確保・新しい D3D 呼出は無い。`fault_point` は非 test ビルドで空関数。
 
 ## Migration Strategy
@@ -610,6 +678,7 @@ fn fault_point(at: UploadFault) -> Result<(), PresentError>;
 2. crate 単位で移行（seriko → keeper 3 crate → atlas／compose → emo-present → emo-text → areka → wintf → 統合テスト 2 本）。各段で `cargo test -p <crate>` 緑。
 3. 検知テスト（8.x）を有効化し 0 件を確認。
 4. ②・④ は独立に実施（ファイル共有なし）。
+5. **2026-08-27 裁定ぶん（要件 12・13 と改訂後の 7.4）は上記 1-4 の完了後に実施する**。順序は ⑴ 錠の定義の削除（`command.rs`・独立） → ⑵ `temp-path-kit` の新設と自己テスト → ⑶ 20 ファイルの移行（crate 単位: `areka` → `areka-ghost` → `areka-parsers`） → ⑷ 一時パスの見張りの有効化と較正 → ⑸ `cargo test -p areka` の同時 4 プロセス 30 回反復 → ⑹ 常時化の費用の A/B 測定 → ⑺ 申し送り台帳の登記。⑹ は `probe.rs` を触るので ⑵-⑸ と**同時に進めない**（⑸ の反復が測定対象の実行体を共有するため）。
 5. ⑦ は dlp の状態で分岐。⑩ は kit と同時に有効化（例外表 11 件）。
 6. 反復検証と申し送り登記。
 

@@ -133,7 +133,7 @@
 1. While `draw-load-parity` が `SELF_INITIATED_DEPTH` のスレッド局所化（`command.rs`）を着地させていない, the 本仕様 shall `command.rs` に触れず、錠 `lock_self_initiated_for_test()` の利用を現状のまま保つ。
 2. When `draw-load-parity` の着地形（スレッド局所化）が本仕様のブランチへ取り込まれる, the テスト基盤 shall 錠 `lock_self_initiated_for_test()` の呼出（2026-08-22 時点 実呼出 21 箇所／5 ファイル）を退役させ、退役後も当該テスト群が並列実行で失敗 0 件であることを要件 9 の反復条件で示す。
 3. If `draw-load-parity` がスレッド局所化を見送った, then the 本仕様 shall その旨を申し送りに登記し、錠を温存したまま完了できる（是正そのものは本仕様の範囲外のまま）。
-4. The テスト基盤 shall 錠の退役後に `command.rs` 本体の錠定義が不要になる場合でも、その削除は `command.rs` の所有者（`draw-load-parity`）へ申し送り、本仕様では行わない。
+4. **（2026-08-27 開発者裁定により改訂）** The 本仕様 shall 錠の退役後に不要となった錠の定義 `lock_self_initiated_for_test()`（`crates/wintf/src/ecs/window/command.rs:98-102`）を**本仕様で削除する**。**旧条文**（「その削除は `command.rs` の所有者（`draw-load-parity`）へ申し送り、本仕様では行わない」）は引受先が実在しないため破棄した——`draw-load-parity` は 2026-08-23 に完了・アーカイブ済みで申し送りを消化できず、かつ同 spec の `design.md:226` は逆に本仕様へ委ねており、**互いに相手へ委ねる閉ループの片端がアーカイブ済み**という形だった。同一項目は `dpi-transition-atomicity` でも 1 度落ちている（同 spec `mechanism-ledger.md:769` が「登記が行われておらず、引受先も 0 だった」と最終ゲートの実測で記録）。**呼出を 0 にしたのは本仕様のタスク 7.2 であり、死なせた側が片付ける**という裁定である。削除に伴い、同関数の doc コメントにある「定義そのものの扱いはタスク 8.3 で開発者が裁定する」の記述も同じ変更で除去する（裁定が済んだ後に残ると、存在しない判断を指し続けるため）。
 
 ### Requirement 8: 再発防止（共有機構を迂回する捕捉の新設検知）
 **Objective:** 後続 spec の実装者として、共有機構を迂回した捕捉ヘルパや直書きを新設すると即座に赤になることを求める。それにより「後置するほどコピーが増える」構造が止まり、本仕様の成果が次の spec で崩れない。
@@ -180,6 +180,32 @@
 7. If 本仕様のテストが共有の起床旗（`crates/wintf/src/ecs/world/tick_wake.rs`）に触る、または tick 実行判定（`EcsWorld::decide_tick`・`world/mod.rs:551`）へ到達する, then the テスト基盤 shall 既存の唯一の錠 `ecs::world::TICK_WAKE_TEST_LOCK`（`world/mod.rs:931`）を取り、2 本目の錠を新設しない（`draw-load-parity` の実装中に錠が 2 本へ分裂した実例がある）。
 8. The 本仕様 shall 共有の起床旗の上で「旗が立っていない」という不在主張を書かない（本番経路が旗を立てるようになったため成立しない）。省略側の主張が要る場合は注入口（`tick_one_frame_with`・`tick_bridge.rs:230`／`EcsWorld::decide_tick_with`・`world/mod.rs:560`）で行う。2026-08-23 時点で本仕様の接触集合のうち起床旗を立てる本番経路は `emo2_boot/adapter.rs:122` と `emo2_boot/balloon_visibility_phase.rs:113-114` の 2 箇所で、既存の待機テストはいずれも旗を観測しない（要件 4 の 2 箇所は現状のままで本条に抵触しない）。
 
+### Requirement 12: テスト用一時パスのプロセス間衝突の解消（2026-08-27 開発者裁定で本仕様へ追加）
+**Objective:** 本仕様が用意した反復検証の仕組みを実際に使う開発者として、同じテストを複数プロセスで同時に走らせてもテスト同士が一時ファイルを奪い合って落ちないことを求める。それにより「負荷をかけた反復」という本仕様の成果物が、それ自身の副作用で使えなくなる状態を解消する。
+
+**裁定の背景**: タスク 8.2 が要件 9.5 の追跡で `cargo test -p areka` を同時 4 プロセスで 30 回反復したところ、**30 回中 3 回が赤**になった。原因は捕捉でも待機でも退役した錠でもなく、**プロセス内では一意だがプロセス間では共有される固定の一時パス**である（`crates/areka/src/placement/transition_signoff_tests.rs:102` の固定ファイル名、`crates/areka/src/main_restore_seam_tests.rs:16-20` の `unique_temp_dir`——後者は名前に反しプロセス間では一意でなく、`plant_minimal_ghost`（`:24`）が冒頭で `remove_dir_all` するため隣のプロセスの前提を消す）。8.2 の時点では「`crates/` の変更なので範囲外・別 spec へ起票」としたが、**2026-08-27 の裁定で本仕様が全解決する**ことになった。要件 10.4（既存ファイルを分割・縮小しない）は 1 ファイルの行数の目安に固有の制約であり、本要件はその適用範囲外である。
+
+#### Acceptance Criteria
+1. The テスト基盤 shall テスト用の一時パスを**プロセス間で一意**に組み立てる窓口を 1 つ用意する（プロセス識別子と単調増加の連番を名前に含め、後始末を伴う）。既に実在する正解の型（`crates/areka/src/placement/placement_shared_test_support.rs:41-68` の `TempDir`＝`AtomicU32` の連番＋`std::process::id()`＋`Drop` での再帰削除）を基準とし、crate をまたいで引ける位置へ置く。**発明ではなく移植である**（同じ型は 2026-08-27 時点で 16 ファイルに実在する）。
+2. The テスト基盤 shall `std::env::temp_dir()` からテスト用のパスを組み立て、**かつ書込または削除を行う 20 ファイル**をこの窓口へ移行する（2026-08-27 実測。内訳: `areka` 6・`areka-ghost` 12・`areka-parsers` 2）。読み出しのみの 2 ファイル（`crates/areka/src/placement/placement_monitor_tests.rs`・`crates/shiori-host32-host/tests/error_paths.rs`）は衝突し得ないため対象外とし、その判定根拠を記録する。
+3. The 移行 shall 各テストの既存の主張・期待値・テスト本数を変えない（要件 6.1 と同じ規律）。本番コード（`#[cfg(test)]` の外）の挙動は 1 行も変えない。
+4. The テスト基盤 shall 窓口を迂回する新設（`std::env::temp_dir()` から固定名を組み立てる箇所）を検知して失敗する実行テストを 1 本置く。例外表は移行後の実測値で開始し、項目の追加は明示的な編集としてのみ許す（要件 8.2・10.2 と同じ形）。
+5. The 検知テスト shall 既知の陽性例で赤になること自体を自己テストで固定する（要件 8.4・10.3 と同じ較正の規律）。
+6. When 移行が完了する, the 検証 shall `cargo test -p areka` を同時 4 プロセスで **30 回以上**反復し、一時パスの衝突に起因する失敗が 0 件であることを要件 9 の仕組み（`verification/repeat-tests.ps1`）で示す。
+7. The 本仕様 shall 移行対象の判定に用いた走査式を較正する。**走査語がコメント中に現れて判定が反転する事故が本仕様の調査中に実際に起きている**——`crates/areka/src/main_restore_seam_tests.rs:15` の「外部 tempfile 非依存」というコメント中の `tempfile` が絞り込み式に拾われ、**実際に落ちている当のファイルが候補から外れた**。タスク 6.1 が同型の罠（コメント除去の要否）を既に解いているので、その部品を用いること。
+
+### Requirement 13: ログ有効判定の常時化の費用の測定（2026-08-27 開発者裁定で本仕様へ追加）
+**Objective:** 本仕様の完了を承認する開発者として、硬化の代償として支払っている実行時間が数字で示されていることを求める。それにより「速くなったか遅くなったか分からないまま硬化を常設する」状態を解消する。
+
+**裁定の背景**: design.md `:605`（R-3）は `cargo test --workspace` の所要時間を移行前（`main`）と比較して記録することを求めていた。タスク 8.2 がこれを実施し **移行前 39.6 秒 対 移行後 41.7 秒（+2.1 秒 / +5.3%・各 5 回の中央値）** を得たが、**差の出所を分離できなかった**——移行後はテストが 111 件・実行体が 6 本多く、移行前側の測定値自身の散らばり（34.6〜77.8 秒）が差の 20 倍ある。さらに移行前ツリーは素の `cargo test --workspace` で完走しない（赤が出て cargo が 92 本中 58 本で打ち切る）。2026-08-27 の裁定で**同一テスト集合による測り直しを本仕様で行う**。
+
+#### Acceptance Criteria
+1. The 測定 shall **同一のテスト実行体・同一のテスト集合**に対して、常駐の仕掛け（`crates/log-capture-kit/src/probe.rs:95` の `ensure_interest_probes`）が有効な場合と無効な場合の所要時間を比較する。**移行前ツリーとの比較は用いない**（集合が揃わないことがタスク 8.2 で実証された）。
+2. The 測定 shall 常駐を無効にした側で赤になるテスト（硬化なしでは取りこぼす捕捉テスト群）を特定し、除外して比較するか、除外できない場合はその影響量を測って記録する。**赤を含んだままの所要時間を比較値として採らない。**
+3. The 測定 shall 反復して中央値と散らばりの両方を採り、**差が散らばりの範囲に埋没する場合はその旨をそのまま結論とする**（差が出たことにしない）。
+4. The 測定 shall 要件 9 の反復の仕組み（`verification/repeat-tests.ps1`）で実行し、記録を `verification/summary.md` に残す。
+5. When 測定が完了する, the 本仕様 shall 得られた数字と、**その数字が何を測っていて何を測っていないか**を申し送り台帳へ登記する。
+
 ---
 
 ## 申し送り台帳
@@ -198,7 +224,7 @@
 | 着地したコミット | PR#118 の squash `327e7fd3`。`Cell<i32>` の行と `command_threadlocal_tests.rs` の新設はいずれも同コミットが初出で、本ブランチの先祖 | `git log -S 'static SELF_INITIATED_DEPTH: Cell<i32>'`／`git log --diff-filter=A`／`git merge-base --is-ancestor 327e7fd3 HEAD`。取り込みは `76384c83` |
 | 「錠なし並列でも緑」を固定する新テスト | 実在。3 本・**3 passed / 0 failed** | `crates/wintf/src/ecs/window/command_threadlocal_tests.rs:37`・`:90`・`:127`（`cargo test -p wintf --lib command_threadlocal_tests`） |
 | 錠の実呼出 | **21 箇所 / 5 ファイル**（2026-08-23 の `verification/remeasure.md` §5 と増減なし） | 内訳は下表 |
-| 錠の定義 | `crates/wintf/src/ecs/window/command.rs:104`（`pub(crate) fn lock_self_initiated_for_test()`） | 本仕様では削除しない（要件 7.4） |
+| 錠の定義 | `crates/wintf/src/ecs/window/command.rs:99`（`pub(crate) fn lock_self_initiated_for_test()`）。**2026-08-24 訂正**: 起草時の `:104` はタスク 7.2 の編集で `:99` へ動いた | **2026-08-27 開発者裁定で本仕様が削除する**（改訂後の要件 7.4）。旧記載「本仕様では削除しない」は引受先不在のため破棄 |
 | 「プロセス共有のカウンタ」と書いたまま残る説明文 | **4 件**（要件 2.4 の対象・7.2 が是正） | `command_batch_tests.rs:25`・`command_transition_tests.rs:28`・`window_pos_tests.rs:40`・`window_pos_transition_tests.rs:21` |
 
 錠の実呼出の内訳（`let _serialized = …lock_self_initiated_for_test();` の実行行のみ。doc コメント中の参照は数えない）:
