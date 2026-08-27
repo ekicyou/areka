@@ -68,8 +68,8 @@ areka は ukadoc 準拠の互換ベースウェア（SSP 代替）であり、�
 3. When バルーン定義に `vertical` キーが宣言されていないとき、the areka バルーン文字表示 shall 正典既定である横書きとして扱う（`vertical` の未宣言と `vertical,0` の宣言は、表示結果としては同一であってよい）。
 4. The areka バルーン定義の解析 shall `vertical` の**未宣言**と**宣言された値**を区別して保持する（未宣言を `0` の宣言へ潰さない。共存規則の判定に宣言の有無が必要なため）。
 5. When `vertical` が基層（`descript.txt`）と面別上書き層（`balloon(s/k)*s.txt`）の双方で宣言されているとき、the areka バルーン定義の解析 shall 既存の 2 層マージ規約（後勝ち）を `vertical` にも同一に適用する。
-6. If `vertical` に `0` でも `1` でもない値が指定されたとき、then the areka 書字方向の解決 shall 警告を記録したうえで正典既定の横書きへ縮退し、起動を妨げない。
-7. If `vertical` の値が空であるとき、then the areka 書字方向の解決 shall 前項と同一に扱う（警告＋横書きへ縮退）。
+6. If `vertical` に `0` でも `1` でもない値が指定されたとき、then the areka 書字方向の解決 shall 警告を記録したうえで当該宣言を**指定なし**として扱い（`writing_mode` に有効な宣言があればそちらを採る＝Requirement 2 の共存規則・無ければ正典既定の横書きへ縮退）、起動を妨げない。
+7. If `vertical` の値が空であるとき、then the areka 書字方向の解決 shall 前項と同一に扱う（警告＋指定なし扱い・2.7 の `writing_mode` 未知値と対称——設計 DD6）。
 8. The areka バルーン定義の解析 shall `vertical` の追加によって、既存の解析済みキー（`origin.*`／`wordwrappoint.*`／`validrect.*`／`font.*`／`writing_mode` 等）の解析結果を 1 つも変えない。
 
 > **層の注記（自明修正・2026-08-27）**: 6.・7. の警告と縮退の主体は**解析層ではなく書字方向の解決層**である。`areka-parsers` のバルーン解析は「語彙外の値も解釈せず・警告せず素通し」という無警告契約をテストで固定しており（`parse_tests.rs:284-287`）、警告の先例と観測資産（`count_levels`）は `writing.rs` 側に在る（ギャップ分析 §3.2）。解析層は生値の保持（4.）のみを担う。
