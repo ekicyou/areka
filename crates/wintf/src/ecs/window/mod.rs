@@ -12,6 +12,8 @@ mod window_pos;
 pub(crate) mod window_system;
 /// グループ単位の重なり（受け口・観測・純判断・記録の唯一の出口）。
 mod zorder_group;
+/// グループ系の記録行を組む純関数だけの層（マクロを含まない＝出力先を分裂させない）。
+mod zorder_group_diag;
 mod zorder_pair;
 /// 記録の行を組む純関数だけの層（マクロを含まない＝出力先を分裂させない）。
 mod zorder_pair_diag;

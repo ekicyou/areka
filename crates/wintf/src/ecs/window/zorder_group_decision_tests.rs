@@ -137,10 +137,15 @@ fn scan(windows: &[HWND], reached_top: bool) -> FrontScan {
 }
 
 /// 観測結果を手で組む（`decide_group_fix` の直接検査用）。
+///
+/// 実測列は宣言列と同じにしてある——判断（`decide_group_fix`）は実測列を見ないので
+/// ここでは差が意味を持たない。宣言列と実測列が食い違う入力での書式の固定は、
+/// 記録の層の兄弟テスト（`zorder_group_diag_tests.rs`）が持つ。
 fn observation(id: u32, hwnds: &[HWND], missing: usize, order_ok: bool) -> GroupObservation {
     GroupObservation {
         id,
         hwnds: hwnds.to_vec(),
+        measured_front: hwnds.to_vec(),
         missing,
         order_ok,
     }
@@ -362,7 +367,7 @@ fn unresolved_members_drop_out_but_keep_the_declared_order() {
     assert!(obs.order_ok, "存在する窓だけでの相対順が成立していない");
 }
 
-/// 解決できた窓が 2 枚未満なら、前面走査そのものを行わない。
+/// 解決できた窓が 2 枚未満なら、前面走査そのものを行わない（実測列も空のまま）。
 #[test]
 fn a_group_with_fewer_than_two_windows_is_never_scanned() {
     let e = entities(2);
@@ -373,6 +378,69 @@ fn a_group_with_fewer_than_two_windows_is_never_scanned() {
     assert_eq!(obs.hwnds.len(), 1);
     assert_eq!(obs.missing, 1);
     assert_eq!(probe.scan_calls.get(), 0, "比べる相手が居ないのに走査した");
+    // 測っていないのだから実測列は空——宣言列を写しておくと「測った」と読める行が出る
+    assert!(
+        obs.measured_front.is_empty(),
+        "走査していないのに実測列が埋まっている: {:?}",
+        obs.measured_front
+    );
+}
+
+/// 実測列は**走査が実際に出会った並び**であって、宣言された並びではない（要件 9.1／9.2）。
+///
+/// 宣言は手前から `[m0, m1, m2]`、実際の重なりは手前から `[m1, m0, m2]` である。
+/// 走査は末尾 `m2` から手前へ辿るので `m0`・`m1` の順に出会い、実測列はそれを手前から
+/// 並べ直した `[m1, m0, m2]` になる。ここが宣言の写しなら、**まったく別の Z 形が同じ
+/// 記録行を出す**ことになり、`fix` 行が「どの窓がどの窓のすぐ手前に着いたか」に答えられない。
+#[test]
+fn the_measured_column_comes_from_the_scan_not_from_the_declaration() {
+    let e = entities(3);
+    let (m0, m1, m2) = (fake_hwnd(0x10), fake_hwnd(0x11), fake_hwnd(0x12));
+    let (x, y) = (fake_hwnd(0xF0), fake_hwnd(0xF1));
+    let probe = CountingProbe::new()
+        .with_handle(e[0], m0)
+        .with_handle(e[1], m1)
+        .with_handle(e[2], m2)
+        // m2 から手前へ: 構成外の窓を挟みつつ m0 → m1 の順で出会う（＝宣言の逆）
+        .with_front(m2, &[x, m0, y, m1], true);
+
+    let obs = observe_group(
+        &ZOrderGroupSpec {
+            id: 8,
+            members: e.clone(),
+        },
+        &probe,
+    );
+
+    assert!(!obs.order_ok, "崩れた重なりが成立と判定された");
+    // 宣言列は宣言のまま（task 2.1 の意味を変えない＝足すのであって置き換えない）
+    assert_eq!(obs.hwnds, vec![m0, m1, m2], "宣言列が書き換えられた");
+    // 実測列は走査が出会った順（手前から）
+    assert_eq!(
+        obs.measured_front,
+        vec![m1, m0, m2],
+        "実測列が走査を映していない"
+    );
+    // グループの外側は数も位置も持ち込まない（要件 3.6／6.1——構成外の窓は落ちる）
+    for foreign in [x, y] {
+        assert!(
+            !obs.measured_front.contains(&foreign),
+            "構成外の窓 {foreign:?} が実測列に載っている"
+        );
+    }
+
+    // 対照: 同じメンバーで実際の重なりが宣言どおりなら、実測列は宣言列と一致する
+    let ordered = CountingProbe::new()
+        .with_handle(e[0], m0)
+        .with_handle(e[1], m1)
+        .with_handle(e[2], m2)
+        .with_front(m2, &[m1, x, m0], true);
+    let obs_ok = observe_group(&ZOrderGroupSpec { id: 8, members: e }, &ordered);
+    assert!(obs_ok.order_ok, "宣言どおりの重なりが不成立と判定された");
+    assert_eq!(
+        obs_ok.measured_front, obs_ok.hwnds,
+        "成立した巡で実測列と宣言列が食い違った"
+    );
 }
 
 /// 相対順は「部分列」で見る——構成外の窓が前・間・後ろのどこに何枚挟まっても成立する。

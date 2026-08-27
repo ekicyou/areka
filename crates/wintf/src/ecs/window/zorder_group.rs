@@ -38,9 +38,10 @@
 //! `record_*`／`log_*` を呼ぶ（既存ペア機構が [`super::zorder_pair_diag`] との間で
 //! 敷いたのと同じ一線＝「マクロを含むか否か」）。
 //!
-//! **行の組立は暫定でここに同居している**——記録タグ 4 種の定数と行を組む純関数は
-//! 後続タスク（2.2）が兄弟モジュールへ切り出す。切り出しの継ぎ目は
-//! 「[`emit`] を呼ばない `*_line` 関数」であり、動かすのはその一群だけで済む。
+//! **行の組立は兄弟の [`super::zorder_group_diag`] に在る**——記録タグ 5 種の定数と
+//! 行を組む純関数はあちらに閉じており（マクロを 1 つも含まない）、こちらは戻り値を
+//! そのまま本文にする。組立を二重に持たないための分割であり、境界は
+//! 「マクロを含むか否か」の一線である。
 
 // 結線（維持系・トリガ・areka 側の射影）が着地するまでの段階的実装のための緩和である。
 // 本モジュールの公開面はテストからしか呼ばれない時期があり、そのあいだ未使用の警告が
@@ -50,11 +51,13 @@
 use std::collections::HashMap;
 
 use bevy_ecs::prelude::*;
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 use windows::Win32::Foundation::HWND;
 
+use super::zorder_group_diag::{
+    applied_line, fix_line, rejected_line, skip_line, verify_failed_line,
+};
 use super::zorder_pair::{FrontScan, measure_windows_in_front};
-use super::zorder_pair_diag::hwnd_field;
 
 // ============================================================================
 // ZOrderGroups - areka からの受け口
@@ -199,6 +202,8 @@ pub(crate) struct GroupObservation {
     pub id: u32,
     /// 解決できたメンバーのみ（順序保存）
     pub hwnds: Vec<HWND>,
+    /// 前面走査が**実際に出会った**構成窓の列（手前から順）
+    pub measured_front: Vec<HWND>,
     /// ハンドル未解決の数（要件 8.4 の記録材料）
     pub missing: usize,
     /// 前面走査による相対順の成否
@@ -269,18 +274,61 @@ pub(crate) fn observe_group<P: GroupProbe + ?Sized>(
         }
     }
 
-    let order_ok = match hwnds.last() {
-        Some(back) if hwnds.len() >= 2 => order_holds(&hwnds, &probe.scan_in_front(*back)),
+    let (order_ok, measured_front) = match hwnds.last() {
+        Some(back) if hwnds.len() >= 2 => {
+            let scan = probe.scan_in_front(*back);
+            (order_holds(&hwnds, &scan), measured_members(&hwnds, &scan))
+        }
         // 比べる相手が居ないので「崩れている」とは言えない（判断側が別の理由で見送る）。
-        _ => true,
+        // 測っていない以上、実測の列は空のままにする——宣言列を写すと「測った」と読める。
+        _ => (true, Vec::new()),
     };
 
     GroupObservation {
         id: spec.id,
         hwnds,
+        measured_front,
         missing,
         order_ok,
     }
+}
+
+/// 前面走査が**実際に出会った**構成窓を、手前から順に並べ直す（Win32 も World も触らない）。
+///
+/// `hwnds` は手前から順の解決済みメンバー、`scan` はその**末尾**から手前へ辿った走査結果
+/// （近い順）である。走査は奥から手前へ進むので、出会った順をそのまま並べると奥から順に
+/// なる——逆順にしてから、走査の起点である末尾を最後尾に足すと、記録に載せられる
+/// 「手前から順」の実測列になる。
+///
+/// # なぜ判定用の bool だけでは足りないのか（要件 9.1／9.2）
+///
+/// 相対順の成否（[`order_holds`]）は 1 ビットであり、「どう違っていたか」を持たない。
+/// 記録に宣言列を載せると、**まったく別の重なりが同じ字面の行を出す**——解決できた
+/// メンバー集合さえ同じなら行は byte 一致になる。それでは「どの窓がどの窓のすぐ手前へ
+/// 着いたか」に答えられず、とりわけ検証不一致の行が、不一致を報せながら期待どおりの
+/// 並びを見せることになる。よって走査の結果そのものを値として残す。
+///
+/// # 構成窓だけを残す（要件 3.6／6.1）
+///
+/// 走査には構成外の窓も入っているが、ここで濾し落とす。観測結果がグループの外側について
+/// 何も持たないという [`GroupObservation`] の不変条件は、この列にも等しくかかる——
+/// 他人の窓の位置を持てば、それを見て動かす規則を書く場所ができてしまう。
+///
+/// 走査に現れなかったメンバー（本当に奥に居るか、走査が打ち切られたか）は列に載らない。
+/// 載せないのが正しい——載せれば「測れなかった」が「測って、そこに在った」に化ける。
+pub(crate) fn measured_members(hwnds: &[HWND], scan: &FrontScan) -> Vec<HWND> {
+    let Some(back) = hwnds.last().copied() else {
+        return Vec::new();
+    };
+    let mut found: Vec<HWND> = scan
+        .windows
+        .iter()
+        .copied()
+        .filter(|seen| *seen != back && hwnds.contains(seen))
+        .collect();
+    found.reverse();
+    found.push(back);
+    found
 }
 
 /// 前面走査の結果から、宣言どおりの相対順が成立しているかを決める（Win32 も World も触らない）。
@@ -403,6 +451,8 @@ pub(crate) fn decide_group_fix(obs: &GroupObservation) -> GroupFixDecision {
 enum GroupRecordLevel {
     /// 診断専用（既定運転では無音・サインオフの `RUST_LOG` で点灯）
     Debug,
+    /// 不正な指定の拒否（既定運転でも残す・`logging.md` の「無効なパラメーター」区分）
+    Warn,
     /// 検証不一致（既定運転でも残す）
     Error,
 }
@@ -415,98 +465,9 @@ enum GroupRecordLevel {
 fn emit(level: GroupRecordLevel, line: &str) {
     match level {
         GroupRecordLevel::Debug => debug!("{line}"),
+        GroupRecordLevel::Warn => warn!("{line}"),
         GroupRecordLevel::Error => error!("{line}"),
     }
-}
-
-/// 値が取得できなかったフィールドの番兵（既存ペア機構と同じ字面）。
-const UNKNOWN: &str = "-";
-
-/// 窓の列をログ用の 1 フィールドへ（空列は番兵）。
-fn hwnd_list_field(hwnds: &[HWND]) -> String {
-    if hwnds.is_empty() {
-        return UNKNOWN.to_string();
-    }
-    hwnds
-        .iter()
-        .map(|h| hwnd_field(Some(*h)))
-        .collect::<Vec<_>>()
-        .join(",")
-}
-
-/// 連鎖の各段を「動かした窓@挿入先」の列へ（空列は番兵）。
-fn moves_field(head: HWND, chain: &[HWND]) -> String {
-    if chain.is_empty() {
-        return UNKNOWN.to_string();
-    }
-    let mut anchor = head;
-    let mut parts = Vec::with_capacity(chain.len());
-    for moved in chain {
-        parts.push(format!(
-            "{}@{}",
-            hwnd_field(Some(*moved)),
-            hwnd_field(Some(anchor))
-        ));
-        anchor = *moved;
-    }
-    parts.join(",")
-}
-
-/// 見送りの記録行（理由必須・要件 8.3）。
-fn skip_line(
-    group_id: Option<u32>,
-    reason: GroupSkipReason,
-    observed: Option<&GroupObservation>,
-) -> String {
-    let group_id = match group_id {
-        Some(id) => id.to_string(),
-        None => UNKNOWN.to_string(),
-    };
-    let (resolved, missing, order_ok) = match observed {
-        Some(obs) => (
-            obs.hwnds.len().to_string(),
-            obs.missing.to_string(),
-            obs.order_ok.to_string(),
-        ),
-        None => (
-            UNKNOWN.to_string(),
-            UNKNOWN.to_string(),
-            UNKNOWN.to_string(),
-        ),
-    };
-    format!(
-        "[zorder-group] skip group_id={group_id} reason={reason:?} \
-         resolved={resolved} missing={missing} order_ok={order_ok}"
-    )
-}
-
-/// 是正の記録行（出した指令と、次巡の検証で採った実測を同一行に載せる・要件 9.1／9.2）。
-fn fix_line(verify: &GroupVerify, observed: &GroupObservation) -> String {
-    format!(
-        "[zorder-group] fix group_id={id} head={head} moves={moves} measured={measured}",
-        id = verify.id,
-        head = hwnd_field(Some(verify.head)),
-        moves = moves_field(verify.head, &verify.chain),
-        measured = hwnd_list_field(&observed.hwnds),
-    )
-}
-
-/// 検証不一致の記録行（error 水準・要件 8.2）。
-fn verify_failed_line(verify: &GroupVerify, observed: &GroupObservation) -> String {
-    format!(
-        "[zorder-group] verify-failed group_id={id} head={head} moves={moves} \
-         measured={measured} missing={missing}",
-        id = verify.id,
-        head = hwnd_field(Some(verify.head)),
-        moves = moves_field(verify.head, &verify.chain),
-        measured = hwnd_list_field(&observed.hwnds),
-        missing = observed.missing,
-    )
-}
-
-/// 受理の記録行（台帳が指定を受け入れた事実）。
-fn applied_line(detail: &str) -> String {
-    format!("[zorder-group] applied {detail}")
 }
 
 /// 見送りを記録する（理由必須）。
@@ -580,6 +541,21 @@ pub(crate) fn record_group_verification(verify: &GroupVerify, observed: &GroupOb
 /// ——サインオフの grep 対象を 1 本に保つための形である。
 pub fn log_group_applied(detail: &str) {
     emit(GroupRecordLevel::Debug, &applied_line(detail));
+}
+
+/// 指定を拒否した事実を記録する（台帳を持つ層＝areka から呼ぶ・要件 8.1／8.3）。
+///
+/// 水準は **warn**——`logging.md` の「無効なパラメーター」区分であり、作者の書き間違いは
+/// 診断手順を有効化していない通常運転でも読めなければ「黙って無視された」に等しい
+/// （要件 8.3）。見送り（[`GroupSkipReason`] を伴う debug）とは別の概念なので、タグも
+/// 水準も分けてある。
+///
+/// 拒否理由もトークン列も**組み上がった文字列**で受け取る。理由の型（areka の
+/// `ZOrderReject`）は areka 側にあり、`wintf → areka` の import は禁止だからである
+/// （[`log_group_applied`] と同じ形）。タグと出力先だけをこちらが与えることで、
+/// サインオフの grep 対象は 1 本に保たれる。
+pub fn log_group_rejected(reason: &str, tokens: &str) {
+    emit(GroupRecordLevel::Warn, &rejected_line(reason, tokens));
 }
 
 #[cfg(test)]
