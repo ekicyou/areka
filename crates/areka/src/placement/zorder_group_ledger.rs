@@ -52,9 +52,9 @@
 //! トークン前後の空白は上流（さくらスクリプトの引数分割・kv 層）で既に落ちており、
 //! ここでの `trim` はその冗長化である（実際に届く値に対しては恒等）。
 
-// 本 task（1.1）が載せるのは語彙＋トークン解釈＋拒否判定の純関数までであり、非 test
-// ビルド（bin 本体）からの消費点はまだ無い。台帳本体（task 1.3）と drain 相の結線が
-// 着地するまで dead_code が出るが、これは段階実装の想定内である（`move_cue.rs:37` および
+// 本モジュールが載せるのは語彙＋トークン解釈＋拒否判定＋台帳の状態遷移（task 1.1〜1.3）
+// までであり、非 test ビルド（bin 本体）からの消費点はまだ無い。drain 相の結線が着地する
+// まで dead_code が出るが、これは段階実装の想定内である（`move_cue.rs:37` および
 // `input_events/throttle.rs:13-17` と同じ扱い。**本 allow は結線着地時に撤去する**）。
 #![allow(dead_code)]
 
@@ -114,6 +114,36 @@ pub enum ZOrderReject {
         /// 解釈できなかったトークン。
         token: String,
     },
+    /// 既にいずれかのグループに属しているスコープを含んでいた（要件 3.2）。
+    /// 伴う値は衝突したスコープを、要素列に現れた順で 1 度ずつ並べたもの。
+    ///
+    /// 突き合わせは**スコープ**で行う。明示モードの `sN`／`bN` と数値モードの `N` は
+    /// 同じスコープを指すものとして扱う（要件 3.3）——本層へ届く時点でモードの区別は
+    /// [`GroupElement`] へ畳まれているので、この同一視は台帳側に規則を足さずに成立する。
+    CrossGroupRedesignation {
+        /// 既に塞がっていたスコープ（初出順・重複なし）。
+        scopes: Vec<u32>,
+    },
+}
+
+/// グループの出所。解除（`\![reset,zorder]`）が落とすのはタグ由来だけである。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GroupSource {
+    /// `\![set,zorder,...]` タグ由来。解除で落ちる（要件 4.1）。
+    Tag,
+    /// shell descript の `seriko.zorder` 由来の基底。解除で落ちない（要件 4.1）。
+    Descript,
+}
+
+/// 前後関係を確定させる窓の並び 1 本。並びの左側ほど手前。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ZOrderGroup {
+    /// セッション内で単調増加する識別子。解除で空いても配り直さない。
+    pub id: u32,
+    /// 窓 1 枚単位の要素列（正規化済み）。
+    pub members: Vec<GroupElement>,
+    /// 出所。
+    pub source: GroupSource,
 }
 
 /// 同一スコープの 2 窓を `[Balloon, Char]` の隣接ブロックへ寄せた記録（要件 2.4 の材料）。
@@ -353,6 +383,180 @@ fn normalize_scope_blocks(elements: Vec<GroupElement>) -> (Vec<GroupElement>, Ve
     (normalized, normalizations)
 }
 
+// =============================================================================
+// 台帳（グループの唯一の正本）
+// =============================================================================
+
+/// スコープ窓 Z 順グループの台帳。プロセス内の状態のみを持つ。
+///
+/// 保持するのは descript 由来の基底（高々 1 つ）とタグ由来のグループ列である。
+/// 不変条件は design「Data Models / Domain Model」の 4 つ——⑴どのスコープも高々
+/// 1 グループ ⑵グループ内で同一窓は 1 回 ⑶同一スコープの 2 窓は `[Balloon, Char]`
+/// の隣接ブロック ⑷基底は高々 1 つ。⑵⑶は [`parse_zorder_tokens`] が要素列を組む
+/// 段で既に成立しており、台帳は受け取った要素列を組み替えないことでそれを保つ。
+/// ⑴は追加の入口で、⑷は基底の入口で、それぞれ本モジュールが守る。
+///
+/// # 保存しない（要件 1.5）
+///
+/// 台帳は保存の仕組みに一切接続しない。「ゴーストが終了するまで有効で、次回起動へ
+/// 持ち越さない」は、値がプロセスと同じ寿命を持つこと＝**何もしないこと**で成立する。
+///
+/// # 窓の存在を知らない（要件 1.4）
+///
+/// 要素はスコープ番号と窓種別のままで持つ。まだ現れていない窓のスコープも取り除かず、
+/// 実在する窓だけを選ぶのは射影（drain 相）の担当である。そのため台帳の判断分岐は
+/// 実機・実ディスプレイ無しで全て検査できる（要件 10.1）。
+///
+/// # 読み出しの並び
+///
+/// [`ZOrderGroupLedger::groups`] は「基底が先頭・以降はタグの追加順」で返す。これは
+/// 決定論のための**読み出し順**であって前後関係の規則ではない。異なるグループどうしの
+/// 相対的な前後関係は固定の規則で決めない（要件 3.6）。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ZOrderGroupLedger {
+    /// 基底（あれば先頭）＋タグ由来のグループ列。`groups()` がそのまま貸し出す。
+    groups: Vec<ZOrderGroup>,
+    /// 先頭が descript 由来の基底かどうか。真なら `groups[0].source == Descript`。
+    has_base: bool,
+    /// 次に配るグループ ID。解除で空いた ID も配り直さない。
+    next_id: u32,
+    /// 内容が動いた回数。射影を組み直すかどうかの判定に使う。
+    version: u64,
+}
+
+impl ZOrderGroupLedger {
+    /// タグ由来のグループとして追加を試みる（要件 3.1／3.2／3.3）。
+    ///
+    /// `members` は [`parse_zorder_tokens`] が受理した要素列であること（呼び出し規約）。
+    /// モード混在・タグ内重複・要素 2 個未満・解釈不能の 4 分岐は解釈の段で既に落ちて
+    /// おり、台帳が返す拒否は [`ZOrderReject::CrossGroupRedesignation`] だけである。
+    ///
+    /// 拒否したときは台帳を**一切**変更しない（要件 8.1 の部分適用禁止）。`members` を
+    /// 動かすのは検査を通った後だけなので、部分適用が起きないことは制御の流れで保証される。
+    ///
+    /// グループ数にも要素数にも上限検査を設けない（要件 3.7）。
+    pub fn try_add_tag_group(&mut self, members: Vec<GroupElement>) -> Result<u32, ZOrderReject> {
+        let scopes = self.colliding_scopes(&members);
+        if !scopes.is_empty() {
+            return Err(ZOrderReject::CrossGroupRedesignation { scopes });
+        }
+
+        let id = self.allocate_id();
+        self.groups.push(ZOrderGroup {
+            id,
+            members,
+            source: GroupSource::Tag,
+        });
+        self.version += 1;
+        Ok(id)
+    }
+
+    /// shell descript 由来の基底を据える（要件 5.1／5.3）。
+    ///
+    /// 基底は高々 1 つなので、前の基底は残らない（不変条件⑷）。据え直した基底には
+    /// 新しい ID を配る——同じ要素列でも「据え直された別のグループ」だからである。
+    ///
+    /// # タグ由来のグループとの関係（正典沈黙箇所の裁量）
+    ///
+    /// 終状態は [`ZOrderGroupLedger::reset_to_descript`] と一致させる＝タグ由来の
+    /// グループは残さない。要件 5.1 は基底の適用を**起動時・タグ実行より前**と定めて
+    /// おり、タグ由来のグループと衝突する状況は正典の経路では起こらない。そのうえで
+    /// design の署名は拒否を返す口を持たないため、衝突しても「黙って落とす」（要件 8.3
+    /// が禁じる）ことも「不変条件⑴を破ったまま載せる」こともできない。要件 4.1 が
+    /// 「基底へ戻った状態」を唯一の形として既に定義しているので、それに合わせる。
+    ///
+    /// # 空の要素列
+    ///
+    /// [`parse_zorder_tokens`] が受理する要素列は必ず 2 個以上（要件 1.6）なので、
+    /// 空列は正典の経路では届かない。届いた場合は**基底なし**として扱う——0 要素の
+    /// グループを載せると、要件 4.2 の「基底が無ければ既定状態へ戻る」が
+    /// 「0 要素の基底へ戻る」に化けて意味が変わるからである。
+    pub fn set_descript_base(&mut self, members: Vec<GroupElement>) {
+        // 何かが載っていたか、これから載るものがあるときだけ内容が動く。
+        let changed = !self.groups.is_empty() || !members.is_empty();
+
+        self.groups.clear();
+        self.has_base = false;
+
+        if !members.is_empty() {
+            let id = self.allocate_id();
+            self.groups.push(ZOrderGroup {
+                id,
+                members,
+                source: GroupSource::Descript,
+            });
+            self.has_base = true;
+        }
+
+        if changed {
+            self.version += 1;
+        }
+    }
+
+    /// `\![reset,zorder]` の適用（要件 4.1／4.2／4.3）。
+    ///
+    /// タグ由来のグループを全て落として基底へ戻す。基底が無ければ既定状態（グループ
+    /// 0 本）へ戻る。基底は ID ごと生き残るので、基底が押さえているスコープは解除の
+    /// 後も再指定の拒否対象であり続ける（要件 5.5）。落とされた側のスコープは空くので、
+    /// 新しい組み合わせとして受け付けられる（要件 4.3）。
+    pub fn reset_to_descript(&mut self) {
+        let keep = usize::from(self.has_base);
+        if self.groups.len() == keep {
+            // 落とすものが無い＝内容は動かない。版も進めない。
+            return;
+        }
+
+        self.groups.truncate(keep);
+        self.version += 1;
+    }
+
+    /// グループの読み口（射影が読む）。基底が先頭・以降はタグの追加順。
+    pub fn groups(&self) -> &[ZOrderGroup] {
+        &self.groups
+    }
+
+    /// 内容が動いた回数。射影を組み直すかどうかの判定に使う。
+    ///
+    /// **内容が実際に動いたときだけ**進む。拒否された追加も、落とすものが無い解除も、
+    /// 何も載らない基底の据え直しも進めない——射影を組み直す理由が無いからである。
+    pub fn version(&self) -> u64 {
+        self.version
+    }
+
+    /// 既にいずれかのグループに属しているスコープを、要素列に現れた順で 1 度ずつ拾う。
+    ///
+    /// 基底もタグ由来も区別せず参加させる（要件 5.5）。
+    fn colliding_scopes(&self, members: &[GroupElement]) -> Vec<u32> {
+        let occupied: HashSet<u32> = self
+            .groups
+            .iter()
+            .flat_map(|group| group.members.iter().map(|member| member.scope))
+            .collect();
+
+        let mut hit: Vec<u32> = Vec::new();
+        for member in members {
+            if occupied.contains(&member.scope) && !hit.contains(&member.scope) {
+                hit.push(member.scope);
+            }
+        }
+        hit
+    }
+
+    /// 次のグループ ID を配る。解除で空いた ID も配り直さない（セッション内単調増加）。
+    ///
+    /// 飽和は 1 セッションで 42 億回の受理を要するため到達しない。到達した場合でも
+    /// 台帳の整合は崩れない（ID の一意性だけが失われる）ので、飽和側へ倒しておく。
+    fn allocate_id(&mut self) -> u32 {
+        let id = self.next_id;
+        self.next_id = self.next_id.saturating_add(1);
+        id
+    }
+}
+
 #[cfg(test)]
 #[path = "zorder_group_ledger_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "zorder_group_ledger_state_tests.rs"]
+mod state_tests;
