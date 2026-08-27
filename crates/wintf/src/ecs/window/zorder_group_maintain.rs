@@ -397,3 +397,7 @@ mod zorder_group_verify_tests;
 #[cfg(test)]
 #[path = "zorder_group_wake_tests.rs"]
 mod zorder_group_wake_tests;
+
+#[cfg(test)]
+#[path = "zorder_group_order_tests.rs"]
+mod zorder_group_order_tests;
