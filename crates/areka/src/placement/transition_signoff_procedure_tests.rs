@@ -41,6 +41,7 @@ use crate::placement::transition_diag::{
     KIND_GROUND, KIND_HOLD, KIND_OFFSET, KIND_SNAPSHOT, OFFSET_FIELDS, OFFSET_VERDICT_ALL,
     PLACEMENT_KIND_ALL, SNAPSHOT_FIELDS,
 };
+use crate::placement::transition_judge_offset::judge_offset_log;
 
 /// 手順書のリポジトリ相対パス（`crates/areka` から見た相対）。
 const PROCEDURE_RELATIVE_PATH: &str =
@@ -373,6 +374,8 @@ fn the_offset_procedure_states_what_the_judge_does_not_see() {
         "素の追従スコープ",
         "重なり順",
         "task 10.1",
+        // 5 件目（task 8.1 の限界 ⒟ の後半）——最初の起点より前の行は 1 件も判定されない。
+        "最初の遷移起点より前に出た記録は 1 件も判定されない",
     ] {
         assert!(
             text.contains(phrase),
@@ -382,13 +385,20 @@ fn the_offset_procedure_states_what_the_judge_does_not_see() {
 }
 
 #[test]
-fn the_offset_procedure_forbids_the_two_shapes_that_make_a_false_red() {
-    // 手順が「素の追従スコープを 1 つ含める」「キーワード指定は素材消費後に低い側へ遷移させる」
-    // の 2 つを**必須**として書いていること。どちらを落としても、正しい実装のまま赤になる
-    // ログが採れてしまう（task 8.1 のレビューが名指しした 2 つの偽の赤）。
+fn the_offset_procedure_forbids_the_three_shapes_that_make_a_false_red() {
+    // 手順が ⑴「素の追従スコープを 1 つ含める」⑵「キーワード指定を**素材未消費のまま**
+    // 遷移へ 1 度通す」⑶「そのうえで素材を消費させてから低い側へ遷移させる」の 3 つを
+    // **必須**として書いていること。どれを落としても、正しい実装のまま赤になるログが
+    // 採れてしまう（task 8.1 のレビューが 2 つ、その次のレビューが 3 つ目を名指しした）。
+    //
+    // ⑵ が要るのは、`check_alignment_residual` がキーワード指定スコープの集合を**遷移の
+    // 内側に現れた `keyword-pending` の行だけ**から作るためである。素材を先に消費させると
+    // 門は 2 度と出ず、集合が空のまま `measured == 0` になって `NoKeywordAlignmentMeasured`
+    // の偽の赤が出る——⑶ だけを書いた手順は、その形へ**まっすぐ導く**。
     let text = read_procedure(OFFSET_PROCEDURE_RELATIVE_PATH);
     for phrase in [
         "キーワード指定でないバルーン",
+        "素材未消費のまま遷移へ最低 1 度通す",
         "素材を消費させてから低い拡大率側へ遷移させる",
         "偽の赤",
     ] {
@@ -397,6 +407,51 @@ fn the_offset_procedure_forbids_the_two_shapes_that_make_a_false_red() {
             "本仕様の手順書が偽の赤を防ぐ必須の手 `{phrase}` を書いていない"
         );
     }
+}
+
+/// 要約行の数が入る 3 箇所を `N`・`M`・`0` へ置き換える（合格は違反 0 件ゆえ 3 つ目は `0`）。
+fn with_count_placeholders(line: &str) -> String {
+    let mut out = String::new();
+    let mut runs = 0usize;
+    let mut chars = line.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c.is_ascii_digit() {
+            while chars.peek().is_some_and(char::is_ascii_digit) {
+                chars.next();
+            }
+            out.push_str(["N", "M", "0"].get(runs).copied().unwrap_or("?"));
+            runs += 1;
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+#[test]
+fn the_offset_procedure_quotes_the_pass_line_the_report_prints() {
+    // §6.1 の合格語は `OffsetReport` の `Display` そのものである。書式だけを変えると、
+    // 手順書の合格語が静かに古くなり、採取者は**存在しない語を読む**（要件 8.5 が名指しで
+    // 禁じている形）。ゆえに文言は手書きせず Display から起こして突合する。
+    let printed = judge_offset_log("").to_string();
+    let first = printed
+        .lines()
+        .next()
+        .expect("Display は 1 行目に要約を刷る");
+    let expected = with_count_placeholders(first);
+    let text = read_procedure(OFFSET_PROCEDURE_RELATIVE_PATH);
+    assert!(
+        text.contains(&expected),
+        "本仕様の手順書の合格語が Report の書式と食い違う（期待: `{expected}`）"
+    );
+
+    // 較正 ⑴: 置き換えそのものが効いていること（効いていなければ上は恒真になり得る）。
+    assert_eq!(
+        with_count_placeholders("遷移 12 本・行 3 件・違反 0 件"),
+        "遷移 N 本・行 M 件・違反 0 件"
+    );
+    // 較正 ⑵: 書式を変えた形は載っていない＝上の検査は字面を本当に見ている。
+    assert!(!text.contains(&expected.replace('・', ", ")));
 }
 
 #[test]
