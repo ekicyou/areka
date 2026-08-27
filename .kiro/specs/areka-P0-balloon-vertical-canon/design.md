@@ -14,7 +14,7 @@
 - `vertical` と `writing_mode` の共存規則を **単一の決定点** に集約し、正典の再改訂（SC14）に対する追随点を 1 箇所へ保つ（2.1〜2.8）。
 - 正典と既に一致している縦書き座標意味論を決定論テストで固定し、一致していない 1 点（origin クランプ正準）を正典側へ是正する（3.1〜3.11）。
 - 実装しない正典語彙（`\_l`／`\f` 系／下線／矢印／プロパティ族）を、完全な語彙・採った前提・追跡先とともに `doc/COMPAT_ARCHITECTURE.md` §8 へ登記する（4／5／7／8／9.3／9.4／11／12）。
-- 成功基準: ワークスペース全体のテストが緑（10.8）・追跡先 spec への双方向登記が実在確認済み（4.5／7.5／8.4）・実行時の挙動変化は「`vertical` の受理」と「宣言 origin の字義解決」の 2 点だけに限局する。
+- 成功基準: ワークスペース全体のテストが緑（10.8）・追跡先 spec への双方向登記が実在確認済み（4.5／7.5／8.4）・実行時の挙動変化は「`vertical` の受理」と「宣言 origin の字義解決」の 2 点だけに限局する（**この限局は、validrect 外 origin を宣言する既存資産——実ゴースト定義 `emo2-kakukaku` を含む——を正典推奨形〔宣言削除・表示不変〕へ是正して初めて成立する**——2026-08-28 討議 #1）。
 
 ### Non-Goals
 
@@ -35,6 +35,7 @@
 - **`TextRegion` の描画開始点の解決規約**（`areka-emo-text::region`）——宣言された `origin` を字義どおり用いること、未宣言時の書字開始角への縮退、validrect 外宣言の DEBUG 記録。
 - **縦書き座標意味論の正典適合の証跡**——`origin.x`＝1 列目右端／`origin.y`＝字送り開始／`wordwrappoint.y` 折返し／`wordwrappoint.x` 不参照／`validrect` 不変／負値＝反対端基準を固定する決定論テスト。
 - **縦書きフィクスチャ 2 種**（正典キー版・拡張キー版）とその同値性。
+- **repo 全域のバルーン定義ファイルにおける validrect 外 `origin` 宣言の正典適合**（2026-08-28 設計討議 #1 で裁定＝境界拡張）——`crates/pilot/**` の実ゴースト定義**データファイル**を含む。コード（`emo2_boot` 等）には触れない。
 - **バルーン縦書きに関する互換台帳の登記**（`doc/COMPAT_ARCHITECTURE.md` §8）と、`doc/emo2-conformance-scope.md` の陳腐化是正。
 - **SSP 仕様への疑義 SC1〜SC15 の保持**と、areka が採った前提の明示。
 
@@ -44,7 +45,7 @@
 - `crates/areka-sylphya/**` の**全域**——プロパティの実導出・語彙表・件数錠。`areka-P0-currentghost-property-tree`／`areka-P0-property-query-channels`／`areka-P0-property-catalog-lists` が所有する。
 - `\f[align]`／`\f[valign]`／下線の**実装**——`areka-P0-text-decoration-canon` が所有する（SC1 の採択は本仕様が確定させ、同 spec は再審議せず継承する）。
 - `arrow0`／`arrow1` の**画像と座標の実導出**——`areka-P0-balloon-canon-residue` 項目 1 の第 3 軸が所有する。
-- `crates/areka/src/emo2_boot/**`・`placement/**`・`presenter/**`——本仕様は非接触（W6.95 同居 3 本とのファイル素を保つ）。
+- `crates/areka/src/emo2_boot/**`・`placement/**`・`presenter/**`——本仕様は非接触（W6.95 同居 3 本とのファイル素を保つ）。**`crates/pilot/**` のコードも非接触**（触るのは上記境界拡張のとおり実ゴースト定義**データファイル 1 件**＝`emo2-kakukaku/descript.txt` の origin 宣言 2 行のみ）。
 - **完了 spec のアーカイブ本体**（`.kiro/specs/completed/areka-P0-emo-text-layer/**`）——非改変。上書きの事実は COMPAT §8 と本書に記録する（後述 DD4）。
 
 ### Allowed Dependencies
@@ -170,6 +171,8 @@ crates/areka-emo-text/
 ├── src/
 │   ├── writing_decision_tests.rs         # 新規: 共存規則・警告水準・.vertical 導出規則の檻
 │   └── region_vertical_canon_tests.rs    # 新規: 縦書き座標意味論と origin 正典化の檻
+├── tests/
+│   └── shipped_fixture_region_test.rs    # 新規: 実ゴースト定義（emo2-kakukaku）の開始点 (36,46)/(24,40) を逐語固定（2026-08-28 討議 #1）
 └── examples/fixtures/
     └── emo2-vertical-canon/              # 新規: 正典キー版フィクスチャ
         ├── descript.txt                  # emo2-vertical との差分は vertical,1 の 1 行のみ
@@ -194,6 +197,9 @@ crates/areka-emo-text/
 | `crates/areka-emo-text/tests/vertical_fixture_test.rs`（151 行） | 正典キー版フィクスチャの読み込みと、拡張キー版との `WritingMode`／`TextRegion` 同値の檻を追加。:117 の `assert_eq!(region.start(), (356.0, 46.0))` は**フィクスチャ側の origin 宣言削除により不変** | 10.1, 10.2, 10.9 |
 | `crates/areka-emo-text/examples/fixtures/emo2-vertical/descript.txt` | :15-16 の `origin.x,0`／`origin.y,0` を削除（正典推奨形） | 10.9 |
 | `crates/areka-emo-text/tests/fixtures/emo2-choice/descript-cursor.txt` | :18-19 の origin 宣言を削除し、:17 のコメントからクランプ正準の記述を除去（開始点 (5,5) は不変） | 3.10, 10.7 |
+| `crates/areka-emo-text/tests/fixtures/emo2-choice/descript-plain.txt` | :17-18 の origin 宣言を削除（開始点 (5,5) は不変・2026-08-28 討議 #1 追加） | 3.10, 10.7 |
+| `crates/pilot/examples/shiori-host-32/fixtures/emo2/emo2-kakukaku/descript.txt` | :13-14 の `origin.x,0`／`origin.y,0` を削除（既定縮退が同じ開始点を与えるため表示不変・**データファイルのみ・pilot のコードは非接触**・2026-08-28 討議 #1 の境界拡張） | 3.10, 10.7, 10.9 |
+| `crates/areka-emo-text/tests/shipped_fixture_region_test.rs`（新規） | 実ゴースト定義（emo2-kakukaku）の 2 層マージ→`TextRegion` 解決で開始点 sakura (36,46)／kero (24,40) を逐語固定（現在この観測点は 0 本＝全緑のまま壊れる唯一の穴を塞ぐ） | 3.10, 10.7 |
 | `crates/areka-emo-text/src/viewbox_draw_test_support.rs`（:93-96） | 「クランプ正準」の語を「未指定時の縮退」へ改める（挙動は `None` 経路で不変） | 3.11, 10.7 |
 | `crates/areka-emo-text/tests/draw_readback_test.rs`／`tests/scale_invariance_test.rs`／`tests/pipeline_test.rs`／`src/layout_wrap_tests.rs`／`src/draw_oracle_tests.rs`／`src/canvas.rs` の該当行 | クランプ正準に言及する doc／assert メッセージの是正と、DD5 に従う origin 宣言の棚卸し。**validrect が画像端に一致する檻はクランプが無操作のため文言のみ** | 3.10, 10.7 |
 | `doc/COMPAT_ARCHITECTURE.md` | §8 の 48 データ行（:128-175）の**末尾へ 13 行を追記**（Data Models 節の登記台帳が正本） | 4, 5, 6.5, 7, 8, 9.3, 9.4, 11, 12 |
@@ -645,14 +651,17 @@ fn resolve_origin_component(
 
 **Responsibilities & Constraints**
 
-- **10.7 の読み**: 「退行させない」とは**被覆を失わないこと**であって、期待値が 1 つも動かないことではない。3.10 は正典の改訂を命じており、改訂に伴う期待値の更新は退行ではない（`obsolete-vs-broken-test-policy` の「壊れたら更新」）。この読みを本書の正本とする。
-- **棚卸しの規則（DD5）**: 各テスト・フィクスチャについて、意図が「書字開始角の縮退」なら**宣言を削除して未指定形へ**、意図が「宣言された origin」なら**宣言を残して期待値を字義位置へ**。
-- 2026-08-27 実測の候補地（着手時に再検証すること）:
+- **10.7 の読み（2026-08-28 設計討議 #1 で開発者裁定・確定）**: 「退行させない」とは**被覆を失わないこと**であって、期待値が 1 つも動かないことではない。3.10 は正典の改訂を命じており、改訂に伴う期待値の更新は退行ではない（`obsolete-vs-broken-test-policy` の「壊れたら更新」）。この読みを本書の正本とする。
+- **棚卸しの規則（DD5・2026-08-28 設計討議 #1 で一般化を裁定）**: 各テスト・フィクスチャについて、意図が「書字開始角の縮退」なら**宣言を削除して未指定形へ**、意図が「宣言された origin」なら**宣言を残して期待値を字義位置へ**。適用範囲は **repo 全域の出荷／テスト資産**（`crates/**`・`examples/**`・`tests/fixtures/**`——`crates/pilot/**` の実ゴースト定義ファイルを含む）。
+- **棚卸しの方法（2026-08-28 是正・バリデーション重大 1）**: 語の grep（「クランプ」等）では当該語を含まない定義ファイルを原理的に見つけられない。**意味論で棚卸しする**——repo 全域の `origin.x`／`origin.y` 宣言を列挙し、各々の 2 層マージ後の validrect と突合して内外を判定する。2026-08-27 のバリデーション実測では宣言は 5 ファイル・範囲外は 4 件（下表の 4 行）・`emo2-kakukaku-wplimit` は validrect 全 0＝範囲 [0,0] 境界内で不変。
+- 2026-08-27〜28 実測の候補地（着手時に意味論の棚卸しで再検証すること）:
 
 | 場所 | 現況 | 想定される是正 |
 |---|---|---|
 | `examples/fixtures/emo2-vertical/descript.txt:15-16` | `origin.x,0`／`origin.y,0`・validrect 外 | 削除（開始点 (356,46) 不変・10.9） |
 | `tests/fixtures/emo2-choice/descript-cursor.txt:17-19` | 同型＋クランプ正準を述べるコメント | 削除＋コメント是正（開始点 (5,5) 不変） |
+| **`crates/pilot/examples/shiori-host-32/fixtures/emo2/emo2-kakukaku/descript.txt:13-14`**（2026-08-28 追加＝バリデーション重大 1） | `origin.x,0`／`origin.y,0`・面別上書き層 `balloons0s.txt:6-9`（sakura: top,46／left,36）・`balloonk0s.txt:4-7`（kero: top,40／left,24）で validrect 外。**実機サインオフと emo-present 実描画に効く実ゴースト定義**・開始点を固定するテストは現在 0 本 | 削除（既定縮退が同じ開始点 (36,46)／(24,40) を与えるため表示不変）＋**開始点を逐語固定する檻を新設**（`tests/shipped_fixture_region_test.rs`） |
+| **`tests/fixtures/emo2-choice/descript-plain.txt:17-18`**（2026-08-28 追加＝同上） | `descript-cursor.txt` と同型（validrect.left,5／top,5・`choice_fixture_test.rs:67` が読む） | 削除（開始点 (5,5) 不変） |
 | `src/region.rs` インライン `mod tests` :493／:502／:537／:562／:573 | クランプ結果を逐語固定 | 縮退を見る 2 件は `origin=None` モデルへ・宣言値を見る 3 件は期待値を字義位置へ |
 | `tests/vertical_fixture_test.rs:104/:116-117` | 「クランプ正準」の語＋`start()==(356,46)` | 文言のみ是正（フィクスチャ側の宣言削除により値は不変） |
 | `tests/scale_invariance_test.rs:340/:385`・`tests/draw_readback_test.rs:15/:77/:385/:394/:545`・`tests/pipeline_test.rs:487` | doc／assert メッセージがクランプ正準に言及 | 文言是正＋モデルの origin 宣言の棚卸し |
@@ -662,7 +671,7 @@ fn resolve_origin_component(
 **Contracts**: —
 
 **Implementation Notes**
-- Risks: **「全緑」は十分性の証拠にならない**（本リポジトリで 2 度踏んでいる）。棚卸しは grep による網羅（`クランプ`／`clamp_origin`／`書字開始角`）で行い、緑になったことを完了条件にしない。
+- Risks: **「全緑」は十分性の証拠にならない**（本リポジトリで 2 度踏み、本仕様のバリデーションで 3 度目を未然に検出した——語 grep の棚卸しが実ゴースト定義を取りこぼし、開始点を固定する檻が無いため全緑のまま壊れる構図）。棚卸しは**意味論**（origin 宣言の全列挙×マージ後 validrect 突合）で行い、緑になったことを完了条件にしない。語 grep（`クランプ`／`clamp_origin`／`書字開始角`）は**文言是正の網羅**にのみ用いる（用途を取り違えない）。
 
 ---
 
