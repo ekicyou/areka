@@ -1803,3 +1803,235 @@ repeat-tests.ps1 が 1 回の走行につき 1 節を追記する。読み方と
 | 所要時間の分離 | §6-d。同一のテスト集合で硬化の有無だけを切り替える測り方が要る | **引受先未定**（要なら起票） |
 | 記録の正本の宣言 | §7 の結論（`summary.md` を正本とし、縮約ファイルは作らない） | 8.3 が台帳へ登記 |
 | 錠の退役の安全性の主張（`tasks.md:331` の申し送り） | 錠が付随的に守り得た状態の列挙から、`command_batch_tests.rs` が `with_forced_batch_begin_failure`（`command.rs:366`・呼出 5 箇所）で実際に動かす `FORCE_BATCH_BEGIN_FAILURE`（`command.rs:361`）が漏れていた。**本タスクで数え直した正しい形**: `command.rs` と `transition_diag.rs` の static は **6 個**で、うち **5 個が `thread_local!` の中**（`command.rs:70` `SELF_INITIATED_DEPTH`・`:256` `WINDOW_POS_COMMANDS`・`:361` `FORCE_BATCH_BEGIN_FAILURE`／`transition_diag.rs:655` `TICK_MIRROR`・`:728` `FLUSH_START`）、**例外は退役した錠の内側の `LOCK`（`command.rs:100`）1 個だけ**——これは `#[cfg(test)]` 関数 `lock_self_initiated_for_test`（`:99`）の本体にあるプロセス共有の static である。結論（スレッド局所なので錠が無くても並列実行で干渉しない）は変わらず、`r72-wintf` の 30 回全緑（§2）がその実測にあたる | 8.3 が台帳へ登記 |
+
+## cal106-areka — custom ×1（同時 1 プロセス）
+
+| 項目 | 値 |
+|---|---|
+| 実行日時 | 2026-08-27 11:36:43 |
+| 走行ルート | `C:\home\maz\git\areka\.claude\worktrees\ghost-window-zorder-0055fb` |
+| HEAD | `f8d6fb86`（作業ツリー clean） |
+| 実行コマンド | `cargo test -p areka` |
+| 回数 / 同時プロセス | 1 / 1 |
+| 期待 passed | 指定なし |
+| 1 回の上限 | 1800 秒（custom の既定 1800 秒（単独実測が無いため）） |
+| 事前ビルド | 31.9 秒・テスト実行体 3 本（刻印 logs/cal106-areka-binaries.txt） |
+| i686 成果物の検査 | 実施 |
+| cargo | cargo 1.98.0 (797e8a9bc 2026-08-05) |
+| 備考 | 要件 12.6: 10.6 の反復に先立ち cargo test -p areka の期待件数を採り直す（--list の行数は使わない） |
+
+| 回 | 開始 | 所要秒 | 終了 | passed | failed | ignored | filtered | 実行体 | 判定 | ログ |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|---|---|
+| 1 | 11:36:30 | 12.9 | 0 | 1241 | 0 | 1 | 0 | 3 | 緑 | `cal106-areka-r001.out.log` |
+
+**1 回走らせて 緑 1・赤 0・空振り 0・件数不一致 0・ビルド失敗 0・打ち切り 0**（所要秒 中央値 12.9 / 最小 12.9 / 最大 12.9）
+
+
+## r106-areka — custom ×30（同時 4 プロセス）
+
+| 項目 | 値 |
+|---|---|
+| 実行日時 | 2026-08-27 11:39:48 |
+| 走行ルート | `C:\home\maz\git\areka\.claude\worktrees\ghost-window-zorder-0055fb` |
+| HEAD | `f8d6fb86`（作業ツリー dirty（1 件）） |
+| 実行コマンド | `cargo test -p areka` |
+| 回数 / 同時プロセス | 30 / 4 |
+| 期待 passed | 1241 |
+| 1 回の上限 | 1800 秒（custom の既定 1800 秒（単独実測が無いため）） |
+| 事前ビルド | 0.4 秒・テスト実行体 3 本（刻印 logs/r106-areka-binaries.txt） |
+| i686 成果物の検査 | 実施 |
+| cargo | cargo 1.98.0 (797e8a9bc 2026-08-05) |
+| 備考 | 要件 12.6: 一時パスの窓口移行（10.2/10.3/10.4/10.7）後に、r95-areka と同じ条件（cargo test -p areka・30 回・同時 4 プロセス・期待 1241）で赤が消えたことを示す |
+
+| 回 | 開始 | 所要秒 | 終了 | passed | failed | ignored | filtered | 実行体 | 判定 | ログ |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|---|---|
+| 1 | 11:36:58 | 20.4 | 0 | 1241 | 0 | 1 | 0 | 3 | 緑 | `r106-areka-r001.out.log` |
+| 2 | 11:36:58 | 20.8 | 0 | 1241 | 0 | 1 | 0 | 3 | 緑 | `r106-areka-r002.out.log` |
+| 3 | 11:36:58 | 21 | 0 | 1241 | 0 | 1 | 0 | 3 | 緑 | `r106-areka-r003.out.log` |
+| 4 | 11:36:58 | 21.6 | 0 | 1241 | 0 | 1 | 0 | 3 | 緑 | `r106-areka-r004.out.log` |
+| 5 | 11:37:19 | 21.1 | 0 | 1241 | 0 | 1 | 0 | 3 | 緑 | `r106-areka-r005.out.log` |
+| 6 | 11:37:19 | 22.2 | 0 | 1241 | 0 | 1 | 0 | 3 | 緑 | `r106-areka-r006.out.log` |
+| 7 | 11:37:19 | 22.4 | 0 | 1241 | 0 | 1 | 0 | 3 | 緑 | `r106-areka-r007.out.log` |
+| 8 | 11:37:20 | 22.6 | 0 | 1241 | 0 | 1 | 0 | 3 | 緑 | `r106-areka-r008.out.log` |
+| 9 | 11:37:42 | 20.6 | 0 | 1241 | 0 | 1 | 0 | 3 | 緑 | `r106-areka-r009.out.log` |
+| 10 | 11:37:42 | 20.8 | 0 | 1241 | 0 | 1 | 0 | 3 | 緑 | `r106-areka-r010.out.log` |
+| 11 | 11:37:42 | 21 | 0 | 1241 | 0 | 1 | 0 | 3 | 緑 | `r106-areka-r011.out.log` |
+| 12 | 11:37:42 | 21.1 | 0 | 1241 | 0 | 1 | 0 | 3 | 緑 | `r106-areka-r012.out.log` |
+| 13 | 11:38:04 | 22 | 0 | 1241 | 0 | 1 | 0 | 3 | 緑 | `r106-areka-r013.out.log` |
+| 14 | 11:38:04 | 22.2 | 0 | 1241 | 0 | 1 | 0 | 3 | 緑 | `r106-areka-r014.out.log` |
+| 15 | 11:38:04 | 22.4 | 0 | 1241 | 0 | 1 | 0 | 3 | 緑 | `r106-areka-r015.out.log` |
+| 16 | 11:38:04 | 22.6 | 0 | 1241 | 0 | 1 | 0 | 3 | 緑 | `r106-areka-r016.out.log` |
+| 17 | 11:38:27 | 20.2 | 0 | 1241 | 0 | 1 | 0 | 3 | 緑 | `r106-areka-r017.out.log` |
+| 18 | 11:38:27 | 21.3 | 0 | 1241 | 0 | 1 | 0 | 3 | 緑 | `r106-areka-r018.out.log` |
+| 19 | 11:38:27 | 21.4 | 0 | 1241 | 0 | 1 | 0 | 3 | 緑 | `r106-areka-r019.out.log` |
+| 20 | 11:38:27 | 22.5 | 0 | 1241 | 0 | 1 | 0 | 3 | 緑 | `r106-areka-r020.out.log` |
+| 21 | 11:38:49 | 20 | 0 | 1241 | 0 | 1 | 0 | 3 | 緑 | `r106-areka-r021.out.log` |
+| 22 | 11:38:49 | 20.2 | 0 | 1241 | 0 | 1 | 0 | 3 | 緑 | `r106-areka-r022.out.log` |
+| 23 | 11:38:49 | 22.1 | 0 | 1241 | 0 | 1 | 0 | 3 | 緑 | `r106-areka-r023.out.log` |
+| 24 | 11:38:50 | 22.3 | 0 | 1241 | 0 | 1 | 0 | 3 | 緑 | `r106-areka-r024.out.log` |
+| 25 | 11:39:12 | 20.3 | 0 | 1241 | 0 | 1 | 0 | 3 | 緑 | `r106-areka-r025.out.log` |
+| 26 | 11:39:12 | 21 | 0 | 1241 | 0 | 1 | 0 | 3 | 緑 | `r106-areka-r026.out.log` |
+| 27 | 11:39:12 | 22.6 | 0 | 1241 | 0 | 1 | 0 | 3 | 緑 | `r106-areka-r027.out.log` |
+| 28 | 11:39:12 | 22.7 | 0 | 1241 | 0 | 1 | 0 | 3 | 緑 | `r106-areka-r028.out.log` |
+| 29 | 11:39:35 | 11.7 | 0 | 1241 | 0 | 1 | 0 | 3 | 緑 | `r106-areka-r029.out.log` |
+| 30 | 11:39:35 | 13.1 | 0 | 1241 | 0 | 1 | 0 | 3 | 緑 | `r106-areka-r030.out.log` |
+
+**30 回走らせて 緑 30・赤 0・空振り 0・件数不一致 0・ビルド失敗 0・打ち切り 0**（所要秒 中央値 21.2 / 最小 11.7 / 最大 22.7）
+
+
+## cal106-red — custom ×2（同時 1 プロセス）
+
+| 項目 | 値 |
+|---|---|
+| 実行日時 | 2026-08-27 11:40:15 |
+| 走行ルート | `C:\home\maz\git\areka\.claude\worktrees\ghost-window-zorder-0055fb` |
+| HEAD | `f8d6fb86`（作業ツリー dirty（1 件）） |
+| 実行コマンド | `cargo test --manifest-path <temp>\areka-cage-calibration\redcal\Cargo.toml --lib` |
+| 回数 / 同時プロセス | 2 / 1 |
+| 期待 passed | 1 |
+| 1 回の上限 | 1800 秒（custom の既定 1800 秒（単独実測が無いため）） |
+| 事前ビルド | 0.2 秒・テスト実行体 1 本（刻印 logs/cal106-red-binaries.txt） |
+| i686 成果物の検査 | 実施 |
+| cargo | cargo 1.98.0 (797e8a9bc 2026-08-05) |
+| 備考 | 要件 12.6 の較正: 10.6 の全緑が空虚でないことを示すため、同じ道具・同じ日に意図的な赤を出して判定が赤になることを確かめる |
+
+| 回 | 開始 | 所要秒 | 終了 | passed | failed | ignored | filtered | 実行体 | 判定 | ログ |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|---|---|
+| 1 | 11:40:14 | 0.3 | 101 | 1 | 1 | 0 | 0 | 1 | 赤 | `cal106-red-r001.out.log` |
+| 2 | 11:40:15 | 0.1 | 101 | 1 | 1 | 0 | 0 | 1 | 赤 | `cal106-red-r002.out.log` |
+
+**2 回走らせて 緑 0・赤 2・空振り 0・件数不一致 0・ビルド失敗 0・打ち切り 0**（所要秒 中央値 0.2 / 最小 0.1 / 最大 0.3）
+
+### 緑でなかった回の内訳
+
+- **回 1・判定 赤**（終了コード 101・passed 1・failed 1・filtered out 0・ログ `cal106-red-r001.out.log`）
+  - 失敗したテスト（1 件）:
+    - `tests::redcal_this_one_fails_on_purpose`
+
+  失敗内容 `tests::redcal_this_one_fails_on_purpose`:
+
+  ```
+  
+  thread 'tests::redcal_this_one_fails_on_purpose' (30604) panicked at src\lib.rs:11:9:
+  assertion `left == right` failed: わざと落とす較正用のテスト（実測 41）
+    left: 41
+   right: 42
+  stack backtrace:
+     0: std::panicking::panic_handler
+               at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\panicking.rs:679
+     1: core::panicking::panic_fmt
+               at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:80
+     2: core::panicking::assert_failed_inner
+               at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:434
+     3: core::panicking::assert_failed<i32,i32>
+               at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:394
+     4: redcal::tests::redcal_this_one_fails_on_purpose
+               at .\src\lib.rs:11
+     5: redcal::tests::redcal_this_one_fails_on_purpose::closure$0
+               at .\src\lib.rs:9
+     6: core::ops::function::FnOnce::call_once<redcal::tests::redcal_this_one_fails_on_purpose::closure_env$0,tuple$<> >
+               at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\core\src\ops\function.rs:250
+     7: core::ops::function::FnOnce::call_once
+               at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\ops\function.rs:250
+  note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+  ```
+
+- **回 2・判定 赤**（終了コード 101・passed 1・failed 1・filtered out 0・ログ `cal106-red-r002.out.log`）
+  - 失敗したテスト（1 件）:
+    - `tests::redcal_this_one_fails_on_purpose`
+
+  失敗内容 `tests::redcal_this_one_fails_on_purpose`:
+
+  ```
+  
+  thread 'tests::redcal_this_one_fails_on_purpose' (31640) panicked at src\lib.rs:11:9:
+  assertion `left == right` failed: わざと落とす較正用のテスト（実測 41）
+    left: 41
+   right: 42
+  stack backtrace:
+     0: std::panicking::panic_handler
+               at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\panicking.rs:679
+     1: core::panicking::panic_fmt
+               at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:80
+     2: core::panicking::assert_failed_inner
+               at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:434
+     3: core::panicking::assert_failed<i32,i32>
+               at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:394
+     4: redcal::tests::redcal_this_one_fails_on_purpose
+               at .\src\lib.rs:11
+     5: redcal::tests::redcal_this_one_fails_on_purpose::closure$0
+               at .\src\lib.rs:9
+     6: core::ops::function::FnOnce::call_once<redcal::tests::redcal_this_one_fails_on_purpose::closure_env$0,tuple$<> >
+               at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\core\src\ops\function.rs:250
+     7: core::ops::function::FnOnce::call_once
+               at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\ops\function.rs:250
+  note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+  ```
+
+## タスク 10.6 — 一時パスの窓口移行の前後（要件 12.6）
+
+**結論: 同じコマンド・同じ回数・同じ同時プロセス数で、緑 27・赤 3 → 緑 30・赤 0。**
+
+### 10.6-a. 対比
+
+| 項目 | 移行前 `r95-areka`（タスク 8.2・2026-08-25） | 移行後 `r106-areka`（タスク 10.6・2026-08-27） |
+|---|---|---|
+| HEAD | `aa698693` | `f8d6fb86` |
+| 実行コマンド | `cargo test -p areka` | 同左 |
+| 回数 / 同時プロセス | 30 / 4 | 同左 |
+| 期待 passed | 1241 | 1241（走行前に採り直した＝10.6-b） |
+| 1 回の上限 | 1800 秒（custom の既定） | 同左 |
+| 判定 | 緑 27・**赤 3**・空振り 0・件数不一致 0・ビルド失敗 0・打ち切り 0 | **緑 30**・赤 0・空振り 0・件数不一致 0・ビルド失敗 0・打ち切り 0 |
+| 所要秒（中央値 / 最小 / 最大） | 21.3 / 10.1 / 24.5 | 21.2 / 11.7 / 22.7 |
+| 道具の終了コード | 1 | **0** |
+
+各回の件数は上の `r106-areka` 節の表から読める——**30 回すべて passed 1241 / failed 0 / ignored 1 / filtered 0 / 実行体 3 本・終了コード 0**。
+生ログは `logs/r106-areka-r001.out.log` 〜 `-r030.out.log` の 30 本（同数の `.err.log` つき）。
+`red/` へ複写された回は 1 つも無い（赤・ビルド失敗・打ち切りが 0 だったため）。
+
+### 10.6-b. 走行前に期待件数を採り直した（タスク 8.2 の申し送り）
+
+**`--list` の行数は使っていない。** 反復の道具で 1 回だけ走らせ、要約の passed 列を読む形を採った（`cal106-areka` 節・`repeat-tests.md` §2）。
+
+- `cargo test -p areka` は実行体 3 本で、`test result:` 行は **1238 + 1 + 2 = 1241 passed**
+  （`logs/cal106-areka-r001.out.log` の `:1243`・`:1249`・`:1256`）。
+- タスク 8.2 の `cal82-areka`（1241）と同値。移行はテスト本数を変えていない（要件 12.3 の主張がここでも成り立つ）。
+- 事前ビルドの刻印 `logs/cal106-areka-binaries.txt` は 3 本とも更新時刻 `2026-08-27T02:36`（UTC）で、
+  **移行後の実行体を測っている**（前周の古い実体を黙って測る事故の否定＝`repeat-tests.md` §5-a）。
+
+### 10.6-c. 消えた赤の出所
+
+`r95-areka` の赤 3 回は 2 系統・3 テストで、いずれも**テストが使う一時パスがプロセス間で共有されていた**ことが原因だった（§4-b・§4-c）。
+
+| 移行前に落ちていた場所 | 是正 |
+|---|---|
+| `crates/areka/src/placement/transition_signoff_tests.rs:102` — `env::temp_dir()` の下に固定名のファイルを書き、`:108` で消す | タスク 10.2 で一時パスの窓口 crate（`crates/temp-path-kit`）へ寄せた |
+| `crates/areka/src/main_restore_seam_tests.rs:16-20` — `unique_temp_dir` は名前に反しプロセス間では一意でなく、`plant_minimal_ghost`（`:24`）が入口で `remove_dir_all` して隣のプロセスの前提を消す | 同上 |
+
+窓口は名前に `std::process::id()` と単調増加の連番を含め、破棄時に再帰削除する（要件 12.1・タスク 10.1）。
+窓口を迂回する新設はタスク 10.5 の見張りが検知する。
+
+### 10.6-d. 全緑が空虚でないことの較正
+
+「30 回とも緑」は道具が壊れていても出る。**同じ道具・同じ日に意図的な赤を出して**、判定が赤になることを確かめた（`cal106-red` 節）。
+
+- `repeat-tests.md` §6-a の使い捨てクレート（`<temp>/areka-cage-calibration/redcal`）を 2 回走らせ、
+  **2 回とも 判定 赤・終了コード 101・`1 passed; 1 failed`**。
+- 失敗したテスト名 `tests::redcal_this_one_fails_on_purpose` と失敗本文が要約へ載り、
+  生ログが `red/cal106-red-r001.out.log`・`red/cal106-red-r002.out.log` へ複写された。
+- 道具そのものの終了コードは **1**。
+
+したがって `r106-areka` の終了コード 0（緑 30）は、赤を読めない道具が出した緑ではない。
+
+### 10.6-e. 残す注記
+
+- **`r95-areka-serial`（同時 1 プロセス × 10 回）に対応する移行後の走行は採っていない。** 移行前はそれが
+  「赤が出るのは同時 4 プロセスのときだけ」（§4-d）を示す切り分けとして要ったが、移行後は同時 4 プロセスでも
+  赤が 0 なので、単独走行を足しても主張は強くならない。
+- 本走行が測るのは `cargo test -p areka` の範囲＝要件 12.6 が名指しする対象そのものである。
+  `areka-ghost`（10.3）・`areka-parsers`（10.4）・`areka-sylphya`（10.7）の移行前後の A/B は
+  各タスクの記録（`tasks.md` の `## Implementation Notes`）にあり、本節は重複させない。
+- 走行時に `crates/` は 1 行も触っていない（`git status --porcelain -- crates/` が 0 件）。**上の節の HEAD 欄が
+  「作業ツリー dirty（1 件）」と記すのはこのファイル自身**——道具が走行中に要約を追記していくためである
+  （レビューの指摘で「clean」から言い換えた。節どうしで字面が食い違って読めた）。本タスクが増やしたのは
+  本ファイルの追記と `logs/`（非追跡）・`red/cal106-red-*`（較正の赤）だけである。

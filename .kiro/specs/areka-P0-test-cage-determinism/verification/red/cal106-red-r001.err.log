@@ -1,0 +1,3 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running unittests src\lib.rs (<temp>\areka-cage-calibration\redcal\target\debug\deps\redcal-24f9061ab55dad84.exe)
+error: test failed, to rerun pass `--lib`
