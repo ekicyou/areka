@@ -558,6 +558,42 @@ pub fn log_group_rejected(reason: &str, tokens: &str) {
     emit(GroupRecordLevel::Warn, &rejected_line(reason, tokens));
 }
 
+/// 宣言されたメンバーのうち**まだ現れていない窓**があった事実を記録する（要件 8.4）。
+///
+/// 呼ぶのは台帳から窓の列を組む層＝areka の射影の相である。射影は「実在する窓だけ」を
+/// 抜き出すので、まだ生まれていない窓・破棄済みの窓はこの Resource へ届く前に落ちる
+/// ——落ちたことをここで報せなければ、記録の上では**最初から書かれていなかった**のと
+/// 区別が付かない（要件 8.3 が禁じる「黙って諦める」の一形態である）。
+///
+/// 理由語は新設せず既存の [`GroupSkipReason::MemberMissing`] を用いる——記録を読む側の
+/// 語彙を増やさないためである（同じ事実は同じ語で出る）。
+///
+/// # 観測側の 3 欄は番兵のまま・射影側の実数は別名で足す
+///
+/// [`record_group_skip`] が組む `resolved`／`missing`／`order_ok` は**前面走査の結果**を
+/// 載せる欄であり、ここはその走査より手前なので番兵（`-`）になる。呼び手が知っている
+/// 実数をその 3 欄へ流し込むことはしない——同じ欄名が場所によって別の出所を指すのは、
+/// 「実測を騙る宣言列」を載せていた `fix` 行の欠陥と同型だからである。
+///
+/// 代わりに、射影の段でしか分からない 2 つの実数を**衝突しない名前**で末尾へ足す。
+///
+/// - `declared`: 作者が書いた要素の数（台帳に載っている宣言の長さ）
+/// - `existing`: そのうち実在する窓へ解決できた数
+///
+/// 引き算した「欠けた数」ではなく両方の生の数を載せるのは、`existing=0`（一度も現れて
+/// いない）と `existing=2`（一部だけ現れた）が要件 8.4 の読み手にとって別の事実だから
+/// である。行の組み立てがこちらに在るのは、`skip` 行そのものの書式（[`skip_line`]）を
+/// 動かさずに欄を足すためである。
+///
+/// [`skip_line`]: super::zorder_group_diag::skip_line
+pub fn log_group_member_missing(group_id: u32, declared: usize, existing: usize) {
+    let line = format!(
+        "{base} declared={declared} existing={existing}",
+        base = skip_line(Some(group_id), GroupSkipReason::MemberMissing, None),
+    );
+    emit(GroupRecordLevel::Debug, &line);
+}
+
 #[cfg(test)]
 #[path = "zorder_group_decision_tests.rs"]
 mod zorder_group_decision_tests;
