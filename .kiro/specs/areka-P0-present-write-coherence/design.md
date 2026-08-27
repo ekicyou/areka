@@ -128,6 +128,7 @@ sequenceDiagram
 | `.kiro/specs/areka-P0-present-write-coherence/design.md` | 本文書。裁定・却下理由・不適用要件・残余検証・手渡しの登記 | C1・C2・C3・C4・C5 |
 | `.kiro/specs/areka-P0-present-write-coherence/research.md` | §10 として設計フェーズの合成結果（一般化・作るか採るか・簡約の 3 観点と、その結論＝作らない）を追記 | C5 |
 | `.kiro/specs/areka-P0-present-write-coherence/tasks.md` | 残余検証と登記の完結をタスクとして生成（次フェーズ） | C4 |
+| `.kiro/specs/areka-P0-present-write-coherence/verification/notes.md` | 残余検証 V1〜V5 の実行結果と、登記の突合結果・完了報告の文面を残す記録（実装フェーズで新規作成）。V2 の許可集合の内側であり、**V2 の差分採取より前にコミットして作業ツリーを確定させる** | C4 |
 | `.kiro/specs/areka-P0-present-write-coherence/spec.json` | フェーズ・承認状態の更新 | — |
 
 ### 既に追随済み（本フェーズでは**検証対象**・編集しない）
