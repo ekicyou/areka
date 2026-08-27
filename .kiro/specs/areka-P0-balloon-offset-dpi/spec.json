@@ -1,16 +1,16 @@
 {
   "feature_name": "areka-P0-balloon-offset-dpi",
   "created_at": "2026-08-27T11:21:48Z",
-  "updated_at": "2026-08-27T12:06:00Z",
+  "updated_at": "2026-08-27T13:40:00Z",
   "language": "ja",
-  "phase": "requirements-generated",
+  "phase": "design-generated",
   "approvals": {
     "requirements": {
       "generated": true,
-      "approved": false
+      "approved": true
     },
     "design": {
-      "generated": false,
+      "generated": true,
       "approved": false
     },
     "tasks": {
