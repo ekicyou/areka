@@ -201,14 +201,21 @@ fn roundtrip(anchor: Anchor, saved: Option<PointPx>) -> ScopePlacement {
 /// （[`BalloonFollow::anchor_base_dpi`]／[`BalloonFollow::apply_rescaled`]）であり、
 /// ここが持つのは「どの腕でどちらを呼ぶか」の対応だけである。その対応が本番と一致して
 /// いることは相の結合の檻（`frame_balloon_offset_follow_tests.rs`・
-/// `frame_balloon_offset_keyword_gate_tests.rs`）が World 上で固定している——本ファイルは
+/// `frame_balloon_offset_keyword_gate_tests.rs`・`frame_balloon_offset_roundtrip_tests.rs`）が World 上で
+/// 固定している——ただし**恒等比の腕だけは 2026-08-28 までどの World 檻も固定していなかった**
+/// （戻りの遷移が 1 本も無かった）。その穴を塗り直したのが上記 3 ファイル目である。本ファイルは
 /// **腕そのものを毎回 assert する**ことで、写し取った対応が黙ってずれないようにする。
 fn observe(follow: &mut BalloonFollow, current: DPI) -> OffsetRescale {
     let verdict = rescale_follow_offset(follow.base(), current);
     match verdict {
         OffsetRescale::Anchored { base_dpi } => follow.anchor_base_dpi(base_dpi),
         OffsetRescale::Rescaled { offset, .. } => follow.apply_rescaled(offset),
-        OffsetRescale::Unchanged | OffsetRescale::Unresolved { .. } => {}
+        // 恒等比の腕も**基準から引き直す**（2026-08-28 実装時是正・本番と同じ写し）。
+        OffsetRescale::Unchanged => {
+            let base_offset = follow.base().offset;
+            follow.apply_rescaled(base_offset);
+        }
+        OffsetRescale::Unresolved { .. } => {}
     }
     verdict
 }

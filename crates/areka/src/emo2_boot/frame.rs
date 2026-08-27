@@ -342,6 +342,12 @@ mod balloon_offset_keyword_gate_tests;
 #[path = "frame_balloon_offset_follow_tests.rs"]
 mod balloon_offset_follow_tests;
 
+// 拡大率の往復で基準へ bit 同一で戻ることの櫯（areka-P0-balloon-offset-dpi task 6.1 の実装時是正・design D4／D16・
+// 要件 3.3／7.8）。
+#[cfg(test)]
+#[path = "frame_balloon_offset_roundtrip_tests.rs"]
+mod balloon_offset_roundtrip_tests;
+
 #[cfg(test)]
 #[path = "frame_diag_route_tests.rs"]
 mod diag_route_tests;

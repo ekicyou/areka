@@ -290,13 +290,22 @@ flowchart TD
     HasDpi -- yes --> Anchored{base DPI is some}
     Anchored -- no --> Anchor[verdict anchored stamp current DPI keep offset]
     Anchored -- yes --> Same{base DPI equals current DPI}
-    Same -- yes --> Unchanged[verdict unchanged bit identical]
+    Same -- yes --> Identity[identity ratio rederive base offset]
+    Identity --> Moved{value actually moved}
+    Moved -- no --> Unchanged[verdict unchanged]
+    Moved -- yes --> Returned[verdict rescaled return transition]
     Same -- no --> Ratio{ScaleRatio new succeeds}
     Ratio -- no --> Unresolved
     Ratio -- yes --> Rescaled[verdict rescaled derive from base]
     Rescaled --> Sat{saturated}
     Sat -- yes --> Warn[record saturation and warn]
 ```
+
+**⚠ 実装時訂正（2026-08-28・task 6.1）**: 恒等比の腕（`OffsetRescale::Unchanged`）は当初「値も基準も動かさない＝現在値を据え置く」と読める形で書かれていたが、**誤り**であった。純関数が返す `Unchanged` の意味は「**比が恒等**」であって「Component の現在値が既に正しい」ではない——両者が一致するのは `offset == base.offset` のあいだだけである。`apply_rescaled` は現在値だけを動かし基準対を意図的に残す（D14）ので、一度追随した後に**元の表示 DPI へ戻る遷移**では現在値が基準から離れており、据え置くと `144 → 192 → 144` で `offset` が `(-683,-64)` のまま取り残される（要件 3.3「往復で誤差が累積しない」と D4「基準対から毎回引き直す」の双方に違反し、要件 8.2 の実機往復判定も落ちる）。
+
+ゆえに恒等比の腕も**基準から引き直す**——`base.offset` を追随相の書込口 `apply_rescaled`（基準対を触らない）で書く。判定語は**値が実際に動いたか**で選ぶ: 動かなければ `unchanged`、動けば `rescaled`（戻りの遷移）。動いたのに `unchanged` と記録すると語が嘘になり、要件 8.3 の判定器を誤らせる。純関数（`rescale_follow_offset`）と 6 語の語彙はどちらも 1 文字も変えていない。
+
+**なぜ既存の檻が見逃したか**（同型の穴を避けるための記録）: ⑴ 純関数側の往復の檻（`follow_offset_space_tests.rs`）は**判定語だけ**を比べており、純関数は Component の現在値を一度も見ないので「腕→書込口」の取り違えを原理的に表現できない。⑵ 相の結合の行列（`frame_balloon_offset_follow_tests.rs`）の遷移 3 組は**すべて単調増加**で、各組が World を組み直して 1 遷移だけ走らせるため、`Rescaled` の**後に** `Unchanged` が来る列が一度も起きなかった。是正と同時に `frame_balloon_offset_roundtrip_tests.rs`（新設）が両方を塞ぐ——適用相を直接呼んで**着地値**を読む単体の檻と、`96→192→96`・`96→120→192→120→96` を World の上で走らせる戻りの遷移である。
 
 ---
 
@@ -460,7 +469,7 @@ pub fn scale_author_offset(raw: (i32, i32), k: ScaleRatio) -> (ScaledAxis, Scale
 - **Preconditions**: `base.offset` はキャラ窓左上相対の物理 px。`current` は当該キャラ窓の `DPI` component の現在値。
 - **Postconditions**:
   - `rescale_follow_offset(base, d)` は `base` を変更しない（純関数）。
-  - `base.dpi == Some(d)` のとき必ず `Unchanged`（値を 1 bit も動かさない）。
+  - `base.dpi == Some(d)` のとき必ず `Unchanged`（純関数は基準対を 1 bit も動かさない）。**⚠ `Unchanged` は「比が恒等」であって「Component の現在値が既に正しい」ではない**（2026-08-28 実装時訂正）——呼び手は本腕でも `base.offset` から引き直すこと。純関数は Component の現在値を一度も見ないため、この取り違えは本層の檻では表現できず、適用相の檻（`frame_balloon_offset_roundtrip_tests.rs`）が持つ。
   - `base.dpi == None` のとき必ず `Anchored { base_dpi: d }`（値を 1 bit も動かさない）。
   - `Rescaled` の値は軸ごとに `scale_signed(base.offset.axis, ScaleRatio::new(current.axis, base.dpi.axis))`。
   - `scale_author_offset(raw, ScaleRatio::ONE) == raw`（恒等は素通し・2.2）。
@@ -538,6 +547,7 @@ impl BalloonFollow {
 - 発火条件は `Changed<DPI>`（`dpi_phase_with` の対象集合）**だけ**である。面の切替・作業領域の再スナップ・`\![move]` は本ステップを通らないため、それらでオフセットが動かないことが構造的に保たれる（3.2・9.8）。
 - キャラ窓に `BalloonKeywordBase` があるあいだは 1 bit も触らない（4.3・D7）。
 - `refresh_scale_report` より前に完了する（手順 6 の追従が新しいオフセットで書かれるため・3.4）。
+- **恒等比の腕でも基準から引き直す**（2026-08-28 実装時訂正・上記「追随の判断」の注記）。現在値の据え置きではなく `base.offset` を `apply_rescaled` で書き、判定語は値が動いたかで `unchanged`／`rescaled` を選ぶ。戻りの遷移で `OffsetFollowOutcome::Changed` を返すため、D16 の収束もこの腕で正しく発火する。
 - 縮退腕はすべて `warn!` を伴う（9.4）。素材があって見送る腕は縮退ではないので警告を出さない（`rederive_keyword_balloon_offset` の同型の流儀に揃える）。
 
 **Dependencies**
@@ -638,7 +648,7 @@ pub(super) fn converge_balloon_after_skipped_write(world: &mut World, char_windo
 | 採寸に使う主モニタ DPI が取れない | `build_measure_scaling`（既存） | 96 相当で続行（拡大率は恒等へ寄る） | 既存の `error!`（重複を新設しない・1.5） |
 | 供給時の換算が `i32` 域を超える | 供給ステップ | `±i32::MAX` へ飽和（回り込ませない） | `warn!`（scope・軸・生値・飽和後の値）（2.5） |
 | 基準 DPI または現在 DPI が**片側だけ** 0 | `rescale_follow_offset` | `Unresolved`——offset も基準も変えない | `warn!` ＋ `verdict=unresolved`（3.6・9.4） |
-| 基準 DPI と現在 DPI が**両側とも同値の** 0 | `rescale_follow_offset` | `Unchanged`——同値判定が 0 検査より先に立つ | 警告なし・`verdict=unchanged`。**縮退ではなく無遷移として記録する**（値はどちらの腕でも動かないので 3.6 の規範側は成立。片側 0 の真に危険な腕を雑音で埋めないための裁定・檻 `zero_on_both_sides_is_unchanged_not_unresolved`） |
+| 基準 DPI と現在 DPI が**両側とも同値の** 0 | `rescale_follow_offset` | `Unchanged`——同値判定が 0 検査より先に立つ | 警告なし・`verdict=unchanged`。**縮退ではなく無遷移として記録する**（値はどちらの腕でも動かないので 3.6 の規範側は成立。片側 0 の真に危険な腕を雑音で埋めないための裁定・檻 `zero_on_both_sides_is_unchanged_not_unresolved`）。**2026-08-28 実装時訂正の影響なし**——本腕でも呼び手は `base.offset` から引き直すが、0 の基準で追随が起きたことは無く現在値は基準と一致しているので、値は動かず語も `unchanged` のままである（檻 `the_zero_dpi_arm_stays_an_unchanged_no_op`） |
 | キャラ窓に `DPI` component が無い | 適用相 | 追随を見送る | `warn!`（9.4） |
 | キャラ窓に `BalloonFollow` が無い | 適用相 | 何もしない | **記録しない**（縮退ではなくデータ駆動の非該当。`rederive_keyword_balloon_offset` の同型の腕と同じ扱い） |
 | `BalloonKeywordBase` が未消費 | 適用相 | 追随を見送る（4.3・D7） | `verdict=keyword-pending`（警告ではない） |

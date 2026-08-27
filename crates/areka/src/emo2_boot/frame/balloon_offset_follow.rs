@@ -43,6 +43,21 @@
 //! - **係留**（[`OffsetRescale::Anchored`]）: 永続値の腕が正規の口を通っただけ（要件 5.2）。
 //! - **無遷移**（[`OffsetRescale::Unchanged`]）: 基準 DPI と現在 DPI が同一。
 //!
+//! ## 恒等比の腕も**基準から引き直す**（design D4・要件 3.3・2026-08-28 実装時是正）
+//!
+//! 純関数が返す [`OffsetRescale::Unchanged`] の意味は「**比が恒等**」であって、
+//! 「Component の現在値が既に正しい」ではない——両者が一致するのは
+//! `offset == base.offset` のあいだだけである。[`BalloonFollow::apply_rescaled`] は現在値だけを
+//! 動かし基準対を意図的に残すので、一度追随した後に**元の表示 DPI へ戻る遷移**では
+//! 現在値が基準から離れている。据え置くと `144 → 192 → 144` で値が高 DPI 側のまま
+//! 取り残され、往復無誤差（要件 3.3）が壊れる。ゆえに本腕でも `base.offset` を
+//! [`BalloonFollow::apply_rescaled`]（基準対を触らない書込口）で書く。
+//!
+//! 判定語は**値が実際に動いたか**で選ぶ: 動かなければ `unchanged`、動けば `rescaled`
+//! （戻りの遷移）。動いたのに `unchanged` と記録すると語が嘘になり、要件 8.3 の判定器を
+//! 誤らせる。戻りの遷移では [`OffsetFollowOutcome::Changed`] を返すので、design D16 の収束も
+//! 本腕で正しく発火する（檻 `frame_balloon_offset_roundtrip_tests.rs`）。
+//!
 //! ## `DPI{0,0}` は縮退ではなく無遷移として記録する（要件 3.6 の記録側・9.4）
 //!
 //! 基準 DPI と現在の表示 DPI が**どちらも 0** の場合、純関数は同値判定が先に立つため
@@ -184,7 +199,25 @@ pub(super) fn rescale_balloon_follow_offset(
             }
             (old_offset, OFFSET_VERDICT_ANCHORED)
         }
-        OffsetRescale::Unchanged => (old_offset, OFFSET_VERDICT_UNCHANGED),
+        OffsetRescale::Unchanged => {
+            // 恒等比の腕。**現在値を据え置くのではなく基準から引き直す**（design D4）——
+            // 純関数が言っているのは「比が恒等」であって「現在値が既に正しい」ではない。
+            // 両者が一致するのは `offset == base.offset` のあいだだけであり、一度追随した
+            // 後に元の表示 DPI へ戻った遷移（往復）では現在値が基準から離れている。
+            // 書込口は追随相の `apply_rescaled`（基準対を触らない）を使う。
+            if base.offset != old_offset
+                && let Some(mut f) = world.get_mut::<BalloonFollow>(char_window)
+            {
+                f.apply_rescaled(base.offset);
+            }
+            // 判定語は**値が動いたか**で選ぶ。動いたのに `unchanged` と記録すると語が嘘になる。
+            let verdict = if base.offset == old_offset {
+                OFFSET_VERDICT_UNCHANGED
+            } else {
+                OFFSET_VERDICT_RESCALED
+            };
+            (base.offset, verdict)
+        }
         OffsetRescale::Rescaled { offset, saturated } => {
             if let Some(mut f) = world.get_mut::<BalloonFollow>(char_window) {
                 f.apply_rescaled(offset);
