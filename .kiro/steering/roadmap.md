@@ -94,11 +94,11 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 - **W6.95 同時開始の再確認（2026-08-27・開発者要請）**: 4 brief の言及ファイルを機械抽出して全 6 ペア突合＝**改変集合の交差 0 を再確認**（重なり 6 件は全て「参照・観測・報告」の側と判別）。コア接触 crate も別居（zsp=`wintf/ecs/window`・bod=`areka/placement`・pwc=`areka-emo-present`・bvc=`areka-parsers`＋`areka-emo-text`）。**共有の追記先は 3 つだけ**＝doc/COMPAT_ARCHITECTURE.md（zsp §8・bvc balloon 節・bod「areka 裁量」の可能性＝**各自の節のみ追記・後着が rebase 吸収**）・sylphya 語彙表（zsp/bvc 行隣接・既登記）・`file_length_guard_test.rs` の例外表（**4 spec とも触らない**＝新規ファイルは 1,000 行未満で作る。2 spec が同時に表を編集すると衝突かつ規律違反）。4 worktree 並走のテスト実行は cage の決定論化（`temp-path-kit`＝プロセス間一時パス衝突の根治・sylphya 30% flake 根治）で以前より安全＝**同時開始 GO**
 - **show.rs アンカー（2026-08-27 棚卸⑪で実測再確認・ドリフトなし）**: `apply_show` :46 起点・budget 域（compose/resample/mask/insert）:97-173・可視化の段（pwc）`set_visible` :375／`set_bounds` :381／`Visualize` 発行 :392
 - **退役（2026-08-27 棚卸⑪・W6.9 完走により消滅または rebase 義務へ転化）**: cage⇄dlp（両者完了・`command.rs` 同居裁定は成立のまま完走）・bod⇄cage（cage 完了＝bod は一本化済みハーネス〔`log-capture-kit`＋委譲 shim・実測確認済み〕で檻を書ける）・cage⇄pwc（直列条件は W6.9 完走で充足）・dlp⇄pwc（dlp は**実行時挙動不変**で完了＝pwc の tick 実形 rebase は実質ゼロ・dlp の観測資産〔4 段帰属・tick 相別・perf-loop 道具〕は pwc が流用可）。棚卸⑩退役分（atom⇄bod・atom⇄dlp）・棚卸⑨退役分は history 参照
-- `status-execution-states`=台帳 spec（着手しない・源着地時に just-in-time）・`surfaces-basepos`／`sakura-time-directives`／`balloon-canon-residue`／**`tick-gate-adoption`（2026-08-27 棚卸⑪起票）**=**M2 解禁ゲート**（M1 では着手しない・tick-gate は開発者裁定で前倒し可＝夜間/25 分/n≥3 の実測環境が前提）
+- `status-execution-states`=台帳 spec（着手しない・源着地時に just-in-time）・`surfaces-basepos`／`sakura-time-directives`／`balloon-canon-residue`／**`tick-gate-adoption`（2026-08-27 棚卸⑪起票）**／**`zorder-property`（2026-08-27 zsp 要件ディスカッション議題 3 起票＝`currentghost.seriko.zorder` の実導出・upstream は zsp 完成）**=**M2 解禁ゲート**（M1 では着手しない・tick-gate は開発者裁定で前倒し可＝夜間/25 分/n≥3 の実測環境が前提）
 
 ## 着手手順
 
-> **brief 全数完備体制**: M1 残ユニット 5 本（pwc・bod・zsp・bvc・e2e）＋M2 ゲート 5 本＝全 10 本 brief 済み＝着手は該当 brief を読んで `/kiro-start <unit>` へ直行。新規課題の起票は `/kiro-discovery`（再入）で brief just-in-time 生成。`/kiro-spec-batch` は使わない（一括＝工場化）。ウェーブ跨ぎの合流判断は別セッションで一括（記憶 portfolio-convergence-decided-in-separate-session）。
+> **brief 全数完備体制**: M1 残ユニット 5 本（pwc・bod・zsp・bvc・e2e）＋M2 ゲート 6 本（2026-08-27 `zorder-property` 追加）＝全 11 本 brief 済み＝着手は該当 brief を読んで `/kiro-start <unit>` へ直行。新規課題の起票は `/kiro-discovery`（再入）で brief just-in-time 生成。`/kiro-spec-batch` は使わない（一括＝工場化）。ウェーブ跨ぎの合流判断は別セッションで一括（記憶 portfolio-convergence-decided-in-separate-session）。
 
 ## 制約
 
