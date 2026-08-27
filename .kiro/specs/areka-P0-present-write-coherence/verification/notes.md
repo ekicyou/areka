@@ -921,3 +921,359 @@ $ comm -23 /tmp/live_req.txt /tmp/task_ids_fake.txt | wc -l
 - **不適用と未達は混ざっていない。** 未達 40 件は要件 2.1 に紐づく量として登記に残っており、2.1 を不適用に分類したことでその量が帳簿から消える形にはなっていない。
 - **本節は `requirements.md`・`design.md`・`tasks.md` のいずれも 1 行も変更していない**（本タスクの編集対象は本記録のみ）。
 - **後続への申し送り 1 件**: design のトレーサビリティ表**だけ**を機械で読むと 4.6 は生存側に分類される。4.6 の分類は `design.md:272` の「要件 4.6 の読み」段落まで読まないと確定しない。加えて、実現要素セルに文字列 `不適用` を含むかで抽出すると 4.6 が偽陽性で拾われ、**間違った抽出のほうが「一致」という結論を出す**。抽出はセル冒頭の `**不適用**` マーカーで行うこと。
+
+---
+
+## 登記の突合⑵: 裁定・却下理由・未達・手渡し（task 3.2）
+
+実施日 2026-08-27。対象 HEAD `48c8a807`（`feat(areka-P0-present-write-coherence): 不適用と生存の受入基準の確定を検証 (task 3.1)`）。作業ツリー差分は `git status --porcelain` → ` M vendors/pasta` の 1 行のみ（V2-5・突合⑴ と同じ扱い）。
+
+> **本節が塞ぐ誤読**: 「見送りの結論だけが残り、なぜ採らなかったのかと、何がどれだけ未達で誰も引き受けていないのかが、後から読めなくなる」形。本仕様群の履歴が最悪と記す形は **未達が仕様の内側から見えないこと**であり、本節はその番人である。
+> **本節の限界**: 見ているのは ⑴ 却下理由が構造的事実と対で残っているか ⑵ その事実が現物のコードと一致するか ⑶ 要件文書と設計文書の数値が同じか ⑷ 手渡しの指す先が実在するか、の 4 点だけである。**裁定そのものの当否（見送りが正しかったか）は要件討議 #2 の開発者裁定であり、本節は再審しない。**
+> **数の出所**: 本節に載せる値はすべて隣に採取コマンドを置く。文書に書かれた値を写して埋めていない。
+
+### 突合⑵-0: 採取の基準点
+
+| 項目 | 値 | 採取コマンド |
+|---|---|---|
+| 対象 HEAD | **`48c8a807`** | `git rev-parse HEAD` ／ `git log -1 --format='%h %s'` |
+| 既定枝 `origin/main` | **`a6d27c73`** | `git rev-parse origin/main` |
+| 枝名 | `claude/areka-p0-present-write-coherence-8308e6` | `git rev-parse --abbrev-ref HEAD` |
+| 本枝が加えるコミット | **15 本** | `git log --oneline origin/main..HEAD \| wc -l` |
+| 作業ツリー差分 | **1 行**（` M vendors/pasta`） | `git status --porcelain \| wc -l` |
+
+> **本節自身の扱い**（V2 と同じ注記）: 本節を書き込む行為そのものが `verification/notes.md` に未コミット差分を 1 件作る。上の 1 行は書き込みより**前**の状態であり、書き込み後に数え直すと 2 行になる。許可集合の内側の変更であり、本タスクのコミットで解消する。
+
+---
+
+### 突合⑵-1: 4 候補の却下理由 ⇄ 構造的事実 ⇄ task 2.1 の実測
+
+`design.md` Architecture「却下の登記（4 候補）」（`grep -n "却下の登記" design.md` → **2 行**＝`:109`（本節の見出し）と `:246`（C2 の所在列が本節を指す行）。データ行は `:113`〜`:116`）の 4 行それぞれについて、**却下理由**と**根拠となる構造的事実**の 2 つが揃っていること、およびその事実が**現物のコードと一致する**ことを検査した。
+
+**⑴ 「理由」と「事実」が対で揃っているかの機械的検査**——表は 4 列（`#`／`候補`／`却下理由`／`根拠となる構造的事実`）で、後ろ 2 列が両方とも非空であることを確かめる:
+
+```
+$ awk -F'|' '/^\| R[1-4] \|/ {r=$4; f=$5; gsub(/^ +| +$/,"",r); gsub(/^ +| +$/,"",f);
+             printf "%s 却下理由=%d 構造的事実=%d\n", $2, length(r), length(f)}' design.md
+ R1  却下理由=81 構造的事実=196
+ R2  却下理由=177 構造的事実=276
+ R3  却下理由=272 構造的事実=601
+ R4  却下理由=162 構造的事実=187
+```
+
+**4 行とも 2 列が非空**＝理由だけの行・事実だけの行は無い（上の数値は `awk` の `length()` が返す**バイト長**であって文字数ではない。ここで使うのは「0 でないこと」だけである）。
+
+**⑵ 構造的事実の現物突合**（各事実を、設計文書からではなく**その場で現物を読んで**確かめた）:
+
+| # | 候補 | 却下理由（design `:113`-`:116` の逐語要旨） | 根拠となる構造的事実 | **本節の現物実測** | task 2.1 の実測との一致 |
+|---|---|---|---|---|---|
+| R1 | **B-3（文言どおり）**＝可視化を窓書込の直前まで遅らせる | 上限 16,667µs に**構造的に届かない**。是正しても未達は残る | 窓書込の刻印は `EndDeferWindowPos` が戻った後。残る隙間の下限＝`flush_total_us` 143,231µs 以上＝上限の 8.6 倍以上 | `command.rs`: `flush()` `:724` → `begin` レコード `:742` → `apply_as_batch` 呼出 **`:757`**（その内側 **`:433`** が `EndDeferWindowPos(batch)`）→ **戻った後** `:776` `if observe {` ／ `:777` `for (index, cmd) …` ／ `:780` `stage: WriteStage::Flush,` → `end` レコード `:800`。**刻印は依然として `EndDeferWindowPos` の後**。下限比は `143231/16667 = 8.59` | **一致**（V4-d の T1「該当なし」と同じ現物・行番号も一致） |
+| R2 | **B-3′**＝flush 完了後に可視化の反映を駆動する | 要件 1.2⑵「tick の駆動と窓書込 flush の駆動の関係を変更する」に**該当**＝大改造。要件 1.3 により候補から落ちる | 上限へ届く唯一の置き場が `EndDeferWindowPos` の後であり、そこへの駆動は flush の後ろに新しい駆動を足す行為。加えて wintf は areka を知らないため既定 None のコールバック口という前例の無い仕組みが要る | `tick_bridge.rs`: `world.try_tick_world()`（13 本スケジュール）が **`:246`**＝`world.try_borrow_mut()`（**`:241`**）の借用スコープの**内**。`crate::ecs::window::flush_window_pos_commands();` が **`:258`**＝借用スコープ（`match` 式が **`:256`** の `    };` で閉じる）の**外**。`:257` のコメント逐語＝`// World 借用スコープ終了後に SetWindowPos コマンドをフラッシュ（省略の回も必ず）。`／ **wintf → areka の依存は無い**——`grep -n "areka" crates/wintf/Cargo.toml` は 3 行返すがいずれも `#` で始まるコメント（非コメント行 **0**）、`grep -rn 'areka_' --include='*.rs' crates/wintf/src/` は **0 件** | **一致**（V4-d の T2「該当なし」と同じ現物） |
+| R3 | **B-4**＝遷移中だけサーフェスを窓内下端中央へ置く補償 | 合否量 `visualize_to_write_us` を **1µs も動かせない**（要件 2.1 を原理的に満たせない）一方、3 つの新しい壊し方を持ち込む。切替頻度が稀で無視できる優先度に対し費用と釣り合わない | 判定量は可視化と書込の**時刻差**しか見ないが、B-4 はどちらの時刻にも触れない | **判定量の入力は時刻だけである**——`transition_judge.rs:817` = `.map(\|write_us\| write_us.saturating_sub(*visualize_us))`。左右の入力の出所は `:679`-`:680`（`last_write_us_per_window_frame` / `.insert((window, record.stamp.frame), record.stamp.t_us);`）と `:709`（`.push((record.stamp.frame, record.stamp.t_us));`）＝**どちらも `record.stamp.t_us`（刻印の時刻）だけ**であり、位置・寸・オフセットのフィールドは 1 つも入らない。合否束は `transition_judge_verdict.rs:169` `pub const fn signoff() -> Self {`（本体は `:170` の `Self {` から `:175` まで。**`:171`** `visualize_to_write_us_max: Some(VISUALIZE_TO_WRITE_US_MAX),` と **`:172`** `flush_total_us_max: Some(FLUSH_TOTAL_US_MAX),` で 2 量とも armed）。**位置の補償は入力に触れないので値を動かせない**／3 つの壊し方の前提も現物にある——`mount.rs:76` `offset: Offset { x: 0.0, y: 0.0 },`・`:244` `arr.offset = Offset { x: 0.0, y: 0.0 };`（常時ゼロ）、番兵テスト `presenter_upload_failure_tests.rs` は実在し `grep -c "offset"` → **17** | **一致**（V4-a の B1・B2 と同じ現物・行番号も一致） |
+| R4 | **観測のみ先行**＝提示側の観測点を足して見え方の順序を初めて機械で名指しする | **いずれ直す前提が無い**ため採らない。観測点は是正の準備であって、是正しないなら費用だけが残る | 提示（合成器）を観測する仕組みはリポジトリに 1 つも無く、GPU 合成窓で「画面に出た時刻」を返す手段自体が未調査（`research.md` §8-①） | **本節が独自に走査した結果、提示時刻の観測は 1 件も無い**——`GetFrameStatistics` **0**／`DwmGetCompositionTimingInfo` **0**／`PresentCount` **0**／`SyncQPCTime` **0**／`GetLastPresentCount` **0**／`DXGI_FRAME_STATISTICS` **0**／`present_time` **0**／`PresentTime` **0**（いずれも `crates/` 全域・`--include='*.rs'`）。`CompositionTarget` は **4 件**だが内訳は pilot 例の `IDCompositionTarget` 3 件（`pilot-clickthrough-alpha-toggle/main.rs:33`・`:155`・`:475`）と `visual_sync.rs:238` のコメント 1 件＝**時刻を返す口ではない**。`.Present(` は **3 件**（`chain.rs:352`・`swapchain_spike.rs:151`・`surface.rs:314`）だが、いずれも**提示を行う呼出**であって提示時刻を**読む**呼出ではない。観測語彙の側も、`transition_diag.rs` の `kind=` は `enqueue`／`flush`／`monitor`／`msg`／`shell`／`write` の **6 語**（下の `grep -o 'kind=[a-z_]*' … | sort -u` は **7 行**返すが、1 行は語の付かない裸の `kind=`＝レコード書式の雛形側の出現であり、段の名前ではない）、面の側 `transition_record.rs:121` `pub(super) enum SurfaceStage {` は `Upload`／`Visualize`／`Skipped` の 3 段——**最後の観測はアプリ自身の可視化呼出であり、「画面に出た」を測る段は存在しない** | **一致**（`research.md` §8-①（`:255`）の「リポジトリに DWM 合成・提示の観測は 1 つも無い」を独立に再現） |
+
+現物突合に用いた採取コマンド（すべてワークツリー直下で実行）:
+
+```
+sed -n '724p;742p;757p;433p;776,777p;780p;800p' crates/wintf/src/ecs/window/command.rs
+grep -n "Instant::now\|elapsed_us"              crates/wintf/src/ecs/window/command.rs
+sed -n '230,262p'                               crates/wintf/src/runtime/tick_bridge.rs
+grep -n "areka" crates/wintf/Cargo.toml | grep -v "^[0-9]*:#"
+grep -rn 'areka_' --include='*.rs' crates/wintf/src/ | wc -l
+sed -n '808,824p'                               crates/areka/src/placement/transition_judge.rs
+sed -n '679,685p;705,710p'                      crates/areka/src/placement/transition_judge.rs
+sed -n '165,178p'                               crates/areka/src/placement/transition_judge_verdict.rs
+grep -n "offset" crates/areka-emo-present/src/mount.rs
+grep -c "offset" crates/areka-emo-present/src/presenter_upload_failure_tests.rs
+for pat in GetFrameStatistics DwmGetCompositionTimingInfo PresentCount SyncQPCTime \
+           GetLastPresentCount DXGI_FRAME_STATISTICS present_time PresentTime CompositionTarget ; do
+  printf "%-28s %s\n" "$pat" "$(grep -rn "$pat" --include='*.rs' crates/ | wc -l)" ; done
+grep -rn "\.Present(" --include='*.rs' crates/
+grep -o 'kind=[a-z_]*' crates/wintf/src/ecs/window/transition_diag.rs | sort -u
+sed -n '121,128p' crates/areka-emo-present/src/presenter/transition_record.rs
+```
+
+**⑶ 要件文書と設計文書が 4 候補について食い違っていないこと**
+
+`requirements.md`「裁定の記録」**4**（`:40`）と **5**（`:41`）が裁定の正本である。design の R1〜R4 と行ごとに突き合わせた（採取＝`sed -n '40p;41p' requirements.md` ／ `sed -n '113,116p' design.md`）:
+
+| 候補 | requirements 側（逐語の要旨・出所行） | design 側（出所行） | 食い違い |
+|---|---|---|---|
+| B-3（文言どおり） | `:40` — `窓書込の刻印は OS 呼出（EndDeferWindowPos）が戻った後に発行され、OS 呼出自体が 143,231µs 以上を占めるため、文言どおりの B-3（可視化を窓書込の直前へ）では上限 16,667µs に構造的に届かない` | `:113`（R1）— 同じ事実・同じ下限値 143,231µs | **なし** |
+| B-3′ | `:40` — `上限へ届く唯一の形＝flush 完了後に可視化の反映を駆動する形（B-3′）は…要件 1.2⑵…に該当すると裁定。よって要件 1.3 により B-3（B-3′ を含む）は候補から落ちる` | `:114`（R2）— 同じ条項番号（1.2⑵）・同じ帰結（要件 1.3 で落ちる） | **なし** |
+| B-4 | `:41` — `合否量 visualize_to_write_us を動かせず（…要件 2.1 を原理的に満たせない＝ギャップ分析 §5-①）` ＋ 3 つの壊し方を逐語列挙 ＋ `費用と釣り合わない` | `:115`（R3）— `1µs も動かせない`・同じ 3 つの壊し方・同じ費用対効果の理由 | **なし** |
+| 観測のみ先行 | `:41` — `観測のみ先行（提示側観測点の追加）も採らない——いずれ直す前提が無いため` | `:116`（R4）— `いずれ直す前提が無いため採らない` | **なし** |
+
+- **4 候補とも、却下理由が両文書で同一であり、構造的事実は現物と一致する。** 要件 1.1〜1.5 は登記として完結している。要件 1.6（上流の食い違いに対する読みの明記）は `requirements.md` 裁定の記録 1（`:37`）が「規模を先に測る対象は B-3・採否は 1.5 の裁定で一意に決める」と明記しており、design `:186`-`:187` のトレーサビリティが同じ読みを参照として保っている。
+- **一点だけ粒度の差がある**（食い違いではない）: requirements 裁定の記録 5 は B-3 を 1 項目にまとめ「裁定の記録 4 のとおり要件 1.2⑵ に該当」と書くが、厳密には **1.2⑵ 該当は B-3′ の側**であり、文言どおりの B-3 は**構造的に届かない**ことで落ちている。裁定の記録 4（`:40`）はその 2 つを分けて書いており、design は R1／R2 として**分けて登記している**。すなわち design は requirements を細かくした形であって、逆向きの主張はしていない。この方向の粒度差は登記を弱めない（申し送りとして突合⑵-5 に残す）。
+
+---
+
+### 突合⑵-2: 数値の突合（要件文書 ⇄ 設計文書）
+
+未達の登記に現れる値を、両文書から**機械で抜いて**突き合わせた。
+
+**⑴ 登記表の行を、列ごとに正規化して差分を取る**
+
+対象は `requirements.md` 末尾「未達の登記」節の表（`grep -n "^## 未達の登記" requirements.md` → **`:209`**・データ行 `:217`-`:218`）と `design.md`「未達の登記（設計側の反映）」の表（`grep -n "未達の登記（設計側の反映）" design.md` → **2 行**＝`:245`（C1 の所在列）と `:251`（本節の見出し）。データ行は `:257`-`:258`）。
+
+```
+$ norm() { sed 's/\*\*//g; s/ //g'; }
+$ awk -F'|' '/^\| `(visualize_to_write_us|flush_total_us)` \|/ {print $2"|"$3"|"$4"|"$5}' requirements.md | norm
+`visualize_to_write_us`|210,329…306,301µs（上限の12.6〜18.4倍）|16,667µs|32窓中32件（上限以下0件）
+`flush_total_us`|143,231…231,910µs|16,667µs|8遷移中8件（もとより本仕様の合否外＝要件4.2）
+
+$ awk -F'|' '/^\| `(visualize_to_write_us|flush_total_us)` \|/ {print $2"|"$3"|"$4"|"$5}' design.md | norm
+`visualize_to_write_us`|210,329…306,301µs（上限の12.6〜18.4倍）|16,667µs|32窓中32件（上限以下0件）
+`flush_total_us`|143,231…231,910µs|16,667µs|8遷移中8件
+```
+
+第 1 行は**逐語で完全一致**。第 2 行の差は `（もとより本仕様の合否外＝要件4.2）` の有無だけで、design はこれを**第 5 列（合否）**に持つ:
+
+```
+$ awk -F'|' '/^\| `flush_total_us` \|/ {print $6}' design.md
+ もとより合否外（要件 4.2）
+```
+
+すなわち**同じ内容が別の列に置かれているだけ**であり、値の食い違いではない。
+
+**⑵ 数値トークンだけを抜いた列の突合**（列の割り方の違いを消して比べる）:
+
+```
+$ nums() { awk -F'|' '/^\| `(visualize_to_write_us|flush_total_us)` \|/ {print $2"|"$3"|"$4"|"$5}' "$1" \
+             | grep -oE '[0-9]+([,.][0-9]+)*' | tr '\n' ' '; echo; }
+$ nums requirements.md
+210,329 306,301 12.6 18.4 16,667 32 32 0 143,231 231,910 16,667 8 8 4.2
+$ nums design.md
+210,329 306,301 12.6 18.4 16,667 32 32 0 143,231 231,910 16,667 8 8
+```
+
+**数値の並びは、末尾の `4.2`（＝要件番号であって量ではない・design では第 5 列にある）を除いて完全一致。**
+
+**⑶ 項目別の突合表**（採取＝`sed -n '217p;218p;220p;224p' requirements.md` ／ `sed -n '257p;258p;260p;261p' design.md`）
+
+| 項目 | 要件文書の値（出所） | 設計文書の値（出所） | 一致 |
+|---|---|---|---|
+| `visualize_to_write_us` の実測域 | **210,329 … 306,301µs**（`:217`） | **210,329 … 306,301µs**（`:257`） | **一致** |
+| 同・上限との比 | **上限の 12.6〜18.4 倍**（`:217`） | **上限の 12.6〜18.4 倍**（`:257`） | **一致** |
+| 同・上限 | **16,667µs**（`:217`） | **16,667µs**（`:257`） | **一致** |
+| 同・違反件数 | **32 窓中 32 件**（上限以下 0 件）（`:217`） | **32 窓中 32 件**（上限以下 0 件）（`:257`） | **一致** |
+| `flush_total_us` の実測域 | **143,231 … 231,910µs**（`:218`） | **143,231 … 231,910µs**（`:258`） | **一致** |
+| 同・上限 | **16,667µs**（`:218`） | **16,667µs**（`:258`） | **一致** |
+| 同・違反件数 | **8 遷移中 8 件**（`:218`） | **8 遷移中 8 件**（`:258`） | **一致** |
+| 同・合否上の位置づけ | `もとより本仕様の合否外＝要件 4.2`（`:218` 第 4 列） | `もとより合否外（要件 4.2）`（`:258` 第 5 列） | **一致**（列位置のみ差） |
+| 違反の合計 | **計 40 件**（`:220`） | **計 40 件**（`:260`） | **一致** |
+| 引受先 | **引受先なし**（`:224`・要件 8.2 の明示） | **引受先なし**（`:261`・要件 8.2 の明示） | **一致** |
+| 引受先でない仕様の名指し | `tick-gate-adoption` は tick の門の本採用が担当であり本量は担当しない（`:224`） | 同趣旨の同文（`:261`） | **一致** |
+| 症状の持続 | `最大 0.3 秒程度`（`:220`） | `最大 0.3 秒程度`（`:260`） | **一致** |
+
+**⑷ トークン出現数の交差確認**（表の外の本文にも同じ値が書かれているので、文書全体で数える）:
+
+```
+$ for tok in "210,329" "306,301" "12.6" "18.4" "16,667" "32 窓中 32 件" "143,231" "231,910" \
+             "8 遷移中 8 件" "40 件" "引受先なし"; do
+    printf "%-16s req=%s des=%s\n" "$tok" "$(grep -c -- "$tok" requirements.md)" "$(grep -c -- "$tok" design.md)"; done
+210,329          req=3 des=1
+306,301          req=3 des=1
+12.6             req=3 des=1
+18.4             req=3 des=1
+16,667           req=10 des=6
+32 窓中 32 件    req=1 des=1
+143,231          req=3 des=3
+231,910          req=2 des=1
+8 遷移中 8 件    req=1 des=1
+40 件            req=3 des=8
+引受先なし       req=1 des=7
+```
+
+**11 トークンすべてが両文書に 1 件以上ある。** 出現**回数**は文書の役割が違うので一致を求めない——requirements は起点の実測表（`:23`-`:29`）と登記表（`:215`-`:218`）の 2 箇所で書き、design は登記を 1 箇所に集めたうえで却下理由・完了報告の規律から繰り返し参照する。
+
+**⑸ 上限 16,667µs が現物の定数と一致すること**
+
+```
+$ ls -l crates/areka/src/placement/transition_judge_verdict.rs
+-rw-r--r-- … 40387 … crates/areka/src/placement/transition_judge_verdict.rs
+$ grep -rn "16_667" --include='*.rs' crates/
+crates/areka/src/placement/transition_judge_verdict.rs:90:pub const VISUALIZE_TO_WRITE_US_MAX: u64 = 16_667;
+crates/areka/src/placement/transition_judge_verdict.rs:99:pub const FLUSH_TOTAL_US_MAX: u64 = 16_667;
+```
+
+- **リポジトリ全域で `16_667` は 2 箇所のみ**であり、両方とも本仕様が登記する上限と同値。**文書の 16,667µs は現物の定数と一致している。**
+- 2 量とも同じ上限を当てることも現物どおり（`Bounds::signoff()` `:169`-`:175` が両方に `Some(...)` を入れる＝V4-a の B2）。
+
+**⑹ 比と件数が算術で再導出できること**（値を写しただけでないことの裏取り）:
+
+```
+$ awk 'BEGIN{printf "210329/16667=%.2f  306301/16667=%.2f  143231/16667=%.2f  231910/16667=%.2f\n",
+        210329/16667, 306301/16667, 143231/16667, 231910/16667}'
+210329/16667=12.62  306301/16667=18.38  143231/16667=8.59  231910/16667=13.91
+```
+
+- `12.62`／`18.38` は登記の **12.6〜18.4 倍**と一致する。
+- `flush_total_us` の**最小値 143,231µs が既に上限 16,667µs を超えている**ので、**8 遷移すべてが違反＝8/8** は算術から出る（件数を数え直さなくても成立する）。
+- `143231/16667 = 8.59` は R1 の構造的事実が言う **8.6 倍以上**と一致する。
+- 合計 **32 ＋ 8 = 40 件**。
+
+**⑺ 数量の正本（atom 確定台帳 §11）との突合**
+
+両文書は数量の正本を atom 確定台帳 `mechanism-ledger.md` §11 と名指す（`grep -n "§11" requirements.md` → `:21`・`:220`／同 design.md → `:52`・`:321`）。**その正本が実在し、同じ値を持つことを確かめた**:
+
+```
+$ ls -l .kiro/specs/completed/areka-P0-dpi-transition-atomicity/mechanism-ledger.md
+-rw-r--r-- … 129004 …（実在）
+$ grep -n "^## 11\." .kiro/specs/completed/areka-P0-dpi-transition-atomicity/mechanism-ledger.md
+549:## 11. 判定に載らない症状（task 7.3・2026-08-22）
+$ grep -n "210,329\|306,301\|143,231\|231,910" .kiro/specs/completed/areka-P0-dpi-transition-atomicity/mechanism-ledger.md
+579:| **その隙間**（＝`visualize_to_write_us`） | … | **210,329〜306,301µs**（上限 16,667µs の **12.6〜18.4 倍**） |
+602:> … 下限は **210,329µs**（遷移 #7・`scope=1 char`）。倍率は **12.6〜18.4 倍** |
+652:| 一括書込の総所要（`flush stage=end` の `total_us`） | … | 143,231〜231,910µs（平均 **188,711**…） | …
+654:| 窓ごとの `visualize_to_write_us` | … | 210,329〜306,301µs（平均 **255,345**・32 件） | …
+661:- **ゆえに C8 の梯子は次段（B-4）の条件を満たしたままである**——…現況 max は **306,301µs＝上限の 18.4 倍**。…梯子は引受先 `areka-P0-present-write-coherence` が続ける。
+```
+
+（**該当は 5 行**——`grep -c` で 5 を確認済み。各行の内側は `…` で省略しているが、**行そのものは 1 本も落としていない**。とりわけ `:661` は登記上重要である：atom は C8 の梯子の次段を**本仕様へ引き渡した**と書いており、その本仕様が見送りを裁定した結果、**梯子の引受先が居なくなった**——これが「引受先なし」の来歴そのものである。）
+
+台帳 `:581` は `- **上限以下で終わった窓は 32 窓中 1 つも無い。**`、`:624` は `signoff の visualize_to_write_us は FAIL……（40 件の違反のうち 32 件がこれ）`、`:643` は `SIGNOFF-BOUNDS: FAIL (違反 40 件)` を持つ（採取＝`sed -n '581p;624p;643p' …`）。**実測域・比・32 件・40 件のいずれも正本と一致する。**
+
+**判定: 要件文書と設計文書の数値の食い違いは 0 件。** 差は「`flush_total_us` の合否外という註記が第 4 列にあるか第 5 列にあるか」という**列位置の差 1 件**のみで、値・件数・上限・比・引受先の有無はすべて同一である。
+
+---
+
+### 突合⑵-3: 将来仕様への手渡し（3 点）の実在確認
+
+`design.md`「将来仕様への手渡し（再着手の前提）」（`grep -n "将来仕様への手渡し" design.md` → **6 行**＝`:40`（境界節 This Spec Owns）・`:65`（Revalidation Triggers が罠②を指す行）・`:107`（Key Decisions D7）・`:175`（System Flows の mermaid ノード）・`:249`（C5 の所在列）・**`:274`（本体節の見出し）**）の本体節 `:274`-`:282` を検査した。
+
+| # | 手渡し | 逐語（出所） | 実在／正確さの証明 | 判定 |
+|---|---|---|---|---|
+| ⑴ | **素材の所在** | `:278` — `research.md が規模見積りの正本である。§1（現状構造の実測と隙間の内訳）・§3（B-3 の接触集合・破る順序制約 6 本・追加が必要な仕組み 5 点）・§5（判定器の落とし穴 3 件）・§6（影響を受ける既存テスト 5 件）・§7（工数と危険度）・§8（未調査 5 件）` | **名指しされた 6 節がすべて実在**（下の節番号突合）。加えて **`research.md` を指す参照は両文書とも 1 つも空振りしない** | **揃っている** |
+| ⑵-① | **罠①（判定量の飽和）** | `:279` — `visualize_to_write_us は同一フレーム内の write_us - visualize_us を飽和減算で求める（crates/areka/src/placement/transition_judge.rs:817）。可視化を書込の後ろへ動かすと値は 0＝満点になる。これは未測定でも違反でもなく満点として通る……置き場を決めるより先に、合格の意味をどう保つかを裁定すること` | **現物と一致**——`sed -n '817p' crates/areka/src/placement/transition_judge.rs` → `                    .map(\|write_us\| write_us.saturating_sub(*visualize_us))`。飽和減算であり、`visualize_us > write_us` なら **0** を返す。値が 0 になれば上限 16,667µs を下回るので**違反として立たず、未測定にも落ちない**（未測定は同一フレームに書込が無いときの経路＝`transition_judge_verdict.rs` の `Unmeasured` 側）。**「満点として通る」という主張は現物の意味論どおり** | **揃っている・主張も正確** |
+| ⑵-② | **罠②（`t_us` の起点）** | `:280` — `t_us はプロセス開始からではなく当該 tick の開始からの経過である（crates/wintf/src/ecs/window/transition_diag.rs:692・:703）。起点実測の 22,297〜339,998µs はすべて 1 つの tick の内側で起きており……この読み替えを持たずに見積もると規模が 1 桁ずれる` | **現物と一致**——`:692` = `pub fn since_tick_start_us() -> u64 {`（直前の doc `:689` = `/// tick 開始からの経過（µs・**World を借りられない観測点専用**）。`・本体は `TICK_MIRROR` を読んで `elapsed_us(start)` を返す）、`:703` = `pub fn stamp() -> Stamp {`（`:705`-`:706` = `frame: current_frame(),` ／ `t_us: since_tick_start_us(),`）。**刻印の `t_us` が tick 起点であることは組み立て箇所で確定する**——プロセス起点の時刻を入れる経路は無い | **揃っている・主張も正確** |
+| ⑶ | **未調査で残る 1 点** | `:281` — `EndDeferWindowPos 単独の所要は台帳に無い（OS 側の内訳は未特定）。research.md §8-② のとおり、その直前・直後に計時点を足せば確定でき、この 1 点の実測が B-3′ の到達可否を確定させる` | **「未調査」であることを現物で確かめた**——`grep -n "Instant::now\|elapsed_us" crates/wintf/src/ecs/window/command.rs` は **6 行＝3 対**（`:397`/`:413`＝`DeferWindowPos` **投入だけ**の所要 `call_us`、`:460`/`:474`＝縮退 `SetWindowPos` 経路、`:738`/`:803`＝flush **区間全体**の `total_us`）。**`EndDeferWindowPos(batch)`（`:433`）を挟む計時対は 1 つも無い**＝単独所要は現に測られていない。／確定手段の所在も実在——`research.md` §8-②（`:257`）が `EndDeferWindowPos の直前・直後に計時点を足せば確定できる` と書いている | **未知として登記済み・確定手段の所在も実在** |
+
+**節番号の突合（実在しない節を指していないこと）**——task 2.1 が見つけた「実在しない `presenter/mount.rs` を指す」欠陥と同型の欠陥を機械で排除する:
+
+```
+$ grep -nE '^## [0-9]+\.' research.md
+8:## 0. 要旨（5 点）
+18:## 1. 現状の構造（実測）
+76:## 2. 要件→資産マップ
+99:## 3. B-3 の規模見積り（Requirement 1.1 の素材）
+150:## 4. 実装アプローチの選択肢
+198:## 5. 判定器の落とし穴（設計討議へ必ず上げる）
+225:## 6. 既存の決定論テストへの影響（Requirement 6.5 の素材）
+241:## 7. Effort / Risk
+253:## 8. Research Needed（設計フェーズへ持ち越す）
+267:## 9. 設計判断項目（要件ディスカッションへ）
+282:## 10. 設計フェーズの記録（2026-08-27・`design.md` 生成）
+
+$ grep -oE '^## ([0-9]+)\.' research.md | grep -oE '[0-9]+' | sort -n | tr '\n' ' '
+0 1 2 3 4 5 6 7 8 9 10
+$ grep -oE '§[0-9]+' design.md       | grep -oE '[0-9]+' | sort -un | tr '\n' ' '
+0 1 3 5 6 7 8 9 10 11
+$ grep -oE '§[0-9]+' requirements.md | grep -oE '[0-9]+' | sort -un | tr '\n' ' '
+0 1 3 5 11
+```
+
+- design が名指す節番号は **{0,1,3,5,6,7,8,9,10,11}**、requirements は **{0,1,3,5,11}**。このうち **§11 は `research.md` ではなく atom 確定台帳を指す**参照である（`grep -n "§11" design.md` → `:52` `atom 確定台帳 §11（数量の正本）`・`:321` `mechanism-ledger.md §11（数量の正本）`／同 requirements.md → `:21` `atom 確定台帳 mechanism-ledger.md §11`・`:220` `正本＝atom 確定台帳 §11`）。**§11 を除けば、両文書が `research.md` に対して名指す節はすべて実在する（空振り 0 件）。**
+- design `:5` の `ギャップ分析 §0〜§9` という**範囲指定**も、実在集合が `0`〜`10` の連番なので**穴が無い**（上の連番出力がそれを示す）。
+- **requirements（§1・§3・§5）と design（§1・§3・§5・§6・§7・§8）の差は包含関係であり、食い違いではない**——design が素材の所在をより広く渡している。狭い側が広い側と矛盾する主張をしている箇所は無い。
+
+**判定: 手渡し 3 点はすべて揃っており、指す先はすべて実在し、2 つの罠は現物の意味論と一致する。** 罠①・罠②はいずれも「知らずに着手すると、直っていないのに PASS が出る／規模を 1 桁誤る」種類の事実であり、**単に書かれているだけでなく、書かれている内容が正しい**ことをその場で現物から確かめた。
+
+---
+
+### 突合⑵-4: 上限・判定器・観測語彙のいずれも書き換えられていないこと（要件 8.3・3.4・5.4）
+
+task 2.1（V4）・task 2.4（V2）の結果を本節の基準点 HEAD `48c8a807` で**採り直した**（あの採取以降にコミットが増えているため、写さずに採り直す）。
+
+**⑴ pathspec の実在確認（差分採取の直前に実行）**
+
+```
+$ for p in crates/areka/src/placement/transition_judge.rs \
+           crates/areka/src/placement/transition_judge_verdict.rs \
+           crates/wintf/src/ecs/window/transition_diag.rs \
+           crates/wintf/src/ecs/window/command.rs \
+           crates/wintf/src/runtime/tick_bridge.rs ; do
+    [ -f "$p" ] && echo "EXISTS  $p" || echo "MISSING $p" ; done
+EXISTS  crates/areka/src/placement/transition_judge.rs
+EXISTS  crates/areka/src/placement/transition_judge_verdict.rs
+EXISTS  crates/wintf/src/ecs/window/transition_diag.rs
+EXISTS  crates/wintf/src/ecs/window/command.rs
+EXISTS  crates/wintf/src/runtime/tick_bridge.rs
+$ ls -1 crates/areka/src/placement/transition_judge*.rs | wc -l
+9
+```
+
+**⑵ 差分の採取**
+
+```
+$ git diff --name-only origin/main...HEAD -- crates/ | wc -l
+0
+
+$ git diff --name-only origin/main...HEAD
+.kiro/specs/areka-P0-present-write-coherence/design-validation.md
+.kiro/specs/areka-P0-present-write-coherence/design.md
+.kiro/specs/areka-P0-present-write-coherence/requirements.md
+.kiro/specs/areka-P0-present-write-coherence/research.md
+.kiro/specs/areka-P0-present-write-coherence/spec.json
+.kiro/specs/areka-P0-present-write-coherence/tasks.md
+.kiro/specs/areka-P0-present-write-coherence/verification/notes.md
+.kiro/steering/roadmap.md
+
+$ git diff --name-only origin/main...HEAD -- $(ls -1 crates/areka/src/placement/transition_judge*.rs | tr '\n' ' ') | wc -l
+0
+$ git diff --name-only origin/main...HEAD -- crates/wintf/src/ecs/window/transition_diag.rs | wc -l
+0
+$ git diff --name-only origin/main...HEAD -- crates/areka/src/placement/transition_judge_verdict.rs | wc -l
+0
+```
+
+| 対象 | 実在 | 差分 | 対応する受入基準 |
+|---|---|---|---|
+| **上限** `VISUALIZE_TO_WRITE_US_MAX` `:90` ／ `FLUSH_TOTAL_US_MAX` `:99`（ともに `= 16_667;`） | EXISTS（`transition_judge_verdict.rs`） | **0** | 3.4・8.3 |
+| **判定器** `transition_judge*.rs`（**9 ファイルを列挙して渡す**） | 9 ファイルへ展開 | **0** | 8.3 |
+| **観測語彙** `transition_diag.rs` | EXISTS | **0** | 5.4・8.3 |
+| `crates/` 全体（上 3 者を包含する検査） | ディレクトリ実在 | **0** | 6.1-6.7 |
+
+**⑶ 対照——この検査が赤を出せること**
+
+```
+$ git diff --stat origin/main...HEAD -- .kiro/specs/areka-P0-present-write-coherence/design.md
+ .../areka-P0-present-write-coherence/design.md     | 322 +++++++++++++++++++++
+ 1 file changed, 322 insertions(+)
+
+$ git diff --stat origin/main...HEAD -- crates/areka/src/placement/transition_judge_NONEXISTENT.rs
+（出力なし）
+$ echo $?
+0
+$ ls crates/areka/src/placement/transition_judge_NONEXISTENT.rs
+ls: cannot access 'crates/areka/src/placement/transition_judge_NONEXISTENT.rs': No such file or directory
+```
+
+**陽性対照は非空を返し、空振り対照は空・終了コード 0 を返す。** ⑴ の実在確認を省いていればこの 2 つは見分けがつかなかった——上表の 0 は、**渡した pathspec が現に解決することを確かめた上での 0** である。
+
+**⑷ 上限の値そのものが動いていないこと**（差分 0 だけでは「元から緩かった」可能性を排除できないので、値を直接読む）
+
+```
+$ grep -rn "16_667" --include='*.rs' crates/
+crates/areka/src/placement/transition_judge_verdict.rs:90:pub const VISUALIZE_TO_WRITE_US_MAX: u64 = 16_667;
+crates/areka/src/placement/transition_judge_verdict.rs:99:pub const FLUSH_TOTAL_US_MAX: u64 = 16_667;
+```
+
+**判定: 上限・判定器・観測語彙のいずれも書き換えられていない。** 要件 8.3（上限・判定器・観測語彙を書き換えることで未達を消さない）・3.4（上限を緩めない）・5.4（レコード語彙の文言とフィールド名を変更しない）は、**現物の差分 0 ＋ 定数の実値**で成立している。未達 40 件は判定の側を動かして消されたのではなく、**登記として残されている**。
+
+---
+
+### 突合⑵-5: 判定
+
+- **⑴ 4 候補の却下理由は、いずれも構造的事実と対で残っている**（`awk` による 2 列非空検査＝4/4）。その事実は本節が現物を読んで確かめた結果と一致し、**task 2.1 の実測（V3・V4）とも一致する**——R1 は V4-d の T1、R2 は同 T2、R3 は V4-a の B1・B2 と同じ行番号・同じ字面である。R4 は本節が独立に走査して「提示時刻の観測は 1 件も無い」を再現した。**要件文書と設計文書が 4 候補について食い違う箇所は 0 件。**
+- **⑵ 要件文書と設計文書の数値の食い違いは 0 件。** 実測域・上限との比・上限・違反件数（**32 窓中 32 件**／**8 遷移中 8 件**）・合計 **40 件**・**引受先なし**——すべて同一である。差は註記の列位置 1 件のみ。比と件数は算術で再導出でき（`12.62`／`18.38`／`8.59`／最小値が上限超ゆえ 8/8）、数量の正本（atom 確定台帳 §11）とも一致する。上限 16,667µs は現物の定数 2 本（`transition_judge_verdict.rs:90`・`:99`）と一致する。
+- **⑶ 将来仕様への手渡しは 3 点とも揃っている。** 素材の所在（`research.md` §1・§3・§5・§6・§7・§8＝**全節が実在・空振り 0 件**）・2 つの罠（飽和減算 `transition_judge.rs:817`／`t_us` の tick 起点 `transition_diag.rs:692`・`:703`＝**どちらも現物の意味論と一致**）・未調査の 1 点（`EndDeferWindowPos` 単独所要＝**計時対が現に無いことを確かめた**上で、確定手段の所在 `research.md` §8-② が実在）。
+- **⑷ 上限・判定器・観測語彙のいずれも書き換えられていない**（実在を確かめた上での差分 0・対照は赤を出す・定数の実値は `16_667` のまま）。
+- **本節は `requirements.md`・`design.md`・`research.md`・`tasks.md` のいずれも 1 行も変更していない**（本タスクの編集対象は本記録のみ）。
+
+**この判定の射程（混ぜてはならない）**——ここで確定するのは「**裁定・却下理由・未達・手渡しの登記が、両文書のあいだで矛盾なく完結している**」ことだけである。**未達 40 件が解消した証拠ではない。** 本仕様は是正コード 0 行であり、`visualize_to_write_us` は上限の 12.6〜18.4 倍のまま、`flush_total_us` は 8 遷移すべてが上限超のまま、**引受先は無い**。既存のサインオフ判定がこの 2 量の違反を報告し続けるのは正常な状態である（要件 8.3）。**完了報告でこの「食い違い 0 件」を合否量と同じ息で並べてはならない**（要件 8.5）。
+
+**後続への申し送り 1 件**: `requirements.md` 裁定の記録 5（`:41`）は B-3 と B-3′ を 1 項目にまとめて「要件 1.2⑵ に該当」と書く。**厳密には 1.2⑵ 該当は B-3′ の側**であり、文言どおりの B-3 は構造的非到達で落ちている（裁定の記録 4（`:40`）と design の R1／R2 はこれを分けて書いている）。将来 `requirements.md` の裁定の記録 5 **だけ**を読むと「文言どおりの B-3 も大改造だから落ちた」と読める——**却下の正確な内訳は design `:113`-`:114` の R1／R2 を読むこと。** 突合⑴-6 の申し送り（design のトレーサビリティ表だけを読むと 4.6 が生存側に見える）と対をなす、**片方の文書だけを読むと分類が粗くなる**形の 2 件目である。
+
+**後続への申し送り 2 件目**: 手渡しの素材の所在は design の中で **2 箇所**にあり、名指しする節が食い違う——本体（`design.md:278`）は `research.md` §1・§3・§5・**§6・§7・§8** を挙げるが、C5 のトレーサビリティ行（`design.md:249`）は §1・§3・§5・**§10** を挙げる。**どちらの節も実在するので空振りではない**（`research.md` は §0〜§10 が連番で存在）。ただし C5 の行だけを見て辿った読み手は、工数と危険度（§7）・影響を受ける既存テスト（§6）・未調査事項（§8）ではなく設計フェーズの合成結果（§10）に着く。**再着手仕様は本体の `:278` の並びを正とすること。**
