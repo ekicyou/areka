@@ -67,7 +67,7 @@
 
 - **Extends**: なし（完全新規・完了 spec への申し送り登記もゼロ＝2026-08-27 実測）。
 - **Adjacent**:
-  - `present-write-coherence`（W6.95 同居）: ファイル素。弱接触 2 点＝⑴ pwc brief:154 が `zorder_pair_maintain.rs` を**観測対象**（改変せず）として名指し ⑵ COMPAT §8 へ両者追記（行が別）。
+  - `present-write-coherence`（W6.95 同居）: ファイル素。弱接触 2 点＝⑴ pwc brief:161 が `zorder_pair_maintain.rs` を**観測対象**（改変せず）として名指し ⑵ COMPAT §8 へ両者追記（行が別）。**【2026-08-27 同時開始再確認で追加された本 spec 側の義務】**: `zorder_pair_maintain.rs` には `draw-load-parity` が着地させた **tick の門の起床旗 1 行**（Z 順変化の生産者）が入っている——N 窓グループへ改組するとき**この旗と観測語彙（相名）を保存する**こと（pwc と dlp 観測資産〔`[tick]` 相別行〕が読む前提。落とすと門 ON 時に Z 順変化が tick を起こせなくなる）。
   - `balloon-offset-dpi`（W6.95 同居）: ファイル素。**唯一の実質リスク**＝bod が `enqueue_window_set_pos`（`follow/window_move.rs:452-544`・`SWP_NOZORDER` ハードコード）の署名を変える場合のみ同一関数衝突。**本 spec は同 funnel を触らない**（維持系は既存どおり `SetWindowPosCommand` を直接発行）を設計不変条件とする。
   - `areka-P0-sakura-time-directives`（M2 ゲート）: `\![set,*]` サブコマンド粒度の裁定を共有（compile 側 allowlist と sink 台帳の層違いを要件で明文化）。
   - 先送り語彙檻: `zorder_pair_deferred_vocabulary_tests.rs:69-101` と areka 側兄弟——新設本番ファイルは**両肺の `PRODUCTION_FILES` へ同時追加**（:76-79 の規定）。
