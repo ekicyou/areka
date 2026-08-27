@@ -43,6 +43,14 @@ pub mod transition_diag;
 /// 1 つも置かずに済ませる。
 #[cfg(test)]
 pub(crate) mod transition_judge;
+
+/// 追随レコード（`kind=offset`）の機械判定器（純関数・I/O 無し）。
+///
+/// [`transition_judge`] の解析と遷移の切り出しを再利用し、本仕様の要件 8.2〜8.5 を判定する。
+/// 消費者は決定論テストと実機サインオフのランナーだけなので、[`transition_judge`] と同じ形
+/// （`#[cfg(test)]`）に置いて許可属性を 1 つも使わない。
+#[cfg(test)]
+pub(crate) mod transition_judge_offset;
 mod windowposition;
 
 /// 作者空間の符号付きオフセットを k 倍する唯一の写像（大きさは `ScaleRatio::scale_len`
