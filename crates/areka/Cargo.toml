@@ -62,3 +62,7 @@ shiori-host32-host = { path = "../shiori-host32-host" }
 # 出荷クロージャに新規外部依存を持ち込まない（必須依存は tracing のみ＝既出）。
 # 依存方向の規律により [dependencies] へは決して置かない。
 log-capture-kit = { path = "../log-capture-kit" }
+# テスト用一時パスをプロセス間で一意に組み立てる窓口の唯一の定義元（同 spec）。
+# 依存 0（std のみ）の leaf・publish = false・テスト専用。log-capture-kit と同じく
+# [dependencies] へは決して置かない。
+temp-path-kit = { path = "../temp-path-kit" }

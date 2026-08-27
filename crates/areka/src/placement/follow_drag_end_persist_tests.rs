@@ -196,33 +196,24 @@ fn on_balloon_drag_end_persists_balloon_offset_for_scope() {
 /// （100・0・96 系）と重ならない。
 #[test]
 fn round_trip_save_restore_value_equivalence_over_real_fs() {
-    use std::path::PathBuf;
-
     use areka_ghost::sylphya_wiring::profile_areka_root;
     use areka_parsers::charset::DefaultEncoding;
     use areka_sylphya::persist::FsPersistIo;
     use areka_sylphya::{
         Axis, PersistKey, PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya,
     };
+    use temp_path_kit::TempPath;
 
     use super::super::persist::{PersistWiring, apply_restored_placements, load_restored_state};
     use super::on_balloon_drag_end;
     use crate::placement::resolver::ScopePlacement;
     use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker};
 
-    // panic をまたいで temp dir を確実に片付ける Drop ガード。
-    struct TempGhostDir(PathBuf);
-    impl Drop for TempGhostDir {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_dir_all(&self.0);
-        }
-    }
-
     // --- fixture: 最小解決可能ゴースト（persist.rs plant_minimal_ghost 同型）---------
-    let mut root = std::env::temp_dir();
-    root.push("areka_follow_round_trip_e2e_8_2");
-    let _ = std::fs::remove_dir_all(&root);
-    let _guard = TempGhostDir(root.clone());
+    // 一時ディレクトリは共通窓口経由。名前にプロセス識別子が入るので**プロセス間でも
+    // 一意**になり、panic をまたぐ後始末（Drop での再帰削除）も窓口が担う。
+    let temp = TempPath::new("follow-round-trip-e2e-8-2");
+    let root = temp.path().to_path_buf();
     let ghost_master = root.join("ghost").join("master");
     std::fs::create_dir_all(&ghost_master).expect("create ghost/master");
     std::fs::write(
@@ -437,7 +428,7 @@ fn round_trip_save_restore_value_equivalence_over_real_fs() {
     assert_eq!(out[0].char_size, char_size);
     assert_eq!(out[0].anchor, Anchor::Bottom);
 
-    // 正典終了（アクター join）——temp dir は _guard の Drop が片付ける。
+    // 正典終了（アクター join）——temp dir は temp の Drop が片付ける。
     parts.publisher.close();
     let _ = parts.handle.join();
 }
@@ -473,32 +464,22 @@ fn round_trip_save_restore_value_equivalence_over_real_fs() {
 /// 座標は 96 の非倍数を用い（隠れた dpi/96 再スケールの副次檻）、scope 間・既定値と重ねない。
 #[test]
 fn dragged_char_persists_even_without_dragging_state_at_dragend() {
-    use std::path::PathBuf;
-
     use areka_ghost::sylphya_wiring::profile_areka_root;
     use areka_parsers::charset::DefaultEncoding;
     use areka_sylphya::persist::FsPersistIo;
     use areka_sylphya::{
         Axis, PersistKey, PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya,
     };
+    use temp_path_kit::TempPath;
 
     use super::super::persist::{PersistWiring, apply_restored_placements, load_restored_state};
     use super::on_balloon_drag_end;
     use crate::placement::resolver::ScopePlacement;
     use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker};
 
-    struct TempGhostDir(PathBuf);
-    impl Drop for TempGhostDir {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_dir_all(&self.0);
-        }
-    }
-
     // --- fixture: 最小解決可能ゴースト（round_trip 8.2 と同型）------------------------
-    let mut root = std::env::temp_dir();
-    root.push("areka_follow_dragend_no_dragging_state_repro");
-    let _ = std::fs::remove_dir_all(&root);
-    let _guard = TempGhostDir(root.clone());
+    let temp = TempPath::new("follow-dragend-no-dragging-state-repro");
+    let root = temp.path().to_path_buf();
     let ghost_master = root.join("ghost").join("master");
     std::fs::create_dir_all(&ghost_master).expect("create ghost/master");
     std::fs::write(

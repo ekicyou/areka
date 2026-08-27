@@ -1,14 +1,16 @@
 use super::*;
+use temp_path_kit::TempPath;
 
 // ------------------------------------------------------------------
 // load_restored_state（唯一の IO 点・8.1 前哨・6.1/6.3 寛容縮退）
 // ------------------------------------------------------------------
 
-/// このテスト専用の一意な一時ディレクトリ（source.rs と同規約・外部 tempfile 非依存）。
-fn unique_temp_dir(tag: &str) -> std::path::PathBuf {
-    let mut dir = std::env::temp_dir();
-    dir.push(format!("areka_placement_persist_tests_{tag}"));
-    dir
+/// このテスト専用の一時ディレクトリ。共通窓口 `temp-path-kit` 経由で組むので、
+/// 名前にプロセス識別子と連番が入り**プロセス間でも一意**になる。
+///
+/// 返り値が生きている間だけ実体が存在し、破棄で中身ごと消える。
+fn unique_temp_dir(tag: &str) -> TempPath {
+    TempPath::new(&format!("placement-persist-{tag}"))
 }
 
 /// 最小ゴーストパッケージ（ghost/master/descript.txt ＋ shell/master dir）を組む。
@@ -29,7 +31,8 @@ fn plant_minimal_ghost(root: &Path) {
 /// `(PersistKey, String)` エントリとして読み戻る（load_scope 契約経由・8.1 前哨）。
 #[test]
 fn load_restored_state_reads_planted_sylphya_toml() {
-    let root = unique_temp_dir("load_reads_planted");
+    let temp = unique_temp_dir("load-reads-planted");
+    let root = temp.path().to_path_buf();
     plant_minimal_ghost(&root);
     // profile root = <ghost/master>/profile/areka（boot 結線と同一構築）。
     let profile = profile_areka_root(&root.join("ghost").join("master"));
@@ -74,7 +77,8 @@ fn load_restored_state_reads_planted_sylphya_toml() {
 /// 起動時先読み: 永続ファイル不在（profile 未作成）→ 空（load_scope の不在縮退・6.1）。
 #[test]
 fn load_restored_state_absent_file_is_empty() {
-    let root = unique_temp_dir("load_absent_file");
+    let temp = unique_temp_dir("load-absent-file");
+    let root = temp.path().to_path_buf();
     plant_minimal_ghost(&root); // resolve は成功するが sylphya.toml は植えない
     let entries = load_restored_state(&root, DefaultEncoding::Ansi);
     assert!(entries.is_empty(), "永続ファイル不在は空縮退: {entries:?}");
@@ -84,7 +88,8 @@ fn load_restored_state_absent_file_is_empty() {
 /// 起動時先読み: mount 解決失敗（ghost_root 不在）→ 空 Vec（寛容縮退・panic なし・6.1/6.3）。
 #[test]
 fn load_restored_state_mount_resolve_failure_is_empty() {
-    let root = unique_temp_dir("load_mount_fail").join("no_such_ghost");
+    let temp = unique_temp_dir("load-mount-fail");
+    let root = temp.path().join("no_such_ghost");
     let entries = load_restored_state(&root, DefaultEncoding::Ansi);
     assert!(
         entries.is_empty(),

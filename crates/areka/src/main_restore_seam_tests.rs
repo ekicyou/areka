@@ -6,17 +6,19 @@ use placement::follow::MonitorSnapshot;
 use placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
 use placement::test_support::{ExpectField, capture_logs, expect_one};
 use std::path::Path;
+use temp_path_kit::TempPath;
 
 /// 復元テスト共通寸法（persist.rs の merge テストと同流儀）。
 const CSZ: SizePx = SizePx { w: 400, h: 600 };
 const BSZ: SizePx = SizePx { w: 200, h: 300 };
 
-/// このテスト専用の一意な一時ディレクトリ（persist.rs の load テストと同規約・
-/// 外部 tempfile 非依存）。
-fn unique_temp_dir(tag: &str) -> std::path::PathBuf {
-    let mut dir = std::env::temp_dir();
-    dir.push(format!("areka_main_restore_seam_tests_{tag}"));
-    dir
+/// このテスト専用の一時ディレクトリ。共通窓口 `temp-path-kit` 経由で組むので、
+/// 名前にプロセス識別子と連番が入り**プロセス間でも一意**（同じテストを同時に
+/// 複数プロセスで走らせても互いの一時ファイルを消し合わない）。
+///
+/// 返り値が生きている間だけ実体が存在し、破棄で中身ごと消える。
+fn unique_temp_dir(tag: &str) -> TempPath {
+    TempPath::new(&format!("main-restore-seam-{tag}"))
 }
 
 /// `resolve` が成功する最小ゴーストパッケージ（persist.rs の `plant_minimal_ghost` と同型）。
@@ -58,7 +60,8 @@ fn synthetic_placement(default_char_pos: PointPx) -> ScopePlacement {
 /// saved 窓を完全に覆う work area ゆえ `project_restore` は恒等＝保存値素通し。
 #[test]
 fn restore_seam_prefers_saved_position_over_default() {
-    let root = unique_temp_dir("prefers_saved");
+    let temp = unique_temp_dir("prefers-saved");
+    let root = temp.path().to_path_buf();
     plant_minimal_ghost(&root);
     // profile root = <ghost/master>/profile/areka（boot 結線と同一構築）。
     let profile = profile_areka_root(&root.join("ghost").join("master"));
@@ -110,7 +113,8 @@ fn restore_seam_prefers_saved_position_over_default() {
 /// （保存位置が無ければ従来の既定位置解決のまま）。
 #[test]
 fn restore_seam_without_persist_is_identity_default() {
-    let root = unique_temp_dir("no_persist_default");
+    let temp = unique_temp_dir("no-persist-default");
+    let root = temp.path().to_path_buf();
     plant_minimal_ghost(&root); // resolve は成功するが sylphya.toml は植えない。
 
     let default_char_pos = PointPx { x: 100, y: 100 };
@@ -152,7 +156,8 @@ fn restore_seam_without_persist_is_identity_default() {
 /// 補正が `balloon_offset` へ焼き付いていたら（DD6 違反）3 番目の assert が赤になる。
 #[test]
 fn restore_seam_clamps_balloon_display_position_but_keeps_offset_raw() {
-    let root = unique_temp_dir("balloon_limit_gate");
+    let temp = unique_temp_dir("balloon-limit-gate");
+    let root = temp.path().to_path_buf();
     plant_minimal_ghost(&root);
     let profile = profile_areka_root(&root.join("ghost").join("master"));
     std::fs::create_dir_all(&profile).expect("create profile/areka");

@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU32, Ordering};
 
+use temp_path_kit::TempPath;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
 
 use super::resolver::RectPx;
@@ -36,35 +36,22 @@ pub(super) const WA: RectPx = RectPx {
     bottom: 1040,
 };
 
-// ── テスト用一時ディレクトリ（measure.rs テストと同じ std-only 最小実装）──
-
-static TEMP_COUNTER: AtomicU32 = AtomicU32::new(0);
+// ── テスト用一時ディレクトリ（共通窓口 `temp-path-kit` の薄い包み）──
 
 /// Drop 時に自身を再帰削除する一時ディレクトリ。
-pub(super) struct TempDir {
-    path: PathBuf,
-}
+///
+/// 名前の組み立ては共通窓口 [`TempPath`] へ一本化してある。この crate の中に
+/// 「窓口」と「窓口の移植元になった同型の実装」の 2 系統を残さないための包みで、
+/// 出来上がる名前は移植前と同じ `areka-placement-prepare-{プロセス識別子}-{連番}`。
+pub(super) struct TempDir(TempPath);
 
 impl TempDir {
     pub(super) fn new() -> Self {
-        let n = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
-        let path = std::env::temp_dir().join(format!(
-            "areka-placement-prepare-{}-{}",
-            std::process::id(),
-            n
-        ));
-        std::fs::create_dir_all(&path).expect("一時ディレクトリ作成");
-        TempDir { path }
+        TempDir(TempPath::new("placement-prepare"))
     }
 
     pub(super) fn path(&self) -> &Path {
-        &self.path
-    }
-}
-
-impl Drop for TempDir {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.path);
+        self.0.path()
     }
 }
 
