@@ -89,10 +89,264 @@ set-count=0        # Get-ChildItem Env: の HOST32* が 0 件
 
 ## V2: コード非接触の証跡（要件 6.1-6.7・8.3）
 
-> **未実施。task 2.4 が本節を埋める。** 本節は仕様文書の変更をすべてコミットして作業ツリーを確定させた**後**に採取する（本文書自身のコミットを含む）。
-> 記載すべき内容: `git diff --name-only origin/main...HEAD` の全行・許可集合外 0 件の判定・接触禁止集合 7 項目の差分 0 の判定・`git status --porcelain` による想定外の作業ツリー差分 0 件の判定。
-> **採取の必須手順**: 接触禁止集合の 7 項目は、**各パスが現物として解決することを先に確かめてから**採取すること。git は実在しないパスに対して空出力・終了コード 0 を返すため、確かめずに採った「差分なし」は空振りと区別できない（task 2.1 で実際に 1 項目がこの状態だった。V4-e 参照）。
-> なお本節の採取に先立つ暫定確認は V4 の「差分の不在」に記録してある（task 2.1 時点のもので、証跡としては V2 の採取値が正本になる）。
+実施日 2026-08-27。
+
+> **採取の順序と、本節自身の扱い（先に読むこと）**: 本節の採取はすべて、task 2.1〜2.3 の仕様文書変更を**コミットして作業ツリーを確定させた後**に実行した（採取時の `git status --porcelain` は ` M vendors/pasta` の 1 行のみ）。ただし**本節を書き込む行為そのもの**が `verification/notes.md` に未コミット差分を 1 件作る——下に記す値は書き込みより**前**の状態を写したものであり、本節の記載後に `git status --porcelain` を実行すれば `M .kiro/specs/areka-P0-present-write-coherence/verification/notes.md` が 1 行増える。これは**許可集合の内側**の変更であり、本タスクのコミットで解消する。数え直した読者が「1 行のはずが 2 行ある」と読み違えないための注記である。
+> **採取の規律（V4-c と同じ）**: git は**実在しないパスを渡されても空出力・終了コード 0 を返す**。ゆえに本節では、差分を採るすべての pathspec について**先に現物が解決することを確かめ**、さらに**同じ検査が赤を出せること**を対照で示してから「差分なし」を記録した。確かめずに採った緑は、何も検査していない緑と見分けがつかない。
+
+### V2-0: 採取の基準点
+
+| 項目 | 値 | 採取コマンド |
+|---|---|---|
+| 対象 HEAD | **`946d0aa0`**（`feat(areka-P0-present-write-coherence): steering 編成表の裁定反映を確認 (task 2.3)`） | `git rev-parse HEAD` ／ `git log -1 --oneline` |
+| 既定枝 `origin/main` | **`a6d27c73`** | `git rev-parse origin/main` |
+| 枝名 | `claude/areka-p0-present-write-coherence-8308e6` | `git rev-parse --abbrev-ref HEAD` |
+| 本枝が `origin/main` に加えるコミット | **13 本** | `git log --oneline origin/main..HEAD \| wc -l` |
+| 採取時の作業ツリー差分 | **1 行**（` M vendors/pasta`） | `git status --porcelain \| wc -l` |
+
+- `origin/main` の `a6d27c73` は、調査文書 `research.md` 冒頭が実測時 HEAD として記す sha と**同一**である（本文書冒頭「検証の基準点」表と一致）。すなわち本枝の分岐点以降、既定枝は動いていない。
+
+### V2-1: 差分ファイル一覧（全行）
+
+```
+$ git diff --name-only origin/main...HEAD
+.kiro/specs/areka-P0-present-write-coherence/design-validation.md
+.kiro/specs/areka-P0-present-write-coherence/design.md
+.kiro/specs/areka-P0-present-write-coherence/requirements.md
+.kiro/specs/areka-P0-present-write-coherence/research.md
+.kiro/specs/areka-P0-present-write-coherence/spec.json
+.kiro/specs/areka-P0-present-write-coherence/tasks.md
+.kiro/specs/areka-P0-present-write-coherence/verification/notes.md
+.kiro/steering/roadmap.md
+
+$ git diff --name-only origin/main...HEAD | wc -l
+8
+```
+
+**全 8 行**である。内訳は本仕様の spec ディレクトリ配下 **7 行**（`design-validation.md`・`design.md`・`requirements.md`・`research.md`・`spec.json`・`tasks.md`・`verification/notes.md`）と `.kiro/steering/roadmap.md` **1 行**。**`crates/` 配下・`Cargo.toml`・`vendors/` は 1 行も現れない。**
+
+### V2-2: 判定⑴——許可集合外 **0 件**
+
+許可集合の定義は design.md `Boundary Commitments` → `Out of Boundary` 第 1 項の逐語である——**`.kiro/specs/areka-P0-present-write-coherence/` 配下＋`.kiro/steering/roadmap.md`**（「この 2 つが許可集合の唯一の定義であり、V2 がこれを機械で検査する」）。他の節・他の文書の記述を許可集合の定義として持ち込んでいない。
+
+```
+$ git diff --name-only origin/main...HEAD \
+    | grep -v -E '^\.kiro/specs/areka-P0-present-write-coherence/|^\.kiro/steering/roadmap\.md$'
+（出力なし）
+
+$ git diff --name-only origin/main...HEAD \
+    | grep -v -E '^\.kiro/specs/areka-P0-present-write-coherence/|^\.kiro/steering/roadmap\.md$' | wc -l
+0
+```
+
+- **判定: 許可集合外 0 件。**（8 行すべてが許可集合の内側。）
+- **終了コードで読まないこと**: `grep -v` は 1 行も残らないとき**終了コード 1** を返す。ここでの空は `wc -l` の **`0`** で取っている——終了コードを合否に使うと、この検査は「正常な緑」を「失敗」と読む。
+
+### V2-3: 判定⑵——接触禁止集合 **0 件**（7 項目・項目別）
+
+#### ⒜ pathspec の実在確認（差分採取の直前に実行）
+
+```
+$ for p in crates/areka-emo-present/src/presenter/show.rs \
+           crates/areka-emo-present/src/mount.rs \
+           crates/wintf/src/ecs/window/command.rs \
+           crates/wintf/src/runtime/tick_bridge.rs \
+           crates/wintf/src/ecs/window/transition_diag.rs ; do
+    [ -f "$p" ] && echo "EXISTS  $p" || echo "MISSING $p" ; done
+EXISTS  crates/areka-emo-present/src/presenter/show.rs
+EXISTS  crates/areka-emo-present/src/mount.rs
+EXISTS  crates/wintf/src/ecs/window/command.rs
+EXISTS  crates/wintf/src/runtime/tick_bridge.rs
+EXISTS  crates/wintf/src/ecs/window/transition_diag.rs
+
+$ ls -1 crates/areka/src/placement/transition_judge*.rs
+crates/areka/src/placement/transition_judge.rs
+crates/areka/src/placement/transition_judge_coalesced_follow_tests.rs
+crates/areka/src/placement/transition_judge_frame_tests.rs
+crates/areka/src/placement/transition_judge_negative_tests.rs
+crates/areka/src/placement/transition_judge_reobservation_tests.rs
+crates/areka/src/placement/transition_judge_test_support.rs
+crates/areka/src/placement/transition_judge_tests.rs
+crates/areka/src/placement/transition_judge_verdict.rs
+crates/areka/src/placement/transition_judge_verdict_tests.rs
+$ ls -1 crates/areka/src/placement/transition_judge*.rs | wc -l
+9
+
+$ ls -1 Cargo.toml crates/*/Cargo.toml | wc -l
+25
+$ find crates -name Cargo.toml -not -path "*/target/*" | wc -l
+24
+$ find crates -name Cargo.toml -not -path "*/target/*" | grep -v "^crates/[^/]*/Cargo.toml$"
+（出力なし）
+```
+
+- **5 ファイルとも EXISTS。** glob 2 件も実体へ展開した——`transition_judge*.rs` が **9 ファイル**、`Cargo.toml` 群が **25 ファイル**（ルート 1 ＋ `crates/*/Cargo.toml` 24）。
+- 設計の字面は `crates/**/Cargo.toml`（再帰）だが、`find` の結果は **24 件すべてが 1 階層目の `crates/<crate 名>/Cargo.toml`** であり、より深い階層の `Cargo.toml` は存在しない（上の `grep -v` が空）。したがって `crates/*/Cargo.toml` と `crates/**/Cargo.toml` は**同じ 24 ファイルへ展開する**——一段浅い glob を使ったことで取りこぼした対象は無い。
+- glob の 2 項目は、以下の差分採取でも**展開後の 9 ／ 25 ファイルを明示的に列挙して**渡した。シェルの glob 展開に頼ると、展開が 0 件になったとき pathspec が消えて「差分なし」に見える。
+
+#### ⒝ 項目別の差分（各項目を**単独の pathspec で**採取）
+
+採取コマンド（各項目 `<item>` について）:
+
+```
+git diff --name-only origin/main...HEAD -- <item> | wc -l
+git diff --stat      origin/main...HEAD -- <item>
+```
+
+| # | 接触禁止集合の項目 | 実在 | `--name-only \| wc -l` | `--stat` | 判定 |
+|---|---|---|---|---|---|
+| 1 | `crates/areka-emo-present/src/presenter/show.rs` | EXISTS | **0** | 出力なし | **差分なし** |
+| 2 | `crates/areka-emo-present/src/mount.rs` | EXISTS | **0** | 出力なし | **差分なし** |
+| 3 | `crates/wintf/src/ecs/window/command.rs` | EXISTS | **0** | 出力なし | **差分なし** |
+| 4 | `crates/wintf/src/runtime/tick_bridge.rs` | EXISTS | **0** | 出力なし | **差分なし** |
+| 5 | `crates/wintf/src/ecs/window/transition_diag.rs` | EXISTS | **0** | 出力なし | **差分なし** |
+| 6 | `crates/areka/src/placement/transition_judge*.rs`（**9 ファイルを列挙して渡す**） | 9 ファイルへ展開 | **0** | 出力なし | **差分なし** |
+| 7 | `Cargo.toml` ＋ `crates/*/Cargo.toml`（**25 ファイルを列挙して渡す**） | 25 ファイルへ展開 | **0** | 出力なし | **差分なし** |
+
+- 項目 2 は **`crates/areka-emo-present/src/mount.rs`**（`src/` 直下）である。`crates/areka-emo-present/src/presenter/mount.rs` は**実在しない**——task 2.1 以前の設計文書はこの実在しないパスを指しており、そのままでは項目 2 の検査が空振りしていた（V4-e の是正 1 件）。本節はその是正後のパスで採取している。
+
+#### ⒞ 総計（項目別とは別建ての、包含関係にある検査）
+
+```
+$ git diff --name-only origin/main...HEAD -- crates/ Cargo.toml | wc -l
+0
+```
+
+**0 行。** 接触禁止集合の 7 項目はすべて `crates/` 配下かルート `Cargo.toml` に属するので、この 0 は項目別 7 件の 0 を包含する。**ただし総計だけでは項目別の証跡にならない**（1 項目が空振りしても総計は 0 のままである）ため、⒝ の項目別採取を正本とし、⒞ は整合の確認として置く。
+
+### V2-4: 対照——**この検査が赤を出せること**の確認
+
+「差分なし」を証拠として使うには、同じコマンドが差分のある対象に対して**赤（非空）を返す**ことを示さねばならない。
+
+**⑴ 陽性対照**（差分のある許可集合内のファイルへ同じコマンドを当てる）:
+
+```
+$ git diff --stat origin/main...HEAD -- .kiro/specs/areka-P0-present-write-coherence/design.md
+ .../areka-P0-present-write-coherence/design.md     | 322 +++++++++++++++++++++
+ 1 file changed, 322 insertions(+)
+
+$ git diff --name-only origin/main...HEAD -- .kiro/specs/areka-P0-present-write-coherence/design.md | wc -l
+1
+```
+
+**非空を返した。** ゆえに V2-3 の「出力なし・0 行」は、検査が働いた上での空である。
+
+**⑵ 空振り対照**（実在しないパスを渡すと何が起きるかの実演）:
+
+```
+$ git diff --stat origin/main...HEAD -- crates/areka-emo-present/src/presenter/mount.rs
+（出力なし）
+$ echo $?
+0
+$ ls crates/areka-emo-present/src/presenter/mount.rs
+ls: cannot access 'crates/areka-emo-present/src/presenter/mount.rs': No such file or directory
+```
+
+**実在しないパスに対して git は空出力・終了コード 0 を返す。** V2-3 ⒜ の実在確認を省いていれば、この出力は「差分なし」と見分けがつかなかった。⑴ と ⑵ を並べて初めて、上表の緑が読める。
+
+### V2-5: 判定⑶——想定外の作業ツリー差分 **0 件**と、`vendors/pasta` の扱い
+
+**⑴ 作業ツリー**
+
+```
+$ git status --porcelain
+ M vendors/pasta
+
+$ git status --porcelain | wc -l
+1
+```
+
+**1 行のみ**であり、それは `vendors/pasta`（サブモジュールのポインタ）である。これは**本仕様の着手前から動いている汚れ**であり、本仕様は触っていない（V1・V4-c と同じ扱い）。**想定外の作業ツリー差分は 0 件。**
+
+**⑵ `vendors/pasta` が本仕様のどのコミットにも含まれないこと**
+
+```
+$ git log --name-only origin/main..HEAD -- vendors/pasta
+（出力なし）
+
+$ git log --name-only --pretty=format:"" origin/main..HEAD | grep -c "vendors"
+0
+
+$ git log --name-only --pretty=format:"--- %h %s" origin/main..HEAD \
+    | grep -v '^---' | grep -v '^$' | sort -u
+.kiro/specs/areka-P0-present-write-coherence/design-validation.md
+.kiro/specs/areka-P0-present-write-coherence/design.md
+.kiro/specs/areka-P0-present-write-coherence/requirements.md
+.kiro/specs/areka-P0-present-write-coherence/research.md
+.kiro/specs/areka-P0-present-write-coherence/spec.json
+.kiro/specs/areka-P0-present-write-coherence/tasks.md
+.kiro/specs/areka-P0-present-write-coherence/verification/notes.md
+.kiro/steering/roadmap.md
+```
+
+3 本目のコマンドは **13 コミットそれぞれの変更ファイルを 1 本残らず集めて重複を除いた集合**であり、**8 パス**——V2-1 の差分一覧と完全に一致する。すなわち `vendors/pasta` は**13 コミットのいずれにも現れない**（`grep -c "vendors"` が **0**）。差分一覧に現れないだけでなく、**中間コミットで一度触れて後で戻した、という経路も存在しない**ことがここで確定する。
+
+**⑶ 本枝が加える 13 コミット**（採取＝`git log --oneline origin/main..HEAD`）
+
+```
+946d0aa0 feat(areka-P0-present-write-coherence): steering 編成表の裁定反映を確認 (task 2.3)
+957358ea feat(areka-P0-present-write-coherence): ワークスペース全体テストの実行と結果の記録 (task 2.2)
+2b124d33 feat(areka-P0-present-write-coherence): 上流アンカーの実測再確認と検証記録の起票 (task 2.1)
+18db890f feat(areka-P0-present-write-coherence): ワークスペース全体テストの前提を整える (task 1)
+ce4204a3 docs(areka-P0-present-write-coherence): generate tasks (tasks.md)
+bd9f782f docs(areka-P0-present-write-coherence): fix obvious issues in design
+8aaee11f docs(areka-P0-present-write-coherence): add design validation report
+20dd6aef docs(areka-P0-present-write-coherence): generate design (design.md)
+3bb48834 docs(areka-P0-present-write-coherence): resolve discussion #2 - defer remediation, register shortfall
+f2aedc3e docs(areka-P0-present-write-coherence): resolve discussion #1 - B-3 excluded as major restructuring
+f76460bd docs(areka-P0-present-write-coherence): fix obvious issues in requirements
+4131e4fb docs(areka-P0-present-write-coherence): add gap analysis
+abb93236 chore(areka-P0-present-write-coherence): initialize spec (spec.json, requirements.md)
+```
+
+### V2-6: 要件 6 の各条を、現物の差分で確認する
+
+要件 6.4／6.6／6.7 は「本仕様が触っていないファイルの中身が壊れていないこと」を求める条項である。**設計文書の文言から自明と断じず、当該ファイルを名指しして差分 0 を採った。** ファイルの所在は本節でその場に特定したものであり、設計文書・調査文書から写していない（特定に用いたコマンドは表の下に併記）。
+
+| 受入基準 | 守るべき現物（**実測した字面**） | ファイル（**その場で特定**） | 実在 | `git diff --name-only origin/main...HEAD -- <file> \| wc -l` |
+|---|---|---|---|---|
+| 6.1 atom の窓書込の形 | 指令の合流・一括適用・書込経路の語彙・整合ゲート | `crates/wintf/src/ecs/window/command.rs` | EXISTS | **0** |
+| 6.2 当たり判定の原点 | 配置契約と寸の直接反映 | `crates/areka-emo-present/src/mount.rs` | EXISTS | **0** |
+| 6.2 バルーン追従の基準 | 並走 bod のファイル素を含む配置一式 | `crates/areka/src/placement/`（配下全体） | ディレクトリ実在 | **0** |
+| 6.4 定常アロケーション 0 | `show.rs:344` の注記行——「成立させた定常状態のアロケーション 0（Requirement 10.4）が壊れる」 | `crates/areka-emo-present/src/presenter/show.rs` | EXISTS | **0** |
+| 6.4 段階別計時ログの発行 | `timing.rs:56` = `pub(super) const PERF_LINE_MESSAGE: &str = "perf(apply_show): 段階別計時";` | `crates/areka-emo-present/src/presenter/timing.rs` | EXISTS | **0** |
+| 6.6 tick の門の既定（無効） | `world/mod.rs:405` = `tick_gate_enabled: false,`（構築時の既定値） | `crates/wintf/src/ecs/world/mod.rs` | EXISTS | **0** |
+| 6.6 門の判断（無効なら必ず回す） | `tick_gate.rs:156` = `if !i.gate_enabled {` | `crates/wintf/src/ecs/world/tick_gate.rs` | EXISTS | **0** |
+| 6.6 既定の上書き口（本採用は行わない） | `AREKA_TICK_GATE` の読み口。既定を動かすのは環境変数指定時のみ | `crates/areka/src/tick_gate_config.rs` | EXISTS | **0** |
+| 6.7 起床旗 | `tick_wake.rs:1` = 「起床の旗——『次の画面更新で仕事があるか』をプロセス共有のビット集合で持つ」 | `crates/wintf/src/ecs/world/tick_wake.rs` | EXISTS | **0** |
+| 6.7 観測の相名 | `transition_diag.rs:328` = `pub enum WriteStage {` ／ `:347` = `pub enum FlushStage {` | `crates/wintf/src/ecs/window/transition_diag.rs` | EXISTS | **0** |
+| 6.7 観測の相名（面の側） | `transition_record.rs:121` = `pub(super) enum SurfaceStage {` | `crates/areka-emo-present/src/presenter/transition_record.rs` | EXISTS | **0** |
+
+ファイルの所在と字面の特定に用いたコマンド:
+
+```
+grep -rn "定常状態のアロケーション" crates/areka-emo-present/src/presenter/show.rs
+grep -n  "PERF_LINE_MESSAGE"        crates/areka-emo-present/src/presenter/timing.rs
+grep -n  "tick_gate_enabled"        crates/wintf/src/ecs/world/mod.rs
+grep -n  "gate_enabled"             crates/wintf/src/ecs/world/tick_gate.rs
+grep -rn "AREKA_TICK_GATE" --include=*.rs crates/
+grep -n  "pub enum"                 crates/wintf/src/ecs/window/transition_diag.rs
+grep -rn "enum SurfaceStage" --include=*.rs crates/
+sed -n '344p'      crates/areka-emo-present/src/presenter/show.rs
+sed -n '56p'       crates/areka-emo-present/src/presenter/timing.rs
+sed -n '405p'      crates/wintf/src/ecs/world/mod.rs
+sed -n '1p'        crates/wintf/src/ecs/world/tick_wake.rs
+sed -n '328p;347p' crates/wintf/src/ecs/window/transition_diag.rs
+sed -n '121p'      crates/areka-emo-present/src/presenter/transition_record.rs
+```
+
+- **6.3 は不適用**（B-4 を採用していないため While 節の前件が偽）。したがって「当たり判定の原点が遷移中も遷移後も規約どおりであることの確認記録」は発生しない。
+- **6.5**（既存の決定論テストを壊れたまま残さない）は、`crates/` 配下の差分が **0 ファイル**であることに加え、V1 のワークスペース全体テストが **95 ターゲット全て `test result: ok`・失敗 0** であることで満たされる。退役／更新の判断を要するテストは 1 件も生じていない——**テストファイルを 1 本も触っていない**ため、判断の対象そのものが存在しない。
+- **8.3**（上限・判定器・観測語彙を書き換えることで未達を消さない）は、項目 5・6 の差分 0（`transition_diag.rs`・`transition_judge*.rs` 9 本）で構造的に成立する。上限定数 16,667µs そのものの現物確認は V4-b にある。
+
+### V2-7: 判定
+
+- **⑴ 許可集合外 0 件**（採取＝`git diff --name-only origin/main...HEAD | grep -v -E '^\.kiro/specs/areka-P0-present-write-coherence/|^\.kiro/steering/roadmap\.md$' | wc -l` → **0**）。差分 8 ファイルはすべて許可集合の内側。
+- **⑵ 接触禁止集合 0 件**（採取＝7 項目それぞれへの `git diff --name-only origin/main...HEAD -- <item> | wc -l` → いずれも **0**。総計 `-- crates/ Cargo.toml` も **0**）。7 項目とも**実在を確かめた上での 0** であり、同じ検査は `design.md` に対して `1 file changed, 322 insertions(+)` を返す。
+- **⑶ 想定外の作業ツリー差分 0 件**（採取＝`git status --porcelain | wc -l` → **1**、その 1 行は `vendors/pasta`）。`vendors/pasta` は本枝が加える **13 コミットのいずれにも現れない**（`git log --name-only origin/main..HEAD -- vendors/pasta` が空・全コミットの変更ファイル集合 8 パスに `vendors` の語が **0** 件）。
+- **要件 6.1・6.2・6.4・6.5・6.6・6.7・8.3 は、いずれも現物の差分 0 として成立している。** 6.3 は B-4 不採用により不適用。
+
+**この 3 判定の射程（混ぜてはならない）**——ここで確定するのは「**本仕様が実行時の挙動に関わるものを何一つ変更していない**」ことだけである。**未達（`visualize_to_write_us`・`flush_total_us` の違反 40 件）が解消した証拠ではない。** 本仕様は 2026-08-27 の裁定により是正コード 0 行であり、未達は `requirements.md`「未達の登記」節に**引受先なし**で登記されたまま残る。完了報告でこの 3 つの 0 を合否量と同じ息で並べてはならない（要件 8.5）。
 
 ---
 
