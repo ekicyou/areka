@@ -301,3 +301,105 @@ SC 番号・要件段階の裁定 5 点との対応を併記する。
 - **R-4**: 正典側の再改訂（SC14）に対する追随点を単一に保つ具体形。Option B の「決定の記録」が唯一の追随点になりうるか、`\_l` の軸規約が別の追随点を作らないか。
 - **R-5**: `vertical,1` フィクスチャの作り方。既存 `emo2-vertical` は `origin.x,0` を宣言しておりクランプ経路を通る。正典キー版を「同一の表示結果」（Requirement 10.2）で作るなら、宣言値もそのまま複製するのが素直だが、その場合 Requirement 3.1／3.2 の**宣言済み経路**は依然フィクスチャで検証されない（クランプに吸われる）。宣言済み・validrect 内の origin を持つ第 3 の観測点が要るかを設計段階で判断すること。
 - **R-6**: COMPAT §8 への追記行が `scope-zorder-pinning`・`present-write-coherence` と隣接する（3 spec が同ウェーブで §8 へ追記予定）。後着側の rebase コストは行マージのみだが、`writing_mode` の新規登記は §8 の既存 48 行のどこへ挿すかで差分の見え方が変わる。
+
+---
+
+# 設計フェーズの調査と決定（2026-08-27・`/kiro-spec-design`）
+
+- 採取日: 2026-08-27（ブランチ `claude/areka-p0-balloon-vertical-a522c6`）
+- Discovery Scope: **Extension**（既存システムへの受口追加＋既存正典の 1 点是正）＝light discovery
+- 方法: 3 系統の並列踏査（⑴ 転記層と解決層のコード実形 ⑵ クランプ正準の所有 spec と文書の追随先 ⑶ 追跡先 spec の項目列挙・フィクスチャ・テスト網・行数番人）。**本節の file:line はすべて本日再検証したもの**で、§1〜§7 のギャップ分析から転記していない。
+
+## 設計フェーズの主要な発見
+
+1. **受口は実質 0 行**——2 層マージ（`parse.rs:40-57`）は `descript.clone()` へ image 側を `insert` するだけのキー非依存実装。`vertical` の後勝ち（要件 1.5）に追加コードは要らない。
+2. **`BalloonModel::new` の呼出は 30 箇所**（本日実測・23 ファイル）だが、**本番はただ 1 箇所**（`parse.rs:142`）。残 29 はテスト／テスト支援。additive ビルダー（`with_cursor`・`with_windowposition_raw` の 2 先例・`model.rs:82-98` が「既存呼び出し側は `new` のまま不変」と doc で宣言）を採れば波及は 0。
+3. **`WritingMode::resolve` の本番呼出も 1 箇所**（`actor.rs:153`）。テストは 13（インライン 8・統合 5）。**戻り値型を保てば 2 入力化の波及は 0** ——これが Option B を安く成立させる。
+4. **要件 6.4（計測と描画で方向が食い違わない）は構造的に成立済み**。`DirectionRecipe::for_mode` は本番で `create_text_format`（`draw.rs:302-331`）からのみ呼ばれ（本番ヒットは `draw.rs:329` の 1 件）、計測（`DWriteMetrics::new` → `draw.rs:393`）も描画（`viewbox_draw.rs:522`／`:527`）も同じ工場を通り、キャッシュ鍵に `WritingMode` を含む。仕事は「構造で守られていることを檻にする」ことだけである。
+5. **クランプ正準の所有者は完了 spec `areka-P0-emo-text-layer`**（`design.md:464`「origin クランプ正準（areka 独自・**本書が正典**）」）。同 design.md はもう 1 箇所（`:716` の軸読み替え正準表「描画開始点＝clamp(origin, validrect)」）でも同じ規約を述べる。派生言及は `:151`／`:788`／`:822`／`tasks.md:49`。
+6. **同 spec の requirements.md にクランプを定める受入基準は 1 つも無い**（「クランプ」の grep が 0 件）。design.md だけの発明である。したがって撤去はどの承認済み受入基準とも矛盾しない——上書きされるのは design.md の 2 行だけである。
+7. **steering にクランプ正準を主張する記述は 1 件も無い**（10 ファイル全走査）。`roadmap-history.md` の「クランプ」ヒットはすべて別種（窓配置の `resolver.rs` P4／`balloon_limit.rs`）。正典改訂の追随は steering へ及ばない。
+8. **`doc/COMPAT_ARCHITECTURE.md` §8 にテスト保護は無い**（`include_str!` 0 件・行数番人なし）。48 データ行（`:128-175`）・列は 項目／裁量／根拠／出典 spec・**追記は末尾**。
+9. **上書き行の先例が 2 件ある**——`:147`（`kero-balloon` が `position-persist` R2.2／R8.5 を上書き）と `:153`（`scope-chain-gap` が `window-placement` R2.9 を上書き）。いずれも「アーカイブ済み spec は非改変とし、上書きの事実を本表と現行 spec に記録する」と明記。**`:153` が本仕様の行の雛形になる。**
+10. **追跡先 4 本の項目列挙はすべて成立していた**（下表）。要件 4.5／7.5／8.4 の双方向登記は実在確認＋項目突合の双方が満たされている。
+11. **`areka-parsers` に `log-capture-kit` は入っていない**（dev-deps は `temp-path-kit` のみ）。転記層に警告を置くと要件 10.6 の決定論テストで観測できない——警告の主体を解決層に置く根拠が実測で裏づけられた。
+12. **`draw.rs` は 974 行**（上限 1,000・番人は `log-capture-kit/tests/file_length_guard_test.rs`・例外表 11 件＋件数定数・**例外表は縮小方向にしか動かせない**）。要件 6 の檻は兄弟テスト `draw_format_metrics_tests.rs`（469 行）へ置く。
+13. **`emo2-choice` フィクスチャもクランプ経路を通っていた**——`tests/fixtures/emo2-choice/descript-cursor.txt:17-19` が `origin.x,0`／`origin.y,0` を宣言し validrect は `left,5`／`top,5`。要件 10.9 が `emo2-vertical` について命じた是正と**同型の箇所がもう 1 件ある**。
+
+### 追跡先 spec の項目列挙（本日実測）
+
+| 本仕様の要求 | 追跡先 brief | 結果 |
+|---|---|---|
+| 4.5 の 5 実測 | `areka-P0-cursor-tag-canon/brief.md`（91 行） | ✅ `:18`（非負ゲート）・`:29-32`（`vertical_rl` 原点符号）・`:33`（`vertical_lr` 一致）・`:35`（被覆 0）・`:27`／`:44`／`:54`（縮退表改訂義務） |
+| 5.5 の `\f` 系 | `areka-P0-text-decoration-canon/brief.md`（59 行） | ✅ `:20`（align／valign／underline）・`:21`／`:33`／`:59`（SC1 は bvc 裁定を継承し再審議しない） |
+| 5.5 の矢印 | `areka-P0-balloon-canon-residue/brief.md`（75 行） | ✅ `:11` の項目 1 に第 3 軸として追記済み |
+| 7.5 | `areka-P0-currentghost-property-tree/brief.md`（59 行） | ✅ `:24`（導出規則を bvc 参照で収載）・`:23`（balloon.scope 族 19 項目を全列挙） |
+| 7.3 の照会経路 | `areka-P0-property-query-channels/brief.md`（76 行） | ✅ `:14-22` に正典 6 経路 |
+
+### §1〜§7 の記述の訂正（本日の実測による）
+
+- **§3.7（`:167`）の出典が誤り**。「受け側が項目を列挙していない spec は所有者ではない」という規律文は `balloon-canon-residue/brief.md:18` には**無い**（同 brief は規律を適用しているが明文化していない）。正しい出所は `.kiro/specs/completed/areka-P0-balloon-visibility/tasks.md:196`。design.md はそちらを引く。
+- **§3.7（`:162`）の行数が誤り**。residue brief は 76 行ではなく **75 行**。
+- **§3.1（`:65`）の呼出箇所数**——「約 26」は本日の実測で **30**（23 ファイル）。結論（additive ビルダーで波及 0）は変わらない。
+- §3.10 の行数表は本日も一致（`draw.rs` 974・`region.rs` 721・`writing.rs` 224・`parse.rs` 161）。
+
+## Architecture Pattern Evaluation
+
+§4 で提示した 3 案を設計フェーズで評価し直した結果。
+
+| Option | 評価 | 採否 |
+|---|---|---|
+| **A: 既存機構への最小統合** | 触るファイルは最小だが、⑴ 2.6（層の優劣とキーの優劣を混ぜない）が規約でしか担保されない ⑵ 7.1 の導出点が書字方向の決定点から離れる ⑶ SC14 の追随点が散る | ❌ 却下 |
+| **B: 書字方向の解決を第一級の決定へ格上げ** | 上記 3 点が型と構造で解決する。**実測で分かった決定打は「戻り値型を保てば既存 14 呼出箇所の波及が 0 になる」こと**——§4 が挙げた弱点（呼出箇所への波及）は、`WritingMode::resolve` を薄い委譲として残せば消える | ✅ **採用** |
+| **C: ハイブリッド（段階化）** | 段の切り方そのものは有用。ただし ③（`\_l`）と ④（プロパティ）は要件討議で本仕様の範囲から外れたため、危険度の高い 2 段が消えている | ⚠ **Migration Strategy として部分採用**（実装順の 6 段へ写す） |
+
+§4 の所見「① で Option B の形を先に作り、②③④⑤ をその上に積む」は**そのまま成立する**（③④が消えたぶん単純になった）。
+
+## Design Decisions
+
+design.md の DD1〜DD9 が正本。ここには design.md に収めきれない判断の背景だけを残す。
+
+### Decision: 不正な `vertical` 値と共存規則の関係（DD6）
+
+- **Context**: 要件 1.6 は「不正値は警告のうえ正典既定の横書きへ縮退」と書き、要件 2.7 は「`writing_mode` の未知値は**指定なし**として扱い、`vertical` が宣言されていればそちらを採る」と書く。両者が非対称に読める。
+- **Alternatives**: ⑴ 1.6 を字義どおり「横書きの宣言へ縮退」と読む（`vertical,2` ＋ `writing_mode,vertical_rl` は「不一致の併記」となり 2.5 の DEBUG が出る）⑵ 2.7 と対称に「指定なし」として扱う（DEBUG は出ない）。
+- **Selected Approach**: ⑵。
+- **Rationale**: **両読みとも最終的な `WritingMode` は全ケースで同一**（他方が無ければ横書き＝1.6 の要求どおり／他方が有効なら `writing_mode` が勝つ）。差は DEBUG 記録の有無だけである。対称形を採ると規則が 1 本になり、値が壊れている側について「両者の値」を DEBUG に残す意味も無くなる。要件はどちらも棄却していない。
+- **Trade-offs**: 1.6 の字面から一歩離れる。design.md の Flow 1 と Error Handling の表で明示する。
+
+### Decision: 要件 10.7（既存資産を退行させない）と 3.10（クランプ撤去）の両立
+
+- **Context**: クランプ撤去は既存檻の期待値を反転させる箇所がある。10.7 を「期待値が 1 つも動かないこと」と読むと 3.10 と衝突する。
+- **Selected Approach**: **10.7 の「退行」＝被覆の喪失**と読む。期待値の更新は退行ではない。
+- **Rationale**: 3.10 は正典の改訂を明示的に命じている（要件段階の開発者裁定）。記憶「陳腐化テストは除外・壊れたら更新」と一致する。さらに実測で、クランプが効いていた箇所は**いずれも「宣言を削除すれば同じ位置になる」形**であり（`emo2-vertical` → (356,46) 不変・`emo2-choice` → (5,5) 不変）、正典推奨形（「通常は指定せず validrect の定義に任せる」）へ揃えれば被覆も期待値も保たれる。
+- **Follow-up**: 意図が「宣言された origin」であるテストだけが期待値更新を要する。棚卸しは grep（「クランプ」／`clamp_origin`／「書字開始角」）で網羅し、**緑になったことを完了条件にしない**。
+
+### Decision: 追跡先の双方向登記を檻にしない（DD8）
+
+- **Context**: 要件 4.5／7.5／8.4 は「追跡先 spec の brief が項目を収載していることを**確認する**」と命じる。
+- **Alternatives**: ⑴ `include_str!` で brief を読む決定論テスト ⑵ 設計・タスクの検査項目として文書で担保。
+- **Selected Approach**: ⑵。
+- **Rationale**: `/kiro-complete` のアーカイブ移動が「コードからの spec 文書実ファイル読み」を壊す既知の穴があり（記憶・PR#114 で 5 件が main で赤のまま放置）、追跡先 4 本はいずれも M2 ゲートで brief が requirements.md へ置き換わる。文書間の登記は文書で検査するのが正しい。
+- **Trade-offs**: 機械検出が効かないぶん、着手時の file:line 再検証を義務として明記する（陳腐化はこのリポジトリで通算 8 度踏まれている）。
+
+## 統合結果（Generalization / Build-vs-Adopt / Simplification）
+
+- **一般化**: 要件 1（受口）・2（共存）・7.1（プロパティ導出規則）・SC14 追随は、**「このスコープはどちら向きに書くのか、そして誰の宣言によってか」という 1 つの問題**の側面である。`WritingDirectionDecision` へ畳んだ。要件 4・5・7・8・9.3／9.4・11・12 も、**「実装しない正典語彙の登記」という 1 つの問題**の側面であり、COMPAT §8 の 13 行＋双方向登記表という単一の成果物へ畳んだ。
+- **Build vs Adopt**: 新設したのは `WritingDirectionDecision`＋補助 enum 3 つと `with_vertical_raw` の 1 メソッドだけ。2 層マージ（キー非依存）・additive ビルダー・生値転記（`limit_raw` 先例）・`count_levels` によるログ件数固定・単一 format 工場・§8 の上書き行の雛形（`:153`）はすべて既存資産をそのまま採用した。外部依存の追加は 0。
+- **単純化**: ⑴ `WritingDirectionDecision` を `ResolvedBalloonText` へ**配線しない**（消費者が居ない＝投機的抽象を作らない。必要になったら additive で足せる）⑵ `areka-parsers` へ `log-capture-kit` を**足さない**（警告を置かないので要らない）⑶ `vertical` 用の新しいラッパ型を**作らない**（`writing_mode` と同じ素の `Option<String>` で足りる）⑷ 語彙登記のためのコード型（未実装 `\f` 系の enum 等）を**作らない**。
+
+## Risks & Mitigations
+
+- **クランプ撤去の波及が実測より広い**——`region.rs` インライン 5 件のほか、統合テスト・支援ファイル・フィクスチャ 2 件・doc 8 箇所が候補。→ 段 3 と段 4 を不可分の論理単位として扱い、grep 網羅で棚卸しする。
+- **`\_l` への波及の誤検出**——カーソル経路は `region.left()`／`region.top()` を読み（`layout.rs:453-454`）、`region.start()` は読まない。したがってクランプ撤去は `\_l` を動かさない。→ `layout_cursor_tests.rs`（670 行）を**無改変で緑**に保つことを要件 4.4 の証跡とする。
+- **COMPAT §8 の行衝突**——`scope-zorder-pinning` が同ウェーブで末尾へ追記する。→ 隣接行マージのみ・意味的衝突なし。後着側が rebase を負う。
+- **既存 warn 件数檻の巻き添え**——`writing.rs` のインラインテストが warn 件数を厳密一致で見る。`vertical` 未宣言経路が余計なログを出すと赤になる。→ これは望ましい早期検出であり緩めない。
+- **正典の再改訂（SC14）**——SSP は縦書きを依然「試験実装」と称する。→ 追随点を 2 関数（`WritingDirectionDecision::resolve`／`TextRegion::resolve`）と COMPAT §8 の該当行に限局する。
+
+## References
+
+- 正典: ライブ ukadoc（2.8.83 現行）／SSP changelog 2.8.80・2.8.83。**ukadoc-mcp スナップショットはプロパティ節のみ 2.8.80 時点で現行と逆**（座標節は一致）。
+- 上書き行の雛形: `doc/COMPAT_ARCHITECTURE.md:153`（`scope-chain-gap` が `window-placement` R2.9 を上書きした行）。
+- 双方向登記の規律の出典: `.kiro/specs/completed/areka-P0-balloon-visibility/tasks.md:196`。
+- 撤去対象の正典: `.kiro/specs/completed/areka-P0-emo-text-layer/design.md:464`・`:716`（アーカイブは非改変）。
+- テスト配置規約: `.kiro/steering/structure.md`（Unit Tests・`<stem>_<モジュール名>.rs`・1 ファイル 1,000 行・`include_str!` 構造テストは兄弟テストファイルも列挙する）。
