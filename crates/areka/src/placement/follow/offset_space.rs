@@ -46,22 +46,17 @@
 //! また `World`・`Entity`・ログ機構のいずれにも触れない。縮退・飽和は**判定結果の値**として
 //! 返し、警告の発行は呼び手の責務である（要件 1.5／2.5／3.6／9.4 の記録は呼び手が出す）。
 
-// scaffold: 消費者の結線は段階的に入る。確立の 2 本（[`BalloonFollow::new`]・
-// [`BalloonFollow::reestablish`]）と読取の [`BalloonFollow::offset`]、および供給時の換算
-// （[`scale_author_offset`]・[`ScaledAxis`]・`scale_axis`＝task 4.1 で
-// `placement::apply_author_balloon_offset_scale` が結線）は結線済みだが、
-// 追随相専用の 2 本（[`BalloonFollow::anchor_base_dpi`]・[`BalloonFollow::apply_rescaled`]）
-// と基準対の読取 [`BalloonFollow::base`]、および遷移の変換規則（[`rescale_follow_offset`]と
-// その判定型）は、追随相（task 6.x）が結線するまで非テストビルドで未使用に見える
-// ——areka は lib target を持たない bin crate ゆえ `pub` でも dead_code 免除されない。
-// 実測（本 allow を外した `cargo build -p areka --bins`・task 4.1 時点）で残る未使用は
-// **6 項目**（`base`・`anchor_base_dpi`・`apply_rescaled`・`UnresolvedScale`・
-// `OffsetRescale`・`rescale_follow_offset`）であり、項目ごとの許可を 6 枚貼るより
-// 1 枚に集約するほうが、以後の**真の** dead code を隠さない。
-// （task 3.1 時点の本注記は「7 項目」と書いていたが、当時の実測値も 6 項目で誤りだった
-// ——数は結線が進むたびに動くので、変えたときは必ず measure し直すこと。
-// task 4.1 では 9 → 6 へ減った。task 6.x の結線後は本 allow ごと撤去できる見込み。）
-#![allow(dead_code)]
+// 結線の履歴（scaffold 解消の記録）: 本モジュールは task 1.2 で契約と型と純関数だけを先に
+// 建て、消費者の結線を段階的に入れてきた。areka は lib target を持たない bin crate ゆえ
+// `pub` でも dead_code 免除されないため、その間は `#![allow(dead_code)]` を 1 枚貼っていた
+// （未使用の実測は task 3.1 で 9 項目・task 4.1 で 6 項目）。
+//
+// 実測（task 6.1・追随相の結線後）: 本 allow を外した `cargo build --workspace --all-targets`
+// で未使用は **1 つも残らない**——`base`・`anchor_base_dpi`・`apply_rescaled`・
+// `OffsetRescale`・`rescale_follow_offset` はいずれも追随相
+// （`emo2_boot::frame::balloon_offset_follow`）が呼び、`UnresolvedScale` はその縮退腕の
+// 理由として構築される。ゆえに `#![allow(dead_code)]` は撤去した（以後の**真の** dead code
+// を隠さないため、結線が減ったときは貼り直すのではなく減った理由を先に疑うこと）。
 
 use areka_emo_compose::ScaleRatio;
 use bevy_ecs::prelude::{Component, Entity};

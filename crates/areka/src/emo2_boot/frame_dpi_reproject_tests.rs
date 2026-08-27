@@ -339,23 +339,43 @@ fn s2_control_some_report_path_reprojects_and_keeps_balloon_offset() {
 //
 // 本檻は同じ恒等式を**空虚でない形**へ書き直す。すなわち `offset` を書込の**前**に
 // 読み、書込の**後**に
-//   (a) `BalloonFollow.offset` の値自体が 1 bit も変わっていないこと
-//   (b) `balloon − char` が**その前読み値**と一致すること
-// を主張する。offset を付け替える実装（かつて Bottom だけに存在し、2026-07-31 の
-// 実機 SSP 裁定で欠陥と確定して撤去された「原点＝下端中央基準への付替え」）は
-// (a) と (b) の両方を落とす。正典は窓（char 左上）相対＝
-// `balloon_pos − char_pos ≡ offset` が**全アンカーで不変**であること
-// （`.kiro/steering/roadmap.md`「DPI 追従が基本設計」・
-//   檻 `resize_window_to_bottom_keeps_ssp_window_relative_balloon_offset`）。
+//   (a) `BalloonFollow.offset` が**前読み値を表示 DPI 比で引き直した値**であること
+//   (b) `balloon − char` が**その前読み値から導いた期待値**と一致すること
+// を主張する。比較相手を「前読み値から独立に導いた期待値」に置くことで、
+// [`follow_balloon`] へ恒等式を問い返す恒真形にならない。
+//
+// ── areka-P0-balloon-offset-dpi task 6.1 による主張の書き換え（design D13）──
+//
+// 本檻は 2026-08-27 まで (a) を「**1 bit も変わっていないこと**」として固定していた。
+// これは当時の現行契約の正確な写しであり、取りこぼしではない。追従オフセットは
+// 物理 px で保持され、拡大率が変わっても引き直されなかったからである。
+// balloon-offset-dpi の要件 3.1 はこれを**欠陥として反転**させた——拡大率が変われば
+// 追従オフセットも表示 DPI 比で追随し、遷移後の相対位置が遷移前と同じ**作者空間の
+// 距離**を表さなければならない。ゆえに (a) の主張を「表示 DPI 比で追随する」へ改める
+// （是正前は必ず落ちる側＝要件 7.4 の対の片割れ）。
+//
+// **窓（char 左上）相対という追従の基準そのものは 1 mm も動いていない**（要件 9.1）
+// ——動いたのは「その相対量が拡大率をまたいで一定か、それとも表示 DPI 比で伸びるか」
+// だけである。かつて Bottom だけに存在し 2026-07-31 の実機 SSP 裁定で欠陥と確定して
+// 撤去された「原点＝下端中央基準への付替え」は、今も (a)(b) の両方を落とす
+// （引き直しは char 左上相対の量に対して掛かるため）。
+//
+// **拡大率が変わらない寸法変化では従来どおり 1 bit も動かない**（要件 3.2／9.8）。
+// その不変を固定するのは `follow_resize_tests.rs`／`frame_work_area_resnap_tests.rs`
+// の群であり、本檻の書き換えはそちらへ波及しない——追随の発火条件が
+// `Changed<DPI>` に限られているからである。
 //
 // 併せて 96/120/192 の 3 遷移 × 全 scope へ拡充する。判定は絶対 px ではなく
 // 「変化の前後で保存される差分ベクトル」＝不変条件である（Req 5.6）。
 //
-// 非空虚性の自己検査を 3 段で持つ:
+// 非空虚性の自己検査を 3 段で持つ（書き換え後もそのまま保つ）:
 //   (1) work area 下端が実際に動く（[`s2_assert_work_area_bottom_moves`]）
 //   (2) 報告寸が現寸と**異なる**＝`Some` 経路が実際に reconcile を走らせる
-//   (3) バルーンの**絶対位置は動く**＝「相対不変」が「何も起きなかった」の
-//       言い換えに退化していない
+//   (3) バルーンの**絶対位置は動く**＝主張が「何も起きなかった」の言い換えに
+//       退化していない
+// さらに task 6.1 で 1 段足す:
+//   (4) 期待値が前読み値と**異なる**＝「表示 DPI 比で追随する」が「据え置き」と
+//       区別できる（比が 1 に潰れた行では主張が空虚になるため）
 
 /// 追従 offset（`BalloonFollow.offset`）を読む。
 ///
@@ -369,17 +389,31 @@ fn s2_follow_offset(world: &World, char_e: Entity) -> (i32, i32) {
     (offset.x, offset.y)
 }
 
-/// **task 7.2**: 寸の再導出結果が**得られる**（`Some`）経路の非退行を、混在 DPI の
-/// 3 遷移（96→120・96→192・120→192）× 全 scope で固定する。
+/// 追従 offset を**表示 DPI 比で引き直した**期待値（areka-P0-balloon-offset-dpi task 6.1）。
+///
+/// 本番の追随（`emo2_boot::frame::balloon_offset_follow`）へ問い返さず、テスト側で独立に
+/// 導く——ただし丸めは**既存の単一権威**（`ScaleRatio::scale_len`・round half away from zero）
+/// へ委ね、新しい丸め規約を持ち込まない（要件 9.3）。符号は大きさと分けて保存する。
+fn s2_rescaled_offset(offset: (i32, i32), ratio: ScaleRatio) -> (i32, i32) {
+    let axis = |v: i32| {
+        let magnitude = ratio.scale_len(v.unsigned_abs()) as i32;
+        if v < 0 { -magnitude } else { magnitude }
+    };
+    (axis(offset.0), axis(offset.1))
+}
+
+/// **task 7.2 ＋ areka-P0-balloon-offset-dpi task 6.1**: 寸の再導出結果が**得られる**
+/// （`Some`）経路を、混在 DPI の 3 遷移（96→120・96→192・120→192）× 全 scope で固定する。
 ///
 /// 主張は 4 つ:
 /// - 従来経路が走る（報告された新物理寸へ `reconcile_window_size` が反映する）
 /// - 接地点の X が保存され、Y は**変化後の** work area 下端へ再射影される（Req 4.1/4.2）
-/// - **窓相対の追従 offset が値ごと不変で、バルーンはその前読み値どおりに追従する**
-///   （Req 4.4 の非恒真形・2026-07-31 実機 SSP 裁定の契約）
+/// - **窓相対の追従 offset が表示 DPI 比で追随し、バルーンはその追随後の値どおりに
+///   追従する**（balloon-offset-dpi 要件 3.1／3.7・D4／D13。比較相手は書込**前**に
+///   読んだ値から独立に導いた期待値ゆえ恒真ではない）
 /// - 経路語は `DpiReproject` のまま（D13）
 #[test]
-fn s2_some_report_path_preserves_the_balloon_ground_anchor_across_mixed_dpi_levels() {
+fn s2_some_report_path_rescales_the_balloon_follow_offset_by_the_display_dpi_ratio() {
     for (from_dpi, to_dpi) in [(96u16, 120u16), (96, 192), (120, 192)] {
         // (1) 非空虚性: この 2 水準のあいだで work area 下端が実際に動く。
         s2_assert_work_area_bottom_moves(from_dpi, to_dpi);
@@ -496,23 +530,36 @@ fn s2_some_report_path_preserves_the_balloon_ground_anchor_across_mixed_dpi_leve
                  （『相対が保たれた』が『何も起きなかった』と区別できない）"
             );
 
-            // 本題 (a)（Req 4.4）: 追従 offset は**値ごと**不変（窓相対契約）。
-            // 寸法・DPI・work area がまとめて変わっても 1 bit も書き換わらない
-            // ——Bottom だけを原点（下端中央）基準へ付け替える実装はここで落ちる。
+            // **前読み値から独立に導いた**期待値（本番の追随へは問い返さない）。
+            let expected_offset = s2_rescaled_offset(before[i].1, ratio);
+            // (4) 非空虚性: 期待値が前読み値と異なる＝「追随する」が「据え置き」と
+            //     区別できる（比が 1 に潰れていたら主張は空虚になる）。
+            assert_ne!(
+                expected_offset, before[i].1,
+                "探針が不動点: dpi {from_dpi}→{to_dpi} scope={scope} で期待値が前読み値と同じ\
+                 （『表示 DPI 比で追随した』が『据え置き』と区別できない）"
+            );
+
+            // 本題 (a)（balloon-offset-dpi 要件 3.1）: 追従 offset は**表示 DPI 比**で
+            // 引き直される。基準対から毎回引き直すので往復しても誤差が積まない（D4）。
+            // 追随を入れる前の実装（拡大率が変わっても offset を 1 bit も触らない）は
+            // ここで落ちる——それが要件 7.4 の「是正前は失敗する側」である。
             assert_eq!(
                 s2_follow_offset(&world, char_e),
-                before[i].1,
-                "dpi {from_dpi}→{to_dpi} scope={scope}: BalloonFollow.offset が書き換わった\
-                 （窓相対契約＝リサイズで offset を補正しない・2026-07-31 実機 SSP 裁定）"
+                expected_offset,
+                "dpi {from_dpi}→{to_dpi} scope={scope}: BalloonFollow.offset が表示 DPI 比で\
+                 追随していない（前読み {:?} × {from_dpi}→{to_dpi}）",
+                before[i].1
             );
-            // 本題 (b): バルーンは**前読み**の offset どおりに追従している。
-            // 比較相手が前読み値ゆえ、付替えが起きればここも同時に落ちる（恒真でない）。
+            // 本題 (b): バルーンは**追随後**の offset どおりに追従している。
+            // 比較相手が前読み値から導いた期待値ゆえ、追随の取りこぼしでも
+            // 誤った引き直しでもここが同時に落ちる（恒真でない）。
             let cp = pos_of(&world, char_e).expect("char 位置がある");
             assert_eq!(
                 (bp.x - cp.x, bp.y - cp.y),
-                before[i].1,
+                expected_offset,
                 "dpi {from_dpi}→{to_dpi} scope={scope}: 追従恒等式 balloon − char ≡ offset\
-                 （書込**前**に読んだ offset）が崩れている・Req 4.4"
+                 （書込**前**に読んだ値から導いた期待値）が崩れている"
             );
 
             assert_eq!(

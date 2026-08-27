@@ -33,6 +33,8 @@
 //! `resolve_talk_time`）・排他 system `emo2_frame_system`（remove→各フェーズ→insert）を実装する。
 
 mod attach;
+// 拡大率遷移でのバルーン追従オフセットの追随（areka-P0-balloon-offset-dpi・design D6）。
+mod balloon_offset_follow;
 mod dpi;
 mod drain_resnap;
 mod scale_text;

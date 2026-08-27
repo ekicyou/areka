@@ -73,6 +73,14 @@ pub use self::offset_space::BalloonFollow;
 /// 配置解決の出力（`resolver::ScopePlacement`）と復元 merge（`persist`）が運ぶため、
 /// 移設の波及をここで吸収するファサード再輸出に載せる（design「Modified Files」）。
 pub use self::offset_space::OffsetBase;
+/// 遷移時の唯一の変換規則と、その判定結果
+/// （areka-P0-balloon-offset-dpi・要件 3.1／3.3／3.6・task 6.1）。
+///
+/// 追随の適用相（`emo2_boot::frame::balloon_offset_follow`）だけが呼ぶため crate 内に留める。
+/// examples は `#[path]` で src を取り込むが本相を持たないため、そちらのビルドでは未使用に
+/// 見える——下の `MonitorDpiTable` と同じ事情なので同じ扱いにする。
+#[allow(unused_imports)]
+pub(crate) use self::offset_space::{OffsetRescale, rescale_follow_offset};
 /// 作者空間のオフセットを合流欄の空間（物理 px）へ換算する純関数と、その 1 軸ぶんの結果
 /// （areka-P0-balloon-offset-dpi・要件 1.2／2.1／2.5・task 4.1）。
 ///

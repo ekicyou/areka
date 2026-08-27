@@ -132,6 +132,10 @@
 
 `frame_dpi_reproject_tests.rs:273`／`frame_dpi_reproject_none_tests.rs:33`／`frame_transition_atomicity_tests.rs:285`（`transition_is_atomic_at(dpi)`・駆動は `:534`／`:540`）／`frame_transition_branch_tests.rs:557`（駆動は `:615`／`:621`）。いずれも offset を書込**後**に読んで `balloon − char` と突合するため、追随が入っても緑のまま通る。**「全部緑だから壊していない」の根拠に使ってはならない。**
 
+> **⚠ 訂正（2026-08-28・task 6.1 の実装で判明）**: 上記のうち **`frame_transition_atomicity_tests.rs` は本群ではない**。引いた `:285` は関数頭（`fn transition_is_atomic_at`）であって主張の位置ではなく、同ファイルの 4.3 ブロックは**書込前にオフセットを読み（`:301-311`）、拡大率遷移で再スケールされないことを突合して主張していた**（`:414-435`）。実測でも追随を入れると赤になる非空虚な檻である。本群は残り **3 本**（`frame_dpi_reproject_tests.rs:273`／`frame_dpi_reproject_none_tests.rs:33`／`frame_transition_branch_tests.rs:557`）。design.md の D13 と Testing Strategy で訂正済み。
+>
+> **同型の取りこぼしを避ける読み方**: 「書込**後**に読んで恒等式を主張する（空振り）」と「書込**前**に読んだ値と突合する（非空虚）」は、**行番号ではなく構造で**見分けること。本行の誤りは、関数頭の行番号だけを見て中身の構造を確かめなかったことに由来する。
+
 **(c) 寸法変化に対する不変＝Requirement 3.2／9.8 が守れと言っている側（変更しない）**
 
 `follow_resize_tests.rs:176`（`resize_window_to_bottom_preserves_balloon_follow_offset`・`:237`）／`:261`（`resize_window_to_bottom_keeps_ssp_window_relative_balloon_offset`・`window_move.rs:168` が名指しするテスト）／`:476`（Left 版）／`emo2_boot/frame_work_area_resnap_tests.rs:156`（作業領域再スナップで offset に触れない）。→ **Requirement 9.7 が「作業領域の再スナップについての期待であって拡大率遷移には及ばない」と区別せよと言っているのは、まさに最後の 1 本のこと。**

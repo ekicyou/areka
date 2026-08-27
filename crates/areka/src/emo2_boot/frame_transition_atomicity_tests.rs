@@ -12,7 +12,7 @@
 //! | 全窓の書込が同一フレーム | 4.4 | 起点フレームより後に書込を持つフレームが無い（[`TRANSITION_FRAME_BOUND`]） |
 //! | キャラ窓 1 回・バルーン窓 1 回 | 4.5・D13 | 窓ごとの指令数（[`WRITES_PER_WINDOW_MAX`]） |
 //! | 同期書込（経路 A）0 回 | 4.5・D13 | `origin=dpi-suggested` の件数（[`PATH_A_WRITES_MAX`]） |
-//! | 随伴バルーンが同一フレームで窓相対へ | 4.3 | 同一 drain にバルーンの指令が居る＋追従 offset 不変 |
+//! | 随伴バルーンが同一フレームで窓相対へ | 4.3 | 同一 drain にバルーンの指令が居る＋追従 offset が表示 DPI 比で追随（balloon-offset-dpi 要件 3.1／9.7 が atom 4.3 の遷移側を上書き・task 6.1） |
 //! | 遷移中の接地点が規約値から外れない | 4.1 | `kind=ground` の `diff`（[`GROUND_DIFF_MAX`]）＋書込 1 本の下端 |
 //! | 拡大率 120／192・複数モニタの作業領域 | 7.2 | [`transition_is_atomic_at_120`]／[`transition_is_atomic_at_192`] |
 //!
@@ -63,6 +63,7 @@
 //! 確定台帳 L2（実機 24/24）と実機サインオフ（要件 8.3・C7 ランナーが
 //! `Bounds::deterministic` の `PATH_A_WRITES_MAX` で判定する）である。
 
+use areka_emo_compose::ScaleRatio;
 use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER};
 
@@ -412,15 +413,45 @@ fn transition_is_atomic_at(dpi: u16) {
     }
 
     // ── 4.3: 随伴バルーンが同一フレームで窓相対へ移る ─────────────────────
+    //
+    // **areka-P0-balloon-offset-dpi task 6.1 による主張の書き換え**: 本ブロックは
+    // 2026-08-27 まで「追従オフセットを補正していないこと（atom 要件 4.3）」を固定していた。
+    // その期待は balloon-offset-dpi の要件 3.1 が**拡大率遷移についてだけ**上書きする
+    // ——同仕様の要件 9.7 が「作業領域の再スナップについての不変は残し、拡大率遷移に
+    // ついての期待は要件 3 が上書きする」と 2 つに区別して裁定した当のものである。
+    // 本テストが起こすのは `Changed<DPI>` を伴う**拡大率遷移**なので、上書きされる側に
+    // あたる（作業領域の再スナップ単独での不変は `frame_work_area_resnap_tests.rs` が
+    // 引き続き固定しており、そちらは 1 文字も触っていない）。
+    //
+    // なお balloon-offset-dpi の design D13 は本ファイルを「書込後に読んで恒等式のみを
+    // 主張する＝追随が入っても緑のまま」の群へ分類していたが、**実測では誤りだった**
+    // ——本ブロックは `balloon_offsets_before` として書込の**前**に読んでおり、
+    // 恒真ではないため追随の導入で正しく赤になる。分類の誤りは task 6.1 で是正した。
+    //
+    // 変わったのは「相対量が拡大率をまたいで一定か、表示 DPI 比で伸びるか」だけであり、
+    // **窓（char 左上）相対という追従の基準そのものは不変**である（要件 9.1）。
+    let follow_ratio = ScaleRatio::new(dpi.into(), BASE_DPI.into()).expect("非ゼロ比");
     for (scope, before) in &balloon_offsets_before {
         let char_window = harness.char_window(*scope);
         let balloon = harness.balloon_window(*scope);
+        // 前読み値から**独立に**導いた期待値（丸めは既存の単一権威 `scale_len` へ委譲）。
+        let axis = |v: i32| {
+            let magnitude = follow_ratio.scale_len(v.unsigned_abs()) as i32;
+            if v < 0 { -magnitude } else { magnitude }
+        };
+        let expected = (axis(before.x), axis(before.y));
+        // 非空虚性: 期待値が前読み値と異なる（＝「追随した」が「据え置き」と区別できる）。
+        assert_ne!(
+            expected,
+            (before.x, before.y),
+            "dpi={dpi} scope={scope}: 期待値が前読み値と同じ（追随の主張が空虚）"
+        );
         let char_pos = pos_of(&harness.world, char_window).expect("char 位置がある");
         let balloon_pos = pos_of(&harness.world, balloon).expect("balloon 位置がある");
         assert_eq!(
             (balloon_pos.x - char_pos.x, balloon_pos.y - char_pos.y),
-            (before.x, before.y),
-            "dpi={dpi} scope={scope}: 随伴恒等式 balloon − char ≡ BalloonFollow.offset が崩れている"
+            expected,
+            "dpi={dpi} scope={scope}: 随伴恒等式 balloon − char ≡ 追随後の BalloonFollow.offset が崩れている"
         );
         let after = harness
             .world
@@ -429,8 +460,9 @@ fn transition_is_atomic_at(dpi: u16) {
             .offset();
         assert_eq!(
             (after.x, after.y),
-            (before.x, before.y),
-            "dpi={dpi} scope={scope}: 追従オフセットを補正している（要件 4.3: 補正しない）"
+            expected,
+            "dpi={dpi} scope={scope}: 追従オフセットが表示 DPI 比で追随していない\
+             （balloon-offset-dpi 要件 3.1・要件 9.7 が atom 要件 4.3 の遷移側を上書き）"
         );
     }
     // 「相対不変」が「何も動かなかった」の言い換えに退化していないこと。

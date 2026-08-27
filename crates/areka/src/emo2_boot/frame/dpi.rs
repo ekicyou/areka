@@ -16,6 +16,7 @@ use crate::placement::follow::{resize_window_keep_position, resize_window_to};
 use crate::placement::resolver::SizePx;
 use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker};
 
+use super::balloon_offset_follow::{OffsetFollowOutcome, rescale_balloon_follow_offset};
 use super::{Emo2Wiring, PlannedAttach, balloon_target, shell_target};
 
 // ---------------------------------------------------------------------------
@@ -325,6 +326,18 @@ pub(super) fn dpi_phase_with<S: ScaleReportSource>(
         let target = match kind {
             GhostWindowKind::Char => shell_target(scope),
             GhostWindowKind::Balloon => balloon_target(scope),
+        };
+        // 拡大率遷移でのバルーン追従オフセットの追随（areka-P0-balloon-offset-dpi・design D6・
+        // task 6.1）。**寸の再取得より前**に済ませるので、`resize_window_to` 手順 6 の随伴追従は
+        // 必ず新しいオフセットで書かれる。相順・待ち札の関門・[`reconcile_window_size`] の署名は
+        // いずれも変えない（要件 9.5）。対象はキャラ窓だけ——追従 Component はキャラ窓が持つ。
+        //
+        // 継ぎ目（task 6.2・design D16）: 戻り値は「オフセットが実際に動いたか」であり、下の
+        // 反映で**窓書込が起きなかった**とき（べき等 skip 等）だけ随伴追従を 1 度呼んで
+        // バルーンを収束させる必要がある。その消費は task 6.2 が入れる。
+        let _offset_outcome = match kind {
+            GhostWindowKind::Char => rescale_balloon_follow_offset(world, window, scope),
+            GhostWindowKind::Balloon => OffsetFollowOutcome::Unchanged,
         };
         // 再導出→（差分があれば）再表示。`None` は「**窓寸**を触らない」が正しい（前表示・前寸の
         // 維持・Req4.4）。なお `None` は k 不変とは同義でない——不可視・未表示・失敗に加え、**k は
