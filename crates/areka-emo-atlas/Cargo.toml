@@ -16,9 +16,6 @@ tracing = { workspace = true }
 windows = { workspace = true }
 
 [dev-dependencies]
-# テスト専用のログ捕捉ハーネス（log_capture）用。0 寸/全透明 element 検出時の
-# warn! 発火を決定論的に assert する（bake 結果自体は不変）。ワークスペース既存基盤。
-tracing-subscriber = { workspace = true }
 # ログ捕捉テストの硬化機構の唯一の定義元（spec: areka-P0-test-cage-determinism）。
 # ワークスペース内 crate に依存しない leaf・publish = false・テスト専用であり、
 # 出荷クロージャに新規外部依存を持ち込まない（必須依存は tracing のみ＝既出）。

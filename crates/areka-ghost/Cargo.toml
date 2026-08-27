@@ -33,10 +33,6 @@ tracing = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
-# task 2.4（ghost::sink の LogSink）のログ発火検証専用。workspace で既出（kanade が
-# schedule::log_capture で同じ技法を使用済み）・テスト限定であり、設計「新規外部
-# 依存なし」（＝runtime 依存の制約）には抵触しない。
-tracing-subscriber = { workspace = true }
 # LogSink の command_kind テストで CueCommand::Custom { params: DynamicValue } を
 # 組み立てるためだけの workspace path dep（本体 import は areka_sakura::contract
 # 経由・dola への直接依存は本体コードに持ち込まない）。
