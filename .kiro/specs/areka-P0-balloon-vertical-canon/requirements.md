@@ -36,14 +36,14 @@ areka は ukadoc 準拠の互換ベースウェア（SSP 代替）であり、�
   - `\_l`（カーソル移動）の縦書き座標系正典（SSP 2.8.83＝バルーン画像と平行な軸・X 正＝右／Y 正＝下・列送りは負の X）の**語彙登記と、現行 `vertical_rl` 非互換の既知登記**（実装は `areka-P0-cursor-tag-canon` が全語彙を一括所有——2026-08-27 討議裁定・本仕様は `\_l` に一切触れない）。
   - `\f[align]`／`\f[valign]`／下線／スクロール矢印 `arrow0`/`arrow1` の**縦書き再解釈の語彙を完全形で保持**し、実装が無いものは縮退シームと追跡先を伴って登記すること。
   - フォント縦書き異体の**挙動等価の定義**（SSP は `@` 接頭辞のフォント異体を用いる／areka は文字描画基盤のネイティブな縦組みで同じ見た目を達成する）と、areka 裁量としての登記。
-  - プロパティ `currentghost.balloon.scope(ID).vertical` の導出（0/1）。
+  - プロパティ `currentghost.balloon.scope(ID).vertical` の**導出規則の確定（語彙登記）と既知の穴（枝の不在・照会経路の不在）の登記**——実装はプロパティ系 3 spec（`property-query-channels`／`currentghost-property-tree`／`property-catalog-lists`・2026-08-27 討議で即日起票）が所有し、本仕様はプロパティを一切実装しない。
   - 縦書きフィクスチャ（`vertical,1` 版の追加・既存 `writing_mode` 版は共存検証へ転用）と決定論テスト。
   - **SSP 仕様に対する疑義の登記**（本書末尾 SC1〜SC15）と、それに依存する前提の明示。
 - **Out of scope**:
   - **`\_l[x,y]` の実装全般**（負値解禁・`%`・`@` 相対・縦書き座標系の是正を含む）——全語彙を `areka-P0-cursor-tag-canon`（M2 解禁ゲート・2026-08-27 即日起票）が一括所有する。本仕様が行うのは語彙登記と既知非互換の登記のみ（Requirement 4）。
   - `sstpmessage.*`（2.8.83 の `.yb` を含む）・`number.*`（同 `.x`／`.yb` を含む）・`arrow*` の**画像と座標の実導出**——バルーン機能ごと非モデル化のままとする（該当機能自体が M1 非実装）。本仕様は縦書きに伴う**意味の変化を語彙として記録するだけ**である。
   - SSTP マーカー送信元表示・ネットワーク更新進捗表示・入力ボックス（communicatebox）——機能自体が M1 非実装。
-  - `currentghost.balloon.scope(ID).validwidth`／`validheight`／`lines`（および `.initial` 系）**を含む同族プロパティの実導出**。当該族は sylphya に**族ごと不在**であり（2026-08-27 実測で `currentghost.balloon.scope(ID).*` は 0 件）、正典側は 19 項目規模である。本仕様は `.vertical` のみを実導出し、族は縮退シーム＋追跡先の登記に留める（Requirement 8）。
+  - `currentghost.balloon.scope(ID).validwidth`／`validheight`／`lines`（および `.initial` 系）**を含む同族プロパティの実導出**。当該族は sylphya に**族ごと不在**であり（2026-08-27 実測で `currentghost.balloon.scope(ID).*` は 0 件）、正典側は 19 項目規模である。本仕様はプロパティを**一切実装せず**（`.vertical` 含む——2026-08-27 討議 #4 裁定）、導出規則の確定と縮退シーム＋追跡先（`areka-P0-currentghost-property-tree`）の登記に留める（Requirement 7／8）。
   - `vertical_lr`（縦書き左送り）——SSP に対応物が無く、areka 拡張として維持する。
   - budoux 分かち書き改行との相互作用の拡張——現行挙動（書字方向に対して直交・縦書きでは列を割る）を維持するのみ。
   - `\f` 系文字装飾そのものの実装（M2 予約シーム）・下線描画そのものの実装。
@@ -157,18 +157,17 @@ areka は ukadoc 準拠の互換ベースウェア（SSP 代替）であり、�
 
 > **前提の明示（要件段階の裁定 4・討議対象）**: SSP は「指定フォントの `@` 付き縦書き異体を自動使用し、異体が無い場合は環境の標準ゴシックの縦書き異体へ自動差し替え」と定める。areka の文字描画基盤は `@` フォントを介さずネイティブに縦組みグリフを扱うため、**機構ではなく観測される挙動で等価を定義する**。副作用として、SSP が「異体が無いフォント」で行う**標準ゴシックへの差し替え**は areka では起こらない（指定フォントのまま縦組み描画される）。これは SSP よりも作者の指定を尊重する挙動であり、差し替えの模倣は行わない裁定を採った。
 
-### Requirement 7: プロパティ `currentghost.balloon.scope(ID).vertical`
+### Requirement 7: プロパティ `currentghost.balloon.scope(ID).vertical`——導出規則の確定と縮退登記（実装は `currentghost-property-tree` へ）
 
-**Objective:** ゴーストスクリプトの作者として、現在のバルーンが縦書きかどうかを照会できることを求める。これにより 1 行（1 列）に入る文字数の計算を書字方向に応じて切り替えられる。
+**Objective:** 開発者として、`.vertical` の導出規則が本仕様の書字方向裁定から一意に確定して残り、プロパティとしての実装は `currentghost.*` 枝全体を所有する専用 spec が行うことを求める。「値はあるが電話線が無い」「電話線はあるが値の規則が曖昧」のどちらの穴も残さない。
 
 #### Acceptance Criteria
 
-1. When ゴーストがプロパティ `currentghost.balloon.scope(ID).vertical` を照会したとき、the areka プロパティ解決 shall 当該スコープのバルーンが縦書きなら `1` を、横書きなら `0` を返す。
-2. The areka プロパティ解決 shall 前項の値を、当該スコープに対して実際に適用されている書字方向（Requirement 2 の共存規則で確定した結果）から導く。
-3. While `writing_mode,vertical_lr` によって縦書き左送りが適用されているとき、the areka プロパティ解決 shall `1` を返す（正典の語彙は縦書きか否かの 2 値であり、送り方向を区別しないため）。
-4. When 照会されたスコープに対応するバルーンが解決されていないとき、the areka プロパティ解決 shall 値なしとして応答し（値を捏造しない）、照会元の進行を妨げない。
-5. The areka プロパティ解決 shall 本プロパティの追加によって、既存のプロパティ照会の結果を 1 つも変えない。
-6. The areka ワークスペース shall 本プロパティの値が書字方向と一致することを決定論テストで固定する（縦書き・横書きの双方について）。
+1. The areka ワークスペース shall `.vertical` の導出規則を語彙として確定する——当該スコープに**実際に適用されている書字方向**（Requirement 2 の共存規則で確定した結果）から導き、縦書きなら `1`・横書きなら `0`・`writing_mode,vertical_lr`（areka 拡張・縦書き左送り）も `1`（正典の語彙は縦横 2 値で送り方向を区別しない）・未解決スコープは値なし（捏造しない）・書字方向は起動時に一度確定する（Requirement 9）ため値は会話中に変わらない。
+2. The areka ワークスペース shall 現状の 2 つの欠落を**既知の穴**として登記する——⑴ `currentghost.*` 枝は areka のプロパティ機構に実導出 0 件（族ごと不在）⑵ 本番構成（32bit ヘルパ経由）にはプロパティ照会を運ぶ経路自体が存在しない（host32 の 3 crate に property の語 0 件・2026-08-27 実測）。
+3. The areka ワークスペース shall 実装の追跡先を登記する——値の導出（`.vertical` を含む `currentghost.*` ≈65 項目）は `areka-P0-currentghost-property-tree`・照会経路（`\![get,property]` ほか正典 6 経路）は `areka-P0-property-query-channels`（いずれも 2026-08-27 討議で即日起票・M2 解禁ゲート・`areka-P0-property-catalog-lists` と合わせて 3 spec でプロパティ正典 ≈180 項目を全域所有）。
+4. The areka プロパティ解決 shall 本仕様によって挙動を 1 つも変えない——`currentghost.*` の照会は現行どおり値なし（既存の未導出語彙と同一の縮退）のまま（本要件は登記であって実装ではない）。
+5. The areka ワークスペース shall 追跡先 spec の brief が ⑴ `.vertical` の導出規則（1. の内容）を本仕様参照で収載し ⑵ balloon.scope 族 19 項目を全列挙していることを確認する（実在確認＋項目列挙の双方向登記）。
 
 ### Requirement 8: 同族プロパティの縮退登記
 
@@ -183,9 +182,7 @@ areka は ukadoc 準拠の互換ベースウェア（SSP 代替）であり、�
 5. The areka プロパティ解決 shall 当該族を照会されたとき、値を捏造せず、値なしとして応答する（既存の未導出語彙と同一の縮退）。
 6. The areka ワークスペース shall 前項の縮退が**新たな挙動の追加ではなく現行どおりである**ことを確認する（本要件は登記であって実装ではない）。
 
-> **追跡先についての注記**: 4. の受け皿の候補は `.kiro/specs/areka-P0-balloon-canon-residue`（実在を確認済み・M1 外の解禁ゲート下）。ただし同 spec が現在収載するのはバルーン**系列解決**と**表示寿命**の残語彙であり、プロパティ族は収載されていない。追記で足りるか新設が要るかは設計段階で確定すること。
-
-> **前提の明示（要件段階の裁定 3・討議対象）**: brief の推奨どおり「`.vertical` 単独＋族は縮退シーム登記」を採った。**族の規模は brief の想定より大きい**——正典の `currentghost.balloon.scope(ID).*` は `background.color`／`basepos.x`／`basepos.y`／`char_width`／`count`／`lines`／`lines.initial`／`num`／`validwidth`／`validwidth.initial`／`validheight`／`validheight.initial`／`vertical` 等を含む 19 項目規模であり、areka にはそのうち 1 件も無い。族ごと実装する選択肢は、本仕様を「縦書き互換」から「バルーンプロパティ族の新設」へ変質させるため採らない。
+> **裁定 3（2026-08-27 討議・議題 4 で確定）**: 当初案（`.vertical` 単独実導出＋族は縮退登記）は開発者が却下した——「`currentghost` スコープの実装自体が無い。spec を立ち上げてそちらへ任せるべき」。ukadoc の規模実測（プロパティ木 ≈180 項目・照会経路 6 本・本番に経路 0 本）を経て、**プロパティ正典を全域所有する 3 spec を即日起票**（`property-query-channels`〔経路〕→ `currentghost-property-tree`〔`currentghost.*` ≈65 項目・**balloon.scope 族 19 項目の指名受け皿・全列挙済み**〕→ `property-catalog-lists`〔system/カタログ群〕・いずれも M2 解禁ゲート・roadmap 追記(86)）。**本仕様はプロパティを一切実装しない**——4. の追跡先は `areka-P0-currentghost-property-tree` で確定（実在＋項目列挙の双方向登記を Requirement 7.5 が検査する）。族ごと実装しない理由（spec の変質）は分割形でも維持されている——族は専用 spec が所有する。
 
 ### Requirement 9: サーフェス毎の縦書き指定の適用範囲
 
@@ -296,6 +293,6 @@ brief が「要件段階の裁定事項」として挙げた 5 点について�
 |---|---|---|---|
 | 1 | `vertical` × `writing_mode` 併記時の優先順位 | ✅**確定（2026-08-27 討議）**: 拡張キー（`writing_mode`）が正典キーに勝つ＋ **DEBUG レベルのログ**記録（警告にしない）。層のマージを先に確定してからキー間で裁定する | Requirement 2.5／2.6 |
 | 2 | `\_l` の縦書き座標系 | ✅**確定（2026-08-27 討議・議題 3）**: 部分是正は却下——`\_l[x,y]` 全語彙を一括所有する専用 spec `areka-P0-cursor-tag-canon` を即日起票（M2 ゲート）。本仕様は**一切実装せず**、正典写像の語彙登記＋既知非互換の登記のみ | Requirement 4 |
-| 3 | プロパティの範囲 | **`.vertical` 単独＋族は縮退シーム登記**（族は正典で 19 項目規模・areka に 1 件も無い） | Requirement 7／8 |
+| 3 | プロパティの範囲 | ✅**確定（2026-08-27 討議・議題 4）**: `.vertical` 単独実導出も却下——**本仕様はプロパティを一切実装しない**。プロパティ正典 ≈180 項目を全域所有する 3 spec（channels／currentghost-tree／catalog-lists）を即日起票（M2 ゲート・roadmap 追記(86)）し、本仕様は導出規則の語彙登記＋既知の穴（枝の不在・照会経路の不在）の登記のみ | Requirement 7／8 |
 | 4 | フォント縦書き異体の挙動等価 | **観測される挙動で等価を定義**（`@` フォント機構は用いない）。標準ゴシックへの自動差し替えは模倣しない | Requirement 6 |
 | 5 | サーフェス毎切替の扱い | **会話中に書字方向を変えない**（SSP の「崩れる」を許容するのではなく、崩れる状態に入らない） | Requirement 9 |
