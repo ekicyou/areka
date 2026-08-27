@@ -16,7 +16,13 @@ toml = { workspace = true }
 areka-actor = { path = "../areka-actor" }
 
 [dev-dependencies]
-# 寛容読取の未知バージョン警告（R6.4「未知バージョン→warn・旧形式判別可能」）を実行可能
-# テストで捕捉するための tracing subscriber。workspace 既出（areka／wintf／kanade が使用済み）・
-# テスト限定であり、設計「新規外部依存なし」（＝runtime 依存の制約）には抵触しない。
-tracing-subscriber = { workspace = true }
+# ログ捕捉テストの硬化機構の唯一の定義元（spec: areka-P0-test-cage-determinism）。
+# ワークスペース内 crate に依存しない leaf・publish = false・テスト専用であり、
+# 出荷クロージャに新規外部依存を持ち込まない（必須依存は tracing のみ＝既出）。
+# 依存方向の規律により [dependencies] へは決して置かない。
+log-capture-kit = { path = "../log-capture-kit" }
+# テスト用一時パスをプロセス間で一意に組み立てる窓口の唯一の定義元
+# （spec: areka-P0-test-cage-determinism・要件 12）。依存 0（std のみ）の leaf・
+# publish = false・テスト専用。本 crate は「最下層・最小依存」なので、
+# 依存方向の規律により [dependencies] へは決して置かない。
+temp-path-kit = { path = "../temp-path-kit" }

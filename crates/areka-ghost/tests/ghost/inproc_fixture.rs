@@ -19,6 +19,8 @@
 
 use std::path::{Path, PathBuf};
 
+use temp_path_kit::TempPath;
+
 /// `cargo test --workspace` がビルドした x64 cdylib `shiori4_testdll.dll` の**単一の正準位置**を
 /// 決定論的に特定して返す（要件 1.2・5.4／design.md D-1）。
 ///
@@ -67,22 +69,18 @@ pub fn locate_built_test_dll() -> PathBuf {
 /// `root` は `resolve()`／`boot()` へ渡す ghost_root（`ghost/master/descript.txt` 起点・
 /// design.md「fixture 組立と DLL locate」）。[`TempGhost::root`] で取得する。`Drop` で temp root を
 /// 再帰削除する（design.md「テスト終了時に削除」——ベストエフォート・失敗は無視）。
+///
+/// 実体は共通窓口 `temp-path-kit` が配る一時ディレクトリで、名前にプロセス識別子と連番が
+/// 入るため**プロセス間でも一意**である（同じテストを複数プロセスで同時に走らせても、
+/// 隣のプロセスの fixture を消さない）。削除は [`TempPath`] の破棄が行う。
 pub struct TempGhost {
-    root: PathBuf,
+    root: TempPath,
 }
 
 impl TempGhost {
     /// 組み立てた一時ゴーストの root（`resolve()`／`boot()` の ghost_root として渡す）。
     pub fn root(&self) -> &Path {
-        &self.root
-    }
-}
-
-impl Drop for TempGhost {
-    fn drop(&mut self) {
-        // ベストエフォート削除（design.md「テスト終了時に削除」）。既に消えていても・
-        // 共有違反等で失敗しても、テスト結果を左右しないため無視する。
-        let _ = std::fs::remove_dir_all(&self.root);
+        self.root.path()
     }
 }
 
@@ -157,8 +155,8 @@ fn emo2_shell_master_src() -> PathBuf {
 /// （要件 4.1・4.2・4.3／design.md「fixture 組立と DLL locate」Batch/Job Contract）。
 ///
 /// 手順:
-/// 1. 一意 temp root（`areka_shiori4_test_ghost_<tag>`）を確定し、冪等性のため事前削除する
-///    （spine の `unique_temp_dir`＋事前削除の流儀・Idempotency）。
+/// 1. 共通窓口 `temp-path-kit` から temp root を受け取る（名前にプロセス識別子と連番が入るので
+///    **プロセス間でも一意**・破棄で中身ごと消える）。
 /// 2. `ghost/master/descript.txt` を UTF-8 生成する。`shiori,` 行は**新設のテスト DLL**
 ///    （`shiori4_testdll.dll` == [`shiori4_testdll::DLL_FILE_NAME`]）を指す（要件 4.2）。
 /// 3. emo2 実物 `shell/master/`（surfaces.txt＋PNG 一式）を `root/shell/master/` へ再帰的に実体化する
@@ -171,7 +169,8 @@ fn emo2_shell_master_src() -> PathBuf {
 /// 返り値 [`TempGhost`] の Drop がテスト終了時に temp root を削除する。
 ///
 /// # 組立の直列化（同時 FS メタデータ churn による spine starvation の除去）
-/// 本関数の FS 実体化区間はプロセス全体で 1 本の [`std::sync::Mutex`] で直列化する。個々の組立は
+/// 実体化は [`materialize_test_ghost_tree`] が行い、その FS 区間はプロセス全体で 1 本の
+/// [`std::sync::Mutex`] で直列化する。個々の組立は
 /// ハードリンク優先（[`materialize_file`]）で新規バイト列を書かないが、同一 `ghost` テストバイナリ内で
 /// **複数の組立が同時に**多数の NTFS メタデータ操作（`CreateHardLink`／`CreateDirectory`／
 /// `remove_dir_all`）を叩くと、瞬間的なメタデータ競合が spine 側の協調反復ループ（壁時計なし）を
@@ -179,16 +178,27 @@ fn emo2_shell_master_src() -> PathBuf {
 /// （実測 0 失敗）へ収束させる。ロックは FS 区間だけを覆い、`resolve`/`boot` 等の consume は覆わない
 /// （読み取り専用消費は共有 fixture を並行に読んでよい）。
 pub fn assemble_test_ghost(tag: &str) -> TempGhost {
-    // 組立の FS 実体化区間をプロセス全体で直列化（同時メタデータ churn を避ける・上記 rationale）。
-    // poison は無視（組立途中 panic 後も後続組立は健全にやり直せる——各 root は tag で独立）。
+    // 1. 共通窓口が配る一時 root（プロセス識別子＋連番入り＝**プロセス間でも一意**）。
+    //    破棄で中身ごと消えるので、事前削除も後始末も要らない。
+    let root = TempPath::new(&format!("ghost-inproc-fixture-{tag}"));
+    materialize_test_ghost_tree(root.path());
+    TempGhost { root }
+}
+
+/// 与えられた `root` の直下へテストゴーストの実体（descript／shell／DLL）を配置する
+/// （[`assemble_test_ghost`] と [`shared_test_ghost`] が共有する唯一の組立手続き）。
+///
+/// FS 実体化区間はプロセス全体で 1 本の [`std::sync::Mutex`] で直列化する（同時メタデータ
+/// churn による spine starvation の除去・[`assemble_test_ghost`] の rationale 参照）。
+/// poison は無視する（組立途中 panic 後も後続組立は健全にやり直せる——各 root は独立）。
+fn materialize_test_ghost_tree(root: &Path) {
     static ASSEMBLE_FS_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
     let _fs_guard = ASSEMBLE_FS_LOCK
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
 
-    // 1. 一意 temp root＋事前削除（冪等・Idempotency）。
-    let root = std::env::temp_dir().join(format!("areka_shiori4_test_ghost_{tag}"));
-    let _ = std::fs::remove_dir_all(&root);
+    // 1. 事前削除（冪等・Idempotency——固定パスの共有 fixture を作り直す経路で効く）。
+    let _ = std::fs::remove_dir_all(root);
 
     // 2. ghost/master/descript.txt（`shiori,` 行はテスト DLL を指す・要件 4.2）。
     let ghost_master = root.join("ghost").join("master");
@@ -223,8 +233,6 @@ pub fn assemble_test_ghost(tag: &str) -> TempGhost {
     );
 
     // 5. balloon は非同梱（要件 4.2）——何も配置しない。
-
-    TempGhost { root }
 }
 
 /// InProc テスト一族が共有する**一度だけ組み立てる**テストゴーストの root を返す
@@ -267,12 +275,12 @@ pub fn shared_test_ghost() -> &'static Path {
             return root;
         }
 
-        // 無いか陳腐化していれば固定タグで**ちょうど一度**組み立てる（get_or_init が初期化を直列化）。
-        let temp = assemble_test_ghost("shared");
-        let root = temp.root().to_path_buf();
-        // TempGhost の Drop（remove_dir_all）を抑止して root をリーク＝プロセス寿命存置。
-        // static に格納する PathBuf は Drop されないため temp dir は残る（上記ドキュメント参照）。
-        std::mem::forget(temp);
+        // 無いか陳腐化していれば固定パスへ**ちょうど一度**組み立てる（get_or_init が初期化を直列化）。
+        // ここだけは共通窓口を使わない——**固定パスであること自体が仕様**（プロセスを跨いで
+        // 同じ実体を再利用してビルド後の再組立を丸ごと省くための、意図的な共有 fixture）。
+        // 窓口が配る一意な名前にすると再利用が二度と成立せず、リーク（`static` は Drop されない）
+        // だけが毎プロセス積み上がる。読み取り専用消費のみを許す前提は上記ドキュメントのとおり。
+        materialize_test_ghost_tree(&root);
         root
     });
 
@@ -455,7 +463,7 @@ mod tests {
     #[test]
     fn temp_ghost_drop_removes_the_temp_root() {
         let root_path = {
-            let temp = super::assemble_test_ghost("drop_cleanup");
+            let temp = super::assemble_test_ghost("drop-cleanup");
             let p = temp.root().to_path_buf();
             assert!(
                 p.is_dir(),

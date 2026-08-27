@@ -1,0 +1,8 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on build directory
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.29s
+     Running unittests src\main.rs (target\debug\deps\areka-d42d69e746985539.exe)
+error: test failed, to rerun pass `-p areka --bin areka`

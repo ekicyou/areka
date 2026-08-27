@@ -118,7 +118,7 @@ OS 側のコストは一括化では減らない（atom 確定台帳 L7「過半
 
 - **Extends**: なし（atom は本 spec の起票をもって 4.2 の実機側を手放す。atom 側には「実機で未達・引受先は本 spec」を登記する）
 - **Adjacent**:
-  - `areka-P0-test-cage-determinism`（W6.9・`presenter/show.rs` `apply_show` 鎖の最後尾を自称。**本 spec は cage の後に置く**）
+  - `areka-P0-test-cage-determinism`（W6.9・`presenter/show.rs` `apply_show` 鎖の最後尾を自称。**本 spec は cage の後に置く**。**2026-08-27 に cage は完了・アーカイブ済み＝この順序制約は充足した**）
   - `areka-P0-draw-load-parity`（W6.9・フレーム駆動の負荷。同 brief が「`presenter/show.rs` は対象外」と明記しているので責務は重ならない）
   - `areka-P0-balloon-offset-dpi`（W6.75・バルーン追従オフセットの k 倍。**同じ「100% で見た目が変」でも機序が別**——あちらは offset が k 倍されない話、こちらは提示のタイミングの話）
 

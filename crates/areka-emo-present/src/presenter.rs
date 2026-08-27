@@ -137,6 +137,9 @@ mod resize_report_tests;
 #[path = "presenter_test_support.rs"]
 mod test_support;
 #[cfg(test)]
+#[path = "presenter_upload_failure_tests.rs"]
+mod upload_failure_tests;
+#[cfg(test)]
 #[path = "presenter_visibility_tests.rs"]
 mod visibility_tests;
 

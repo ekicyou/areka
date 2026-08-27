@@ -15,88 +15,46 @@
 //!
 //! # 捕捉の流儀
 //!
-//! emo-present 既存の自前 `CaptureSubscriber`（presenter_refresh_and_log_tests.rs）と同型の
-//! 最小 subscriber を用いる（`tracing::subscriber::with_default` ＝ スレッドローカル既定
-//! subscriber。`set_global_default` はプロセス大域で並列テストと混線するため使わない）。
-//! 本ファイルは「ログが**出ない**こと」を主張しない——callsite interest キャッシュ由来の
-//! 恒真化の罠は陰性主張にのみ効く。既存 info! 行の不変性と陰陽対の観測は task 1.4 の
-//! `presenter_perf_log_tests` が担う。
+//! 捕捉窓は硬化機構の唯一の定義元 [`log_capture_kit::capture`] へ委譲する（spec:
+//! areka-P0-test-cage-determinism・要件 1.5／2.2）。ここに在った自前の最小 subscriber は
+//! 撤去した。
+//!
+//! 「`tracing::subscriber::with_default` はスレッドローカルだから安全」は**誤り**である。
+//! 差し替わるのはスレッドローカルの既定 dispatcher だけで、「そのログを評価するか」を決める
+//! callsite の interest キャッシュは**プロセス全体で 1 つ**しかなく、その発行点をプロセス内で
+//! 最初に踏んだスレッドの判定が焼き付く。捕捉窓を持たないスレッドの既定は `NoSubscriber` で
+//! 判定は「不要」なので、先に踏まれると `never` が大域へ焼き付き、自分のスレッドへ捕捉先を
+//! 差していても以後そのイベントは早期 return で捨てられる。つまり問題は他テストのイベントの
+//! **混入**ではなく、自分が見るはずのイベントの**取りこぼし**であり、存在を主張する本ファイル
+//! の檻はその場合に捕捉 0 件で確率的に赤になる（偽陽性）。共有機構は ⑴ プロセス寿命の probe
+//! 常駐 ⑵ 窓の内側での interest 再計算 ⑶ 窓の内側で発火する対照イベント（番兵）による空振り
+//! 検出、の 3 点でこれを塞ぐ（番兵は返却前に取り除かれるので件数は変わらない）。
+//!
+//! 本ファイルは「ログが**出ない**こと」は主張しない。既存 info! 行の不変性と陰陽対の観測は
+//! task 1.4 の `presenter_perf_log_tests` が担う。
 
 use super::*;
 
 use areka_emo_compose::{BlendKind, BlendMode, ComposeMethod, PatternFrame};
 
-// ── 捕捉 subscriber（tracing 単体・新規依存なし） ─────────────────────────────────────
+// ── 捕捉窓（硬化機構は共有 crate に 1 箇所だけ） ────────────────────────────────────
 
-/// 捕捉した 1 イベント（level ＋ フィールド名 → Debug 表現）。
-#[derive(Debug, Clone)]
-struct CapturedEvent {
-    level: tracing::Level,
-    fields: std::collections::HashMap<String, String>,
-}
-
-/// 全フィールドを Debug 表現で拾う visitor。
-///
-/// [`tracing::field::Visit`] の `record_u64`／`record_bool` 等は既定実装が `record_debug` へ
-/// 転送するため、`record_debug` 1 本で型を問わず全フィールドを捕捉できる。
-struct FieldGrab(std::collections::HashMap<String, String>);
-
-impl tracing::field::Visit for FieldGrab {
-    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
-        self.0
-            .insert(field.name().to_string(), format!("{value:?}"));
-    }
-}
-
-/// イベントを溜めるだけの最小 subscriber（span は使わないので new_span は固定 id を返す）。
-#[derive(Clone, Default)]
-struct CaptureSubscriber(std::sync::Arc<std::sync::Mutex<Vec<CapturedEvent>>>);
-
-impl tracing::Subscriber for CaptureSubscriber {
-    fn enabled(&self, _meta: &tracing::Metadata<'_>) -> bool {
-        true
-    }
-    fn new_span(&self, _attrs: &tracing::span::Attributes<'_>) -> tracing::span::Id {
-        tracing::span::Id::from_u64(1)
-    }
-    fn record(&self, _span: &tracing::span::Id, _values: &tracing::span::Record<'_>) {}
-    fn record_follows_from(&self, _span: &tracing::span::Id, _follows: &tracing::span::Id) {}
-    fn event(&self, event: &tracing::Event<'_>) {
-        let mut grab = FieldGrab(std::collections::HashMap::new());
-        event.record(&mut grab);
-        self.0
-            .lock()
-            .expect("捕捉バッファの毒化なし")
-            .push(CapturedEvent {
-                level: *event.metadata().level(),
-                fields: grab.0,
-            });
-    }
-    fn enter(&self, _span: &tracing::span::Id) {}
-    fn exit(&self, _span: &tracing::span::Id) {}
-}
+use log_capture_kit::{CapturedEvent, capture};
 
 /// 捕捉列から perf サマリ行だけを抜く（固定文言 [`PERF_LINE_MESSAGE`] の完全一致）。
-fn perf_lines(cap: &CaptureSubscriber) -> Vec<CapturedEvent> {
-    cap.0
-        .lock()
-        .expect("捕捉バッファ")
+fn perf_lines(events: &[CapturedEvent]) -> Vec<CapturedEvent> {
+    events
         .iter()
-        .filter(|e| {
-            e.fields
-                .get("message")
-                .is_some_and(|m| m == PERF_LINE_MESSAGE)
-        })
+        .filter(|e| e.field("message").is_some_and(|m| m == PERF_LINE_MESSAGE))
         .cloned()
         .collect()
 }
 
 /// フィールドを引く（無ければ全フィールドを添えて落とす＝欠落が判る形）。
 fn field(ev: &CapturedEvent, name: &str) -> String {
-    ev.fields
-        .get(name)
+    ev.field(name)
         .unwrap_or_else(|| panic!("perf サマリ行にフィールド `{name}` が無い: {:?}", ev.fields))
-        .clone()
+        .to_string()
 }
 
 /// perf サマリ行スキーマの全段フィールド名（design.md §Data Models・`judge-perf.py` の契約面）。
@@ -164,17 +122,15 @@ fn emits_single_debug_line_with_all_stage_fields_and_zero_for_skipped_stages() {
     // Resample・MaskGen は実行されなかった段（mark を呼ばない）。
     timing.mark_at(Stage::Upload, t0 + Duration::from_millis(10));
 
-    let cap = CaptureSubscriber::default();
-    tracing::subscriber::with_default(cap.clone(), || {
+    let ((), events) = capture(|| {
         timing.emit_at(&ctx(), allocs(), t0 + Duration::from_millis(12));
     });
 
-    let lines = perf_lines(&cap);
+    let lines = perf_lines(&events);
     assert_eq!(
         lines.len(),
         1,
-        "1 適用 1 行の契約が壊れている（捕捉列: {:?}）",
-        cap.0.lock().expect("捕捉バッファ")
+        "1 適用 1 行の契約が壊れている（捕捉列: {events:?}）"
     );
     let ev = &lines[0];
 
@@ -187,7 +143,7 @@ fn emits_single_debug_line_with_all_stage_fields_and_zero_for_skipped_stages() {
     // 全段フィールドが常に出る（Requirement 2.5 の行単位欠落検出の前提）。
     for name in STAGE_FIELDS {
         assert!(
-            ev.fields.contains_key(name),
+            ev.field(name).is_some(),
             "全段フィールドが常時出現していない: `{name}` が無い（{:?}）",
             ev.fields
         );
@@ -224,7 +180,7 @@ fn emits_single_debug_line_with_all_stage_fields_and_zero_for_skipped_stages() {
     // 確保計数（Requirement 1.3 の供給先・値は呼び手から素通し）。
     for name in ALLOC_FIELDS {
         assert!(
-            ev.fields.contains_key(name),
+            ev.field(name).is_some(),
             "確保計数フィールドが無い: `{name}`（{:?}）",
             ev.fields
         );
@@ -244,8 +200,7 @@ fn all_stage_fields_appear_as_zero_when_nothing_was_marked() {
     let t0 = Instant::now();
     let timing = FrameTiming::start_at(t0);
 
-    let cap = CaptureSubscriber::default();
-    tracing::subscriber::with_default(cap.clone(), || {
+    let ((), events) = capture(|| {
         timing.emit_at(
             &ctx(),
             BudgetDelta::default(),
@@ -253,7 +208,7 @@ fn all_stage_fields_appear_as_zero_when_nothing_was_marked() {
         );
     });
 
-    let lines = perf_lines(&cap);
+    let lines = perf_lines(&events);
     assert_eq!(lines.len(), 1, "全段スキップでも 1 行は出ること");
     let ev = &lines[0];
 
@@ -290,17 +245,16 @@ fn public_clock_seam_emits_the_same_schema() {
     timing.mark(Stage::Compose);
     timing.mark(Stage::Upload);
 
-    let cap = CaptureSubscriber::default();
-    tracing::subscriber::with_default(cap.clone(), || {
+    let ((), events) = capture(|| {
         timing.emit(&ctx(), allocs());
     });
 
-    let lines = perf_lines(&cap);
+    let lines = perf_lines(&events);
     assert_eq!(lines.len(), 1, "公開シームでも 1 適用 1 行");
     let ev = &lines[0];
     for name in STAGE_FIELDS.iter().chain(ALLOC_FIELDS.iter()) {
         assert!(
-            ev.fields.contains_key(*name),
+            ev.field(name).is_some(),
             "公開シーム経由でもフィールド `{name}` が出ること（{:?}）",
             ev.fields
         );

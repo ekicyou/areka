@@ -793,8 +793,8 @@ mod tests {
     // ログ** を明示的に要求する。format 層の縮退 warn は `format.rs` 側で檻済みだが、load/save
     // orchestration（本モジュール）の縮退アーム——load の read 障害段（R6.3「読み取れない」）と
     // save の commit 失敗段（R6.2/R8.1）——は outcome のみ檻済みでログ未表明だった。ここを共有
-    // ヘルパ [`crate::test_log_capture`]（interest-keeper で並列決定論化）経由で檻へ入れる
-    // （bare `with_default` は使わない）。
+    // ヘルパ [`crate::test_log_capture`]（共有 crate `log-capture-kit` へ委譲して並列決定論化）
+    // 経由で檻へ入れる（bare `with_default` は使わない）。
 
     // --- Criterion 2 (R6.3/R6.7): load_scope の read 障害段——warn ＋ 空縮退 ＋ 起動継続 ---
     #[test]

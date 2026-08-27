@@ -523,7 +523,6 @@ fn window_move_output_under_filter(directives: &str) -> String {
 
     let (mut world, e) = char_window_world(1, 192);
     tracing::subscriber::with_default(subscriber, || {
-        tracing::callsite::rebuild_interest_cache();
         assert!(resize_window_to(
             &mut world,
             e,

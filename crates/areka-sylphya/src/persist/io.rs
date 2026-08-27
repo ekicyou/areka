@@ -185,16 +185,19 @@ impl PersistIo for FakePersistIo {
 mod tests {
     use super::*;
     use std::path::PathBuf;
+    use temp_path_kit::TempPath;
 
-    // --- 実 I/O 往復（design-sanctioned: std::env::temp_dir() 直下・自己 cleanup）---
+    // --- 実 I/O 往復（一時パスは共有の窓口 `TempPath` から取る＝プロセス間で一意・
+    //     破棄で再帰削除。固定名だと同じテストの 2 プロセスが一時ファイルを奪い合う）---
     // real 実装は暦時計・OS 環境を暗黙に直読しない（R8.3）——temp 名は宛先から決定論的に導く。
 
     #[test]
     fn real_round_trip_and_overwrite() {
         let io = FsPersistIo;
-        let mut path = std::env::temp_dir();
-        path.push("areka_sylphya_persist_io_round_trip.toml");
-        let _ = std::fs::remove_file(&path);
+        // 窓口が配るディレクトリは呼び出しごとに別物なので、その下に取る宛先は他プロセスと
+        // 衝突しない。事前の削除は要らない（`child` はパスだけ返して実体を作らない）。
+        let dir = TempPath::new("sylphya-persist-io-round-trip");
+        let path = dir.child("areka_sylphya_persist_io_round_trip.toml");
 
         io.commit(&path, "first").unwrap();
         assert_eq!(io.read(&path).unwrap().as_deref(), Some("first"));
@@ -202,16 +205,16 @@ mod tests {
         // 既存宛先を rename-replace で上書き（Windows の置換 rename を実プラットフォームで実証）。
         io.commit(&path, "second").unwrap();
         assert_eq!(io.read(&path).unwrap().as_deref(), Some("second"));
-
-        let _ = std::fs::remove_file(&path);
+        // 後始末は `dir` の破棄に委ねる（呼び忘れの余地を残さない）。
     }
 
     #[test]
     fn real_read_absent_is_ok_none() {
         let io = FsPersistIo;
-        let mut path = std::env::temp_dir();
-        path.push("areka_sylphya_persist_io_absent_never_created.toml");
-        let _ = std::fs::remove_file(&path);
+        // このテストの前提は宛先が**存在しない**こと。`child` はパスだけ返して実体を作らない
+        // ので、前提は窓口の性質からそのまま成り立つ（事前の削除は要らない）。
+        let dir = TempPath::new("sylphya-persist-io-absent");
+        let path = dir.child("areka_sylphya_persist_io_absent_never_created.toml");
         assert_eq!(io.read(&path).unwrap(), None);
     }
 
@@ -221,14 +224,11 @@ mod tests {
     #[test]
     fn real_commit_creates_missing_parent_dirs() {
         let io = FsPersistIo;
-        // temp 直下に未作成の 2 段ネスト（宛先の親が存在しない状況を実 FS で再現）。
-        let mut root = std::env::temp_dir();
-        root.push(format!(
-            "areka_sylphya_missing_parent_{}",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&root); // 前回残骸掃除（親不在を保証）
-        let path = root.join("profile").join("areka").join("sylphya.toml");
+        // 窓口が配るディレクトリの下に未作成の 2 段ネスト（宛先の親が存在しない状況を実 FS で
+        // 再現）。`child`／`join` は実体を作らないので親不在は構成から保証され、前回残骸の掃除も
+        // 要らない（窓口の名前は呼び出しごとに別物）。
+        let root = TempPath::new("sylphya-missing-parent");
+        let path = root.child("profile").join("areka").join("sylphya.toml");
         assert!(
             !path.parent().unwrap().exists(),
             "前提: 宛先の親 dir は存在しない"
@@ -240,8 +240,7 @@ mod tests {
             io.read(&path).unwrap().as_deref(),
             Some("format-version = 1\n")
         );
-
-        let _ = std::fs::remove_dir_all(&root);
+        // 後始末は `root` の破棄に委ねる。
     }
 
     // --- 原子性の檻（fake IO・純 x64・R6.2）---

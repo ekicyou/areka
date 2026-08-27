@@ -321,60 +321,62 @@ mod ghost_names_transcription_tests {
     //!
     //! ghost/master/descript.txt を合成 tempdir に書き出し、`resolve` を直接呼んで
     //! `sakura.name2` の忠実転記（宣言あり→Some・宣言なし→None）を決定論で固定する。
-    //! 縮退・フォールバックは行わない（それは ghost 層 task 8.1 の責務）。tempfile 等
-    //! 外部クレートには依存せず temp_dir 直下を使う。
+    //! 縮退・フォールバックは行わない（それは ghost 層 task 8.1 の責務）。一時パスは
+    //! 共通窓口 `temp-path-kit` 経由で組む（プロセス間でも一意）。
 
     use std::fs;
-    use std::path::PathBuf;
+
+    use temp_path_kit::TempPath;
 
     use crate::charset::DefaultEncoding;
 
     use super::resolve;
 
     /// テスト専用の一意な ghost ルートを作り、descript.txt と shell/master を用意して返す。
-    fn ghost_root_with_descript(tag: &str, descript_body: &str) -> PathBuf {
-        let mut root = std::env::temp_dir();
-        root.push(format!("areka_ghost_names_tests_{tag}"));
-        let _ = fs::remove_dir_all(&root);
-        let master = root.join("ghost").join("master");
+    ///
+    /// 一時ディレクトリは共通窓口 `temp-path-kit` 経由で組むので、名前にプロセス識別子と
+    /// 連番が入り**プロセス間でも一意**になる。返り値が生きている間だけ実体が存在し、
+    /// 破棄で中身ごと消える（後始末を呼び忘れる余地が無い）。
+    fn ghost_root_with_descript(tag: &str, descript_body: &str) -> TempPath {
+        // 札は `-` と英数字だけ（窓口の約束）。呼出側の tag は関数名由来で `_` を含む。
+        let root = TempPath::new(&format!("parsers-ghost-names-{}", tag.replace('_', "-")));
+        let master = root.path().join("ghost").join("master");
         fs::create_dir_all(&master).expect("create ghost/master");
         fs::write(master.join("descript.txt"), descript_body.as_bytes())
             .expect("write descript.txt");
         // shell/master は存在確認（Req 3.3）を通すために用意する。
-        fs::create_dir_all(root.join("shell").join("master")).expect("create shell/master");
+        fs::create_dir_all(root.path().join("shell").join("master")).expect("create shell/master");
         root
     }
 
     /// `sakura.name2` 宣言あり → `GhostNames.sakura_name2 == Some(値)`（忠実転記・R4.4）。
     #[test]
     fn sakura_name2_declared_is_some() {
-        let root = ghost_root_with_descript(
+        let temp = ghost_root_with_descript(
             "name2_declared",
             "charset,UTF-8\nname,テスト\nsakura.name,本体\nsakura.name2,別名\nkero.name,相方\n",
         );
+        let root = temp.path().to_path_buf();
         let model = resolve(&root, DefaultEncoding::Utf8).expect("resolve ok");
 
         assert_eq!(model.names.sakura_name2, Some("別名".to_string()));
         // 既存フィールドは無改変。
         assert_eq!(model.names.sakura_name, Some("本体".to_string()));
-
-        let _ = fs::remove_dir_all(&root);
     }
 
     /// `sakura.name2` 宣言なし → `GhostNames.sakura_name2 == None`（推測しない・R4.4）。
     #[test]
     fn sakura_name2_absent_is_none() {
-        let root = ghost_root_with_descript(
+        let temp = ghost_root_with_descript(
             "name2_absent",
             "charset,UTF-8\nname,テスト\nsakura.name,本体\nkero.name,相方\n",
         );
+        let root = temp.path().to_path_buf();
         let model = resolve(&root, DefaultEncoding::Utf8).expect("resolve ok");
 
         assert_eq!(model.names.sakura_name2, None);
         // 兄弟フィールドは通常どおり転記される（None は欠落を意味する）。
         assert_eq!(model.names.sakura_name, Some("本体".to_string()));
-
-        let _ = fs::remove_dir_all(&root);
     }
 }
 
@@ -385,10 +387,11 @@ mod bindgroup_name_transcription_tests {
     //! shell descript.txt を合成 tempdir に書き出し、`read_bindgroup_defaults` を
     //! 直接呼んで `.name` サフィックスの忠実転記（2/3 フィールド・trim・sakura/kero
     //! 区別・重複後勝ち・パーツ欠落 skip）と、既存 `.default` 経路の無改変（R1.6）を
-    //! 決定論で固定する。tempfile 等外部クレートには依存せず temp_dir 直下を使う。
+    //! 決定論で固定する。一時パスは共通窓口 `temp-path-kit` 経由で組む（プロセス間でも一意）。
 
     use std::fs;
-    use std::path::PathBuf;
+
+    use temp_path_kit::TempPath;
 
     use crate::charset::DefaultEncoding;
     use crate::package::model::BindScope;
@@ -396,22 +399,26 @@ mod bindgroup_name_transcription_tests {
     use super::read_bindgroup_defaults;
 
     /// テスト専用の一意な shell ディレクトリを作り、descript.txt を書き込んで返す。
-    fn shell_with_descript(tag: &str, descript_body: &str) -> PathBuf {
-        let mut dir = std::env::temp_dir();
-        dir.push(format!("areka_bindgroup_name_tests_{tag}"));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).expect("create shell dir");
-        fs::write(dir.join("descript.txt"), descript_body.as_bytes()).expect("write descript.txt");
+    ///
+    /// 一時ディレクトリは共通窓口 `temp-path-kit` 経由で組むので、名前にプロセス識別子と
+    /// 連番が入り**プロセス間でも一意**になる。返り値が生きている間だけ実体が存在し、
+    /// 破棄で中身ごと消える（後始末を呼び忘れる余地が無い）。
+    fn shell_with_descript(tag: &str, descript_body: &str) -> TempPath {
+        // 札は `-` と英数字だけ（窓口の約束）。呼出側の tag は関数名由来で `_` を含む。
+        let dir = TempPath::new(&format!("parsers-bindgroup-name-{}", tag.replace('_', "-")));
+        fs::write(dir.path().join("descript.txt"), descript_body.as_bytes())
+            .expect("write descript.txt");
         dir
     }
 
     /// 3 フィールド形（カテゴリ, パーツ, サムネ）を忠実転記し、名前解決できる。
     #[test]
     fn name_three_fields_transcribed_and_resolvable() {
-        let shell = shell_with_descript(
+        let temp = shell_with_descript(
             "three_fields",
             "charset,UTF-8\nsakura.bindgroup1100.name,腕,伸び,thumb\n",
         );
+        let shell = temp.path().to_path_buf();
         let defaults = read_bindgroup_defaults(&shell, DefaultEncoding::Utf8);
 
         assert_eq!(defaults.sakura_names.len(), 1);
@@ -424,17 +431,16 @@ mod bindgroup_name_transcription_tests {
             defaults.resolve_name(BindScope::Sakura, "腕", "伸び"),
             Some(1100)
         );
-
-        let _ = fs::remove_dir_all(&shell);
     }
 
     /// 2 フィールド形（サムネ欠落）は `thumbnail == None` で転記する。
     #[test]
     fn name_two_fields_thumbnail_none() {
-        let shell = shell_with_descript(
+        let temp = shell_with_descript(
             "two_fields",
             "charset,UTF-8\nsakura.bindgroup1200.name,口,笑い\n",
         );
+        let shell = temp.path().to_path_buf();
         let defaults = read_bindgroup_defaults(&shell, DefaultEncoding::Utf8);
 
         assert_eq!(defaults.sakura_names.len(), 1);
@@ -443,17 +449,16 @@ mod bindgroup_name_transcription_tests {
             defaults.resolve_name(BindScope::Sakura, "口", "笑い"),
             Some(1200)
         );
-
-        let _ = fs::remove_dir_all(&shell);
     }
 
     /// kero 側は本体側と区別して `kero_names` へ入る（R1.2）。
     #[test]
     fn kero_name_distinguished_from_sakura() {
-        let shell = shell_with_descript(
+        let temp = shell_with_descript(
             "kero_scope",
             "charset,UTF-8\nkero.bindgroup2100.name,腕,伸び\n",
         );
+        let shell = temp.path().to_path_buf();
         let defaults = read_bindgroup_defaults(&shell, DefaultEncoding::Utf8);
 
         assert!(defaults.sakura_names.is_empty(), "sakura 側は空であるべき");
@@ -464,17 +469,16 @@ mod bindgroup_name_transcription_tests {
         );
         // sakura スコープでは解決できない（別集合）。
         assert_eq!(defaults.resolve_name(BindScope::Sakura, "腕", "伸び"), None);
-
-        let _ = fs::remove_dir_all(&shell);
     }
 
     /// パーツ欠落（第 2 フィールド無し）の宣言は転記対象外（捏造しない・R1.5）。
     #[test]
     fn name_missing_part_not_transcribed() {
-        let shell = shell_with_descript(
+        let temp = shell_with_descript(
             "missing_part",
             "charset,UTF-8\nsakura.bindgroup1300.name,カテゴリのみ\n",
         );
+        let shell = temp.path().to_path_buf();
         let defaults = read_bindgroup_defaults(&shell, DefaultEncoding::Utf8);
 
         assert!(
@@ -482,22 +486,19 @@ mod bindgroup_name_transcription_tests {
             "パーツ欠落の宣言は転記されない: {:?}",
             defaults.sakura_names
         );
-
-        let _ = fs::remove_dir_all(&shell);
     }
 
     /// 空パーツ（`カテゴリ,`）も転記対象外。
     #[test]
     fn name_empty_part_not_transcribed() {
-        let shell = shell_with_descript(
+        let temp = shell_with_descript(
             "empty_part",
             "charset,UTF-8\nsakura.bindgroup1301.name,カテゴリ,\n",
         );
+        let shell = temp.path().to_path_buf();
         let defaults = read_bindgroup_defaults(&shell, DefaultEncoding::Utf8);
 
         assert!(defaults.sakura_names.is_empty());
-
-        let _ = fs::remove_dir_all(&shell);
     }
 
     /// 重複 (カテゴリ, パーツ) はキー昇順走査の後勝ち（D2）＝最後の ID を採る。
@@ -505,26 +506,25 @@ mod bindgroup_name_transcription_tests {
     fn duplicate_category_part_last_wins() {
         // 1100 と 1400 が同じ (腕, 伸び) を宣言。キー昇順で 1100→1400 の順に転記され、
         // `resolve_name` は後勝ちで 1400 を返す。
-        let shell = shell_with_descript(
+        let temp = shell_with_descript(
             "duplicate",
             "charset,UTF-8\n\
              sakura.bindgroup1100.name,腕,伸び\n\
              sakura.bindgroup1400.name,腕,伸び\n",
         );
+        let shell = temp.path().to_path_buf();
         let defaults = read_bindgroup_defaults(&shell, DefaultEncoding::Utf8);
 
         assert_eq!(
             defaults.resolve_name(BindScope::Sakura, "腕", "伸び"),
             Some(1400)
         );
-
-        let _ = fs::remove_dir_all(&shell);
     }
 
     /// R1.6: `.default` 経路は `.name` 増設後も無改変（value=="1" のみ・番号集合）。
     #[test]
     fn default_path_unchanged_alongside_names() {
-        let shell = shell_with_descript(
+        let temp = shell_with_descript(
             "default_coexist",
             "charset,UTF-8\n\
              sakura.bindgroup1100.default,1\n\
@@ -532,6 +532,7 @@ mod bindgroup_name_transcription_tests {
              sakura.bindgroup1100.name,腕,伸び\n\
              kero.bindgroup2100.default,1\n",
         );
+        let shell = temp.path().to_path_buf();
         let defaults = read_bindgroup_defaults(&shell, DefaultEncoding::Utf8);
 
         assert_eq!(defaults.sakura_default_on, vec![1100]);
@@ -541,8 +542,6 @@ mod bindgroup_name_transcription_tests {
             defaults.resolve_name(BindScope::Sakura, "腕", "伸び"),
             Some(1100)
         );
-
-        let _ = fs::remove_dir_all(&shell);
     }
 
     /// R1.6（純粋非退行）: `.default` on/off **のみ**（`.name` 皆無）の shell descript は、
@@ -551,7 +550,7 @@ mod bindgroup_name_transcription_tests {
     /// が `.name` 併存を扱うのに対し、本テストは名前宣言が皆無の既定 on/off 専用ケースを固定する。
     #[test]
     fn default_only_no_names_leaves_names_empty() {
-        let shell = shell_with_descript(
+        let temp = shell_with_descript(
             "default_only_no_names",
             "charset,UTF-8\n\
              sakura.bindgroup1100.default,1\n\
@@ -559,6 +558,7 @@ mod bindgroup_name_transcription_tests {
              kero.bindgroup2100.default,1\n\
              kero.bindgroup2101.default,0\n",
         );
+        let shell = temp.path().to_path_buf();
         let defaults = read_bindgroup_defaults(&shell, DefaultEncoding::Utf8);
 
         // 既定 on/off は従来どおり（value=="1" のみ収集・off は非収集）。
@@ -578,8 +578,6 @@ mod bindgroup_name_transcription_tests {
         // 名前解決は全スコープで None（着せ替え ID を捏造しない）。
         assert_eq!(defaults.resolve_name(BindScope::Sakura, "腕", "伸び"), None);
         assert_eq!(defaults.resolve_name(BindScope::Kero, "腕", "伸び"), None);
-
-        let _ = fs::remove_dir_all(&shell);
     }
 
     /// Observable（emo2 実 fixture）: 宣言済みの全 (カテゴリ, パーツ) が ID へ解決する。
@@ -641,26 +639,34 @@ mod bindoption_options_tests {
     //! `sakura/kero.bindoption*.group,カテゴリ,オプション[+オプション...]` の取り込みを
     //! 決定論で固定する。網羅マトリクス: ukadoc 正典 3 値（`mustselect`／非宣言＝既定／
     //! `multiple`）・`+` 区切り併記・未知語・不完全値・宣言ゼロ・sakura/kero 隔離・再読の
-    //! 同一結果。tempfile 等外部クレートには依存せず temp_dir 直下を使う。
+    //! 同一結果。一時パスは共通窓口 `temp-path-kit` 経由で組む（プロセス間でも一意）。
     //!
     //! 語彙: 「排他置換（exclusive）」「既定（Default＝高々 1 個・解除可）」「複数可
     //! （Multiple）」。ここで検証するのは**宣言の所属の転記**だけで、「排他か」の解釈は
     //! 下流 seriko の責務（転写層原則）。
 
     use std::fs;
-    use std::path::PathBuf;
+
+    use temp_path_kit::TempPath;
 
     use crate::charset::DefaultEncoding;
     use crate::package::model::BindScope;
 
     use super::read_bindgroup_defaults;
 
-    fn shell_with_descript(tag: &str, descript_body: &str) -> PathBuf {
-        let mut dir = std::env::temp_dir();
-        dir.push(format!("areka_bindoption_options_tests_{tag}"));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).expect("create shell dir");
-        fs::write(dir.join("descript.txt"), descript_body.as_bytes()).expect("write descript.txt");
+    /// テスト専用の一意な shell ディレクトリを作り、descript.txt を書き込んで返す。
+    ///
+    /// 一時ディレクトリは共通窓口 `temp-path-kit` 経由で組むので、名前にプロセス識別子と
+    /// 連番が入り**プロセス間でも一意**になる。返り値が生きている間だけ実体が存在し、
+    /// 破棄で中身ごと消える（後始末を呼び忘れる余地が無い）。
+    fn shell_with_descript(tag: &str, descript_body: &str) -> TempPath {
+        // 札は `-` と英数字だけ（窓口の約束）。呼出側の tag は関数名由来で `_` を含む。
+        let dir = TempPath::new(&format!(
+            "parsers-bindoption-options-{}",
+            tag.replace('_', "-")
+        ));
+        fs::write(dir.path().join("descript.txt"), descript_body.as_bytes())
+            .expect("write descript.txt");
         dir
     }
 
@@ -669,12 +675,13 @@ mod bindoption_options_tests {
     /// 既存挙動不変の錨。非宣言カテゴリ・別スコープはどちらの集合にも入らない＝既定。
     #[test]
     fn mustselect_declared_categories_ingested() {
-        let shell = shell_with_descript(
+        let temp = shell_with_descript(
             "declared",
             "charset,UTF-8\n\
              sakura.bindoption0.group,腕,mustselect\n\
              sakura.bindoption3.group,目,mustselect\n",
         );
+        let shell = temp.path().to_path_buf();
         let defaults = read_bindgroup_defaults(&shell, DefaultEncoding::Utf8);
 
         assert!(defaults.is_mustselect(BindScope::Sakura, "腕"));
@@ -687,8 +694,6 @@ mod bindoption_options_tests {
         assert!(!defaults.is_multiple(BindScope::Sakura, "紅"));
         // 別スコープ（kero）には漏れない。
         assert!(!defaults.is_mustselect(BindScope::Kero, "腕"));
-
-        let _ = fs::remove_dir_all(&shell);
     }
 
     /// `multiple` 単独宣言は multiple としてスコープ別に**収録**される（bindopt 1.1）。
@@ -698,10 +703,11 @@ mod bindoption_options_tests {
     /// されること（＝区別が成立すること）を固定する。
     #[test]
     fn multiple_option_ingested() {
-        let shell = shell_with_descript(
+        let temp = shell_with_descript(
             "multiple",
             "charset,UTF-8\nsakura.bindoption0.group,紅,multiple\n",
         );
+        let shell = temp.path().to_path_buf();
         let defaults = read_bindgroup_defaults(&shell, DefaultEncoding::Utf8);
 
         assert_eq!(defaults.sakura_multiple, vec!["紅".to_string()]);
@@ -712,41 +718,37 @@ mod bindoption_options_tests {
         // 別スコープ（kero）には漏れない。
         assert!(!defaults.is_multiple(BindScope::Kero, "紅"));
         assert!(defaults.kero_multiple.is_empty());
-
-        let _ = fs::remove_dir_all(&shell);
     }
 
     /// kero 側の `multiple` は本体側と区別して収録する（bindopt 1.1・スコープ隔離）。
     #[test]
     fn kero_multiple_distinguished_from_sakura() {
-        let shell = shell_with_descript(
+        let temp = shell_with_descript(
             "kero_multiple",
             "charset,UTF-8\nkero.bindoption0.group,尻尾飾り,multiple\n",
         );
+        let shell = temp.path().to_path_buf();
         let defaults = read_bindgroup_defaults(&shell, DefaultEncoding::Utf8);
 
         assert_eq!(defaults.kero_multiple, vec!["尻尾飾り".to_string()]);
         assert!(defaults.is_multiple(BindScope::Kero, "尻尾飾り"));
         assert!(!defaults.is_multiple(BindScope::Sakura, "尻尾飾り"));
         assert!(defaults.sakura_multiple.is_empty());
-
-        let _ = fs::remove_dir_all(&shell);
     }
 
     /// kero 側は本体側と区別して取り込む（bindopt 1.2・スコープ隔離）。
     #[test]
     fn kero_mustselect_distinguished_from_sakura() {
-        let shell = shell_with_descript(
+        let temp = shell_with_descript(
             "kero_scope",
             "charset,UTF-8\nkero.bindoption0.group,腕,mustselect\n",
         );
+        let shell = temp.path().to_path_buf();
         let defaults = read_bindgroup_defaults(&shell, DefaultEncoding::Utf8);
 
         assert!(defaults.is_mustselect(BindScope::Kero, "腕"));
         assert!(!defaults.is_mustselect(BindScope::Sakura, "腕"));
         assert!(defaults.sakura_mustselect.is_empty());
-
-        let _ = fs::remove_dir_all(&shell);
     }
 
     /// `+` 区切り併記（`mustselect+multiple`）は両方の集合へ収録し情報を落とさない
@@ -757,45 +759,44 @@ mod bindoption_options_tests {
     /// 下流 seriko の解釈であり、転写層は両方を写す。
     #[test]
     fn plus_separated_both_options_ingested_into_both_sets() {
-        let shell = shell_with_descript(
+        let temp = shell_with_descript(
             "plus_both",
             "charset,UTF-8\nsakura.bindoption0.group,腕,mustselect+multiple\n",
         );
+        let shell = temp.path().to_path_buf();
         let defaults = read_bindgroup_defaults(&shell, DefaultEncoding::Utf8);
 
         assert_eq!(defaults.sakura_mustselect, vec!["腕".to_string()]);
         assert_eq!(defaults.sakura_multiple, vec!["腕".to_string()]);
         assert!(defaults.is_mustselect(BindScope::Sakura, "腕"));
         assert!(defaults.is_multiple(BindScope::Sakura, "腕"));
-
-        let _ = fs::remove_dir_all(&shell);
     }
 
     /// `+` 区切りの語順は結果に影響しない（`multiple+mustselect`・bindopt 1.3）。
     #[test]
     fn plus_separated_option_order_is_insensitive() {
-        let shell = shell_with_descript(
+        let temp = shell_with_descript(
             "plus_order",
             "charset,UTF-8\nsakura.bindoption0.group,腕,multiple+mustselect\n",
         );
+        let shell = temp.path().to_path_buf();
         let defaults = read_bindgroup_defaults(&shell, DefaultEncoding::Utf8);
 
         assert_eq!(defaults.sakura_mustselect, vec!["腕".to_string()]);
         assert_eq!(defaults.sakura_multiple, vec!["腕".to_string()]);
-
-        let _ = fs::remove_dir_all(&shell);
     }
 
     /// `+` 区切りに未知語が混ざっても、認識できる語のみ収録して未知語は読み流す
     /// （寛容パース・bindopt 1.3/1.4）。空白入りの語も trim して認識する。
     #[test]
     fn plus_separated_unknown_word_is_skipped() {
-        let shell = shell_with_descript(
+        let temp = shell_with_descript(
             "plus_unknown",
             "charset,UTF-8\n\
              sakura.bindoption0.group,紅,unknown+multiple\n\
              sakura.bindoption1.group,腕,mustselect + unknown\n",
         );
+        let shell = temp.path().to_path_buf();
         let defaults = read_bindgroup_defaults(&shell, DefaultEncoding::Utf8);
 
         // unknown+multiple → multiple のみ収録。
@@ -804,8 +805,6 @@ mod bindoption_options_tests {
         // mustselect + unknown → mustselect のみ収録（各語 trim）。
         assert_eq!(defaults.sakura_mustselect, vec!["腕".to_string()]);
         assert!(!defaults.is_multiple(BindScope::Sakura, "腕"));
-
-        let _ = fs::remove_dir_all(&shell);
     }
 
     /// 未知語のみ・オプション欄空・カテゴリ空・`,` なしはいずれも収録対象外
@@ -814,7 +813,7 @@ mod bindoption_options_tests {
     /// 収録対象外＝どちらの集合にも入らない＝当該カテゴリは既定（高々 1 個・解除可）。
     #[test]
     fn missing_or_empty_fields_not_ingested() {
-        let shell = shell_with_descript(
+        let temp = shell_with_descript(
             "missing",
             "charset,UTF-8\n\
              sakura.bindoption0.group,腕\n\
@@ -824,6 +823,7 @@ mod bindoption_options_tests {
              sakura.bindoption5.group,頬,Mustselect\n\
              sakura.bindoption6.group, ,multiple\n",
         );
+        let shell = temp.path().to_path_buf();
         let defaults = read_bindgroup_defaults(&shell, DefaultEncoding::Utf8);
 
         // オプション欄欠落（腕・`,` なし）・カテゴリ空（,mustselect）・オプション欄空（口,）
@@ -843,21 +843,20 @@ mod bindoption_options_tests {
             assert!(!defaults.is_mustselect(BindScope::Sakura, category));
             assert!(!defaults.is_multiple(BindScope::Sakura, category));
         }
-
-        let _ = fs::remove_dir_all(&shell);
     }
 
     /// bindoption 宣言が 1 件も無い shell も読み取りは成立し、全カテゴリ既定になる
     /// （読み取り失敗にしない・bindopt 1.6）。
     #[test]
     fn no_bindoption_declarations_yields_all_default() {
-        let shell = shell_with_descript(
+        let temp = shell_with_descript(
             "no_bindoption",
             "charset,UTF-8\n\
              sakura.bindgroup1100.default,1\n\
              sakura.bindgroup1100.name,腕,伸び\n\
              kero.bindgroup2100.name,腕,伸び\n",
         );
+        let shell = temp.path().to_path_buf();
         let defaults = read_bindgroup_defaults(&shell, DefaultEncoding::Utf8);
 
         // 4 集合すべて空＝全カテゴリ既定（高々 1 個・解除可）。
@@ -875,14 +874,12 @@ mod bindoption_options_tests {
             defaults.resolve_name(BindScope::Kero, "腕", "伸び"),
             Some(2100)
         );
-
-        let _ = fs::remove_dir_all(&shell);
     }
 
     /// 同一 descript を再読すると同一の収録結果を返す（決定論・走査順維持・bindopt 1.7）。
     #[test]
     fn same_descript_reread_yields_same_result() {
-        let shell = shell_with_descript(
+        let temp = shell_with_descript(
             "determinism",
             "charset,UTF-8\n\
              sakura.bindoption0.group,腕,mustselect\n\
@@ -891,6 +888,7 @@ mod bindoption_options_tests {
              sakura.bindoption3.group,眉,unknown\n\
              kero.bindoption0.group,尻尾飾り,multiple\n",
         );
+        let shell = temp.path().to_path_buf();
         let first = read_bindgroup_defaults(&shell, DefaultEncoding::Utf8);
         let second = read_bindgroup_defaults(&shell, DefaultEncoding::Utf8);
 
@@ -906,8 +904,6 @@ mod bindoption_options_tests {
         );
         assert_eq!(first.kero_multiple, vec!["尻尾飾り".to_string()]);
         assert!(first.kero_mustselect.is_empty());
-
-        let _ = fs::remove_dir_all(&shell);
     }
 
     /// Observable（emo2 実 fixture）: 腕・口・眉・目 が `mustselect` 宣言と判別でき、

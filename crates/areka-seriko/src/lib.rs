@@ -32,10 +32,6 @@ mod state;
 mod table;
 mod timeline;
 
-/// テスト専用: ログ捕捉ヘルパーが共有する interest 毒化対策（本番には含まれない）。
-#[cfg(test)]
-mod log_interest_probe;
-
 pub use actor::{SerikoMsg, SerikoSink, spawn_seriko};
 pub use bind::{
     BindChoicePolicy, BindDirective, BindNamespace, BindOptionDecls, BindResolver, accumulate,

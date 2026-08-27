@@ -70,42 +70,6 @@ thread_local! {
     static SELF_INITIATED_DEPTH: Cell<i32> = const { Cell::new(0) };
 }
 
-/// テスト専用: カウンタを触る／読むテストを直列化する錠。**退役候補**。
-///
-/// # スレッド局所化後は不要である（要件 6.6・8.2）
-///
-/// この錠は [`SELF_INITIATED_DEPTH`] が**プロセス共有の `AtomicI32`** だった頃の産物である。
-/// 当時は、あるテストの [`guarded_set_window_pos`] が持ち上げた値を、並列に走る無関係な
-/// テストの [`is_self_initiated`]／観測レコードの `in_swp` 判定が読んでしまっていた
-/// （実測では `cargo test -p wintf --lib` を 60 周して **11 周が赤**になり、
-/// `test_flush_empty_queue_is_noop` の `assert!(!is_self_initiated())` と `msg` レコードの
-/// `in_swp=false` 検査がいずれも落ちた）。
-///
-/// カウンタは**スレッド局所になった**（`areka-P0-draw-load-parity` task 4）。持ち上げも
-/// 読み取りも同じスレッドの内側で閉じるので、テストを直列化する必要はもう無い——錠なしで
-/// 並列に走らせても緑であることは `command_threadlocal_tests.rs` が固定している。
-///
-/// # それでも今は残す
-///
-/// 呼出が **21 箇所／5 ファイル**あり、撤去は本仕様の取り分（`command.rs` 1 ファイル）を
-/// 越えてテストハーネス側へ及ぶ。撤去の可否と実施は `areka-P0-test-cage-determinism` が
-/// rebase で受ける。それまでは**取っても無害**（ただの直列化）なので現状のまま残す。
-///
-/// # 使い方（残っている間）
-///
-/// ⑴ カウンタを**持ち上げる**側（[`guarded_set_window_pos`]／[`flush_window_pos_commands`]
-/// を呼ぶテスト）と ⑵ カウンタを**読む**側（[`is_self_initiated`]／`in_swp` を検査する
-/// テスト）の**両方**が取得すること。片側だけでは直列化にならない。読む側はテスト本体の
-/// 先頭で取得して最後まで持ち、持ち上げるだけの側は少なくとも当該呼出を含む区間で持つ。
-///
-/// 毒化は無視する（`into_inner`）——1 本のテストの失敗が、以後の全テストを
-/// 「錠が毒化した」で連鎖失敗させないため。
-#[cfg(test)]
-pub(crate) fn lock_self_initiated_for_test() -> std::sync::MutexGuard<'static, ()> {
-    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-    LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
-}
-
 /// 現在 `guarded_set_window_pos` 呼び出しスコープ内かどうかを返す。
 ///
 /// `WM_WINDOWPOSCHANGED` ハンドラ内で echo 判定に使用する。
@@ -955,10 +919,9 @@ mod tests {
         // guarded_set_window_pos スコープ外（ネストカウンタ 0）では false
         //
         // 注: SELF_INITIATED_DEPTH は**スレッド局所**になった（draw-load-parity task 4）ので、
-        // このテストスレッドで guarded_set_window_pos を呼ばない限り 0 のままである。錠は
-        // もう要らないが、退役は cage が rebase で受けるまで保留なのでそのまま取っておく
-        // （取っても無害）。スレッド局所であることの本体は `command_threadlocal_tests.rs`。
-        let _serialized = lock_self_initiated_for_test();
+        // このテストスレッドで guarded_set_window_pos を呼ばない限り 0 のままである。直列化の
+        // 錠は要らない（test-cage-determinism task 7.2 で退役）。スレッド局所であることの本体は
+        // `command_threadlocal_tests.rs`。
         assert!(!is_self_initiated());
     }
 
@@ -968,9 +931,8 @@ mod tests {
         // （このテスト内では enqueue していないため WINDOW_POS_COMMANDS は空。
         //  thread_local かつ同一テストスレッドのため他テストの enqueue 残留はない）
         //
-        // 末尾の `is_self_initiated()` はスレッド局所カウンタを読むので直列化は要らない。
-        // 錠は退役待ちのため残置（`lock_self_initiated_for_test` の doc）。
-        let _serialized = lock_self_initiated_for_test();
+        // 末尾の `is_self_initiated()` はスレッド局所カウンタを読むので直列化は要らない
+        // （錠は test-cage-determinism task 7.2 で退役）。
         SetWindowPosCommand::flush();
         // 便利関数経由でも同様に no-op
         flush_window_pos_commands();

@@ -7,7 +7,7 @@
 //! **時刻を進めるために sleep しない**ことであり（時刻前進は注入 Tick のみ＝決定論の源）、
 //! **有界待機の poll-backoff に用いる短い sleep は明示例外**である。反復回数のみの上限は CPU
 //! 競合下で数 ms で尽き、製品コードが正常でも偽陽性の赤を出すため、待機はすべて壁時計
-//! [`SPIN_WAIT`] で有界化してある。待機の形は**2 種**（どちらも期限は [`SPIN_WAIT`]）:
+//! [`SPIN_WAIT`] で有界化してある。待機の形は**3 種**（いずれも期限は [`SPIN_WAIT`]）:
 //!
 //! - **純粋ポーリング**（各反復が系を進めない・別スレッドの到着を読むだけ）→ [`spin_wait_until`]。
 //!   密 yield（[`SPIN_YIELD_BUDGET`]）で速い経路の検出遅延を犠牲にせず、予算超過後に
@@ -17,9 +17,12 @@
 //!   流用しない。送出ごとに `yield_now` で回すと unbounded channel を洪水させつつ worker を
 //!   CPU 飢餓させる二重の害があり、短い sleep でペーシングするのが根治（areka-kanade 先例）。
 //!   加えて注入時刻が観測を追い越さないこと（R7.8 の頭打ち）が別途必要。
+//! - **回収（settle）**（「尽きるのが正常」の残余回収＝負検証）→ [`settle_bounded`]。時刻前進は
+//!   呼出側が前段で注入し終えており、本体は観測しかしない。打ち切りは反復回数ではなく
+//!   **[`SETTLE_MIN`] の最小持続 かつ 連続 [`SETTLE_QUIET_ROUNDS`] 回 0 件**の両立で、反復間は
+//!   [`BACKOFF_SLEEP`] の短い sleep のみ（要件 4.2・4.4）。負荷で回収機会が縮まないことが要点。
 //!
-//! 詳細な根拠は [`drive_shell_shown`] の doc を参照。負検証の settle drain（「尽きるのが正常」）
-//! だけは従来どおり `yield_now` のみで回す。
+//! 詳細な根拠は [`drive_shell_shown`] の doc を参照。
 //! 決定論 spine の**土台**。本 task（6.1）はハーネス（scripted `ShioriBackend`＋実 sink 結線＋
 //! GPU World＋frame フェーズ直接駆動）と、boot→Tick→attach 到達をスモークレベルで固定する
 //! `#[test]` を所有する。豊富な観測（S1 ピクセル readback・S2 typewriter・S3 `\b` 配送・
@@ -68,9 +71,8 @@ use areka_seriko::{
 };
 use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
+use log_capture_kit::{LineFormat, capture_lines};
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
-use tracing::field::{Field, Visit};
-use tracing_subscriber::prelude::*;
 use windows::Win32::Foundation::{HINSTANCE, HWND};
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
@@ -374,6 +376,70 @@ fn spin_wait_until(mut cond: impl FnMut() -> bool) -> bool {
     }
 }
 
+/// 「尽きるのが正常」の回収（settle）が満たすべき**壁時計の最小持続**（要件 4.2・4.5）。
+///
+/// 回収機会を反復回数で与えると、CPU 競合下（並列 `cargo test`・ウイルス対策の再スキャン）では
+/// 数 ms で反復が尽き、**残余を出す欠陥があっても空のまま緑になる**（空虚な緑）。負検証は
+/// 「出ないこと」を主張するので、機会が縮む方向の変動は誰にも赤にされない。よって最低限の
+/// 観測時間は壁時計で与える。
+///
+/// 初期値 200ms（design C3）を実測のうえ据え置いた。置き換え対象の旧ループ（`yield_now` 5,000 回）が
+/// 実際に占める時間を本機（22 論理 CPU）で測ると **無負荷 0.31ms**（7/7・振れ幅 0.306〜0.314）／
+/// **4 スレッド占有 0.93・8.4・22.6ms**／**22 スレッド占有 3.7・5.5・390ms**——負荷次第で 3 桁動き、
+/// 平常時は 1ms 未満しか待たない。200ms の床は平常値の 600 倍以上を常に与え、上振れ（390ms）とも
+/// 同じ桁なので**どの負荷でも旧形より回収機会が縮まない**（要件 4.5）。この床の内側には
+/// [`BACKOFF_SLEEP`] 粒度の反復が実測 約 130 回入る（1ms 指定の sleep は実測 1.5ms 粒度）。
+/// 代償は 1 呼出点あたり 0.2 秒で、対象は 2 呼出点のみ。
+const SETTLE_MIN: Duration = Duration::from_millis(200);
+
+/// 回収が尽きたと見なすのに要する**連続して 0 件だった反復数**（要件 4.2）。
+///
+/// 壁時計だけでは「たまたま静かな 200ms」を通してしまうので、観測量の側からも条件を置く。
+/// 1 反復ごとに [`BACKOFF_SLEEP`] を挟むので、50 回は「50ms 以上どのスレッドからも 1 件も
+/// 来なかった」ことを意味する。初期値（design C3）を据え置いた。無負荷では [`SETTLE_MIN`] の
+/// 内側に約 130 反復入るので本条件は先に満たされるが、sleep 粒度が伸びる負荷下（Windows の
+/// タイマ分解能が落ちると 1 反復 15ms 級＝200ms で 13 反復）では**こちらが効いて反復を伸ばす**。
+/// 2 条件は入れ替わりで律速する関係にあり、片方だけでは負荷下の回収機会を保証できない。
+const SETTLE_QUIET_ROUNDS: u32 = 50;
+
+/// 「尽きるのが正常」の回収ループ。`step` は 1 反復分の回収（drain）を行い**回収件数**を返す。
+///
+/// 終了条件は **[`SETTLE_MIN`] を満たし かつ 連続 [`SETTLE_QUIET_ROUNDS`] 回 0 件**の両立で、
+/// どちらか一方では返らない。両立しないまま [`SPIN_WAIT`] を超えたら必ず返る（hang しない）。
+/// 反復の間は [`BACKOFF_SLEEP`] の短い sleep だけを挟む（有界 poll-backoff＝要件 4.4。
+/// **時刻を進めるための sleep ではない**——時刻前進は呼出側が前段で決定論的に注入し終えており、
+/// 本ヘルパは観測しかしない）。
+///
+/// 本ヘルパは **panic しない**。合否の宣告は呼出側の既存 assert のまま（要件 4.5・4.6）。
+fn settle_bounded(step: impl FnMut() -> usize) {
+    settle_bounded_with(Instant::now, step);
+}
+
+/// 時計を注入できる [`settle_bounded`] の内側（檻専用の継ぎ目・`spine_settle_tests.rs`）。
+///
+/// 「最小持続に達するまで返らない」を実時間の計測で確かめると並列負荷で合否が動く——本仕様が
+/// 直そうとしている当の病になる。時計を差し替えられるようにして、檻の期待値を**反復回数という
+/// 整数**へ落とすためだけの継ぎ目であり、本番の呼出点は常に [`settle_bounded`]（実時計）を使う。
+fn settle_bounded_with(mut now: impl FnMut() -> Instant, mut step: impl FnMut() -> usize) {
+    let started = now();
+    let mut quiet = 0u32;
+    loop {
+        if step() == 0 {
+            quiet += 1;
+        } else {
+            quiet = 0;
+        }
+        let elapsed = now().saturating_duration_since(started);
+        if elapsed >= SETTLE_MIN && quiet >= SETTLE_QUIET_ROUNDS {
+            return;
+        }
+        if elapsed > SPIN_WAIT {
+            return;
+        }
+        std::thread::sleep(BACKOFF_SLEEP);
+    }
+}
+
 /// `GraphicsCore`＋`WucGraphicsResource` を実資源として載せた wintf World（headless GPU・R8.4）。
 ///
 /// 本番 UI スレッドは MTA（記憶: areka WUC は MTA スレッドで動く）。WARP 可（`GraphicsCore::new()`）。
@@ -494,41 +560,26 @@ fn join_bounded(what: &str, timeout: Duration, handle: ActorHandle) -> Result<()
 }
 
 // ===========================================================================
-// ログ捕捉（frame.rs/adapter.rs の確立パターンを単一ファイル境界内へ最小複製）
+// ログ捕捉（硬化機構の唯一の定義元 `log-capture-kit` への委譲）
 //
-// スレッドローカル `with_default` ゆえ `cargo test` 並行実行でも他スレッドの subscriber と
-// 干渉しない。`run_attach_phase` の `info!(planned, attached, ...)`（DD-12 の縮退がバグを
-// 隠さない檻の観測点）をこのスレッド上で捕捉して件数一致を assert する。
+// `run_attach_phase` の `info!(planned, attached, ...)`（DD-12 の縮退がバグを隠さない檻の
+// 観測点）をこのスレッド上で捕捉して件数一致を assert する。行の形（1 イベント 1 行・
+// `level=… target=…` に続けてフィールドを訪問順で ` name=value`）は移行前と 1 バイト変わらない。
+//
+// 「`with_default` はスレッドローカルゆえ並行実行でも干渉しない」は**誤り**である。差し替わる
+// のはスレッドローカルの既定 dispatcher だけで、「そのログを評価するか」を決める callsite の
+// interest キャッシュは**プロセス全体で 1 つ**しかなく、その発行点を最初に踏んだスレッドの判定が
+// 焼き付く（先着が勝つ）。捕捉窓を持たないスレッドの既定は `NoSubscriber` で判定は「不要」ゆえ、
+// 先に踏まれると `never` が大域へ焼き付き、自分のスレッドへ捕捉先を差していても取りこぼす。
+// 共有機構は ⑴ プロセス寿命の probe 常駐 ⑵ 捕捉窓の内側での interest 再計算 ⑶ 番兵イベントに
+// よる空振り検出 の 3 点でこれを塞ぐ（機序の逐条解説は `log_capture_kit` の crate doc と
+// 同 crate の `src/probe.rs`）。
 // ===========================================================================
-
-/// イベントの `level`＋各フィールドを 1 行文字列へ整形して共有 Vec へ push する最小 Layer。
-#[derive(Clone, Default)]
-struct Capture(Arc<Mutex<Vec<String>>>);
-
-impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Capture {
-    fn on_event(&self, ev: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
-        let meta = ev.metadata();
-        let mut line = format!("level={} target={}", meta.level(), meta.target());
-        struct V<'a>(&'a mut String);
-        impl Visit for V<'_> {
-            fn record_debug(&mut self, f: &Field, v: &dyn std::fmt::Debug) {
-                use std::fmt::Write;
-                let _ = write!(self.0, " {}={:?}", f.name(), v);
-            }
-        }
-        ev.record(&mut V(&mut line));
-        self.0.lock().unwrap().push(line);
-    }
-}
 
 /// クロージャ `f` 実行中に**現在のスレッド**で発火した tracing イベントを 1 行 1 件で返す。
 fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
-    let cap = Capture::default();
-    let logs = cap.0.clone();
-    let subscriber = tracing_subscriber::registry().with(cap);
-    tracing::subscriber::with_default(subscriber, f);
-    let guard = logs.lock().unwrap();
-    guard.clone()
+    let ((), lines) = capture_lines(LineFormat::LevelTargetFields, f);
+    lines
 }
 
 /// 捕捉行のうち指定 level（例 `"ERROR"`）の件数を数える。
@@ -861,6 +912,9 @@ mod move_cue_tests;
 #[cfg(test)]
 #[path = "spine_seriko_loop_tests.rs"]
 mod seriko_loop_tests;
+#[cfg(test)]
+#[path = "spine_settle_tests.rs"]
+mod settle_tests;
 #[cfg(test)]
 #[path = "spine_talk_close_tests.rs"]
 mod talk_close_tests;

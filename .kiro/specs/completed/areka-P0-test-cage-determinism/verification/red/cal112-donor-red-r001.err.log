@@ -1,0 +1,5 @@
+較正に失敗した（道具が壊れている）:
+  - 自己テスト付きの包みが供給者になっていない: crates/areka-emo-atlas/src/log_capture.rs は capture_logs( を crates/areka-emo-atlas/ へ供給するはず（走査語 18 語の中に不在）
+  - 自己テスト付きの包みが供給者になっていない: crates/areka-emo-compose/src/log_capture.rs は capture_logs( を crates/areka-emo-compose/ へ供給するはず（走査語 18 語の中に不在）
+  - 自己テスト付きの包みを呼ぶファイルが 1 件も当たっていない:   取りこぼし ['crates/areka-emo-atlas/src/lib.rs', 'crates/areka-emo-compose/src/log_firing_tests.rs', 'crates/areka-emo-compose/src/plan_ops_tests.rs', 'crates/areka-emo-compose/src/scale_ratio_tests.rs', 'crates/areka-emo-compose/src/scale_resample_tests.rs']
+  - 較正 5 の陽性側が 0 件（走査そのものが空振りしている）

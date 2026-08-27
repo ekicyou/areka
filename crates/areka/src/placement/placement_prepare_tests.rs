@@ -232,9 +232,10 @@ fn prepared_placement_is_send() {
 /// 失敗は load（モニタ列挙より前）で起きるため headless でも決定論。
 #[test]
 fn prepare_missing_root_returns_mount_err_to_caller() {
-    let root = std::env::temp_dir()
-        .join("areka_placement_prepare_missing_root")
-        .join("no_such_ghost");
+    // 不在の root は共通窓口が配るディレクトリの下に取る（窓口は宛先を返すだけで
+    // 実体を作らないので、`no_such_ghost` は確実に不在のまま・プロセス間でも一意）。
+    let temp = TempDir::new();
+    let root = temp.path().join("no_such_ghost");
     let err = prepare_ghost_windows(&root, &balloon_root()).expect_err("不在 root は Err");
     assert!(
         matches!(err, PlacementError::Mount(_)),

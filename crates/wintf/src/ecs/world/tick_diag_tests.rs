@@ -23,14 +23,36 @@ fn field_value<'a>(line: &'a str, name: &str) -> Option<&'a str> {
         .map(|(_, v)| v)
 }
 
+/// インデント 4 の閉じ括弧だけの行の、**直前の改行**の位置を返す。
+///
+/// 改行コードは作業ツリーの設定（`core.autocrlf`）次第で CRLF にも LF にもなるので、
+/// `"\n    }\n"` のような LF 固定の needle で探してはならない（CRLF チェックアウトでは
+/// 永久に一致せず、本番の中身と無関係にこの検査だけが赤くなる）。行末の `\r` を落としてから
+/// 照合する。
+fn indent4_close_brace_at(rest: &str) -> Option<usize> {
+    let mut from = 0usize;
+    while let Some(rel) = rest[from..].find('\n') {
+        let nl = from + rel;
+        let line_start = nl + 1;
+        let line_end = rest[line_start..]
+            .find('\n')
+            .map(|i| line_start + i)
+            .unwrap_or(rest.len());
+        if rest[line_start..line_end].trim_end_matches('\r') == "    }" {
+            return Some(nl);
+        }
+        from = line_start;
+    }
+    None
+}
+
 /// `mod.rs` の本文から `try_tick_world` の関数本体だけを切り出す。
 fn try_tick_world_body(src: &str) -> &str {
     let at = src
         .find("pub fn try_tick_world")
         .expect("mod.rs に try_tick_world が無い");
     let rest = &src[at..];
-    let end = rest
-        .find("\n    }\n")
+    let end = indent4_close_brace_at(rest)
         .expect("try_tick_world の終端（インデント 4 の閉じ括弧）が見つからない");
     &rest[..end]
 }

@@ -89,6 +89,7 @@ pub fn real_connect(
 mod tests {
     use areka_parsers::charset::DefaultEncoding;
     use areka_parsers::package;
+    use temp_path_kit::TempPath;
 
     use super::*;
 
@@ -97,13 +98,14 @@ mod tests {
     ///
     /// `ghost/master/descript.txt` に `shiori,<name>` 行が有れば `file: Some(name)`、
     /// 無ければ `file: None` になる（`resolve` の実装どおり・推測しない）。
-    fn build_shiori_mount(shiori_line: Option<&str>) -> ShioriMount {
-        let unique = format!(
-            "areka-ghost-shiori-wiring-test-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        );
-        let root = std::env::temp_dir().join(unique);
+    ///
+    /// フィクスチャの置き場は共通窓口 `temp-path-kit` から受け取る。名前にプロセス識別子と
+    /// 連番が入るので**プロセス間でも一意**であり、破棄で中身ごと消える（従来の手組みの名前は
+    /// スレッド識別子までしか含まず、しかも後始末が無いため一時ディレクトリが残り続けていた）。
+    /// 返り値の [`TempPath`] を呼び出し側がテストの間だけ生かしておくこと。
+    fn build_shiori_mount(shiori_line: Option<&str>) -> (TempPath, ShioriMount) {
+        let temp = TempPath::new("ghost-shiori-wiring");
+        let root = temp.path().to_path_buf();
         let master_dir = root.join("ghost").join("master");
         std::fs::create_dir_all(&master_dir).expect("fixture master dir 作成に失敗");
         std::fs::create_dir_all(root.join("shell").join("master"))
@@ -118,7 +120,7 @@ mod tests {
 
         let mount = package::resolve(&root, DefaultEncoding::Ansi)
             .expect("fixture ghost_root の resolve に失敗");
-        mount.shiori
+        (temp, mount.shiori)
     }
 
     /// `shiori.file` が `None`（DLL ファイル名未解決）なら、ウィンドウ生成やプロセス起動を
@@ -130,7 +132,7 @@ mod tests {
     #[test]
     fn missing_shiori_file_fails_immediately_without_spawning() {
         let helper_exe = PathBuf::from("Z:\\definitely\\does\\not\\exist\\helper.exe");
-        let shiori = build_shiori_mount(None);
+        let (_temp, shiori) = build_shiori_mount(None);
         assert_eq!(
             shiori.file, None,
             "fixture は shiori 行なし＝file:None のはず"
@@ -158,7 +160,7 @@ mod tests {
     #[test]
     fn nonexistent_helper_exe_fails_via_spawn_step() {
         let helper_exe = PathBuf::from("Z:\\definitely\\does\\not\\exist\\helper.exe");
-        let shiori = build_shiori_mount(Some("whatever.dll"));
+        let (_temp, shiori) = build_shiori_mount(Some("whatever.dll"));
         assert_eq!(
             shiori.file,
             Some("whatever.dll".to_string()),

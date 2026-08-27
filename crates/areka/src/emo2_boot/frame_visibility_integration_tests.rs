@@ -26,7 +26,7 @@ use wintf::ecs::layout::Arrangement;
 use crate::emo2_boot::assets::build_boot_assets;
 use crate::emo2_boot::talk_lifecycle::TalkLifecycleSignal;
 use crate::input_events::balloon::BalloonWiring;
-use crate::placement::test_support::{LogEvent, capture_logs};
+use crate::placement::test_support::{ExpectField, LogEvent, capture_logs};
 
 use super::test_support::{dpi_world, size_of, zero_clock};
 use super::*;
@@ -113,7 +113,7 @@ fn visibility_lines(events: &[LogEvent]) -> Vec<&LogEvent> {
 fn explicit_lines(events: &[LogEvent]) -> Vec<&LogEvent> {
     visibility_lines(events)
         .into_iter()
-        .filter(|e| e.fields.get("trigger").map(String::as_str) == Some("\"explicit\""))
+        .filter(|e| e.field("trigger") == Some("\"explicit\""))
         .collect()
 }
 
@@ -216,8 +216,8 @@ fn visibility_phase_judges_the_state_left_by_this_frames_display_commands() {
         1,
         "外因の可視化が 1 行で記録される（次フレームの比較相手が可視に揃った証跡）: {events:?}"
     );
-    assert_eq!(explicit[0].field("scope"), "0");
-    assert_eq!(explicit[0].field("visible"), "true");
+    assert_eq!(explicit[0].expect_field("scope"), "0");
+    assert_eq!(explicit[0].expect_field("visible"), "true");
 
     // フレーム 3: 本フレームの drain が `\b[-1]` 相当の非表示を適用する。
     present_tx
@@ -235,8 +235,8 @@ fn visibility_phase_judges_the_state_left_by_this_frames_display_commands() {
         1,
         "指令適用後の実状態で判断していれば、同一フレームで非表示への変化を検出する（相を drain の前へ移すと 0 件になる）: {events:?}"
     );
-    assert_eq!(explicit[0].field("scope"), "0");
-    assert_eq!(explicit[0].field("visible"), "false");
+    assert_eq!(explicit[0].expect_field("scope"), "0");
+    assert_eq!(explicit[0].expect_field("visible"), "false");
     assert_eq!(
         wiring.presenter.target_visible(target),
         Some(false),

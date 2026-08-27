@@ -1,0 +1,10 @@
+[package]
+name = "temp-path-kit"
+workspace = "../.."
+description = "テスト用の一時パスをプロセス間で一意に組み立てる窓口をワークスペースで唯一定義するテスト専用の leaf crate（spec: areka-P0-test-cage-determinism）: プロセス識別子＋単調連番の命名と破棄時の再帰削除"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false

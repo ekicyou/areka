@@ -4,7 +4,7 @@ use wintf::ecs::pointer::Phase;
 use wintf::ecs::{WindowHandle, WindowPos};
 
 use super::super::diag::DESPAWNED_SKIP_TAG;
-use super::super::test_support::{LogEvent, capture_logs, expect_one};
+use super::super::test_support::{ExpectField, LogEvent, capture_logs, expect_one};
 use super::test_support::{
     CLAMP_TAG, DPIS, GUARD_TAG_PREFIX, NEAREST_TAG, UNRESOLVED_TAG, balloon_size, char_size,
     drag_end_event_at, drag_event_at, dragging_state, fake_handle, gap_center_x, grounded_y,
@@ -449,12 +449,12 @@ fn balloon_undetermined_size_holds_proposed_position_and_warns() {
         // どちらを落としても実機判定が反転するので、literal で固定する
         // （[[5.1 → 7.2 の申し送り＝判定語に使っているのに檻が無い型]] の再発防止）。
         assert_eq!(
-            warned.field("route"),
+            warned.expect_field("route"),
             "BalloonFollow",
             "dpi={dpi}: 判定不能行が窓種別を名乗っていない（§3.1 の振り分けが成立しない）"
         );
         assert_eq!(
-            warned.field("proposed"),
+            warned.expect_field("proposed"),
             format!("{bare:?}"),
             "dpi={dpi}: 判定不能行の `proposed` が提案位置と違う（§6.3 の判別子）"
         );
@@ -495,7 +495,7 @@ fn missing_monitor_snapshot_warns_for_both_windows_without_the_proposed_field() 
             2,
             "dpi={dpi}: 装置異常はキャラ窓とバルーン窓の双方から出るはず: {events:?}"
         );
-        let routes: Vec<&str> = warned.iter().map(|e| e.field("route")).collect();
+        let routes: Vec<&str> = warned.iter().map(|e| e.expect_field("route")).collect();
         assert!(
             routes.contains(&"Resnap") && routes.contains(&"BalloonFollow"),
             "dpi={dpi}: 2 行の route が {routes:?}（キャラ窓＋バルーン窓の対になっていない）"
@@ -507,9 +507,9 @@ fn missing_monitor_snapshot_warns_for_both_windows_without_the_proposed_field() 
                 "dpi={dpi}: 水準が warn でない"
             );
             assert!(
-                !e.fields.contains_key("proposed"),
+                e.field("proposed").is_none(),
                 "dpi={dpi}: 装置異常の行が `proposed` を持っている＝§6.3 の判別子が壊れる: {:?}",
-                e.fields
+                e.fields_map()
             );
         }
         assert!(

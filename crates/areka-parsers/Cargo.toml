@@ -12,3 +12,9 @@ publish = false
 [dependencies]
 encoding_rs = { workspace = true }
 tracing = { workspace = true }
+
+[dev-dependencies]
+# テスト用一時パスをプロセス間で一意に組み立てる窓口の唯一の定義元（test-cage-determinism）。
+# 依存 0（std のみ）の leaf・publish = false・テスト専用。本 crate は host-independent な
+# 純パーサ群なので、[dependencies] へは決して置かない。
+temp-path-kit = { path = "../temp-path-kit" }

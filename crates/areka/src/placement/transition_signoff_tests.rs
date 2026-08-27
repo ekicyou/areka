@@ -23,6 +23,8 @@
 use std::fs;
 use std::path::Path;
 
+use temp_path_kit::TempPath;
+
 use super::{Report, TRANSITION_LOG_ENV, judge_transition_log};
 
 /// 実機ログを読み、判定まで通す。
@@ -89,7 +91,8 @@ fn a_missing_environment_variable_is_an_error_not_an_empty_pass() {
 
 #[test]
 fn an_unreadable_path_is_an_error_not_an_empty_pass() {
-    let missing = std::env::temp_dir().join("areka-transition-signoff-does-not-exist.log");
+    let temp = TempPath::new("transition-signoff-missing");
+    let missing = temp.child("does-not-exist.log");
     assert!(!missing.exists(), "この檻は存在しないパスを前提にする");
     let error = signoff_log(missing.to_str()).expect_err("読めないパスは失敗");
     assert!(error.contains(TRANSITION_LOG_ENV), "{error}");
@@ -99,7 +102,8 @@ fn an_unreadable_path_is_an_error_not_an_empty_pass() {
 fn a_log_without_any_observation_line_is_an_error_not_an_empty_pass() {
     // 空のファイルと、観測行を 1 行も含まないファイルの両方。どちらも「違反 0 件」を
     // 作れてしまう入力なので、合格ではなく失敗として落ちなければならない（要件 8.5）。
-    let path = std::env::temp_dir().join("areka-transition-signoff-empty.log");
+    let temp = TempPath::new("transition-signoff-empty");
+    let path = temp.child("empty.log");
     for body in ["", "何も観測していないログ\n"] {
         fs::write(&path, body).expect("一時ファイルを書けるはず");
         let error = signoff_log(path.to_str()).expect_err("観測行 0 行は失敗");
@@ -111,7 +115,8 @@ fn a_log_without_any_observation_line_is_an_error_not_an_empty_pass() {
 #[test]
 fn a_directory_given_instead_of_a_log_is_an_error_not_an_empty_pass() {
     // 採取先のフォルダを渡す取り違えは実際に起こる。読めない理由が何であれ失敗にする。
-    let directory = std::env::temp_dir();
+    let temp = TempPath::new("transition-signoff-directory");
+    let directory = temp.path();
     assert!(directory.is_dir());
     let error = signoff_log(directory.to_str()).expect_err("フォルダは読めない");
     assert!(error.contains(TRANSITION_LOG_ENV), "{error}");
@@ -121,7 +126,8 @@ fn a_directory_given_instead_of_a_log_is_an_error_not_an_empty_pass() {
 fn the_runner_reads_the_same_pure_functions_as_the_deterministic_tests() {
     // 埋め込みログを一時ファイルへ落として入口を一巡させ、判定が決定論テストと同じ結論
     // （現行ログは決定論の上限を満たさない）を返すことを固定する。
-    let path = std::env::temp_dir().join("areka-transition-signoff-fixture.log");
+    let temp = TempPath::new("transition-signoff-fixture");
+    let path = temp.child("fixture.log");
     fs::write(
         &path,
         super::transition_judge_reobservation_tests::REOBSERVATION_TRANSITION_1,

@@ -1,0 +1,1338 @@
+
+running 30 tests
+test event::tests::event_without_fields_has_no_trailing_space ... ok
+test event::tests::duplicate_field_names_resolve_to_the_last_occurrence ... ok
+test capture::tests::captures_trace_level_events ... FAILED
+test event::tests::missing_field_is_none ... FAILED
+test capture::tests::ensure_interest_probes_is_idempotent_across_threads ... FAILED
+test event::tests::capture_lines_does_not_leak_the_sentinel ... FAILED
+test event::tests::capture_lines_returns_formatted_lines_and_the_closure_result ... FAILED
+test event::tests::count_levels_counts_each_level ... FAILED
+test event::tests::level_is_rendered_with_display_not_debug ... FAILED
+test capture::tests::declares_failure_when_the_sentinel_is_not_captured - should panic ... FAILED
+test event::tests::field_str_returns_the_raw_value_and_field_returns_the_debug_representation ... FAILED
+test event::tests::count_levels_counts_zero_when_nothing_is_emitted_but_the_window_is_live ... FAILED
+test global::tests::installs_once_and_the_second_call_returns_the_same_buffer ... FAILED
+test event::tests::field_names_sorted_is_ascending_and_includes_message ... FAILED
+test event::tests::message_is_the_body_and_is_empty_when_absent ... FAILED
+test capture::tests::extracts_events_even_while_the_shared_sink_is_still_held ... FAILED
+test probe::tests::establishing_the_probes_is_idempotent ... FAILED
+test event::tests::field_str_is_none_for_values_that_did_not_come_through_record_str ... FAILED
+test event::tests::level_fields_matches_verbatim_fixture ... FAILED
+test capture::tests::sentinel_is_removed_before_returning ... FAILED
+test event::tests::level_target_fields_matches_verbatim_fixture ... FAILED
+test probe::tests::the_decision_agrees_with_what_the_environment_actually_says ... FAILED
+test event::tests::format_line_is_byte_identical_to_current_formatting_code ... FAILED
+test global::tests::fails_explicitly_when_a_different_global_is_already_installed - should panic ... FAILED
+test capture::tests::captures_event_whose_callsite_another_thread_registered_before_the_window ... FAILED
+test event::tests::fields_map_is_name_to_debug_representation ... FAILED
+test probe::tests::the_switch_variable_lives_in_the_workspace_namespace ... ok
+test probe::tests::the_environment_is_read_exactly_once_for_the_whole_process ... FAILED
+test capture::tests::captures_event_whose_callsite_another_thread_registers_inside_the_window ... FAILED
+test capture::tests::does_not_capture_events_from_outside_the_window_or_other_threads ... FAILED
+
+failures:
+
+---- capture::tests::captures_trace_level_events stdout ----
+
+thread 'capture::tests::captures_trace_level_events' (30004) panicked at crates\log-capture-kit\src\probe.rs:133:18:
+AREKA_LOG_CAPTURE_PROBES の値が不正: "typo"。`on`（常駐する＝未設定と同じ）か `off`（常駐しない＝測定の被験側）のいずれかを指定すること
+stack backtrace:
+   0: std::panicking::panic_handler
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\panicking.rs:679
+   1: core::panicking::panic_fmt
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:80
+   2: log_capture_kit::probe::probes_requested
+             at .\src\probe.rs:133
+   3: log_capture_kit::probe::probes::closure$0
+             at .\src\probe.rs:162
+   4: std::sync::once_lock::impl$0::get_or_init::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,log_capture_kit::probe::probes::closure_env$0>
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+   5: std::sync::once_lock::impl$0::initialize::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_env$0<enum2$<core::option::Option<tuple$<tr
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:543
+   6: std::sync::once::impl$2::call_once_force::closure$0<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_i
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   7: std::sys::sync::once::futex::Once::call
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\sys\sync\once\futex.rs:183
+   8: std::sync::once::Once::call_once_force<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   9: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::initialize<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispa
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:542
+  10: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_try_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:410
+  11: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Disp
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+  12: log_capture_kit::probe::probes
+             at .\src\probe.rs:161
+  13: log_capture_kit::probe::ensure_interest_probes
+             at .\src\probe.rs:186
+  14: log_capture_kit::capture::run_with_subscriber<log_capture_kit::capture::CaptureSubscriber,tuple$<>,void (*)()>
+             at .\src\capture.rs:64
+  15: log_capture_kit::capture::capture<tuple$<>,void (*)()>
+             at .\src\capture.rs:102
+  16: log_capture_kit::capture::tests::captures_trace_level_events
+             at .\src\capture_tests.rs:147
+  17: log_capture_kit::capture::tests::captures_trace_level_events::closure$0
+             at .\src\capture_tests.rs:146
+  18: core::ops::function::FnOnce::call_once<log_capture_kit::capture::tests::captures_trace_level_events::closure_env$0,tuple$<> >
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\core\src\ops\function.rs:250
+  19: core::ops::function::FnOnce::call_once
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\ops\function.rs:250
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+---- event::tests::missing_field_is_none stdout ----
+
+thread 'event::tests::missing_field_is_none' (1328) panicked at crates\log-capture-kit\src\probe.rs:133:18:
+AREKA_LOG_CAPTURE_PROBES の値が不正: "typo"。`on`（常駐する＝未設定と同じ）か `off`（常駐しない＝測定の被験側）のいずれかを指定すること
+stack backtrace:
+   0: std::panicking::panic_handler
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\panicking.rs:679
+   1: core::panicking::panic_fmt
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:80
+   2: log_capture_kit::probe::probes_requested
+             at .\src\probe.rs:133
+   3: log_capture_kit::probe::probes::closure$0
+             at .\src\probe.rs:162
+   4: std::sync::once_lock::impl$0::get_or_init::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,log_capture_kit::probe::probes::closure_env$0>
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+   5: std::sync::once_lock::impl$0::initialize::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_env$0<enum2$<core::option::Option<tuple$<tr
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:543
+   6: std::sync::once::impl$2::call_once_force::closure$0<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_i
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   7: std::sys::sync::once::futex::Once::call
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\sys\sync\once\futex.rs:183
+   8: std::sync::once::Once::call_once_force<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   9: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::initialize<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispa
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:542
+  10: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_try_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:410
+  11: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Disp
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+  12: log_capture_kit::probe::probes
+             at .\src\probe.rs:161
+  13: log_capture_kit::probe::ensure_interest_probes
+             at .\src\probe.rs:186
+  14: log_capture_kit::capture::run_with_subscriber<log_capture_kit::event::tests::LegacyLineFormatting,tuple$<>,void (*)()>
+             at .\src\capture.rs:64
+  15: log_capture_kit::event::tests::run_fixture
+             at .\src\event_tests.rs:151
+  16: log_capture_kit::event::tests::missing_field_is_none
+             at .\src\event_tests.rs:375
+  17: log_capture_kit::event::tests::missing_field_is_none::closure$0
+             at .\src\event_tests.rs:374
+  18: core::ops::function::FnOnce::call_once<log_capture_kit::event::tests::missing_field_is_none::closure_env$0,tuple$<> >
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\core\src\ops\function.rs:250
+  19: core::ops::function::FnOnce::call_once
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\ops\function.rs:250
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+---- capture::tests::ensure_interest_probes_is_idempotent_across_threads stdout ----
+
+thread 'capture::tests::ensure_interest_probes_is_idempotent_across_threads' (25980) panicked at crates\log-capture-kit\src\probe.rs:133:18:
+AREKA_LOG_CAPTURE_PROBES の値が不正: "typo"。`on`（常駐する＝未設定と同じ）か `off`（常駐しない＝測定の被験側）のいずれかを指定すること
+stack backtrace:
+   0: std::panicking::panic_handler
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\panicking.rs:679
+   1: core::panicking::panic_fmt
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:80
+   2: log_capture_kit::probe::probes_requested
+             at .\src\probe.rs:133
+   3: log_capture_kit::probe::probes::closure$0
+             at .\src\probe.rs:162
+   4: std::sync::once_lock::impl$0::get_or_init::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,log_capture_kit::probe::probes::closure_env$0>
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+   5: std::sync::once_lock::impl$0::initialize::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_env$0<enum2$<core::option::Option<tuple$<tr
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:543
+   6: std::sync::once::impl$2::call_once_force::closure$0<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_i
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   7: std::sys::sync::once::futex::Once::call
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\sys\sync\once\futex.rs:183
+   8: std::sync::once::Once::call_once_force<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   9: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::initialize<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispa
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:542
+  10: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_try_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:410
+  11: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Disp
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+  12: log_capture_kit::probe::probes
+             at .\src\probe.rs:161
+  13: log_capture_kit::probe::ensure_interest_probes
+             at .\src\probe.rs:186
+  14: log_capture_kit::capture::tests::ensure_interest_probes_is_idempotent_across_threads
+             at .\src\capture_tests.rs:234
+  15: log_capture_kit::capture::tests::ensure_interest_probes_is_idempotent_across_threads::closure$0
+             at .\src\capture_tests.rs:231
+  16: core::ops::function::FnOnce::call_once<log_capture_kit::capture::tests::ensure_interest_probes_is_idempotent_across_threads::closure_env$0,tuple$<> >
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\core\src\ops\function.rs:250
+  17: core::ops::function::FnOnce::call_once
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\ops\function.rs:250
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+---- event::tests::capture_lines_does_not_leak_the_sentinel stdout ----
+
+thread 'event::tests::capture_lines_does_not_leak_the_sentinel' (35420) panicked at crates\log-capture-kit\src\probe.rs:133:18:
+AREKA_LOG_CAPTURE_PROBES の値が不正: "typo"。`on`（常駐する＝未設定と同じ）か `off`（常駐しない＝測定の被験側）のいずれかを指定すること
+stack backtrace:
+   0: std::panicking::panic_handler
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\panicking.rs:679
+   1: core::panicking::panic_fmt
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:80
+   2: log_capture_kit::probe::probes_requested
+             at .\src\probe.rs:133
+   3: log_capture_kit::probe::probes::closure$0
+             at .\src\probe.rs:162
+   4: std::sync::once_lock::impl$0::get_or_init::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,log_capture_kit::probe::probes::closure_env$0>
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+   5: std::sync::once_lock::impl$0::initialize::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_env$0<enum2$<core::option::Option<tuple$<tr
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:543
+   6: std::sync::once::impl$2::call_once_force::closure$0<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_i
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   7: std::sys::sync::once::futex::Once::call
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\sys\sync\once\futex.rs:183
+   8: std::sync::once::Once::call_once_force<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   9: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::initialize<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispa
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:542
+  10: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_try_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:410
+  11: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Disp
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+  12: log_capture_kit::probe::probes
+             at .\src\probe.rs:161
+  13: log_capture_kit::probe::ensure_interest_probes
+             at .\src\probe.rs:186
+  14: log_capture_kit::capture::run_with_subscriber<log_capture_kit::capture::CaptureSubscriber,tuple$<>,log_capture_kit::event::tests::capture_lines_does_not_leak_the_sentinel::closure_env$0>
+             at .\src\capture.rs:64
+  15: log_capture_kit::capture::capture<tuple$<>,log_capture_kit::event::tests::capture_lines_does_not_leak_the_sentinel::closure_env$0>
+             at .\src\capture.rs:102
+  16: log_capture_kit::event::capture_lines<tuple$<>,log_capture_kit::event::tests::capture_lines_does_not_leak_the_sentinel::closure_env$0>
+             at .\src\event.rs:173
+  17: log_capture_kit::event::tests::capture_lines_does_not_leak_the_sentinel
+             at .\src\event_tests.rs:276
+  18: log_capture_kit::event::tests::capture_lines_does_not_leak_the_sentinel::closure$0
+             at .\src\event_tests.rs:275
+  19: core::ops::function::FnOnce::call_once<log_capture_kit::event::tests::capture_lines_does_not_leak_the_sentinel::closure_env$0,tuple$<> >
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\core\src\ops\function.rs:250
+  20: core::ops::function::FnOnce::call_once
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\ops\function.rs:250
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+---- event::tests::capture_lines_returns_formatted_lines_and_the_closure_result stdout ----
+
+thread 'event::tests::capture_lines_returns_formatted_lines_and_the_closure_result' (17896) panicked at crates\log-capture-kit\src\probe.rs:133:18:
+AREKA_LOG_CAPTURE_PROBES の値が不正: "typo"。`on`（常駐する＝未設定と同じ）か `off`（常駐しない＝測定の被験側）のいずれかを指定すること
+stack backtrace:
+   0: std::panicking::panic_handler
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\panicking.rs:679
+   1: core::panicking::panic_fmt
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:80
+   2: log_capture_kit::probe::probes_requested
+             at .\src\probe.rs:133
+   3: log_capture_kit::probe::probes::closure$0
+             at .\src\probe.rs:162
+   4: std::sync::once_lock::impl$0::get_or_init::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,log_capture_kit::probe::probes::closure_env$0>
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+   5: std::sync::once_lock::impl$0::initialize::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_env$0<enum2$<core::option::Option<tuple$<tr
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:543
+   6: std::sync::once::impl$2::call_once_force::closure$0<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_i
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   7: std::sys::sync::once::futex::Once::call
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\sys\sync\once\futex.rs:183
+   8: std::sync::once::Once::call_once_force<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   9: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::initialize<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispa
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:542
+  10: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_try_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:410
+  11: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Disp
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+  12: log_capture_kit::probe::probes
+             at .\src\probe.rs:161
+  13: log_capture_kit::probe::ensure_interest_probes
+             at .\src\probe.rs:186
+  14: log_capture_kit::capture::run_with_subscriber<log_capture_kit::capture::CaptureSubscriber,i32,log_capture_kit::event::tests::capture_lines_returns_formatted_lines_and_the_closure_result::closure_env$0>
+             at .\src\capture.rs:64
+  15: log_capture_kit::capture::capture<i32,log_capture_kit::event::tests::capture_lines_returns_formatted_lines_and_the_closure_result::closure_env$0>
+             at .\src\capture.rs:102
+  16: log_capture_kit::event::capture_lines<i32,log_capture_kit::event::tests::capture_lines_returns_formatted_lines_and_the_closure_result::closure_env$0>
+             at .\src\event.rs:173
+  17: log_capture_kit::event::tests::capture_lines_returns_formatted_lines_and_the_closure_result
+             at .\src\event_tests.rs:260
+  18: log_capture_kit::event::tests::capture_lines_returns_formatted_lines_and_the_closure_result::closure$0
+             at .\src\event_tests.rs:259
+  19: core::ops::function::FnOnce::call_once<log_capture_kit::event::tests::capture_lines_returns_formatted_lines_and_the_closure_result::closure_env$0,tuple$<> >
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\core\src\ops\function.rs:250
+  20: core::ops::function::FnOnce::call_once
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\ops\function.rs:250
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+---- event::tests::count_levels_counts_each_level stdout ----
+
+thread 'event::tests::count_levels_counts_each_level' (13240) panicked at crates\log-capture-kit\src\probe.rs:133:18:
+AREKA_LOG_CAPTURE_PROBES の値が不正: "typo"。`on`（常駐する＝未設定と同じ）か `off`（常駐しない＝測定の被験側）のいずれかを指定すること
+stack backtrace:
+   0: std::panicking::panic_handler
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\panicking.rs:679
+   1: core::panicking::panic_fmt
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:80
+   2: log_capture_kit::probe::probes_requested
+             at .\src\probe.rs:133
+   3: log_capture_kit::probe::probes::closure$0
+             at .\src\probe.rs:162
+   4: std::sync::once_lock::impl$0::get_or_init::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,log_capture_kit::probe::probes::closure_env$0>
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+   5: std::sync::once_lock::impl$0::initialize::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_env$0<enum2$<core::option::Option<tuple$<tr
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:543
+   6: std::sync::once::impl$2::call_once_force::closure$0<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_i
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   7: std::sys::sync::once::futex::Once::call
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\sys\sync\once\futex.rs:183
+   8: std::sync::once::Once::call_once_force<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   9: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::initialize<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispa
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:542
+  10: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_try_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:410
+  11: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Disp
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+  12: log_capture_kit::probe::probes
+             at .\src\probe.rs:161
+  13: log_capture_kit::probe::ensure_interest_probes
+             at .\src\probe.rs:186
+  14: log_capture_kit::capture::run_with_subscriber<log_capture_kit::capture::CaptureSubscriber,ref$<str$>,log_capture_kit::event::tests::count_levels_counts_each_level::closure_env$0>
+             at .\src\capture.rs:64
+  15: log_capture_kit::capture::capture<ref$<str$>,log_capture_kit::event::tests::count_levels_counts_each_level::closure_env$0>
+             at .\src\capture.rs:102
+  16: log_capture_kit::event::count_levels<ref$<str$>,log_capture_kit::event::tests::count_levels_counts_each_level::closure_env$0>
+             at .\src\event.rs:201
+  17: log_capture_kit::event::tests::count_levels_counts_each_level
+             at .\src\event_tests.rs:291
+  18: log_capture_kit::event::tests::count_levels_counts_each_level::closure$0
+             at .\src\event_tests.rs:290
+  19: core::ops::function::FnOnce::call_once<log_capture_kit::event::tests::count_levels_counts_each_level::closure_env$0,tuple$<> >
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\core\src\ops\function.rs:250
+  20: core::ops::function::FnOnce::call_once
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\ops\function.rs:250
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+---- event::tests::level_is_rendered_with_display_not_debug stdout ----
+
+thread 'event::tests::level_is_rendered_with_display_not_debug' (8928) panicked at crates\log-capture-kit\src\probe.rs:133:18:
+AREKA_LOG_CAPTURE_PROBES の値が不正: "typo"。`on`（常駐する＝未設定と同じ）か `off`（常駐しない＝測定の被験側）のいずれかを指定すること
+stack backtrace:
+   0: std::panicking::panic_handler
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\panicking.rs:679
+   1: core::panicking::panic_fmt
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:80
+   2: log_capture_kit::probe::probes_requested
+             at .\src\probe.rs:133
+   3: log_capture_kit::probe::probes::closure$0
+             at .\src\probe.rs:162
+   4: std::sync::once_lock::impl$0::get_or_init::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,log_capture_kit::probe::probes::closure_env$0>
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+   5: std::sync::once_lock::impl$0::initialize::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_env$0<enum2$<core::option::Option<tuple$<tr
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:543
+   6: std::sync::once::impl$2::call_once_force::closure$0<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_i
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   7: std::sys::sync::once::futex::Once::call
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\sys\sync\once\futex.rs:183
+   8: std::sync::once::Once::call_once_force<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   9: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::initialize<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispa
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:542
+  10: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_try_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:410
+  11: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Disp
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+  12: log_capture_kit::probe::probes
+             at .\src\probe.rs:161
+  13: log_capture_kit::probe::ensure_interest_probes
+             at .\src\probe.rs:186
+  14: log_capture_kit::capture::run_with_subscriber<log_capture_kit::event::tests::LegacyLineFormatting,tuple$<>,void (*)()>
+             at .\src\capture.rs:64
+  15: log_capture_kit::event::tests::run_fixture
+             at .\src\event_tests.rs:151
+  16: log_capture_kit::event::tests::level_is_rendered_with_display_not_debug
+             at .\src\event_tests.rs:232
+  17: log_capture_kit::event::tests::level_is_rendered_with_display_not_debug::closure$0
+             at .\src\event_tests.rs:231
+  18: core::ops::function::FnOnce::call_once<log_capture_kit::event::tests::level_is_rendered_with_display_not_debug::closure_env$0,tuple$<> >
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\core\src\ops\function.rs:250
+  19: core::ops::function::FnOnce::call_once
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\ops\function.rs:250
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+---- capture::tests::declares_failure_when_the_sentinel_is_not_captured stdout ----
+
+thread 'capture::tests::declares_failure_when_the_sentinel_is_not_captured' (34312) panicked at crates\log-capture-kit\src\probe.rs:133:18:
+AREKA_LOG_CAPTURE_PROBES の値が不正: "typo"。`on`（常駐する＝未設定と同じ）か `off`（常駐しない＝測定の被験側）のいずれかを指定すること
+stack backtrace:
+   0: std::panicking::panic_handler
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\panicking.rs:679
+   1: core::panicking::panic_fmt
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:80
+   2: log_capture_kit::probe::probes_requested
+             at .\src\probe.rs:133
+   3: log_capture_kit::probe::probes::closure$0
+             at .\src\probe.rs:162
+   4: std::sync::once_lock::impl$0::get_or_init::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,log_capture_kit::probe::probes::closure_env$0>
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+   5: std::sync::once_lock::impl$0::initialize::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_env$0<enum2$<core::option::Option<tuple$<tr
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:543
+   6: std::sync::once::impl$2::call_once_force::closure$0<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_i
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   7: std::sys::sync::once::futex::Once::call
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\sys\sync\once\futex.rs:183
+   8: std::sync::once::Once::call_once_force<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   9: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::initialize<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispa
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:542
+  10: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_try_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:410
+  11: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Disp
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+  12: log_capture_kit::probe::probes
+             at .\src\probe.rs:161
+  13: log_capture_kit::probe::ensure_interest_probes
+             at .\src\probe.rs:186
+  14: log_capture_kit::capture::run_with_subscriber<log_capture_kit::capture::tests::SentinelDroppingSubscriber,tuple$<>,log_capture_kit::capture::tests::declares_failure_when_the_sentinel_is_not_captured::closure_env$0>
+             at .\src\capture.rs:64
+  15: log_capture_kit::capture::tests::declares_failure_when_the_sentinel_is_not_captured
+             at .\src\capture_tests.rs:137
+  16: log_capture_kit::capture::tests::declares_failure_when_the_sentinel_is_not_captured::closure$0
+             at .\src\capture_tests.rs:134
+  17: core::ops::function::FnOnce::call_once<log_capture_kit::capture::tests::declares_failure_when_the_sentinel_is_not_captured::closure_env$0,tuple$<> >
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\core\src\ops\function.rs:250
+  18: core::ops::function::FnOnce::call_once
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\ops\function.rs:250
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+note: panic did not contain expected string
+      panic message: "AREKA_LOG_CAPTURE_PROBES の値が不正: \"typo\"。`on`（常駐する＝未設定と同じ）か `off`（常駐しない＝測定の被験側）のいずれかを指定すること"
+ expected substring: "対照イベント"
+---- event::tests::field_str_returns_the_raw_value_and_field_returns_the_debug_representation stdout ----
+
+thread 'event::tests::field_str_returns_the_raw_value_and_field_returns_the_debug_representation' (35768) panicked at crates\log-capture-kit\src\probe.rs:133:18:
+AREKA_LOG_CAPTURE_PROBES の値が不正: "typo"。`on`（常駐する＝未設定と同じ）か `off`（常駐しない＝測定の被験側）のいずれかを指定すること
+stack backtrace:
+   0: std::panicking::panic_handler
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\panicking.rs:679
+   1: core::panicking::panic_fmt
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:80
+   2: log_capture_kit::probe::probes_requested
+             at .\src\probe.rs:133
+   3: log_capture_kit::probe::probes::closure$0
+             at .\src\probe.rs:162
+   4: std::sync::once_lock::impl$0::get_or_init::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,log_capture_kit::probe::probes::closure_env$0>
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+   5: std::sync::once_lock::impl$0::initialize::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_env$0<enum2$<core::option::Option<tuple$<tr
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:543
+   6: std::sync::once::impl$2::call_once_force::closure$0<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_i
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   7: std::sys::sync::once::futex::Once::call
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\sys\sync\once\futex.rs:183
+   8: std::sync::once::Once::call_once_force<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   9: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::initialize<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispa
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:542
+  10: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_try_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:410
+  11: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Disp
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+  12: log_capture_kit::probe::probes
+             at .\src\probe.rs:161
+  13: log_capture_kit::probe::ensure_interest_probes
+             at .\src\probe.rs:186
+  14: log_capture_kit::capture::run_with_subscriber<log_capture_kit::event::tests::LegacyLineFormatting,tuple$<>,void (*)()>
+             at .\src\capture.rs:64
+  15: log_capture_kit::event::tests::run_fixture
+             at .\src\event_tests.rs:151
+  16: log_capture_kit::event::tests::field_str_returns_the_raw_value_and_field_returns_the_debug_representation
+             at .\src\event_tests.rs:329
+  17: log_capture_kit::event::tests::field_str_returns_the_raw_value_and_field_returns_the_debug_representation::closure$0
+             at .\src\event_tests.rs:328
+  18: core::ops::function::FnOnce::call_once<log_capture_kit::event::tests::field_str_returns_the_raw_value_and_field_returns_the_debug_representation::closure_env$0,tuple$<> >
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\core\src\ops\function.rs:250
+  19: core::ops::function::FnOnce::call_once
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\ops\function.rs:250
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+---- event::tests::count_levels_counts_zero_when_nothing_is_emitted_but_the_window_is_live stdout ----
+
+thread 'event::tests::count_levels_counts_zero_when_nothing_is_emitted_but_the_window_is_live' (7620) panicked at crates\log-capture-kit\src\probe.rs:133:18:
+AREKA_LOG_CAPTURE_PROBES の値が不正: "typo"。`on`（常駐する＝未設定と同じ）か `off`（常駐しない＝測定の被験側）のいずれかを指定すること
+stack backtrace:
+   0: std::panicking::panic_handler
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\panicking.rs:679
+   1: core::panicking::panic_fmt
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:80
+   2: log_capture_kit::probe::probes_requested
+             at .\src\probe.rs:133
+   3: log_capture_kit::probe::probes::closure$0
+             at .\src\probe.rs:162
+   4: std::sync::once_lock::impl$0::get_or_init::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,log_capture_kit::probe::probes::closure_env$0>
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+   5: std::sync::once_lock::impl$0::initialize::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_env$0<enum2$<core::option::Option<tuple$<tr
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:543
+   6: std::sync::once::impl$2::call_once_force::closure$0<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_i
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   7: std::sys::sync::once::futex::Once::call
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\sys\sync\once\futex.rs:183
+   8: std::sync::once::Once::call_once_force<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   9: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::initialize<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispa
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:542
+  10: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_try_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:410
+  11: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Disp
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+  12: log_capture_kit::probe::probes
+             at .\src\probe.rs:161
+  13: log_capture_kit::probe::ensure_interest_probes
+             at .\src\probe.rs:186
+  14: log_capture_kit::capture::run_with_subscriber<log_capture_kit::capture::CaptureSubscriber,tuple$<>,log_capture_kit::event::tests::count_levels_counts_zero_when_nothing_is_emitted_but_the_window_is_live::closure_env$0>
+             at .\src\capture.rs:64
+  15: log_capture_kit::capture::capture<tuple$<>,log_capture_kit::event::tests::count_levels_counts_zero_when_nothing_is_emitted_but_the_window_is_live::closure_env$0>
+             at .\src\capture.rs:102
+  16: log_capture_kit::event::count_levels<tuple$<>,log_capture_kit::event::tests::count_levels_counts_zero_when_nothing_is_emitted_but_the_window_is_live::closure_env$0>
+             at .\src\event.rs:201
+  17: log_capture_kit::event::tests::count_levels_counts_zero_when_nothing_is_emitted_but_the_window_is_live
+             at .\src\event_tests.rs:318
+  18: log_capture_kit::event::tests::count_levels_counts_zero_when_nothing_is_emitted_but_the_window_is_live::closure$0
+             at .\src\event_tests.rs:316
+  19: core::ops::function::FnOnce::call_once<log_capture_kit::event::tests::count_levels_counts_zero_when_nothing_is_emitted_but_the_window_is_live::closure_env$0,tuple$<> >
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\core\src\ops\function.rs:250
+  20: core::ops::function::FnOnce::call_once
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\ops\function.rs:250
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+---- global::tests::installs_once_and_the_second_call_returns_the_same_buffer stdout ----
+
+thread 'global::tests::installs_once_and_the_second_call_returns_the_same_buffer' (23636) panicked at crates\log-capture-kit\src\probe.rs:133:18:
+AREKA_LOG_CAPTURE_PROBES の値が不正: "typo"。`on`（常駐する＝未設定と同じ）か `off`（常駐しない＝測定の被験側）のいずれかを指定すること
+stack backtrace:
+   0: std::panicking::panic_handler
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\panicking.rs:679
+   1: core::panicking::panic_fmt
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:80
+   2: log_capture_kit::probe::probes_requested
+             at .\src\probe.rs:133
+   3: log_capture_kit::probe::probes::closure$0
+             at .\src\probe.rs:162
+   4: std::sync::once_lock::impl$0::get_or_init::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,log_capture_kit::probe::probes::closure_env$0>
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+   5: std::sync::once_lock::impl$0::initialize::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_env$0<enum2$<core::option::Option<tuple$<tr
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:543
+   6: std::sync::once::impl$2::call_once_force::closure$0<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_i
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   7: std::sys::sync::once::futex::Once::call
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\sys\sync\once\futex.rs:183
+   8: std::sync::once::Once::call_once_force<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   9: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::initialize<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispa
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:542
+  10: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_try_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:410
+  11: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Disp
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+  12: log_capture_kit::probe::probes
+             at .\src\probe.rs:161
+  13: log_capture_kit::probe::ensure_interest_probes
+             at .\src\probe.rs:186
+  14: log_capture_kit::global::install_into::closure$0<tracing_core::dispatcher::SetGlobalDefaultError,log_capture_kit::global::install_global_capture_all::closure_env$0>
+             at .\src\global.rs:81
+  15: std::sync::once_lock::impl$0::get_or_init::closure$0<alloc::sync::Arc<std::sync::poison::mutex::Mutex<alloc::vec::Vec<log_capture_kit::event::CapturedEvent,alloc::alloc::Global> >,alloc::alloc::Global>,log_capture_kit::global::install_into::closure_env$0<t
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+  16: std::sync::once_lock::impl$0::initialize::closure$0<alloc::sync::Arc<std::sync::poison::mutex::Mutex<alloc::vec::Vec<log_capture_kit::event::CapturedEvent,alloc::alloc::Global> >,alloc::alloc::Global>,std::sync::once_lock::impl$0::get_or_init::closure_env$
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:543
+  17: std::sync::once::impl$2::call_once_force::closure$0<std::sync::once_lock::impl$0::initialize::closure_env$0<alloc::sync::Arc<std::sync::poison::mutex::Mutex<alloc::vec::Vec<log_capture_kit::event::CapturedEvent,alloc::alloc::Global> >,alloc::alloc::Global>
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+  18: std::sys::sync::once::futex::Once::call
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\sys\sync\once\futex.rs:183
+  19: std::sync::once::Once::call_once_force<std::sync::once_lock::impl$0::initialize::closure_env$0<alloc::sync::Arc<std::sync::poison::mutex::Mutex<alloc::vec::Vec<log_capture_kit::event::CapturedEvent,alloc::alloc::Global> >,alloc::alloc::Global>,std::sync::o
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+  20: std::sync::once_lock::OnceLock<alloc::sync::Arc<std::sync::poison::mutex::Mutex<alloc::vec::Vec<log_capture_kit::event::CapturedEvent,alloc::alloc::Global> >,alloc::alloc::Global> >::initialize<alloc::sync::Arc<std::sync::poison::mutex::Mutex<alloc::vec::V
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:542
+  21: std::sync::once_lock::OnceLock<alloc::sync::Arc<std::sync::poison::mutex::Mutex<alloc::vec::Vec<log_capture_kit::event::CapturedEvent,alloc::alloc::Global> >,alloc::alloc::Global> >::get_or_try_init<alloc::sync::Arc<std::sync::poison::mutex::Mutex<alloc::v
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:410
+  22: std::sync::once_lock::OnceLock<alloc::sync::Arc<std::sync::poison::mutex::Mutex<alloc::vec::Vec<log_capture_kit::event::CapturedEvent,alloc::alloc::Global> >,alloc::alloc::Global> >::get_or_init<alloc::sync::Arc<std::sync::poison::mutex::Mutex<alloc::vec::
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+  23: log_capture_kit::global::install_into<tracing_core::dispatcher::SetGlobalDefaultError,log_capture_kit::global::install_global_capture_all::closure_env$0>
+             at .\src\global.rs:79
+  24: log_capture_kit::global::install_global_capture_all
+             at .\src\global.rs:65
+  25: log_capture_kit::global::tests::installs_once_and_the_second_call_returns_the_same_buffer
+             at .\src\global_tests.rs:36
+  26: log_capture_kit::global::tests::installs_once_and_the_second_call_returns_the_same_buffer::closure$0
+             at .\src\global_tests.rs:35
+  27: core::ops::function::FnOnce::call_once<log_capture_kit::global::tests::installs_once_and_the_second_call_returns_the_same_buffer::closure_env$0,tuple$<> >
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\core\src\ops\function.rs:250
+  28: core::ops::function::FnOnce::call_once
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\ops\function.rs:250
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+---- event::tests::field_names_sorted_is_ascending_and_includes_message stdout ----
+
+thread 'event::tests::field_names_sorted_is_ascending_and_includes_message' (11484) panicked at crates\log-capture-kit\src\probe.rs:133:18:
+AREKA_LOG_CAPTURE_PROBES の値が不正: "typo"。`on`（常駐する＝未設定と同じ）か `off`（常駐しない＝測定の被験側）のいずれかを指定すること
+stack backtrace:
+   0: std::panicking::panic_handler
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\panicking.rs:679
+   1: core::panicking::panic_fmt
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:80
+   2: log_capture_kit::probe::probes_requested
+             at .\src\probe.rs:133
+   3: log_capture_kit::probe::probes::closure$0
+             at .\src\probe.rs:162
+   4: std::sync::once_lock::impl$0::get_or_init::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,log_capture_kit::probe::probes::closure_env$0>
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+   5: std::sync::once_lock::impl$0::initialize::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_env$0<enum2$<core::option::Option<tuple$<tr
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:543
+   6: std::sync::once::impl$2::call_once_force::closure$0<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_i
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   7: std::sys::sync::once::futex::Once::call
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\sys\sync\once\futex.rs:183
+   8: std::sync::once::Once::call_once_force<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   9: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::initialize<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispa
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:542
+  10: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_try_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:410
+  11: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Disp
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+  12: log_capture_kit::probe::probes
+             at .\src\probe.rs:161
+  13: log_capture_kit::probe::ensure_interest_probes
+             at .\src\probe.rs:186
+  14: log_capture_kit::capture::run_with_subscriber<log_capture_kit::event::tests::LegacyLineFormatting,tuple$<>,void (*)()>
+             at .\src\capture.rs:64
+  15: log_capture_kit::event::tests::run_fixture
+             at .\src\event_tests.rs:151
+  16: log_capture_kit::event::tests::field_names_sorted_is_ascending_and_includes_message
+             at .\src\event_tests.rs:385
+  17: log_capture_kit::event::tests::field_names_sorted_is_ascending_and_includes_message::closure$0
+             at .\src\event_tests.rs:384
+  18: core::ops::function::FnOnce::call_once<log_capture_kit::event::tests::field_names_sorted_is_ascending_and_includes_message::closure_env$0,tuple$<> >
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\core\src\ops\function.rs:250
+  19: core::ops::function::FnOnce::call_once
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\ops\function.rs:250
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+---- event::tests::message_is_the_body_and_is_empty_when_absent stdout ----
+
+thread 'event::tests::message_is_the_body_and_is_empty_when_absent' (7612) panicked at crates\log-capture-kit\src\probe.rs:133:18:
+AREKA_LOG_CAPTURE_PROBES の値が不正: "typo"。`on`（常駐する＝未設定と同じ）か `off`（常駐しない＝測定の被験側）のいずれかを指定すること
+stack backtrace:
+   0: std::panicking::panic_handler
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\panicking.rs:679
+   1: core::panicking::panic_fmt
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:80
+   2: log_capture_kit::probe::probes_requested
+             at .\src\probe.rs:133
+   3: log_capture_kit::probe::probes::closure$0
+             at .\src\probe.rs:162
+   4: std::sync::once_lock::impl$0::get_or_init::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,log_capture_kit::probe::probes::closure_env$0>
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+   5: std::sync::once_lock::impl$0::initialize::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_env$0<enum2$<core::option::Option<tuple$<tr
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:543
+   6: std::sync::once::impl$2::call_once_force::closure$0<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_i
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   7: std::sys::sync::once::futex::Once::call
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\sys\sync\once\futex.rs:183
+   8: std::sync::once::Once::call_once_force<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   9: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::initialize<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispa
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:542
+  10: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_try_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:410
+  11: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Disp
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+  12: log_capture_kit::probe::probes
+             at .\src\probe.rs:161
+  13: log_capture_kit::probe::ensure_interest_probes
+             at .\src\probe.rs:186
+  14: log_capture_kit::capture::run_with_subscriber<log_capture_kit::event::tests::LegacyLineFormatting,tuple$<>,void (*)()>
+             at .\src\capture.rs:64
+  15: log_capture_kit::event::tests::run_fixture
+             at .\src\event_tests.rs:151
+  16: log_capture_kit::event::tests::message_is_the_body_and_is_empty_when_absent
+             at .\src\event_tests.rs:358
+  17: log_capture_kit::event::tests::message_is_the_body_and_is_empty_when_absent::closure$0
+             at .\src\event_tests.rs:357
+  18: core::ops::function::FnOnce::call_once<log_capture_kit::event::tests::message_is_the_body_and_is_empty_when_absent::closure_env$0,tuple$<> >
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\core\src\ops\function.rs:250
+  19: core::ops::function::FnOnce::call_once
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\ops\function.rs:250
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+---- capture::tests::extracts_events_even_while_the_shared_sink_is_still_held stdout ----
+
+thread 'capture::tests::extracts_events_even_while_the_shared_sink_is_still_held' (16944) panicked at crates\log-capture-kit\src\probe.rs:133:18:
+AREKA_LOG_CAPTURE_PROBES の値が不正: "typo"。`on`（常駐する＝未設定と同じ）か `off`（常駐しない＝測定の被験側）のいずれかを指定すること
+stack backtrace:
+   0: std::panicking::panic_handler
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\panicking.rs:679
+   1: core::panicking::panic_fmt
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:80
+   2: log_capture_kit::probe::probes_requested
+             at .\src\probe.rs:133
+   3: log_capture_kit::probe::probes::closure$0
+             at .\src\probe.rs:162
+   4: std::sync::once_lock::impl$0::get_or_init::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,log_capture_kit::probe::probes::closure_env$0>
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+   5: std::sync::once_lock::impl$0::initialize::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_env$0<enum2$<core::option::Option<tuple$<tr
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:543
+   6: std::sync::once::impl$2::call_once_force::closure$0<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_i
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   7: std::sys::sync::once::futex::Once::call
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\sys\sync\once\futex.rs:183
+   8: std::sync::once::Once::call_once_force<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   9: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::initialize<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispa
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:542
+  10: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_try_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:410
+  11: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Disp
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+  12: log_capture_kit::probe::probes
+             at .\src\probe.rs:161
+  13: log_capture_kit::probe::ensure_interest_probes
+             at .\src\probe.rs:186
+  14: log_capture_kit::capture::run_with_subscriber<log_capture_kit::capture::CaptureSubscriber,tuple$<>,void (*)()>
+             at .\src\capture.rs:64
+  15: log_capture_kit::capture::tests::extracts_events_even_while_the_shared_sink_is_still_held
+             at .\src\capture_tests.rs:217
+  16: log_capture_kit::capture::tests::extracts_events_even_while_the_shared_sink_is_still_held::closure$0
+             at .\src\capture_tests.rs:212
+  17: core::ops::function::FnOnce::call_once<log_capture_kit::capture::tests::extracts_events_even_while_the_shared_sink_is_still_held::closure_env$0,tuple$<> >
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\core\src\ops\function.rs:250
+  18: core::ops::function::FnOnce::call_once
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\ops\function.rs:250
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+---- probe::tests::establishing_the_probes_is_idempotent stdout ----
+
+thread 'probe::tests::establishing_the_probes_is_idempotent' (27820) panicked at crates\log-capture-kit\src\probe.rs:133:18:
+AREKA_LOG_CAPTURE_PROBES の値が不正: "typo"。`on`（常駐する＝未設定と同じ）か `off`（常駐しない＝測定の被験側）のいずれかを指定すること
+stack backtrace:
+   0: std::panicking::panic_handler
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\panicking.rs:679
+   1: core::panicking::panic_fmt
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:80
+   2: log_capture_kit::probe::probes_requested
+             at .\src\probe.rs:133
+   3: log_capture_kit::probe::probes::closure$0
+             at .\src\probe.rs:162
+   4: std::sync::once_lock::impl$0::get_or_init::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,log_capture_kit::probe::probes::closure_env$0>
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+   5: std::sync::once_lock::impl$0::initialize::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_env$0<enum2$<core::option::Option<tuple$<tr
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:543
+   6: std::sync::once::impl$2::call_once_force::closure$0<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_i
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   7: std::sys::sync::once::futex::Once::call
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\sys\sync\once\futex.rs:183
+   8: std::sync::once::Once::call_once_force<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   9: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::initialize<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispa
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:542
+  10: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_try_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:410
+  11: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Disp
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+  12: log_capture_kit::probe::probes
+             at .\src\probe.rs:161
+  13: log_capture_kit::probe::ensure_interest_probes
+             at .\src\probe.rs:186
+  14: log_capture_kit::probe::tests::establishing_the_probes_is_idempotent
+             at .\src\probe_tests.rs:56
+  15: log_capture_kit::probe::tests::establishing_the_probes_is_idempotent::closure$0
+             at .\src\probe_tests.rs:55
+  16: core::ops::function::FnOnce::call_once<log_capture_kit::probe::tests::establishing_the_probes_is_idempotent::closure_env$0,tuple$<> >
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\core\src\ops\function.rs:250
+  17: core::ops::function::FnOnce::call_once
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\ops\function.rs:250
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+---- event::tests::field_str_is_none_for_values_that_did_not_come_through_record_str stdout ----
+
+thread 'event::tests::field_str_is_none_for_values_that_did_not_come_through_record_str' (3240) panicked at crates\log-capture-kit\src\probe.rs:133:18:
+AREKA_LOG_CAPTURE_PROBES の値が不正: "typo"。`on`（常駐する＝未設定と同じ）か `off`（常駐しない＝測定の被験側）のいずれかを指定すること
+stack backtrace:
+   0: std::panicking::panic_handler
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\panicking.rs:679
+   1: core::panicking::panic_fmt
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:80
+   2: log_capture_kit::probe::probes_requested
+             at .\src\probe.rs:133
+   3: log_capture_kit::probe::probes::closure$0
+             at .\src\probe.rs:162
+   4: std::sync::once_lock::impl$0::get_or_init::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,log_capture_kit::probe::probes::closure_env$0>
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+   5: std::sync::once_lock::impl$0::initialize::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_env$0<enum2$<core::option::Option<tuple$<tr
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:543
+   6: std::sync::once::impl$2::call_once_force::closure$0<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_i
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   7: std::sys::sync::once::futex::Once::call
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\sys\sync\once\futex.rs:183
+   8: std::sync::once::Once::call_once_force<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   9: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::initialize<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispa
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:542
+  10: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_try_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:410
+  11: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Disp
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+  12: log_capture_kit::probe::probes
+             at .\src\probe.rs:161
+  13: log_capture_kit::probe::ensure_interest_probes
+             at .\src\probe.rs:186
+  14: log_capture_kit::capture::run_with_subscriber<log_capture_kit::event::tests::LegacyLineFormatting,tuple$<>,void (*)()>
+             at .\src\capture.rs:64
+  15: log_capture_kit::event::tests::run_fixture
+             at .\src\event_tests.rs:151
+  16: log_capture_kit::event::tests::field_str_is_none_for_values_that_did_not_come_through_record_str
+             at .\src\event_tests.rs:345
+  17: log_capture_kit::event::tests::field_str_is_none_for_values_that_did_not_come_through_record_str::closure$0
+             at .\src\event_tests.rs:344
+  18: core::ops::function::FnOnce::call_once<log_capture_kit::event::tests::field_str_is_none_for_values_that_did_not_come_through_record_str::closure_env$0,tuple$<> >
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\core\src\ops\function.rs:250
+  19: core::ops::function::FnOnce::call_once
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\ops\function.rs:250
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+---- event::tests::level_fields_matches_verbatim_fixture stdout ----
+
+thread 'event::tests::level_fields_matches_verbatim_fixture' (34492) panicked at crates\log-capture-kit\src\probe.rs:133:18:
+AREKA_LOG_CAPTURE_PROBES の値が不正: "typo"。`on`（常駐する＝未設定と同じ）か `off`（常駐しない＝測定の被験側）のいずれかを指定すること
+stack backtrace:
+   0: std::panicking::panic_handler
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\panicking.rs:679
+   1: core::panicking::panic_fmt
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:80
+   2: log_capture_kit::probe::probes_requested
+             at .\src\probe.rs:133
+   3: log_capture_kit::probe::probes::closure$0
+             at .\src\probe.rs:162
+   4: std::sync::once_lock::impl$0::get_or_init::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,log_capture_kit::probe::probes::closure_env$0>
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+   5: std::sync::once_lock::impl$0::initialize::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_env$0<enum2$<core::option::Option<tuple$<tr
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:543
+   6: std::sync::once::impl$2::call_once_force::closure$0<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_i
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   7: std::sys::sync::once::futex::Once::call
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\sys\sync\once\futex.rs:183
+   8: std::sync::once::Once::call_once_force<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   9: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::initialize<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispa
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:542
+  10: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_try_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:410
+  11: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Disp
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+  12: log_capture_kit::probe::probes
+             at .\src\probe.rs:161
+  13: log_capture_kit::probe::ensure_interest_probes
+             at .\src\probe.rs:186
+  14: log_capture_kit::capture::run_with_subscriber<log_capture_kit::event::tests::LegacyLineFormatting,tuple$<>,void (*)()>
+             at .\src\capture.rs:64
+  15: log_capture_kit::event::tests::run_fixture
+             at .\src\event_tests.rs:151
+  16: log_capture_kit::event::tests::level_fields_matches_verbatim_fixture
+             at .\src\event_tests.rs:183
+  17: log_capture_kit::event::tests::level_fields_matches_verbatim_fixture::closure$0
+             at .\src\event_tests.rs:182
+  18: core::ops::function::FnOnce::call_once<log_capture_kit::event::tests::level_fields_matches_verbatim_fixture::closure_env$0,tuple$<> >
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\core\src\ops\function.rs:250
+  19: core::ops::function::FnOnce::call_once
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\ops\function.rs:250
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+---- capture::tests::sentinel_is_removed_before_returning stdout ----
+
+thread 'capture::tests::sentinel_is_removed_before_returning' (26880) panicked at crates\log-capture-kit\src\probe.rs:133:18:
+AREKA_LOG_CAPTURE_PROBES の値が不正: "typo"。`on`（常駐する＝未設定と同じ）か `off`（常駐しない＝測定の被験側）のいずれかを指定すること
+stack backtrace:
+   0: std::panicking::panic_handler
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\panicking.rs:679
+   1: core::panicking::panic_fmt
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:80
+   2: log_capture_kit::probe::probes_requested
+             at .\src\probe.rs:133
+   3: log_capture_kit::probe::probes::closure$0
+             at .\src\probe.rs:162
+   4: std::sync::once_lock::impl$0::get_or_init::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,log_capture_kit::probe::probes::closure_env$0>
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+   5: std::sync::once_lock::impl$0::initialize::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_env$0<enum2$<core::option::Option<tuple$<tr
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:543
+   6: std::sync::once::impl$2::call_once_force::closure$0<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_i
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   7: std::sys::sync::once::futex::Once::call
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\sys\sync\once\futex.rs:183
+   8: std::sync::once::Once::call_once_force<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   9: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::initialize<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispa
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:542
+  10: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_try_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:410
+  11: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Disp
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+  12: log_capture_kit::probe::probes
+             at .\src\probe.rs:161
+  13: log_capture_kit::probe::ensure_interest_probes
+             at .\src\probe.rs:186
+  14: log_capture_kit::capture::run_with_subscriber<log_capture_kit::capture::CaptureSubscriber,u32,log_capture_kit::capture::tests::sentinel_is_removed_before_returning::closure_env$0>
+             at .\src\capture.rs:64
+  15: log_capture_kit::capture::capture<u32,log_capture_kit::capture::tests::sentinel_is_removed_before_returning::closure_env$0>
+             at .\src\capture.rs:102
+  16: log_capture_kit::capture::tests::sentinel_is_removed_before_returning
+             at .\src\capture_tests.rs:193
+  17: log_capture_kit::capture::tests::sentinel_is_removed_before_returning::closure$0
+             at .\src\capture_tests.rs:192
+  18: core::ops::function::FnOnce::call_once<log_capture_kit::capture::tests::sentinel_is_removed_before_returning::closure_env$0,tuple$<> >
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\core\src\ops\function.rs:250
+  19: core::ops::function::FnOnce::call_once
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\ops\function.rs:250
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+---- event::tests::level_target_fields_matches_verbatim_fixture stdout ----
+
+thread 'event::tests::level_target_fields_matches_verbatim_fixture' (22388) panicked at crates\log-capture-kit\src\probe.rs:133:18:
+AREKA_LOG_CAPTURE_PROBES の値が不正: "typo"。`on`（常駐する＝未設定と同じ）か `off`（常駐しない＝測定の被験側）のいずれかを指定すること
+stack backtrace:
+   0: std::panicking::panic_handler
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\panicking.rs:679
+   1: core::panicking::panic_fmt
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:80
+   2: log_capture_kit::probe::probes_requested
+             at .\src\probe.rs:133
+   3: log_capture_kit::probe::probes::closure$0
+             at .\src\probe.rs:162
+   4: std::sync::once_lock::impl$0::get_or_init::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,log_capture_kit::probe::probes::closure_env$0>
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+   5: std::sync::once_lock::impl$0::initialize::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_env$0<enum2$<core::option::Option<tuple$<tr
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:543
+   6: std::sync::once::impl$2::call_once_force::closure$0<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_i
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   7: std::sys::sync::once::futex::Once::call
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\sys\sync\once\futex.rs:183
+   8: std::sync::once::Once::call_once_force<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   9: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::initialize<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispa
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:542
+  10: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_try_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:410
+  11: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Disp
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+  12: log_capture_kit::probe::probes
+             at .\src\probe.rs:161
+  13: log_capture_kit::probe::ensure_interest_probes
+             at .\src\probe.rs:186
+  14: log_capture_kit::capture::run_with_subscriber<log_capture_kit::event::tests::LegacyLineFormatting,tuple$<>,void (*)()>
+             at .\src\capture.rs:64
+  15: log_capture_kit::event::tests::run_fixture
+             at .\src\event_tests.rs:151
+  16: log_capture_kit::event::tests::level_target_fields_matches_verbatim_fixture
+             at .\src\event_tests.rs:162
+  17: log_capture_kit::event::tests::level_target_fields_matches_verbatim_fixture::closure$0
+             at .\src\event_tests.rs:161
+  18: core::ops::function::FnOnce::call_once<log_capture_kit::event::tests::level_target_fields_matches_verbatim_fixture::closure_env$0,tuple$<> >
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\core\src\ops\function.rs:250
+  19: core::ops::function::FnOnce::call_once
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\ops\function.rs:250
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+---- probe::tests::the_decision_agrees_with_what_the_environment_actually_says stdout ----
+
+thread 'probe::tests::the_decision_agrees_with_what_the_environment_actually_says' (21548) panicked at crates\log-capture-kit\src\probe_tests.rs:44:24:
+AREKA_LOG_CAPTURE_PROBES の値が不正: "typo"
+stack backtrace:
+   0: std::panicking::panic_handler
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\panicking.rs:679
+   1: core::panicking::panic_fmt
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:80
+   2: log_capture_kit::probe::tests::the_decision_agrees_with_what_the_environment_actually_says
+             at .\src\probe_tests.rs:44
+   3: log_capture_kit::probe::tests::the_decision_agrees_with_what_the_environment_actually_says::closure$0
+             at .\src\probe_tests.rs:28
+   4: core::ops::function::FnOnce::call_once<log_capture_kit::probe::tests::the_decision_agrees_with_what_the_environment_actually_says::closure_env$0,tuple$<> >
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\core\src\ops\function.rs:250
+   5: core::ops::function::FnOnce::call_once
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\ops\function.rs:250
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+---- event::tests::format_line_is_byte_identical_to_current_formatting_code stdout ----
+
+thread 'event::tests::format_line_is_byte_identical_to_current_formatting_code' (18172) panicked at crates\log-capture-kit\src\probe.rs:133:18:
+AREKA_LOG_CAPTURE_PROBES の値が不正: "typo"。`on`（常駐する＝未設定と同じ）か `off`（常駐しない＝測定の被験側）のいずれかを指定すること
+stack backtrace:
+   0: std::panicking::panic_handler
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\panicking.rs:679
+   1: core::panicking::panic_fmt
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:80
+   2: log_capture_kit::probe::probes_requested
+             at .\src\probe.rs:133
+   3: log_capture_kit::probe::probes::closure$0
+             at .\src\probe.rs:162
+   4: std::sync::once_lock::impl$0::get_or_init::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,log_capture_kit::probe::probes::closure_env$0>
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+   5: std::sync::once_lock::impl$0::initialize::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_env$0<enum2$<core::option::Option<tuple$<tr
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:543
+   6: std::sync::once::impl$2::call_once_force::closure$0<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_i
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   7: std::sys::sync::once::futex::Once::call
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\sys\sync\once\futex.rs:183
+   8: std::sync::once::Once::call_once_force<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   9: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::initialize<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispa
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:542
+  10: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_try_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:410
+  11: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Disp
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+  12: log_capture_kit::probe::probes
+             at .\src\probe.rs:161
+  13: log_capture_kit::probe::ensure_interest_probes
+             at .\src\probe.rs:186
+  14: log_capture_kit::capture::run_with_subscriber<log_capture_kit::event::tests::LegacyLineFormatting,tuple$<>,void (*)()>
+             at .\src\capture.rs:64
+  15: log_capture_kit::event::tests::run_fixture
+             at .\src\event_tests.rs:151
+  16: log_capture_kit::event::tests::format_line_is_byte_identical_to_current_formatting_code
+             at .\src\event_tests.rs:206
+  17: log_capture_kit::event::tests::format_line_is_byte_identical_to_current_formatting_code::closure$0
+             at .\src\event_tests.rs:205
+  18: core::ops::function::FnOnce::call_once<log_capture_kit::event::tests::format_line_is_byte_identical_to_current_formatting_code::closure_env$0,tuple$<> >
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\core\src\ops\function.rs:250
+  19: core::ops::function::FnOnce::call_once
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\ops\function.rs:250
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+---- global::tests::fails_explicitly_when_a_different_global_is_already_installed stdout ----
+
+thread 'global::tests::fails_explicitly_when_a_different_global_is_already_installed' (6932) panicked at crates\log-capture-kit\src\probe.rs:133:18:
+AREKA_LOG_CAPTURE_PROBES の値が不正: "typo"。`on`（常駐する＝未設定と同じ）か `off`（常駐しない＝測定の被験側）のいずれかを指定すること
+stack backtrace:
+   0: std::panicking::panic_handler
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\panicking.rs:679
+   1: core::panicking::panic_fmt
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:80
+   2: log_capture_kit::probe::probes_requested
+             at .\src\probe.rs:133
+   3: log_capture_kit::probe::probes::closure$0
+             at .\src\probe.rs:162
+   4: std::sync::once_lock::impl$0::get_or_init::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,log_capture_kit::probe::probes::closure_env$0>
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+   5: std::sync::once_lock::impl$0::initialize::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_env$0<enum2$<core::option::Option<tuple$<tr
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:543
+   6: std::sync::once::impl$2::call_once_force::closure$0<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_i
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   7: std::sys::sync::once::futex::Once::call
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\sys\sync\once\futex.rs:183
+   8: std::sync::once::Once::call_once_force<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   9: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::initialize<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispa
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:542
+  10: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_try_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:410
+  11: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Disp
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+  12: log_capture_kit::probe::probes
+             at .\src\probe.rs:161
+  13: log_capture_kit::probe::ensure_interest_probes
+             at .\src\probe.rs:186
+  14: log_capture_kit::global::install_into::closure$0<log_capture_kit::global::tests::ForeignGlobalAlreadyInstalled,log_capture_kit::global::tests::fails_explicitly_when_a_different_global_is_already_installed::closure_env$0>
+             at .\src\global.rs:81
+  15: std::sync::once_lock::impl$0::get_or_init::closure$0<alloc::sync::Arc<std::sync::poison::mutex::Mutex<alloc::vec::Vec<log_capture_kit::event::CapturedEvent,alloc::alloc::Global> >,alloc::alloc::Global>,log_capture_kit::global::install_into::closure_env$0<l
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+  16: std::sync::once_lock::impl$0::initialize::closure$0<alloc::sync::Arc<std::sync::poison::mutex::Mutex<alloc::vec::Vec<log_capture_kit::event::CapturedEvent,alloc::alloc::Global> >,alloc::alloc::Global>,std::sync::once_lock::impl$0::get_or_init::closure_env$
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:543
+  17: std::sync::once::impl$2::call_once_force::closure$0<std::sync::once_lock::impl$0::initialize::closure_env$0<alloc::sync::Arc<std::sync::poison::mutex::Mutex<alloc::vec::Vec<log_capture_kit::event::CapturedEvent,alloc::alloc::Global> >,alloc::alloc::Global>
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+  18: std::sys::sync::once::futex::Once::call
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\sys\sync\once\futex.rs:183
+  19: std::sync::once::Once::call_once_force<std::sync::once_lock::impl$0::initialize::closure_env$0<alloc::sync::Arc<std::sync::poison::mutex::Mutex<alloc::vec::Vec<log_capture_kit::event::CapturedEvent,alloc::alloc::Global> >,alloc::alloc::Global>,std::sync::o
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+  20: std::sync::once_lock::OnceLock<alloc::sync::Arc<std::sync::poison::mutex::Mutex<alloc::vec::Vec<log_capture_kit::event::CapturedEvent,alloc::alloc::Global> >,alloc::alloc::Global> >::initialize<alloc::sync::Arc<std::sync::poison::mutex::Mutex<alloc::vec::V
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:542
+  21: std::sync::once_lock::OnceLock<alloc::sync::Arc<std::sync::poison::mutex::Mutex<alloc::vec::Vec<log_capture_kit::event::CapturedEvent,alloc::alloc::Global> >,alloc::alloc::Global> >::get_or_try_init<alloc::sync::Arc<std::sync::poison::mutex::Mutex<alloc::v
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:410
+  22: std::sync::once_lock::OnceLock<alloc::sync::Arc<std::sync::poison::mutex::Mutex<alloc::vec::Vec<log_capture_kit::event::CapturedEvent,alloc::alloc::Global> >,alloc::alloc::Global> >::get_or_init<alloc::sync::Arc<std::sync::poison::mutex::Mutex<alloc::vec::
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+  23: log_capture_kit::global::install_into<log_capture_kit::global::tests::ForeignGlobalAlreadyInstalled,log_capture_kit::global::tests::fails_explicitly_when_a_different_global_is_already_installed::closure_env$0>
+             at .\src\global.rs:79
+  24: log_capture_kit::global::tests::fails_explicitly_when_a_different_global_is_already_installed
+             at .\src\global_tests.rs:74
+  25: log_capture_kit::global::tests::fails_explicitly_when_a_different_global_is_already_installed::closure$0
+             at .\src\global_tests.rs:71
+  26: core::ops::function::FnOnce::call_once<log_capture_kit::global::tests::fails_explicitly_when_a_different_global_is_already_installed::closure_env$0,tuple$<> >
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\core\src\ops\function.rs:250
+  27: core::ops::function::FnOnce::call_once
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\ops\function.rs:250
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+note: panic did not contain expected string
+      panic message: "AREKA_LOG_CAPTURE_PROBES の値が不正: \"typo\"。`on`（常駐する＝未設定と同じ）か `off`（常駐しない＝測定の被験側）のいずれかを指定すること"
+ expected substring: "全体設定（グローバル subscriber）を置いてよいのは"
+---- capture::tests::captures_event_whose_callsite_another_thread_registered_before_the_window stdout ----
+
+thread 'capture::tests::captures_event_whose_callsite_another_thread_registered_before_the_window' (6360) panicked at crates\log-capture-kit\src\probe.rs:133:18:
+AREKA_LOG_CAPTURE_PROBES の値が不正: "typo"。`on`（常駐する＝未設定と同じ）か `off`（常駐しない＝測定の被験側）のいずれかを指定すること
+stack backtrace:
+   0: std::panicking::panic_handler
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\panicking.rs:679
+   1: core::panicking::panic_fmt
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:80
+   2: log_capture_kit::probe::probes_requested
+             at .\src\probe.rs:133
+   3: log_capture_kit::probe::probes::closure$0
+             at .\src\probe.rs:162
+   4: std::sync::once_lock::impl$0::get_or_init::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,log_capture_kit::probe::probes::closure_env$0>
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+   5: std::sync::once_lock::impl$0::initialize::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_env$0<enum2$<core::option::Option<tuple$<tr
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:543
+   6: std::sync::once::impl$2::call_once_force::closure$0<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_i
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   7: std::sys::sync::once::futex::Once::call
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\sys\sync\once\futex.rs:183
+   8: std::sync::once::Once::call_once_force<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   9: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::initialize<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispa
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:542
+  10: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_try_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:410
+  11: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Disp
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+  12: log_capture_kit::probe::probes
+             at .\src\probe.rs:161
+  13: log_capture_kit::probe::ensure_interest_probes
+             at .\src\probe.rs:186
+  14: log_capture_kit::capture::run_with_subscriber<log_capture_kit::capture::CaptureSubscriber,tuple$<>,void (*)()>
+             at .\src\capture.rs:64
+  15: log_capture_kit::capture::capture<tuple$<>,void (*)()>
+             at .\src\capture.rs:102
+  16: log_capture_kit::capture::tests::captures_event_whose_callsite_another_thread_registered_before_the_window
+             at .\src\capture_tests.rs:62
+  17: log_capture_kit::capture::tests::captures_event_whose_callsite_another_thread_registered_before_the_window::closure$0
+             at .\src\capture_tests.rs:57
+  18: core::ops::function::FnOnce::call_once<log_capture_kit::capture::tests::captures_event_whose_callsite_another_thread_registered_before_the_window::closure_env$0,tuple$<> >
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\core\src\ops\function.rs:250
+  19: core::ops::function::FnOnce::call_once
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\ops\function.rs:250
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+---- event::tests::fields_map_is_name_to_debug_representation stdout ----
+
+thread 'event::tests::fields_map_is_name_to_debug_representation' (30608) panicked at crates\log-capture-kit\src\probe.rs:133:18:
+AREKA_LOG_CAPTURE_PROBES の値が不正: "typo"。`on`（常駐する＝未設定と同じ）か `off`（常駐しない＝測定の被験側）のいずれかを指定すること
+stack backtrace:
+   0: std::panicking::panic_handler
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\panicking.rs:679
+   1: core::panicking::panic_fmt
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:80
+   2: log_capture_kit::probe::probes_requested
+             at .\src\probe.rs:133
+   3: log_capture_kit::probe::probes::closure$0
+             at .\src\probe.rs:162
+   4: std::sync::once_lock::impl$0::get_or_init::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,log_capture_kit::probe::probes::closure_env$0>
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+   5: std::sync::once_lock::impl$0::initialize::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_env$0<enum2$<core::option::Option<tuple$<tr
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:543
+   6: std::sync::once::impl$2::call_once_force::closure$0<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_i
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   7: std::sys::sync::once::futex::Once::call
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\sys\sync\once\futex.rs:183
+   8: std::sync::once::Once::call_once_force<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   9: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::initialize<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispa
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:542
+  10: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_try_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:410
+  11: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Disp
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+  12: log_capture_kit::probe::probes
+             at .\src\probe.rs:161
+  13: log_capture_kit::probe::ensure_interest_probes
+             at .\src\probe.rs:186
+  14: log_capture_kit::capture::run_with_subscriber<log_capture_kit::event::tests::LegacyLineFormatting,tuple$<>,void (*)()>
+             at .\src\capture.rs:64
+  15: log_capture_kit::event::tests::run_fixture
+             at .\src\event_tests.rs:151
+  16: log_capture_kit::event::tests::fields_map_is_name_to_debug_representation
+             at .\src\event_tests.rs:404
+  17: log_capture_kit::event::tests::fields_map_is_name_to_debug_representation::closure$0
+             at .\src\event_tests.rs:403
+  18: core::ops::function::FnOnce::call_once<log_capture_kit::event::tests::fields_map_is_name_to_debug_representation::closure_env$0,tuple$<> >
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\core\src\ops\function.rs:250
+  19: core::ops::function::FnOnce::call_once
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\ops\function.rs:250
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+---- probe::tests::the_environment_is_read_exactly_once_for_the_whole_process stdout ----
+
+thread 'probe::tests::the_environment_is_read_exactly_once_for_the_whole_process' (26676) panicked at crates\log-capture-kit\src\probe.rs:133:18:
+AREKA_LOG_CAPTURE_PROBES の値が不正: "typo"。`on`（常駐する＝未設定と同じ）か `off`（常駐しない＝測定の被験側）のいずれかを指定すること
+stack backtrace:
+   0: std::panicking::panic_handler
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\panicking.rs:679
+   1: core::panicking::panic_fmt
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:80
+   2: log_capture_kit::probe::probes_requested
+             at .\src\probe.rs:133
+   3: log_capture_kit::probe::probes::closure$0
+             at .\src\probe.rs:162
+   4: std::sync::once_lock::impl$0::get_or_init::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,log_capture_kit::probe::probes::closure_env$0>
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+   5: std::sync::once_lock::impl$0::initialize::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_env$0<enum2$<core::option::Option<tuple$<tr
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:543
+   6: std::sync::once::impl$2::call_once_force::closure$0<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_i
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   7: std::sys::sync::once::futex::Once::call
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\sys\sync\once\futex.rs:183
+   8: std::sync::once::Once::call_once_force<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   9: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::initialize<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispa
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:542
+  10: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_try_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:410
+  11: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Disp
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+  12: log_capture_kit::probe::probes
+             at .\src\probe.rs:161
+  13: log_capture_kit::probe::ensure_interest_probes
+             at .\src\probe.rs:186
+  14: log_capture_kit::probe::tests::the_environment_is_read_exactly_once_for_the_whole_process
+             at .\src\probe_tests.rs:74
+  15: log_capture_kit::probe::tests::the_environment_is_read_exactly_once_for_the_whole_process::closure$0
+             at .\src\probe_tests.rs:73
+  16: core::ops::function::FnOnce::call_once<log_capture_kit::probe::tests::the_environment_is_read_exactly_once_for_the_whole_process::closure_env$0,tuple$<> >
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\core\src\ops\function.rs:250
+  17: core::ops::function::FnOnce::call_once
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\ops\function.rs:250
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+---- capture::tests::captures_event_whose_callsite_another_thread_registers_inside_the_window stdout ----
+
+thread 'capture::tests::captures_event_whose_callsite_another_thread_registers_inside_the_window' (35552) panicked at crates\log-capture-kit\src\probe.rs:133:18:
+AREKA_LOG_CAPTURE_PROBES の値が不正: "typo"。`on`（常駐する＝未設定と同じ）か `off`（常駐しない＝測定の被験側）のいずれかを指定すること
+stack backtrace:
+   0: std::panicking::panic_handler
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\panicking.rs:679
+   1: core::panicking::panic_fmt
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:80
+   2: log_capture_kit::probe::probes_requested
+             at .\src\probe.rs:133
+   3: log_capture_kit::probe::probes::closure$0
+             at .\src\probe.rs:162
+   4: std::sync::once_lock::impl$0::get_or_init::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,log_capture_kit::probe::probes::closure_env$0>
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+   5: std::sync::once_lock::impl$0::initialize::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_env$0<enum2$<core::option::Option<tuple$<tr
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:543
+   6: std::sync::once::impl$2::call_once_force::closure$0<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_i
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   7: std::sys::sync::once::futex::Once::call
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\sys\sync\once\futex.rs:183
+   8: std::sync::once::Once::call_once_force<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   9: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::initialize<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispa
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:542
+  10: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_try_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:410
+  11: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Disp
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+  12: log_capture_kit::probe::probes
+             at .\src\probe.rs:161
+  13: log_capture_kit::probe::ensure_interest_probes
+             at .\src\probe.rs:186
+  14: log_capture_kit::capture::run_with_subscriber<log_capture_kit::capture::CaptureSubscriber,tuple$<>,log_capture_kit::capture::tests::captures_event_whose_callsite_another_thread_registers_inside_the_window::closure_env$0>
+             at .\src\capture.rs:64
+  15: log_capture_kit::capture::capture<tuple$<>,log_capture_kit::capture::tests::captures_event_whose_callsite_another_thread_registers_inside_the_window::closure_env$0>
+             at .\src\capture.rs:102
+  16: log_capture_kit::capture::tests::captures_event_whose_callsite_another_thread_registers_inside_the_window
+             at .\src\capture_tests.rs:77
+  17: log_capture_kit::capture::tests::captures_event_whose_callsite_another_thread_registers_inside_the_window::closure$0
+             at .\src\capture_tests.rs:76
+  18: core::ops::function::FnOnce::call_once<log_capture_kit::capture::tests::captures_event_whose_callsite_another_thread_registers_inside_the_window::closure_env$0,tuple$<> >
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\core\src\ops\function.rs:250
+  19: core::ops::function::FnOnce::call_once
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\ops\function.rs:250
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+---- capture::tests::does_not_capture_events_from_outside_the_window_or_other_threads stdout ----
+
+thread 'capture::tests::does_not_capture_events_from_outside_the_window_or_other_threads' (28700) panicked at crates\log-capture-kit\src\probe.rs:133:18:
+AREKA_LOG_CAPTURE_PROBES の値が不正: "typo"。`on`（常駐する＝未設定と同じ）か `off`（常駐しない＝測定の被験側）のいずれかを指定すること
+stack backtrace:
+   0: std::panicking::panic_handler
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\panicking.rs:679
+   1: core::panicking::panic_fmt
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\panicking.rs:80
+   2: log_capture_kit::probe::probes_requested
+             at .\src\probe.rs:133
+   3: log_capture_kit::probe::probes::closure$0
+             at .\src\probe.rs:162
+   4: std::sync::once_lock::impl$0::get_or_init::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,log_capture_kit::probe::probes::closure_env$0>
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+   5: std::sync::once_lock::impl$0::initialize::closure$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_env$0<enum2$<core::option::Option<tuple$<tr
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:543
+   6: std::sync::once::impl$2::call_once_force::closure$0<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_i
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   7: std::sys::sync::once::futex::Once::call
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\std\src\sys\sync\once\futex.rs:183
+   8: std::sync::once::Once::call_once_force<std::sync::once_lock::impl$0::initialize::closure_env$0<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > >,std::sync::once_lock::impl$0::get_or_init::closure_
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once.rs:226
+   9: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::initialize<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispa
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:542
+  10: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_try_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:410
+  11: std::sync::once_lock::OnceLock<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Dispatch> > > >::get_or_init<enum2$<core::option::Option<tuple$<tracing_core::dispatcher::Dispatch,tracing_core::dispatcher::Disp
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\std\src\sync\once_lock.rs:321
+  12: log_capture_kit::probe::probes
+             at .\src\probe.rs:161
+  13: log_capture_kit::probe::ensure_interest_probes
+             at .\src\probe.rs:186
+  14: log_capture_kit::capture::run_with_subscriber<log_capture_kit::capture::CaptureSubscriber,tuple$<>,log_capture_kit::capture::tests::does_not_capture_events_from_outside_the_window_or_other_threads::closure_env$0>
+             at .\src\capture.rs:64
+  15: log_capture_kit::capture::capture<tuple$<>,log_capture_kit::capture::tests::does_not_capture_events_from_outside_the_window_or_other_threads::closure_env$0>
+             at .\src\capture.rs:102
+  16: log_capture_kit::capture::tests::does_not_capture_events_from_outside_the_window_or_other_threads
+             at .\src\capture_tests.rs:169
+  17: log_capture_kit::capture::tests::does_not_capture_events_from_outside_the_window_or_other_threads::closure$0
+             at .\src\capture_tests.rs:166
+  18: core::ops::function::FnOnce::call_once<log_capture_kit::capture::tests::does_not_capture_events_from_outside_the_window_or_other_threads::closure_env$0,tuple$<> >
+             at C:\rust\up\toolchains\stable-x86_64-pc-windows-msvc\lib\rustlib\src\rust\library\core\src\ops\function.rs:250
+  19: core::ops::function::FnOnce::call_once
+             at /rustc/88d9e12ae178fab0fb5cc050a94da85685d449ea/library\core\src\ops\function.rs:250
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+
+failures:
+    capture::tests::captures_event_whose_callsite_another_thread_registered_before_the_window
+    capture::tests::captures_event_whose_callsite_another_thread_registers_inside_the_window
+    capture::tests::captures_trace_level_events
+    capture::tests::declares_failure_when_the_sentinel_is_not_captured
+    capture::tests::does_not_capture_events_from_outside_the_window_or_other_threads
+    capture::tests::ensure_interest_probes_is_idempotent_across_threads
+    capture::tests::extracts_events_even_while_the_shared_sink_is_still_held
+    capture::tests::sentinel_is_removed_before_returning
+    event::tests::capture_lines_does_not_leak_the_sentinel
+    event::tests::capture_lines_returns_formatted_lines_and_the_closure_result
+    event::tests::count_levels_counts_each_level
+    event::tests::count_levels_counts_zero_when_nothing_is_emitted_but_the_window_is_live
+    event::tests::field_names_sorted_is_ascending_and_includes_message
+    event::tests::field_str_is_none_for_values_that_did_not_come_through_record_str
+    event::tests::field_str_returns_the_raw_value_and_field_returns_the_debug_representation
+    event::tests::fields_map_is_name_to_debug_representation
+    event::tests::format_line_is_byte_identical_to_current_formatting_code
+    event::tests::level_fields_matches_verbatim_fixture
+    event::tests::level_is_rendered_with_display_not_debug
+    event::tests::level_target_fields_matches_verbatim_fixture
+    event::tests::message_is_the_body_and_is_empty_when_absent
+    event::tests::missing_field_is_none
+    global::tests::fails_explicitly_when_a_different_global_is_already_installed
+    global::tests::installs_once_and_the_second_call_returns_the_same_buffer
+    probe::tests::establishing_the_probes_is_idempotent
+    probe::tests::the_decision_agrees_with_what_the_environment_actually_says
+    probe::tests::the_environment_is_read_exactly_once_for_the_whole_process
+
+test result: FAILED. 3 passed; 27 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+

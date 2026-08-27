@@ -187,3 +187,21 @@ M1 ゴール「emo2 が**そのまま** boot→talk→touch→menu→close ま�
 **dlp の合否に載せない申し送り（憶測で埋めないこと）**: 遷移フレームのうち自前の窓手続きが 1 行も走っていない**未特定区間 47.5%**（639,106／1,344,271µs）と、文字層の再構築の所要。
 
 **着地（2026-08-23・dlp タスク 9.4 で更新）**: dlp の改善ループは周 3 で頭打ち（plateau）となり STOPPED・**採用 0**。門の既定は **OFF のまま**（`crates/wintf/src/ecs/world/mod.rs` の `tick_gate_enabled: false`）、tick 構造（13 本の順序・実行器）は着地前と同じ、`Cargo.toml` は非接触。本節の file:line は dlp のタスク 1〜8 着地時点のまま有効。未達（⑵ catch-up・⑶・⑷a 22.3%）と残る最大項（段② `unregistered_rest` 51.8%）・引受先なし（新規 spec 要）は dlp の `requirements.md` 改訂欄に登記済み。
+
+## 申し送り（areka-P0-test-cage-determinism・2026-08-27）
+
+> 送り元は **2026-08-27 に完了・アーカイブ済み**。台帳の本体は `.kiro/specs/completed/areka-P0-test-cage-determinism/requirements.md` の `## 申し送り台帳`。
+
+同 spec の申し送り台帳「⑶ タスク 12.1 の登記」の **B-1／B-2／B-3** を本 brief へ転記する。**転記の理由**——同 spec は「引受先が実在しない閉ループ」を 2 度作っている（要件 7.4 がその是正だった）。**台帳にだけ書いて受け手が知らない状態は 3 度目**になるので、受け手の側にも置く。
+
+**B-1 再表示時の重なり順の再確認（実機が要る）**
+
+決定論的なテストで固定できる範囲が無い。理由は 3 点で、いずれも実測で確かめてある——⑴ 再断行の要求を挿す箇所は `crates/wintf/src/ecs/window/zorder_pair_establish.rs:180` の **1 箇所だけ**で、確立時にしか通らない、⑵ 再表示の経路（`crates/areka/src/emo2_boot/balloon_visibility_phase.rs:446` → `crates/areka-emo-present/src/presenter/visibility.rs:69`）は再指示を**挿さない**、⑶ 実際の隣接の確認には**実窓**が要る（既定の IME 窓が owner の直上に居座るため、隣接は「最も近い**可視**の隣」で測らねばならず、生の 1 歩だと偽の失敗を記録する）。**本 brief `:41`・`:53` が既にこの残件を自ら宣言している**ので、受け手として矛盾しない。
+
+**B-2 `areka-ghost` の間欠赤（本仕様の要件 4 と同型の構造欠陥）**
+
+`crates/areka-ghost/tests/ghost/spine_e2e_test_s3_helper_liveness_detected.rs` の有界スピン（`:145-163`）が待つのは**記録が非空になることだけ**で、その直後の 5 呼出の数え上げ（`:175-180`）と判定 `assert_eq!(boot_prefix_len, 5, …)`（`:181-185`）には**待機が 1 つも無い単発のスナップショット**である。ソース内のコメントは「5 本は先に完了しているはず」と論じるが、それは**仮定であって強制ではない**。負荷下で 5 本目が間に合わないと `left: 4` で落ちる。`verification/logs/` の既存全ログでは常に緑で、**赤の記録は 2026-08-27 のタスク 10.1 が初**（`cargo test --workspace` の 1 回目・2 回目は全緑・単独 5 連走も全緑）。**本 brief `:104`／`:148` の DoD が `cargo test --workspace` の exit 0 を逐語で要求しており、この間欠赤はその DoD を間欠的に破る。**
+
+**B-3 子プロセスへの受け渡しの実走未検証**
+
+タスク 10.3 が `areka-ghost` の一時パス 13 ファイルを共通窓口へ寄せた際、タスク文が名指しした「宛先が変わっても子プロセスへの受け渡し（環境変数・引数）が壊れていないこと」は**静的検証止まり**である。実プロセスを起こす 2 本（`tests/ghost/real_pasta_test.rs`・`snapshot_capture_test.rs`）が環境変数の門で既定では走らないため。静的には確認済み——受け渡しの配線（`crates/shiori-host32-host/src/process_host.rs:239-251` の引数・環境変数・作業ディレクトリ）は非接触、札は英数と `-` のみ、絶対パス、最長の合成名でも約 129 文字。**実機サインオフの機会に 1 度通すこと**（`HOST32_PASTA_DLL` を絶対パスで与える。相対だと `pasta.dll` の LOAD が `0x8007007E` で落ちる）。

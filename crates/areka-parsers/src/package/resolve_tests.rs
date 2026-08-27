@@ -6,30 +6,35 @@
 //! `sakura` の `Result` 無し寛容パースとは意図的に非対称である
 //! （マウントは物理不在という現実の失敗を持つ・Req 5.1、詳細は `mod.rs` 冒頭）。
 //!
-//! 外部クレート（tempfile 等）に依存せず、`std::env::temp_dir()` 直下に
-//! テスト関数名でユニークな一時ツリーを構築する。区切り文字は `Path::join`
+//! 一時ツリーは共通窓口 `temp-path-kit` 経由で組む。名前にプロセス識別子と連番が
+//! 入るので**プロセス間でも一意**で、破棄で中身ごと消える。区切り文字は `Path::join`
 //! に委ね、クロスプラットフォームで決定的に振る舞う。
 
 use std::fs;
-use std::path::PathBuf;
+
+use temp_path_kit::TempPath;
 
 use crate::charset::DefaultEncoding;
 
 use super::{MountError, resolve};
 
-/// このテスト専用の一意な一時ディレクトリを返す（関数名でユニーク化・衝突回避）。
-fn unique_temp_dir(tag: &str) -> PathBuf {
-    let mut dir = std::env::temp_dir();
-    dir.push(format!("areka_package_resolve_tests_{tag}"));
-    dir
+/// このテスト専用の一時ディレクトリを返す（共通窓口 `temp-path-kit` 経由）。
+///
+/// 名前にプロセス識別子と連番が入るので**プロセス間でも一意**になる。返り値が生き
+/// ている間だけ実体が存在し、破棄で中身ごと消える（後始末を呼び忘れる余地が無い）。
+fn unique_temp_dir(tag: &str) -> TempPath {
+    // 札は `-` と英数字だけ（窓口の約束）。呼出側の tag は関数名由来で `_` を含む。
+    TempPath::new(&format!(
+        "parsers-package-resolve-{}",
+        tag.replace('_', "-")
+    ))
 }
 
 #[test]
 fn resolve_happy_path_builds_mount_model() {
     // --- Arrange: 正常なゴーストツリーを一時ディレクトリに構築 ---
-    let root = unique_temp_dir("happy_path_builds_mount_model");
-    // 前回残骸があれば掃除（best-effort）。
-    let _ = fs::remove_dir_all(&root);
+    let temp = unique_temp_dir("happy_path_builds_mount_model");
+    let root = temp.path().to_path_buf();
 
     let ghost_master = root.join("ghost").join("master");
     fs::create_dir_all(&ghost_master).expect("create ghost/master");
@@ -67,9 +72,6 @@ fn resolve_happy_path_builds_mount_model() {
     assert_eq!(model.names.name, Some("テスト".to_string()));
     assert_eq!(model.names.sakura_name, Some("さくら".to_string()));
     assert_eq!(model.names.kero_name, Some("けろ".to_string()));
-
-    // --- Cleanup（best-effort）---
-    let _ = fs::remove_dir_all(&root);
 }
 
 // ---------------------------------------------------------------------------
@@ -88,8 +90,8 @@ fn resolve_happy_path_builds_mount_model() {
 #[test]
 fn resolve_missing_descript_yields_start_point_missing() {
     // --- Arrange: descript.txt を含まないツリー（ghost/master ディレクトリすら作らない）---
-    let root = unique_temp_dir("missing_descript_yields_start_point_missing");
-    let _ = fs::remove_dir_all(&root);
+    let temp = unique_temp_dir("missing_descript_yields_start_point_missing");
+    let root = temp.path().to_path_buf();
     fs::create_dir_all(&root).expect("create root");
 
     // --- Act ---
@@ -106,9 +108,6 @@ fn resolve_missing_descript_yields_start_point_missing() {
         }
         other => panic!("StartPointMissing を期待したが {other:?} が返った"),
     }
-
-    // --- Cleanup（best-effort）---
-    let _ = fs::remove_dir_all(&root);
 }
 
 /// 起点 descript.txt は所在するが読取に失敗 → `StartPointUnreadable`。
@@ -120,8 +119,8 @@ fn resolve_missing_descript_yields_start_point_missing() {
 #[test]
 fn resolve_unreadable_descript_yields_start_point_unreadable() {
     // --- Arrange: descript.txt を「ディレクトリ」として作る（read が失敗する）---
-    let root = unique_temp_dir("unreadable_descript_yields_start_point_unreadable");
-    let _ = fs::remove_dir_all(&root);
+    let temp = unique_temp_dir("unreadable_descript_yields_start_point_unreadable");
+    let root = temp.path().to_path_buf();
     let descript_as_dir = root.join("ghost").join("master").join("descript.txt");
     fs::create_dir_all(&descript_as_dir).expect("create descript.txt as a directory");
 
@@ -137,9 +136,6 @@ fn resolve_unreadable_descript_yields_start_point_unreadable() {
         }
         other => panic!("StartPointUnreadable を期待したが {other:?} が返った"),
     }
-
-    // --- Cleanup（best-effort）---
-    let _ = fs::remove_dir_all(&root);
 }
 
 /// 解決した shell ディレクトリが不在 → `ShellDirMissing`。
@@ -150,8 +146,8 @@ fn resolve_unreadable_descript_yields_start_point_unreadable() {
 #[test]
 fn resolve_missing_shell_dir_yields_shell_dir_missing() {
     // --- Arrange: 正常な descript.txt（file）だが shell/<名> は作らない ---
-    let root = unique_temp_dir("missing_shell_dir_yields_shell_dir_missing");
-    let _ = fs::remove_dir_all(&root);
+    let temp = unique_temp_dir("missing_shell_dir_yields_shell_dir_missing");
+    let root = temp.path().to_path_buf();
 
     let ghost_master = root.join("ghost").join("master");
     fs::create_dir_all(&ghost_master).expect("create ghost/master");
@@ -174,9 +170,6 @@ fn resolve_missing_shell_dir_yields_shell_dir_missing() {
         }
         other => panic!("ShellDirMissing を期待したが {other:?} が返った"),
     }
-
-    // --- Cleanup（best-effort）---
-    let _ = fs::remove_dir_all(&root);
 }
 
 // ---------------------------------------------------------------------------
@@ -196,8 +189,8 @@ fn resolve_missing_shell_dir_yields_shell_dir_missing() {
 #[test]
 fn resolve_missing_shiori_yields_file_none() {
     // --- Arrange: shiori 行を持たない正常な descript.txt ＋ 実在 shell dir ---
-    let root = unique_temp_dir("missing_shiori_yields_file_none");
-    let _ = fs::remove_dir_all(&root);
+    let temp = unique_temp_dir("missing_shiori_yields_file_none");
+    let root = temp.path().to_path_buf();
 
     let ghost_master = root.join("ghost").join("master");
     fs::create_dir_all(&ghost_master).expect("create ghost/master");
@@ -229,9 +222,6 @@ fn resolve_missing_shiori_yields_file_none() {
     );
     // dir 自体は起点の親として確定している。
     assert_eq!(model.shiori.dir, ghost_master);
-
-    // --- Cleanup（best-effort）---
-    let _ = fs::remove_dir_all(&root);
 }
 
 /// `seriko.defaultsurfacedirectoryname` 未指定 かつ `shell/master` 実在
@@ -242,8 +232,8 @@ fn resolve_missing_shiori_yields_file_none() {
 #[test]
 fn resolve_missing_shell_name_falls_back_to_master() {
     // --- Arrange: shell 名指定なし ＋ 実在する shell/master ---
-    let root = unique_temp_dir("missing_shell_name_falls_back_to_master");
-    let _ = fs::remove_dir_all(&root);
+    let temp = unique_temp_dir("missing_shell_name_falls_back_to_master");
+    let root = temp.path().to_path_buf();
 
     let ghost_master = root.join("ghost").join("master");
     fs::create_dir_all(&ghost_master).expect("create ghost/master");
@@ -269,9 +259,6 @@ fn resolve_missing_shell_name_falls_back_to_master() {
         model.shell.dir.is_dir(),
         "フォールバックした shell dir は実在する"
     );
-
-    // --- Cleanup（best-effort）---
-    let _ = fs::remove_dir_all(&root);
 }
 
 /// `type,ghost` 欠落でも所在ベースで受理 → `Ok`（Req 1.2/1.3）。
@@ -282,8 +269,8 @@ fn resolve_missing_shell_name_falls_back_to_master() {
 #[test]
 fn resolve_missing_type_is_accepted() {
     // --- Arrange: type 行を持たない descript.txt ＋ 実在 shell dir ---
-    let root = unique_temp_dir("missing_type_is_accepted");
-    let _ = fs::remove_dir_all(&root);
+    let temp = unique_temp_dir("missing_type_is_accepted");
+    let root = temp.path().to_path_buf();
 
     let ghost_master = root.join("ghost").join("master");
     fs::create_dir_all(&ghost_master).expect("create ghost/master");
@@ -310,7 +297,4 @@ fn resolve_missing_type_is_accepted() {
     // 名前情報は読めており、マウントも所在で確定する。
     assert_eq!(model.names.name, Some("no-type".to_string()));
     assert_eq!(model.shell.dir, shell_dir);
-
-    // --- Cleanup（best-effort）---
-    let _ = fs::remove_dir_all(&root);
 }

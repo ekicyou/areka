@@ -47,6 +47,7 @@ use areka_seriko::{
     AnimationTable, BindResolver, DisplayCommand, LoopRng, MockSurfaceOutput, SerikoLoopConfig,
     SurfaceResolver, spawn_seriko,
 };
+use log_capture_kit::{LineFormat, format_line};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 駆動ハーネス（cue と tick を FIFO 順に注入・Close→join 同期・sleep なし）
@@ -559,51 +560,24 @@ fn residual_immediately_cleared_on_refire_full_path() {
 // 檻 9: `-2`（他負 surface）warn-once ＋ 他アニメ非停止（R8.2）
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// 全スレッド横断のログ捕捉（アクタースレッドで発火する warn! を捕捉するためのプロセス広域 subscriber）。
+/// 全スレッド横断のログ捕捉（アクタースレッドで発火する warn! を捕捉するためのプロセス広域捕捉先）。
 ///
-/// looper.rs/table.rs 単体は同スレッド `with_default` で捕捉するが、統合テストは warn! が**別スレッド**
-/// （アクター）で発火するため、プロセス広域 default subscriber を 1 度だけ設置して横断捕捉する。共有
-/// buffer から `-2` warn 行のみを filter するため、並行実行時の他ログ混入は判別に影響しない
-/// （`-2` warn を出すのは本檻のみ）。
+/// looper.rs/table.rs 単体は呼出スレッド局所の捕捉窓で足りるが、統合テストは warn! が**別スレッド**
+/// （アクター）で発火するため、共有機構の全スレッド窓口 `install_global_capture_all()` を使う。
+/// 据え付けは 1 度きり・冪等で、他所が先に全体設定を置いていれば黙って縮退せず明示的に panic する
+/// （自前の `set_global_default` はもう持たない）。共有 buffer から `-2` warn 行のみを filter する
+/// ため、並行実行時の他ログ混入は判別に影響しない（`-2` warn を出すのは本檻のみ）。
+///
+/// 行文字列は `format_line(_, LineFormat::LevelTargetFields)` で組む——移行前に本ファイルが自前で
+/// 組んでいた `format!("level={} target={}", …)` ＋ 訪問順の ` {name}={value:?}` と 1 バイトも
+/// 違わない形である（`log_capture_kit` の `LineFormat` がその逐語再現を担う）。
 mod warn_capture {
-    use std::sync::{Arc, Mutex, OnceLock};
-    use tracing::field::{Field, Visit};
-    use tracing_subscriber::prelude::*;
+    use log_capture_kit::{CapturedEvent, install_global_capture_all};
+    use std::sync::{Arc, Mutex};
 
-    static BUFFER: OnceLock<Arc<Mutex<Vec<String>>>> = OnceLock::new();
-
-    #[derive(Clone)]
-    struct Capture(Arc<Mutex<Vec<String>>>);
-
-    impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Capture {
-        fn on_event(&self, ev: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
-            let meta = ev.metadata();
-            let mut line = format!("level={} target={}", meta.level(), meta.target());
-            struct V<'a>(&'a mut String);
-            impl Visit for V<'_> {
-                fn record_debug(&mut self, f: &Field, v: &dyn std::fmt::Debug) {
-                    use std::fmt::Write;
-                    let _ = write!(self.0, " {}={:?}", f.name(), v);
-                }
-            }
-            ev.record(&mut V(&mut line));
-            self.0.lock().unwrap().push(line);
-        }
-    }
-
-    /// プロセス広域 subscriber を 1 度だけ設置し、共有捕捉 buffer を返す。
-    pub fn buffer() -> Arc<Mutex<Vec<String>>> {
-        BUFFER
-            .get_or_init(|| {
-                let buf = Arc::new(Mutex::new(Vec::new()));
-                let cap = Capture(Arc::clone(&buf));
-                let subscriber = tracing_subscriber::registry().with(cap);
-                // 本テストバイナリ内で default を設定するのは本モジュールのみ（他檻はログを主張しない）。
-                tracing::subscriber::set_global_default(subscriber)
-                    .expect("プロセス広域 subscriber を 1 度だけ設置できること");
-                buf
-            })
-            .clone()
+    /// プロセス広域の捕捉先を 1 度だけ据え付け、共有捕捉 buffer を返す。
+    pub fn buffer() -> Arc<Mutex<Vec<CapturedEvent>>> {
+        install_global_capture_all()
     }
 }
 
@@ -658,6 +632,7 @@ fn other_negative_surface_warns_once_and_spares_others_full_path() {
         .lock()
         .unwrap()
         .iter()
+        .map(|ev| format_line(ev, LineFormat::LevelTargetFields))
         .filter(|line| line.contains("以外の負 surface"))
         .count();
     assert_eq!(

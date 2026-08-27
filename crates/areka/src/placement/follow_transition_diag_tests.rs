@@ -325,7 +325,6 @@ fn resize_under_filter(directives: &str) -> String {
     let _residue = drain_window_pos_commands();
     let (mut world, char_window) = world_with_stale_snapshot(LIVE_WA_BOTTOM_AT_100);
     tracing::subscriber::with_default(subscriber, || {
-        tracing::callsite::rebuild_interest_cache();
         // 対照行は観測対象の**内側**で出す（同じ捕捉窓・同じ target・同じ directive を通る）。
         tracing::info!(target: TRANSITION_TARGET, "{CONTROL_LINE}");
         resize_window_to(

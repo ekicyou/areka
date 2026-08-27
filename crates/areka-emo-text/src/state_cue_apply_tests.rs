@@ -1,5 +1,4 @@
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use log_capture_kit::count_levels;
 
 use super::test_support::{REVEAL_INTERVAL, cue, cue_dur, items_of, reveal_times_of};
 use super::*;
@@ -231,29 +230,6 @@ fn same_cue_sequence_yields_identical_state() {
 
 // ── Choice/Cursor 実消費（W4 choice-render・タスク 1.2） ──
 
-/// WARN イベント数を数える最小 Subscriber（決定論的なログ檻・実時間非依存）。
-struct WarnCounter {
-    warns: Arc<AtomicUsize>,
-}
-
-impl tracing::Subscriber for WarnCounter {
-    fn enabled(&self, _: &tracing::Metadata<'_>) -> bool {
-        true
-    }
-    fn new_span(&self, _: &tracing::span::Attributes<'_>) -> tracing::span::Id {
-        tracing::span::Id::from_u64(1)
-    }
-    fn record(&self, _: &tracing::span::Id, _: &tracing::span::Record<'_>) {}
-    fn record_follows_from(&self, _: &tracing::span::Id, _: &tracing::span::Id) {}
-    fn event(&self, event: &tracing::Event<'_>) {
-        if *event.metadata().level() == tracing::Level::WARN {
-            self.warns.fetch_add(1, Ordering::SeqCst);
-        }
-    }
-    fn enter(&self, _: &tracing::span::Id) {}
-    fn exit(&self, _: &tracing::span::Id) {}
-}
-
 /// actor の choices を取得する（未生成なら panic ＝テスト失敗として扱う）。
 fn choices_of<'a>(state: &'a TextLayerState, actor: &str) -> &'a [ChoiceSpan] {
     state
@@ -382,12 +358,7 @@ fn choice_cues_preserve_delivery_order_with_strictly_monotonic_ordinals() {
 /// グリフ追記なし・reveal 不変。once-guard は無いので繰り返し空 Choice は毎回 warn する。
 #[test]
 fn empty_choice_text_warns_and_records_empty_range_no_glyphs() {
-    let warns = Arc::new(AtomicUsize::new(0));
-    let subscriber = WarnCounter {
-        warns: Arc::clone(&warns),
-    };
-
-    let state = tracing::subscriber::with_default(subscriber, || {
+    let (state, counts) = count_levels(|| {
         let mut state = TextLayerState::default();
         state.apply_cue(&cue("0", 0.0, CueCommand::Text("あ".into()))); // グリフ 0
         state.apply_cue(&choice_cue("0", 0.1, "empty", "", &[]));
@@ -409,18 +380,13 @@ fn empty_choice_text_warns_and_records_empty_range_no_glyphs() {
         }]
     );
     // 空 text は warn する（R1.5）。
-    assert_eq!(warns.load(Ordering::SeqCst), 1);
+    assert_eq!(counts.warn, 1);
 }
 
 /// 反復 Choice cue（非空 text）は once-guard 警告を一切発火しない（撤去済み）。
 #[test]
 fn repeated_nonempty_choice_cues_do_not_warn() {
-    let warns = Arc::new(AtomicUsize::new(0));
-    let subscriber = WarnCounter {
-        warns: Arc::clone(&warns),
-    };
-
-    tracing::subscriber::with_default(subscriber, || {
+    let ((), counts) = count_levels(|| {
         let mut state = TextLayerState::default();
         state.apply_cue(&choice_cue("0", 0.0, "a", "はい", &[]));
         state.apply_cue(&choice_cue("0", 0.5, "b", "いいえ", &[]));
@@ -428,8 +394,7 @@ fn repeated_nonempty_choice_cues_do_not_warn() {
     });
 
     assert_eq!(
-        warns.load(Ordering::SeqCst),
-        0,
+        counts.warn, 0,
         "once-guard は撤去済み——非空 Choice は警告しない"
     );
 }
@@ -440,12 +405,7 @@ fn repeated_nonempty_choice_cues_do_not_warn() {
 /// グリフ／リビール状態は変えない（非グリフ item・reveal 対象外）。once-guard 警告も無い。
 #[test]
 fn cursor_cue_appends_cursor_move_and_leaves_glyph_reveal_unchanged() {
-    let warns = Arc::new(AtomicUsize::new(0));
-    let subscriber = WarnCounter {
-        warns: Arc::clone(&warns),
-    };
-
-    let state = tracing::subscriber::with_default(subscriber, || {
+    let (state, counts) = count_levels(|| {
         let mut state = TextLayerState::default();
         state.apply_cue(&cue("0", 0.0, CueCommand::Text("あ".into())));
         state.apply_cue(&cue(
@@ -498,7 +458,7 @@ fn cursor_cue_appends_cursor_move_and_leaves_glyph_reveal_unchanged() {
     // Cursor は choices を作らない。
     assert!(choices_of(&state, "0").is_empty());
     // once-guard 警告は発火しない。
-    assert_eq!(warns.load(Ordering::SeqCst), 0);
+    assert_eq!(counts.warn, 0);
 }
 
 /// Cursor アームがグリフ／reveal 状態を一切変えないことを、対照実行（Cursor cue を

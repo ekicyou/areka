@@ -22,9 +22,10 @@
 //! （偽ハンドルの経路は「縮退が起きること」の側で使う）。窓は 0x0 の不可視の道具窓で、
 //! メッセージポンプは要らない——`EndDeferWindowPos` は同一スレッドの窓へ同期 send する。
 //!
-//! 一括書込は**プロセス共有**の `SELF_INITIATED_DEPTH` を持ち上げるので、本ファイルの
-//! テストは [`lock_self_initiated_for_test`](super::lock_self_initiated_for_test) を
-//! **ちょうど 1 層**取る（`std::sync::Mutex` は再入不可）。
+//! 一括書込が持ち上げる `SELF_INITIATED_DEPTH` は**スレッドごとに独立**である
+//! （`command.rs` の `thread_local!`）。持ち上げ・同期送達・判定・解放はすべて `flush` を
+//! 呼んだこのテストスレッドの内側で閉じるので、並列に走る他テストの `is_self_initiated()`
+//! ／`in_swp` 検査には見えない。よって本ファイルのテストは直列化の錠を取らない。
 //!
 //! # 「1 バッチ」を主張するときの対
 //!
@@ -319,7 +320,6 @@ fn each_degrade_reason_has_its_own_word() {
 
 #[test]
 fn a_flush_of_real_windows_is_submitted_as_one_batch_and_says_so() {
-    let _serialized = super::lock_self_initiated_for_test();
     clean_slate();
     let first = create_test_window();
     let second = create_test_window();
@@ -399,7 +399,6 @@ fn a_flush_of_real_windows_is_submitted_as_one_batch_and_says_so() {
 
 #[test]
 fn an_invalid_handle_discards_the_batch_and_degrades_to_one_write_per_command() {
-    let _serialized = super::lock_self_initiated_for_test();
     clean_slate();
     let first = fake_hwnd(0x20);
     let second = fake_hwnd(0x21);
@@ -463,7 +462,6 @@ fn write_log_lines<'a>(captured: &'a str, via: Option<&str>) -> Vec<&'a str> {
 /// **静かに壊れる形**であり、本檻がその 1 点を押さえる。
 #[test]
 fn the_write_log_line_is_emitted_once_per_command_on_both_paths() {
-    let _serialized = super::lock_self_initiated_for_test();
     clean_slate();
     let first = create_test_window();
     let second = create_test_window();
@@ -539,7 +537,6 @@ fn the_write_log_line_is_emitted_once_per_command_on_both_paths() {
 
 #[test]
 fn the_batch_keeps_the_self_initiated_guard_over_the_messages_it_sends() {
-    let _serialized = super::lock_self_initiated_for_test();
     clean_slate();
     let hwnd = create_test_window();
 
@@ -634,7 +631,6 @@ fn normalize_z(set: &[HWND]) {
 
 #[test]
 fn a_batched_zorder_list_lands_in_the_same_order_as_one_write_per_command() {
-    let _serialized = super::lock_self_initiated_for_test();
     clean_slate();
 
     let batch_set: Vec<HWND> = (0..3).map(|_| create_test_window()).collect();

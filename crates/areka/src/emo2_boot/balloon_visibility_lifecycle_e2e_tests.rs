@@ -39,7 +39,7 @@ use crate::emo2_boot::talk_clock::TalkClock;
 use crate::emo2_boot::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
 use crate::emo2_boot::target_map::balloon_target;
 use crate::input_events::balloon::BalloonWiring;
-use crate::placement::test_support::{LogEvent, capture_logs};
+use crate::placement::test_support::{ExpectField, LogEvent, capture_logs};
 
 use super::{configured_timeout_secs, run_balloon_visibility_phase};
 
@@ -174,12 +174,12 @@ fn script_occupancy_end_becomes_the_measurement_anchor_in_the_decision_core() {
         "会話が終わって可視コンテンツが在るフレームで計測が 1 度だけ確立する: {events:?}"
     );
     assert_eq!(
-        started[0].field("display_end"),
+        started[0].expect_field("display_end"),
         format!("{horizon:?}"),
         "計測の起点は台本の占有終端"
     );
     assert_eq!(
-        started[0].field("deadline"),
+        started[0].expect_field("deadline"),
         format!("{:?}", horizon + timeout_secs),
         "満了予定は「占有終端＋待ち時間」（現在時刻 {now} 起点なら {} になって落ちる）",
         now + timeout_secs

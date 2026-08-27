@@ -13,7 +13,7 @@ use tracing::Level;
 // - **同期 state 檻**（[`state_fixture`]＋[`spawn_probe_talk`]）: [`DispatcherState::handle`] を
 //   テストスレッド上で直接駆動する。talk スタンドインが受けた [`SakuraMsg`] を**そのまま**
 //   突合できる（＝中継の送出内容の直接固定）ほか、棄却・防御アームのログを
-//   [`capture`](crate::test_log_capture::capture) で観測できる（`with_default` は thread-local
+//   [`capture`](crate::test_log_capture::capture) で観測できる（捕捉窓は呼出スレッド局所
 //   ゆえ actor スレッドのログは載らない＝この段でしか語彙を固定できない）。
 // - **actor e2e 檻**（[`spawn_dispatcher`]＋実 talk）: 実再生層を通した往復（選択待ち成立通知の
 //   ms 換算・解決による再開・Close funnel の中断 ACK 帰還）を固定する。

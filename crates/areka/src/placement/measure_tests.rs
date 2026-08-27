@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
 
 use crate::placement::PlacementError;
-use crate::placement::test_support::{capture_logs, expect_one};
+use crate::placement::test_support::{ExpectField, capture_logs, expect_one};
 
 /// COM 初期化下でクロージャを実行する（`WicDecoderArm` は COM 必須・
 /// emo-atlas `wic_arm.rs` テストと同一パターン）。
@@ -752,7 +752,8 @@ fn apply_scaling_rejects_negative_balloon_extent_with_prefix() {
 // キャッシュはプロセス大域かつ「最初に踏んだスレッドが勝つ」ため、subscriber を持たない
 // 他テスト（同じ `error!` callsite を踏む `apply_scaling_guards_i32_overflow` 等）が
 // 先に登録すると `Interest::never()` が焼き付き、捕捉窓の内側でもイベントが捨てられる。
-// 機構と対策は `test_support` のモジュール doc を参照。
+// 機構と対策は共有機構 `log_capture_kit` の crate doc（および `test_support` の
+// モジュール doc）を参照。
 
 /// design「Error Handling」: k 適用失敗は **`error!`**＋帰属情報
 /// （`scope`／`kind`／`k`／`reason`）を残す（silent wrap の禁止）。
@@ -778,10 +779,10 @@ fn scale_size_px_failure_emits_error_log_with_attribution() {
         tracing::Level::ERROR,
         "採寸失敗は error 格（無言 wrap の禁止）: {ev:?}"
     );
-    assert_eq!(ev.field("scope"), "3");
-    assert_eq!(ev.field("kind"), "Char");
-    assert_eq!(ev.field("k"), "2.0");
-    assert!(ev.field("reason").contains("i32 を超過"), "{ev:?}");
+    assert_eq!(ev.expect_field("scope"), "3");
+    assert_eq!(ev.expect_field("kind"), "Char");
+    assert_eq!(ev.expect_field("k"), "2.0");
+    assert!(ev.expect_field("reason").contains("i32 を超過"), "{ev:?}");
     assert_eq!(events.len(), 1, "1 失敗 1 ログ: {events:?}");
 
     // balloon 起因（scope=1・k=3/1）——kind と scope が balloon 軸へ切り替わる。
@@ -800,10 +801,10 @@ fn scale_size_px_failure_emits_error_log_with_attribution() {
     assert!(res.is_err());
     let ev = expect_one(&events, "k 適用に失敗");
     assert_eq!(ev.level, tracing::Level::ERROR, "{ev:?}");
-    assert_eq!(ev.field("scope"), "1", "先頭スコープ 0 ではない");
-    assert_eq!(ev.field("kind"), "Balloon");
+    assert_eq!(ev.expect_field("scope"), "1", "先頭スコープ 0 ではない");
+    assert_eq!(ev.expect_field("kind"), "Balloon");
     assert_eq!(
-        ev.field("k"),
+        ev.expect_field("k"),
         "3.0",
         "balloon 軸の k が載る（shell の 1.0 ではない）"
     );

@@ -3,7 +3,7 @@ use windows::Win32::UI::WindowsAndMessaging::CW_USEDEFAULT;
 use wintf::ecs::pointer::Phase;
 use wintf::ecs::{SizeI, WindowPos};
 
-use super::super::test_support::{LogEvent, capture_logs, expect_one};
+use super::super::test_support::{ExpectField, LogEvent, capture_logs, expect_one};
 use super::test_support::{
     drag_end_event_at, drag_event_at, fake_handle, point_of, rect, window_pos_sized,
 };
@@ -357,19 +357,19 @@ fn releasing_outside_the_work_area_persists_the_raw_offset_and_corrects_only_the
     // --- 補正ログ（要件 6.1・DD7） ---
     let clamp = expect_one(&events, LIMIT_CLAMP_TAG);
     assert_eq!(clamp.level, tracing::Level::INFO, "補正の記録は info 水準");
-    assert_eq!(clamp.field("scope"), "0");
+    assert_eq!(clamp.expect_field("scope"), "0");
     assert_eq!(
-        clamp.field("context"),
+        clamp.expect_field("context"),
         format!("{RELEASE_CONTEXT:?}"),
         "3 関門を弁別する契機ラベルが解放時補正のものでない"
     );
     assert_eq!(
-        clamp.field("route"),
+        clamp.expect_field("route"),
         format!("{:?}", PlacementRoute::BalloonLimitRelease),
         "解放時の補正が専用 route を名乗っていない（DD7）"
     );
-    assert_eq!(clamp.field("from"), format!("{released_at:?}"));
-    assert_eq!(clamp.field("to"), format!("{corrected:?}"));
+    assert_eq!(clamp.expect_field("from"), format!("{released_at:?}"));
+    assert_eq!(clamp.expect_field("to"), format!("{corrected:?}"));
 
     // --- 窓移動レコードは補正後位置・route は BalloonLimitRelease（DD7） ---
     let record = expect_one(&events, WINDOW_MOVE_TAG);
@@ -398,8 +398,8 @@ fn releasing_outside_the_work_area_persists_the_raw_offset_and_corrects_only_the
 
     // --- 保存ログが記録した値も生値（実 IO 観測の前段確認） ---
     let save = expect_one(&events, PERSIST_SAVE_TAG);
-    assert_eq!(save.field("persist_x"), expected_raw.x.to_string());
-    assert_eq!(save.field("persist_y"), expected_raw.y.to_string());
+    assert_eq!(save.expect_field("persist_x"), expected_raw.x.to_string());
+    assert_eq!(save.expect_field("persist_y"), expected_raw.y.to_string());
 
     // --- 実 IO 越しの保存値が生 offset であること ---
     parts
@@ -461,7 +461,7 @@ fn releasing_inside_the_work_area_writes_nothing() {
     // 先に捕捉が成立していることを確かめてから「無いこと」を主張する。
     let save = expect_one(&events, PERSIST_SAVE_TAG);
     assert_eq!(
-        save.field("persist_x"),
+        save.expect_field("persist_x"),
         raw_offset(released_at).x.to_string(),
         "域内解放でも保存は走る（保存フックは limit と無関係）"
     );
@@ -566,7 +566,7 @@ fn unresolvable_reference_warns_and_skips_the_release_correction() {
             "{label}: 縮退は warn 水準"
         );
         assert_eq!(
-            warn.field("context"),
+            warn.expect_field("context"),
             format!("{RELEASE_CONTEXT:?}"),
             "{label}: 契機ラベルが解放時補正のものでない"
         );
@@ -661,7 +661,7 @@ fn the_release_correction_is_idempotent_through_the_runtime_gate() {
 
     let clamp = expect_one(&events, LIMIT_CLAMP_TAG);
     assert_eq!(
-        clamp.field("context"),
+        clamp.expect_field("context"),
         format!("{RELEASE_CONTEXT:?}"),
         "runtime 関門が二度目の補正ログを出している（冪等でない）"
     );

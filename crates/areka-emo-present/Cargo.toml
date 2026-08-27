@@ -31,3 +31,8 @@ tracing = { workspace = true }
 # （workspace.dependencies.windows）、D3D11/DXGI/WUC の直呼び API（UpdateSubresource/CopyResource/
 # Map/Present/ResizeBuffers・IDXGISwapChain1 等）を明示的に有効化する。
 windows = { workspace = true, features = ["Win32_Graphics_Dxgi"] }
+# ログ捕捉テストの硬化機構の唯一の定義元（spec: areka-P0-test-cage-determinism）。
+# ワークスペース内 crate に依存しない leaf・publish = false・テスト専用であり、
+# 出荷クロージャに新規外部依存を持ち込まない（必須依存は tracing のみ＝既出）。
+# 依存方向の規律により [dependencies] へは決して置かない。
+log-capture-kit = { path = "../log-capture-kit" }

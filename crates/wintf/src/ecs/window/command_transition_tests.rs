@@ -23,13 +23,14 @@
 //! 加えて「出ない」を見るテストには、同じ捕捉窓の内側に必ず拾えるはずの**対照行**を置く
 //! ——捕捉が死んでいるだけで緑になる形にしない。
 //!
-//! # 一括書込を呼ぶテストは直列化する（要件 7.7）
+//! # 自発書込カウンタはスレッド局所である（要件 7.7）
 //!
-//! `flush` は `guarded_set_window_pos` を通り、**プロセス共有**の `SELF_INITIATED_DEPTH` を
-//! 一時的に持ち上げる。並列に走る他テストの `is_self_initiated()`／`in_swp` 検査がそれを
-//! 読むと偽の失敗になるため、一括書込を呼ぶテストは
-//! [`lock_self_initiated_for_test`](super::lock_self_initiated_for_test) を取る
-//! （経緯と実測はその doc を参照）。
+//! `flush` は `guarded_set_window_pos` を通り `SELF_INITIATED_DEPTH` を一時的に持ち上げる。
+//! このカウンタは**スレッドごとに独立**であり（`command.rs` の `thread_local!`）、持ち上げ・
+//! 同期送達・判定・解放がすべて `flush` を呼んだこのスレッドの内側で閉じる。並列に走る
+//! 他テストの `is_self_initiated()`／`in_swp` 検査はこの値を読めないので、一括書込を呼ぶ
+//! テストを直列化する錠は要らない（スレッド局所であることの本体は
+//! `command_threadlocal_tests.rs`）。
 //!
 //! # 偽の窓ハンドルの安全性
 //!
@@ -299,7 +300,6 @@ fn drain_and_reset_leave_no_residue_for_the_following_test() {
 
 #[test]
 fn flush_emits_begin_write_and_end_for_a_fake_window_handle() {
-    let _serialized = super::lock_self_initiated_for_test();
     clean_slate();
     let hwnd = fake_hwnd(0x30);
 
@@ -369,7 +369,6 @@ fn flush_emits_begin_write_and_end_for_a_fake_window_handle() {
 
 #[test]
 fn flush_numbers_each_write_in_enqueue_order() {
-    let _serialized = super::lock_self_initiated_for_test();
     clean_slate();
     let first = fake_hwnd(0x31);
     let second = fake_hwnd(0x32);
@@ -405,7 +404,6 @@ fn flush_numbers_each_write_in_enqueue_order() {
 
 #[test]
 fn flush_of_an_empty_queue_emits_no_records() {
-    let _serialized = super::lock_self_initiated_for_test();
     clean_slate();
 
     let captured = capture_under_filter(SIGNOFF_DIRECTIVES, || {
@@ -423,7 +421,6 @@ fn flush_of_an_empty_queue_emits_no_records() {
 
 #[test]
 fn flush_emits_nothing_under_the_default_directives() {
-    let _serialized = super::lock_self_initiated_for_test();
     clean_slate();
 
     let captured = capture_under_filter(DEFAULT_DIRECTIVES, || {

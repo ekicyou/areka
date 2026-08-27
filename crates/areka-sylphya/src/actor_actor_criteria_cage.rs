@@ -132,8 +132,8 @@ fn epoch_advance_is_deterministic_over_iterations() {
 ///
 /// 死亡後の fire-and-forget send（[`SylphyaPublisher::send`] 経由）と barrier
 /// （[`SylphyaPublisher::barrier`]）はいずれも `SendError` を warn 記録して縮退する
-/// （panic せず・無音でもない）。[`crate::test_log_capture::capture`]（interest-keeper で
-/// 並列負荷下の Interest::never 焼き付きを根絶・決定論）で両縮退 WARN を捕捉して照合する。
+/// （panic せず・無音でもない）。[`crate::test_log_capture::capture`]（共有機構 `log-capture-kit`
+/// への委譲で並列負荷下の Interest::never 焼き付きを根絶・決定論）で両縮退 WARN を捕捉して照合する。
 /// 既存 [`actor_integration_tests::actor_death_via_close_makes_sends_observable_and_reader_continues`]
 /// は「panic しない・barrier Err」を突くが、WARN の存在（無音失敗禁止）は本檻が初出で突く。
 #[test]

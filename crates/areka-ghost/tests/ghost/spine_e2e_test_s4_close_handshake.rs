@@ -32,12 +32,15 @@ use areka_ghost::dispatcher::DispatcherMsg;
 use areka_ghost::{GhostBootOptions, ShioriWiring, SystemVarWiring, TickerMode, boot};
 use areka_kanade::{CloseReason, KanadeConfig, KanadeMsg, MonotonicMs, ShioriCall, events};
 use areka_parsers::charset::DefaultEncoding;
+use temp_path_kit::TempPath;
 
-/// このテスト専用の一意な一時ディレクトリ（S1〜S3 の流儀を踏襲）。
-fn unique_temp_dir(tag: &str) -> std::path::PathBuf {
-    let mut dir = std::env::temp_dir();
-    dir.push(format!("areka_ghost_spine_e2e_s4_tests_{tag}"));
-    dir
+/// このテスト専用の一時ディレクトリ。共通窓口 `temp-path-kit` 経由で組むので、
+/// 名前にプロセス識別子と連番が入り**プロセス間でも一意**（同じテストを同時に
+/// 複数プロセスで走らせても互いの一時ファイルを消し合わない）。
+///
+/// 返り値が生きている間だけ実体が存在し、破棄で中身ごと消える。
+fn unique_temp_dir(tag: &str) -> TempPath {
+    TempPath::new(&format!("ghost-spine-s4-{tag}"))
 }
 
 /// `root` 直下に最小限の解決可能なゴーストツリーを構築する（S1/S3 の
@@ -99,9 +102,8 @@ fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: std::time::Dur
 fn s4_close_handshake_completes_regular_shutdown_via_quit_ending_close_talk() {
     const SHELL_NAME: &str = "S4CloseShell";
 
-    let root =
-        unique_temp_dir("s4_close_handshake_completes_regular_shutdown_via_quit_ending_close_talk");
-    let _ = std::fs::remove_dir_all(&root);
+    let temp = unique_temp_dir("completes-regular-shutdown-via-quit-ending-close-talk");
+    let root = temp.path().to_path_buf();
     write_ghost_fixture(&root, SHELL_NAME);
 
     let config = KanadeConfig::new(SHELL_NAME, env!("CARGO_PKG_VERSION"));
@@ -272,6 +274,4 @@ fn s4_close_handshake_completes_regular_shutdown_via_quit_ending_close_talk() {
             );
         },
     );
-
-    let _ = std::fs::remove_dir_all(&root);
 }

@@ -401,8 +401,8 @@ mod tests {
     //
     // ログ捕捉は共有ヘルパ [`crate::test_log_capture`] を経由する。並列 `cargo test` 負荷下で
     // tracing callsite の Interest が `Never` に焼き付いて warn が偽消失する確率欠陥は、当該
-    // ヘルパの interest-keeper（プロセスグローバル bare registry 常駐）で根絶される（Task 4.1
-    // flaky 根治・R9.1「テスト可能領域は決定論的に檻へ」）。
+    // ヘルパが委譲する共有 crate `log-capture-kit`（probe 常駐＋窓内の interest 再計算＋番兵）で
+    // 根絶される（Task 4.1 flaky 根治・R9.1「テスト可能領域は決定論的に檻へ」）。
 
     #[test]
     fn unknown_version_emits_warn() {

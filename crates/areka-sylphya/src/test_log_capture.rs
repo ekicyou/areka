@@ -7,49 +7,32 @@
 //! メッセージでログを出していることを決定論的に検証可能にする（R9.1「テスト可能領域は全て
 //! 実行テスト」）。
 //!
-//! 兄弟 crate `areka-kanade` の `schedule::log_capture` が同一機構を先行実装しているが、
-//! areka-sylphya は最下層 crate であり areka-kanade へ**上方依存できない**ため、当該 crate 内に
-//! 同型の interest-keeper を複製する（reuse ではなく copy）。
+//! # 硬化機構は 1 箇所にしかない
+//! 捕捉窓そのものは**共有 crate [`log_capture_kit`] へ委譲**する（spec:
+//! areka-P0-test-cage-determinism・要件 1.5／2.2）。本モジュールが持つのは
+//! 「この crate の檻が照合する形（[`CapturedEvent`]）への変換」と表明ヘルパだけで、
+//! subscriber の設置も interest の管理も自前では行わない。以前ここにあった
+//! interest-keeper（プロセス全体の既定 subscriber を常駐させる方式）は、
+//! 同じ機構が crate ごとに写し取られて写し損ねた側だけが静かに嘘をつく形だったため、
+//! 共有 crate へ一本化して撤去した。
 //!
-//! # 決定性の要（PITFALL）
-//! [`capture`] は [`tracing::subscriber::with_default`] でスレッドローカルに subscriber を
-//! 差し込み、クロージャ内で発行されたイベントのみを捕える。`read_toml_str()` はテストスレッド
-//! 上で同期的に走る純粋関数ゆえ、そのイベントは確実に同一スレッドで捕捉される。
+//! # 機序（「スレッドローカルゆえ安全」は誤り）
+//! `tracing::subscriber::with_default` が差し替えるのはスレッドローカルの既定 dispatcher
+//! だけで、そこは確かにスレッドごとに独立している。しかし「そのログを評価するか」を決める
+//! callsite の **interest キャッシュはプロセス全体で 1 つ**であり、その発行点をプロセス内で
+//! 最初に踏んだスレッドの判定が焼き付く。捕捉窓を持たないスレッドの既定は `NoSubscriber` で
+//! 判定は「不要」なので、先に踏まれると `never` が大域へ焼き付き、自分のスレッドへ捕捉先を
+//! 差していても以後そのイベントは早期 return で捨てられる。結果、不在の主張は捕捉 0 件のまま
+//! 静かに緑になり（偽陰性）、存在の主張は捕捉 0 件で確率的に赤になる（偽陽性）。
 //!
-//! ## 並列負荷下の確率欠陥と interest-keeper による根治
-//! `with_default` は呼出ごとに transient dispatcher を登録/破棄する。`cargo test` の並列負荷下
-//! では **live dispatcher が 0 個になる瞬間**が生じ、その窓で別スレッドの callsite が初回
-//! `register()` されると tracing-core が Interest を `Never` に**焼き付ける**（tracing-core
-//! 0.1.36 `callsite.rs` の `unwrap_or_else(Interest::never)`・sticky で次の dispatcher 登録まで
-//! 復活しない）。焼き付いた callsite のイベントは以降マクロの静的チェックで捨てられ、対象檻が
-//! ~1/10〜1/20 の確率で偽赤する。
-//!
-//! 根治は [`install_interest_keeper`] が初回 [`capture`] で一度だけ確立する
-//! **プロセスグローバル interest-keeper**（[`INTEREST_KEEPER`]）。素の
-//! `tracing_subscriber::registry()`（per-layer filter 無し・`register_callsite=always`・`event`
-//! は no-op の bare registry）を `set_global_default` で常駐させると、その subscriber Arc は leak
-//! され**プロセス生存期間ずっと registrar が生き続ける**。以後は live dispatcher 数が 0 になる
-//! 瞬間が構造的に存在しなくなり、`Interest::never` 焼き付きが**到達不能**になる。確立の瞬間に
-//! 全 callsite が rebuild され、確立以前に焼き付いた callsite も治癒される。
-//!
-//! ## 不変条件
-//! **本モジュール（interest-keeper）より先に、別のグローバル subscriber を設定してはならない。**
-//! フィルタ付きの global を先に置くと callsite Interest がそちらの評価で `Never` へ焼き付き直され
-//! capture が壊れる。違反時は [`install_interest_keeper`] が `set_global_default` の `Err` を
-//! `.expect()` で受けて**大声で panic** する（silent 縮退なし・log-first・R8.1）。
-//!
-//! bare registry を global 常駐させても capture の意味論は不変: capture 外のイベントは Registry の
-//! `event` no-op へ落ち（従来の `NoSubscriber` と観測差なし）、capture 内のイベントは
-//! `with_default` の thread-local subscriber が global を shadow するため thread-local のみへ配送
-//! され、捕捉列が相互に混在しない。
+//! [`log_capture_kit::capture`] はこれを ⑴ プロセス寿命の probe 常駐 ⑵ 窓の内側での
+//! interest 再計算 ⑶ 窓の内側で発火する対照イベント（番兵）による空振り検出、の 3 点で塞ぐ。
+//! 番兵は返却前に取り除かれるので、呼出側の件数・主張は変わらない。機序の逐条解説と
+//! `tracing-core` の実コード引用は `log_capture_kit` の crate doc および同 crate の
+//! `src/probe.rs` にある。
 
-use std::sync::{Arc, Mutex, OnceLock};
-
-use tracing::field::{Field, Visit};
-use tracing::{Event, Level, Subscriber};
-use tracing_subscriber::layer::{Context, Layer};
-use tracing_subscriber::prelude::*;
-use tracing_subscriber::registry::LookupSpan;
+use log_capture_kit::CapturedEvent as CanonicalEvent;
+use tracing::Level;
 
 /// 捕捉した 1 イベント（format 層の檻が照合するのは target／level／message）。
 #[derive(Clone, Debug)]
@@ -60,78 +43,28 @@ pub(crate) struct CapturedEvent {
     pub message: String,
 }
 
-/// `message` フィールドを取り出す訪問子。
-struct MessageVisitor {
-    message: String,
-}
-
-impl Visit for MessageVisitor {
-    fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
-        if field.name() == "message" {
-            self.message = format!("{value:?}");
+impl CapturedEvent {
+    /// 共有機構の正準イベントから、本 crate の檻が照合する形へ変換する。
+    ///
+    /// `message` は `fmt::Arguments` ゆえ `record_debug` 経路で届き、その `{:?}` は整形済みの
+    /// 本文そのもの（引用符なし）になる。欠落時に空文字を返すのも移行前と同じ
+    /// （[`log_capture_kit::CapturedEvent::message`] が `unwrap_or("")`）。
+    fn from_canonical(ev: &CanonicalEvent) -> Self {
+        Self {
+            target: ev.target.clone(),
+            level: ev.level,
+            message: ev.message().to_string(),
         }
     }
 }
 
-/// 捕捉先へイベントを積む Layer。
-struct CaptureLayer {
-    sink: Arc<Mutex<Vec<CapturedEvent>>>,
-}
-
-impl<S> Layer<S> for CaptureLayer
-where
-    S: Subscriber + for<'a> LookupSpan<'a>,
-{
-    fn on_event(&self, event: &Event<'_>, _ctx: Context<'_, S>) {
-        let mut visitor = MessageVisitor {
-            message: String::new(),
-        };
-        event.record(&mut visitor);
-        let meta = event.metadata();
-        self.sink.lock().unwrap().push(CapturedEvent {
-            target: meta.target().to_string(),
-            level: *meta.level(),
-            message: visitor.message,
-        });
-    }
-}
-
-/// プロセスグローバル interest-keeper（一度だけ確立・leak されて永久生存）。
-///
-/// 確立済みか否かの二値のみを保持する（中身なし）。`OnceLock` が初期化競合を直列化するため、
-/// 並行初回呼出でも `set_global_default` はプロセスで高々 1 回しか走らない。
-static INTEREST_KEEPER: OnceLock<()> = OnceLock::new();
-
-/// tracing callsite Interest の `Never` 焼き付きを根絶する（機構の詳細はモジュール doc「決定性の要」）。
-///
-/// [`capture`] の先頭から呼ぶ。初回のみ素の `registry()` を global default として常駐させ、
-/// 全 callsite の Interest を再評価する。2 回目以降は `OnceLock` の no-op 参照で即返る。
-fn install_interest_keeper() {
-    INTEREST_KEEPER.get_or_init(|| {
-        // bare registry（per-layer filter 無し）を global default として leak・常駐させる。
-        // 以降 live dispatcher 数が 0 になる瞬間が消え、Interest::never 焼き付きが到達不能になる。
-        tracing::subscriber::set_global_default(tracing_subscriber::registry()).expect(
-            "test_log_capture の interest-keeper より先に別のグローバル subscriber を設定してはならない: \
-             フィルタ付き global は callsite Interest を Never へ焼き付け直し capture を壊す。\
-             対処: テストプロセスで test_log_capture 以外の set_global_default / init を行わないこと",
-        );
-        // 登録時 rebuild で理論上は十分だが、確立以前に焼き付いた callsite の再評価保険＋意図の
-        // 自己文書化として明示呼出する（コスト 0）。
-        tracing::callsite::rebuild_interest_cache();
-    });
-}
-
 /// `f` を実行し、その間にテストスレッドで発行された `tracing` イベントを捕捉して返す。
+///
+/// 捕捉窓は [`log_capture_kit::capture`]（硬化機構の唯一の定義元）。捕捉が働いていなければ
+/// 空の結果を静かに返さず panic する。
 pub(crate) fn capture<F: FnOnce()>(f: F) -> Vec<CapturedEvent> {
-    install_interest_keeper();
-    let sink: Arc<Mutex<Vec<CapturedEvent>>> = Arc::new(Mutex::new(Vec::new()));
-    let subscriber = tracing_subscriber::registry().with(CaptureLayer { sink: sink.clone() });
-    tracing::subscriber::with_default(subscriber, f);
-    // NOTE: `with_default` 終了後も tracing は Dispatch（subscriber＝sink を内包する Layer を
-    // 保持）を一時的に clone し得るため、sink の strong_count が 1 に戻る保証はない。よって
-    // `Arc::try_unwrap` は並列テスト下で稀に失敗する。参照数に依存せず、ロック下で捕捉列を
-    // 取り出して返す。f 完了後に本スレッドで新規イベントは発行されないため take で安全に確定できる。
-    std::mem::take(&mut *sink.lock().expect("capture sink mutex は毒化しない"))
+    let ((), events) = log_capture_kit::capture(f);
+    events.iter().map(CapturedEvent::from_canonical).collect()
 }
 
 /// 捕捉列に `target`・`level`・`message ⊇ needle` のイベントが存在することを表明する。

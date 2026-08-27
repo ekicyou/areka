@@ -1,7 +1,7 @@
 use super::test_support::{opaque_count, variant_name};
 use super::{
     BindSet, Duration, Instant, PresentCommand, SPIN_WAIT, SpineHarness, TargetId, balloon_target,
-    capture_logs, count_level, run_attach_phase, shell_target,
+    capture_logs, count_level, run_attach_phase, settle_bounded, shell_target,
 };
 
 /// `PresentCommand`（`#[non_exhaustive]`）の表示対象 `TargetId` を取り出す（未知 variant は `None`）。
@@ -406,12 +406,22 @@ fn spine_s4_balloon_free_onboot_completes_without_balloon_face_switch() {
         !received.is_empty(),
         "\\b なし OnBoot 台本の talk が有界内に発火しない（boot→talk 経路が通っていない）"
     );
-    // settle: さらに有界に Tick/drain して残余（万一の balloon 指令）を漏れなく回収する（sleep 不使用）。
+    // settle 前段（Tick 注入だけ・打ち切り条件を持たない）: 旧ループと同じ注入列
+    // `1_000_000..1_000_000 + 5_000` を**毎回すべて**注入し、各注入の直後に回収する。範囲は
+    // リテラルの固定列ゆえ環境の速さに依らず常に同一で、時刻が観測を追い越さない（要件 4.3）。
     for now in 1_000_000u64..1_000_000 + 5_000 {
         harness.inject_dispatcher_tick(now);
         received.extend(harness.wiring.drain_received());
-        std::thread::yield_now();
     }
+    // settle 後段（回収だけ・時刻は進めない）: 残余（万一の balloon 指令）を、反復回数ではなく
+    // 壁時計の最小持続と連続空観測で有界に回収する（要件 4.2・4.5）。負荷下でも回収機会が
+    // 縮まないので、この不在主張が空虚な緑になりにくい。
+    settle_bounded(|| {
+        let got = harness.wiring.drain_received();
+        let n = got.len();
+        received.extend(got);
+        n
+    });
 
     // R5.5: 受信列に balloon 表示対象（奇数 TargetId）宛は一切現れない（`\b` 由来面切替なしで完走）。
     for cmd in &received {

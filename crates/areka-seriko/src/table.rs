@@ -202,44 +202,21 @@ mod tests {
     use areka_parsers::shell::{
         Animation, AppendTarget, DefRef, DrawMethod, Interval, Pattern, Shell, Surface,
     };
+    use log_capture_kit::{LineFormat, capture_lines};
 
-    /// テスト専用 tracing 捕捉ハーネス（emo-compose/actor.rs の log_capture 流儀・
-    /// スレッドローカル `with_default` ゆえ並行テスト安全）。1 イベント 1 行へ level／target／
-    /// 各フィールド（`name=value`）を整形し、改行連結で返す。
+    /// テスト専用 tracing 捕捉ハーネス（硬化機構の唯一の定義元 `log-capture-kit` へ委譲）。
+    /// 1 イベント 1 行へ level／target／各フィールド（`name=value`）を整形し、改行連結で返す。
+    ///
+    /// **「`with_default` はスレッドローカルゆえ並行テスト安全」は誤り**である。差し替わるのは
+    /// スレッドローカルの既定 dispatcher だけで、「そのログを評価するか」を決める callsite の
+    /// interest キャッシュはプロセス全体で 1 つしかなく、その発行点を最初に踏んだスレッドの
+    /// 判定が焼き付く。捕捉窓を持たないスレッド（既定は `NoSubscriber`）が先に踏むと `never`
+    /// が大域へ焼き付き、自分のスレッドへ捕捉先を差していても取りこぼす。共有機構は
+    /// ⑴ probe 常駐 ⑵ 窓内の interest 再計算 ⑶ 番兵による空振り検出でこれを塞ぐ。機序の
+    /// 逐条解説は `log_capture_kit` の crate doc および同 crate の `src/probe.rs` にある。
     fn capture_logs<F: FnOnce()>(f: F) -> String {
-        use std::sync::{Arc, Mutex};
-        use tracing::field::{Field, Visit};
-        use tracing_subscriber::prelude::*;
-
-        #[derive(Clone, Default)]
-        struct Capture(Arc<Mutex<Vec<String>>>);
-
-        impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Capture {
-            fn on_event(
-                &self,
-                ev: &tracing::Event<'_>,
-                _: tracing_subscriber::layer::Context<'_, S>,
-            ) {
-                let meta = ev.metadata();
-                let mut line = format!("level={} target={}", meta.level(), meta.target());
-                struct V<'a>(&'a mut String);
-                impl Visit for V<'_> {
-                    fn record_debug(&mut self, f: &Field, v: &dyn std::fmt::Debug) {
-                        use std::fmt::Write;
-                        let _ = write!(self.0, " {}={:?}", f.name(), v);
-                    }
-                }
-                ev.record(&mut V(&mut line));
-                self.0.lock().unwrap().push(line);
-            }
-        }
-
-        let cap = Capture::default();
-        let logs = cap.0.clone();
-        let subscriber = tracing_subscriber::registry().with(cap);
-        tracing::subscriber::with_default(subscriber, f);
-        let guard = logs.lock().unwrap();
-        guard.join("\n")
+        let ((), lines) = capture_lines(LineFormat::LevelTargetFields, f);
+        lines.join("\n")
     }
 
     /// コマ 1 本（index/method/surface_id/wait/x/y）。

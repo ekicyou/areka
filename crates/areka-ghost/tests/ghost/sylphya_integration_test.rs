@@ -42,6 +42,7 @@ use areka_kanade::{MonotonicMs, ShioriBackend};
 use areka_parsers::charset::DefaultEncoding;
 use areka_sylphya::{AskerContext, DottedResolution, FlatResolution};
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
+use temp_path_kit::TempPath;
 
 use crate::spine_e2e_test::RecordingSink;
 
@@ -49,11 +50,13 @@ use crate::spine_e2e_test::RecordingSink;
 /// この壁時計値はテスト意味論に影響せず、並列負荷の飢餓による偽赤のみを防ぐ。
 const E2E_BOUND: std::time::Duration = std::time::Duration::from_secs(60);
 
-/// このファイル専用の一意な一時ディレクトリ（`runtime.rs`／`spine_e2e_test.rs` の流儀を踏襲）。
-fn unique_temp_dir(tag: &str) -> std::path::PathBuf {
-    let mut dir = std::env::temp_dir();
-    dir.push(format!("areka_ghost_sylphya_integration_tests_{tag}"));
-    dir
+/// このテスト専用の一時ディレクトリ。共通窓口 `temp-path-kit` 経由で組むので、
+/// 名前にプロセス識別子と連番が入り**プロセス間でも一意**（同じテストを同時に
+/// 複数プロセスで走らせても互いの一時ファイルを消し合わない）。
+///
+/// 返り値が生きている間だけ実体が存在し、破棄で中身ごと消える。
+fn unique_temp_dir(tag: &str) -> TempPath {
+    TempPath::new(&format!("ghost-sylphya-{tag}"))
 }
 
 /// `root` 直下に解決可能なゴーストツリーを構築する。ghost/master/descript.txt の
@@ -248,8 +251,8 @@ fn drive_until_first_cue(
 /// 鏡像へ反映済みである（sleep／retry 不要）。
 #[test]
 fn boot_reader_resolves_selfname_family_and_baseware_real_values() {
-    let root = unique_temp_dir("boot_reader_resolves_selfname_family_and_baseware_real_values");
-    let _ = std::fs::remove_dir_all(&root);
+    let temp = unique_temp_dir("boot-reader-resolves-selfname-family-and-baseware-real-values");
+    let root = temp.path().to_path_buf();
     write_named_ghost_fixture(&root, "むらさき", Some("紫"), Some("エモ"));
 
     let options = GhostBootOptions {
@@ -316,7 +319,6 @@ fn boot_reader_resolves_selfname_family_and_baseware_real_values() {
     );
 
     manual_teardown(parts);
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 // ============================================================================
@@ -329,8 +331,8 @@ fn boot_reader_resolves_selfname_family_and_baseware_real_values() {
 /// ことは `Ok(())` に含意される（失敗があれば `GhostShutdownError.failures` に段名つきで現れる）。
 #[test]
 fn boot_then_shutdown_all_stages_including_sylphya_succeed() {
-    let root = unique_temp_dir("boot_then_shutdown_all_stages_including_sylphya_succeed");
-    let _ = std::fs::remove_dir_all(&root);
+    let temp = unique_temp_dir("boot-then-shutdown-all-stages-including-sylphya-succeed");
+    let root = temp.path().to_path_buf();
     write_named_ghost_fixture(&root, "むらさき", None, None);
 
     let options = GhostBootOptions {
@@ -362,8 +364,6 @@ fn boot_then_shutdown_all_stages_including_sylphya_succeed() {
             );
         },
     );
-
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 // ============================================================================
@@ -379,8 +379,8 @@ fn boot_then_shutdown_all_stages_including_sylphya_succeed() {
 /// snapshot を**一度だけ** assert する（snapshot 自体の retry／sleep は一切なし＝レース非依存）。
 #[test]
 fn username_value_is_in_boot_talk_snapshot_via_barrier_fence() {
-    let root = unique_temp_dir("username_value_is_in_boot_talk_snapshot_via_barrier_fence");
-    let _ = std::fs::remove_dir_all(&root);
+    let temp = unique_temp_dir("username-value-is-in-boot-talk-snapshot-via-barrier-fence");
+    let root = temp.path().to_path_buf();
     write_named_ghost_fixture(&root, "むらさき", None, None);
 
     // 初回 talk 発火の観測点（driving 用）。OnBoot に非待ちの挨拶を積み、必ず 1 件以上 broadcast させる。
@@ -427,7 +427,6 @@ fn username_value_is_in_boot_talk_snapshot_via_barrier_fence() {
     );
 
     manual_teardown(parts);
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// companion: mock shiori が resource `username` へ 204（NoContent）を返す構成では、prefetch sink が
@@ -436,8 +435,8 @@ fn username_value_is_in_boot_talk_snapshot_via_barrier_fence() {
 /// 静的層由来で依然実在することも併せて固定する（不在記録が他フラット値を巻き添えにしない）。
 #[test]
 fn username_no_content_is_absent_from_boot_talk_snapshot() {
-    let root = unique_temp_dir("username_no_content_is_absent_from_boot_talk_snapshot");
-    let _ = std::fs::remove_dir_all(&root);
+    let temp = unique_temp_dir("username-no-content-is-absent-from-boot-talk-snapshot");
+    let root = temp.path().to_path_buf();
     write_named_ghost_fixture(&root, "むらさき", None, None);
 
     let probe = RecordingSink::new();
@@ -481,5 +480,4 @@ fn username_no_content_is_absent_from_boot_talk_snapshot() {
     );
 
     manual_teardown(parts);
-    let _ = std::fs::remove_dir_all(&root);
 }

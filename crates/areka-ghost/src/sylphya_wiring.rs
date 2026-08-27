@@ -334,7 +334,7 @@ mod tests {
     /// （provider の源が sylphya 読み口であることの R9.3 grep 証跡）。ログが削除・target/メッセージ
     /// 変更・レベル変更されると本檻が落ちる（固定ログの回帰檻）。
     ///
-    /// interest-keeper 経由の [`crate::test_log_capture::capture`] で捕捉し、並列 `cargo test` 負荷下
+    /// 共有機構へ委譲する [`crate::test_log_capture::capture`] で捕捉し、並列 `cargo test` 負荷下
     /// でも `Interest::never` 焼き付きに影響されず決定論的に判定する（bare `with_default` 不使用）。
     #[test]
     fn provider_snapshot_emits_fixed_debug_log() {

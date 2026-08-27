@@ -39,7 +39,7 @@ use crate::emo2_boot::talk_clock::TalkClock;
 use crate::emo2_boot::talk_lifecycle::TalkLifecycleSignal;
 use crate::emo2_boot::target_map::balloon_target;
 use crate::input_events::balloon::{BalloonWiring, ChoiceSelection};
-use crate::placement::test_support::{LogEvent, capture_logs};
+use crate::placement::test_support::{ExpectField, LogEvent, capture_logs};
 use wintf::ecs::FrameTime;
 
 // ---------------------------------------------------------------------------
@@ -249,11 +249,15 @@ fn scope_without_present_target_is_skipped_and_logged_once() {
         1,
         "観測できない scope の記録は 2 フレームで 1 件のはず: {errors:?}"
     );
-    assert_eq!(errors[0].field("scope"), "0", "scope が 1 行から確定する");
+    assert_eq!(
+        errors[0].expect_field("scope"),
+        "0",
+        "scope が 1 行から確定する"
+    );
 
     let explicit: Vec<&LogEvent> = visibility_lines(&events)
         .into_iter()
-        .filter(|e| e.fields.get("trigger").map(String::as_str) == Some("\"explicit\""))
+        .filter(|e| e.field("trigger") == Some("\"explicit\""))
         .collect();
     assert_eq!(
         explicit.len(),
@@ -261,7 +265,7 @@ fn scope_without_present_target_is_skipped_and_logged_once() {
         "健全な scope の処理は見送りに巻き込まれない（かつ見送った scope は処理されない）: {events:?}"
     );
     assert_eq!(
-        explicit[0].field("scope"),
+        explicit[0].expect_field("scope"),
         "1",
         "処理されたのは装着済みの scope のみ"
     );
@@ -300,11 +304,11 @@ fn failed_show_is_logged_and_rolled_back() {
         1,
         "表示の発行の失敗は誤りレベルで 1 件記録する: {first:?}"
     );
-    assert_eq!(errors[0].field("scope"), "0");
+    assert_eq!(errors[0].expect_field("scope"), "0");
     assert!(
         visibility_lines(&first)
             .iter()
-            .all(|e| e.fields.get("visible").map(String::as_str) != Some("true")),
+            .all(|e| e.field("visible") != Some("true")),
         "実らなかった表示を「遷移した」と名乗らない: {first:?}"
     );
 
@@ -356,7 +360,7 @@ fn external_hide_is_logged_as_explicit_and_clears_hover() {
 
     let explicit: Vec<&LogEvent> = visibility_lines(&events)
         .into_iter()
-        .filter(|e| e.fields.get("trigger").map(String::as_str) == Some("\"explicit\""))
+        .filter(|e| e.field("trigger") == Some("\"explicit\""))
         .collect();
     assert_eq!(
         explicit.len(),
@@ -368,8 +372,8 @@ fn external_hide_is_logged_as_explicit_and_clears_hover() {
         Level::INFO,
         "遷移の記録は情報レベル（D10）"
     );
-    assert_eq!(explicit[0].field("scope"), "0");
-    assert_eq!(explicit[0].field("visible"), "false");
+    assert_eq!(explicit[0].expect_field("scope"), "0");
+    assert_eq!(explicit[0].expect_field("visible"), "false");
 
     assert!(
         !world
@@ -735,7 +739,7 @@ fn hide_touches_only_the_balloon_target() {
         "非表示は装着済みの 1 target へちょうど 1 回適用される: {events:?}"
     );
     assert_eq!(
-        applied[0].field("target_id"),
+        applied[0].expect_field("target_id"),
         format!("{:?}", balloon_target(0)),
         "適用先はバルーンの target"
     );
@@ -744,7 +748,7 @@ fn hide_touches_only_the_balloon_target() {
     assert!(
         events
             .iter()
-            .all(|e| e.fields.get("target_id") != Some(&shell)),
+            .all(|e| e.field("target_id") != Some(shell.as_str())),
         "キャラクター窓の target へは指令が届かない（可視性へ波及しない・Requirement 6.7）: {events:?}"
     );
 
@@ -753,7 +757,8 @@ fn hide_touches_only_the_balloon_target() {
         events
             .iter()
             .filter(|e| e.message().contains("apply(Hide): 未装着ターゲット"))
-            .filter(|e| e.field("target_id") == format!("{:?}", balloon_target(UNATTACHED_SCOPE)))
+            .filter(|e| e.expect_field("target_id")
+                == format!("{:?}", balloon_target(UNATTACHED_SCOPE)))
             .count(),
         1,
         "未装着 scope への非表示も同じ窓で 1 行として見えている: {events:?}"
@@ -825,26 +830,26 @@ fn decision_events_are_written_with_the_agreed_level_and_fields() {
     assert_eq!(lines.len(), 7, "事象 1 件につき 1 行: {events:?}");
 
     assert_eq!(lines[0].level, Level::INFO);
-    assert_eq!(lines[0].field("scope"), "1");
-    assert_eq!(lines[0].field("trigger"), "\"content\"");
-    assert_eq!(lines[0].field("visible"), "true");
+    assert_eq!(lines[0].expect_field("scope"), "1");
+    assert_eq!(lines[0].expect_field("trigger"), "\"content\"");
+    assert_eq!(lines[0].expect_field("visible"), "true");
 
-    assert_eq!(lines[1].field("trigger"), "\"clear\"");
-    assert_eq!(lines[1].field("visible"), "false");
+    assert_eq!(lines[1].expect_field("trigger"), "\"clear\"");
+    assert_eq!(lines[1].expect_field("visible"), "false");
 
     assert_eq!(lines[2].level, Level::INFO);
-    assert_eq!(lines[2].field("display_end"), "4.0");
-    assert_eq!(lines[2].field("deadline"), "34.0");
+    assert_eq!(lines[2].expect_field("display_end"), "4.0");
+    assert_eq!(lines[2].expect_field("deadline"), "34.0");
 
-    assert_eq!(lines[3].field("reason"), "\"talk_started\"");
+    assert_eq!(lines[3].expect_field("reason"), "\"talk_started\"");
 
-    assert_eq!(lines[4].field("talk_time"), "40.0");
-    assert_eq!(lines[4].field("deadline"), "70.0");
+    assert_eq!(lines[4].expect_field("talk_time"), "40.0");
+    assert_eq!(lines[4].expect_field("deadline"), "70.0");
 
     assert_eq!(lines[5].level, Level::INFO);
-    assert_eq!(lines[5].field("hover"), "true");
-    assert_eq!(lines[5].field("dragging"), "false");
-    assert_eq!(lines[5].field("choice"), "false");
+    assert_eq!(lines[5].expect_field("hover"), "true");
+    assert_eq!(lines[5].expect_field("dragging"), "false");
+    assert_eq!(lines[5].expect_field("choice"), "false");
 
     assert_eq!(
         lines[6].level,
@@ -878,10 +883,10 @@ fn transition_of_a_show_that_did_not_take_is_not_written() {
 
     let lines = visibility_lines(&events);
     assert_eq!(lines.len(), 2, "scope 0 の表示だけが落ちる: {events:?}");
-    assert_eq!(lines[0].field("scope"), "1");
-    assert_eq!(lines[1].field("scope"), "0");
+    assert_eq!(lines[0].expect_field("scope"), "1");
+    assert_eq!(lines[1].expect_field("scope"), "0");
     assert_eq!(
-        lines[1].field("visible"),
+        lines[1].expect_field("visible"),
         "false",
         "非表示の遷移は実際に起きるので落とさない"
     );

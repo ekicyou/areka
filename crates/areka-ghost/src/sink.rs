@@ -133,16 +133,15 @@ fn command_kind(command: &CueCommand) -> &'static str {
 mod tests {
     use super::*;
     use areka_sakura::contract::ActorKey;
-    use std::sync::{Arc, Mutex};
-    use tracing::field::{Field, Visit};
-    use tracing::{Event, Level, Subscriber};
-    use tracing_subscriber::layer::{Context, Layer};
-    use tracing_subscriber::prelude::*;
-    use tracing_subscriber::registry::LookupSpan;
+    use log_capture_kit::CapturedEvent as CanonicalEvent;
+    use tracing::Level;
 
-    // ---- テスト専用ログ捕捉ヘルパ（kanade の schedule::log_capture 慣行に倣う。
-    // kanade のヘルパは pub(crate) で外部クレートから再利用できないため、本モジュール
-    // 限定で同じ技法をミニマルに再実装する）。----
+    // ---- テスト専用ログ捕捉ヘルパ（捕捉窓は crate 内の唯一の窓口
+    // `crate::test_log_capture::capture_events` へ寄せ、そこから共有 crate `log-capture-kit`
+    // へ委譲する。以前ここにあった自前の `with_default` 捕捉は硬化を持たず、別スレッドが
+    // 先に発行点を踏むと callsite の interest が `never` へ焼き付いて捕捉 0 件になり得た
+    // ——存在の主張は確率的に赤、不在の主張は静かに緑になる形である。機序は
+    // `log_capture_kit` の crate doc を参照）。----
 
     /// 捕捉した 1 イベント（本テストが照合する構造化フィールドのみ保持する）。
     #[derive(Debug, Clone)]
@@ -154,79 +153,70 @@ mod tests {
         command_kind: Option<String>,
     }
 
-    /// `at`／`actor`／`command_kind` フィールドを取り出す訪問子。
+    /// 正準イベントから 1 フィールドの値を、移行前の訪問子と同じ規則で取り出す。
     ///
-    /// `actor` は `%cue.actor`（Display 経由）で渡るため `record_debug` 経由で届く
-    /// （tracing の `%` シジルは `Value::record` 内部で `record_debug` を呼ぶ）。
-    /// `command_kind` はプレーンな `&'static str` 値なので `record_str` で届く。
-    struct FieldVisitor {
-        at: Option<f64>,
-        actor: Option<String>,
-        command_kind: Option<String>,
-    }
-
-    impl Visit for FieldVisitor {
-        fn record_f64(&mut self, field: &Field, value: f64) {
-            if field.name() == "at" {
-                self.at = Some(value);
+    /// 移行前は `record_str` を無条件に採り、`record_debug` は生値がまだ無いときだけ採って
+    /// いた（すなわち生値が 1 つでもあれば最後の生値、無ければ最初の Debug 表現）。第 2 要素は
+    /// 「生値だったか」で、Debug 表現のときだけ囲みの引用符を剥がすために使う。
+    ///
+    /// `actor` は `%cue.actor`（Display 経由）で渡るため `record_debug` 経路で届き、
+    /// `command_kind` はプレーンな `&'static str` 値なので `record_str` 経路で届く。
+    /// **[`log_capture_kit::CapturedEvent::field_str`] だけで書くと前者が黙って落ちる**
+    /// （`log_capture_kit` の crate doc「注意」節）。
+    fn field_of(ev: &CanonicalEvent, name: &str) -> Option<(String, bool)> {
+        let mut last_str: Option<&str> = None;
+        let mut first_debug: Option<&str> = None;
+        for (field_name, value) in &ev.fields {
+            if field_name != name {
+                continue;
+            }
+            match &value.str_raw {
+                Some(raw) => last_str = Some(raw.as_str()),
+                None if first_debug.is_none() => first_debug = Some(value.debug.as_str()),
+                None => {}
             }
         }
-
-        fn record_str(&mut self, field: &Field, value: &str) {
-            match field.name() {
-                "command_kind" => self.command_kind = Some(value.to_string()),
-                "actor" => self.actor = Some(value.to_string()),
-                _ => {}
-            }
-        }
-
-        fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
-            match field.name() {
-                "actor" if self.actor.is_none() => {
-                    self.actor = Some(format!("{value:?}").trim_matches('"').to_string());
-                }
-                "command_kind" if self.command_kind.is_none() => {
-                    self.command_kind = Some(format!("{value:?}").trim_matches('"').to_string());
-                }
-                _ => {}
-            }
+        match (last_str, first_debug) {
+            (Some(raw), _) => Some((raw.to_string(), true)),
+            (None, Some(debug)) => Some((debug.to_string(), false)),
+            (None, None) => None,
         }
     }
 
-    /// 捕捉先へイベントを積む Layer。
-    struct CaptureLayer {
-        sink: Arc<Mutex<Vec<CapturedEvent>>>,
+    /// 文字列フィールドの値（Debug 表現のときは囲みの引用符を剥がす）。
+    fn text_of(ev: &CanonicalEvent, name: &str) -> Option<String> {
+        field_of(ev, name).map(|(value, from_str)| {
+            if from_str {
+                value
+            } else {
+                value.trim_matches('"').to_string()
+            }
+        })
     }
 
-    impl<S> Layer<S> for CaptureLayer
-    where
-        S: Subscriber + for<'a> LookupSpan<'a>,
-    {
-        fn on_event(&self, event: &Event<'_>, _ctx: Context<'_, S>) {
-            let mut visitor = FieldVisitor {
-                at: None,
-                actor: None,
-                command_kind: None,
-            };
-            event.record(&mut visitor);
-            let meta = event.metadata();
-            self.sink.lock().unwrap().push(CapturedEvent {
-                target: meta.target().to_string(),
-                level: *meta.level(),
-                at: visitor.at,
-                actor: visitor.actor,
-                command_kind: visitor.command_kind,
-            });
+    impl CapturedEvent {
+        /// 共有機構の正準イベントから、本檻が照合する形へ変換する。
+        ///
+        /// `at` は `f64` 値ゆえ `Visit` の既定実装で `record_debug` へ落ち、その `{:?}` は
+        /// `1.5`／`3.25` のような十進表記になる。移行前の `record_f64` と同じ値を得るために
+        /// ここで `f64` へ戻す（数値でない値が載っていれば `None` になり、檻は移行前どおり落ちる）。
+        fn from_canonical(ev: &CanonicalEvent) -> Self {
+            Self {
+                target: ev.target.clone(),
+                level: ev.level,
+                at: field_of(ev, "at").and_then(|(value, _)| value.parse::<f64>().ok()),
+                actor: text_of(ev, "actor"),
+                command_kind: text_of(ev, "command_kind"),
+            }
         }
     }
 
     /// `f` を実行し、その間にテストスレッドで発行された `tracing` イベントを捕捉して返す。
     fn capture<F: FnOnce()>(f: F) -> Vec<CapturedEvent> {
-        let sink: Arc<Mutex<Vec<CapturedEvent>>> = Arc::new(Mutex::new(Vec::new()));
-        let layer = CaptureLayer { sink: sink.clone() };
-        let subscriber = tracing_subscriber::registry().with(layer);
-        tracing::subscriber::with_default(subscriber, f);
-        std::mem::take(&mut *sink.lock().expect("capture sink mutex は毒化しない"))
+        crate::test_log_capture::capture_events(f)
+            .iter()
+            .map(CapturedEvent::from_canonical)
+            .collect()
     }
 
     fn sample_cue(at: f64, actor: &str, command: CueCommand) -> TalkCue {

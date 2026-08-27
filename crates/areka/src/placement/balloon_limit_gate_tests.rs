@@ -21,7 +21,7 @@
 
 use super::super::config::{BalloonXMode, PlacementConfig, ScopeConfig};
 use super::super::resolver::{Anchor, ScopeInput, resolve_placement};
-use super::super::test_support::{LogEvent, capture_logs, expect_one};
+use super::super::test_support::{ExpectField, LogEvent, capture_logs, expect_one};
 use super::*;
 
 // ---------------------------------------------------------------------------
@@ -149,24 +149,25 @@ fn boot_gate_clamps_display_position_and_keeps_offset_raw() {
     let hit = expect_one(&events, BALLOON_LIMIT_CLAMP_TAG);
     assert_eq!(hit.level, tracing::Level::INFO, "補正の記録は info（DD7）");
     assert_eq!(
-        hit.field("scope"),
+        hit.expect_field("scope"),
         "0",
         "補正した scope を記録する（要件 6.1）"
     );
     assert_eq!(
-        hit.field("from"),
+        hit.expect_field("from"),
         format!("{:?}", point(-20, 310)),
         "補正前の位置を記録する（要件 6.1）"
     );
     assert_eq!(
-        hit.field("to"),
+        hit.expect_field("to"),
         format!("{:?}", point(0, 310)),
         "補正後の位置を記録する（要件 6.1）"
     );
     assert!(
-        hit.field("context").contains(BALLOON_LIMIT_BOOT_CONTEXT),
+        hit.expect_field("context")
+            .contains(BALLOON_LIMIT_BOOT_CONTEXT),
         "契機（どの関門か）を記録する（要件 6.1）: {}",
-        hit.field("context")
+        hit.expect_field("context")
     );
 }
 
@@ -193,7 +194,7 @@ fn boot_gate_logs_only_for_scopes_it_actually_moved() {
 
     let hit = expect_one(&events, BALLOON_LIMIT_CLAMP_TAG);
     assert_eq!(
-        hit.field("scope"),
+        hit.expect_field("scope"),
         "1",
         "補正ログは実際に動いた scope の分だけ（域内 scope の分は出ない）"
     );
@@ -223,7 +224,7 @@ fn boot_gate_skips_scopes_with_limit_disabled() {
 
     let hit = expect_one(&events, BALLOON_LIMIT_CLAMP_TAG);
     assert_eq!(
-        hit.field("scope"),
+        hit.expect_field("scope"),
         "1",
         "limit=0 の scope の補正ログは出ない"
     );
@@ -251,12 +252,13 @@ fn boot_gate_warns_and_passes_through_when_snapshot_is_empty() {
     let hit = expect_one(&events, BALLOON_LIMIT_UNRESOLVED_TAG);
     assert_eq!(hit.level, tracing::Level::WARN, "縮退は warn（log-first）");
     assert_eq!(
-        hit.field("scope"),
+        hit.expect_field("scope"),
         "0",
         "どの scope が素通ししたかを記録する"
     );
     assert!(
-        hit.field("context").contains(BALLOON_LIMIT_BOOT_CONTEXT),
+        hit.expect_field("context")
+            .contains(BALLOON_LIMIT_BOOT_CONTEXT),
         "どの関門の縮退かを記録する"
     );
     // 捕捉は生きている（直前の expect_one が 1 件取り出した）＝この主張は空虚でない。
@@ -537,7 +539,7 @@ fn boot_gate_limit_arms_cover_every_edge_at_every_dpi_level() {
             // `expect_one` が 1 件取り出せている時点で捕捉は生きている（空虚でない）。
             let hit = expect_one(&events, BALLOON_LIMIT_CLAMP_TAG);
             assert_eq!(
-                hit.field("scope"),
+                hit.expect_field("scope"),
                 "1",
                 "dpi={dpi} {what}: limit=0 の scope の補正ログが出ている"
             );

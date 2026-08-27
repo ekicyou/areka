@@ -2,7 +2,7 @@ use super::resolver::{PointPx, SizePx};
 use super::shared_test_support::{
     TempDir, WA, balloon_root, emo2_root, synth_declared_dpi_ghost, with_com_initialized,
 };
-use super::test_support::{LogEvent, capture_logs};
+use super::test_support::{ExpectField, LogEvent, capture_logs};
 use super::*;
 
 // ------------------------------------------------------------------
@@ -39,25 +39,25 @@ fn prepare_windowposition_logs_scope_raw_side_and_converted_adjust() {
 
         // scope0（本体側・`balloons0s.txt` の 266,-129・バルーンはキャラ左）。
         assert_eq!(hits[0].level, tracing::Level::INFO);
-        assert_eq!(hits[0].field("scope"), "0");
-        assert_eq!(hits[0].field("windowposition_x"), "Some(266)");
-        assert_eq!(hits[0].field("windowposition_y"), "Some(-129)");
-        assert_eq!(hits[0].field("balloon_side"), "Left");
-        assert_eq!(hits[0].field("adjust_dx"), "266");
-        assert_eq!(hits[0].field("adjust_dy"), "-129");
-        assert_eq!(hits[0].field("adjusted"), "true");
+        assert_eq!(hits[0].expect_field("scope"), "0");
+        assert_eq!(hits[0].expect_field("windowposition_x"), "Some(266)");
+        assert_eq!(hits[0].expect_field("windowposition_y"), "Some(-129)");
+        assert_eq!(hits[0].expect_field("balloon_side"), "Left");
+        assert_eq!(hits[0].expect_field("adjust_dx"), "266");
+        assert_eq!(hits[0].expect_field("adjust_dy"), "-129");
+        assert_eq!(hits[0].expect_field("adjusted"), "true");
 
         // scope1（相方側・`balloonk0s.txt` の -190,-75・バルーンはキャラ右）。
-        assert_eq!(hits[1].field("scope"), "1");
-        assert_eq!(hits[1].field("windowposition_x"), "Some(-190)");
-        assert_eq!(hits[1].field("windowposition_y"), "Some(-75)");
-        assert_eq!(hits[1].field("balloon_side"), "Right");
+        assert_eq!(hits[1].expect_field("scope"), "1");
+        assert_eq!(hits[1].expect_field("windowposition_x"), "Some(-190)");
+        assert_eq!(hits[1].expect_field("windowposition_y"), "Some(-75)");
+        assert_eq!(hits[1].expect_field("balloon_side"), "Right");
         assert_eq!(
-            hits[1].field("adjust_dx"),
+            hits[1].expect_field("adjust_dx"),
             "-190",
             "生値 −190 は Right 側でも反転せず画面 −x のまま（SSP 実測で確定・R7.6）"
         );
-        assert_eq!(hits[1].field("adjust_dy"), "-75");
+        assert_eq!(hits[1].expect_field("adjust_dy"), "-75");
     });
 }
 
@@ -227,16 +227,16 @@ fn prepare_windowposition_adjust_is_identical_for_both_balloon_sides() {
             })
             .collect();
         assert_eq!(hits.len(), 2, "scope ごとに 1 行: {events:?}");
-        assert_eq!(hits[0].field("balloon_side"), "Left");
-        assert_eq!(hits[1].field("balloon_side"), "Right");
-        assert_eq!(hits[0].field("adjust_dx"), "266");
+        assert_eq!(hits[0].expect_field("balloon_side"), "Left");
+        assert_eq!(hits[1].expect_field("balloon_side"), "Right");
+        assert_eq!(hits[0].expect_field("adjust_dx"), "266");
         assert_eq!(
-            hits[1].field("adjust_dx"),
+            hits[1].expect_field("adjust_dx"),
             "266",
             "Right 側でも符号は反転しない（反転すれば -266 になる）"
         );
-        assert_eq!(hits[0].field("adjust_dy"), "-129");
-        assert_eq!(hits[1].field("adjust_dy"), "-129");
+        assert_eq!(hits[0].expect_field("adjust_dy"), "-129");
+        assert_eq!(hits[1].expect_field("adjust_dy"), "-129");
 
         // (b) 配置面: 基本位置からの寄与が両 scope で一致する
         //     （置き側が変えるのは基本位置だけ）。

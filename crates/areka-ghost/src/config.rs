@@ -79,12 +79,15 @@ mod tests {
     use super::*;
     use std::fs;
     use std::path::PathBuf;
+    use temp_path_kit::TempPath;
 
-    /// このテスト専用の一意な一時ディレクトリを返す（関数名でユニーク化・衝突回避）。
-    fn unique_temp_dir(tag: &str) -> PathBuf {
-        let mut dir = std::env::temp_dir();
-        dir.push(format!("areka_ghost_config_tests_{tag}"));
-        dir
+    /// このテスト専用の一時ディレクトリ。共通窓口 `temp-path-kit` 経由で組むので、
+    /// 名前にプロセス識別子と連番が入り**プロセス間でも一意**（同じテストを同時に
+    /// 複数プロセスで走らせても互いの一時ファイルを消し合わない）。
+    ///
+    /// 返り値が生きている間だけ実体が存在し、破棄で中身ごと消える。
+    fn unique_temp_dir(tag: &str) -> TempPath {
+        TempPath::new(&format!("ghost-config-{tag}"))
     }
 
     /// `root` 直下に最小限の正常なゴーストツリー（`ghost/master/descript.txt` ＋
@@ -129,7 +132,8 @@ mod tests {
     #[test]
     fn resolve_kanade_config_reads_shell_name_from_descript() {
         // --- Arrange: shell/master/descript.txt に name,SomeShellName ---
-        let root = unique_temp_dir("reads_shell_name_from_descript");
+        let temp = unique_temp_dir("reads-shell-name-from-descript");
+        let root = temp.path().to_path_buf();
         let mount = resolve_mount_with_shell_descript(
             &root,
             "master",
@@ -144,15 +148,13 @@ mod tests {
         assert_eq!(config.baseware_name, "areka");
         assert_eq!(config.baseware_version, env!("CARGO_PKG_VERSION"));
         assert_eq!(config.close_talk_deadline_ms, 30_000);
-
-        // --- Cleanup（best-effort）---
-        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
     fn resolve_kanade_config_falls_back_to_dir_name_when_name_key_missing() {
         // --- Arrange: descript.txt は読めるが name キーが無い ---
-        let root = unique_temp_dir("falls_back_when_name_key_missing");
+        let temp = unique_temp_dir("falls-back-when-name-key-missing");
+        let root = temp.path().to_path_buf();
         let mount = resolve_mount_with_shell_descript(
             &root,
             "master",
@@ -164,15 +166,13 @@ mod tests {
 
         // --- Assert: shell ディレクトリ自身の basename（"master"）へフォールバック ---
         assert_eq!(config.shell_name, "master");
-
-        // --- Cleanup（best-effort）---
-        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
     fn resolve_kanade_config_falls_back_to_dir_name_when_descript_missing() {
         // --- Arrange: shell/master/descript.txt が存在しない ---
-        let root = unique_temp_dir("falls_back_when_descript_missing");
+        let temp = unique_temp_dir("falls-back-when-descript-missing");
+        let root = temp.path().to_path_buf();
         let mount = resolve_mount_with_shell_descript(&root, "master", None);
 
         // --- Act ---
@@ -180,9 +180,6 @@ mod tests {
 
         // --- Assert: shell ディレクトリ自身の basename（"master"）へフォールバック ---
         assert_eq!(config.shell_name, "master");
-
-        // --- Cleanup（best-effort）---
-        let _ = fs::remove_dir_all(&root);
     }
 
     /// フォールバック値が「たまたま `master` と一致する」偽陽性を防ぐための決め手テスト:
@@ -194,7 +191,8 @@ mod tests {
     #[test]
     fn resolve_kanade_config_falls_back_to_non_master_dir_name() {
         // --- Arrange: shell ディレクトリ名は customshell（master ではない）---
-        let root = unique_temp_dir("falls_back_to_non_master_dir_name");
+        let temp = unique_temp_dir("falls-back-to-non-master-dir-name");
+        let root = temp.path().to_path_buf();
         let mount = resolve_mount_with_shell_descript(&root, "customshell", None);
 
         // --- Act ---
@@ -203,8 +201,5 @@ mod tests {
         // --- Assert: フォールバック値は実ディレクトリ名 "customshell"（"master" 固定ではない）---
         assert_eq!(config.shell_name, "customshell");
         assert_ne!(config.shell_name, "master");
-
-        // --- Cleanup（best-effort）---
-        let _ = fs::remove_dir_all(&root);
     }
 }

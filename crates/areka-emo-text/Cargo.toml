@@ -59,3 +59,8 @@ areka-emo-compose = { path = "../areka-emo-compose" }
 # 観測 example（examples/emo-text-layer.rs・task 9.2）のログ初期化
 # （RUST_LOG 対応・emo-present example と同型。example 専用＝dev-deps）。
 tracing-subscriber = { workspace = true }
+# ログ捕捉テストの硬化機構の唯一の定義元（spec: areka-P0-test-cage-determinism）。
+# ワークスペース内 crate に依存しない leaf・publish = false・テスト専用であり、
+# 出荷クロージャに新規外部依存を持ち込まない（必須依存は tracing のみ＝既出）。
+# 依存方向の規律により [dependencies] へは決して置かない。
+log-capture-kit = { path = "../log-capture-kit" }
