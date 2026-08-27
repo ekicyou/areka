@@ -269,6 +269,18 @@ fn s2_red_ground_point_preserved_from_dpi120_to_dpi192() {
 /// 経路語は `DpiReproject` のままである（D13）。
 ///
 /// 5.2 が `Some` 経路まで作り替えると本件が赤になる。
+///
+/// **⚠ 区分（areka-P0-balloon-offset-dpi task 6.4・要件 7.4／7.6・design D13）＝
+/// 拡大率遷移での追従オフセットの追随に対して本檻は空振りであり、追随の証拠にならない。**
+/// 上の随伴恒等式は `offset` を書込の**後**に world から読んで `balloon − char` と突き合わせる
+/// ため、追随が書込の途中で `offset` を付け替えても成立し続ける（恒真の言い換え＝下の
+/// 「task 7.2」ブロックが詳述する空振りの罠そのものの配置である）。
+///
+/// 実測（task 6.4）: 追随の適用（`frame::balloon_offset_follow::rescale_balloon_follow_offset`
+/// の呼出）を外した走行で、本件は**緑のまま**であった（同走行では追随の檻 13 件が赤になる）。
+/// ゆえに**本件が緑であることを「追随を壊していない」の根拠に使ってはならない**——追随の
+/// 証拠は [`s2_some_report_path_rescales_the_balloon_follow_offset_by_the_display_dpi_ratio`]
+/// と `frame_balloon_offset_follow_tests.rs` の行列だけが持つ。
 #[test]
 fn s2_control_some_report_path_reprojects_and_keeps_balloon_offset() {
     let (mut world, gw) = dpi_world();

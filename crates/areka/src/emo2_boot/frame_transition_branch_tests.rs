@@ -554,6 +554,22 @@ fn the_wait_defers_window_writes_only_and_leaves_the_drawing_phase_untouched() {
 /// （要件 10.7・設計 Integration Tests 項目 6）。
 ///
 /// 「待ち札 0」の陽性の対は同じ本体の内側——待たずに通ったからこそ書込が出て寸が変わる。
+///
+/// **⚠ 区分（areka-P0-balloon-offset-dpi task 6.4・要件 7.4／7.6・design D13）＝
+/// 拡大率遷移での追従オフセットの追随に対して本檻は空振りであり、追随の証拠にならない。**
+/// 本檻は待ち札・書込回数・**寸**の追従を主張するのみで、`BalloonFollow.offset` の値について
+/// は何も主張しない（[`move_scope_to`] が読む `offset` は遷移を起こす**前**に二体を隣接モニタ
+/// へ揃えて置くための配置用であり、主張の対象ではない）。遷移そのものは起きるが、追随が
+/// 入っても出なくても本檻の主張は同じ値を取る。
+///
+/// 実測（task 6.4）: 追随の適用（`frame::balloon_offset_follow::rescale_balloon_follow_offset`
+/// の呼出）を外した走行で、本件は 120／192 とも**緑のまま**であった（同走行では追随の檻 13 件
+/// が赤になる）。ゆえに**本件が緑であることを「追随を壊していない」の根拠に使ってはならない**。
+///
+/// なお本檻を「書込**後**に読んだ `offset` で恒等式を突き合わせる」群として数えていた
+/// `research.md` §2.8 (b) の記述は、構造としては本檻に当たらない（恒等式すら主張しない）。
+/// 結論（追随に対して空振り）は変わらないが、**行番号ではなく構造で見分けよ**という
+/// 2026-08-28 の訂正の教訓がここにも当てはまる。
 fn a_window_moved_to_another_monitor_never_waits_at(dpi: u16) {
     let mut harness = FrameHarness::new();
     let mut source = FakeReports::default();

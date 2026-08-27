@@ -29,6 +29,18 @@ use super::*;
 /// 随伴（Req 4.4）も同時に固定する: バルーン窓は自分の `None` 経路では動かず、
 /// **キャラ窓確定後の追従**（`route=BalloonFollow`）だけが動かし、恒等式
 /// `balloon − char ≡ BalloonFollow.offset` が保たれる。
+///
+/// **⚠ 区分（areka-P0-balloon-offset-dpi task 6.4・要件 7.4／7.6・design D13）＝
+/// 拡大率遷移での追従オフセットの追随に対して本檻は空振りであり、追随の証拠にならない。**
+/// 末尾の随伴恒等式は `offset` を書込の**後**に world から読んで `balloon − char` と突き合わせる
+/// ため、追随が書込の途中で `offset` を付け替えても成立し続ける（恒真の言い換え——
+/// `frame_dpi_reproject_tests.rs` の「task 7.2」ブロックが同じ罠を詳述している）。
+///
+/// 実測（task 6.4）: 追随の適用（`frame::balloon_offset_follow::rescale_balloon_follow_offset`
+/// の呼出）を外した走行で、本件は**緑のまま**であった（同走行では追随の檻 13 件が赤になる）。
+/// ゆえに**本件が緑であることを「追随を壊していない」の根拠に使ってはならない**。本檻が持つ
+/// のは「`None` 経路で寸を触らず位置だけが再射影される」という分離の主張であって、追従
+/// オフセットの値についての主張ではない。
 #[test]
 fn s2_none_report_path_reprojects_position_without_touching_size() {
     let (mut world, gw) = dpi_world();
