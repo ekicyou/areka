@@ -310,6 +310,22 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 **Location**: `/crates/pilot/`
 **Purpose**: 二坑モデルの**先進坑（pilot・使い捨て）知見クレート**。**空（最小）`lib.rs` ＋ 探索コードは `examples/<spec-name>/` のみ**という構造で葉ノード隔離を担保（出荷グラフから被依存しない＝可逆性の構造的担保）。完了 pilot はここへ隔離保全（例: `examples/pilot-clickthrough-alpha-toggle/`・`examples/shiori-host-32/`）。規律の正本は `.kiro/steering/two-tunnel.md`。
 
+### Log Capture Kit Crate（log-capture-kit）
+**Location**: `/crates/log-capture-kit/`
+**Purpose**: ログ捕捉テストの**硬化機構**（`tracing` の有効判定はプロセス共有で先着が焼き付くため、後続の捕捉テストがイベントを 1 件も観測できなくなる。それを捕捉窓の内側で構造的に防ぐ仕組み）を**ワークスペースで唯一定義する**テスト専用 leaf（`areka-P0-test-cage-determinism` 2026-08-27）。定義箇所が 1 つなので「どの流儀が正しいか」を crate ごとに判断し直す必要が無い。**「`with_default` はスレッドローカルゆえ並行実行でも干渉しない」は誤り**——スレッド局所なのは捕捉先の差し替えだけで、有効判定のキャッシュはプロセス共有である。
+**Modules**: `probe.rs`（常駐の仕掛けの確立）／`capture.rs`（捕捉窓。窓の内側で対照イベントを発行し、その捕捉を要求して落ちる＝**不在主張が捕捉 0 件のまま静かに緑にならない**）／`event.rs`（正準イベント型と既存の文字列形の再現）／`filter.rs`（`env-filter` feature・濾過指示つき捕捉。有効にしてよいのは `wintf` のみ）／`global.rs`（全スレッド横断の一回限り捕捉。既定 API と混同させないため別窓口とし、両立条件を明記）
+**Tests（`tests/`）**: **ワークスペース全体の見張りの置き場である**（設計判断・ログ捕捉に限らない）。共有機構の迂回検知（`with_default_guard_test.rs`）・**1 ファイル 1,000 行の番人**（`file_length_guard_test.rs`。目安の正本は本文書 Test Naming Conventions の「1 ファイル 1,000 行以下の目安」の項）・**テスト用一時パスの窓口の迂回検知**（`temp_path_guard_test.rs`）の 3 本が、走査部品 `workspace_scan/mod.rs`（ファイル列挙・コメント除去・語の走査）を共有する。**見張りを別 crate へ分けると走査器が複製される**ため、crate 名がログ捕捉だけを名乗る点との食い違いを承知でこの配置を採っている。較正 `capture_calibration_test.rs` は**わざと硬化なしの直接呼出を使う**ので迂回検知の例外表に載る（外すと較正が空振りする）。各見張りは例外表の件数を別の定数に逐語で持ち、**項目の追加は複数箇所の明示的な編集としてのみ許す**（暗黙に増えない）。
+**Dependencies**: `tracing`（必須）＋ `tracing-subscriber`（`env-filter` feature 時のみの任意依存・既定 off）。**ワークスペース内 crate への依存は 0**（leaf・依存方向の規律＝`wintf` から引いても上位 crate を持ち込まない）・`publish = false`
+**Consumers**: テスト専用（`[dev-dependencies]` のパス依存 1 行）で 10 crate（`areka`・`wintf`・`areka-ghost`・`areka-kanade`・`areka-seriko`・`areka-sylphya`・`areka-emo-atlas`・`areka-emo-compose`・`areka-emo-present`・`areka-emo-text`）。**`[dependencies]` へは決して置かない**（製品側依存に現れたら `with_default_guard_test.rs` が赤にする）
+
+### Temp Path Kit Crate（temp-path-kit）
+**Location**: `/crates/temp-path-kit/`
+**Purpose**: テスト用の一時パスを**プロセス間で一意**に組み立てる窓口を**唯一定義する**テスト専用 leaf（`areka-P0-test-cage-determinism` 2026-08-27）。同じテストを複数プロセスで同時に走らせたとき、固定名の一時パスが互いの前提ファイルを消し合って赤になる形を消す（是正前は同時 4 プロセス × 40 反復で 30.0% が赤）。**発明ではなく移植**——既に正しく書けていた型（連番＋プロセス識別子＋破棄時の再帰削除）を crate をまたいで引ける位置へ出したもの。
+**Pattern**: 名前は `areka-{札}-{プロセス識別子}-{連番}` を組む内部関数 1 つで作り、実際に作る入口がその関数を通る。**一意性と後始末は別の性質**で、識別子があっても破棄が無ければ `%TEMP%` に積み上がる（実例あり）ので、破棄は型が持つ。宛先の種類は増やさず、単一ファイルはディレクトリの下に取る。
+**Modules**: `lib.rs`（入口・名前組立・破棄）＋ `lib_tests.rs`（自己テスト）
+**Dependencies**: **依存 0**（`[dependencies]` 節そのものが無く std のみ）・`publish = false`
+**Consumers**: テスト専用（`[dev-dependencies]`）で `areka`・`areka-ghost`・`areka-parsers`・`areka-sylphya`。**迂回の検知は本 crate ではなく `log-capture-kit/tests/temp_path_guard_test.rs` にある**（走査部品を複製しないため。**窓口と見張りが別 crate に分かれるのは意図的な設計**）
+
 ### Vendored: pasta DSL Engine
 **Location**: `/vendors/pasta/`（git サブモジュール）  
 **Repository**: [https://github.com/ekicyou/pasta](https://github.com/ekicyou/pasta)  
