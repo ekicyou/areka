@@ -344,7 +344,7 @@ flowchart TD
 | 11.7 | 起床旗に触るテストは唯一の錠 | C3 settle・C5 錠 | `TICK_WAKE_TEST_LOCK` | — |
 | 11.8 | 共有の旗の上で不在主張をしない | C3 settle | 注入口経由 | — |
 | 12.1 | プロセス間で一意な一時パスの窓口 | C8 | `temp-path-kit` の `TempPath`（`process::id()`＋連番＋Drop） | — |
-| 12.2 | 書込 20 ファイルの移行 | C8 | `areka` 6・`areka-ghost` 12・`areka-parsers` 2 | — |
+| 12.2 | 書込 **22 ファイル**の移行 | C8 | `areka` 6・`areka-ghost` **13**・`areka-parsers` 2・`areka-sylphya` 1（**2026-08-27 実測**。起草の 20 は `areka-ghost` を 12 と数え、`areka-sylphya` を取りこぼしていた） | — |
 | 12.3 | 判定内容を変えない | C8 | 主張・期待値・本数を保存／本番コード非接触 | — |
 | 12.4 | 迂回の新設を検知 | C6 番人 | `temp_path_guard_test.rs`＋例外表 | — |
 | 12.5 | 検知の較正 | C6 番人 | 既知陽性で赤になる自己テスト | — |
@@ -367,7 +367,7 @@ flowchart TD
 | C5 錠の退役 | `wintf` テストファイル 4 本 ＋ `command.rs` | 21 呼出を退役し、**定義も本仕様で削除**（2026-08-27 裁定で 7.4 改訂） | 7.1-7.4 | dlp の着地（P0・外部） | — |
 | C6 番人テスト | kit `tests/`（ワークスペース全体の見張りの置き場） | 直接呼出検知・1,000 行番人・**一時パスの固定名検知**・dev-deps-only・較正 | 1.3, 2.6, 8.1-8.4, 10.1-10.3, 11.5, **12.4, 12.5** | walker（P0） | Batch |
 | C7 検証ハーネスと文書 | `verification/`・requirements.md | 反復実行・ログ保存・再計測・申し送り | 2.1, 4.1, 3.7, 9.1-9.6, 5.8, 6.2, 7.3, 7.4, 10.4, 10.5, 11.4 | PowerShell（P1） | Batch |
-| C8 一時パスの共通窓口と全面移行 | テスト基盤（leaf crate `temp-path-kit`）＋各 crate のテストコード | プロセス間で一意な一時パスの窓口を 1 つ用意し、書込 20 ファイルを寄せる | 12.1-12.3, 12.6, 12.7 | std のみ（依存 0） | Service, State |
+| C8 一時パスの共通窓口と全面移行 | テスト基盤（leaf crate `temp-path-kit`）＋各 crate のテストコード | プロセス間で一意な一時パスの窓口を 1 つ用意し、書込 **22 ファイル**を寄せる | 12.1-12.3, 12.6, 12.7 | std のみ（依存 0） | Service, State |
 | C9 常時化の費用の測定 | `verification/`・kit `probe.rs` | 同一実行体・同一集合で常駐 probe の有無だけを切り替える A/B | 13.1-13.5 | C7 ハーネス（P0） | Batch |
 
 ### テスト基盤層
@@ -617,7 +617,7 @@ fn fault_point(at: UploadFault) -> Result<(), PresentError>;
 
 | Field | Detail |
 |-------|--------|
-| Intent | テスト用の一時パスを**プロセス間で一意**に組み立てる窓口を 1 つ用意し、書込を行う 20 ファイルをそこへ寄せる |
+| Intent | テスト用の一時パスを**プロセス間で一意**に組み立てる窓口を 1 つ用意し、書込を行う **22 ファイル**（起草は 20・2026-08-27 実測で訂正）をそこへ寄せる |
 | Requirements | 12.1, 12.2, 12.3, 12.6, 12.7 |
 
 **設計判断: なぜ `log-capture-kit` へ相乗りせず新 crate を立てるか**
@@ -631,7 +631,7 @@ fn fault_point(at: UploadFault) -> Result<(), PresentError>;
 
 - 窓口の型（`temp-path-kit/src/lib.rs`）は既存の正解型の移植とする——`crates/areka/src/placement/placement_shared_test_support.rs:41-68` の `TempDir`＝`AtomicU32` の単調連番 ＋ `std::process::id()` ＋ `Drop` での再帰削除。**発明しない。** 同型は 2026-08-27 時点で 16 ファイルに実在する。
 - ディレクトリだけでなく**単一ファイル**の宛先も要る（`transition_signoff_tests.rs:102` は固定ファイル名 1 個）。窓口はディレクトリを配り、ファイルはその下に置く形へ寄せる（宛先の種類を増やさない）。
-- 移行対象は **`std::env::temp_dir()` を使い、かつ書込・削除を行う 20 ファイル**（`areka` 6・`areka-ghost` 12・`areka-parsers` 2）。読み出しのみの 2 ファイル（`placement_monitor_tests.rs`・`shiori-host32-host/tests/error_paths.rs`）は対象外で、その判定根拠を記録する。
+- 移行対象は **`std::env::temp_dir()` を使い、かつ書込・削除を行う 22 ファイル**（`areka` 6・`areka-ghost` **13**・`areka-parsers` 2・`areka-sylphya` 1。**起草の「20（ghost 12）」は二重に誤っていた**——ghost の数え落とし 1 本と、ファイル単位の絞り込みが見逃した `areka-sylphya` 1 本である）。読み出しのみの 2 ファイル（`placement_monitor_tests.rs`・`shiori-host32-host/tests/error_paths.rs`）は対象外で、その判定根拠を記録する。
 - 既存の主張・期待値・テスト本数を変えない（要件 12.3）。**本番コード（`#[cfg(test)]` の外）は 1 行も変えない**——`areka-ghost/src/config.rs`・`areka-ghost/src/shiori_wiring.rs`・`areka-parsers/src/package/resolve.rs` は製品ファイルなので、触るのはその中のテストモジュールだけである。
 - 移行済みで既に `std::process::id()` を使っている 16 ファイルは**本タスクの対象外**（既に正しい）。ただし見張りの例外表に載せるか窓口へ寄せるかは実装時に決め、根拠を記録する。
 - **2026-08-27 訂正（絞り込みがファイル単位だった・対象は 20 → 21）**: 上の 2 行が使っている「ファイルのどこかに `std::process::id()` があれば一意化済み」という判定は**ファイル単位**であり、**1 つのファイルの中で一意名と固定名が混在する形を丸ごと取りこぼす**。タスク 10.5 のレビューが実物を 1 件掘り当てた——`crates/areka-sylphya/src/persist/io.rs` は入口 3 箇所のうち識別子を使うのが `:225-229` の 1 箇所だけで、`:195-197` と `:212-214` は**固定名で書込・削除を行う**。全域を数え直した結果、危険な取りこぼしは**この 1 ファイルだけ**で（残る混在 6 本＝`shiori_proxy.rs`・`process_host.rs`・host32 の e2e 4 本は、書込を伴う箇所がすべて識別子を含み、識別子の無い箇所は「実在するディレクトリ」として読むだけ）、タスク 10.7 で移行する。また `std::process::id()` を持つファイルの実測は **15** で起草の「16」と合わず、うち **2 つは窓口 crate 自身**（`temp-path-kit` の `src/lib.rs` と `src/lib_tests.rs`）なので、**見張りの例外表に「一意化済み」として載るのは 13**（タスク 10.5 の再レビューが実測して訂正。**この行自身が最初「うち 1 つは窓口自身」と書いて 14 を含意しており、訂正の訂正にあたる**）。
@@ -687,7 +687,7 @@ fn fault_point(at: UploadFault) -> Result<(), PresentError>;
 2. crate 単位で移行（seriko → keeper 3 crate → atlas／compose → emo-present → emo-text → areka → wintf → 統合テスト 2 本）。各段で `cargo test -p <crate>` 緑。
 3. 検知テスト（8.x）を有効化し 0 件を確認。
 4. ②・④ は独立に実施（ファイル共有なし）。
-5. **2026-08-27 裁定ぶん（要件 12・13 と改訂後の 7.4）は上記 1-4 の完了後に実施する**。順序は ⑴ 錠の定義の削除（`command.rs`・独立） → ⑵ `temp-path-kit` の新設と自己テスト → ⑶ 21 ファイルの移行（crate 単位: `areka` → `areka-ghost` → `areka-parsers` → **`areka-sylphya`**。最後の 1 本は 2026-08-27 の訂正ぶんで、**⑷ より前に置く**——⑷ の例外表がそのファイルを「一意化済み」と偽って登記してしまうため、先に事実のほうを直す） → ⑷ 一時パスの見張りの有効化と較正 → ⑸ `cargo test -p areka` の同時 4 プロセス 30 回反復 → ⑹ 常時化の費用の A/B 測定 → ⑺ 申し送り台帳の登記。⑹ は `probe.rs` を触るので ⑵-⑸ と**同時に進めない**（⑸ の反復が測定対象の実行体を共有するため）。
+5. **2026-08-27 裁定ぶん（要件 12・13 と改訂後の 7.4）は上記 1-4 の完了後に実施する**。順序は ⑴ 錠の定義の削除（`command.rs`・独立） → ⑵ `temp-path-kit` の新設と自己テスト → ⑶ **22 ファイル**の移行（crate 単位: `areka` → `areka-ghost` → `areka-parsers` → **`areka-sylphya`**。最後の 1 本は 2026-08-27 の訂正ぶんで、**⑷ より前に置く**——⑷ の例外表がそのファイルを「一意化済み」と偽って登記してしまうため、先に事実のほうを直す） → ⑷ 一時パスの見張りの有効化と較正 → ⑸ `cargo test -p areka` の同時 4 プロセス 30 回反復 → ⑹ 常時化の費用の A/B 測定 → ⑺ 申し送り台帳の登記。⑹ は `probe.rs` を触るので ⑵-⑸ と**同時に進めない**（⑸ の反復が測定対象の実行体を共有するため）。
 5. ⑦ は dlp の状態で分岐。⑩ は kit と同時に有効化（例外表 11 件）。
 6. 反復検証と申し送り登記。
 
