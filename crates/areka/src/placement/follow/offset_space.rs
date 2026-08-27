@@ -47,18 +47,20 @@
 //! 返し、警告の発行は呼び手の責務である（要件 1.5／2.5／3.6／9.4 の記録は呼び手が出す）。
 
 // scaffold: 消費者の結線は段階的に入る。確立の 2 本（[`BalloonFollow::new`]・
-// [`BalloonFollow::reestablish`]）と読取の [`BalloonFollow::offset`] は結線済みだが、
+// [`BalloonFollow::reestablish`]）と読取の [`BalloonFollow::offset`]、および供給時の換算
+// （[`scale_author_offset`]・[`ScaledAxis`]・`scale_axis`＝task 4.1 で
+// `placement::apply_author_balloon_offset_scale` が結線）は結線済みだが、
 // 追随相専用の 2 本（[`BalloonFollow::anchor_base_dpi`]・[`BalloonFollow::apply_rescaled`]）
-// と基準対の読取 [`BalloonFollow::base`]、および変換規則（[`rescale_follow_offset`]・
-// [`scale_author_offset`] とその周辺）は、供給層（task 4.1）と追随相（task 6.x）が
-// 結線するまで非テストビルドで未使用に見える——areka は lib target を持たない bin crate
-// ゆえ `pub` でも dead_code 免除されない。
-// 実測（本 allow を外した `cargo build -p areka --bins`）で残る未使用は **9 項目**
-// （`base`・`anchor_base_dpi`・`apply_rescaled`・`ScaledAxis`・`UnresolvedScale`・
-// `OffsetRescale`・`rescale_follow_offset`・`scale_author_offset`・`scale_axis`）であり、
-// 項目ごとの許可を 9 枚貼るより 1 枚に集約するほうが、以後の**真の** dead code を隠さない。
+// と基準対の読取 [`BalloonFollow::base`]、および遷移の変換規則（[`rescale_follow_offset`]と
+// その判定型）は、追随相（task 6.x）が結線するまで非テストビルドで未使用に見える
+// ——areka は lib target を持たない bin crate ゆえ `pub` でも dead_code 免除されない。
+// 実測（本 allow を外した `cargo build -p areka --bins`・task 4.1 時点）で残る未使用は
+// **6 項目**（`base`・`anchor_base_dpi`・`apply_rescaled`・`UnresolvedScale`・
+// `OffsetRescale`・`rescale_follow_offset`）であり、項目ごとの許可を 6 枚貼るより
+// 1 枚に集約するほうが、以後の**真の** dead code を隠さない。
 // （task 3.1 時点の本注記は「7 項目」と書いていたが、当時の実測値も 6 項目で誤りだった
-// ——数は結線が進むたびに動くので、変えたときは必ず measure し直すこと。）
+// ——数は結線が進むたびに動くので、変えたときは必ず measure し直すこと。
+// task 4.1 では 9 → 6 へ減った。task 6.x の結線後は本 allow ごと撤去できる見込み。）
 #![allow(dead_code)]
 
 use areka_emo_compose::ScaleRatio;

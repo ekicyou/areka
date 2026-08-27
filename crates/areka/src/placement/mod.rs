@@ -387,6 +387,12 @@ fn prepare_stages(
         scopes = ?sizes.scopes,
         "placement: k₀ 倍後の物理窓寸で窓を生成する（起動採寸・要件 3.3）"
     );
+    // 作者空間 → 物理 px の換算（areka-P0-balloon-offset-dpi 要件 1.2/2.1/2.3・design D2/D3）。
+    // **`apply_scope_windowpositions` の直前**に置く——合流欄（`ScopeConfig.balloon_offset`）で
+    // 加算が起きる時点で、descript 由来も windowposition 由来もどちらも物理 px であることを
+    // 保証するためである（要件 2.3）。順序を入れ替えると windowposition の調整量まで
+    // シェル軸で二重に掛かる。
+    apply_author_balloon_offset_scale(&mut cfg, &scope_ids, scaling.shell);
     // 表示位置指定（`windowposition` 数値指定）→ 初期既定位置の調整量（areka-P0-kero-balloon
     // 要件 3.2/3.3/3.4/3.6・design D1'）。**採寸の後**に scope ごとの定義を権威から取得し、
     // `ScopeConfig.balloon_offset`（P5 が既に加算している欄）へ合流させる供給のみを行う
@@ -401,6 +407,96 @@ fn prepare_stages(
         // ——k₀ の分子は軸によらず 1 つだからである（軸差は分母＝作者基準 DPI にある）。
         measure_dpi: DPI::from_dpi(measure_dpi as u16, measure_dpi as u16),
     })
+}
+
+/// 供給時の飽和を記録する語（areka-P0-balloon-offset-dpi 要件 2.5・task 4.1）。
+///
+/// 語彙は綴りごと契約であり、実機ログの grep と決定論テストが同じ定数を参照する
+/// （`balloon_limit.rs` の `*_TAG` と同じ流儀）。綴りを逐語で固定する檻は task 4.3 の所有で、
+/// 本コミット時点ではまだ無い。
+pub(crate) const BALLOON_OFFSET_SATURATED_TAG: &str = "[balloon-offset] Saturated";
+
+/// `descript` の `balloon.offsetx`／`offsety`（**作者空間**の生値）を、合流欄の空間である
+/// **物理 px** へその場で置き換える（areka-P0-balloon-offset-dpi 要件 1.2/2.1/2.2/2.3/2.5・
+/// design D2／D3・task 4.1）。
+///
+/// # 呼び出し位置（D3・要件 2.3）
+///
+/// [`prepare_stages`] が [`apply_scope_windowpositions`] を呼ぶ**直前**に走る。合流欄
+/// `ScopeConfig.balloon_offset` は加算欄であり、`windowposition` 由来の調整量は既に
+/// バルーン軸の k を掛けた物理 px として合流する——本ステップが先に走ることで、加算の
+/// 時点で両辺が同じ空間に揃う。逆順にすると windowposition の調整量にもシェル軸の k が
+/// 掛かって二重換算になる。
+///
+/// # 換算軸（D2・要件 1.4）
+///
+/// `k` は**シェル軸**（`MeasureScaling::shell`）である——`balloon.offsetx`／`offsety` は
+/// ゴースト／シェルの `descript.txt` の語彙＝シェル作者の空間で書かれた値だからである。
+/// 割り当ての一覧は契約の定義元 [`follow::OffsetBase`] のモジュール doc
+/// （`placement/follow/offset_space.rs`）が持つ。
+///
+/// # 受理規約は変えない（要件 2.6）
+///
+/// 「両軸が揃ったときのみ採用する」判断は `config.rs` の `offset_x.zip(offset_y)` が持ち、
+/// 本ステップは触らない。`None`（未宣言・片軸のみ宣言）はそのまま `None` で通す
+/// ——非該当であって縮退ではないので記録もしない。
+///
+/// # 拡大率 1（要件 2.2）
+///
+/// `k` が恒等なら [`follow::scale_author_offset`] は生値を素通しする（丸め権威
+/// `ScaleRatio::scale_len` の恒等素通し）ので、本仕様の適用前と同一の出力になる。
+/// **唯一の例外は `i32::MIN`** ——`scale_signed` が `-i32::MAX` へ飽和させる（既存権威の
+/// 挙動であり `windowposition` 由来の調整量も今日すでに同じ。回り込みは起きず、飽和は
+/// 下の `warn!` で必ず記録に出る）。作者が書ける生値の受理範囲は実質 `i32::MIN + 1..=i32::MAX`
+/// であり、この 1 点だけが要件 2.2 の字面に対する明示の例外である
+/// （檻 `supply_identity_saturates_only_at_i32_min` が固定）。
+///
+/// # 飽和と縮退（要件 2.5／1.5／9.4）
+///
+/// `i32` 域を超えた軸は**回り込ませず飽和値**（`±i32::MAX`）を採り、scope・軸・生値・
+/// 飽和後の値を [`BALLOON_OFFSET_SATURATED_TAG`] の `warn!` で記録する。
+/// `k` そのものを解決できない場合は既存の単一縮退点（[`build_measure_scaling`] の
+/// `error!`＋恒等縮退）が既に記録済みであり、**重複した警告を新設しない**（D9）。
+fn apply_author_balloon_offset_scale(
+    cfg: &mut PlacementConfig,
+    scope_ids: &[usize],
+    k: ScaleRatio,
+) {
+    for &scope in scope_ids {
+        let Some(sc) = cfg.scopes.get_mut(&scope) else {
+            // `scope_ids` は `cfg.scopes` の鍵から作られるため到達しない。それでも
+            // 無言で飛ばさない（記録の無い縮退経路を作らない・要件 9.4）。
+            warn!(
+                scope,
+                "placement: 配置表に無い scope の作者オフセット換算要求を無視した"
+            );
+            continue;
+        };
+        // 未宣言・片軸のみ宣言は `None`（受理規約は `config.rs` の所有・要件 2.6）。
+        // データ駆動の非該当であって縮退ではないので記録しない。
+        let Some(raw) = sc.balloon_offset else {
+            continue;
+        };
+        let (x, y) = follow::scale_author_offset(raw, k);
+        warn_if_saturated(scope, "x", raw.0, x);
+        warn_if_saturated(scope, "y", raw.1, y);
+        sc.balloon_offset = Some((x.value, y.value));
+    }
+}
+
+/// 飽和した軸を 1 本ぶん記録する（要件 2.5: scope・軸・生値・飽和後の値）。
+fn warn_if_saturated(scope: usize, axis: &'static str, raw: i32, scaled: follow::ScaledAxis) {
+    if !scaled.saturated {
+        return;
+    }
+    warn!(
+        scope,
+        axis,
+        raw,
+        saturated_value = scaled.value,
+        "{BALLOON_OFFSET_SATURATED_TAG} descript のバルーンオフセットの換算が i32 域を超えた\
+         ——回り込ませず飽和値を採る（要件 2.5）"
+    );
 }
 
 /// scope ごとの表示位置指定（`windowposition` 数値指定）を初期既定位置の調整量へ変換し
@@ -696,6 +792,9 @@ fn work_area_of(monitor: Option<&Monitor>) -> Result<RectPx, PlacementError> {
     })
 }
 
+#[cfg(test)]
+#[path = "balloon_offset_supply_tests.rs"]
+mod balloon_offset_supply_tests;
 #[cfg(test)]
 #[path = "placement_monitor_tests.rs"]
 mod monitor_tests;

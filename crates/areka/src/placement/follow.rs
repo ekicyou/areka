@@ -73,6 +73,11 @@ pub use self::offset_space::BalloonFollow;
 /// 配置解決の出力（`resolver::ScopePlacement`）と復元 merge（`persist`）が運ぶため、
 /// 移設の波及をここで吸収するファサード再輸出に載せる（design「Modified Files」）。
 pub use self::offset_space::OffsetBase;
+/// 作者空間のオフセットを合流欄の空間（物理 px）へ換算する純関数と、その 1 軸ぶんの結果
+/// （areka-P0-balloon-offset-dpi・要件 1.2／2.1／2.5・task 4.1）。
+///
+/// 供給層（`placement::apply_author_balloon_offset_scale`）だけが呼ぶため crate 内に留める。
+pub(crate) use self::offset_space::{ScaledAxis, scale_author_offset};
 pub use self::work_area::{
     MonitorSnapshot, WorkAreaResolution, work_area_for_window, work_area_for_window_with_origin,
 };
