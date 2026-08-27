@@ -1,0 +1,44 @@
+較正 OK（純粋な部分の見本 / 既知の答え 素の呼出 4 件 + 全スレッド捕捉 2 件 + 別名 4 件 + 自己テスト付きの包み 2 件とその呼び手 5 件 の逐語再現）
+# 共有捕捉窓を使うテストの静的な列挙（タスク 11.2・要件 13.2）
+除外の粒度: file（file = 当たったファイルの全テスト / test = 当たったテストだけ）
+走査したソース: 1035 ファイル（crates/**/*.rs・コメント除去後）
+包みの語を提供しうるファイル: 39 件（log_capture_kit を参照する・自己テストの有無は問わない）
+走査語（不動点後・適用範囲つき）: 28 語
+  bare_capture_count(	crates/log-capture-kit/tests/
+  buffer(	crates/areka-seriko/tests/
+  capture(	（全域＝共有 crate の窓口）
+  capture(	crates/areka-emo-present/
+  capture(	crates/areka-ghost/
+  capture(	crates/areka-kanade/
+  capture(	crates/areka-sylphya/
+  capture_events(	crates/areka-emo-present/
+  capture_events(	crates/areka-ghost/
+  capture_lines(	（全域＝共有 crate の窓口）
+  capture_lines_joined(	crates/areka/
+  capture_logs(	crates/areka-emo-atlas/
+  capture_logs(	crates/areka-emo-compose/
+  capture_logs(	crates/areka-seriko/
+  capture_logs(	crates/areka/
+  capture_logs(	crates/wintf/
+  capture_logs_flow(	crates/areka-seriko/
+  capture_under_filter(	（全域＝共有 crate の窓口）
+  count_levels(	（全域＝共有 crate の窓口）
+  count_warns(	crates/areka-emo-text/
+  hardened_capture_count(	crates/log-capture-kit/tests/
+  install(	crates/areka-ghost/tests/
+  install_global_capture_all(	（全域＝共有 crate の窓口）
+  resolve_counting_warns(	crates/areka-emo-text/
+  set_default(	（全域＝共有 crate の窓口）
+  set_global_default(	（全域＝共有 crate の窓口）
+  with_default(	（全域＝共有 crate の窓口）
+  with_log_cage(	crates/areka-emo-text/
+当たったファイル: 130 件（helper-only=12 per-test=84 whole-file=34）
+除外するテスト関数名: 1372 個
+--list の行（test）: 5930 行 / 重複を除くと 5925 個
+除外する完全なテスト名: 1447 個
+  うち --skip の部分一致で巻き込んだぶん: 77 個
+  同名のテストが複数 module にある関数名: 5 個
+  --list に見つからなかった関数名: 4 個
+  arm assert_send tag tracked_script
+--skip に渡す値: 188 個
+残るテスト名: 4478 個

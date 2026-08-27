@@ -89,8 +89,16 @@ pwsh -NoProfile -File ".kiro/specs/areka-P0-test-cage-determinism/verification/r
   ```
 
   `-- --list` の行数で数えてはいけない。`--list` は **ignored のテストも数える**ので、
-  実際の `passed` と食い違う（`kit` は `--list` で 81・実測 `79 passed; 2 ignored`。
+  実際の `passed` と食い違う（2026-08-24 当時の `kit` は `--list` で 81・実測 `79 passed; 2 ignored`。
   この食い違いは実際に「件数不一致」として検出された＝`summary.md` の最初の `kit` 節）。
+
+- **表は放っておくと陳腐化し、既存の呼び方が赤になる。** 2026-08-27（タスク 11.2 の差し戻し
+  1 巡目）に 5 件すべてを実走で数え直したところ、`workspace` が 5865 に対し実測 **5894**、
+  `kit` が 79 に対し実測 **99** で、どちらも「件数不一致」＋終了コード 1 を返す状態だった
+  （`seriko` 200 / `wintf` 842 / `wait` 2 は一致）。表の値は**その時点の実測であって不変量では
+  ない**という上の流儀に従い、表のほうを是正した（`repeat-tests.ps1` の `$Targets` に採り直しの
+  日付と旧値を残してある）。是正後の `-Target kit` は緑＝`summary.md` の `cal112-kit-expect` 節。
+  **陳腐化そのものは欠陥ではないが、放置すると「赤が普通」になって本物の赤を隠す。**
 
 ---
 
@@ -449,3 +457,88 @@ requirements.md の申し送り台帳へ登記する（要件 9.4。**名前の�
 7. **終了コード 0 は「テストが走った」ことを意味しない。** フィルタの綴り誤りは
    `0 passed; N filtered out` で終了コード 0 になる。必ず `passed` 件数を期待値と突き合わせる（§4・§6-b）。
 8. **`-- --list` の行数を期待件数にしない。** ignored を含むので実測の `passed` と食い違う（§2・§6-d）。
+9. **「全部緑だった」を網羅の証拠に使わない。** 走らなかったテストは赤にならない。
+   除外・フィルタを伴う走行では、**当たる件数を先に予言して `filtered out` と突き合わせる**
+   （§10-b）。11.2 では 24 回全緑のまま 96 件が除外されずに走り続けていた。
+
+## 10. 各回へ環境変数を渡す（`-EnvVars`・タスク 11.2 で追加）
+
+`-EnvVars` は `NAME=VALUE` の並びを受け取り、**事前ビルドと各回の走行**へ渡す。設定は本
+スクリプトのプロセスに対して行うので、起動する `cargo` とその子（テスト実行体）が継承する。
+既定は**何も足さない**ので、この引数を使わない既存の呼び方は 1 文字も変わらない。
+
+```powershell
+# 常駐なし側で走らせる（要件 13・タスク 11.2 の A/B）
+pwsh -NoProfile -Command "& '.\.kiro\specs\areka-P0-test-cage-determinism\verification\repeat-tests.ps1' -Target kit -Times 4 -EnvVars AREKA_LOG_CAPTURE_PROBES=off"
+
+# 複数渡すときはカンマ区切り（-Command で呼ぶこと。-File だと 1 語になる＝§1 と同じ罠）
+... -EnvVars AREKA_LOG_CAPTURE_PROBES=off,RUST_BACKTRACE=1
+```
+
+- 形が `NAME=VALUE` でない項目、名前が環境変数名の形でない項目は**その場で止める**。
+  「立てたつもりで綴りを誤り、既定側を測ったまま緑で通る」を静かに通さないため。
+  値が空文字列であること（`NAME=`）は許す。
+- 設定した名前と値は要約の見出し表に「渡した環境変数」の 1 行としてそのまま載る。
+  **どちら側を測ったのかが記録から確定できなければ、採った数字は意味を持たない。**
+
+### 10-a. 環境変数が本当に届いたかを確かめる（較正）
+
+渡したつもりで届いていない場合、多くの仕掛けは**既定側の挙動のまま緑で通る**。届いたことは
+必ず別立てで確かめる。`AREKA_LOG_CAPTURE_PROBES` には次の 2 通りが使える。
+
+1. **不正値で赤を作る。** 値は逐語の `on`／`off` で、それ以外は panic する設計なので、
+   `-EnvVars AREKA_LOG_CAPTURE_PROBES=typo` で走らせて赤になれば届いている。
+   2026-08-27 の実測では `-Target kit` で 27 件が赤になり、本文は
+   「`AREKA_LOG_CAPTURE_PROBES` の値が不正: "typo"」だった。
+2. **判定を読む檻を両側で走らせる。ただしこれは「届いた」の証拠にはならない。**
+   `probe::tests::the_decision_agrees_with_what_the_environment_actually_says` が
+   `interest_probes_enabled()` を切替と同じ経路で読み、指定と判定の食い違いを赤にする。
+   この檻は共有 crate の `src/` にあるので、捕捉テストを除外するフィルタでは落ちない。
+
+   **しかし届かなかった場合を赤にはできない。** 実装は
+   `crates/log-capture-kit/src/probe_tests.rs:29` の `std::env::var(PROBES_ENV).ok()` で、
+   届いていなければ `None` 分岐＝「未設定なら既定（常駐する）」の主張に落ちて**緑になる**。
+   この檻が縛るのは「値が届いたとき、その値と判定が食い違わない」ことだけである。
+   **届いたことを示せるのは 1 の不正値較正のほうだけ**なので、A/B を採るときは
+   1 を必ず 1 回走らせて赤を記録に残すこと（2026-08-27 の証跡＝
+   `red/cal112-typo-r001.out.log`・`AREKA_LOG_CAPTURE_PROBES` を含む行 29 本）。
+
+### 10-b. タスク 11.2 の A/B をそのまま回す形
+
+```powershell
+# 0. 除外集合を静的な列挙で作る（詳細は capture-window-tests.py の module doc）
+cargo test --workspace -- --list > list.txt
+python .\.kiro\specs\areka-P0-test-cage-determinism\verification\capture-window-tests.py `
+    --root . --list list.txt `
+    --out-dir .\.kiro\specs\areka-P0-test-cage-determinism\verification\exclusion --calibrate
+
+# 1. 各行の前に --skip を挟んで -TestArgs へ渡す
+$V = '.\.kiro\specs\areka-P0-test-cage-determinism\verification'
+$ta = Get-Content -LiteralPath "$V\exclusion\exclusion-skip-args.txt" -Encoding utf8 |
+      Where-Object { $_ -ne '' } | ForEach-Object { '--skip'; $_ }
+
+# 2. 4 回ずつの区を交互に並べる（機械の状態が時間とともに動くので、片側をまとめて走らせない）
+& "$V\repeat-tests.ps1" -Target custom -CargoArgs test,--workspace,--no-fail-fast `
+    -TestArgs $ta -Times 4 -ExpectPassed 4545 -Tag ab-on-1 -TimeoutSec 900 `
+    -EnvVars AREKA_LOG_CAPTURE_PROBES=on
+& "$V\repeat-tests.ps1" ... -Tag ab-off-1 -EnvVars AREKA_LOG_CAPTURE_PROBES=off
+# 以下 ab-on-2 / ab-off-2 / ab-on-3 / ab-off-3 と交互に
+```
+
+3 点だけ落とせない。
+
+- **`--no-fail-fast` は必須。** 既定の fail-fast では常駐なし側が最初の 1 本で打ち切られ、
+  所要時間が比較値にならない（タスク 11.1 の実測）。
+- **`--skip` を使う走行は `filtered out` の件数を予言して突き合わせる。** 綴りを誤ると
+  除外したつもりのテストが走り続けたまま緑で通る（§9-7 と同じ罠の、除外側の顔）。
+  11.2（採り直し）では走査側が「1,450 行が当たる」と予言し、実走 24 回すべてが `filtered out` 1,450 だった。
+  **1 巡目の 1,354 は引かないこと**——除外集合に穴があり `summary.md` で撤回済みである。
+- **全緑は除外集合が足りている証拠にならない。** 11.2 では別名の取り込み
+  （`capture_logs as capture_diag_logs`）を追っていなかった穴が、静的な較正 4 種を全部通り
+  抜けたうえで**3 回目の走行で初めて**赤になった。さらに差し戻し 1 巡目で、**24 回全緑のまま
+  96 件が両側で走り続けていた**ことが判明した（供給条件が自己テスト付きの包みを構造的に
+  外していた）。常駐なし側で赤が出るかどうかは並列の巡り合わせ次第なので、
+  **走らせて緑だったことからは何も言えない。** 閉じているかどうかは走査の側で担保する
+  ——`capture-window-tests.py --calibrate` を**陽性を要求する**形（「拾われないこと」ではなく
+  「拾われること」を要求する）で書き、既知の答えを 1 件でも取りこぼしたら非 0 で止める。
+  新しい穴を見つけたら、その実例を**既知の答えとして較正へ足す**のが唯一の閉じ方である。

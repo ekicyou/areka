@@ -47,7 +47,12 @@ param(
     # 上限に達した回はプロセス木を止めて「打ち切り」として記録する（緑にはしない）。
     [int]$TimeoutSec = 0,
     # i686 成果物の在否検査を省く。
-    [switch]$SkipI686Check
+    [switch]$SkipI686Check,
+    # 各回（と事前ビルド）へ渡す環境変数。'NAME=VALUE' の並び。既定は何も足さない。
+    # 本スクリプトのプロセスへ設定するので、起動する cargo とその子（テスト実行体）が継承する。
+    # 設定した名前と値は要約に 1 行そのまま載る（どちら側を測ったかが記録から確定できるように）。
+    # 例: -EnvVars AREKA_LOG_CAPTURE_PROBES=off
+    [string[]]$EnvVars
 )
 
 $ErrorActionPreference = 'Stop'
@@ -57,14 +62,21 @@ $TAB = [string][char]9
 
 # ---- 対象表 -------------------------------------------------------------
 # Expect は「その時点の実測値」であって不変量ではない。テストが増減したら
-# cargo test <対象> -- --list で採り直して更新する（repeat-tests.md §2）。
+# cargo test <対象> で採り直して更新する（repeat-tests.md §2。--list の行数は
+# ignored も数えるので期待値には使えない）。
 # Solo は -Parallel 1 での実測所要秒（2026-08-24）。上限秒の自動算出にだけ使う。
+#
+# 2026-08-27 採り直し（タスク 11.2 の差し戻し 1 巡目）: 5 件すべてを実走で数え直した。
+#   workspace 5865 -> 5894（陳腐化）  kit 79 -> 99（陳腐化）
+#   seriko 200 / wintf 842 / wait 2 は実測と一致（据え置き）
+# 陳腐化した 2 件は「件数不一致」＋終了コード 1 を返す状態だった＝既定の呼び方
+# （-Target kit など）が赤を出す。表の値は不変量ではないので、直すのが正しい扱い。
 $Targets = @{
-    'workspace' = @{ Cargo = @('test', '--workspace'); Test = @(); Expect = 5865; Solo = 36.8; Desc = 'ワークスペース全体' }
+    'workspace' = @{ Cargo = @('test', '--workspace'); Test = @(); Expect = 5894; Solo = 36.8; Desc = 'ワークスペース全体' }
     'seriko'    = @{ Cargo = @('test', '-p', 'areka-seriko', '--lib'); Test = @(); Expect = 200; Solo = 0.4; Desc = 'areka-seriko の lib テスト（要件 3.7 の存在主張を含む）' }
     'wait'      = @{ Cargo = @('test', '-p', 'areka', '--bins'); Test = @('spine_e2e_sakura_blink_default_off_emits_nothing', 'spine_s4_balloon_free_onboot_completes_without_balloon_face_switch'); Expect = 2; Solo = 1.7; Desc = '有界化した待機 2 テスト（要件 4）' }
     'wintf'     = @{ Cargo = @('test', '-p', 'wintf', '--lib'); Test = @(); Expect = 842; Solo = 1.6; Desc = 'wintf の lib テスト（錠を退役させた crate・要件 7.2）' }
-    'kit'       = @{ Cargo = @('test', '-p', 'log-capture-kit'); Test = @(); Expect = 79; Solo = 2.4; Desc = '共有 crate log-capture-kit の全テスト（試走用の小さい対象）' }
+    'kit'       = @{ Cargo = @('test', '-p', 'log-capture-kit'); Test = @(); Expect = 99; Solo = 2.4; Desc = '共有 crate log-capture-kit の全テスト（試走用の小さい対象）' }
 }
 # 上限秒の下限と、単独実測に掛ける係数。上限は性能の合否ではなく「ハングの止め木」なので
 # 大きめに取る（既定は期待所要のおよそ 10 倍）。
@@ -158,6 +170,25 @@ if (-not $SkipI686Check) {
 }
 
 $env:CARGO_TERM_COLOR = 'never'
+
+# ---- 各回へ渡す環境変数 -------------------------------------------------
+# 設定は本プロセスに対して行う（起動する cargo とその子のテスト実行体が継承する）。
+# 綴りの誤りは「立てたつもりで立っていない」＝既定側を測ったまま気づかない事故になるので、
+# 形が 'NAME=VALUE' でないものはここで止める。値が空文字列であることは許す（消す指定）。
+$envApplied = @()
+foreach ($pair in @($EnvVars)) {
+    if (-not $pair) { continue }
+    $eq = $pair.IndexOf('=')
+    if ($eq -lt 1) { throw "-EnvVars の項目は 'NAME=VALUE' の形でなければならない: '$pair'" }
+    $name = $pair.Substring(0, $eq)
+    $value = $pair.Substring($eq + 1)
+    if ($name -notmatch '^[A-Za-z_][A-Za-z0-9_]*$') {
+        throw "-EnvVars の名前が環境変数名の形でない: '$name'"
+    }
+    Set-Item -Path "Env:$name" -Value $value
+    $envApplied += "$name=$value"
+}
+$envText = if ($envApplied.Count -gt 0) { ($envApplied | ForEach-Object { "$BQ$_$BQ" }) -join ' ' } else { '（無し）' }
 
 $headSha = (& git -C $root rev-parse --short HEAD 2>$null)
 $dirty = @(& git -C $root status --porcelain 2>$null)
@@ -402,6 +433,7 @@ $out.Add("| 期待 passed | $expectText |")
 $out.Add("| 1 回の上限 | $TimeoutSec 秒（$timeoutBasis） |")
 $out.Add("| 事前ビルド | $prebuildText |")
 $out.Add("| i686 成果物の検査 | $i686Text |")
+$out.Add("| 渡した環境変数 | $envText |")
 $out.Add("| cargo | $cargoVer |")
 if ($Note) { $out.Add("| 備考 | $Note |") }
 $out.Add('')
