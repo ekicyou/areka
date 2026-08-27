@@ -1550,3 +1550,29 @@ $ （同じ awk を $S/para_control.txt に対して実行）
 - **本節は `requirements.md`・`design.md`・`research.md`・`tasks.md`・`spec.json`・`.kiro/steering/roadmap.md` のいずれも 1 行も変更していない**（本タスクの編集対象は本記録のみ。V1〜V5・突合⑴・突合⑵ の既存節も無編集）。
 
 **この判定の射程（混ぜてはならない）**——ここで確定するのは「**完了報告の文面が、未達を登記して閉じたことを明示しており、合格と読める表現を含まない**」ことだけである。**未達 40 件が解消した証拠ではない。** `visualize_to_write_us` は上限の 12.6〜18.4 倍のまま、`flush_total_us` は 8 遷移すべてが上限超のまま、**引受先は無い**。将来是正するには新規仕様の起票が要る。
+
+---
+
+## 完了時の注意（最終検証ゲートで判明・task 3.3 の後）
+
+**`/kiro-complete` の参照パス修正が、本仕様の中心的な主張を壊し得る。**
+
+`kiro-complete` はアーカイブ移動の後、ソース全域を走査して spec への参照パスを直す（ステップ 5-2）。その走査で次の 2 行が引っ掛かる。どちらも移動前のパスを指したままである。
+
+```
+$ git grep -n "\.kiro/specs" -- crates | grep dpi-transition-atomicity
+crates/areka/src/placement/transition_judge_reobservation_tests.rs:13://! 正本は `.kiro/specs/areka-P0-dpi-transition-atomicity/reobservation-2026-08-15.md` の §3.1
+crates/areka/src/placement/transition_signoff_procedure_tests.rs:3://! 手順書（`.kiro/specs/areka-P0-dpi-transition-atomicity/signoff-procedure.md`）は
+$ ls -d .kiro/specs/areka-P0-dpi-transition-atomicity
+ls: cannot access '.kiro/specs/areka-P0-dpi-transition-atomicity': No such file or directory
+$ ls -d .kiro/specs/completed/areka-P0-dpi-transition-atomicity
+.kiro/specs/completed/areka-P0-dpi-transition-atomicity
+```
+
+- **この 2 行はどちらも `//!` のコメントであり、実行に影響しない。** 実ファイルを読む定数は同じファイルの `:41` にあるが、そちらは既に `completed/` を指しており是正済みである（`git grep -n "completed/areka-P0-dpi-transition-atomicity" -- crates` で確認できる）。
+- **`kiro-complete` 自身の仕分け規則がこれを覆っている**——「コメント参照は放置可・実ファイル読みだけがビルドを壊す」（`.claude/skills/kiro-complete/SKILL.md` の当該節）。したがって既定の手順どおりに進めれば触られない。
+- 本仕様の名前 `areka-P0-present-write-coherence` は **`crates/` にも `doc/` にも 1 件も現れない**（`git grep -c … -- crates doc` → 0）。ステップ 5-2(a) の本命検索は 0 件で終わる。上の 2 行は**別の仕様の名前**を含むので、そちらの検索網には掛からない。
+
+**それでも明記する理由**: この 2 行を「ついでに直す」と、`crates/` に差分が 1 行入る。その瞬間、V2 が証明した「許可集合外 0 件・接触禁止集合 0 件」と、完了報告の「差分は仕様文書のみ・実行時の挙動は着手前と同一」は**いずれも偽になる**。設計 Out of Boundary はこの 2 行を「引受先なし・触らない」と裁定済みであり、**完了作業でもその裁定を守ること。** 直すのは、これらのファイルを正当に改変する仕様が現れたときでよい。
+
+（採取＝上記のコマンドをいずれも実行して得た出力。`transition_signoff_procedure_tests.rs:41` が `completed/` を指すことは PR#114 の是正の結果である。）
