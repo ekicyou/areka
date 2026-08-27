@@ -43,7 +43,7 @@
 
 - **製品コード・テストコード・`Cargo.toml` の一切の変更**。本仕様の差分集合（`origin/main...HEAD`）は **`.kiro/specs/areka-P0-present-write-coherence/` 配下＋`.kiro/steering/roadmap.md`（要件 8.4 の追随・要件段階で適用済み）** に限る。この 2 つが許可集合の唯一の定義であり、V2 がこれを機械で検査する。
 - atom（completed）が確定させた資産の改変——判定器（`crates/areka/src/placement/transition_judge*.rs`）・観測チャネルとレコード語彙（`crates/wintf/src/ecs/window/transition_diag.rs`）・上限・サインオフ手順書・確定台帳。
-- 可視化の段（`crates/areka-emo-present/src/presenter/show.rs`）・配置契約（`crates/areka-emo-present/src/presenter/mount.rs`）・窓書込 flush（`crates/wintf/src/ecs/window/command.rs`・`crates/wintf/src/runtime/tick_bridge.rs`）。**読むだけで変えない**。
+- 可視化の段（`crates/areka-emo-present/src/presenter/show.rs`）・配置契約（`crates/areka-emo-present/src/mount.rs`）・窓書込 flush（`crates/wintf/src/ecs/window/command.rs`・`crates/wintf/src/runtime/tick_bridge.rs`）。**読むだけで変えない**。
 - 並走 3 仕様のファイル素（`placement/follow` 系・`zorder_pair*.rs`・`areka-parsers/balloon`＋`areka-emo-text`）。
 - **観測された残余で本仕様が引き取らないもの**: `crates/areka/src/placement/transition_signoff_procedure_tests.rs:3` と `crates/areka/src/placement/transition_judge_reobservation_tests.rs:13` の**doc コメント内**の spec パスが完了アーカイブ移動前のまま残っている（実行に影響しない。実パスを読む定数 `:41` は是正済み）。本仕様はコード非接触を証跡とするため**触らない**——引受先は**なし**（doc コメントのみで実行に影響しないため起票は不要。これらのファイルを改変する仕様が現れたとき併せて直せばよい）。
 
@@ -142,7 +142,7 @@ sequenceDiagram
 
 ```
 crates/areka-emo-present/src/presenter/show.rs      # 可視化の段（読むだけ・アンカー再確認の対象）
-crates/areka-emo-present/src/presenter/mount.rs     # 配置契約と寸の直接反映（B-4 却下により非接触）
+crates/areka-emo-present/src/mount.rs               # 配置契約と寸の直接反映（B-4 却下により非接触）
 crates/wintf/src/ecs/window/command.rs              # 窓書込 flush と刻印（atom の確定物）
 crates/wintf/src/runtime/tick_bridge.rs             # flush の駆動点（atom／dlp の確定物）
 crates/wintf/src/ecs/window/transition_diag.rs      # 観測チャネルとレコード語彙（要件 5.4）

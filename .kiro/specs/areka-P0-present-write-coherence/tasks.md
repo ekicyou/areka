@@ -12,7 +12,7 @@
 
 - [ ] 2. 残余検証を実行して証跡を採る
 
-- [ ] 2.1 上流アンカーと確定物の非接触を実測で確認し、検証記録を起こす
+- [x] 2.1 上流アンカーと確定物の非接触を実測で確認し、検証記録を起こす
   - 仕様ディレクトリ配下に検証記録の文書を新規作成し、V1〜V5 の 5 節を用意する
   - 可視化の段の 4 アンカー（適用の起点・可視化・寸の反映・観測レコードの発行）が現存することを現物で確認する
   - 判定器の 3 アンカー（飽和減算・合否量を armed にする構成子・観測の時刻起点）が現存し、差分が無いことを確認する
@@ -76,3 +76,5 @@
 
 - task 1: i686 成果物は `target/i686-pc-windows-msvc/debug/` に置かれ、ワークスペース全体テストの解決子はいずれもワークスペース根からこの木を直接読む（`target/debug/` へのコピーは不要）。**環境変数 `HOST32_HELPER_EXE` / `HOST32_TESTDLL_DLL` は target 探索より優先され、しかも解決できないときは fallback せず panic する**（`crates/shiori-host32-host/tests/lifecycle_cyclic_e2e.rs:96-107`・`:137-148`／`crates/shiori-host32-helper/src/shiori_proxy.rs:415-425`）。task 2.2 はこの 2 変数が未設定の shell で走らせること（実測: 両方とも未設定）。
 - task 1: ビルドの exit 0 は空振りでも出る。成果物の実在・鮮度（mtime）・PE machine `0x014C` の 3 点を毎回読むこと。今回の実測＝helper.exe 271,872 B／shiori.dll 160,768 B・いずれも 2026-08-27 22:04・Machine バイト `4c01`。
+- task 2.1: **実在しない pathspec に `git diff` を当てても空出力・exit 0 が返る**（`git ls-files --error-unmatch` は exit 1）。設計文書の接触禁止集合が `crates/areka-emo-present/src/presenter/mount.rs`（実在せず・実パスは `crates/areka-emo-present/src/mount.rs`）を指していたため、項目別の非接触検査が 1 項目まるごと空振りする形になっていた。**「差分なし」を記録する前に、その pathspec が実在することを別建てで証明すること**。あわせて赤を出せる対照（既知の差分ファイル）を必ず 1 本添える。
+- task 2.1: 7 アンカー（`show.rs:46`／`:375`／`:381`／`:392`・`transition_judge.rs:817`・`transition_judge_verdict.rs:169`・`transition_diag.rs:692`）はドリフトなし。失効条件 4 項目はいずれも該当なしで、却下理由 R1・R2 の根拠は保たれている。
