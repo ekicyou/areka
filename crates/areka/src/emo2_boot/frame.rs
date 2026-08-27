@@ -326,6 +326,11 @@ mod dpi_reproject_tests;
 #[path = "frame_dpi_reproject_none_tests.rs"]
 mod dpi_reproject_none_tests;
 
+// 収束の保証（areka-P0-balloon-offset-dpi task 6.2・design D16・要件 3.1／3.4）。
+#[cfg(test)]
+#[path = "frame_balloon_offset_converge_tests.rs"]
+mod balloon_offset_converge_tests;
+
 #[cfg(test)]
 #[path = "frame_diag_route_tests.rs"]
 mod diag_route_tests;

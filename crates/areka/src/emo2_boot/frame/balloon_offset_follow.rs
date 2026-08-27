@@ -64,11 +64,14 @@
 
 use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
-use tracing::warn;
+use tracing::{debug, warn};
 
-use wintf::ecs::DPI;
+use wintf::ecs::{DPI, Point, WindowPos};
 
-use crate::placement::follow::{BalloonFollow, OffsetRescale, rescale_follow_offset};
+use crate::placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
+use crate::placement::follow::{
+    BalloonFollow, BalloonFollowTrigger, OffsetRescale, follow_balloon, rescale_follow_offset,
+};
 use crate::placement::transition_diag::{
     OFFSET_VERDICT_ANCHORED, OFFSET_VERDICT_RESCALED, OFFSET_VERDICT_SATURATED,
     OFFSET_VERDICT_UNCHANGED, OFFSET_VERDICT_UNRESOLVED, log_offset_rescale,
@@ -185,4 +188,64 @@ pub(super) fn rescale_balloon_follow_offset(
     } else {
         OffsetFollowOutcome::Changed
     }
+}
+
+/// **収束の保証**（design D16・要件 3.1／3.4）——追随でオフセットが変わったのに、続く
+/// 窓書込が起きなかった腕で、バルーンを新しいオフセットの位置へ 1 度だけ寄せる。
+///
+/// # なぜ要るか
+///
+/// 通常の遷移では [`resize_window_to`](crate::placement::follow::resize_window_to) の手順 6 が
+/// 新しいオフセットで随伴追従を出すため、キャラ 1・バルーン 1 の書込で両窓が同時に落ち着く。
+/// しかし位置と寸がともに同一だと同関数は**手順 4 のべき等 skip で `false` を返し**
+/// （`window_move.rs:337-345`）、手順 6 の追従へ到達しない。この腕を放置すると
+/// 「オフセットは直ったのにバルーンは次に何かが動くまで古い位置に居る」という、
+/// 本仕様が消しに来た欠陥そのものが残る。
+///
+/// # 予算（要件 3.4・Adjacent expectations）
+///
+/// 遷移 1 回あたりの窓書込は キャラ ≤1・バルーン ≤1・別経路 0。本関数が走るのは
+/// **キャラ書込が 0 だった腕だけ**ゆえ、バルーン書込 0→1 でも合計は増えない。
+/// バルーンは 1 度の書込で最終位置へ行くので中間位置も提示されない。
+///
+/// # 呼出契約
+///
+/// 呼び手（[`dpi_phase_with`](super::dpi::dpi_phase_with)）は、当該窓について
+/// ⑴ 本モジュールの追随が [`OffsetFollowOutcome::Changed`] を返し、かつ
+/// ⑵ 続く反映（`reconcile_window_size`／`reproject_char_window_at_current_size`）が
+/// `false` を返した——の 2 条件が揃ったときだけ、**1 遷移・1 スコープにつき 1 度**呼ぶ。
+///
+/// # 縮退（log-first・[`reproject_char_window_at_current_size`] と同じ 2 分）
+///
+/// - **entity 破棄済み**: 終了処理の正常終了系ゆえ [`DESPAWNED_SKIP_TAG`] の `debug!`。
+/// - **実在するが `WindowPos.position` 不在**（窓生成前）: 真の異常ゆえ `warn!`。
+pub(super) fn converge_balloon_after_skipped_write(world: &mut World, char_window: Entity) {
+    let Some(pos) = world
+        .get::<WindowPos>(char_window)
+        .and_then(|wp| wp.position)
+    else {
+        if world.get_entity(char_window).is_err() {
+            debug!(
+                entity = ?char_window,
+                "{DESPAWNED_SKIP_TAG} balloon offset: キャラ窓 entity が破棄済み → 収束の随伴追従を正常系として打ち切り"
+            );
+        } else {
+            warn!(
+                entity = ?char_window,
+                "balloon offset: キャラ窓の WindowPos.position が未確定（窓生成前）→ 収束の随伴追従を見送る"
+            );
+        }
+        return;
+    };
+    // 引き金はキャラ窓を動かす**はずだった**経路そのもの——本相の唯一の実在トリガは
+    // `Changed<DPI>` エッジである（design D13 の 1 語＝1 実在トリガ）。書込自身の route は
+    // 定義上つねに `BalloonFollow` ゆえ、可視性の遷移ガードの発火可否はここでしか決まらない
+    // （通常腕＝`resize_window_to` 手順 6 と**同一の引き金**にすることで、書込が起きた腕と
+    // 起きなかった腕でバルーンの落ち着き先が食い違わない）。
+    follow_balloon(
+        world,
+        char_window,
+        Point { x: pos.x, y: pos.y },
+        BalloonFollowTrigger::Placement(PlacementRoute::DpiReproject),
+    );
 }

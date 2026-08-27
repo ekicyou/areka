@@ -16,7 +16,9 @@ use crate::placement::follow::{resize_window_keep_position, resize_window_to};
 use crate::placement::resolver::SizePx;
 use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker};
 
-use super::balloon_offset_follow::{OffsetFollowOutcome, rescale_balloon_follow_offset};
+use super::balloon_offset_follow::{
+    OffsetFollowOutcome, converge_balloon_after_skipped_write, rescale_balloon_follow_offset,
+};
 use super::{Emo2Wiring, PlannedAttach, balloon_target, shell_target};
 
 // ---------------------------------------------------------------------------
@@ -332,10 +334,10 @@ pub(super) fn dpi_phase_with<S: ScaleReportSource>(
         // 必ず新しいオフセットで書かれる。相順・待ち札の関門・[`reconcile_window_size`] の署名は
         // いずれも変えない（要件 9.5）。対象はキャラ窓だけ——追従 Component はキャラ窓が持つ。
         //
-        // 継ぎ目（task 6.2・design D16）: 戻り値は「オフセットが実際に動いたか」であり、下の
-        // 反映で**窓書込が起きなかった**とき（べき等 skip 等）だけ随伴追従を 1 度呼んで
-        // バルーンを収束させる必要がある。その消費は task 6.2 が入れる。
-        let _offset_outcome = match kind {
+        // 収束の保証（task 6.2・design D16）: 戻り値は「オフセットが実際に動いたか」であり、
+        // 下の反映で**窓書込が起きなかった**とき（べき等 skip 等）だけ随伴追従を 1 度呼んで
+        // バルーンを収束させる（`converge_balloon_after_skipped_write` の doc を参照）。
+        let offset_outcome = match kind {
             GhostWindowKind::Char => rescale_balloon_follow_offset(world, window, scope),
             GhostWindowKind::Balloon => OffsetFollowOutcome::Unchanged,
         };
@@ -345,7 +347,7 @@ pub(super) fn dpi_phase_with<S: ScaleReportSource>(
         // ゆえに文字層 k 追従の判断材料にはこの戻り値を使わない（[`run_text_scale_phase`] を参照）。
         //
         // **位置**は寸の再導出結果に条件付けない（S2 是正・D7・下の `None` 腕）。
-        match source.refresh_scale_report(world, target) {
+        let wrote = match source.refresh_scale_report(world, target) {
             // 経路タグ: 本フェーズは `Changed<DPI>` エッジ駆動＝真に DPI 由来（Req 1.2・D13）。
             Some(new_size) => {
                 // 書込**前**の窓寸（下で `reconcile_window_size` が bypass ミラーを書き換える
@@ -366,6 +368,7 @@ pub(super) fn dpi_phase_with<S: ScaleReportSource>(
                 {
                     chain_realign::arm_chain_realign(world);
                 }
+                wrote
             }
             // 再導出結果なし: 寸は触らないが、**位置は現寸のまま射影 T を一度通す**。
             // バルーン窓は位置据置きのまま（位置は従属量ゆえ、キャラ窓確定後の
@@ -377,10 +380,20 @@ pub(super) fn dpi_phase_with<S: ScaleReportSource>(
                         world,
                         window,
                         PlacementRoute::DpiReproject,
-                    );
+                    )
                 }
-                GhostWindowKind::Balloon => {}
+                GhostWindowKind::Balloon => false,
             },
+        };
+        // 収束の保証（design D16・要件 3.1／3.4）: オフセットが実際に動いたのに窓書込が
+        // 起きなかった腕でだけ、随伴追従を **1 度**呼んでバルーンを新しい位置へ寄せる。
+        // 2 条件のどちらを落としても意味が変わる——動いていなければ寄せる先は現在値と
+        // 同じ（`follow_balloon` が冗長な書込を出す）、書込が起きていれば
+        // `resize_window_to` 手順 6 が既に新しいオフセットで随伴させており二重書込になる。
+        // 予算（キャラ ≤1・バルーン ≤1・別経路 0）は保たれる: ここへ来る腕はキャラ書込が
+        // 0 だった腕だけである。
+        if matches!(offset_outcome, OffsetFollowOutcome::Changed) && !wrote {
+            converge_balloon_after_skipped_write(world, window);
         }
     }
 }

@@ -110,7 +110,7 @@
   - 完了状態: 表示 DPI が変わったとき追従オフセットが表示 DPI 比の値へ更新され、書き換えた既存テストが緑になる（是正前は同テストが落ちる）
   - _Requirements: 3.1, 3.2, 3.6, 3.7, 7.4, 9.4, 9.8_
 
-- [ ] 6.2 窓書込が起きなかった腕でバルーンを収束させる
+- [x] 6.2 窓書込が起きなかった腕でバルーンを収束させる
   - 位置と寸法がともに同一で寸法調整が早期に抜けた場合に限り、追随ステップが随伴追従を 1 度だけ呼んでバルーンを新しいオフセットの位置へ収束させる
   - 遷移 1 回あたりの窓書込の予算（キャラ 1 以下・バルーン 1 以下・別経路 0）を超えないこと、中間位置を提示しないことを守る
   - 完了状態: 早期に抜ける状況を作った決定論テストで、バルーンが同一フレームで新しい位置へ 1 度だけ書かれ、書込回数がキャラ 0・バルーン 1 になる
@@ -258,3 +258,8 @@
 - **6.1（縮退の全数）**: 終端は 6 つ。`BalloonFollow` 不在＝早期 return・**記録も警告もなし**（縮退ではない）／`DPI` component 不在＝`warn!` ＋ `unresolved`／`Anchored`・`Unchanged`＝警告なし／`Rescaled{saturated}`＝`warn!` ＋ `saturated`／`Unresolved`＝`warn!`。**縮退した腕はすべて警告を伴う**（要件 9.4）。`DPI{0,0}` は `verdict=unchanged`・警告なしで、**縮退ではなく無遷移として記録する**——design の Error Handling へ行を分けて登記済み。
 - **6.1**: `offset_space.rs` の `#![allow(dead_code)]` を**撤去**（未使用 0 を再測して確認）。1.2 から引きずった足場がここで外れた。
 - **6.1 → 6.2 / 6.3 の継ぎ目**: `OffsetFollowOutcome` を定義して返し、`dpi.rs` が `let _offset_outcome = …` で束ねて D16 の `wrote == false` 条件を名指しするコメントを置いてある（6.2）。`BalloonFollow` 読取と `DPI` 読取の間に `BalloonKeywordBase` の門の位置を平文コメントで確保してある（6.3）。いずれもスタブでも TODO でもない。
+- **6.2**: 追随でオフセットが動いたのに窓書込が起きなかった腕（`resize_window_to` 手順 4 のべき等 skip）でだけ `follow_balloon` を 1 度呼ぶ（D16 の 2 条件＝`Changed` かつ `!wrote`）。放置すると**オフセットは直ったのにバルーンは古い位置に居座る**＝本仕様が消しに来た欠陥そのものが残る腕。
+- **6.2（探針が本物であることの二重の裏取り）**: 早期 skip の状況は「拡大率だけ 192・作業領域は 96 のまま」のモニタ表で作った。⑴ 檻の主張ではなく**本番関数 `reproject_char_window_at_current_size` の戻り値そのもの**が `false` であることを専用テストで固定。⑵ **この状態対は本番で到達可能**——タスクバーの自動非表示や別モニタ配置では作業領域＝モニタ矩形で拡大率に依らず不動なので、その台での拡大率変更は作業領域を 1px も動かさない（レビュー裁定）。あり得ない状態の捏造ではない。
+- **6.2（予算）**: skip 腕でキャラ 0・バルーン 1、通常腕でキャラ 1・バルーン 1、別経路 0。計数は新設せず `FrameHarness::drain_writes()` ＋ `frame_dpi_sync_hold_tests.rs` と同型の `writes_for` を再利用。書込の `(x,y)` が「確定済みキャラ窓位置＋**新しい** offset」と bit 等価であることまで固定（旧 offset で書いて直す形なら赤）。
+- **6.2 ⚠ 檻の帰属を 1 件書き違えていた（是正済み）**: `the_normal_arm_still_writes_the_character_once_and_the_balloon_once` の doc が「収束が二重書込を足していないこと」を守ると称していたが、**D16 の `!wrote` 条件を落としても緑のまま通る**（通常腕ではバルーンが既に目的座標に居るので余分な `follow_balloon` が指令を積まない）。実際に二重書込を捕まえるのは `frame_dpi_reproject_none_tests.rs` の `s2_none_report_path_reprojects_position_without_touching_size`。doc を訂正し、誤った安心の根拠に使われないよう明記した。**「このテストが緑だから X は無い」の X は、実際に赤にしてみるまで信じないこと。**
+- **6.2（引き金）**: 収束は `BalloonFollowTrigger::Placement(PlacementRoute::DpiReproject)` を渡す（通常腕の手順 6 と同一）。書込に載る経路語は `PlacementRoute::BalloonFollow` のままで観測上の誤帰属は生じない。
