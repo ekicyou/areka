@@ -724,3 +724,7 @@ fn check_alignment_residual(
 #[cfg(test)]
 #[path = "transition_judge_offset_tests.rs"]
 mod transition_judge_offset_tests;
+
+#[cfg(test)]
+#[path = "transition_judge_offset_signoff_tests.rs"]
+mod transition_judge_offset_signoff_tests;

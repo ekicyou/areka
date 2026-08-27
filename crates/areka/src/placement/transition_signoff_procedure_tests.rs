@@ -37,8 +37,9 @@ use wintf::ecs::window::transition_diag::{
 
 use super::TRANSITION_LOG_ENV;
 use crate::placement::transition_diag::{
-    CHAIN_FIELDS, CHAIN_STAGE_ALL, GROUND_FIELDS, HOLD_FIELDS, KIND_CHAIN, KIND_GROUND, KIND_HOLD,
-    KIND_OFFSET, KIND_SNAPSHOT, OFFSET_FIELDS, PLACEMENT_KIND_ALL, SNAPSHOT_FIELDS,
+    CHAIN_FIELDS, CHAIN_STAGE_ALL, FIELD_VERDICT, GROUND_FIELDS, HOLD_FIELDS, KIND_CHAIN,
+    KIND_GROUND, KIND_HOLD, KIND_OFFSET, KIND_SNAPSHOT, OFFSET_FIELDS, OFFSET_VERDICT_ALL,
+    PLACEMENT_KIND_ALL, SNAPSHOT_FIELDS,
 };
 
 /// 手順書のリポジトリ相対パス（`crates/areka` から見た相対）。
@@ -51,9 +52,17 @@ const PROCEDURE_RELATIVE_PATH: &str =
 /// （atom）の手順書は完了アーカイブに在り、**他仕様の文書は書き換えない**（要件 6.6）ので、
 /// 新しい種別は自分の仕様の手順書が引き受ける。
 ///
-/// **task 8.2 はここへ本仕様の手順書（モジュール doc）を足すこと**——同時に
-/// [`PENDING_PROCEDURE_KINDS`] から `offset` を消す必要がある（消し忘れは檻が赤で教える）。
-const PROCEDURE_SOURCES: &[&str] = &[PROCEDURE_RELATIVE_PATH];
+/// 本仕様（balloon-offset-dpi）の手順書は **task 8.2 が置いた**——出所はランナーと同居する
+/// モジュール doc であり（design「実機サインオフ」の 5）、本檻はそれを 1 個の文書として読む。
+const PROCEDURE_SOURCES: &[&str] = &[PROCEDURE_RELATIVE_PATH, OFFSET_PROCEDURE_RELATIVE_PATH];
+
+/// 本仕様の手順書のリポジトリ相対パス（`crates/areka` から見た相対）。
+///
+/// 文書は独立した `.md` ではなく**ランナーのモジュール doc** に置いてある（design の指定）。
+/// 本檻は出所をテキストとして読むだけなので、拡張子が `.rs` でも読める——手順書とランナーが
+/// 同じファイルに在ることは、手順の字面と実装が離れないという点でむしろ望ましい。
+const OFFSET_PROCEDURE_RELATIVE_PATH: &str =
+    "src/placement/transition_judge_offset_signoff_tests.rs";
 
 /// どの手順書もまだ名指ししていないレコード種別（**期限つきの保留**）。
 ///
@@ -63,9 +72,10 @@ const PROCEDURE_SOURCES: &[&str] = &[PROCEDURE_RELATIVE_PATH];
 ///
 /// **この保留欄は自ら消える。** 檻は ⑴ 載っていない種別が保留欄の内側に収まること
 /// （`missing ⊆ pending`）だけでなく、⑵ 保留欄の種別が**まだ本当に載っていない**こと
-/// （`pending ∩ covered = ∅`）も見る。ゆえに task 8.2 が本仕様の手順書を
-/// [`PROCEDURE_SOURCES`] へ足した時点で、`offset` を消さないかぎりこの檻は赤になる。
-const PENDING_PROCEDURE_KINDS: &[&str] = &[KIND_OFFSET];
+/// （`pending ∩ covered = ∅`）も見る。task 8.2 が本仕様の手順書を [`PROCEDURE_SOURCES`] へ
+/// 足したので、唯一の保留であった `offset` は**ここから消えた**（残していれば ⑵ が赤になる）。
+/// 空であることが正常な状態であり、次に保留が生じたときだけ行が増える。
+const PENDING_PROCEDURE_KINDS: &[&str] = &[];
 
 /// 先行仕様（atom）の手順書の本文を読む。読めなければ**失敗**（無い文書に対して緑を出さない）。
 fn procedure_text() -> String {
@@ -232,7 +242,9 @@ fn validate_record_line(record: &str) -> Result<(), String> {
 
 #[test]
 fn the_procedure_only_quotes_record_lines_the_emitters_can_produce() {
-    let text = procedure_text();
+    // 出所は**集合の全体**を読む（task 8.2）。先行仕様の手順書だけを読んでいると、本仕様の
+    // 手順書が引く観測行の例を誰も検査しない＝新しい種別の例が静かに検査の外へ落ちる。
+    let text = procedure_sources_text();
     let examples: Vec<&str> = text.lines().filter_map(record_part).collect();
 
     // 例が 1 本も無ければ、下の検査は恒真になる（零件の主張には陽性の対を置く）。
@@ -300,6 +312,10 @@ fn contains_token(haystack: &str, needle: &str) -> bool {
 
 #[test]
 fn the_procedure_names_the_runner_vocabulary_verbatim() {
+    // ここは**先行仕様の手順書 1 本**を読む（出所集合ではない）。下に並ぶのは先行仕様の
+    // ランナーの語であり、集合で読むと「本仕様の手順書が同じ語を書いているから緑」に
+    // なってしまう——先行仕様の手順書が語を落としても気づけない。仕様ごとのランナーの語は
+    // 仕様ごとの手順書に対して確かめる（本仕様のぶんは下の検査）。
     let text = procedure_text();
     // 判定器・ランナーの入口の語。字面が 1 つでもずれると手順書のコマンドは動かない。
     for word in [
@@ -318,6 +334,67 @@ fn the_procedure_names_the_runner_vocabulary_verbatim() {
         assert!(
             contains_token(&text, word),
             "手順書が判定器の語 `{word}` を 1 度も書いていない（部分一致でごまかさない）"
+        );
+    }
+}
+
+#[test]
+fn the_offset_procedure_names_its_runner_vocabulary_verbatim() {
+    // 本仕様（追随レコード）の手順書とランナーの語。字面が 1 つでもずれると、採取者は
+    // 存在しない語を grep して 0 件を得る（要件 8.5 が名指しで禁じている形）。
+    let text = read_procedure(OFFSET_PROCEDURE_RELATIVE_PATH);
+    let mut words: Vec<&str> = vec![
+        TRANSITION_LOG_ENV,
+        TRANSITION_TARGET,
+        RECORD_PREFIX_TAG,
+        KIND_OFFSET,
+        FIELD_VERDICT,
+        // ランナーのテスト名と、それを 1 本だけ選ぶ `cargo test` のフィルタ語。
+        "transition_judge_offset_signoff",
+        "judges_a_real_machine_offset_log",
+    ];
+    // 判定語は表そのものから起こす（手で並べると、語が増えた日に手順書だけが古くなる）。
+    words.extend(OFFSET_VERDICT_ALL.iter().copied());
+    for word in words {
+        assert!(
+            contains_token(&text, word),
+            "本仕様の手順書が判定器の語 `{word}` を 1 度も書いていない（部分一致でごまかさない）"
+        );
+    }
+}
+
+#[test]
+fn the_offset_procedure_states_what_the_judge_does_not_see() {
+    // 「違反 0 件」を「全部正しい」と読ませないための欄（task 8.1 のレビュー由来）。
+    // 見出しごと消えると、緑の読み違えが静かに戻ってくる。
+    let text = read_procedure(OFFSET_PROCEDURE_RELATIVE_PATH);
+    for phrase in [
+        "判定器が見ないもの",
+        "素の追従スコープ",
+        "重なり順",
+        "task 10.1",
+    ] {
+        assert!(
+            text.contains(phrase),
+            "本仕様の手順書が「判定器が見ないもの」の欄から `{phrase}` を落としている"
+        );
+    }
+}
+
+#[test]
+fn the_offset_procedure_forbids_the_two_shapes_that_make_a_false_red() {
+    // 手順が「素の追従スコープを 1 つ含める」「キーワード指定は素材消費後に低い側へ遷移させる」
+    // の 2 つを**必須**として書いていること。どちらを落としても、正しい実装のまま赤になる
+    // ログが採れてしまう（task 8.1 のレビューが名指しした 2 つの偽の赤）。
+    let text = read_procedure(OFFSET_PROCEDURE_RELATIVE_PATH);
+    for phrase in [
+        "キーワード指定でないバルーン",
+        "素材を消費させてから低い拡大率側へ遷移させる",
+        "偽の赤",
+    ] {
+        assert!(
+            text.contains(phrase),
+            "本仕様の手順書が偽の赤を防ぐ必須の手 `{phrase}` を書いていない"
         );
     }
 }

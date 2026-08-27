@@ -89,7 +89,7 @@ const T1_SCOPE0: usize = 5;
 const T1_SCOPE2: usize = 7;
 
 /// 既知の**合格**ログ（module doc の台本）。
-fn pass_lines() -> Vec<String> {
+pub(super) fn pass_lines() -> Vec<String> {
     vec![
         // T0: 96 → 192。
         monitor(10, 96, 192, WA_LOW, WA_HIGH),
@@ -223,7 +223,7 @@ fn pass_lines() -> Vec<String> {
 }
 
 /// 行の並びをログ本文へ。
-fn log_of(lines: &[String]) -> String {
+pub(super) fn log_of(lines: &[String]) -> String {
     lines.join("\n")
 }
 

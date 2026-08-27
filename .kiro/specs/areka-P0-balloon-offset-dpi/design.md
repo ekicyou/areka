@@ -238,7 +238,8 @@ crates/areka/src/
 - `crates/areka/src/placement/balloon_offset_supply_tests.rs` — 供給層の結線（換算ステップと `apply_scope_windowpositions` の呼出順・合流値・飽和の記録）。
 - `crates/areka/src/emo2_boot/frame_balloon_offset_follow_tests.rs` — `FrameHarness` による相の結合。
 - `crates/areka/src/placement/balloon_offset_persist_roundtrip_tests.rs` — 保存／復元の行列。
-- `crates/areka/src/placement/transition_judge_offset_tests.rs` — 判定器と実機サインオフ手順（`#[ignore]` ランナーを含む）。
+- `crates/areka/src/placement/transition_judge_offset_tests.rs` — 判定器の決定論檻。**⚠ 実装時訂正（2026-08-28・task 8.2）**: 実機サインオフのランナーと手順書は同ファイルではなく兄弟 `transition_judge_offset_signoff_tests.rs` へ置いた——同ファイルが 712 行に達し、手順書を同居させると 1,000 行の分量規律（要件 9.6）に触れるため。
+- `crates/areka/src/placement/transition_judge_offset_signoff_tests.rs`（新規）— 実機サインオフ手順書（モジュール doc）と `#[ignore]` ランナー。ログの経路は**新しい環境変数を増やさず既存の `TRANSITION_LOG_ENV`（`AREKA_TRANSITION_LOG`）を再利用**する——同一の実機走行が両判定器の材料になり、操作者が同じログを 2 度採らずに済み、`kind=monitor` を共通の起点として使う構造とも一致する。
 
 いずれも 1,000 行を超えないこと（D17）。
 
@@ -710,13 +711,13 @@ pub(super) fn converge_balloon_after_skipped_write(world: &mut World, char_windo
 - **恒等式のみを主張する 3 本**（`frame_dpi_reproject_tests.rs:273`／`frame_dpi_reproject_none_tests.rs:33`／`frame_transition_branch_tests.rs:557`）は、追随が入っても緑のまま通る＝**追随の証拠にならない**。テスト doc にその旨を明記し、「全部緑だから壊していない」の根拠に使わせない。
 - **寸法変化に対する不変を主張する群**（`follow_resize_tests.rs:176/:261/:476`・`frame_work_area_resnap_tests.rs:156`）と**「再スケールなし」を固定する群**（`follow_drag_tests.rs:48`・`follow_window_move_tests.rs:55`）は**変更しない**——本仕様の発火条件が `Changed<DPI>` に限られるため両立する（7.6）。
 
-### 実機サインオフ（要件 8・`transition_judge_offset_tests.rs` の `#[ignore]` ランナー）
+### 実機サインオフ（要件 8・`transition_judge_offset_signoff_tests.rs` の `#[ignore]` ランナー）
 
 1. 125% 相当と 200% 相当の 2 台以上を備えた環境で、`wintf::transition=debug` を点灯して実行する（8.1）。
 2. ゴーストをモニタ間で往復させ、`kind=offset` の `new_offset` が往復の前後で bit 同一に戻ること（8.2）。
 3. 低い拡大率の側で `verdict=rescaled` が出ており、先行仕様の残所見「低い拡大率の側で定常的にバルーンがずれる」が解消していること（8.4）。
 4. キーワード指定スコープで、遷移後の揃えの残差が D8 の許容量以内であること（8.5）。
-5. 合否は判定器の機械判定で決め、判定語と手順を文書として残す（8.3）。**手順書の置き場所は `transition_judge_offset_tests.rs` のモジュール doc** とし、先行仕様の donor（`transition_signoff_procedure_tests.rs`）と同じ形——手順・点灯方法・判定語・合否条件を逐語で持ち、`#[ignore]` のランナーが同じ判定器を回す——にする。先行仕様の手順書ファイルは書き換えない（自らの行に限る規律を検証側にも適用する）。
+5. 合否は判定器の機械判定で決め、判定語と手順を文書として残す（8.3）。**手順書の置き場所は `transition_judge_offset_signoff_tests.rs` のモジュール doc**（2026-08-28 実装時訂正・上記 File Structure Plan の注記を参照）とし、先行仕様の donor（`transition_signoff_procedure_tests.rs`）と同じ形——手順・点灯方法・判定語・合否条件を逐語で持ち、`#[ignore]` のランナーが同じ判定器を回す——にする。先行仕様の手順書ファイルは書き換えない（自らの行に限る規律を検証側にも適用する）。 **手順書は番人の `PROCEDURE_SOURCES` へ登録し、`PENDING_PROCEDURE_KINDS` の `offset` を外す。あわせて前向きの検査 `the_procedure_only_quotes_record_lines_the_emitters_can_produce` を `procedure_sources_text()` へ切り替える**——切り替えないと新出所が引用する観測行を誰も検査しない空振りになる（実測で確認済み）。手順書には**偽の赤を生む 2 つの形**（素の追従スコープが 1 つも無い／キーワード指定の素材を消費せずに遷移する）を必須手として禁じ、**判定器が見ないもの 4 件**を合格判定の直後に置くこと。
 
 > `hello-pasta`（`vendors/pasta/.../shell/master/descript.txt:7-10`）は `sakura.balloon.offsetx,64`／`kero.balloon.offsetx,64` を**実際に宣言している**（実測）。要件 2 の検証には emo2 ではなくこの資産を使う——emo2 は当該オフセットが未宣言のため、拡大率適用の是正が走る経路を持たない。
 
