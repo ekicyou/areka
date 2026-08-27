@@ -25,3 +25,8 @@ tracing-subscriber = { workspace = true }
 # 出荷クロージャに新規外部依存を持ち込まない（必須依存は tracing のみ＝既出）。
 # 依存方向の規律により [dependencies] へは決して置かない。
 log-capture-kit = { path = "../log-capture-kit" }
+# テスト用一時パスをプロセス間で一意に組み立てる窓口の唯一の定義元
+# （spec: areka-P0-test-cage-determinism・要件 12）。依存 0（std のみ）の leaf・
+# publish = false・テスト専用。本 crate は「最下層・最小依存」なので、
+# 依存方向の規律により [dependencies] へは決して置かない。
+temp-path-kit = { path = "../temp-path-kit" }
