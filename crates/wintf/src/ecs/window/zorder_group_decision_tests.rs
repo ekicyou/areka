@@ -40,9 +40,10 @@ use bevy_ecs::prelude::*;
 use windows::Win32::Foundation::HWND;
 
 use super::{
-    GroupFixDecision, GroupObservation, GroupProbe, GroupSkipReason, GroupVerify, ZOrderGroupSpec,
-    ZOrderGroups, decide_group_fix, log_group_applied, observe_group, order_holds,
-    plan_group_fixes, record_group_decision, record_group_skip, record_group_verification,
+    GroupFixDecision, GroupObservation, GroupProbe, GroupSkipReason, GroupVerify,
+    GroupVerifyOutcome, ZOrderGroupSpec, ZOrderGroups, decide_group_fix, log_group_applied,
+    observe_group, order_holds, plan_group_fixes, record_group_decision, record_group_skip,
+    record_group_verification,
 };
 use crate::ecs::test_support::capture_under_filter;
 use crate::ecs::window::zorder_pair::FrontScan;
@@ -148,6 +149,9 @@ fn observation(id: u32, hwnds: &[HWND], missing: usize, order_ok: bool) -> Group
         measured_front: hwnds.to_vec(),
         missing,
         order_ok,
+        // 走査を行った巡（＝検証の証跡になり得る巡）として組む。走査を行わなかった巡
+        // （番兵）との差は兄弟の `zorder_group_verify_tests.rs` が固定している。
+        scan_complete: Some(true),
     }
 }
 
@@ -682,6 +686,7 @@ fn every_skip_is_recorded_with_its_reason_and_yields_no_fix() {
         GroupSkipReason::TooFewResolved,
         GroupSkipReason::MemberMissing,
         GroupSkipReason::PairFixThisPass,
+        GroupSkipReason::GaveUpAfterFailures,
     ] {
         let mut taken = Some(GroupFixDecision::Skip(reason));
         let out = capture_under_filter(SIGNOFF_DIRECTIVES, || {
@@ -789,12 +794,16 @@ fn verification_puts_the_command_and_the_measurement_on_one_line() {
         true,
     );
 
-    let mut ok = false;
+    let mut outcome = GroupVerifyOutcome::NotMeasured;
     let out = capture_under_filter(SIGNOFF_DIRECTIVES, || {
-        ok = record_group_verification(&verify, &measured);
+        outcome = record_group_verification(&verify, &measured);
     });
 
-    assert!(ok, "成立した検証が失敗として返った");
+    assert_eq!(
+        outcome,
+        GroupVerifyOutcome::Matched,
+        "成立した検証が成立として返っていない"
+    );
     let line = only_line_with(&out, "[zorder-group] fix");
     assert!(line.contains("group_id=2"), "{line}");
     assert!(line.contains("head=0xA0"), "{line}");
@@ -813,12 +822,16 @@ fn a_failed_verification_is_recorded_as_a_mismatch_at_error_level() {
     };
     let measured = observation(2, &[fake_hwnd(0xA0), fake_hwnd(0xB0)], 1, false);
 
-    let mut ok = true;
+    let mut outcome = GroupVerifyOutcome::Matched;
     let out = capture_under_filter(SIGNOFF_DIRECTIVES, || {
-        ok = record_group_verification(&verify, &measured);
+        outcome = record_group_verification(&verify, &measured);
     });
 
-    assert!(!ok, "不一致の検証が成立として返った");
+    assert_eq!(
+        outcome,
+        GroupVerifyOutcome::Mismatched,
+        "不一致の検証が成立として返った"
+    );
     assert!(
         !out.contains("[zorder-group] fix"),
         "不一致なのに是正が記録された: {out}"
@@ -882,9 +895,9 @@ fn diagnostic_records_are_silent_at_default_level_while_mismatch_still_speaks() 
     );
 }
 
-/// 見送りの理由 4 種は互いに異なる語で記録される（1 語へ潰れると理由が読めない）。
+/// 見送りの理由 5 種は互いに異なる語で記録される（1 語へ潰れると理由が読めない）。
 #[test]
-fn the_four_skip_reasons_are_recorded_as_distinct_words() {
+fn the_five_skip_reasons_are_recorded_as_distinct_words() {
     let obs = observation(1, &[fake_hwnd(0xA0), fake_hwnd(0xB0)], 0, true);
     let mut seen: Vec<String> = Vec::new();
 
@@ -893,6 +906,7 @@ fn the_four_skip_reasons_are_recorded_as_distinct_words() {
         GroupSkipReason::TooFewResolved,
         GroupSkipReason::MemberMissing,
         GroupSkipReason::PairFixThisPass,
+        GroupSkipReason::GaveUpAfterFailures,
     ] {
         let out = capture_under_filter(SIGNOFF_DIRECTIVES, || {
             record_group_skip(Some(1), reason, Some(&obs));
@@ -908,7 +922,7 @@ fn the_four_skip_reasons_are_recorded_as_distinct_words() {
         assert!(!seen.contains(&word), "理由語 `{word}` が他と重なっている");
         seen.push(word);
     }
-    assert_eq!(seen.len(), 4);
+    assert_eq!(seen.len(), 5);
 }
 
 // ---------------------------------------------------------------------------

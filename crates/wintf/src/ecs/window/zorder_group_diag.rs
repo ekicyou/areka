@@ -72,6 +72,19 @@ pub(crate) fn group_record_tags() -> [&'static str; 5] {
     ]
 }
 
+/// 真偽値をログ用表現へ（判定そのものが取れなかった場合は番兵）。
+///
+/// 「取れなかった」を `false` へ潰さない——潰すと「測ったが偽だった」という**観測**と
+/// 「測っていない」という**観測の欠落**が同じ字面になる。既存ペア機構の
+/// `tristate_field`（`zorder_pair_diag.rs`）と同じ規律であり、あちらの 5 ファイルは
+/// 無編集ゆえ関数そのものは共有できないので、字面だけを合わせてこちらにも置く。
+pub(crate) fn tristate_field(value: Option<bool>) -> String {
+    match value {
+        Some(v) => v.to_string(),
+        None => UNKNOWN.to_string(),
+    }
+}
+
 /// 窓の列をログ用の 1 フィールドへ（空列は番兵）。
 fn hwnd_list_field(hwnds: &[HWND]) -> String {
     if hwnds.is_empty() {
@@ -183,16 +196,25 @@ pub(crate) fn fix_line(verify: &GroupVerify, observed: &GroupObservation) -> Str
 ///   ある——`measured` に載るのは走査が実際に出会った並びだけである。
 /// - `missing` を載せるのは、不一致の原因が「指令が効かなかった」のか「そもそも窓が
 ///   揃っていなかった」のかを 1 行で切り分けられるようにするためである。
+/// - `scan_complete` を載せるのは、`measured` に現れないメンバーが「測ったら別の場所に
+///   居た」のか「そこまで測れなかった」のかを**この 1 行で**切り分けるためである。
+///   前面走査は上限（512 枚）で打ち切られることがあり、打ち切られた巡は
+///   [`FrontScan::reached_top`](super::zorder_pair::FrontScan) が偽になる。打ち切り
+///   そのものは走査層が warn に残すが、それは**別の出力先の 2 行目**であり、突き合わせて
+///   初めて解ける形は本行の設計理由（1 行で読める）が戒めているものそのものである。
+///   走査を行わなかった巡は番兵（`-`）——「測っていない」を `false` へ潰さない。
 pub(crate) fn verify_failed_line(verify: &GroupVerify, observed: &GroupObservation) -> String {
     format!(
         "{VERIFY_FAILED_TAG} group_id={id} head={head} moves={moves} \
-         members={members} measured={measured} missing={missing}",
+         members={members} measured={measured} missing={missing} \
+         scan_complete={scan_complete}",
         id = verify.id,
         head = hwnd_field(Some(verify.head)),
         moves = moves_field(verify.head, &verify.chain),
         members = hwnd_list_field(&observed.hwnds),
         measured = hwnd_list_field(&observed.measured_front),
         missing = observed.missing,
+        scan_complete = tristate_field(observed.scan_complete),
     )
 }
 

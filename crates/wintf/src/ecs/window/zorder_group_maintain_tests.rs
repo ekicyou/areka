@@ -17,8 +17,11 @@
 //! - **構成窓だけ**——構成外の窓へは 1 本も指令が出ない（要件 2.5）。
 //! - **位置と寸法を変えない**——指令の組み立て方そのものが保証する（要件 11.1）。
 //!
-//! 次巡の実測照合・連続失敗の頭打ち・印の解除・起床の印は**まだ無い**（後続タスクの担当）。
-//! よって本ファイルは「発行した巡でも印は立ったまま」を正として書いてある。
+//! 次巡の実測照合・連続失敗の頭打ち・印の解除は兄弟の
+//! [`zorder_group_verify_tests`](super::zorder_group_verify_tests) が持つ（起床の印は
+//! まだ無い＝後続タスクの担当）。本ファイルが「発行した巡でも印は立ったまま」を正として
+//! 書けるのは、発行の相手が**相対順の成立していないグループ**だからである——印が降りる
+//! のは維持対象が全て成立した巡だけなので、発行した巡がその条件を満たすことはない。
 //!
 //! # 「起きてはならない」を片側だけの入力で主張しない
 //!
@@ -57,19 +60,19 @@ const SHARED_SCAN_TARGET: &str = "wintf::ecs::window::zorder_pair";
 const SHARED_SCAN_DIRECTIVES: &str = "info,wintf::ecs::window::zorder_pair=debug";
 
 /// テスト用の偽 HWND（Win32 へは渡さない・値としてのみ扱う）。
-fn fake_hwnd(v: usize) -> HWND {
+pub(super) fn fake_hwnd(v: usize) -> HWND {
     HWND(v as *mut _)
 }
 
 /// 窓の実体を n 個作る（値としての `Entity` が欲しいだけ）。
-fn entities(n: usize) -> Vec<Entity> {
+pub(super) fn entities(n: usize) -> Vec<Entity> {
     let mut world = World::new();
     (0..n).map(|_| world.spawn_empty().id()).collect()
 }
 
 /// 前の巡の残留を捨ててから測る（キューはスレッドローカルであり、同じスレッドを別のテストが
 /// 使い回す）。
-fn clear_queue() {
+pub(super) fn clear_queue() {
     let _ = drain_window_pos_commands();
 }
 
@@ -82,7 +85,7 @@ fn clear_queue() {
 /// 回数を数えるのは「印が立っていなければ観測しない」を、記録や指令の有無ではなく
 /// **呼出そのもの**で見るためである。指令の有無で見ると「観測はしたが出さなかった」形が
 /// 素通りする。
-struct FakeProbe {
+pub(super) struct FakeProbe {
     handles: HashMap<Entity, HWND>,
     /// 走査の起点ごとの結果（未登録は「手前に可視の窓が無い・最前面まで辿れた」）
     fronts: HashMap<isize, (Vec<HWND>, bool)>,
@@ -91,7 +94,7 @@ struct FakeProbe {
 }
 
 impl FakeProbe {
-    fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             handles: HashMap::new(),
             fronts: HashMap::new(),
@@ -101,7 +104,7 @@ impl FakeProbe {
     }
 
     /// 実体と偽ハンドルの対応をまとめて足す（`hwnds[i]` が `members[i]` のハンドル）。
-    fn with_handles(mut self, members: &[Entity], hwnds: &[HWND]) -> Self {
+    pub(super) fn with_handles(mut self, members: &[Entity], hwnds: &[HWND]) -> Self {
         for (entity, hwnd) in members.iter().zip(hwnds.iter()) {
             self.handles.insert(*entity, *hwnd);
         }
@@ -109,7 +112,7 @@ impl FakeProbe {
     }
 
     /// ある窓から手前へ辿ったときに見える可視の窓の列（近い順）を仕込む。
-    fn with_front(mut self, from: HWND, windows: &[HWND], reached_top: bool) -> Self {
+    pub(super) fn with_front(mut self, from: HWND, windows: &[HWND], reached_top: bool) -> Self {
         self.fronts
             .insert(from.0 as isize, (windows.to_vec(), reached_top));
         self
@@ -138,7 +141,7 @@ impl GroupProbe for FakeProbe {
 }
 
 /// 受け口をグループ 1 本で組む（印は立てた状態）。
-fn groups_with(id: u32, members: &[Entity]) -> ZOrderGroups {
+pub(super) fn groups_with(id: u32, members: &[Entity]) -> ZOrderGroups {
     let mut groups = ZOrderGroups::default();
     groups.groups.push(ZOrderGroupSpec {
         id,
@@ -149,7 +152,7 @@ fn groups_with(id: u32, members: &[Entity]) -> ZOrderGroups {
 }
 
 /// 積まれた指令の「動かす窓」を積まれた順に取り出す。
-fn issued_targets(cmds: &[SetWindowPosCommand]) -> Vec<HWND> {
+pub(super) fn issued_targets(cmds: &[SetWindowPosCommand]) -> Vec<HWND> {
     cmds.iter().map(|c| c.hwnd).collect()
 }
 
@@ -275,7 +278,8 @@ fn an_empty_roster_observes_nothing_and_issues_nothing_even_while_marked() {
 ///
 /// 対照は**同じ入力でペア機構の是正が無い巡**である。そちらでは指令が積まれ、検証待ちが
 /// 預けられ、調停の記録は出ない。印がどちらの巡でも立ったままであることも併せて見る
-/// ——印の解除は後続タスクの担当であり、この段で消える実装は誤りである。
+/// ——見送った巡は言うまでもなく、発行した巡も相手が成立していない以上、印を降ろす条件を
+/// 満たさない。
 #[test]
 fn a_pair_fix_in_the_same_pass_defers_the_issue_and_keeps_the_mark() {
     let members = entities(3);
@@ -327,7 +331,7 @@ fn a_pair_fix_in_the_same_pass_defers_the_issue_and_keeps_the_mark() {
     );
     assert!(
         groups.pending,
-        "発行した巡で印が落ちている（印の解除は後続タスクの担当）"
+        "発行した巡で印が落ちている（相対順の成立していないグループを出した巡である）"
     );
     assert!(
         !out.contains("reason=PairFixThisPass"),

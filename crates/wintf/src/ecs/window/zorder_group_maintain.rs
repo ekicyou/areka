@@ -1,14 +1,17 @@
 //! グループ単位の重なりの維持系——印を消費し、既存のペア機構と調停し、連鎖で是正を出す。
 //!
-//! design.md「wintf 層 > group 維持系」の 1 巡の手順のうち、**②印の門・③調停・④連鎖の
-//! 発行**をここで実装する。①次巡の実測照合、⑤印の解除と連続失敗の頭打ち、⑥起床の印は
-//! 後続タスクの担当であり、本モジュールにはまだ無い。
+//! design.md「wintf 層 > group 維持系」の 1 巡の手順のうち、**①次巡の実測照合と頭打ち・
+//! ②印の門・③調停・④連鎖の発行・⑤印の解除**をここで実装する。⑥起床の印は後続タスクの
+//! 担当であり、本モジュールにはまだ無い。
 //!
 //! ```text
-//! 印（pending）が立っていない → 何もしない（観測すらしない）
+//! 前の巡の発行があれば実測して照合（一致→是正の記録／不一致→検証不一致の記録＋連続失敗）
+//!   → 連続失敗が上限に達したグループだけを維持対象から外す（理由と観測値を warn で記録）
+//! 印（pending）が立っていない → ここで終わり（観測すらしない）
 //!   → 同じ巡にペア機構の是正が在る → 理由つきの見送りを記録して終わり（印は保持）
-//!       → 各グループを観測 → 是正が要る最初の 1 グループへ連鎖を積む
-//!                            → 検証待ちを預ける（照合は次巡＝後続タスク）
+//!       → 維持対象の各グループを観測 → 是正が要る最初の 1 グループへ連鎖を積む
+//!                            → 検証待ちを預ける（照合は次の巡）
+//!       → 維持対象が全て成立していれば印を降ろす（外したグループは数えない）
 //! ```
 //!
 //! # なぜ「印が立っていない巡は観測すらしない」のか（要件 6.1／6.4）
@@ -54,8 +57,9 @@ use windows::Win32::Foundation::HWND;
 
 use super::SetWindowPosCommand;
 use super::zorder_group::{
-    GroupFixDecision, GroupProbe, GroupSkipReason, GroupVerify, ZOrderGroups, plan_group_fixes,
-    record_group_decision, record_group_skip,
+    GroupFixDecision, GroupProbe, GroupSkipReason, GroupVerify, GroupVerifyOutcome,
+    VERIFY_FAIL_CAP, ZOrderGroupSpec, ZOrderGroups, observe_group, plan_group_fixes,
+    record_group_decision, record_group_give_up, record_group_skip, record_group_verification,
 };
 use super::zorder_pair::InsertSpec;
 use super::zorder_pair_maintain::{HandleQuery, IssuedPairFix, pair_fix_command};
@@ -122,7 +126,7 @@ fn enqueue_group_chain(head: HWND, chain: &[HWND]) {
 /// 1 巡ぶんの維持を回す（World も Win32 も、実測の口の向こう側にしか無い）。
 ///
 /// system 本体（[`apply_zorder_group_maintenance`]）から World 依存を剥がしてあるのは、
-/// 門・調停・連鎖の組立という**判断の側**を実機も実ディスプレイも無しに固定するためで
+/// 照合・門・調停・連鎖の組立・印の解除という**判断の側**を実機も実ディスプレイも無しに固定するためで
 /// ある（要件 10.1）。既存ペア機構が観測を構造体へ写して純関数へ渡しているのと同じ分割
 /// であり、こちらは列の長さが可変ゆえ「値の写し」ではなく「引く口」を渡す形にしてある。
 ///
@@ -134,6 +138,15 @@ pub(crate) fn run_group_maintenance_pass<P: GroupProbe + ?Sized>(
     pair_fix_this_pass: bool,
     probe: &P,
 ) {
+    // ① 前の巡に出した連鎖の照合。印の門より前に置く（設計の手順どおり）。
+    //
+    // 門の前で構わないのは、**検証待ちが預けられている巡は必ず印も立っている**からで
+    // ある——検証待ちが付くのは連鎖を出した巡だけであり、その巡のグループは相対順が
+    // 成立していないので⑤の解除条件を満たさない。よってここが「印の立っていない巡に
+    // 観測する」経路になることはなく、要件 6.1／6.4 の構造的保証（グループが 1 本も
+    // 宣言されていなければ実測の口を一度も呼ばない）はそのまま残る。
+    verify_previous_issue(groups, probe);
+
     // ② 印の門。立っていなければ観測も判断も指令も無い（要件 6.1／6.4）。
     // 記録も出さない——「是正が要るかもしれない」と誰も言っていない巡であり、
     // 見送るべき判断がそもそも無いからである（要件 8.3 の対象は判断した上での沈黙）。
@@ -155,10 +168,25 @@ pub(crate) fn run_group_maintenance_pass<P: GroupProbe + ?Sized>(
     // 1 本ずつ独立に回す）。発行を 1 本に絞るのは観測ではなく**指令の側**であり、
     // 2 本目以降の是正は記録も要求の取り下げも伴わずに次巡へ持ち越される
     // ——印が残っている以上、記録の無い握り潰しにはならない。
-    let plans = plan_group_fixes(&groups.groups, probe);
+    //
+    // 観測にかけるのは**維持対象のグループだけ**である。頭打ちで外したグループを列から
+    // 落としてから渡すので、外れたグループは実測もされない——「外した」を、指令を出さない
+    // 判断ではなく判断の機会そのものの不在として作る（②の門と同じ形）。
+    let maintained: Vec<ZOrderGroupSpec> = groups
+        .groups
+        .iter()
+        .filter(|spec| groups.is_maintained(spec.id))
+        .cloned()
+        .collect();
+    let plans = plan_group_fixes(&maintained, probe);
     let mut issued: Option<GroupVerify> = None;
+    // ⑤の判定材料。維持対象のうち 1 本でも相対順が成立していなければ印は残る。
+    let mut all_ordered = true;
 
     for plan in plans {
+        if !plan.observation.order_ok {
+            all_ordered = false;
+        }
         // 判断結果は必ず記録の入口を通す——見送りはそこで理由つきの記録になり、
         // 返ってくるのは適用すべき是正だけである（要件 8.3 の規約）。発行済みの巡でも
         // この呼出は飛ばさない。飛ばすと、後ろに居るグループの見送りが**発行したという
@@ -184,9 +212,80 @@ pub(crate) fn run_group_maintenance_pass<P: GroupProbe + ?Sized>(
         });
     }
 
-    // 出した連鎖を次巡の照合のために預ける。照合そのものは後続タスクが引き取る。
+    // 出した連鎖を次巡の照合（①）のために預ける。
     if let Some(verify) = issued {
         groups.arm_verify(verify);
+    }
+
+    // ⑤ 印の解除。**維持対象**の全グループの相対順が成立した時点で降ろす。
+    //
+    // 頭打ちで外したグループを数えないのは、数えると 1 本の不成立が他のグループの静穏
+    // まで止め、tick の門が永久に開いたままになるからである（要件 7.4 の起床旗は印が
+    // 立つ間ずっと立つ）。外した事実は打ち切りの巡に warn として残っているので、
+    // 「黙って諦めた」にはならない（要件 8.3）。
+    //
+    // 是正を出した巡はここへ来ても降りない——出した相手は相対順が成立していない
+    // グループであり、`all_ordered` が偽になっているからである。
+    if all_ordered {
+        groups.pending = false;
+        // 打ち切りの記憶もここで捨てる。印が降りている間は維持系が何もしないので、
+        // 外したグループが実際に戻るのは次の追随トリガが印を立て直した巡である。
+        groups.clear_all_fail_streaks();
+    }
+}
+
+// ============================================================================
+// verify_previous_issue - 前の巡の発行に対する照合と、グループごとの頭打ち
+// ============================================================================
+
+/// 前の巡に出した連鎖を実測と突き合わせ、連続失敗が上限に達したグループを維持対象から外す。
+///
+/// # なぜ発行の巡ではなくここで照合するのか（要件 9.1／9.2）
+///
+/// 指令の実際の書込は巡の後の flush であり、発行と同じ巡に採った実測は必ず書込前の値に
+/// なる。よって是正の記録（`fix` 行）は**この段でしか出さない**——既存ペア機構の
+/// `record_verification`（`zorder_pair.rs`）が同じ理由で 2 段階になっている。出した指令
+/// （預かった [`GroupVerify`]）とこの巡の実測が同じ 1 行に載ることが要件 9.1／9.2 の実質で
+/// ある。
+///
+/// # 検証の相手が名簿から消えていたら
+///
+/// 空のメンバー列として観測する。解決できる窓が 2 枚未満なので走査は行われず、記録は
+/// [`GroupVerifyOutcome::NotMeasured`] の見送りになる——`fix` も `verify-failed` も出さず、
+/// 連続失敗にも数えない。何も測っていない巡を証跡にしないためであり、環境が是正を
+/// 拒んだわけでもないからである。
+///
+/// # 頭打ちはグループごと（要件 8.2／8.3）
+///
+/// 連続失敗を数えるのは**検証に失敗したグループ**だけである。1 巡に発行するのは 1 本
+/// なので、他のグループの陰で持ち越されているグループはそもそもこの段へ到達せず、
+/// 数を持てない——「一度も発行していないグループが頭打ちで外れ、印が降りて、二度と
+/// 発行されない」という経路が構造として作れない形にしてある（task 4.1 からの申し送り）。
+fn verify_previous_issue<P: GroupProbe + ?Sized>(groups: &mut ZOrderGroups, probe: &P) {
+    let Some(verify) = groups.take_verify() else {
+        return;
+    };
+    let spec = groups
+        .groups
+        .iter()
+        .find(|spec| spec.id == verify.id)
+        .cloned()
+        .unwrap_or(ZOrderGroupSpec {
+            id: verify.id,
+            members: Vec::new(),
+        });
+    let observed = observe_group(&spec, probe);
+
+    match record_group_verification(&verify, &observed) {
+        GroupVerifyOutcome::Matched => groups.clear_fail_streak(verify.id),
+        GroupVerifyOutcome::Mismatched => {
+            let streak = groups.note_verify_failure(verify.id);
+            if streak >= VERIFY_FAIL_CAP {
+                record_group_give_up(verify.id, streak, &observed);
+            }
+        }
+        // 測っていないので、成立とも失敗とも数えない（記録は入口が済ませている）。
+        GroupVerifyOutcome::NotMeasured => {}
     }
 }
 
@@ -194,7 +293,7 @@ pub(crate) fn run_group_maintenance_pass<P: GroupProbe + ?Sized>(
 // apply_zorder_group_maintenance - 維持系 system
 // ============================================================================
 
-/// 維持系: 是正が要るかもしれない印を消費し、ペア機構と調停し、連鎖で是正を出す。
+/// 維持系: 前の巡の発行を照合し、印を消費し、ペア機構と調停し、連鎖で是正を出す。
 ///
 /// # 受け口が挿さっていない巡
 ///
@@ -231,3 +330,7 @@ pub fn apply_zorder_group_maintenance(
 #[cfg(test)]
 #[path = "zorder_group_maintain_tests.rs"]
 mod zorder_group_maintain_tests;
+
+#[cfg(test)]
+#[path = "zorder_group_verify_tests.rs"]
+mod zorder_group_verify_tests;

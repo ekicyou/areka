@@ -55,7 +55,7 @@ use tracing::{debug, error, warn};
 use windows::Win32::Foundation::HWND;
 
 use super::zorder_group_diag::{
-    applied_line, fix_line, rejected_line, skip_line, verify_failed_line,
+    applied_line, fix_line, rejected_line, skip_line, tristate_field, verify_failed_line,
 };
 use super::zorder_pair::{FrontScan, measure_windows_in_front};
 
@@ -158,7 +158,34 @@ impl ZOrderGroups {
     pub(crate) fn fail_streak(&self, id: u32) -> u8 {
         self.fail_streaks.get(&id).copied().unwrap_or(0)
     }
+
+    /// そのグループを今も維持の対象にしているか（頭打ちに達していないか）。
+    ///
+    /// 判定を**グループ ID ごと**に閉じてあることが、要件 8.2 の「1 つの不成立が他の
+    /// グループの是正を止めない」の実質である。全体で 1 つの数を持つと、あるグループの
+    /// 環境側の失敗が無関係なグループの維持まで打ち切る。
+    pub(crate) fn is_maintained(&self, id: u32) -> bool {
+        self.fail_streak(id) < VERIFY_FAIL_CAP
+    }
+
+    /// すべてのグループの連続失敗を 0 へ戻す（維持がひと区切りついた巡に呼ぶ）。
+    ///
+    /// 呼ぶのは印（[`Self::pending`]）が降りる時点である。印が降りている間は維持系が
+    /// 何もしないので、頭打ちで外したグループが実際に維持対象へ戻るのは**次の追随
+    /// トリガが印を立て直した巡**になる——design の「外したグループは次の追随トリガで
+    /// 維持対象へ戻す」を、トリガ側の書き方（`pending = true`）に一切依存せずに満たす
+    /// 形である。
+    pub(crate) fn clear_all_fail_streaks(&mut self) {
+        self.fail_streaks.clear();
+    }
 }
+
+/// 検証の連続失敗をどこで打ち切るか（design「頭打ち」の 3 回）。
+///
+/// 打ち切るのは**そのグループだけ**であり、他のグループの是正も、印の解除も止めない。
+/// 打ち切りは記録（warn）を伴い、次の追随トリガで解ける（[`ZOrderGroups::is_maintained`]／
+/// [`ZOrderGroups::clear_all_fail_streaks`]）。
+pub(crate) const VERIFY_FAIL_CAP: u8 = 3;
 
 // ============================================================================
 // GroupProbe - 実測の口（判断を実機から切り離すための一線）
@@ -208,6 +235,18 @@ pub(crate) struct GroupObservation {
     pub missing: usize,
     /// 前面走査による相対順の成否
     pub order_ok: bool,
+    /// 前面走査が最前面まで辿れたか（走査を行わなかった巡は `None`）
+    ///
+    /// [`measured_front`](Self::measured_front) は走査が出会わなかったメンバーを落とす
+    /// ので、その欄だけでは「測ったら別の場所に居た」と「そこまで測れなかった」が同じ
+    /// 字面になる（走査は上限 512 枚で打ち切られ得る）。打ち切りは走査層が warn に残す
+    /// が、それは別の出力先の 2 行目であり、突き合わせて初めて解ける形は記録行の設計
+    /// 理由（1 行で読める）が戒めているものそのものである。よって走査の完否をここで
+    /// 運び、検証不一致の行へ同じ 1 行として載せる。
+    ///
+    /// 3 値なのは「測っていない」を `false`（＝測ったが最前面まで届かなかった）へ
+    /// 潰さないためである（既存ペア機構の `tristate_field` と同じ規律）。
+    pub scan_complete: Option<bool>,
 }
 
 /// 観測と判断を 1 対にした 1 グループ分の計画。
@@ -274,14 +313,19 @@ pub(crate) fn observe_group<P: GroupProbe + ?Sized>(
         }
     }
 
-    let (order_ok, measured_front) = match hwnds.last() {
+    let (order_ok, measured_front, scan_complete) = match hwnds.last() {
         Some(back) if hwnds.len() >= 2 => {
             let scan = probe.scan_in_front(*back);
-            (order_holds(&hwnds, &scan), measured_members(&hwnds, &scan))
+            (
+                order_holds(&hwnds, &scan),
+                measured_members(&hwnds, &scan),
+                Some(scan.reached_top),
+            )
         }
         // 比べる相手が居ないので「崩れている」とは言えない（判断側が別の理由で見送る）。
-        // 測っていない以上、実測の列は空のままにする——宣言列を写すと「測った」と読める。
-        _ => (true, Vec::new()),
+        // 測っていない以上、実測の列は空のままにし、走査の完否も番兵にする——宣言列を
+        // 写せば「測った」と読め、`false` を書けば「測ったが届かなかった」と読める。
+        _ => (true, Vec::new(), None),
     };
 
     GroupObservation {
@@ -290,6 +334,7 @@ pub(crate) fn observe_group<P: GroupProbe + ?Sized>(
         measured_front,
         missing,
         order_ok,
+        scan_complete,
     }
 }
 
@@ -387,6 +432,13 @@ pub(crate) enum GroupSkipReason {
     MemberMissing,
     /// この巡は既存のペア機構が是正を出しており、重ねて出さない（調停）
     PairFixThisPass,
+    /// 検証の連続失敗が上限に達したので、このグループの維持を打ち切った（要件 8.2／8.3）
+    ///
+    /// 「諦めた」を語として持つのは、これが**記録の無い断念**と紙一重の判断だからである
+    /// ——理由語のある見送りとして残る限り、読み手は「何度やっても環境側が受け付けな
+    /// かった」という事実に到達できる。水準だけは他の見送りと違い warn である
+    /// （[`record_group_give_up`]）。
+    GaveUpAfterFailures,
 }
 
 /// 是正判断の結果。
@@ -514,24 +566,88 @@ pub(crate) fn record_group_decision(
     }
 }
 
-/// 適用後の実測照合を記録し、期待どおりだったかを返す（要件 9.1／9.2）。
+/// 検証の結末（要件 8.3——「測れなかった」を成否のどちらかへ潰さない）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum GroupVerifyOutcome {
+    /// 実測が指令どおりだった（`fix` を記録済み）
+    Matched,
+    /// 実測が指令どおりでなかった（`verify-failed` を記録済み）
+    Mismatched,
+    /// 比べる相手が 2 枚に満たず、そもそも実測していない（見送りを記録済み）
+    NotMeasured,
+}
+
+/// 適用後の実測照合を記録し、結末を返す（要件 9.1／9.2）。
 ///
 /// - 一致: 是正の記録（debug）——出した指令と実測を同じ行に載せる。
 /// - 不一致: 検証不一致の記録（error）。
+/// - 実測なし: 理由つきの見送り（debug）。**是正の記録は出さない。**
 ///
 /// 是正の記録をここでしか出さないのは、発行と同じ巡の実測が必ず書込前の値になり証跡に
 /// 使えないからである（[`GroupVerify`] の doc 参照）。
-pub(crate) fn record_group_verification(verify: &GroupVerify, observed: &GroupObservation) -> bool {
+///
+/// # 測っていない巡を「成立」と読ませない
+///
+/// 検証の巡までに窓が減ると、解決できるのが 1 枚以下になり前面走査そのものが行われない
+/// （[`observe_group`]）。このとき [`GroupObservation::order_ok`] は「崩れているとは
+/// 言えない」の意味で真になるが、その真をここで成立として扱うと、**何も測っていない巡に
+/// `fix` 行が出る**。サインオフはその行を「指定が成立した」と読むので、これは
+/// 「証跡のふりをした非証跡」そのものである。よって判定材料は `order_ok` ではなく
+/// [`GroupObservation::scan_complete`] の有無を先に見る——走査を行った巡だけが証跡に
+/// なる。呼び出し側の作法ではなくこの関数の中で塞いであるのは、記録の唯一の入口を
+/// 通る限り誰が呼んでも同じ保証が効くようにするためである。
+pub(crate) fn record_group_verification(
+    verify: &GroupVerify,
+    observed: &GroupObservation,
+) -> GroupVerifyOutcome {
+    if observed.scan_complete.is_none() {
+        // 実測していない以上、成否のどちらも主張できない。黙って落とすと要件 8.3 に
+        // 触れるので、既存の理由語（比べる相手が居ない）で見送りとして残す。
+        record_group_skip(
+            Some(verify.id),
+            GroupSkipReason::TooFewResolved,
+            Some(observed),
+        );
+        return GroupVerifyOutcome::NotMeasured;
+    }
     if observed.order_ok {
         emit(GroupRecordLevel::Debug, &fix_line(verify, observed));
-        true
+        GroupVerifyOutcome::Matched
     } else {
         emit(
             GroupRecordLevel::Error,
             &verify_failed_line(verify, observed),
         );
-        false
+        GroupVerifyOutcome::Mismatched
     }
+}
+
+/// そのグループの維持を打ち切った事実を記録する（warn・要件 8.2／8.3）。
+///
+/// 水準が warn なのは、諦めは診断手順を有効化していない通常運転でも読めなければ
+/// 「黙って諦めた」に等しいからである（見送り＝debug との差はここにある）。ゴーストは
+/// 異常終了させない——記録して次の追随トリガを待つのが要件 8.2 の求める形である。
+///
+/// # 欄は既存の見送り行に足す形で増やす
+///
+/// 本文は [`skip_line`] が組む 5 欄（グループ・理由・解決枚数・未解決数・相対順の成否）に、
+/// この経路でしか意味を持たない 2 欄を継ぎ足したものである（[`log_group_member_missing`]
+/// と同じ作法——`skip_line` の書式そのものは動かさない）。
+///
+/// - `streak`: 連続して何回の検証に失敗した末の打ち切りか
+/// - `scan_complete`: 最後の実測で走査が最前面まで辿れたか（打ち切りの原因が「窓が
+///   動かせない」のか「そもそも測り切れていない」のかを 1 行で切り分ける）
+pub(crate) fn record_group_give_up(group_id: u32, streak: u8, observed: &GroupObservation) {
+    let line = format!(
+        "{base} streak={streak} scan_complete={scan}",
+        base = skip_line(
+            Some(group_id),
+            GroupSkipReason::GaveUpAfterFailures,
+            Some(observed)
+        ),
+        scan = tristate_field(observed.scan_complete),
+    );
+    emit(GroupRecordLevel::Warn, &line);
 }
 
 /// 指定が受理された事実を記録する（台帳を持つ層＝areka から呼ぶ）。

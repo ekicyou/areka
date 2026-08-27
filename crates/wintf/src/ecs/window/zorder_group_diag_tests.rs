@@ -71,6 +71,9 @@ fn measured_observation(
         measured_front: measured_front.to_vec(),
         missing,
         order_ok,
+        // 走査を行い、最前面まで辿れた巡として組む。辿れなかった巡・走査そのものを
+        // 行わなかった巡との差は `the_verify_failed_line_never_folds...` が固定する。
+        scan_complete: Some(true),
     }
 }
 
@@ -323,7 +326,7 @@ fn the_verify_failed_line_shows_the_declared_order_beside_the_measured_one() {
     assert_eq!(
         verify_failed_line(&verify, &observed),
         "[zorder-group] verify-failed group_id=2 head=0xA0 moves=0xB0@0xA0 \
-         members=0xA0,0xB0 measured=0xB0,0xA0 missing=1"
+         members=0xA0,0xB0 measured=0xB0,0xA0 missing=1 scan_complete=true"
     );
     // 2 欄が別物であることを、名前でも値でも主張する（片方が他方の写しなら赤くなる）
     let line = verify_failed_line(&verify, &observed);
@@ -332,6 +335,42 @@ fn the_verify_failed_line_shows_the_declared_order_beside_the_measured_one() {
         field(&line, "measured"),
         "宣言列と実測列が同じ字面になっている: {line}"
     );
+}
+
+/// 検証不一致の行は、走査が最前面まで辿れたかを 3 値のまま載せる（`-`／`true`／`false`）。
+///
+/// `measured` は走査が出会わなかったメンバーを落とすので、この欄が無いと
+/// 「測ったら別の場所に居た」と「そこまで測れなかった」が同じ字面になる。**3 値すべて**を
+/// 回すのは、`None` を `false` へ潰す実装（＝測っていないのに「届かなかった」と読ませる）
+/// も、常に `true` を書く実装も、片側だけの入力では素通りするからである。
+#[test]
+fn the_verify_failed_line_never_folds_an_unmeasured_scan_into_a_measured_negative() {
+    let verify = GroupVerify {
+        id: 4,
+        head: fake_hwnd(0xA0),
+        chain: vec![fake_hwnd(0xB0)],
+    };
+    let mut observed = measured_observation(
+        4,
+        &[fake_hwnd(0xA0), fake_hwnd(0xB0)],
+        &[fake_hwnd(0xA0)],
+        0,
+        false,
+    );
+
+    for (scan_complete, rendered) in [
+        (Some(true), "true"),
+        (Some(false), "false"),
+        (None, UNKNOWN),
+    ] {
+        observed.scan_complete = scan_complete;
+        let line = verify_failed_line(&verify, &observed);
+        assert_eq!(
+            field(&line, "scan_complete"),
+            rendered,
+            "{scan_complete:?} が `{rendered}` として読めない: {line}"
+        );
+    }
 }
 
 /// 見送りの行は理由を必ず伴い、観測値も同じ行に載る（要件 8.3）。
@@ -345,9 +384,9 @@ fn the_skip_line_always_carries_its_reason_and_the_observed_values() {
     );
 }
 
-/// 見送りの理由 4 種は、行の上で互いに異なる語になる（1 語へ潰れると理由が読めない）。
+/// 見送りの理由 5 種は、行の上で互いに異なる語になる（1 語へ潰れると理由が読めない）。
 #[test]
-fn the_four_skip_reasons_render_as_four_distinct_words() {
+fn the_five_skip_reasons_render_as_five_distinct_words() {
     let observed = observation(1, &[fake_hwnd(0xA0), fake_hwnd(0xB0)], 0, true);
     let mut seen: Vec<String> = Vec::new();
 
@@ -356,6 +395,7 @@ fn the_four_skip_reasons_render_as_four_distinct_words() {
         GroupSkipReason::TooFewResolved,
         GroupSkipReason::MemberMissing,
         GroupSkipReason::PairFixThisPass,
+        GroupSkipReason::GaveUpAfterFailures,
     ] {
         let line = skip_line(Some(1), reason, Some(&observed));
         let word = field(&line, "reason").to_string();
@@ -369,7 +409,8 @@ fn the_four_skip_reasons_render_as_four_distinct_words() {
             "AlreadyOrdered",
             "TooFewResolved",
             "MemberMissing",
-            "PairFixThisPass"
+            "PairFixThisPass",
+            "GaveUpAfterFailures"
         ]
     );
 }
