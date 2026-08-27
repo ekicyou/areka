@@ -331,6 +331,11 @@ mod dpi_reproject_none_tests;
 #[path = "frame_balloon_offset_converge_tests.rs"]
 mod balloon_offset_converge_tests;
 
+// キーワード再導出との排他の門（areka-P0-balloon-offset-dpi task 6.3・design D7・要件 4.3）。
+#[cfg(test)]
+#[path = "frame_balloon_offset_keyword_gate_tests.rs"]
+mod balloon_offset_keyword_gate_tests;
+
 #[cfg(test)]
 #[path = "frame_diag_route_tests.rs"]
 mod diag_route_tests;

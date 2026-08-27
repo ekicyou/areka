@@ -55,12 +55,35 @@
 //! 性質が違う。両者を同じ `unresolved` へ畳むと、**真に危険な片側 0 の警告が
 //! 「そもそも DPI を一度も観測していない窓」の日常的な雑音に埋もれる**。
 //!
+//! # キーワード由来の基本位置との排他（要件 4.1／4.3／4.5・design D7）
+//!
+//! キャラ窓が [`BalloonKeywordBase`] を持つあいだ、本相は**オフセットも基準対も 1 bit も
+//! 触らない**——`verdict=keyword-pending` を 1 行記録して抜けるだけである。素材が残る間の
+//! 正しい揃えは再導出（`rederive_keyword_balloon_offset`）が新しい実表示寸から**絶対値**で
+//! 出すので、追随まで効かせると 1 回の遷移で揃えが二重に動く。
+//!
+//! 分岐は**本仕様の新規コード側**に置く。再導出側の発火条件（寸の変化）と「経路で絞らない」
+//! という同関数の設計判断は 1 文字も変えていない（要件 4.5）。
+//!
+//! ## 受容した残余（開発者裁定 2026-08-27・要件 4.4 の記録に含む）
+//!
+//! 丸めの偶然でキャラ窓の物理寸が変わらない遷移では、再導出は寸が変わらないので発火せず、
+//! 追随は素材があるので見送る——**どちらも走らず**、揃えの更新が次の寸法変化まで
+//! 取り残される。これは塞がない裁定である: ⑴ 条件が二重に稀 ⑵ `verdict=keyword-pending`
+//! が記録に残るので沈黙しない ⑶ 次の寸法変化で自己回復する ⑷ 塞ぐには追随の判定を新寸確定後へ
+//! 回す二段構えが要り、挿入位置の単純さ（`refresh_scale_report` の直前という 1 点）を失う。
+//! 腕の挙動と自己回復は `frame_balloon_offset_keyword_gate_tests.rs` が固定している。
+//!
 //! # 記録の欄の読み方
 //!
 //! `new_dpi=0` は「現在の表示 DPI を使える値として読めなかった」ことを表す——
 //! [`DPI`] Component が無い腕と、読めたが 0 だった腕（`UnresolvedScale::ZeroCurrentDpi`）の
 //! 両方がこの字面になる。どちらも `verdict=unresolved` で `warn!` を伴うため、
 //! 行だけで両者を切り分ける必要は無い（切り分けは警告本文が持つ）。
+//!
+//! 見送りの腕（`verdict=keyword-pending`）も `new_dpi=0` になる——門が [`DPI`] の読取より
+//! **前**に立つため、そもそも現在の表示 DPI を読んでいないからである。判定語が違うので
+//! 縮退の 2 腕とは行の上で区別が付く。
 
 use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
@@ -72,9 +95,11 @@ use crate::placement::diag::{DESPAWNED_SKIP_TAG, PlacementRoute};
 use crate::placement::follow::{
     BalloonFollow, BalloonFollowTrigger, OffsetRescale, follow_balloon, rescale_follow_offset,
 };
+use crate::placement::spawn::BalloonKeywordBase;
 use crate::placement::transition_diag::{
-    OFFSET_VERDICT_ANCHORED, OFFSET_VERDICT_RESCALED, OFFSET_VERDICT_SATURATED,
-    OFFSET_VERDICT_UNCHANGED, OFFSET_VERDICT_UNRESOLVED, log_offset_rescale,
+    OFFSET_VERDICT_ANCHORED, OFFSET_VERDICT_KEYWORD_PENDING, OFFSET_VERDICT_RESCALED,
+    OFFSET_VERDICT_SATURATED, OFFSET_VERDICT_UNCHANGED, OFFSET_VERDICT_UNRESOLVED,
+    log_offset_rescale,
 };
 
 /// 追随の適用結果（呼び手＝`dpi_phase_with` が収束の要否を決めるために読む・design D16）。
@@ -107,10 +132,28 @@ pub(super) fn rescale_balloon_follow_offset(
     let old_offset = follow.offset();
     let base_dpi_field = base.dpi.map(|d| d.dpi_x as u32);
 
-    // 継ぎ目（task 6.3・design D7）: キーワード由来の基本位置の素材（`BalloonKeywordBase`）が
-    // 未消費のあいだは、オフセットも基準対も 1 bit も触らず `verdict=keyword-pending` を
-    // 記録して抜ける門がここへ入る。門は本仕様の新規コード側に置き、再導出側の発火条件と
-    // 「経路で絞らない」設計判断には触れない。
+    // 門（task 6.3・design D7・要件 4.1／4.3／4.5）: キーワード由来の基本位置の素材が
+    // 未消費のあいだは、オフセットも基準対も **1 bit も触らず**見送りの判定語だけを記録して
+    // 抜ける。素材があるうちは再導出が新しい実表示寸から**絶対値として**正しい揃えを出すので、
+    // ここで追随まで効かせると 1 回の遷移で揃えが二重に動く（要件 4.3）。
+    //
+    // 分岐が**本仕様の新規コード側**に在ることが D7 の要点である——再導出側
+    // （`rederive_keyword_balloon_offset`）の発火条件（寸の変化）と「経路で絞らない」設計判断は
+    // 1 文字も変えない（要件 4.5）。読取は `DPI` より**前**（design「追随の判断」の流れ図の
+    // とおり）——書込にも記録にも先立って抜けるため、見送った遷移では基準の係留すら起きない。
+    if world.get::<BalloonKeywordBase>(char_window).is_some() {
+        log_offset_rescale(
+            world,
+            Some(scope),
+            base_dpi_field,
+            0,
+            base.offset,
+            old_offset,
+            old_offset,
+            OFFSET_VERDICT_KEYWORD_PENDING,
+        );
+        return OffsetFollowOutcome::Unchanged;
+    }
 
     let Some(current) = world.get::<DPI>(char_window).copied() else {
         // 縮退（要件 9.4）: 現在の表示 DPI が読めない＝比を組む材料が無い。値は据え置く。
