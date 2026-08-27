@@ -336,6 +336,12 @@ mod balloon_offset_converge_tests;
 #[path = "frame_balloon_offset_keyword_gate_tests.rs"]
 mod balloon_offset_keyword_gate_tests;
 
+// 遷移相の結合テスト行列（areka-P0-balloon-offset-dpi task 6.5・design Integration 1／2／4／5／6・
+// 要件 3.2／3.5／4.2／7.1／7.3／9.8）。
+#[cfg(test)]
+#[path = "frame_balloon_offset_follow_tests.rs"]
+mod balloon_offset_follow_tests;
+
 #[cfg(test)]
 #[path = "frame_diag_route_tests.rs"]
 mod diag_route_tests;
