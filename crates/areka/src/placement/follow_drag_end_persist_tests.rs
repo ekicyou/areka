@@ -95,10 +95,7 @@ fn on_balloon_drag_end_persists_balloon_offset_for_scope() {
             fake_handle(0x1000),
             window_pos_sized(char_pos.x, char_pos.y, char_size.w, char_size.h),
             Anchored(anchor),
-            BalloonFollow {
-                balloon,
-                offset: stale_offset,
-            },
+            BalloonFollow::new(balloon, OffsetBase::unpinned(stale_offset)),
         ))
         .id();
 
@@ -127,7 +124,7 @@ fn on_balloon_drag_end_persists_balloon_offset_for_scope() {
     // 変えない（保存は最終確定位置から独立に導出する）。
     assert_eq!(position_of(&world, char_w), char_pos);
     assert_eq!(
-        world.get::<BalloonFollow>(char_w).unwrap().offset,
+        world.get::<BalloonFollow>(char_w).unwrap().offset(),
         stale_offset,
         "on_balloon_drag_end は in-session offset を変異させない（保存専用）"
     );
@@ -279,10 +276,7 @@ fn round_trip_save_restore_value_equivalence_over_real_fs() {
             window_pos_sized(1200, 600, char_size.w, char_size.h),
             Anchored(Anchor::Bottom),
             CharWindowMarker { scope: 1 },
-            BalloonFollow {
-                balloon,
-                offset: stale_offset,
-            },
+            BalloonFollow::new(balloon, OffsetBase::unpinned(stale_offset)),
             dragging_state((1250, 500), (1300, 550)),
         ))
         .id();
@@ -540,10 +534,7 @@ fn dragged_char_persists_even_without_dragging_state_at_dragend() {
             window_pos_sized(s0_char_final.x, s0_char_final.y, s0_size.w, s0_size.h),
             Anchored(Anchor::Bottom),
             CharWindowMarker { scope: 0 },
-            BalloonFollow {
-                balloon: s0_balloon,
-                offset: PointPx { x: 111, y: 222 },
-            },
+            BalloonFollow::new(s0_balloon, OffsetBase::unpinned(PointPx { x: 111, y: 222 })),
             // ここに dragging_state を**付けない**のが本檻の肝。
         ))
         .id();
@@ -561,10 +552,7 @@ fn dragged_char_persists_even_without_dragging_state_at_dragend() {
             window_pos_sized(800, 650, s1_size.w, s1_size.h),
             Anchored(Anchor::Bottom),
             CharWindowMarker { scope: 1 },
-            BalloonFollow {
-                balloon: s1_balloon,
-                offset: PointPx { x: 333, y: 444 },
-            },
+            BalloonFollow::new(s1_balloon, OffsetBase::unpinned(PointPx { x: 333, y: 444 })),
             dragging_state((s1_char_final.x, 650), (1000, 1000)),
         ))
         .id();

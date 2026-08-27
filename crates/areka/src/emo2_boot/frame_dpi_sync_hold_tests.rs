@@ -120,7 +120,7 @@ fn move_scope_to_neighbor(harness: &mut FrameHarness, scope: usize) {
         .world
         .get::<BalloonFollow>(char_window)
         .expect("char 窓は BalloonFollow を持つ")
-        .offset;
+        .offset();
     set_position(harness, char_window, CHAR_ON_NEIGHBOR);
     set_position(
         harness,

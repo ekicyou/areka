@@ -5,16 +5,26 @@ use tracing::{debug, info, warn};
 use windows::Win32::UI::WindowsAndMessaging::CW_USEDEFAULT;
 use wintf::ecs::drag::{DragEndEvent, DragEvent, DraggingState};
 use wintf::ecs::pointer::Phase;
-use wintf::ecs::{Point, WindowPos};
+use wintf::ecs::{DPI, Point, WindowPos};
 
 use super::{
     Anchor, Anchored, BALLOON_LIMIT_CLAMP_TAG, BALLOON_LIMIT_RELEASE_CONTEXT,
     BALLOON_LIMIT_UNRESOLVED_TAG, BalloonFollow, BalloonKeywordBase, BalloonLimit,
-    BalloonWindowMarker, CharWindowMarker, DESPAWNED_SKIP_TAG, MonitorSnapshot, PlacementRoute,
-    PointPx, SizePx, VISIBILITY_UNRESOLVED_TAG, balloon_offset_entries, char_pos_entries,
-    char_pos_to_origin_x, enqueue_window_set_pos, evaluate_visibility_guard, limit_correction,
-    persist_entries, project_anchor, rect_at, route_applies_visibility_guard, work_area_for_window,
+    BalloonWindowMarker, CharWindowMarker, DESPAWNED_SKIP_TAG, MonitorSnapshot, OffsetBase,
+    PlacementRoute, PointPx, SizePx, VISIBILITY_UNRESOLVED_TAG, balloon_offset_entries,
+    char_pos_entries, char_pos_to_origin_x, enqueue_window_set_pos, evaluate_visibility_guard,
+    limit_correction, persist_entries, project_anchor, rect_at, route_applies_visibility_guard,
+    work_area_for_window,
 };
+
+/// バルーン単独ドラッグで確定した相対位置を、キャラ窓の表示 DPI を読めないまま
+/// **未係留**の基準として確立したときの記録タグ（areka-P0-balloon-offset-dpi・
+/// 要件 5.2／9.4）。
+///
+/// `[balloon-drag] ` 接頭辞＋弁別語 1 語という形は
+/// [`BALLOON_LIMIT_UNRESOLVED_TAG`]・`[balloon-keyword] ` 系と同じ規律であり、
+/// 決定論テストがこの定数を逐語で固定する（生リテラルを書かない）。
+pub(super) const BALLOON_DRAG_BASE_UNPINNED_TAG: &str = "[balloon-drag] BaseUnpinned";
 
 /// `OnDrag` ハンドラ: ドラッグ中のキャラ窓の移動とバルーン追従（4.2/4.3/4.7）。
 ///
@@ -344,15 +354,15 @@ pub(crate) fn follow_balloon(
     // 不変条件: pos は仮想スクリーン座標範囲・offset は配置時確定の
     // 有限値のため、加算が i32 を溢れることはない（溢れは入力源の異常）。
     debug_assert!(
-        pos.x.checked_add(follow.offset.x).is_some()
-            && pos.y.checked_add(follow.offset.y).is_some(),
+        pos.x.checked_add(follow.offset().x).is_some()
+            && pos.y.checked_add(follow.offset().y).is_some(),
         "char window position out of virtual-screen range: {pos:?} + {:?}",
-        follow.offset
+        follow.offset()
     );
     // 相対位置の恒等式（4.4: `balloon_pos − char_pos ≡ offset`）が出す提案位置。
     let proposed = PointPx {
-        x: pos.x + follow.offset.x,
-        y: pos.y + follow.offset.y,
+        x: pos.x + follow.offset().x,
+        y: pos.y + follow.offset().y,
     };
     // 遷移ガード（S3′ 是正）。適用外の引き金では 1 bit も触らない。
     let decided = if trigger.applies_visibility_guard() {
@@ -497,26 +507,58 @@ pub(crate) fn on_balloon_drag(
                 return false;
             };
 
-            // BalloonFollow.balloon == 自バルーンのキャラ窓を逆引きし offset 更新
-            let mut chars = world.query::<(&mut BalloonFollow, &WindowPos)>();
-            for (mut follow, char_wp) in chars.iter_mut(world) {
-                if follow.balloon != entity {
+            // BalloonFollow.balloon == 自バルーンのキャラ窓を逆引きし、確定 offset を組む。
+            // ここは**読取だけ**で閉じる（可変借用は次の段で 1 窓ずつ取る）。
+            let mut chars = world.query::<(Entity, &BalloonFollow, &WindowPos)>();
+            let targets: Vec<(Entity, PointPx)> = chars
+                .iter(world)
+                .filter(|(_, follow, _)| follow.balloon == entity)
+                .filter_map(|(char_window, _, char_wp)| {
+                    let char_pos = char_wp.position?;
+                    // 不変条件: 両者とも仮想スクリーン座標範囲のため、減算が i32 を
+                    // 溢れることはない（溢れは入力源の異常・on_char_drag と同じ流儀）
+                    debug_assert!(
+                        balloon_pos.x.checked_sub(char_pos.x).is_some()
+                            && balloon_pos.y.checked_sub(char_pos.y).is_some(),
+                        "window positions out of virtual-screen range: {balloon_pos:?} - {char_pos:?}"
+                    );
+                    Some((
+                        char_window,
+                        PointPx {
+                            x: balloon_pos.x - char_pos.x,
+                            y: balloon_pos.y - char_pos.y,
+                        },
+                    ))
+                })
+                .collect();
+
+            for (char_window, new_offset) in targets {
+                // **表示 DPI を先に読んでから**追従 Component を可変で借りる
+                // （同時借用を避ける順序・design「Modified Files」drag_follow の項）。
+                let current_dpi = world.get::<DPI>(char_window).copied();
+                let Some(mut follow) = world.get_mut::<BalloonFollow>(char_window) else {
                     continue;
+                };
+                match current_dpi {
+                    // 確立点: ドラッグで決まった相対位置を新しい**基準**として焼き直す。
+                    // 作者指定と同一の追随規則がここから効く（要件 3.5・design D14）。
+                    Some(dpi) => follow.reestablish(new_offset, dpi),
+                    None => {
+                        // 表示 DPI を読めない窓（DPI component 未付与）。値は確定して
+                        // いるが「どの表示 DPI に属するか分からない」ので、永続値の腕と
+                        // 同じ**未係留**の基準として確立する——基準 DPI を発明すると
+                        // 次の遷移で二重に拡大する。最初の観測で値を変えずに係留される
+                        // （要件 5.2／5.4）。無ログの縮退経路は作らない（要件 9.4）。
+                        let balloon = follow.balloon;
+                        *follow = BalloonFollow::new(balloon, OffsetBase::unpinned(new_offset));
+                        warn!(
+                            entity = ?char_window,
+                            balloon = ?entity,
+                            offset = ?new_offset,
+                            "{BALLOON_DRAG_BASE_UNPINNED_TAG} キャラ窓の表示 DPI を読めないため追従オフセットの基準を未係留で確立した（最初の観測で係留される）"
+                        );
+                    }
                 }
-                let Some(char_pos) = char_wp.position else {
-                    continue;
-                };
-                // 不変条件: 両者とも仮想スクリーン座標範囲のため、減算が i32 を
-                // 溢れることはない（溢れは入力源の異常・on_char_drag と同じ流儀）
-                debug_assert!(
-                    balloon_pos.x.checked_sub(char_pos.x).is_some()
-                        && balloon_pos.y.checked_sub(char_pos.y).is_some(),
-                    "window positions out of virtual-screen range: {balloon_pos:?} - {char_pos:?}"
-                );
-                follow.offset = PointPx {
-                    x: balloon_pos.x - char_pos.x,
-                    y: balloon_pos.y - char_pos.y,
-                };
             }
             false
         }

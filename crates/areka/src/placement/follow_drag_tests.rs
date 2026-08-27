@@ -30,10 +30,7 @@ fn on_char_drag_tunnel_phase_is_ignored() {
         .spawn((
             fake_handle(0x1000),
             window_pos_at(50, 60),
-            BalloonFollow {
-                balloon,
-                offset: PointPx { x: 11, y: 22 },
-            },
+            BalloonFollow::new(balloon, OffsetBase::unpinned(PointPx { x: 11, y: 22 })),
         ))
         .id();
 
@@ -55,7 +52,7 @@ fn on_char_drag_bubble_moves_balloon_by_offset() {
         .spawn((
             fake_handle(0x1000),
             window_pos_at(1207, 653),
-            BalloonFollow { balloon, offset },
+            BalloonFollow::new(balloon, OffsetBase::unpinned(offset)),
         ))
         .id();
 
@@ -84,10 +81,7 @@ fn on_char_drag_without_window_pos_is_noop() {
     let window = world
         .spawn((
             fake_handle(0x1000),
-            BalloonFollow {
-                balloon,
-                offset: PointPx { x: 11, y: 22 },
-            },
+            BalloonFollow::new(balloon, OffsetBase::unpinned(PointPx { x: 11, y: 22 })),
         ))
         .id();
 
@@ -242,7 +236,7 @@ fn on_char_drag_free_window_stays_wndproc_delegated() {
             fake_handle(0x1000),
             window_pos_sized(1207, 217, 434, 687), // wndproc がドラッグ中に更新した位置
             Anchored(Anchor::Free),
-            BalloonFollow { balloon, offset },
+            BalloonFollow::new(balloon, OffsetBase::unpinned(offset)),
             // DraggingState が居ても free 経路は写像を使わない檻（実 flow でも挿入される）
             dragging_state((999, 888), (0, 0)),
         ))
@@ -277,7 +271,7 @@ fn on_char_drag_without_anchored_stays_wndproc_delegated() {
             fake_handle(0x1000),
             window_pos_sized(1207, 217, 434, 687), // wndproc がドラッグ中に更新した位置
             // Anchored は付けない（None）——DraggingState は実 flow 同様に挿入される
-            BalloonFollow { balloon, offset },
+            BalloonFollow::new(balloon, OffsetBase::unpinned(offset)),
             dragging_state((999, 888), start),
         ))
         .id();
@@ -310,7 +304,7 @@ fn on_char_drag_balloon_follows_policy_applied_position() {
             fake_handle(0x1000),
             window_pos_sized(1207, 356, 434, 687),
             Anchored(Anchor::Bottom),
-            BalloonFollow { balloon, offset },
+            BalloonFollow::new(balloon, OffsetBase::unpinned(offset)),
             dragging_state((1207, 356), start),
         ))
         .id();
@@ -346,7 +340,7 @@ fn on_char_drag_end_applies_policy_at_final_cursor() {
             // 「最後に配送された DragEvent 時点」の位置を模す（最終位置とはずれている）
             window_pos_sized(1250, 356, 434, 687),
             Anchored(Anchor::Bottom),
-            BalloonFollow { balloon, offset },
+            BalloonFollow::new(balloon, OffsetBase::unpinned(offset)),
             // OnDragEnd 配送時点では DraggingState はまだ生きている（dispatch.rs は
             // ハンドラ配送**後**に remove する）——実 flow 準拠
             dragging_state((1207, 356), start),
@@ -683,10 +677,7 @@ fn non_dragend_operations_leave_persist_store_byte_invariant() {
             window_pos_sized(1250, 356, 434, 687),
             Anchored(Anchor::Bottom),
             CharWindowMarker { scope: 1 },
-            BalloonFollow {
-                balloon,
-                offset: PointPx { x: -549, y: 27 },
-            },
+            BalloonFollow::new(balloon, OffsetBase::unpinned(PointPx { x: -549, y: 27 })),
             dragging_state((1207, 356), start),
         ))
         .id();
@@ -780,10 +771,7 @@ fn drag_handlers_ignore_events_targeting_other_entities() {
             fake_handle(0x1000),
             window_pos_sized(1207, 356, 434, 687),
             Anchored(Anchor::Bottom),
-            BalloonFollow {
-                balloon,
-                offset: initial,
-            },
+            BalloonFollow::new(balloon, OffsetBase::unpinned(initial)),
             dragging_state((1207, 356), start),
         ))
         .id();
@@ -802,7 +790,10 @@ fn drag_handlers_ignore_events_targeting_other_entities() {
     // on_balloon_drag: target=other → offset 不変
     let ev = Phase::Bubble(drag_event_at(other, start, (10, 10)));
     assert!(!on_balloon_drag(&mut world, other, balloon, &ev));
-    assert_eq!(world.get::<BalloonFollow>(window).unwrap().offset, initial);
+    assert_eq!(
+        world.get::<BalloonFollow>(window).unwrap().offset(),
+        initial
+    );
 }
 
 /// (+) MonitorSnapshot 不在（main.rs フォールバック経路）: ポリシーは identity
@@ -819,7 +810,7 @@ fn on_char_drag_without_snapshot_moves_to_raw_position() {
             fake_handle(0x1000),
             window_pos_sized(1207, 356, 434, 687),
             Anchored(Anchor::Bottom),
-            BalloonFollow { balloon, offset },
+            BalloonFollow::new(balloon, OffsetBase::unpinned(offset)),
             dragging_state((1207, 356), start),
         ))
         .id();
@@ -890,10 +881,7 @@ fn on_char_drag_without_dragging_state_is_noop_for_snap_window() {
             fake_handle(0x1000),
             window_pos_sized(1207, 356, 434, 687),
             Anchored(Anchor::Bottom),
-            BalloonFollow {
-                balloon,
-                offset: PointPx { x: 11, y: 22 },
-            },
+            BalloonFollow::new(balloon, OffsetBase::unpinned(PointPx { x: 11, y: 22 })),
         ))
         .id();
 

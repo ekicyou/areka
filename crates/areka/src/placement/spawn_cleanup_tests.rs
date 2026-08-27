@@ -42,7 +42,7 @@ fn scope_state(world: &World, gw: &GhostWindows, scope: usize) -> ScopeState {
         balloon_pos: balloon_wp.and_then(|w| w.position),
         balloon_size: balloon_wp.and_then(|w| w.size),
         follow_target: follow.map(|f| f.balloon),
-        follow_offset: follow.map(|f| f.offset),
+        follow_offset: follow.map(|f| f.offset()),
         anchor: world.get::<Anchored>(char_e).map(|a| a.0),
     }
 }

@@ -161,10 +161,12 @@ fn stale_offset() -> PointPx {
 }
 
 fn set_stale_offset(world: &mut World, char_window: Entity) {
-    let mut follow = *world
+    let follow = *world
         .get::<BalloonFollow>(char_window)
         .expect("spawn が BalloonFollow を付ける");
-    follow.offset = stale_offset();
+    // 欄は私有ゆえ確立点（構築子）から組み直す（design D14）。基準 DPI は本檻の
+    // 関心事ではないので未係留のままにする。
+    let follow = BalloonFollow::new(follow.balloon, OffsetBase::unpinned(stale_offset()));
     world.entity_mut(char_window).insert(follow);
 }
 
@@ -259,7 +261,7 @@ fn the_drag_itself_is_never_intercepted_by_the_limit_gate() {
         world
             .get::<BalloonFollow>(char_window)
             .expect("spawn が BalloonFollow を付ける")
-            .offset,
+            .offset(),
         raw_offset(dragged_to),
         "ドラッグ中の offset 記憶が生の差分でない"
     );
@@ -348,7 +350,7 @@ fn releasing_outside_the_work_area_persists_the_raw_offset_and_corrects_only_the
         world
             .get::<BalloonFollow>(char_window)
             .expect("spawn が BalloonFollow を付ける")
-            .offset,
+            .offset(),
         stale_offset(),
         "解放時補正が BalloonFollow.offset を書き換えた（補正の焼き付き・DD6 違反）"
     );

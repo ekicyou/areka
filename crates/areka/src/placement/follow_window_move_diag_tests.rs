@@ -1,3 +1,4 @@
+use crate::placement::follow::OffsetBase;
 use bevy_ecs::prelude::*;
 use wintf::ecs::Point;
 use wintf::ecs::pointer::Phase;
@@ -369,10 +370,7 @@ fn move_cue_write_is_recorded_as_move_cue_with_a_balloon_follow_companion() {
             fake_handle(0x1000),
             window_pos_sized(731, 356, 434, 687),
             CharWindowMarker { scope: 0 },
-            BalloonFollow {
-                balloon,
-                offset: PointPx { x: -551, y: 27 },
-            },
+            BalloonFollow::new(balloon, OffsetBase::unpinned(PointPx { x: -551, y: 27 })),
         ))
         .id();
     // 96 非倍数の DPI を明示付与（on_add フックの後に入れる＝96 へ潰されない）。
@@ -420,10 +418,7 @@ fn drag_path_records_only_the_balloon_follow_write() {
             window_pos_sized(1207, 356, 434, 687),
             Anchored(Anchor::Bottom),
             CharWindowMarker { scope: 0 },
-            BalloonFollow {
-                balloon,
-                offset: PointPx { x: -551, y: 27 },
-            },
+            BalloonFollow::new(balloon, OffsetBase::unpinned(PointPx { x: -551, y: 27 })),
             dragging_state((1207, 356), (1300, 500)),
         ))
         .id();

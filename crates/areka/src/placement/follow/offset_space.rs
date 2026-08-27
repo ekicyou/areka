@@ -46,13 +46,19 @@
 //! また `World`・`Entity`・ログ機構のいずれにも触れない。縮退・飽和は**判定結果の値**として
 //! 返し、警告の発行は呼び手の責務である（要件 1.5／2.5／3.6／9.4 の記録は呼び手が出す）。
 
-// scaffold: 消費者の結線は段階的に入る。基準対 [`OffsetBase`] は配置解決の出力
-// （`resolver::ScopePlacement::balloon_offset_base`）が既に運んでいるが、変換規則
-// （[`rescale_follow_offset`]・[`scale_author_offset`] とその周辺 6 項目）は供給層
-// （task 4.1）と追随相（task 6.x）が結線するまで非テストビルドで未使用に見える
-// ——areka は lib target を持たない bin crate ゆえ `pub` でも dead_code 免除されない。
-// 実測（本 allow を外した非テストビルド）で残る未使用は 7 項目であり、項目ごとの許可を
-// 7 枚貼るより 1 枚に集約するほうが、以後の**真の** dead code を隠さない。
+// scaffold: 消費者の結線は段階的に入る。確立の 2 本（[`BalloonFollow::new`]・
+// [`BalloonFollow::reestablish`]）と読取の [`BalloonFollow::offset`] は結線済みだが、
+// 追随相専用の 2 本（[`BalloonFollow::anchor_base_dpi`]・[`BalloonFollow::apply_rescaled`]）
+// と基準対の読取 [`BalloonFollow::base`]、および変換規則（[`rescale_follow_offset`]・
+// [`scale_author_offset`] とその周辺）は、供給層（task 4.1）と追随相（task 6.x）が
+// 結線するまで非テストビルドで未使用に見える——areka は lib target を持たない bin crate
+// ゆえ `pub` でも dead_code 免除されない。
+// 実測（本 allow を外した `cargo build -p areka --bins`）で残る未使用は **9 項目**
+// （`base`・`anchor_base_dpi`・`apply_rescaled`・`ScaledAxis`・`UnresolvedScale`・
+// `OffsetRescale`・`rescale_follow_offset`・`scale_author_offset`・`scale_axis`）であり、
+// 項目ごとの許可を 9 枚貼るより 1 枚に集約するほうが、以後の**真の** dead code を隠さない。
+// （task 3.1 時点の本注記は「7 項目」と書いていたが、当時の実測値も 6 項目で誤りだった
+// ——数は結線が進むたびに動くので、変えたときは必ず measure し直すこと。）
 #![allow(dead_code)]
 
 use areka_emo_compose::ScaleRatio;
@@ -64,11 +70,26 @@ use crate::placement::scale_signed;
 
 /// キャラ窓に付与するバルーン追従 Component（4.2/4.4/4.8）。
 ///
+/// 現在のオフセットと、その値が導かれた**基準対**（[`OffsetBase`]）を 1 つに持つ。
+/// どちらも**私有**であり、読取は [`BalloonFollow::offset`]／[`BalloonFollow::base`] に、
+/// 書込は次の 4 本だけに閉じる（areka-P0-balloon-offset-dpi・design D14・要件 3.3／3.5）。
+///
+/// | 種別 | メソッド | 基準対の扱い |
+/// |---|---|---|
+/// | 確立 | [`BalloonFollow::new`]（配置解決の既定／保存値の復元） | 与えられた基準対を置く |
+/// | 確立 | [`BalloonFollow::reestablish`]（ドラッグ結果／キーワード再導出） | 新しい値で焼き直す |
+/// | 追随 | [`BalloonFollow::anchor_base_dpi`]（未係留の基準を係留する） | 値は不変・表示 DPI だけ刻む |
+/// | 追随 | [`BalloonFollow::apply_rescaled`]（基準から引き直した値を反映） | **変えない** |
+///
+/// 欄を私有にする目的は、「基準対の書き手を 1 つでも取りこぼすと基準が古いまま残り、
+/// 次の遷移で静かにずれる」危険を**型で潰す**ことである——定義モジュールの外から欄へ
+/// 直接代入すると、実行時にずれる代わりにコンパイルエラーになる（design D14）。
+///
 /// `offset` の初期値は配置時に確定する暫定 offset（物理 px・
 /// `ScopePlacement.balloon_offset` の転写＝P5 幾何の暫定規則。正式な配置規則は
 /// balloon 表示系の後続が所有する・4.4）。バルーン単独ドラッグでユーザーが
-/// ずらすと [`on_balloon_drag`] が `balloon_pos − char_pos` へ**記憶更新**し、
-/// 以後のキャラ窓ドラッグ・[`move_window_to`] は調整後 offset で追従する
+/// ずらすと [`super::on_balloon_drag`] が `balloon_pos − char_pos` へ**記憶更新**し、
+/// 以後のキャラ窓ドラッグ・[`super::move_window_to`] は調整後 offset で追従する
 /// （4.8・セッション内のみ・永続化は M-life の領分。
 /// 旧挙動「次のキャラ窓ドラッグで初期 offset へスナップバック」は
 /// 2026-07-11 要件 4.8 により仕様退役）。
@@ -77,7 +98,62 @@ pub struct BalloonFollow {
     /// 追従して動かすバルーン窓 entity。
     pub balloon: Entity,
     /// キャラ窓左上からバルーン窓左上への相対 offset（物理 px・配置時確定）。
-    pub offset: PointPx,
+    /// **私有**——上表の 4 本だけが書ける。
+    offset: PointPx,
+    /// 基準対（この offset が導かれた元の値と、その値が属する表示 DPI）。**私有**。
+    base: OffsetBase,
+}
+
+impl BalloonFollow {
+    /// **確立点**——基準対を与えて組む（配置解決の既定／保存値の復元）。
+    ///
+    /// 現在値は基準値そのものから始まる（まだ一度も追随していない状態）。
+    pub fn new(balloon: Entity, base: OffsetBase) -> Self {
+        Self {
+            balloon,
+            offset: base.offset,
+            base,
+        }
+    }
+
+    /// 現在の相対位置（キャラ窓左上相対・物理 px・読取専用・要件 9.1）。
+    pub fn offset(&self) -> PointPx {
+        self.offset
+    }
+
+    /// 基準対（読取専用・追随ステップと決定論テストが読む）。
+    pub fn base(&self) -> OffsetBase {
+        self.base
+    }
+
+    /// **確立点**——新しい相対位置を基準として焼き直す（ドラッグ結果・キーワード再導出）。
+    ///
+    /// 現在値と基準値の双方が `offset` になり、基準 DPI はその時点の表示 DPI へ
+    /// **係留済み**（`Some(dpi)`）になる。利用者のドラッグ由来にも作者指定と同一の
+    /// 追随規則が効くのは、この 1 本が基準を確立するからである（要件 3.5）。
+    pub fn reestablish(&mut self, offset: PointPx, dpi: DPI) {
+        self.offset = offset;
+        self.base = OffsetBase {
+            offset,
+            dpi: Some(dpi),
+        };
+    }
+
+    /// **係留**——未係留の基準へ現在の表示 DPI を刻む（要件 5.2）。
+    ///
+    /// 基準値も現在値も **1 bit も変えない**。永続値の腕が「どの表示 DPI に属するか
+    /// 分からない」状態から通常の追随規則へ入る唯一の口である（要件 5.4）。
+    pub fn anchor_base_dpi(&mut self, dpi: DPI) {
+        self.base.dpi = Some(dpi);
+    }
+
+    /// **追随**——基準から引き直した値を反映する（要件 3.1）。
+    ///
+    /// **基準対は変えない**。出力を入力へ戻さないので誤差が連鎖せず、拡大率が往復して
+    /// 元へ戻れば同じ値へ戻る（[`rescale_follow_offset`] の純関数性がここで守られる）。
+    pub fn apply_rescaled(&mut self, offset: PointPx) {
+        self.offset = offset;
+    }
 }
 
 /// 追従オフセットの基準対——値と、その値が属する表示 DPI。

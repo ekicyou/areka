@@ -74,18 +74,18 @@ pub fn move_window_with_route(
     }
 
     if let Some(follow) = follow {
+        let offset = follow.offset();
         debug_assert!(
-            x.checked_add(follow.offset.x).is_some() && y.checked_add(follow.offset.y).is_some(),
-            "move target out of virtual-screen range: ({x},{y}) + {:?}",
-            follow.offset
+            x.checked_add(offset.x).is_some() && y.checked_add(offset.y).is_some(),
+            "move target out of virtual-screen range: ({x},{y}) + {offset:?}"
         );
         // バルーン側の失敗（WindowHandle 未付与等）は enqueue_window_set_pos が
         // warn! 済み。対象自身の移動は成立しているため true のまま返す。
         enqueue_window_set_pos(
             world,
             follow.balloon,
-            x + follow.offset.x,
-            y + follow.offset.y,
+            x + offset.x,
+            y + offset.y,
             None,
             Some(PlacementRoute::BalloonFollow),
         );

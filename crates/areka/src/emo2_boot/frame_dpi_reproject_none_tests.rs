@@ -100,7 +100,7 @@ fn s2_none_report_path_reprojects_position_without_touching_size() {
     let offset = world
         .get::<BalloonFollow>(char0)
         .expect("char 窓は BalloonFollow を持つ")
-        .offset;
+        .offset();
     let cp = pos_of(&world, char0).expect("char 位置がある");
     assert_eq!(
         (balloon_after.x - cp.x, balloon_after.y - cp.y),

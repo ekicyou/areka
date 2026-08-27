@@ -479,10 +479,8 @@ pub fn spawn_ghost_windows(
                     ..Default::default()
                 },
                 OnDrag(on_char_drag),
-                BalloonFollow {
-                    balloon: balloon_window,
-                    offset: p.balloon_offset,
-                },
+                // 基準対ごと確立する（欄が私有ゆえ構築子が唯一の口・design D14）。
+                BalloonFollow::new(balloon_window, p.balloon_offset_base),
                 // マウス入力配線（areka-P0-input-events）: キャラ窓のポインタ移動／押下を
                 // kanade へ配信する `OnPointerMoved`／`OnPointerPressed` は**ここでは付けない**。
                 // 依存方向は input_events→placement（placement は `crate::` パスを持てない＝

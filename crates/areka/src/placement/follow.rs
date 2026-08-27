@@ -159,6 +159,9 @@ mod drag_tests;
 #[path = "follow_keyword_base_tests.rs"]
 mod keyword_base_tests;
 #[cfg(test)]
+#[path = "follow_offset_component_tests.rs"]
+mod offset_component_tests;
+#[cfg(test)]
 #[path = "follow_offset_residual_tests.rs"]
 mod offset_residual_tests;
 #[cfg(test)]

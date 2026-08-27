@@ -1,3 +1,4 @@
+use crate::placement::follow::OffsetBase;
 use bevy_ecs::prelude::*;
 use wintf::ecs::SizeI;
 use wintf::ecs::pointer::Phase;
@@ -89,7 +90,7 @@ fn char_with_far_balloon_world(
             fake_handle(0x1000),
             window_pos_sized(start.x, start.y, c.w, c.h),
             Anchored(Anchor::Bottom),
-            BalloonFollow { balloon, offset },
+            BalloonFollow::new(balloon, OffsetBase::unpinned(offset)),
         ))
         .id();
     (world, char_window, balloon)
@@ -387,7 +388,7 @@ fn char_with_balloon_window_pos(
             fake_handle(0x1000),
             window_pos_sized(start.x, start.y, c.w, c.h),
             Anchored(Anchor::Bottom),
-            BalloonFollow { balloon, offset },
+            BalloonFollow::new(balloon, OffsetBase::unpinned(offset)),
         ))
         .id();
     (world, char_window, balloon)
@@ -716,7 +717,7 @@ fn gap_bound_char_world_with_balloon(
             fake_handle(0x1000),
             window_pos_sized(old_pos.x, old_pos.y, old.w, old.h),
             Anchored(Anchor::Bottom),
-            BalloonFollow { balloon, offset },
+            BalloonFollow::new(balloon, OffsetBase::unpinned(offset)),
         ))
         .id();
     (world, char_window, balloon, old_pos)
@@ -919,7 +920,7 @@ fn balloon_follows_the_guarded_char_position_not_the_raw_projection() {
             let stored_offset = world
                 .get::<BalloonFollow>(char_window)
                 .expect("char 窓は BalloonFollow を持つ")
-                .offset;
+                .offset();
             assert_eq!(
                 stored_offset, offset,
                 "dpi={dpi} route={route}: BalloonFollow.offset が書き換わった\

@@ -311,7 +311,7 @@ fn s2_control_some_report_path_reprojects_and_keeps_balloon_offset() {
     let offset = world
         .get::<BalloonFollow>(char0)
         .expect("char 窓は BalloonFollow を持つ")
-        .offset;
+        .offset();
     let cp = pos_of(&world, char0).expect("char 位置がある");
     let bp = pos_of(&world, balloon0).expect("balloon 位置がある");
     assert_eq!(
@@ -365,7 +365,7 @@ fn s2_follow_offset(world: &World, char_e: Entity) -> (i32, i32) {
     let offset = world
         .get::<BalloonFollow>(char_e)
         .expect("char 窓は BalloonFollow を持つ")
-        .offset;
+        .offset();
     (offset.x, offset.y)
 }
 

@@ -168,7 +168,7 @@ fn move_scope_to(harness: &mut FrameHarness, scope: usize, position: Point) {
         .world
         .get::<BalloonFollow>(char_window)
         .expect("char 窓は BalloonFollow を持つ")
-        .offset;
+        .offset();
     set_position(harness, char_window, position);
     set_position(
         harness,
@@ -650,7 +650,7 @@ fn a_work_area_only_change_writes_once_at(dpi: u16) {
                 .world
                 .get::<BalloonFollow>(harness.char_window(scope))
                 .expect("char 窓は BalloonFollow を持つ")
-                .offset;
+                .offset();
             (scope, offset.x, offset.y)
         })
         .collect();
@@ -721,7 +721,7 @@ fn a_work_area_only_change_writes_once_at(dpi: u16) {
             .world
             .get::<BalloonFollow>(harness.char_window(*scope))
             .expect("char 窓は BalloonFollow を持つ")
-            .offset;
+            .offset();
         assert_eq!(
             (after.x, after.y),
             (*offset_x, *offset_y),

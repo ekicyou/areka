@@ -305,7 +305,7 @@ fn transition_is_atomic_at(dpi: u16) {
                 .world
                 .get::<BalloonFollow>(harness.char_window(scope))
                 .expect("char 窓は BalloonFollow を持つ")
-                .offset;
+                .offset();
             (scope, offset)
         })
         .collect();
@@ -426,7 +426,7 @@ fn transition_is_atomic_at(dpi: u16) {
             .world
             .get::<BalloonFollow>(char_window)
             .expect("char 窓は BalloonFollow を持つ")
-            .offset;
+            .offset();
         assert_eq!(
             (after.x, after.y),
             (before.x, before.y),

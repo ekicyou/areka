@@ -128,7 +128,7 @@ fn apply_keeps_balloon_offset() {
         .get::<BalloonFollow>(target)
         .copied()
         .expect("target に BalloonFollow")
-        .offset;
+        .offset();
 
     assert!(apply_move_directive(
         &mut world,
@@ -287,7 +287,7 @@ fn pipeline_sink_to_apply_moves_keeps_balloon_and_anchored() {
         .get::<BalloonFollow>(target)
         .copied()
         .expect("target に BalloonFollow")
-        .offset;
+        .offset();
     let target_anchored_before = world
         .get::<Anchored>(target)
         .copied()
