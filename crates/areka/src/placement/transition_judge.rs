@@ -66,8 +66,8 @@ use wintf::ecs::window::transition_diag::{
 use super::diag::{PlacementRoute, WindowKind};
 use super::transition_diag::{
     CHAIN_FIELDS, CHAIN_STAGE_REALIGNED, FIELD_DECISION, FIELD_DIFF, GROUND_FIELDS,
-    HOLD_DECISION_HOLD, HOLD_FIELDS, KIND_CHAIN, KIND_GROUND, KIND_HOLD, KIND_SNAPSHOT,
-    SNAPSHOT_FIELDS,
+    HOLD_DECISION_HOLD, HOLD_FIELDS, KIND_CHAIN, KIND_GROUND, KIND_HOLD, KIND_OFFSET,
+    KIND_SNAPSHOT, OFFSET_FIELDS, SNAPSHOT_FIELDS,
 };
 
 // ---------------------------------------------------------------------------
@@ -383,6 +383,8 @@ fn required_fields(kind: &str) -> Option<&'static [&'static str]> {
         KIND_HOLD => Some(HOLD_FIELDS),
         KIND_GROUND => Some(GROUND_FIELDS),
         KIND_CHAIN => Some(CHAIN_FIELDS),
+        // task 5.2: 追随の種別。判定は専用モジュールが持つため、ここは語彙を教えるだけ。
+        KIND_OFFSET => Some(OFFSET_FIELDS),
         _ => None,
     }
 }

@@ -1,5 +1,5 @@
-//! 配置判断の**遷移観測レコード**（`kind=snapshot`／`hold`／`ground`／`chain`）——語彙・
-//! レコード純関数・World からの転写口。
+//! 配置判断の**遷移観測レコード**（`kind=snapshot`／`hold`／`ground`／`chain`／`offset`）
+//! ——語彙・レコード純関数・World からの転写口。
 //!
 //! design.md の Data Models「Logical Data Model（レコード語彙）」の areka 行が正本である。
 //! 窓書込・サーフェス更新・モニタ表更新（wintf・areka-emo-present が出す）と**同一の
@@ -10,6 +10,7 @@
 //! [transition] frame=<u32> t_us=<u64> kind=hold   entity=<e> scope=<s> win_kind=<k> window_dpi=… table_dpi=… since_frame=… decision=… site=…
 //! [transition] frame=<u32> t_us=<u64> kind=ground scope=<s> ground_y=<y> wa_bottom=<b> diff=<d> route=<r>
 //! [transition] frame=<u32> t_us=<u64> kind=chain  stage=<s> scopes=<n> moved=<n> reason=<r>
+//! [transition] frame=<u32> t_us=<u64> kind=offset scope=<s> base_dpi=<d> new_dpi=<d> base_offset=<x,y> old_offset=<x,y> new_offset=<x,y> verdict=<v>
 //! ```
 //!
 //! 接頭語（`frame`／`t_us`／`kind`）は [`base::record_prefix`] が組む。段階ごとに意味を持たない
@@ -19,15 +20,20 @@
 //! # 語彙の定義元
 //!
 //! 共有のフィールド名（`entity`／`scope`／`win_kind`／`stage`）は wintf が単一の定義元であり、
-//! ここは**参照するだけ**である。areka が足すのは 4 つの種別語と、この 4 種にしか出ない
+//! ここは**参照するだけ**である。areka が足すのは 5 つの種別語と、この 5 種にしか出ない
 //! フィールド名・判定語だけ（wintf は上位 crate の語彙を持たない＝依存方向 wintf ← areka）。
+//! `new_dpi` は wintf の `kind=monitor` と**同じ意味・同じ値の形**（表示 DPI の `dpi_x`）で
+//! 使うため、欄名は [`base::FIELD_NEW_DPI`] を参照する（同じ語を二重に定義しない）。
 //!
-//! # 発行点は 4 種そろっている
+//! # 発行点
 //!
 //! 本ファイルは task 2.4（観測の増設）で建てた語彙であり、実際に到達できる発行点は 4 つ——
 //! [`log_char_ground`]（`resize_window_to` から）・[`log_monitor_snapshot_sync`]（作業領域源の
 //! 同期＝task 5.1 から）・[`log_hold`]（整合ゲートの 4 点＝task 5.4 の 3 点＋task 6.5 の 4 点目）・[`log_chain`]
-//! （遷移後の連鎖再解決＝task 5.6 から）である。
+//! （遷移後の連鎖再解決＝task 5.6 から）である。5 種目の [`log_offset_rescale`]
+//! （拡大率遷移でのバルーン追従オフセットの追随＝`areka-P0-balloon-offset-dpi` の
+//! 要件 3.7・design D10）は**語彙が先着**しており、発行する適用相は同 spec の後続タスクが
+//! 建てる。
 //!
 //! # 語彙は先に建てる（未消費の `#[allow(dead_code)]` の根拠）
 //!
@@ -50,8 +56,8 @@ use bevy_ecs::prelude::*;
 use wintf::ecs::FrameCount;
 use wintf::ecs::window::monitor::Monitor;
 use wintf::ecs::window::transition_diag::{
-    self as base, FIELD_ENTITY, FIELD_SCOPE, FIELD_STAGE, FIELD_WIN_KIND, MISSING, Stamp,
-    TickStart, WriteTag,
+    self as base, FIELD_ENTITY, FIELD_NEW_DPI, FIELD_SCOPE, FIELD_STAGE, FIELD_WIN_KIND, MISSING,
+    Stamp, TickStart, WriteTag,
 };
 
 use super::diag::{PlacementRoute, WindowKind};
@@ -78,13 +84,21 @@ pub const KIND_HOLD: &str = "hold";
 pub const KIND_GROUND: &str = "ground";
 /// 連鎖（隣接ペア）の再解決。
 pub const KIND_CHAIN: &str = "chain";
+/// 拡大率遷移での**バルーン追従オフセットの追随**（`areka-P0-balloon-offset-dpi` 要件 3.7）。
+pub const KIND_OFFSET: &str = "offset";
 
 /// areka が発行する `kind` 語の全体（判定側の語彙照合・語の一意性テストが参照する）。
 ///
 /// wintf の [`base::KIND_ALL`] とも emo-present の `KIND_SURFACE` とも交わらない
 /// （交わると判定側のレコード振り分けと遷移の起点判定が壊れる）。
 #[allow(dead_code)] // 語彙先着（module doc「語彙は先に建てる」）
-pub const PLACEMENT_KIND_ALL: &[&str] = &[KIND_SNAPSHOT, KIND_HOLD, KIND_GROUND, KIND_CHAIN];
+pub const PLACEMENT_KIND_ALL: &[&str] = &[
+    KIND_SNAPSHOT,
+    KIND_HOLD,
+    KIND_GROUND,
+    KIND_CHAIN,
+    KIND_OFFSET,
+];
 
 // ---------------------------------------------------------------------------
 // 整合待ちの判定語（decision）と観測点語（site）
@@ -148,6 +162,41 @@ pub const CHAIN_STAGE_ALL: &[&str] = &[
 ];
 
 // ---------------------------------------------------------------------------
+// 追随の判定語（verdict）
+// ---------------------------------------------------------------------------
+
+/// 追随した——基準対から引き直した値を反映した（要件 3.1）。
+pub const OFFSET_VERDICT_RESCALED: &str = "rescaled";
+/// 未係留の基準を現在の表示 DPI へ係留した——**値は変えていない**（要件 5.2）。
+pub const OFFSET_VERDICT_ANCHORED: &str = "anchored";
+/// 基準 DPI と現在 DPI が同一——値も基準も変えていない（要件 3.3 の bit 同一）。
+pub const OFFSET_VERDICT_UNCHANGED: &str = "unchanged";
+/// キーワード由来の基本位置の素材が未消費のため追随を見送った（要件 4.3・design D7）。
+///
+/// **縮退ではない**ので警告を伴わない。それでも語を持つのは、開発者裁定（2026-08-27）が
+/// 受容した残余——素材が未消費のまま寸据え置きの遷移を迎えると、揃えの更新が次の寸法変化まで
+/// 取り残される——が**記録に残って沈黙しない**ことを、この語 1 つが担っているからである。
+pub const OFFSET_VERDICT_KEYWORD_PENDING: &str = "keyword-pending";
+/// 拡大率を解決できない——値も基準も変えていない（要件 3.6・警告を伴う）。
+pub const OFFSET_VERDICT_UNRESOLVED: &str = "unresolved";
+/// 追随したが `i32` 域を超えて飽和した（回り込ませていない・要件 2.5 と同型・警告を伴う）。
+pub const OFFSET_VERDICT_SATURATED: &str = "saturated";
+
+/// 追随の判定語の全体（6 値・判定側の語彙照合が参照する単一の定義元）。
+///
+/// 実機サインオフの機械判定（要件 8.3）は**この定数群を参照するだけ**で、字面のリテラルを
+/// 自前で書かない——語を変えたときに片方だけが動く食い違いを構造で潰す。
+#[allow(dead_code)] // 語彙先着（module doc「語彙は先に建てる」）
+pub const OFFSET_VERDICT_ALL: &[&str] = &[
+    OFFSET_VERDICT_RESCALED,
+    OFFSET_VERDICT_ANCHORED,
+    OFFSET_VERDICT_UNCHANGED,
+    OFFSET_VERDICT_KEYWORD_PENDING,
+    OFFSET_VERDICT_UNRESOLVED,
+    OFFSET_VERDICT_SATURATED,
+];
+
+// ---------------------------------------------------------------------------
 // フィールド名（判定側が辞書引きする語）
 // ---------------------------------------------------------------------------
 
@@ -177,6 +226,16 @@ pub const FIELD_SCOPES: &str = "scopes";
 pub const FIELD_MOVED: &str = "moved";
 /// 見送りの理由（見送り以外は番兵）。
 pub const FIELD_REASON: &str = "reason";
+/// 基準対が属する表示 DPI（**未係留**＝永続値の腕は番兵）。
+pub const FIELD_BASE_DPI: &str = "base_dpi";
+/// 基準対の値（キャラ窓左上相対・物理 px・`x,y`）。
+pub const FIELD_BASE_OFFSET: &str = "base_offset";
+/// 追随を適用する**前**の追従オフセット（物理 px・`x,y`）。
+pub const FIELD_OLD_OFFSET: &str = "old_offset";
+/// 追随を適用した**後**の追従オフセット（物理 px・`x,y`）。
+pub const FIELD_NEW_OFFSET: &str = "new_offset";
+/// 追随の判定（[`OFFSET_VERDICT_ALL`] のいずれか）。
+pub const FIELD_VERDICT: &str = "verdict";
 
 /// `kind=snapshot` 行の必須フィールド（接頭語と可変長の `m<i>` を除く）。
 #[allow(dead_code)] // 語彙先着（module doc「語彙は先に建てる」）
@@ -208,6 +267,18 @@ pub const GROUND_FIELDS: &[&str] = &[
 /// `kind=chain` 行の必須フィールド（接頭語を除く）。
 #[allow(dead_code)] // 語彙先着（module doc「語彙は先に建てる」）
 pub const CHAIN_FIELDS: &[&str] = &[FIELD_STAGE, FIELD_SCOPES, FIELD_MOVED, FIELD_REASON];
+
+/// `kind=offset` 行の必須フィールド（接頭語を除く）。
+#[allow(dead_code)] // 語彙先着（module doc「語彙は先に建てる」）
+pub const OFFSET_FIELDS: &[&str] = &[
+    FIELD_SCOPE,
+    FIELD_BASE_DPI,
+    FIELD_NEW_DPI,
+    FIELD_BASE_OFFSET,
+    FIELD_OLD_OFFSET,
+    FIELD_NEW_OFFSET,
+    FIELD_VERDICT,
+];
 
 // ---------------------------------------------------------------------------
 // レコード
@@ -293,6 +364,36 @@ pub struct ChainRecord {
     pub reason: Option<&'static str>,
 }
 
+/// 拡大率遷移でのバルーン追従オフセットの追随 1 件の記録（要件 3.7）。
+///
+/// # 基準・前・後の 3 つを載せる
+///
+/// 追随は**基準対から毎回引き直す**（design D4）ため、`new_offset` を再現できるのは
+/// `base_offset` と 2 つの DPI であって `old_offset` ではない。一方 `old_offset` を落とすと
+/// 「実際に値が動いたか」が事後に判らない。3 つとも載せるのは、判定側が**引き直しの再現**と
+/// **動いたかの判定**をどちらも行うためである。
+#[allow(dead_code)] // 語彙先着（module doc「語彙は先に建てる」）
+#[derive(Clone, Copy, Debug)]
+pub struct OffsetRecord {
+    /// 刻印。
+    pub stamp: Stamp,
+    /// スコープ番号（キャラ窓 marker が無ければ `None`＝番兵）。
+    pub scope: Option<u32>,
+    /// 基準対が属する表示 DPI（`dpi_x`）。**未係留**は `None`＝番兵——`0` へ潰すと
+    /// 「未係留」と「0 を観測した」が同じ字面になる（[`GroundRecord::wa_bottom`] と同じ規律）。
+    pub base_dpi: Option<u32>,
+    /// 遷移後の表示 DPI（`dpi_x`）。`kind=monitor` の同名欄と同じ意味・同じ値の形。
+    pub new_dpi: u32,
+    /// 基準対の値（物理 px）。
+    pub base_offset: PointPx,
+    /// 追随前の追従オフセット（物理 px）。
+    pub old_offset: PointPx,
+    /// 追随後の追従オフセット（物理 px・値が動かない腕では [`Self::old_offset`] と同一）。
+    pub new_offset: PointPx,
+    /// 判定（[`OFFSET_VERDICT_ALL`] のいずれか）。
+    pub verdict: &'static str,
+}
+
 // ---------------------------------------------------------------------------
 // フィールドの表現（番兵はここだけが作る）
 // ---------------------------------------------------------------------------
@@ -303,6 +404,15 @@ fn opt_field<T: std::fmt::Display>(value: Option<T>) -> String {
         Some(v) => v.to_string(),
         None => MISSING.to_string(),
     }
+}
+
+/// 点を 1 フィールドへ畳む（`x,y`）。
+///
+/// 値に空白を入れないのは、判定側の `名前=値` の切り出し（空白区切り）をそのまま通すため
+/// である（[`snapshot_line`] の `m<i>=<dpi>:<l,t,r,b>` と同じ流儀）。
+#[allow(dead_code)] // 語彙先着（module doc「語彙は先に建てる」）
+fn point_field(point: PointPx) -> String {
+    format!("{x},{y}", x = point.x, y = point.y)
 }
 
 // ---------------------------------------------------------------------------
@@ -379,6 +489,24 @@ pub fn chain_line(record: &ChainRecord) -> String {
         scopes = record.scopes,
         moved = record.moved,
         reason = opt_field(record.reason),
+    )
+}
+
+/// 追随の記録行。未係留の基準 DPI と marker の無い窓は番兵で埋める（欄を落とさない）。
+#[allow(dead_code)] // 語彙先着（module doc「語彙は先に建てる」）
+pub fn offset_line(record: &OffsetRecord) -> String {
+    format!(
+        "{prefix} {FIELD_SCOPE}={scope} {FIELD_BASE_DPI}={base_dpi} {FIELD_NEW_DPI}={new_dpi} \
+         {FIELD_BASE_OFFSET}={base_offset} {FIELD_OLD_OFFSET}={old_offset} \
+         {FIELD_NEW_OFFSET}={new_offset} {FIELD_VERDICT}={verdict}",
+        prefix = base::record_prefix(record.stamp, KIND_OFFSET),
+        scope = opt_field(record.scope),
+        base_dpi = opt_field(record.base_dpi),
+        new_dpi = record.new_dpi,
+        base_offset = point_field(record.base_offset),
+        old_offset = point_field(record.old_offset),
+        new_offset = point_field(record.new_offset),
+        verdict = record.verdict,
     )
 }
 
@@ -610,6 +738,61 @@ pub fn log_char_ground(
         route,
     };
     base::emit_line(&ground_line(&record));
+}
+
+// ---------------------------------------------------------------------------
+// 追随レコードの発行
+// ---------------------------------------------------------------------------
+
+/// 拡大率遷移でのバルーン追従オフセットの追随を 1 行出す（要件 3.7・design D10）。
+///
+/// # 1 遷移・1 スコープにつき高々 1 行
+///
+/// 本関数は 1 呼出につき 1 行だけを出す。判定語は腕ごとに 1 つ（[`OFFSET_VERDICT_ALL`]）で
+/// あり、追随の適用相はキャラ窓 1 つにつき 1 度だけ判定を下してその結果を 1 語として渡す。
+/// 腕ごとに別々の行を出す形にしないのは、判定側が「遷移 1 回ぶんの行」を数えて突合する
+/// からである——複数行になると、どれが最終の判定かが事後に判らない。
+///
+/// # 前置ガードは**本関数が持つ**
+///
+/// 行の組立（`String` の確保）へ入る前に [`is_enabled`] で抜ける。呼出側に委ねないのは、
+/// 引数がすべて Copy のスカラーで**確保を伴わない**からである——ガードを内側に置いても
+/// 既定運転の費用は 0 のまま、書き忘れの余地だけが消える（`dpi_sync` の整合待ちの発行口と
+/// 同じ形）。`debug!` は既定で濾過されるため、ガードを失っても**出力は変わらない**＝
+/// 濾過テストでは検出できない退行であり、固定するのは `transition_diag_tests.rs` の
+/// 本文走査である。
+///
+/// 判定語は本モジュールの `pub const` が単一の定義元であり、呼出側は字面をリテラルで
+/// 持たない（語彙表に無い字面はその場で `debug_assert!` が落とす）。
+#[allow(dead_code)] // 語彙先着（module doc「語彙は先に建てる」）
+pub fn log_offset_rescale(
+    world: &World,
+    scope: Option<u32>,
+    base_dpi: Option<u32>,
+    new_dpi: u32,
+    base_offset: PointPx,
+    old_offset: PointPx,
+    new_offset: PointPx,
+    verdict: &'static str,
+) {
+    debug_assert!(
+        OFFSET_VERDICT_ALL.contains(&verdict),
+        "語彙表に無い判定語が渡された: {verdict}"
+    );
+    if !is_enabled() {
+        return;
+    }
+    let record = OffsetRecord {
+        stamp: stamp_of(world),
+        scope,
+        base_dpi,
+        new_dpi,
+        base_offset,
+        old_offset,
+        new_offset,
+        verdict,
+    };
+    base::emit_line(&offset_line(&record));
 }
 
 #[cfg(test)]

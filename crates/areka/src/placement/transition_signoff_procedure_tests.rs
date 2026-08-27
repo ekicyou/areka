@@ -11,8 +11,13 @@
 //!
 //! - 手順書に載る観測行の例（`[transition]` を含む行）は、**発行側の単一定義元**が持つ
 //!   レコード種別・段階語・フィールド名だけで構成されていること。
-//! - 逆向きも固定する: 発行側が持つレコード種別 10 種が**すべて**手順書に現れること。
-//!   片側だけだと「例を 1 本も書かなければ緑」という恒真の檻になる（本仕様で 2 度出た形）。
+//! - 逆向きも固定する: 発行側が持つレコード種別が**すべて**、本リポジトリが備える手順書の
+//!   **どれか**に現れること。片側だけだと「例を 1 本も書かなければ緑」という恒真の檻になる
+//!   （本仕様で 2 度出た形）。守るべき不変は「採取者が grep すべき語が、どこかの手順書に
+//!   載っていること」であって「先行仕様の手順書に載っていること」ではない——本檻は手順書が
+//!   1 本しか無かった時期に書かれたので、出所を [`PROCEDURE_SOURCES`] という集合に一般化して
+//!   ある。まだどの手順書も載せていない種別は [`PENDING_PROCEDURE_KINDS`] へ**明示的に**
+//!   記録し、黙って見逃さない（保留欄は自ら消える形にしてある——同定数の doc を見よ）。
 //! - 判定器の入口の語（環境変数名・観測 target・行頭タグ・Report が刷る 2 系統の名前と
 //!   合格語・ランナーのテスト名）が字面で載っていること。
 //!
@@ -33,16 +38,43 @@ use wintf::ecs::window::transition_diag::{
 use super::TRANSITION_LOG_ENV;
 use crate::placement::transition_diag::{
     CHAIN_FIELDS, CHAIN_STAGE_ALL, GROUND_FIELDS, HOLD_FIELDS, KIND_CHAIN, KIND_GROUND, KIND_HOLD,
-    KIND_SNAPSHOT, PLACEMENT_KIND_ALL, SNAPSHOT_FIELDS,
+    KIND_OFFSET, KIND_SNAPSHOT, OFFSET_FIELDS, PLACEMENT_KIND_ALL, SNAPSHOT_FIELDS,
 };
 
 /// 手順書のリポジトリ相対パス（`crates/areka` から見た相対）。
 const PROCEDURE_RELATIVE_PATH: &str =
     "../../.kiro/specs/completed/areka-P0-dpi-transition-atomicity/signoff-procedure.md";
 
-/// 手順書の本文を読む。読めなければ**失敗**（無い文書に対して緑を出さない）。
+/// 本リポジトリが備える手順書の出所（`crates/areka` から見た相対パス）。
+///
+/// 採取者が「この語を grep せよ」と読む文書は、時期によって 1 本とは限らない。先行仕様
+/// （atom）の手順書は完了アーカイブに在り、**他仕様の文書は書き換えない**（要件 6.6）ので、
+/// 新しい種別は自分の仕様の手順書が引き受ける。
+///
+/// **task 8.2 はここへ本仕様の手順書（モジュール doc）を足すこと**——同時に
+/// [`PENDING_PROCEDURE_KINDS`] から `offset` を消す必要がある（消し忘れは檻が赤で教える）。
+const PROCEDURE_SOURCES: &[&str] = &[PROCEDURE_RELATIVE_PATH];
+
+/// どの手順書もまだ名指ししていないレコード種別（**期限つきの保留**）。
+///
+/// 語彙を先に建てる（task 5.1）と、手順書（task 8.2）が置かれるまでのあいだ「発行側には
+/// 在るが、どの手順書にも載っていない」種別が生じる。黙って除外すると
+/// 「未達が spec の内側から見えない」形になるので、ここへ名指しで残す。
+///
+/// **この保留欄は自ら消える。** 檻は ⑴ 載っていない種別が保留欄の内側に収まること
+/// （`missing ⊆ pending`）だけでなく、⑵ 保留欄の種別が**まだ本当に載っていない**こと
+/// （`pending ∩ covered = ∅`）も見る。ゆえに task 8.2 が本仕様の手順書を
+/// [`PROCEDURE_SOURCES`] へ足した時点で、`offset` を消さないかぎりこの檻は赤になる。
+const PENDING_PROCEDURE_KINDS: &[&str] = &[KIND_OFFSET];
+
+/// 先行仕様（atom）の手順書の本文を読む。読めなければ**失敗**（無い文書に対して緑を出さない）。
 fn procedure_text() -> String {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(PROCEDURE_RELATIVE_PATH);
+    read_procedure(PROCEDURE_RELATIVE_PATH)
+}
+
+/// 出所 1 本の本文を読む。読めなければ**失敗**（無い文書に対して緑を出さない）。
+fn read_procedure(relative: &str) -> String {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(relative);
     std::fs::read_to_string(&path).unwrap_or_else(|error| {
         panic!(
             "サインオフ手順書を読めない: {} ({error})。task 4.1 の成果物であり、\
@@ -50,6 +82,17 @@ fn procedure_text() -> String {
             path.display()
         )
     })
+}
+
+/// 出所集合すべての本文を連結して返す（語の在処の検査は「どれかに載っていれば良い」）。
+///
+/// 出所の区切りは改行で入れる——連結の継ぎ目が偶然 1 つの語を作らないようにする。
+fn procedure_sources_text() -> String {
+    PROCEDURE_SOURCES
+        .iter()
+        .map(|relative| read_procedure(relative))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// レコード種別 → その種別の必須フィールド列（接頭語を除く）。
@@ -68,6 +111,7 @@ fn fields_by_kind() -> BTreeMap<&'static str, &'static [&'static str]> {
         (KIND_HOLD, HOLD_FIELDS),
         (KIND_GROUND, GROUND_FIELDS),
         (KIND_CHAIN, CHAIN_FIELDS),
+        (KIND_OFFSET, OFFSET_FIELDS),
     ])
 }
 
@@ -208,16 +252,28 @@ fn the_procedure_only_quotes_record_lines_the_emitters_can_produce() {
 
 #[test]
 fn the_procedure_names_every_record_kind_the_emitters_produce() {
-    let text = procedure_text();
-    // 点灯表が 1 種でも落ちていると、その観測点は「手順書が触れていない」＝採取者が
+    let text = procedure_sources_text();
+    // 点灯表が 1 種でも落ちていると、その観測点は「どの手順書も触れていない」＝採取者が
     // 点灯を確かめる術を持たないまま 0 件を根拠にできてしまう（要件 8.5）。
-    let missing: Vec<&str> = all_kinds()
+    let missing: BTreeSet<&str> = all_kinds()
         .into_iter()
         .filter(|kind| !contains_token(&text, &format!("{FIELD_KIND}={kind}")))
         .collect();
+    let pending: BTreeSet<&str> = PENDING_PROCEDURE_KINDS.iter().copied().collect();
+
+    let unrecorded: Vec<&str> = missing.difference(&pending).copied().collect();
     assert!(
-        missing.is_empty(),
-        "手順書が `{FIELD_KIND}=` で名指ししていないレコード種別がある: {missing:?}"
+        unrecorded.is_empty(),
+        "どの手順書も `{FIELD_KIND}=` で名指ししていないレコード種別がある: {unrecorded:?}\n  \
+         出所: {PROCEDURE_SOURCES:?}（保留なら {PENDING_PROCEDURE_KINDS:?} へ明示的に記録する）"
+    );
+
+    // 保留欄は自ら消える: 既にどこかの手順書が載せた種別が保留欄に残っていたら赤にする。
+    let stale: Vec<&str> = pending.difference(&missing).copied().collect();
+    assert!(
+        stale.is_empty(),
+        "保留欄に残っているが、もう手順書に載っている種別がある: {stale:?}\n  \
+         task 8.2 が本仕様の手順書を出所集合へ足したら、保留欄の当該行を消すこと"
     );
 }
 
