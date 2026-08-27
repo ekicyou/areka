@@ -15,7 +15,7 @@
 //! - [`POINTER`] — ポインタ入力の投入（`pointer/buffers.rs`）とポインタ系メッセージの受理
 //! - [`DRAG`] — ドラッグ中（毎画面更新で回す必要があるので、tick の末尾で自分で立て直す）
 //! - [`WINDOW_CMD`] — 窓書込指令の積み上げ（`command.rs` の enqueue）
-//! - [`ZORDER`] — Z 順の要求（`zorder_pair_maintain`／`ReassertZOrder`）
+//! - [`ZORDER`] — Z 順の要求（`zorder_pair_maintain`／`ReassertZOrder`・`zorder_group_maintain`）
 //! - [`WM_GEOMETRY`] — 幾何・DPI・表示構成・活性化・表示／破棄系メッセージの受理
 //! - [`PRESENT`] — 表示指令の到着（areka 側の `PresentBridge`／`MoveCueSink`／lifecycle 送信端）
 //! - [`ANIM`] — dola アニメータに活性がある
