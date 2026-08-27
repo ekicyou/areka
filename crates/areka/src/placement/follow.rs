@@ -34,6 +34,8 @@
 mod anchor;
 mod drag_follow;
 mod keyword_base;
+// バルーン位置オフセットの単位空間契約の定義元（areka-P0-balloon-offset-dpi・design C1）。
+mod offset_space;
 mod visibility;
 mod window_move;
 mod work_area;
@@ -169,6 +171,9 @@ mod window_move_diag_tests;
 #[cfg(test)]
 #[path = "follow_window_move_tests.rs"]
 mod window_move_tests;
+#[cfg(test)]
+#[path = "follow_offset_space_tests.rs"]
+mod offset_space_tests;
 #[cfg(test)]
 #[path = "follow_work_area_tests.rs"]
 mod work_area_tests;

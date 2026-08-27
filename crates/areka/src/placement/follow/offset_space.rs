@@ -1,0 +1,183 @@
+//! バルーン位置オフセットの**単位空間契約の定義元**と、その契約の上で働く変換規則
+//! （areka-P0-balloon-offset-dpi・design C1／D1〜D5・要件 1.1〜1.5／2.1〜2.5／3.1／3.3／
+//! 4.2／4.4／5.3／9.3）。
+//!
+//! # 単位空間契約（唯一の権威・要件 1.1／1.3）
+//!
+//! **実行時の合流欄と追従オフセットが保持する値は「現在の表示 DPI における物理 px」である。**
+//!
+//! 対象は `ScopeConfig.balloon_offset`／`ScopePlacement.balloon_offset`／
+//! 追従 Component が持つオフセットの 3 つで、すべて同じ空間の値として合流する。
+//! 作者空間（作者基準 DPI で意味を持つ生値）を持つ供給元は、**合流の前に**本モジュールの
+//! [`scale_author_offset`] を通って物理 px へ換算される——換算前の値と換算後の値が同じ欄へ
+//! 混ざることは無い（要件 1.2）。「単位空間の混在は意図的な暫定」という従来の記述は本契約が
+//! 置き換える。
+//!
+//! # 供給元ごとの換算軸の割り当て（要件 1.4）
+//!
+//! 作者基準 DPI はシェル（`seriko.dpi`）とバルーン（`dpi`）で別々に宣言され得るため、
+//! 拡大率は 1 つではなく 2 つある。どちらで換算するかは供給元ごとに一意に定める。
+//!
+//! | 供給元 | 換算軸 | 出所 |
+//! |---|---|---|
+//! | `descript` の `balloon.offsetx`／`offsety` | **シェル軸**（`MeasureScaling::shell`） | 語彙がゴースト／シェルの `descript.txt`＝シェル作者の空間（design D2・本仕様の決定） |
+//! | `windowposition` 由来の調整量 | **バルーン軸** | バルーン作者の空間（既存確定・本仕様は温存して記録するだけ） |
+//! | 移動台本 `\![move]` の `dx`／`dy` | **シェル軸** | 既存確定（互換記録へ登記済み）・本仕様は温存して記録するだけ |
+//!
+//! **遷移の追随には軸の選択が生じない**（design D5・要件 4.4）。
+//! `k_axis(d) = app_scale × (d ÷ author_dpi_axis)` ゆえ
+//! `k_axis(d₁) ÷ k_axis(d₀) = d₁ ÷ d₀` となり、作者基準 DPI が約分で消えるからである。
+//! [`rescale_follow_offset`] は表示 DPI の整数 2 つから比を直に組む。
+//!
+//! # 永続値は契約の明示の例外（要件 5.1／5.3）
+//!
+//! 永続化されるバルーンオフセットは物理 px の生値のみで、**保存時の表示 DPI を記録しない**。
+//! 保存値は換算せずそのまま採用する（拡大率をまたぐ保存位置の追従はしない・開発者裁定の踏襲）。
+//! この「どの表示 DPI に属するか分からない」状態は [`OffsetBase::dpi`] の `None`＝**未係留**
+//! として表現する。未係留の基準は最初の観測で**値を変えずに**その時の表示 DPI へ係留され、
+//! 以後は通常の追随規則が効く（要件 5.4）。
+//!
+//! # 丸めと記録の規律
+//!
+//! 本モジュールは**新しい丸め規約を 1 つも導入しない**（要件 9.3）——大きさの丸めは
+//! `ScaleRatio::scale_len`（round half away from zero・非ゼロ長は最小 1px・恒等は素通し）へ、
+//! 符号の保存は [`scale_signed`] へ委譲する。
+//!
+//! また `World`・`Entity`・ログ機構のいずれにも触れない。縮退・飽和は**判定結果の値**として
+//! 返し、警告の発行は呼び手の責務である（要件 1.5／2.5／3.6／9.4 の記録は呼び手が出す）。
+
+// scaffold: 本モジュールは契約と純関数の定義元であり、消費者の結線は後続タスク
+// （供給層＝task 4.1・基準対の運搬＝task 2.x・追随相＝task 6.x）で入る。
+// areka は lib target を持たない bin crate ゆえ、それまでは非テストビルドで未使用に見える。
+#![allow(dead_code)]
+
+use areka_emo_compose::ScaleRatio;
+use wintf::ecs::DPI;
+
+use crate::placement::resolver::PointPx;
+use crate::placement::scale_signed;
+
+/// 追従オフセットの基準対——値と、その値が属する表示 DPI。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OffsetBase {
+    /// 基準値（キャラ窓左上相対・物理 px）。
+    pub offset: PointPx,
+    /// 基準値が属する表示 DPI。`None` は**未係留**＝
+    /// 「最初に観測した表示 DPI の空間に属する」と読む（永続値の腕・要件 5.2）。
+    pub dpi: Option<DPI>,
+}
+
+/// 換算の 1 軸ぶんの結果（飽和したかを呼び手へ伝える・要件 2.5）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ScaledAxis {
+    /// 換算後の値（物理 px・飽和時は `±i32::MAX`）。
+    pub value: i32,
+    /// `i32` 域を超えて飽和したか（回り込みは起こさない）。
+    pub saturated: bool,
+}
+
+/// 拡大率を解決できなかった理由（要件 9.4: 縮退は必ず語を持つ）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnresolvedScale {
+    /// 基準 DPI が 0（構築子を通れば起きないが、発明せず縮退する）。
+    ZeroBaseDpi,
+    /// 現在 DPI が 0。
+    ZeroCurrentDpi,
+}
+
+/// 追随の判定結果。呼び手はこの 4 腕を網羅して書込と記録を決める。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OffsetRescale {
+    /// 未係留の基準を現在の DPI へ係留した——**値は変えない**（要件 5.2）。
+    Anchored {
+        /// 係留した表示 DPI（＝観測した現在値）。
+        base_dpi: DPI,
+    },
+    /// 基準 DPI と現在 DPI が同一——値も基準も変えない（要件 3.3 の bit 同一）。
+    Unchanged,
+    /// 追随した。
+    Rescaled {
+        /// 追随後のオフセット（物理 px）。
+        offset: PointPx,
+        /// いずれかの軸が飽和したか（要件 2.5 と同型）。
+        saturated: bool,
+    },
+    /// 拡大率を解決できない——値も基準も変えない（要件 3.6）。
+    Unresolved {
+        /// 解決できなかった理由。
+        reason: UnresolvedScale,
+    },
+}
+
+/// 遷移時の唯一の変換規則（純関数・要件 3.1／3.3／4.2／4.4）。
+///
+/// 入力は**基準対と現在の表示 DPI だけ**であり、前回の結果を入力にしない。出力が入力へ
+/// 戻らないため誤差が連鎖せず、一度訪れた表示 DPI へ戻れば常に同じ値になる（往復無誤差）。
+///
+/// 比は表示 DPI の整数 2 つから直接組む——`k(d) = app_scale × (d ÷ author_dpi)` ゆえ
+/// `k(d₁) ÷ k(d₀) = d₁ ÷ d₀` で作者基準 DPI が約分で消え、シェル軸／バルーン軸の選択が
+/// 生じない（要件 4.4 の「どちらを用いるか」への答え）。
+///
+/// `base` は変更しない（純関数）。基準が変わるのは確立点と係留だけである。
+pub fn rescale_follow_offset(base: OffsetBase, current: DPI) -> OffsetRescale {
+    let Some(base_dpi) = base.dpi else {
+        // 未係留＝保存値の腕。値を 1 bit も動かさずに現在の表示 DPI へ係留する（要件 5.2）。
+        return OffsetRescale::Anchored { base_dpi: current };
+    };
+    if base_dpi == current {
+        // 恒等——値も基準も動かさない（要件 2.2／3.3）。
+        return OffsetRescale::Unchanged;
+    }
+    if base_dpi.dpi_x == 0 || base_dpi.dpi_y == 0 {
+        return OffsetRescale::Unresolved {
+            reason: UnresolvedScale::ZeroBaseDpi,
+        };
+    }
+    if current.dpi_x == 0 || current.dpi_y == 0 {
+        return OffsetRescale::Unresolved {
+            reason: UnresolvedScale::ZeroCurrentDpi,
+        };
+    }
+    // 0 は上で弾いたので `ScaleRatio::new` は必ず `Some`——それでも `unwrap` せず、
+    // 万一の縮退にも語を与える（記録の無い縮退経路を作らない・要件 9.4）。
+    let (Some(kx), Some(ky)) = (
+        ScaleRatio::new(current.dpi_x as u32, base_dpi.dpi_x as u32),
+        ScaleRatio::new(current.dpi_y as u32, base_dpi.dpi_y as u32),
+    ) else {
+        return OffsetRescale::Unresolved {
+            reason: UnresolvedScale::ZeroCurrentDpi,
+        };
+    };
+    let x = scale_axis(base.offset.x, kx);
+    let y = scale_axis(base.offset.y, ky);
+    OffsetRescale::Rescaled {
+        offset: PointPx {
+            x: x.value,
+            y: y.value,
+        },
+        saturated: x.saturated || y.saturated,
+    }
+}
+
+/// 作者空間のオフセットを合流欄の空間（物理 px）へ換算する（要件 2.1／2.4／2.5）。
+///
+/// `k` は供給元の作者空間に対応する軸の表示スケール。`balloon.offsetx`／`offsety` は
+/// シェル作者の空間ゆえ [`MeasureScaling::shell`](crate::placement::measure::MeasureScaling)
+/// を渡す（design D2・上表「供給元ごとの換算軸の割り当て」）。
+///
+/// 恒等比（`ScaleRatio::ONE`）では生値がそのまま返る（要件 2.2）。
+pub fn scale_author_offset(raw: (i32, i32), k: ScaleRatio) -> (ScaledAxis, ScaledAxis) {
+    (scale_axis(raw.0, k), scale_axis(raw.1, k))
+}
+
+/// 1 軸ぶんの符号付き換算＋飽和の判定。
+///
+/// 値は [`scale_signed`]（既存の単一権威）が出す。飽和の判定だけを本層が足す——
+/// `scale_len` は `u32` 域で答えるので、物理 px 通貨（`i32`）へ収まらなかったことは
+/// 同じ権威の出力を `i32` の上限と比べて判る。**新しい丸めは 1 つも導入しない。**
+fn scale_axis(v: i32, k: ScaleRatio) -> ScaledAxis {
+    ScaledAxis {
+        value: scale_signed(v, k),
+        saturated: k.scale_len(v.unsigned_abs()) > i32::MAX as u32,
+    }
+}
