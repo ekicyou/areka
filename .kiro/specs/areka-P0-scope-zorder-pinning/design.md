@@ -134,7 +134,7 @@ crates/areka/src/
 - `crates/wintf/src/ecs/world/tick_wake.rs` — module doc の ZORDER 生産者行に `zorder_group_maintain` を追記（doc のみ）
 - `crates/wintf/src/ecs/window/zorder_pair_deferred_vocabulary_tests.rs` — `PRODUCTION_FILES` 5→8（新設 3 本追加）＋件数定数
 - `crates/areka/src/placement/spawn.rs` — `wire_zorder_pair` のチェーンを `(establish, pair_maintain, group_maintain).chain()` へ拡張（1 行）＋`KeepDirectlyAbove` doc の「スコープ間には宣言を張らない」節を二状態の記述へ改訂
-- `crates/areka/src/placement/spawn_zorder_pair_deferred_tests.rs` — `PRODUCTION_FILES` 2→4（ledger・zorder_cue 追加）＋件数定数
+- `crates/areka/src/placement/spawn_zorder_pair_deferred_tests.rs` — `PRODUCTION_FILES` 2→5（ledger・zorder_cue・frame/zorder_drain.rs 追加）＋件数定数
 - `crates/areka/src/emo2_boot/mod.rs` — チャネル 1 組＋`sinks` 1 行＋`Emo2Wiring` 受け渡し（sink 追加 5 点セットの 3 点）
 - `crates/areka/src/emo2_boot/frame/wiring.rs` — `Emo2Wiring` フィールド＋`new` 引数（残り 2 点）
 - `crates/areka/src/emo2_boot/frame.rs` — `run_move_drain_phase`（:210）の直後に `run_zorder_drain_phase` を追加
@@ -212,13 +212,13 @@ sequenceDiagram
 | 8.2 | flush 層の既存 warn＋維持系の verify-failed 記録（ゴーストは継続） |
 | 8.3 | 全拒否・見送り・失敗経路が `RejectReason`／`GroupSkipReason` を通る（理由なし見送りを型で作らせない） |
 | 8.4 | 未出現スコープは射影から外れ続け、`skip` 記録（member-missing）を残し他窓の配置は継続 |
-| 9.1, 9.2 | `[zorder-group] fix` 行（グループ ID・対象窓・挿入先・実測隣）＝pair `fix_line` と同一書式規律 |
+| 9.1, 9.2 | `[zorder-group] fix` 行（グループ ID・対象窓・挿入先・次巡検証の実測隣を同一行）＝pair `fix_line` の書式規律・検証段発行 |
 | 9.3 | 既存 `measure_*`（最も近い可視の隣・Windows 基準）をそのまま共有 |
 | 9.4 | 実機サインオフ手順（§Testing）: 有界 auto-exit＋grep 判定（成立証跡＋既定状態の指令 0 本証跡） |
 | 9.5 | 既存ペア 5 ファイル無編集＝タグ 6 種・grep 対象 module path・起床旗・SCHEDULE_NAMES すべて不変 |
 | 10.1, 10.2 | 純関数境界（解釈・正規化・拒否・decide_group_fix・検証判定）＋ 9 分岐の兄弟テスト |
 | 10.3 | テストは Resource／純関数単位で独立（log-capture-kit・temp-path-kit の cage 着地物を利用） |
-| 10.4 | 新設 5 本（wintf 3・areka 2）を両肺の `PRODUCTION_FILES` へ追加＋件数定数更新 |
+| 10.4 | 新設 6 本（wintf 3・areka 3＝ledger・zorder_cue・zorder_drain）を両肺の `PRODUCTION_FILES` へ追加＋件数定数更新 |
 | 11.1 | `pair_fix_command` と同じ `WindowPos` 経由の型導出（`SWP_NOMOVE\|NOSIZE\|NOACTIVATE` 自動） |
 | 11.2, 11.3 | consumer_ledger キー拡張（名前＋選別子）＝`set` の他サブコマンドの余地を残す・1 出現高々 1 担当 |
 | 11.4 | 新設ファイルを先送り語彙検査の対象へ追加（10.4 と同じ変更で自動成立） |
@@ -342,7 +342,7 @@ pub struct ZOrderGroups {
     pub groups: Vec<ZOrderGroupSpec>,   // 射影済み（存在窓のみ・手前から順）
     pub pending: bool,                  // 是正が必要かもしれない
     verify: Option<GroupVerify>,        // 直前巡の発行に対する検証待ち
-    fail_streak: u8,                    // 連続 verify 失敗の頭打ち用
+    fail_streaks: HashMap<u32, u8>,     // グループ ID ごとの連続 verify 失敗（頭打ち用）
 }
 pub struct ZOrderGroupSpec { pub id: u32, pub members: Vec<Entity> }
 
@@ -371,15 +371,15 @@ pub(crate) fn decide_group_fix(obs: &GroupObservation) -> GroupFixDecision;
 | Requirements | 1.1-1.3, 2.5, 7.4, 8.2, 8.3 |
 
 - `wire_zorder_pair` のチェーン末尾に追加: `(establish_owner_links, apply_zorder_pair_maintenance, apply_zorder_group_maintenance).chain()`
-- 1 巡の処理: ①検証待ちがあれば実測して verify 記録（成功→fail_streak リセット・失敗→`[zorder-group] verify-failed` ＋ fail_streak++）②`pending` でなければ終了 ③調停: この巡にペア是正が出ていれば（`Query<(), Added<IssuedPairFix>>` 非空）`Skip(PairFixThisPass)` 記録のみ ④各グループを観測し、**最初に是正が要ると判断された 1 グループ**へ連鎖発行（`w[i]` を `ZOrder::InsertAfter(w[i-1])`・先頭は動かさない・既存 `WindowPos` 型導出で `SWP_NOMOVE|NOSIZE|NOACTIVATE` 自動＝11.1）⑤全グループ `order_ok` なら `pending = false` ⑥`pending || verify` の間は `tick_wake::mark(ZORDER)`（7.4）
-- 頭打ち: `fail_streak >= 3` で warn（諦める旨と観測値）を出し pending を降ろす（次のトリガで再点火＝8.2/8.3 の「黙って諦めない」）
+- 1 巡の処理: ①検証待ちがあれば実測して検証（成功→`[zorder-group] fix` 行＝指令内容と検証実測を同一行で発行＋当該グループの fail_streak リセット・失敗→`[zorder-group] verify-failed` ＋当該グループの fail_streak++）②`pending` でなければ終了 ③調停: この巡にペア是正が出ていれば（`Query<(), Added<IssuedPairFix>>` 非空）`Skip(PairFixThisPass)` 記録のみ ④各グループを観測し、**最初に是正が要ると判断された 1 グループ**へ連鎖発行（`w[i]` を `ZOrder::InsertAfter(w[i-1])`・先頭は動かさない・既存 `WindowPos` 型導出で `SWP_NOMOVE|NOSIZE|NOACTIVATE` 自動＝11.1）⑤全グループ `order_ok` なら `pending = false` ⑥`pending || verify` の間は `tick_wake::mark(ZORDER)`（7.4）
+- 頭打ち: あるグループの fail_streak が 3 以上になったら warn（group_id・諦める旨・観測値）を出し、**そのグループだけ**を維持対象から外す（次のトリガで再点火＝8.2/8.3 の「黙って諦めない」）。pending は維持対象のグループが残っている限り降ろさない——1 グループの不成立が他グループの是正を止めない
 - バッチ順序の前提: `DeferWindowPos` 一括投入は enqueue 順を保存（実窓テスト `command_batch_tests.rs:633` で実証済み）。縮退経路（逐次）でも順序どおり
 
 #### group diag（`zorder_group_diag.rs`）
 
 - タグ定数: `[zorder-group] fix`／`skip`／`verify-failed`／`applied`（受理時の台帳内容）。**既存 `[zorder-pair]` 6 タグとは独立の新設**（9.5 は既存無編集で構造保証）
 - 行組立は tracing マクロを含まない純関数（diag 規律 `zorder_pair_diag.rs:8-16` に従う）。マクロ呼出は `zorder_group.rs` 側に置き、grep 対象 module path を `wintf::ecs::window::zorder_group` の 1 本に保つ
-- `fix` 行: グループ ID・動かした窓・挿入先・発行直後の実測隣（pair `fix_line:131` の書式規律と同型＝9.1/9.2）
+- `fix` 行: グループ ID・動かした窓・挿入先・**次巡の検証で採った実測隣**。pair の実体と同じく `fix`（debug）／`verify-failed`（error）は**検証段でのみ**発行する（`record_verification` `zorder_pair.rs:858` の先例）。指令の書込は巡後の flush で起きるため、発行と同巡の実測は必ず書込前の値になり証跡に使えない。指令内容と検証実測が同一行に載ることで 9.1/9.2 を満たす
 
 #### トリガ 2 点
 
@@ -426,7 +426,7 @@ pub(crate) fn decide_group_fix(obs: &GroupObservation) -> GroupFixDecision;
 ### 実機サインオフ（9.4・有界 auto-exit＋grep）
 
 - descript `seriko.zorder` 入り fixture＋タグ実行スクリプトで `AREKA_APP_SMOKE_EXIT_MS` 走行 →
-  ⑴ `[zorder-group] applied`／`fix`／verify 成功行で成立を判定 ⑵ グループ無し走行で `[zorder-group] fix` が **0 件**（既定＝非強制の証跡）⑶ 既存 `[zorder-pair]` 6 タグが従来どおり出る（9.5）
+  ⑴ `[zorder-group] applied`（受理）と `fix`（次巡検証の成功＝指令と実測が同一行）で成立を判定 ⑵ グループ無し走行で `[zorder-group] fix` が **0 件**（既定＝非強制の証跡）⑶ 既存 `[zorder-pair]` 6 タグが従来どおり出る（9.5）
 - 判定語は grep 1:1（`wintf::ecs::window::zorder_group` target）
 
 ## Performance & Scalability
