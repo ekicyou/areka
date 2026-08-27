@@ -216,7 +216,7 @@ sequenceDiagram
 | 9.3 | 既存 `measure_*`（最も近い可視の隣・Windows 基準）をそのまま共有 |
 | 9.4 | 実機サインオフ手順（§Testing）: 有界 auto-exit＋grep 判定（成立証跡＋既定状態の指令 0 本証跡） |
 | 9.5 | 既存ペア 5 ファイル無編集＝タグ 6 種・grep 対象 module path・起床旗・SCHEDULE_NAMES すべて不変 |
-| 10.1, 10.2 | 純関数境界（解釈・正規化・拒否・decide_group_fix・検証判定）＋ 9 分岐の兄弟テスト |
+| 10.1, 10.2 | 純関数境界（解釈・正規化・拒否・decide_group_fix・検証判定）＋ **10 分岐**の兄弟テスト |
 | 10.3 | テストは Resource／純関数単位で独立（log-capture-kit・temp-path-kit の cage 着地物を利用） |
 | 10.4 | 新設 6 本（wintf 3・areka 3＝ledger・zorder_cue・zorder_drain）を両肺の `PRODUCTION_FILES` へ追加＋件数定数更新 |
 | 11.1 | `pair_fix_command` と同じ `WindowPos` 経由の型導出（`SWP_NOMOVE\|NOSIZE\|NOACTIVATE` 自動） |
@@ -371,8 +371,8 @@ pub(crate) fn decide_group_fix(obs: &GroupObservation) -> GroupFixDecision;
 | Requirements | 1.1-1.3, 2.5, 7.4, 8.2, 8.3 |
 
 - `wire_zorder_pair` のチェーン末尾に追加: `(establish_owner_links, apply_zorder_pair_maintenance, apply_zorder_group_maintenance).chain()`
-- 1 巡の処理: ①検証待ちがあれば実測して検証（成功→`[zorder-group] fix` 行＝指令内容と検証実測を同一行で発行＋当該グループの fail_streak リセット・失敗→`[zorder-group] verify-failed` ＋当該グループの fail_streak++）②`pending` でなければ終了 ③調停: この巡にペア是正が出ていれば（`Query<(), Added<IssuedPairFix>>` 非空）`Skip(PairFixThisPass)` 記録のみ ④各グループを観測し、**最初に是正が要ると判断された 1 グループ**へ連鎖発行（`w[i]` を `ZOrder::InsertAfter(w[i-1])`・先頭は動かさない・既存 `WindowPos` 型導出で `SWP_NOMOVE|NOSIZE|NOACTIVATE` 自動＝11.1）⑤全グループ `order_ok` なら `pending = false` ⑥`pending || verify` の間は `tick_wake::mark(ZORDER)`（7.4）
-- 頭打ち: あるグループの fail_streak が 3 以上になったら warn（group_id・諦める旨・観測値）を出し、**そのグループだけ**を維持対象から外す（次のトリガで再点火＝8.2/8.3 の「黙って諦めない」）。pending は維持対象のグループが残っている限り降ろさない——1 グループの不成立が他グループの是正を止めない
+- 1 巡の処理: ①検証待ちがあれば実測して検証（成功→`[zorder-group] fix` 行＝指令内容と検証実測を同一行で発行＋当該グループの fail_streak リセット・失敗→`[zorder-group] verify-failed` ＋当該グループの fail_streak++）②`pending` でなければ終了 ③調停: この巡にペア是正が出ていれば（`Query<(), Added<IssuedPairFix>>` 非空）`Skip(PairFixThisPass)` 記録のみ ④各グループを観測し、**最初に是正が要ると判断された 1 グループ**へ連鎖発行（`w[i]` を `ZOrder::InsertAfter(w[i-1])`・先頭は動かさない・既存 `WindowPos` 型導出で `SWP_NOMOVE|NOSIZE|NOACTIVATE` 自動＝11.1）⑤維持対象の全グループが `order_ok` なら `pending = false` ⑥`pending || verify` の間は `tick_wake::mark(ZORDER)`（7.4）
+- 頭打ち: あるグループの fail_streak が 3 以上になったら warn（group_id・諦める旨・観測値）を出し、**そのグループだけ**を維持対象から外す。外したグループは次の追随トリガで維持対象へ戻す（＝8.2/8.3 の「黙って諦めない」）。pending の解除条件は⑤のまま（**維持対象**の全グループが `order_ok`）——外されたグループは判定に加えないので、1 グループの不成立が他グループの是正も tick の静穏も止めない
 - バッチ順序の前提: `DeferWindowPos` 一括投入は enqueue 順を保存（実窓テスト `command_batch_tests.rs:633` で実証済み）。縮退経路（逐次）でも順序どおり
 
 #### group diag（`zorder_group_diag.rs`）
@@ -406,9 +406,9 @@ pub(crate) fn decide_group_fix(obs: &GroupObservation) -> GroupFixDecision;
 
 ### Unit（決定論・実機不要）
 
-1. `parse_zorder_tokens`: 数値／明示／省略形の受理、モード混在・タグ内重複（bN+sN 併存は非重複）・2 個未満・解釈不能の各拒否（10.2 の 9 分岐のうち 5）
+1. `parse_zorder_tokens`: 数値／明示／省略形の受理、モード混在・タグ内重複（bN+sN 併存は非重複）・2 個未満・解釈不能の各拒否（**10.2 の 10 分岐のうち 6**）
 2. スコープブロック正規化: 反転（`s1,b1`）・非隣接（`b1,s0,s1,b0`）→ `[Balloon,Char]` 隣接ブロック化＋ `Normalization` 記録（2.4）
-3. 台帳: 複数グループ併存・グループまたぎ再指定拒否（sN/N 同一視）・reset→descript 復帰／空復帰・reset 後の再受理・descript 由来の拒否判定参加（10.2 残り 4 分岐）
+3. 台帳: 複数グループ併存・グループまたぎ再指定拒否（sN/N 同一視）・reset→descript 復帰／空復帰・reset 後の再受理・descript 由来の拒否判定参加（**10.2 残り 3 分岐**＝再指定拒否・解除・descript 適用）
 4. `decide_group_fix`: 同値ガード・解決 2 未満・連鎖計画の形（先頭不動）
 5. sink: 自己選別表（set/zorder・reset/zorder・set/他・reset/他・非キャリア）＋ **actor 値を変えても結果不変**（1.7）
 
