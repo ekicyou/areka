@@ -1,6 +1,6 @@
 ---
 inclusion: always
-updated_at: 2026-07-02
+updated_at: 2026-08-27
 ---
 
 # Technology Stack
@@ -19,16 +19,16 @@ Rust 2024を前提にしたマルチクレート構成です。wintfはbevy_ecs�
 
 ## Key Libraries
 
-- **bevy_ecs** (0.18.0): ECSアーキテクチャの実装基盤
-- **bevy_app** (0.18.0): ECSスケジュールとアプリライフサイクル統合
+- **bevy_ecs** (0.19): ECSアーキテクチャの実装基盤。**2026-08-19 に 0.18→0.19 へ更新（spec 外直接コミット `bf2d7950`）**——`ExecutorKind` API が撤去され実行器が改稿された（檻の追随は `dpi-transition-atomicity` マージ時に実施済み・**更新前の性能実測は傾向も持ち越せない**＝roadmap 追記(80)）
+- **bevy_app** (0.19): ECSスケジュールとアプリライフサイクル統合
 - **thiserror** (2): エラー型定義（全クレート共通）
 - **windows** (0.62.2): Windows APIバインディング
 - **windows-core** (0.62.2): Windows Core API
-- **taffy** (0.9.2): レイアウトエンジン
+- **taffy** (0.13): レイアウトエンジン（bevy 0.19 更新と同時に 0.9→0.13 へ）
 - **wintf-winmsg-executor** (=0.0.5): Windows メッセージループ・ウィンドウ生成・UI スレッド async の基盤クレ（`winmsg-executor` フォーク）。極初期版ゆえ完全 pin（`=`）。共有ウィンドウクラスに `CS_DBLCLKS` ＋既定カーソルを内蔵
 - **event-listener** (5): スレッド跨ぎの起床通知（VSync スレッド→UI スレッド async tick）。tokio 非依存
 - ~~**async-executor**~~: 撤去済み（spec `wintf-winmsg-executor` 完了時）。UI スレッド async は `wintf-winmsg-executor` の `spawn_local` へ移行。背景プール `WintfTaskPool` は `bevy_tasks` ベースで async-executor 非依存
-- **bevy_tasks** (0.18.0): 背景ワーカープール `WintfTaskPool` の実行基盤（`world.spawn` 経路・UI スレッドとは別レイヤ）
+- **bevy_tasks** (0.19): 背景ワーカープール `WintfTaskPool` の実行基盤（`world.spawn` 経路・UI スレッドとは別レイヤ）
 - **tracing / tracing-subscriber**: 構造化ロギング
 - **windows-numerics** (0.3.1): Windows数値型サポート
 - **ambassador** (0.5.0): トレイト委譲（delegation）マクロ。COM/状態ラッパーのボイラープレート削減に使用
