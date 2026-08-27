@@ -375,7 +375,7 @@
 
 #### ⑶-C 起票（受け皿が実在しないので新規に立てる）
 
-**C-1【起票】移行で未使用になった `tracing-subscriber` の dev-dependency 6 件の撤去**
+**C-1【実施】移行で未使用になった `tracing-subscriber` の dev-dependency 6 件の撤去（**2026-08-27 開発者裁定で「起票」→「直接実施」へ**）
 
 共有機構への移行の結果、次の 6 crate の `[dev-dependencies] tracing-subscriber` が**未使用**になった（2026-08-27 実測。いずれも分岐点 `327e7fd3` では実際に参照があり、移行後は crate 全域の `.rs` で参照 0）:
 
@@ -388,11 +388,11 @@
 | `crates/areka-seriko/Cargo.toml` | :28 |
 | `crates/areka-sylphya/Cargo.toml` | :22 |
 
-**本仕様では撤去できない**——要件 11.5 が `Cargo.toml` の変更を dev-dependencies の**追加**に限っており、`crates/log-capture-kit/tests/with_default_guard_test.rs` の `Cargo.toml` 検査も拾わない（見るのは「製品側依存に共有 crate が現れていないこと」と「濾過の feature を宣言してよいのは `wintf` のみ」だけ）。併せて `crates/areka-seriko/Cargo.toml:25-27` の存在理由コメント（「sink send 失敗時の発火を捕捉する専用」）も陳腐化している。**進行中 spec でこれを受けられる範囲を持つものは 0 件なので、新規に起票する。** 実害は「テストビルドが要らない依存を引く」ことに限られ、赤にはならない。
+**本仕様では撤去できない**——要件 11.5 が `Cargo.toml` の変更を dev-dependencies の**追加**に限っており、`crates/log-capture-kit/tests/with_default_guard_test.rs` の `Cargo.toml` 検査も拾わない（見るのは「製品側依存に共有 crate が現れていないこと」と「濾過の feature を宣言してよいのは `wintf` のみ」だけ）。併せて `crates/areka-seriko/Cargo.toml:25-27` の存在理由コメント（「sink send 失敗時の発火を捕捉する専用」）も陳腐化している。**2026-08-27 開発者裁定: 新規 spec は立てず、直接実施した。**理由は同日の錮の削除の裁定（要件 7.4）と同じ形——**6 行の削除のために requirements→design→tasks の全工程を立てるのは道具立てが荷物より重い**。実施の内容: 6 crate の `[dev-dependencies]` から当該行とその存在理由コメントを落とした（追加 0・削除 22 行）。`areka-seriko` の陳腐化した存在理由コメントも同じ塊で消えている。実測: 削除の前後とも `cargo test --workspace` は **95 実行体 / 5,894 passed / 0 failed**（使っていなかったことの実証）。**要件 11.5 との関係**: 同条文は `Cargo.toml` の変更を dev-dependencies の**追加**に限るので、この削除は**本仕様の外側の作業**である。同じブランチに載るが、**spec の外だと明示した別コミット**としている（`chore:`）。 実害は「テストビルドが要らない依存を引く」ことに限られ、赤にはならない。
 
 **C-2【起票】steering の crate 一覧に他 12 crate が欠けている（本タスクの範囲外・steering の同期手続きで解消する）**
 
-本タスクは指示どおり `log-capture-kit` と `temp-path-kit` の 2 本を足したが、**`crates/` の実在 24 crate に対し `structure.md` が節を持つのは 12 crate だけ**である（追加後の実測）。節が無いのは次の 12 本: `areka-actor`・`areka-emo-atlas`・`areka-emo-compose`・`areka-emo-present`・`areka-emo-text`・`areka-ghost`・`areka-kanade`・`areka-sakura`・`areka-seriko`・`areka-talk`・`shiori-host32-testdll`・`shiori4-testdll`。**この 12 本は本仕様が作ったものではなく、本仕様の着手前から欠けていた**（本仕様が新設したのは 2 本だけで、その 2 本は本タスクで載せた）。解消先は spec ではなく steering の同期手続き（`/kiro-steering`）である。本タスクの完了条件「一覧と実際の `crates/` の内容が食い違わない」は**指示された 2 本については満たしたが、一覧全体としては満たしていない**——この事実を隠さず登記する。
+本タスクは指示どおり `log-capture-kit` と `temp-path-kit` の 2 本を足したが、**`crates/` の実在 24 crate に対し `structure.md` が節を持つのは 12 crate だけ**である（追加後の実測）。節が無いのは次の 12 本: `areka-actor`・`areka-emo-atlas`・`areka-emo-compose`・`areka-emo-present`・`areka-emo-text`・`areka-ghost`・`areka-kanade`・`areka-sakura`・`areka-seriko`・`areka-talk`・`shiori-host32-testdll`・`shiori4-testdll`。**この 12 本は本仕様が作ったものではなく、本仕様の着手前から欠けていた**（本仕様が新設したのは 2 本だけで、その 2 本は本タスクで載せた）。解消先は spec ではなく steering の同期手続き（`/kiro-steering`）である。**2026-08-27 開発者裁定でこの線が採られた**——新規 spec は立てず、`/kiro-steering` で同期する。本タスクの完了条件「一覧と実際の `crates/` の内容が食い違わない」は**指示された 2 本については満たしたが、一覧全体としては満たしていない**——この事実を隠さず登記する。
 
 #### ⑶-D 残余の登記（調べたうえで是正しないと裁定した項目・いずれも起票しない）
 
