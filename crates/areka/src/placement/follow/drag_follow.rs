@@ -9,30 +9,12 @@ use wintf::ecs::{Point, WindowPos};
 
 use super::{
     Anchor, Anchored, BALLOON_LIMIT_CLAMP_TAG, BALLOON_LIMIT_RELEASE_CONTEXT,
-    BALLOON_LIMIT_UNRESOLVED_TAG, BalloonKeywordBase, BalloonLimit, BalloonWindowMarker,
-    CharWindowMarker, DESPAWNED_SKIP_TAG, MonitorSnapshot, PlacementRoute, PointPx, SizePx,
-    VISIBILITY_UNRESOLVED_TAG, balloon_offset_entries, char_pos_entries, char_pos_to_origin_x,
-    enqueue_window_set_pos, evaluate_visibility_guard, limit_correction, persist_entries,
-    project_anchor, rect_at, route_applies_visibility_guard, work_area_for_window,
+    BALLOON_LIMIT_UNRESOLVED_TAG, BalloonFollow, BalloonKeywordBase, BalloonLimit,
+    BalloonWindowMarker, CharWindowMarker, DESPAWNED_SKIP_TAG, MonitorSnapshot, PlacementRoute,
+    PointPx, SizePx, VISIBILITY_UNRESOLVED_TAG, balloon_offset_entries, char_pos_entries,
+    char_pos_to_origin_x, enqueue_window_set_pos, evaluate_visibility_guard, limit_correction,
+    persist_entries, project_anchor, rect_at, route_applies_visibility_guard, work_area_for_window,
 };
-
-/// キャラ窓に付与するバルーン追従 Component（4.2/4.4/4.8）。
-///
-/// `offset` の初期値は配置時に確定する暫定 offset（物理 px・
-/// `ScopePlacement.balloon_offset` の転写＝P5 幾何の暫定規則。正式な配置規則は
-/// balloon 表示系の後続が所有する・4.4）。バルーン単独ドラッグでユーザーが
-/// ずらすと [`on_balloon_drag`] が `balloon_pos − char_pos` へ**記憶更新**し、
-/// 以後のキャラ窓ドラッグ・[`move_window_to`] は調整後 offset で追従する
-/// （4.8・セッション内のみ・永続化は M-life の領分。
-/// 旧挙動「次のキャラ窓ドラッグで初期 offset へスナップバック」は
-/// 2026-07-11 要件 4.8 により仕様退役）。
-#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
-pub struct BalloonFollow {
-    /// 追従して動かすバルーン窓 entity。
-    pub balloon: Entity,
-    /// キャラ窓左上からバルーン窓左上への相対 offset（物理 px・配置時確定）。
-    pub offset: PointPx,
-}
 
 /// `OnDrag` ハンドラ: ドラッグ中のキャラ窓の移動とバルーン追従（4.2/4.3/4.7）。
 ///
@@ -313,7 +295,7 @@ fn policy_mapped_position(
 /// [`route_applies_visibility_guard`] と同じ流儀。引き金の種類が増えたとき、既定腕が
 /// あると新しい引き金が黙って片側へ倒れる（D14 帰結⑵）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum BalloonFollowTrigger {
+pub(crate) enum BalloonFollowTrigger {
     /// ユーザーの明示的なドラッグ（[`on_char_drag`]／[`on_char_drag_end`]）。
     /// 引き戻しは明示操作の否定ゆえ**ガード適用外**（requirements.md Boundary Context）。
     Drag,
@@ -350,7 +332,7 @@ impl BalloonFollowTrigger {
 /// **後**に、キャラ窓とまったく同一の純関数（[`guard_visibility`]）・同一の遷移規則を
 /// バルーン矩形へ適用する（[`guard_balloon_position`]）。発火可否は書込自身の route では
 /// なく `trigger`（随伴の引き金）が決める。
-pub(super) fn follow_balloon(
+pub(crate) fn follow_balloon(
     world: &mut World,
     entity: Entity,
     pos: Point,

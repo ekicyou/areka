@@ -56,10 +56,29 @@
 #![allow(dead_code)]
 
 use areka_emo_compose::ScaleRatio;
+use bevy_ecs::prelude::{Component, Entity};
 use wintf::ecs::DPI;
 
 use crate::placement::resolver::PointPx;
 use crate::placement::scale_signed;
+
+/// キャラ窓に付与するバルーン追従 Component（4.2/4.4/4.8）。
+///
+/// `offset` の初期値は配置時に確定する暫定 offset（物理 px・
+/// `ScopePlacement.balloon_offset` の転写＝P5 幾何の暫定規則。正式な配置規則は
+/// balloon 表示系の後続が所有する・4.4）。バルーン単独ドラッグでユーザーが
+/// ずらすと [`on_balloon_drag`] が `balloon_pos − char_pos` へ**記憶更新**し、
+/// 以後のキャラ窓ドラッグ・[`move_window_to`] は調整後 offset で追従する
+/// （4.8・セッション内のみ・永続化は M-life の領分。
+/// 旧挙動「次のキャラ窓ドラッグで初期 offset へスナップバック」は
+/// 2026-07-11 要件 4.8 により仕様退役）。
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BalloonFollow {
+    /// 追従して動かすバルーン窓 entity。
+    pub balloon: Entity,
+    /// キャラ窓左上からバルーン窓左上への相対 offset（物理 px・配置時確定）。
+    pub offset: PointPx,
+}
 
 /// 追従オフセットの基準対——値と、その値が属する表示 DPI。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

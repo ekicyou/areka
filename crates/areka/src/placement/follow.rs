@@ -61,10 +61,13 @@ use super::spawn::{BalloonKeywordBase, BalloonWindowMarker, CharWindowMarker, Gh
 use super::spawn::BalloonLimit;
 
 pub use self::anchor::{Anchored, project_anchor};
-pub use self::drag_follow::BalloonFollow;
 pub(crate) use self::drag_follow::{
     on_balloon_drag, on_balloon_drag_end, on_char_drag, on_char_drag_end,
 };
+// 追従 Component の定義元は単位空間契約のモジュール（`offset_space`）へ移した
+// （areka-P0-balloon-offset-dpi・design D14／task 3.1）。外部からの参照はすべて
+// このファサードを経由するため、移設の波及はこの 1 行に閉じる。
+pub use self::offset_space::BalloonFollow;
 /// 単位空間契約の定義元が持つ基準対（areka-P0-balloon-offset-dpi・要件 1.1／3.1）。
 ///
 /// 配置解決の出力（`resolver::ScopePlacement`）と復元 merge（`persist`）が運ぶため、
@@ -107,7 +110,10 @@ pub use self::window_move::{
 // 私有項目のファサード再束縛（クレート内可視性のみ・公開面は増やさない）。
 // サブモジュール間の相互参照とテストモジュールからの `super::` 参照は、いずれも
 // ここを経由する。
-use self::drag_follow::{BalloonFollowTrigger, follow_balloon};
+// 追随相（`emo2_boot::frame`）が収束の保証（design D16）で `follow_balloon` を呼ぶため、
+// この 2 項目だけは私有再束縛から crate 内公開へ格上げする。areka は bin crate であり
+// `pub(crate)` はクレート内に留まるので、外部 API 面は増えない。
+pub(crate) use self::drag_follow::{BalloonFollowTrigger, follow_balloon};
 use self::keyword_base::rederive_keyword_balloon_offset;
 use self::visibility::{
     VISIBILITY_UNRESOLVED_TAG, apply_visibility_guard, evaluate_visibility_guard, rect_at,
