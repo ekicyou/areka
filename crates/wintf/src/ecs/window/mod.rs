@@ -14,6 +14,8 @@ pub(crate) mod window_system;
 mod zorder_group;
 /// グループ系の記録行を組む純関数だけの層（マクロを含まない＝出力先を分裂させない）。
 mod zorder_group_diag;
+/// グループ単位の重なりの維持系（印の消費・調停・連鎖発行）。
+mod zorder_group_maintain;
 mod zorder_pair;
 /// 記録の行を組む純関数だけの層（マクロを含まない＝出力先を分裂させない）。
 mod zorder_pair_diag;
@@ -27,6 +29,7 @@ pub use dpi::*;
 pub use window_handle::*;
 pub use window_pos::*;
 pub use zorder_group::*;
+pub use zorder_group_maintain::*;
 pub use zorder_pair::*;
 pub use zorder_pair_establish::*;
 pub use zorder_pair_maintain::*;

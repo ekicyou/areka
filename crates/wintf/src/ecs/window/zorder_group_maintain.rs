@@ -1,0 +1,233 @@
+//! グループ単位の重なりの維持系——印を消費し、既存のペア機構と調停し、連鎖で是正を出す。
+//!
+//! design.md「wintf 層 > group 維持系」の 1 巡の手順のうち、**②印の門・③調停・④連鎖の
+//! 発行**をここで実装する。①次巡の実測照合、⑤印の解除と連続失敗の頭打ち、⑥起床の印は
+//! 後続タスクの担当であり、本モジュールにはまだ無い。
+//!
+//! ```text
+//! 印（pending）が立っていない → 何もしない（観測すらしない）
+//!   → 同じ巡にペア機構の是正が在る → 理由つきの見送りを記録して終わり（印は保持）
+//!       → 各グループを観測 → 是正が要る最初の 1 グループへ連鎖を積む
+//!                            → 検証待ちを預ける（照合は次巡＝後続タスク）
+//! ```
+//!
+//! # なぜ「印が立っていない巡は観測すらしない」のか（要件 6.1／6.4）
+//!
+//! グループが 1 本も宣言されていない状態で本系統が毎巡 Win32 の走査を回すと、既定状態
+//! （＝非強制）の挙動が本機能の導入前と同じである保証が「結果として指令 0 本だった」に
+//! 後退する。門を先頭に置き、受け口
+//! （[`plan_group_fixes`]）が空の列を舐めるだけで実測の口を一度も呼ばない形と併せて、
+//! **判断の機会がそもそも作られない**ようにしてある。
+//!
+//! # なぜ 1 巡に 1 グループなのか
+//!
+//! 実測は巡の中で採るが、指令の実際の書込はその巡の後の flush である。同じ巡に 2 グループ
+//! ぶんの連鎖を積むと、後から適用される連鎖の挿入位置は先の適用で既に古い——既存ペア機構が
+//! 「1 巡で指令を出すのは高々 1 ペア」に落ち着いたのと同じ理由である
+//! （[`zorder_pair_maintain`](super::zorder_pair_maintain) の module doc）。見送られた
+//! グループの要求は印として残り、次の巡の新しい実測から計算し直される。
+//!
+//! グループの**内側**の連鎖は自己参照（`w[i]` を `w[i-1]` の直後へ）なので、この陳腐化とは
+//! 無縁である——挿入先は同じ連鎖で今まさに位置が決まる窓であり、外の窓の実測に依存しない。
+//! よって連鎖そのものは一括で積んでよい（`DeferWindowPos` の一括投入は積んだ順を保存する
+//! ——実窓での実証は `command_batch_tests.rs:633`）。
+//!
+//! # なぜ「同じ巡にペア機構が是正を出していたら見送る」のか（調停）
+//!
+//! 上と同じ陳腐化が**系統をまたいで**起きるからである。ペア機構が積んだ 1 本もこの巡の
+//! flush で書かれるので、こちらが同じ巡に採った実測は適用の時点では古い。既存機構が自分の
+//! 内側で敷いていた「1 巡に窓を動かすのは 1 つ」という規律を、系統間へ広げた形である。
+//! 見送っても印は落とさない——次の巡でやり直すためであり、落とせば要件 8.3 が禁じる
+//! 「黙って諦める」になる。
+//!
+//! # 記録はこのモジュールから出さない
+//!
+//! `tracing` の出力先は呼び出し元の module path が既定であり、ここでマクロを呼ぶと
+//! サインオフの grep 対象（`wintf::ecs::window::zorder_group`）が 2 本に割れる。よって
+//! 記録は兄弟の [`zorder_group`](super::zorder_group) が持つ唯一の入口
+//! （`record_*`）を呼ぶだけにし、本ファイルにはマクロを 1 つも置かない。この不在は
+//! 兄弟テストが本文の走査で毎回確かめている。
+
+use bevy_ecs::prelude::*;
+use bevy_ecs::system::NonSendMarker;
+use windows::Win32::Foundation::HWND;
+
+use super::SetWindowPosCommand;
+use super::zorder_group::{
+    GroupFixDecision, GroupProbe, GroupSkipReason, GroupVerify, ZOrderGroups, plan_group_fixes,
+    record_group_decision, record_group_skip,
+};
+use super::zorder_pair::InsertSpec;
+use super::zorder_pair_maintain::{HandleQuery, IssuedPairFix, pair_fix_command};
+
+// ============================================================================
+// WorldGroupProbe - 本番の実測の口
+// ============================================================================
+
+/// 本番の実測の口——`Entity` から `HWND` を引くところだけを World に依存させる。
+///
+/// **前面走査は書かない**。[`GroupProbe::scan_in_front`] の既定実装が既存のペア機構の
+/// 走査（`measure_windows_in_front`）をそのまま呼ぶので、こちらは
+/// [`GroupProbe::resolve`] だけを実装する——「Windows 上で非表示の窓を読み飛ばし、
+/// 最も近い可視の隣で測る」という測り方（要件 9.3）をこの型が二重に持たないための形で
+/// ある。override して自前の走査を書けば、測り方が 2 通りに分かれた瞬間に隣接の意味が
+/// 静かにずれる。**override していないこと**は兄弟テストが本型そのものへ主張している。
+pub(crate) struct WorldGroupProbe<'a, 'w, 's> {
+    handles: &'a HandleQuery<'w, 's>,
+}
+
+impl<'a, 'w, 's> WorldGroupProbe<'a, 'w, 's> {
+    /// ハンドルを引くクエリを借りて実測の口を組む。
+    pub(crate) fn new(handles: &'a HandleQuery<'w, 's>) -> Self {
+        Self { handles }
+    }
+}
+
+impl GroupProbe for WorldGroupProbe<'_, '_, '_> {
+    /// 実体が消えている（`Err`）のと、実体はあるが窓がまだ無い（`Ok(None)`）のを、どちらも
+    /// 「まだ現れていない」として `None` に畳む。観測はこの 2 つを区別せず数だけを残し
+    /// （要件 8.4 の記録材料）、区別が要る破棄経路は既存ペア機構が持っている。
+    fn resolve(&self, entity: Entity) -> Option<HWND> {
+        self.handles.get(entity).ok().flatten().map(|h| h.hwnd)
+    }
+}
+
+// ============================================================================
+// 連鎖の発行——位置と寸法を持てない経路で組む
+// ============================================================================
+
+/// 連鎖を指令として積む（`chain[i]` を直前の要素の直後へ・先頭は動かさない）。
+///
+/// 1 本ずつの指令は既存ペア機構の [`pair_fix_command`] で組む。あちらは位置も寸法も
+/// 持たない [`WindowPos`](super::WindowPos) から `SetWindowPos` の引数を導くので、
+/// `SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE` は**組み立て方から従う**——「フラグを
+/// 立て忘れない」ではなく「位置と寸法を運ぶ欄がそもそも無い」形であり、これが要件 11.1
+/// の構造的な根拠である。指令を自前で組み直せばその保証は消えるので、ここでは組まない。
+///
+/// 軸は段ごとに進む（`chain[0]` は `head` の直後、`chain[1]` は `chain[0]` の直後）。
+/// 挿入先が必ず**同じ連鎖の直前の窓**であることが、構成外の窓を指す余地を無くしている
+/// （要件 2.5）——動かす窓も挿入先も、観測が集めた構成窓の列からしか採らない。
+fn enqueue_group_chain(head: HWND, chain: &[HWND]) {
+    let mut anchor = head;
+    for moved in chain {
+        SetWindowPosCommand::enqueue(pair_fix_command(*moved, InsertSpec::After(anchor)));
+        anchor = *moved;
+    }
+}
+
+// ============================================================================
+// run_group_maintenance_pass - 1 巡の維持（World を持たない中核）
+// ============================================================================
+
+/// 1 巡ぶんの維持を回す（World も Win32 も、実測の口の向こう側にしか無い）。
+///
+/// system 本体（[`apply_zorder_group_maintenance`]）から World 依存を剥がしてあるのは、
+/// 門・調停・連鎖の組立という**判断の側**を実機も実ディスプレイも無しに固定するためで
+/// ある（要件 10.1）。既存ペア機構が観測を構造体へ写して純関数へ渡しているのと同じ分割
+/// であり、こちらは列の長さが可変ゆえ「値の写し」ではなく「引く口」を渡す形にしてある。
+///
+/// `pair_fix_this_pass` は「この巡に既存のペア機構が是正の指令を出したか」である。
+/// 真偽値 1 つで受け取るのは、判断がペア機構の内部（どのペアが・どの窓を）を覗かないため
+/// ——覗ける形にすると、ペアの中身を見てグループの是正を変える規則を書く場所ができる。
+pub(crate) fn run_group_maintenance_pass<P: GroupProbe + ?Sized>(
+    groups: &mut ZOrderGroups,
+    pair_fix_this_pass: bool,
+    probe: &P,
+) {
+    // ② 印の門。立っていなければ観測も判断も指令も無い（要件 6.1／6.4）。
+    // 記録も出さない——「是正が要るかもしれない」と誰も言っていない巡であり、
+    // 見送るべき判断がそもそも無いからである（要件 8.3 の対象は判断した上での沈黙）。
+    if !groups.pending {
+        return;
+    }
+
+    // ③ 調停。この巡はペア機構が既に窓を動かす指令を積んでいるので、こちらは出さない。
+    // 印は落とさない——次の巡の新しい実測でやり直す（見送りであって断念ではない）。
+    // グループを名指しできないのは巡そのものの見送りだからであり、記録の group_id は番兵になる。
+    if pair_fix_this_pass {
+        record_group_skip(None, GroupSkipReason::PairFixThisPass, None);
+        return;
+    }
+
+    // ④ 観測して、是正が要る**最初の 1 グループ**へ連鎖を積む。
+    //
+    // 観測は先に全グループぶんを組む（[`plan_group_fixes`] がグループ間の順序を一切見ずに
+    // 1 本ずつ独立に回す）。発行を 1 本に絞るのは観測ではなく**指令の側**であり、
+    // 2 本目以降の是正は記録も要求の取り下げも伴わずに次巡へ持ち越される
+    // ——印が残っている以上、記録の無い握り潰しにはならない。
+    let plans = plan_group_fixes(&groups.groups, probe);
+    let mut issued: Option<GroupVerify> = None;
+
+    for plan in plans {
+        // 判断結果は必ず記録の入口を通す——見送りはそこで理由つきの記録になり、
+        // 返ってくるのは適用すべき是正だけである（要件 8.3 の規約）。発行済みの巡でも
+        // この呼出は飛ばさない。飛ばすと、後ろに居るグループの見送りが**発行したという
+        // 理由だけで**記録から消える。
+        let Some(decision) = record_group_decision(&plan.observation, plan.decision) else {
+            continue;
+        };
+        let GroupFixDecision::Chain { head, chain } = decision else {
+            // 記録の入口は見送りを返さないのでここへは届かない。届いても panic は作らず、
+            // 指令を出さずに読み飛ばす（記録は入口が済ませている）。
+            continue;
+        };
+        if issued.is_some() {
+            // この巡は既に別のグループの連鎖を積んだ。いま手にしている実測は適用の時点では
+            // 古いので、印を残したまま次巡でやり直す。
+            continue;
+        }
+        enqueue_group_chain(head, &chain);
+        issued = Some(GroupVerify {
+            id: plan.observation.id,
+            head,
+            chain,
+        });
+    }
+
+    // 出した連鎖を次巡の照合のために預ける。照合そのものは後続タスクが引き取る。
+    if let Some(verify) = issued {
+        groups.arm_verify(verify);
+    }
+}
+
+// ============================================================================
+// apply_zorder_group_maintenance - 維持系 system
+// ============================================================================
+
+/// 維持系: 是正が要るかもしれない印を消費し、ペア機構と調停し、連鎖で是正を出す。
+///
+/// # 受け口が挿さっていない巡
+///
+/// 結線前の状態である。既存ペア機構がストラテジ未挿入を既定値で受け流しているのと同じく、
+/// ここも何もせずに戻る——グループが宣言されていない状態と結果は同じ（指令 0 本）であり、
+/// 異常終了させる理由が無い。
+///
+/// # UI スレッド固定
+///
+/// [`NonSendMarker`] を取るのは、実測の口の既定実装が Win32（`GetWindow` 走査）を呼び、
+/// 積んだ指令のキューがスレッドローカルで UI スレッドを前提にするためである。この印が
+/// 付いた system をスケジュール実行器はメインスレッド以外で走らせない。
+///
+/// # スケジュールへの結線
+///
+/// 本 system をどの並びに挿すかは後続タスクが決める。設計上の位置は既存ペア機構の
+/// **直後**であり、[`IssuedPairFix`] がこの巡に付いたかどうかを見て調停するには、
+/// ペア機構が先に走っている必要がある。
+pub fn apply_zorder_group_maintenance(
+    _ui_thread: NonSendMarker,
+    groups: Option<ResMut<ZOrderGroups>>,
+    // この巡にペア機構が是正を出した窓（`Added` なので前の巡に付いたものは映らない）。
+    pair_fixes: Query<(), Added<IssuedPairFix>>,
+    // すべての実体に当たるクエリ（実測の口がハンドルを引くために借りる）。
+    handles: HandleQuery,
+) {
+    let Some(mut groups) = groups else {
+        return;
+    };
+    let probe = WorldGroupProbe::new(&handles);
+    run_group_maintenance_pass(&mut groups, !pair_fixes.is_empty(), &probe);
+}
+
+#[cfg(test)]
+#[path = "zorder_group_maintain_tests.rs"]
+mod zorder_group_maintain_tests;
