@@ -303,3 +303,40 @@
 10. ~~**要件 13 の sylphya への露出**~~ **→ 裁定済み（2026-08-27 要件ディスカッション議題 3）**: 語彙表には触れない（名前だけの先行登録はしない）。追跡先の実在検証で拾い手ゼロと判明したため、追跡 spec `areka-P0-zorder-property` を即日起票（brief＋roadmap M2 ゲート棚 6 本目）。要件 13.3〜13.5 に反映済み。bvc との語彙表行隣接ウォッチは消滅。
 11. **グループの上限と性能**（要件 3.7 / Out of scope の「性能最適化の計測はしない」）: 上限を設けないと、1 グループ N 窓 × M グループで 1 巡に出す指令数が増える。**「常識的に減らす」の下限（例: 既に順序どおりなら 1 本も出さない同値ガード）をどこまで設計で書くか**。既存 `decide_pair_fix` の同値ガード（`zorder_pair.rs:346`）が手本。
 12. **要件 1.7（実行スコープに依らない）と `cue.actor`**: `move` は `cue.actor` を scope として使う（`move_cue.rs:522`）が、本 spec は actor を**見ない**。同じキャリアで挙動が違うことを、消費者の doc とテストで明示的に固定するかどうか。
+
+---
+
+## 9. 設計前再実測（2026-08-27）とシンセシス結果
+
+### 9.1 ドリフト訂正（§1〜§3 の記述に対する実測差・design.md はこちらを正とする）
+
+| # | 本文の記述 | 実測 |
+|---|---|---|
+| ① | 収束の論証は `zorder_pair.rs:40-59` | **`zorder_pair_maintain.rs:40-59`**（前提 2 つは `:56-59`） |
+| ② | 確立系は `Added<WindowHandle>` 駆動 | `Query<Option<Ref<WindowHandle>>>`＋`Ref::is_added`（`establish.rs:107,118-126`） |
+| ③ | 記録タグは 6 種（`owner-detached` 含む）＋`sink-observed` | **`[zorder-pair]` タグは 6 本＝`owner-established`/`fix`/`skip`/`verify-failed`/`owner-establish-failed`/`sink-observed`**。`owner-detached` はタグ無しの素文（warn） |
+| ④ | `window_proc/window_pos.rs` | `crates/wintf/src/ecs/window_proc/window_pos.rs`（`ecs/` 直下） |
+| ⑤ | `WINDOWPOS.flags`／`hwndInsertAfter` が「読める＝検知点は在る」 | **現行が読むのは `wp.x/y/cx/cy` のみ**（`flags`/`hwndInsertAfter` 参照 0 件）。z 変化検知は新規実装になる |
+| ⑥ | `apply_as_batch`（`command.rs:757`） | 定義は `:385-446`・`:757` は呼出・縮退は `:771`（`BatchDegrade` 3 種のみ） |
+| ⑦ | `tick_diag.rs:132` | `:131` |
+| ⑧ | `KeepDirectlyAbove` 付与 `:532-533` | `:531-533` |
+| ＋ | `Emo2Wiring::new` は `mod.rs:458` | 定義は `frame/wiring.rs:122`・sink 追加は**5 点**（`new` 署名変更を含む） |
+| ＋ | 記録水準の正典は steering `logging.md` | `logging.md` にあるのは水準表（`:23-29`）のみ。良性スキップ debug／不正入力 warn の実質規範はコード先例（宛名規律 D8④＝`move_cue.rs:489-505`・`command.rs:764` の「縮退は無音にしない」・`SkipReason` の型強制） |
+
+### 9.2 R1 は解決済み（§6 の表を更新）
+
+`DeferWindowPos` 一括投入は **enqueue 順を保存し、逐次適用と最終 Z 形が一致する**。実窓の対照テスト `crates/wintf/src/ecs/window/command_batch_tests.rs:633`（並べ替えに敏感な 2 連鎖で両経路 `[2,0,1]` 一致）が既に緑。→ G2 の「グループ内自己参照連鎖の 1 巡一括」は flush 側の前提が成立している。残る Win32 側未知は R2（owner 一組の間への挿入不可＝記憶と一致・設計は挟む指令を出さない形で回避）のみ。
+
+### 9.3 シンセシス（設計判断 §8 の #1〜#7・#11・#12 の決着）
+
+1. **是正発行戦略＝(c) 1 巡 1 グループ・グループ内は自己参照連鎖で一括**（根拠: 9.2。先頭窓は動かさないので実測陳腐化と無縁）。ペア機構との調停は「同巡にペア是正が出たらグループは見送り」（`Added<IssuedPairFix>` 検知）＝1 巡に窓を動かす系統は 1 つ。
+2. **語彙の住処＝案 C 確定・ただし既存 `zorder_pair*` 5 ファイルは 1 行も編集しない**（`pub(crate)` 共有で足りることを再実測で確認）。`decide_pair_fix` の署名変更も不要（グループが自前でスコープ内隣接を内包するため）。要件 9.5 が構造で成立。
+3. **調停方式＝スコープブロック正規化**: 数値モードは `[Balloon, Char]` 展開＝明示モードの特例という一般化。反転（2.4）も非隣接（R6）も「先出現位置へ隣接ブロックとして寄せ、調整を記録」の 1 規則で処理。
+4. **consumer_ledger＝キーを（名前＋選別子）へ拡張**し `("set","zorder")`／`("reset","zorder")` を登記（11.3 の将来余地を型で保持）。
+5. **`\![reset,他]`＝debug スキップ**（宛名規律 D8④・他人宛）。
+6. **descript 適用点＝main.rs 起動シーム（spawn 後・最初の FrameFinalize 前）・失敗は warn**。
+7. **発火経路＝pending 1 ビットに統一**（sink 送出・drain 書込・shown エッジ・外部由来 WINDOWPOS 変化の 4 供給者が同じ pending を立てる）＋維持系が pending 中は毎巡 `ZORDER` 旗（相順序の拘束は追加しない＝1 巡遅延を許容し 7.4 の旗で補償）。**1.3 の検知は flags 解析をやめ「外部由来変化→再検証」に単純化**（ドリフト⑤で新規実装と判明したため・同値ガードが空振りを 0 本で吸収）。
+11. **同値ガード必須**（相対順成立中は指令 0 本）＋ verify 連続失敗 3 回で warn を出して pending を降ろす頭打ち（8.3 の「黙って諦めない」を記録で満たす）。
+12. **actor 非参照は doc＋決定論テストで固定**（自己選別表に actor 変化不変のケースを含める）。
+
+Build vs Adopt: 新規外部依存なし・既存資産（measure_*・flush・mpsc drain 型・diag 規律・log-capture-kit）を全面採用。Simplification: `decide_pair_fix` 改変案・WINDOWPOS flags 解析案・sylphya 語彙先行登録案を棄却（いずれも要らないことが再実測で確定）。
