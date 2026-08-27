@@ -44,6 +44,9 @@ pub mod transition_diag;
 #[cfg(test)]
 pub(crate) mod transition_judge;
 mod windowposition;
+/// スコープ窓 Z 順グループの台帳と、タグ／descript 共通のトークン解釈・拒否判定
+/// （純関数・Win32／ECS 非依存）。
+pub(crate) mod zorder_group_ledger;
 
 /// 作者空間の符号付きオフセットを k 倍する唯一の写像（大きさは `ScaleRatio::scale_len`
 /// 権威へ委譲し符号のみ保存する）。`windowposition.x/y` と `\![move]` の dx/dy は
