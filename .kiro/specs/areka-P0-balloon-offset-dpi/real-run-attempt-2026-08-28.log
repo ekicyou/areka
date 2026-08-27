@@ -1,0 +1,54 @@
+2026-08-27T22:05:00.118380Z DEBUG wintf::transition: [transition] frame=1 t_us=104719 kind=enqueue hwnd=0x1280CF0 origin=zorder-pair scope=- win_kind=- merged_into_seq=-
+2026-08-27T22:05:00.158358Z DEBUG wintf::transition: [transition] frame=1 t_us=144704 kind=surface stage=upload target_id=1 w=800 h=448 resized=false reason=-
+2026-08-27T22:05:00.160211Z DEBUG wintf::transition: [transition] frame=1 t_us=146569 kind=surface stage=visualize target_id=1 w=800 h=448 resized=- reason=-
+2026-08-27T22:05:00.185248Z DEBUG wintf::transition: [transition] frame=1 t_us=171596 kind=surface stage=upload target_id=3 w=576 h=406 resized=false reason=-
+2026-08-27T22:05:00.186409Z DEBUG wintf::transition: [transition] frame=1 t_us=172767 kind=surface stage=visualize target_id=3 w=576 h=406 resized=- reason=-
+2026-08-27T22:05:00.186894Z DEBUG wintf::transition: [transition] frame=1 t_us=173254 kind=hold entity=24v0 scope=1 win_kind=char window_dpi=192 table_dpi=192 since_frame=1 decision=proceed site=dpi
+2026-08-27T22:05:00.187219Z DEBUG wintf::transition: [transition] frame=1 t_us=173579 kind=hold entity=21v0 scope=0 win_kind=balloon window_dpi=192 table_dpi=192 since_frame=1 decision=proceed site=dpi
+2026-08-27T22:05:00.187483Z DEBUG wintf::transition: [transition] frame=1 t_us=173834 kind=hold entity=23v0 scope=1 win_kind=balloon window_dpi=192 table_dpi=192 since_frame=1 decision=proceed site=dpi
+2026-08-27T22:05:00.187959Z DEBUG wintf::transition: [transition] frame=1 t_us=174319 kind=hold entity=22v0 scope=0 win_kind=char window_dpi=192 table_dpi=192 since_frame=1 decision=proceed site=dpi
+2026-08-27T22:05:00.188163Z DEBUG wintf::transition: [transition] frame=1 t_us=174524 kind=offset scope=1 base_dpi=192 new_dpi=192 base_offset=292,-150 old_offset=292,-150 new_offset=292,-150 verdict=unchanged
+2026-08-27T22:05:00.188433Z DEBUG wintf::transition: [transition] frame=1 t_us=174795 kind=surface stage=skipped target_id=2 w=- h=- resized=- reason=invisible
+2026-08-27T22:05:00.188836Z DEBUG wintf::transition: [transition] frame=1 t_us=175197 kind=surface stage=skipped target_id=1 w=- h=- resized=- reason=k-unchanged
+2026-08-27T22:05:00.189025Z DEBUG wintf::transition: [transition] frame=1 t_us=175387 kind=surface stage=skipped target_id=3 w=- h=- resized=- reason=k-unchanged
+2026-08-27T22:05:00.189221Z DEBUG wintf::transition: [transition] frame=1 t_us=175582 kind=offset scope=0 base_dpi=192 new_dpi=0 base_offset=34,-448 old_offset=34,-448 new_offset=34,-448 verdict=keyword-pending
+2026-08-27T22:05:00.189447Z DEBUG wintf::transition: [transition] frame=1 t_us=175807 kind=surface stage=skipped target_id=0 w=- h=- resized=- reason=invisible
+2026-08-27T22:05:00.190651Z DEBUG wintf::transition: [transition] frame=1 t_us=177014 kind=flush stage=begin count=1 since_tick_us=177014 total_us=-
+2026-08-27T22:05:00.191420Z DEBUG wintf::transition: [transition] frame=1 t_us=177772 kind=msg msg=WM_WINDOWPOSCHANGED hwnd=0x1280CF0 in_swp=true since_flush_us=769
+2026-08-27T22:05:00.191633Z DEBUG wintf::transition: [transition] frame=1 t_us=177991 kind=write stage=flush seq=0 hwnd=0x1280CF0 origin=zorder-pair scope=- win_kind=- x=0 y=0 cx=0 cy=0 flags=0x13 ax=1632 ay=754 aw=576 ah=406 call_us=7 ok=true in_batch=true
+2026-08-27T22:05:00.191785Z DEBUG wintf::transition: [transition] frame=1 t_us=178146 kind=flush stage=end count=1 since_tick_us=178147 total_us=1133
+2026-08-27T22:05:00.192297Z DEBUG wintf::transition: [transition] frame=1 t_us=178659 kind=msg msg=WM_WINDOWPOSCHANGED hwnd=0x15C0D08 in_swp=false since_flush_us=-
+2026-08-27T22:05:00.192915Z DEBUG wintf::transition: [transition] frame=1 t_us=179277 kind=msg msg=WM_WINDOWPOSCHANGED hwnd=0x1440BBE in_swp=false since_flush_us=-
+2026-08-27T22:05:00.193405Z DEBUG wintf::transition: [transition] frame=1 t_us=179767 kind=msg msg=WM_WINDOWPOSCHANGED hwnd=0x1250E8C in_swp=false since_flush_us=-
+2026-08-27T22:05:00.193897Z DEBUG wintf::transition: [transition] frame=1 t_us=180260 kind=msg msg=WM_WINDOWPOSCHANGED hwnd=0x1280CF0 in_swp=false since_flush_us=-
+2026-08-27T22:05:00.194408Z DEBUG wintf::transition: [transition] frame=1 t_us=180771 kind=msg msg=WM_WINDOWPOSCHANGED hwnd=0x15C0D08 in_swp=false since_flush_us=-
+2026-08-27T22:05:00.195081Z DEBUG wintf::transition: [transition] frame=1 t_us=181444 kind=msg msg=WM_WINDOWPOSCHANGED hwnd=0x15C0D08 in_swp=false since_flush_us=-
+2026-08-27T22:05:00.196152Z DEBUG wintf::transition: [transition] frame=1 t_us=182511 kind=msg msg=WM_WINDOWPOSCHANGED hwnd=0x1440BBE in_swp=false since_flush_us=-
+2026-08-27T22:05:00.197194Z DEBUG wintf::transition: [transition] frame=1 t_us=183554 kind=msg msg=WM_WINDOWPOSCHANGED hwnd=0x1440BBE in_swp=false since_flush_us=-
+2026-08-27T22:05:00.197832Z DEBUG wintf::transition: [transition] frame=1 t_us=184193 kind=msg msg=WM_WINDOWPOSCHANGED hwnd=0x1250E8C in_swp=false since_flush_us=-
+2026-08-27T22:05:00.198340Z DEBUG wintf::transition: [transition] frame=1 t_us=184702 kind=msg msg=WM_WINDOWPOSCHANGED hwnd=0x1250E8C in_swp=false since_flush_us=-
+2026-08-27T22:05:00.198889Z DEBUG wintf::transition: [transition] frame=1 t_us=185251 kind=msg msg=WM_WINDOWPOSCHANGED hwnd=0x1280CF0 in_swp=false since_flush_us=-
+2026-08-27T22:05:00.199472Z DEBUG wintf::transition: [transition] frame=1 t_us=185833 kind=msg msg=WM_WINDOWPOSCHANGED hwnd=0x1280CF0 in_swp=false since_flush_us=-
+2026-08-27T22:08:59.238954Z DEBUG wintf::transition: [transition] frame=28686 t_us=8512 kind=msg msg=WM_WINDOWPOSCHANGED hwnd=0x1440BBE in_swp=false since_flush_us=-
+2026-08-27T22:08:59.241771Z DEBUG wintf::transition: [transition] frame=28687 t_us=1557 kind=enqueue hwnd=0x1440BBE origin=window-pos scope=- win_kind=- merged_into_seq=-
+2026-08-27T22:08:59.243340Z DEBUG wintf::transition: [transition] frame=28687 t_us=3133 kind=flush stage=begin count=1 since_tick_us=3133 total_us=-
+2026-08-27T22:08:59.249574Z DEBUG wintf::transition: [transition] frame=28687 t_us=9343 kind=write stage=flush seq=0 hwnd=0x1440BBE origin=window-pos scope=- win_kind=- x=-1600 y=700 cx=868 cy=1374 flags=0x4 ax=-1600 ay=700 aw=868 ah=1374 call_us=7 ok=true in_batch=true
+2026-08-27T22:08:59.249976Z DEBUG wintf::transition: [transition] frame=28687 t_us=9754 kind=flush stage=end count=1 since_tick_us=9755 total_us=6623
+2026-08-27T22:08:59.250508Z DEBUG wintf::transition: [transition] frame=28687 t_us=10280 kind=msg msg=WM_DPICHANGED hwnd=0x1440BBE in_swp=false since_flush_us=-
+2026-08-27T22:08:59.252068Z DEBUG wintf::transition: [transition] frame=28687 t_us=11847 kind=msg msg=WM_WINDOWPOSCHANGED hwnd=0x1440BBE in_swp=false since_flush_us=-
+2026-08-27T22:08:59.257948Z DEBUG wintf::transition: [transition] frame=28688 t_us=2097 kind=hold entity=22v0 scope=0 win_kind=char window_dpi=144 table_dpi=144 since_frame=28688 decision=proceed site=dpi
+2026-08-27T22:08:59.258334Z DEBUG wintf::transition: [transition] frame=28688 t_us=2490 kind=offset scope=0 base_dpi=192 new_dpi=0 base_offset=34,-448 old_offset=34,-448 new_offset=34,-448 verdict=keyword-pending
+2026-08-27T22:08:59.258505Z DEBUG wintf::transition: [transition] frame=28688 t_us=2664 kind=surface stage=skipped target_id=0 w=- h=- resized=- reason=invisible
+2026-08-27T22:08:59.258662Z DEBUG wintf::transition: [transition] frame=28688 t_us=2820 kind=enqueue hwnd=0x1440BBE origin=DpiReproject scope=0 win_kind=char merged_into_seq=-
+2026-08-27T22:08:59.258867Z DEBUG wintf::transition: [transition] frame=28688 t_us=3022 kind=ground scope=0 ground_y=1795 wa_bottom=1795 diff=0 route=DpiReproject
+2026-08-27T22:08:59.259038Z DEBUG wintf::transition: [transition] frame=28688 t_us=3197 kind=enqueue hwnd=0x1250E8C origin=BalloonFollow scope=0 win_kind=balloon merged_into_seq=-
+2026-08-27T22:08:59.259352Z DEBUG wintf::transition: [transition] frame=28688 t_us=3513 kind=flush stage=begin count=2 since_tick_us=3513 total_us=-
+2026-08-27T22:08:59.260235Z DEBUG wintf::transition: [transition] frame=28688 t_us=4393 kind=msg msg=WM_WINDOWPOSCHANGED hwnd=0x1440BBE in_swp=true since_flush_us=885
+2026-08-27T22:08:59.260655Z DEBUG wintf::transition: [transition] frame=28688 t_us=4813 kind=msg msg=WM_WINDOWPOSCHANGED hwnd=0x1250E8C in_swp=true since_flush_us=1305
+2026-08-27T22:08:59.261093Z DEBUG wintf::transition: [transition] frame=28688 t_us=5245 kind=msg msg=WM_DPICHANGED hwnd=0x1250E8C in_swp=true since_flush_us=1737
+2026-08-27T22:08:59.261690Z DEBUG wintf::transition: [transition] frame=28688 t_us=5849 kind=msg msg=WM_WINDOWPOSCHANGED hwnd=0x1250E8C in_swp=true since_flush_us=2341
+2026-08-27T22:08:59.262120Z DEBUG wintf::transition: [transition] frame=28688 t_us=6268 kind=write stage=flush seq=0 hwnd=0x1440BBE origin=DpiReproject scope=0 win_kind=char x=-1600 y=421 cx=868 cy=1374 flags=0x14 ax=-1600 ay=421 aw=868 ah=1374 call_us=5 ok=true in_batch=true
+2026-08-27T22:08:59.262330Z DEBUG wintf::transition: [transition] frame=28688 t_us=6487 kind=write stage=flush seq=1 hwnd=0x1250E8C origin=BalloonFollow scope=0 win_kind=balloon x=-1566 y=195 cx=0 cy=0 flags=0x15 ax=-1566 ay=195 aw=800 ah=448 call_us=0 ok=true in_batch=true
+2026-08-27T22:08:59.262436Z DEBUG wintf::transition: [transition] frame=28688 t_us=6598 kind=flush stage=end count=2 since_tick_us=6598 total_us=3085
+2026-08-27T22:08:59.266721Z DEBUG wintf::transition: [transition] frame=28689 t_us=2775 kind=hold entity=21v0 scope=0 win_kind=balloon window_dpi=144 table_dpi=144 since_frame=28689 decision=proceed site=dpi
+2026-08-27T22:08:59.267238Z DEBUG wintf::transition: [transition] frame=28689 t_us=3291 kind=surface stage=skipped target_id=1 w=- h=- resized=- reason=invisible
