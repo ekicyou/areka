@@ -255,7 +255,7 @@
 4. **拡大率を placement 層へどう渡すか**（Requirement 9.5・zsp との相互確認）——⑴ `resize_window_to` の署名追加／⑵ frame 層で先に `BalloonFollow.offset` を書き換える／⑶ component で指示を渡す、の 3 案。`enqueue_window_set_pos` の署名は zsp が「触らないことを design の不変条件とする」としているため、**そこへは触れない形を選ぶこと**が前提。
 5. **`COMPAT_ARCHITECTURE.md:172` の扱い**（Requirement 6.6）——`windowposition-limit` 所有の行が `balloon.offsetx/offsety` の生値加算を前提に書かれている。自分の行で上書きを明示するか、所有者へ相互確認するか。
 6. **既存テストの反転範囲の確定**（Requirement 7.4・7.6）——§2.8 の (a)〜(d) 区分を設計時に `origin/main` に対して引き直し、⑴ 反転させる (a) の 2 本の**書き換え後の主張文**、⑵ 空振りの (b) 群を強い主張へ格上げするか、⑶ 表現を変える案でのみ意味が変わる (d) 末尾 2 本の扱い、を確定させる。
-7. **`\![move]` と `windowposition` の分母の非対称を、本仕様が揃えるのか温存するのか**——実行時はシェル軸、起動時はバルーン軸という現状（§2.2）を、Requirement 1.4 の「供給元ごとに一意」で追認するのか、揃えるのか。揃える場合は `\![move]`（他仕様の確定事項・`COMPAT:154`）に触れることになる。
+7. ~~**`\![move]` と `windowposition` の分母の非対称を、本仕様が揃えるのか温存するのか**~~——**要件ディスカッション議題 1 で裁定済み（2026-08-27）＝温存**。既存供給元の割り当て（`windowposition`＝バルーン軸・`\![move]`＝シェル軸）は変更せず、Requirement 1.4 の記録に含めるのみ。`\![move]`（`COMPAT:154`）には触れない（Out of scope へ登記）。設計フェーズに残るのは**新規供給元 `balloon.offsetx`／`offsety` の軸選択だけ**（§7 判断 2）。
 
 ---
 
