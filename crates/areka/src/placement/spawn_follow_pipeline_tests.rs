@@ -1,3 +1,4 @@
+use crate::placement::shared_test_support::MEASURE_DPI;
 use bevy_ecs::prelude::*;
 use wintf::ecs::drag::OnDrag;
 use wintf::ecs::pointer::Phase;
@@ -86,7 +87,7 @@ fn real_pipeline_world() -> (World, GhostWindows, Vec<ScopePlacement>) {
             balloon_size: SizePx { w: 227, h: 159 },
         },
     ];
-    let placements = resolve_placement(&cfg, work_area, &scopes);
+    let placements = resolve_placement(&cfg, work_area, &scopes, MEASURE_DPI);
 
     let mut world = World::new();
     let gw = spawn_ghost_windows(&mut world, &placements, &titles());

@@ -6,6 +6,7 @@ use super::resolve_test_support::{cfg_of, input, scope_cfg};
 use super::test_support::{DPIS, px, work_area};
 use super::*;
 use crate::placement::config::{Alignment, build_placement_config};
+use crate::placement::shared_test_support::MEASURE_DPI;
 
 // ------------------------------------------------------------------
 // anchor 伝搬（4.2・DD15 基盤・task 1.2）
@@ -34,7 +35,7 @@ fn anchor_propagates_five_values_from_resolved_alignment() {
         ];
         for (alignment, expected) in cases {
             let cfg = cfg_of(vec![(0, scope_cfg(alignment.clone(), Some(0), None))]);
-            let out = resolve_placement(&cfg, wa, &[input(0, w, h)]);
+            let out = resolve_placement(&cfg, wa, &[input(0, w, h)], MEASURE_DPI);
             assert_eq!(
                 out[0].anchor, expected,
                 "dpi={dpi} alignment={alignment:?}: anchor の伝搬"
@@ -64,6 +65,7 @@ fn anchor_mixed_scopes_and_missing_config_defaults_to_bottom() {
                 input(1, px(320, dpi), px(480, dpi)),
                 input(2, px(200, dpi), px(400, dpi)), // 未収載 → 既定 Bottom
             ],
+            MEASURE_DPI,
         );
         assert_eq!(
             out[0].anchor,
@@ -130,6 +132,7 @@ fn anchor_propagates_through_build_placement_config_cascade() {
                 input(1, px(320, dpi), px(480, dpi)),
                 input(2, px(200, dpi), px(400, dpi)),
             ],
+            MEASURE_DPI,
         );
         assert_eq!(out.len(), 3, "dpi={dpi}: 3 スコープ解決（空虚一致封じ）");
         assert_eq!(
@@ -174,7 +177,7 @@ fn postconditions_order_length_and_offset_identity() {
             (1, scope_cfg(Alignment::Bottom, Some(0), None)),
         ]);
 
-        let out = resolve_placement(&cfg, wa, &inputs);
+        let out = resolve_placement(&cfg, wa, &inputs, MEASURE_DPI);
 
         assert_eq!(out.len(), inputs.len(), "dpi={dpi}: 出力長＝入力長");
         for (o, i) in out.iter().zip(&inputs) {

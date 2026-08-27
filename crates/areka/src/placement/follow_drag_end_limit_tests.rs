@@ -1,3 +1,4 @@
+use crate::placement::follow::OffsetBase;
 use bevy_ecs::prelude::*;
 use windows::Win32::UI::WindowsAndMessaging::CW_USEDEFAULT;
 use wintf::ecs::pointer::Phase;
@@ -112,6 +113,7 @@ fn base_placement(balloon_limit: bool) -> ScopePlacement {
         balloon_pos: PointPx { x: 1601, y: 811 },
         balloon_size: balloon_size(),
         balloon_offset: PointPx { x: 300, y: 400 },
+        balloon_offset_base: OffsetBase::unpinned(PointPx { x: 300, y: 400 }),
         balloon_limit,
         anchor: Anchor::Bottom,
         balloon_keyword_base: None,

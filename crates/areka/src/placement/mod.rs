@@ -67,6 +67,7 @@ use areka_emo_present::balloon::{load_scope_balloon_model, resolve_balloon_faces
 use areka_parsers::balloon::{WindowPosition, WindowPositionRaw};
 use areka_parsers::package::MountError;
 use tracing::{error, info, warn};
+use wintf::ecs::DPI;
 use wintf::ecs::window::monitor::{Monitor, enumerate_monitors};
 
 use self::config::{BalloonXMode, PlacementConfig};
@@ -254,12 +255,19 @@ struct PreparedStages {
     sizes: MeasuredSizes,
     titles: GhostTitles,
     author_dpi: AuthorDpi,
+    /// 採寸に使った表示 DPI（[`build_measure_scaling`] が k₀ の分子へ採った値）。
+    ///
+    /// **起動時の主モニタ DPI**であって、窓がいま載っているモニタの DPI ではない
+    /// （areka-P0-balloon-offset-dpi design D15・意図された挙動）。非主モニタで生まれた
+    /// 窓は最初の `Changed<DPI>` で主モニタ空間から実モニタ空間へ引き直される。
+    measure_dpi: DPI,
 }
 
 impl PreparedStages {
     /// work area（物理 px）を与えて配置を確定する（純粋・resolver P1〜P5）。
     fn resolve(self, work_area: RectPx) -> PreparedPlacement {
-        let placements = resolver::resolve_placement(&self.cfg, work_area, &self.sizes.scopes);
+        let placements =
+            resolver::resolve_placement(&self.cfg, work_area, &self.sizes.scopes, self.measure_dpi);
         PreparedPlacement {
             placements,
             titles: self.titles,
@@ -283,7 +291,14 @@ impl PreparedStages {
 /// （例: author=192 → k₀=1/2）となる。いずれにせよ窓は生え、窓生成後に窓の実 DPI が
 /// `Changed<DPI>` → `refresh_scale`＋窓寸 reconcile（task 4.2）で k を自己補正する
 /// ——つまりこの縮退は**回復可能**であり、表示の喪失にはならない（要件 1.4/4.1）。
-fn build_measure_scaling(primary_dpi: Option<u32>, author_dpi: AuthorDpi) -> MeasureScaling {
+///
+/// # 戻り値の第 2 要素＝採寸 DPI（areka-P0-balloon-offset-dpi 要件 1.1／1.5／3.1）
+///
+/// k₀ の**分子へ実際に採った表示 DPI**（`primary_dpi` が `Some(d)` かつ `d > 0` なら `d`、
+/// それ以外は縮退値 [`FALLBACK_PRIMARY_DPI`]）をそのまま返す。内部で決めて捨てると、
+/// 追従オフセットの基準 DPI を作る側が同じ判断をもう一度書くことになり、片方だけ直した
+/// ときに採寸 k₀ と基準 DPI が静かに食い違う——**単一の決定点**をここに置く。
+fn build_measure_scaling(primary_dpi: Option<u32>, author_dpi: AuthorDpi) -> (MeasureScaling, u32) {
     let dpi = match primary_dpi {
         Some(dpi) if dpi > 0 => dpi,
         unobtainable => {
@@ -328,7 +343,8 @@ fn build_measure_scaling(primary_dpi: Option<u32>, author_dpi: AuthorDpi) -> Mea
         k_balloon_ratio = ?scaling.balloon,
         "placement: 起動時 k₀ を導出（primary モニタ DPI ÷ 作者基準 DPI・D7）"
     );
-    scaling
+    // 分子に採った表示 DPI を捨てずに返す（採寸 DPI の単一決定点・要件 1.1）。
+    (scaling, dpi)
 }
 
 /// 準備パイプラインの work area 非依存部を同期実行する:
@@ -360,7 +376,7 @@ fn prepare_stages(
     // k₀ 構築（D7）→ 採寸源へ供給（Flow 3 手順2〜3・要件 3.3）。窓寸の k 倍は
     // ここ（採寸の源）で吸収され、`spawn.rs` は k 倍済み `SizePx` を consume するのみ
     // ＝窓生成・窓移動の責務は不変（要件 3.4/7.6）。
-    let scaling = build_measure_scaling(primary_dpi, author_dpi);
+    let (scaling, measure_dpi) = build_measure_scaling(primary_dpi, author_dpi);
     let sizes = measure::measure_scope_sizes(&src.shell_dir, balloon_root, &scope_ids, &scaling)?;
     // 起動観測点（D10・要件 6.3）: 窓生成へ渡る**k₀ 倍後の物理寸**そのものを載せる。
     // 非 96 環境では k_shell/k_balloon が 1.0 以外になり、scopes の寸が原寸の k₀ 倍で
@@ -381,6 +397,9 @@ fn prepare_stages(
         sizes,
         titles: src.titles,
         author_dpi,
+        // 採寸 DPI（追従オフセットの基準 DPI・要件 3.1）。両軸に同じ表示 DPI を置く
+        // ——k₀ の分子は軸によらず 1 つだからである（軸差は分母＝作者基準 DPI にある）。
+        measure_dpi: DPI::from_dpi(measure_dpi as u16, measure_dpi as u16),
     })
 }
 

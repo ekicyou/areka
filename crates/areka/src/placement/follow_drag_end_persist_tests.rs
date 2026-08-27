@@ -1,3 +1,4 @@
+use crate::placement::follow::OffsetBase;
 use bevy_ecs::prelude::*;
 use wintf::ecs::pointer::Phase;
 use wintf::ecs::{Point, WindowPos};
@@ -396,6 +397,7 @@ fn round_trip_save_restore_value_equivalence_over_real_fs() {
         },
         balloon_size: SizePx { w: 200, h: 300 },
         balloon_offset: default_balloon_offset,
+        balloon_offset_base: OffsetBase::unpinned(default_balloon_offset),
         // windowposition-limit: 正典既定（有効）。本檻は limit の判定を対象にしない。
         balloon_limit: true,
         anchor: Anchor::Bottom,
@@ -651,6 +653,7 @@ fn dragged_char_persists_even_without_dragging_state_at_dragend() {
         balloon_pos: PointPx { x: 107, y: 107 },
         balloon_size: SizePx { w: 200, h: 300 },
         balloon_offset: PointPx { x: 7, y: 7 },
+        balloon_offset_base: OffsetBase::unpinned(PointPx { x: 7, y: 7 }),
         // windowposition-limit: 正典既定（有効）。本檻は limit の判定を対象にしない。
         balloon_limit: true,
         anchor: Anchor::Bottom,

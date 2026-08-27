@@ -1,3 +1,4 @@
+use crate::placement::follow::OffsetBase;
 use bevy_ecs::prelude::*;
 use wintf::ecs::pointer::Phase;
 use wintf::ecs::{Point, SizeI, WindowPos};
@@ -117,6 +118,7 @@ fn placement_measured_at(
         },
         balloon_size: bs,
         balloon_offset,
+        balloon_offset_base: OffsetBase::unpinned(balloon_offset),
         balloon_limit,
         anchor: Anchor::Bottom,
         balloon_keyword_base: keyword,

@@ -1,5 +1,6 @@
 use crate::emo2_boot::assets::{BalloonScopeAssets, BootAssets, LoopTables, ScopeAssets};
 use crate::placement::diag::WINDOW_MOVE_RECORD_TAG;
+use crate::placement::follow::OffsetBase;
 use crate::placement::follow::{MonitorDpiTable, MonitorSnapshot, MonitorSources};
 use crate::placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
 use crate::placement::source::GhostTitles;
@@ -174,6 +175,7 @@ fn resnap_placements() -> Vec<ScopePlacement> {
             balloon_pos: PointPx { x: 1071, y: 732 },
             balloon_size: SizePx { w: 223, h: 158 },
             balloon_offset: PointPx { x: -412, y: -25 },
+            balloon_offset_base: OffsetBase::unpinned(PointPx { x: -412, y: -25 }),
             // windowposition-limit: **無効**（task 3.3 の追随）。理由は下の注記を参照。
             balloon_limit: false,
             anchor: Anchor::Bottom,
@@ -186,6 +188,7 @@ fn resnap_placements() -> Vec<ScopePlacement> {
             balloon_pos: PointPx { x: 1334, y: 1068 },
             balloon_size: SizePx { w: 223, h: 158 },
             balloon_offset: PointPx { x: 285, y: -19 },
+            balloon_offset_base: OffsetBase::unpinned(PointPx { x: 285, y: -19 }),
             // windowposition-limit: **無効**（task 3.3 の追随）。理由は下の注記を参照。
             balloon_limit: false,
             anchor: Anchor::Bottom,

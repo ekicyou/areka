@@ -427,6 +427,10 @@ fn merge_scope(
         balloon_pos,
         balloon_size: placement.balloon_size,
         balloon_offset,
+        // 基準対は本タスク（areka-P0-balloon-offset-dpi task 2.1）では**素通し**する
+        // ——保存値採用腕を未係留（`dpi: None`）にするのは後続タスクの責務であり、
+        // ここで先取りすると採用腕の意味論が 2 か所に分かれる。
+        balloon_offset_base: placement.balloon_offset_base,
         // limit の解決値は merge の対象外（永続化しない・毎起動 descript から解決する）
         // ゆえ、入力の値をそのまま転記する（merge 規則は無改変）。
         balloon_limit: placement.balloon_limit,

@@ -1,5 +1,8 @@
 use std::fs;
 
+use wintf::ecs::DPI;
+
+use super::follow::OffsetBase;
 use super::resolver::{PointPx, SizePx};
 use super::shared_test_support::{
     TempDir, WA, balloon_root, emo2_root, synth_declared_dpi_ghost, with_com_initialized,
@@ -330,17 +333,17 @@ fn prepare_never_reads_or_writes_ghost_dat() {
 fn build_measure_scaling_derives_k0_from_primary_and_author_dpi() {
     let author = AuthorDpi::DEFAULT; // 96/96（emo2 fixture と同じ無宣言ケース）
 
-    let two = build_measure_scaling(Some(192), author);
+    let (two, _) = build_measure_scaling(Some(192), author);
     assert_eq!(two.shell, k(2, 1), "192/96 は既約 2/1");
     assert_eq!(two.balloon, k(2, 1));
 
-    let five_quarters = build_measure_scaling(Some(120), author);
+    let (five_quarters, _) = build_measure_scaling(Some(120), author);
     assert_eq!(five_quarters.shell, k(5, 4), "120/96 は既約 5/4（125%）");
 
-    let seven_sixths = build_measure_scaling(Some(112), author);
+    let (seven_sixths, _) = build_measure_scaling(Some(112), author);
     assert_eq!(seven_sixths.shell, k(7, 6), "112/96 は既約 7/6（非整数 k）");
 
-    let identity = build_measure_scaling(Some(96), author);
+    let (identity, _) = build_measure_scaling(Some(96), author);
     assert_eq!(
         identity.shell,
         ScaleRatio::ONE,
@@ -355,7 +358,7 @@ fn build_measure_scaling_derives_k0_from_primary_and_author_dpi() {
 /// コンパイルを通ってしまう静かな誤表示ゆえ、両軸に**異なる**宣言値を与えて檻に入れる。
 #[test]
 fn build_measure_scaling_uses_each_axis_own_author_dpi() {
-    let scaling = build_measure_scaling(
+    let (scaling, _) = build_measure_scaling(
         Some(192),
         AuthorDpi {
             shell: 96,
@@ -370,7 +373,7 @@ fn build_measure_scaling_uses_each_axis_own_author_dpi() {
     );
 
     // 入れ替え検出（同じ 2 値を逆に宣言すると k も逆になる）。
-    let swapped = build_measure_scaling(
+    let (swapped, _) = build_measure_scaling(
         Some(192),
         AuthorDpi {
             shell: 144,
@@ -395,7 +398,7 @@ fn build_measure_scaling_uses_each_axis_own_author_dpi() {
 #[test]
 fn build_measure_scaling_degrades_to_96_equivalent_when_primary_dpi_unobtainable() {
     for missing in [None, Some(0)] {
-        let default_author = build_measure_scaling(missing, AuthorDpi::DEFAULT);
+        let (default_author, _) = build_measure_scaling(missing, AuthorDpi::DEFAULT);
         assert_eq!(
             default_author.shell,
             ScaleRatio::ONE,
@@ -403,7 +406,7 @@ fn build_measure_scaling_degrades_to_96_equivalent_when_primary_dpi_unobtainable
         );
         assert_eq!(default_author.balloon, ScaleRatio::ONE);
 
-        let declared = build_measure_scaling(
+        let (declared, _) = build_measure_scaling(
             missing,
             AuthorDpi {
                 shell: 192,
@@ -624,5 +627,89 @@ fn prepare_emo2_carries_author_dpi_read_once_for_attach() {
             p.author_dpi, expected,
             "採寸 k₀ に使った宣言値がそのまま attach 側へ搬送される（読取は 1 度）"
         );
+    });
+}
+
+// ------------------------------------------------------------------
+// 採寸 DPI の単一決定点と基準対への搬送
+// （areka-P0-balloon-offset-dpi task 2.1・要件 1.1/1.5/3.1・design D15）
+// ------------------------------------------------------------------
+
+/// `build_measure_scaling` が返す**採寸 DPI**は、同じ呼出が k₀ の**分子**へ採った値と
+/// 常に一致する（単一の決定点・要件 1.1）。
+///
+/// 分子を内部で決めて捨て、呼び手が同じ判断（`primary_dpi` の有無と 0 の弾き）を
+/// もう一度書く形だと、片方だけ直したときに採寸 k₀ と基準 DPI が静かに食い違う。
+/// 食い違いは**表示 DPI が変わるまで観測されない**ゆえ、ここで構造として封じる。
+/// 縮退の腕（`None`／`Some(0)`＝[`FALLBACK_PRIMARY_DPI`]）も同じ規則で固定する（要件 1.5）。
+#[test]
+fn build_measure_scaling_returns_the_dpi_it_took_as_numerator() {
+    let declared = AuthorDpi {
+        shell: 192,
+        balloon: 48,
+    };
+    let cases = [
+        (Some(192), AuthorDpi::DEFAULT, 192),
+        (Some(120), AuthorDpi::DEFAULT, 120),
+        (Some(112), declared, 112),
+        (Some(96), AuthorDpi::DEFAULT, 96),
+        // 縮退の 2 腕（要件 1.5）: 恒等へ丸めず 96 相当を分子に採る。
+        (None, AuthorDpi::DEFAULT, FALLBACK_PRIMARY_DPI),
+        (Some(0), declared, FALLBACK_PRIMARY_DPI),
+    ];
+    for (primary_dpi, author, expected_dpi) in cases {
+        let (scaling, measure_dpi) = build_measure_scaling(primary_dpi, author);
+        assert_eq!(
+            measure_dpi, expected_dpi,
+            "採用した表示 DPI を返す（primary_dpi={primary_dpi:?}）"
+        );
+        assert_eq!(
+            scaling.shell,
+            k(measure_dpi, u32::from(author.shell)),
+            "shell 軸の k₀ の分子は返した採寸 DPI と同一（primary_dpi={primary_dpi:?}）"
+        );
+        assert_eq!(
+            scaling.balloon,
+            k(measure_dpi, u32::from(author.balloon)),
+            "balloon 軸の k₀ の分子も同一——軸が違っても分子は 1 つ（primary_dpi={primary_dpi:?}）"
+        );
+    }
+}
+
+/// 配置解決の出力が**基準対**を載せる: 値は配置式が出した既定のオフセットそのもの、
+/// 基準 DPI は採寸に使った表示 DPI（要件 3.1・design D15「配置式が出した既定は
+/// `Some(採寸 DPI)` を持つ」）。
+///
+/// 採寸 DPI は**起動時の主モニタ DPI**であって、窓がいま載っているモニタの DPI では
+/// ない（design D15・意図された挙動）。縮退の腕でも基準対は未係留にならず、96 相当が
+/// 刻まれることを併せて固定する（要件 1.5 の縮退が基準対の腕を変えないこと）。
+#[test]
+fn prepare_stamps_measure_dpi_onto_balloon_offset_base() {
+    with_com_initialized(|| {
+        for (primary_dpi, expected_dpi) in [
+            (Some(120), 120u32),
+            (Some(192), 192),
+            (None, FALLBACK_PRIMARY_DPI),
+        ] {
+            let prepared = prepare_ghost_windows_with_work_area(
+                &emo2_root(),
+                &balloon_root(),
+                WA,
+                primary_dpi,
+            )
+            .expect("準備は成功する");
+            assert_eq!(prepared.placements.len(), 2);
+            for p in &prepared.placements {
+                assert_eq!(
+                    p.balloon_offset_base,
+                    OffsetBase {
+                        offset: p.balloon_offset,
+                        dpi: Some(DPI::from_dpi(expected_dpi as u16, expected_dpi as u16)),
+                    },
+                    "scope {} の基準対＝(配置式の既定 offset, 採寸 DPI)（primary_dpi={primary_dpi:?}）",
+                    p.scope
+                );
+            }
+        }
     });
 }

@@ -18,6 +18,7 @@ use super::*;
 use crate::placement::config::{
     Alignment, BalloonSide, BalloonXMode, PlacementConfig, ScopeConfig,
 };
+use crate::placement::shared_test_support::MEASURE_DPI;
 
 /// 左上が原点でない work area（基本位置式の left/top 依存を暴く）。
 fn offset_work_area(dpi: i32) -> RectPx {
@@ -98,7 +99,7 @@ fn resolve_one(
 ) -> (ScopePlacement, SizePx, SizePx) {
     let (cs, bs) = sizes(dpi);
     let cfg = cfg_of(vec![(0, keyword_cfg(mode, side, balloon_offset, true))]);
-    let out = resolve_placement(&cfg, wa, &[input(0, cs, bs)]);
+    let out = resolve_placement(&cfg, wa, &[input(0, cs, bs)], MEASURE_DPI);
     assert_eq!(out.len(), 1, "dpi={dpi}: 出力長＝入力長（空虚一致封じ）");
     (out[0], cs, bs)
 }
@@ -363,7 +364,7 @@ fn t_k5_center_midpoint_is_integer_division_toward_zero() {
                 h: 160,
             };
             let cfg = cfg_of(vec![(0, keyword_cfg(mode, BalloonSide::Left, None, true))]);
-            let out = resolve_placement(&cfg, wa, &[input(0, cs, bs)]);
+            let out = resolve_placement(&cfg, wa, &[input(0, cs, bs)], MEASURE_DPI);
             assert_eq!(out.len(), 1, "空虚一致封じ");
 
             assert_eq!(
@@ -432,7 +433,7 @@ fn t_k6_default_mode_is_side_and_missing_scope_uses_it() {
         let wa = work_area(dpi);
         let (cs, bs) = sizes(dpi);
         // scopes マップが空 → scope0 は既定 ScopeConfig で解決される
-        let out = resolve_placement(&cfg_of(vec![]), wa, &[input(0, cs, bs)]);
+        let out = resolve_placement(&cfg_of(vec![]), wa, &[input(0, cs, bs)], MEASURE_DPI);
         assert_eq!(out.len(), 1, "dpi={dpi}: 空虚一致封じ");
 
         let cp = out[0].char_pos;
@@ -479,6 +480,7 @@ fn t_k7_balloon_limit_is_transcribed_from_scope_config() {
                 // scope2 は未収載 → ScopeConfig::default()＝正典既定 true
                 input(2, cs, bs),
             ],
+            MEASURE_DPI,
         );
 
         assert_eq!(out.len(), 3, "dpi={dpi}: 空虚一致封じ");
@@ -510,11 +512,13 @@ fn t_k7_balloon_limit_value_does_not_affect_geometry() {
                 &cfg_of(vec![(0, keyword_cfg(mode, BalloonSide::Left, None, true))]),
                 wa,
                 &[input(0, cs, bs)],
+                MEASURE_DPI,
             );
             let disabled = resolve_placement(
                 &cfg_of(vec![(0, keyword_cfg(mode, BalloonSide::Left, None, false))]),
                 wa,
                 &[input(0, cs, bs)],
+                MEASURE_DPI,
             );
             assert_eq!(enabled.len(), 1, "dpi={dpi}: 空虚一致封じ");
 

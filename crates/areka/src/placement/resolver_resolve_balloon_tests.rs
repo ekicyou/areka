@@ -6,6 +6,7 @@ use super::resolve_test_support::{cfg_of, input, offset_work_area};
 use super::test_support::{DPIS, px, work_area};
 use super::*;
 use crate::placement::config::{Alignment, BalloonSide, ScopeConfig};
+use crate::placement::shared_test_support::MEASURE_DPI;
 
 // ------------------------------------------------------------------
 // T-R8: バルーン暫定 offset（P5・4.4・DD7）
@@ -41,7 +42,7 @@ fn t_r8_balloon_left_places_left_of_char() {
             scope_cfg_balloon(Some(px(40, dpi)), BalloonSide::Left, None),
         )]);
 
-        let out = resolve_placement(&cfg, wa, &[inp]);
+        let out = resolve_placement(&cfg, wa, &[inp], MEASURE_DPI);
 
         let cp = out[0].char_pos;
         assert_eq!(
@@ -75,7 +76,7 @@ fn t_r8_balloon_right_places_right_of_char_without_clamp() {
             scope_cfg_balloon(Some(0), BalloonSide::Right, None),
         )]);
 
-        let out = resolve_placement(&cfg, wa, &[input(0, w, h)]);
+        let out = resolve_placement(&cfg, wa, &[input(0, w, h)], MEASURE_DPI);
 
         let cp = out[0].char_pos;
         assert_eq!(cp.x, wa.right - w, "dpi={dpi}: 前提＝右端密着");
@@ -109,7 +110,7 @@ fn t_r8_balloon_offsetx_offsety_added() {
             scope_cfg_balloon(Some(px(40, dpi)), BalloonSide::Left, Some((ox, oy))),
         )]);
 
-        let out = resolve_placement(&cfg, wa, &[inp]);
+        let out = resolve_placement(&cfg, wa, &[inp], MEASURE_DPI);
 
         let cp = out[0].char_pos;
         assert_eq!(
@@ -153,7 +154,7 @@ fn t_r8_resolver_does_not_clamp_balloon_outside_work_area() {
             scope_cfg_balloon(Some(px(40000, dpi)), BalloonSide::Left, None),
         )]);
 
-        let out = resolve_placement(&cfg, wa, &[inp]);
+        let out = resolve_placement(&cfg, wa, &[inp], MEASURE_DPI);
 
         assert_eq!(out[0].char_pos.x, wa.left, "dpi={dpi}: 前提＝左端クランプ");
         assert_eq!(

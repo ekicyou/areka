@@ -23,6 +23,8 @@ use super::super::config::{BalloonXMode, PlacementConfig, ScopeConfig};
 use super::super::resolver::{Anchor, ScopeInput, resolve_placement};
 use super::super::test_support::{ExpectField, LogEvent, capture_logs, expect_one};
 use super::*;
+use crate::placement::follow::OffsetBase;
+use crate::placement::shared_test_support::MEASURE_DPI;
 
 // ---------------------------------------------------------------------------
 // 檻の道具
@@ -69,6 +71,7 @@ fn placement(
         balloon_pos: point(char_pos.x + balloon_offset.x, char_pos.y + balloon_offset.y),
         balloon_size: BSZ,
         balloon_offset,
+        balloon_offset_base: OffsetBase::unpinned(balloon_offset),
         balloon_limit,
         anchor: Anchor::Free,
         balloon_keyword_base: None,
@@ -338,6 +341,7 @@ fn boot_gate_clamps_keyword_derived_initial_position() {
             char_size: SizePx { w: 400, h: 1000 },
             balloon_size: BSZ,
         }],
+        MEASURE_DPI,
     );
     let before = placements[0];
     assert_eq!(before.char_pos, point(1520, 80), "前提: P1/P2 の既定位置");
@@ -443,6 +447,7 @@ fn placement_sized(
         balloon_pos: point(char_pos.x + balloon_offset.x, char_pos.y + balloon_offset.y),
         balloon_size,
         balloon_offset,
+        balloon_offset_base: OffsetBase::unpinned(balloon_offset),
         balloon_limit,
         anchor: Anchor::Free,
         balloon_keyword_base: None,

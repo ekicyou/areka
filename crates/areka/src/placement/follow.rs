@@ -65,6 +65,11 @@ pub use self::drag_follow::BalloonFollow;
 pub(crate) use self::drag_follow::{
     on_balloon_drag, on_balloon_drag_end, on_char_drag, on_char_drag_end,
 };
+/// 単位空間契約の定義元が持つ基準対（areka-P0-balloon-offset-dpi・要件 1.1／3.1）。
+///
+/// 配置解決の出力（`resolver::ScopePlacement`）と復元 merge（`persist`）が運ぶため、
+/// 移設の波及をここで吸収するファサード再輸出に載せる（design「Modified Files」）。
+pub use self::offset_space::OffsetBase;
 pub use self::work_area::{
     MonitorSnapshot, WorkAreaResolution, work_area_for_window, work_area_for_window_with_origin,
 };

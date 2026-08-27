@@ -46,9 +46,13 @@
 //! また `World`・`Entity`・ログ機構のいずれにも触れない。縮退・飽和は**判定結果の値**として
 //! 返し、警告の発行は呼び手の責務である（要件 1.5／2.5／3.6／9.4 の記録は呼び手が出す）。
 
-// scaffold: 本モジュールは契約と純関数の定義元であり、消費者の結線は後続タスク
-// （供給層＝task 4.1・基準対の運搬＝task 2.x・追随相＝task 6.x）で入る。
-// areka は lib target を持たない bin crate ゆえ、それまでは非テストビルドで未使用に見える。
+// scaffold: 消費者の結線は段階的に入る。基準対 [`OffsetBase`] は配置解決の出力
+// （`resolver::ScopePlacement::balloon_offset_base`）が既に運んでいるが、変換規則
+// （[`rescale_follow_offset`]・[`scale_author_offset`] とその周辺 6 項目）は供給層
+// （task 4.1）と追随相（task 6.x）が結線するまで非テストビルドで未使用に見える
+// ——areka は lib target を持たない bin crate ゆえ `pub` でも dead_code 免除されない。
+// 実測（本 allow を外した非テストビルド）で残る未使用は 7 項目であり、項目ごとの許可を
+// 7 枚貼るより 1 枚に集約するほうが、以後の**真の** dead code を隠さない。
 #![allow(dead_code)]
 
 use areka_emo_compose::ScaleRatio;
@@ -65,6 +69,17 @@ pub struct OffsetBase {
     /// 基準値が属する表示 DPI。`None` は**未係留**＝
     /// 「最初に観測した表示 DPI の空間に属する」と読む（永続値の腕・要件 5.2）。
     pub dpi: Option<DPI>,
+}
+
+impl OffsetBase {
+    /// **未係留**の基準対を組む（表示 DPI が記録されていない値・要件 5.2）。
+    ///
+    /// 永続値の腕がこの形を採るほか、追従の基準を対象にしない檻が合成の
+    /// `ScopePlacement` を組むときの既定でもある——「どの表示 DPI に属するか分からない」
+    /// を正直に表す 1 ビットであり、最初の観測で値を変えずに係留される。
+    pub fn unpinned(offset: PointPx) -> Self {
+        Self { offset, dpi: None }
+    }
 }
 
 /// 換算の 1 軸ぶんの結果（飽和したかを呼び手へ伝える・要件 2.5）。

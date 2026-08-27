@@ -6,6 +6,7 @@ use super::resolve_test_support::{cfg_of, input, offset_work_area, scope_cfg};
 use super::test_support::{DPIS, px};
 use super::*;
 use crate::placement::config::Alignment;
+use crate::placement::shared_test_support::MEASURE_DPI;
 
 // ------------------------------------------------------------------
 // T-R4: free 配置（P3・2.6・DD10）
@@ -22,7 +23,7 @@ fn t_r4_free_applies_default_left_top_from_work_area_origin() {
         let (dx, dy) = (px(120, dpi), px(80, dpi));
         let cfg = cfg_of(vec![(0, scope_cfg(Alignment::Free, Some(dx), Some(dy)))]);
 
-        let out = resolve_placement(&cfg, wa, &[input(0, w, h)]);
+        let out = resolve_placement(&cfg, wa, &[input(0, w, h)], MEASURE_DPI);
 
         assert_eq!(
             out[0].char_pos,
@@ -45,7 +46,7 @@ fn t_r4_free_unspecified_y_falls_back_to_bottom() {
         let dx = px(120, dpi);
         let cfg = cfg_of(vec![(0, scope_cfg(Alignment::Free, Some(dx), None))]);
 
-        let out = resolve_placement(&cfg, wa, &[input(0, w, h)]);
+        let out = resolve_placement(&cfg, wa, &[input(0, w, h)], MEASURE_DPI);
 
         assert_eq!(
             out[0].char_pos,
@@ -68,7 +69,7 @@ fn t_r4_free_unspecified_x_falls_back_to_bottom_chain() {
         let dy = px(80, dpi);
         let cfg = cfg_of(vec![(0, scope_cfg(Alignment::Free, None, Some(dy)))]);
 
-        let out = resolve_placement(&cfg, wa, &[input(0, w, h)]);
+        let out = resolve_placement(&cfg, wa, &[input(0, w, h)], MEASURE_DPI);
 
         assert_eq!(
             out[0].char_pos,
@@ -102,8 +103,8 @@ fn t_r4_free_both_unspecified_equals_bottom() {
             (1, scope_cfg(Alignment::Bottom, None, None)),
         ]);
 
-        let out_free = resolve_placement(&free, wa, &inputs);
-        let out_bottom = resolve_placement(&bottom, wa, &inputs);
+        let out_free = resolve_placement(&free, wa, &inputs, MEASURE_DPI);
+        let out_bottom = resolve_placement(&bottom, wa, &inputs, MEASURE_DPI);
         assert_eq!(out_free.len(), 2, "dpi={dpi}: 空虚一致封じ");
         for (f, b) in out_free.iter().zip(&out_bottom) {
             assert_eq!(f.scope, b.scope, "dpi={dpi}");
@@ -143,7 +144,7 @@ fn t_r4_free_is_clamped_into_work_area() {
             scope_cfg(Alignment::Free, Some(huge), Some(huge)),
         )]);
 
-        let out = resolve_placement(&cfg, wa, &[input(0, w, h)]);
+        let out = resolve_placement(&cfg, wa, &[input(0, w, h)], MEASURE_DPI);
 
         assert_eq!(
             out[0].char_pos,
@@ -170,7 +171,7 @@ fn t_r4_free_position_feeds_scope_chain() {
             (1, scope_cfg(Alignment::Bottom, Some(0), None)),
         ]);
 
-        let out = resolve_placement(&cfg, wa, &[input(0, w0, h0), input(1, w1, h1)]);
+        let out = resolve_placement(&cfg, wa, &[input(0, w0, h0), input(1, w1, h1)], MEASURE_DPI);
 
         let x0 = wa.left + dx;
         assert_eq!(out[0].char_pos.x, x0, "dpi={dpi}");
