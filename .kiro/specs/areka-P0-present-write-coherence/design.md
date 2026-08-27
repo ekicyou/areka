@@ -41,11 +41,11 @@
 
 ### Out of Boundary
 
-- **製品コード・テストコード・`Cargo.toml` の一切の変更**。本仕様の差分集合は `.kiro/specs/areka-P0-present-write-coherence/` 配下に限る。
+- **製品コード・テストコード・`Cargo.toml` の一切の変更**。本仕様の差分集合（`origin/main...HEAD`）は **`.kiro/specs/areka-P0-present-write-coherence/` 配下＋`.kiro/steering/roadmap.md`（要件 8.4 の追随・要件段階で適用済み）** に限る。この 2 つが許可集合の唯一の定義であり、V2 がこれを機械で検査する。
 - atom（completed）が確定させた資産の改変——判定器（`crates/areka/src/placement/transition_judge*.rs`）・観測チャネルとレコード語彙（`crates/wintf/src/ecs/window/transition_diag.rs`）・上限・サインオフ手順書・確定台帳。
 - 可視化の段（`crates/areka-emo-present/src/presenter/show.rs`）・配置契約（`crates/areka-emo-present/src/presenter/mount.rs`）・窓書込 flush（`crates/wintf/src/ecs/window/command.rs`・`crates/wintf/src/runtime/tick_bridge.rs`）。**読むだけで変えない**。
 - 並走 3 仕様のファイル素（`placement/follow` 系・`zorder_pair*.rs`・`areka-parsers/balloon`＋`areka-emo-text`）。
-- **観測された残余で本仕様が引き取らないもの**: `crates/areka/src/placement/transition_signoff_procedure_tests.rs:3` と `crates/areka/src/placement/transition_judge_reobservation_tests.rs:13` の**doc コメント内**の spec パスが完了アーカイブ移動前のまま残っている（実行に影響しない。実パスを読む定数 `:41` は是正済み）。本仕様はコード非接触を証跡とするため**触らない**——これらのファイルを次に改変する仕様が併せて直すのが適切である。
+- **観測された残余で本仕様が引き取らないもの**: `crates/areka/src/placement/transition_signoff_procedure_tests.rs:3` と `crates/areka/src/placement/transition_judge_reobservation_tests.rs:13` の**doc コメント内**の spec パスが完了アーカイブ移動前のまま残っている（実行に影響しない。実パスを読む定数 `:41` は是正済み）。本仕様はコード非接触を証跡とするため**触らない**——引受先は**なし**（doc コメントのみで実行に影響しないため起票は不要。これらのファイルを改変する仕様が現れたとき併せて直せばよい）。
 
 ### Allowed Dependencies
 
@@ -117,7 +117,7 @@ sequenceDiagram
 
 ### Technology Stack
 
-変更なし。新規依存ゼロ。ビルド構成（`opt-level='z'` 等）非接触。本仕様の完了確認は `cargo test --workspace` のみで足りる（GPU・実窓・実 DPI・実機操作をいずれも要しない）。
+変更なし。新規依存ゼロ。ビルド構成（`opt-level='z'` 等）非接触。本仕様の完了確認は `cargo test --workspace` のみで足りる——**本仕様が新たに**要求する環境は無い（実機操作・新規採取は不要）。ただしゲート自体は GPU 実描画＋readback のテストを含み、**i686（host-32）成果物を先にビルドしておかないと赤になる**（V1 の前提条件として明記）。
 
 ## File Structure Plan
 
@@ -284,7 +284,7 @@ flowchart TD
 
 本仕様はエラー経路を新設しない。定めるのは残余検証が期待どおりに運ばなかったときの扱いのみである。
 
-- **ワークスペース全体テストが赤のとき**: 本仕様の差分は仕様文書のみであるから、赤は本仕様に由来し得ない。原因ファイルを名指しして本仕様の差分集合の外であることを示し、その上で完了可否を判断する（並走 3 仕様の着地や main の取り込みが原因になり得る）。**赤を「無関係だから」と黙って通さず、無関係であることを file 単位で示す。**
+- **ワークスペース全体テストが赤のとき**: まず前提条件（i686 host-32 成果物・GPU 環境）を確認し、次に原因ファイルを名指しして本仕様の差分集合（V2 の許可集合）の外であることを **file 単位で示す**。それができて初めて「本仕様に由来しない」と結論してよい（並走 3 仕様の着地や main の取り込みが原因になり得る）。**示せないまま「無関係だから」と黙って通してはならない。**
 - **アンカーがずれていたとき**: 要件 9.5 に従い本文書と `research.md` の記述を実測値へ更新する。ずれの内容が Revalidation Triggers の第 1・2 行に該当する場合は、却下理由 R1・R2 の根拠が失効するため、**完了させる前に開発者へ再着手の可否を確認する**。
 - **接触禁止集合に差分が出たとき**: 本仕様の裁定（是正コード 0 行）に反する。差分を取り消すか、裁定そのものを開発者へ差し戻す。**部分的な着手で埋めない。**
 - **未達を消す方向の変更**: 上限・判定器・観測語彙の変更は要件 8.3 違反である。本仕様の完了条件として明示的に禁じる。
@@ -299,8 +299,8 @@ flowchart TD
 
 | # | 検証 | 手順 | 判定 |
 |---|---|---|---|
-| V1 | ワークスペース全体テスト（要件 7.7） | `cargo test --workspace` | 全通過（`test result: ok`）。赤があれば Error Handling の第 1 項へ |
-| V2 | コード非接触の証跡（要件 6.1-6.7・8.3） | ブランチの変更ファイル一覧を取得し、`.kiro/specs/areka-P0-present-write-coherence/` と `.kiro/steering/roadmap.md` 以外が含まれないことを確認 | 接触禁止集合に 1 ファイルも現れない |
+| V1 | ワークスペース全体テスト（要件 7.7） | 前提＝i686（`i686-pc-windows-msvc`）の host-32 成果物をビルド済みにした上で `cargo test --workspace` を実行 | 全通過（`test result: ok`）。赤があれば Error Handling の第 1 項へ |
+| V2 | コード非接触の証跡（要件 6.1-6.7・8.3） | ⑴ `git diff --name-only origin/main...HEAD` の全行が許可集合（`.kiro/specs/areka-P0-present-write-coherence/` 配下＋`.kiro/steering/roadmap.md`）に含まれることを確認 ⑵ `git status --porcelain` で作業ツリーを別建てに検査——`vendors/pasta`（サブモジュールのポインタ・**本仕様着手前からの汚れ＝本仕様は触っていない**）以外の未コミット差分が無いこと、および `vendors/pasta` を本仕様のどのコミットにも**含めない**ことを確認 | ⑴ 許可集合外 0 件 ⑵ 想定外の作業ツリー差分 0 件・`vendors/pasta` は本仕様のコミット履歴に現れない |
 | V3 | 上流アンカーの実測再確認（要件 9.5） | `crates/areka-emo-present/src/presenter/show.rs` の `apply_show` 起点・`set_visible`・`set_bounds`・`Visualize` 発行の 4 点を現物で確認（2026-08-27 実測＝`:46`／`:375`／`:381`／`:392`・ドリフトなし） | 4 点が現存。ずれていれば記述を更新 |
 | V4 | 判定器・語彙・上限の非接触（要件 8.3・5.4） | `transition_judge*.rs`・`transition_diag.rs` に差分が無いことを確認（2026-08-27 実測アンカー＝飽和減算 `transition_judge.rs:817`・`Bounds::signoff` `transition_judge_verdict.rs:169`・`since_tick_start_us` `transition_diag.rs:692`） | 差分 0 |
 | V5 | steering 追随の確認（要件 8.4） | `.kiro/steering/roadmap.md` のゴール表 `:67`・W6.95 行 `:82`・干渉台帳 `:89` が見送り裁定を反映していることを確認 | 3 箇所とも反映済み（2026-08-27 追随済み） |
