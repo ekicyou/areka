@@ -61,11 +61,11 @@
 - `emo2_boot::frame::dpi::dpi_phase_with` の**内側**（相の順序と待ち札の関門に相乗りする）。
 - 共有テストハーネス `log-capture-kit`／`temp-path-kit`、`emo2_boot::frame_test_support::FrameHarness`。
 
-**依存の向き**（左から右へのみ許す）:
+**依存の向き**:
 
-`ScaleRatio` → `follow/offset_space.rs`（純関数・契約の定義元） → `placement`（resolver／persist／spawn／windowposition／follow） → `emo2_boot::frame`（適用相） → `transition_judge_offset`（判定・`#[cfg(test)]`）
+`ScaleRatio` → `follow/offset_space.rs`（純関数・契約の定義元） → `placement` の消費者（persist／spawn／follow） → `emo2_boot::frame`（適用相） → `transition_judge_offset`（判定・`#[cfg(test)]`）
 
-`follow/offset_space.rs` は `World` を持たない純粋モジュールであり、ECS への到達は frame 層と `follow` の消費者側に限る。
+ただし `offset_space` は型の再利用として `resolver::PointPx` と `windowposition::scale_signed` に依存し、`resolver` は `offset_space::OffsetBase` に依存する——**同一 crate 内の相互参照であり、一方向の層ではない**。「契約の定義元は `offset_space`・座標型の定義元は `resolver`・換算部品の定義元は `windowposition`」という役割分担として読む。`follow/offset_space.rs` は `World` を持たない純粋モジュールであり、ECS への到達は frame 層と `follow` の消費者側に限る。
 
 ### Revalidation Triggers
 
@@ -77,6 +77,7 @@
 - 拡大率遷移時の変換規則の変更（基準から引き直す方式からの離脱）。
 - `dpi_phase_with` の相順の変更、または追随ステップの挿入位置の変更。
 - 遷移中の窓書込の回数の予算（キャラ ≤1・バルーン ≤1・別経路 0）の変更。
+- `transition_diag` の種別語彙の追加——**発行側の語彙を増やしたら、共有パーサ `transition_judge.rs` の語彙表も同時に増やすこと**（片方だけ増やすと既存判定が `UnknownKind` で赤になる）。
 
 ---
 
@@ -90,7 +91,7 @@
 - **旧拡大率を覚えている場所がどこにも無い**。`DPI` component は現在値のみで、`monitor_systems.rs:534-536` が `*dpi = new_dpi` と上書きして旧値を捨てる。`refresh_scale_report` の戻り値 `None` は拡大率不変を意味しない（`frame/dpi.rs:329-332`）ため、**寸の変化を追随の発火条件にはできない**。
 - **`BalloonFollow.offset` への非テスト書込は 3 か所しかない**（`spawn.rs:482-485` の構築・`drag_follow.rs:534-537`・`keyword_base.rs:142-145`）。保存値の復元は `persist::merge_scope` が `ScopePlacement.balloon_offset` を差し替えたうえで `spawn.rs` の構築を通るため、4 番目の書込口ではなく**構築口の入力違い**である。
 - **`resize_window_to` の手順は確定している**——手順 5（位置＋寸を一度書き）／5b（接地点観測）／5a（キーワード再導出）／6（随伴バルーン追従）。追従オフセットの書換えは手順 6 より前でなければならない。
-- **1 ファイル 1,000 行の番人が例外表と完全一致を要求する**（`crates/log-capture-kit/tests/file_length_guard_test.rs`）。`follow/window_move.rs`（1,228 行）は既に例外表にあるが、**新たに 1,000 行を超えるファイルを作ると番人が赤になり、例外表の編集が必要になる**——要件 9.6 がそれを禁じている。本設計はこれを構造制約として扱う（D17）。
+- **1 ファイル 1,000 行の番人が例外表と完全一致を要求する**（`crates/log-capture-kit/tests/file_length_guard_test.rs`）。`follow/window_move.rs`（1,227 行）は既に例外表にあるが、**新たに 1,000 行を超えるファイルを作ると番人が赤になり、例外表の編集が必要になる**——要件 9.6 がそれを禁じている。本設計はこれを構造制約として扱う（D17）。
 
 ### Architecture Pattern & Boundary Map
 
@@ -167,11 +168,11 @@ graph TB
 | **D10** | 追随の記録の出し方（3.7・8.3） | `placement/transition_diag.rs` へ**種別 `offset` を 1 つ足す**（既定 OFF・語彙表 `PLACEMENT_KIND_ALL` へ追加）。常時の `info!` は足さない | 既存の語彙表が全数を保証し、実機ログの機械判定ランナーと既に接続済み。既定 OFF ゆえ定常 CPU 目標へ影響しない |
 | **D11** | 互換記録の行数（6.5・6.6） | **3 行**（単位空間契約／遷移時の変換規則／保存往復の意味論）。他仕様の行は 1 文字も書き換えない | 4 欄形式は項目ごとの表であり、根拠と出典が項目ごとに違う 3 点を 1 行へ畳むと出典が読めなくなる。なお `COMPAT:172`（`windowposition-limit` 所有）の主張「`balloon.offsetx`／`offsety` を基本位置へ加算する・数値指定時とまったく同じ扱い」は**本仕様の後もそのまま真である**——本仕様は加算をやめず、`windowposition` 数値と同じく拡大率を掛けてから加算するので「まったく同じ扱い」はむしろ強まる。同行の書換えも所有者への相互確認も要らない（本仕様の単位空間行が軸の割り当てを明示的に補う） |
 | **D12** | `\![move]` 経路の扱い（9） | **変更なし**。`BalloonFollow` の表に出る値の意味が変わらないため `move_window_with_route`（`window_move.rs:76-92`）は読み手として無改変。アクセサ化（D14）に伴う `.offset` → `.offset()` の呼び替えのみ | 表現据置きの利得。`follow_drag_tests.rs:48`／`follow_window_move_tests.rs:55` が固定する「再スケールなし」もそのまま生き残る |
-| **D13** | 既存の遷移テスト 2 本（7.4） | **主張を書き換える**（除外・新設ではない）。`frame_dpi_reproject_tests.rs:382` と `follow_visibility_balloon_wiring_tests.rs:850` を「拡大率遷移では表示 DPI 比で追随する／それ以外の寸法変化では不変」へ改める。**書込前に読んだ値と突合する構造と空振り防止の証人 3 つは必ず保つ** | 本プロジェクトの流儀（陳腐化テストは除外・壊れたら更新）。この 2 本は取りこぼしではなく現行契約の正確な写しであり、赤になるのが正しい＝要件 7.4 の「是正前は失敗する側」が既に書かれている。同テストが `:330-358` で自ら戒める「恒等式を、それを作った当人に問う」空振りの罠を、書き換え後も踏まない |
-| **D14** | 基準対の取りこぼし防止 | `BalloonFollow` を新モジュールへ移し、**`offset` を私有欄にして読取は `offset()` アクセサ、書込は `new()` と `reestablish()` の 2 本に閉じる** | 基準対の最大の危険は「書き手を 1 つでも取りこぼすと基準が古いまま残り、次の遷移で静かにずれる」こと。欄を私有にすると、定義モジュールの外にある既存の書込 2 か所（`drag_follow.rs:534`・`keyword_base.rs:144`）は**コンパイルエラーになる**——危険を型で潰す。構築側は欄が増えるだけで既に構造体リテラルがコンパイルエラーになる（`config.rs:276-278` と同じ防御） |
+| **D13** | 既存の遷移テストの扱い（7.4） | **`frame_dpi_reproject_tests.rs:382` は主張を書き換える**（除外・新設ではない）——「拡大率遷移では表示 DPI 比で追随する」へ改め、**書込前に読んだ値と突合する構造と空振り防止の証人 3 つは必ず保つ**。**`follow_visibility_balloon_wiring_tests.rs:850` は書き換えない**——同テストは DPI 遷移（`Changed<DPI>`）を一度も起こさない（`DPI::` の書き換えが無く、`for dpi in DPIS` で世界を組み直して `resize_window_to` を直接呼ぶだけ）ため、本設計の発火条件では是正後も緑のまま＝追随の証拠にならない。「寸法変化に対する不変」群へ区分を移し、テスト doc に「本テストは遷移を起こさない」旨を明記する。是正⑵の対のもう 1 本は新規（`frame_balloon_offset_follow_tests.rs` の行列）で組む | 本プロジェクトの流儀（陳腐化テストは除外・壊れたら更新）。前者は取りこぼしではなく現行契約の正確な写しであり、赤になるのが正しい＝要件 7.4 の「是正前は失敗する側」。後者を書き換えると「遷移を起こさないテストが遷移を主張する」空振り——同テストが `:330-358` で自ら戒める罠の別種——になる |
+| **D14** | 基準対の取りこぼし防止 | `BalloonFollow` を新モジュールへ移し、**`offset` を私有欄にして読取は `offset()` アクセサに閉じる。書込は確立が `new()`／`reestablish()` の 2 本・追随相専用が `anchor_base_dpi()`／`apply_rescaled()` の 2 本**（後者 2 本は基準を変えない） | 基準対の最大の危険は「書き手を 1 つでも取りこぼすと基準が古いまま残り、次の遷移で静かにずれる」こと。欄を私有にすると、定義モジュールの外にある既存の書込 2 か所（`drag_follow.rs:534`・`keyword_base.rs:144`）は**コンパイルエラーになる**——危険を型で潰す。構築側は欄が増えるだけで既に構造体リテラルがコンパイルエラーになる（`config.rs:276-278` と同じ防御） |
 | **D15** | 永続値の基準 DPI（5.2・5.4・1.1 の例外） | 基準 DPI を `Option<DPI>` とし、**`None`＝未係留**（「最初に観測した表示 DPI の空間に属する」と読む）を導入する。永続値を採用した腕だけが `None` を持ち、最初の観測で**値を変えずに**その時の DPI を係留する。配置式が出した既定は `Some(採寸 DPI)` を持つ | 要件 5.2（保存値を換算せずそのまま採用）と要件 3.1（遷移では追随する）は、この 1 ビットが無いと両立しない。保存値は**どの拡大率で書かれたかを記録していない**（要件 5.1）ため、基準 DPI を発明して係留すると、主モニタと違う DPI のモニタへ復元されたときに保存値を二重に拡大してしまう。未係留は「情報が無い」ことの正直な表現であり、要件 5.3 が求める「永続値は実行時契約に対する明示の例外である」の実装上の姿でもある。係留後は要件 5.4 のとおり通常の追随規則が効く |
-| **D16** | 収束の保証（3.1・3.4） | 追随でオフセットが実際に変わったのに、続く `reconcile_window_size`／`reproject_char_window_at_current_size` が **`false`（べき等 skip・寸不正・窓未生成・破棄済み）を返した**場合に限り、追随ステップが `follow_balloon` を 1 度だけ呼んでバルーンを収束させる | `resize_window_to` は位置と寸がともに同一なら手順 4 で早期 skip し（`window_move.rs:337-345`・**`return false`** を実測確認済み）、手順 6 の追従に到達しない。この腕を放置すると「オフセットは直ったのにバルーンは次に何かが動くまで古い位置に居る」という、本仕様が消しに来た欠陥そのものが残る。書込回数の予算は守られる——通常時はキャラ 1・バルーン 1（従来と同数）、skip 時はキャラ 0・バルーン 1 で**合計は増えない**。中間位置は提示されない（バルーンは 1 度で最終位置へ行く） |
-| **D17** | 分量規律（9.6） | **新規コードは新規ファイルへ置き、既存ファイルを 1,000 行超へ押し上げない**。追記の見込み: `transition_diag.rs` 617→約 680・`frame/dpi.rs` 482→約 495・`drag_follow.rs` 912→**減る**（`BalloonFollow` の移設ぶん）・`windowposition.rs` 436→約 460・`mod.rs` 694→約 715 | 行数の番人は「実測した超過ファイルの集合が例外表と**完全に一致**する」ことを要求する。1 ファイルでも新たに超えると番人が赤になり、例外表の編集が要る——要件 9.6 がそれを禁じている。判定モジュールを既存の `transition_judge.rs`（929 行）／`transition_judge_verdict.rs`（863 行）へ足さず新設するのも同じ理由 |
+| **D16** | 収束の保証（3.1・3.4） | 追随でオフセットが実際に変わったのに、続く `reconcile_window_size`／`reproject_char_window_at_current_size` が **`false`（べき等 skip・寸不正・窓未生成・破棄済み）を返した**場合に限り、追随ステップが `follow_balloon` を 1 度だけ呼んでバルーンを収束させる | `resize_window_to` は位置と寸がともに同一なら手順 4 で早期 skip し（`window_move.rs:337-345`・**`return false`** を実測確認済み）、手順 6 の追従に到達しない。この腕を放置すると「オフセットは直ったのにバルーンは次に何かが動くまで古い位置に居る」という、本仕様が消しに来た欠陥そのものが残る。書込回数の予算は守られる——通常時はキャラ 1・バルーン 1（従来と同数）、skip 時はキャラ 0・バルーン 1 で**合計は増えない**。要件 3.4 の「回数を増やさない」は、要件の Adjacent expectations が定める**予算形（キャラ ≤1・バルーン ≤1・別経路 0）**で読む——skip 腕のバルーン書込 0→1 は予算内であり、放置すればオフセットだけ直って窓が旧位置に残る（本仕様が消しに来た欠陥そのもの）。中間位置は提示されない（バルーンは 1 度で最終位置へ行く） |
+| **D17** | 分量規律（9.6） | **新規コードは新規ファイルへ置き、既存ファイルを 1,000 行超へ押し上げない**。追記の見込み: `transition_diag.rs` 617→約 680・`frame/dpi.rs` 482→約 495・`drag_follow.rs` 912→**減る**（`BalloonFollow` の移設ぶん）・`windowposition.rs` 435→約 460・`mod.rs` 694→約 715・`transition_judge.rs` 929→約 940 | 行数の番人は「実測した超過ファイルの集合が例外表と**完全に一致**する」ことを要求する。1 ファイルでも新たに超えると番人が赤になり、例外表の編集が要る——要件 9.6 がそれを禁じている。判定モジュールを既存の `transition_judge.rs`（929 行）／`transition_judge_verdict.rs`（863 行）へ足さず新設するのも同じ理由。ただし**共有パーサの語彙表への match アーム 1 本は例外**——語彙を教えないと既存判定が `UnknownKind` で赤になるため `transition_judge.rs` へ足す（929→約 940 行・上限に触れない） |
 
 ### Technology Stack
 
@@ -217,15 +218,16 @@ crates/areka/src/
 
 - `crates/areka/src/placement/follow/offset_space.rs`（新規・見込み 300〜380 行）— **本仕様の契約の定義元**。モジュール doc が単位空間契約の唯一の権威。`BalloonFollow`（`offset` 私有）・`OffsetBase`・`OffsetRescale`・`UnresolvedScale`・`rescale_follow_offset`・`scale_author_offset` を持つ。`World` に触れない。
 - `crates/areka/src/placement/follow.rs` — `mod offset_space;` の追加、`pub use self::offset_space::BalloonFollow;`（従来は `drag_follow` から）、私有再束縛の追加、新テストモジュールの宣言。**外部からの参照はすべてこのファサードを経由するため、移設の波及はここで吸収される。** あわせて、現在は私有再束縛にとどまる `follow_balloon`／`BalloonFollowTrigger`（`use self::drag_follow::{BalloonFollowTrigger, follow_balloon};`）を **`pub(crate) use` へ格上げ**する——frame 層の追随ステップが収束の保証（D16）で `follow_balloon` を呼ぶため。公開面は crate 内に留め、外部 API は増やさない。
-- `crates/areka/src/placement/follow/drag_follow.rs` — `BalloonFollow` の定義を移出（行数は減る）。`on_balloon_drag` の書込（`:534-537`）を `reestablish(new_offset, current_dpi)` へ。現在 DPI はキャラ窓の `DPI` component から読む。
+- `crates/areka/src/placement/follow/drag_follow.rs` — `BalloonFollow` の定義を移出（行数は減る）。`on_balloon_drag` の書込（`:534-537`）を `reestablish(new_offset, current_dpi)` へ。現在 DPI はキャラ窓の `DPI` component から読む——`on_balloon_drag` は `BalloonFollow` を `get_mut` で借りるため、**DPI を先に読んでから借りる**順序にする（同時借用を避ける）。
 - `crates/areka/src/placement/follow/keyword_base.rs` — `:143-145` の書込を `reestablish` へ。**発火条件（`old_size != new_size`）と「経路で絞らない」doc は 1 文字も変えない。**
 - `crates/areka/src/placement/follow/window_move.rs` — `:87-88`・`:372-373` ほかの `.offset` を `.offset()` へ呼び替え。**新しい行を足さない**（既に例外表の対象ファイルのため）。
 - `crates/areka/src/placement/windowposition.rs` — `:191-197` の「注意（単位空間の混在・意図的）」と `:214-215` の実装コメントを、確定契約（合流欄は物理 px・供給元ごとの換算軸の割り当て）の記述へ置換し、定義元 `follow/offset_space.rs` を指す。`scale_signed`・`to_screen_adjust`・`apply_windowposition` の署名と挙動は不変。
-- `crates/areka/src/placement/mod.rs` — `prepare_stages` に⑴ `apply_author_balloon_offset_scale(&mut cfg, &scope_ids, scaling.shell)` の呼出を `apply_scope_windowpositions` の直前へ追加、⑵ **採寸 DPI** を `resolve_placement` へ渡す配線を追加。採寸 DPI の定義は `build_measure_scaling` が実際に分母へ取った値——`primary_dpi` が `Some(d)` かつ `d > 0` なら `d`、それ以外は縮退値 `FALLBACK_PRIMARY_DPI`——であり、`DPI::from_dpi(d as u16, d as u16)` として運ぶ。**この値と `MeasureScaling` の分母が食い違ってはならない**ので、`build_measure_scaling` が採用した値をそのまま返す形（現在は内部で決めて捨てている）にして単一の決定点を保つ。
+- `crates/areka/src/placement/mod.rs` — `prepare_stages` に⑴ `apply_author_balloon_offset_scale(&mut cfg, &scope_ids, scaling.shell)` の呼出を `apply_scope_windowpositions` の直前へ追加、⑵ **採寸 DPI** を `resolve_placement` へ渡す配線を追加。採寸 DPI の定義は `build_measure_scaling` が拡大率の**分子**へ取った値（`ScaleRatio::new(dpi, author)`＝主モニタ DPI ÷ 作者基準 DPI・`mod.rs:302`）——`primary_dpi` が `Some(d)` かつ `d > 0` なら `d`、それ以外は縮退値 `FALLBACK_PRIMARY_DPI`——であり、`DPI::from_dpi(d as u16, d as u16)` として運ぶ。**採寸 DPI は起動時の主モニタ DPI であって、窓がいま載っているモニタの DPI ではない**——非主モニタで生まれた窓は最初の `Changed<DPI>` で主モニタ空間から実モニタ空間へ引き直される（それが望ましい挙動である）。**この値と `MeasureScaling` の分母が食い違ってはならない**ので、`build_measure_scaling` が採用した値をそのまま返す形（現在は内部で決めて捨てている）にして単一の決定点を保つ。
 - `crates/areka/src/placement/resolver.rs` — `ScopePlacement` へ `balloon_offset_base: OffsetBase` を追加し、`resolve_placement` の出力で `OffsetBase { offset: balloon_offset, dpi: Some(採寸 DPI) }` を代入する（採寸 DPI は新規引数として受ける）。**配置式 P1〜P5 は無改変。**
-- `crates/areka/src/placement/persist.rs` — `merge_scope` の保存値採用腕（`:393` の `(Some(x), Some(y))`）で `balloon_offset_base = OffsetBase { offset: 保存値, dpi: None }`（未係留）を置く。欠損腕は `placement.balloon_offset_base` をそのまま運ぶ。**保存 entries の構築・採否順位・「焼き付けない」規約は不変。**
+- `crates/areka/src/placement/persist.rs` — `merge_scope` の保存値採用腕（`:396` の `(Some(x), Some(y))`）で `balloon_offset_base = OffsetBase { offset: 保存値, dpi: None }`（未係留）を置く。欠損腕は `placement.balloon_offset_base` をそのまま運ぶ。**保存 entries の構築・採否順位・「焼き付けない」規約は不変。**
 - `crates/areka/src/placement/spawn.rs` — `:482-485` を `BalloonFollow::new(balloon_window, p.balloon_offset_base)` へ。欄が増えるため既存のリテラル構築は必ずコンパイルエラーになり、追随漏れが構造的に起きない。
 - `crates/areka/src/placement/transition_diag.rs` — `KIND_OFFSET`・判定語 6 つ・`OFFSET_FIELDS`・`OffsetRecord`・`offset_line`・`log_offset_rescale` を追加し、`PLACEMENT_KIND_ALL` へ `KIND_OFFSET` を足す。
+- `crates/areka/src/placement/transition_judge.rs` — **共有パーサの語彙表へ `KIND_OFFSET` を教える**: `required_fields` へ `KIND_OFFSET => Some(OFFSET_FIELDS)` の match アーム 1 本と定数参照を足す（929→約 940 行・上限 1,000 に触れない）。これを怠ると `kind=offset` 行が `RecordDefect::UnknownKind` になり、既存の機械判定（atom／pwc の資産）と `transition_judge_reobservation_tests.rs` の全行整形性検査が赤になる。**判定ロジックは足さない**（新設の `transition_judge_offset.rs` が持つ——語彙を教えることと判定を置くことは別問題）。埋め込み再観測ログは本仕様では再採取しないため更新不要（`kind=offset` は新規採取のログにのみ現れる）。
 - `crates/areka/src/placement/transition_judge_offset.rs`（新規・`#[cfg(test)]`・見込み 200〜260 行）— 追随レコードの切り出しと判定量の集計。**判定語は発行側の `pub const` を参照するだけでリテラルを書かない**（既存 `transition_judge.rs` の規律を踏襲）。
 - `crates/areka/src/emo2_boot/frame/balloon_offset_follow.rs`（新規・見込み 150〜200 行）— `rescale_balloon_follow_offset(world, char_window) -> OffsetFollowOutcome`。`BalloonFollow`・`DPI`・`BalloonKeywordBase` を読み、純関数へ委ね、結果を `reestablish`／基準の係留として書き、観測を出す。`follow_balloon` による収束（D16）もここが呼ぶ。
 - `crates/areka/src/emo2_boot/frame/dpi.rs` — `dpi_phase_with` 第 2 巡の `refresh_scale_report`（`:335`）の**直前**へ、`GhostWindowKind::Char` のときだけ追随ステップを呼ぶ 1 ブロックを挿入し、その戻り値を `Some`／`None` 両腕の `wrote` と突き合わせて D16 の収束を決める。**相順・待ち札の関門・`reconcile_window_size` の署名は不変。**
@@ -658,7 +660,7 @@ pub(super) fn converge_balloon_after_skipped_write(world: &mut World, char_windo
 | # | 是正 | 是正前に**失敗する**主張 | 置き場所 |
 |---|---|---|---|
 | ⑴ | `descript` オフセットへの拡大率適用（要件 2） | 拡大率 ≠ 1 で `balloon.offsetx` 宣言ありのとき、合流値が生値ではなくシェル軸で換算された値であること | `follow_offset_space_tests.rs`（純関数）＋ `balloon_offset_supply_tests.rs`（供給結線・`prepare_stages` の呼出順と合流値） |
-| ⑵ | 拡大率遷移での追随（要件 3） | 遷移の前後で `BalloonFollow` の offset が**表示 DPI 比で変わる**こと | **既存 2 本の書き換え**（`frame_dpi_reproject_tests.rs:382`・`follow_visibility_balloon_wiring_tests.rs:850`）＝現行はまさに逆（bit 同一）を主張しており、是正前は必ず落ちる |
+| ⑵ | 拡大率遷移での追随（要件 3） | 遷移の前後で `BalloonFollow` の offset が**表示 DPI 比で変わる**こと | **既存 1 本の書き換え**（`frame_dpi_reproject_tests.rs:382`＝現行はまさに逆（bit 同一）を主張しており、是正前は必ず落ちる）＋**新規 1 本**（`frame_balloon_offset_follow_tests.rs` の遷移×アンカー行列＝追随の実装が無ければ旧値のままで落ちるため、新規でも「是正前は失敗する側」が成立する） |
 | ⑶ | キーワード再導出との排他（要件 4.3） | 素材未消費のまま遷移を迎えたとき、揃えが二重に動かない（＝再導出のみが offset を書く）こと | `frame_balloon_offset_follow_tests.rs`（新規・現行は追随の実装が無いので「二重に動く」状態を作れない＝新規テストが是正前は組めない側なので、**先に⑵の追随を入れてから⑶の門を入れる**順序で対を成立させる） |
 | ⑷ | 復元値の未係留（要件 5.2／5.4） | 復元直後の offset が保存値と bit 同一であり、**かつ**その後の遷移では追随すること | `balloon_offset_persist_roundtrip_tests.rs`（新規・是正前は後半が落ちる） |
 
@@ -692,7 +694,7 @@ pub(super) fn converge_balloon_after_skipped_write(world: &mut World, char_windo
 ### 既存テストの書き換え（7.4・D13）
 
 - `emo2_boot/frame_dpi_reproject_tests.rs:382` — 主張を「拡大率遷移では表示 DPI 比で追随する」へ改める。書込前読みの構造と 3 つの証人は保つ。
-- `placement/follow_visibility_balloon_wiring_tests.rs:850` — 同上。
+- `placement/follow_visibility_balloon_wiring_tests.rs:850` — **書き換えない（D13）**。同テストは DPI 遷移を起こさないため恒等式は是正後も真のまま。「寸法変化に対する不変」群へ区分を移し、テスト doc へ「本テストは遷移を起こさない＝追随の証拠にならない」を明記する。
 - **恒等式のみを主張する 4 本**（`frame_dpi_reproject_tests.rs:273`／`frame_dpi_reproject_none_tests.rs:33`／`frame_transition_atomicity_tests.rs:285`／`frame_transition_branch_tests.rs:557`）は、追随が入っても緑のまま通る＝**追随の証拠にならない**。テスト doc にその旨を明記し、「全部緑だから壊していない」の根拠に使わせない。
 - **寸法変化に対する不変を主張する群**（`follow_resize_tests.rs:176/:261/:476`・`frame_work_area_resnap_tests.rs:156`）と**「再スケールなし」を固定する群**（`follow_drag_tests.rs:48`・`follow_window_move_tests.rs:55`）は**変更しない**——本仕様の発火条件が `Changed<DPI>` に限られるため両立する（7.6）。
 
