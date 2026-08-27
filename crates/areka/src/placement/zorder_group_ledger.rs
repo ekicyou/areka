@@ -26,6 +26,23 @@
 //! である。展開後の窓枚数で数えると `\![set,zorder,0]` が窓 2 枚として受理されてしまい、
 //! 要件 1.1 と食い違う。
 //!
+//! # 同一スコープの 2 窓は隣接ブロックへ寄せる
+//!
+//! 明示モードは窓 1 枚単位で並べられるので、同じスコープのキャラ窓をバルーン窓より
+//! 手前に置く指定（反転）も、2 窓の間に他スコープが挟まる指定（非隣接）も書ける。
+//! どちらも「バルーン窓はそのスコープのキャラ窓の直上」という既存の不変条件
+//! （要件 6.3）と衝突するため、areka は不変条件の側を優先し、**そのスコープの要素が
+//! 最初に現れた位置**へ `[Balloon, Char]` の隣接ブロックとして寄せる（要件 2.4）。
+//! 反転は「最初に現れたのがキャラ窓だった」場合、非隣接は「2 枚目までの間に他スコープが
+//! 挟まっていた」場合にすぎず、規則は 1 つで足りる（design「スコープブロック正規化」・
+//! research R6）。
+//!
+//! 採用しなかったことは呼び出し側が記録できるよう [`Normalization`] として返す
+//! （要件 8.3）。`reordered` の意味は**「そのスコープについて、作者が書いた順を
+//! そのままの形では採用しなかった」**である——バルーンの直後にキャラ窓と書かれて
+//! いたときだけ `false`、反転も非隣接も `true` になる。design は欄を宣言するのみで
+//! 述語を書いていないため、本モジュールでこう定める。
+//!
 //! # 語彙は小文字ちょうど・trim は冗長化
 //!
 //! `balloonN`／`surfaceN`／`bN`／`sN` は小文字ちょうどで一致させる
@@ -104,11 +121,18 @@ pub enum ZOrderReject {
 /// 明示モードの指定順が同一スコープ内でキャラ窓をバルーン窓より手前に置くことを
 /// 要求しても、「バルーンはキャラ窓の直上」という既存の不変条件を優先する。
 /// 採用しなかったことは呼び出し側が記録できるよう、値として返す（要件 8.3）。
+///
+/// 記録が出るのは**2 窓そろったスコープ**についてだけである。窓が 1 枚しか書かれて
+/// いないスコープは寄せる相手が居ない＝調停そのものが起きない。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Normalization {
     /// 調整の対象となったスコープ。
     pub scope: u32,
-    /// 指定順を実際に組み替えたか（`false`＝指定どおりで既に隣接ブロックだった）。
+    /// 作者が書いた順をそのままの形では採用しなかったか。
+    ///
+    /// `false` はバルーン窓の**直後**にキャラ窓と書かれていた場合ちょうど。
+    /// 反転（キャラ窓が先）も非隣接（間に他スコープ）も `true` になる
+    /// （モジュール doc「同一スコープの 2 窓は隣接ブロックへ寄せる」）。
     pub reordered: bool,
 }
 
@@ -184,17 +208,18 @@ fn window_element(digits: &str, kind: GroupWindowKind) -> Option<ParsedElement> 
 /// # 判定の順序
 ///
 /// ⑴解釈できないトークン（8.1）→ ⑵モード混在（2.3）→ ⑶要素 2 個未満（1.6）→
-/// ⑷展開 → ⑸同一窓の重複（3.4／3.5）。
+/// ⑷展開 → ⑸同一窓の重複（3.4／3.5）→ ⑹スコープブロック正規化（2.4）。
 /// トークンを 1 つずつ読む段で落ちれば要素列そのものが組めないので、解釈不能が
 /// 他のどの拒否よりも先に立つ。混在した指定も要素列を組めないため、重複を数える
 /// 前に落とす。どの順で落ちても「変更を一切行わない」ことは変わらない。
+/// 正規化は受理が確定した後にだけ走る——拒否する指定を整えても意味が無いからである。
 ///
 /// # 第 2 戻り値
 ///
-/// [`Normalization`] は要件 2.4 の調整記録である。現時点の本関数はトークンの解釈と
-/// 拒否判定までを担い、同一スコープの 2 窓を `[Balloon, Char]` の隣接ブロックへ寄せる
-/// 規則（反転・非隣接の一元処理）は⑸の後段に入る。数値モードは⑷の展開の時点で必ず
-/// 隣接ブロックになるので、数値モードの受理では調整記録は常に空である。
+/// [`Normalization`] は要件 2.4 の調整記録である（モジュール doc「同一スコープの
+/// 2 窓は隣接ブロックへ寄せる」）。数値モードは⑷の展開の時点で必ず隣接ブロックに
+/// なるうえ、その並びは作者が書いた指定順ではなくエンジンが組んだものなので、
+/// 数値モードの受理では調整記録は常に空である。
 pub fn parse_zorder_tokens(
     tokens: &[&str],
 ) -> Result<(Vec<GroupElement>, Vec<Normalization>), ZOrderReject> {
@@ -257,10 +282,75 @@ pub fn parse_zorder_tokens(
         }
     }
 
-    // 要件 2.4 のスコープブロック正規化はこの位置に入る（doc「第 2 戻り値」）。
-    let normalizations = Vec::new();
+    // ⑹ スコープブロック正規化（要件 2.4・research R6 の一元処理）。
+    //    ⑵で混在を落としているので、ここへ来るグループは数値モードか明示モードの
+    //    どちらか一方ちょうどである。数値モードは⑷の展開が必ず `[Balloon, Char]` の
+    //    隣接ブロックを作り、かつその並びは作者の指定順ではないので、寄せるものも
+    //    記録するものも無い（要件 2.4 は「明示モードの指定順が」と明示モードを名指しする）。
+    if has_numeric {
+        return Ok((elements, Vec::new()));
+    }
 
-    Ok((elements, normalizations))
+    Ok(normalize_scope_blocks(elements))
+}
+
+/// 同一スコープの 2 窓を `[Balloon, Char]` の隣接ブロックへ寄せる（明示モード専用）。
+///
+/// 寄せ先は**そのスコープの要素が最初に現れた位置**である。反転（`s1,b1`）も
+/// 非隣接（`b1,s0,s1,b0`）もこの 1 つの規則で片付く（モジュール doc「同一スコープの
+/// 2 窓は隣接ブロックへ寄せる」）。
+///
+/// 2 窓そろっていないスコープの要素は書かれた位置のまま残す。動かすのは 1 スコープの
+/// 2 窓だけなので、他スコープの要素どうしの相対順は入力のまま保たれる——要件 2.5 の
+/// 「グループに属さない窓を動かさない」と同じ発想を、グループの内側にも効かせる。
+///
+/// 呼び出し前提は⑸の重複検査を通っていること。各スコープの各窓が高々 1 回しか
+/// 現れないため、位置は探索で一意に定まる。
+fn normalize_scope_blocks(elements: Vec<GroupElement>) -> (Vec<GroupElement>, Vec<Normalization>) {
+    let position_of = |target: GroupElement| elements.iter().position(|other| *other == target);
+
+    let mut normalized = Vec::with_capacity(elements.len());
+    let mut normalizations = Vec::new();
+
+    for (index, element) in elements.iter().enumerate() {
+        let scope = element.scope;
+        let (Some(balloon_at), Some(char_at)) = (
+            position_of(GroupElement {
+                scope,
+                kind: GroupWindowKind::Balloon,
+            }),
+            position_of(GroupElement {
+                scope,
+                kind: GroupWindowKind::Char,
+            }),
+        ) else {
+            // 2 窓そろっていないスコープ＝寄せる相手が居ない。位置も記録も動かさない。
+            normalized.push(*element);
+            continue;
+        };
+
+        if index != balloon_at.min(char_at) {
+            // 同じスコープの 2 枚目。ブロックは 1 枚目の位置で既に組み終えている。
+            continue;
+        }
+
+        normalized.push(GroupElement {
+            scope,
+            kind: GroupWindowKind::Balloon,
+        });
+        normalized.push(GroupElement {
+            scope,
+            kind: GroupWindowKind::Char,
+        });
+        normalizations.push(Normalization {
+            scope,
+            // 書かれたとおりに採用できたのは「バルーンの直後にキャラ窓」のときだけ。
+            // 反転（`char_at < balloon_at`）も非隣接（間に他スコープ）もここを通らない。
+            reordered: char_at != balloon_at + 1,
+        });
+    }
+
+    (normalized, normalizations)
 }
 
 #[cfg(test)]

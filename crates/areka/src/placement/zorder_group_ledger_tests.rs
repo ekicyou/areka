@@ -1,14 +1,30 @@
-//! `parse_zorder_tokens` の決定論檻——受理 3 形と拒否 4 分岐（要件 1.6／2.1〜2.3／
-//! 3.4／3.5／8.1・design「Testing Strategy / Unit」1）。
+//! `parse_zorder_tokens` の決定論檻——受理 3 形・拒否 4 分岐・スコープブロック正規化
+//! （要件 1.6／2.1〜2.4／3.4／3.5／6.3／8.1・design「Testing Strategy / Unit」1 と 2・
+//! design「File Structure Plan」の本ファイル欄「9 分岐＋正規化＋actor 非依存の決定論テスト」）。
 //!
 //! 実機・実ディスプレイ・World を一切必要としない純関数の檻である（要件 10.1）。
 //! 可変の共有状態を持たないため、単独実行と一括実行で結果が変わらない（要件 10.3）。
+//!
+//! # 檻の並び
+//!
+//! - 受理 3 形と拒否 4 分岐＋拒否どうしの優先順・入力の前処理（`t_zgp1`〜`t_zgp14`）
+//! - スコープブロック正規化（`t_zgp15`〜`t_zgp22`）——同一スコープの 2 窓を
+//!   `[Balloon, Char]` の隣接ブロックへ寄せる調停（要件 2.4）と、それが既存の不変条件
+//!   「バルーン窓はキャラ窓の直上」（要件 6.3）を破らないことを押さえる。
 //!
 //! # 拒否の檻が示すこと
 //!
 //! 拒否分岐の檻はすべて [`expect_reject`] を通す。この道具は `Ok` を受け取ったら
 //! 要素列を添えて落ちるので、「拒否時に要素列を一切返さない」（要件 8.1 の部分適用
 //! 禁止）が檻の構造そのもので示される。
+//!
+//! # 正規化の檻が示すこと
+//!
+//! 正規化の檻はすべて [`assert_paired_scopes_form_balloon_first_blocks`] を通す。
+//! 2 窓そろったどのスコープについても `char_at == balloon_at + 1` を全数で見るので、
+//! 「隣接している」と「バルーンが手前」を 1 本の式で同時に押さえる（要件 2.4／6.3）。
+//! 加えて、正規化が**動かしてはならないもの**——2 窓そろっていないスコープの要素の
+//! 位置と、他スコープどうしの相対順——を `t_zgp20` と `t_zgp22` の 2 方向から挟む。
 
 use super::*;
 
@@ -305,4 +321,259 @@ fn t_zgp14_no_upper_bound_on_element_count() {
     assert_eq!(elements.len(), 128, "64 スコープ × 窓 2 枚");
     assert_eq!(elements[0], b(0));
     assert_eq!(elements[127], s(63));
+}
+
+// ---------------------------------------------------------------------------
+// スコープブロック正規化（要件 2.4・research R6）
+// ---------------------------------------------------------------------------
+
+/// 正規化後の要素列で、2 窓そろったスコープがどれも「バルーンが先の隣接ブロック」に
+/// なっていることを確かめる（要件 2.4／6.3・task 1.2 の完了状態）。
+///
+/// `si == bi + 1` の 1 本で「隣接している」と「バルーンが先である」の両方を見る。
+fn assert_paired_scopes_form_balloon_first_blocks(elements: &[GroupElement]) {
+    for element in elements {
+        let scope = element.scope;
+        let (Some(balloon_at), Some(char_at)) = (
+            elements.iter().position(|other| *other == b(scope)),
+            elements.iter().position(|other| *other == s(scope)),
+        ) else {
+            // 2 窓そろっていないスコープは寄せる相手が居ない＝不変条件の対象外。
+            continue;
+        };
+
+        assert_eq!(
+            char_at,
+            balloon_at + 1,
+            "スコープ {scope} の 2 窓がバルーン先頭の隣接ブロックになっていない: {elements:?}"
+        );
+    }
+}
+
+/// 反転指定: 同一スコープのキャラ窓がバルーン窓より手前に並ぶ指定は、既存の不変条件
+/// （バルーンはキャラ窓の直上）を優先して `[Balloon, Char]` へ寄せる（要件 2.4）。
+/// 寄せ先はそのスコープの要素が最初に現れた位置である。
+#[test]
+fn t_zgp15_inverted_scope_pair_is_folded_into_balloon_then_char() {
+    let (elements, normalizations) = expect_accept(&["s1", "b1"]);
+
+    assert_eq!(
+        elements,
+        vec![b(1), s(1)],
+        "キャラ窓を手前に置く要求は採用しない"
+    );
+    assert_eq!(
+        normalizations,
+        vec![Normalization {
+            scope: 1,
+            reordered: true
+        }],
+        "指定順を採用しなかったことが記録される"
+    );
+    assert_paired_scopes_form_balloon_first_blocks(&elements);
+
+    // 寄せ先は「最初に現れた要素の位置」であって「バルーン窓が書かれた位置」ではない。
+    // 反転していると両者は食い違うので、間に他スコープを挟んで違いを見えるようにする。
+    let (with_neighbour, _) = expect_accept(&["s1", "b2", "b1"]);
+    assert_eq!(
+        with_neighbour,
+        vec![b(1), s(1), b(2)],
+        "スコープ 1 のブロックは s1 が書かれた先頭位置に立ち、b2 はその後ろに残る"
+    );
+}
+
+/// 非隣接指定: 同一スコープの 2 窓の間に他スコープが挟まる指定も、反転と同じ規則で
+/// 「先に現れた位置の隣接ブロック」へ寄せる（要件 2.4・research R6 の一元処理）。
+#[test]
+fn t_zgp16_non_adjacent_scope_pair_is_folded_at_first_appearance() {
+    let (elements, normalizations) = expect_accept(&["b1", "s0", "s1", "b0"]);
+
+    assert_eq!(
+        elements,
+        vec![b(1), s(1), b(0), s(0)],
+        "スコープ 1 は位置 0 へ、スコープ 0 は位置 1（=s0 が書かれた位置）へ寄る"
+    );
+    assert_eq!(
+        normalizations,
+        vec![
+            Normalization {
+                scope: 1,
+                reordered: true
+            },
+            Normalization {
+                scope: 0,
+                reordered: true
+            }
+        ],
+        "記録はスコープが最初に現れた順に並ぶ"
+    );
+    assert_paired_scopes_form_balloon_first_blocks(&elements);
+}
+
+/// 指定どおりで既に `[Balloon, Char]` の隣接ブロックだったスコープは組み替えない。
+/// 調停の対象であったことは記録に残し、`reordered: false` で「指定どおり採用した」
+/// ことを区別する（要件 2.4 の記録は「採用しなかった旨」を読み取れる形で返す）。
+#[test]
+fn t_zgp17_already_adjacent_block_is_recorded_as_not_reordered() {
+    let (elements, normalizations) =
+        expect_accept(&["balloon1", "surface1", "balloon0", "surface0"]);
+
+    assert_eq!(elements, vec![b(1), s(1), b(0), s(0)], "要素列は指定のまま");
+    assert_eq!(
+        normalizations,
+        vec![
+            Normalization {
+                scope: 1,
+                reordered: false
+            },
+            Normalization {
+                scope: 0,
+                reordered: false
+            }
+        ]
+    );
+    assert_paired_scopes_form_balloon_first_blocks(&elements);
+}
+
+/// 数値モードでは正規化が何もしない。展開（⑷）が必ず `[Balloon, Char]` の隣接
+/// ブロックを作るうえ、その並びは作者が書いた指定順ではないので、寄せるものも
+/// 記録するものも無い（要件 2.4 は「明示モードの指定順が」と明示モードを名指しする）。
+#[test]
+fn t_zgp18_numeric_mode_normalization_is_a_no_op() {
+    for tokens in [["1", "0"].as_slice(), ["2", "0", "1"].as_slice()] {
+        let (elements, normalizations) = expect_accept(tokens);
+
+        assert!(
+            normalizations.is_empty(),
+            "tokens={tokens:?} normalizations={normalizations:?}"
+        );
+        assert_paired_scopes_form_balloon_first_blocks(&elements);
+    }
+
+    let (elements, _) = expect_accept(&["2", "0", "1"]);
+    assert_eq!(
+        elements,
+        vec![b(2), s(2), b(0), s(0), b(1), s(1)],
+        "展開順は指定順のまま＝正規化は要素列にも触れない"
+    );
+}
+
+/// 2 窓そろっていないスコープは書かれた位置のまま残し、記録も出さない。
+/// 寄せる相手が居ないので調停そのものが起きないからである。
+#[test]
+fn t_zgp19_single_window_scope_is_left_in_place_without_record() {
+    let (untouched, none) = expect_accept(&["b1", "s0"]);
+    assert_eq!(untouched, vec![b(1), s(0)], "どちらのスコープも 1 枚だけ");
+    assert!(none.is_empty(), "調停が起きないので記録も出ない: {none:?}");
+
+    // 2 窓そろったスコープと 1 枚だけのスコープが同居する場合。
+    let (mixed, normalizations) = expect_accept(&["b1", "s0", "s1"]);
+    assert_eq!(
+        mixed,
+        vec![b(1), s(1), s(0)],
+        "スコープ 1 だけが寄り、s0 は書かれた位置のまま後ろに残る"
+    );
+    assert_eq!(
+        normalizations,
+        vec![Normalization {
+            scope: 1,
+            reordered: true
+        }],
+        "記録は 2 窓そろったスコープの分だけ"
+    );
+    assert_paired_scopes_form_balloon_first_blocks(&mixed);
+}
+
+/// 正規化が動かすのは 1 スコープの 2 窓だけであり、他スコープの要素どうしの
+/// 相対順は入力のまま保たれる（要件 2.5 の「属さない窓を動かさない」をグループの
+/// 内側にも効かせる）。
+#[test]
+fn t_zgp20_other_scopes_keep_their_relative_order() {
+    let (elements, normalizations) = expect_accept(&["b0", "b2", "s3", "s0"]);
+
+    assert_eq!(
+        elements,
+        vec![b(0), s(0), b(2), s(3)],
+        "b2 と s3 は 1 枚だけのスコープ＝互いの前後関係も書かれた順のまま"
+    );
+    assert_eq!(
+        normalizations,
+        vec![Normalization {
+            scope: 0,
+            reordered: true
+        }]
+    );
+    assert_paired_scopes_form_balloon_first_blocks(&elements);
+}
+
+/// 完了状態の総取り: 反転・非隣接・両者の混在・数値モードのいずれを与えても、
+/// 正規化後の要素列では 2 窓そろったどのスコープもバルーンが先の隣接ブロックになる。
+#[test]
+fn t_zgp21_every_paired_scope_is_adjacent_with_balloon_first_after_normalization() {
+    for (tokens, expected_len) in [
+        (["s1", "b1"].as_slice(), 2),
+        (["b1", "s0", "s1", "b0"].as_slice(), 4),
+        (["s0", "b2", "b0", "s2"].as_slice(), 4),
+        (["b1", "s2", "s1", "b3", "s3", "b2"].as_slice(), 6),
+        (["surface0", "b1", "balloon0", "s1"].as_slice(), 4),
+        (["3", "1", "2"].as_slice(), 6),
+    ] {
+        let (elements, _) = expect_accept(tokens);
+
+        assert_paired_scopes_form_balloon_first_blocks(&elements);
+        assert_eq!(
+            elements.len(),
+            expected_len,
+            "正規化は窓を増やしも減らしもしない: tokens={tokens:?} elements={elements:?}"
+        );
+
+        let unique: std::collections::HashSet<GroupElement> = elements.iter().copied().collect();
+        assert_eq!(
+            unique.len(),
+            elements.len(),
+            "正規化は窓を複製しない: tokens={tokens:?} elements={elements:?}"
+        );
+    }
+}
+
+/// 2 窓そろっていないスコープの要素は、**ペアブロックより前に書かれていても前のまま**
+/// 残る。正規化が動かすのは 1 スコープの 2 窓だけだからである（要件 2.4 の調停は
+/// スコープ内に閉じ、要件 2.5 の「属さない窓を動かさない」を破らない）。
+///
+/// [`t_zgp20_other_scopes_keep_their_relative_order`] の入力はどれも 1 枚だけの要素が
+/// 最初のペアブロックより**後ろ**にあり、「1 枚だけの要素をまとめて末尾へ回す」実装と
+/// 区別が付かなかった。ここでは 1 枚だけの要素を先頭に置いて、その差を赤にする。
+/// 差は「どちらの窓が手前か」そのものであり、本機能が存在する理由に直結する。
+#[test]
+fn t_zgp22_single_window_scope_written_before_a_block_stays_before_it() {
+    // s3 はペアを組むスコープ 0 のどの要素よりも前に書かれている。
+    let (elements, normalizations) = expect_accept(&["s3", "b0", "b2", "s0"]);
+
+    assert_eq!(
+        elements,
+        vec![s(3), b(0), s(0), b(2)],
+        "s3 は先頭のまま・スコープ 0 のブロックは b0 が書かれた位置に立ち・b2 はその後ろ"
+    );
+    assert_eq!(
+        normalizations,
+        vec![Normalization {
+            scope: 0,
+            reordered: true
+        }],
+        "スコープ 0 は非隣接（間に b2）だったので指定順を採用していない"
+    );
+    assert_paired_scopes_form_balloon_first_blocks(&elements);
+
+    // 最小形: ペアが既に隣接ブロックでも、前に書かれた 1 枚は前のまま。
+    let (minimal, minimal_records) = expect_accept(&["s3", "b0", "s0"]);
+    assert_eq!(minimal, vec![s(3), b(0), s(0)]);
+    assert_eq!(
+        minimal_records,
+        vec![Normalization {
+            scope: 0,
+            reordered: false
+        }],
+        "指定どおりに採用できた場合も調停の対象であったことは記録に残る"
+    );
+    assert_paired_scopes_form_balloon_first_blocks(&minimal);
 }
