@@ -1,6 +1,6 @@
 ---
 inclusion: always
-updated_at: 2026-07-02
+updated_at: 2026-08-27
 ---
 
 # Project Structure
@@ -292,6 +292,25 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 **Dependencies**: **std・thiserror・tracing・toml・areka-actor のみ**（上流 areka クレートへの依存は**禁止**＝最下層規律。「消費者は backing を知らない」はこの依存方向から自動帰結）
 **Consumers**: `areka-ghost`（結線・静的構成 publish・provider `SystemVarWiring::FromSylphya`）／`crates/areka` bin（`ShioriHostSink` 委譲）。`areka-kanade` は **sylphya へ依存しない**（`ResourceSink` クロージャで疎結合）
 
+### Actor Convention Crate（areka-actor）
+**Location**: `/crates/areka-actor/`
+**Purpose**: エンジン非依存のアクター規約と薄いヘルパ群（**規約正本**）。並行モデル「機構=areka-actor／経路=kanade／結線=ghost」の**機構**。全エンジン（kanade/sakura/seriko/emo 等）が共有するアクター通信の原語を提供し、特定エンジンの知識を持たない。提供物は「規約＋薄いヘルパ＋UI 配送ブリッジ」までに限定し、共通トレイトによる actor framework 化（過剰抽象）は行わない。
+
+### Engine Crates（⓪③④⑤＋talk 契約・固有名は roadmap のエンジン表参照）
+- **`areka-ghost`（⓪・結線層）**: descript.txt 起点のマウント解決（`areka_parsers::package::resolve`）を入力に、shiori 通信層（host-32 経由）・kanade・sakura・ticker を起動順に結線し、終了時は逆順で統括する最上位 owner。
+- **`areka-kanade`（③・conductor）**: **運行表（scheduling state machine）の正本**。ghost の boot/steady/close 各フェーズの運行判断。純粋状態機械＋アクターシェル＋メッセージ境界差し替えの三層構造。**sylphya へ依存しない**（`ResourceSink` クロージャで疎結合）。
+- **`areka-sakura`（④・さくらスクリプト再生）**: SHIORI が返す Value を時間軸上で再生する **per-talk transient** エンジン＝`areka_parsers::sakura::parse` の `Instruction` 列から dola `CueSheet` へのコンパイラ。再生制御そのもの（状態機械・horizon・broadcast）は **dola `cue` が唯一のエンジン**（dola 節参照）。
+- **`areka-seriko`（⑤・SERIKO アニメ）**: サーフェス解決・状態・発行・構築・アクターを責務別モジュールへ分割。公開 API は crate root の `pub use` re-export に集約（唯一の公開面）。
+- **`areka-talk`（talk 契約 leaf）**: talk 授受契約の**物理正本**（`TalkId`／`StartTalk`／`TalkDone`／`TalkEndReason`／`TalkCommand`／`ChoiceWaiting`）。kanade（③）⇄ sakura（④）間契約の唯一の物理定義。**依存ゼロ（std のみ）**・エンジン知識を持ち込まない。
+
+### emo Render Engine Crates（⑥・三段直列＋テキスト層）
+**Location**: `/crates/areka-emo-atlas/`・`/crates/areka-emo-compose/`・`/crates/areka-emo-present/`・`/crates/areka-emo-text/`
+**Pattern**（自前コンポジタの三段直列チェーン・入力=(surface id, BindSet)・wintf へは完成品のみ）:
+- **`areka-emo-atlas`（1/3・pure）**: 素材基盤層＝bake パイプライン。アトラス正本（premultiplied BGRA・`Placement` 解決済み `AtlasTable`）。
+- **`areka-emo-compose`（2/3・pure）**: `areka-parsers::shell` の忠実転記モデル＋`AtlasTable` を入力に、静的合成済みビットマップ `ComposedSurface` を生成する純粋層。
+- **`areka-emo-present`（3/3・提示段）**: `ComposedSurface` を wintf の WUC 表示面へアップロード・提示し、当たり判定用 AlphaMask を供給。`presenter/show.rs` の `apply_show` が単一漏斗（k 導出・合成/キャッシュ・アップロード・マスク同期・可視化）。
+- **`areka-emo-text`（テキスト層）**: バルーン文字レンダリング（spec 名は `areka-P0-emo-text-layer`・atlas/compose/present の単一トークン命名に倣う）。
+
 ### SHIORI ABI Crate
 **Location**: `/crates/shiori-abi/`
 **Purpose**: 脳（SHIORI）との**内部唯一 ABI**。`IShiori`/`IShioriHost` のカスタム COM 定義（HSTRING/UTF-16・IID 既定義）＋エルゴノミック変換層。UI 基盤（wintf）に依存させない最小依存クレート（下流 32bit ホスト/pasta が同 ABI を共有）。x64 native 脳は in-proc COM、過去互換は 32bit Rust ホスト（host-32）が IPC 越しに同 ABI を実装。
@@ -305,6 +324,12 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
 - `shiori-host32-helper` - **i686 専用** helper 実行体（`wintf-winmsg-executor` の message pump 上）
 - トランスポートは **WM_COPYDATA 一本化＋再入 RESPONSE**（named pipe 不要）。x64⟷x86 を跨ぐのは生バイト列のみ
 - 下流ユニット（shiori-load／request／lifecycle）はこの seam の上に増分
+
+### Test DLL Fixture Crates（shiori-host32-testdll・shiori4-testdll）
+**Location**: `/crates/shiori-host32-testdll/`・`/crates/shiori4-testdll/`
+**Purpose**: 実 SHIORI 境界を踏む決定論テストの fixture DLL 群（いずれも cdylib・テスト専用）:
+- **`shiori-host32-testdll`**: 最小 SHIORI DLL fixture（出力名 `shiori.dll`・**i686**）。pasta 非依存の決定的 LOAD／request E2E を成立させる host-32 トラック所有の最小実装（flat-C の `load`/`unload`/`request` 3 エクスポート・署名正確源は `vendors/pasta` の windows.rs）。
+- **`shiori4-testdll`**: **x64** SHIORI4 決定論テスト DLL。正典イベント集合へ実 emo2 pasta 採取のゴールデンスナップショットを決定論 replay する「脳」（ReplayBrain・`shiori_factory` export）。
 
 ### Pilot (Two-Tunnel Knowledge) Crate
 **Location**: `/crates/pilot/`
