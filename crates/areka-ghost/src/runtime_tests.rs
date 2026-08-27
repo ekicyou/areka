@@ -1,5 +1,6 @@
 use super::*;
 use std::path::PathBuf;
+use temp_path_kit::TempPath;
 
 /// task 8.3: 退役した `default_system_vars()` の忠実な代役スタンドイン。
 ///
@@ -50,12 +51,13 @@ use areka_kanade::MonotonicMs;
 use areka_sakura::contract::{CueSink, TalkCue};
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
 
-/// このテスト専用の一意な一時ディレクトリを返す（関数名でユニーク化・衝突回避・
-/// `config.rs` テストの流儀を踏襲）。
-fn unique_temp_dir(tag: &str) -> PathBuf {
-    let mut dir = std::env::temp_dir();
-    dir.push(format!("areka_ghost_runtime_tests_{tag}"));
-    dir
+/// このテスト専用の一時ディレクトリ。共通窓口 `temp-path-kit` 経由で組むので、
+/// 名前にプロセス識別子と連番が入り**プロセス間でも一意**（同じテストを同時に
+/// 複数プロセスで走らせても互いの一時ファイルを消し合わない）。
+///
+/// 返り値が生きている間だけ実体が存在し、破棄で中身ごと消える。
+fn unique_temp_dir(tag: &str) -> TempPath {
+    TempPath::new(&format!("ghost-runtime-{tag}"))
 }
 
 /// `root` 直下に最小限の解決可能なゴーストツリー（`ghost/master/descript.txt`＋
@@ -134,8 +136,8 @@ impl CueSink for NoopSink {
 /// `boot_then_shutdown_joins_everything_and_returns_ok`（task 3.2）で確認する。
 #[test]
 fn boot_happy_path_wires_all_components_and_kicks_off_boot_sequence() {
-    let root = unique_temp_dir("boot_happy_path_wires_all_components_and_kicks_off_boot_sequence");
-    let _ = std::fs::remove_dir_all(&root);
+    let temp = unique_temp_dir("boot-happy-path-wires-all-components-and-kicks-off-boot-sequence");
+    let root = temp.path().to_path_buf();
     write_minimal_resolvable_ghost_fixture(&root);
 
     let options = GhostBootOptions {
@@ -167,8 +169,6 @@ fn boot_happy_path_wires_all_components_and_kicks_off_boot_sequence() {
             now: MonotonicMs(1),
         })
         .expect("dispatcher actor thread should be alive and receiving after boot");
-
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// シナリオ2（mount 失敗の短絡）: `ghost_root` に `ghost/master/descript.txt` が
@@ -179,9 +179,10 @@ fn boot_happy_path_wires_all_components_and_kicks_off_boot_sequence() {
 /// も spawn されない（短絡する）ことの直接証跡になる（要件 2.5）。
 #[test]
 fn boot_returns_mount_error_and_short_circuits_before_touching_shiori_wiring() {
-    let root = unique_temp_dir(
-        "boot_returns_mount_error_and_short_circuits_before_touching_shiori_wiring",
+    let temp = unique_temp_dir(
+        "boot-returns-mount-error-and-short-circuits-before-touching-shiori-wiring",
     );
+    let root = temp.path().to_path_buf();
     // 起点不在を保証する（ディレクトリごと未作成・ghost/master/descript.txt 無し）。
     let _ = std::fs::remove_dir_all(&root);
 
@@ -207,8 +208,6 @@ fn boot_returns_mount_error_and_short_circuits_before_touching_shiori_wiring() {
              ghost/master/descript.txt"
         ),
     }
-
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 // ---- boot→shutdown 統合テスト（task 3.2） ----
@@ -238,8 +237,8 @@ fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: std::time::Dur
 /// 起動〜終了の一連の流れ」の直接証跡になる）。
 #[test]
 fn boot_then_shutdown_joins_everything_and_returns_ok() {
-    let root = unique_temp_dir("boot_then_shutdown_joins_everything_and_returns_ok");
-    let _ = std::fs::remove_dir_all(&root);
+    let temp = unique_temp_dir("boot-then-shutdown-joins-everything-and-returns-ok");
+    let root = temp.path().to_path_buf();
     write_minimal_resolvable_ghost_fixture(&root);
 
     let options = GhostBootOptions {
@@ -267,8 +266,6 @@ fn boot_then_shutdown_joins_everything_and_returns_ok() {
             );
         },
     );
-
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 /// シナリオ4（`into_parts` 構造分解・task 3.2）: `boot` した `GhostRuntime` から
@@ -280,9 +277,9 @@ fn boot_then_shutdown_joins_everything_and_returns_ok() {
 /// S6 全断線シナリオ等の分解結線に必要な全てを過不足なく提供している直接証跡。
 #[test]
 fn into_parts_exposes_live_senders_and_all_handles_for_manual_teardown() {
-    let root =
-        unique_temp_dir("into_parts_exposes_live_senders_and_all_handles_for_manual_teardown");
-    let _ = std::fs::remove_dir_all(&root);
+    let temp =
+        unique_temp_dir("into-parts-exposes-live-senders-and-all-handles-for-manual-teardown");
+    let root = temp.path().to_path_buf();
     write_minimal_resolvable_ghost_fixture(&root);
 
     let options = GhostBootOptions {
@@ -381,8 +378,6 @@ fn into_parts_exposes_live_senders_and_all_handles_for_manual_teardown() {
                 .expect("sylphya should terminate normally after Close");
         },
     );
-
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 // ---- sylphya_publisher() アクセサ（task 3.1・position-persist） ----
@@ -399,10 +394,10 @@ fn into_parts_exposes_live_senders_and_all_handles_for_manual_teardown() {
 /// 持たないため、直後の反映フェンスで生存を証拠づける）。
 #[test]
 fn sylphya_publisher_accessor_yields_live_publisher_that_accepts_persist_put() {
-    let root = unique_temp_dir(
-        "sylphya_publisher_accessor_yields_live_publisher_that_accepts_persist_put",
+    let temp = unique_temp_dir(
+        "sylphya-publisher-accessor-yields-live-publisher-that-accepts-persist-put",
     );
-    let _ = std::fs::remove_dir_all(&root);
+    let root = temp.path().to_path_buf();
     write_minimal_resolvable_ghost_fixture(&root);
 
     let options = GhostBootOptions {
@@ -440,8 +435,6 @@ fn sylphya_publisher_accessor_yields_live_publisher_that_accepts_persist_put() {
             let _ = runtime.shutdown(areka_kanade::CloseReason::System);
         },
     );
-
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 // ---- shutdown() の barrier() 明示フラッシュ確認（task 3.2・position-persist） ----
@@ -462,8 +455,8 @@ fn sylphya_publisher_accessor_yields_live_publisher_that_accepts_persist_put() {
 fn shutdown_confirms_persist_flush_via_barrier_before_close() {
     use crate::test_log_capture::{assert_logged, capture};
 
-    let root = unique_temp_dir("shutdown_confirms_persist_flush_via_barrier_before_close");
-    let _ = std::fs::remove_dir_all(&root);
+    let temp = unique_temp_dir("shutdown-confirms-persist-flush-via-barrier-before-close");
+    let root = temp.path().to_path_buf();
     write_minimal_resolvable_ghost_fixture(&root);
 
     let options = GhostBootOptions {
@@ -502,8 +495,6 @@ fn shutdown_confirms_persist_flush_via_barrier_before_close() {
             );
         },
     );
-
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 // ---- InProc 結線の生成〜駆動〜終了 統合テスト（task 2.4） ----
@@ -572,8 +563,8 @@ fn inproc_wiring_boots_drives_and_shuts_down_through_real_test_dll() {
         built_dll.display()
     );
 
-    let root = unique_temp_dir("inproc_wiring_boots_drives_and_shuts_down_through_real_test_dll");
-    let _ = std::fs::remove_dir_all(&root);
+    let temp = unique_temp_dir("inproc-wiring-boots-drives-and-shuts-down-through-real-test-dll");
+    let root = temp.path().to_path_buf();
 
     // fixture: ghost/master/descript.txt（`shiori,` 行＝テスト DLL 名）＋ shell/master/descript.txt
     // （shell dir 存在チェックを通すための最小 descript）。
@@ -674,8 +665,6 @@ fn inproc_wiring_boots_drives_and_shuts_down_through_real_test_dll() {
         !records.lock().expect("records mutex poisoned").is_empty(),
         "RecordingSink には少なくとも 1 件の TalkCue が捕捉されているべき（挨拶が InProc 境界を越えた）"
     );
-
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 // ---- apply_boot_record_gate 単体（task 7.1・position-persist・design「C5 GhostRuntime 増分」step 1-3） ----
@@ -876,9 +865,9 @@ use areka_sylphya::{Axis, load_scope};
 /// 事前作成する。本番では `profile/areka/` が既存の前提）。
 #[test]
 fn exit_flush_reflects_barrierless_clone_puts_after_shutdown_sequence() {
-    let root =
-        unique_temp_dir("exit_flush_reflects_barrierless_clone_puts_after_shutdown_sequence");
-    let _ = std::fs::remove_dir_all(&root);
+    let temp =
+        unique_temp_dir("exit-flush-reflects-barrierless-clone-puts-after-shutdown-sequence");
+    let root = temp.path().to_path_buf();
     // FsPersistIo.commit は親ディレクトリを作らない（`File::create` のみ）ため、ghost scope root を
     // 事前作成する（本番では profile/areka/ が既存の前提）。未作成だと commit が Degraded になり
     // ファイルが書かれず、この檻が意味を失う。
@@ -994,6 +983,4 @@ fn exit_flush_reflects_barrierless_clone_puts_after_shutdown_sequence() {
         ) && v == "1234"),
         "中間値 1234 は最終値 1777 に上書きされているべき（last-write-wins）: {loaded:?}"
     );
-
-    let _ = std::fs::remove_dir_all(&root);
 }

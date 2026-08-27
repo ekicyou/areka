@@ -35,6 +35,7 @@ use areka_ghost::ticker::TickerConfig;
 use areka_ghost::{GhostBootOptions, ShioriWiring, SystemVarWiring, TickerMode, boot};
 use areka_kanade::CloseReason;
 use areka_parsers::charset::DefaultEncoding;
+use temp_path_kit::TempPath;
 
 use crate::spine_e2e_test::RecordingSink;
 
@@ -98,11 +99,13 @@ fn resolve_helper_exe() -> Result<PathBuf, String> {
     ))
 }
 
-/// このテスト専用の一意な一時ディレクトリ（`spine_e2e_test.rs` 各シナリオの流儀を踏襲）。
-fn unique_temp_dir(tag: &str) -> PathBuf {
-    let mut dir = std::env::temp_dir();
-    dir.push(format!("areka_ghost_real_pasta_tests_{tag}"));
-    dir
+/// このテスト専用の一時ディレクトリ。共通窓口 `temp-path-kit` 経由で組むので、
+/// 名前にプロセス識別子と連番が入り**プロセス間でも一意**（同じテストを同時に
+/// 複数プロセスで走らせても互いの一時ファイルを消し合わない）。
+///
+/// 返り値が生きている間だけ実体が存在し、破棄で中身ごと消える。
+fn unique_temp_dir(tag: &str) -> TempPath {
+    TempPath::new(&format!("ghost-real-pasta-{tag}"))
 }
 
 /// `root` 直下に、実 pasta DLL を**物理的に持ち込んだ** `ghost/master/` を含む
@@ -170,8 +173,8 @@ fn real_pasta_boot_observes_a_cue_then_shuts_down_cleanly() {
     // （ShioriDown）へ倒すのではなく、追験の前提として明示 fail させる」）。
     let helper_exe = resolve_helper_exe().expect("i686 helper exe の解決に失敗");
 
-    let root = unique_temp_dir("real_pasta_boot_observes_a_cue_then_shuts_down_cleanly");
-    let _ = std::fs::remove_dir_all(&root);
+    let temp = unique_temp_dir("boot-observes-a-cue-then-shuts-down-cleanly");
+    let root = temp.path().to_path_buf();
     write_real_pasta_ghost_fixture(&root, &dll_path);
 
     let surface_sink = RecordingSink::new();
@@ -238,6 +241,4 @@ fn real_pasta_boot_observes_a_cue_then_shuts_down_cleanly() {
         ),
         Err(_) => panic!("shutdown が {SHUTDOWN_BOUND:?} 以内に完了しなかった（宙吊りの疑い）"),
     }
-
-    let _ = std::fs::remove_dir_all(&root);
 }

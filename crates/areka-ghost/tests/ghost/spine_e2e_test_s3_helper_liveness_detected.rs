@@ -20,12 +20,15 @@ use areka_kanade::{KanadeMsg, MonotonicMs};
 use areka_parsers::charset::DefaultEncoding;
 
 use areka_actor::{ActorError, ActorHandle};
+use temp_path_kit::TempPath;
 
-/// このテスト専用の一意な一時ディレクトリ（S1/S2 の流儀を踏襲）。
-fn unique_temp_dir(tag: &str) -> std::path::PathBuf {
-    let mut dir = std::env::temp_dir();
-    dir.push(format!("areka_ghost_spine_e2e_s3_tests_{tag}"));
-    dir
+/// このテスト専用の一時ディレクトリ。共通窓口 `temp-path-kit` 経由で組むので、
+/// 名前にプロセス識別子と連番が入り**プロセス間でも一意**（同じテストを同時に
+/// 複数プロセスで走らせても互いの一時ファイルを消し合わない）。
+///
+/// 返り値が生きている間だけ実体が存在し、破棄で中身ごと消える。
+fn unique_temp_dir(tag: &str) -> TempPath {
+    TempPath::new(&format!("ghost-spine-s3-{tag}"))
 }
 
 /// `root` 直下に最小限の解決可能なゴーストツリー（`ghost/master/descript.txt`＋
@@ -77,10 +80,8 @@ const BOUND: std::time::Duration = super::E2E_BOUND;
 fn s3_helper_liveness_detected_mid_scenario_drives_autonomous_fault_termination() {
     const SHELL_NAME: &str = "S3LivenessShell";
 
-    let root = unique_temp_dir(
-        "s3_helper_liveness_detected_mid_scenario_drives_autonomous_fault_termination",
-    );
-    let _ = std::fs::remove_dir_all(&root);
+    let temp = unique_temp_dir("mid-scenario-drives-autonomous-fault-termination");
+    let root = temp.path().to_path_buf();
     write_ghost_fixture(&root, SHELL_NAME);
 
     // boot 系列一式（S1 と同旨）＋ OnSecondChange（Steady pump の 1 発）＋ unload
@@ -273,6 +274,4 @@ fn s3_helper_liveness_detected_mid_scenario_drives_autonomous_fault_termination(
         all_calls.iter().any(|c| matches!(c, RecordedCall::Unload)),
         "S3: Fault 系列は best-effort Unload を発行するはず: {all_calls:?}"
     );
-
-    let _ = std::fs::remove_dir_all(&root);
 }

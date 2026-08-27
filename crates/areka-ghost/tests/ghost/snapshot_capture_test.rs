@@ -101,6 +101,7 @@ use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package;
 
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
+use temp_path_kit::TempPath;
 
 use crate::recorder::{Recorder, RecorderHandle};
 use crate::spine_e2e_test::RecordingSink;
@@ -187,11 +188,13 @@ fn resolve_helper_exe() -> Result<PathBuf, String> {
     ))
 }
 
-/// このテスト専用の一意な一時ディレクトリ（`real_pasta_test.rs::unique_temp_dir` と同旨）。
-fn unique_temp_dir(tag: &str) -> PathBuf {
-    let mut dir = std::env::temp_dir();
-    dir.push(format!("areka_ghost_snapshot_capture_{tag}"));
-    dir
+/// このテスト専用の一時ディレクトリ。共通窓口 `temp-path-kit` 経由で組むので、
+/// 名前にプロセス識別子と連番が入り**プロセス間でも一意**（同じテストを同時に
+/// 複数プロセスで走らせても互いの一時ファイルを消し合わない）。
+///
+/// 返り値が生きている間だけ実体が存在し、破棄で中身ごと消える。
+fn unique_temp_dir(tag: &str) -> TempPath {
+    TempPath::new(&format!("ghost-snapshot-capture-{tag}"))
 }
 
 /// `root` 直下に、実 pasta DLL を物理的に持ち込んだ `ghost/master/` を含む解決可能な
@@ -318,8 +321,8 @@ fn capture_real_pasta_snapshots() {
         .expect("AREKA_SNAPSHOT_OUT ディレクトリを作成できませんでした");
 
     // --- 実 pasta fixture を組立（DLL をフィクスチャ ghost/master へ持ち込む）---
-    let root = unique_temp_dir("capture_real_pasta_snapshots");
-    let _ = std::fs::remove_dir_all(&root);
+    let temp = unique_temp_dir("capture-real-pasta-snapshots");
+    let root = temp.path().to_path_buf();
     write_real_pasta_ghost_fixture(&root, &dll_path);
 
     // boot が内部で通すのと同一契約で mount を自前解決し、`mount.shiori` を real_connect へ渡す。
@@ -397,8 +400,6 @@ fn capture_real_pasta_snapshots() {
         snapshots.len(),
         out_path.display()
     );
-
-    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[cfg(test)]
