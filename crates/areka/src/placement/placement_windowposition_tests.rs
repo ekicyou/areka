@@ -336,8 +336,9 @@ fn prepare_windowposition_yields_to_persisted_balloon_offset() {
                 let balloon_offset = PointPx { x: 0, y: 0 };
                 // 基準対は**対照でも元のまま**にする——本檻が見ているのは復元後の
                 // `balloon_offset`／`balloon_pos` が永続値だけで決まることであり、
-                // 基準対の腕（保存値採用時に未係留へ落とす）はまだ入っていない
-                // （areka-P0-balloon-offset-dpi の後続タスクが所有する）。
+                // 基準対そのものは対象ではない。両辺とも保存値採用腕へ入るため、復元後の
+                // 基準対は入力に依らず未係留＋保存値（areka-P0-balloon-offset-dpi 要件 5.2）
+                // へ収束し、`assert_eq!` の全構造体比較は空虚一致にならない。
                 ScopePlacement {
                     balloon_pos: s.char_pos,
                     balloon_offset,
