@@ -18,8 +18,72 @@
 
 ## V1: ワークスペース全体テスト（要件 7.7）
 
-> **未実施。task 2.2 が本節を埋める。** 前提（i686 host-32 成果物）は task 1 で整備済み。
-> 記載すべき内容: 実行コマンド・全体の通過数・バイナリ数・`test result: ok` の有無。赤が出た場合は設計 Error Handling 第 1 項の手順（前提確認 → 原因ファイルを名指し → 許可集合の外であることを file 単位で提示）。
+実施日 2026-08-27。対象 HEAD `2b124d33`（`feat(areka-P0-present-write-coherence): 上流アンカーの実測再確認と検証記録の起票 (task 2.1)`）。実行時点の作業ツリー差分は `git status --porcelain` で `M vendors/pasta` の 1 行のみ——これは本仕様の着手前からの汚れであり、本仕様は触っていない（V4-c と同じ扱い）。
+
+### 実行
+
+| 項目 | 値 |
+|---|---|
+| コマンド | `cargo test --workspace` |
+| シェル | **PowerShell 7**（`Start-Process` 経由で stdout／stderr を別ファイルへ分離採取）。Git Bash は使っていない——本リポジトリは Git Bash の `link.exe` が MSVC のリンカを覆う既知の罠を持つため |
+| 作業ディレクトリ | ワークツリー直下（`…\worktrees\areka-p0-scope-chain-gap-004c39`） |
+| ツールチェイン | `cargo 1.98.0 (797e8a9bc 2026-08-05)` ／ `rustc 1.98.0 (88d9e12ae 2026-08-18)` |
+| 所要 | 456.6 秒（ビルド込み） |
+| **終了コード** | **0** |
+
+> **終了コードの出所（後から再導出できない）**: 上の `0` は実行時のプロセスオブジェクトから読んだ値である。採取したログは stdout ／ stderr の中身だけで**終了コードを含まない**——後から `ws-test.out.log` ／ `ws-test.err.log` を読み直しても、この `0` は再導出できない。ログに見当たらないことをもって記録の誤りと早合点しないこと。ログ側から裏が取れるのは下の「結果」節の数量である。
+
+### 前提の確認（実行直前に、実行と同一のシェルで採取）
+
+**⑴ i686 host-32 成果物**（task 1 で整備済み。再ビルドはしていない）
+
+| ファイル | サイズ | PE Machine | 更新時刻 |
+|---|---|---|---|
+| `target\i686-pc-windows-msvc\debug\shiori-host32-helper.exe` | 271,872 B | `0x014C`（i386） | 2026/08/27 22:04:49 |
+| `target\i686-pc-windows-msvc\debug\shiori.dll` | 160,768 B | `0x014C`（i386） | 2026/08/27 22:04:48 |
+
+**⑵ 環境変数の上書きが無いこと**（**この確認を省くと結果が読めない**）
+
+```
+HOST32_HELPER_EXE=[]
+HOST32_TESTDLL_DLL=[]
+set-count=0        # Get-ChildItem Env: の HOST32* が 0 件
+```
+
+`HOST32_HELPER_EXE`／`HOST32_TESTDLL_DLL` は解決器（`crates/shiori-host32-host/tests/lifecycle_cyclic_e2e.rs:96-107`・`:137-148`、`crates/shiori-host32-helper/src/shiori_proxy.rs:415-425`）で target ディレクトリ探索より**優先**され、しかも解決に失敗したときは既定へ落ちずに **panic する**。両方とも**未設定**であることを実行と同じシェルで確認した上で走らせた——設定されていれば上表の成果物ではなく別のパスが測られる。
+
+### 結果
+
+| 項目 | 値 |
+|---|---|
+| `test result:` 行（＝テストターゲット数） | **95**（実行バイナリ **74** ＋ Doc-tests **21**） |
+| うち `test result: ok` | **95**（**例外なし**。`ok` 以外の `test result:` 行は 0 行） |
+| 通過 | **5,894** |
+| 失敗 | **0** |
+| ignored | **36**（内訳の全て＝26／3／2／2／1／1／1 の 7 ターゲット） |
+| measured ／ filtered out | **0** ／ **0** |
+
+### 空振りでないことの確認（終了コード 0 は何も走らせなくても出る）
+
+- `running N tests` 行が **95 本**あり、`test result:` 行の 95 と一致する。うち `running 0 tests` は 19 本（テストを持たない bin ターゲット・空の Doc-tests）で、残り 76 本が実際にテストを実行している。
+- **i686 前提を要する e2e が現に走っている**——`tests\lifecycle_cyclic_e2e.rs`・`tests\lifecycle_kill_e2e.rs`・`tests\shiori_load_e2e.rs`・`tests\shiori_request_e2e.rs` の 4 ターゲット。前提⑴が欠けていればここが赤になる（この一文が当てはまるのは、この 4 件に対してだけである）。
+  - なお `shiori_lifecycle_e2e_tests::*` を**この 4 件に混ぜてはならない**。当該モジュールの宣言は `crates/areka/src/main.rs:94`（`#[cfg(test)] mod shiori_lifecycle_e2e_tests;`）であり、`shiori-host32-host` ではなく **`areka` クレートの中**にある（実行ターゲットも `unittests src\main.rs`）。中身も in-process のモック駆動で、`grep -cEi "host32|HOST32|helper|i686|host-32" crates/areka/src/shiori_lifecycle_e2e_tests.rs` は **0** を返す——i686 成果物への依存を一切持たないため、**前提⑴が欠けてもここは赤にならない**。i686 前提の証跡としては数えられない。
+- GPU 実描画／readback 系のテスト名も `... ok` の側に並んでおり、GPU 環境も成立している。採取コマンドと実測値は次のとおり（採取した stdout ログ `ws-test.out.log` に対して実行）。
+  - `grep -E "\.\.\. ok$" ws-test.out.log | grep -cEi "readback|d2d|swap_chain"` → **35**
+  - 同じ語集合を `... FAILED` ／ `... ignored` の側で数えると **0**（`grep -E "\.\.\. (FAILED|ignored)" ws-test.out.log | grep -cEi "readback|d2d|swap_chain"`）。
+  - この **35** は**テスト名に含まれる語による近似**であって、GPU 経路を通るテストの全数ではない。`gpu`・`offscreen` も語としては当たるが、当たるのは中身が GPU 描画でないもの（`run_attach_phase_without_gpu_does_not_attach_or_consume_assets` 1 件と `an_offscreen_projection_input_*` 2 件＝窓の画面外投影の話）だけなので、語集合から外してある。語集合を変えれば数は変わる——**数だけを引用せず、必ず上のコマンドと一緒に読むこと。**
+- 採取ログの実体: stdout 520,823 B ／ stderr 9,764 B（スクラッチパッドに保存。**仕様ディレクトリの外**に置いた——本仕様の差分集合を汚さないため）。
+
+### 付随して出た出力（いずれも赤ではない）
+
+- ビルド警告 1 件（`shiori4-testdll` のリンカ stdout がインポートライブラリ生成を報告するもの）。本仕様と無関係のビルド既存事項。
+- host-32 e2e の stderr に `[helper] LOAD 失敗（観測・ack[0]）: LoadReturnedFalse` と `… LoadLibraryFailed(HRESULT(0x8007007E))` の 2 行。これは**失敗経路を意図的に踏むテストが出す観測ログ**であり、当該ターゲットは `test result: ok` を返している。
+
+### 判定と、その射程（**ここを混ぜてはならない**）
+
+- **要件 7.7（ワークスペース全体のテストが通る状態で完了する）は充足した。** 95 ターゲットすべてが `test result: ok`・失敗 0・終了コード 0。
+- **この緑は要件 2.1 の充足ではない。** 本仕様は 2026-08-27 の裁定により**是正コード 0 行**であり、絵と窓が同じ提示フレームで揃うかという合否量（`visualize_to_write_us`・`flush_total_us`）は**未達のまま登記されている**（requirements.md「未達の登記」節）。上の緑は「本仕様が何も壊していない」ことの証拠であって、未達が解消した証拠ではない。**完了報告で合否量と同じ息で並べてはならない。**
+- 併せて、この緑を「十分性の証拠」として読まないこと。本仕様群では全緑が実在の欠陥を素通りさせた事例が二度ある。ここに記すのは**数量と、その数量が何を検査していないか**であり、それ以上ではない。
 
 ---
 
