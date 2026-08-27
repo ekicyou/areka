@@ -496,6 +496,9 @@ pub fn persist_entries(world: &World, entries: Vec<(PersistKey, String)>) {
 }
 
 #[cfg(test)]
+#[path = "balloon_offset_persist_roundtrip_tests.rs"]
+mod balloon_offset_persist_roundtrip_tests;
+#[cfg(test)]
 #[path = "persist_entries_tests.rs"]
 mod entries_tests;
 #[cfg(test)]
