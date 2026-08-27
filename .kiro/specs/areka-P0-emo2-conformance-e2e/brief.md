@@ -190,6 +190,8 @@ M1 ゴール「emo2 が**そのまま** boot→talk→touch→menu→close ま�
 
 ## 申し送り（areka-P0-test-cage-determinism・2026-08-27）
 
+> 送り元は **2026-08-27 に完了・アーカイブ済み**。台帳の本体は `.kiro/specs/completed/areka-P0-test-cage-determinism/requirements.md` の `## 申し送り台帳`。
+
 同 spec の申し送り台帳「⑶ タスク 12.1 の登記」の **B-1／B-2／B-3** を本 brief へ転記する。**転記の理由**——同 spec は「引受先が実在しない閉ループ」を 2 度作っている（要件 7.4 がその是正だった）。**台帳にだけ書いて受け手が知らない状態は 3 度目**になるので、受け手の側にも置く。
 
 **B-1 再表示時の重なり順の再確認（実機が要る）**
