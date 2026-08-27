@@ -148,6 +148,12 @@ mod drag_tests;
 #[path = "follow_keyword_base_tests.rs"]
 mod keyword_base_tests;
 #[cfg(test)]
+#[path = "follow_offset_residual_tests.rs"]
+mod offset_residual_tests;
+#[cfg(test)]
+#[path = "follow_offset_space_tests.rs"]
+mod offset_space_tests;
+#[cfg(test)]
 #[path = "follow_resize_tests.rs"]
 mod resize_tests;
 #[cfg(test)]
@@ -171,9 +177,6 @@ mod window_move_diag_tests;
 #[cfg(test)]
 #[path = "follow_window_move_tests.rs"]
 mod window_move_tests;
-#[cfg(test)]
-#[path = "follow_offset_space_tests.rs"]
-mod offset_space_tests;
 #[cfg(test)]
 #[path = "follow_work_area_tests.rs"]
 mod work_area_tests;
