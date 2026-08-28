@@ -57,7 +57,7 @@
   - 範囲外集合が既知 4 件（`emo2-vertical`／`emo2-choice/descript-cursor`／`emo2-choice/descript-plain`／`emo2-kakukaku`）と一致することを確認。**5 件目が出た場合は DD5（意図別: 縮退なら宣言削除・宣言そのものなら期待値を字義位置へ）で分類してから先へ進む**
   - **Observable**: 棚卸し記録（対象ファイル一覧・内外判定・是正方針・方法の限界「語 grep では見つからない類が在る」）を **4.2 で新設する檻のモジュール doc へ恒久記録**する（セッション記録に残さない）
   - _Requirements: 3.10, 10.7_
-- [ ] 4.2 実ゴースト開始点の檻を新設する（クランプ現存下で先に固定）
+- [x] 4.2 実ゴースト開始点の檻を新設する（クランプ現存下で先に固定）
   - `tests/shipped_fixture_region_test.rs` 新設——`emo2-kakukaku` の `descript.txt`＋`balloons0s.txt`／`balloonk0s.txt` を 2 層マージ→`TextRegion` 解決で **sakura (36,46)／kero (24,40) を逐語固定**（現在この観測点は 0 本＝全緑のまま壊れる唯一の穴）
   - **檻は宣言がまだ在る状態（クランプ経由）で書く**。以後 4.3 の宣言削除・4.4 のクランプ撤去を**またいで無改変のまま緑**であり続けることが、両編集の挙動不変の反証可能な証跡になる
   - モジュール doc に 4.1 の棚卸し記録（方法・対象・限界）を収める
@@ -148,6 +148,8 @@
 - **3.1 の檻はクランプ非依存に作ってある**（origin は未宣言か validrect 内側の値のみ）。レビュアーが `clamp_origin_component` を無効化した状態で新檻 7 本が全緑であることを実測済み＝**4.4 のクランプ撤去で偽の赤を出さない**。4.4 で赤くなるのは `region.rs` の既存インライン `mod tests` 5 本だけのはず（DD5 で意図別に是正する対象）。
 - **1,000 行番人の実体は `crates/log-capture-kit/tests/file_length_guard_test.rs`**（`LINE_LIMIT = 1000`・`OVER_LIMIT_ALLOWED` 例外表 11 件・件数定数 `OVER_LIMIT_ALLOWED_COUNT`）。検証コマンドに `cargo test -p log-capture-kit` を含めること。`cargo test -p areka-emo-text` では番人は走らない。
 - **3.2 の字面檻は `draw.rs` の字面に強く依存する**（`pub fn create_text_format(` の書式・`pub const DEFAULT_FONT_NAME` の可視性・`for_mode` の全出現が 2 件であること・`seam @ (…)` 束縛が `@` の唯一の供給源であること）。レビュアーが 7 種の変異で空振りしないことを実証済みだが、**`draw.rs` を触る後続タスクは無い前提**で成立している（4.5 の対象一覧に `draw.rs` は無い・7.1 は「非接触」を確認するだけ）。将来 `draw.rs` をリファクタするときは檻の側も更新すること（檻の doc に自己説明済み）。
+- **付録 A の「複製 fixture」の読み方に注意**: `emo2-kakukaku-wplimit` は `descript.txt` と 2 枚の PNG が原本とバイト同一だが、**面別上書き層 2 本はバイト同一ではない**（`windowposition.*` の行が異なる＝同 fixture の `readme.txt` が明記する意図的な差分）。`validrect`／`wordwrappoint` は同値なので `TextRegion` は一致する。4.3 で「複製だから上書き層も同じ」と読むと誤る。
+- **4.2 の檻は群 4 の順序が意味を持つことの証跡そのもの**。レビュアーが独立に ⑴ クランプ無効化→**赤 3 本** ⑵ 両 fixture の origin 宣言削除（4.3 単独）→**緑 6/6** ⑶ ⑴＋⑵ の合成（群 4 完了後の姿）→**檻を 1 バイトも変えずに緑 6/6** ⑷ fixture のリネーム→**フルパス付き panic で赤**、を実測済み。**4.3・4.4 の実装者は、この檻が赤くなったら自分の編集が挙動を変えた証拠だと理解すること**（檻の期待値を書き換えて緑にするのは禁止）。
 
 ---
 
