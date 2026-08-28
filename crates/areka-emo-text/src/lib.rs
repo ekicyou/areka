@@ -179,6 +179,10 @@ mod tests {
                 include_str!("writing_decision_tests.rs"),
             ),
             ("region.rs", include_str!("region.rs")),
+            (
+                "region_vertical_canon_tests.rs",
+                include_str!("region_vertical_canon_tests.rs"),
+            ),
             ("segment.rs", include_str!("segment.rs")),
             ("layout.rs", include_str!("layout.rs")),
             ("canvas.rs", include_str!("canvas.rs")),

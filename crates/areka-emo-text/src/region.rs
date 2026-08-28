@@ -719,3 +719,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "region_vertical_canon_tests.rs"]
+mod vertical_canon_tests;

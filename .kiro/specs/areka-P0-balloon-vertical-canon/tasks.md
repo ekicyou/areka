@@ -35,7 +35,7 @@
   - _Requirements: 1.6, 1.7, 2.2, 2.3, 2.4, 2.5, 2.7, 7.1, 10.3, 10.6_
 
 - [ ] 3. 一致の固定（コード変更 0・檻のみ）
-- [ ] 3.1 (P) 縦書き座標意味論の檻を新設する
+- [x] 3.1 (P) 縦書き座標意味論の檻を新設する
   - `region_vertical_canon_tests.rs` 新設＋`PURE_SOURCES` へ列挙
   - `wordwrappoint.y` の既定＝`validrect.bottom`・負値＝下辺基準／**`wordwrappoint.x` だけを変えた 2 モデルが同一の `TextRegion` を与える**（型の保証を読める形へ）／`validrect` 4 辺が横書きと同一に解決される
   - SC5（列の上限＝`validrect.left`）は**既存挙動＋既存檻**（`layout_visible_window_tests.rs:60-79`）の確認のみ——新規の檻は作らない
@@ -141,3 +141,5 @@
 - **grep の 0 件主張には陽性対照を添える**（無警告契約の確認など）。空出力は「無い」と「grep が空振りした」を区別しない。
 - **群 2 の共存規則で design 未明文の 2 点を確定した（2.2 以降の檻はこれに従うこと）**: ⑴ `vertical,1` ＋ `writing_mode,vertical_lr` は**異なる方向**＝`conflicting()` true・debug 1 件（要件 2.2 が `vertical,1` を `VerticalRl` へ逐語固定・Flow 1 の一致腕が「**その方向**を採用」と単数で書かれているため）。⑵ 両キーが有効宣言なら `source()` は常に `ExtensionKey`（方向一致時も含む・`DirectionSource` に「両者一致」の枠が無いため）。いずれも最終 `WritingMode` は不変で、差は記録の有無と `source()` の値のみ。実装者・レビュアーの双方が独立に spec 整合と判定した。
 - **`writing.rs` の doc に残る `R5.x` は完了 spec `areka-P0-emo-text-layer` の要件番号**であり、本仕様の Requirement 5（縦書きで意味が変わる正典語彙）とは別物。ファイル内一貫性のため 2.1 では現行番号体系を踏襲した。**群 4 以降で新たに要件番号を doc へ書くときは出典 spec 名を添えること**。
+- **`wordwrappoint.y` の負値の基準は「ベース画像の下辺（image height）」であって `validrect.bottom` ではない**（`region.rs` の `resolve_or(model.wordwrappoint().y(), height, bottom, ...)`＝extent が height・fallback が bottom）。未宣言のときだけ `validrect.bottom` へ縮退する。実装者・レビュアーが独立に file:line で裏取りし、3.1 の檻が変異注入でこの区別を単独で捕まえることも実測済み。**群 6 の COMPAT 登記で「下辺基準」と書くときはこの区別を落とさないこと**。
+- **3.1 の檻はクランプ非依存に作ってある**（origin は未宣言か validrect 内側の値のみ）。レビュアーが `clamp_origin_component` を無効化した状態で新檻 7 本が全緑であることを実測済み＝**4.4 のクランプ撤去で偽の赤を出さない**。4.4 で赤くなるのは `region.rs` の既存インライン `mod tests` 5 本だけのはず（DD5 で意図別に是正する対象）。
