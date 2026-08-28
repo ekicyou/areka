@@ -79,11 +79,10 @@ const OFFSET_PROCEDURE_RELATIVE_PATH: &str =
 ///
 /// # 現在の保留
 ///
-/// - `windpi`（task 8.3 が新設した**窓**の拡大率の起点）——手順書の改訂は task 8.5 の
-///   担当である（手順の手が「モニタ間の移動」から変わるため、語だけ先に足すと採取者が
-///   点灯を確かめる手順を持たないまま語を grep することになる）。8.5 が手順書へ
-///   `kind=windpi` を書いたら、この行は⑵の検査によって**赤くなって消える**。
-const PENDING_PROCEDURE_KINDS: &[&str] = &[KIND_WINDPI];
+/// **無し。** task 8.3 が新設した `windpi` が唯一の保留だったが、task 8.5 が本仕様の手順書へ
+/// `kind=windpi` を書いたので⑵の検査が実際に赤くなり（`保留欄に残っているが、もう手順書に
+/// 載っている種別がある: ["windpi"]`）、この行を消して緑へ戻した。自壊は設計どおりに働いた。
+const PENDING_PROCEDURE_KINDS: &[&str] = &[];
 
 /// 先行仕様（atom）の手順書の本文を読む。読めなければ**失敗**（無い文書に対して緑を出さない）。
 fn procedure_text() -> String {

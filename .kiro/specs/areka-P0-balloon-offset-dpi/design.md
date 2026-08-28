@@ -617,12 +617,12 @@ pub(super) fn converge_balloon_after_skipped_write(world: &mut World, char_windo
 
 畳み込みが要るのは、**1 つの拡大率変化から起点が複数行出る**ためである。表示設定の変更では `detect_display_change_system` が `monitor` を出し、同じ処理の中で `redrive_window_dpi_for_updated_monitors` が窓の `DPI` を引き直して `windpi` も出す。モニタ間の移動では窓 1 枚ごとに `windpi` が出る（ゴースト 1 体で 4 枚）。畳まないと起点行の本数だけ遷移が水増しされる——規約 2 が作業領域だけの更新を外しているのと同じ趣旨である。
 
-**壊れるのは合否の門ではなく、人が読む量である。** 判定器に「往復が各方向に N 回以上」という*充足判定*は**実在しない**（requirements.md の Requirement 8.2 は回数を 1 度も述べていない）。回数に触れる門は `transition_judge_offset.rs:605` の `if round_trips == 0`（＝**往復が最低 1 回**・`NoRoundTripObserved`）ただ 1 つで、手順書 `transition_judge_offset_signoff_tests.rs:82` も「同じ拡大率へ**戻る**遷移が最低 1 回要る（要件 8.2）」と書く。水増しが実際に壊すのは次の 2 つである。
+**壊れるのは合否の門ではなく、人が読む量である。** 判定器に「往復が各方向に N 回以上」という*充足判定*は**実在しない**（requirements.md の Requirement 8.2 は回数を 1 度も述べていない）。回数に触れる門は `transition_judge_offset.rs:605` の `if round_trips == 0`（＝**往復が最低 1 回**・`NoRoundTripObserved`）ただ 1 つで、手順書 `transition_judge_offset_signoff_tests.rs:114` も「同じ拡大率へ**戻る**遷移が最低 1 回要る（要件 8.2）」と書く。水増しが実際に壊すのは次の 2 つである。
 
 - `OffsetReport` の `Display`（`transition_judge_offset.rs:364-377`）が刷る「遷移 N 本」。起点行 30 本のログなら 6 本ではなく 30 本と表示される。
 - `OffsetViolation::NoLowScaleRescale` の `low_side_transitions`（同 `:209-211`・メッセージ `:302-306`・`:650` で `low_side.len()` から詰める）。これは違反の**本文に載る数**であって閾値ではない。
 
-加えて手順書 `transition_judge_offset_signoff_tests.rs:170` は運用者へ「スコープごとの往復の本数は目で確かめる」と指示している。畳まないと、その目視の対象そのものが実態の 5 倍で刷られる。
+加えて手順書 `transition_judge_offset_signoff_tests.rs:221` は運用者へ「スコープごとの往復の本数は目で確かめる」と指示している。畳まないと、その目視の対象そのものが実態の 5 倍で刷られる。
 
 **「隣接」を同一フレームで定義した理由と境界。**
 
@@ -634,8 +634,8 @@ pub(super) fn converge_balloon_after_skipped_write(world: &mut World, char_windo
 
 | 判定 | 遷移番号を合否に使うか | 畳み込みの有無で違反集合が変わるか |
 |---|---|---|
-| ⑴ 往復の bit 同一（`check_round_trip`・`:583` で鍵を組む） | 使わない（鍵は `scope`／`base_offset`／`base_dpi`／`new_dpi` の値の欄だけ） | **変わらない**。畳み込みは行を落とさず順序も変えないので、`round_trips` の件数まで一致する |
-| ⑵ 判定語の腕（`check_verdict_arms`・`:519-554`） | 使わない（行単位） | **変わらない** |
+| ⑴ 往復の bit 同一（`check_round_trip`・`:585` で鍵を組む） | 使わない（鍵は `scope`／`base_offset`／`base_dpi`／`new_dpi` の値の欄だけ） | **変わらない**。畳み込みは行を落とさず順序も変えないので、`round_trips` の件数まで一致する |
+| ⑵ 判定語の腕（`check_verdict_arms`・`:521-557`） | 使わない（行単位） | **変わらない** |
 | ⑶ 低い拡大率側の追随（`check_low_scale_rescale`・`:633-652`） | **使う**（`row.transition > pending`） | **変わり得る** |
 | ⑷ 揃えの残差（`check_alignment_residual`・`:683-724`） | 使わない（行単位） | **変わらない** |
 
@@ -644,6 +644,8 @@ pub(super) fn converge_balloon_after_skipped_write(world: &mut World, char_windo
 したがって本規約が守っている性質は「**合否を甘くしない**」であって、「厳しくなる方へ倒れる」ではない（当初そう書いていたが裏付けが無く、2026-08-28 のレビューで撤回した）。
 
 決定論テストは `transition_judge_origin_tests.rs`——3 通り（両方が出る／新起点だけ／既存起点だけ）と、水増し側・畳みすぎ側の両方の檻、および 3 往復の逐語ログで「起点行 30 本に対して遷移 6 本（各方向 3 本ずつ）」を固定する——回数の下限を課すためではなく、水増しが起きていないことを測るためである。
+
+**手順書側の帰結（task 8.5 で改訂済み）**: ⑴ モニタ間の往復で出る起点は `kind=windpi` だけなので、手順は表示設定を触らず往復操作だけで完結する。⑵ 往復は**人の手でのドラッグ**で行う——合成マウス入力ではゴーストを掴めず（4 窓とも `WS_EX_TRANSPARENT` が外れない・2026-08-28 実測）、`SetWindowPos` で外から動かした結果は利用者のドラッグ経路を通らないので要件 8.2 の証跡にならない。⑶ 手順の必須の手（素の追従スコープとキーワード指定スコープの両方）を単独で満たす検体は混成の `fixtures/emo2-kakukaku-offsetdpi` だけであり、手順書 §1 がこれを名指しする。
 
 ---
 
