@@ -156,6 +156,7 @@
 - **4.5 の文言是正の実対象は design C9 の一覧より狭い**。実装者・レビュアーが独立に実測したところ、「クランプ正準」の**生きた文言**として残るのは `crates/areka-emo-text/src/viewbox_draw_test_support.rs` の 1 件のみ（`vertical_fixture_test.rs`／`layout_wrap_tests.rs`／`pipeline_test.rs`／`draw_oracle_tests.rs`／`canvas.rs`／`scale_invariance_test.rs`／`draw_readback_test.rs` は 0 件か 4.4 で是正済み）。`region.rs` に残る 5 箇所は**すべて「撤去された」「かつて」を伴う歴史記述**で生きた主張ではない。**4.5 は着手時に自分で grep を引き直すこと**（design の一覧を鵜呑みにしない）。
 - **4.4 で `region.rs` の `Some` 腕の `debug!` から構造化フィールド `corner` が落ちた**（結果に関与しなくなったため）。`None` 腕の文言・フィールドは逐語不変。記録水準表に `corner` の規定は無いので仕様違反ではない。
 - **`region.rs` の末尾 4 行（3.1 が追加した接続宣言）だけが LF 単独**で残り 752 行は CRLF。コミット時に正規化されるので差分・挙動には出ないが、群 5 以降で `region.rs` を触るときは認識しておくこと。
+- **bash の二重引用符の中にバッククォートを書かないこと**。`python -c "..."` の中に Markdown のコード表記を入れると bash がコマンド置換として実行してしまい、tasks.md の申し送り 3 行から識別子が丸ごと消えた（4.4 のコミットで実際に踏み、次のコミットで是正した）。この種の編集はスクリプトファイル経由か単一引用符で行うこと。
 
 ---
 
