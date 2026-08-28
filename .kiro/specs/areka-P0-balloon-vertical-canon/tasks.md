@@ -86,7 +86,7 @@
   - _Requirements: 3.10, 10.7_
 
 - [ ] 5. 正典キー版フィクスチャと同値檻
-- [ ] 5.1 `emo2-vertical-canon` を新設し拡張キー版との同値を檻にする
+- [x] 5.1 `emo2-vertical-canon` を新設し拡張キー版との同値を檻にする
   - `descript.txt` は既存 `emo2-vertical` との差分を **`writing_mode,vertical_rl` → `vertical,1` の 1 行だけ**に保つ・`balloons0s.txt` は同内容・origin 宣言なし（正典推奨形）・枠画像は共有フィクスチャを借用（複製しない）
   - `vertical_fixture_test.rs` へ追加: 正典キー版が縦書きへ解決される（基層のみ／2 層マージ後の双方）・**両版の `WritingMode` と `TextRegion` 全成分の逐語一致**
   - 期待 `TextRegion`＝left 36／top 46／right 356／bottom 168／start (356,46)／wrap 164（design Data Models の表と一致）
