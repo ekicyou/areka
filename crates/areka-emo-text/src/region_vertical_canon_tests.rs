@@ -246,7 +246,8 @@ fn vertical_negative_wordwrap_y_resolves_from_image_bottom_edge() {
 /// 「縦書きの折返し軸選択が `wordwrappoint.y` のみを読む網羅 match である」という
 /// **型による保証**を、人間が読める形へ翻訳したものである（設計 C4）。
 ///
-/// `origin` は未宣言形と validrect 内側の宣言形の両方で見る（クランプの発火に依存しない）。
+/// `origin` は未宣言形と validrect 内側の宣言形の両方で見る（撤去された旧「origin クランプ正準」
+/// の発火に依存しない形で書かれており、撤去後もそのまま成立する）。
 /// `wordwrappoint.y` も未宣言形と宣言形の両方で見る（既定経路と宣言経路の双方で不変）。
 #[test]
 fn vertical_region_is_invariant_to_wordwrappoint_x() {
@@ -333,7 +334,8 @@ fn validrect_edges_resolve_identically_across_writing_modes() {
         let resolved: Vec<(f32, f32, f32, f32)> = ALL_MODES
             .iter()
             .map(|mode| {
-                // origin は未宣言（クランプ非依存・要件 3.11 の縮退のみに触れる）。
+                // origin は未宣言（撤去された旧クランプ正準に非依存・要件 3.11 の
+                // 縮退のみに触れる）。
                 edges(&TextRegion::resolve(
                     &model((None, None), (None, None), rect),
                     IMAGE,

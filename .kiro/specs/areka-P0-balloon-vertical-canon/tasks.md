@@ -80,7 +80,7 @@
   - origin 4 分岐の檻を `region_vertical_canon_tests.rs` へ追加: validrect 内宣言（字義・記録 0）／外宣言（**字義**＋debug 1）／未宣言（開始角＋debug 1）／負値宣言
   - **Observable**: crate 全緑＋**4.2 の檻が無改変のまま緑**＋4 分岐檻緑
   - _Requirements: 3.1, 3.2, 3.3, 3.7, 3.8, 3.9, 3.10, 3.11, 10.5, 10.7_
-- [ ] 4.5 文言掃除（語 grep は文言網羅のみに使う）
+- [x] 4.5 文言掃除（語 grep は文言網羅のみに使う）
   - 「クランプ」「clamp_origin」「書字開始角」の語 grep で doc／assert メッセージを是正: `scale_invariance_test.rs`・`draw_readback_test.rs`・`pipeline_test.rs`・`layout_wrap_tests.rs`・`draw_oracle_tests.rs`・`canvas.rs`・`viewbox_draw_test_support.rs:93-96`（挙動はいずれも不変——validrect が画像端一致 or 未指定経路）
   - **Observable**: `crates/**` で「クランプ正準」ヒット 0 件＋**陽性対照**＝同一 grep が `.kiro/specs/areka-P0-balloon-vertical-canon/` 配下で ≥1 ヒット（道具と pathspec の生存証明）＋対象ファイルの実在列挙
   - _Requirements: 3.10, 10.7_
@@ -157,6 +157,7 @@
 - **4.4 で `region.rs` の `Some` 腕の `debug!` から構造化フィールド `corner` が落ちた**（結果に関与しなくなったため）。`None` 腕の文言・フィールドは逐語不変。記録水準表に `corner` の規定は無いので仕様違反ではない。
 - **`region.rs` の末尾 4 行（3.1 が追加した接続宣言）だけが LF 単独**で残り 752 行は CRLF。コミット時に正規化されるので差分・挙動には出ないが、群 5 以降で `region.rs` を触るときは認識しておくこと。
 - **bash の二重引用符の中にバッククォートを書かないこと**。`python -c "..."` の中に Markdown のコード表記を入れると bash がコマンド置換として実行してしまい、tasks.md の申し送り 3 行から識別子が丸ごと消えた（4.4 のコミットで実際に踏み、次のコミットで是正した）。この種の編集はスクリプトファイル経由か単一引用符で行うこと。
+- **4.5 の Observable「`crates/**` で「クランプ正準」ヒット 0 件」は literal には成立しない**——4.4 が DD4 の要求で意図的に歴史記述を書き込んだため。**親の裁定で「生きた主張 0 件＋残存は全件が撤去の目印（撤去された／かつて／旧／もう残っていない）を伴う歴史記述」へ読み替えた。**実装者・レビュアーが独立に全数調査し、生きた主張 0 件・目印を欠く歴史記述 0 件・「書字開始角」53 件は全件が未宣言の縮退か行内 alignment で正しい語、を実測。陽性対照は spec 配下 77 件。**この読み替えは 7.1 の最終ゲートでも同じ基準を使うこと**（件数は 8→9 に増えているので、数だけ見て後退と読まない）。
 
 ---
 
