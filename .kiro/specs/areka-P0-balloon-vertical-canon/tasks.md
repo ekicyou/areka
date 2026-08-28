@@ -42,7 +42,7 @@
   - **Observable**: 新檻緑・`region.rs` 本番コード非改変
   - _Requirements: 3.4, 3.5, 3.6, 3.8, 10.5, 10.6_
   - _Boundary: C4（region 檻のみ）_
-- [ ] 3.2 (P) フォント縦書き等価の構造檻を追加する
+- [x] 3.2 (P) フォント縦書き等価の構造檻を追加する
   - `draw_format_metrics_tests.rs`（兄弟テスト）へ追記——**`draw.rs`（974 行・上限まで 26 行）へは 1 行も足さない**
   - 3 モードの `reading`／`flow` 写像（縦書き 2 モード＝`TOP_TO_BOTTOM`＋`RIGHT_TO_LEFT`／`LEFT_TO_RIGHT`）
   - 本番ソースに `@` 前置のフォント名生成・標準ゴシックへの差し替えが**存在しない**こと（字面檻・「何を守っているか」を檻の doc に明記）
@@ -143,3 +143,5 @@
 - **`writing.rs` の doc に残る `R5.x` は完了 spec `areka-P0-emo-text-layer` の要件番号**であり、本仕様の Requirement 5（縦書きで意味が変わる正典語彙）とは別物。ファイル内一貫性のため 2.1 では現行番号体系を踏襲した。**群 4 以降で新たに要件番号を doc へ書くときは出典 spec 名を添えること**。
 - **`wordwrappoint.y` の負値の基準は「ベース画像の下辺（image height）」であって `validrect.bottom` ではない**（`region.rs` の `resolve_or(model.wordwrappoint().y(), height, bottom, ...)`＝extent が height・fallback が bottom）。未宣言のときだけ `validrect.bottom` へ縮退する。実装者・レビュアーが独立に file:line で裏取りし、3.1 の檻が変異注入でこの区別を単独で捕まえることも実測済み。**群 6 の COMPAT 登記で「下辺基準」と書くときはこの区別を落とさないこと**。
 - **3.1 の檻はクランプ非依存に作ってある**（origin は未宣言か validrect 内側の値のみ）。レビュアーが `clamp_origin_component` を無効化した状態で新檻 7 本が全緑であることを実測済み＝**4.4 のクランプ撤去で偽の赤を出さない**。4.4 で赤くなるのは `region.rs` の既存インライン `mod tests` 5 本だけのはず（DD5 で意図別に是正する対象）。
+- **1,000 行番人の実体は `crates/log-capture-kit/tests/file_length_guard_test.rs`**（`LINE_LIMIT = 1000`・`OVER_LIMIT_ALLOWED` 例外表 11 件・件数定数 `OVER_LIMIT_ALLOWED_COUNT`）。検証コマンドに `cargo test -p log-capture-kit` を含めること。`cargo test -p areka-emo-text` では番人は走らない。
+- **3.2 の字面檻は `draw.rs` の字面に強く依存する**（`pub fn create_text_format(` の書式・`pub const DEFAULT_FONT_NAME` の可視性・`for_mode` の全出現が 2 件であること・`seam @ (…)` 束縛が `@` の唯一の供給源であること）。レビュアーが 7 種の変異で空振りしないことを実証済みだが、**`draw.rs` を触る後続タスクは無い前提**で成立している（4.5 の対象一覧に `draw.rs` は無い・7.1 は「非接触」を確認するだけ）。将来 `draw.rs` をリファクタするときは檻の側も更新すること（檻の doc に自己説明済み）。
