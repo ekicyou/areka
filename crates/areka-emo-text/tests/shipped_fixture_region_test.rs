@@ -52,7 +52,7 @@
 //! # 付録: task 4.1 意味論の棚卸し記録（2026-08-28 実測）
 //!
 //! 本檻はこの棚卸しの産物である。監査証跡として恒久記録する（正本は
-//! `.kiro/specs/areka-P0-balloon-vertical-canon/tasks.md` 付録 A）。
+//! `.kiro/specs/completed/areka-P0-balloon-vertical-canon/tasks.md` 付録 A）。
 //!
 //! ## 対象ファイル一覧
 //!
