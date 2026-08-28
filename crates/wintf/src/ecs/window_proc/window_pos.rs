@@ -57,10 +57,7 @@ fn wants_group_follow(is_echo: bool, has_groups: bool) -> bool {
 /// 旗を自分で立てるのは、印だけ立てても**表示に変化の無い巡は省略され得る**からである
 /// （`tick_wake` の旗と `tick_gate` の判断）。省略の向こうで要求が足踏みしないよう、
 /// 変化を起こした側が旗を立てる——既存の各生産者と同じ作法である。
-fn note_external_zorder_change(
-    groups: &mut crate::ecs::window::ZOrderGroups,
-    is_echo: bool,
-) {
+fn note_external_zorder_change(groups: &mut crate::ecs::window::ZOrderGroups, is_echo: bool) {
     if wants_group_follow(is_echo, !groups.groups.is_empty()) {
         groups.pending = true;
         crate::ecs::world::tick_wake::mark(crate::ecs::world::tick_wake::ZORDER);

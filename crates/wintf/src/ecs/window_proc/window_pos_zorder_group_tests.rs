@@ -247,7 +247,10 @@ fn the_follow_trigger_is_wired_once_before_the_tick_and_reads_no_windowpos() {
 
     // 位置——`is_echo` の後、`WINDOWPOS` を読む前、巡を回す前、そして受理経路の中。
     let handler_at = index_of(&code, "pub(super) fn WM_WINDOWPOSCHANGED(");
-    let echo_at = index_of(&code, "let is_echo = crate::ecs::window::is_self_initiated();");
+    let echo_at = index_of(
+        &code,
+        "let is_echo = crate::ecs::window::is_self_initiated();",
+    );
     let call_at = index_of(&code, "note_external_zorder_change(&mut groups, is_echo);");
     let windowpos_at = index_of(&code, "let windowpos = lparam.0 as *const WINDOWPOS;");
     let tick_at = index_of(&code, "let _ = world.try_tick_on_vsync();");

@@ -16,7 +16,8 @@
 //! - [`DRAG`] — ドラッグ中（毎画面更新で回す必要があるので、tick の末尾で自分で立て直す）
 //! - [`WINDOW_CMD`] — 窓書込指令の積み上げ（`command.rs` の enqueue）
 //! - [`ZORDER`] — Z 順の要求（`zorder_pair_maintain`／`ReassertZOrder`・`zorder_group_maintain`・
-//!   `window_proc::window_pos` の追随トリガ・areka 側の `ZOrderCueSink`）
+//!   `window_proc::window_pos` の追随トリガ・areka 側の `ZOrderCueSink`・areka 側の
+//!   `balloon_visibility_phase` の再表示トリガ）
 //! - [`WM_GEOMETRY`] — 幾何・DPI・表示構成・活性化・表示／破棄系メッセージの受理
 //! - [`PRESENT`] — 表示指令の到着（areka 側の `PresentBridge`／`MoveCueSink`／lifecycle 送信端）
 //! - [`ANIM`] — dola アニメータに活性がある
