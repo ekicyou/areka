@@ -328,6 +328,14 @@ fn the_wake_is_raised_once_after_the_five_steps_and_after_every_exit() {
         code.contains("run_group_maintenance_pass(&mut groups, !pair_fixes.is_empty(), &probe);"),
         "本番の system が旗の立つ入口を通っていない（要件 7.4 が本番で成立しない）"
     );
+    // 双子は**モジュールの外から呼べない**（task 4.3 → 6.1 の補強）。上の 2 本は本ファイル
+    // 内の経路しか見ておらず、可視性を `pub(crate)` へ広げれば、他モジュールが旗を通らない
+    // 第 2 の本番経路を結線できるようになる。結線が areka 側へ着地した以上（task 6.1）、
+    // その 1 語の緩和は「本番配線をもう 1 本足すだけ」の距離にある——ここで塞ぐ。
+    assert!(
+        code.contains("\nfn run_group_maintenance_steps<P:"),
+        "①〜⑤の双子がモジュール外へ公開されている（旗を通らない第 2 の本番経路を結線できる）"
+    );
     assert!(
         code.contains("fn wants_wake("),
         "説明文を落とす処理が本文まで落としている"

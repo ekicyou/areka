@@ -22,6 +22,7 @@ use dola::cue::{CueCommand, TalkCue};
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use wintf::ecs::Visual;
 use wintf::ecs::layout::Arrangement;
+use wintf::ecs::window::{ZOrderGroupSpec, ZOrderGroups};
 
 use crate::emo2_boot::assets::build_boot_assets;
 use crate::emo2_boot::talk_lifecycle::TalkLifecycleSignal;
@@ -448,5 +449,91 @@ fn text_slot_stays_invisible_after_the_text_layer_attaches_its_surface() {
         wiring.presenter.target_visible(target),
         Some(false),
         "改行だけでは可視コンテンツにならず、バルーンも不可視のまま（Requirement 2.3）"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// ⑸ 再表示がグループ機構の追随トリガになる（areka-P0-scope-zorder-pinning 要件 7.3）
+// ---------------------------------------------------------------------------
+
+/// バルーンが実際に表示へ遷移したフレームで、重なりのグループ機構へ「是正が要るかもしれない」
+/// の印が立つ（areka-P0-scope-zorder-pinning 要件 7.3・task 5.2 → 6.1 の引受け）。
+///
+/// # なぜここに置くのか
+///
+/// トリガの実装点（`balloon_visibility_phase.rs` の `note_balloon_shown`）を持つ spec の
+/// 決定論テストは、**表示が実際に成立した巡を本番経路で通せない**——headless の表示層は
+/// 「表示が一度も確立していない」ため `show_target` が必ず失敗し、`shown` を真にできない
+/// （`balloon_visibility_phase_tests.rs` の同旨の注記）。あちらは純判断・World の状態・
+/// 結線の字面で受け入れており、**肯定側だけが本番経路で未観測**のまま残っていた。
+///
+/// 本ハーネスは実 GPU ＋実 emo2 fixture で本番の `emo2_frame_system` をそのまま回し、
+/// 実際に `target_visible == Some(true)` を成立させられる唯一の場所である（⑵と同じ助走）。
+/// よってここが肯定側の引受先になる。
+///
+/// # 両側から挟む
+///
+/// 表示が成立していないフレーム（装着だけの 1・可視コンテンツの無い 2）では印が立たない
+/// ことを先に要求する。肯定側だけを見ると「印が最初から立っている」「毎フレーム立てて
+/// いる」形が素通りする。
+///
+/// # 本ハーネスで印を動かせるのは再表示のトリガだけである
+///
+/// 維持系（印を降ろす⑤）も指令の取り出しの相（印を立てるもう 1 つの本番の書き手）も、
+/// `emo2_frame_system` には結線されていない。よって観測された印の上がりは、他の経路の
+/// 混入ではなく再表示のトリガそのものである。
+#[test]
+fn a_show_transition_raises_the_zorder_group_mark_on_the_production_frame_path() {
+    let (mut world, gw) = gpu_frame_world();
+    let (_present_tx, present_rx) = mpsc::channel::<PresentCommand>();
+    let (_lifecycle_tx, lifecycle_rx) = mpsc::channel::<TalkLifecycleSignal>();
+    let mut wiring = boot_wiring(present_rx, lifecycle_rx);
+    let target = balloon_target(0);
+
+    // グループを 1 本だけ載せた受け口（トリガは「宣言が 1 本でもあるか」を見る）。
+    let mut groups = ZOrderGroups::default();
+    groups.groups.push(ZOrderGroupSpec {
+        id: 1,
+        members: vec![
+            gw.balloon_window(0).expect("balloon 窓がある"),
+            gw.char_window(0).expect("char 窓がある"),
+        ],
+    });
+    world.insert_resource(groups);
+
+    // フレーム 1: 装着（不可視のままの確立）。
+    wiring = advance_frame(&mut world, wiring);
+    assert_eq!(
+        wiring.presenter.target_visible(target),
+        Some(false),
+        "前提: 装着だけのフレームは不可視"
+    );
+    assert!(
+        !world.resource::<ZOrderGroups>().pending,
+        "表示へ遷移していないフレームで印が立っている（毎フレーム立てる形は要件 6.4 を崩す）"
+    );
+
+    // フレーム 2: 可視コンテンツがまだ無い。
+    wiring = advance_frame(&mut world, wiring);
+    assert!(
+        !world.resource::<ZOrderGroups>().pending,
+        "可視コンテンツの無いフレームで印が立っている"
+    );
+
+    // 可視コンテンツを置く（表示の唯一の契機）。時刻は注入のみ。
+    wiring.clock.observe_cue(0.0);
+    world.insert_resource(FrameTime(1.0));
+    reveal_text(&wiring, 0, "あい");
+
+    // フレーム 3: 表示へ遷移する。
+    wiring = advance_frame(&mut world, wiring);
+    assert_eq!(
+        wiring.presenter.target_visible(target),
+        Some(true),
+        "前提: 可視コンテンツの配置で表示へ遷移する（遷移していなければ以下の主張は空虚）"
+    );
+    assert!(
+        world.resource::<ZOrderGroups>().pending,
+        "表示へ遷移したフレームでグループ機構の印が立っていない（要件 7.3 の肯定側）"
     );
 }
