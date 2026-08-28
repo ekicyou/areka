@@ -45,7 +45,7 @@
 - `crates/areka-sylphya/**` の**全域**——プロパティの実導出・語彙表・件数錠。`areka-P0-currentghost-property-tree`／`areka-P0-property-query-channels`／`areka-P0-property-catalog-lists` が所有する。
 - `\f[align]`／`\f[valign]`／下線の**実装**——`areka-P0-text-decoration-canon` が所有する（SC1 の採択は本仕様が確定させ、同 spec は再審議せず継承する）。
 - `arrow0`／`arrow1` の**画像と座標の実導出**——`areka-P0-balloon-canon-residue` 項目 1 の第 3 軸が所有する。
-- `crates/areka/src/emo2_boot/**`・`placement/**`・`presenter/**`——本仕様は非接触（W6.95 同居 3 本とのファイル素を保つ）。**`crates/pilot/**` のコードも非接触**（触るのは上記境界拡張のとおり実ゴースト定義**データファイル 1 件**＝`emo2-kakukaku/descript.txt` の origin 宣言 2 行のみ）。
+- `crates/areka/src/emo2_boot/**`・`placement/**`・`presenter/**`——本仕様は非接触（W6.95 同居 3 本とのファイル素を保つ）。**`crates/pilot/**` のコードも非接触**（触るのは上記境界拡張のとおり実ゴースト定義**データファイル 2 件**＝`emo2-kakukaku/descript.txt` と `emo2-kakukaku-wplimit/descript.txt` の origin 宣言 各 2 行のみ。**2 件目は 2026-08-28 のタスク 4.1 棚卸しで判明**——下記 C9 の訂正を参照）。
 - **完了 spec のアーカイブ本体**（`.kiro/specs/completed/areka-P0-emo-text-layer/**`）——非改変。上書きの事実は COMPAT §8 と本書に記録する（後述 DD4）。
 
 ### Allowed Dependencies
@@ -653,7 +653,7 @@ fn resolve_origin_component(
 
 - **10.7 の読み（2026-08-28 設計討議 #1 で開発者裁定・確定）**: 「退行させない」とは**被覆を失わないこと**であって、期待値が 1 つも動かないことではない。3.10 は正典の改訂を命じており、改訂に伴う期待値の更新は退行ではない（`obsolete-vs-broken-test-policy` の「壊れたら更新」）。この読みを本書の正本とする。
 - **棚卸しの規則（DD5・2026-08-28 設計討議 #1 で一般化を裁定）**: 各テスト・フィクスチャについて、意図が「書字開始角の縮退」なら**宣言を削除して未指定形へ**、意図が「宣言された origin」なら**宣言を残して期待値を字義位置へ**。適用範囲は **repo 全域の出荷／テスト資産**（`crates/**`・`examples/**`・`tests/fixtures/**`——`crates/pilot/**` の実ゴースト定義ファイルを含む）。
-- **棚卸しの方法（2026-08-28 是正・バリデーション重大 1）**: 語の grep（「クランプ」等）では当該語を含まない定義ファイルを原理的に見つけられない。**意味論で棚卸しする**——repo 全域の `origin.x`／`origin.y` 宣言を列挙し、各々の 2 層マージ後の validrect と突合して内外を判定する。2026-08-27 のバリデーション実測では宣言は 5 ファイル・範囲外は 4 件（下表の 4 行）・`emo2-kakukaku-wplimit` は validrect 全 0＝範囲 [0,0] 境界内で不変。
+- **棚卸しの方法（2026-08-28 是正・バリデーション重大 1）**: 語の grep（「クランプ」等）では当該語を含まない定義ファイルを原理的に見つけられない。**意味論で棚卸しする**——repo 全域の `origin.x`／`origin.y` 宣言を列挙し、各々の 2 層マージ後の validrect と突合して内外を判定する。2026-08-27 のバリデーション実測では宣言は 5 ファイル・範囲外は 4 件と判定していたが、**2026-08-28 のタスク 4.1 棚卸し（着手時の再検証）でこの判定に誤りが 1 件見つかった**——`emo2-kakukaku-wplimit` を「validrect 全 0＝範囲 [0,0] 境界内で不変」としたのは**基層（`descript.txt` 単体）だけを見た判定**であり、同 fixture は面別上書き層 `balloons0s.txt`（top,46／bottom,-56／left,36／right,-44）と `balloonk0s.txt`（top,40／bottom,-70／left,24／right,-48）を持つ複製であるため、**2 層マージ後の実範囲は原本 `emo2-kakukaku` と同一**（sakura [36,356]×[46,168]／kero [24,240]×[40,133]）で origin(0,0) は**範囲外**である。よって**宣言 5 ファイルすべてが範囲外**であり、是正対象は 5 件。**基層だけを見て内外を判定してはならない**（本番の読み込み経路は必ず面別上書き層を重ねる）。
 - 2026-08-27〜28 実測の候補地（着手時に意味論の棚卸しで再検証すること）:
 
 | 場所 | 現況 | 想定される是正 |
@@ -662,6 +662,10 @@ fn resolve_origin_component(
 | `tests/fixtures/emo2-choice/descript-cursor.txt:17-19` | 同型＋クランプ正準を述べるコメント | 削除＋コメント是正（開始点 (5,5) 不変） |
 | **`crates/pilot/examples/shiori-host-32/fixtures/emo2/emo2-kakukaku/descript.txt:13-14`**（2026-08-28 追加＝バリデーション重大 1） | `origin.x,0`／`origin.y,0`・面別上書き層 `balloons0s.txt:6-9`（sakura: top,46／left,36）・`balloonk0s.txt:4-7`（kero: top,40／left,24）で validrect 外。**実機サインオフと emo-present 実描画に効く実ゴースト定義**・開始点を固定するテストは現在 0 本 | 削除（既定縮退が同じ開始点 (36,46)／(24,40) を与えるため表示不変）＋**開始点を逐語固定する檻を新設**（`tests/shipped_fixture_region_test.rs`） |
 | **`tests/fixtures/emo2-choice/descript-plain.txt:17-18`**（2026-08-28 追加＝同上） | `descript-cursor.txt` と同型（validrect.left,5／top,5・`choice_fixture_test.rs:67` が読む） | 削除（開始点 (5,5) 不変） |
+| **`crates/pilot/examples/shiori-host-32/fixtures/emo2-kakukaku-wplimit/descript.txt:13-14`**（**2026-08-28 タスク 4.1 で追加＝5 件目**） | `origin.x,0`／`origin.y,0`。`readme.txt:4-14` が「`descript.txt` と全画像は原本と 1 バイトも違わない」複製であると明記しており、面別上書き層の validrect も原本と同一＝**2 層マージ後は範囲外**（原本を基層のみで判定した誤りの是正）。`windowposition-limit` の実機サインオフ用バルーン | 削除（開始点 sakura (36,46)／kero (24,40) が原本と同値で不変） |
+| **`crates/areka-emo-text/src/actor_scale_refresh_tests.rs:116-124`**（**2026-08-28 タスク 4.1 で追加**） | in-code モデル `Origin::new(Some(0), Some(0))` ＋ `ValidRect::new(Some(16), Some(200), Some(24), Some(360))` → 範囲 [24,360]×[16,200] で origin(0,0) は範囲外。assert は `assert_ne!(region, region_before)` のみ＝**クランプ撤去後も緑のまま**（全緑では検出できない） | `Origin::new(None, None)` へ（意図は validrect 差替えの検出で origin は付随物） |
+| **`crates/areka-parsers/src/balloon/validation_tests.rs:60-61／:116-117／:158-159`**（**2026-08-28 タスク 4.1 で追加＝第 3 類**） | `model.origin().x() == Some(0)` を「基層の値が面別上書き層に無くても継承される」ことの**証拠**として使う（解決後の start ではなく**宣言された生値**を見る）。`emo2-kakukaku` の実物を読むため fixture の宣言削除で**赤になる** | **継承の証拠を同条件で継承される別キーへ移す**（`wordwrappoint.y`／`font.height`／`font.color` 等）。期待値を `None` へ替えるだけでは継承の被覆が消える＝要件 10.7「被覆を失わない」に反する |
+| **`crates/areka-emo-present/src/balloon_model_tests.rs:118-123`**（**2026-08-28 タスク 4.1 で追加＝第 3 類**） | 同上（2 scope のループ内で `origin().x() == Some(0)` を descript 継承の証拠に使う）。fixture は `balloon_test_support.rs` 経由で `emo2-kakukaku` の実物 | 同上（別キーへ移す） |
 | `src/region.rs` インライン `mod tests` :493／:502／:537／:562／:573 | クランプ結果を逐語固定 | 縮退を見る 2 件は `origin=None` モデルへ・宣言値を見る 3 件は期待値を字義位置へ |
 | `tests/vertical_fixture_test.rs:104/:116-117` | 「クランプ正準」の語＋`start()==(356,46)` | 文言のみ是正（フィクスチャ側の宣言削除により値は不変） |
 | `tests/scale_invariance_test.rs:340/:385`・`tests/draw_readback_test.rs:15/:77/:385/:394/:545`・`tests/pipeline_test.rs:487` | doc／assert メッセージがクランプ正準に言及 | 文言是正＋モデルの origin 宣言の棚卸し |
