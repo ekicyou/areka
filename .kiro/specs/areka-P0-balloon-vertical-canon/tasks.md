@@ -4,7 +4,7 @@
 > **file:line は 2026-08-27〜28 実測**。着手時に必ず引き直すこと（本リポジトリで陳腐化を通算 8 度踏んでいる）。
 > 実装上の正本: 型と契約は design.md の C1〜C9／DD1〜DD9・記録水準は Error Handling 表・§8 の行内容は Data Models 登記台帳。
 
-- [ ] 1. 転記層の受口（`vertical` の生値転記）
+- [x] 1. 転記層の受口（`vertical` の生値転記）
 - [x] 1.1 `vertical` 生値の保持を balloon モデルへ追加する
   - 生値フィールド＋additive ビルダー（`with_cursor`／`with_windowposition_raw` と同じ流儀）＋アクセサ。`new()` の 7 引数署名は非改変
   - 未宣言（`None`）と宣言（空文字列含む）を潰さない。解釈・検証・警告は一切行わない（転記層の無警告契約）
@@ -17,7 +17,7 @@
   - **Observable**: 4 テスト緑・転記層のログ発行 0 件のまま
   - _Requirements: 1.4, 1.5, 10.4_
 
-- [ ] 2. 書字方向の唯一の決定点
+- [x] 2. 書字方向の唯一の決定点
 - [x] 2.1 書字方向の決定記録型を新設し既存の解決を委譲へ縮小する
   - 宣言分類 2 種（正典キー: 未宣言/横/縦/不正・拡張キー: 未宣言/宣言/未知）と採用出所の enum、決定記録型（`mode`／`source`／`conflicting`／`.vertical` 導出値）を design C2 の契約どおりに実装
   - 共存規則: 有効宣言なし→正典既定の横書き（記録なし）／単独→そのキー／一致併記→無記録／**矛盾併記→拡張キー採用＋DEBUG 記録（両キーの生値を構造化フィールドで・resolve の内側で）**／不正値・未知値は「指定なし」として合流（DD6・警告は発行済み）
@@ -34,7 +34,7 @@
   - **Observable**: 新檻全緑＋`PURE_SOURCES` 構造檻緑
   - _Requirements: 1.6, 1.7, 2.2, 2.3, 2.4, 2.5, 2.7, 7.1, 10.3, 10.6_
 
-- [ ] 3. 一致の固定（コード変更 0・檻のみ）
+- [x] 3. 一致の固定（コード変更 0・檻のみ）
 - [x] 3.1 (P) 縦書き座標意味論の檻を新設する
   - `region_vertical_canon_tests.rs` 新設＋`PURE_SOURCES` へ列挙
   - `wordwrappoint.y` の既定＝`validrect.bottom`・負値＝下辺基準／**`wordwrappoint.x` だけを変えた 2 モデルが同一の `TextRegion` を与える**（型の保証を読める形へ）／`validrect` 4 辺が横書きと同一に解決される
@@ -51,7 +51,7 @@
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.6_
   - _Boundary: C5（draw 兄弟テストのみ）_
 
-- [ ] 4. origin クランプ正準の撤去と追随（段3＋段4＝不可分の論理単位）
+- [x] 4. origin クランプ正準の撤去と追随（段3＋段4＝不可分の論理単位）
 - [x] 4.1 意味論の棚卸し（着手時・どの編集よりも先）
   - repo 全域（`crates/**`・`examples/**`・`tests/fixtures/**`）の `origin.x`／`origin.y` 宣言を列挙し、各々の **2 層マージ後の validrect と突合**して内外を判定する（語 grep は使わない——当該語を含まない定義ファイルを原理的に見つけられないため）
   - 範囲外集合が既知 4 件（`emo2-vertical`／`emo2-choice/descript-cursor`／`emo2-choice/descript-plain`／`emo2-kakukaku`）と一致することを確認。**5 件目が出た場合は DD5（意図別: 縮退なら宣言削除・宣言そのものなら期待値を字義位置へ）で分類してから先へ進む**
@@ -85,7 +85,7 @@
   - **Observable**: `crates/**` で「クランプ正準」ヒット 0 件＋**陽性対照**＝同一 grep が `.kiro/specs/areka-P0-balloon-vertical-canon/` 配下で ≥1 ヒット（道具と pathspec の生存証明）＋対象ファイルの実在列挙
   - _Requirements: 3.10, 10.7_
 
-- [ ] 5. 正典キー版フィクスチャと同値檻
+- [x] 5. 正典キー版フィクスチャと同値檻
 - [x] 5.1 `emo2-vertical-canon` を新設し拡張キー版との同値を檻にする
   - `descript.txt` は既存 `emo2-vertical` との差分を **`writing_mode,vertical_rl` → `vertical,1` の 1 行だけ**に保つ・`balloons0s.txt` は同内容・origin 宣言なし（正典推奨形）・枠画像は共有フィクスチャを借用（複製しない）
   - `vertical_fixture_test.rs` へ追加: 正典キー版が縦書きへ解決される（基層のみ／2 層マージ後の双方）・**両版の `WritingMode` と `TextRegion` 全成分の逐語一致**
@@ -94,7 +94,7 @@
   - _Requirements: 10.1, 10.2, 10.9_
   - _Depends: 2.1, 4.3_
 
-- [ ] 6. 互換台帳への登記（文書のみ・コード非接触）
+- [x] 6. 互換台帳への登記（文書のみ・コード非接触）
 - [x] 6.1 双方向登記の着手時再検証（DD8 前半・6.2〜6.4 の前提）
   - design.md「追跡先の双方向登記」表 6 行の file:line を**引き直す**（追跡先 brief は同ウェーブ中に動きうる）。変動があれば表を追随
   - **Observable**: 6 行それぞれの再検証結果（一致／追随内容）が design.md の表に反映されている
@@ -122,7 +122,7 @@
   - _Requirements: 11.9_
   - _Boundary: doc/emo2-conformance-scope.md（6.2〜6.4 の COMPAT_ARCHITECTURE.md とファイル非重複）_
 
-- [ ] 7. 最終ゲート
+- [x] 7. 最終ゲート
 - [x] 7.1 全体検証と双方向登記の完了時再検証
   - ワークスペース全テスト緑（**ただし「全緑」を十分性の証拠にしない**——4.1 の棚卸し記録と各檻の存在が正）
   - `layout_cursor_tests.rs`（670 行・13 本）が**無改変で緑**＝`\_l` を 1 ビットも変えていない証跡
