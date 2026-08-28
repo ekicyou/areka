@@ -45,6 +45,22 @@ scope 0 はキーワードのままなので wplimit 側の `windowposition.y,0`
 原本の数値指定 x=266 / x=-190 を期待値に持つためである。`fixtures/emo2` ツリーの外
 （兄弟ディレクトリ）に置いてあるので、ゴーストツリーの列挙にも影響しない。
 
+見た目について（誤読注意・2026-08-29 追記）
+----------------------------------------
+
+scope 0 のバルーンは、シェルの上端に下端が接する位置に出る（重なりゼロ）ため、
+原本の検体を見慣れた目には「上すぎる」「ずれている」ように映る。これは
+windowposition.x,center の正典どおりの姿である——ukadoc の \![set,balloonalign,ID] が
+center を「シェルの中央上座標に、バルーンの中央下座標が接する」と定めており、
+areka の実装（placement/resolver.rs の CenterTop＝char_y - balloon_h）はこれに一致する。
+原本 emo2-kakukaku は数値指定（＝上端揃え＋作者の調整）なので重なって見えるだけである。
+
+したがって本検体は「バルーンの見栄えを目で確かめる」用途には向かない。
+見栄えや、キーワードと無関係な確認（例: descript の balloon.offsetx/offsety に
+拡大率が掛かることの確認）を行うときは、原本 fixtures/emo2/emo2-kakukaku を使うこと。
+本検体の scope 0 は画面内維持の関門にも掛かりやすく（右へ動かすと右端で押し戻される）、
+移動量そのものを目で測る観測点にもならない。
+
 使い方: 起動時に argv[2]（バルーンルート）としてこのディレクトリの絶対パスを渡す。
 手順の全体は `crates/areka/src/placement/transition_judge_offset_signoff_tests.rs` の
 モジュール doc を参照。
