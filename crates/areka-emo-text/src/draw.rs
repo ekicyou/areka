@@ -139,6 +139,12 @@ pub const RESERVED_KEY_DISABLE_FONT_PREFIX: &str = "disable.font.";
 ///
 /// `#[non_exhaustive]`＋フィールドなし＝crate 外から意味を持たせられない構造保証。
 /// 実装（`\f[disable]` によるフォント変更禁止）は M2/後続ユニットの領分。
+///
+/// **縦書き写像は確定済み**（spec `areka-P0-balloon-vertical-canon` 要件 5.1〜5.3・5.7）——
+/// `align` は `left`＝上寄せ／`right`＝下寄せ／`center`＝縦中央、`valign` は `top`＝右寄せ／
+/// `bottom`＝左寄せ、下線は列の右側。正典 2 ページで `valign` の写像が逆である事実（疑義 SC1）と
+/// areka が採る側の理由は `doc/COMPAT_ARCHITECTURE.md` §8 の該当行が正本で、実装の追跡先は
+/// `areka-P0-text-decoration-canon`（同 spec は本裁定を再審議せず継承する）。
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct FontDisableSeam {}

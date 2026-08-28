@@ -9,6 +9,8 @@
 //! - RGB 部分欠落が個別 `None`（`font.color.r` のみ存在・R2.6）。
 //! - `writing_mode` の生文字列転記 4 パターン（単層／画像別上書き後勝ち／未指定＝`None`／
 //!   未知値素通し・解釈しない・emo-text-layer 要件 5.6）。
+//! - SSP 正典キー `vertical` の生文字列転記 4 形（単層／面別上書き層の後勝ち／未指定＝`None`
+//!   かつ宣言された `0` と区別／語彙外値素通し・balloon-vertical-canon 要件 1.4/1.5/10.4）。
 
 use super::parse::{parse, parse_str};
 use std::collections::BTreeMap;
@@ -353,4 +355,55 @@ fn writing_mode_unknown_value_passes_through_raw() {
 
     // 未知語彙でも解釈せず生文字列のまま転記する。
     assert_eq!(got.writing_mode(), Some("diagonal_bt"));
+}
+
+/// `vertical` 単層指定（descript のみ）→ 生文字列がそのまま転記される（要件 1.4）。
+#[test]
+fn vertical_descript_single_layer_transcribed() {
+    let descript = map(&[("vertical", "1")]);
+
+    let got = parse(&descript, None);
+
+    assert_eq!(got.vertical_raw(), Some("1"));
+}
+
+/// `vertical` 面別上書き層の後勝ち → 画像別層の値が descript 基層を上書きする（要件 1.5/10.4）。
+///
+/// 2 層マージはキー非依存の既存実装であり、`vertical` のためのマージ改変は 0 行である
+/// （＝追加コード 0 で後勝ちが成立することの証跡）。
+#[test]
+fn vertical_image_layer_overrides_descript() {
+    let descript = map(&[("vertical", "0")]);
+    let image = map(&[("vertical", "1")]);
+
+    let got = parse(&descript, Some(&image));
+
+    assert_eq!(got.vertical_raw(), Some("1"));
+}
+
+/// `vertical` 未指定 → `None`。宣言された `0` とは区別して保持する（要件 1.4）。
+///
+/// 「未宣言」と「`0` の宣言」を潰さないことが共存規則（下流の書字方向の解決）の前提であり、
+/// 両者を同一のモデル上で対比して固定する。
+#[test]
+fn vertical_unspecified_is_none_and_distinct_from_declared_zero() {
+    let unspecified = parse(&map(&[("origin.x", "12")]), None);
+    let declared_zero = parse(&map(&[("vertical", "0")]), None);
+
+    assert_eq!(unspecified.vertical_raw(), None);
+    // 宣言された `0` は `None` へ潰れない（未宣言との区別が保たれる）。
+    assert_eq!(declared_zero.vertical_raw(), Some("0"));
+}
+
+/// `vertical` の語彙外値も解釈せず・警告せず素通しで転記される（転記層の無警告契約・要件 1.4）。
+///
+/// `0`/`1` の検証・語彙外値の警告付き縮退は下流（書字方向の解決層）の責務であり、
+/// parser はここで判断しない（steering「parser は転記層・解釈は下流」）。
+#[test]
+fn vertical_out_of_vocabulary_value_passes_through_raw() {
+    let got_numeric = parse(&map(&[("vertical", "2")]), None);
+    let got_word = parse(&map(&[("vertical", "true")]), None);
+
+    assert_eq!(got_numeric.vertical_raw(), Some("2"));
+    assert_eq!(got_word.vertical_raw(), Some("true"));
 }

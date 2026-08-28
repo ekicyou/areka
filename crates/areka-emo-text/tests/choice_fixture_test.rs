@@ -25,7 +25,9 @@ use areka_emo_text::actor::{
     ChoiceHitRow, ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame,
 };
 use areka_emo_text::choice::ResolvedChoiceStyle;
+use areka_emo_text::region::TextRegion;
 use areka_emo_text::state::TextLayerConfig;
+use areka_emo_text::writing::WritingMode;
 use areka_parsers::balloon::{BalloonModel, parse_str};
 use areka_parsers::charset::{DefaultEncoding, decode};
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
@@ -70,6 +72,51 @@ fn plain_model() -> BalloonModel {
 fn font_color_tuple(model: &BalloonModel) -> (u8, u8, u8) {
     let c = model.font().color();
     (c.r().unwrap_or(0), c.g().unwrap_or(0), c.b().unwrap_or(0))
+}
+
+// ══ 開始点の檻: origin 未宣言（正典推奨形）でも書字開始角 (5,5) が変わらない（GPU 不要） ══════
+
+/// 両 fixture の**描画開始点**が `(5, 5)` であることを固定する
+/// （spec `areka-P0-balloon-vertical-canon` 要件 3.11／10.9）。
+///
+/// 同 spec は「origin クランプ正準」を撤去し、あわせて validrect 外の `origin.x,0`／`origin.y,0`
+/// 宣言を持っていた出荷／テスト資産を**正典推奨形**（指定せず validrect の定義に任せる）へ
+/// 是正した。本 fixture の 2 本もその対象だが、**着地後も開始点を観測する消費者が 1 本も
+/// 無かった**（同 spec タスク 4.1 の意味論棚卸しが着手前に記録した既知の穴）。ここで塞ぐ。
+///
+/// - **撤去前**（宣言 `origin(0,0)` ＋クランプ）: `0` は validrect `[5, …]` の外なので書字開始角 `(5,5)` へ寄っていた。
+/// - **撤去後**（宣言なし）: `None` 腕が書字開始角 `(5,5)` へ縮退する。
+///
+/// つまり両経路が同じ値を与えるため是正は挙動中立である——その主張を反証可能にするのが本檻。
+/// もし `origin` 宣言が復活すれば、クランプはもう無いので開始点は字義どおり `(0,0)` へ落ちて赤くなる。
+///
+/// 開始点が**画像原寸に依存しない**ことも併せて見る（`validrect.left`／`.top` が非負素通しのため）。
+/// 本 fixture は画像を持たないので、これは「どの寸法で解決しても同じ」ことの明示でもある。
+#[test]
+fn choice_fixtures_start_at_writing_corner_regardless_of_image_size() {
+    // 画像原寸を 2 通り振る（負値辺 right/bottom は寸法で動くが、開始点は動かない）。
+    for image_size in [(200u32, 150u32), (400u32, 224u32)] {
+        for (label, model) in [("cursor", cursor_model()), ("plain", plain_model())] {
+            // 前提: 正典推奨形＝origin は未宣言のまま（宣言が戻ったら本檻の意味が変わる）。
+            assert_eq!(
+                (model.origin().x(), model.origin().y()),
+                (None, None),
+                "{label}: fixture は origin を宣言しない（正典推奨形・要件 10.9）"
+            );
+
+            let region = TextRegion::resolve(&model, image_size, WritingMode::HorizontalTb);
+            assert_eq!(
+                region.start(),
+                (5.0, 5.0),
+                "{label} / {image_size:?}: 書字開始角＝validrect 左上 (5,5)（要件 3.11）"
+            );
+            assert_eq!(
+                (region.left(), region.top()),
+                (5.0, 5.0),
+                "{label} / {image_size:?}: validrect の left/top は非負素通し"
+            );
+        }
+    }
 }
 
 // ══ テスト 1: fixture descript が実 parse で期待スタイルへ解決される（GPU 不要） ══════════════

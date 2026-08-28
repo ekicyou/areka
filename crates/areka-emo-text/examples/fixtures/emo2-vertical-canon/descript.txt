@@ -10,7 +10,7 @@ craftmanurl,https://ekicyou.github.io/2020/08/10/emo.html
 
 use_self_alpha,1
 
-writing_mode,vertical_rl
+vertical,1
 
 
 wordwrappoint.x,-34

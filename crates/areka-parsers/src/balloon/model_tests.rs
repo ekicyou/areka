@@ -509,3 +509,88 @@ fn cursor_blendmethod_value_variants_transcribed_verbatim() {
         assert_eq!(got.cursor().blendmethod(), Some(blend), "blend={blend:?}");
     }
 }
+
+/// SSP 正典キー `vertical` の生値は additive 追加であり、`new` だけで組んだモデルでは
+/// 未宣言（`None`）から始まる。相乗りさせても既存アクセサの戻り値は 1 つも変わらない
+/// （要件 1.4／1.8・`with_windowposition_raw` 流儀）。
+#[test]
+fn balloon_model_vertical_raw_defaults_to_unspecified_and_builder_overrides() {
+    let base = BalloonModel::new(
+        WindowPosition::new(Some(-34), Some(56)),
+        Origin::new(Some(12), Some(34)),
+        WordWrapPoint::new(Some(-34), None),
+        ValidRect::new(Some(10), Some(-56), Some(20), Some(-34)),
+        Font::new(
+            Some("さざなみゴシック".to_string()),
+            Some(12),
+            FontColor::new(Some(255), Some(255), Some(255)),
+        ),
+        Some("vertical_rl".to_string()),
+        Some("1".to_string()),
+    );
+    // additive 既定は未宣言。
+    assert_eq!(base.vertical_raw(), None);
+
+    let with_vertical = base.clone().with_vertical_raw(Some("1".to_string()));
+    assert_eq!(with_vertical.vertical_raw(), Some("1"));
+    // 既存の解析結果は 1 つも変わらない（要件 1.8）。
+    assert_eq!(with_vertical.windowposition(), base.windowposition());
+    assert_eq!(with_vertical.origin(), base.origin());
+    assert_eq!(with_vertical.wordwrappoint(), base.wordwrappoint());
+    assert_eq!(with_vertical.validrect(), base.validrect());
+    assert_eq!(with_vertical.font(), base.font());
+    assert_eq!(with_vertical.writing_mode(), base.writing_mode());
+    assert_eq!(with_vertical.budoux_newline(), base.budoux_newline());
+    assert_eq!(with_vertical.cursor(), base.cursor());
+    assert_eq!(
+        with_vertical.windowposition_raw(),
+        base.windowposition_raw()
+    );
+}
+
+/// 未宣言（`None`）と `vertical,0` の宣言（`Some("0")`）を潰さずに区別して保持する
+/// （共存規則の判定に宣言の有無が要る・要件 1.4）。
+#[test]
+fn balloon_model_vertical_raw_absent_is_distinct_from_declared_zero() {
+    let absent = BalloonModel::new(
+        WindowPosition::new(None, None),
+        Origin::new(None, None),
+        WordWrapPoint::new(None, None),
+        ValidRect::new(None, None, None, None),
+        Font::new(None, None, FontColor::new(None, None, None)),
+        None,
+        None,
+    );
+    let declared_zero = absent.clone().with_vertical_raw(Some("0".to_string()));
+
+    assert_eq!(absent.vertical_raw(), None);
+    assert_eq!(declared_zero.vertical_raw(), Some("0"));
+    assert_ne!(absent.vertical_raw(), declared_zero.vertical_raw());
+    // モデル全体としても両者は判別される。
+    assert_ne!(absent, declared_zero);
+}
+
+/// 空文字列の宣言（`vertical,`）は `None` へ潰さない。値の解釈・語彙判定・縮退は
+/// 下流（書字方向の解決）の責務であり、転記層は素通しで保持する（要件 1.4）。
+#[test]
+fn balloon_model_vertical_raw_empty_declaration_is_not_collapsed_to_none() {
+    let base = BalloonModel::new(
+        WindowPosition::new(None, None),
+        Origin::new(None, None),
+        WordWrapPoint::new(None, None),
+        ValidRect::new(None, None, None, None),
+        Font::new(None, None, FontColor::new(None, None, None)),
+        None,
+        None,
+    );
+    let empty = base.clone().with_vertical_raw(Some(String::new()));
+    assert_eq!(empty.vertical_raw(), Some(""));
+    assert_ne!(empty.vertical_raw(), None);
+    assert_ne!(empty, base);
+
+    // 語彙外の値も解釈せず逐語で保持する（不透明転写・`cursor.style` 流儀）。
+    for raw in ["2", "true", "01"] {
+        let got = base.clone().with_vertical_raw(Some(raw.to_string()));
+        assert_eq!(got.vertical_raw(), Some(raw), "vertical={raw:?}");
+    }
+}

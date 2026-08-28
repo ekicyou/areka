@@ -467,3 +467,271 @@ fn dwrite_metrics_warns_on_font_height_mismatch() {
         "値は束縛 format の実測のまま（縮退継続）"
     );
 }
+
+// ── C5 フォント縦書き等価の構造檻（spec areka-P0-balloon-vertical-canon 要件 6.1〜6.4／6.6） ──
+//
+// **何を守っているか**（同 spec 裁定 4・design.md C5）: areka は SSP の
+// 「フォント名の頭に `@` を付けて縦書き異体を選び、異体が無ければ環境の標準ゴシックへ
+// 自動差し替える」機構を**模倣しない**。DirectWrite のネイティブ縦組みをそのまま用い、
+// バルーン定義の `font.name` は縦書きでも差し替えない。したがって要件 6.2／6.3 は
+// 「その経路が**存在しない**」という不在の主張であり、値を突き合わせる普通のテストでは
+// 書けない。以下は不在を本番ソース `draw.rs` の字面と構造で固定する檻である。要件 6.4
+// （計測と描画が同一の format 工場を通る）も「呼び手がここ以外に増えていない」という
+// 構造の主張なので同じ手段で固定する。
+//
+// **既存が固定済みのものは重ねない**: 要件 6.1／6.6（3 モードの reading／flow 写像）は
+// 本ファイルの `direction_recipe_maps_three_modes_per_design_table`（写像表そのもの・
+// 3 モード全て）と `all_direction_recipes_share_leading_near_alignment`（共通部）が既に
+// 固定している。COM 側の焼き込みも
+// `text_format_from_missing_definition_carries_defaults_and_recipe` が 3 モードで
+// TextFormat から読み戻して確認済み。よってここでは写像の再宣言を作らない。
+//
+// **空振りの危険と更新義務**（design.md C5 Risks の明示要求）: 字面検査はリファクタで
+// 名前や書式が変わると、赤くならないまま守備範囲だけが消える。この檻は `draw.rs` の
+// 次の名前と形に依存している——`create_text_format`／`try_create_format`／
+// `DirectionRecipe::for_mode`／`DEFAULT_FONT_NAME`、および `cargo fmt` が保証する
+// トップレベル項目の列 0 閉じ括弧。**これらを改名・改形したときは、この檻も同時に
+// 更新すること。** 各檻は自分自身に陽性対照（既知の違反文字列を同じ検査関数へ通して
+// 検出できることの確認）を持たせてあり、検査関数が壊れたときは陽性対照が先に落ちる。
+//
+// 本節の要件番号はすべて spec `areka-P0-balloon-vertical-canon` のもの。`draw.rs` 本文の
+// `R4.2` 等は完了 spec `areka-P0-emo-text-layer` の番号であり別物。
+
+/// 本番ソース `draw.rs` の本文。`#[path]` で取り込まれる本テストファイルの本文は
+/// 含まれない（`include_str!` はディスク上の `draw.rs` 単体を読む）。
+const DRAW_RS: &str = include_str!("draw.rs");
+
+/// 改行を LF へ正規化した `draw.rs` 本文。ワークツリーは `core.autocrlf` により CRLF で
+/// 展開されるため、行末に依存する検査（列 0 閉じ括弧・行単位の走査）は必ずこれを使う。
+fn draw_rs() -> String {
+    DRAW_RS.replace('\r', "")
+}
+
+/// 部分文字列の非重複出現数。
+fn count(src: &str, needle: &str) -> usize {
+    src.matches(needle).count()
+}
+
+/// トップレベル関数 1 本の本文（署名の先頭から列 0 の閉じ括弧の直前まで）を切り出す。
+///
+/// 列 0 の `}` に依拠できるのは、ワークスペースが `cargo fmt --all -- --check` を常時
+/// ゲートしており、トップレベル項目の閉じ括弧が必ず列 0 に来るため。
+fn top_level_fn_source<'a>(src: &'a str, signature_head: &str) -> &'a str {
+    let start = src.find(signature_head).unwrap_or_else(|| {
+        panic!("draw.rs に `{signature_head}` が無い——改名したなら本檻も更新すること")
+    });
+    let rest = &src[start..];
+    let end = rest
+        .find("\n}\n")
+        .expect("トップレベル関数の列 0 閉じ括弧が見つからない（rustfmt 前提が崩れている）");
+    &rest[..end]
+}
+
+/// `patterns` のうち `src` に現れたものを列挙する（禁止パターン検査の本体）。
+fn hits<'p>(src: &str, patterns: &'p [&'p str]) -> Vec<&'p str> {
+    patterns
+        .iter()
+        .copied()
+        .filter(|pat| src.contains(pat))
+        .collect()
+}
+
+/// 「フォント名の頭へ `@` を付ける」生成の字面パターン。`"@` は `"@"`／`"@{}"`／
+/// `format!("@{name}")` を、`'@'` は char 経路（`push('@')`／`insert(0, '@')`）を捕まえる。
+/// Rust の束縛パターン（`seam @ (..)`）は素の `@` なのでどちらにも当たらない＝誤検出しない。
+const AT_PREFIX_PATTERNS: &[&str] = &["\"@", "'@'"];
+
+/// 要件 6.2: 本番ソースに「フォント名の頭へ `@` を付ける」生成が存在しない。
+#[test]
+fn at_prefixed_font_name_generation_is_absent_from_production_source() {
+    let src = draw_rs();
+    // 空振り防止: draw.rs には素の `@`（束縛パターン）が現に在る。`@` が 1 個も無いから
+    // 緑、という無意味な緑ではないことを先に示す。
+    assert!(
+        src.contains('@'),
+        "draw.rs に `@` が 1 個も無い——この檻は空振りしている可能性がある"
+    );
+    assert_eq!(
+        hits(&src, AT_PREFIX_PATTERNS),
+        Vec::<&str>::new(),
+        "SSP の `@` フォント機構（縦書き異体名の生成）が draw.rs に現れた。\
+         areka は裁定 4 によりこれを模倣しない"
+    );
+    // 陽性対照: 同じ検査関数が既知の違反を確かに検出する。
+    for planted in [
+        r#"    let name = format!("@{}", font.name);"#,
+        r#"    let name = "@".to_owned() + &font.name;"#,
+        r#"    let mut name = font.name.clone(); name.insert(0, '@');"#,
+    ] {
+        assert!(
+            !hits(planted, AT_PREFIX_PATTERNS).is_empty(),
+            "陽性対照を検出できない＝禁止パターンが空振りしている: {planted}"
+        );
+    }
+    // 陰性対照: Rust の束縛パターンの素の `@` では発火しない（誤検出しない）。
+    assert!(
+        hits(
+            "                seam @ (ResidentContent::Image(_)) => {}",
+            AT_PREFIX_PATTERNS
+        )
+        .is_empty(),
+        "束縛パターンの `@` で発火する＝誤検出する檻になっている"
+    );
+}
+
+/// 要件 6.3: DirectWrite へ渡るフォント family 名は「バルーン定義の名前そのまま」か
+/// 「既定フォント再試行」の 2 つだけ——縦書き専用の差し替え先は存在しない。
+#[test]
+fn font_family_reaches_directwrite_only_as_author_name_or_default_retry() {
+    let src = draw_rs();
+    // family 名が DirectWrite へ渡る唯一の窓口は try_create_format。定義 1＋呼出 2 で 3。
+    assert_eq!(
+        count(&src, "try_create_format"),
+        3,
+        "try_create_format の出現が 1 定義＋2 呼出から動いた——family 名の入口が増減した疑い"
+    );
+    let body = top_level_fn_source(&src, "pub fn create_text_format(");
+    // 切り出しが本物であることの確認（範囲取得が壊れていたらここで落ちる）。
+    assert!(
+        body.contains("DirectionRecipe::for_mode"),
+        "create_text_format の本文切り出しが失敗している: {body}"
+    );
+    assert_eq!(
+        count(body, "try_create_format("),
+        2,
+        "呼出 2 箇所はいずれも create_text_format の内側にある"
+    );
+    assert!(
+        body.contains("try_create_format(factory, &font.name, font.height)"),
+        "1 回目はバルーン定義の font.name をそのまま渡す（別名へ差し替えない）"
+    );
+    assert!(
+        body.contains("try_create_format(factory, DEFAULT_FONT_NAME, font.height)"),
+        "2 回目は生成失敗時の既定フォント再試行のみ（書字方向とは無関係な経路）"
+    );
+    // 既定フォント名リテラルは宣言 1 箇所だけ——縦書き専用の差し替え先が別に
+    // 埋め込まれていないこと。ログ文中の ＭＳ ゴシックは引用符に挟まれないので当たらず、
+    // doc コメントの Yu Gothic UI 実測例も対象外＝誤検出しない。
+    assert!(
+        src.contains("pub const DEFAULT_FONT_NAME: &str = \"ＭＳ ゴシック\";"),
+        "既定フォント名の宣言が見つからない——改名したなら本檻も更新すること"
+    );
+    assert_eq!(
+        count(&src, "\"ＭＳ ゴシック\""),
+        1,
+        "フォント名リテラルが DEFAULT_FONT_NAME の宣言以外にも現れた"
+    );
+}
+
+/// 要件 6.2／6.3: `create_text_format` の中で書字方向が効くのは方向レシピの 1 行だけ
+/// ——フォント名の選択は writing_mode に一切依存しない。
+#[test]
+fn writing_mode_selects_only_the_direction_recipe_not_the_font_name() {
+    let src = draw_rs();
+    let body = top_level_fn_source(&src, "pub fn create_text_format(");
+    let mode_lines: Vec<&str> = body.lines().filter(|line| line.contains("mode")).collect();
+    assert_eq!(
+        mode_lines.len(),
+        2,
+        "書字方向に触れる行が署名＋方向レシピの 2 行から増えた＝縦書き分岐が混入した疑い: \
+         {mode_lines:?}"
+    );
+    assert!(
+        mode_lines[0].contains("mode: WritingMode"),
+        "1 行目は署名の引数: {:?}",
+        mode_lines[0]
+    );
+    assert!(
+        mode_lines[1].contains("DirectionRecipe::for_mode(mode)"),
+        "2 行目は方向レシピの適用のみ: {:?}",
+        mode_lines[1]
+    );
+    // 陽性対照: 縦書き分岐でフォント名を差し替える版を同じ手順に通すと 3 行になる。
+    let planted = "pub fn create_text_format(\n    mode: WritingMode,\n) -> R {\n    \
+        let name = if mode.is_vertical() { at_name } else { &font.name };\n    \
+        DirectionRecipe::for_mode(mode).apply(&format)?;\n}\n";
+    let planted_body = top_level_fn_source(planted, "pub fn create_text_format(");
+    assert_eq!(
+        planted_body
+            .lines()
+            .filter(|line| line.contains("mode"))
+            .count(),
+        3,
+        "陽性対照（縦書き分岐でフォント名を選ぶ版）を検出できていない"
+    );
+}
+
+/// 要件 6.4: `DirectionRecipe::for_mode` の本番呼出は `create_text_format` の内側 1 箇所
+/// だけ——計測（`DWriteMetrics`）も描画（`viewbox_draw.rs`）も同じ format 工場を通る構造
+/// の証跡。呼び手が増えたらここが赤くなる。
+///
+/// **数え方**: `draw.rs` 本文に現れる識別子 `for_mode` の**全出現**を数える。現状は
+/// 定義（`pub fn for_mode(`）と呼出（`create_text_format` 内）の 2 件のみで、doc
+/// コメント中の言及も無い。`DirectionRecipe::for_mode(` という呼出形だけを数えれば
+/// たまたま 1 になるが、それでは `Self::for_mode(..)` や `use` 経由の裸呼出を見逃す。
+/// 全出現を数えて内訳を突き合わせる形にしてあるので、doc への言及が増えただけでも赤に
+/// なり、人が内訳を読み直すことになる（それが意図した厳しさ）。
+#[test]
+fn direction_recipe_factory_has_exactly_one_call_site_inside_create_text_format() {
+    let src = draw_rs();
+    assert_eq!(
+        count(&src, "for_mode"),
+        2,
+        "draw.rs の `for_mode` 出現が 2（定義 1＋呼出 1）から動いた——内訳を読み直すこと"
+    );
+    assert_eq!(
+        count(&src, "pub fn for_mode("),
+        1,
+        "内訳のうち 1 件は定義そのもの"
+    );
+    let body = top_level_fn_source(&src, "pub fn create_text_format(");
+    assert!(
+        body.contains("try_create_format("),
+        "create_text_format の本文切り出しが失敗している: {body}"
+    );
+    assert_eq!(
+        count(body, "for_mode"),
+        1,
+        "残る 1 件は create_text_format の内側の呼出でなければならない"
+    );
+    // 陽性対照: 工場の外に呼び手が増えた版を同じ数え方に通すと 3 になる。
+    let planted = "pub fn for_mode(mode: WritingMode) {}\n\
+        pub fn create_text_format() {\n    DirectionRecipe::for_mode(mode);\n}\n\
+        pub fn elsewhere() {\n    DirectionRecipe::for_mode(other);\n}\n";
+    assert_eq!(
+        count(planted, "for_mode"),
+        3,
+        "陽性対照（工場の外に呼び手が増えた版）を検出できていない"
+    );
+}
+
+/// 要件 6.2／6.3 の観測面: バルーン定義の明示フォント名は 3 モードとも TextFormat へ
+/// そのまま焼かれる——縦書きでも `@` は付かず、標準ゴシックへも差し替わらない。
+/// 字面檻がリファクタで空振りしても、この実 DirectWrite 読み戻しは挙動を捕まえる。
+#[test]
+fn explicit_font_name_is_carried_into_vertical_modes_unchanged() {
+    let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("factory");
+    let font = Font::new(
+        Some("ＭＳ Ｐゴシック".to_owned()),
+        Some(16),
+        FontColor::new(None, None, None),
+    );
+    let resolved = ResolvedFont::resolve(&model_with_font(font));
+    for mode in [
+        WritingMode::HorizontalTb,
+        WritingMode::VerticalRl,
+        WritingMode::VerticalLr,
+    ] {
+        let format =
+            create_text_format(&factory, &resolved, mode).expect("明示定義で TextFormat 生成");
+        let family = read_family_name(&format);
+        assert_eq!(
+            family, "ＭＳ Ｐゴシック",
+            "{mode:?}: 作者指定のフォント名が差し替わっている"
+        );
+        assert!(
+            !family.starts_with('@'),
+            "{mode:?}: 縦書き異体の `@` 接頭辞が付いている: {family}"
+        );
+    }
+}

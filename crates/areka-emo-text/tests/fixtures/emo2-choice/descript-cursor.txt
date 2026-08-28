@@ -14,9 +14,7 @@ font.color.r,0
 font.color.g,0
 font.color.b,0
 
-// バルーン幾何（原点＝validrect-local 書字開始角へクランプ・validrect は image 相対の負値=反対辺）。
-origin.x,0
-origin.y,0
+// バルーン幾何（origin は正典推奨形どおり宣言しない＝validrect の定義に任せる・validrect は image 相対の負値=反対辺）。
 validrect.top,5
 validrect.left,5
 validrect.right,-5
