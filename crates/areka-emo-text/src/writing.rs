@@ -460,3 +460,7 @@ mod tests {
         assert_eq!(RESERVED_KEY_TEXT_COMBINE_UPRIGHT, "text_combine_upright");
     }
 }
+
+#[cfg(test)]
+#[path = "writing_decision_tests.rs"]
+mod decision_tests;
