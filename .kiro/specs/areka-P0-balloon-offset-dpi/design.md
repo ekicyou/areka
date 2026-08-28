@@ -591,7 +591,9 @@ pub(super) fn converge_balloon_after_skipped_write(world: &mut World, char_windo
 
 - Published: `transition_diag` の `kind=offset` 行（既定 OFF）。欄＝`scope`／`base_dpi`／`new_dpi`／`base_offset`／`old_offset`／`new_offset`／`verdict`。
 - 判定語（6 値・全数を `OFFSET_VERDICT_ALL` が保証）: `rescaled`／`anchored`／`unchanged`／`keyword-pending`／`unresolved`／`saturated`。
-- Ordering: 1 遷移・1 スコープにつき高々 1 行。`kind=monitor`（`old_dpi`／`new_dpi` を持つ）と同一時系列に並ぶため、判定器は遷移の切り出しに既存の起点をそのまま使える。
+- Ordering: 1 遷移・1 スコープにつき高々 1 行。起点レコード（`old_dpi`／`new_dpi` を持つ行）と同一時系列に並ぶ。
+
+> **改訂（2026-08-28・task 8.4）**——当初ここには「`kind=monitor` と同一時系列に並ぶため、判定器は遷移の切り出しに**既存の起点をそのまま使える**」と書いてあった。**この記述は誤りである。** `kind=monitor` が出るのはモニタ表そのものが変わったとき＝表示設定の変更だけで、要件 8.2 が指示する「ゴーストをモニタ間で往復させる」操作では 1 行も出ない（実測＝`real-run-attempt-2026-08-28.md` 検出 2b）。起点は `kind=monitor` と `kind=windpi`（task 8.3 で新設・窓の表示 DPI の書き換え）の**和集合**へ広げる。確定した起点規約は下記「起点規約（task 8.4 で確定）」。
 
 **Implementation Notes**
 
@@ -603,7 +605,45 @@ pub(super) fn converge_balloon_after_skipped_write(world: &mut World, char_windo
 
 - **供給ステップ**（`placement/mod.rs` の 1 行 ＋ `offset_space::scale_author_offset`）: `apply_scope_windowpositions` の直前に走り、`cfg.scopes[*].balloon_offset` を作者空間からシェル軸の物理 px へ**その場で**置き換える。既存の加算合流（`windowposition.rs:216-219`）は無改変のまま、両辺が物理 px であることが保証される（2.3）。飽和は `warn!` で記録する（2.5）。拡大率が解決できない場合は既存の単一縮退点が `error!` を出して 96 相当へ落とすので、重複した警告を新設しない（1.5・D9）。
 - **`transition_diag` 種別 `offset`**: 既存の 4 種別と同じ形（`pub const` の語彙＋欄名定数＋全数配列＋`*_line` 純関数＋前置ガード付き `log_*`）で 1 種別を足す。`PLACEMENT_KIND_ALL` へ追加する（3.7）。
-- **`transition_judge_offset`**（`#[cfg(test)]`）: `kind=monitor` を起点に切り出した遷移ごとに `kind=offset` 行を集計し、⑴ 往復の前後で `new_offset` が bit 同一に戻ること（8.2）⑵ 遷移ごとに判定語が期待の腕であること（8.3）⑶ 低い拡大率側で `verdict=rescaled` が出ていること（8.4）⑷ キーワード指定スコープで揃えの残差が D8 の許容量以内であること（8.5）を判定する。判定語は発行側の `pub const` を参照するだけで、リテラルを書かない。
+- **`transition_judge_offset`**（`#[cfg(test)]`）: 下記の起点規約で切り出した遷移ごとに `kind=offset` 行を集計し、⑴ 往復の前後で `new_offset` が bit 同一に戻ること（8.2）⑵ 遷移ごとに判定語が期待の腕であること（8.3）⑶ 低い拡大率側で `verdict=rescaled` が出ていること（8.4）⑷ キーワード指定スコープで揃えの残差が D8 の許容量以内であること（8.5）を判定する。判定語は発行側の `pub const` を参照するだけで、リテラルを書かない。
+
+### 起点規約（task 8.4 で確定）
+
+判定器（`transition_judge::split_transitions` が単一の決定点）が遷移を切り出す規約。
+
+1. **起点候補は 2 種別の和集合**——`kind=monitor`（モニタ表の値変化＝表示設定の変更）と `kind=windpi`（窓の表示 DPI の書き換え＝モニタ間の移動・`WM_DPICHANGED` 経路とモニタ表からの引き直し経路の両方）。
+2. **拡大率が実際に変わっている行だけを起点にする**（既存規約・2 種別に等しく効く）。作業領域だけが変わった `monitor` 行も、`old_dpi == new_dpi` の `windpi` 行（経路 1 は component への代入が無条件なので、OS が同値の DPI を運ぶと出得る）も起点にしない。
+3. **同じ変化を指す起点は 1 本の遷移へ畳む**——開いている遷移の起点と ⑴ `old_dpi`→`new_dpi` の対が同一で ⑵ 同一フレーム（差は `wrapping_sub` で取る・D14）の起点候補は、新しい遷移を開かずその遷移へ入れる。畳まれた行は捨てない。
+
+畳み込みが要るのは、**1 つの拡大率変化から起点が複数行出る**ためである。表示設定の変更では `detect_display_change_system` が `monitor` を出し、同じ処理の中で `redrive_window_dpi_for_updated_monitors` が窓の `DPI` を引き直して `windpi` も出す。モニタ間の移動では窓 1 枚ごとに `windpi` が出る（ゴースト 1 体で 4 枚）。畳まないと起点行の本数だけ遷移が水増しされる——規約 2 が作業領域だけの更新を外しているのと同じ趣旨である。
+
+**壊れるのは合否の門ではなく、人が読む量である。** 判定器に「往復が各方向に N 回以上」という*充足判定*は**実在しない**（requirements.md の Requirement 8.2 は回数を 1 度も述べていない）。回数に触れる門は `transition_judge_offset.rs:605` の `if round_trips == 0`（＝**往復が最低 1 回**・`NoRoundTripObserved`）ただ 1 つで、手順書 `transition_judge_offset_signoff_tests.rs:82` も「同じ拡大率へ**戻る**遷移が最低 1 回要る（要件 8.2）」と書く。水増しが実際に壊すのは次の 2 つである。
+
+- `OffsetReport` の `Display`（`transition_judge_offset.rs:364-377`）が刷る「遷移 N 本」。起点行 30 本のログなら 6 本ではなく 30 本と表示される。
+- `OffsetViolation::NoLowScaleRescale` の `low_side_transitions`（同 `:209-211`・メッセージ `:302-306`・`:650` で `low_side.len()` から詰める）。これは違反の**本文に載る数**であって閾値ではない。
+
+加えて手順書 `transition_judge_offset_signoff_tests.rs:170` は運用者へ「スコープごとの往復の本数は目で確かめる」と指示している。畳まないと、その目視の対象そのものが実態の 5 倍で刷られる。
+
+**「隣接」を同一フレームで定義した理由と境界。**
+
+- 起点が**行として隣り合っていること**は条件にしない。同一フレームの内側では起点のあいだに受理（`kind=msg`）や追随（`kind=offset`）の行が並ぶため、隣接を字面の隣で定義すると実ログでは 1 度も畳めない。
+- **畳みすぎない側**: フレームが違えば対が同じでも別の変化として数える。上限をフレームに採るのは「1 回の変化の起点は 1 フレームに収まる」という発行側の性質（どちらの経路も 1 つの刻印で行を組む）に拠る。ここを緩めて対の一致だけで畳むと、往復を繰り返したログが 1 本の遷移へ潰れ、判定 ⑴ が「往復が 1 度も観測されていない」の偽の赤になる。
+- **畳み足りない側**: 同じ変化に属する起点がフレームをまたいで届いた場合（例——バルーン窓の `WM_DPICHANGED` が次フレームの書込で初めて届く形）は 2 本に分かれる。合否への影響は判定ごとに異なる（下表）。
+
+**遷移番号が合否に効く唯一の箇所。** `transition_judge_offset.rs` を読むと、遷移番号（`OffsetRow::transition`）を**合否に**使うのは `counts_for_low_scale`（`:626-632` の `row.transition > pending`）だけである。他の箇所は違反の本文へ番号を載せるだけで、判定には使わない。
+
+| 判定 | 遷移番号を合否に使うか | 畳み込みの有無で違反集合が変わるか |
+|---|---|---|
+| ⑴ 往復の bit 同一（`check_round_trip`・`:583` で鍵を組む） | 使わない（鍵は `scope`／`base_offset`／`base_dpi`／`new_dpi` の値の欄だけ） | **変わらない**。畳み込みは行を落とさず順序も変えないので、`round_trips` の件数まで一致する |
+| ⑵ 判定語の腕（`check_verdict_arms`・`:519-554`） | 使わない（行単位） | **変わらない** |
+| ⑶ 低い拡大率側の追随（`check_low_scale_rescale`・`:633-652`） | **使う**（`row.transition > pending`） | **変わり得る** |
+| ⑷ 揃えの残差（`check_alignment_residual`・`:683-724`） | 使わない（行単位） | **変わらない** |
+
+⑶ の向きは次のとおりである。畳むと遷移番号が等しくなり `>` が偽になるため、母数は**狭くなる**——すなわち**畳み込みが ⑶ を甘くすることはない**。逆に畳み足りない側は母数を広げ得る（門の行と追随の行が別番号になる）。ただしその 2 行は実際に時間順で前後しているので、番号が前後すること自体は ⑶ の意図（素材消費後の行だけを数える）に沿う。
+
+したがって本規約が守っている性質は「**合否を甘くしない**」であって、「厳しくなる方へ倒れる」ではない（当初そう書いていたが裏付けが無く、2026-08-28 のレビューで撤回した）。
+
+決定論テストは `transition_judge_origin_tests.rs`——3 通り（両方が出る／新起点だけ／既存起点だけ）と、水増し側・畳みすぎ側の両方の檻、および 3 往復の逐語ログで「起点行 30 本に対して遷移 6 本（各方向 3 本ずつ）」を固定する——回数の下限を課すためではなく、水増しが起きていないことを測るためである。
 
 ---
 

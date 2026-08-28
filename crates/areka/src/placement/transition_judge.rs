@@ -1,8 +1,9 @@
 //! 遷移観測ログの**判定器**——観測行の解析・遷移の切り出し・判定量の集計（純関数・I/O 無し）。
 //!
 //! design.md の C7（`transition_judge`）が正本である。3 crate（wintf・areka-emo-present・areka）が
-//! 同一の target・同一の接頭語で出した観測行を 1 本の時系列として読み、`kind=monitor` の
-//! 拡大率変化を起点に**遷移**へ切り分け、遷移ごとの判定量（[`TransitionSummary`]）を出す。
+//! 同一の target・同一の接頭語で出した観測行を 1 本の時系列として読み、`kind=monitor`／
+//! `kind=windpi` の拡大率変化を起点に**遷移**へ切り分け（起点規約は
+//! [`split_transitions`]）、遷移ごとの判定量（[`TransitionSummary`]）を出す。
 //!
 //! # 判定語を二重定義しない
 //!
@@ -219,7 +220,7 @@ impl std::fmt::Display for WindowKey {
 // 遷移の判定量
 // ---------------------------------------------------------------------------
 
-/// 遷移の起点（拡大率が変わったモニタ表更新）。
+/// 遷移の起点（拡大率が実際に変わった `kind=monitor`／`kind=windpi` の行）。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TransitionOrigin {
     /// 起点の刻印。
@@ -523,18 +524,29 @@ fn read_prefix_number<T: std::str::FromStr + Default>(
 // 遷移の切り出し
 // ---------------------------------------------------------------------------
 
-/// この行が遷移の起点か（`kind=monitor` かつ拡大率が変わっている）。
+/// この行が遷移の**起点候補**か（`kind=monitor`／`kind=windpi` のうち拡大率が変わっている行）。
 ///
-/// 作業領域だけが変わったモニタ表更新は起点にしない——起点にすると遷移が水増しされ、
-/// 「各方向 3 回以上」の充足判定（要件 8.2）が実態より甘くなる。
+/// 起点は 2 種別の**和集合**である（task 8.4）。`monitor` が出るのはモニタ表そのものが
+/// 変わったとき——表示設定の変更——だけで、ゴーストをモニタ間で移す往復（要件 8.2 が
+/// 指示する操作）では 1 行も出ない。窓の表示 DPI が書き換わったことを表す `windpi` を
+/// 起点へ加えて初めて、往復のログから遷移が切り出せる（実測は
+/// `.kiro/specs/areka-P0-balloon-offset-dpi/real-run-attempt-2026-08-28.md` の検出 2b）。
+///
+/// **拡大率が実際に変わっている行だけを起点にする**規約は 2 種別に等しく効く。作業領域
+/// だけが変わったモニタ表更新も、`WM_DPICHANGED` が同値の DPI を運んで
+/// `old_dpi == new_dpi` になった `windpi` 行も、起点にしない——起点にすると**報告される
+/// 遷移本数**が実態から離れる（下記「畳み込み」と同じ理由）。
+///
+/// 「候補」なのは **1 つの変化から起点が複数行出る**ためで、遷移の先頭に立つのはその
+/// うちの 1 行だけである（畳み込みは [`split_transitions`]）。
 pub fn is_transition_origin(record: &TransitionRecord) -> bool {
     TransitionOrigin::of(record).is_some()
 }
 
 impl TransitionOrigin {
-    /// 起点レコードなら起点情報を返す。
+    /// 起点候補なら起点情報を返す（起点判定の**単一の決定点**）。
     fn of(record: &TransitionRecord) -> Option<Self> {
-        if record.kind != KIND_MONITOR {
+        if record.kind != KIND_MONITOR && record.kind != KIND_WINDPI {
             return None;
         }
         let old_dpi: u32 = record.int_field(FIELD_OLD_DPI)?;
@@ -545,19 +557,65 @@ impl TransitionOrigin {
             new_dpi,
         })
     }
+
+    /// 開いている遷移の起点と**同じ変化**を指すか（畳み込みの規約）。
+    ///
+    /// 条件は ⑴ `old_dpi`→`new_dpi` の対が同一 ⑵ 同一フレーム（差が 0・D14 に従い
+    /// `wrapping_sub` で取り、絶対値の大小比較をしない）の連言である。
+    fn is_same_change_as(&self, open: &Self) -> bool {
+        self.old_dpi == open.old_dpi
+            && self.new_dpi == open.new_dpi
+            && self.stamp.frame.wrapping_sub(open.stamp.frame) == 0
+    }
 }
 
 /// 起点ごとに遷移を切り出す（起点から次の起点の直前まで）。
 ///
 /// 最初の起点より前の行は**どの遷移にも属さない**ので捨てる（起動時の書込を遷移へ数え
 /// 込まないため）。
+///
+/// # 同じ変化を指す起点は 1 本の遷移へ畳む
+///
+/// 1 つの拡大率変化から起点が**複数行**出る。表示設定の変更では
+/// `detect_display_change_system` が `monitor` を出し、同じ処理の中で
+/// `redrive_window_dpi_for_updated_monitors` が窓の `DPI` を引き直して `windpi` も出す。
+/// モニタ間の移動では窓 1 枚ごとに `windpi` が出る（ゴースト 1 体で 4 枚）。**畳まないと
+/// 起点行の本数だけ遷移が水増しされる**。壊れるのは合否の門ではなく**人が読む量**である
+/// ——`transition_judge_offset` の `OffsetReport` の `Display` が刷る「遷移 N 本」と
+/// `NoLowScaleRescale` の `low_side_transitions` が実態の何倍にもなる。
+///
+/// 規約は [`TransitionOrigin::is_same_change_as`]——**開いている遷移の起点と、対
+/// （`old_dpi`→`new_dpi`）が同一で、かつ同一フレームの起点候補を畳む**。畳まれた行は
+/// 捨てずにその遷移へ入れる。あいだに別種別の行が挟まっても切れない——同一フレームの
+/// 内側では起点のあいだに受理・追随の行が並ぶので、「起点が隣り合っていること」を条件に
+/// すると実ログで 1 度も畳めない。
+///
+/// 境界は同一フレームである。**畳みすぎない側**——フレームが違えば対が同じでも別の変化と
+/// して数える。上限をフレームに採るのは「1 回の変化の起点は 1 フレームに収まる」という
+/// 発行側の性質（どちらの経路も 1 つの刻印で出す）に拠り、緩めると往復を繰り返したログが
+/// 1 本へ潰れて「往復が 1 度も観測されていない」の偽の赤になる。**畳み足りない側**——同じ
+/// 変化の起点がフレームをまたいで届けば 2 本に分かれる。合否への影響は判定ごとに違う
+/// （遷移番号を合否に使うのは ⑶ の 1 箇所だけ）——内訳と裏取りは design.md の
+/// 「起点規約（task 8.4 で確定）」。
 pub fn split_transitions(records: &[TransitionRecord]) -> Vec<Vec<&TransitionRecord>> {
     let mut transitions: Vec<Vec<&TransitionRecord>> = Vec::new();
+    let mut open: Option<TransitionOrigin> = None;
     for record in records {
-        if is_transition_origin(record) {
-            transitions.push(vec![record]);
-        } else if let Some(current) = transitions.last_mut() {
-            current.push(record);
+        match TransitionOrigin::of(record) {
+            Some(origin) => match transitions.last_mut() {
+                Some(current) if open.is_some_and(|open| origin.is_same_change_as(&open)) => {
+                    current.push(record);
+                }
+                _ => {
+                    open = Some(origin);
+                    transitions.push(vec![record]);
+                }
+            },
+            None => {
+                if let Some(current) = transitions.last_mut() {
+                    current.push(record);
+                }
+            }
         }
     }
     transitions
@@ -924,6 +982,10 @@ mod transition_judge_verdict_tests;
 #[cfg(test)]
 #[path = "transition_judge_negative_tests.rs"]
 mod transition_judge_negative_tests;
+
+#[cfg(test)]
+#[path = "transition_judge_origin_tests.rs"]
+mod transition_judge_origin_tests;
 
 #[cfg(test)]
 #[path = "transition_signoff_tests.rs"]

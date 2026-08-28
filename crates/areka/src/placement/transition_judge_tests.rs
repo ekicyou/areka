@@ -281,7 +281,7 @@ fn split_starts_a_transition_at_each_dpi_changing_monitor_record() {
 
 #[test]
 fn split_does_not_start_a_transition_when_only_the_work_area_changed() {
-    // 作業領域だけの更新を起点にすると遷移が水増しされ、充足判定（各方向 3 回以上）が甘くなる。
+    // 作業領域だけの更新を起点にすると、報告される遷移本数が起点行の本数だけ水増しされる。
     let work_area_only = monitor(10, 96, 96, 1704, 1752);
     let record = parse_ok(&work_area_only);
     assert!(!is_transition_origin(&record));

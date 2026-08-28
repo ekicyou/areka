@@ -2,8 +2,10 @@
 //! （純関数・I/O 無し・`#[cfg(test)]`）。
 //!
 //! design.md「供給層・観測・判定（要約）」の `transition_judge_offset` が正本である。
-//! [`super::transition_judge`] が解析した観測行の時系列を受け取り、`kind=monitor` の拡大率
-//! 変化を起点に切り出した遷移ごとに `kind=offset` 行を集計して、次の 4 点を判定する。
+//! [`super::transition_judge`] が解析した観測行の時系列を受け取り、`kind=monitor`／
+//! `kind=windpi` の拡大率変化を起点に切り出した遷移（起点規約は
+//! [`super::transition_judge::split_transitions`]——同じ変化を指す起点は 1 本へ畳む）ごとに
+//! `kind=offset` 行を集計して、次の 4 点を判定する。
 //!
 //! | # | 要件 | 判定 |
 //! |---|---|---|
