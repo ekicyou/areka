@@ -183,6 +183,7 @@ fn run_attach_phase_without_gpu_does_not_attach_or_consume_assets() {
         mpsc::channel::<PresentCommand>().1,
         mpsc::channel::<MoveDirective>().1,
         mpsc::channel::<TalkLifecycleSignal>().1,
+        mpsc::channel::<crate::emo2_boot::zorder_cue::ZOrderDirective>().1,
         Rc::new(RefCell::new(TextLayerRuntime::new(
             TextLayerConfig::default(),
         ))),
@@ -291,6 +292,7 @@ fn attach_supplies_each_scope_its_own_balloon_model_to_map_and_text_layer() {
         mpsc::channel::<PresentCommand>().1,
         mpsc::channel::<MoveDirective>().1,
         mpsc::channel::<TalkLifecycleSignal>().1,
+        mpsc::channel::<crate::emo2_boot::zorder_cue::ZOrderDirective>().1,
         Rc::clone(&runtime),
         zero_clock(),
         assets,
@@ -367,6 +369,7 @@ fn attach_establishes_balloons_invisible_with_slot_and_surface() {
         mpsc::channel::<PresentCommand>().1,
         mpsc::channel::<MoveDirective>().1,
         mpsc::channel::<TalkLifecycleSignal>().1,
+        mpsc::channel::<crate::emo2_boot::zorder_cue::ZOrderDirective>().1,
         Rc::new(RefCell::new(TextLayerRuntime::new(
             TextLayerConfig::default(),
         ))),
@@ -420,6 +423,7 @@ fn presenter_accessor_feeds_resolve_hit_region() {
         mpsc::channel::<PresentCommand>().1,
         mpsc::channel::<MoveDirective>().1,
         mpsc::channel::<TalkLifecycleSignal>().1,
+        mpsc::channel::<crate::emo2_boot::zorder_cue::ZOrderDirective>().1,
         Rc::new(RefCell::new(TextLayerRuntime::new(
             TextLayerConfig::default(),
         ))),
@@ -460,6 +464,7 @@ fn move_cue_sink_reaches_emo2_wiring_receiver() {
         mpsc::channel::<PresentCommand>().1,
         move_rx,
         mpsc::channel::<TalkLifecycleSignal>().1,
+        mpsc::channel::<crate::emo2_boot::zorder_cue::ZOrderDirective>().1,
         Rc::new(RefCell::new(TextLayerRuntime::new(
             TextLayerConfig::default(),
         ))),
@@ -520,6 +525,7 @@ fn talk_playback_reaches_emo2_wiring_lifecycle_receiver() {
         mpsc::channel::<PresentCommand>().1,
         mpsc::channel::<MoveDirective>().1,
         lifecycle_rx,
+        mpsc::channel::<crate::emo2_boot::zorder_cue::ZOrderDirective>().1,
         Rc::new(RefCell::new(TextLayerRuntime::new(
             TextLayerConfig::default(),
         ))),

@@ -87,6 +87,7 @@ fn script_occupancy_end_becomes_the_measurement_anchor_in_the_decision_core() {
         mpsc::channel().1,
         mpsc::channel::<MoveDirective>().1,
         lifecycle_rx,
+        mpsc::channel::<crate::emo2_boot::zorder_cue::ZOrderDirective>().1,
         Rc::clone(&runtime),
         clock,
         empty_assets(),

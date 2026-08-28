@@ -82,6 +82,7 @@ fn boot_wiring(
         rx,
         mpsc::channel::<MoveDirective>().1,
         lifecycle_rx,
+        mpsc::channel::<crate::emo2_boot::zorder_cue::ZOrderDirective>().1,
         Rc::new(RefCell::new(TextLayerRuntime::new(
             TextLayerConfig::default(),
         ))),
@@ -479,9 +480,15 @@ fn text_slot_stays_invisible_after_the_text_layer_attaches_its_surface() {
 ///
 /// # 本ハーネスで印を動かせるのは再表示のトリガだけである
 ///
-/// 維持系（印を降ろす⑤）も指令の取り出しの相（印を立てるもう 1 つの本番の書き手）も、
-/// `emo2_frame_system` には結線されていない。よって観測された印の上がりは、他の経路の
-/// 混入ではなく再表示のトリガそのものである。
+/// 維持系（印を降ろす⑤）は `emo2_frame_system` に結線されていない。指令の取り出しの相は
+/// task 6.2 で結線されたが、**この檻では印を 1 度も動かさない**——台帳に据えた宣言と受け口へ
+/// 置いた射影を最初から一致させてあるので、相は毎フレーム「何も動いていない」と判断して
+/// 書込も印立ても行わない（要件 6.1）。よって観測された印の上がりは、他の経路の混入では
+/// なく再表示のトリガそのものである。
+///
+/// 台帳を空のまま受け口だけへ宣言を植えると、相が受け口を**台帳の内容で上書きする**
+/// （正本は台帳ひとつ・design「Data Models」）。それは本番では起こり得ない食い違いであり、
+/// 檻の側が二重帳簿を作っていることを意味する。ゆえに宣言は台帳から作る。
 #[test]
 fn a_show_transition_raises_the_zorder_group_mark_on_the_production_frame_path() {
     let (mut world, gw) = gpu_frame_world();
@@ -490,13 +497,23 @@ fn a_show_transition_raises_the_zorder_group_mark_on_the_production_frame_path()
     let mut wiring = boot_wiring(present_rx, lifecycle_rx);
     let target = balloon_target(0);
 
-    // グループを 1 本だけ載せた受け口（トリガは「宣言が 1 本でもあるか」を見る）。
+    // グループを 1 本だけ載せる（トリガは「宣言が 1 本でもあるか」を見る）。正本は台帳なので
+    // 台帳へ据え、受け口にはその射影と**同じ内容**を置く——本番で取り出しの相が到達する
+    // 定常状態そのものであり、相はこの状態を毎フレーム素通りする（書込も印立ても無い）。
+    let (members, _) = crate::placement::zorder_group_ledger::parse_zorder_tokens(&["1", "0"])
+        .expect("2 スコープの数値モードは受理される");
+    let group_id = wiring
+        .zorder_ledger
+        .try_add_tag_group(members)
+        .expect("空の台帳への最初の追加は受理される");
     let mut groups = ZOrderGroups::default();
     groups.groups.push(ZOrderGroupSpec {
-        id: 1,
+        id: group_id,
         members: vec![
-            gw.balloon_window(0).expect("balloon 窓がある"),
-            gw.char_window(0).expect("char 窓がある"),
+            gw.balloon_window(1).expect("scope 1 の balloon 窓がある"),
+            gw.char_window(1).expect("scope 1 の char 窓がある"),
+            gw.balloon_window(0).expect("scope 0 の balloon 窓がある"),
+            gw.char_window(0).expect("scope 0 の char 窓がある"),
         ],
     });
     world.insert_resource(groups);

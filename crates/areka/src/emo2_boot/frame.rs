@@ -17,6 +17,9 @@
 //!   グリフ数・選択肢表示中・ポインタ滞在・ドラッグ中・表示ライフサイクル信号）を集めて判断中核へ渡し、
 //!   返った遷移を発行して 1 行ずつ記録する。実装は `emo2_boot::balloon_visibility`（判断）と
 //!   その配線層 `balloon_visibility_phase.rs`。
+//! - zorder-drain: 台本から届いた `\![set,zorder,…]`／`\![reset,zorder]` を台帳へ適用し、台帳を
+//!   実在する窓の列へ射影して wintf の受け口（`ZOrderGroups`）へ置く。`\![move]` の取り出しの
+//!   直後・グループ維持系より前（scope-zorder-pinning task 6.2）。実装は `frame/zorder_drain.rs`。
 //! - 窓寸 reconcile: 表示成立点の状態照合報告（`take_pending_resize`）で窓寸を反映する（第 2 経路）。
 //!   可視性の相が発行した表示が積む窓寸要求も、同一フレームのここで landing する。
 //! - text-scale: 装着済み balloon scope の文字層 binding を presenter の**現適用 k** へ毎フレーム
@@ -107,6 +110,7 @@ pub use self::dpi::run_dpi_phase;
 pub use self::drain_resnap::{run_drain_phase, run_move_drain_phase};
 pub use self::scale_text::{run_text_phase, run_text_scale_phase};
 pub use self::wiring::Emo2Wiring;
+pub use self::zorder_drain::run_zorder_drain_phase;
 
 // 私有項目のファサード再束縛（クレート内可視性のみ・公開面は増やさない）。サブモジュール間の
 // 相互参照とテストモジュールからの `use super::*;` は、いずれもここを経由する。
@@ -209,6 +213,15 @@ pub fn emo2_frame_system(world: &mut World) {
     // apply_move_directive で実窓へ即時反映する（GhostWindows ゲート・R5・task 9.2）。present drain
     // とは独立で、GPU attach でなく GhostWindows 存在を待つ（move はキャラ窓 entity へ作用するため）。
     run_move_drain_phase(&wiring, world);
+    // 重なりの指令の取り出し（scope-zorder-pinning design「zorder drain 相」・要件 1.4／6.1／
+    // 7.1／7.2／8.4）: `\![move]` の取り出しの**直後**に置く。同じ跨ぎ（台本のスレッドが送り
+    // 出した指令を画面を持つ側で取り出す）であり、こちらは適用した台帳を実在する窓の列へ
+    // 射影して wintf の受け口へ置くところまでを行う。
+    // グループ維持系（確定段の 3 本目）より**前**である必要がある——後ろだと、窓が現れた巡の
+    // 是正が最大 1 心拍ぶん遅れる。その順序は本 system の登録側（`wire_emo2_boot` の
+    // `.before(apply_zorder_group_maintenance)`）が持つ。
+    // 窓の正本が無い間は相の側が早期に戻り、チャネルが保留バッファを兼ねる（取りこぼさない）。
+    run_zorder_drain_phase(&wiring.zorder_rx, &mut wiring.zorder_ledger, world);
     // drain（全 PresentCommand 適用）後に shell サーフェス寸法の変化を検知し、変化した char 窓のみ
     // アンカー再適用を駆動する（適用後の実寸を読むため drain の**後**・同一 World・同一 tick 内の
     // 直接呼び・Req4.1/4.3/1.3）。text の前後とは機能的に無関係だが drain の後であることが必須。

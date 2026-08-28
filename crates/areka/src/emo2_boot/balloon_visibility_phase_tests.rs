@@ -87,6 +87,7 @@ impl Harness {
             mpsc::channel().1,
             mpsc::channel().1,
             lifecycle_rx,
+            mpsc::channel::<crate::emo2_boot::zorder_cue::ZOrderDirective>().1,
             Rc::new(RefCell::new(TextLayerRuntime::new(
                 TextLayerConfig::default(),
             ))),

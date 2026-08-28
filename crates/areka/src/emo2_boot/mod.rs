@@ -33,6 +33,13 @@ pub mod zorder_cue;
 #[cfg(test)]
 mod spine;
 
+// タグ入口の結線（areka-P0-scope-zorder-pinning task 6.2）の檻。受け渡し口・入口の登録・
+// 受け渡し構造・相の呼出という 4 点は、削っても判断のテストが 1 本も赤くならない性質を
+// 持つので、到達性・相順・字面の 3 方向でここが受け持つ。
+#[cfg(test)]
+#[path = "zorder_wiring_tests.rs"]
+mod zorder_wiring_tests;
+
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -50,9 +57,11 @@ use areka_seriko::{
     AnimationTable, BindResolver, SerikoLoopConfig, SerikoSink, SurfaceResolver, seeded_rng,
     spawn_seriko,
 };
+use bevy_ecs::schedule::IntoScheduleConfigs;
 use tracing::{error, info, warn};
 use wintf::WinApp;
 use wintf::ecs::FrameFinalize;
+use wintf::ecs::window::apply_zorder_group_maintenance;
 
 use crate::placement::AuthorDpi;
 
@@ -62,6 +71,7 @@ use self::frame::{Emo2Wiring, emo2_frame_system};
 use self::move_cue::{MoveCueSink, MoveDirective};
 use self::talk_clock::{ClockedTextSink, TalkClock};
 use self::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
+use self::zorder_cue::{ZOrderCueSink, ZOrderDirective};
 
 /// 統合結線の構築時（load-time）失敗を観測可能化する誤り型（log-first・R7.3）。
 ///
@@ -253,8 +263,9 @@ const _: fn() = || {
 ///    `shiori`＝`Helper`・`ticker`＝`Real`）。`Err` は既存 [`crate::is_benign_boot_error`]（R7.4）で
 ///    分類（起点不在＝`warn!`・他＝`error!`）＋`wired=false` フォールバック。
 /// 6. [`Emo2Wiring`] を NonSend 挿入・`add_systems(FrameFinalize, emo2_frame_system)`（placement の
-///    click-through 登録と同位置・self-gating・順序依存なし）。成立時 `info!`「wire 成立」マーカーを
-///    発火（実 fixture smoke＝task 7.1 がこの存在を assert する）。
+///    click-through 登録と同位置・self-gating）。載せ方は**グループ維持系より前**という 1 点だけを
+///    指定する（重なりの取り出しの相を同じ巡のうちに維持系へ届けるため・task 6.2）。成立時
+///    `info!`「wire 成立」マーカーを発火（実 fixture smoke＝task 7.1 がこの存在を assert する）。
 /// 7. `Emo2BootOutcome{ ghost: Some, seriko: Some, wired: true }` を返す。
 ///
 /// # 失敗（log-first・panic しない・R7.3）
@@ -328,6 +339,13 @@ pub fn wire_emo2_boot(
     // 届き、タイムアウト計測の破棄と起点になる（Requirements 4.1／4.5・design 決定 D4＝α）。
     let (lifecycle_tx, lifecycle_rx) = std::sync::mpsc::channel::<TalkLifecycleSignal>();
     let lifecycle_sink = BalloonLifecycleSink::new(lifecycle_tx);
+    // 重なりの channel（move channel と同型の配線・areka-P0-scope-zorder-pinning task 6.2）:
+    // talk スレッドの ZOrderCueSink が送出端、UI スレッドの Emo2Wiring が受信端（frame 相の
+    // 取り出し＝run_zorder_drain_phase が消費）を保持する。運ばれるのは解釈前のトークン列で
+    // あり、意味付け（数値モード／明示モードの読み分け・拒否判定）は台帳の状態を要するので
+    // 取り出しの相が行う。
+    let (zorder_tx, zorder_rx) = std::sync::mpsc::channel::<ZOrderDirective>();
+    let zorder_sink = ZOrderCueSink::new(zorder_tx);
     let BootAssets {
         shells,
         balloons,
@@ -412,6 +430,10 @@ pub fn wire_emo2_boot(
     // 順序の制約（draw-load-parity 3.5）: lifecycle_sink は clocked_text_sink より**後**に置く。
     // lifecycle_sink::send は起床旗 PRESENT を立てるので、文字 cue が先に積まれていないと
     // 旗だけが先に倒されて文字が心拍待ちになる。
+    // 第 5 要素の zorder_sink（task 6.2）は `\![set,zorder,…]`／`\![reset,zorder]` を「名前＋
+    // 第 1 引数」で選別して消費し、解釈前のトークン列を zorder channel 経由で UI スレッド
+    // （Emo2Wiring の zorder_rx）へ送出する。担当外のコマンドには一切触れない（要件 11.2）ので
+    // 既存 4 sink の消費は 1 つも変わらない。文字 cue に依存しないため末尾で構わない。
     let boot_options = GhostBootOptions {
         ghost_root: ghost_root.to_path_buf(),
         default_encoding: DefaultEncoding::Ansi,
@@ -423,6 +445,7 @@ pub fn wire_emo2_boot(
             Box::new(clocked_text_sink),
             Box::new(move_sink),
             Box::new(lifecycle_sink),
+            Box::new(zorder_sink),
         ],
         system_vars: SystemVarWiring::FromSylphya,
         app_profile_dir: Some(crate::default_app_profile_dir()),
@@ -461,14 +484,22 @@ pub fn wire_emo2_boot(
         rx,
         move_rx,
         lifecycle_rx,
+        zorder_rx,
         runtime,
         clock,
         wiring_assets,
     );
     app.world().borrow_mut().world_mut().insert_non_send(wiring);
-    app.world()
-        .borrow_mut()
-        .add_systems(FrameFinalize, emo2_frame_system);
+    // 相の登録は**グループ維持系より前**という指定つきで行う（task 3.3 → 6.2 の必須事項）。
+    // 登録の順そのものは維持系のほうが先である（`open_startup_window` の `wire_zorder_pair`
+    // が確定段へ 3 本を載せてから、ここが相を載せる）ので、指定を落とすと相は維持系の後ろへ
+    // 回り、窓が現れた巡の是正が最大 1 心拍ぶん遅れる。飢餓は起きない（tick の門は旗が 1 つ
+    // でも立っていれば全スケジュールを回す全か無かの形である）が、遅れは実際に生じる。
+    // 指定が効くのは維持系との間だけで、既存のペア機構との相対順には触れない。
+    app.world().borrow_mut().add_systems(
+        FrameFinalize,
+        emo2_frame_system.before(apply_zorder_group_maintenance),
+    );
 
     // SERIKO ループ ticker 起動（design「本番は実時間・実 entropy 接続」・R7.4）: 16ms 実時計
     // （LoopTickerConfig::default）で駆動し、各 Tick を tick_sink（SerikoSink クローン）経由で seriko

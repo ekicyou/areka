@@ -90,6 +90,7 @@ pub(super) fn headless_emo2_wiring(runtime: Rc<RefCell<TextLayerRuntime>>) -> Em
         mpsc::channel::<PresentCommand>().1,
         mpsc::channel::<MoveDirective>().1,
         mpsc::channel::<TalkLifecycleSignal>().1,
+        mpsc::channel::<crate::emo2_boot::zorder_cue::ZOrderDirective>().1,
         runtime,
         TalkClock::new(Arc::new(|| 0.0)),
         synth_boot_assets(),

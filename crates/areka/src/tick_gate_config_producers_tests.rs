@@ -19,7 +19,7 @@
 /// 待ち時間の見直しに `REARM`、バルーンの再表示に `ZORDER` を立てる）。その場合は
 /// **旗ごとに 1 行**を置く——旗の欄は 1 つしか持てず、片方だけ載せると残りの旗が
 /// 名簿から落ちて静かにずれる。
-const AREKA_PRODUCERS: [(&str, &str, &str); 7] = [
+const AREKA_PRODUCERS: [(&str, &str, &str); 8] = [
     (
         "emo2_boot/adapter.rs",
         include_str!("emo2_boot/adapter.rs"),
@@ -54,6 +54,11 @@ const AREKA_PRODUCERS: [(&str, &str, &str); 7] = [
         "emo2_boot/talk_lifecycle.rs",
         include_str!("emo2_boot/talk_lifecycle.rs"),
         "PRESENT",
+    ),
+    (
+        "emo2_boot/zorder_cue.rs",
+        include_str!("emo2_boot/zorder_cue.rs"),
+        "ZORDER",
     ),
 ];
 
