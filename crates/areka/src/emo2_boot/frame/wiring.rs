@@ -22,6 +22,7 @@ use areka_parsers::balloon::BalloonModel;
 use super::super::balloon_visibility::BalloonVisibilityState;
 use super::super::talk_lifecycle::TalkLifecycleSignal;
 use super::super::zorder_cue::ZOrderDirective;
+use super::zorder_descript::apply_descript_base;
 use super::{BootAssets, DpiChangedQuery, MoveDirective, TalkClock};
 use crate::placement::zorder_group_ledger::ZOrderGroupLedger;
 
@@ -88,8 +89,9 @@ pub struct Emo2Wiring {
     /// 射影キャッシュ（wintf の `ZOrderGroups`）は World 側に在るが、**正本はこちら**であり
     /// 二重帳簿にはしない（design「Data Models」）。
     ///
-    /// shell 設定由来の基底（`set_descript_base`）を起動時に据えるのは後続の task 6.3 で
-    /// あり、本 task の時点では常に既定（グループ 0 本）から始まる。
+    /// 構築の時点では常に既定（グループ 0 本）から始まる。shell 設定由来の基底は、
+    /// 起動の段が [`Emo2Wiring::seed_zorder_descript_base`] で 1 度だけ据える
+    /// （取り出しの相が 1 度も走る前＝タグの実行より前・要件 5.1）。
     pub(super) zorder_ledger: ZOrderGroupLedger,
     /// バルーン可視性コントローラが持ち越す状態（エッジ検出・計測・抑止の記憶）。
     ///
@@ -176,6 +178,21 @@ impl Emo2Wiring {
             // 初回 [`run_dpi_phase`] で遅延生成する（`SystemState::new` は `&mut World` を要する）。
             dpi_state: None,
         }
+    }
+
+    /// shell 設定（`seriko.zorder`）由来の基底を台帳へ据える（起動の段の入口・要件 5.1）。
+    ///
+    /// 台帳は `frame` の内側に閉じているので、起動の結線（`wire_emo2_boot`）はこの口から
+    /// 触る。呼ぶのは **`insert_non_send` より前・最初の `FrameFinalize` より前**の 1 回だけで
+    /// あり、そのとき取り出しの相はまだ 1 度も走っていない——ゆえに基底はタグの実行を待たずに
+    /// 最初の維持の巡から効く（design「descript 起動時適用」）。
+    ///
+    /// 解釈・拒否・記録はすべて [`apply_descript_base`] が持つ。ここは台帳への到達だけを
+    /// 引き受け、判断を 1 つも持たない。
+    ///
+    /// [`apply_descript_base`]: super::zorder_descript::apply_descript_base
+    pub(in crate::emo2_boot) fn seed_zorder_descript_base(&mut self, zorder_raw: Option<&str>) {
+        apply_descript_base(&mut self.zorder_ledger, zorder_raw);
     }
 
     /// 当たり判定 resolver への読み口（design DD-IE-9/DD-IE-10・「Modified Files」mod.rs 行）。

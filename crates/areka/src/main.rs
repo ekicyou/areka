@@ -199,10 +199,15 @@ fn main() -> Result<()> {
     // （キャラ窓＋バルーン窓）を配置・生成する。準備失敗時（fixture 不在等）は
     // 検証用ダミー窓へフォールバックし、`main` 所有の `app.run()` ループに
     // heartbeat を与える骨格保証（boot→loop→exit）を維持する（DD14）。
-    // 戻り値は配置準備が **1 度だけ**読んだ作者基準 DPI（areka-P0-emo-dpi-scaling task 4.3・
-    // design Flow 3 手順1）。同じ値が採寸の k₀ と直下の `wire_emo2_boot`（→`attach_target`）
-    // の双方へ渡ることで、採寸と表示が別々の宣言を見る食い違いを構造的に排除する。
-    let author_dpi = open_startup_window(&app, &cfg);
+    // 戻り値は配置準備が **1 度だけ**読んだ descript 由来の 2 値（areka-P0-emo-dpi-scaling
+    // task 4.3・design Flow 3 手順1）。作者基準 DPI は採寸の k₀ と直下の `wire_emo2_boot`
+    // （→`attach_target`）の双方へ渡り、採寸と表示が別々の宣言を見る食い違いを構造的に
+    // 排除する。shell の `seriko.zorder` も同じ搬送に乗せる（areka-P0-scope-zorder-pinning
+    // 要件 5.1／5.2）——重なりの基底の出所を配置と同じ 1 度の読取に揃えるためである。
+    let startup = open_startup_window(&app, &cfg);
+    // 重なりの基底の生の値（準備が倒れていれば読めていない＝`None`＝基底なしで起動する）。
+    let zorder_raw = startup.as_ref().and_then(|prep| prep.zorder_raw.clone());
+    let author_dpi = startup.map(|prep| prep.author_dpi);
 
     // emo2 統合結線（task 5.2・design「エントリポイント / main.rs＋wire_emo2_boot」・DD-7）:
     // UI 基盤・起動窓の後で完成済み 5 トラック（seriko／sakura／emo-present／emo-text／actor）を
@@ -227,6 +232,7 @@ fn main() -> Result<()> {
         &cfg.balloon_root,
         &helper_exe,
         author_dpi,
+        zorder_raw.as_deref(),
     );
     let (ghost_runtime, seriko_handle, loop_ticker) = if outcome.wired {
         tracing::info!(
@@ -579,6 +585,19 @@ fn boot_monitor_snapshot(
     placement::follow::MonitorSources::from_monitors(monitors)
 }
 
+/// 起動窓の準備が descript から**1 度だけ**読み取った値のうち、呼び手（`main`）が下流へ
+/// 配るもの（areka-P0-emo-dpi-scaling task 4.3・areka-P0-scope-zorder-pinning 要件 5.1／5.2）。
+///
+/// どちらも `wire_emo2_boot` へ渡る搬送値であり、[`open_startup_window`] 自身は解釈しない。
+/// 戻り口を 2 つに増やさず 1 つの型へまとめるのは、「同じ 1 度の読取から来た」という出所を
+/// 型で示すためである——別々に読み直す余地を残すと、配置と重なりが違う宣言を見る日が来る。
+struct StartupDescriptValues {
+    /// 採寸 k₀ と attach（`attach_target`）が共有する作者基準 DPI。
+    author_dpi: placement::AuthorDpi,
+    /// shell descript の `seriko.zorder` の生の値（未指定なら `None`）。解釈は台帳の層が行う。
+    zorder_raw: Option<String>,
+}
+
 /// 起動窓シーム（task 6.2・要件 1.4・design「main.rs seam」）: `prepare_ghost_windows`
 /// 成功時は本物のゴースト窓（キャラ窓＋バルーン窓）を生成し、準備失敗時は検証用
 /// ダミー窓へフォールバックする（旧 replace-me シームの差し替え本体）。
@@ -599,12 +618,13 @@ fn boot_monitor_snapshot(
 /// 初期化済み（measure の WIC 前提を満たす）。署名は `(&WinApp, &ConfigInputs)`
 /// （design の Revalidation Trigger として本タスクで変更）。
 ///
-/// 戻り値は準備が読んだ作者基準 DPI（`Some`＝準備成功時のみ・areka-P0-emo-dpi-scaling
-/// task 4.3）。descript 読取は準備の中で 1 度だけ行われ、その値が (a) 採寸の k₀ と
-/// (b) 呼び手（`main`）経由で `wire_emo2_boot`→`attach_target` の双方へ配られる
-/// （design Flow 3 手順1「1 度だけ読む」）。準備失敗時は `None`（呼び手が正典既定へ縮退）。
-fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) -> Option<placement::AuthorDpi> {
-    let author_dpi = match placement::prepare_ghost_windows(&cfg.ghost_root, &cfg.balloon_root) {
+/// 戻り値は準備が descript から**1 度だけ**読んだ値の組（`Some`＝準備成功時のみ・
+/// [`StartupDescriptValues`]）。作者基準 DPI は (a) 採寸の k₀ と (b) 呼び手（`main`）経由で
+/// `wire_emo2_boot`→`attach_target` の双方へ配られ、shell の `seriko.zorder` は同じ経路で
+/// 重なりの台帳へ配られる（design Flow 3 手順1「1 度だけ読む」）。準備失敗時は `None`
+/// （呼び手が作者基準 DPI を正典既定へ縮退させ、重なりの基底は無しで起動する）。
+fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) -> Option<StartupDescriptValues> {
+    let startup = match placement::prepare_ghost_windows(&cfg.ghost_root, &cfg.balloon_root) {
         Ok(prepared) => {
             // モニタ 2 源（task 8.1・atom task 5.1）: 起動時の実モニタから忠実転写した
             // 作業領域源とモニタ別拡大率表（物理 px・Send な純粋データ）。bottom 吸着ドラッグ
@@ -639,6 +659,9 @@ fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) -> Option<placement::Au
             // （default_encoding は boot 結線・source.rs と同一の Ansi＝mount 解決の一貫性）。
             // 作者基準 DPI は `prepared` 分解の前に取り出して呼び手へ返す（`Copy` 値の転記）。
             let author_dpi = prepared.author_dpi;
+            // 重なりの基底の生の値も同じ読取から取り出す（解釈は結線の先＝台帳の層が行う・
+            // areka-P0-scope-zorder-pinning 要件 5.2）。`prepared` を分解する前に写す。
+            let zorder_raw = prepared.zorder_raw.clone();
             // 復元は**起動時の作業領域源を 1 度だけ**読む（atom 要件 5.7）。以後の同期段は
             // この判定へ効かせない——拡大率をまたぐ保存位置の追従は行わない裁定
             // （`windowposition-limit` の開発者裁定）を踏襲する。
@@ -693,7 +716,10 @@ fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) -> Option<placement::Au
                     );
                 }));
             });
-            Some(author_dpi)
+            Some(StartupDescriptValues {
+                author_dpi,
+                zorder_raw,
+            })
         }
         Err(err) => {
             // フォールバック分類（DD14・log-first）: 起点不在（fixture 不在等の想定内）は
@@ -755,7 +781,7 @@ fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) -> Option<placement::Au
         });
     }
 
-    author_dpi
+    startup
 }
 
 /// smoke 自動 close の despawn 標的を despawn する（task 6.2 で

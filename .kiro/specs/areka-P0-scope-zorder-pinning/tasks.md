@@ -114,7 +114,7 @@
   - _Requirements: 7.3_
   - _Boundary: balloon_visibility_phase_
 
-- [ ] 6. 統合: 結線と起動時適用
+- [x] 6. 統合: 結線と起動時適用
 - [x] 6.1 維持系の結線と既存機構の不可侵の確認
   - 既存の「所有関係の確立 → ペア維持」の連なりの末尾へグループ維持を加える（処理の相への登録と実行順の指定のみ。モジュール一覧への追記は各新設タスクが済ませている）
   - 既存のペア機構の実装 5 ファイルを 1 行も編集せず、宣言の説明はグループ機構が別系統で列を宣言する旨を宣言元の側へ追記するにとどめる
@@ -128,7 +128,7 @@
   - _Depends: 3.1, 3.3_
   - _Requirements: 11.2_
 
-- [ ] 6.3 shell 設定の起動時適用
+- [x] 6.3 shell 設定の起動時適用
   - shell の設定に書かれた重なり指定を、タグと同じ解釈で読み、起動の段で基底として適用する（タグの実行を待たない）
   - 解釈できない場合は受け取った値と理由を記録し、グループを一つも適用せずに起動を続ける
   - 完了状態: 設定入りのゴーストを起動すると、最初の維持の巡から指定どおりの相対順が成立する
@@ -263,3 +263,13 @@
 - **6.2**: `#![allow(dead_code)]` を 3 本撤去＝`zorder_group.rs`（6.1 の宿題）・`zorder_cue.rs`・`frame/zorder_drain.rs`（後 2 者は各ファイルの註が「結線が着地したら外す」と書いていた）。`cargo check --all-targets` は警告 0。**`zorder_group_ledger.rs:59` は残す**——外すと `set_descript_base` と `version` が未使用の警告ちょうど 1 件（`:473`）が出ることを実装者・レビュー双方が実測。6.1 の予測どおりで**引受先は 6.3 のまま**（当該ファイルの差分は 0 行）。
 - **6.2 → task 6.3 への必須事項**: 台帳は `Emo2Wiring`（`pub(super)`）が持つことになったので、**6.3 は `main.rs` の `spawn_ghost_windows` 後ではなく `wire_emo2_boot` の側から台帳へ届くこと**（`new` の引数を増やすか、種を蒔く段を設けるか）。design が定めた適用時点（起動時・タグ実行より前）は保たれる——`wire_emo2_boot` は `open_startup_window` の後・最初の `FrameFinalize` の前に走るため。
 - **6.2**: `t_zwi03`／`t_zwi04` は順序の**仕組み**が弁別することを振る舞いで示す対だが、**本番の `emo2_frame_system` がその順序で登記されていること自体は字面の檻 `t_zwi06` だけが押さえている**（`emo2_frame_system` は `Emo2Wiring` を挿さないと完全な無処理になるため headless では観測できない）。テストの冒頭（`zorder_wiring_tests.rs:1-25`）にこの限界が明記してある。
+- **6.3**: 経路は `PlacementConfig::zorder_raw`（従来消費者ゼロ）→ `PreparedPlacement::zorder_raw`（`placement/mod.rs:248-282`）→ `main.rs:588-597` の新設 `StartupDescriptValues { author_dpi, zorder_raw }`（作者 DPI と同じ「一度だけ読む」搬送の形）→ `wire_emo2_boot(..., zorder_descript)` → `Emo2Wiring::seed_zorder_descript_base`（`frame/wiring.rs:183-195`）→ 新設 `frame/zorder_descript.rs::apply_descript_base`（92 行）。解釈は `,` で割ってから**タグと同一の** `parse_zorder_tokens` 1 本だけを通し、記録の欄も `zorder_drain.rs` の `set_applied_detail`／`reject_reason_text` を `pub(super)` へ広げて共用（第 2 の解釈器も第 2 の書式も生やしていない）。Err は既存の `log_group_rejected`（warn）へ値と理由を載せ、何も据えずに起動を続ける。
+- **6.3**: 適用時点は `main.rs:207` `open_startup_window` → `main.rs:229` `wire_emo2_boot` → `mod.rs:500` seed → `mod.rs:501` `insert_non_send` → `mod.rs:508` `add_systems(FrameFinalize, …)` → `main.rs:317` `app.run()`。**最初の `FrameFinalize` より厳密に手前**で、取り出しの相は 1 度も走っていない＝要件 5.1 の「タグの実行を待たない」が構造で成立。**design.md:320 の字面（「`spawn_ghost_windows` の後」）とは食い違う**が、6.2 で台帳が `Emo2Wiring` へ移ったことによる必然で、design が定めた時点の意味（起動時・タグ実行より前・最初の `FrameFinalize` より前）は保たれている。**task 8.1 は design 本文の字面追随か裁量登記かを判断すること。**
+- **6.3**: `zorder_group_ledger.rs` のモジュール全体の `#![allow(dead_code)]` を**撤去**し、`version()` 1 項目の `#[allow(dead_code)]`（`:528`）へ絞った（`cargo check --all-targets` 警告 0）。6.1／6.2 の申し送りが予告した引受けの着地。レビューが許可を外す変異（M7）を当て、隠れているのは `version` **ちょうど 1 件**（`:529`）であることを独立に実測。569 行のモジュールに毛布を残す方が将来の死蔵コードを隠すため絞る側が正しい、という判断。版が未消費である経緯（3.3 が変化検出を版でなく射影結果の突き合わせに決めた）は `:516-527` の doc に明記した。
+- **⚠ 6.3 → task 7.4 への必須事項（手順が静かに空振りする形）**: 起動由来の受理行の実際の字面は `[zorder-group] applied action=set group_id=<N> source=Descript members=… normalized=…` で、**`action=set` と `source=Descript` の間に `group_id=N` が挟まる**（`emo2_boot/frame/zorder_drain.rs:388-396`＋`wintf/src/ecs/window/zorder_group_diag.rs:147-149`）。**サインオフは `source=Descript` 単独（または正規表現）で grep すること**——`action=set source=Descript` を連結文字列として手順書へ写すと 1 件も当たらない。`action=descript` のような語は存在せず、タグ／設定の弁別は `source` 欄だけが担う（タグ経路は `try_add_tag_group` が必ず `GroupSource::Tag` を付け、解除は `action=reset` なので `action=set` かつ `source=Descript` は起動の段からしか出ない）。2.2 の「7.4 はこの行を 1:1 で grep する」と同じ罠の 2 度目。
+- **6.3 → task 7.2 への引受け（件数は現物を読むこと）**: 本 task が増やした**本番ファイルは 1 本**＝`emo2_boot/frame/zorder_descript.rs`（`zorder_descript_tests.rs` はテストなので 1.3 の先例どおり対象外）。本 spec がこれまでに増やした areka 本番ファイルは計 4 本＝`placement/zorder_group_ledger.rs`／`emo2_boot/zorder_cue.rs`／`emo2_boot/frame/zorder_drain.rs`／`emo2_boot/frame/zorder_descript.rs`。先送り語彙の名簿は `placement/spawn_zorder_pair_deferred_tests.rs:48` の `PRODUCTION_FILES: [&str; 2]`（**この数値も引用せず現物の宣言長を読むこと**——3.1／6.2 で 2 度陳腐化している）。
+- **6.3（危険形の 5 度目）**: 本 task が足した本番の性質 2 つ——「設定の値が結線へ運ばれる」（`main.rs`）と「基底を World 挿入より前に据える」（`mod.rs`）——は、それぞれ**字面の檻ただ 1 本**（`t_zwi08`／`t_zwi09`）だけが支えている（レビューが変異 M4・M5 で赤 1 本ちょうどを実測）。4.2／3.1／6.2 に続く 5 度目。両檻とも `code_only`（説明文除去後）へ当たり両方向の対照を備える。原理的な限界（経路の 1 行を落としても「設定を書いていないゴースト」と挙動が一致するので headless では弁別できない）は `zorder_wiring_tests.rs:24-32` に明記済み。
+- **6.3 のレビュー実測（独立変異 8 本）**: ⑴順序反転 → t_zdb01/03/04/**08**/11 が赤。⑵「設定なしでも据える」→ 対照 3 本（t_zdb02/09/12）**ちょうど**が赤＝片側偏りでない。⑶**本物の第 2 の解釈器**（数値モードだけ自前展開）→ t_zdb03 を含む 5 本が赤＝「タグと同一の純関数を通る」は t_zdb03 が実際に支えている。⑷搬送断 → t_zwi08 のみ。⑸種蒔き削除 → t_zwi09 のみ。⑹グループを空に → t_zdb08/10 を含む 7 本。⑺allow 較正 → 警告ちょうど 1 件。⑻placement 転記断 → `prepare_carries_the_shell_zorder_value_verbatim` のみ。復元は Git Bash の `cp` で行い md5 一致・`git diff --stat` 逐語一致・CRLF 全行保持を実測（1.3 の mtime の罠を回避）。
+- **6.3 の任意の補強（レビュー提案・非ブロッキング）**: `zorder_descript_tests.rs:199-204`（t_zdb03＝逐語一致の錨）の入力 4 本は**すべて既に正規化済みの並び**なので、「`parse_zorder_tokens` は通すが正規化だけ省く」型の第 2 解釈器は t_zdb03 単独では捕まらない（実際は t_zdb04 の反転入力が捕まえるので被覆に穴は無い）。錨を自足させるなら `"s1,b1,s0,b0"` を 1 本足せば済む。task 7.1 が分岐網羅を見るときに拾ってもよい。
+- **6.3**: `seriko.zorder,`（値が空）は `reason=UnparsableToken() tokens=-` として拒否記録に出る（`zorder_group_diag.rs:134-140` の `text_field` が空を番兵 `-` へ畳む）。「値が空だった」と「値の欄が出せなかった」は記録上区別が付かないが、理由語 `UnparsableToken()` 自体が前者を運ぶので要件 5.4／8.3 は成立。番兵の多義性は既存 wintf の性質で本 task が持ち込んだものではない。
+- **6.3**: `main.rs` は 922→948 行（上限 1,000 に対し余裕 52 行）。`placement/mod.rs` と `main.rs` は並走 4 spec の共有ファイルなので rebase 時に当たりうる。窓の位置・寸法を決める経路そのものには触れていない（搬送する値は解釈もされず窓を動かさない）。凍結 5 ファイル（wintf のペア機構）は `git diff` 空をレビューが実測。

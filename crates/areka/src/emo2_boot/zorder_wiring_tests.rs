@@ -1,5 +1,6 @@
 // =============================================================================
-// タグ入口の結線（task 6.2・要件 11.2）の決定論テスト
+// タグ入口の結線（task 6.2・要件 11.2）と、shell 設定由来の基底の起動時結線
+// （task 6.3・要件 5.1／5.2）の決定論テスト
 //
 // この task が足すのは判断ではなく**配線**である。受け口も台帳も相の本体も既に在って
 // 兄弟のテストが判断を全部押さえているので、ここで測るのは 3 点だけになる。
@@ -20,6 +21,12 @@
 // 字面の走査は必ず**説明文を落とした本文**へ当てる。素の全文には本ファイルの説明の語も
 // 相手ファイルの doc の語も入るので、当てる先を間違えると検査が恒真になる
 // （task 3.1 の教訓。各檻の末尾に両方向の対照を置いてある）。
+//
+// task 6.3 が足す 2 本（⑷）も同じ性質を持つ——設定の値を起動の段まで運ぶ経路は、
+// 途中の 1 行を落としても「設定を書いていないゴースト」と全く同じ挙動になるので、
+// 挙動を見る檻には**原理的に**映らない。運ぶ側（`main.rs`）と据える側（`mod.rs`）の
+// 字面をそれぞれ名指しで押さえる。据えた値が実際に効くことは兄弟の
+// `frame/zorder_descript_tests.rs` が挙動で受け持つ。
 // =============================================================================
 
 use bevy_ecs::prelude::*;
@@ -380,6 +387,93 @@ fn t_zwi07_the_frame_calls_the_zorder_drain_right_after_the_move_drain() {
     );
     assert!(
         raw.contains("donor パターン: remove→各フェーズ→insert"),
+        "対照の前提が崩れている（素の全文に説明文が無い）"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// ⑷ 起動の段の結線——shell 設定の値が台帳まで運ばれる（task 6.3・要件 5.1／5.2）
+// ---------------------------------------------------------------------------
+
+/// 起動窓の準備が読んだ `seriko.zorder` の生の値が、`main` の 1 本道で結線へ渡る。
+///
+/// 落としても「設定を書いていないゴースト」と挙動が 1 ミリも変わらないので、挙動の檻には
+/// 映らない。運ぶ側の字面をここが唯一押さえる。
+#[test]
+fn t_zwi08_the_entry_point_carries_the_shell_setting_into_the_wiring() {
+    let raw = include_str!("../main.rs");
+    let code = code_only(raw);
+    let squeezed = squeeze(&code);
+
+    assert!(
+        squeezed.contains("let zorder_raw = prepared.zorder_raw.clone();"),
+        "準備の結果から重なりの生の値を取り出す行が本文に無い"
+    );
+    assert!(
+        squeezed
+            .contains("let zorder_raw = startup.as_ref().and_then(|prep| prep.zorder_raw.clone());"),
+        "起動窓の戻り値から重なりの生の値を受け取る行が本文に無い"
+    );
+    assert!(
+        squeezed.contains("author_dpi, zorder_raw.as_deref(), );"),
+        "重なりの生の値が結線（wire_emo2_boot）へ渡されていない＝設定が台帳へ届かない: {squeezed}"
+    );
+
+    // 対照——落とし過ぎ／落とし漏れが無いこと。
+    assert!(
+        code.contains("fn open_startup_window(app: &WinApp, cfg: &ConfigInputs)"),
+        "説明文を落とす処理が本文まで落としている"
+    );
+    assert!(
+        !code.contains("起動窓の準備が descript から**1 度だけ**読み取った値"),
+        "説明文が落ちていない（走査が恒真になっている）"
+    );
+    assert!(
+        raw.contains("起動窓の準備が descript から**1 度だけ**読み取った値"),
+        "対照の前提が崩れている（素の全文に説明文が無い）"
+    );
+}
+
+/// 結線は台帳へ基底を据えてから結線状態を World へ載せる（要件 5.1 の適用時点）。
+///
+/// 順序が逆になると結線状態は既に move 済みで種を蒔けない（コンパイルが通らない）ため、
+/// ここが押さえるのは**呼出が 1 つだけ在ること**と**載せるより手前に在ること**である。
+/// 呼出を丸ごと削っても、設定を書いていないゴーストと同じ挙動になるだけで誰も気づかない。
+#[test]
+fn t_zwi09_the_boot_seats_the_descript_base_before_inserting_the_wiring() {
+    let raw = include_str!("mod.rs");
+    let code = code_only(raw);
+    let squeezed = squeeze(&code);
+
+    assert_eq!(
+        squeezed
+            .matches("wiring.seed_zorder_descript_base(zorder_descript);")
+            .count(),
+        1,
+        "shell 設定由来の基底を据える呼出がちょうど 1 つではない（0 なら設定が効かず、2 なら二度据える）"
+    );
+
+    let seed_at = index_of(&squeezed, "wiring.seed_zorder_descript_base(zorder_descript);");
+    let insert_at = index_of(
+        &squeezed,
+        "app.world().borrow_mut().world_mut().insert_non_send(wiring);",
+    );
+    assert!(
+        seed_at < insert_at,
+        "基底を据える段が結線状態を World へ載せるより後ろに在る（seed={seed_at}・insert={insert_at}）"
+    );
+
+    // 対照——落とし過ぎ／落とし漏れが無いこと。
+    assert!(
+        code.contains("zorder_descript: Option<&str>,"),
+        "説明文を落とす処理が本文まで落としている"
+    );
+    assert!(
+        !code.contains("解釈できない値は理由とともに記録され"),
+        "説明文が落ちていない（走査が恒真になっている）"
+    );
+    assert!(
+        raw.contains("解釈できない値は理由とともに記録され"),
         "対照の前提が崩れている（素の全文に説明文が無い）"
     );
 }

@@ -381,7 +381,11 @@ fn publish_projection(world: &mut World, specs: Vec<ZOrderGroupSpec>) {
 /// `normalized` に載るのは同一スコープの 2 窓を隣接ブロックへ寄せた記録である
 /// （要件 2.4）。`scope:true` は「作者が書いた順をそのままの形では採用しなかった」を
 /// 意味する。数値モードでは調整そのものが起きないので常に番兵になる。
-fn set_applied_detail(group: &ZOrderGroup, normalizations: &[Normalization]) -> String {
+///
+/// 起動の段（[`zorder_descript`](super::zorder_descript)）も shell 設定由来の基底を
+/// 据えたときに**この関数**を呼ぶ。行の欄を二重に持つと、片方だけを直した日に記録の
+/// 書式が静かに割れるからである。起動由来かタグ由来かは `source` 欄が弁別する。
+pub(super) fn set_applied_detail(group: &ZOrderGroup, normalizations: &[Normalization]) -> String {
     format!(
         "action=set group_id={id} source={source:?} members={members} normalized={normalized}",
         id = group.id,
@@ -412,7 +416,10 @@ fn reset_applied_detail(ledger: &ZOrderGroupLedger) -> String {
 }
 
 /// 拒否理由を 1 語へ畳む（空白を含めない——記録側が空白を `_` へ潰すため）。
-fn reject_reason_text(reject: &ZOrderReject) -> String {
+///
+/// 起動の段（[`zorder_descript`](super::zorder_descript)）も同じ関数を通す。理由の語彙が
+/// 入口ごとに割れると、実機サインオフの grep が 2 通りの字面を追うことになる。
+pub(super) fn reject_reason_text(reject: &ZOrderReject) -> String {
     match reject {
         ZOrderReject::ModeMixed => "ModeMixed".to_string(),
         ZOrderReject::DuplicateElement { element } => {

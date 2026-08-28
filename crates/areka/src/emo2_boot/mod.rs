@@ -262,7 +262,9 @@ const _: fn() = || {
 /// 5. [`areka_ghost::boot`]（`surface_sink`＝[`SerikoSink`] を直渡し・`text_sink`＝`ClockedTextSink`・
 ///    `shiori`＝`Helper`・`ticker`＝`Real`）。`Err` は既存 [`crate::is_benign_boot_error`]（R7.4）で
 ///    分類（起点不在＝`warn!`・他＝`error!`）＋`wired=false` フォールバック。
-/// 6. [`Emo2Wiring`] を NonSend 挿入・`add_systems(FrameFinalize, emo2_frame_system)`（placement の
+/// 6. [`Emo2Wiring`] を組み、shell 設定由来の重なりの基底を据えてから（`zorder_descript`＝
+///    placement の準備が読んだ `seriko.zorder` の値・要件 5.1／5.2）NonSend 挿入・
+///    `add_systems(FrameFinalize, emo2_frame_system)`（placement の
 ///    click-through 登録と同位置・self-gating）。載せ方は**グループ維持系より前**という 1 点だけを
 ///    指定する（重なりの取り出しの相を同じ巡のうちに維持系へ届けるため・task 6.2）。成立時
 ///    `info!`「wire 成立」マーカーを発火（実 fixture smoke＝task 7.1 がこの存在を assert する）。
@@ -279,6 +281,7 @@ pub fn wire_emo2_boot(
     balloon_root: &Path,
     helper_exe: &Path,
     author_dpi: AuthorDpi,
+    zorder_descript: Option<&str>,
 ) -> Emo2BootOutcome {
     /// 実 sink 結線を成立させないフォールバック結果（`main` の `LogSink`×2 boot へ委ねる・R7.3）。
     fn fallback() -> Emo2BootOutcome {
@@ -479,7 +482,7 @@ pub fn wire_emo2_boot(
     // 手順6: Emo2Wiring を NonSend 挿入＋emo2_frame_system を FrameFinalize へ登録（placement の
     // click-through 登録と同位置・self-gating・順序依存なし）。EcsWorld は insert_non_send を
     // 直接持たないため world_mut() 経由で bevy World へ載せる（add_systems は EcsWorld 直メソッド）。
-    let wiring = Emo2Wiring::new(
+    let mut wiring = Emo2Wiring::new(
         presenter,
         rx,
         move_rx,
@@ -489,6 +492,12 @@ pub fn wire_emo2_boot(
         clock,
         wiring_assets,
     );
+    // shell 設定（`seriko.zorder`）由来の基底を、World へ載せる前に据える（要件 5.1／5.2／
+    // 5.3／5.4・areka-P0-scope-zorder-pinning task 6.3）。ここはまだ最初の `FrameFinalize` の
+    // 手前であり、取り出しの相も 1 度も走っていない——ゆえに基底は**タグの実行を待たずに**
+    // 最初の維持の巡から効く。解釈できない値は理由とともに記録され、グループを 1 本も
+    // 載せずに起動が続く（この呼出は失敗を返さない）。
+    wiring.seed_zorder_descript_base(zorder_descript);
     app.world().borrow_mut().world_mut().insert_non_send(wiring);
     // 相の登録は**グループ維持系より前**という指定つきで行う（task 3.3 → 6.2 の必須事項）。
     // 登録の順そのものは維持系のほうが先である（`open_startup_window` の `wire_zorder_pair`
@@ -599,6 +608,7 @@ mod wire_tests {
             missing_balloon,
             helper,
             AuthorDpi::DEFAULT,
+            None,
         );
 
         assert!(

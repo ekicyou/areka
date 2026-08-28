@@ -41,6 +41,7 @@ mod drain_resnap;
 mod scale_text;
 mod wiring;
 mod work_area_sync;
+mod zorder_descript;
 mod zorder_drain;
 
 // 移設前の本モジュール本体が使っていた import 一式をそのまま保持する。本番項目は各サブモジュール
