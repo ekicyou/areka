@@ -24,6 +24,49 @@ use crate::ecs::world::EcsWorld;
 /// メッセージハンドラの戻り値型
 type HandlerResult = Option<LRESULT>;
 
+// ============================================================================
+// グループの重なりへの追随トリガ（要件 1.3／7.5）
+// ============================================================================
+
+/// 外部由来の位置変化を、グループ機構の追随トリガとして採るか（World も Win32 も触らない）。
+///
+/// 見るのは 2 つだけである。
+///
+/// - `is_echo`——自アプリが出した指令のこだま。こだまで印を立てると、是正 → こだま →
+///   再検証 → 是正 …… の輪が表示に変化の無いまま回り続け、`tick` の門（表示に変化の
+///   無い巡を省く仕組み）が実質無効になる。
+/// - `has_groups`——グループが 1 本でも宣言されているか。1 本も無い巡に印を立てると、
+///   維持系が起きて既定状態（＝非強制）の挙動が本機能の導入前と変わる（要件 6.4）。
+///
+/// **変化の内訳は見ない**。`WINDOWPOS` のフラグも挿入先も読まないのは、位置だけが動いた
+/// 巡と重なりが動いた巡を呼び分ける規則を持つと、その規則の取りこぼしが「利用者が持ち上げ
+/// たのに戻らない」という形で表に出るからである。余分に検証が走る側の費用は、維持系の
+/// 同値ガードが指令 0 本で吸収する（design「トリガ 2 点」）。
+fn wants_group_follow(is_echo: bool, has_groups: bool) -> bool {
+    !is_echo && has_groups
+}
+
+/// 外部由来の変化を受けて、グループ機構へ「是正が要るかもしれない」と伝える。
+///
+/// 立てるのは印（[`ZOrderGroups::pending`](crate::ecs::window::ZOrderGroups::pending)）と
+/// 起床の旗の 2 つで、**どちらも立てる側にしか動かさない**。印を降ろす口は維持系の⑤
+/// （維持対象の全グループの相対順が成立した巡）ただ 1 つであり、ここが降ろせるようにすると
+/// 未処理の是正要求が記録も無く消える——安全側の不変条件「検証待ちがある ⇒ 印が立って
+/// いる」がそこで破れる。
+///
+/// 旗を自分で立てるのは、印だけ立てても**表示に変化の無い巡は省略され得る**からである
+/// （`tick_wake` の旗と `tick_gate` の判断）。省略の向こうで要求が足踏みしないよう、
+/// 変化を起こした側が旗を立てる——既存の各生産者と同じ作法である。
+fn note_external_zorder_change(
+    groups: &mut crate::ecs::window::ZOrderGroups,
+    is_echo: bool,
+) {
+    if wants_group_follow(is_echo, !groups.groups.is_empty()) {
+        groups.pending = true;
+        crate::ecs::world::tick_wake::mark(crate::ecs::world::tick_wake::ZORDER);
+    }
+}
+
 /// WM_WINDOWPOSCHANGED: ウィンドウ位置/サイズ変更通知
 ///
 /// World借用区切り方式による処理（3ステッププロトコル）:
@@ -76,6 +119,22 @@ pub(super) fn WM_WINDOWPOSCHANGED(
 
             // RefCellが既に借用されている場合はスキップ（再入時）
             if let Ok(mut world_borrow) = world.try_borrow_mut() {
+                // グループの重なりへの追随トリガ（要件 1.3／7.5）。
+                //
+                // **`WINDOWPOS` を読む前**に置いてある。変化の内訳（フラグ・挿入先）を
+                // 見て判断する余地を構造から断つためであり、design がその解析を明示的に
+                // 禁じている。**巡（②）より前**でもある——後ろへ移すと、印が立ってから
+                // 維持系が実際に回るまで画面更新 1 回ぶん遅れる。
+                //
+                // 受け口が挿さっていない（結線前・グループ機構を使わない構成）巡は何も
+                // しない。宣言が 1 本も無い巡と結果は同じ（指令 0 本）である。
+                if let Some(mut groups) = world_borrow
+                    .world_mut()
+                    .get_resource_mut::<crate::ecs::window::ZOrderGroups>()
+                {
+                    note_external_zorder_change(&mut groups, is_echo);
+                }
+
                 let windowpos = lparam.0 as *const WINDOWPOS;
                 if !windowpos.is_null() {
                     let wp = unsafe { &*windowpos };
@@ -512,3 +571,7 @@ mod tests;
 #[cfg(test)]
 #[path = "window_pos_transition_tests.rs"]
 mod window_pos_transition_tests;
+
+#[cfg(test)]
+#[path = "window_pos_zorder_group_tests.rs"]
+mod window_pos_zorder_group_tests;
