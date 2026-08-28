@@ -1,10 +1,36 @@
-//! # writing — writing_mode 宣言の解釈（純粋層）
+//! # writing — 書字方向の唯一の決定点（純粋層）
 //!
-//! balloon descript の `writing_mode` 転記値（2層マージ後勝ち解決済み・生文字列）を
-//! `WritingMode`（`HorizontalTb`／`VerticalRl`／`VerticalLr`）へ解決し、
-//! 方向写像と M2 予約キー名（`text_orientation`／`text_combine_upright`）の記録を担う。
+//! バルーン定義の 2 キー——SSP 正典キー `vertical`（`0`／`1`）と areka 拡張キー
+//! `writing_mode`（`horizontal_tb`／`vertical_rl`／`vertical_lr`）——を**独立に分類**し、
+//! 確定した 2 つの分類の間で優先順位を裁定して [`WritingMode`] を 1 つ決める。
+//! 裁定とその根拠は [`WritingDirectionDecision`] が保持する（正典が再改訂されたときの
+//! 唯一の追随点）。方向写像と M2 予約キー名（`text_orientation`／`text_combine_upright`）の
+//! 記録も本モジュールが担う。
 //!
-//! **層規律**: 純粋層——`windows` 系 crate への依存を一切持たない（決定論檻）。
+//! 2 層マージ（`descript.txt` 基層と面別上書き層の後勝ち）は `areka-parsers` の
+//! `balloon::parse` が既に確定させたうえで [`BalloonModel`] に届くため、本層はキー間の
+//! 優劣だけを見る（層の優劣とキーの優劣を混ぜない）。
+//!
+//! 本番の唯一の呼出は `actor.rs:153` の [`WritingMode::resolve`]
+//! （`ResolvedBalloonText::resolve` の内側）である。
+//!
+//! **層規律**: 純粋層——`windows` 系 crate への依存を一切持たない。`lib.rs` の構造檻
+//! `pure_layer_modules_have_no_windows_imports` が本ファイル（`PURE_SOURCES`）を走査して強制する。
+//!
+//! ## 2 キーの共存規則（要件 2・裁定 1）
+//!
+//! | 有効な宣言 | 採用する方向 | 記録 |
+//! |---|---|---|
+//! | どちらも無し | 正典既定の横書き | 無し |
+//! | `vertical` のみ | 正典キーの宣言 | 無し |
+//! | `writing_mode` のみ | 拡張キーの宣言 | 無し |
+//! | 両方・同じ方向 | その方向 | 無し |
+//! | 両方・異なる方向 | **拡張キー** `writing_mode` | `debug!` ちょうど 1 件 |
+//!
+//! 拡張キーが勝つのは、`vertical_lr` という正典キーでは表現できない値を持つ＝表現力で
+//! 上位だからである（要件の裁定 1）。値が壊れている宣言（`vertical` が `0`／`1` 以外か空・
+//! `writing_mode` が受理語彙外）は `warn!` のうえ「**指定なし**」として上表へ合流する
+//! （設計 DD6）。
 //!
 //! ## M2 予約キー（記録のみ・実装しない・R5.7）
 //!
@@ -13,7 +39,6 @@
 //!
 //! - [`RESERVED_KEY_TEXT_ORIENTATION`]（`text_orientation`・欧文の向き）
 //! - [`RESERVED_KEY_TEXT_COMBINE_UPRIGHT`]（`text_combine_upright`・縦中横）
-
 use areka_parsers::balloon::BalloonModel;
 
 /// `writing_mode` の CSS 語彙 `horizontal_tb` に対応する受理値（R5.1）。
@@ -53,26 +78,239 @@ pub enum WritingMode {
 }
 
 impl WritingMode {
-    /// `BalloonModel` の転記値（2層マージ後勝ち解決済み・R5.2）から有効値を解釈する。
+    /// `BalloonModel`（2 層マージ済み）から有効な書字方向を解釈する。
     ///
-    /// - マーカー無し（`None`）→ [`HorizontalTb`](Self::HorizontalTb)（SSP 互換既定・
-    ///   正常系につきログなし・R5.3）。
-    /// - 未知の値 → `warn!`（値を含む）＋ [`HorizontalTb`](Self::HorizontalTb) へ
-    ///   フォールバック（縮退継続・R5.4）。
-    /// - 語彙は snake_case 完全一致（trim は parser の kv 層で済んでいる前提・R5.1）。
+    /// [`WritingDirectionDecision::resolve`] へ委譲し、その [`mode`](WritingDirectionDecision::mode)
+    /// を返すだけの薄い経路である（戻り値型は不変）。決定の**根拠**（採用出所・両キーの分類・
+    /// 矛盾併記の有無）が要るときは [`WritingDirectionDecision`] を直接使うこと。
     pub fn resolve(model: &BalloonModel) -> WritingMode {
-        match model.writing_mode() {
-            None => WritingMode::HorizontalTb,
-            Some(VALUE_HORIZONTAL_TB) => WritingMode::HorizontalTb,
-            Some(VALUE_VERTICAL_RL) => WritingMode::VerticalRl,
-            Some(VALUE_VERTICAL_LR) => WritingMode::VerticalLr,
-            Some(unknown) => {
-                tracing::warn!(
-                    value = unknown,
-                    "未知の writing_mode 値のため horizontal_tb へフォールバックする（受理語彙: horizontal_tb / vertical_rl / vertical_lr）"
-                );
-                WritingMode::HorizontalTb
+        WritingDirectionDecision::resolve(model).mode()
+    }
+}
+
+/// SSP 正典キー `vertical` の「横書き」を表す受理値（R1.2）。
+const VALUE_VERTICAL_OFF: &str = "0";
+/// SSP 正典キー `vertical` の「縦書き」を表す受理値（R1.1）。
+const VALUE_VERTICAL_ON: &str = "1";
+
+/// 正典キー `vertical` の宣言の分類（未宣言・不正値を潰さない）。
+///
+/// 未宣言（[`Undeclared`](Self::Undeclared)）と `0` の宣言（[`Horizontal`](Self::Horizontal)）を
+/// 区別して保つのは、共存規則の裁定に**宣言の有無**が要るためである（R1.4）。
+/// 表示結果としては両者とも横書きで同一になる（R1.3）。
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum VerticalDecl {
+    /// キーが無い。
+    Undeclared,
+    /// `0`＝横書きの宣言。
+    Horizontal,
+    /// `1`＝縦書きの宣言。
+    Vertical,
+    /// `0`／`1` 以外または空文字列（警告済み・共存規則では「指定なし」として扱う）。
+    Invalid,
+}
+
+impl VerticalDecl {
+    /// 有効な宣言であれば、それが意味する書字方向を返す。
+    ///
+    /// `1` は日本語縦書き＝右から左へ列送り（[`WritingMode::VerticalRl`]）へ写す（R2.2）。
+    /// [`Invalid`](Self::Invalid) は [`Undeclared`](Self::Undeclared) と同じく `None`——
+    /// 壊れた値は「指定なし」として共存規則へ合流する（設計 DD6）。
+    fn declared_mode(self) -> Option<WritingMode> {
+        match self {
+            VerticalDecl::Horizontal => Some(WritingMode::HorizontalTb),
+            VerticalDecl::Vertical => Some(WritingMode::VerticalRl),
+            VerticalDecl::Undeclared | VerticalDecl::Invalid => None,
+        }
+    }
+}
+
+/// areka 拡張キー `writing_mode` の宣言の分類。
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum WritingModeDecl {
+    /// キーが無い。
+    Undeclared,
+    /// 受理語彙 3 種のいずれかの宣言。
+    Declared(WritingMode),
+    /// 受理語彙外（警告済み・「指定なし」として扱う・要件 2.7）。
+    Unknown,
+}
+
+impl WritingModeDecl {
+    /// 有効な宣言であれば、それが意味する書字方向を返す。
+    ///
+    /// [`Unknown`](Self::Unknown) は [`Undeclared`](Self::Undeclared) と同じく `None`
+    /// （要件 2.7・[`VerticalDecl::Invalid`] と対称）。
+    fn declared_mode(self) -> Option<WritingMode> {
+        match self {
+            WritingModeDecl::Declared(mode) => Some(mode),
+            WritingModeDecl::Undeclared | WritingModeDecl::Unknown => None,
+        }
+    }
+}
+
+/// どちらの宣言を採ったか。
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum DirectionSource {
+    /// 有効な宣言が無く正典既定（横書き）を用いた。
+    CanonDefault,
+    /// 正典キー `vertical` を採った。
+    CanonKey,
+    /// areka 拡張キー `writing_mode` を採った（矛盾併記の解決を含む）。
+    ///
+    /// 両キーが有効に宣言されているときは**常に**本出所になる（併記が同じ方向を意味する
+    /// 場合も含む）——優先順位は方向の一致・不一致に依らず一定であり、一致・不一致は
+    /// 記録の有無だけを変える（要件 2.4／2.5）。
+    ExtensionKey,
+}
+
+/// 書字方向の決定と、その決定の記録（正典再改訂に対する唯一の追随点）。
+///
+/// [`resolve`](Self::resolve) が 2 キーを独立に分類してから裁定し、結果とともに
+/// **なぜその結果になったか**（採用出所・両キーの分類・矛盾併記の有無）を保持する。
+/// 生の宣言文字列は持たない（[`Copy`] を保つため）——文字列を要する記録は
+/// [`resolve`](Self::resolve) の内側でその場で発行する。
+///
+/// 本型は `ResolvedBalloonText` へ配線していない（現時点で消費者が居ないため・
+/// design.md C2 Responsibilities）。
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct WritingDirectionDecision {
+    mode: WritingMode,
+    source: DirectionSource,
+    vertical_declaration: VerticalDecl,
+    writing_mode_declaration: WritingModeDecl,
+    conflicting: bool,
+}
+
+impl WritingDirectionDecision {
+    /// 2 層マージ済み `BalloonModel` から解決する（副作用はログのみ）。
+    ///
+    /// 記録水準（design.md「記録水準の割当」が正本）:
+    ///
+    /// - `vertical` が `0`／`1` 以外または空 → `warn!` 1 件（R1.6／R1.7）
+    /// - `writing_mode` が受理語彙外 → `warn!` 1 件（現行の文言のまま・R2.7）
+    /// - 両キーが有効宣言かつ**異なる**方向 → `debug!` 1 件（両キーの生値を構造化
+    ///   フィールドで記録・R2.5）
+    /// - 両キーが有効宣言かつ同じ方向／両キーとも宣言なし → **記録しない**（R2.4／R1.3）
+    pub fn resolve(model: &BalloonModel) -> WritingDirectionDecision {
+        let vertical_declaration = classify_vertical(model.vertical_raw());
+        let writing_mode_declaration = classify_writing_mode(model.writing_mode());
+
+        let (mode, source, conflicting) = match (
+            vertical_declaration.declared_mode(),
+            writing_mode_declaration.declared_mode(),
+        ) {
+            // 有効な宣言が 1 つも無い——正典既定の横書き（正常系につき記録しない）。
+            (None, None) => (
+                WritingMode::HorizontalTb,
+                DirectionSource::CanonDefault,
+                false,
+            ),
+            // 正典キー単独。
+            (Some(canon), None) => (canon, DirectionSource::CanonKey, false),
+            // 拡張キー単独（`writing_mode` 単独指定時の結果は現行と 1 ビットも変わらない・R2.3）。
+            (None, Some(extension)) => (extension, DirectionSource::ExtensionKey, false),
+            // 併記——優先順位は拡張キー（要件の裁定 1）。方向が異なるときだけ記録する。
+            (Some(canon), Some(extension)) => {
+                let conflicting = canon != extension;
+                if conflicting {
+                    tracing::debug!(
+                        vertical = model.vertical_raw().unwrap_or_default(),
+                        writing_mode = model.writing_mode().unwrap_or_default(),
+                        "vertical と writing_mode が異なる書字方向を指すため areka 拡張キー writing_mode を採用する（正典キー vertical は採らない）"
+                    );
+                }
+                (extension, DirectionSource::ExtensionKey, conflicting)
             }
+        };
+
+        WritingDirectionDecision {
+            mode,
+            source,
+            vertical_declaration,
+            writing_mode_declaration,
+            conflicting,
+        }
+    }
+
+    /// 実際に適用される書字方向。
+    pub fn mode(&self) -> WritingMode {
+        self.mode
+    }
+
+    /// 採用した宣言の出所。
+    pub fn source(&self) -> DirectionSource {
+        self.source
+    }
+
+    /// 正典キーの宣言の分類。
+    pub fn vertical_declaration(&self) -> VerticalDecl {
+        self.vertical_declaration
+    }
+
+    /// 拡張キーの宣言の分類。
+    pub fn writing_mode_declaration(&self) -> WritingModeDecl {
+        self.writing_mode_declaration
+    }
+
+    /// 双方が有効に宣言され、かつ異なる方向を意味していたか。
+    ///
+    /// 判定は**両宣言が意味する [`WritingMode`] の相違**で行う。したがって
+    /// `vertical,1` ＋ `writing_mode,vertical_lr` は「異なる方向」であり
+    /// （正典キーが意味する [`VerticalRl`](WritingMode::VerticalRl) を採らないため）、
+    /// `debug!` の対象になる。
+    pub fn conflicting(&self) -> bool {
+        self.conflicting
+    }
+
+    /// 正典プロパティ `currentghost.balloon.scope(ID).vertical` の導出規則（要件 7.1・**語彙**）。
+    ///
+    /// 当該スコープに実際に適用されている書字方向（[`mode`](Self::mode)）から一意に定まる:
+    /// 縦書きで `1`・横書きで `0`。**`vertical_lr`（areka 拡張の縦書き左送り）も `1`** である
+    /// ——正典の語彙は縦横 2 値であり、列送りの向きを区別しない。
+    ///
+    /// 本仕様はこの値を publish しない（語彙表登録も照会経路の新設も行わない）。
+    /// プロパティの実導出は追跡 spec `areka-P0-currentghost-property-tree` が所有する（DD7）。
+    pub fn vertical_property_value(&self) -> u8 {
+        match self.mode {
+            WritingMode::HorizontalTb => 0,
+            WritingMode::VerticalRl | WritingMode::VerticalLr => 1,
+        }
+    }
+}
+
+/// 正典キー `vertical` の生値を分類する（不正値はここで `warn!` 1 件・R1.6／R1.7）。
+fn classify_vertical(raw: Option<&str>) -> VerticalDecl {
+    match raw {
+        None => VerticalDecl::Undeclared,
+        Some(VALUE_VERTICAL_OFF) => VerticalDecl::Horizontal,
+        Some(VALUE_VERTICAL_ON) => VerticalDecl::Vertical,
+        Some(invalid) => {
+            tracing::warn!(
+                value = invalid,
+                "vertical の値が 0／1 のいずれでもないため指定なしとして扱う（受理値: 0 / 1）"
+            );
+            VerticalDecl::Invalid
+        }
+    }
+}
+
+/// 拡張キー `writing_mode` の生値を分類する（未知値はここで `warn!` 1 件・R5.4／R2.7）。
+///
+/// 語彙は snake_case 完全一致（trim は parser の kv 層で済んでいる前提・R5.1）。
+/// 警告の文言と件数は現行のまま（既存インラインテストが逐語固定している）。
+fn classify_writing_mode(raw: Option<&str>) -> WritingModeDecl {
+    match raw {
+        None => WritingModeDecl::Undeclared,
+        Some(VALUE_HORIZONTAL_TB) => WritingModeDecl::Declared(WritingMode::HorizontalTb),
+        Some(VALUE_VERTICAL_RL) => WritingModeDecl::Declared(WritingMode::VerticalRl),
+        Some(VALUE_VERTICAL_LR) => WritingModeDecl::Declared(WritingMode::VerticalLr),
+        Some(unknown) => {
+            tracing::warn!(
+                value = unknown,
+                "未知の writing_mode 値のため horizontal_tb へフォールバックする（受理語彙: horizontal_tb / vertical_rl / vertical_lr）"
+            );
+            WritingModeDecl::Unknown
         }
     }
 }
