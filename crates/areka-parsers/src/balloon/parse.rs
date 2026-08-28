@@ -111,6 +111,12 @@ fn map_merged(merged: &BTreeMap<String, String>) -> BalloonModel {
     // budoux_newline も生文字列の転記のみ（writing_mode と同一規律・値の検証・語彙判定・
     // fallback は下流 emo テキスト層の責務・budoux-newline 要件 1.1）。
     let budoux_newline = merged.get("budoux_newline").map(|v| v.to_owned());
+    // vertical も生文字列の転記のみ。上 2 者と異なりこれは areka 拡張キーではなく SSP 正典キー
+    // （SSP 2.8.80 が確立・`0`／`1`）であり、正典側の既定は横書きである。ただし転記層の扱いは
+    // 同一で、未宣言（None）と宣言（Some・空文字列を含む）を潰さずそのまま持ち上げる。
+    // `0`/`1` の検証・語彙外値の警告付き縮退・`writing_mode` との共存裁定は、いずれも下流の
+    // 書字方向の解決層の責務である（balloon-vertical-canon 要件 1.4/1.6/1.7）。
+    let vertical = merged.get("vertical").map(|v| v.to_owned());
 
     // cursor.* スタイルモデル（additive・要件 4.2/6.2）。既存の完全一致引き＋2 層後勝ちマージに
     // 相乗りする。style/blendmethod は生文字列転記（語彙判定は下流）。brush/pen/font の各色成分は
@@ -150,6 +156,7 @@ fn map_merged(merged: &BTreeMap<String, String>) -> BalloonModel {
     )
     .with_cursor(cursor)
     .with_windowposition_raw(windowposition_raw)
+    .with_vertical_raw(vertical)
 }
 
 /// マージ済みマップから `key` を完全一致で引き、値を `T` へ整数パースする寛容ヘルパ（R1.4/R2.6）。
