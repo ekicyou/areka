@@ -16,8 +16,8 @@ use windows::Win32::Foundation::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
 use crate::ecs::window::transition_diag::{
-    self, MSG_DPICHANGED, MSG_WINDOWPOSCHANGED, MsgRecord, ORIGIN_DPI_SUGGESTED, WriteRecord,
-    WriteStage, WriteTag,
+    self, MSG_DPICHANGED, MSG_WINDOWPOSCHANGED, MsgRecord, ORIGIN_DPI_SUGGESTED, WindowDpiRecord,
+    WriteRecord, WriteStage, WriteTag,
 };
 use crate::ecs::world::EcsWorld;
 
@@ -395,6 +395,25 @@ pub(super) fn WM_DPICHANGED(
                             new_dpi_y = new_dpi.dpi_y,
                             "[WM_DPICHANGED] DPI component directly updated (Changed<DPI>)"
                         );
+                        // 窓の拡大率が変わったことを表す**起点**（task 8.3）。上の `debug` 行と
+                        // 同じ事実を、1 回の遷移の時系列へ並べられる形（刻印つき・単一 target）で
+                        // 出す。発行するのは component を**実際に書き換えたこの腕だけ**であり、
+                        // `DPI` を持たない窓・entity へ到達できなかった経路からは 1 行も出ない。
+                        //
+                        // 刻印はスレッド局所ミラーから組む（D1）——wndproc は UI スレッドで走り、
+                        // ここは World の借用を持っているが `FrameCount`／`TickStart` を
+                        // 引数で受け取っていないため、同ファイルの受理記録（`msg_line`）と
+                        // 同じ流儀に倣う。
+                        if transition_diag::is_enabled() {
+                            transition_diag::emit_line(&transition_diag::windpi_line(
+                                &WindowDpiRecord {
+                                    stamp: transition_diag::stamp(),
+                                    entity,
+                                    old_dpi: u32::from(old_dpi.dpi_x),
+                                    new_dpi: u32::from(new_dpi.dpi_x),
+                                },
+                            ));
+                        }
                     }
                 }
             }

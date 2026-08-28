@@ -31,8 +31,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use areka_emo_present::presenter::{KIND_SURFACE, SURFACE_FIELDS, SURFACE_STAGE_ALL};
 use wintf::ecs::window::transition_diag::{
     ENQUEUE_FIELDS, FIELD_FRAME, FIELD_KIND, FIELD_STAGE, FIELD_T_US, FLUSH_FIELDS, KIND_ALL,
-    KIND_ENQUEUE, KIND_FLUSH, KIND_MONITOR, KIND_MSG, KIND_WRITE, MONITOR_FIELDS, MSG_FIELDS,
-    RECORD_PREFIX_TAG, STAGE_ALL, TRANSITION_TARGET, WRITE_FIELDS,
+    KIND_ENQUEUE, KIND_FLUSH, KIND_MONITOR, KIND_MSG, KIND_WINDPI, KIND_WRITE, MONITOR_FIELDS,
+    MSG_FIELDS, RECORD_PREFIX_TAG, STAGE_ALL, TRANSITION_TARGET, WINDPI_FIELDS, WRITE_FIELDS,
 };
 
 use super::TRANSITION_LOG_ENV;
@@ -76,7 +76,14 @@ const OFFSET_PROCEDURE_RELATIVE_PATH: &str =
 /// （`pending ∩ covered = ∅`）も見る。task 8.2 が本仕様の手順書を [`PROCEDURE_SOURCES`] へ
 /// 足したので、唯一の保留であった `offset` は**ここから消えた**（残していれば ⑵ が赤になる）。
 /// 空であることが正常な状態であり、次に保留が生じたときだけ行が増える。
-const PENDING_PROCEDURE_KINDS: &[&str] = &[];
+///
+/// # 現在の保留
+///
+/// - `windpi`（task 8.3 が新設した**窓**の拡大率の起点）——手順書の改訂は task 8.5 の
+///   担当である（手順の手が「モニタ間の移動」から変わるため、語だけ先に足すと採取者が
+///   点灯を確かめる手順を持たないまま語を grep することになる）。8.5 が手順書へ
+///   `kind=windpi` を書いたら、この行は⑵の検査によって**赤くなって消える**。
+const PENDING_PROCEDURE_KINDS: &[&str] = &[KIND_WINDPI];
 
 /// 先行仕様（atom）の手順書の本文を読む。読めなければ**失敗**（無い文書に対して緑を出さない）。
 fn procedure_text() -> String {
@@ -113,6 +120,7 @@ fn procedure_sources_text() -> String {
 fn fields_by_kind() -> BTreeMap<&'static str, &'static [&'static str]> {
     BTreeMap::from([
         (KIND_MONITOR, MONITOR_FIELDS),
+        (KIND_WINDPI, WINDPI_FIELDS),
         (KIND_WRITE, WRITE_FIELDS),
         (KIND_FLUSH, FLUSH_FIELDS),
         (KIND_MSG, MSG_FIELDS),

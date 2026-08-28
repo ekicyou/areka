@@ -8,7 +8,7 @@ use super::super::taffy::TaffyLayoutResource;
 use super::super::{
     BoxInset, BoxPosition, BoxSize, BoxStyle, Dimension, LayoutRoot, LengthPercentageAuto, Rect,
 };
-use crate::ecs::window::transition_diag::{self, MonitorRecord, Stamp, TickStart};
+use crate::ecs::window::transition_diag::{self, MonitorRecord, Stamp, TickStart, WindowDpiRecord};
 use crate::ecs::world::FrameCount;
 
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -268,9 +268,9 @@ pub fn detect_display_change_system(
 /// 檻はこれを判定語に用いる（0 なら駆動していない・1 なら 1 窓だけ駆動した）。
 ///
 /// # `stamp`
-/// 値変化更新の `monitor` レコードに載せる刻印。**呼出側が World 資源から組んで渡す**
-/// （design D1）——本関数は多スレッド実行器でワーカースレッドに載り得るため、自分で
-/// スレッド局所ミラーを読んではならない。
+/// 値変化更新の `monitor` レコードと、窓の拡大率再導出の `windpi` レコードに載せる刻印。
+/// **呼出側が World 資源から組んで渡す**（design D1）——本関数は多スレッド実行器で
+/// ワーカースレッドに載り得るため、自分でスレッド局所ミラーを読んではならない。
 pub(crate) fn apply_monitor_snapshot(
     commands: &mut Commands,
     root_entity: Entity,
@@ -415,7 +415,7 @@ pub(crate) fn apply_monitor_snapshot(
     }
 
     // モニタ表が実際に更新されたときだけ、当該モニタ上の窓の DPI を再導出する。
-    redrive_window_dpi_for_updated_monitors(windows, &updated_monitors)
+    redrive_window_dpi_for_updated_monitors(windows, &updated_monitors, stamp)
 }
 
 /// 窓矩形（`WindowPos` の位置・寸）の中心点を返す。位置または寸が未確定なら `None`。
@@ -502,11 +502,18 @@ pub fn monitor_containing<M: MonitorBounds>(monitors: &[M], center: (i32, i32)) 
 /// `WM_DPICHANGED` が届く環境では同じ値が既に入っているため差分ゼロ＝書込なしで抜ける
 /// （二重駆動しない）。
 ///
+/// # 観測（task 8.3）
+///
+/// `DPI` を**実際に書き換えた**窓ごとに `kind=windpi` の起点行を出す。同値で早期に
+/// 抜けた窓からは 1 行も出ない——出すと「拡大率が変わっていないのに遷移が始まった」
+/// ことになり、判定器の遷移本数が水増しされる。
+///
 /// # 戻り値
 /// `DPI` を実際に書き換えた窓の数。
 fn redrive_window_dpi_for_updated_monitors(
     windows: &mut Query<(Entity, &crate::ecs::WindowPos, &mut crate::ecs::DPI)>,
     updated_monitors: &[crate::ecs::Monitor],
+    stamp: Stamp,
 ) -> usize {
     if updated_monitors.is_empty() {
         return 0;
@@ -534,6 +541,18 @@ fn redrive_window_dpi_for_updated_monitors(
         let old_dpi = *dpi;
         *dpi = new_dpi;
         rewritten += 1;
+        // 窓の拡大率が変わったことを表す**起点**（task 8.3）。上の `if *dpi == new_dpi`
+        // で抜けた窓（＝書き換えが起きなかった経路）からは 1 行も出ない。
+        // 刻印は呼出側が World 資源から組んで渡した値をそのまま使う（D1・本関数は
+        // 多スレッド実行器でワーカースレッドに載り得るので時刻を自分で読まない）。
+        if transition_diag::is_enabled() {
+            transition_diag::emit_line(&transition_diag::windpi_line(&WindowDpiRecord {
+                stamp,
+                entity,
+                old_dpi: u32::from(old_dpi.dpi_x),
+                new_dpi: u32::from(new_dpi.dpi_x),
+            }));
+        }
         debug!(
             entity = ?entity,
             handle = monitor.handle,

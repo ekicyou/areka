@@ -58,9 +58,9 @@ use areka_emo_present::presenter::{
 use wintf::ecs::window::transition_diag::{
     ENQUEUE_FIELDS, FIELD_CALL_US, FIELD_FRAME, FIELD_KIND, FIELD_MERGED_INTO_SEQ, FIELD_NEW_DPI,
     FIELD_OLD_DPI, FIELD_ORIGIN, FIELD_SCOPE, FIELD_SEQ, FIELD_STAGE, FIELD_T_US, FIELD_TOTAL_US,
-    FIELD_WIN_KIND, FLUSH_FIELDS, KIND_ENQUEUE, KIND_FLUSH, KIND_MONITOR, KIND_MSG, KIND_WRITE,
-    MISSING, MONITOR_FIELDS, MSG_FIELDS, ORIGIN_DPI_SUGGESTED, RECORD_PREFIX_TAG, STAGE_END,
-    STAGE_SYNC, Stamp, WRITE_FIELDS, WRITE_OPTIONAL_FIELDS,
+    FIELD_WIN_KIND, FLUSH_FIELDS, KIND_ENQUEUE, KIND_FLUSH, KIND_MONITOR, KIND_MSG, KIND_WINDPI,
+    KIND_WRITE, MISSING, MONITOR_FIELDS, MSG_FIELDS, ORIGIN_DPI_SUGGESTED, RECORD_PREFIX_TAG,
+    STAGE_END, STAGE_SYNC, Stamp, WINDPI_FIELDS, WRITE_FIELDS, WRITE_OPTIONAL_FIELDS,
 };
 
 use super::diag::{PlacementRoute, WindowKind};
@@ -374,6 +374,9 @@ pub(crate) fn optional_fields(kind: &str) -> &'static [&'static str] {
 fn required_fields(kind: &str) -> Option<&'static [&'static str]> {
     match kind {
         KIND_MONITOR => Some(MONITOR_FIELDS),
+        // task 8.3: 窓の拡大率が変わったことを表す起点。**語彙を教えるだけ**であり、
+        // 起点集合を広げるのは task 8.4 の担当（`TransitionOrigin::of` は無改変）。
+        KIND_WINDPI => Some(WINDPI_FIELDS),
         KIND_WRITE => Some(WRITE_FIELDS),
         KIND_FLUSH => Some(FLUSH_FIELDS),
         KIND_MSG => Some(MSG_FIELDS),
