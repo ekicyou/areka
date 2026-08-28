@@ -33,12 +33,14 @@
 ### This Spec Owns
 
 - **オフセットの単位空間契約そのもの**——実行時の合流欄 `ScopeConfig.balloon_offset`／`ScopePlacement.balloon_offset`／`BalloonFollow` が保持する値の意味の唯一の権威。新設モジュール `placement/follow/offset_space.rs` がこの契約の定義元になる。
-- **`BalloonFollow` Component の定義と、その書込経路**。オフセットの基準対（基準値＋基準 DPI）を持たせ、書込を構築子と再確立子の 2 本に閉じる。
+- **`BalloonFollow` Component の定義と、その書込経路**。オフセットの基準対（基準値＋基準 DPI）を持たせ、書込を構築子と再確立子の 2 本に閉じる。**⚠ 実装時訂正（task 3.2）**: 実際に閉じた書込口は **4 本**である（`new`／`reestablish`／`anchor_base_dpi`／`apply_rescaled`・`placement/follow/offset_space.rs`）——遷移の追随が「基準を係留するだけ」と「引き直した値を反映する」を別々の口として要求したため。私有化そのもの（欄は非 `pub`・直接代入は定義元モジュール内のみ）は宣言どおり成立している。
 - **拡大率遷移時のオフセット変換規則**（純関数 `rescale_follow_offset`）と、その適用相（frame 層の新規ステップ）。
 - **`descript` の `balloon.offsetx`／`offsety` への拡大率適用**（供給層の新規変換ステップ）と、掛ける拡大率の軸の決定。
 - **キーワード再導出との排他の判断**（素材の有無で分岐する側＝本仕様の新規コード）。
 - **追随の観測記録**（`transition_diag` への種別 1 つの追加）と、その機械判定（新規判定モジュール）。
+  **⚠ 実装時訂正（2026-08-28・task 8.3／8.4）**: 起点レコードの新設により、本仕様の所有は `crates/areka/src/placement/transition_diag.rs` だけでなく **wintf 側の共有語彙**にも及んだ——`crates/wintf/src/ecs/window/transition_diag.rs` へ種別 `windpi`（`KIND_WINDPI`・`WINDPI_FIELDS`・`WindowDpiRecord`・`windpi_line`）を新設して共有語彙 `KIND_ALL` を 5→6 語へ広げ、発行を `crates/wintf/src/ecs/layout/systems/monitor_systems.rs` と `crates/wintf/src/ecs/window_proc/window_pos.rs` の 2 経路へ置いた。**この語彙は片方だけ増やしてはならない**（消費側の登録＝`placement/transition_judge.rs`・`placement/transition_signoff_procedure_tests.rs`）。
 - **互換記録 `doc/COMPAT_ARCHITECTURE.md` §8 への自らの 3 行の追記**。
+- **⚠ 実装時追記（2026-08-28・task 2.1）— 完了済み仕様 `areka-P0-window-placement` の規約 U5／DD1（「resolver 署名に DPI・論理 DIP を持ち込まない」）の緩和**。`resolve_placement` は `measure_dpi: DPI` を受ける（`crates/areka/src/placement/resolver.rs`）が、受けた値は基準対の札として素通しで刻むだけで、**配置式 P1〜P5 の幾何は表示 DPI を 1 度も読まない**ため U5 の実質は保たれている。完了済み仕様の設計文書は改訂できないため、緩和の事実は本行・`doc/COMPAT_ARCHITECTURE.md` の「バルーン位置オフセットの単位空間契約」行・`placement/resolver.rs` のモジュール doc の 3 か所に置く。
 
 ### Out of Boundary
 
@@ -242,6 +244,12 @@ crates/areka/src/
 - `crates/areka/src/placement/transition_judge_offset_signoff_tests.rs`（新規）— 実機サインオフ手順書（モジュール doc）と `#[ignore]` ランナー。ログの経路は**新しい環境変数を増やさず既存の `TRANSITION_LOG_ENV`（`AREKA_TRANSITION_LOG`）を再利用**する——同一の実機走行が両判定器の材料になり、操作者が同じログを 2 度採らずに済み、`kind=monitor` を共通の起点として使う構造とも一致する。
 
 いずれも 1,000 行を超えないこと（D17）。
+
+**⚠ 実装時訂正（2026-08-29・実装後の突合）— 上の表に載っていない実ファイル**:
+
+- 追加の新規テストファイル 6 件 — `crates/areka/src/placement/follow_offset_component_tests.rs`／`follow_offset_residual_tests.rs`／`persist_restore_offset_base_tests.rs`／`transition_judge_origin_tests.rs`、`crates/areka/src/emo2_boot/frame_balloon_offset_converge_tests.rs`／`frame_balloon_offset_keyword_gate_tests.rs`。いずれも 1,000 行規律に沿った分割の結果で、D17 は満たしている。
+- 変更した wintf 側 3 ファイル — `crates/wintf/src/ecs/window/transition_diag.rs`（種別 `windpi` の新設）／`crates/wintf/src/ecs/layout/systems/monitor_systems.rs`・`crates/wintf/src/ecs/window_proc/window_pos.rs`（発行の 2 経路）。上の This Spec Owns の訂正行に対応する。
+- 規模の見込み差 2 件 — `transition_judge_offset.rs` は見込み 200〜260 行に対し実測 765 行、`frame/balloon_offset_follow.rs` は見込み 150〜200 行に対し実測 327 行。どちらも上限 1,000 行の内側。
 
 ---
 
