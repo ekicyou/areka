@@ -2,7 +2,7 @@ use bevy_ecs::prelude::*;
 use bitflags::*;
 
 bitflags! {
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+    #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
     pub struct VisualFlagBits: u32 {
         /// 非表示なら描画／カリングでスキップ。
         const VISIBLE = 1 << 0;
@@ -10,7 +10,7 @@ bitflags! {
     }
 }
 
-#[derive(Component, Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Component, Clone, Copy, PartialEq, Eq, Debug, Hash)]
 #[repr(transparent)]
 pub struct VisualFlags(pub VisualFlagBits);
 

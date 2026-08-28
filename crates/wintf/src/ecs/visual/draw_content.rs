@@ -1,8 +1,9 @@
+use crate::numerics::*;
 use bevy_ecs::prelude::*;
+use core::hash::*;
 use windows::Win32::Graphics::Direct2D::{ID2D1CommandList, ID2D1DeviceContext};
 use windows::core::Result;
-
-use crate::numerics::*;
+use windows_core::*;
 
 #[derive(Component, Clone, Debug, PartialEq)]
 pub struct VisualDrawContent {
@@ -12,6 +13,13 @@ pub struct VisualDrawContent {
 
 unsafe impl Send for VisualDrawContent {}
 unsafe impl Sync for VisualDrawContent {}
+
+impl Hash for VisualDrawContent {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.local_aabb.hash(state);
+        (self.command_list.as_raw() as usize).hash(state);
+    }
+}
 
 impl VisualDrawContent {
     /// 事前に計算済みの `local_aabb` を用いて `VisualDrawContent` を構築する。
