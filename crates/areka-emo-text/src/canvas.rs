@@ -26,6 +26,12 @@
 //!
 //! ## M2 予約（記録のみ・実装しない・R8.3/R10.3）
 //!
+//! `\f` 系文字装飾の**縦書き写像は確定済み**（spec `areka-P0-balloon-vertical-canon`
+//! 要件 5.1〜5.3・5.7）——`align` は `left`＝上寄せ／`right`＝下寄せ／`center`＝縦中央、
+//! `valign` は `top`＝右寄せ／`bottom`＝左寄せ、下線は列の右側。正典 2 ページで `valign` の
+//! 写像が逆である事実（疑義 SC1）と areka が採る側の理由は `doc/COMPAT_ARCHITECTURE.md`
+//! §8 の該当行が正本で、実装の追跡先は `areka-P0-text-decoration-canon`。
+//!
 //! 回転値・文字装飾（アウトライン/多色/シャドウ）は [`TextEffects`] 予約型と
 //! 予約名定数（[`RESERVED_EFFECT_OUTLINE`]／[`RESERVED_EFFECT_MULTICOLOR`]／
 //! [`RESERVED_EFFECT_SHADOW`]／[`RESERVED_EFFECT_ROTATION`]）として記録するに留め、

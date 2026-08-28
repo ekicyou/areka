@@ -64,7 +64,7 @@
 | `WritingDirectionDecision` の公開面（採用キー・`vertical` 相当値の導出規則）の変更 | `areka-P0-currentghost-property-tree`（`.vertical` の導出規則を本仕様参照で収載済み） |
 | `TextRegion::start` の解決規約の再変更 | `areka-P0-cursor-tag-canon`（`\_l[0,0]` と `origin.x` の一致は本仕様のクランプ撤去に従属する・SC15） |
 | SSP が縦書きの座標意味論を再改訂（SC14） | 追随点は `WritingDirectionDecision::resolve` と `TextRegion::resolve` の 2 関数のみ。COMPAT §8 の該当行も同時に改訂する |
-| `doc/COMPAT_ARCHITECTURE.md` §8 への行追加 | `areka-P0-scope-zorder-pinning`（同ウェーブで §8 末尾へ追記予定＝隣接行マージ） |
+| `doc/COMPAT_ARCHITECTURE.md` §8 への行追加 | **`areka-P0-balloon-offset-dpi`**（2026-08-29 実測で確定した実際の隣接相手——同ブランチが §8 の同一ハンク `@@ -173` へ 3 行を挿入している）。⚠**当初の予測 `areka-P0-scope-zorder-pinning` は外れ**——同ブランチは `doc/COMPAT_ARCHITECTURE.md` に一切触れていない（実測・重複は `roadmap.md` のみ）。衝突は純粋な追記どうしの隣接行マージで意味的衝突ではないが、後着側が rebase を負う |
 | `BalloonModel` の追加フィールド方針の変更（`new()` 署名を伸ばす形へ回帰） | ワークスペース全 30 呼出箇所（本設計は additive ビルダーで 0 波及に保つ） |
 
 ---
@@ -158,7 +158,7 @@ graph TB
 | COM 層 | DirectWrite（`windows` 0.62.2 経由） | 縦組みのネイティブ実現（`DWRITE_READING_DIRECTION_TOP_TO_BOTTOM` ＋ `DWRITE_FLOW_DIRECTION_RIGHT_TO_LEFT`） | 6.2 のとおり `@` フォント機構は用いない。既存 `DirectionRecipe` を再利用し改変しない |
 | ログ | `tracing`（workspace） | `warn!`／`debug!` の 2 水準 | 水準の割当は Error Handling 節の表が正本 |
 | テスト | 素の `#[test]` ＋ `log-capture-kit::count_levels` | 決定論檻・ログ件数の逐語固定 | 実 DPI・実 GPU・実窓を要さない（10.6） |
-| 台帳 | `doc/COMPAT_ARCHITECTURE.md` §8（Markdown 表・テスト保護なし） | 裁量と語彙の登記 | 48 データ行（:128-175）の**末尾へ追記**。`scope-zorder-pinning` と隣接行マージが起きうる |
+| 台帳 | `doc/COMPAT_ARCHITECTURE.md` §8（Markdown 表・テスト保護なし） | 裁量と語彙の登記 | 48 データ行（:128-175）の**末尾へ追記**。隣接行マージの相手は **`areka-P0-balloon-offset-dpi`**（2026-08-29 実測。`scope-zorder-pinning` は COMPAT 非接触だった） |
 
 ---
 
@@ -205,6 +205,19 @@ crates/areka-emo-text/
 | `doc/COMPAT_ARCHITECTURE.md` | §8 の 48 データ行（:128-175）の**末尾へ 13 行を追記**（Data Models 節の登記台帳が正本） | 4, 5, 6.5, 7, 8, 9.3, 9.4, 11, 12 |
 | `doc/emo2-conformance-scope.md` | :85 の「縦書きを M2 へ後ろ倒し」を本仕様（M1・W6.95）へ追随。:61 の適合スコープ判断（痕跡なし・適合 14 項目に不要）は**変更しない**。:60 の `\f[]` に文字装飾系 3 spec の所有確定への参照を添える | 11.9 |
 | `.kiro/steering/roadmap.md` | ウェーブ表の bvc 行と追記の更新（`/kiro-complete` 手順の範囲）。**クランプ正準を主張する steering は 1 件も無い**（2026-08-27 実測）ため正典改訂の追随は不要 | 3.10 |
+
+> **実装後の追随（2026-08-29・`/kiro-validate-impl` の是正 1 周目）**: 着地した実ファイル集合と本表が双方向に食い違っていたため、実測へ追随させる。
+>
+> **本表に無かったが実際に変更したもの（4 件）**
+>
+> | ファイル | 変更内容 | 要件 |
+> |---|---|---|
+> | `crates/areka-parsers/src/balloon/validation_tests.rs` | 4.1 棚卸しで判明した**第 3 類**の追随——宣言された生値 `origin().x()` を「基層からの継承」の証拠に使っていた 3 テスト 6 assert を「未宣言＝`None`」の固定へ置換し、継承の証拠は既存の `wordwrappoint`／`font.*` が担う（被覆は純増）。doc の行番号の陳腐化も是正 | 3.10, 10.7, 10.9 |
+> | `crates/areka-emo-present/src/balloon_model_tests.rs` | 同上（2 scope のループ内 1 assert） | 3.10, 10.7, 10.9 |
+> | `crates/areka-emo-text/src/actor_scale_refresh_tests.rs` | 4.1 棚卸しで判明した in-code の validrect 外 `origin` 宣言を `Origin::new(None, None)` へ（DD5・意図は「validrect 差替えの検出」で origin は付随物）。**撤去後も緑のままだった＝全緑では検出できなかった箇所** | 3.10, 10.7 |
+> | `crates/areka-emo-text/src/draw.rs`／`src/canvas.rs`（**doc コメントのみ・挙動不変**） | 要件 5.7 の追随——`\f` 系文字装飾を **M2 の予約シーム**として扱っている記述へ、縦書き写像が確定済みであることと参照先（COMPAT §8 の該当行・追跡先 `areka-P0-text-decoration-canon`）を添える。`draw.rs` は 974→980 行（1,000 行上限内）で、3.2 の構造檻が固定する不変条件（`for_mode` の全出現 2 件・`try_create_format` 3 件）は不変 | 5.7 |
+>
+> **本表にあったが実際には変更しなかったもの（4 件）**: `tests/pipeline_test.rs`／`src/layout_wrap_tests.rs`／`src/draw_oracle_tests.rs`／`src/canvas.rs` のクランプ文言。タスク 4.5 の着手時 grep で**対象 0 件**と実測された（design C9 の候補地表が実際より広かった）。`canvas.rs` は上記 5.7 の追随で別件として触れている。`.kiro/steering/roadmap.md` は `/kiro-complete` の範囲。
 
 **触らないファイル（境界の裏面）**: `crates/areka-emo-text/src/layout_cursor_tests.rs`（670 行・`\_l` の檻・無改変で緑であることが 4.4 の証跡）／`crates/areka-sylphya/**`／`crates/areka/src/emo2_boot/**`／`.kiro/specs/completed/**`／`.kiro/steering/roadmap-history.md`。
 
@@ -656,7 +669,7 @@ fn resolve_origin_component(
 **Implementation Notes**
 - Integration: §8 は `include_str!` による保護もテストも無い（2026-08-27 実測・0 件）。したがって檻は作らず、⑴ 13 行の項目名を tasks.md の完了条件へ逐語で持たせ ⑵ 上の双方向登記表を**着手時と完了時の 2 回**引き直すことで担保する（DD8・バリデーション重大 3 の是正）。
 - Validation: 上表の再検証（file:line の陳腐化はこのリポジトリで通算 8 度踏まれている——**着手時と完了時に必ず引き直すこと**）。
-- Risks: `scope-zorder-pinning` が同ウェーブで §8 末尾へ追記する。衝突は隣接行マージのみで意味的衝突ではないが、後着側が rebase を負う。
+- Risks: 同ウェーブの別ブランチが §8 末尾へ追記する。**2026-08-29 の実測では相手は `areka-P0-balloon-offset-dpi`**（§8 の同一ハンク `@@ -173` へ 3 行）で、**当初予測していた `scope-zorder-pinning` は COMPAT に触れていない**。衝突は純粋な追記どうしの隣接行マージで意味的衝突ではないが、後着側が rebase を負う。
 
 #### C8 決定論テスト網
 
