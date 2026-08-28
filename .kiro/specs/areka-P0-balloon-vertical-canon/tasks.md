@@ -1,0 +1,131 @@
+# Implementation Plan — areka-P0-balloon-vertical-canon
+
+> 生成: 2026-08-28（`-y` 自動承認）。設計 Migration 6 段に対応（群 1=段1・群 2=段1・群 3=段2・群 4=段3＋段4〔不可分・ただし「檻を先に・編集を後に」へ並べ直し済み——宣言削除はクランプ有無どちらでも挙動不変のため、各タスク末で常に全緑を保てる〕・群 5=段2/4・群 6=段5・群 7=段6）。
+> **file:line は 2026-08-27〜28 実測**。着手時に必ず引き直すこと（本リポジトリで陳腐化を通算 8 度踏んでいる）。
+> 実装上の正本: 型と契約は design.md の C1〜C9／DD1〜DD9・記録水準は Error Handling 表・§8 の行内容は Data Models 登記台帳。
+
+- [ ] 1. 転記層の受口（`vertical` の生値転記）
+- [ ] 1.1 `vertical` 生値の保持を balloon モデルへ追加する
+  - 生値フィールド＋additive ビルダー（`with_cursor`／`with_windowposition_raw` と同じ流儀）＋アクセサ。`new()` の 7 引数署名は非改変
+  - 未宣言（`None`）と宣言（空文字列含む）を潰さない。解釈・検証・警告は一切行わない（転記層の無警告契約）
+  - モデルのテストに「additive 既定は未宣言」「未宣言と `"0"` 宣言の区別」を追加
+  - **Observable**: 既存 30 呼出箇所を 1 つも変えずにワークスペースがコンパイルされ、新テストが緑
+  - _Requirements: 1.4, 1.8_
+- [ ] 1.2 `vertical` の転記と 2 層マージを通す
+  - `writing_mode` の転記の隣へ 1 行、末尾のビルダー鎖へ 1 行。**キー非依存のマージ関数は非改変**（追加コード 0 で後勝ちが成立することの証跡）
+  - 解析のテストに 4 形を追加: 単層宣言／面別上書き層の後勝ち／未指定は `None`／語彙外値の素通し（既存 `writing_mode` テスト群と同型）
+  - **Observable**: 4 テスト緑・転記層のログ発行 0 件のまま
+  - _Requirements: 1.4, 1.5, 10.4_
+
+- [ ] 2. 書字方向の唯一の決定点
+- [ ] 2.1 書字方向の決定記録型を新設し既存の解決を委譲へ縮小する
+  - 宣言分類 2 種（正典キー: 未宣言/横/縦/不正・拡張キー: 未宣言/宣言/未知）と採用出所の enum、決定記録型（`mode`／`source`／`conflicting`／`.vertical` 導出値）を design C2 の契約どおりに実装
+  - 共存規則: 有効宣言なし→正典既定の横書き（記録なし）／単独→そのキー／一致併記→無記録／**矛盾併記→拡張キー採用＋DEBUG 記録（両キーの生値を構造化フィールドで・resolve の内側で）**／不正値・未知値は「指定なし」として合流（DD6・警告は発行済み）
+  - 既存の解決 API は決定記録の `.mode()` を返す薄い委譲へ（**戻り値型不変＝既存 14 呼出箇所は無改変**）
+  - 記録水準は design Error Handling 表が正本（不正値＝warn・矛盾併記＝debug・両方なし＝無記録）
+  - **Observable**: 既存 writing.rs インライン `mod tests`（warn 件数の逐語固定含む）が**無改変で緑**（2.3 の証跡）・`actor.rs:153` 非改変
+  - _Requirements: 1.1, 1.2, 1.3, 1.6, 1.7, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 9.1, 9.2_
+- [ ] 2.2 決定点の檻を新設する（兄弟テストファイル）
+  - `writing_decision_tests.rs` 新設＋`lib.rs` の `PURE_SOURCES` へ列挙（列挙しないと被覆が黙って縮む）
+  - `vertical` 分類 4 分岐（未宣言／`0`／`1`／不正値＝`2`・空文字列。不正値は warn ちょうど 1 件）
+  - 共存規則 6 組合せ（単独 2 形＋3 形／一致併記＝記録 0 件／不一致併記＝拡張キー採用＋debug ちょうど 1 件／未知値＋`vertical` 宣言＝`vertical` 採用）
+  - 記録水準は `count_levels` で warn／debug を**別々に**逐語固定。0 件主張は捕捉窓内の対照イベント込み（恒真檻の禁止）
+  - `.vertical` 導出 3 値（横→`0`・`vertical_rl`→`1`・**`vertical_lr`→`1`**）
+  - **Observable**: 新檻全緑＋`PURE_SOURCES` 構造檻緑
+  - _Requirements: 1.6, 1.7, 2.2, 2.3, 2.4, 2.5, 2.7, 7.1, 10.3, 10.6_
+
+- [ ] 3. 一致の固定（コード変更 0・檻のみ）
+- [ ] 3.1 (P) 縦書き座標意味論の檻を新設する
+  - `region_vertical_canon_tests.rs` 新設＋`PURE_SOURCES` へ列挙
+  - `wordwrappoint.y` の既定＝`validrect.bottom`・負値＝下辺基準／**`wordwrappoint.x` だけを変えた 2 モデルが同一の `TextRegion` を与える**（型の保証を読める形へ）／`validrect` 4 辺が横書きと同一に解決される
+  - SC5（列の上限＝`validrect.left`）は**既存挙動＋既存檻**（`layout_visible_window_tests.rs:60-79`）の確認のみ——新規の檻は作らない
+  - **Observable**: 新檻緑・`region.rs` 本番コード非改変
+  - _Requirements: 3.4, 3.5, 3.6, 3.8, 10.5, 10.6_
+  - _Boundary: C4（region 檻のみ）_
+- [ ] 3.2 (P) フォント縦書き等価の構造檻を追加する
+  - `draw_format_metrics_tests.rs`（兄弟テスト）へ追記——**`draw.rs`（974 行・上限まで 26 行）へは 1 行も足さない**
+  - 3 モードの `reading`／`flow` 写像（縦書き 2 モード＝`TOP_TO_BOTTOM`＋`RIGHT_TO_LEFT`／`LEFT_TO_RIGHT`）
+  - 本番ソースに `@` 前置のフォント名生成・標準ゴシックへの差し替えが**存在しない**こと（字面檻・「何を守っているか」を檻の doc に明記）
+  - `DirectionRecipe::for_mode` の本番呼出が `create_text_format` の内側 1 箇所のみ（計測と描画が同じ工場を通る証跡）
+  - **Observable**: 檻緑・`draw.rs` 974 行のまま・1,000 行番人緑
+  - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.6_
+  - _Boundary: C5（draw 兄弟テストのみ）_
+
+- [ ] 4. origin クランプ正準の撤去と追随（段3＋段4＝不可分の論理単位）
+- [ ] 4.1 意味論の棚卸し（着手時・どの編集よりも先）
+  - repo 全域（`crates/**`・`examples/**`・`tests/fixtures/**`）の `origin.x`／`origin.y` 宣言を列挙し、各々の **2 層マージ後の validrect と突合**して内外を判定する（語 grep は使わない——当該語を含まない定義ファイルを原理的に見つけられないため）
+  - 範囲外集合が既知 4 件（`emo2-vertical`／`emo2-choice/descript-cursor`／`emo2-choice/descript-plain`／`emo2-kakukaku`）と一致することを確認。**5 件目が出た場合は DD5（意図別: 縮退なら宣言削除・宣言そのものなら期待値を字義位置へ）で分類してから先へ進む**
+  - **Observable**: 棚卸し記録（対象ファイル一覧・内外判定・是正方針・方法の限界「語 grep では見つからない類が在る」）を **4.2 で新設する檻のモジュール doc へ恒久記録**する（セッション記録に残さない）
+  - _Requirements: 3.10, 10.7_
+- [ ] 4.2 実ゴースト開始点の檻を新設する（クランプ現存下で先に固定）
+  - `tests/shipped_fixture_region_test.rs` 新設——`emo2-kakukaku` の `descript.txt`＋`balloons0s.txt`／`balloonk0s.txt` を 2 層マージ→`TextRegion` 解決で **sakura (36,46)／kero (24,40) を逐語固定**（現在この観測点は 0 本＝全緑のまま壊れる唯一の穴）
+  - **檻は宣言がまだ在る状態（クランプ経由）で書く**。以後 4.3 の宣言削除・4.4 のクランプ撤去を**またいで無改変のまま緑**であり続けることが、両編集の挙動不変の反証可能な証跡になる
+  - モジュール doc に 4.1 の棚卸し記録（方法・対象・限界）を収める
+  - **Observable**: 新檻緑（この時点の実挙動を固定）
+  - _Requirements: 3.10, 10.7_
+  - _Depends: 4.1_
+- [ ] 4.3 フィクスチャと実ゴースト定義を正典推奨形へ是正する（挙動不変）
+  - `emo2-vertical/descript.txt:15-16`・`emo2-choice/descript-cursor.txt:18-19`（＋:17 のクランプ言及コメント是正）・`emo2-choice/descript-plain.txt:17-18`・`crates/pilot/.../emo2-kakukaku/descript.txt:13-14` の origin 宣言を削除（**pilot はデータファイルのみ・コードは非接触**）
+  - 削除はクランプ現存下でも挙動不変（未宣言→書字開始角＝同値）
+  - **Observable**: 4.2 の檻・`vertical_fixture_test.rs:117` の `(356,46)`・choice の `(5,5)` が**すべて無改変のまま緑**
+  - _Requirements: 3.10, 10.9_
+  - _Depends: 4.2_
+- [ ] 4.4 クランプを撤去し宣言 origin を字義どおりにする
+  - `clamp_origin_component` → `resolve_origin_component` 改称。`Some` 腕は負値（反対端基準）解決後**そのまま返し**、validrect 外なら debug 1 件。`None` 腕と `start_corner` の match は非改変。**validrect 引数が返値に影響しない**ことを不変条件とする（クランプが残っていない証拠）
+  - モジュール doc（`region.rs:3`／`:24-27`／`:177`／`:189`／`:211`／`:271`・`layout.rs:29` の 1 行）を本仕様の規約へ指し直す
+  - `region.rs` インライン既存テスト 5 件を DD5（意図別）で是正——期待値だけを機械的に書き換えない
+  - origin 4 分岐の檻を `region_vertical_canon_tests.rs` へ追加: validrect 内宣言（字義・記録 0）／外宣言（**字義**＋debug 1）／未宣言（開始角＋debug 1）／負値宣言
+  - **Observable**: crate 全緑＋**4.2 の檻が無改変のまま緑**＋4 分岐檻緑
+  - _Requirements: 3.1, 3.2, 3.3, 3.7, 3.8, 3.9, 3.10, 3.11, 10.5, 10.7_
+- [ ] 4.5 文言掃除（語 grep は文言網羅のみに使う）
+  - 「クランプ」「clamp_origin」「書字開始角」の語 grep で doc／assert メッセージを是正: `scale_invariance_test.rs`・`draw_readback_test.rs`・`pipeline_test.rs`・`layout_wrap_tests.rs`・`draw_oracle_tests.rs`・`canvas.rs`・`viewbox_draw_test_support.rs:93-96`（挙動はいずれも不変——validrect が画像端一致 or 未指定経路）
+  - **Observable**: `crates/**` で「クランプ正準」ヒット 0 件＋**陽性対照**＝同一 grep が `.kiro/specs/areka-P0-balloon-vertical-canon/` 配下で ≥1 ヒット（道具と pathspec の生存証明）＋対象ファイルの実在列挙
+  - _Requirements: 3.10, 10.7_
+
+- [ ] 5. 正典キー版フィクスチャと同値檻
+- [ ] 5.1 `emo2-vertical-canon` を新設し拡張キー版との同値を檻にする
+  - `descript.txt` は既存 `emo2-vertical` との差分を **`writing_mode,vertical_rl` → `vertical,1` の 1 行だけ**に保つ・`balloons0s.txt` は同内容・origin 宣言なし（正典推奨形）・枠画像は共有フィクスチャを借用（複製しない）
+  - `vertical_fixture_test.rs` へ追加: 正典キー版が縦書きへ解決される（基層のみ／2 層マージ後の双方）・**両版の `WritingMode` と `TextRegion` 全成分の逐語一致**
+  - 期待 `TextRegion`＝left 36／top 46／right 356／bottom 168／start (356,46)／wrap 164（design Data Models の表と一致）
+  - **Observable**: 同値檻緑・既存 4 テスト無改変で緑
+  - _Requirements: 10.1, 10.2, 10.9_
+  - _Depends: 2.1, 4.3_
+
+- [ ] 6. 互換台帳への登記（文書のみ・コード非接触）
+- [ ] 6.1 双方向登記の着手時再検証（DD8 前半・6.2〜6.4 の前提）
+  - design.md「追跡先の双方向登記」表 6 行の file:line を**引き直す**（追跡先 brief は同ウェーブ中に動きうる）。変動があれば表を追随
+  - **Observable**: 6 行それぞれの再検証結果（一致／追随内容）が design.md の表に反映されている
+  - _Requirements: 4.5, 5.5, 7.5, 8.4_
+- [ ] 6.2 COMPAT §8 行 1〜2 を登記する（`writing_mode` 優先順位・クランプ撤去の上書き行）
+  - 行内容は design Data Models 登記台帳 #1〜#2 が正本。上書き行は §8 :153（scg が R2.9 を上書きした行）を雛形とし、出所（`completed/areka-P0-emo-text-layer/design.md:464`／`:716`）を名指し・§8 :170 の別種クランプ（`balloon_limit.rs`）と項目名で区別
+  - **挿入点は編集時に §8 末尾を再導出する（`:175` を信用しない）**——zsp が同ウェーブで同じ表末尾へ追記予定＝後着側が rebase を負う
+  - **Observable**: 行 1〜2 が表に存在し、内容が台帳 #1〜#2 と逐語対応・出典列に本仕様＋要件/SC 番号
+  - _Requirements: 2.8, 3.10, 11.1, 11.2, 11.3, 11.4, 11.8_
+  - _Depends: 6.1_
+- [ ] 6.3 COMPAT §8 行 3〜8 を登記する（未実装語彙＋追跡先）
+  - 台帳 #3〜#8: フォント等価（`@` 非使用・差替非模倣・グリフ一致非保証）／切替なし（SC11）／列の上限（SC5＝既存挙動）／`\f` 写像（SC1 の採択側と理由・decoration へ継承）／矢印（SC10・residue 項目 1 第 3 軸）／`\_l` 正典と既知非互換（SC8/SC9/SC15・正典文の逐語引用・cursor-tag-canon）
+  - 各行の根拠列に「**正典側は未規定のまま**」を明記（解決済みと偽らない）。追跡先名指しは 6.1 の再検証結果に基づく
+  - **Observable**: 行 3〜8 が存在し台帳と逐語対応・コード非接触（記録は表示結果を変えない）
+  - _Requirements: 4.1, 4.2, 4.3, 4.5, 4.6, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 6.5, 9.3, 9.4, 11.5, 11.6, 12.3, 12.4_
+  - _Depends: 6.1_
+- [ ] 6.4 COMPAT §8 行 9〜13 を登記する（プロパティ族＋正典参照・不安定さ）
+  - 台帳 #9〜#13: `.vertical` 導出規則と 2 つの穴（枝の不在・照会経路の不在）／同族 `validwidth`/`validheight`/`lines` の 2.8.83 意味論と 2.8.80 逆転（SC4/SC13）／`origin.y` 分岐なし（SC6）／正典参照の出所（**snapshot 陳腐化はプロパティ節限局・座標節は一致**）／正典側の不安定さ（SC14・追随点 2 関数）
+  - **Observable**: 行 9〜13 が存在し台帳と逐語対応
+  - _Requirements: 3.3, 7.2, 7.3, 8.1, 8.2, 8.3, 11.7, 12.1, 12.2, 12.5, 12.6_
+  - _Depends: 6.1_
+- [ ] 6.5 (P) `emo2-conformance-scope.md` の陳腐化を是正する
+  - `:85` の「縦書きを M2 へ後ろ倒し」を本仕様（M1・W6.95）へ追随・**`:61` の適合スコープ判断（痕跡なし・適合 14 項目に不要）は変更しない**・`:60` の `\f[]` に文字装飾系 3 spec の所有確定への参照を添える
+  - **Observable**: 当該 3 箇所の差分のみで他行不変
+  - _Requirements: 11.9_
+  - _Boundary: doc/emo2-conformance-scope.md（6.2〜6.4 の COMPAT_ARCHITECTURE.md とファイル非重複）_
+
+- [ ] 7. 最終ゲート
+- [ ] 7.1 全体検証と双方向登記の完了時再検証
+  - ワークスペース全テスト緑（**ただし「全緑」を十分性の証拠にしない**——4.1 の棚卸し記録と各檻の存在が正）
+  - `layout_cursor_tests.rs`（670 行・13 本）が**無改変で緑**＝`\_l` を 1 ビットも変えていない証跡
+  - 1,000 行番人緑（`draw.rs` 974 のまま非接触・例外表非改変）・`PURE_SOURCES` に新規 2 本が列挙済み
+  - **非接触の確認**: `crates/areka-sylphya/**`・`emo2_boot/**`・`placement/**`・`presenter/**`・`crates/pilot/**` のコード・`.kiro/specs/completed/**` に差分 0（プロパティ照会は現行どおり値なしのまま＝7.4/8.5/8.6・面別上書き解決規則不変＝9.5 の証跡。**pathspec の実在を証明してから「差分なし」を記録する**）
+  - §8 の 13 項目名（①writing_mode ②クランプ撤去 ③フォント等価 ④切替なし ⑤列の上限 ⑥\f 写像 ⑦矢印 ⑧\_l ⑨.vertical 導出 ⑩同族意味論 ⑪origin.y 分岐なし ⑫正典参照の出所 ⑬正典の不安定さ）を**逐語突合**——§8 末尾は再導出する（`:175` 非信用）
+  - 双方向登記表 6 行の file:line を**もう一度**引き直す（DD8 後半＝完了時レグ・追跡先 brief の変動があれば追随）
+  - **Observable**: 全ゲート緑＋非接触確認（pathspec 実在証明付き）と再検証結果が記録されている
+  - _Requirements: 4.4, 4.5, 7.4, 7.5, 8.4, 8.5, 8.6, 9.5, 10.7, 10.8_
