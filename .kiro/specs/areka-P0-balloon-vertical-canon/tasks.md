@@ -5,7 +5,7 @@
 > 実装上の正本: 型と契約は design.md の C1〜C9／DD1〜DD9・記録水準は Error Handling 表・§8 の行内容は Data Models 登記台帳。
 
 - [ ] 1. 転記層の受口（`vertical` の生値転記）
-- [ ] 1.1 `vertical` 生値の保持を balloon モデルへ追加する
+- [x] 1.1 `vertical` 生値の保持を balloon モデルへ追加する
   - 生値フィールド＋additive ビルダー（`with_cursor`／`with_windowposition_raw` と同じ流儀）＋アクセサ。`new()` の 7 引数署名は非改変
   - 未宣言（`None`）と宣言（空文字列含む）を潰さない。解釈・検証・警告は一切行わない（転記層の無警告契約）
   - モデルのテストに「additive 既定は未宣言」「未宣言と `"0"` 宣言の区別」を追加
