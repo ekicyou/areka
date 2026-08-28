@@ -90,8 +90,13 @@ fn load_scope_balloon_model_merges_per_scope_on_emo2_fixture() {
 /// 実 fixture の `wordwrappoint.x` がこの 2 面性をそのまま体現する——`balloonk0s.txt` は
 /// `wordwrappoint` を持たないゆえ scope 1 は descript の `-34` を継承し、`balloons0s.txt` は
 /// `wordwrappoint.x,-49` を持つゆえ scope 0 はそちらで上書きされる。加えて双方の scope が
-/// 上書き層のどちらも触れない項目（`font.name` / `origin` / `font.height`）を descript から
-/// 等しく継承する。
+/// 上書き層のどちらも触れない項目（`wordwrappoint.y` / `font.name` / `font.height`）を descript
+/// から等しく継承する。
+///
+/// `origin` は**どちらの層にも宣言が無い**——`areka-P0-balloon-vertical-canon`（要件 3.10・10.9）が
+/// 正典 ukadoc の「通常は指定せず validrect の定義に任せる」に合わせて `descript.txt` の
+/// `origin.x,0`／`origin.y,0` を削除したためである。ここではその**未宣言形が両 scope で `None` の
+/// まま保たれる**ことを固定する（`Some(0)` が現れたら宣言の復活＝正典推奨形からの逸脱）。
 #[test]
 fn load_scope_balloon_model_inherits_unspecified_keys_from_descript() {
     let dir = emo2_balloon_root();
@@ -117,8 +122,13 @@ fn load_scope_balloon_model_inherits_unspecified_keys_from_descript() {
         );
         assert_eq!(
             model.origin().x(),
-            Some(0),
-            "scope {scope}: origin.x は descript 継承"
+            None,
+            "scope {scope}: origin はどちらの層にも宣言が無い＝未宣言のまま None（正典推奨形・要件 3.10/10.9）"
+        );
+        assert_eq!(
+            model.origin().y(),
+            None,
+            "scope {scope}: origin.y も同様に未宣言＝None"
         );
         assert_eq!(
             model.font().name(),

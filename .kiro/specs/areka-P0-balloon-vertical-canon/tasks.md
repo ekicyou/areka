@@ -64,7 +64,7 @@
   - **Observable**: 新檻緑（この時点の実挙動を固定）
   - _Requirements: 3.10, 10.7_
   - _Depends: 4.1_
-- [ ] 4.3 フィクスチャと実ゴースト定義を正典推奨形へ是正する（挙動不変）
+- [x] 4.3 フィクスチャと実ゴースト定義を正典推奨形へ是正する（挙動不変）
   - `emo2-vertical/descript.txt:15-16`・`emo2-choice/descript-cursor.txt:18-19`（＋:17 のクランプ言及コメント是正）・`emo2-choice/descript-plain.txt:17-18`・`crates/pilot/.../emo2-kakukaku/descript.txt:13-14` の origin 宣言を削除（**pilot はデータファイルのみ・コードは非接触**）
   - **【4.1 棚卸しで追加】`crates/pilot/.../emo2-kakukaku-wplimit/descript.txt:13-14` の origin 宣言も削除する（5 件目）**。design C9 が「範囲 [0,0] 境界内で不変」としたのは基層のみを見た誤判定で、面別上書き層を重ねると原本と同一の範囲外。削除で開始点 sakura (36,46)／kero (24,40) が不変
   - **【4.1 棚卸しで追加＝第 3 類の追随】宣言削除で赤くなる既存テストを同一コミットで是正する**——`crates/areka-parsers/src/balloon/validation_tests.rs:60-61／:116-117／:158-159`（3 テスト・6 assert）と `crates/areka-emo-present/src/balloon_model_tests.rs:118-123`。いずれも「基層の値が面別上書き層に無くても継承される」ことの**証拠**として `origin().x() == Some(0)` を使っている。**期待値を `None` へ替えるだけにしないこと**——それでは継承の被覆が消えて要件 10.7 に反する。**継承の証拠を同条件で継承される別キー**（`wordwrappoint.y`／`font.height`／`font.color` 等）**へ移す**こと。あわせて `validation_tests.rs` の doc（:6・:8-10・:53 の「採取元: descript.txt L13–L14」）の陳腐化も是正する
@@ -150,6 +150,9 @@
 - **3.2 の字面檻は `draw.rs` の字面に強く依存する**（`pub fn create_text_format(` の書式・`pub const DEFAULT_FONT_NAME` の可視性・`for_mode` の全出現が 2 件であること・`seam @ (…)` 束縛が `@` の唯一の供給源であること）。レビュアーが 7 種の変異で空振りしないことを実証済みだが、**`draw.rs` を触る後続タスクは無い前提**で成立している（4.5 の対象一覧に `draw.rs` は無い・7.1 は「非接触」を確認するだけ）。将来 `draw.rs` をリファクタするときは檻の側も更新すること（檻の doc に自己説明済み）。
 - **付録 A の「複製 fixture」の読み方に注意**: `emo2-kakukaku-wplimit` は `descript.txt` と 2 枚の PNG が原本とバイト同一だが、**面別上書き層 2 本はバイト同一ではない**（`windowposition.*` の行が異なる＝同 fixture の `readme.txt` が明記する意図的な差分）。`validrect`／`wordwrappoint` は同値なので `TextRegion` は一致する。4.3 で「複製だから上書き層も同じ」と読むと誤る。
 - **4.2 の檻は群 4 の順序が意味を持つことの証跡そのもの**。レビュアーが独立に ⑴ クランプ無効化→**赤 3 本** ⑵ 両 fixture の origin 宣言削除（4.3 単独）→**緑 6/6** ⑶ ⑴＋⑵ の合成（群 4 完了後の姿）→**檻を 1 バイトも変えずに緑 6/6** ⑷ fixture のリネーム→**フルパス付き panic で赤**、を実測済み。**4.3・4.4 の実装者は、この檻が赤くなったら自分の編集が挙動を変えた証拠だと理解すること**（檻の期待値を書き換えて緑にするのは禁止）。
+- **Git Bash の `sed -i` はファイル全体の CRLF を LF へ書き換える**（本 repo は `core.autocrlf=true`・`.gitattributes` 無しでワークツリー規約が CRLF）。コミット差分は正規化で綺麗に見えるのでレビューをすり抜ける。4.3 では期待バイト差 24 に対し 54/55/46/107/107 になったことで検出し復元した。**ファイル編集後は必ずバイト差か CR 数／LF 数の一致を確認すること。**
+- **完了 spec `areka-P0-balloon-parse` の R5.1 が 4.3 で陳腐化した**（「`origin`(0,0) を含むモデルを生成する」と逐語で述べているが fixture から宣言が消えた）。アーカイブ本体は非改変が規律なので、乖離は `validation_tests.rs` のモジュール doc に経緯付きで可視化してある。**群 6 の COMPAT 登記でこの上書きも記録すること**（design DD4 の同型＝上書きした出所を名指しする）。
+- **`emo2-choice` の 2 fixture は開始点 (5,5) を観測する消費者を持たないまま宣言削除された**（`choice_fixture_test.rs` は `TextRegion` を解決しない）。4.1 の棚卸しが着手前に記録済みの既知の穴で 4.3 が作ったものではないが、**7.1 の最終ゲートで意識すること**。
 
 ---
 
