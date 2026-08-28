@@ -542,7 +542,10 @@ fn balloon_model_vertical_raw_defaults_to_unspecified_and_builder_overrides() {
     assert_eq!(with_vertical.writing_mode(), base.writing_mode());
     assert_eq!(with_vertical.budoux_newline(), base.budoux_newline());
     assert_eq!(with_vertical.cursor(), base.cursor());
-    assert_eq!(with_vertical.windowposition_raw(), base.windowposition_raw());
+    assert_eq!(
+        with_vertical.windowposition_raw(),
+        base.windowposition_raw()
+    );
 }
 
 /// 未宣言（`None`）と `vertical,0` の宣言（`Some("0")`）を潰さずに区別して保持する
