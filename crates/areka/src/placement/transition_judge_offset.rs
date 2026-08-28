@@ -35,8 +35,9 @@
 //! `keyword-pending` は表示 DPI を読む**前**の門で抜けるので `new_dpi=0` を運ぶ
 //! （`balloon_offset_follow.rs` の門）。しかし縮退の `unresolved` も `DPI` component が
 //! 無い腕では `new_dpi=0` を運ぶ。**腕は `verdict` だけで見分ける**——`new_dpi` から
-//! 推し量ると 2 つの腕が混ざる。加えて ⑴ と ⑷ は `new_dpi=0` の行を 1 件も読まない
-//! （遷移後の表示 DPI がその行には無い）。
+//! 推し量ると 2 つの腕が混ざる。加えて ⑴ と ⑷ は `new_dpi=0` の行から**値を読まない**
+//! （遷移後の表示 DPI がその行には無い）——⑷ が門の行を読むのは、母数となるスコープを
+//! 数えるときだけである（[`keyword_pending_scopes`]・task 8.6）。
 //!
 //! # 受容された残余を「壊れている」と読まない
 //!
@@ -397,7 +398,7 @@ pub fn judge_offset_log(log: &str) -> OffsetReport {
         check_verdict_arms(&transitions, &mut violations);
         check_round_trip(&transitions, &mut violations);
         check_low_scale_rescale(&transitions, &mut violations);
-        check_alignment_residual(&transitions, &mut violations);
+        check_alignment_residual(&records, &transitions, &mut violations);
     }
 
     OffsetReport {
@@ -680,16 +681,48 @@ fn axis_residual(base_offset: i32, new_offset: i32, base_dpi: u32, new_dpi: u32)
     )
 }
 
+/// 母数となるキーワード指定スコープの集合を、**観測行の全体**から作る（task 8.6）。
+///
+/// # なぜ遷移の内側に限らないのか
+///
+/// 門の行は「その時点で再導出の素材が未消費だった」という**事実の記録**であり、その行が
+/// 遷移の内側にあるかどうかはその事実を変えない。そして実機では門の行は**構造的に必ず
+/// 最初の起点より前**に出る——素材は起動から 0.73〜5.0 秒で自動的に消費される
+/// （`ReportedSizeReconcile` の基準確定）のに対し、最初の起点は利用者のドラッグ由来なので
+/// 必ずそれより後になる。[`split_transitions`] は最初の起点より前の行を捨てるため、遷移の
+/// 内側だけから母数を作ると**キーワード指定スコープの母数は永久に空**になり、正しい実装の
+/// ままでも [`OffsetViolation::NoKeywordAlignmentMeasured`] の偽の赤が出る（2026-08-28 の
+/// 実機ログ 3 本すべてがこの形・開発者裁定で母数の作り方を広げた）。
+///
+/// # なぜ広げても甘くならないのか
+///
+/// 広げるのは**母数（どのスコープを測る対象とみなすか）だけ**である。残差そのものを測る行
+/// （[`residual_measurable`] が通す `rescaled` の行）は従来どおり遷移の内側からしか採らない
+/// ので、合否の厳しさは 1 つも落ちない。門の行がどこにも無いログでは集合が空のままなので、
+/// 従来どおり `NoKeywordAlignmentMeasured` が立つ（母数を広げた結果、検査が何も要求しなく
+/// なる形にはならない・`transition_judge_offset_tests.rs` の 3 通りの檻が固定する）。
+///
+/// 語彙の規約を破っている行は数えない——読めない行から母数を組むと、行の形が壊れたときに
+/// 母数だけが静かに増える。
+fn keyword_pending_scopes(records: &[TransitionRecord]) -> BTreeSet<Option<u32>> {
+    records
+        .iter()
+        .filter(|record| record.kind == KIND_OFFSET && record.is_well_formed())
+        .filter(|record| record.field(FIELD_VERDICT) == Some(OFFSET_VERDICT_KEYWORD_PENDING))
+        .map(|record| record.int_field::<u32>(FIELD_SCOPE))
+        .collect()
+}
+
+/// 揃えの残差を判定する。
+///
+/// 引数に**元の観測行の並び**（`records`）を取るのは、母数を [`keyword_pending_scopes`] が
+/// 観測行の全体から作るためである（遷移だけでは最初の起点より前の門の行に届かない）。
 fn check_alignment_residual(
+    records: &[TransitionRecord],
     transitions: &[OffsetTransition],
     violations: &mut Vec<OffsetViolation>,
 ) {
-    let keyword_scopes: BTreeSet<Option<u32>> = transitions
-        .iter()
-        .flat_map(|t| t.rows.iter())
-        .filter(|row| row.verdict == OFFSET_VERDICT_KEYWORD_PENDING)
-        .map(|row| row.scope)
-        .collect();
+    let keyword_scopes = keyword_pending_scopes(records);
     let mut measured = 0usize;
     for row in transitions
         .iter()

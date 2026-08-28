@@ -607,6 +607,10 @@ pub(super) fn converge_balloon_after_skipped_write(world: &mut World, char_windo
 - **`transition_diag` 種別 `offset`**: 既存の 4 種別と同じ形（`pub const` の語彙＋欄名定数＋全数配列＋`*_line` 純関数＋前置ガード付き `log_*`）で 1 種別を足す。`PLACEMENT_KIND_ALL` へ追加する（3.7）。
 - **`transition_judge_offset`**（`#[cfg(test)]`）: 下記の起点規約で切り出した遷移ごとに `kind=offset` 行を集計し、⑴ 往復の前後で `new_offset` が bit 同一に戻ること（8.2）⑵ 遷移ごとに判定語が期待の腕であること（8.3）⑶ 低い拡大率側で `verdict=rescaled` が出ていること（8.4）⑷ キーワード指定スコープで揃えの残差が D8 の許容量以内であること（8.5）を判定する。判定語は発行側の `pub const` を参照するだけで、リテラルを書かない。
 
+**⑷ の母数は観測行の全体から作る（task 8.6・2026-08-28 の開発者裁定）。** キーワード指定スコープの集合（母数）は `keyword_pending_scopes`（`transition_judge_offset.rs:707-714`）が**解析した観測行の全体**から `verdict=keyword-pending` の行を拾って作る——遷移の内側に限らない。理由は構造にある: 再導出の素材は起動から 0.73〜5.0 秒で自動的に消費される（`ReportedSizeReconcile` による基準確定）のに対し、最初の遷移起点は利用者のドラッグ由来なので**必ずそれより後**になる。`split_transitions` は最初の起点より前の行を捨てるため、遷移の内側だけから母数を作ると母数は**永久に空**になり、正しい実装のままでも `NoKeywordAlignmentMeasured` の偽の赤が出る（2026-08-28 の実機ログ 3 本すべてがこの形）。門の行は「その時点で素材が未消費だった」という**事実の記録**であり、遷移の内側にあるかどうかはその事実を変えない。
+
+**広げても甘くならない。** 広げるのは母数（どのスコープを測る対象とみなすか）だけであり、**残差そのものを測る行**（`residual_measurable` が通す `rescaled` の行）は従来どおり遷移の内側からしか採らない。ゆえに合否の厳しさは 1 つも落ちない。門の行が**どこにも無い**ログでは集合が空のままなので、従来どおり `NoKeywordAlignmentMeasured` が立つ——母数を広げた結果「検査が何も要求しなくなる」形にはならない。3 通り（起点より前にだけ門がある／遷移の内側に門がある／門がどこにも無い）を `transition_judge_offset_tests.rs` の決定論テストが固定する。語彙の規約を破っている行は母数に数えない（読めない行から母数を組むと、行の形が壊れたときに母数だけが静かに増える）。
+
 ### 起点規約（task 8.4 で確定）
 
 判定器（`transition_judge::split_transitions` が単一の決定点）が遷移を切り出す規約。
@@ -630,14 +634,14 @@ pub(super) fn converge_balloon_after_skipped_write(world: &mut World, char_windo
 - **畳みすぎない側**: フレームが違えば対が同じでも別の変化として数える。上限をフレームに採るのは「1 回の変化の起点は 1 フレームに収まる」という発行側の性質（どちらの経路も 1 つの刻印で行を組む）に拠る。ここを緩めて対の一致だけで畳むと、往復を繰り返したログが 1 本の遷移へ潰れ、判定 ⑴ が「往復が 1 度も観測されていない」の偽の赤になる。
 - **畳み足りない側**: 同じ変化に属する起点がフレームをまたいで届いた場合（例——バルーン窓の `WM_DPICHANGED` が次フレームの書込で初めて届く形）は 2 本に分かれる。合否への影響は判定ごとに異なる（下表）。
 
-**遷移番号が合否に効く唯一の箇所。** `transition_judge_offset.rs` を読むと、遷移番号（`OffsetRow::transition`）を**合否に**使うのは `counts_for_low_scale`（`:626-632` の `row.transition > pending`）だけである。他の箇所は違反の本文へ番号を載せるだけで、判定には使わない。
+**遷移番号が合否に効く唯一の箇所。** `transition_judge_offset.rs` を読むと、遷移番号（`OffsetRow::transition`）を**合否に**使うのは `counts_for_low_scale`（`:627-632` の `row.transition > pending`）だけである。他の箇所は違反の本文へ番号を載せるだけで、判定には使わない。
 
 | 判定 | 遷移番号を合否に使うか | 畳み込みの有無で違反集合が変わるか |
 |---|---|---|
-| ⑴ 往復の bit 同一（`check_round_trip`・`:585` で鍵を組む） | 使わない（鍵は `scope`／`base_offset`／`base_dpi`／`new_dpi` の値の欄だけ） | **変わらない**。畳み込みは行を落とさず順序も変えないので、`round_trips` の件数まで一致する |
-| ⑵ 判定語の腕（`check_verdict_arms`・`:521-557`） | 使わない（行単位） | **変わらない** |
-| ⑶ 低い拡大率側の追随（`check_low_scale_rescale`・`:633-652`） | **使う**（`row.transition > pending`） | **変わり得る** |
-| ⑷ 揃えの残差（`check_alignment_residual`・`:683-724`） | 使わない（行単位） | **変わらない** |
+| ⑴ 往復の bit 同一（`check_round_trip`・`:579-609`／`:586` で鍵を組む） | 使わない（鍵は `scope`／`base_offset`／`base_dpi`／`new_dpi` の値の欄だけ） | **変わらない**。畳み込みは行を落とさず順序も変えないので、`round_trips` の件数まで一致する |
+| ⑵ 判定語の腕（`check_verdict_arms`・`:522-559`） | 使わない（行単位） | **変わらない** |
+| ⑶ 低い拡大率側の追随（`check_low_scale_rescale`・`:634-654`） | **使う**（`row.transition > pending`） | **変わり得る** |
+| ⑷ 揃えの残差（`check_alignment_residual`・`:720-757`） | 使わない（行単位） | **変わらない**。母数は遷移の外の行も数える（task 8.6）が、これも番号を読まない |
 
 ⑶ の向きは次のとおりである。畳むと遷移番号が等しくなり `>` が偽になるため、母数は**狭くなる**——すなわち**畳み込みが ⑶ を甘くすることはない**。逆に畳み足りない側は母数を広げ得る（門の行と追随の行が別番号になる）。ただしその 2 行は実際に時間順で前後しているので、番号が前後すること自体は ⑶ の意図（素材消費後の行だけを数える）に沿う。
 
@@ -759,7 +763,7 @@ pub(super) fn converge_balloon_after_skipped_write(world: &mut World, char_windo
 2. ゴーストをモニタ間で往復させ、`kind=offset` の `new_offset` が往復の前後で bit 同一に戻ること（8.2）。
 3. 低い拡大率の側で `verdict=rescaled` が出ており、先行仕様の残所見「低い拡大率の側で定常的にバルーンがずれる」が解消していること（8.4）。
 4. キーワード指定スコープで、遷移後の揃えの残差が D8 の許容量以内であること（8.5）。
-5. 合否は判定器の機械判定で決め、判定語と手順を文書として残す（8.3）。**手順書の置き場所は `transition_judge_offset_signoff_tests.rs` のモジュール doc**（2026-08-28 実装時訂正・上記 File Structure Plan の注記を参照）とし、先行仕様の donor（`transition_signoff_procedure_tests.rs`）と同じ形——手順・点灯方法・判定語・合否条件を逐語で持ち、`#[ignore]` のランナーが同じ判定器を回す——にする。先行仕様の手順書ファイルは書き換えない（自らの行に限る規律を検証側にも適用する）。 **手順書は番人の `PROCEDURE_SOURCES` へ登録し、`PENDING_PROCEDURE_KINDS` の `offset` を外す。あわせて前向きの検査 `the_procedure_only_quotes_record_lines_the_emitters_can_produce` を `procedure_sources_text()` へ切り替える**——切り替えないと新出所が引用する観測行を誰も検査しない空振りになる（実測で確認済み）。手順書には**偽の赤を生む 3 つの形**（素の追従スコープが 1 つも無い／キーワード指定の素材を消費せずに遷移する／**キーワード指定を素材未消費のまま遷移へ 1 度も通さない**——`check_alignment_residual` は遷移の内側に現れた `keyword-pending` の行からしかキーワード指定スコープの集合を作らないので、素材を先に消費させると母数が空になり `NoKeywordAlignmentMeasured` が立つ）を必須手として禁じ、**判定器が見ないもの 5 件**（5 件目＝最初の遷移起点より前に出た記録は 1 件も判定されない）を合格判定の直後に置くこと。**手順書のコマンドは PowerShell の形で書く**（`VAR=値 コマンド` という POSIX の記法は本リポジトリの主シェルでは `VAR=値` という名前のコマンド探索になって落ちる・`grep` も無い・donor の §2.5／§6.1 と同じ形）。
+5. 合否は判定器の機械判定で決め、判定語と手順を文書として残す（8.3）。**手順書の置き場所は `transition_judge_offset_signoff_tests.rs` のモジュール doc**（2026-08-28 実装時訂正・上記 File Structure Plan の注記を参照）とし、先行仕様の donor（`transition_signoff_procedure_tests.rs`）と同じ形——手順・点灯方法・判定語・合否条件を逐語で持ち、`#[ignore]` のランナーが同じ判定器を回す——にする。先行仕様の手順書ファイルは書き換えない（自らの行に限る規律を検証側にも適用する）。 **手順書は番人の `PROCEDURE_SOURCES` へ登録し、`PENDING_PROCEDURE_KINDS` の `offset` を外す。あわせて前向きの検査 `the_procedure_only_quotes_record_lines_the_emitters_can_produce` を `procedure_sources_text()` へ切り替える**——切り替えないと新出所が引用する観測行を誰も検査しない空振りになる（実測で確認済み）。手順書には**偽の赤を生む 3 つの形**（素の追従スコープが 1 つも無い／キーワード指定の素材を消費せずに遷移する／**キーワード指定を素材未消費のまま遷移へ 1 度も通さない** ⚠**この 3 つ目は task 8.6 で解消した**——母数を観測行の全体から作るようになったので、この手は不要になった。手順書からの撤去は task 8.7 が行う）を必須手として禁じ、**判定器が見ないもの 5 件**（5 件目＝最初の遷移起点より前に出た記録は 1 件も判定されない）を合格判定の直後に置くこと。 ⚠**この 5 件目は task 8.6 で限定が付いた**——判定 ⑴⑵⑶ については従来どおり真（いずれも `split_transitions` が切り出した遷移の内側の行しか読まない）だが、**判定 ⑷ の母数だけは起点より前に出た門（`verdict=keyword-pending`）の行を読む**（`keyword_pending_scopes`・`transition_judge_offset.rs:707-714`）。実機ログ `signoff3.log` で ⑷ を空虚でなくしている唯一の門の行が、まさに最初の起点より前（ログ 14 行目・`frame=1`／最初の `kind=windpi` は 89 行目・`frame=495`）に出たものである。**task 8.7 は手順書 §6.3 の 5 件目を「起点より前の行の扱いは判定ごとに違う」形へ書き直すこと**——⑴⑵⑶ の残差・往復・腕の判定には一切入らないが、⑷ の母数には入る。「起点より前の行は無関係」と読める字面を残してはならない（8.6 の是正がまさにその逆だからである）。なお ⑷ が**残差そのものを測る行**は従来どおり遷移の内側限定であり、この限定は 8.6 でも変えていない。**手順書のコマンドは PowerShell の形で書く**（`VAR=値 コマンド` という POSIX の記法は本リポジトリの主シェルでは `VAR=値` という名前のコマンド探索になって落ちる・`grep` も無い・donor の §2.5／§6.1 と同じ形）。
 
 > `hello-pasta`（`vendors/pasta/.../shell/master/descript.txt:7-10`）は `sakura.balloon.offsetx,64`／`kero.balloon.offsetx,64` を**実際に宣言している**（実測）。要件 2 の検証には emo2 ではなくこの資産を使う——emo2 は当該オフセットが未宣言のため、拡大率適用の是正が走る経路を持たない。
 

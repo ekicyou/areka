@@ -32,12 +32,13 @@
 
 use crate::placement::resolver::PointPx;
 use crate::placement::transition_diag::{
-    OFFSET_VERDICT_ALL, OFFSET_VERDICT_ANCHORED, OFFSET_VERDICT_KEYWORD_PENDING,
-    OFFSET_VERDICT_RESCALED, OFFSET_VERDICT_UNCHANGED, OFFSET_VERDICT_UNRESOLVED, OffsetRecord,
-    offset_line,
+    FIELD_BASE_DPI, FIELD_VERDICT, OFFSET_VERDICT_ALL, OFFSET_VERDICT_ANCHORED,
+    OFFSET_VERDICT_KEYWORD_PENDING, OFFSET_VERDICT_RESCALED, OFFSET_VERDICT_UNCHANGED,
+    OFFSET_VERDICT_UNRESOLVED, OffsetRecord, offset_line,
 };
+use crate::placement::transition_judge::parse_transition_line;
 use crate::placement::transition_judge::test_support::monitor;
-use wintf::ecs::window::transition_diag::Stamp;
+use wintf::ecs::window::transition_diag::{FIELD_SCOPE, Stamp};
 
 use super::{ALIGNMENT_RESIDUAL_MAX_PX, OffsetViolation, judge_offset_log};
 
@@ -86,6 +87,7 @@ const T3_SCOPE0: usize = 13;
 const T3_SCOPE1: usize = 14;
 const T3_SCOPE2: usize = 15;
 const T1_SCOPE0: usize = 5;
+const T1_SCOPE1: usize = 6;
 const T1_SCOPE2: usize = 7;
 
 /// 既知の**合格**ログ（module doc の台本）。
@@ -683,6 +685,128 @@ fn a_log_that_never_measures_a_keyword_alignment_is_red() {
         report
             .violations
             .contains(&OffsetViolation::NoKeywordAlignmentMeasured { keyword_scopes: 1 }),
+        "{report}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// ⑷ の母数は観測行の全体から作る（task 8.6・要件 8.5）
+// ---------------------------------------------------------------------------
+
+/// キーワード指定スコープの門の行（合格ログの scope 1 と同じ値・素材未消費）。
+fn keyword_gate_line(frame: u32) -> String {
+    offset(
+        frame,
+        1,
+        Some(192),
+        0,
+        (25, -11),
+        (25, -11),
+        (25, -11),
+        OFFSET_VERDICT_KEYWORD_PENDING,
+    )
+}
+
+/// 合格ログから**遷移の内側**の門の行 2 件（T0・T1 の scope 1）を落とした並び。
+fn lines_without_gate_rows() -> Vec<String> {
+    let mut lines = pass_lines();
+    lines.remove(T1_SCOPE1);
+    lines.remove(T0_SCOPE1);
+    lines
+}
+
+#[test]
+fn a_gate_row_before_the_first_origin_still_forms_the_denominator() {
+    // ⑴ 門の行が**最初の起点より前にしか無い**ログ。実機はこの形しか採れない——素材は
+    // 起動から 0.73〜5.0 秒で自動的に消費され、最初の起点は利用者のドラッグ由来ゆえ必ず
+    // それより後に出る（2026-08-28 の実機ログ 3 本すべて）。
+    let mut lines = lines_without_gate_rows();
+    lines.insert(0, keyword_gate_line(1));
+    let report = judge_offset_log(&log_of(&lines));
+    // 門の行はどの遷移にも属さない（`split_transitions` が捨てる）＝母数は遷移の外から来た。
+    assert_eq!(report.rows, 10, "{report}");
+    assert!(
+        !report
+            .transitions
+            .iter()
+            .flat_map(|transition| transition.rows.iter())
+            .any(|row| row.verdict == OFFSET_VERDICT_KEYWORD_PENDING),
+        "遷移の内側に門の行が残っている＝この檻が ⑴ の形を踏んでいない:
+{report}"
+    );
+    assert!(!report.failed(), "{report}");
+}
+
+#[test]
+fn a_gate_row_inside_a_transition_still_forms_the_denominator() {
+    // ⑵ 従来どおり遷移の内側に門の行があるログ（既知の合格ログ）。母数の作り方を広げても
+    // この形が壊れないことを固定する。
+    let report = judge_offset_log(&log_of(&pass_lines()));
+    assert!(
+        report
+            .transitions
+            .iter()
+            .flat_map(|transition| transition.rows.iter())
+            .any(|row| row.verdict == OFFSET_VERDICT_KEYWORD_PENDING),
+        "既知の合格ログが遷移の内側に門の行を持たなくなった:
+{report}"
+    );
+    assert!(!report.failed(), "{report}");
+}
+
+/// 門の行から**必須欄を 1 つ落とした**行（語彙の規約を破っている＝読めない行）。
+///
+/// 落とすのは `base_dpi` である——`scope` と `verdict` は残るので、母数が
+/// `is_well_formed()` で弾いているのか、それとも欄が読めずに弾かれただけなのかを
+/// 取り違えない。値が読めない字面（`base_dpi=x` など）では欠陥が立たない
+/// （`RecordDefect::UnreadableField` は `frame`／`t_us` にしか立たない・実測）。
+fn malformed_keyword_gate_line() -> String {
+    let intact = keyword_gate_line(1);
+    let broken = intact.replace(&format!(" {FIELD_BASE_DPI}=192"), "");
+    assert_ne!(broken, intact, "檻の前提: 実際に必須欄が落ちていること");
+    broken
+}
+
+#[test]
+fn a_malformed_gate_row_does_not_enter_the_denominator() {
+    // 母数は**読める行**からしか作らない（`keyword_pending_scopes` の `is_well_formed()`）。
+    // 読めない行から母数を組むと、行の形が壊れたときに母数だけが静かに増え、⑷ が
+    // 「1 度も測れていない」を言えなくなる。
+    let broken_gate = malformed_keyword_gate_line();
+    // 檻の較正——この行は語彙の規約を破っているが、`scope` と `verdict` は**依然として
+    // 読める**。ゆえにこの檻が緑に化けるとしたら、それは `is_well_formed()` の分岐が
+    // 消えたときだけである（欄が読めないせいで弾かれたのではない）。
+    let record = parse_transition_line(&broken_gate).expect("行としては解析できる");
+    assert!(
+        !record.is_well_formed(),
+        "檻の前提: 語彙の規約を破っていること"
+    );
+    assert_eq!(record.int_field::<u32>(FIELD_SCOPE), Some(1));
+    assert_eq!(
+        record.field(FIELD_VERDICT),
+        Some(OFFSET_VERDICT_KEYWORD_PENDING)
+    );
+
+    let mut lines = lines_without_gate_rows();
+    lines.insert(0, broken_gate);
+    let report = judge_offset_log(&log_of(&lines));
+    assert!(
+        report
+            .violations
+            .contains(&OffsetViolation::NoKeywordAlignmentMeasured { keyword_scopes: 0 }),
+        "{report}"
+    );
+}
+
+#[test]
+fn a_log_with_no_gate_row_anywhere_is_still_red() {
+    // ⑶ 門の行が**どこにも無い**ログ。母数を広げた結果「検査が何も要求しなくなる」形を
+    // 防ぐ檻——ここが緑になったら、⑷ はキーワード指定スコープを 1 つも要求していない。
+    let report = judge_offset_log(&log_of(&lines_without_gate_rows()));
+    assert!(
+        report
+            .violations
+            .contains(&OffsetViolation::NoKeywordAlignmentMeasured { keyword_scopes: 0 }),
         "{report}"
     );
 }
