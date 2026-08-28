@@ -36,12 +36,30 @@
 //! **本ファイルではこの件について新しい檻を作らない**（設計 C4「新規の檻は作らず、
 //! COMPAT §8 で『既に実装され固定されている挙動』として登記する」）。
 //!
-//! ## origin クランプには依存しない
+//! ## origin の解決 4 分岐と「validrect は返値に影響しない」不変条件
 //!
-//! 本檻は `origin` の宣言を **validrect の内側**に置くか、**未宣言**にするかのどちらかに
-//! 限る。areka 独自の「origin クランプ正準」は本仕様の要件 3.10 で撤去されるため、
-//! クランプの発火に依存する assert を書くと撤去時に偽の赤を出す。未宣言時の縮退
-//! （書字開始角）は要件 3.11 で維持されるため、そちらへの依存は安全である。
+//! 上の 4 点（要件 3.4〜3.6）を見る檻は `origin` の宣言を **validrect の内側**に置くか
+//! **未宣言**にするかのどちらかに限っている——そこは書字方向とは別の関心事であり、
+//! origin の規約が変わっても偽の赤を出さないためである。
+//!
+//! それとは別に、本ファイルは `origin` 解決そのものの判断分岐も固定する
+//! （本仕様の要件 3.10／3.11・設計 C3 の Validation）——
+//!
+//! 5. **validrect 内の宣言**＝字義位置・記録 0 件。
+//! 6. **validrect 外の宣言**＝**字義位置**（寄せない）・成分ごとに `debug!` ちょうど 1 件。
+//! 7. **未宣言**＝書字開始角へ縮退・成分ごとに `debug!` ちょうど 1 件（要件 3.11・不変）。
+//! 8. **負値宣言**＝反対端基準で絶対値化してから字義（要件 3.7）。
+//! 9. **不変条件**——宣言された `origin` の解決結果は `validrect` を変えても動かない。
+//!    これが areka 独自の「origin クランプ正準」（`clamp(resolve(origin), validrect)`）が
+//!    もう残っていないことの、読み手向けの証拠である。クランプを戻すと 6. と 9. が赤になる。
+//!
+//! ## 0 件主張の規律（恒真の禁止）
+//!
+//! 「`debug` が 0 件」という主張は、捕捉窓が死んでいても成立してしまう。そこで記録件数を
+//! 見る檻は捕捉窓の**内側**で対照イベント（`error!` 1 件）を発行し、その 1 件が数えられて
+//! いることを件数主張と必ず同時に確認する（[`assert_capture_alive`]）。件数の集計は硬化
+//! 機構の唯一の定義元 `log-capture-kit` の [`count_levels`] に委ね、`warn` と `debug` を
+//! **別々に**数える（`writing_decision_tests.rs` と同じ流儀）。
 //!
 //! ## 実行条件
 //!
@@ -53,6 +71,7 @@
 use areka_parsers::balloon::{
     BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
 };
+use log_capture_kit::{LevelCounts, count_levels};
 
 use super::TextRegion;
 use crate::writing::WritingMode;
@@ -355,5 +374,302 @@ fn writing_mode_still_separates_start_corner_while_edges_agree() {
         vertical_rl.start(),
         horizontal.start(),
         "vertical_rl の書字開始角が横書きと同じでは、モードが区別されていない"
+    );
+}
+
+// ── 要件 3.10／3.11: origin 解決の 4 分岐と validrect 非依存の不変条件（設計 C3） ──
+
+/// 対照イベント専用の宛先（本番コードがここへ発火することは無い）。
+const CONTROL_TARGET: &str = "areka_emo_text::region_vertical_canon_tests::control";
+
+/// `origin` 由来の記録だけが数えられる条件で解決し、（`TextRegion`, レベル別件数）を返す。
+///
+/// `wordwrappoint` は x・y の**両方**を宣言してある——未宣言成分は `resolve_or` が
+/// `debug!` を出すため、宣言しておかないと origin の件数主張に他所の記録が混ざる。
+/// `validrect` は呼出側が渡す（4 辺すべてを宣言した形を渡せば同様に混入しない）。
+/// 窓の内側で対照イベントを 1 件発行し、[`assert_capture_alive`] で捕捉が生きていることを
+/// 示せるようにする。
+fn resolve_counting(
+    origin: (Option<i32>, Option<i32>),
+    validrect: (Option<i32>, Option<i32>, Option<i32>, Option<i32>),
+    mode: WritingMode,
+) -> (TextRegion, LevelCounts) {
+    count_levels(|| {
+        tracing::error!(
+            target: CONTROL_TARGET,
+            "捕捉窓の対照イベント（この 1 件が数えられないなら同窓の 0 件主張は無効）"
+        );
+        TextRegion::resolve(
+            // wordwrappoint は x,-49／y,-56 を宣言（未宣言由来の debug を封じる）。
+            &model(origin, (Some(-49), Some(-56)), validrect),
+            IMAGE,
+            mode,
+        )
+    })
+}
+
+/// 捕捉窓が生きていたことを対照イベントの件数で示す（件数主張の前提条件）。
+fn assert_capture_alive(counts: &LevelCounts) {
+    assert_eq!(
+        counts.error, 1,
+        "捕捉窓の対照イベントが数えられていない。この窓の debug 件数の主張は\
+         「出た／出なかった」ことの証拠にならない"
+    );
+}
+
+/// 分岐 1——**validrect の内側**に宣言された `origin` は字義どおり用いられ、記録は出ない
+/// （要件 3.10 前半・正常系）。書字方向 3 モードで同一（開始角の選択は使われない）。
+#[test]
+fn declared_origin_inside_validrect_is_literal_and_unrecorded() {
+    // (200, 60) は解決後 validrect (36,46)-(356,168) の内側。
+    for mode in ALL_MODES {
+        let (region, counts) = resolve_counting((Some(200), Some(60)), RECT, mode);
+        assert_capture_alive(&counts);
+        assert_eq!(
+            region.start(),
+            (200.0, 60.0),
+            "{mode:?}: 範囲内の宣言は字義どおり用いる"
+        );
+        assert_eq!(counts.debug, 0, "{mode:?}: 範囲内の宣言は記録しない");
+        assert_eq!(counts.warn, 0, "{mode:?}: warn も出さない");
+    }
+}
+
+/// 分岐 2——**validrect の外**に宣言された `origin` も**字義どおり**用いられ、
+/// 成分ごとに `debug!` ちょうど 1 件を記録する（要件 3.10 後半）。
+///
+/// **これが撤去の本体である**。旧「origin クランプ正準」が残っていれば期待値は
+/// 書字開始角（横書き (36,46)／`vertical_rl` (356,46)）になり、本檻は赤くなる。
+#[test]
+fn declared_origin_outside_validrect_is_literal_with_one_debug_per_component() {
+    // (ラベル, origin, mode, 期待 start, 期待 debug 件数)
+    let cases = [
+        // y(0) だけが top(46) より上＝範囲外。x(200) は範囲内なので記録は 1 件だけ。
+        (
+            "y のみ範囲外",
+            (Some(200), Some(0)),
+            WritingMode::HorizontalTb,
+            (200.0, 0.0),
+            1,
+        ),
+        // x(400) だけが right(356) より右＝範囲外。
+        (
+            "x のみ範囲外",
+            (Some(400), Some(60)),
+            WritingMode::HorizontalTb,
+            (400.0, 60.0),
+            1,
+        ),
+        // 両成分とも範囲外（フィクスチャがかつて宣言していた形）。
+        (
+            "両成分が範囲外・横書き",
+            (Some(0), Some(0)),
+            WritingMode::HorizontalTb,
+            (0.0, 0.0),
+            2,
+        ),
+        // 縦書きでも寄せない——クランプが残っていれば (356,46) になる。
+        (
+            "両成分が範囲外・vertical_rl",
+            (Some(0), Some(0)),
+            WritingMode::VerticalRl,
+            (0.0, 0.0),
+            2,
+        ),
+        (
+            "両成分が範囲外・vertical_lr",
+            (Some(0), Some(0)),
+            WritingMode::VerticalLr,
+            (0.0, 0.0),
+            2,
+        ),
+    ];
+    for (label, origin, mode, expected_start, expected_debug) in cases {
+        let (region, counts) = resolve_counting(origin, RECT, mode);
+        assert_capture_alive(&counts);
+        assert_eq!(
+            region.start(),
+            expected_start,
+            "{label} / {mode:?}: validrect 外の宣言は寄せずに字義どおり用いる\
+             （書字開始角へ寄っていたら旧クランプ正準が残っている）"
+        );
+        assert_eq!(
+            counts.debug, expected_debug,
+            "{label} / {mode:?}: 範囲外の成分 1 つにつき debug ちょうど 1 件"
+        );
+        assert_eq!(
+            counts.warn, 0,
+            "{label} / {mode:?}: 範囲外宣言は warn ではない（記録水準表・要件 3.10）"
+        );
+    }
+}
+
+/// 分岐 3——**未宣言**の成分は書字開始角へ縮退し、成分ごとに `debug!` ちょうど 1 件を
+/// 記録する（要件 3.11・クランプ撤去の前後で完全に同一の挙動）。
+#[test]
+fn undeclared_origin_falls_back_to_writing_corner_with_one_debug_per_component() {
+    // (ラベル, origin, mode, 期待 start, 期待 debug 件数)
+    let cases = [
+        (
+            "y のみ未宣言",
+            (Some(200), None),
+            WritingMode::HorizontalTb,
+            (200.0, RECT_TOP),
+            1,
+        ),
+        (
+            "x のみ未宣言・横書き",
+            (None, Some(60)),
+            WritingMode::HorizontalTb,
+            (RECT_LEFT, 60.0),
+            1,
+        ),
+        (
+            "x のみ未宣言・vertical_rl",
+            (None, Some(60)),
+            WritingMode::VerticalRl,
+            (RECT_RIGHT, 60.0),
+            1,
+        ),
+        (
+            "全未宣言・横書き",
+            (None, None),
+            WritingMode::HorizontalTb,
+            (RECT_LEFT, RECT_TOP),
+            2,
+        ),
+        (
+            "全未宣言・vertical_rl",
+            (None, None),
+            WritingMode::VerticalRl,
+            (RECT_RIGHT, RECT_TOP),
+            2,
+        ),
+        (
+            "全未宣言・vertical_lr",
+            (None, None),
+            WritingMode::VerticalLr,
+            (RECT_LEFT, RECT_TOP),
+            2,
+        ),
+    ];
+    for (label, origin, mode, expected_start, expected_debug) in cases {
+        let (region, counts) = resolve_counting(origin, RECT, mode);
+        assert_capture_alive(&counts);
+        assert_eq!(
+            region.start(),
+            expected_start,
+            "{label} / {mode:?}: 未宣言成分は書字開始角へ縮退する（要件 3.11）"
+        );
+        assert_eq!(
+            counts.debug, expected_debug,
+            "{label} / {mode:?}: 未宣言の成分 1 つにつき debug ちょうど 1 件"
+        );
+    }
+}
+
+/// 分岐 4——**負値の宣言**は反対端基準（`extent + v`）で絶対値化してから字義どおり
+/// 用いられる（要件 3.7）。範囲内なら記録 0 件・範囲外なら成分ごとに debug 1 件。
+#[test]
+fn negative_origin_resolves_from_opposite_edge_then_is_used_literally() {
+    // (ラベル, origin, 期待 start, 期待 debug 件数)。画像は 400×224。
+    let cases = [
+        // 400-100=300 ∈ [36,356]・224-100=124 ∈ [46,168] ＝ 両成分とも範囲内。
+        ("範囲内へ解決", (Some(-100), Some(-100)), (300.0, 124.0), 0),
+        // 400-380=20 < 36・224-200=24 < 46 ＝ 両成分とも範囲外でも寄せない。
+        ("範囲外へ解決", (Some(-380), Some(-200)), (20.0, 24.0), 2),
+        // 反対端ちょうど（0）——負値規約の境界。両成分とも範囲外。
+        ("反対端ちょうど", (Some(-400), Some(-224)), (0.0, 0.0), 2),
+    ];
+    for (label, origin, expected_start, expected_debug) in cases {
+        for mode in ALL_MODES {
+            let (region, counts) = resolve_counting(origin, RECT, mode);
+            assert_capture_alive(&counts);
+            assert_eq!(
+                region.start(),
+                expected_start,
+                "{label} / {mode:?}: 負値は反対端基準で解決してから字義どおり用いる"
+            );
+            assert_eq!(
+                counts.debug, expected_debug,
+                "{label} / {mode:?}: debug 件数"
+            );
+        }
+    }
+    // 対照——負値解決の結果は、同じ位置を非負で宣言したものと逐語一致する
+    // （負値規約が「別の経路」になっていないことの証拠）。
+    for mode in ALL_MODES {
+        let (negative, _) = resolve_counting((Some(-100), Some(-100)), RECT, mode);
+        let (nonnegative, _) = resolve_counting((Some(300), Some(124)), RECT, mode);
+        assert_eq!(negative, nonnegative, "{mode:?}: 負値解決は非負宣言と同値");
+    }
+}
+
+/// 不変条件——**宣言された `origin` の解決結果は `validrect` を変えても動かない**。
+///
+/// `resolve_origin_component` の `range` 引数は記録の判定にのみ使われ、返す値には影響
+/// しない（設計 C3 の Invariants）。これが「クランプが残っていない」ことの読み手向けの
+/// 証拠である。**宣言が在る場合のみの主張**であることに注意——未宣言のときは書字開始角
+/// そのものが `validrect` から決まるため、下の対照テストのとおり当然に動く。
+#[test]
+fn declared_origin_resolution_is_independent_of_validrect() {
+    // 宣言は固定。validrect だけを差し替える（origin が内側になる形・外側になる形・
+    // 画像全域へ縮退する形・全 0 の退化形——退化形は warn を出すが値は動かない）。
+    let variants: [(&str, (Option<i32>, Option<i32>, Option<i32>, Option<i32>)); 4] = [
+        ("基準（origin は内側）", RECT),
+        // top100／bottom 224-10=214／left210／right 400-10=390 ＝ origin (200,60) は外側。
+        (
+            "origin が外側になる矩形",
+            (Some(100), Some(-10), Some(210), Some(-10)),
+        ),
+        ("全未宣言（画像端へ縮退）", (None, None, None, None)),
+        ("全 0（退化矩形）", (Some(0), Some(0), Some(0), Some(0))),
+    ];
+    let declared = (Some(200), Some(60));
+
+    let mut seen_edges = Vec::new();
+    for (label, rect) in variants {
+        for mode in ALL_MODES {
+            let (region, _) = resolve_counting(declared, rect, mode);
+            assert_eq!(
+                region.start(),
+                (200.0, 60.0),
+                "{label} / {mode:?}: validrect を変えても宣言 origin の解決結果は動かない\
+                 （動いたなら validrect が返値に効いている＝クランプが残っている）"
+            );
+        }
+        seen_edges.push(edges(
+            &resolve_counting(declared, rect, WritingMode::HorizontalTb).0,
+        ));
+    }
+    // 前提の確認——validrect は本当に変わっている（不変条件が恒真ではないことの証拠）。
+    assert_eq!(
+        seen_edges,
+        vec![
+            (RECT_LEFT, RECT_TOP, RECT_RIGHT, RECT_BOTTOM),
+            (210.0, 100.0, 390.0, 214.0),
+            (0.0, 0.0, 400.0, 224.0),
+            (0.0, 0.0, 0.0, 0.0),
+        ],
+        "差し替えた validrect が解決後も同一だと、上の不変条件は何も主張しない"
+    );
+}
+
+/// 対照——上の不変条件は**宣言が在る場合のみ**の主張である。`origin` が未宣言なら、
+/// 同じ `validrect` の差し替えで開始点は実際に動く（書字開始角が validrect から決まるため）。
+#[test]
+fn undeclared_origin_does_move_when_validrect_changes() {
+    let (base, _) = resolve_counting((None, None), RECT, WritingMode::HorizontalTb);
+    let (moved, _) = resolve_counting(
+        (None, None),
+        (Some(100), Some(-10), Some(210), Some(-10)),
+        WritingMode::HorizontalTb,
+    );
+    assert_eq!(base.start(), (RECT_LEFT, RECT_TOP));
+    assert_eq!(moved.start(), (210.0, 100.0));
+    assert_ne!(
+        base.start(),
+        moved.start(),
+        "未宣言時まで validrect 非依存になっていたら、書字開始角の縮退（要件 3.11）が壊れている"
     );
 }

@@ -12,7 +12,7 @@
 //!    テキストのインクは合成結果上 validrect の外に存在し得ない。これを観測可能な構造
 //!    述語に落とす——(a) 供給面が validrect 寸**のみ**を覆う（`surface.size()`／readback
 //!    長）、(b) 提示位置が validrect 原点に一致（`Arrangement`）、(c) 面内のインクが
-//!    クランプ正準の書字開始角（validrect-local 原点側）から始まる（領域オフセットの
+//!    書字開始角（validrect-local 原点側）から始まる（領域オフセットの
 //!    二重適用＝面内で (36,46) へずれる変異を殺す）。インクの行矩形はみ出し（縦書きで
 //!    数 px 超え得る——task 6.3 申し送り）は供給面クリップで validrect 内に閉じる。
 //!
@@ -73,13 +73,18 @@ const VR_SIZE: (u32, u32) = (120, 48);
 const FONT_H: u32 = 12;
 const PITCH: u32 = 15;
 
-/// 非退化 validrect 付きのテスト用 BalloonModel。origin (0,0) は validrect 外＝
-/// クランプ正準で書字開始角へ寄る（region.rs の fixture 檻と同じ正準経路）。
+/// 非退化 validrect 付きのテスト用 BalloonModel。**origin は宣言しない**＝描画開始点は
+/// 書字開始角へ縮退する（region.rs の fixture 檻と同じ経路・要件 3.11）。
 /// wordwrap 未指定＝折返し閾値は行末辺（横=right 156／縦=bottom 94）。
+///
+/// かつては `Origin::new(Some(0), Some(0))` を宣言していたが、これは解決後 validrect
+/// (36,46)-(156,94) の外にあり、撤去された「origin クランプ正準」で書字開始角へ寄せられて
+/// いた。本檻の意図は書字開始角の縮退（そこから始まるインクの観測）なので、正典推奨形の
+/// 未宣言へ直してある（spec `areka-P0-balloon-vertical-canon` の DD5・要件 10.9）。
 fn validrect_model(writing_mode: Option<&str>) -> BalloonModel {
     BalloonModel::new(
         WindowPosition::new(None, None),
-        Origin::new(Some(0), Some(0)),
+        Origin::new(None, None),
         WordWrapPoint::new(None, None),
         ValidRect::new(Some(46), Some(-56), Some(36), Some(-44)),
         Font::new(None, None, FontColor::new(None, None, None)),
@@ -382,7 +387,7 @@ fn full_path_ink_monotonic_clear_transparent_and_contained_in_validrect() {
         );
     }
 
-    // ── 述語 3（面内 (c)）: インクはクランプ正準の書字開始角（validrect-local 原点側）
+    // ── 述語 3（面内 (c)）: インクは書字開始角（validrect-local 原点側）
     //    から始まる——領域オフセットの二重適用（面内で (36,46) へずれ、下端の内容が
     //    validrect の外相当へ押し出される変異）を殺す ──
     {

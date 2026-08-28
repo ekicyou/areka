@@ -1,6 +1,6 @@
 //! # region — バルーン座標の画像空間解決と DPI/スケール契約（純粋層）
 //!
-//! origin／wordwrappoint／validrect の「負値=反対辺基準」解決・origin クランプ正準・
+//! origin／wordwrappoint／validrect の「負値=反対辺基準」解決・宣言 origin の字義解決・
 //! `TextRegion`／`ScaleContract`（画像座標空間と物理座標空間の 2 空間のみ・論理 px 不在）を担う。
 //!
 //! **層規律**: 純粋層——`windows` 系 crate への依存を一切持たない（決定論檻）。
@@ -21,10 +21,20 @@
 //! `resolve(v, extent) = if v >= 0 { v } else { extent + v }`
 //! （「マイナス座標はベース画像の右下からの相対」）。
 //!
-//! ## origin クランプ正準（areka 独自・design.md が正典）
+//! ## 描画開始点は宣言どおり（spec `areka-P0-balloon-vertical-canon` が正典）
 //!
-//! 描画開始点＝`clamp(resolve(origin), validrect)`。成分 `None` または validrect 外は
-//! 書字開始角（horizontal_tb/vertical_lr＝validrect 左上・vertical_rl＝右上）へ寄せる。
+//! 描画開始点＝`resolve(origin)`。宣言された成分は validrect の内外を問わず**宣言どおりの
+//! 位置**を用いる（同 spec の要件 3.10）——validrect の外にある宣言は `debug!` で記録する
+//! だけで、位置は動かさない。成分 `None` のときだけ書字開始角
+//! （horizontal_tb/vertical_lr＝validrect 左上・vertical_rl＝右上）へ縮退する（同 3.11）。
+//!
+//! **撤去された規約**: かつては areka 独自の「origin クランプ正準」
+//! （`clamp(resolve(origin), validrect)`）を採っており、完了 spec
+//! `areka-P0-emo-text-layer` の design.md（`:464` と `:716`）がそれを正典と称していた。
+//! 2026-08-27 の開発者裁定で撤去——正典 ukadoc は `origin.x` について
+//! 「通常は指定せず validrect の定義に任せる」と述べるだけで、範囲外宣言を寄せることを
+//! 求めていないためである。アーカイブ済み spec 本体は非改変とし、上書きの事実は
+//! `areka-P0-balloon-vertical-canon` が `doc/COMPAT_ARCHITECTURE.md` §8 へ登記する。
 
 use areka_parsers::balloon::BalloonModel;
 
@@ -174,7 +184,7 @@ pub struct TextRegion {
     right: f32,
     /// validrect 絶対矩形の下辺（image px）。
     bottom: f32,
-    /// 描画開始点（origin クランプ正準適用済み・image px）。
+    /// 描画開始点（宣言された origin は字義・未宣言成分は書字開始角・image px）。
     start: (f32, f32),
     /// 折返し閾値（行内軸・image px。横書き＝x 値・縦書き＝y 値）。
     wrap_threshold: f32,
@@ -186,7 +196,8 @@ impl TextRegion {
     ///
     /// - validrect: 負値=反対辺基準で絶対値化。成分 `None` は画像全域の辺へ縮退
     ///   （`debug!` 記録）。退化矩形（幅/高さ ≤ 0）は `warn!`＋そのまま返す（縮退継続）。
-    /// - 描画開始点: origin クランプ正準（`None`/範囲外成分は書字開始角へ・`debug!` 記録）。
+    /// - 描画開始点: 宣言された origin 成分は字義どおり（validrect 外なら `debug!` 記録・
+    ///   位置は動かさない）。`None` 成分のみ書字開始角へ縮退（`debug!` 記録）。
     /// - 折返し閾値: 横書き＝`wordwrappoint.x`（負値=右辺基準）・縦書き＝`wordwrappoint.y`
     ///   （負値=下辺基準）。`None` は行内軸の validrect 遠辺へ縮退（領域端での自然折返し）。
     pub fn resolve(model: &BalloonModel, image_size: (u32, u32), mode: WritingMode) -> TextRegion {
@@ -208,19 +219,19 @@ impl TextRegion {
             );
         }
 
-        // ── 描画開始点: origin クランプ正準（書字開始角は正準表参照） ──
+        // ── 描画開始点: 宣言は字義・未宣言のみ書字開始角へ（書字開始角は正準表参照） ──
         let start_corner = match mode {
             WritingMode::HorizontalTb | WritingMode::VerticalLr => (left, top),
             WritingMode::VerticalRl => (right, top),
         };
-        let start_x = clamp_origin_component(
+        let start_x = resolve_origin_component(
             model.origin().x(),
             width,
             (left, right),
             start_corner.0,
             "origin.x",
         );
-        let start_y = clamp_origin_component(
+        let start_y = resolve_origin_component(
             model.origin().y(),
             height,
             (top, bottom),
@@ -268,7 +279,7 @@ impl TextRegion {
         self.bottom
     }
 
-    /// 描画開始点（origin クランプ正準適用済み・image px）。
+    /// 描画開始点（宣言された origin は字義・未宣言成分は書字開始角・image px）。
     pub fn start(&self) -> (f32, f32) {
         self.start
     }
@@ -297,9 +308,18 @@ fn resolve_or(v: Option<i32>, extent: f32, fallback: f32, key: &'static str) -> 
     }
 }
 
-/// origin 成分のクランプ正準: `None`／解決後に validrect 範囲外は書字開始角成分へ寄せる
-/// （範囲は両端含む・`debug!` 記録——fixture の origin 0,0 も通る正常系挙動）。
-fn clamp_origin_component(
+/// origin 成分の解決（spec `areka-P0-balloon-vertical-canon` の要件 3.10／3.11）:
+///
+/// - `Some`: 負値=反対辺基準で絶対値化し、**宣言どおりの位置をそのまま返す**。
+///   解決後の値が validrect の当該軸（`range`・両端含む）の外にあるときは `debug!` を
+///   1 件記録するだけで、位置は動かさない。
+/// - `None`: 書字開始角へ縮退する（`debug!` 記録・要件 3.11・撤去前と完全に同一）。
+///
+/// **不変条件**: `range` は**返す値に影響しない**（記録の判定にのみ用いる）。これが
+/// 撤去された「origin クランプ正準」がもう残っていないことの、読み手向けの証拠である
+/// （檻: `region_vertical_canon_tests.rs` の
+/// `declared_origin_resolution_is_independent_of_validrect`）。
+fn resolve_origin_component(
     v: Option<i32>,
     extent: f32,
     range: (f32, f32),
@@ -309,19 +329,16 @@ fn clamp_origin_component(
     match v {
         Some(v) => {
             let resolved = resolve_coord(v, extent);
-            if range.0 <= resolved && resolved <= range.1 {
-                resolved
-            } else {
+            if resolved < range.0 || range.1 < resolved {
                 tracing::debug!(
                     key,
                     resolved,
                     range_min = range.0,
                     range_max = range.1,
-                    corner,
-                    "validrect 外の origin 成分を書字開始角へ寄せる（クランプ正準）"
+                    "宣言された origin 成分が validrect の外にある——宣言どおりの位置を用いる"
                 );
-                corner
             }
+            resolved
         }
         None => {
             tracing::debug!(key, corner, "未指定の origin 成分を書字開始角へ寄せる");
@@ -362,11 +379,18 @@ mod tests {
     }
 
     /// fixture 実測値（2層マージ後）の BalloonModel:
-    /// origin (0,0)・wordwrappoint.x,-49（balloons0s.txt 上書き）・
+    /// **origin は宣言しない**・wordwrappoint.x,-49（balloons0s.txt 上書き）・
     /// validrect top,46／bottom,-56／left,36／right,-44。
+    ///
+    /// origin の宣言が無いのは実フィクスチャに追随した結果である——`emo2-vertical`／
+    /// `emo2-kakukaku` の `descript.txt` はかつて validrect 外の `origin.x,0`／`origin.y,0`
+    /// を宣言していたが、spec `areka-P0-balloon-vertical-canon` の要件 10.9 で正典推奨形
+    /// （「通常は指定せず validrect の定義に任せる」）へ是正され、宣言そのものが消えた。
+    /// 未宣言時の書字開始角への縮退（要件 3.11）は不変なので、本ヘルパを使う檻の
+    /// 開始点期待値は是正の前後で変わらない。
     fn fixture_model() -> BalloonModel {
         model(
-            (Some(0), Some(0)),
+            (None, None),
             (Some(-49), Some(0)),
             (Some(46), Some(-56), Some(36), Some(-44)),
         )
@@ -458,9 +482,10 @@ mod tests {
         use std::collections::BTreeMap;
 
         // fixture 実測の関連キー subset（descript.txt 基層／balloons0s.txt 上書き層）。
+        // origin は実フィクスチャと同じく宣言しない（要件 10.9 の是正後の姿）——本檻の
+        // 関心は「2 層マージ後にのみ非退化領域が成立する」ことであり、開始点は
+        // 未宣言→書字開始角の縮退（要件 3.11）で (36,46) になる。
         let descript: BTreeMap<String, String> = [
-            ("origin.x", "0"),
-            ("origin.y", "0"),
             ("wordwrappoint.x", "-34"),
             ("wordwrappoint.y", "0"),
             ("validrect.top", "0"),
@@ -494,12 +519,12 @@ mod tests {
         assert_eq!(region.wrap_threshold(), 351.0); // 400 + (-49)
     }
 
-    // ── origin クランプ正準（areka 独自・design.md が正典） ──
+    // ── 描画開始点の解決（宣言は字義・未宣言は書字開始角） ──
 
-    /// fixture origin (0,0) は validrect 外＝書字開始角 (left,top)=(36,46) へ寄る
-    /// （SSP 表示実態と整合する期待座標）。
+    /// origin を宣言しない fixture は書字開始角 (left,top)=(36,46) から書き始める
+    /// （要件 3.11 の縮退・SSP 表示実態と整合する期待座標）。
     #[test]
-    fn fixture_origin_clamps_to_start_corner() {
+    fn fixture_without_origin_declaration_starts_at_writing_corner() {
         let region = TextRegion::resolve(
             &fixture_model(),
             FIXTURE_IMAGE_SIZE,
@@ -532,22 +557,28 @@ mod tests {
         assert_eq!(region.start(), (36.0, 46.0));
     }
 
-    /// 範囲外成分だけが開始角へ寄り、範囲内成分は保持される（成分独立クランプ）。
+    /// 宣言された成分は x・y それぞれ独立に**字義どおり**返る——範囲内でも範囲外でも
+    /// 値は同じ扱いで、validrect は寄せ先として使われない（要件 3.10・クランプ撤去後の姿）。
+    ///
+    /// かつてこの檻は「範囲外成分だけが開始角へ寄る（成分独立クランプ）」を見ていた。
+    /// 撤去でその規約自体が無くなったため、**成分独立性**という残る関心だけを引き継ぎ、
+    /// 見るものを「独立に字義位置が返る」へ差し替えてある。
     #[test]
-    fn out_of_range_component_clamps_independently() {
+    fn origin_components_resolve_literally_and_independently() {
         let m = model(
             (Some(100), Some(0)), // x は範囲内・y(0) は top(46) より上＝範囲外
             (None, None),
             (Some(46), Some(-56), Some(36), Some(-44)),
         );
         let region = TextRegion::resolve(&m, FIXTURE_IMAGE_SIZE, WritingMode::HorizontalTb);
-        assert_eq!(region.start(), (100.0, 46.0));
+        // y は 46 へ寄らない（寄っていたら旧クランプが残っている）。
+        assert_eq!(region.start(), (100.0, 0.0));
     }
 
-    /// origin の負値も反対辺基準で解決してからクランプ判定する。
+    /// origin の負値も反対辺基準で解決してから字義どおり用いる（要件 3.7）。
     #[test]
-    fn negative_origin_resolves_from_opposite_edge_before_clamp() {
-        // origin.x,-100 → 400-100=300（validrect 36..356 内）・origin.y,-100 → 124（46..168 内）。
+    fn negative_origin_resolves_from_opposite_edge() {
+        // origin.x,-100 → 400-100=300・origin.y,-100 → 224-100=124。
         let m = model(
             (Some(-100), Some(-100)),
             (None, None),
@@ -557,7 +588,7 @@ mod tests {
         assert_eq!(region.start(), (300.0, 124.0));
     }
 
-    /// vertical_rl の書字開始角は validrect 右上＝範囲外 origin の x は右端側へ寄る。
+    /// vertical_rl の書字開始角は validrect 右上＝origin 未宣言なら x は右端側になる。
     #[test]
     fn vertical_rl_start_corner_is_top_right() {
         let region = TextRegion::resolve(
@@ -568,7 +599,7 @@ mod tests {
         assert_eq!(region.start(), (356.0, 46.0));
     }
 
-    /// vertical_lr の書字開始角は validrect 左上（horizontal_tb と同じ角）。
+    /// vertical_lr の書字開始角は validrect 左上（horizontal_tb と同じ角・origin 未宣言時）。
     #[test]
     fn vertical_lr_start_corner_is_top_left() {
         let region = TextRegion::resolve(
