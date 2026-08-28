@@ -608,7 +608,7 @@ fn resolve_origin_component(
 
 **Contracts**: —（文書）
 
-##### 追跡先の双方向登記（2026-08-27 実測・実装時に再検証すること）
+##### 追跡先の双方向登記（2026-08-27 実測／2026-08-28〜29 着手時に再検証済み・完了時にもう一度引き直す）
 
 | 本仕様の要求 | 追跡先 | 実在 | 項目列挙の確認結果 |
 |---|---|---|---|
@@ -618,6 +618,23 @@ fn resolve_origin_component(
 | 7.5（`.vertical` の導出規則を bvc 参照で収載・balloon.scope 族 19 項目の全列挙） | `.kiro/specs/areka-P0-currentghost-property-tree/brief.md`（59 行） | ✅ | ✅ :24（導出規則を bvc Requirement 2／7／9 参照で収載）・:23（17 リーフ＋`balloon.汎用`＋`balloon.count`＝19 項目を全列挙） |
 | 7.3（照会経路） | `.kiro/specs/areka-P0-property-query-channels/brief.md`（76 行） | ✅ | ✅ :14-22 に正典 6 経路を表で列挙 |
 | 8.4（同族の実導出の着地先） | `areka-P0-currentghost-property-tree`（同上） | ✅ | ✅ 上記 :23 の 19 項目に `validwidth`／`validheight`／`lines` および `.initial` 変種が含まれる |
+
+**再検証の記録（2026-08-28〜29・タスク 6.1 ＝着手時／DD8 前半）**
+
+上表 6 行の file:line を着手時に引き直した。**追随を要する変動は 1 件も無く、上表は実測どおりである**（追跡先 5 本はいずれも `brief.md` のままで、M2 ゲートの `requirements.md` 置き換えはまだ起きていない＝参照先の付け替えも不要）。実在は `git ls-files --error-unmatch` で pathspec を証明したうえで読み、総行数は実測している（実在しないパスへの grep は空出力＝「0 件」と区別できないため）。
+
+| 本仕様の要求 | 追跡先 | 実在 | 総行数（表の記載 → 実測） | 引用 file:line の実測 |
+|---|---|---|---|---|
+| 4.5 | `areka-P0-cursor-tag-canon/brief.md` | ✅ git 追跡下に実在 | 91 → **91（一致）** | :18 ＝ 非負ゲート（`layout.rs:656-670` の `value >= 0.0`）／:29 が `vertical_rl` の原点・符号不一致の見出しで :30-32 がその内訳（`layout.rs:453-454`／`:305-311`／`:611-621`）／:33 ＝ `vertical_lr` は既に整合／:35 ＝ `layout_cursor_tests.rs` は `WritingMode::` 全 22 箇所が `HorizontalTb`＝縦書き被覆 0／:27・:44・:54 ＝ 完了 spec `emo-text-layer` の縮退表（R2.4／6.5・`CursorWarnGuard`）改訂義務。**5 項目すべて一致** |
+| 5.5（装飾） | `areka-P0-text-decoration-canon/brief.md` | ✅ 同上 | 59 → **59（一致）** | :20 ＝ 核 17 項目の列挙に `underline`・`align`（行内・`\n`/`\_l` でリセット）・`valign`（行厚み方向・リセットされない）を含む／:21・:33・:59 ＝ SC1 は bvc 裁定を継承し再審議しない（:21 が縦書き写像を `align`=左上/右下・`valign`=**top 右/bottom 左**・下線=列の右側で明記）。**一致** |
+| 5.5（矢印） | `areka-P0-balloon-canon-residue/brief.md` | ✅ 同上 | 75 → **75（一致）** | :11 の項目 1 に「**追加軸（2026-08-27・bvc 討議 5 から登記）**」として `arrow0`／`arrow1` の右／左再解釈が系列解決軸とは独立の**第 3 軸**として記載され、出典を bvc Requirement 5.4 と名指ししている。**一致** |
+| 7.5 | `areka-P0-currentghost-property-tree/brief.md` | ✅ 同上 | 59 → **59（一致）** | :24 ＝ `.vertical` の導出規則を bvc Requirement 2／7／9 参照で収載／:23 ＝ `scope(ID).*` ×17 ＋ `balloon.汎用` ＋ `balloon.count` ＝ 19 項目を全列挙（17 リーフを実数え＝一致）。**一致** |
+| 7.3 | `areka-P0-property-query-channels/brief.md` | ✅ 同上 | 76 → **76（一致）** | :14 が「正典の照会経路 6 本」の見出し、:15-16 が表頭、:17-22 が経路 1〜6（`\![get,property,…]`／`\![set,property,…]`／`%property[…]`／`\![embed,…]`／`.ext.*`／非スクリプト同期読み）。**一致** |
+| 8.4 | `areka-P0-currentghost-property-tree`（同上 :23） | ✅ 同上 | 同上 | :23 の 19 項目に `validwidth`／`validwidth.initial`／`validheight`／`validheight.initial`／`lines`／`lines.initial` がすべて含まれる（2.8.83 改訂の適用注記つき）。**一致** |
+
+規律の出典 `.kiro/specs/completed/areka-P0-balloon-visibility/tasks.md:196` も実在と内容を確認した——同行は「受け側が項目を列挙していない spec は所有者ではない、という規律による」と逐語で述べている。下の訂正注記が「residue brief にその文は無い」と述べる点も、陽性対照（同 brief の `arrow0` は 1 件ヒット）を添えた 0 件確認で再現した。
+
+**完了時（タスク 7.1）に、この 6 行をもう一度同じ手順で引き直す義務がある**（DD8 後半）。追跡先 brief は同ウェーブ中に動きうるため、着手時の一致は完了時の一致を保証しない。
 
 > **規律の出典の訂正**: 「受け側が項目を列挙していない spec は所有者ではない」という規律文は、research.md :167 が `balloon-canon-residue/brief.md:18` を出所として引いていたが、実測では同 brief にその文は無い（同 brief は規律を**適用**しているが**明文化**していない）。正しい出所は `.kiro/specs/completed/areka-P0-balloon-visibility/tasks.md:196`。本書はそちらを引く。
 
