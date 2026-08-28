@@ -1,8 +1,10 @@
 use crate::numerics::*;
 use bevy_ecs::prelude::*;
 use core::hash::*;
-use windows::Win32::Graphics::Direct2D::ID2D1Geometry;
+use windows::Win32::Graphics::Direct2D::*;
+use windows_core::Result;
 use windows_core::*;
+use windows_numerics::*;
 
 #[derive(Component, Clone, Debug, PartialEq)]
 pub enum VisualClip {
@@ -51,5 +53,16 @@ impl VisualClip {
             VisualClip::Geometry(g) => Some(g.clone()),
             _ => None,
         }
+    }
+
+    pub fn world_aabb(&self, world_transform: Matrix3x2) -> Result<Aabb> {
+        let bounds = match self {
+            VisualClip::Rect(r) => *r * world_transform,
+            VisualClip::Geometry(g) => {
+                let bounds = unsafe { g.GetBounds(Some(&world_transform)) }?;
+                bounds.into()
+            }
+        };
+        Ok(bounds)
     }
 }
