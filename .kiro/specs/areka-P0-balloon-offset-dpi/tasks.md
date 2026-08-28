@@ -217,7 +217,7 @@
   - _Requirements: 2.1, 8.1, 8.2, 8.3, 8.4, 8.5_
   - _Depends: 8.5, 9_
 
-- [ ] 10.2 非回帰と分量規律を確認する
+- [x] 10.2 非回帰と分量規律を確認する
   - ワークスペース全体のテストを走らせ、既存の「拡大率が混入しないこと」を固定する群と「寸法変化に対する不変」を主張する群がいずれも緑であることを確認する
   - 分量規律の番人が緑であること、例外表を 1 行も書き換えていないことを確認する
   - 位置書込の共通経路の署名が 1 つも変わっていないことを確認する
@@ -361,6 +361,14 @@
 - **8.5: §6.3 限界 5 は落とさず「解消済み＋残余」へ書き換えた**——檻 `the_offset_procedure_states_what_the_judge_does_not_see`（`transition_signoff_procedure_tests.rs:375`）が逐語句を要求しており、かつ**文そのものは今も真**（`split_transitions` は無改変）。変わったのは「どの操作で起点が出るか」だけで、残る視野外は起動直後の 1 巡目に絞られた。
 - **8.5 追補（親が適用・レビュアーの非阻害の指摘 2 件）**: ⒜ 拡大率をまたがせる操作は手 3・手 4・手 5 のいずれも手 5 の作法（人手ドラッグ）で行う旨を手順の冒頭へ明記（従来は手 5 にしか書かれておらず誤用の余地があった）。⒝ §2 へ `cargo build -p areka` を追加——**古い実行体を黙って測る**穴を塞ぐため（先行仕様 draw-load-parity が実際に踏み、周 1 の結論を撤回させた形）。
 - **⚠ 8.5 に残る既知の限界（合否は変わらない）**: §3 前提の「遷移が窓の枚数だけ水増しされることはない」は畳み込みが**同一フレーム限定**であることに拠る。実ドラッグで窓ごとにフレームが分かれれば遷移は水増しし得る（判定 ⑶ の母数は変わり得るが、8.4 で確認したとおり**甘くなる方へは倒れない**）。
+
+- **10.2**: ワークスペース全体 `cargo test --workspace` は **95 スイート / 6,045 passed / 0 failed / 37 ignored / exit 0**（2 回走行して同一）。前提として i686 の成果物ビルドが要る（`shiori-host32-helper` と `shiori-host32-testdll` を `--target i686-pc-windows-msvc`・出所は `crates/shiori-host32-host/README.md:38-62`）。分量規律の番人 6 passed・**例外表 diff 0 行**（`file_length_guard_test.rs:61-108`・件数宣言 `OVER_LIMIT_ALLOWED_COUNT = 11` は `:112`）。**位置書込の共通経路 4 本の署名は基点比で逐語同一**（`window_move.rs:45` `move_window_to`／`:63` `move_window_with_route`／`:185` `resize_window_to`／`:638` `enqueue_window_set_pos`・22 行）。`balloon_limit.rs`・`scale.rs` は diff 0 行、COMPAT の `:147`（追従の基準）・`:170`（画面内維持）は不変。基点は `git merge-base HEAD origin/main` = `a6d27c73`。
+- **10.2: `persist.rs` の基点比 71 行は回帰ではない（裁定 2.2 の再確認・レビュアーがより強い根拠を発見）**——`design.md:208` のファイル木が persist.rs を自ら「**変更:** merge_scope の保存値採用腕で基準を未係留にする」と明記し、`:227` が本差分と逐語同型の変更を処方している。`:340/:344` の「無改変」を**字面で読むと design が自分自身と矛盾する**。腕ごとに追った結果、`match (saved_bx, saved_by)` の条件も採用値も不変で、増えたのは `balloon_offset_base` 欄とテスト宣言 2 本のみ。
+- **⚠⚠ 10.2 の最大の成果＝「全緑は十分性の証拠にならない」の 4 度目を未然で捕まえた。A 群は摂動 1 本では覆えない。** design.md:754 が名指す A 群 2 本は**互いに素な書込経路**に載る——`move_window_with_route`（定義 `window_move.rs:63`）は共有の `follow_balloon` を**経由せず**、`:87` `x + offset.x,` / `:88` `y + offset.y,` で**自前に加算**する（同関数の本体に `follow_balloon` の呼出は **0 件**）。実測: 摂動 P1（`window_move.rs` 側）は `follow_window_move_tests.rs:55` を赤にするが `drag_tests` の赤は **0 本**／摂動 P2（`drag_follow.rs:364` 側）は `follow_drag_tests.rs:48` を赤にするが `follow_window_move_tests.rs:55` は**緑のまま**。**A 群の充足は P1 ∪ P2 の合併でのみ成立する。単独の摂動 1 本で A 群を検査したと読んではならない。** B 群は P2 単独で 4 ファイルとも赤（`follow_resize_tests.rs:176/:261/:476`・`frame_work_area_resnap_tests.rs:156`・`follow_visibility_balloon_wiring_tests.rs` 8 本）。P1 では B 群 3 ファイルとも赤 0 本＝両摂動の射程は互いに素。
+- **10.2: 摂動の正の数値は replace 形**。`drag_follow.rs:364` の `x: pos.x + follow.offset().x,` を **`x: pos.x + 13,`（値を経路から外す）** → **1,346 passed / 35 failed**（内訳の `follow_visibility_balloon_wiring_tests` は **8 本**）。対して add 形 **`... + follow.offset().x + 13,`（値を平行移動）** → **1,350 passed / 31 failed**。両者は**真の包含**（replace ∖ add ＝ クランプ系 4 本・add ∖ replace ＝ **0 本**）で、置き換え版のほうが強い。P1 の全体走行は **1,370 passed / 11 failed**。※ **add 形の 3 回走行は逐語同一の失敗集合＝非決定ではない**（数値差の原因は摂動の定義違いだった）。
+- **⚠ 10.2 で採れた一般則（今後の非空虚性検査の作法）**: **多対一の変換（飽和・クランプ）を通した出力に対して檻が「述語」を主張している場合、その regime を保つ平行移動は吸収されて檻を弱く見せる。値を平行移動するのではなく、値を経路から外す（置き換える）こと。** 出所＝`balloon_limit.rs:90-91` の `clamp_axis(v, lo, hi) = v.min(hi).max(lo)` は区間の外側で多対一（冪等・doc `:99` が明記）。当該テスト群は `far_out_offset = (500,-400)·k`（`follow_visibility_balloon_wiring_tests.rs:61-63`）で提案位置を全 work area 非交差まで飛ばし（`:151-154` が `assert!(!visible_in(...))` で保証）、最後に「書かれた矩形がいずれかの work area と**交差する**」という述語を主張する（`:170-172`）。ゆえに +13 の平行移動は同じ regime に留まり述語を動かさない。**「13px が小さいから弱い」ではない**——厳密一致を主張する檻に対しては平行移動でも十分に赤くなる（add 形でも 31 本が赤い）。
+- **⚠ 10.2: 中断時の言いさしは誤りだった**——「`work_area_resnap_tests` は赤にならなかった」は**摂動の当て所が不適切だった**ためで、正しい接地点では赤になる（`the_resnap_moves_the_companion_balloon_in_the_same_frame_without_touching_the_offset`）。**途中経過を結論として採らなかった判断が正しかった。**
+- **⚠ 10.2: file:line の陳腐化・通算 9 例目と 10 例目**（どちらもレビュアー側）: ⑴ 自前加算を `window_move.rs:86-89` と引いたが実体は `:87-88`（`:86` は `follow.balloon,`・`:89` は `None,`）。⑵ 第 1 巡で `follow_visibility_balloon_wiring_tests` の赤を「7 本」と報告したが、自分の生成果物を機械で数え直したら **8 本**（目視の数え違い・実装者の値が正しい）。**総数 35 は両者一致していたので、内訳を数えなければ気づけなかった。**
 
 ## 中断時点の状態（2026-08-28・再開のための覚書）
 
