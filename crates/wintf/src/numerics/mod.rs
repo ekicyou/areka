@@ -1,4 +1,5 @@
 mod aabb;
+mod calc_hash;
 mod matrix3x2;
 mod point2;
 mod transform2d;

@@ -18,7 +18,7 @@ impl VisualDrawContent {
     ///
     /// # 引数
     /// - `local_aabb`: コンテンツがローカル座標で占める AABB。
-    ///   **純粋な論理単位（DPI 非依存）** で与えること。DPI に依存した値を
+    ///   **論理単位（96DPI）** で与えること。DPI に依存した値を
     ///   入れると、モニタ跨ぎや DPI 変更時に内在プロパティとしての不変性が
     ///   崩れるため注意。
     /// - `command_list`: このコンテンツの描画コマンド列。呼び出し側で
@@ -38,8 +38,8 @@ impl VisualDrawContent {
     ///
     /// [`ID2D1DeviceContext::GetImageLocalBounds`] は world transform を含まない
     /// ローカル空間のバウンズを返すが、その値は **DC の現在の DPI・UnitMode・
-    /// InterpolationMode を反映する**。したがって `local_aabb` を純粋な論理単位
-    /// （DPI 非依存の内在プロパティ）として保持したい場合、渡す `dc` は
+    /// InterpolationMode を反映する**。したがって `local_aabb` を論理単位
+    /// （96DPI）として保持したい場合、渡す `dc` は
     /// **DPI=96 / `D2D1_UNIT_MODE_DIPS`** に設定されていなければならない。
     /// 画面 DPI や UnitMode=Pixels の DC を渡すと、得られる AABB がその DPI に
     /// スケールされてしまい、モニタ跨ぎで再計算が必要になる。
