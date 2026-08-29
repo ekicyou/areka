@@ -622,3 +622,7 @@ mod tests {
         destroy_test_hwnd(owner);
     }
 }
+
+#[cfg(test)]
+#[path = "api_owner_chain_probe_tests.rs"]
+mod api_owner_chain_probe_tests;
