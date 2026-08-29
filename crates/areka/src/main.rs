@@ -646,7 +646,7 @@ fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) -> Option<StartupDescri
 
             // ゴースト窓ペアの重なり管理を同じ確定段へ結線（areka-P0-ghost-window-zorder
             // task 3.2・要件 1.1/5.6/6.1）。実行時ストラテジ（既定＝案 A・補助浮上なし）の
-            // 明示挿入と、確立系 → 維持系の順での `FrameFinalize` 登録を
+            // 明示挿入と、確立系 → ペア維持系 → 鎖の適用系の順での `FrameFinalize` 登録を
             // `wire_zorder_pair` 1 本にまとめてある（登録内容と理由は同関数の doc）。
             // clickthrough 登録と同じく `Added<WindowHandle>` 起点ゆえ、窓 spawn より
             // 先に結線しても取りこぼさない。

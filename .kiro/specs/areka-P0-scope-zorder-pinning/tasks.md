@@ -94,7 +94,7 @@
   - _Depends: 2.1_
   - _Boundary: zorder_drain ＋ 旧受け口を読む areka 側の檻・支援ファイル_
 
-- [ ] 3.2 本番の処理列への結線と受け口の登録
+- [x] 3.2 本番の処理列への結線と受け口の登録
   - 新設モジュールの登記は 1.2／1.3／2.2 で済んでいる。退役予定モジュールの登記はこの時点では**まだ外さない**（5.1 の担当）
   - 仕上げの処理列の**末尾**へ適用系を置く（所有関係の確立 → スコープ内ペアの維持 → 鎖の適用の順）
   - 旧維持系を指していた順序指定を新しい適用系へ差し替える
@@ -590,3 +590,7 @@
 - **3.1**: 檻 3 本を**削除**した（レビューが本番コードを読んで「陳腐化」と判定・承認）。⑴`t_zdp03`／`t_zdp12`＝旧受け口の `members.len() >= 2` を留めていたが、**この判断は wintf の `nudge_command` へ移り**、`zorder_chain_tests.rs:371-382` が 0 枚・1 枚・2 枚の**両側から**固定している。⑵`a_show_transition_raises_the_zorder_group_mark_on_the_production_frame_path`＝本番が `ZOrderGroups` を二度と埋めないため、テスト名が主張する「本番経路の性質」が空虚になった。
 - **3.1**: `[zorder-chain] absent` の出力先は `wintf::ecs::window::zorder_chain`（`_diag` **ではない**）。前方一致の罠を避けるため檻の照合定数は**末尾に空白**を付けてある。**6.1 の判定語の差し替えはこれを前提にすること**。
 - **3.1**: `note_balloon_shown` は**本番では実質死んでいる**（読む受け口を本番が二度と作らない）。撤去は 3.3 の担当。
+- **3.2 → 5.1 への警告**: `spawn_zorder_group_wiring_tests.rs` は **`spawn_zorder_chain_wiring_tests.rs` へ改名して流用済み＝現役の檻**であり、**削除してはならない**。`research.md` §11.4 は初版のまま「檻側の退役対象」に挙げていたので**訂正註を入れた**（design.md の Modified Files が正典）。
+- **3.2**: 檻 1 本を削除（本 spec で 4 件目）——`the_wired_route_holds_group_commands_on_a_pair_fix_pass_and_releases_them_on_the_next`。主題である `IssuedPairFix` の調停は、消費点が**退役する `zorder_group_maintain.rs:378` の 1 か所だけ**で、`apply_zorder_chain` は引数にも本体にも持たない＝主題が実在しない（レビューが実測で確認）。消えた 2 つの主張の引受先は **4.1（鎖が実際に出る）と 4.2（ペアの直上不変）**。
+- **3.2**: 本番で `ZOrderChainPlan.dirty` を**立てるのは `zorder_drain.rs:317` の 1 か所・降ろすのは `zorder_chain_apply.rs:142` の 1 か所だけ**（全 crate grep で確認）。相順の檻はこの印を観測点にしている。
+- **3.2 で併せて是正**: 台帳側の doc 註 2 件が陳腐化していた（初版のタスク番号を引く／**「台帳の並びは前後関係へ何も含意しない」が要件 15・DD-11 と正面から食い違う**）。引受先が無かったのでコントローラが直した。要件 3.6 の非強制は**指定が一つも無い既定状態**についての規定であって、グループどうしが並んだ後の話ではない。

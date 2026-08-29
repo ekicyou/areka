@@ -215,13 +215,15 @@ pub fn emo2_frame_system(world: &mut World) {
     // apply_move_directive で実窓へ即時反映する（GhostWindows ゲート・R5・task 9.2）。present drain
     // とは独立で、GPU attach でなく GhostWindows 存在を待つ（move はキャラ窓 entity へ作用するため）。
     run_move_drain_phase(&wiring, world);
-    // 重なりの指令の取り出し（scope-zorder-pinning design「zorder drain 相」・要件 1.4／6.1／
-    // 7.1／7.2／8.4）: `\![move]` の取り出しの**直後**に置く。同じ跨ぎ（台本のスレッドが送り
-    // 出した指令を画面を持つ側で取り出す）であり、こちらは適用した台帳を実在する窓の列へ
-    // 射影して wintf の受け口へ置くところまでを行う。
-    // グループ維持系（確定段の 3 本目）より**前**である必要がある——後ろだと、窓が現れた巡の
-    // 是正が最大 1 心拍ぶん遅れる。その順序は本 system の登録側（`wire_emo2_boot` の
-    // `.before(apply_zorder_group_maintenance)`）が持つ。
+    // 重なりの指令の取り出し（scope-zorder-pinning design「zorder drain 相」・要件 1.4／4.1／
+    // 5.1／7.1／8.4／14.5／15.3）: `\![move]` の取り出しの**直後**に置く。同じ跨ぎ（台本の
+    // スレッドが送り出した指令を画面を持つ側で取り出す）であり、こちらは適用した台帳と窓の
+    // 在庫から**望む鎖 1 本**を組み、内容が前回と異なるときだけ wintf の受け口
+    // （`ZOrderChainPlan`）へ公開するところまでを行う。
+    // 鎖の適用系（確定段の 3 本目）より**前**である必要がある——後ろだと、ここで公開した
+    // 望む鎖を適用系が読むのが 1 心拍ぶん遅れ、組み替えがそのイベントの巡で完了しない
+    // （要件 14.5）。その順序は本 system の登録側（`wire_emo2_boot` の
+    // `.before(apply_zorder_chain)`）が持つ。
     // 窓の正本が無い間は相の側が早期に戻り、チャネルが保留バッファを兼ねる（取りこぼさない）。
     run_zorder_drain_phase(&wiring.zorder_rx, &mut wiring.zorder_ledger, world);
     // drain（全 PresentCommand 適用）後に shell サーフェス寸法の変化を検知し、変化した char 窓のみ

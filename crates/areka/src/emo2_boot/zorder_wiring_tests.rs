@@ -6,7 +6,7 @@
 // 兄弟のテストが判断を全部押さえているので、ここで測るのは 3 点だけになる。
 //
 // 1. タグを含む台本が受け口へ届くと、指令が**台帳適用の相まで**通ること（到達性）。
-// 2. その相が**維持系より前**に走ること（相順）。
+// 2. その相が**鎖の適用系より前**に走ること（相順）。
 // 3. 結線の字面そのもの（受け渡し口・入口の登録・受け渡し構造・相の呼出）。
 //
 // 3 を字面で押さえるのは、配線の欠けが挙動に現れにくいからである。呼出を丸ごと削っても
@@ -14,7 +14,7 @@
 // 「是正が 1 心拍ぶん遅れる」だけなので、実窓を持たない檻には**原理的に**映らない。
 //
 // 相順は 2 で挙動としても測る——ただし測れるのは「確定段へ `.before` で載せた仕事が
-// 同じ巡のうちに維持系から見えるか」という**機構**であって、本番の `emo2_frame_system`
+// 同じ巡のうちに適用系から見えるか」という**機構**であって、本番の `emo2_frame_system`
 // がその形で載っていることは 3 の字面が受け持つ（本番の相は `Emo2Wiring` が挿さっていない
 // World では丸ごと無操作なので、headless の檻からは観測できない）。
 //
@@ -34,7 +34,7 @@ use bevy_ecs::schedule::{IntoScheduleConfigs, Schedules};
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
 use std::sync::mpsc::channel;
 use wintf::ecs::FrameFinalize;
-use wintf::ecs::window::{ZOrderChainPlan, ZOrderGroups, apply_zorder_group_maintenance};
+use wintf::ecs::window::{ZOrderChainPlan, apply_zorder_chain};
 
 use super::frame::run_zorder_drain_phase;
 use super::zorder_cue::{ZOrderCueSink, ZOrderDirective};
@@ -208,64 +208,66 @@ fn t_zwi02_a_script_without_the_tag_leaves_the_mechanism_absent() {
 }
 
 // ---------------------------------------------------------------------------
-// ⑵ 相順——確定段へ `.before` で載せた仕事は同じ巡のうちに維持系から見える
+// ⑵ 相順——確定段へ `.before` で載せた仕事は同じ巡のうちに適用系から見える
 // ---------------------------------------------------------------------------
 
 /// 確定段の stand-in——受け口の印を立てるだけの最小の仕事（本番では取り出しの相が立てる）。
-fn raise_the_pending_mark(mut groups: ResMut<ZOrderGroups>) {
-    groups.pending = true;
+fn raise_the_dirty_mark(mut plan: ResMut<ZOrderChainPlan>) {
+    plan.dirty = true;
 }
 
 /// 本番と同じ順序で確定段を組んだ World（`wire_zorder_pair` が 3 本を先に載せる）。
 ///
 /// 本番も `open_startup_window`（`wire_zorder_pair`）→ `wire_emo2_boot`（相の登録）の順で
-/// あり、**登録の順は維持系のほうが先**である。順序指定を落とすと相は後ろへ回る。
+/// あり、**登録の順は適用系のほうが先**である。順序指定を落とすと相は後ろへ回る。
 fn wired_finalize_world() -> World {
     let mut world = World::new();
     world.init_resource::<Schedules>();
-    world.insert_resource(ZOrderGroups::default());
+    world.insert_resource(ZOrderChainPlan {
+        chain: None,
+        dirty: false,
+    });
     wire_zorder_pair(&mut world);
     world
 }
 
-/// 維持系より**前**に載せた仕事は、同じ巡のうちに維持系が読む。
+/// 適用系より**前**に載せた仕事は、同じ巡のうちに適用系が読む。
 ///
-/// 読めた証拠は印が降りていることである——維持対象のグループが 1 本も無い巡は、②の門を
-/// 通った維持系が⑤で印を降ろす。維持系が先に走っていれば門は閉じたままで、後から立った
-/// 印はそのまま残る（下の対の檻）。
+/// 読めた証拠は印が降りていることである——印は適用系だけが降ろす。適用系が先に走っていれば
+/// その巡の印はまだ立っておらず、後から立った印はそのまま残る（下の対の檻）。
 #[test]
-fn t_zwi03_work_placed_before_the_group_maintenance_is_seen_in_the_same_pass() {
+fn t_zwi03_work_placed_before_the_chain_apply_is_seen_in_the_same_pass() {
     let mut world = wired_finalize_world();
     world.resource_mut::<Schedules>().add_systems(
         FrameFinalize,
-        raise_the_pending_mark.before(apply_zorder_group_maintenance),
+        raise_the_dirty_mark.before(apply_zorder_chain),
     );
 
     world.run_schedule(FrameFinalize);
 
     assert!(
-        !world.resource::<ZOrderGroups>().pending,
-        "維持系より前に立てた印が同じ巡で消費されていない（相順の機構が効いていない）"
+        !world.resource::<ZOrderChainPlan>().dirty,
+        "適用系より前に立てた印が同じ巡で消費されていない（相順の機構が効いていない）"
     );
 }
 
-/// 逆側——維持系より**後ろ**に載せると、その巡は誰も読まない（是正が 1 心拍ぶん遅れる）。
+/// 逆側——適用系より**後ろ**に載せると、その巡は誰も読まない（組み替えが 1 心拍ぶん遅れる）。
 ///
 /// 片側だけでは空虚である。印が常に降りる World でも、常に残る World でも、片方の主張は
 /// 緑になる。この対があって初めて「印の値が相順を読んでいる」と言える。
 #[test]
-fn t_zwi04_work_placed_after_the_group_maintenance_is_one_heartbeat_late() {
+fn t_zwi04_work_placed_after_the_chain_apply_is_one_heartbeat_late() {
     let mut world = wired_finalize_world();
     world.resource_mut::<Schedules>().add_systems(
         FrameFinalize,
-        raise_the_pending_mark.after(apply_zorder_group_maintenance),
+        raise_the_dirty_mark.after(apply_zorder_chain),
     );
 
     world.run_schedule(FrameFinalize);
 
     assert!(
-        world.resource::<ZOrderGroups>().pending,
-        "維持系より後ろに立てた印がその巡で消えている（対照が成立していない＝上の檻が空虚）"
+        world.resource::<ZOrderChainPlan>().dirty,
+        "適用系より後ろに立てた印がその巡で消えている（対照が成立していない＝上の檻が空虚）"
     );
 }
 
@@ -316,19 +318,19 @@ fn t_zwi05_the_boot_wires_the_channel_the_sink_and_the_handoff() {
     );
 }
 
-/// 毎フレームの相は**維持系より前**へ載る（task 3.3 → 6.2 の必須事項）。
+/// 毎フレームの相は**鎖の適用系より前**へ載る（task 3.2 の必須事項）。
 ///
-/// 後ろに載ると、窓が現れた巡の是正が最大 1 心拍ぶん遅れる。遅れるだけで結果は同じなので、
-/// 挙動を見る檻には映らない——順序指定の字面そのものを名指しで押さえる。
+/// 後ろに載ると、相が組んだ望む鎖を適用系が読むのが 1 心拍ぶん遅れる。遅れるだけで結果は
+/// 同じなので、挙動を見る檻には映らない——順序指定の字面そのものを名指しで押さえる。
 #[test]
-fn t_zwi06_the_frame_system_is_ordered_before_the_group_maintenance() {
+fn t_zwi06_the_frame_system_is_ordered_before_the_chain_apply() {
     let raw = include_str!("mod.rs");
     let code = code_only(raw);
     let squeezed = squeeze(&code);
 
     assert!(
-        squeezed.contains("emo2_frame_system.before(apply_zorder_group_maintenance)"),
-        "相の登録に維持系より前という指定が無い（登録は維持系のほうが先なので、指定を落とすと相は後ろへ回る）"
+        squeezed.contains("emo2_frame_system.before(apply_zorder_chain)"),
+        "相の登録に鎖の適用系より前という指定が無い（登録は適用系のほうが先なので、指定を落とすと相は後ろへ回る）"
     );
 
     // 対照——落とし過ぎ／落とし漏れが無いこと。

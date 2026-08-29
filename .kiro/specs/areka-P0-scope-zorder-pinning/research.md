@@ -555,6 +555,9 @@ areka `balloon_visibility_phase.rs`）・結線 2 点（`frame/wiring.rs`・`pla
 **檻側**: `zorder_group_decision/maintain/order/verify/wake_tests`・`window_pos_zorder_group_tests`・
 `spawn_zorder_group_wiring_tests`・`balloon_visibility_phase_zorder_group_tests`（歩行器と Z_SETUP 手法は
 鎖檻の雛形として流用価値あり）。
+> **訂正（2026-08-30・task 3.2 着地時）**: `spawn_zorder_group_wiring_tests` は**退役しない**。
+> `design.md` の Modified Files が「改名して流用」と裁定し、実際に `spawn_zorder_chain_wiring_tests.rs` へ
+> 改名済みで、本番の処理列の並び順を字面で主張する**現役の檻**である。**5.1 は削除しないこと。**
 **制約**: 語彙退役は要件 9.5 の範囲で行う（`applied`／`rejected` は生存・隣接仕様が読む語彙は保全）。
 両側 `PRODUCTION_FILES` 名簿と分岐網羅表はファイル増減へ追随させる（名簿倒れ防止の檻が既に赤で教える）。
 

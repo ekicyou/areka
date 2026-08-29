@@ -61,7 +61,7 @@ use bevy_ecs::schedule::IntoScheduleConfigs;
 use tracing::{error, info, warn};
 use wintf::WinApp;
 use wintf::ecs::FrameFinalize;
-use wintf::ecs::window::apply_zorder_group_maintenance;
+use wintf::ecs::window::apply_zorder_chain;
 
 use crate::placement::AuthorDpi;
 
@@ -265,8 +265,9 @@ const _: fn() = || {
 /// 6. [`Emo2Wiring`] を組み、shell 設定由来の重なりの基底を据えてから（`zorder_descript`＝
 ///    placement の準備が読んだ `seriko.zorder` の値・要件 5.1／5.2）NonSend 挿入・
 ///    `add_systems(FrameFinalize, emo2_frame_system)`（placement の
-///    click-through 登録と同位置・self-gating）。載せ方は**グループ維持系より前**という 1 点だけを
-///    指定する（重なりの取り出しの相を同じ巡のうちに維持系へ届けるため・task 6.2）。成立時
+///    click-through 登録と同位置・self-gating）。載せ方は**鎖の適用系より前**という 1 点だけを
+///    指定する（重なりの取り出しの相が組んだ望む鎖を同じ巡のうちに適用系へ届けるため・
+///    task 3.2）。成立時
 ///    `info!`「wire 成立」マーカーを発火（実 fixture smoke＝task 7.1 がこの存在を assert する）。
 /// 7. `Emo2BootOutcome{ ghost: Some, seriko: Some, wired: true }` を返す。
 ///
@@ -499,16 +500,17 @@ pub fn wire_emo2_boot(
     // 載せずに起動が続く（この呼出は失敗を返さない）。
     wiring.seed_zorder_descript_base(zorder_descript);
     app.world().borrow_mut().world_mut().insert_non_send(wiring);
-    // 相の登録は**グループ維持系より前**という指定つきで行う（task 3.3 → 6.2 の必須事項）。
-    // 登録の順そのものは維持系のほうが先である（`open_startup_window` の `wire_zorder_pair`
-    // が確定段へ 3 本を載せてから、ここが相を載せる）ので、指定を落とすと相は維持系の後ろへ
-    // 回り、窓が現れた巡の是正が最大 1 心拍ぶん遅れる。飢餓は起きない（tick の門は旗が 1 つ
-    // でも立っていれば全スケジュールを回す全か無かの形である）が、遅れは実際に生じる。
-    // 指定が効くのは維持系との間だけで、既存のペア機構との相対順には触れない。
-    app.world().borrow_mut().add_systems(
-        FrameFinalize,
-        emo2_frame_system.before(apply_zorder_group_maintenance),
-    );
+    // 相の登録は**鎖の適用系より前**という指定つきで行う（task 3.2 の必須事項）。相が組んだ
+    // 望む鎖を、同じ巡のうちに適用系が読むための順序である。登録の順そのものは適用系のほうが
+    // 先である（`open_startup_window` の `wire_zorder_pair` が確定段へ 3 本を載せてから、ここが
+    // 相を載せる）ので、指定を落とすと相は適用系の後ろへ回り、組み替えが 1 心拍ぶん遅れる
+    // ——要件 14.5 が求める「そのイベントへの応答としての完了」が割れる。飢餓は起きない
+    // （tick の門は旗が 1 つでも立っていれば全スケジュールを回す全か無かの形である）が、
+    // 遅れは実際に生じる。指定が効くのは適用系との間だけで、既存のペア機構との相対順には
+    // 触れない。
+    app.world()
+        .borrow_mut()
+        .add_systems(FrameFinalize, emo2_frame_system.before(apply_zorder_chain));
 
     // SERIKO ループ ticker 起動（design「本番は実時間・実 entropy 接続」・R7.4）: 16ms 実時計
     // （LoopTickerConfig::default）で駆動し、各 Tick を tick_sink（SerikoSink クローン）経由で seriko
