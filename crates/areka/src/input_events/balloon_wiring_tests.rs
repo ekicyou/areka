@@ -2,6 +2,7 @@ use super::test_support::{
     headless_emo2_wiring, runtime_with_active_choice, spawn_balloon_leave_child,
 };
 use super::*;
+use crate::placement::follow::OffsetBase;
 use bevy_ecs::world::World;
 use std::sync::mpsc;
 
@@ -157,6 +158,7 @@ fn two_scopes() -> Vec<ScopePlacement> {
             balloon_pos: PointPx { x: 1071, y: 708 },
             balloon_size: SizePx { w: 223, h: 158 },
             balloon_offset: PointPx { x: -412, y: -25 },
+            balloon_offset_base: OffsetBase::unpinned(PointPx { x: -412, y: -25 }),
             // windowposition-limit: 正典既定（有効）。本檻は limit の判定を対象にしない。
             balloon_limit: true,
             anchor: Anchor::Bottom,
@@ -169,6 +171,7 @@ fn two_scopes() -> Vec<ScopePlacement> {
             balloon_pos: PointPx { x: 1334, y: 1044 },
             balloon_size: SizePx { w: 223, h: 158 },
             balloon_offset: PointPx { x: 285, y: -19 },
+            balloon_offset_base: OffsetBase::unpinned(PointPx { x: 285, y: -19 }),
             // windowposition-limit: 正典既定（有効）。本檻は limit の判定を対象にしない。
             balloon_limit: true,
             anchor: Anchor::Bottom,

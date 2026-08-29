@@ -33,6 +33,8 @@
 //! `resolve_talk_time`）・排他 system `emo2_frame_system`（remove→各フェーズ→insert）を実装する。
 
 mod attach;
+// 拡大率遷移でのバルーン追従オフセットの追随（areka-P0-balloon-offset-dpi・design D6）。
+mod balloon_offset_follow;
 mod dpi;
 mod drain_resnap;
 mod scale_text;
@@ -323,6 +325,28 @@ mod dpi_reproject_tests;
 #[cfg(test)]
 #[path = "frame_dpi_reproject_none_tests.rs"]
 mod dpi_reproject_none_tests;
+
+// 収束の保証（areka-P0-balloon-offset-dpi task 6.2・design D16・要件 3.1／3.4）。
+#[cfg(test)]
+#[path = "frame_balloon_offset_converge_tests.rs"]
+mod balloon_offset_converge_tests;
+
+// キーワード再導出との排他の門（areka-P0-balloon-offset-dpi task 6.3・design D7・要件 4.3）。
+#[cfg(test)]
+#[path = "frame_balloon_offset_keyword_gate_tests.rs"]
+mod balloon_offset_keyword_gate_tests;
+
+// 遷移相の結合テスト行列（areka-P0-balloon-offset-dpi task 6.5・design Integration 1／2／4／5／6・
+// 要件 3.2／3.5／4.2／7.1／7.3／9.8）。
+#[cfg(test)]
+#[path = "frame_balloon_offset_follow_tests.rs"]
+mod balloon_offset_follow_tests;
+
+// 拡大率の往復で基準へ bit 同一で戻ることの櫯（areka-P0-balloon-offset-dpi task 6.1 の実装時是正・design D4／D16・
+// 要件 3.3／7.8）。
+#[cfg(test)]
+#[path = "frame_balloon_offset_roundtrip_tests.rs"]
+mod balloon_offset_roundtrip_tests;
 
 #[cfg(test)]
 #[path = "frame_diag_route_tests.rs"]

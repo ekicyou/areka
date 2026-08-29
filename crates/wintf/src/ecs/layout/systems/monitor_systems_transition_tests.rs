@@ -34,7 +34,10 @@ use windows::Win32::Foundation::RECT;
 
 use super::*;
 use crate::ecs::test_support::capture_under_filter;
-use crate::ecs::window::transition_diag::{KIND_MONITOR, RECORD_PREFIX_TAG, TRANSITION_TARGET};
+use crate::ecs::types::{Point, SizeI};
+use crate::ecs::window::transition_diag::{
+    KIND_MONITOR, KIND_WINDPI, RECORD_PREFIX_TAG, TRANSITION_TARGET,
+};
 use crate::ecs::world::{EcsWorld, Update};
 use crate::ecs::{DPI, Monitor, WindowPos};
 
@@ -98,6 +101,23 @@ fn monitor_before() -> Monitor {
         },
         dpi: 120,
         is_primary: true,
+    }
+}
+
+/// 作業領域**だけ**が変わったモニタ（DPI は据え置き）。
+///
+/// 窓 DPI の再導出が「同値なので書き換えない」腕（`if *dpi == new_dpi { continue; }`）を
+/// 踏ませるための検体。モニタ表そのものは更新されるので `kind=monitor` は出る＝
+/// 「捕捉は生きているのに `kind=windpi` だけが 0 行」を非空虚に見られる。
+fn monitor_after_work_area_only() -> Monitor {
+    Monitor {
+        work_area: RECT {
+            left: 0,
+            top: 0,
+            right: 3840,
+            bottom: 2064,
+        },
+        ..monitor_before()
     }
 }
 
@@ -169,6 +189,23 @@ fn probe_world(injected: Vec<Monitor>) -> (World, Entity) {
     world.spawn(LayoutRoot);
     let monitor_entity = world.spawn(monitor_before()).id();
     (world, monitor_entity)
+}
+
+/// 更新対象モニタの内側に中心を持つ窓を 1 つ置く（再導出の対象になる形）。
+fn spawn_probe_window(world: &mut World, dpi: u16) -> Entity {
+    world
+        .spawn((
+            WindowPos {
+                position: Some(Point { x: 100, y: 100 }),
+                size: Some(SizeI {
+                    width: 400,
+                    height: 600,
+                }),
+                ..Default::default()
+            },
+            DPI::from_dpi(dpi, dpi),
+        ))
+        .id()
 }
 
 /// 檻の実行。**シングルスレッド実行器を明示**する——既定の多スレッド実行器では
@@ -253,6 +290,104 @@ fn an_unchanged_table_records_nothing() {
 #[test]
 fn the_monitor_record_is_silent_under_the_default_directives() {
     let (mut world, _monitor_entity) = probe_world(vec![monitor_after()]);
+
+    let captured = capture_under_filter(DEFAULT_DIRECTIVES, || {
+        emit_control();
+        run_apply(&mut world);
+    });
+
+    assert!(
+        captured.contains(CONTROL_LINE),
+        "対照が拾えていない＝捕捉が死んでいる: {captured}"
+    );
+    assert!(
+        transition_lines(&captured).is_empty(),
+        "観測 target を点けない運転では観測行は 1 行も出ない: {captured}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// 窓の拡大率の起点（`kind=windpi`）——モニタ表更新から窓へ引き直す経路（task 8.3）
+// ---------------------------------------------------------------------------
+
+#[test]
+fn redriving_a_window_dpi_records_the_window_origin() {
+    let (mut world, _monitor_entity) = probe_world(vec![monitor_after()]);
+    let window = spawn_probe_window(&mut world, 120);
+
+    let captured = capture_under_filter(SIGNOFF_WITH_EXISTING_DIRECTIVES, || {
+        emit_control();
+        run_apply(&mut world);
+    });
+
+    assert!(
+        captured.contains(CONTROL_LINE),
+        "対照が拾えていない＝捕捉が死んでいる: {captured}"
+    );
+
+    let records = lines_of_kind(&captured, KIND_WINDPI);
+    assert_eq!(records.len(), 1, "書き換えた窓 1 つにつき 1 行: {captured}");
+    let line = records[0];
+    assert!(
+        line.contains("[transition] frame=7 t_us=1234 kind=windpi"),
+        "接頭語の刻印が渡した値と違う（本関数は時刻を読まない）: {line}"
+    );
+    assert!(
+        line.contains(&format!("entity={window:?}")),
+        "書き換えた**窓**の entity が載る（モニタの entity ではない）: {line}"
+    );
+    assert!(
+        line.contains("old_dpi=120 new_dpi=192"),
+        "新旧の表示 DPI が同一行から復元できない: {line}"
+    );
+
+    // 既存の挙動は不変——`debug` 行も component の書き換えもそのまま。
+    assert!(
+        captured.contains("[detect_display_change_system] Redriving window DPI"),
+        "既存の再導出ログが失われている: {captured}"
+    );
+    assert_eq!(
+        *world.get::<DPI>(window).expect("窓の DPI"),
+        DPI::from_dpi(192, 192),
+        "再導出そのものが壊れている"
+    );
+}
+
+/// **書き換えが起きなかった経路からは発行しない**（task 8.3 の完了条件）。
+///
+/// モニタ表は更新されるので再導出は走るが、窓の DPI が同値なので早期に抜ける。
+/// 同じ捕捉窓に `kind=monitor` が出ていることが、捕捉が生きている証拠である。
+#[test]
+fn a_window_whose_dpi_does_not_change_records_nothing() {
+    let (mut world, _monitor_entity) = probe_world(vec![monitor_after_work_area_only()]);
+    let window = spawn_probe_window(&mut world, 120);
+
+    let captured = capture_under_filter(SIGNOFF_DIRECTIVES, || {
+        emit_control();
+        run_apply(&mut world);
+    });
+
+    assert!(captured.contains(CONTROL_LINE), "捕捉が死んでいる");
+    assert_eq!(
+        lines_of_kind(&captured, KIND_MONITOR).len(),
+        1,
+        "対照の起点行（モニタ表の値変化）が出ていない＝檻の前提が崩れている: {captured}"
+    );
+    assert!(
+        lines_of_kind(&captured, KIND_WINDPI).is_empty(),
+        "窓の DPI が動いていないのに起点が出ている（遷移が水増しされる）: {captured}"
+    );
+    assert_eq!(
+        *world.get::<DPI>(window).expect("窓の DPI"),
+        DPI::from_dpi(120, 120),
+        "同値の腕で書き換えが起きている"
+    );
+}
+
+#[test]
+fn the_window_origin_is_silent_under_the_default_directives() {
+    let (mut world, _monitor_entity) = probe_world(vec![monitor_after()]);
+    let _window = spawn_probe_window(&mut world, 120);
 
     let captured = capture_under_filter(DEFAULT_DIRECTIVES, || {
         emit_control();
@@ -451,10 +586,13 @@ fn the_monitor_record_builds_its_stamp_from_world_resources_only() {
         0,
         "World を借りられる観測点がスレッド局所ミラーを読んでいる（D1 違反）"
     );
+    // 記録を組む点は 2 つ（モニタ表の値変化＝`kind=monitor`・窓の拡大率再導出＝
+    // `kind=windpi`・task 8.3）。どちらも刻印は**呼出側が渡した値**を使うので、
+    // 上の `stamp()` 0 件の主張は 2 点まとめて見張っている。
     assert_eq!(
         code.matches("transition_diag::is_enabled()").count(),
-        1,
-        "記録点の前置ガードが 1 つでない（既定運転で行の組立の費用を払う形になる）"
+        2,
+        "記録点の前置ガードが 2 つでない（既定運転で行の組立の費用を払う形になる）"
     );
 
     // 走査が中身を見ている対照——落とし過ぎていないこと。

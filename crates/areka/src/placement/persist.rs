@@ -26,7 +26,7 @@ use areka_sylphya::{Axis, PersistKey, PersistScope, ScopeRoots, SylphyaPublisher
 use bevy_ecs::world::World;
 use tracing::{debug, warn};
 
-use super::follow::{MonitorSnapshot, project_anchor, work_area_for_window};
+use super::follow::{MonitorSnapshot, OffsetBase, project_anchor, work_area_for_window};
 use super::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
 
 /// 永続値の寛容 parse（design C1・6.1）。
@@ -390,12 +390,25 @@ fn merge_scope(
     // 落とさないと、実表示寸確定の再導出がユーザーの保存した相対位置をキーワード既定へ
     // 上書きしてしまう——保存値優先の順位が静かに反転する。offset 欠損側（resolver 既定を
     // 保持する腕）は素材をそのまま運ぶ。
-    let (balloon_offset, balloon_keyword_base) = match (saved_bx, saved_by) {
+    // 基準対（areka-P0-balloon-offset-dpi 要件 5.1／5.2・design D15）も同じ腕で決まる。
+    // 保存値は**保存時の表示 DPI を記録していない**（要件 5.1）ゆえ、採用した保存値の基準
+    // DPI は発明できない——`OffsetBase::unpinned`＝未係留（`dpi: None`）として運び、最初の
+    // 観測で値を変えずに係留させる（要件 5.2「換算せずそのまま採用」の実装上の姿）。
+    // 採寸 DPI を継ぐと、主モニタと違う拡大率へ復元されたとき保存値を二重に拡大する。
+    let (balloon_offset, balloon_offset_base, balloon_keyword_base) = match (saved_bx, saved_by) {
         // 保存 offset は**char 左上基準**（ランタイム BalloonFollow.offset と同一基準）ゆえ
         // 基準変換なしで採用する（2.3・[`balloon_offset_entries`] の基準記述）。
-        (Some(x), Some(y)) => (PointPx { x, y }, None),
-        // offset 欠損 → resolver 既定 offset（左上基準）を保持（2.4）。
-        _ => (placement.balloon_offset, placement.balloon_keyword_base),
+        (Some(x), Some(y)) => {
+            let saved = PointPx { x, y };
+            (saved, OffsetBase::unpinned(saved), None)
+        }
+        // offset 欠損 → resolver 既定 offset（左上基準）を保持（2.4）。基準対も配置式が
+        // 出したもの（`Some(採寸 DPI)`）をそのまま運ぶ。
+        _ => (
+            placement.balloon_offset,
+            placement.balloon_offset_base,
+            placement.balloon_keyword_base,
+        ),
     };
     // どちらの場合も最終 char_pos へ追従させて balloon_pos を再導出する。
     let balloon_pos = PointPx {
@@ -427,6 +440,8 @@ fn merge_scope(
         balloon_pos,
         balloon_size: placement.balloon_size,
         balloon_offset,
+        // 保存値採用腕では未係留・欠損腕では配置式の基準対。上の match が決めている。
+        balloon_offset_base,
         // limit の解決値は merge の対象外（永続化しない・毎起動 descript から解決する）
         // ゆえ、入力の値をそのまま転記する（merge 規則は無改変）。
         balloon_limit: placement.balloon_limit,
@@ -481,11 +496,17 @@ pub fn persist_entries(world: &World, entries: Vec<(PersistKey, String)>) {
 }
 
 #[cfg(test)]
+#[path = "balloon_offset_persist_roundtrip_tests.rs"]
+mod balloon_offset_persist_roundtrip_tests;
+#[cfg(test)]
 #[path = "persist_entries_tests.rs"]
 mod entries_tests;
 #[cfg(test)]
 #[path = "persist_io_wiring_tests.rs"]
 mod io_wiring_tests;
+#[cfg(test)]
+#[path = "persist_restore_offset_base_tests.rs"]
+mod restore_offset_base_tests;
 #[cfg(test)]
 #[path = "persist_restore_tests.rs"]
 mod restore_tests;

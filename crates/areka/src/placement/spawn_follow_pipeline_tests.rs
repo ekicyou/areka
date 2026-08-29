@@ -1,3 +1,4 @@
+use crate::placement::shared_test_support::MEASURE_DPI;
 use bevy_ecs::prelude::*;
 use wintf::ecs::drag::OnDrag;
 use wintf::ecs::pointer::Phase;
@@ -86,7 +87,7 @@ fn real_pipeline_world() -> (World, GhostWindows, Vec<ScopePlacement>) {
             balloon_size: SizePx { w: 227, h: 159 },
         },
     ];
-    let placements = resolve_placement(&cfg, work_area, &scopes);
+    let placements = resolve_placement(&cfg, work_area, &scopes, MEASURE_DPI);
 
     let mut world = World::new();
     let gw = spawn_ghost_windows(&mut world, &placements, &titles());
@@ -150,8 +151,25 @@ fn t_i4_follow_offset_matches_resolver_output_through_real_pipeline() {
             .get::<BalloonFollow>(char_e)
             .expect("char window BalloonFollow");
         assert_eq!(
-            follow.offset, p.balloon_offset,
+            follow.offset(),
+            p.balloon_offset,
             "scope{}: BalloonFollow.offset は resolver 出力の転写",
+            p.scope
+        );
+        // **確立点の檻**（要件 3.5・5.2・design D14）: 配置解決の既定は現在値だけで
+        // なく**基準対**（値と、その値が属する表示 DPI）も `ScopePlacement` から
+        // そのまま確立する。ここが転写されていないと、以後の拡大率遷移が
+        // 「どの空間の値か分からない」基準から引き直して静かにずれる。
+        assert_eq!(
+            follow.base(),
+            p.balloon_offset_base,
+            "scope{}: BalloonFollow の基準対は resolver 出力 balloon_offset_base の転写",
+            p.scope
+        );
+        assert_eq!(
+            follow.base().offset,
+            p.balloon_offset,
+            "scope{}: 確立直後は基準値と現在値が一致する（まだ一度も追随していない）",
             p.scope
         );
         assert_eq!(
@@ -277,7 +295,7 @@ fn t_i4_char_move_follows_adjusted_offset_after_balloon_solo_drag() {
         "檻の前提: 調整後 offset は resolver 由来の初期 offset と異なる"
     );
     assert_eq!(
-        world.get::<BalloonFollow>(char_e).unwrap().offset,
+        world.get::<BalloonFollow>(char_e).unwrap().offset(),
         adjusted,
         "バルーン単独ドラッグで offset が記憶更新される（4.8）"
     );
@@ -296,7 +314,7 @@ fn t_i4_char_move_follows_adjusted_offset_after_balloon_solo_drag() {
     // 他スコープ（scope1）の offset は不干渉
     let char1 = gw.char_window(1).unwrap();
     assert_eq!(
-        world.get::<BalloonFollow>(char1).unwrap().offset,
+        world.get::<BalloonFollow>(char1).unwrap().offset(),
         placements[1].balloon_offset,
         "scope0 バルーンのドラッグは scope1 の offset を変えない"
     );

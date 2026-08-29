@@ -1,3 +1,4 @@
+use crate::placement::follow::OffsetBase;
 use bevy_ecs::prelude::*;
 use wintf::ecs::SizeI;
 use wintf::ecs::layout::Offset;
@@ -183,7 +184,7 @@ fn resize_window_to_bottom_preserves_balloon_follow_offset() {
             fake_handle(0x1000),
             window_pos_sized(731, 356, 434, 687),
             Anchored(Anchor::Bottom),
-            BalloonFollow { balloon, offset },
+            BalloonFollow::new(balloon, OffsetBase::unpinned(offset)),
         ))
         .id();
 
@@ -232,7 +233,7 @@ fn resize_window_to_bottom_preserves_balloon_follow_offset() {
     assert_eq!(balloon_pos.x - char_pos.x, offset.x);
     assert_eq!(balloon_pos.y - char_pos.y, offset.y);
     assert_eq!(
-        world.get::<BalloonFollow>(window).unwrap().offset,
+        world.get::<BalloonFollow>(window).unwrap().offset(),
         offset,
         "BalloonFollow.offset は resize で補正されない"
     );
@@ -274,7 +275,7 @@ fn resize_window_to_bottom_keeps_ssp_window_relative_balloon_offset() {
             fake_handle(0x1000),
             window_pos_sized(3297, 1241, 543, 859),
             Anchored(Anchor::Bottom),
-            BalloonFollow { balloon, offset },
+            BalloonFollow::new(balloon, OffsetBase::unpinned(offset)),
         ))
         .id();
 
@@ -311,7 +312,7 @@ fn resize_window_to_bottom_keeps_ssp_window_relative_balloon_offset() {
     assert_eq!(balloon_pos.x - char_pos.x, offset.x);
     assert_eq!(balloon_pos.y - char_pos.y, offset.y);
     assert_eq!(
-        world.get::<BalloonFollow>(window).unwrap().offset,
+        world.get::<BalloonFollow>(window).unwrap().offset(),
         offset,
         "BalloonFollow.offset は resize で書き換わらない"
     );
@@ -483,7 +484,7 @@ fn resize_window_to_left_preserves_balloon_follow_offset() {
             fake_handle(0x1000),
             window_pos_sized(731, 500, 434, 687),
             Anchored(Anchor::Left),
-            BalloonFollow { balloon, offset },
+            BalloonFollow::new(balloon, OffsetBase::unpinned(offset)),
         ))
         .id();
 

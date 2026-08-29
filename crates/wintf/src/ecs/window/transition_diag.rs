@@ -65,6 +65,25 @@ pub const MISSING: &str = "-";
 
 /// モニタ表の値変化（DPI・作業領域）。
 pub const KIND_MONITOR: &str = "monitor";
+/// **窓**の表示 DPI（`DPI` component）の書き換え。
+///
+/// # なぜ `monitor` と別の語が要るのか
+///
+/// [`KIND_MONITOR`] が出るのは**モニタ表そのもの**の値が変わったとき——すなわち表示設定の
+/// 変更——だけである。ゴーストを拡大率の異なるモニタへ移すと、窓の表示 DPI は変わるのに
+/// モニタ表は 1 つも変わらないため `monitor` 行は 1 行も出ない（実測＝
+/// `.kiro/specs/areka-P0-balloon-offset-dpi/real-run-attempt-2026-08-28.md` の検出 2b）。
+/// 「拡大率が変わった」を起点として読む側（`areka` の判定器）は、この経路を別の語で
+/// 見分けられなければ遷移を 1 本も切り出せない。
+///
+/// # 語の選び方
+///
+/// 既存の 11 語——wintf の 5 語（`monitor`／`write`／`flush`／`msg`／`enqueue`＝
+/// [`KIND_ALL`]）・areka-emo-present の 1 語（`surface`）・areka の 5 語（`snapshot`／
+/// `hold`／`ground`／`chain`／`offset`＝`PLACEMENT_KIND_ALL`）——のいずれとも衝突せず、
+/// フィールド名 [`FIELD_WIN_KIND`] と同じ「窓の」の接頭で**窓の DPI** と読める最短の語と
+/// して `windpi` を採る。
+pub const KIND_WINDPI: &str = "windpi";
 /// 窓書込 1 回（一括 flush・メッセージ受理時の同期書込のいずれも）。
 pub const KIND_WRITE: &str = "write";
 /// 一括 flush の開始／終了。
@@ -78,7 +97,14 @@ pub const KIND_ENQUEUE: &str = "enqueue";
 ///
 /// areka／areka-emo-present が足す `snapshot`／`surface`／`hold`／`ground`／`chain` は
 /// それぞれの crate のレコード純関数が定義する（wintf は上位 crate の語彙を持たない）。
-pub const KIND_ALL: &[&str] = &[KIND_MONITOR, KIND_WRITE, KIND_FLUSH, KIND_MSG, KIND_ENQUEUE];
+pub const KIND_ALL: &[&str] = &[
+    KIND_MONITOR,
+    KIND_WINDPI,
+    KIND_WRITE,
+    KIND_FLUSH,
+    KIND_MSG,
+    KIND_ENQUEUE,
+];
 
 // ---------------------------------------------------------------------------
 // 段階語（stage）
@@ -142,7 +168,7 @@ pub const FIELD_T_US: &str = "t_us";
 /// 接頭語: レコード種別。
 pub const FIELD_KIND: &str = "kind";
 
-/// モニタ表のエンティティ。
+/// 起点のエンティティ（`kind=monitor` ならモニタ表の・`kind=windpi` なら**窓**の）。
 pub const FIELD_ENTITY: &str = "entity";
 /// 変化前の DPI。
 pub const FIELD_OLD_DPI: &str = "old_dpi";
@@ -215,6 +241,13 @@ pub const MONITOR_FIELDS: &[&str] = &[
     FIELD_OLD_WA,
     FIELD_NEW_WA,
 ];
+
+/// `kind=windpi` 行の必須フィールド（接頭語を除く）。
+///
+/// [`MONITOR_FIELDS`] の**先頭 3 欄と同名・同義・同値形**である（`entity`／`old_dpi`／
+/// `new_dpi`）——判定側は起点 2 種を同じ読み方で扱うため、ここを別名にしてはならない。
+/// 作業領域の 2 欄は窓には意味が無いので、番兵で埋めるのではなく**持たない**。
+pub const WINDPI_FIELDS: &[&str] = &[FIELD_ENTITY, FIELD_OLD_DPI, FIELD_NEW_DPI];
 
 /// `kind=write` 行の必須フィールド（接頭語を除く）。
 pub const WRITE_FIELDS: &[&str] = &[
@@ -382,6 +415,28 @@ pub struct MonitorRecord {
     pub new_work_area: RECT,
 }
 
+/// **窓**の表示 DPI（`DPI` component）が書き換わった 1 回。
+///
+/// # 値の形は [`MonitorRecord`] と揃える
+///
+/// `old_dpi`／`new_dpi` は `u32` の DPI 値（96 = 100%）である。窓の `DPI` component は
+/// `dpi_x`／`dpi_y` の 2 軸を持つが、行に載せるのは**横軸の値**である。2 軸を別欄で出すと
+/// 既存の起点（[`MonitorRecord`]・単一のスカラ）と同じ読み方ができなくなるうえ、
+/// 本仕様が追う量（拡大率の比）はもともと 1 つのスカラだからである。発行元の 2 経路とも
+/// 2 軸へ同じ値を書く（`WM_DPICHANGED` の wparam の LOWORD／HIWORD は OS が同値で運び、
+/// モニタ表からの再導出は `Monitor::dpi` という単一のスカラを 2 軸へ配る）。
+#[derive(Clone, Copy, Debug)]
+pub struct WindowDpiRecord {
+    /// 刻印。
+    pub stamp: Stamp,
+    /// 表示 DPI が書き換わった**窓**のエンティティ。
+    pub entity: Entity,
+    /// 変化前の表示 DPI（横軸）。
+    pub old_dpi: u32,
+    /// 変化後の表示 DPI（横軸）。
+    pub new_dpi: u32,
+}
+
 /// 窓書込 1 回。
 #[derive(Clone, Copy, Debug)]
 pub struct WriteRecord {
@@ -546,6 +601,19 @@ pub fn monitor_line(record: &MonitorRecord) -> String {
         new_dpi = record.new_dpi,
         old_wa = rect_field(record.old_work_area),
         new_wa = rect_field(record.new_work_area),
+    )
+}
+
+/// 窓の表示 DPI が書き換わった記録行。
+///
+/// 欄は [`monitor_line`] の先頭 3 欄と同名・同義・同値形（作業領域は持たない）。
+pub fn windpi_line(record: &WindowDpiRecord) -> String {
+    format!(
+        "{prefix} {FIELD_ENTITY}={entity:?} {FIELD_OLD_DPI}={old_dpi} {FIELD_NEW_DPI}={new_dpi}",
+        prefix = record_prefix(record.stamp, KIND_WINDPI),
+        entity = record.entity,
+        old_dpi = record.old_dpi,
+        new_dpi = record.new_dpi,
     )
 }
 

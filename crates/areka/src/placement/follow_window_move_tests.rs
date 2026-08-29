@@ -1,3 +1,4 @@
+use crate::placement::follow::OffsetBase;
 use bevy_ecs::prelude::*;
 use wintf::ecs::Point;
 use wintf::ecs::SizeI;
@@ -60,7 +61,7 @@ fn move_window_to_moves_balloon_with_offset_preserved() {
         .spawn((
             fake_handle(0x1000),
             window_pos_at(50, 60),
-            BalloonFollow { balloon, offset },
+            BalloonFollow::new(balloon, OffsetBase::unpinned(offset)),
         ))
         .id();
 
@@ -91,10 +92,7 @@ fn move_window_to_target_without_handle_does_not_move_balloon() {
     let window = world
         .spawn((
             window_pos_at(50, 60),
-            BalloonFollow {
-                balloon,
-                offset: PointPx { x: 11, y: 22 },
-            },
+            BalloonFollow::new(balloon, OffsetBase::unpinned(PointPx { x: 11, y: 22 })),
         ))
         .id();
 
@@ -113,10 +111,7 @@ fn move_window_to_balloon_without_handle_still_moves_target() {
         .spawn((
             fake_handle(0x1000),
             window_pos_at(50, 60),
-            BalloonFollow {
-                balloon,
-                offset: PointPx { x: 11, y: 22 },
-            },
+            BalloonFollow::new(balloon, OffsetBase::unpinned(PointPx { x: 11, y: 22 })),
         ))
         .id();
 
@@ -162,7 +157,7 @@ fn on_char_drag_syncs_arrangement_offset_of_char_and_balloon() {
             window_pos_sized(1207, 356, 434, 687),
             arrangement_at(1207.0, 356.0),
             Anchored(Anchor::Bottom),
-            BalloonFollow { balloon, offset },
+            BalloonFollow::new(balloon, OffsetBase::unpinned(offset)),
             dragging_state((1207, 356), start),
         ))
         .id();
@@ -211,7 +206,7 @@ fn move_window_to_syncs_arrangement_offset_of_target_and_balloon() {
             fake_handle(0x1000),
             window_pos_at(50, 60),
             arrangement_at(50.0, 60.0),
-            BalloonFollow { balloon, offset },
+            BalloonFollow::new(balloon, OffsetBase::unpinned(offset)),
         ))
         .id();
 

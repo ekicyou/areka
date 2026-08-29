@@ -19,6 +19,7 @@
 //! 問う各テストは、**同じ書込先**で route ないし対象だけを差し替えた陽性側を、同じテスト
 //! 本体の中で続けて主張する。
 
+use crate::placement::follow::OffsetBase;
 use bevy_ecs::prelude::*;
 use wintf::ecs::WindowPos;
 use wintf::ecs::window::drain_window_pos_commands;
@@ -56,6 +57,7 @@ fn world_with_one_scope() -> (World, Entity, Entity) {
         balloon_pos: PointPx { x: 1071, y: 732 },
         balloon_size: SizePx { w: 223, h: 158 },
         balloon_offset: PointPx { x: -412, y: -25 },
+        balloon_offset_base: OffsetBase::unpinned(PointPx { x: -412, y: -25 }),
         // 関門を素通しさせる（本ファイルの主題は既定位置の追跡であって limit 補正ではない）。
         balloon_limit: false,
         anchor: Anchor::Bottom,

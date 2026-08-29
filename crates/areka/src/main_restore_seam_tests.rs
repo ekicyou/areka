@@ -1,4 +1,5 @@
 use super::*;
+use crate::placement::follow::OffsetBase;
 use areka_ghost::sylphya_wiring::profile_areka_root;
 use areka_parsers::charset::DefaultEncoding;
 use placement::balloon_limit::BALLOON_LIMIT_CLAMP_TAG;
@@ -48,6 +49,7 @@ fn synthetic_placement(default_char_pos: PointPx) -> ScopePlacement {
         },
         balloon_size: BSZ,
         balloon_offset,
+        balloon_offset_base: OffsetBase::unpinned(balloon_offset),
         // windowposition-limit: 正典既定（有効）。本檻は limit の判定を対象にしない。
         balloon_limit: true,
         anchor: Anchor::Free,

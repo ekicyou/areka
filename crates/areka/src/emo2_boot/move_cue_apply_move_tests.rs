@@ -9,6 +9,7 @@
 // =============================================================================
 
 use super::*;
+use crate::placement::follow::OffsetBase;
 use areka_emo_compose::ScaleRatio;
 use bevy_ecs::prelude::{Entity, World};
 use windows::Win32::Foundation::{HINSTANCE, HWND};
@@ -39,6 +40,7 @@ fn placement(scope: usize, cx: i32, cy: i32, cw: i32, ch: i32, boff: PointPx) ->
         },
         balloon_size: SizePx { w: 200, h: 150 },
         balloon_offset: boff,
+        balloon_offset_base: OffsetBase::unpinned(boff),
         // windowposition-limit: 正典既定（有効）。本檻は limit の判定を対象にしない。
         balloon_limit: true,
         anchor: Anchor::Bottom,
@@ -126,7 +128,7 @@ fn apply_keeps_balloon_offset() {
         .get::<BalloonFollow>(target)
         .copied()
         .expect("target に BalloonFollow")
-        .offset;
+        .offset();
 
     assert!(apply_move_directive(
         &mut world,
@@ -285,7 +287,7 @@ fn pipeline_sink_to_apply_moves_keeps_balloon_and_anchored() {
         .get::<BalloonFollow>(target)
         .copied()
         .expect("target に BalloonFollow")
-        .offset;
+        .offset();
     let target_anchored_before = world
         .get::<Anchored>(target)
         .copied()

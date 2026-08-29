@@ -1,0 +1,4 @@
+charset,UTF-8
+type,balloon
+name,kakukaku for emo2 (balloon-offset-dpi verification)
+directory,emo2-kakukaku-offsetdpi

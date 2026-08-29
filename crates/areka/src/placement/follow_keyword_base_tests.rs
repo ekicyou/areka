@@ -1,6 +1,7 @@
+use crate::placement::follow::OffsetBase;
 use bevy_ecs::prelude::*;
 use wintf::ecs::pointer::Phase;
-use wintf::ecs::{Point, SizeI, WindowPos};
+use wintf::ecs::{DPI, Point, SizeI, WindowPos};
 
 use super::super::test_support::{ExpectField, LogEvent, capture_logs, expect_one};
 use super::test_support::{drag_end_event_at, drag_event, fake_handle, point_of, rect};
@@ -39,6 +40,8 @@ use crate::placement::spawn::{BalloonKeywordBase, spawn_ghost_windows};
 const REDERIVE_TAG: &str = "[balloon-keyword] Rederive";
 /// 解決不能（縮退）の判定語。
 const KEYWORD_UNRESOLVED_TAG: &str = "[balloon-keyword] Unresolved";
+/// 再導出は成立したが基準 DPI を読めず**未係留**で確立したときの判定語。
+const KEYWORD_BASE_UNPINNED_TAG: &str = "[balloon-keyword] BaseUnpinned";
 
 /// 作業領域（原点非 (0,0)・全辺 96 の非倍数＝隠れた再スケールの檻）。
 fn wa() -> RectPx {
@@ -117,6 +120,7 @@ fn placement_measured_at(
         },
         balloon_size: bs,
         balloon_offset,
+        balloon_offset_base: OffsetBase::unpinned(balloon_offset),
         balloon_limit,
         anchor: Anchor::Bottom,
         balloon_keyword_base: keyword,
@@ -144,7 +148,7 @@ fn offset_of(world: &World, char_window: Entity) -> PointPx {
     world
         .get::<BalloonFollow>(char_window)
         .expect("キャラ窓に BalloonFollow があるはず")
-        .offset
+        .offset()
 }
 
 /// ユーザーのバルーン単独ドラッグを**本番のハンドラで**再現する（Component を手で
@@ -238,6 +242,10 @@ fn reported_size_reconcile_rederives_the_keyword_offset_from_the_displayed_size(
             expected_offset(mode, measured_char(), balloon(), adjust),
             "mode={mode:?}: 前提＝spawn 直後は採寸寸から導いた offset を持つ"
         );
+        // 確立点の係留 DPI を見るため、既定（96）と**異なる**表示 DPI を刻む
+        // （96 のままでは「刻んだのか既定のままなのか」を区別できない）。
+        let char_dpi = DPI::from_dpi(144, 144);
+        world.entity_mut(char_window).insert(char_dpi);
 
         let (moved, events) = capture_logs(|| {
             resize_window_to(
@@ -258,6 +266,20 @@ fn reported_size_reconcile_rederives_the_keyword_offset_from_the_displayed_size(
         assert_ne!(
             fresh, stale,
             "mode={mode:?}: 再導出の前後が同値（檻が空虚）"
+        );
+        // **確立点の檻**（要件 3.5・design D14）: 再導出は現在値だけでなく**基準**も
+        // 焼き直し、その基準はキャラ窓の表示 DPI へ係留される。基準が古いままだと
+        // 次の拡大率遷移が採寸寸由来の値から引き直して静かにずれる。
+        assert_eq!(
+            world
+                .get::<BalloonFollow>(char_window)
+                .expect("キャラ窓に BalloonFollow があるはず")
+                .base(),
+            OffsetBase {
+                offset: fresh,
+                dpi: Some(char_dpi)
+            },
+            "mode={mode:?}: キーワード再導出が基準対（値・係留 DPI）を更新していない"
         );
 
         // 表示位置でも中央が揃っていること（offset だけ直って追従が古いままを弾く）。
@@ -714,5 +736,75 @@ fn a_drag_on_a_side_scope_is_a_no_op_for_the_material() {
     assert!(
         world.get::<BalloonKeywordBase>(char_window).is_none(),
         "Side の scope に素材が生えている"
+    );
+}
+
+// -------------------------------------------------------------------------
+// 表示 DPI を読めないキャラ窓での再導出（要件 5.2／5.4／9.4・design D15）
+//
+// 再導出そのものは**成立している**ので `Unresolved` の語は使わない——実機
+// サインオフの grep 判定語を汚さないためであり、この腕は専用の語を持つ。
+// `WindowHandle` の on_add フックが必ず `DPI` を刻むため、この腕は他のどの檻からも
+// 踏まれない。ゆえに `DPI` を明示的に外して踏ませる。
+// -------------------------------------------------------------------------
+
+/// キャラ窓が表示 DPI を持たないとき: offset は導出値へ更新され、基準は**未係留**
+/// （`dpi: None`）で確立され、専用の `warn!` が 1 件出る（`Unresolved` は出ない）。
+#[test]
+fn rederive_without_display_dpi_establishes_unpinned_base_and_warns() {
+    let mode = BalloonXMode::CenterTop;
+    let adjust = PointPx { x: 0, y: 0 };
+    let (mut world, char_window, _balloon_window) =
+        world_with(placement_measured_at(Some((mode, adjust)), false));
+
+    let stale = offset_of(&world, char_window);
+    // 檻の前提: `WindowHandle` の on_add フックが刻んだ `DPI` を外し、
+    // 「表示 DPI を読めないキャラ窓」を作る（これが無いと Some 側の腕を踏む）。
+    world.entity_mut(char_window).remove::<DPI>();
+    assert!(
+        world.get::<DPI>(char_window).is_none(),
+        "檻の前提: キャラ窓が表示 DPI を持たないこと"
+    );
+
+    let (moved, events) = capture_logs(|| {
+        resize_window_to(
+            &mut world,
+            char_window,
+            displayed_char(),
+            PlacementRoute::ReportedSizeReconcile,
+        )
+    });
+    assert!(moved, "実表示寸の反映そのものは成立する");
+
+    // (a) 現在値は実表示寸から導出し直される——縮退で見送らない。
+    let fresh = expected_offset(mode, displayed_char(), balloon(), adjust);
+    assert_ne!(fresh, stale, "檻の前提: 再導出の前後が同値では観測できない");
+    assert_eq!(
+        offset_of(&world, char_window),
+        fresh,
+        "表示 DPI を読めなくても再導出結果は失われない（確立点で見送らない）"
+    );
+    // (b) 基準は**未係留**で確立される（96 を発明しない・要件 5.2／5.4）。
+    assert_eq!(
+        world
+            .get::<BalloonFollow>(char_window)
+            .expect("キャラ窓に BalloonFollow があるはず")
+            .base(),
+        OffsetBase {
+            offset: fresh,
+            dpi: None
+        },
+        "未係留で確立していない（基準 DPI を発明した／基準を焼き直していない）"
+    );
+
+    // (c) 無ログの縮退経路は作らない（要件 9.4）。専用の語であり、
+    //     実機サインオフの `Unresolved` 判定語は汚さない。
+    let rec = expect_one(&events, KEYWORD_BASE_UNPINNED_TAG);
+    assert_eq!(rec.level, tracing::Level::WARN, "未係留の確立は warn 水準");
+    assert_no_event(&events, KEYWORD_UNRESOLVED_TAG);
+    // 一度きり（4.7）の消費は縮退の腕でも変わらない。
+    assert!(
+        world.get::<BalloonKeywordBase>(char_window).is_none(),
+        "未係留の腕でも素材は消費される"
     );
 }
