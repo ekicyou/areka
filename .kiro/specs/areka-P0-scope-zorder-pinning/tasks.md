@@ -143,7 +143,7 @@
   - _Depends: 1.1, 1.2, 1.3, 2.1, 6.3_
   - _Requirements: 10.1, 10.2, 10.3_
 
-- [ ] 7.2 (P) 先送り語彙の検査対象へ新設ファイルを追加
+- [x] 7.2 (P) 先送り語彙の検査対象へ新設ファイルを追加
   - 両側の検査対象の一覧へ新設した本番ファイルを全て加え、件数の定数も同時に更新する
   - 完了状態: 新設ファイルのいずれかに先送り語彙を 1 語入れると検査が赤になることを確認する
   - _Depends: 1.1, 2.1, 2.2, 3.1, 3.3, 4.1_
@@ -286,3 +286,10 @@
 - **7.1 の非ブロッキング指摘 2 件（レビュー・後続の任意の補強）**: ⑴生産者名簿の完全性検査は**ファイル単位**で照合しており、名簿自身の慣習「旗ごとに 1 行」は機械化されていない＝既に載っているファイルが 2 つ目の旗を立てても緑のまま（ZORDER は散文名簿の檻が拾うので実害は非 ZORDER 旗に限られる。旗ごとのループを 1 本足せば閉じる）。⑵`the_zorder_constant_doc_keeps_no_second_roster` の走査は wintf の木だけを見るため、areka 側の生産者名を `ZORDER` 定数 doc へ書く形は捕まらない。
 - **7.1**: `production_rs_files`（両クレート）は**モジュールグラフではなくファイルシステム**を歩くので、`mod` 宣言されていない `.rs` も生産者として数える（較正で置いた probe ファイルは 1 度もコンパイルされていないのに檻を赤くした）。厳しい側への誤りなので安全だが、`src/` 配下に下書きの `.rs` を置くと赤くなる。
 - **7.1（行数の現況・引用せず現物を読むこと）**: `zorder_group_decision_tests.rs` 953（**申し送り 203 の「939」は陳腐化**・上限まで 47 行）／`window_pos_zorder_group_tests.rs` 844／`tick_gate_tests.rs` 669／`zorder_group_ledger.rs` 574／`zorder_group_branch_coverage_tests.rs` 398／`tick_gate_config_producers_tests.rs` 279。
+- **7.2**: 本 spec が新設した**本番ファイルは 7 本**（wintf 3＝`ecs/window/zorder_group.rs`／`zorder_group_diag.rs`／`zorder_group_maintain.rs`、areka 4＝`placement/zorder_group_ledger.rs`／`emo2_boot/zorder_cue.rs`／`emo2_boot/frame/zorder_drain.rs`／`emo2_boot/frame/zorder_descript.rs`）。両側の `PRODUCTION_FILES` は wintf 5→8（`zorder_pair_deferred_vocabulary_tests.rs:76`）・areka 2→6（`spawn_zorder_pair_deferred_tests.rs:59`）。**申し送り 270 の「`:48` の `[&str; 2]`」はここで陳腐化した**（同じ形の 3 度目）。
+- **7.2 の除外の根拠（3 群）**: ⑴`*_tests.rs` は対象外（1.3 の先例）。⑵`emo2_boot/frame/zorder_drain_test_support.rs` は名前が `_tests.rs` で終わらないが `zorder_drain.rs:485-487` の `#[cfg(test)] #[path]` でしか結線されず本番ビルドに 1 バイトも入らないので対象外。⑶追記だけの既存ファイルは要件 10.4 の文言（「**新しい実装ファイルを追加したとき**……その新しい実装も対象に含めて」）の射程外。**⑶の「共有の巨大ファイルは全文走査に入れない」という論拠は本 task の創作ではなく、先行 spec が書いた既存の設計判断**（merge-base 時点の `spawn_zorder_pair_deferred_tests.rs` の doc「# 走査の範囲」節・レビューが `git show` で裏取り済み）。
+- **7.2 の名簿倒れ対策**: 両側へ完全性検査 `the_scanned_roster_covers_every_zorder_production_source_in_this_crate` を新設し、⑴名簿から 1 行落とす ⑵名簿に無い実物を足す ⑶名簿に実在しないパスを足す の**3 方向すべてで赤**を実測。加えて名簿へ加えた **7 ファイルそれぞれに 1 語ずつ**先送り語彙を入れて 7/7 で赤（＝「名簿に載っただけで走査されていない」ファイルは無い）。**この檻は `zorder_` というファイル名接頭辞を鍵にしている**ので、接頭辞を持たない本番ファイルは素通りする（実測で確認）。現時点で該当 0 本なので実害なしだが、**接頭辞を持たない本番ファイルを足す task は名簿へ手で載せること**。
+- **7.2 の差し戻し 1 巡目＝コードは合格・design が実装に追随していなかった**: レビューは名簿の中身・除外判断・較正・要件 9.5 の凍結をすべて合格としたうえで、**`design.md` の件数が実装と食い違ったままその事実がどこにも記録されていない**ことだけを理由に差し戻した。是正巡は `crates/` を 1 行も触らず design.md の **4 箇所**を訂正＝⑴Modified Files の areka「2→5」→**2→6** ⑵Traceability 10.4「新設 6 本」→**新設 7 本** ⑶新設ファイルツリーへ `frame/zorder_descript.rs`（本番ファイルの漏れ）⑷同ツリーの `zorder_group_ledger_tests.rs` の注記「9 分岐」→**7 分岐**＋残る 3 分岐を持つ `zorder_group_ledger_state_tests.rs` をツリーへ追加（7+3=10 で design の「10 分岐」と初めて噛み合った）。**⑶⑷は 1 巡目レビューも実装者も最初は見落としており、親が「1 箇所だけ直すな」と指示して初めて出た。同じ形の陳腐化は 1 つ見つけたら残りを機械で探すこと。**
+- **7.2**: `design.md` の新設ファイルツリーは**本番ファイルは全数（7/7）だがテスト／支援 18 本のうち 13 本が未掲載**。これは陳腐化ではなく「設計時のテスト分割計画と実装の分割の差」。ツリーが全数目録なのか設計時計画なのかが読者に分からないと**次の読者が同じ差を陳腐化と誤認する**ので、見出しへ一句添えるのが望ましい（レビューの非ブロッキング提案・引受けは任意）。
+- **⚠ 道具の罠（8 つ目・CRLF 判定）**: `grep -c $'\r$'` は**純 LF のファイルに対して全行を CRLF と誤報告する**（実測＝441 行のファイルで 441 と出たが `tr -cd '\r' | wc -c` は 0）。申し送り 240 番台の `file` コマンドの較正とは別種。**CRLF の判定は `tr -cd '\r' | wc -c` で行うこと。**
+- **⚠ 道具の罠（9 つ目）**: `cargo test -p areka --lib` は areka が bin crate のため `error: no library targets found` で **exit 101** を返す＝**テスト失敗と区別が付かない**。areka は `--lib` を付けずに走らせること。

@@ -121,10 +121,12 @@ crates/wintf/src/ecs/window/
 └── zorder_group_order_tests.rs     # 実窓での連鎖適用テスト（command_batch_tests.rs:633 と同型）
 
 crates/areka/src/
-├── placement/zorder_group_ledger.rs        # 台帳の正本＋トークン解釈・正規化・拒否判定（純関数・Win32/ECS 非依存）
-├── placement/zorder_group_ledger_tests.rs  # 9 分岐＋正規化＋actor 非依存の決定論テスト（兄弟配置）
-├── emo2_boot/zorder_cue.rs                 # ZOrderCueSink（自己選別・トークン送出・起床旗）＋ZOrderDirective
-└── emo2_boot/frame/zorder_drain.rs         # drain 相（指令適用→台帳→Entity 射影→ZOrderGroups 書込→pending）
+├── placement/zorder_group_ledger.rs              # 台帳の正本＋トークン解釈・正規化・拒否判定（純関数・Win32/ECS 非依存）
+├── placement/zorder_group_ledger_tests.rs        # 7 分岐＋正規化＋actor 非依存の決定論テスト（兄弟配置）
+├── placement/zorder_group_ledger_state_tests.rs  # 残り 3 分岐（再指定拒否・解除・descript 適用）の状態遷移テスト（兄弟配置）
+├── emo2_boot/zorder_cue.rs                       # ZOrderCueSink（自己選別・トークン送出・起床旗）＋ZOrderDirective
+├── emo2_boot/frame/zorder_drain.rs               # drain 相（指令適用→台帳→Entity 射影→ZOrderGroups 書込→pending）
+└── emo2_boot/frame/zorder_descript.rs            # descript 基底の着席（起動時適用・タグと同一の解釈経路）
 ```
 
 ### Modified Files
@@ -134,7 +136,7 @@ crates/areka/src/
 - `crates/wintf/src/ecs/world/tick_wake.rs` — module doc の ZORDER 生産者行に `zorder_group_maintain` を追記（doc のみ）
 - `crates/wintf/src/ecs/window/zorder_pair_deferred_vocabulary_tests.rs` — `PRODUCTION_FILES` 5→8（新設 3 本追加）＋件数定数
 - `crates/areka/src/placement/spawn.rs` — `wire_zorder_pair` のチェーンを `(establish, pair_maintain, group_maintain).chain()` へ拡張（1 行）＋`KeepDirectlyAbove` doc の「スコープ間には宣言を張らない」節を二状態の記述へ改訂
-- `crates/areka/src/placement/spawn_zorder_pair_deferred_tests.rs` — `PRODUCTION_FILES` 2→5（ledger・zorder_cue・frame/zorder_drain.rs 追加）＋件数定数
+- `crates/areka/src/placement/spawn_zorder_pair_deferred_tests.rs` — `PRODUCTION_FILES` 2→6（ledger・zorder_cue・frame/zorder_drain.rs・frame/zorder_descript.rs 追加）＋件数定数
 - `crates/areka/src/emo2_boot/mod.rs` — チャネル 1 組＋`sinks` 1 行＋`Emo2Wiring` 受け渡し（sink 追加 5 点セットの 3 点）
 - `crates/areka/src/emo2_boot/frame/wiring.rs` — `Emo2Wiring` フィールド＋`new` 引数（残り 2 点）
 - `crates/areka/src/emo2_boot/frame.rs` — `run_move_drain_phase`（:210）の直後に `run_zorder_drain_phase` を追加
@@ -218,7 +220,7 @@ sequenceDiagram
 | 9.5 | 既存ペア 5 ファイル無編集＝タグ 6 種・grep 対象 module path・起床旗・SCHEDULE_NAMES すべて不変 |
 | 10.1, 10.2 | 純関数境界（解釈・正規化・拒否・decide_group_fix・検証判定）＋ **10 分岐**の兄弟テスト |
 | 10.3 | テストは Resource／純関数単位で独立（log-capture-kit・temp-path-kit の cage 着地物を利用） |
-| 10.4 | 新設 6 本（wintf 3・areka 3＝ledger・zorder_cue・zorder_drain）を両肺の `PRODUCTION_FILES` へ追加＋件数定数更新 |
+| 10.4 | 新設 7 本（wintf 3・areka 4＝ledger・zorder_cue・zorder_drain・zorder_descript）を両肺の `PRODUCTION_FILES` へ追加＋件数定数更新 |
 | 11.1 | `pair_fix_command` と同じ `WindowPos` 経由の型導出（`SWP_NOMOVE\|NOSIZE\|NOACTIVATE` 自動） |
 | 11.2, 11.3 | consumer_ledger キー拡張（名前＋選別子）＝`set` の他サブコマンドの余地を残す・1 出現高々 1 担当 |
 | 11.4 | 新設ファイルを先送り語彙検査の対象へ追加（10.4 と同じ変更で自動成立） |

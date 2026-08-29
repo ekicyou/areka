@@ -1,13 +1,13 @@
 //! 先送りした正典語彙が areka 側の本番コードに入り込んでいないこと、および窓の既定が
 //! 「常時最前面ではない・最小化もタスクバー露出も足していない」ままであることを
-//! 固定するテスト（要件 8.1／8.3／8.4／8.5）。
+//! 固定するテスト（要件 8.1／8.3／8.4／8.5、および重なり順のグループ機構の要件 10.4／11.4）。
 //!
 //! # 兄弟ファイルとの分担
 //!
-//! wintf 側の本番ファイル 5 本に対する同じ形の走査は
+//! wintf 側の本番ファイル 8 本に対する同じ形の走査は
 //! `crates/wintf/src/ecs/window/zorder_pair_deferred_vocabulary_tests.rs` が持つ。
-//! 本ファイルは areka 側の 2 本——ペア宣言を付ける組立（`spawn.rs`）と、その記録
-//! （`diag.rs`）——を受け持つ。
+//! 本ファイルは areka 側の 6 本——ペア機構の 2 本（ペア宣言を付ける組立＝`spawn.rs`、
+//! その記録＝`diag.rs`）と、グループ機構が新設した 4 本——を受け持つ。
 //!
 //! 窓の拡張スタイルを完全一致で押さえるのは
 //! `spawn_assembly_tests::t_i2_no_window_has_ws_ex_topmost` である（`ex_style` と `style` の
@@ -19,11 +19,16 @@
 //!
 //! # 走査の範囲
 //!
-//! 要件 8.3〜8.5 は「**本フィーチャーにおいて**足さない」ことを言う。よって走査は
-//! 本フィーチャーの areka 側の本番コードが載っている 2 ファイルに限る。`main.rs` の
-//! 結線 1 行は他フィーチャーと共有の巨大ファイルであり、全文走査に入れると他所の追記で
-//! 赤くなって本フィーチャーへの誤った告発になるため入れない（結線が呼ぶ
-//! `wire_zorder_pair` の本体は `spawn.rs` にあり、走査の対象に入っている）。
+//! 要件 8.3〜8.5（ペア機構）と要件 11.4（グループ機構）は、いずれも「**本フィーチャーに
+//! おいて**足さない」ことを言う。よって走査は、2 つの機構が全部を書いた areka 側の本番
+//! ファイルに限る。`main.rs` の結線 1 行や、`balloon_visibility_phase.rs`・`frame.rs` の
+//! ような他フィーチャーと共有の巨大ファイルは、全文走査に入れると他所の追記で赤くなって
+//! 本フィーチャーへの誤った告発になるため入れない（結線が呼ぶ `wire_zorder_pair` の本体は
+//! `spawn.rs` にあり、走査の対象に入っている）。
+//!
+//! グループ機構が新設した本番ファイルが走査から漏れないことは、
+//! `the_scanned_roster_covers_every_zorder_production_source_in_this_crate` が
+//! 実在するファイルと名簿の両方向で見張る（要件 10.4）。
 //!
 //! # 行コメントを除いてから探す理由
 //!
@@ -44,8 +49,21 @@ use wintf::ecs::WindowStyle;
 use super::spawn_ghost_windows;
 use super::test_support::{ghost_window_entities, titles, two_scope_placements};
 
-/// 本フィーチャーの areka 側本番ファイル（`CARGO_MANIFEST_DIR` からの相対）。
-const PRODUCTION_FILES: [&str; 2] = ["src/placement/spawn.rs", "src/placement/diag.rs"];
+/// 重なり順の 2 機構が全部を書いた areka 側の本番ファイル（`CARGO_MANIFEST_DIR` からの相対）。
+///
+/// 前半 2 本はペア機構（`ghost-window-zorder`）——ペア宣言を付ける組立（`spawn.rs`）と
+/// その記録（`diag.rs`）。後半 4 本はグループ機構（`areka-P0-scope-zorder-pinning`）が
+/// 新設したもの。下の
+/// `the_scanned_roster_covers_every_zorder_production_source_in_this_crate` が
+/// 「実在する `zorder_` 系の本番ファイルが 1 本残らずここに載っている」ことを機械で見張る。
+const PRODUCTION_FILES: [&str; 6] = [
+    "src/placement/spawn.rs",
+    "src/placement/diag.rs",
+    "src/placement/zorder_group_ledger.rs",
+    "src/emo2_boot/zorder_cue.rs",
+    "src/emo2_boot/frame/zorder_drain.rs",
+    "src/emo2_boot/frame/zorder_descript.rs",
+];
 
 /// 先送り語彙（小文字）と、それが何の入口かの説明。
 ///
@@ -78,8 +96,12 @@ const DEFERRED_NEEDLES: [(&str, &str); 9] = [
     ),
 ];
 
+fn source_path(relative: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(relative)
+}
+
 fn read_source(relative: &str) -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(relative);
+    let path = source_path(relative);
     std::fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("本番ファイルを読めなかった（{}）: {e}", path.display()))
 }
@@ -253,6 +275,98 @@ fn ghost_windows_carry_no_always_on_top_minimize_or_taskbar_bits() {
             style.ex_style.contains(WS_EX_TOOLWINDOW),
             "タスクバー・アプリ切り替え一覧に出さない印が外れている（要件 8.5）: {:?}",
             style.ex_style
+        );
+    }
+}
+
+/// `src` 配下の `.rs` を再帰で集め、`CARGO_MANIFEST_DIR` からの相対パス（`/` 区切り）で返す。
+fn all_source_files() -> Vec<String> {
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut stack = vec![manifest.join("src")];
+    let mut found = Vec::new();
+    while let Some(dir) = stack.pop() {
+        let entries = std::fs::read_dir(&dir)
+            .unwrap_or_else(|e| panic!("ソースの木を辿れなかった（{}）: {e}", dir.display()));
+        for entry in entries {
+            let path = entry.expect("ディレクトリ項目を読めなかった").path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.extension().and_then(|e| e.to_str()) == Some("rs") {
+                let relative = path
+                    .strip_prefix(&manifest)
+                    .expect("マニフェスト配下のはず")
+                    .to_string_lossy()
+                    .replace(std::path::MAIN_SEPARATOR, "/");
+                found.push(relative);
+            }
+        }
+    }
+    found.sort();
+    found
+}
+
+/// 重なり順の 2 機構（ペア・グループ）が全部を書いた areka 側の本番ファイル
+/// ＝ファイル名が `zorder_` で始まり、テストでもテスト専用の道具立てでもないもの。
+///
+/// 共有ファイルへ足した継ぎ目（`spawn.rs`／`diag.rs`）はこの名前の規則に合わないので、
+/// 名簿へ人が載せたままになる。よって下の検査は「実物 ⊆ 名簿」の向きだけを機械化し、
+/// 名簿が実物より多いことは許す（多い側は ③ が実在で押さえる）。
+fn zorder_production_sources() -> Vec<String> {
+    all_source_files()
+        .into_iter()
+        .filter(|relative| {
+            let name = relative.rsplit('/').next().unwrap_or(relative);
+            name.starts_with("zorder_")
+                && !name.ends_with("_tests.rs")
+                && !name.ends_with("_test_support.rs")
+        })
+        .collect()
+}
+
+/// 走査対象の一覧が、実在する本番ファイルへ両方向で追随していることを固定する。
+///
+/// 上の 2 つのテストは `PRODUCTION_FILES` に**載っているものだけ**を読む。名簿が実物から
+/// ずれても「無い」の主張はそのまま緑になるので、守りは静かに狭まる（新しい本番ファイルが
+/// 生えても誰も赤くならない）。ここでは
+/// ⑴ 実在する `zorder_` 系の本番ファイルが 1 本残らず名簿に載っていること、
+/// ⑵ 名簿の各項目が実在すること、
+/// の両方向を機械で確かめる。走査から外すのはテスト（`*_tests.rs`）と、`#[cfg(test)]` でしか
+/// 結線されないテスト専用の道具立て（`*_test_support.rs`）だけである。
+#[test]
+fn the_scanned_roster_covers_every_zorder_production_source_in_this_crate() {
+    let actual = zorder_production_sources();
+
+    // ① 道具の較正: 既知の正例が挙がり、既知の偽例（テスト・テスト専用の道具立て）は挙がらない。
+    assert!(
+        actual.contains(&"src/placement/zorder_group_ledger.rs".to_string()),
+        "実物の走査が効いていない（既知の本番ファイルを見つけられない）: {actual:?}"
+    );
+    assert!(
+        !actual.iter().any(|p| p.ends_with("_tests.rs")),
+        "テストファイルを本番ファイルとして数えている: {actual:?}"
+    );
+    assert!(
+        !actual
+            .iter()
+            .any(|p| p == "src/emo2_boot/frame/zorder_drain_test_support.rs"),
+        "テスト専用の道具立てを本番ファイルとして数えている: {actual:?}"
+    );
+
+    // ② 実物が名簿から漏れていない。
+    let missing: Vec<&String> = actual
+        .iter()
+        .filter(|relative| !PRODUCTION_FILES.contains(&relative.as_str()))
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "本番ファイルが先送り語彙の走査対象に載っていない（名簿へ足すこと）: {missing:?}"
+    );
+
+    // ③ 名簿の項目が実在する（改名・移動で名簿だけが取り残されない）。
+    for relative in PRODUCTION_FILES {
+        assert!(
+            source_path(relative).is_file(),
+            "走査対象の一覧に実在しないファイルが載っている: {relative}"
         );
     }
 }
