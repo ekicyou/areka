@@ -44,6 +44,8 @@ pub mod transition_diag;
 #[cfg(test)]
 pub(crate) mod transition_judge;
 mod windowposition;
+/// 台帳のグループと窓の在庫から「望む鎖」を組み立てる純関数（Win32／ECS 非依存）。
+pub(crate) mod zorder_chain_compose;
 /// スコープ窓 Z 順グループの台帳と、タグ／descript 共通のトークン解釈・拒否判定
 /// （純関数・Win32／ECS 非依存）。
 pub(crate) mod zorder_group_ledger;

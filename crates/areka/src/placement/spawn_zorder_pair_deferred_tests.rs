@@ -6,8 +6,8 @@
 //!
 //! wintf 側の本番ファイル 8 本に対する同じ形の走査は
 //! `crates/wintf/src/ecs/window/zorder_pair_deferred_vocabulary_tests.rs` が持つ。
-//! 本ファイルは areka 側の 6 本——ペア機構の 2 本（ペア宣言を付ける組立＝`spawn.rs`、
-//! その記録＝`diag.rs`）と、グループ機構が新設した 4 本——を受け持つ。
+//! 本ファイルは areka 側の 7 本——ペア機構の 2 本（ペア宣言を付ける組立＝`spawn.rs`、
+//! その記録＝`diag.rs`）と、グループ機構が新設した 5 本——を受け持つ。
 //!
 //! 窓の拡張スタイルを完全一致で押さえるのは
 //! `spawn_assembly_tests::t_i2_no_window_has_ws_ex_topmost` である（`ex_style` と `style` の
@@ -52,13 +52,14 @@ use super::test_support::{ghost_window_entities, titles, two_scope_placements};
 /// 重なり順の 2 機構が全部を書いた areka 側の本番ファイル（`CARGO_MANIFEST_DIR` からの相対）。
 ///
 /// 前半 2 本はペア機構（`ghost-window-zorder`）——ペア宣言を付ける組立（`spawn.rs`）と
-/// その記録（`diag.rs`）。後半 4 本はグループ機構（`areka-P0-scope-zorder-pinning`）が
-/// 新設したもの。下の
+/// その記録（`diag.rs`）。後半 5 本はグループ機構（`areka-P0-scope-zorder-pinning`）が
+/// 新設したもの（うち `zorder_chain_compose.rs` は鎖方式の合成層）。下の
 /// `the_scanned_roster_covers_every_zorder_production_source_in_this_crate` が
 /// 「実在する `zorder_` 系の本番ファイルが 1 本残らずここに載っている」ことを機械で見張る。
-const PRODUCTION_FILES: [&str; 6] = [
+const PRODUCTION_FILES: [&str; 7] = [
     "src/placement/spawn.rs",
     "src/placement/diag.rs",
+    "src/placement/zorder_chain_compose.rs",
     "src/placement/zorder_group_ledger.rs",
     "src/emo2_boot/zorder_cue.rs",
     "src/emo2_boot/frame/zorder_drain.rs",
