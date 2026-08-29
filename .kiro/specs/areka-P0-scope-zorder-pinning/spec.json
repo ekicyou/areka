@@ -1,22 +1,22 @@
 {
   "feature_name": "areka-P0-scope-zorder-pinning",
   "created_at": "2026-08-27T11:33:41Z",
-  "updated_at": "2026-08-27T14:20:00Z",
+  "updated_at": "2026-08-29T00:00:00Z",
   "language": "ja",
-  "phase": "tasks-generated",
+  "phase": "requirements-generated",
   "approvals": {
     "requirements": {
       "generated": true,
-      "approved": true
+      "approved": false
     },
     "design": {
       "generated": true,
-      "approved": true
+      "approved": false
     },
     "tasks": {
       "generated": true,
-      "approved": true
+      "approved": false
     }
   },
-  "ready_for_implementation": true
+  "ready_for_implementation": false
 }
