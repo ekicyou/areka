@@ -669,3 +669,11 @@ mod zorder_chain_apply_tests;
 #[cfg(test)]
 #[path = "zorder_chain_order_tests.rs"]
 mod zorder_chain_order_tests;
+
+/// 実窓での出入りの檻（解除・スプライス・破棄の非連動）。
+///
+/// 兄弟の [`zorder_chain_order_tests`] と足場を共有するため別ファイルに分けてある
+/// ——1 ファイル 1,000 行未満という本 spec の共通制約に従う。
+#[cfg(test)]
+#[path = "zorder_chain_order_lifecycle_tests.rs"]
+mod zorder_chain_order_lifecycle_tests;

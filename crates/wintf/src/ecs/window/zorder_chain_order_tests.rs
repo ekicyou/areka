@@ -104,7 +104,7 @@ const REVERSED: [usize; CHAIN_SIZE] = [3, 2, 1, 0];
 /// `ShowWindow` が落ちても 3 本とも緑のままになる——それは初版が落ちた「表示すらしない窓の
 /// 上に建った檻」への静かな逆戻りである。よって各テストは ⑴ 4 枚が実際に可視であること、
 /// ⑵ 本番の走査がその 4 枚を拾うこと（1 本目）を自己検査する。
-fn create_chain_window(title: PCWSTR) -> HWND {
+pub(super) fn create_chain_window(title: PCWSTR) -> HWND {
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
     // SAFETY: Win32 境界。自プロセス所有の 0x0 トップレベル窓を生成し、活性化を奪わずに
     // 表示状態へ移す。
@@ -131,7 +131,7 @@ fn create_chain_window(title: PCWSTR) -> HWND {
 }
 
 /// Windows から見て可視か（絵の有無ではなく `WS_VISIBLE` の意味での可視）。
-fn is_visible(hwnd: HWND) -> bool {
+pub(super) fn is_visible(hwnd: HWND) -> bool {
     // SAFETY: Win32 境界。読み取りのみ。
     unsafe { IsWindowVisible(hwnd) }.as_bool()
 }
@@ -174,7 +174,7 @@ fn destroy_all(windows: &[HWND]) {
 }
 
 /// 所有関係を外してから破棄する（後始末の唯一の入口）。
-fn teardown(windows: &[HWND]) {
+pub(super) fn teardown(windows: &[HWND]) {
     unlink_all(windows);
     destroy_all(windows);
 }
@@ -214,7 +214,7 @@ fn relative_z_order(windows: &[HWND]) -> Vec<HWND> {
 }
 
 /// 組内の並びを**添字の列**（手前から奥）で表す。
-fn z_shape(set: &[HWND]) -> Vec<usize> {
+pub(super) fn z_shape(set: &[HWND]) -> Vec<usize> {
     relative_z_order(set)
         .iter()
         .filter_map(|hwnd| set.iter().position(|w| w == hwnd))
@@ -244,7 +244,7 @@ fn place_after(hwnd: HWND, after: HWND) {
 /// 組を `order`（手前から順の添字）の並びへ揃える助走。
 ///
 /// 自分の窓どうしの相対指定だけで組む（絶対帯指定を使わない理由は module doc）。
-fn arrange_z(set: &[HWND], order: &[usize]) {
+pub(super) fn arrange_z(set: &[HWND], order: &[usize]) {
     for pair in order.windows(2) {
         place_after(set[pair[1]], set[pair[0]]);
     }
@@ -313,7 +313,7 @@ fn chain_fixture(title: PCWSTR) -> (Vec<HWND>, World, Vec<Entity>) {
 }
 
 /// 帳簿（本 spec が張った繋ぎ）を、被所有側の添字 → 所有側の添字の対で読み出す。
-fn ledger_shape(world: &mut World, members: &[Entity]) -> Vec<(usize, usize)> {
+pub(super) fn ledger_shape(world: &mut World, members: &[Entity]) -> Vec<(usize, usize)> {
     let mut found: Vec<(usize, usize)> = world
         .query::<(Entity, &CrossOwnerLink)>()
         .iter(world)
@@ -328,7 +328,7 @@ fn ledger_shape(world: &mut World, members: &[Entity]) -> Vec<(usize, usize)> {
 }
 
 /// 所有関係を添字の対で読み出す（`GetWindow(GW_OWNER)`・OS 側の現況）。
-fn owner_shape(set: &[HWND]) -> Vec<Option<usize>> {
+pub(super) fn owner_shape(set: &[HWND]) -> Vec<Option<usize>> {
     set.iter()
         .map(|h| owner_of(*h).and_then(|o| set.iter().position(|w| *w == o)))
         .collect()
