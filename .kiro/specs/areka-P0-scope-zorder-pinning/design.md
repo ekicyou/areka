@@ -30,7 +30,7 @@
 - `\![set,zorder,...]`／`\![reset,zorder]` の消費（自己選別・解釈・拒否・記録）
 - グループ台帳（唯一の正本・areka 側・scope／窓種別のまま保持）と descript `seriko.zorder` の起動時適用
 - グループ順の観測・是正・検証（wintf 側の新設維持系）と `[zorder-group]` 系の診断記録
-- COMPAT §8 への裁量 5 件＋誤記訂正 1 件の登記（要件 12）
+- COMPAT §8 への裁量（要件 12.2 の列挙 5 件は下限＝「少なくとも」・着地は 9 件）＋誤記訂正 1 件＋実機の現況 1 件＋先送りの参照 1 件の登記（要件 12・13.3／13.4）
 
 ### Out of Boundary
 
@@ -133,20 +133,20 @@ crates/areka/src/
 
 - `crates/wintf/src/ecs/window/mod.rs` — 新設 3 モジュールの登録のみ
 - `crates/wintf/src/ecs/window_proc/window_pos.rs` — 外部由来（`!is_echo`）の WINDOWPOS 変化時、グループが 1 つでもあれば `ZOrderGroups.pending` を立て `tick_wake::mark(ZORDER)`（数行。`wp.flags`／`hwndInsertAfter` の解析はしない）
-- `crates/wintf/src/ecs/world/tick_wake.rs` — module doc の ZORDER 生産者行に `zorder_group_maintain` を追記（doc のみ）
+- `crates/wintf/src/ecs/world/tick_wake.rs` — module doc の ZORDER 生産者行へ本 spec の生産者を追記（doc のみ）。着地時点で当該行（:18-21）は 5 人を名指し、うち 4 人が本 spec 由来＝`window/zorder_group_maintain.rs`・`window_proc/window_pos.rs`・areka `emo2_boot/zorder_cue.rs`・areka `emo2_boot/balloon_visibility_phase.rs`（既存は `window/zorder_pair_maintain.rs` の 1 人）
 - `crates/wintf/src/ecs/window/zorder_pair_deferred_vocabulary_tests.rs` — `PRODUCTION_FILES` 5→8（新設 3 本追加）＋件数定数
 - `crates/areka/src/placement/spawn.rs` — `wire_zorder_pair` のチェーンを `(establish, pair_maintain, group_maintain).chain()` へ拡張（1 行）＋`KeepDirectlyAbove` doc の「スコープ間には宣言を張らない」節を二状態の記述へ改訂
 - `crates/areka/src/placement/spawn_zorder_pair_deferred_tests.rs` — `PRODUCTION_FILES` 2→6（ledger・zorder_cue・frame/zorder_drain.rs・frame/zorder_descript.rs 追加）＋件数定数
-- `crates/areka/src/emo2_boot/mod.rs` — チャネル 1 組＋`sinks` 1 行＋`Emo2Wiring` 受け渡し（sink 追加 5 点セットの 3 点）
-- `crates/areka/src/emo2_boot/frame/wiring.rs` — `Emo2Wiring` フィールド＋`new` 引数（残り 2 点）
-- `crates/areka/src/emo2_boot/frame.rs` — `run_move_drain_phase`（:210）の直後に `run_zorder_drain_phase` を追加
-- `crates/areka/src/emo2_boot/balloon_visibility_phase.rs` — `show_target` 成功直後（:446 付近）に pending 点火＋`tick_wake::mark(ZORDER)`（同ファイルに tick_wake 使用の先例あり :35,113-114）
+- `crates/areka/src/emo2_boot/mod.rs` — チャネル 1 組＋`sinks` 1 行＋`Emo2Wiring` 受け渡し（sink 追加 5 点セットの 3 点）＋起動の段で shell 設定由来の基底を据える呼出（:495-500・要件 5.1）
+- `crates/areka/src/emo2_boot/frame/wiring.rs` — `Emo2Wiring` フィールド＋`new` 引数（残り 2 点）＋巡をまたいで台帳を持つ `zorder_ledger` フィールド（:95）と起動の段の入口 `seed_zorder_descript_base`（:183-195）
+- `crates/areka/src/emo2_boot/frame.rs` — `run_move_drain_phase`（:216）の直後に `run_zorder_drain_phase`（:225）を追加
+- `crates/areka/src/emo2_boot/balloon_visibility_phase.rs` — `show_target` の結果を畳んだ直後（:477 の `note_balloon_shown`）に pending 点火＋`tick_wake::mark(ZORDER)`（:537-543。同ファイルに tick_wake 使用の先例あり :36,114-115）
 - `crates/areka/src/emo2_boot/consumer_ledger.rs` — キーを（名前＋選別子）へ拡張し `("set","zorder")`／`("reset","zorder")` を `ZOrderSink` として登記
-- `crates/areka/src/main.rs` — 起動シーム（:645-664 付近）で `config.zorder_raw` を台帳へ適用する呼出 1 本
-- `doc/COMPAT_ARCHITECTURE.md` — §8 へ裁量 5 行＋誤記訂正 1 行
+- `crates/areka/src/main.rs` — **適用は行わない**。起動窓の準備が読んだ `config.zorder_raw` を生のまま搬送するだけ＝`open_startup_window` の内側で写し（:664）`StartupDescriptValues` へ載せ（:721）、呼び手が取り出して（:209）`wire_emo2_boot` へ渡す（:235）。台帳への適用は結線の側（`emo2_boot/mod.rs:500` → `frame/wiring.rs:194-195` → `frame/zorder_descript.rs:61`）にあり、`set_descript_base`／`apply_descript_base`／`seed_zorder_descript_base` の呼出は main.rs に 1 件も無い（下の「descript 起動時適用」節と同じ事実）
+- `doc/COMPAT_ARCHITECTURE.md` — §8 へ 12 行（裁量 9・実機の現況 1・誤記訂正 1・先送りプロパティ 1）
 - `crates/wintf/src/ecs/window/zorder_pair.rs` ほか既存ペア 4 ファイル — **編集しない**（`KeepDirectlyAbove` の doc 改訂は areka 側 spawn.rs の doc が対象）
 
-> 注: 「スコープ間には宣言を張らない」の記述は wintf `zorder_pair.rs:42-45` と areka `spawn.rs:517-530` の 2 箇所にある。wintf 側は**ペア機構自身の**宣言規則として今も真（グループは別語彙）なので無編集とし、areka 側 spawn.rs の doc にだけ「グループ機構（本 spec）は別系統で列を宣言する」旨を追記する。
+> 注: 「スコープ間には宣言を張らない」の記述は wintf `zorder_pair.rs:42-45` と areka `spawn.rs:530-532` の 2 箇所にある。wintf 側は**ペア機構自身の**宣言規則として今も真（グループは別語彙）なので無編集とし、areka 側 spawn.rs の doc にだけ「グループ機構（本 spec）は別系統で列を宣言する」旨を追記する（着地済み＝`spawn.rs:535-542`）。
 
 ## System Flows
 
@@ -198,7 +198,7 @@ sequenceDiagram
 | 4.1, 4.2 | `Reset` 指令→タグ由来グループ全解除→descript 基底を再適用（無ければ空） |
 | 4.3 | 解除後は台帳が空／基底のみ＝再指定拒否の対象外 |
 | 4.4 | sink の自己選別（`reset`＋第 1 引数 zorder 以外は debug スキップ・重なり不変） |
-| 5.1 | main.rs 起動シームで `zorder_raw` を台帳へ適用（最初の維持巡より前） |
+| 5.1 | main.rs 起動シームは `zorder_raw` を搬送するのみ・台帳への適用は `wire_emo2_boot` の側（最初の維持巡より前） |
 | 5.2 | descript 値はタグと同一の `parse_zorder_tokens` で解釈 |
 | 5.3 | KV 後勝ち単一値＝高々 1 グループ（§8 登記・要件 12.2 済） |
 | 5.4 | 解釈失敗は warn 記録＋グループ 0 適用＋起動継続 |
@@ -224,7 +224,7 @@ sequenceDiagram
 | 11.1 | `pair_fix_command` と同じ `WindowPos` 経由の型導出（`SWP_NOMOVE\|NOSIZE\|NOACTIVATE` 自動） |
 | 11.2, 11.3 | consumer_ledger キー拡張（名前＋選別子）＝`set` の他サブコマンドの余地を残す・1 出現高々 1 担当 |
 | 11.4 | 新設ファイルを先送り語彙検査の対象へ追加（10.4 と同じ変更で自動成立） |
-| 12.1, 12.2 | COMPAT §8 へ裁量 5 行（二状態・再指定全体拒否・descript 明示記法受理・隣接優先・descript 後勝ち 1 グループ） |
+| 12.1, 12.2 | COMPAT §8 へ裁量 9 行——要件 12.2 の列挙 5 件（二状態・再指定全体拒否・descript 明示記法受理・隣接優先・descript 後勝ち 1 グループ）は下限で、実装中に確定した 4 件（語の小文字ちょうど・基底据え直しの衝突時の終状態・`\![reset,zorder,...]` の余分なトークン受理・`origin=zorder-pair` の流用）を加えた。あわせて実機の現況（数値モードが実機で未成立＝要件 1.1／1.2 未達）を 1 行登記 |
 | 12.3 | §8 へ訂正行（`seriko.zorder`＝窓の重なり順。完了アーカイブ非接触＝裁定済み） |
 | 12.4 | §8 の二状態行に完了 spec 要件 3 との関係を明記 |
 | 13.1〜13.5 | 実装なし＝現行 NOT_FOUND 応答維持・sylphya 非接触・語彙正本＝`areka-P0-zorder-property/brief.md`（起票済み）・§8 から参照 |
@@ -318,8 +318,8 @@ impl ZOrderGroupLedger {
 
 #### descript 起動時適用（main.rs シーム）
 
-- `config.zorder_raw`（`config.rs:104`・現在消費者ゼロ）を `parse_zorder_tokens` で解釈し `set_descript_base` へ。解釈失敗は **warn**（`logging.md:23-29` の「無効なパラメーター」区分）＋グループ 0 適用＋起動継続（5.4）
-- 適用位置は `spawn_ghost_windows`（main.rs:660）の後・最初の FrameFinalize より前＝タグ実行を待たずに最初の維持巡から効く（5.1）
+- `config.zorder_raw`（`config.rs:104`＝shell descript の生転記。本 spec の着地までは消費者ゼロだった）を `parse_zorder_tokens` で解釈し `set_descript_base` へ。解釈失敗は **warn**（`logging.md:23-29` の「無効なパラメーター」区分）＋グループ 0 適用＋起動継続（5.4）
+- 適用位置は `wire_emo2_boot` の内側＝`main.rs:229` → `emo2_boot/mod.rs:500` `Emo2Wiring::seed_zorder_descript_base` → `frame/zorder_descript.rs::apply_descript_base`。台帳が `Emo2Wiring` に属する（6.2 の結線）ため、main.rs の呼び出し位置ではなく結線の側から据える。実行順は `open_startup_window`（`main.rs:207`。その内側 `main.rs:683` で `spawn_ghost_windows` を呼ぶ）の後・`insert_non_send`（`mod.rs:501`）より前・最初の FrameFinalize より前＝タグ実行を待たずに最初の維持巡から効く（5.1）
 
 #### consumer_ledger 拡張（`emo2_boot/consumer_ledger.rs`）
 
