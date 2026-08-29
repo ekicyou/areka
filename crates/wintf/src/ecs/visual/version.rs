@@ -8,7 +8,7 @@ use bevy_ecs::prelude::*;
 ///
 /// 不変条件: transform 由来で bump してはならない。破るとスクロールが
 ///           全ノード内容 damage 化し、フェーズ3 の blit を無効化する。
-#[derive(Component, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
 #[repr(transparent)]
 pub struct VisualVersion(pub u64);
 

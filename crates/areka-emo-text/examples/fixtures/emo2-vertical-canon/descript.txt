@@ -1,0 +1,30 @@
+charset,UTF-8
+type,balloon
+name,kakukaku for emo-gs (vertical variant)
+homeurl,https://raw.githubusercontent.com/ekicyou/emo-gs/stable/ghost/emo-gs/emo-kakukaku/
+
+craftman,ekicyou
+craftmanw,えちょ
+craftmanurl,https://ekicyou.github.io/2020/08/10/emo.html
+
+
+use_self_alpha,1
+
+vertical,1
+
+
+wordwrappoint.x,-34
+wordwrappoint.y,150
+validrect.top,0
+validrect.bottom,0
+validrect.left,0
+validrect.right,0
+
+
+
+font.name,Yu Gothic UI
+font.height,28
+
+font.color.r,0
+font.color.g,0
+font.color.b,0

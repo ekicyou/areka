@@ -24,6 +24,11 @@
 //!   持つ。数値化済みの [`WindowPosition`] とは別枠であり、数値化できないキーワードや
 //!   `windowposition.limit` の生値を解釈せず保持する（windowposition-limit 要件 1.1/4.1。
 //!   `WindowPosition` と既存アクセサは無改変＝同要件 5.1）。
+//! - 同じく `vertical_raw` を additive な生文字列転記フィールドとして持つ。これは上 2 者と異なり
+//!   **areka 拡張キーではなく SSP 正典キー**（`vertical,0`/`1`）であるが、additive にする理由は
+//!   同じ——`new` の署名を伸ばさずに追加でき、既存の解析結果を 1 つも変えないためである
+//!   （balloon-vertical-canon 要件 1.4/1.8・設計 DD3）。値の解釈（`0`/`1` の判定・語彙外値の
+//!   縮退・警告）は下流の書字方向の解決層（`areka-emo-text::writing`）の責務である。
 //!
 //! 構築は同クレートの `balloon::parse`（写像）とテストが公開/クレートパスで行う。
 //! `new` コンストラクタ＋read-only accessor という不変値オブジェクト流儀（`sakura::SurfaceArg` 流儀）。
@@ -44,6 +49,7 @@ pub struct BalloonModel {
     budoux_newline: Option<String>,
     cursor: BalloonCursor,
     windowposition_raw: WindowPositionRaw,
+    vertical_raw: Option<String>,
 }
 
 impl BalloonModel {
@@ -57,6 +63,11 @@ impl BalloonModel {
     /// `WindowPositionRaw::default()`（両項未指定）で初期化する。生値を持つ写像は
     /// [`BalloonModel::with_windowposition_raw`] で相乗りさせる
     /// （windowposition-limit 要件 1.1/4.1・既存呼び出し側は無改変＝要件 5.1）。
+    ///
+    /// SSP 正典キー `vertical` の生値 `vertical_raw` も同様に additive 追加フィールドであり、
+    /// 本コンストラクタでは `None`（未宣言）で初期化する。生値を持つ写像は
+    /// [`BalloonModel::with_vertical_raw`] で相乗りさせる
+    /// （balloon-vertical-canon 要件 1.4/1.8・既存 30 呼出箇所は無改変）。
     pub fn new(
         windowposition: WindowPosition,
         origin: Origin,
@@ -76,6 +87,7 @@ impl BalloonModel {
             budoux_newline,
             cursor: BalloonCursor::default(),
             windowposition_raw: WindowPositionRaw::default(),
+            vertical_raw: None,
         }
     }
 
@@ -94,6 +106,17 @@ impl BalloonModel {
     /// マージ済み生値を相乗りさせるために消費する（既存呼び出し側は `new` のまま不変・要件 5.1）。
     pub fn with_windowposition_raw(mut self, windowposition_raw: WindowPositionRaw) -> Self {
         self.windowposition_raw = windowposition_raw;
+        self
+    }
+
+    /// SSP 正典キー `vertical` の生文字列を差し替えた値を返す additive ビルダ
+    /// （`with_cursor`／`with_windowposition_raw` 流儀）。
+    ///
+    /// `new` で基層を組んだ後、`balloon::parse` の KV 写像が 2 層マージ済みの `vertical` 生値を
+    /// 相乗りさせるために消費する（既存呼び出し側は `new` のまま不変・balloon-vertical-canon
+    /// 要件 1.4/1.8）。未宣言は `None` を渡す。
+    pub fn with_vertical_raw(mut self, vertical_raw: Option<String>) -> Self {
+        self.vertical_raw = vertical_raw;
         self
     }
 
@@ -156,6 +179,16 @@ impl BalloonModel {
     /// 本フィールドの追加で一切変化しない（要件 5.1）。
     pub fn windowposition_raw(&self) -> &WindowPositionRaw {
         &self.windowposition_raw
+    }
+
+    /// SSP 正典キー `vertical` の生文字列を読み取る（balloon-vertical-canon 要件 1.4）。
+    ///
+    /// 2 層マージ済みの生値をそのまま転記したもの（`writing_mode`／`budoux_newline` 流儀）。
+    /// `0`/`1` の検証・語彙外値の縮退・警告は下流の書字方向の解決層の責務であり、ここでは
+    /// 一切判定しない。未宣言は `None`、宣言は `Some(_)`（空文字列 `Some("")` を含む）であり、
+    /// 両者は潰されずに区別される（共存規則の判定に宣言の有無が要るため）。
+    pub fn vertical_raw(&self) -> Option<&str> {
+        self.vertical_raw.as_deref()
     }
 }
 

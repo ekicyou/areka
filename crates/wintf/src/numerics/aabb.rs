@@ -1,4 +1,6 @@
+use super::calc_hash::*;
 use super::point2::*;
+use core::hash::*;
 use core::ops::*;
 use windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F;
 use windows_numerics::*;
@@ -6,6 +8,24 @@ use windows_numerics::*;
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[repr(transparent)]
 pub struct Aabb(pub D2D_RECT_F);
+
+impl CalcHash for Aabb {
+    #[inline]
+    fn calc_hash<H: Hasher>(&self, state: &mut H) {
+        let r = &self.0;
+        r.left.calc_hash(state);
+        r.top.calc_hash(state);
+        r.right.calc_hash(state);
+        r.bottom.calc_hash(state);
+    }
+}
+
+impl Hash for Aabb {
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.calc_hash(state);
+    }
+}
 
 impl Aabb {
     pub const fn new(left: f32, top: f32, right: f32, bottom: f32) -> Self {

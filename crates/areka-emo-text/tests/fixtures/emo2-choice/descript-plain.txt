@@ -14,8 +14,6 @@ font.color.g,0
 font.color.b,0
 
 // バルーン幾何（descript-cursor.txt と同値）。
-origin.x,0
-origin.y,0
 validrect.top,5
 validrect.left,5
 validrect.right,-5

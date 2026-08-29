@@ -12,8 +12,6 @@ use_self_alpha,1
 
 writing_mode,vertical_rl
 
-origin.x,0
-origin.y,0
 
 wordwrappoint.x,-34
 wordwrappoint.y,150
