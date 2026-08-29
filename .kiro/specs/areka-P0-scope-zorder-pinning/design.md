@@ -48,6 +48,14 @@
 - 鎖を成立させるための**後押し 1 回**（鎖の先頭を 2 番目の直後へ差し直す。§12.2 実測 9 で形を確定）
 - `[zorder-chain]` 系の診断記録と、`[zorder-group] applied`／`rejected` の維持
 - COMPAT §8 への裁量登記（要件 12・13.3／13.4）
+- **実窓の檻を 1 本だけ areka 側へ置く**（`crates/areka/src/placement/zorder_chain_tail_order_tests.rs`）——
+  要件 15 の並びの導出（未指定スコープを全グループの後ろへ・スコープ ID 昇順）は areka の
+  `compose_chain` が持ち、**wintf は areka を import できない**（下記 Allowed Dependencies）。
+  よってこの主題を wintf 側の実窓の檻へ置くと、檻が期待する並びを檻自身が組むことになり、
+  測っているのが自分の入力だけになる。areka 側へ置くことで「タグの語彙 → 台帳 → 合成（areka）
+  → 適用系（wintf）→ 実窓の重なり」を 1 本に繋いで測る。依存の向きは areka → wintf のままであり、
+  `#[cfg(test)]` ゲート済み・名簿の走査は `*_tests.rs` を除外するので本番の名簿には影響しない
+  （task 4.3・コントローラ裁定で認可）
 
 ### Out of Boundary
 
@@ -179,7 +187,8 @@ graph TB
 ```
 crates/areka/src/placement/
 ├── zorder_chain_compose.rs              # 鎖合成の純関数（グループ＋窓の在庫 → 横断 edge 列）
-└── zorder_chain_compose_tests.rs        # 合成の分岐網羅（実機不要）
+├── zorder_chain_compose_tests.rs        # 合成の分岐網羅（実機不要）
+└── zorder_chain_tail_order_tests.rs     # 【実窓】未指定スコープの後方参加＝スコープ ID 昇順（task 4.3・下記「実窓の檻を 1 本だけ areka 側へ置く」）
 
 crates/wintf/src/ecs/window/
 ├── zorder_chain.rs                      # Resource / Component / 差分の純関数 / 後押しの選定 / 記録の唯一の入口
@@ -188,8 +197,15 @@ crates/wintf/src/ecs/window/
 ├── zorder_chain_tests.rs                # 差分・後押し選定・不変条件（偽ハンドル）
 ├── zorder_chain_diag_tests.rs           # 記録行の逐語固定
 ├── zorder_chain_apply_tests.rs          # 適用系の巡（偽ハンドル＋記録捕捉）
-└── zorder_chain_order_tests.rs          # 実窓 4 枚での最終形・解除・スプライス・破棄の非連動
+├── zorder_chain_order_tests.rs          # 【実窓】成立・攪乱・背面回り＋実窓の足場（窓の作り・順序の走行器・助走・後始末）（task 4.1）
+├── zorder_chain_order_lifecycle_tests.rs # 【実窓】解除・スプライス・破棄の非連動（task 4.2）
+└── zorder_chain_order_outsider_tests.rs # 【実窓】鎖の外どうしの相対順・既定状態＝非強制（task 4.3）
 ```
+
+> 実窓の檻が 4 ファイルに分かれているのは、足場を共有しつつ 1 ファイル 1,000 行未満という
+> 本 spec の共通制約を守るためである（`file_length_guard_test.rs` の例外表は触らない）。
+> 3 本は wintf の `zorder_chain_apply.rs` 末尾に `#[cfg(test)]` ＋ `#[path]` で登記し、
+> areka の 1 本は `zorder_chain_compose.rs` 末尾に同じ形で登記する。
 
 **既に着地済みの実測檻（本設計の土台の証跡・恒久保存）**
 

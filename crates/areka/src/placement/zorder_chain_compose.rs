@@ -191,3 +191,12 @@ fn is_intra_scope_pair(front: &GroupElement, back: &GroupElement) -> bool {
 #[cfg(test)]
 #[path = "zorder_chain_compose_tests.rs"]
 mod tests;
+
+/// 未指定スコープの後方参加を**実窓**で固定する檻（要件 15.1／15.2）。
+///
+/// 並びの導出（本モジュール）と実窓への書き込み（wintf の適用系）を 1 本に繋いで測る。
+/// wintf は areka を import できないので、この主題を wintf 側へ置くと「檻が期待する並びを
+/// 檻自身が組む」形になり、測っているのが自分の入力だけになる。
+#[cfg(test)]
+#[path = "zorder_chain_tail_order_tests.rs"]
+mod zorder_chain_tail_order_tests;

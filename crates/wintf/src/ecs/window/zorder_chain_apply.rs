@@ -677,3 +677,11 @@ mod zorder_chain_order_tests;
 #[cfg(test)]
 #[path = "zorder_chain_order_lifecycle_tests.rs"]
 mod zorder_chain_order_lifecycle_tests;
+
+/// 実窓での**縛らないもの**の檻（鎖の外どうしの相対順・既定状態＝非強制）。
+///
+/// 兄弟 2 本と足場を共有するため別ファイルに分けてある——1 ファイル 1,000 行未満という
+/// 本 spec の共通制約に従う。
+#[cfg(test)]
+#[path = "zorder_chain_order_outsider_tests.rs"]
+mod zorder_chain_order_outsider_tests;
