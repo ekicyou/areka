@@ -572,3 +572,9 @@ mod state_tests;
 #[cfg(test)]
 #[path = "zorder_group_branch_coverage_tests.rs"]
 mod branch_coverage_tests;
+
+// 先送りしたプロパティ `currentghost.seriko.zorder` の不提供を固定する檻（要件 13.1／13.2／13.5）。
+// 台帳の兄弟に置くのは、要件 13.2 後段「窓の重なりの状態を変更しない」の主張に台帳が要るため。
+#[cfg(test)]
+#[path = "zorder_property_deferral_tests.rs"]
+mod property_deferral_tests;
