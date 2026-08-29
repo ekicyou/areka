@@ -6,6 +6,8 @@
 
 **入力**: requirements.md（改訂第 2 版・確定）・research.md（§10 差し戻しの根拠／§11 ギャップ分析／**§12 設計前実測**）・`.kiro/steering/`
 **file:line は 2026-08-29 の実測値**。§12 の実測はすべて `crates/wintf/src/api_owner_chain_probe_tests.rs` で再現できる。
+**設計ディスカッション改訂（2026-08-29・議題 1）**: 未指定スコープの後方参加（要件 15・DD-11）を組み込んだ——
+指定が 1 つでもある間は**全窓が 1 本の鎖**に入る（グループは登記順・未指定はスコープ ID 昇順で後方）。
 
 ## Overview
 
@@ -22,7 +24,7 @@
 
 - 正典 3 入口（タグ 2 種＋descript）を ukadoc の意味論どおりに動かす（要件 1〜5）
 - 前後関係を所有の鎖として構成し、維持を OS の不変条件へ委ねる（要件 14）
-- 既定状態＝非強制を構造的に保存する（横断 edge を撤去すれば島が戻る・要件 6）
+- 既定状態（指定ゼロ）＝非強制を構造的に保存する（横断 edge を撤去すれば島が戻る・要件 6）。指定が 1 つでもある間は**全窓が 1 本の鎖**に入る（未指定スコープは後方・要件 15）
 - 窓の出現・破棄・再表示・利用者操作へ、**イベント応答としてのみ**追随する（要件 7・14.5）
 - 判断分岐の決定論テスト網羅と、実機ログだけで判定できるサインオフ証跡（要件 9・10）
 
@@ -41,7 +43,7 @@
 
 - `\![set,zorder,...]`／`\![reset,zorder]` の消費（自己選別・解釈・拒否・記録）とグループ台帳（唯一の正本・areka 側）
 - shell descript `seriko.zorder` の起動時適用
-- **横断 edge**——グループの並びのうち**スコープをまたぐ連続対**に対して張る所有関係。書込先はキャラ窓（現在 owner を持たない窓）が原則
+- **横断 edge**——全窓の鎖の並び（グループ登記順＋未指定スコープの後方配置＝要件 15）のうち**スコープをまたぐ連続対**に対して張る所有関係。書込先はキャラ窓（現在 owner を持たない窓）が原則
 - 横断 edge の帳簿（`CrossOwnerLink`）と、その撤去・張り替え・スプライス
 - 鎖を成立させるための**後押し 1 回**（鎖の先頭を 2 番目の直後へ差し直す。§12.2 実測 9 で形を確定）
 - `[zorder-chain]` 系の診断記録と、`[zorder-group] applied`／`rejected` の維持
@@ -54,7 +56,6 @@
 - 窓の位置・寸法（`enqueue_window_set_pos`／`placement/follow/window_move.rs`＝並走 spec の領域）。本 spec は窓を動かさない
 - 窓状態（常時最前面・最小化・全画面連動）・タスクバーへの出方・クリック透過（要件 11.4／11.5）
 - sylphya 語彙表（`vocab/dotted.rs`）——名前だけの先行登録もしない（要件 13.5）
-- **グループに属さない窓を鎖へ加えること**（既定＝非強制の保存を優先・要件 12.2 の裁量として登記）
 - 外部要因（他プロセスによる `GWLP_HWNDPARENT` 書換）で鎖が壊れた場合の**検知**（§12.7-7 の裁定。観測系を置くと要件 14.2 へ逆戻りする）
 
 ### Allowed Dependencies
@@ -225,7 +226,7 @@ crates/wintf/src/ecs/window/
 | `crates/wintf/src/ecs/window/zorder_pair_deferred_vocabulary_tests.rs` | `PRODUCTION_FILES` 名簿（`:76` の 8 件）を更新（要件 10.4） |
 | `crates/wintf/src/ecs/window/zorder_pair_maintain.rs` | **doc 段落のみ訂正**（`:258-262`「スコープをまたぐ owner はそもそも存在しない」は本 spec が無効化する事実）。コードは 1 行も変えない |
 | `.kiro/specs/.../signoff-scan.ps1`／`signoff-procedure.md`／`real-machine-signoff.md` | 判定語の差し替え（後述「実機サインオフの改訂」） |
-| `doc/COMPAT_ARCHITECTURE.md` §8 | 裁量 10 件・訂正 1 件・先送りの参照 1 件の登記（要件 12・13） |
+| `doc/COMPAT_ARCHITECTURE.md` §8 | 裁量 11 件・訂正 1 件・先送りの参照 1 件の登記（要件 12・13） |
 
 ### 退役するファイル（前進コミットで削除・履歴は巻き戻さない）
 
@@ -300,14 +301,14 @@ stateDiagram-v2
 | 2.2 | `bN`／`sN` の省略記法 | `zorder_group_ledger` | 語彙定数（小文字ちょうど） | — |
 | 2.3 | モード混在は全体拒否 | `zorder_group_ledger` | `ZOrderReject::ModeMixed` | `[zorder-group] rejected` |
 | 2.4 | スコープ内隣接を優先し記録 | `zorder_group_ledger` | `Normalization.reordered` | `[zorder-group] applied` の `normalized=` 欄 |
-| 2.5 | グループ外のスコープの窓を動かさない | `zorder_chain_compose`（edge はグループ内の連続対のみ） | 不変条件③ | — |
+| 2.5 | グループ外の窓への作用は後方配置に限る（要件 15 へ置換） | `zorder_chain_compose`（未指定スコープは後方ブロックとしてのみ扱う） | テール合成（DD-11） | — |
 | 2.6 | 片方だけの指名は相棒を暗黙に畳み込む | `zorder_group_ledger`（**新規**） | `Normalization.implied_partner` | `[zorder-group] applied` の `normalized=` 欄 |
 | 3.1 | 重複しないなら追加 | `ZOrderGroupLedger::try_add_tag_group` | — | — |
 | 3.2 | 既属スコープを含めば全体拒否 | 同上 | `ZOrderReject::CrossGroupRedesignation` | `[zorder-group] rejected` |
 | 3.3 | `sN`／`bN` と `N` を同一スコープ扱い | `colliding_scopes` | — | — |
 | 3.4 | タグ内の同一窓重複は全体拒否 | `zorder_group_ledger` | `ZOrderReject::DuplicateElement` | `[zorder-group] rejected` |
 | 3.5 | `bN` と `sN` は別の窓 | `zorder_group_ledger` | 重複判定の粒度＝窓 | — |
-| 3.6 | グループ間の相対順を規定しない | `zorder_chain_compose`（グループをまたぐ edge を作らない） | 不変条件④ | — |
+| 3.6 | グループ間は登記順で確定（先に登記が手前） | `zorder_chain_compose`（登記順で 1 本に連結） | 合成の順序規則（DD-11） | — |
 | 3.7 | 個数上限を設けない | `ZOrderGroupLedger`（`Vec`） | — | — |
 | 4.1 | reset で descript 既定へ戻る | `ZOrderGroupLedger::reset_to_descript`・鎖の撤去 | `plan_chain_ops` の `Detach` | 状態遷移「鎖→島」 |
 | 4.2 | descript が無ければ既定状態へ | 同上 | — | 同上 |
@@ -318,8 +319,8 @@ stateDiagram-v2
 | 5.3 | 1 指定＝1 グループ | `set_descript_base` | — | — |
 | 5.4 | 解釈不能なら起動継続・記録 | `frame/zorder_descript.rs` | `log_group_rejected` | `[zorder-group] rejected` |
 | 5.5 | descript 由来も再指定拒否の対象 | `ZOrderGroupLedger`（基底も `groups` に載る） | `colliding_scopes` | — |
-| 6.1 | 非グループ 2 窓の前後を規定しない | `zorder_chain_compose`（edge を作らない） | 不変条件③ | — |
-| 6.2 | 活性化で他スコープの相対順を変えない | **後押しの形**（自分の窓 2 枚だけを参照・§12.2 実測 9）。鎖の外どうしの相対順が保たれることを実測で固定 | `nudge_chain` | 鎖適用 |
+| 6.1 | 既定状態では前後を規定しない | `compose_chain`（グループがゼロなら `None`＝edge も指令もゼロ） | 早期 return | — |
+| 6.2 | 既定状態では活性化で他スコープの相対順を変えない | 既定状態では 1 命令も出さない（`None`）。指定中の全窓は鎖に入る（要件 15 の射程） | 早期 return | — |
 | 6.3 | バルーン直上は常に保つ | 既存ペア機構（無編集）＋正規化 | `KeepDirectlyAbove` | — |
 | 6.4 | 指定ゼロなら導入前と同じ | `ZOrderChainPlan` が空なら 1 命令も出さない | 早期 return | — |
 | 7.1 | 出現した窓を指定順へ | `zorder_chain_compose`＋`plan_chain_ops`（スプライス） | `Detach`→`Attach`→後押し | 状態遷移「鎖→鎖」・§12.4 |
@@ -354,11 +355,15 @@ stateDiagram-v2
 | 13.3 | 先送り語彙を完全な形で記録 | COMPAT §8 →`areka-P0-zorder-property` brief | — | — |
 | 13.4 | 追跡先を記録 | 同上 | — | — |
 | 13.5 | 語彙表へ先行登録しない | 先送り檻 | — | — |
-| 14.1 | 一直線の鎖で構成し維持を OS へ委ねる | `zorder_chain_compose`・`zorder_chain_apply` | `set_window_owner` | 全体 |
+| 14.1 | 全窓を一直線の鎖で構成し維持を OS へ委ねる | `zorder_chain_compose`・`zorder_chain_apply` | `set_window_owner` | 全体 |
 | 14.2 | 反復観測・反復是正を行わない | **退役計画**（観測・判断・発行・検証・起床促しを消す）＋結線の字面の檻 | — | — |
 | 14.3 | 活性化しても往復なしで順を保つ | — （**構造で満たす**） | OS 不変条件 | §12.1 の攪乱行 |
 | 14.4 | 星形にしない | `zorder_chain_compose` の不変条件①② | 純関数の檻 | — |
 | 14.5 | 組み替えはイベント応答として完了 | drain 相（イベントが起こした 1 度の起床の中で完結）・適用後に追加の起床を要求しない | 「適用系は `tick_wake::mark` を呼ばない」の檻 | — |
+| 15.1 | 未指定スコープを全グループの後ろへブロック配置 | `zorder_chain_compose`（テール合成・DD-11） | `compose_chain` | タグ受理〜鎖の成立 |
+| 15.2 | 後方はスコープ ID 昇順 | `zorder_chain_compose`（現況の観測なしの完全決定論） | 同上 | — |
+| 15.3 | 未指定窓の出現・破棄で組み替え | drain 相の内容差分（在庫の変化で合成結果が変わる） | `ZOrderChainPlan` の差分公開 | 7.1 と同経路 |
+| 15.4 | 全解除で後方配置も撤去し既定状態へ | `plan_chain_ops`（`Detach`・`Teardown`） | — | 状態遷移「鎖→島」 |
 
 ## Components and Interfaces
 
@@ -366,7 +371,7 @@ stateDiagram-v2
 |---|---|---|---|---|---|
 | `ZOrderCueSink`（既存・無改変） | areka | タグの自己選別と送出 | 1.7, 4.4, 11.2, 11.3 | dola `CueSink` (P0) | Event |
 | `ZOrderGroupLedger`（既存・**畳み込みを追加**） | areka | 解釈・拒否・台帳の正本 | 1, 2, 3, 4, 5, 8.1 | なし（純） | Service / State |
-| `zorder_chain_compose`（**新設**） | areka | グループ＋在庫 → 横断 edge 列（純関数） | 1.4, 2.5, 3.6, 6.1, 7.1, 8.4, 10.1, 14.1, 14.4 | `GhostWindows` (P0) | Service |
+| `zorder_chain_compose`（**新設**） | areka | グループ＋在庫 → 横断 edge 列（純関数） | 1.4, 2.5, 3.6, 6.1, 7.1, 8.4, 10.1, 14.1, 14.4, 15.1, 15.2 | `GhostWindows` (P0) | Service |
 | `ZOrderChainPlan`（**新設**） | wintf | areka→wintf の唯一の受け口 | 6.4, 7.1, 7.3, 14.5 | bevy_ecs Resource | State |
 | `CrossOwnerLink`（**新設**） | wintf | 自分が張った edge の帳簿 | 4.1, 7.2, 8.2 | bevy_ecs Component | State |
 | `plan_chain_ops`（**新設**・純関数） | wintf | 望む edge と現況の差分（先に外す→次に張る） | 4.1, 7.1, 7.2, 10.1 | なし（純） | Service |
@@ -381,7 +386,7 @@ stateDiagram-v2
 | Field | Detail |
 |---|---|
 | Intent | 正規化済みグループと窓の在庫から、本 spec が張るべき横断 edge 列を導く |
-| Requirements | 1.4, 2.5, 3.6, 6.1, 7.1, 8.4, 10.1, 14.1, 14.4 |
+| Requirements | 1.4, 2.5, 3.6, 6.1, 7.1, 8.4, 10.1, 14.1, 14.4, 15.1, 15.2 |
 | 場所 | `crates/areka/src/placement/zorder_chain_compose.rs` |
 
 **Responsibilities & Constraints**
@@ -390,7 +395,7 @@ stateDiagram-v2
   グループから取り除かず、`absent` として返す（要件 1.4＝取り除かない・要件 8.4＝記録材料）
 - 射影後の**連続対**を走り、**同一スコープの (Balloon, Char) 対を除いた残り**を横断 edge とする。
   同一スコープ対＝既存ペア edge であり、本 spec は張らない（境界）
-- グループをまたぐ edge を**作らない**（要件 3.6）。グループに属さない窓を鎖へ加え**ない**（要件 2.5／6.1）
+- グループどうしは**登記の順**（先に登記されたグループほど手前・descript 基底が最前）で 1 本に連結する（要件 3.6）。どのグループにも属さないスコープは、**スコープ ID 昇順**のブロック（各ブロックは [Balloon, Char]）として全グループの後ろへ連結する（要件 15.1／15.2）。グループが 1 つも無ければ計画は空（既定状態・要件 6）
 
 **Dependencies**
 
@@ -402,28 +407,30 @@ stateDiagram-v2
 ##### Service Interface
 
 ```rust
-// CrossEdge と ChainGroupPlan は **wintf 側**（`ecs/window/zorder_chain.rs`）で定義し、
+// CrossEdge と ChainPlan は **wintf 側**（`ecs/window/zorder_chain.rs`）で定義し、
 // areka はそれを `use` する（Resource が運ぶ型であり、wintf は areka を import できないため）。
 // したがって両者の欄に areka 固有の型（`GroupElement` 等）は載せられない——
 // 不在要素は**正準表記の文字列**（`"b0"`／`"s1"`）で運ぶ。記録行が要るのもこの形である。
 
 pub fn compose_chain(
     groups: &[ZOrderGroup],
+    all_scopes: &[u32],                // 在庫にある全スコープ（未指定の後方参加に使う・要件 15）
     resolve: &dyn Fn(&GroupElement) -> Option<Entity>,
-) -> Vec<ChainGroupPlan>;
+) -> Option<ChainPlan>;               // グループがゼロなら None（既定状態＝1 命令も出さない）
 ```
 
-- **Preconditions**: `groups` の各要素列は台帳で正規化済み（各スコープが `[Balloon, Char]` の隣接ブロック・要件 2.4／2.6 済み）
+- **Preconditions**: `groups` の各要素列は台帳で正規化済み（各スコープが `[Balloon, Char]` の隣接ブロック・要件 2.4／2.6 済み）・登記順に並ぶ
 - **Postconditions**:
-  - `cross_edges` は `members` の連続対の部分集合であり、順序は手前から奥
+  - `groups` が空なら `None`（既定状態。edge も指令もゼロ・要件 6.1／6.4）
+  - `members` ＝ グループの連結（登記順・先に登記されたグループほど手前）＋未指定スコープのブロック（スコープ ID 昇順・各ブロックは [Balloon, Char]・要件 15.1／15.2）
+  - `cross_edges` は `members` の連続対の部分集合（同一スコープの (Balloon, Char) 対を除く）であり、順序は手前から奥
   - `members.last()` が**鎖の根**（後押しの対象）
-  - `members.len() < 2` のとき `cross_edges` は空（張る意味が無い）
   - `absent` は宣言順のまま、要素の正準表記（`"b0"`／`"s1"`）で並ぶ
 - **Invariants**（純関数の檻で固定・要件 14.4）
   1. 返り値の全 `cross_edges` を通して、ある Entity が `owner` として現れるのは高々 1 回（**星形にならない**）
   2. 同じく `owned` として現れるのも高々 1 回（**輪にも分岐にもならない**）
-  3. `cross_edges` の両端は必ず同一 `ChainGroupPlan` の `members` に属する（グループ外の窓を巻き込まない）
-  4. 異なる `ChainGroupPlan` の間に edge は存在しない（要件 3.6）
+  3. `cross_edges` の両端は必ず `members` に属する（在庫に無い窓を巻き込まない）
+  4. `members` の中に同じ Entity は 2 回現れない（1 窓は鎖のちょうど 1 箇所）
 
 **Implementation Notes**
 
@@ -465,8 +472,8 @@ pub fn compose_chain(
 
 - 台帳の適用（追加・拒否・解除・基底）と `[zorder-group] applied`／`rejected` の記録は**現行のまま**
 - 射影の出口を `ZOrderGroups` から **`compose_chain` → `ZOrderChainPlan`** へ差し替える
-- **公開は内容が前回と異なるときだけ**（`ChainGroupPlan` の `PartialEq` 比較。初版が版数でなく射影結果の
-  突き合わせで変化を見たのと同じ判断）。窓の出現・破棄はここで自然に検出される（要件 7.1／14.5）。
+- **公開は内容が前回と異なるときだけ**（`ChainPlan` の `PartialEq` 比較。初版が版数でなく射影結果の
+  突き合わせで変化を見たのと同じ判断）。窓の出現・破棄はここで自然に検出される（未指定スコープの出現・破棄も同様＝要件 7.1／15.3／14.5）。
   **再表示（要件 7.3）はここでは検出されない**——再表示は窓の在庫を 1 ミリも変えないため。7.3 は
   「鎖が崩れる経路が無い」ことによる**構造充足**であり（DD-9）、初版の引き金 3 点
   （`window_pos.rs`・`tick_wake`・`balloon_visibility_phase.rs`）はいずれの要件も担わなくなるので退役する
@@ -496,23 +503,23 @@ pub struct CrossEdge {
     pub owner: Entity,
 }
 
-/// 鎖の 1 グループぶんの計画（areka が構築し、wintf が適用する）。
+/// 全窓の鎖 1 本ぶんの計画（areka が構築し、wintf が適用する・DD-11）。
+/// `members` はグループの連結（登記順・先に登記されたほど手前）＋未指定スコープの後方配置（スコープ ID 昇順）。
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub struct ChainGroupPlan {
-    pub id: u32,
+pub struct ChainPlan {
     /// 手前から奥へ並べた、実在する窓の Entity 列（射影後）。末尾が鎖の根。
     pub members: Vec<Entity>,
     /// 本 spec が張る横断 edge（`members` の連続対のうち、同一スコープのペア対でないもの）。
     pub cross_edges: Vec<CrossEdge>,
-    /// 窓が存在しなかった要素の正準表記（`"b0"`／`"s1"`。要件 1.4／8.4 の記録材料）。
+    /// 窓が存在しなかった宣言要素の正準表記（`"b0"`／`"s1"`。要件 1.4／8.4 の記録材料）。
     pub absent: Vec<String>,
 }
 
 /// areka が公開する「望む鎖」。wintf 側の唯一の受け口。
 #[derive(Resource, Default)]
 pub struct ZOrderChainPlan {
-    /// 手前→奥の Entity 列と横断 edge 列（グループごと）。
-    pub groups: Vec<ChainGroupPlan>,
+    /// 望む鎖。`None` は既定状態（指定ゼロ＝1 命令も出さない・要件 6）。
+    pub chain: Option<ChainPlan>,
     /// 内容が変わったことを示す。適用系が読んだら false へ戻す。
     pub dirty: bool,
 }
@@ -529,7 +536,7 @@ pub struct CrossOwnerLink {
 
 - **State model**: 望む状態（`ZOrderChainPlan`）と現況（`CrossOwnerLink` の集合）の 2 つだけ。
   **OS の z 順は状態として持たない**——持てば観測が要り、要件 14.2 へ戻る
-- **Persistence & consistency**: なし（プロセス内・要件 1.5）。`CrossEdge`／`ChainGroupPlan` は
+- **Persistence & consistency**: なし（プロセス内・要件 1.5）。`CrossEdge`／`ChainPlan` は
   **wintf 側で定義し areka が構築する**（wintf→areka の import を作らないため）。この向きゆえ
   両者の欄に areka 固有の型は載せられず、不在要素は正準表記の文字列で運ぶ
 - **Concurrency**: UI スレッド固定（`NonSendMarker`）。既存のペア系と同じ
@@ -604,13 +611,13 @@ pub(crate) fn nudge_command(members: &[HWND]) -> Option<SetWindowPosCommandSpec>
 - `FrameFinalize` チェーンの**末尾**に置く（`establish_owner_links` → `apply_zorder_pair_maintenance` → **本 system**）。
   ペア機構が同じ巡で owner を張り替えたあとに走ることで、上書きの取り合いが構造的に起きない
 - `ZOrderChainPlan.dirty` が偽なら**即座に return**（1 命令も出さない・要件 6.4／14.2）
-- 手順（1 巡・グループごと）:
+- 手順（1 巡・鎖全体）:
   1. 去る窓の切離し（`Departing`）——被所有側または所有側のハンドルが消えた／Entity が despawn された edge
   2. `plan_chain_ops` で差分を得る（**Detach が先・Attach が後**）
   3. 各 `Detach`: **外す前に `GetWindow(GW_OWNER)` を読み**、帳簿の `owner_hwnd` と一致するときだけ
      `clear_window_owner` を呼ぶ。食い違えば `Diverged` として帳簿だけ落とす（**Win32 は呼ばない**）
   4. 各 `Attach`: `set_window_owner(owned_hwnd, owner_hwnd)`。成功したら `CrossOwnerLink` を挿す
-  5. 何らかの操作が実際に走ったグループについてのみ、**後押しを 1 回**
+  5. 何らかの操作が実際に走ったときのみ、鎖全体へ**後押しを 1 回**
      （`nudge_command` → `SetWindowPos(members[0], members[1], SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE)`）
   6. 後押しの**直後に**重なりを実測し（既存の `measure_*` を流用・不可視の窓は読み飛ばす＝要件 9.3）、
      宣言と実測を 1 行に載せる（要件 9.2）
@@ -652,13 +659,16 @@ pub(crate) fn nudge_command(members: &[HWND]) -> Option<SetWindowPosCommandSpec>
 
 | タグ | 水準 | 欄 | 要件 |
 |---|---|---|---|
-| `[zorder-chain] linked` | debug | `group_id= owned= owner= owned_hwnd= owner_hwnd= pos=i/n` | 9.1 |
-| `[zorder-chain] unlinked` | debug | `group_id= owned= owned_hwnd= owner_hwnd= reason=<Teardown｜Rechain｜Departing｜Diverged>` | 4.1, 7.2, 9.1 |
-| `[zorder-chain] settled` | debug | `group_id= nudged_hwnd= insert_after=<0x..> declared=<hwnd,...> measured=<hwnd,...>` | **9.2** |
+| `[zorder-chain] linked` | debug | `segment= owned= owner= owned_hwnd= owner_hwnd= pos=i/n` | 9.1 |
+| `[zorder-chain] unlinked` | debug | `segment= owned= owned_hwnd= owner_hwnd= reason=<Teardown｜Rechain｜Departing｜Diverged>` | 4.1, 7.2, 9.1 |
+| `[zorder-chain] settled` | debug | `nudged_hwnd= insert_after=<0x..> declared=<hwnd,...> measured=<hwnd,...>`（鎖全体につき 1 行） | **9.2** |
 | `[zorder-chain] absent` | debug | `group_id= element=<b0｜s1｜...>` | 1.4, 8.4 |
-| `[zorder-chain] skipped` | debug | `group_id= reason=<TooFewPresent｜NoChange｜HandleMissing>` | 8.3 |
-| `[zorder-chain] link-failed` | error | `group_id= owned_hwnd= owner_hwnd= error=` | 8.2 |
-| `[zorder-chain] unlink-failed` | error | `group_id= owned_hwnd= error=` | 8.2 |
+| `[zorder-chain] skipped` | debug | `reason=<TooFewPresent｜NoChange｜HandleMissing>` | 8.3 |
+| `[zorder-chain] link-failed` | error | `segment= owned_hwnd= owner_hwnd= error=` | 8.2 |
+| `[zorder-chain] unlink-failed` | error | `owned_hwnd= error=` | 8.2 |
+
+> `segment=` はその edge が属する区間——グループ（`gN`・登記順）か後方配置（`tail`・要件 15）か——を示す。
+> `absent` の `group_id=` は台帳上の宣言グループを指す（後方配置に宣言要素は無い）。
 
 **保全する既存語彙（要件 9.5）と、その新しい住処**: `[zorder-group] applied`（`action=set｜reset group_id=N source=Tag｜Descript members=… normalized=…`）・
 `[zorder-group] rejected`（`reason= tokens=`）・`[zorder-pair]` の 6 語すべて。
@@ -684,8 +694,8 @@ target は移設に伴い `wintf::ecs::window::zorder_group` から `wintf::ecs:
 
 - **グループ**（`ZOrderGroup`）: `{ id, members: Vec<GroupElement>, source: Tag｜Descript }`。
   `GroupElement = { scope: u32, kind: Balloon｜Char }`。**手前から奥の順**。台帳が唯一の正本
-- **鎖の計画**（`ChainGroupPlan`）: グループを窓の在庫へ射影したもの。`members`（Entity 列）と
-  `cross_edges`（Entity 対）と `absent`（不在要素）
+- **鎖の計画**（`ChainPlan`）: 全グループ（登記順）と未指定スコープ（昇順・後方）を窓の在庫へ射影した
+  1 本の鎖。`members`（Entity 列）と `cross_edges`（Entity 対）と `absent`（不在要素）
 - **帳簿**（`CrossOwnerLink`）: 本 spec が実際に OS へ書いた edge。被所有側の Entity に付く
 
 **Business rules & invariants**
@@ -694,6 +704,7 @@ target は移設に伴い `wintf::ecs::window::zorder_group` から `wintf::ecs:
 2. 鎖は一直線——ある窓を所有する窓は高々 1 つ、ある窓が所有される回数も高々 1 回（要件 14.4）
 3. 本 spec は**同一スコープの (Balloon, Char) 対に owner を書かない**（ペア機構の担当・要件 6.3）
 4. 本 spec が撤去するのは**帳簿にあり、かつ OS の現況が帳簿と一致する** edge のみ（§12.6）
+5. 指定が 1 つでもある間、鎖はゴーストの全窓を含む 1 本（グループ登記順＋未指定スコープ昇順・DD-11／要件 15）
 
 **Consistency & integrity**: 望む状態と現況の一致は「イベントのたびに差分を出す」ことで保つ。
 **周期的な照合は行わない**（要件 14.2）。整合が崩れうる唯一の外部要因（他プロセスによる `GWLP_HWNDPARENT` 書換）は
@@ -728,7 +739,8 @@ target は移設に伴い `wintf::ecs::window::zorder_group` から `wintf::ecs:
 ### Unit（決定論・実機不要／要件 10.1・10.2）
 
 1. **`compose_chain` の分岐**——数値モード・明示モード・畳み込み（要件 2.6）・不在要素の射影（1.4）・
-   要素 1 個以下（edge ゼロ）・複数グループ（グループ間 edge ゼロ＝3.6）・グループ外の窓に触れないこと（2.5／6.1）
+   指定ゼロ（`None`＝既定状態・6.1／6.4）・複数グループの登記順連結（3.6）・未指定スコープの後方参加と
+   スコープ ID 昇順（15.1／15.2）・要素 1 個以下のグループ
 2. **`compose_chain` の不変条件 1〜4**——星形・輪・分岐が作れないこと（要件 14.4）。
    **摂動は「経路から外す」形で当てる**（同一スコープ対の除外を落とす／グループ境界をまたいで繋ぐ）
 3. **`plan_chain_ops` の差分**——追加のみ・撤去のみ・張り替え（`Detach` が必ず `Attach` より前）・変化なし（ops 空）
@@ -739,7 +751,7 @@ target は移設に伴い `wintf::ecs::window::zorder_group` から `wintf::ecs:
 
 ### Integration（in-crate・World 使用）
 
-1. **drain 相の差分公開**——同じ内容では公開しない／窓が現れたら公開する／解除で空になる（要件 7.1／4.1）
+1. **drain 相の差分公開**——同じ内容では公開しない／窓が現れたら公開する（未指定スコープ含む）／解除で空になる（要件 7.1／15.3／4.1）
 1b. **再表示の非作用**——バルーンの内容可視性が変わっても `ZOrderChainPlan` が変化しないこと（要件 7.3 の構造充足の証跡）
 2. **`apply_zorder_chain` の 1 巡**（偽ハンドル＋記録捕捉）——`dirty=false` なら 1 命令も出さない（6.4）／
    `Detach`→`Attach` の順／`Diverged` で Win32 を呼ばない／失敗した edge を飛ばして残りを張る（8.2）
@@ -760,9 +772,12 @@ target は移設に伴い `wintf::ecs::window::zorder_group` から `wintf::ecs:
 3. **解除**——横断 edge の撤去だけで束縛が消え、並べ替えが起きないこと（要件 4／6）
 4. **スプライス**——後から現れた窓が鎖の途中へ入り、抜けると元へ戻ること（要件 7.1／7.2）
 5. **破棄の非連動**——鎖の窓を壊しても他スコープの窓が生き残ること（要件 7.2）
-6. **グループ外どうしの相対順が変わらないこと**——前後を部外者で挟み、後押しの前後で
-   **部外者どうしの前後関係**が変わらないこと（要件 6.1／6.2）。
+6. **部外者どうしの相対順が変わらないこと**——鎖に属さない検体窓（他アプリの窓に相当）で前後を挟み、
+   後押しの前後で**部外者どうしの前後関係**が変わらないこと（§12.5 の実測の恒久化。ゴースト窓は全て
+   鎖に入るため、要件 6.1／6.2 は既定状態＝指令ゼロの檻で満たす）。
    **鎖と部外者の間の前後関係は主張しない**（DD-3b・鎖は塊として動く）
+7. **未指定スコープの後方参加**——3 スコープ中 2 つだけを指定し、未指定スコープのブロックが
+   全グループの後ろに来ること（要件 15.1／15.2）
 
 いずれも**順序で測る**（隣接では測らない）——不可視の隣（既定 IME 窓）が挟まっても結果が動かないため。
 歩行器は `zorder_group_order_tests.rs:126-160` の `relative_z_order`／`z_shape` を写す。
@@ -809,7 +824,7 @@ J2（既定＝非強制）と J3（ペア語彙の保全）は形を変えない
 | DD-1 | 前後関係を**所有の鎖**として書き、維持を OS へ委ねる | 要件 14.1。§12.1 で実測 | 毎巡の観測＋`SetWindowPos` 是正（初版・実機 NO-GO） |
 | DD-2 | 新設する edge は**横断 edge 1 種類のみ**。ペア edge は既存機構のまま | `research.md` §11.2 の構造上の発見。§12.4 が「ペア edge 非接触で鎖が組める」を実測 | Option B（全 edge を鎖モジュールへ一元化）＝変更面積が跳ね、要件 9.5 の語彙保全が難しくなる |
 | DD-3 | 後押しは**鎖の先頭を 2 番目の直後へ差し直す 1 形**のみ（参照は自分の窓 2 枚だけ） | §12.2 実測 9。位置・寸法を変えず（要件 11.1）、鎖の外どうしの相対順も変えない（要件 6.1／6.2）。何より**外部の窓の生死に依存しない** | `SWP_NOZORDER`（効かない・実測 7）／`GW_HWNDPREV` の直後へ差し直す形（**挿入位置に他プロセスの窓を渡しうる**——消えると黙って失敗する。§12.9 の 2 件目で実測）／`HWND_TOP`・`HWND_BOTTOM`（グループの絶対位置を無用に動かす） |
-| DD-3b | **鎖が鎖の外の窓を追い越しうることを許容する** | §12.5——鎖は塊として動く。要件 6.1／6.2 が縛るのは「**どのグループにも属していない窓どうし**の相対順」であり、そちらは保たれることを実測で固定した。グループと非グループの間の前後関係は正典も要件も規定していない（要件 3.6／6.1） | 追い越しを抑える（抑えるには観測と是正が要り、要件 14.2 へ逆戻りする） |
+| DD-3b | **鎖が他アプリの窓を追い越しうることを許容する**——DD-11 によりゴースト窓は全て鎖に入るため、鎖の外に居るのは他アプリの窓だけ | §12.5——鎖は塊として動く。他アプリの窓との前後は正典も要件も規定しておらず、部外者どうしの相対順が保たれることは実測で固定した | 追い越しを抑える（抑えるには観測と是正が要り、要件 14.2 へ逆戻りする） |
 | DD-4 | 後押しは指令キューを経由せず直接 `SetWindowPos` | 要件 9.2 が「直後の実測」を求める／挿入位置が生の相対位置である | バッチ経由（同じ巡で測れず、他の指令が挿入位置を動かしうる） |
 | DD-5 | 撤去は**帳簿にあり現況が一致する edge のみ**。掃除のための一括撤去をしない | §12.6——`clear_window_owner` は owner を持たない窓に当てると失敗を返す。またペア edge を誤って外すと要件 6.3 を壊す | 全窓を舐めて外す（偽の失敗を量産し、バルーン直上を壊す） |
 | DD-6 | 破棄の前に必ず外す（既存ペア切離しの雛形と同型） | §12.3——外してから壊せば道連れが完全に消える（要件 7.2） | 破棄後に帳簿を掃除する（既に他窓が巻き込まれている） |
@@ -817,24 +832,28 @@ J2（既定＝非強制）と J3（ペア語彙の保全）は形を変えない
 | DD-8 | 外部要因で鎖が壊れた場合の**検知系を持たない** | `research.md` §12.7-7。鎖が壊れるのは他プロセスが `GWLP_HWNDPARENT` を書いた場合だけで、その仮説のために観測系を置けば NO-GO の根因へ逆戻りする（要件 14.2） | 定期照合（要件 14.2 違反） |
 | DD-9 | 再表示（要件 7.3）は**構造で満たし**、専用の引き金を持たない | 再表示は「窓の中身の絵の消去・再描画」であり（要件 7.3 の定義）、HWND にも owner にも作用しない。鎖が崩れる経路が存在しないので、確認も是正も不要（1.3／7.4 と同型）。決定論檻「内容可視性が変わっても `ZOrderChainPlan` 不変」で固定し、引き金 3 点は退役 | 合成層の shown エッジから直接点火（初版の形。鎖の下では点火しても出す指令が無い）／drain 相の在庫差分で拾う（**誤り**——在庫は再表示で変わらない。検証レポート Critical 2 で棄却） |
 | DD-10 | 部分グループは**相棒窓の畳み込み**（要件 2.6） | 2026-08-29 要件ディスカッションの裁定。バルーン直上の既存不変条件により初版方式でも相棒窓は同じ位置に拘束されており、見える結果が変わらない | スコープをまたぐ部分グループを拒否（正典の例示は常にペア込みだが、拒否は作者の書けるものを狭める） |
+| DD-11 | **指定が 1 つでもある間は全窓が 1 本の鎖に参加**——グループは登記順（先に登記が手前・descript 基底が最前）、未指定スコープはその後ろへスコープ ID 昇順のブロック（要件 15） | 2026-08-29 設計ディスカッション裁定「指定がない＝後ろ側に回る窓とみなす」（指定漏れは作者のバグ想定）。SSP の実測窓木（§10.2）が全窓を 1 本の鎖に繋ぐ構造と整合。登記順は成立済みの指定を新しい指定が乱さない（3.1 の精神と一貫）・スコープ ID 昇順は現況の観測なしの完全決定論 | グループの窓だけを鎖に入れ未指定を放置（改稿前の本設計——「追い越し」の合否が要件文から判定できない・検証 Critical 3）／新しいグループほど手前（成立済みの並びが動く） |
 
 ## 互換記録（`doc/COMPAT_ARCHITECTURE.md` §8）
 
-**登記する裁量（要件 12.2 の列挙 7 件は下限＝「少なくとも」。着地は 10 件）**
+**登記する裁量（要件 12.2 の列挙は下限＝「少なくとも」。着地は 11 件）**
 
 1. 既定＝非強制とグループ指定時のみピン留めという二状態の採用
 2. 既にペアにしたスコープ ID を含むタグを受け付けない際の扱い（タグ全体を不採用・既存グループ不変）
 3. descript での明示モード記法の受理
 4. 明示モードが同一スコープ内の隣接と矛盾する場合に隣接を優先すること
 5. `seriko.zorder` が複数回現れた場合に最後の 1 行だけを 1 つのグループとして扱うこと
-6. **グループに属さない窓を所有の鎖へ加えないこと**（既定＝非強制の保存を優先。正典実装 SSP の窓木は既定状態でも
-   全窓を鎖に繋いでいる可能性があり、その差を登記する）
+6. **指定が 1 つでもある間は未指定スコープの窓も後方へ参加させ、全窓を 1 本の鎖とすること**（要件 15。
+   未指定はスコープ ID 昇順で後方。既定状態＝指定ゼロは非強制のまま。正典実装の窓木は既定状態でも全窓を
+   鎖に繋ぐ観測があり、既定状態の差だけが残る）
 7. スコープの片方の窓だけを指名した明示モードで相棒窓を暗黙にグループへ加えること（要件 2.6・DD-10）
 8. 語彙の一致は**小文字ちょうど**（`Balloon0`／`B0` は解釈不能として拒否。初版の申し送り 1.1）
 9. `set_descript_base` が既存のタグ由来グループと衝突したときの終状態を「タグ由来を残さず基底のみ」と決めたこと
    （初版の申し送り 1.3。正典経路では起きない）
 10. **グループが有効な間、最小化の連動がスコープをまたいで伝わること**（DD-7・§12.3 の実測。
     ゴースト窓に最小化の到達経路が無いため利用者に見える変化は生じないが、性質としては変わるので登記する）
+11. **グループどうしの前後を登記の順（先に登記されたグループほど手前・descript 基底が最前）で確定すること**
+    （要件 3.6・DD-11。全窓が 1 本の鎖に入る以上、確定は不可避であり正典は沈黙している）
 
 **訂正**: 既存文書にある `seriko.zorder` を SERIKO のレイヤ順とする記述（所在は**完了アーカイブ配下の 2 か所のみ**——
 `completed/areka-P0-ghost-window-zorder/brief.md:10`・同 `research.md:74-77`。現行の `doc/` にも `crates/` にも残っていない）を、
