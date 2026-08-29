@@ -443,3 +443,227 @@ fn window_proc_dispatch_maps_the_message_to_bits() {
         "window_proc/mod.rs: 配送点がメッセージ→旗の写像を通っていない"
     );
 }
+
+// ============================================ 生産者一覧の完全性（現物の木から照合する）
+
+// 上の 2 本は「表に載っている行が現に旗を立てるか」を見る。それだけでは**表から落ちた
+// 生産者**を捕まえられない——行を回すだけの検査は、載っていないファイルについては何も
+// 言わないからである（実際 `zorder_group_maintain.rs` は一度落ちたまま緑で通っていた）。
+// ここから下は逆向き、すなわち「木の中で旗を立てているファイルが全部表に載っているか」を
+// 見る。両向きが揃って初めて名簿は名簿として働く。
+//
+// 見るのは 2 つの書き方である——`tick_wake::mark` とパスで書いた参照と、
+// `tick_wake::` を含む `use` 行が `mark` を名指している形（`use …tick_wake::{ZORDER, mark};`）である。
+// 呼出の字面 `tick_wake::mark(` だけを見ていたときは、**表に載せていない新設の生産者が
+// `use` 形だと両向とも緑で抜けた**（表の側の検査は表に在る行しか見ないので助けに
+// ならない）。なおモジュールごと別名にする形（`use …tick_wake as tw;`）までは見ていない
+// ——その形が要るときは [`uses_tick_wake_name`] を広げること。
+
+use std::path::{Path, PathBuf};
+
+/// クレートの `src/` 配下の本番 `.rs` を集める（テストのファイルは除く）。
+fn production_rs_files(dir: &Path, out: &mut Vec<PathBuf>) {
+    let entries = std::fs::read_dir(dir)
+        .unwrap_or_else(|e| panic!("木を歩けない（検査が空振りする）: {} — {e}", dir.display()));
+    for entry in entries {
+        let path = entry.expect("ディレクトリ項目が読めない").path();
+        if path.is_dir() {
+            production_rs_files(&path, out);
+            continue;
+        }
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        if !name.ends_with(".rs")
+            || name.ends_with("_tests.rs")
+            || name.ends_with("test_support.rs")
+        {
+            continue;
+        }
+        out.push(path);
+    }
+}
+
+/// この本文が `tick_wake` の名前 `name` を使っているか。
+///
+/// 見るのは 2 つ——`tick_wake::name` と書いた参照と、`use …tick_wake::…name…` で
+/// 引き込んでから素の `name` で書く形の `use` 行である。
+fn uses_tick_wake_name(code: &str, name: &str) -> bool {
+    if code.contains(&format!("tick_wake::{name}")) {
+        return true;
+    }
+    code.lines().any(|line| {
+        let line = line.trim_start();
+        line.starts_with("use ") && line.contains("tick_wake::") && line.contains(name)
+    })
+}
+
+/// 走査の判定子は 2 つの書き方をどちらも見る（`use` 形が抜けないことの自己検査）。
+///
+/// この 3 行が無いと、広げたはずの走査が実は広がっていなくても誰も気づかない
+/// （現物の木に `use` 形の生産者が 1 つも無いため）。
+#[test]
+fn the_scan_sees_both_the_path_form_and_the_use_form() {
+    assert!(
+        uses_tick_wake_name("tick_wake::mark(tick_wake::ZORDER);", "mark"),
+        "パス形の呼出を見落としている"
+    );
+    assert!(
+        uses_tick_wake_name(
+            "use crate::ecs::world::tick_wake::{ZORDER, mark};
+mark(ZORDER);",
+            "mark"
+        ),
+        "`use` 形で引き込んだ生産者を見落としている（この形は両向とも緑で抜ける）"
+    );
+    assert!(
+        !uses_tick_wake_name("use crate::ecs::world::tick_wake;", "mark"),
+        "モジュールを引き込んだだけの `use` 行を生産者と見なしている"
+    );
+}
+
+/// `src/` からの相対パス（区切りは `/`）で、旗を立てている本番ファイルを列挙する。
+///
+/// `flag` が空文字なら「どれかの旗を立てている」、それ以外なら「その旗を立てている」。
+fn files_marking(flag: &str) -> Vec<String> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut files = Vec::new();
+    production_rs_files(&root, &mut files);
+
+    let mut found: Vec<String> = files
+        .iter()
+        .filter(|path| {
+            let src = std::fs::read_to_string(path).expect("本番ファイルが読めない");
+            let code = code_only(&src);
+            uses_tick_wake_name(&code, "mark")
+                && (flag.is_empty() || uses_tick_wake_name(&code, flag))
+        })
+        .map(|path| {
+            path.strip_prefix(&root)
+                .expect("走査の根の下に無い")
+                .to_string_lossy()
+                .replace('\\', "/")
+        })
+        .collect();
+    found.sort();
+    found
+}
+
+/// 木の中で旗を立てている本番ファイルは、1 つ残らず `WINTF_PRODUCERS` に載っている。
+///
+/// 逆向きも同時に見る——表の行が現物のどのファイルにも当たらなければ、走査が壊れて
+/// 0 件を返している（そのときは何を消しても緑になる）。両側から挟んでおく。
+#[test]
+fn the_wintf_table_lists_every_file_that_marks_the_wake() {
+    let found = files_marking("");
+    assert!(
+        !found.is_empty(),
+        "走査が 1 件も見つけていない（検査そのものが壊れている）"
+    );
+
+    for rel in &found {
+        assert!(
+            WINTF_PRODUCERS
+                .iter()
+                .any(|(label, _, _)| rel.ends_with(label)),
+            "旗を立てているのに WINTF_PRODUCERS に載っていない: {rel}"
+        );
+    }
+    for (label, _, _) in WINTF_PRODUCERS {
+        assert!(
+            found.iter().any(|rel| rel.ends_with(label)),
+            "WINTF_PRODUCERS の行が現物のどのファイルにも当たらない: {label}"
+        );
+    }
+}
+
+/// `tick_wake.rs` 冒頭の散文名簿の `ZORDER` の行は、旗を立てている wintf のファイルを
+/// 1 つ残らずファイル名で名指ししている。
+///
+/// この行は一度実際にずれた（`zorder_group_maintain.rs` と `window_pos.rs` が落ちたまま）。
+/// 見つけたのは人の目であってテストではない。以後は機械が見る。
+#[test]
+fn the_module_roster_names_every_wintf_zorder_producer() {
+    let bullet = zorder_bullet();
+    let producers = files_marking("ZORDER");
+    assert!(
+        !producers.is_empty(),
+        "ZORDER の生産者が 1 件も見つからない（検査そのものが壊れている）"
+    );
+
+    for rel in &producers {
+        let stem = file_stem_of(rel);
+        assert!(
+            bullet.contains(stem),
+            "tick_wake.rs 冒頭の ZORDER の名簿が {rel} を名指ししていない"
+        );
+    }
+}
+
+/// `ZORDER` 定数の doc は生産者を 1 人も名指ししない（名簿はモジュール冒頭のただ 1 つ）。
+///
+/// 写しが 2 つあると片方だけが古くなり、しかも古くなったことが誰にも見えない
+/// （`PRESENT` 定数の doc が生産者を挙げていないのと同じ流儀）。
+#[test]
+fn the_zorder_constant_doc_keeps_no_second_roster() {
+    let doc = const_doc_of("ZORDER");
+    let producers = files_marking("ZORDER");
+    assert!(
+        !producers.is_empty(),
+        "ZORDER の生産者が 1 件も見つからない（検査そのものが壊れている——走査が空なら何を書いても緑になる）"
+    );
+    assert!(
+        !doc.is_empty(),
+        "ZORDER 定数の doc が空（切り出しが壊れている——何を書いても緑になる）"
+    );
+    for rel in producers {
+        let stem = file_stem_of(&rel);
+        assert!(
+            !doc.contains(stem),
+            "ZORDER 定数の doc が生産者 {rel} を名指ししている（名簿の 2 つ目の写しになる）"
+        );
+    }
+}
+
+/// `tick_wake.rs` の中身（散文名簿と定数 doc を切り出す元）。
+const TICK_WAKE_SRC: &str = include_str!("tick_wake.rs");
+
+/// 相対パスからファイル名の幹（`window/zorder_pair_maintain.rs` → `zorder_pair_maintain`）。
+fn file_stem_of(rel: &str) -> &str {
+    rel.rsplit('/')
+        .next()
+        .and_then(|name| name.strip_suffix(".rs"))
+        .expect("相対パスが .rs で終わっていない")
+}
+
+/// 冒頭の散文名簿から `ZORDER` の項だけを切り出す（次の項の手前まで）。
+fn zorder_bullet() -> String {
+    let normalized = TICK_WAKE_SRC.replace("\r\n", "\n");
+    let mut lines = normalized
+        .lines()
+        .skip_while(|l| !l.contains("- [`ZORDER`]"));
+    let head = lines.next().expect("散文名簿に ZORDER の項が無い");
+    let rest: Vec<&str> = lines
+        .take_while(|l| l.starts_with("//!") && !l.contains("- ["))
+        .collect();
+    format!("{head}\n{}", rest.join("\n"))
+}
+
+/// 指定した旗の定数の直前に付いている doc コメントを切り出す。
+fn const_doc_of(name: &str) -> String {
+    let normalized = TICK_WAKE_SRC.replace("\r\n", "\n");
+    let lines: Vec<&str> = normalized.lines().collect();
+    let at = lines
+        .iter()
+        .position(|l| l.starts_with(&format!("pub const {name}:")))
+        .unwrap_or_else(|| panic!("定数 {name} の宣言が見つからない"));
+    let mut doc: Vec<&str> = Vec::new();
+    for line in lines[..at].iter().rev() {
+        if !line.starts_with("///") {
+            break;
+        }
+        doc.push(line);
+    }
+    assert!(!doc.is_empty(), "定数 {name} に doc が付いていない");
+    doc.join("\n")
+}

@@ -378,15 +378,50 @@ fn zorder_command(hwnd: HWND, after: HWND) -> SetWindowPosCommand {
     )
 }
 
-/// 組を `order`（手前から順の添字）の並びへ揃える（助走——本機能の経路は通さない）。
-fn arrange_z(set: &[HWND], order: &[usize]) {
-    for pair in order.windows(2) {
-        SetWindowPosCommand::enqueue(zorder_command(set[pair[1]], set[pair[0]]));
+/// 組を `order`（手前から順の添字）の並びへ揃え、**揃ったことを観測してから**返る
+/// （助走——本機能の経路は通さない）。
+///
+/// # なぜ 1 巡では足りないのか（実測）
+///
+/// 挿入は [`insert_after`] で 1 本ずつ流す。まとめて 1 バッチにすると
+/// `hwndInsertAfter` に**同じバッチで動かす窓**を渡すことになり、`EndDeferWindowPos` が
+/// まとめて適用する際の解決順に結果が依存する。3 プロセス並走の 135 走行に 1 度、
+/// 揃わないまま返っていた（この助走の自己検査が赤くなった）。
+///
+/// 揃ったことを確かめてから返るのは [`raise_to_front_of`] と同じ理由による——同一
+/// プロセスの他の検査が同じデスクトップの窓リストを同時に組み替えているため、Win32 が
+/// 成功を返しながら並びを変えないことがある。壁時計では待たず、**観測できる条件**
+/// （並びが `order` に一致する）が満たされるまで有界回数だけ書き直す。
+///
+/// 主張は弱めない——顛末を返すだけで、合否は呼び出し側の表明が持つ。
+fn arrange_z(set: &[HWND], order: &[usize]) -> ZSetupTrace {
+    let want = order.to_vec();
+    let mut misses = Vec::new();
+    for attempt in 1..=Z_SETUP_ATTEMPTS {
+        for pair in order.windows(2) {
+            insert_after(set[pair[1]], set[pair[0]]);
+        }
+        let shape = z_shape(set);
+        if shape == want {
+            return ZSetupTrace {
+                attempts: attempt,
+                misses,
+                shape,
+            };
+        }
+        misses.push(shape);
     }
-    flush_window_pos_commands();
+    ZSetupTrace {
+        attempts: Z_SETUP_ATTEMPTS,
+        misses,
+        shape: z_shape(set),
+    }
 }
 
 /// 利用者の操作を模して 1 枚を最前面へ持ち上げる（`HWND_TOP`——常時最前面の帯へは入れない）。
+///
+/// この 1 発は黙って断られることがある。検査からは [`raise_to_front_of`] を呼ぶこと
+/// ——直に呼ぶと 17.5% の確率で助走が成立しない（そちらの doc に実測がある）。
 fn raise_to_top(hwnd: HWND) {
     SetWindowPosCommand::enqueue(SetWindowPosCommand::new(
         hwnd,
@@ -398,6 +433,109 @@ fn raise_to_top(hwnd: HWND) {
         Some(HWND_TOP),
     ));
     flush_window_pos_commands();
+}
+
+/// 助走の Z 書込を観測できるまで試す上限（**有界の回数**——壁時計では待たない）。
+///
+/// 上限は「観測できないまま無限に回らない」ためだけに置く。なぜ 1 巡では足りないのかは
+/// [`arrange_z`] と [`raise_to_front_of`] の doc にそれぞれ実測がある。
+const Z_SETUP_ATTEMPTS: usize = 8;
+
+/// 助走の Z 書込の顛末（呼び出し側の表明の文言に出す）。
+struct ZSetupTrace {
+    /// 観測できるまでに要した試行回数。
+    attempts: usize,
+    /// 書込が届かなかった巡ごとの並び（届いていれば空）。
+    misses: Vec<Vec<usize>>,
+    /// 最後に観測した並び。
+    shape: Vec<usize>,
+}
+
+impl ZSetupTrace {
+    /// 「檻の前提が崩れた」と「**助走の書込が届かなかった**」を呼び分ける診断文。
+    fn note(&self) -> String {
+        if self.misses.is_empty() {
+            "助走の書込は 1 回目で届いている".to_string()
+        } else {
+            format!(
+                "助走の書込が {} 回届かなかった（Win32 が成功を返しながら並びを変えない事象・届かなかった巡の並び: {:?}）",
+                self.misses.len(),
+                self.misses
+            )
+        }
+    }
+}
+
+/// 挿入位置を 1 本だけ書いて、その場で適用する（相対指定の最小単位）。
+///
+/// 1 本ずつ流すのは、`hwndInsertAfter` に**同じバッチで動かす窓**を渡すと
+/// `EndDeferWindowPos` がまとめて適用する際の解決順に結果が依存するためである。
+fn insert_after(hwnd: HWND, after: HWND) {
+    SetWindowPosCommand::enqueue(zorder_command(hwnd, after));
+    flush_window_pos_commands();
+}
+
+/// 利用者の操作を模して 1 枚を**組の先頭**へ持ち上げ、持ち上がったことを**観測してから**返る。
+///
+/// # なぜ `HWND_TOP` 1 発では足りないのか（実測）
+///
+/// `HWND_TOP` は帯の中の**絶対位置**の指定である。同一プロセスの他の検査が自分の窓を
+/// 前面窓（`GetForegroundWindow` が返す窓）にしている最中、この不可視の道具窓に対する
+/// `SetWindowPos(hwnd, HWND_TOP, …)` は **`Ok(())` を返し `GetLastError()` も 0 のまま、
+/// 窓を 1 つも動かさない**。`cargo test -p wintf --lib` を 3 プロセス並走で 120 走行した
+/// ところ 21 走行（17.5%）でこれが起き、次を確認している。
+///
+/// - 同じ書込を 32 回繰り返しても 32 回とも動かない——**再試行だけでは直らない**。
+/// - 書込を挟まずに読み直しても並びは変わらない——読み取りが競っているのではない。
+/// - 窓は 4 枚とも生存しており、非表示（`WS_VISIBLE` 無し）で、常時最前面でもない。
+/// - キューを介さない直の `SetWindowPos` でも同じ結果——本番の書込経路（バッチ投入と
+///   その縮退・`window/command.rs`）の側の問題ではない。
+/// - 断られた場面で前面窓は**自プロセスの別の検査の窓**だった。
+/// - **相対指定**（`hwndInsertAfter` に witness の窓を渡す）へ替えると、観測した 9 例
+///   すべてで 1 回目に動く。
+///
+/// よって絶対指定が断られたら**相対指定で同じ観測結果へ持ち込む**。維持系が実際に読むのは
+/// メンバーどうしの前後関係だけなので、「利用者が持ち上げた窓が組の先頭に居る」という
+/// 条件は絶対位置に頼らずに作れる。
+///
+/// 動かすのは**持ち上げる 1 枚と、いま先頭に居る 1 枚**だけである。witness 全体を並べ直すと、
+/// 呼び出し側が別に持っている「残りの前後関係は変わっていない」という表明が空虚になる。
+///
+/// # 主張は弱めない
+///
+/// 本関数は顛末を返すだけで、合否の判定は呼び出し側の表明が持つ。有界回数を使い切っても
+/// 観測できなければ呼び出し側がそのまま赤くなる。
+fn raise_to_front_of(target: HWND, witness: &[HWND]) -> ZSetupTrace {
+    let index = witness.iter().position(|w| *w == target);
+    let mut misses = Vec::new();
+    for attempt in 1..=Z_SETUP_ATTEMPTS {
+        match (attempt, relative_z_order(witness).into_iter().next()) {
+            // 1 回目は利用者の操作そのまま——最前面への持ち上げ。
+            (1, _) => raise_to_top(target),
+            // 先頭が読めなければ（走査が空）絶対指定をもう一度試すほかない。
+            (_, None) => raise_to_top(target),
+            (_, Some(top)) if top == target => {}
+            // 絶対指定が断られた——先頭の 1 枚と入れ替えるだけの相対指定で作り直す。
+            (_, Some(top)) => {
+                insert_after(target, top);
+                insert_after(top, target);
+            }
+        }
+        let shape = z_shape(witness);
+        if shape.first().copied() == index {
+            return ZSetupTrace {
+                attempts: attempt,
+                misses,
+                shape,
+            };
+        }
+        misses.push(shape);
+    }
+    ZSetupTrace {
+        attempts: Z_SETUP_ATTEMPTS,
+        misses,
+        shape: z_shape(witness),
+    }
 }
 
 /// 実窓を相手にする実測の口。
@@ -512,8 +650,8 @@ fn a_window_raised_by_the_user_returns_to_the_declared_order_on_the_following_pa
     let mut groups = groups_with(71, &members);
 
     // 助走——宣言どおりに並べる。
-    arrange_z(&set, &DECLARED);
-    let start = z_shape(&set);
+    let arrange = arrange_z(&set, &DECLARED);
+    let start = arrange.shape.clone();
 
     // 自己検査——本番の走査は不可視のこれらを 1 枚も拾わない（差し替えの根拠）。
     let production_scan = measure_windows_in_front(set[GROUP_SIZE - 1]);
@@ -527,8 +665,8 @@ fn a_window_raised_by_the_user_returns_to_the_declared_order_on_the_following_pa
     let quiet_shape = z_shape(&set);
 
     // ⑵ 利用者の操作——最も奥の 1 枚を最前面へ持ち上げる。
-    raise_to_top(set[GROUP_SIZE - 1]);
-    let raised = z_shape(&set);
+    let raise = raise_to_front_of(set[GROUP_SIZE - 1], &set);
+    let raised = raise.shape.clone();
 
     // ⑶ 対照——トリガを引かなければ、崩れたままである。
     let untriggered = run_pass_and_flush(&mut groups, &probe);
@@ -554,7 +692,9 @@ fn a_window_raised_by_the_user_returns_to_the_declared_order_on_the_following_pa
     assert_eq!(
         start,
         DECLARED.to_vec(),
-        "始点が宣言どおりに揃っていない: {start:?}"
+        "始点が宣言どおりに揃っていない: {start:?}（試行 {} 回・{}）",
+        arrange.attempts,
+        arrange.note()
     );
     assert!(
         !production_saw_members,
@@ -571,9 +711,11 @@ fn a_window_raised_by_the_user_returns_to_the_declared_order_on_the_following_pa
 
     // ⑵ 持ち上げが効いている（効いていなければ以降は空虚）。
     assert_eq!(
-        raised[0],
-        GROUP_SIZE - 1,
-        "持ち上げた窓が最前面に居ない（檻の前提が崩れている）: {raised:?}"
+        raised.first().copied(),
+        Some(GROUP_SIZE - 1),
+        "持ち上げた窓が組の先頭に居ない: {raised:?}（試行 {} 回・{}）",
+        raise.attempts,
+        raise.note()
     );
     assert_ne!(
         raised,
@@ -639,14 +781,14 @@ fn the_internal_order_survives_the_whole_group_going_behind_another_window() {
     let probe = RealWindowProbe::new(&members, &set);
     let mut groups = groups_with(81, &members);
 
-    arrange_z(&set, &DECLARED);
-    let start = z_shape(&set);
+    let arrange = arrange_z(&set, &DECLARED);
+    let start = arrange.shape.clone();
 
     // 別のアプリが前に出た——4 枚は揃って後ろへ回る。
-    raise_to_top(intruder);
     let mut with_intruder = set.clone();
     with_intruder.push(intruder);
-    let layered = z_shape(&with_intruder);
+    let raise = raise_to_front_of(intruder, &with_intruder);
+    let layered = raise.shape.clone();
     let behind_shape = z_shape(&set);
 
     // 内訳を読まないトリガは引かれる。
@@ -665,11 +807,16 @@ fn the_internal_order_survives_the_whole_group_going_behind_another_window() {
     assert_eq!(
         start,
         DECLARED.to_vec(),
-        "始点が宣言どおりに揃っていない: {start:?}"
+        "始点が宣言どおりに揃っていない: {start:?}（試行 {} 回・{}）",
+        arrange.attempts,
+        arrange.note()
     );
     assert_eq!(
-        layered[0], GROUP_SIZE,
-        "割り込んだ窓が最前面に居ない（檻の前提が崩れている）: {layered:?}"
+        layered.first().copied(),
+        Some(GROUP_SIZE),
+        "割り込んだ窓が組の先頭に居ない: {layered:?}（試行 {} 回・{}）",
+        raise.attempts,
+        raise.note()
     );
     assert_eq!(
         behind_shape,

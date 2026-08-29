@@ -567,3 +567,8 @@ mod tests;
 #[cfg(test)]
 #[path = "zorder_group_ledger_state_tests.rs"]
 mod state_tests;
+
+// 要件 10.2 の 10 分岐と、それを覆う実行されるテストの対応表（表が現実からずれたらここで赤くなる）。
+#[cfg(test)]
+#[path = "zorder_group_branch_coverage_tests.rs"]
+mod branch_coverage_tests;

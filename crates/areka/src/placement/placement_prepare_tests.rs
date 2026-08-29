@@ -653,8 +653,11 @@ fn stages_with_shell(shell_kv_text: &str) -> PreparedStages {
 /// 設定は本番で一切効かないが、配置も採寸も何一つ変わらないので他のどの檻にも映らない。
 #[test]
 fn prepare_carries_the_shell_zorder_value_verbatim() {
-    let prepared = stages_with_shell("seriko.zorder,1,0
-").resolve(WA);
+    let prepared = stages_with_shell(
+        "seriko.zorder,1,0
+",
+    )
+    .resolve(WA);
 
     assert_eq!(
         prepared.zorder_raw.as_deref(),
@@ -668,8 +671,11 @@ fn prepare_carries_the_shell_zorder_value_verbatim() {
 /// 片側だけでは「常に `Some` を作る」形と区別が付かない。
 #[test]
 fn prepare_carries_no_zorder_value_when_the_shell_declares_none() {
-    let prepared = stages_with_shell("seriko.dpi,120
-").resolve(WA);
+    let prepared = stages_with_shell(
+        "seriko.dpi,120
+",
+    )
+    .resolve(WA);
 
     assert_eq!(
         prepared.zorder_raw, None,

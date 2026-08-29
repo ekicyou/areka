@@ -194,12 +194,17 @@ fn t_zdb02_no_setting_leaves_the_ledger_and_the_log_untouched() {
 /// 期待値を手で書き写さずに `parse_zorder_tokens` の戻り値そのものと突き合わせるのは、
 /// 「別解釈器を新設していない」を主張するためである。手書きの期待値だと、こちらに
 /// 2 つ目の解釈器が生えても両方を同じに直せば緑のまま通ってしまう。
+///
+/// 入力に**正規化を要する並び**（`s1,b1,s0,b0`＝同一スコープ内が反転している）を 1 本
+/// 混ぜてあるのは、この錨を自足させるためである。既に正規化済みの並びだけを与えると
+/// 「`parse_zorder_tokens` は通すが正規化だけ省く」型の第 2 解釈器が素通りする。
 #[test]
 fn t_zdb03_the_setting_is_read_by_the_very_function_the_tag_uses() {
     for raw in [
         "1,0",
         "balloon1,surface1,balloon0,surface0",
         "b1,s1,b0,s0",
+        "s1,b1,s0,b0",
         "2,0,1",
     ] {
         let mut ledger = ZOrderGroupLedger::default();
@@ -325,7 +330,9 @@ fn t_zdb06_short_and_empty_settings_are_rejected_with_a_reason() {
 fn t_zdb07_a_rejected_setting_does_not_disturb_a_seated_base() {
     let mut ledger = ZOrderGroupLedger::default();
     apply_descript_base(&mut ledger, Some("1,0"));
-    let seated = base_of(&ledger).expect("前提の基底が据わっていない").clone();
+    let seated = base_of(&ledger)
+        .expect("前提の基底が据わっていない")
+        .clone();
 
     apply_descript_base(&mut ledger, Some("balloon1,Surface0"));
 
@@ -415,7 +422,11 @@ fn t_zdb10_the_seated_base_takes_part_in_the_redesignation_refusal() {
         "基底が押さえているスコープを指すタグが受理された（要件 5.5）"
     );
     let rejected = lines_with(&logs, "[zorder-group] rejected");
-    assert_eq!(rejected.len(), 1, "再指定の拒否が記録されていない: {logs:?}");
+    assert_eq!(
+        rejected.len(),
+        1,
+        "再指定の拒否が記録されていない: {logs:?}"
+    );
     assert!(
         rejected[0].contains("reason=CrossGroupRedesignation(0,1)"),
         "拒否理由が「既に塞がっているスコープ」でない: {}",

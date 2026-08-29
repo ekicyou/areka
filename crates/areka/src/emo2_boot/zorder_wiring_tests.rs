@@ -410,8 +410,9 @@ fn t_zwi08_the_entry_point_carries_the_shell_setting_into_the_wiring() {
         "準備の結果から重なりの生の値を取り出す行が本文に無い"
     );
     assert!(
-        squeezed
-            .contains("let zorder_raw = startup.as_ref().and_then(|prep| prep.zorder_raw.clone());"),
+        squeezed.contains(
+            "let zorder_raw = startup.as_ref().and_then(|prep| prep.zorder_raw.clone());"
+        ),
         "起動窓の戻り値から重なりの生の値を受け取る行が本文に無い"
     );
     assert!(
@@ -453,7 +454,10 @@ fn t_zwi09_the_boot_seats_the_descript_base_before_inserting_the_wiring() {
         "shell 設定由来の基底を据える呼出がちょうど 1 つではない（0 なら設定が効かず、2 なら二度据える）"
     );
 
-    let seed_at = index_of(&squeezed, "wiring.seed_zorder_descript_base(zorder_descript);");
+    let seed_at = index_of(
+        &squeezed,
+        "wiring.seed_zorder_descript_base(zorder_descript);",
+    );
     let insert_at = index_of(
         &squeezed,
         "app.world().borrow_mut().world_mut().insert_non_send(wiring);",

@@ -15,9 +15,13 @@
 //! - [`POINTER`] — ポインタ入力の投入（`pointer/buffers.rs`）とポインタ系メッセージの受理
 //! - [`DRAG`] — ドラッグ中（毎画面更新で回す必要があるので、tick の末尾で自分で立て直す）
 //! - [`WINDOW_CMD`] — 窓書込指令の積み上げ（`command.rs` の enqueue）
-//! - [`ZORDER`] — Z 順の要求（`zorder_pair_maintain`／`ReassertZOrder`・`zorder_group_maintain`・
-//!   `window_proc::window_pos` の追随トリガ・areka 側の `ZOrderCueSink`・areka 側の
-//!   `balloon_visibility_phase` の再表示トリガ）
+//! - [`ZORDER`] — Z 順の要求（`window/zorder_pair_maintain.rs` の `ReassertZOrder` 維持・
+//!   `window/zorder_group_maintain.rs` のグループ維持・`window_proc/window_pos.rs` の追随
+//!   トリガ・areka 側 `emo2_boot/zorder_cue.rs` のタグ入口・areka 側
+//!   `emo2_boot/balloon_visibility_phase.rs` の再表示トリガ）
+//!   この行は**ファイル名で**書く。決定論テストが「旗を立てているファイルの名前がこの行に
+//!   現れるか」を機械で照合しているので、型名や関数名へ言い換えるとその照合が落ちる
+//!   （wintf 側は `tick_gate_tests.rs`、areka 側は `tick_gate_config_producers_tests.rs`）。
 //! - [`WM_GEOMETRY`] — 幾何・DPI・表示構成・活性化・表示／破棄系メッセージの受理
 //! - [`PRESENT`] — 表示指令の到着（areka 側の `PresentBridge`／`MoveCueSink`／lifecycle 送信端）
 //! - [`ANIM`] — dola アニメータに活性がある
@@ -115,7 +119,10 @@ pub const POINTER: WakeBits = WakeBits(1 << 0);
 pub const DRAG: WakeBits = WakeBits(1 << 1);
 /// 窓書込指令の積み上げ（`command.rs` の enqueue）。
 pub const WINDOW_CMD: WakeBits = WakeBits(1 << 2);
-/// Z 順の要求（`zorder_pair_maintain`／`ReassertZOrder`）。
+/// Z 順の要求（重なりの維持・利用者の操作への追随・タグ入口）。
+///
+/// 生産者の名前はここに書かない——名簿はモジュール冒頭のただ 1 つとし、写しを増やさない
+/// （[`PRESENT`] と同じ流儀。写しが 2 つあると片方だけが古くなり、しかも静かに古くなる）。
 pub const ZORDER: WakeBits = WakeBits(1 << 3);
 /// 幾何・DPI・表示構成・活性化・表示／破棄系メッセージの受理。
 pub const WM_GEOMETRY: WakeBits = WakeBits(1 << 4);
