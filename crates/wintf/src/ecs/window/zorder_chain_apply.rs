@@ -664,3 +664,8 @@ pub(crate) mod double {
 #[cfg(test)]
 #[path = "zorder_chain_apply_tests.rs"]
 mod zorder_chain_apply_tests;
+
+/// 実窓での最終形の檻（替え玉を据えないので、上の 5 つの窓口はそのまま Win32 を呼ぶ）。
+#[cfg(test)]
+#[path = "zorder_chain_order_tests.rs"]
+mod zorder_chain_order_tests;
