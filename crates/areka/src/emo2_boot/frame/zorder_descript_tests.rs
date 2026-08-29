@@ -22,7 +22,7 @@ use bevy_ecs::world::World;
 use log_capture_kit::{LineFormat, capture_lines};
 use std::sync::mpsc::channel;
 
-use wintf::ecs::window::ZOrderGroups;
+use wintf::ecs::window::ZOrderChainPlan;
 
 use crate::emo2_boot::frame::run_zorder_drain_phase;
 use crate::emo2_boot::frame::test_support::{headless_wiring_with, zero_clock};
@@ -353,13 +353,19 @@ fn t_zdb07_a_rejected_setting_does_not_disturb_a_seated_base() {
 // 完了状態——最初の巡から指定どおりの相対順が成立する（要件 5.1）
 // ---------------------------------------------------------------------------
 
-/// 設定を据えた台帳は、タグの指令が**1 本も無い**最初の巡で受け口へ指定どおりの列を出す。
+/// 設定を据えた台帳は、タグの指令が**1 本も無い**最初の巡で受け口へ指定どおりの鎖を出す。
 ///
-/// これが task 6.3 の完了状態である（「タグの実行を待たない」）。
+/// これが起動時適用の完了状態である（「タグの実行を待たない」・要件 5.1／5.3）。
+/// 1 つの設定は 1 つのグループとして扱われるので、鎖の並びは設定の要素順そのものになる。
 #[test]
 fn t_zdb08_the_seated_base_projects_on_the_first_pass_without_any_tag() {
     let mut ledger = ZOrderGroupLedger::default();
     apply_descript_base(&mut ledger, Some("1,0"));
+    assert_eq!(
+        ledger.groups().len(),
+        1,
+        "1 つの設定が 1 つのグループとして据わっていない（要件 5.3）"
+    );
 
     let mut world = world_with_scopes(&[0, 1]);
     let (_tx, rx) = channel::<ZOrderDirective>();
@@ -371,22 +377,20 @@ fn t_zdb08_the_seated_base_projects_on_the_first_pass_without_any_tag() {
         window_of(&world, 0, GroupWindowKind::Balloon),
         window_of(&world, 0, GroupWindowKind::Char),
     ];
-    let groups = world
-        .get_resource::<ZOrderGroups>()
-        .expect("最初の巡で受け口が出来ていない（基底が最初の維持の巡から効いていない）");
+    let receiver = world
+        .get_resource::<ZOrderChainPlan>()
+        .expect("最初の巡で受け口が出来ていない（基底が最初の巡から効いていない）");
+    let chain = receiver
+        .chain
+        .as_ref()
+        .expect("受け口は在るのに鎖が空（基底が射影まで届いていない）");
     assert_eq!(
-        groups.groups.len(),
-        1,
-        "受け口へ置かれたグループが 1 本ではない: {:?}",
-        groups.groups
-    );
-    assert_eq!(
-        groups.groups[0].members, expected,
-        "受け口の窓の並びが設定どおり（手前が scope 1）でない"
+        chain.members, expected,
+        "鎖の窓の並びが設定どおり（手前が scope 1）でない"
     );
     assert!(
-        groups.pending,
-        "最初の巡に印が立っていない（維持系が次の巡で動かない）"
+        receiver.dirty,
+        "最初の巡に印が立っていない（適用系が鎖を書きに行かない）"
     );
 }
 
@@ -401,7 +405,7 @@ fn t_zdb09_without_a_setting_the_first_pass_creates_no_receiver() {
     run_zorder_drain_phase(&rx, &mut ledger, &mut world);
 
     assert!(
-        world.get_resource::<ZOrderGroups>().is_none(),
+        world.get_resource::<ZOrderChainPlan>().is_none(),
         "設定が無い運転で受け口が作られた（既定＝非強制が構造で成り立っていない）"
     );
 }

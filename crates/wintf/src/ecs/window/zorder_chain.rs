@@ -363,8 +363,9 @@ pub(crate) fn log_chain_settled(
 /// であり、それを知っているのは台帳と在庫を持つ側だからである。よって保全語彙 2 語
 /// （[`log_group_applied`](super::zorder_chain_diag::log_group_applied) 等）と同じく
 /// crate の外へ開いてある。出力先は本モジュールのままなので、grep の対象は割れない。
-/// 呼び手を立てるのは指令消化の相の出口を差し替える task である
-/// （材料は [`ChainPlan::absent`] が `(group_id, element)` の対で運ぶ）。
+/// 呼び手は指令消化の相（areka の `emo2_boot/frame/zorder_drain.rs`）であり、材料は
+/// [`ChainPlan::absent`] が `(group_id, element)` の対で運ぶ。同じ内容が続く間は
+/// 1 度だけ出す（連呼の抑止は呼び手側の控えが持つ）。
 pub fn log_chain_absent(group_id: u32, element: &str) {
     debug!("{}", absent_line(group_id, element));
 }

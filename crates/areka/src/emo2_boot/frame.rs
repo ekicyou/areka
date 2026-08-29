@@ -17,9 +17,10 @@
 //!   グリフ数・選択肢表示中・ポインタ滞在・ドラッグ中・表示ライフサイクル信号）を集めて判断中核へ渡し、
 //!   返った遷移を発行して 1 行ずつ記録する。実装は `emo2_boot::balloon_visibility`（判断）と
 //!   その配線層 `balloon_visibility_phase.rs`。
-//! - zorder-drain: 台本から届いた `\![set,zorder,…]`／`\![reset,zorder]` を台帳へ適用し、台帳を
-//!   実在する窓の列へ射影して wintf の受け口（`ZOrderGroups`）へ置く。`\![move]` の取り出しの
-//!   直後・グループ維持系より前（scope-zorder-pinning task 6.2）。実装は `frame/zorder_drain.rs`。
+//! - zorder-drain: 台本から届いた `\![set,zorder,…]`／`\![reset,zorder]` を台帳へ適用し、台帳と
+//!   窓の在庫から**望む鎖 1 本**を組んで wintf の受け口（`ZOrderChainPlan`）へ置く。公開は内容が
+//!   前回と異なるときだけで、窓の出現・破棄はこの門で自然に検出される。`\![move]` の取り出しの
+//!   直後・鎖の適用系より前（scope-zorder-pinning）。実装は `frame/zorder_drain.rs`。
 //! - 窓寸 reconcile: 表示成立点の状態照合報告（`take_pending_resize`）で窓寸を反映する（第 2 経路）。
 //!   可視性の相が発行した表示が積む窓寸要求も、同一フレームのここで landing する。
 //! - text-scale: 装着済み balloon scope の文字層 binding を presenter の**現適用 k** へ毎フレーム

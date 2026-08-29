@@ -82,12 +82,12 @@ pub struct Emo2Wiring {
     /// 窓の正本（`GhostWindows`）が World に載るまで取り出しの相は `try_iter` を呼ばず、
     /// チャネル自身が保留バッファを兼ねる——起動直後のタグも落ちない。
     pub(super) zorder_rx: Receiver<ZOrderDirective>,
-    /// 重なりのグループ台帳（正本）。取り出しの相が指令を適用し、射影の入力になる。
+    /// 重なりのグループ台帳（正本）。取り出しの相が指令を適用し、鎖の合成の入力になる。
     ///
     /// `balloon_visibility` と同じ理由でここに置く——相関数は排他 system から呼ばれる素の
     /// 関数で `Local` を取れないため、フレームを跨いで生きる器が結線状態の側に要る。
-    /// 射影キャッシュ（wintf の `ZOrderGroups`）は World 側に在るが、**正本はこちら**であり
-    /// 二重帳簿にはしない（design「Data Models」）。
+    /// 合成した鎖の写し（wintf の `ZOrderChainPlan`）は World 側に在るが、**正本はこちら**で
+    /// あり二重帳簿にはしない（design「Data Models」）。
     ///
     /// 構築の時点では常に既定（グループ 0 本）から始まる。shell 設定由来の基底は、
     /// 起動の段が [`Emo2Wiring::seed_zorder_descript_base`] で 1 度だけ据える

@@ -34,7 +34,7 @@ use bevy_ecs::schedule::{IntoScheduleConfigs, Schedules};
 use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
 use std::sync::mpsc::channel;
 use wintf::ecs::FrameFinalize;
-use wintf::ecs::window::{ZOrderGroups, apply_zorder_group_maintenance};
+use wintf::ecs::window::{ZOrderChainPlan, ZOrderGroups, apply_zorder_group_maintenance};
 
 use super::frame::run_zorder_drain_phase;
 use super::zorder_cue::{ZOrderCueSink, ZOrderDirective};
@@ -160,23 +160,22 @@ fn t_zwi01_a_script_tag_reaches_the_ledger_through_the_wired_channel() {
     );
 
     // 射影まで通って受け口が出来ていること——ここまでが「相まで届く」の終端である。
-    let groups = world
-        .get_resource::<ZOrderGroups>()
-        .expect("受け口（ZOrderGroups）が出来ていない＝射影まで届いていない");
+    let receiver = world
+        .get_resource::<ZOrderChainPlan>()
+        .expect("受け口（ZOrderChainPlan）が出来ていない＝射影まで届いていない");
+    let chain = receiver
+        .chain
+        .as_ref()
+        .expect("受け口は在るのに鎖が空（台帳から鎖の合成まで届いていない）");
     assert_eq!(
-        groups.groups.len(),
-        1,
-        "受け口へ置かれたグループがちょうど 1 本ではない: {:?}",
-        groups.groups
-    );
-    assert_eq!(
-        groups.groups[0].members.len(),
+        chain.members.len(),
         4,
-        "実在する窓 4 枚が射影に載っていない"
+        "実在する窓 4 枚が鎖に載っていない: {:?}",
+        chain.members
     );
     assert!(
-        groups.pending,
-        "射影が動いた巡に印が立っていない（維持系が次の巡に動かない）"
+        receiver.dirty,
+        "内容が動いた巡に印が立っていない（適用系が鎖を書きに行かない）"
     );
 }
 
@@ -203,7 +202,7 @@ fn t_zwi02_a_script_without_the_tag_leaves_the_mechanism_absent() {
         "担当外のコマンドで台帳が動いた（自己選別が漏れている）"
     );
     assert!(
-        world.get_resource::<ZOrderGroups>().is_none(),
+        world.get_resource::<ZOrderChainPlan>().is_none(),
         "グループが 1 本も無い走行で受け口が作られた（既定＝非強制が構造で成り立っていない）"
     );
 }

@@ -10,6 +10,7 @@ use super::*;
 use bevy_ecs::world::World;
 use log_capture_kit::{LineFormat, capture_lines};
 use std::sync::mpsc::{Sender, channel};
+use wintf::ecs::window::{ChainPlan, ZOrderChainPlan};
 
 use crate::placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
 use crate::placement::source::GhostTitles;
@@ -96,31 +97,49 @@ pub(super) fn directive_channel() -> (Sender<ZOrderDirective>, Receiver<ZOrderDi
     channel()
 }
 
-/// 受け口（`ZOrderGroups`）の現在の内容を `(グループ id, 窓の列)` の並びで読む。
+/// 受け口（`ZOrderChainPlan`）そのものが World に在るか。
 ///
-/// Resource そのものが無いときは `None`——「空の受け口が在る」と「受け口が無い」は
-/// 要件 6.1 の判定で意味が違うので、潰さずに区別する。
-pub(super) fn projected(world: &World) -> Option<Vec<(u32, Vec<Entity>)>> {
-    world.get_resource::<ZOrderGroups>().map(|groups| {
-        groups
-            .groups
+/// 「空の受け口が在る」と「受け口が無い」は要件 6.1／6.4 の判定で意味が違うので、
+/// 中身とは別の読み口として潰さずに区別する。既定状態（グループ 0 本）では受け口を
+/// 作らないことが「1 命令も出さない」の構造的な根拠である。
+pub(super) fn receiver_exists(world: &World) -> bool {
+    world.get_resource::<ZOrderChainPlan>().is_some()
+}
+
+/// 公開されている鎖の計画（受け口が無い、または既定状態へ戻された後は `None`）。
+pub(super) fn chain(world: &World) -> Option<ChainPlan> {
+    world
+        .get_resource::<ZOrderChainPlan>()
+        .and_then(|plan| plan.chain.clone())
+}
+
+/// 公開されている鎖の窓の列（手前から奥）。鎖が無ければ `None`。
+pub(super) fn chain_members(world: &World) -> Option<Vec<Entity>> {
+    chain(world).map(|plan| plan.members)
+}
+
+/// 公開されている鎖の繋ぎの列を `(手前, 奥)` の対で読む。鎖が無ければ `None`。
+pub(super) fn chain_edges(world: &World) -> Option<Vec<(Entity, Entity)>> {
+    chain(world).map(|plan| {
+        plan.cross_edges
             .iter()
-            .map(|spec| (spec.id, spec.members.clone()))
+            .map(|edge| (edge.owned, edge.owner))
             .collect()
     })
 }
 
-/// 受け口の印（`pending`）。Resource が無いときは `None`。
-pub(super) fn pending(world: &World) -> Option<bool> {
-    world.get_resource::<ZOrderGroups>().map(|g| g.pending)
+/// 受け口の差分の印（`dirty`）。Resource が無いときは `None`。
+pub(super) fn dirty(world: &World) -> Option<bool> {
+    world.get_resource::<ZOrderChainPlan>().map(|p| p.dirty)
 }
 
-/// 受け口の印を倒す（次の巡で「立ったかどうか」を測るための下ごしらえ）。
-pub(super) fn clear_pending(world: &mut World) {
+/// 受け口の印を倒す（次の巡で「立ったかどうか」を測るための下ごしらえ——本番では
+/// 適用系が読んだ時点で倒す欄である）。
+pub(super) fn clear_dirty(world: &mut World) {
     world
-        .get_resource_mut::<ZOrderGroups>()
+        .get_resource_mut::<ZOrderChainPlan>()
         .expect("受け口が無い World で印を倒そうとした")
-        .pending = false;
+        .dirty = false;
 }
 
 /// クロージャ実行中に**現在のスレッド**で発火した記録を 1 行 1 件で返す。
@@ -149,9 +168,9 @@ pub(super) fn lines_with<'a>(logs: &'a [String], needle: &str) -> Vec<&'a str> {
 /// 指定は前方一致なのでこの出力先を点灯させる（判定に影響しない）。
 pub(super) const GROUP_TARGET: &str = "target=wintf::ecs::window::zorder_chain_diag";
 
-/// 不在メンバーの見送り（`[zorder-group] skip reason=MemberMissing`）の出力先。
+/// 宣言した窓が不在だった記録（`[zorder-chain] absent`）の出力先。
 ///
-/// この記録だけは移設の対象ではない——要件 9.5 の保全対象は受理・拒否の 2 語であり、
-/// こちらは退役予定（後継は `[zorder-chain] absent`・要件 8.4）だからである。よって
-/// 出力先も退役予定のモジュールのままである。
-pub(super) const GROUP_SKIP_TARGET: &str = "target=wintf::ecs::window::zorder_group";
+/// 末尾の空白は**必須**である——`zorder_chain` は `zorder_chain_diag` の前方部分でも
+/// あり、空白を落とすと [`GROUP_TARGET`] の行まで拾って照合が恒真になる。
+/// 捕捉行の書式（`level= target= message= …`）が欄を空白で区切ることに依る。
+pub(super) const CHAIN_TARGET: &str = "target=wintf::ecs::window::zorder_chain ";

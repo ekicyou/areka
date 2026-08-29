@@ -1,11 +1,11 @@
-//! 重なりの指令を台帳へ適用し、台帳を**実在する窓の列**へ射影する相
-//! （design「zorder drain 相（`emo2_boot/frame/zorder_drain.rs`）」・要件 1.4／6.1／
-//! 7.1／7.2／8.4）。
+//! 重なりの指令を台帳へ適用し、台帳を**鎖の計画**へ射影する相
+//! （design「`zorder_drain`（既存・出口を差し替え）」・要件 1.4／4／5／7.1／8.4／
+//! 14.5／15.3）。
 //!
 //! 兄弟の [`run_move_drain_phase`](super::drain_resnap::run_move_drain_phase) と同じ
 //! 跨ぎの形である——台本のスレッドが送り出した指令を、画面を持つ側のスレッドで
 //! 取り出して適用する。違うのは**適用した後にもう一仕事ある**ことで、こちらは台帳の
-//! 内容を「いま実際に在る窓」の列へ写し、その写しを wintf の受け口へ置く。
+//! 内容を「いま実際に在る窓」の鎖へ写し、その写しを wintf の受け口へ置く。
 //!
 //! # 窓の正本が無い間は取り出さない
 //!
@@ -15,48 +15,43 @@
 //! （move の相 `drain_resnap.rs:79-87` と同じ意図・要件 1.4）。取り出してから捨てる形に
 //! すると、起動直後の `\![set,zorder,...]` が黙って消える。
 //!
-//! # 射影は「実在する窓だけ」を宣言順のまま抜き出す
+//! # 出口は「望む鎖 1 本」である
 //!
 //! 台帳はスコープ番号と窓種別のままで持ち、まだ現れていないスコープも取り除かない
 //! （要件 1.4）。窓が実在するかを知っているのはこの相だけなので、
-//! 「宣言 → 実在する窓の列」の写像はここが持つ。写像の規則は 2 つだけである。
+//! 「宣言 → 実在する窓の鎖」の写像はここが持つ。並びと繋ぎを決める判断そのものは
+//! 純関数 [`compose_chain`] にあり、この相が足すのは 2 つだけである——在庫のスコープ
+//! 一覧を引くことと、要素 1 つを実在する窓へ解決する規則を渡すことである。
 //!
-//! - **実在しない要素は飛ばし、残る要素の相対順は宣言のまま保つ**（要件 1.4／7.2）。
-//!   飛ばした要素があったグループは見送りの記録を残す（黙って落とさない・要件 8.4）。
-//!   この記録は**受け口への書込とは独立**である——要件 8.4 が名指しする「窓が一度も
-//!   現れないまま推移する」グループは射影が空になり書込が起きないので、書込に紐付けると
-//!   肝心の場合が沈黙する（差し戻し 1 巡目の是正。詳細は [`report_missing_members`]）。
-//! - **実在する窓が 2 枚未満のグループは射影から外す**（比べる相手が居らず維持のしようが
-//!   無い）。ただし**台帳のエントリは残す**ので、窓が現れた後の相で射影へ戻ってくる
-//!   （要件 7.1）。
-//!
-//! ここでの「実在する」は 2 段である——`GhostWindows` にそのスコープが載っていること
+//! 「実在する」は 2 段である——`GhostWindows` にそのスコープが載っていること
 //! （まだ生まれていない窓は載らない）と、指している entity が World にまだ居ること
 //! （破棄済みは飛ばす・要件 7.2）。前者だけを見ると、対の後追い破棄の途中で
 //! 既に消えた entity を受け口へ渡してしまう。
 //!
-//! # 何も変わっていない巡では受け口に触れない（要件 6.1）
+//! # 公開は内容が前回と異なるときだけ（要件 14.5）
 //!
-//! 射影の結果が受け口の現在の内容と同じなら、書き込みも印立ても行わない。
-//! グループが 1 つも無い状態では射影が空になり、受け口の Resource すら作らない
-//! ——維持系は観測する対象を得られず、指令を 1 本も出さない。「既定状態では従来と
+//! 組んだ鎖が受け口の現在の内容と同じなら、書き込みも印立ても行わない。**窓の出現・
+//! 破棄はこの 1 つの門で自然に検出される**——在庫が動けば合成の結果が動くからである。
+//! どのグループにも属さないスコープの出入りも同じ門を通る（要件 7.1／15.3）。
+//! 変化の検出に台帳の版（[`ZOrderGroupLedger::version`]）ではなく**合成の結果そのもの**を
+//! 使うのは、版が進んでも結果が動かない場合があるからである（例: まだ 1 枚も窓が無い
+//! スコープだけのグループが受理された巡）。結果の突き合わせは版の判定を包含する。
+//!
+//! グループが 1 つも無い状態では合成が計画そのものを作らず、受け口の Resource すら
+//! 生えない——適用系は仕事を得られず、指令を 1 本も出さない。「既定状態では従来と
 //! 同じ」（要件 6.1／6.4）はこの**不在**によって構造的に成り立つのであって、
-//! 「出さないと判断する」ことによってではない。
-//!
-//! 変化の検出に台帳の版（[`ZOrderGroupLedger::version`]）ではなく**射影の結果そのもの**を
-//! 使うのは、版が進んでも射影が動かない場合があるからである（例: まだ 1 枚も窓が無い
-//! スコープだけのグループが受理された巡）。版で判定すると、その巡に印が立って維持系が
-//! 空振りする。結果の突き合わせは版の判定を包含する（版が動かなければ結果も動かない）。
+//! 「出さないと判断する」ことによってではない。一度出来た受け口は解除の後も残す。
+//! 消してしまうと、適用系が「張った繋ぎを外せ」という指示を受け取れなくなる
+//! （要件 4.1／15.4）。
 //!
 //! # 記録はすべて wintf の唯一の入口を通す
 //!
-//! 受理・拒否・メンバー不在のいずれも、記録を出すのは wintf 側の
-//! [`log_group_applied`]／[`log_group_rejected`]／[`log_group_member_missing`] である。
+//! 受理・拒否・宣言要素の不在のいずれも、記録を出すのは wintf 側の
+//! [`log_group_applied`]／[`log_group_rejected`]／[`log_chain_absent`] である。
 //! `tracing` の出力先は呼び出し元の module path が既定なので、こちら側でマクロを
-//! 呼ぶと実機サインオフの grep 対象が 2 本に割れる（task 2.1 が入口を 1 つに閉じた
-//! 理由そのもの）。本モジュールが組むのは**本文の文字列**だけである。
+//! 呼ぶと実機サインオフの grep 対象が 2 本に割れる。本モジュールが組むのは
+//! **本文の文字列**だけである。
 
-use std::collections::BTreeMap;
 use std::sync::mpsc::Receiver;
 
 use bevy_ecs::entity::Entity;
@@ -64,11 +59,12 @@ use bevy_ecs::prelude::Resource;
 use bevy_ecs::world::World;
 
 use wintf::ecs::window::{
-    ZOrderGroupSpec, ZOrderGroups, log_group_applied, log_group_member_missing, log_group_rejected,
+    ChainPlan, ZOrderChainPlan, log_chain_absent, log_group_applied, log_group_rejected,
 };
 
 use crate::emo2_boot::zorder_cue::ZOrderDirective;
 use crate::placement::spawn::GhostWindows;
+use crate::placement::zorder_chain_compose::{compose_chain, element_text};
 use crate::placement::zorder_group_ledger::{
     GroupElement, GroupWindowKind, Normalization, ZOrderGroup, ZOrderGroupLedger, ZOrderReject,
     parse_zorder_tokens,
@@ -85,10 +81,12 @@ const NO_VALUE: &str = "-";
 // 相の本体
 // ---------------------------------------------------------------------------
 
-/// zorder drain 相（design「zorder drain 相」・要件 1.4／6.1／7.1／7.2／8.4）。
+/// zorder drain 相（design「`zorder_drain`（既存・出口を差し替え）」・要件 1.4／4／5／
+/// 6.1／7.1／7.2／8.4／14.5／15.3）。
 ///
 /// 順に⑴窓の正本が無ければ何もしない ⑵届いている指令を到着順に台帳へ適用する
-/// ⑶台帳を実在する窓の列へ射影する ⑷射影が動いていれば受け口へ書いて印を立てる。
+/// ⑶台帳と窓の在庫から望む鎖を組む ⑷窓が無かった宣言要素を報せる
+/// ⑸内容が前回と異なれば受け口へ公開する。
 ///
 /// # 引数が受け口と台帳を**直接**受け取る理由
 ///
@@ -118,12 +116,16 @@ pub fn run_zorder_drain_phase(
         apply_directive(ledger, &directive);
     }
 
-    // ⑶ 射影する。
-    let projection = project_groups(ledger, world);
-    // ⑷ 実在しない要素の報告は**受け口の書込とは独立**に行う（下の関数の doc を参照）。
-    report_missing_members(world, &projection.incomplete);
-    // ⑸ 射影が動いていれば受け口へ置く。
-    publish_projection(world, projection.specs);
+    // ⑶ 台帳と窓の在庫から望む鎖を組む。
+    let plan = compose_plan(ledger, world);
+    // ⑷ 窓が無かった宣言要素の報告は**公開とは独立**に行う（下の関数の doc を参照）。
+    let absent = plan
+        .as_ref()
+        .map(|chain| chain.absent.clone())
+        .unwrap_or_default();
+    report_absent_elements(world, &absent);
+    // ⑸ 内容が前回と異なれば受け口へ置く。
+    publish_chain_plan(world, plan);
 }
 
 // ---------------------------------------------------------------------------
@@ -178,73 +180,28 @@ fn apply_directive(ledger: &mut ZOrderGroupLedger, directive: &ZOrderDirective) 
 }
 
 // ---------------------------------------------------------------------------
-// ⑶ 射影（台帳 → 実在する窓の列）
+// ⑶ 合成（台帳＋窓の在庫 → 望む鎖 1 本）
 // ---------------------------------------------------------------------------
 
-/// 射影の結果——受け口へ置く列と、要素を飛ばしたグループの控え。
-#[derive(Debug, Default, PartialEq, Eq)]
-struct Projection {
-    /// 維持の対象になるグループ（実在する窓が 2 枚以上・宣言順のまま）。
-    specs: Vec<ZOrderGroupSpec>,
-    /// 実在しない要素があったグループ（記録の対象・要件 8.4）。
-    ///
-    /// 射影から外れたグループも、射影に載ったが一部が欠けたグループも、どちらも
-    /// ここへ入る。「窓が足りずに外した」ことと「窓が足りないまま残る要素で維持する」
-    /// ことは、作者から見ればどちらも「書いたスコープの窓がまだ無い」1 つの事実である。
-    incomplete: Vec<IncompleteGroup>,
-}
-
-/// 実在しない要素があったグループ 1 本の控え（記録に載せる実数を持つ）。
+/// 台帳の全グループと窓の在庫から、望む鎖 1 本を組む
+/// （要件 1.4／3.6／7.1／7.2／15.1／15.2）。
 ///
-/// 欠けた数ではなく**宣言の数と実在の数**を持つ。`existing == 0`（一度も現れていない
-/// ＝要件 8.4 が名指しする形）と `existing >= 2`（一部だけ現れて維持は続く形）は
-/// 読み手にとって別の事実であり、引き算した 1 つの数からは復元できない。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct IncompleteGroup {
-    /// 台帳が配ったグループの識別子。
-    id: u32,
-    /// 作者が書いた要素の数（台帳に載っている宣言の長さ）。
-    declared: usize,
-    /// そのうち実在する窓へ解決できた数。
-    existing: usize,
-}
-
-/// 台帳の全グループを、実在する窓だけの列へ射影する（要件 1.4／7.1／7.2）。
+/// 並びと繋ぎを決める判断そのものは純関数 [`compose_chain`] が持つ。ここが足すのは
+/// 在庫のスコープ一覧と、要素 1 つを実在する窓へ解決する規則の 2 つだけである。
 ///
-/// `GhostWindows` が無ければ空の射影を返す（呼び出し元が先に弾いているので、
-/// これは二重の防波堤である）。
-fn project_groups(ledger: &ZOrderGroupLedger, world: &World) -> Projection {
-    let Some(ghost_windows) = world.get_resource::<GhostWindows>() else {
-        return Projection::default();
-    };
-
-    let mut projection = Projection::default();
-    for group in ledger.groups() {
-        let mut members: Vec<Entity> = Vec::with_capacity(group.members.len());
-        for element in &group.members {
-            // 飛ばすのは要素だけで、残る要素は**宣言の順のまま**積む（要件 1.4）。
-            // 詰めるだけなので、存在する窓どうしの相対順は作者の指定と一致する。
-            if let Some(entity) = resolve_member(ghost_windows, world, element) {
-                members.push(entity);
-            }
-        }
-        if members.len() < group.members.len() {
-            projection.incomplete.push(IncompleteGroup {
-                id: group.id,
-                declared: group.members.len(),
-                existing: members.len(),
-            });
-        }
-        // 実在が 2 枚未満＝比べる相手が居ない。射影から外すが台帳のエントリは残るので、
-        // 窓が現れた後の巡で戻ってくる（要件 7.1）。
-        if members.len() >= 2 {
-            projection.specs.push(ZOrderGroupSpec {
-                id: group.id,
-                members,
-            });
-        }
-    }
-    projection
+/// `None` は既定状態（グループが 1 つも無い）を意味する。`GhostWindows` が無いときも
+/// 同じく `None` を返す——呼び出し元が先に弾いているので、これは二重の防波堤である。
+fn compose_plan(ledger: &ZOrderGroupLedger, world: &World) -> Option<ChainPlan> {
+    let ghost_windows = world.get_resource::<GhostWindows>()?;
+    // 未指定スコープの後方参加（要件 15.1）に使う在庫の一覧。合成側が昇順へ整えて
+    // 重複も落とすので、ここでは順も重複も問わない。
+    let all_scopes: Vec<u32> = ghost_windows
+        .scopes()
+        .filter_map(|scope| u32::try_from(scope).ok())
+        .collect();
+    compose_chain(ledger.groups(), &all_scopes, &|element| {
+        resolve_member(ghost_windows, world, element)
+    })
 }
 
 /// 要素 1 つを実在する窓の entity へ解決する（実在しなければ `None`）。
@@ -266,110 +223,98 @@ fn resolve_member(
 }
 
 // ---------------------------------------------------------------------------
-// ⑷ 実在しない要素の報告（受け口の書込とは独立）
+// ⑷ 窓が無かった宣言要素の記録（公開とは独立）
 // ---------------------------------------------------------------------------
 
-/// 直近に報告した「不完全なグループ」の控え（グループ id → 実在した窓の数）。
+/// 直近に報せた「窓が無かった宣言要素」の控え。
 ///
 /// **正本ではない**。グループの内容（要素・順序・出所）は 1 バイトも持たず、
-/// 「どの id について、実在何枚という事実を既に報せたか」だけを覚える。二重帳簿を
-/// 作らないための線引きであり、この Resource を失っても復元されるのは
-/// 「もう一度同じ行が出る」ことだけで、重なりの判断には何の影響も無い。
+/// 「どの対を既に報せたか」だけを覚える。二重帳簿を作らないための線引きであり、
+/// この Resource を失っても復元されるのは「もう一度同じ行が出る」ことだけで、
+/// 重なりの判断には何の影響も無い。
 #[derive(Resource, Default)]
-struct ZOrderMissingReports {
-    /// グループ id → 前回報告時に実在した窓の数。
-    seen: BTreeMap<u32, usize>,
+struct ZOrderAbsentReports {
+    /// 前回報せた `(グループ id, 要素の正準表記)` の並び（合成が返した順のまま）。
+    reported: Vec<(u32, String)>,
 }
 
-/// 実在しない要素があったグループを記録する（要件 8.4／8.3）。
+/// 窓が無かった宣言要素を記録する（要件 8.3／8.4）。
 ///
-/// # なぜ受け口の書込と切り離すのか（差し戻し 1 巡目の是正）
+/// # なぜ公開と切り離すのか
 ///
-/// 当初はこの報告を [`publish_projection`] の末尾に置いていたが、あちらには
-/// 「受け口を作る理由が無い」「射影が動いていない」の 2 つの早期 return がある。
-/// **要件 8.4 が名指しする「窓が一度も現れないまま推移する」グループは射影が空**
-/// なので 1 つ目の return に落ち、報告そのものが消えていた。既に安定した射影が在る
-/// ところへ全欠けのグループを足した場合も、射影が動かないので 2 つ目に落ちた。
-/// 不在は**書込とは別の事実**であり、書込の有無に紐付けてはならない。
+/// 公開には「受け口を作る理由が無い」「内容が動いていない」の 2 つの早期 return がある。
+/// **要件 8.4 が名指しする「窓が一度も現れないまま推移する」形は鎖が空**なので、
+/// 公開に紐付けると報告そのものが消える。既に安定した鎖が在るところへ全欠けのグループを
+/// 足した場合も同様である。不在は**公開とは別の事実**であり、公開の有無に紐付けてはならない。
 ///
 /// # 連呼はしない（毎巡走る相であることへの配慮）
 ///
-/// 素直に毎回出すと、現れないスコープを 1 つ書いただけで同じ 1 行が毎フレーム積もり、
-/// 本物の変化を埋める。よって**前回報告した内容と違うときだけ**出す——初めて不完全に
-/// なった id と、実在の枚数が動いた id である。完全になった id は控えから落ちるので、
-/// 再び欠ければまた報される。「一度きり」にしないのは、欠けが増減した事実まで
-/// 黙らせないためである。
+/// 素直に毎回出すと、現れないスコープを 1 つ書いただけで同じ行が毎フレーム積もり、
+/// 本物の変化を埋める。よって**前回報せた内容と違うときだけ**、その時点の不在を
+/// 一式出す。揃えば控えは空になるので、再び欠ければまた報される。「一度きり」に
+/// しないのは、欠けが増減した事実まで黙らせないためである。
 ///
 /// 控えは報告の有無を決めるためだけに使い、判断には一切関与しない。
-fn report_missing_members(world: &mut World, incomplete: &[IncompleteGroup]) {
+fn report_absent_elements(world: &mut World, absent: &[(u32, String)]) {
     // 報せるものが無く、控えもまだ無い＝既定状態。Resource を作らずに戻る
     // （グループが 1 つも無い間は何も生やさない・要件 6.1 と同じ姿勢）。
-    if incomplete.is_empty() && world.get_resource::<ZOrderMissingReports>().is_none() {
+    if absent.is_empty() && world.get_resource::<ZOrderAbsentReports>().is_none() {
         return;
     }
 
-    world.init_resource::<ZOrderMissingReports>();
-    let mut reports = world.resource_mut::<ZOrderMissingReports>();
-    // 出す順は台帳の並び順（決定論・要件 10.3）。
-    let fresh: Vec<IncompleteGroup> = incomplete
-        .iter()
-        .copied()
-        .filter(|group| reports.seen.get(&group.id) != Some(&group.existing))
-        .collect();
-    reports.seen = incomplete
-        .iter()
-        .map(|group| (group.id, group.existing))
-        .collect();
+    world.init_resource::<ZOrderAbsentReports>();
+    let mut reports = world.resource_mut::<ZOrderAbsentReports>();
+    if reports.reported == absent {
+        return;
+    }
+    reports.reported = absent.to_vec();
     drop(reports);
 
-    for group in fresh {
-        log_group_member_missing(group.id, group.declared, group.existing);
+    // 出す順は合成が返した順＝宣言の順（決定論・要件 10.3）。
+    for (group_id, element) in absent {
+        log_chain_absent(*group_id, element);
     }
 }
 
 // ---------------------------------------------------------------------------
-// ⑸ 受け口への書込
+// ⑸ 受け口への公開
 // ---------------------------------------------------------------------------
 
-/// 射影が動いていれば受け口へ書き、印を立てる（要件 6.1／7.1）。
+/// 望む鎖が前回と違っていれば受け口へ置き、印を立てる（要件 4.1／6.1／7.1／14.5／15.3）。
 ///
-/// # 何も変わっていない巡では触れない
+/// # 同じ内容の巡では触れない
 ///
-/// 受け口の現在の内容と射影が一致するなら、書きもせず印も立てない。印は「是正が要る
-/// かもしれない」の合図であり、何も動いていない巡に立てると維持系が毎巡空振りして
-/// 表示に変化の無い巡を省く門を実質無効にする。
+/// 受け口の現在の内容と一致するなら、書きもせず印も立てない。印は適用系への
+/// 「書くべきものがある」の合図であり、何も動いていない巡に立てると適用系が毎巡
+/// 空振りして、表示に変化の無い巡を省く門を実質無効にする。
 ///
-/// # 空の射影では受け口そのものを作らない
+/// # 既定状態では受け口そのものを作らない
 ///
-/// グループが 1 つも無い（＝既定状態）とき、受け口の Resource は挿入しない。維持系は
-/// 観測する対象を得られず、指令を 1 本も出さない——要件 6.1／6.4 の「既定状態は従来と
+/// グループが 1 つも無い（＝合成が `None`）とき、受け口をまだ持っていなければ挿入しない。
+/// 適用系は仕事を得られず、指令を 1 本も出さない——要件 6.1／6.4 の「既定状態は従来と
 /// 同じ」は、判断ではなくこの**不在**で成り立つ。
 ///
-/// # 印は立てるだけで倒さない
+/// # 一度出来た受け口は解除でも消さない
 ///
-/// 射影が空になった巡（全グループの窓が消えた等）でも印は倒さない。倒す条件
-/// （維持対象が全て成立した）は維持系の持ち物であり、こちらが横から倒すと
-/// 「他の追随トリガが立てた印」を消してしまう。空の射影に対して維持系は何も
-/// 観測しないので、印が立ったままでも指令は 1 本も出ない。
-fn publish_projection(world: &mut World, specs: Vec<ZOrderGroupSpec>) {
-    if world.get_resource::<ZOrderGroups>().is_none() {
-        if specs.is_empty() {
-            // 並べるものが無い＝受け口を作る理由が無い（要件 6.1 の構造的な根拠）。
+/// 解除（要件 4.1／4.2／15.4）で公開するのは「鎖が無い」という**内容**であって、
+/// 受け口の撤去ではない。Resource ごと消すと、適用系は自分が張った繋ぎを外す指示を
+/// 受け取れないまま鎖が残る。
+fn publish_chain_plan(world: &mut World, plan: Option<ChainPlan>) {
+    if world.get_resource::<ZOrderChainPlan>().is_none() {
+        if plan.is_none() {
+            // 望む鎖が無く受け口も無い＝既定状態（要件 6.1 の構造的な根拠）。
             return;
         }
-        world.init_resource::<ZOrderGroups>();
+        world.init_resource::<ZOrderChainPlan>();
     }
 
-    let mut groups = world.resource_mut::<ZOrderGroups>();
-    if groups.groups == specs {
-        // 何も動いていない＝書込も印立ても行わない（空振りの巡を作らない）。
+    let mut receiver = world.resource_mut::<ZOrderChainPlan>();
+    if receiver.chain == plan {
+        // 何も動いていない＝公開も印立ても行わない（空振りの巡を作らない）。
         return;
     }
-    let projected = !specs.is_empty();
-    groups.groups = specs;
-    if projected {
-        groups.pending = true;
-    }
+    receiver.chain = plan;
+    receiver.dirty = true;
 }
 
 // ---------------------------------------------------------------------------
@@ -454,15 +399,6 @@ fn tokens_text(tokens: &[String]) -> String {
         return NO_VALUE.to_string();
     }
     tokens.join(",")
-}
-
-/// 要素 1 つを省略記法（`bN`／`sN`）の字面へ。
-fn element_text(element: &GroupElement) -> String {
-    let prefix = match element.kind {
-        GroupWindowKind::Balloon => 'b',
-        GroupWindowKind::Char => 's',
-    };
-    format!("{prefix}{}", element.scope)
 }
 
 /// 要素列を手前から順に 1 欄へ（空列は番兵）。

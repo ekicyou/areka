@@ -35,9 +35,8 @@ fn t_zdr01_holds_directives_while_the_window_registry_is_absent() {
         ledger.groups().is_empty(),
         "窓の正本が無い巡に台帳が動いた（保留になっていない）"
     );
-    assert_eq!(
-        projected(&world),
-        None,
+    assert!(
+        !receiver_exists(&world),
         "窓の正本が無い巡に受け口が作られた（射影する対象が無い）"
     );
     assert!(
@@ -488,9 +487,8 @@ fn t_zdr10_an_empty_pass_is_silent() {
         "何も届いていないのに台帳が動いた"
     );
     assert!(logs.is_empty(), "何も届いていない巡に記録が出た: {logs:?}");
-    assert_eq!(
-        projected(&world),
-        None,
+    assert!(
+        !receiver_exists(&world),
         "グループが 1 つも無いのに受け口が作られた（要件 6.1）"
     );
 }
