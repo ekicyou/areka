@@ -217,6 +217,7 @@ crates/wintf/src/ecs/window/
 | `crates/areka/src/placement/zorder_group_ledger_tests.rs`／`zorder_group_ledger_state_tests.rs` | 畳み込みの分岐を追加 |
 | `crates/areka/src/placement/zorder_group_branch_coverage_tests.rs` | 要件 10.2 の分岐一覧を鎖の語彙へ差し替え（`BRANCHES` 配列。**要件文と機械では結ばれていないので逐語確認が要る**＝申し送り） |
 | `crates/areka/src/emo2_boot/frame/zorder_drain.rs` | 射影の出口を `ZOrderGroups` から `ZOrderChainPlan` へ。台帳→合成→公開の 3 段。公開は**内容が前回と異なるときだけ**。`log_group_*` の import 先も移設へ追随 |
+| `crates/areka/src/emo2_boot/frame/zorder_drain_test_support.rs`・`frame/zorder_descript_tests.rs`・`zorder_wiring_tests.rs`・`frame_visibility_integration_tests.rs` | **旧受け口 `ZOrderGroups` を読み続ける areka 側の檻・支援 4 本**（`zorder_wiring_tests.rs` は退役する `apply_zorder_group_maintenance` も import している）。受け口の差し替えと同じ作業単位で鎖側へ移すか、旧維持系だけを主張していたものは退役させる（**2026-08-29 タスク健全性レビューの指摘で追加**） |
 | `crates/areka/src/emo2_boot/balloon_visibility_phase.rs` | 再表示の引き金（`note_balloon_shown`／`wants_group_follow_on_show`）を撤去。鎖の下では再表示が重なりへ作用する経路が無い（要件 7.3 は構造で満たす・DD-9）。撤去時に、引き金が他の要件を担っていないことを確認する |
 | `crates/areka/src/emo2_boot/mod.rs` | `:510` の `.before(apply_zorder_group_maintenance)` を `.before(apply_zorder_chain)` へ |
 | `crates/areka/src/placement/spawn.rs` | `:663-671` の `FrameFinalize` チェーン末尾を `apply_zorder_group_maintenance` → `apply_zorder_chain` へ |
@@ -224,6 +225,7 @@ crates/wintf/src/ecs/window/
 | `crates/areka/src/placement/spawn_zorder_pair_deferred_tests.rs` | `PRODUCTION_FILES` 名簿（`:59` の 6 件）を新設・退役に合わせて更新（要件 10.4） |
 | `crates/wintf/src/ecs/window/mod.rs` | 退役 3 モジュールの登記（`:14`／`:16`／`:18`＋再輸出）を削除、新設 3 モジュールを登記 |
 | `crates/wintf/src/ecs/window/zorder_pair_deferred_vocabulary_tests.rs` | `PRODUCTION_FILES` 名簿（`:76` の 8 件）を更新（要件 10.4） |
+| `crates/areka/src/emo2_boot/frame/wiring.rs`（`:89` 註）・`frame.rs`（`:21` 註）・`crates/areka/src/placement/spawn.rs`（`:538` 註） | **doc 註のみ追随**（旧受け口 `ZOrderGroups` を名指している 3 か所）。コードは変えない |
 | `crates/wintf/src/ecs/window/zorder_pair_maintain.rs` | **doc 段落のみ訂正**（`:258-262`「スコープをまたぐ owner はそもそも存在しない」は本 spec が無効化する事実）。コードは 1 行も変えない |
 | `.kiro/specs/.../signoff-scan.ps1`／`signoff-procedure.md`／`real-machine-signoff.md` | 判定語の差し替え（後述「実機サインオフの改訂」） |
 | `doc/COMPAT_ARCHITECTURE.md` §8 | 裁量 11 件・訂正 1 件・先送りの参照 1 件の登記（要件 12・13） |
@@ -678,6 +680,8 @@ target は移設に伴い `wintf::ecs::window::zorder_group` から `wintf::ecs:
 （サインオフの `RUST_LOG` は既に `zorder_chain=debug` を含むため判定に影響しない。grep はタグの字面で行う）。
 呼び出し元 2 件（`zorder_descript.rs:36`・`zorder_drain.rs:67`）は import 先の変更のみ（Modified Files 参照）。
 `log_group_member_missing`（`zorder_group.rs:700`）は退役し、後継は `[zorder-chain] absent`（要件 8.4・保全対象ではない）。
+**呼出元 `zorder_drain.rs:326` の参照は受け口の差し替えと同じ作業単位で落とす**（残すと退役時にコンパイルが折れる）。
+**移設対象 2 関数の呼出元は本番 2 件だけではない**——退役予定の檻 `zorder_group_decision_tests.rs:44,942`・`zorder_group_diag_tests.rs:35,571-589` も呼んでおり、移設と同じ作業単位で取り込み先を差し替える（削除は退役の順序 ⑶）。
 **退役する語彙**: `[zorder-group] fix`・`[zorder-group] skip`・`[zorder-group] verify-failed`・`[zorder-group] member-missing`。
 
 > ⚠ **サインオフへの必須事項（初版の申し送り 6.3 の再掲）**: 起動由来の受理行の実際の字面は
