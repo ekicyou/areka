@@ -361,7 +361,7 @@ fn t_zdp07_missing_members_are_recorded_and_complete_groups_are_not() {
     );
     let line = skips[0];
     assert!(
-        line.contains(GROUP_TARGET),
+        line.contains(GROUP_SKIP_TARGET),
         "記録の出力先が 1 本に揃っていない: {line}"
     );
     assert!(

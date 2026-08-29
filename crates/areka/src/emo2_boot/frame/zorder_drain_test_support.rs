@@ -140,5 +140,18 @@ pub(super) fn lines_with<'a>(logs: &'a [String], needle: &str) -> Vec<&'a str> {
         .collect()
 }
 
-/// グループ系の記録の出力先（実機サインオフの grep 対象と同じ 1 本）。
-pub(super) const GROUP_TARGET: &str = "target=wintf::ecs::window::zorder_group";
+/// 受理・拒否の記録の出力先（実機サインオフの grep 対象と同じ 1 本）。
+///
+/// 要件 9.5 の保全対象である `[zorder-group] applied`／`rejected` は、退役する
+/// `zorder_group` 系から `zorder_chain_diag` へ移設された。**タグの字面は 1 字も
+/// 変わっておらず**、変わったのは `tracing` の出力先（module path 既定）だけである。
+/// サインオフの `RUST_LOG` は `wintf::ecs::window::zorder_chain=debug` を含み、
+/// 指定は前方一致なのでこの出力先を点灯させる（判定に影響しない）。
+pub(super) const GROUP_TARGET: &str = "target=wintf::ecs::window::zorder_chain_diag";
+
+/// 不在メンバーの見送り（`[zorder-group] skip reason=MemberMissing`）の出力先。
+///
+/// この記録だけは移設の対象ではない——要件 9.5 の保全対象は受理・拒否の 2 語であり、
+/// こちらは退役予定（後継は `[zorder-chain] absent`・要件 8.4）だからである。よって
+/// 出力先も退役予定のモジュールのままである。
+pub(super) const GROUP_SKIP_TARGET: &str = "target=wintf::ecs::window::zorder_group";

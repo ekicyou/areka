@@ -10,6 +10,8 @@ pub mod transition_diag;
 mod window_handle;
 mod window_pos;
 pub(crate) mod window_system;
+/// 鎖系の記録行を組む純関数とタグ定数の唯一の所在（保全語彙 2 語の記録もここ）。
+mod zorder_chain_diag;
 /// グループ単位の重なり（受け口・観測・純判断・記録の唯一の出口）。
 mod zorder_group;
 /// グループ系の記録行を組む純関数だけの層（マクロを含まない＝出力先を分裂させない）。
@@ -28,6 +30,7 @@ pub use components::*;
 pub use dpi::*;
 pub use window_handle::*;
 pub use window_pos::*;
+pub use zorder_chain_diag::*;
 pub use zorder_group::*;
 pub use zorder_group_maintain::*;
 pub use zorder_pair::*;

@@ -9,14 +9,15 @@
 //! そこで本テストは、本フィーチャーが持つ本番ファイルの中身を読み、先送り語彙に対応する
 //! 語が 1 つも現れないことを毎回の `cargo test` で確かめる。
 //!
-//! # 走査の対象（なぜこの 8 ファイルなのか）
+//! # 走査の対象（なぜこの 9 ファイルなのか）
 //!
 //! 要件 8.3〜8.5（ペア機構）と要件 11.4（グループ機構）が言うのは「**本フィーチャーに
 //! おいて**足さない」ことである。リポジトリ全体を
 //! 走査すると、別フィーチャーが正当に持っている窓の一般機構（`wintf` の窓スタイル層など）まで
 //! 拾ってしまい、主張が「areka 全体が最小化を実装していない」という別物へすり替わる。
-//! よって対象は**2 つの機構が全部を書いたファイル**に限る——`zorder_pair` 系の本番
-//! ファイル 5 本と、`zorder_group` 系の本番ファイル 3 本である。areka 側（ペア機構の 2 本と
+//! よって対象は**重なり順の機構が全部を書いたファイル**に限る——`zorder_pair` 系の本番
+//! ファイル 5 本、`zorder_group` 系の本番ファイル 3 本、`zorder_chain` 系の本番ファイル
+//! 1 本である。areka 側（ペア機構の 2 本と
 //! グループ機構の 4 本）は兄弟の `spawn_zorder_pair_deferred_tests.rs` が同じ形で受け持つ。
 //!
 //! 新設ファイルが走査から漏れないことは、
@@ -69,11 +70,12 @@ use std::path::PathBuf;
 
 /// 重なり順の 2 機構が全部を書いた wintf 側の本番ファイル（`CARGO_MANIFEST_DIR` からの相対）。
 ///
-/// 前半 5 本はペア機構（`ghost-window-zorder`）、後半 3 本はグループ機構
-/// （`areka-P0-scope-zorder-pinning`）が新設したもの。下の
+/// 先頭 5 本はペア機構（`ghost-window-zorder`）、続く 3 本はグループ機構
+/// （`areka-P0-scope-zorder-pinning` 改訂第 1 版・退役予定）、最後の 1 本は同 spec の
+/// 改訂第 2 版（所有の鎖）が新設したもの。下の
 /// `the_scanned_roster_covers_every_zorder_production_source_in_this_crate` が
 /// 「実在する `zorder_` 系の本番ファイルが 1 本残らずここに載っている」ことを機械で見張る。
-const PRODUCTION_FILES: [&str; 8] = [
+const PRODUCTION_FILES: [&str; 9] = [
     "src/ecs/window/zorder_pair.rs",
     "src/ecs/window/zorder_pair_diag.rs",
     "src/ecs/window/zorder_pair_establish.rs",
@@ -82,6 +84,7 @@ const PRODUCTION_FILES: [&str; 8] = [
     "src/ecs/window/zorder_group.rs",
     "src/ecs/window/zorder_group_diag.rs",
     "src/ecs/window/zorder_group_maintain.rs",
+    "src/ecs/window/zorder_chain_diag.rs",
 ];
 
 /// 先送り語彙（小文字で保持し、走査も小文字化して行う）と、それが何の入口かの説明。

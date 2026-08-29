@@ -41,8 +41,8 @@ use windows::Win32::Foundation::HWND;
 
 use super::{
     GroupFixDecision, GroupObservation, GroupProbe, GroupSkipReason, GroupVerify,
-    GroupVerifyOutcome, ZOrderGroupSpec, ZOrderGroups, decide_group_fix, log_group_applied,
-    observe_group, order_holds, plan_group_fixes, record_group_decision, record_group_skip,
+    GroupVerifyOutcome, ZOrderGroupSpec, ZOrderGroups, decide_group_fix, observe_group,
+    order_holds, plan_group_fixes, record_group_decision, record_group_skip,
     record_group_verification,
 };
 use crate::ecs::test_support::capture_under_filter;
@@ -844,13 +844,12 @@ fn a_failed_verification_is_recorded_as_a_mismatch_at_error_level() {
     assert!(line.contains("missing=1"), "{line}");
 }
 
-/// 4 種の記録タグはすべて、サインオフの水準で同じ 1 本の出力先へ出る。
+/// この層に残る 3 種の記録タグはすべて、サインオフの水準で同じ 1 本の出力先へ出る。
 #[test]
 fn every_group_record_is_visible_under_the_signoff_directive() {
     let out = capture_under_filter(SIGNOFF_DIRECTIVES, emit_every_record);
 
     for tag in [
-        "[zorder-group] applied",
         "[zorder-group] fix",
         "[zorder-group] skip",
         "[zorder-group] verify-failed",
@@ -871,7 +870,7 @@ fn every_group_record_is_visible_under_the_signoff_directive() {
     );
 }
 
-/// 既定水準では診断専用の 3 種が無音で、検証不一致だけが残る。
+/// 既定水準では診断専用の 2 種が無音で、検証不一致だけが残る。
 ///
 /// 「出ない」の主張が捕捉の死で恒真にならないよう、同じ捕捉窓から確かに拾える記録
 /// （検証不一致）を併置してある。
@@ -879,11 +878,7 @@ fn every_group_record_is_visible_under_the_signoff_directive() {
 fn diagnostic_records_are_silent_at_default_level_while_mismatch_still_speaks() {
     let out = capture_under_filter(DEFAULT_DIRECTIVES, emit_every_record);
 
-    for tag in [
-        "[zorder-group] applied",
-        "[zorder-group] fix",
-        "[zorder-group] skip",
-    ] {
+    for tag in ["[zorder-group] fix", "[zorder-group] skip"] {
         assert!(
             !out.contains(tag),
             "診断専用の `{tag}` が既定水準へ漏れている: {out}"
@@ -929,7 +924,10 @@ fn the_five_skip_reasons_are_recorded_as_distinct_words() {
 // 記録の水準・出力先を見るための共通の出し口
 // ---------------------------------------------------------------------------
 
-/// 4 種の記録をすべて 1 回ずつ出す（水準・出力先の確認用）。
+/// この層に残る 3 種の記録をすべて 1 回ずつ出す（水準・出力先の確認用）。
+///
+/// 受理（`[zorder-group] applied`）は要件 9.5 の保全対象として `zorder_chain_diag` へ
+/// 移設した。水準・出力先の固定はあちらの兄弟テストが引き継いでいる。
 fn emit_every_record() {
     let obs_ok = observation(1, &[fake_hwnd(0xA0), fake_hwnd(0xB0)], 0, true);
     let obs_broken = observation(1, &[fake_hwnd(0xA0), fake_hwnd(0xB0)], 0, false);
@@ -939,7 +937,6 @@ fn emit_every_record() {
         chain: vec![fake_hwnd(0xB0)],
     };
 
-    log_group_applied("group_id=1 members=2");
     record_group_skip(Some(1), GroupSkipReason::AlreadyOrdered, Some(&obs_ok));
     record_group_verification(&verify, &obs_ok);
     record_group_verification(&verify, &obs_broken);

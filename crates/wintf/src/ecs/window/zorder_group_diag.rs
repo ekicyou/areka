@@ -37,39 +37,30 @@ use super::zorder_pair_diag::hwnd_field;
 /// 値が取得できなかったフィールドの番兵（既存ペア機構と同じ字面）。
 pub(crate) const UNKNOWN: &str = "-";
 
-/// 受理の記録タグ（台帳が指定を受け入れた事実・debug 水準）。
-const APPLIED_TAG: &str = "[zorder-group] applied";
 /// 是正の記録タグ（指令と実測を同一行に載せる・debug 水準・検証段でのみ発行・要件 9.1／9.2）。
 const FIX_TAG: &str = "[zorder-group] fix";
 /// 見送りの記録タグ（理由必須・debug 水準・要件 8.3）。
 const SKIP_TAG: &str = "[zorder-group] skip";
 /// 検証不一致の記録タグ（error 水準・要件 8.2）。
 const VERIFY_FAILED_TAG: &str = "[zorder-group] verify-failed";
-/// 拒否の記録タグ（warn 水準・要件 8.1／8.3）。
+/// この層に残るグループ系の記録タグ 3 種（サインオフの grep 判定語の一覧）。
 ///
-/// 見送り（[`SKIP_TAG`]）とは別の概念である——あちらは観測の結果「今は動かさない」と
-/// 決めた [`GroupSkipReason`] を伴う判断であり、こちらは作者の書いた指定そのものを
-/// **受け付けなかった**という入力側の事実である。1 つのタグへ潰すと、記録を読む者が
-/// 「エンジンが様子を見た」と「指定が捨てられた」を区別できなくなる。
-const REJECTED_TAG: &str = "[zorder-group] rejected";
-
-/// グループ系の記録タグ 5 種（サインオフの grep 判定語の一覧）。
-///
-/// 定数を個別に公開せず一覧の形で返すのは、「5 種であること」「冠を共有すること」
+/// 定数を個別に公開せず一覧の形で返すのは、「3 種であること」「冠を共有すること」
 /// 「互いに異なること」をテストが 1 か所で主張できるようにするためである。
+///
+/// # 保全語彙 2 語はここに居ない
+///
+/// `[zorder-group] applied`／`[zorder-group] rejected` は要件 9.5 の保全対象であり、
+/// 本モジュールが退役しても残る。よって定数も行組立も
+/// [`zorder_chain_diag`](super::zorder_chain_diag) へ**字面を 1 字も変えずに**移した。
+/// 住処が 1 つだけであることは、あちらの兄弟テストが両方向で見張っている。
 ///
 /// 本番の記録行は上の定数を直接使うので、この一覧は**テストの覗き窓**にすぎない
 /// （`#[cfg(test)]` にしてあるのはそのため——本番に未使用の関数を残さない）。
 /// 定数そのものを指しているので、タグを書き換えれば必ずここも動く＝二重帳簿にならない。
 #[cfg(test)]
-pub(crate) fn group_record_tags() -> [&'static str; 5] {
-    [
-        APPLIED_TAG,
-        FIX_TAG,
-        SKIP_TAG,
-        VERIFY_FAILED_TAG,
-        REJECTED_TAG,
-    ]
+pub(crate) fn group_record_tags() -> [&'static str; 3] {
+    [FIX_TAG, SKIP_TAG, VERIFY_FAILED_TAG]
 }
 
 /// 真偽値をログ用表現へ（判定そのものが取れなかった場合は番兵）。
@@ -117,35 +108,6 @@ fn moves_field(head: HWND, chain: &[HWND]) -> String {
         anchor = *moved;
     }
     parts.join(",")
-}
-
-/// 呼び出し側から受け取った自由文を 1 フィールドへ畳む（空は番兵）。
-///
-/// 空白を `_` へ潰すのは、`field=value` の 1 行から**機械的に切り出せる**状態を呼び出し側の
-/// 行儀に依存させないためである。この関数を通る 2 つの欄（拒否理由・受け取ったトークン列）は
-/// areka 側で組んだ文字列であり、`wintf → areka` の import が禁止されている以上こちらは
-/// 中身の型を知り得ない——素通しにすると、向こうの文字列に空白が 1 つ混じった日に
-/// サインオフの切り出しが静かに壊れる。
-///
-/// 畳み込みは**意図的に不可逆**である（`"a b"` と `"a_b"` は記録の上で区別が付かなくなる）。
-/// 記録から元の字面を復元できることより、1 行から機械的に切り出せることを優先した判断で
-/// ある——この 2 欄の読み手はサインオフの grep であり、区別が要るのは値そのものではなく
-/// 「どの理由でどのトークン列が落ちたか」だからである。
-fn text_field(value: &str) -> String {
-    let folded = value.split_whitespace().collect::<Vec<_>>().join("_");
-    if folded.is_empty() {
-        return UNKNOWN.to_string();
-    }
-    folded
-}
-
-/// 受理の記録行（純関数）——台帳が組んだ本文へ、こちらはタグだけを貼る。
-///
-/// 台帳の内容そのものは areka の型であり、`wintf → areka` の import は禁止ゆえここでは
-/// 受け取れない。よって組み上がった本文を受け取り、タグと（呼び出し側の module path 既定
-/// による）出力先だけをこちらが与える——サインオフの grep 対象を 1 本に保つための形である。
-pub(crate) fn applied_line(detail: &str) -> String {
-    format!("{APPLIED_TAG} {detail}")
 }
 
 /// 是正の記録行（純関数）——**出した指令と、その後の実測を同じ 1 行に載せる**。
@@ -252,25 +214,6 @@ pub(crate) fn skip_line(
     format!(
         "{SKIP_TAG} group_id={group_id} reason={reason:?} \
          resolved={resolved} missing={missing} order_ok={order_ok}"
-    )
-}
-
-/// 拒否の記録行（純関数・warn 水準で出す・要件 8.1／8.3）。
-///
-/// 載るのは**拒否理由**と**受け取ったトークン列**の 2 欄である。トークン列を載せるのは、
-/// 作者が何を書いたのかが記録から復元できなければ書き間違いを直せないからであり
-/// （要件 8.1 は「そのタグによる変更を一切行わず、拒否理由を記録する」）、理由を載せる
-/// のは「黙って無視された」を禁じる要件 8.3 の実質そのものである。
-///
-/// どちらも**組み上がった文字列**で受け取る。拒否理由の型（areka の `ZOrderReject`）は
-/// areka 側にあり、`wintf → areka` の import は禁止だからである（[`applied_line`] と
-/// 同じ形）。素通しにせず [`text_field`] を通すので、向こうの文字列に空白が混じっても
-/// 1 行からの切り出しは壊れない。
-pub(crate) fn rejected_line(reason: &str, tokens: &str) -> String {
-    format!(
-        "{REJECTED_TAG} reason={reason} tokens={tokens}",
-        reason = text_field(reason),
-        tokens = text_field(tokens),
     )
 }
 

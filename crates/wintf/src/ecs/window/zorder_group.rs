@@ -38,10 +38,17 @@
 //! `record_*`／`log_*` を呼ぶ（既存ペア機構が [`super::zorder_pair_diag`] との間で
 //! 敷いたのと同じ一線＝「マクロを含むか否か」）。
 //!
-//! **行の組立は兄弟の [`super::zorder_group_diag`] に在る**——記録タグ 5 種の定数と
+//! **行の組立は兄弟の [`super::zorder_group_diag`] に在る**——記録タグ 3 種の定数と
 //! 行を組む純関数はあちらに閉じており（マクロを 1 つも含まない）、こちらは戻り値を
 //! そのまま本文にする。組立を二重に持たないための分割であり、境界は
 //! 「マクロを含むか否か」の一線である。
+//!
+//! # 保全語彙 2 語はこのモジュールに居ない（要件 9.5）
+//!
+//! `[zorder-group] applied`／`[zorder-group] rejected` は本モジュールが退役しても残る
+//! 語彙であり、定数・行組立・記録関数（`log_group_applied`／`log_group_rejected`）ごと
+//! [`super::zorder_chain_diag`] へ**字面を 1 字も変えずに**移してある。呼び出し元は
+//! `wintf::ecs::window` の再輸出を通して同じ名前で呼び続ける。
 
 use std::collections::HashMap;
 
@@ -49,9 +56,7 @@ use bevy_ecs::prelude::*;
 use tracing::{debug, error, warn};
 use windows::Win32::Foundation::HWND;
 
-use super::zorder_group_diag::{
-    applied_line, fix_line, rejected_line, skip_line, tristate_field, verify_failed_line,
-};
+use super::zorder_group_diag::{fix_line, skip_line, tristate_field, verify_failed_line};
 use super::zorder_pair::{FrontScan, measure_windows_in_front};
 
 // ============================================================================
@@ -645,29 +650,10 @@ pub(crate) fn record_group_give_up(group_id: u32, streak: u8, observed: &GroupOb
     emit(GroupRecordLevel::Warn, &line);
 }
 
-/// 指定が受理された事実を記録する（台帳を持つ層＝areka から呼ぶ）。
-///
-/// 台帳の内容そのものは areka の型であり、`wintf → areka` の import は禁止ゆえここでは
-/// 受け取れない。よって組み上がった本文を受け取り、タグと出力先だけをこちらが与える
-/// ——サインオフの grep 対象を 1 本に保つための形である。
-pub fn log_group_applied(detail: &str) {
-    emit(GroupRecordLevel::Debug, &applied_line(detail));
-}
-
-/// 指定を拒否した事実を記録する（台帳を持つ層＝areka から呼ぶ・要件 8.1／8.3）。
-///
-/// 水準は **warn**——`logging.md` の「無効なパラメーター」区分であり、作者の書き間違いは
-/// 診断手順を有効化していない通常運転でも読めなければ「黙って無視された」に等しい
-/// （要件 8.3）。見送り（[`GroupSkipReason`] を伴う debug）とは別の概念なので、タグも
-/// 水準も分けてある。
-///
-/// 拒否理由もトークン列も**組み上がった文字列**で受け取る。理由の型（areka の
-/// `ZOrderReject`）は areka 側にあり、`wintf → areka` の import は禁止だからである
-/// （[`log_group_applied`] と同じ形）。タグと出力先だけをこちらが与えることで、
-/// サインオフの grep 対象は 1 本に保たれる。
-pub fn log_group_rejected(reason: &str, tokens: &str) {
-    emit(GroupRecordLevel::Warn, &rejected_line(reason, tokens));
-}
+// 受理（`[zorder-group] applied`）と拒否（`[zorder-group] rejected`）の記録は、
+// 要件 9.5 の保全対象として本モジュールの退役後も残る。よって定数・行組立・記録関数の
+// いずれも `zorder_chain_diag` へ**字面を 1 字も変えずに**移してある。呼び出し元は
+// `wintf::ecs::window` の再輸出を通して同じ名前で呼び続ける。
 
 /// 宣言されたメンバーのうち**まだ現れていない窓**があった事実を記録する（要件 8.4）。
 ///

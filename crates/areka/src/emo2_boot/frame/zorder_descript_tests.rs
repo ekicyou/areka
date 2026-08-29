@@ -34,8 +34,14 @@ use crate::placement::zorder_group_ledger::{GroupElement, GroupWindowKind, ZOrde
 
 // ---------------------------------------------------------------- 道具立て
 
-/// グループ系の記録の出力先（実機サインオフの grep 対象と同じ 1 本）。
-const GROUP_TARGET: &str = "target=wintf::ecs::window::zorder_group";
+/// 受理・拒否の記録の出力先（実機サインオフの grep 対象と同じ 1 本）。
+///
+/// 要件 9.5 の保全対象である `[zorder-group] applied`／`rejected` は、退役する
+/// `zorder_group` 系から `zorder_chain_diag` へ移設された。**タグの字面は 1 字も
+/// 変わっておらず**、変わったのは `tracing` の出力先（module path 既定）だけである。
+/// サインオフの `RUST_LOG` は `wintf::ecs::window::zorder_chain=debug` を含み、
+/// 指定は前方一致なのでこの出力先を点灯させる（判定に影響しない）。
+const GROUP_TARGET: &str = "target=wintf::ecs::window::zorder_chain_diag";
 
 /// クロージャ実行中に**現在のスレッド**で発火した記録を 1 行 1 件で返す。
 fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {

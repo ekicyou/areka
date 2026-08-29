@@ -26,23 +26,8 @@
 
 use windows::Win32::Foundation::HWND;
 
-use super::{
-    UNKNOWN, applied_line, fix_line, group_record_tags, rejected_line, skip_line,
-    verify_failed_line,
-};
-use crate::ecs::test_support::capture_under_filter;
-use crate::ecs::window::zorder_group::{
-    GroupObservation, GroupSkipReason, GroupVerify, log_group_applied, log_group_rejected,
-};
-
-/// 実機サインオフが用いる `RUST_LOG` 相当（グループ系の出力先を点灯させる指定）。
-const SIGNOFF_DIRECTIVES: &str = "info,wintf::ecs::window::zorder_group=debug";
-
-/// 既定水準（診断手順を有効化していない通常運転）。
-const DEFAULT_DIRECTIVES: &str = "info";
-
-/// 記録の出力先。マクロを兄弟 1 ファイルに閉じている限りこの 1 本に保たれる。
-const LOG_TARGET: &str = "wintf::ecs::window::zorder_group";
+use super::{UNKNOWN, fix_line, group_record_tags, skip_line, verify_failed_line};
+use crate::ecs::window::zorder_group::{GroupObservation, GroupSkipReason, GroupVerify};
 
 /// テスト用の偽 HWND（Win32 へは渡さない・値としてのみ扱う）。
 fn fake_hwnd(v: usize) -> HWND {
@@ -96,26 +81,22 @@ fn field<'a>(line: &'a str, key: &str) -> &'a str {
         .unwrap_or_default()
 }
 
-/// 捕捉した出力から、指定タグを含む行をちょうど 1 本取り出す。
-fn only_line_with<'a>(out: &'a str, tag: &str) -> &'a str {
-    let found: Vec<&str> = out.lines().filter(|l| l.contains(tag)).collect();
-    assert_eq!(found.len(), 1, "`{tag}` の行がちょうど 1 本ではない: {out}");
-    found[0]
-}
-
 // ===========================================================================
-// タグ語彙——5 種（要件 8.1／8.3／9.1／9.2）
+// タグ語彙——この層に残る 3 種（要件 9.1／9.2）
 // ===========================================================================
+//
+// 受理・拒否の 2 種は要件 9.5 の保全対象として `zorder_chain_diag` へ移した。
+// 字面・水準・出力先の固定はあちらの兄弟テストが引き継いでいる。
 
-/// 記録タグは 5 種で、すべてグループ系の冠を持ち、互いに異なる。
+/// 記録タグは 3 種で、すべてグループ系の冠を持ち、互いに異なる。
 ///
 /// 冠を共有するのはサインオフが `[zorder-group]` の 1 語で全記録を拾えるようにするため、
 /// 互いに異なるのは拾った行を種別へ振り分けられるようにするためである。
 #[test]
-fn the_five_group_tags_share_one_prefix_and_are_all_distinct() {
+fn the_three_remaining_group_tags_share_one_prefix_and_are_all_distinct() {
     let tags = group_record_tags();
 
-    assert_eq!(tags.len(), 5, "タグの本数が 5 種でない: {tags:?}");
+    assert_eq!(tags.len(), 3, "タグの本数が 3 種でない: {tags:?}");
     for tag in tags {
         assert!(
             tag.starts_with("[zorder-group] "),
@@ -131,25 +112,24 @@ fn the_five_group_tags_share_one_prefix_and_are_all_distinct() {
     assert_eq!(
         tags,
         [
-            "[zorder-group] applied",
             "[zorder-group] fix",
             "[zorder-group] skip",
             "[zorder-group] verify-failed",
-            "[zorder-group] rejected",
         ]
     );
 }
 
-/// 名簿に載っていない 6 つ目のタグはモジュール本体に存在しない。
+/// 名簿に載っていない 4 つ目のタグはモジュール本体に存在しない。
 ///
-/// 直上のテストは「登録されている 5 つが正しい」ことしか言わない——**それ以外に無い**は
-/// 名簿を読むだけでは決して言えず、6 つ目の定数とそれを使う行組立を足しても名簿は
-/// 沈黙する。親裁定は「6 つ目のタグは作らない」と明示しているので、こちらから挟む。
+/// 直上のテストは「登録されている 3 つが正しい」ことしか言わない——**それ以外に無い**は
+/// 名簿を読むだけでは決して言えず、4 つ目の定数とそれを使う行組立を足しても名簿は
+/// 沈黙する。親裁定は「タグを勝手に増やさない」と明示しているので、こちらから挟む。
 ///
 /// 数えるのはコード本文に現れる `[zorder-group] ` の**文字列リテラル**である。定数を
-/// 足しても、タグを組立の中へ直に書き込んでも、どちらも数が動く。
+/// 足しても、タグを組立の中へ直に書き込んでも、どちらも数が動く。移した 2 語がここへ
+/// 戻ってくれば（＝住処が 2 つに割れれば）この数がそのまま動く。
 #[test]
-fn no_sixth_tag_hides_outside_the_roster() {
+fn no_fourth_tag_hides_outside_the_roster() {
     let code = code_only(include_str!("zorder_group_diag.rs"));
 
     let literals = code.matches("\"[zorder-group] ").count();
@@ -160,7 +140,7 @@ fn no_sixth_tag_hides_outside_the_roster() {
     );
 
     // 対照: 数える針が本当に当たっている（0 を数えて緑になる走査ではない）
-    assert_eq!(literals, 5, "走査そのものが空振りしている");
+    assert_eq!(literals, 3, "走査そのものが空振りしている");
     for tag in group_record_tags() {
         assert!(
             code.contains(&format!("\"{tag}\"")),
@@ -172,15 +152,6 @@ fn no_sixth_tag_hides_outside_the_roster() {
 // ===========================================================================
 // 各タグの 1 行——丸ごと固定する
 // ===========================================================================
-
-/// 受理の行（台帳が組んだ本文へ、こちらはタグだけを貼る）。
-#[test]
-fn the_applied_line_prefixes_the_ledger_text_with_the_tag_and_nothing_else() {
-    assert_eq!(
-        applied_line("group_id=1 members=2"),
-        "[zorder-group] applied group_id=1 members=2"
-    );
-}
 
 /// 是正の行は、グループ識別子・動かした窓・挿入先・検証時の実測を**同じ 1 行**に載せる。
 ///
@@ -424,37 +395,6 @@ fn a_skip_before_observation_fills_every_field_with_the_sentinel() {
     );
 }
 
-/// 拒否の行は、受け取ったトークン列と拒否理由を載せる（要件 8.1／8.3・親裁定の 5 つ目のタグ）。
-#[test]
-fn the_rejected_line_carries_the_reason_and_the_received_tokens() {
-    assert_eq!(
-        rejected_line("CrossGroupRedesignation", "1,0"),
-        "[zorder-group] rejected reason=CrossGroupRedesignation tokens=1,0"
-    );
-}
-
-/// 拒否の行の 2 欄は、空でも落ちずに番兵になる。
-#[test]
-fn an_empty_reason_or_token_list_renders_the_sentinel() {
-    let line = rejected_line("", "");
-    assert_eq!(field(&line, "reason"), UNKNOWN, "{line}");
-    assert_eq!(field(&line, "tokens"), UNKNOWN, "{line}");
-    assert_eq!(line, "[zorder-group] rejected reason=- tokens=-");
-}
-
-/// 呼び出し側の文字列に空白が混じっても、1 行の `field=value` 切り出しは壊れない。
-///
-/// 拒否理由とトークン列は **areka 側で組んだ文字列**をそのまま受け取る（`ZOrderReject` は
-/// areka の型であり、wintf は areka を import できない）。素通しにすると、向こうの
-/// 文字列に空白が 1 つ混じった日に切り出しが静かに壊れるので、こちらで畳む。
-#[test]
-fn whitespace_in_caller_supplied_text_is_folded_so_the_cut_still_works() {
-    let line = rejected_line("Unparsable Token", "b1, s1 , x");
-
-    assert_eq!(field(&line, "reason"), "Unparsable_Token", "{line}");
-    assert_eq!(field(&line, "tokens"), "b1,_s1_,_x", "{line}");
-}
-
 // ===========================================================================
 // 既存ペア機構の語彙は不変（要件 9.5）——両側から挟む
 // ===========================================================================
@@ -496,7 +436,7 @@ fn the_six_pair_tags_survive_verbatim_and_are_not_impersonated_here() {
         "説明文を落とす処理の対照が失われている（否定の説明が doc から消えた）"
     );
     assert!(
-        group_code.contains("[zorder-group] rejected"),
+        group_code.contains("[zorder-group] verify-failed"),
         "説明文を落とす処理が本文まで落としている"
     );
 }
@@ -554,46 +494,4 @@ fn code_only(source: &str) -> String {
         .filter(|line| !line.trim_start().starts_with("//"))
         .collect::<Vec<_>>()
         .join("\n")
-}
-
-// ===========================================================================
-// 拒否の記録は warn 水準で、既定運転でも残る（`logging.md`「無効なパラメーター」区分）
-// ===========================================================================
-
-/// 拒否は既定水準でも読める warn として、診断専用の受理と同じ 1 本の出力先へ出る。
-///
-/// 併置してある受理（debug）は二重の対照である——⑴ 既定水準では黙ることで「拒否が
-/// 残る」が水準の区別を本当に見ていることを示し、⑵ サインオフ水準では出ることで
-/// 捕捉窓そのものは生きていることを示す。
-#[test]
-fn a_rejection_is_recorded_at_warn_level_and_survives_the_default_level() {
-    let signoff = capture_under_filter(SIGNOFF_DIRECTIVES, || {
-        log_group_applied("group_id=1 members=2");
-        log_group_rejected("ModeMixed", "b1,0");
-    });
-    let line = only_line_with(&signoff, "[zorder-group] rejected");
-    assert!(line.contains("WARN"), "拒否が warn 水準でない: {line}");
-    assert!(
-        line.contains(LOG_TARGET),
-        "grep 対象の出力先が module path 既定でない: {line}"
-    );
-    assert_eq!(field(line, "reason"), "ModeMixed", "{line}");
-    assert_eq!(field(line, "tokens"), "b1,0", "{line}");
-    assert!(
-        signoff.contains("[zorder-group] applied"),
-        "捕捉窓が死んでいる疑い: {signoff}"
-    );
-
-    let default = capture_under_filter(DEFAULT_DIRECTIVES, || {
-        log_group_applied("group_id=1 members=2");
-        log_group_rejected("ModeMixed", "b1,0");
-    });
-    assert!(
-        default.contains("[zorder-group] rejected"),
-        "既定運転で拒否が読めない（黙って捨てられている）: {default}"
-    );
-    assert!(
-        !default.contains("[zorder-group] applied"),
-        "診断専用の受理が既定水準へ漏れている（水準の区別を見ていない）: {default}"
-    );
 }
