@@ -15,11 +15,11 @@
 ///
 /// パスは本ファイル（`crates/areka/src/`）からの相対である。
 ///
-/// 1 つのファイルが 2 種類の旗を立てることがある（`balloon_visibility_phase.rs` は
-/// 待ち時間の見直しに `REARM`、バルーンの再表示に `ZORDER` を立てる）。その場合は
-/// **旗ごとに 1 行**を置く——旗の欄は 1 つしか持てず、片方だけ載せると残りの旗が
-/// 名簿から落ちて静かにずれる。
-const AREKA_PRODUCERS: [(&str, &str, &str); 8] = [
+/// 1 つのファイルが 2 種類の旗を立てることがあるので、その場合は**旗ごとに 1 行**を
+/// 置く——旗の欄は 1 つしか持てず、片方だけ載せると残りの旗が名簿から落ちて静かにずれる。
+/// （現在は 1 ファイル 1 旗である。`balloon_visibility_phase.rs` が `REARM` と `ZORDER` の
+/// 2 行を持っていたのは、退役したバルーン再表示の追随トリガのぶんである。）
+const AREKA_PRODUCERS: [(&str, &str, &str); 7] = [
     (
         "emo2_boot/adapter.rs",
         include_str!("emo2_boot/adapter.rs"),
@@ -29,11 +29,6 @@ const AREKA_PRODUCERS: [(&str, &str, &str); 8] = [
         "emo2_boot/balloon_visibility_phase.rs",
         include_str!("emo2_boot/balloon_visibility_phase.rs"),
         "REARM",
-    ),
-    (
-        "emo2_boot/balloon_visibility_phase.rs",
-        include_str!("emo2_boot/balloon_visibility_phase.rs"),
-        "ZORDER",
     ),
     (
         "emo2_boot/frame/scale_text.rs",

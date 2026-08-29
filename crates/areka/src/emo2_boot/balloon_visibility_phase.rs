@@ -32,7 +32,6 @@ use areka_sakura::ActorKey;
 use bevy_ecs::prelude::{Entity, With};
 use bevy_ecs::world::World;
 use tracing::{error, info, warn};
-use wintf::ecs::window::ZOrderGroups;
 use wintf::ecs::world::tick_wake;
 use wintf::ecs::{FrameTime, WindowDragging};
 
@@ -446,7 +445,7 @@ fn issue_show(presenter: &mut EmoPresenter, world: &mut World, scope: u32) -> bo
     let target = balloon_target(scope);
     let issued = presenter.show_target(world, target);
     let visible = presenter.target_visible(target) == Some(true);
-    let shown = match issued {
+    match issued {
         Ok(()) if visible => true,
         Ok(()) => {
             // 発行そのものは通ったが可視になっていない（出す内容が無い＝全透明への退化）。
@@ -469,13 +468,7 @@ fn issue_show(presenter: &mut EmoPresenter, world: &mut World, scope: u32) -> bo
             );
             false
         }
-    };
-    // 再表示への追随トリガ（要件 7.3）。渡すのは発行の戻り値ではなく**実際に可視に
-    // なったか**を畳んだ `shown` であり、それは本関数が返す値そのものである（片方だけ
-    // 差し替える変異を作れない）。発行の**後ろ**に置くのは、前へ移すとまだ描き直して
-    // いない巡に印が立ち、表示に変化の無い巡を省く門が実質無効になるからである。
-    note_balloon_shown(world, shown);
-    shown
+    }
 }
 
 /// 実らなかった表示の `prev_visible` を発行前の値へ戻す（tasks.md「タスク 4.4 の義務」）。
@@ -496,51 +489,6 @@ fn roll_back_show(
         .is_some_and(|observed| observed.visible);
     if let Some(previous) = state.per_scope.get_mut(&scope) {
         previous.prev_visible = observed_visible;
-    }
-}
-
-// ---------------------------------------------------------------------------
-// ⑸の付随: バルーンの再表示への追随トリガ（Requirement 7.3）
-// ---------------------------------------------------------------------------
-
-/// 再表示をグループ機構の追随トリガとして採るか（`World` も表示層も触らない）。
-///
-/// 見るのは 2 つだけである。
-///
-/// - `shown`——**実際に可視になったか**。発行が失敗した巡も、発行は通ったが出す内容が
-///   無く全透明へ退化した巡も、絵は描き直されていない——重なりを確かめる理由がない。
-/// - `has_groups`——グループが 1 本でも宣言されているか。1 本も無い巡に印を立てると、
-///   維持系が起きて既定状態（＝非強制）の挙動が本機能の導入前と変わる（要件 6.4）。
-///
-/// **隠れていた間に何が起きたかは見ない**。中身の絵を消して描き直す間、Windows 上の窓は
-/// 出しっぱなしで重なりを人から崩されうるが、崩されたかどうかをここで見分ける規則を持つと、
-/// その規則の取りこぼしが「再表示したら順番が違う」という形で表に出る。余分に検証が走る
-/// 側の費用は、維持系の同値ガードが指令 0 本で吸収する（design「トリガ 2 点」）。
-fn wants_group_follow_on_show(shown: bool, has_groups: bool) -> bool {
-    shown && has_groups
-}
-
-/// 再表示を受けて、グループ機構へ「是正が要るかもしれない」と伝える。
-///
-/// 立てるのは印（`ZOrderGroups::pending`）と起床の旗の 2 つで、**どちらも立てる側にしか
-/// 動かさない**。印を降ろす口は維持系の⑤（維持対象の全グループの相対順が成立した巡）
-/// ただ 1 つであり、ここが降ろせるようにすると未処理の是正要求が記録も無く消える——
-/// 安全側の不変条件「検証待ちがある ⇒ 印が立っている」がそこで破れる。
-///
-/// 旗を自分で立てるのは、印だけ立てても**表示に変化の無い巡は省略され得る**からである
-/// （`tick_wake` の旗と `tick_gate` の判断）。しかも本件の再表示は **Windows 上の窓の表示
-/// 状態を伴わない**（要件 7.3）ので、窓のメッセージが代わりに旗を立ててくれることも期待
-/// できない——変化を起こした側が旗を立てる。既存の各生産者と同じ作法である。
-///
-/// 受け口（`ZOrderGroups`）がまだ挿さっていない巡は何もしない。ここで作ると、宣言が 1 本も
-/// 無いのに受け口だけが生える（宣言 0 本の巡と結果は同じなので作る意味がない）。
-fn note_balloon_shown(world: &mut World, shown: bool) {
-    let Some(mut groups) = world.get_resource_mut::<ZOrderGroups>() else {
-        return;
-    };
-    if wants_group_follow_on_show(shown, !groups.groups.is_empty()) {
-        groups.pending = true;
-        tick_wake::mark(tick_wake::ZORDER);
     }
 }
 
@@ -633,6 +581,8 @@ mod tests;
 #[path = "balloon_visibility_phase_wake_tests.rs"]
 mod wake_tests;
 
+// 再表示は重なりへ作用しない（要件 7.3 は所有の鎖の構造で満たす）。その不作用と、
+// 退役した追随トリガの痕跡が残っていないことを見る決定論テスト。
 #[cfg(test)]
-#[path = "balloon_visibility_phase_zorder_group_tests.rs"]
-mod zorder_group_tests;
+#[path = "balloon_visibility_phase_zorder_chain_tests.rs"]
+mod zorder_chain_tests;
