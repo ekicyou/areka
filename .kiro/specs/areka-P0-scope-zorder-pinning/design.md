@@ -59,7 +59,7 @@
 
 ### Allowed Dependencies
 
-- wintf 新設 → `api.rs` の `set_window_owner`（:141）／`clear_window_owner`（:152）／`get_window_above`（:63）（いずれも `pub(crate)`）
+- wintf 新設 → `api.rs` の `set_window_owner`（:141）／`clear_window_owner`（:152）／`get_window_above`（:72）（いずれも `pub(crate)`）
 - wintf 新設 → 既存 `zorder_pair` の `pub(crate)` 純関数（`InsertSpec` 等）— **読むだけ**
 - areka 新設 → `GhostWindows`（scope→Entity の唯一の正本）・`ZOrderGroupLedger`・`dola::cue::CueSink`
 - **wintf → areka の import は禁止**（既存規律 `zorder_pair.rs:5-7`）。scope／窓種別の知識は areka に閉じ、
@@ -202,9 +202,8 @@ crates/wintf/src/ecs/window/
 | ファイル | 本 spec での役割 |
 |---|---|
 | `crates/areka/src/emo2_boot/zorder_cue.rs`（159 行） | タグの自己選別と送出（`ZOrderCueSink`）。初版の実装をそのまま使う（要件 1.7／4.4／11.2／11.3） |
-| `crates/areka/src/emo2_boot/frame/zorder_descript.rs`（92 行） | shell 設定の読み取りと基底適用（`apply_descript_base`）。解釈は `parse_zorder_tokens` を共用（要件 5） |
 | `crates/areka/src/emo2_boot/frame/wiring.rs` | 台帳の住処（`:95`）と descript の種蒔き（`:194`）。台帳の型が変わらないので無編集 |
-| `crates/wintf/src/api.rs`（owner 3 本） | `set_window_owner`（`:141`）／`clear_window_owner`（`:152`）／`get_window_above`（`:63`）。**呼ぶだけ**で変更しない |
+| `crates/wintf/src/api.rs`（owner 3 本） | `set_window_owner`（`:141`）／`clear_window_owner`（`:152`）／`get_window_above`（`:72`）。**呼ぶだけ**で変更しない |
 | `crates/wintf/src/ecs/window/zorder_pair.rs`・`zorder_pair_diag.rs`・`zorder_pair_establish.rs`・`zorder_pair_sink.rs` | スコープ内ペア edge＝鎖のスコープ区間（要件 6.3）。**挙動も doc も無編集** |
 | `crates/areka/src/placement/zorder_property_deferral_tests.rs`（606 行） | 先送りプロパティの固定（要件 13）。設計に依存しないので無編集 |
 
@@ -212,11 +211,12 @@ crates/wintf/src/ecs/window/
 
 | ファイル | 変更内容 |
 |---|---|
+| `crates/areka/src/emo2_boot/frame/zorder_descript.rs` | **import 先の変更のみ**（`log_group_applied`／`log_group_rejected` の移設に追随）。shell 設定の読み取りと基底適用（要件 5）の挙動は無変更 |
 | `crates/areka/src/placement/zorder_group_ledger.rs` | 要件 2.6 の**畳み込み**を `normalize_scope_blocks` へ追加。`Normalization` に `implied_partner: Option<GroupWindowKind>` を追加（加えたことの記録材料） |
 | `crates/areka/src/placement/zorder_group_ledger_tests.rs`／`zorder_group_ledger_state_tests.rs` | 畳み込みの分岐を追加 |
 | `crates/areka/src/placement/zorder_group_branch_coverage_tests.rs` | 要件 10.2 の分岐一覧を鎖の語彙へ差し替え（`BRANCHES` 配列。**要件文と機械では結ばれていないので逐語確認が要る**＝申し送り） |
-| `crates/areka/src/emo2_boot/frame/zorder_drain.rs` | 射影の出口を `ZOrderGroups` から `ZOrderChainPlan` へ。台帳→合成→公開の 3 段。公開は**内容が前回と異なるときだけ** |
-| `crates/areka/src/emo2_boot/balloon_visibility_phase.rs` | 再表示の引き金を撤去（drain 相の内容差分が同じ役目を果たす・要件 7.3） |
+| `crates/areka/src/emo2_boot/frame/zorder_drain.rs` | 射影の出口を `ZOrderGroups` から `ZOrderChainPlan` へ。台帳→合成→公開の 3 段。公開は**内容が前回と異なるときだけ**。`log_group_*` の import 先も移設へ追随 |
+| `crates/areka/src/emo2_boot/balloon_visibility_phase.rs` | 再表示の引き金（`note_balloon_shown`／`wants_group_follow_on_show`）を撤去。鎖の下では再表示が重なりへ作用する経路が無い（要件 7.3 は構造で満たす・DD-9）。撤去時に、引き金が他の要件を担っていないことを確認する |
 | `crates/areka/src/emo2_boot/mod.rs` | `:510` の `.before(apply_zorder_group_maintenance)` を `.before(apply_zorder_chain)` へ |
 | `crates/areka/src/placement/spawn.rs` | `:663-671` の `FrameFinalize` チェーン末尾を `apply_zorder_group_maintenance` → `apply_zorder_chain` へ |
 | `crates/areka/src/placement/spawn_zorder_group_wiring_tests.rs` | 結線の字面の檻を鎖の名前へ（ファイル名も `spawn_zorder_chain_wiring_tests.rs` へ改名） |
@@ -240,7 +240,7 @@ crates/wintf/src/ecs/window/
 **流用してから捨てるもの**: `zorder_group_order_tests.rs:126-180` の `relative_z_order`／`z_shape`／`arrange_z` 歩行器と
 `window_pos_zorder_group_tests.rs:580-632` の `RealWindowProbe` は、`zorder_chain_order_tests.rs` の雛形として写してから退役させる。
 
-**退役の順序（要件 9.5 を割らないために）**: ⑴新設を着地させ緑にする → ⑵結線を鎖側へ切り替える →
+**退役の順序（要件 9.5 を割らないために）**: ⑴新設を着地させ緑にする（**`[zorder-group] applied`／`rejected` の `zorder_chain_diag.rs` への移設と呼出元 2 件の追随を含む**）→ ⑵結線を鎖側へ切り替える →
 ⑶退役ファイルを削除し両側 `PRODUCTION_FILES` 名簿と分岐網羅表を同時に直す → ⑷`signoff-scan.ps1` の判定語を差し替える。
 **`[zorder-pair]` の 6 語と `[zorder-group] applied`／`rejected` は全工程を通じて 1 度も欠かさない。**
 
@@ -324,7 +324,7 @@ stateDiagram-v2
 | 6.4 | 指定ゼロなら導入前と同じ | `ZOrderChainPlan` が空なら 1 命令も出さない | 早期 return | — |
 | 7.1 | 出現した窓を指定順へ | `zorder_chain_compose`＋`plan_chain_ops`（スプライス） | `Detach`→`Attach`→後押し | 状態遷移「鎖→鎖」・§12.4 |
 | 7.2 | 破棄が他窓を巻き込まない | `detach_cross_owner_links_for_departing`（破棄より先に外す） | `clear_window_owner` | 状態遷移「鎖→島」・§12.3 |
-| 7.3 | バルーン再表示直後に確認・是正 | drain 相の内容差分（再表示で窓の在庫が変われば合成結果が変わる） | `ZOrderChainPlan` の差分公開 | タグ受理と同経路 |
+| 7.3 | バルーン再表示直後に確認・是正 | — （**構造で満たす**。再表示は窓の中身の絵だけを触り、HWND にも owner にも作用しないため、鎖が崩れる経路が存在しない） | 所有の鎖の OS 不変条件＋決定論檻（内容可視性が変わっても `ZOrderChainPlan` が不変） | 1.3／7.4 と同型 |
 | 7.4 | 周期処理の省略に影響されない | — （**構造で満たす**） | 所有の鎖の OS 不変条件 | 維持に周期処理が関与しない |
 | 7.5 | 全窓が背面に回っても順を保持 | 同上 | 同上 | — |
 | 8.1 | 解釈不能は部分適用せず記録 | `zorder_group_ledger` | `ZOrderReject::UnparsableToken` | `[zorder-group] rejected` |
@@ -333,7 +333,7 @@ stateDiagram-v2
 | 8.4 | 一度も現れない窓を記録 | `zorder_chain_compose` の `absent` | `[zorder-chain] absent` | — |
 | 9.1 | どの窓を鎖のどこへ繋いだか | `zorder_chain_diag` | `linked`／`unlinked` 行 | — |
 | 9.2 | 組み替えの内容と直後の実測を対応づける | `zorder_chain_apply`（**同期の後押しの直後に実測**） | `settled` 行（`declared=` と `measured=`） | 鎖適用 |
-| 9.3 | 不可視窓を読み飛ばし最も近い可視の隣で判定 | 既存 `measure_*`（`zorder_pair.rs:511/525/635`）を流用 | `FrontScan` | 実測 |
+| 9.3 | 不可視窓を読み飛ばし最も近い可視の隣で判定 | 既存 `measure_*`（`zorder_pair.rs:525/:635`）を流用 | `FrontScan` | 実測 |
 | 9.4 | 有界時間の自動終了実行のログで判定 | `signoff-scan.ps1`・`signoff-procedure.md` | 終了コード 0/1/2/3 | 実機サインオフ |
 | 9.5 | 既存の観測記録の語彙を保つ | 退役の順序 ⑴〜⑷・両側の語彙檻 | `[zorder-pair]` 6 語＋`[zorder-group] applied`／`rejected` | — |
 | 10.1 | 解釈と鎖の構成を決定論テストで | `zorder_chain_compose`（純関数）・`plan_chain_ops`（純関数） | `compose_chain`・`plan_chain_ops` | — |
@@ -466,8 +466,10 @@ pub fn compose_chain(
 - 台帳の適用（追加・拒否・解除・基底）と `[zorder-group] applied`／`rejected` の記録は**現行のまま**
 - 射影の出口を `ZOrderGroups` から **`compose_chain` → `ZOrderChainPlan`** へ差し替える
 - **公開は内容が前回と異なるときだけ**（`ChainGroupPlan` の `PartialEq` 比較。初版が版数でなく射影結果の
-  突き合わせで変化を見たのと同じ判断）。窓の出現・破棄・バルーンの再生成はここで自然に検出されるので、
-  初版の引き金 3 点（`window_pos.rs`・`tick_wake`・`balloon_visibility_phase.rs`）は不要になる（要件 7.1／7.3／14.5）
+  突き合わせで変化を見たのと同じ判断）。窓の出現・破棄はここで自然に検出される（要件 7.1／14.5）。
+  **再表示（要件 7.3）はここでは検出されない**——再表示は窓の在庫を 1 ミリも変えないため。7.3 は
+  「鎖が崩れる経路が無い」ことによる**構造充足**であり（DD-9）、初版の引き金 3 点
+  （`window_pos.rs`・`tick_wake`・`balloon_visibility_phase.rs`）はいずれの要件も担わなくなるので退役する
 - `absent` は `[zorder-chain] absent` として記録（要件 8.4）。**同じ内容が続く間は 1 度だけ**出す
 
 ### wintf 層
@@ -658,9 +660,15 @@ pub(crate) fn nudge_command(members: &[HWND]) -> Option<SetWindowPosCommandSpec>
 | `[zorder-chain] link-failed` | error | `group_id= owned_hwnd= owner_hwnd= error=` | 8.2 |
 | `[zorder-chain] unlink-failed` | error | `group_id= owned_hwnd= error=` | 8.2 |
 
-**保全する既存語彙（要件 9.5）**: `[zorder-group] applied`（`action=set｜reset group_id=N source=Tag｜Descript members=… normalized=…`）・
+**保全する既存語彙（要件 9.5）と、その新しい住処**: `[zorder-group] applied`（`action=set｜reset group_id=N source=Tag｜Descript members=… normalized=…`）・
 `[zorder-group] rejected`（`reason= tokens=`）・`[zorder-pair]` の 6 語すべて。
-**退役する語彙**: `[zorder-group] fix`・`[zorder-group] skip`・`[zorder-group] verify-failed`。
+**applied／rejected のタグ定数と記録関数（`log_group_applied`／`log_group_rejected`）は本ファイル（`zorder_chain_diag.rs`）へ移設する**——
+現所在（`zorder_group.rs:653/668`・`zorder_group_diag.rs:41/54`）が退役対象のため。**タグの字面は 1 字も変えない**。
+target は移設に伴い `wintf::ecs::window::zorder_group` から `wintf::ecs::window::zorder_chain` へ変わる
+（サインオフの `RUST_LOG` は既に `zorder_chain=debug` を含むため判定に影響しない。grep はタグの字面で行う）。
+呼び出し元 2 件（`zorder_descript.rs:36`・`zorder_drain.rs:67`）は import 先の変更のみ（Modified Files 参照）。
+`log_group_member_missing`（`zorder_group.rs:700`）は退役し、後継は `[zorder-chain] absent`（要件 8.4・保全対象ではない）。
+**退役する語彙**: `[zorder-group] fix`・`[zorder-group] skip`・`[zorder-group] verify-failed`・`[zorder-group] member-missing`。
 
 > ⚠ **サインオフへの必須事項（初版の申し送り 6.3 の再掲）**: 起動由来の受理行の実際の字面は
 > `[zorder-group] applied action=set group_id=<N> source=Descript members=… normalized=…` であり、
@@ -731,7 +739,8 @@ pub(crate) fn nudge_command(members: &[HWND]) -> Option<SetWindowPosCommandSpec>
 
 ### Integration（in-crate・World 使用）
 
-1. **drain 相の差分公開**——同じ内容では公開しない／窓が現れたら公開する／解除で空になる（要件 7.1／7.3／4.1）
+1. **drain 相の差分公開**——同じ内容では公開しない／窓が現れたら公開する／解除で空になる（要件 7.1／4.1）
+1b. **再表示の非作用**——バルーンの内容可視性が変わっても `ZOrderChainPlan` が変化しないこと（要件 7.3 の構造充足の証跡）
 2. **`apply_zorder_chain` の 1 巡**（偽ハンドル＋記録捕捉）——`dirty=false` なら 1 命令も出さない（6.4）／
    `Detach`→`Attach` の順／`Diverged` で Win32 を呼ばない／失敗した edge を飛ばして残りを張る（8.2）
 3. **`tick_wake::mark` を呼ばないこと**（要件 14.2・14.5）——適用系のソースに当該呼び出しが無いことを字面で固定し、
@@ -806,7 +815,7 @@ J2（既定＝非強制）と J3（ペア語彙の保全）は形を変えない
 | DD-6 | 破棄の前に必ず外す（既存ペア切離しの雛形と同型） | §12.3——外してから壊せば道連れが完全に消える（要件 7.2） | 破棄後に帳簿を掃除する（既に他窓が巻き込まれている） |
 | DD-7 | **最小化の連動は封じない**。到達経路が無いことを根拠に許容し、裁量として COMPAT §8 へ登記 | §12.3——鎖である以上 OS の性質として付いてくる。ただし⑴ゴースト窓は `WS_POPUP`＋`WS_EX_TOOLWINDOW`＋最小化ボックス無しで、areka はどの経路でも `SW_MINIMIZE` を出さない（要件 11.4・先送り語彙の檻が `minimize`／`iconic` の混入を赤で止める）、⑵同型の連動は既にペア edge で本番成立している（キャラ窓を最小化すればバルーンは既に隠れる）、⑶可逆である。要件 11.5 が縛るのは「利用者に見える変化」であり、経路が無い以上その変化は生じない | 最小化を検知して鎖を外す（要件 11.4 が窓状態を射程外とし、検知系は要件 14.2 の観測系の復活になる） |
 | DD-8 | 外部要因で鎖が壊れた場合の**検知系を持たない** | `research.md` §12.7-7。鎖が壊れるのは他プロセスが `GWLP_HWNDPARENT` を書いた場合だけで、その仮説のために観測系を置けば NO-GO の根因へ逆戻りする（要件 14.2） | 定期照合（要件 14.2 違反） |
-| DD-9 | 再表示（要件 7.3）の追随は**drain 相の内容差分**で行い、専用の引き金を持たない | 窓の在庫が変われば合成結果が変わるので自然に検出される。引き金 3 点は退役 | 合成層の shown エッジから直接点火（初版の形。引き金の数を増やしても指令の中身は直らない＝§10.10） |
+| DD-9 | 再表示（要件 7.3）は**構造で満たし**、専用の引き金を持たない | 再表示は「窓の中身の絵の消去・再描画」であり（要件 7.3 の定義）、HWND にも owner にも作用しない。鎖が崩れる経路が存在しないので、確認も是正も不要（1.3／7.4 と同型）。決定論檻「内容可視性が変わっても `ZOrderChainPlan` 不変」で固定し、引き金 3 点は退役 | 合成層の shown エッジから直接点火（初版の形。鎖の下では点火しても出す指令が無い）／drain 相の在庫差分で拾う（**誤り**——在庫は再表示で変わらない。検証レポート Critical 2 で棄却） |
 | DD-10 | 部分グループは**相棒窓の畳み込み**（要件 2.6） | 2026-08-29 要件ディスカッションの裁定。バルーン直上の既存不変条件により初版方式でも相棒窓は同じ位置に拘束されており、見える結果が変わらない | スコープをまたぐ部分グループを拒否（正典の例示は常にペア込みだが、拒否は作者の書けるものを狭める） |
 
 ## 互換記録（`doc/COMPAT_ARCHITECTURE.md` §8）
