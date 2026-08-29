@@ -135,6 +135,7 @@ crates/areka/src/
 - `crates/wintf/src/ecs/window_proc/window_pos.rs` — 外部由来（`!is_echo`）の WINDOWPOS 変化時、グループが 1 つでもあれば `ZOrderGroups.pending` を立て `tick_wake::mark(ZORDER)`（数行。`wp.flags`／`hwndInsertAfter` の解析はしない）
 - `crates/wintf/src/ecs/world/tick_wake.rs` — module doc の ZORDER 生産者行へ本 spec の生産者を追記（doc のみ）。着地時点で当該行（:18-21）は 5 人を名指し、うち 4 人が本 spec 由来＝`window/zorder_group_maintain.rs`・`window_proc/window_pos.rs`・areka `emo2_boot/zorder_cue.rs`・areka `emo2_boot/balloon_visibility_phase.rs`（既存は `window/zorder_pair_maintain.rs` の 1 人）
 - `crates/wintf/src/ecs/window/zorder_pair_deferred_vocabulary_tests.rs` — `PRODUCTION_FILES` 5→8（新設 3 本追加）＋件数定数
+- `crates/areka/src/placement/mod.rs` — 台帳モジュールの登録（:49）と、shell 設定の生の値を起動窓の準備から `main.rs` へ渡す中継フィールド `PreparedPlacement::zorder_raw`（:258）。placement は値を解釈しない
 - `crates/areka/src/placement/spawn.rs` — `wire_zorder_pair` のチェーンを `(establish, pair_maintain, group_maintain).chain()` へ拡張（1 行）＋`KeepDirectlyAbove` doc の「スコープ間には宣言を張らない」節を二状態の記述へ改訂
 - `crates/areka/src/placement/spawn_zorder_pair_deferred_tests.rs` — `PRODUCTION_FILES` 2→6（ledger・zorder_cue・frame/zorder_drain.rs・frame/zorder_descript.rs 追加）＋件数定数
 - `crates/areka/src/emo2_boot/mod.rs` — チャネル 1 組＋`sinks` 1 行＋`Emo2Wiring` 受け渡し（sink 追加 5 点セットの 3 点）＋起動の段で shell 設定由来の基底を据える呼出（:495-500・要件 5.1）
