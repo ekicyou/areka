@@ -64,9 +64,22 @@ fn entities(n: usize) -> Vec<Entity> {
     (0..n).map(|_| world.spawn_empty().id()).collect()
 }
 
-/// 望む繋ぎ 1 本。
+/// 望む繋ぎ 1 本（区間は差分の判断に一切効かないので、ここでは通し番号で埋める）。
 fn edge(owned: Entity, owner: Entity) -> CrossEdge {
-    CrossEdge { owned, owner }
+    CrossEdge {
+        owned,
+        owner,
+        segment: ChainSegment::Group(0),
+    }
+}
+
+/// 区間だけが違う同じ端点の繋ぎ（差分の判断が区間を見ていないことの対照に使う）。
+fn edge_in_tail(owned: Entity, owner: Entity) -> CrossEdge {
+    CrossEdge {
+        owned,
+        owner,
+        segment: ChainSegment::Tail,
+    }
 }
 
 /// 帳簿の 1 件（窓ハンドルの値は照合に使わないので通し番号で埋める）。
@@ -77,6 +90,7 @@ fn ledger(owned: Entity, owner: Entity, seq: usize) -> (Entity, CrossOwnerLink) 
             owner,
             owned_hwnd: fake_hwnd(0x1000 + seq),
             owner_hwnd: fake_hwnd(0x2000 + seq),
+            segment: ChainSegment::Group(0),
         },
     )
 }
@@ -216,6 +230,29 @@ fn a_chain_that_already_matches_yields_no_operation_at_all() {
     let ops = plan_chain_ops(&desired, &current);
 
     assert!(ops.is_empty(), "変化が無いのに操作が出ている: {ops:?}");
+}
+
+/// 区間だけが変わっても操作は 1 つも出ない——差分は**所有関係**の差だけを見る。
+///
+/// 区間は記録のための欄であり、実行環境への指令とは無関係である。ここを見て操作を
+/// 作ると、同じ並びのまま帰属が変わっただけの巡で鎖を外して張り直すことになる
+/// （途中状態で鎖が切れる・後押しも無駄に出る）。
+#[test]
+fn a_segment_only_change_yields_no_operation_at_all() {
+    let e = entities(3);
+    // 現況の帳簿は `Group(0)`（`ledger` の既定）。望みは同じ端点で区間だけ `Tail`。
+    let desired = [edge_in_tail(e[0], e[1]), edge_in_tail(e[1], e[2])];
+    let current = [ledger(e[0], e[1], 0), ledger(e[1], e[2], 1)];
+
+    assert_ne!(
+        desired[0],
+        edge(e[0], e[1]),
+        "対照が成立していない（区間が同じなら何も主張できない）"
+    );
+
+    let ops = plan_chain_ops(&desired, &current);
+
+    assert!(ops.is_empty(), "区間の差で操作を出している: {ops:?}");
 }
 
 /// スプライス（切る 1 本・張る 2 本）でも、撤去の塊が付与の塊より前にまとまる。
@@ -486,7 +523,7 @@ fn every_chain_record_leaves_from_this_module_not_from_the_line_builders() {
     let e = entities(2);
     let out = capture_under_filter(SIGNOFF_DIRECTIVES, || {
         log_chain_linked(
-            ChainSegment::Group(1),
+            Some(ChainSegment::Group(1)),
             e[0],
             e[1],
             Some(fake_hwnd(0x10)),
@@ -511,7 +548,7 @@ fn every_chain_record_leaves_from_this_module_not_from_the_line_builders() {
         log_chain_absent(3, "b0");
         log_chain_skipped(ChainSkipReason::NoChange);
         log_chain_link_failed(
-            ChainSegment::Group(0),
+            Some(ChainSegment::Group(0)),
             Some(fake_hwnd(0x10)),
             Some(fake_hwnd(0x20)),
             &fake_error(),

@@ -27,16 +27,11 @@
 //! 無い」の区別が事後に付かなくなる。よってすべての欄は必ず `field=value` の形で現れ、
 //! 値が無いときは [`UNKNOWN`] になる（既存ペア機構と同じ字面）。
 //!
-//! # 段階的実装のための `dead_code` 許可
+//! # `dead_code` 許可は 1 つも残っていない
 //!
-//! 鎖系 7 語の行組立には、本 task の時点ではまだ本番の呼び手が居ない（記録を出す側＝
-//! `zorder_chain` の適用系は後続 task で着地する）。逐語の檻は兄弟テストが今すぐ固定する
-//! ので実装は先に置き、結線が着くまでの間だけ未使用の警告を伏せる。**適用系が着地した
-//! task は、この許可を外せるか必ず確かめること**（モジュール単位の許可の先例＝
-//! `areka/src/emo2_boot/consumer_ledger.rs:51` と `areka/src/emo2_boot/move_cue.rs:37`。
-//! 結線の着地とともに撤去し切った例＝`areka/src/placement/zorder_group_ledger.rs:570-581`）。
-
-#![allow(dead_code)]
+//! 適用系（[`zorder_chain_apply`](super::zorder_chain_apply)）の着地と、望む鎖へ区間の
+//! 帰属を載せる工事によって、本モジュールの全項目に本番の呼び手が付いた。段階的実装の
+//! ためにモジュール全体を覆っていた許可は撤去してある。
 
 use bevy_ecs::prelude::*;
 use tracing::{debug, warn};
@@ -88,8 +83,15 @@ pub(crate) fn preserved_group_tags() -> [&'static str; 2] {
 }
 
 /// その繋ぎが属する鎖の区間。
+///
+/// # なぜ crate の外へ開いているのか
+///
+/// 望む鎖（[`ChainPlan`](super::zorder_chain::ChainPlan)）は**areka が組む**——グループの
+/// 登記順もスコープ ID も areka 側の知識だからである。よって区間の値も areka が詰められ
+/// なければならず、`pub(crate)` では届かない。開いているのは**語彙**（グループの通し番号か
+/// 後方配置か）だけであり、判断も記録もこちら側に閉じたままである。
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) enum ChainSegment {
+pub enum ChainSegment {
     /// 台帳のグループ（登記順の通し番号）。
     Group(u32),
     /// どのグループにも属さないスコープの後方配置（要件 15）。
@@ -176,8 +178,19 @@ fn text_field(value: &str) -> String {
 /// `segment` はこの繋ぎが属する区間である——台帳のグループ（`gN`・登記順）か、
 /// どのグループにも属さないスコープの後方配置（`tail`・要件 15）か。これが無いと、
 /// 全窓 1 本の鎖では「どのグループの繋ぎか」が記録から復元できない。
+///
+/// # `Option` は防御であって、本番は常に実値である
+///
+/// 区間は望む鎖が運んでくる——[`CrossEdge::segment`](super::zorder_chain::CrossEdge) に
+/// 載って届き、撤去のときは帳簿の控え
+/// （[`CrossOwnerLink::segment`](super::zorder_chain::CrossOwnerLink)）から出る。
+/// よって**本番の呼び出しは常に `Some(..)`** であり、`gN` か `tail` のどちらかが必ず入る。
+///
+/// 引数が `Option` なのは、値が取れなかったときに**欄そのものを落とさない**ための防御で
+/// ある（本モジュール共通の原則）。落とすと「記録が出ていない」と「その経路にはその値が
+/// 無い」の区別が事後に付かなくなるので、取れないときは `-` を入れる。
 pub(crate) fn linked_line(
-    segment: ChainSegment,
+    segment: Option<ChainSegment>,
     owned: Entity,
     owner: Entity,
     owned_hwnd: Option<HWND>,
@@ -188,7 +201,7 @@ pub(crate) fn linked_line(
     format!(
         "{LINKED_TAG} segment={segment} owned={owned:?} owner={owner:?} \
          owned_hwnd={owned_h} owner_hwnd={owner_h} pos={pos}/{total}",
-        segment = segment_field(Some(segment)),
+        segment = segment_field(segment),
         owned_h = hwnd_field(owned_hwnd),
         owner_h = hwnd_field(owner_hwnd),
     )
@@ -285,8 +298,11 @@ pub(crate) fn skipped_line(reason: ChainSkipReason) -> String {
 ///
 /// 失敗した繋ぎ **1 本だけ**を飛ばして残りは張る、というのが design.md の裁定である。
 /// よってこの行は「どの区間のどの対が張れなかったか」を単独で読めなければならない。
+///
+/// 区間の扱いは [`linked_line`] と同じ——本番は常に実値であり、`Option` は欄を落とさない
+/// ための防御である（取れないときは番兵 `-`）。
 pub(crate) fn link_failed_line(
-    segment: ChainSegment,
+    segment: Option<ChainSegment>,
     owned_hwnd: Option<HWND>,
     owner_hwnd: Option<HWND>,
     error: &windows::core::Error,
@@ -294,7 +310,7 @@ pub(crate) fn link_failed_line(
     format!(
         "{LINK_FAILED_TAG} segment={segment} owned_hwnd={owned_h} owner_hwnd={owner_h} \
          error={code:?}",
-        segment = segment_field(Some(segment)),
+        segment = segment_field(segment),
         owned_h = hwnd_field(owned_hwnd),
         owner_h = hwnd_field(owner_hwnd),
         code = error.code(),

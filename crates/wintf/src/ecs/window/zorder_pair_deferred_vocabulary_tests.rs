@@ -71,11 +71,11 @@ use std::path::PathBuf;
 /// 重なり順の 2 機構が全部を書いた wintf 側の本番ファイル（`CARGO_MANIFEST_DIR` からの相対）。
 ///
 /// 先頭 5 本はペア機構（`ghost-window-zorder`）、続く 3 本はグループ機構
-/// （`areka-P0-scope-zorder-pinning` 改訂第 1 版・退役予定）、最後の 2 本は同 spec の
+/// （`areka-P0-scope-zorder-pinning` 改訂第 1 版・退役予定）、最後の 3 本は同 spec の
 /// 改訂第 2 版（所有の鎖）が新設したもの。下の
 /// `the_scanned_roster_covers_every_zorder_production_source_in_this_crate` が
 /// 「実在する `zorder_` 系の本番ファイルが 1 本残らずここに載っている」ことを機械で見張る。
-const PRODUCTION_FILES: [&str; 10] = [
+const PRODUCTION_FILES: [&str; 11] = [
     "src/ecs/window/zorder_pair.rs",
     "src/ecs/window/zorder_pair_diag.rs",
     "src/ecs/window/zorder_pair_establish.rs",
@@ -85,6 +85,7 @@ const PRODUCTION_FILES: [&str; 10] = [
     "src/ecs/window/zorder_group_diag.rs",
     "src/ecs/window/zorder_group_maintain.rs",
     "src/ecs/window/zorder_chain.rs",
+    "src/ecs/window/zorder_chain_apply.rs",
     "src/ecs/window/zorder_chain_diag.rs",
 ];
 

@@ -60,7 +60,7 @@
 
 ### Allowed Dependencies
 
-- wintf 新設 → `api.rs` の `set_window_owner`（:141）／`clear_window_owner`（:152）／`get_window_above`（:72）（いずれも `pub(crate)`）
+- wintf 新設 → `api.rs` の `set_window_owner`（:141）／`clear_window_owner`（:152）／`get_window_long_ptr`（:11・撤去前の照合で `GWLP_HWNDPARENT` を読み戻す）／`get_window_above`（:72・前面走査の土台）（いずれも既存の `pub(crate)`）
 - wintf 新設 → 既存 `zorder_pair` の `pub(crate)` 純関数（`InsertSpec` 等）— **読むだけ**
 - areka 新設 → `GhostWindows`（scope→Entity の唯一の正本）・`ZOrderGroupLedger`・`dola::cue::CueSink`
 - **wintf → areka の import は禁止**（既存規律 `zorder_pair.rs:5-7`）。scope／窓種別の知識は areka に閉じ、
@@ -166,7 +166,7 @@ graph TB
 | Layer | Choice | Role in Feature | Notes |
 |---|---|---|---|
 | ECS | bevy_ecs 0.19（既存） | Resource・Component・`FrameFinalize` の system | 新規依存なし |
-| Win32 | windows 0.62.2（既存） | `SetWindowLongPtrW(GWLP_HWNDPARENT)`／`SetWindowPos`／`GetWindow(GW_HWNDPREV/GW_OWNER)` | すべて既存ラッパ経由。新規 API 呼び出しは `GW_OWNER` の読み取り 1 本のみ |
+| Win32 | windows 0.62.2（既存） | `SetWindowLongPtrW(GWLP_HWNDPARENT)`／`GetWindowLongPtrW(GWLP_HWNDPARENT)`／`SetWindowPos`／`GetWindow(GW_HWNDPREV)` | すべて既存ラッパ経由。**新規 API 呼び出しは無い**——撤去前の照合は owner を書くのと同じ欄（`GWLP_HWNDPARENT`）を既存の `get_window_long_ptr` で読み戻す（`GetWindow(GW_OWNER)` と同値・`api.rs:590-618` の実窓檻が固定）。よって `api.rs` は非接触 |
 | 演出 | dola `CueSink`（既存） | タグの受け口 | 初版の実装をそのまま流用 |
 | 記録 | tracing（既存） | `[zorder-chain]` 系 1 target | マクロ呼び出しは 1 箇所に集約 |
 
@@ -204,7 +204,7 @@ crates/wintf/src/ecs/window/
 |---|---|
 | `crates/areka/src/emo2_boot/zorder_cue.rs`（159 行） | タグの自己選別と送出（`ZOrderCueSink`）。初版の実装をそのまま使う（要件 1.7／4.4／11.2／11.3） |
 | `crates/areka/src/emo2_boot/frame/wiring.rs` | 台帳の住処（`:95`）と descript の種蒔き（`:194`）。台帳の型が変わらないので無編集 |
-| `crates/wintf/src/api.rs`（owner 3 本） | `set_window_owner`（`:141`）／`clear_window_owner`（`:152`）／`get_window_above`（`:72`）。**呼ぶだけ**で変更しない |
+| `crates/wintf/src/api.rs`（owner 3 本＋読み戻し 1 本） | `set_window_owner`（`:141`）／`clear_window_owner`（`:152`）／`get_window_long_ptr`（`:11`・撤去前の照合）／`get_window_above`（`:72`）。**呼ぶだけ**で変更しない |
 | `crates/wintf/src/ecs/window/zorder_pair.rs`・`zorder_pair_diag.rs`・`zorder_pair_establish.rs`・`zorder_pair_sink.rs` | スコープ内ペア edge＝鎖のスコープ区間（要件 6.3）。**挙動も doc も無編集** |
 | `crates/areka/src/placement/zorder_property_deferral_tests.rs`（606 行） | 先送りプロパティの固定（要件 13）。設計に依存しないので無編集 |
 
@@ -333,8 +333,8 @@ stateDiagram-v2
 | 8.1 | 解釈不能は部分適用せず記録 | `zorder_group_ledger` | `ZOrderReject::UnparsableToken` | `[zorder-group] rejected` |
 | 8.2 | 鎖の構成・組み替えの失敗を記録し続行 | `zorder_chain_apply` | `link-failed`／`unlink-failed` | 失敗した edge だけ飛ばし残りは張る |
 | 8.3 | 黙って諦めない | `zorder_chain.rs` の記録入口 | `skipped reason=` | 全経路に記録 |
-| 8.4 | 一度も現れない窓を記録 | `zorder_chain_compose` の `absent` | `[zorder-chain] absent` | — |
-| 9.1 | どの窓を鎖のどこへ繋いだか | `zorder_chain_diag` | `linked`／`unlinked` 行 | — |
+| 8.4 | 一度も現れない窓を記録 | `zorder_chain_compose` の `absent`（グループ ID 付き）・`zorder_drain`（記録の出口） | `[zorder-chain] absent` | — |
+| 9.1 | どの窓を鎖のどこへ繋いだか | `zorder_chain_compose`（区間の帰属を載せる）・`zorder_chain_apply`（記録） | `linked`／`unlinked` 行の `segment=`／`pos=` | — |
 | 9.2 | 組み替えの内容と直後の実測を対応づける | `zorder_chain_apply`（**同期の後押しの直後に実測**） | `settled` 行（`declared=` と `measured=`） | 鎖適用 |
 | 9.3 | 不可視窓を読み飛ばし最も近い可視の隣で判定 | 既存 `measure_*`（`zorder_pair.rs:525/:635`）を流用 | `FrontScan` | 実測 |
 | 9.4 | 有界時間の自動終了実行のログで判定 | `signoff-scan.ps1`・`signoff-procedure.md` | 終了コード 0/1/2/3 | 実機サインオフ |
@@ -377,7 +377,7 @@ stateDiagram-v2
 | `ZOrderChainPlan`（**新設**） | wintf | areka→wintf の唯一の受け口 | 6.4, 7.1, 7.3, 14.5 | bevy_ecs Resource | State |
 | `CrossOwnerLink`（**新設**） | wintf | 自分が張った edge の帳簿 | 4.1, 7.2, 8.2 | bevy_ecs Component | State |
 | `plan_chain_ops`（**新設**・純関数） | wintf | 望む edge と現況の差分（先に外す→次に張る） | 4.1, 7.1, 7.2, 10.1 | なし（純） | Service |
-| `apply_zorder_chain`（**新設**・system） | wintf | Win32 書込・後押し・実測・記録 | 8.2, 8.3, 9.1, 9.2, 11.1, 14.1, 14.5 | `api.rs` の owner ラッパ (P0)・既存 `measure_*` (P1) | Service |
+| `apply_zorder_chain`（**新設**・system） | wintf | Win32 書込・後押し・実測・記録 | 8.2, 8.3, 9.1, 9.2, 11.1, 14.1, 14.5 | `api.rs` の owner ラッパ＋`get_window_long_ptr` (P0)・既存 `measure_*` (P1) | Service |
 | `zorder_chain_diag`（**新設**） | wintf | 記録行の純関数組み立て | 8.3, 9.1, 9.2 | なし（純） | — |
 | 既存ペア機構（**挙動無編集**） | wintf | スコープ内隣接＝鎖のスコープ区間 | 6.3 | — | — |
 
@@ -412,7 +412,9 @@ stateDiagram-v2
 // CrossEdge と ChainPlan は **wintf 側**（`ecs/window/zorder_chain.rs`）で定義し、
 // areka はそれを `use` する（Resource が運ぶ型であり、wintf は areka を import できないため）。
 // したがって両者の欄に areka 固有の型（`GroupElement` 等）は載せられない——
-// 不在要素は**正準表記の文字列**（`"b0"`／`"s1"`）で運ぶ。記録行が要るのもこの形である。
+// 不在要素は**グループ ID と正準表記の文字列の対**（`(1, "b0")`）で運ぶ。記録行が要るのもこの形である。
+// 区間（`ChainSegment`）だけは wintf 側で `pub` にしてあり、areka がそのまま詰める
+// ——グループの境目は連結後の `members` から復元できないので、ここで載せる以外に道が無い。
 
 pub fn compose_chain(
     groups: &[ZOrderGroup],
@@ -426,8 +428,10 @@ pub fn compose_chain(
   - `groups` が空なら `None`（既定状態。edge も指令もゼロ・要件 6.1／6.4）
   - `members` ＝ グループの連結（登記順・先に登記されたグループほど手前）＋未指定スコープのブロック（スコープ ID 昇順・各ブロックは [Balloon, Char]・要件 15.1／15.2）
   - `cross_edges` は `members` の連続対の部分集合（同一スコープの (Balloon, Char) 対を除く）であり、順序は手前から奥
+  - 各 `cross_edge` の `segment` は**手前側（被所有側）の枠が属する区間**——グループなら `Group(id)`、
+    後方配置なら `Tail`。よってグループの末尾から次のグループへ渡る繋ぎは、手前側のグループが名乗る
   - `members.last()` が**鎖の根**（後押しの対象）
-  - `absent` は宣言順のまま、要素の正準表記（`"b0"`／`"s1"`）で並ぶ
+  - `absent` は宣言順のまま、`(宣言したグループの id, 要素の正準表記)` の対で並ぶ
 - **Invariants**（純関数の檻で固定・要件 14.4）
   1. 返り値の全 `cross_edges` を通して、ある Entity が `owner` として現れるのは高々 1 回（**星形にならない**）
   2. 同じく `owned` として現れるのも高々 1 回（**輪にも分岐にもならない**）
@@ -440,7 +444,7 @@ pub fn compose_chain(
 - Validation: 不変条件 1〜4 は純関数の檻で全網羅（実機不要・要件 10.1）
 - Risks: 射影が「同一スコープのバルーンだけが存在する」形を生むと、横断 edge の被所有側がバルーンになる。
   そのバルーンはペア相手が不在なのでペア機構が owner を張れず、その時点では衝突しない。ただしキャラ窓が
-  後から現れるとペア機構が上書きするため、**適用系は書込前・撤去前に必ず現況（`GW_OWNER`）を読む**（下記 `apply_zorder_chain` 手順 3）
+  後から現れるとペア機構が上書きするため、**適用系は撤去の前に必ず現況（`GWLP_HWNDPARENT` の読み戻し）を読む**（下記 `apply_zorder_chain` 手順 3）
 
 #### `ZOrderGroupLedger`（既存・畳み込みを追加）
 
@@ -503,6 +507,11 @@ pub struct CrossEdge {
     pub owned: Entity,
     /// 所有する窓（奥側）。
     pub owner: Entity,
+    /// この繋ぎが属する区間（グループの登記順の通し番号か、後方配置か）。
+    /// **記録のためだけの欄**であり、所有関係を書く手順はこの値を読まない。
+    /// 計画に載せるのは、区間を知っているのは台帳を持つ areka だけで、
+    /// 連結された `members` からは境界が消えて復元できないためである（要件 9.1）。
+    pub segment: ChainSegment,
 }
 
 /// 全窓の鎖 1 本ぶんの計画（areka が構築し、wintf が適用する・DD-11）。
@@ -513,8 +522,10 @@ pub struct ChainPlan {
     pub members: Vec<Entity>,
     /// 本 spec が張る横断 edge（`members` の連続対のうち、同一スコープのペア対でないもの）。
     pub cross_edges: Vec<CrossEdge>,
-    /// 窓が存在しなかった宣言要素の正準表記（`"b0"`／`"s1"`。要件 1.4／8.4 の記録材料）。
-    pub absent: Vec<String>,
+    /// 窓が存在しなかった宣言要素——**宣言したグループの ID と正準表記の対**
+    /// （`(0, "b0")`／`(1, "s1")`。要件 1.4／8.4 の記録材料）。
+    /// ID を伴うのは `[zorder-chain] absent group_id= element=` が単独で読めるためである。
+    pub absent: Vec<(u32, String)>,
 }
 
 /// areka が公開する「望む鎖」。wintf 側の唯一の受け口。
@@ -533,6 +544,9 @@ pub struct CrossOwnerLink {
     pub owned_hwnd: HWND,
     /// 張った時点で書き込んだ owner の HWND。撤去前の照合に使う（§12.6）。
     pub owner_hwnd: HWND,
+    /// 張った時点の区間。撤去の記録が名乗る（撤去の局面では望む鎖から区間を引けない）。
+    /// 端点が同じまま区間だけが変わったときは、Win32 を呼ばずに控えだけを差し替える。
+    pub segment: ChainSegment,
 }
 ```
 
@@ -612,13 +626,28 @@ pub(crate) fn nudge_command(members: &[HWND]) -> Option<SetWindowPosCommandSpec>
 
 - `FrameFinalize` チェーンの**末尾**に置く（`establish_owner_links` → `apply_zorder_pair_maintenance` → **本 system**）。
   ペア機構が同じ巡で owner を張り替えたあとに走ることで、上書きの取り合いが構造的に起きない
-- `ZOrderChainPlan.dirty` が偽なら**即座に return**（1 命令も出さない・要件 6.4／14.2）
+- **手順 1（去る窓の切離し）だけは `dirty` の門の外**に置き、それ以降（手順 2〜7）は
+  `ZOrderChainPlan.dirty` が偽なら**即座に return**する（1 命令も出さない・要件 6.4／14.2）。
+  切離しを門の内側へ入れられないのは、破棄カスケードが**望む鎖の再公開を待てない**ためである
+  ——窓が去ってから drain 相が鎖を組み直して公開するまでには少なくとも 1 巡の間があり、
+  その間に `DestroyWindow` が走ると鎖の下流が巻き込まれる（要件 7.2）。去る窓が 1 枚も無ければ
+  この段は Win32 を 1 度も呼ばないので、「変化が無ければ無操作」は割れない（決定論檻で固定）
 - 手順（1 巡・鎖全体）:
-  1. 去る窓の切離し（`Departing`）——被所有側または所有側のハンドルが消えた／Entity が despawn された edge
+  1. 去る窓の切離し（`Departing`）——**所有側**の窓が去った edge（所有側の Entity が despawn された、
+     ないし所有側の `WindowHandle` が外れた）。被所有側だけを見ないのは、⑴破棄カスケードは
+     「所有する窓を壊すと所有される窓も壊す」向きに働くので、断つべきは被所有側の owner であり、
+     ⑵被所有側が先に去る場合、実体ごと消えれば帳簿（`CrossOwnerLink`）も一緒に消えて走査に現れず、
+     実体が残って `WindowHandle` だけが外れた場合は帳簿が古い `owned_hwnd` を抱えて残るものの、
+     次の dirty な巡で撤去（照合に失敗して `unlink-failed`）として掃かれる。いずれにせよ
+     被所有側の破棄は他窓を巻き込まないため、ここで見る必要が無いためである
   2. `plan_chain_ops` で差分を得る（**Detach が先・Attach が後**）
-  3. 各 `Detach`: **外す前に `GetWindow(GW_OWNER)` を読み**、帳簿の `owner_hwnd` と一致するときだけ
-     `clear_window_owner` を呼ぶ。食い違えば `Diverged` として帳簿だけ落とす（**Win32 は呼ばない**）
+  3. 各 `Detach`: **外す前に `GWLP_HWNDPARENT` を読み戻し**、帳簿の `owner_hwnd` と一致するときだけ
+     `clear_window_owner` を呼ぶ。食い違えば `Diverged` として帳簿だけ落とす（**Win32 は呼ばない**）。
+     読むのは `GetWindow(GW_OWNER)` ではなく、`set_window_owner`／`clear_window_owner` が**書くのと
+     同じ欄**である——既存ラッパ `get_window_long_ptr` で読めるので `api.rs` は非接触のまま済み、
+     新しい Win32 呼び出しも増えない。両者が同じ値を返すことは実窓の檻（`api.rs:590-618`）が固定している
   4. 各 `Attach`: `set_window_owner(owned_hwnd, owner_hwnd)`。成功したら `CrossOwnerLink` を挿す
+     （このとき望む edge の**区間**を控える。撤去の記録が名乗る区間はこの控えである）
   5. 何らかの操作が実際に走ったときのみ、鎖全体へ**後押しを 1 回**
      （`nudge_command` → `SetWindowPos(members[0], members[1], SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE)`）
   6. 後押しの**直後に**重なりを実測し（既存の `measure_*` を流用・不可視の窓は読み飛ばす＝要件 9.3）、
@@ -629,7 +658,8 @@ pub(crate) fn nudge_command(members: &[HWND]) -> Option<SetWindowPosCommandSpec>
 **Dependencies**
 
 - Inbound: `ZOrderChainPlan`（areka の drain 相が公開・P0）
-- Outbound: `api::set_window_owner`／`clear_window_owner`／`get_window_above`（P0）・既存 `measure_*`（P1）
+- Outbound: `api::set_window_owner`／`clear_window_owner`／`get_window_long_ptr`（`GWLP_HWNDPARENT` の
+  読み戻し）（P0）・既存 `measure_*`（`measure_windows_in_front`・P1）
 - External: なし
 
 **Contracts**: Service
@@ -670,7 +700,11 @@ pub(crate) fn nudge_command(members: &[HWND]) -> Option<SetWindowPosCommandSpec>
 | `[zorder-chain] unlink-failed` | error | `owned_hwnd= error=` | 8.2 |
 
 > `segment=` はその edge が属する区間——グループ（`gN`・登記順）か後方配置（`tail`・要件 15）か——を示す。
+> **`ChainSegment` は `pub`**（crate の外へ開く）——望む鎖を組むのは areka であり、区間の値も areka が
+> 詰められなければ計画に載らないためである。開くのは語彙だけで、判断も記録も wintf に閉じたままである。
 > `absent` の `group_id=` は台帳上の宣言グループを指す（後方配置に宣言要素は無い）。
+> `log_chain_absent` も同じ理由で `pub`——不在は「宣言と在庫の食い違い」であり、それを知るのは
+> 台帳と在庫を持つ areka だけである（呼び手を立てるのは出口を差し替える task）。
 
 **保全する既存語彙（要件 9.5）と、その新しい住処**: `[zorder-group] applied`（`action=set｜reset group_id=N source=Tag｜Descript members=… normalized=…`）・
 `[zorder-group] rejected`（`reason= tokens=`）・`[zorder-pair]` の 6 語すべて。
@@ -699,7 +733,7 @@ target は移設に伴い `wintf::ecs::window::zorder_group` から `wintf::ecs:
 - **グループ**（`ZOrderGroup`）: `{ id, members: Vec<GroupElement>, source: Tag｜Descript }`。
   `GroupElement = { scope: u32, kind: Balloon｜Char }`。**手前から奥の順**。台帳が唯一の正本
 - **鎖の計画**（`ChainPlan`）: 全グループ（登記順）と未指定スコープ（昇順・後方）を窓の在庫へ射影した
-  1 本の鎖。`members`（Entity 列）と `cross_edges`（Entity 対）と `absent`（不在要素）
+  1 本の鎖。`members`（Entity 列）と `cross_edges`（Entity 対＋区間）と `absent`（グループ ID 付きの不在要素）
 - **帳簿**（`CrossOwnerLink`）: 本 spec が実際に OS へ書いた edge。被所有側の Entity に付く
 
 **Business rules & invariants**

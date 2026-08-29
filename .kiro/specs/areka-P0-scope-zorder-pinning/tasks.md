@@ -61,7 +61,7 @@
   - _Depends: 1.3_
   - _Boundary: zorder_chain_compose_
 
-- [ ] 2.2 (P) 鎖の適用系（差分の書込・後押し 1 回・直後の実測・記録）
+- [x] 2.2 (P) 鎖の適用系（差分の書込・後押し 1 回・直後の実測・記録）
   - 望む鎖に変化が無ければ**即座に何もしない**（1 命令も出さない）
   - 去る窓の繋ぎを**破棄に先立って**外す経路を持つ
   - 撤去は「帳簿にあり、かつ外す前に読んだ現況が帳簿と一致する」繋ぎだけに限る。食い違えば実行環境の呼び出しを行わず帳簿だけ落とし、理由つきで記録する
@@ -76,7 +76,7 @@
   - 完了状態: 偽ハンドルの 1 巡テストで「変化なしなら無操作」「撤去が先・付与が後」「食い違いでは実行環境を呼ばない」「失敗した 1 本を飛ばして残りを張る」が緑になり、促しの呼び出しの不在が対照つきで固定される
   - _Requirements: 6.3, 6.4, 7.1, 7.2, 8.2, 8.3, 9.1, 9.2, 9.3, 10.4, 11.1, 14.1, 14.2, 14.5_
   - _Depends: 1.3_
-  - _Boundary: zorder_chain_apply_
+  - _Boundary: zorder_chain_apply_（**2026-08-30 にコントローラ裁定で拡張**: 区間の帰属を通すため `zorder_chain`・`zorder_chain_compose`・`design.md` を含む。後続に引受先が実測でゼロだったため）_
 
 - [ ] 3. 統合: 出口の差し替えと結線
 
@@ -582,3 +582,7 @@
 - **1.3**: 鎖の 7 語は `zorder_chain.rs` から、保全語彙 2 語は `zorder_chain_diag.rs` から出す、と裁定した（行組立の純関数は両方とも `zorder_chain_diag.rs` に置いたまま）。出力先は捕捉テストで両側から固定してある。
 - **2.1 → 3.1 の受け入れ条件**: 不在要素の正準表記を組む `element_text` が**2 本存在する**（`placement/zorder_chain_compose.rs:93` と `emo2_boot/frame/zorder_drain.rs:460`。本文は byte 一致を確認済み）。この字面は `[zorder-group] applied members=` と `[zorder-chain] absent` の両方に載るので、**3.1 で必ず 1 本へ収斂させること**。
 - **2.1**: 後方参加の「スコープ ID 昇順」を守っている檻は 1 本だけ（他は入力が既に昇順で昇順性を主張していない）。**4.3（実窓での未指定スコープの後方参加）は入力を非昇順にして測ること**。
+- **2.2 の裁定**: `segment=` が構造上どの経路でも番兵 `-` にしかならず、要件 9.1 の「どのグループの」が復元不能だった。レビュアーが後続 task を実測で全数当たった結果**引受先がゼロ**（3.1 の boundary は `ChainPlan` にも `compose_chain` にも届かない）ため、**2.2 の boundary 拡張を認可**し、帰属を `compose_chain` → `ChainPlan` → 適用系まで通した。`ChainSegment` は `pub` へ、`ChainPlan.absent` は `Vec<(u32, String)>` へ。**繋ぎは手前（owned）側の区間を採る**。
+- **2.2**: `[zorder-chain] absent` の呼び手は **3.1 が立てる**。供給可能性はコンパイルで実証済み（`t_zcc18` が `log_chain_absent` を import して `absent` の対をそのまま渡す）。`log_chain_absent` は `pub`。
+- **2.2 → 次に design.md を触る task へ**: `design.md:196` の「`api.rs:625-627` で登記」は**行番号が 1 つずれている**。実際は `:626` が `#[cfg(test)]`・`:627` が `#[path]`・`:628` が `mod` で、正しい範囲は `626-628`。
+- **2.2**: `zorder_chain_compose.rs:74` のモジュール単位の `#![allow(dead_code)]` が**残る最後の 1 本**。areka は bin crate なので `pub fn compose_chain` も dead_code の対象で、本番の呼び手は 3.1 で初めて付く。**3.1 はこの許可を外すこと**（wintf 側の許可 4 箇所は 2.2 で全滅済み）。

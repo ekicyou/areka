@@ -76,7 +76,7 @@
 use std::collections::HashSet;
 
 use bevy_ecs::entity::Entity;
-use wintf::ecs::window::{ChainPlan, CrossEdge};
+use wintf::ecs::window::{ChainPlan, ChainSegment, CrossEdge};
 
 use super::zorder_group_ledger::{GroupElement, GroupWindowKind, ZOrderGroup};
 
@@ -118,19 +118,24 @@ pub fn compose_chain(
         return None;
     }
 
-    let mut placed: Vec<(GroupElement, Entity)> = Vec::new();
-    let mut absent: Vec<String> = Vec::new();
+    // 並びの各枠は「どの要素か・どの窓か・**どの区間に属するか**」の 3 つを持つ。
+    // 区間はここでしか判らない——連結してしまえばグループの境界は列から消えるので、
+    // 適用系が後から復元することはできない（要件 9.1 の記録材料）。
+    let mut placed: Vec<(GroupElement, Entity, ChainSegment)> = Vec::new();
+    let mut absent: Vec<(u32, String)> = Vec::new();
     let mut named: HashSet<u32> = HashSet::new();
 
     // ⑴ グループを登記の順で連ねる（要件 3.6）。各グループの中は正規化済みの要素順のまま。
     for group in groups {
+        let segment = ChainSegment::Group(group.id);
         for element in &group.members {
             // 窓がまだ現れていなくてもスコープは「グループに属している」ままである
             // （要件 1.4）。よって後方参加からは常に除く。
             named.insert(element.scope);
             match resolve(element) {
-                Some(entity) => placed.push((*element, entity)),
-                None => absent.push(element_text(element)),
+                Some(entity) => placed.push((*element, entity, segment)),
+                // 不在は**宣言したグループの ID とともに**記録材料へ載せる（要件 8.4）。
+                None => absent.push((group.id, element_text(element))),
             }
         }
     }
@@ -148,20 +153,25 @@ pub fn compose_chain(
         for kind in SCOPE_BLOCK {
             let element = GroupElement { scope, kind };
             if let Some(entity) = resolve(&element) {
-                placed.push((element, entity));
+                placed.push((element, entity, ChainSegment::Tail));
             }
         }
     }
 
-    let members: Vec<Entity> = placed.iter().map(|(_, entity)| *entity).collect();
+    let members: Vec<Entity> = placed.iter().map(|(_, entity, _)| *entity).collect();
 
     // ⑶ 連続対のうち、同一スコープの（バルーン, キャラ窓）対を除いた残りが本 spec の繋ぎ。
+    //
+    //    区間は**手前側**（被所有側）の枠のものを採る。繋ぎは「この窓をどこへ繋いだか」を
+    //    語る記録であり、主語は手前側だからである。よってグループの末尾から次のグループ
+    //    （ないし後方配置）へ渡る繋ぎは、手前側のグループの区間として記録される。
     let cross_edges: Vec<CrossEdge> = placed
         .windows(2)
         .filter(|pair| !is_intra_scope_pair(&pair[0].0, &pair[1].0))
         .map(|pair| CrossEdge {
             owned: pair[0].1,
             owner: pair[1].1,
+            segment: pair[0].2,
         })
         .collect();
 

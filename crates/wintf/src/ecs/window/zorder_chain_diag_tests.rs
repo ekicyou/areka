@@ -203,7 +203,7 @@ fn the_preserved_tags_have_exactly_one_home_after_the_move() {
 fn the_linked_line_carries_segment_both_ends_and_the_position_in_the_chain() {
     let (owned, owner) = two_entities();
     let line = linked_line(
-        ChainSegment::Group(0),
+        Some(ChainSegment::Group(0)),
         owned,
         owner,
         Some(fake_hwnd(0xA0)),
@@ -226,7 +226,7 @@ fn the_linked_line_carries_segment_both_ends_and_the_position_in_the_chain() {
 fn a_tail_segment_renders_as_the_tail_word_not_a_group_number() {
     let (owned, owner) = two_entities();
     let line = linked_line(
-        ChainSegment::Tail,
+        Some(ChainSegment::Tail),
         owned,
         owner,
         Some(fake_hwnd(0x10)),
@@ -240,6 +240,31 @@ fn a_tail_segment_renders_as_the_tail_word_not_a_group_number() {
     assert_eq!(field(&line, "pos"), "3/3", "{line}");
 }
 
+/// 区間が取れない呼び出しでも欄は落ちず、番兵が入る（繋いだ行・張り失敗の行の両方）。
+///
+/// **本番の呼び出しはここへ来ない**——区間は望む鎖（`CrossEdge::segment`）が運び、撤去では
+/// 帳簿の控えから出るので、実際に流れるのは常に `Some(..)` である。ここで固定するのは
+/// `Option` を残してある理由そのもの、すなわち「値が取れなくても**欄が消えない**」ことで
+/// ある——消えると「記録が出ていない」と「その経路にはその値が無い」の区別が事後に付かない。
+#[test]
+fn a_segmentless_call_still_carries_the_field_filled_with_the_sentinel() {
+    let (owned, owner) = two_entities();
+
+    let linked = linked_line(None, owned, owner, Some(fake_hwnd(0xA0)), None, 1, 2);
+    assert_eq!(field(&linked, "segment"), UNKNOWN, "{linked}");
+    assert!(
+        linked.contains(&format!("segment={UNKNOWN} owned={owned:?}")),
+        "番兵の欄と被所有側の間に別の欄が割り込んでいる: {linked}"
+    );
+
+    let failed = link_failed_line(None, Some(fake_hwnd(0xA0)), None, &fake_error());
+    assert_eq!(field(&failed, "segment"), UNKNOWN, "{failed}");
+    assert!(
+        failed.contains(&format!("segment={UNKNOWN} owned_hwnd=0xA0")),
+        "番兵の欄と被所有側のハンドルの間に別の欄が割り込んでいる: {failed}"
+    );
+}
+
 /// 区間の欄は、繋いだ行の中で **`owned=` の直前**に在る（間に別の欄が割り込まない）。
 ///
 /// 連結文字列へ丸めると欄の割り込みを見逃す（初版 6.3 の罠）。ここでは隣り合う対を
@@ -248,7 +273,7 @@ fn a_tail_segment_renders_as_the_tail_word_not_a_group_number() {
 fn the_segment_field_sits_immediately_before_the_owned_field() {
     let (owned, owner) = two_entities();
     let line = linked_line(
-        ChainSegment::Group(2),
+        Some(ChainSegment::Group(2)),
         owned,
         owner,
         Some(fake_hwnd(0xA0)),
@@ -434,7 +459,7 @@ fn the_three_skip_reasons_render_as_three_distinct_words() {
 #[test]
 fn the_link_failed_line_carries_the_segment_and_both_handles() {
     let line = link_failed_line(
-        ChainSegment::Group(1),
+        Some(ChainSegment::Group(1)),
         Some(fake_hwnd(0xA0)),
         Some(fake_hwnd(0xB0)),
         &fake_error(),

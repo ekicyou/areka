@@ -37,14 +37,11 @@
 //! よって語彙の保全（要件 9.5）は割れない。2 つの住処が実際に分かれていることは
 //! 兄弟テストが捕捉した行の出力先で固定している。
 //!
-//! # 段階的実装のための `dead_code` 許可
+//! # `dead_code` 許可は 1 つも残っていない
 //!
-//! 差分の純判断・後押しの選定・記録の出口には、本 task の時点ではまだ本番の呼び手が
-//! 居ない（適用系の結線は後続 task）。判断の檻は兄弟テストが今すぐ固定するので実装は
-//! 先に置き、結線が着くまでの間だけ未使用の警告を伏せる。**適用系が着地した task は、
-//! この許可を外せるか必ず確かめること**（同じ理由で [`zorder_chain_diag`] にも許可がある）。
-
-#![allow(dead_code)]
+//! 適用系（[`zorder_chain_apply`](super::zorder_chain_apply)）が着地したことで、差分の
+//! 純判断・後押しの選定・記録の出口には本番の呼び手が付いた。段階的実装のために
+//! モジュール全体を覆っていた許可は撤去してある。
 
 use bevy_ecs::prelude::*;
 use tracing::{debug, error};
@@ -71,6 +68,14 @@ pub struct CrossEdge {
     pub owned: Entity,
     /// 所有する窓（奥側）。
     pub owner: Entity,
+    /// この繋ぎが属する鎖の区間——台帳のグループ（`gN`・登記順）か、どのグループにも
+    /// 属さないスコープの後方配置（`tail`・要件 15）か。
+    ///
+    /// **記録のためだけの欄である**（要件 9.1「どのグループの…」）。所有関係を書く
+    /// 手順はこの値を 1 度も読まない。それでも計画に載せるのは、区間を知っているのは
+    /// 台帳を持つ側（areka）だけであり、鎖を適用する側からは**構造上復元できない**
+    /// ためである——列は「グループの連結＋後方配置」に畳まれており、境界が消える。
+    pub segment: ChainSegment,
 }
 
 /// 全窓の鎖 1 本ぶんの計画（areka が構築し、wintf が適用する）。
@@ -83,8 +88,13 @@ pub struct ChainPlan {
     pub members: Vec<Entity>,
     /// 本 spec が張る横断 edge（`members` の連続対のうち、同一スコープのペア対でないもの）。
     pub cross_edges: Vec<CrossEdge>,
-    /// 窓が存在しなかった宣言要素の正準表記（`"b0"`／`"s1"`。要件 1.4／8.4 の記録材料）。
-    pub absent: Vec<String>,
+    /// 窓が存在しなかった宣言要素——**宣言したグループの ID と正準表記の対**
+    /// （`(0, "b0")`／`(1, "s1")`。要件 1.4／8.4 の記録材料）。
+    ///
+    /// ID を伴うのは、記録行（`[zorder-chain] absent group_id= element=`）が
+    /// 「どのグループの宣言が空振りしたか」を単独で読めなければならないからである。
+    /// 後方配置のスコープは誰も宣言していないので、ここには 1 度も現れない。
+    pub absent: Vec<(u32, String)>,
 }
 
 /// areka が公開する「望む鎖」。wintf 側の唯一の受け口。
@@ -111,6 +121,13 @@ pub struct CrossOwnerLink {
     pub owned_hwnd: HWND,
     /// 張った時点で書き込んだ owner の窓ハンドル。撤去前の照合に使う。
     pub owner_hwnd: HWND,
+    /// 張った時点でこの繋ぎが属していた区間（撤去の記録に載せる）。
+    ///
+    /// 撤去は「グループが解けた」「窓が去った」といった、区間そのものが既に消えている
+    /// 局面で起きる。そのとき望む鎖から区間を引くことはできないので、**張ったときの値を
+    /// 帳簿が控える**。望む鎖が同じ繋ぎを別の区間へ付け替えたときは、実行環境を呼ばずに
+    /// 控えだけを差し替える（適用系の帰属の更新）。
+    pub segment: ChainSegment,
 }
 
 // SAFETY: `CrossOwnerLink` は `HWND`（`*mut c_void` の newtype）を 2 つ保持するため、
@@ -294,7 +311,7 @@ pub(crate) fn nudge_command(members: &[HWND]) -> Option<SetWindowPosCommand> {
 
 /// 繋いだ事実を記録する（debug・要件 9.1）。
 pub(crate) fn log_chain_linked(
-    segment: ChainSegment,
+    segment: Option<ChainSegment>,
     owned: Entity,
     owner: Entity,
     owned_hwnd: Option<HWND>,
@@ -341,7 +358,14 @@ pub(crate) fn log_chain_settled(
 }
 
 /// 宣言された要素の窓が不在だった事実を記録する（debug・要件 1.4／8.4）。
-pub(crate) fn log_chain_absent(group_id: u32, element: &str) {
+///
+/// 鎖系 7 語のうち、**これだけは areka から呼ばれる**——不在は「宣言と在庫の食い違い」
+/// であり、それを知っているのは台帳と在庫を持つ側だからである。よって保全語彙 2 語
+/// （[`log_group_applied`](super::zorder_chain_diag::log_group_applied) 等）と同じく
+/// crate の外へ開いてある。出力先は本モジュールのままなので、grep の対象は割れない。
+/// 呼び手を立てるのは指令消化の相の出口を差し替える task である
+/// （材料は [`ChainPlan::absent`] が `(group_id, element)` の対で運ぶ）。
+pub fn log_chain_absent(group_id: u32, element: &str) {
     debug!("{}", absent_line(group_id, element));
 }
 
@@ -357,7 +381,7 @@ pub(crate) fn log_chain_skipped(reason: ChainSkipReason) {
 /// 失敗した繋ぎ 1 本だけを飛ばして残りは張る、というのが裁定である。よってこの行は
 /// 「どの区間のどの対が張れなかったか」を単独で読めなければならない。
 pub(crate) fn log_chain_link_failed(
-    segment: ChainSegment,
+    segment: Option<ChainSegment>,
     owned_hwnd: Option<HWND>,
     owner_hwnd: Option<HWND>,
     error: &windows::core::Error,

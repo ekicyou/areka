@@ -25,7 +25,7 @@
 use std::collections::{HashMap, HashSet};
 
 use bevy_ecs::entity::Entity;
-use wintf::ecs::window::{ChainPlan, CrossEdge};
+use wintf::ecs::window::{ChainPlan, ChainSegment, CrossEdge, log_chain_absent};
 
 use super::compose_chain;
 use crate::placement::zorder_group_ledger::{
@@ -66,12 +66,21 @@ fn ents(elements: &[GroupElement]) -> Vec<Entity> {
     elements.iter().copied().map(ent).collect()
 }
 
-/// 手前側 `front` が奥側 `back` に所有される繋ぎ 1 本。
-fn edge(front: GroupElement, back: GroupElement) -> CrossEdge {
+/// 手前側 `front` が奥側 `back` に所有される繋ぎ 1 本（区間つき）。
+///
+/// 区間は**手前側の枠が属していたもの**である（合成の規則そのもの）。ここで書き下すのは
+/// 「どのグループの繋ぎか」が記録から復元できることの主張であり、値を取り違えると赤くなる。
+fn edge(front: GroupElement, back: GroupElement, segment: ChainSegment) -> CrossEdge {
     CrossEdge {
         owned: ent(front),
         owner: ent(back),
+        segment,
     }
+}
+
+/// グループ `id` に属する繋ぎ 1 本。
+fn g(id: u32) -> ChainSegment {
+    ChainSegment::Group(id)
 }
 
 /// 窓の在庫（本番の `GhostWindows` が果たす「スコープ×種別 → 窓の有無」だけを写した表）。
@@ -199,10 +208,11 @@ fn pair_edges_written(plan: &ChainPlan, scopes: &[u32]) -> Vec<u32> {
         .iter()
         .copied()
         .filter(|&scope| {
-            plan.cross_edges.contains(&CrossEdge {
-                owned: ent(b(scope)),
-                owner: ent(s(scope)),
-            })
+            // 端点だけで照らす——区間の値に依らせると、区間が変わっただけで
+            // 「ペアの繋ぎを張っていない」が偽の緑になる。
+            plan.cross_edges
+                .iter()
+                .any(|e| e.owned == ent(b(scope)) && e.owner == ent(s(scope)))
         })
         .collect()
 }
@@ -214,6 +224,7 @@ fn all_consecutive_edges(members: &[Entity]) -> Vec<CrossEdge> {
         .map(|w| CrossEdge {
             owned: w[0],
             owner: w[1],
+            segment: ChainSegment::Tail,
         })
         .collect()
 }
@@ -249,7 +260,7 @@ fn t_zcc01_numeric_mode_puts_left_scope_in_front_as_a_block() {
     let plan = composed(&groups, &inventory);
 
     assert_eq!(plan.members, ents(&[b(1), s(1), b(0), s(0)]));
-    assert_eq!(plan.cross_edges, vec![edge(s(1), b(0))]);
+    assert_eq!(plan.cross_edges, vec![edge(s(1), b(0), g(1))]);
     assert!(plan.absent.is_empty(), "不在要素は無い: {:?}", plan.absent);
     assert_eq!(
         plan.members.last().copied(),
@@ -280,7 +291,7 @@ fn t_zcc03_folded_partial_specification_yields_full_scope_blocks() {
     let plan = composed(&groups, &inventory);
 
     assert_eq!(plan.members, ents(&[b(1), s(1), b(0), s(0)]));
-    assert_eq!(plan.cross_edges, vec![edge(s(1), b(0))]);
+    assert_eq!(plan.cross_edges, vec![edge(s(1), b(0), g(1))]);
 }
 
 // ===========================================================================
@@ -302,11 +313,15 @@ fn t_zcc04_absent_scope_is_reported_and_never_dropped_from_the_group() {
         "同一スコープの対しか無いので張る繋ぎは 0 本: {:?}",
         plan.cross_edges
     );
-    assert_eq!(plan.absent, vec!["b1".to_string(), "s1".to_string()]);
+    assert_eq!(
+        plan.absent,
+        vec![(1, "b1".to_string()), (1, "s1".to_string())],
+        "不在要素は宣言したグループの ID を伴う（要件 8.4）"
+    );
 
     // 対照: 窓がそろえば同じ指定が繋ぎを 1 本生み、不在要素は空になる。
     let both = composed(&groups, &Inventory::full(&[0, 1]));
-    assert_eq!(both.cross_edges, vec![edge(s(0), b(1))]);
+    assert_eq!(both.cross_edges, vec![edge(s(0), b(1), g(1))]);
     assert!(both.absent.is_empty());
 }
 
@@ -320,8 +335,8 @@ fn t_zcc05_partially_present_scope_keeps_the_surviving_window_in_the_chain() {
     let plan = composed(&groups, &inventory);
 
     assert_eq!(plan.members, ents(&[b(0), s(0), b(1)]));
-    assert_eq!(plan.cross_edges, vec![edge(s(0), b(1))]);
-    assert_eq!(plan.absent, vec!["s1".to_string()]);
+    assert_eq!(plan.cross_edges, vec![edge(s(0), b(1), g(1))]);
+    assert_eq!(plan.absent, vec![(1, "s1".to_string())]);
 }
 
 /// 1 枚も実在しないときも計画そのものは組まれる（指定は生きている）。
@@ -338,10 +353,10 @@ fn t_zcc06_group_with_no_existing_window_still_yields_a_plan_with_absent_element
     assert_eq!(
         plan.absent,
         vec![
-            "b0".to_string(),
-            "s0".to_string(),
-            "b1".to_string(),
-            "s1".to_string()
+            (1, "b0".to_string()),
+            (1, "s0".to_string()),
+            (1, "b1".to_string()),
+            (1, "s1".to_string())
         ]
     );
 }
@@ -389,8 +404,12 @@ fn t_zcc08_groups_are_concatenated_in_registration_order_with_the_descript_base_
     );
     assert_eq!(
         plan.cross_edges,
-        vec![edge(s(3), b(2)), edge(s(2), b(0)), edge(s(0), b(1))],
-        "繋ぎはスコープの継ぎ目だけ（グループの境目も継ぎ目の 1 つ）"
+        vec![
+            edge(s(3), b(2), g(0)),
+            edge(s(2), b(0), g(0)),
+            edge(s(0), b(1), g(1))
+        ],
+        "繋ぎはスコープの継ぎ目だけ（グループの境目も継ぎ目の 1 つ）。         区間は手前側の枠のもの——基底（g0）の末尾からタグ由来（g1）へ渡る繋ぎは g0 が名乗る"
     );
 }
 
@@ -416,7 +435,12 @@ fn t_zcc09_unassigned_scopes_join_behind_every_group_in_ascending_scope_order() 
     );
     assert_eq!(
         plan.cross_edges,
-        vec![edge(s(1), b(0)), edge(s(0), b(2)), edge(s(2), b(3))]
+        vec![
+            edge(s(1), b(0), g(1)),
+            edge(s(0), b(2), ChainSegment::Tail),
+            edge(s(2), b(3), ChainSegment::Tail)
+        ],
+        "グループの繋ぎと後方配置の繋ぎが、同じ 1 本の鎖の中で別々の区間を名乗る"
     );
     assert!(plan.absent.is_empty(), "後方参加は宣言要素ではない");
 }
@@ -431,7 +455,7 @@ fn t_zcc10_partially_present_tail_scope_contributes_only_the_existing_window() {
     let plan = composed(&groups, &inventory);
 
     assert_eq!(plan.members, ents(&[b(0), s(0), s(2)]));
-    assert_eq!(plan.cross_edges, vec![edge(s(0), s(2))]);
+    assert_eq!(plan.cross_edges, vec![edge(s(0), s(2), g(1))]);
     assert!(
         plan.absent.is_empty(),
         "未指定スコープの欠けは記録しない: {:?}",
@@ -494,7 +518,7 @@ fn t_zcc13_groups_with_one_or_zero_elements_still_concatenate() {
     );
     assert_eq!(
         plan.cross_edges,
-        vec![edge(b(0), b(1))],
+        vec![edge(b(0), b(1), g(1))],
         "相手の居ないバルーンは奥側のバルーンに所有される"
     );
     assert!(plan.absent.is_empty());
@@ -590,11 +614,24 @@ fn t_zcc15_every_branch_satisfies_all_four_chain_invariants() {
             "{name}: スコープ内ペアの繋ぎを張っている"
         );
         // 繋ぎは必ず「連続対の部分集合」であり、順序は手前から奥のまま。
+        // 照らすのは端点だけである——区間は記録の欄であって並びの主張ではない。
         let consecutive = all_consecutive_edges(&plan.members);
         for e in &plan.cross_edges {
             assert!(
-                consecutive.contains(e),
+                consecutive
+                    .iter()
+                    .any(|c| c.owned == e.owned && c.owner == e.owner),
                 "{name}: 連続対でない繋ぎを張っている: {e:?}"
+            );
+        }
+        // 区間は必ず埋まる（どの分岐でも「どのグループの繋ぎか」が記録から読める）。
+        for e in &plan.cross_edges {
+            let named = groups
+                .iter()
+                .any(|g| ChainSegment::Group(g.id) == e.segment);
+            assert!(
+                named || e.segment == ChainSegment::Tail,
+                "{name}: 実在しない区間を名乗っている: {e:?}"
             );
         }
     }
@@ -610,7 +647,10 @@ fn the_invariant_checker_catches_every_broken_shape() {
     // ①星形: 1 枚が 2 枚を所有する。
     let star = ChainPlan {
         members: members.clone(),
-        cross_edges: vec![edge(b(0), s(1)), edge(s(0), s(1))],
+        cross_edges: vec![
+            edge(b(0), s(1), ChainSegment::Tail),
+            edge(s(0), s(1), ChainSegment::Tail),
+        ],
         absent: Vec::new(),
     };
     assert!(
@@ -624,7 +664,10 @@ fn the_invariant_checker_catches_every_broken_shape() {
     // ②多重被所有: 1 枚が 2 枚に所有される。
     let forked = ChainPlan {
         members: members.clone(),
-        cross_edges: vec![edge(b(0), s(0)), edge(b(0), b(1))],
+        cross_edges: vec![
+            edge(b(0), s(0), ChainSegment::Tail),
+            edge(b(0), b(1), ChainSegment::Tail),
+        ],
         absent: Vec::new(),
     };
     assert!(
@@ -638,7 +681,7 @@ fn the_invariant_checker_catches_every_broken_shape() {
     // ③鎖の外の窓を繋いでいる。
     let outsider = ChainPlan {
         members: members.clone(),
-        cross_edges: vec![edge(s(1), b(9))],
+        cross_edges: vec![edge(s(1), b(9), ChainSegment::Tail)],
         absent: Vec::new(),
     };
     assert!(
@@ -668,10 +711,39 @@ fn the_invariant_checker_catches_every_broken_shape() {
     // 較正の対照: 正しい形は 1 件も挙がらない。
     let sound = ChainPlan {
         members,
-        cross_edges: vec![edge(s(0), b(1))],
+        cross_edges: vec![edge(s(0), b(1), ChainSegment::Tail)],
         absent: Vec::new(),
     };
     assert!(chain_invariant_violations(&sound).is_empty());
+}
+
+/// 不在要素の記録材料が、areka 側から**そのまま鎖の語彙へ渡せる**形で届く。
+///
+/// `[zorder-chain] absent` を出すのは指令消化の相（出口）であって本合成ではない。
+/// ここで固定するのは「出口を立てる task が、計画から `group_id` と要素の字面を取り出して
+/// [`log_chain_absent`] へ渡せる」ことである——欄の型か可視性のどちらかが欠けていれば、
+/// このテストはそもそもコンパイルできない（引受先が居ない欄を残さないための対照）。
+#[test]
+fn t_zcc18_absent_elements_can_be_handed_straight_to_the_chain_record_vocabulary() {
+    let groups = [tag_group(1, &["0", "1"]), tag_group(2, &["4", "5"])];
+    let plan = composed(&groups, &Inventory::full(&[0, 4]));
+
+    // どのグループの宣言が空振りしたかが、要素ごとに読める。
+    assert_eq!(
+        plan.absent,
+        vec![
+            (1, "b1".to_string()),
+            (1, "s1".to_string()),
+            (2, "b5".to_string()),
+            (2, "s5".to_string())
+        ],
+        "不在要素が宣言したグループを名乗っていない"
+    );
+
+    // 出口が行うことをそのまま写した呼び出し（型と可視性の実証）。
+    for (group_id, element) in &plan.absent {
+        log_chain_absent(*group_id, element);
+    }
 }
 
 // ===========================================================================
@@ -720,11 +792,11 @@ fn t_zcc17_linking_across_a_group_boundary_breaks_the_single_owner_invariant() {
     let inventory = Inventory::full(&[0, 1]);
 
     let plan = composed(&groups, &inventory);
-    assert_eq!(plan.cross_edges, vec![edge(s(0), b(1))]);
+    assert_eq!(plan.cross_edges, vec![edge(s(0), b(1), g(1))]);
 
     // グループ境界を跨ぐ繋ぎを 1 本足す（後のグループの先頭が 2 枚を所有する）。
     let mut cross_edges = plan.cross_edges.clone();
-    cross_edges.push(edge(b(0), b(1)));
+    cross_edges.push(edge(b(0), b(1), ChainSegment::Tail));
     let mutant = ChainPlan {
         members: plan.members.clone(),
         cross_edges,
