@@ -378,9 +378,16 @@ fn publish_projection(world: &mut World, specs: Vec<ZOrderGroupSpec>) {
 
 /// 受理（`\![set,zorder,...]`）の本文——台帳に載った内容と、正規化で調整した内容。
 ///
-/// `normalized` に載るのは同一スコープの 2 窓を隣接ブロックへ寄せた記録である
-/// （要件 2.4）。`scope:true` は「作者が書いた順をそのままの形では採用しなかった」を
-/// 意味する。数値モードでは調整そのものが起きないので常に番兵になる。
+/// `normalized` に載るのは、明示モードで名前の挙がったスコープごとの正規化の記録である。
+/// `scope:true` は「作者が書いた順をそのままの形では採用しなかった」（同一スコープの
+/// 2 窓を隣接ブロックへ寄せた・要件 2.4）を意味する。
+///
+/// 片方の窓しか書かれていなかったスコープには `+bN`／`+sN` が続き、**こちらが補った
+/// 相棒窓**を名指しする（畳み込み・要件 2.6）。補いのときは並べ替えるべき 2 窓が
+/// そもそも書かれていないので、字面は必ず `scope:false+bN` の形になる——`scope:false`
+/// だけの欄は「2 窓とも書かれていて、その順をそのまま採った」を意味し続ける。
+///
+/// 数値モードでは調整も補いも起きないので常に番兵になる。
 ///
 /// 起動の段（[`zorder_descript`](super::zorder_descript)）も shell 設定由来の基底を
 /// 据えたときに**この関数**を呼ぶ。行の欄を二重に持つと、片方だけを直した日に記録の
@@ -471,13 +478,31 @@ fn members_text(members: &[GroupElement]) -> String {
 }
 
 /// 正規化の記録を 1 欄へ（空列は番兵）。
+///
+/// 1 スコープぶんの字面は `scope:reordered`。相棒窓を補ったスコープ（畳み込み・
+/// 要件 2.6）だけ、そこへ `+bN`／`+sN` を続けて**補った窓そのもの**を名指しする。
+/// 要素列の欄（`members=`）と同じ省略記法を使うので、行の中で照らし合わせられる。
+///
+/// 2 窓そろって書かれたスコープの字面は畳み込みの導入前と 1 バイトも変わらない
+/// ——既存の檻（`zorder_drain_tests.rs` の受理行・`zorder_descript_tests.rs` の
+/// 起動行）が読み続けている語だからである（要件 9.5）。
 fn normalizations_text(normalizations: &[Normalization]) -> String {
     if normalizations.is_empty() {
         return NO_VALUE.to_string();
     }
     normalizations
         .iter()
-        .map(|n| format!("{}:{}", n.scope, n.reordered))
+        .map(|n| {
+            let mut field = format!("{}:{}", n.scope, n.reordered);
+            if let Some(kind) = n.implied_partner {
+                field.push('+');
+                field.push_str(&element_text(&GroupElement {
+                    scope: n.scope,
+                    kind,
+                }));
+            }
+            field
+        })
         .collect::<Vec<_>>()
         .join(",")
 }

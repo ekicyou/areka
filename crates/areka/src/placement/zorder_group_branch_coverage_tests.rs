@@ -84,7 +84,7 @@ const TEST_FILES: [(&str, &str, &str); 5] = [
 ///
 /// 1 分岐に複数行あってよい。解釈の段（台帳の純関数）・台帳の状態遷移・取り出しの段の
 /// 記録・起動時適用と、同じ分岐を別の高さで覆う行が並ぶ。
-const COVERAGE: [(&str, &str, &str); 38] = [
+const COVERAGE: [(&str, &str, &str); 41] = [
     // ── 数値モード（要件 1.1・1.2）
     (
         "数値モード",
@@ -200,12 +200,28 @@ const COVERAGE: [(&str, &str, &str); 38] = [
     (
         "スコープ内隣接との矛盾の調停",
         "placement/zorder_group_ledger_tests.rs",
-        "t_zgp21_every_paired_scope_is_adjacent_with_balloon_first_after_normalization",
+        "t_zgp21_every_scope_is_adjacent_with_balloon_first_after_normalization",
+    ),
+    // 片方の窓だけが指名された形も同じ調停の一部である（相棒窓の畳み込み・要件 2.6）。
+    (
+        "スコープ内隣接との矛盾の調停",
+        "placement/zorder_group_ledger_tests.rs",
+        "t_zgp23_balloon_only_scope_gains_its_char_window_right_below",
+    ),
+    (
+        "スコープ内隣接との矛盾の調停",
+        "placement/zorder_group_ledger_tests.rs",
+        "t_zgp24_char_only_scope_gains_its_balloon_window_right_above",
     ),
     (
         "スコープ内隣接との矛盾の調停",
         "emo2_boot/frame/zorder_drain_tests.rs",
         "t_zdr04_normalization_is_surfaced_only_when_the_author_order_was_adjusted",
+    ),
+    (
+        "スコープ内隣接との矛盾の調停",
+        "emo2_boot/frame/zorder_drain_tests.rs",
+        "t_zdr11_an_implied_partner_window_is_named_in_the_accepted_record",
     ),
     (
         "スコープ内隣接との矛盾の調停",

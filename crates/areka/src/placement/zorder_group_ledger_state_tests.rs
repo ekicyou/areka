@@ -173,7 +173,8 @@ fn t_zgl2_non_overlapping_tags_accumulate_as_separate_groups() {
 fn t_zgl3_the_ledger_stores_the_normalized_element_list_verbatim() {
     let mut ledger = ZOrderGroupLedger::default();
 
-    // 反転（`s1,b1`）と非隣接（間に b2）を含む指定。解釈の側で寄せられている。
+    // 反転（`s1,b1`）と片方だけの指名（`b2`）を含む指定。解釈の側で寄せられ、
+    // 指名されなかった相棒窓（`s2`）も畳み込まれている（要件 2.4／2.6）。
     expect_added(&mut ledger, &["s1", "b2", "b1"]);
 
     assert_eq!(
@@ -183,7 +184,7 @@ fn t_zgl3_the_ledger_stores_the_normalized_element_list_verbatim() {
     );
     assert_eq!(
         ledger.groups()[0].members,
-        vec![b(1), s(1), b(2)],
+        vec![b(1), s(1), b(2), s(2)],
         "正規化済みの並びがそのまま載る"
     );
 }
@@ -235,13 +236,14 @@ fn t_zgl5_numeric_and_explicit_modes_denote_the_same_scope() {
         "数値モードの `1` は明示モードのスコープ 1 と衝突する"
     );
 
-    // 窓の片方だけを押さえている場合も、判定はスコープ単位である。
+    // 窓の片方だけを書いたタグでも、判定はスコープ単位である（畳み込みで相棒窓も
+    // 台帳へ載るので、スコープ 1 は `b1` と `s1` の両方で塞がっている・要件 2.6）。
     let mut half = ZOrderGroupLedger::default();
     expect_added(&mut half, &["b1", "s0"]);
     assert_eq!(
         expect_cross_reject(&mut half, &["s1", "b6"]),
         vec![1],
-        "`b1` しか載っていなくてもスコープ 1 は塞がっている"
+        "`b1` としか書かれていなくてもスコープ 1 は塞がっている"
     );
 }
 
@@ -252,7 +254,7 @@ fn t_zgl6_rejection_names_every_colliding_scope_once_in_order() {
     expect_added(&mut ledger, &["1", "0"]);
     expect_added(&mut ledger, &["b2", "s2"]);
 
-    // 要素列は正規化後 [b2, b1, s1, s0]＝スコープの初出順は 2 → 1 → 0。
+    // 要素列は正規化後 [b2, s2, b1, s1, b0, s0]＝スコープの初出順は 2 → 1 → 0。
     let scopes = expect_cross_reject(&mut ledger, &["b2", "s1", "b1", "s0"]);
 
     assert_eq!(

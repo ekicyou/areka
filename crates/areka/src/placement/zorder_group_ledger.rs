@@ -43,6 +43,22 @@
 //! いたときだけ `false`、反転も非隣接も `true` になる。design は欄を宣言するのみで
 //! 述語を書いていないため、本モジュールでこう定める。
 //!
+//! # 片方だけ指名されたスコープには相棒窓を補う（畳み込み）
+//!
+//! 明示モードは窓 1 枚単位なので、あるスコープのバルーン窓だけ（あるいはキャラ窓だけ）を
+//! 書くこともできる。このとき指名されなかった相棒窓を、同一スコープ内の隣接を保つ位置
+//! ——`bN` だけなら直後に `sN`、`sN` だけなら直前に `bN`——へ暗黙に加える（要件 2.6・
+//! 2026-08-29 の設計ディスカッション裁定）。結果として、明示モードで名前の挙がった
+//! スコープは必ず `[Balloon, Char]` の隣接ブロック 1 個として並ぶ。
+//!
+//! 補ったことは [`Normalization::implied_partner`] に**どちらの窓を補ったか**まで
+//! 載せて返す（要件 2.6 の「加えたことを記録する」）。
+//!
+//! 畳み込みは寄せる規則と同じ段（⑹）に置く。**要素数の判定（⑶）より後**なので、
+//! `\![set,zorder,b0]` は要素 1 個として無視されたままである（要件 1.6）——畳み込みで
+//! 窓 2 枚に化けさせて受理してはならない。数値モードは⑷の展開が既に隣接ブロックを
+//! 作っているので、畳み込みも記録も起こらない。
+//!
 //! # 語彙は小文字ちょうど・trim は冗長化
 //!
 //! `balloonN`／`surfaceN`／`bN`／`sN` は小文字ちょうどで一致させる
@@ -146,8 +162,9 @@ pub struct ZOrderGroup {
 /// 要求しても、「バルーンはキャラ窓の直上」という既存の不変条件を優先する。
 /// 採用しなかったことは呼び出し側が記録できるよう、値として返す（要件 8.3）。
 ///
-/// 記録が出るのは**2 窓そろったスコープ**についてだけである。窓が 1 枚しか書かれて
-/// いないスコープは寄せる相手が居ない＝調停そのものが起きない。
+/// 記録は明示モードで現れたスコープすべてについて出る。2 窓そろったスコープは
+/// 寄せた記録（`reordered`）を、片方だけ書かれたスコープは補った記録
+/// （`implied_partner`）を持つ。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Normalization {
     /// 調整の対象となったスコープ。
@@ -157,7 +174,20 @@ pub struct Normalization {
     /// `false` はバルーン窓の**直後**にキャラ窓と書かれていた場合ちょうど。
     /// 反転（キャラ窓が先）も非隣接（間に他スコープ）も `true` になる
     /// （モジュール doc「同一スコープの 2 窓は隣接ブロックへ寄せる」）。
+    ///
+    /// 片方の窓だけが書かれたスコープでは、作者は 2 窓の前後を書いていないので
+    /// 「採用しなかった順」が存在しない——常に `false` であり、補ったことは
+    /// [`Normalization::implied_partner`] の側が語る。
     pub reordered: bool,
+    /// 指名されなかったので**こちらが補った**窓の種別（要件 2.6）。
+    ///
+    /// `Some(Char)` は `bN` だけが書かれたので `sN` を直後へ、`Some(Balloon)` は
+    /// `sN` だけが書かれたので `bN` を直前へ加えたことを表す。2 窓とも書かれて
+    /// いたスコープは `None`。
+    ///
+    /// `Some(_)` と `reordered == true` は同時に立たない（片方しか書かれていない
+    /// スコープには並べ替える 2 窓が無いため）。
+    pub implied_partner: Option<GroupWindowKind>,
 }
 
 // =============================================================================
@@ -232,7 +262,7 @@ fn window_element(digits: &str, kind: GroupWindowKind) -> Option<ParsedElement> 
 /// # 判定の順序
 ///
 /// ⑴解釈できないトークン（8.1）→ ⑵モード混在（2.3）→ ⑶要素 2 個未満（1.6）→
-/// ⑷展開 → ⑸同一窓の重複（3.4／3.5）→ ⑹スコープブロック正規化（2.4）。
+/// ⑷展開 → ⑸同一窓の重複（3.4／3.5）→ ⑹スコープブロック正規化＋畳み込み（2.4／2.6）。
 /// トークンを 1 つずつ読む段で落ちれば要素列そのものが組めないので、解釈不能が
 /// 他のどの拒否よりも先に立つ。混在した指定も要素列を組めないため、重複を数える
 /// 前に落とす。どの順で落ちても「変更を一切行わない」ことは変わらない。
@@ -306,7 +336,8 @@ pub fn parse_zorder_tokens(
         }
     }
 
-    // ⑹ スコープブロック正規化（要件 2.4・research R6 の一元処理）。
+    // ⑹ スコープブロック正規化＋相棒窓の畳み込み（要件 2.4／2.6・research R6 の一元処理）。
+    //    ⑶より後に置くので、要素 1 個のタグが畳み込みで 2 個に化けて受理されることはない。
     //    ⑵で混在を落としているので、ここへ来るグループは数値モードか明示モードの
     //    どちらか一方ちょうどである。数値モードは⑷の展開が必ず `[Balloon, Char]` の
     //    隣接ブロックを作り、かつその並びは作者の指定順ではないので、寄せるものも
@@ -318,42 +349,53 @@ pub fn parse_zorder_tokens(
     Ok(normalize_scope_blocks(elements))
 }
 
-/// 同一スコープの 2 窓を `[Balloon, Char]` の隣接ブロックへ寄せる（明示モード専用）。
+/// 明示モードの要素列を、スコープごとの `[Balloon, Char]` 隣接ブロックの列へ整える。
 ///
-/// 寄せ先は**そのスコープの要素が最初に現れた位置**である。反転（`s1,b1`）も
-/// 非隣接（`b1,s0,s1,b0`）もこの 1 つの規則で片付く（モジュール doc「同一スコープの
-/// 2 窓は隣接ブロックへ寄せる」）。
+/// 規則は 1 つ——**そのスコープの要素が最初に現れた位置**に、そのスコープの
+/// `[Balloon, Char]` ブロックを立てる。これで 3 つの形が同時に片付く。
 ///
-/// 2 窓そろっていないスコープの要素は書かれた位置のまま残す。動かすのは 1 スコープの
-/// 2 窓だけなので、他スコープの要素どうしの相対順は入力のまま保たれる——要件 2.5 の
-/// 「グループに属さない窓を動かさない」と同じ発想を、グループの内側にも効かせる。
+/// - 反転（`s1,b1`）: キャラ窓を手前に置く要求は採用しない（要件 2.4）
+/// - 非隣接（`b1,s0,s1,b0`）: 間に他スコープが挟まる指定を寄せる（要件 2.4・research R6）
+/// - 片方だけの指名（`b1,s0`）: 指名されなかった相棒窓を補う（要件 2.6・**畳み込み**）
+///
+/// 畳み込みが加えるのは相棒 1 枚だけであり、ブロックの立つ位置は変えない。よって
+/// スコープどうしの相対順は入力の初出順のまま保たれる——要件 2.5 の「グループに属さない
+/// 窓を動かさない」と同じ発想を、グループの内側にも効かせる。
+///
+/// 記録（[`Normalization`]）は明示モードで現れたスコープすべてについて初出順に 1 件ずつ
+/// 出す。2 窓そろっていたスコープは `reordered` が、片方だけだったスコープは
+/// `implied_partner` が、それぞれ何をしたかを語る（要件 2.4／2.6 の「記録する」）。
+/// 片方しか書かれていないスコープには並べ替える 2 窓が無いので、2 欄が同時に立つことはない。
 ///
 /// 呼び出し前提は⑸の重複検査を通っていること。各スコープの各窓が高々 1 回しか
 /// 現れないため、位置は探索で一意に定まる。
 fn normalize_scope_blocks(elements: Vec<GroupElement>) -> (Vec<GroupElement>, Vec<Normalization>) {
     let position_of = |target: GroupElement| elements.iter().position(|other| *other == target);
 
-    let mut normalized = Vec::with_capacity(elements.len());
+    // 畳み込みは各スコープを高々 1 枚ぶん増やす＝上限は入力の 2 倍。
+    let mut normalized = Vec::with_capacity(elements.len() * 2);
     let mut normalizations = Vec::new();
 
     for (index, element) in elements.iter().enumerate() {
         let scope = element.scope;
-        let (Some(balloon_at), Some(char_at)) = (
-            position_of(GroupElement {
-                scope,
-                kind: GroupWindowKind::Balloon,
-            }),
-            position_of(GroupElement {
-                scope,
-                kind: GroupWindowKind::Char,
-            }),
-        ) else {
-            // 2 窓そろっていないスコープ＝寄せる相手が居ない。位置も記録も動かさない。
-            normalized.push(*element);
-            continue;
-        };
+        let balloon_at = position_of(GroupElement {
+            scope,
+            kind: GroupWindowKind::Balloon,
+        });
+        let char_at = position_of(GroupElement {
+            scope,
+            kind: GroupWindowKind::Char,
+        });
 
-        if index != balloon_at.min(char_at) {
+        // このスコープが最初に現れた位置。少なくとも一方は必ず在る（`element` 自身）。
+        let first_at = match (balloon_at, char_at) {
+            (Some(balloon), Some(char_window)) => balloon.min(char_window),
+            (Some(balloon), None) => balloon,
+            (None, Some(char_window)) => char_window,
+            // `element` が指すスコープなのだから、両方 `None` はあり得ない。
+            (None, None) => index,
+        };
+        if index != first_at {
             // 同じスコープの 2 枚目。ブロックは 1 枚目の位置で既に組み終えている。
             continue;
         }
@@ -370,7 +412,18 @@ fn normalize_scope_blocks(elements: Vec<GroupElement>) -> (Vec<GroupElement>, Ve
             scope,
             // 書かれたとおりに採用できたのは「バルーンの直後にキャラ窓」のときだけ。
             // 反転（`char_at < balloon_at`）も非隣接（間に他スコープ）もここを通らない。
-            reordered: char_at != balloon_at + 1,
+            // 片方しか書かれていなければ、採用しなかった順そのものが存在しない。
+            reordered: match (balloon_at, char_at) {
+                (Some(balloon), Some(char_window)) => char_window != balloon + 1,
+                _ => false,
+            },
+            // 補ったのは「書かれていなかった方」の窓（要件 2.6）。
+            implied_partner: match (balloon_at, char_at) {
+                (Some(_), Some(_)) => None,
+                (Some(_), None) => Some(GroupWindowKind::Char),
+                (None, Some(_)) => Some(GroupWindowKind::Balloon),
+                (None, None) => None,
+            },
         });
     }
 

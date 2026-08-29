@@ -116,16 +116,25 @@ fn t_zdp02_projection_preserves_the_declared_front_to_back_order() {
 // 実在 2 枚未満は射影から外れる／台帳には残って戻ってくる（要件 7.1）
 // ---------------------------------------------------------------------------
 
-/// 在る窓が 1 枚しか無いグループは射影に載らないが、台帳には残り、窓が揃えば戻る。
+/// 在る窓が 2 枚に満たないグループは射影に載らないが、台帳には残り、窓が揃えば戻る。
+/// ここは**実在 0 枚**の側から境界を押さえる。
+///
+/// 相棒窓の畳み込み（要件 2.6）が入って以降、宣言はスコープ単位のブロックにしかならず、
+/// 正本（`GhostWindows`）も正常な経路では**同じスコープの窓を片方だけ**持つ状態を作らない。
+/// ただし作れないわけではない——掃除の hook が働けない状況では片側だけが落ちる
+/// （[`t_zdp08_a_stale_registry_entry_is_skipped_while_its_living_siblings_are_kept`]）。
+/// 実在ちょうど 1 枚の側は
+/// [`t_zdp12_exactly_one_existing_window_still_leaves_the_projection`] が同じ技法で押さえる。
 #[test]
 fn t_zdp03_under_length_group_leaves_the_projection_but_returns_from_the_ledger() {
-    // b0 と s1 の 2 枚宣言。scope 1 の窓がまだ無いので実在は 1 枚。
-    let (mut world, mut ledger, _tx, rx) = seeded(&[0], &["b0", "s1"]);
+    // b0 と s1 の 2 枚宣言（畳み込みで b0,s0,b1,s1 の 4 枚になる）。
+    // World に在るのは scope 9 だけなので、宣言のどの窓も実在しない。
+    let (mut world, mut ledger, _tx, rx) = seeded(&[9], &["b0", "s1"]);
 
     assert_eq!(
         projected(&world),
         None,
-        "実在 1 枚のグループが受け口へ渡っている（比べる相手が居ない）"
+        "実在 2 枚未満のグループが受け口へ渡っている（比べる相手が居ない）"
     );
     assert_eq!(
         ledger.groups().len(),
@@ -133,14 +142,75 @@ fn t_zdp03_under_length_group_leaves_the_projection_but_returns_from_the_ledger(
         "射影から外したグループを台帳からも消している（要件 7.1）"
     );
 
-    // 相手の窓が現れたら維持対象へ戻る。
-    spawn_scopes(&mut world, &[0, 1]);
+    // 宣言した窓が現れたら維持対象へ戻る。
+    spawn_scopes(&mut world, &[0, 1, 9]);
     run_zorder_drain_phase(&rx, &mut ledger, &mut world);
 
     assert_eq!(
         projected(&world),
-        Some(vec![(0, vec![balloon_of(&world, 0), char_of(&world, 1)])]),
+        Some(vec![(
+            0,
+            vec![
+                balloon_of(&world, 0),
+                char_of(&world, 0),
+                balloon_of(&world, 1),
+                char_of(&world, 1),
+            ]
+        )]),
         "窓が揃ったのに射影へ戻っていない（要件 7.1）"
+    );
+}
+
+/// 宣言 4 枚のうち**実在がちょうど 1 枚**でも射影から外れる（要件 7.1／1.4 の境界）。
+///
+/// `project_groups` の「実在 2 枚未満は載せない」判断（`>= 2`）は 0 枚と 1 枚の両方を
+/// 落とす。0 枚だけを見ていると `>= 1` へ緩めた実装が素通りするので、**1 枚の側を
+/// 直接組んで**境界を挟む。
+///
+/// 畳み込み（要件 2.6）の後は宣言がスコープ単位のブロックになるため、この形は
+/// [`t_zdp08_a_stale_registry_entry_is_skipped_while_its_living_siblings_are_kept`] と
+/// 同じ技法——掃除の hook が働けない間に窓を破棄し、古い正本を戻す——でしか作れない。
+#[test]
+fn t_zdp12_exactly_one_existing_window_still_leaves_the_projection() {
+    // `b0,s1` は畳み込みで b0,s0,b1,s1 の 4 枚宣言になる。
+    let (mut world, mut ledger, _tx, rx) = seeded(&[0, 1], &["b0", "s1"]);
+    assert!(
+        projected(&world).is_some(),
+        "下ごしらえの時点で射影が立っていない（この後の None が何も証明しなくなる）"
+    );
+
+    let registry = ghost_windows(&world);
+    let doomed = [
+        registry
+            .balloon_window(0)
+            .expect("scope 0 のバルーン窓が無い"),
+        registry.char_window(0).expect("scope 0 のキャラ窓が無い"),
+        registry
+            .balloon_window(1)
+            .expect("scope 1 のバルーン窓が無い"),
+    ];
+
+    // 掃除の hook が働かない状況を作ってから 3 枚を破棄し、古い正本を戻す。
+    // 残るのは s1 の 1 枚ちょうど。
+    world.remove_resource::<GhostWindows>();
+    for entity in doomed {
+        world.despawn(entity);
+    }
+    world.insert_resource(registry);
+
+    run_zorder_drain_phase(&rx, &mut ledger, &mut world);
+
+    // 受け口そのものは下ごしらえの巡で既に立っているので、消えるのは**中身**である
+    // （`None`＝受け口が無い、との違いは要件 6.1 の判定で意味を持つので潰さない）。
+    assert_eq!(
+        projected(&world),
+        Some(Vec::new()),
+        "実在ちょうど 1 枚のグループが受け口へ渡っている（比べる相手が居ない）"
+    );
+    assert_eq!(
+        ledger.groups()[0].members.len(),
+        4,
+        "射影から外したグループの宣言を台帳からも削っている（要件 1.4）"
     );
 }
 

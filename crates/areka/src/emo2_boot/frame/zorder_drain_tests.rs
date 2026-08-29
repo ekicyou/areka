@@ -162,6 +162,56 @@ fn t_zdr04_normalization_is_surfaced_only_when_the_author_order_was_adjusted() {
     );
 }
 
+/// 片方の窓だけを指名したタグでは、**補った相棒窓**が受理の記録に載る（要件 2.6 の
+/// 「加えたことを記録する」・design「Requirements Traceability」2.6 行が名指しする
+/// `[zorder-group] applied` の `normalized=` 欄）。
+///
+/// 檻は**実際の字面のまま**当てる。`members=` と `normalized=` は行の中で隣り合うので
+/// 続けて 1 本で見るが、間に他の欄が挟まる形を連結して丸めることはしない。
+///
+/// あわせて、畳み込みの導入で**嘘をつくようになっていないこと**を 2 方向から見る。
+/// ⑴ 補ったスコープの欄が `1:false` のままだと「作者の書いた順をそのまま採った」と
+///    読めてしまう（窓 2 枚を黙って足しておきながら「調整していない」と言う行）。
+/// ⑵ 2 窓そろって書かれたスコープの字面は 1 バイトも変わっていない（要件 9.5）。
+#[test]
+fn t_zdr11_an_implied_partner_window_is_named_in_the_accepted_record() {
+    let (tx, rx) = directive_channel();
+    let mut ledger = ZOrderGroupLedger::default();
+    let mut world = world_with_scopes(&[0, 1]);
+    tx.send(set_directive(&["b1", "s0"])).unwrap();
+    let logs = capture_logs(|| run_zorder_drain_phase(&rx, &mut ledger, &mut world));
+    let line = lines_with(&logs, "[zorder-group] applied")[0];
+
+    assert!(
+        line.contains("members=b1,s1,b0,s0 normalized=1:false+s1,0:false+b0"),
+        "補った相棒窓（s1 と b0）が記録に名指しされていない: {line}"
+    );
+    assert!(
+        !line.contains("normalized=1:false,0:false"),
+        "窓 2 枚を暗黙に加えておきながら「調整していない」と読める行が出ている: {line}"
+    );
+
+    // 対照: 2 窓そろって書かれたスコープの字面は据え置き（既存の檻が読む語）。
+    let (tx2, rx2) = directive_channel();
+    let mut ledger2 = ZOrderGroupLedger::default();
+    let mut world2 = world_with_scopes(&[0, 1]);
+    tx2.send(set_directive(&["s1", "b1", "b0", "s0"])).unwrap();
+    let logs2 = capture_logs(|| run_zorder_drain_phase(&rx2, &mut ledger2, &mut world2));
+    let line2 = lines_with(&logs2, "[zorder-group] applied")[0];
+    assert!(
+        line2.contains("members=b1,s1,b0,s0 normalized=1:true,0:false"),
+        "2 窓そろったスコープの字面が畳み込みの導入で変わっている（要件 9.5）: {line2}"
+    );
+    assert!(
+        !line2.contains("+b"),
+        "補っていないのに補いの欄が出ている: {line2}"
+    );
+    assert!(
+        !line2.contains("+s"),
+        "補っていないのに補いの欄が出ている: {line2}"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // 拒否の記録（要件 8.1／8.3／3.2）
 // ---------------------------------------------------------------------------
