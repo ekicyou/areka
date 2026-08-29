@@ -1,53 +1,80 @@
-# 設計検証レポート: areka-P0-scope-zorder-pinning
+# 設計検証レポート: areka-P0-scope-zorder-pinning（改訂第 2 版・所有の鎖）
 
-**実施**: 2026-08-27 ／ **入力**: design.md・requirements.md（確定・議題 3 件裁定済）・research.md（§9 再実測込み）・brief.md・`.kiro/steering/` ／ **言語**: ja（spec.json）
+**実施**: 2026-08-29 ／ **対象**: design.md 改訂第 2 版（867 行・鎖方式への全面書き替え）
+**入力**: requirements.md 改訂第 2 版（確定・受入基準 70 件・要件 14 が方式を拘束）・research.md（§10 差し戻しの根拠／§11 ギャップ分析／**§12 設計前実測**）・`.kiro/steering/`・実コード
 **方式**: 非対話（design-review.md の Analysis → Critical Issues → Strengths → GO/NO-GO）。設計中の file:line 主張は本ワークツリーの実コードで抜き取り検証した。
+**注記**: 本レポートは 2026-08-27 付の検証レポート（初版設計＝毎巡是正方式・実機 NO-GO で撤回）を差し替える。
 
 ## Design Review Summary
 
-案 C（グループの正本と解釈は areka・維持は wintf の新設 1 系統・既存 `zorder_pair*` 5 ファイルは無編集）は、要件 9.5（既存観測語彙の保存）と要件 6.4（既定＝非強制）を**構造で**満たしており、層の分界・依存方向・記録規律・檻の作法のいずれも既存の正典と整合する。要件 1〜13 の全 65 受入基準が Requirements Traceability 表に行を持ち、裁定 3 件（不可視＝Windows 基準／誤記訂正は COMPAT §8／追跡 spec＋sylphya 非接触）はいずれも設計本文に反映済みである。ただし**診断行の発行時点**と**頭打ちの粒度**に、実装がそのまま書くと実機サインオフの証跡と収束性を損なう欠陥が 1 件ずつあり、加えて先送り語彙檻の対象ファイルが 1 本漏れている。
+本版は「前後関係を毎巡直す」を捨て、正典実装 SSP と同じ**分岐の無い所有の鎖**へ全面的に書き替えたものであり、初版 NO-GO の根因（未実測の方式選択）は §12 の設計前実測 9 本（`crates/wintf/src/api_owner_chain_probe_tests.rs`・恒久の檻として着地済み）で正面から潰されている。層の分界（wintf → areka の import を作らない・型は wintf 側に置き areka が構築する）・記録規律・檻の作法・退役計画のいずれも既存の正典と整合し、受入基準 **70 件すべてが Requirements Traceability に行を持つ**（1.1〜14.5 を機械列挙して欠落ゼロを確認）。ただし、**退役計画が要件 9.5 で保全対象と宣言した語彙の実装をそのまま削除してしまう**という自己矛盾が 1 件あり、加えて要件 7.3 の実現機構の根拠が事実と食い違い、要件 2.5 の文言と DD-3b の裁定が突き合わされていない。
+
+### file:line 主張の抜き取り検証（初版で頻発した陳腐化の再検査・14 点）
+
+| 主張 | 実測 | 判定 |
+|---|---|---|
+| `api.rs:141` `set_window_owner` ／ `:152` `clear_window_owner` | 一致 | OK |
+| `api.rs:625-627` 実測檻の登記 | `#[cfg(test)]` ／ `#[path]` ／ `mod` の 3 行 | OK |
+| `zorder_pair_establish.rs:169` owner 確立 | `match set_window_owner(...)` | OK |
+| `zorder_pair_maintain.rs:258-262` 訂正対象の doc 段落 | 「スコープをまたぐ owner はそもそも存在しない」の段落そのもの | OK |
+| `zorder_pair_maintain.rs:286` 切離し | `clear_window_owner(handle.hwnd)` | OK |
+| `zorder_group_ledger.rs:256/271/276/305/333` 判定順 | UnparsableToken／ModeMixed／TooFewElements／DuplicateElement／`normalize_scope_blocks` すべて一致 | OK |
+| `spawn.rs:663-671` `FrameFinalize` チェーン | 3 system の `.chain()` | OK |
+| `emo2_boot/mod.rs:510` `.before(...)` | 一致 | OK |
+| `frame/wiring.rs:95` 台帳の住処 ／ `:194` 種蒔き | 一致 | OK |
+| `mod.rs:14/16/18` 退役 3 モジュールの登記 | 一致 | OK |
+| `spawn_zorder_pair_deferred_tests.rs:59`（6 件）／`zorder_pair_deferred_vocabulary_tests.rs:76`（8 件） | 件数まで一致 | OK |
+| `signoff-scan.ps1:41-50 / 122 / 140-142 / 154 / 155 / 214` | すべて一致 | OK |
+| 行数主張（ledger 580・drain 495・cue 159・descript 92・group 710／403／279 ほか） | すべて一致 | OK |
+| `api.rs:63` `get_window_above` ／ `zorder_pair.rs:511` `measure_*` | 前者は関数本体が `:72`（`:63` は doc 冒頭）、後者は `SIBLING_SCAN_LIMIT` 定数（`measure_*` は `:525/:564/:575/:635`） | 軽微なずれ 2 件 |
 
 ## Critical Issues（3 件）
 
-### 🔴 Critical Issue 1: `[zorder-group] fix` 行を「発行直後の実測」で組むと、証跡が書込前の値になる
+### Critical Issue 1: 要件 9.5 で「保全する」と宣言した `[zorder-group] applied`／`rejected` の実装が、退役ファイルの中にある
 
-**Concern**: 設計は group 維持系 ④ で連鎖発行し、group diag の項で `fix` 行を「発行直後の実測隣（pair `fix_line:131` と同型）」と規定している。しかし先例の実体は同型ではない——`fix_line` を実際に呼ぶのは `zorder_pair.rs:858` の `record_verification` であり、**次巡の検証で一致したときにだけ `fix`（debug）を、不一致なら `verify-failed`（error）を出す**。指令の書込は巡の後の flush で起きるため、発行と同じ巡で測れば必ず**書込前の重なり**が載る。
-**Impact**: 要件 9.2（指令とその直後の実測を同一行）が字面だけ満たされ、要件 9.4 の実機サインオフが「`fix` 行が出た＝成立した」と読むと**偽の成立証跡**になる。過去に同型の誤診があったことが `zorder_pair_diag.rs:126-129` に明記されている。
-**Suggestion**: group 維持系 ① の検証段で `fix`／`verify-failed` を出す形へ統一し（発行時は `applied`／計画のみ）、設計本文の「発行直後の実測隣」を「次巡の検証で採った実測隣」へ改める。サインオフ判定語（§Testing の ⑴）も検証行を読む形へ揃える。
-**Traceability**: 9.1, 9.2, 9.4
-**Evidence**: design.md「group 維持系（`zorder_group_maintain.rs`）」1 巡の処理 ①④／「group diag（`zorder_group_diag.rs`）」／「Testing Strategy > 実機サインオフ」
+**Concern**: 設計は `[zorder-group] applied`／`rejected` を保全語彙として明記し、退役の順序でも「全工程を通じて 1 度も欠かさない」と書いている。しかし実装の所在は
+`crates/wintf/src/ecs/window/zorder_group.rs:653/668/700`（`log_group_applied`／`log_group_rejected`／`log_group_member_missing`）と
+`zorder_group_diag.rs:41/54`（`APPLIED_TAG`／`REJECTED_TAG`）であり、**どちらも「退役するファイル」に丸ごと挙がっている**。移設先は設計本文のどこにも書かれていない（`log_group` を含む記述は traceability の 5.4 行だけ）。
+さらに、これらを呼ぶ `crates/areka/src/emo2_boot/frame/zorder_descript.rs:36`（`use wintf::ecs::window::{log_group_applied, log_group_rejected};`）は**「変更しない既存ファイル」表に載っている**。`zorder_drain.rs:67` も同じ 3 関数を import している。
 
-### 🔴 Critical Issue 2: `fail_streak` が全グループ共有＝1 グループの不成立が他グループの是正を止める
+**Impact**: 退役の順序 (3)（退役ファイルの削除）で areka 側がコンパイル不能になるか、通すために記録を落とせば要件 9.5 が割れる。`signoff-scan.ps1` は `$TAG_GROUP_APPLIED`／`$TAG_GROUP_REJECTED` を据え置く前提（J1 の受理判定・J2）なので、語彙が消えれば実機サインオフの判定が丸ごと成立しなくなる。初版が「機械検査全緑のまま実機で不成立」になった形と同じ、**退役の段取りにだけ現れる穴**である。
 
-**Concern**: `ZOrderGroups` は `fail_streak: u8` を**Resource に 1 本**持ち、「`fail_streak >= 3` で warn を出し pending を降ろす」。一方、是正は「1 巡 1 グループ」であり、検証も発行したグループ単位で起きる。実現不能なグループ（例: 明示モードで片方の窓だけを並べ、OS の owner 制約に当たる形）が 1 つあると、その失敗 3 回で pending が全体的に降り、**同時に有効な他グループの是正が新しいトリガが来るまで止まる**。
-**Impact**: 要件 1.1／1.3／7.1 の「グループが有効な間は指定順を保つ」が、無関係なグループの失敗によって静かに破れる。記録は 1 行出るので要件 8.3 は満たすが、原因の帰属が付かない。
-**Suggestion**: `fail_streak` をグループ ID ごとに持ち（`HashMap<u32,u8>` か `ZOrderGroupSpec` の同居フィールド）、頭打ちは**そのグループだけ**を維持対象から外す形にする。pending は他グループが残っている限り降ろさない。併せて頭打ち warn に group_id と観測順を載せる。
-**Traceability**: 1.1, 1.3, 7.1, 8.3
-**Evidence**: design.md「ZOrderGroups Resource＋純判断」State 定義（`fail_streak: u8`）／「group 維持系」頭打ちの節
+**Suggestion**: 保全語彙の**新しい住所を設計で名指しする**（例: `zorder_chain_diag.rs` へ `[zorder-group] applied`／`rejected` のタグ定数と `log_group_applied`／`log_group_rejected` を移設し、target も併記する／あるいは `zorder_group_diag.rs` を「applied・rejected だけを残す小さなファイル」として退役対象から外す）。併せて (1) `zorder_descript.rs` を Modified Files へ移す（import 先が変わるため「無編集」は成立しない）、(2) `log_group_member_missing`（要件 8.4 の記録材料。`[zorder-chain] absent` へ移ったのか退役なのかが未記載）の去就を明記、(3) 記録の target が変わる場合は `signoff-scan.ps1` の `RUST_LOG` 指定（現行は `zorder_pair`＋`zorder_chain` の 2 本）へ追随させること。
 
-### 🔴 Critical Issue 3: 先送り語彙檻の対象に新設本番ファイルが 1 本漏れている
+**Traceability**: 9.5・5.4・8.4・9.4 ／ **Evidence**: design.md「退役するファイル」「変更しない既存ファイル」「`zorder_chain_diag`／保全する既存語彙」「実機サインオフの改訂」
 
-**Concern**: File Structure Plan の areka 新設**本番**ファイルは `placement/zorder_group_ledger.rs`・`emo2_boot/zorder_cue.rs`・`emo2_boot/frame/zorder_drain.rs` の 3 本だが、Modified Files は `spawn_zorder_pair_deferred_tests.rs` の `PRODUCTION_FILES` を **2→4**（ledger・zorder_cue のみ）とし、Traceability 10.4 も「新設 5 本（wintf 3・areka 2）」と数えている。実ファイル（`spawn_zorder_pair_deferred_tests.rs:48` = `[&str; 2]`）に対し正しくは **2→5**、総数は 6 本である。
-**Impact**: 要件 10.4／11.4 は「新しい実装ファイルも検査対象に含める」ことを求めており、drain 相だけが先送り語彙（`topmost`／`stayontop`／`windowstate` ほか 9 語）の検査から外れる。檻は全緑のまま穴が残る形で、`test-cage-determinism` が踏んだ「対象選定がファイル単位で 1 件取りこぼす」と同型。
-**Suggestion**: `PRODUCTION_FILES` を 2→5（`src/emo2_boot/frame/zorder_drain.rs` を追加）とし、件数定数と Traceability 10.4 の「5 本」を 6 本へ訂正する。wintf 側 5→8 は正しい。
-**Traceability**: 10.4, 11.4
-**Evidence**: design.md「File Structure Plan」新設ファイル一覧／「Modified Files」／Traceability 10.4 行
+### Critical Issue 2: 要件 7.3（バルーン再表示への追随）の実現根拠が事実と食い違う
+
+**Concern**: DD-9 と traceability 7.3 は「再表示で**窓の在庫が変われば**合成結果が変わるので drain 相の内容差分が自然に検出する」として、初版の引き金（`balloon_visibility_phase.rs` の `note_balloon_shown`／`wants_group_follow_on_show`）を撤去する。しかし要件 7.3 自身が再表示を「窓の中身の絵の消去・再描画を指し、Windows 上の窓の表示状態の変化を伴わない」と定義しており、窓の在庫（`GhostWindows`＝`spawn.rs:294-309`。scope ごとにキャラ窓とバルーン窓の Entity 対を spawn 時から保持）は**再表示では 1 ミリも変わらない**。したがって `ChainGroupPlan` は同一で `dirty` は立たず、drain 相の差分は**発火しない**。
+
+**Impact**: 撤去の根拠が誤っているため、実装者は「差分が拾ってくれるはず」と信じたまま 7.3 の檻を書かない（設計の Integration テスト一覧にも再表示の項が無い）。実際には鎖方式では再表示で順が崩れる経路が無い＝**何もしなくてよい**可能性が高いが、それは「在庫差分で拾う」とは別の理由である。理由が誤ったまま着地すると、実機サインオフで 7.3 を主張する証跡が組み立てられない（初版の申し送りと同じ轍）。
+
+**Suggestion**: 7.3 の充足根拠を「再表示は HWND も owner も触らないので鎖が崩れる経路が無く、確認も是正も不要（構造で満たす＝1.3／7.4 と同型）」へ書き替え、traceability 7.3 の Components を「—（構造で満たす）」にする。そのうえで、(1) 撤去する引き金が他の要件を担っていないこと（`wants_group_follow_on_show` は `ZOrderGroups` 非空を条件にしていた）を確認し、(2) 決定論の檻として「バルーンの内容可視性が変わっても `ZOrderChainPlan` が変化しないこと」を 1 本置くこと。
+
+**Traceability**: 7.3・7.4・14.5 ／ **Evidence**: design.md DD-9・Requirements Traceability 7.3・Modified Files（`balloon_visibility_phase.rs`）
+
+### Critical Issue 3: 要件 2.5「グループに属するスコープ以外の窓を動かさない」と DD-3b が突き合わされていない
+
+**Concern**: §12.5／§12.9-3 の実測により「鎖は 1 つの塊として動き、後押しの際に**鎖の外の窓を追い越すことがある**」ことが確定し、DD-3b はこれを許容する裁定を下している。その根拠として挙がるのは要件 6.1／6.2／3.6 だけで、**要件 2.5 は一度も参照されていない**。traceability の 2.5 行は `zorder_chain_compose`（edge を張らない）＝不変条件(3) だけを根拠にしており、後押しによる塊移動には触れていない。要件 2.5 の文言は「動かさない」であり、「相対順を規定しない」（6.1）より強い読み方ができる。
+
+**Impact**: 実機サインオフの目視で「グループ外のキャラ窓が鎖に追い越された」場面が出たとき、それが仕様どおりなのか不成立なのかを**要件文だけでは判定できない**。初版は要件 1.1／1.2／2.1 の解釈と機構の食い違いで実機 NO-GO になっており、同じ判定不能を持ち込むリスクがある。
+
+**Suggestion**: DD-3b の射程に 2.5 を明記し、「2.5 が禁じるのは**グループ外の窓を対象とする指令を出すこと**および**グループ外どうしの相対順を変えること**であって、鎖が塊として移動した結果の相対位置変化は含まない」と設計で線を引く。併せて COMPAT §8 の裁量へ 11 件目として登記し（正典が沈黙する領域である）、実窓檻 6 の主張（部外者どうしの前後不変）が 2.5 の証跡でもあることを Testing Strategy に書くこと。要件文そのものを触る必要がある場合は設計ディスカッションの議題へ。
+
+**Traceability**: 2.5・6.1／6.2・3.6・12.2 ／ **Evidence**: design.md DD-3b・Requirements Traceability 2.5・research.md §12.5
 
 ## Design Strengths
 
-1. **既存語彙の保存を構造で担保している**: 既存ペア 5 ファイルを 1 行も編集せず、`[zorder-pair]` 6 タグ・`ZORDER` 起床旗・`SCHEDULE_NAMES` を不変に保つ設計は、要件 9.5 と干渉台帳（zsp⇄pwc／zsp⇄bod）の義務を「守る努力」ではなく「触らない形」で満たしている。`enqueue_window_set_pos` 非接触も明示されており、並走 spec との衝突面が最小。
-2. **未知が実測で潰されたうえで設計に反映されている**: R1（`DeferWindowPos` 一括投入の順序保存）は既存の実窓テスト `command_batch_tests.rs:633`（並べ替えに敏感な 2 連鎖で両経路一致）で緑であることを確認済みで、それに立って「1 巡 1 グループ・グループ内は自己参照連鎖で一括・先頭窓は動かさない」という収束論証が組まれている。判断はすべて純関数（`parse_zorder_tokens`／`decide_group_fix`）に切り出され、要件 10.2 の 9 分岐が実機不要で檻に入る。
+1. **初版 NO-GO の根因（未実測の方式選択）を、設計に先立つ実測で正面から潰している**。`api_owner_chain_probe_tests.rs` の 9 本（張り替えの非即時性・後押しの形 3 種の比較・最小化／非表示／破棄の連動・切離しによる連動の無効化・スプライス・`clear_window_owner` の失敗・部外者への影響）が実在し、恒久の檻として着地済みであることを確認した。しかも**檻自身の非決定を 3 度潰した記録**（§12.9）があり、うち 1 件（`GW_HWNDPREV` を挿入位置に渡すと他プロセスの窓の消滅で黙って失敗する）は本番の設計判断 DD-3 を変えている。設計の主要主張が「§12 の実測 → DD → traceability」で 1 本に繋がっている。
+2. **「ペア edge は鎖の部分列である」という構造上の発見により、新設が横断 edge 1 種類だけに縮んでいる**。実証済みのペア 5 ファイルが挙動非接触で残り（唯一の例外が doc 段落 1 つの訂正）、解除＝自分が張った edge の撤去だけで既定状態が構造的に復元する。層の分界も正しい——`CrossEdge`／`ChainGroupPlan` を wintf 側に置いて areka が構築する形により、**wintf → areka の import を 1 本も作らない**（不在要素を正準表記の文字列で運ぶという代償まで自覚的に記述されている）。
 
 ## Final Assessment
 
-**Decision: GO**
+**判定: GO（条件付き——上記 3 件を設計ディスカッションで解消してからタスク生成へ）**
 
-**Rationale**: 層の分界・依存方向・記録規律・既定＝非強制の保存に構造的な不整合はなく、要件 1〜13 の全受入基準に実現要素が対応し、裁定 3 件も本文へ正しく反映されている。指摘 3 件はいずれも**設計文の局所訂正で閉じる**（診断行の発行時点／頭打ちの粒度／檻の対象 1 本）であり、アーキテクチャの選択（案 C）を揺るがさない。
+**Rationale**: 方式（要件 14）の実現可能性は §12 の実測で閉じており、荷重のかかる platform 挙動で §12 または既存の檻に裏づけの無いものは見当たらない。受入基準 70 件は全件が traceability に行を持ち、file:line 主張も 14 点中 12 点が完全一致（残る 2 点は行のずれのみで無害）。Critical Issue 1〜3 はいずれも**局所的な記述・段取りの穴**であって、アーキテクチャの是非や複雑さの不均衡ではない——1 は移設先の名指し、2 は充足根拠の書き替え、3 は裁定の射程の明記で閉じる。
 
 **Next Steps**:
-1. 設計ディスカッションで指摘 1〜3 を反映（1 は診断の発行時点、2 は `fail_streak` の粒度、3 は `PRODUCTION_FILES` 2→5・総数 6）。
-2. その後 `/kiro-spec-tasks areka-P0-scope-zorder-pinning` でタスク生成。
-3. タスク化時の注意（合否外の申し送り）:
-   - 明示モードで同一スコープの片方の窓だけを並べたグループ（例 `\![set,zorder,b1,b0]`）は連鎖が owner 一組の間への挿入を要求し得る。検証が**相対順のみ**であることが救いになっている設計なので、その理由を実装の doc に残すと後続が誤って「直後隣接」を検証条件に格上げしない。
-   - `consumer_ledger` は本番に読み手が 0 件（`consumer_of`／`try_register` の呼出はファイル内のみ）。要件 11.3 の一意性は台帳＋テストによる記録上の保証であり、実行時の分配点ではないことを設計・タスクの記述で取り違えない。
-   - 設計の `maintain.rs:368-372`（起床旗の作法）は実測では `:363-372` が doc、`mark` 呼出は `:374`。実害はないが実装時に参照するなら再確認のこと。
+1. 設計ディスカッション（`/kiro-design-discussion areka-P0-scope-zorder-pinning`）で Critical Issue 1〜3 を裁定し design.md へ反映する。特に 1 は**タスク分割に直結する**（保全語彙の移設が退役の順序 (3) の前提になる）。
+2. 反映後に `/kiro-spec-tasks areka-P0-scope-zorder-pinning` でタスクを生成する。退役の順序 (1)〜(4) を跨ぐタスクには、各段で `[zorder-pair]` 6 語と `[zorder-group] applied`／`rejected` が生存していることの検査を必ず添えること。
+3. 軽微: `api.rs` の `get_window_above` 引用を `:72` へ、`zorder_pair.rs:511` の `measure_*` 引用を `:525/:635` へ直す（`:511` は `SIBLING_SCAN_LIMIT`）。
