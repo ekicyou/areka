@@ -8,7 +8,7 @@
 //!
 //! # 保全語彙 2 語の新しい住処（要件 9.5）
 //!
-//! `[zorder-group] applied`／`[zorder-group] rejected` は、退役する `zorder_group` 系から
+//! `[zorder-group] applied`／`[zorder-group] rejected` は、退役した `zorder_group` 系から
 //! **字面を 1 字も変えずに**ここへ移した。呼び出し元（shell 設定の適用・指令消化の相）は
 //! `wintf::ecs::window` の再輸出を通して同じ名前で呼び続ける。
 //!
@@ -57,9 +57,9 @@ const LINK_FAILED_TAG: &str = "[zorder-chain] link-failed";
 /// 外し失敗の記録タグ（error 水準・要件 8.2）。
 const UNLINK_FAILED_TAG: &str = "[zorder-chain] unlink-failed";
 
-/// 受理の記録タグ（**退役する `zorder_group_diag` からの移設・字面は 1 字も変えない**）。
+/// 受理の記録タグ（**退役した `zorder_group_diag` からの移設・字面は 1 字も変えない**）。
 const APPLIED_TAG: &str = "[zorder-group] applied";
-/// 拒否の記録タグ（**退役する `zorder_group_diag` からの移設・字面は 1 字も変えない**）。
+/// 拒否の記録タグ（**退役した `zorder_group_diag` からの移設・字面は 1 字も変えない**）。
 const REJECTED_TAG: &str = "[zorder-group] rejected";
 
 /// 鎖系の記録タグ 7 種（サインオフの grep 判定語の一覧）。
@@ -332,7 +332,7 @@ pub(crate) fn unlink_failed_line(owned_hwnd: Option<HWND>, error: &windows::core
 
 /// 受理の記録行（純関数）——台帳が組んだ本文へ、こちらはタグだけを貼る。
 ///
-/// **退役する `zorder_group_diag` からの移設であり、字面は 1 字も変えていない**（要件 9.5）。
+/// **退役した `zorder_group_diag` からの移設であり、字面は 1 字も変えていない**（要件 9.5）。
 ///
 /// 台帳の内容そのものは areka の型であり、`wintf → areka` の import は禁止ゆえここでは
 /// 受け取れない。よって組み上がった本文を受け取り、タグと（呼び出し側の module path 既定
@@ -343,7 +343,7 @@ pub(crate) fn applied_line(detail: &str) -> String {
 
 /// 拒否の記録行（純関数・warn 水準で出す・要件 8.1／8.3）。
 ///
-/// **退役する `zorder_group_diag` からの移設であり、字面は 1 字も変えていない**（要件 9.5）。
+/// **退役した `zorder_group_diag` からの移設であり、字面は 1 字も変えていない**（要件 9.5）。
 ///
 /// 載るのは**拒否理由**と**受け取ったトークン列**の 2 欄である。トークン列を載せるのは、
 /// 作者が何を書いたのかが記録から復元できなければ書き間違いを直せないからであり、

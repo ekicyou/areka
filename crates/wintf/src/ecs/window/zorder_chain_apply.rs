@@ -30,7 +30,7 @@
 //!
 //! # 後押しに観測札（`WriteTag`）は付けない（task 1.3 の申し送りへの裁定）
 //!
-//! **直に書く経路へ札を付ける前例は本番に在る**——`window_proc/window_pos.rs:519-537` は
+//! **直に書く経路へ札を付ける前例は本番に在る**——`window_proc/window_pos.rs:475-493` は
 //! `guarded_set_window_pos` の直呼びに対して `WriteRecord { stage: WriteStage::Sync, .. }`
 //! を自分で組み、`WriteTag { origin: ORIGIN_DPI_SUGGESTED, .. }` を明示している。
 //! よって「札はキュー経由でしか付かない」は事実ではない。それでも後押しには付けない:

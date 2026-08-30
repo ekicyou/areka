@@ -16,12 +16,6 @@ mod zorder_chain;
 mod zorder_chain_apply;
 /// 鎖系の記録行を組む純関数とタグ定数の唯一の所在（保全語彙 2 語の記録もここ）。
 mod zorder_chain_diag;
-/// グループ単位の重なり（受け口・観測・純判断・記録の唯一の出口）。
-mod zorder_group;
-/// グループ系の記録行を組む純関数だけの層（マクロを含まない＝出力先を分裂させない）。
-mod zorder_group_diag;
-/// グループ単位の重なりの維持系（印の消費・調停・連鎖発行）。
-mod zorder_group_maintain;
 mod zorder_pair;
 /// 記録の行を組む純関数だけの層（マクロを含まない＝出力先を分裂させない）。
 mod zorder_pair_diag;
@@ -37,8 +31,6 @@ pub use window_pos::*;
 pub use zorder_chain::*;
 pub use zorder_chain_apply::*;
 pub use zorder_chain_diag::*;
-pub use zorder_group::*;
-pub use zorder_group_maintain::*;
 pub use zorder_pair::*;
 pub use zorder_pair_establish::*;
 pub use zorder_pair_maintain::*;

@@ -350,7 +350,7 @@ fn is_run_distinguishes_run_from_skip() {
 ///
 /// 並びは見出しの辞書順。areka 側の生産者は別クレートなのでここからは読めず、
 /// areka 側の同種の検査が受け持つ。
-const WINTF_PRODUCERS: [(&str, &str, &str); 10] = [
+const WINTF_PRODUCERS: [(&str, &str, &str); 8] = [
     ("app.rs", include_str!("../app.rs"), "WM_GEOMETRY"),
     ("dola/mod.rs", include_str!("../dola/mod.rs"), "ANIM"),
     (
@@ -374,11 +374,6 @@ const WINTF_PRODUCERS: [(&str, &str, &str); 10] = [
         "WINDOW_CMD",
     ),
     (
-        "window/zorder_group_maintain.rs",
-        include_str!("../window/zorder_group_maintain.rs"),
-        "ZORDER",
-    ),
-    (
         "window/zorder_pair_maintain.rs",
         include_str!("../window/zorder_pair_maintain.rs"),
         "ZORDER",
@@ -388,11 +383,6 @@ const WINTF_PRODUCERS: [(&str, &str, &str); 10] = [
         "window_proc/mod.rs",
         include_str!("../window_proc/mod.rs"),
         "",
-    ),
-    (
-        "window_proc/window_pos.rs",
-        include_str!("../window_proc/window_pos.rs"),
-        "ZORDER",
     ),
 ];
 

@@ -16,8 +16,7 @@
 //! - [`DRAG`] — ドラッグ中（毎画面更新で回す必要があるので、tick の末尾で自分で立て直す）
 //! - [`WINDOW_CMD`] — 窓書込指令の積み上げ（`command.rs` の enqueue）
 //! - [`ZORDER`] — Z 順の要求（`window/zorder_pair_maintain.rs` の `ReassertZOrder` 維持・
-//!   `window/zorder_group_maintain.rs` のグループ維持・`window_proc/window_pos.rs` の追随
-//!   トリガ・areka 側 `emo2_boot/zorder_cue.rs` のタグ入口）
+//!   areka 側 `emo2_boot/zorder_cue.rs` のタグ入口）
 //!   この行は**ファイル名で**書く。決定論テストが「旗を立てているファイルの名前がこの行に
 //!   現れるか」を機械で照合しているので、型名や関数名へ言い換えるとその照合が落ちる
 //!   （wintf 側は `tick_gate_tests.rs`、areka 側は `tick_gate_config_producers_tests.rs`）。

@@ -175,23 +175,91 @@ fn no_extra_tag_hides_outside_the_two_rosters() {
     }
 }
 
-/// 保全語彙 2 語の住処は 1 つだけ——旧所在にはもう定義が無い（grep 対象が分裂しない）。
-#[test]
-fn the_preserved_tags_have_exactly_one_home_after_the_move() {
-    let retiring = code_only(include_str!("zorder_group_diag.rs"));
+/// クレートの `src/` 配下の本番 `.rs` を集める（テストのファイルは除く）。
+fn production_rs_files(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+    let entries = std::fs::read_dir(dir)
+        .unwrap_or_else(|e| panic!("木を歩けない（検査が空振りする）: {} — {e}", dir.display()));
+    for entry in entries {
+        let path = entry.expect("ディレクトリ項目が読めない").path();
+        if path.is_dir() {
+            production_rs_files(&path, out);
+            continue;
+        }
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        if !name.ends_with(".rs")
+            || name.ends_with("_tests.rs")
+            || name.ends_with("test_support.rs")
+        {
+            continue;
+        }
+        out.push(path);
+    }
+}
 
+/// `src/` 配下の本番ファイルのうち、`needle` を**コード行の**字面として持つものの相対パス。
+fn production_files_containing(needle: &str) -> Vec<String> {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut files = Vec::new();
+    production_rs_files(&root, &mut files);
+    assert!(
+        files.len() >= 20,
+        "走査が {} 件しか歩いていない（木の歩き方が壊れている）",
+        files.len()
+    );
+
+    let mut found: Vec<String> = files
+        .iter()
+        .filter(|path| {
+            let src = std::fs::read_to_string(path).expect("本番ファイルが読めない");
+            code_only(&src).contains(needle)
+        })
+        .map(|path| {
+            path.strip_prefix(&root)
+                .expect("走査の根の下に無い")
+                .to_string_lossy()
+                .replace('\\', "/")
+        })
+        .collect();
+    found.sort();
+    found
+}
+
+/// 保全語彙 2 語の住処はクレート全体でただ 1 つ——`zorder_chain_diag.rs` である（要件 9.5）。
+///
+/// 旧所在（`zorder_group_diag.rs`／`zorder_group.rs`）は task 5.1 で削除済みなので、
+/// 「あちらにもう無い」という形の主張はもう立てられない（対象そのものが実在しない）。
+/// 代わりに**クレートの木を歩いて**住処が 1 つであることを直に数える。こちらの方が強い
+/// ——退役した層に限らず、どのファイルへ 2 つ目の定義が生えても赤くなる。
+#[test]
+fn the_preserved_tags_have_exactly_one_home_in_this_crate() {
     for tag in preserved_group_tags() {
-        assert!(
-            !retiring.contains(&format!("\"{tag}\"")),
-            "退役予定の層に `{tag}` の定義が残っている（住処が 2 つに割れる）"
+        let homes = production_files_containing(&format!("\"{tag}\""));
+        assert_eq!(
+            homes,
+            vec!["ecs/window/zorder_chain_diag.rs".to_string()],
+            "`{tag}` の住処が 1 つではない（grep 対象が分裂する）"
         );
     }
 
-    // 対照: 同じ走査が、あちらに今も在るタグでは必ず当たる（走査の空振り検出）
-    assert!(
-        retiring.contains("\"[zorder-group] fix\""),
-        "走査そのものが壊れている（退役予定の層で既知のタグを見つけられない）"
+    // 対照 ①: 同じ走査は、実在する別の字面では当たる（0 を数えて緑になる走査ではない）
+    assert_eq!(
+        production_files_containing("\"[zorder-chain] linked\""),
+        vec!["ecs/window/zorder_chain_diag.rs".to_string()],
+        "走査そのものが壊れている（既知の鎖タグを見つけられない）"
     );
+    // 対照 ②: 退役した語彙は本番コードのどこにも残っていない（要件 14.2）
+    for retired in [
+        "[zorder-group] fix",
+        "[zorder-group] skip",
+        "[zorder-group] verify-failed",
+    ] {
+        assert!(
+            production_files_containing(&format!("\"{retired}\"")).is_empty(),
+            "退役した語彙 `{retired}` が本番コードに残っている"
+        );
+    }
 }
 
 // ===========================================================================

@@ -26,7 +26,7 @@
 //! 10 分岐はいずれも解釈・台帳・起動時適用の判断であり、錨はすべて areka 側に在る。
 //! wintf 側（重なりの是正の要否・見送りの理由語）は別クレートのファイルを読めないため
 //! ここには載せない——`tick_gate_config_producers_tests.rs` が示した「クレートの境界で
-//! 表を分ける」流儀に揃えてある。wintf 側の分岐は `zorder_group_decision_tests.rs` が
+//! 表を分ける」流儀に揃えてある。wintf 側の分岐は `zorder_chain_tests.rs`／`zorder_chain_apply_tests.rs` が
 //! 自前で覆う。
 
 use std::collections::BTreeSet;
