@@ -1,8 +1,8 @@
-//! 要件 10.2 が名指しする 10 分岐と、それを覆う「実際に実行されるテスト」の対応表。
+//! 要件 10.2 が名指しする 11 分岐と、それを覆う「実際に実行されるテスト」の対応表。
 //!
 //! # なぜ表を置くか
 //!
-//! 要件 10.2 は分岐の名前を 10 個並べているが、どの分岐がどのテストで覆われているかは
+//! 要件 10.2 は分岐の名前を 11 個並べているが、どの分岐がどのテストで覆われているかは
 //! テスト名の綴りを人が読み解くしかない。分岐の 1 つを覆っていた唯一のテストが消えても、
 //! 残りが全部緑なら誰も気づかない——「網羅している」という主張が、どこにも書かれて
 //! いないために検査できない状態になる。
@@ -17,25 +17,35 @@
 //! ⑵ その直前に `#[test]` が付いている（＝**実行される**。名前だけ残った私設ヘルパーは通さない）、
 //! ⑶ そのテストファイルが本番ファイルの `#[path = …]` 宣言で**クレートへ組み込まれている**
 //!    （＝ディスクに在るだけでコンパイルされないファイルを「覆っている」と数えない）、
-//! ⑷ 10 分岐のどれもが少なくとも 1 行を持ち、表に**未知の分岐名が現れない**。
+//! ⑷ 11 分岐のどれもが少なくとも 1 行を持ち、表に**未知の分岐名が現れない**。
 //!
 //! 改名・削除・宣言外しのいずれもこの場で赤になる。
 //!
 //! # 範囲
 //!
-//! 10 分岐はいずれも解釈・台帳・起動時適用の判断であり、錨はすべて areka 側に在る。
-//! wintf 側（重なりの是正の要否・見送りの理由語）は別クレートのファイルを読めないため
+//! 11 分岐はいずれも解釈・台帳・起動時適用と、在庫から鎖を導く合成の判断であり、
+//! 錨はすべて areka 側に在る。11 番目（窓の出現・破棄に伴う繋ぎ直しの導出）のうち、
+//! **何を繋ぐか**を在庫から導く段（`compose_chain` と drain 相の差分公開）は areka 側に在るので
+//! ここで覆う。導かれた鎖の差から**どの繋ぎを切って張るか**を組む段（`plan_chain_ops`）と、
+//! 重なりの是正の要否・見送りの理由語は wintf 側に在り、別クレートのファイルを読めないため
 //! ここには載せない——`tick_gate_config_producers_tests.rs` が示した「クレートの境界で
 //! 表を分ける」流儀に揃えてある。wintf 側の分岐は `zorder_chain_tests.rs`／`zorder_chain_apply_tests.rs` が
 //! 自前で覆う。
 
 use std::collections::BTreeSet;
 
-/// 要件 10.2 が名指しする 10 分岐。並びも語も要件本文の逐語である。
+/// 要件 10.2 が名指しする 11 分岐。並びも語も要件本文の逐語である。
 ///
 /// 9 番目を tasks.md は「shell 設定の適用」と言い換えているが、ここは要件の字面
 /// （「descript 適用」）を採る——対応表が名指すべきは要件の分岐そのものだからである。
-const BRANCHES: [&str; 10] = [
+///
+/// 11 番目は改訂第 2 版で足された分岐である。要件本文の末尾は
+/// 「…・解釈失敗・窓の出現・破棄に伴う繋ぎ直しの導出の各分岐」と続く。ここで区切りの
+/// 中黒を素朴に数えると 12 個に読めるが、「窓の出現・破棄」は 1 つの並立複合語であり
+/// （design.md も一貫して「窓の出現・破棄は spawn／despawn」と対で扱う）、
+/// 「窓の出現」だけ／「破棄に伴う繋ぎ直しの導出」だけを分岐名とすると後者が文の断片になる。
+/// よって 1 分岐として数え、全体を 11 とする。
+const BRANCHES: [&str; 11] = [
     "数値モード",
     "明示モード",
     "モード混在の拒否",
@@ -46,13 +56,14 @@ const BRANCHES: [&str; 10] = [
     "解除",
     "descript 適用",
     "解釈失敗",
+    "窓の出現・破棄に伴う繋ぎ直しの導出",
 ];
 
 /// 対応表が読むテストファイル（見出し・中身・そのファイルを組み込む本番ファイルの中身）。
 ///
 /// 3 つ目の欄は「このテストファイルが本当にコンパイルされるか」を見るためのもので、
 /// `#[path = "…"]` 宣言を持っている本番ファイルの中身を入れる。
-const TEST_FILES: [(&str, &str, &str); 5] = [
+const TEST_FILES: [(&str, &str, &str); 7] = [
     (
         "placement/zorder_group_ledger_tests.rs",
         include_str!("zorder_group_ledger_tests.rs"),
@@ -78,13 +89,23 @@ const TEST_FILES: [(&str, &str, &str); 5] = [
         include_str!("../emo2_boot/frame/zorder_descript_tests.rs"),
         include_str!("../emo2_boot/frame/zorder_descript.rs"),
     ),
+    (
+        "placement/zorder_chain_compose_tests.rs",
+        include_str!("zorder_chain_compose_tests.rs"),
+        include_str!("zorder_chain_compose.rs"),
+    ),
+    (
+        "emo2_boot/frame/zorder_drain_projection_tests.rs",
+        include_str!("../emo2_boot/frame/zorder_drain_projection_tests.rs"),
+        include_str!("../emo2_boot/frame/zorder_drain.rs"),
+    ),
 ];
 
 /// 分岐 → それを覆うテスト（分岐の見出し・テストファイルの見出し・テスト関数の名前）。
 ///
 /// 1 分岐に複数行あってよい。解釈の段（台帳の純関数）・台帳の状態遷移・取り出しの段の
 /// 記録・起動時適用と、同じ分岐を別の高さで覆う行が並ぶ。
-const COVERAGE: [(&str, &str, &str); 41] = [
+const COVERAGE: [(&str, &str, &str); 50] = [
     // ── 数値モード（要件 1.1・1.2）
     (
         "数値モード",
@@ -101,6 +122,12 @@ const COVERAGE: [(&str, &str, &str); 41] = [
         "emo2_boot/frame/zorder_descript_tests.rs",
         "t_zdb01_a_numeric_setting_seats_exactly_one_descript_base",
     ),
+    // 解釈の先——在庫から鎖を導く段（`compose_chain`）でも同じ分岐を覆う。
+    (
+        "数値モード",
+        "placement/zorder_chain_compose_tests.rs",
+        "t_zcc01_numeric_mode_puts_left_scope_in_front_as_a_block",
+    ),
     // ── 明示モード（要件 2.1・2.2）
     (
         "明示モード",
@@ -116,6 +143,11 @@ const COVERAGE: [(&str, &str, &str); 41] = [
         "明示モード",
         "placement/zorder_group_ledger_tests.rs",
         "t_zgp4_balloon_and_char_of_same_scope_are_distinct_windows",
+    ),
+    (
+        "明示モード",
+        "placement/zorder_chain_compose_tests.rs",
+        "t_zcc02_explicit_mode_matches_the_numeric_shape",
     ),
     // ── モード混在の拒否（要件 2.3）
     (
@@ -228,6 +260,11 @@ const COVERAGE: [(&str, &str, &str); 41] = [
         "emo2_boot/frame/zorder_descript_tests.rs",
         "t_zdb04_an_inverted_setting_is_normalized_and_the_adjustment_is_recorded",
     ),
+    (
+        "スコープ内隣接との矛盾の調停",
+        "placement/zorder_chain_compose_tests.rs",
+        "t_zcc03_folded_partial_specification_yields_full_scope_blocks",
+    ),
     // ── 解除（要件 4.1〜4.3）
     (
         "解除",
@@ -301,6 +338,39 @@ const COVERAGE: [(&str, &str, &str); 41] = [
         "emo2_boot/frame/zorder_descript_tests.rs",
         "t_zdb05_an_unreadable_setting_seats_nothing_and_records_value_and_reason",
     ),
+    // ── 窓の出現・破棄に伴う繋ぎ直しの導出（要件 7.1・7.2・15.3。改訂第 2 版で追加）
+    // 在庫が動いた巡に鎖の中身が動くこと（導出）と、動いていない巡には動かないこと（対照）は
+    // drain 相が受け持ち、在庫の欠けを鎖へどう射影するかは合成の段が受け持つ。
+    (
+        "窓の出現・破棄に伴う繋ぎ直しの導出",
+        "emo2_boot/frame/zorder_drain_projection_tests.rs",
+        "t_zdp06_publishing_happens_only_when_the_content_actually_differs",
+    ),
+    (
+        "窓の出現・破棄に伴う繋ぎ直しの導出",
+        "emo2_boot/frame/zorder_drain_projection_tests.rs",
+        "t_zdp04_destroyed_scope_leaves_the_chain_without_dragging_others_with_it",
+    ),
+    (
+        "窓の出現・破棄に伴う繋ぎ直しの導出",
+        "emo2_boot/frame/zorder_drain_projection_tests.rs",
+        "t_zdp08_a_stale_registry_entry_is_skipped_while_its_living_siblings_are_kept",
+    ),
+    (
+        "窓の出現・破棄に伴う繋ぎ直しの導出",
+        "emo2_boot/frame/zorder_drain_projection_tests.rs",
+        "t_zdp14_an_unnamed_scope_appearing_and_leaving_is_detected_too",
+    ),
+    (
+        "窓の出現・破棄に伴う繋ぎ直しの導出",
+        "placement/zorder_chain_compose_tests.rs",
+        "t_zcc04_absent_scope_is_reported_and_never_dropped_from_the_group",
+    ),
+    (
+        "窓の出現・破棄に伴う繋ぎ直しの導出",
+        "placement/zorder_chain_compose_tests.rs",
+        "t_zcc05_partially_present_scope_keeps_the_surviving_window_in_the_chain",
+    ),
 ];
 
 /// 註釈の行を落とす——説明文に書いてあるだけの綴りを「在る」と数えないため
@@ -325,11 +395,11 @@ fn source_of(label: &str) -> &'static str {
         .unwrap_or_else(|| panic!("対応表が知らないテストファイルの見出しを指している: {label}"))
 }
 
-/// 表に載る分岐の見出しは、要件 10.2 の 10 個のいずれかでなければならない。
+/// 表に載る分岐の見出しは、要件 10.2 の 11 個のいずれかでなければならない。
 ///
 /// 綴り違いの分岐名を足しても表の行数が増えるだけで気づけないので、こちら側から挟む。
 #[test]
-fn t_zbc1_the_table_names_no_branch_outside_the_ten() {
+fn t_zbc1_the_table_names_no_branch_outside_the_eleven() {
     let known: BTreeSet<&str> = BRANCHES.into_iter().collect();
     for (branch, file, name) in COVERAGE {
         assert!(
@@ -339,9 +409,9 @@ fn t_zbc1_the_table_names_no_branch_outside_the_ten() {
     }
 }
 
-/// 10 分岐のどれもが、少なくとも 1 本のテストで覆われていなければならない。
+/// 11 分岐のどれもが、少なくとも 1 本のテストで覆われていなければならない。
 #[test]
-fn t_zbc2_every_one_of_the_ten_branches_has_at_least_one_test() {
+fn t_zbc2_every_one_of_the_eleven_branches_has_at_least_one_test() {
     let covered: BTreeSet<&str> = COVERAGE.iter().map(|(branch, _, _)| *branch).collect();
     for branch in BRANCHES {
         assert!(
@@ -352,7 +422,7 @@ fn t_zbc2_every_one_of_the_ten_branches_has_at_least_one_test() {
     assert_eq!(
         covered.len(),
         BRANCHES.len(),
-        "覆われた分岐の数が 10 でない（覆われている: {covered:?}）"
+        "覆われた分岐の数が 11 でない（覆われている: {covered:?}）"
     );
 }
 
