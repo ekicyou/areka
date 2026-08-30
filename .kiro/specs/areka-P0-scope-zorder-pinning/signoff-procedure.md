@@ -80,12 +80,19 @@
 | 語（部分一致） | 出る条件 | 水準 | 実出の対照 |
 |---|---|---|---|
 | `[zorder-group] applied` | 受理（台帳に載った） | debug | R2・R3 |
-| `[zorder-chain] linked` | 繋いだ（この窓を 1 つ奥の窓の所有下へ置いた） | debug | task 6.2 |
-| `[zorder-chain] settled` | 収まった（宣言と**直後の実測**を同一行に載せる） | debug | task 6.2 |
-| `[zorder-chain] link-failed` | 繋ぎを張れなかった | error | task 6.2 |
-| `[zorder-group] rejected` | 指定そのものの拒否 | warn | **R5**（§3.3 の拒否検体） |
+| `[zorder-chain] linked` | 繋いだ（この窓を 1 つ奥の窓の所有下へ置いた） | debug | **第 2 版 R2〜R8**（`real-machine-signoff.md` §7.4） |
+| `[zorder-chain] settled` | 収まった（宣言と**直後の実測**を同一行に載せる） | debug | **第 2 版 R2〜R8**（同上・R8 は 2 本） |
+| `[zorder-chain] link-failed` | 繋ぎを張れなかった | error | **実出なし**（下の註） |
+| `[zorder-group] rejected` | 指定そのものの拒否 | warn | 初版 **R5**（§3.3 の拒否検体）・第 2 版 **R7**（`CrossGroupRedesignation`） |
 | `[zorder-pair] owner-established` | ペア機構の所有関係の確立 | info | R1〜R5 |
 | `[zorder-pair] fix` / `[zorder-pair] skip` | ペア機構の是正／見送り | debug | R1〜R5 |
+
+> **⚠ `link-failed` には実出の対照が無い（2026-08-30・task 6.2 で確定）。** 第 2 版の実走 8 本すべてで 0 件であり、
+> **健全な走行では原理的に出ない**（Win32 の所有関係の書込そのものが失敗したときだけ出る）。
+> よってこの語は §2.4 の意味での対照を持てず、**§2.0 の 3 タグと同じ扱い**にする——
+> 道具がこの語を読めることは合成標本 `S3-grouped-linkfailed.log` で赤を作って確かめてある
+> （§6.1.2 の 3 行目）。**「0 件だから成立した」と読んではならない**（J1 の成立は `linked` と
+> `settled` が担い、`link-failed` は 4 つ目の連言として「失敗が無かったこと」だけを言う）。
 
 判定に使わないが同じ冠を持つ鎖の 4 語（`unlinked` / `absent` / `skipped` / `unlink-failed`）は
 J2 の「0 件」に冠ごと入る。**`skipped` の件数を判定条件にしてはならない**——連呼の抑止が
@@ -116,6 +123,18 @@ design の ⑶ は「既存 `[zorder-pair]` **6 タグ**が従来どおり出る
 （`crates/wintf/src/ecs/window/zorder_pair_diag.rs:36-40`）——は**失敗経路と活性化由来**であり、
 **健全な無人走行では原理的に出ない**。実際、本サインオフの 5 本と切り分けの 10 本、
 および独立レビューの 4 本、計 19 本のログすべてで 0 件である。
+
+> **⚠ 2026-08-30（task 6.2）の訂正: `sink-observed` は「無人走行では出ない」であって
+> 「出ない」ではない。** 第 2 版の走行 R6 は**外から窓を活性化した**ので、この語が **2 件**出た
+> （`[zorder-pair] sink-observed entity=… adjacency_ok=true foreground=0x… behind_foreground=…`・
+> `real-machine-signoff.md` §8.4⑴）。**J3 はこの語を判定に使っていないので判定は不変**である。
+> むしろこの実出は、外から与えた刺激が本当にアプリへ届いたことの**自己検査**として働いた
+> ——刺激の到達を確かめずに「順が保たれた」と言うのは、攪乱の届かない檻で緑を取るのと同じである。
+> **ただし 3 発の活性化のうち直接の証言が付いたのは 2 発で、残る 1 発（鎖の根）は
+> 記録も probe の差分も残らなかった**。その 1 発の到達は「次の活性化が出した `sink-observed` の
+> `entity=` が、前に活性だった対を名指す」という**非活性化枝からの含意**で閉じてある
+> （`real-machine-signoff.md` §8.4⑴）。
+> 残る 2 語（`verify-failed`／`owner-establish-failed`）は第 2 版の 8 本でも 0 件のままである。
 これらを J3 の連言に足すと、**出ないことが正常な語で「0 件」を主張する**という
 §2.4 が禁じた形になる（対照走行が作れない）。
 
@@ -307,6 +326,73 @@ $d = $d -replace "seriko.alignmenttodesktop,bottom", "seriko.alignmenttodesktop,
 - **共有 `fixtures/emo2` を書き換えないこと。** 既定＝非強制の走行は「設定を持たない側」をそのまま使って得る。
 - **areka の窓は `WS_EX_TOPMOST` を持たない。** 全画面の端末やエディタの背後に完全に隠れる。
   「出ていない」の第一容疑は Z 順であって欠陥ではない。本手順は目視を使わないので実害は無い。
+
+### 3.5 第 2 版（task 6.2）で足した検体と道具（**再生成が正本**）
+
+task 6.2 は初版の 3 検体に加えて**タグ由来の検体を 3 通り**と**活性化を外から与える道具**を使った。
+いずれも派生物でありコミットしない。作り方は次のとおりである（`$dst` の作成と片付けは §3.2／§3.2.1 と同一）。
+
+| 検体 | 起動（`boot.pasta` の 12 パターン） | 通常トーク（`talk.pasta` の 48 シーン） | 何を測るための検体か |
+|---|---|---|---|
+| `emo2-zsp-tag` | `\![set,zorder,b0,s0,b1,s1]` | `\![reset,zorder]` | **解除**が実機で実行され既定へ戻ること |
+| `emo2-zsp-tag2` | `\![set,zorder,b1,s1,b0,s0]` | `\![set,zorder,b0,s0,b1,s1]` | グループ有効中の**再指定**（実測では拒否された） |
+| `emo2-zsp-tag3` | `\![set,zorder,b1,s1,b0,s0]` | `\![reset,zorder]\![set,zorder,b0,s0,b1,s1]` | 走行の途中で**鎖を逆順へ組み替える**（宣言列が 2 本になる） |
+
+差し込みは §3.2 のスクリプトの `$tag` を替え、**通常トーク側にも同じ要領で差し込む**だけである
+（`＊通常トーク` の直後の最初の発話行へ 1 つずつ）:
+
+```powershell
+$g = "$dst\ghost\master\dic\talk.pasta"
+$tl = [System.IO.File]::ReadAllText($g) -split "`r`n"
+$rtag = '\![reset,zorder]'          # tag3 は '\![reset,zorder]\![set,zorder,b0,s0,b1,s1]'
+$m = 0; $pending = $false
+for ($i = 0; $i -lt $tl.Count; $i++) {
+  if ($tl[$i] -eq '＊通常トーク') { $pending = $true; continue }
+  if ($pending -and $tl[$i] -match '^　[^　]+：＠[^　]*　') {
+    $tl[$i] = $tl[$i] -replace '^(　[^　]+：＠[^　]*　)', "`$1$rtag"; $m++; $pending = $false
+  }
+}
+[System.IO.File]::WriteAllText($g, ($tl -join "`r`n"), (New-Object System.Text.UTF8Encoding($false)))
+```
+
+- 差し込み数は **48**（`＊通常トーク` の全シーン）。時刻帯にも抽選にも依存させないため全シーンへ入れる。
+- `　　　エモ：` の行は先頭が全角空白 3 つなので上の正規表現に当たらない。当たらない場合は
+  待ち（`$pending`）が続き、そのシーンの**むらさきの発話**へ入る。どちらでも同じシーンに 1 つだけ入る。
+
+#### 3.5.1 ⚠ 「グループ有効中に同じスコープを指名し直す」タグは拒否される
+
+`emo2-zsp-tag2` は「途中で別の順を指定する」つもりの検体だったが、実機の答えは
+
+```
+[zorder-group] rejected reason=CrossGroupRedesignation(0,1) tokens=b0,s0,b1,s1
+```
+
+であった（既に別グループに載っているスコープを含むタグは採らない）。**組み替えを測りたいなら
+先に `\![reset,zorder]` を出すこと**（＝`emo2-zsp-tag3`）。この 1 行は同時に、拒否しても起動が続き
+**成立済みの鎖が保たれる**ことの証跡でもある（R7 は J1=PASS）。
+
+#### 3.5.2 活性化を外から与える道具（利用者の操作の代わり）
+
+判定は**ログだけ**で下すが、「利用者の操作で活性化させた」ことを確かめるには外から刺激を与える必要がある。
+PowerShell の P/Invoke 5 本で足りる（`GetTopWindow`／`GetWindow(GW_HWNDNEXT=2)`／`IsWindowVisible`／
+`GetWindowThreadProcessId`／`SetForegroundWindow`＋`BringWindowToTop`）。
+
+- 窓の列挙は `GetTopWindow(NULL)` から `GW_HWNDNEXT` を辿る——**この順が手前から奥の順**である。
+  対象プロセスの **可視**窓だけを拾う（不可視の既定 IME 窓を巻き込まないため）。
+- **活性化させる窓はログの `declared=` から採る。** 目で見当をつけると鎖の外の窓を掴む
+  （実際に 1 度掴んだ——R5 の 1 度目は鎖外の窓で、これはこれで「部外の窓が前に出ても鎖の中の順は動かない」
+  という別の証跡になった）。走行中のログを読み、`[zorder-chain] settled` の `declared=` を分解して
+  **根（末尾）・先頭・奥から 2 枚目**を名指しで活性化する。
+- **刺激が届いたことを必ず自分で検査する。** アプリ側に `[zorder-pair] sink-observed` が出て
+  `foreground=` がこちらの活性化させた窓と一致することを確かめる（§2.0 の訂正註）。
+  これを見ずに「順が保たれた」と言うと、**刺激が届かない檻で緑を取る**のと同じになる。
+  - **⚠ 1 発目は証言が残らないことがある。** `sink-observed` の目印は `WM_ACTIVATE` の
+    **非活性化枝**でしか付かない（`crates/wintf/src/ecs/window/zorder_pair_sink.rs:52-53,87`）ので、
+    **最初の活性化は「降りる側」が居らず記録を残さない**。鎖が既に最前面に居れば probe の並びも動かない。
+    **活性化は 2 発以上出し、後続の `sink-observed` の `entity=` が前の発の対を名指すことで
+    1 発目の到達を裏から取ること**（実例＝`real-machine-signoff.md` §8.4⑴）。
+- 実走の道具は `real-machine-signoff.md` §7.3 の `*.probe.txt` を生んだスクリプトであり、
+  上の 4 点を満たせば実装は問わない。
 
 ---
 
@@ -791,6 +877,21 @@ $DEPART  = "$P2[zorder-chain] unlinked segment=g0 owned=23v0 owned_hwnd=$H3 owne
   静かに壊れる**——実際 round 2 の時点で `nudged_hwnd` に `true` が入り `insert_after` が空だった。
   是正後は判定器の出力に 4 欄すべてが載る（`settled 後押し=… 錨=… 宣言=… 実測=…`）。
 
+## 6.2 実走ログでの較正（2026-08-30・task 6.2・**合成ではない標本**）
+
+§6.1 の 25 通りは**合成標本**が主である（鎖の語彙で実際に走ったログが当時まだ無かったため）。
+task 6.2 の 8 走行でその欠を埋めた——**同じ道具を実走ログ 11 通りに当てて、3 種類の終了コードが出た**。
+表と逐語は `real-machine-signoff.md` **§9** にある。要点だけを引く:
+
+- **合成標本の期待が実走で裏返らなかった**——成立形は緑（exit 0）、既定走行に鎖の記録が無いことは緑、
+  グループ走行を `-Mode default` で測ると赤（exit 1・§2.4 の対照）、受理の無い走行は判定不能（exit 2）。
+- **⒝（宣言列ごとの終状態の全称）が実走で複数の宣言列に効いた初めての例**が R8 である
+  （1 走行の中で鎖を逆順へ組み替え、`宣言列 2 本中 一致 2 / 不一致 0`）。
+  §6.1.2 の 9〜13・22〜25 行目は合成標本でこの量化子を測っていたが、**実走で 2 本以上の宣言列が
+  出たのはここが最初**である。
+- **終状態の不一致は 1 件も出なかった。** よって §5.1-3a への例外の登記は**行っていない**
+  （登記すべき事象が起きなかった）。
+
 ---
 
 ## 7. 走行時の申し送り
@@ -807,11 +908,21 @@ $DEPART  = "$P2[zorder-chain] unlinked segment=g0 owned=23v0 owned_hwnd=$H3 owne
   いない／既に壊れているときの記録であり、異常ではない（要件 1.4——存在する窓だけで鎖を組み、
   グループからは取り除かない）。同じ内容が続く間は 1 度だけ出る。
 - **`[zorder-chain] unlinked reason=Departing`** が走行終了時に出る（窓が去る巡）。異常ではない。
+  > **⚠ 2026-08-30（task 6.2）の訂正: 実際には出なかった。** 8 走行のログで `reason=Departing` は
+  > **0 件**である（実出した `unlinked` は 2 件でどちらも `reason=Teardown`＝解除・組み替えの巡）。
+  > 有界終了は 4 枚を**一斉に** despawn するので（`areka: smoke 自動 close … count=4`）、鎖の相が走る頃には
+  > 帳簿の component ごと消えており、切離しの対象が残らない。終了時に実際に出るのは
+  > **`[zorder-chain] absent` × 宣言要素数 ＋ `skipped reason=NoChange`** である。どちらも異常ではない。
+  > **`Departing` を「出るはず」の前提にして待たないこと。**
 - **数値モード（`seriko.zorder,0,1` 等）は初版（毎巡の観測＋是正）の実機で成立しなかった。**
   **本 spec の改訂そのものがその不成立への応答であり、鎖の下で成立するかを確かめるのが task 6.2 である**
   （task 6.2 が「数値モードと明示モードの両方で窓 4 枚」を求めているのはこのため）。
   詳細と切り分けは `real-machine-signoff.md` §4。**本版で J1 を測るときも、成立する形（例 `b0,s0,s1`）と
   数値モードの両方を走らせて対比を残すこと**——初版が落ちたのはまさに数値モードの 4 枚だからである。
+  > **✅ 2026-08-30（task 6.2）の実測: 鎖の下では成立した。** 数値 `0,1`（R3）・明示 `b0,s0,b1,s1`（R2）の
+  > **両方**で `declared` と `measured` が同一行で一致し、`link-failed` は 0 件だった
+  > （`real-machine-signoff.md` §8.2）。初版の `verify-failed` 24 件・`fix` 0 件という形は再現しない。
+  > 以後この項は**歴史の記録**として読むこと。
 - **初版の欠陥の根因候補 2 つ（`real-machine-signoff.md` §4.3）と、その切り分け手順は退役した。**
   切り分けの対象だった本番ファイル `zorder_group_maintain.rs` は本 spec の改訂で退役しており、
   もはや存在しない。根因がどちらであっても答えは同じ「毎巡の観測＋是正をやめる」であり、

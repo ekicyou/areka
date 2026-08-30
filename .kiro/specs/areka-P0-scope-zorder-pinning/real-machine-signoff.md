@@ -12,6 +12,9 @@
 > 実装・差し替え前の判定式で採った一次証跡であり、そのまま残す**——数値モードの不成立（§4）は
 > 本 spec の改訂そのものを引き起こした実測であり、書き換えれば改訂の理由が消える。
 >
+> **⚠ 現行版（所有の鎖）の受け入れ記録は §7〜§9 である**（2026-08-30・task 6.2）。
+> §4 が「実機で一度も成立しない」と記録した数値モード `0,1` は、**§8.2 で成立している**。
+>
 > ## 本版（鎖）での判定の意味
 >
 > | 判定 | **本版の意味**（2026-08-30〜） | 初版の意味（本記録が測ったもの） |
@@ -489,9 +492,344 @@ R1・R3・R5 が 0 件**——ペア是正の巡にグループが既に載っ�
 
 ## 6. 実機で確認**できていない**こと（本記録の射程外）
 
+> ⚠ **2026-08-30（task 6.2）: 本節は初版の走行についての射程である。**
+> 下の 3 点のうち**解除の実機実行**と**利用者の操作による活性化**は第 2 版の走行で実測した（§8.3／§8.4）。
+> 第 2 版でなお実機の外に在るのは 2 点——**3 スコープ以上**（emo2 が 2 つしか持たないため・下の 3 つ目と同じ理由）と、
+> **窓が現れる側の出入り**（§8.4⑶ に理由と引受先を書いた）である。
+
 - **`\![reset,zorder]`（解除）の実機実行。** 本走行の台本は `set` だけを実行した。
   解除の分岐は決定論テストで網羅済み（task 群 1・3）。
 - **利用者のクリックによる重なり変化への追随（要件 6.2 の能動側）。** 本サインオフは
   目視・手操作を使わない方針のため測っていない。追随そのものは定期トークに伴う
   バルーンの表示・消去で 6〜7 回駆動され、いずれも `AlreadyOrdered` で落ち着いている。
 - **3 スコープ以上のグループ。** emo2 は 2 スコープ（`sakura`／`kero`）しか持たない。
+
+---
+
+## 7. 第 2 版（所有の鎖）の実機サインオフ（2026-08-30・task 6.2）
+
+> **本節が現行版の受け入れ記録である。** §1〜§6 は初版（毎巡の観測＋是正）の一次証跡であり、
+> 実装も判定語も違う。両者を混ぜて読まないこと。判定手順は `signoff-procedure.md`
+> （§5.1 の判定式・§6.1 と §6.2 の較正）が正典である。
+
+### 7.0 結論
+
+**8 走行すべてで判定の道具が期待どおりの終了コードを返した。**
+初版を実機 NO-GO にした構成——**窓 4 枚**（数値モード `0,1` と明示モード `b0,s0,b1,s1`）——は
+**どちらも成立した**。宣言と実測が同一行で一致し、`link-failed` は全走行で 0 件である。
+
+| 走行 | 検体・指定 | `-Mode` | 判定 | 終了コード |
+|---|---|---|---|---|
+| **R1** 指定なし | `emo2`（共有・無改変） | `default` | J2=PASS J3=PASS | **0** |
+| **R2** 明示 4 枚 | `seriko.zorder,b0,s0,b1,s1` | `grouped` | J1=PASS J3=PASS | **0** |
+| **R3** 数値モード | `seriko.zorder,0,1` | `grouped` | J1=PASS J3=PASS | **0** |
+| **R4** タグ set → reset | `\![set,zorder,b0,s0,b1,s1]` → `\![reset,zorder]` | `grouped` | J1=PASS J3=PASS | **0** |
+| **R5** 活性化（部外の窓） | `seriko.zorder,b0,s0,b1,s1` ＋ 外部から活性化 | `grouped` | J1=PASS J3=PASS | **0** |
+| **R6** 活性化（鎖の窓 3 枚） | 同上 ＋ 鎖の根・先頭・奥から 2 枚目を活性化 | `grouped` | J1=PASS J3=PASS | **0** |
+| **R7** 有効中の再指定 | タグで `b1,s1,b0,s0` → 途中で `b0,s0,b1,s1` | `grouped` | J1=PASS J3=PASS | **0** |
+| **R8** 解除してから組み替え | タグで `b1,s1,b0,s0` → 途中で `\![reset,zorder]\![set,zorder,b0,s0,b1,s1]` | `grouped` | J1=PASS J3=PASS | **0** |
+
+- **目視は 1 度も使っていない。** J1／J2／J3 はすべて `signoff-scan.ps1` が記録の照合だけで下した。
+- R5／R6 の**外部からの重なり実測**（`*.probe.txt`）は判定材料ではなく、活性化の前後で
+  実際の重なりが動いていないことを機械で測った**副次の証跡**である。
+
+### 7.1 実施条件
+
+| 項目 | 値 |
+|---|---|
+| 実施日時 | 2026-08-30（観測区間 `14:34:38Z` 〜 `14:58:09Z`・UTC） |
+| ブランチ / HEAD | `claude/areka-p0-zorder-pinning-8e3e7c` / `488dad20`（task 6.1 まで） |
+| ゴースト | 実 emo2 fixture・**実 pasta.dll**・辞書込みフルゴースト（発話が返っていることは `seriko: bind 適用` と `[balloon-visibility] バルーンの可視状態が遷移した` で確認） |
+| 起動 | **絶対パス**（ghost＝各検体のルート／balloon＝`fixtures\emo2\emo2-kakukaku`） |
+| 有界終了 | `AREKA_APP_SMOKE_EXIT_MS=120000`（2 分）× 8 走行。**耐久走行は 1 本も行っていない**（開発者指示） |
+| ログ水準 | `RUST_LOG=info,wintf::ecs::window=debug` |
+| helper | i686 版 `shiori-host32-helper.exe` を `target\debug\` へ配置済み |
+| ビルド | debug プロファイル（走行前に `cargo build -p areka` を再実行） |
+| モニタ | 実効 192dpi（全走行で `k_shell=2.0 k_balloon=2.0`） |
+
+### 7.2 検体
+
+| 走行 | ゴースト | 指定 |
+|---|---|---|
+| R1 | `fixtures\emo2`（**共有 fixture・無改変**） | 無し |
+| R2・R5・R6 | `fixtures\emo2-zsp-descript` | `shell\master\descript.txt` に `seriko.zorder,b0,s0,b1,s1` |
+| R3 | 同上（1 行だけ差し替え） | `seriko.zorder,0,1` |
+| R4 | `fixtures\emo2-zsp-tag` | `boot.pasta` の起動 12 パターンに `\![set,zorder,b0,s0,b1,s1]`・`talk.pasta` の通常トーク 48 シーンに `\![reset,zorder]` |
+| R7 | `fixtures\emo2-zsp-tag2` | 起動に `\![set,zorder,b1,s1,b0,s0]`・通常トークに `\![set,zorder,b0,s0,b1,s1]` |
+| R8 | `fixtures\emo2-zsp-tag3` | 起動に `\![set,zorder,b1,s1,b0,s0]`・通常トークに `\![reset,zorder]\![set,zorder,b0,s0,b1,s1]` |
+
+**共有 fixture（`fixtures\emo2`）は 1 バイトも書き換えていない**（走行後に
+`git status --short crates/pilot/examples/shiori-host-32/fixtures/emo2` が空であることを確認）。
+派生検体 4 本は**走行後に片付けた**。作り方の正本は `signoff-procedure.md` §3.1／§3.2／**§3.5**、
+片付けの安全な順序は同 §3.2.1 である。
+
+### 7.3 ログの所在（一次証跡・読み取り専用）
+
+`C:\Users\maz-o\AppData\Local\areka-diag\zsp-signoff-r2-20260830\`
+
+| ログ | サイズ | md5 |
+|---|---|---|
+| `R1-default.log` | 78,619 bytes | `FCADEA461A3E1CF0266B35CC6E73B94C` |
+| `R2-descript-explicit4.log` | 84,394 bytes | `6164F1F8A7044740161A56296EABB37C` |
+| `R3-descript-numeric.log` | 86,493 bytes | `99E30B5EF7FEDBC3E42662ED33C45B71` |
+| `R4-tag-set-reset.log` | 90,741 bytes | `556B986B95487B4B5FDDB184FE5FA5CC` |
+| `R5-activation.log` | 84,411 bytes | `856664A895116CF84E9D230903792848` |
+| `R5-activation.probe.txt` | 929 bytes | `769A6CC0C3F4BC212F3D32F673D7B5E2` |
+| `R6-activation-chain.log` | 87,613 bytes | `A9A891466A8262F6D4FE3634D5C0171C` |
+| `R6-activation-chain.probe.txt` | 1,173 bytes | `95EDA6858796B989B63129A5D98282A6` |
+| `R7-tag-rechain.log` | 83,380 bytes | `B72C2870C2CFCE0B1ACEB700E14B640D` |
+| `R8-tag-reset-then-set.log` | 96,070 bytes | `063B101BFBC7B6D3F7ABC50288AF794E` |
+
+ログはコミットしない。**再採取の手順が正本**である（`signoff-procedure.md` §4.2／§3.5）。
+
+### 7.4 タグ別の件数（全走行・冠込みで数えた）
+
+| 走行 | applied | rejected | linked | unlinked | settled | link-failed | absent | skipped | pair owner / fix / skip | pair sink-observed |
+|---|---|---|---|---|---|---|---|---|---|---|
+| R1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 2 / 1 / 1 | 0 |
+| R2 | 1 | 0 | 1 | 0 | 1 | 0 | 4 | 1 | 2 / 1 / 1 | 0 |
+| R3 | 1 | 0 | 1 | 0 | 1 | 0 | 4 | 1 | 2 / 1 / 1 | 0 |
+| R4 | 4 | 0 | 1 | 1 | 1 | 0 | 0 | 1 | 2 / 1 / 1 | 0 |
+| R5 | 1 | 0 | 1 | 0 | 1 | 0 | 4 | 1 | 2 / 1 / 1 | 0 |
+| R6 | 1 | 0 | 1 | 0 | 1 | 0 | 4 | 1 | 2 / 1 / 1 | **2** |
+| R7 | 1 | **1** | 1 | 0 | 1 | 0 | 4 | 1 | 2 / 1 / 1 | 0 |
+| R8 | 9 | 0 | 2 | 1 | 2 | 0 | 4 | 4 | 2 / 1 / 1 | 0 |
+
+`unlink-failed`・ペア側の `verify-failed`・`owner-establish-failed` は**全 8 走行で 0 件**である。
+**`[zorder-pair] sink-observed` が R6 で 2 件出た**——`signoff-procedure.md` §2.0 が
+「健全な無人走行では原理的に出ない」と書いていた 3 タグの 1 つで、**外から活性化を与えたこの走行で
+初めて実出した**（同節へ訂正註を入れた）。J3 はこのタグを判定に使っていないので判定は不変である。
+
+---
+
+## 8. task 6.2 の 5 つの箇条ごとの証跡
+
+### 8.1 有界時間で自動終了する実機実行を行い、ログだけで判定する
+
+8 走行とも `AREKA_APP_SMOKE_EXIT_MS=120000` の**有界の 1 回走行**で、終了コード 0 で自動終了した。
+判定は `signoff-scan.ps1` の終了コードだけで下している（§7.0 の表・§9 の較正）。
+**耐久走行・繰り返し走行は 1 本も行っていない。**
+
+### 8.2 数値モードと明示モードの両方で**窓 4 枚**が宣言どおりに成立する
+
+**明示モード（R2）**——`seriko.zorder,b0,s0,b1,s1`:
+
+```
+14:36:55.002531Z DEBUG wintf::ecs::window::zorder_chain_diag:
+  [zorder-group] applied action=set group_id=0 source=Descript members=b0,s0,b1,s1 normalized=0:false,1:false
+
+14:36:55.161703Z DEBUG wintf::ecs::window::zorder_chain:
+  [zorder-chain] linked segment=g0 owned=22v0 owner=23v0
+                 owned_hwnd=0x270E0908 owner_hwnd=0x21940CF2 pos=2/4
+
+14:36:55.162729Z DEBUG wintf::ecs::window::zorder_chain:
+  [zorder-chain] settled nudged_hwnd=0x20B41714 insert_after=0x21940CF2
+                 declared=0x1DDA1884,0x270E0908,0x21940CF2,0x20B41714
+                 measured=0x1DDA1884,0x270E0908,0x21940CF2,0x20B41714 nudge_ok=true
+```
+
+**数値モード（R3）**——`seriko.zorder,0,1`（**初版が `verify-failed` 24 件を出して 1 度も成立しなかった形**）:
+
+```
+14:40:10.167247Z DEBUG wintf::ecs::window::zorder_chain_diag:
+  [zorder-group] applied action=set group_id=0 source=Descript members=b0,s0,b1,s1 normalized=-
+
+14:40:10.318823Z DEBUG wintf::ecs::window::zorder_chain:
+  [zorder-chain] settled nudged_hwnd=0x24A10FDE insert_after=0x270F0908
+                 declared=0x21950CF2,0x24F30F8E,0x270F0908,0x24A10FDE
+                 measured=0x21950CF2,0x24F30F8E,0x270F0908,0x24A10FDE nudge_ok=true
+```
+
+- 数値の `0,1` が **`members=b0,s0,b1,s1` の 4 枚へ展開**されている（`normalized=-` は数値モードの番兵）。
+  すなわち**初版が落ちた「4 枚・スコープ 2 つ」の構成そのもの**である。
+- `linked` は **1 本**である（4 枚に対し繋ぎ 1 本）。同一スコープの 2 枚は既存ペア機構が張るので
+  鎖の繋ぎには数えない（design DD-2）。`pos=2/4` が宣言列の 2 番目の隣接対を名指しする。
+- **繋ぐ前の重なりは宣言と違っていた。** R3 の最初の `[zorder-pair] owner-established` は
+  `owned_hwnd=0x21950CF2 owner_hwnd=0x24F30F8E measured_prev=0x24A10FDE` であり、
+  **宣言列の最後尾 `0x24A10FDE` が、宣言列の先頭 `0x21950CF2` の 1 つ手前に居た**。
+  並べ替えは実際に起きている（同じことを R8 が 1 走行の中で 2 通りの順で示す・§8.4⑵）。
+
+### 8.3 解除が実機で 1 度以上実行され、既定状態へ戻る（R4）
+
+```
+14:43:28.819630Z DEBUG wintf::ecs::window::zorder_chain_diag:
+  [zorder-group] applied action=reset groups=0 base=-
+14:43:28.820228Z DEBUG wintf::ecs::window::zorder_chain:
+  [zorder-chain] unlinked segment=g0 owned=22v0 owned_hwnd=0x21531092 owner_hwnd=0x24F40F8E reason=Teardown
+14:43:28.820268Z DEBUG wintf::ecs::window::zorder_chain:
+  [zorder-chain] skipped reason=TooFewPresent
+```
+
+- 解除で**鎖が実際にほどけた**（`unlinked reason=Teardown`）。続く見送りの理由 `TooFewPresent` は、
+  望む鎖が空になり後押しの対象が 2 枚未満になったことを意味する。
+- **以後 61 秒間、`[zorder-chain]` の記録は 1 行も出ない**（機械で数えて 0 件）。
+  区間は**解除の `14:43:28.820268Z` から走行の最終行 `14:44:29.790817Z` まで**である
+  （走行の開始は `14:42:29.112923Z`・有界 120 秒）。
+  同じ通常トークが再度 `\![reset,zorder]` を送っても `applied action=reset` が 2 件出るだけで、
+  鎖の仕事は 1 つも起きない＝**冪等**であり、既定状態のまま留まっている。
+- ペア機構は解除の後も従来どおり動いている（J3=PASS）。
+
+### 8.4 活性化のあとも順が保たれる／グループ有効中に鎖が組み替わる
+
+#### ⑴ 利用者の操作による活性化（R6・R5）
+
+外部から `SetForegroundWindow` ＋ `BringWindowToTop` を**鎖の窓 3 枚**へ順に与えた——
+**a1＝根 `0x2A690ECA`**（`14:49:05.939Z`）・**a2＝先頭 `0x24571268`**（`14:49:18.965Z`）・
+**a3＝奥から 2 枚目 `0x1DB81892`**（`14:49:31.997Z`）。刺激が届いたことの証言は
+**3 発すべてに直接付いているわけではない**ので、付いている側と付いていない側を分けて書く。
+
+**⑴ 直接の証言があるのは a2 と a3 の 2 発だけである。**
+
+```
+14:49:18.960452Z DEBUG wintf::ecs::window::zorder_pair:
+  [zorder-pair] sink-observed entity=23v0 adjacency_ok=true foreground=0x24571268 behind_foreground=true
+14:49:31.991429Z DEBUG wintf::ecs::window::zorder_pair:
+  [zorder-pair] sink-observed entity=21v0 adjacency_ok=true foreground=0x1DB81892 behind_foreground=false
+```
+
+この 2 件の時刻は外から活性化を出した時刻と一致し（記録の方が数 ms 早いのは、probe が
+`SetForegroundWindow` を**呼んだ後**に時刻を採るためである）、`foreground=` は
+**こちらが活性化させた窓そのもの**である。
+
+**⑵ a1（根の活性化）には自己検査が 1 つも無い。** この巡には `sink-observed` が出ておらず、
+probe の並びも `t1` と `t2` で同一（差分ゼロ）である。**「アプリ自身のログが 3 発とも証言している」
+とは書けない。**
+
+**⑶ ただし a1 の到達は a2 の記録が事後に含意する。** `sink-observed` の目印を付ける
+`mark_pair_sink_observation` は **`WM_ACTIVATE` の非活性化枝からだけ**呼ばれ、
+**非活性化された窓が属する対**へ付く（`crates/wintf/src/ecs/window/zorder_pair_sink.rs:52-53,87`）。
+a2 の行は `entity=23v0`——R6 の `owner-established` によれば
+**対 `(23v0, 24v0)` ＝ `{0x1DB81892, 0x2A690ECA}`** である。すなわち a2 の瞬間に
+**`0x2A690ECA` を含む対が活性から降りた**のであり、その活性を作れたのは
+**a1 の `SetForegroundWindow(0x2A690ECA)` 以外に無い**——**a2 の時点より前に、この対の窓を
+前面へ出した操作は a1 の 1 発だけである**（probe の全操作が `R6-activation-chain.probe.txt` に載っている。
+⚠ a3＝`hwnd=0x1DB81892` は**同じ対のもう 1 枚**だが `14:49:31.9970085Z` であり、a2 の `sink-observed`
+`14:49:18.960452Z` より **13 秒後**なので、a2 の目印の出所にはなり得ない。限定の射程は
+「走行全体」ではなく「**a2 以前**」である）。
+a3 についても同型で、`entity=21v0`＝対 `(21v0, 22v0)` ＝ `{0x24571268, 0x1E88190E}` が降りた
+＝**a2 の到達**を裏から示す。
+
+**⑷ よって射程はこうである**——a2・a3 は**直接**、a1 は**a2 の非活性化からの含意**で到達を確かめた。
+`sink-observed` は活性化由来の記録であり無人走行では出ない（§7.4 の註）。
+
+結果:
+
+- **重なりは 1 度も動かなかった。** 外部実測（probe）は `t0`／`t1`／`t2`／`t3`／`t4`／`t5` の
+  6 点すべてで `0x24571268,0x1E88190E,0x1DB81892,0x2A690ECA`（＋鎖外の窓 1 枚）であり、
+  これはログの `declared=` と**逐語で同一**である。
+- **是正の往復が 1 度も起きていない。** 起動時の `settled`（`14:48:55.770Z`）から
+  終了時の後片付け（`14:50:55.63Z`）まで、`[zorder-chain]` の記録は **0 行**である。
+  すなわち順は**観測と是正ではなく所有の鎖の構造**で保たれている（要件 14.3／design §12.1）。
+- **鎖が一体で前へ出ることも測れた（R5）。** R5 では先に**鎖の外の窓**を活性化して
+  鎖全体の手前へ出し（`t2`＝`0x22661480,0x25CB0C1C,0x1E500C60,0x22020EFE,0x1DB71892`）、
+  次に**鎖の窓 1 枚**を活性化した。すると `t3` で鎖の 4 枚が
+  `0x25CB0C1C,0x1E500C60,0x22020EFE,0x1DB71892` の**宣言どおりの並びのまま一体で前へ戻り**、
+  部外の窓が最背面へ下がった。**1 枚だけが飛び出す形にはならない。**
+
+#### ⑵ グループ有効中の組み替え（R8）
+
+解除してから別の順を指定すると、**同じ走行の中で鎖が組み直された**:
+
+```
+14:56:10.278066Z [zorder-group] applied action=set group_id=0 source=Tag members=b1,s1,b0,s0 normalized=1:false,0:false
+14:56:10.279252Z [zorder-chain] settled ... declared=0x2361111A,0x2336104C,0x21021236,0x21571092
+                                            measured=0x2361111A,0x2336104C,0x21021236,0x21571092 nudge_ok=true
+
+14:56:40.708958Z [zorder-group] applied action=reset groups=0 base=-
+14:56:40.709033Z [zorder-group] applied action=set group_id=1 source=Tag members=b0,s0,b1,s1 normalized=0:false,1:false
+14:56:40.710075Z [zorder-chain] unlinked segment=g0 owned=24v0 owned_hwnd=0x2336104C owner_hwnd=0x21021236 reason=Teardown
+14:56:40.710270Z [zorder-chain] linked   segment=g1 owned=22v0 owner=23v0 owned_hwnd=0x21571092 owner_hwnd=0x2361111A pos=2/4
+14:56:40.711056Z [zorder-chain] settled ... declared=0x21021236,0x21571092,0x2361111A,0x2336104C
+                                            measured=0x21021236,0x21571092,0x2361111A,0x2336104C nudge_ok=true
+```
+
+- **2 つの宣言列は互いにスコープ 2 つ分を入れ替えた形**（前半＝スコープ 1 が手前／後半＝スコープ 0 が手前）
+  であり、**どちらも実測が宣言と一致した**。同一走行の中で**逆の並びが 2 度とも成立している**ので、
+  「たまたま起動時の並びが宣言と同じだった」という読みは成り立たない。
+- 判定の道具は `宣言列 2 本中 一致 2 / 不一致 0` と印字した——**⒝（宣言列ごとの終状態の全称）が
+  実走のログで複数の宣言列に対して働いた初めての例**である（§9 の 8 行目）。
+- 以後の通常トークが同じ `reset`＋`set` を繰り返しても `skipped reason=NoChange` になるだけで、
+  鎖は組み替わらない（内容が同じ巡は公開しない・要件 14.5）。
+
+#### ⑶ 窓の出入り（**去る側だけを実機で観測した**・射程の明示）
+
+グループが有効なまま**窓が去る**側は観測できた——終了時に 4 枚が一斉に despawn され
+（`areka: smoke 自動 close: 起動窓（ダミー窓／ゴースト窓）を despawn しました count=4`）、鎖は
+
+```
+14:38:55.014672Z [zorder-chain] absent group_id=0 element=b0   （s0 / b1 / s1 と 4 行）
+14:38:55.015083Z [zorder-chain] skipped reason=NoChange
+```
+
+へ組み替わった（宣言要素が 1 つも実在しなくなった＝望む鎖が空）。
+
+**窓が現れる側は、この検体では実機で観測できない。** emo2 のゴースト窓は
+`crates/areka/src/placement/spawn.rs` の一度きりの生成でスコープ 2 つ分（4 枚）が揃い、
+実行中に窓が増える経路が本番に無いためである（走行中の窓の生成・破棄の記録は起動と終了以外に 1 件も無い）。
+**この側の担保は決定論テスト**
+（`crates/wintf/src/ecs/window/zorder_chain_order_lifecycle_tests.rs`・task 4.2）が持つ。
+**射程の外であることを、実機で確かめたことと混ぜて書かない。**
+
+**時刻順がその理由を裏づける**（R3 の例）:
+
+```
+14:40:10.167247Z  [zorder-group] applied …            ← 受理（窓はまだ 1 枚も無い）
+14:40:10.240798Z  WindowHandle added entity=22v0      ← ここから 4 枚が 5.3 ms の間に揃う
+14:40:10.242431Z  WindowHandle added entity=24v0
+14:40:10.244366Z  WindowHandle added entity=21v0
+14:40:10.246124Z  WindowHandle added entity=23v0
+14:40:10.317893Z  [zorder-chain] linked …             ← 鎖が働くのは 4 枚が揃った後
+14:40:10.318823Z  [zorder-chain] settled …
+```
+
+受理は窓の生成より **約 74 ms 先行**し（`.167247` → `.240798`）、窓は**まとめて**現れる。よって「グループが有効な最中に窓が 1 枚ずつ
+増える」巡が実機に存在せず、**起動時の `[zorder-chain] absent` は 8 走行とも 0 行**である
+（`absent` が出るのは終了時の一斉 despawn の後だけで、8 走行のいずれでも最初の `absent` は
+`smoke 自動 close` の行より後にある）。
+
+### 8.5 指定が一つも無い状態では鎖の記録が 1 行も出ない（R1）
+
+無改変の共有 fixture での 2 分走行で、**`[zorder-group]` と `[zorder-chain]` の両方の冠が 0 件**:
+
+```
+[zorder-group] 合計 0   applied 0 / rejected 0
+[zorder-chain] 合計 0   linked 0 / settled 0 / link-failed 0
+[zorder-pair]  合計 4   owner-established 2 / fix 1 / skip 1
+```
+
+「0 件」は対照を添えて初めて意味を持つ（`signoff-procedure.md` §2.4）。**同じ道具・同じ語**を
+R2／R3 に当てると **J2=FAIL / exit 1** になる（§9 の 9・10 行目）ので、R1 の 0 件は
+「語が空振りしている」ではなく「本当に記録が無い」である。
+
+---
+
+## 9. 本走行での判定器の較正（実走ログ 11 通り・3 種類の終了コードが出た）
+
+| # | 当てたログ | `-Mode` | 何を確かめるか | 実測 |
+|---|---|---|---|---|
+| 1 | `R1-default.log` | `default` | 既定＝非強制が緑 | **J2=PASS J3=PASS / exit 0** |
+| 2 | `R2-descript-explicit4.log` | `grouped` | 明示 4 枚が緑 | **J1=PASS J3=PASS / exit 0** |
+| 3 | `R3-descript-numeric.log` | `grouped` | **数値 4 枚が緑**（初版の NO-GO 構成） | **J1=PASS J3=PASS / exit 0** |
+| 4 | `R4-tag-set-reset.log` | `grouped` | タグ由来＋解除が緑 | **J1=PASS J3=PASS / exit 0** |
+| 5 | `R5-activation.log` | `grouped` | 活性化を挟んでも緑 | **J1=PASS J3=PASS / exit 0** |
+| 6 | `R6-activation-chain.log` | `grouped` | 鎖の窓を 3 枚活性化しても緑 | **J1=PASS J3=PASS / exit 0** |
+| 7 | `R7-tag-rechain.log` | `grouped` | 有効中の再指定が拒否されても、成立済みの鎖の判定は緑 | **J1=PASS J3=PASS / exit 0** |
+| 8 | `R8-tag-reset-then-set.log` | `grouped` | **宣言列 2 本の終状態がどちらも一致**（⒝ の全称が実走で複数列に効く） | **J1=PASS J3=PASS / exit 0**（`宣言列 2 本中 一致 2 / 不一致 0`） |
+| 9 | `R2-descript-explicit4.log` | `default` | **J2 の「0 件」の非 0 対照** | **J2=FAIL J3=PASS / exit 1** |
+| 10 | `R3-descript-numeric.log` | `default` | 同上（2 本目の対照） | **J2=FAIL J3=PASS / exit 1** |
+| 11 | `R1-default.log` | `grouped` | 受理が無い走行は FAIL ではなく**判定不能** | **J1=INCONCLUSIVE J3=PASS / exit 2** |
+
+- **exit 3（引数不正）は本走行では作っていない**——道具側の較正であり `signoff-procedure.md`
+  §6.1.2 の 21 行目が持つ。本節は**実走ログだけ**の較正である。
+- 9・10 行目が §2.4 の対照であり、11 行目が「沈黙を PASS と読ませない」ことの確認である。
+
+### 9.1 予定になかった実出が 2 つある（どちらも記録しておく）
+
+1. **`[zorder-group] rejected reason=CrossGroupRedesignation(0,1) tokens=b0,s0,b1,s1`**（R7・`14:54:03.701Z`）
+   ——グループが有効な間に**同じスコープを別のグループへ指名し直すタグ**は拒否される、という
+   裁量が**実機で効いていることの証跡**である（task 6.3 が対応表へ登記する項目の 1 つ）。
+   初版の `rejected` の実出は解釈不能値（`UnparsableToken`）1 通りだけだったので、**理由語が 2 通りになった**。
+   拒否しても起動は続き、成立済みの鎖はそのまま保たれた（J1=PASS）。
+2. **`[zorder-pair] sink-observed` 2 件**（R6）——§7.4 の註のとおり。
+   `signoff-procedure.md` §2.0 の「19 本すべてで 0 件」は**無人走行についての主張**であり、
+   活性化を外から与えた走行には当てはまらない（同節へ訂正註を入れた）。
