@@ -49,8 +49,10 @@
 //!   `HWND_BOTTOM` の絶対帯指定は cargo 3 プロセス同時の regime で檻を不安定にした実績が
 //!   あり（`api_owner_chain_probe_tests.rs` の module doc ⑴）、挿入位置に**他プロセスの
 //!   窓**（`GW_HWNDPREV` で得たもの）を渡す形は、読み取りと書き込みの間にその窓が消えると
-//!   黙って失敗する（同 ⑵）。どちらも使わない。絶対帯指定が残っているのは
-//!   **それ自体が測定対象である攪乱の 1 行**だけである。
+//!   黙って失敗する（同 ⑵）。どちらも使わない。絶対帯指定を出すのは
+//!   [`raise_to_front_until`] を通る 2 か所だけである——**それ自体が測定対象である攪乱**と、
+//!   その攪乱を見るための**検体窓を手前へ据える 1 行**。どちらも「届いたことを観測してから
+//!   進む」形にしてある（`Ok` が返っても 1 つも動かないことがあるため・同 doc に実測）。
 //! - 始点は生成順に頼らず明示的に組み、その成立をテスト本体が自己検査する——始点が
 //!   揃っていなければ以降の比較は空虚だからである。
 //! - **鎖の窓より先に「受け皿」の窓を 1 枚作る**（[`ensure_ime_anchor`]）。スレッド既定の
@@ -293,11 +295,43 @@ pub(super) fn teardown(windows: &[HWND]) {
 // Z の読み取りと助走（順序で測る・絶対帯指定を使わない）
 // ---------------------------------------------------------------------------
 
+/// 走査をやり直す上限。観測できないまま無限に回らないためだけに置く。
+pub(super) const Z_SCAN_ATTEMPTS: usize = 8;
+
 /// 与えた窓集合だけを Z の上から下へ並べて返す。
 ///
 /// 最前面から `GW_HWNDNEXT` で降りながら、集合に属する窓だけを拾う。**生の 1 歩では
 /// 測らない**——不可視の隣が間に挟まるので、隣接ではなく順序で見る。
+///
+/// # なぜ 1 度の走査では足りないのか（2026-08-30 の実測）
+///
+/// この走査はデスクトップ全体の**生きた**連結リストを 1 歩ずつ辿る。歩いている最中に
+/// **手前の他プロセスの窓が破棄される**と、その窓に対する `GetWindow(GW_HWNDNEXT)` は
+/// `Err` を返し、走査はそこで打ち切られる。集合の窓へ辿り着く前に切れれば結果は**空**に
+/// なる——自分の窓が 4 枚とも生きているのに `[]` が返る。`cargo test -p wintf --lib` の
+/// 3 プロセス同時 × 120 走行で、この形の赤を 2 件観測した（`left: []` 対
+/// `right: [0, 1, 2, 3]`）。task 2.3 を含まない HEAD でも同じ形が出ており、道具の側の
+/// 欠陥である（`research.md` §13.7 の 7 件目）。
+///
+/// よって**集合の窓を全部拾えるまで有界回数だけ走査をやり直す**。破棄済みの窓を含む
+/// 集合を渡された場合は何度やっても揃わないので、いちばん多く拾えた回の結果を返す
+/// ——回数を使い切ったときの意味は従来と同じ「拾えた分だけ」であり、**主張は弱めない**。
 fn relative_z_order(windows: &[HWND]) -> Vec<HWND> {
+    let mut best: Vec<HWND> = Vec::new();
+    for _ in 0..Z_SCAN_ATTEMPTS {
+        let seen = scan_z_once(windows);
+        if seen.len() == windows.len() {
+            return seen;
+        }
+        if seen.len() > best.len() {
+            best = seen;
+        }
+    }
+    best
+}
+
+/// 走査の 1 回分（打ち切られたら短い列を返す）。
+fn scan_z_once(windows: &[HWND]) -> Vec<HWND> {
     let mut result = Vec::new();
     // SAFETY: Win32 境界。デスクトップ配下の最前面窓を得る読み取り専用 API。
     let mut cursor = unsafe { GetTopWindow(None) }.ok();
@@ -357,6 +391,146 @@ fn place_after(hwnd: HWND, after: HWND) {
 pub(super) fn arrange_z(set: &[HWND], order: &[usize]) {
     for pair in order.windows(2) {
         place_after(set[pair[1]], set[pair[0]]);
+    }
+}
+
+/// 絶対帯指定の持ち上げを出し直す上限。観測できないまま無限に回らないためだけに置く。
+pub(super) const Z_RAISE_ATTEMPTS: usize = 8;
+
+/// 持ち上げの顛末（呼び出し側の表明の文言に出す）。
+pub(super) struct RaiseTrace {
+    /// 刺激が届いたことを観測できたか。
+    pub(super) landed: bool,
+    /// `SetWindowPos` そのものが成功を返したか（最後に出した 1 回）。
+    pub(super) command_ok: bool,
+    /// 観測できるまでに要した試行回数。
+    pub(super) attempts: usize,
+    /// 届かなかった巡ごとの並び（1 回目で届いていれば空）。
+    pub(super) misses: Vec<Vec<usize>>,
+    /// 最後に観測した並び。
+    pub(super) shape: Vec<usize>,
+}
+
+impl RaiseTrace {
+    /// 「檻の前提が崩れた」と「**持ち上げが届かなかった**」を呼び分ける診断文。
+    pub(super) fn note(&self) -> String {
+        if self.misses.is_empty() {
+            "持ち上げは 1 回目で届いている".to_string()
+        } else {
+            format!(
+                "持ち上げが {} 回届かなかった（Win32 が成功を返しながら並びを 1 つも変えない事象・届かなかった巡の並び: {:?}）",
+                self.misses.len(),
+                self.misses
+            )
+        }
+    }
+}
+
+/// 据え付け専用——**満たされていれば 1 命令も出さない**版。
+///
+/// 検体窓を手前へ据えるのは助走であって刺激ではないので、既に手前に居るなら Z 書込は
+/// 要らない。実測では検体窓は生成したてでほぼ常に手前に居るため、**この分岐で通常巡の
+/// 追加 Z 書込は 0 になる**（同じプロセスの他の檻から見た外乱を増やさないため・
+/// `research.md` §13.7 の隔離測定）。
+///
+/// 刺激の側（[`raise_to_front_until`]）には**この先読みを入れてはいけない**——入れると
+/// 「既に条件が揃っていれば持ち上げを出さない」ことになり、持ち上げの 1 行を消しても
+/// 緑になる＝檻が空虚化する。
+pub(super) fn ensure_front_until(
+    target: HWND,
+    witness: &[HWND],
+    landed: impl Fn(&[usize]) -> bool,
+) -> RaiseTrace {
+    let shape = z_shape(witness);
+    if landed(&shape) {
+        return RaiseTrace {
+            landed: true,
+            command_ok: true,
+            attempts: 0,
+            misses: Vec::new(),
+            shape,
+        };
+    }
+    raise_to_front_until(target, witness, landed)
+}
+
+/// `target` を最前面へ持ち上げ、`landed` が満たされたことを**観測してから**返る。
+///
+/// # なぜ 1 発では足りないのか（2026-08-30 の実測）
+///
+/// `HWND_TOP` は帯の中の**絶対位置**の指定であり、その結果はデスクトップ全体の状態に依る
+/// （§13.6 の 1 件目と同じ性質）。この持ち上げは **`Ok(())` を返しながら窓を 1 つも動かさない**
+/// ことがある。`cargo test -p wintf --lib` の 3 プロセス同時 × 120 走行で、この形の赤を 3 件
+/// 観測した。**task 2.3 を含まない HEAD でも同率で出る**ので、掃き出しが持ち込んだ外乱では
+/// なく、絶対帯指定そのものの性質である（`research.md` §13.7 の 7 件目）。
+///
+/// # なぜ「出し直し」で足りるのか——兄弟の実測との違い（重要）
+///
+/// 兄弟の `window_pos_zorder_group_tests.rs` は**同じ現象**を独立に実測しているが、そこでの
+/// 結論は「**同じ書込を 32 回繰り返しても 32 回とも動かない＝再試行では直らない**」であり、
+/// 是正は**相対指定への切り替え**だった。**その結論をここへそのまま引いてはいけない**——
+/// regime が違う。
+///
+/// | | 兄弟（`window_pos_zorder_group_tests`） | ここ |
+/// |---|---|---|
+/// | 道具窓 | `WS_VISIBLE` を持たない不可視の 0x0 窓 | `SW_SHOWNOACTIVATE` で**可視**の 0x0 窓 |
+/// | 巡の間 | 間を置かずに連続 32 回 | 1 巡ごとに **2ms 譲る**（断りは前面窓が他の検査の窓に
+///   移っている間だけ続くので、譲らないと同じ瞬間を 32 回見ることになる） |
+/// | 断られたときの逃げ道 | witness の先頭と入れ替える**相対指定**が使える（先頭に置ければよい） | **使えない**——ここで要るのは「鎖が検体窓を**追い越す**」ことであり、自分の窓だけを
+///   挿入位置に渡す相対指定では検体窓より手前へは出られない。検体窓を下げれば作れるが、
+///   それは下記のとおり主張を空虚にする |
+///
+/// この形での実測は、是正後 3 プロセス × 120 走行を 2 回（360 + 360）で**種 B の赤 0 件**。
+/// 相対指定へ寄せる余地が無い以上、「届いたことを観測してから進む」形が採れる唯一の手であり、
+/// 実測がそれで足りることを示している。
+///
+/// # 主張は弱めない
+///
+/// 出し直すのは**同じ持ち上げ 1 本だけ**である。検体窓を下げて条件を作りにいくような
+/// 逃げは打たない——それをやると「持ち上げの 1 行を消しても緑」に戻ってしまう。本関数は
+/// 顛末を返すだけで合否は呼び出し側の表明が持ち、有界回数を使い切っても観測できなければ
+/// 呼び出し側がそのまま赤くなる。
+pub(super) fn raise_to_front_until(
+    target: HWND,
+    witness: &[HWND],
+    landed: impl Fn(&[usize]) -> bool,
+) -> RaiseTrace {
+    let mut misses = Vec::new();
+    let mut command_ok = false;
+    for attempt in 1..=Z_RAISE_ATTEMPTS {
+        // SAFETY: Win32 境界。自プロセスの窓の Z のみを動かす（活性化・移動・寸法変更なし）。
+        command_ok = unsafe {
+            SetWindowPos(
+                target,
+                Some(HWND_TOP),
+                0,
+                0,
+                0,
+                0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+            )
+        }
+        .is_ok();
+        let shape = z_shape(witness);
+        if landed(&shape) {
+            return RaiseTrace {
+                landed: true,
+                command_ok,
+                attempts: attempt,
+                misses,
+                shape,
+            };
+        }
+        misses.push(shape);
+        // 断りは前面窓が別の検査の窓に移っている間だけ続く。次の巡へ譲ってから出し直す。
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    RaiseTrace {
+        landed: false,
+        command_ok,
+        attempts: Z_RAISE_ATTEMPTS,
+        misses,
+        shape: z_shape(witness),
     }
 }
 
@@ -616,29 +790,31 @@ fn a_settled_chain_holds_its_order_when_the_deepest_window_is_raised_to_the_fron
     chain_schedule().run(&mut world);
     let settled = z_shape(&set);
 
-    // 鎖の外の検体窓（刺激が届いたことの目印）。生成したてなので鎖より手前に居る。
+    // 鎖の外の検体窓（刺激が届いたことの目印）。
+    //
+    // 「生成したてだから鎖より手前に居るはずだ」は**こちらが保証していない性質**であり、
+    // 3 プロセス同時走行で実際に赤を出した（`research.md` §13.7 の 6 件目）。よって成り行きに
+    // 任せず、鎖と同じ絶対帯指定で**手前へ据えて、据わったことを観測してから**始める。
+    // 据えるのは検体窓 1 枚だけである——鎖を背面へ回して条件を作る手は 2.3 が試して
+    // 悪化させたので採らない（§13.7 の 6 件目の申し送り）。据え付けは
+    // [`ensure_front_until`] なので、既に手前に居る通常巡では **Z 書込を 1 つも足さない**。
     let control = create_chain_window(w!("zorder-chain-order/disturb-control"));
     let with_control: Vec<HWND> = set.iter().copied().chain([control]).collect();
     let control_at = |shape: &[usize]| shape.iter().position(|i| *i == CHAIN_SIZE);
-    let before_shape = z_shape(&with_control);
+    let seat_control =
+        ensure_front_until(control, &with_control, |shape| control_at(shape) == Some(0));
+    let before_shape = seat_control.shape.clone();
     let control_before = control_at(&before_shape);
 
     // 攪乱——最も奥の窓（鎖の根）を最前面へ。以降、適用系は 1 度も回さない。
-    // SAFETY: Win32 境界。自プロセスの窓の Z のみを動かす。
-    let raise_root_ok = unsafe {
-        SetWindowPos(
-            set[CHAIN_SIZE - 1],
-            Some(HWND_TOP),
-            0,
-            0,
-            0,
-            0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
-        )
-    }
-    .is_ok();
+    // 絶対帯指定は Win32 が成功を返しながら空振りすることがあるので、届いたことを
+    // 観測するまで有界回数だけ出し直す（[`raise_to_front_until`] の doc に実測）。
+    let raise_root = raise_to_front_until(set[CHAIN_SIZE - 1], &with_control, |shape| {
+        control_at(shape) == Some(CHAIN_SIZE)
+    });
+    let raise_root_ok = raise_root.command_ok;
     let after_disturb = z_shape(&set);
-    let after_shape = z_shape(&with_control);
+    let after_shape = raise_root.shape.clone();
     let control_after = control_at(&after_shape);
 
     // もう一度、今度は先頭の窓を最前面へ（既に最前面にいる窓への指令でも崩れないこと）。
@@ -686,12 +862,16 @@ fn a_settled_chain_holds_its_order_when_the_deepest_window_is_raised_to_the_fron
     assert_eq!(
         control_before,
         Some(0),
-        "攪乱の前に検体窓が鎖より手前に居ない（この位置から始めないと刺激の有無が見えない）: {before_shape:?}"
+        "攪乱の前に検体窓が鎖より手前に居ない（この位置から始めないと刺激の有無が見えない）: {before_shape:?}（{}・試行 {} 回）",
+        seat_control.note(),
+        seat_control.attempts
     );
     assert_eq!(
         control_after,
         Some(CHAIN_SIZE),
-        "攪乱で鎖が検体窓より手前へ出ていない＝刺激が届いておらず、以下の比較は空虚である: {after_shape:?}"
+        "攪乱で鎖が検体窓より手前へ出ていない＝刺激が届いておらず、以下の比較は空虚である: {after_shape:?}（{}・試行 {} 回）",
+        raise_root.note(),
+        raise_root.attempts
     );
 
     assert_eq!(

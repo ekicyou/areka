@@ -59,14 +59,13 @@
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
 use windows::Win32::Foundation::{HINSTANCE, HWND};
-use windows::Win32::UI::WindowsAndMessaging::{
-    DestroyWindow, HWND_TOP, IsWindow, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetWindowPos,
-};
+use windows::Win32::UI::WindowsAndMessaging::{DestroyWindow, IsWindow};
 use windows::core::{PCWSTR, w};
 
 use super::apply_zorder_chain;
 use super::zorder_chain_order_tests::{
-    arrange_z, create_chain_window, is_visible, ledger_shape, owner_shape, teardown, z_shape,
+    arrange_z, create_chain_window, is_visible, ledger_shape, owner_shape, raise_to_front_until,
+    teardown, z_shape,
 };
 use crate::ecs::window::{
     ChainPlan, ChainSegment, CrossEdge, KeepDirectlyAbove, WindowHandle, ZOrderChainPlan,
@@ -225,26 +224,6 @@ fn is_window(hwnd: HWND) -> bool {
     unsafe { IsWindow(Some(hwnd)) }.as_bool()
 }
 
-/// Z のみを動かす素の指令で最前面へ持ち上げる（**攪乱専用・本番の経路ではない**）。
-///
-/// 絶対帯指定（`HWND_TOP`）を使うのは、これが**測定対象そのもの**——利用者が窓を活性化して
-/// 最前面へ持ち上げた状況の再現——だからである。助走には使わない（兄弟の module doc）。
-fn raise_to_front(hwnd: HWND) -> bool {
-    // SAFETY: Win32 境界。自プロセスの窓の Z のみを動かす（活性化・移動・寸法変更なし）。
-    unsafe {
-        SetWindowPos(
-            hwnd,
-            Some(HWND_TOP),
-            0,
-            0,
-            0,
-            0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
-        )
-    }
-    .is_ok()
-}
-
 // ===========================================================================
 // ⑴ 解除——横断 edge の撤去だけで束縛が消え、並べ替えは起きない
 //    （要件 4.1／4.2／6.3／15.4）
@@ -305,15 +284,22 @@ fn releasing_every_group_drops_only_the_cross_links_and_reorders_nothing() {
     let pairs_after = balloon_offsets(&after_release, SCOPES);
 
     // 束縛が本当に消えたことの自己検査——最奥のキャラ窓を最前面へ。
-    let raised_ok = raise_to_front(set[SCOPES * 2 - 1]);
-    let after_raise = z_shape(&set);
-    let released_scope_moved = match (
-        after_raise.iter().position(|v| *v == SCOPES * 2 - 1),
-        after_raise.iter().position(|v| *v == 1),
+    //
+    // 絶対帯指定（`HWND_TOP`）を使うのは、これが**測定対象そのもの**——利用者が窓を活性化
+    // して最前面へ持ち上げた状況の再現——だからである。助走には使わない（兄弟の module doc）。
+    // ただし Win32 は成功を返しながら空振りすることがあるので、届いたことを観測するまで
+    // 有界回数だけ出し直す（`raise_to_front_until` の doc に実測）。
+    let deepest_above_first = |shape: &[usize]| match (
+        shape.iter().position(|v| *v == SCOPES * 2 - 1),
+        shape.iter().position(|v| *v == 1),
     ) {
         (Some(deepest), Some(first)) => deepest < first,
         _ => false,
     };
+    let raise = raise_to_front_until(set[SCOPES * 2 - 1], &set, deepest_above_first);
+    let raised_ok = raise.command_ok;
+    let after_raise = raise.shape.clone();
+    let released_scope_moved = raise.landed;
     let pairs_after_raise = balloon_offsets(&after_raise, SCOPES);
 
     teardown(&set);
@@ -381,7 +367,9 @@ fn releasing_every_group_drops_only_the_cross_links_and_reorders_nothing() {
     );
     assert!(
         released_scope_moved,
-        "解除の後なのに最奥のスコープが手前へ出ない＝束縛が消えていない（この比較は空虚である）: {after_raise:?}"
+        "解除の後なのに最奥のスコープが手前へ出ない＝束縛が消えていない（この比較は空虚である）: {after_raise:?}（{}・試行 {} 回）",
+        raise.note(),
+        raise.attempts
     );
     assert_eq!(
         pairs_after_raise,

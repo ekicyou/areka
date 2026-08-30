@@ -247,11 +247,38 @@ fn teardown(windows: &[HWND]) {
 // Z の読み取りと助走（順序で測る・絶対帯指定を使わない）
 // ---------------------------------------------------------------------------
 
+/// 走査をやり直す上限。観測できないまま無限に回らないためだけに置く。
+const Z_SCAN_ATTEMPTS: usize = 8;
+
 /// 与えた窓集合だけを Z の上から下へ並べて返す。
 ///
 /// 最前面から `GW_HWNDNEXT` で降りながら、集合に属する窓だけを拾う。**生の 1 歩では
 /// 測らない**——不可視の隣（既定の IME 窓など）が間に挟まるので、隣接ではなく順序で見る。
+///
+/// # なぜ 1 度の走査では足りないのか（2026-08-30 の実測・`research.md` §13.7 の 7 件目）
+///
+/// 走査はデスクトップ全体の**生きた**連結リストを 1 歩ずつ辿る。歩いている最中に手前の
+/// 他プロセスの窓が破棄されると `GetWindow(GW_HWNDNEXT)` が `Err` を返して走査がそこで
+/// 打ち切られ、集合の窓へ辿り着く前に切れれば結果は**空**になる（自分の窓は生きているのに
+/// `[]` が返る）。3 プロセス同時走行でこの形の赤を実測した。よって全部拾えるまで有界回数
+/// だけやり直す。使い切ったときはいちばん多く拾えた回を返す＝従来と同じ意味であり、
+/// **主張は弱めない**。
 fn relative_z_order(windows: &[HWND]) -> Vec<HWND> {
+    let mut best: Vec<HWND> = Vec::new();
+    for _ in 0..Z_SCAN_ATTEMPTS {
+        let seen = scan_z_once(windows);
+        if seen.len() == windows.len() {
+            return seen;
+        }
+        if seen.len() > best.len() {
+            best = seen;
+        }
+    }
+    best
+}
+
+/// 走査の 1 回分（打ち切られたら短い列を返す）。
+fn scan_z_once(windows: &[HWND]) -> Vec<HWND> {
     let mut result = Vec::new();
     // SAFETY: Win32 境界。デスクトップ配下の最前面窓を得る読み取り専用 API。
     let mut cursor = unsafe { GetTopWindow(None) }.ok();

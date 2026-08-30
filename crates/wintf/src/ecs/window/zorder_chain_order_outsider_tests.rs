@@ -53,14 +53,12 @@
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
 use windows::Win32::Foundation::{HINSTANCE, HWND};
-use windows::Win32::UI::WindowsAndMessaging::{
-    HWND_TOP, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetWindowPos,
-};
 use windows::core::{PCWSTR, w};
 
 use super::apply_zorder_chain;
 use super::zorder_chain_order_tests::{
-    arrange_z, create_chain_window, is_visible, ledger_shape, owner_shape, teardown, z_shape,
+    arrange_z, create_chain_window, is_visible, ledger_shape, owner_shape, raise_to_front_until,
+    teardown, z_shape,
 };
 use crate::ecs::test_support::capture_under_filter;
 use crate::ecs::window::{ChainPlan, ChainSegment, CrossEdge, WindowHandle, ZOrderChainPlan};
@@ -130,27 +128,6 @@ fn bare_fixture(count: usize, title: PCWSTR) -> (Vec<HWND>, World, Vec<Entity>) 
     let mut world = World::new();
     let members: Vec<Entity> = set.iter().map(|h| spawn_window(&mut world, *h)).collect();
     (set, world, members)
-}
-
-/// Z のみを動かす素の指令で最前面へ持ち上げる（**攪乱専用・本番の経路ではない**）。
-///
-/// 絶対帯指定（`HWND_TOP`）を使うのは、これが**測定対象そのもの**——利用者が窓を活性化して
-/// 最前面へ持ち上げた状況の再現（要件 6.2 の「活性化されたとき」）——だからである。
-/// 助走には使わない（兄弟の module doc）。
-fn raise_to_front(hwnd: HWND) -> bool {
-    // SAFETY: Win32 境界。自プロセスの窓の Z のみを動かす（活性化・移動・寸法変更なし）。
-    unsafe {
-        SetWindowPos(
-            hwnd,
-            Some(HWND_TOP),
-            0,
-            0,
-            0,
-            0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
-        )
-    }
-    .is_ok()
 }
 
 /// 捕捉した出力に含まれる重なり順系の記録行を返す（冠込みで照合する）。
@@ -327,8 +304,16 @@ fn the_default_state_issues_nothing_and_pins_no_pair_of_windows() {
     let ledger_idle = ledger_shape(&mut world, &members);
 
     // ⑵ 刺激——最奥の窓を活性化して最前面へ（要件 6.2 の「活性化されたとき」）。
-    let raised_ok = raise_to_front(set[DEFAULT_SIZE - 1]);
-    let after_raise = z_shape(&set);
+    //
+    // 絶対帯指定（`HWND_TOP`）を使うのは、これが**測定対象そのもの**——利用者が窓を活性化
+    // して最前面へ持ち上げた状況の再現——だからである。助走には使わない（兄弟の module doc）。
+    // ただし Win32 は成功を返しながら空振りすることがあるので、届いたことを観測するまで
+    // 有界回数だけ出し直す（`raise_to_front_until` の doc に実測）。
+    let raise = raise_to_front_until(set[DEFAULT_SIZE - 1], &set, |shape| {
+        shape.first().copied() == Some(DEFAULT_SIZE - 1)
+    });
+    let raised_ok = raise.command_ok;
+    let after_raise = raise.shape.clone();
 
     // ⑶ 活性化のあとも既定状態のまま 1 巡——押し戻す規則が無いこと。
     let quiet_after_raise = capture_under_filter(SIGNOFF_DIRECTIVES, || {
@@ -403,8 +388,11 @@ fn the_default_state_issues_nothing_and_pins_no_pair_of_windows() {
         .chain(0..DEFAULT_SIZE - 1)
         .collect();
     assert_eq!(
-        after_raise, expected_after_raise,
-        "活性化そのものが重なりを動かしていない＝以下の比較は空虚である: {after_raise:?}"
+        after_raise,
+        expected_after_raise,
+        "活性化そのものが重なりを動かしていない＝以下の比較は空虚である: {after_raise:?}（{}・試行 {} 回）",
+        raise.note(),
+        raise.attempts
     );
     assert_eq!(
         after_second_idle, expected_after_raise,
