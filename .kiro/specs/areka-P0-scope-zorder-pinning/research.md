@@ -1104,3 +1104,36 @@ task 4.4 の走行が拾った赤のうち、**本 spec の担当外**であり�
 **この regime を要求しているのは task 4.4 だけ**である（通常の `cargo test` 1 プロセスでは 1 本も出ない）。
 よって「直ちに直すべき欠陥」なのか「この regime を要求する側が引き取るべき測定条件」なのかを
 **開発者の裁定に上げる**。
+
+## §13.9 完成検証（2026-08-31）で出た引受先の無い残件——`/kiro-complete` の裁定へ
+
+`/kiro-validate-impl` の 3 次元（要件被覆・設計整合と境界・タスク間結合）が掘り、
+**本 spec の 18 task がすべて `[x]` になった時点で引受先を失った**もの。
+コントローラが直せるものは直し（下記「是正済み」）、残りをここへ登記する。
+
+### 是正済み（コントローラが完成検証の中で直した）
+
+| 何が偽だったか | 所在 | 是正 |
+|---|---|---|
+| `zorder_raw` に「実挙動なし」 | `crates/areka/src/placement/config.rs` | 本 spec の descript 経路が実挙動を与えたので訂正註つきで書き替え |
+| `ZORDER` の語釈に「利用者の操作への追随」 | `crates/wintf/src/ecs/world/tick_wake.rs` | task 5.1 で退役した引き金なので削り、訂正註を添えた |
+| 新設 2 ファイルが File Structure Plan に無い | `design.md` | `zorder_chain_apply_nudge_tests.rs`（入れ子登記）と `balloon_visibility_phase_zorder_chain_tests.rs` を追記 |
+| `api.rs` が「変更しない」表に載りつつ登記行が入る | `design.md` | 内部矛盾を註で解消 |
+| 保全語彙の target が `zorder_chain` という記述 | `design.md` | 実際は `zorder_chain_diag`（移設先ファイルがそれ）。target は 2 本になると訂正 |
+| `settled` の欄一覧に `nudge_ok=` が無い | `design.md` | 追記（4 欄の後ろ・判定には使わない旨も） |
+| `ChainPlan` の derive 一覧 | `design.md` | `Default` を追記 |
+
+### 未担当のまま残るもの（開発者の裁定が要る）
+
+| # | 事項 | 所在 | なぜ未担当か |
+|---|---|---|---|
+| 1 | **分岐一覧が要件文と機械で結ばれていない**。要件 10.2 に無い 12 個目の分岐名を実在する錨つきで足しても檻は緑（レビュアーが変異で実証） | `crates/areka/src/placement/zorder_group_branch_coverage_tests.rs` | 5.2 が「本 task の射程外」として残したが引受先を書いていない。塞ぐ案＝要件 10.2 の文を定数として埋め込み `BRANCHES.join("・")` との一致を主張する（コードから spec 実ファイルを読む罠を踏まない形） |
+| 2 | **分岐 11 の wintf 側（`plan_chain_ops`）を名簿が守っていない**。テストは実在し実行されるが、消しても改名しても緑のまま | `crates/wintf/src/ecs/window/zorder_chain_tests.rs` | crate をまたいで `include_str!` できないため。要件 10.2 の字面（実行されるテストで網羅）は満たすが、浸食への門が areka 側だけ |
+| 3 | **生産者名簿の穴 2 件**——⑴既に載っているファイルが 2 つ目の旗を立てても緑（照合が file 単位）⑵`ZORDER` 定数 doc の写し検査が wintf の木しか歩かない | `tick_gate_tests.rs`／`tick_gate_config_producers_tests.rs` | 初版 7.1 が「後続の任意の補強」として残した。本 spec 以前からの性質 |
+| 4 | **要件 12.1〜12.4・13.3・13.4 は COMPAT §8 の行だけに乗っており檻が無い**（13.1／13.2／13.5 には在る）。今日は正しいが静かに腐る | `doc/COMPAT_ARCHITECTURE.md:176-191` | 文書表の性質上、機械の門を置く先が決まっていない |
+| 5 | **要件 11.5 のタスクバーへの出方・クリック透過と、8.2 の「入力の受け付けを損なわない」に実行テストが無い**。いずれも構造で論証されている（`WS_POPUP｜WS_EX_TOOLWINDOW`／後押しが位置・寸法・活性化を持たない） | — | 実機の目視でしか測れない性質。§8 に裁量として登記済み |
+| 6 | **ペア機構の doc が 2 系統の処理列を述べたまま**（本番は 3 系統）。要件 9.5 が凍結する側なので触っていない | `crates/wintf/src/ecs/window/zorder_pair_maintain.rs` | 「将来ペア機構を触る spec」を宛先にしているが、その spec は実在しない |
+| 7 | **`roadmap.md:132` を引く COMPAT §8 の 5 行が空行を指している**（roadmap が伸びて行番号がずれた） | `doc/COMPAT_ARCHITECTURE.md:160,161,162,164,165` | **本 spec の所有ではない**——完了済み `areka-P0-balloon-visibility` の行で、追跡先 `areka-P0-balloon-canon-residue` は現役。その spec が引き取るべきもの |
+
+⚠ 1・2・3 はいずれも「**檻が浸食に対して片側しか守っていない**」形であり、
+本 spec が繰り返し掘り当てた欠陥類型（檻が自分の前提の破壊を生き延びる）と同じ根を持つ。

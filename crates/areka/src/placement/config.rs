@@ -100,7 +100,12 @@ impl Default for ScopeConfig {
 pub struct PlacementConfig {
     /// 検出済みスコープ（0 起点・`BTreeMap` で昇順）。emo2 → {0, 1}（DD6）。
     pub scopes: BTreeMap<usize, ScopeConfig>,
-    /// shell `seriko.zorder` の生転記（実挙動なし・5.2）。
+    /// shell `seriko.zorder` の生転記。
+    ///
+    /// ⚠ 2026-08-31 訂正: 以前ここには「実挙動なし」と書いてあったが、
+    /// `areka-P0-scope-zorder-pinning` の着地で**実挙動が付いた**——`main.rs` が読み出し、
+    /// `emo2_boot::frame::wiring::seed_zorder_descript_base` を通って起動時の基底グループになる
+    /// （解釈器はタグ入口と共通・`emo2_boot::frame::zorder_descript`）。
     pub zorder_raw: Option<String>,
     /// shell `seriko.sticky-window` の生転記（実挙動なし・5.2）。
     pub sticky_window_raw: Option<String>,

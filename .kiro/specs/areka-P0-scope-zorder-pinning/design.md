@@ -198,18 +198,26 @@ crates/wintf/src/ecs/window/
 ├── zorder_chain_tests.rs                # 差分・後押し選定・不変条件（偽ハンドル）
 ├── zorder_chain_diag_tests.rs           # 記録行の逐語固定
 ├── zorder_chain_apply_tests.rs          # 適用系の巡（偽ハンドル＋記録捕捉）
+├── zorder_chain_apply_nudge_tests.rs    # 後押しの形と印の持ち越し（task 2.3・↑の末尾に登記＝入れ子）
 ├── zorder_chain_order_tests.rs          # 【実窓】成立・攪乱・背面回り＋実窓の足場（窓の作り・順序の走行器・助走・後始末）（task 4.1）
 ├── zorder_chain_order_lifecycle_tests.rs # 【実窓】解除・スプライス・破棄の非連動（task 4.2）
 └── zorder_chain_order_outsider_tests.rs # 【実窓】鎖の外どうしの相対順・既定状態＝非強制（task 4.3）
 
 crates/wintf/src/
 └── api_owner_chain_nudge_probe_tests.rs # 【実窓・実測】後押しの形の掃き出し（task 2.3・§13）
+
+crates/areka/src/emo2_boot/
+└── balloon_visibility_phase_zorder_chain_tests.rs # 再表示が鎖の計画を動かさないこと（task 3.3・退役した
+                                                  # `balloon_visibility_phase_zorder_group_tests.rs` の後継）
 ```
 
 > 実窓の檻が 4 ファイルに分かれているのは、足場を共有しつつ 1 ファイル 1,000 行未満という
 > 本 spec の共通制約を守るためである（`file_length_guard_test.rs` の例外表は触らない）。
 > 3 本は wintf の `zorder_chain_apply.rs` 末尾に `#[cfg(test)]` ＋ `#[path]` で登記し、
 > areka の 1 本は `zorder_chain_compose.rs` 末尾に同じ形で登記する。
+> ⚠ `zorder_chain_apply_nudge_tests.rs` だけは 1 段深く、`zorder_chain_apply_tests.rs` の末尾に登記する
+> （task 2.3 で親が 1,147 行へ膨れて行数の門に触れたため子へ分割した）。
+> `balloon_visibility_phase_zorder_chain_tests.rs` は `balloon_visibility_phase.rs` 末尾に登記する。
 >
 > **4 本とも、窓を作る唯一の入口で「受け皿」の窓を 1 枚先に作る**（`ensure_ime_anchor`・task 2.3）。
 > スレッド既定の不可視 IME 窓は「そのスレッドで最初に作られた窓」に所有されるので、手当てを
@@ -241,7 +249,7 @@ crates/wintf/src/
 |---|---|
 | `crates/areka/src/emo2_boot/zorder_cue.rs`（159 行） | タグの自己選別と送出（`ZOrderCueSink`）。初版の実装をそのまま使う（要件 1.7／4.4／11.2／11.3） |
 | `crates/areka/src/emo2_boot/frame/wiring.rs` | 台帳の住処（`:95`）と descript の種蒔き（`:194`）。台帳の型が変わらないので無編集 |
-| `crates/wintf/src/api.rs`（owner 3 本＋読み戻し 1 本） | `set_window_owner`（`:141`）／`clear_window_owner`（`:152`）／`get_window_long_ptr`（`:11`・撤去前の照合）／`get_window_above`（`:72`）。**呼ぶだけ**で変更しない |
+| `crates/wintf/src/api.rs`（owner 3 本＋読み戻し 1 本）⚠ **本体は変更しないが、末尾へ実測檻の `#[cfg(test)]` 登記 3 行が入る**（task 2.3・上の「新設ファイル」参照） | `set_window_owner`（`:141`）／`clear_window_owner`（`:152`）／`get_window_long_ptr`（`:11`・撤去前の照合）／`get_window_above`（`:72`）。**呼ぶだけ**で変更しない |
 | `crates/wintf/src/ecs/window/zorder_pair.rs`・`zorder_pair_diag.rs`・`zorder_pair_establish.rs`・`zorder_pair_sink.rs` | スコープ内ペア edge＝鎖のスコープ区間（要件 6.3）。**挙動も doc も無編集** |
 | `crates/areka/src/placement/zorder_property_deferral_tests.rs`（606 行） | 先送りプロパティの固定（要件 13）。設計に依存しないので無編集 |
 
@@ -553,7 +561,7 @@ pub struct CrossEdge {
 
 /// 全窓の鎖 1 本ぶんの計画（areka が構築し、wintf が適用する・DD-11）。
 /// `members` はグループの連結（登記順・先に登記されたほど手前）＋未指定スコープの後方配置（スコープ ID 昇順）。
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct ChainPlan {
     /// 手前から奥へ並べた、実在する窓の Entity 列（射影後）。末尾が鎖の根。
     pub members: Vec<Entity>,
@@ -760,7 +768,7 @@ pub(crate) fn nudge_command(
 |---|---|---|---|
 | `[zorder-chain] linked` | debug | `segment= owned= owner= owned_hwnd= owner_hwnd= pos=i/n` | 9.1 |
 | `[zorder-chain] unlinked` | debug | `segment= owned= owned_hwnd= owner_hwnd= reason=<Teardown｜Rechain｜Departing｜Diverged>` | 4.1, 7.2, 9.1 |
-| `[zorder-chain] settled` | debug | `nudged_hwnd= insert_after=<0x..> declared=<hwnd,...> measured=<hwnd,...>`（鎖全体につき 1 行） | **9.2** |
+| `[zorder-chain] settled` | debug | `nudged_hwnd= insert_after=<0x..> declared=<hwnd,...> measured=<hwnd,...> nudge_ok=<bool>`（鎖全体につき 1 行）。⚠ `nudge_ok=` は 4 欄の**後ろ**に付く（後押しの失敗を黙って落とさないため・Error Strategy）。サインオフの正規表現は 4 欄だけを読むので当たったままだが、判定には使わない（理由は `signoff-procedure.md` §5.1-3） | **9.2**・8.3 |
 | `[zorder-chain] absent` | debug | `group_id= element=<b0｜s1｜...>` | 1.4, 8.4 |
 | `[zorder-chain] skipped` | debug | `reason=<TooFewPresent｜NoChange｜HandleMissing>` | 8.3 |
 | `[zorder-chain] link-failed` | error | `segment= owned_hwnd= owner_hwnd= error=` | 8.2 |
@@ -777,7 +785,7 @@ pub(crate) fn nudge_command(
 `[zorder-group] rejected`（`reason= tokens=`）・`[zorder-pair]` の 6 語すべて。
 **applied／rejected のタグ定数と記録関数（`log_group_applied`／`log_group_rejected`）は本ファイル（`zorder_chain_diag.rs`）へ移設する**——
 現所在（`zorder_group.rs:653/668`・`zorder_group_diag.rs:41/54`）が退役対象のため。**タグの字面は 1 字も変えない**。
-target は移設に伴い `wintf::ecs::window::zorder_group` から `wintf::ecs::window::zorder_chain` へ変わる
+target は移設に伴い `wintf::ecs::window::zorder_group` から **`wintf::ecs::window::zorder_chain_diag`** へ変わる（⚠ 2026-08-31 訂正: 以前ここは `zorder_chain` と書いていたが、移設先のファイルが `zorder_chain_diag.rs` である以上この 2 語は同じ場所を指さない。鎖の 7 語は `zorder_chain.rs` から出るので target は 2 本になる。サインオフの `RUST_LOG` は前方一致なので判定への影響は無く、`signoff-procedure.md` は当初から正しく書いている）
 （サインオフの `RUST_LOG` は既に `zorder_chain=debug` を含むため判定に影響しない。grep はタグの字面で行う）。
 呼び出し元 2 件（`zorder_descript.rs:36`・`zorder_drain.rs:67`）は import 先の変更のみ（Modified Files 参照）。
 `log_group_member_missing`（`zorder_group.rs:700`）は退役し、後継は `[zorder-chain] absent`（要件 8.4・保全対象ではない）。
