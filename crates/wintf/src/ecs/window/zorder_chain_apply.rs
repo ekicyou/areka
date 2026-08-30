@@ -13,7 +13,8 @@
 //! 3. 各撤去: **外す前に現況の所有者を読み**、帳簿の控えと一致するときだけ外す。
 //!    食い違えば実行環境を呼ばずに帳簿だけ落とす（要件 8.3・§12.6）
 //! 4. 各付与: 所有関係を張る。失敗した繋ぎは**その 1 本だけ**飛ばし、残りは張る（要件 8.2）
-//! 5. 実際に操作が走った巡だけ、鎖全体へ**後押しを 1 回**（[`nudge_command`]・要件 11.1）
+//! 5. 実際に操作が走った巡だけ、鎖全体へ**後押しを 1 回**（[`nudge_command`]・要件 11.1）。
+//!    挿入位置の 2 択のため、指令を組む直前に**現況を 1 度だけ**読む（周期的な観測ではない）
 //! 6. 後押しの**直後に**重なりを実測し、宣言と実測を同じ 1 行へ載せる（要件 9.2／9.3）
 //! 7. 変化の印を落とす。**追加の起床は要求しない**（要件 14.5）
 //!
@@ -57,8 +58,8 @@
 //!
 //! # 実行環境の窓口は 5 つに絞ってある
 //!
-//! [`os_read_owner`]／[`os_clear_owner`]／[`os_set_owner`]／[`os_nudge`]／
-//! [`os_measure_front`] の 5 本だけが実行環境へ触る。決定論テストはこの 5 本を台本つきの
+//! [`os_read_owner`]／[`os_clear_owner`]／[`os_set_owner`]／[`os_raw_next`]／[`os_nudge`]／
+//! [`os_measure_front`] の 6 本だけが実行環境へ触る。決定論テストはこの 6 本を台本つきの
 //! 替え玉へ差し替えて 1 巡を丸ごと踏む（`command.rs` の
 //! `with_forced_batch_begin_failure` と同じ、`#[cfg(test)]` の札で倒す形）。本番のビルドに
 //! 替え玉は 1 バイトも入らない。
@@ -76,7 +77,7 @@
 use bevy_ecs::prelude::*;
 use bevy_ecs::system::NonSendMarker;
 use windows::Win32::Foundation::HWND;
-use windows::Win32::UI::WindowsAndMessaging::GWLP_HWNDPARENT;
+use windows::Win32::UI::WindowsAndMessaging::{GW_HWNDNEXT, GWLP_HWNDPARENT, GetWindow};
 
 use crate::api::{clear_window_owner, get_window_long_ptr, set_window_owner};
 
@@ -118,15 +119,27 @@ type HandleQuery<'w, 's> = Query<'w, 's, Option<&'static WindowHandle>>;
 ///
 /// 見送り・食い違い・失敗のいずれの経路にも記録がある——見送りは
 /// `[zorder-chain] skipped reason=`、食い違いは `[zorder-chain] unlinked reason=Diverged`、
-/// 失敗は `[zorder-chain] link-failed`／`unlink-failed` である。**唯一記録を出さないのは
-/// 「印が立っていない巡」**であり、これは諦めではなく仕事が無いことである（毎巡出すと
-/// 記録が氾濫し、実機のログ判定が使い物にならなくなる）。
+/// 失敗は `[zorder-chain] link-failed`／`unlink-failed` である。記録を出さない巡は 2 つだけで、
+/// どちらも諦めではない:
+///
+/// - **印が立っていない巡**——仕事が無い
+/// - **持ち越しを続けている巡**——[`carry_announced`](apply_zorder_chain) の節のとおり、
+///   同じ理由で待ち続けている間は最初の 1 回だけ出す
+///
+/// どちらも「毎巡出すと記録が氾濫し、実機のログ判定が使い物にならなくなる」ことへの配慮で
+/// ある。`zorder_drain.rs` の `report_absent_elements`（**前回と内容が違うときだけ出す**）と
+/// 同じ姿勢である。
+#[doc(alias = "carry_announced")]
 pub fn apply_zorder_chain(
     _ui_thread: NonSendMarker,
     mut commands: Commands,
     plan: Option<ResMut<ZOrderChainPlan>>,
     links: CrossLinkQuery,
     handles: HandleQuery,
+    // 直前の巡が「窓ハンドル待ち」で持ち越したか。持ち越しは同じ計画・同じ理由のまま
+    // 何巡も続きうるので、見送りの記録は**待ち始めた 1 回だけ**出す（毎巡出すと実機の
+    // ログ判定が埋まる）。system ごとの局所状態なので Resource を新設しない。
+    mut carry_announced: Local<bool>,
 ) {
     // ⑴ 去る窓の切離しは印を待たない（module doc「なぜ差分の門より前に置くのか」）。
     let departed = detach_cross_owner_links_for_departing(&mut commands, &links, &handles);
@@ -163,16 +176,55 @@ pub fn apply_zorder_chain(
     if ops.is_empty() {
         // 印は立っていたが出す操作が無い（同じ内容の再公開・ペアだけの鎖）。
         log_chain_skipped(ChainSkipReason::NoChange);
+        // **ここも待ちの出口である**——直前で `dirty` を落としており、持ち越しは終わっている。
+        // 武装し直さないと、待ちの最中にこの巡が挟まった以降のすべての待ちが無記録になる
+        // （要件 8.3 への無言の失敗経路）。待ちを終わらせる出口は 3 つ——⑴ 1 本でも書けた
+        // ⑵ 持ち越さない巡（食い違いだけ等）⑶ この「出す操作が無い」巡——であり、
+        // **3 つとも武装し直す**。
+        *carry_announced = false;
         return;
     }
 
-    let acted = execute_ops(&mut commands, &ops, &desired, &current, &members, &handles);
-    if !acted {
+    let outcome = execute_ops(
+        &mut commands,
+        &ops,
+        &desired,
+        &current,
+        &members,
+        &handles,
+        // 待ち始めの 1 巡だけ見送りを記録する（2 巡目以降は同じ行を積まない）。
+        !*carry_announced,
+    );
+    if !outcome.acted {
         // 1 度も実行環境を呼べなかった（ハンドル未取得・食い違いだけの巡）。理由は
         // 各操作の側で記録済みであり、後押しを出す根拠が無いので鎖には触れない。
+        if outcome.handle_missing {
+            // **まだ一度も書けていない**——印は「書くべきものがある」の合図であって
+            // 「観測して直せ」ではない。窓ハンドルは entity より遅れて付く
+            // （`placement/spawn.rs` の `Added<WindowHandle>`）ので、計画は HWND 生成より
+            // 前に公開されうる。ここで印を落とすと、あとからハンドルが現れても
+            // **計画の内容は変わらないので再公開されず、印は二度と立たない**＝鎖が
+            // 永久に書かれない。よって 1 本も書けなかった巡は印を戻す。
+            //
+            // これは要件 14.2 が禁じた「毎巡の観測と是正」ではない——重なりを 1 度も
+            // 読まず、まだ**適用していない**計画を持ち越すだけである。持ち越しが解ける
+            // のは「**付与の両端の窓ハンドルが揃った edge が 1 本でも現れたとき**」で
+            // ある（`handle_missing` は付与の**どちらか一方**の窓ハンドルが無いだけで
+            // 立つので、ハンドル済みの窓を含む鎖でも 1 本も書けずに待つ配置が在る）。
+            //
+            // 待っている間は実行環境を 1 度も呼ばず、記録も待ち始めの 1 回しか出さない
+            // ——だから「解けるまで毎巡試す」形にはならない。
+            plan.dirty = true;
+            *carry_announced = true;
+        } else {
+            // 持ち越さない巡（食い違いだけ等）。次に待ち始めたらまた 1 回記録する。
+            *carry_announced = false;
+        }
         return;
     }
 
+    // 1 本でも書けた＝待ちは解けた。
+    *carry_announced = false;
     nudge_and_measure(&members, &handles);
 }
 
@@ -245,11 +297,26 @@ fn refresh_ledger_segments(
 // ⑵〜⑷ 差分の実行
 // ============================================================================
 
-/// 操作列を順に実行する。実行環境を 1 度でも呼んだら `true` を返す。
+/// 操作列を実行した結果。
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
+struct ExecOutcome {
+    /// 実行環境を 1 度でも呼んだ（＝後押しの要否そのもの）。
+    acted: bool,
+    /// 窓ハンドルがまだ取れていないために見送った**付与**が 1 つでもあった。
+    handle_missing: bool,
+}
+
+/// 操作列を順に実行する。
 ///
-/// 返り値が後押しの要否そのものである（要件: 実際に操作が走った巡だけ後押しを 1 回）。
-/// 食い違いによる帳簿の取り下げやハンドル未取得の見送りは実行環境を呼ばないので、
-/// それだけの巡では後押しも出ない——書いていないものを収める必要は無い。
+/// [`ExecOutcome::acted`] が後押しの要否そのものである（要件: 実際に操作が走った巡だけ
+/// 後押しを 1 回）。食い違いによる帳簿の取り下げやハンドル未取得の見送りは実行環境を
+/// 呼ばないので、それだけの巡では後押しも出ない——書いていないものを収める必要は無い。
+///
+/// [`ExecOutcome::handle_missing`] は、印を持ち越すかどうかの判断材料である
+/// （呼び出し元の「まだ一度も書けていない」の節を参照）。
+///
+/// `record_handle_missing` が false の巡は、**窓ハンドル待ちの見送りを記録しない**——
+/// 前の巡と同じ理由で待ち続けているだけだからである（判断そのものは変わらない）。
 fn execute_ops(
     commands: &mut Commands,
     ops: &[ChainOp],
@@ -257,9 +324,11 @@ fn execute_ops(
     current: &[(Entity, CrossOwnerLink)],
     members: &[Entity],
     handles: &HandleQuery,
-) -> bool {
+    record_handle_missing: bool,
+) -> ExecOutcome {
     let total = members.len();
     let mut acted = false;
+    let mut handle_missing = false;
 
     for op in ops {
         match *op {
@@ -268,6 +337,7 @@ fn execute_ops(
                 else {
                     // 帳簿に無いものは外さない（純関数は帳簿からしか撤去を作らないので
                     // ここへは来ないが、来たら黙って通さず見送りとして記録する）。
+                    // **印の持ち越しには数えない**——帳簿に無い繋ぎは、待っても現れない。
                     log_chain_skipped(ChainSkipReason::HandleMissing);
                     continue;
                 };
@@ -284,7 +354,10 @@ fn execute_ops(
                 else {
                     // どちらかの窓ハンドルがまだ取れていない。**この 1 本だけ**を
                     // 理由つきで見送り、残りの繋ぎは張る（要件 8.2／8.3）。
-                    log_chain_skipped(ChainSkipReason::HandleMissing);
+                    handle_missing = true;
+                    if record_handle_missing {
+                        log_chain_skipped(ChainSkipReason::HandleMissing);
+                    }
                     continue;
                 };
                 acted = true;
@@ -325,7 +398,10 @@ fn execute_ops(
         }
     }
 
-    acted
+    ExecOutcome {
+        acted,
+        handle_missing,
+    }
 }
 
 /// 繋ぎ 1 本を外す（照合 → 撤去 → 帳簿の取り下げ）。実行環境を呼んだら `true`。
@@ -387,8 +463,9 @@ fn detach_one(
 
 /// 鎖全体へ後押しを 1 回出し、**その直後に**重なりを実測して 1 行へ載せる（要件 9.2）。
 ///
-/// 後押しの形は [`nudge_command`] が 1 つに固定している（鎖の先頭を 2 番目の直後へ
-/// 差し直す・参照するのは自分の窓 2 枚だけ）。窓が 2 枚未満なら後押しを出さない
+/// 後押しの形は [`nudge_command`] が固定している（**鎖の根を錨＝1 つ手前の窓の直後へ**
+/// 差し直す・参照するのは自分の窓 2 枚だけ。錨の直後が既に根の巡だけ挿入位置を先頭へ
+/// 切り替える・`research.md` §13.3）。窓が 2 枚未満なら後押しを出さない
 /// ——張るべき繋ぎも無く、収めるものが無いためである。その場合も理由つきの見送りを
 /// 記録する（黙って諦めない・要件 8.3）。
 fn nudge_and_measure(members: &[Entity], handles: &HandleQuery) {
@@ -397,7 +474,15 @@ fn nudge_and_measure(members: &[Entity], handles: &HandleQuery) {
         .filter_map(|m| hwnd_of(handles, *m))
         .collect();
 
-    let Some(cmd) = nudge_command(&declared) else {
+    // 挿入位置の 2 択に使う現況——**錨（根の 1 つ手前）の生の 1 つ奥**を、指令を組む
+    // 直前に 1 度だけ読む（[`nudge_command`] の「挿入位置は 2 択」を参照）。窓が
+    // 2 枚未満のときは読まない（後押しそのものが出ない）。
+    let anchor_next = declared
+        .len()
+        .checked_sub(2)
+        .and_then(|at| os_raw_next(declared[at]));
+
+    let Some(cmd) = nudge_command(&declared, anchor_next) else {
         log_chain_skipped(ChainSkipReason::TooFewPresent);
         return;
     };
@@ -487,6 +572,21 @@ fn os_set_owner(owned: HWND, owner: HWND) -> windows::core::Result<()> {
     set_window_owner(owned, owner)
 }
 
+/// 生の重なりで 1 つ奥に居る窓を読む（不可視の窓も含む・`GW_HWNDNEXT`）。
+///
+/// **これは実測（要件 9.3）の口ではない**——実測は不可視の窓を読み飛ばす
+/// [`os_measure_front`] が担う。こちらは「これから出す指令が現在位置と同じ位置を
+/// 要求していないか」を確かめるためのものであり、`SetWindowPos` が見るのと同じ
+/// **生の**並びを読まなければ意味を成さない。読むのは書く直前の 1 度だけである。
+fn os_raw_next(hwnd: HWND) -> Option<HWND> {
+    #[cfg(test)]
+    if let Some(scripted) = double::raw_next(hwnd) {
+        return scripted;
+    }
+    // SAFETY: Win32 境界。窓ハンドルに対する読み取り専用の走査。
+    unsafe { GetWindow(hwnd, GW_HWNDNEXT) }.ok()
+}
+
 /// 後押しを 1 回出す（遅延キューを通さず直に書く）。
 fn os_nudge(cmd: &SetWindowPosCommand) -> windows::core::Result<()> {
     #[cfg(test)]
@@ -546,6 +646,8 @@ pub(crate) mod double {
         ClearOwner(usize),
         /// 所有関係を張った（被所有側, 所有側）。
         SetOwner(usize, usize),
+        /// 生の 1 つ奥を読んだ。
+        RawNext(usize),
         /// 後押しを出した（差し直した窓, 挿入位置）。
         Nudge(usize, usize),
         /// 前面走査を行った。
@@ -565,6 +667,8 @@ pub(crate) mod double {
         pub clear_fails: HashSet<usize>,
         /// 付与を失敗させる窓（被所有側で指定する）。
         pub set_fails: HashSet<usize>,
+        /// 生の 1 つ奥（載っていない窓は「奥に何も無い」＝`None`）。
+        pub next_of: HashMap<usize, usize>,
         /// 後押しを失敗させる。
         pub nudge_fails: bool,
         /// 前面走査が返す列（起点 → 手前へ辿った順）。
@@ -636,6 +740,14 @@ pub(crate) mod double {
         })
     }
 
+    pub(super) fn raw_next(hwnd: HWND) -> Option<Option<HWND>> {
+        with(|s| {
+            let key = hwnd.0 as usize;
+            s.calls.push(Call::RawNext(key));
+            s.next_of.get(&key).map(|next| HWND(*next as *mut _))
+        })
+    }
+
     pub(super) fn nudge(cmd: &SetWindowPosCommand) -> Option<windows::core::Result<()>> {
         with(|s| {
             s.calls.push(Call::Nudge(
@@ -665,7 +777,7 @@ pub(crate) mod double {
 #[path = "zorder_chain_apply_tests.rs"]
 mod zorder_chain_apply_tests;
 
-/// 実窓での最終形の檻（替え玉を据えないので、上の 5 つの窓口はそのまま Win32 を呼ぶ）。
+/// 実窓での最終形の檻（替え玉を据えないので、上の 6 つの窓口はそのまま Win32 を呼ぶ）。
 #[cfg(test)]
 #[path = "zorder_chain_order_tests.rs"]
 mod zorder_chain_order_tests;

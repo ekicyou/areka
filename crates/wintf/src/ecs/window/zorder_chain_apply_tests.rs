@@ -458,129 +458,6 @@ fn an_edge_without_handles_is_skipped_with_a_reason_and_the_rest_are_linked() {
 }
 
 // ===========================================================================
-// 後押し 1 回と、その直後の実測（要件 9.2／9.3／11.1）
-// ===========================================================================
-
-/// 操作が走った巡は、鎖全体へ後押しが**ちょうど 1 回**出て、その直後に実測される。
-///
-/// 宣言と実測は同じ 1 行に載る（分けると「指令は出したが効かなかった」の判定が
-/// 2 行の突合になる＝要件 9.2 が同一行を求める理由）。
-#[test]
-fn the_nudge_runs_once_for_the_whole_chain_and_the_measurement_follows_it_immediately() {
-    let mut world = World::new();
-    let a = spawn_window(&mut world, fake_hwnd(0x10));
-    let b = spawn_window(&mut world, fake_hwnd(0x20));
-    let c = spawn_window(&mut world, fake_hwnd(0x30));
-    publish(
-        &mut world,
-        vec![a, b, c],
-        vec![
-            edge(a, b, ChainSegment::Group(0)),
-            edge(b, c, ChainSegment::Group(0)),
-        ],
-    );
-
-    let mut script = Script::default();
-    // 最も奥（0x30）から手前へ辿ると、間に部外者（0x99・不可視の隣は走査が既に
-    // 読み飛ばしている）を挟んで 0x20・0x10 が現れる。
-    script
-        .front_of
-        .insert(0x30, vec![0x20usize, 0x99usize, 0x10usize]);
-
-    let (out, used) = run_once(&mut world, script);
-
-    let nudges: Vec<&Call> = used
-        .calls
-        .iter()
-        .filter(|c| matches!(c, Call::Nudge(_, _)))
-        .collect();
-    assert_eq!(
-        nudges.len(),
-        1,
-        "後押しが鎖全体につき 1 回になっていない: {:?}",
-        used.calls
-    );
-    assert_eq!(
-        *nudges[0],
-        Call::Nudge(0x10, 0x20),
-        "後押しの形が「先頭を 2 番目の直後へ差し直す」になっていない"
-    );
-
-    // 実測は**後押しの直後**である（間に他の窓口を挟まない）。
-    let nudge_at = used
-        .calls
-        .iter()
-        .position(|c| matches!(c, Call::Nudge(_, _)))
-        .expect("後押しが無い");
-    assert_eq!(
-        used.calls.get(nudge_at + 1),
-        Some(&Call::MeasureFront(0x30)),
-        "後押しの直後に実測していない: {:?}",
-        used.calls
-    );
-
-    assert_line_count(&out, SETTLED, 1, "鎖全体につき 1 行");
-    let settled = lines_with(&out, SETTLED)[0];
-    assert_eq!(field(settled, "nudged_hwnd"), "0x10", "{settled}");
-    assert_eq!(field(settled, "insert_after"), "0x20", "{settled}");
-    assert_eq!(field(settled, "declared"), "0x10,0x20,0x30", "{settled}");
-    assert_eq!(field(settled, "measured"), "0x10,0x20,0x30", "{settled}");
-    assert_eq!(field(settled, "nudge_ok"), "true", "{settled}");
-}
-
-/// 後押しが失敗しても記録して続行する（黙って消えない・要件 8.2／8.3）。
-#[test]
-fn a_failed_nudge_is_recorded_on_the_settled_line_rather_than_swallowed() {
-    let mut world = World::new();
-    let a = spawn_window(&mut world, fake_hwnd(0x10));
-    let b = spawn_window(&mut world, fake_hwnd(0x20));
-    publish(
-        &mut world,
-        vec![a, b],
-        vec![edge(a, b, ChainSegment::Group(0))],
-    );
-
-    let mut script = Script::default();
-    script.nudge_fails = true;
-
-    let (out, _used) = run_once(&mut world, script);
-
-    assert_line_count(&out, SETTLED, 1, "後押しの失敗");
-    assert_eq!(
-        field(lines_with(&out, SETTLED)[0], "nudge_ok"),
-        "false",
-        "後押しの失敗が行から読めない"
-    );
-}
-
-/// 実測は宣言に無い窓を拾わない（鎖の外の窓の前後は主張しない・DD-3b）。
-#[test]
-fn the_measurement_reports_only_the_windows_the_chain_declared() {
-    let mut world = World::new();
-    let a = spawn_window(&mut world, fake_hwnd(0x10));
-    let b = spawn_window(&mut world, fake_hwnd(0x20));
-    publish(
-        &mut world,
-        vec![a, b],
-        vec![edge(a, b, ChainSegment::Group(0))],
-    );
-
-    let mut script = Script::default();
-    // 部外者（0xAA・0xBB）が鎖の窓の間にも手前にも居る。
-    script
-        .front_of
-        .insert(0x20, vec![0xAAusize, 0x10usize, 0xBBusize]);
-
-    let (out, _used) = run_once(&mut world, script);
-
-    assert_eq!(
-        field(lines_with(&out, SETTLED)[0], "measured"),
-        "0x10,0x20",
-        "鎖の外の窓を実測へ混ぜている"
-    );
-}
-
-// ===========================================================================
 // 破棄に先立って外す（要件 7.2）
 // ===========================================================================
 
@@ -928,3 +805,10 @@ fn the_scripted_failures_actually_fail() {
         "台本の失敗指定が窓口へ届いていない"
     );
 }
+
+/// 後押しと印の持ち越しの檻（足場を共有するので子モジュールとして分ける）。
+///
+/// 分けてあるのは 1 ファイル 1,000 行未満という本 spec の共通制約のためである
+/// （`file_length_guard_test.rs` の例外表は触らない）。
+#[path = "zorder_chain_apply_nudge_tests.rs"]
+mod zorder_chain_apply_nudge_tests;

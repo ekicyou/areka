@@ -53,6 +53,12 @@
 //!   **それ自体が測定対象である攪乱の 1 行**だけである。
 //! - 始点は生成順に頼らず明示的に組み、その成立をテスト本体が自己検査する——始点が
 //!   揃っていなければ以降の比較は空虚だからである。
+//! - **鎖の窓より先に「受け皿」の窓を 1 枚作る**（[`ensure_ime_anchor`]）。スレッド既定の
+//!   不可視 IME 窓は「そのスレッドで最初に作られた窓」に所有されるので、手当てをしないと
+//!   **鎖の先頭が IME 窓の所有者になる**。Windows が鎖を並べ直すのは所有側が動いたときだけ
+//!   なので、それは本番には無い「先頭も所有する窓である」という易しい配置であり、初版の
+//!   後押しがこの檻で緑だった理由そのものである（`research.md` §13）。各テストは
+//!   [`head_owns_nothing`] で自分の配置を検査する。
 //!
 //! # 主張しないこと
 //!
@@ -63,12 +69,15 @@
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::{Schedule, SingleThreadedExecutor};
-use windows::Win32::Foundation::{HINSTANCE, HWND};
+use windows::Win32::Foundation::{HINSTANCE, HWND, LPARAM};
+use windows::Win32::System::Threading::GetCurrentThreadId;
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DestroyWindow, GW_HWNDNEXT, GW_OWNER, GetTopWindow, GetWindow, HWND_TOP,
-    IsWindowVisible, SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetWindowPos,
-    ShowWindow, WINDOW_EX_STYLE, WINDOW_STYLE, WS_EX_TOOLWINDOW, WS_POPUP,
+    CreateWindowExW, DestroyWindow, EnumThreadWindows, GW_HWNDNEXT, GW_OWNER, GetTopWindow,
+    GetWindow, HWND_TOP, IsWindowVisible, SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SWP_NOMOVE,
+    SWP_NOSIZE, SetWindowPos, ShowWindow, WINDOW_EX_STYLE, WINDOW_STYLE, WS_EX_TOOLWINDOW,
+    WS_POPUP,
 };
+use windows::core::BOOL;
 use windows::core::{PCWSTR, w};
 
 use super::apply_zorder_chain;
@@ -105,6 +114,47 @@ const REVERSED: [usize; CHAIN_SIZE] = [3, 2, 1, 0];
 /// 上に建った檻」への静かな逆戻りである。よって各テストは ⑴ 4 枚が実際に可視であること、
 /// ⑵ 本番の走査がその 4 枚を拾うこと（1 本目）を自己検査する。
 pub(super) fn create_chain_window(title: PCWSTR) -> HWND {
+    ensure_ime_anchor();
+    create_raw_window(title)
+}
+
+thread_local! {
+    /// このスレッドで既定の IME 窓の受け皿をもう作ったか。
+    static IME_ANCHOR_MADE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// **スレッド既定の不可視 IME 窓の受け皿**を、鎖の窓より先に 1 枚だけ作る。
+///
+/// # なぜ要るのか（2026-08-30 の実窓検証で判った）
+///
+/// Windows はスレッドにつき 1 つ、`class="IME"` の不可視・0x0 の窓を作り、それを
+/// **そのスレッドで最初に作られた窓に所有させる**。所有される窓は所有者の直上に居るので、
+/// 何も手当てをしないと**この檻が最初に作った窓＝鎖の先頭の直上に IME 窓が居座る**。
+///
+/// その配置では後押しが「本物の Z 変更」になり、鎖が収まる。つまり**檻が緑だったのは
+/// 偶然の隣人のおかげ**であって、本番にその保証は無い（本番は各スコープでバルーンを
+/// 先に・キャラ窓を後に作るので、IME 窓は鎖の先頭には付かない）。受け皿を先に 1 枚
+/// 作っておけば IME 窓はそちらに付き、鎖の窓は**本番と同じ裸の隣接**で並ぶ。
+///
+/// # 破棄しない
+///
+/// 受け皿は返さないし壊さない——Windows は**スレッドが終わるときにそのスレッドが作った
+/// 窓をすべて破棄する**ので、テスト 1 本ごとに 0x0 の窓が 1 枚だけ残り、テストが終われば
+/// 消える。壊してしまうと IME 窓の所有が次の窓（＝鎖の先頭）へ移りかねない。
+fn ensure_ime_anchor() {
+    IME_ANCHOR_MADE.with(|made| {
+        if made.get() {
+            return;
+        }
+        // 先に印を立てる（`create_raw_window` を直に呼ぶので再入はしないが、
+        // 「受け皿づくりが受け皿を要求する」形を構造で潰しておく）。
+        made.set(true);
+        let _ = create_raw_window(w!("zorder-chain-order/ime-anchor"));
+    });
+}
+
+/// 実窓を 1 枚作る本体（受け皿の面倒を見ない生の版）。
+fn create_raw_window(title: PCWSTR) -> HWND {
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
     // SAFETY: Win32 境界。自プロセス所有の 0x0 トップレベル窓を生成し、活性化を奪わずに
     // 表示状態へ移す。
@@ -128,6 +178,66 @@ pub(super) fn create_chain_window(title: PCWSTR) -> HWND {
         let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
         hwnd
     }
+}
+
+/// その窓が、**同じスレッドの窓を 1 つでも所有しているか**。
+///
+/// # なぜこれを自己検査するのか（本 spec の中心）
+///
+/// Windows が所有の鎖を並べ直すのは**所有する窓が動いたとき**だけであり、鎖の先頭は
+/// 本来何も所有していない。ところが Windows はスレッドにつき 1 つ不可視の IME 窓を作り、
+/// **そのスレッドで最初に作られた窓に所有させる**ので、手当てをしないと
+/// 「檻が最初に作った窓＝鎖の先頭」が所有する窓になってしまう。初版の後押し
+/// （⚠ 撤回済みの形＝先頭を 2 番目の直後へ差し直す）が実窓の檻で緑だったのは、その偶然による。
+///
+/// よって各テストは「**先頭が何も所有していない**」——本番のゴースト窓と同じ姿——を
+/// 自分で確かめてから、鎖が収まることを主張する。受け皿（[`ensure_ime_anchor`]）が
+/// 効かなくなればここが赤で教える。
+///
+/// **生の隣接では測らない**（初版の空振りの引き金は「先頭が 2 番目の生の直後に居る」ことだが、
+/// 2 つの窓の間に何も挟まらないことは**こちらが保証できるものではない**——他プロセスの窓が
+/// いつでも割り込みうる。3 プロセス同時走行で実際に稀な赤が出た）。所有関係なら自分で作った
+/// ものだけを見るので決定論である。
+fn owns_any_thread_window(hwnd: HWND) -> bool {
+    /// 列挙の受け皿（探す窓と、見つかったかどうか）。
+    struct Probe {
+        target: HWND,
+        found: bool,
+    }
+
+    /// 列挙のコールバック。`lparam` は直下で渡した [`Probe`] を指す。
+    unsafe extern "system" fn visit(candidate: HWND, lparam: LPARAM) -> BOOL {
+        // SAFETY: `lparam` には直下の `EnumThreadWindows` 呼び出しが `&mut Probe` を
+        // 渡している。列挙はその呼び出しの中で完結するので、参照は生存している。
+        let probe = unsafe { &mut *(lparam.0 as *mut Probe) };
+        // SAFETY: Win32 境界。読み取りのみ。
+        let owner = unsafe { GetWindow(candidate, GW_OWNER) }.ok();
+        if owner == Some(probe.target) {
+            probe.found = true;
+            return BOOL(0); // 見つかったので列挙を止める
+        }
+        BOOL(1)
+    }
+
+    let mut probe = Probe {
+        target: hwnd,
+        found: false,
+    };
+    // SAFETY: Win32 境界。自スレッドの窓を列挙し、各窓の所有者を読むだけである。
+    unsafe {
+        let _ = EnumThreadWindows(
+            GetCurrentThreadId(),
+            Some(visit),
+            LPARAM(&raw mut probe as isize),
+        );
+    }
+    probe.found
+}
+
+/// 鎖の先頭が何も所有していないか（＝本番と同じ姿で測っているか）。
+pub(super) fn head_owns_nothing(set: &[HWND]) -> bool {
+    set.first()
+        .is_some_and(|head| !owns_any_thread_window(*head))
 }
 
 /// Windows から見て可視か（絵の有無ではなく `WS_VISIBLE` の意味での可視）。
@@ -346,9 +456,11 @@ fn a_declared_chain_lands_in_the_declared_order_on_real_windows() {
     let (set, mut world, members) = chain_fixture(w!("zorder-chain-order/lands"));
     let all_visible = set.iter().all(|h| is_visible(*h));
 
-    // 助走——宣言の逆順から始める。
+    // 助走——宣言の逆順から始める。最後の 1 手が ⚠ 撤回済みの形（先頭を 2 番目の直後へ）
+    // にとっての空振りの配置を作る。
     arrange_z(&set, &REVERSED);
     let start = z_shape(&set);
+    let head_bare = head_owns_nothing(&set);
 
     // 本番の適用系を 1 巡（所有関係の書込・後押し 1 回・直後の実測はすべてこの中）。
     chain_schedule().run(&mut world);
@@ -377,6 +489,11 @@ fn a_declared_chain_lands_in_the_declared_order_on_real_windows() {
         REVERSED.to_vec(),
         "始点が宣言の逆順に揃っていない: {start:?}"
     );
+    // 配置の自己検査——**易しい配置で測っていないこと**（本 spec の中心）。
+    assert!(
+        head_bare,
+        "鎖の先頭が窓を所有している＝受け皿が効かず、本番より易しい配置で測っている"
+    );
 
     // 鎖が一直線であること（星形でも輪でもない・要件 14.4 の実窓側の裏づけ）。
     assert_eq!(
@@ -402,6 +519,58 @@ fn a_declared_chain_lands_in_the_declared_order_on_real_windows() {
         production_scan,
         vec![2, 1, 0],
         "本番の実測経路が鎖の窓を宣言どおりに拾わない（要件 9.3・不可視の窓は列に入らない）"
+    );
+}
+
+// ===========================================================================
+// ⑴b 空振りの引き金その 2——根が既に錨の直後に居る配置（要件 1.1／1.2／8.2）
+// ===========================================================================
+
+/// **根が既に錨（1 つ手前の窓）の生の直後に居ても**、鎖は 1 巡で宣言順へ着く。
+///
+/// 素直な後押し「根を錨の直後へ」は、この配置では要求位置が現在位置と同じであり
+/// `SetWindowPos` は 1 枚も動かさない＝完全な空振りになる。適用系は後押しの前に印を
+/// 降ろし再試行経路を持たないので、空振りするとその計画のままでは二度と収まらない。
+/// 是正はこの巡だけ挿入位置を**先頭**へ切り替える。
+///
+/// 始点 `[1,0,2,3]` は ⑴ の逆順とは別の壊れ方であり、**根と錨だけが既に正しい**——
+/// 先頭 2 枚が入れ替わっているので、後押しが効かなければ宣言順には着かない。
+#[test]
+fn a_chain_whose_root_already_sits_behind_its_anchor_still_lands() {
+    /// 始点——根と錨だけが宣言どおりで、先頭 2 枚が入れ替わっている配置。
+    const ROOT_ADJACENT_SEED: [usize; CHAIN_SIZE] = [1, 0, 2, 3];
+
+    let (set, mut world, _members) = chain_fixture(w!("zorder-chain-order/root-adjacent"));
+    let all_visible = set.iter().all(|h| is_visible(*h));
+
+    // 助走——最後の 1 手が根を錨の直後へ置くので、素直な後押しが空振りする配置になる。
+    arrange_z(&set, &ROOT_ADJACENT_SEED);
+    let start = z_shape(&set);
+    let head_bare = head_owns_nothing(&set);
+
+    chain_schedule().run(&mut world);
+
+    let landed = z_shape(&set);
+
+    teardown(&set);
+
+    assert!(
+        all_visible,
+        "4 枚が表示状態になっていない（不可視の窓では要件 9.3 の実測経路が働かない）"
+    );
+    assert_eq!(
+        start,
+        ROOT_ADJACENT_SEED.to_vec(),
+        "始点が組めていない: {start:?}"
+    );
+    assert!(
+        head_bare,
+        "鎖の先頭が窓を所有している＝受け皿が効かず、本番より易しい配置で測っている"
+    );
+    assert_eq!(
+        landed,
+        DECLARED.to_vec(),
+        "素直な後押しが空振りする配置で鎖が宣言順へ着かない（要件 1.1／1.2）"
     );
 }
 
@@ -443,6 +612,7 @@ fn a_settled_chain_holds_its_order_when_the_deepest_window_is_raised_to_the_fron
     let all_visible = set.iter().all(|h| is_visible(*h));
 
     arrange_z(&set, &REVERSED);
+    let head_bare = head_owns_nothing(&set);
     chain_schedule().run(&mut world);
     let settled = z_shape(&set);
 
@@ -493,6 +663,10 @@ fn a_settled_chain_holds_its_order_when_the_deepest_window_is_raised_to_the_fron
     assert!(
         all_visible,
         "4 枚が表示状態になっていない（不可視の窓では要件 9.3 の実測経路が働かない）"
+    );
+    assert!(
+        head_bare,
+        "鎖の先頭が窓を所有している＝受け皿が効かず、本番より易しい配置で測っている"
     );
     assert_eq!(
         settled,
@@ -562,6 +736,7 @@ fn a_chain_holds_its_relative_order_when_every_window_falls_behind_an_outsider()
     let all_visible = set.iter().all(|h| is_visible(*h));
 
     arrange_z(&set, &REVERSED);
+    let head_bare = head_owns_nothing(&set);
     chain_schedule().run(&mut world);
     let settled = z_shape(&set);
 
@@ -590,6 +765,10 @@ fn a_chain_holds_its_relative_order_when_every_window_falls_behind_an_outsider()
     assert!(
         all_visible,
         "4 枚が表示状態になっていない（不可視の窓では要件 9.3 の実測経路が働かない）"
+    );
+    assert!(
+        head_bare,
+        "鎖の先頭が窓を所有している＝受け皿が効かず、本番より易しい配置で測っている"
     );
     assert_eq!(
         settled,

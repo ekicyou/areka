@@ -159,6 +159,37 @@ fn element_at(index: usize) -> GroupElement {
 /// だからである（`research.md` §12 の検体と同じ条件）。寸法は 0x0 なので画面には
 /// 1 ピクセルも出ないが、`WS_VISIBLE` は立ち、OS から見れば可視のトップレベル窓である。
 fn create_window(title: PCWSTR) -> HWND {
+    ensure_ime_anchor();
+    create_raw_window(title)
+}
+
+thread_local! {
+    /// このスレッドで既定の IME 窓の受け皿をもう作ったか。
+    static IME_ANCHOR_MADE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// **スレッド既定の不可視 IME 窓の受け皿**を、鎖の窓より先に 1 枚だけ作る。
+///
+/// Windows はスレッドにつき 1 つ `class="IME"` の不可視 0x0 窓を作り、それを**そのスレッドで
+/// 最初に作られた窓に所有させる**。何も手当てをしないと、この檻が最初に作った窓——鎖の
+/// 先頭になりうる窓——が IME 窓の所有者になり、「先頭も所有する窓である」という**本番には
+/// 無い**性質が入り込む（所有する窓を動かすかどうかで後押しの効き方が変わる）。受け皿を
+/// 先に 1 枚作れば IME 窓はそちらに付き、鎖の窓は本番と同じ裸の隣接で並ぶ。
+///
+/// 受け皿は壊さない——Windows はスレッドの終了時にそのスレッドの窓をすべて破棄するので、
+/// テスト 1 本につき 0x0 の窓が 1 枚残り、終われば消える。壊すと所有が次の窓へ移りかねない。
+fn ensure_ime_anchor() {
+    IME_ANCHOR_MADE.with(|made| {
+        if made.get() {
+            return;
+        }
+        made.set(true);
+        let _ = create_raw_window(w!("zorder-chain-tail/ime-anchor"));
+    });
+}
+
+/// 実窓を 1 枚作る本体（受け皿の面倒を見ない生の版）。
+fn create_raw_window(title: PCWSTR) -> HWND {
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
     // SAFETY: Win32 境界。自プロセス所有の 0x0 トップレベル窓を生成し、活性化を奪わずに
     // 表示状態へ移す。

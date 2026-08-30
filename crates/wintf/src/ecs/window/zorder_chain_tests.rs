@@ -6,7 +6,8 @@
 //!
 //! # 「自分の窓以外は現れない」をどう機械で固定するか
 //!
-//! 後押しの形は 1 つに絞ってある——**鎖の先頭を 2 番目の直後へ差し直す**。禁じ手
+//! 後押しが動かす窓は 1 つに絞ってある——**鎖の根**（初版の「先頭を 2 番目の直後へ」は
+//! `research.md` §13.2 で**撤回**された）。挿入位置は錨か先頭の 2 択である。禁じ手
 //! （`GW_HWNDPREV` で拾った他プロセスの窓を挿入位置に渡す形・`HWND_TOP` などの絶対帯指定）は
 //! いずれも「指令に現れる窓ハンドルが `members` の外から来る」という 1 つの形で現れる。
 //! よって指令に現れる**すべての窓ハンドルを列挙し、`members` の部分集合であること**を
@@ -353,40 +354,144 @@ fn no_window_is_ever_attached_twice_in_one_plan() {
 // 後押しの選定——自分の窓 2 枚だけ
 // ===========================================================================
 
-/// 鎖の先頭を 2 番目の直後へ差し直す 1 形だけを組む（§12.2 実測 9）。
+/// 錨の直後が根でない巡は、**根を錨（1 つ手前の窓）の直後へ**差し直す（§13 実測 10）。
+///
+/// 動かすのが根であることが要点である——鎖の中で他の窓を所有しているのは根であり、
+/// 所有側が動いたときにだけ Windows は被所有側を引き連れて並べ直す。先頭は誰も
+/// 所有していないので、先頭を動かしても鎖は並ばない（実測 24 通り中 0 通り）。
 #[test]
-fn the_nudge_reinserts_the_head_right_behind_the_second_window() {
+fn the_nudge_reinserts_the_root_right_behind_its_anchor() {
     let members = [fake_hwnd(0x10), fake_hwnd(0x20), fake_hwnd(0x30)];
 
-    let cmd = nudge_command(&members).expect("窓が 2 枚以上あれば後押しが出る");
+    // 錨（`members[1]`）の直後は根ではない＝素直な形が本物の位置変更になる巡。
+    let cmd =
+        nudge_command(&members, Some(fake_hwnd(0xAA))).expect("窓が 2 枚以上あれば後押しが出る");
 
-    assert_eq!(cmd.hwnd, members[0], "動かす窓が鎖の先頭でない");
+    assert_eq!(cmd.hwnd, members[2], "動かす窓が鎖の根でない");
     assert_eq!(
         cmd.hwnd_insert_after,
         Some(members[1]),
-        "挿入位置が鎖の 2 番目でない"
+        "挿入位置が根の 1 つ手前の窓（錨）でない"
+    );
+}
+
+/// 錨の直後が**まだ何も無い**巡（`None`）も、素直な形を採る。
+#[test]
+fn a_missing_raw_neighbour_still_takes_the_plain_shape() {
+    let members = [fake_hwnd(0x10), fake_hwnd(0x20), fake_hwnd(0x30)];
+
+    let cmd = nudge_command(&members, None).expect("窓が 2 枚以上あれば後押しが出る");
+
+    assert_eq!(cmd.hwnd, members[2], "動かす窓が鎖の根でない");
+    assert_eq!(
+        cmd.hwnd_insert_after,
+        Some(members[1]),
+        "隣が無い巡で挿入位置が錨から外れている"
+    );
+}
+
+/// 錨の直後が既に根なら、**挿入位置を先頭へ**切り替える（空振りを塞ぐ・要件 1.1／1.2）。
+///
+/// 素直な形は「根を錨の直後へ」だが、根が既に錨の生の直後に居ると、その要求は現在位置と
+/// 同じであり `SetWindowPos` は重なりを 1 ミリも動かさない＝完全な空振りになる。適用系は
+/// 後押しの前に印を降ろし再試行経路を持たないので、1 度空振りすると鎖は収まらないまま
+/// 固まる（2026-08-30 に実窓検証で掘り当てた本番欠陥）。
+#[test]
+fn a_redundant_insert_position_switches_to_the_head_of_the_chain() {
+    let members = [fake_hwnd(0x10), fake_hwnd(0x20), fake_hwnd(0x30)];
+
+    // 錨（`members[1]`）の生の直後が根（`members[2]`）＝素直な形が空振りする巡。
+    let cmd = nudge_command(&members, Some(members[2])).expect("窓が 2 枚以上あれば後押しが出る");
+
+    assert_eq!(cmd.hwnd, members[2], "動かす窓が鎖の根でない");
+    assert_eq!(
+        cmd.hwnd_insert_after,
+        Some(members[0]),
+        "空振りする巡で挿入位置が先頭へ切り替わっていない"
+    );
+}
+
+/// 2 つの形が同時に空振りすることはない（＝どちらか一方は必ず本物の位置変更である）。
+///
+/// これが本 task の是正の要である。「Windows は隣接なら省略する」という**未文書の性質**に
+/// 賭けるのではなく、「要求位置が現在位置と違えば Z は動く」という `SetWindowPos` の基本の
+/// 性質だけに乗る。根の生の 1 つ手前は高々 1 枚なので、錨と先頭が別の窓である限り
+/// 2 つの要求が同時に「現在位置と同じ」にはならない。
+#[test]
+fn the_two_insert_positions_can_never_both_be_redundant() {
+    let members = [
+        fake_hwnd(0x10),
+        fake_hwnd(0x20),
+        fake_hwnd(0x30),
+        fake_hwnd(0x40),
+    ];
+    let root = members[3];
+    let anchor = members[2];
+    let head = members[0];
+
+    // ⑴ 錨の直後が根＝素直な形が空振りする巡 → 挿入位置は先頭（根の直後ではない）。
+    let redundant = nudge_command(&members, Some(root)).expect("後押しが出る");
+    assert_eq!(redundant.hwnd_insert_after, Some(head));
+    assert_ne!(
+        redundant.hwnd_insert_after,
+        Some(anchor),
+        "空振りする挿入位置をそのまま採っている"
+    );
+
+    // ⑵ 錨の直後が根でない巡 → 挿入位置は錨（こちらが本物の位置変更）。
+    let plain = nudge_command(&members, Some(head)).expect("後押しが出る");
+    assert_eq!(plain.hwnd_insert_after, Some(anchor));
+
+    // 2 つの形は必ず別の挿入位置を名指しする（3 枚以上のとき錨と先頭は別の窓）。
+    assert_ne!(
+        redundant.hwnd_insert_after, plain.hwnd_insert_after,
+        "2 つの形が同じ挿入位置に畳まれている（空振りを塞げない）"
+    );
+}
+
+/// 窓が 2 枚のときは錨と先頭が同じ窓なので、2 択は 1 つに畳まれる。
+///
+/// 畳まれても困らない——そのとき空振りするのは「根が先頭の直後に居る」＝**既に望む
+/// 並びである**場合だけであり、収めるものが無いからである。
+#[test]
+fn a_two_window_chain_collapses_both_insert_positions_into_one() {
+    let members = [fake_hwnd(0x10), fake_hwnd(0x20)];
+
+    let plain = nudge_command(&members, Some(fake_hwnd(0xAA))).expect("後押しが出る");
+    let redundant = nudge_command(&members, Some(members[1])).expect("後押しが出る");
+
+    assert_eq!(plain.hwnd, members[1], "動かす窓が根でない");
+    assert_eq!(redundant.hwnd, members[1], "動かす窓が根でない");
+    assert_eq!(plain.hwnd_insert_after, Some(members[0]));
+    assert_eq!(
+        redundant.hwnd_insert_after,
+        Some(members[0]),
+        "2 枚のときに存在しない 3 枚目を挿入位置にしている"
     );
 }
 
 /// 窓が 2 枚未満なら後押しを出さない（張るべき繋ぎも 1 本も無い）。
 #[test]
 fn fewer_than_two_windows_produce_no_nudge_at_all() {
-    assert!(nudge_command(&[]).is_none(), "窓 0 枚で後押しが出ている");
     assert!(
-        nudge_command(&[fake_hwnd(0x10)]).is_none(),
+        nudge_command(&[], None).is_none(),
+        "窓 0 枚で後押しが出ている"
+    );
+    assert!(
+        nudge_command(&[fake_hwnd(0x10)], None).is_none(),
         "窓 1 枚で後押しが出ている"
     );
     assert!(
-        nudge_command(&[fake_hwnd(0x10), fake_hwnd(0x20)]).is_some(),
+        nudge_command(&[fake_hwnd(0x10), fake_hwnd(0x20)], None).is_some(),
         "境界の反対側（窓 2 枚）で後押しが消えている"
     );
 }
 
 /// **後押しの指令に、自分の鎖の窓以外の窓ハンドルが 1 つも現れない**。
 ///
-/// 本 task の完了状態そのものである。禁じ手（他プロセスの窓を挿入位置に渡す形・
-/// 絶対帯の指定）はどれも「`members` の外の値が指令に載る」形で現れるので、
-/// 指令が名指しする窓の集合を丸ごと調べる。
+/// 禁じ手（他プロセスの窓を挿入位置に渡す形・絶対帯の指定）はどれも
+/// 「`members` の外の値が指令に載る」形で現れるので、指令が名指しする窓の集合を丸ごと
+/// 調べる。**2 択のどちらの枝でも**調べる——切り替えた先が鎖の外を指していては意味が無い。
 #[test]
 fn the_nudge_command_only_ever_names_the_chains_own_windows() {
     let members = [
@@ -396,25 +501,34 @@ fn the_nudge_command_only_ever_names_the_chains_own_windows() {
         fake_hwnd(0x40),
     ];
 
-    let cmd = nudge_command(&members).expect("窓が 2 枚以上あれば後押しが出る");
-    let named = hwnds_named_by(&cmd);
+    for (label, anchor_next) in [
+        ("素直な枝", Some(fake_hwnd(0xAA))),
+        ("切り替えた枝", Some(members[3])),
+    ] {
+        let cmd = nudge_command(&members, anchor_next).expect("窓が 2 枚以上あれば後押しが出る");
+        let named = hwnds_named_by(&cmd);
 
-    assert!(
-        !named.is_empty(),
-        "指令が窓を 1 つも名指ししていない（検査が空振りしている）"
-    );
-    for hwnd in &named {
         assert!(
-            members.contains(hwnd),
-            "鎖の外の窓ハンドルが後押しの指令に現れている: {hwnd:?} / members={members:?}"
+            !named.is_empty(),
+            "{label}: 指令が窓を 1 つも名指ししていない（検査が空振りしている）"
+        );
+        for hwnd in &named {
+            assert!(
+                members.contains(hwnd),
+                "{label}: 鎖の外の窓ハンドルが後押しの指令に現れている: {hwnd:?} / members={members:?}"
+            );
+        }
+        // 参照するのは根と挿入位置の 2 枚だけ（鎖の他の窓は引数に取らない）。
+        assert_eq!(
+            named.len(),
+            2,
+            "{label}: 指令が名指しする窓が 2 枚でない: {named:?}"
+        );
+        assert!(
+            !named.contains(&members[1]),
+            "{label}: 根と挿入位置以外の窓を参照している: {named:?}"
         );
     }
-    // 参照するのは先頭と 2 番目の 2 枚だけ（鎖の他の窓も引数に取らない）。
-    assert_eq!(named.len(), 2, "指令が名指しする窓が 2 枚でない: {named:?}");
-    assert!(
-        !named.contains(&members[2]) && !named.contains(&members[3]),
-        "先頭と 2 番目以外の窓を参照している: {named:?}"
-    );
 }
 
 /// 上の検査そのものが、外から来た窓を実際に掴めることを示す（道具の較正）。
@@ -424,7 +538,7 @@ fn the_nudge_command_only_ever_names_the_chains_own_windows() {
 #[test]
 fn the_same_check_actually_catches_the_forbidden_nudge_shapes() {
     let members = [fake_hwnd(0x10), fake_hwnd(0x20)];
-    let cmd = nudge_command(&members).expect("窓が 2 枚以上あれば後押しが出る");
+    let cmd = nudge_command(&members, None).expect("窓が 2 枚以上あれば後押しが出る");
 
     // 禁じ手⑴: 他プロセスの窓（`GW_HWNDPREV` で拾ったもの）を挿入位置に渡す形。
     let foreign = SetWindowPosCommand::new(
@@ -460,29 +574,33 @@ fn the_same_check_actually_catches_the_forbidden_nudge_shapes() {
 }
 
 /// 後押しは重なりだけを動かす——位置・寸法・活性化を伴わない（要件 11.1）。
+///
+/// **2 択のどちらの枝でも**同じであること（切り替えた先が窓を動かす形になっていない）。
 #[test]
 fn the_nudge_moves_only_the_zorder() {
-    let members = [fake_hwnd(0x10), fake_hwnd(0x20)];
+    let members = [fake_hwnd(0x10), fake_hwnd(0x20), fake_hwnd(0x30)];
 
-    let cmd = nudge_command(&members).expect("窓が 2 枚以上あれば後押しが出る");
+    for (label, anchor_next) in [("素直な枝", None), ("切り替えた枝", Some(members[2]))] {
+        let cmd = nudge_command(&members, anchor_next).expect("窓が 2 枚以上あれば後押しが出る");
 
-    assert_eq!(
-        cmd.flags,
-        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
-        "重なり以外を動かすフラグが立っている: {:?}",
-        cmd.flags
-    );
-    assert_eq!(
-        (cmd.x, cmd.y, cmd.width, cmd.height),
-        (0, 0, 0, 0),
-        "位置・寸法の欄に値が入っている"
-    );
-    // Z を触らない指令（`SWP_NOZORDER`）では収まらない＝§12.2 実測 7。
-    assert_eq!(
-        cmd.flags & SET_WINDOW_POS_FLAGS(0x0004),
-        SET_WINDOW_POS_FLAGS(0),
-        "Z を触らない指令になっている（後押しとして効かない形）"
-    );
+        assert_eq!(
+            cmd.flags,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+            "{label}: 重なり以外を動かすフラグが立っている: {:?}",
+            cmd.flags
+        );
+        assert_eq!(
+            (cmd.x, cmd.y, cmd.width, cmd.height),
+            (0, 0, 0, 0),
+            "{label}: 位置・寸法の欄に値が入っている"
+        );
+        // Z を触らない指令（`SWP_NOZORDER`）では収まらない＝§12.2 実測 7。
+        assert_eq!(
+            cmd.flags & SET_WINDOW_POS_FLAGS(0x0004),
+            SET_WINDOW_POS_FLAGS(0),
+            "{label}: Z を触らない指令になっている（後押しとして効かない形）"
+        );
+    }
 }
 
 /// 後押しは遅延キューへ積まず、追加の起床も要求しない（要件 14.5／14.2）。

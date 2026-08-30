@@ -40,6 +40,23 @@
 //!
 //! ⑵ は檻の都合ではなく**本番の設計判断**でもある（design.md の DD-3）。
 //!
+//! # ⚠ 実測 7・9 の結論は 2026-08-30 に撤回・測り直した（`research.md` §13.2）
+//!
+//! 当初この檻は、後押しの形として「**鎖の先頭を 2 番目の直後へ差し直す**」（⚠ **撤回済み**）を
+//! 採り、それで鎖が収まると記録していた。**それは汚染された測定である**——受け皿を敷いていなかったため、
+//! スレッド既定の不可視 IME 窓が**鎖の先頭に所有されて**おり、本来何も所有していないはずの
+//! 先頭が「所有する窓」になっていた。Windows が鎖を並べ直すのは**所有する窓が動いたとき**
+//! だけなので、受け皿を敷くと同じ形は **24 通りの始点すべてで 0/24**（1 枚も動かない）。
+//!
+//! よって実測 7・9 は [`ensure_ime_anchor`] で受け皿を敷いた形へ書き替え、主張も現在の形
+//! （**鎖の根を錨の直後へ**・§13.3）へ改めてある。実測 9 は**撤回そのものを記録する**——
+//! 同じ始点から、撤回済みの形では 1 枚も動かないことと、採用形なら収まることを対で測る。
+//! 両テストは [`head_owns_nothing`] で「先頭が何も所有していない」ことを自己検査するので、
+//! **受け皿を外すと必ず赤になる**。
+//!
+//! 他の実測（1・1b・2・3・4・5・6・8）は所有側を動かす形か絶対帯指定を測っており、記録済みの
+//! 逐語値は受け皿の有無に依らない。よってそちらは値を保つためにあえて触っていない。
+//!
 //! # 主張しないこと
 //!
 //! **鎖と、鎖の外の窓との前後関係は主張しない。** 鎖は 1 つの塊として動き、後押しの際に
@@ -47,14 +64,15 @@
 //! 要件が縛るのは ⑴ 鎖の中の相対順（要件 1.1／1.2）と ⑵ **鎖の外どうし**の相対順
 //! （要件 6.1／6.2）であって、その 2 群の間ではない。檻もそこまでしか固定しない。
 
-use windows::Win32::Foundation::HWND;
+use windows::Win32::Foundation::{HWND, LPARAM};
+use windows::Win32::System::Threading::GetCurrentThreadId;
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DestroyWindow, GW_HWNDNEXT, GW_OWNER, GetTopWindow, GetWindow, HWND_BOTTOM,
-    HWND_TOP, IsIconic, IsWindow, IsWindowVisible, SW_HIDE, SW_MINIMIZE, SW_RESTORE,
-    SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetWindowPos, ShowWindow,
-    WINDOW_EX_STYLE, WINDOW_STYLE, WS_EX_TOOLWINDOW, WS_POPUP,
+    CreateWindowExW, DestroyWindow, EnumThreadWindows, GW_HWNDNEXT, GW_OWNER, GetTopWindow,
+    GetWindow, HWND_BOTTOM, HWND_TOP, IsIconic, IsWindow, IsWindowVisible, SW_HIDE, SW_MINIMIZE,
+    SW_RESTORE, SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetWindowPos,
+    ShowWindow, WINDOW_EX_STYLE, WINDOW_STYLE, WS_EX_TOOLWINDOW, WS_POPUP,
 };
-use windows::core::{PCWSTR, w};
+use windows::core::{BOOL, PCWSTR, w};
 
 use super::{clear_window_owner, set_window_owner};
 
@@ -62,7 +80,7 @@ use super::{clear_window_owner, set_window_owner};
 // 実窓（0x0・可視・トップレベル・本番と同じ拡張スタイル）
 // ---------------------------------------------------------------------------
 
-fn create_probe_window(title: PCWSTR) -> HWND {
+pub(super) fn create_probe_window(title: PCWSTR) -> HWND {
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
     // SAFETY: Win32 境界。自プロセス所有の 0x0 トップレベル窓を生成し、活性化を奪わずに
     // 表示状態へ移す。
@@ -88,7 +106,82 @@ fn create_probe_window(title: PCWSTR) -> HWND {
     }
 }
 
-fn destroy_all(windows: &[HWND]) {
+thread_local! {
+    /// このスレッドで受け皿をもう作ったか。
+    static IME_ANCHOR_MADE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// **スレッド既定の不可視 IME 窓の受け皿**を、鎖の窓より先に 1 枚だけ作る。
+///
+/// Windows はスレッドにつき 1 つ `class="IME"` の不可視 0x0 窓を作り、それを**そのスレッドで
+/// 最初に作られた窓に所有させる**。手当てをしないと「この檻が最初に作った窓＝鎖の先頭」が
+/// 所有する窓になり、**本番には無い性質**（先頭も所有する窓である）の上で測ってしまう。
+/// §13 が掘り当てたのはまさにこの汚染であり、実測 7・9 の当初の結論はこれに乗っていた。
+///
+/// 受け皿は壊さない——Windows はスレッド終了時にそのスレッドの窓をすべて破棄するので、
+/// テスト 1 本につき 0x0 の窓が 1 枚残り、終われば消える。壊すと所有が次の窓へ移りかねない。
+///
+/// **受け皿を敷くのは §13 で測り直した実測 7・9 と、§13 の掃き出しだけである。** 他の実測
+/// （1・1b・2・3・4・5・6）は所有側を動かす形か絶対帯指定を測っており、記録済みの逐語値は
+/// 受け皿の有無に依らないので、値を保つためにあえて触らない。
+pub(super) fn ensure_ime_anchor() {
+    IME_ANCHOR_MADE.with(|made| {
+        if made.get() {
+            return;
+        }
+        made.set(true);
+        let _ = create_probe_window(w!("owner-chain-probe/ime-anchor"));
+    });
+}
+
+/// その窓が、同じスレッドの窓を 1 つでも所有しているか。
+fn owns_any_thread_window(hwnd: HWND) -> bool {
+    /// 列挙の受け皿（探す窓と、見つかったかどうか）。
+    struct Probe {
+        target: HWND,
+        found: bool,
+    }
+
+    /// 列挙のコールバック。`lparam` は直下で渡した [`Probe`] を指す。
+    unsafe extern "system" fn visit(candidate: HWND, lparam: LPARAM) -> BOOL {
+        // SAFETY: `lparam` には直下の `EnumThreadWindows` 呼び出しが `&mut Probe` を
+        // 渡している。列挙はその呼び出しの中で完結するので、参照は生存している。
+        let probe = unsafe { &mut *(lparam.0 as *mut Probe) };
+        // SAFETY: Win32 境界。読み取りのみ。
+        let owner = unsafe { GetWindow(candidate, GW_OWNER) }.ok();
+        if owner == Some(probe.target) {
+            probe.found = true;
+            return BOOL(0);
+        }
+        BOOL(1)
+    }
+
+    let mut probe = Probe {
+        target: hwnd,
+        found: false,
+    };
+    // SAFETY: Win32 境界。自スレッドの窓を列挙し、各窓の所有者を読むだけである。
+    unsafe {
+        let _ = EnumThreadWindows(
+            GetCurrentThreadId(),
+            Some(visit),
+            LPARAM(&raw mut probe as isize),
+        );
+    }
+    probe.found
+}
+
+/// 鎖の先頭が何も所有していないか（＝本番と同じ姿で測っているか）。
+///
+/// **生の隣接では測らない**——2 つの窓の間に何も挟まらないことはこちらが保証できるもの
+/// ではない（他プロセスの窓がいつでも割り込む）。所有関係なら自分で作ったものだけを見る。
+pub(super) fn head_owns_nothing(chain: &[HWND]) -> bool {
+    chain
+        .first()
+        .is_some_and(|head| !owns_any_thread_window(*head))
+}
+
+pub(super) fn destroy_all(windows: &[HWND]) {
     for hwnd in windows {
         // SAFETY: Win32 境界。自プロセスが生成した窓を破棄する。
         unsafe {
@@ -112,7 +205,7 @@ fn is_minimized(hwnd: HWND) -> bool {
     unsafe { IsIconic(hwnd) }.as_bool()
 }
 
-fn owner_of(hwnd: HWND) -> Option<HWND> {
+pub(super) fn owner_of(hwnd: HWND) -> Option<HWND> {
     // SAFETY: Win32 境界。読み取りのみ。
     unsafe { GetWindow(hwnd, GW_OWNER) }.ok()
 }
@@ -149,12 +242,12 @@ fn relative_z_order(windows: &[HWND]) -> Vec<HWND> {
 /// 添字の列から、指定した添字だけを順序を保って抜き出す。
 ///
 /// **鎖の外の窓の絶対位置は主張しない**ための助手（module doc「主張しないこと」を参照）。
-fn only(shape: &[usize], keep: &[usize]) -> Vec<usize> {
+pub(super) fn only(shape: &[usize], keep: &[usize]) -> Vec<usize> {
     shape.iter().copied().filter(|i| keep.contains(i)).collect()
 }
 
 /// 組内の並びを添字の列（手前から順）で返す。
-fn z_shape(set: &[HWND]) -> Vec<usize> {
+pub(super) fn z_shape(set: &[HWND]) -> Vec<usize> {
     relative_z_order(set)
         .iter()
         .filter_map(|hwnd| set.iter().position(|w| w == hwnd))
@@ -162,7 +255,7 @@ fn z_shape(set: &[HWND]) -> Vec<usize> {
 }
 
 /// 素の Z 指令（助走・後押し専用）。
-fn place_after(hwnd: HWND, after: HWND) {
+pub(super) fn place_after(hwnd: HWND, after: HWND) {
     // SAFETY: Win32 境界。自プロセスの窓の Z のみを動かす（活性化・移動・寸法変更なし）。
     unsafe {
         let _ = SetWindowPos(
@@ -181,28 +274,44 @@ fn place_at(hwnd: HWND, insert_after: HWND) {
     place_after(hwnd, insert_after);
 }
 
-/// 本設計が採る後押し——**鎖の先頭を 2 番目の直後へ差し直す**。
+/// 本設計が採る後押し——**鎖の根を錨（1 つ手前の窓）の直後へ差し直す**（`research.md` §13.3）。
 ///
-/// 参照するのはどちらも自分の窓であり、主張する関係は鎖が既に強制しているものと同じなので、
-/// 鎖の外の窓は 1 つも動かない。`GW_HWNDPREV`（＝「いま自分の 1 つ手前にいる窓」）を挿入位置に
-/// 使う形も同じ効果を持つが、**その窓が他プロセスのものでありうる**——読み取りと書き込みの
-/// 間に消えると `SetWindowPos` が黙って失敗し、鎖が収まらない（full-suite の並走走行で実際に
+/// > ⚠ **2026-08-30 訂正**: ここは当初「鎖の**先頭**を 2 番目の直後へ差し直す」だった。
+/// > §13.2 でその形は**撤回**されている——Windows が鎖を並べ直すのは**所有する窓が動いた
+/// > とき**だけであり、鎖の先頭は誰も所有していないので、先頭を動かしても鎖は並ばない
+/// > （24 通りの始点すべてで 0/24）。当時それが効いて見えたのは、受け皿が無く
+/// > **不可視の IME 窓が鎖の先頭に所有されていた**からである。撤回済みの形は
+/// > [`retired_head_nudge`]（実測 9 が「収まらないこと」を主張するために保存）。
+///
+/// 参照するのはどちらも自分の窓である。`GW_HWNDPREV`（＝「いま自分の 1 つ手前にいる窓」）を
+/// 挿入位置に使う形は**その窓が他プロセスのものでありうる**——読み取りと書き込みの間に
+/// 消えると `SetWindowPos` が黙って失敗し、鎖が収まらない（full-suite の並走走行で実際に
 /// 再現した）。よって自分の窓だけを参照するこちらを採る。
 fn nudge_chain(chain: &[HWND]) {
+    if chain.len() >= 2 {
+        place_after(chain[chain.len() - 1], chain[chain.len() - 2]);
+    }
+}
+
+/// **撤回済みの初版の後押し**——鎖の先頭を 2 番目の直後へ差し直す（記録として保存）。
+///
+/// ⚠ この形は**収まらない**（§13.2 で撤回）。実測 9 が「収まらないこと」を主張するために
+/// だけ残してある。本番はこれを使わない。
+fn retired_head_nudge(chain: &[HWND]) {
     if chain.len() >= 2 {
         place_after(chain[0], chain[1]);
     }
 }
 
 /// 組を `order`（手前から順の添字）へ揃える助走。
-fn arrange_z(set: &[HWND], order: &[usize]) {
+pub(super) fn arrange_z(set: &[HWND], order: &[usize]) {
     for pair in order.windows(2) {
         place_after(set[pair[1]], set[pair[0]]);
     }
 }
 
 /// 鎖を張る（`chain` は**手前から奥**の順。`chain[i]` は `chain[i+1]` に所有される）。
-fn link_chain(chain: &[HWND]) {
+pub(super) fn link_chain(chain: &[HWND]) {
     for pair in chain.windows(2) {
         set_window_owner(pair[0], pair[1]).expect("set_window_owner should succeed");
     }
@@ -212,7 +321,7 @@ fn link_chain(chain: &[HWND]) {
 ///
 /// **owner を持たない窓へ `clear_window_owner` を当ててはならない**——実測 5 が示すとおり
 /// `SetWindowLongPtrW(GWLP_HWNDPARENT, 0)` は元の owner が無いとき偽の失敗を返す。
-fn unlink_all(windows: &[HWND]) {
+pub(super) fn unlink_all(windows: &[HWND]) {
     for hwnd in windows {
         if owner_of(*hwnd).is_some() {
             clear_window_owner(*hwnd).expect("clear_window_owner should succeed");
@@ -699,6 +808,10 @@ fn touch_only(hwnd: HWND) {
 
 #[test]
 fn owner_chain_probe_nudge_effect_on_outsiders() {
+    // **受け皿を先に敷く**——敷かないと鎖の先頭が不可視の IME 窓を所有してしまい、
+    // 「先頭も所有する窓である」という本番には無い性質の上で測ることになる（§13.2）。
+    ensure_ime_anchor();
+
     // 組: 0,1,2 が鎖・3 が部外者。
     let chain: Vec<HWND> = (0..3)
         .map(|_| create_probe_window(w!("owner-chain-probe/out-chain")))
@@ -712,6 +825,7 @@ fn owner_chain_probe_nudge_effect_on_outsiders() {
     let start = z_shape(&all);
 
     link_chain(&chain);
+    let head_bare = head_owns_nothing(&chain);
 
     // ⑴ 触るだけの後押し（Z を指定しない）。
     touch_only(chain[0]);
@@ -719,28 +833,33 @@ fn owner_chain_probe_nudge_effect_on_outsiders() {
     touch_only(chain[2]);
     let after_touch_root = z_shape(&all);
 
-    // ⑵ Z を伴う後押し——根をその場（直前の窓の直後）へ差し直す。
+    // ⑵ Z を伴う後押し——**所有側（鎖の根）**を錨の直後へ差し直す（§13.3 の採用形）。
     nudge_chain(&chain);
-    let after_root_bottom = z_shape(&all);
+    let after_nudge = z_shape(&all);
 
     eprintln!("[probe-7] start(out=3 が最前面)   = {start:?}");
+    eprintln!("[probe-7] head_owns_nothing       = {head_bare}");
     eprintln!("[probe-7] after_touch_head        = {after_touch_head:?}");
     eprintln!("[probe-7] after_touch_root        = {after_touch_root:?}");
-    eprintln!("[probe-7] after_root_bottom       = {after_root_bottom:?}");
+    eprintln!("[probe-7] after_nudge(root->anchor) = {after_nudge:?}");
 
     unlink_all(&chain);
     destroy_all(&all);
 
     assert_eq!(start, vec![3, 2, 1, 0], "助走: 部外者が最前面・鎖は逆順");
+    assert!(
+        head_bare,
+        "鎖の先頭が窓を所有している＝受け皿が効かず、本番より易しい配置で測っている（§13.2）"
+    );
     assert_eq!(
         after_touch_head, start,
         "【実測】`SWP_NOZORDER` の後押しでは再整列が起きない——Z を伴う指令でなければならない"
     );
     assert_eq!(after_touch_root, start, "根を触っても同じ");
     assert_eq!(
-        only(&after_root_bottom, &[0, 1, 2]),
+        only(&after_nudge, &[0, 1, 2]),
         vec![0, 1, 2],
-        "【実測】Z を伴う後押しなら鎖は宣言順へ収まる"
+        "【実測・§13.3】Z を伴う後押しでも**所有側を動かせば**鎖は宣言順へ収まる"
     );
 }
 
@@ -749,14 +868,22 @@ fn owner_chain_probe_nudge_effect_on_outsiders() {
 //
 // 実測 8 の「その場への差し直し」は挿入位置に `GW_HWNDPREV`＝**他プロセスの窓**を渡しうる。
 // その窓が読み取りと書き込みの間に消えると `SetWindowPos` が黙って失敗し、鎖が収まらない
-// （full-suite の並走走行で実際に再現した）。
+// （full-suite の並走走行で実際に再現した）。よって自分の窓だけを参照する形を採る。
 //
-// 代案: 鎖の**先頭を 2 番目の直後へ**差し直す。参照するのはどちらも自分の窓であり、
-// 主張する関係は鎖が既に強制しているものと同じなので、他の窓は 1 つも動かないはずである。
+// ⚠ **2026-08-30 に結論を撤回・測り直した（§13.2）。** 当初ここは代案として
+// 「鎖の**先頭**を 2 番目の直後へ差し直す」を採り、収まると記録していた。それは
+// **受け皿を敷いていなかったため**——不可視の IME 窓が鎖の先頭に所有されており、先頭が
+// 「所有する窓」になっていた——の汚染された測定であった。受け皿を敷くと同じ形は
+// **1 枚も動かさない**。本テストはその**撤回そのものを記録**する形へ書き替えてある:
+// 撤回済みの形では収まらないこと（`retired_head_nudge`）と、採用形（`nudge_chain`＝
+// 所有側である根を動かす）なら同じ始点から収まることを、同じ 1 本で対にして測る。
 // ===========================================================================
 
 #[test]
 fn owner_chain_probe_nudge_referencing_only_our_own_windows() {
+    // **受け皿を先に敷く**——これが無いと初版の形が偶然効いてしまう（§13.2）。
+    ensure_ime_anchor();
+
     let chain: Vec<HWND> = (0..3)
         .map(|_| create_probe_window(w!("owner-chain-probe/own-chain")))
         .collect();
@@ -771,13 +898,20 @@ fn owner_chain_probe_nudge_referencing_only_our_own_windows() {
     let start = z_shape(&all);
 
     link_chain(&chain);
+    let head_bare = head_owns_nothing(&chain);
 
-    // 後押し——先頭を 2 番目の直後へ。参照はどちらも自分の窓。
-    place_after(chain[0], chain[1]);
-    let after_own_nudge = z_shape(&all);
+    // ⑴ **撤回済みの初版の形**——先頭（何も所有していない窓）を 2 番目の直後へ。
+    retired_head_nudge(&chain);
+    let after_retired = z_shape(&all);
 
-    eprintln!("[probe-9] start            = {start:?}");
-    eprintln!("[probe-9] after_own_nudge  = {after_own_nudge:?}");
+    // ⑵ **採用形**——所有側である根を錨の直後へ。同じ始点から測る。
+    nudge_chain(&chain);
+    let after_adopted = z_shape(&all);
+
+    eprintln!("[probe-9] start             = {start:?}");
+    eprintln!("[probe-9] head_owns_nothing = {head_bare}");
+    eprintln!("[probe-9] after_retired(head->second) = {after_retired:?}");
+    eprintln!("[probe-9] after_adopted(root->anchor) = {after_adopted:?}");
 
     unlink_all(&chain);
     destroy_all(&all);
@@ -787,13 +921,21 @@ fn owner_chain_probe_nudge_referencing_only_our_own_windows() {
         vec![3, 2, 1, 0, 4],
         "助走: 部外者で前後を挟み鎖は逆順"
     );
-    assert_eq!(
-        only(&after_own_nudge, &[0, 1, 2]),
-        vec![0, 1, 2],
-        "【実測】自分の窓だけを参照する後押しでも鎖は宣言順へ収まる"
+    assert!(
+        head_bare,
+        "鎖の先頭が窓を所有している＝受け皿が効かず、本番より易しい配置で測っている（§13.2）"
     );
     assert_eq!(
-        only(&after_own_nudge, &[3, 4]),
+        after_retired, start,
+        "【実測・§13.2 の撤回そのもの】撤回済みの形（先頭を 2 番目の直後へ）は 1 枚も動かさない。当初ここが収まると記録していたのは、受け皿が無く IME 窓が先頭に所有されていたためである"
+    );
+    assert_eq!(
+        only(&after_adopted, &[0, 1, 2]),
+        vec![0, 1, 2],
+        "【実測・§13.3】自分の窓だけを参照する後押しでも、**所有側を動かせば**鎖は宣言順へ収まる"
+    );
+    assert_eq!(
+        only(&after_adopted, &[3, 4]),
         vec![3, 4],
         "【実測・要件 6.1／6.2】鎖の外どうしの相対順は変わらない"
     );
