@@ -74,3 +74,11 @@ sink 新設（get/set）＋ kanade への「参照付きイベント発生」型
 - ウェーブ配置: **M2 解禁ゲート**（emo2 は property 照会を使わない見込み＝e2e 非ブロック・要件段階で emo2 辞書の grep 確認）。プロパティ 3 spec の先頭（他 2 本のゲート）。
 - 経路 6 の輸送路はライブ ukadoc/SSP 実測なしに設計しない（snapshot は無記載＝bvc SC 系と同じ「snapshot だけで裏取りしない」規律）。
 - 決定論テスト必達・値なし（NotFound）経路も檻に入れる。
+
+---
+
+> **📌 2026-09-02 棚卸⑫（W12 裁定枠 B 候補＝依存ツリー最長の先頭・XL＝分割推奨）**——アンカー再測定: `decode.rs:321`・`command.rs:163`・`runtime.rs:223-224`・`msg.rs:119-156`・`choice_drain.rs:71`・`schedule/choice.rs:60`・`events.rs:391`・`actor.rs:274`・`lexer.rs:273-285`・`sysvar.rs:65-83`・`shiori-host32-ipc/lib.rs:42-55`・`interface.rs:153/:159`・`shiori_host.rs:247/:267`・`main.rs:194`・`shiori_inproc.rs:276/:289`・`dotted.rs:72`（21 項）・`:106-109` ＝**全命中**。**ずれ（zsp 合流由来）**: `consumer_ledger.rs:96`→**:224/:227/:230/:233**（`"move"`／`"bind"`／`("set",Some("zorder"))`／`("reset",Some("zorder"))`）・`emo2_boot/mod.rs:420`→**:447-453**（5 sink）・`:426`→**:454**。
+> **前提の更新 2 点**: ⑴ **consumer_ledger の粒度は zsp が「選別子つき」で先着**（`("set", Some("zorde"))` 形）＝brief の「コマンド名粒度」前提は要更新・`\![get,property]`／`\![set,property]` も同形で登記できる。⑵ **`crates/areka-ghost/src/prop_sink.rs` に `PropSetCueSink`（内部キャリア `areka.prop.set` を名前自己選別→`SylphyaPublisher::persist_put`）が本番配線ごと実在**（`areka-ghost/src/runtime.rs:601` で登録済み）＝`\![set,property]` sink の同型雛形。
+> **⚠ 三重所有**: `seriko.zorder` の SET 台帳を本 spec（21→26）・`zorder-property`（「dotted.rs に入れない・本 brief が語彙正本」）・`currentghost-property-tree`（`seriko.*` 一括）が食い違って主張。棚卸⑫の推奨＝**台帳行 1 本は本 spec⑶ が持ち、値の導出は zorder-property 単独・tree は zorder を除外**（着手前に 1 度で裁定）。
+> **分割の継ぎ目（開発者裁定）**: ⑴ スクリプト経路 1〜4（sink 2 本＋lexer `%property[…]`＋`\![embed]` 対）／⑵ 非スクリプト経路 6＋host32 IPC 運搬（**輸送路のライブ実測が前提条件**・snapshot 無記載）／⑶ sylphya SET 台帳 21→26＋件数檻（S・単独着地可）。W12 に載せるなら ⑴＋⑶。**共有ファイル**: ⓪ lexer 修正と `lexer.rs`／`decode.rs`（⓪ 先着で解消）・e2e とは crate 同居（`areka-ghost` src/ 対 tests/）＝sink 追加が spine の sink 数を変え得る点は本 spec の保存義務。cursor-tag／toolkit とは 0。**要件定義は Fable 推奨**。
+

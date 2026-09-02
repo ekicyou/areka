@@ -41,3 +41,7 @@ compile の汎用キャリアアームへ allowlist 判定を追加（純関数�
 
 - 正典は ukadoc。決定論檻必達・二重待ち禁止（タイミングは焼込絶対 start_time が唯一の権威）。
 - 汎用キャリアのワイヤ形・消費側名前選別の規律（dialogue-tags R4.5/R8.7）は不変。
+
+---
+
+> **📌 2026-09-02 棚卸⑫**——`file:line` 主張なし（ukadoc 一次接地のみ）＝ドリフト該当なし。編集集合＝`areka-sakura/compile.rs`（allowlist 判定・lowering）・`dola/src/cue/`（C 群 Barrier）・`areka-kanade/`（C 群再調停）。**`compile.rs` を `text-decoration-canon` と共有**＝W13 と同居不可（段階 A/B/D は compile 局所・C は台本分割＝分割するなら A/B/D／C）。`\![set,balloontimeout]` は residue 項目 7 と対（COMPAT §8 で住み分け済み）。前提「これらを使うゴーストの適合」は未充足＝M2 ゲート据え置き。

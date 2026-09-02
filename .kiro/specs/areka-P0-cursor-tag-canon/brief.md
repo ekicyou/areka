@@ -73,7 +73,7 @@
 
 - **Upstream**:
   - `areka-P0-emo-text-layer`（完了）——縮退表の現行正典。本 spec が改訂する。
-  - `areka-P0-balloon-vertical-canon`（bvc・W6.95）——⑴ R3 で座標意味論（origin/wordwrappoint/validrect）を決定論テストで固定済みにする ⑵ **origin クランプ正準の撤去**（bvc 討議 #2 裁定・Requirement 3.10）により「実際の 1 列目」＝「宣言された `origin.x` の列」が常に一致＝本 spec の `\_l[0,0]` 着地定義（SC15）が一意 ⑶ 縦書きフィクスチャ（`vertical,1` 版）を供給。**bvc 完了後に着手するのが自然**。
+  - `areka-P0-balloon-vertical-canon`（bvc・旧 W6.95〔新 W11〕）——⑴ R3 で座標意味論（origin/wordwrappoint/validrect）を決定論テストで固定済みにする ⑵ **origin クランプ正準の撤去**（bvc 討議 #2 裁定・Requirement 3.10）により「実際の 1 列目」＝「宣言された `origin.x` の列」が常に一致＝本 spec の `\_l[0,0]` 着地定義（SC15）が一意 ⑶ 縦書きフィクスチャ（`vertical,1` 版）を供給。**bvc 完了後に着手するのが自然**。
   - SSP 2.8.83 ライブ ukadoc（`\_l` の縦書き節は 2.8.83 で追加＝**ukadoc-mcp スナップショット（2.8.80）に縦書き節は無い**。正典参照はライブで行うこと。bvc requirements.md の SC8・SC9・SC13〜SC15 が関連疑義）。
 - **Downstream**:
   - M2 文字装飾（`\f[align]` 系）——`\_l` との相互作用写像を本 spec の登記から引く。
@@ -89,3 +89,10 @@
 - Rust 2024。主接触 crate は `areka-emo-text`（`layout.rs` 764 行・`layout_cursor_tests.rs` 670 行・`draw.rs` **974 行＝1,000 行番人まで残 26 行**——draw.rs への追記は避け兄弟ファイルへ・2026-08-27 実測）。
 - ウェーブ配置: **M2 解禁ゲート**（M1 では着手しない・開発者裁定で前倒し可）。bvc が縦書き `\_l` の非互換を既知として登記した状態で M1 を閉じる——emo2 非依存のため e2e を妨げない。
 - 決定論テスト必達（実 DPI・実 GPU・実窓を要しない形）。縮退経路も含め全語彙を檻に入れる。
+
+---
+
+> **📌 2026-09-02 棚卸⑫（W12 裁定枠 A 候補＝挙動バグ級）**——アンカー再測定: `layout.rs` :656-670（ゲート本体 :658）・:684 `Relative`・:679→**:680**（variant）・:453-454・:305-311・:611-621（`VerticalRl` 腕は :619-624）・:601-610・`layout_cursor_tests.rs` 670 行/13 本/`HorizontalTb` 22 箇所＝**逐語一致**。**変化 2 点**: ⑴ `draw.rs` **974→980 行（残 20）**＝bvc PR#124 で +6・番人の例外表に不在＝1 行超過で赤。本 spec は draw.rs に追記しない（兄弟ファイル）。⑵ 出典 bvc research §3.5／§7 R-1 のパスは **`.kiro/specs/completed/areka-P0-balloon-vertical-canon/`**（08-29 アーカイブ済み）。
+> **現行 main の本物の非互換を構造で裏取り**: カーソル X は `layout.rs:453` で常に `region.left()` 起点の**増加**方向、列送りは `:309` の `(start.1, start.0, -1.0)`＝**減少**方向、列矩形は `:620` `left: block_pos - font_height`＝`block_pos` が列**右端**→ `vertical_rl` で `\_l[0,0]` が 1 列目に着地しない。`vertical_lr` は `:310` の `+1.0` で整合。**縦書き `\_l` のテスト被覆は 0 本**（檻に一切かかっていない）。
+> 前提: bvc 完了 ✅・M2 ゲート（開発者裁定で前倒し可）・ライブ ukadoc 2.8.83。**W12 同居候補（e2e／channels／toolkit）と共有ファイル 0**（実測）。ウェーブ番号整数化＝本文の W6.95→**W11**・W7→**W12**。分割禁止裁定は不変（Boundary Candidates はタスク分割）。要件定義は Opus で足りる見込み。
+

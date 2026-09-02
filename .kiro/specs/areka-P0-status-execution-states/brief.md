@@ -70,3 +70,8 @@ ukadoc `Status` 実行状態語彙の各状態が、それぞれの源サブシ�
 - **契約不変**: idle-talk の `Status` 送出契約（カンマ連結・空集合→省略）へ additive で乗る。
 - 正典は ukadoc（`ukadoc:spec_shiori3:Status_20_5bSSP_62e1_5f35_5d:1`）・emo2 は最小適合 fixture（[[ukadoc-mcp-preferred-source]]）。
 - **規律**: 憶測で先に設計しない（roadmap「spec 工場の禁止」）。源着地まで本 spec は台帳に留める。
+
+---
+
+> **📌 2026-09-02 棚卸⑫（Current State の陳腐化を登記）**——⑴ **`choosing` は実導出済み**（`crates/areka-kanade/src/status.rs:171-174` `if snapshot.choice_active { states.push(ExecutionState::Choosing) }`・`:21` が「M1 で実導出するのは `Talking` と `Choosing` の 2 状態」と宣言）＝台帳表の「M1（M-dialogue）」行は**完了**。⑵ `talking` の実導出は `kanade/src/status.rs:160-185 ExecutionStatus::derive`（brief の `events.rs` は file-slimming で分離済み）。⑶ `EmoPresenter::target_visible` は `presenter/read.rs:208`→**:218**。⑷ pasta `virtual_dispatcher.lua:98,:123` の完全一致比較は**逐語一致**（fail-open は今日も成立）。⑸ **`balloon(ID群)` と `minimizing` の源は今日すでに実在**（`read.rs:218` と wintf の窓状態）＝「M1〜M2」行は今日でも配線可能。⑹ **台帳表に不在の項目**: `status.rs:15-17` が「実 SSP 2.3.86 は `balloon(0=2,1=0)` を送る（区切り `/` 対 `,`）差異は実導出の解禁時に本 spec で決着」と登記済み＝本 brief の負う項目として追加すること（現時点は非アクティブゆえ実害 0・潜在互換バグ）。⑺ COMPAT §8 :160/:165 の引用は棚卸⑫で本 brief への引用に差替済み。編集集合＝`kanade/src/status.rs`（`ExecutionSnapshot` フィールド追加＋SEAM 行 :175-182 差替）＋`areka/emo2_boot/` の配線。規模 S（台帳）。
+

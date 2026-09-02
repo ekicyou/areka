@@ -6,18 +6,18 @@
 > **⛔ 着手ゲート**: M1 残ユニットの全完了後（最終ユニット）。ただし**適合表の維持は今から**（下記チェックリストが M1 の「迷いの発生しないゴール」の単一定義）。
 
 > **📌 2026-08-01 追記(58)棚卸更新（棚卸⑤・本ブロックが(52)㊹より優先）**:
-> - **W5 は 3/4 着地**（choice-select-events✅・kero-balloon✅・dpi-window-vanish✅）・残＝collision-dpi-hittest は **W6 へ編入**。残ウェーブ改訂＝**W6（col ∥ vis ∥ bind ∥ zorder ∥ scg の5本）→ W6.5（exact ∥ wpl）→ W6.75（budget ∥ atom+bod〔縮退時統合〕）→ W6.9（cage）→ W7=本 spec**（正本は roadmap 追記(58)）。
+> - **W5 は 3/4 着地**（choice-select-events✅・kero-balloon✅・dpi-window-vanish✅）・残＝collision-dpi-hittest は **W6 へ編入**。残ウェーブ改訂＝**W6（col ∥ vis ∥ bind ∥ zorder ∥ scg の5本）→ 旧 W6.5〔新 W8〕（exact ∥ wpl）→ 旧 W6.75〔新 W9〕（budget ∥ atom+bod〔縮退時統合〕）→ 旧 W6.9〔新 W10〕（cage）→ 旧 W7〔新 W12〕=本 spec**（正本は roadmap 追記(58)）。
 > - **上流列へ追補 5 本**: `ghost-window-zorder`（バルーン埋もれ＝一周走行の可視性前提）・`scope-chain-gap`（P2 幅差隙間・SSP 実測正典）・`windowposition-limit`（バルーン画面外はみ出し）・`recompose-budget`（アイドル CPU 税＝e2e 実機走行の観測品質前提）・`dpi-transition-atomicity`（適合 #1 DPI 検証時の跳ね解消・+36px 追随）。
 > - アンカー: spawn.rs `GhostWindows` :115 → **:164**・`ScopeWindows` :101 → **:150**（van の despawn hook 挿入）。target_map.rs `shell_target` :19 不変。
 >
 > **📌 2026-07-31 追記(52)棚卸更新（W4 完走・本ブロックが㊹以下より優先）**:
-> - **completed 追補（㊹以降）**: wintf-gpu-test-crash（割込）✅・position-persist✅・choice-interact✅・emo-dpi-scaling✅＝**W4 完走**。**残ウェーブ改訂**: W5（dpi-window-vanish ∥ collision-dpi-hittest ∥ choice-select-events ∥ kero-balloon）→ **W6（balloon-visibility ∥ bindoption-exclusivity の2本・追記(52)裁定）**→ **W6.5（scale-exact-rational ∥ test-cage-determinism・追記(51)起票）**→ W7=本 spec。
+> - **completed 追補（㊹以降）**: wintf-gpu-test-crash（割込）✅・position-persist✅・choice-interact✅・emo-dpi-scaling✅＝**W4 完走**。**残ウェーブ改訂**: W5（dpi-window-vanish ∥ collision-dpi-hittest ∥ choice-select-events ∥ kero-balloon）→ **W6（balloon-visibility ∥ bindoption-exclusivity の2本・追記(52)裁定）**→ **旧 W6.5〔新 W8〕（scale-exact-rational ∥ test-cage-determinism・追記(51)起票）**→ 旧 W7〔新 W12〕=本 spec。
 > - **上流列へ追補3本**: `bindoption-exclusivity`（表情固着バグ＝**適合 #3「着せ替え表情」の前提充足**・bindoption 3値正典準拠）・`scale-exact-rational`（**適合 #1 の DPI 検証を絶対値で書ける前提**＝画素演算の有理数化。**【2026-08-14 失効・下記追記(68) が正本】**——有理数化は却下され、供給面寸の判定には **+1 の許容が要る**）・`test-cage-determinism`（M1 宣言を支える檻の決定性）。
 > - **着手時義務**: 本 brief の全面再監査（追記㊹時点で唯一補正無しだった経緯・調査日 2026-07-16 の実測は全面陳腐化前提で読む）・適合表へバルーン表示ライフサイクル項目追補・㉘(E)「OnFirstBoot 限定 `\![move]` の2回目起動蒸発は許容仕様」の実機判断・#7（冒頭空行＝pasta 上流未解決）は M1 完成を妨げない扱いの確認。
 > - アンカー: spawn.rs `GhostWindows` :109-130 → **:115**（`ScopeWindows` :101）・target_map.rs `shell_target` :19 不変。
 
 > **📌 2026-07-24 追記㊹棚卸更新（本ブロックが以下の本文より優先・調査日 2026-07-16 の残ユニット認識は失効）**:
-> - **completed 済み**: cue-playback-duration・mayuna-compose・seriko-loop・sakura-dialogue-tags・choice-render・input-events・idle-talk・collision-geometry・sylphya（本文の「実装中/並走中」記述は全て過去形へ読み替え）。**残ウェーブ**: 割込 `wintf-gpu-test-crash`（DoD ゲート復旧）→ W4（position-persist ∥ choice-interact ∥ emo-dpi-scaling）→ W5（dpi-window-vanish ∥ collision-dpi-hittest ∥ choice-select-events ∥ kero-balloon）→ W6（balloon-visibility）→ **W7=本 spec**。
+> - **completed 済み**: cue-playback-duration・mayuna-compose・seriko-loop・sakura-dialogue-tags・choice-render・input-events・idle-talk・collision-geometry・sylphya（本文の「実装中/並走中」記述は全て過去形へ読み替え）。**残ウェーブ**: 割込 `wintf-gpu-test-crash`（DoD ゲート復旧）→ W4（position-persist ∥ choice-interact ∥ emo-dpi-scaling）→ W5（dpi-window-vanish ∥ collision-dpi-hittest ∥ choice-select-events ∥ kero-balloon）→ W6（balloon-visibility）→ **旧 W7〔新 W12〕=本 spec**。
 > - **上流列へ追補4本**: `choice-interact`（choice-render 2分割の対話半分・**`ChoiceSelection` 正本**＝適合 #7 hover の対話面と #8 の供給元）・`balloon-visibility`（M1 編入裁可済＝**本 spec 着手時に適合表へ「バルーン表示ライフサイクル」項目を追補**・roadmap W7 行登記済み）・`kero-balloon`（**#10 kero 一式の前提充足**＝kero が `balloonk*` 正典資産で表示・placement 採寸 scope 別）・`sylphya`✅（%username 実導出）。#1 の DPI 検証は DPI 追従込みへ格上げ（追記㉟裁定）。
 > - アンカー微修正: spawn.rs の `GhostWindows` は **:109-130**（`ScopeWindows` :95-100）・target_map.rs:19-38 は不変。
 
@@ -153,7 +153,7 @@ M1 ゴール「emo2 が**そのまま** boot→talk→touch→menu→close ま�
 
 ## 申し送り（areka-P0-draw-load-parity・2026-08-23）
 
-`areka-P0-draw-load-parity`（W6.9）が tick の周期・構造に加えた変更の報告（同 spec 要件 8.3）。本 spec（W7・最終）は適合 14 項目の一周走行の前提としてこれを読み、実機走行時の環境変数と観測行の扱いを決めること。
+`areka-P0-draw-load-parity`（旧 W6.9〔新 W10〕）が tick の周期・構造に加えた変更の報告（同 spec 要件 8.3）。本 spec（W7・最終）は適合 14 項目の一周走行の前提としてこれを読み、実機走行時の環境変数と観測行の扱いを決めること。
 
 **⑴ tick に「門」が入った（既定 OFF）**
 
@@ -206,3 +206,15 @@ M1 ゴール「emo2 が**そのまま** boot→talk→touch→menu→close ま�
 **B-3 子プロセスへの受け渡しの実走未検証**
 
 タスク 10.3 が `areka-ghost` の一時パス 13 ファイルを共通窓口へ寄せた際、タスク文が名指しした「宛先が変わっても子プロセスへの受け渡し（環境変数・引数）が壊れていないこと」は**静的検証止まり**である。実プロセスを起こす 2 本（`tests/ghost/real_pasta_test.rs`・`snapshot_capture_test.rs`）が環境変数の門で既定では走らないため。静的には確認済み——受け渡しの配線（`crates/shiori-host32-host/src/process_host.rs:239-251` の引数・環境変数・作業ディレクトリ）は非接触、札は英数と `-` のみ、絶対パス、最長の合成名でも約 129 文字。**実機サインオフの機会に 1 度通すこと**（`HOST32_PASTA_DLL` を絶対パスで与える。相対だと `pasta.dll` の LOAD が `0x8007007E` で落ちる）。
+
+---
+
+> **📌 2026-09-02 棚卸⑫（W11 完走・M1 唯一の残ユニット・W12＝旧 W7）**——アンカー全数再測定（origin/main `9ed1e9ed`）。
+> - **上流ユニットは全数 `completed/` に実在**（brief が名指しする 35 本を照合・欠落 0）。`bindoption-exclusivity` も完了済み（PR#105）。
+> - **大ドリフト（07 期の本文アンカー）**: `spawn.rs` `GhostWindows` :164/:115→**:294**・`ScopeWindows` :150/:101→**:254**（:88-92 は import 塊）／`command.rs:229` の「3 連言」→**:512-516 `fn is_coalescible`**／`transition_diag.rs` `win_kind=` :167→**:193 `FIELD_WIN_KIND`**・`kind=` :143→**:169 `FIELD_KIND`**／`drag_follow.rs` :89/:183→**:81/:177**（`enqueue_window_set_pos`）／自己参照 :53→:54・:148→:149。**全命中**: `target_map.rs:19`・`surfaces.txt:458-507`・`transition_diag.rs:54`・`transition_signoff_tests.rs:10,57`・`timing.rs:220`・dlp 申し送り 9 点（`tick_gate.rs:154`・`world/mod.rs:551/:405/:593`・`tick_bridge.rs:230,:258`・`tick_diag.rs:133`・`perf_thread_report.rs:51`・`tick_gate_config.rs:25`）・B-1〜B-3 のアンカー。
+> - **DoD（`cargo test --workspace` exit 0）を脅かす間欠赤 3 系統**: ⑴ B-2（`spine_e2e_test_s3_helper_liveness_detected.rs:175-185` に待機なし・負荷下 `left: 4`・08-27 から不変で残存）⑵⑶ zsp research §13.8 ①②（3 プロセス同時 regime のペア機構檻 `zorder_pair_maintain_always_on_top_tests.rs:767/:411`・壁時計期限の飢餓 `tick_bridge.rs:355`／`spine_boot_smoke_tests.rs:46`／`spine_talk_close_tests.rs:306`）——受け皿は新規台帳 `zorder-chain-residue`（A-1/A-2）。**本 spec は隔離裁定（除外 or 更新・記憶 obsolete-vs-broken-test-policy）のみ行い根治は同台帳**。
+> - `doc/emo2-conformance-scope.md:60` は bvc R11.9 で **既に改訂済み**（`\f` 43 項目の所有先＝文字装飾系 3 spec）＝Adjacent 節の想定より doc が進んでいる。
+> - **分割候補（開発者裁定）**: ⑴ 決定論 conformance spine（CI 常設・実 pasta 非依存）／⑵ 実機一周サインオフ＋M1 完成宣言 DoD——brief の Boundary Candidates と一致。分割しない場合は tasks で二相に切る。規模 XL。
+> - 着手時義務（roadmap W12 行）: brief 全面再監査・㉘(E)・#7 pasta 上流・**`ReassertZOrder` 未消費の実機確認**（挿入点は `zorder_pair_establish.rs:180` の 1 箇所のみ＝再表示経路は再指示を挿さない・現況一致）・間欠赤 3 系統の隔離裁定。`AREKA_TICK_GATE` は既定 OFF（`world/mod.rs:405`）のまま記録。
+> - **要件定義は Fable 推奨**（DoD 定義・隔離裁定・分割裁定・14 項目×二層観測）。W12 同居候補（cursor-tag／channels／toolkit）とは共有ファイル 0（channels の sink 追加が spine の sink 数を変え得る点のみ channels 側の保存義務）。
+

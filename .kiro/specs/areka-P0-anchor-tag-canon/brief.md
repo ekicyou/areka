@@ -53,3 +53,10 @@
 
 - ウェーブ配置: **M2 解禁ゲート**（`text-decoration-canon` の後段）。lexer バグ修正のみ開発者裁定で M1 前倒し可（just-in-time 起票）。
 - 決定論テスト必達（3 状態 × 縦横・イベント発火・文字漏れの回帰檻）。
+
+---
+
+> **📌 2026-09-02 棚卸⑫（lexer バグ確定・⓪ 前倒し候補）**——**バグは現行 main に実在**（逐語証跡）: `lexer.rs:152-157` のループは `word="_a"` を正しく作るが、角括弧が無い場合の else 腕（**:172-177**・`let bare = first; (Token::Bare(bare), word_start + 1)`）が `word` を捨てて `'_'` 1 文字ぶんしか進めない。`\_a[id]text\_a` → `Tag{"_a",["id"]}` は `decode_tag`（`decode.rs:191-221`）に `"_a"` 腕なし→`Raw`→`compile.rs:203` で破棄／末尾 `\_a` → `Bare('_')`→`decode_passthrough_bare`（:331-333）→破棄・**残った `a` が `Token::Text("a")` として本文へ**＝「text**a**」と表示。**同じ欠陥は `\_q`・`\_n`・`\_b`・`\_v` 等、全 2 文字 `\_` 系 bare 形に一律**。既存テスト被覆 **0 本**（`\_w[450]`・`\_l[10,20]` の角括弧付きのみ）。
+> **推奨＝spec を立てず直接修正 1 PR（Path B・⓪）**: lexer の bare 腕で `word` 全体を消費（`Token::Tag{word, args: []}` or bare 2 文字型）＋decode の passthrough を `\_X` 全体の `Raw` へ＋決定論檻（bare 形 5 種・角括弧形・`\_` 単独末尾）。**W12 の channels と W13 の decoration が同じ `decode.rs` を触るため先に着地させる**。着地後は本 brief に「lexer 修正は消化済み（PR#）」を登記し、本 spec は L→M。
+> アンカー再測定: `parse.rs:157` の distractor 言及は **:164**（`.with_cursor` が :157）・`parse_tests.rs` データ行 :164・`viewbox_draw.rs:346-354` は **reset の腕**（hover 適用は :388）。前提: decoration 未着手（必須先行）・choice 系 ✅・bvc ✅。W14 で choice-marker と `decode.rs`／`viewbox_draw.rs` を共有し得る＝design で所有分割。
+

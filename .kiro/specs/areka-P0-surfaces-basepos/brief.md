@@ -47,3 +47,8 @@ surfaces.txt の `point.basepos.x/y` 宣言が parse で転記され、move 解�
 
 - 正典は ukadoc（emo2 は最小適合 fixture）。転記層は解釈しない。決定論檻必達。
 - 宣言なしシェルの挙動（既定経路）は本 spec で**一切変えない**（非退行）。
+
+---
+
+> **📌 2026-09-02 棚卸⑫**——アンカー **ドリフト 0**（`move_cue.rs:338 BaseposResolver`／`:347 CanonDefaultBasepos`／`:392-398` に `k: ScaleRatio` 第 5 引数・parsers `basepos` 0 件・emo2 `surfaces.txt` 未宣言・COMPAT §8 :146）。追記(63) の再突合は済み（式・署名とも記載どおり・`\![move]` k 倍は意図的 SSP 非互換の裁定で不変）。前提「`point.basepos` を宣言する実シェルの適合」は未充足＝M2 ゲート据え置き。規模 S・wintf 直近コミットと非交差。
+

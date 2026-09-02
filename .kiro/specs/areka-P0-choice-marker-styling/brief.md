@@ -48,3 +48,8 @@
 
 - ウェーブ配置: **M2 解禁ゲート**（`text-decoration-canon` の後段・3 本中最小＝S）。
 - 決定論テスト必達（10 項目 × descript 有無 × 縦横の下線位置）。
+
+---
+
+> **📌 2026-09-02 棚卸⑫**——アンカー **実質ドリフト 0**（`choice.rs` :432 impl／:450 `resolve`／:470 `match cursor.style()`／:472-476 underline→`SquareFill` warn-once／:519-521 `style_has_underline`・`viewbox_draw.rs:346-354`）。前提: decoration 未着手（必須先行）・`choice-render` ✅・bvc ✅。編成＝W14 裁定枠（anchor と同居・`decode.rs` は decoration の `"f"` 腕の内側＝所有分割を design で確認）。規模 S・要件定義は Opus で足りる。
+

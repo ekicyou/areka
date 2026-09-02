@@ -45,3 +45,9 @@ ukadoc プロパティ **`currentghost.seriko.zorder`**（SSP 2.8.78・[SET有�
 
 - M1 では着手しない（`surfaces-basepos`・`balloon-canon-residue` と同じ M2 解禁ゲート棚）。
 - zsp の COMPAT §8 登記と本 brief は相互参照で重複記載しない（語彙の正本は本 brief）。
+
+---
+
+> **📌 2026-09-02 棚卸⑫**——上流 zsp は **完了**（PR#126・09-02）＝`.kiro/specs/completed/areka-P0-scope-zorder-pinning/`（本文の `zsp brief:18` 参照は移動後パスで再確認）。`dotted.rs` 21 項に `zorder` 不在（grep 0）・件数檻 `:191`＝一致。
+> **⚠ 二重所有は三重所有だった**: `currentghost-property-tree`（`seriko.*` 14 項一括）に加え **`property-query-channels`** も「SET 台帳 21→26 の追随に `seriko.zorder`・`seriko.sticky-window` を含む（SET 経路の所有者として）」を In に掲げる。本 brief の「dotted.rs に入れない・本 brief が語彙の正本」と食い違う。**棚卸⑫の推奨＝切り出し**: 値の導出（parse の対＝serialize・往復恒等）は本 spec 単独／tree は `seriko.*` から `zorder` を除外／**`SET_EFFECTIVE` の 1 行は channels⑶（台帳スライス・S）が持ち本 spec は台帳に触れない**。完了 spec zsp 要件 13.3/13.4 の追跡先は本 spec 単独と記録済み。裁定は着手前に 1 度（roadmap 干渉台帳）。zsp 残件 B-4 のうち **13.3/13.4 の檻は本 spec の語彙記録行そのもの**＝実質の受け皿（12.1〜12.4 は `zorder-chain-residue`）。
+

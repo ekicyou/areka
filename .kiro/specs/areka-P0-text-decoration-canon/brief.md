@@ -57,3 +57,10 @@
 - ウェーブ配置: **M2 解禁ゲート**（文字装飾 3 spec の先頭・他 2 本のゲート）。
 - **`draw.rs` 分割が着手前提**（残 26 行・1,000 行番人）。
 - 決定論テスト必達（3 書字方向 × 17 項目・リセット経路込み）。SC1 は bvc 裁定を継承し再審議しない。
+
+---
+
+> **📌 2026-09-02 棚卸⑫（W13 裁定枠・先頭ゲート・XL＝分割推奨）**——アンカー再測定: `decode.rs:191-221` に `"f"` 腕なし ✅・`compile.rs:202-204` ✅・`state.rs:71-93` ✅・`draw.rs:136` ✅・`parse.rs:98-105` ✅・`SetUnderline` 等 repo 0 件 ✅。**ずれ（+6〜+15）**: `canvas.rs` `TextEffects` :130-137→**:136-143**・予約名定数 :39/:41/:43/:45→**:45/:47/:49/:51**・doc :32→**:38**／`draw.rs` `ResolvedFont` :150-166→**:158-172**・weight/style 固定 :333-339→**:348-349**・align/valign 固定 :271-272→**:277-278**・`FontDisableSeam` :142-144→**:150**。**事実誤認 1 件**: 「唯一の `DWRITE_TEXT_RANGE` 使用は `viewbox_draw.rs:346-354`」は誤り——`crates/wintf/src/ecs/widget/text/typewriter_draw.rs:245,:259` にも 2 件（wintf typewriter・spec 外既存資産）。
+> **前提の逼迫**: `draw.rs` **974→980 行（残 20）**・番人の例外表に不在＝**分割が着手前提**（brief どおり・ただし余裕は減った）。`doc/emo2-conformance-scope.md:60` は bvc R11.9 で既に本 spec 群を所有者として明記済み（brief の「どの spec も未所有」は spec 上は真・doc は先行）。
+> **分割の継ぎ目（開発者裁定）**: ⑴ 基盤相＝`draw.rs` 分割＋decode 腕＋CueCommand＋per-run 3 層配管（`TextItem::Glyph`→`PositionedGlyph`→`GlyphRunContent`）／⑵ 語彙相＝17 項目（font 10／影 3／寄せ 2／全体 2）／⑶ **descript `font.*` 基底 13 キー＝完全独立スライス**（`areka-parsers/balloon` に閉じ・共有ファイル 0）。`balloon-canon-residue` 項目 9 との相互登記＝単独着地不可（不変）。cursor-tag と `layout.rs`／`state.rs` を共有＝**W12 の cursor-tag 完走後**（W13）。⓪ の lexer 修正が `decode.rs` を先に触る＝rebase 吸収。**design 段階は Fable 推奨**。
+

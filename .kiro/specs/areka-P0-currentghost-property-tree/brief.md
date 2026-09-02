@@ -57,3 +57,8 @@
 - ウェーブ配置: **M2 解禁ゲート**（channels spec の後段・bvc 完了後が自然）。
 - 正典参照はライブ ukadoc（2.8.83 現行）——**ukadoc-mcp snapshot のプロパティ節は 2.8.80 意味論で逆**（bvc Requirement 11.7 登記済みの罠）。
 - 値の捏造禁止（未導出は NotFound のまま）・決定論テスト必達（scope 2 体・縦書き/横書き双方の `.vertical` 一致を含む）。
+
+---
+
+> **📌 2026-09-02 棚卸⑫**——アンカー再測定: `dotted.rs:3-9`・`reader.rs:80-83/:127-146`・`key.rs:129-141`・`persist/mod.rs:153/:156` ＝命中。**ずれ**: publish 縫い目 `emo2_boot/mod.rs:430-465`→**:458-502**（zsp が +35 行）。Adjacent 節の「`zorder-property` は本ブランチには不在」は**現在は偽**（09-02 の zsp 合流で `.kiro/specs/areka-P0-zorder-property/brief.md` 実在）。**三重所有**（channels も SET 台帳で `seriko.zorder` を主張）＝棚卸⑫の推奨は「本 spec は `seriko.*` から `zorder` を除外」（roadmap 干渉台帳・裁定は着手前）。編成＝W13 裁定枠（channels と `dotted.rs`／`emo2_boot/mod.rs` を共有＝同居不可・直列）。先行スライス可＝balloon.scope 19 項目（bvc R3 の数値源を再利用・publish と決定論檻は channels 抜きで単独着地可）。規模 L。
+

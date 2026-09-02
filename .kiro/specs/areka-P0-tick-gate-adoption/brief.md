@@ -1,6 +1,6 @@
 # Brief: areka-P0-tick-gate-adoption
 
-> **起票 2026-08-27（棚卸⑪・Path C）**: `draw-load-parity`（W6.9・PR#118・2026-08-23 完了）が requirements.md 改訂欄に「引受先＝なし → 新規 spec が要る」と登記して閉じた案件の受け皿。**M1 完成を妨げない優先度（dlp と同格・開発者裁定 2026-08-22 の継承）**——解禁条件は下記「着手ゲート」参照。
+> **起票 2026-08-27（棚卸⑪・Path C）**: `draw-load-parity`（旧 W6.9〔新 W10〕・PR#118・2026-08-23 完了）が requirements.md 改訂欄に「引受先＝なし → 新規 spec が要る」と登記して閉じた案件の受け皿。**M1 完成を妨げない優先度（dlp と同格・開発者裁定 2026-08-22 の継承）**——解禁条件は下記「着手ゲート」参照。
 
 ## Problem
 
@@ -50,10 +50,15 @@ dlp が建てた自走ループ（perf-loop）を**測定側 3 是正を先に�
 ## Existing Spec Touchpoints
 
 - **Extends**: なし（新規境界）。
-- **Adjacent**: `present-write-coherence`（W6.95・提示タイミングの軸＝pwc が tick 実形の上で規模を見積もる関係は dlp⇄pwc 台帳の継承。**本 spec は pwc より後**——同じ理由で直列）。`emo2-conformance-e2e`（W7・一周走行と干渉するため並走不可）。
+- **Adjacent**: `present-write-coherence`（旧 W6.95〔新 W11〕・提示タイミングの軸＝pwc が tick 実形の上で規模を見積もる関係は dlp⇄pwc 台帳の継承。**本 spec は pwc より後**——同じ理由で直列）。`emo2-conformance-e2e`（W7・一周走行と干渉するため並走不可）。
 
 ## Constraints
 
 - **着手ゲート**: M1 完成（e2e 完走）後、または開発者の明示裁定による前倒し。**夜間または 25 分以上の実機走行を n≥3 回せる環境**が実測の前提（日中 7 分では分解能不足が dlp で実証済み）。
 - 実機判定は areka 実ゴースト（emo2）＋実 DPI・有界 auto-exit＋ログ grep（記憶 areka-real-machine-signoff-bounded-auto-exit）。
 - 1 ファイル 1,000 行の目安・兄弟テスト配置・ログ捕捉は `log-capture-kit`／一時パスは `temp-path-kit`（cage 着地形）に従う。
+
+---
+
+> **📌 2026-09-02 棚卸⑫**——アンカー **ドリフト 0**（`tick_gate.rs`:154/:53/:58・`tick_gate_config.rs:25`・`tools/perf/perf-loop.ps1`・agents 4 本・dlp `results/` 全実在）。ウェーブ番号整数化＝本文の W6.9→**W10**・W6.95→**W11**（roadmap 冒頭対応表）。編成＝**M1 完成後・単独**（e2e と並走不可）。⚠ **開発者方針「長時間試行禁止」**（zsp の 4,440 走行の教訓・記憶 areka-p0-scope-zorder-pinning）と本 spec の走行時間要求（夜間/25 分/n≥3）が正面衝突する——要件段階で「始める前に決着可能な A/B 設計」を先に組むこと。分割シーム＝測定側是正 ⇄ 製品側変更（brief 記載どおり）。zsp 残件 B-3（生産者名簿の穴・`tick_gate_tests.rs`／`tick_gate_config_producers_tests.rs`）は `zorder-chain-residue` が持つ（本 spec は名簿を読む側）。
+
