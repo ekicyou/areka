@@ -197,7 +197,7 @@ owner = "areka-P0-property-catalog-lists"
 priority = "C1"
 values = []
 links = [
-  { kind = "queries", to = "ukadoc:list_sakura_script:\![get,property,ID]:1" },
+  { kind = "queries", to = "ukadoc:list_sakura_script:\\![get,property,ID]:1" },
 ]
 note = """
 壊れ方: 値を返せないと辞書が空文字を前提に進み、黙って壊れる。
@@ -235,7 +235,7 @@ note = "旧名。本文注記により currentghost.* 側が正典。"
 ### A.3 書き方の決まり
 
 - 台帳に**証拠の欄は無い**（要件 2.3）。実装済みの根拠はソース側の doc コメント `/// ukadoc: <正典 URL>`（要件 5）。
-- 文字列は二重引用符。id や見出しに逆斜線（さくらスクリプトのタグ）が含まれるときは `\` と書く（上の例の `\![get,property,ID]`）。
+- 文字列は二重引用符。id や見出しに逆斜線（さくらスクリプトのタグ）が含まれるときは `\` と書く（上の例の `\\![get,property,ID]`）。
 - 台帳ファイルはドメインの持ち主だけが編集する。他ドメインの id を書かない（要件 3.2）。
 - 報告（`doc/ukadoc-coverage/report/<ドメイン>.md`）は本 spec の道具が着地するまで存在しなくてよい。着地後は持ち主が再生成して一緒にコミットする（要件 7.4）。
 
