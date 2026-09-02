@@ -35,6 +35,8 @@ areka が SHIORI へ送るイベントは emo2 が使う分だけで組まれて
 
 ## Approach
 
+- toolkit が凍結した仕訳規則（最新優先・新書式正典・旧書式 alias・版番号＝世代・種別付き links）を適用する。本ドメインの alias 例＝Resource の `sakura.*`／`kero.*` 固有形と `char*.*` 汎用形（汎用形を正典・固有形を alias）・`OnMouseClick` と `OnMouseClickEx`（Ex は alias ではなく後継＝`supersedes`・両方送る SSP 挙動を note に残す）・`X-SSTP-Return-`（廃止予定）と `X-SSTP-PassThru-`。
+- **着手条件**: toolkit の要件確定（台帳形式の凍結）後・実装完了を待たない。他 survey と並走。
 - 分類軸を固定してから埋める: ⑴ 送信方向（baseware→SHIORI／SHIORI→baseware〔Resource〕／plugin／SSTP 経由） ⑵ 発火源（ライフサイクル・時刻・入力・窓/OS・ネットワーク・外部アプリ） ⑶ SSP 世代（版番号） ⑷ 依存基盤（無いと群ごと不成立の機構）。
 - Ex 168 は群単位で一括分類（外部送信元＝受け口の有無だけを問う）・個別評価しない。
 - Resource 159 はオーナードローメニュー／ゴースト管理 UI の要件源として、UI 面の M2 候補 spec への入力に整形する。

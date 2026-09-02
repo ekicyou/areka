@@ -25,7 +25,8 @@ M1 ロードマップは「M2 以降は M1 完成後に実物を見て組み直�
    - 段階 C: 環境と対話する（時刻・窓状態・OS 事象イベント群・`system.*` プロパティ・サウンド）。
    - 段階 D: 外部と繋がる（SSTP・FMO・PLUGIN・HEADLINE・SAORI・`x-ukagaka-link`）。
    - 段階 E: 周辺（外部アプリ連携 Ex イベント・開発者機能・トランスレータ）。
-4. **網羅ロードマップ草案** `doc/ukadoc-coverage/roadmap-draft.md`: 段階 A〜E を M2 以降のマイルストーン候補として、束→候補 spec（既存 13 brief の位置づけ込み）→依存順→ウェーブ案を書く。**steering の roadmap.md は本 spec で書き換えない**（完了後に `/kiro-discovery` 再入で取り込む＝別セッション一括裁定・記憶 portfolio-convergence-decided-in-separate-session）。**候補 spec の brief も本 spec では作らない**（spec 工場化しない・着手時に just-in-time）。
+4. **網羅ロードマップ草案** `doc/ukadoc-coverage/roadmap-draft.md`: 段階 A〜E を M2 以降のマイルストーン候補として、束→候補 spec（既存 13 brief の位置づけ込み）→依存順→ウェーブ案を書く。
+5. **開発仕様の立ち上げとロードマップ調整**（開発者追記 2026-09-02＝段③④）: 優先順の**先頭ウェーブ分**について開発 spec の brief を `/kiro-discovery` 再入で起票し（台帳 id を brief に列挙＝根拠が引ける）、steering の roadmap.md への反映は棚卸セッションで一括裁定する（記憶 portfolio-convergence-decided-in-separate-session）。**先頭ウェーブより先の束は brief を作らず roadmap-draft の名前付き束のまま置く**（spec 工場化しない・着手時に just-in-time）。既存 13 brief は台帳 id で所有範囲を書き換える是正候補を添える。
 
 ## Approach
 
@@ -48,7 +49,7 @@ M1 ロードマップは「M2 以降は M1 完成後に実物を見て組み直�
 
 ## Upstream / Downstream
 
-- **Upstream**: `ukadoc-survey-shiori`・`ukadoc-survey-assets`・`ukadoc-survey-script-property`（3 台帳が `unclassified` 0 で揃うこと）・`ukadoc-survey-toolkit`（report/linkage の再生成）・`emo2-conformance-e2e`（M1 完成の実物・段階 A の起点。**e2e 完了前に本 spec を完了させない**）。
+- **Upstream**: `ukadoc-survey-shiori`・`ukadoc-survey-assets`・`ukadoc-survey-sakura-script`・`ukadoc-survey-property`（4 台帳が `unclassified` 0・alias 仕訳済みで揃うこと）・`ukadoc-survey-toolkit`（report/linkage の再生成）・`emo2-conformance-e2e`（M1 完成の実物・段階 A の起点。**e2e 完了前に本 spec を完了させない**）。
 - **Downstream**: `/kiro-discovery` 再入（M2 ロードマップ本文化）・既存 M2 ゲート brief 13 本の順序確定・新規 spec の just-in-time 起票。
 
 ## Existing Spec Touchpoints

@@ -1,7 +1,8 @@
 # Brief: areka-P0-ukadoc-survey-toolkit
 
 > 起票: 2026-09-02（`/kiro-discovery` Path D・開発者要望「ukadoc を読み込み、主だった SHIORI Event/Resource・プロパティシステム・Install/Update 設定・nar 仕様などを網羅的に分類し、項目間の繋がりを評価し、areka を製品品質にするために必要な順に実装項目を洗い出してブリーフィングとして整理する調査 spec を作れ。網羅調査に必要な仕組みは Rust で作ることも検討せよ。大規模なら分割せよ」）。
-> **ukadoc 網羅調査 5 本のうち 1 本目＝唯一コードを書く spec。** 残り 4 本（`ukadoc-survey-shiori`／`ukadoc-survey-assets`／`ukadoc-survey-script-property`／`ukadoc-coverage-roadmap`）は本 spec の道具で台帳を書く調査 spec であり、実行時コードを 1 行も触らない。
+> **ukadoc 網羅調査 6 本のうち 1 本目＝唯一コードを書く spec。** 残り 5 本（`ukadoc-survey-shiori`／`ukadoc-survey-assets`／`ukadoc-survey-sakura-script`／`ukadoc-survey-property`／`ukadoc-coverage-roadmap`）は本 spec の道具で台帳を書く調査 spec であり、実行時コードを 1 行も触らない。
+> **開発者追記（2026-09-02）**: 「ukadoc をとにかく網羅的に一度調査して仕訳する。最新の仕様を優先し、古い仕様に新しい書式があれば新書式を優先して旧書式はエイリアスとする。網羅調査→仕訳と関連の検索→最終的な優先度決定と開発仕様立ち上げ→ロードマップ調整、の順。調査段階は並行実施できるように」——本 spec は**仕訳の規則と台帳の形式を凍結する役**であり、規則は下記「仕訳の規則」節が全 survey spec 共通の正本。
 > **種別**: 道具 spec（新規 crate 1 本＋`doc/ukadoc-coverage/` 配下の台帳）。既存 crate・実行時挙動は非接触。
 
 ## Problem
@@ -42,9 +43,29 @@ ukadoc は 1,749 項目（37 ページ）ある。これまでの areka は「em
 - **未対応ログの語彙**: `縮退` 79 件・`無視` 15・`未知` 11・`未対応` 2（`warn!`/`debug!`/`info!` 行）。英語 `unsupported`/`deferred` は 0。代表点＝`areka-emo-compose/src/method.rs:160`（未知の合成メソッド）・`areka-sakura/src/compile.rs:203`（M-boot 外タグ無視）・`areka-seriko/src/table.rs:270-272`（非駆動 interval）。evidence スキャンはこの語彙と `target:`／`event =` 構造化フィールド（91 種）を手掛かりにする。
 - **既存の対応表**: `doc/COMPAT_ARCHITECTURE.md` §8 沈黙ルール対応表＝データ行 80 件（項目／裁量／根拠／出典 spec）・`doc/emo2-conformance-scope.md` §6 rescope 表。台帳の `status=degraded` と `note` の転記元。
 
+## 仕訳の規則（全 survey spec 共通・本 spec の要件で凍結）
+
+1. **最新仕様を優先する**。同じ機能に複数の書式・名前があるとき、ukadoc の版番号（`2.x.xx`）が最も新しい書式を**正典**とし、それ以外は **`alias`**（`alias_of` で正典 id を指す）。版番号が無い項目は「初期から存在」として最も古い世代に置く。SSP 以外のベースウェア専用記述（MATERIA／CROW 等の注記）は `not-applicable` 候補。
+2. **実装は正典だけ**。alias は正典への写像で受ける（parser／語彙表の 1 か所）。これにより実装 spec の対象数が縮み、既存資産の旧書式も壊れない。
+3. **世代を記録する**: `introduced`（版番号・無ければ空）・`deprecated_by`（後継 id・あれば）。世代別の対応表は report が機械生成する。
+4. **関連（links）は種別付き**: `alias_of`（旧→新）／`supersedes`（新→旧）／`triggers`（タグ・操作→イベント）／`configures`（descript キー→挙動・タグ・イベント）／`queries`（タグ・イベント→プロパティ）／`same-feature`（束＝同じ機能の別面）。機械抽出（本文の相互言及）は候補提示まで・登記は survey spec の人手。
+5. **状態語彙**: `implemented`／`vocabulary-only`／`degraded`／`absent`／`alias`／`not-applicable`／`unclassified`。alias の状態は正典側で判定し、alias 行自身は「写像の有無」だけを持つ。
+6. **優先度の根拠は 3 つに限定**（coverage-roadmap が使う）: 壊れ方（黙って壊れる＞明示エラー＞見た目差）・影響する既存資産の広さ（標準辞書が使うか・世代の古さ）・依存基盤の共有度。
+
+**台帳の 1 行（TOML）**: `id`（catalog id）・`status`・`introduced`・`alias_of`／`deprecated_by`（任意）・`evidence[]`（`path:line` と期待トークン）・`owner_spec`・`priority`（A〜E 段階＋数値）・`links[] = {kind, to}`・`note`。**この形式は本 spec の要件確定時点で凍結し、survey 4 本は本 spec の実装完了を待たず着手できる**（検査は後から追いつく）。
+
+## 段階（開発者追記の 4 段と spec の対応）
+
+| 段 | 内容 | 担当 | 並行 |
+|---|---|---|---|
+| ① 網羅調査 | 1,749 項目の全数台帳化（catalog＋areka 証跡） | toolkit（器）＋survey 4 本 | survey 4 本は並走（台帳ファイル別） |
+| ② 仕訳と関連の検索 | 新旧仕訳（alias）・links 登記・無所有の炙り出し | survey 4 本（各ドメイン内）＋coverage-roadmap（ドメイン跨ぎ） | ドメイン内は①と同時・跨ぎは③の前 |
+| ③ 優先度決定と開発仕様立ち上げ | 束→優先順→上位の束から開発 spec の brief 起票 | coverage-roadmap（`/kiro-discovery` 再入を含む） | 直列（e2e 完了後） |
+| ④ ロードマップ調整 | M2+ マイルストーンとウェーブへ反映 | 棚卸セッション（別セッション一括裁定） | 直列 |
+
 ## Desired Outcome
 
-- ukadoc 1,749 項目の**全数**が 1 つの台帳形式に載り、各項目に「分類・areka 状態・根拠 file:line・担当 spec・優先度・繋がり」を書ける器がある。
+- ukadoc 1,749 項目の**全数**が 1 つの台帳形式に載り、各項目に「分類・areka 状態・根拠 file:line・担当 spec・世代・alias・優先度・繋がり」を書ける器がある。
 - 台帳の整合（id の実在・全数の網羅・根拠 file:line の実在）が `cargo test` で機械検査される。根拠が陳腐化したら赤になる。
 - 調査 spec 4 本が同じ道具・同じ形式で台帳を書ける。台帳から `doc/ukadoc-coverage/report.md`（網羅率・未分類件数・優先度別一覧）が再生成できる。
 - ukadoc スナップショットが更新されたとき（MCP パッケージ更新）、差分（追加・削除・本文変更）が機械で出る。
@@ -55,8 +76,8 @@ ukadoc は 1,749 項目（37 ページ）ある。これまでの areka は「em
 
 1. **正規化（catalog）**: スナップショット JSON → `doc/ukadoc-coverage/catalog.toml`（id・page・title・category・SSP 版番号（抽出）・本文ハッシュ・url）。**本文そのものは repo に入れない**（ukadoc の著作物を丸ごと同梱しない・ハッシュで変更検出だけ行う＝`shiori-protocol` の `SOURCES.md` 先例）。スナップショットの所在は環境変数 `AREKA_UKADOC_SNAPSHOT`（既定＝npm グローバルの実パス）。既存の `doc/shiori/fragments`（SHIORI event/resource の契約カタログ）と sylphya 語彙表は**置き換えず**、catalog id からそれらの entry 名へ結ぶ対応列を持つ（同じ項目を 2 か所で数えない）。
 2. **証跡スキャン（evidence）**: areka ソース全域を走査し、台帳の「根拠」候補を機械で集める——SHIORI イベント名の文字列リテラル・`\![...]` コマンド名の消費側 `name` 選別・descript キー表・sylphya 語彙表・「未対応」系ログ行（走査規則はサブエージェント実測の慣習に合わせて design で確定）。
-3. **台帳（ledger）**: `doc/ukadoc-coverage/ledger/<domain>.toml`（調査 spec 1 本＝1 ファイル＝共有ファイル 0 で並走可）。行＝`{id, status, evidence[], owner_spec, priority, links[], note}`。`status` は固定語彙 `implemented / vocabulary-only / degraded / absent / not-applicable / unclassified`。
-4. **検査と報告（check / report）**: `cargo test -p ukadoc-survey` で ⑴ ledger の id ⊆ catalog ⑵ catalog 全 id が ledger のどこかに 1 回だけ現れる（未分類は `unclassified` として明示・件数を台帳に固定し減少のみ許す） ⑶ `evidence` の file:line が現在の作業木に実在し、行に期待トークンを含む ⑷ links の両端が実在。`report.md` は決定論的に再生成し、差分ゼロをテストで検査する。
+3. **台帳（ledger）**: `doc/ukadoc-coverage/ledger/<domain>.toml`（調査 spec 1 本＝1 ファイル＝共有ファイル 0 で並走可）。行の形式と `status` 語彙は上記「仕訳の規則」節で凍結。
+4. **検査と報告（check / report）**: `cargo test -p ukadoc-survey` で ⑴ ledger の id ⊆ catalog ⑵ catalog 全 id が ledger のどこかに 1 回だけ現れる（未分類は `unclassified` として明示・件数を台帳に固定し減少のみ許す） ⑶ `evidence` の file:line が現在の作業木に実在し、行に期待トークンを含む ⑷ links の両端が実在・`alias_of` の先は `alias` でない（alias の連鎖禁止）・`introduced` の版番号は catalog の抽出値と矛盾しない。`report.md`（状態分布・世代別対応表・alias 一覧・束の連結成分）は決定論的に再生成し、差分ゼロをテストで検査する。
 
 **規模**: 中。crate 1 本（目安 1,000 行未満・行数番人の対象）・TOML/JSON の読み書きは既存依存（`toml`・`serde`・`serde_json`）で足りる。
 
@@ -87,7 +108,7 @@ ukadoc は 1,749 項目（37 ページ）ある。これまでの areka は「em
 ## Upstream / Downstream
 
 - **Upstream**: なし（新規 crate・既存 crate 非依存）。ukadoc スナップショット（外部・2026-08-24 生成）。
-- **Downstream**: `ukadoc-survey-shiori`／`ukadoc-survey-assets`／`ukadoc-survey-script-property`（台帳を書く）→ `ukadoc-coverage-roadmap`（統合）。将来の全機能 spec（着手時に台帳の該当行を `implemented` へ更新する義務＝`/kiro-complete` の DoD 候補）。
+- **Downstream**: `ukadoc-survey-shiori`／`ukadoc-survey-assets`／`ukadoc-survey-sakura-script`／`ukadoc-survey-property`（台帳を書く・**本 spec の要件確定後に並走開始可**）→ `ukadoc-coverage-roadmap`（統合）。将来の全機能 spec（着手時に台帳の該当行を `implemented` へ更新する義務＝`/kiro-complete` の DoD 候補）。
 
 ## Existing Spec Touchpoints
 
