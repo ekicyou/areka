@@ -412,3 +412,11 @@
 - 機械が作る束の一覧は報告の一節（`report/summary.md` にドメイン跨ぎ・`report/<ドメイン>.md` にドメイン内）。各束に構成 id だけから決まる安定した束 id を付ける（要件 7.9 新設）。
 - `doc/ukadoc-coverage/linkage.md` は統合担当 `ukadoc-coverage-roadmap` が**人手で書く**文書（束の名付け・成立に要る最小基盤・欠けると壊れる振る舞い）。報告の束 id を引用する。道具は生成しない。
 - **隣接 spec への宿題（本 spec のファイル外・設計前 rebase 時に直す）**: `ukadoc-coverage-roadmap/brief.md` 42 行目・67 行目の「toolkit が report/linkage を再生成」→「toolkit が report（`report/summary.md`＋ドメイン別 4 本）を再生成・linkage は人手」。同 20 行目の `report.md` → `report/summary.md`。survey 4 本の brief の「共有ファイル 0」の根拠に「自分のドメイン別報告も自分の編集集合」を追記。
+
+### 8.5 要件承認前の最終追記（開発者指示 2026-09-02「提案の必要な対応をすべて実施・その内容で要件を承認・PR して squash マージ」）
+
+- **付録 A**（台帳のキー名・型・記入例・並び順）と**付録 B**（道具の着地前に id 一覧を得る手順）を requirements.md に凍結。survey 4 本は toolkit の実装を待たず `/kiro-impl` まで進められる。
+- 要件 2.3・5.5 改訂: 証拠は台帳の欄として**持たない**（検査の出力に列挙・報告には有無だけ）。ソースの整理でファイルが動いても台帳・報告を書き直させないため（要件 6.11 と整合・人手と機械の分離＝要件 2.7）。
+- 要件 3.3a 新設: 初期台帳の生成は既存の台帳を壊さず、欠けた id だけを挿入（survey が先に着地しても成り立つ）。
+- **中間 PR の裁定**: `workflow.md`「1 spec ＝ 1 PR」の例外として、要件確定＝契約の公開を main へ先に載せる（survey 4 本の着手条件を満たすため・discovery brief の docs PR #127〜#130 と同じ扱い）。branch は残し、rebase 後に同じ branch で設計以降を続ける。
+- spec.json: `requirements.approved = true`・`phase = requirements-approved`。
