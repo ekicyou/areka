@@ -350,7 +350,7 @@ ukadoc の MCP 検索で総覧を引き直した。**要件・設計の内容を
 | # | 問い | 解決 | 根拠 |
 |---|---|---|---|
 | 1 | 凍結表を増やす場合の採取可否 | **消滅**（議題 1 裁定＝家 B・台本化した応答。凍結表に触れない） | §7.1 |
-| 2 | 自発会話の注入形 | **`KanadeMsg::Tick { now }` を `GhostRuntime::kanade()` へ直接投函する**。dispatcher への Tick とは別チャンネルであり、既存 spine は dispatcher へしか投げていない | `crates/areka-kanade/src/msg.rs:123`・`crates/areka-ghost/src/runtime.rs:219`（`kanade()`）／`:224`（`dispatcher()`）・`crates/areka/src/emo2_boot/spine.rs:857`（現行は dispatcher のみ）・`crates/areka-ghost/src/dispatcher.rs:126`→`on_tick` は `SakuraMsg::Tick` を中継するだけ（同 `:344`）・`spine.rs:666` が「OnSecondChange は kanade へ Tick を送らないため不要」と明記 |
+| 2 | 自発会話の注入形 | **`KanadeMsg::Tick { now }` を `GhostRuntime::kanade()` へ直接投函する**。dispatcher への Tick とは別チャンネルであり、既存 spine は dispatcher へしか投げていない | `crates/areka-kanade/src/msg.rs:123`・`crates/areka-ghost/src/runtime.rs:218`（`kanade()`）／`:223`（`dispatcher()`）・`crates/areka/src/emo2_boot/spine.rs:857`（現行は dispatcher のみ）・`crates/areka-ghost/src/dispatcher.rs:126`→`on_tick` は `SakuraMsg::Tick` を中継するだけ（同 `:344`）・`spine.rs:666` が「OnSecondChange は kanade へ Tick を送らないため不要」と明記 |
 | 3 | 走行時間の実測 | **19 本 9.24 秒**（`cargo test -p areka --bin areka emo2_boot::spine -- --test-threads=1`・2026-09-02）。一周 1 本の追加は 1 秒前後 | §7.1 |
 | 4 | ホバー反転の実機観測条件 | **本走行では点けない**。点ける場合は**別走行として分ける**（本番既定と条件が変わるため） | `crates/areka/src/emo2_boot/hover_inject.rs:29`（`AREKA_CHOICE_HOVER_INJECT`）・同 `:184`（`OnceLock` で処理系に 1 度だけ焼き付く＝走行中の切替不可） |
 | 5 | 隔離が失う被覆の見積り | 下表 §10.1 | 実測 |
@@ -395,7 +395,7 @@ ukadoc の MCP 検索で総覧を引き直した。**要件・設計の内容を
 - **文脈**: R3.8・R12.1・R12.5。
 - **確かめた事実**: 受け口は進行状態を受け取っているが捨てている——`ScriptedShioriBackend::get`／`notify` の第 3 引数は `_status: Option<&str>`（`spine.rs:220`／`:241`）で、記録型 `RecordedCall`（`spine.rs:109-118`）は id と参照列しか持たない。`areka-ghost` 側の同型（`crates/areka-ghost/tests/ghost/spine_e2e_test.rs:73-82`）も同じである。進行状態を運ぶログ行は存在しない（`crates/areka-kanade/src/shiori/real.rs:126-155` は wire 値を組み立てて受け口へ渡すだけ）。
 - **部分的には既に観測できる**: 会話中は `OnSecondChange` が NOTIFY・Ref3=`"0"` になり（`crates/areka-kanade/src/schedule/events.rs:171-194`）、これは参照列として記録されている。**しかし選択待ち（`choosing`）は Ref3 では会話中と区別できない**——選択待ち中も会話の枠は占有されたままで `talk_active` と `choice_active` が同時に真になる（`crates/areka-kanade/src/status.rs:211-216`・複合値 `talking,choosing`）。
-- **採った形**: `ScriptedShioriBackend` に**記録の第 2 系統**（呼出 id と組み立て済み進行状態の対の列）を追加し、`ScriptedShioriHandle` に取り出し口を 1 本足す。既存の `RecordedCall`・`non_status_calls()`（`spine.rs:287`）は**一字も変えない**ため、既存の兄弟テスト 8 本の照合はすべて素通しになる。
+- **採った形**: `ScriptedShioriBackend` に**記録の第 2 系統**（呼出 id と組み立て済み進行状態の対の列）を追加し、`ScriptedShioriHandle` に取り出し口を 1 本足す。既存の `RecordedCall`・`non_status_calls()`（`spine.rs:287`）は**一字も変えない**ため、既存の兄弟テスト 8 ファイル（19 本）の照合はすべて素通しになる。
 - **R12.1 との関係（記録して縮退させる・R12.5）**: 要件は編集集合を「兄弟テストファイル＋`spine.rs` のモジュール宣言 1 行」と書いている。`spine.rs` は編集集合の中の**ファイル**であり、本決定はその中の分量が「宣言 1 行」から「宣言 1 行＋記録の追補 1 か所」へ増えるという**具体化**である。`spine.rs` は丸ごと `#[cfg(test)]`（`crates/areka/src/emo2_boot/mod.rs:33-34`）ゆえ本番コードの改変には当たらない（R8.1・`roadmap.md:88`）。挙動が変わらないことは「追加した経路を読む既存の主張が 1 つも無い」ことで示す。
 - **採らなかった案**: 一周テスト専用の受け口を自前で組む（`boot_with` は `ScriptedShioriBackend` を具体型で受ける＝`spine.rs:681` ため、自前の受け口を渡すには起動手順 130 行の複製が要る。R2.6「新しいテスト機構を発明しない」に反する）。
 

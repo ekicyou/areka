@@ -4,7 +4,7 @@
 
 本仕様の成果物は**証明**である。動く機能を足すのではなく、「適合対象ゴースト emo2 が起動から終了までを一周する」ことを、⑴ 常時走る決定論的な一周テストと、⑵ 実機での一周走行の人間サインオフ、という二層の観測で確定させ、M1 完成の判定基準を 1 か所へ束ねる。ロードマップは本ユニットを M1 の最終ユニットと定め、「証明に徹する（`crates/` 本番コード改変 0 が原則）」を着手条件として課している（`.kiro/steering/roadmap.md:72`・`:88`）。
 
-決定論層は新しいテスト機構を作らない。既に在る組立（`crates/areka/src/emo2_boot/spine.rs:617` の `SpineHarness`）へ、既に在る注入口（`crates/areka-ghost/src/runtime.rs:219` の kanade 送信端・同 `:224` の dispatcher 送信端）から入力を流し、既に在る記録（`spine.rs:287` の呼出記録・`crates/areka/src/emo2_boot/frame/wiring.rs:280` の表示指令の取り出し口）を読むだけである。本仕様が新たに書くのは**台本と期待列と段の駆動順**であって、仕組みではない。
+決定論層は新しいテスト機構を作らない。既に在る組立（`crates/areka/src/emo2_boot/spine.rs:617` の `SpineHarness`）へ、既に在る注入口（`crates/areka-ghost/src/runtime.rs:218` の kanade 送信端・同 `:223` の dispatcher 送信端）から入力を流し、既に在る記録（`spine.rs:287` の呼出記録・`crates/areka/src/emo2_boot/frame/wiring.rs:280` の表示指令の取り出し口）を読むだけである。本仕様が新たに書くのは**台本と期待列と段の駆動順**であって、仕組みではない。
 
 実機層は判断そのものを人間へ委ねる。本仕様が作るのは、判断を再現可能にする**条件・手順・記録様式**と、機械判定と目視が食い違ったときの読み分けである。読み分けは先行仕様の完成品（`.kiro/specs/completed/areka-P0-dpi-transition-atomicity/signoff-procedure.md` の §6.5／§6.6）をそのまま引く。
 
@@ -48,7 +48,7 @@
 | 依存先 | 用途 | 制約 |
 |---|---|---|
 | `crates/areka/src/emo2_boot/spine.rs` の `SpineHarness` | 決定論一周テストの母体（起動・受け口・GPU World・後片付け） | 既存の公開面（構造体フィールドと関数）を使う。既存の判定・記録形は変えない |
-| `crates/areka-ghost/src/runtime.rs:219`／`:224` | 撫で・二重クリック・選択確定・毎秒通知・終了指示の注入 | 既存の公開送信端のみ。新設しない |
+| `crates/areka-ghost/src/runtime.rs:218`／`:223` | 撫で・二重クリック・選択確定・毎秒通知・終了指示の注入 | 既存の公開送信端のみ。新設しない |
 | `crates/areka/src/emo2_boot/frame/wiring.rs:280` | 表示指令の列の取り出し | `#[cfg(test)]` の既存取り出し口。追加しない |
 | `crates/areka/src/placement/transition_signoff_tests.rs` の走行 | 実機ログの機械判定 | 判定は決定論テストと同一の純関数を回す。判定を二重に書かない |
 | `.kiro/specs/completed/areka-P0-dpi-transition-atomicity/signoff-procedure.md` §6.5／§6.6 | 読み分けの表と合否ブロック | 引用して使う。独自の突合規約を作らない |
@@ -73,7 +73,7 @@
 
 見た目まで組む系統は `areka` クレート側にしか無い（`crates/areka/src/emo2_boot/spine.rs:681` の `boot_with` が headless GPU の World・合成した窓一式・実 emo2 資産・本番と同じ 4 つの受け口を組む）。要件討議はここを一周テストの置き場と裁定した（research §7.1）。`areka` は bin のみで lib を持たないため、内部へ届くテストは同じディレクトリの兄弟ファイルとして置くのが唯一の形である（`crates/areka/src/emo2_boot/mod.rs:29-34`）。
 
-既存の spine テスト 8 本は `spine.rs:907-930` の接続宣言で繋がれている。本仕様の一周テストも同じ形で 3 本を繋ぐ。
+既存の spine 兄弟テストは 8 ファイル（実テスト 19 本）が `spine.rs:907-930` の接続宣言（1 本 3 行）で繋がれている。本仕様の一周テストも同じ形で 3 本を繋ぐ。
 
 **足りないのは 3 点だけである。**
 
@@ -135,7 +135,7 @@ graph TB
 |---|---|---|---|
 | テスト実行 | Rust 2024 / `cargo test`（外部 CI 無し） | 決定論一周テストの常設実行 | 新規依存なし。`tokio` 不使用 |
 | テスト母体 | `crates/areka/src/emo2_boot/spine.rs` の `SpineHarness` | headless GPU World・合成窓・実 emo2 資産・本番同型の 4 受け口 | 既存。`make_world_with_gpu` は MTA COM 初期化＋WARP 可（`spine.rs:447-458`） |
-| 注入 | `areka-ghost` の kanade／dispatcher 送信端 | 毎秒通知・撫で・二重クリック・選択確定・終了指示 | 既存の公開面（`runtime.rs:219`／`:224`） |
+| 注入 | `areka-ghost` の kanade／dispatcher 送信端 | 毎秒通知・撫で・二重クリック・選択確定・終了指示 | 既存の公開面（`runtime.rs:218`／`:223`） |
 | 記録 | `ScriptedShioriHandle`（交信）／`Emo2Wiring::drain_received`（表示指令） | 列の採取 | 交信側に進行状態の記録を 1 系統追補する |
 | 実機判定 | `crates/areka/src/placement/transition_signoff_tests.rs` の明示実行走行 | 実機ログの機械判定 | 環境変数 `AREKA_TRANSITION_LOG`（定義は `crates/areka/src/placement/transition_judge_verdict.rs:102`） |
 | 完成判定 | `.claude/skills/kiro-complete/SKILL.md` の DoD 手順 | 全体テストと許諾の検査 | `deny.toml`・`about.toml`・`about.hbs` が実在するため許諾の検査は実際に走る |
@@ -169,7 +169,7 @@ crates/areka/src/emo2_boot/
 
 ### Modified Files
 
-- `crates/areka/src/emo2_boot/spine.rs` — ⑴ 末尾（`:907-930` と同じ形）へ接続宣言 3 本を追加。⑵ 受け口へ**記録の第 2 系統**（呼出 id と組み立て済み進行状態の対の列）を追補し、取り出し口を 1 本足す。既存の `RecordedCall`（`:109-118`）と `non_status_calls()`（`:287`）は変えない。
+- `crates/areka/src/emo2_boot/spine.rs` — ⑴ 末尾（`:907-930` と同じ形）へ接続宣言 3 本を追加。⑵ 受け口へ**記録の第 2 系統**（呼出 id と組み立て済み進行状態の対の列）を追補し、取り出し口を 1 本足す。記録の型と取り出し口の本体は `spine_conformance_support.rs` に置き、`spine.rs` にはフィールドと書き込み（2 か所）だけを残す（`spine.rs` は 930 行で余白 70 行・追補の予算は接続宣言込みで 40 行以内・Testing Strategy §2）。既存の `RecordedCall`（`:109-118`）と `non_status_calls()`（`:287`）は変えない。
 - `crates/areka-ghost/tests/ghost/spine_e2e_test_s3_helper_liveness_detected.rs` — `:174-185` の「待たずに数える」形を、既存の手本（`crates/areka/src/emo2_boot/spine_boot_smoke_tests.rs:32-36`）と同じ「条件が満たされるまで待つ」形へ更新（R9.2）。
 - `crates/wintf/src/ecs/window/zorder_pair_maintain_always_on_top_tests.rs` — `:369` と `:740` の 2 本へ理由付きの `#[ignore]` と環境変数の門を付与（R9.3）。判定ロジックは 1 行も変えない。
 - `crates/wintf/src/runtime/tick_bridge.rs` — `:346` の 1 本へ同じ形の門を付与（R9.3）。
@@ -504,7 +504,7 @@ flowchart TB
 **追補の形（挙動を変えない）**
 
 - 受け口へ**記録の第 2 系統**（呼出 id と組み立て済み進行状態の対の列）を足し、観測ハンドルへ取り出し口を 1 本足す。
-- 既存の記録型と既存の取り出し口は**一字も変えない**。ゆえに既存の兄弟テスト 8 本の照合はすべて素通しになる。
+- 既存の記録型と既存の取り出し口は**一字も変えない**。ゆえに既存の兄弟テスト 8 ファイル（19 本）の照合はすべて素通しになる。
 - 挙動が変わらないことの示し方: 追加した経路を読む既存の主張が 1 つも無いこと（追加は書き込みのみで、既存の読み手が増えない）。
 - **編集集合の具体化（R12.1・R12.5 の記録）**: 要件は編集集合を「兄弟テストファイル＋`spine.rs` のモジュール宣言 1 行」と書く。`spine.rs` は編集集合の中のファイルであり、本設計はその中の分量を「宣言 3 行＋記録の追補 1 か所」へ具体化する。`spine.rs` は丸ごとテスト専用（`crates/areka/src/emo2_boot/mod.rs:33-34`）ゆえ本番コードの改変には当たらない。採らなかった案（一周テスト専用の受け口を自前で組む）は起動手順の複製を招き、「新しいテスト機構を発明しない」に反する（research 決定 D）。
 
@@ -530,7 +530,7 @@ flowchart TB
 
 **毎秒の通知の注入形（R3.2）**
 
-`GhostRuntime::kanade()`（`crates/areka-ghost/src/runtime.rs:219`）へ `KanadeMsg::Tick { now }`（`crates/areka-kanade/src/msg.rs:123`）を直接投函する。既存 spine が投げているのは dispatcher 側（`spine.rs:857`）であり、そちらは再生の時刻を進めるだけで毎秒の通知を起こさない（`crates/areka-ghost/src/dispatcher.rs:126` → 再生層への中継のみ）。標準の台本が毎秒の通知を持たないのはこのためである（`spine.rs:666` が明記）。
+`GhostRuntime::kanade()`（`crates/areka-ghost/src/runtime.rs:218`）へ `KanadeMsg::Tick { now }`（`crates/areka-kanade/src/msg.rs:123`）を直接投函する。既存 spine が投げているのは dispatcher 側（`spine.rs:857`）であり、そちらは再生の時刻を進めるだけで毎秒の通知を起こさない（`crates/areka-ghost/src/dispatcher.rs:126` → 再生層への中継のみ）。標準の台本が毎秒の通知を持たないのはこのためである（`spine.rs:666` が明記）。
 
 **注入時刻と正典の一致**
 
@@ -703,7 +703,7 @@ research §10.1 の表を記録へ写す。要旨は次のとおり。
 
 0. **前提**: 32bit の橋渡し実行体を先にビルドし、実バイナリの隣へ置く。これが無いと全体テストが赤くなる。**完了手続きの検査項目には無い前提**であり、判定手順の側に書く（R10.3）。
 1. **隔離裁定を先に済ませる**（D11）。間欠的な赤が残ったまま「全通過」と記録しない（R10.7）。
-2. **⑴ 全体テストの成功**——完了手続きが 2 度計る（着手時と、完了置き場へ移した後）。**正の証跡は移した後の再実行**とする。移す前の緑は移した後の緑を保証しないためである。
+2. **⑴ 全体テストの成功**——完了手続きが 2 度計る（着手時と、完了置き場へ移した後）。**正の証跡は移した後の再実行**とする。移す前の緑は移した後の緑を保証しないためである。走行で間欠的な赤が出た場合は、同一コミットで再走を **1 回だけ**行い、再び赤なら D11 の裁定へ差し戻す（緑が出るまで回し続けない）。
 3. **⑵ 許諾の検査**——依存の許諾検査と第三者告知の生成。**本リポジトリには設定ファイルが実在するため実際に走る**。設定が無い場合の「設定不在により省略」は通ったものとして扱わない、という規則は維持するが、本仕様では発動しない（R10.2）。
 4. **⑶ 適合検証項目表 20 項目の実機サインオフ**——人間の判断。AI 単独で完成を宣言しない（R10.4・R5.10）。
 5. **宣言**——3 つの根拠（テストの出力・許諾の検査の出力・受入記録）を 1 か所から辿れる状態で行う（R10.5）。
@@ -844,8 +844,8 @@ research §10.1 の表を記録へ写す。要旨は次のとおり。
 
 ### 既存テストへの影響の確認
 
-1. **既存の spine 兄弟テスト 8 本が素通しであること**——記録の追補は書き込みのみで、既存の取り出し口と記録型を変えないため。追補の前後で 8 本の結果が変わらないことを確かめる。
-2. **1 ファイルの分量規律**——新規 3 ファイルがいずれも 1,000 行以下であること。上限の見張りは常設で走る。例外表には触れない。
+1. **既存の spine 兄弟テスト 19 本（8 ファイル）が素通しであること**——記録の追補は書き込みのみで、既存の取り出し口と記録型を変えないため。追補の前後で 19 本の結果が変わらないことを確かめる。
+2. **1 ファイルの分量規律**——新規 3 ファイルと、**追補後の `spine.rs`**（現在 930 行・余白 70 行・例外表に無い）がいずれも 1,000 行以下であること。`spine.rs` への追補は接続宣言 9 行＋フィールドと書き込み・取り出しで **40 行以内**を予算とし、記録の型と取り出し口の本体は `spine_conformance_support.rs` 側へ置く。上限の見張り（`crates/log-capture-kit/tests/file_length_guard_test.rs:145`・`:252`）は常設で走る。例外表には触れない。
 3. **走行時間**——既存 19 本 9.24 秒に対する増分が 1 秒前後であること（R12.6）。
 4. **更新した間欠的な赤 ⑴**——待つ形へ移した後、同じ確認が同じ結果を出すこと。
 
