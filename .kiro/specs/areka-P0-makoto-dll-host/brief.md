@@ -1,0 +1,91 @@
+# Brief: areka-P0-makoto-dll-host
+
+> 起票: 2026-09-02（`/kiro-discovery`・Path D の 2 本目・**L 規模**）。翻訳経路の **後半**＝MAKOTO/2.0 DLL のホスティング。前半は [areka-P0-translate-pipeline](../areka-P0-translate-pipeline/brief.md)（継ぎ目・展開順序・OnTranslate）で、本 spec は前半が用意する `Translator` フックへ DLL 鎖を差し込む。
+> **種別**: 互換機能の新設（32bit MAKOTO DLL・任意 charset・付け外し命令）。emo2 は使わない＝**M2 ゲート扱い**。
+> **ブリーフィング段階の裁定（2026-09-02・開発者）**: ⑷ 実機サインオフは**本物の MAKOTO DLL 1 本**（YAYA as MAKOTO の UTF-8 改良版）＋自前テスト DLL ⑸ **任意の charset 対応は常に欲しい**＝MAKOTO wire だけでなく **SHIORI 側 wire（今日 UTF-8 のみ）も本 spec で任意 charset へ広げる** ⑹ **シェル側 MAKOTO も含める**（ゴースト側→シェル側の鎖）⑺ spec 名は本名で確定。
+> ⚠ **一次資料の薄さ**: MAKOTO/2.0 の wire 規格ページは ukadoc に無い（`spec_makoto.html` は 404・MCP スナップショットにも無し）。下記の wire 形式は ooyashima 用語集「OnTranslate が SHIORI/3.0 に（`TRANSLATE Sentence` SHIORI/2.x に）実装された」＋Mac 互換ベースウェア Ourin の `MakotoTranslator.swift`＋.NET プロキシ dnproxy の対応表から復元したもの。**要件定義の先頭で本物の DLL（YAYA as MAKOTO のソース）で裏取りする**（別途調査中・結果は本 brief 末尾に追記）。
+
+## Problem
+
+ukadoc [トランスレータ](https://ssp.shillest.net/ukadoc/manual/manual_translator.html): ゴースト側（`ghost/master/makoto.dll`・descript [`makoto,ファイル名`](https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#makoto_2c_30d5_30a1_30a4_30eb_540d:1)）とシェル側（`shell/<名>/makoto.dll`）の両方に置け、**ゴースト側の翻訳の後にシェル側の翻訳**が行われる。SHIORI の `OnTranslate` と併用時は SHIORI → MAKOTO。用途は今日「シェルによって口調を変える」仕掛け（YAYA as MAKOTO：季節で服装と口調が変わるシェル・ウィンドウにお座りするシェル）。付け外しは [`\![reload,makoto]`](https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5breload_2cmakoto_5d:1)・[`\![unload,makoto]`](https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bunload_2cmakoto_5d:1)・[`\![load,makoto]`](https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5c_21_5bload_2cmakoto_5d:1)（SSP 2.5.58）。
+
+DLL の口は SHIORI と同じ [DLL 共通仕様](http://ssp.shillest.net/ukadoc/manual/spec_dll.html)（`load(HGLOBAL,long)`／`unload()`／`request(HGLOBAL,long*)`・要求 HGLOBAL は DLL が解放・応答 HGLOBAL はホストが解放・NUL 終端保証なし）。wire は SHIORI/2.x 風のヘッダ形式:
+
+```
+TRANSLATE Sentence MAKOTO/2.0\r\n
+Charset: <符号名>\r\n
+Sender: <ベースウェア名>\r\n
+String: <台詞>\r\n
+\r\n
+```
+
+応答は `MAKOTO/2.0 200 OK\r\n`＋（`Charset: …\r\n`）＋`String: <変換後>\r\n\r\n`。
+
+**利用者から見える結果（今日）**: `makoto,` を書いたゴースト／シェルは無言で翻訳されない（descript の未知キーは捨てられる）。加えて areka の wire は UTF-8 のみなので、**Shift_JIS のゴースト（里々／YAYA の標準テンプレートの大半）は SHIORI とも会話できない**＝互換の入口が閉じている。
+
+## Current State（2026-09-02 実測・着手時に再検証）
+
+- **32bit helper は DLL 1 本専用**: プロキシ保持スロット 1 つ（[main.rs:155](../../../crates/shiori-host32-helper/src/main.rs:155)）・DLL 名は argv 1 枠（`main.rs:491`）・wire の `MsgTag` は Hello/Load/Request/Response/Unload の 5 種で DLL 選別子なし（[lib.rs:44](../../../crates/shiori-host32-ipc/src/lib.rs:44)・凍結）。**関数の型は MAKOTO と同一**（[shiori_proxy.rs:63-70](../../../crates/shiori-host32-helper/src/shiori_proxy.rs:63)）で `ShioriByteProxy` は SHIORI/3.0 の知識を持たない＝そのまま流用可。spawn 契約は `[parent_hwnd, load_dir, dll_name]`（[process_host.rs:233](../../../crates/shiori-host32-host/src/process_host.rs:233)・cwd＝load_dir・`load()` の引数はディレクトリを ANSI で）。
+- **charset**: SHIORI/3.0 codec は `Charset::Utf8` のみ（[shiori3.rs:39](../../../crates/shiori-host32-host/src/shiori3.rs:39)・Shift_JIS は「切替シームのみ」と明記）。`client.rs:132/:169` が固定で渡す。`encoding_rs 0.8` はワークスペース依存に既にある（`areka-parsers` が descript の charset で使用）。
+- **descript**: `makoto,` は読まれない（[resolve.rs:76](../../../crates/areka-parsers/src/package/resolve.rs:76)・認識キーは name 4 種・`shiori`・`seriko.defaultsurfacedirectoryname` のみ）。shell 側 descript は bindgroup 既定値だけ転記（`resolve.rs:146`）。`ShioriMount` は `#[non_exhaustive]`（[model.rs:198](../../../crates/areka-parsers/src/package/model.rs:198)）。
+- **付け外し命令**: `reload`/`load`/`unload` の消費者は 0（reload という概念自体が未実装・`events.rs:109` に「M1 に reload なし」）。`\!` の消費者台帳は 4 行（[consumer_ledger.rs:221](../../../crates/areka/src/emo2_boot/consumer_ledger.rs:221)＝move／bind／set,zorder／reset,zorder・全て表示側）。**ゴースト側（アクター）へ届く cue 消費者は今日 1 つも無い**。
+- **接続の所有**: `ShioriConnection`（窓＋helper ライフサイクル・[real.rs:36](../../../crates/areka-kanade/src/shiori/real.rs:36)）が SHIORI 1 本分。
+- **テスト資産**: 偽 32bit DLL `shiori-host32-testdll`（cdylib・出力 `shiori.dll`・HGLOBAL 所有権を忠実に再現・`HOST32_TESTDLL_LOAD_FAIL` で load 失敗注入）と `shiori-host32-host/tests/*_e2e.rs`（i686 helper を先ビルド・`HOST32_HELPER_EXE`）。
+
+## Desired Outcome
+
+1. **descript の `makoto,` を読む**: ゴースト側（`ghost/master/descript.txt`）とシェル側（`shell/<名>/descript.txt`）の両方。未指定なら翻訳なし（推測しない）。ukadoc は単値のみ＝複数値 `[a,b]`（ooyashima 非公式）は受け付けず `warn!`（COMPAT §8 に登記）。
+2. **MAKOTO/2.0 の wire codec**（純粋関数・要求組立と応答解析）: 上記形式。`Sender: areka`。応答は状態行 `MAKOTO/x.y 200` かつ `String:` ありのとき置換（空文字列も採用）、それ以外（非 200・`String:` なし・解析不能・タイムアウト）は**元の台詞**（`warn!`）。台詞中の CR/LF は要求に載せない（さくらスクリプトの改行は `\n` タグ＝実改行は持たない・持っていたら除去して `debug!`）。
+3. **ホスティング＝DLL 1 本につき 32bit helper プロセス 1 つ**（ゴースト側・シェル側で最大 2 つ追加）。wire（`MsgTag`）は無改変・helper の DLL 名 argv をそのまま使う・`ShioriByteProxy` 流用。親側に `MakotoConnection`（`ShioriConnection` と同形・窓＋ライフサイクル）。**load 失敗は致命ではない**: `error!` を残して翻訳なしで起動を続ける（SHIORI の load 失敗＝致命とは扱いが違う・COMPAT §8）。終了時は SHIORI と同じ正規の unload 経路。
+4. **鎖の順序**: 〔前半 spec の OnTranslate〕→ ゴースト側 MAKOTO → シェル側 MAKOTO。鎖は起動時に組む（シェル切替は未実装＝切替時の付け替えは将来 spec）。
+5. **任意 charset（共有の符号化器）**: `encoding_rs` で 1 つの符号化器（名前 ⇄ 符号・`Charset` ヘッダ値の解決・未知名は `warn!`＋既定へ）を作り、**MAKOTO codec と SHIORI/3.0 codec の両方**に配線する。規則（要件定義で確定）: 要求 charset の既定＝ghost descript `charset`（不在は Shift_JIS＝正典既定）、応答は応答の `Charset:` ヘッダ優先（無ければ要求と同じ）、以後の要求は最後の応答 charset に追随（SSP の挙動と伝えられる＝ukadoc [SHIORI/3.0](http://ssp.shillest.net/ukadoc/manual/spec_shiori3.html) で裏取り）。**pasta.dll（UTF-8 宣言）への wire は bit 同一**（golden bytes の決定論テストで担保＝e2e 経路の挙動不変）。
+6. **付け外し命令**: `\![unload,makoto]`（鎖の全 DLL を unload・以後は素通し）／`\![load,makoto]`（unload 後に再ロード・ロード済みなら冪等）／`\![reload,makoto]`（unload→load）。消費者台帳に 3 行（選別子 `makoto`）。**cue 消費者からゴースト側アクターへ届く最初の配線**＝UI スレッドを塞がないメッセージ経路で設計する。命令は鎖の両側（ゴースト側・シェル側）に効く（SSP は明記なし＝COMPAT §8）。
+7. **決定論テスト**: ⑴ codec の往復（要求 bytes golden・応答行列 200／200 空／非 200／`String:` なし／壊れた charset）⑵ charset 符号化器（Shift_JIS／UTF-8／未知名・SHIORI codec の UTF-8 golden が不変）⑶ 新設 `shiori-host32-makoto-testdll`（i686 cdylib・出力 `makoto.dll`・決定論の変換〔例: 末尾に固定語を付ける〕・応答 charset を Shift_JIS に切り替える env・load 失敗注入・非 200 注入）で helper 経由の e2e ⑷ descript 読取（ゴースト／シェル／不在／複数値）⑸ 鎖の順序（ゴースト側→シェル側の変異＝入れ替えると赤）⑹ 命令 3 種の状態遷移（Loaded／Unloaded・冪等）⑺ load 失敗時に起動が続く。
+8. **実機サインオフ**（有界 auto-exit＋`RUST_LOG` grep）: ⑴ **YAYA as MAKOTO UTF-8 改良版**（nightwork 配布）＋語尾変換の小辞書を emo2 の複製ゴーストへ `makoto,` で装着し、台詞に変換が出ること・`\![reload,makoto]` の往復 ⑵ 同じ DLL をシェル側に置いて鎖の順序 ⑶ Shift_JIS 応答を返すテスト DLL で文字化けなし。Shift_JIS の**実 SHIORI**（里々テンプレート）は任意（追記(89)⑧⑷ の段階 A 検証対象と合わせて要件定義で裁定）。
+9. `cargo test --workspace` 緑（i686 先ビルド）・1,000 行未満・例外表非接触。
+
+## Approach
+
+**別プロセス案（推奨）**: MAKOTO DLL 1 本につき既存 helper をもう 1 プロセス起こす。wire・helper は無改変（DLL 名は既に汎用 argv）、親側の接続型を SHIORI と同形でもう 1 つ持つ。解決: 32bit 同居・所有権・ライフサイクル・死活監視が SHIORI と同じ機構で得られる。未解決: プロセスが最大 3 つになる（起動コストは helper 1 本あたり数十 ms・M1 の計測結果を再計測）。
+
+**多重 DLL 案（不採用）**: helper に DLL 選別子を足して 1 プロセスで複数 DLL を飼う。解決: プロセス数 1。未解決: 凍結 wire（`MsgTag`）の改変・helper の単一スロット設計の全面改修・SHIORI と MAKOTO の障害が同居する（片方のクラッシュで会話が止まる）。SAORI の「同 32bit プロセス同居」（COMPAT §5:87）は SHIORI が自分で `LoadLibrary` する話であり、ベースウェアが呼ぶ MAKOTO には当てはまらない。
+
+x64 in-proc（COM `IShiori`）の MAKOTO 版は作らない（そのような DLL は存在しない・MAKOTO は常に 32bit helper 経由）。arm64 ホストでも helper は i686（SHIORI と同じ）。
+
+## Scope
+
+- **In**: descript `makoto,`（ghost／shell）・`MakotoMount`・MAKOTO/2.0 codec・共有 charset 符号化器＋**SHIORI/3.0 codec への配線**（`shiori3.rs`／`client.rs`）・`MakotoConnection`（第 2/3 helper）・鎖と順序・`Translator` フックへの差し込み・命令 3 種と消費者台帳 3 行・`shiori-host32-makoto-testdll` 新設・e2e・実機サインオフ・COMPAT §5（MAKOTO ホスティング）／§8（裁量 4 件＝複数値拒否・load 失敗は非致命・命令は鎖全体・charset 追随規則）・`boot_config.rs`（helper exe の再利用）。
+- **Out**: `OnTranslate`・翻訳の継ぎ目・展開順序（前半 spec）・シェル切替時の鎖の付け替え（切替自体が未実装）・SAORI／PLUGIN／HEADLINE・`\![reload,shiori]`（本 spec の reload 機構で書けるようになるが起票は別・追跡登記）・Shift_JIS の**実 SHIORI**での e2e（任意）・descript `charset` 以外の符号自動判別。
+
+## Boundary Candidates
+
+- ⓐ **共有 charset 符号化器＋SHIORI wire 採用**（S・独立 PR 可・挙動不変を golden で担保）。
+- ⓑ **第 2 helper のライフサイクル＋MAKOTO codec＋descript＋鎖**（L・本体）。
+- ⓒ **付け外し命令 3 種**（M・ゴースト側へ届く cue 消費者の初出＝配線の型を決める）。
+- 分割の裁定は開発者（推奨: ⓐ を先に単独着地させ、ⓑⓒ を 1 PR）。
+
+## Out of Boundary
+
+- 翻訳の継ぎ目そのもの（前半 spec が所有・本 spec はフックを埋めるだけ）。
+- helper の wire（`MsgTag`）改変・helper の多重 DLL 化。
+- 里々／YAYA を areka がソースビルドすること（COMPAT §5:87・bitness 連鎖）。
+
+## Upstream / Downstream
+
+- **Upstream**: `translate-pipeline`（`Translator` フックと出所語彙）・完了 spec `host32-ipc`／`host32-lifecycle`／`host32-request`／`host32-shiori-load`（helper・wire・ライフサイクル）・`parser-foundation`（encoding_rs・descript charset）・`package-mount`（`MountModel`）。
+- **Downstream**: `ukadoc-coverage-roadmap`（MAKOTO 項目 5 件＋charset の段階 A 反映）・将来のシェル切替 spec（鎖の付け替え）・`\![reload,shiori]`（reload 機構の再利用・追跡登記）・Shift_JIS 実ゴースト（里々／YAYA テンプレート）の起動検証 spec。
+
+## Existing Spec Touchpoints
+
+- **Extends**: 完了 spec `host32-request`（codec の `Charset` 列挙＝「切替シームのみ」を実符号化へ）・`package-mount`（`MountModel` に `makoto`）。完了 spec の文書は改変せず、縮退表の更新は COMPAT §8 で行う。
+- **Adjacent**: `property-query-channels` ⑵ IPC 片（`shiori-host32-*`・`areka/shiori_host.rs`＝**共有あり**）と ⑴⑶（`consumer_ledger.rs`＝**共有あり**）→ **直列**（先着が rebase 源）／`ukadoc-survey-shiori`（kanade/schedule の doc 1 行＝後着 rebase）／`ukadoc-survey-toolkit`（`Cargo.lock` の機械マージのみ）／`emo2-conformance-e2e`（tests のみ・**ただし SHIORI wire の charset 配線は e2e 経路に触る＝golden で不変を証明してから合流**）。
+- **編集集合（2026-09-02 実測）**: `crates/shiori-host32-host/src/{shiori3.rs, client.rs}`＋新規 `charset.rs`（共有符号化器・置き場は design で `shiori-host32-ipc` か `-host` を選ぶ）・新規 `crates/shiori-host32-makoto-testdll/`・`crates/areka-parsers/src/package/{model,resolve}.rs`・`crates/areka-kanade/src/shiori/real.rs`＋新規 `crates/areka-kanade/src/makoto/{mod,codec,chain}.rs`・`crates/areka-ghost/src/{runtime.rs, shiori_wiring.rs}`＋新規 `makoto_wiring.rs`・`crates/areka/src/{boot_config.rs, emo2_boot/consumer_ledger.rs}`・`Cargo.lock`・`doc/COMPAT_ARCHITECTURE.md` §5/§8。helper（`shiori-host32-helper`）と `shiori-host32-ipc` の wire は非接触。
+
+## Constraints
+
+- 32bit 可搬性の適用範囲は host-32 系のみ（roadmap 制約）・helper は i686・テストは x64 の偽境界＋i686 e2e（記憶 prefer-x64-fake-boundary-tests-not-x86）。
+- ログ無し失敗経路の禁止（load 失敗・非 200・charset 未知は全て `warn!`/`error!`）。
+- 本番 env は `AREKA_` 冠（テスト DLL の注入 env は `HOST32_` 系の既存慣行に従う）。
+- 1 ファイル 1,000 行未満・兄弟テスト・例外表非接触。
+- 実機の定石: 絶対パス起動・i686 先ビルド・`AREKA_APP_SMOKE_EXIT_MS`・`RUST_LOG` grep（記憶 areka-real-machine-signoff-bounded-auto-exit）。
+- 正典の根拠: ukadoc [トランスレータ](https://ssp.shillest.net/ukadoc/manual/manual_translator.html)・[descript makoto](https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#makoto_2c_30d5_30a1_30a4_30eb_540d:1)・[DLL 共通仕様](http://ssp.shillest.net/ukadoc/manual/spec_dll.html)・`\![load|unload|reload,makoto]`・[ゴースト](https://ssp.shillest.net/ukadoc/manual/manual_ghost.html)／[シェル](https://ssp.shillest.net/ukadoc/manual/manual_shell.html)の配置図・YAYA wiki「YAYA as MAKOTO」。wire 形式の二次資料: Ourin `MakotoTranslator.swift`・dnproxy readme（対応プロトコル MAKOTO/2.0）・ooyashima 用語集。
