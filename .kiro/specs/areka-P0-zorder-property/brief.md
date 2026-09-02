@@ -38,7 +38,7 @@ ukadoc プロパティ **`currentghost.seriko.zorder`**（SSP 2.8.78・[SET有�
 
 ## Upstream / Downstream
 
-- **Upstream**: `areka-P0-scope-zorder-pinning`（グループ台帳・解釈純関数・COMPAT §8 登記＝完成待ち）。
+- **Upstream**: `areka-P0-scope-zorder-pinning`（グループ台帳・解釈純関数・COMPAT §8 登記）＝**2026-09-02 完了・`.kiro/specs/completed/areka-P0-scope-zorder-pinning/`**。⚠着手前に `areka-P0-currentghost-property-tree` との**二重所有裁定**〔`currentghost.seriko.zorder` を本 spec が単独で持つのか、プロパティ樹 spec が一括で持つのか〕を 1 度で決めること（roadmap M2 ゲート節に持ち越しを登記済み）。
 - **Downstream**: M2 互換面拡大の各ゴースト適合。
 
 ## Constraints
