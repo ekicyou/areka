@@ -403,7 +403,7 @@ ukadoc の MCP 検索で総覧を引き直した。**要件・設計の内容を
 
 - **文脈**: R2.2（終了握手を一周に含む）・R3.9（終了挨拶 → 終了指示 → 解放の順序・解放はちょうど 1 度）。
 - **確かめた事実**: 既存 spine の終了は `GhostRuntime::shutdown` 経由の強制終了であり、`OnClose` は片道の NOTIFY になる（`spine.rs:675`・`spine_talk_close_tests.rs:286-292`）。通常の握手（`OnClose` GET → 終了挨拶 → `\-` → 解放）は `KanadeMsg::CloseRequest { reason }`（`crates/areka-kanade/src/msg.rs:127`）で始まり、`ClosePending` で応答スクリプトを受けて `CloseTalkWait` へ進む（`crates/areka-kanade/src/schedule/close.rs:57-72`）。終了後は `Stopped` へ落ち、kanade のアクターは受信ループを抜ける（`crates/areka-kanade/src/schedule/mod.rs:629`・`crates/areka-kanade/src/actor.rs:106`）。
-- **採った形**: 一周の最終段で `ghost.kanade()` へ `CloseRequest{User}` を投函し、台本は `OnClose` の **GET** 応答に終了挨拶＋`\-` を積む。走行後の後片付けは既存の `shutdown_bounded`（`spine.rs:871`）をそのまま使う——同関数は終了指示の結果を捨てる（`:885`）ので、既に止まっている kanade への強制終了が失敗しても畳み方は成立する。
+- **採った形**: 一周の最終段で `ghost.kanade()` へ `CloseRequest{User}` を投函し、台本は `OnClose` の **GET** 応答に終了挨拶＋`\-` を積む。終了段の完了条件は「解放がちょうど 1 件記録され、かつ `ghost.kanade()` への送信が Err（受信側が閉じた）になること」まで延ばす（設計討議 #1 裁定・2026-09-02）。走行後の後片付けは既存の `shutdown_bounded`（`spine.rs:871`）をそのまま使う——後片付けの時点で kanade は自己終了済みなので強制終了の届く先が無く（`runtime.rs:242-244` が送出失敗を正常系として次段へ進む）、解放を出せる唯一の主体（kanade の終了系列・`real.rs:201`）も残らないため、二重終了は構造的に起きない。当初の理由付け「結果を捨てる（`:885`）から安全」は送出そのものを止めないので差し替えた（検証報告 重大 2）。
 - **判定**: 解放がちょうど 1 度であることは、記録の全体から解放の件数を数えて 1 と照合する。台本の解放応答は 1 度きり消費（`spine.rs:163`・`:263`）ゆえ 2 度目が起きれば受け口が落ちる。
 - **採らなかった案**: 強制終了のままにする（終了挨拶が出ないので一周の最終段が成立しない）。
 
