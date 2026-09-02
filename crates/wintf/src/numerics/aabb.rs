@@ -37,6 +37,10 @@ impl Aabb {
         })
     }
 
+    pub const fn new_rect(r: D2D_RECT_F) -> Self {
+        Self(r)
+    }
+
     /// union の単位元（反転無限大）。`is_empty()` とも整合。
     pub const EMPTY: Aabb = Aabb::new(
         f32::INFINITY,
@@ -44,6 +48,26 @@ impl Aabb {
         f32::NEG_INFINITY,
         f32::NEG_INFINITY,
     );
+
+    #[inline]
+    pub fn left(&self) -> f32 {
+        self.0.left
+    }
+
+    #[inline]
+    pub fn top(&self) -> f32 {
+        self.0.top
+    }
+
+    #[inline]
+    pub fn right(&self) -> f32 {
+        self.0.right
+    }
+
+    #[inline]
+    pub fn bottom(&self) -> f32 {
+        self.0.bottom
+    }
 
     #[inline]
     pub fn width(&self) -> f32 {
