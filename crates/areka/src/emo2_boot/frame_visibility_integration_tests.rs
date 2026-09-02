@@ -81,6 +81,7 @@ fn boot_wiring(
         rx,
         mpsc::channel::<MoveDirective>().1,
         lifecycle_rx,
+        mpsc::channel::<crate::emo2_boot::zorder_cue::ZOrderDirective>().1,
         Rc::new(RefCell::new(TextLayerRuntime::new(
             TextLayerConfig::default(),
         ))),

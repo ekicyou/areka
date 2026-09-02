@@ -21,7 +21,10 @@ use areka_parsers::balloon::BalloonModel;
 
 use super::super::balloon_visibility::BalloonVisibilityState;
 use super::super::talk_lifecycle::TalkLifecycleSignal;
+use super::super::zorder_cue::ZOrderDirective;
+use super::zorder_descript::apply_descript_base;
 use super::{BootAssets, DpiChangedQuery, MoveDirective, TalkClock};
+use crate::placement::zorder_group_ledger::ZOrderGroupLedger;
 
 // ---------------------------------------------------------------------------
 // Emo2Wiring＋attach フェーズ（tasks.md task 4.1・design「UI 毎フレーム結線 / frame」）
@@ -68,6 +71,28 @@ pub struct Emo2Wiring {
     /// 取り出しは可視性相の `try_iter` による**全件 drain**。受信前の信号はチャネル
     /// 自身が保留バッファとして預かるため、attach 前に始まった会話の信号も落ちない。
     pub(in crate::emo2_boot) lifecycle_rx: Receiver<TalkLifecycleSignal>,
+    /// talk スレッド（`ZOrderCueSink`）からの重なりの指令受信端（frame 相の取り出し
+    /// ＝[`run_zorder_drain_phase`](super::zorder_drain::run_zorder_drain_phase) が消費）。
+    ///
+    /// `move_rx` と同型の配線: [`super::super::wire_emo2_boot`] が
+    /// `mpsc::channel::<ZOrderDirective>()` を作り、送出端を `GhostBootOptions.sinks` の
+    /// 5 本目（`ZOrderCueSink`）へ、受信端をここへ渡す（areka-P0-scope-zorder-pinning task 6.2）。
+    /// `\![set,zorder,…]`／`\![reset,zorder]` の**解釈前のトークン列**が到着順に届く。
+    ///
+    /// 窓の正本（`GhostWindows`）が World に載るまで取り出しの相は `try_iter` を呼ばず、
+    /// チャネル自身が保留バッファを兼ねる——起動直後のタグも落ちない。
+    pub(super) zorder_rx: Receiver<ZOrderDirective>,
+    /// 重なりのグループ台帳（正本）。取り出しの相が指令を適用し、鎖の合成の入力になる。
+    ///
+    /// `balloon_visibility` と同じ理由でここに置く——相関数は排他 system から呼ばれる素の
+    /// 関数で `Local` を取れないため、フレームを跨いで生きる器が結線状態の側に要る。
+    /// 合成した鎖の写し（wintf の `ZOrderChainPlan`）は World 側に在るが、**正本はこちら**で
+    /// あり二重帳簿にはしない（design「Data Models」）。
+    ///
+    /// 構築の時点では常に既定（グループ 0 本）から始まる。shell 設定由来の基底は、
+    /// 起動の段が [`Emo2Wiring::seed_zorder_descript_base`] で 1 度だけ据える
+    /// （取り出しの相が 1 度も走る前＝タグの実行より前・要件 5.1）。
+    pub(super) zorder_ledger: ZOrderGroupLedger,
     /// バルーン可視性コントローラが持ち越す状態（エッジ検出・計測・抑止の記憶）。
     ///
     /// 判断中核（[`super::super::balloon_visibility::decide`]）は状態を `&mut` で受けて更新する
@@ -118,12 +143,15 @@ impl Emo2Wiring {
     /// 保持し、attach フェーズ（[`run_attach_phase`]）が `take` で高々 1 回消費する。`move_rx` は
     /// `MoveCueSink`（talk スレッド）と対の受信端で、frame 相 drain（task 9.2）が消費する。
     /// `lifecycle_rx` は `BalloonLifecycleSink`（同じく talk スレッド）と対の受信端で、バルーン
-    /// 可視性相が消費する。可視性の持ち越し状態は外から与えず初期値から始める。
+    /// 可視性相が消費する。`zorder_rx` は `ZOrderCueSink`（同じく talk スレッド）と対の
+    /// 受信端で、取り出しの相（task 6.2）が消費する。可視性の持ち越し状態と重なりの台帳は
+    /// 外から与えず初期値から始める。
     pub fn new(
         presenter: EmoPresenter,
         rx: Receiver<PresentCommand>,
         move_rx: Receiver<MoveDirective>,
         lifecycle_rx: Receiver<TalkLifecycleSignal>,
+        zorder_rx: Receiver<ZOrderDirective>,
         runtime: Rc<RefCell<TextLayerRuntime>>,
         clock: TalkClock,
         assets: BootAssets,
@@ -133,6 +161,10 @@ impl Emo2Wiring {
             rx,
             move_rx,
             lifecycle_rx,
+            zorder_rx,
+            // 台帳は既定（グループ 0 本）から始める。shell 設定由来の基底を据えるのは
+            // 起動の段の担当であり、結線はその器を用意するところまでを負う。
+            zorder_ledger: ZOrderGroupLedger::default(),
             // 可視性の持ち越し状態は初期値（未観測・計測なし）から始める。
             balloon_visibility: BalloonVisibilityState::default(),
             runtime,
@@ -146,6 +178,21 @@ impl Emo2Wiring {
             // 初回 [`run_dpi_phase`] で遅延生成する（`SystemState::new` は `&mut World` を要する）。
             dpi_state: None,
         }
+    }
+
+    /// shell 設定（`seriko.zorder`）由来の基底を台帳へ据える（起動の段の入口・要件 5.1）。
+    ///
+    /// 台帳は `frame` の内側に閉じているので、起動の結線（`wire_emo2_boot`）はこの口から
+    /// 触る。呼ぶのは **`insert_non_send` より前・最初の `FrameFinalize` より前**の 1 回だけで
+    /// あり、そのとき取り出しの相はまだ 1 度も走っていない——ゆえに基底はタグの実行を待たずに
+    /// 最初の維持の巡から効く（design「descript 起動時適用」）。
+    ///
+    /// 解釈・拒否・記録はすべて [`apply_descript_base`] が持つ。ここは台帳への到達だけを
+    /// 引き受け、判断を 1 つも持たない。
+    ///
+    /// [`apply_descript_base`]: super::zorder_descript::apply_descript_base
+    pub(in crate::emo2_boot) fn seed_zorder_descript_base(&mut self, zorder_raw: Option<&str>) {
+        apply_descript_base(&mut self.zorder_ledger, zorder_raw);
     }
 
     /// 当たり判定 resolver への読み口（design DD-IE-9/DD-IE-10・「Modified Files」mod.rs 行）。

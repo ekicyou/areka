@@ -1,5 +1,6 @@
 //! 先送りした正典語彙が、本フィーチャーの wintf 側の本番コードに 1 つも入り込んで
-//! いないことを機械的に確かめるテスト（要件 8.3／8.4／8.5）。
+//! いないことを機械的に確かめるテスト（要件 8.3／8.4／8.5、および重なり順のグループ機構の
+//! 要件 10.4／11.4）。
 //!
 //! # なぜ文章ではなく走査で確かめるのか
 //!
@@ -8,14 +9,20 @@
 //! そこで本テストは、本フィーチャーが持つ本番ファイルの中身を読み、先送り語彙に対応する
 //! 語が 1 つも現れないことを毎回の `cargo test` で確かめる。
 //!
-//! # 走査の対象（なぜこの 5 ファイルなのか）
+//! # 走査の対象（なぜこの 8 ファイルなのか）
 //!
-//! 要件 8.3〜8.5 が言うのは「**本フィーチャーにおいて**足さない」ことである。リポジトリ全体を
+//! 要件 8.3〜8.5（ペア機構）と要件 11.4（グループ機構）が言うのは「**本フィーチャーに
+//! おいて**足さない」ことである。リポジトリ全体を
 //! 走査すると、別フィーチャーが正当に持っている窓の一般機構（`wintf` の窓スタイル層など）まで
 //! 拾ってしまい、主張が「areka 全体が最小化を実装していない」という別物へすり替わる。
-//! よって対象は**本フィーチャーが全部を書いたファイル**に限る——`zorder_pair` 系の本番
-//! ファイル 5 本である。areka 側（宣言と記録の 2 ファイル）は兄弟の
-//! `spawn_zorder_pair_deferred_tests.rs` が同じ形で受け持つ。
+//! よって対象は**重なり順の機構が全部を書いたファイル**に限る——`zorder_pair` 系の本番
+//! ファイル 5 本と `zorder_chain` 系の本番ファイル 3 本である（`zorder_group` 系の本番
+//! ファイル 3 本は改訂第 2 版の task 5.1 で退役し、名簿からも落とした）。areka 側は
+//! 兄弟の `spawn_zorder_pair_deferred_tests.rs` が同じ形で受け持つ。
+//!
+//! 新設ファイルが走査から漏れないことは、
+//! `the_scanned_roster_covers_every_zorder_production_source_in_this_crate` が
+//! 実在するファイルと名簿の両方向で見張る（要件 10.4）。
 //!
 //! 本フィーチャーが共有ファイルへ足した継ぎ目は、`window_proc` の非活性化の枝、`api.rs` の
 //! 走査ラッパ（`get_window_above`／`get_window_below`／`is_window_visible`）と帯の所属を
@@ -39,9 +46,10 @@
 //! 読みと書きを区別できないので、この向きの取りこぼしは走査の既知の性質である。
 //!
 //! よって `api.rs` は走査の対象に**入れない**。入れれば、帯へ書かないための読み取りが
-//! 「帯へ書いた」と告発されることになり、主張が裏返る。走査対象一覧（`PRODUCTION_FILES`）と
-//! 走査語（`DEFERRED_NEEDLES`）は現状のままが正しい。帯へ**書く**側が本フィーチャーの
-//! 本番ファイルへ入り込めば、下の走査がそのまま捕まえる。
+//! 「帯へ書いた」と告発されることになり、主張が裏返る。`api.rs` を走査対象一覧
+//! （`PRODUCTION_FILES`）へ入れない判断と、走査語（`DEFERRED_NEEDLES`）の 9 語は、
+//! グループ機構のファイルを足した後も変えない。帯へ**書く**側が対象のファイルへ
+//! 入り込めば、下の走査がそのまま捕まえる。
 //!
 //! # `\v` を語として走査しない理由
 //!
@@ -60,13 +68,22 @@
 
 use std::path::PathBuf;
 
-/// 本フィーチャーが全部を書いた wintf 側の本番ファイル（`CARGO_MANIFEST_DIR` からの相対）。
-const PRODUCTION_FILES: [&str; 5] = [
+/// 重なり順の 2 機構が全部を書いた wintf 側の本番ファイル（`CARGO_MANIFEST_DIR` からの相対）。
+///
+/// 先頭 5 本はペア機構（`ghost-window-zorder`）、残る 3 本は
+/// `areka-P0-scope-zorder-pinning` 改訂第 2 版（所有の鎖）が新設したもの。改訂第 1 版の
+/// グループ機構 3 本は task 5.1 で退役し、実装・檻ともども消えている。下の
+/// `the_scanned_roster_covers_every_zorder_production_source_in_this_crate` が
+/// 「実在する `zorder_` 系の本番ファイルが 1 本残らずここに載っている」ことを機械で見張る。
+const PRODUCTION_FILES: [&str; 8] = [
     "src/ecs/window/zorder_pair.rs",
     "src/ecs/window/zorder_pair_diag.rs",
     "src/ecs/window/zorder_pair_establish.rs",
     "src/ecs/window/zorder_pair_maintain.rs",
     "src/ecs/window/zorder_pair_sink.rs",
+    "src/ecs/window/zorder_chain.rs",
+    "src/ecs/window/zorder_chain_apply.rs",
+    "src/ecs/window/zorder_chain_diag.rs",
 ];
 
 /// 先送り語彙（小文字で保持し、走査も小文字化して行う）と、それが何の入口かの説明。
@@ -229,4 +246,86 @@ fn the_deferred_vocabulary_scan_can_actually_find_what_it_looks_for() {
         maintain.contains("pub fn apply_zorder_pair_maintenance"),
         "コードだけの本文から維持系の定義が消えている"
     );
+}
+
+/// `src` 配下の `.rs` を再帰で集め、`CARGO_MANIFEST_DIR` からの相対パス（`/` 区切り）で返す。
+fn all_source_files() -> Vec<String> {
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut stack = vec![manifest.join("src")];
+    let mut found = Vec::new();
+    while let Some(dir) = stack.pop() {
+        let entries = std::fs::read_dir(&dir)
+            .unwrap_or_else(|e| panic!("ソースの木を辿れなかった（{}）: {e}", dir.display()));
+        for entry in entries {
+            let path = entry.expect("ディレクトリ項目を読めなかった").path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.extension().and_then(|e| e.to_str()) == Some("rs") {
+                let relative = path
+                    .strip_prefix(&manifest)
+                    .expect("マニフェスト配下のはず")
+                    .to_string_lossy()
+                    .replace(std::path::MAIN_SEPARATOR, "/");
+                found.push(relative);
+            }
+        }
+    }
+    found.sort();
+    found
+}
+
+/// 重なり順の 2 機構（ペア・グループ）が全部を書いた wintf 側の本番ファイル
+/// ＝ファイル名が `zorder_` で始まり、テストでもテスト専用の道具立てでもないもの。
+fn zorder_production_sources() -> Vec<String> {
+    all_source_files()
+        .into_iter()
+        .filter(|relative| {
+            let name = relative.rsplit('/').next().unwrap_or(relative);
+            name.starts_with("zorder_")
+                && !name.ends_with("_tests.rs")
+                && !name.ends_with("_test_support.rs")
+        })
+        .collect()
+}
+
+/// 走査対象の一覧が、実在する本番ファイルへ両方向で追随していることを固定する。
+///
+/// 上の 2 つのテストは `PRODUCTION_FILES` に**載っているものだけ**を読む。名簿が実物から
+/// ずれても「無い」の主張はそのまま緑になるので、守りは静かに狭まる（新しい本番ファイルが
+/// 生えても誰も赤くならない）。ここでは
+/// ⑴ 実在する `zorder_` 系の本番ファイルが 1 本残らず名簿に載っていること、
+/// ⑵ 名簿の各項目が実在すること、
+/// の両方向を機械で確かめる。走査から外すのはテスト（`*_tests.rs`）と、`#[cfg(test)]` でしか
+/// 結線されないテスト専用の道具立て（`*_test_support.rs`）だけである。
+#[test]
+fn the_scanned_roster_covers_every_zorder_production_source_in_this_crate() {
+    let actual = zorder_production_sources();
+
+    // ① 道具の較正: 既知の正例が挙がり、既知の偽例（テスト）は挙がらない。
+    assert!(
+        actual.contains(&"src/ecs/window/zorder_pair.rs".to_string()),
+        "実物の走査が効いていない（既知の本番ファイルを見つけられない）: {actual:?}"
+    );
+    assert!(
+        !actual.iter().any(|p| p.ends_with("_tests.rs")),
+        "テストファイルを本番ファイルとして数えている: {actual:?}"
+    );
+
+    // ② 実物が名簿から漏れていない。
+    let missing: Vec<&String> = actual
+        .iter()
+        .filter(|relative| !PRODUCTION_FILES.contains(&relative.as_str()))
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "本番ファイルが先送り語彙の走査対象に載っていない（名簿へ足すこと）: {missing:?}"
+    );
+
+    // ③ 名簿の項目が実在する（改名・移動で名簿だけが取り残されない）。
+    for relative in PRODUCTION_FILES {
+        assert!(
+            source_path(relative).is_file(),
+            "走査対象の一覧に実在しないファイルが載っている: {relative}"
+        );
+    }
 }

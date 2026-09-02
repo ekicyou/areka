@@ -631,6 +631,64 @@ fn prepare_emo2_carries_author_dpi_read_once_for_attach() {
 }
 
 // ------------------------------------------------------------------
+// shell `seriko.zorder` の搬送（areka-P0-scope-zorder-pinning 要件 5.1／5.2）
+// ------------------------------------------------------------------
+
+/// 準備の中間結果を、`seriko.zorder` の有無だけ変えて組む（他の入力は最小の空）。
+///
+/// 採寸結果を空にしてあるのは、搬送の主張が寸法にも配置にも一切依らないからである
+/// （この値は窓を 1 mm も動かさない）。
+fn stages_with_shell(shell_kv_text: &str) -> PreparedStages {
+    PreparedStages {
+        cfg: config::build_placement_config(
+            &areka_parsers::kv::parse_kv(""),
+            &areka_parsers::kv::parse_kv(shell_kv_text),
+        ),
+        sizes: MeasuredSizes { scopes: Vec::new() },
+        titles: GhostTitles::from_scope_titles(Vec::new()),
+        author_dpi: AuthorDpi::DEFAULT,
+        // 採寸 DPI は既定の 96（この助手は寸法にも配置にも依らないので値は判定に効かない）。
+        measure_dpi: DPI::from_dpi(96, 96),
+    }
+}
+
+/// shell が `seriko.zorder` を宣言していれば、その**生の値がそのまま**準備の結果に載る。
+///
+/// 起動の結線（`wire_emo2_boot`）はこの欄から重なりの基底を受け取る。ここで落ちると
+/// 設定は本番で一切効かないが、配置も採寸も何一つ変わらないので他のどの檻にも映らない。
+#[test]
+fn prepare_carries_the_shell_zorder_value_verbatim() {
+    let prepared = stages_with_shell(
+        "seriko.zorder,1,0
+",
+    )
+    .resolve(WA);
+
+    assert_eq!(
+        prepared.zorder_raw.as_deref(),
+        Some("1,0"),
+        "shell の seriko.zorder が準備の結果へ搬送されていない（解釈は下流なので生のまま）"
+    );
+}
+
+/// 逆側——宣言が無ければ `None` のまま運ばれる（基底なしで起動する）。
+///
+/// 片側だけでは「常に `Some` を作る」形と区別が付かない。
+#[test]
+fn prepare_carries_no_zorder_value_when_the_shell_declares_none() {
+    let prepared = stages_with_shell(
+        "seriko.dpi,120
+",
+    )
+    .resolve(WA);
+
+    assert_eq!(
+        prepared.zorder_raw, None,
+        "宣言が無いのに重なりの値が生まれた（既定＝非強制が壊れる）"
+    );
+}
+
+// ------------------------------------------------------------------
 // 採寸 DPI の単一決定点と基準対への搬送
 // （areka-P0-balloon-offset-dpi task 2.1・要件 1.1/1.5/3.1・design D15）
 // ------------------------------------------------------------------

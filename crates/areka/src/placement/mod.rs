@@ -52,6 +52,11 @@ pub(crate) mod transition_judge;
 #[cfg(test)]
 pub(crate) mod transition_judge_offset;
 mod windowposition;
+/// 台帳のグループと窓の在庫から「望む鎖」を組み立てる純関数（Win32／ECS 非依存）。
+pub(crate) mod zorder_chain_compose;
+/// スコープ窓 Z 順グループの台帳と、タグ／descript 共通のトークン解釈・拒否判定
+/// （純関数・Win32／ECS 非依存）。
+pub(crate) mod zorder_group_ledger;
 
 /// 作者空間の符号付きオフセットを k 倍する唯一の写像（大きさは `ScaleRatio::scale_len`
 /// 権威へ委譲し符号のみ保存する）。`windowposition.x/y` と `\![move]` の dx/dy は
@@ -251,6 +256,17 @@ pub struct PreparedPlacement {
     /// 同じ読取結果を attach 側（`attach_target`）へ配るための搬送口
     /// （[`AuthorDpi`] の doc・design Flow 3 手順1「1 度だけ読む」）。
     pub author_dpi: AuthorDpi,
+    /// shell descript の `seriko.zorder` の生の値（未指定なら `None`）。
+    ///
+    /// `author_dpi` と**同じ搬送の形**である（areka-P0-scope-zorder-pinning 要件 5.1／5.2）。
+    /// descript を読むのは準備の中の 1 度だけなので、重なりの基底もそのときの読取結果を
+    /// ここへ載せて `main` → `wire_emo2_boot` → 台帳へ配る。ここで搬送せずに結線の側で
+    /// 読み直すと、配置と重なりが**別々の宣言**を見る余地が生まれる（`author_dpi` を搬送に
+    /// した理由そのもの）。
+    ///
+    /// 値の解釈は placement では一切行わない（生の転記＝`PlacementConfig::zorder_raw` の
+    /// そのまま）。窓の位置も寸法もこの値では 1 mm も動かない。
+    pub zorder_raw: Option<String>,
 }
 
 /// 準備パイプラインの中間結果（load→config→measure まで・work area 非依存部）。
@@ -280,6 +296,8 @@ impl PreparedStages {
             placements,
             titles: self.titles,
             author_dpi: self.author_dpi,
+            // 解釈せずそのまま搬送する（重なりの基底の出所は 1 つ＝この読取・要件 5.2）。
+            zorder_raw: self.cfg.zorder_raw,
         }
     }
 }

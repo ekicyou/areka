@@ -820,6 +820,7 @@ impl SpineHarness {
             rx,
             move_rx,
             lifecycle_rx,
+            mpsc::channel::<crate::emo2_boot::zorder_cue::ZOrderDirective>().1,
             Rc::clone(&runtime),
             clock,
             wiring_assets,

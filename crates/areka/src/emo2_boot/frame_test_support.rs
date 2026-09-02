@@ -132,6 +132,7 @@ pub(super) fn headless_wiring_with(rx: Receiver<PresentCommand>, clock: TalkCloc
         rx,
         mpsc::channel::<MoveDirective>().1,
         mpsc::channel::<crate::emo2_boot::talk_lifecycle::TalkLifecycleSignal>().1,
+        mpsc::channel::<crate::emo2_boot::zorder_cue::ZOrderDirective>().1,
         Rc::new(RefCell::new(TextLayerRuntime::new(
             TextLayerConfig::default(),
         ))),

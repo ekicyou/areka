@@ -228,6 +228,7 @@ fn run_move_drain_phase_buffers_until_ghost_windows_present() {
         mpsc::channel::<PresentCommand>().1,
         rx,
         mpsc::channel::<TalkLifecycleSignal>().1,
+        mpsc::channel::<crate::emo2_boot::zorder_cue::ZOrderDirective>().1,
         Rc::new(RefCell::new(TextLayerRuntime::new(
             TextLayerConfig::default(),
         ))),
@@ -275,6 +276,7 @@ fn run_move_drain_phase_applies_directive_when_ghost_windows_present() {
         mpsc::channel::<PresentCommand>().1,
         rx,
         mpsc::channel::<TalkLifecycleSignal>().1,
+        mpsc::channel::<crate::emo2_boot::zorder_cue::ZOrderDirective>().1,
         Rc::new(RefCell::new(TextLayerRuntime::new(
             TextLayerConfig::default(),
         ))),

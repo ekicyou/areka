@@ -580,3 +580,9 @@ mod tests;
 #[cfg(test)]
 #[path = "balloon_visibility_phase_wake_tests.rs"]
 mod wake_tests;
+
+// 再表示は重なりへ作用しない（要件 7.3 は所有の鎖の構造で満たす）。その不作用と、
+// 退役した追随トリガの痕跡が残っていないことを見る決定論テスト。
+#[cfg(test)]
+#[path = "balloon_visibility_phase_zorder_chain_tests.rs"]
+mod zorder_chain_tests;

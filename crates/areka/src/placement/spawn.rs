@@ -62,8 +62,10 @@
 //!
 //! [`wire_zorder_pair`] が実行時ストラテジ（既定＝案 A・補助浮上なし）を明示挿入し、
 //! **挿入した当の値を起動時ログへ 1 行残し**（要件 5.6・実機ゲートの結論をバイナリ自身が
-//! 名乗る）、wintf の確立系 → 維持系を clickthrough 登録と同じ確定段（`FrameFinalize`）へ
-//! この順で載せる。呼び手は main.rs の起動窓シーム（同 1.1／5.6／6.1）。
+//! 名乗る）、wintf の確立系 → ペア維持系 → 鎖の適用系を clickthrough 登録と同じ確定段
+//! （`FrameFinalize`）へこの順で載せる。呼び手は main.rs の起動窓シーム（同 1.1／5.6／6.1）。
+//! 3 本目の鎖の適用系は areka-P0-scope-zorder-pinning task 3.2 の追加であり、順序と
+//! 同期点の両方に意味がある（[`wire_zorder_pair`] の doc「なぜ順序を付けるのか」）。
 
 use std::collections::BTreeMap;
 
@@ -80,6 +82,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use wintf::ecs::clickthrough::ClickThroughRegistryHandle;
 use wintf::ecs::drag::{DragConfig, OnDrag, OnDragEnd};
 use wintf::ecs::layout::HitTest;
+use wintf::ecs::window::apply_zorder_chain;
 use wintf::ecs::{
     DpiSuggestedRectPolicy, FrameFinalize, KeepDirectlyAbove, Point, SizeI, Window, WindowHandle,
     WindowPos, WindowStyle, ZOrderPairStrategy, apply_zorder_pair_maintenance,
@@ -526,6 +529,17 @@ pub fn spawn_ghost_windows(
         // 「スコープ間の上下関係を固定規則で決めない」（要件 3.1）と「是正時に当該
         // スコープの 2 窓しか動かさない」（要件 3.4）の構造的な根拠である。
         // 宣言を消費する確立系・維持系（wintf 側）の結線は main.rs が行う。
+        //
+        // **この宣言がスコープ間を張らないことは今も変わらない**が、スコープ間の列が
+        // engine の中に一切現れない、という意味ではなくなった——作者が `\![set,zorder,…]`
+        // や shell 設定で明示した列は、グループ機構（areka-P0-scope-zorder-pinning）が
+        // **別系統**で宣言する（areka 側の台帳 → 鎖の合成 → wintf の `ZOrderChainPlan` →
+        // 鎖の適用系）。あちらが張るのは**スコープをまたぐ**繋ぎだけであり、本宣言
+        // （`KeepDirectlyAbove`）が張るスコープ内ペアには 1 本も触れない。両者は語彙も
+        // 書込先も交わらず、それを消費するペア機構の 5 ファイルも一切変わっていない
+        // （要件 9.5 の凍結）。
+        // 変わったのは「作者が明示した列だけは、別の宣言としてスコープ間にも存在しうる」
+        // という一点であり、明示が無い間はグループが 1 本も無い＝従来どおりである。
         world
             .entity_mut(balloon_window)
             .insert(KeepDirectlyAbove { peer: char_window });
@@ -606,15 +620,26 @@ fn window_pos(x: i32, y: i32, w: i32, h: i32) -> WindowPos {
 ///   [`log_zorder_pair_strategy`] で起動時ログへも 1 行残す——判定表は spec 配下の文書で
 ///   あって、目の前のバイナリが本当にその結論どおりに動いているかは、バイナリ自身が
 ///   名乗る以外に確かめようがない（要件 5.6）。
-/// - **確立系 → 維持系**を `FrameFinalize` へこの順で載せる（[`IntoScheduleConfigs::chain`]）。
+/// - **確立系 → ペア維持系 → 鎖の適用系**を `FrameFinalize` へこの順で載せる
+///   （[`IntoScheduleConfigs::chain`]）。
 ///
 /// # なぜ順序を付けるのか
 ///
 /// 確立系（[`establish_owner_links`]）は owner を張った巡に再断行の要求
-/// （[`ReassertZOrder`](wintf::ecs::ReassertZOrder)）を挿し、それを維持系
+/// （[`ReassertZOrder`](wintf::ecs::ReassertZOrder)）を挿し、それをペア維持系
 /// （[`apply_zorder_pair_maintenance`]）が消費して初期の隣接を確定させる。順序を付けないと
 /// 消費が 1 巡遅れる。必要なのは順序だけではなく `chain` が置く**同期点**でもある——要求は
 /// `Commands` 経由で挿さるため、同期点が無ければ同じ巡ではまだ実体に付いていない。
+///
+/// 3 本目の鎖の適用系（[`apply_zorder_chain`]・areka-P0-scope-zorder-pinning task 3.2）が
+/// 末尾に来るのも、順序と同期点の両方が要るからである。あちらが書くのは**スコープを
+/// またぐ**繋ぎだけで、書込先は前 2 本と交わらないが、書く前提として⑴確立系が張った
+/// owner と⑵ペア機構が直したスコープ内の隣接が**同じ巡のうちに済んでいる**必要がある
+/// ——前 2 本はどちらも `Commands`（遅延コマンド）で実体を触るため、同期点が無ければ
+/// その結果は同じ巡の 3 本目からは見えない。順序と同期点のどちらが欠けても、鎖は
+/// 1 巡古い姿の上に張られる。`chain` を `chain_ignore_deferred` へ替える書き換えが
+/// まさにその形なので、結線の字面ごと兄弟テストが押さえている
+/// （`spawn_zorder_chain_wiring_tests.rs`）。
 ///
 /// # なぜ確定段なのか
 ///
@@ -637,7 +662,12 @@ pub fn wire_zorder_pair(world: &mut World) {
     log_zorder_pair_strategy(strategy);
     world.resource_mut::<Schedules>().add_systems(
         FrameFinalize,
-        (establish_owner_links, apply_zorder_pair_maintenance).chain(),
+        (
+            establish_owner_links,
+            apply_zorder_pair_maintenance,
+            apply_zorder_chain,
+        )
+            .chain(),
     );
 }
 
@@ -717,6 +747,9 @@ mod follow_pipeline_tests;
 #[cfg(test)]
 #[path = "spawn_test_support.rs"]
 mod test_support;
+#[cfg(test)]
+#[path = "spawn_zorder_chain_wiring_tests.rs"]
+mod zorder_chain_wiring_tests;
 #[cfg(test)]
 #[path = "spawn_zorder_pair_deferred_tests.rs"]
 mod zorder_pair_deferred_tests;

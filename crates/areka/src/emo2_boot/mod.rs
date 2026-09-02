@@ -24,6 +24,7 @@ pub mod move_cue;
 pub mod talk_clock;
 pub mod talk_lifecycle;
 pub mod target_map;
+pub mod zorder_cue;
 
 // 決定論 spine テストハーネス（R8・task 6.1）。`areka` は [[bin]] のみ（[lib] 無し）で外部
 // tests/ から bin 内部項目へ到達できないため、既存 repo 慣行に従い in-crate #[cfg(test)]
@@ -31,6 +32,13 @@ pub mod target_map;
 // 冒頭 doc 参照）。frame フェーズ直接駆動・Tick 注入・GPU readback を in-process で行う。
 #[cfg(test)]
 mod spine;
+
+// タグ入口の結線（areka-P0-scope-zorder-pinning task 6.2）の檻。受け渡し口・入口の登録・
+// 受け渡し構造・相の呼出という 4 点は、削っても判断のテストが 1 本も赤くならない性質を
+// 持つので、到達性・相順・字面の 3 方向でここが受け持つ。
+#[cfg(test)]
+#[path = "zorder_wiring_tests.rs"]
+mod zorder_wiring_tests;
 
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -49,9 +57,11 @@ use areka_seriko::{
     AnimationTable, BindResolver, SerikoLoopConfig, SerikoSink, SurfaceResolver, seeded_rng,
     spawn_seriko,
 };
+use bevy_ecs::schedule::IntoScheduleConfigs;
 use tracing::{error, info, warn};
 use wintf::WinApp;
 use wintf::ecs::FrameFinalize;
+use wintf::ecs::window::apply_zorder_chain;
 
 use crate::placement::AuthorDpi;
 
@@ -61,6 +71,7 @@ use self::frame::{Emo2Wiring, emo2_frame_system};
 use self::move_cue::{MoveCueSink, MoveDirective};
 use self::talk_clock::{ClockedTextSink, TalkClock};
 use self::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
+use self::zorder_cue::{ZOrderCueSink, ZOrderDirective};
 
 /// 統合結線の構築時（load-time）失敗を観測可能化する誤り型（log-first・R7.3）。
 ///
@@ -251,9 +262,13 @@ const _: fn() = || {
 /// 5. [`areka_ghost::boot`]（`surface_sink`＝[`SerikoSink`] を直渡し・`text_sink`＝`ClockedTextSink`・
 ///    `shiori`＝`Helper`・`ticker`＝`Real`）。`Err` は既存 [`crate::is_benign_boot_error`]（R7.4）で
 ///    分類（起点不在＝`warn!`・他＝`error!`）＋`wired=false` フォールバック。
-/// 6. [`Emo2Wiring`] を NonSend 挿入・`add_systems(FrameFinalize, emo2_frame_system)`（placement の
-///    click-through 登録と同位置・self-gating・順序依存なし）。成立時 `info!`「wire 成立」マーカーを
-///    発火（実 fixture smoke＝task 7.1 がこの存在を assert する）。
+/// 6. [`Emo2Wiring`] を組み、shell 設定由来の重なりの基底を据えてから（`zorder_descript`＝
+///    placement の準備が読んだ `seriko.zorder` の値・要件 5.1／5.2）NonSend 挿入・
+///    `add_systems(FrameFinalize, emo2_frame_system)`（placement の
+///    click-through 登録と同位置・self-gating）。載せ方は**鎖の適用系より前**という 1 点だけを
+///    指定する（重なりの取り出しの相が組んだ望む鎖を同じ巡のうちに適用系へ届けるため・
+///    task 3.2）。成立時
+///    `info!`「wire 成立」マーカーを発火（実 fixture smoke＝task 7.1 がこの存在を assert する）。
 /// 7. `Emo2BootOutcome{ ghost: Some, seriko: Some, wired: true }` を返す。
 ///
 /// # 失敗（log-first・panic しない・R7.3）
@@ -267,6 +282,7 @@ pub fn wire_emo2_boot(
     balloon_root: &Path,
     helper_exe: &Path,
     author_dpi: AuthorDpi,
+    zorder_descript: Option<&str>,
 ) -> Emo2BootOutcome {
     /// 実 sink 結線を成立させないフォールバック結果（`main` の `LogSink`×2 boot へ委ねる・R7.3）。
     fn fallback() -> Emo2BootOutcome {
@@ -327,6 +343,13 @@ pub fn wire_emo2_boot(
     // 届き、タイムアウト計測の破棄と起点になる（Requirements 4.1／4.5・design 決定 D4＝α）。
     let (lifecycle_tx, lifecycle_rx) = std::sync::mpsc::channel::<TalkLifecycleSignal>();
     let lifecycle_sink = BalloonLifecycleSink::new(lifecycle_tx);
+    // 重なりの channel（move channel と同型の配線・areka-P0-scope-zorder-pinning task 6.2）:
+    // talk スレッドの ZOrderCueSink が送出端、UI スレッドの Emo2Wiring が受信端（frame 相の
+    // 取り出し＝run_zorder_drain_phase が消費）を保持する。運ばれるのは解釈前のトークン列で
+    // あり、意味付け（数値モード／明示モードの読み分け・拒否判定）は台帳の状態を要するので
+    // 取り出しの相が行う。
+    let (zorder_tx, zorder_rx) = std::sync::mpsc::channel::<ZOrderDirective>();
+    let zorder_sink = ZOrderCueSink::new(zorder_tx);
     let BootAssets {
         shells,
         balloons,
@@ -411,6 +434,10 @@ pub fn wire_emo2_boot(
     // 順序の制約（draw-load-parity 3.5）: lifecycle_sink は clocked_text_sink より**後**に置く。
     // lifecycle_sink::send は起床旗 PRESENT を立てるので、文字 cue が先に積まれていないと
     // 旗だけが先に倒されて文字が心拍待ちになる。
+    // 第 5 要素の zorder_sink（task 6.2）は `\![set,zorder,…]`／`\![reset,zorder]` を「名前＋
+    // 第 1 引数」で選別して消費し、解釈前のトークン列を zorder channel 経由で UI スレッド
+    // （Emo2Wiring の zorder_rx）へ送出する。担当外のコマンドには一切触れない（要件 11.2）ので
+    // 既存 4 sink の消費は 1 つも変わらない。文字 cue に依存しないため末尾で構わない。
     let boot_options = GhostBootOptions {
         ghost_root: ghost_root.to_path_buf(),
         default_encoding: DefaultEncoding::Ansi,
@@ -422,6 +449,7 @@ pub fn wire_emo2_boot(
             Box::new(clocked_text_sink),
             Box::new(move_sink),
             Box::new(lifecycle_sink),
+            Box::new(zorder_sink),
         ],
         system_vars: SystemVarWiring::FromSylphya,
         app_profile_dir: Some(crate::default_app_profile_dir()),
@@ -455,19 +483,34 @@ pub fn wire_emo2_boot(
     // 手順6: Emo2Wiring を NonSend 挿入＋emo2_frame_system を FrameFinalize へ登録（placement の
     // click-through 登録と同位置・self-gating・順序依存なし）。EcsWorld は insert_non_send を
     // 直接持たないため world_mut() 経由で bevy World へ載せる（add_systems は EcsWorld 直メソッド）。
-    let wiring = Emo2Wiring::new(
+    let mut wiring = Emo2Wiring::new(
         presenter,
         rx,
         move_rx,
         lifecycle_rx,
+        zorder_rx,
         runtime,
         clock,
         wiring_assets,
     );
+    // shell 設定（`seriko.zorder`）由来の基底を、World へ載せる前に据える（要件 5.1／5.2／
+    // 5.3／5.4・areka-P0-scope-zorder-pinning task 6.3）。ここはまだ最初の `FrameFinalize` の
+    // 手前であり、取り出しの相も 1 度も走っていない——ゆえに基底は**タグの実行を待たずに**
+    // 最初の維持の巡から効く。解釈できない値は理由とともに記録され、グループを 1 本も
+    // 載せずに起動が続く（この呼出は失敗を返さない）。
+    wiring.seed_zorder_descript_base(zorder_descript);
     app.world().borrow_mut().world_mut().insert_non_send(wiring);
+    // 相の登録は**鎖の適用系より前**という指定つきで行う（task 3.2 の必須事項）。相が組んだ
+    // 望む鎖を、同じ巡のうちに適用系が読むための順序である。登録の順そのものは適用系のほうが
+    // 先である（`open_startup_window` の `wire_zorder_pair` が確定段へ 3 本を載せてから、ここが
+    // 相を載せる）ので、指定を落とすと相は適用系の後ろへ回り、組み替えが 1 心拍ぶん遅れる
+    // ——要件 14.5 が求める「そのイベントへの応答としての完了」が割れる。飢餓は起きない
+    // （tick の門は旗が 1 つでも立っていれば全スケジュールを回す全か無かの形である）が、
+    // 遅れは実際に生じる。指定が効くのは適用系との間だけで、既存のペア機構との相対順には
+    // 触れない。
     app.world()
         .borrow_mut()
-        .add_systems(FrameFinalize, emo2_frame_system);
+        .add_systems(FrameFinalize, emo2_frame_system.before(apply_zorder_chain));
 
     // SERIKO ループ ticker 起動（design「本番は実時間・実 entropy 接続」・R7.4）: 16ms 実時計
     // （LoopTickerConfig::default）で駆動し、各 Tick を tick_sink（SerikoSink クローン）経由で seriko
@@ -567,6 +610,7 @@ mod wire_tests {
             missing_balloon,
             helper,
             AuthorDpi::DEFAULT,
+            None,
         );
 
         assert!(
