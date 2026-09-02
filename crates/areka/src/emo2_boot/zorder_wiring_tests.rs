@@ -38,6 +38,7 @@ use wintf::ecs::window::{ZOrderChainPlan, apply_zorder_chain};
 
 use super::frame::run_zorder_drain_phase;
 use super::zorder_cue::{ZOrderCueSink, ZOrderDirective};
+use crate::placement::follow::OffsetBase;
 use crate::placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
 use crate::placement::source::GhostTitles;
 use crate::placement::spawn::{spawn_ghost_windows, wire_zorder_pair};
@@ -78,6 +79,7 @@ fn placement(scope: usize) -> ScopePlacement {
         },
         balloon_size: SizePx { w: 180, h: 120 },
         balloon_offset: PointPx { x: 220, y: 0 },
+        balloon_offset_base: OffsetBase::unpinned(PointPx { x: 220, y: 0 }),
         balloon_limit: false,
         anchor: Anchor::Bottom,
         balloon_keyword_base: None,

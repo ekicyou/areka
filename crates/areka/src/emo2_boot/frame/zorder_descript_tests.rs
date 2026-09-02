@@ -27,6 +27,7 @@ use wintf::ecs::window::ZOrderChainPlan;
 use crate::emo2_boot::frame::run_zorder_drain_phase;
 use crate::emo2_boot::frame::test_support::{headless_wiring_with, zero_clock};
 use crate::emo2_boot::zorder_cue::ZOrderDirective;
+use crate::placement::follow::OffsetBase;
 use crate::placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
 use crate::placement::source::GhostTitles;
 use crate::placement::spawn::{GhostWindows, spawn_ghost_windows};
@@ -93,6 +94,7 @@ fn placement(scope: usize) -> ScopePlacement {
         },
         balloon_size: SizePx { w: 180, h: 120 },
         balloon_offset: PointPx { x: 220, y: 0 },
+        balloon_offset_base: OffsetBase::unpinned(PointPx { x: 220, y: 0 }),
         balloon_limit: false,
         anchor: Anchor::Bottom,
         balloon_keyword_base: None,

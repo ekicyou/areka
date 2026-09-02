@@ -12,6 +12,7 @@ use log_capture_kit::{LineFormat, capture_lines};
 use std::sync::mpsc::{Sender, channel};
 use wintf::ecs::window::{ChainPlan, ZOrderChainPlan};
 
+use crate::placement::follow::OffsetBase;
 use crate::placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
 use crate::placement::source::GhostTitles;
 use crate::placement::spawn::spawn_ghost_windows;
@@ -32,6 +33,7 @@ pub(super) fn placement(scope: usize) -> ScopePlacement {
         },
         balloon_size: SizePx { w: 180, h: 120 },
         balloon_offset: PointPx { x: 220, y: 0 },
+        balloon_offset_base: OffsetBase::unpinned(PointPx { x: 220, y: 0 }),
         balloon_limit: false,
         anchor: Anchor::Bottom,
         balloon_keyword_base: None,

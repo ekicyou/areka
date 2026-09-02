@@ -647,6 +647,8 @@ fn stages_with_shell(shell_kv_text: &str) -> PreparedStages {
         sizes: MeasuredSizes { scopes: Vec::new() },
         titles: GhostTitles::from_scope_titles(Vec::new()),
         author_dpi: AuthorDpi::DEFAULT,
+        // 採寸 DPI は既定の 96（この助手は寸法にも配置にも依らないので値は判定に効かない）。
+        measure_dpi: DPI::from_dpi(96, 96),
     }
 }
 
