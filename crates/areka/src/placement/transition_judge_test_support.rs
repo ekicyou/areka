@@ -19,8 +19,8 @@ use wintf::ecs::window::transition_diag::{
     FIELD_MERGED_INTO_SEQ, FIELD_MSG, FIELD_NEW_DPI, FIELD_NEW_WA, FIELD_OK, FIELD_OLD_DPI,
     FIELD_OLD_WA, FIELD_ORIGIN, FIELD_SCOPE, FIELD_SEQ, FIELD_SINCE_FLUSH_US, FIELD_SINCE_TICK_US,
     FIELD_STAGE, FIELD_T_US, FIELD_TOTAL_US, FIELD_WIN_KIND, FIELD_X, FIELD_Y, KIND_ENQUEUE,
-    KIND_FLUSH, KIND_MONITOR, KIND_MSG, KIND_WRITE, MISSING, RECORD_PREFIX_TAG, STAGE_BEGIN,
-    STAGE_END, STAGE_FLUSH,
+    KIND_FLUSH, KIND_MONITOR, KIND_MSG, KIND_WINDPI, KIND_WRITE, MISSING, RECORD_PREFIX_TAG,
+    STAGE_BEGIN, STAGE_END, STAGE_FLUSH,
 };
 
 use super::super::diag::{PlacementRoute, WindowKind};
@@ -51,6 +51,16 @@ pub fn monitor(frame: u32, old_dpi: u32, new_dpi: u32, old_bottom: i32, new_bott
             "{FIELD_ENTITY}=2v0 {FIELD_OLD_DPI}={old_dpi} {FIELD_NEW_DPI}={new_dpi} \
              {FIELD_OLD_WA}=0,0,2880,{old_bottom} {FIELD_NEW_WA}=0,0,2880,{new_bottom}"
         ),
+    )
+}
+
+/// 窓の表示 DPI の書き換え（task 8.3 の新起点）。欄は [`monitor`] の先頭 3 欄と同名・同義。
+pub fn windpi(frame: u32, entity: &str, old_dpi: u32, new_dpi: u32) -> String {
+    record(
+        frame,
+        0,
+        KIND_WINDPI,
+        &format!("{FIELD_ENTITY}={entity} {FIELD_OLD_DPI}={old_dpi} {FIELD_NEW_DPI}={new_dpi}"),
     )
 }
 

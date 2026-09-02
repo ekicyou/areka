@@ -2,8 +2,14 @@
 //! P4 クランプ）。
 //!
 //! 座標単位契約（design 正本 U1〜U5）に従い、入出力は**すべて物理 px**
-//! （論理 DIP・DPI は署名に登場しない）。std＋tracing のみに依存し wintf 型を
-//! import しない（DPI パラメタ化単体テストの前提・U5）。
+//! （論理 DIP は持ち込まない）。std＋tracing のみに依存する規律は配置式 P1〜P5 に
+//! ついては不変である——**幾何は表示 DPI を 1 度も読まない**。
+//!
+//! 唯一の例外は追従オフセットの**基準対**（[`ScopePlacement::balloon_offset_base`]・
+//! areka-P0-balloon-offset-dpi 要件 3.1／design D15）である。基準対は「この物理 px 値は
+//! どの表示 DPI の空間に属するか」という札であり、値型 `wintf::ecs::DPI` を運ぶだけで
+//! 配置式の入力にはならない（[`resolve_placement`] は受け取った値を素通しで刻む）。
+//! U5 が守ろうとした「幾何が DPI に依存しない」性質はそのまま保たれる。
 //!
 //! 配置規則 P1〜P5（design「placement::resolver」正本）と
 //! `virtual_desktop_union`（4.6・DD8）を持つ。座標演算は `saturating_add`/
@@ -11,8 +17,10 @@
 //! 「パニックしない」契約の防波堤。通常入力では通常の加減算と同値）。
 
 use tracing::warn;
+use wintf::ecs::DPI;
 
 use super::config::{Alignment, BalloonSide, BalloonXMode, PlacementConfig, ScopeConfig};
+use super::follow::OffsetBase;
 
 /// 物理 px の矩形（スクリーン座標系・wintf 非依存）。
 #[allow(dead_code)]
@@ -89,6 +97,16 @@ pub struct ScopePlacement {
     /// 補正後の**表示位置**、`balloon_offset` が補正を焼き付けない**論理相対位置**
     /// （作者指定・保存値の系譜）という役割分離になる。
     pub balloon_offset: PointPx,
+    /// 追従オフセットの**基準対**——値と、その値が属する表示 DPI
+    /// （areka-P0-balloon-offset-dpi 要件 3.1・design D15）。
+    ///
+    /// 本関数の出力では常に `OffsetBase { offset: balloon_offset, dpi: Some(採寸 DPI) }`
+    /// ——配置式が出した既定のオフセットは、採寸に使った表示 DPI の空間の値だからである。
+    /// 保存値を採用した scope だけが未係留（`dpi: None`）になる（`persist::merge_scope`）。
+    ///
+    /// 基準対は拡大率遷移でオフセットを引き直すための札であり、**配置式の入力ではない**
+    /// （P1〜P5 は基準対を 1 度も読まない）。
+    pub balloon_offset_base: OffsetBase,
     /// このスコープの `windowposition.limit` 解決値（正典既定 `true`＝画面内へ維持する）。
     ///
     /// resolver は**判定も補正もしない**——`ScopeConfig.balloon_limit` を転記して
@@ -232,6 +250,7 @@ pub fn resolve_placement(
     cfg: &PlacementConfig,
     work_area: RectPx,
     scopes: &[ScopeInput],
+    measure_dpi: DPI,
 ) -> Vec<ScopePlacement> {
     let default_scope_cfg = ScopeConfig::default();
     let mut out = Vec::with_capacity(scopes.len());
@@ -318,6 +337,11 @@ pub fn resolve_placement(
                 }
             }
         };
+        // 事後条件の値を 1 度だけ組む（欄と基準対で同じ式を書き写さない）。
+        let balloon_offset = PointPx {
+            x: balloon_pos.x.saturating_sub(char_pos.x),
+            y: balloon_pos.y.saturating_sub(char_pos.y),
+        };
         out.push(ScopePlacement {
             scope: input.scope,
             char_pos,
@@ -327,9 +351,12 @@ pub fn resolve_placement(
             // 事後条件: balloon_offset ≡ balloon_pos − char_pos（design Postconditions）。
             // 成立するのは**本関数の出力時点**まで（DD6）——下流の関門が balloon_pos だけを
             // 補正した後は、この欄は補正を含まない論理相対位置として残る。
-            balloon_offset: PointPx {
-                x: balloon_pos.x.saturating_sub(char_pos.x),
-                y: balloon_pos.y.saturating_sub(char_pos.y),
+            balloon_offset,
+            // 基準対（要件 3.1・D15）: 配置式が出した既定の offset に**採寸 DPI**を刻む。
+            // 幾何は 1 ビットも変えない——札を貼るだけの代入である。
+            balloon_offset_base: OffsetBase {
+                offset: balloon_offset,
+                dpi: Some(measure_dpi),
             },
             // limit は判定せず転記するだけ（design C4・下流の関門が所有する）
             balloon_limit: sc.balloon_limit,

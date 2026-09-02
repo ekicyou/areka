@@ -1,9 +1,11 @@
 mod aabb;
+mod calc_hash;
 mod matrix3x2;
 mod point2;
 mod transform2d;
 
 pub use aabb::*;
+pub(crate) use calc_hash::*;
 pub use matrix3x2::*;
 pub use point2::*;
 pub use transform2d::*;

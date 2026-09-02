@@ -188,13 +188,17 @@ pub fn to_screen_adjust(wp_x: Option<i32>, wp_y: Option<i32>, k: ScaleRatio) -> 
 /// 供給点をこの欄に置くことで `resolver.rs` の配置式 P1〜P5 は無改変で済む（design D1'）
 /// ——P5 は `balloon_offset.unwrap_or((0, 0))` を既に加算しているためである。
 ///
-/// # 注意（単位空間の混在・意図的）
+/// # 単位空間（確定契約）
 ///
-/// 本欄は**物理 px の加算欄**である。`windowposition` 由来の調整量は k 適用済みの
-/// 物理 px で合流するが、既存供給元である descript の `balloon.offsetx`/`offsety` は
-/// **非スケールの生値**のまま加算される——後者の規約温存は本仕様の Out of scope（W5 対象外）。
-/// emo2 は descript offset が `None` ゆえ顕在化しないが、将来の取り違えを封じるため
-/// ここに明記する（design Service Interface の同注記の転記）。
+/// 本欄は**「現在の表示 DPI における物理 px」の加算欄**である。契約そのものの定義元は
+/// `placement/follow/offset_space.rs` のモジュール doc であり（供給元ごとの換算軸の
+/// 割り当ての表もそこにある）、ここでは繰り返さない。
+///
+/// 作者空間の生値を持つ供給元は**合流の前に**換算される——descript の
+/// `balloon.offsetx`／`offsety` は `placement::apply_author_balloon_offset_scale` が
+/// シェル軸で（`apply_scope_windowpositions` を呼ぶ直前）、`windowposition` 由来の調整量は
+/// [`to_screen_adjust`] がバルーン軸で換算する。ゆえに本欄へ加算される値はすべて
+/// 同じ空間の値であり、換算前の生値が混ざることは無い。
 pub fn apply_windowposition(cfg: &mut PlacementConfig, scope: usize, adjust: Option<(i32, i32)>) {
     let Some((dx, dy)) = adjust else {
         // 調整量なし＝`balloon_offset` を触らない（現行と bit 同一・R3.4）。
@@ -211,8 +215,9 @@ pub fn apply_windowposition(cfg: &mut PlacementConfig, scope: usize, adjust: Opt
         );
         return;
     };
-    // 別供給元（descript の非スケール生値）が既にあれば加算する（飽和・ラップしない）。
-    // 単位空間の混在は意図的（本関数の doc「注意（単位空間の混在・意図的）」を参照）。
+    // 別供給元（descript 由来のオフセット・供給時にシェル軸で物理 px へ換算済み）が
+    // 既にあれば加算する（飽和・ラップしない）。両辺とも同じ物理 px ゆえ加算が成立する
+    // （契約の定義元は本関数の doc「単位空間（確定契約）」が指す）。
     sc.balloon_offset = Some(match sc.balloon_offset {
         Some((ox, oy)) => (ox.saturating_add(dx), oy.saturating_add(dy)),
         None => (dx, dy),

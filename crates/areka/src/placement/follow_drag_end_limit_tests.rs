@@ -1,3 +1,4 @@
+use crate::placement::follow::OffsetBase;
 use bevy_ecs::prelude::*;
 use windows::Win32::UI::WindowsAndMessaging::CW_USEDEFAULT;
 use wintf::ecs::pointer::Phase;
@@ -112,6 +113,7 @@ fn base_placement(balloon_limit: bool) -> ScopePlacement {
         balloon_pos: PointPx { x: 1601, y: 811 },
         balloon_size: balloon_size(),
         balloon_offset: PointPx { x: 300, y: 400 },
+        balloon_offset_base: OffsetBase::unpinned(PointPx { x: 300, y: 400 }),
         balloon_limit,
         anchor: Anchor::Bottom,
         balloon_keyword_base: None,
@@ -159,10 +161,12 @@ fn stale_offset() -> PointPx {
 }
 
 fn set_stale_offset(world: &mut World, char_window: Entity) {
-    let mut follow = *world
+    let follow = *world
         .get::<BalloonFollow>(char_window)
         .expect("spawn が BalloonFollow を付ける");
-    follow.offset = stale_offset();
+    // 欄は私有ゆえ確立点（構築子）から組み直す（design D14）。基準 DPI は本檻の
+    // 関心事ではないので未係留のままにする。
+    let follow = BalloonFollow::new(follow.balloon, OffsetBase::unpinned(stale_offset()));
     world.entity_mut(char_window).insert(follow);
 }
 
@@ -257,7 +261,7 @@ fn the_drag_itself_is_never_intercepted_by_the_limit_gate() {
         world
             .get::<BalloonFollow>(char_window)
             .expect("spawn が BalloonFollow を付ける")
-            .offset,
+            .offset(),
         raw_offset(dragged_to),
         "ドラッグ中の offset 記憶が生の差分でない"
     );
@@ -346,7 +350,7 @@ fn releasing_outside_the_work_area_persists_the_raw_offset_and_corrects_only_the
         world
             .get::<BalloonFollow>(char_window)
             .expect("spawn が BalloonFollow を付ける")
-            .offset,
+            .offset(),
         stale_offset(),
         "解放時補正が BalloonFollow.offset を書き換えた（補正の焼き付き・DD6 違反）"
     );

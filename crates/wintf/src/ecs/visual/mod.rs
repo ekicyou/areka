@@ -1,4 +1,5 @@
 mod clip;
+mod draw;
 mod draw_content;
 mod transform;
 mod version;

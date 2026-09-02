@@ -7,6 +7,7 @@ use super::resolve_test_support::{cfg_of, input, offset_work_area, scope_cfg};
 use super::test_support::{DPIS, px, work_area};
 use super::*;
 use crate::placement::config::Alignment;
+use crate::placement::shared_test_support::MEASURE_DPI;
 
 // ------------------------------------------------------------------
 // T-R1: bottom 右下基準（P1＋P2 の scope0 項）
@@ -21,7 +22,7 @@ fn t_r1_bottom_anchors_bottom_right() {
         let (w, h, dx) = (px(400, dpi), px(600, dpi), px(40, dpi));
         let cfg = cfg_of(vec![(0, scope_cfg(Alignment::Bottom, Some(dx), None))]);
 
-        let out = resolve_placement(&cfg, wa, &[input(0, w, h)]);
+        let out = resolve_placement(&cfg, wa, &[input(0, w, h)], MEASURE_DPI);
 
         assert_eq!(out.len(), 1, "dpi={dpi}: 出力長＝入力長");
         assert_eq!(out[0].scope, 0);
@@ -46,7 +47,7 @@ fn t_r1_bottom_holds_on_offset_work_area() {
         let (w, h) = (px(400, dpi), px(600, dpi));
         let cfg = cfg_of(vec![(0, scope_cfg(Alignment::Bottom, Some(0), None))]);
 
-        let out = resolve_placement(&cfg, wa, &[input(0, w, h)]);
+        let out = resolve_placement(&cfg, wa, &[input(0, w, h)], MEASURE_DPI);
 
         assert_eq!(
             out[0].char_pos,
@@ -69,7 +70,7 @@ fn t_r1_missing_scope_config_defaults_to_bottom_flush() {
         let (w, h) = (px(400, dpi), px(600, dpi));
 
         // scopes マップが完全に空 → scope0 は既定 ScopeConfig で解決
-        let out = resolve_placement(&cfg_of(vec![]), wa, &[input(0, w, h)]);
+        let out = resolve_placement(&cfg_of(vec![]), wa, &[input(0, w, h)], MEASURE_DPI);
 
         assert_eq!(out.len(), 1, "dpi={dpi}");
         assert_eq!(
@@ -107,6 +108,7 @@ fn t_r2_scope_chain_defaultx_zero_stays_adjacent() {
             &cfg,
             wa,
             &[input(0, w0, h0), input(1, w1, h1), input(2, w2, h2)],
+            MEASURE_DPI,
         );
 
         assert_eq!(out.len(), 3, "dpi={dpi}");
@@ -177,7 +179,7 @@ fn t_r2_unequal_widths_leave_no_gap() {
             .map(|(s, &w)| input(s, w, px(600, dpi) - s as i32 * px(40, dpi)))
             .collect();
 
-        let out = resolve_placement(&cfg, wa, &inputs);
+        let out = resolve_placement(&cfg, wa, &inputs, MEASURE_DPI);
         assert_eq!(
             out.len(),
             widths.len(),
@@ -248,7 +250,7 @@ fn t_r2_chain_defaultx_offsets_leftward_from_base() {
             (1, scope_cfg(Alignment::Bottom, Some(dx1), None)),
         ]);
 
-        let out = resolve_placement(&cfg, wa, &[input(0, w0, h0), input(1, w1, h1)]);
+        let out = resolve_placement(&cfg, wa, &[input(0, w0, h0), input(1, w1, h1)], MEASURE_DPI);
 
         let x0 = wa.right - w0 - dx0;
         assert_eq!(out[0].char_pos.x, x0, "dpi={dpi}");
@@ -276,8 +278,8 @@ fn t_r3_default_y_ignored_under_bottom() {
         )]);
         let without_y = cfg_of(vec![(0, scope_cfg(Alignment::Bottom, Some(dx), None))]);
 
-        let out_with = resolve_placement(&with_y, wa, &[input(0, w, h)]);
-        let out_without = resolve_placement(&without_y, wa, &[input(0, w, h)]);
+        let out_with = resolve_placement(&with_y, wa, &[input(0, w, h)], MEASURE_DPI);
+        let out_without = resolve_placement(&without_y, wa, &[input(0, w, h)], MEASURE_DPI);
 
         assert_eq!(out_with, out_without, "dpi={dpi}: defaulttop は完全無視");
         assert_eq!(
@@ -310,7 +312,7 @@ fn t_r5_seam_output_identical_to_bottom() {
             (0, scope_cfg(Alignment::Bottom, Some(dx), None)),
             (1, scope_cfg(Alignment::Bottom, Some(0), None)),
         ]);
-        let expected = resolve_placement(&bottom, wa, &inputs);
+        let expected = resolve_placement(&bottom, wa, &inputs, MEASURE_DPI);
         // 空 Vec 同士の空虚一致（RED スタブで観測）を封じる
         assert_eq!(expected.len(), 2, "dpi={dpi}: 比較基準が空では無意味");
 
@@ -330,7 +332,7 @@ fn t_r5_seam_output_identical_to_bottom() {
                     scope_cfg(Alignment::Seam(seam_value.to_owned()), Some(0), None),
                 ),
             ]);
-            let out = resolve_placement(&seam, wa, &inputs);
+            let out = resolve_placement(&seam, wa, &inputs, MEASURE_DPI);
             assert_eq!(out.len(), 2, "dpi={dpi} seam={seam_value}");
             for (s, b) in out.iter().zip(&expected) {
                 // 幾何（位置・寸法・バルーン）は Bottom と同一（DD9・挙動出力不変）
@@ -378,7 +380,7 @@ fn t_r6_oversized_defaultx_clamps_to_left_edge() {
             scope_cfg(Alignment::Bottom, Some(px(4000, dpi)), None),
         )]);
 
-        let out = resolve_placement(&cfg, wa, &[input(0, w, h)]);
+        let out = resolve_placement(&cfg, wa, &[input(0, w, h)], MEASURE_DPI);
 
         assert_eq!(out[0].char_pos.x, wa.left, "dpi={dpi}: 左端で停止");
         assert_eq!(out[0].char_pos.y, wa.bottom - h, "dpi={dpi}: Y は不干渉");
@@ -396,7 +398,7 @@ fn t_r6_negative_defaultx_clamps_to_right_edge() {
             scope_cfg(Alignment::Bottom, Some(-px(4000, dpi)), None),
         )]);
 
-        let out = resolve_placement(&cfg, wa, &[input(0, w, h)]);
+        let out = resolve_placement(&cfg, wa, &[input(0, w, h)], MEASURE_DPI);
 
         assert_eq!(out[0].char_pos.x, wa.right - w, "dpi={dpi}: 右端で停止");
     }
@@ -412,7 +414,7 @@ fn t_r6_oversized_surface_pins_to_top_left() {
         let (w, h) = (px(2400, dpi), px(1600, dpi));
         let cfg = cfg_of(vec![(0, scope_cfg(Alignment::Bottom, Some(0), None))]);
 
-        let out = resolve_placement(&cfg, wa, &[input(0, w, h)]);
+        let out = resolve_placement(&cfg, wa, &[input(0, w, h)], MEASURE_DPI);
 
         assert_eq!(
             out[0].char_pos,
@@ -443,7 +445,7 @@ fn t_r6_chain_uses_clamped_previous_position() {
             (1, scope_cfg(Alignment::Bottom, Some(0), None)),
         ]);
 
-        let out = resolve_placement(&cfg, wa, &[input(0, w0, h0), input(1, w1, h1)]);
+        let out = resolve_placement(&cfg, wa, &[input(0, w0, h0), input(1, w1, h1)], MEASURE_DPI);
 
         assert_eq!(out[0].char_pos.x, wa.left, "dpi={dpi}");
         // base_x(1) = char_x(0) − w1 は左外 → scope1 も左端クランプ（scg 2.1/2.2）
@@ -461,7 +463,7 @@ fn t_r6_chain_uses_clamped_previous_position() {
             (1, scope_cfg(Alignment::Bottom, Some(0), None)),
         ]);
 
-        let out = resolve_placement(&cfg, wa, &[input(0, w0, h0), input(1, w1, h1)]);
+        let out = resolve_placement(&cfg, wa, &[input(0, w0, h0), input(1, w1, h1)], MEASURE_DPI);
 
         let clamped_x0 = wa.right - w0;
         assert_eq!(

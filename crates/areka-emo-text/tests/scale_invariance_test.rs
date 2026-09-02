@@ -236,7 +236,7 @@ fn sub_unity_scale_min_one_pixel_clamp_does_not_inflate_image_size() {
 #[test]
 fn physical_size_and_offset_map_from_region_at_each_scale() {
     let m = model(
-        (Some(0), Some(0)),
+        (None, None),
         (Some(-49), Some(0)),
         (Some(46), Some(-56), Some(36), Some(-44)),
         None,
@@ -337,9 +337,9 @@ fn physical_extent_ceils_fractional_values_killing_round_and_floor() {
 #[test]
 fn layout_decision_is_scale_independent_for_horizontal_text() {
     // fixture 実測: validrect (36,46)-(356,168)・折返し閾値 400-49=351・
-    // origin (0,0) はクランプで書字開始角 (36,46) へ。font 40 → pitch ceil(50)=50。
+    // origin は未宣言＝書字開始角 (36,46) から書き始める。font 40 → pitch ceil(50)=50。
     let m = model(
-        (Some(0), Some(0)),
+        (None, None),
         (Some(-49), Some(0)),
         (Some(46), Some(-56), Some(36), Some(-44)),
         None,
@@ -382,7 +382,7 @@ fn layout_decision_is_scale_independent_for_horizontal_text() {
     );
     assert_eq!(
         full.lines[0].glyphs[0].inline_pos, 36.0,
-        "行内開始＝書字開始角 x=36（origin クランプ正準・image px）"
+        "行内開始＝書字開始角 x=36（origin 未宣言時の縮退・image px）"
     );
     assert_eq!(
         full.window,
@@ -400,7 +400,7 @@ fn layout_decision_is_scale_independent_for_horizontal_text() {
 #[test]
 fn same_image_size_yields_identical_layout_regardless_of_scale() {
     let m = model(
-        (Some(0), Some(0)),
+        (None, None),
         (Some(-49), Some(0)),
         (Some(46), Some(-56), Some(36), Some(-44)),
         None,

@@ -2,7 +2,7 @@ use crate::numerics::*;
 use bevy_ecs::prelude::*;
 use core::ops::*;
 
-#[derive(Component, Clone, Copy, Debug, PartialEq, Default)]
+#[derive(Component, Clone, Copy, Debug, PartialEq, Hash, Default)]
 #[repr(transparent)]
 pub struct VisualTransform(pub Transform2D);
 

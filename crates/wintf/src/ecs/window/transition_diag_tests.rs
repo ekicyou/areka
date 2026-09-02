@@ -34,13 +34,14 @@ const WORLD_CONSTRUCTION_SRC: &str = include_str!("../world/mod.rs");
 use windows::Win32::Foundation::{HWND, RECT};
 
 use super::{
-    ENQUEUE_FIELDS, EnqueueRecord, FIELD_KIND, FLUSH_FIELDS, FlushRecord, FlushStage, KIND_ALL,
-    KIND_ENQUEUE, KIND_FLUSH, KIND_MONITOR, KIND_MSG, KIND_WRITE, MONITOR_FIELDS, MSG_DPICHANGED,
-    MSG_FIELDS, MonitorRecord, MsgRecord, STAGE_ALL, Stamp, TRANSITION_TARGET, TickStart,
-    WRITE_FIELDS, WRITE_OPTIONAL_FIELDS, WriteRecord, WriteStage, WriteTag, begin_flush,
-    begin_tick, current_frame, emit_line, enqueue_line, flush_line, is_enabled, monitor_line,
-    msg_line, record_prefix, reset_for_test, since_flush_us, since_tick_start_us, stamp,
-    stamp_from_world, write_line,
+    ENQUEUE_FIELDS, EnqueueRecord, FIELD_ENTITY, FIELD_KIND, FIELD_NEW_DPI, FIELD_OLD_DPI,
+    FIELD_OLD_WA, FLUSH_FIELDS, FlushRecord, FlushStage, KIND_ALL, KIND_ENQUEUE, KIND_FLUSH,
+    KIND_MONITOR, KIND_MSG, KIND_WINDPI, KIND_WRITE, MONITOR_FIELDS, MSG_DPICHANGED, MSG_FIELDS,
+    MonitorRecord, MsgRecord, STAGE_ALL, Stamp, TRANSITION_TARGET, TickStart, WINDPI_FIELDS,
+    WRITE_FIELDS, WRITE_OPTIONAL_FIELDS, WindowDpiRecord, WriteRecord, WriteStage, WriteTag,
+    begin_flush, begin_tick, current_frame, emit_line, enqueue_line, flush_line, is_enabled,
+    monitor_line, msg_line, record_prefix, reset_for_test, since_flush_us, since_tick_start_us,
+    stamp, stamp_from_world, windpi_line, write_line,
 };
 use crate::ecs::test_support::capture_under_filter;
 use crate::ecs::world::{EcsWorld, FrameCount, Update};
@@ -169,6 +170,56 @@ fn monitor_line_is_verbatim() {
         KIND_MONITOR,
         MONITOR_FIELDS
     ));
+}
+
+#[test]
+fn windpi_line_is_verbatim() {
+    let record = WindowDpiRecord {
+        stamp: STAMP,
+        entity: entity(9),
+        old_dpi: 120,
+        new_dpi: 192,
+    };
+    assert_eq!(
+        windpi_line(&record),
+        "[transition] frame=7 t_us=1234 kind=windpi entity=9v0 old_dpi=120 new_dpi=192"
+    );
+    assert!(matches(&windpi_line(&record), KIND_WINDPI, WINDPI_FIELDS));
+}
+
+/// 新起点（`kind=windpi`）は既存の起点（`kind=monitor`）と**同名・同義・同値形**の欄で
+/// 読めること。判定器は両者を同じ読み方で起点に採る（task 8.4 の前提）ので、欄名が
+/// 1 文字でもずれたら起点集合の拡張が静かに空振りする。
+#[test]
+fn windpi_reads_like_the_monitor_origin() {
+    let windpi = windpi_line(&WindowDpiRecord {
+        stamp: STAMP,
+        entity: entity(9),
+        old_dpi: 120,
+        new_dpi: 192,
+    });
+    let monitor = monitor_line(&MonitorRecord {
+        stamp: STAMP,
+        entity: entity(9),
+        old_dpi: 120,
+        new_dpi: 192,
+        old_work_area: rect(0, 0, 10, 10),
+        new_work_area: rect(0, 0, 20, 20),
+    });
+    let from_windpi = parse_fields(&windpi);
+    let from_monitor = parse_fields(&monitor);
+    for name in [FIELD_ENTITY, FIELD_OLD_DPI, FIELD_NEW_DPI] {
+        assert_eq!(
+            from_windpi.get(name),
+            from_monitor.get(name),
+            "起点 2 種で {name} の読み方が違う: {windpi} / {monitor}"
+        );
+    }
+    // 窓は作業領域を持たない——番兵で埋めるのではなく**欄ごと持たない**（欄の意味が無い）。
+    assert!(
+        !from_windpi.contains_key(FIELD_OLD_WA),
+        "窓の起点に作業領域の欄が生えている: {windpi}"
+    );
 }
 
 #[test]
@@ -395,6 +446,12 @@ fn no_line_repeats_a_field_name() {
             old_work_area: rect(0, 0, 10, 10),
             new_work_area: rect(0, 0, 20, 20),
         }),
+        windpi_line(&WindowDpiRecord {
+            stamp: STAMP,
+            entity: entity(1),
+            old_dpi: 96,
+            new_dpi: 120,
+        }),
         write_line(&WriteRecord {
             stamp: STAMP,
             stage: WriteStage::Flush,
@@ -545,7 +602,14 @@ fn kind_words_are_unique_and_complete() {
     sorted.sort_unstable();
     sorted.dedup();
     assert_eq!(sorted.len(), KIND_ALL.len(), "kind 語は互いに異なる");
-    for kind in [KIND_MONITOR, KIND_WRITE, KIND_FLUSH, KIND_MSG, KIND_ENQUEUE] {
+    for kind in [
+        KIND_MONITOR,
+        KIND_WINDPI,
+        KIND_WRITE,
+        KIND_FLUSH,
+        KIND_MSG,
+        KIND_ENQUEUE,
+    ] {
         assert!(KIND_ALL.contains(&kind), "{kind} が KIND_ALL に無い");
     }
 }

@@ -174,7 +174,15 @@ mod tests {
             ("choice.rs", include_str!("choice.rs")),
             ("state.rs", include_str!("state.rs")),
             ("writing.rs", include_str!("writing.rs")),
+            (
+                "writing_decision_tests.rs",
+                include_str!("writing_decision_tests.rs"),
+            ),
             ("region.rs", include_str!("region.rs")),
+            (
+                "region_vertical_canon_tests.rs",
+                include_str!("region_vertical_canon_tests.rs"),
+            ),
             ("segment.rs", include_str!("segment.rs")),
             ("layout.rs", include_str!("layout.rs")),
             ("canvas.rs", include_str!("canvas.rs")),

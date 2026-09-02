@@ -45,6 +45,7 @@
 //! `shiori-host32-host`（既に areka-ghost/areka-kanade 経由で推移ビルド済み・x64・新規外部依存
 //! ではない）を追加した。
 
+use crate::placement::follow::OffsetBase;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::path::PathBuf;
@@ -498,6 +499,7 @@ fn two_scope_placements() -> Vec<ScopePlacement> {
             balloon_pos: PointPx { x: 1071, y: 708 },
             balloon_size: SizePx { w: 223, h: 158 },
             balloon_offset: PointPx { x: -412, y: -25 },
+            balloon_offset_base: OffsetBase::unpinned(PointPx { x: -412, y: -25 }),
             // windowposition-limit: 正典既定（有効）。本檻は limit の判定を対象にしない。
             balloon_limit: true,
             anchor: Anchor::Bottom,
@@ -510,6 +512,7 @@ fn two_scope_placements() -> Vec<ScopePlacement> {
             balloon_pos: PointPx { x: 1334, y: 1044 },
             balloon_size: SizePx { w: 223, h: 158 },
             balloon_offset: PointPx { x: 285, y: -19 },
+            balloon_offset_base: OffsetBase::unpinned(PointPx { x: 285, y: -19 }),
             // windowposition-limit: 正典既定（有効）。本檻は limit の判定を対象にしない。
             balloon_limit: true,
             anchor: Anchor::Bottom,

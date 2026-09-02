@@ -1,0 +1,58 @@
+# SSP 拡大率跨ぎ観測ログ — areka-P0-balloon-offset-dpi task 1.1（要件 6.1〜6.3）
+#
+# 日時   : 2026-08-27 22:23〜22:25 (JST)
+# 参照実装: SSP  C:\wintools\ssp\ssp.exe（profile 空＝初回起動）
+# ゴースト: えも2DEBUG（sakura=むらさき / kero=エモ）+ 既定バルーン
+# 採取器  : .kiro/specs/completed/areka-P0-scope-chain-gap/tools/measure-ssp-rects.ps1
+#           （Per-Monitor v2 aware・GetWindowRect / GetDpiForWindow の読み取りのみ）
+# モニタ  : DISPLAY1 primary mon=L0,T0,R2880,B1800   dpi=192（200%）
+#           DISPLAY2         mon=L-2560,T195,R0,B1795 dpi=144（150%）
+# 操作    : むらさきのキャラ窓を合成マウス入力でモニタ間をドラッグ往復。
+#           バルーンは左クリックの接触反応で開かせた（右クリック＝メニューは使わない）。
+#
+# 追従オフセットの定義: balloon(L,T) − char(L,T)  ＝ キャラ窓左上を基準とした物理 px の相対位置。
+
+=== snapshot 1 — DPI 192（起動直後・DISPLAY1）===
+Tmainform    むらさき         Dpi=192  L=2181  T=610  W=764  H=1094
+Tmessageform むらさき/Balloon Dpi=192  L=1901  T=366  W=800  H=448
+  -> follow offset = (1901-2181, 366-610) = (-280, -244)
+Tkeroform    エモ             Dpi=192  L=1509  T=904  W=672  H=800
+Tmessageformu エモ/Balloon    Dpi=192  L=1796  T=746  W=576  H=406
+  -> follow offset = (+287, -158)
+
+=== snapshot 2 — DPI 144（DISPLAY2 へドラッグ直後・バルーン閉）===
+Tmainform    むらさき         Dpi=144  L=-1582 T=701  W=764  H=1094
+  ※ 窓寸が 764x1094 のまま 1 bit も変わらない（DPI 192 -> 144 で 0.75 倍にならない）
+Tkeroform    エモ             Dpi=192  L=1509  T=904  W=672  H=800
+  ※ ドラッグしていない scope は元のモニタに残る（SSP は scope 単位で移動する）
+
+=== snapshot 3 — DPI 144（DISPLAY2・クリックでバルーンを開かせた）===
+Tmainform    むらさき         Dpi=144  L=-1582 T=701  W=764  H=1094
+Tmessageform むらさき/Balloon Dpi=144  L=-1862 T=457  W=800  H=448
+  -> follow offset = (-1862-(-1582), 457-701) = (-280, -244)   ★ snapshot 1 と bit 同一
+  ※ バルーン窓寸も 800x448 のまま不変
+
+=== snapshot 4 — DPI 192（DISPLAY1 へドラッグで戻した・往復後）===
+Tmainform    むらさき         Dpi=192  L=2018  T=610  W=764  H=1094
+Tmessageform むらさき/Balloon Dpi=192  L=1738  T=366  W=800  H=448
+  -> follow offset = (1738-2018, 366-610) = (-280, -244)       ★ snapshot 1/3 と bit 同一
+
+=== 観測結果 ===
+(1) SSP は拡大率遷移でバルーン追従オフセットを再スケールしない。
+    192 -> 144 -> 192 の往復で (-280,-244) が 3 回とも bit 同一。
+(2) SSP は拡大率遷移でキャラ窓・バルーン窓の寸法も変えない。
+    起動時に決めた物理寸（キャラ 764x1094 ＝ 素材 382x547 の k=2・バルーン 800x448）を
+    別 DPI のモニタへ移しても据え置く。つまり SSP には「拡大率遷移」という概念が無く、
+    起動時の主モニタ DPI で焼いた物理 px をそのまま持ち回る。
+(3) したがって「拡大率跨ぎのバルーン追従」に relevant な参照挙動は存在しない。
+    存在するのは「何もしない」という結果であり、それは areka の設計原則
+    （表示経路が拡大率に追従する＝doc/COMPAT_ARCHITECTURE.md・areka-dpi-following）と
+    そもそも両立しない（追従しない実装の追従規則は移植できない）。
+
+=== 採った腕 ===
+腕 B（要件 6.3）。areka 自身の設計原則から導出した判断（design.md D1〜D5）を採り、
+互換記録 doc/COMPAT_ARCHITECTURE.md §8 の裁量表へ 4 欄で登記する（task 9）。
+本観測は既登記 2 例と整合する 3 例目である——
+  COMPAT:146 windowposition.x = 生値 × k（実機実測）
+  COMPAT:154 \![move] の dx/dy = 作者基準 px × k（意図的な SSP 非互換・SSP は無スケール）
+  本件      balloon.offsetx/offsety および追従オフセット = 同じ扱い（SSP は無スケール＝非互換）

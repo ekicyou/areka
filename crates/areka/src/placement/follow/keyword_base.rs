@@ -3,10 +3,11 @@
 
 use bevy_ecs::prelude::*;
 use tracing::{info, warn};
-use wintf::ecs::WindowPos;
+use wintf::ecs::{DPI, WindowPos};
 
 use super::{
-    BalloonFollow, BalloonKeywordBase, CharWindowMarker, PointPx, SizePx, keyword_balloon_pos,
+    BalloonFollow, BalloonKeywordBase, CharWindowMarker, OffsetBase, PointPx, SizePx,
+    keyword_balloon_pos,
 };
 
 // =============================================================================
@@ -18,6 +19,9 @@ use super::{
 pub(super) const KEYWORD_REDERIVE_TAG: &str = "[balloon-keyword] Rederive";
 /// 再導出に必要な入力を解決できなかったときの記録タグ（log-first の縮退シーム）。
 pub(super) const KEYWORD_UNRESOLVED_TAG: &str = "[balloon-keyword] Unresolved";
+/// 再導出は成立したが基準 DPI を読めず**未係留**で確立したときの記録タグ
+/// （areka-P0-balloon-offset-dpi・要件 5.2／9.4。offset 自体は導出値で正しい）。
+const KEYWORD_BASE_UNPINNED_TAG: &str = "[balloon-keyword] BaseUnpinned";
 
 /// キーワード由来のバルーン基本位置を**実表示寸**から導出し直し、素材を消費する
 /// （[`resize_window_to`] 手順 5a 専用・要件 4.2/4.3/4.4/4.7）。
@@ -139,9 +143,27 @@ pub(super) fn rederive_keyword_balloon_offset(
         return;
     };
 
-    let old_offset = follow.offset;
+    let old_offset = follow.offset();
+    // **確立点**——再導出した基本位置を新しい基準として焼き直す（design D14・要件 3.3）。
+    // 追従 Component を借りる前に表示 DPI を読む（同時借用を避ける順序）。
+    let current_dpi = world.get::<DPI>(char_window).copied();
     if let Some(mut f) = world.get_mut::<BalloonFollow>(char_window) {
-        f.offset = new_offset;
+        match current_dpi {
+            Some(dpi) => f.reestablish(new_offset, dpi),
+            None => {
+                // 表示 DPI を読めない窓。値は確定しているが属する空間が分からないので
+                // 永続値の腕と同じ**未係留**で確立する（最初の観測で値を変えずに係留・
+                // 要件 5.2／5.4）。基準 DPI を発明すると次の遷移で二重に拡大する。
+                let balloon = f.balloon;
+                *f = BalloonFollow::new(balloon, OffsetBase::unpinned(new_offset));
+                // 再導出そのものは**成立している**ので [`KEYWORD_UNRESOLVED_TAG`] は
+                // 使わない（実機サインオフの grep 判定語を汚さない）。
+                warn!(
+                    entity = ?char_window,
+                    "{KEYWORD_BASE_UNPINNED_TAG} キーワード再導出: キャラ窓の表示 DPI を読めないため基準を未係留で確立した（offset は導出値へ更新済み）"
+                );
+            }
+        }
     }
     // 一度きり（4.7）: 素材を消費して除去する。これ以降のリサイズは `Side` と同じく
     // 配置時確定の静的 offset として振る舞う。

@@ -57,16 +57,23 @@ fn field_value<'a>(line: &'a str, name: &str) -> &'a str {
 // 語彙（種別語・段階語・理由語・フィールド名）
 // ---------------------------------------------------------------------------
 
-/// 4 つのレコード種別語の字面が固定されている（design Data Models の `kind` 列）。
+/// 5 つのレコード種別語の字面が固定されている（design Data Models の `kind` 列）。
 #[test]
 fn placement_record_kinds_are_fixed() {
     assert_eq!(KIND_SNAPSHOT, "snapshot");
     assert_eq!(KIND_HOLD, "hold");
     assert_eq!(KIND_GROUND, "ground");
     assert_eq!(KIND_CHAIN, "chain");
+    assert_eq!(KIND_OFFSET, "offset");
     assert_eq!(
         PLACEMENT_KIND_ALL,
-        &[KIND_SNAPSHOT, KIND_HOLD, KIND_GROUND, KIND_CHAIN]
+        &[
+            KIND_SNAPSHOT,
+            KIND_HOLD,
+            KIND_GROUND,
+            KIND_CHAIN,
+            KIND_OFFSET
+        ]
     );
 }
 
@@ -101,7 +108,12 @@ fn hold_and_chain_words_are_fixed_and_distinct() {
     assert_eq!(CHAIN_STAGE_REALIGNED, "realigned");
     assert_eq!(CHAIN_STAGE_DEFERRED, "deferred");
 
-    for words in [HOLD_DECISION_ALL, HOLD_SITE_ALL, CHAIN_STAGE_ALL] {
+    for words in [
+        HOLD_DECISION_ALL,
+        HOLD_SITE_ALL,
+        CHAIN_STAGE_ALL,
+        OFFSET_VERDICT_ALL,
+    ] {
         let mut sorted = words.to_vec();
         sorted.sort_unstable();
         let before = sorted.len();
@@ -158,6 +170,16 @@ fn no_placement_line_repeats_a_field_name() {
             scopes: 2,
             moved: 1,
             reason: None,
+        }),
+        offset_line(&OffsetRecord {
+            stamp: stamp(),
+            scope: Some(0),
+            base_dpi: Some(96),
+            new_dpi: 192,
+            base_offset: PointPx { x: 10, y: 20 },
+            old_offset: PointPx { x: 10, y: 20 },
+            new_offset: PointPx { x: 20, y: 40 },
+            verdict: OFFSET_VERDICT_RESCALED,
         }),
     ];
 
@@ -409,6 +431,35 @@ fn the_declared_field_lists_match_the_lines_that_are_actually_built() {
     assert_eq!(HOLD_FIELDS[2], FIELD_WIN_KIND);
     assert_eq!(CHAIN_FIELDS[0], FIELD_STAGE);
     assert_eq!(SNAPSHOT_FIELDS, &[FIELD_MONITORS]);
+
+    let offset = offset_line(&OffsetRecord {
+        stamp: stamp(),
+        scope: None,
+        base_dpi: None,
+        new_dpi: 96,
+        base_offset: PointPx { x: 0, y: 0 },
+        old_offset: PointPx { x: 0, y: 0 },
+        new_offset: PointPx { x: 0, y: 0 },
+        verdict: OFFSET_VERDICT_ANCHORED,
+    });
+    for name in OFFSET_FIELDS {
+        assert!(
+            offset.contains(&format!("{name}=")),
+            "追随レコードに必須フィールド `{name}` が無い: {offset}"
+        );
+    }
+    assert_eq!(
+        OFFSET_FIELDS,
+        &[
+            FIELD_SCOPE,
+            FIELD_BASE_DPI,
+            base::FIELD_NEW_DPI,
+            FIELD_BASE_OFFSET,
+            FIELD_OLD_OFFSET,
+            FIELD_NEW_OFFSET,
+            FIELD_VERDICT
+        ]
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -591,4 +642,152 @@ fn log_chain_emits_exactly_one_record_per_stage() {
         "見送りの行の中身が違う: {}",
         hits[1]
     );
+}
+
+// ---------------------------------------------------------------------------
+// 追随レコード（`kind=offset`・要件 3.7／8.3・design D10）
+// ---------------------------------------------------------------------------
+
+/// 種別語と判定語 6 値が字面で固定され、種別が全数表に載っている。
+///
+/// 全数表への追加を怠ると、判定側は行を `UnknownKind` として落とすだけで**赤にならない**
+/// ——種別の取りこぼしを構造で捕まえる唯一の口が全数表である。
+#[test]
+fn the_offset_kind_and_its_six_verdict_words_are_fixed() {
+    assert!(
+        PLACEMENT_KIND_ALL.contains(&KIND_OFFSET),
+        "全数表が追随の種別を載せていない"
+    );
+
+    assert_eq!(OFFSET_VERDICT_RESCALED, "rescaled");
+    assert_eq!(OFFSET_VERDICT_ANCHORED, "anchored");
+    assert_eq!(OFFSET_VERDICT_UNCHANGED, "unchanged");
+    assert_eq!(OFFSET_VERDICT_KEYWORD_PENDING, "keyword-pending");
+    assert_eq!(OFFSET_VERDICT_UNRESOLVED, "unresolved");
+    assert_eq!(OFFSET_VERDICT_SATURATED, "saturated");
+    assert_eq!(
+        OFFSET_VERDICT_ALL,
+        &[
+            OFFSET_VERDICT_RESCALED,
+            OFFSET_VERDICT_ANCHORED,
+            OFFSET_VERDICT_UNCHANGED,
+            OFFSET_VERDICT_KEYWORD_PENDING,
+            OFFSET_VERDICT_UNRESOLVED,
+            OFFSET_VERDICT_SATURATED,
+        ]
+    );
+}
+
+/// 追随レコードは 7 欄すべてを載せ、点は `x,y`（空白なし）で 1 フィールドに畳む。
+#[test]
+fn offset_line_carries_the_base_pair_the_two_offsets_and_the_verdict() {
+    assert_eq!(
+        offset_line(&OffsetRecord {
+            stamp: stamp(),
+            scope: Some(0),
+            base_dpi: Some(96),
+            new_dpi: 192,
+            base_offset: PointPx { x: 10, y: -20 },
+            old_offset: PointPx { x: 10, y: -20 },
+            new_offset: PointPx { x: 20, y: -40 },
+            verdict: OFFSET_VERDICT_RESCALED,
+        }),
+        "[transition] frame=7 t_us=1234 kind=offset scope=0 base_dpi=96 new_dpi=192 \
+         base_offset=10,-20 old_offset=10,-20 new_offset=20,-40 verdict=rescaled"
+    );
+}
+
+/// 未係留の基準（永続値の腕・要件 5.2）と marker を持たない窓は番兵で埋める
+/// ——欄を落とすと「記録が出ていない」と「その腕にはその値が無い」の区別が事後に付かない。
+#[test]
+fn offset_line_uses_a_sentinel_for_an_unpinned_base_and_an_unmarked_scope() {
+    assert_eq!(
+        offset_line(&OffsetRecord {
+            stamp: stamp(),
+            scope: None,
+            base_dpi: None,
+            new_dpi: 120,
+            base_offset: PointPx { x: 3, y: 4 },
+            old_offset: PointPx { x: 3, y: 4 },
+            new_offset: PointPx { x: 3, y: 4 },
+            verdict: OFFSET_VERDICT_ANCHORED,
+        }),
+        "[transition] frame=7 t_us=1234 kind=offset scope=- base_dpi=- new_dpi=120 \
+         base_offset=3,4 old_offset=3,4 new_offset=3,4 verdict=anchored"
+    );
+}
+
+/// 発行は 1 呼出 1 行（1 遷移 1 スコープにつき高々 1 行という契約の下半分）。
+#[test]
+fn log_offset_rescale_emits_exactly_one_record_per_call() {
+    let world = World::new();
+
+    let (_, events) = crate::placement::test_support::capture_logs(|| {
+        log_offset_rescale(
+            &world,
+            Some(1),
+            Some(96),
+            192,
+            PointPx { x: 10, y: 20 },
+            PointPx { x: 10, y: 20 },
+            PointPx { x: 20, y: 40 },
+            OFFSET_VERDICT_RESCALED,
+        );
+    });
+
+    let hits: Vec<&str> = events
+        .iter()
+        .map(|e| e.message())
+        .filter(|m| m.contains("kind=offset"))
+        .collect();
+    assert_eq!(hits.len(), 1, "追随レコードが 1 行でない: {events:?}");
+    assert!(
+        hits[0].contains(
+            "scope=1 base_dpi=96 new_dpi=192 base_offset=10,20 old_offset=10,20 \
+             new_offset=20,40 verdict=rescaled"
+        ),
+        "追随レコードの中身が違う: {}",
+        hits[0]
+    );
+}
+
+/// 要件 3.7／8.3・design D10: 発行口は前置ガードを**自分で**持ち、ガードは行の組立より
+/// 前にある。`debug!` は既定運転で濾過されるので、ガードを失っても**出力は変わらない**
+/// ——濾過テストでは検出できない退行であり、固定できるのは本文走査だけである。
+#[test]
+fn the_offset_record_is_built_behind_the_front_guard() {
+    let code = code_only_lines(include_str!("transition_diag.rs"));
+    let body = code
+        .split("pub fn log_offset_rescale(")
+        .nth(1)
+        .expect("発行口 `log_offset_rescale` が無い");
+    let guard = body
+        .find("if !is_enabled() {")
+        .expect("発行口に前置ガードが無い——既定運転でも観測の費用を払う形になる");
+    let build = body
+        .find("OffsetRecord {")
+        .expect("発行口がレコードを組んでいない");
+    assert!(
+        guard < build,
+        "前置ガードがレコードの組立より後ろにある（既定運転で確保が起きる）"
+    );
+    assert!(
+        body[..guard].find("format!").is_none() && body[..guard].find("to_string()").is_none(),
+        "ガードより前に文字列の確保がある"
+    );
+
+    // 走査が中身を見ている対照——説明文を落とす処理が本文まで落としていないこと。
+    assert!(
+        code.contains("pub fn offset_line("),
+        "説明文を落とす処理が本文まで落としている"
+    );
+}
+
+/// 説明行（`//` 始まり）を落とした本文。doc の字面を主張と取り違えないための前処理。
+fn code_only_lines(source: &str) -> String {
+    source
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n")
 }

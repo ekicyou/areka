@@ -164,7 +164,7 @@ fn the_resnap_moves_the_companion_balloon_in_the_same_frame_without_touching_the
         .world
         .get::<BalloonFollow>(char0)
         .expect("char 窓は BalloonFollow を持つ")
-        .offset;
+        .offset();
     let balloon_before = pos_of(&harness.world, balloon0).expect("balloon 位置がある");
 
     hide_the_taskbar(&mut harness);
@@ -195,7 +195,7 @@ fn the_resnap_moves_the_companion_balloon_in_the_same_frame_without_touching_the
         .world
         .get::<BalloonFollow>(char0)
         .expect("char 窓は BalloonFollow を持つ")
-        .offset;
+        .offset();
     assert_eq!(
         (after.x, after.y),
         (before.x, before.y),

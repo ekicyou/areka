@@ -1,5 +1,6 @@
 use super::*;
 use crate::placement::config::BalloonXMode;
+use crate::placement::follow::OffsetBase;
 
 // ------------------------------------------------------------------
 // バルーン相対オフセットの保存基準（2.2/2.5・2026-07-31 実機裁定）
@@ -404,6 +405,7 @@ fn placement(
         },
         balloon_size,
         balloon_offset,
+        balloon_offset_base: OffsetBase::unpinned(balloon_offset),
         // windowposition-limit: 正典既定（有効）。復元 merge は limit を変換しない。
         balloon_limit: true,
         anchor,

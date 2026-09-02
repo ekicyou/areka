@@ -91,9 +91,11 @@ pub(super) fn geo_model(font_height: Option<u32>) -> BalloonModel {
 }
 
 /// live-diff 用 BalloonModel（**origin 未指定**＝mode ごとの書字開始角へ寄せる・font 高さ
-/// 指定可・validrect 全域）。origin (0,0) を明示すると vertical_rl では validrect 内の
-/// 左上に留まり列が面外（負の x）へ描かれてしまうため、origin は None にして
-/// クランプ正準（horizontal/vertical_lr＝左上・vertical_rl＝右上）へ委ねる。
+/// 指定可・validrect 全域）。origin (0,0) を明示すると宣言が字義どおり用いられて面の
+/// 左上から書き始まり、vertical_rl は列送りが −x ゆえ列が面外（負の x）へ描かれてしまう。
+/// そのため origin は None にして、未宣言時の縮退＝書字開始角
+/// （horizontal_tb/vertical_lr＝validrect 左上・vertical_rl＝右上）へ委ねる
+/// （spec `areka-P0-balloon-vertical-canon` の要件 3.10／3.11）。
 /// フォント名＋高さを明示した live-diff 用モデル（既定フォントは `name=None`＝ＭＳ ゴシック・
 /// G4——非 default フォント/大サイズで AA こぼれガード `DIRTY_GUARD_IMG_PX` の実効性を byte
 /// 等価で検証するため）。

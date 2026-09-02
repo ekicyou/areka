@@ -1,3 +1,4 @@
+use crate::placement::follow::OffsetBase;
 use bevy_ecs::prelude::*;
 use wintf::ecs::SizeI;
 use wintf::ecs::pointer::Phase;
@@ -89,7 +90,7 @@ fn char_with_far_balloon_world(
             fake_handle(0x1000),
             window_pos_sized(start.x, start.y, c.w, c.h),
             Anchored(Anchor::Bottom),
-            BalloonFollow { balloon, offset },
+            BalloonFollow::new(balloon, OffsetBase::unpinned(offset)),
         ))
         .id();
     (world, char_window, balloon)
@@ -387,7 +388,7 @@ fn char_with_balloon_window_pos(
             fake_handle(0x1000),
             window_pos_sized(start.x, start.y, c.w, c.h),
             Anchored(Anchor::Bottom),
-            BalloonFollow { balloon, offset },
+            BalloonFollow::new(balloon, OffsetBase::unpinned(offset)),
         ))
         .id();
     (world, char_window, balloon)
@@ -716,7 +717,7 @@ fn gap_bound_char_world_with_balloon(
             fake_handle(0x1000),
             window_pos_sized(old_pos.x, old_pos.y, old.w, old.h),
             Anchored(Anchor::Bottom),
-            BalloonFollow { balloon, offset },
+            BalloonFollow::new(balloon, OffsetBase::unpinned(offset)),
         ))
         .id();
     (world, char_window, balloon, old_pos)
@@ -846,6 +847,18 @@ fn both_windows_survive_a_single_write_onto_different_monitors() {
 /// バルーンの追従先が**ずれた後**の位置であることを座標で固定する。バルーン自身は
 /// clamp されない（＝救われたのはキャラだけ・`ClampX` はちょうど 1 行）ので、
 /// 「バルーンが偶然どこかへ clamp されて結果が一致した」逃げ道も塞がる。
+///
+/// **区分（areka-P0-balloon-offset-dpi task 6.4・要件 7.4／7.6・design D13）＝本檻は
+/// 「寸法変化に対する不変」群である。拡大率遷移を一度も起こさないので、追随の証拠にはならない。**
+/// 本檻は `for dpi in DPIS` で**水準ごとに世界を組み直して** [`resize_window_to`] を直接呼ぶ
+/// だけであり、`DPI` を書き換えて `Changed<DPI>` のエッジを立てることは無い。追随の発火条件
+/// はそのエッジに限られる（`emo2_boot::frame::dpi` の相）ため、追随が入っても本檻には届かない
+/// ——上の `stored_offset == offset`（窓相対契約＝リサイズで offset を補正しない・2026-07-31
+/// 実機 SSP 裁定）は**是正後も真のまま**であり、主張は 1 文字も書き換えていない。
+///
+/// 実測（task 6.4）: 追随の適用（`emo2_boot::frame::balloon_offset_follow::rescale_balloon_follow_offset`
+/// の呼出）を外した走行で、本件は**緑のまま**であった（同走行では追随の檻 13 件が赤になる）。
+/// ゆえに**本件が緑であることを「追随を壊していない」の根拠に使ってはならない**。
 #[test]
 fn balloon_follows_the_guarded_char_position_not_the_raw_projection() {
     for dpi in DPIS {
@@ -919,7 +932,7 @@ fn balloon_follows_the_guarded_char_position_not_the_raw_projection() {
             let stored_offset = world
                 .get::<BalloonFollow>(char_window)
                 .expect("char 窓は BalloonFollow を持つ")
-                .offset;
+                .offset();
             assert_eq!(
                 stored_offset, offset,
                 "dpi={dpi} route={route}: BalloonFollow.offset が書き換わった\

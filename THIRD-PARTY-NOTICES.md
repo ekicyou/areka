@@ -569,7 +569,7 @@ DEALINGS IN THE SOFTWARE.
 
 対象 crate:
 - bitflags 2.13.1
-- log 0.4.33
+- log 0.4.34
 - regex-automata 0.4.18
 - regex-syntax 0.8.11
 
@@ -606,7 +606,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 対象 crate:
-- uuid 1.24.0
+- uuid 1.26.0
 
 ```
 Copyright (c) 2014 The Rust Project Developers
@@ -642,7 +642,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 対象 crate:
-- either 1.17.0
+- either 1.18.0
 - itertools 0.10.5
 
 ```
@@ -1478,7 +1478,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 対象 crate:
-- chacha20 0.10.1
+- chacha20 0.10.2
 
 ```
 Copyright (c) 2019-2026 The RustCrypto Project Developers
@@ -1576,10 +1576,10 @@ SOFTWARE.
 ## MIT License
 
 対象 crate:
-- cpufeatures 0.3.0
+- cpufeatures 0.3.1
 
 ```
-Copyright (c) 2020-2025 The RustCrypto Project Developers
+Copyright (c) 2020-2026 The RustCrypto Project Developers
 
 Permission is hereby granted, free of charge, to any
 person obtaining a copy of this software and associated
@@ -1934,7 +1934,6 @@ SOFTWARE.
 - shiori4-testdll 0.0.1
 - temp-path-kit 0.0.1
 - wintf 0.0.1
-- pasta_core 0.3.3
 - ambassador 0.5.1
 - block2 0.6.2
 - dispatch2 0.3.1
@@ -1942,6 +1941,7 @@ SOFTWARE.
 - objc2-encode 4.1.0
 - objc2-io-kit 0.3.2
 - objc2 0.6.4
+- pasta_core 0.3.3
 - r-efi 6.0.0
 - taffy 0.13.0
 - winapi-i686-pc-windows-gnu 0.4.0
@@ -2188,7 +2188,7 @@ SOFTWARE.
 - serde_derive 1.0.229
 - serde_json 1.0.151
 - syn 2.0.119
-- syn 3.0.3
+- syn 3.0.4
 - thiserror-impl 2.0.20
 - thiserror 2.0.20
 - typeid 1.0.3

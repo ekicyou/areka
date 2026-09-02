@@ -1,0 +1,10 @@
+windowposition.x,266
+windowposition.y,-129
+
+wordwrappoint.x,-49
+wordwrappoint.y,-60
+
+validrect.top,46
+validrect.bottom,-56
+validrect.left,36
+validrect.right,-44

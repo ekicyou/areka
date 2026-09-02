@@ -1,9 +1,25 @@
+use super::calc_hash::*;
+use core::hash::*;
 use core::ops::*;
 use windows_numerics::*;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[repr(transparent)]
 pub struct Point2(pub Vector2);
+
+impl CalcHash for Point2 {
+    #[inline]
+    fn calc_hash<H: Hasher>(&self, state: &mut H) {
+        self.0.calc_hash(state);
+    }
+}
+
+impl Hash for Point2 {
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.calc_hash(state);
+    }
+}
 
 impl Point2 {
     #[inline]

@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 use temp_path_kit::TempPath;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
+use wintf::ecs::DPI;
 
 use super::resolver::RectPx;
 
@@ -34,6 +35,17 @@ pub(super) const WA: RectPx = RectPx {
     top: 0,
     right: 1920,
     bottom: 1040,
+};
+
+/// 決定論テストが [`super::resolver::resolve_placement`] へ渡す**採寸 DPI**（正典既定 96）。
+///
+/// 配置式 P1〜P5 は採寸 DPI を 1 度も読まない——値は基準対
+/// （`ScopePlacement::balloon_offset_base`）へ刻まれるだけである。ゆえに幾何の檻は
+/// この既定を渡せばよく、採寸 DPI の決め方そのものの檻は `placement_prepare_tests.rs`
+/// が持つ（areka-P0-balloon-offset-dpi task 2.1）。
+pub(super) const MEASURE_DPI: DPI = DPI {
+    dpi_x: 96,
+    dpi_y: 96,
 };
 
 // ── テスト用一時ディレクトリ（共通窓口 `temp-path-kit` の薄い包み）──

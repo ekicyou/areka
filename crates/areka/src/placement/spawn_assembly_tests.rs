@@ -164,7 +164,7 @@ fn t_i1_char_window_has_follow_and_on_drag_balloon_has_on_drag_only() {
             .get::<BalloonFollow>(char_e)
             .expect("char window BalloonFollow");
         assert_eq!(follow.balloon, balloon_e);
-        assert_eq!(follow.offset, p.balloon_offset);
+        assert_eq!(follow.offset(), p.balloon_offset);
         assert!(world.get::<OnDrag>(char_e).is_some());
 
         // バルーン窓: 相対位置記憶ハンドラあり（4.8）・BalloonFollow なし

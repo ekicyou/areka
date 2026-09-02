@@ -62,8 +62,8 @@ use windows::core::{PCWSTR, w};
 use crate::ecs::App;
 use crate::ecs::test_support::capture_under_filter;
 use crate::ecs::window::transition_diag::{
-    self, KIND_MSG, KIND_WRITE, MISSING, MSG_DISPLAYCHANGE, MSG_DPICHANGED, MSG_WINDOWPOSCHANGED,
-    ORIGIN_DPI_SUGGESTED, RECORD_PREFIX_TAG, TRANSITION_TARGET,
+    self, KIND_MSG, KIND_WINDPI, KIND_WRITE, MISSING, MSG_DISPLAYCHANGE, MSG_DPICHANGED,
+    MSG_WINDOWPOSCHANGED, ORIGIN_DPI_SUGGESTED, RECORD_PREFIX_TAG, TRANSITION_TARGET,
 };
 use crate::ecs::window::{DPI, DpiSuggestedRectPolicy, SetWindowPosCommand, WindowHandle};
 use crate::ecs::world::EcsWorld;
@@ -152,6 +152,38 @@ fn capture_dpichanged(directives: &str, policy: Option<DpiSuggestedRectPolicy>) 
     });
     clean_slate();
     out
+}
+
+/// `WM_DPICHANGED` を 1 回配送し、観測出力と**対象エンティティ**を返す。
+///
+/// `with_dpi` が偽のとき、対象は `DPI` component を持たない——`WM_DPICHANGED` の
+/// component 書き換えが `if let Some(mut dpi_comp)` で抜ける腕（＝**書き換えが起きない
+/// 入力**）である。
+fn capture_dpichanged_with_entity(directives: &str, with_dpi: bool) -> (String, Entity) {
+    clean_slate();
+    let world = Rc::new(RefCell::new(EcsWorld::new()));
+    let entity = {
+        let mut w = world.borrow_mut();
+        let mut e = w.world_mut().spawn(());
+        if with_dpi {
+            e.insert(DPI::from_dpi(96, 96));
+        }
+        e.id()
+    };
+
+    let suggested = RECT {
+        left: 3210,
+        top: 140,
+        right: 3810,
+        bottom: 620,
+    };
+    let m = dpichanged_message(HWND(std::ptr::null_mut()), 192, &suggested);
+    let out = capture_under_filter(directives, || {
+        emit_control();
+        let _ = crate::ecs::dispatch_window_message(&world, entity, &m);
+    });
+    clean_slate();
+    (out, entity)
 }
 
 /// `WM_WINDOWPOSCHANGED` を 1 回配送し、観測出力を返す（窓書込の**外側**での受理）。
@@ -285,6 +317,61 @@ fn displaychange_receipt_is_recorded_and_still_delegates_to_defwindowproc() {
         msgs[0]
     );
     clean_slate();
+}
+
+// ---------------------------------------------------------------------------
+// 窓の拡大率の起点（`kind=windpi`）——メッセージ受理の経路（task 8.3）
+// ---------------------------------------------------------------------------
+
+#[test]
+fn dpichanged_records_the_window_origin_when_the_component_is_rewritten() {
+    let (captured, entity) = capture_dpichanged_with_entity(SIGNOFF_DIRECTIVES, true);
+    assert!(captured.contains(CONTROL_LINE), "捕捉が死んでいる");
+
+    let records = lines_of_kind(&captured, KIND_WINDPI);
+    assert_eq!(
+        records.len(),
+        1,
+        "component の書き換え 1 回につき 1 行: {captured}"
+    );
+    let line = records[0];
+    assert!(
+        line.contains(&format!("entity={entity:?}")),
+        "書き換えた窓の entity が載る: {line}"
+    );
+    assert!(
+        line.contains("old_dpi=96 new_dpi=192"),
+        "新旧の表示 DPI が同一行から復元できない: {line}"
+    );
+}
+
+/// **書き換えが起きなかった経路からは発行しない**（task 8.3 の完了条件）。
+///
+/// `DPI` component を持たない窓では `WM_DPICHANGED` の書き換え腕へ入らない。
+/// 同じ捕捉窓に受理の記録（`kind=msg`）が出ていることが、捕捉が生きている証拠である。
+#[test]
+fn dpichanged_records_no_window_origin_without_a_dpi_component() {
+    let (captured, _entity) = capture_dpichanged_with_entity(SIGNOFF_DIRECTIVES, false);
+    assert!(captured.contains(CONTROL_LINE), "捕捉が死んでいる");
+    assert_eq!(
+        lines_of_kind(&captured, KIND_MSG).len(),
+        1,
+        "対照の受理行が出ていない＝檻の前提が崩れている: {captured}"
+    );
+    assert!(
+        lines_of_kind(&captured, KIND_WINDPI).is_empty(),
+        "component を書き換えていないのに起点が出ている: {captured}"
+    );
+}
+
+#[test]
+fn the_window_origin_is_silent_under_the_default_directives() {
+    let (captured, _entity) = capture_dpichanged_with_entity(DEFAULT_DIRECTIVES, true);
+    assert!(captured.contains(CONTROL_LINE), "捕捉が死んでいる");
+    assert!(
+        lines_of_kind(&captured, KIND_WINDPI).is_empty(),
+        "観測 target を点けない運転では 1 行も出ない: {captured}"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -613,17 +700,17 @@ fn message_handlers_keep_the_front_guard_so_the_default_run_pays_no_observation_
     // `transition_diag_tests::is_enabled_follows_the_directive` が実濾過で示している。
     let code = code_only(include_str!("window_pos.rs"));
 
-    // 記録を組む点は 3 つ（`WM_DPICHANGED` の受理・`WM_WINDOWPOSCHANGED` の受理・
-    // 採用時の同期書込）。刻印を読む回数とガードの回数が一致していなければ、
-    // どれかがガードの外に出ている。
+    // 記録を組む点は 4 つ（`WM_DPICHANGED` の受理・`WM_WINDOWPOSCHANGED` の受理・
+    // 採用時の同期書込・`WM_DPICHANGED` での窓 DPI 書き換え＝`kind=windpi`・task 8.3）。
+    // 刻印を読む回数とガードの回数が一致していなければ、どれかがガードの外に出ている。
     assert_eq!(
         code.matches("transition_diag::is_enabled()").count(),
-        3,
+        4,
         "前置ガードの数が記録点の数と食い違う——ガードされていない記録点がある"
     );
     assert_eq!(
         code.matches("transition_diag::stamp()").count(),
-        3,
+        4,
         "刻印を読む回数が記録点の数と食い違う"
     );
     assert_eq!(

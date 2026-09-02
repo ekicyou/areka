@@ -113,9 +113,12 @@ fn refresh_actor_binding_with_same_binding_but_changed_region_rebuilds() {
     let region_before = rt.layout_input[&actor].region;
 
     // binding は 1 バイトも変えず、model の validrect だけが別 scope の値へ変わった状況。
+    // origin は宣言しない——本檻の関心は「validrect だけが変わったとき region が変わるか」で
+    // あり origin は付随物である（かつての `Origin::new(Some(0), Some(0))` は解決後
+    // validrect [24,360]×[16,200] の外にあり、旧「origin クランプ正準」に依存していた）。
     let narrowed = BalloonModel::new(
         WindowPosition::new(None, None),
-        Origin::new(Some(0), Some(0)),
+        Origin::new(None, None),
         WordWrapPoint::new(None, None),
         ValidRect::new(Some(16), Some(200), Some(24), Some(360)),
         Font::new(None, None, FontColor::new(None, None, None)),

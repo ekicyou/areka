@@ -1,4 +1,6 @@
+use super::calc_hash::*;
 use super::point2::*;
+use core::hash::*;
 use core::ops::*;
 use windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F;
 use windows_numerics::*;
@@ -6,6 +8,24 @@ use windows_numerics::*;
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[repr(transparent)]
 pub struct Aabb(pub D2D_RECT_F);
+
+impl CalcHash for Aabb {
+    #[inline]
+    fn calc_hash<H: Hasher>(&self, state: &mut H) {
+        let r = &self.0;
+        r.left.calc_hash(state);
+        r.top.calc_hash(state);
+        r.right.calc_hash(state);
+        r.bottom.calc_hash(state);
+    }
+}
+
+impl Hash for Aabb {
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.calc_hash(state);
+    }
+}
 
 impl Aabb {
     pub const fn new(left: f32, top: f32, right: f32, bottom: f32) -> Self {
@@ -17,6 +37,10 @@ impl Aabb {
         })
     }
 
+    pub const fn new_rect(r: D2D_RECT_F) -> Self {
+        Self(r)
+    }
+
     /// union の単位元（反転無限大）。`is_empty()` とも整合。
     pub const EMPTY: Aabb = Aabb::new(
         f32::INFINITY,
@@ -24,6 +48,26 @@ impl Aabb {
         f32::NEG_INFINITY,
         f32::NEG_INFINITY,
     );
+
+    #[inline]
+    pub fn left(&self) -> f32 {
+        self.0.left
+    }
+
+    #[inline]
+    pub fn top(&self) -> f32 {
+        self.0.top
+    }
+
+    #[inline]
+    pub fn right(&self) -> f32 {
+        self.0.right
+    }
+
+    #[inline]
+    pub fn bottom(&self) -> f32 {
+        self.0.bottom
+    }
 
     #[inline]
     pub fn width(&self) -> f32 {
