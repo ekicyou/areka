@@ -112,6 +112,12 @@ requirements.md L53 は「角括弧を伴わない `\_` タグは上表のとお
 
 ### 2.3 意味の観点（本仕様の範囲外だが記録）
 
+> **要件ディスカッション議題 2 の実在検証（2026-09-02）— 網羅調査（`ukadoc-survey-sakura-script` → `ukadoc-coverage-roadmap`）への申し送り**
+>
+> - `\_?` `\_!`: brief・requirements・roadmap の全件 grep で言及 0 件。**所有先未定**。
+> - `\__q` `\__v` `\__c` `\__t`: `decode.rs` に `"__q"` `"__v"` `"__c"` `"__t"` の腕は無い（grep 0 件）＝開始形・終了形とも**未実装**。
+> - **隣接 brief の誤記**: `anchor-tag-canon/brief.md:31` と `choice-marker-styling/brief.md:35` が「`\q`/`\__q` の機構は完了済み（choice-select-events）」と書くが、`completed/areka-P0-choice-select-events/requirements.md` に `\__q` は 1 行も無い。完了済みは `\q` のみ。本仕様は隣接 brief を書き換えない（要件 6.3）ので、coverage-roadmap の無所有一覧で `\__q` を「未実装」として扱うこと。
+
 `\_?` と `\_!` は「次の同じタグまでタグを**実行せず**そのまま表示する」区間指令である。切り分けだけを直しても区間内のタグは従来どおり実行されるため、`\_?…\_?` の表示は正典と一致しない。これは意味付けであり本仕様の範囲外（要件 Boundary Context「Out of scope」）。所有仕様が未確定なら申し送り先を決める必要がある（→ 判断項目 6）。
 
 ---
@@ -259,7 +265,7 @@ requirements.md L53 は「角括弧を伴わない `\_` タグは上表のとお
 > | 3. 型の形（案 A `Bare(String)` / 案 C `Token::Raw`） | **B: 設計判断** | `/kiro-spec-design` で決定 |
 > | 4. テストを置く層と配置（既存追記 / 新規兄弟ファイル） | **B: 設計判断** | `/kiro-spec-design` で決定 |
 > | 5. 要件 1.6/1.7 の位置づけ | **A: 自明な修正** | 反映済み（「既存挙動の固定」と明示） |
-> | 6. `\_?` / `\_!` の意味の所有先 | **C: 開発者確認** | 議題 2 で解決 |
+> | 6. `\_?` / `\_!` の意味の所有先 | **C: 開発者確認** | **解決済み（2026-09-02）: 「所有先未定」と明記**し、survey-sakura-script → coverage-roadmap の無所有一覧へ流す（要件 6.4a・Adjacent expectations） |
 > | 7. `lexer.rs:132` の食い違う注記 | **A: 自明な修正** | 反映済み（要件 7.5 として一般化） |
 > | 8. COMPAT §8 の 1 行の文言 | **B: 設計判断** | 議題 1 の結論を受けて `/kiro-spec-design` で確定 |
 >

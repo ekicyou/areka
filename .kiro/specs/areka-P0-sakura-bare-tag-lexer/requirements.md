@@ -85,6 +85,8 @@
   - `areka-P0-anchor-tag-canon` は本欠陥の発見者であり、字句の是正が本仕様で消化されることを前提に自らの範囲を狭める。本仕様は同仕様の記録へ消化済みの登記を残す。
   - `areka-P0-property-query-channels`・`areka-P0-text-decoration-canon`・`areka-P0-ukadoc-survey-sakura-script` は同じ字句・意味写像の記述へ後から触れる。本仕様が先に着地することを前提に、それらは本仕様の結果の上へ積む。
   - 本仕様は emo2 フィクスチャの適合結果を変えない。M1 の完成判定は本仕様の前後で同一である。
+  - 意味付けの所有先が名指しされていないタグ（`\_?`・`\_!`・`\_n`・`\_s`・`\_V`・`\_+`・`\__c`・`\__t`・`\__q`・`\__v`）は、本仕様の時点では**所有先未定**である（要件ディスカッション議題 2 で確定）。これらは `areka-P0-ukadoc-survey-sakura-script` の網羅調査を経て `areka-P0-ukadoc-coverage-roadmap` の無所有一覧に載り、そこで優先度と引受先が裁定される。本仕様はこの流れを変えず、単一仕様の側から所有先を決めない。
+  - 隣接 2 仕様（`areka-P0-anchor-tag-canon`・`areka-P0-choice-marker-styling`）の記録は「`\q`/`\__q` の機構は完了済み」と書いているが、完了済み仕様 `areka-P0-choice-select-events` の要件に `\__q` は含まれておらず、意味写像にも `\__q` の腕は存在しない。「完了済み」は `\q` のみに当たる。本仕様はこの食い違いを書き換えず（要件 6.3）、ギャップ分析に記録して網羅調査への申し送りとする。
 
 ## Requirements
 
@@ -173,7 +175,8 @@
 1. The 本仕様 shall 「角括弧なし `\_` タグは 1 単位として切り分けたうえで意味を与えず素通しし、意味付けは各所有仕様が行う」という現在の裁量を、互換記録の裁量表へ「項目・裁量・根拠・出典 spec」の 4 欄で 1 行登記する。
 2. The 本仕様 shall 本欠陥を発見した隣接仕様（`areka-P0-anchor-tag-canon`）の記録へ、字句の是正が消化済みであることを取り込み番号付きで登記する。
 3. The 本仕様 shall 隣接仕様の記録のうち自らの登記行以外を書き換えない。
-4. The 本仕様 shall 意味付けの所有（アンカー＝`areka-P0-anchor-tag-canon`／一気表示＝`areka-P0-sakura-time-directives`／その他 `\_` タグ＝各所有仕様）を変更しない。
+4. The 本仕様 shall 意味付けの所有（アンカー＝`areka-P0-anchor-tag-canon`／一気表示＝`areka-P0-sakura-time-directives`）を変更しない。
+4a. The 本仕様 shall 所有先が名指しされていない `\_`・`\__` タグの意味付けを「所有先未定」と明記し、既存の仕様へ名指しで割り当てない——引受先の裁定は `areka-P0-ukadoc-coverage-roadmap` の無所有一覧に委ねる。
 5. The 本仕様 shall 実装が正典に合っていることを示す出典注記をソースへ置かない——それは `areka-P0-ukadoc-survey-sakura-script` の担当である。
 
 ### Requirement 7: 分量と非回帰の規律
