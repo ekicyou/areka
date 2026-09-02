@@ -29,6 +29,8 @@ ukadoc のプロパティシステムのページ（`list_propertysystem`・実�
 - 汎用プロパティ名の葉 17 件は、sylphya の `GENERIC_PROP_NAMES` 17 名（`crates/areka-sylphya/src/vocab/dotted.rs:37`）と**名前が 1 対 1 で一致する**。
 - 本文から版番号を拾うと SSP の版でない番号が混じる項目が 1 件ある（`system.os.(キー)` が `2.6.26`／`2.8.17`／`5.19.0` の 3 つを含み、`5.19.0` は本文が例示する OS の版）。複数の版番号を持つ項目は本ページではこの 1 件だけ。
 - 関連の相手になる他ドメインの id は実在する: `%property[プロパティ名]`／`\![get,property,イベント名,プロパティ名,プロパティ名,...]`／`\![set,property,プロパティ名,値]`（いずれも `list_sakura_script`）・`property.get`／`property.set`（`list_shiori_event` と `list_plugin_event` の双方）。
+- `baseware.name`／`baseware.version` の実値（`"areka"` と版文字列）を sylphya の大域点付き区画へ流し込んでいる定義箇所は sylphya の語彙表ではなく `crates/areka-ghost/src/sylphya_wiring.rs:126-127`（2 行の組）である。語彙表 `dotted.rs` はルート枝 `baseware` を名前として持つだけで、`baseware.name` という文字列は見出しの名前と一致する要素として現れない。
+- sylphya は語彙表を実行時の判定にも使っている（`crates/areka-sylphya/src/actor.rs:136-165`）: SET の宛先が「根がルート枝 10 のいずれか、または葉が汎用プロパティ名 17 のいずれか」なら正典の語彙とみなして「受理＋警告＋非反映」、それ以外の自由な名前は保存へ回す。読み取り側（`reader.rs`）は語彙表を見ず、値が無ければ一律に「値なし」を返す。
 - areka 側（sylphya の点付き語彙表・`crates/areka-sylphya/src/vocab/`）: ルート枝 10（`dotted.rs:17`）・汎用プロパティ名 17（`dotted.rs:37`）・SET 有効群 21（`dotted.rs:72`・件数を固定するテストは同 `:191`）・`property.get`／`property.set` の名前の予約（`dotted.rs:106` と `:109`）。**M1 で実際に値へ導出するのは `baseware.*` だけで、他のルート枝の配下は値なしへ縮退する**と宣言されている（`dotted.rs:4-5`・宣言ブロック全体は `:1-9`）。件数を固定するテストは `crates/areka-sylphya/src/ledger_key_determinism_tests.rs:201-204`。
 - 語彙表には既に「ukadoc `list_propertysystem.html`」という語が 2 か所あるが（`dotted.rs:3` と `:67`）、**いずれも URL を伴わない**＝toolkit 要件 5.6 により証拠として扱われない。本ページの正典 URL はソース中に 0 件。
 - 縮退の転記元になる既存の登記: `doc/COMPAT_ARCHITECTURE.md:184`（`currentghost.balloon.scope(ID).vertical` の導出規則と、値の枝も照会経路も無いという 2 つの穴）・同 `:185`（`validwidth`／`validheight`／`lines` の 2.8.83 意味論と、スナップショットが 2.8.80 のままである罠）・同 `:136`（SET が無効な名前への書込は受理＋警告＋非反映）。
@@ -52,7 +54,7 @@ ukadoc のプロパティシステムのページ（`list_propertysystem`・実�
   - 台帳の項目形式・状態語彙・仕訳規則の定義（`areka-P0-ukadoc-survey-toolkit` が凍結済み）。
   - SSP 実機との挙動比較、ukadoc 本文の repo への取り込み。
 - **Adjacent expectations**:
-  - `areka-P0-ukadoc-survey-toolkit`: 台帳の形式と仕訳の規則を凍結済みとして受け取る。道具の実装完了は待たない。道具が後から初期台帳を生成しても、本 spec が書いた項目は書き換えられない（同要件 3.3a）。
+  - `areka-P0-ukadoc-survey-toolkit`: 台帳の形式と仕訳の規則を凍結済みとして受け取る。道具の実装完了は待たない。道具が後から初期台帳を生成しても、本 spec が書いた項目は書き換えられない（同要件 3.3a）。道具の整合検査のうち「カタログの全 id が 4 つの台帳のいずれか 1 つにちょうど 1 回だけ現れる」（同要件 6.4）と「関連の両端の id が実在する」（同 6.7）は、他の 3 ドメインの台帳が揃うまで本 spec の台帳 1 本では確かめられない。本 spec はこれを不合格とは扱わず、ブリーフィングの末尾に「他 3 台帳が揃うまで検査できない項目」として注記する。
   - `areka-P0-ukadoc-survey-sakura-script` と `areka-P0-ukadoc-survey-shiori`: 同じ機能の別の面を別ページの id として持つ。同じ id を 2 つの台帳へ置かない。
   - 既存 4 brief: 本 spec は読むだけで書き換えない。是正候補はブリーフィングに置き、受け取るかどうかは各 brief の担当者と `ukadoc-coverage-roadmap` が決める。
   - 編集するファイルは「自分の台帳 1 本＋自分のブリーフィング 1 本＋（道具の着地後は）自分のドメイン別報告 1 本＋ソースの doc コメント」に限られ、他の調査 spec と共有するファイルは無い（並走できる）。
@@ -68,7 +70,7 @@ ukadoc のプロパティシステムのページ（`list_propertysystem`・実�
 1. When 台帳を書き終える, the property 台帳 shall カタログのページ `list_propertysystem` に属する全 id（2026-09-02 の実測は 188 件）について項目を 1 つずつ持ち、id を 1 件も落とさない。
 2. The property 台帳 shall 同ページ以外の id を 1 件も置かない。
 3. The プロパティ調査 shall 台帳の項目形式・欄・状態語彙・仕訳の規則を `areka-P0-ukadoc-survey-toolkit` の要件 2・要件 4・付録 A のとおりに用い、本 spec で再定義しない。
-4. When id を写す, the プロパティ調査 shall スナップショットの id 文字列を逐語で写し、見出しの日本語を符号化した部分（実測 67 件が `_28_30ad_30fc_29` のような形を含む）を読みやすい形に直さない。
+4. When id を写す, the プロパティ調査 shall スナップショットの id 文字列を逐語で写し、見出しの日本語を符号化した部分（実測 67 件が `_28_30ad_30fc_29` のような形を含む）を読みやすい形に直さない。`currentghost.seriko.cursor.scope(ID).mouse????list...` の 5 件に含まれる `????`（id では `_3f_3f_3f_3f`）は正典ページの見出しの表記そのものであり（2026-09-02 に生ページで確認。`mouseuplist`／`mousedownlist`／`mousehoverlist`／`mousewheellist` の総称）、写しの過程で失われた記号ではないので、ブリーフィングでは「正典の表記どおり」と説明する。
 5. The property 台帳 shall 項目を id の文字順に並べ、同じ id を 2 度書かない。
 6. If 台帳の件数がカタログと食い違う, then the プロパティ調査 shall カタログ（id）を正とし、食い違いの内容をブリーフィングに記録する。
 7. The プロパティ調査 shall 台帳ファイルを `doc/ukadoc-coverage/ledger/property.toml` 1 本に限り、カタログ・他ドメインの台帳・テーマ定義を編集しない。
@@ -81,13 +83,13 @@ ukadoc のプロパティシステムのページ（`list_propertysystem`・実�
 #### Acceptance Criteria
 
 1. When 台帳を書き終える, the property 台帳 shall 全項目の状態が凍結済みの 7 語彙のいずれかであり、`unclassified` が 0 件である状態にする。
-2. Where 項目が areka で実際に値へ導出される, the プロパティ調査 shall 状態を「実装済み」とする（2026-09-02 の実測では点付き語彙のうち実導出は `baseware.*` のみと宣言されており〔`crates/areka-sylphya/src/vocab/dotted.rs:4-5`〕、該当するカタログ id の候補は `baseware.name` と `baseware.version` の 2 件。着手時に再確認する）。
+2. Where 項目が areka で実際に値へ導出される, the プロパティ調査 shall 状態を「実装済み」とする（2026-09-02 の実測では点付き語彙のうち実導出は `baseware.*` のみと宣言されており〔`crates/areka-sylphya/src/vocab/dotted.rs:4-5`〕、該当するカタログ id は `ukadoc:list_propertysystem:baseware.name:1` と `baseware.version` の 2 件で、実値の定義箇所は `crates/areka-ghost/src/sylphya_wiring.rs:126-127`。着手時に再確認する）。
 3. Where 名前は sylphya の語彙表に登記されているが値を返さない, the プロパティ調査 shall 状態を「語彙のみ」とする。
 4. Where 正典が定める応答に対して areka が別の応答（値なし・受理して非反映など）を返すことが既に登記されている, the プロパティ調査 shall 状態を「縮退」とし、転記元（`doc/COMPAT_ARCHITECTURE.md` の該当行）を備考に書く。
 5. Where 名前が語彙表にも無く応答も無い, the プロパティ調査 shall 状態を「未対応」とする。
 6. Where 項目が areka の担当範囲の外にある（正典が他の実装主体の持ち物として定めているなど）, the プロパティ調査 shall 状態を「対象外」とし、なぜ対象外なのかを備考に書く。
 7. Where 状態が「別名」である, the プロパティ調査 shall その行で実装状態を判定せず、写像先の正典の行に委ねる。
-8. The プロパティ調査 shall 全項目の備考に「壊れ方」（値を返せないときに黙って壊れるか・明示的なエラーになるか・見た目の差にとどまるか）を書き、その根拠としてどのログが出るか／出ないかを添える。
+8. The プロパティ調査 shall 状態が「別名」「対象外」である項目を除く全項目の備考に「壊れ方」（値を返せないときに黙って壊れるか・明示的なエラーになるか・見た目の差にとどまるか）を書き、その根拠としてどのログが出るか／出ないかを添える（「別名」は写像先の行に委ね〔2.7〕、「対象外」は理由だけを書く〔2.6〕）。
 9. The プロパティ調査 shall 状態を「areka が値を返すか否か」だけで決め、返す値が正典どおりの意味かどうか（意味論の当否）の判定は所有 spec に委ねる。
 10. If 状態が「実装済み」である, then the プロパティ調査 shall その根拠となる正典 URL をソースの定義箇所に置く（要件 9）。
 
@@ -97,7 +99,7 @@ ukadoc のプロパティシステムのページ（`list_propertysystem`・実�
 
 #### Acceptance Criteria
 
-1. When 項目の登場した版を決める, the プロパティ調査 shall カタログが本文から拾った版番号の集合の中から選び、集合が空なら「世代不明」を表す空文字とする。
+1. When 項目の登場した版を決める, the プロパティ調査 shall カタログ（道具の着地前はスナップショットの本文）から拾った版番号の集合の中から選び、集合が空なら「世代不明」を表す空文字とする。
 2. The プロパティ調査 shall 版番号が無い項目を最も古いものと決めつけない。
 3. If カタログの版番号に SSP の版でない番号が混じる（実測 1 件＝`system.os.(キー)` が `2.6.26`／`2.8.17`／`5.19.0` を含み、`5.19.0` は本文が例示する OS の版）, then the プロパティ調査 shall その番号を登場した版として採らず、採らなかった理由を備考に書く。
 4. When 同じ値へ到達する名前が 2 つ以上ある, the プロパティ調査 shall 最も新しい書式を正典・それ以外を別名とし、別名の側から正典の id を指す。向きの決め方は凍結済みの順序（本文の注記 → 版番号 → 人手の判断）に従う。
@@ -117,7 +119,7 @@ ukadoc のプロパティシステムのページ（`list_propertysystem`・実�
 3. If brief の件数がカタログと食い違う（実測の例: `property-catalog-lists` brief は `history` を 8・`headlinelist` を 2・`pluginlist` を 4 と書くがカタログはそれぞれ 12・3・5。`currentghost-property-tree` brief は `currentghost.*` を約 65 と書くがカタログは 69）, then the プロパティ調査 shall カタログを正とし、差を表に記録する。
 4. When 突合を終える, the property 台帳 shall 各項目の担当 spec 欄に spec 名 1 つ、または「裁定待ち」「所有者なし」を表す空文字を持つ。
 5. If 担当 spec 欄が空文字である, then the プロパティ調査 shall その項目の全件をブリーフィングの「所有者なし」または「裁定待ち」の一覧に載せる。
-6. The プロパティ調査 shall 所有者が見つからない項目を、憶測で既存の brief に押し込まない。
+6. The プロパティ調査 shall 所有者が見つからない項目を、憶測で既存の brief に押し込まない。まだ起票されていない spec を引受先として提案したい場合は、担当 spec 欄には書かず（付録 A により担当 spec 欄は実在する spec 名か空文字に限る）、備考とブリーフィングの「所有者なし」の一覧に「候補: ...」として書く。
 7. Where 2 本以上の spec が同じ id を主張し、一方は値の導出を、他方は sylphya の語彙表の 1 行だけを担当している, the プロパティ調査 shall 担当 spec 欄には値を導出する側を書き、語彙表だけを触る側を備考に書く。
 8. Where 項目が既に実装済みで、実装した spec が完了済みである, the プロパティ調査 shall 担当 spec 欄にその完了済み spec の名前を書いてよい（誰が実装したかの記録として）。
 9. If 項目が未実装である, then the プロパティ調査 shall 担当 spec 欄に完了済みの spec を書かない（完了した spec は新しい作業を引き受けられないため）。
@@ -145,7 +147,7 @@ ukadoc のプロパティシステムのページ（`list_propertysystem`・実�
 1. When 照会経路との関連を書く, the property 台帳 shall さくらスクリプト側と SHIORI／PLUGIN 側の実在する id を種別つきで指す（相手の実測 id: `%property[プロパティ名]`／`\![get,property,イベント名,プロパティ名,プロパティ名,...]`／`\![set,property,プロパティ名,値]`／`property.get`／`property.set`）。
 2. The property 台帳 shall 照会経路そのものを項目として置かない（それらは `areka-P0-ukadoc-survey-sakura-script` と `areka-P0-ukadoc-survey-shiori` の台帳の持ち物であり、同じ id を 2 つの台帳へ置かない）。
 3. Where 葉の値の源が descript のキー・OS のメトリクス・他エンジンが持つ状態である, the プロパティ調査 shall その相手を種別つきの関連として登記する。
-4. When SET が有効な葉を仕訳する, the プロパティ調査 shall sylphya の SET 有効群 21 名（`crates/areka-sylphya/src/vocab/dotted.rs:72`・件数を固定するテストは同 `:191`）をカタログ id へ対応付け、⑴ 対応が付かなかった名前と ⑵ 正典では SET が有効なのに 21 名に無い葉、の双方をブリーフィングに列挙する。
+4. When SET が有効な葉を仕訳する, the プロパティ調査 shall 正典の側を基準にして、sylphya の SET 有効群 21 名（`crates/areka-sylphya/src/vocab/dotted.rs:72`・件数を固定するテストは同 `:191`）をカタログ id へ対応付け、⑴ 対応が付かなかった名前と ⑵ 正典では SET が有効なのに 21 名に無い葉、の双方をブリーフィングに列挙する。「正典で SET が有効」は本文の 3 つの書き方のいずれかで読む: ⒜ 見出しの `[SET有効]` の印（実測 14 件）⒝ 本文の「設定も可能」「設定時」「書き込みの場合」などの記述（例: `currentghost.scope(ID).surface.num` は印が無くても「設定も可能で `\s[]` タグと同じ挙動」と書かれている）⒞ 族の頭の「以降 ... で始まるプロパティに共通」による継承（例: `currentghost.mousecursor` の本文が `currentghost.mousecursor`／`currentghost.balloon.mousecursor` で始まる全項目に印を及ぼす）。印の件数だけを正としない。
 5. The property 台帳 shall 関連の相手 id をカタログに実在するものだけに限る。
 6. Where 汎用プロパティ名の葉がカタログに 1 件ずつ置かれ、複数のルート枝の下で使い回される（実測 17 件で、sylphya の `GENERIC_PROP_NAMES` 17 名〔`dotted.rs:37`〕と名前が 1 対 1 に一致する）, the プロパティ調査 shall その乗算の関係を関連と備考で表し、ルート枝ごとに項目を増やさない。
 7. Where サウンドの要素葉がカタログに 1 件ずつ置かれる（実測 18 件＝`meta.*` 8 を含む。`currentghost.sound.*` 3 件と合わせて 21 件で、`property-catalog-lists` brief の約 21 と一致する）, the プロパティ調査 shall 同じ扱いで登記し、要素ごとに項目を増やさない。
@@ -170,7 +172,7 @@ ukadoc のプロパティシステムのページ（`list_propertysystem`・実�
 #### Acceptance Criteria
 
 1. When 調査を終える, the プロパティ調査 shall `doc/ukadoc-coverage/briefing-property.md` を書き、⑴ 所有の突合表 ⑵ 別名の一覧 ⑶ 所有者なし／裁定待ちの一覧と優先度 ⑷ 二重所有の裁定案 ⑸ 既存 brief への是正候補 ⑹ カタログとの件数の差、の 6 つを載せる。
-2. The property ブリーフィング shall 是正候補を「どの brief のどの記述を、どの id の一覧へ書き換えるか」の形で書き、書き換えそのものは行わない。
+2. The property ブリーフィング shall 是正候補を「どの brief のどの記述を、どの id の一覧へ書き換えるか」の形で書き、書き換えそのものは行わない。⑹ の件数の差のうち原因が特定できたもの（実測: `currentghost` 69 対約 65 は `currentghost.balloon.mousecursor` 系 4 件がどの束にも入っていない・`history` 12 対 8／`headlinelist` 3 対 2／`pluginlist` 5 対 4 はいずれも `.count` の葉の数え落とし）は、⑸ の是正候補としても同じ形で書く。
 3. Where 道具（`areka-P0-ukadoc-survey-toolkit`）が着地している, the プロパティ調査 shall `doc/ukadoc-coverage/report/property.md` を台帳から再生成して台帳と一緒にコミットし、報告を手で編集しない。
 4. Where 道具がまだ着地していない, the プロパティ調査 shall 報告ファイルを作らない。
 5. The プロパティ調査 shall 統合報告 `doc/ukadoc-coverage/report/summary.md` を作らず、触らない。
