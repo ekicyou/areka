@@ -31,8 +31,11 @@
 pub(crate) enum Token {
     /// 正準形 `\word[args]`（word は `[` まで、args は `]` までをカンマ分割）。
     Tag { word: String, args: Vec<String> },
-    /// bare タグ `\e` `\c` `\-` `\n`（角括弧なし 1 文字）。
-    Bare(char),
+    /// 角括弧を伴わないタグの綴り（先頭の `\` を除く）。
+    ///
+    /// 既知 1 文字タグ `e` `c` `-` `n` `0` `1` `h` `u` のほか、未知の 1 文字語も
+    /// 同じ載荷に載る。入力末尾の裸 `\` は綴り `"\\"` として載せる。
+    Bare(String),
     /// 短縮形 `\<word>N`（`word` は短縮対象語・`N` は 1 桁）。
     ///
     /// 待ち短縮 `\wN`（`word='w'`）・バルーン面短縮 `\bN`（`word='b'`）・話者スコープ
@@ -126,7 +129,7 @@ pub(crate) fn lex(input: &str) -> Vec<Token> {
 fn scan_tag(chars: &[(usize, char)], i: usize) -> (Token, usize) {
     // `\` の次の文字が無ければ（入力末尾の裸 `\`）bare 扱いで継続。
     let Some(&(_, first)) = chars.get(i + 1) else {
-        return (Token::Bare('\\'), i + 1);
+        return (Token::Bare("\\".to_string()), i + 1);
     };
 
     // ワード（コマンド語）を読む: 角括弧／バックスラッシュ／`%`／空白に当たるまで。
@@ -172,7 +175,7 @@ fn scan_tag(chars: &[(usize, char)], i: usize) -> (Token, usize) {
     } else {
         // 角括弧なし。word は通常 1 文字（`\e` `\c` `\-` `\n` 等）。
         // 1 文字のみを bare として消費し、残りはテキスト／後続走査へ委ねる。
-        let bare = first;
+        let bare = first.to_string();
         (Token::Bare(bare), word_start + 1)
     }
 }
