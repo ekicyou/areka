@@ -42,6 +42,7 @@ areka の現状は「一部だけ動く」状態にある。ukadoc が定める 
 - **Adjacent expectations（隣接する仕様・運用への期待）**
   - 上流 `areka-P0-balloon-vertical-canon`（完了）が、宣言された `origin` を字義どおり用いる正典（クランプ撤去）を確定させている。これにより「実際に確定した 1 列目」と「宣言された `origin.x` の列」は常に一致し、`\_l[0,0]` の着地先が一意に定まる。本仕様はこの前提の上に立つ。
   - `\f[align]` 系の実装所有者は `areka-P0-text-decoration-canon`（実在確認済み・同 brief が本仕様を相互指名済み）。
+  - 完了仕様 `areka-P0-balloon-vertical-canon` は `design.md:44` で `\_l` の座標解決・単位・縮退表の所有を本仕様へ既に引き渡している（実測）。相互登記は本仕様側から指し返すだけでよい。
   - `\c[line]` には**実装所有者が存在しない**（実測）。割当は `areka-P0-ukadoc-survey-sakura-script` の台帳が行う。
   - 既存の emo2 適合経路は `\_l[5em,2lh]` を 3 箇所で使うのみ（いずれも現在すでに実導出されている形）。本仕様は emo2 の表示結果を変えず、適合 e2e を妨げない。
   - `\_l` の座標はバルーン画像のピクセル空間で解決される。表示倍率（DPI）への追従は完了仕様 `areka-P0-balloon-offset-dpi` が確定させた単位空間の正典が所有し、本仕様はそこに手を入れない。
@@ -145,11 +146,11 @@ areka の現状は「一部だけ動く」状態にある。ukadoc が定める 
 
 #### Acceptance Criteria
 
-1. The 本仕様 shall `\_l` の縮退表の正典を持つ完了仕様 `areka-P0-choice-render`（R2.4／R6.5・design の縮退表・境界節）を改訂し、`\_l` の語彙・換算・カーソル移動の所有を本仕様へ移す。
-2. The 本仕様 shall 「`\_l` 縮退表の正典は `areka-P0-emo-text-layer`」という既存の登記が誤りであることを、実測（当該仕様の要件文書に `\_l`・縮退・警告一回化の記述が無く、Requirement 6 は 4 項目で R6.5 が存在しないこと）を根拠に是正する。是正対象には本仕様の brief、`.kiro/steering/roadmap.md`、および完了仕様 `areka-P0-balloon-vertical-canon` の該当登記を含める。
+1. The 本仕様 shall `\_l` の縮退表の正典を持つ完了仕様 `areka-P0-choice-render`（`requirements.md:47-56`＝R2.4・`:95-105`＝R6.5／`design.md:31`＝境界節・`:123`＝単位表〔原点の定義がここにも書かれている〕・`:124`＝縮退の要約・`:607-625`＝縮退表本体・`:632`＝検査計画。所在は 2026-09-02 実測）を改訂し、`\_l` の語彙・換算・カーソル移動の所有を本仕様へ移す。
+2. The 本仕様 shall 「`\_l` 縮退表の正典は `areka-P0-emo-text-layer`」という既存の登記が誤りであることを、実測（当該仕様の要件文書に `\_l`・縮退・警告一回化の記述が無く、Requirement 6 は 4 項目で R6.5 が存在しないこと）を根拠に是正する。是正対象には本仕様の brief、`.kiro/steering/roadmap.md:89`、および完了仕様 `areka-P0-balloon-vertical-canon` の該当登記（`design.md:628`・`research.md:283`。所在は 2026-09-02 実測）を含める。
 3. When 完了仕様の記述を訂正するとき, the 本仕様 shall 訂正である旨と根拠を明記した形で行い、履歴を黙って書き換えないようにする。
 4. The 本仕様 shall `doc/COMPAT_ARCHITECTURE.md` の `\_l` 縦書き座標系の行を「未実装（語彙記録＋既知非互換の登記）」から実装済みへ改め、既知非互換の記述を取り下げ、正典文の逐語引用は維持する。
-5. The 本仕様 shall `.kiro/steering/roadmap.md` の本仕様に関する行（ウェーブ配置・編集集合・所有台帳）を着地後の実態に合わせて更新する。
+5. The 本仕様 shall `.kiro/steering/roadmap.md` の本仕様に関する行（ウェーブ配置・編集集合・所有台帳）を着地後の実態に合わせて更新する。現在 `:89` は編集集合を `areka-emo-text/src/{layout,state}.rs` としているが、実測ではバルーン画像の原寸取得と書字開始点の解決のために少なくとも `region.rs` が加わる。
 6. The 本仕様 shall ソースコード内で正典を称する説明コメント（カーソル換算・縮退分岐・警告一回化）を、改訂後の正典と一致させる。
 
 ### Requirement 9: 決定論テスト網と既存表示結果の保護
