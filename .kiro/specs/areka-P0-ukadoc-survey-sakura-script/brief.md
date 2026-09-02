@@ -67,3 +67,6 @@
 - 台帳は `doc/ukadoc-coverage/ledger/sakura-script.toml` 1 ファイルのみ（他 survey と共有ファイル 0＝並走可）。
 - 既存 brief の件数と catalog が食い違うときは catalog（id）を正とし、brief 側の差を記録する。
 - 「所有者なし」は憶測で既存 brief に押し込まない（記憶 deferral-requires-verified-owner）。
+
+> **📌 2026-09-02 開発者指針「伺からしい価値観を持つ要素の優先度を上げる」（toolkit 規則 6・9 に凍結・裁定は議題 5〜7）**: 分類軸に **テーマ付与**（`values[]`）を加える。本ドメインの代表例: **掛け合い**＝`\0`／`\1`（`\h`／`\u` は alias）・`\w`／`\_w`・`\_q`・`\q`・`\n`／`\c`／`\x`＝M1 でほぼ実装済み＝URL の doc コメントを置く先／**装い**＝`\s[]`（`\sN` は alias）・`\i[]`・`\![bind,...]`・`\![change,shell|balloon]`・`\f` 族 43（既存 3 brief の所有どおり）／**気配**＝`\4`／`\5`（重なり回避）・`\![set,balloontimeout]`／**記憶**＝`\![open,inputbox|teachbox|communicatebox]`・`\![vanishbymyself]`／**更新**＝`\![updatebymyself]`・`\![update,...]`・`\![execute,http-get]`（更新の道具）／**触れ合い**＝`\![set,alignmentondesktop]`・`\![move]`（キャラが歩く）／**交わり**＝`\![set,otherghosttalk]`・`\![call,ghost]`・`\![raise,...]` のうち他ゴースト宛。**テーマ 0**＝`%property[...]`・`\![get,property]`／`\![set,property]`・`\![embed]`・`\![raise]`（自ゴースト宛）・`\![lock,repaint]` 等の配管。「書いてあるのに何も起きない」（壊れ方⑴）が先・テーマは同段階内の並びと繰り上げに使う。
+

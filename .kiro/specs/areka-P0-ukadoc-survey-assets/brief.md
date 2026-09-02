@@ -76,3 +76,6 @@
 - 台帳は `doc/ukadoc-coverage/ledger/assets.toml` 1 ファイルのみ。
 - 根拠は file:line。parsers の「未知キー」ログ慣習は areka 側実測に従って記す。
 - nar は zip（実体）＝展開ライブラリの選定は本 spec でしない（実装 spec の設計事項）。
+
+> **📌 2026-09-02 開発者指針「伺からしい価値観を持つ要素の優先度を上げる」（toolkit 規則 6・9 に凍結・裁定は議題 5〜7）**: 分類軸に ⑸ **テーマ付与**（`values[]`）を加える。本ドメインの代表例: **更新**＝updates2.dau 9（spec_update_file）・install.txt の `*.refresh`／`refreshundeletemask`・delete.txt・`developer_options.txt`・descript `homeurl`・file_structure「ネットワーク更新」＝**新旧両軸で高い唯一の群・段階 B 先頭**（開発者 2026-09-02「ネットワーク更新に関する軸は優先すべきかも」）／**触れ合い**＝surfaces の `collision`（部位名＝撫での前提）・nar の D&D インストール（触れ合い＋更新の 2 テーマ）／**装い**＝descript_shell_surfaces 137（SERIKO まばたき・口パク・MAYUNA bind）・`menu.*`（着せ替えメニュー）・シェル／バルーン切替の descript キー／**気配**＝descript_ghost `secondchangeinterval`・balloon の表示寿命キー／**記憶**＝`install.accept`（初回導入）。**テーマ 0**＝dev_guide の作成側（`dev_nar`／`createupdatedata`・配布者向け）・plugin／headline の descript・トランスレータ。未知キー方針（黙って捨てる／ログ／エラー）は壊れ方⑴の判定材料＝テーマより先に並ぶ。
+
