@@ -73,7 +73,7 @@
 
 - **Upstream**:
   - `areka-P0-emo-text-layer`（完了）——縮退表の現行正典。本 spec が改訂する。
-  - `areka-P0-balloon-vertical-canon`（bvc・W6.95）——⑴ R3 で座標意味論（origin/wordwrappoint/validrect）を決定論テストで固定済みにする ⑵ **origin クランプ正準の撤去**（bvc 討議 #2 裁定・Requirement 3.10）により「実際の 1 列目」＝「宣言された `origin.x` の列」が常に一致＝本 spec の `\_l[0,0]` 着地定義（SC15）が一意 ⑶ 縦書きフィクスチャ（`vertical,1` 版）を供給。**bvc 完了後に着手するのが自然**。
+  - `areka-P0-balloon-vertical-canon`（bvc・旧 W6.95〔新 W11〕）——⑴ R3 で座標意味論（origin/wordwrappoint/validrect）を決定論テストで固定済みにする ⑵ **origin クランプ正準の撤去**（bvc 討議 #2 裁定・Requirement 3.10）により「実際の 1 列目」＝「宣言された `origin.x` の列」が常に一致＝本 spec の `\_l[0,0]` 着地定義（SC15）が一意 ⑶ 縦書きフィクスチャ（`vertical,1` 版）を供給。**bvc 完了後に着手するのが自然**。
   - SSP 2.8.83 ライブ ukadoc（`\_l` の縦書き節は 2.8.83 で追加＝**ukadoc-mcp スナップショット（2.8.80）に縦書き節は無い**。正典参照はライブで行うこと。bvc requirements.md の SC8・SC9・SC13〜SC15 が関連疑義）。
 - **Downstream**:
   - M2 文字装飾（`\f[align]` 系）——`\_l` との相互作用写像を本 spec の登記から引く。

@@ -50,7 +50,7 @@ dlp が建てた自走ループ（perf-loop）を**測定側 3 是正を先に�
 ## Existing Spec Touchpoints
 
 - **Extends**: なし（新規境界）。
-- **Adjacent**: `present-write-coherence`（W6.95・提示タイミングの軸＝pwc が tick 実形の上で規模を見積もる関係は dlp⇄pwc 台帳の継承。**本 spec は pwc より後**——同じ理由で直列）。`emo2-conformance-e2e`（W7・一周走行と干渉するため並走不可）。
+- **Adjacent**: `present-write-coherence`（旧 W6.95〔新 W11〕・提示タイミングの軸＝pwc が tick 実形の上で規模を見積もる関係は dlp⇄pwc 台帳の継承。**本 spec は pwc より後**——同じ理由で直列）。`emo2-conformance-e2e`（W7・一周走行と干渉するため並走不可）。
 
 ## Constraints
 

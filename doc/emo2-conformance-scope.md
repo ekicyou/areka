@@ -82,7 +82,7 @@
 | areka-P0-seriko-runtime | 「ukadoc **完全マップ**」→ **SERIKO/2.0＋MAYUNA bind・overlay のみ・interval 3種・矩形 collision** へ大幅縮小 |
 | areka-P0-shiori-host-32 | **SAORI 同居を M1 から削除**（emo2 未使用）。32bit SHIORI 往復に集中 |
 | areka-P0-sakura-script | 全タグ網羅 → **約12タグ＋`\![move]`** に縮小 |
-| wintf-P0-surface-hierarchy | 汎用シーングラフ（循環検出/多重同一性）は **emo2 には YAGNI**。overlay z-order＋0,0 合成で足りる。汎用エンジンは M2（ベクトル）へ後ろ倒し。**縦書きはこの後ろ倒しから外れた**——バルーン文字の縦書き（`vertical`／`writing_mode` の受口・縦書き座標意味論・フォント縦書き異体の挙動等価）は **M1・ウェーブ W6.95 の `areka-P0-balloon-vertical-canon` が着地させた**。ただし縦書き全般が M1 になったわけではなく、`\_l` の縦書き座標系・`\f` 系の縦書き写像・プロパティ族は**未実装のまま追跡 spec が所有**する（同 spec が行ったのは語彙登記のみ）。なおこれは適合スコープの判断とは別の話で、§3 の「budoux/縦書きは痕跡なし・M1 不要」（＝emo2 適合 14 項目に不要）は**今も真**である |
+| wintf-P0-surface-hierarchy | 汎用シーングラフ（循環検出/多重同一性）は **emo2 には YAGNI**。overlay z-order＋0,0 合成で足りる。汎用エンジンは M2（ベクトル）へ後ろ倒し。**縦書きはこの後ろ倒しから外れた**——バルーン文字の縦書き（`vertical`／`writing_mode` の受口・縦書き座標意味論・フォント縦書き異体の挙動等価）は **M1・ウェーブ 旧 W6.95〔新 W11〕の `areka-P0-balloon-vertical-canon` が着地させた**。ただし縦書き全般が M1 になったわけではなく、`\_l` の縦書き座標系・`\f` 系の縦書き写像・プロパティ族は**未実装のまま追跡 spec が所有**する（同 spec が行ったのは語彙登記のみ）。なおこれは適合スコープの判断とは別の話で、§3 の「budoux/縦書きは痕跡なし・M1 不要」（＝emo2 適合 14 項目に不要）は**今も真**である |
 | wintf-P0-animation-system | SERIKO 再生は**まばたき（random/bind+random）のみ** |
 | areka-P0-balloon-loader | 必須フィールドのみ（§4）。通信/SSTP/online 系は defer |
 | compat-ghost-integration | 適合対象を里々→**emo2（pasta 32bit）**。E2E 一周（boot→talk→touch→menu→close） |
