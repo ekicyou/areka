@@ -6,7 +6,7 @@
 > **⛔ 着手ゲート**: M1 残ユニットの全完了後（最終ユニット）。ただし**適合表の維持は今から**（下記チェックリストが M1 の「迷いの発生しないゴール」の単一定義）。
 
 > **📌 2026-08-01 追記(58)棚卸更新（棚卸⑤・本ブロックが(52)㊹より優先）**:
-> - **W5 は 3/4 着地**（choice-select-events✅・kero-balloon✅・dpi-window-vanish✅）・残＝collision-dpi-hittest は **W6 へ編入**。残ウェーブ改訂＝**W6（col ∥ vis ∥ bind ∥ zorder ∥ scg の5本）→ W6.5（exact ∥ wpl）→ W6.75（budget ∥ atom+bod〔縮退時統合〕）→ W6.9（cage）→ 旧 W7〔新 W12〕=本 spec**（正本は roadmap 追記(58)）。
+> - **W5 は 3/4 着地**（choice-select-events✅・kero-balloon✅・dpi-window-vanish✅）・残＝collision-dpi-hittest は **W6 へ編入**。残ウェーブ改訂＝**W6（col ∥ vis ∥ bind ∥ zorder ∥ scg の5本）→ 旧 W6.5〔新 W8〕（exact ∥ wpl）→ 旧 W6.75〔新 W9〕（budget ∥ atom+bod〔縮退時統合〕）→ 旧 W6.9〔新 W10〕（cage）→ 旧 W7〔新 W12〕=本 spec**（正本は roadmap 追記(58)）。
 > - **上流列へ追補 5 本**: `ghost-window-zorder`（バルーン埋もれ＝一周走行の可視性前提）・`scope-chain-gap`（P2 幅差隙間・SSP 実測正典）・`windowposition-limit`（バルーン画面外はみ出し）・`recompose-budget`（アイドル CPU 税＝e2e 実機走行の観測品質前提）・`dpi-transition-atomicity`（適合 #1 DPI 検証時の跳ね解消・+36px 追随）。
 > - アンカー: spawn.rs `GhostWindows` :115 → **:164**・`ScopeWindows` :101 → **:150**（van の despawn hook 挿入）。target_map.rs `shell_target` :19 不変。
 >
