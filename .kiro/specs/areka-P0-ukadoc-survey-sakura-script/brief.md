@@ -32,7 +32,9 @@
 
 ## Approach
 
-- toolkit が凍結した仕訳規則（最新優先・新書式正典・旧書式 alias・版番号＝世代）をそのまま適用する。書式群の同定は title の機械分類→人手確定。
+- toolkit が凍結した仕訳規則（最新優先・新書式正典・旧書式 alias・版番号＝世代・版番号なしは世代不明）をそのまま適用する。書式群の同定は title の機械分類→人手確定。
+- 実装済みの証拠は toolkit の規則 7（ソースの ukadoc URL）＝`implemented` と判定したタグの定義箇所（`sakura/decode.rs` の match の腕・`consumer_ledger.rs` の 4 登録）へ URL の doc コメントを置く。実行時挙動を変えない doc コメントのみ・本 spec の唯一のコード接触。
+- **着手条件**: toolkit の要件確定後・実装完了を待たない。他 survey と並走。
 - 既存 brief 7 本と COMPAT §8 を先に転記し、無所有の残余だけを人手で分類する（brief は書き換えず差分を記録）。
 - 使用頻度の根拠は、里々／YAYA の標準テンプレート辞書（ukadoc MCP の satori_wiki／yaya_wiki カテゴリで裏取り可）が使うタグを参照値にする。実ゴースト資産の走査は対象外（ライセンス・入手の問題）。
 

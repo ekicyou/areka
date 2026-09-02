@@ -41,6 +41,7 @@
 
 - toolkit が凍結した仕訳規則（最新優先・新書式正典・旧書式 alias・版番号＝世代・種別付き links）を適用する。本ドメインは版番号が濃い（surfaces 71/137・balloon 31/162）＝新旧書式の併存が最も多い面。alias 例＝surfaces.txt の `surface.append` と旧 `surface` 追記法・SERIKO/1.x の `interval,talk`／`always`／`runonce` 系と SERIKO/2.0 の `animationN.interval`・collision の矩形と `collisionex`（後継＝`supersedes`）・`updates.txt` と `updates2.dau`（後継）・balloon の `sakura.*`/`kero.*` と `char*.*`。
 - **着手条件**: toolkit の要件確定後・実装完了を待たない。他 survey と並走。
+- 実装済みの証拠は toolkit の規則 7（ソースの ukadoc URL）＝`implemented` と判定した descript／surfaces キーの定義箇所（`package/resolve.rs` の定数・`balloon/parse.rs` のキー・`shell/decode.rs` の語）へ URL の doc コメントを置く。実行時挙動を変えない doc コメントのみ・本 spec の唯一のコード接触。
 - 定義ファイル種別（ghost／shell／surfaces／balloon／install／plugin／headline／update）ごとに 1 節。各節の分類軸＝⑴ 読み手（parsers の転記層 or 下流エンジン） ⑵ SSP 世代 ⑶ 依存基盤（例: `menu.*`＝オーナードローメニュー・`*.refresh`＝更新機構） ⑷ 既存 spec の所有（COMPAT §8 の裁量登記を含む）。
 - install/update/nar は「導線」として並べる（入手→展開→配置→起動→更新→削除）。各段に必要な正典項目とイベント（shiori 台帳の `links`）を繋ぐ。
 - balloon 162 は完了 spec と M2 ゲート brief の登記を先に取り込み、差分だけ人手で埋める。

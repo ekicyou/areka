@@ -33,7 +33,9 @@
 
 - 3 本の brief＋zorder-property の項目名→catalog id 対応表を先に作る（対応が付かない名前は表記揺れとして記録）。
 - toolkit の evidence スキャン（sylphya 語彙表の件数固定テストと `M1Status`）で status 候補を機械転記し、人手で確定。
-- 仕訳規則は toolkit 凍結のものを適用（最新優先・新名正典・旧名 alias・版番号＝世代）。
+- 仕訳規則は toolkit 凍結のものを適用（最新優先・新名正典・旧名 alias・版番号＝世代・版番号なしは世代不明）。
+- 実装済みの証拠は toolkit の規則 7（ソースの ukadoc URL）＝sylphya の語彙表は**表の頭にページ URL 1 つ**（`list_propertysystem.html`）を置き、個々の名前は catalog の title で対応付ける。実行時挙動を変えない doc コメントのみ・本 spec の唯一のコード接触。
+- **着手条件**: toolkit の要件確定後・実装完了を待たない。他 survey と並走。
 
 ## Scope
 

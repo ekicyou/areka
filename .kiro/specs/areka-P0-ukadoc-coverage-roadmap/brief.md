@@ -30,9 +30,18 @@ M1 ロードマップは「M2 以降は M1 完成後に実物を見て組み直�
 
 ## Approach
 
-- 3 台帳の `links` を toolkit で結合し、連結成分（束）を機械で出す→人手で名付け・分割・優先度付け。
+**二段で進める**（開発者裁定 2026-09-02・議題 3）:
+
+| 段 | 着手条件 | 作るもの |
+|---|---|---|
+| 第一段 | survey 4 本の台帳が `unclassified` 0 で揃い次第（**e2e を待たない**） | `report.md`（状態分布）・`linkage.md`（束の一覧＝例「時刻イベント束」＝descript `secondchangeinterval`＋OnSecondChange／OnMinuteChange／OnHourTimeSignal＋plugin OnSecondChange＋`system.clock.*`・束が無いと壊れる振る舞い・成立に要る最小基盤）・`briefing.md` **草案**（段階 A〜E への仮置きと仮順位） |
+| 第二段 | **e2e（M1 完成）後** | `briefing.md` 確定版（実物＝適合 14 項目の結果で仮順位を直し、理由を e2e の項目番号で書く）・先頭ウェーブ分の開発 spec brief（`/kiro-discovery` 再入・台帳 id を列挙）・ロードマップ反映（棚卸セッションで一括裁定） |
+
+方針「M2 は M1 完成後に実物を見て組み直す」は、**決定にあたる第二段を実物の後ろに置く**ことで守る。
+
+- 4 台帳の `links` を toolkit で結合し、連結成分（束）を機械で出す→人手で名付け・分割・優先度付け。
 - 優先度の根拠は 3 つに限定: ⑴ 壊れ方（黙って壊れる＞明示エラー＞見た目差） ⑵ 影響する既存資産の広さ（里々/YAYA の標準辞書が使う項目か・版番号の古さ） ⑶ 依存基盤の共有度（1 基盤で何束が成立するか）。
-- 段階 A の検証対象ゴーストを要件フェーズで開発者と確定する（emo2 以外の代表資産＝ライセンス上テストに使えるもの）。
+- **「使用頻度」の参照元と段階 A の検証対象**（開発者裁定 2026-09-02・議題 4）: 当面は**里々／YAYA の標準テンプレート辞書**（新規ゴースト作成の雛形・ukadoc MCP の satori／yaya wiki で裏取り可）が使う語彙を参照値にする。実在ゴーストの辞書走査と実走検証は行わない。開発者の本音は「実在ゴーストを指定したい」だが良い候補が無く、候補があるとすれば自作の「どっとさくら」。**外部から「このゴーストを動かして」という要望が来た時点で、そのゴーストを参照元・検証対象に切り替える**。段階 A の温度感は「当面 emo2 が動けばよい」。
 
 ## Scope
 
@@ -49,7 +58,7 @@ M1 ロードマップは「M2 以降は M1 完成後に実物を見て組み直�
 
 ## Upstream / Downstream
 
-- **Upstream**: `ukadoc-survey-shiori`・`ukadoc-survey-assets`・`ukadoc-survey-sakura-script`・`ukadoc-survey-property`（4 台帳が `unclassified` 0・alias 仕訳済みで揃うこと）・`ukadoc-survey-toolkit`（report/linkage の再生成）・`emo2-conformance-e2e`（M1 完成の実物・段階 A の起点。**e2e 完了前に本 spec を完了させない**）。
+- **Upstream**: `ukadoc-survey-shiori`・`ukadoc-survey-assets`・`ukadoc-survey-sakura-script`・`ukadoc-survey-property`（4 台帳が `unclassified` 0・alias 仕訳済みで揃うこと）・`ukadoc-survey-toolkit`（report/linkage の再生成）・`emo2-conformance-e2e`（M1 完成の実物・段階 A の起点。**第一段は e2e 前に進め、第二段＝順位確定・開発 spec 起票・ロードマップ反映は e2e 完了後**）。
 - **Downstream**: `/kiro-discovery` 再入（M2 ロードマップ本文化）・既存 M2 ゲート brief 13 本の順序確定・新規 spec の just-in-time 起票。
 
 ## Existing Spec Touchpoints
