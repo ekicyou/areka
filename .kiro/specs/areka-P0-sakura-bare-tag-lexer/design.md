@@ -37,8 +37,8 @@
 - **字句層の角括弧なし経路の消費規律**（`crates/areka-parsers/src/sakura/lexer.rs` `scan_tag` の `else` 腕）: 「先頭が `_` なら `\_` ＋（`_` 0〜1 個）＋ 1 文字、先頭が `_` でなければ 1 文字」という固定長の決定と、その純粋関数化。
 - **`Token::Bare` の載荷型**（`char` → `String`）とその不変条件（下記 Data Models）。
 - **意味層の bare 写像の入口の形**（`decode_bare(word: &str)`・`decode_passthrough_bare(word: &str)`）。既知 1 文字語の写像内容は変えず、未知語は `Instruction::Raw("\\" + 綴り)` へ落とす。
-- 新設テスト 2 ファイル（`lexer_bare_tag_tests.rs`・`parse_bare_tag_tests.rs`）と `mod.rs` の接続宣言、既存 `lexer_tests.rs` の型追随（機械置換）。
-- 触れるファイル内の、実装と食い違う説明注記の訂正（`lexer.rs:8` `:34` `:125` `:132` `:173-174`・`decode.rs:163` `:328`）。
+- 新設テスト 2 ファイル（`lexer_bare_tag_tests.rs`・`parse_bare_tag_tests.rs`）と、`lexer.rs`／`parse.rs` 末尾に置くパス属性つきの接続宣言、既存 `lexer_tests.rs` の型追随（機械置換）。
+- 触れるファイル内の、実装と食い違う説明注記の訂正（`lexer.rs:8` `:34` `:124` `:125` `:132` `:133` `:173-174`・`decode.rs:163` `:328`）。
 - `doc/COMPAT_ARCHITECTURE.md` §8 の 1 行と、`.kiro/specs/areka-P0-anchor-tag-canon/brief.md` 末尾の登記 1 行。
 
 ### Out of Boundary
@@ -116,9 +116,9 @@ graph LR
 
 ```
 crates/areka-parsers/src/sakura/
-├── lexer.rs                     # 変更: Token::Bare(String)・bare_tag_len・角括弧なし経路・注記訂正
+├── lexer.rs                     # 変更: Token::Bare(String)・bare_tag_len・角括弧なし経路・注記訂正・末尾に接続宣言
 ├── decode.rs                    # 変更: decode_bare(&str)・decode_passthrough_bare(&str)・注記訂正
-├── mod.rs                       # 変更: 新規テスト 2 モジュールの接続宣言（#[cfg(test)] mod ...;）
+├── parse.rs                     # 変更: 末尾に接続宣言のみ（#[cfg(test)] #[path = "parse_bare_tag_tests.rs"] mod bare_tag_tests;）
 ├── lexer_tests.rs               # 変更: Token::Bare('x') → Token::Bare("x".to_string()) の機械置換 11 行
 ├── lexer_bare_tag_tests.rs      # 新規: 字句層（lex → Token 列）の判断分岐網羅
 └── parse_bare_tag_tests.rs      # 新規: 通し（parse → Instruction 列）で表示本文と Raw の形を固定
@@ -135,23 +135,24 @@ doc/
   - `:129` 末尾裸 `\` → `Token::Bare("\\".to_string())`（挙動不変）。
   - `:172-177` 角括弧なし経路 → `bare_tag_len(&word)` で消費長 `take` を決め、`chars[word_start..word_start + take]` を綴りにして `Token::Bare(綴り)` を返し、`word_start + take` を次位置とする。
   - 新規 `fn bare_tag_len(word: &str) -> usize`（private・純粋）: 下記 Components の契約。
-  - 注記訂正: `:8`（「1 文字タグ」→ 綴り単位）・`:125`・`:132`（「空白」を削除し、実装どおり `[`／`\`／`%` でのみ止まると書く）・`:173-174`。ukadoc URL は書かない。
+  - 注記訂正: `:8`（「1 文字タグ」→ 綴り単位）・`:124`／`:133`（短縮対象語の例に `\p` を加える——実装の `SHORTHAND_WORDS` は `w` `b` `p` の 3 語）・`:125`・`:132`（「空白」を削除し、実装どおり `[`／`\`／`%` でのみ止まると書く）・`:173-174`。ukadoc URL は書かない。
+  - 末尾に接続宣言 `#[cfg(test)] #[path = "lexer_bare_tag_tests.rs"] mod bare_tag_tests;` を置く（steering `structure.md` Unit Tests の規約。`mod.rs` 経由は歴史形で新規には使わない）。
 - `crates/areka-parsers/src/sakura/decode.rs`（348 行 → 約 350 行）
   - `:156` `Token::Bare(word) => decode_bare(&word)`。
   - `:174` `fn decode_bare(word: &str)`: `match word { "e" | "c" | "-" | "n" | "0" | "h" | "1" | "u" => 既存写像 (内容不変), other => decode_passthrough_bare(other) }`。`:163` の「角括弧なし 1 文字」を訂正。
   - `:331` `fn decode_passthrough_bare(word: &str) -> Instruction { Instruction::Raw(format!("\\{word}")) }`。`:328` の説明を訂正。
   - `decode_tag`（`:191-221`）・`fold_*`・`is_*` は**触らない**。
-- `crates/areka-parsers/src/sakura/mod.rs`（36 行 → 42 行）: `:20` の後に `#[cfg(test)] mod lexer_bare_tag_tests;`、`:30` の後に `#[cfg(test)] mod parse_bare_tag_tests;`。
+- `crates/areka-parsers/src/sakura/parse.rs`（末尾 +3 行）: `#[cfg(test)] #[path = "parse_bare_tag_tests.rs"] mod bare_tag_tests;` のみ。本体は触らない。`mod.rs` は**編集しない**。
 - `crates/areka-parsers/src/sakura/lexer_tests.rs`（458 行・行数不変）: `:92` `:93` `:94` `:100` `:161` `:163` `:174` `:229` `:323` `:436` `:454` の `Token::Bare('X')` を `Token::Bare("X".to_string())` へ。期待値の意味は変えない。
 - `doc/COMPAT_ARCHITECTURE.md`（216 行 → 217 行）: `:207` の直後に §8 の 1 行（4 欄・文面は Components「COMPAT 登記」）。
 - `.kiro/specs/areka-P0-anchor-tag-canon/brief.md`（62 行 → 63 行）: 末尾に blockquote 1 行（文面は Components「隣接仕様登記」）。他の行は 1 文字も変えない。
 
 ### New Files
 
-- `crates/areka-parsers/src/sakura/lexer_bare_tag_tests.rs`（見積 250〜350 行）: `use super::lexer::{Token, lex};`。Testing Strategy の T1〜T15。
-- `crates/areka-parsers/src/sakura/parse_bare_tag_tests.rs`（見積 200〜300 行）: `use super::model::Instruction; use super::parse::parse;`。Testing Strategy の P1〜P10。
+- `crates/areka-parsers/src/sakura/lexer_bare_tag_tests.rs`（見積 250〜350 行）: `lexer.rs` の子モジュールなので `use super::{Token, lex};`。Testing Strategy の T1〜T15。
+- `crates/areka-parsers/src/sakura/parse_bare_tag_tests.rs`（見積 200〜300 行）: `parse.rs` の子モジュールなので `use super::parse; use super::super::model::Instruction;`。Testing Strategy の P1〜P10。
 
-> 命名は `.kiro/steering/structure.md` の `<stem>_<モジュール名>.rs`（stem ＝ `lexer`／`parse`）。接続は同ディレクトリの既存兄弟（`lexer_tests` 等）と同じく `mod.rs` の `#[cfg(test)] mod …;` で行う。逆引きの最長 stem 規則で `lexer_tests`／`parse_tests` とは衝突しない。
+> 命名は `.kiro/steering/structure.md` の `<stem>_<モジュール名>.rs`（stem ＝ `lexer`／`parse`・モジュール名 ＝ `bare_tag_tests`）。接続は同 steering の Unit Tests 規約どおり**本番ファイル末尾**に `#[cfg(test)] #[path = "<stem>_bare_tag_tests.rs"] mod bare_tag_tests;` を置く。既存兄弟（`lexer_tests` 等）が `mod.rs` から繋がっているのは歴史形であり、新規には使わない（設計検証の指摘 1）。逆引きの最長 stem 規則で `lexer_tests`／`parse_tests` とは衝突しない。
 
 ## System Flows
 
@@ -229,7 +230,7 @@ flowchart TD
 | 7.2 | 解析を中断する新経路を作らない | `bare_tag_len` は常に 1 以上を返し `lex` は前進する | — | 消費長決定 |
 | 7.3 | 新しい意味写像を足さない | `decode_bare` の既知語集合は不変 | — | — |
 | 7.4 | 範囲外ファイルを編集しない | File Structure Plan の 8 ファイルのみ | — | — |
-| 7.5 | 実装と食い違う注記を残さない | 注記訂正（`lexer.rs:8` `:34` `:125` `:132` `:173-174`・`decode.rs:163` `:328`） | — | — |
+| 7.5 | 実装と食い違う注記を残さない | 注記訂正（`lexer.rs:8` `:34` `:124` `:125` `:132` `:133` `:173-174`・`decode.rs:163` `:328`） | — | — |
 
 ## Components and Interfaces
 
@@ -339,6 +340,7 @@ fn decode_passthrough_bare(word: &str) -> Instruction;
 
 - `lexer.rs:132`「…／`%`／空白に当たるまで」→「`[`／`\`／`%` に当たるまで（本文でも空白でも止まらない。角括弧なし経路はこのワード長を消費長に使わない）」。
 - `lexer.rs:8`・`:34`・`:125`・`:173-174`・`decode.rs:163`・`:328` の「1 文字」を「綴り（1〜3 文字）」の表現へ。
+- `lexer.rs:124`・`:133` の短縮対象語の例（`\wN`/`\bN`・`\w`/`\b`）に `\p` を加え、実装の `SHORTHAND_WORDS`（`w` `b` `p`）と一致させる。
 - ukadoc の URL・「正典に合致」を示す文言は書かない（`areka-P0-ukadoc-survey-sakura-script` の担当）。
 
 ### 登記
@@ -415,8 +417,9 @@ fn decode_passthrough_bare(word: &str) -> Instruction;
 ### 変異手順（要件 5.5／5.6・実装タスクで実施し結果を記録する）
 
 1. 是正後の全テストが緑であることを確認する。
-2. **変異 ⑴（元の欠陥へ戻す）**: `scan_tag` の角括弧なし腕を `word_start + 1`（先頭 1 文字だけ消費）へ戻し `cargo test -p areka-parsers` を実行。**期待: T1・T2・T5〜T7・T9・T11・T12・P1〜P6 が赤**。
-3. **変異 ⑵（広く読みすぎ）**: 消費長を `word.chars().count()`（ワード全体）にして実行。**期待: T5・T11・T12・P2・P3・P10 が赤**（`\_q` が末尾にある P1 は偶然通る——だから本文が続く形を対に含める）。
+2. **変異 ⑴（元の欠陥へ戻す）**: `bare_tag_len` の本体を `1` に置き換える（＝旧実装の `word_start + 1` と同値）。`cargo test -p areka-parsers` を実行。**期待の赤: T1・T2・T4・T5・T6・T7・T9・T11・T12・P1・P2・P3・P4・P5・P6**。**期待の緑: T3（別綴りであることは 1 文字でも成立）・T8・T10・T13・T14・T15・P7・P8・P9・P10**。
+3. **変異 ⑵（広く読みすぎ）**: `bare_tag_len` の本体を `word.chars().count()`（ワード全体）に置き換える。**期待の赤: T5・T9・T11・T12・T13・P2・P3・P10**（T13 は `\eあ` が `Bare("eあ")` に、T9 は `\___x` が `Bare("___x")` になるため赤）。**期待の緑: T1・T2・T3・T4・T6・T7・T8・T10・T14・T15・P1・P4・P5・P6・P7・P8・P9**——タグが入力末尾か `\`／`%` の直前にある形はワード長 ＝ 固定長なので偶然通る。だから本文が続く形（T5・T11・T12・P2・P3・P10）を対に必ず含める。
+   - 変異は `bare_tag_len` の**本体置換**で定義する（呼び出し側の式を変えない）。呼び出し側や `_` 分岐だけを変える別の変異では上の赤リストが変わるため、記録には「どの本体に置き換えたか」を添える。
 4. どちらの変異も元へ戻し、再び全緑を確認する。変異ごとに赤になったテスト名を実装記録へ残す。
 
 ### 既存テストの扱い

@@ -315,7 +315,7 @@ requirements.md L53 は「角括弧を伴わない `\_` タグは上表のとお
 | `doc/COMPAT_ARCHITECTURE.md`（216 行） | `:122` §8 見出し・`:126-127` 表ヘッダ・`:207` 表の最終行 | 一致 |
 | `.kiro/specs/areka-P0-anchor-tag-canon/brief.md`（62 行） | 末尾の「📌 2026-09-02 棚卸⑫」ブロック（`:59-62`）。`:60` が「着地後は本 brief に『lexer 修正は消化済み（PR#）』を登記」と書き込み位置を自ら指定 | 一致 |
 | `crates/log-capture-kit/tests/file_length_guard_test.rs` | `:61-109` 例外表 11 件（`areka-parsers` は 0 件）・`OVER_LIMIT_ALLOWED_COUNT = 11` | 一致 |
-| emo2 フィクスチャ `crates/pilot/examples/shiori-host-32/fixtures/emo2/ghost/master/dic/*.pasta` | `\_` は `menu.pasta:15` `:33` の `\_l[5em,2lh]` のみ（角括弧付き）。`areka-sakura` 側でこれを直入力するテストは `compile_arm_tests.rs`・`drive_choice_tests.rs`・`drive_delivery_tests.rs` | 一致（§1.7 の `:62` は再測定で該当なし・実体は 2 行） |
+| emo2 フィクスチャ `crates/pilot/examples/shiori-host-32/fixtures/emo2/ghost/master/dic/*.pasta` | `\_` は `menu.pasta:15` `:33` `:62` の `\_l[5em,2lh]`（3 箇所）と `update.pasta:44` の `\_w[600]`（1 箇所）。**すべて角括弧付き**で角括弧なし形は 0 件。`areka-sakura` 側でこれを直入力するテストは `compile_arm_tests.rs`・`drive_choice_tests.rs`・`drive_delivery_tests.rs` | 設計ディスカッションで再測定（設計フェーズの「`:62` 該当なし・実体は 2 行」は誤り。要件 4.7 の結論は不変） |
 
 ### 10.3 決定ログ: 型の形は **案 A（`Token::Bare(char)` → `Token::Bare(String)`）** を採る
 
