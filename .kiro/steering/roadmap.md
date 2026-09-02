@@ -70,7 +70,7 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 | 種別 | ゴール（単一文） | ユニット | ウェーブ |
 |---|---|---|---|
 | M-e2e | 適合 14 項目一周＋DoD＝**M1 完成宣言** | `emo2-conformance-e2e` | **W12**（最終・M1 唯一の残ユニット） |
-| 挙動バグ（直接修正候補） | 角括弧なしの 2 文字 `\_X` タグ（`\_a`・`\_q`・`\_n`・`\_b`・`\_v`…）で lexer が `_` 1 文字しか消費せず **`X` が本文へ漏れる**（`lexer.rs:172-177`・テスト 0 本・emo2 非使用＝M1 適合には無害） | 所有＝`anchor-tag-canon`（M2）・**M1 前倒しは開発者裁定**（推奨＝spec を立てず直接修正 1 PR〔Path B〕・W12 の先頭で着地させ、`decode.rs` を触る後続 spec の rebase 源にしない） | ⓪（W12 開始前） |
+| 挙動バグ（直接修正候補） | 角括弧なしの 2 文字 `\_X` タグ（`\_a`・`\_q`・`\_n`・`\_b`・`\_v`…）で lexer が `_` 1 文字しか消費せず **`X` が本文へ漏れる**（`lexer.rs:172-177`・テスト 0 本・emo2 非使用＝M1 適合には無害） | **`sakura-bare-tag-lexer`**（S・2026-09-02 起票＝開発者「spec が無いと開始できない」で直接修正から S spec へ）・意味付けの所有は `anchor-tag-canon`（M2）。W12 の先頭で着地させ、`decode.rs` を触る後続 spec の rebase 源にしない | ⓪（W12 開始前） |
 | 挙動バグ（直接修正候補） | `writing.rs:311` の未知 `writing_mode` 警告文言が実挙動（`:32`「指定なしとして扱う」）とずれている（表示影響なし・ログ文言のみ） | 所有＝`balloon-canon-residue` 項目 12・**S・前提なし** | ⓪（任意） |
 | 見た目（引受先なし） | 遷移中に絵と窓が同じ提示フレームで揃う（可視化→書込の隙間 0.21〜0.31 秒・未達 40 件） | **引受先なし**（pwc は見送り＋登記で完了・再着手は新規起票が要る） | M2 |
 
@@ -84,7 +84,7 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 | Wave | ユニット | 開始コマンド | 編成根拠・条件 |
 |---|---|---|---|
 | W1〜W11 ✅ | 完了サマリ参照 | — | 旧行全文は history（棚卸⑧〜⑫退避） |
-| **⓪**（W12 開始前・直接修正） | `\_X` bare 漏れの lexer 修正（Path B・spec なし・1 PR）／residue 項目 12 の文言修正（任意） | （harness worktree で直接実装→PR） | **挙動バグ最優先**。lexer 修正は `lexer.rs`＋`decode.rs`＋テスト新設（`\_a`・`\_q` 等の bare 形と `\_a[...]` 形の決定論檻・現在 0 本）。**W12 の channels と W13 の decoration が同じ `decode.rs` を触るため、先に着地させて rebase 源を消す**。着地後は `anchor-tag-canon` brief に「lexer 修正は消化済み」を登記 |
+| **⓪**（W12 開始前・S spec） | **`sakura-bare-tag-lexer`**（`\_X` bare 漏れの lexer 修正・S・2026-09-02 起票）／residue 項目 12 の文言修正（任意・spec なし） | `/kiro-start areka-P0-sakura-bare-tag-lexer` | **挙動バグ最優先**。編集集合＝`lexer.rs`＋`decode.rs`＋テスト新設（`\_a`・`\_q` 等の bare 形と `\_a[...]` 形の決定論檻・現在 0 本）・意味付けは行わない。**着地後に `ukadoc-survey-sakura-script` を開始**（同ファイルへ URL コメント）。**W12 の channels と W13 の decoration が同じ `decode.rs` を触るため、先に着地させて rebase 源を消す**。着地後は `anchor-tag-canon` brief に「lexer 修正は消化済み」を登記 |
 | **W12**（M1 最終＋裁定枠） | **`emo2-conformance-e2e`**（M1 必須） | `/kiro-start areka-P0-emo2-conformance-e2e` | 全ユニット完了（W11 完走で充足）。着手時義務: ⑴ brief 全面再監査（棚卸⑫追記ブロックが実測正本＝`spawn.rs` アンカー :294/:254 等の大ドリフト・dlp 申し送り 9 点は全命中）⑵ ㉘(E) の実機判断 ⑶ #7（pasta 上流）は M1 完成を妨げない扱いの確認 ⑷ **`ReassertZOrder` 未消費の実機確認** ⑸ **DoD `cargo test --workspace` exit 0 を脅かす間欠赤 3 系統の隔離裁定**（B-2 `spine_e2e_test_s3_helper_liveness_detected.rs:175-185`・zsp §13.8 ①②＝`zorder-chain-residue` A-1/A-2）——e2e は除外/更新の裁定のみ行い根治は `zorder-chain-residue`。**分割候補（開発者裁定）**: 決定論 conformance spine（CI 常設）／実機一周＋M1 完成宣言 DoD の 2 spec——brief 自身の Boundary Candidates と一致。本 spec は「証明に徹する」（`crates/` 本番コード改変 0 が原則） |
 | **W12** 裁定枠 A | `cursor-tag-canon`（挙動バグ級・L・分割禁止裁定済み） | `/kiro-start areka-P0-cursor-tag-canon` | **現行 main の本物の非互換**＝縦書き `vertical_rl` で `\_l[0,0]` が 1 列目に着地しない（`layout.rs:453` 増加方向 対 `:309` 減少方向・`:620` 列右端＝構造で裏取り済み・縦書き `\_l` テスト 0 本）。上流 bvc 完了で前提充足。編集集合＝`areka-emo-text/src/{layout,state}.rs`＋兄弟テスト＋完了 spec `emo-text-layer` 縮退表＋COMPAT §8。**e2e／channels／toolkit と共有ファイル 0**（実測）。`draw.rs` には追記しない（残 20 行） |
 | **W12** 裁定枠 B → **W14 へ移動（2026-09-02 再評価）** | `property-query-channels`（依存ツリー最長の先頭・XL・分割推奨＝⑴スクリプト経路／⑵IPC＋ライブ実測／⑶台帳 S） | （W14）`/kiro-start areka-P0-property-query-channels` | **W12 から外した理由**＝survey 4 本の doc コメント接触先（`sakura/{lexer,decode}.rs`・`consumer_ledger.rs`・`kanade/schedule`・`sylphya/vocab`）が本 spec の編集集合と一致＝原則（共有ファイル 0）で同居不可。W13 は decoration が `decode.rs` を持つため ⑴ を載せられない（⑵ IPC 片＝`shiori-host32-*`・`areka/shiori_host.rs` のみなら W13 同居可）。**利得**＝survey-property の所有突合表（188 項目・三重所有の裁定案）が先に出るので要件の材料が揃う。分割案・`PropSetCueSink` 雛形・三重所有は brief 追記(88) ブロックが正本。**要件定義は Fable** |
@@ -108,7 +108,7 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 
 ## 着手手順
 
-> **brief 全数完備体制**: M1 残ユニット 1 本（e2e）＋M2 ゲート **14 本**（棚卸⑫で `zorder-chain-residue` 合流）＋調査系 **6 本**（別セッション起票・追記(89) 反映後に実在）＝全 21 本 brief 済み＝着手は該当 brief を読んで `/kiro-start <unit>` へ直行。新規課題の起票は `/kiro-discovery`（再入）で brief just-in-time 生成。`/kiro-spec-batch` は使わない（一括＝工場化）。ウェーブ跨ぎの合流判断は別セッションで一括（記憶 portfolio-convergence-decided-in-separate-session）。
+> **brief 全数完備体制**: M1 残ユニット 1 本（e2e）＋M2 ゲート **14 本**（棚卸⑫で `zorder-chain-residue` 合流）＋調査系 **6 本**（別セッション起票・追記(89) 反映後に実在）＋⓪ `sakura-bare-tag-lexer`（S・09-02 起票）＝全 22 本 brief 済み＝着手は該当 brief を読んで `/kiro-start <unit>` へ直行。新規課題の起票は `/kiro-discovery`（再入）で brief just-in-time 生成。`/kiro-spec-batch` は使わない（一括＝工場化）。ウェーブ跨ぎの合流判断は別セッションで一括（記憶 portfolio-convergence-decided-in-separate-session）。
 
 ## 制約
 
