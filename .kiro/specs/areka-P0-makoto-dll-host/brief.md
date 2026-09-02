@@ -3,7 +3,7 @@
 > 起票: 2026-09-02（`/kiro-discovery`・Path D の 2 本目・**L 規模**）。翻訳経路の **後半**＝MAKOTO/2.0 DLL のホスティング。前半は [areka-P0-translate-pipeline](../areka-P0-translate-pipeline/brief.md)（継ぎ目・展開順序・OnTranslate）で、本 spec は前半が用意する `Translator` フックへ DLL 鎖を差し込む。
 > **種別**: 互換機能の新設（32bit MAKOTO DLL・任意 charset・付け外し命令）。emo2 は使わない＝**M2 ゲート扱い**。
 > **ブリーフィング段階の裁定（2026-09-02・開発者）**: ⑷ 実機サインオフは**本物の MAKOTO DLL 1 本**（YAYA as MAKOTO の UTF-8 改良版）＋自前テスト DLL ⑸ **任意の charset 対応は常に欲しい**＝MAKOTO wire だけでなく **SHIORI 側 wire（今日 UTF-8 のみ）も本 spec で任意 charset へ広げる** ⑹ **シェル側 MAKOTO も含める**（ゴースト側→シェル側の鎖）⑺ spec 名は本名で確定。
-> ⚠ **一次資料の薄さ**: MAKOTO/2.0 の wire 規格ページは ukadoc に無い（`spec_makoto.html` は 404・MCP スナップショットにも無し）。下記の wire 形式は ooyashima 用語集「OnTranslate が SHIORI/3.0 に（`TRANSLATE Sentence` SHIORI/2.x に）実装された」＋Mac 互換ベースウェア Ourin の `MakotoTranslator.swift`＋.NET プロキシ dnproxy の対応表から復元したもの。**要件定義の先頭で本物の DLL（YAYA as MAKOTO のソース）で裏取りする**（別途調査中・結果は本 brief 末尾に追記）。
+> ⚠ **一次資料**: MAKOTO/2.0 の wire 規格ページは ukadoc に無い（`spec_makoto.html` は 404・MCP スナップショットにも無し）。正典は materia（偽春菜）の原典 `usada.sakura.vg/contents/makoto.html`（サイトは消滅・Wayback 2008-02-10 のスナップショット http://web.archive.org/web/20080210074700id_/http://usada.sakura.vg/contents/makoto.html）。**要求行は `EXECUTE MAKOTO/2.0`**。Mac 互換ベースウェア Ourin が使う `TRANSLATE Sentence MAKOTO/2.0` は Ourin 独自（GitHub 全検索で Ourin 以外に 0 件・自身のコメントも「ninix の挙動参照に留め」）＝採用しない。「§ 原典の追記」節に詳細。
 
 ## Problem
 
@@ -12,14 +12,14 @@ ukadoc [トランスレータ](https://ssp.shillest.net/ukadoc/manual/manual_tra
 DLL の口は SHIORI と同じ [DLL 共通仕様](http://ssp.shillest.net/ukadoc/manual/spec_dll.html)（`load(HGLOBAL,long)`／`unload()`／`request(HGLOBAL,long*)`・要求 HGLOBAL は DLL が解放・応答 HGLOBAL はホストが解放・NUL 終端保証なし）。wire は SHIORI/2.x 風のヘッダ形式:
 
 ```
-TRANSLATE Sentence MAKOTO/2.0\r\n
-Charset: <符号名>\r\n
+EXECUTE MAKOTO/2.0\r\n
 Sender: <ベースウェア名>\r\n
 String: <台詞>\r\n
+Charset: <符号名>\r\n
 \r\n
 ```
 
-応答は `MAKOTO/2.0 200 OK\r\n`＋（`Charset: …\r\n`）＋`String: <変換後>\r\n\r\n`。
+応答は `MAKOTO/2.0 200 OK\r\n`＋`String: <変換後>\r\n`＋`Charset: …\r\n`＋`\r\n`。状態は 200／**204 No Content（触らない＝素通し）**／400／500（原典）。
 
 **利用者から見える結果（今日）**: `makoto,` を書いたゴースト／シェルは無言で翻訳されない（descript の未知キーは捨てられる）。加えて areka の wire は UTF-8 のみなので、**Shift_JIS のゴースト（里々／YAYA の標準テンプレートの大半）は SHIORI とも会話できない**＝互換の入口が閉じている。
 
@@ -34,11 +34,11 @@ String: <台詞>\r\n
 
 ## Desired Outcome
 
-1. **descript の `makoto,` を読む**: ゴースト側（`ghost/master/descript.txt`）とシェル側（`shell/<名>/descript.txt`）の両方。未指定なら翻訳なし（推測しない）。ukadoc は単値のみ＝複数値 `[a,b]`（ooyashima 非公式）は受け付けず `warn!`（COMPAT §8 に登記）。
-2. **MAKOTO/2.0 の wire codec**（純粋関数・要求組立と応答解析）: 上記形式。`Sender: areka`。応答は状態行 `MAKOTO/x.y 200` かつ `String:` ありのとき置換（空文字列も採用）、それ以外（非 200・`String:` なし・解析不能・タイムアウト）は**元の台詞**（`warn!`）。台詞中の CR/LF は要求に載せない（さくらスクリプトの改行は `\n` タグ＝実改行は持たない・持っていたら除去して `debug!`）。
+1. **descript の `makoto,` を読む**: ゴースト側（`ghost/master/descript.txt`）とシェル側（`shell/<名>/descript.txt`）の両方。未指定なら翻訳なし（推測しない）。ukadoc（最新）は単値＝正典。原典 materia の複数値 `makoto,[a.dll,b.dll]`（左から順に鎖・最後の出力が最終）は**旧書式のエイリアスとして受理**（toolkit 仕分け規則「新書式正典・旧書式は alias」）。原典の `ghost/master/alias.txt` の `makoto,別名.dll` 上書きは ukadoc に無い＝要件定義で採否を裁定（推奨: 読むが `info!` で記録）。
+2. **MAKOTO/2.0 の wire codec**（純粋関数・要求組立と応答解析）: 上記形式。`Sender: areka`。応答は状態行 `MAKOTO/x.y 200` かつ `String:` ありのとき置換（空文字列も採用）、**204 は素通し**（正典どおり・`debug!`）、それ以外（400／500・`String:` なし・解析不能・タイムアウト）は**元の台詞**（`warn!`）。台詞中の CR/LF は要求に載せない（さくらスクリプトの改行は `\n` タグ＝実改行は持たない・持っていたら除去して `debug!`）。⚠ **HGLOBAL 所有権の食い違い**: DLL 共通仕様（ukadoc）は「要求 HGLOBAL は DLL が解放」だが、原典は「204 のときは**ハンドルを解放せずに**返せ」＝204 では要求ハンドルがホストに残る。要件定義で helper の解放規則を裁定（推奨: 応答 204 のときだけホストが要求ハンドルを解放・テスト DLL で両方の振る舞いを注入し二重解放・リークの決定論テスト）。
 3. **ホスティング＝DLL 1 本につき 32bit helper プロセス 1 つ**（ゴースト側・シェル側で最大 2 つ追加）。wire（`MsgTag`）は無改変・helper の DLL 名 argv をそのまま使う・`ShioriByteProxy` 流用。親側に `MakotoConnection`（`ShioriConnection` と同形・窓＋ライフサイクル）。**load 失敗は致命ではない**: `error!` を残して翻訳なしで起動を続ける（SHIORI の load 失敗＝致命とは扱いが違う・COMPAT §8）。終了時は SHIORI と同じ正規の unload 経路。
 4. **鎖の順序**: 〔前半 spec の OnTranslate〕→ ゴースト側 MAKOTO → シェル側 MAKOTO。鎖は起動時に組む（シェル切替は未実装＝切替時の付け替えは将来 spec）。
-5. **任意 charset（共有の符号化器）**: `encoding_rs` で 1 つの符号化器（名前 ⇄ 符号・`Charset` ヘッダ値の解決・未知名は `warn!`＋既定へ）を作り、**MAKOTO codec と SHIORI/3.0 codec の両方**に配線する。規則（要件定義で確定）: 要求 charset の既定＝ghost descript `charset`（不在は Shift_JIS＝正典既定）、応答は応答の `Charset:` ヘッダ優先（無ければ要求と同じ）、以後の要求は最後の応答 charset に追随（SSP の挙動と伝えられる＝ukadoc [SHIORI/3.0](http://ssp.shillest.net/ukadoc/manual/spec_shiori3.html) で裏取り）。**pasta.dll（UTF-8 宣言）への wire は bit 同一**（golden bytes の決定論テストで担保＝e2e 経路の挙動不変）。
+5. **任意 charset（共有の符号化器）**: `encoding_rs` で 1 つの符号化器（名前 ⇄ 符号・`Charset` ヘッダ値の解決・未知名は `warn!`＋既定へ）を作り、**MAKOTO codec と SHIORI/3.0 codec の両方**に配線する。`load()` の引数（DLL ディレクトリ）も同じ話＝SSP 2.6.92 以降の `loadu()`（UTF-8 パス・ukadoc `spec_dll`）を DLL が export していればそれを使い、無ければ `load()`（OEM コードページ）へ落とす（SHIORI 側の helper にも同じ規則を適用＝非 ASCII パスのゴーストが動く入口）。規則（要件定義で確定）: 要求 charset の既定＝ghost descript `charset`（不在は Shift_JIS＝正典既定）、応答は応答の `Charset:` ヘッダ優先（無ければ要求と同じ）、以後の要求は最後の応答 charset に追随（SSP の挙動と伝えられる＝ukadoc [SHIORI/3.0](http://ssp.shillest.net/ukadoc/manual/spec_shiori3.html) で裏取り）。**pasta.dll（UTF-8 宣言）への wire は bit 同一**（golden bytes の決定論テストで担保＝e2e 経路の挙動不変）。
 6. **付け外し命令**: `\![unload,makoto]`（鎖の全 DLL を unload・以後は素通し）／`\![load,makoto]`（unload 後に再ロード・ロード済みなら冪等）／`\![reload,makoto]`（unload→load）。消費者台帳に 3 行（選別子 `makoto`）。**cue 消費者からゴースト側アクターへ届く最初の配線**＝UI スレッドを塞がないメッセージ経路で設計する。命令は鎖の両側（ゴースト側・シェル側）に効く（SSP は明記なし＝COMPAT §8）。
 7. **決定論テスト**: ⑴ codec の往復（要求 bytes golden・応答行列 200／200 空／非 200／`String:` なし／壊れた charset）⑵ charset 符号化器（Shift_JIS／UTF-8／未知名・SHIORI codec の UTF-8 golden が不変）⑶ 新設 `shiori-host32-makoto-testdll`（i686 cdylib・出力 `makoto.dll`・決定論の変換〔例: 末尾に固定語を付ける〕・応答 charset を Shift_JIS に切り替える env・load 失敗注入・非 200 注入）で helper 経由の e2e ⑷ descript 読取（ゴースト／シェル／不在／複数値）⑸ 鎖の順序（ゴースト側→シェル側の変異＝入れ替えると赤）⑹ 命令 3 種の状態遷移（Loaded／Unloaded・冪等）⑺ load 失敗時に起動が続く。
 8. **実機サインオフ**（有界 auto-exit＋`RUST_LOG` grep）: ⑴ **YAYA as MAKOTO UTF-8 改良版**（nightwork 配布）＋語尾変換の小辞書を emo2 の複製ゴーストへ `makoto,` で装着し、台詞に変換が出ること・`\![reload,makoto]` の往復 ⑵ 同じ DLL をシェル側に置いて鎖の順序 ⑶ Shift_JIS 応答を返すテスト DLL で文字化けなし。Shift_JIS の**実 SHIORI**（里々テンプレート）は任意（追記(89)⑧⑷ の段階 A 検証対象と合わせて要件定義で裁定）。
@@ -88,4 +88,14 @@ x64 in-proc（COM `IShiori`）の MAKOTO 版は作らない（そのような DL
 - 本番 env は `AREKA_` 冠（テスト DLL の注入 env は `HOST32_` 系の既存慣行に従う）。
 - 1 ファイル 1,000 行未満・兄弟テスト・例外表非接触。
 - 実機の定石: 絶対パス起動・i686 先ビルド・`AREKA_APP_SMOKE_EXIT_MS`・`RUST_LOG` grep（記憶 areka-real-machine-signoff-bounded-auto-exit）。
-- 正典の根拠: ukadoc [トランスレータ](https://ssp.shillest.net/ukadoc/manual/manual_translator.html)・[descript makoto](https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#makoto_2c_30d5_30a1_30a4_30eb_540d:1)・[DLL 共通仕様](http://ssp.shillest.net/ukadoc/manual/spec_dll.html)・`\![load|unload|reload,makoto]`・[ゴースト](https://ssp.shillest.net/ukadoc/manual/manual_ghost.html)／[シェル](https://ssp.shillest.net/ukadoc/manual/manual_shell.html)の配置図・YAYA wiki「YAYA as MAKOTO」。wire 形式の二次資料: Ourin `MakotoTranslator.swift`・dnproxy readme（対応プロトコル MAKOTO/2.0）・ooyashima 用語集。
+- 正典の根拠: ukadoc [トランスレータ](https://ssp.shillest.net/ukadoc/manual/manual_translator.html)・[descript makoto](https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#makoto_2c_30d5_30a1_30a4_30eb_540d:1)・[DLL 共通仕様](http://ssp.shillest.net/ukadoc/manual/spec_dll.html)・`\![load|unload|reload,makoto]`・[ゴースト](https://ssp.shillest.net/ukadoc/manual/manual_ghost.html)／[シェル](https://ssp.shillest.net/ukadoc/manual/manual_shell.html)の配置図・YAYA wiki「YAYA as MAKOTO」。wire 形式の原典: materia `makoto.html`（Wayback・下記）。傍証: dnproxy（`IMakoto20 : ILoad, IUnload, IRequest`）・ooyashima 用語集。
+
+## 原典の追記（2026-09-02・調査サブエージェントの裏取り結果）
+
+- **要求行は `EXECUTE MAKOTO/2.0`**（原典の記述例: `EXECUTE MAKOTO/2.0` / `Sender: embryo` / `String: \0\s0これはペンです。\e` / `Charset: Shift_JIS`、応答 `MAKOTO/2.0 200 OK` / `String: …` / `Charset: Shift_JIS`）。export は `request(HGLOBAL, long*)`。framing（CR+LF・1 行目＝命令＋版・`名: 値`・空行で終端・NUL 終端保証なし）は ukadoc `spec_dll` と同じ。
+- **MAKOTO/1.0 は別物**: export が `execute(HGLOBAL, long*)` で、ヘッダなしの生の台詞を受けて生の台詞を返す。本 spec は 2.0 のみ（DLL が `request` を持たず `execute` だけ持つときは `warn!`＋翻訳なし＝世代の記録のみ・1.0 の実装は起票しない）。
+- **`load()` は DLL のディレクトリを受ける**（1.0／2.0 とも・戻り値は materia が見ていない）。SSP 2.6.92（2025-01-16）以降は `loadu()`（UTF-8 パス）を先に探す。
+- **状態**: 200（`String` を使う）／204（触らない＝素通し・**要求ハンドルを解放せずに返す**＝所有権の食い違い・上記 2 項）／400／500。**非 200 や `String` 欠落時の SSP の振る舞いは文書化されていない**＝素通し（204 と同義）を areka の裁量として COMPAT §8 に登記。
+- **鎖と別名**: 原典は `makoto,[a.dll,b.dll]` の順次連鎖と `alias.txt` の `makoto,` 上書きを定義（ukadoc には無い＝旧書式エイリアス扱い・上記 1 項）。`sstp.alwaystranslate`（SSTP でも翻訳）は SSTP 未実装ゆえ範囲外。
+- **YAYA as MAKOTO UTF-8 改良版**: 配布中（`YAYA_as_MAKOTO_UTF-8(20250116).7z`・yaya.dll Tc571-9・辞書 UTF-8・`makoto_systemfunc.dic`）。**呼び出される YAYA 関数名は未確認**（同梱 readme／`.dic` にある＝要件定義で開発者が展開して確認・サブエージェントは配布物のダウンロードを行わない）。
+- 到達不能: `navy.nm.land.to/post/makoto.html`（MAKOTO 総合解説・2026-03 にサービス終了・Wayback は 429）・`usada.sakura.vg/contents/specification{,2}.html`（Wayback 429・再試行の価値あり）。
