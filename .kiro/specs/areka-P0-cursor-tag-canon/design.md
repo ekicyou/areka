@@ -80,7 +80,7 @@
 | 字句・意味写像 | `areka-parsers/src/sakura/decode.rs:212`・`:223-229` | 非接触（引数は文字列のまま） |
 | cue 化 | `areka-sakura/src/compile.rs:137-145` | 非接触 |
 | 状態適用 | `areka-emo-text/src/state.rs:409-416` | 非接触（`parse_cursor_coord` を軸ごとに呼ぶ形は維持） |
-| **語彙化** | `state.rs:108-133`・`:148-183` | `CenterX`／`CenterY` を追加 |
+| **語彙化** | `state.rs:108-133`・`:148-184` | `CenterX`／`CenterY` を追加 |
 | **解決（換算・原点・縮退）** | `layout.rs:650-748`（`cursor_to_image_px`・`CursorDegrade`・`CursorWarnGuard`・`warn_cursor_degrade`） | 新設 `cursor_tag.rs` へ移し、式 1 本へ一般化 |
 | **配線（保留・実体化）** | `layout.rs:449-478`（`CursorMove` 腕）・`:349-372`（保留フラッシュ） | 原点を `region.start()` へ・`@` の基点（実効位置）供給・保留の軸ごと合成 |
 | **原点・画像原寸の供給** | `region.rs:203-260`（`TextRegion::resolve` は `image_size` を受け取っている） | `image_size` を保持し `image_size()` で返す |
@@ -128,8 +128,8 @@ graph LR
 | # | 問い（research §8） | 決定 | 根拠 |
 |---|---|---|---|
 | DD-1 | 1. 絶対座標の原点 | **裁定済み**（要件 2.1／2.7／2.9）＝`TextRegion::start()`（解決後の `origin`。未宣言成分は書字開始角） | `region.rs:222-240`。`vertical_rl` の書字開始角は `(right, top)`＝正典の「文字描画範囲の右上」。宣言バルーンの横書きが動くのは正典追随（2.9） |
-| DD-2 | 2. バルーン画像原寸の配り方 | `TextRegion` に `image_size: (f32, f32)` を保持し `image_size()` で返す | `resolve` は既に `image_size` を受け取っている（`region.rs:203`）。呼び手 134 箇所は無改変 |
-| DD-3 | 3. `@` の基点（保留の扱い・連続 `\_l`） | 基点＝**実効位置**（走査ローカルの位置に、保留中の改行と保留中のカーソルをフラッシュと同じ順で仮適用した「次の文字が置かれる位置」）。連続する `\_l` は軸ごとに合成（後の `\_l` が動かした軸だけ上書き・動かさなかった軸は先の値を保つ） | `\_l[@0,@0]` がどこでも無効果になる（保留改行を無視すると `\n\_l[@0,@0]` が改行を取り消す）。里々 Wiki の実例 `\_l[,@-70]`＋`\_l[160,]`（2 段組メニュー）は軸ごとの合成を前提にしている。要件 3.5（基点はタグ実行時点で固定）・1.2（軸の独立）。**注**: 現行は後の `\_l` が先の保留を丸ごと上書きする（`layout.rs:470`）ため、`\_l[10,]\_l[,20]` のような既存形の**連続**だけは結果が変わる（X が失われなくなる）。2.8.80 の正典でも「省略＝移動しない」なので退行ではなく正典追随（9.6・テスト H2） |
+| DD-2 | 2. バルーン画像原寸の配り方 | `TextRegion` に `image_size: (f32, f32)` を保持し `image_size()` で返す | `resolve` は既に `image_size` を受け取っている（`region.rs:203`）。呼び手（`TextRegion::resolve(` の全呼出・128 箇所）は無改変 |
+| DD-3 | 3. `@` の基点（保留の扱い・連続 `\_l`） | 基点＝**実効位置**（走査ローカルの位置に、保留中の改行と保留中のカーソルをフラッシュと同じ順で仮適用した「次の文字が置かれる位置」）。連続する `\_l` は軸ごとに合成（後の `\_l` が動かした軸だけ上書き・動かさなかった軸は先の値を保つ） | `\_l[@0,@0]` がどこでも無効果になる（保留改行を無視すると `\n\_l[@0,@0]` が改行を取り消す）。里々 Wiki の実例 `\_l[,@-70]`＋`\_l[160,]`（2 段組メニュー）は軸ごとの合成を前提にしている。要件 3.5（基点はタグ実行時点で固定）・1.2（軸の独立）。**注**: 現行は後の `\_l` が先の保留を丸ごと上書きする（`layout.rs:470`）ため、`\_l[10,]\_l[,20]` のような既存形の**連続**だけは結果が変わる（X が失われなくなる）。2.8.80 の正典でも「省略＝移動しない」なので退行ではなく正典追随（要件 2.7 の但し書き・9.6・テスト H2） |
 | DD-4 | 4. 軸写像と換算の順序 | **image 軸（x, y）で解決してから行内／行送りへ写す**（現行順序を保つ）。`@` の基点は走査ローカルの `(inline, block)` を逆写像して image 軸へ戻す（横書き `(x,y)=(inline,block)`・縦書き `(x,y)=(block,inline)`） | 正典は座標軸を「バルーン画像そのまま」と定めるため、意味論は image 軸で閉じるのが素直。逆写像は 1 行の `match` |
 | DD-5 | 5. `centerx` を Y に・`centery` を X に書いたとき | 挙動は要件 1.5（当該軸不動）。記録は専用の分類 `CenterAxisMismatch` で警告一回化する | 書き手に「軸を取り違えた」と伝わる。分類が 1 つ増えるだけで式は変わらない |
 | DD-6 | 6. `%` の係数 | `値 × 文字高さ / 100` | 正典「100%＝タグを書いた時点での文字高さ」＝`em` の 100 分の 1 刻み。係数表に 1 行 |
@@ -153,7 +153,7 @@ crates/areka-emo-text/src/
 ├── layout_cursor_tests.rs          # 既存 13 本（横書きの非回帰）＋期待値の正典追随
 ├── layout_cursor_vertical_tests.rs # 新設: 3 書字方向の着地（縦書き 2 方向・宣言 origin・あふれ判定の不変）
 ├── actor.rs                        # `use crate::layout::CursorWarnGuard` → `use crate::cursor_tag::CursorWarnGuard`（1 行）
-└── lib.rs                          # `pub mod cursor_tag;` の 1 行
+└── lib.rs                          # `pub mod cursor_tag;`＋層規律テストの PURE_SOURCES へ 5 件登録
 ```
 
 ### Modified / Created Files
@@ -169,7 +169,7 @@ crates/areka-emo-text/src/
 | `crates/areka-emo-text/src/layout_cursor_tests.rs` | 変更 | 縮退 4 分岐 → 2 分岐（負値・`%`・`@` は実導出）。`cursor_to_image_px_*` 3 本は `cursor_tag_tests.rs` へ移して式で置換。軸ごと合成のテストを追加 | 2.7・5.3・9.6 |
 | `crates/areka-emo-text/src/layout_cursor_vertical_tests.rs` | **新設** | `vertical_rl`／`vertical_lr` の着地・正典記述例・宣言 `origin` の 3 方向・あふれ判定の不変 | 2.2〜2.9・3.6・9.2・9.3・9.6 |
 | `crates/areka-emo-text/src/actor.rs` | 変更 | import 1 行（`CursorWarnGuard` の住処が移る） | — |
-| `crates/areka-emo-text/src/lib.rs` | 変更 | `pub mod cursor_tag;` | — |
+| `crates/areka-emo-text/src/lib.rs` | 変更 | `pub mod cursor_tag;`。層規律の構造テスト `pure_layer_modules_have_no_windows_imports`（`:170-190`）の `PURE_SOURCES` に、新設 `cursor_tag.rs`・`cursor_tag_tests.rs`・`layout_cursor_vertical_tests.rs` と、従来未登録だった `layout_cursor_tests.rs`・`state_cursor_coord_parse_tests.rs` の 5 件を追加する（`structure.md:181`＝兄弟テストファイルも走査対象）。名前列挙型の検査は新設ファイルを黙って素通しするため、登録漏れは設計上の欠落として扱う | 8.6・9.1 |
 | `doc/COMPAT_ARCHITECTURE.md` | 変更 | §8 `\_l` 行（`:183`）を実装済みへ改め既知非互換を取り下げ・逐語引用は維持。所有移管と誤登記是正の上書き行を `:153` を雛形に追加 | 8.1・8.2・8.4 |
 | `.kiro/steering/roadmap.md` | 変更 | `:89`（編集集合・「完了 spec `emo-text-layer` 縮退表」の是正）・`:143` 追記(85) の所有者注記 | 8.2・8.5 |
 | `.kiro/specs/areka-P0-cursor-tag-canon/brief.md` | 変更 | `:27`・`:44`・`:54`・`:75`・`:84` の「`emo-text-layer`」を「`choice-render`」へ是正（是正である旨と根拠を添える） | 8.2・8.3 |
@@ -348,7 +348,9 @@ pub fn resolve_cursor_axis(
     basis: &CursorBasis,
 ) -> Result<Option<f32>, CursorDegrade>;
 
-/// 解決値が validrect の当該軸範囲の外なら `debug!` を 1 件記録する（位置は動かさない・2.6）。
+/// 解決値（点。グリフ矩形ではない）が validrect の当該軸範囲 [min, max]（閉区間）の外なら `debug!` を
+/// 1 件記録する（位置は動かさない・2.6）。境界上（`== min`／`== max`）は範囲内＝`vertical_rl` の
+/// 正典 `\_l[0,0]`（x = right）は記録されない。
 pub fn note_out_of_range(axis: CursorAxis, value: f32, region: &TextRegion);
 
 /// キャラクターごと・分岐ごとの警告一回化（ランタイム所有・走査を跨いで持続）。
@@ -394,7 +396,7 @@ impl TextRegion {
     // left/top/right/bottom/wrap_threshold は既存
 }
 ```
-- 呼び手 134 箇所は無改変（`resolve` の引数は変わらない）。
+- 呼び手（`TextRegion::resolve(` の全呼出・128 箇所）は無改変（`resolve` の引数は変わらない）。
 
 ### 配線
 
@@ -471,7 +473,7 @@ impl TextRegion {
 | `\_l` `centerx`／`centery`（正しい軸） | **実導出**（画像の半分） | なし | 4.1・4.2 |
 | `\_l` `centerx` を Y に・`centery` を X に | 当該軸不動 | `warn!`（キャラクター・分岐ごと初回） | 1.5・5.3 |
 | `\_l` 解釈不能・非有限 | 当該軸不動 | `warn!`（キャラクター・分岐ごと初回） | 1.5・5.1・5.3 |
-| 解決後の位置が文字描画範囲の外 | 字義どおり（寄せない） | `debug!`（軸・値・範囲。一回化しない） | 2.6 |
+| 解決後の位置（点）が文字描画範囲 [min, max]（閉区間）の外 | 字義どおり（寄せない） | `debug!`（軸・値・範囲。一回化しない。境界上は記録しない） | 2.6 |
 
 **利用者から見える結果**: 文字描画範囲の外へ出した文字は、描画側のダーティ矩形クランプ（`viewbox.rs:722-746`）により**落ちないが見えない**（あるいは一部だけ見える）。本仕様はこれを変えない（変えるのは矩形の意味論を持つ別仕様の領分）。
 
@@ -499,7 +501,7 @@ impl TextRegion {
 1. 解決表の全行 × X・Y（省略・数値・負値・小数・`em`・`lh`・`%`・`@`×4 単位・`centerx`／`centery`・軸取り違え・`Invalid`）——期待値は式で書く（例: `@-1650%` → `200 − 165 = 35`）。
 2. 単位係数は軸に依らない（同じ `Nlh` を X と Y に与えて同じ量だけ動く・1.4）。
 3. 境界値: `0`・`-0`・`0.5`・`-0.5em`・`@0`・`@-0`・大きな負値（範囲外）・`Invalid`（非有限は語彙層で `Invalid` になることを `state_cursor_coord_parse_tests.rs` が固定）。
-4. `note_out_of_range` は範囲内で 0 件・範囲外で `debug` 1 件・位置を動かさない。
+4. `note_out_of_range` は範囲内で 0 件・範囲外で `debug` 1 件・位置を動かさない。境界: `== min`／`== max` → 0 件・`max + 0.5`／`min − 0.5` → 1 件。検査するのは点であり、`x = left` の列矩形 `[left − font_height, left]` が範囲外へ出ても記録しない（矩形の可視性は描画側の責務）。
 5. `warn_cursor_degrade` は `(actor, degrade)` ごとに 1 件・別 actor で再び 1 件・`Omitted` と実導出は 0 件。
 
 ### Integration Tests（`layout_cursor_vertical_tests.rs`・`layout_cursor_tests.rs`・配線）
@@ -508,7 +510,7 @@ impl TextRegion {
 
 | # | 入力 | 方向 | 期待 | Req |
 |---|---|---|---|---|
-| V1 | `\_l[0,0]あ` | `vertical_rl` | 列矩形 `[390, 400]`（1 列目）・`inline = 0` | 2.3・9.2 |
+| V1 | `\_l[0,0]あ` | `vertical_rl` | 列矩形 `[390, 400]`（1 列目）・`inline = 0`・範囲外の `debug` 0 件（x = right は境界上＝範囲内） | 2.3・2.6・9.2 |
 | V2 | `\_l[-13,0]あ` | `vertical_rl` | 列矩形 `[377, 387]`（2 列目＝自動列送りと同値） | 2.3 |
 | V3 | `あ\_l[@-1lh,0]あ` | `vertical_rl` | 2 個目は列 `[377, 387]`・`inline = 0` | 3.6・9.3 |
 | V4 | `あ\_l[,@1em]あ` | `vertical_rl` | 2 個目は同じ列・`inline = 20` | 3.6・2.5 |
