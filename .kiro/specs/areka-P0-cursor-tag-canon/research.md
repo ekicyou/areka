@@ -173,7 +173,7 @@
 | **誤登記②** | `.kiro/steering/roadmap.md:89`（編集集合に「完了 spec `emo-text-layer` 縮退表」） | 8.2/8.5 | 是正＋編集集合の更新（後述） |
 | **誤登記③** | `.kiro/specs/completed/areka-P0-balloon-vertical-canon/` の該当登記 | 8.2 | 是正（訂正である旨と根拠を明記＝8.3） |
 | 正典文書 | `doc/COMPAT_ARCHITECTURE.md:183`（「`\_l` の縦書き座標系の正典写像と、areka の既知非互換」の行） | 8.4 | 「未実装（語彙記録＋既知非互換の登記）」→ 実装済みへ・既知非互換の取り下げ・逐語引用は維持 |
-| ロードマップ | `.kiro/steering/roadmap.md:89`・`:133`・`:138`・`:142` | 8.5 | 着地後の実態へ |
+| ロードマップ | `.kiro/steering/roadmap.md:89`・`:133`・`:139`・`:143`（2026-09-02 の origin/main rebase 後に `:138`→`:139`・`:142`→`:143` へずれた。`:89`・`:133` は不変） | 8.5 | 着地後の実態へ |
 | ソース内の説明 | `layout.rs:449-452`（「origin＝validrect 左辺／上辺」）・`:455-457`（「縮退 4 分岐」）・`:638-649`（換算の説明）・`:678-690`（分岐種別）・`:692-700`（警告の管理）・`state.rs:102-107`（M1 の縮退）・`:135-147`（語彙の文法） | 8.6 | 改訂後の正典と一致させる |
 
 **誤登記の根拠（自ら再実測）**: `.kiro/specs/completed/areka-P0-emo-text-layer/requirements.md` に `\_l` の記述は無く（`_l` の出現 2 件はいずれも `writing_mode` の説明で `\_l` ではない）、Requirement 6（縦書き/横書きの軸解釈）は**受入基準 4 項目**で R6.5 は存在しない。一方 `areka-P0-choice-render` は R2.4／R6.5 と design の縮退表を持つ。したがって Requirement 8.2 の主張は成立する。
@@ -235,3 +235,73 @@
 - **相互登記の相手はすでに準備できている**——`.kiro/specs/areka-P0-text-decoration-canon/brief.md:34`・`:47` が本仕様を「`\_l` 側の実装所有者」として名指ししている。本仕様側から指し返すだけでよい。
 - **`\c[line]` に所有者が居ないことは実測で確認した**（`.kiro/specs/` 直下の 21 仕様のうち `\c[line]` に言及するのは本仕様の brief と requirements のみで、他は完了仕様の調査記録と roadmap の履歴）。Requirement 7.3 の登記先は `areka-P0-ukadoc-survey-sakura-script`（実在確認済み）。
 - **並走仕様との衝突は見当たらない**。`areka-P0-sakura-bare-tag-lexer` は `areka-parsers` の `lexer.rs`／`decode.rs` を触るが、本仕様は `areka-emo-text` に閉じる（`decode.rs:212` の `"_l"` 腕は角括弧形なので bare 形の修正とは別の分岐）。
+
+---
+
+## 10. 設計フェーズの記録（2026-09-02・`/kiro-spec-design`）
+
+### 10.1 サマリ
+
+- **Discovery Scope**: Extension（既存システムの拡張・light discovery）。外部依存の追加なし・Web 調査なし。コードベースの実測（§2〜§5 の再確認）と正典（`requirements.md` 付録 A）だけで設計が閉じた。
+- **Key Findings**:
+  - `TextRegion::resolve` は既に `image_size` を受け取っている（`region.rs:203`）ので、`centerx`／`centery` の基準は `TextRegion` に原寸を保持するだけで配れる（呼び手 134 箇所は無改変）。
+  - `vertical_rl` の `block_pos` は列の**右端**（`layout.rs:619-621`）。原点を `region.start()`（`(right, top)`）に切り替えると `\_l[0,0]` が自動配置の 1 列目と厳密一致し、`\_l[@-1lh,0]` は自動列送り `block_pos += −pitch` と同じ値を与える。式に分岐は要らない。
+  - `structure.md` のテスト分離規約「最長 stem 優先」により、新設ファイルを `layout_cursor.rs` と名付けると既存 `layout_cursor_tests.rs` の所属が `layout` から `layout_cursor` へ変わって接続宣言が規約違反になる。新設ファイルは **`cursor_tag.rs`** とした（§10.3 DD-8）。
+  - 里々 Wiki の実例（ukadoc MCP 検索 `\_l`）が `@` 相対の実用形を示す——`\_l[@0,@3]…\_l[@0,@-3]`（記号だけを 3px 下げて戻す）と 2 段組メニューの `\_l[,@-70]`＋`\_l[160,]`。後者は連続する `\_l` が軸ごとに合成されることを前提にしており、現行の「後の `\_l` が保留を丸ごと上書き」（`layout.rs:470`）では Y が失われる。
+
+### 10.2 調査ログ
+
+#### 正典の版差（MCP スナップショット 2.8.80 と付録 A 2.8.83）
+- **Context**: 設計が依拠する正典文の確認。
+- **Sources**: ukadoc MCP `search_docs("\_l")`（`ukadoc:list_sakura_script:_5c_l_5bx_2cy_5d:1`）・`requirements.md` 付録 A。
+- **Findings**: スナップショットは「文字描画範囲左上」・`centerx`／`centery` なし・縦書き段落なし。付録 A（ライブ）は「文字描画開始点（`origin` の位置）」・`centerx`／`centery` あり・縦書き段落あり。`\c[line]`・`\f[align]` の文はスナップショットと付録 A で同文。
+- **Implications**: 設計は付録 A を正典とする。`doc/COMPAT_ARCHITECTURE.md` §8 の `\_l` 行にも版の注記を残す（既存行が既に 2.8.83 逐語を引いている）。
+
+#### `@` の基点と保留改行
+- **Context**: §8-3（要件側で「基点＝次の文字が置かれる位置」と決まり、保留改行の扱いは設計へ）。
+- **Findings**: 保留改行を無視して走査ローカルの位置を基点にすると `\n\_l[@0,@0]` が改行を取り消す。フラッシュと同じ順（保留改行 → 保留カーソル）で仮適用した「実効位置」を基点にすれば `\_l[@0,@0]` はどこでも無効果になり、連続する `@` は累算される。
+- **Implications**: design DD-3。走査ローカル状態は書き換えない（遅延モデルと末尾蒸発は不変）。
+
+#### ファイル名とテスト分離規約
+- **Context**: §8-8。
+- **Findings**: `structure.md` Unit Tests「最長 stem 優先」「前向きの衝突禁止」。`layout_cursor.rs` を作ると `layout_cursor_tests.rs`・`layout_cursor_*_tests.rs` はすべて `layout_cursor` の所属になり、配線のテスト（`LayoutEngine::layout` を通す）が意味論ファイルの配下へ移って `layout::test_support`（`pub(super)`）へ届かなくなる。
+- **Implications**: 意味論は `cursor_tag.rs`＋`cursor_tag_tests.rs`、配線のテストは `layout.rs` 配下（既存 `layout_cursor_tests.rs`＋新設 `layout_cursor_vertical_tests.rs`）。可視性の変更も複製も要らない。
+
+### 10.3 設計判断（§8 の残項目 2・4・5・6・7・8・9・12 への回答。正本は design.md「設計判断」表）
+
+| § | 決定 | 選ばなかった案と理由 |
+|---|---|---|
+| 8-2 | `TextRegion` に `image_size` を保持（DD-2） | `layout` の引数を増やす案＝呼出 10 箇所以上を触るうえ、原寸は領域の属性であって配置の入力ではない |
+| 8-3 | 基点＝実効位置・保留は軸ごとに合成（DD-3） | 保留改行を無視する案＝`\n\_l[@0,@0]` が改行を取り消す。上書き案＝里々 Wiki の 2 段組メニューが壊れる |
+| 8-4 | image 軸で解決してから写す（DD-4） | 先に軸を写す案＝正典が「座標軸はバルーン画像そのまま」と定めるため、意味論を image 軸で閉じる方が読みやすく、逆写像は 1 行 |
+| 8-5 | 専用分類 `CenterAxisMismatch`（DD-5） | `Unparsable` に畳む案＝書き手に「軸を取り違えた」と伝わらない。分類が 1 つ増えるだけで式は不変 |
+| 8-6 | `値 × 文字高さ / 100`（DD-6） | — |
+| 8-7 | 列挙型は残し 2 バリアント・範囲外と無効果は DEBUG（DD-7） | 列挙型を廃す案＝要件 5.3「分岐ごと」の鍵が無くなる。範囲外を warn にする案＝正典どおりの正常形を警告してしまう |
+| 8-8 | `cursor_tag.rs`＋`cursor_tag_tests.rs`・配線テストは `layout` 配下（DD-8） | `layout_cursor.rs`＝§10.2 の規約衝突。案 A（`layout.rs` に足す）＝2 役の同居が続く |
+| 8-9 | 拡張の口の確認と登記のみ（DD-9） | 由来の印を今付ける案＝`\c[line]` を実装しない（6.4）以上、消費者の無い field を足すことになる |
+| 8-12 | 着地時に更新（DD-10） | 着手前に直す案＝実装の差分と食い違う |
+
+### 10.4 統合（design-synthesis）の結果
+
+- **一般化**: 7 つの座標書式は「基点＋値×係数」の 1 式の特殊化。基点 3 種（原点／現在位置／画像中央）と係数 4 種（1／文字高さ／行送り／文字高さ÷100）の直積で全語彙が尽きる。書字方向は式に入らず、原点の位置（`TextRegion::start()`）と軸写像（既存の正準表）だけが回る。
+- **採用 vs 自作**: 既存資産で足りる——`parse_cursor_coord`（語彙）・`TextRegion::start()`（原点）・保留フラッシュ（実体化）・`CursorWarnGuard`（一回化）・`FixedMetrics`／`layout_test_support`（テスト足場）。新しい抽象は `CursorAxis`・`CursorBasis`・`resolve_cursor_axis` の 3 つだけ。
+- **簡素化**: 旧 `cursor_to_image_px` の非負ゲートと `Percent => None` を撤去し、4 分岐の縮退を 2 分岐へ。`draw.rs`・`visible_window`・パーサは非接触。
+
+### 10.5 リスクと緩和
+
+- **宣言 `origin` バルーンの横書きが動く**（2.9）——正典追随として要件で裁定済み。emo2 は未宣言（`emo2-kakukaku/descript.txt`）で不変。テスト V7 が 3 方向の宣言値着地を固定する。
+- **後戻り行とあふれ判定**（2.8）——式は変えない。テスト V8 が既存の式の返す値を固定し、将来の「意味のある窓」の議論は別仕様へ。
+- **連続 `\_l` の軸ごと合成が既存形の連続の結果を変える**——2.8.80 でも「省略＝移動しない」なので正典追随（テスト H2・9.6）。
+- **`centerx`／`centery` の大小文字**——正典沈黙。小文字完全一致のみ（COMPAT §8 の先例に揃える）。緩める必要が出たら語彙層の 1 分岐で済む。
+
+### 10.6 レビューゲート
+
+- 機械検査: 要件 ID 56 件すべてが design.md の Traceability に出現（初回は `10.1〜10.3` の範囲表記で 10.2 が検出されず → 3 行に分解して再検査で 0 件欠落）。境界 4 節・File Structure Plan は具体・孤児コンポーネントなし。
+- 判断検査: 要件の矛盾・曖昧は見つからず。修正 2 件（`warn_cursor_degrade` の誤記・H5 の warn 件数を鍵 `(actor, degrade)` と整合）。`cursor_tag.rs` の依存から `writing.rs` を外した（書字方向を知らない純関数）。
+- 結果: **通過**（修復 1 回）。
+
+### 10.7 参照
+
+- `requirements.md` 付録 A（SSP 2.8.83 逐語）・付録 B（疑義表）。
+- ukadoc MCP: `ukadoc:list_sakura_script:_5c_l_5bx_2cy_5d:1`（2.8.80 スナップショット）・`satori:選択肢#dc10653c`（2 段組メニュー）・`satori:絵文字（Unicode文字）を表示する#p15a4438`（`@` 相対の微調整）。
+- `.kiro/steering/structure.md` Unit Tests（テスト分離規約）・`doc/COMPAT_ARCHITECTURE.md` §8 `:147`／`:153`（上書き行の雛形）・`.kiro/specs/completed/areka-P0-balloon-vertical-canon/design.md` DD4。
