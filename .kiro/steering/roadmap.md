@@ -88,9 +88,9 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 | **W12**（M1 最終＋裁定枠） | **`emo2-conformance-e2e`**（M1 必須） | `/kiro-start areka-P0-emo2-conformance-e2e` | 全ユニット完了（W11 完走で充足）。着手時義務: ⑴ brief 全面再監査（棚卸⑫追記ブロックが実測正本＝`spawn.rs` アンカー :294/:254 等の大ドリフト・dlp 申し送り 9 点は全命中）⑵ ㉘(E) の実機判断 ⑶ #7（pasta 上流）は M1 完成を妨げない扱いの確認 ⑷ **`ReassertZOrder` 未消費の実機確認** ⑸ **DoD `cargo test --workspace` exit 0 を脅かす間欠赤 3 系統の隔離裁定**（B-2 `spine_e2e_test_s3_helper_liveness_detected.rs:175-185`・zsp §13.8 ①②＝`zorder-chain-residue` A-1/A-2）——e2e は除外/更新の裁定のみ行い根治は `zorder-chain-residue`。**分割候補（開発者裁定）**: 決定論 conformance spine（CI 常設）／実機一周＋M1 完成宣言 DoD の 2 spec——brief 自身の Boundary Candidates と一致。本 spec は「証明に徹する」（`crates/` 本番コード改変 0 が原則） |
 | **W12** 裁定枠 A | `cursor-tag-canon`（挙動バグ級・L・分割禁止裁定済み） | `/kiro-start areka-P0-cursor-tag-canon` | **現行 main の本物の非互換**＝縦書き `vertical_rl` で `\_l[0,0]` が 1 列目に着地しない（`layout.rs:453` 増加方向 対 `:309` 減少方向・`:620` 列右端＝構造で裏取り済み・縦書き `\_l` テスト 0 本）。上流 bvc 完了で前提充足。編集集合＝`areka-emo-text/src/{layout,state}.rs`＋兄弟テスト＋完了 spec `emo-text-layer` 縮退表＋COMPAT §8。**e2e／channels／toolkit と共有ファイル 0**（実測）。`draw.rs` には追記しない（残 20 行） |
 | **W12** 裁定枠 B | `property-query-channels`（依存ツリー最長＝channels→tree→catalog の先頭ゲート・XL・**分割推奨**） | `/kiro-start areka-P0-property-query-channels` | 分割案（brief 追記(88) ブロック）: ⑴ スクリプト経路 1〜4（sink 2 本＋lexer `%property[…]`＋`\![embed]` 対）／⑵ 非スクリプト経路 6＋host32 IPC（**ライブ実測が前提**）／⑶ sylphya SET 台帳 21→26＋件数檻（S・単独着地可）。W12 に載せるのは **⑴＋⑶**（⑵ は実測後）。編集集合＝`areka-parsers/sakura/{lexer,decode}.rs`・`areka-kanade`・`areka-sylphya/vocab/dotted.rs`・`areka/emo2_boot/{consumer_ledger,mod}.rs`・`areka-ghost/src/prop_sink.rs`（**`PropSetCueSink` が本番配線ごと実在＝`\![set,property]` sink の雛形**）。**⚠ 三重所有の裁定が着手前提**（下記 台帳）。e2e とは crate 同居（`areka-ghost`）だが src/ 対 tests/ で別居＝sink 追加が spine の sink 数を変える点のみ保存義務 |
-| **W12** 裁定枠 C | `ukadoc-survey-toolkit`（別セッション起票・追記(89)・調査道具＝新規 crate＋doc/ 台帳のみ） | （追記(89) 参照） | 既存 crate 非接触＝改変集合は新規 `crates/ukadoc-survey/`＋`doc/ukadoc-coverage/`＋`Cargo.lock` のみ（root `Cargo.toml` の members は `crates/*` glob＝行変更なし・**共有は `Cargo.lock` の機械マージのみ**・W12 の他 spec は Cargo.lock 非接触）。survey 3 本→coverage-roadmap は toolkit 完了後（W13〜W14）。M2 機能 spec は起票しない（材料作り） |
-| **W13**（裁定枠・W12 完走後） | `text-decoration-canon`（`\f` 族の先頭ゲート・XL・分割推奨＝基盤相／語彙相／descript 13 キー）∥ `currentghost-property-tree`（channels 後・二重所有裁定後）∥ `ukadoc-survey-{shiori,assets,script-property}` | `/kiro-start areka-P0-text-decoration-canon` 他 | decoration は **`draw.rs` 分割が着手前提**（980/1,000）・`balloon-canon-residue` 項目 9 と相互登記＝単独着地不可・cursor-tag と `layout.rs`/`state.rs` を共有するため **W12 の cursor-tag 完走後**。tree は channels と `dotted.rs`／`emo2_boot/mod.rs` を共有＝**同居不可・直列** |
-| **W14**（裁定枠） | `anchor-tag-canon`（decoration 後・lexer 修正済みなら L→M）∥ `choice-marker-styling`（S・decoration 後）∥ `property-catalog-lists`（島単位＝`system.{monitor,clock,cursor,os,…}` は今日でも実装可・`bpp` のみ実データなし）∥ `ukadoc-coverage-roadmap` | — | anchor と choice-marker は `decode.rs`／`viewbox_draw.rs` を共有する可能性＝design で所有分割（anchor＝`"_a"` 腕・choice＝`\f[cursor*]` は decoration の腕の内側）を確認してから同居 |
+| **W12** 裁定枠 C | `ukadoc-survey-toolkit`（別セッション起票・追記(89)・調査道具＝新規 crate＋doc/ 台帳のみ） | （追記(89) 参照） | 既存 crate 非接触＝改変集合は新規 `crates/ukadoc-survey/`＋`doc/ukadoc-coverage/`＋`Cargo.lock` のみ（root `Cargo.toml` の members は `crates/*` glob＝行変更なし・**共有は `Cargo.lock` の機械マージのみ**・W12 の他 spec は Cargo.lock 非接触）。**survey 4 本（`ukadoc-survey-{shiori,assets,sakura-script,property}`）は toolkit の要件確定後に同時開始（実装完了を待たない・開発者方針「調査段階は並行実施」）**＝W12 内で段差開始・共有は各自の `doc/ukadoc-coverage/ledger/<domain>.toml` のみ＝0。`ukadoc-coverage-roadmap` は survey 4 本＋e2e の後（W13）。M2 機能 spec は起票しない（材料作り） |
+| **W13**（裁定枠・W12 完走後） | `text-decoration-canon`（`\f` 族の先頭ゲート・XL・分割推奨＝基盤相／語彙相／descript 13 キー）∥ `currentghost-property-tree`（channels 後・二重所有裁定後）∥ `ukadoc-coverage-roadmap`（survey 4 本＋e2e 完走後） | `/kiro-start areka-P0-text-decoration-canon` 他 | decoration は **`draw.rs` 分割が着手前提**（980/1,000）・`balloon-canon-residue` 項目 9 と相互登記＝単独着地不可・cursor-tag と `layout.rs`/`state.rs` を共有するため **W12 の cursor-tag 完走後**。tree は channels と `dotted.rs`／`emo2_boot/mod.rs` を共有＝**同居不可・直列** |
+| **W14**（裁定枠） | `anchor-tag-canon`（decoration 後・lexer 修正済みなら L→M）∥ `choice-marker-styling`（S・decoration 後）∥ `property-catalog-lists`（島単位＝`system.{monitor,clock,cursor,os,…}` は今日でも実装可・`bpp` のみ実データなし） | — | anchor と choice-marker は `decode.rs`／`viewbox_draw.rs` を共有する可能性＝design で所有分割（anchor＝`"_a"` 腕・choice＝`\f[cursor*]` は decoration の腕の内側）を確認してから同居 |
 | **M1 完成後・単独** | `tick-gate-adoption` | — | 夜間/25 分/n≥3 の実測環境が前提・**開発者方針「長時間試行禁止」と正面衝突する走行時間要求**＝始める前に決着可能な A/B 設計を組むこと・e2e と並走不可（M1 状態の証明を汚す） |
 
 **干渉台帳（2026-09-02 棚卸⑫・W12 候補 4 本＋⓪の全ペア実測・旧 W6.95 台帳全文は history）**:
@@ -106,7 +106,7 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 
 ## 着手手順
 
-> **brief 全数完備体制**: M1 残ユニット 1 本（e2e）＋M2 ゲート **14 本**（棚卸⑫で `zorder-chain-residue` 合流・別セッション起票の ukadoc-survey 5 本は追記(89) 反映後に加算）＝全 15 本 brief 済み＝着手は該当 brief を読んで `/kiro-start <unit>` へ直行。新規課題の起票は `/kiro-discovery`（再入）で brief just-in-time 生成。`/kiro-spec-batch` は使わない（一括＝工場化）。ウェーブ跨ぎの合流判断は別セッションで一括（記憶 portfolio-convergence-decided-in-separate-session）。
+> **brief 全数完備体制**: M1 残ユニット 1 本（e2e）＋M2 ゲート **14 本**（棚卸⑫で `zorder-chain-residue` 合流）＋調査系 **6 本**（別セッション起票・追記(89) 反映後に実在）＝全 21 本 brief 済み＝着手は該当 brief を読んで `/kiro-start <unit>` へ直行。新規課題の起票は `/kiro-discovery`（再入）で brief just-in-time 生成。`/kiro-spec-batch` は使わない（一括＝工場化）。ウェーブ跨ぎの合流判断は別セッションで一括（記憶 portfolio-convergence-decided-in-separate-session）。
 
 ## 制約
 
@@ -118,7 +118,7 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 
 ## M2 以降
 
-**M1 完成後に、実物を見て組み直す。** 本ロードマップでは扱わない（pasta の native x64・`IShiori` in-proc 化、ベクトル描画・AI、owner-draw 右クリック system メニュー、互換面拡大＝Shift_JIS/SAORI/里々・YAYA 網羅/NAR 等はその時に）。組み直しの材料＝別セッション起票の `ukadoc-survey-*`→`ukadoc-coverage-roadmap`（追記(89)）。
+**M1 完成後に、実物を見て組み直す。** 本ロードマップでは扱わない（pasta の native x64・`IShiori` in-proc 化、ベクトル描画・AI、owner-draw 右クリック system メニュー、互換面拡大＝Shift_JIS/SAORI/里々・YAYA 網羅/NAR 等はその時に）。組み直しの材料＝別セッション起票の `ukadoc-survey-*` 5 本→`ukadoc-coverage-roadmap`（追記(89)）。
 
 **アプリ層の M2 予約（2026-07-05 ukadoc 裏付け・全て任意）**: SSTP ポート（9801）・FMO・DirectSSTP・Plugin/HEADLINE/SAORI・ネットワーク更新・ゴースト/バルーン選択 UI・多重ゴースト運用。
 **emo テキスト進化の予約**: ①回転テキストの実挙動 ②文字装飾（→ `text-decoration-canon` が具体着地先）。
@@ -131,7 +131,7 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 - カーソル: `cursor-tag-canon`（W12 裁定枠 A）。
 - プロパティ系 3 本: `property-query-channels`（W12 裁定枠 B・分割推奨）→ `currentghost-property-tree`（L・balloon.scope 19 は先行スライス可）→ `property-catalog-lists`（島単位）。＋ `zorder-property`（S・三重所有裁定後）。
 - 文字装飾系 3 本: `text-decoration-canon`（W13・分割推奨）→ `anchor-tag-canon`（lexer バグは ⓪ で前倒し可）＋ `choice-marker-styling`（S）。
-- 調査系 5 本（別セッション起票・追記(89)）: `ukadoc-survey-toolkit` → `ukadoc-survey-{shiori,assets,script-property}` → `ukadoc-coverage-roadmap`。
+- 調査系 **6 本**（別セッション起票・追記(89)・開発者追記で script-property を 2 分割）: `ukadoc-survey-toolkit` →（要件確定後・同時開始）`ukadoc-survey-{shiori,assets,sakura-script,property}` → `ukadoc-coverage-roadmap`（e2e 後）。
 
 **要件定義段階で深掘り（Fable）を推奨する spec**: `emo2-conformance-e2e`（DoD の定義・間欠赤の隔離裁定・分割裁定・14 項目×二層観測の設計）・`property-query-channels`（6 経路・輸送路のライブ実測・三重所有・分割）・`text-decoration-canon`（design 段階＝`draw.rs` 分割と per-run 属性の 3 層配管）。Opus で足りる: `cursor-tag-canon`（語彙は採取済み・符号の非互換は構造で裏取り済み）・`zorder-property`・`choice-marker-styling`・`surfaces-basepos`・residue 分割後の各片。
 
