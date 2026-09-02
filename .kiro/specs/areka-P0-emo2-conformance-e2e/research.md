@@ -222,6 +222,20 @@
 
 残る ①（一周テストの置き場と「1 本の走行」の厳密さ）・⑤（間欠的な赤 ⑵⑶ の扱い）・⑦（仕様の分割）は開発者の判断を要するカテゴリ C として討議に掛ける（結果は本節の後に追記する）。
 
+### 7.1 議題 1 の裁定（2026-09-02・開発者確認済み）
+
+**① 決定論一周テストの置き場＝選択肢 B（見た目まで組む家・`crates/areka/src/emo2_boot/` の兄弟テスト）で確定。R2.2「1 本の走行」は字義どおり維持する。**
+
+再評価で確かめた事実:
+
+- 走行時間の実測: B の家の既存 spine テスト 19 本（毎回ハーネス起動・実 emo2 資産・headless GPU World）は直列で **9.24 秒**（`cargo test -p areka --bin areka emo2_boot::spine -- --test-threads=1`・2026-09-02）。一周テスト 1 本の追加は 1 秒前後で、R12.6 の懸念にならない。
+- B は今日すでに門なしで常設（`spine.rs:641` 以下＝`make_world_with_gpu`・MTA COM＋WARP 可）。注入端は `GhostRuntime::kanade()`／`dispatcher()`（`crates/areka-ghost/src/runtime.rs:218`／`:223`）、交信記録は `non_status_calls`（`spine.rs:287`）、表示指令の取り出しは `drain_received`（`spine_display_tests.rs:35`）、台本の移動指令→実窓移動は `spine_move_cue_tests.rs`。製品コード改変 0 で組める（R2.9）。
+- 「本番クレートの `src/` にファイルが増える」は欠点ではなく規則: `areka` は bin のみ（`emo2_boot/mod.rs:29-34` の注記）で、内部到達テストは兄弟配置が唯一の形。
+- A（`areka-ghost/tests/`）は `areka` bin に依存できないため、将来も表示経路を組めない。凍結表は GET 専用（`snapshot.rs:43-48`）で、増設は実機採取が前提。A の唯一の強み＝実 pasta の実採取応答は B に持ち込めないが、「pasta が何を言うか」は実機層（R5）の責務であり、既存の A のテスト（起動挨拶の凍結）はそのまま残す＝失う被覆は無い。
+- 干渉の再実測（R12.3）: 本仕様が触るのは `emo2_boot/` の新規兄弟ファイル＋`spine.rs` のモジュール宣言 1 行。W12 併走の `cursor-tag-canon`（`areka-emo-text/src`）・調査系（新規 crate＋`consumer_ledger.rs` 等への doc コメント）・⓪ `sakura-bare-tag-lexer`（`lexer.rs`／`decode.rs`）と共有 0。ロードマップ干渉台帳の e2e 行（`roadmap.md:99`）は旧前提のままなので、R11.2 でロードマップを閉じるときに書き換える。
+
+派生: ②（凍結応答か台本か）は「台本」で事実上決まる。③（R2.4 の列）は B で観測できる列（表示指令＋時刻付きの演出）から設計が確定する。
+
 **① 決定論一周テストをどの家に置くか**（選択肢 A／B／C）
 - A（実 DLL の家）は交信の忠実さを解き、見た目を解かない。凍結表の追加＝`crates/` 改変が発生する。
 - B（見た目まで組む家）は一周の段の広さを解き、本番クレートの `src/` にファイルが増える。
