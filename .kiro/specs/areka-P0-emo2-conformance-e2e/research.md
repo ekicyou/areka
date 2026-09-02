@@ -291,3 +291,137 @@
 
 - 本文書は決定を含まない。①〜⑨ を要件討議に掛け、確定したものを設計（`/kiro-design areka-P0-emo2-conformance-e2e`）へ渡す。
 - 設計着手時には brief が課している正典の再確認（`brief.md:115-119`）を行うこと（6-⑥）。
+
+---
+
+# 設計フェーズの調査（2026-09-02・`/kiro-design` 実施分）
+
+> 本節より下は設計フェーズで追記した。上の §1〜§8 は要件フェーズの記録であり、改変していない。
+> 記載はすべて実ファイルを読んで `file:line` で確かめたものだけである。**§9.1 は §2.3 の記述を 1 点訂正する。**
+
+## 9. 正典の再確認（ukadoc・brief `:115-119` の設計着手時義務・§6-⑥ の解決）
+
+ukadoc の MCP 検索で総覧を引き直した。**要件・設計の内容を変えるものだけ**を挙げる。出典はすべて `https://ssp.shillest.net/ukadoc/manual/` 配下である。
+
+### 9.1 `On` 始まりの選択肢 ID は正典が「直接発火する」と明記している（§2.3 の訂正）
+
+§2.3 は「正典は `On` 始まり ID の直接発火について沈黙している」と書いたが、**これは誤りである**。正典には専用の項目がある。
+
+- doc id `ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cOnID_2cr0_2cr1_2c..._5d:1`
+  URL `https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html#_5cq_5b_30bf_30a4_30c8_30eb_2cOnID_2cr0_2cr1_2c..._5d:1`
+  題は `\q[タイトル,OnID,r0,r1,...]`。本文は「ID が "On" で始まっている場合は、選択後、SHIORI イベント OnID が開始される」と書く。引数 `r0,r1,...` は **Reference0 以降**へ入る（`OnChoiceSelectEx` のように Ref0 がラベルになる形ではない）。
+- 対比項目も実在する——`\q[タイトル,ID,r2,r3...]` は `OnChoiceSelectEx` が開始される（doc id `ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cID_2cr2_2cr3..._5d:1`）。`\__q[ID,...]`（下線 2 本）も「ID 仕様は `On` や `script:` の特別扱いまで含めて `\q` と同じ」と書く（doc id `ukadoc:list_sakura_script:_5c__q_5bID_2c..._5d:1`）。なお `\_q`（下線 1 本）はクイックセクションであって選択肢とは無関係である（doc id `ukadoc:list_sakura_script:_5c_q:1`）。
+- 差込側の総覧にも「`\q` 等に指定された任意名イベント」という見出しが実在する（doc id `ukadoc:list_plugin_event:OnChoiceSelect_28Ex_29_2fOnAnchorSelect_28Ex_29_2f_5cq_7b49_306b_6307_5b9a_3055_308c_305f_4efb_610f_540d_30a4_30d9_30f3_:1`）。
+
+**影響**: R3.5 と R11.1 の根拠が強くなる。実装（`crates/areka-kanade/src/schedule/choice.rs:57-65`）は正典どおりであり、`crates/areka-kanade/src/schedule/events.rs:28` の送出表も正典どおり「Ref0 以降＝付随参照列のみ」である。**訂正対象は `doc/emo2-conformance-scope.md:24` ただ 1 行**という結論は変わらないが、訂正文の根拠が「実装の裁定」から「正典の逐語」へ格上げされる。実装側注記（`choice.rs:22-24`）が書く「正典は先行段の有無に沈黙」は**先行段（`OnChoiceSelectEx` を先に出すか）についての沈黙**であって、直接発火そのものについての沈黙ではない——この読み分けを設計に書く。
+
+### 9.2 `Status` ヘッダは 9 種ではなく **10 種**（brief `:118` の数が古い）
+
+- doc id `ukadoc:spec_shiori3:Status_20_5bSSP_62e1_5f35_5d:1`
+  URL `https://ssp.shillest.net/ukadoc/manual/spec_shiori3.html#Status_20_5bSSP_62e1_5f35_5d:1`
+  題は「Status [SSP拡張]」。「複数ある場合はカンマでつなげたもの」。
+- 値は `talking` / `choosing` / `minimizing` / `induction` / `passive` / `timecritical` / `nouserbreak` / `online` / `opening(種類)` / `balloon(ID群)` の **10 種**。素の 8 種＋引数付き 2 種である。
+- **実装は既に 10 種を第一級で持っている**（`crates/areka-kanade/src/status.rs:19-38` の `ExecutionState` が正典順で 10 variant・同 `:3` の doc も「全10状態」と書く）。M1 で実導出するのは `Talking`（`:168`）と `Choosing`（`:172`）の 2 種で、残 8 種は非アクティブへ縮退する（`:175-182`）。
+- **食い違いは brief `:118` の「9種」という数だけ**である。`doc/emo2-conformance-scope.md` には Status の種類数の記載が無い（`:20-26` はイベント一覧であり Status ヘッダの節を持たない）ため、正本文書の訂正対象は増えない。適合検証項目表の側に「正典 10 種・M1 実導出 2 種・残 8 種は非アクティブ」と書けば足りる。
+
+### 9.3 起動系列の順序は正典が規定していない
+
+- 各イベントのページは「起動時に発生」「[NOTIFY]」としか書かず、**送出順を規定する ukadoc 文書は見つからなかった**（`ukadoc:memo_shiorievent` は自ら「きちんとした仕様書ではない」と断っている）。
+- `version` は SHIORI リソースであって起動イベントではない（doc id `ukadoc:list_shiori_resource:version:1`）。`basewareversion` は [NOTIFY]（doc id `ukadoc:list_shiori_event:basewareversion:1`・Ref0=バージョン番号／Ref1=本体の識別／Ref2=詳細数値）。
+- **影響**: R3.1 の「逐語の順序で固定する」は**正典の写しではなく areka の実装契約の固定**である（`OnInitialize`→`username`→`OnFirstBoot`→`OnBoot`→`basewareversion`）。実装側の逐語は `crates/areka/src/emo2_boot/spine_boot_smoke_tests.rs:50-60` に既に在る。設計はこの出所（正典でなく実装契約）を明記する。
+- `OnFirstBoot` は「204 が返された場合、続けて `OnBoot` が発生」（doc id `ukadoc:list_shiori_event:OnFirstBoot:1`）。標準台本が `OnFirstBoot` に `Ok(None)`（204）を返して `OnBoot` へ続くのは正典どおりである（`spine.rs:672-673`）。
+- `OnClose` の正典 Reference は Ref0=終了理由・Ref1/Ref2=スコープ番号（doc id `ukadoc:list_shiori_event:OnClose:1`）。**areka は Ref0 のみを送る**（`events.rs:197-206`・同 `:199` が「Ref1/2 は単一スコープの M1 では省略する」と明記）。R11.5（判定に用いる語を実際に出力される語と一致させる）に従い、期待列は実装どおり 1 参照で書く。
+
+### 9.4 マウス系の Reference 配置は実装と正典が一致
+
+- `OnMouseMove`（doc id `ukadoc:list_shiori_event:OnMouseMove:1`）: Ref0=x・Ref1=y・Ref2=ホイール回転量・**Ref3=スコープ（本体 0／相方 1）**・**Ref4=当たり判定の識別子**・Ref5=常に 0・Ref6=デバイス種。
+- `OnMouseDoubleClick`（doc id `ukadoc:list_shiori_event:OnMouseDoubleClick:1`）: Ref2=常に 0・Ref5=左 0／右 1、他は同じ。
+- 実装は逐語で一致する（`crates/areka-kanade/src/schedule/events.rs:247-267`／`:285-310`）。適合対象の辞書も同じ読み方をする（`crates/pilot/examples/shiori-host-32/fixtures/emo2/ghost/master/dic/touch.pasta:14-15` が `var.r3`＝話者・`var.r4`＝領域）。**R3.3 の「当たり領域と話者が付随参照に載る」は Ref4／Ref3 として確定する。**
+
+### 9.5 更新系とバルーン変更が「任意」である根拠は**発火契機の側からの導出**である
+
+- 実在するのは 4 本ではない: `OnUpdateBegin` / `OnUpdateReady` / `OnUpdateComplete` / `OnUpdateFailure` / `OnUpdateCheckComplete` / `OnUpdateCheckFailure` / `OnUpdateOtherBegin` / `OnUpdateOtherComplete` / `OnUpdateOtherFailure` / `OnUpdateResult` / `OnUpdateResultEx` / `OnUpdateResultExplorer`（いずれも `list_shiori_event.html` の同名アンカー）。
+- `OnBalloonChange`（doc id `ukadoc:list_shiori_event:OnBalloonChange:1`）の契機は「他のバルーンから切り替わった際」。さくらスクリプト側にも `\![change,balloon,バルーン名]` の項に「変更後 SHIORI イベント OnBalloonChange が通知される」とある（doc id `ukadoc:list_sakura_script:_5c_21_5bchange_2cballoon_2c_30d0_30eb_30fc_30f3_540d_5d:1`）。
+- **「ベースウェア実装として任意である」と明言した文は正典に見つからなかった。** 得られるのは契機の側からの導出のみ——更新系はすべて「ネットワーク更新」を契機とし、`OnBalloonChange` は「バルーンの切替」を契機とするので、その機能を持たないベースウェアでは契機自体が発生しない。**適合検証項目表と正本文書には「正典の明示的な任意宣言ではなく、契機からの導出である」と書く**（R4.6・R11.5）。
+- 適合対象の辞書は `OnUpdateBegin` / `OnUpdateReady` / `OnUpdateComplete`（2 箇所）/ `OnUpdateFailure` / `OnBalloonChange` の受け口を持つ（`dic/update.pasta`・`dic/event.pasta`）。**受け口が在るのに送らない**のが M1 の縮退であり、項目 14 が確かめるのはこの縮退で破綻しないことである。
+
+## 10. §6（設計フェーズへ送った 6 件）の解決
+
+| # | 問い | 解決 | 根拠 |
+|---|---|---|---|
+| 1 | 凍結表を増やす場合の採取可否 | **消滅**（議題 1 裁定＝家 B・台本化した応答。凍結表に触れない） | §7.1 |
+| 2 | 自発会話の注入形 | **`KanadeMsg::Tick { now }` を `GhostRuntime::kanade()` へ直接投函する**。dispatcher への Tick とは別チャンネルであり、既存 spine は dispatcher へしか投げていない | `crates/areka-kanade/src/msg.rs:123`・`crates/areka-ghost/src/runtime.rs:219`（`kanade()`）／`:224`（`dispatcher()`）・`crates/areka/src/emo2_boot/spine.rs:857`（現行は dispatcher のみ）・`crates/areka-ghost/src/dispatcher.rs:126`→`on_tick` は `SakuraMsg::Tick` を中継するだけ（同 `:344`）・`spine.rs:666` が「OnSecondChange は kanade へ Tick を送らないため不要」と明記 |
+| 3 | 走行時間の実測 | **19 本 9.24 秒**（`cargo test -p areka --bin areka emo2_boot::spine -- --test-threads=1`・2026-09-02）。一周 1 本の追加は 1 秒前後 | §7.1 |
+| 4 | ホバー反転の実機観測条件 | **本走行では点けない**。点ける場合は**別走行として分ける**（本番既定と条件が変わるため） | `crates/areka/src/emo2_boot/hover_inject.rs:29`（`AREKA_CHOICE_HOVER_INJECT`）・同 `:184`（`OnceLock` で処理系に 1 度だけ焼き付く＝走行中の切替不可） |
+| 5 | 隔離が失う被覆の見積り | 下表 §10.1 | 実測 |
+| 6 | 正典の再確認 | §9 | ukadoc |
+
+### 10.1 隔離で失う被覆（R9.4）
+
+| 対象 | 実体 | 失う被覆 |
+|---|---|---|
+| `crates/wintf/src/ecs/window/zorder_pair_maintain_always_on_top_tests.rs:370-444`（`pair_fix_commands_keep_a_pair_inside_the_band_it_already_shares`・`#[test]` は `:369`） | 実の最上位窓 4 枚を作り、3 つの挿入位置指令を実 `SetWindowPos` で流す。`:411-414` は対照①（印の読み取りが常に真を返していないこと）、`:416-424` は対照②（帯の内側の窓の直前へ挿すと OS が帯へ引き込むこと） | 常設走行が「3 つの挿入位置はいずれも帯の所属を変えない」ことを**実 OS に対して**主張しなくなる。対照 2 本も同時に止まるため、残る単体判定は反証不能になる |
+| 同 `:741-794`（`the_top_of_normal_band_fix_keeps_a_real_owned_pair_adjacent_and_out_of_the_band`・`#[test]` は `:740`） | 実の所有リンク（`set_window_owner`）を張った実窓 2 枚に `TopOfNormalBand` を適用し、`:767` で「バルーンがキャラのすぐ手前」を測る。`:775-788` は所有リンク無しの対照（`assert_ne!`） | 実の所有リンクが実の持ち上げ後も隣接を保つことを測る**唯一の**テストが既定で走らなくなる。隣接が「所有リンクのおかげ」か「指令の副作用」かを分ける対照も止まる |
+| `crates/wintf/src/runtime/tick_bridge.rs:346-362`（`vblank_notifies_listener_then_joins_on_drop`） | `:353-354` で 500ms の壁時計期限を置き `:355-358` で通知の到達を主張する。`:360-361` の `drop` は停止→join を兼ね、終わらなければハングして落ちる | 実 DWM の垂直同期通知が待機側へ届くことと、`wintf-vsync` スレッドが清く畳まれることの証跡が既定で止まる。隣の `vsync_thread_registers_itself_with_the_vblank_role`（`#[test]` `:325`）は登録・命名しか見ないので代替にならない |
+
+いずれも根治の引受先は `.kiro/specs/areka-P0-zorder-chain-residue/brief.md` の **A-1**（`:15`・`zorder_pair_maintain_always_on_top_tests.rs:767`／`:411` を名指し）と **A-2**（`:16`・`tick_bridge.rs:355` を名指し）である。同 brief `:34` は「e2e が先に踏んだ場合は e2e が隔離裁定を行い根治は本 spec」という分担を明記している。
+
+## 11. 設計判断（決定と、採らなかった案）
+
+### 決定 A: 一周テストは `SpineHarness` の兄弟テストファイルとして 3 本に分ける
+
+- **文脈**: R2.2（1 本の走行）・R2.11（1 ファイルの分量規律）・R12.6（常設テストの実行時間）。
+- **採った形**: 走行そのものは `#[test]` 1 本。台本・期待列・駆動ヘルパを主題ごとに別ファイルへ置き、`spine.rs` 末尾の接続宣言（`spine.rs:907-930` と同じ形）で繋ぐ。
+- **根拠**: 上限は 1,000 行（`crates/log-capture-kit/tests/workspace_scan/mod.rs:38`）で、超過は例外表（`crates/log-capture-kit/tests/file_length_guard_test.rs:61`・件数の逐語 `:109`）への追記を強いる。例外表は「誰も触らない」と編成側で決まっている（`.kiro/steering/roadmap.md:105`）。判定は `f.lines > LINE_LIMIT` の厳密比較（`workspace_scan/mod.rs:139-142`）ゆえ 1,000 行ちょうどは緑。
+- **採らなかった案**: 1 ファイルに全部書く（期待列が長く 1,000 行を超える見込み）。
+
+### 決定 B: 自発会話は kanade へ直接 Tick を投函し、注入時刻には段ごとの頭打ちを置く
+
+- **文脈**: R3.2・R2.1・R2.10。
+- **採った形**: `ghost.kanade().send(KanadeMsg::Tick { now })`。台本には `OnSecondChange` の GET／NOTIFY 応答を積む（`spine.rs:141`／`:154` のビルダー）。段ごとに注入時刻の上限を決め、上限に達したら以後は注入せず観測だけを待つ。
+- **根拠**: `spine.rs:302-331` の注記が、注入する時刻が観測を追い越すと「待っている条件そのものが破壊されて永久に不成立になる」実測（並行実行で約 2%・期限を 30 秒へ延ばしても 50 回中 3 回失敗）を記録し、頭打ちを置くことを求めている。
+- **採らなかった案**: 期限だけを延ばす（同注記が「期限では直らない」と実測で否定している）。
+
+### 決定 C: R2.4 の「表示指令の列（時刻と指令）」は〈段・指令〉の列と、採取時刻が段の宣言区間に入ることの 2 段で実現する
+
+- **文脈**: R2.4・§7.0-③。
+- **確かめた事実**: `PresentCommand` は時刻を持たない（`crates/areka-emo-present/src/command.rs:39-73` に時刻フィールドが無い）。時刻を持つのは `dola::cue::TalkCue`（`crates/dola/src/cue/command.rs:316-329`・`at: f64` は `:318`）だが、areka 側の 4 つの受け口（`spine.rs:799-804`）はいずれも cue を記録しない。`TalkClock` は cue の `at` を観測するが単一の最大値しか持たない（`crates/areka/src/emo2_boot/talk_clock.rs:23`・`:41`・`:63`）。
+- **採った形**: 記録の単位を〈段名・指令〉とし列の完全一致で判定する。加えて各指令について「採取した時点の注入時刻が当該段の宣言区間に入る」ことを不変条件として判定する。
+- **採らなかった案 1**: cue を記録する受け口を 5 本目として足す。`spine.rs:799-804` の受け口列・`SpineHarness` の構造（`:617-639`）・`shutdown_bounded` の分解（`:872-881`）・`spine_talk_close_tests.rs:312-321` の分解を同時に変えることになり、編集集合が既存テストへ広がる。さらに本番の受け口列への追加は併走する `property-query-channels` 側の保存義務の対象であり（`.kiro/steering/roadmap.md:100`）、受け口の本数を固定すると併走側に更新義務を発生させる。
+- **採らなかった案 2**: 台本に待ちを入れて指令ごとの最小発火時刻を判定する。決定 B の根拠と同じ壊れ方（注入時刻が観測を追い越す）を新たに作る。
+
+### 決定 D: 進行状態のヘッダは、記録を**追補**して観測する（既存の記録形は変えない）
+
+- **文脈**: R3.8・R12.1・R12.5。
+- **確かめた事実**: 受け口は進行状態を受け取っているが捨てている——`ScriptedShioriBackend::get`／`notify` の第 3 引数は `_status: Option<&str>`（`spine.rs:220`／`:241`）で、記録型 `RecordedCall`（`spine.rs:109-118`）は id と参照列しか持たない。`areka-ghost` 側の同型（`crates/areka-ghost/tests/ghost/spine_e2e_test.rs:73-82`）も同じである。進行状態を運ぶログ行は存在しない（`crates/areka-kanade/src/shiori/real.rs:126-155` は wire 値を組み立てて受け口へ渡すだけ）。
+- **部分的には既に観測できる**: 会話中は `OnSecondChange` が NOTIFY・Ref3=`"0"` になり（`crates/areka-kanade/src/schedule/events.rs:171-194`）、これは参照列として記録されている。**しかし選択待ち（`choosing`）は Ref3 では会話中と区別できない**——選択待ち中も会話の枠は占有されたままで `talk_active` と `choice_active` が同時に真になる（`crates/areka-kanade/src/status.rs:211-216`・複合値 `talking,choosing`）。
+- **採った形**: `ScriptedShioriBackend` に**記録の第 2 系統**（呼出 id と組み立て済み進行状態の対の列）を追加し、`ScriptedShioriHandle` に取り出し口を 1 本足す。既存の `RecordedCall`・`non_status_calls()`（`spine.rs:287`）は**一字も変えない**ため、既存の兄弟テスト 8 本の照合はすべて素通しになる。
+- **R12.1 との関係（記録して縮退させる・R12.5）**: 要件は編集集合を「兄弟テストファイル＋`spine.rs` のモジュール宣言 1 行」と書いている。`spine.rs` は編集集合の中の**ファイル**であり、本決定はその中の分量が「宣言 1 行」から「宣言 1 行＋記録の追補 1 か所」へ増えるという**具体化**である。`spine.rs` は丸ごと `#[cfg(test)]`（`crates/areka/src/emo2_boot/mod.rs:33-34`）ゆえ本番コードの改変には当たらない（R8.1・`roadmap.md:88`）。挙動が変わらないことは「追加した経路を読む既存の主張が 1 つも無い」ことで示す。
+- **採らなかった案**: 一周テスト専用の受け口を自前で組む（`boot_with` は `ScriptedShioriBackend` を具体型で受ける＝`spine.rs:681` ため、自前の受け口を渡すには起動手順 130 行の複製が要る。R2.6「新しいテスト機構を発明しない」に反する）。
+
+### 決定 E: 終了は**通常の握手**で駆動し、後片付けだけ既存の畳み方を使う
+
+- **文脈**: R2.2（終了握手を一周に含む）・R3.9（終了挨拶 → 終了指示 → 解放の順序・解放はちょうど 1 度）。
+- **確かめた事実**: 既存 spine の終了は `GhostRuntime::shutdown` 経由の強制終了であり、`OnClose` は片道の NOTIFY になる（`spine.rs:675`・`spine_talk_close_tests.rs:286-292`）。通常の握手（`OnClose` GET → 終了挨拶 → `\-` → 解放）は `KanadeMsg::CloseRequest { reason }`（`crates/areka-kanade/src/msg.rs:127`）で始まり、`ClosePending` で応答スクリプトを受けて `CloseTalkWait` へ進む（`crates/areka-kanade/src/schedule/close.rs:57-72`）。終了後は `Stopped` へ落ち、kanade のアクターは受信ループを抜ける（`crates/areka-kanade/src/schedule/mod.rs:629`・`crates/areka-kanade/src/actor.rs:106`）。
+- **採った形**: 一周の最終段で `ghost.kanade()` へ `CloseRequest{User}` を投函し、台本は `OnClose` の **GET** 応答に終了挨拶＋`\-` を積む。走行後の後片付けは既存の `shutdown_bounded`（`spine.rs:871`）をそのまま使う——同関数は終了指示の結果を捨てる（`:885`）ので、既に止まっている kanade への強制終了が失敗しても畳み方は成立する。
+- **判定**: 解放がちょうど 1 度であることは、記録の全体から解放の件数を数えて 1 と照合する。台本の解放応答は 1 度きり消費（`spine.rs:163`・`:263`）ゆえ 2 度目が起きれば受け口が落ちる。
+- **採らなかった案**: 強制終了のままにする（終了挨拶が出ないので一周の最終段が成立しない）。
+
+### 決定 F: 子プロセスへの受け渡し（R5.8）は**実 SHIORI が応答したこと**で観測する
+
+- **文脈**: R5.8・§7.0-⑥・R12.1（実走テストの改変は編集集合の外）。
+- **確かめた事実**: 受け渡しは引数 3 本（`crates/shiori-host32-host/src/process_host.rs:243-245`）・同じ 3 値の環境変数（`:247-249`・名前は `:36` `HOST32_PARENT_HWND`／`:42` `HOST32_LOAD_DIR`／`:48` `HOST32_SHIORI_NAME`）・作業ディレクトリ（`:251`＝読み込み元）を**同時に**渡す。**成功経路にログ行は 1 つも無い**（`process_host.rs` に `tracing::` の呼出が無い）。失敗は `crates/areka-ghost/src/shiori_wiring.rs:39-86` が文字列で返し、`crates/areka-kanade/src/shiori/real.rs:275-280` の `event=connect_failed` として 1 か所に出る。正規の解放完了は同 `:204-208` の `event=unload_clean`。
+- **採った形**: 「1 度通った」の意味を**3 経路の同時成立**と定める（3 つのどれが欠けても読み込みが成立しないため、経路を選り分ける必要がない）。記録は ⑴ `connect_failed` が 0 行 ⑵ 実 SHIORI 由来の起動挨拶が画面に出たこと（目視） ⑶ `unload_clean` が 1 行、の 3 点を残す。
+- **採らなかった案**: 実走テストが探す語を 1 つ増やす（`crates/areka/tests/emo2_real_run.rs:208-242`）。当該ファイルは編集集合の外であり、R12.1 の事前登記に無い。
+
+### 決定 G: 実機記録は「先に宣言する」形と「定型の合否ブロック」を合成する
+
+- **文脈**: R5.6・R6.1・R6.7・§7.0-⑧。
+- **採った形**: 骨格は `.kiro/specs/completed/areka-P0-collision-dpi-hittest/acceptance-record.md`（証跡の分類を先に置く §0＝`:46-84`・結果を見る前に狙いを宣言する規則＝`:32-38`）。読み分けと合否は `.kiro/specs/completed/areka-P0-dpi-transition-atomicity/signoff-procedure.md` の §6.5（3 問を上から当てる 4 行の表＝`:426-465`）と §6.6（7 行の合否ブロック＝`:467-481`）を**そのまま引く**。走行の同定欄は同手順書 §7（`:487-509`）の項目表を骨格にする。
+- **根拠**: R6.1 が「独自の突合規約を作らない」と課している。上記 2 つは完成品であり、合成で要件を満たす。
+
+### 決定 H: 完成判定の「テスト全通過」は**移動後の再実行**を正とする
+
+- **文脈**: R10.1・R10.3・§2.7-4／-5。
+- **確かめた事実**: 完了手続きは着手時に 1 度（`.claude/skills/kiro-complete/SKILL.md:119-123`・直近実行があれば省略可）、アーカイブ移動の後にもう 1 度（同 `:290-301`・**省略不可**・`:299` が明記）テストを回す。許諾の検査は設定ファイルがある場合のみ走る（同 `:125-138`）。**本リポジトリには `deny.toml`・`about.toml`・`about.hbs` がいずれも実在する**（リポジトリ直下で実測・2026-09-02）ため、R10.2 の「設定不在により省略」分岐は**発生しない**＝許諾の検査は実際に走る。
+- **採った形**: 完成判定の ⑴ は**移動後の再実行が成功で終わったこと**を正の証跡とする（着手時の実行は前置き）。32bit の橋渡し実行体の用意は ⑴ の前提として手順に明記する（`crates/areka/tests/emo2_real_run.rs:34-42` が唯一の記載箇所であり、完了手続きの検査項目には無い）。
