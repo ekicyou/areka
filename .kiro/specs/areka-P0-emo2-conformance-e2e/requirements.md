@@ -192,12 +192,12 @@ brief 本文の調査日は 2026-07-16 であり、着手時義務として全�
 
 1. The 本仕様 shall 既知の 3 系統について、隔離するか更新するかの裁定を行い、選んだ理由を記録する。
 2. The 本仕様 shall 「記録が非空になるのを待つだけで、直後の呼出数を待たずに数える」形を、待ちを伴う形へ更新する（同じ確認を行う既存の書き方に揃える）。
-3. Where 実窓の重なり順を他プロセスに割り込まれて赤くなる形、および壁時計の期限が負荷で飢える形について, the 本仕様 shall 明示実行の門で隔離するか、そのまま残すかを裁定する。
+3. The 本仕様 shall 実窓の重なり順を他プロセスに割り込まれて赤くなる形（`crates/wintf/src/ecs/window/zorder_pair_maintain_always_on_top_tests.rs`）と、画面同期の通知の壁時計期限が負荷で飢える形（`crates/wintf/src/runtime/tick_bridge.rs:353-356`）を、既存の書き方（理由付きの `#[ignore]`＋環境変数）で明示実行の門へ隔離する（議題 3 裁定・2026-09-02）。The 本仕様 shall `emo2_boot` 側の同形 2 本（`spine_boot_smoke_tests.rs:46-49`・`spine_talk_close_tests.rs:306-309`）は「条件が揃うまで待つ」形で既に書かれ期限は打ち切りの上限にすぎないため、触らず残す。
 4. If 隔離を選んだ場合, the 記録 shall 失われる被覆と、根治の引受先（台帳仕様の該当項目）を明記する。
 5. The 本仕様 shall 根治を行わない。
-6. The 本仕様 shall 隔離の妥当性の確認を、**事前に上限を決めた回数**の走行で行い、決着の付かない長時間の反復を行わない。
+6. The 本仕様 shall 隔離の妥当性の確認を、**隔離前・隔離後に各 3 回**（上限・事前確定）の走行で行い、決着の付かない長時間の反復を行わない。
 7. The 本仕様 shall 「門を持たないこと」を自ら要件として固定しているテストに門を付けない。
-8. Where 隔離裁定で触れるファイルが編集集合の外にある場合, the 本仕様 shall その範囲を記録し、併走する仕様と衝突しないことを確かめる。
+8. The 本仕様 shall 隔離裁定で編集集合の外に触れる範囲を、`crates/wintf/src/ecs/window/zorder_pair_maintain_always_on_top_tests.rs` と `crates/wintf/src/runtime/tick_bridge.rs` の 2 ファイル（門の付与のみ・判定ロジック非改変）に限り、W12 で併走する仕様が `wintf` に触れないことを着手前に確かめて記録する。
 
 ### Requirement 10: 完成判定の一本化と宣言
 
@@ -232,7 +232,7 @@ brief 本文の調査日は 2026-07-16 であり、着手時義務として全�
 
 #### Acceptance Criteria
 
-1. The 本仕様 shall 編集集合を、新規の一周テスト（`crates/areka/src/emo2_boot/` の兄弟テストファイル＋`spine.rs` のモジュール宣言 1 行）・実物定義の文書・本仕様の記録に限る。Where 隔離裁定で集合の外に触れる場合, the 本仕様 shall その範囲を事前に記録する。
+1. The 本仕様 shall 編集集合を、新規の一周テスト（`crates/areka/src/emo2_boot/` の兄弟テストファイル＋`spine.rs` のモジュール宣言 1 行）・実物定義の文書・本仕様の記録に限る。The 本仕様 shall 例外として Requirement 9.2（`spine_e2e_test_s3_helper_liveness_detected.rs` の待ちの形への更新）と Requirement 9.8（`wintf` の 2 ファイルへの門の付与）のみを事前登記済みの範囲として認める。
 2. The 本仕様 shall 既存の決定論テストの期待値を、本仕様の都合で緩めない。
 3. If 併走する仕様と共有するファイルが生じた場合, the 本仕様 shall 着手前に相互確認する。
 4. The 本仕様 shall 決定論層（Requirement 2・3）と実機層・完成判定（Requirement 5〜11）を独立した節に保ち、実装段階の相 1（決定論一周テスト）と相 2（実機一周走行と完成判定）の境界をこの節構造で表す（分割はしない＝議題 2 裁定）。
