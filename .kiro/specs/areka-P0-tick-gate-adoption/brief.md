@@ -57,3 +57,8 @@ dlp が建てた自走ループ（perf-loop）を**測定側 3 是正を先に�
 - **着手ゲート**: M1 完成（e2e 完走）後、または開発者の明示裁定による前倒し。**夜間または 25 分以上の実機走行を n≥3 回せる環境**が実測の前提（日中 7 分では分解能不足が dlp で実証済み）。
 - 実機判定は areka 実ゴースト（emo2）＋実 DPI・有界 auto-exit＋ログ grep（記憶 areka-real-machine-signoff-bounded-auto-exit）。
 - 1 ファイル 1,000 行の目安・兄弟テスト配置・ログ捕捉は `log-capture-kit`／一時パスは `temp-path-kit`（cage 着地形）に従う。
+
+---
+
+> **📌 2026-09-02 棚卸⑫**——アンカー **ドリフト 0**（`tick_gate.rs`:154/:53/:58・`tick_gate_config.rs:25`・`tools/perf/perf-loop.ps1`・agents 4 本・dlp `results/` 全実在）。ウェーブ番号整数化＝本文の W6.9→**W10**・W6.95→**W11**（roadmap 冒頭対応表）。編成＝**M1 完成後・単独**（e2e と並走不可）。⚠ **開発者方針「長時間試行禁止」**（zsp の 4,440 走行の教訓・記憶 areka-p0-scope-zorder-pinning）と本 spec の走行時間要求（夜間/25 分/n≥3）が正面衝突する——要件段階で「始める前に決着可能な A/B 設計」を先に組むこと。分割シーム＝測定側是正 ⇄ 製品側変更（brief 記載どおり）。zsp 残件 B-3（生産者名簿の穴・`tick_gate_tests.rs`／`tick_gate_config_producers_tests.rs`）は `zorder-chain-residue` が持つ（本 spec は名簿を読む側）。
+

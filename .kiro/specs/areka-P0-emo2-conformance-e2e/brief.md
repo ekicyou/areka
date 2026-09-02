@@ -206,3 +206,15 @@ M1 ゴール「emo2 が**そのまま** boot→talk→touch→menu→close ま�
 **B-3 子プロセスへの受け渡しの実走未検証**
 
 タスク 10.3 が `areka-ghost` の一時パス 13 ファイルを共通窓口へ寄せた際、タスク文が名指しした「宛先が変わっても子プロセスへの受け渡し（環境変数・引数）が壊れていないこと」は**静的検証止まり**である。実プロセスを起こす 2 本（`tests/ghost/real_pasta_test.rs`・`snapshot_capture_test.rs`）が環境変数の門で既定では走らないため。静的には確認済み——受け渡しの配線（`crates/shiori-host32-host/src/process_host.rs:239-251` の引数・環境変数・作業ディレクトリ）は非接触、札は英数と `-` のみ、絶対パス、最長の合成名でも約 129 文字。**実機サインオフの機会に 1 度通すこと**（`HOST32_PASTA_DLL` を絶対パスで与える。相対だと `pasta.dll` の LOAD が `0x8007007E` で落ちる）。
+
+---
+
+> **📌 2026-09-02 棚卸⑫（W11 完走・M1 唯一の残ユニット・W12＝旧 W7）**——アンカー全数再測定（origin/main `9ed1e9ed`）。
+> - **上流ユニットは全数 `completed/` に実在**（brief が名指しする 35 本を照合・欠落 0）。`bindoption-exclusivity` も完了済み（PR#105）。
+> - **大ドリフト（07 期の本文アンカー）**: `spawn.rs` `GhostWindows` :164/:115→**:294**・`ScopeWindows` :150/:101→**:254**（:88-92 は import 塊）／`command.rs:229` の「3 連言」→**:512-516 `fn is_coalescible`**／`transition_diag.rs` `win_kind=` :167→**:193 `FIELD_WIN_KIND`**・`kind=` :143→**:169 `FIELD_KIND`**／`drag_follow.rs` :89/:183→**:81/:177**（`enqueue_window_set_pos`）／自己参照 :53→:54・:148→:149。**全命中**: `target_map.rs:19`・`surfaces.txt:458-507`・`transition_diag.rs:54`・`transition_signoff_tests.rs:10,57`・`timing.rs:220`・dlp 申し送り 9 点（`tick_gate.rs:154`・`world/mod.rs:551/:405/:593`・`tick_bridge.rs:230,:258`・`tick_diag.rs:133`・`perf_thread_report.rs:51`・`tick_gate_config.rs:25`）・B-1〜B-3 のアンカー。
+> - **DoD（`cargo test --workspace` exit 0）を脅かす間欠赤 3 系統**: ⑴ B-2（`spine_e2e_test_s3_helper_liveness_detected.rs:175-185` に待機なし・負荷下 `left: 4`・08-27 から不変で残存）⑵⑶ zsp research §13.8 ①②（3 プロセス同時 regime のペア機構檻 `zorder_pair_maintain_always_on_top_tests.rs:767/:411`・壁時計期限の飢餓 `tick_bridge.rs:355`／`spine_boot_smoke_tests.rs:46`／`spine_talk_close_tests.rs:306`）——受け皿は新規台帳 `zorder-chain-residue`（A-1/A-2）。**本 spec は隔離裁定（除外 or 更新・記憶 obsolete-vs-broken-test-policy）のみ行い根治は同台帳**。
+> - `doc/emo2-conformance-scope.md:60` は bvc R11.9 で **既に改訂済み**（`\f` 43 項目の所有先＝文字装飾系 3 spec）＝Adjacent 節の想定より doc が進んでいる。
+> - **分割候補（開発者裁定）**: ⑴ 決定論 conformance spine（CI 常設・実 pasta 非依存）／⑵ 実機一周サインオフ＋M1 完成宣言 DoD——brief の Boundary Candidates と一致。分割しない場合は tasks で二相に切る。規模 XL。
+> - 着手時義務（roadmap W12 行）: brief 全面再監査・㉘(E)・#7 pasta 上流・**`ReassertZOrder` 未消費の実機確認**（挿入点は `zorder_pair_establish.rs:180` の 1 箇所のみ＝再表示経路は再指示を挿さない・現況一致）・間欠赤 3 系統の隔離裁定。`AREKA_TICK_GATE` は既定 OFF（`world/mod.rs:405`）のまま記録。
+> - **要件定義は Fable 推奨**（DoD 定義・隔離裁定・分割裁定・14 項目×二層観測）。W12 同居候補（cursor-tag／channels／toolkit）とは共有ファイル 0（channels の sink 追加が spine の sink 数を変え得る点のみ channels 側の保存義務）。
+

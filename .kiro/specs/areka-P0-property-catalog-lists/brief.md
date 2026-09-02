@@ -67,3 +67,8 @@ SSP プロパティ木の過半は `currentghost` の外にある——`system.*
 - ウェーブ配置: **M2 解禁ゲート**（プロパティ 3 spec の最後尾・島単位で前倒し可）。
 - 正典参照はライブ ukadoc（snapshot のプロパティ節は 2.8.80——本 spec の範囲では balloon.scope 系ほどの既知逆転は無いが、設計前にライブ突合を必須とする）。
 - 値の捏造禁止・決定論テスト必達（OS メトリクスは採取層を抽象して偽値注入で檻に入れる）。
+
+---
+
+> **📌 2026-09-02 棚卸⑫**——アンカー **ドリフト 0**（`key.rs:140`・`dotted.rs:106-109`・`GENERIC_PROP_NAMES` 17＝`:37-55`）。**今日 M2 基盤なしで実装できる島**（実測）: `system.monitor.*`（`count`・`index(ID).{dpi,primary,rect,work}`＝`wintf/ecs/window/monitor.rs` の `dpi: u32` :72・`is_primary`・`work_area`・`bounds` に全部ある・**`bpp` のみ実データなし＝別途 Win32 採取**）／`system.clock` 8 葉／`system.cursor.pos`／`system.{os,memory,cpu,power,disk}`／`system.{dnd.mode,theme.*}`＝いずれも Win32 採取層の新設のみで M2 サブシステムに依存しない（「M2 待ち」は採取層未作成の意味）。真に M2 基盤待ち＝`ghostlist`／`activeghostlist`／`balloonlist`／`headlinelist`／`pluginlist`／`history`／`rateofuselist`／`currentghost.sound.*`／`.ext.*` 逆方向。編成＝W14 裁定枠（channels→tree の後・publish のみなら前倒し可）。wintf 直近コミット（visual/draw・aabb）とは非交差（Monitor データは `ecs/window/monitor.rs`）。
+
