@@ -20,7 +20,7 @@ ukadoc（SSP 公式仕様書）1,749 項目を網羅的に分類するための�
 - ukadoc の entry id はコロン区切りで 2 形ある。`ukadoc:<ページ>:<アンカー>:<連番>`（1,730 件）と、アンカーを持たないページ全体の `ukadoc:<ページ>`（19 件）。第 2 セグメントがページ名で、ページ名自身が下線を含む。
 - 全 1,749 件が `https://` の URL を持ち、URL は entry ごとに相異なる。フラグメントを外すと 38 種（ページ数と一致）に縮む。
 - カテゴリは 6 種（shiori_event 637・descript 518・sakurascript 342・protocol 237・file_structure 8・dev_guide 7）。カテゴリとページは 1 対 1 ではなく、`protocol` は `list_propertysystem` 188 と `spec_*` 49 に分かれる。
-- `doc/ukadoc-coverage/` も調査用クレートも現時点で存在しない。ソース中に「ukadoc」と URL を併記した doc コメントは 0 件（「ukadoc」の語だけを含む散文コメントは 4 件あり、例: `crates/areka-parsers/src/sakura/lexer.rs:54`）。
+- `doc/ukadoc-coverage/` も調査用クレートも現時点で存在しない。ソース中に「ukadoc」と URL を併記した行は 0 件（「ukadoc」の語だけを含み URL を伴わないコメントは 152 件〔doc コメント 129・行コメント 23〕あり、例: `crates/areka-parsers/src/sakura/lexer.rs:54`。ほかにテスト関数名や文字列などコメント以外の出現が 4 件）。
 - 既に機械可読な正典資産が 2 系統ある。`doc/shiori/fragments/`（フラグメント 38 本＋`_manifest.toml`・イベント entry 287／リソース entry 159／field 802／沈黙裁定 9・entry は `[entry."名前"]` 形式のキー付きテーブル＝`doc/shiori/fragments/events/01.lifecycle.toml:5`・件数は `doc/shiori/README.md:37`・生成器は未実装と宣言済み `doc/shiori/README.md:41`）と、`crates/areka-sylphya/src/vocab/`（`flat.rs:32` の 26 件・`dotted.rs:17` の 10 件・`dotted.rs:37` の 17 件・`dotted.rs:72` の 21 件・`shiori_resource.rs:45` の 159 件、件数固定テスト `crates/areka-sylphya/src/ledger_key_determinism_tests.rs:201-204`）。本 spec はこれらを置き換えない。
 - 実装側の許可表は小さい。送出イベント 11 件（`crates/areka-kanade/src/schedule/events.rs:70-82`・件数を固定するテストは無い）、照会リソース 1 件（`crates/areka-kanade/src/schedule/resources.rs:32`・固定テストは `resources.rs:114-118`）、`\![...]` の消費側登録 4 件（`crates/areka/src/emo2_boot/consumer_ledger.rs:221`）。
 - 既存の対応表は `doc/COMPAT_ARCHITECTURE.md:122` の沈黙ルール対応表（データ行 80・`:128-207`）と `doc/emo2-conformance-scope.md:78` の見直し表（データ行 7）。台帳の「縮退」と備考の転記元になる。
@@ -51,7 +51,7 @@ ukadoc（SSP 公式仕様書）1,749 項目を網羅的に分類するための�
 
 #### Acceptance Criteria
 1. When カタログ再生成が実行される, the ukadoc 調査ツールキット shall スナップショット中の `source` が `ukadoc` である全 entry（実測 1,749 件）について 1 項目 1 行の `doc/ukadoc-coverage/catalog.toml` を出力する。
-2. When カタログ再生成が実行される, the ukadoc 調査ツールキット shall 各行に「項目 id・ページ名・見出し・カテゴリ・本文から抽出した SSP 版番号（抽出できなければ空）・本文のハッシュ・正典 URL」を記録する。
+2. When カタログ再生成が実行される, the ukadoc 調査ツールキット shall 各行に「項目 id・ページ名・見出し・カテゴリ・本文に現れる SSP 版番号のすべて（重複を除き昇順・1 つも無ければ空。1 項目に 2 つ以上の版番号を含むものが 23 件あるため 1 つに絞らない）・本文のハッシュ・正典 URL」を記録する。
 3. The ukadoc 調査ツールキット shall 本文そのものをカタログに記録せず、本文の変更検出はハッシュだけで行う。
 4. When スナップショット中の entry の `source` が `ukadoc` 以外である, the ukadoc 調査ツールキット shall その entry をカタログに含めない。
 5. When 同一のスナップショットに対してカタログ再生成を 2 回続けて実行する, the ukadoc 調査ツールキット shall 行の順序を含めて 1 バイトも違わない出力を生成する。
@@ -113,7 +113,7 @@ ukadoc（SSP 公式仕様書）1,749 項目を網羅的に分類するための�
 3. The ukadoc 調査ツールキット shall 1 項目につき 1 行・説明文を伴わない書き方を規約とし、実装済み項目の定義行 1 行ずつを超える増量を求めない。
 4. Where 正典の名前をそのまま並べた語彙表である, the ukadoc 調査ツールキット shall 表の先頭にページ URL を 1 つ置く書き方を許し、表の要素文字列とカタログの見出しを名前で突き合わせて個々の項目に対応付ける。
 5. When 証拠収集が実行される, the ukadoc 調査ツールキット shall ソース全域を走査して正典 URL を集め、カタログの id へ解決し、台帳の証拠欄を機械で埋める。
-6. If コメントに「ukadoc」の語はあるが正典 URL を伴わない, then the ukadoc 調査ツールキット shall それを証拠として扱わない（現に 4 件の散文コメントが存在するため）。
+6. If コメントに「ukadoc」の語はあるが正典 URL を伴わない, then the ukadoc 調査ツールキット shall それを証拠として扱わない（現に URL を伴わない「ukadoc」のコメントが 152 件存在し、語だけで判定すると全件が誤検出になるため）。
 7. Where 項目が未実装である, the ukadoc 調査ツールキット shall ソース側に何も書かせない（未対応であることは台帳が持つ）。
 8. When 証拠収集が実行される, the ukadoc 調査ツールキット shall 正典 URL がまだ置かれていない既存コードから、URL を置く作業の手掛かりとなる候補（イベント名の文字列・`\![...]` の消費側の名前・設定キーの表・「縮退」「無視」「未知」などを含むログ行）を、証拠とは明確に区別した別の出力として提示する。
 9. The ukadoc 調査ツールキット shall 候補の提示を証拠として扱わず、状態の判定は調査 spec の人手に委ねる。
@@ -128,12 +128,13 @@ ukadoc（SSP 公式仕様書）1,749 項目を網羅的に分類するための�
 4. When 整合検査が実行される, the 整合検査 shall カタログの全 id が 4 つの台帳のいずれか 1 つにちょうど 1 回だけ現れることを確かめる。
 5. When 整合検査が実行される, the 整合検査 shall ソース中の正典 URL がすべてカタログに実在することを確かめる。
 6. When 整合検査が実行される, the 整合検査 shall 状態が `implemented` の行に少なくとも 1 つの証拠（正典 URL の出現）があることを確かめる。
-7. When 整合検査が実行される, the 整合検査 shall 関連の両端の id が実在すること、`alias_of` の指す先が `alias` でないこと（別名の連鎖の禁止）、記録された登場版がカタログの抽出値と矛盾しないことを確かめる。
+7. When 整合検査が実行される, the 整合検査 shall 関連の両端の id が実在すること、`alias_of` の指す先が `alias` でないこと（別名の連鎖の禁止）、記録された登場版がカタログの版番号と矛盾しないこと（カタログの版番号が 1 つ以上あるときは、台帳の登場版がその中に含まれること。カタログの版番号が空なら検査しない）を確かめる。
 8. When 整合検査が実行される, the 整合検査 shall 台帳に書かれたテーマ名がテーマ定義に実在することを確かめる。
 9. The ukadoc 調査ツールキット shall 未分類の件数を台帳側に固定値として持たせ、実際の未分類件数がその値を上回ったときに検査が赤になるようにする（減少は常に許す）。
 10. If 正典 URL の綴りが違う・`implemented` なのに証拠が消えた・テーマ名の綴りが違う・未分類が固定値より増えた, then the 整合検査 shall 赤になり、該当する id と場所を示す。
 11. While 実装が入れ替わっても正典 URL が定義箇所に残っている, the 整合検査 shall 赤にならない（行の増減や整理では壊れない）。
 12. If 整合検査が失敗する, then the 整合検査 shall 何がどう食い違ったかを示す出力を残す（黙って失敗しない）。
+13. The ukadoc 調査ツールキット shall 整合検査の各項目（6.3〜6.9）について、小さな見本データでその項目だけを壊すと赤になることを確かめるテストと、実データで検査対象が 0 件でないこと（カタログ 1,749 件・ページ 38 種・台帳 4 本など）を確かめるテストを併置する（初期台帳は全行が未分類のため、6.6〜6.8 は対象 0 件で緑になり、道具が壊れていても気づけないから）。
 
 ### Requirement 7: 報告の決定論的な再生成
 **Objective:** `ukadoc-coverage-roadmap` の担当者として、台帳から網羅状況の一覧を機械で作りたい。それにより優先度の議論を数字の上で行える。
