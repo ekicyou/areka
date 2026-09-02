@@ -50,12 +50,13 @@ ukadoc は 1,749 項目（37 ページ）ある。これまでの areka は「em
 3. **世代を記録する**: `introduced`（版番号・無ければ空）・`deprecated_by`（後継 id・あれば）。世代別の対応表は report が機械生成する。
 4. **関連（links）は種別付き**: `alias_of`（旧→新）／`supersedes`（新→旧）／`triggers`（タグ・操作→イベント）／`configures`（descript キー→挙動・タグ・イベント）／`queries`（タグ・イベント→プロパティ）／`same-feature`（束＝同じ機能の別面）。機械抽出（本文の相互言及）は候補提示まで・登記は survey spec の人手。
 5. **状態語彙**: `implemented`／`vocabulary-only`／`degraded`／`absent`／`alias`／`not-applicable`／`unclassified`。alias の状態は正典側で判定し、alias 行自身は「写像の有無」だけを持つ。
-6. **優先度の根拠は 3 つに限定**（coverage-roadmap が使う）: 壊れ方（黙って壊れる＞明示エラー＞見た目差）・影響する既存資産の広さ（標準辞書が使うか・世代の古さ）・依存基盤の共有度。
+6. **優先度の根拠は 4 つ・序列固定**（開発者裁定 2026-09-02・議題 6）: ⑴ **壊れ方**（黙って壊れる〔「間違った結果を正常な顔で見せる」を含む〕＞明示エラー＞見た目差＝「利用者が気づけるか」で分ける）＞ ⑵ **伺からしさ**（規則 9 のテーマ）＞ ⑶ 影響する既存資産の広さ（標準辞書が使うか・世代の古さ）＞ ⑷ 依存基盤の共有度。coverage-roadmap が束（機能のまとまり）単位で適用する。壊れ方の段は survey が id ごとに付け、根拠（どのログ行が出るか・出ないか）を `note` に書く。
 
 7. **実装済みの証拠は「ソースに置いた ukadoc の URL」**（開発者裁定 2026-09-02・議題 1）。ソースが第一の正典（cc-sdd の建て付け）と同じ向き＝コードから正典へ逆引きでき、道具は URL を拾って台帳の証拠欄を**自動で**埋める。行番号も内部 ID も使わない。**ソース側の規則**: ⑴ 書くのは**定義箇所だけ**（許可表の要素・match の腕・語彙表の 1 行）・呼び出し側には書かない ⑵ **1 項目 1 行**の doc コメント（`/// ukadoc: <url>`）・説明文は書かない ⑶ 正典の名前をそのまま並べる語彙表（sylphya の 159 個など）は**表の頭にページ URL 1 つ**・個々の文字列は catalog の title と名前で対応付ける ⑷ 未実装の項目には何も書かない（「未対応」は台帳が持つ）。膨らみは実装済み項目の定義行 1 行ずつを超えない。
 8. **各 survey の完了条件＝自ドメインの `unclassified` が 0**。優先度は survey が段階 A〜E を仮付けし、`ukadoc-coverage-roadmap` が最終順序を決める。survey が既存 M2 ゲート brief の誤りを見つけても brief は直さず「是正候補」として記録する。
+9. **伺からしさ（`values[]`）**（開発者指針 2026-09-02「伺からしい価値観を持つ要素について優先度を上げる」・議題 5〜7 で裁定）: 正典 `doc/ukadoc-coverage/values.md` に**テーマ 8 つ**を凍結する＝**気配**（放っておいても喋る・時報・起動と終了の挨拶・見切れや重なりへの反応）／**触れ合い**（撫で・つつき・ホイール・部位ごとの当たり判定・物を渡す）／**掛け合い**（二人の会話のテンポ・選択肢・タイプライター）／**装い**（表情・まばたき・口パク・着せ替え・シェルとバルーンの切替）／**記憶**（名前を覚える・教える・初めての起動・消滅）／**交わり**（ゴースト同士の会話・呼び出し・外からの声）／**気配り**（スリープ復帰・バッテリー・スクリーンセーバー・フルスクリーン退避など利用者の環境を察する）／**更新**（自分で育つ・ネットワーク更新を自分の台詞で語る＝OnUpdate 系 24・`\![updatebymyself]`・`homeurl`・updates2.dau・`*.refresh`・delete.txt）。各テーマは 1 行定義＋「利用者が失うもの」＋代表 id 2〜3 個で書く。**付与規則は 1 つ**＝「この項目が無いと利用者はゴーストの何を失うか」に答えられるテーマだけ付ける（答えられなければ空）。テーマ 0 の既定＝開発者機能（`createupdatedata` 等）・外部アプリ Ex 168・トランスレータ・ヘッドライン（歴史的には象徴・現役資産では薄い）・照会配管（`%property`／`\![get,property]`／`system.*`）。areka 自身の更新（OnBasewareUpdating／Updated）は「更新」に含めない（ベースウェアの配布＝別軸・`note` に注記）。**上げ方**（coverage-roadmap が束単位で判定）: テーマ 1 つ＝同じ段階の中で先頭群へ／テーマ 2 つ以上＝段階を 1 つ繰り上げてよい（例: ファイル D&D＝触れ合い＋更新で C→B）／テーマ 0 かつ壊れ方が見た目差以下＝段階 E 候補。「交わり」は多重ゴースト基盤が前提で最も重いが、テーマ側では下げず規則 6 ⑷ が担う。
 
-**台帳の 1 行（TOML）**: `id`（catalog id）・`status`・`introduced`・`alias_of`／`deprecated_by`（任意）・`owner_spec`・`priority`（A〜E 段階＋数値）・`links[] = {kind, to}`・`note`。証拠欄（`evidence[]`＝URL を見つけたファイル）は人が書かず道具が生成する。**この形式は本 spec の要件確定時点で凍結し、survey 4 本は本 spec の実装完了を待たず着手できる**（検査は後から追いつく）。
+**台帳の 1 行（TOML）**: `id`（catalog id）・`status`・`introduced`・`alias_of`／`deprecated_by`（任意）・`owner_spec`・`priority`（A〜E 段階＋数値）・`values[]`（規則 9 のテーマ名・空可）・`links[] = {kind, to}`・`note`。証拠欄（`evidence[]`＝URL を見つけたファイル）は人が書かず道具が生成する。**この形式は本 spec の要件確定時点で凍結し、survey 4 本は本 spec の実装完了を待たず着手できる**（検査は後から追いつく）。
 
 ## 段階（開発者追記の 4 段と spec の対応）
 
@@ -80,7 +81,7 @@ ukadoc は 1,749 項目（37 ページ）ある。これまでの areka は「em
 1. **正規化（catalog）**: スナップショット JSON → `doc/ukadoc-coverage/catalog.toml`（id・page・title・category・SSP 版番号（抽出）・本文ハッシュ・url）。**本文そのものは repo に入れない**（ukadoc の著作物を丸ごと同梱しない・ハッシュで変更検出だけ行う＝`shiori-protocol` の `SOURCES.md` 先例）。スナップショットの所在は環境変数 `AREKA_UKADOC_SNAPSHOT`（既定＝npm グローバルの実パス）。既存の `doc/shiori/fragments`（SHIORI event/resource の契約カタログ）と sylphya 語彙表は**置き換えず**、catalog id からそれらの entry 名へ結ぶ対応列を持つ（同じ項目を 2 か所で数えない）。
 2. **証跡スキャン（evidence）**: areka ソース全域を走査し、⑴ `ukadoc:` doc コメントの URL を拾って catalog id へ解決（**実装済みの証拠はこれが正**・仕訳の規則 7）⑵ ページ URL 付きの語彙表は要素文字列を catalog の title で対応付け ⑶ 補助として、URL が未整備の既存コードから候補を提示する（SHIORI イベント名の文字列リテラル・`\![...]` 消費側 `name`・descript キー表・「縮退」「無視」「未知」系ログ行）。⑶ は survey が URL を置く作業の手掛かりであり、証拠にはならない。
 3. **台帳（ledger）**: `doc/ukadoc-coverage/ledger/<domain>.toml`（調査 spec 1 本＝1 ファイル＝共有ファイル 0 で並走可）。行の形式と `status` 語彙は上記「仕訳の規則」節で凍結。
-4. **検査と報告（check / report）**: **常時 `cargo test --workspace` に含める**（開発者裁定・議題 2。純粋な決定論テスト・ネットワークと実機を使わない・スナップショット不在でも赤にならない）。検査は ⑴ ledger の id ⊆ catalog ⑵ catalog 全 id が ledger のどこかに 1 回だけ現れる（未分類は `unclassified` として明示・件数を台帳に固定し減少のみ許す） ⑶ **ソース中の `ukadoc:` URL は全て catalog に実在する**（綴り違いの検出）・`status=implemented` の行には URL の出現が 1 つ以上ある ⑷ links の両端が実在・`alias_of` の先は `alias` でない（alias の連鎖禁止）・`introduced` の版番号は catalog の抽出値と矛盾しない。赤になるのは「URL の綴り違い」「実装済みなのに URL が無い（＝消えた）」だけで、行の増減やリファクタでは壊れない。「URL の置き忘れ」は検査では拾えない＝`/kiro-complete` の DoD 側の運用（本 spec では決めない）。`report.md`（状態分布・世代別対応表・alias 一覧・束の連結成分）は決定論的に再生成し、差分ゼロをテストで検査する。
+4. **検査と報告（check / report）**: **常時 `cargo test --workspace` に含める**（開発者裁定・議題 2。純粋な決定論テスト・ネットワークと実機を使わない・スナップショット不在でも赤にならない）。検査は ⑴ ledger の id ⊆ catalog ⑵ catalog 全 id が ledger のどこかに 1 回だけ現れる（未分類は `unclassified` として明示・件数を台帳に固定し減少のみ許す） ⑶ **ソース中の `ukadoc:` URL は全て catalog に実在する**（綴り違いの検出）・`status=implemented` の行には URL の出現が 1 つ以上ある ⑷ links の両端が実在・`alias_of` の先は `alias` でない（alias の連鎖禁止）・`introduced` の版番号は catalog の抽出値と矛盾しない ⑸ `values[]` の要素は `values.md` のテーマ名に実在する（綴り違いの検出）。赤になるのは「URL の綴り違い」「実装済みなのに URL が無い（＝消えた）」「テーマ名の綴り違い」だけで、行の増減やリファクタでは壊れない。「URL の置き忘れ」は検査では拾えない＝`/kiro-complete` の DoD 側の運用（本 spec では決めない）。`report.md`（状態分布・世代別対応表・alias 一覧・束の連結成分・**テーマ別の状態分布**〔テーマごとに実装済み／語彙のみ／縮退／未対応の件数〕）は決定論的に再生成し、差分ゼロをテストで検査する。
 
 **規模**: 中。crate 1 本（目安 1,000 行未満・行数番人の対象）・TOML/JSON の読み書きは既存依存（`toml`・`serde`・`serde_json`）で足りる。
 
@@ -90,7 +91,7 @@ ukadoc は 1,749 項目（37 ページ）ある。これまでの areka は「em
 
 - **In**:
   - `crates/ukadoc-survey`（catalog／evidence／ledger／check／report）。
-  - `doc/ukadoc-coverage/`（catalog.toml・ledger/ の空雛形 4 本・report.md・README）。
+  - `doc/ukadoc-coverage/`（catalog.toml・ledger/ の空雛形 4 本・**values.md**〔規則 9 のテーマ 8 つ・要件確定時に凍結〕・report.md・README）。
   - 全 1,749 id の初期台帳＝全行 `unclassified`（調査 spec が埋める）。
   - 証跡スキャンの走査規則（areka の実慣習に合わせる・design で確定）。
 - **Out**:
