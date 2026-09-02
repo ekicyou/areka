@@ -8,7 +8,7 @@
 
 ## 1. 分析サマリ
 
-- **一周を辿るテストの母体は既に 2 系統あり、どちらも「新しい仕組みを作らない」という要件（R2.6）を満たせる。** 台本化した応答による系統（`crates/areka-ghost/tests/ghost/spine_e2e_test.rs:83` の S1 ほか）と、実ビルドの x64 テスト DLL を実際に読み込む系統（同 `inproc_e2e_test.rs:656`／`:820`）である。後者は交信の列と演出の列を**同一の走行から二重に記録して全順序で照合する**形が既にできている（`inproc_e2e_test.rs:939`・`:782`）。
+- **一周を辿るテストの母体は既に 2 系統あり、どちらも「新しい仕組みを作らない」という要件（R2.6）を満たせる。** 台本化した応答による系統（`crates/areka-ghost/tests/ghost/spine_e2e_test.rs:83` の S1 ほか）と、実ビルドの x64 テスト DLL を実際に読み込む系統（同 `inproc_e2e_test.rs:656`／`:782`）である。後者は交信の列と演出の列を**同一の走行から二重に記録して全順序で照合する**形が既にできている（`inproc_e2e_test.rs:939`・`:782`）。
 - **足りないのは「入力を注入して一周を伸ばす」部分である。** 撫で・二重クリック・選択確定の注入口は実在する（`crates/areka-kanade/src/msg.rs:134`／`:138`、実行時の窓口は `crates/areka-ghost/src/runtime.rs:218`）が、**一周を辿るテストから使われている例は 0 件**であり、使用箇所は単体テストと本番配線だけである（後述 2.2 の全数一覧）。
 - **見た目（バルーン・拡大率・掴んで動かす・重なり順・位置調整）を観測できるのは `areka` クレート側のテスト用組立であり、`areka-ghost/tests/` 側ではない。** 前者は実 emo2 資産・画面用の World・実の表示指令経路まで組む（`crates/areka/src/emo2_boot/spine.rs:641` 以下、表示指令の観測は `spine_display_tests.rs:8`、位置調整は `spine_move_cue_tests.rs:1-17`）。**決定論一周テストをどちらの家に置くかが最大の設計判断**であり、ロードマップの干渉台帳が想定する編集集合（`.kiro/steering/roadmap.md:99`＝`areka-ghost/tests/ghost/*` 新規）とも直結する。
 - **実 SHIORI を実際に読み込む系統を撫で・メニューまで伸ばすには、凍結応答の表を増やす必要がある。** 現在の凍結表は **`OnFirstBoot` ただ 1 件**である（`crates/shiori4-testdll/src/snapshot.rs:43-48`）。増やす作業は `crates/shiori4-testdll/` の改変であり、「本番コード改変 0 が原則」（`.kiro/steering/roadmap.md:88`）および R12.1 の編集集合と衝突しうる。台本化した応答の系統を採ればこの衝突は起きない。
@@ -23,7 +23,7 @@
 | 系統 | 実体 | 駆動 | 記録している列 | 一周のどこまで |
 |---|---|---|---|---|
 | 台本化した応答 | `crates/areka-ghost/tests/ghost/spine_e2e_test.rs`（S1〜S7 は同名の分割ファイル群） | 注入した時刻のみ。待ちは `spin_pumping_ticks`（`spine_e2e_test.rs:48-66`・上限 60 秒＝同 `:22`） | backend への呼出列（`RecordedCall`＝同 `:73-88`）と演出列（`RecordingSink`） | 起動・接続失敗・死活・終了握手・終了期限・切断・2 回目起動 |
-| 実 DLL を読み込む | `crates/areka-ghost/tests/ghost/inproc_e2e_test.rs` | 同上（`:715` からの Tick 注入ループ・壁時計は宙吊り防止の上限のみ） | 交信列（`ExchangeRecord`＝`recorder.rs:51-62`）＋演出列（`RecordingSink`）の**二重記録**（`inproc_e2e_test.rs:820`） | 起動 → 起動挨拶 → 正常終了（`:939` の期待列は 6 件で閉じる） |
+| 実 DLL を読み込む | `crates/areka-ghost/tests/ghost/inproc_e2e_test.rs` | 同上（`:715` からの Tick 注入ループ・壁時計は宙吊り防止の上限のみ） | 交信列（`ExchangeRecord`＝`recorder.rs:51-62`）＋演出列（`RecordingSink`）の**二重記録**（`inproc_e2e_test.rs:782`） | 起動 → 起動挨拶 → 正常終了（`:939` の期待列は 6 件で閉じる） |
 
 補足:
 
@@ -147,7 +147,7 @@
 
 **どこを触るか**: `crates/areka-ghost/tests/ghost/` に一周テストのファイルを新設し、`recorder.rs`・`inproc_fixture.rs`・`RecordingSink` を再利用する。あわせて `crates/shiori4-testdll/src/snapshot.rs:43-48` の凍結表へ、撫で・二重クリック・選択確定・終了に対する実採取の応答を足す。
 
-- 利点: 交信の列と演出の列を二重に記録する形（`inproc_e2e_test.rs:820`）がそのまま使える。応答が**実 pasta の実採取**なので、期待列が実物と乖離しない。凍結値が差し替われば期待列が必ず落ちる（`:664-672` の検出の仕組み）。
+- 利点: 交信の列と演出の列を二重に記録する形（`inproc_e2e_test.rs:782`）がそのまま使える。応答が**実 pasta の実採取**なので、期待列が実物と乖離しない。凍結値が差し替われば期待列が必ず落ちる（`:664-672` の検出の仕組み）。
 - 欠点: **凍結表の追加が `crates/` 配下の改変**であり、「証明に徹する（本番コード改変 0 が原則）」（`.kiro/steering/roadmap.md:88`）および R12.1 の編集集合と衝突する。採取自体は既存の採取用ハーネス（`snapshot_capture_test.rs:1-27`）で行えるが、**実 pasta と 32bit の橋渡しが揃った実機でしか採取できない**（同 `:6-9` の 2 変数の門）。
 - 欠点: **見た目（バルーン・拡大率・追従・重なり順・位置調整）は 1 つも観測できない**。この系統は窓も画面も持たない。
 
