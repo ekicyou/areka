@@ -30,9 +30,9 @@ ukadoc のプロパティシステムのページ（`list_propertysystem`・実�
 - 本文から版番号を拾うと SSP の版でない番号が混じる項目が 1 件ある（`system.os.(キー)` が `2.6.26`／`2.8.17`／`5.19.0` の 3 つを含み、`5.19.0` は本文が例示する OS の版）。複数の版番号を持つ項目は本ページではこの 1 件だけ。
 - 関連の相手になる他ドメインの id は実在する: `%property[プロパティ名]`／`\![get,property,イベント名,プロパティ名,プロパティ名,...]`／`\![set,property,プロパティ名,値]`（いずれも `list_sakura_script`）・`property.get`／`property.set`（`list_shiori_event` と `list_plugin_event` の双方）。
 - `baseware.name`／`baseware.version` の実値（`"areka"` と版文字列）を sylphya の大域点付き区画へ流し込んでいる定義箇所は sylphya の語彙表ではなく `crates/areka-ghost/src/sylphya_wiring.rs:126-127`（2 行の組）である。語彙表 `dotted.rs` はルート枝 `baseware` を名前として持つだけで、`baseware.name` という文字列は見出しの名前と一致する要素として現れない。
-- sylphya は語彙表を実行時の判定にも使っている（`crates/areka-sylphya/src/actor.rs:136-165`）: SET の宛先が「根がルート枝 10 のいずれか、または葉が汎用プロパティ名 17 のいずれか」なら正典の語彙とみなして「受理＋警告＋非反映」、それ以外の自由な名前は保存へ回す。読み取り側（`reader.rs`）は語彙表を見ず、値が無ければ一律に「値なし」を返す。
+- sylphya は語彙表を実行時の判定にも使っている（`crates/areka-sylphya/src/actor.rs:136-166`）: SET の宛先が「根がルート枝 10 のいずれか、または葉が汎用プロパティ名 17 のいずれか」なら正典の語彙とみなして「受理＋警告＋非反映」、それ以外の自由な名前は保存へ回す。読み取り側（`reader.rs`）は語彙表を見ず、値が無ければ一律に「値なし」を返す。
 - areka 側（sylphya の点付き語彙表・`crates/areka-sylphya/src/vocab/`）: ルート枝 10（`dotted.rs:17`）・汎用プロパティ名 17（`dotted.rs:37`）・SET 有効群 21（`dotted.rs:72`・件数を固定するテストは同 `:191`）・`property.get`／`property.set` の名前の予約（`dotted.rs:106` と `:109`）。**M1 で実際に値へ導出するのは `baseware.*` だけで、他のルート枝の配下は値なしへ縮退する**と宣言されている（`dotted.rs:4-5`・宣言ブロック全体は `:1-9`）。件数を固定するテストは `crates/areka-sylphya/src/ledger_key_determinism_tests.rs:201-204`。
-- 語彙表には既に「ukadoc `list_propertysystem.html`」という語が 2 か所あるが（`dotted.rs:3` と `:67`）、**いずれも URL を伴わない**＝toolkit 要件 5.6 により証拠として扱われない。本ページの正典 URL はソース中に 0 件。
+- 語彙表には既に「ukadoc `list_propertysystem.html`」という語が 2 か所あるが（`dotted.rs:3` と `:67`。「ukadoc」の語だけなら `:15` を含め 3 か所）、**いずれも URL を伴わない**＝toolkit 要件 5.6 により証拠として扱われない。本ページの正典 URL はソース中に 0 件。
 - 縮退の転記元になる既存の登記: `doc/COMPAT_ARCHITECTURE.md:184`（`currentghost.balloon.scope(ID).vertical` の導出規則と、値の枝も照会経路も無いという 2 つの穴）・同 `:185`（`validwidth`／`validheight`／`lines` の 2.8.83 意味論と、スナップショットが 2.8.80 のままである罠）・同 `:136`（SET が無効な名前への書込は受理＋警告＋非反映）。
 - `doc/ukadoc-coverage/` は現時点で存在しない。
 
@@ -84,7 +84,7 @@ ukadoc のプロパティシステムのページ（`list_propertysystem`・実�
 
 1. When 台帳を書き終える, the property 台帳 shall 全項目の状態が凍結済みの 7 語彙のいずれかであり、`unclassified` が 0 件である状態にする。
 2. Where 項目が areka で実際に値へ導出される, the プロパティ調査 shall 状態を「実装済み」とする（2026-09-02 の実測では点付き語彙のうち実導出は `baseware.*` のみと宣言されており〔`crates/areka-sylphya/src/vocab/dotted.rs:4-5`〕、該当するカタログ id は `ukadoc:list_propertysystem:baseware.name:1` と `baseware.version` の 2 件で、実値の定義箇所は `crates/areka-ghost/src/sylphya_wiring.rs:126-127`。着手時に再確認する）。
-3. Where 名前は sylphya の語彙表に登記されているが値を返さない, the プロパティ調査 shall 状態を「語彙のみ」とする。「登記されている」は sylphya が実行時に正典の語彙と判定する規則そのもの（`crates/areka-sylphya/src/actor.rs:136-165`）で決める: id の根がルート枝 10 のいずれかであるか、葉が汎用プロパティ名 17 のいずれかであれば登記済みとみなす（開発者裁定 2026-09-02 議題 1＝塊単位。areka はこれらの名前を認識し、書き込みに対して「受理＋警告＋非反映」で応答するため、「未対応」と呼ぶと実挙動と食い違う）。葉の名前が語彙表に文字どおり載っているか否か（汎用 17・SET 有効群 21）は備考で区別する。
+3. Where 名前は sylphya の語彙表に登記されているが値を返さない, the プロパティ調査 shall 状態を「語彙のみ」とする。「登記されている」は sylphya が実行時に正典の語彙と判定する規則そのもの（`crates/areka-sylphya/src/actor.rs:136-166`）で決める: id の根がルート枝 10 のいずれかであるか、葉が汎用プロパティ名 17 のいずれかであれば登記済みとみなす（開発者裁定 2026-09-02 議題 1＝塊単位。areka はこれらの名前を認識し、書き込みに対して「受理＋警告＋非反映」で応答するため、「未対応」と呼ぶと実挙動と食い違う）。葉の名前が語彙表に文字どおり載っているか否か（汎用 17・SET 有効群 21）は備考で区別する。
 4. Where 正典が定める応答に対して areka が別の応答（値なし・受理して非反映など）を返すことが既に登記されている, the プロパティ調査 shall 状態を「縮退」とし、転記元（`doc/COMPAT_ARCHITECTURE.md` の該当行）を備考に書く。
 5. Where 名前が語彙表にも無く応答も無い（2.3 の規則で登記済みとみなされない）, the プロパティ調査 shall 状態を「未対応」とする（本ページの 188 件は全て根がルート枝 10 のいずれかに属するため、2026-09-02 の実測では該当 0 件の見込み。0 件ならその旨をブリーフィングに書く）。
 5a. When 備考を書く, the プロパティ調査 shall 読み取りの応答（値を返すか・値なしか）に加えて書き込みの準拠（正典で SET が有効か〔6.4 の 3 形で読む〕と、areka の応答〔SET 有効群なら型だけの予約で実書込なし・語彙のみなら受理＋警告＋非反映・自由な名前なら保存〕が正典と一致するか）を 1 件ずつ書き、状態そのものは 2.9 のとおり読み取りで決める。
@@ -193,7 +193,7 @@ ukadoc のプロパティシステムのページ（`list_propertysystem`・実�
 5. The プロパティ調査 shall 語彙表の件数を変えず、SET 有効群への追加や汎用プロパティ名の変更を行わない（件数を固定するテスト `crates/areka-sylphya/src/ledger_key_determinism_tests.rs:201-204` と `crates/areka-sylphya/src/vocab/dotted.rs:191` が現状のまま通ること）。
 6. When ソースへ URL を置き終える, the プロパティ調査 shall ワークスペースの標準のテスト実行が通ることを確かめる。
 7. The プロパティ調査 shall 実装済みの根拠に行番号や内部の識別子を使わず、正典 URL だけを使う。
-8. Where ソースに「ukadoc」の語だけがあって URL を伴わない箇所がある（実測 2 件＝`crates/areka-sylphya/src/vocab/dotted.rs:3` と同 `:67`）, the プロパティ調査 shall それを実装済みの根拠として数えない。
+8. Where ソースに「ukadoc」の語だけがあって URL を伴わない箇所がある（実測 3 件＝`crates/areka-sylphya/src/vocab/dotted.rs:3`・同 `:15`・同 `:67`）, the プロパティ調査 shall それを実装済みの根拠として数えない。
 
 ### Requirement 10: 境界を守り、他の持ち物に触れない
 
