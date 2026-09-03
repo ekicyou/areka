@@ -220,7 +220,7 @@ Rust 側に新しいクレート・モジュール・テストは足さない。
 | 察し（`OnBattery*`・`OnNetwork*`・`OnDisplay*`・`OnSysResume`／`OnSysSuspend`・`OnScreenSaver*`・`OnFullScreenApp*`・`OnWindowState*`） | 気配り | 黙って | C | `C2` | brief 裁定 |
 | 交わり（`OnOtherGhost*`・`OnGhostCalled`・`OnGhostChanged`・`OnCommunicate*`・群 14a の SSTP／FMO） | 交わり | 黙って | D | `D1` | brief 裁定（基盤の重さはテーマ側で下げない） |
 | テーマの無い配管（群 4 の `On` 以外・群 10／11 のヘッダ・群 8 のその他のリソース） | — | 黙って | D | `D2` | 単体では利用者に見えない |
-| 受け口そのものが無い周辺（群 13 PLUGIN・群 14b の WEB／DLL／PLUGIN／HEADLINE） | — | 黙って | E | `E1` | roadmap 追記(90)④（ヘッドラインは E・PLUGIN は M2 予約） |
+| 受け口そのものが無い周辺（群 13 PLUGIN・群 14b の WEB／PLUGIN／HEADLINE・群 14c の DLL 共通仕様） | — | 黙って | E | `E1` | roadmap 追記(90)④（ヘッドラインは E・PLUGIN は M2 予約）。群 14c は `degraded` で E のまま（SAORI 等の同居は M2 以降の周辺・開発者裁定 2026-09-03 議題 1） |
 
 上の表に当たらない項目（テーマの付け方の表で「上のどれにも当たらない `On` 始まり」122 件の一部）は、1 項目ずつ規則 4.6 でテーマを決めたあと、同じテーマの群の値を写す。数値は段階の中の通し番号であり、段階と数値のどちらも**仮置き**である。最終決定は `ukadoc-coverage-roadmap` が行う（要件 7.5）。
 
@@ -245,12 +245,15 @@ Rust 側に新しいクレート・モジュール・テストは足さない。
 | 12 | 解釈している応答（ステータスコード・`Value`・`ErrorLevel`・`ErrorDescription`） | 4 | `implemented` | `[]` | `""` |
 | 13 | PLUGIN の受け口 | 19 | `absent` | `[]` | `E1` |
 | 14a | 外部連携のうちゴースト同士の交わり（SSTP 2・FMO 6） | 8 | `absent` | 交わり | `D1` |
-| 14b | 外部連携のその他（WEB 3・DLL 1・PLUGIN 1・HEADLINE 1） | 6 | `absent`（`spec_dll` は設計ディスカッション議題 1） | `[]` | `E1` |
+| 14b | 外部連携のその他（WEB 3・PLUGIN 1・HEADLINE 1） | 5 | `absent` | `[]` | `E1` |
+| 14c | DLL 共通仕様（`ukadoc:spec_dll`・SHIORI 用の `load`／`unload`／`request` は host-32 が実装済み・SAORI／MAKOTO／PLUGIN の同居は無い） | 1 | `degraded` | `[]` | `E1` |
 | 15 | イベント一覧の補足（`memo_shiorievent`） | 1 | `not-applicable` | `[]` | `""` |
 
-内訳の検算: 11＋248＋3＋3＋25 ＝ 290（`list_shiori_event`）／168（`list_shiori_event_ex`）／1＋131＋27 ＝ 159（`list_shiori_resource`）／5＋2＋15＋4 ＝ 26（`spec_shiori3`）／19（`list_plugin_event`）／8＋6 ＝ 14（外部連携の 6 ページ）／1（`memo_shiorievent`）＝ **677**。
+内訳の検算: 11＋248＋3＋3＋25 ＝ 290（`list_shiori_event`）／168（`list_shiori_event_ex`）／1＋131＋27 ＝ 159（`list_shiori_resource`）／5＋2＋15＋4 ＝ 26（`spec_shiori3`）／19（`list_plugin_event`）／8＋5＋1 ＝ 14（外部連携の 6 ページ）／1（`memo_shiorievent`）＝ **677**。
 
 群 2 の 248 件は「290 − 実装済み 11 − `On` 以外 25 − 別名 3 − 意図的非発火 3（群 2a）」である。群 2a の 3 件は `doc/COMPAT_ARCHITECTURE.md` §8 が「M1 非発火・語彙と Reference 割当と受け渡し口の型のみを残す」と記録しているもので、上流の状態語彙では「語彙のみ登記」＝`vocabulary-only` に当たる。`owner` は追跡先の `areka-P0-balloon-canon-residue`（進行中）。仕分けの途中で新たな別名が見つかれば、その行は群 2 から群 3 へ移る（要件 6.1 の順序で決める）。件数が固定なのは 677 の合計とページ別の内訳だけで、状態ごとの件数は判定の結果として決まる。
+
+群 14c の `ukadoc:spec_dll` は「DLL 共通仕様」のページ全体で 1 項目であり、SHIORI・SAORI・MAKOTO・PLUGIN が共有する `load`／`unload`／`request` の入口の決まりを指す。areka の host-32（`crates/shiori-host32-helper/src/shiori_proxy.rs` の `ShioriProxy::load`／`request`）は SHIORI DLL に対してこの 3 つの入口を解決して呼んでいるので「受け口が無い」ではなく、同じ入口を使う SAORI・MAKOTO・PLUGIN の DLL は読み込めないので「実装済み」でもない。上流の状態語彙では `degraded`（一部だけできている）が当たる（開発者裁定 2026-09-03 議題 1・案 ⒜）。`note` には「SHIORI 用の入口は host-32 が実装済み・SAORI／MAKOTO／PLUGIN の同居は無い」と、SAORI の成立条件（要件 5.9・転記元は `doc/emo2-conformance-scope.md` §6）、MAKOTO は `areka-P0-makoto-dll-host` が担う旨を書く。`owner` は空のまま。実装済みではないので URL コメントは置かず、コード接触は 4 ファイル 22 行のまま変わらない。
 
 `spec_shiori3` 26 件の内訳（群 9〜12）は次のとおり。リクエスト側 11＝送っている 5（要求行・`Sender`・`Status`・`ID`・`Reference*`）／固定値 2（`Charset`・`SecurityLevel`）／送らない 4（`SenderType`・`SecurityOrigin`・`BaseID`・リクエスト側の `X-SSTP-PassThru-`）。レスポンス側 15＝解釈している 4（ステータスコード・`Value`・`ErrorLevel`・`ErrorDescription`）／読み飛ばす 11（レスポンス側の `Charset`・`Sender`・`SecurityLevel`・`X-SSTP-PassThru-`、`ValueNotify`・`Marker`・`BalloonOffset`・`Reference0`・`Reference1〜`・`Age`・`MarkerSend`）。`BaseID` は `shiori3.rs` の `build_request` の説明に「送らないもの」として挙がっていないことを `note` に書く（要件 5.3）。
 
@@ -406,9 +409,9 @@ doc/ukadoc-coverage/
 | 5.1, 5.2, 5.3, 5.4, 5.4a | `spec_shiori3` 26 件の仕訳（リクエスト 11・レスポンス 15） | 群 9〜群 12 と内訳の段落・コメントを置く場所 #4・#5 |
 | 5.5 | 見出しが同じ 2 組（`Charset`・`Sender`）を id で区別 | DD-1（id をそのまま写すので潰れない）・群 9〜11 の内訳 |
 | 5.6 | `list_plugin_event` 19 の種別の書き分け | 群 13・DD-6 |
-| 5.7 | 外部連携 14 は「受け口の有無」だけを判定 | 群 14・優先度 `E1` |
+| 5.7 | 外部連携 14 は「受け口の有無」だけを判定 | 群 14a（SSTP／FMO・`D1`）・群 14b（`E1`）・群 14c（DLL 共通仕様は SHIORI 用の受け口が実在するので `degraded`・`E1`） |
 | 5.8 | アンカーの無い 4 件の粗さを `note` に書く | DD-7 の 1 |
-| 5.9 | SAORI は `spec_dll` の `note` に書き独立した行を作らない | 群 14（`spec_dll` の個別の `note`・成立の条件を併記） |
+| 5.9 | SAORI は `spec_dll` の `note` に書き独立した行を作らない | 群 14c（`spec_dll` は `degraded`・個別の `note` に成立の条件を併記） |
 | 6.1, 6.2, 6.8 | 正典と別名の決め方・`alias_of`・連鎖を作らない | 群 3・繋がりの設計・テスト方針の検査 ⑸ |
 | 6.3, 6.4 | 旧仕様 3 件は `OnFileDrop2` の別名・`OnFileDropping` は含めない | 群 3（5 件すべての実在を確認済み） |
 | 6.5 | `OnMouseClick` と `OnMouseClickEx` は分担 | 繋がりの設計（`same-feature` 1 本） |
