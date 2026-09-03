@@ -269,6 +269,7 @@ graph TB
 - 付録 A は「id の文字順に並べる」を必須にしている。要件 3.3a は「既存の項目を一切書き換えず」欠けた id だけを挿入せよと言う。**既存の本文をそのまま残すには、値を組み立て直すのではなく本文を切り貼りするしかない**（組み立て直すと備考の書き方や空行が変わる）。
 - したがって初期台帳の生成は、既存本文を項目の塊に切り分け、新しい塊を然るべき位置へ差し込み、既存の塊のバイト列はそのまま写す。
 - 既存の塊が id 順に並んでいなかった場合は**並べ替えず、どの id が順序を破っているかを告げて失敗する**（持ち主が直す）。整合検査にも同じ判定を置く（付録 A の凍結された取り決めなので、機械で守る）。
+- 並び順の判定は**厳密な昇順**（前の id と同じでも失敗）にする。備考の複数行文字列の中に行頭 `[entry."…"]` が既存の id と同じ綴りで現れた場合、切り分けの較正（`toml` の鍵集合との一致）では見抜けないが、厳密昇順なら重複として落ちる。
 
 ---
 
@@ -358,7 +359,7 @@ crates/ukadoc-survey/
         └── values_md.rs             # values.md の見出しが 8 テーマと一致する
 
 doc/ukadoc-coverage/
-├── README.md                        # 台帳の形式・状態語彙・欄の意味・仕訳の規則・URL の書き方・報告の扱い
+├── README.md                        # 台帳の形式・状態語彙・欄の意味・仕訳の規則・URL の書き方・報告の扱い・合流の手順・付録 A.1 の記入例 id が実在しない注意
 ├── values.md                        # 伺からしさのテーマ 8 つ（要件 4.4-4.6）
 ├── catalog.toml                     # 機械生成のみ。1,749 項目＋冒頭のスナップショット情報
 ├── ledger/
@@ -375,7 +376,8 @@ doc/ukadoc-coverage/
 ```
 
 - `.rs` は 48 本。research §4 の見積り（生成 200・証拠 250・台帳 200・検査 250・報告 250・テスト 600 行）を機能ごとに割ると、いずれも 1,000 行の上限に対して十分な余裕がある（要件 9.6）。
-- 在中テストは `structure.md:148-160` の作法どおり、同じディレクトリの兄弟ファイル `<stem>_tests.rs` に置き、本体側は `#[cfg(test)] #[path = "<stem>_tests.rs"] mod tests;` の 1 行だけを持つ。共用の見本データは `structure.md:176` の作法に合わせ `lib_test_support.rs` に集約する。
+- 在中テストは `structure.md:148-160` の作法どおり、同じディレクトリの兄弟ファイル `<stem>_tests.rs` に置き、本体側は `#[cfg(test)] #[path = "<stem>_tests.rs"] mod tests;` の 1 行だけを持つ。共用の見本データは `structure.md:176` の作法に合わせ `lib_test_support.rs` に集約する。`structure.md:176` が想定するのは同じ stem のテーマ間の共有だが、ここでは `catalog/`・`ledger/` など別ディレクトリのテストからも使うため、`lib.rs` に `#[cfg(test)] #[path = "lib_test_support.rs"] pub(crate) mod lib_test_support;` の接続を置き、各テストは `crate::lib_test_support` で引く。
+- **新クレートのテストはファイルを 1 つも作らず、一時ディレクトリも使わない**（読むだけ。書き出しは本文を返す関数として確かめる）。ワークスペースには走査器を共有する見張りテストが行数上限のほかに 2 本あり（`crates/log-capture-kit/tests/temp_path_guard_test.rs`＝`std::env::temp_dir` の呼び出しは窓口クレートと例外表の外に置けない／`crates/log-capture-kit/tests/with_default_guard_test.rs`）、一時ディレクトリを使うと既存クレート内の例外表への追記が要り、要件 9.1（既存クレート非接触）を破る。2 層構成はもともとこれを満たす。
 
 ### Modified Files
 
@@ -449,6 +451,14 @@ flowchart TD
 ```
 
 スナップショットには触らない（要件 6.2）。ネットワークにも実機にも触らない（要件 6.1）。
+
+### 合流の手順（調査 spec と本 spec の着地順が前後する場合・README に記載）
+
+調査 spec 4 本は本 spec の実装を待たずに台帳を書く（要件付録 A）。着地順はどちらが先でも成り立つが、rebase 後の手順を README に 1 節で書き、担当者が迷わないようにする。
+
+- **本 spec が先に着地**: 調査 spec は rebase 後に `ledger-init`（既存の塊は変えず、欠けた id だけ差し込む・3.3a）→ `report`（自ドメインの報告を再生成・7.4）→ `cargo test -p ukadoc-survey` の順で回し、緑を確かめてから PR を出す。
+- **調査 spec が先に着地**: 本 spec の PR で `ledger-init` と `report` を全ドメインに対して回し、手書きの台帳を検査に通す。赤になった食い違いは本 spec 側で直せるもの（形式の取り違え）は直し、判断を要するもの（実在しない id・綴り違い）は該当 spec へ差し戻す。
+- 報告は手で merge しない（要件 7.7）。台帳の衝突も手で merge せず、`ledger-init` を再実行して差し込みで解消する。
 
 ---
 
@@ -771,7 +781,7 @@ pub struct CheckOutcome { pub findings: Vec<Finding>, pub stats: ScanStats }
 pub struct Finding { pub kind: FindingKind, pub id: Option<EntryId>, pub place: String, pub detail: String }
 pub enum FindingKind {
     LedgerIdNotInCatalog, CatalogIdMissingFromLedgers, CatalogIdInMultipleLedgers,
-    LedgerIdPageMismatch, LedgerOutOfOrder, PageNotAssigned,
+    LedgerIdPageMismatch, LedgerDomainMismatch, LedgerPagesMismatch, LedgerOutOfOrder, PageNotAssigned,
     SourceUrlNotInCatalog, ImplementedWithoutEvidence,
     LinkEndpointMissing, AliasChain, IntroducedNotInCatalogVersions,
     UnknownTheme, DomainReportStale,
@@ -790,8 +800,10 @@ pub fn render(findings: &[Finding]) -> String;   // 種類ごとにまとめた�
 |---|---|---|
 | `LedgerIdNotInCatalog` | 6.3 | 台帳の id がカタログに無い |
 | `CatalogIdMissingFromLedgers` / `CatalogIdInMultipleLedgers` | 6.4, 3.2 | カタログの id がちょうど 1 つの台帳に 1 回だけ現れるか |
-| `LedgerIdPageMismatch` | 3.1, 3.2 | id のページがその台帳の担当でない |
-| `LedgerOutOfOrder` | 3.3a（付録 A） | 台帳の項目が id の byte 昇順でない |
+| `LedgerIdPageMismatch` | 3.1, 3.2 | id のページがその台帳の担当でない。**担当の正本は `assignment::canonical()`**（台帳の `[ledger].pages` ではない） |
+| `LedgerDomainMismatch` | 3.1 | `[ledger].domain` がファイル名のドメインと違う |
+| `LedgerPagesMismatch` | 3.1 | `[ledger].pages` が `assignment::canonical()` の担当ページと集合として一致しない（手書きや古いままの前置きを拾う。3.3a は前置きをバイト列のまま写すので、ここで守らないと永久に残る） |
+| `LedgerOutOfOrder` | 3.3a（付録 A） | 台帳の項目が id の byte **厳密**昇順でない（同じ id が 2 回現れる場合もここで落ちる） |
 | `PageNotAssigned` | 3.5 | カタログにあるページに割り当てが無い |
 | `SourceUrlNotInCatalog` | 6.5, 6.10 | ソースの URL がカタログの URL にもページ URL にも一致しない |
 | `ImplementedWithoutEvidence` | 6.6 | `status = "implemented"` の id に証拠が 1 件も無い |
@@ -813,7 +825,7 @@ pub fn render_domain(ledger: &Ledger, themes: &[&str]) -> String; // 要件 7.1
 pub fn render_summary(catalog: &Catalog, ledgers: &[Ledger], evidence: &EvidenceIndex, themes: &[&str]) -> String; // 要件 7.2
 ```
 
-**ドメイン別報告の中身（要件 7.1）**: ⑴ 状態の分布（ドメイン全体と、id から取り出したページ別）⑵ SSP 世代別の対応表（`introduced` の上 2 桁を世代とし、空文字は「世代不明」）⑶ 別名の一覧（`status = "alias"` の行と `alias_of`）⑷ テーマ別の状態分布（8 テーマそれぞれ）⑸ ドメイン内で関連が閉じている束の一覧。**入力はその台帳 1 本とテーマ名だけ**（D-11）。
+**ドメイン別報告の中身（要件 7.1）**: ⑴ 状態の分布（ドメイン全体と、id から取り出したページ別）⑵ SSP 世代別の対応表（`introduced` の先頭 2 節を世代とする。例 `2.3.53` → `2.3`。空文字は「世代不明」）⑶ 別名の一覧（`status = "alias"` の行と `alias_of`）⑷ テーマ別の状態分布（8 テーマそれぞれ）⑸ ドメイン内で関連が閉じている束の一覧。**入力はその台帳 1 本とテーマ名だけ**（D-11）。
 
 **全体報告の中身（要件 7.2）**: 冒頭にカタログの `[snapshot].generated_at` と各台帳の項目数・未分類件数。続けて状態の分布（全体・ドメイン別）、ドメインを跨いで繋がった束の一覧、テーマ別の状態分布（全体）、ドメインごとの証拠あり件数（要件 2.3 の「有無だけ」）。壁時計の時刻は書かない（要件 7.3）。
 
@@ -1064,7 +1076,7 @@ pub enum SurveyError {
 ### 実データに対する整合検査（`tests/consistency/checks.rs`）
 
 18. `check::run` の `findings` が空であること。空でなければ本文をそのまま失敗メッセージにする（6.1・6.12）。
-19. スナップショットが無い環境でもこの一群が緑になること（環境変数を空にした状態で走ることをテストの中で明示する・6.2）。
+19. スナップショットが無い環境でもこの一群が緑になること（6.2）。環境変数を書き換えるテストは置かない（テストは同一プロセスで並行に走り、Rust 2024 では `set_var` が unsafe）。代わりに構造で保証する: `tests/consistency/` は `io::snapshot` を参照せず、スナップショットの場所を組み立てる関数を 1 度も呼ばない。`tests/consistency/mod.rs` の冒頭にその旨を書き、`io::snapshot` を `cli` からだけ引く形にする。
 
 ---
 
