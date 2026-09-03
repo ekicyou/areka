@@ -94,6 +94,10 @@ use super::move_cue::{MoveCueSink, MoveDirective};
 use super::talk_clock::{ClockedTextSink, TalkClock};
 use super::talk_lifecycle::{BalloonLifecycleSink, TalkLifecycleSignal};
 use super::target_map::{balloon_target, shell_target};
+// 進行状態の記録（第 2 系統・R3.8）の型と本体は兄弟ファイル側に置く（design D3）。
+use self::conformance_support::{
+    RecordedStatus, StatusLedger, record_status, snapshot_status_calls,
+};
 
 // ===========================================================================
 // ScriptedShioriBackend（DD-11・areka 側 spine ローカルの最小 fake）
@@ -184,14 +188,19 @@ impl ScriptedShioriBackendBuilder {
             .or_insert_with(|| VecDeque::from([Ok(None)]));
 
         let calls = Arc::new(Mutex::new(Vec::new()));
+        let status_calls: StatusLedger = Arc::new(Mutex::new(Vec::new()));
         let backend = ScriptedShioriBackend {
             get_scripts: self.get_scripts,
             notify_scripts: self.notify_scripts,
             unload_script: self.unload_script,
             status: HelperStatus::Running,
             calls: Arc::clone(&calls),
+            status_calls: Arc::clone(&status_calls),
         };
-        let handle = ScriptedShioriHandle { calls };
+        let handle = ScriptedShioriHandle {
+            calls,
+            status_calls,
+        };
         (backend, handle)
     }
 }
@@ -203,6 +212,8 @@ struct ScriptedShioriBackend {
     unload_script: Option<Result<ExitKind, ShutdownError>>,
     status: HelperStatus,
     calls: Arc<Mutex<Vec<RecordedCall>>>,
+    /// 進行状態の記録（第 2 系統・R3.8）。既存 `calls` とは別の台帳で、書き込みのみ。
+    status_calls: StatusLedger,
 }
 
 impl ScriptedShioriBackend {
@@ -217,8 +228,9 @@ impl ShioriBackend for ScriptedShioriBackend {
         &mut self,
         id: &str,
         references: &[String],
-        _status: Option<&str>,
+        status: Option<&str>,
     ) -> Result<Option<String>, RequestError> {
+        record_status(&self.status_calls, id, status);
         self.calls
             .lock()
             .expect("calls mutex poisoned")
@@ -238,8 +250,9 @@ impl ShioriBackend for ScriptedShioriBackend {
         &mut self,
         id: &str,
         references: &[String],
-        _status: Option<&str>,
+        status: Option<&str>,
     ) -> Result<(), RequestError> {
+        record_status(&self.status_calls, id, status);
         self.calls
             .lock()
             .expect("calls mutex poisoned")
@@ -280,6 +293,8 @@ impl ShioriBackend for ScriptedShioriBackend {
 #[derive(Clone)]
 struct ScriptedShioriHandle {
     calls: Arc<Mutex<Vec<RecordedCall>>>,
+    /// 進行状態の記録（第 2 系統・R3.8）の共有台帳。取り出し口は [`Self::status_calls`]。
+    status_calls: StatusLedger,
 }
 
 impl ScriptedShioriHandle {
@@ -292,6 +307,11 @@ impl ScriptedShioriHandle {
             .filter(|c| !matches!(c, RecordedCall::Status))
             .cloned()
             .collect()
+    }
+
+    /// 進行状態の記録（呼出 id と組み立て済み進行状態の対）のスナップショットを返す（R3.8）。
+    fn status_calls(&self) -> Vec<RecordedStatus> {
+        snapshot_status_calls(&self.status_calls)
     }
 }
 
@@ -907,6 +927,9 @@ impl SpineHarness {
 #[cfg(test)]
 #[path = "spine_boot_smoke_tests.rs"]
 mod boot_smoke_tests;
+#[cfg(test)]
+#[path = "spine_conformance_support.rs"]
+mod conformance_support;
 #[cfg(test)]
 #[path = "spine_display_tests.rs"]
 mod display_tests;
