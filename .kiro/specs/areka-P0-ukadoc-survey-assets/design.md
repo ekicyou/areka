@@ -30,7 +30,7 @@
 
 - `doc/ukadoc-coverage/ledger/assets.toml`（新設）——資産ドメイン 542 項目の状態・世代・別名・担当・優先度・テーマ・関連・備考。
 - `doc/ukadoc-coverage/briefing-assets.md`（新設）——人手で書く読み物。
-- `crates/` 配下の `/// ukadoc: <URL>` 1 行コメント——実装済みと判定した項目の定義箇所のみ。
+- `crates/` 配下の `ukadoc: <URL>` 1 行コメント（項目の直上は `///`・式の途中は `//`・D11）——実装済みと判定した項目の定義箇所のみ。
 - 上流の道具が着地していた場合の `doc/ukadoc-coverage/report/assets.md`（再生成のみ・手編集なし）。
 
 ### 2.2 持たないもの
@@ -60,16 +60,16 @@
 
 ## 3. 上流契約の確定範囲と未決範囲
 
-上流 spec は**要件のみ承認済みで、`design.md` はまだ生成されていない**（2026-09-03 に `.kiro/specs/areka-P0-ukadoc-survey-toolkit/` を確認・`brief.md`・`requirements.md`・`research.md`・`spec.json` の 4 本だけが存在する）。したがって「道具の設計が決めるはずの事柄」は、まだ決まっていない。
+上流 spec は**要件が main で承認済み**（PR#132）で、**設計はブランチ `claude/areka-p0-ukadoc-survey-1617ba` に存在する（1,098 行・2026-09-03 時点で未 push・main には無い）**。本 spec が依存する 2 点はその設計で決まっている——⑴ 版番号の抽出規則（同 design.md 行 696）、⑵ URL を拾うコメント行の形（同 行 761）。main に載る前に変わる可能性があるので、道具の着地時に V10・V11 で再照合する。
 
 | 事項 | 状態 | 本 spec の扱い |
 |---|---|---|
 | 台帳 1 項目の形（`[entry."<id>"]`＋欄）・欄名 `owner`／`supersedes` | **凍結済み**（付録 A.1・A.2） | そのまま従う |
 | 状態 7 語彙・関連 6 種別・テーマ 8 つ | **凍結済み**（要件 2.2・4.3・4.4） | そのまま従う |
-| doc コメントの書式 `/// ukadoc: <正典 URL>`・1 項目 1 行・定義箇所のみ・語彙表は頭にページ URL 1 つ | **凍結済み**（要件 5.1〜5.4・付録 A.3） | そのまま従う |
+| doc コメントの書式 `ukadoc: <正典 URL>`・1 項目 1 行・定義箇所のみ・語彙表は頭にページ URL 1 つ | **凍結済み**（要件 5.1〜5.4・付録 A.3）。行の形は上流の設計（行 761）が「行頭の空白を除いて `///`・`//!`・`//` のいずれかで始まり、`ukadoc:` の後に空白区切りの 1 語（URL）だけが続く行」と定めた | そのまま従う。項目の直上は `///`、式の途中（引数・構造体リテラルの欄）は `//`（D11） |
 | id の抽出手順（コロンで分割・`_` で分割しない） | **凍結済み**（付録 B） | そのまま従う |
 | 報告 `report/<ドメイン>.md` の構成 | **凍結済み**（要件 7.1） | 道具が着地した場合のみ従う |
-| **本文からの SSP 版番号の抽出規則** | **未決**（要件 1.2 は「本文に現れる版番号すべて」としか書かず、語境界の有無を決めていない） | §5 の D6 で本 spec が仮に決める。道具着地時に照合 |
+| **本文からの SSP 版番号の抽出規則** | **上流の設計で決定済み（未 main）**——「前後が数字でも小数点でもない `数字+.数字+.数字+`」をすべて拾い、重複を除いて昇順（同 design.md 行 696）。整合検査は `introduced` が空なら見ない（同 行 814） | D6 で同じ規則を採る。道具着地時に V10 で照合 |
 | 台帳と報告の一致検査の実装 | 未着地 | §11 の自前検査で代替（要件 9.3 の退避路） |
 
 ## 4. アーキテクチャ（生産の流れ）
@@ -158,8 +158,10 @@ graph TB
 備考の書き方を 1 行の型に固定する。
 
 ```
-壊れ方: <黙って壊れる|明示的なエラー|見た目の差>。記録: <なし|debug!|warn!|error!> <file:line>。
+壊れ方: <黙って壊れる|明示的なエラー|見た目の差>。記録: <なし|debug!|warn!|error!> <ファイルパス>::<定義名>。
 ```
+
+台帳の備考にはソースの**行番号を書かない**（ファイルパス＋関数名・定数名で指す）。行番号は整理で動き、備考が黙って古びるからである。同じ裁定が同日の `areka-P0-ukadoc-survey-shiori` の要件ディスカッションで出ており（議題 1・案 ⒜）、台帳 4 本の流儀を揃える。本書の表に書いた `file:line` は設計時点の所在を示すためのもので、台帳へは写さない。
 
 現在の記録の全数（本ドメインに関わる範囲）。
 
@@ -179,25 +181,15 @@ graph TB
 
 要件 4.2 が「表の版番号を台帳から取り、食い違わせない」と命じており、道具が未着地の間その一致を保つ仕組みが他に無い。世代表は §6.1 と同じ作業用スクリプトが台帳を読んで Markdown の表を吐き、ブリーフィングへ貼る。表の生成規則（列・並び順・注記）は §9.2 に置く。
 
-### D6: 版番号は語境界付きで読み、境界事例 7 件は空にする（research 判断 10 = 案 ⑴＋⑶）
+### D6: 版番号は上流の設計と同じ規則で読む（research 判断 10・設計ディスカッション 2026-09-03 で改訂）
 
-抽出規則は上流の道具の設計が決めるはずだが、その設計はまだ無い（§3）。本 spec は**語境界付き**（前後に英数字・下線・ピリオドが続かない `\d+\.\d+\.\d+`）で読む。緩い規則は「他の数字の並び」を版番号と誤読するので、厳しい側を既定にする。
+抽出規則は上流の設計（§3）が決めている——**「前後が数字でも小数点でもない `数字+.数字+.数字+`」をすべて拾い、重複を除いて昇順に並べる**。正規表現で書けば `(?<![0-9.])\d+\.\d+\.\d+(?![0-9.])`。英字の隣接は妨げにならないので、`SSP2.3.00` のように版番号が語にくっついている本文からも `2.3.00` が取れる。本 spec も同じ規則で読む。
 
-そのうえで、**2 つの規則で結果が割れる 7 項目は `introduced` を空にする**（要件 2.7「版番号が無ければ空・最古と決めつけない」が形式上そのまま使える）。上流の道具がどちらの規則を採っても上流契約 要件 6.7 の照合が赤にならない。
+この規則を担当 24 ページ 542 件に当てた実測（2026-09-03）: 版番号を 1 つ以上持つ項目 **144**、2 つ以上持つ項目 **7**。「区切りを見ない緩い規則」との差は **0 件**である。したがって「規則の違いで結果が割れる項目」は存在せず、`introduced` を空にしておく逃げ道は要らない。
 
-| 項目 id | 語境界あり | 語境界なし |
-|---|---|---|
-| `ukadoc:descript_balloon:cursor_2c_30d5_30a1_30a4_30eb_540d_20_2f_20mousecursor_2c_30d5_30a1_30a4_30eb_540d:1` | なし | 2.5.40 |
-| `ukadoc:descript_ghost:cursor_2c_30d5_30a1_30a4_30eb_540d_20_2f_20mousecursor_2c_30d5_30a1_30a4_30eb_540d:1` | なし | 2.5.41 |
-| `ukadoc:descript_ghost:shiori.cache_2c_6570_5024:1` | なし | 2.4.73・2.4.74 |
-| `ukadoc:descript_ghost:shiori.logo.file_2c_30d5_30a1_30a4_30eb_540d:1` | なし | 2.4.26・2.8.56 |
-| `ukadoc:descript_install:_76f8_5bfe_30d1_30b9_2c...:1`（相対パス系の 1 件） | なし | 2.5.17 |
-| `ukadoc:manual_shell` | なし | 2.2.57・2.7.38 |
-| `ukadoc:dev_nar` | 2.7.52 | 2.3.00・2.7.52 |
+> 設計の初版は「語境界付き」と書いて 7 件を空にする案を採っていたが、これは誤りだった。語境界の定義が曖昧で、Python の `\b`（日本語の直後を境界と見なさない）で数えると 8 件、英数字・下線・ピリオドだけを境界に取ると 2 件、上流の規則では 0 件と、数が定義しだいで動く。上流の規則を採れば数える必要そのものが無くなる。
 
-（ギャップ分析は 5 件と書いたが、集合の差で数え直すと 7 件である。§12 の訂正 3 を参照。）
-
-`introduced` は 1 つの版だけを書く欄なので、語境界付きで 2 つ以上の版が取れる項目は**最も古い版**を書く（その項目が最初に現れた版という欄の意味に合う）。上流契約 要件 6.7 は「カタログの版番号のいずれかに含まれること」しか求めないので、これで赤にならない。
+`introduced` は 1 つの版だけを書く欄なので、2 つ以上の版が取れる 7 項目は**最も古い版**を書く（その項目が最初に現れた版という欄の意味に合う）。上流契約 要件 6.7 の整合検査は「カタログの版番号のいずれかに含まれること」を見るだけで、`introduced` が空の項目は検査しない（上流 design.md 行 814）ので、いずれの項目も赤にならない。版番号が 1 つも取れない 398 項目は `""`（要件 2.7）。
 
 ### D7: 上流の道具は「未着地」を前提に固定する（research 判断 8 = 案 ⑴）
 
@@ -229,6 +221,12 @@ graph TB
 - 上流契約 要件 6.6 は `implemented` 行に証拠があることしか求めておらず、狭く置いても赤にならない。
 
 **1 つの id に対する URL は repo 全体で 1 行だけ**にする（要件 6.3）。2 つのファイルが同じ語を定義している場合は、意味を所有する側に置く（例: 描画メソッド `overlay` は `crates/areka-emo-compose/src/method.rs:148`。`crates/areka-parsers/src/shell/decode.rs:198` は行の受理側なので置かない）。
+
+### D11: 式の途中に置く URL 行は `//` で書く（設計検証 重大 3 への対処）
+
+URL を置く先の多くは**式の途中**である——`crates/areka-parsers/src/balloon/parse.rs:71-101` の 28 か所は `WindowPosition::new(...)` などの引数、`crates/areka-parsers/src/package/resolve.rs:69-72` の 4 か所は `GhostNames { ... }` の欄。この位置に `///` を置くと `rustc` が `unused doc comment` の警告を出し（検証で同型の最小コードを実際にコンパイルして確認）、rustdoc にも出ない。ワークスペースに `deny(warnings)` は無いのでテストは赤にならないが、ビルドのたびに警告が並ぶ。
+
+上流の設計（行 761）は URL を拾う行の形を「`///`・`//!`・`//` のいずれかで始まる」と定めているので、**項目（関数・定数・構造体の欄の定義）の直上は `///`、式の途中は `//`** と書き分ける。どちらも証拠として同じに拾われる。同じ書き分けを `areka-P0-ukadoc-survey-shiori`（配列要素は `//`）と `areka-P0-ukadoc-survey-property`（値の定義行に `//`）も採っており、4 本で流儀が揃う。上流契約 要件 5.1 の「doc コメント」という語は `//` を含む読み替えが要るので、上流へ回す是正候補として §9.8 に 1 行書く（要件 10.8）。
 
 なお要件 6.4 の「語彙表の先頭にページ URL 1 つ」という書き方は本ドメインでは使わない。唯一の候補である合成メソッドの種別表（`crates/areka-emo-compose/src/method.rs:186-204` の 19 種）は、実導出を持つのが `Overlay` だけ（`:130-132`）で表の中身が `vocabulary-only` になるため、D10 の下では URL を置く対象にならない。
 
@@ -278,6 +276,8 @@ graph TB
 | 規則 3: 読む経路が無いページ | 61 | `descript_plugin` 13 ＋ `descript_headline` 9 ＋ `descript_install` 15 ＋ `spec_update_file` 9 ＋ ページ全体項目 15 |
 | 合計 | **178** | 残り 364 件は人手。ただし大半は素直に `absent` で、実作業は備考・テーマ・優先度の文章 |
 
+**規則 1 の受理キー表は `areka-parsers` だけでは足りない**（設計検証 重大 2）。`crates/areka/src/placement/` が本ドメインの descript キーを別途読んでいる——`config.rs:138`（`seriko.zorder`）・`:139`（`seriko.sticky-window`）・`:140`（`seriko.dpi`）・`:227`（`seriko.alignmenttodesktop`／`seriko.alignmentondesktop` の定数・`sakura.`／`kero.`／`char*.` の各形と全体形のカスケードは `:232-236`）と、`source.rs:45`（`SHELL_DPI_KEY` = `seriko.dpi`）・`:48`（`BALLOON_DPI_KEY` = バルーン descript の `dpi`）。第 2 段の仕訳ではこれらの読取も受理キー表に含め、`absent` へ落とさない。ただし `build_placement_config` は `#[allow(dead_code)]` の足場（`config.rs:125`）で本番経路から呼ばれていない形もあるので、`implemented` か `vocabulary-only` かは項目ごとに本番経路（`placement/mod.rs` → `main.rs` → `emo2_boot/frame/wiring.rs`）まで追って決める。62 件という数はこの分だけ増えうる。
+
 規則 1 の一致は実測で裏が取れている。バルーンは 30 キーのうち 28 が `descript_balloon` の見出しと 1 文字も違わずに一致し、一致しない 2 つ（`writing_mode`・`budoux_newline`）は areka 独自の拡張で正典に項目が無い。ゴーストは 7/7 一致。シェルだけは形が違い、ukadoc の `sakura.bindgroup*.default` に対して areka は接頭辞＋番号＋接尾辞で照合するので、§6.1 の読み替え規則 1 行で橋を架ける。なお `descript_shell` には `char*.bindgroup*.*`・`char*.bindoption*.group` という別系統の項目もあり、areka はこちらを照合しない（`crates/areka-parsers/src/package/resolve.rs:111-121` の接頭辞は `sakura.`／`kero.` の 2 つだけ）。
 
 ### 6.4 別名の向きと「対象外」の決め方（要件 2.5・2.6）
@@ -324,18 +324,19 @@ doc/
 
 ### 7.2 変更するファイル（`crates/` の doc コメントのみ）
 
-| ファイル | 置く URL の数（上限） | 置く場所 |
-|---|---|---|
-| `crates/areka-parsers/src/charset/prescan.rs` | 3 | `:54` の照合の直上（D3） |
-| `crates/areka-parsers/src/package/resolve.rs` | 12 | ゴースト 6 キーは各引き行（`:69`・`:70`・`:71`・`:72`・`:78`・`:83`）の直上、シェルの合成形 6 は定数群（`:111-121`）の直上にまとめて 6 行 |
-| `crates/areka-parsers/src/balloon/parse.rs` | 28 | 各引き行の直上（`writing_mode`・`budoux_newline` は正典項目が無いので置かない） |
-| `crates/areka-parsers/src/shell/decode.rs` | 9 | `element*`（`:197`）・`collision*`（`:234`）・`animation*.interval`（`:323`）・`animation*.pattern*`（`:334`）・`animation-sort`（`:501`）・`collision-sort`（`:502`）・`bind`（`:387`）・`random`（`:388`）ほか。`descript`／`surface`／`surface.append`／`kero.surface.alias`／`ascend`／`descend` は正典項目が無いので置かない |
-| `crates/areka-emo-compose/src/method.rs` | 1 | `overlay`（`:148`）。ほかは `vocabulary-only` ゆえ置かない（D10） |
-| `crates/areka/src/emo2_boot/frame/zorder_descript.rs` | 1 | `seriko.zorder` の読取（`:47`） |
+| ファイル | 置く URL の数（上限） | 置く場所 | 行の形（D11） |
+|---|---|---|---|
+| `crates/areka-parsers/src/charset/prescan.rs` | 3 | `:54` の照合の直上（D3） | `//`（`if` の腕の中） |
+| `crates/areka-parsers/src/package/resolve.rs` | 12 | ゴースト 6 キーは各引き行（`:69`・`:70`・`:71`・`:72`・`:78`・`:83`）の直上、シェルの合成形 6 は定数群（`:111-121`）の直上にまとめて 6 行 | ゴースト 6 は `//`（構造体リテラルの欄）。シェル 6 も `//`（`///` だと `:110` の既存 doc へ合流して `SAKURA_BINDGROUP_PREFIX` の説明文になるため） |
+| `crates/areka-parsers/src/balloon/parse.rs` | 28 | 各引き行の直上（`writing_mode`・`budoux_newline` は正典項目が無いので置かない） | `//`（すべて `X::new(...)` の引数） |
+| `crates/areka-parsers/src/shell/decode.rs` | 8 | `element*`（`:197`）・`collision*`（`:234`）・`animation*.interval`（`:323`）・`animation*.pattern*`（`:334`）・`animation-sort`（`:501`）・`collision-sort`（`:502`）・`bind`（`:387`）・`random`（`:388`）。`descript`／`surface`／`surface.append`／`kero.surface.alias`／`ascend`／`descend` は正典項目が無いので置かない | `//`（`match` の腕・`if` の条件） |
+| `crates/areka-emo-compose/src/method.rs` | 1 | `overlay`（`:148`）。ほかは `vocabulary-only` ゆえ置かない（D10） | `//`（`match` の腕） |
+| `crates/areka/src/placement/config.rs` | 5 | `seriko.zorder`（`:138`）・`seriko.sticky-window`（`:139`）・`seriko.dpi`（`:140`）・`seriko.alignmenttodesktop`／`seriko.alignmentondesktop`（`:227` の定数の直上に 2 行）。**設計初版の `emo2_boot/frame/zorder_descript.rs:47` は誤り**（同行は doc コメントの一行で読取ではない・§12 訂正 11） | `:138-140` は `//`（構造体リテラルの欄）、`:227` は `///`（関数内の `const` 定義の直上） |
+| `crates/areka/src/placement/source.rs` | 2 | `SHELL_DPI_KEY`（`:45`）・`BALLOON_DPI_KEY`（`:48`） | `///`（定数定義の直上・既存 doc の末尾に 1 行足す） |
 
-**上限は 54 行**である。実際に置く数は状態が `implemented` に確定した項目数で決まる（`degraded` と判定した項目には置かない・D10）。URL を置く対象は本ドメインの項目に限り、他ドメインの項目の定義箇所には置かない（要件 6.9）。
+**上限は 59 行**である。実際に置く数は状態が `implemented` に確定した項目数で決まる（`degraded`・`vocabulary-only` と判定した項目には置かない・D10。`placement/` の 7 か所は本番経路まで追って決める・§6.3）。URL を置く対象は本ドメインの項目に限り、他ドメインの項目の定義箇所には置かない（要件 6.9）。
 
-行数の上限テストは `crates/**/*.rs` を走査する（`crates/log-capture-kit/tests/workspace_scan/mod.rs:38` が上限 1,000・`:82` が `root.join("crates")`・`:103` が `.rs` だけ）。追加後の行数は `resolve.rs` 949→961、`balloon/parse.rs` 168→196、`shell/decode.rs` 558→567、`method.rs` 395→396、`prescan.rs` 60→63 で、いずれも上限を超えない（V13 で確かめる）。
+行数の上限テストは `crates/**/*.rs` を走査する（`crates/log-capture-kit/tests/workspace_scan/mod.rs:38` が上限 1,000・`:82` が `root.join("crates")`・`:103` が `.rs` だけ）。追加後の行数は `resolve.rs` 949→961、`balloon/parse.rs` 168→196、`shell/decode.rs` 558→566、`method.rs` 395→396、`prescan.rs` 60→63、`placement/config.rs` 703→708、`placement/source.rs` 284→286 で、いずれも上限を超えない（V13 で確かめる）。
 
 ### 7.3 作業用（コミットしない）
 
@@ -354,7 +355,7 @@ doc/
 | `areka-P0-choice-marker-styling` | バルーン descript の `cursor.*` | `brief.md:26`・`:8` |
 | `areka-P0-charset-canon` | `shiori.encoding`／`shiori.forceencoding`／surfaces.txt の `charset` | `brief.md:50` |
 | `areka-P0-scope-zorder-pinning` | シェル descript の `seriko.zorder` | 完了 spec |
-| `areka-P0-windowposition-limit` | ゴースト側 `windowposition.*` | 完了 spec |
+| `areka-P0-windowposition-limit` | `descript_balloon` の `windowposition.x`／`.y`／`.limit`（要件 7.2 は「ゴースト側」と書くが、本ドメインで `windowposition` を見出しに持つ正典項目はバルーンの 3 件だけ・`descript_ghost` には無い——§12 訂正 12） | 完了 spec |
 | `areka-P0-kero-balloon`／`-balloon-visibility`／`-balloon-vertical-canon`／`-balloon-offset-dpi` | バルーンの系列名・表示寿命・縦書き・単位空間 | 完了 spec |
 | `areka-P0-bindoption-exclusivity` | `bindoption*.group` | 完了 spec |
 | `areka-P0-package-mount` | ゴースト descript の起点と install.txt の対象外宣言 | 完了 spec |
@@ -420,7 +421,7 @@ doc/
 
 ### 9.5 沈黙ルール対応表 44 行の一覧（要件 2.9）
 
-`doc/COMPAT_ARCHITECTURE.md:128-207` の 80 行のうち本ドメインの項目に触れる行の**行番号一覧**を 1 節として載せる。表にドメインを示す欄が無く 44 と 16 が機械で再現できないため、この一覧が数の根拠になる。縮退（`degraded`）と判定した項目の備考には転記元の行番号を必ず書く（要件 2.8）ので、逆引きでも数え直せる。
+`doc/COMPAT_ARCHITECTURE.md:128-207` の 80 行のうち本ドメインの項目に触れる行の**一覧**を 1 節として載せる。行は**行番号ではなく表の第 1 列（項目名）で指す**——行番号は追記で動くが項目名は動かない（D4 と同じ理由・shiori の裁定に揃える）。表にドメインを示す欄が無く 44 と 16 が機械で再現できないため、この一覧が数の根拠になる。縮退（`degraded`）と判定した項目の備考には転記元の行を項目名で必ず書く（要件 2.8）ので、逆引きでも数え直せる。
 
 ### 9.6 ライブ確認の結果（要件 1.12）
 
@@ -436,7 +437,7 @@ WebFetch で 4 ページを引く（`manual_shell`・`descript_shell_surfaces`�
 
 ### 9.8 隣接 spec の是正候補（要件 7.4）
 
-§8 の 4 件と、調査中に見つかったものを並べる。brief は書き換えない。
+§8 の 4 件と、調査中に見つかったものを並べる。brief は書き換えない。上流契約へ回すものも同じ節に置く——⑴ 要件 5.1・付録 A.3 の「doc コメント `///`」は `//` を含む読み替えが要る（D11・上流の設計 行 761 は既にそう実装している）、⑵ 要件 7.2 の「ゴースト側 `windowposition.*`」は本 spec の要件側の記述誤り（§12 訂正 12）。
 
 ## 10. 進めかたと段取り
 
@@ -468,11 +469,11 @@ WebFetch で 4 ページを引く（`manual_shell`・`descript_shell_surfaces`�
 | V7 | `links[].kind` が 6 種のいずれか・`links[].to` がスナップショットに実在する id | 9.7 |
 | V8 | `values[]` が 8 テーマ名のいずれか | 8.1 |
 | V9 | `alias`・`not-applicable` 以外の全項目の `priority` が `^[A-E][0-9]+$`。この 2 状態は `""` | 8.6 |
-| V10 | `introduced` が空、またはその項目の本文から語境界付きで取れる版番号のいずれか。D6 の 7 項目は空であること | 2.7・D6 |
-| V11 | `crates/**/*.rs` の `/// ukadoc: <URL>` を集めて、⑴ 各 URL がスナップショットの `url` と 1 文字も違わない、⑵ URL → id の集合が台帳の `implemented` の id 集合と一致、⑶ 同じ id の URL が 2 行以上ない | 6.1・6.3・6.5・6.7・6.9・D10 |
-| V12 | 世代表 137 行の版番号が台帳の `introduced` と一致（表の再生成結果とブリーフィング中の表がバイト一致） | 4.1・4.2 |
+| V10 | `introduced` が空、またはその項目の本文から D6 の規則（`(?<![0-9.])\d+\.\d+\.\d+(?![0-9.])`）で取れる版番号のいずれか。2 つ以上取れる 7 項目は最も古い版であること | 2.7・D6 |
+| V11 | `crates/**/*.rs` から「行頭の空白を除いて `///`・`//!`・`//` のいずれかで始まり、`ukadoc:` の後に空白区切りの 1 語だけが続く行」（上流設計 行 761 と同じ形）を集めて、⑴ 各 URL がスナップショットの `url` と 1 文字も違わない、⑵ URL → id の集合が台帳の `implemented` の id 集合と一致、⑶ 同じ id の URL が 2 行以上ない。URL を伴わない `ukadoc` の行（例: `crates/areka-parsers/src/sakura/decode_tests.rs:438`）は拾わない | 6.1・6.3・6.5・6.7・6.9・D10・D11 |
+| V12 | 世代表 137 行の版番号が台帳の `introduced` と一致（表の再生成結果とブリーフィング中の表がバイト一致。比較は作業ツリーのファイル同士で行い、改行は CRLF に揃える・D8） | 4.1・4.2 |
 | V13 | URL を足した各ファイルの行数が 1,000 未満（上限テストの前倒し・`crates/log-capture-kit/tests/workspace_scan/mod.rs:38`） | 6.8 |
-| V14 | `git diff --name-only` の変更対象が `doc/ukadoc-coverage/` 配下と `crates/` の doc コメントだけ。`doc/COMPAT_ARCHITECTURE.md`・`.kiro/steering/roadmap.md`・他 3 台帳・隣接 spec の文書に差分が無い（パスの実在を先に確かめてから差分を取る） | 10.1〜10.6 |
+| V14 | `git diff --name-only`（比較元は分岐点の origin/main）の変更対象が `doc/ukadoc-coverage/` 配下・`crates/` の URL コメント・本 spec 自身の `.kiro/specs/areka-P0-ukadoc-survey-assets/` だけ。`doc/COMPAT_ARCHITECTURE.md`・`.kiro/steering/roadmap.md`・他 3 台帳・隣接 spec の文書に差分が無い（パスの実在を先に確かめてから差分を取る） | 10.1〜10.6 |
 | V15 | 完了直前に `doc/ukadoc-coverage/catalog.toml` と調査用クレートの有無を確かめる。着地していれば `cargo test --workspace` と報告の再生成を足す | 9.1〜9.3 |
 
 **道具そのものを較正する**（緑は道具が壊れていても出る）。V1〜V12 は、それぞれ「わざと 1 か所壊した写し」を作って赤になることを 1 度は確かめてから本番に当てる。例——id を 1 つ削って V1・V2 が赤になるか、`status` を綴り違いにして V5 が赤になるか、URL の末尾を 1 文字変えて V11 が赤になるか。
@@ -487,7 +488,7 @@ WebFetch で 4 ページを引く（`manual_shell`・`descript_shell_surfaces`�
 |---|---|---|
 | 1 | ギャップ分析 §1.2「シェルの照合の本体は `resolve.rs:171-215`」 | 要件本文の **`:146-218`** が正しい（`read_bindgroup_defaults` 全体）。`:171-215` は腕の途中で切れている |
 | 2 | ギャップ分析 §1.2「未知キーの明文は `balloon/parse.rs:122-126`」 | **`:121-125`**（`:126` は `BalloonCursor::new(` のコード行） |
-| 3 | ギャップ分析 §3-4・§6-2「語境界の有無で動くのは 5 件」 | **7 件**（§5 の D6 の表）。5 件は「版番号を 1 つも持たなくなる descript 系の項目」の数で、`ukadoc:manual_shell`（2 つ失う）と `ukadoc:dev_nar`（1 つ失う）が漏れている |
+| 3 | ギャップ分析 §3-4・§6-2「語境界の有無で動くのは 5 件」 | **数は語境界の定義しだいで動く**（Python の `\b` なら 8・英数字と下線とピリオドだけを境界に取れば 2・上流の規則なら **0**）。設計初版は 7 件と書いたがこれも `\b` による数え方で、しかも `ukadoc:dev_update` を落としていた。上流の規則を採る D6 の下では境界事例そのものが無い |
 | 4 | ギャップ分析 §1.2 の試験用ファイル 7 本の場所 | `emo2-kakukaku-offsetdpi/install.txt` と `emo2-kakukaku-wplimit/install.txt` は `fixtures/emo2/` の中ではなく **`fixtures/` 直下**（`emo2/` の兄弟）。7 本という数は正しい |
 | 5 | 要件 5.7「`doc/emo2-conformance-scope.md:75`・`:76`・`:89` の 3 か所」 | **`:89` は空行**。実在する言及は `:73`（install.txt の type）・`:75`（delete.txt は M1 マウントでは無視可）・`:76`（NAR インストーラは M1 範囲外）・`:92`（生態系拡張として NAR インストール等が M1 後）の 4 か所。主張の中身（いずれも「対象外」の宣言）は正しい |
 | 6 | ギャップ分析 §1.2「`prescan.rs:52` が最初の読点で分割」 | **`:51`**（`:52` は `continue`）。`:54` の照合は一致 |
@@ -495,6 +496,9 @@ WebFetch で 4 ページを引く（`manual_shell`・`descript_shell_surfaces`�
 | 8 | ギャップ分析 §1.2 の `areka-emo-compose/src/method.rs` の行 | 実導出の判定は **`:130-132`**（`:129` は説明文）、名前の解決は `:142` が関数の宣言で小文字化が **`:143`**・記号の除去が **`:145`**、種別 19 種は **`:186-204`**、語彙 10 種を数えるテストは **`:236-248`**。`:148`・`:153`・`:160-161`・`:173`・`:176-177` は一致 |
 | 9 | ギャップ分析 §1.2「`validation_tests.rs:123-126` の doc コメント・`:128` のテスト本体」 | doc は **`:122-125`**、テスト関数は **`:127`**。`:113` は一致 |
 | 10 | ギャップ分析 §6-6「上限テストの起点は `workspace_scan/mod.rs:81`」 | **`:82`**。上限値 `:38`・`.rs` だけを拾う `:103` は一致 |
+| 11 | ギャップ分析 §1.2・設計初版 §7.2「`seriko.zorder` はアプリ側 `emo2_boot/frame/zorder_descript.rs:47` が読む」 | **`:47` は doc コメントの一行**。実際の読取は `crates/areka/src/placement/config.rs:138`。同じファイルが `seriko.sticky-window`（`:139`）・`seriko.dpi`（`:140`）・`seriko.alignmenttodesktop`／`alignmentondesktop`（`:227`）も読み、`placement/source.rs:45`・`:48` が `seriko.dpi`・バルーンの `dpi` を読む（設計検証 重大 2） |
+| 12 | 要件 7.2「`areka-P0-windowposition-limit`（ゴースト側 `windowposition.*`）」 | 本ドメインで `windowposition` を見出しに持つ正典項目は **`descript_balloon` の 3 件**（`.x`・`.y`・`.limit`）だけ。`descript_ghost` には無い。担当の取り込み先はバルーンの 3 件 |
+| 13 | 要件 5.7「`doc/emo2-conformance-scope.md:75`・`:76`・`:89`」 | 要件側を `:73`・`:75`・`:76`・`:92` へ訂正済み（設計ディスカッション 2026-09-03） |
 
 **rebase による移動は 1 件も無い**。この作業ツリーが取り込んだ上流の 2 コミットは `crates/wintf/src/ecs/visual/draw/builder.rs` だけを変えており、`areka-parsers`・`areka-seriko`・`areka-emo-compose`・`areka` のいずれにも差分が無い（`git diff --name-only` で確認）。上の 10 件はすべて、もとの引用の取り方の粗さである。
 
@@ -503,7 +507,8 @@ WebFetch で 4 ページを引く（`manual_shell`・`descript_shell_surfaces`�
 | 危険 | 影響 | 対処 |
 |---|---|---|
 | スナップショットが 2.8.82 で止まっている | 2.8.83 以降に追加された項目が台帳から丸ごと抜ける。既存項目の本文が改訂されていれば別名の向きの判断が古い本文に基づく | 要件 1.12 のライブ確認を 3 ページに限って行い、増えた見出しを §9.7 に列挙する。台帳には入れない |
-| 版番号の抽出規則が上流の道具と食い違う | 上流契約 要件 6.7 の照合が赤になる | D6（語境界付き＋境界事例 7 件は空）。道具着地時に V10 を回して差分を見る |
+| 版番号の抽出規則が上流の道具と食い違う | 上流契約 要件 6.7 の照合が赤になる | D6 が上流の設計と同じ規則を採る。上流の設計は未 main なので、道具着地時に V10 を回して差分を見る。`introduced` が空の項目は検査対象外（上流設計 行 814） |
+| `///` を式の途中に置くと doc コメントとして成立しない | `unused doc comment` の警告がビルドのたびに並ぶ（テストは赤にならない） | D11（式の途中は `//`）。上流の走査は `//` も拾う |
 | 名前の重なりで別ページの項目を取り違える | 同じ名前で状態が割れる（`charset` は 8 ページ・`homeurl` は 7 ページ・`name` 系は ghost と shell の両方） | 名前で引かず、必ず「ページを決めてから」引く。区別を備考に書く（要件 7.6）。URL も id ごとに書く（要件 6.5） |
 | ブリーフィングと台帳が二重管理になる | 世代表 137 行と台帳の版番号がずれる | D5（表は台帳から機械で起こす）＋ V12 |
 | 上流の道具が本 spec の完了前に着地する | 完了条件が変わる（要件 9.1・9.2 が発効） | D7 で「未着地」を既定に固定し、V15 で 1 度だけ分岐する。冒頭の 1 段落を差し替えるだけで済む形にしておく |
@@ -550,7 +555,7 @@ WebFetch で 4 ページを引く（`manual_shell`・`descript_shell_surfaces`�
 
 いずれも本 spec の作業を止めない。設計としての扱いを決めてある。
 
-1. **上流の道具の版番号抽出規則**——上流 spec の設計が未生成（§3）。D6 の「語境界付き＋境界事例 7 件は空」で凌ぐ。着地後に V10 で照合する。
+1. **上流の道具の版番号抽出規則と URL 行の形**——上流の設計は別ブランチに存在し未 main（§3）。D6・D11 は同じ規則を写しているが、main に載るまでに変わる余地がある。着地後に V10・V11 で照合する。
 2. **`surface.append`・`kero.surface.alias` の正典上の実在**——ライブ確認（§9.6）で決める。確かめられない間は当該の areka の語を根拠にした `implemented` 判定をしない（D9）。
 3. **`areka-P0-text-decoration-canon` が言う「13 キー」の実体**——当該 brief に名前の列挙が無く、`descript_balloon` の `font.*` は実測 14 種。台帳側で名前を確定し、是正候補として §9.8 に記録する（brief は書き換えない）。
 4. **`ukadoc:manual_translator` の担当**——2 本が半分ずつ主張する。§8 の規則（`owner` は `translate-pipeline`・備考と `links` に `makoto-dll-host`）で扱い、最終判断は統合担当へ渡す。
