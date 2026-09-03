@@ -5,23 +5,39 @@ use bevy_ecs::prelude::*;
 use windows::Win32::Graphics::Direct2D::*;
 use windows_numerics::*;
 
+/// visit が 1 ノードから読み取る不変ビュー（すべて read-only）。
+///
+/// - `VisualTransform`   : 無ければ identity 扱い。
+/// - `VisualDrawContent` : 無ければ描画コマンドを出さない。
+/// - `VisualClip`        : 無ければ clip push/pop なし。
+/// - `Children`          : 無ければ葉ノード。
+///
+/// 4 つを 1 本に束ねることで、1 エンティティ = 1 回の `Query::get`
+/// ルックアップで済む（クエリを分けると get が複数回になる）。
+type NodeData = (
+    Option<&'static VisualTransform>,
+    Option<&'static VisualDrawContent>,
+    Option<&'static VisualClip>,
+    Option<&'static Children>,
+);
+
 /// `root` を起点に pre-order DFS（ペインターズ順）で `DrawCommand` 列を構築する。
 ///
 /// - `out`       : 出力累積器。先頭で `clear()` され、capacity は再利用される。
 /// - `unit_rect` : Rect→Geometry 昇格時に共有する単位矩形 (0,0)-(1,1)。ポインタ安定用。
 /// - `root_mat`  : ルートに与える親変換（通常は identity か DPI 変換）。
-/// - `world`     : ECS world。ノードは `get_entity` でランダムアクセスする。
+/// - `nodes`     : read-only クエリ。ノードは `get` でランダムアクセスする。
 /// - `root`      : 走査の起点 entity。
 #[allow(dead_code)]
 pub(crate) fn build(
     out: &mut Vec<DrawCommand>,
     unit_rect: &ID2D1Geometry,
     root_mat: Matrix3x2,
-    world: &World,
+    nodes: &Query<NodeData>,
     root: Entity,
 ) {
     out.clear();
-    visit(out, unit_rect, world, root, root_mat);
+    visit(out, unit_rect, nodes, root, root_mat);
 }
 
 enum ClipKind {
@@ -31,30 +47,31 @@ enum ClipKind {
 
 /// 1 ノードを訪問する。clip push → 自分を Draw → 子を再帰 → clip pop の順。
 /// この順序により clip は自ノードと部分木の両方を囲み、`Children` の順序が Z 順になる。
+///
+/// `&Query` は共有借用なので再帰で何度渡しても read 借用が重なるだけで合法。
 fn visit(
     out: &mut Vec<DrawCommand>,
     unit_rect: &ID2D1Geometry,
-    world: &World,
+    nodes: &Query<NodeData>,
     entity: Entity,
     parent_world: Matrix3x2,
 ) {
-    // despawn 済み等は静かにスキップ（部分木ごと出力しない）。
-    let Ok(er) = world.get_entity(entity) else {
+    // despawn 済み / クエリ非該当は静かにスキップ（部分木ごと出力しない）。
+    let Ok((transform, draw, clip, children)) = nodes.get(entity) else {
         return;
     };
 
     // world = local * parent（行ベクトル規約: v' = v * local * parent）。
-    let local = er
-        .get::<VisualTransform>()
+    let local = transform
         .map(|t| t.0.into())
         .unwrap_or(Matrix3x2::identity());
     let world_mat = local * parent_world;
 
     // push clip
-    let clip_kind = push_clip(out, unit_rect, &er, world_mat);
+    let pop_clip = push_clip(out, unit_rect, clip, entity, world_mat);
 
     // 自ノードの描画
-    if let Some(content) = er.get::<VisualDrawContent>() {
+    if let Some(content) = draw {
         out.push(DrawCommand::Draw(DrawItem {
             hash: hash_draw(content, &world_mat),
             world_mat,
@@ -64,14 +81,14 @@ fn visit(
     }
 
     // 子を宣言順に再帰（= 描画順 = Z 順）。
-    if let Some(children) = er.get::<Children>() {
+    if let Some(children) = children {
         for child in children.iter() {
-            visit(out, unit_rect, world, child, world_mat);
+            visit(out, unit_rect, nodes, child, world_mat);
         }
     }
 
     // pop clip
-    match clip_kind {
+    match pop_clip {
         Some(ClipKind::PopClipRect) => out.push(DrawCommand::PopClipRect),
         Some(ClipKind::PopClipGeometry) => out.push(DrawCommand::PopClipGeometry),
         None => {}
@@ -86,12 +103,11 @@ fn visit(
 fn push_clip(
     out: &mut Vec<DrawCommand>,
     unit_rect: &ID2D1Geometry,
-    er: &EntityRef,
+    clip: Option<&VisualClip>,
+    entity: Entity,
     world_mat: Matrix3x2,
 ) -> Option<ClipKind> {
-    let Some(clip) = er.get::<VisualClip>() else {
-        return None;
-    };
+    let clip = clip?;
     match clip {
         VisualClip::Rect(local) => {
             if is_rect_preserving(&world_mat) {
@@ -116,7 +132,7 @@ fn push_clip(
             out.push(DrawCommand::PushClipGeometryEntity(ClipGeometryEntity {
                 world_mat,
                 world_aabb: geometry_bounds(local_geom, &world_mat),
-                entity: er.entity(),
+                entity,
             }));
             Some(ClipKind::PopClipGeometry)
         }
