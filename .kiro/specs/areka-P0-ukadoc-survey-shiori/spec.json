@@ -1,17 +1,17 @@
 {
   "feature_name": "areka-P0-ukadoc-survey-shiori",
   "created_at": "2026-09-02T15:00:00Z",
-  "updated_at": "2026-09-02T15:20:00Z",
+  "updated_at": "2026-09-03T00:00:00Z",
   "language": "ja",
-  "phase": "requirements-generated",
+  "phase": "design-generated",
   "approvals": {
     "requirements": {
       "generated": true,
-      "approved": false,
+      "approved": true,
       "generated_at": "2026-09-02T15:20:00Z"
     },
     "design": {
-      "generated": false,
+      "generated": true,
       "approved": false
     },
     "tasks": {
