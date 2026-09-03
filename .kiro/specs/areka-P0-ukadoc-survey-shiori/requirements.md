@@ -13,7 +13,7 @@ ukadoc（SSP 公式仕様書）のうち「ベースウェアと SHIORI／外部
 2. **ドメイン別報告** `doc/ukadoc-coverage/report/shiori.md` — 上流の道具が台帳から機械で作り直すもの。道具が着地した後に、台帳の持ち主である本 spec が再生成して置く。
 3. **ブリーフィング文書** `doc/ukadoc-coverage/briefing-shiori.md` — 人が読むための文書。「既存ゴーストが黙って壊れる」順に未対応の群を並べ、群ごとに「それが無いと利用者は何を失うか」と「その群を成立させる最小の基盤」を書く。
 
-これに伴う**唯一のコード接触**は、実装済みと判定した項目の定義箇所に正典 URL の doc コメントを 1 行置くことである。実行時の振る舞いは変えない。
+これに伴う**唯一のコード接触**は、実装済みと判定した項目の定義箇所に正典 URL のコメントを 1 行置くことである（定義そのものには `///`、配列の要素や関数本体の文のように Rust が `///` を受け付けない場所では `//`。要件 9.1）。実行時の振る舞いは変えない。
 
 ### なぜ今これが要るか
 
@@ -26,7 +26,7 @@ areka が SHIORI へ送るイベントは 11 種類しかない。既存ゴー�
 - `list_shiori_event` 290・`list_shiori_event_ex` 168・`list_shiori_resource` 159・`list_plugin_event` 19・`memo_shiorievent` 1・`spec_shiori3` 26・`spec_fmo_mutex` 6・`spec_web` 3・`spec_sstp` 2・`spec_dll` 1・`spec_plugin` 1・`spec_headline` 1＝**677**（全件を実測で確認。担当外の 26 ページと合わせて 1,749 を過不足なく尽くす）。
 - 版番号（`2.x.y` の形）を本文に含む項目は `list_shiori_event` **78 / 290**・`list_shiori_resource` **9 / 159**・`list_shiori_event_ex` **0 / 168**（正規表現 `[0-9]+\.[0-9]+\.[0-9]+` による実測）。
 - `list_shiori_event` には `On` で始まらない項目が **26 件**同居する（`basewareversion`・`property.get`／`property.set`・`hwnd`・`uniqueid`・`capability`・`installed*`・`*pathlist`・`enable_log` など）。**送る側のページに、引く側・通知側の項目が混ざっている**。
-- `spec_dll` 1・`spec_plugin` 1・`spec_headline` 1 は**アンカーの無いページ全体で 1 項目**（id は `ukadoc:spec_dll` の形）。他ページの 1 項目より粒度が粗い。
+- `spec_dll` 1・`spec_plugin` 1・`spec_headline` 1・`memo_shiorievent` 1 の 4 件は**アンカーの無いページ全体で 1 項目**（id は `ukadoc:spec_dll` の形）。他ページの 1 項目より粒度が粗い。
 - `spec_shiori3` は 26 項目のうち見出しが重複する組が 2 つある（`Charset` はリクエスト側とレスポンス側、`Sender` も同様）。見出しだけで突き合わせると 2 項目が潰れる。
 - SAORI の独立したページは ukadoc に**存在しない**。SAORI の語が出るのは 4 項目だけで、仕様面は `spec_dll`（DLL 共通仕様）が担っている。
 - 正典 URL の形は `https://ssp.shillest.net/ukadoc/manual/<ページ>.html#<アンカー>`（アンカーの無いページは末尾の `#` 以降が無い）。
@@ -66,7 +66,7 @@ areka が SHIORI へ送るイベントは 11 種類しかない。既存ゴー�
   - 担当 12 ページ・677 項目の台帳 `doc/ukadoc-coverage/ledger/shiori.toml` を人手で埋め、未分類を 0 にすること。
   - 各項目の発火条件の源・関連の登記（`links`）と、伺からしさのテーマ・優先度の仮置き。
   - ブリーフィング文書 `doc/ukadoc-coverage/briefing-shiori.md`。
-  - 実装済みと判定した項目の定義箇所へ正典 URL の doc コメントを 1 行置くこと（実行時の振る舞いは変えない）。
+  - 実装済みと判定した項目の定義箇所へ正典 URL のコメントを 1 行置くこと（実行時の振る舞いは変えない）。
   - 上流の道具が着地した後の `doc/ukadoc-coverage/report/shiori.md` の再生成。
 - **Out of scope**:
   - 実装（未対応の項目を送れるようにする作業は 1 行も行わない）。
@@ -101,7 +101,7 @@ areka が SHIORI へ送るイベントは 11 種類しかない。既存ゴー�
 
 #### Acceptance Criteria
 1. The SHIORI ドメイン台帳 shall `list_shiori_event` の 290 項目それぞれに状態を与える。
-2. Where 項目が areka の送出イベント表（`crates/areka-kanade/src/schedule/events.rs:70-82`）の 11 要素のいずれかに対応する, the SHIORI ドメイン台帳 shall その項目を `implemented` とし、要件 9 の正典 URL を根拠として置く。
+2. Where 項目が areka の送出イベント表（`crates/areka-kanade/src/schedule/events.rs:70-82`）の 11 要素のいずれかに対応する, the SHIORI ドメイン台帳 shall その項目を `implemented` とし、要件 9 に従ってソース側の定義箇所に正典 URL のコメントを置く（台帳の行に URL は書かない・要件 9.8）。
 3. Where 項目が送出イベント表に無い, the SHIORI ドメイン台帳 shall その項目を `absent` とし、`note` に「areka はこのイベントを送らない・ログにも例外にも現れない」という壊れ方の根拠を書く。
 4. The SHIORI ドメイン台帳 shall `list_shiori_event` に同居する「`On` で始まらない 26 項目」（`basewareversion`・`property.get`／`property.set`・`hwnd`・`uniqueid`・`capability`・`installed*`・`*pathlist`・`enable_log` ほか）について、`note` に送信の向き（ベースウェアからの通知なのか、SHIORI から引く値なのか）を書き分ける。
 5. Where 項目が `basewareversion` である, the SHIORI ドメイン台帳 shall 正典での所在が `list_shiori_event`（通知イベント）であることに従って行を置き、リソース側には置かない。
@@ -110,7 +110,7 @@ areka が SHIORI へ送るイベントは 11 種類しかない。既存ゴー�
 8. The SHIORI ドメイン台帳 shall 各イベントの発火条件の源（descript のキー・プロパティ・さくらスクリプトのタグ・OS の事象・利用者の操作）を `links` に登記する。
 9. When 状態を決める, the SHIORI ドメイン調査 shall 判断の根拠として areka 側の `file:line` を `note` に書き、書く前にその場所を実際に読んで確かめる。
 10. The SHIORI ドメイン台帳 shall `memo_shiorievent` の 1 項目にも状態を与え、それがイベント一覧の補足であることを `note` に書く。
-11. When 台帳を確定させる, the SHIORI ドメイン調査 shall 正典の 290 項目と既存のカタログ `doc/shiori/fragments/events/` の 287 項目を項目 id 単位で突き合わせ、差の 3 件がどの項目かを `note` に記録する。
+11. When 台帳を確定させる, the SHIORI ドメイン調査 shall 正典の 290 項目と既存のカタログ `doc/shiori/fragments/events/` の 287 項目を項目 id 単位で突き合わせ、差の 3 件（着手時の実測では `OnArchiveViewerOpen`・`OnMediaPlayerOpen`・`OnPictureViewerOpen`。いずれも正典にあって断片に無く、逆向きは 0 件）を該当する行の `note` に記録する。
 
 ### Requirement 3: 引く側（SHIORI リソース 159）の仕訳
 **Objective:** M2 の画面まわりの要件を立てる人として、正典のリソースのうち何が実際に引かれていて何が名前だけなのかを知りたい。それによりメニューや管理画面の要件源として使える。
@@ -118,7 +118,7 @@ areka が SHIORI へ送るイベントは 11 種類しかない。既存ゴー�
 #### Acceptance Criteria
 1. The SHIORI ドメイン台帳 shall `list_shiori_resource` の 159 項目それぞれに状態を与える。
 2. Where 項目が areka の照会リソース表（`crates/areka-kanade/src/schedule/resources.rs:32`）の要素に対応する, the SHIORI ドメイン台帳 shall その項目を `implemented` とする。
-3. Where 項目が `crates/areka-sylphya/src/vocab/shiori_resource.rs:45` の語彙表に逐語で載っているが実際には引かれていない, the SHIORI ドメイン台帳 shall その項目を `vocabulary-only` とする。
+3. Where 項目が `crates/areka-sylphya/src/vocab/shiori_resource.rs:45` の語彙表に載っているが実際には引かれていない, the SHIORI ドメイン台帳 shall その項目を `vocabulary-only` とする。名前の突き合わせでは空白の全角・半角の違いを同一とみなす（159 件のうち `(入力ボックス種類).defaultleft　(入力ボックス種類).defaulttop` の 1 件だけが、正典は全角空白・語彙表は半角空白で写されている。残る 158 件は逐語一致）。
 4. The SHIORI ドメイン調査 shall `sakura.*`／`kero.*`／`char*.*` の 3 つの形を新旧の関係として扱わず、正典本文が示すとおり「本体側・相方側・2 人目以降または `\p[*]` 側」というスコープの違いとして仕訳する。
 5. The SHIORI ドメイン台帳 shall メニューやゴースト管理の画面が入力として使うリソース群（`popupmenu.*`・各ボタンの文言・`menu.*.bitmap.filename`・`menu.*.font.color.*`・`*.recommendsites`・`*.portalsites`）を `links` と `values` で束ねられる形にし、`note` にそれが何の画面の材料かを書く。
 6. When 縮退している項目を見つける, the SHIORI ドメイン台帳 shall `degraded` を用い、`note` に縮退の記録の転記元（`doc/COMPAT_ARCHITECTURE.md` の沈黙ルール対応表・`doc/emo2-conformance-scope.md` の見直し表）を書く。
@@ -127,8 +127,8 @@ areka が SHIORI へ送るイベントは 11 種類しかない。既存ゴー�
 **Objective:** 調査の担当者として、送信元が areka ではない項目に個別評価の手間をかけたくない。それにより本当に効く 290＋159 に時間を使える。
 
 #### Acceptance Criteria
-1. The SHIORI ドメイン台帳 shall `list_shiori_event_ex` の 168 項目を 1 つの群として扱い、群に共通の状態（送信元が外部のアプリやプラグインであることを理由とする `not-applicable`）を与える。
-2. The SHIORI ドメイン台帳 shall 群に共通の `note` を置き、そこに「送信元は areka ではない」「areka が問われるのは受け口の有無だけ」という判断の理由を書く。
+1. The SHIORI ドメイン台帳 shall `list_shiori_event_ex` の 168 項目を 1 つの群として扱い、群に共通の状態（送信元が areka ではない〔外部のアプリ・プラグイン・他のゴースト〕ことを理由とする `not-applicable`）を与える。
+2. The SHIORI ドメイン台帳 shall 群に共通の `note` を置き、そこに「送信元は areka ではない」「areka が問われるのは受け口の有無だけ」という判断の理由を書く。送信元が外部のアプリやプラグインではなく他のゴースト（`\![raiseother]` で送り、ベースウェアが運ぶ）である 3 件（`OnRequestValues`・`OnGetValues`・可変名の返信イベント）については、areka にゴースト間の伝達そのものが無いことを理由として書き添え、`list_shiori_event` 側のゴースト間のやり取り（`OnCommunicate` 群）との繋がりを `links` で示す。
 3. The SHIORI ドメイン台帳 shall 168 項目の `values` を空にする（上流 要件 4.6 の付与規則に照らして答えられるテーマが無いため）。
 4. Where 受け口（`\![raiseplugin]` などの任意名イベントの経路）が areka に存在しない, the SHIORI ドメイン台帳 shall その事実を群の `note` に 1 度だけ書き、168 項目それぞれに `file:line` を求めない。
 5. The SHIORI ドメイン調査 shall 168 項目のうち版番号を持つものが 0 件であることを確かめ、`introduced` をすべて空にする。
@@ -140,11 +140,12 @@ areka が SHIORI へ送るイベントは 11 種類しかない。既存ゴー�
 1. The SHIORI ドメイン台帳 shall `spec_shiori3` の 26 項目それぞれに状態を与え、リクエスト側の 11 項目とレスポンス側の 15 項目を `note` で区別する。
 2. Where 項目が areka が現に送るヘッダに対応する（リクエスト行・`Charset`・`Sender`・`Status`・`ID`・`Reference*`・`SecurityLevel`）, the SHIORI ドメイン台帳 shall その項目を `implemented` または `degraded` とし、固定値で送っている箇所（`SecurityLevel: local`・`Charset` は UTF-8 のみ）を `note` に書く。
 3. Where 項目が areka が送らないヘッダに対応する（`SenderType`・`SecurityOrigin`・`BaseID`・リクエスト側の `X-SSTP-PassThru-*`）, the SHIORI ドメイン台帳 shall その項目を `absent` とし、`crates/shiori-host32-host/src/shiori3.rs:86-87` の記載に `BaseID` が挙がっていないことを `note` に書く。
-4. Where 項目が areka が読み飛ばす応答ヘッダに対応する（`ValueNotify`・`Marker`・`BalloonOffset`・`Age`・`MarkerSend`・レスポンス側の `Reference*`）, the SHIORI ドメイン台帳 shall その項目を `absent` とし、読み飛ばしている箇所（`shiori3.rs:202-218`）を `note` に書く。
+4. Where 項目が areka が読み飛ばす応答ヘッダに対応する（`ValueNotify`・`Marker`・`BalloonOffset`・`Age`・`MarkerSend`・レスポンス側の `Reference*`・レスポンス側の `Charset`・`Sender`・`SecurityLevel`・`X-SSTP-PassThru-`）, the SHIORI ドメイン台帳 shall その項目を `absent` とし、読み飛ばしている箇所（`shiori3.rs:202-218`）を `note` に書く。
+4a. Where 項目が areka が現に解釈する応答に対応する（ステータスコード・`Value`・`ErrorLevel`・`ErrorDescription`）, the SHIORI ドメイン台帳 shall その項目を `implemented` とし、解釈している箇所（`shiori3.rs:178` の `parse_response`・ヘッダの分岐は `:202-218`）に要件 9 のコメントを置く。これで 26 項目すべてが 5.2〜5.4a のいずれかに当てはまる（リクエスト側は 5.2・5.3、レスポンス側は 5.4・5.4a）。
 5. When 見出しが同じ項目が同じページに 2 つある（`Charset`・`Sender`）, the SHIORI ドメイン調査 shall 項目 id で区別し、1 つの行にまとめない。
 6. The SHIORI ドメイン台帳 shall `list_plugin_event` の 19 項目について、イベント・PLUGIN 向けのリソース・プロパティの照会・任意名イベントの枠という種別の違いを `note` に書き分ける。
 7. The SHIORI ドメイン台帳 shall 外部連携の 14 項目（`spec_sstp` 2・`spec_fmo_mutex` 6・`spec_web` 3・`spec_dll` 1・`spec_plugin` 1・`spec_headline` 1）について、実装の可否ではなく「受け口が areka にあるか無いか」だけを判定する。
-8. When `spec_dll`・`spec_plugin`・`spec_headline` を仕訳する, the SHIORI ドメイン調査 shall それらがページ全体で 1 項目（アンカーの無い id）であり他ページの 1 項目より粒度が粗いことを `note` に書く。
+8. When `spec_dll`・`spec_plugin`・`spec_headline`・`memo_shiorievent` を仕訳する, the SHIORI ドメイン調査 shall それらがページ全体で 1 項目（アンカーの無い id・4 件）であり他ページの 1 項目より粒度が粗いことを `note` に書く（`memo_shiorievent` は要件 2.10 の注記と併記する）。
 9. Where SAORI について記録する, the SHIORI ドメイン台帳 shall `spec_dll` の行の `note` にそれを書き、SAORI 用の独立した行を作らない（ukadoc に SAORI の独立したページが無いため）。その `note` には、areka がプロトコルを実装せず実装の主体は SHIORI 側であること、成立の条件（32bit の同じプロセスに同居・作業ディレクトリ・DLL の探索パス）を書く。
 
 ### Requirement 6: 新旧の書式と別名の向き
@@ -160,6 +161,7 @@ areka が SHIORI へ送るイベントは 11 種類しかない。既存ゴー�
 7. If brief に書かれた新旧関係の例が正典本文と食い違う, then the SHIORI ドメイン調査 shall 正典本文に従い、食い違いを `note` に明記する。
 8. The SHIORI ドメイン台帳 shall 別名の連鎖を作らない（`alias_of` の指す先が `alias` であってはならない）。
 9. Where 項目に版番号が無い, the SHIORI ドメイン台帳 shall `introduced` を空にし、その項目を最も古いものとして扱わない。
+10. When 1 つの項目の本文に版番号が 2 つ以上ある（担当範囲に 12 件。例: `OnNetworkStatusChange`・`ValueNotify`・`*.popupmenu.applybindtoself`）, the SHIORI ドメイン台帳 shall 項目そのものの登場を示す版番号を `introduced` に書き、残りの版番号とその意味（挙動の変更・引数の追加など）を `note` に書く。どれが登場の版か本文から判別できなければ、最も小さい版番号を `introduced` に書く。
 
 ### Requirement 7: 伺からしさのテーマと優先度の仮置き
 **Objective:** 統合の担当者として、各項目が「無いと利用者がゴーストの何を失うか」で色分けされていてほしい。それにより件数の多さではなく体験の重さで順序を組める。
@@ -187,7 +189,7 @@ areka が SHIORI へ送るイベントは 11 種類しかない。既存ゴー�
 **Objective:** 台帳を読む人として、「実装済み」と書かれた行の根拠がソース側に実在してほしい。それにより整理や作り替えで根拠が消えたことに気づける。
 
 #### Acceptance Criteria
-1. Where 項目の状態を `implemented` とした, the SHIORI ドメイン調査 shall その項目の定義箇所に正典 URL の doc コメントを 1 行だけ置く。
+1. Where 項目の状態を `implemented` とした, the SHIORI ドメイン調査 shall その項目の定義箇所に正典 URL のコメント（`ukadoc: <正典 URL>` の 1 行）を 1 行だけ置く。定義そのもの（配列や定数の宣言・語彙表の先頭）には `///` を使い、配列の要素や関数本体の文のように Rust が `///` を受け付けない場所（`unused_doc_comments` の警告が出ることを着手時に `rustc` で実測済み）には `//` を使う。上流 要件 5.1 の「doc コメント」はこの読み替えを含むものとして扱う（上流の証拠収集は URL の文字列を探すだけなので、どちらの書き方でも証拠として拾われる）。
 2. The SHIORI ドメイン調査 shall URL を置く場所を定義箇所（許可表の要素・分岐の腕・語彙表の 1 行）に限り、呼び出し側には置かない。
 3. Where 正典の名前をそのまま並べた語彙表である（`crates/areka-sylphya/src/vocab/shiori_resource.rs` の 159 要素など）, the SHIORI ドメイン調査 shall 表の先頭にページの URL を 1 つ置き、要素ごとの URL は置かない。
 4. Where 項目が実装済みでない, the SHIORI ドメイン調査 shall ソース側に何も書かない。
@@ -202,7 +204,7 @@ areka が SHIORI へ送るイベントは 11 種類しかない。既存ゴー�
 
 #### Acceptance Criteria
 1. Where 上流の道具が着地している, the SHIORI ドメイン調査 shall `doc/ukadoc-coverage/report/shiori.md` を台帳から再生成し、台帳と一緒に置く。
-2. While 上流の道具がまだ着地していない, the SHIORI ドメイン調査 shall 報告が存在しないことを許し、台帳とブリーフィング文書だけで本 spec の完了を判定する。
+2. While 上流の道具がまだ着地していない, the SHIORI ドメイン調査 shall 報告が存在しないことを許し、台帳とブリーフィング文書だけで本 spec の完了を判定する。本 spec が道具より先に完了した場合、報告の初回生成は道具の着地（上流 要件 7.4 の検査が着地と同時に 4 本の報告を要求する）に伴う上流の仕事とし、完了済みの本 spec を再生成の担い手として残さない。
 3. If 上流の整合検査が本ドメインについて赤になる, then the SHIORI ドメイン調査 shall 台帳側の修正または報告の再生成で解消し、報告を手で書き換えて合わせない。
 4. The SHIORI ドメイン調査 shall `doc/ukadoc-coverage/report/summary.md`・`doc/ukadoc-coverage/linkage.md`・`doc/ukadoc-coverage/values.md`・`doc/ukadoc-coverage/catalog.toml`・他の 3 つの台帳を編集しない。
 5. When 台帳を確定させる, the SHIORI ドメイン調査 shall 台帳に書いた状態語彙・テーマ名・関連の種別が上流の凍結した語彙のいずれかであることを確かめる。
@@ -222,7 +224,7 @@ areka が SHIORI へ送るイベントは 11 種類しかない。既存ゴー�
 **Objective:** 並走している他の spec の担当者として、この調査が自分の作業に影響しないと確信したい。それにより 4 本が同時に進められる。
 
 #### Acceptance Criteria
-1. The SHIORI ドメイン調査 shall areka の実行時の振る舞いを変えない（追加するのは要件 9 の doc コメントだけ）。
+1. The SHIORI ドメイン調査 shall areka の実行時の振る舞いを変えない（追加するのは要件 9 のコメント行だけ）。
 2. The SHIORI ドメイン調査 shall 他ドメインの台帳・報告・ブリーフィング文書を編集せず、他ドメインの項目の行を作らない。
 3. Where 既存の spec（`areka-P0-status-execution-states`・`areka-P0-property-query-channels` ほか）が同じ項目を所有している, the SHIORI ドメイン台帳 shall `owner` にその spec 名を書くだけとし、その spec の判断を上書きしない。
 4. If 既存の spec の brief に正典と食い違う記述を見つける, then the SHIORI ドメイン調査 shall その brief を書き換えず、是正の候補として `note` またはブリーフィング文書に記録する。
@@ -241,7 +243,7 @@ areka が SHIORI へ送るイベントは 11 種類しかない。既存ゴー�
 | # | brief の記載 | 実測 | 扱い |
 |---|---|---|---|
 | 1 | ページ別件数 12 ページ・合計 677 | 全件一致（677） | そのまま採用 |
-| 2 | 版番号付き `list_shiori_event` 65／290・`list_shiori_resource` 8／159 | **78／290**・**9／159**（`[0-9]+\.[0-9]+\.[0-9]+` による実測）。`list_shiori_event_ex` の 0／168 は一致 | 数え方の違いの可能性はあるが brief の値は再現しなかった。台帳では版番号を項目ごとに写すので合計値は使わない |
+| 2 | 版番号付き `list_shiori_event` 65／290・`list_shiori_resource` 8／159 | **78／290**・**9／159**（`[0-9]+\.[0-9]+\.[0-9]+` による実測）。`list_shiori_event_ex` の 0／168 は一致。担当 12 ページ全体では **98 件**（上記のほか `list_plugin_event` 2・`spec_shiori3` 4・`spec_dll` 1・`spec_fmo_mutex` 2・`spec_sstp` 1・`spec_web` 1）。版番号を 2 つ以上含む項目は **12 件** | 数え方の違いの可能性はあるが brief の値は再現しなかった。台帳では版番号を項目ごとに写すので合計値は使わない。複数の版番号の書き方は要件 6.10 |
 | 3 | `OnTeach` 系 3 | 実在は `OnTeach`・`OnTeachStart`・`OnTeachInputCancel`。**`OnTeachInput` は存在しない** | 実在する 3 つで登記 |
 | 4 | `basewareversion` は照会リソース | **`list_shiori_event` の通知イベント**（リソースのページには無い） | 要件 2.5 |
 | 5 | `OnMenuExec` は SHIORI イベント | **`list_plugin_event` にだけ存在** | 要件 5.6 |
