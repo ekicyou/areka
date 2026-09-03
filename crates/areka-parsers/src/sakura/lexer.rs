@@ -328,3 +328,7 @@ fn scan_sysvar(chars: &[(usize, char)], i: usize) -> (Token, usize) {
     let keyword: String = chars[start..j].iter().map(|&(_, c)| c).collect();
     (Token::SysVar(keyword), j)
 }
+
+#[cfg(test)]
+#[path = "lexer_bare_tag_tests.rs"]
+mod bare_tag_tests;
