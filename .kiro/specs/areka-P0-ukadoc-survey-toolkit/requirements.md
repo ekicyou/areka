@@ -1,0 +1,261 @@
+# Requirements Document
+
+## Project Description (Input)
+ukadoc（SSP 公式仕様書）1,749 項目を網羅的に分類するための道具を用意する。現状 areka には「正典のどの項目が実装済み／語彙だけ登記済み／縮退／未対応／対象外なのか」を一望できる台帳が無く、spec ごとに ukadoc を手作業で数え直している。本 spec は新規の調査用クレートと `doc/ukadoc-coverage/` 配下の台帳一式を建て、台帳の形式・仕訳の規則・整合検査・報告の再生成を凍結する。後続の調査 spec 4 本（shiori／assets／sakura-script／property）が同じ道具・同じ形式で並走して台帳を書けるようにし、`ukadoc-coverage-roadmap` がそれを統合して優先度を決められるようにする。areka の実行時コードは 1 行も変更しない。
+
+## Introduction
+
+本 spec は「ukadoc 網羅調査」6 本のうち唯一コードを書く**道具 spec** である。作るものは 2 つある。
+
+1. **正典の写し（カタログ）と areka の判定（台帳）を分けて置く場所** — `doc/ukadoc-coverage/` 配下。カタログは機械生成のみ、台帳は調査 spec の担当者が人手で書き、機械が検査する。
+2. **その一式を扱う調査用クレート** — カタログ生成・証拠収集・整合検査・報告生成の 4 つの働きを持つ。
+
+利用者は 3 種類いる。⑴ 台帳を書く調査 spec の担当者（shiori／assets／sakura-script／property の 4 本）、⑵ 台帳を統合して優先度を決める `ukadoc-coverage-roadmap` の担当者、⑶ 将来の機能 spec の実装者（実装した項目の定義箇所に正典 URL を 1 行置き、台帳の該当行を更新する）。
+
+本 spec の中心的な価値は「**形式の凍結**」にある。要件が承認された時点で台帳の項目形式・状態語彙・担当ドメインの分割・仕訳の規則が確定し、調査 spec 4 本は本 spec の実装完了を待たずに並走を始められる（機械検査は後から追いつく）。したがって本要件は、後続 5 本が依存する契約そのものを含む。
+
+**現状の実測（2026-09-02）**
+
+- ukadoc スナップショットは npm グローバルの `ukagaka-doc-mcp`（パッケージ版 0.2.7）が持つ単一 JSON（`%APPDATA%\npm\node_modules\ukagaka-doc-mcp\data\index.json`・2,716,948 バイト・`version` = 1・`generatedAt` = `2026-08-24T04:08:57.881Z`）。全 2,983 entry のうち `source` が `ukadoc` のものが 1,749 件、38 ページに分かれる。残る 1,234 件（satori_wiki 745・yaya_wiki 448・aosora_wiki 41）は対象外。
+- ukadoc の entry id はコロン区切りで 2 形ある。`ukadoc:<ページ>:<アンカー>:<連番>`（1,730 件）と、アンカーを持たないページ全体の `ukadoc:<ページ>`（19 件）。第 2 セグメントがページ名で、ページ名自身が下線を含む。
+- 全 1,749 件が `https://` の URL を持ち、URL は entry ごとに相異なる。フラグメントを外すと 38 種（ページ数と一致）に縮む。
+- カテゴリは 6 種（shiori_event 637・descript 518・sakurascript 342・protocol 237・file_structure 8・dev_guide 7）。カテゴリとページは 1 対 1 ではなく、`protocol` は `list_propertysystem` 188 と `spec_*` 49 に分かれる。
+- `doc/ukadoc-coverage/` も調査用クレートも現時点で存在しない。ソース中に「ukadoc」と URL を併記した行は 0 件（「ukadoc」の語だけを含み URL を伴わないコメントは 152 件〔doc コメント 129・行コメント 23〕あり、例: `crates/areka-parsers/src/sakura/lexer.rs:54`。ほかにテスト関数名や文字列などコメント以外の出現が 4 件）。
+- 既に機械可読な正典資産が 2 系統ある。`doc/shiori/fragments/`（フラグメント 38 本＋`_manifest.toml`・イベント entry 287／リソース entry 159／field 802／沈黙裁定 9・entry は `[entry."名前"]` 形式のキー付きテーブル＝`doc/shiori/fragments/events/01.lifecycle.toml:5`・件数は `doc/shiori/README.md:37`・生成器は未実装と宣言済み `doc/shiori/README.md:41`）と、`crates/areka-sylphya/src/vocab/`（`flat.rs:32` の 26 件・`dotted.rs:17` の 10 件・`dotted.rs:37` の 17 件・`dotted.rs:72` の 21 件・`shiori_resource.rs:45` の 159 件、件数固定テスト `crates/areka-sylphya/src/ledger_key_determinism_tests.rs:201-204`）。本 spec はこれらを置き換えない。
+- 実装側の許可表は小さい。送出イベント 11 件（`crates/areka-kanade/src/schedule/events.rs:70-82`・件数を固定するテストは無い）、照会リソース 1 件（`crates/areka-kanade/src/schedule/resources.rs:32`・固定テストは `resources.rs:114-118`）、`\![...]` の消費側登録 4 件（`crates/areka/src/emo2_boot/consumer_ledger.rs:221`）。
+- 既存の対応表は `doc/COMPAT_ARCHITECTURE.md:122` の沈黙ルール対応表（データ行 80・`:128-207`）と `doc/emo2-conformance-scope.md:78` の見直し表（データ行 7）。台帳の「縮退」と備考の転記元になる。
+
+## Boundary Context
+
+- **In scope**:
+  - `doc/ukadoc-coverage/` 一式（カタログ・台帳 4 本・テーマ定義・報告・README）の新設と、その形式・語彙・分割の凍結。
+  - 調査用クレート 1 本（カタログ生成・証拠収集・整合検査・報告生成）。
+  - 全 1,749 項目の初期台帳（全行「未分類」）。
+  - ソース側に置く正典 URL の書き方の規約（どこに何を何行書くか）。
+- **Out of scope**:
+  - 個々の項目の分類・優先度付け・繋がりの登記そのもの（調査 spec 4 本が行う）。段階 A〜E の最終順序（`ukadoc-coverage-roadmap` が決める）。
+  - ukadoc 本文の repo 同梱。ukadoc 以外の 3 ソース（yaya／里々／蒼空 wiki）。
+  - areka 実行時コードの変更。既存の `doc/shiori/fragments/` 生成器の実装。
+  - ukadoc スナップショットを作る外部パッケージ自体の改修、および SSP 実機との挙動比較。
+  - 「正典 URL の置き忘れ」（実装済みなのに一度も URL を置かなかった項目）を検出する運用。完了処理側の DoD で扱い、本 spec では決めない。
+- **Adjacent expectations**:
+  - 調査 spec 4 本は「台帳ファイル 1 本＝spec 1 本」で共有ファイルを持たず並走する。本 spec は 4 本が同時に書いても衝突しない分割を与える。
+  - `ukadoc-coverage-roadmap` は台帳から全体の報告（`report/summary.md`）を再生成できることを前提にする。全体の報告の再生成は統合担当の仕事であり、調査 spec 4 本は自分のドメイン別報告だけを再生成する。
+  - 将来の機能 spec は「実装した項目の定義箇所に正典 URL を 1 行置く」規約に従う。本 spec はその規約と機械検査を用意するが、既存コードへの URL 付与作業そのものは調査 spec と各機能 spec の仕事とする。
+  - 新設クレートはワークスペースの標準テスト実行（`cargo test --workspace`）と、ファイル行数の上限テスト（1,000 行・`crates/log-capture-kit/tests/workspace_scan/mod.rs:38`・`crates/` 配下を自動走査するため新クレートも即座に対象になる＝`mod.rs:79-83`）の対象に自動的に入る。
+
+## Requirements
+
+### Requirement 1: 正典カタログの生成
+**Objective:** 調査 spec の担当者として、ukadoc 1,749 項目の一覧を機械可読な 1 ファイルで手に入れたい。それにより spec ごとに正典を数え直さずに済む。
+
+#### Acceptance Criteria
+1. When カタログ再生成が実行される, the ukadoc 調査ツールキット shall スナップショット中の `source` が `ukadoc` である全 entry（実測 1,749 件）について 1 項目 1 行の `doc/ukadoc-coverage/catalog.toml` を出力する。
+2. When カタログ再生成が実行される, the ukadoc 調査ツールキット shall 各行に「項目 id・ページ名・見出し・カテゴリ・本文に現れる SSP 版番号のすべて（重複を除き昇順・1 つも無ければ空。1 項目に 2 つ以上の版番号を含むものが 23 件あるため 1 つに絞らない）・本文のハッシュ・正典 URL」を記録する。
+3. The ukadoc 調査ツールキット shall 本文そのものをカタログに記録せず、本文の変更検出はハッシュだけで行う。
+4. When スナップショット中の entry の `source` が `ukadoc` 以外である, the ukadoc 調査ツールキット shall その entry をカタログに含めない。
+5. When 同一のスナップショットに対してカタログ再生成を 2 回続けて実行する, the ukadoc 調査ツールキット shall 行の順序を含めて 1 バイトも違わない出力を生成する。
+6. When カタログ再生成が実行される, the ukadoc 調査ツールキット shall スナップショットの版・生成日時・提供パッケージの版・全 entry 件数・うち ukadoc の件数をカタログの冒頭に記録する。
+7. Where 環境変数 `AREKA_UKADOC_SNAPSHOT` が設定されている, the ukadoc 調査ツールキット shall 既定の場所より優先してその場所のスナップショットを読む。
+8. If スナップショットが読めない（存在しない・壊れている）, then the ukadoc 調査ツールキット shall 探した絶対パスと理由を示すエラーを出して失敗し、既存のカタログを書き換えない。
+9. The ukadoc 調査ツールキット shall アンカーを持たないページ全体の id（19 件）とアンカー付きの id（1,730 件）の双方を、同じ 1 行形式で区別なく収容する。
+
+### Requirement 2: 台帳の項目形式と状態語彙の凍結
+**Objective:** 調査 spec 4 本の担当者として、書くべき 1 項目の形が spec 横断で同一であってほしい。それにより台帳の形式が spec ごとに割れず、統合報告が機械で作れる。
+
+#### Acceptance Criteria
+1. The ukadoc 調査ツールキット shall 台帳の 1 項目を 1 つのキー付きテーブル（`[entry."<項目 id>"]` に続けて欄を 1 行ずつ書く複数行の塊。既存の `doc/shiori/fragments/` と同じ書き方）として書かせ、次の欄を持たせる: 項目 id（テーブルのキー）・状態・登場した版・別名の参照先（任意）・後継の参照先（任意）・担当 spec・優先度（段階 1 文字＋数値）・伺からしさのテーマ（0 個以上）・関連（種別と相手 id の対）・備考（複数行の文字列を許す）。1 項目を 1 行に詰める形は採らない（人手で編集する文書であり、差分を項目単位で読めるようにするため。開発者裁定 2026-09-02 議題 1）。キー名・値の型・記入例は本書末尾の**付録 A** で凍結する（調査 spec 4 本は本 spec の実装を待たず付録 A の形で台帳を書き始める）。
+2. The ukadoc 調査ツールキット shall 状態の語彙を次の 7 つだけに限る: `implemented`（実装済み）・`vocabulary-only`（語彙のみ登記）・`degraded`（縮退）・`absent`（未対応）・`alias`（別名）・`not-applicable`（対象外）・`unclassified`（未分類）。
+3. The ukadoc 調査ツールキット shall 証拠（正典 URL を見つけたソースの場所）を台帳の欄として持たせず、証拠収集の結果として検査の出力に列挙する（台帳は人手だけが書く文書に保ち、ソースの整理でファイルが動いても台帳や報告を書き直させないため。報告には証拠の有無だけを載せる）。
+4. When 状態が `alias` である, the ukadoc 調査ツールキット shall その行に「正典側の id への写像があるか否か」だけを持たせ、実装状態の判定は写像先の正典行に委ねる。
+5. The ukadoc 調査ツールキット shall 台帳の項目形式・状態語彙・欄の意味を `doc/ukadoc-coverage/README.md` に記載する。
+6. While 本要件が承認済みである, the ukadoc 調査ツールキット shall 台帳の項目形式・状態語彙・ドメイン分割を変更しない（変更には本要件の改訂を要する）。
+7. The ukadoc 調査ツールキット shall カタログ（機械生成のみ・正典の写し）と台帳（人手で記入・機械で検査・areka の判定）を別ファイル・別責務として保つ。
+
+### Requirement 3: 担当ドメインの分割と初期台帳
+**Objective:** 調査 spec 4 本の担当者として、自分のファイルだけを編集すれば済む分割がほしい。それにより 4 本が同時に走っても互いの作業が衝突しない。
+
+#### Acceptance Criteria
+1. The ukadoc 調査ツールキット shall 台帳を 4 ファイルに分け、ページ単位で次のとおり割り当てる。
+
+   | 台帳ファイル | 担当ページ | 件数 |
+   |---|---|---|
+   | `doc/ukadoc-coverage/ledger/shiori.toml` | list_shiori_event 290・list_shiori_event_ex 168・list_shiori_resource 159・list_plugin_event 19・memo_shiorievent 1・spec_shiori3 26・spec_fmo_mutex 6・spec_web 3・spec_sstp 2・spec_dll 1・spec_plugin 1・spec_headline 1 | 677 |
+   | `doc/ukadoc-coverage/ledger/assets.toml` | descript_balloon 162・descript_shell_surfaces 137・descript_shell 102・descript_ghost 74・descript_install 15・descript_plugin 13・descript_headline 9・descript_shell_surfacetable 6・spec_update_file 9・manual_balloon／manual_directory／manual_ghost／manual_install／manual_owner_draw_menu／manual_shell／manual_translator／manual_update 各 1・dev_bind／dev_nar／dev_ownerdraw／dev_shell／dev_shell_error／dev_update／memo 各 1 | 542 |
+   | `doc/ukadoc-coverage/ledger/sakura-script.toml` | list_sakura_script | 342 |
+   | `doc/ukadoc-coverage/ledger/property.toml` | list_propertysystem | 188 |
+
+2. The ukadoc 調査ツールキット shall 1 つのページに属する項目を 1 つの台帳ファイルだけに置き、同じ id を 2 つ以上の台帳に置かない。
+3. When 初期台帳が生成される, the ukadoc 調査ツールキット shall カタログの全 1,749 id について 1 項目ずつを、状態 `unclassified`・担当 spec 未設定の状態で、付録 A の形式・id の文字順で書き出す。
+3a. If 初期台帳の生成時に台帳ファイルが既に存在する, then the ukadoc 調査ツールキット shall 既存の項目を一切書き換えず、カタログにあって台帳に無い id の項目だけを id の文字順の位置へ挿入する（調査 spec が本 spec の実装より先に台帳を書き終えている場合に、その成果を壊さないため）。
+4. The ukadoc 調査ツールキット shall 4 つの台帳ファイルを互いに独立して編集できる状態に保つ（1 つの台帳の編集が他の台帳の内容を要求しない。調査 spec 1 本の編集集合は「自分の台帳 1 本＋自分のドメイン別報告 1 本＋ソースの URL コメント」に限られ、常時検査が要求する共有ファイルは無い）。
+5. If カタログに、どの台帳にも割り当てが無いページが現れる, then the ukadoc 調査ツールキット shall そのページ名を明示して失敗し、割り当ての追加を促す。
+
+### Requirement 4: 仕訳の規則の凍結
+**Objective:** 調査 spec 4 本の担当者として、新旧の書式・世代・繋がり・伺からしさの判断規則が 1 か所に書かれていてほしい。それにより 4 本の判断がばらつかない。
+
+#### Acceptance Criteria
+1. The ukadoc 調査ツールキット shall 同じ機能に複数の書式があるとき「最も新しい書式を正典、それ以外を別名」とし、向きを ⑴ 正典本文の注記（廃止予定・旧・統合された旨）→ ⑵ SSP 版番号 → ⑶ 人手の判断、の順で決める規則を README に記載する。
+2. When 項目に SSP 版番号が無い, the ukadoc 調査ツールキット shall その項目を「世代不明」として扱い、最も古いものとは決めつけない規則を README に記載する。
+3. The ukadoc 調査ツールキット shall 関連の種別を次の 6 つに限る: `alias_of`（旧→新）・`supersedes`（新→旧）・`triggers`（操作・タグ→イベント）・`configures`（設定キー→挙動・タグ・イベント）・`queries`（タグ・イベント→プロパティ）・`same-feature`（同じ機能の別の面）。
+4. The ukadoc 調査ツールキット shall 伺からしさのテーマを `doc/ukadoc-coverage/values.md` に 8 つだけ凍結する: 気配・触れ合い・掛け合い・装い・記憶・交わり・気配り・更新。
+5. When テーマを定義する, the ukadoc 調査ツールキット shall 各テーマについて「1 行の定義」「その項目が無いと利用者がゴーストの何を失うか」「代表となる項目 2〜3 件」を書く。
+6. The ukadoc 調査ツールキット shall テーマの付与規則を 1 つだけ定める:「この項目が無いと利用者はゴーストの何を失うか」に答えられるテーマだけを付け、答えられなければ何も付けない。
+7. The ukadoc 調査ツールキット shall 優先度の根拠が 4 つあり序列が固定であることを README に記載する: ⑴ 壊れ方（黙って壊れる〔誤った結果を正常な顔で見せる場合を含む〕＞明示的なエラー＞見た目の差）＞ ⑵ 伺からしさのテーマ ＞ ⑶ 影響する既存資産の広さ ＞ ⑷ 依存する基盤の共有度。
+8. The ukadoc 調査ツールキット shall 段階（A〜E）の最終決定を本 spec の外（`ukadoc-coverage-roadmap`）に置き、調査 spec は仮の段階を付けるだけであることを README に記載する。
+9. The ukadoc 調査ツールキット shall 台帳の各項目に「壊れ方の段」の根拠（どのログが出るか・出ないか）を備考へ書ける場所を用意する。
+
+### Requirement 5: 実装済みの証拠をソースから集める
+**Objective:** 台帳を読む人として、「実装済み」と書かれた行の根拠がソース側に実在することを確かめたい。それにより根拠が陳腐化したまま気づかない状態を避けられる。
+
+#### Acceptance Criteria
+1. The ukadoc 調査ツールキット shall 実装済みの証拠を「ソースの定義箇所に置かれた正典 URL 1 行の doc コメント」と定め、行番号や内部 ID を証拠に使わない。
+2. The ukadoc 調査ツールキット shall URL を書く場所を定義箇所だけ（許可表の要素・分岐の腕・語彙表の 1 行）に限り、呼び出し側には書かない規約を README に記載する。
+3. The ukadoc 調査ツールキット shall 1 項目につき 1 行・説明文を伴わない書き方を規約とし、実装済み項目の定義行 1 行ずつを超える増量を求めない。
+4. Where 正典の名前をそのまま並べた語彙表である, the ukadoc 調査ツールキット shall 表の先頭にページ URL を 1 つ置く書き方を許し、表の要素文字列とカタログの見出しを名前で突き合わせて個々の項目に対応付ける。
+5. When 証拠収集が実行される, the ukadoc 調査ツールキット shall ソース全域を走査して正典 URL を集め、カタログの id へ解決し、id ごとの証拠（ファイルパス。行番号は使わない）を検査の出力に列挙する（台帳には書き込まない）。
+6. If コメントに「ukadoc」の語はあるが正典 URL を伴わない, then the ukadoc 調査ツールキット shall それを証拠として扱わない（現に URL を伴わない「ukadoc」のコメントが 152 件存在し、語だけで判定すると全件が誤検出になるため）。
+7. Where 項目が未実装である, the ukadoc 調査ツールキット shall ソース側に何も書かせない（未対応であることは台帳が持つ）。
+8. When 証拠収集が実行される, the ukadoc 調査ツールキット shall 正典 URL がまだ置かれていない既存コードから、URL を置く作業の手掛かりとなる候補（イベント名の文字列・`\![...]` の消費側の名前・設定キーの表・「縮退」「無視」「未知」などを含むログ行）を、証拠とは明確に区別した別の出力として提示する。
+9. The ukadoc 調査ツールキット shall 候補の提示を証拠として扱わず、状態の判定は調査 spec の人手に委ねる。
+
+### Requirement 6: 整合検査が標準のテスト実行で常時走る
+**Objective:** 開発者として、台帳と正典とソースの食い違いが放置されない仕組みがほしい。それにより整理や作り替えで根拠が消えたことに気づける。
+
+#### Acceptance Criteria
+1. The ukadoc 調査ツールキット shall 整合検査をワークスペースの標準テスト実行に常時含め、ネットワークにも実機にも依存しない決定的なテストとして実行する。
+2. While ukadoc スナップショットがその環境に存在しない, the 整合検査 shall 赤にならない（repo 内のカタログを正本として検査する）。
+3. When 整合検査が実行される, the 整合検査 shall 台帳に現れる全 id がカタログに実在することを確かめる。
+4. When 整合検査が実行される, the 整合検査 shall カタログの全 id が 4 つの台帳のいずれか 1 つにちょうど 1 回だけ現れることを確かめる。
+5. When 整合検査が実行される, the 整合検査 shall ソース中の正典 URL がすべてカタログに実在することを確かめる。
+6. When 整合検査が実行される, the 整合検査 shall 状態が `implemented` の行に少なくとも 1 つの証拠（正典 URL の出現）があることを確かめる。
+7. When 整合検査が実行される, the 整合検査 shall 関連の両端の id が実在すること、`alias_of` の指す先が `alias` でないこと（別名の連鎖の禁止）、記録された登場版がカタログの版番号と矛盾しないこと（カタログの版番号が 1 つ以上あるときは、台帳の登場版がその中に含まれること。カタログの版番号が空なら検査しない）を確かめる。
+8. When 整合検査が実行される, the 整合検査 shall 台帳に書かれたテーマ名がテーマ定義に実在することを確かめる。
+9. The ukadoc 調査ツールキット shall 未分類の件数を台帳側の宣言値として別に持たせず、ドメイン別報告（要件 7.1）に載る「ページ別の状態の分布」を正とし、報告と台帳の一致検査（要件 7.4）でその件数を固定する（同じ数を 2 か所で持たない。未分類が増える経路はいずれも別の手段で見える＝人手の再分類は差分に出る・カタログ更新の追加項目は要件 8.1 の差分に出る・状態語彙の綴り違いは 6.10 が赤にする。開発者裁定 2026-09-02 議題 3）。
+10. If 正典 URL の綴りが違う・`implemented` なのに証拠が消えた・テーマ名の綴りが違う・状態の語彙が 7 つのいずれでもない・ドメイン別報告が台帳と食い違う, then the 整合検査 shall 赤になり、該当する id と場所を示す。
+11. While 実装が入れ替わっても正典 URL が定義箇所に残っている, the 整合検査 shall 赤にならない（行の増減や整理では壊れない）。
+12. If 整合検査が失敗する, then the 整合検査 shall 何がどう食い違ったかを示す出力を残す（黙って失敗しない）。
+13. The ukadoc 調査ツールキット shall 整合検査の各項目（6.3〜6.8 と 7.4）について、小さな見本データでその項目だけを壊すと赤になることを確かめるテストと、実データで検査対象が 0 件でないこと（カタログ 1,749 件・ページ 38 種・台帳 4 本など）を確かめるテストを併置する（初期台帳は全行が未分類のため、6.6〜6.8 は対象 0 件で緑になり、道具が壊れていても気づけないから）。
+
+### Requirement 7: 報告の決定論的な再生成
+**Objective:** `ukadoc-coverage-roadmap` の担当者として、台帳から網羅状況の一覧を機械で作りたい。それにより優先度の議論を数字の上で行える。
+
+#### Acceptance Criteria
+1. When ドメイン別の報告生成が実行される, the ukadoc 調査ツールキット shall 台帳 1 本ごとに `doc/ukadoc-coverage/report/<ドメイン>.md`（shiori・assets・sakura-script・property の 4 本）を出力し、そのドメインの「状態の分布（ドメイン全体とページ別。未分類の残りがどのページに何件あるかが読める）」「SSP 世代別の対応表」「別名の一覧」「テーマ別の状態分布」「ドメイン内で関連が閉じている束の一覧」を載せる。
+2. When 全体の報告生成が実行される, the ukadoc 調査ツールキット shall 4 台帳すべてから `doc/ukadoc-coverage/report/summary.md` を出力し、「状態の分布（全体・ドメイン別）」「ドメインを跨いで関連が繋がった束の一覧」「テーマ別の状態分布（全体）」と、冒頭に「元にしたカタログのスナップショット生成日時・各台帳の項目数と未分類件数」を載せる（古さを読んで分かるようにするため。壁時計の生成日時は載せない＝7.3 の決定論を守る）。
+3. When 同じカタログと同じ台帳に対して報告生成を 2 回続けて実行する, the ukadoc 調査ツールキット shall 同一の内容を出力する（ドメイン別・全体とも）。
+4. When 整合検査が実行される, the 整合検査 shall ドメイン別の報告 4 本それぞれが、対応する台帳 1 本から再生成した内容と一致することを確かめる（持ち主の調査 spec だけが台帳と報告の両方を編集するため、並走 4 本の間で共有ファイルは生じない）。
+5. If ドメイン別の報告がその台帳と食い違う, then the 整合検査 shall 赤になり、どのドメインの報告の再生成が必要かを示す。
+6. The 整合検査 shall 全体の報告 `summary.md` の新しさを常時検査の合否に含めない（4 台帳を跨ぐ成果物であり、常時赤にすると並走 4 本が同じファイルを取り合うため。再生成は統合担当 `ukadoc-coverage-roadmap` が行う。開発者裁定 2026-09-02 議題 2）。
+7. The ukadoc 調査ツールキット shall 報告ファイルを手で編集しない・食い違いは再生成で解消する（手で merge しない）規約を README に記載する。
+8. The ukadoc 調査ツールキット shall 報告に現れる状態の呼び名を平易な日本語（実装済み・語彙のみ・縮退・未対応・別名・対象外・未分類）で表示する。
+9. When 束の一覧を出力する, the ukadoc 調査ツールキット shall 各束（関連で繋がった id の連結成分）に、構成 id だけから決まる安定した束 id（例: 構成 id のうち文字順で最小のもの）を付け、人手の文書（統合担当が書く `doc/ukadoc-coverage/linkage.md` の束の名付けと解説）がその id を引用できるようにする。束の名付けと解説そのものは道具の出力に含めない（再生成で人手の文が消えないよう、機械の一覧と人手の文書を別ファイルに分ける。開発者裁定 2026-09-02 議題 4）。
+
+### Requirement 8: スナップショット更新時の差分
+**Objective:** 開発者として、正典のスナップショットが新しくなったときに何が変わったかを知りたい。それにより台帳を見直す範囲を絞れる。
+
+#### Acceptance Criteria
+1. When 現行のカタログより新しいスナップショットに対して差分が要求される, the ukadoc 調査ツールキット shall 追加された項目・削除された項目・本文が変わった項目をそれぞれ id 付きで列挙する。
+2. When 本文の変更を判定する, the ukadoc 調査ツールキット shall カタログに記録された本文ハッシュと新しいスナップショットの本文ハッシュを比べる。
+3. If 差分に削除された項目が含まれ、かつその id が台帳に現れる, then the ukadoc 調査ツールキット shall その id を「台帳の見直しが要る項目」として明示する。
+4. The ukadoc 調査ツールキット shall 差分の算出をスナップショットが要る作業として扱い、標準のテスト実行の合否に影響させない。
+
+### Requirement 9: 既存資産との非重複と非接触
+**Objective:** 開発者として、この道具が既存の実行時コードや既存の正典資産を壊さないと確信したい。それにより並走中の他 spec に影響が及ばない。
+
+#### Acceptance Criteria
+1. The ukadoc 調査ツールキット shall areka の実行時コードを変更せず、既存クレートから参照されない。
+2. The ukadoc 調査ツールキット shall 既存の 2 系統の機械可読資産（`doc/shiori/fragments/` の契約カタログと `crates/areka-sylphya/src/vocab/` の語彙台帳）を置き換えず、カタログ id からそれらの entry 名へ結ぶ対応だけを持つ。
+3. The ukadoc 調査ツールキット shall 同じ項目を 2 か所で数えさせない（対応が付いた項目は既存資産側の名前で辿れる）。
+4. The ukadoc 調査ツールキット shall ukadoc の本文を repo に取り込まず、記録するのは URL・見出し・ハッシュ・取得元の版に限る（`.kiro/specs/completed/areka-P0-shiori-protocol/ukadoc/SOURCES.md:9-13` と同じ扱い）。
+5. The ukadoc 調査ツールキット shall 台帳・報告・README で使う日本語を平易な語に限り、プロジェクト内でしか通じない言い回しを持ち込まない。
+6. The ukadoc 調査ツールキット shall 新設する Rust ソースファイル（`crates/` 配下の `.rs`）をいずれも 1,000 行未満に保つ（ワークスペースのファイル行数上限テストは `crates/**/*.rs` だけを走査する＝`crates/log-capture-kit/tests/workspace_scan/mod.rs:79-86`・`:103`）。`doc/ukadoc-coverage/` 配下のデータファイル（カタログ・台帳・報告）には行数の上限を設けない（カタログは 1 項目 1 行で約 1,760 行、台帳は 1 項目複数行で shiori.toml が数千行になる。開発者裁定 2026-09-02 議題 1）。
+7. The ukadoc 調査ツールキット shall 環境変数名を `AREKA_` で始める既存の命名規約に従う（例: `crates/areka/src/main.rs:854`・`crates/areka/src/boot_config.rs:95`）。
+8. The ukadoc 調査ツールキット shall ロードマップ本文（`.kiro/steering/roadmap.md`）を変更しない。
+
+---
+
+## 付録 A: 台帳の項目形式（凍結・要件 2 の具体）
+
+調査 spec 4 本は本 spec の実装を待たず、この形式で `doc/ukadoc-coverage/ledger/<ドメイン>.toml` を書き始めてよい。本 spec の道具は**この形式に従う側**であり、形式の変更には要件 2 の改訂を要する。
+
+### A.1 ファイルの構造
+
+```toml
+# doc/ukadoc-coverage/ledger/property.toml
+# 人手で記入・機械で検査する台帳。形式の正本は
+# .kiro/specs/areka-P0-ukadoc-survey-toolkit/requirements.md 付録 A。
+
+[ledger]
+domain = "property"                     # ファイル名と同じドメイン名
+pages = ["list_propertysystem"]         # 要件 3.1 の担当ページ（ここに無いページの id は置けない）
+
+[entry."ukadoc:list_propertysystem:system.year:1"]
+status = "implemented"
+introduced = ""
+owner = "areka-P0-property-catalog-lists"
+priority = "C1"
+values = []
+links = [
+  { kind = "queries", to = "ukadoc:list_sakura_script:\\![get,property,ID]:1" },
+]
+note = """
+壊れ方: 値を返せないと辞書が空文字を前提に進み、黙って壊れる。
+areka では sylphya の `system.*` が NotFound 縮退（縮退の登記は COMPAT_ARCHITECTURE の沈黙ルール表を参照）。
+"""
+
+[entry."ukadoc:list_propertysystem:balloon.scope(ID).width:1"]
+status = "alias"
+alias_of = "ukadoc:list_propertysystem:currentghost.balloon.scope(ID).width:1"
+introduced = "2.3.53"
+owner = ""
+priority = ""
+values = []
+links = []
+note = "旧名。本文注記により currentghost.* 側が正典。"
+```
+
+### A.2 キーと値（項目ごと）
+
+| キー | 型 | 必須 | 値の決まり |
+|---|---|---|---|
+| （テーブル名） | `[entry."<項目 id>"]` | 必須 | カタログの id をそのまま。引用符で囲む。1 ファイル内で重複禁止・**id の文字順**に並べる |
+| `status` | 文字列 | 必須 | 要件 2.2 の 7 語彙のいずれか（`implemented` `vocabulary-only` `degraded` `absent` `alias` `not-applicable` `unclassified`） |
+| `introduced` | 文字列 | 必須 | 登場した SSP 版番号（例 `"2.3.53"`）。不明なら `""`（＝世代不明。最古とは決めつけない・要件 4.2） |
+| `alias_of` | 文字列 | `status = "alias"` のとき必須・それ以外は書かない | 正典側の id。指す先の `status` は `alias` であってはならない（要件 6.7） |
+| `supersedes` | 文字列の配列 | 任意 | この項目が置き換えた旧 id の一覧（`alias_of` の逆向き。両方を書いても片方だけでもよい） |
+| `owner` | 文字列 | 必須 | 担当 spec 名（`areka-P0-...`）。未設定は `""` |
+| `priority` | 文字列 | 必須 | 段階 1 文字（A〜E）＋数値（例 `"C1"`）。仮置き（最終決定は `ukadoc-coverage-roadmap`・要件 4.8）。未設定は `""` |
+| `values` | 文字列の配列 | 必須（空可） | `doc/ukadoc-coverage/values.md` のテーマ名（気配・触れ合い・掛け合い・装い・記憶・交わり・気配り・更新）だけ。付与規則は要件 4.6 |
+| `links` | インラインテーブルの配列 | 必須（空可） | 各要素は `{ kind = "<種別>", to = "<相手 id>" }`。`kind` は要件 4.3 の 6 種（`alias_of` `supersedes` `triggers` `configures` `queries` `same-feature`）。`alias_of` / `supersedes` は上のキーと二重に書かなくてよい |
+| `note` | 文字列（複数行可） | 必須（空可） | 備考。壊れ方の段の根拠（どのログが出るか・出ないか・要件 4.9）、縮退の転記元、テーマを付けた理由（「無いと利用者は何を失うか」）など |
+
+初期台帳（要件 3.3）の 1 項目は `status = "unclassified"`・`introduced = ""`・`owner = ""`・`priority = ""`・`values = []`・`links = []`・`note = ""` で書き出される。
+
+### A.3 書き方の決まり
+
+- 台帳に**証拠の欄は無い**（要件 2.3）。実装済みの根拠はソース側の doc コメント `/// ukadoc: <正典 URL>`（要件 5）。
+- 文字列は二重引用符。id や見出しに逆斜線（さくらスクリプトのタグ）が含まれるときは `\` と書く（上の例の `\\![get,property,ID]`）。
+- 台帳ファイルはドメインの持ち主だけが編集する。他ドメインの id を書かない（要件 3.2）。
+- 報告（`doc/ukadoc-coverage/report/<ドメイン>.md`）は本 spec の道具が着地するまで存在しなくてよい。着地後は持ち主が再生成して一緒にコミットする（要件 7.4）。
+
+## 付録 B: 道具の着地前に自ドメインの id 一覧を得る手順
+
+カタログ（`catalog.toml`）は本 spec の実装で生成されるが、id はスナップショットから決定的に定まるので、道具無しでも正確に写せる。
+
+1. スナップショットの場所: `%APPDATA%\npm\node_modules\ukagaka-doc-mcp\data\index.json`（環境変数 `AREKA_UKADOC_SNAPSHOT` があればその場所）。最上位キーは `version` / `generatedAt` / `entries`。各 entry は `id` `title` `source` `category` `content` `url`。
+2. 自ドメインの id ＝ `source == "ukadoc"` かつ、`id` が `ukadoc:<ページ>` に等しいか `ukadoc:<ページ>:` で始まるもの（ページは要件 3.1 の担当ページ）。**`_` で分割しない**（ページ名自身が `_` を含む。区切りはコロン）。
+3. 文字順に並べる。件数が要件 3.1 の表（shiori 677・assets 542・sakura-script 342・property 188）と一致することを確かめる。
+4. 例（property・Python）:
+
+```python
+import json, os
+p = os.environ.get("AREKA_UKADOC_SNAPSHOT") or os.path.expandvars(r"%APPDATA%\npm\node_modules\ukagaka-doc-mcp\data\index.json")
+pages = {"list_propertysystem"}
+ids = sorted(e["id"] for e in json.load(open(p, encoding="utf-8"))["entries"]
+             if e["source"] == "ukadoc" and e["id"].split(":")[1] in pages)
+print(len(ids))  # 188
+```
+
+5. アンカー部分には見出しの日本語を `_6c4e_7528_...` のように符号化した文字列が入ることがある。**見た目で直さず、そのまま写す**（カタログと 1 文字でも違えば要件 6.3 で赤になる）。
+6. 見出し（`title`）と本文（`content`）は仕訳の判断材料にしてよいが、台帳には写さない（要件 9.4）。
