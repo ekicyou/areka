@@ -113,6 +113,7 @@
 9. The 資産ドメイン調査 shall ukadoc の本文を台帳へ書き写さない（書くのは areka 側の判定と、その根拠を指す文だけ）。
 10. The 資産ドメイン調査 shall アンカーを持たないページ全体の項目 15 件（`manual_*` 8・`dev_*` 6・`memo`）も他の項目と同じ形で収容し、粒度が粗いことを備考に記す。
 11. If 調査の過程でスナップショット（またはカタログ）に無い正典項目（2.8.83 以降の追加など）が見つかる, then the 資産ドメイン調査 shall それを台帳に書かず、ページ名と見出しを `doc/ukadoc-coverage/briefing-assets.md` に「未収載の候補」として記す（台帳の id はカタログと完全一致でなければならず、追加は上流契約 要件 8 のスナップショット更新で入る）。
+12. The 資産ドメイン調査 shall ライブの ukadoc との突き合わせを次の範囲に限って行う（開発者裁定 2026-09-03 議題 2）: ⑴ `surface.append`・`kero.surface.alias` の綴りと正典上の実在を `manual_shell`／`descript_shell_surfaces` のライブページで確かめ、結果（実在する／しない・正しい綴り）を `doc/ukadoc-coverage/briefing-assets.md` に記す。⑵ 版番号が新しい 3 ページ（`descript_shell_surfaces`・`descript_balloon`・`descript_shell`）について、ライブの見出し一覧とスナップショットの見出し一覧を突き合わせ、増えた見出しを 1.11 の「未収載の候補」に列挙する。他の 21 ページはライブを見ず、スナップショットで完結させる。
 
 ### Requirement 2: 全項目の仕訳と状態語彙
 **Objective:** 統合担当として、未分類が 1 件も残っていない台帳がほしい。それにより優先度の議論を全数の上で行える。
@@ -146,7 +147,7 @@
 **Objective:** 互換ベースウェアの開発者として、`descript_shell_surfaces` 137 項目が SSP のどの世代の機能で、areka がどこまで追えているかを一覧で見たい。それにより「完全マップ」という目標と実物の差が数で分かる。
 
 #### Acceptance Criteria
-1. The 資産ドメイン調査 shall `doc/ukadoc-coverage/briefing-assets.md` に `descript_shell_surfaces` 137 項目の世代別対応表を 1 節として置き、各行に「項目 id・見出し・登場した版・areka の状態」を載せる。
+1. The 資産ドメイン調査 shall `doc/ukadoc-coverage/briefing-assets.md` に `descript_shell_surfaces` 137 項目の世代別対応表を 1 節として置き、各行に「項目 id・見出し・登場した版・areka の状態」を載せ、表の冒頭に基準時点（スナップショットの `generatedAt` と、要件 1.12 のライブ確認日）を書く。
 2. The 資産ドメイン調査 shall 表の版番号を台帳の登場した版の欄から取り、台帳と食い違わせない。
 3. The 資産ドメイン調査 shall 間隔語のうち実際にアニメーションを駆動するのは `random` と `bind+random` の 2 語だけであり `bind` は駆動しないことを、転記側（`crates/areka-parsers/src/shell/decode.rs:385-397`）と駆動側（`crates/areka-seriko/src/table.rs:105-136`）の file:line 付きで表に記す。`bind+random` に対応する正典項目はスナップショットに無い（見出し 0・本文 0）ため、台帳に新しい行を作らず、`random` の項目の備考と表の注記に書く。
 4. The 資産ドメイン調査 shall 合成メソッド語について、実導出が `overlay` のみであること（`crates/areka-emo-compose/src/method.rs:129-131`）を各項目の状態に反映する。
