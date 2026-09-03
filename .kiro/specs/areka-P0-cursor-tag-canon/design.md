@@ -64,7 +64,7 @@
 ### Revalidation Triggers
 
 - `TextRegion` の公開面（`start()`・新設 `image_size()`）の形が変わったとき——`cursor_tag.rs` と `layout.rs` の基点供給を再確認する。
-- `LayoutEngine::layout` の保留フラッシュ順序（(1) 現在行確定 → (2) 保留改行 → (3) 保留カーソル）が変わったとき——`@` の基点（実効位置）の定義を再確認する。
+- `LayoutEngine::layout` の保留フラッシュ順序（(1) 現在行確定 → (2) 保留改行 → (3) 保留カーソル）、または `\n` 到着時のカーソル先行実体化（DD-11）が変わったとき——`@` の基点（実効位置）の定義と書かれた順の適用を再確認する。
 - 正典（ukadoc）が `\_l` の座標定義を再改訂したとき（付録 B・SC13／SC14）——本書「Data Models」の解決表と `doc/COMPAT_ARCHITECTURE.md` §8 の `\_l` 行を追随させる。
 - `areka-P0-text-decoration-canon` が `\f[align]` を実装するとき——本書「語彙登記と申し送り」の SC8 と相互登記を消費する。
 - `PositionedLine` に分割の由来を持たせる変更（`\c[line]` の実装時）——本書「行構造」の拡張の口を消費する。
@@ -137,6 +137,7 @@ graph LR
 | DD-8 | 8. ファイルの置き場所 | 新設 `cursor_tag.rs`（意味論）＋ `cursor_tag_tests.rs`（純関数の全網羅）。配線のテストは `layout.rs` 配下に残し、縦書き用に `layout_cursor_vertical_tests.rs` を新設。`draw.rs` には足さない | 上の「Architecture Pattern」参照。`layout.rs` は約 120 行減る |
 | DD-9 | 9. 行構造の観測 | **拡張の口の確認と登記にとどめる**。`\_l` は既に実体化時に現在行を閉じる（行の分割点）。`\c[line]` が要する「分割の由来」「内容の有無」は `PositionedLine` にフィールドを足せば付けられる形であることをテストで確認し、実装しない | 要件 6.3／6.4。過剰実装と申し送り不足の線引き |
 | DD-10 | 12. ロードマップの編集集合 | **着地時**（文書タスク）に `roadmap.md:89` の編集集合と所有台帳を実態へ更新する | 要件 8.5。設計段階で先に直すと実装の差分と食い違う |
+| DD-11 | 検証指摘 3: `\_l` の直後に `\n` が来たとき | **書かれた順に適用**。`LineBreak` 到着時に保留カーソルを先に実体化してから改行を保留する（`layout.rs:443` の腕に数行）。完了仕様 `areka-P0-choice-render` が定めた「保留カーソルが改行に後勝ち＝カーソル明示位置が最終値」（`layout.rs:341-348` の②'）を上書きし、COMPAT §8 に上書き行を足す | SSP はタグを書かれた順に適用する。`あ\_l[@10,]\nあ` は SSP で (0, 13)・現行 areka で (20, 13)、`\_l[,100]\nあ` は SSP で y = 113・現行で y = 100。本仕様が所有するタグに順序依存の非互換を残さない（設計ディスカッション裁定 2026-09-02・開発者「書かれた順に適用が当然」） |
 
 ## File Structure Plan
 
@@ -198,6 +199,7 @@ flowchart TD
 - **実効位置**（DD-3）: `inline`／`block` の走査ローカル値に、`pending`（Σratio の改行）と `pending_cursor`（先行 `\_l` の解決値）を、フラッシュの順序 (2)→(3) と同じ順で仮適用した値。走査ローカル状態は書き換えない（実体化は従来どおり次の可視グリフ直前）。
 - **保留の合成**: `pending_cursor = (new.inline.or(old.inline), new.block.or(old.block))`。両軸 `None` の `\_l` は保留を変えない（先行の保留が残っていればその効果のみが残る）。
 - **フラッシュ順序は不変**: (1) 現在行が非空なら確定 → (2) 保留改行 → (3) 保留カーソルの上書き。`\_l` が行の分割点になる（6.1）のは (1) による。
+- **書かれた順の適用（DD-11・設計ディスカッション裁定 2026-09-02）**: `LineBreak` が到着した時点でカーソルが保留中なら、改行を保留する**前に**その `\_l` を実体化する（(1) 現在行が非空なら確定 → (3) カーソル適用、の 2 段だけを先に走らせる）。これで `\_l` → `\n` の順でも SSP と同じく改行が後勝ちになる。`\n` → `\_l` の順は従来どおり (2) → (3)。末尾の `\n`／`\_l` が行を作らない規則は不変（先行実体化は位置の更新だけで、内容の無い行は作らない）。
 
 ## Requirements Traceability
 
@@ -414,7 +416,7 @@ impl TextRegion {
   3. `CursorBasis { origin: region.start(), current: (x, y), image_size: region.image_size(), font_height, line_pitch }` を組み、X・Y をそれぞれ `resolve_cursor_axis`。
   4. `Err` は `warn_cursor_degrade`（guard があれば）・`Ok(Some)` は `note_out_of_range` → 軸写像（`HorizontalTb → (inline, block) = (x, y)`／縦書き → `(y, x)`）。
   5. 保留の合成 `pending_cursor = Some((new_inline.or(old_inline), new_block.or(old_block)))`。両軸 `None` なら保留を変えず `debug!`（5.4・6.2）。
-- 保留フラッシュ（`:349-372`）は非改変。`visible_window` は非改変（2.8）。
+- 保留フラッシュ（`:349-372`）は非改変。`LineBreak` 腕（`:443`）に「保留カーソルがあれば先に実体化」を足す（DD-11）。`visible_window` は非改変（2.8）。
 - 公開 API `layout`／`layout_with_cursor_warn` の署名は不変（`CursorWarnGuard` の型の住処だけが `cursor_tag` へ移る）。
 
 **Implementation Notes**
@@ -521,6 +523,7 @@ impl TextRegion {
 | H1 | 既存 13 本 | `horizontal_tb` | 未宣言バルーンで期待値不変（縮退テストのみ正典追随で更新） | 2.7・9.6 |
 | H2 | `\_l[10,]\_l[,20]あ` | `horizontal_tb` | `(10, 20)`（軸ごとの合成） | 1.2・3.5 |
 | H3 | `あ\_l[@0,@0]あ`／`あ\n\_l[@0,@0]あ` | `horizontal_tb` | 前者は続けて配置・後者は次行の先頭（実効位置） | 3.1・3.5 |
+| H3b | `あ\_l[@10,]\nあ`／`\_l[,100]\nあ` | `horizontal_tb` | 前者は 2 個目が次行の先頭 (0, 13)・後者は y = 113（書かれた順＝改行が後勝ち・DD-11）。現行値 (20, 13)／100 との差分を正典追随として示す | 3.5・9.1・9.6 |
 | H4 | `\_l[30,5em]`／`\_l[@-1650%,100]`／`\_l[,@-100]` | `horizontal_tb` | `(30, 50)`・`(current.x − 165, 100)`・`(現状維持, current.y − 100)` | 9.3 |
 | H5 | `\_l[centery,centerx]あ` | `horizontal_tb` | 両軸不動・`warn` 1 件（分岐 `CenterAxisMismatch` は軸が違っても同一キャラクターで 1 回＝鍵は `(actor, degrade)`）・行を分割しない・`debug` 1 件（完全無効果） | 1.5・5.3・5.4 |
 | H6 | 行構造: `あ\_l[10,]あ` は 2 行・`あ\_l[,]あ` は 1 行 | `horizontal_tb` | `Vec<PositionedLine>` の行数 | 6.1・6.2・6.3 |
@@ -545,6 +548,7 @@ impl TextRegion {
 | `design.md:124`（縮退の要約） | 「`%`・`@`（相対）・負値絶対＝語彙保持＋warn-once＋状態不変スキップ」 | いずれも実導出へ |
 | `design.md:607-625`（縮退表の `\_l` 5 行） | 軸省略／両軸省略・全縮退／負値絶対／`%`・`@`／パース不能 | 本書 Error Handling の表が正本 |
 | `design.md:632`（検査計画） | `parse_cursor_coord`＋`cursor_to_image_px` の全網羅 | `cursor_to_image_px` は `cursor_tag::resolve_cursor_axis` へ |
+| 保留フラッシュ規則②'（`layout.rs:341-348` が正典と称する行） | 「②' が (2) の改行送り/行内リセットに後勝ち＝カーソル明示位置が最終値」 | `\_l` → `\n` の順では改行が後勝ち（書かれた順・DD-11）。`\n` → `\_l` の順は不変 |
 
 記録先: `doc/COMPAT_ARCHITECTURE.md` §8 に上書き行を 1 行追加（雛形 `:153`。項目＝「`\_l` の座標解決の正典所有と、原点定義の版差」、裁量＝上の表の要約、根拠＝正典 2.8.83 の逐語と出所 file:line、出典 spec＝本仕様）。
 
