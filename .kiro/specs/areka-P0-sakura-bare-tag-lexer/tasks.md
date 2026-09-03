@@ -73,7 +73,5 @@
 ## Implementation Notes
 
 - 字句層の `Token` は `pub(crate)` なので `crates/areka-parsers/tests/` の統合テストからは見えない。字句層の検証は `src/sakura/` 内の `#[cfg(test)]` モジュールから行う（設計の接続規約どおり本番ファイル末尾の `#[path]` 宣言経由）。
-- `crates/areka-parsers/src/sakura/*.rs` は CRLF。`cargo fmt` は CRLF を LF へ落とすので、実行したら `file` で確認し、崩れていれば `perl -i -pe 's/?
-$/
-/'` で戻して `git diff --stat` の行数が小さいままか確かめる。
-- タスク 2 の変異実測（設計の変異手順 ⑴⑵ を暫定ハーネスで先行確認）: 本体 `1`（読み足りない）と本体 `word.chars().count()`（読みすぎ）のどちらでも角括弧なし経路が赤になることを確認済み。恒久テストでの正式な実測はタスク 3.3。
+- `crates/areka-parsers/src/sakura/*.rs` は CRLF。`cargo fmt` は CRLF を LF へ落とすので、実行したら `file` コマンドで行末を確認し、崩れていれば CRLF へ戻したうえで `git diff --stat` の行数が小さいままか確かめる。
+- タスク 2 の変異実測（設計の変異手順 ⑴⑵ を暫定ハーネスで先行確認）: 本体 `1`（読み足りない）と本体をワード全体の文字数にした形（読みすぎ）のどちらでも角括弧なし経路が赤になることを確認済み。恒久テストでの正式な実測はタスク 3.3。
