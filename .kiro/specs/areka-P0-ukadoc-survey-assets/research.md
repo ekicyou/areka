@@ -383,3 +383,58 @@
 2. **上流の道具の版番号抽出規則**——語境界を付けるか否か。上流 spec の設計が決まるまでは判断 10 の併用案で凌げる。
 3. **`text-decoration-canon` の「13 キー」の実体**——`descript_balloon` の `font.*` は実測で `font.bold`／`font.color.b`／`.g`／`.r`／`font.height`／`font.italic`／`font.name`／`font.outline`／`font.shadowcolor.b`／`.g`／`.r`／`font.shadowstyle`／`font.strike`／`font.underline` の 14 種ある。13 が何を除いた数なのかは当該 brief から読み取れない。
 4. **`values.md` が未作成である間のテーマ名の正本**——`.kiro/steering/roadmap.md:148` が 8 つのテーマ名を登記しているので当面はここを引ける。道具の着地後に `doc/ukadoc-coverage/values.md` へ切り替わる。
+
+
+---
+
+## 9. 設計フェーズの記録（2026-09-03・`/kiro-spec-design`）
+
+> 探索の種類: **light（統合重視）**。新しい仕組みを建てないので外部調査は不要で、⑴ rebase 後の `file:line` 全数再検証（サブエージェント 1 体）、⑵ スナップショットの再計数（charset・makoto・版番号の境界）、⑶ 上流 spec と隣接 brief 2 本の再読み——の 3 点に絞った。
+
+### 9.1 §7 の設計判断の決着（design.md の D1〜D10 が正本）
+
+| 判断 | 決着 | design.md |
+|---|---|---|
+| 判断 1（骨組みを機械で作るか） | 案 ⑴。使い捨てスクリプトを `crates/` の外に置き、成果物の TOML だけをコミット。生成規則を design.md §6.1 に全部書いて再現性を担保する | D1 |
+| 判断 3（`charset` の URL） | 案 ⑴。**実装済みは 3 ページだけ**（ghost・shell・balloon）で、`prescan.rs:54` の直上に 3 行。surfaces・surfacetable・install・plugin・headline は経路が無い | D3 |
+| 判断 5（記録の段の書き分け） | 案 ⑴。分類は 3 つのまま、段は備考に 1 行の型で書く。要件 3.5a の裁定どおり `debug!` だけなら壊れ方は「黙って壊れる」 | D4 |
+| 判断 7（世代表 137 行） | 案 ⑴。台帳から機械で起こす。V12 で台帳との一致を検査 | D5 |
+| 判断 8（道具の着地前提） | 案 ⑴。「未着地」を既定に固定し、完了直前に V15 で 1 度だけ分岐する | D7 |
+| 判断 10（版番号の抽出規則） | 案 ⑴＋⑶。語境界付きで読み、2 つの規則で結果が割れる項目は `introduced` を空にする | D6 |
+| §6-5（改行コード） | CRLF。生成スクリプトで改行を明示する | D8 |
+| §6-7（`surface.append` ほか） | 台帳に行を作らず、`manual_shell` と `random` の備考＋ブリーフィングに書く。ライブ確認で実在が取れるまで `implemented` にしない | D9 |
+
+新たに 1 件決めた。**URL を置くのは `status = "implemented"` の項目だけ**（要件 6.1 と 6.6 の最も狭い読み方）。これにより検査が「ソース中の URL の集合 ＝ 台帳の `implemented` の id 集合」という 1 本の等式になる（V11）。
+
+### 9.2 設計フェーズで得た新しい実測
+
+- **上流 spec の `design.md` はまだ存在しない**（`.kiro/specs/areka-P0-ukadoc-survey-toolkit/` は brief・requirements・research・spec.json の 4 本のみ）。したがって版番号の抽出規則は「上流の要件では未決」であり、D6 が仮に決める。
+- **版番号の境界事例は 5 件ではなく 7 件**。集合の差で数え直すと、descript 系 5 件に加えて `ukadoc:manual_shell`（2.2.57・2.7.38 を失う）と `ukadoc:dev_nar`（2.3.00 を失う）が動く。
+- **`charset` の実装済み判定に必要な経路を追い切った**。ゴーストとシェルは `package/resolve.rs:64`・`:156`、バルーンは `crates/areka-emo-present/src/balloon.rs:418`（`read_decoded`）が `charset::decode` を通す。surfaces.txt は `crates/areka/src/emo2_boot/assets.rs:279` と `crates/areka/src/placement/measure.rs:333` が `std::fs::read_to_string` で読むので通らない。
+- **担当 24 ページ 542 件・id はすべて ASCII・文字列順とバイト順が一致**することを再確認した。TOML のキーは引用符で囲むだけでよい。
+- **`descript_shell` には `char*.bindgroup*.*` 系の項目もある**（`char*.bindgroup*.addid`／`.default`／`.name`・`char*.bindoption*.group`）。areka の接頭辞は `sakura.`／`kero.` の 2 つだけなので、この系統は照合されない。
+- **本ドメインで `makoto` を見出しに持つ項目は 1 件だけ**（`ukadoc:descript_ghost:makoto_2c_30d5_30a1_30a4_30eb_540d:1`）。`descript_shell` に `makoto` の項目は無い。
+
+### 9.3 rebase 後の `file:line` 再検証
+
+上流の 2 コミットは `crates/wintf/src/ecs/visual/draw/builder.rs` だけを変えており、`areka-parsers`・`areka-seriko`・`areka-emo-compose`・`areka` に差分は無い。**rebase による行移動は 1 件も無い。** 一方で、もとの引用の取り方が粗かった箇所が 10 件あった（design.md §12 の訂正表が正本）。とくに次の 3 つは台帳の備考へそのまま写ると誤りが残る。
+
+- `areka-seriko/src/table.rs` の間隔語の駆動判断は `:105-137`（`Random` は `:106`、`BindRandom` は `:107-109`、`Bind` の非駆動は `:110-117`）。
+- `areka-emo-compose/src/method.rs` の実導出判定は `:130-132`、種別 19 種は `:186-204`。
+- 要件 5.7 が挙げる `doc/emo2-conformance-scope.md:89` は**空行**。実在する言及は `:73`・`:75`・`:76`・`:92` の 4 か所。
+
+### 9.4 要件確定後に main へ現れた隣接 spec 2 本
+
+`areka-P0-makoto-dll-host` と `areka-P0-translate-pipeline` の brief を読んだ。本ドメインの項目への担当宣言は 2 件ある。
+
+- `areka-P0-makoto-dll-host` — ゴースト descript の `makoto,ファイル名`（brief `:10`・`:37`・`:57`）。シェル側 `makoto.dll` も範囲だが、対応する正典項目は無い。
+- `areka-P0-translate-pipeline` — トランスレータの継ぎ目と順序（brief `:9`・`:47`）。ページ全体項目 `ukadoc:manual_translator` が該当する。
+
+`manual_translator` は 2 本が半分ずつ主張する。`owner` は 1 つしか書けないので `translate-pipeline` を担当とし、備考と `links` で `makoto-dll-host` を指す（design.md §8）。要件 7.2 が挙げる最小集合への**追加**であり、要件は書き換えない。
+
+### 9.5 設計の統合（一般化・作るか使うか・単純化）
+
+- **一般化**: 「未知の記述の扱い」の備考を 1 行の型（`壊れ方: ...。記録: ... file:line。`）に固定した。9 種の節と 542 件の備考で同じ形が使え、後から機械で数え直せる。
+- **作るか使うか**: 台帳の形式・語彙・URL の書き方は上流契約が凍結済みなので**一切作らない**。作るのは使い捨てスクリプト 3 本（骨組み・世代表・検査）だけで、いずれもコミットしない。
+- **単純化**: 要件 6.4 の「語彙表の先頭にページ URL 1 つ」という書き方を使わないと決めた。唯一の候補（合成メソッドの種別表）の中身が `vocabulary-only` になるため、D10 の下では対象にならない。これで URL の書き方が 1 種類に減る。
+- **除いたもの**: 台帳に「証拠」の欄を作る案（上流契約 要件 2.3 が禁じている）、`bind+random` 用の新しい行を作る案（要件 1.4・1.6 が件数とページを固定している）。
