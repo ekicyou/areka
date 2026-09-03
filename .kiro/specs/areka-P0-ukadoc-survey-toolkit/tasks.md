@@ -10,7 +10,7 @@
   - 完了時: `cargo test -p ukadoc-survey` と `cargo test --workspace` が緑になり、ワークスペースのファイル行数上限テストが新クレートを走査しても赤にならない
   - _Requirements: 9.1, 9.6, 9.7_
 
-- [ ] 1.2 (P) 値の型と語彙を 1 か所で定義する
+- [x] 1.2 (P) 値の型と語彙を 1 か所で定義する
   - 項目 id の型を作り、「ページ全体の形」と「アンカー付きの形」の 2 形だけを受け付ける。区切りはコロンで、下線では割らない
   - 状態 7 種・関連の種別 6 種・テーマ 8 種・ドメイン 4 種を列挙で持ち、文字列からの変換を失敗しうる操作にする。既定の腕を置かず網羅を守る
   - 状態には台帳へ書く英字の綴りと、報告に出す平易な日本語の呼び名の 2 つの読み出しを持たせる
@@ -300,3 +300,6 @@
 - 1.1: `cargo test --workspace` は先に i686 成果物を作らないと `shiori-host32-host` で赤になる（環境の前提であって欠陥ではない）。`cargo build -p shiori-host32-helper --target i686-pc-windows-msvc` と `cargo build -p shiori-host32-testdll --target i686-pc-windows-msvc` を一度回せば緑（99 suites・6,376 passed を確認）。
 - 1.1: 新しい worktree では `vendors/pasta` サブモジュールが未展開で cargo がワークスペースを解決できない。`git submodule update --init --recursive` を一度回す（作業ツリーの展開だけで repo の差分は出ない）。
 - 1.1: design.md「File Structure Plan」の本文は「`.rs` は 48 本」と書くが、同じ節の Directory Structure の木は `src/` 62 本＋`tests/` を数える。木の方が数え上げられる正本なので、木に合わせて 62 本を作った（`tests/consistency*` はタスク 8.x の持ち物）。
+- 1.2: 語彙の変換は `Result<_, UnknownVocabulary>` を返す（`SurveyError::BadVocabulary` は file と id を持つが、素の `&str` を受ける parse はそれを知らないため）。`ledger::read`（タスク 2.4）は**必ず** `err.at(file, id)` で包むこと。包み忘れると要件 6.10 の「該当 id と場所を示す」がこの継ぎ目で失われる。
+- 1.2: `as_key` の綴りを入れ替える摂動は往復テストを素通りする（往復は入れ替えても自己整合）。要件 2.2／4.3／7.8 の綴りを逐語で確かめるテストだけが捕まえるので、後の整理で往復テストに畳まないこと。
+- 1.2: このワークスペースは `cargo fmt --all -- --check` が緑（外れ値 0 件）。新設ファイルも fmt に通すこと。

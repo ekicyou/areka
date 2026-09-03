@@ -12,7 +12,9 @@ fn snapshot_unreadable_carries_the_absolute_path_and_the_reason() {
     };
     let body = err.to_string();
     assert!(
-        body.contains(r"C:\Users\maz\AppData\Roaming\npm\node_modules\ukagaka-doc-mcp\data\index.json"),
+        body.contains(
+            r"C:\Users\maz\AppData\Roaming\npm\node_modules\ukagaka-doc-mcp\data\index.json"
+        ),
         "探した絶対パスが本文に無い: {body}"
     );
     assert!(
@@ -28,8 +30,14 @@ fn io_and_toml_parse_carry_the_path_and_the_reason() {
         reason: "アクセスが拒否されました。".to_string(),
     };
     let io_body = io.to_string();
-    assert!(io_body.contains("doc/ukadoc-coverage/catalog.toml"), "パスが無い: {io_body}");
-    assert!(io_body.contains("アクセスが拒否されました。"), "理由が無い: {io_body}");
+    assert!(
+        io_body.contains("doc/ukadoc-coverage/catalog.toml"),
+        "パスが無い: {io_body}"
+    );
+    assert!(
+        io_body.contains("アクセスが拒否されました。"),
+        "理由が無い: {io_body}"
+    );
 
     let parse = SurveyError::TomlParse {
         path: "doc/ukadoc-coverage/ledger/property.toml".to_string(),
@@ -40,14 +48,20 @@ fn io_and_toml_parse_carry_the_path_and_the_reason() {
         parse_body.contains("doc/ukadoc-coverage/ledger/property.toml"),
         "パスが無い: {parse_body}"
     );
-    assert!(parse_body.contains("expected `=`"), "理由が無い: {parse_body}");
+    assert!(
+        parse_body.contains("expected `=`"),
+        "理由が無い: {parse_body}"
+    );
 }
 
 #[test]
 fn missing_env_names_the_variable_it_looked_for() {
     let err = SurveyError::MissingEnv { name: "APPDATA" };
     let body = err.to_string();
-    assert!(body.contains("APPDATA"), "環境変数の名前が本文に無い: {body}");
+    assert!(
+        body.contains("APPDATA"),
+        "環境変数の名前が本文に無い: {body}"
+    );
 }
 
 #[test]
@@ -65,7 +79,10 @@ fn bad_vocabulary_points_at_the_file_the_id_the_field_and_the_value() {
         "status",
         "implmented",
     ] {
-        assert!(body.contains(needle), "形が違う場所の手掛かり {needle} が本文に無い: {body}");
+        assert!(
+            body.contains(needle),
+            "形が違う場所の手掛かり {needle} が本文に無い: {body}"
+        );
     }
 }
 
@@ -89,13 +106,18 @@ fn structural_failures_point_at_the_place_that_broke() {
         pages: "list_newpage, list_anotherpage".to_string(),
     };
     let unassigned_body = unassigned.to_string();
-    assert!(unassigned_body.contains("list_newpage"), "ページ名が本文に無い: {unassigned_body}");
+    assert!(
+        unassigned_body.contains("list_newpage"),
+        "ページ名が本文に無い: {unassigned_body}"
+    );
 
     let split = SurveyError::LedgerSplitMismatch {
         detail: "切り分けの鍵 676 件・toml の鍵 677 件".to_string(),
     };
     assert!(
-        split.to_string().contains("切り分けの鍵 676 件・toml の鍵 677 件"),
+        split
+            .to_string()
+            .contains("切り分けの鍵 676 件・toml の鍵 677 件"),
         "食い違いの内訳が本文に無い: {split}"
     );
 
@@ -107,6 +129,11 @@ fn structural_failures_point_at_the_place_that_broke() {
         "形の食い違いが本文に無い: {shape}"
     );
 
-    let bad_id = SurveyError::BadEntryId { raw: "ukadoc".to_string() };
-    assert!(bad_id.to_string().contains("ukadoc"), "元の綴りが本文に無い: {bad_id}");
+    let bad_id = SurveyError::BadEntryId {
+        raw: "ukadoc".to_string(),
+    };
+    assert!(
+        bad_id.to_string().contains("ukadoc"),
+        "元の綴りが本文に無い: {bad_id}"
+    );
 }
