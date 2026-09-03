@@ -868,7 +868,9 @@ pub mod sources {
     /// crates/**/*.rs を名前順・重複なしで返す。crates/ukadoc-survey/ は除く。
     pub fn walk(root: &Path) -> Result<Vec<(String, String)>, SurveyError>;
 }
-pub mod snapshot {
+// 検査経路から型検査で切り離すため crate 内公開にする（要件 6.2・Testing Strategy 項目 19）。
+// tests/consistency は統合テスト＝別クレートなので、この形なら io::snapshot に手が届かない。
+pub(crate) mod snapshot {
     pub struct SnapshotDoc { pub version: i64, pub generated_at: String, pub entries: Vec<RawEntry>,
                              pub package: String, pub package_version: String }
     pub struct RawEntry { pub id: String, pub title: String, pub source: String,
@@ -1015,7 +1017,7 @@ pub enum SurveyError {
     SnapshotUnreadable { path: String, reason: String },
     #[error("スナップショットの形が違う: {detail}")]
     SnapshotShape { detail: String },
-    #[error("環境変数 {name} が無いので既定の場所を組み立てられない")]
+    #[error("環境変数 {name} が無いので既定の場所を組み立てられない。AREKA_UKADOC_SNAPSHOT で場所を指定してほしい")]
     MissingEnv { name: &'static str },
     #[error("項目 id の形が違う: {raw}")]
     BadEntryId { raw: String },

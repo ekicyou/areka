@@ -18,7 +18,9 @@ pub enum SurveyError {
     #[error("スナップショットの形が違う: {detail}")]
     SnapshotShape { detail: String },
     /// 既定の場所を組み立てるための環境変数が無い。
-    #[error("環境変数 {name} が無いので既定の場所を組み立てられない")]
+    #[error(
+        "環境変数 {name} が無いので既定の場所を組み立てられない。AREKA_UKADOC_SNAPSHOT で場所を指定してほしい"
+    )]
     MissingEnv { name: &'static str },
     /// 項目 id が 2 形（`ukadoc:<ページ>` か `ukadoc:<ページ>:<アンカー>:<連番>`）の
     /// どちらでもない。

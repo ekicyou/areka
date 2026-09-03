@@ -6,5 +6,10 @@
 
 pub mod files;
 pub mod paths;
-pub mod snapshot;
+// スナップショットの読み込みだけは crate の中に閉じる。常時走る整合検査
+// （`tests/consistency.rs`）はライブラリの外にある別クレートなので、これで
+// 「スナップショットの無い環境でも検査が赤にならない」ことを申し合わせではなく
+// 型検査で守れる（要件 6.2・設計 Testing Strategy 19）。`cli` は crate の中にあるので
+// そのまま引ける。
+pub(crate) mod snapshot;
 pub mod sources;
