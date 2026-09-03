@@ -108,7 +108,7 @@ areka が SHIORI へ送るイベントは 11 種類しかない。既存ゴー�
 6. The SHIORI ドメイン調査 shall areka の内部でだけ使う名前（`OnTalk`・`OnHour`・`OnMenuBack`）について台帳の行を作らず、最も近い正典項目の `note` に areka 側の扱いを書く。
 7. When 更新に関わる項目を仕訳する, the SHIORI ドメイン台帳 shall 名前が `OnUpdate` で始まる 26 項目を 1 つの群として扱い、群としての壊れ方・テーマ・優先度を揃える。
 8. The SHIORI ドメイン台帳 shall 各イベントの発火条件の源（descript のキー・プロパティ・さくらスクリプトのタグ・OS の事象・利用者の操作）を `links` に登記する。
-9. When 状態を決める, the SHIORI ドメイン調査 shall 判断の根拠として areka 側の `file:line` を `note` に書き、書く前にその場所を実際に読んで確かめる。
+9. When 状態を決める, the SHIORI ドメイン調査 shall 判断の根拠となる areka 側の場所を `note` にファイルパスと定義名（例: `events.rs` の `ALLOWED_EVENT_IDS`・`shiori3.rs` の `parse_response`）で書き、行番号は書かない（隣の spec がファイルを整理すると古くなり、台帳の行番号は誰も検査しないため。上流 要件 2.3・5.1 と同じ考え方。開発者裁定 2026-09-03 議題 1）。書く対象は `implemented`・`degraded`・`vocabulary-only` の行と群の共通の `note` に限り、`absent` の各行には根拠を繰り返さない（「許可表に無い」の 1 か所で足りる）。書く前にその場所を実際に読んで確かめる義務は変わらない。
 10. The SHIORI ドメイン台帳 shall `memo_shiorievent` の 1 項目にも状態を与え、それがイベント一覧の補足であることを `note` に書く。
 11. When 台帳を確定させる, the SHIORI ドメイン調査 shall 正典の 290 項目と既存のカタログ `doc/shiori/fragments/events/` の 287 項目を項目 id 単位で突き合わせ、差の 3 件（着手時の実測では `OnArchiveViewerOpen`・`OnMediaPlayerOpen`・`OnPictureViewerOpen`。いずれも正典にあって断片に無く、逆向きは 0 件）を該当する行の `note` に記録する。
 
@@ -139,9 +139,9 @@ areka が SHIORI へ送るイベントは 11 種類しかない。既存ゴー�
 #### Acceptance Criteria
 1. The SHIORI ドメイン台帳 shall `spec_shiori3` の 26 項目それぞれに状態を与え、リクエスト側の 11 項目とレスポンス側の 15 項目を `note` で区別する。
 2. Where 項目が areka が現に送るヘッダに対応する（リクエスト行・`Charset`・`Sender`・`Status`・`ID`・`Reference*`・`SecurityLevel`）, the SHIORI ドメイン台帳 shall その項目を `implemented` または `degraded` とし、固定値で送っている箇所（`SecurityLevel: local`・`Charset` は UTF-8 のみ）を `note` に書く。
-3. Where 項目が areka が送らないヘッダに対応する（`SenderType`・`SecurityOrigin`・`BaseID`・リクエスト側の `X-SSTP-PassThru-*`）, the SHIORI ドメイン台帳 shall その項目を `absent` とし、`crates/shiori-host32-host/src/shiori3.rs:86-87` の記載に `BaseID` が挙がっていないことを `note` に書く。
-4. Where 項目が areka が読み飛ばす応答ヘッダに対応する（`ValueNotify`・`Marker`・`BalloonOffset`・`Age`・`MarkerSend`・レスポンス側の `Reference*`・レスポンス側の `Charset`・`Sender`・`SecurityLevel`・`X-SSTP-PassThru-`）, the SHIORI ドメイン台帳 shall その項目を `absent` とし、読み飛ばしている箇所（`shiori3.rs:202-218`）を `note` に書く。
-4a. Where 項目が areka が現に解釈する応答に対応する（ステータスコード・`Value`・`ErrorLevel`・`ErrorDescription`）, the SHIORI ドメイン台帳 shall その項目を `implemented` とし、解釈している箇所（`shiori3.rs:178` の `parse_response`・ヘッダの分岐は `:202-218`）に要件 9 のコメントを置く。これで 26 項目すべてが 5.2〜5.4a のいずれかに当てはまる（リクエスト側は 5.2・5.3、レスポンス側は 5.4・5.4a）。
+3. Where 項目が areka が送らないヘッダに対応する（`SenderType`・`SecurityOrigin`・`BaseID`・リクエスト側の `X-SSTP-PassThru-*`）, the SHIORI ドメイン台帳 shall その項目を `absent` とし、`shiori3.rs` の `build_request` の説明（送らないヘッダの記載）に `BaseID` が挙がっていないことを `note` に書く（行番号は書かない・要件 2.9）。
+4. Where 項目が areka が読み飛ばす応答ヘッダに対応する（`ValueNotify`・`Marker`・`BalloonOffset`・`Age`・`MarkerSend`・レスポンス側の `Reference*`・レスポンス側の `Charset`・`Sender`・`SecurityLevel`・`X-SSTP-PassThru-`）, the SHIORI ドメイン台帳 shall その項目を `absent` とし、読み飛ばしている場所（`shiori3.rs` の `parse_response` のヘッダの分岐）を `note` に書く。
+4a. Where 項目が areka が現に解釈する応答に対応する（ステータスコード・`Value`・`ErrorLevel`・`ErrorDescription`）, the SHIORI ドメイン台帳 shall その項目を `implemented` とし、解釈している場所（`shiori3.rs` の `parse_response` とそのヘッダの分岐）に要件 9 のコメントを置く。これで 26 項目すべてが 5.2〜5.4a のいずれかに当てはまる（リクエスト側は 5.2・5.3、レスポンス側は 5.4・5.4a）。
 5. When 見出しが同じ項目が同じページに 2 つある（`Charset`・`Sender`）, the SHIORI ドメイン調査 shall 項目 id で区別し、1 つの行にまとめない。
 6. The SHIORI ドメイン台帳 shall `list_plugin_event` の 19 項目について、イベント・PLUGIN 向けのリソース・プロパティの照会・任意名イベントの枠という種別の違いを `note` に書き分ける。
 7. The SHIORI ドメイン台帳 shall 外部連携の 14 項目（`spec_sstp` 2・`spec_fmo_mutex` 6・`spec_web` 3・`spec_dll` 1・`spec_plugin` 1・`spec_headline` 1）について、実装の可否ではなく「受け口が areka にあるか無いか」だけを判定する。
