@@ -21,8 +21,9 @@
 //! **スコープ境界（タスク 4.1 / 4.2 シーム）**: 本ファイルは emo2 subset の
 //! 値正規化のみを行う。subset 外タグ・`move` 以外の `\!`・`\q` 旧 2 連形・
 //! `\![*]` マーカー・不正トークンの吸収（`GenericCommand` / `Raw`）は
-//! **タスク 4.2 の領分**であり、ここでは `decode_passthrough` という明示的な
-//! シーム関数へ委ねる（現状は最小プレースホルダ。4.2 がここを実装する）。
+//! **タスク 4.2 の領分**であり、ここでは `decode_passthrough_*` という明示的な
+//! シーム関数へ委ねる（`\q` 旧 2 連形・`\![*]` マーカーはシーケンス依存ゆえ
+//!   `fold_*` 群が捕捉する。いずれも実装済み）。
 
 // `decode` は `parse`（タスク 5）から非テスト経路で結線済み。タスク 4.2 の
 // シーム関数（`decode_passthrough_*`）も `decode_token` / `decode_tag` / `decode_bang`
@@ -134,7 +135,7 @@ fn fold_legacy_q(
 /// 単一の構文トークンを `Instruction` へ写像する。
 ///
 /// emo2 subset（本タスク 4.1）に該当するものはここで値正規化し、それ以外は
-/// `decode_passthrough`（タスク 4.2 のシーム）へ委ねる。
+/// `decode_passthrough_*`（タスク 4.2 のシーム）へ委ねる。
 fn decode_token(token: Token) -> Instruction {
     match token {
         Token::Text(s) => Instruction::Text(s),
@@ -153,14 +154,14 @@ fn decode_token(token: Token) -> Instruction {
         // 対象外の短縮語（`SHORTHAND_WORDS` の想定外拡張時）への防御。lexer は現状
         // `'w'`/`'b'`/`'p'` のみ産むため到達不能だが、panic せず生情報を失わない `Raw` に留める。
         Token::Shorthand { word, n } => Instruction::Raw(format!("\\{word}{n}")),
-        Token::Bare(c) => decode_bare(c),
+        Token::Bare(word) => decode_bare(&word),
         Token::Tag { word, args } => decode_tag(word, args),
         // タスク 4.2 のシーム: 構文上区切れたが正準でない／不正な生保持。
         Token::Raw(s) => decode_passthrough_raw(s),
     }
 }
 
-/// bare タグ（角括弧なし 1 文字）を写像する。
+/// bare タグ（角括弧なしタグの綴り・1〜3 文字）を写像する。
 ///
 /// `\n`（bare）は既定比率 1.0 の改行（要件 4.2）。`\e`/`\c`/`\-` は制御命令（要件 6.2-6.4）。
 ///
@@ -171,16 +172,17 @@ fn decode_token(token: Token) -> Instruction {
 /// 分類）の**意図的なスーパーセット更新**であり、非 emo2 ゴースト・bare タグ経路の
 /// fixture（`boot.pasta:79` の `\1\![move,...]` 等）が正しく動くようにする（emo2 自身は
 /// `\p[n]` を発行するため無影響）。
-fn decode_bare(c: char) -> Instruction {
-    match c {
-        'e' => Instruction::End,
-        'c' => Instruction::Clear,
-        '-' => Instruction::Quit,
-        'n' => Instruction::NewLine(NewLineRatio::new(1.0)),
+fn decode_bare(word: &str) -> Instruction {
+    match word {
+        "e" => Instruction::End,
+        "c" => Instruction::Clear,
+        "-" => Instruction::Quit,
+        "n" => Instruction::NewLine(NewLineRatio::new(1.0)),
         // 正典スコープタグ bare 形（R1.5/R4.4・ukadoc）: `\0`/`\h`=本体側、`\1`/`\u`=相方側。
-        '0' | 'h' => Instruction::SpeakerScope { n: 0 },
-        '1' | 'u' => Instruction::SpeakerScope { n: 1 },
-        // 上記以外の subset 外 bare タグ（`\i` `\j` 等）はタスク 4.2 のパススルー領分。
+        "0" | "h" => Instruction::SpeakerScope { n: 0 },
+        "1" | "u" => Instruction::SpeakerScope { n: 1 },
+        // 上記以外の subset 外 bare タグ（`\i` `\j`・`\_a` `\__q` 等）は
+        // タスク 4.2 のパススルー領分。
         other => decode_passthrough_bare(other),
     }
 }
@@ -325,11 +327,12 @@ fn decode_passthrough_bang(args: Vec<String>) -> Instruction {
     Instruction::GenericCommand { name, raw_args }
 }
 
-/// 【タスク 4.2】subset 外の bare タグ（`\i` `\j` 等・**スコープタグを除く**）→ 生情報を
-/// 保持して `Raw`（要件 11.2）。正典スコープ bare 形 `\0`/`\1`/`\h`/`\u` は `decode_bare` で
+/// 【タスク 4.2】subset 外の bare タグ（`\i` `\j`・`\_a` `\__q` 等・**スコープタグを除く**）
+/// → 綴りを `\` 付きで復元した `Raw` として保持し、生情報を失わない（要件 11.2）。
+/// 正典スコープ bare 形 `\0`/`\1`/`\h`/`\u` は `decode_bare` で
 /// `SpeakerScope` へ写像されるため、ここへは到達しない（R1.5/R4.4）。
-fn decode_passthrough_bare(c: char) -> Instruction {
-    Instruction::Raw(format!("\\{c}"))
+fn decode_passthrough_bare(word: &str) -> Instruction {
+    Instruction::Raw(format!("\\{word}"))
 }
 
 /// 【タスク 4.2】lexer が区切れず `Raw` 吸収した不正断片（未閉じ `[`/`"`）→ そのまま
