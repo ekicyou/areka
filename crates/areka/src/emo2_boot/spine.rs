@@ -928,6 +928,9 @@ impl SpineHarness {
 #[path = "spine_boot_smoke_tests.rs"]
 mod boot_smoke_tests;
 #[cfg(test)]
+#[path = "spine_conformance_script.rs"]
+mod conformance_script;
+#[cfg(test)]
 #[path = "spine_conformance_support.rs"]
 mod conformance_support;
 #[cfg(test)]
