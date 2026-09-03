@@ -137,6 +137,7 @@
 3. The 資産ドメイン調査 shall `areka-parsers` に記録を残す経路が 3 つしか無いこと（警告段 `crates/areka-parsers/src/package/resolve.rs:296` の 1 つ・控えめな段 `crates/areka-parsers/src/charset/decode.rs:35`・`:52` の 2 つ・エラー段 0）と、それ以外の経路がすべて無言であることを、記録の段（`warn!`／`debug!`）を添えて明記する。分類は要件 3.1 の 3 つのまま増やさず、段は備考の情報として書く。
 4. The 資産ドメイン調査 shall 当たり判定の `collisionex` が何も記録せずに読み飛ばされること（`crates/areka-parsers/src/shell/decode.rs:234-236`）を、対応する台帳の項目の備考に file:line 付きで登記する。
 5. When 項目の扱いが「黙って捨てる」に当たる, the 資産ドメイン調査 shall その項目が上流契約 要件 4.7 の壊れ方 ⑴（黙って壊れる）に当たるかを判定し、判定の根拠として「どの記録が出るか・出ないか」を備考に書く。
+5a. When 項目の扱いが「記録を残す」に当たり、その記録が既定のログ水準（`info`・`crates/areka/src/main.rs:141`）で表示されない段（`debug!`）だけである, the 資産ドメイン調査 shall 分類は事実どおり「記録を残す」としたまま、壊れ方の判定は「黙って壊れる」（利用者には何も見えない）とし、備考に「記録の段＝`debug!`・既定では不可視」と書く（開発者裁定 2026-09-03 議題 1。該当例: SERIKO の間隔語 `sometimes`／`rarely`／`always`／`runonce`／`never`〔`crates/areka-seriko/src/table.rs:118-127`〕・未対応の charset ラベル〔`crates/areka-parsers/src/charset/decode.rs:35`〕）。
 6. The 資産ドメイン調査 shall 各節に「その記述を読むのは誰か」（転記層で止まるのか、下流のどのエンジンまで届くのか）と「成立に要る基盤は何か」（例: オーナードローメニュー・更新機構）を書き添える。
 7. The 資産ドメイン調査 shall この登記のために areka の実行時の振る舞いを変えない（記録を増やす変更・分類を足す変更はしない）。
 8. Where その種別を読む経路が areka に無い（install.txt・プラグインの descript・ヘッドラインの descript・surfacetable.txt・更新ファイル）, the 資産ドメイン調査 shall ファイル全体が「黙って捨てる」に当たることをその節に明記し、記述単位の分類は行わない。
