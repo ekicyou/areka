@@ -865,6 +865,9 @@ mod cursor_tests;
 #[path = "layout_cursor_vertical_tests.rs"]
 mod cursor_vertical_tests;
 #[cfg(test)]
+#[path = "layout_cursor_wiring_tests.rs"]
+mod cursor_wiring_tests;
+#[cfg(test)]
 #[path = "layout_segmented_tests.rs"]
 mod segmented_tests;
 #[cfg(test)]

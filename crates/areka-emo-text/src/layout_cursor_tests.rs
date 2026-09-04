@@ -145,7 +145,7 @@ fn trailing_cursor_move_evaporates() {
 }
 
 /// 両軸 None（`\_l[,]`＝両軸省略）は完全 no-op——行区切りもしない
-/// （正典「両方省略で無効果」・2.4）。`[あ, \_l[,], あ]` → 1 行 [あ@0, あ@10]（改行なし）。
+/// （正典「両方省略で無効果」・R1.6/5.4/6.2）。`[あ, \_l[,], あ]` → 1 行 [あ@0, あ@10]（改行なし）。
 #[test]
 fn both_axes_omitted_cursor_move_is_complete_noop() {
     let region = TextRegion::resolve(
@@ -233,7 +233,7 @@ fn cursor_move_em_and_lh_units_place_next_glyph_through_layout() {
 }
 
 /// 保留改行なしの単軸 `\_l` は指定軸のみ上書きし、省略軸は走査中の実行位置のまま据え置く
-/// （軸別に独立・R2.4）。x のみ `\_l[10px,]` → inline=10・block は改行がないため 0 のまま。
+/// （軸別に独立・R1.2/1.6）。x のみ `\_l[10px,]` → inline=10・block は改行がないため 0 のまま。
 /// y のみ `\_l[,50px]` → block=50・inline は直前グリフ送り終端(10)のまま（リセットされない）。
 #[test]
 fn cursor_move_single_axis_leaves_other_axis_unchanged() {
@@ -305,7 +305,7 @@ fn cursor_move_single_axis_leaves_other_axis_unchanged() {
 }
 
 /// 保留改行と単軸 `\_l` が同一フラッシュに混在するとき、上書き軸はカーソル値・省略軸は改行進行値を
-/// 取る（all-or-nothing でなく per-axis 合成の証左・R2.2/2.4）。font 10・pitch 13:
+/// 取る（all-or-nothing でなく per-axis 合成の証左・R1.2/1.6）。font 10・pitch 13:
 /// - x のみ `\_l[10px,]`＋`\n(1.0)`: inline=カーソル 10・block=改行進行 13。
 /// - y のみ `\_l[,5px]`＋`\n(1.0)`: block=カーソル 5・inline=改行リセット 0。
 #[test]
@@ -526,7 +526,7 @@ fn cursor_degrade_warns_once_per_actor_per_branch() {
     );
 }
 
-/// `Omitted`（軸省略）・実導出成功（非負 Px/Em/Lh）は縮退でなく無音（warn しない・R2.4）。
+/// `Omitted`（軸省略）・実導出成功（Px/Em/Lh）は縮退でなく無音（warn しない・R5.5/5.2）。
 /// `\_l[5px, ]`（x 実導出・y 省略）と `\_l[,]`（両省略）はいずれも警告 0。
 #[test]
 fn cursor_omitted_and_valid_axes_do_not_warn() {
