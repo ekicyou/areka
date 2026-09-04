@@ -447,11 +447,18 @@ impl LayoutEngine {
                     pending = Some(pending.map_or(ratio, |acc| acc + ratio));
                 }
                 TextItem::CursorMove { x, y } => {
-                    // 到着時換算（保留のみ・行は閉じない・R2.1/2.3）。x→水平軸（origin＝validrect
-                    // 左辺）／y→垂直軸（origin＝validrect 上辺）を `cursor_to_image_px` で絶対 image px
-                    // 化する（em＝font_height・lh＝pitch・原点加算——design §`\_l 換算式`）。
-                    let x_val = cursor_to_image_px(x, region.left(), font_height, pitch);
-                    let y_val = cursor_to_image_px(y, region.top(), font_height, pitch);
+                    // 到着時換算（保留のみ・行は閉じない・R2.1/2.3）。x→水平軸／y→垂直軸を
+                    // `cursor_to_image_px` で絶対 image px 化する（em＝font_height・lh＝pitch・
+                    // 原点加算——design §`\_l 換算式`）。
+                    //
+                    // 原点は**解決済みの文字描画開始点** `TextRegion::start()`（宣言された `origin`
+                    // 成分は字義どおり・未宣言成分は書字開始角へ縮退）であって、validrect の辺では
+                    // ない（Requirement 2.1）。軸の向きは 3 書字方向共通（X 正＝右・Y 正＝下）で、
+                    // 書字方向で変わるのは原点の位置だけ——`horizontal_tb`／`vertical_lr` は
+                    // `(left, top)`・`vertical_rl` は `(right, top)`（design Data Models の原点表）。
+                    // これにより `vertical_rl` の `\_l[0,0]` が 1 列目の先頭を指す（2.3）。
+                    let x_val = cursor_to_image_px(x, start.0, font_height, pitch);
+                    let y_val = cursor_to_image_px(y, start.1, font_height, pitch);
                     // 縮退 4 分岐（負値絶対／`%`／`@`／パース不能）の actor ごと warn-once（6.5）。
                     // Omitted（軸省略）・実導出成功（Some）は無音。guard 不在（`layout` 経路）は抑止。
                     if let Some((actor, guard)) = cursor_warn.as_mut() {
@@ -641,7 +648,10 @@ fn finish_line(
 /// - `Px`: `image_px = value`（裸数値＝バルーン画像 px 恒等）
 /// - `Em`: `image_px = value × font_height`（1em＝タグ時点の文字高さ＝`ResolvedFont::height`）
 /// - `Lh`: `image_px = value × line_pitch`（1lh＝行送りピッチ＝`ceil(font_height × 1.25)`）
-/// - 最終座標 ＝ `origin`（当該軸の validrect 原点＝`\_l` 原点・文字描画範囲左上・RN-3）＋ `image_px`
+/// - 最終座標 ＝ `origin`（当該軸の `\_l` 原点＝**解決済みの文字描画開始点** `TextRegion::start()`
+///   の当該軸成分。宣言された `origin` 成分は字義どおり・未宣言成分は書字開始角へ縮退する。
+///   書字開始角は `horizontal_tb`／`vertical_lr` が `(left, top)`・`vertical_rl` が `(right, top)`）
+///   ＋ `image_px`
 ///
 /// `origin`／`font_height`／`line_pitch` は呼び手が軸読み替え・metrics 解決済みで渡す
 /// （本関数は係数乗算と原点加算のみ——`line_pitch` は引数として受け取り内部算出しない）。
