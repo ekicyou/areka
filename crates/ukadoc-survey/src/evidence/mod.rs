@@ -80,20 +80,21 @@ pub struct UnmatchedName {
     pub path: String,
     /// 目印として置かれていたページ URL（綴りそのまま）。
     pub page_url: String,
-    /// 突き合わせに失敗した要素の文字列。
-    /// 表そのものが続かなかったとき（[`NameMatchFailure::TableMissing`]）は `None`。
-    pub name: Option<String>,
-    /// 対応が付かなかった理由。
+    /// 対応が付かなかった理由と、対象の要素の文字列。
     pub reason: NameMatchFailure,
 }
 
 /// 語彙表の名前が証拠にならなかった理由（設計 D-5）。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+///
+/// 要素の文字列は**理由の側が持つ**。表そのものが続かなかったときには要素が 1 つも
+/// 無いので、別の欄に `Option` で持たせると「`None` のときどうするか」を誰も強制
+/// されない。理由と対象を 1 つの値にすれば、対応は構造で保たれる。
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum NameMatchFailure {
-    /// 正規化しても同じ見出しがそのページに 1 つも無い。
-    NoMatch,
-    /// 同じ見出しがそのページに 2 つ以上あって 1 件に定まらない。
-    Ambiguous,
+    /// 正規化しても同じ見出しがそのページに 1 つも無い（要素の文字列を持つ）。
+    NoMatch(String),
+    /// 同じ見出しがそのページに 2 つ以上あって 1 件に定まらない（要素の文字列を持つ）。
+    Ambiguous(String),
     /// ページ URL の行の後にスライス定数が始まらない（「目印だが表が続かない」）。
     TableMissing,
 }
