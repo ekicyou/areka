@@ -264,5 +264,11 @@ pub fn warn_cursor_degrade(
 }
 
 #[cfg(test)]
+#[path = "cursor_tag_resolve_tests.rs"]
+mod resolve_tests;
+#[cfg(test)]
+#[path = "cursor_tag_test_support.rs"]
+mod test_support;
+#[cfg(test)]
 #[path = "cursor_tag_tests.rs"]
 mod tests;

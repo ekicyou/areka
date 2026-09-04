@@ -1,8 +1,10 @@
 //! 解決層 `cursor_tag` の決定論テスト（`areka-P0-cursor-tag-canon`）。
 //!
 //! design.md「Testing Strategy ／ Unit Tests（`cursor_tag_tests.rs`・純関数）」の住処である。
-//! タスク 3.1 が置くのは**解決表の各行を 1 本ずつ通す最小限**であり、全網羅（両軸 × 全書式 ×
-//! 境界値 × 縮退 × ログ件数）はタスク 3.3 が本ファイルへ追加する。
+//! タスク 3.1／3.2 が置いたのは**解決表の各行を 1 本ずつ通す最小限**と、記録の 2 口
+//! （範囲外の `debug!`・縮退警告の一回化）の**判断分岐そのもの**である。全網羅
+//! （解決表の全行 × 両軸 × 境界値 × 正典の記述例 × ログ件数）はタスク 3.3 が姉妹モジュール
+//! `cursor_tag_resolve_tests.rs` に置いた。共通前提は `cursor_tag_test_support.rs` が持つ。
 //!
 //! 共通前提は design.md「Unit Tests」の逐語:
 //! `font_height = 10`・`line_pitch = 13`・`image_size = (400, 224)`・
@@ -13,39 +15,17 @@
 //! `font_height / 100`）はいずれも互いに異なる値になるよう選んであるので、基点や係数を
 //! 取り違えた実装はどれか 1 本で必ず赤になる。
 
+use super::test_support::{
+    CURRENT, FONT_HEIGHT, IMAGE_SIZE, LINE_PITCH, ORIGIN, VALID_BOTTOM, VALID_LEFT, VALID_RIGHT,
+    VALID_TOP, basis, discriminating_basis, out_of_range_region,
+};
 use super::{
-    CursorAxis, CursorBasis, CursorDegrade, CursorWarnGuard, note_out_of_range,
-    resolve_cursor_axis, unit_coefficient, warn_cursor_degrade,
+    CursorAxis, CursorDegrade, CursorWarnGuard, note_out_of_range, resolve_cursor_axis,
+    unit_coefficient, warn_cursor_degrade,
 };
-use crate::region::TextRegion;
 use crate::state::{CursorCoord, CursorUnit};
-use crate::writing::WritingMode;
-use areka_parsers::balloon::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
-};
 use areka_sakura::contract::ActorKey;
 use log_capture_kit::{capture, count_levels};
-
-/// design.md「Unit Tests」共通前提の文字高さ（正典 `1em`＝タグ時点の文字高さ）。
-const FONT_HEIGHT: f32 = 10.0;
-/// 同・行送り（正典 `1lh`＝1em＋行間。`ceil(10 × 1.25) = 13`）。
-const LINE_PITCH: f32 = 13.0;
-/// 同・バルーン画像原寸（`centerx`／`centery` の基準）。
-const IMAGE_SIZE: (f32, f32) = (400.0, 224.0);
-/// 同・宣言された文字描画開始点（絶対座標の基点）。
-const ORIGIN: (f32, f32) = (50.0, 20.0);
-/// 同・現在の文字描画位置（`@` 相対の基点）。
-const CURRENT: (f32, f32) = (200.0, 30.0);
-
-fn basis() -> CursorBasis {
-    CursorBasis {
-        origin: ORIGIN,
-        current: CURRENT,
-        image_size: IMAGE_SIZE,
-        font_height: FONT_HEIGHT,
-        line_pitch: LINE_PITCH,
-    }
-}
 
 /// 解決表「`""`（省略）→ `Ok(None)`＝動かさない・無音」（R1.6/5.5）。両軸とも同じ。
 #[test]
@@ -136,13 +116,10 @@ fn centerx_on_x_resolves_to_half_the_image_width() {
         resolve_cursor_axis(CursorCoord::CenterX, CursorAxis::X, &basis()),
         Ok(Some(IMAGE_SIZE.0 / 2.0))
     );
-    let discriminating = CursorBasis {
-        image_size: (360.0, 180.0),
-        ..basis()
-    };
+    let discriminating = discriminating_basis();
     assert_eq!(
         resolve_cursor_axis(CursorCoord::CenterX, CursorAxis::X, &discriminating),
-        Ok(Some(360.0 / 2.0))
+        Ok(Some(discriminating.image_size.0 / 2.0))
     );
 }
 
@@ -153,13 +130,10 @@ fn centery_on_y_resolves_to_half_the_image_height() {
         resolve_cursor_axis(CursorCoord::CenterY, CursorAxis::Y, &basis()),
         Ok(Some(IMAGE_SIZE.1 / 2.0))
     );
-    let discriminating = CursorBasis {
-        image_size: (360.0, 180.0),
-        ..basis()
-    };
+    let discriminating = discriminating_basis();
     assert_eq!(
         resolve_cursor_axis(CursorCoord::CenterY, CursorAxis::Y, &discriminating),
-        Ok(Some(180.0 / 2.0))
+        Ok(Some(discriminating.image_size.1 / 2.0))
     );
 }
 
@@ -230,54 +204,10 @@ fn unit_coefficient_is_a_scalar_that_does_not_depend_on_the_axis() {
 
 // ── 3.2: 範囲外の記録（R2.6）と縮退警告の一回化（R5.1/5.2/5.3） ──
 //
-// design.md「Unit Tests」4.・5. の住処。全網羅（解決表の全行 × 両軸 × 境界値 × ログ件数）は
-// タスク 3.3 が本ファイルへ追加する。ここに置くのは新設 2 口の**判断分岐そのもの**——
-// 閉区間の内外判定と、一回化の鍵に軸が含まれないこと——だけである。
-
-/// 範囲外記録の檻で使う文字描画範囲（validrect）の 4 辺。
-///
-/// 画像全域（`0..400 × 0..224`）の**部分矩形**にしてある——全域にすると「validrect の辺」と
-/// 「バルーン画像の辺」を取り違えた実装が素通りしてしまう（`image_size` は `(400, 224)`）。
-const VALID_LEFT: f32 = 40.0;
-const VALID_TOP: f32 = 20.0;
-const VALID_RIGHT: f32 = 360.0;
-const VALID_BOTTOM: f32 = 200.0;
-
-/// 上の 4 辺を持つ `TextRegion`。
-///
-/// 書字方向は `note_out_of_range` の判定に**関与しない**——当該関数が読むのは validrect の
-/// 4 辺だけで、書字方向が効くのは `start()`／`wrap_threshold()` の側である。ここで
-/// `HorizontalTb` を渡すのは `TextRegion::resolve` の引数を埋めるためにすぎない。
-///
-/// **捕捉窓の外で組むこと**——`TextRegion::resolve` は未宣言の `origin` 成分について
-/// `debug!` を出すので、窓の中で組むと範囲外記録の件数に混ざる。
-fn out_of_range_region() -> TextRegion {
-    let model = BalloonModel::new(
-        WindowPosition::new(None, None),
-        Origin::new(None, None),
-        WordWrapPoint::new(None, None),
-        ValidRect::new(
-            Some(VALID_TOP as i32),
-            Some(VALID_BOTTOM as i32),
-            Some(VALID_LEFT as i32),
-            Some(VALID_RIGHT as i32),
-        ),
-        Font::new(None, None, FontColor::new(None, None, None)),
-        None,
-        None,
-    );
-    let region = TextRegion::resolve(
-        &model,
-        (IMAGE_SIZE.0 as u32, IMAGE_SIZE.1 as u32),
-        WritingMode::HorizontalTb,
-    );
-    // 檻の前提を檻にする（fixture が意図した矩形になっていることの確認）。
-    assert_eq!(
-        (region.left(), region.top(), region.right(), region.bottom()),
-        (VALID_LEFT, VALID_TOP, VALID_RIGHT, VALID_BOTTOM)
-    );
-    region
-}
+// design.md「Unit Tests」4.・5. の住処。ここに置くのは新設 2 口の**判断分岐そのもの**——
+// 閉区間の内外判定と、一回化の鍵に軸が含まれないこと——である。全網羅（解決表の全行 ×
+// 両軸 × 境界値 × 正典の記述例 × ログ件数）は姉妹モジュール `cursor_tag_resolve_tests.rs`。
+// validrect の 4 辺と `out_of_range_region` は `cursor_tag_test_support.rs` が持つ。
 
 /// 範囲**内**と**境界上**は 1 件も記録しない（縮退表「解決後の位置が …［閉区間］の外」）。
 ///
@@ -354,6 +284,31 @@ fn note_out_of_range_records_one_debug_with_axis_value_and_range() {
     assert_eq!(fields.get("value").copied(), Some("200.5"));
     assert_eq!(fields.get("range_min").copied(), Some("20.0"));
     assert_eq!(fields.get("range_max").copied(), Some("200.0"));
+}
+
+/// 範囲外は**両軸 × 両側の 4 方向**で記録される（`min − 0.5` と `max + 0.5`・design Unit Tests 4）。
+///
+/// 上の 2 本は X の下外と Y の上外しか見ていないので、残る 2 方向（X の上外・Y の下外）を
+/// 含めて 4 件を 1 度に締める。片側だけを見る実装（`value < min` を落とした等）はここで赤になる。
+#[test]
+fn note_out_of_range_records_every_side_of_both_axes() {
+    let region = out_of_range_region();
+    let ((), counts) = count_levels(|| {
+        note_out_of_range(CursorAxis::X, VALID_LEFT - 0.5, &region);
+        note_out_of_range(CursorAxis::X, VALID_RIGHT + 0.5, &region);
+        note_out_of_range(CursorAxis::Y, VALID_TOP - 0.5, &region);
+        note_out_of_range(CursorAxis::Y, VALID_BOTTOM + 0.5, &region);
+    });
+    assert_eq!(counts.debug, 4, "4 方向それぞれが 1 件");
+
+    // 同じ 4 方向の境界上（閉区間の端）は 0 件——「外」の定義が半開区間へずれたら赤になる。
+    let ((), counts) = count_levels(|| {
+        note_out_of_range(CursorAxis::X, VALID_LEFT, &region);
+        note_out_of_range(CursorAxis::X, VALID_RIGHT, &region);
+        note_out_of_range(CursorAxis::Y, VALID_TOP, &region);
+        note_out_of_range(CursorAxis::Y, VALID_BOTTOM, &region);
+    });
+    assert_eq!(counts.debug, 0, "境界上は範囲内（閉区間）");
 }
 
 /// 範囲外記録は**一回化しない**（同じ値を 2 度渡せば 2 件残る）。

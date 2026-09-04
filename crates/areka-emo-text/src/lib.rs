@@ -175,6 +175,14 @@ mod tests {
         const PURE_SOURCES: &[(&str, &str)] = &[
             ("choice.rs", include_str!("choice.rs")),
             ("cursor_tag.rs", include_str!("cursor_tag.rs")),
+            (
+                "cursor_tag_resolve_tests.rs",
+                include_str!("cursor_tag_resolve_tests.rs"),
+            ),
+            (
+                "cursor_tag_test_support.rs",
+                include_str!("cursor_tag_test_support.rs"),
+            ),
             ("cursor_tag_tests.rs", include_str!("cursor_tag_tests.rs")),
             ("state.rs", include_str!("state.rs")),
             (
