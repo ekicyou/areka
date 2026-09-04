@@ -534,7 +534,7 @@ flowchart TD
 | 7.3 | 2 回続けて同一内容 | `report::tally` `report::domain` `report::summary` | 集計順を決め打ち |
 | 7.4 | ドメイン別報告と台帳の一致を検査 | `check::freshness` | 復帰文字を落として比較・D-6 |
 | 7.5 | 食い違えば赤・どのドメインかを示す | `check::freshness` | `DomainReportStale` |
-| 7.6 | summary.md は常時検査に含めない | `tests/consistency/checks.rs` | 検査対象から外す |
+| 7.6 | summary.md は常時検査に含めない | `tests/consistency/mod.rs` | 読み込む対象に入れない（`check::CheckInput` に全体報告の欄が無く、全体報告の場所を組み立てる関数を呼ばない）|
 | 7.7 | 報告は手で編集しない | `README.md` | — |
 | 7.8 | 状態の呼び名は平易な日本語 | `report::tally` | 表示名の対応表 |
 | 7.9 | 束に安定した束 id を付ける | `report::bundle` | 構成 id の最小値 |
