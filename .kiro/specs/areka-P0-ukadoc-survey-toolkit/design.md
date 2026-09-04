@@ -327,7 +327,9 @@ crates/ukadoc-survey/
 │   │   ├── structure.rs             # 6.3 6.4 3.5 と台帳の並び順
 │   │   ├── structure_tests.rs
 │   │   ├── content.rs               # 6.5 6.6 6.7 6.8 6.10
-│   │   ├── content_tests.rs
+│   │   ├── content_test_support.rs  # 在中テスト 2 本が共有する数え方と場所の綴り
+│   │   ├── content_tests.rs         # URL と証拠（6.5 6.6）
+│   │   ├── content_link_tests.rs    # 関連・別名・登場版・テーマ（6.7 6.8）
 │   │   ├── freshness.rs             # 7.4 7.5（ドメイン別報告の突き合わせ）
 │   │   └── freshness_tests.rs
 │   ├── report/
@@ -377,7 +379,7 @@ doc/ukadoc-coverage/
     └── summary.md                   # 常時検査なし（要件 7.6）。統合担当が再生成
 ```
 
-- `.rs` は 48 本。research §4 の見積り（生成 200・証拠 250・台帳 200・検査 250・報告 250・テスト 600 行）を機能ごとに割ると、いずれも 1,000 行の上限に対して十分な余裕がある（要件 9.6）。
+- `.rs` は上の木のとおり（本文に数を書かない——書けば必ず陳腐化する。**木が正本**。`tests/consistency*` はタスク 8.x が作るので、それまで木の下半分は未着手である）。research §4 の見積り（生成 200・証拠 250・台帳 200・検査 250・報告 250・テスト 600 行）を機能ごとに割ると、いずれも 1,000 行の上限に対して十分な余裕がある（要件 9.6）。
 - 在中テストは `structure.md:148-160` の作法どおり、同じディレクトリの兄弟ファイル `<stem>_tests.rs` に置き、本体側は `#[cfg(test)] #[path = "<stem>_tests.rs"] mod tests;` の 1 行だけを持つ。共用の見本データは `structure.md:176` の作法に合わせ `lib_test_support.rs` に集約する。`structure.md:176` が想定するのは同じ stem のテーマ間の共有だが、ここでは `catalog/`・`ledger/` など別ディレクトリのテストからも使うため、`lib.rs` に `#[cfg(test)] #[path = "lib_test_support.rs"] pub(crate) mod lib_test_support;` の接続を置き、各テストは `crate::lib_test_support` で引く。
 - **新クレートのテストはファイルを 1 つも作らず、一時ディレクトリも使わない**（読むだけ。書き出しは本文を返す関数として確かめる）。ワークスペースには走査器を共有する見張りテストが行数上限のほかに 2 本あり（`crates/log-capture-kit/tests/temp_path_guard_test.rs`＝`std::env::temp_dir` の呼び出しは窓口クレートと例外表の外に置けない／`crates/log-capture-kit/tests/with_default_guard_test.rs`）、一時ディレクトリを使うと既存クレート内の例外表への追記が要り、要件 9.1（既存クレート非接触）を破る。2 層構成はもともとこれを満たす。
 
@@ -539,7 +541,7 @@ flowchart TD
 | 9.3 | 同じ項目を 2 か所で数えさせない | `evidence::resolve` `README.md` | 対応が付いた項目は既存資産側の名前で辿る |
 | 9.4 | 本文を取り込まない | `catalog::build` | 記録は URL・見出し・ハッシュ・版のみ |
 | 9.5 | 平易な日本語に限る | `README.md` `values.md` `report::*` | — |
-| 9.6 | 新設 `.rs` は 1,000 行未満 | ファイル構成 | 48 本へ分割 |
+| 9.6 | 新設 `.rs` は 1,000 行未満 | ファイル構成 | 上の木のとおりに分割（木が正本） |
 | 9.7 | 環境変数は `AREKA_` 冠 | `io::snapshot` | `AREKA_UKADOC_SNAPSHOT` |
 | 9.8 | roadmap 本文を変更しない | 変更ファイル 0 | — |
 
