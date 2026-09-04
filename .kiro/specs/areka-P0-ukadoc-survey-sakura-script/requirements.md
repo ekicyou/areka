@@ -27,9 +27,9 @@ ukadoc の「さくらスクリプト」のページ（`list_sakura_script`・�
 - ページ `list_sakura_script` の項目は **342 件**（brief 記載と一致）。カテゴリは全件 `sakurascript` であり、カテゴリ `sakurascript` を持つ項目が他ページに現れることもない（1 対 1）。URL は 342 件すべて相異なる。
 - 見出しの先頭で機械分類した内訳は 4 つ: **`\![...]` の命令 198 件**（第 1 引数まで見た異なり 52 名）・**`%` 環境変数 28 件**・**それ以外のタグ 115 件**・**タグでない項目 1 件**（見出し `環境変数の記述例`＝記述例だけの節）。合計 342。
 - 本文に版番号（前後が数字でも小数点でもない `数字.数字.数字`）が現れる項目は **65 件**、現れない項目は 277 件。版番号の種類は 39。SSP の版でない番号が 1 件混じる（`\![close,websocket,URL]` が `2.8.05` と `7.4.1` を持ち、`7.4.1` は SSP の版ではない。上流の設計もこの 1 件を承知のうえでそのまま記録する規則としている）。
-- 見出しを「タグ名＋引数の並び」とみなして名前でまとめると異なりは **259 名**。うち **24 名が 2 件以上の id を持つ**（合計 **107 件**）。最大は `\f` の 43 件、次いで `\_b` 6・`\q` 6・`\c` 5・`\![open,dialog]` 4。同じ名前で引数の数だけが違う組（`\![execute,http-get]` の 3 件・`\![set,scaling]` の 3 件など）はここに含まれる。
+- 見出しを「タグ名＋引数の並び」とみなして名前でまとめると、**まとめ方の規則しだいで異なりは 259〜263 名・2 件以上の id を持つ名前は 20〜24・その合計は 99〜107 件**になる（ギャップ分析が別の規則で数え直して 263 名／20 群／99 件を得た。規則は本文に書かれておらず、設計で 1 つに書き切る）。最大は `\f` の 43 件、次いで `\_b` 6・`\q` 6・`\c` 5・`\![open,dialog]` 4。**この群は 2 種類に割れる**: ⑴ 同じ命令で引数の数だけが違う組（`\![execute,http-get]` 3・`\![execute,http-post]` 2・`\![reload,descript]` 2・`\![set,scaling]` 3・`\_b` 6・`\q` 5＋旧 1・`\x` 2・`\_s` 2・`\c` 5 の 9 群）と、⑵ 引数の値が違うだけの兄弟（`\![set,windowstate,minimize]` と `stayontop`・`\![open,dialog,color]` と `folder`・`\n[パーセント]` と `\n[half]` など 11 群）。別名の候補になるのは ⑴ だけである。
 - **正典本文が新旧を明示している項目は 7 件だけ**（本文に `[旧仕様]` を含む: `\![reloadsurface]`・`\_!`・`\__c`・`\__t`・`\a`・`\q[ID][タイトル]または\q*[ID][タイトル]`・`\z`）。「廃止」「非推奨」の語は **0 件**。したがって上流 要件 4.1 の向きの決め方は、⑴ 本文の注記で決まるのが 7 件、⑵ 版番号で決まるのが 65 件の一部、残りはすべて ⑶ 人手の判断になる。
-- **見出しが 2 つのタグを「もしくは」「または」で並べている項目が 8 件ある**（`\0もしくは\h`・`\1もしくは\u`・`\q[ID][タイトル]または\q*[ID][タイトル]`・`\f[...color]もしくは\f[...brushcolor]` の 5 件）。並べられた側（`\h`・`\u`・`\q*`・`\f[anchorbrushcolor,色指定]` など）は**独立した id を持たない**。
+- **見出しが 2 つのタグを「もしくは」「または」で並べている項目が 8 件ある**（`\0もしくは\h`・`\1もしくは\u`・`\q[ID][タイトル]または\q*[ID][タイトル]` の 3 件と、`\f[...color]もしくは\f[...brushcolor]` の形の 5 件）。並べられた側（`\h`・`\u`・`\q*`・`\f[anchorbrushcolor,色指定]` など）は**独立した id を持たない**。
 - 本文が別のタグとの同等を明言する例が実在する（`\![sound,play,ファイル名,オプション...]` は「`\_v` と同じ機能。ただしオプションを指定可能」、`\![sound,wait]` は「`\_V` と同じ機能」、`\![reloadsurface]` は「SSP では `\![reload,shell]` と同じ」）。
 - 括弧なし形と括弧形の対（`\sID番号` と `\s[ID番号]`・`\pID番号` と `\p[ID番号]`・`\bID番号` と `\b[ID番号]`）は、いずれも括弧なし側の本文が「この場合 0〜9 のみ使用可能」と引数の範囲を狭く定めており、括弧形の本文が上位互換の書き方（`\s[-1]`・面の別名・`\b[ID,--fallback=ID2]`）を追加している。版番号が付くのは `\b[ID番号]` の 1 件だけ（`2.6.34`）。
 
@@ -43,8 +43,8 @@ ukadoc の「さくらスクリプト」のページ（`list_sakura_script`・�
 - **`%` の名前だけを並べた語彙表が 1 つある**: `crates/areka-sylphya/src/vocab/flat.rs`（:32-200）が 26 名を持ち、加えて `SYNTAX_RECORDS`（:200）が `*` と `property[...]` の 2 つの書式を記録する。この表は実行時の解決に使われない。**本ドメインで「名前は登記されているが何も起こらない」に当たるのはこの表だけである。**
 - タグの**引数の語彙**を持つ場所が 3 つある: `crates/areka/src/placement/zorder_group_ledger.rs` の `parse_zorder_tokens`（:198-204・:277＝`balloon`／`surface`／`b`／`s`）・`crates/areka-emo-text/src/state.rs`（:148-170＝`\_l` の `em`／`lh`／`%`／`@`）・`crates/areka-seriko` の面 ID `-1`。`\q` の行き先は `crates/areka-kanade/src/schedule/events.rs`（:79-80・:104・:331-364）が `OnChoiceSelectEx`／`OnChoiceSelect`／`OnChoiceTimeout` として消費する。
 - `crates/areka/src/emo2_boot/prop_sink.rs` の `"areka.prop.set"` は areka 内部の cue 名であり、さくらスクリプトのタグではない（同じキャリアに載るため取り違えやすい）。
-- 既存の登記: `doc/COMPAT_ARCHITECTURE.md` §8 のうち、さくらスクリプトのタグを扱う行が 17 行ある（:129 の時間指令の一覧・:130〜:134 の `\![move]` 5 行・:143 と :158 の `\b[ID]`・:154 の `\![move]` の拡大率・:161 の `\![set,balloontimeout]`・:164 の `\x` と `\x[noclear]`・:181 の `\f[align]`／`\f[valign]`・:183 の `\_l`・:198 と :203 と :206 の `\![set,zorder]`／`\![reset,zorder]`・:208 の括弧なし `\_` タグ）。§8 の本文中にある file:line のいくつかは既に古い（例: :164 が指す `decode.rs:180` は現在 :186）。
-- **M2 ゲート brief 8 本はすべて `.kiro/specs/` に実在し、いずれも brief.md だけを持つ**（要件・設計・タスクは未着手・`completed/` には無い）。所有を宣言しているタグ: `areka-P0-text-decoration-canon` が `\f` の中核 17 件・`areka-P0-anchor-tag-canon` が `\_a` 3 件と `\f[anchor*]` 16 件・`areka-P0-choice-marker-styling` が `\f[cursor*]` 10 件・`areka-P0-cursor-tag-canon` が `\_l`・`areka-P0-sakura-time-directives` が時間指令一式・`areka-P0-surfaces-basepos` が `\![move]` の基準位置・`areka-P0-balloon-canon-residue` が `\![reload,balloon]` と `\![set,balloontimeout]`・`areka-P0-sakura-tag-word-boundary` が「本文の半角 `[` で直前のタグと本文が黙って消える」欠陥。**`\f` の 43 件は 17＋16＋10 でちょうど 43 に分かれ、3 本の brief が過不足なく所有している。**
+- 既存の登記: `doc/COMPAT_ARCHITECTURE.md` §8 のうち、さくらスクリプトのタグを扱う行が 17 行ある（:129 の時間指令の一覧・:130〜:134 の `\![move]` 5 行・:143 と :158 の `\b[ID]`・:154 の `\![move]` の拡大率・:161 の `\![set,balloontimeout]`・:164 の `\x` と `\x[noclear]`・:181 の `\f[align]`／`\f[valign]`・:183 の `\_l`・:198 と :203 と :206 の `\![set,zorder]`／`\![reset,zorder]`・:208 の括弧なし `\_` タグ）。加えて `%` を主題にする行が 4 行ある（:128 の `%username` の既定値・:137 の `%selfname2` 未定義時・:138 の `%keroname` 未定義時・:151 の `%username` の 204 応答時）。**本ドメインの項目を主題にする行は合わせて 21 行**である。§8 の本文中にある file:line のいくつかは既に古い（例: :164 が指す `decode.rs:180` は現在 :186）。
+- **M2 ゲート brief 8 本はすべて `.kiro/specs/` に実在し、いずれも brief.md だけを持つ**（要件・設計・タスクは未着手・`completed/` には無い）。所有を宣言しているタグ: `areka-P0-text-decoration-canon` が `\f` の中核 17 件・`areka-P0-anchor-tag-canon` が `\_a`（brief の言う「3 形」は開き 2 形＋閉じの素の `\_a` であり、カタログの 3 件＝`\_a[ID]`・`\_a[ID,r2,r3...]`・`\_a[OnID,r0,r1...]` とは別の数え方。閉じの `\_a` に独立した id は無い）と `\f[anchor*]` 16 件・`areka-P0-choice-marker-styling` が `\f[cursor*]` 10 件・`areka-P0-cursor-tag-canon` が `\_l`・`areka-P0-sakura-time-directives` が時間指令一式・`areka-P0-surfaces-basepos` が `\![move]` の基準位置・`areka-P0-balloon-canon-residue` が `\![reload,balloon]` と `\![set,balloontimeout]`・`areka-P0-sakura-tag-word-boundary` が「本文の半角 `[` で直前のタグと本文が黙って消える」欠陥。**`\f` の 43 件は 17＋16＋10 でちょうど 43 に分かれ、3 本の brief が過不足なく所有している。**
 - ソース中に正典 URL を書いた行は **0 件**。「ukadoc」の語だけを含み URL を伴わない行は `crates/` に 156 件ある（上流 要件 5.6 により証拠として扱われない）。
 - `doc/ukadoc-coverage/` は現時点で存在しない。
 
@@ -71,10 +71,10 @@ ukadoc の「さくらスクリプト」のページ（`list_sakura_script`・�
 
 - **In scope**:
   - ページ `list_sakura_script` の 342 項目を収めた台帳 1 本（`doc/ukadoc-coverage/ledger/sakura-script.toml`）と、未分類を 0 にすること。
-  - 書式群（同じ名前で引数が違う 24 群 107 件）と新旧の仕訳、および見出しが 2 つのタグを並べる 8 件の扱い。
+  - 書式群（2 件以上の id を持つ名前の群。別名の候補は同じ命令で引数の数だけが違う 9 群）と新旧の仕訳、および見出しが 2 つのタグを並べる 8 件の扱い。
   - `\![...]` 198 件の消費側の名前の表（「キャリアは通るが誰も消費しない」名前の列挙を含む）。
   - 発火するイベント・参照する設定キー・照会するプロパティを `links` へ登記すること。
-  - 既存 8 本の M2 ゲート brief と `doc/COMPAT_ARCHITECTURE.md` §8 の所有宣言を id 単位で `owner` へ転記すること。
+  - さくらスクリプトの項目の所有を主張している brief すべて（実測 11 本＝M2 ゲート 8 本＋3 本）と `doc/COMPAT_ARCHITECTURE.md` §8 の 21 行の所有宣言を id 単位で `owner` へ転記すること。
   - テーマと優先度の仮置き。
   - ブリーフィング 1 本（`doc/ukadoc-coverage/briefing-sakura-script.md`）。
   - 実装済みと判定した項目の定義箇所へ置く正典 URL の 1 行コメント。
@@ -83,7 +83,7 @@ ukadoc の「さくらスクリプト」のページ（`list_sakura_script`・�
   - 実装（未対応のタグを動くようにする作業は 1 行も行わない。字句・意味写像・消費側のいずれも変えない）。
   - プロパティの木そのものの項目（`list_propertysystem` の 188 件は `areka-P0-ukadoc-survey-property` の持ち物）。本台帳はそれらを `links` の相手として指すだけで、項目としては置かない。
   - 他ドメインの台帳（`shiori.toml`／`assets.toml`／`property.toml`）とそこに属する項目の判定。
-  - 既存 8 本の M2 ゲート brief の本文の書き換えと、その優先順位の変更。
+  - 既存の brief（M2 ゲート 8 本と、所有を主張する他の 3 本）の本文の書き換えと、その優先順位の変更。
   - 段階 A〜E の最終順序・束の名付け・`linkage.md`・全体の報告（いずれも `areka-P0-ukadoc-coverage-roadmap` の持ち物）。
   - 台帳の項目形式・状態語彙・関連の種別・テーマの定義そのものの改訂（上流の要件の改訂を要する）。
   - 実ゴースト資産の走査（入手とライセンスの問題）。SSP 実機との挙動比較。ukadoc 本文の repo への取り込み。
@@ -93,6 +93,8 @@ ukadoc の「さくらスクリプト」のページ（`list_sakura_script`・�
   - `areka-P0-ukadoc-survey-property` とは、照会経路の 3 件（`%property[プロパティ名]`・`\![get,property,...]`・`\![set,property,...]`）で隣り合う。**この 3 件はタグとして本 spec の台帳に置き、プロパティ側の台帳には置かない。** 向きは本 spec 側から `queries` で相手のプロパティ id を指し、プロパティ側は `same-feature` で本 spec の id を指す。
   - 既存 8 本の M2 ゲート brief は読むだけで書き換えない。是正候補はブリーフィングに置き、受け取るかどうかは各 brief の担当者と `areka-P0-ukadoc-coverage-roadmap` が決める。
   - `areka-P0-sakura-tag-word-boundary` が扱う「本文の半角 `[` で直前のタグと本文が黙って消える」欠陥は、実装済みと判定したタグにも及ぶ。本 spec は状態を「その欠陥が無ければどう動くか」で決め、この欠陥そのものは同 spec の持ち物として `links` と備考で指すだけにする。
+  - `areka-P0-sakura-tag-word-boundary` の brief は本 spec を上流として指している（タグ語彙の正本を本台帳が生む、という位置づけ）。本台帳の「それ以外のタグ」の節が、同 spec が語彙表の一般解を作るときの材料になる。
+  - ソースに URL コメントを置くファイルのうち 2 つは他 spec と重なる: `crates/areka-ghost/src/sylphya_wiring.rs`（`areka-P0-ukadoc-survey-property` が別の関数に 2 行置く）と `crates/areka-parsers/src/sakura/lexer.rs`（`areka-P0-property-query-channels` が `scan_sysvar` を直す予定）。いずれも後着が rebase する。
 
 ## Requirements
 
@@ -124,11 +126,11 @@ ukadoc の「さくらスクリプト」のページ（`list_sakura_script`・�
 3. Where 見出しがタグではなく記述例だけの節である（実測 1 件）, the さくらスクリプト調査 shall 状態を `not-applicable` とし、タグではないことを備考に書く。
 4. Where areka がそのタグの名前を見て正典の動きを起こす, the さくらスクリプト調査 shall 状態を `implemented` とする。「名前を見て動きを起こす」は次のいずれかで判定する: ⒜ `decode.rs` の写像先が cue になり実際に効くこと ⒝ `\![...]` について消費側が名前で自分を選ぶ 4 経路のいずれかに当たること ⒞ `%` について値の源が実在し展開されること。
 5. Where 2.4 に当たらず、かつ areka の登記に名前が載っている, the さくらスクリプト調査 shall 状態を `vocabulary-only` とする。「登記」は 2 つに限る: `crates/areka-sylphya/src/vocab/flat.rs` の `%` 語彙表（26 名と 2 つの書式記録）と、`doc/COMPAT_ARCHITECTURE.md` §8 が「語彙・意味論のみ記録」と明記している行。**2.4 と 2.5 の双方に当たる項目は `implemented` とする**（`%` 語彙表の 26 名には値の源が実在する `username`・`selfname`・`selfname2`・`keroname` が含まれるため、表に名前があることだけで `vocabulary-only` としない）。
-6. Where 正典が定める応答に対して areka が別の応答（記録付きの読み飛ばし・即時反映・座標を返さないなど）を返すことが既に登記されている, the さくらスクリプト調査 shall 状態を `degraded` とし、転記元（`doc/COMPAT_ARCHITECTURE.md` の該当行）を備考に書く。
+6. Where 正典が定める応答に対して areka が別の応答（記録付きの読み飛ばし・即時反映・座標を返さないなど）を返すことが既に登記されている, the さくらスクリプト調査 shall 状態を `degraded` とし、転記元（`doc/COMPAT_ARCHITECTURE.md` の該当行）を備考に書く。**この判定は 2.4 より先に当てる**——正典の主要な用法が動いていても（`\![move]` の基本形・`\_l[x,y]` の横書き・`\q[タイトル,script:実行内容]` の選択肢表示など）、登記された縮退や既知の非互換が 1 つでもあれば `degraded` とし、動く用法と動かない用法の両方を備考に書く。`degraded` の項目にはソースの URL コメントを置かない（並走 2 本の調査と同じ扱い）。
 7. Where 2.4〜2.6 のいずれにも当たらない（2.5 の 2 つの登記に名前が無く、areka の動きも何も起こらない）, the さくらスクリプト調査 shall 状態を `absent` とする。**`\![...]` のうち消費側の登録が無く §8 にも記録が無い名前はここに入る**（名前はキャリアに載って最後まで運ばれるが、それを名前として登記した表がどこにも無いため）。運ばれること自体は備考に書く。
 8. Where 項目が areka の担当範囲の外にある, the さくらスクリプト調査 shall 状態を `not-applicable` とし、なぜ対象外なのかを備考に書く。
 9. Where 状態が `alias` である, the さくらスクリプト調査 shall その行で実装状態を判定せず、写像先の正典の行に委ねる。
-10. The さくらスクリプト台帳 shall 状態が `alias`・`not-applicable` である項目を除く全項目の備考に「壊れ方」（黙って壊れるか・明示的なエラーになるか・見た目の差にとどまるか）を書き、その根拠としてどのログが出るか・出ないかを添える。
+10. The さくらスクリプト台帳 shall 状態が `alias`・`not-applicable` である項目を除く全項目の備考に「壊れ方」（黙って壊れるか・明示的なエラーになるか・見た目の差にとどまるか）を書き、その根拠としてどのログが出るか・出ないかを添える。「黙って壊れる」は本ドメインでは 3 通りに割れるので、どれに当たるかまで書く: ⑴ タグが消える（`Raw` を compile が `debug!` に記録して捨てる）⑵ `%名前` が台詞にそのまま出る（`resolve_system_var` が素通しし、compile が `Text` の cue にする）⑶ 引数が台詞へ漏れる（`\s0` の `0`・`\i5` の `5` のように、短縮形の語でない 1 文字タグに数字が続く形。`bare_tag_len` が綴りだけを 1 単位で消費し、残りが本文になる）。
 11. When 備考を書く, the さくらスクリプト調査 shall ソースの行番号を書かず、定義の名前（関数名・分岐の腕・定数名）で場所を示す。
 12. The さくらスクリプト調査 shall 未対応の項目に同じ文言の備考を繰り返し書かず、群に共通する説明はブリーフィングに 1 度だけ書いて備考からはその群を指す。
 13. If ある項目を `implemented` としたいのに定義箇所が特定できない, then the さくらスクリプト調査 shall その項目を `implemented` とせず、`vocabulary-only` または `degraded` として理由を備考に書く。
@@ -139,7 +141,7 @@ ukadoc の「さくらスクリプト」のページ（`list_sakura_script`・�
 
 #### Acceptance Criteria
 
-1. Where 見出しが 2 つ以上のタグを「もしくは」「または」で並べている（実測 8 件）, the さくらスクリプト台帳 shall その項目を 1 つの項目として扱い、並べられた側のために新しい項目を作らない。
+1. Where 見出しが 2 つ以上のタグを「もしくは」「または」で並べている（実測 8 件＝3 件＋`\f` 系 5 件）, the さくらスクリプト台帳 shall その項目を 1 つの項目として扱い、並べられた側のために新しい項目を作らない。
 2. When 8 件を仕訳する, the さくらスクリプト調査 shall 並べられた側の綴りを備考に列挙し、それが正典の中で独立した id を持たないことを明記する。
 3. The さくらスクリプト台帳 shall 並べられた側の綴りに対して `alias_of` を使わない（指す先となる id が正典に存在しないため）。
 4. When 状態を決める, the さくらスクリプト調査 shall 並べられた綴りのすべてを areka が同じ扱いにしているかを確かめ、綴りによって扱いが違う場合はその差を備考に書く。
@@ -152,15 +154,15 @@ ukadoc の「さくらスクリプト」のページ（`list_sakura_script`・�
 #### Acceptance Criteria
 
 1. When 同じ機能に複数の書式がある, the さくらスクリプト調査 shall 上流 要件 4.1 の順序（正典本文の注記 → 版番号 → 人手の判断）で正典と別名を決める。
-2. The さくらスクリプト調査 shall 本文の注記で向きが決まる 7 件（本文に `[旧仕様]` を含む項目）を先に確定させ、そのうち置き換え先が本文に明示されているもの（`\![reloadsurface]` は `\![reload,shell]`）を `alias_of` で結ぶ。
-3. If 本文の注記が旧仕様であることだけを言い、置き換え先を明示しない（`\_!`・`\__c`・`\__t`・`\a`・`\z`）, then the さくらスクリプト調査 shall 置き換え先を憶測で決めず、状態は旧仕様であることを踏まえて決めたうえで、置き換え先が特定できないことを備考に書く。
-4. Where 本文が別のタグとの同等を明言している（`\![sound,play,...]` と `\_v[ファイル名]`・`\![sound,wait]` と `\_V`）, the さくらスクリプト調査 shall その明言を向きの根拠として使い、根拠の文言を備考に写す。
-5. Where 同じ名前で引数の数だけが違う組がある（実測 24 群 107 件）, the さくらスクリプト調査 shall 引数の空間が広い側を正典・狭い側を別名とし、狭さ（`\sID番号` の「0〜9 のみ」など）を備考に書く。
+2. The さくらスクリプト調査 shall 本文の注記で向きが決まる 7 件（本文に `[旧仕様]` を含む項目）を先に確定させ、そのうち置き換え先が本文に明示されているもの（`\![reloadsurface]` は `\![reload,shell]`・`\z` は本文が「選択肢を含むスクリプトにおける `\e`」と書くので `\e`）を `alias_of` で結ぶ。`\a` は旧仕様の札が付くが本文が現行の振る舞い（`OnAITalk` を発生させる）を明記しているので、別名にせず自分の状態を持ち、`triggers` で `OnAITalk` を指す。
+3. If 本文の注記が旧仕様であることだけを言い、置き換え先を明示しない（`\_!`・`\__c`・`\__t` の 3 件。`\__c`／`\__t` は現行形 `\![open,communicatebox]`／`\![open,teachbox]` が実在するが、本文はそれを名指ししていない）, then the さくらスクリプト調査 shall 置き換え先を憶測で決めず、状態は旧仕様であることを踏まえて決めたうえで、置き換え先が特定できないことを備考に書く。
+4. Where 本文が別のタグとの同等を明言している（実測で少なくとも 10 件: `\![sound,play,...]`＝`\_v[ファイル名]`・`\![sound,wait]`＝`\_V`・`\![reloadsurface]`＝`\![reload,shell]`・`\![executesntp]`＝`\7`・`\__q[ID,...]`＝`\q`・`\![change,ghost,random]`＝`\+`・`\![change,ghost,sequential]`＝`\_+`・`\![notify,...]`＝`\![raise,...]`・`\![notifyother,...]`＝`\![raiseother,...]`・`\![notifyplugin,...]`＝`\![raiseplugin,...]`・`\![timernotify*]`＝`\![timerraise*]`・`\![anim,stop,ID]`＝`\![anim,clear,ID]`・**`%*`＝`\![*]`**）, the さくらスクリプト調査 shall その明言を向きの根拠として使い、根拠の文言を備考に写す。明言が「同じ機能」ではなく「同様」「ID 仕様は同じ」「〜と同じだが〜しない」にとどまる組（`\__q` と `\q`・`notify` 系と `raise` 系のように振る舞いの一部が違うもの）は別名にせず `same-feature` で結ぶ。`%*`＝`\![*]` は `%` の節と `\![...]` の節をまたぐ唯一の関連であり、`%*` の側から `same-feature` で指す。
+5. Where 同じ命令で引数の数だけが違う組がある（実測 9 群。名寄せの規則しだいで 2 件以上の id を持つ名前は 20〜24 群・99〜107 件になるが、そのうち別名の候補になるのはこの 9 群だけ）, the さくらスクリプト調査 shall 引数の空間が広い側を正典・狭い側を別名とし、狭さ（`\sID番号` の「0〜9 のみ」など）を備考に書く。**引数の値が違うだけの兄弟**（`\![set,windowstate,minimize]` と `stayontop`・`\![open,dialog,color]` と `folder`・`\n[パーセント]` と `\n[half]`・`\_a[ID]` と `\_a[OnID,...]`・`\i[ID番号]` と `\i[ID,wait]`・`\__w[時間]` と `\__w[animation,ID]`・`\_b[...,inline]` と `\_b[...,x,y]` など 11 群）は同じ機能の別の書式ではないので、別名にせず、それぞれが自分の状態を持つ。名寄せの規則（どこまでを名前とみなすか）は設計で 1 つの文に書き切り、ブリーフィングの一覧はその規則で再現できる数を載せる。
 6. When 括弧なし形と括弧形の対を仕訳する（4.5 の特例＝`\s`・`\p`・`\b` の 3 対）, the さくらスクリプト調査 shall 括弧形を正典・括弧なし形を別名とし、版番号が付く `\b[ID番号]`（`2.6.34`）を向きの根拠として明記したうえで、版番号の無い `\s`・`\p` の 2 対に同じ向きを人手の判断として適用したことを備考に書く。
 7. The さくらスクリプト台帳 shall 別名が指す先が別名でない状態に保つ（別名の連鎖を作らない）。
 8. Where 新しい書式が旧書式を置き換えたことが本文から読める, the さくらスクリプト台帳 shall 新しい側から旧 id への `supersedes` も登記してよい。
-9. When 項目の登場した版を決める, the さくらスクリプト調査 shall カタログから拾った版番号の集合の中から選び、集合が空なら空文字（世代不明）とする。
-10. The さくらスクリプト調査 shall 版番号が無い 277 件を最も古いものと決めつけない。
+9. When 項目の登場した版を決める, the さくらスクリプト調査 shall カタログから拾った版番号の集合の中から選び、集合が空なら空文字（世代不明）とする。集合に 2 つ以上ある場合（実測 4 件: `\![close,websocket,URL]`・`\![set,scaling,横倍率,縦倍率,オプション]`・`\![set,tasktrayicon,...]`・`\![set,zorder,スコープID,...]`）は 4.11 で除いたうえで最小の版を採り（「登場した版」の語義に最も近い）、採らなかった版と、それが本文のどの追記に当たるかを備考に書く。
+10. The さくらスクリプト調査 shall 版番号が無い 277 件を最も古いものと決めつけない。そのうち本文が 2 桁の版だけを書いている項目（実測 5 件: `\![sound,play|load|option]` の `2.4`・`\__v[オプション]` の `2.4`・`\![biff(,アカウント名)]` の `2.5`・`\![execute,resetwindowpos]` の `2.7 RC1`・`\![move]` の `2.5`）は、カタログの抽出規則（3 桁）では拾えないので `introduced` を空文字のままとし、備考に「本文は `2.4` と書くがカタログの規則で拾えない」の形で本文の版を写して、単なる世代不明と区別する。2 桁を拾う規則を上流へ提案しない（`\w時間` の `0.45` など秒数や例文の数字を誤って拾うため）。
 11. If カタログの版番号に SSP の版でない番号が混じる（実測 1 件＝`\![close,websocket,URL]` の `7.4.1`）, then the さくらスクリプト調査 shall その番号を登場した版として採らず、採らなかった理由を備考に書く。
 12. When 仕訳を終える, the さくらスクリプト調査 shall 「同じ機能の書式群」の一覧（正典 1 つと別名の対応・向きを決めた根拠が ⑴⑵⑶ のどれか）をブリーフィングに載せる。
 
@@ -171,8 +173,8 @@ ukadoc の「さくらスクリプト」のページ（`list_sakura_script`・�
 #### Acceptance Criteria
 
 1. The さくらスクリプト台帳 shall `\![...]` の 198 件を、正典の id ごとに 1 項目として持つ（消費側の名前でまとめて 1 項目にしない）。
-2. When ブリーフィングを書く, the さくらスクリプト調査 shall 消費側の名前ごとの表を載せ、各行に「名前（第 1 引数まで含む選択子・実測の異なりは 52 名）」「その名前に属する正典 id の一覧」「消費側の登録の有無」「登録がある場合の受け手」を書く。
-3. The さくらスクリプト調査 shall 消費側の登録の有無を、名前で自分を選ぶ実在の 4 経路（`move`・`bind`・`set` と選択子 `zorder`・`reset` と選択子 `zorder`）で判定し、宣言だけの表（`ConsumerLedger::canonical()`）をその 4 経路と食い違わない範囲で根拠に使う。
+2. When ブリーフィングを書く, the さくらスクリプト調査 shall 消費側の名前ごとの表を載せ、各行に「名前」「その名前に属する正典 id の一覧」「消費側の登録の有無」「登録がある場合の受け手」を書く。名前の粒度は 2 段ある——第 1 引数だけの異なりは 52 名、第 2 引数（選択子）まで含めた組は 183——ので、消費側が組で選ぶ事実（`set` 31 件のうち消費されるのは選択子 `zorder` の 1 件だけ）が読み取れる形にする（表の形は設計で決める）。見出しの丸括弧に引きずられた綴り（`biff(`・`updatebymyself(`）は命令名 `biff`・`updatebymyself` に直して載せる。
+3. The さくらスクリプト調査 shall 消費側の登録の有無を、名前で自分を選ぶ実在の 4 経路（`move`・`bind`・`set` と選択子 `zorder`・`reset` と選択子 `zorder`）で判定し、宣言だけの表（`ConsumerLedger::canonical()`）をその 4 経路と食い違わない範囲で根拠に使う。キャリアを開ける場所は 5 つあり、5 つ目（`prop_sink.rs` の `areka.prop.set`）は areka 内部の cue 名を選ぶだけでさくらスクリプトの名前ではない（5.7）。
 4. When 表を書き終える, the さくらスクリプト調査 shall 「キャリアは通るが誰も消費しない」名前とその id の件数を明示する。
 5. The さくらスクリプト調査 shall 消費側を新設せず、`\![...]` ごとの専用の型を提案しない（既存の方針＝1 本の汎用キャリアに載せて消費側が名前で選ぶ、を前提とする）。
 6. Where `\![...]` の引数の語彙を持つ場所が既にある（重なり指定の `balloon`／`surface`／`b`／`s`）, the さくらスクリプト調査 shall その語彙が正典のどの記述に当たるかを備考に書く。
@@ -190,7 +192,7 @@ ukadoc の「さくらスクリプト」のページ（`list_sakura_script`・�
 4. When タグがプロパティを読み書きする, the さくらスクリプト台帳 shall `queries` でプロパティ側の id を指す（相手は `list_propertysystem` の実在 id）。読みと書きのどちらであるかは備考に書く（種別は 6 つに限られ、書き込みを表す種別が無いため）。
 5. The さくらスクリプト台帳 shall 照会経路の 3 件（`%property[プロパティ名]`・`\![get,property,...]`・`\![set,property,...]`）を自分の台帳の項目として持ち、プロパティ側の台帳にはこの 3 件の行を作らせない。
 6. When タグが設定ファイルのキーと同じ設定を扱う, the さくらスクリプト台帳 shall そのキーの id を `same-feature` で指す（実測の相手: `\f` 族と `descript` のフォント設定・`\_l` と文字描画の基準点・`\b` とバルーンの系列名）。`configures` は使わない——上流 要件 4.3 が定めるその向きは「設定キー → タグ」であり、タグの側の行から書くと向きが裏返るため、`configures` を書くのは設定キーを持つ `assets` 台帳の側である。
-7. The さくらスクリプト台帳 shall `links` に書く相手の id が正典に実在することを、書く前に確かめる。
+7. The さくらスクリプト台帳 shall `links` に書く相手の id が正典に実在することを、書く前にスナップショット（上流 付録 B の手順）で確かめる。他ドメインの台帳が揃うのを待たず、上流の検査（4 本揃うまで動かない）にも任せない。
 8. Where 相手が他ドメインの項目である, the さくらスクリプト台帳 shall その id を `links` の相手として書いてよいが、その項目の行を本台帳に作らない。
 9. The さくらスクリプト台帳 shall 繋がりに人手の名付けや解説を持たせない（束の名付けは統合担当の `linkage.md` が持つ）。
 
@@ -216,15 +218,15 @@ ukadoc の「さくらスクリプト」のページ（`list_sakura_script`・�
 
 #### Acceptance Criteria
 
-1. When 所有を転記する, the さくらスクリプト調査 shall 既存 8 本の brief（`areka-P0-text-decoration-canon`・`areka-P0-anchor-tag-canon`・`areka-P0-choice-marker-styling`・`areka-P0-cursor-tag-canon`・`areka-P0-sakura-time-directives`・`areka-P0-surfaces-basepos`・`areka-P0-balloon-canon-residue`・`areka-P0-sakura-tag-word-boundary`）と `doc/COMPAT_ARCHITECTURE.md` §8 の 17 行が宣言しているタグを、1 つずつカタログ id へ対応付けた表をブリーフィングに載せる。
+1. When 所有を転記する, the さくらスクリプト調査 shall さくらスクリプトの項目の所有を主張している brief すべてと `doc/COMPAT_ARCHITECTURE.md` §8 の 21 行（タグ 17 行＋`%` 4 行）が宣言しているタグを、1 つずつカタログ id へ対応付けた表をブリーフィングに載せる。brief の集合は名指しの列挙でなく `.kiro/specs/*/brief.md` の走査で決める（2026-09-04 の実測は 11 本＝M2 ゲートの 8 本〔`areka-P0-text-decoration-canon`・`areka-P0-anchor-tag-canon`・`areka-P0-choice-marker-styling`・`areka-P0-cursor-tag-canon`・`areka-P0-sakura-time-directives`・`areka-P0-surfaces-basepos`・`areka-P0-balloon-canon-residue`・`areka-P0-sakura-tag-word-boundary`〕＋8 本の外で主張している 3 本〔`areka-P0-property-query-channels` が `\![get,property,...]`・`\![set,property,...]`・`%property[...]`・`\![embed,...]` の 4 件、`areka-P0-makoto-dll-host` が `\![load|unload|reload,makoto]` の 3 件、`areka-P0-status-execution-states` が `\![enter,inductionmode|passivemode|nouserbreakmode]` の 3 件〕）。brief がさくらスクリプト以外の id（descript の `font.*`・surfaces.txt の `point.basepos.*`・`OnAnchorSelect*` など）も一緒に名乗っている場合は、主張をドメインで割り、本台帳へ転記するのはさくらスクリプトの id だけにする。
 2. The さくらスクリプト台帳 shall 各項目の `owner` に spec 名 1 つ、または「所有者なし」を表す空文字を持つ。
 3. The さくらスクリプト台帳 shall 同じ id を 2 つ以上の群・2 つ以上の `owner` に数えない。
-4. If 2 本以上の brief が同じ id を主張する, then the さくらスクリプト調査 shall どちらか一方を憶測で選ばず、`owner` を空文字のままにして両者の主張をブリーフィングに並べ、裁定案を 1 つ添えたうえでそれが案であって決定ではないことを明記する。
+4. If 2 本以上の brief が同じ id を主張する, then the さくらスクリプト調査 shall どちらか一方を憶測で選ばず、`owner` を空文字のままにして両者の主張をブリーフィングに並べ、裁定案を 1 つ添えたうえでそれが案であって決定ではないことを明記する。ただし両者が既に分担を合意している場合（互いに相手を名指ししている、または `doc/COMPAT_ARCHITECTURE.md` §8 に住み分けが登記されている。実測: `\![set,balloontimeout,時間]` の compile 側＝`sakura-time-directives`／実導出側＝`balloon-canon-residue`・`\![set,choicetimeout,時間]` の compile 側＝`sakura-time-directives`／実行時側＝完了済み `choice-select-events`）は二重所有として扱わず、まだ作業が残っている側を `owner` に書き、相方と分担の中身を備考に書く。互いに相手を知らない主張（実測: `\![embed,...]` を `sakura-time-directives` と `property-query-channels` が別々に主張）だけがこの条の対象になる。
 5. If brief に書かれたタグの綴りがどの id にも対応しない, then the さくらスクリプト調査 shall それを表記の揺れとして表に残し、憶測で近い id に結び付けない。
 6. The さくらスクリプト調査 shall 所有者が見つからない項目を憶測で既存の brief に押し込まない。まだ起票されていない spec を引受先として提案したい場合は `owner` に書かず、備考とブリーフィングの「所有者なし」の一覧に候補として書く。
 7. If 項目が未実装である, then the さくらスクリプト調査 shall `owner` に完了済みの spec を書かない（完了した spec は新しい作業を引き受けられないため）。
 8. Where 項目が既に実装済みで実装した spec が完了済みである, the さくらスクリプト調査 shall `owner` にその完了済み spec の名前を書いてよい（誰が実装したかの記録として）。
-9. The さくらスクリプト調査 shall 既存 8 本の brief の本文とその優先順位を変えず、是正候補はブリーフィングにだけ置く。
+9. The さくらスクリプト調査 shall 既存の brief（8.1 で走査した 11 本を含む）の本文とその優先順位を変えず、是正候補はブリーフィングにだけ置く。
 10. If `doc/COMPAT_ARCHITECTURE.md` §8 の行に書かれた file:line が現在のソースと食い違う, then the さくらスクリプト調査 shall §8 を書き換えず、食い違いを是正候補としてブリーフィングに記録する。
 
 ### Requirement 9: 実装済みの証拠をソースに置く（唯一のコード接触）
@@ -281,7 +283,7 @@ ukadoc の「さくらスクリプト」のページ（`list_sakura_script`・�
 1. The さくらスクリプト調査 shall areka の実行時の振る舞いを変えない（追加するのは要件 9 のコメント行だけ）。字句・意味写像・compile・消費側のいずれの判断も変えない。
 2. The さくらスクリプト調査 shall 他ドメインの台帳・報告・ブリーフィングを編集せず、他ドメインの項目の行を作らない。
 3. The さくらスクリプト調査 shall `.kiro/steering/roadmap.md` と `doc/COMPAT_ARCHITECTURE.md` を変更しない。
-4. The さくらスクリプト調査 shall 既存 8 本の M2 ゲート brief を書き換えない。
+4. The さくらスクリプト調査 shall 既存の brief（M2 ゲート 8 本と、8.1 で見つけた 3 本を含む）を書き換えない。
 5. Where 実装済みと判定したタグにも `areka-P0-sakura-tag-word-boundary` が扱う欠陥（本文の半角 `[` で直前のタグと本文が黙って消える）が及ぶ, the さくらスクリプト調査 shall 状態をその欠陥が無い場合の振る舞いで決め、欠陥そのものを本 spec で直さず、同 spec の担当であることを備考に書く。
 6. The さくらスクリプト調査 shall ukadoc の本文を repo に取り込まず、台帳に写すのは項目 id・状態・版番号・担当 spec・優先度・テーマ・関連・備考に限る。
 7. The さくらスクリプト調査 shall SSP 実機との挙動比較を行わない。
@@ -304,7 +306,8 @@ ukadoc の「さくらスクリプト」のページ（`list_sakura_script`・�
 | 「`\f[...]` 43 項目」 | 43 件で一致。かつ 3 本の brief が 17（`text-decoration-canon`）＋16（`anchor-tag-canon`）＋10（`choice-marker-styling`）でちょうど 43 を過不足なく所有する | 実測どおり |
 | 内訳の分類が暫定 | 見出しの先頭で機械分類すると `\![...]` 198・`%` 28・その他のタグ 115・タグでない項目 1 の 4 つに割れる。`\![...]` の第 1 引数まで見た異なりは 52 名 | 実測の 4 分類 |
 | 新旧の併存の例 `\w8` と `\_w[ms]`・`\s0` と `\s[ID]`・`\![sound,play,...]` と `\_v[...]`／`\8[...]`・`\![raise]` と `\![embed]` | いずれも id は実在する。ただし正典本文が新旧を明示するのは 342 件中 **7 件だけ**（`[旧仕様]` の表記。「廃止」「非推奨」は 0 件）で、`\w`／`\_w`・`\s0`／`\s[ID]` はいずれもその 7 件に入らない＝人手の判断で決める | 実測（要件 4） |
-| — | 見出しが 2 つのタグを並べる項目が 8 件・同じ名前で引数が違う組が 24 群 107 件・SSP の版でない番号が 1 件（`7.4.1`） | 実測を要件 3・4 に反映 |
+| — | 見出しが 2 つのタグを並べる項目が 8 件（3 件＋`\f` 系 5 件）・2 件以上の id を持つ名前の群は名寄せ規則しだいで 20 群 99 件〜24 群 107 件（別名の候補は引数の数違いの 9 群だけ・11 群は値違いの兄弟）・SSP の版でない番号が 1 件（`7.4.1`）・版番号を 2 つ以上持つ項目 4 件・本文が 2 桁の版だけを書く項目 5 件 | 実測を要件 3・4 に反映 |
+| — | 本文が別のタグとの同等を明言する項目は 2 件でなく少なくとも 10 件（`%*`＝`\![*]` を含む）。`\z` は置き換え先 `\e` を、`\a` は現行の振る舞い `OnAITalk` を本文が書いている。`\![biff(,アカウント名)]`・`\![updatebymyself(,...)]` の第 1 引数は丸括弧を除いて `biff`・`updatebymyself` と読む | 要件 4.2〜4.4・5.2 |
 
 ### areka 側
 
@@ -319,8 +322,8 @@ ukadoc の「さくらスクリプト」のページ（`list_sakura_script`・�
 | `compile.rs:203` の `debug!` 無視 | `:203` で一致（腕は `:202-204`）。ただし現在ここへ来るのは `Raw` と未知の列挙子だけで、`\![...]` は 1 件もここへ来ない | 実測 |
 | `consumer_ledger.rs:223-238` に 4 登録 | 関数は **`:221-236`**。4 登録の内容は一致。ただしこの表は**宣言であって実行時の振り分けではない**。名前で自分を選ぶ実体は `move_cue.rs`・`zorder_cue.rs`・`areka-seriko/src/actor.rs` の 4 経路。鍵は `("set", Some("zorder"))` のような名前と選択子の組で、`set,zorder` という 1 つの文字列ではない | 実測（要件 5.3） |
 | `COMPAT_ARCHITECTURE.md:129` の時間指令 allowlist | `:129` で一致。綴りは `quicksection` | 実測 |
-| 「COMPAT §8 登記」 | §8 のうちさくらスクリプトのタグを扱う行は **17 行**（`:129`・`:130`〜`:134`・`:143`・`:154`・`:158`・`:161`・`:164`・`:181`・`:183`・`:198`・`:203`・`:206`・`:208`）。うち複数の行が「M1 未実装（語彙・意味論のみ記録）」と明記しており、要件 2.5 の「登記」の 2 つ目の源になる。§8 の本文中の file:line には既に古いものがある（例: `:164` が指す `decode.rs:180` は現在 `:186`） | 実測（要件 8.10） |
-| 追跡 spec 4 本（`text-decoration-canon`・`anchor-tag-canon`・`choice-marker-styling`・`cursor-tag-canon`） | 8 本すべてが `.kiro/specs/` に実在し、いずれも brief.md だけを持つ（`completed/` には無い）。所有するタグは Introduction に列挙したとおり | 実測 |
+| 「COMPAT §8 登記」 | §8 のうちさくらスクリプトのタグを扱う行は **17 行**、`%` を主題にする行が **4 行**（`:128`・`:137`・`:138`・`:151`）、合わせて **21 行**。タグの行は（`:129`・`:130`〜`:134`・`:143`・`:154`・`:158`・`:161`・`:164`・`:181`・`:183`・`:198`・`:203`・`:206`・`:208`）。うち複数の行が「M1 未実装（語彙・意味論のみ記録）」と明記しており、要件 2.5 の「登記」の 2 つ目の源になる。§8 の本文中の file:line には既に古いものがある（例: `:164` が指す `decode.rs:180` は現在 `:186`） | 実測（要件 8.10） |
+| 追跡 spec 4 本（`text-decoration-canon`・`anchor-tag-canon`・`choice-marker-styling`・`cursor-tag-canon`） | 8 本すべてが `.kiro/specs/` に実在し、いずれも brief.md だけを持つ（`completed/` には無い）。所有するタグは Introduction に列挙したとおり。さらに 8 本の外で所有を主張する brief が 3 本ある（`property-query-channels` 4 件・`makoto-dll-host` 3 件・`status-execution-states` 3 件）。`\![embed,...]` は互いに相手を知らない 2 本（`sakura-time-directives`・`property-query-channels`）が主張している | 実測（要件 8.1・8.4） |
 | — | ソース中に正典 URL を書いた行は 0 件。「ukadoc」の語だけの行は `crates/` に 156 件 | 実測 |
 | — | `%` の名前だけを並べた語彙表が `crates/areka-sylphya/src/vocab/flat.rs` に実在する（26 名＋書式記録 2）。実行時の解決（`sysvar.rs` の `resolve_system_var`）はこの表を参照しない。**本ドメインで `vocabulary-only` に当たるのはこの表と COMPAT §8 の明記だけ** | 要件 2.5 |
 | — | `crates/areka/src/emo2_boot/prop_sink.rs` の `areka.prop.set` は areka 内部の cue 名であり正典のタグではない（同じキャリアに載るため取り違えやすい） | 要件 5.7 |
