@@ -803,7 +803,7 @@ pub fn render(findings: &[Finding]) -> String;   // 種類ごとにまとめた�
 | `LedgerIdNotInCatalog` | 6.3 | 台帳の id がカタログに無い |
 | `CatalogIdMissingFromLedgers` / `CatalogIdInMultipleLedgers` | 6.4, 3.2 | カタログの id がちょうど 1 つの台帳に 1 回だけ現れるか |
 | `LedgerIdPageMismatch` | 3.1, 3.2 | id のページがその台帳の担当でない。**担当の正本は `assignment::canonical()`**（台帳の `[ledger].pages` ではない） |
-| `LedgerDomainMismatch` | 3.1 | `[ledger].domain` がファイル名のドメインと違う |
+| `LedgerDomainMismatch` | 3.1 | `[ledger].domain` がファイル名のドメインと違う。**判定は `ledger::read` の段で行う**（下の注記を参照）。この所見は他の手段で組み立てられた `Ledger` に対する二重の備えとしてだけ残る |
 | `LedgerPagesMismatch` | 3.1 | `[ledger].pages` が `assignment::canonical()` の担当ページと集合として一致しない（手書きや古いままの前置きを拾う。3.3a は前置きをバイト列のまま写すので、ここで守らないと永久に残る） |
 | `LedgerOutOfOrder` | 3.3a（付録 A） | 台帳の項目が id の byte **厳密**昇順でない（同じ id が 2 回現れる場合もここで落ちる） |
 | `PageNotAssigned` | 3.5 | カタログにあるページに割り当てが無い |
@@ -816,6 +816,10 @@ pub fn render(findings: &[Finding]) -> String;   // 種類ごとにまとめた�
 | `DomainReportStale` | 7.4, 7.5 | ドメイン別報告が台帳から作り直した本文と一致しない |
 
 状態の綴り違い（要件 6.10）は `Status::parse` の失敗として `ledger::read` の段で `SurveyError` になり、テストはそこで赤になる。
+
+`[ledger].domain` の食い違い（`LedgerDomainMismatch`）も同じく `ledger::read` の段で止める。`Ledger` は `domain` を 1 つしか持たず、その値はファイル名から来る（`read(text, domain)` の引数）ので、宣言された綴りが残るのは `read` の中だけである。`CheckInput` は台帳ごとのファイル名を受け取らないため、検査層はこの判定を作り直せない。したがって「読み取りが落とす」以外の実装は無く、検査層の `Finding` は他の手段で組み立てられた `Ledger` に対する二重の備えである。**台帳ファイルからこの所見を出すテストは書けない**（書けないことが正しい）。
+
+対になる `LedgerPagesMismatch` は逆で、検査層が持ち続ける。`read` は `PageAssignment` を受け取らないので、担当ページの一致は読み取りの段では判定できない。
 
 #### report
 
