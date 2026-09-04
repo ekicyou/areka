@@ -675,6 +675,14 @@ pub fn cursor_to_image_px(
             };
             Some(origin + value * factor)
         }
+        // `centerx`／`centery` はこの段では未解決。実導出（バルーン画像原寸の半分）は解決層
+        // `cursor_tag.rs`（タスク 3.1）が担い、この腕はタスク 4.1 で撤去される。ここでは
+        // 現行の縮退挙動どおり None（＝当該軸不動）を返す。この match は下に `_ => None` を
+        // 残しているのでコンパイル上この腕は要らない——腕を要求するのは網羅 match の
+        // `warn_cursor_degrade` だけである。それでも明示で書くのは、新しい語彙がワイルドカード
+        // 経由で黙って旧経路へ落ちたのではなく、意図して現行挙動へ据え置いたことを 4.1 の
+        // 撤去者に見せるためである。
+        CursorCoord::CenterX | CursorCoord::CenterY => None,
         // 負値絶対・Relative（@）・Invalid・Omitted は縮退（None＝状態不変スキップ・warn-once）。
         _ => None,
     }
@@ -746,6 +754,13 @@ fn warn_cursor_degrade(
         CursorCoord::Absolute { .. } => return,
         CursorCoord::Relative { .. } => CursorDegrade::Relative,
         CursorCoord::Invalid => CursorDegrade::Invalid,
+        // `centerx`／`centery` はこの段では実導出できない（解決層 `cursor_tag.rs`＝
+        // タスク 3.1 の担当）。現行の 4 分岐に専用の受け皿が無いので、最も素直な分類＝
+        // 「今この段では解釈できない」＝`Invalid` へ**暫定的に**落とす（無理に
+        // `NegativeAbsolute`／`Percent`／`Relative` へ押し込まない）。分類を
+        // 「解釈不能」「中央指定の軸取り違え（`CenterAxisMismatch`）」の 2 分岐へ書き換える
+        // のはタスク 4.1 であり、その時点でこの腕は撤去される。
+        CursorCoord::CenterX | CursorCoord::CenterY => CursorDegrade::Invalid,
     };
     if guard.should_warn(actor, degrade) {
         tracing::warn!(

@@ -31,7 +31,7 @@
 
 ## 2. 語彙: 全書式の受理
 
-- [ ] 2.1 `centerx` / `centery` を語彙に加える
+- [x] 2.1 `centerx` / `centery` を語彙に加える
   - 座標語彙に画像中央を表す 2 バリアントを追加し、`@` 剥離前の生文字列が小文字完全一致のときだけ該当させる
   - `@centerx` と大文字表記は数値として解釈できない形（不正）に落ちることを固定する
   - 語彙層は軸の情報を持たない（軸取り違えの判定は解決層の責務）ことを説明に明記し、語彙ファイルと語彙テストの説明文を改訂後の正典に合わせる（旧換算関数を名指しする記述を含む）
@@ -180,3 +180,9 @@
 - 1.1: 原点切替後の `vertical_rl` では `\_l[10,10]` が文字描画範囲の**右外**（列矩形 `[400, 410]`）へ出る。これは「原点＝右上・X 正＝右」の正典の帰結であって欠陥ではない（縦書きで意味のある指定は負の X）。1.2 の時点では範囲外の DEBUG 記録口がまだ無いので、位置だけを固定する。
 - 1.2: 原点は `layout_inner` 冒頭の既存 `let start = region.start();` をそのまま使う（新しい読み取り口は不要）。差分が `vertical_rl` の X だけに出るのは fixture 依存ではなく `region.rs` の `start_corner`（`HorizontalTb | VerticalLr => (left, top)` / `VerticalRl => (right, top)`）の帰結＝構造的必然。`region.top()` は `layout.rs` 内から呼ばれなくなったが `TextRegion` の公開アクセサとして他所で使用中（dead_code 警告なし）。
 - 1.3: `cargo fmt` はこのツリー（CRLF・`core.autocrlf=true`・`.gitattributes` 不在）で対象ファイルを **LF 改行へ書き換える**。手で CRLF へ戻し、`git diff --stat --ignore-cr-at-eol` が素の `git diff --stat` と一致することで残渣ゼロを証明すること。レビューは fmt 違反 1 件で 1 度差し戻された——**変更後に `cargo fmt -p <crate> -- --check` を必ず走らせる**。`region.rs` は 863 行（上限 1,000 まで 137 行）。
+- 2.1: `CursorCoord` に variant を足すと `layout.rs` の網羅 match `warn_cursor_degrade` がコンパイルエラーになる。暫定腕を 2 か所置いた——**4.1 が撤去すること**: `layout.rs:685`（`cursor_to_image_px` の `CenterX | CenterY => None`。同 match に `_ => None` が残るのでコンパイル上は不要・意図の明示として置いた）と `layout.rs:763`（`warn_cursor_degrade` の `CenterX | CenterY => CursorDegrade::Invalid`＝**コンパイルに必須**の暫定分類。4.1 が 2 分岐へ書き換える時点で消える）。
+- 2.1（4.1 への申し送り・レビュー FINDINGS 3）: `state.rs:31`（モジュール doc）と `:436`（`CueCommand::Cursor` 消費の行内コメント）の「単位換算・座標解決・原点解釈は下流 layout の責務」は**現時点では真**だが、4.1 が旧換算を撤去した瞬間に偽になる。tasks.md 4.1 の該当項は「**配線ファイル**の説明コメント」としか書いておらず語彙ファイルを含まないため、**4.1 でこの塊も同時に改訂すること**。2.1 で書き換えなかったのは、旧仕様の要件番号で一貫して書かれた塊の一部だけを移すと番号の読み替え事故を作るため。
+- 2.1（4.1 への申し送り・レビュー FINDINGS 4）: `state_cursor_coord_parse_tests.rs:130` の「1.3 checklist」は**旧仕様のタスク番号**の残渣（本仕様の 1.3 は無関係）。正典を称する記述ではないので 8.6 未達ではないが、同ファイルの旧テストを移設・書き換える 4.1 で削るのが望ましい。
+- 2.1（道具の穴）: **改行コードを Git Bash の `grep -c $'$'` で測ってはいけない**——`` を正規化して全行に一致し、LF のファイルを CRLF と誤判定する（レビュアーが 1 度これに騙された）。正しくは `python -c "b=open(PATH,'rb').read(); print(b.count(b'
+'), b.count(b'
+'))"`。実測では `layout.rs` と `layout_cursor_vertical_tests.rs` が作業ツリー上 LF、`state.rs`・`region.rs`・語彙テストが CRLF（index は `core.autocrlf=true` により全て LF なのでコミット内容は同一）。残渣ゼロの証明は `git diff --stat` と `--ignore-cr-at-eol` の一致で取ること。
