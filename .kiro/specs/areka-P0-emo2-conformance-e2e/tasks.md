@@ -154,6 +154,13 @@
   - _Requirements: 9.2, 12.1, 12.2_
   - _Depends: 5.3_
   - _Boundary: `crates/areka-ghost/tests/ghost/spine_e2e_test_s1_boot_success.rs`・`.kiro/specs/areka-P0-emo2-conformance-e2e/verification/isolation-decision.md`_
+- [ ] 5.7 決定論一周の台本の選択肢を実物どおり相方側（scope 1）へ直す
+  - 実物 `menu.pasta:15`・`:38`・`:54` は選択肢を `エモ：`（scope 1・相方側バルーン）に置くが、`crates/areka/src/emo2_boot/spine_conformance_script.rs:395-423` は scope 0（本体側）に置いている。走行 A の症状 #1（相方側バルーンの高さ 93px に 3 行が収まらない）を決定論層が構造上踏めなかった原因（2026-09-05 の根因調査）。台本は実物に忠実でなければならない（R3.1）
+  - 3 台本（メイン・おしゃべり頻度・位置調整）の選択肢を `\1` 側へ移し、期待列（`expected_calls`／`expected_display`／`expected_statuses`）の導出を実物から引き直す。期待値を緩めない（R12.2）
+  - 一周テストと判定（`spine_conformance_judge.rs`）が緑のままであることを確かめ、緑が「台本の写し間違いを固定していない」ことを 1 行の理由で記録に書く
+  - 完了状態: 台本の scope が実物と一致し、期待列が導出し直され、一周テストが緑
+  - _Requirements: 3.1, 3.3, 12.2_
+  - _Boundary: `crates/areka/src/emo2_boot/spine_conformance_script.rs`（必要なら `spine_conformance_lap_tests.rs`・`spine_conformance_judge.rs` の期待の導出部のみ・1,000 行の見張りを超えない）_
 
 - [ ] 6. 実機一周走行の実施
 - [ ] 6.1 走行の準備と期待の事前宣言を行う
@@ -171,6 +178,7 @@
   - 完了状態: 走行の同定情報・環境変数・点灯確認・20 項目の判定・機械判定の出力が記録に揃っている
   - _Requirements: 1.2, 1.3, 1.6, 5.1, 5.2, 5.3, 5.4, 5.5, 5.7, 5.8, 5.11_
   - _Depends: 6.1_
+  - _Blocked: 2026-09-05 の走行 A（A14）で構造的な症状 #1（相方側バルーンでメニューの先頭の選択肢が描かれない＝行送り 1.25 の正典欠陥・記録 §13.2）を発見。R8.3 と開発者裁定により、引受先 spec（emo-text の行送り正典化・`cursor-tag-canon` の main マージ後に起票）を先に完遂してから走行 A を採り直す。走行 A の生ログ `lap-run-a.log` は中断の記録として残す（§13.3）_
 - [ ] 6.3 読み分けを当てて合否ブロックを確定する
   - 機械判定と目視所見が食い違った箇所に 3 問を上から当てて 1 行に定め、閾値を目に合わせて緩めない
   - 7 行の合否ブロックを全欄埋めて書き、決定論層の合否とは別の欄に置く
@@ -263,5 +271,7 @@
 - **⑹ の機序は裁定文と違っていた（タスク 5.5 の実測・design D11 ⑹ と tasks 5.5 は訂正済み）**。本ハーネスは起動ごとに fixture の永続状態を消す（`spine.rs:490-499`）ため必ず初回起動で、`OnBoot` 204 でも空の起動記録トークが `Steady{talk: Some}` を作る（`boot.rs:253-273`）。保留 close の消化は再生完了通知（`steady.rs:847-849`）で、直しは**再生側 Tick を据え置き時刻で繰り返す**形。kanade Tick を使うと `Steady{Some}` で `OnSecondChange` NOTIFY が増え、台本に応答が無い受け口が落ちる（`spine.rs:267`）。決定論の再現檻 `close_request_that_lands_during_boot_is_honored_without_any_second_change` は進行状態台帳の錠を起動前に握って応答を止める（眠りも壁時計も使わない）。
 - **⚠ 製品側の欠陥を 1 件発掘（本仕様の外・引受先が要る＝タスク 6.5／7.2 で仕分け）**（タスク 5.5・レビューが独立に確認）。`TalkDone{Ended}` が kanade の `BootVersion` 滞在中に届くと `mod.rs:543`→`dispatch_phase`（`:646`）→`boot.rs:32-36` の `_ =>` が捨てる。`current_talk_id`（`mod.rs:681-694`・`:683-684`）は `BootVersion{Some}` を突合対象に含めて防御しているのに委譲先が捨てるため、トーク枠が `Steady{Some}` へ漏れ、以後 close 握手が二度と始まらない。窓は狭い（起動記録トークの再生完了 4 hop＋Tick が basewareversion 応答 2 hop に勝つとき）が構造的。登記は `isolation-decision.md` §2.1 ⑹「残る危険 ⑴」・§3.3.1。
 - **道具の罠 2 件**（タスク 5.5）。⑴ `areka` は bin のみで `cargo test -p areka --lib` は `no library targets` で落ちる——`--bin areka` を使う。⑵ `--test-threads=1` で spine ハーネスを同一スレッドで 2 本続けて起動するとアクセス違反（`0xc0000005`）で落ちる——既存の 2 本だけでも再現し本仕様の変更とは無関係。既定の並列走行は全緑。
+- **⛔ 走行 A（2026-09-05）は A14 で中断——構造的な製品欠陥 #1「相方側バルーンでメニューの先頭の選択肢が描かれない」**（記録 §13.2・§13.3）。根因は行送り `ceil(font.height × 1.25)`＝35px（`crates/areka-emo-text/src/state.rs:64-66`）で、相方側 validrect 高さ 93px に 3 行（`\_l[5em,2lh]`＝y110..138）が収まらず `visible_window`（`layout.rs:532-546`）が 1 行スクロール→`draw.rs:766-774` が先頭行を skip。SSP は同設定で 3 行を収める（≈31px/行）。脳 3 件・kanade 3 件（`choice_count=3`）で欠けるのは描画のみ。**開発者裁定: 別 spec（emo-text 行送り正典化）を切って先に直し、一周を採り直す**（R8.3）。**着手は `areka-P0-cursor-tag-canon` の main マージ後に rebase してから**（同 spec は `layout.rs`/`state.rs`/`region.rs` を全面改変・`visible_window`/`draw.rs`/1.25 は無改変＝別セッション回答）。`/kiro-discovery` は開発者専用で AI から呼べない＝起票は開発者。関連症状 #2（`wordwrappoint.x,-34`＝254 が `validrect.right` 240 の外で「閉じる」右端 8px 欠け）も同じ引受先。決定論層が踏めなかった理由＝台本が選択肢を scope 0 に置いていた（実物は scope 1）→タスク 5.7 で是正。
+- **⚠ 道具の罠: PowerShell は areka の UTF-8 出力を CP932 で受ける**（走行 A）。`Tee-Object` で書いたログの日本語が復元不能に化ける（ASCII 欄は無傷）。`lap.ps1` に `[Console]::OutputEncoding = UTF8` を足して是正。走行の生ログを証跡にする手順書 §3.2 にもこの 1 行が要る（7.3 の宿題）。実機 log の `k_new=2.0`＝走行 A は 200% で採られた。
 - **⚠ `design.md:859` にリテラル `\n` で 2 行が 1 行に潰れた表の行がある（HEAD 由来・タスク 5.3 のレビューが発見・正本更新 7.3 で直すこと）**。「解放が 1 度でない」の行末に `\n` が文字として残り、次の行「解放の後も kanade の送信端が閉じない」が前のセルへ吸収される。heredoc がバックスラッシュを落とす罠の痕跡。
 - **⚠ design の `transition_signoff_tests.rs` 引用がずれている（正本更新の候補）**（タスク 5.2・レビューが両方を実測して裁定）。`design.md:610` の `:59-61` は**誤り**——`#[test]`@58・`#[ignore]`@59・`fn`@60・本体 61-75 なので、走行を指すなら **`:58-75`**。一方 `:35-56`（失敗の形）は**誤りではない**——`signoff_log` の本体 34-55 を包む粗い範囲で 3 行ほど過大なだけ。手順書は精密な 3 範囲（`:35-41`／`:43-45`／`:47-53`）へ割った。
