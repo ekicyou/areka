@@ -13,8 +13,18 @@
 //! `font_height / 100`）はいずれも互いに異なる値になるよう選んであるので、基点や係数を
 //! 取り違えた実装はどれか 1 本で必ず赤になる。
 
-use super::{CursorAxis, CursorBasis, CursorDegrade, resolve_cursor_axis, unit_coefficient};
+use super::{
+    CursorAxis, CursorBasis, CursorDegrade, CursorWarnGuard, note_out_of_range,
+    resolve_cursor_axis, unit_coefficient, warn_cursor_degrade,
+};
+use crate::region::TextRegion;
 use crate::state::{CursorCoord, CursorUnit};
+use crate::writing::WritingMode;
+use areka_parsers::balloon::{
+    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
+};
+use areka_sakura::contract::ActorKey;
+use log_capture_kit::{capture, count_levels};
 
 /// design.md「Unit Tests」共通前提の文字高さ（正典 `1em`＝タグ時点の文字高さ）。
 const FONT_HEIGHT: f32 = 10.0;
@@ -216,4 +226,260 @@ fn unit_coefficient_is_a_scalar_that_does_not_depend_on_the_axis() {
     assert_eq!(x - ORIGIN.0, 2.0 * LINE_PITCH);
     assert_eq!(y - ORIGIN.1, 2.0 * LINE_PITCH);
     assert_eq!(x - ORIGIN.0, y - ORIGIN.1);
+}
+
+// ── 3.2: 範囲外の記録（R2.6）と縮退警告の一回化（R5.1/5.2/5.3） ──
+//
+// design.md「Unit Tests」4.・5. の住処。全網羅（解決表の全行 × 両軸 × 境界値 × ログ件数）は
+// タスク 3.3 が本ファイルへ追加する。ここに置くのは新設 2 口の**判断分岐そのもの**——
+// 閉区間の内外判定と、一回化の鍵に軸が含まれないこと——だけである。
+
+/// 範囲外記録の檻で使う文字描画範囲（validrect）の 4 辺。
+///
+/// 画像全域（`0..400 × 0..224`）の**部分矩形**にしてある——全域にすると「validrect の辺」と
+/// 「バルーン画像の辺」を取り違えた実装が素通りしてしまう（`image_size` は `(400, 224)`）。
+const VALID_LEFT: f32 = 40.0;
+const VALID_TOP: f32 = 20.0;
+const VALID_RIGHT: f32 = 360.0;
+const VALID_BOTTOM: f32 = 200.0;
+
+/// 上の 4 辺を持つ `TextRegion`。
+///
+/// 書字方向は `note_out_of_range` の判定に**関与しない**——当該関数が読むのは validrect の
+/// 4 辺だけで、書字方向が効くのは `start()`／`wrap_threshold()` の側である。ここで
+/// `HorizontalTb` を渡すのは `TextRegion::resolve` の引数を埋めるためにすぎない。
+///
+/// **捕捉窓の外で組むこと**——`TextRegion::resolve` は未宣言の `origin` 成分について
+/// `debug!` を出すので、窓の中で組むと範囲外記録の件数に混ざる。
+fn out_of_range_region() -> TextRegion {
+    let model = BalloonModel::new(
+        WindowPosition::new(None, None),
+        Origin::new(None, None),
+        WordWrapPoint::new(None, None),
+        ValidRect::new(
+            Some(VALID_TOP as i32),
+            Some(VALID_BOTTOM as i32),
+            Some(VALID_LEFT as i32),
+            Some(VALID_RIGHT as i32),
+        ),
+        Font::new(None, None, FontColor::new(None, None, None)),
+        None,
+        None,
+    );
+    let region = TextRegion::resolve(
+        &model,
+        (IMAGE_SIZE.0 as u32, IMAGE_SIZE.1 as u32),
+        WritingMode::HorizontalTb,
+    );
+    // 檻の前提を檻にする（fixture が意図した矩形になっていることの確認）。
+    assert_eq!(
+        (region.left(), region.top(), region.right(), region.bottom()),
+        (VALID_LEFT, VALID_TOP, VALID_RIGHT, VALID_BOTTOM)
+    );
+    region
+}
+
+/// 範囲**内**と**境界上**は 1 件も記録しない（縮退表「解決後の位置が …［閉区間］の外」）。
+///
+/// 閉区間であることが正典の `vertical_rl` の `\_l[0,0]`（X ＝ `region.right()`）を沈黙させる
+/// 規定なので、`== min`／`== max` の 4 点を明示で檻に入れる。
+#[test]
+fn note_out_of_range_is_silent_inside_and_on_the_closed_boundary() {
+    let region = out_of_range_region();
+    let ((), counts) = count_levels(|| {
+        // 内側（両軸）。
+        note_out_of_range(CursorAxis::X, (VALID_LEFT + VALID_RIGHT) / 2.0, &region);
+        note_out_of_range(CursorAxis::Y, (VALID_TOP + VALID_BOTTOM) / 2.0, &region);
+        // 境界上（閉区間＝範囲内）。
+        note_out_of_range(CursorAxis::X, VALID_LEFT, &region);
+        note_out_of_range(CursorAxis::X, VALID_RIGHT, &region);
+        note_out_of_range(CursorAxis::Y, VALID_TOP, &region);
+        note_out_of_range(CursorAxis::Y, VALID_BOTTOM, &region);
+    });
+    assert_eq!(
+        counts.debug, 0,
+        "範囲内・境界上は 1 件も記録しない（閉区間）"
+    );
+    assert_eq!(counts.warn, 0, "範囲外記録は warn を出さない");
+    assert_eq!(counts.error, 0, "縮退も範囲外も致命扱いしない（R5.1）");
+}
+
+/// 検査対象は**点**であって、その点に置かれるグリフの矩形ではない。
+///
+/// `x = left` の列矩形は `[left − font_height, left]` で validrect の左外へはみ出すが、
+/// 点そのものは境界上なので記録しない（矩形の可視性は描画側の責務・design.md Unit Tests 4）。
+#[test]
+fn note_out_of_range_checks_the_point_not_the_glyph_rect() {
+    let region = out_of_range_region();
+    // 列矩形の左端は validrect の外（前提の確認）。
+    assert!(VALID_LEFT - FONT_HEIGHT < region.left());
+    let ((), counts) = count_levels(|| {
+        note_out_of_range(CursorAxis::X, VALID_LEFT, &region);
+    });
+    assert_eq!(counts.debug, 0, "点が境界上なら矩形が外へ出ても記録しない");
+}
+
+/// 範囲**外**は軸ごとに `debug!` 1 件だけを残し、軸・値・範囲を構造化フィールドで載せる
+/// （design.md Monitoring: `axis`・`value`・`range_min`・`range_max`）。
+///
+/// 件数だけでなく「どの軸のどの値がどの範囲の外だったか」まで見る——件数だけの檻は、
+/// 軸を取り違えて範囲を引いた実装（X の値を Y の範囲で見る等）を素通しさせる。
+#[test]
+fn note_out_of_range_records_one_debug_with_axis_value_and_range() {
+    let region = out_of_range_region();
+
+    // X の下外（min − 0.5）。値はいずれも 2 進で厳密な半整数なので Debug 表現が一意に定まる。
+    let ((), events) = capture(|| {
+        note_out_of_range(CursorAxis::X, VALID_LEFT - 0.5, &region);
+    });
+    assert_eq!(events.len(), 1, "範囲外は 1 件");
+    assert_eq!(
+        events[0].level,
+        tracing::Level::DEBUG,
+        "DEBUG レベル（R2.6）"
+    );
+    let fields = events[0].fields_map();
+    assert_eq!(fields.get("axis").copied(), Some("X"));
+    assert_eq!(fields.get("value").copied(), Some("39.5"));
+    assert_eq!(fields.get("range_min").copied(), Some("40.0"));
+    assert_eq!(fields.get("range_max").copied(), Some("360.0"));
+
+    // Y の上外（max + 0.5）。範囲は Y 軸の [top, bottom] であって X の [left, right] ではない。
+    let ((), events) = capture(|| {
+        note_out_of_range(CursorAxis::Y, VALID_BOTTOM + 0.5, &region);
+    });
+    assert_eq!(events.len(), 1, "範囲外は 1 件");
+    let fields = events[0].fields_map();
+    assert_eq!(fields.get("axis").copied(), Some("Y"));
+    assert_eq!(fields.get("value").copied(), Some("200.5"));
+    assert_eq!(fields.get("range_min").copied(), Some("20.0"));
+    assert_eq!(fields.get("range_max").copied(), Some("200.0"));
+}
+
+/// 範囲外記録は**一回化しない**（同じ値を 2 度渡せば 2 件残る）。
+///
+/// 一回化するのは `warn_cursor_degrade` だけである（縮退表「一回化しない」）。
+#[test]
+fn note_out_of_range_is_not_deduplicated() {
+    let region = out_of_range_region();
+    let ((), counts) = count_levels(|| {
+        note_out_of_range(CursorAxis::X, VALID_RIGHT + 0.5, &region);
+        note_out_of_range(CursorAxis::X, VALID_RIGHT + 0.5, &region);
+    });
+    assert_eq!(counts.debug, 2, "範囲外記録は一回化しない");
+}
+
+/// 縮退警告はキャラクターごと・分岐ごとに初回 1 回だけ（R5.3）。**鍵に軸は含まれない**
+/// （design.md 検証表 H5: `\_l[centery,centerx]` は軸が違っても同一キャラクターで 1 回）。
+#[test]
+fn warn_cursor_degrade_warns_once_per_actor_and_branch_regardless_of_axis() {
+    let a0 = ActorKey::from("0");
+    let a1 = ActorKey::from("1");
+    let mut guard = CursorWarnGuard::default();
+
+    // 初回（actor "0" × Unparsable）＝1 件。
+    let ((), counts) = count_levels(|| {
+        warn_cursor_degrade(
+            &a0,
+            CursorAxis::X,
+            CursorCoord::Invalid,
+            CursorDegrade::Unparsable,
+            &mut guard,
+        );
+    });
+    assert_eq!(counts.warn, 1, "初回は警告する");
+
+    // 同一 (actor, degrade) の再訪＝0 件（軸が違っても鍵に含まれないので沈黙する）。
+    let ((), counts) = count_levels(|| {
+        warn_cursor_degrade(
+            &a0,
+            CursorAxis::X,
+            CursorCoord::Invalid,
+            CursorDegrade::Unparsable,
+            &mut guard,
+        );
+        warn_cursor_degrade(
+            &a0,
+            CursorAxis::Y,
+            CursorCoord::Invalid,
+            CursorDegrade::Unparsable,
+            &mut guard,
+        );
+    });
+    assert_eq!(
+        counts.warn, 0,
+        "同一 (actor, 分岐) は軸が違っても再警告しない"
+    );
+
+    // 別の分岐（同一 actor）＝再び 1 件。
+    let ((), counts) = count_levels(|| {
+        warn_cursor_degrade(
+            &a0,
+            CursorAxis::Y,
+            CursorCoord::CenterX,
+            CursorDegrade::CenterAxisMismatch,
+            &mut guard,
+        );
+        // 同じ分岐を軸だけ変えて再訪＝沈黙（H5 の逐語: 両軸取り違えでも warn は 1 件）。
+        warn_cursor_degrade(
+            &a0,
+            CursorAxis::X,
+            CursorCoord::CenterY,
+            CursorDegrade::CenterAxisMismatch,
+            &mut guard,
+        );
+    });
+    assert_eq!(
+        counts.warn, 1,
+        "分岐が変われば再び 1 件・軸違いは追加しない"
+    );
+
+    // 別の actor＝分岐ごとに再び 1 件ずつ。
+    let ((), counts) = count_levels(|| {
+        warn_cursor_degrade(
+            &a1,
+            CursorAxis::X,
+            CursorCoord::Invalid,
+            CursorDegrade::Unparsable,
+            &mut guard,
+        );
+        warn_cursor_degrade(
+            &a1,
+            CursorAxis::Y,
+            CursorCoord::CenterX,
+            CursorDegrade::CenterAxisMismatch,
+            &mut guard,
+        );
+    });
+    assert_eq!(counts.warn, 2, "別キャラクターでは分岐ごとに再び 1 件");
+}
+
+/// 縮退警告の中身（design.md Monitoring: `actor`・`axis`・`coord`・`degrade`）。
+///
+/// 件数だけの檻は「どのキャラクターのどの軸のどの書式がどう縮退したか」を言わないので、
+/// 4 フィールドの値まで見る。レベルは `warn`（`error!` は使わない・R5.1）。
+#[test]
+fn warn_cursor_degrade_records_actor_axis_coord_and_degrade() {
+    let actor = ActorKey::from("1");
+    let mut guard = CursorWarnGuard::default();
+    let ((), events) = capture(|| {
+        warn_cursor_degrade(
+            &actor,
+            CursorAxis::Y,
+            CursorCoord::CenterX,
+            CursorDegrade::CenterAxisMismatch,
+            &mut guard,
+        );
+    });
+    assert_eq!(events.len(), 1);
+    assert_eq!(
+        events[0].level,
+        tracing::Level::WARN,
+        "致命扱いしない（R5.1）"
+    );
+    let fields = events[0].fields_map();
+    assert_eq!(fields.get("actor").copied(), Some("1"));
+    assert_eq!(fields.get("axis").copied(), Some("Y"));
+    assert_eq!(fields.get("coord").copied(), Some("CenterX"));
+    assert_eq!(fields.get("degrade").copied(), Some("CenterAxisMismatch"));
 }
