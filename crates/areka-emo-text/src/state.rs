@@ -27,8 +27,10 @@
 //!   で同時初期化・R5.1/R5.3/R9.5）。
 //! - `Cursor`（`\_l` の不透明転写）も本層で実消費する: `parse_cursor_coord` で各軸を
 //!   `CursorCoord` 語彙へ忠実転写し、`TextItem::CursorMove` を items へ追記する（改行マーカーと
-//!   同格の非グリフアイテム＝reveal 対象外・グリフ／リビール状態は不変・R2.1）。単位換算・
-//!   座標解決・原点解釈は下流 layout の責務。
+//!   同格の非グリフアイテム＝reveal 対象外・グリフ／リビール状態は不変・R2.1）。
+//!   **単位の係数・基点・原点の解釈・軸取り違えの判定は解決層 [`crate::cursor_tag`] の責務**で、
+//!   その解決を軸ごとに呼ぶ配線が `layout` である（`areka-P0-cursor-tag-canon` の層分け）。
+//!   本層は軸の情報すら持たない——`centerx` が Y 軸に書かれた事実の判定も解決層が行う。
 //! - **typewriter リビール（R3／R7 系）**: `Text` 追記時に per-glyph リビール時刻を
 //!   `r_i = max(r_{i-1} + interval, at(chunk(i)))`（先頭は `r_0 = at`）で確定する。
 //!   `interval` は**配送された cue の再生時間**から `interval = duration / glyph_count`
@@ -433,7 +435,8 @@ impl TextLayerState {
             CueCommand::Cursor { x, y } => {
                 // カーソル位置指定（`\_l` の不透明転写）の実消費（R2.1）: 各軸を parse_cursor_coord で
                 // `CursorCoord` 語彙へ忠実転写し、非グリフアイテム `CursorMove` を items へ追記する。
-                // グリフ／リビール状態は不変（reveal 対象外）。単位換算・座標解決・原点解釈は下流 layout。
+                // グリフ／リビール状態は不変（reveal 対象外）。単位の係数・基点・原点の解釈は
+                // 解決層 `cursor_tag`、その呼び出し（配線）は `layout` の責務。
                 let x = parse_cursor_coord(x);
                 let y = parse_cursor_coord(y);
                 tracing::debug!(actor = %cue.actor, ?x, ?y, "Cursor cue 適用（CursorMove 追記・グリフ/リビール不変）");

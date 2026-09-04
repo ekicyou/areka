@@ -1,133 +1,19 @@
 use super::test_support::{IMAGE, inline_positions, model};
-use super::{CursorWarnGuard, FixedMetrics, LayoutEngine, WrapPlan, cursor_to_image_px};
+use super::{CursorWarnGuard, FixedMetrics, LayoutEngine, WrapPlan};
 use crate::region::TextRegion;
 use crate::state::{CursorCoord, CursorUnit, TextItem};
 use crate::writing::WritingMode;
 use areka_sakura::contract::ActorKey;
 use log_capture_kit::count_levels;
 
-// ── R2.1/2.2/2.4: `\_l` カーソル座標 → image px 換算（cursor_to_image_px・タスク 4.1） ──
+// ── 配線層の検証（`\_l` の行区切り・軸上書き・末尾蒸発・両軸 no-op） ──
 //
-// 換算式（design §`\_l 換算式`）: Px＝恒等・Em＝×font_height・Lh＝×line_pitch、最終座標は
-// origin（当該軸 validrect 原点）加算。実導出は絶対 Px/Em/Lh の非負値のみ Some、
-// Percent／Relative(@)／負値絶対／Invalid／Omitted は None（縮退＝当該軸スキップ）。
-
-/// 絶対 Px/Em/Lh の非負値は正典式どおり `origin + value × factor` を返す
-/// （factor: Px=1・Em=font_height・Lh=line_pitch）。単位ごとに異なる factor を檻化。
-#[test]
-fn cursor_to_image_px_converts_absolute_units_with_origin() {
-    // Px: image_px = value（恒等）→ origin(10) + 5 = 15。font_height/line_pitch は無関与。
-    assert_eq!(
-        cursor_to_image_px(
-            CursorCoord::Absolute {
-                value: 5.0,
-                unit: CursorUnit::Px,
-            },
-            10.0,
-            20.0,
-            25.0,
-        ),
-        Some(15.0)
-    );
-    // Em: image_px = value × font_height → 2 × 20 = 40 → origin(10) + 40 = 50。
-    assert_eq!(
-        cursor_to_image_px(
-            CursorCoord::Absolute {
-                value: 2.0,
-                unit: CursorUnit::Em,
-            },
-            10.0,
-            20.0,
-            25.0,
-        ),
-        Some(50.0)
-    );
-    // Lh: image_px = value × line_pitch → 3 × 25 = 75 → origin(10) + 75 = 85。
-    assert_eq!(
-        cursor_to_image_px(
-            CursorCoord::Absolute {
-                value: 3.0,
-                unit: CursorUnit::Lh,
-            },
-            10.0,
-            20.0,
-            25.0,
-        ),
-        Some(85.0)
-    );
-}
-
-/// 非負境界 value=0.0 は Some(origin)（≥0 ゲートは 0 を含む＝原点そのもの・境界檻）。
-#[test]
-fn cursor_to_image_px_zero_value_maps_to_origin() {
-    for unit in [CursorUnit::Px, CursorUnit::Em, CursorUnit::Lh] {
-        assert_eq!(
-            cursor_to_image_px(CursorCoord::Absolute { value: 0.0, unit }, 7.0, 20.0, 25.0),
-            Some(7.0),
-            "{unit:?}: value 0 は origin へ写る（≥0 ゲート内）"
-        );
-    }
-}
-
-/// 縮退全形は None（当該軸スキップ・warn-once）: 負値絶対・Percent・Relative(@)・
-/// Invalid・Omitted。origin/font_height/line_pitch に依らず None を返す。
-#[test]
-fn cursor_to_image_px_degenerate_forms_return_none() {
-    // 負値絶対（Px/Em/Lh いずれも）: 非負ゲート外＝None。
-    for unit in [CursorUnit::Px, CursorUnit::Em, CursorUnit::Lh] {
-        assert_eq!(
-            cursor_to_image_px(
-                CursorCoord::Absolute { value: -1.0, unit },
-                10.0,
-                20.0,
-                25.0
-            ),
-            None,
-            "{unit:?}: 負値絶対は None"
-        );
-    }
-    // Percent（縮退保持・非負でも実導出しない）。
-    assert_eq!(
-        cursor_to_image_px(
-            CursorCoord::Absolute {
-                value: 5.0,
-                unit: CursorUnit::Percent,
-            },
-            10.0,
-            20.0,
-            25.0,
-        ),
-        None
-    );
-    // Relative（@ 接頭）: 単位が Px/Em/Lh でも M1 は None。
-    assert_eq!(
-        cursor_to_image_px(
-            CursorCoord::Relative {
-                value: 5.0,
-                unit: CursorUnit::Px,
-            },
-            10.0,
-            20.0,
-            25.0,
-        ),
-        None
-    );
-    // Invalid（パース不能）。
-    assert_eq!(
-        cursor_to_image_px(CursorCoord::Invalid, 10.0, 20.0, 25.0),
-        None
-    );
-    // Omitted（当該軸省略）。
-    assert_eq!(
-        cursor_to_image_px(CursorCoord::Omitted, 10.0, 20.0, 25.0),
-        None
-    );
-}
-
-// ── Task 4.2: pending-cursor 遅延実体化（`\_l` の行区切り＋軸上書き・末尾蒸発・両軸 no-op） ──
+// 解決そのもの（基点＋値×係数・縮退の分類）の純関数テストは解決層の兄弟ファイル
+// （`cursor_tag_tests.rs`／`cursor_tag_resolve_tests.rs`）が持つ。本ファイルが見るのは
+// **配線**だけである——到着時の解決をどう保留し、いつ実体化し、行をどう分割するか。
 //
-// 共通前提は既存 layout 檻と同じ FixedMetrics・font 10（全角 'あ' advance 10・pitch 13）。
-// origin(0,0)・wordwrappoint None ゆえ region.left()=0・region.top()=0・閾値=画像右辺 400。
+// 共通前提は既存 layout テストと同じ FixedMetrics・font 10（全角 'あ' advance 10・pitch 13）。
+// origin(0,0)・wordwrappoint None ゆえ文字描画開始点は (0, 0)・折返し閾値＝画像右辺 400。
 
 /// 絶対 Px の `\_l` は現在行を確定し（`\_l` は行区切り・RN-3）、指定軸で次グリフの
 /// inline/block を上書きする。`[あ, あ, \_l[100px,50px], あ]` → 行 0=[0,10]・
@@ -292,16 +178,16 @@ fn both_axes_omitted_cursor_move_is_complete_noop() {
     assert_eq!(inline_positions(&lines[0]), vec![0.0, 10.0]);
 }
 
-// ── Task 4.3: 換算表完全性（em/lh をレイアウト経由で配置）＋フラッシュ順序の per-axis 合成 ──
+// ── 単位の係数が実配置を駆動すること＋フラッシュ順序の per-axis 合成 ──
 //
-// 4.1 の `cursor_to_image_px_*` は換算を単体で檻化するが、em/lh 係数が実際に次グリフ配置を
-// 駆動する経路（layout フラッシュ）は 4.2 が Px のみで檻化していた。4.3 は換算表の em/lh 分岐を
-// レイアウト経由で・保留改行との per-axis 合成（一方をカーソル上書き・他方は改行進行値）を・
-// 全縮退両軸（Omitted でなく実導出 None 経由）の完全 no-op を補完する。
+// 係数そのものの正しさは解決層のテストが見る。ここで見るのは「解決値が本当に次グリフの
+// 配置座標へ乗るか」（配線が解決値を落としていないこと）と、保留改行との per-axis 合成
+// （一方をカーソル上書き・他方は改行進行値）である。
 
-/// 換算表の em/lh 分岐がレイアウト配置を実際に駆動する（4.2 は Px のみ）。`\_l[2em, 3lh]`
-/// （font 10・pitch 13）は inline=origin(0)+2×10=20・block=origin(0)+3×13=39 へ次グリフを載せる。
-/// 単位ごとに異なる係数（em＝font_height・lh＝line_pitch）が配置座標に現れることを檻化する。
+/// 解決表の em/lh の係数がレイアウト配置を実際に駆動する。`\_l[2em, 3lh]`
+/// （font 10・pitch 13）は inline=文字描画開始点(0)+2×10=20・block=文字描画開始点(0)+3×13=39 へ
+/// 次グリフを載せる。単位ごとに異なる係数（em＝font_height・lh＝line_pitch）が配置座標に
+/// 現れることを固定する（配線が軸ごとの解決値を取り違えず載せていることの証跡）。
 #[test]
 fn cursor_move_em_and_lh_units_place_next_glyph_through_layout() {
     let region = TextRegion::resolve(
@@ -496,11 +382,18 @@ fn cursor_and_pending_newline_compose_per_axis() {
     );
 }
 
-/// 両軸が実導出 None へ縮退（Omitted でなく負値絶対＋`%`）した `\_l` も完全 no-op——行区切りしない
-/// （縮退表「全縮退」row・2.4）。`both_axes_omitted` の Omitted 経路と別の到達路（縮退分岐）で
-/// 同一 no-op を檻化する。`[あ, \_l[-1px, 50%], あ]` → 1 行 [あ@0, あ@10]（改行なし）。
+/// **正典値（4.1 の語彙解禁による）**: かつて両軸とも縮退していた形（負値絶対＋`%`）が、
+/// いまは両軸とも実導出される（縮退表「負値絶対＝実導出」「`%`＝実導出」の行・R5.2）。
+///
+/// `[あ, \_l[-1px, 50%], あ]`（origin (0,0)・font 10）:
+/// - x = 文字描画開始点(0) + (−1) = −1（文字描画範囲 0〜400 の左外＝字義どおり・寄せない）
+/// - y = 文字描画開始点(0) + 50 × (10/100) = 5
+///
+/// 移動が成立するので `\_l` は行の分割点になり、行は 1 → 2 本へ増える。
+/// 書き換え前の現行値は「両軸とも縮退＝完全 no-op ゆえ 1 行 [あ@0, あ@10]」だった。
+/// **原点の切替（1.2）に由来する差分ではない**——横書きの原点は切替の前後とも (0, 0) である。
 #[test]
-fn cursor_all_axes_degraded_is_complete_noop() {
+fn cursor_negative_and_percent_axes_now_resolve_literally() {
     let region = TextRegion::resolve(
         &model((Some(0), Some(0)), (None, None)),
         IMAGE,
@@ -512,11 +405,11 @@ fn cursor_all_axes_degraded_is_complete_noop() {
             x: CursorCoord::Absolute {
                 value: -1.0,
                 unit: CursorUnit::Px,
-            }, // 負値絶対 → None
+            }, // 負値絶対 → origin(0) + (−1) = −1
             y: CursorCoord::Absolute {
                 value: 50.0,
                 unit: CursorUnit::Percent,
-            }, // % → None
+            }, // % → origin(0) + 50 × (10/100) = 5
         },
         TextItem::Glyph { ch: 'あ' },
     ];
@@ -531,18 +424,32 @@ fn cursor_all_axes_degraded_is_complete_noop() {
     );
     assert_eq!(
         lines.len(),
-        1,
-        "両軸全縮退の \\_l は行区切りしない（完全 no-op・Omitted 経路と同一結果）"
+        2,
+        "正典値（4.1 の語彙解禁による）: 両軸とも移動が成立するので \\_l は行の分割点になる\
+         （書き換え前は完全 no-op ゆえ 1 行だった）"
     );
-    assert_eq!(inline_positions(&lines[0]), vec![0.0, 10.0]);
+    assert_eq!(inline_positions(&lines[0]), vec![0.0]);
+    assert_eq!(
+        inline_positions(&lines[1]),
+        vec![-1.0],
+        "負値絶対は字義どおり文字描画範囲の左外へ出る（内側へ寄せない・R2.6）"
+    );
+    assert_eq!(
+        lines[1].rect.top, 5.0,
+        "`%` の係数は font_height / 100（50% ＝ 5px）"
+    );
 }
 
-// ── Task 4.2: `\_l` 縮退 4 分岐の actor ごと warn-once（layout_with_cursor_warn・6.5） ──
+// ── `\_l` 縮退 2 分岐のキャラクターごと warn-once（layout_with_cursor_warn・R5.3） ──
 
-/// `\_l` 換算の 4 縮退分岐（負値絶対／`%`／`@` 相対／パース不能）は actor ごと・分岐ごとに
-/// 厳密 1 回だけ `warn!` する（6.5）。同一 actor の再訪では追加警告なし、別 actor では再び
-/// 全分岐が警告される（持続 guard による per-actor once）。x 軸に縮退座標・y は Omitted
+/// `\_l` の 2 縮退分岐（解釈不能／中央指定の軸取り違え）はキャラクターごと・分岐ごとに
+/// 厳密 1 回だけ `warn!` する（R5.3）。同一キャラクターの再訪では追加警告なし、別キャラクターでは
+/// 再び全分岐が警告される（持続 guard による per-actor once）。x 軸に縮退座標・y は Omitted
 /// （Omitted は正常形で無音）とし、後続グリフで CursorMove を確実に処理させる。
+///
+/// **分岐は 4 → 2 へ減った**（タスク 4.1）: 負値絶対・`%`・`@` 相対は縮退ではなく実導出へ
+/// 移ったので、縮退表に残るのは「解釈不能」と「中央指定の軸取り違え」の 2 行だけである
+/// （design.md 縮退表・R5.2）。
 #[test]
 fn cursor_degrade_warns_once_per_actor_per_branch() {
     let region = TextRegion::resolve(
@@ -550,21 +457,12 @@ fn cursor_degrade_warns_once_per_actor_per_branch() {
         IMAGE,
         WritingMode::HorizontalTb,
     );
-    // 4 縮退分岐（各 x 軸・y は Omitted）。
+    // 2 縮退分岐（各 x 軸・y は Omitted）。
     let branches = [
-        CursorCoord::Absolute {
-            value: -1.0,
-            unit: CursorUnit::Px,
-        }, // 負値絶対
-        CursorCoord::Absolute {
-            value: 5.0,
-            unit: CursorUnit::Percent,
-        }, // %
-        CursorCoord::Relative {
-            value: 3.0,
-            unit: CursorUnit::Px,
-        }, // @ 相対
-        CursorCoord::Invalid, // パース不能
+        // 解釈不能（CursorDegrade::Unparsable）。
+        CursorCoord::Invalid,
+        // 中央指定の軸取り違え（CursorDegrade::CenterAxisMismatch）＝`centery` を X 軸に書いた。
+        CursorCoord::CenterY,
     ];
     let a0 = ActorKey::from("0");
     let a1 = ActorKey::from("1");
@@ -594,25 +492,28 @@ fn cursor_degrade_warns_once_per_actor_per_branch() {
     };
     let mut warns = 0usize;
 
-    // actor "0" 初回: 4 分岐がそれぞれ 1 回警告 → 計 4。
+    // キャラクター "0" 初回: 2 分岐がそれぞれ 1 回警告 → 計 2。
     let ((), counts) = count_levels(|| {
         for c in branches {
             run(&a0, c, &mut guard);
         }
     });
     warns += counts.warn;
-    assert_eq!(warns, 4, "actor0 初回は 4 分岐×1 回＝4 警告");
+    assert_eq!(warns, 2, "キャラクター 0 の初回は 2 分岐×1 回＝2 警告");
 
-    // actor "0" 再訪: 同一 (actor, 分岐) は既出＝追加警告なし。
+    // キャラクター "0" 再訪: 同一 (キャラクター, 分岐) は既出＝追加警告なし。
     let ((), counts) = count_levels(|| {
         for c in branches {
             run(&a0, c, &mut guard);
         }
     });
     warns += counts.warn;
-    assert_eq!(warns, 4, "actor0 再訪では追加警告なし（per-actor once）");
+    assert_eq!(
+        warns, 2,
+        "キャラクター 0 の再訪では追加警告なし（per-actor once）"
+    );
 
-    // actor "1": 別 actor は guard が独立＝再び 4 分岐が警告 → 計 8。
+    // キャラクター "1": 別キャラクターは guard の鍵が独立＝再び 2 分岐が警告 → 計 4。
     let ((), counts) = count_levels(|| {
         for c in branches {
             run(&a1, c, &mut guard);
@@ -620,8 +521,8 @@ fn cursor_degrade_warns_once_per_actor_per_branch() {
     });
     warns += counts.warn;
     assert_eq!(
-        warns, 8,
-        "別 actor では再び全 4 分岐が警告される（actor ごと once）"
+        warns, 4,
+        "別キャラクターでは再び全 2 分岐が警告される（キャラクターごと once）"
     );
 }
 

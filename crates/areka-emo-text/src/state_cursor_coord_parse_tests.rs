@@ -126,7 +126,7 @@ fn parse_at_prefix_percent_is_relative_percent() {
     );
 }
 
-/// 語彙全形の網羅（1.3 checklist「CursorCoord の全形」）: Relative × Lh は他の
+/// 語彙全形の網羅: Relative × Lh は他の
 /// `@` 単位テスト（Px/Em/Percent）で唯一欠けていた組合せ——Absolute×{Px,Em,Lh,Percent}
 /// ／Relative×{Px,Em,Lh,Percent} の完全マトリクスを閉じる。
 #[test]

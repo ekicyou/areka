@@ -56,13 +56,15 @@
 //! グリフ別の行内位置＋送り幅と併せ、choice-render のクリック可能範囲導出が
 //! そのまま再利用できる（導出自体は実装しない・R9.4）。
 
-use std::collections::BTreeSet;
-
 use areka_sakura::contract::ActorKey;
 
+use crate::cursor_tag::{
+    CursorAxis, CursorBasis, CursorWarnGuard, note_out_of_range, resolve_cursor_axis,
+    warn_cursor_degrade,
+};
 use crate::region::TextRegion;
 use crate::segment::SegmentPlan;
-use crate::state::{CursorCoord, CursorUnit, TextItem, TextLayerConfig};
+use crate::state::{CursorCoord, TextItem, TextLayerConfig};
 use crate::writing::WritingMode;
 
 /// グリフ送りの注入点（metrics 依存の唯一の口・R4.5）。
@@ -241,9 +243,9 @@ impl LayoutEngine {
         metrics: &dyn GlyphMetrics,
         wrap: WrapPlan<'_>,
     ) -> Vec<PositionedLine> {
-        // pending-cursor の縮退 warn-once は actor 識別＋走査を跨いで持続する guard を要する
-        // （per-frame 呼出でのスパム抑止＝ランタイム所有）。actor 文脈を持たない既存呼び口は
-        // カーソル換算・遅延実体化（2.1/2.3/2.5）を完全に行いつつ縮退 warn（6.5）だけを抑止する
+        // pending-cursor の縮退 warn-once はキャラクター識別＋走査を跨いで持続する guard を要する
+        // （per-frame 呼出でのスパム抑止＝ランタイム所有）。キャラクター文脈を持たない既存呼び口は
+        // カーソルの解決・遅延実体化（2.1/2.3/2.5）を完全に行いつつ縮退 warn（R5.3）だけを抑止する
         // （`None` 経路）。純挙動は [`layout_with_cursor_warn`] と完全同一。
         Self::layout_inner(
             items,
@@ -257,13 +259,17 @@ impl LayoutEngine {
         )
     }
 
-    /// [`layout`](Self::layout) の全挙動に加え、`\_l` 換算の 4 縮退分岐（負値絶対／`%`／
-    /// `@` 相対／パース不能）を **actor ごと初回のみ** `warn!` する（6.5・design 縮退表）。
+    /// [`layout`](Self::layout) の全挙動に加え、`\_l` の 2 縮退分岐（解釈不能／中央指定の
+    /// 軸取り違え）を **キャラクターごと初回のみ** `warn!` する（R5.3・design 縮退表）。
+    ///
+    /// 負値絶対・`%`・`@` 相対は縮退ではなく**実導出**なので警告の対象ではない（R5.2）。
     ///
     /// warn guard は走査を跨いで持続する必要がある（per-frame layout 呼出での重複警告抑止）
     /// ため、呼び手（ランタイム＝`actor.rs` の `TextLayerRuntime`・既存 `unresolved_warned` と
-    /// 同型の持続 guard）が所有し `&mut` で渡す。行レイアウトの純挙動は [`layout`](Self::layout)
-    /// と完全同一——差は縮退ログの有無のみ（guard は決定的な行出力に一切影響しない）。
+    /// 同型の持続 guard）が所有し `&mut` で渡す。型の住処は解決層
+    /// [`crate::cursor_tag::CursorWarnGuard`] で、本 API の署名は変わらない。行レイアウトの
+    /// 純挙動は [`layout`](Self::layout) と完全同一——差は縮退ログの有無のみ（guard は決定的な
+    /// 行出力に一切影響しない）。
     #[allow(clippy::too_many_arguments)]
     pub fn layout_with_cursor_warn(
         items: &[TextItem],
@@ -320,7 +326,8 @@ impl LayoutEngine {
         // と区別して保存するため（DD-5）。走査ローカル＝フレームを跨ぐ状態を持たない。
         let mut pending: Option<f32> = None;
         // pending-cursor（`\_l` 遅延実体化）: None＝保留なし・Some((inline, block))＝
-        // `cursor_to_image_px` 済みの絶対 image px（換算 None の軸は含めない＝当該軸不動・R2.4）。
+        // 解決層（[`crate::cursor_tag::resolve_cursor_axis`]）が返した絶対 image px
+        // （移動が成立しなかった軸は含めない＝当該軸不動・R1.6/5.5）。
         // 走査ローカル＝フレームを跨がない（newline-defer の `pending` と同型・同一フラッシュで合成）。
         let mut pending_cursor: Option<(Option<f32>, Option<f32>)> = None;
         // 先決済み塊の残グリフ数（Segmented 経路のみ使用）。正＝塊内（追加判定なし配置）・
@@ -447,24 +454,55 @@ impl LayoutEngine {
                     pending = Some(pending.map_or(ratio, |acc| acc + ratio));
                 }
                 TextItem::CursorMove { x, y } => {
-                    // 到着時換算（保留のみ・行は閉じない・R2.1/2.3）。x→水平軸／y→垂直軸を
-                    // `cursor_to_image_px` で絶対 image px 化する（em＝font_height・lh＝pitch・
-                    // 原点加算——design §`\_l 換算式`）。
+                    // 到着時解決（保留のみ・行は閉じない・R2.1/2.3）。意味論そのもの
+                    // （基点＋値×係数・縮退の分類・警告の一回化・範囲外の記録）は解決層
+                    // [`crate::cursor_tag`] が持ち、本腕はその**配線**だけを担う——
+                    // 走査位置を image 軸へ逆写像して軸ごとに解決を呼び、返った値を
+                    // 行内／行送り軸へ写して保留する（design.md「配線 `LayoutEngine`」の 5 段手順）。
                     //
-                    // 原点は**解決済みの文字描画開始点** `TextRegion::start()`（宣言された `origin`
-                    // 成分は字義どおり・未宣言成分は書字開始角へ縮退）であって、validrect の辺では
-                    // ない（Requirement 2.1）。軸の向きは 3 書字方向共通（X 正＝右・Y 正＝下）で、
+                    // 現在位置の image 軸への逆写像（`@` 相対の基点）。軸読み替え正準表の逆向き:
+                    // `horizontal_tb` は行内＝x・行送り＝y、縦書き 2 方向は行内＝y・行送り＝x。
+                    // `vertical_rl` の `block_pos` は列の**右端**なので、`\_l[@-1lh,0]` は
+                    // 自動列送り（`block_pos += −1 × pitch`）と同じ値を与える＝正典「1 列ぶん左の列の先頭へ」。
+                    //
+                    // ここで渡すのは**走査ローカルの現在位置そのもの**である。保留中の改行・
+                    // 保留中のカーソルをフラッシュと同じ順で仮適用した「実効位置」へ差し替えるのは
+                    // タスク 4.2 の担当で、差し替え点はこの `current` の 1 か所だけである
+                    // （保留を仮適用しても走査ローカルは書き換えない、が 4.2 の要件）。
+                    let current = match mode {
+                        WritingMode::HorizontalTb => (inline_pos, block_pos),
+                        WritingMode::VerticalRl | WritingMode::VerticalLr => {
+                            (block_pos, inline_pos)
+                        }
+                    };
+                    // 基点束。原点は**解決済みの文字描画開始点** `TextRegion::start()`（宣言された
+                    // `origin` 成分は字義どおり・未宣言成分は書字開始角へ縮退）であって、validrect の
+                    // 辺ではない（Requirement 2.1）。軸の向きは 3 書字方向共通（X 正＝右・Y 正＝下）で、
                     // 書字方向で変わるのは原点の位置だけ——`horizontal_tb`／`vertical_lr` は
                     // `(left, top)`・`vertical_rl` は `(right, top)`（design Data Models の原点表）。
                     // これにより `vertical_rl` の `\_l[0,0]` が 1 列目の先頭を指す（2.3）。
-                    let x_val = cursor_to_image_px(x, start.0, font_height, pitch);
-                    let y_val = cursor_to_image_px(y, start.1, font_height, pitch);
-                    // 縮退 4 分岐（負値絶対／`%`／`@`／パース不能）の actor ごと warn-once（6.5）。
-                    // Omitted（軸省略）・実導出成功（Some）は無音。guard 不在（`layout` 経路）は抑止。
-                    if let Some((actor, guard)) = cursor_warn.as_mut() {
-                        warn_cursor_degrade(x, x_val, *actor, &mut **guard);
-                        warn_cursor_degrade(y, y_val, *actor, &mut **guard);
-                    }
+                    // `centerx`／`centery` の基準はバルーン画像の原寸（validrect でも原点でもない・4.3）。
+                    let basis = CursorBasis {
+                        origin: start,
+                        current,
+                        image_size: region.image_size(),
+                        font_height,
+                        line_pitch: pitch,
+                    };
+                    let x_val = resolve_cursor_component(
+                        x,
+                        CursorAxis::X,
+                        &basis,
+                        region,
+                        &mut cursor_warn,
+                    );
+                    let y_val = resolve_cursor_component(
+                        y,
+                        CursorAxis::Y,
+                        &basis,
+                        region,
+                        &mut cursor_warn,
+                    );
                     // 軸読み替え正準表: 水平/垂直軸値を行内/ブロック軸へ写像（horizontal_tb＝行内 x・
                     // ブロック y／縦書き rl・lr＝行内 y・ブロック x——layout の inline/block 割当と同一）。
                     let (inline_val, block_val) = match mode {
@@ -473,11 +511,16 @@ impl LayoutEngine {
                     };
                     if inline_val.is_some() || block_val.is_some() {
                         // 有効軸が 1 つ以上＝保留（`\_l` は行区切り性を持つ・フラッシュで実体化）。
-                        // 換算 None の軸は保留に含めない（縮退＝状態不変・当該軸不動・R2.4）。
+                        // 移動が成立しなかった軸は保留に含めない（省略・縮退＝状態不変・
+                        // 当該軸不動・R1.6/5.5）。
+                        //
+                        // 保留は**丸ごと上書き**する（先の指定が動かした軸も捨てる）。軸ごとに
+                        // 合成して「後の指定が動かさなかった軸は先の値を保つ」形へ改めるのは
+                        // タスク 4.2 の担当で、差し替え点はこの代入 1 行だけである。
                         pending_cursor = Some((inline_val, block_val));
                     } else {
-                        // 両軸 None（`\_l[,]` や全縮退）＝完全 no-op（行区切りもしない・正典
-                        // 「両方省略で無効果」・R2.4・design 縮退表 両軸省略/全縮退 row）。
+                        // 両軸 None（`\_l[,]` や両軸縮退）＝完全 no-op（行区切りもしない・正典
+                        // 「両方省略で無効果」・R1.6/5.4/6.2・design 縮退表 両軸省略/両軸縮退 row）。
                         tracing::debug!(
                             "両軸縮退の \\_l を完全 no-op として素通しする（行区切りせず）"
                         );
@@ -638,137 +681,40 @@ fn finish_line(
     PositionedLine { rect, glyphs }
 }
 
-/// `\_l` カーソル座標 → image px 絶対座標の M1 実導出換算（純粋・全域・layout.rs 所有＝
-/// レイアウトカーソル意味論）。
+/// `\_l` の 1 軸ぶんを解決層へ委譲し、記録の 2 口へ配線する（配線層の責務そのもの）。
 ///
-/// 絶対 Px/Em/Lh の**非負値**のみ `Some(image px 絶対座標)` を返す。Percent／Relative（`@`）／
-/// 負値絶対／[`CursorCoord::Invalid`]／[`CursorCoord::Omitted`] は `None`（呼び手が状態不変
-/// スキップ＋warn-once・R2.4/6.5）。換算式（design Supporting References §`\_l 換算式`）:
+/// 意味論（基点＋値×係数・縮退の分類）は [`crate::cursor_tag::resolve_cursor_axis`] が持つ。
+/// 本関数が足すのは戻り値の 3 形への振り分けだけで、**採る契約は次の 1 行に尽きる**:
 ///
-/// - `Px`: `image_px = value`（裸数値＝バルーン画像 px 恒等）
-/// - `Em`: `image_px = value × font_height`（1em＝タグ時点の文字高さ＝`ResolvedFont::height`）
-/// - `Lh`: `image_px = value × line_pitch`（1lh＝行送りピッチ＝`ceil(font_height × 1.25)`）
-/// - 最終座標 ＝ `origin`（当該軸の `\_l` 原点＝**解決済みの文字描画開始点** `TextRegion::start()`
-///   の当該軸成分。宣言された `origin` 成分は字義どおり・未宣言成分は書字開始角へ縮退する。
-///   書字開始角は `horizontal_tb`／`vertical_lr` が `(left, top)`・`vertical_rl` が `(right, top)`）
-///   ＋ `image_px`
+/// - `Ok(Some(px))`＝移動が成立 → [`note_out_of_range`] で範囲外なら DEBUG を 1 件残し
+///   （**位置は動かさない**＝内側へ寄せない・R2.6）、値をそのまま返す。
+/// - `Ok(None)`＝軸省略 → 当該軸不動・**無音**（正典の正常形・R5.5）。
+/// - `Err(degrade)`＝縮退 → guard があれば [`warn_cursor_degrade`]（キャラクター・分岐ごと
+///   初回 1 回）。guard 不在（[`LayoutEngine::layout`] 経路）は警告を抑止するだけで、
+///   当該軸不動という**純挙動は同一**である。
 ///
-/// `origin`／`font_height`／`line_pitch` は呼び手が軸読み替え・metrics 解決済みで渡す
-/// （本関数は係数乗算と原点加算のみ——`line_pitch` は引数として受け取り内部算出しない）。
-/// パニックせず全入力で `Option<f32>` を返す（`Result` なし・R2.4 決定論）。物理化（`×k`）は
-/// 呼び手の領分で、本換算は image px で完結する（2 空間モデルの規律・2.2）。
-pub fn cursor_to_image_px(
+/// すなわち「`Err` のときだけ警告する」——`cursor_tag_resolve_tests.rs` の局所ヘルパ
+/// `warn_if_degraded` が写しているのはこの契約である。
+fn resolve_cursor_component(
     coord: CursorCoord,
-    origin: f32,
-    font_height: f32,
-    line_pitch: f32,
+    axis: CursorAxis,
+    basis: &CursorBasis,
+    region: &TextRegion,
+    cursor_warn: &mut Option<(&ActorKey, &mut CursorWarnGuard)>,
 ) -> Option<f32> {
-    match coord {
-        // 絶対 Px/Em/Lh の非負値のみ実導出（負値絶対はここで弾かず下の match ガードで None）。
-        CursorCoord::Absolute { value, unit } if value >= 0.0 => {
-            let factor = match unit {
-                CursorUnit::Px => 1.0,
-                CursorUnit::Em => font_height,
-                CursorUnit::Lh => line_pitch,
-                // Percent は M1 縮退保持（実導出せず None＝当該軸スキップ）。
-                CursorUnit::Percent => return None,
-            };
-            Some(origin + value * factor)
+    match resolve_cursor_axis(coord, axis, basis) {
+        Ok(Some(value)) => {
+            // 範囲外は記録するだけ（値は素通し）。戻り値を使って寄せてはならない（R2.6）。
+            note_out_of_range(axis, value, region);
+            Some(value)
         }
-        // `centerx`／`centery` はこの段では未解決。実導出（バルーン画像原寸の半分）は解決層
-        // `cursor_tag.rs`（タスク 3.1）が担い、この腕はタスク 4.1 で撤去される。ここでは
-        // 現行の縮退挙動どおり None（＝当該軸不動）を返す。この match は下に `_ => None` を
-        // 残しているのでコンパイル上この腕は要らない——腕を要求するのは網羅 match の
-        // `warn_cursor_degrade` だけである。それでも明示で書くのは、新しい語彙がワイルドカード
-        // 経由で黙って旧経路へ落ちたのではなく、意図して現行挙動へ据え置いたことを 4.1 の
-        // 撤去者に見せるためである。
-        CursorCoord::CenterX | CursorCoord::CenterY => None,
-        // 負値絶対・Relative（@）・Invalid・Omitted は縮退（None＝状態不変スキップ・warn-once）。
-        _ => None,
-    }
-}
-
-/// `\_l` 換算縮退の分岐種別（actor ごと warn-once の鍵・4 分岐）。
-///
-/// 各分岐を actor ごとに厳密 1 回だけ警告するための識別子（design 縮退表 2.4/6.5）。
-/// Omitted（軸省略）は正典の正常形ゆえ本種別に含めない（warn しない）。
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-enum CursorDegrade {
-    /// 負値絶対（`\_l[-1,…]`＝非負ゲート外）。
-    NegativeAbsolute,
-    /// `%`（M1 縮退保持・実導出せず）。
-    Percent,
-    /// `@` 相対（M1 縮退保持・実導出せず）。
-    Relative,
-    /// パース不能（`CursorCoord::Invalid`）。
-    Invalid,
-}
-
-/// pending-cursor 換算縮退の **actor ごと warn-once** 檻（走査を跨いで持続＝ランタイム所有）。
-///
-/// `\_l` の 4 縮退分岐（負値絶対／`%`／`@`／パース不能）を actor ごと初回のみ `warn!` する
-/// （per-frame layout 呼出での重複警告抑止・design 縮退表 2.4/6.5）。既存
-/// `TextLayerRuntime::unresolved_warned`（`BTreeSet<ActorKey>`）と同型の持続 guard で、
-/// [`LayoutEngine::layout_with_cursor_warn`] に `&mut` で渡す。行レイアウトの純挙動は guard に
-/// 依存しない——guard は縮退ログの重複抑止のみを担い、決定的な行出力へ影響しない。
-#[derive(Clone, Debug, Default)]
-pub struct CursorWarnGuard {
-    /// 既に警告済みの `(actor, 縮退分岐)`（決定論的順序のため `BTreeSet`）。
-    warned: BTreeSet<(ActorKey, CursorDegrade)>,
-}
-
-impl CursorWarnGuard {
-    /// `(actor, degrade)` が初回なら記録して `true`（＝今回警告する）、既出なら `false`。
-    fn should_warn(&mut self, actor: &ActorKey, degrade: CursorDegrade) -> bool {
-        self.warned.insert((actor.clone(), degrade))
-    }
-}
-
-/// `\_l` 換算が `None`（当該軸スキップ）へ縮退したとき、縮退分岐を分類し actor ごと初回のみ
-/// `warn!` する（design 縮退表 2.4/6.5）。
-///
-/// `converted.is_some()`（実導出成功）・`CursorCoord::Omitted`（軸省略＝正典の正常形）は
-/// 何もしない。負値絶対は unit を問わず非負ゲート外ゆえ `NegativeAbsolute` として分類する
-/// （`value < 0.0` を `Percent` より先に判定）。
-fn warn_cursor_degrade(
-    coord: CursorCoord,
-    converted: Option<f32>,
-    actor: &ActorKey,
-    guard: &mut CursorWarnGuard,
-) {
-    if converted.is_some() {
-        // 実導出成功＝縮退なし（非負 Px/Em/Lh）。
-        return;
-    }
-    let degrade = match coord {
-        // 軸省略は正典の正常形（縮退表「\_l 軸省略」＝ログなし・R2.4）。
-        CursorCoord::Omitted => return,
-        // 負値絶対（unit を問わず value<0 は非負ゲート外＝None）。
-        CursorCoord::Absolute { value, .. } if value < 0.0 => CursorDegrade::NegativeAbsolute,
-        // 非負 `%` は M1 縮退保持。
-        CursorCoord::Absolute {
-            unit: CursorUnit::Percent,
-            ..
-        } => CursorDegrade::Percent,
-        // 非負 Px/Em/Lh は `converted` が Some ゆえ到達しない——防御的に無音。
-        CursorCoord::Absolute { .. } => return,
-        CursorCoord::Relative { .. } => CursorDegrade::Relative,
-        CursorCoord::Invalid => CursorDegrade::Invalid,
-        // `centerx`／`centery` はこの段では実導出できない（解決層 `cursor_tag.rs`＝
-        // タスク 3.1 の担当）。現行の 4 分岐に専用の受け皿が無いので、最も素直な分類＝
-        // 「今この段では解釈できない」＝`Invalid` へ**暫定的に**落とす（無理に
-        // `NegativeAbsolute`／`Percent`／`Relative` へ押し込まない）。分類を
-        // 「解釈不能」「中央指定の軸取り違え（`CenterAxisMismatch`）」の 2 分岐へ書き換える
-        // のはタスク 4.1 であり、その時点でこの腕は撤去される。
-        CursorCoord::CenterX | CursorCoord::CenterY => CursorDegrade::Invalid,
-    };
-    if guard.should_warn(actor, degrade) {
-        tracing::warn!(
-            actor = %actor,
-            ?coord,
-            ?degrade,
-            "\\_l 座標が縮退した（当該軸スキップ・状態不変）——actor ごと初回のみ警告する（6.5）"
-        );
+        Ok(None) => None,
+        Err(degrade) => {
+            if let Some((actor, guard)) = cursor_warn.as_mut() {
+                warn_cursor_degrade(actor, axis, coord, degrade, guard);
+            }
+            None
+        }
     }
 }
 

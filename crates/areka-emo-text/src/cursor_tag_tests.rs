@@ -20,8 +20,8 @@ use super::test_support::{
     VALID_TOP, basis, discriminating_basis, out_of_range_region,
 };
 use super::{
-    CursorAxis, CursorDegrade, CursorWarnGuard, note_out_of_range, resolve_cursor_axis,
-    unit_coefficient, warn_cursor_degrade,
+    CursorAxis, CursorBasis, CursorDegrade, CursorWarnGuard, note_out_of_range,
+    resolve_cursor_axis, unit_coefficient, warn_cursor_degrade,
 };
 use crate::state::{CursorCoord, CursorUnit};
 use areka_sakura::contract::ActorKey;
@@ -200,6 +200,140 @@ fn unit_coefficient_is_a_scalar_that_does_not_depend_on_the_axis() {
     assert_eq!(x - ORIGIN.0, 2.0 * LINE_PITCH);
     assert_eq!(y - ORIGIN.1, 2.0 * LINE_PITCH);
     assert_eq!(x - ORIGIN.0, y - ORIGIN.1);
+}
+
+// ── 4.1 で配線層から移設した純関数テスト 3 本 ──
+//
+// 旧配線 `layout.rs` は座標換算の純関数（絶対 Px/Em/Lh の**非負値のみ**を実導出し、
+// 負値・`%`・`@` 相対・解釈不能・省略はすべて `None`）を自分で持っていた。タスク 4.1 で
+// それを撤去して意味論を本モジュールへ委譲したので、当時の純関数テスト 3 本もここへ移した。
+//
+// 移設にあたり期待値は**正典の式**（design.md 解決表）から書き直してある。とくに 3 本目は、
+// 旧実装が一律 `None` を返していた 5 形のうち 3 形（負値絶対・`%`・`@` 相対）が実導出へ移り、
+// 縮退として残るのが 2 形だけになったことを、そのまま 1 本の対照にしている（R5.2・R9.6）。
+
+/// 絶対は `origin[axis] + 値 × 係数`（移設元 1 本目）。
+///
+/// 共通前提とは**別の基点束**（原点 `(10, 10)`・文字高さ 20・行送り 25）で通す——共通前提の値に
+/// 焼き付いた実装（原点や係数を定数で持ってしまった実装）をここで赤にする。移設元が
+/// `origin = 10`・`font_height = 20`・`line_pitch = 25` を渡していたのと同じ数値である。
+#[test]
+fn absolute_units_resolve_from_the_origin_on_an_independent_basis() {
+    let b = CursorBasis {
+        origin: (10.0, 10.0),
+        current: (77.0, 88.0),
+        image_size: (360.0, 180.0),
+        font_height: 20.0,
+        line_pitch: 25.0,
+    };
+    for (unit, value) in [
+        (CursorUnit::Px, 5.0f32),
+        (CursorUnit::Em, 2.0),
+        (CursorUnit::Lh, 3.0),
+        (CursorUnit::Percent, 40.0),
+    ] {
+        let coef = unit_coefficient(unit, b.font_height, b.line_pitch);
+        assert_eq!(
+            resolve_cursor_axis(CursorCoord::Absolute { value, unit }, CursorAxis::X, &b),
+            Ok(Some(b.origin.0 + value * coef)),
+            "{unit:?}: X ＝ origin.0 + 値 × 係数"
+        );
+        assert_eq!(
+            resolve_cursor_axis(CursorCoord::Absolute { value, unit }, CursorAxis::Y, &b),
+            Ok(Some(b.origin.1 + value * coef)),
+            "{unit:?}: Y ＝ origin.1 + 値 × 係数"
+        );
+    }
+}
+
+/// 値 0 は係数に依らず原点そのものへ着地する（移設元 2 本目）。
+///
+/// 移設元は Px/Em/Lh の 3 単位だけを見ていた。`%` が実導出へ移った（R5.2）ので **4 単位**に
+/// 広げてある——`0 × 係数 = 0` が単位の別に依らないことが、単位を軸に依らないスカラーとして
+/// 与えている設計（R1.4）の帰結だからである。
+#[test]
+fn zero_value_lands_exactly_on_the_origin_for_every_unit() {
+    let b = basis();
+    for unit in [
+        CursorUnit::Px,
+        CursorUnit::Em,
+        CursorUnit::Lh,
+        CursorUnit::Percent,
+    ] {
+        assert_eq!(
+            resolve_cursor_axis(
+                CursorCoord::Absolute { value: 0.0, unit },
+                CursorAxis::X,
+                &b
+            ),
+            Ok(Some(b.origin.0)),
+            "{unit:?}: 値 0 は原点へ写る"
+        );
+    }
+}
+
+/// 旧実装が一律 `None`（当該軸不動）へ落としていた 5 形の、いまの行き先（移設元 3 本目）。
+///
+/// | 形 | 旧換算（撤去済み） | いまの [`resolve_cursor_axis`] |
+/// |---|---|---|
+/// | 負値絶対（Px/Em/Lh） | `None` | `Ok(Some(origin + 値 × 係数))`＝**実導出** |
+/// | `%` | `None` | `Ok(Some(origin + 値 × font_height / 100))`＝**実導出** |
+/// | `@` 相対 | `None` | `Ok(Some(current + 値 × 係数))`＝**実導出** |
+/// | 解釈不能 | `None` | `Err(Unparsable)`＝当該軸不動・警告対象 |
+/// | 省略 | `None` | `Ok(None)`＝当該軸不動・**無音** |
+///
+/// 旧実装は最後の 2 形（縮退と正常形）を同じ `None` で表しており、呼び手が
+/// 「警告すべきか」を別の関数で**もう一度分類し直して**いた。
+/// いまは戻り値の 3 形がそのまま契約になっている（R5.1/5.5）。
+#[test]
+fn forms_that_used_to_degrade_now_resolve_or_carry_their_own_verdict() {
+    let b = basis();
+    for unit in [CursorUnit::Px, CursorUnit::Em, CursorUnit::Lh] {
+        let coef = unit_coefficient(unit, b.font_height, b.line_pitch);
+        assert_eq!(
+            resolve_cursor_axis(
+                CursorCoord::Absolute { value: -1.0, unit },
+                CursorAxis::X,
+                &b
+            ),
+            Ok(Some(b.origin.0 - coef)),
+            "{unit:?}: 負値絶対は実導出（旧実装は None）"
+        );
+    }
+    assert_eq!(
+        resolve_cursor_axis(
+            CursorCoord::Absolute {
+                value: 5.0,
+                unit: CursorUnit::Percent,
+            },
+            CursorAxis::X,
+            &b
+        ),
+        Ok(Some(b.origin.0 + 5.0 * b.font_height / 100.0)),
+        "`%` は実導出（旧実装は None）"
+    );
+    assert_eq!(
+        resolve_cursor_axis(
+            CursorCoord::Relative {
+                value: 5.0,
+                unit: CursorUnit::Px,
+            },
+            CursorAxis::X,
+            &b
+        ),
+        Ok(Some(b.current.0 + 5.0)),
+        "`@` 相対は実導出（旧実装は None・基点は current）"
+    );
+    assert_eq!(
+        resolve_cursor_axis(CursorCoord::Invalid, CursorAxis::X, &b),
+        Err(CursorDegrade::Unparsable),
+        "解釈不能は縮退（当該軸不動・警告対象）"
+    );
+    assert_eq!(
+        resolve_cursor_axis(CursorCoord::Omitted, CursorAxis::X, &b),
+        Ok(None),
+        "省略は正典の正常形（当該軸不動・無音）——縮退と同じ値で表さない"
+    );
 }
 
 // ── 3.2: 範囲外の記録（R2.6）と縮退警告の一回化（R5.1/5.2/5.3） ──

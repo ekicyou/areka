@@ -27,8 +27,9 @@ use crate::choice::{
     ResolvedChoiceStyle, annotate_lines, decorate_canvas, derive_hit_rows, highlight_band_extent,
     to_window_physical,
 };
+use crate::cursor_tag::CursorWarnGuard;
 use crate::draw::{DWriteMetrics, ResolvedFont};
-use crate::layout::{CursorWarnGuard, GlyphMetrics, LayoutEngine, WrapPlan};
+use crate::layout::{GlyphMetrics, LayoutEngine, WrapPlan};
 use crate::region::{ImagePx, ScaleContract, TextRegion};
 use crate::segment::segment_plan;
 use crate::sink::{EmoTextSink, TextMsg, handle_text_msg};
