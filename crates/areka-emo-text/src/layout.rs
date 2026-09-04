@@ -457,22 +457,44 @@ impl LayoutEngine {
                     // 到着時解決（保留のみ・行は閉じない・R2.1/2.3）。意味論そのもの
                     // （基点＋値×係数・縮退の分類・警告の一回化・範囲外の記録）は解決層
                     // [`crate::cursor_tag`] が持ち、本腕はその**配線**だけを担う——
-                    // 走査位置を image 軸へ逆写像して軸ごとに解決を呼び、返った値を
+                    // 実効位置を image 軸へ逆写像して軸ごとに解決を呼び、返った値を
                     // 行内／行送り軸へ写して保留する（design.md「配線 `LayoutEngine`」の 5 段手順）。
                     //
-                    // 現在位置の image 軸への逆写像（`@` 相対の基点）。軸読み替え正準表の逆向き:
+                    // 実効位置の image 軸への逆写像（`@` 相対の基点）。軸読み替え正準表の逆向き:
                     // `horizontal_tb` は行内＝x・行送り＝y、縦書き 2 方向は行内＝y・行送り＝x。
                     // `vertical_rl` の `block_pos` は列の**右端**なので、`\_l[@-1lh,0]` は
                     // 自動列送り（`block_pos += −1 × pitch`）と同じ値を与える＝正典「1 列ぶん左の列の先頭へ」。
                     //
-                    // ここで渡すのは**走査ローカルの現在位置そのもの**である。保留中の改行・
-                    // 保留中のカーソルをフラッシュと同じ順で仮適用した「実効位置」へ差し替えるのは
-                    // タスク 4.2 の担当で、差し替え点はこの `current` の 1 か所だけである
-                    // （保留を仮適用しても走査ローカルは書き換えない、が 4.2 の要件）。
-                    let current = match mode {
-                        WritingMode::HorizontalTb => (inline_pos, block_pos),
+                    // ここで渡すのは走査ローカルの現在位置ではなく**実効位置**——
+                    // 「もし今フラッシュしたら次の文字が置かれる位置」である（R3.1「直前までに
+                    // 置かれた文字の次に文字が置かれる位置」）。保留中の改行と保留中のカーソルを
+                    // **保留フラッシュ（ゲート②）と同じ順**で仮適用して求める:
+                    //   (1) 行の確定は inline_pos／block_pos を動かさない＝実効位置に寄与しない。
+                    //   (2) 保留改行 Σratio を行送り軸へ適用し、行内軸を先頭へ戻す。
+                    //   (3) 保留カーソルの指定軸で上書きする（不動軸は据え置き）。
+                    // これは**フラッシュの複製ではなく、同じ規則に従う読み取り専用の計算**である
+                    // ——`pending`／`pending_cursor` は `take()` せず、`inline_pos`／`block_pos`
+                    // も書き換えない（走査ローカルは無変更・R3.5「基点は `\_l` 実行時点に固定」）。
+                    let mut eff_inline = inline_pos;
+                    let mut eff_block = block_pos;
+                    if let Some(sum) = pending {
+                        eff_block += block_dir * pitch * sum;
+                        eff_inline = inline_start;
+                    }
+                    if let Some((inline_val, block_val)) = pending_cursor {
+                        if let Some(iv) = inline_val {
+                            eff_inline = iv;
+                        }
+                        if let Some(bv) = block_val {
+                            eff_block = bv;
+                        }
+                    }
+                    // 実効位置を image 軸へ逆写像する（変数名 `eff` は、同ファイルで 200 行に
+                    // わたり「現在行のグリフ列」を意味する `current` との衝突を避けるため）。
+                    let eff = match mode {
+                        WritingMode::HorizontalTb => (eff_inline, eff_block),
                         WritingMode::VerticalRl | WritingMode::VerticalLr => {
-                            (block_pos, inline_pos)
+                            (eff_block, eff_inline)
                         }
                     };
                     // 基点束。原点は**解決済みの文字描画開始点** `TextRegion::start()`（宣言された
@@ -484,7 +506,7 @@ impl LayoutEngine {
                     // `centerx`／`centery` の基準はバルーン画像の原寸（validrect でも原点でもない・4.3）。
                     let basis = CursorBasis {
                         origin: start,
-                        current,
+                        current: eff,
                         image_size: region.image_size(),
                         font_height,
                         line_pitch: pitch,
@@ -514,13 +536,17 @@ impl LayoutEngine {
                         // 移動が成立しなかった軸は保留に含めない（省略・縮退＝状態不変・
                         // 当該軸不動・R1.6/5.5）。
                         //
-                        // 保留は**丸ごと上書き**する（先の指定が動かした軸も捨てる）。軸ごとに
-                        // 合成して「後の指定が動かさなかった軸は先の値を保つ」形へ改めるのは
-                        // タスク 4.2 の担当で、差し替え点はこの代入 1 行だけである。
-                        pending_cursor = Some((inline_val, block_val));
+                        // 保留は**軸ごとに合成**する（丸ごと上書きしない）——後の指定が動かさ
+                        // なかった軸は先の指定が保留した値を保つ。正典「省略＝移動しない」は
+                        // 「先に保留された値を捨てる」ことまでは意味しないからである（R1.2/1.6/
+                        // 3.5・検証表 H2: `\_l[10,]\_l[,20]` → (10, 20)）。
+                        let (old_inline, old_block) = pending_cursor.unwrap_or((None, None));
+                        pending_cursor = Some((inline_val.or(old_inline), block_val.or(old_block)));
                     } else {
                         // 両軸 None（`\_l[,]` や両軸縮退）＝完全 no-op（行区切りもしない・正典
                         // 「両方省略で無効果」・R1.6/5.4/6.2・design 縮退表 両軸省略/両軸縮退 row）。
+                        // **既存の保留も変えない**——`pending_cursor` への代入はこの腕には無い
+                        // （合成は「成立した軸だけを重ねる」であって、不成立は保留の消去ではない）。
                         tracing::debug!(
                             "両軸縮退の \\_l を完全 no-op として素通しする（行区切りせず）"
                         );

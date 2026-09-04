@@ -569,3 +569,274 @@ fn cursor_omitted_and_valid_axes_do_not_warn() {
         "軸省略・実導出成功は縮退でない（警告しない）"
     );
 }
+
+// ── 実効位置（`@` の基点）と保留の軸ごと合成（タスク 4.2・design 5 段手順の 1 段目/5 段目） ──
+
+/// **正典値（4.2 の軸ごと合成による）**: 文字を挟まずに連続する `\_l` の保留は
+/// **軸ごとに合成**され、後の指定が動かさなかった軸は先の値を保つ（検証表 H2）。
+///
+/// `[\_l[10,], \_l[,20], あ]`（origin (0,0)）: 先の指定が X=10 を保留し、後の指定は
+/// Y=20 だけを動かす（X は省略＝「移動しない」＝正典の正常形）。合成後の保留は
+/// (X=10, Y=20) で、次のグリフは (10, 20) へ載る。
+///
+/// 書き換え前の現行値は X=0（＝行頭 `inline_start`）だった——後の `\_l` が保留を
+/// **丸ごと上書き**していたため、先の `\_l` が動かした X が失われていた。正典
+/// 「省略＝移動しない」は「先に保留された値を捨てる」ことまでは意味しない（R1.2/1.6/3.5）。
+///
+/// 併せて、両軸とも移動が成立しない `\_l[,]` が**既存の保留を消さない**ことを固定する
+/// （R5.4/6.2・縮退表「両軸省略／両軸縮退＝完全無効果」は「保留を変えない」を含む）。
+#[test]
+fn consecutive_cursor_moves_compose_pending_per_axis() {
+    let region = TextRegion::resolve(
+        &model((Some(0), Some(0)), (None, None)),
+        IMAGE,
+        WritingMode::HorizontalTb,
+    );
+    // H2: `\\_l[10,]\\_l[,20]あ` → (10, 20)。
+    let items = [
+        TextItem::CursorMove {
+            x: CursorCoord::Absolute {
+                value: 10.0,
+                unit: CursorUnit::Px,
+            },
+            y: CursorCoord::Omitted,
+        },
+        TextItem::CursorMove {
+            x: CursorCoord::Omitted,
+            y: CursorCoord::Absolute {
+                value: 20.0,
+                unit: CursorUnit::Px,
+            },
+        },
+        TextItem::Glyph { ch: 'あ' },
+    ];
+    let lines = LayoutEngine::layout(
+        &items,
+        1,
+        &region,
+        WritingMode::HorizontalTb,
+        10.0,
+        &FixedMetrics,
+        WrapPlan::CharByChar,
+    );
+    assert_eq!(lines.len(), 1, "先頭フラッシュは空行を作らない");
+    assert_eq!(
+        inline_positions(&lines[0]),
+        vec![10.0],
+        "正典値（4.2 の軸ごと合成による）: 後の `\\_l` は X を動かさない\
+         （省略）ので、先の `\\_l` の X=10 が保たれる。書き換え前の現行値は 0（丸ごと上書き）"
+    );
+    assert_eq!(lines[0].rect.top, 20.0, "後の `\\_l` の Y=20 が保留へ入る");
+
+    // 両軸とも成立しない `\\_l[,]` は既存の保留を消さない（R5.4/6.2）。
+    let kept = [
+        TextItem::Glyph { ch: 'あ' },
+        TextItem::CursorMove {
+            x: CursorCoord::Absolute {
+                value: 10.0,
+                unit: CursorUnit::Px,
+            },
+            y: CursorCoord::Absolute {
+                value: 20.0,
+                unit: CursorUnit::Px,
+            },
+        },
+        TextItem::CursorMove {
+            x: CursorCoord::Omitted,
+            y: CursorCoord::Omitted,
+        },
+        TextItem::Glyph { ch: 'あ' },
+    ];
+    let lines = LayoutEngine::layout(
+        &kept,
+        2,
+        &region,
+        WritingMode::HorizontalTb,
+        10.0,
+        &FixedMetrics,
+        WrapPlan::CharByChar,
+    );
+    assert_eq!(
+        lines.len(),
+        2,
+        "移動が成立した先の `\\_l` が行の分割点になる"
+    );
+    assert_eq!(
+        inline_positions(&lines[1]),
+        vec![10.0],
+        "両軸省略の `\\_l` は保留を変えない（X=10 が残る）"
+    );
+    assert_eq!(
+        lines[1].rect.top, 20.0,
+        "両軸省略の `\\_l` は保留を変えない（Y=20 が残る）"
+    );
+}
+
+/// **正典値（4.2 の実効位置による）**: `@` 相対の基点は、走査位置に**保留中の改行と
+/// 保留中のカーソルをフラッシュと同じ順で仮適用した**「次の文字が置かれる位置」である
+/// （検証表 H3・R3.1/3.5）。仮適用は読み取りだけで、走査ローカル状態を書き換えない。
+///
+/// - `[あ, \_l[@0,@0], あ]`: 保留なし＝実効位置は走査位置そのもの (10, 0)。`@0` は
+///   そこへ据え置く＝2 個目が 1 個目に続けて置かれる。
+/// - `[あ, \n(1.0), \_l[@0,@0], あ]`: 保留改行があるので実効位置は改行を仮適用した
+///   (0, 13)＝**次行の先頭**。`@0` はそこへ据え置くので、改行が取り消されない。
+///   書き換え前の現行値は (10, 0) で、`@0` が走査位置を基点にしたせいで**保留改行を
+///   打ち消していた**（改行が無かったことになる）。
+/// - `[\_l[10,], \_l[@5,], あ]`: 保留カーソルも仮適用の対象。実効位置の X は先の
+///   保留 10 なので `@5` は 15 になる（走査位置 0 を基点にすると 5 になる）。
+/// - `[\n(1.0), \_l[10,], \_l[@0,], あ]`: 保留改行と保留カーソルが**同時に**居る
+///   交差ケース。仮適用の順序はフラッシュ本体（`:356-378`）の (2)→(3) と同順である——
+///   (2) 保留改行が行内軸を先頭（0）へ戻し、(3) 保留カーソルの X=10 がそれに**後勝ち**する。
+///   ゆえに実効位置は (10, 13) で、`@0` はそこへ据え置き、最終着地も (10, 13) になる。
+///   仮適用の 2 ブロック（`layout.rs:480-492`）を入れ替えると (3)→(2) の順になり、改行の
+///   行内リセットが後勝ちして `inline` が 0 へ落ちる＝この 1 本だけが赤になる。
+#[test]
+fn relative_cursor_basis_is_the_effective_position() {
+    let region = TextRegion::resolve(
+        &model((Some(0), Some(0)), (None, None)),
+        IMAGE,
+        WritingMode::HorizontalTb,
+    );
+    let relative_zero = || TextItem::CursorMove {
+        x: CursorCoord::Relative {
+            value: 0.0,
+            unit: CursorUnit::Px,
+        },
+        y: CursorCoord::Relative {
+            value: 0.0,
+            unit: CursorUnit::Px,
+        },
+    };
+
+    // 保留なし: 実効位置＝走査位置 (10, 0)。
+    let plain = [
+        TextItem::Glyph { ch: 'あ' },
+        relative_zero(),
+        TextItem::Glyph { ch: 'あ' },
+    ];
+    let lines = LayoutEngine::layout(
+        &plain,
+        2,
+        &region,
+        WritingMode::HorizontalTb,
+        10.0,
+        &FixedMetrics,
+        WrapPlan::CharByChar,
+    );
+    assert_eq!(lines.len(), 2, "両軸とも移動が成立するので行の分割点になる");
+    assert_eq!(
+        inline_positions(&lines[1]),
+        vec![10.0],
+        "保留なし＝実効位置は走査位置 (10, 0)。`@0` は続けて配置する"
+    );
+    assert_eq!(lines[1].rect.top, 0.0);
+
+    // 保留改行あり: 実効位置は改行を仮適用した (0, 13)＝次行の先頭。
+    let after_break = [
+        TextItem::Glyph { ch: 'あ' },
+        TextItem::LineBreak { ratio: 1.0 },
+        relative_zero(),
+        TextItem::Glyph { ch: 'あ' },
+    ];
+    let lines = LayoutEngine::layout(
+        &after_break,
+        2,
+        &region,
+        WritingMode::HorizontalTb,
+        10.0,
+        &FixedMetrics,
+        WrapPlan::CharByChar,
+    );
+    assert_eq!(lines.len(), 2);
+    assert_eq!(
+        inline_positions(&lines[1]),
+        vec![0.0],
+        "正典値（4.2 の実効位置による）: 実効位置の行内軸は改行の行内リセット後の 0。\
+         書き換え前の現行値は 10（走査位置を基点にして改行を打ち消していた）"
+    );
+    assert_eq!(
+        lines[1].rect.top, 13.0,
+        "正典値（4.2 の実効位置による）: 実効位置の行送り軸は改行送り後の 13。\
+         書き換え前の現行値は 0（相対 0 指定が改行を取り消していた）"
+    );
+
+    // 保留カーソルあり: 実効位置の X は先の保留 10 なので `@5` は 15。
+    let after_pending_cursor = [
+        TextItem::CursorMove {
+            x: CursorCoord::Absolute {
+                value: 10.0,
+                unit: CursorUnit::Px,
+            },
+            y: CursorCoord::Omitted,
+        },
+        TextItem::CursorMove {
+            x: CursorCoord::Relative {
+                value: 5.0,
+                unit: CursorUnit::Px,
+            },
+            y: CursorCoord::Omitted,
+        },
+        TextItem::Glyph { ch: 'あ' },
+    ];
+    let lines = LayoutEngine::layout(
+        &after_pending_cursor,
+        1,
+        &region,
+        WritingMode::HorizontalTb,
+        10.0,
+        &FixedMetrics,
+        WrapPlan::CharByChar,
+    );
+    assert_eq!(lines.len(), 1);
+    assert_eq!(
+        inline_positions(&lines[0]),
+        vec![15.0],
+        "正典値（4.2 の実効位置による）: 保留カーソル(X=10)を仮適用した実効位置から\
+         `@5` → 15。走査位置(0)を基点にすると 5 になる"
+    );
+
+    // 保留改行と保留カーソルが**同時に**保留された状態（実経路で到達可能——`\n` →
+    // `\_l[絶対]` → `\_l[@…]`。`\_l` 腕は `pending` を消費しないため）。
+    // 仮適用の**順序**そのものを固定する 1 本＝主張は「保留改行が行内軸を先頭へ戻す規則より、
+    // 保留カーソルの上書きが後勝ちである」（フラッシュ本体 `layout.rs:356-378` の (2)→(3) と同順）。
+    let break_then_cursor = [
+        TextItem::LineBreak { ratio: 1.0 },
+        TextItem::CursorMove {
+            x: CursorCoord::Absolute {
+                value: 10.0,
+                unit: CursorUnit::Px,
+            },
+            y: CursorCoord::Omitted,
+        },
+        TextItem::CursorMove {
+            x: CursorCoord::Relative {
+                value: 0.0,
+                unit: CursorUnit::Px,
+            },
+            y: CursorCoord::Omitted,
+        },
+        TextItem::Glyph { ch: 'あ' },
+    ];
+    let lines = LayoutEngine::layout(
+        &break_then_cursor,
+        1,
+        &region,
+        WritingMode::HorizontalTb,
+        10.0,
+        &FixedMetrics,
+        WrapPlan::CharByChar,
+    );
+    assert_eq!(lines.len(), 1, "先頭フラッシュは空行を作らない");
+    assert_eq!(
+        inline_positions(&lines[0]),
+        vec![10.0],
+        "正典値（4.2 の実効位置による）: 仮適用は (2) 保留改行 → (3) 保留カーソル の順\
+         ＝フラッシュ本体 `layout.rs:356-378` と同順なので、改行の行内リセット(0)に\
+         保留カーソルの X=10 が後勝ちする。実効位置 (10, 13) から `@0` は据え置き＝10。\
+         仮適用の 2 ブロックを入れ替えると (3)→(2) になり 0 へ落ちる"
+    );
+    assert_eq!(
+        lines[0].rect.top, 13.0,
+        "行送り軸は保留改行の送り 13（保留カーソルは Y を動かしていない）"
+    );
+}
