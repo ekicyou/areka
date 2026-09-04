@@ -1,16 +1,16 @@
 {
   "feature_name": "areka-P0-ukadoc-survey-sakura-script",
   "created_at": "2026-09-04T01:17:41Z",
-  "updated_at": "2026-09-04T01:29:33Z",
+  "updated_at": "2026-09-04T02:55:00Z",
   "language": "ja",
-  "phase": "requirements-generated",
+  "phase": "design-generated",
   "approvals": {
     "requirements": {
       "generated": true,
-      "approved": false
+      "approved": true
     },
     "design": {
-      "generated": false,
+      "generated": true,
       "approved": false
     },
     "tasks": {
