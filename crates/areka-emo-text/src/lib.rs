@@ -11,7 +11,8 @@
 //!
 //! crate 内は次の一方向に層を分ける。逆流はレビューエラーとして扱う。
 //!
-//! 1. **純粋層**（[`state`]／[`writing`]／[`region`]／[`layout`]／[`canvas`]／[`viewbox`]）——
+//! 1. **純粋層**（[`state`]／[`writing`]／[`region`]／[`cursor_tag`]／[`layout`]／[`canvas`]／
+//!    [`viewbox`]）——
 //!    `windows` 系 crate 非依存の決定論檻。純粋層モジュールに `windows` の import が
 //!    現れたらレビューエラー（本 crate のテストでも構造検証する）。
 //! 2. **COM 層**（[`draw`]／[`surface`]／[`viewbox_draw`]）——DirectWrite/D2D/DXGI/WUC を
@@ -32,6 +33,7 @@
 pub mod actor;
 pub mod canvas;
 pub mod choice;
+pub mod cursor_tag;
 pub mod draw;
 pub mod layout;
 pub mod region;
@@ -172,6 +174,8 @@ mod tests {
     fn pure_layer_modules_have_no_windows_imports() {
         const PURE_SOURCES: &[(&str, &str)] = &[
             ("choice.rs", include_str!("choice.rs")),
+            ("cursor_tag.rs", include_str!("cursor_tag.rs")),
+            ("cursor_tag_tests.rs", include_str!("cursor_tag_tests.rs")),
             ("state.rs", include_str!("state.rs")),
             (
                 "state_cursor_coord_parse_tests.rs",
