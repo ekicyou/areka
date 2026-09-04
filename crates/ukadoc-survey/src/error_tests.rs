@@ -6,14 +6,14 @@ use super::SurveyError;
 #[test]
 fn snapshot_unreadable_carries_the_absolute_path_and_the_reason() {
     let err = SurveyError::SnapshotUnreadable {
-        path: r"C:\Users\maz\AppData\Roaming\npm\node_modules\ukagaka-doc-mcp\data\index.json"
+        path: r"C:\Users\someone\AppData\Roaming\npm\node_modules\ukagaka-doc-mcp\data\index.json"
             .to_string(),
         reason: "指定されたパスが見つかりません。 (os error 3)".to_string(),
     };
     let body = err.to_string();
     assert!(
         body.contains(
-            r"C:\Users\maz\AppData\Roaming\npm\node_modules\ukagaka-doc-mcp\data\index.json"
+            r"C:\Users\someone\AppData\Roaming\npm\node_modules\ukagaka-doc-mcp\data\index.json"
         ),
         "探した絶対パスが本文に無い: {body}"
     );
