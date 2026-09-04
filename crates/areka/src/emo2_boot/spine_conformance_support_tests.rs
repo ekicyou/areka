@@ -548,11 +548,59 @@ fn second_change_calls(handle: &ScriptedShioriHandle) -> usize {
 /// - **探りが終了を捉えること**: 終了指示 → close 握手 → 解放 → kanade の自己終了、まで進むと探りの
 ///   投函が `Err` になり、完了条件が段の中で成立する。探りが無ければこの段は必ず有界待ち切れになる。
 /// - **握手が正典どおり 1 度ずつであること**: `OnClose` の照会 1 件・解放 1 件（R3.9）。
+/// - **boot 中に届いた終了指示も必ず果たされること**: 終了指示は kanade が boot に居るあいだに
+///   届いても失われず、起動記録トークの再生完了で握手が始まる。しかも**毎秒の変化通知は 1 件も
+///   増えない**（`OnSecondChange` 0 件）——増えていたら保留の消化経路が変わっている。
 ///
 /// ERROR の件数は檻に入れない。kanade は別スレッドで走り、本ハーネスのログ捕捉はスレッドを跨がない
 /// ——「0 件」を主張しても恒真になりうる（steering: ログ檻の盲点）。探りが副作用を持たないことの
 /// 根拠は `crates/areka-kanade/src/schedule/mod.rs:425-431` の防御アームが `warn!` を出して
 /// `(state, Vec::new())`（副作用指示 0 件）を返すことであり、上の (i) がその帰結を観測している。
+///
+/// # 終了段の待ちが「据え置き時刻の再生側 Tick」でなければならない理由（task 5.5・R2.10）
+///
+/// **前提（構造で決まっている）**——本ハーネスの起動は**必ず**起動記録トークを起こす。fixture の
+/// 永続状態は起動のたびに消され（`crates/areka/src/emo2_boot/spine.rs:490-499`）、初回起動と判定
+/// された boot は起動記録の書込 cue を `first_boot_epilogue` へ据える
+/// （`crates/areka-ghost/src/runtime.rs:459-464`）。ゆえに `OnBoot` が 204 でも kanade は「空
+/// script＋末尾 SET 1 件」の記録トークを起こし（`crates/areka-kanade/src/schedule/boot.rs:253-273`）、
+/// `BootVersion{talk: Some}` を経て `Steady{talk: Some}` へ入る（同 `:276-280`・`:105-113`）。
+/// この前提は下の (ii-a) で**進行状態の記録から逐語に固定する**（`basewareversion` の
+/// 組み立て済み進行状態が `talking`＝送出時点の phase が `BootVersion{talk: Some}`
+/// ＝`crates/areka-kanade/src/schedule/mod.rs:449-460`）。
+///
+/// **どの交錯順でも握手が 1 度だけ始まる**——終了指示の到着時点で kanade が居られる場所は 3 つ
+/// しかない。
+///
+/// - **⑴ `Steady{talk: None}`（記録トークが終わっている）**: その場で `OnClose` の照会を発行する
+///   （`crates/areka-kanade/src/schedule/steady.rs:866-869`）。再生側 Tick は 1 本も要らない。
+/// - **⑵ `Steady{talk: Some}`（記録トーク再生中）**: 保留に入るだけ（同 `:870-874`）。保留を消化
+///   するのは**そのトークの再生完了通知**であり（同 `:840-855`・消化は `:847-849`）、再生を進める
+///   のは再生側 Tick だけである。ゆえに何も注入しない待ちでは握手が永久に始まらない。
+/// - **⑶ boot 系列のいずれか**: 保留記録のみで boot は継続する（`schedule/boot.rs:31`・実体は
+///   `:285-288`）。boot が完了すると `Steady{talk}` へ入る（同 `:105-113`）ので、以後は ⑵ に合流
+///   する（本ハーネスでは `talk` は必ず `Some` である＝上の前提）。
+///
+/// いずれの場合も `OnSecondChange` は 1 件も出ない。再生側 Tick は dispatcher の受信端へ入り
+/// SHIORI 呼出を 1 件も起こさず（[`Injection::DispatcherTick`]）、kanade Tick は 1 本も投函しない
+/// ——`Steady{talk: Some}` へ kanade Tick を投げれば毎秒の変化通知が 1 件ずつ増える
+/// （`schedule/steady.rs:705-714`）。台本に `OnSecondChange` の応答を 1 件も積んでいないので、
+/// 万一発行されればその場で受け口が落ちる（`spine.rs:245`／`:267`）＝0 件の主張は恒真ではない。
+/// 握手が始まった後に遅れて届く再生側 Tick も無害である（dispatcher 側であり kanade へ渡らない）。
+///
+/// **なぜ注入時刻を据え置くのか**——駆動器を通すと 1 反復ごとに注入時刻が進み、この段の区間
+/// （1,000ms÷刻み 1,000ms）では注入がミリ秒未満で頭打ちに達する。頭打ちの後は注入されないので
+/// 再生が凍り、待ちは必ず期限切れになる（[`StageSink::may_advance_clock`] の doc が同じ実測を
+/// 持つ）。据え置いた注入時刻は待っている観測を追い越しようがなく、予算も減らない——実測では
+/// 握手の開始までに 1,621 反復を要した（据え置き・静かな機械・task 5.5）。
+///
+/// **残る危険（本檻では直せない）**——記録トークの再生完了通知が kanade の `BootVersion` 滞在中に
+/// 届くと、`schedule/boot.rs:32-36` の防御アームが**それを捨てる**。捨てられた通知は二度と来ない
+/// ので、以後 `Steady{talk: Some}` のまま保留が消化されず、どんな注入でも握手は始まらない
+/// （`schedule/mod.rs:681-694` の `current_talk_id` が `BootVersion{Some}` を突合対象に含めて
+/// おきながら——`:683-684` が「TalkDone が BootVersion 中に届いた場合の防御」と逐語で書いている
+/// ——委譲先が捨てる形）。
+/// これは製品側の欠陥であって檻の待ち方では塞げない。上の assert が落ちたときはこの経路を疑う。
 #[test]
 fn kanade_probe_raises_no_shiori_call_and_observes_the_close() {
     let (backend, handle) = ScriptedShioriBackend::builder()
@@ -601,30 +649,50 @@ fn kanade_probe_raises_no_shiori_call_and_observes_the_close() {
         observed.kanade_probes
     );
 
-    // ── (ii-a) 終了指示 → 握手の開始。**再生側 Tick を 1 本も使わない**（`waiting: Idle`）。
+    // ── (ii-a) 終了指示 → 握手の開始。**駆動器を通さず**、注入時刻を据え置いた再生側 Tick を
+    //     `OnClose` の照会が記録されるまで有界に繰り返す（理由の全体は本檻の doc コメント）。
     //
-    //     active talk が無い Steady への close 指示は、その場で `OnClose` 照会を発行する
-    //     （`crates/areka-kanade/src/schedule/steady.rs:864-899`）。ゆえにこの段の完了条件は
-    //     注入時刻に一切依存せず、純粋な別スレッド到着の待ちになる——注入の予算（＝段の区間が
-    //     収容する本数）が実時間で先に尽きる、という競争がここには構造的に存在しない。
-    let close_begin = stage("終了指示", 11_000, 12_000);
+    //     駆動器の [`WaitInjection`] には足さない——`spine_conformance_support.rs:231-232` が
+    //     「封じているのは駆動器が持つ経路であって、[`StageSink`] を直に呼ぶ経路までは縛らない」
+    //     と明記している。据え置きゆえ注入の予算を 1 本も食わず、注入時刻が観測を追い越さない。
+    const CLOSE_HOLD_MS: u64 = 11_000;
+
+    // 待ちの形が寄りかかっている前提を、進行状態の記録から逐語に固定する。5 呼出目
+    // （`basewareversion`）の組み立て済み進行状態が `talking` であることは、送出時点の phase が
+    // `BootVersion{talk: Some}`＝**起動記録トークが走っている**ことを意味する
+    // （`crates/areka-kanade/src/schedule/boot.rs:276-280`＋`schedule/mod.rs:449-460`）。
+    let boot_status = handle.status_calls();
+    assert_eq!(
+        boot_status
+            .get(4)
+            .map(|record| (record.id.as_str(), record.status.as_deref())),
+        Some(("basewareversion", Some("talking"))),
+        "起動が記録トークを伴っていない——保留 close を消化する経路（再生完了通知）が変わっている: {boot_status:?}"
+    );
+
+    harness
+        .inject(&Injection::CloseRequest(CloseReason::User), CLOSE_HOLD_MS)
+        .expect("kanade の受信端は生きている（直前の段で探りが 12 本通っている）");
     let probe = handle.clone();
-    driver
-        .run_stage(
-            &mut harness,
-            &StagePlan {
-                stage: &close_begin,
-                once: vec![Injection::CloseRequest(CloseReason::User)],
-                waiting: WaitInjection::Idle,
-            },
-            |_| {
-                probe
-                    .non_status_calls()
-                    .iter()
-                    .any(|c| matches!(c, RecordedCall::Get { id, .. } if id == "OnClose"))
-            },
-        )
-        .expect("close 指示はその場で OnClose の照会を発行する（再生側 Tick を要さない）");
+    let mut dispatcher_closed = false;
+    let began = spin_wait_until(|| {
+        // 据え置いた注入時刻の再生側 Tick を毎反復 1 本。SHIORI 呼出は 1 件も起こさない。
+        if harness
+            .inject(&Injection::DispatcherTick, CLOSE_HOLD_MS)
+            .is_err()
+        {
+            dispatcher_closed = true;
+        }
+        probe
+            .non_status_calls()
+            .iter()
+            .any(|c| matches!(c, RecordedCall::Get { id, .. } if id == "OnClose"))
+    });
+    assert!(
+        began,
+        "終了指示のあと OnClose の照会が有界内に現れない（dispatcher の受信端が閉じたか: {dispatcher_closed}）: {:?}",
+        handle.non_status_calls()
+    );
 
     // ── (ii-b) 終了挨拶の再生 → 解放 → kanade の自己終了を探りが捉える ──
     //
@@ -663,6 +731,116 @@ fn kanade_probe_raises_no_shiori_call_and_observes_the_close() {
             .count(),
         1,
         "解放がちょうど 1 度でない（R3.9）: {calls:?}"
+    );
+    assert_eq!(
+        second_change_calls(&handle),
+        0,
+        "終了段の待ちが毎秒の変化通知を起こしている（kanade Tick が混ざったか、保留の消化経路が変わった）: {calls:?}"
+    );
+
+    harness.shutdown_bounded();
+}
+
+/// boot 系列に居るあいだに届いた終了指示が、起動記録トークの再生完了で**必ず**果たされる
+/// （task 5.5・R2.10・R9.1）。上の檻が高負荷で稀に踏んでいた交錯順を、眠りも壁時計も使わず
+/// **構造で**再現する決定論の檻である。
+///
+/// # 交錯順を決定論にする仕掛け
+///
+/// 台本受け口は照会・片道のどちらでも**最初に進行状態の記録へ書く**（`spine.rs:233`／`:255` が
+/// 呼ぶ `record_status`・本体は `spine_conformance_support.rs:50-59`）。ゆえにその台帳の錠を
+/// テスト側が握っていれば受け口は次の呼出の入口で止まり、**応答が kanade へ帰らない**。起動の前に
+/// 錠を握り、握ったまま終了指示を投函すれば、kanade は必ず boot 系列に居るあいだにそれを受け取る
+/// （保留記録＝`crates/areka-kanade/src/schedule/boot.rs:31`・実体は `:285-288`）。錠を放すと起動が
+/// 進み、`Steady{talk: Some}`（起動記録トーク）へ保留を抱えたまま入る——上の檻が稀に踏んでいた形と
+/// 同じ状態である。台本の応答は 1 件も差し替えていない（遅らせているのは**返る時点**だけ）。
+///
+/// **`calls` の側の錠を握ってはならない。** 死活問い合わせの記録も同じ錠を取るため
+/// （`spine.rs:281-285`）、受け口は起動系列へ入る前に止まり、起動そのものが進まなくなる（実測: 錠を
+/// 握ったまま 30 秒経っても `basewareversion` が記録されない）。
+///
+/// 檻に入れる判断分岐:
+/// - **boot 中の終了指示が失われないこと**: `OnClose` の照会がちょうど 1 件・解放がちょうど 1 度。
+/// - **消化に kanade Tick が要らないこと**: `OnSecondChange` は 0 件。台本に応答を 1 件も積んで
+///   いないため、発行されればその場で受け口が落ちる（`spine.rs:245`／`:267`）＝0 件の主張は恒真
+///   ではない。
+#[test]
+fn close_request_that_lands_during_boot_is_honored_without_any_second_change() {
+    let (backend, handle) = ScriptedShioriBackend::builder()
+        .notify("OnInitialize", Ok(()))
+        .get("OnFirstBoot", Ok(None))
+        .get("OnBoot", Ok(None))
+        .notify("basewareversion", Ok(()))
+        .get("OnClose", Ok(Some(r"\0\s[0]またね。\-".to_string())))
+        .unload(Ok(ExitKind::Clean))
+        .build();
+
+    // 起動系列の応答を凍結してから起動する。
+    let frozen = handle
+        .status_calls
+        .lock()
+        .expect("status ledger mutex poisoned");
+    let mut harness = SpineHarness::boot_with(backend, handle.clone(), LoopDriver::Inert);
+    harness
+        .inject(&Injection::CloseRequest(CloseReason::User), 11_000)
+        .expect("起動直後の kanade の受信端は開いている");
+    assert!(
+        frozen.is_empty(),
+        "凍結より先に起動系列が進んでいる（決定論の前提が崩れている）: {frozen:?}"
+    );
+    drop(frozen);
+
+    // 上の檻の (ii-a) と同じ待ち（据え置き時刻の再生側 Tick）。
+    let probe = handle.clone();
+    let began = spin_wait_until(|| {
+        let _ = harness.inject(&Injection::DispatcherTick, 11_000);
+        probe
+            .non_status_calls()
+            .iter()
+            .any(|c| matches!(c, RecordedCall::Get { id, .. } if id == "OnClose"))
+    });
+    assert!(
+        began,
+        "boot 中に届いた終了指示が握手を始めていない: {:?}",
+        handle.non_status_calls()
+    );
+
+    // 終了挨拶の再生 → 解放 → 自己終了（区間は上の檻の終了段と同じ）。
+    let mut driver = LapDriver::new();
+    let closing = stage("終了", 21_000, 71_000);
+    driver
+        .run_stage(
+            &mut harness,
+            &StagePlan {
+                stage: &closing,
+                once: vec![],
+                waiting: WaitInjection::DispatcherTickAndKanadeProbe,
+            },
+            |progress| progress.closed.kanade,
+        )
+        .expect("終了挨拶の再生 → 解放 → 自己終了が探りで観測できる");
+
+    let calls = handle.non_status_calls();
+    assert_eq!(
+        calls
+            .iter()
+            .filter(|c| matches!(c, RecordedCall::Get { id, .. } if id == "OnClose"))
+            .count(),
+        1,
+        "OnClose の照会がちょうど 1 件でない: {calls:?}"
+    );
+    assert_eq!(
+        calls
+            .iter()
+            .filter(|c| matches!(c, RecordedCall::Unload))
+            .count(),
+        1,
+        "解放がちょうど 1 度でない（R3.9）: {calls:?}"
+    );
+    assert_eq!(
+        second_change_calls(&handle),
+        0,
+        "boot 中の保留 close の消化に毎秒の変化通知が混ざっている: {calls:?}"
     );
 
     harness.shutdown_bounded();
