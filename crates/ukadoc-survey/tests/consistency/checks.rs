@@ -1,8 +1,6 @@
-//! repo の実データに対する主張（要件 6.1・6.2・6.12・設計 Testing Strategy 18・19）。
+//! repo の実データに対する主張（要件 6.3〜6.8・6.10・6.11・7.4・7.5・6.1・6.2・6.12）。
 //!
 //! 読み込みは [`RepoData`] が引き受け、ここは**読んだ値に何を求めるか**だけを書く。
-//! 対になる 2 本を置く——「食い違いが 1 件も無いこと」と「その主張が空振りでないこと」
-//! である。
 //!
 //! # 赤になったときに読むもの
 //!
@@ -12,13 +10,47 @@
 //!
 //! # 「食い違い 0 件」は、それだけでは何も言わない
 //!
-//! 初期台帳は全行が未分類なので、要件 6.6〜6.8 の判定は対象 0 件でも緑になる。
-//! 読み込みが空振りしていても同じく緑になるので、**読み込みが実データに届いている
-//! ことを別の事例で主張する**（[`the_load_reaches_the_real_repo_data`]）。件数そのものを
-//! 釘付けする一群はタスク 8.3 が `consistency/non_vacuity.rs` へ置く。
+//! 実データに対する「所見 0 件」は 10 の要件を**一括で**満たす。判定が 1 つ黙って
+//! 消えても、対象が 0 件の判定が空回りしていても、同じ緑になる。だからこのファイルは
+//! 3 段の主張を重ねる。
+//!
+//! ⑴ **一括の主張**（[`real_repo_data_produces_no_findings`]）——所見が 1 件も無い。
+//! ⑵ **対象の数え上げ**（[`the_subject_census_says_which_requirements_are_vacuous`]）
+//!    ——要件ごとに今日の対象を数え、対象 0 件（＝空振り）である要件を**名指しで**
+//!    固定する。対象が生まれたら赤になり、書き換えを促す。
+//! ⑶ **1 要件 1 摂動**（このファイルの後半）——実データの写しを 1 か所だけ壊し、
+//!    該当の判定が該当の id と場所つきで赤くなることを要件ごとに確かめる。壊すのは
+//!    メモリ上の写しだけで、repo のファイルには 1 バイトも触れない。
+//!
+//! ⑶ が要る理由は ⑵ が明かす——今日の実データでは 6.5・6.6・6.7・6.8・6.11 の対象が
+//! **0 件**である（正典 URL がまだソースのどこにも置かれておらず、台帳は全行が未分類
+//! だから）。対象 0 件の判定は緑でも「壊れていない」ことを 1 つも言わない。写しを壊す
+//! ⑶ だけが、その判定が**実データの上で**生きていることを示す。
+//!
+//! この一群は 1 度較正してある——製品側の判定を 1 か所ずつ弱める摂動 16 本を当てると、
+//! いずれも下の事例のどれかが赤になった（素通り 0 件）。台帳の実ファイルの 1 行を
+//! 壊す確認も赤になり、本文が該当 id と場所を名指した（タスク 8.2 の完了条件）。
+//!
+//! # ここに置かないもの
+//!
+//! - 件数そのものの釘付け（カタログ 1,749 件・台帳 4 本など。要件 6.13）はタスク 8.3 の
+//!   持ち物で、`consistency/non_vacuity.rs` に置く。ここで数えるのは**要件ごとの対象の
+//!   有無**だけである。
+//! - 語彙表経路の較正（設計 Testing Strategy 17a・`SHIORI_RESOURCE_IDS` の 159 要素）は
+//!   タスク 8.4 の持ち物である。ここが証拠を作るときは項目 URL を 1 行入れるだけで、
+//!   語彙表経路は通さない。
 
-use ukadoc_survey::check::{render, run};
-use ukadoc_survey::model::{Domain, EntryId, THEMES};
+use std::collections::BTreeMap;
+
+use ukadoc_survey::catalog::{Catalog, CatalogEntry};
+use ukadoc_survey::check::{CheckInput, Finding, FindingKind, render, run};
+use ukadoc_survey::evidence::EvidenceIndex;
+use ukadoc_survey::evidence::extract::extract;
+use ukadoc_survey::evidence::resolve::resolve;
+use ukadoc_survey::io::{files, paths};
+use ukadoc_survey::ledger::read::read as read_ledger;
+use ukadoc_survey::ledger::{Ledger, LedgerEntry};
+use ukadoc_survey::model::{Domain, EntryId, Link, LinkKind, Status, THEMES};
 
 use super::RepoData;
 
@@ -31,6 +63,25 @@ const ANCHOR_URL: &str = "https://ssp.shillest.net/ukadoc/manual/list_shiori_eve
 /// 走査が届いていることの錨に使うソース（既存の語彙台帳・要件 9.2）。
 const ANCHOR_SOURCE: &str = "crates/areka-sylphya/src/vocab/shiori_resource.rs";
 
+/// カタログの場所（所見の「場所」に載る綴り）。
+const CATALOG_FILE: &str = "doc/ukadoc-coverage/catalog.toml";
+
+/// shiori の台帳の場所。
+const SHIORI_LEDGER: &str = "doc/ukadoc-coverage/ledger/shiori.toml";
+
+/// assets の台帳の場所。
+const ASSETS_LEDGER: &str = "doc/ukadoc-coverage/ledger/assets.toml";
+
+/// カタログにも台帳にも無い id（摂動で持ち込む綴り）。
+const ABSENT_ID: &str = "ukadoc:list_shiori_event:OnNoSuchEventForTheTest:1";
+
+/// 割り当て表に無いページを持つ id（摂動で持ち込む綴り）。
+const UNASSIGNED_PAGE_ID: &str = "ukadoc:no_such_page_for_the_test:Whatever:1";
+
+// ---------------------------------------------------------------------------
+// ⑴ 一括の主張
+// ---------------------------------------------------------------------------
+
 /// repo の実データに食い違いが 1 件も無いこと（要件 6.1・6.12）。
 ///
 /// 失敗の本文は整形した一覧そのものである。
@@ -42,15 +93,37 @@ fn real_repo_data_produces_no_findings() {
     assert!(outcome.findings.is_empty(), "{}", render(&outcome.findings));
 }
 
+/// 15 種の食い違いが**種類ごとに** 0 件であること（要件 6.10）。
+///
+/// 上の一括の主張と重なるが、重なり方が違う——こちらは種類の一覧
+/// （[`FindingKind::ALL`]）を回すので、種類が増えたときに数え漏らさない。所見が出た
+/// ときも「どの種類が何件」の形で読める。
+#[test]
+fn every_kind_of_finding_is_absent_from_real_data() {
+    let data = RepoData::load();
+    let outcome = run(&data.input());
+
+    for kind in FindingKind::ALL {
+        let count = outcome
+            .findings
+            .iter()
+            .filter(|finding| finding.kind == kind)
+            .count();
+        assert_eq!(
+            count,
+            0,
+            "{} が {count} 件:\n{}",
+            kind.as_key(),
+            render(&outcome.findings)
+        );
+    }
+}
+
 /// 読み込みが repo の実データに届いていること。
 ///
 /// 「食い違い 0 件」を空振りで満たす道は 2 つある——読み込みが空を返す道と、判定の表を
 /// たたみ込み損ねる道である。どちらも所見を 1 件も生まないので、上の事例だけでは
 /// 見分けられない。ここで塞ぐ。
-///
-/// 証拠の索引（[`RepoData::evidence`]）は今どこも空である。ソースに正典 URL がまだ
-/// 1 行も置かれていないからで、置かれた後に有効になる非空の主張はタスク 8.4 の持ち物で
-/// ある。代わりに**走査そのものが実データへ届いたこと**を主張する。
 #[test]
 fn the_load_reaches_the_real_repo_data() {
     let data = RepoData::load();
@@ -63,7 +136,7 @@ fn the_load_reaches_the_real_repo_data() {
         "判定の表を 1 つでも通し損ねている"
     );
 
-    let anchor = EntryId::parse(ANCHOR_ID).expect("錨の id の形が違う");
+    let anchor = anchor_id();
     let entry = data
         .catalog
         .entries
@@ -111,4 +184,802 @@ fn the_load_reaches_the_real_repo_data() {
         THEMES.as_slice(),
         "検査へ渡すテーマ名が model::THEMES でない（報告を書き出した側と出どころが割れる）"
     );
+}
+
+// ---------------------------------------------------------------------------
+// ⑵ 対象の数え上げ——どの要件が今日空振りかを名指しで固定する
+// ---------------------------------------------------------------------------
+
+/// その判定に今日の実データで対象があるか。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Subjects {
+    /// 対象がある。判定は実データの上で実際に働いている。
+    NonEmpty,
+    /// 対象が 1 件も無い。**判定が壊れていても緑になる**（要件 6.13 の言う状態）。
+    Zero,
+}
+
+/// 数え上げの 1 行（要件・何を数えたか・件数・期待）。
+struct CensusRow {
+    requirement: &'static str,
+    subject: &'static str,
+    count: usize,
+    expected: Subjects,
+}
+
+/// 10 の要件それぞれについて、今日の実データにある対象を数える。
+///
+/// **ここは判定を呼ばない。** 判定が見る母数を、判定とは別の道筋で数え直す——同じ
+/// 関数を呼ぶと、判定が壊れたときに数え上げも一緒に壊れて気づけない。
+fn census(data: &RepoData) -> Vec<CensusRow> {
+    use Subjects::{NonEmpty, Zero};
+
+    let ledger_rows: usize = data.ledgers.iter().map(|led| led.entries.len()).sum();
+    let rows = || data.ledgers.iter().flat_map(|led| led.entries.values());
+
+    let url_hits: usize = data
+        .sources
+        .iter()
+        .map(|(path, text)| extract(path, text).len())
+        .sum();
+    let implemented = rows()
+        .filter(|entry| entry.status == Status::Implemented)
+        .count();
+    let endpoints: usize = rows()
+        .map(|entry| {
+            usize::from(entry.alias_of.is_some()) + entry.supersedes.len() + entry.links.len()
+        })
+        .sum();
+    let alias_rows = rows().filter(|entry| entry.status == Status::Alias).count();
+    let introduced_rows = rows().filter(|entry| !entry.introduced.is_empty()).count();
+    let theme_values: usize = rows().map(|entry| entry.values.len()).sum();
+    let reports = data.domain_reports.len();
+    let versioned = data
+        .catalog
+        .entries
+        .values()
+        .filter(|entry| !entry.versions.is_empty())
+        .count();
+
+    let row = |requirement, subject, count, expected| CensusRow {
+        requirement,
+        subject,
+        count,
+        expected,
+    };
+    vec![
+        row("6.3", "台帳に現れる id", ledger_rows, NonEmpty),
+        row("6.4", "カタログの id", data.catalog.entries.len(), NonEmpty),
+        row("6.5", "ソースの正典 URL", url_hits, Zero),
+        row("6.6", "状態が implemented の行", implemented, Zero),
+        row("6.7", "関連・別名・後継の相手", endpoints, Zero),
+        row("6.7", "状態が alias の行", alias_rows, Zero),
+        row("6.7", "登場版の記入がある行", introduced_rows, Zero),
+        row("6.7", "カタログに版番号のある項目", versioned, NonEmpty),
+        row("6.8", "台帳に書かれたテーマ名", theme_values, Zero),
+        row("6.10", "状態の語彙を通る行", ledger_rows, NonEmpty),
+        row("6.11", "証拠の付いた項目", data.evidence.by_id.len(), Zero),
+        row("7.4/7.5", "ドメイン別報告", reports, NonEmpty),
+    ]
+}
+
+/// 10 の要件のうち、今日の実データで空振りしているものを名指しで固定する（要件 6.13）。
+///
+/// **このテストは「緑だから守られている」を否定するために置く。** 6.5・6.6・6.7 の 3 面・
+/// 6.8・6.11 は対象が 0 件で、判定が丸ごと消えても実データは緑のままである。だから
+/// 0 件であること自体を主張に変え、対象が 1 件でも生まれたら赤にする——そのときは
+/// 「空振り」の但し書きを外し、非空の主張へ書き換えること。
+///
+/// 対象があると分かっている側（6.3・6.4・6.10・7.4/7.5）は 0 件になったら赤にする。
+/// 読み込みが空を返した場合をここでも捕まえる。
+///
+/// 件数そのもの（1,749 など）はここでは固定しない。それはタスク 8.3 の持ち物で、
+/// ここが言うのは**有無**だけである。
+#[test]
+fn the_subject_census_says_which_requirements_are_vacuous() {
+    let data = RepoData::load();
+
+    for row in census(&data) {
+        match row.expected {
+            Subjects::NonEmpty => assert!(
+                row.count > 0,
+                "要件 {} の対象「{}」が 0 件になった。読み込みが空振りしていないか確かめること",
+                row.requirement,
+                row.subject
+            ),
+            Subjects::Zero => assert_eq!(
+                row.count, 0,
+                "要件 {} の対象「{}」が {} 件生まれた。\
+                 この行を Subjects::NonEmpty へ移し、実データで空振りしない主張に書き換えること",
+                row.requirement, row.subject, row.count
+            ),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ⑶ 1 要件 1 摂動——実データの写しを 1 か所だけ壊す
+// ---------------------------------------------------------------------------
+
+/// 実データの写し。**repo のファイルには 1 バイトも触れない**。
+///
+/// 手を入れるのはこの写しの上だけで、テストが終われば消える。台帳のファイルそのものを
+/// 書き換える確認は人手で 1 度だけ行った——常時テストがファイルを書き換えると、並行に
+/// 走る他のテストがその途中の状態を読む。
+struct Perturbed<'a> {
+    data: &'a RepoData,
+    catalog: Catalog,
+    ledgers: Vec<Ledger>,
+    evidence: EvidenceIndex,
+    domain_reports: BTreeMap<Domain, String>,
+}
+
+impl<'a> Perturbed<'a> {
+    /// 手を入れていない写しを作る。
+    fn of(data: &'a RepoData) -> Self {
+        Self {
+            data,
+            catalog: data.catalog.clone(),
+            ledgers: data.ledgers.clone(),
+            evidence: data.evidence.clone(),
+            domain_reports: data.domain_reports.clone(),
+        }
+    }
+
+    /// 写しから検査の入力を組む。割り当て表とテーマ名は本物をそのまま借りる。
+    fn input(&self) -> CheckInput<'_> {
+        CheckInput {
+            catalog: &self.catalog,
+            ledgers: &self.ledgers,
+            assignment: &self.data.assignment,
+            themes: &THEMES,
+            evidence: &self.evidence,
+            domain_reports: &self.domain_reports,
+        }
+    }
+
+    /// 検査を走らせて所見を取る。
+    fn findings(&self) -> Vec<Finding> {
+        run(&self.input()).findings
+    }
+
+    /// そのドメインの台帳（写し）。
+    fn ledger_mut(&mut self, domain: Domain) -> &mut Ledger {
+        self.ledgers
+            .iter_mut()
+            .find(|ledger| ledger.domain == domain)
+            .unwrap_or_else(|| panic!("{} の台帳が写しに無い", domain.as_key()))
+    }
+
+    /// その台帳の項目 1 つ（写し）。
+    fn entry_mut(&mut self, domain: Domain, id: &EntryId) -> &mut LedgerEntry {
+        let key = id.clone();
+        self.ledger_mut(domain)
+            .entries
+            .get_mut(&key)
+            .unwrap_or_else(|| panic!("{} の台帳に {} が無い", domain.as_key(), key.as_str()))
+    }
+}
+
+/// 錨の id。
+fn anchor_id() -> EntryId {
+    EntryId::parse(ANCHOR_ID).expect("錨の id の形が違う")
+}
+
+/// 綴りから id を作る。
+fn id_of(raw: &str) -> EntryId {
+    EntryId::parse(raw).unwrap_or_else(|err| panic!("{raw} の形が違う: {err}"))
+}
+
+/// カタログに足す作り物の項目。
+///
+/// 版番号は空にする——空なら登場版の判定が見ないので（要件 6.7 の番人）、摂動の
+/// 巻き添えが 1 つ減る。
+fn fabricated_entry(id: &EntryId) -> CatalogEntry {
+    CatalogEntry {
+        id: id.clone(),
+        page: id.page(),
+        title: "テストのために作った見出し".to_owned(),
+        category: "shiori_event".to_owned(),
+        versions: Vec::new(),
+        hash: "0000000000000000".to_owned(),
+        url: format!("https://example.invalid/{}", id.as_str()),
+    }
+}
+
+/// 所見を (種類, id, 場所) の並べ替え済みの一覧にする。
+fn seen(findings: &[Finding]) -> Vec<(String, String, String)> {
+    let mut rows: Vec<(String, String, String)> = findings
+        .iter()
+        .map(|finding| {
+            (
+                finding.kind.as_key().to_owned(),
+                finding
+                    .id
+                    .as_ref()
+                    .map(|id| id.as_str().to_owned())
+                    .unwrap_or_default(),
+                finding.place.clone(),
+            )
+        })
+        .collect();
+    rows.sort();
+    rows
+}
+
+/// 所見の顔ぶれが**ちょうど**これであることと、本文が id と場所を名指すこと
+/// （要件 6.10・6.12）。
+///
+/// 「含む」ではなく「ちょうど」で見る——巻き添えの所見が増えたことに気づけないと、
+/// 摂動が何を起こしたのかを読み違える。id を持たない所見は空文字で書く。
+fn expect_exactly(findings: &[Finding], expected: &[(FindingKind, Option<&str>, &str)]) {
+    let mut want: Vec<(String, String, String)> = expected
+        .iter()
+        .map(|(kind, id, place)| {
+            (
+                kind.as_key().to_owned(),
+                id.unwrap_or_default().to_owned(),
+                (*place).to_owned(),
+            )
+        })
+        .collect();
+    want.sort();
+
+    let body = render(findings);
+    assert_eq!(seen(findings), want, "所見の顔ぶれが違う:\n{body}");
+
+    for (kind, id, place) in &want {
+        if !id.is_empty() {
+            assert!(
+                body.contains(id),
+                "本文が id {id} を名指していない:\n{body}"
+            );
+        }
+        assert!(
+            body.contains(place),
+            "本文が場所 {place} を名指していない:\n{body}"
+        );
+        assert!(
+            body.contains(kind),
+            "本文が種類 {kind} を名指していない:\n{body}"
+        );
+    }
+}
+
+/// ソースの写しに 1 行だけ入れて、証拠の索引を作り直す。
+///
+/// `at` は入れる位置（行番号）で、[`the_check_survives_lines_moving`] がここを動かして
+/// 要件 6.11 を確かめる。repo のファイルには触れない。
+fn evidence_with_source_line(data: &RepoData, path: &str, line: &str, at: usize) -> EvidenceIndex {
+    let mut sources: Vec<(String, String)> = data.sources.clone();
+    let target = sources
+        .iter_mut()
+        .find(|(each, _)| each == path)
+        .unwrap_or_else(|| panic!("走査に {path} が無い"));
+    let mut body: Vec<String> = target.1.lines().map(str::to_owned).collect();
+    let at = at.min(body.len());
+    body.insert(at, line.to_owned());
+    target.1 = body.join("\n");
+
+    let hits: Vec<_> = sources
+        .iter()
+        .flat_map(|(each, text)| extract(each, text))
+        .collect();
+    resolve(&hits, &sources, &data.catalog)
+}
+
+/// 手を入れていない写しが実データと同じく緑であること。
+///
+/// **摂動の較正である。** 写しの作り方が壊れていれば（台帳を 1 本落とす・報告を
+/// 取り違えるなど）、以下の摂動が何を証明しているのか分からなくなる。ここで先に
+/// 「壊す前は緑」を示してから壊す。
+#[test]
+fn the_untouched_copy_of_real_data_is_still_green() {
+    let data = RepoData::load();
+    let copy = Perturbed::of(&data);
+
+    expect_exactly(&copy.findings(), &[]);
+}
+
+/// 要件 6.3——台帳の id がカタログから消えると、その id と台帳の場所つきで赤くなる。
+///
+/// 壊すのはカタログの側である（台帳の側の綴りを変えると、同じ摂動が 6.4 の側にも
+/// 火を点けて何が起きたのか読みにくくなる）。台帳に残った id の相手がカタログから
+/// 消えた状態は、要件 6.3 が禁じている形そのものである。
+#[test]
+fn a_ledger_id_that_left_the_catalog_turns_red() {
+    let data = RepoData::load();
+    let anchor = anchor_id();
+    let mut copy = Perturbed::of(&data);
+
+    let removed = copy.catalog.entries.remove(&anchor);
+    assert!(removed.is_some(), "カタログに {ANCHOR_ID} が無い");
+
+    expect_exactly(
+        &copy.findings(),
+        &[(
+            FindingKind::LedgerIdNotInCatalog,
+            Some(ANCHOR_ID),
+            SHIORI_LEDGER,
+        )],
+    );
+}
+
+/// 要件 6.4——カタログの id がどの台帳にも無いと赤くなる。
+#[test]
+fn a_catalog_id_in_no_ledger_turns_red() {
+    let data = RepoData::load();
+    let absent = id_of(ABSENT_ID);
+    let mut copy = Perturbed::of(&data);
+
+    copy.catalog
+        .entries
+        .insert(absent.clone(), fabricated_entry(&absent));
+
+    expect_exactly(
+        &copy.findings(),
+        &[(
+            FindingKind::CatalogIdMissingFromLedgers,
+            Some(ABSENT_ID),
+            CATALOG_FILE,
+        )],
+    );
+}
+
+/// 要件 6.4・3.2——同じ id が 2 本の台帳に現れると赤くなる。
+///
+/// 巻き添えが 2 つ出るが、それは正しい——shiori のページの id を assets の台帳へ
+/// 移した状態は、担当の食い違い（要件 3.1）でもあり、assets の報告が台帳と食い違う
+/// 状態（要件 7.4）でもある。3 つとも本文に出ることをここで固定する。
+#[test]
+fn an_id_in_two_ledgers_turns_red() {
+    let data = RepoData::load();
+    let anchor = anchor_id();
+    let mut copy = Perturbed::of(&data);
+
+    let borrowed = copy.entry_mut(Domain::Shiori, &anchor).clone();
+    copy.ledger_mut(Domain::Assets)
+        .entries
+        .insert(anchor.clone(), borrowed);
+
+    expect_exactly(
+        &copy.findings(),
+        &[
+            (
+                FindingKind::CatalogIdInMultipleLedgers,
+                Some(ANCHOR_ID),
+                CATALOG_FILE,
+            ),
+            (
+                FindingKind::LedgerIdPageMismatch,
+                Some(ANCHOR_ID),
+                ASSETS_LEDGER,
+            ),
+            (
+                FindingKind::DomainReportStale,
+                None,
+                "doc/ukadoc-coverage/report/assets.md",
+            ),
+        ],
+    );
+}
+
+/// 要件 3.3a・付録 A——台帳の並びが崩れると、後ろに来た id つきで赤くなる。
+///
+/// 見るのは本文の順（`file_order`）で、`entries` は表なので作りからして昇順である。
+/// 報告は `entries` から作るので、並びだけを崩しても報告は古くならない。
+#[test]
+fn a_ledger_out_of_order_turns_red() {
+    let data = RepoData::load();
+    let mut copy = Perturbed::of(&data);
+
+    let order = &mut copy.ledger_mut(Domain::Shiori).file_order;
+    assert!(order.len() >= 2, "並びを崩せるだけの項目が無い");
+    order.swap(0, 1);
+    let demoted = order[1].as_str().to_owned();
+
+    expect_exactly(
+        &copy.findings(),
+        &[(
+            FindingKind::LedgerOutOfOrder,
+            Some(demoted.as_str()),
+            SHIORI_LEDGER,
+        )],
+    );
+}
+
+/// 要件 3.5——カタログに割り当ての無いページが現れると赤くなる。
+#[test]
+fn a_page_without_an_assignment_turns_red() {
+    let data = RepoData::load();
+    let stray = id_of(UNASSIGNED_PAGE_ID);
+    let mut copy = Perturbed::of(&data);
+
+    copy.catalog
+        .entries
+        .insert(stray.clone(), fabricated_entry(&stray));
+
+    expect_exactly(
+        &copy.findings(),
+        &[
+            (
+                FindingKind::CatalogIdMissingFromLedgers,
+                Some(UNASSIGNED_PAGE_ID),
+                CATALOG_FILE,
+            ),
+            (FindingKind::PageNotAssigned, None, CATALOG_FILE),
+        ],
+    );
+}
+
+/// 要件 6.5・6.10——ソースの正典 URL がカタログに無いと、そのファイルつきで赤くなる。
+///
+/// **今日の実データにこの判定の対象は 1 件も無い**（[`census`] の 6.5 の行）。だから
+/// ソースの写しに 1 行だけ書き足して対象を作る。取り出し（`extract`）と解決
+/// （`resolve`）を実データのソース全域に対して回すので、走査と突き合わせの経路が
+/// 丸ごと通る。
+#[test]
+fn an_unknown_canon_url_in_a_source_turns_red() {
+    let data = RepoData::load();
+    assert!(
+        data.evidence.unresolved.is_empty(),
+        "実データに解決できない URL が既にある。この摂動の前提が崩れている"
+    );
+
+    let bogus = "https://ssp.shillest.net/ukadoc/manual/list_shiori_event.html#OnNoSuchThing:1";
+    let mut copy = Perturbed::of(&data);
+    copy.evidence =
+        evidence_with_source_line(&data, ANCHOR_SOURCE, &format!("// ukadoc: {bogus}"), 0);
+
+    assert_eq!(
+        copy.evidence.unresolved.len(),
+        1,
+        "書き足した 1 行が取り出せていない"
+    );
+    expect_exactly(
+        &copy.findings(),
+        &[(FindingKind::SourceUrlNotInCatalog, None, ANCHOR_SOURCE)],
+    );
+    assert!(
+        render(&copy.findings()).contains(bogus),
+        "本文が綴りの違う URL そのものを載せていない"
+    );
+}
+
+/// 要件 6.6——`implemented` の行に証拠が無いと赤くなり、証拠が付くと消える。
+///
+/// **今日の実データにこの判定の対象は 1 件も無い**（台帳は全行が未分類）。写しの
+/// 1 行を `implemented` にして対象を作り、次にソースへ正典 URL を 1 行置いて所見が
+/// 消えることまで見る。片方だけだと「常に赤い判定」と見分けが付かない。
+#[test]
+fn implemented_without_evidence_turns_red_and_evidence_clears_it() {
+    let data = RepoData::load();
+    let anchor = anchor_id();
+    let report = "doc/ukadoc-coverage/report/shiori.md";
+
+    let mut copy = Perturbed::of(&data);
+    copy.entry_mut(Domain::Shiori, &anchor).status = Status::Implemented;
+
+    // 証拠が無い側。状態が変われば報告も古くなる（状態の分布が動くため）。
+    expect_exactly(
+        &copy.findings(),
+        &[
+            (
+                FindingKind::ImplementedWithoutEvidence,
+                Some(ANCHOR_ID),
+                SHIORI_LEDGER,
+            ),
+            (FindingKind::DomainReportStale, None, report),
+        ],
+    );
+
+    // 証拠が付いた側。`ImplementedWithoutEvidence` だけが消える。
+    copy.evidence =
+        evidence_with_source_line(&data, ANCHOR_SOURCE, &format!("// ukadoc: {ANCHOR_URL}"), 0);
+    assert_eq!(
+        copy.evidence.by_id.get(&anchor).map(Vec::as_slice),
+        Some([ANCHOR_SOURCE.to_owned()].as_slice()),
+        "書き足した正典 URL が錨の項目の証拠になっていない"
+    );
+    expect_exactly(
+        &copy.findings(),
+        &[(FindingKind::DomainReportStale, None, report)],
+    );
+}
+
+/// 要件 6.7——関連の相手がカタログに無いと、書いた側の id つきで赤くなる。
+///
+/// **報告は古くならない。** ドメイン別報告に載る束は「構成 id が全部この台帳にある」
+/// ものだけで（`report::domain` の `closed_bundles`）、相手が台帳に無い辺の束は丸ごと
+/// 落ちるからである。つまり宙に浮いた関連は報告の側からは見えない——この判定だけが
+/// それを見つける。
+#[test]
+fn a_link_to_a_missing_id_turns_red() {
+    let data = RepoData::load();
+    let anchor = anchor_id();
+    let mut copy = Perturbed::of(&data);
+
+    copy.entry_mut(Domain::Shiori, &anchor).links = vec![Link {
+        kind: LinkKind::SameFeature,
+        to: id_of(ABSENT_ID),
+    }];
+
+    let findings = copy.findings();
+    expect_exactly(
+        &findings,
+        &[(
+            FindingKind::LinkEndpointMissing,
+            Some(ANCHOR_ID),
+            SHIORI_LEDGER,
+        )],
+    );
+    assert!(
+        render(&findings).contains(ABSENT_ID),
+        "本文が相手の id を載せていない"
+    );
+}
+
+/// 要件 6.7・2.4——`alias_of` の指す先も別名だと赤くなる（別名の連鎖の禁止）。
+///
+/// 指す先は `alias_of` を持たない別名の行になるが、その形を拒むのは読み取りの段
+/// （`ledger::read` の付録 A.2 の突き合わせ）であって検査の段ではない。ここは読み取りを
+/// 通さずに写しを組むので、その拒みには掛からない。
+#[test]
+fn an_alias_chain_turns_red() {
+    let data = RepoData::load();
+    let mut copy = Perturbed::of(&data);
+
+    // shiori の台帳から実在する 2 つを取る（並びは id の byte 昇順で決まる）。
+    let shiori = data
+        .ledgers
+        .iter()
+        .find(|ledger| ledger.domain == Domain::Shiori)
+        .expect("shiori の台帳が無い");
+    let mut keys = shiori.entries.keys();
+    let first = keys.next().expect("台帳が空").clone();
+    let second = keys.next().expect("台帳の項目が 1 つしかない").clone();
+
+    copy.entry_mut(Domain::Shiori, &first).status = Status::Alias;
+    copy.entry_mut(Domain::Shiori, &first).alias_of = Some(second.clone());
+    copy.entry_mut(Domain::Shiori, &second).status = Status::Alias;
+
+    let findings = copy.findings();
+    expect_exactly(
+        &findings,
+        &[
+            (FindingKind::AliasChain, Some(first.as_str()), SHIORI_LEDGER),
+            (
+                FindingKind::DomainReportStale,
+                None,
+                "doc/ukadoc-coverage/report/shiori.md",
+            ),
+        ],
+    );
+    assert!(
+        render(&findings).contains(second.as_str()),
+        "本文が指す先の id を載せていない"
+    );
+}
+
+/// 要件 6.7——登場版がカタログの版番号の外にあると赤くなり、中にあれば赤くならない。
+///
+/// カタログ側に版番号のある項目を実データから 1 つ選ぶ（[`census`] がその母数が
+/// 0 件でないことを守っている）。**両方向を見る**——外へ動かすと赤、中へ戻すと緑。
+/// 片方だけだと「常に赤い判定」「常に緑の判定」と見分けが付かない。
+#[test]
+fn an_introduced_version_outside_the_catalog_turns_red() {
+    let data = RepoData::load();
+    let report = "doc/ukadoc-coverage/report/shiori.md";
+
+    // 版番号のある項目のうち shiori の台帳にあるものを 1 つ（並びは id の byte 昇順）。
+    let shiori = data
+        .ledgers
+        .iter()
+        .find(|ledger| ledger.domain == Domain::Shiori)
+        .expect("shiori の台帳が無い");
+    let (id, known) = shiori
+        .entries
+        .keys()
+        .find_map(|id| {
+            let entry = data.catalog.entries.get(id)?;
+            let version = entry.versions.first()?;
+            Some((id.clone(), version.clone()))
+        })
+        .expect("版番号のある項目が shiori の台帳に 1 つも無い");
+
+    let mut copy = Perturbed::of(&data);
+    copy.entry_mut(Domain::Shiori, &id).introduced = "0.0.0-none".to_owned();
+
+    let findings = copy.findings();
+    expect_exactly(
+        &findings,
+        &[
+            (
+                FindingKind::IntroducedNotInCatalogVersions,
+                Some(id.as_str()),
+                SHIORI_LEDGER,
+            ),
+            (FindingKind::DomainReportStale, None, report),
+        ],
+    );
+    assert!(
+        render(&findings).contains(&known),
+        "本文がカタログの版番号を載せていない"
+    );
+
+    // カタログにある版番号へ戻せば、登場版の所見だけが消える。
+    copy.entry_mut(Domain::Shiori, &id).introduced = known;
+    expect_exactly(
+        &copy.findings(),
+        &[(FindingKind::DomainReportStale, None, report)],
+    );
+}
+
+/// 要件 6.8——テーマ名の綴りが違うと赤くなり、定義にある綴りなら赤くならない。
+///
+/// 摂動は「気配り」の末尾に空白 1 つを足したものである。テーマ定義には「気配」と
+/// 「気配り」の 2 つがあり、片方が他方の接頭辞なので、部分一致で拾う実装はこの
+/// 摂動を素通りさせる。
+#[test]
+fn a_misspelled_theme_turns_red() {
+    let data = RepoData::load();
+    let anchor = anchor_id();
+    let report = "doc/ukadoc-coverage/report/shiori.md";
+
+    let mut copy = Perturbed::of(&data);
+    copy.entry_mut(Domain::Shiori, &anchor).values = vec!["気配り ".to_owned()];
+
+    let findings = copy.findings();
+    expect_exactly(
+        &findings,
+        &[
+            (FindingKind::UnknownTheme, Some(ANCHOR_ID), SHIORI_LEDGER),
+            (FindingKind::DomainReportStale, None, report),
+        ],
+    );
+    assert!(
+        render(&findings).contains("気配り "),
+        "本文が綴りの違うテーマ名そのものを載せていない"
+    );
+
+    // 定義にある綴りなら、テーマの所見は出ない。
+    copy.entry_mut(Domain::Shiori, &anchor).values = vec!["気配り".to_owned()];
+    expect_exactly(
+        &copy.findings(),
+        &[(FindingKind::DomainReportStale, None, report)],
+    );
+}
+
+/// 要件 6.10——状態の綴りが 7 つのいずれでもないと、id と場所つきで読み取りが止まる。
+///
+/// 状態の語彙は検査の段には届かない（[`Ledger`] は語彙を通った値しか持てない）。
+/// だから読み取りの段で確かめる。壊すのは**読み込んだ本文の写し**で、repo の
+/// ファイルには触れない。
+#[test]
+fn a_status_word_outside_the_seven_stops_the_ledger_read() {
+    let path = paths::ledger_path(Domain::Shiori);
+    let text = files::read_normalized(&path).unwrap_or_else(|err| panic!("{err}"));
+
+    // 壊す前は読める。
+    read_ledger(&text, Domain::Shiori).expect("実データの台帳が読めない");
+
+    let (id, broken) = break_first_status(&text, "jissou");
+    let err = read_ledger(&broken, Domain::Shiori)
+        .expect_err("語彙に無い状態の綴りが読み取りを素通りした");
+    let body = err.to_string();
+
+    assert!(
+        body.contains(&id),
+        "失敗の本文が id を名指していない: {body}"
+    );
+    assert!(
+        body.contains(SHIORI_LEDGER),
+        "失敗の本文が場所を名指していない: {body}"
+    );
+    assert!(
+        body.contains("jissou"),
+        "失敗の本文が綴りそのものを載せていない: {body}"
+    );
+}
+
+/// 本文の最初の `status = ...` を語彙に無い綴りへ替え、その項目の id と替えた本文を返す。
+fn break_first_status(text: &str, bad: &str) -> (String, String) {
+    let mut id: Option<String> = None;
+    let mut broken = false;
+    let mut out: Vec<String> = Vec::new();
+
+    for line in text.lines() {
+        if !broken {
+            if let Some(rest) = line.strip_prefix("[entry.\"") {
+                id = rest.strip_suffix("\"]").map(str::to_owned);
+            }
+            if line.starts_with("status = ") {
+                out.push(format!("status = \"{bad}\""));
+                broken = true;
+                continue;
+            }
+        }
+        out.push(line.to_owned());
+    }
+
+    assert!(broken, "台帳の本文に status の行が無い");
+    (
+        id.expect("status の行の前に項目の見出しが無い"),
+        out.join("\n"),
+    )
+}
+
+/// 要件 7.4・7.5——ドメイン別報告が台帳と食い違うと、そのドメインを名指して赤くなる。
+///
+/// 壊すのは 1 本だけである。残りの 3 本が巻き添えで赤くならないこと（＝どのドメインの
+/// 再生成が要るかが読めること）まで [`expect_exactly`] が固定する。
+#[test]
+fn a_stale_domain_report_turns_red_and_names_its_domain() {
+    let data = RepoData::load();
+    let mut copy = Perturbed::of(&data);
+
+    let body = copy
+        .domain_reports
+        .get_mut(&Domain::Property)
+        .expect("property の報告を読んでいない");
+    let mut lines: Vec<&str> = body.lines().collect();
+    assert!(!lines.is_empty(), "property の報告が空");
+    let rewritten = format!("{}（手で書き換えた）", lines[0]);
+    lines[0] = rewritten.as_str();
+    let edited = lines.join("\n");
+    *body = edited;
+
+    let findings = copy.findings();
+    expect_exactly(
+        &findings,
+        &[(
+            FindingKind::DomainReportStale,
+            None,
+            "doc/ukadoc-coverage/report/property.md",
+        )],
+    );
+    assert!(
+        findings[0].detail.contains("property"),
+        "所見がどのドメインの報告かを言っていない: {}",
+        findings[0].detail
+    );
+}
+
+/// 要件 6.11——証拠の行が動いても検査は壊れない。
+///
+/// 同じ 1 行を先頭に置いた場合と、ずっと後ろに置いた場合とで、証拠の索引が**値として
+/// 同じ**になることを見る。証拠は行番号を持たない（要件 5.1）ので、実装が入れ替わって
+/// 正典 URL の行が上下しても同じ値になる。あわせて所見の「場所」がファイルパス
+/// そのもの（行番号の付かない綴り）であることも確かめる。
+#[test]
+fn the_check_survives_lines_moving() {
+    let data = RepoData::load();
+    let line = format!("// ukadoc: {ANCHOR_URL}");
+
+    let at_top = evidence_with_source_line(&data, ANCHOR_SOURCE, &line, 0);
+    let far_down = evidence_with_source_line(&data, ANCHOR_SOURCE, &line, 40);
+    assert_eq!(
+        at_top, far_down,
+        "証拠の索引が行の位置で変わった（要件 6.11・5.1）"
+    );
+
+    let anchor = anchor_id();
+    assert_eq!(
+        at_top.by_id.get(&anchor).map(Vec::as_slice),
+        Some([ANCHOR_SOURCE.to_owned()].as_slice()),
+        "書き足した正典 URL が錨の項目の証拠になっていない"
+    );
+
+    // 証拠が付いた状態でも、実データに食い違いは 1 件も生まれない（行が増えただけで
+    // 赤にならないこと）。
+    let mut copy = Perturbed::of(&data);
+    copy.evidence = at_top;
+    expect_exactly(&copy.findings(), &[]);
+
+    // 所見の場所は行番号を持たない。1 件出る摂動で綴りを逐語に見る。
+    let mut broken = Perturbed::of(&data);
+    broken.catalog.entries.remove(&anchor);
+    let findings = broken.findings();
+    assert_eq!(findings.len(), 1);
+    assert_eq!(findings[0].place, SHIORI_LEDGER);
 }
