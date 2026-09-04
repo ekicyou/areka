@@ -278,21 +278,147 @@
 | 既存の兄弟テストの本数と結果（追補の前後で不変であること） | （未記入） |
 | 走行時間（基準値と増分） | （未記入） |
 
-**判定が生きていることの対照**（段の上限を 1 段ずらす変異・戻して緑に復すこと）:
+### 11.1 判定が生きていることの対照（タスク 3.3）
 
-- 変異で赤になった出力:
+**これは合否ではない。**〈段名・表示指令〉の照合（R2.4・R2.5）が空振りでないことの証拠であり、§11 の合否欄はタスク 3.4 が書く。ここには 2 つの走行の出力（変異で赤・復帰で緑）と、変異が跡形なく戻っていることの証跡だけを置く。
+
+| 欄 | 値 |
+|---|---|
+| 実施日 | 2026-09-04 |
+| ブランチ | `claude/areka-p0-emo2-conformance-7b2e56`（走行の前後とも製品コードに差分なし） |
+| 対象の判定 | `crates/areka/src/emo2_boot/spine_conformance_judge.rs:102` の `assert_sequence_eq("〈段名・表示指令〉の列", …)` |
+| 走行のコマンド | `cargo test -p areka --bin areka emo2_boot::spine::conformance_lap_tests::conformance_lap_walks_every_stage_to_its_completion` |
+
+#### 変異 ①: 段の上限を 1 段ずらす（tasks.md 3.3 の字面どおり）——**空振りだった**
+
+`crates/areka/src/emo2_boot/spine_conformance_script.rs:102-158`（`LAP_STAGES`）の `limit_ms` を、各段が**次の段の上限**を持つように 1 段ぶんずらした（最終段は外挿）。`begin_ms` は 1 つも触っていない。
+
+| 段 | 変異前の `limit_ms` | 変異後の `limit_ms` | 行 |
+|---|---|---|---|
+| 起動 | `0` | `20_000` | `:106` |
+| 装着 | `20_000` | `23_000` | `:111` |
+| 自発会話 | `23_000` | `26_000` | `:116` |
+| 会話中の抑止 | `26_000` | `48_000` | `:121` |
+| 撫で | `48_000` | `70_000` | `:126` |
+| メニュー | `70_000` | `92_000` | `:131` |
+| 選択確定 | `92_000` | `114_000` | `:136` |
+| サブメニューと戻り（前半） | `114_000` | `136_000` | `:141` |
+| サブメニューと戻り（後半） | `136_000` | `158_000` | `:146` |
+| 位置調整 | `158_000` | `180_000` | `:151` |
+| 終了 | `180_000` | `200_000` | `:156` |
+
+走行結果（終了コード 0・**緑のまま**）:
 
 ```
-（未記入）
+   Compiling areka v0.0.1 (C:\home\maz\git\areka\.claude\worktrees\areka-p0-emo2-conformance-7b2e56\crates\areka)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.47s
+     Running unittests src\main.rs (target\debug\deps\areka-6913f2adddc1d0a2.exe)
+
+running 1 test
+test emo2_boot::spine::conformance_lap_tests::conformance_lap_walks_every_stage_to_its_completion ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1564 filtered out; finished in 1.39s
 ```
 
-- 変異を戻して緑に復した出力:
+**なぜ空振りなのか（設計の想定が実装と食い違っている）。** 〈段名・表示指令〉の列は一周で **2 行**しかなく（装着＝本体の面 0・撫で＝相方の面 10）、その 2 行がどの段名に付くかは**段の完了条件が決めており、段の上限は 1 ミリ秒も関与しない**。
+
+- 装着段の完了条件は `!progress.collected.is_empty()` を含む（`crates/areka/src/emo2_boot/spine_conformance_lap_tests.rs:697-702`）——起動挨拶の表示指令を**採るまで段が終わらない**ので、この行の段名は構造的に「装着」に固定される。前段（起動）は注入を 1 件も行わず呼出 5 件で完了し、表示指令が出るのはその後の `run_attach_phase` 以降なので、前の段へ漏れることもない。
+- 撫で段の完了条件も同じく `!progress.collected.is_empty()` を含む（同 `:782-786`）——相方の面切替を採るまで終わらない。
+
+上限を動かして変わるのは**注入の予算**だけである。予算を削れば「段名を名指しした待ち切れ」（`StageFailure::Timeout`）に、増やせば何も変わらない。どちらも〈段名・表示指令〉の**照合**が赤になる形ではない。ゆえに設計 D3 の「段の上限を意図的に 1 段ずらすと段名の照合が赤になる」という想定は、**この実装では成立しない**。上へずらせば緑のまま（本節の実測）、下へずらせば別の失敗の形（待ち切れ）になる。
+
+#### 変異 ②: 表示指令の宛先を 1 つずらす——**照合が赤になった**
+
+変異 ① が判定に届かないため、**同じ列を狙う別の変異**を設計した。段の上限ではなく、**段が実際に出す表示指令の宛先**を 1 つずらす——撫での相方側の応答が指す話者を、相方（`\1`）から本体（`\0`）へ移す。
+
+`crates/areka/src/emo2_boot/spine_conformance_script.rs:393`
+
+```diff
+-pub(super) const STROKE_KERO_TALK: &str = r"\1\s[10]……なに。\e";
++pub(super) const STROKE_KERO_TALK: &str = r"\0\s[10]……なに。\e";
+```
+
+**値をずらすのではなく regime を越える変異である。** 面番号を 1 つ足すような平行移動は下流の解決や飽和が吸収しうるが、この変異は表示指令の**届く窓そのもの**を相方のキャラ窓（`TargetId(2)`）から本体のキャラ窓（`TargetId(0)`）へ移す。副次的に、以後の `\0\s[0]` の応答が本体の面を戻す**新しい表示指令を 1 件生む**ため、列は長さも内容も変わる。期待列（`expected_display()`）は 1 文字も触っていない。
+
+走行結果（終了コード 101・**赤**）:
 
 ```
-（未記入）
+   Compiling areka v0.0.1 (C:\home\maz\git\areka\.claude\worktrees\areka-p0-emo2-conformance-7b2e56\crates\areka)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.46s
+     Running unittests src\main.rs (target\debug\deps\areka-6913f2adddc1d0a2.exe)
+
+running 1 test
+test emo2_boot::spine::conformance_lap_tests::conformance_lap_walks_every_stage_to_its_completion ... FAILED
+
+failures:
+
+---- emo2_boot::spine::conformance_lap_tests::conformance_lap_walks_every_stage_to_its_completion stdout ----
+
+thread 'emo2_boot::spine::conformance_lap_tests::conformance_lap_walks_every_stage_to_its_completion' (5476) panicked at crates\areka\src\emo2_boot\spine_conformance_judge.rs:150:5:
+〈段名・表示指令〉の列が期待と一致しない（等値照合・部分一致は用いない＝R2.5）
+  件数: 期待 2 件・実測 3 件
+  最初に食い違う位置: [1]
+  [1] 期待: Some(("撫で", Show { target: 2, surface: 10 }))
+       実測: Some(("撫で", Show { target: 0, surface: 10 }))
+  [2] 期待: None
+       実測: Some(("メニュー", Show { target: 0, surface: 0 }))
+
+failures:
+    emo2_boot::spine::conformance_lap_tests::conformance_lap_walks_every_stage_to_its_completion
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1564 filtered out; finished in 2.04s
+
+error: test failed, to rerun pass `-p areka --bin areka`
 ```
 
-縮退: （未記入）
+（上の引用はスタックトレースの行だけを省いた。省いた行は判定の呼出経路——`assert_sequence_eq` ← `judge_lap` ← 一周テスト本体——を示すもので、判定の内容を 1 文字も含まない。）
+
+この赤が示すもの:
+
+1. 落ちたのは**〈段名・表示指令〉の照合**そのものである（`spine_conformance_judge.rs:150` の `assert_sequence_eq`・ラベルが列名を名乗っている）。
+2. **交信の列の照合はこの直前に通っている**。`judge_lap` は交信の列 → 表示指令の列 → 進行状態の列の順に照合するので、表示指令の列で落ちたことは交信の列が緑だったことを意味する——この変異を捕まえたのは表示指令の列**だけ**であり、他の列の巻き添えではない。
+3. 差分は列名・両方の件数・最初に食い違う位置・食い違う各行の期待と実測を出しており、退行の形が読める。
+
+#### 復帰（緑）
+
+変異 ② を戻し、既存の spine 兄弟テスト全数で緑に復した（終了コード 0）。**`Compiling areka` が実際に走っていることを出力で確かめてある**——復元でファイルの更新時刻が巻き戻ると cargo が変異版の実行体を配り続けるため（tasks.md「Implementation Notes」の道具の罠）、再ビルドの実在は緑の前提である。
+
+```
+   Compiling areka v0.0.1 (C:\home\maz\git\areka\.claude\worktrees\areka-p0-emo2-conformance-7b2e56\crates\areka)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.77s
+     Running unittests src\main.rs (target\debug\deps\areka-6913f2adddc1d0a2.exe)
+
+running 31 tests
+（31 本の個別の ok 行は省略・全数 ok）
+test emo2_boot::spine::conformance_lap_tests::conformance_lap_walks_every_stage_to_its_completion ... ok
+
+test result: ok. 31 passed; 0 failed; 0 ignored; 0 measured; 1534 filtered out; finished in 2.13s
+```
+
+| 走行 | コマンド | 終了コード | 結果 |
+|---|---|---|---|
+| 復帰後（spine 兄弟テスト全数） | `cargo test -p areka --bin areka emo2_boot::spine::` | 0 | `31 passed; 0 failed` |
+| 復帰後（クレート全数） | `cargo test -p areka` | 0 | `1563 passed; 0 failed; 2 ignored` ほか 2 本・1 本の走行も全数 ok |
+| 書式 | `cargo fmt -p areka -- --check` | 0 | 出力なし |
+
+#### 変異が 1 バイトも残っていないことの証跡
+
+変異の前後で SHA-256 が全ファイル一致する。`git diff --numstat -- crates/` は空、`git status --porcelain` に `crates/` 配下のファイルは 1 件も現れない。
+
+| ファイル | 変異前の SHA-256 | 復帰後の SHA-256 |
+|---|---|---|
+| `crates/areka/src/emo2_boot/spine.rs` | `37705e4c9b645e6a03e725d1a74fb72adee69e7c97704d83e116a1475fc70d21` | 同左 |
+| `crates/areka/src/emo2_boot/spine_conformance_script.rs` | `106fe610386a9805b1b55c76f99392d420dcc98b7ca709a53f10320edf6a5f08` | 同左 |
+| `crates/areka/src/emo2_boot/spine_conformance_support.rs` | `25587518ec76c8525791822071c37ac6e63cef5c24c7cafceafa0b439b96abaa` | 同左 |
+| `crates/areka/src/emo2_boot/spine_conformance_support_tests.rs` | `ca75ca3eb281deea704f22d718b61fe1f7c8e7d7a2ea691f73dd807dc896878c` | 同左 |
+| `crates/areka/src/emo2_boot/spine_conformance_lap_tests.rs` | `06e599144dc6b14e9dd5946b3e30280bd15f7f7a4f1554a0e25b63e5e530c472` | 同左 |
+| `crates/areka/src/emo2_boot/spine_conformance_judge.rs` | `6720a53b5657275e5a8952cef54e5531b9df309cb0e0b64ff099a05cf6e8c58c` | 同左 |
+
+#### この対照が示すこと
+
+〈段名・表示指令〉の照合は**空振りではない**。走行が実際に出す表示指令の宛先が 1 つでも期待と違えば、その位置を名指しして赤になる（R2.4・R2.5）。ただし本節が示したのは**この列が退行を捕まえること**までであり、列が 2 行しかないという射程の狭さ（R12.5・`expected_display()` の doc が記す事実）は本節では変わらない。
+
+縮退: **設計 D3 が名指しする変異（段の上限を 1 段ずらす）では対照が作れず、同じ列を狙う別の変異へ差し替えた。** 理由は変異 ① の節に記したとおり、2 行の段名は段の完了条件が固定しており段の上限は関与しないためである。差し替えた変異は同じ判定（`spine_conformance_judge.rs:102`）を同じ列で赤にしているので、対照の目的（判定が生きていることを示す）は満たしている。⇒ design D3 の当該記述（「段の上限を意図的に 1 段ずらして駆動すると、段名の照合が赤になる」）は**実装と食い違うので、正本更新（タスク 7.3・D12）で引き直すこと**。
 
 ---
 
