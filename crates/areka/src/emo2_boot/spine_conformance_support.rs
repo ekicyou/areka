@@ -676,6 +676,66 @@ fn injection_kind(injection: &Injection) -> &'static str {
     }
 }
 
+// ===========================================================================
+// 表示指令の投影（design D3「記録の突合に使う投影関数」・task 3.2）
+// ===========================================================================
+
+/// 表示指令を**等値照合できる形**へ落とした投影（design D3 の「表示の記録の要素」のうち指令の部分）。
+///
+/// # なぜ投影が要るのか
+///
+/// [`PresentCommand`] は `Debug` も `PartialEq` も実装しない（`reply` に返信端を同梱する所有形で
+/// あり、比較も印字も定義できない＝`crates/areka-emo-present/src/command.rs:39-73`）。等値照合と
+/// 失敗時の差分表示にはどちらも要るので、**判定に使う要素だけ**を持つ値へ写す。
+///
+/// # 何を落としているか（判定の射程を過大に見せないための明記）
+///
+/// `binds`（有効 bind 集合）と `pattern`（コマ進行）は投影に載せない。載せると期待列の側で
+/// 合成入力を逐語に組む必要が生じ、面の切替という**この列が見たい退行**より、合成の内部表現の
+/// 変化の方が先に赤を出すようになる。bind と pattern の退行は既存の兄弟テスト
+/// （`spine_seriko_loop_tests.rs`）が正本として持つ。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum DisplayProjection {
+    /// 面の表示（[`PresentCommand::ShowSurface`]）。
+    Show {
+        /// 表示対象の識別子（`TargetId` の生値。偶数＝キャラ窓・奇数＝バルーン窓）。
+        target: u32,
+        /// 表示する面の番号（解決済み）。
+        surface: u32,
+    },
+    /// 非表示（[`PresentCommand::Hide`]）。
+    Hide {
+        /// 表示対象の識別子。
+        target: u32,
+    },
+    /// 合成キャッシュの破棄（[`PresentCommand::InvalidateCache`]）。
+    InvalidateCache {
+        /// 表示対象の識別子。
+        target: u32,
+    },
+    /// 上記のいずれでもない指令。[`PresentCommand`] は `#[non_exhaustive]` ゆえ将来の variant が
+    /// ここへ落ちる——**黙って捨てずに 1 件として列に残る**ので、等値照合が期待との食い違いとして
+    /// 拾う（沈黙の失敗を作らない）。
+    Unknown,
+}
+
+/// 表示指令を [`DisplayProjection`] へ写す（採取側の責務・design D3「採取は support」）。
+pub(super) fn project_display(command: &PresentCommand) -> DisplayProjection {
+    match command {
+        PresentCommand::ShowSurface {
+            target, surface_id, ..
+        } => DisplayProjection::Show {
+            target: target.0,
+            surface: *surface_id,
+        },
+        PresentCommand::Hide { target, .. } => DisplayProjection::Hide { target: target.0 },
+        PresentCommand::InvalidateCache { target, .. } => {
+            DisplayProjection::InvalidateCache { target: target.0 }
+        }
+        _ => DisplayProjection::Unknown,
+    }
+}
+
 // 主題単位の分割（R2.11）: 駆動器を縛る檻は兄弟ファイルへ置く。`spine.rs` は design が接続宣言
 // 3 本に固定しているため、本ファイルの側から接続する。
 #[cfg(test)]

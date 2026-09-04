@@ -42,7 +42,8 @@
 // 公開面をどこも読まないため、未使用警告を理由付きで抑止する。
 #![allow(dead_code)]
 
-use super::{ExitKind, RecordedCall, ScriptedShioriBackend, ScriptedShioriHandle};
+use super::conformance_support::{DisplayProjection, RecordedStatus};
+use super::{ExitKind, RecordedCall, ScriptedShioriBackend, ScriptedShioriHandle, shell_target};
 
 // ===========================================================================
 // 段の注入時刻の区間（design D1 の段表・D3「段の区間はテストが先に宣言する定数」）
@@ -596,5 +597,121 @@ pub(super) fn expected_calls() -> Vec<RecordedCall> {
         get("OnClose", &[CLOSE_REASON]),
         // ── 解放: ちょうど 1 度だけ（R3.9）。列の等値照合が件数もそのまま固定する。
         RecordedCall::Unload,
+    ]
+}
+
+// ===========================================================================
+// 〈段名・表示指令〉の期待列（design D3「判定の本体」・task 3.2）
+// ===========================================================================
+
+/// 一周で届く表示指令の期待列（段名つき・`spine_conformance_judge.rs` が等値で突き合わせる）。
+///
+/// # なぜ 2 行しかないのか（実測・R12.5 の記録）
+///
+/// 一周で表示指令を生む段は **2 つだけ**である。台本の応答は `STROKE_KERO_TALK`
+/// （＝相方の `\1\s[10]`）を除いてすべて `\0\s[0]` を指し、その面は起動挨拶が既に表示している
+/// ——面が変わらない指定は表示指令を生まない。実物 `menu.pasta` の応答がそう書かれているため
+/// であり、台本の都合ではない。ゆえに起動・自発会話・会話中の抑止・メニュー・選択確定・
+/// サブメニューと戻り・位置調整・終了の 8 段は **0 件**である。
+///
+/// design D3 はこの列の完全一致を「判定の本体」と書くが、**2 行では R2.4 の判定は設計が想定する
+/// より実質的に弱い**。段の順序と内容を機械で証明したと言えるのは、交信の列（16 行）と進行状態の
+/// 列（15 行）を合わせた 3 列の等値であって、この列だけではない。表示経路の被覆は既存の兄弟テスト
+/// （`spine_display_tests.rs`・`spine_seriko_loop_tests.rs`・`spine_talk_close_tests.rs`）が正本
+/// として持つ。**この弱さを埋めるために架空の表示指令を足すことはしない**——期待列は実装が実際に
+/// 出すものの写しでなければ、退行の検出器として働かない。
+pub(super) fn expected_display() -> Vec<(&'static str, DisplayProjection)> {
+    vec![
+        // ── 装着: 起動挨拶 `\0\s[0]` が本体（scope0）のキャラ窓へ面 0 を出す。
+        //    表示対象の採番は `target_map.rs` の `shell_target`（キャラ窓＝2*scope）。
+        (
+            "装着",
+            DisplayProjection::Show {
+                target: shell_target(0).0,
+                surface: 0,
+            },
+        ),
+        // ── 撫で: 相方側の応答 [`STROKE_KERO_TALK`]（`\1\s[10]`）が相方（scope1）のキャラ窓へ
+        //    面 10 を出す。本体側の応答 [`STROKE_SAKURA_TALK`] は `\0\s[0]` ＝表示中の面ゆえ 0 件。
+        (
+            "撫で",
+            DisplayProjection::Show {
+                target: shell_target(1).0,
+                surface: 10,
+            },
+        ),
+    ]
+}
+
+// ===========================================================================
+// 進行状態の期待列（design D3「進行状態の台帳」・R3.8・task 3.2）
+// ===========================================================================
+
+/// 進行状態の wire 値（会話中のみ）。
+///
+/// 出所: `crates/areka-kanade/src/status.rs:58-61`（`ExecutionState::Talking` の綴り）と
+/// 同 `:190-199`（複数あるときはカンマ連結・空集合はヘッダ行なし）。
+pub(super) const STATUS_TALKING: &str = "talking";
+
+/// 進行状態の wire 値（会話中かつ選択待ち）。
+///
+/// 選択待ちの間も会話の枠は占有されたままなので、`choosing` は単独では現れず必ず `talking` と
+/// 複合になる（`crates/areka-kanade/src/status.rs:211-216`）。連結順は正典順（`talking` が先）。
+pub(super) const STATUS_TALKING_CHOOSING: &str = "talking,choosing";
+
+/// 進行状態の記録 1 件ぶんの期待。`None`＝ヘッダ行を出さない（記録の欠落ではない）。
+fn status(id: &str, status: Option<&str>) -> RecordedStatus {
+    RecordedStatus {
+        id: id.to_string(),
+        status: status.map(str::to_string),
+    }
+}
+
+/// 一周で送られる呼出に載る進行状態の期待列（`ScriptedShioriHandle::status_calls()` と等値）。
+///
+/// 交信の列から**解放を除いた**並びと 1 対 1 に対応する（解放は進行状態を運ばない型である
+/// ＝`spine.rs` の `unload` は記録の第 2 系統へ書かない）。
+///
+/// # この列だけが選択待ちを見せる（R3.8）
+///
+/// 会話中は毎秒の変化通知の別（照会か片道か）と Ref3 でも読める。**しかし選択待ちは Ref3 では
+/// 会話中と区別できない**——Ref3 の源は `talk_active` だけだからである
+/// （`crates/areka-kanade/src/schedule/events.rs:171-180`）。選択起源の 4 呼出が
+/// [`STATUS_TALKING_CHOOSING`] を運ぶことは、この列でしか固定できない。
+pub(super) fn expected_statuses() -> Vec<RecordedStatus> {
+    vec![
+        // ── 起動系列 1〜4: 運行は起動相にあり、会話も選択待ちも立たない＝ヘッダ行なし。
+        status("OnInitialize", None),
+        status("username", None),
+        status("OnFirstBoot", None),
+        status("OnBoot", None),
+        // ── 起動系列 5: **起動挨拶を先に起動してから**送るので会話中である。
+        //    `OnBoot` が応答を返した経路では、フェーズを `BootVersion{talk: Some(_)}` へ確定して
+        //    から送出時点のスナップショットを撮る（`crates/areka-kanade/src/schedule/boot.rs:226-228`
+        //    ・同 `:275-280`）。204 で返る経路なら非アクティブになるが、本走行の台本は
+        //    [`BOOT_TALK`] を返すので会話中側を通る。
+        status("basewareversion", Some(STATUS_TALKING)),
+        // ── 自発会話（会話可）: 会話が始められる＝会話中でない。
+        status("OnSecondChange", None),
+        // ── 会話中の抑止: 直前の応答が再生中＝会話中。
+        status("OnSecondChange", Some(STATUS_TALKING)),
+        // ── 撫で 2 件: 自発会話の再生が続いたまま入力が届く。
+        status("OnMouseMove", Some(STATUS_TALKING)),
+        status("OnMouseMove", Some(STATUS_TALKING)),
+        // ── メニュー: 撫での応答（相方側）がまだ再生中のうちに二重クリックが届く。
+        //    撫で段は会話の**起動**までで完了し、以後は注入を止めて観測だけを続けるので、
+        //    再生時刻は 1 ミリ秒も進まないまま次段へ渡る（会話中にメニューが開くこと自体が
+        //    R1.5 の「結合と一周でしか現れない事象」である）。
+        status("OnMouseDoubleClick", Some(STATUS_TALKING)),
+        // ── 選択起源の 4 呼出: 選択待ちは会話の枠を占有したまま成立する（複合値）。
+        //    出所: `crates/areka-kanade/src/schedule/steady.rs:292-294`（選択確定の発火は
+        //    `snapshot_with_choice(true)` を明示的に渡す）。
+        status(CHOICE_TALK_INTERVAL_MENU, Some(STATUS_TALKING_CHOOSING)),
+        status(CHOICE_MAIN_MENU, Some(STATUS_TALKING_CHOOSING)),
+        status(CHOICE_MOVE_MENU, Some(STATUS_TALKING_CHOOSING)),
+        status(CHOICE_MOVE_APPLY, Some(STATUS_TALKING_CHOOSING)),
+        // ── 終了: 終了系列は運行を `Unloading` へ移してから発火する＝全状態が非アクティブ。
+        //    出所: `crates/areka-kanade/src/schedule/mod.rs:484-492`。
+        status("OnClose", None),
     ]
 }

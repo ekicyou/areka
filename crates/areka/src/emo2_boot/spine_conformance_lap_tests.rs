@@ -48,11 +48,11 @@
 //! kanade の終了系列だけであり、kanade が居なければ 2 度目の解放も台本に無い通知も**構造的に**
 //! 起きない。「結果を捨てるから安全」ではなく、この順序が根拠である。
 //!
-//! # 判定（task 3.2 の継ぎ目）
+//! # 判定
 //!
 //! 判定は段の駆動をすべて終えた**後にまとめて**行う（段の途中で部分照合しない・design D1）。
-//! 本タスク（3.1）は駆動と段ごとの完了条件までを持ち、3 つの列の**等値照合**は task 3.2 が
-//! 同じ採取点（[`LapLedgers`]）の上へ足す。
+//! 本ファイルは駆動と段ごとの完了条件までを持ち、3 つの列（[`LapLedgers`]）の**等値照合**は
+//! 兄弟ファイル `spine_conformance_judge.rs` が持つ（R2.11 の主題単位の分割・末尾から接続する）。
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -356,14 +356,6 @@ fn has_notify(calls: &[RecordedCall], id: &str, tail_ref: &str) -> bool {
         matches!(call, RecordedCall::Notify { id: got, references }
             if got == id && references.last().map(String::as_str) == Some(tail_ref))
     })
-}
-
-/// 記録の中の解放の件数。
-fn unload_calls(calls: &[RecordedCall]) -> usize {
-    calls
-        .iter()
-        .filter(|call| matches!(call, RecordedCall::Unload))
-        .count()
 }
 
 /// 段の駆動の結果を受け取り、失敗なら**段名を名指しして**走行を落とす（沈黙の失敗を作らない）。
@@ -956,38 +948,19 @@ fn conformance_lap_walks_every_stage_to_its_completion() {
         display,
     };
 
-    // 終了握手（design D1 終了段の完了条件・R3.9）。
-    assert_eq!(
-        get_calls(&ledgers.calls, "OnClose"),
-        1,
-        "終了の照会がちょうど 1 件でない: {:?}",
-        ledgers.calls
-    );
-    assert_eq!(
-        unload_calls(&ledgers.calls),
-        1,
-        "解放がちょうど 1 件でない（R3.9）: {:?}",
-        ledgers.calls
-    );
-
-    // 3 つの列が**同一の走行**から採れていること（design D1「一貫性」）。進行状態は照会・片道の
-    // 2 種にだけ載り、解放には載らない——ゆえに交信の列から解放 1 件を除いた本数と一致する。
-    assert_eq!(
-        ledgers.statuses.len(),
-        ledgers.calls.len() - unload_calls(&ledgers.calls),
-        "進行状態の列が交信の列と同じ走行から採れていない: {:?} / {:?}",
-        ledgers.statuses,
-        ledgers.calls
-    );
-    // 再生を運ぶ本数（[`PLAYOUT_TICKS`]）が、製品の報告した占有終端を覆っていた。
+    // 再生を運ぶ本数（[`PLAYOUT_TICKS`]）が製品の報告した占有終端を覆っていたこと（自己検査）。
     assert_playout_covers_horizon(&observed.borrow());
-    // 表示指令は段名つきで採れている（task 3.2 の等値照合はこの列の上に足す）。
-    assert!(
-        !ledgers.display.is_empty(),
-        "〈段名・表示指令〉の列が 1 件も採れていない（表示経路が死んでいる）"
-    );
+    // 3 つの列を期待と等値で突き合わせる（design D3・R2.3／2.4／2.5・R3.6／3.7）。
+    conformance_judge::judge_lap(&ledgers);
 
     // 後片付け（既存の有界な畳み方）。上の終了段が kanade の自己終了まで観測済みゆえ、強制終了の
     // 届く先はもう無い（設計討議 #1 裁定）。
     harness.shutdown_bounded();
 }
+
+// 主題単位の分割（R2.11）: 3 つの列の等値照合は兄弟ファイルへ置き、**本ファイルの末尾から**接続する。
+// 本ファイルは 1 ファイル 1,000 行の見張りまで余白が僅かで、`spine.rs` の接続宣言は 3 本で確定済み
+// ゆえ、経路をそちらへ増やさない（task 2.3 が支援層で踏んだ手順と同じ）。
+#[cfg(test)]
+#[path = "spine_conformance_judge.rs"]
+mod conformance_judge;

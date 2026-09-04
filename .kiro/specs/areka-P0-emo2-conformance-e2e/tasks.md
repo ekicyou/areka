@@ -55,7 +55,7 @@
   - 明示実行の門（`#[ignore]`・環境変数）を付けない
   - 完了状態: テスト 1 本が通常のテスト実行で走り、一周を最後まで辿って全実行主体が有界時間で畳まれる
   - _Requirements: 1.1, 1.5, 1.6, 2.1, 2.2, 2.6, 2.7, 2.8, 2.9_
-- [ ] 3.2 3 つの列を採取して期待と完全一致で判定する
+- [x] 3.2 3 つの列を採取して期待と完全一致で判定する
   - 交信の列・〈段名と表示指令〉の列・進行状態の列を同一の走行から採り、段の駆動をすべて終えた後にまとめて等値照合する（部分一致・包含判定を使わない）
   - 表示指令の判定の本体は段名を含む列の等値とし、採取時の注入時刻が段の宣言区間に入ることは駆動器の自己検査として別に扱う
   - 会話の発火・時報・更新系 4 種・バルーン変更が 1 件も現れないことを、等値照合が拾う形で成立させる
@@ -206,3 +206,5 @@
 - **⚠ D6 の不変条件の文言を引き直すこと**（タスク 3.1・正本更新の宿題）。駆動器は据え置き門（`may_advance_clock`）が閉じている間、**注入時刻を 1 ミリ秒も進めずに**再生側 Tick を投函し続ける。これは design D6 の文言「上限に達したら以後は注入せず観測だけを待つ」（`design.md:529`）とは違うが、その**理由**（「注入時刻が観測を追い越すと待っている条件そのものが壊れる」）は満たしている——止まった時計は何も追い越せない。R2.10 の「観測が成立するまで進める形」と家の作法（`spine_talk_close_tests.rs:100-107`）に沿う形へ D6 を改訂すること。
 - **⚠ 高負荷では既存テストが名前つきで赤くなる（タスク 4.2〜4.4 は D11 ⑷ の裁定を見直すこと）**（タスク 3.1 の負荷走行で採取）。18 走行中: `conformance_support::driver_tests::kanade_probe_raises_no_shiori_call_and_observes_the_close` **4 回**（本仕様自身のタスク 2.3 の檻）・`talk_close_tests::spine_s2_talk_drives_surface_switch_and_typewriter_reveal` 1 回・`text_scale_tests::spine_dpi_change_while_balloon_hidden_lands_on_next_show` 1 回。別走行では `seriko_loop_tests` 2 種・`display_tests`・`text_scale_tests` 他も観測。いずれも `SPIN_WAIT`（30 秒）の期限切れ＝ゴースト起動の飢餓で、steering の「協調テストループの飢餓」と同じ形。**design D11 ⑷ が「触らない」と裁定しているのは 2 本だけだが、実測される集合はもっと広い**——とくに 4/18 の `driver_tests` は本仕様が今回作った檻であり、一周テスト（18 走行 0 赤）より脆い。⇒ `verification/isolation-decision.md` へ 4 件目以降として裁定・理由・失う被覆を書き足すこと（R9.1・R9.4）。**一周テストの 起動段にも同じ形の赤が 1 回出た**（45 走行中 1 回・注入 0 本のまま 5 呼出を待つ段）ため、同段には原因を名指しする内訳を持たせてある。
 - **⚠ 道具の罠: `Copy-Item` はファイルの更新時刻を保存する**（タスク 3.1 のレビューで発覚）。変異注入の後にスナップショットから復元すると更新時刻が**巻き戻り**、cargo が「新しい」と判断して**変異版のバイナリを配り続ける**。レビュー側はこれで 20 回連続の偽の赤を掴みかけた。復元後は更新時刻を現在へ進め、`Compiling areka` が実際に走ったことを確かめてから走行結果を信じること。
+- **新規ファイルは 5 本で確定した**（タスク 3.2 で 5 本目 `spine_conformance_judge.rs` が実在）。上の 2 つの申し送り（4 本→5 本）を統合して、design の File Structure Plan（`design.md:145-161`）・Testing Strategy §2（`:847`）・**タスク 3.4 の完了条件**の「新規 3 ファイル」は **5 ファイル**へ引き直すこと。内訳＝`spine_conformance_lap_tests.rs`（966）・`spine_conformance_script.rs`（717）・`spine_conformance_support.rs`（743）・`spine_conformance_support_tests.rs`（669）・`spine_conformance_judge.rs`（186）。`spine.rs` は 959 行・接続宣言 3 本のまま無改変。
+- **進行状態の期待値を 2 か所訂正した（緩和ではなく導出の誤り）**（タスク 3.2・レビューが発行側コードから独立に再導出して確認）。⑴ `basewareversion` は `Some("talking")`——`to_baseware_version` が `phase` を `BootVersion{talk}` へ更新した**後で**スナップショットを撮る設計（`crates/areka-kanade/src/schedule/boot.rs:275-280`・規則は `:226-228`）で、既存の檻 `boot_sequence_tests.rs:407-424` が同じ性質を固定している。⑵ `OnMouseDoubleClick` は `Some("talking")`——撫で段の完了条件は design D1 の段表どおり「移動の照会が 2 件」であって会話の終わりではないため、二重クリックは会話中の kanade へ届く。これは **R1.5 が名指しする「会話中にメニューが開くこと」そのもの**であり、隠蔽ではなく観測対象。適合検証項目表 項目 5 の「会話中は割り込まない」は自発会話の話（Ref3="0" の片道）で別に固定されており矛盾しない。`expected_calls()` は 1 文字も変えていない。
