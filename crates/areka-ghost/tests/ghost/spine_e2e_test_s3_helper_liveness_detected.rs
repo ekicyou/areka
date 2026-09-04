@@ -133,13 +133,16 @@ fn s3_helper_liveness_detected_mid_scenario_drives_autonomous_fault_termination(
     // ---- boot talk を Steady{None} 到達まで駆動する（S1 と同一技法・sleep 不使用） ----
     // dispatcher へ Tick を送るたびに RecordingSink を確認する有界再送ループ（実時間
     // 待機なし・単調増加する now の注入のみ・`yield_now` で他スレッドに実行機会を譲る
-    // だけ）。boot talk が dispatcher の active slot に載って発火し終えた時点で、
-    // kanade 自身は（dispatcher Tick とは無関係な別チャンネル経由で）basewareversion
-    // NOTIFY の応答往復のみで既に Steady{talk: None} へ完了している（boot.rs:
+    // だけ）。kanade 自身は（dispatcher Tick とは無関係な別チャンネル経由で）
+    // basewareversion NOTIFY の応答往復のみで Steady{talk: None} へ完了する（boot.rs:
     // 「boot は常に Steady{talk: None} へ完了する」・BootVersion+Notified の遷移は
-    // StartTalk 発行と独立に basewareversion の応答のみで確定するため、StartTalk が
-    // start-relay→dispatcher の 2 hop を経て active slot に載り、さらに Tick で実際に
-    // 発火するよりずっと早く完了している）。
+    // StartTalk 発行と独立に basewareversion の応答のみで確定する）。
+    // ⚠ ただし cue の発火が 5 呼出の完了を**含意しない**——`schedule/boot.rs:241` は
+    // `Action::StartTalk` を `:279` の basewareversion より先に積むので、cue（start-relay
+    // →dispatcher の 2 hop ＋ Tick）と 5 本目の記録（shiori アクタースレッド 1 hop）は
+    // 別スレッドの競走であり、順序は保証されていない。実測では cue の側が遅いことが
+    // ほとんどだが構造的な保証ではないため、件数は下の有界待ちで待ってから数える
+    // （areka-P0-emo2-conformance-e2e R9.2・詳細は :175 以降）。
     let mut now: u64 = 1;
     let mut fired = false;
     let deadline = std::time::Instant::now() + super::E2E_BOUND;
@@ -171,13 +174,33 @@ fn s3_helper_liveness_detected_mid_scenario_drives_autonomous_fault_termination(
     // 5 呼出が完了済みであること（＝kanade が Steady{None} へ既に到達済みであること）を
     // 裏付ける間接証跡（S1 と同旨・死活監視の Status ノイズは除外して数える・task 8.2 の
     // username prefetch GET が OnInitialize と OnFirstBoot の間に 1 件加わり 4→5 になる）。
+    //
+    // **数える前に 5 呼出の到達そのものを有界に待つ**（task 4.1・要件 9.2）。直前のループが
+    // 抜ける条件は「surface cue が 1 件でも載ったこと」だけであり、これは boot 系列の完了を
+    // 含意しない——`to_baseware_version`（`areka-kanade/src/schedule/boot.rs:229-282`）は
+    // `Action::StartTalk` を `basewareversion` の ShioriRequest より**先に**積むため、
+    // StartTalk が start-relay→dispatcher の 2 hop を渡って cue を発火させるのと、
+    // basewareversion NOTIFY が shiori アクタースレッドで記録されるのとは、別スレッドの
+    // 競走になる。待たずに数えると 5 本目がまだ届かず `left: 4` で落ちる瞬間があり、これが
+    // 負荷時にだけ現れる間欠的な赤の正体である。手本は同じ 5 呼出の確認を「条件が満たされる
+    // まで待つ」形で書いている `crates/areka/src/emo2_boot/spine_boot_smoke_tests.rs:32-36`
+    // （`spin_wait_until`）——判定そのもの（Status を除いてちょうど 5 件）は一切変えず、
+    // 数える前に待ちを置くだけである。上限は本ファイル既存の有界待ちと同じ `E2E_BOUND`。
     let calls_handle = handle.calls();
-    let boot_prefix_len = calls_handle
-        .lock()
-        .expect("calls mutex poisoned")
-        .iter()
-        .filter(|c| !matches!(c, RecordedCall::Status))
-        .count();
+    let non_status_len = || {
+        calls_handle
+            .lock()
+            .expect("calls mutex poisoned")
+            .iter()
+            .filter(|c| !matches!(c, RecordedCall::Status))
+            .count()
+    };
+    let mut boot_prefix_len = non_status_len();
+    let boot_deadline = std::time::Instant::now() + super::E2E_BOUND;
+    while boot_prefix_len < 5 && std::time::Instant::now() < boot_deadline {
+        std::thread::yield_now();
+        boot_prefix_len = non_status_len();
+    }
     assert_eq!(
         boot_prefix_len, 5,
         "S3: boot 系列 5 呼出（OnInitialize/username/OnFirstBoot/OnBoot/basewareversion）が \
