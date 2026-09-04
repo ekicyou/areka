@@ -45,13 +45,14 @@
 //!
 //! # テストの本体はこのディレクトリの兄弟に置く
 //!
-//! 実データへの主張は [`checks`]（`checks.rs`）にある。後続のタスク 8.3・8.4 が足す
-//! ファイルも同じ兄弟（`non_vacuity.rs`・`values_md.rs`）で、宣言はこのファイルへ
-//! 下の `mod checks;` と同じく素の `mod` で置ける（`#[path]` で読み込まれたファイルの
-//! 子モジュールは、そのファイル自身のディレクトリを基準に解決される——
-//! `structure.md:141`）。
+//! 実データへの主張は [`checks`]（`checks.rs`）に、検査の対象が 0 件でないことの主張は
+//! [`non_vacuity`]（`non_vacuity.rs`）にある。後続のタスク 8.4 が足すファイルも同じ兄弟
+//! （`values_md.rs`）で、宣言はこのファイルへ下の `mod checks;` と同じく素の `mod` で
+//! 置ける（`#[path]` で読み込まれたファイルの子モジュールは、そのファイル自身の
+//! ディレクトリを基準に解決される——`structure.md:141`）。
 
 mod checks;
+mod non_vacuity;
 
 use std::collections::BTreeMap;
 use std::path::Path;
