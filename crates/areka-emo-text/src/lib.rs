@@ -173,6 +173,10 @@ mod tests {
         const PURE_SOURCES: &[(&str, &str)] = &[
             ("choice.rs", include_str!("choice.rs")),
             ("state.rs", include_str!("state.rs")),
+            (
+                "state_cursor_coord_parse_tests.rs",
+                include_str!("state_cursor_coord_parse_tests.rs"),
+            ),
             ("writing.rs", include_str!("writing.rs")),
             (
                 "writing_decision_tests.rs",
@@ -185,6 +189,14 @@ mod tests {
             ),
             ("segment.rs", include_str!("segment.rs")),
             ("layout.rs", include_str!("layout.rs")),
+            (
+                "layout_cursor_tests.rs",
+                include_str!("layout_cursor_tests.rs"),
+            ),
+            (
+                "layout_cursor_vertical_tests.rs",
+                include_str!("layout_cursor_vertical_tests.rs"),
+            ),
             ("canvas.rs", include_str!("canvas.rs")),
             ("viewbox.rs", include_str!("viewbox.rs")),
             ("wrap.rs", include_str!("wrap.rs")),

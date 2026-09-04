@@ -751,6 +751,9 @@ fn warn_cursor_degrade(
 #[path = "layout_cursor_tests.rs"]
 mod cursor_tests;
 #[cfg(test)]
+#[path = "layout_cursor_vertical_tests.rs"]
+mod cursor_vertical_tests;
+#[cfg(test)]
 #[path = "layout_segmented_tests.rs"]
 mod segmented_tests;
 #[cfg(test)]
