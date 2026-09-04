@@ -15,6 +15,10 @@
 //! - repo の中身（カタログ・台帳・報告＝`doc/ukadoc-coverage/`）が特定の状態であること
 //! - 副手続きの出力の**中身**が特定の値であること（版面はそれぞれの在中テストの持ち物）
 //!
+//! 2 つ目が禁じるのは「中身がこうである」と言うことであって、木を**見る**ことでは
+//! ない。走行の前と後を見比べて「同じである」とだけ言う事例は、木がどんな状態でも
+//! 成り立つので、この線を踏まない（末尾の要件 1.8 の節を見よ）。
+//!
 //! この線を引く限り、事例はタスク 6.2・6.3 が中身を入れた後も書き換えずに生き残る。
 //! 失敗の腕（[`catalog_with_a_missing_snapshot_writes_nothing_to_stdout_and_exits_one`]）が
 //! その例で、今は「まだ中身が繋がっていない」で、6.2 の後は「スナップショットが
@@ -146,5 +150,105 @@ fn catalog_with_a_missing_snapshot_writes_nothing_to_stdout_and_exits_one() {
     assert!(
         !stderr.is_empty(),
         "黙って失敗している（標準エラーに本文が無い）"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// 失敗した走行は既存のカタログを書き換えない（要件 1.8 の後半）
+// ---------------------------------------------------------------------------
+//
+// 今の実装がこれを満たすのは**順番**による。`catalog` はスナップショットを読み終える
+// まで置き場も作らず 1 バイトも書かない（`cli/generate.rs`）。だが順番は書き換えられる
+// ——「先に書いてから読む」形に直しても、上の失敗の事例（終了コード 1・標準出力が空・
+// 標準エラーに本文）は 3 つとも満たしたまま緑になる。だから木そのものを見る。
+//
+// # 冒頭の決まりに触れないのはなぜか
+//
+// このファイルは「repo の中身が特定の状態であること」に寄りかからないと決めている。
+// ここで主張するのは**走行の前と後が同じ**という関係だけで、中身がどうであるかは
+// 1 つも言わない。木が無い作業ツリーでも成り立つ（前も後も空。失敗の途中で空の
+// 置き場を掘れば後だけが増えるので、その壊し方はどちらの作業ツリーでも赤くなる）。
+//
+// ファイルは 1 つも作らず、一時ディレクトリも使わない——**読むだけ**である
+// （設計 File Structure Plan の「読むだけ」）。
+
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+use std::path::{Path, PathBuf};
+
+/// 生成物を置くディレクトリ（`io::paths` を引かず、独立した綴りで書く）。
+const COVERAGE_DIR: &str = "doc/ukadoc-coverage";
+
+/// ワークスペース根。この crate の manifest の 2 段上（`io::paths` と同じ求め方）。
+fn workspace_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .expect("crates/<クレート>/ の 2 段上が取れない")
+        .to_path_buf()
+}
+
+/// 中身の指紋。バイト列が 1 つでも違えば別の値になる。
+fn digest(bytes: &[u8]) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    bytes.hash(&mut hasher);
+    hasher.finish()
+}
+
+/// `doc/ukadoc-coverage/` の今の姿を、並び順の決まった一覧にする。
+///
+/// ファイルは「置き場からの相対の綴りと中身の指紋」、ディレクトリは「綴りの末尾に
+/// `/` を付けたものと 0」で表す。ディレクトリも数えるのは、失敗の途中で**空の置き場を
+/// 掘る**壊し方を見るためである（中身が 1 つも増えないので、ファイルだけ見ると素通りする）。
+fn coverage_tree() -> Vec<(String, u64)> {
+    let root = workspace_root().join(COVERAGE_DIR);
+    let mut out: Vec<(String, u64)> = Vec::new();
+    collect_tree(&root, &root, &mut out);
+    out.sort();
+    out
+}
+
+/// `coverage_tree` の下働き。置き場が無ければ何も足さない（＝空の一覧）。
+fn collect_tree(root: &Path, dir: &Path, out: &mut Vec<(String, u64)>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = path
+            .strip_prefix(root)
+            .unwrap_or(&path)
+            .display()
+            .to_string()
+            .replace('\\', "/");
+        if path.is_dir() {
+            out.push((format!("{name}/"), 0));
+            collect_tree(root, &path, out);
+        } else {
+            let bytes = std::fs::read(&path).expect("読めるはずのファイルが読めない");
+            out.push((name, digest(&bytes)));
+        }
+    }
+}
+
+#[test]
+fn a_failed_run_leaves_the_generated_tree_untouched() {
+    let before = coverage_tree();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_ukadoc-survey"))
+        .arg("catalog")
+        .env(SNAPSHOT_ENV, MISSING_SNAPSHOT)
+        .output()
+        .expect("実行ファイルを起こせなかった");
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "失敗させるつもりの走行が失敗していない（この事例の前提が崩れている）"
+    );
+
+    let after = coverage_tree();
+    assert_eq!(
+        after, before,
+        "失敗した走行が {COVERAGE_DIR} を書き換えた（要件 1.8）"
     );
 }

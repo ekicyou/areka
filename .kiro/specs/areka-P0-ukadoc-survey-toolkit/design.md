@@ -207,7 +207,7 @@ graph TB
 
 - 複数のファイルに同じ URL が現れても赤にしない。要件 5.2 の「定義箇所だけ」は人が守る規約で機械には判定できず（research §3-5）、要件 6.11 は整理で壊れないことを求めている。証拠は id ごとにファイルパスの一覧として並べる（要件 5.5）。
 
-### D-5. 名前の突き合わせの正規化 — **NFKC ＋ 空白の畳み込み・完全一致・1 件に定まるときだけ採る**
+### D-5. 名前の突き合わせの正規化 — **NFKC 相当＋空白の畳み込み・完全一致・1 件に定まるときだけ採る**
 
 実測:
 
@@ -219,7 +219,8 @@ graph TB
 
 規則:
 
-1. 語彙表の要素の文字列と、そのページに属するカタログ項目の見出しを、どちらも NFKC 正規化し前後の空白を落とし連続空白を 1 個に畳んでから**完全一致**で比べる。部分一致は使わない。
+1. 語彙表の要素の文字列と、そのページに属するカタログ項目の見出しを、どちらも正規化し前後の空白を落とし連続空白を 1 個に畳んでから**完全一致**で比べる。部分一致は使わない。
+   - **実装は NFKC そのものではない**。D-1 が依存を増やさないと決めているため、NFKC を**実データに現れる帯へ限った形**で実装する——全角の記号と英数字（`U+FF01..U+FF5E`）を ASCII へ、全角空白（`U+3000`）を空白へ。実測 1,955 文字列のうち NFKC で変わるのはこの 2 種だけで、D-5 の測定 3 つを 1 つも違わず再現する。帯を限った変換なので**間違って一致させることはあり得ず、取りこぼす方向にしか外れない**。半角カナ・丸数字・合字は畳まない。
 2. 一致が 1 件に定まったときだけ証拠にする。
 3. **0 件のとき**と**2 件以上のとき**は証拠にせず、突き合わせできなかった要素として検査の出力に並べる（赤にはしない。要件 5.9 のとおり判定は人手に委ねる）。同一ページ内で見出しが重複するのは `descript_shell_surfaces` 1 組・`list_propertysystem` 2 組（`name`・`path`）・`spec_shiori3` 2 組の実測 5 組だけである。
 
@@ -358,7 +359,9 @@ crates/ukadoc-survey/
 │       ├── mod.rs                   # 副手続きの振り分けと使い方の表示
 │       ├── cli_tests.rs             # 在中テスト（mod.rs の stem は親ディレクトリ名）
 │       ├── generate.rs              # catalog / ledger-init / report / report-summary
-│       └── inspect.rs               # check / evidence / candidates / diff
+│       ├── generate_tests.rs
+│       ├── inspect.rs               # check / evidence / candidates / diff
+│       └── inspect_tests.rs
 └── tests/
     ├── cli_streams.rs               # 実行ファイルの出口（終了コードと標準出力／標準エラーの分け）
     ├── consistency.rs               # 常時走る整合検査の入口（要件 6.1）
@@ -366,7 +369,8 @@ crates/ukadoc-survey/
         ├── mod.rs                   # repo の実データを読み込む共通処理
         ├── checks.rs                # 6.3〜6.8 6.10 7.4 を実データで走らせる
         ├── non_vacuity.rs           # 6.13 の「検査対象が 0 件でない」
-        └── values_md.rs             # values.md の見出しが 8 テーマと一致する
+        └── values_md.rs             # 自前の道具の較正 3 本（見出しと 8 テーマの一致・
+                                     #   書き出しの往復 1,749 件・語彙表経路 159 件）
 
 doc/ukadoc-coverage/
 ├── README.md                        # 台帳の形式・状態語彙・欄の意味・仕訳の規則・URL の書き方・報告の扱い・合流の手順・付録 A.1 の記入例 id が実在しない注意
@@ -561,10 +565,10 @@ flowchart TD
 | `assignment` | 純粋 | ページ→ドメインの割り当て | 3.1, 3.2, 3.5 | `model`（P0） | State |
 | `hash` | 純粋 | 本文ハッシュ | 1.2, 1.3, 8.2 | なし | Service |
 | `tomlout` | 純粋 | 決定的な TOML 本文の組み立て | 1.1, 1.5, 2.1 | なし | Service |
-| `catalog` | 純粋 | カタログの作成・読み・書き | 1.1-1.6, 1.9, 9.4 | `model` `hash` `tomlout` `assignment`（P0） | Service |
+| `catalog` | 純粋 | カタログの作成・読み・書き | 1.1-1.6, 1.9, 9.4 | `model` `hash` `tomlout` `assignment`（P0）／`io::snapshot` は型のみ | Service |
 | `ledger` | 純粋 | 台帳の読み・初期生成・差し込み | 2.1-2.4, 3.3, 3.3a, 6.9 | `model` `tomlout`（P0） | Service |
 | `evidence` | 純粋 | 正典 URL の取り出しと解決・候補提示 | 5.1-5.9, 6.5, 6.11 | `catalog`（P0） | Service |
-| `check` | 純粋 | 整合検査の判定 | 6.3-6.8, 6.10-6.12, 7.4, 7.5 | `catalog` `ledger` `evidence` `report`（P0） | Service |
+| `check` | 純粋 | 整合検査の判定 | 6.3-6.8, 6.10-6.12, 7.4, 7.5 | `catalog` `ledger` `evidence` `report`（P0）／`io::files::strip_cr` のみ | Service |
 | `report` | 純粋 | 報告の本文の組み立て | 7.1-7.3, 7.8, 7.9 | `ledger` `model`（P0）`catalog` `evidence`（P1・summary のみ） | Service |
 | `diff` | 純粋 | スナップショット更新時の差分 | 8.1-8.3 | `catalog` `ledger`（P0） | Service |
 | `io` | 入出力 | 場所の解決・読み書き・走査・JSON | 1.7, 1.8, 6.1, 6.2, 9.7 | `serde_json`（P0・snapshot のみ） | Service |
@@ -666,7 +670,7 @@ pub fn inline_table(pairs: &[(&str, String)]) -> String;     // { k = v, ... }�
 pub fn keyed_table_header(prefix: &str, key: &str) -> String; // [entry."<key>"]
 ```
 
-- 事前条件: 値は改行を含んでよい（`basic_string` が `\n` に逃がす）。
+- 事前条件: 値は改行を含んでよい（`basic_string` が逃がす。逃がした形は D-10 のとおり一律 `\u000A` で、`\n` は入力側の文字の呼び名である）。
 - 事後条件: 出力は改行を含まない 1 行（`basic_string` は逃がすため）。
 - 不変条件: `basic_string` が返す本文は `toml` で読み戻すと元の文字列に一致する。**この読み戻し一致を、実データの見出し 1,749 件すべてに対して確かめるテストを置く**（自前の書き出しの較正）。
 
@@ -1100,6 +1104,7 @@ pub enum SurveyError {
 16. `values.md` の見出しが `model::THEMES` の 8 つと順序まで一致する（4.4・6.8）。
 17. ドメイン別報告 4 本が実在し、いずれも空でない（7.4 の検査が空回りしていないこと）。
 17a. 語彙表経路の較正: `crates/areka-sylphya/src/vocab/shiori_resource.rs` の `SHIORI_RESOURCE_IDS` 159 要素を D-5 の規則で取り出し、`list_shiori_resource` ページの見出しへ **159 件すべてが 1 件に定まって対応付く**ことを逐語で確かめる（ページ URL のコメントが置かれる前は、取り出し関数を直接呼んで確かめる）。あわせて、実データに対する `resolve` で語彙表経路により解決した件数が 0 でないこと（URL が置かれた後に有効になる非空テスト・6.13）。
+    - **今のソースにページ URL のコメントは 1 つも無いので、この後半は現状では成立しない**。だから実装は 0 であること自体を表明にしてある（`tests/consistency/values_md.rs` の `the_vocabulary_route_is_vacuous_on_todays_real_data`）。URL が 1 つでも置かれた瞬間にそのテストが赤くなり、非空の形へ書き換えるよう促す。
 
 ### 実データに対する整合検査（`tests/consistency/checks.rs`）
 

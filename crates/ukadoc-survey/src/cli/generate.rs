@@ -23,7 +23,7 @@
 //! 断りや失敗の本文は標準エラーへ出す（呼び手の `main.rs` が受け持つ）。
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::assignment::PageAssignment;
 use crate::catalog::Catalog;
@@ -63,25 +63,90 @@ pub fn catalog() -> Result<(), SurveyError> {
     Ok(())
 }
 
+/// 台帳 1 本ぶんの書き出しの計画（要件 3.3a）。
+///
+/// [`plan_ledger_init`] が組み立て、[`ledger_init`] がそのとおりに書く。値だけを持ち、
+/// ファイルには触らない。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct LedgerPlan {
+    /// 書き出す先。
+    pub(crate) target: PathBuf,
+    /// 書き出す本文（既存があればそれを写したもの）。
+    pub(crate) body: String,
+    /// 標準出力へ添える件数（カタログ側のこのドメインの id の数）。
+    pub(crate) count: usize,
+}
+
+/// 4 本の台帳の本文を決める（要件 3.3・3.3a）。
+///
+/// **既存本文の取り寄せを引数で受ける**のがこの関数の要点である。呼び出し側が渡した
+/// 取り寄せの結果をそのまま [`merge_initial`] へ渡すので、「既存を渡している」という
+/// 配線そのものを、ファイルを 1 つも作らずに確かめられる（要件 3.3a）。
+///
+/// 台帳が今はすべて未分類なので、既存を渡し忘れても生成物は 1 バイトも変わらない。
+/// つまり生成物の比較ではこの取り違えを 1 件も捕まえられず、調査 spec が手で書いた
+/// 状態・担当・優先度が黙って初期値へ戻る。ここを関数の境目にしたのはそのためである。
+///
+/// `read_existing` にはその台帳の置き場を渡し、本文があれば `Some`、無ければ `None` を
+/// 返してもらう。
+pub(crate) fn plan_ledger_init(
+    catalog: &Catalog,
+    assignment: &PageAssignment,
+    read_existing: &dyn Fn(&Path) -> Result<Option<String>, SurveyError>,
+) -> Result<Vec<LedgerPlan>, SurveyError> {
+    let buckets = select_ids_by_domain(catalog, assignment)?;
+
+    let mut plans: Vec<LedgerPlan> = Vec::new();
+    for domain in Domain::ALL {
+        let ids = buckets.get(&domain).map(Vec::as_slice).unwrap_or_default();
+        let pages = prologue_pages(assignment, domain);
+        let target = paths::ledger_path(domain);
+        let existing = read_existing(&target)?;
+        let body = merge_initial(existing.as_deref(), domain, &pages, ids)?;
+        plans.push(LedgerPlan {
+            target,
+            body,
+            count: ids.len(),
+        });
+    }
+    Ok(plans)
+}
+
 /// 初期の台帳を作って既存の台帳へ差し込む（要件 3.3・3.3a）。
 ///
-/// カタログを読み、id をドメインごとに仕分け、4 本の台帳それぞれについて
-/// [`merge_initial`] を呼ぶ。台帳が既にあれば既存の塊は 1 バイトも変わらない。
+/// カタログを読み、[`plan_ledger_init`] に 4 本の本文を決めさせ、そのとおりに書く。
+/// 台帳が既にあれば既存の塊は 1 バイトも変わらない。
+///
+/// 判断は計画側に全部あるので、ここに残るのは**順番**だけである——4 本ぶんの本文が
+/// 全部決まってから書き始める。途中の 1 本で落ちたときに、その前の台帳だけが
+/// 書き換わって残ることが無い。
+///
+/// # 常時テストが届かない 2 か所
+///
+/// - **取り寄せの引数そのもの**。ここが渡す `&read_if_present` を「いつも `None`」を
+///   返す関数へ差し替えても、クレート全体は緑のままである（[`plan_ledger_init`] の
+///   主張は呼び手が渡した関数を確かめるので、呼び手が何を渡すかまでは押さえない）。
+/// - **下の書き出しの繰り返し**。`files::write_lf` へ渡す本文を空にしても緑のままで
+///   ある。`ledger_init` を呼ぶテストが 1 本も無いことによる、以前からある穴である。
+///
+/// どちらも `ledger_init` を実際に呼ばなければ現れず、呼べば台帳 4 本を書く。新しい
+/// クレートのテストはファイルを 1 つも作らない（設計 File Structure Plan）ので、どちらも
+/// 常時テストでは塞げない。
+///
+/// 実データでの通し確認——`ledger-init` を走らせて 4 本の台帳が 1 バイトも変わらない
+/// ことを見る——が受け持つのは**下の書き出しだけ**である。取り寄せの引数の側は今は
+/// 受け持てない: 台帳が今はすべて未分類なので、「いつも `None`」に差し替えても
+/// 生成物は 1 バイトも変わらない（実測）。調査 spec が手で記入を始めた日から、
+/// この通し確認がそちらも受け持つようになる。
 pub fn ledger_init() -> Result<(), SurveyError> {
     let assignment = PageAssignment::canonical();
     let catalog = read_catalog(&files::read_normalized(&paths::catalog_path())?)?;
-    let buckets = select_ids_by_domain(&catalog, &assignment)?;
+    let plans = plan_ledger_init(&catalog, &assignment, &read_if_present)?;
 
-    for domain in Domain::ALL {
-        let ids = buckets.get(&domain).map(Vec::as_slice).unwrap_or_default();
-        let pages = prologue_pages(&assignment, domain);
-        let target = paths::ledger_path(domain);
-        let existing = read_if_present(&target)?;
-        let body = merge_initial(existing.as_deref(), domain, &pages, ids)?;
-
-        ensure_parent(&target)?;
-        files::write_lf(&target, &body)?;
-        announce(&target, &format!("{} 項目", ids.len()));
+    for plan in &plans {
+        ensure_parent(&plan.target)?;
+        files::write_lf(&plan.target, &plan.body)?;
+        announce(&plan.target, &format!("{} 項目", plan.count));
     }
     Ok(())
 }

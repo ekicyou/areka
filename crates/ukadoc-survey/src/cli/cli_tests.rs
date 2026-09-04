@@ -210,5 +210,7 @@ fn the_usage_text_lists_every_name_in_the_dispatch_table() {
 // 足場のテスト `every_unwired_name_reaches_its_own_not_wired_body` はタスク 6.3 で
 // 役目を終えた（8 つとも中身が繋がったので、`SurveyError::NotWired` ごと退役した）。
 // 名前と中身の結び付きは、いまは 8 つの副手続き自身の在中テストと
-// `tests/cli_streams.rs` が受け持つ——ここで走らせるとファイルを読み書きしてしまう
-// （要件 6.2 が禁じる）。
+// `tests/cli_streams.rs` が受け持つ——ここで走らせると台帳や報告を書き出してしまう
+// （新しいクレートのテストはファイルを 1 つも作らない＝設計 File Structure Plan）。
+// 読むだけなら差し支えない。要件 6.2 はスナップショットが無くても赤くならないこと
+// を求める条項であって、repo の中を読むことは禁じていない。
