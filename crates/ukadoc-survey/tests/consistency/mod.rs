@@ -53,6 +53,7 @@
 
 mod checks;
 mod non_vacuity;
+mod values_md;
 
 use std::collections::BTreeMap;
 use std::path::Path;
