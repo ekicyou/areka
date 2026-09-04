@@ -242,6 +242,24 @@ pub(super) enum WaitInjection {
     DispatcherTickAndKanadeProbe,
     /// 何も注入せず観測だけを待つ。
     Idle,
+    /// 完了条件が**初めて成立するまで**は再生側 Tick を注入し、成立した後は `settle_rounds` 回、
+    /// **何も注入せず観測だけ**を続けてから段を終える。
+    ///
+    /// # なぜこの待ち方が要るのか（task 3.1 のレビュー指摘・R2.10）
+    ///
+    /// 段の完了条件が読む観測の中には、成立した後さらに実スレッドを 2〜3 段跨いで別の状態
+    /// （選択待ちの帳簿など）が整うのを待たねばならないものがある。呼び手の側で「成立してから N 回
+    /// 回す」と数えても、駆動器から見れば完了条件は**まだ偽**なので注入が続き、その N 回のあいだに
+    /// 注入時刻が段の上限まで走ってしまう。上限が広いほど再生が余計に進み、待っている状態が
+    /// 壊れる——実測では、選択待ちのまま止まっているはずの台本へ約 98 秒ぶんの再生が流し込まれ、
+    /// 次の段の選択確定が棄却された。
+    ///
+    /// ゆえに**待ちの終盤で注入をやめる**のは駆動器の側の責務である。呼び手の関数では、完了条件が
+    /// 偽である以上どうやっても注入を止められない。
+    DispatcherTickThenObserve {
+        /// 完了条件が成立した後、注入せずに観測だけを続ける反復の回数。
+        settle_rounds: usize,
+    },
 }
 
 /// 段 1 つぶんの駆動計画（design D6 の入力: 段名・注入の種類・注入時刻の上限）。区間の逐語は
@@ -391,6 +409,23 @@ pub(super) trait StageSink {
     fn inject(&mut self, injection: &Injection, now_ms: u64) -> Result<(), Inbox>;
     /// 表示指令を非ブロックで全件取り出す。
     fn collect(&mut self) -> Vec<PresentCommand>;
+    /// 注入時刻を進めてよいか（既定は「常に進めてよい」）。
+    ///
+    /// # なぜ据え置きが要るのか（task 3.1 のレビュー指摘・R2.10・design D6 の危険欄）
+    ///
+    /// 段の待ちには 2 つの相が混ざっている——⑴ 投函した入力が実スレッドを何段も渡って
+    /// **着地する**のを待つ相と、⑵ 着地した再生を**時間ぶん進める**相である。⑵ だけが注入時刻を
+    /// 要するのに、駆動器は 1 反復ごとに時刻を進めるので、⑴ が長引くと時刻だけが先に上限へ達する。
+    /// 上限に達すると以後は注入されないため**再生が永久に凍り**、その段は必ず待ち切れになる
+    /// （実測: 高負荷で予算 50 本を使い切ってから 30 秒空転し、装着段・選択確定段が赤くなった）。
+    ///
+    /// 据え置きはこれを構造で断つ。⑴ のあいだは**時刻を進めずに**再生側 Tick を投函し続けるので、
+    /// 着地までに何反復かかっても予算は 1 本も減らない。時刻が動かない注入は、待っている観測を
+    /// 追い越しようがない——頭打ちが在る理由（注入時刻が観測を追い越すと条件が壊れる）に照らして
+    /// 据え置きは安全側であり、予算は ⑵ に必要なぶんだけで足りるようになる。
+    fn may_advance_clock(&self) -> bool {
+        true
+    }
 }
 
 impl StageSink for SpineHarness {
@@ -486,6 +521,8 @@ impl LapDriver {
         let mut once_next = 0usize;
         let mut kanade_probes = 0usize;
         let mut closed = ClosedInboxes::default();
+        // 完了条件が成立してから観測だけで回した反復の回数（余韻を持つ待ち方でのみ使う）。
+        let mut settled_rounds: Option<usize> = None;
 
         loop {
             // ── 採取（毎反復）＋駆動器の自己検査（design D3・製品の判定ではない） ──
@@ -504,20 +541,49 @@ impl LapDriver {
                 });
             }
 
-            if complete(&StageProgress {
+            let holds = complete(&StageProgress {
                 collected: &collected,
                 now_ms: self.now_ms,
                 kanade_probes,
                 closed,
-            }) {
-                return Ok(StageObservation {
-                    stage: name,
-                    collected,
-                    injected_at_ms,
-                    once_pending: plan.once.len() - once_next,
-                    kanade_probes,
-                    closed,
-                });
+            });
+            // 余韻を持つ待ち方では、完了条件が成立してからさらに `settle_rounds` 回、**注入せずに**
+            // 観測だけを続ける。成立が崩れたら数え直す（一瞬の成立を完了と誤認しない）。
+            let settle_target = match plan.waiting {
+                WaitInjection::DispatcherTickThenObserve { settle_rounds } => Some(settle_rounds),
+                _ => None,
+            };
+            match settle_target {
+                None => {
+                    if holds {
+                        return Ok(StageObservation {
+                            stage: name,
+                            collected,
+                            injected_at_ms,
+                            once_pending: plan.once.len() - once_next,
+                            kanade_probes,
+                            closed,
+                        });
+                    }
+                }
+                Some(target) => {
+                    if holds {
+                        let rounds = settled_rounds.map_or(1, |done: usize| done + 1);
+                        settled_rounds = Some(rounds);
+                        if rounds >= target {
+                            return Ok(StageObservation {
+                                stage: name,
+                                collected,
+                                injected_at_ms,
+                                once_pending: plan.once.len() - once_next,
+                                kanade_probes,
+                                closed,
+                            });
+                        }
+                    } else {
+                        settled_rounds = None;
+                    }
+                }
             }
 
             // ── 有界時間が尽きたら必ず呼び手へ返す（素通りさせない） ──
@@ -545,7 +611,14 @@ impl LapDriver {
             }
 
             // ── 注入（上限に達したら以後は注入せず観測だけを待つ＝不変条件） ──
-            let picked = if self.now_ms >= limit_ms {
+            // 投函の可否は 3 つの門で決まる。
+            //  ⑴ 余韻に入ったら**何も注入しない**（呼び手が何回数えようと注入が続くと、待っている
+            //     状態が余計な再生で壊れる）。
+            //  ⑵ 実 async の着地待ち（[`StageSink::may_advance_clock`] が偽）のあいだは、**時刻を
+            //     据え置いたまま**再生側 Tick を投函し続ける。予算は 1 本も減らない。
+            //  ⑶ それ以外は上限まで通常どおり注入し、上限に達したら注入をやめる。
+            let holding = !sink.may_advance_clock();
+            let picked = if settled_rounds.is_some() {
                 None
             } else {
                 match plan.once.get(once_next) {
@@ -553,13 +626,15 @@ impl LapDriver {
                         once_next += 1;
                         Some(injection)
                     }
-                    None => match plan.waiting {
+                    None if holding || self.now_ms < limit_ms => match plan.waiting {
                         WaitInjection::DispatcherTick
-                        | WaitInjection::DispatcherTickAndKanadeProbe => {
+                        | WaitInjection::DispatcherTickAndKanadeProbe
+                        | WaitInjection::DispatcherTickThenObserve { .. } => {
                             Some(&Injection::DispatcherTick)
                         }
                         WaitInjection::Idle => None,
                     },
+                    None => None,
                 }
             };
             if let Some(injection) = picked {
@@ -570,8 +645,10 @@ impl LapDriver {
                     }
                 }
                 injected_at_ms.push(self.now_ms);
-                // 刻みが上限を跨ぐときは上限で止める（注入時刻は段の上限を超えない）。
-                self.now_ms = self.now_ms.saturating_add(TICK_STEP_MS).min(limit_ms);
+                if !holding {
+                    // 刻みが上限を跨ぐときは上限で止める（注入時刻は段の上限を超えない）。
+                    self.now_ms = self.now_ms.saturating_add(TICK_STEP_MS).min(limit_ms);
+                }
             }
 
             std::thread::sleep(Duration::from_micros(200));
