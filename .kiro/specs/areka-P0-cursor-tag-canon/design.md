@@ -48,7 +48,7 @@
 
 - `areka-parsers`（`decode.rs:212`・`:223-229`）——引数は既に文字列のまま届く。並走仕様 `areka-P0-sakura-bare-tag-lexer` と共有ファイル 0 を保つ。
 - `draw.rs`（980 行・1,000 行上限まで残り 20 行）——**1 行も足さない**。描画は行矩形と bare 文字列の再レイアウトで行われ、本仕様の変更は行矩形の値として届く。
-- `visible_window`（`layout.rs:512-558`）——式を変えない（2.8）。行が行送り方向へ後戻りする並びは、既存の式が返す値をそのまま採用し、決定論テストで固定する。
+- `visible_window`（`layout.rs:634-680`）——式を変えない（2.8）。行が行送り方向へ後戻りする並びは、既存の式が返す値をそのまま採用し、決定論テストで固定する。
 - `\f[align]` 系の実装と、`\_l` 直後の左寄せリセット・中央揃えのインデント相互作用（`areka-P0-text-decoration-canon` 所有）。
 - `\c[line]` の実装（所有者不在。割当は `areka-P0-ukadoc-survey-sakura-script` の台帳）。
 - 完了仕様のアーカイブ本体（`.kiro/specs/completed/areka-P0-choice-render/**`・`.kiro/specs/completed/areka-P0-balloon-vertical-canon/**`）——非改変。
@@ -534,6 +534,28 @@ impl TextRegion {
 
 - `crates/areka-emo-text/tests/emo2_fixture_e2e_test.rs`／`choice_fixture_test.rs`／`vertical_fixture_test.rs`——emo2 の `\_l[5em,2lh]`（3 箇所・`menu.pasta:15,33,62`）は既存実導出形で `origin` 未宣言ゆえ表示不変（9.5）。
 - ワークスペース全体 `cargo test --workspace` と 1,000 行番人（`file_length_guard_test.rs`）が緑であること（`draw.rs` 非接触・新設ファイルはいずれも 1,000 行未満）。
+
+**着地確認（タスク 7.1・2026-09-04）**——いずれも本ワークツリーで実測した数値である。
+
+| 観測 | コマンド | 結果 |
+|---|---|---|
+| ワークスペース全体 | `cargo test --workspace -j 3` | exit 0・テストバイナリと doctest 群 96 個で **6,456 passed・0 failed**・37 ignored |
+| `areka-emo-text` の単体テスト（本仕様の兄弟テスト 114 本を含む） | 同上の `unittests src\lib.rs` | **493 passed・0 failed**・2 ignored |
+| 適合フィクスチャ①（非改変） | `cargo test -p areka-emo-text --test emo2_fixture_e2e_test` | exit 0・**3 passed** |
+| 適合フィクスチャ②（非改変） | `cargo test -p areka-emo-text --test choice_fixture_test` | exit 0・**3 passed** |
+| 適合フィクスチャ③（非改変） | `cargo test -p areka-emo-text --test vertical_fixture_test` | exit 0・**11 passed** |
+| 1 ファイル行数上限の番人 | `cargo test -p log-capture-kit --test file_length_guard_test` | exit 0・**6 passed** |
+| 整形 | `cargo fmt --all -- --check` | exit 0 |
+| 描画ファイル非接触 | `git diff main...HEAD --stat -- crates/areka-emo-text/src/draw.rs` | 差分なし（`git ls-files` が 1 件を返し経路の実在を確認済み） |
+| 完了仕様アーカイブ非接触 | `git diff main...HEAD --stat -- .kiro/specs/completed` | 差分なし（追跡 1,276 ファイル） |
+
+- `cargo test --workspace` は 32bit helper の実体が要る（`shiori-host32-host` の `error_paths` が明示 panic する）。PowerShell で `cargo build -p shiori-host32-testdll --target i686-pc-windows-msvc` と `cargo build -p shiori-host32-helper --target i686-pc-windows-msvc` を先に通してから測った。
+- 適合フィクスチャ 3 本は本体もデータも非改変（`git diff main...HEAD --stat` を 3 本のテストと 3 つのフィクスチャディレクトリに掛けて差分なし）。3 セットとも文字描画開始点の宣言が無く、`\_l` を使うのは emo2 の `menu.pasta:15,33,62` の `\_l[5em,2lh]` 3 箇所だけである（要件 9.5 の前提を再実測）。
+- **固定するテストが無い行は 0 行**。解決表 10 行は `cursor_tag_resolve_tests.rs:374` が全行 × 両軸を表駆動で回し、`:415` が行・軸・単位の取りこぼしを赤にする。縮退表 8 行は同ファイル `:727-740` の対応表のとおり。検証表は V1〜V8 が `layout_cursor_vertical_tests.rs`／`layout_cursor_vertical_canon_tests.rs`／`layout_cursor_center_origin_tests.rs`／`layout_cursor_overflow_tests.rs`、H1〜H6b が `layout_cursor_wiring_tests.rs`／`layout_cursor_tests.rs`／`layout_cursor_order_tests.rs` に在る。
+- **受理できるのに動かない書式は 0 件**。語彙層 `state.rs:166` の `parse_cursor_coord` が全入力を 6 形のいずれかへ写し（全域性は `state_cursor_coord_parse_tests.rs:245` が固定）、解決層 `cursor_tag.rs:150-175` の `resolve_cursor_axis` が 6 形すべてを網羅 `match` で受けて「値」「動かさない」「分類済みの縮退」のいずれかを返し、配線 `layout.rs:842-855` の `resolve_cursor_component` が 3 つの結果すべてを扱う。配線側に書式で振り分ける分岐は存在しない（`layout.rs` 中の `CursorCoord` 参照は取り込み `:73` と関数シグネチャ `:836` の 2 箇所のみ）。
+- 検証表 H1 の「既存 13 本」は着地後の実態とずれる。`main` の `layout_cursor_tests.rs` 13 本のうち 9 本は名前も期待値も不変、3 本は撤去した換算関数の純関数テストで解決層のテストへ移り、1 本（`cursor_all_axes_degraded_is_complete_noop`）は負値・`%` が実導出へ移った正典追随として書き換わった（現 `cursor_negative_and_percent_axes_now_resolve_literally`）。配線の新設 2 本が加わり同ファイルは 12 本である。
+- 配線層で 3 書字方向すべてを回してはいない書式が 3 つある——`@N%`・中央指定の軸取り違え・解釈不能。いずれも横書きの配線テストと、書字方向を引数に持たない解決層のテストで固定してある（`resolve_cursor_axis` は `WritingMode` を受け取らず、方向が効くのは軸の読み替え `layout.rs:540-545`／`:576-579` だけ）。方向に依らないことそのものは `layout_cursor_center_origin_tests.rs:339`／`:412`／`:559` と `layout_cursor_vertical_canon_tests.rs:552` の 3 方向テストが固定する。
+- `visible_window` は `main` とバイト単位で不変（`main` の `layout.rs:512-558` と現行の `:634-680` がともに 2,180 バイトで一致。1 文字変えた対照は不一致になることも確認）。
 
 ## 正典文書・完了仕様への追随（Requirement 8）
 
