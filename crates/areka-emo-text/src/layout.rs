@@ -862,6 +862,9 @@ mod cursor_center_origin_tests;
 #[path = "layout_cursor_order_tests.rs"]
 mod cursor_order_tests;
 #[cfg(test)]
+#[path = "layout_cursor_overflow_tests.rs"]
+mod cursor_overflow_tests;
+#[cfg(test)]
 #[path = "layout_cursor_tests.rs"]
 mod cursor_tests;
 #[cfg(test)]

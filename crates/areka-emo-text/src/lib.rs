@@ -210,6 +210,10 @@ mod tests {
                 include_str!("layout_cursor_order_tests.rs"),
             ),
             (
+                "layout_cursor_overflow_tests.rs",
+                include_str!("layout_cursor_overflow_tests.rs"),
+            ),
+            (
                 "layout_cursor_tests.rs",
                 include_str!("layout_cursor_tests.rs"),
             ),
