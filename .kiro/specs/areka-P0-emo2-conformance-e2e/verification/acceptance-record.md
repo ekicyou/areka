@@ -268,15 +268,17 @@
 
 **設計が引く 9.24 秒との差について**: design.md は 2026-09-02 実測の 19 本 9.24 秒を引くが、本日同一ツリーで測ると 3.97 秒であった。機械の状態（並行走行・再スキャン）が違えば秒数はこの幅で動く。R12.6 が縛るのは**増分**であるため、追補後の判定は設計の 9.24 秒ではなく本節の 3.97 秒との対で行う。
 
+**合否（決定論層）の宣告**（タスク 3.4・根拠の全文は §11.2）
+
 | 欄 | 値 |
 |---|---|
-| 走行日時 | （未記入） |
-| コミット | （未記入） |
-| 走行のコマンド | （未記入） |
-| 結果（成否） | （未記入） |
-| 一周テストの本数と結果 | （未記入） |
-| 既存の兄弟テストの本数と結果（追補の前後で不変であること） | （未記入） |
-| 走行時間（基準値と増分） | （未記入） |
+| 走行日時 | 2026-09-04 |
+| コミット | `f170fd19`（ブランチ `claude/areka-p0-emo2-conformance-7b2e56`・走行の前後とも `git status --porcelain` は本記録のほかに 1 件も出さない） |
+| 走行のコマンド | `cargo test -p areka --bin areka emo2_boot::spine::`（12 回）・同コマンド ＋ `-- --skip conformance`（12 回）・`cargo test -p areka`・`cargo test -p log-capture-kit`・`cargo fmt -p areka -- --check` |
+| 結果（成否） | **合格**——R12.2（非回帰）・R2.11（分量）・R12.6（時間）の 3 点をいずれも満たす。判定に用いた検証コマンドの終了コードは §11.2 ⑹ のとおり——`emo2_boot::spine::` の 12 回の走行のうち **1 回が 101**、ほかはすべて 0。**留保**: その 1 回は本仕様が新設した檻 1 本が高負荷で間欠的に赤くなったもの（§11.2 ⑺）。既存 19 本の赤ではないので非回帰の宣告は変わらないが、R9 の隔離裁定（タスク 4.2〜4.4）へ申し送る |
+| 一周テストの本数と結果 | 新設 12 本（一周 2 本＋支援層の檻 10 本）。単独走行 3 回はいずれも `12 passed; 0 failed`（1.98〜2.08 秒） |
+| 既存の兄弟テストの本数と結果（追補の前後で不変であること） | 19 本（`a86edf69` の 19 本と**名前が完全一致**・改名 0 件・差し替え 0 件）。24 走行すべてで 19/19 が `ok`。既存 8 ファイルは `a86edf69`↔`HEAD` で差分 0 行、期待値の緩和も 0 件（§11.2 ⑴⑵） |
+| 走行時間（基準値と増分） | 基準は §11.0 の 3.97 秒（`a86edf69`・19 本）。同一セッションの対で測った増分は中央値 **+0.54 秒**・平均 **+0.86 秒**・範囲 −0.40〜+2.56 秒（11 対・§11.2 ⑸）。設計の「1 秒前後」に収まる |
 
 ### 11.1 判定が生きていることの対照（タスク 3.3）
 
@@ -419,6 +421,168 @@ test result: ok. 31 passed; 0 failed; 0 ignored; 0 measured; 1534 filtered out; 
 〈段名・表示指令〉の照合は**空振りではない**。走行が実際に出す表示指令の宛先が 1 つでも期待と違えば、その位置を名指しして赤になる（R2.4・R2.5）。ただし本節が示したのは**この列が退行を捕まえること**までであり、列が 2 行しかないという射程の狭さ（R12.5・`expected_display()` の doc が記す事実）は本節では変わらない。
 
 縮退: **設計 D3 が名指しする変異（段の上限を 1 段ずらす）では対照が作れず、同じ列を狙う別の変異へ差し替えた。** 理由は変異 ① の節に記したとおり、2 行の段名は段の完了条件が固定しており段の上限は関与しないためである。差し替えた変異は同じ判定（`spine_conformance_judge.rs:102`）を同じ列で赤にしているので、対照の目的（判定が生きていることを示す）は満たしている。⇒ design D3 の当該記述（「段の上限を意図的に 1 段ずらして駆動すると、段名の照合が赤になる」）は**実装と食い違うので、正本更新（タスク 7.3・D12）で引き直すこと**。
+
+### 11.2 非回帰と分量・時間の規律（タスク 3.4）
+
+**§11 の合否を宣告する節はここである**（R12.2・R2.11・R12.6）。§11.0 の基準値（編集前・`a86edf69`）と本節の実測を対にして判定した。宣告そのものは §11.0 の直後の「合否（決定論層）の宣告」の表に置いてある。
+
+| 欄 | 値 |
+|---|---|
+| 実施日 | 2026-09-04 |
+| コミット | `f170fd19`（`claude/areka-p0-emo2-conformance-7b2e56`） |
+| 基準コミット | `a86edf69`（§11.0 を採った編集前のコミット） |
+| 機械の状態 | **同一機で他セッションの `cargo` が並行して走っている**。各走行の直後に `cargo`／`rustc` の実プロセス数を数えたところ 2〜8 の間で動いた。秒数はこの幅で揺れる——増分は 1 本の走行の対ではなく分布で読むこと |
+
+#### ⑴ 既存 19 本が名前ごと生き残っていること
+
+件数の一致は改名や差し替えを隠す。よって**名前の集合**で確かめた。方法は次の 4 手（いずれも再実行できる）。
+
+1. `cargo test -p areka --bin areka emo2_boot::spine:: -- --list` で HEAD 側の全テスト名を採る → **31 本**。
+2. 名前に `conformance` を含む 12 本が本仕様の新設、含まない **19 本**が既存。
+3. 基準側は `git show a86edf69:<既存の 7 テストファイル>` の中身から `#[test]` の直後の `fn` 名を抜き、モジュール名を冠して 19 本の名前を作る → **19 本**。
+4. 2 と 3 を `diff` する。
+
+**出力: 差分なし（`IDENTICAL`）。改名 0 件・差し替え 0 件・消失 0 件。**
+
+| モジュール | 本数 | テスト名（`emo2_boot::spine::` を冠する） |
+|---|---|---|
+| `boot_smoke_tests` | 1 | `spine_harness_boots_scripted_ghost_and_reaches_attach_ready` |
+| `display_tests` | 4 | `spine_boot_leaves_all_balloons_invisible_with_established_slot_and_surface`・`spine_s1_boot_to_display_attaches_all_targets_with_opaque_readback`・`spine_s3_balloon_face_cue_delivers_hide_then_show_in_order`・`spine_s4_balloon_free_onboot_completes_without_balloon_face_switch` |
+| `move_cue_tests` | 1 | `spine_move_cue_drives_window_move_end_to_end` |
+| `seriko_loop_tests` | 5 | `spine_blink_smoke_send_tick_drives_loop_pattern_command`・`spine_dpi_change_during_live_seriko_loop_keeps_loop_progressing`・`spine_e2e_kero_blink_one_cycle_golden`・`spine_e2e_sakura_blink_after_bind_one_cycle_golden`・`spine_e2e_sakura_blink_default_off_emits_nothing` |
+| `settle_tests` | 4 | `settle_bounded_does_not_return_before_the_consecutive_quiet_rounds`・`settle_bounded_does_not_return_before_the_minimum_duration`・`settle_bounded_drives_the_real_clock_without_panicking`・`settle_bounded_returns_at_the_upper_bound_even_when_never_quiet` |
+| `talk_close_tests` | 2 | `spine_s2_talk_drives_surface_switch_and_typewriter_reveal`・`spine_s5_close_handshake_consumes_onclose_and_joins_all_handles_bounded` |
+| `text_scale_tests` | 2 | `spine_dpi_change_refreshes_balloon_text_scale_on_real_attach`・`spine_dpi_change_while_balloon_hidden_lands_on_next_show` |
+
+**全数緑の確認**: 本節で採った 24 走行（`emo2_boot::spine::` 12 回・`-- --skip conformance` 12 回）の出力を 1 本ずつ「`test <名前> ... ok`」の逐語で照合したところ、**24 走行すべてで 19/19 が `ok`**。⑺ で述べる赤が出た走行（対 4）でも既存 19 本は 19/19 で `ok` であった。
+
+#### ⑵ 既存の期待値を 1 つも緩めていないこと（R12.2）
+
+**「差分なし」を書く前に pathspec が実在に解決することを証明する**（実在しないパスへ `git diff` を当てると空出力になり、「差分なし」と区別が付かない）。
+
+| 検査 | コマンド | 出力 |
+|---|---|---|
+| pathspec の実在（陽性） | `git ls-files -- <既存 8 ファイル>` | **8 行**（8 ファイルすべてが解決する） |
+| pathspec の空振り（陰性の対照） | `git ls-files -- crates/areka/src/emo2_boot/NO_SUCH_FILE.rs` | **0 行**（実在しなければ 0 行になることの確認） |
+| 既存 8 ファイルの差分 | `git diff --numstat a86edf69 HEAD -- <既存 8 ファイル>` | **0 行**（解決する 8 本に当てて差分が無い） |
+| 赤を出せる対照 | `git diff --numstat a86edf69 HEAD -- crates/areka/src/emo2_boot/spine.rs` | `32  3  crates/areka/src/emo2_boot/spine.rs`（**非空**——同じ道具が差分を検出できることの確認） |
+
+対象の 8 ファイル＝`spine_boot_smoke_tests.rs`・`spine_display_tests.rs`・`spine_move_cue_tests.rs`・`spine_seriko_loop_tests.rs`・`spine_settle_tests.rs`・`spine_talk_close_tests.rs`・`spine_test_support.rs`・`spine_text_scale_tests.rs`。
+
+**唯一触れた既存ファイル `spine.rs` の中身**（`git diff a86edf69 HEAD -- crates/areka/src/emo2_boot/spine.rs` の全項目）:
+
+| 変更 | 種別 | 既存の期待値への影響 |
+|---|---|---|
+| 兄弟ファイルからの `use`（`RecordedStatus`・`StatusLedger`・`record_status`・`snapshot_status_calls`）の追加 | 追加 | なし |
+| `ScriptedShioriBackend`／`ScriptedShioriHandle` へフィールド `status_calls` を 1 本追加 | 追加 | なし（既存フィールド `calls` は無改変） |
+| `request`／`notify` の第 3 引数を `_status` → `status` へ改名し、`record_status(...)` の 1 行を先頭へ足す | 追加（書き込みのみ） | なし（返り値・既存の `calls` への push は 1 字も変わらない） |
+| 取り出し口 `status_calls()` を 1 本追加 | 追加 | なし（既存の取り出し口 `calls()` は無改変） |
+| 接続宣言 3 本（`conformance_lap_tests`・`conformance_script`・`conformance_support`） | 追加 | なし |
+
+**削除も緩和も 0 件**（32 行追加・3 行削除で、削除 3 行はすべて上表の「追加のために書き直した行」＝ `_status` の 2 行と `let handle = …` の 1 行）。design D3「追補の形（挙動を変えない）」の言う「追加は書き込みのみで、既存の読み手が増えない」が実測で成立している。追補の分量は差分で **29 行**（予算 40 行以内）。
+
+#### ⑶ 例外表に触れていないこと
+
+| 検査 | 出力 |
+|---|---|
+| `git rev-parse a86edf69:crates/log-capture-kit/tests/file_length_guard_test.rs` | `d76995d89b824fad55c78121ac2e4dc9db4f599f` |
+| `git rev-parse HEAD:…`（同ファイル） | `d76995d89b824fad55c78121ac2e4dc9db4f599f` |
+| `git hash-object …`（作業ツリーの実体） | `d76995d89b824fad55c78121ac2e4dc9db4f599f` |
+| `OVER_LIMIT_ALLOWED` の項目数（作業ツリー） | 11 件 |
+| `OVER_LIMIT_ALLOWED_COUNT`（`crates/log-capture-kit/tests/file_length_guard_test.rs:109`） | `11` |
+
+3 つの blob が同一＝**基準コミット・HEAD・作業ツリーで 1 バイトも違わない**。分割の代わりに例外表へ 1 行足して逃げた形跡は無い。
+
+（注: 素の `sha256sum` は `git show` の出力が LF・作業ツリーの実体が CRLF のため一致しない。ここでは改行の差に影響されない git の blob ハッシュで比べている。）
+
+#### ⑷ 分量規律（R2.11）
+
+**新規ファイルは 3 本ではなく 5 本である。** タスク 2.3 と 3.2 がそれぞれ R2.11 の「超える場合は主題単位に分けて接続する」に従って分けたため（tasks.md「Implementation Notes」）。本節は 5 本すべてを数えた。
+
+| ファイル | 行数 | 上限 1,000 に対する余白 |
+|---|---|---|
+| `crates/areka/src/emo2_boot/spine_conformance_lap_tests.rs` | 966 | 34 |
+| `crates/areka/src/emo2_boot/spine_conformance_script.rs` | 717 | 283 |
+| `crates/areka/src/emo2_boot/spine_conformance_support.rs` | 743 | 257 |
+| `crates/areka/src/emo2_boot/spine_conformance_support_tests.rs` | 669 | 331 |
+| `crates/areka/src/emo2_boot/spine_conformance_judge.rs` | 186 | 814 |
+| `crates/areka/src/emo2_boot/spine.rs`（追補後の組立ファイル） | 959 | **41**（基準 930 行＋29 行） |
+
+6 本すべてが上限を下回る。接続は `spine.rs` から 3 本（design が固定した本数のまま）、残る 2 本は `spine_conformance_support.rs:742` と `spine_conformance_lap_tests.rs:965` の末尾から。
+
+**上限の見張りが常設で走ることの確認**: `cargo test -p log-capture-kit` は終了コード **0**。`tests/file_length_guard_test.rs` を含む 7 つのテストバイナリが走り、いずれも `0 failed`（`30 passed`／`1 passed; 2 ignored`／`6 passed`／`16 passed`／`24 passed`／`18 passed`／`4 passed`）。門（`#[ignore]`・環境変数）は付けていない。
+
+#### ⑸ 走行時間の増分（R12.6）
+
+**測り方**: 同一機・同一セッションで、`cargo test -p areka --bin areka emo2_boot::spine::`（新規込み 31 本）と、同じコマンドに `-- --skip conformance` を付けた走行（既存 19 本）を**交互に**12 対走らせ、`test result:` 行の `finished in` を採った。1 対だけを選ばず分布で読む。
+
+| 対 | 新規込み 31 本 | 既存 19 本のみ | 増分 |
+|---|---|---|---|
+| 1 | 6.96 秒 | 4.40 秒 | +2.56 |
+| 2 | 7.57 秒 | 5.08 秒 | +2.49 |
+| 3 | 7.49 秒 | 4.94 秒 | +2.55 |
+| 4 | **35.69 秒（赤・⑺ 参照）** | 3.95 秒 | （赤のため増分の算出から除外） |
+| 5 | 3.93 秒 | 3.35 秒 | +0.58 |
+| 6 | 3.26 秒 | 3.20 秒 | +0.06 |
+| 7 | 3.64 秒 | 3.43 秒 | +0.21 |
+| 8 | 3.27 秒 | 2.73 秒 | +0.54 |
+| 9 | 2.97 秒 | 2.19 秒 | +0.78 |
+| 10 | 2.80 秒 | 2.75 秒 | +0.05 |
+| 11 | 2.61 秒 | 2.58 秒 | +0.03 |
+| 12 | 2.52 秒 | 2.92 秒 | **−0.40** |
+
+| 量 | 値 |
+|---|---|
+| 新規込み（緑 11 本）の中央値／最小／最大 | 3.27 ／ 2.52 ／ 7.57 秒 |
+| 既存のみ（12 本）の中央値／最小／最大 | 3.28 ／ 2.19 ／ 5.08 秒 |
+| 増分（11 対）の中央値 | **+0.54 秒** |
+| 増分（11 対）の平均 | **+0.86 秒** |
+| 増分の範囲 | −0.40 〜 +2.56 秒 |
+| 新規 12 本だけの単独走行（3 回） | 2.01 ／ 1.98 ／ 2.08 秒 |
+| 一周テスト 2 本だけの単独走行（3 回） | 2.07 ／ 3.63 ／ 2.29 秒 |
+
+**判定: 設計の「1 秒前後」に収まる**（中央値 +0.54 秒・平均 +0.86 秒）。**ただし雑音は正直に書く**——対 1〜3 では増分が +2.5 秒に達した。同じ 3 対では既存のみの側も 4.4〜5.1 秒（後半の 2.2〜2.9 秒に対し倍近く）で、他セッションの `cargo` が重かった時間帯に両側が揃って伸びている。新規の 12 本は既存 19 本より重い（一周テストは実ゴーストの起動を伴う）ため、機械が混むほど増分も伸びる。**中央値が 1 秒を下回る一方、最悪の対では 2.5 秒だった**——これが本日の実測の全体像である。
+
+§11.0 の基準値 3.97 秒（`a86edf69`・19 本）は本節の「既存のみ」の分布（中央値 3.28 秒・範囲 2.19〜5.08 秒）の中に収まっており、基準値の側にも機械由来の揺れがあることを裏づける。**設計が引く 9.24 秒は別の機械状態の値であり、判定には用いていない**（§11.0 の注記と同じ扱い）。
+
+#### ⑹ 判定に用いた検証コマンド
+
+| コマンド | 回数 | 終了コード | 結果 |
+|---|---|---|---|
+| `cargo test -p areka --bin areka emo2_boot::spine::` | 12 | 11 回 0 ／ 1 回 101 | 11 回 `31 passed; 0 failed`・1 回 `30 passed; 1 failed`（⑺） |
+| 同上 ＋ `-- --skip conformance` | 12 | すべて 0 | すべて `19 passed; 0 failed` |
+| `cargo test -p areka --bin areka emo2_boot::spine::conformance` | 3 | すべて 0 | すべて `12 passed; 0 failed` |
+| `cargo test -p areka` | 1 | 0 | `1563 passed; 0 failed; 2 ignored` ほか `1 passed`・`2 passed` |
+| `cargo test -p log-capture-kit` | 1 | 0 | 7 バイナリすべて `0 failed`（⑷） |
+| `cargo fmt -p areka -- --check` | 1 | 0 | 出力なし |
+| `git diff --numstat a86edf69 HEAD -- crates/` | 1 | 0 | 本仕様の 6 ファイルのみ（`spine.rs` ＋ 新規 5 本）。pathspec の実在は ⑵ の表で確認済み |
+| `git status --porcelain` | 1 | 0 | 本記録（`verification/acceptance-record.md`）以外は 1 件も出ない |
+
+本タスクは計測と記録だけを行い、`crates/**` を 1 行も編集していない。
+
+#### ⑺ 観測した間欠的な赤（非回帰の判定は変えない・R9 へ申し送り）
+
+12 回の走行のうち **1 回**（対 4）が赤くなった。**既存 19 本ではなく、本仕様が新設した檻である。**
+
+```
+test emo2_boot::spine::conformance_support::driver_tests::kanade_probe_raises_no_shiori_call_and_observes_the_close ... FAILED
+
+panicked at crates\areka\src\emo2_boot\spine_conformance_support_tests.rs:571:5:
+起動系列 5 呼出が有界内に揃わない
+
+test result: FAILED. 30 passed; 1 failed; 0 ignored; 0 measured; 1534 filtered out; finished in 35.69s
+```
+
+- 所要 35.69 秒は `SPIN_WAIT`（30 秒）の期限切れと一致する＝ゴースト起動の飢餓。steering の「協調テストループの飢餓」と同じ形であり、tasks.md「Implementation Notes」が 18 走行中 4 回で記録した系統と**同じテスト・同じ主張・同じ行**である。
+- **この赤は非回帰ではない**。落ちたのは本仕様がタスク 2.3 で新設した檻であり、`a86edf69` には存在しない。同じ走行でも既存 19 本は 19/19 が `ok`（⑴）。よって §11 の非回帰の宣告は変わらない。
+- **既存 19 本の側は、本日の 24 走行では 1 本も赤くならなかった。** ただし tasks.md「Implementation Notes」は高負荷下で `boot_smoke_tests::spine_harness_boots_scripted_ghost_and_reaches_attach_ready`・`talk_close_tests::spine_s2_talk_drives_surface_switch_and_typewriter_reveal`・`talk_close_tests::spine_s5_close_handshake_consumes_onclose_and_joins_all_handles_bounded`・`text_scale_tests` の 2 本・`seriko_loop_tests` の 2 本・`display_tests::spine_s4_balloon_free_onboot_completes_without_balloon_face_switch` が赤くなることを名指しで記録している。**本節の緑は「この 24 走行では出なかった」以上のことを言わない**——既存の間欠赤が消えたという主張ではない。
+- **引受先**: R9（間欠的な赤の隔離裁定）＝タスク 4.2〜4.4。design D11 ⑷ が「触らない」と裁定しているのは既存 2 本だけだが、実測される集合はそれより広く、`driver_tests::kanade_probe_raises_no_shiori_call_and_observes_the_close` は本仕様自身の檻である。`verification/isolation-decision.md` へ書き足すこと（R9.1・R9.4）。
+
+#### 縮退（R12.5）
+
+- **タスク 3.4 の完了条件が言う「新規 3 ファイル」は実装と食い違う。** タスク 2.3 と 3.2 が R2.11 に従って主題単位に分けたため実数は **5 ファイル**である。本節は 5 本すべてを数えた（3 本だけ数えると 2 本が検査から漏れる）。tasks.md・design.md の当該語（`design.md:145-161` の File Structure Plan・Testing Strategy の「既存テストへの影響の確認」項目 2＝`design.md:848`・タスク 3.4 の完了条件）の引き直しは**正本更新（タスク 7.3・D12）の担当**であり、本タスクは文書を書き換えていない。
+- **走行時間の判定は「1 対の比較」ではなく「分布の中央値」で行った。** 同一機で他セッションの `cargo` が走っているため 1 対の差は機械の混み具合を測ってしまう。中央値・平均・範囲の 3 つを併記し、都合のよい対を選んでいないことを表で示してある（⑸）。
+- **§12（実機層）は 1 文字も埋めていない。** 決定論層が合格であることは実機層を埋めない（§0.1・R1.3）。
 
 ---
 
