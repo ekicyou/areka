@@ -862,6 +862,9 @@ mod cursor_order_tests;
 #[path = "layout_cursor_tests.rs"]
 mod cursor_tests;
 #[cfg(test)]
+#[path = "layout_cursor_vertical_canon_tests.rs"]
+mod cursor_vertical_canon_tests;
+#[cfg(test)]
 #[path = "layout_cursor_vertical_tests.rs"]
 mod cursor_vertical_tests;
 #[cfg(test)]
