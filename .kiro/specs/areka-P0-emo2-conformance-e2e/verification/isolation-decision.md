@@ -210,11 +210,95 @@ design.md D11 の裁定表を本記録の正本として写す。**「走行結�
 
 ### 4.2 隔離前の走行（3 回・上限）
 
-| 回 | 実施日時 | コマンド | 結果 | 赤くなったテスト |
-|---|---|---|---|---|
-| 1 | （未記入） | （未記入） | （未記入） | （未記入） |
-| 2 | （未記入） | （未記入） | （未記入） | （未記入） |
-| 3 | （未記入） | （未記入） | （未記入） | （未記入） |
+> **本節は門を付ける前（task 4.2）に採った生の結果である。** task 4.3 が門を付けた後は、既定の走行でこの 3 本が走らなくなるため、**同じ観測は二度と採れない**。本節が存在する理由はそこにある。
+
+#### 4.2.1 走行前に定めた判定基準
+
+**データを見る前に**次の 3 分類を確定させた（見てから基準を選ばないため）。
+
+| 分類 | 条件 | 意味 |
+|---|---|---|
+| 決着（緑） | 3 回すべて緑 | この観測条件では赤が現れなかった |
+| 決着（赤） | 3 回すべて赤 | 間欠ではなく常に赤（＝別の原因） |
+| 決着せず | 緑と赤が混じる（赤が 1 回または 2 回） | 混在そのものが間欠性の実測。ただし 3 回では発生率を確定できない |
+
+「決着せず」となった場合の扱いは §4.1 のとおり——**裁定は隔離のままとする**。
+
+**緑で決着しても「間欠でない」ことの証明にはならない。** 3 回という上限（R9.6）は発生率を測る設計になっておらず、緑 3 回が言えるのは「この観測条件では赤を引かなかった」までである。
+
+#### 4.2.2 対象 3 本の同定（本ブランチ HEAD ＝ `3e7414fc`・2026-09-04）
+
+| 記号 | テスト関数名 | 現在の `file:line`（`#[test]` 属性の行） | design.md D11 の引用との差 |
+|---|---|---|---|
+| A1 | `pair_fix_commands_keep_a_pair_inside_the_band_it_already_shares` | `crates/wintf/src/ecs/window/zorder_pair_maintain_always_on_top_tests.rs:369`（`fn` は `:370`） | **ずれ無し**（D11 の `:369` と一致） |
+| A2 | `the_top_of_normal_band_fix_keeps_a_real_owned_pair_adjacent_and_out_of_the_band` | 同 `:740`（`fn` は `:741`） | **ずれ無し**（D11 の `:740` と一致） |
+| B1 | `vblank_notifies_listener_then_joins_on_drop` | `crates/wintf/src/runtime/tick_bridge.rs:346`（`fn` は `:347`） | **ずれ無し**（D11 の `:346` と一致） |
+
+壁時計期限の位置も併せて確認した——B1 の 500ms 期限は `tick_bridge.rs:353-358`（`:353` が説明のコメント・`:354` が `wait_timeout(Duration::from_millis(500))`・`:355-358` が `assert!`）。requirements.md 9.3 の引用 `:353-356` はこの範囲の内側を指しており、矛盾しない。
+
+**根治の引受先（residue brief）が挙げる行番号との関係**——`.kiro/specs/areka-P0-zorder-chain-residue/brief.md` の A-1（`:15`）は `:411`・`:767` を、A-2（`:16`）は `tick_bridge.rs:355` を挙げる。実測すると次のとおりで、**指している先は同じ 3 本である**（`#[test]` 行ではなく本体の判定行を挙げているだけ）。
+
+| brief の引用 | 実測した所在 | 逐語 |
+|---|---|---|
+| `zorder_pair_maintain_always_on_top_tests.rs:411` | **A1 の本体の内側**（`:370` の `fn` に属する） | `assert!(` ——直下 `:412-413` が対照①の `!is_always_on_top(control)` と「対照①: 印の読み取りが常に真を返しているわけではない」 |
+| 同 `:767` | **A2 の本体の内側**（`:741` の `fn` に属する） | `assert_eq!(` ——直下 `:768-770` が `measure_window_below(balloon)` と `Some(character)` と「持ち上がり幅によらず、バルーンはキャラのすぐ手前に居るはず（要件 1.2）」 |
+| `tick_bridge.rs:355` | **B1 の本体の内側**（`:347` の `fn` に属する） | `assert!(` ——直下 `:356-357` が `got.is_some(),` と `"expected a vblank notify within 500ms (is DWM running?)"` |
+
+同定の最終確認として `cargo test -p wintf --lib -- --list` を実行し、下記 3 つの完全名が実在すること（列挙 951 本のうちの 3 本）を確かめた。
+
+- A1 ＝ `ecs::window::zorder_pair_maintain::always_on_top_tests::pair_fix_commands_keep_a_pair_inside_the_band_it_already_shares`
+- A2 ＝ `ecs::window::zorder_pair_maintain::always_on_top_tests::the_top_of_normal_band_fix_keeps_a_real_owned_pair_adjacent_and_out_of_the_band`
+- B1 ＝ `runtime::tick_bridge::tests::vblank_notifies_listener_then_joins_on_drop`
+
+#### 4.2.3 走行の形
+
+1 回の走行は **1 本だけ**を対象にする（3 本を互いから隔離するため）。コマンドの形は次のとおりで、`<完全名>` に §4.2.2 の 3 つを入れる。
+
+```
+cargo test -p wintf --lib -- --exact <完全名> --nocapture --test-threads=1
+```
+
+テスト実行体は `target\debug\deps\wintf-991cffaa4b12d45b.exe`。事前に `cargo test -p wintf --lib --no-run`（3 分 36 秒）で用意しており、**この構築は走行回数に数えない**。各回の出力が `Finished ... in 0.2s` で始まることが、走行中に再構築が起きていないことを示す。
+
+#### 4.2.4 機械の状態
+
+同一機械では別の Claude セッションが兄弟の作業ツリーで `cargo` を走らせ得るため、負荷は本来こちらの制御下に無い。**今回については、走行の直前と直後のいずれでも `cargo`／`rustc`／`link` のプロセスが 0 個であった**（`Get-Process` で計数）。動いていたのは `claude` 18 個と `node` 6 個のみである。作業ツリーは 10 本存在するが、この時間帯に構築やテストを走らせていたものは無い。**負荷を意図的に足しても避けてもいない**——素の状態をそのまま測った。
+
+**これは観測条件の限界である。** design.md D11 が挙げる赤の機序は、⑵「実窓の重なり順を**他プロセスの可視窓**に割り込まれる」・⑶「壁時計期限が**負荷で**飢える」であり、いずれも他プロセスの窓と負荷が在る状態で現れる。今回の 3 回はその状態を欠いている。
+
+#### 4.2.5 走行結果（生の値）
+
+| 回 | 実施日時 | 対象（`--exact` の引数） | 終了コード | 集計 | 壁時計 | 結果 | 赤くなったテスト |
+|---|---|---|---|---|---|---|---|
+| A1-1 | 2026-09-04 19:30:33 | A1 | 0 | `1 passed; 0 failed; 0 ignored; 0 measured; 950 filtered out; finished in 0.01s` | 0.3s | **緑** | 無し |
+| A1-2 | 2026-09-04 19:30:34 | A1 | 0 | `1 passed; 0 failed; 0 ignored; 0 measured; 950 filtered out; finished in 0.01s` | 0.3s | **緑** | 無し |
+| A1-3 | 2026-09-04 19:30:34 | A1 | 0 | `1 passed; 0 failed; 0 ignored; 0 measured; 950 filtered out; finished in 0.01s` | 0.3s | **緑** | 無し |
+| A2-1 | 2026-09-04 19:30:34 | A2 | 0 | `1 passed; 0 failed; 0 ignored; 0 measured; 950 filtered out; finished in 0.01s` | 0.3s | **緑** | 無し |
+| A2-2 | 2026-09-04 19:30:35 | A2 | 0 | `1 passed; 0 failed; 0 ignored; 0 measured; 950 filtered out; finished in 0.01s` | 0.3s | **緑** | 無し |
+| A2-3 | 2026-09-04 19:30:35 | A2 | 0 | `1 passed; 0 failed; 0 ignored; 0 measured; 950 filtered out; finished in 0.01s` | 0.3s | **緑** | 無し |
+| B1-1 | 2026-09-04 19:30:35 | B1 | 0 | `1 passed; 0 failed; 0 ignored; 0 measured; 950 filtered out; finished in 0.00s` | 0.3s | **緑** | 無し |
+| B1-2 | 2026-09-04 19:30:36 | B1 | 0 | `1 passed; 0 failed; 0 ignored; 0 measured; 950 filtered out; finished in 0.01s` | 0.3s | **緑** | 無し |
+| B1-3 | 2026-09-04 19:30:36 | B1 | 0 | `1 passed; 0 failed; 0 ignored; 0 measured; 950 filtered out; finished in 0.00s` | 0.3s | **緑** | 無し |
+
+各回の出力に `test <完全名> ... ok` の行が在ることを逐語で確認した（例：A1-1 は `test ecs::window::zorder_pair_maintain::always_on_top_tests::pair_fix_commands_keep_a_pair_inside_the_band_it_already_shares ... ok`）。**「1 passed」であって「0 passed」ではない**——名前の綴り違いで 1 本も走らないまま緑になる形ではないことを、この 1 行が排除している。
+
+**赤の逐語出力は 1 件も無い。** 9 回すべてが `0 failed` であったため、「赤くなったテスト」欄の「無し」は**事象が発生しなかった**ことを意味する（記録漏れではない）。
+
+走行は **3 本 × 3 回 ＝ 9 回で打ち切った**。R9.6 の上限どおりであり、結果が曖昧に見えても追加の走行は行っていない。
+
+#### 4.2.6 分類（§4.2.1 の基準の適用）
+
+| 記号 | 緑／赤の内訳 | 分類 | 適用した基準 |
+|---|---|---|---|
+| A1 | 緑 3・赤 0 | **決着（緑）** | 「3 回すべて緑」 |
+| A2 | 緑 3・赤 0 | **決着（緑）** | 「3 回すべて緑」 |
+| B1 | 緑 3・赤 0 | **決着（緑）** | 「3 回すべて緑」 |
+
+#### 4.2.7 この結果が言うことと言わないこと
+
+- **言うこと**——門を付ける前の 3 本は、負荷の無い機械で 1 本ずつ隔離して走らせる限り 3 回とも緑である。すなわち 3 本は壊れておらず、隔離は「常に赤いテストの握り潰し」ではない。
+- **言わないこと**——間欠性が存在しないこと。今回の観測条件は §4.2.4 のとおり赤の機序（他プロセスの可視窓・負荷）を欠いており、3 回という上限は発生率を測れない。既知の赤の実測は本仕様の外（§3.3 の引受先 A-1・A-2）が持つ。
+- ゆえに本節は §2 の裁定（系統 ⑵ ⑶ を明示実行の門へ隔離する）を**覆さない**。最終の裁定は §4.5 で下す（task 4.4）。
 
 ### 4.3 隔離後の走行（3 回・上限）
 
