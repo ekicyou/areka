@@ -843,14 +843,19 @@ pub fn render_summary(catalog: &Catalog, ledgers: &[Ledger], evidence: &Evidence
 #### diff
 
 ```rust
-pub struct CatalogDiff {
+// 常時走るテストから呼べないことをコンパイラに守らせるため crate 内公開にする
+// （要件 8.4・タスク 1.7 が io::snapshot で採った形と同じ）。tests/consistency は
+// 統合テスト＝別クレートなので、この形なら diff に手が届かない。
+pub(crate) struct CatalogDiff {
     pub added: Vec<EntryId>, pub removed: Vec<EntryId>, pub changed: Vec<EntryId>,
     pub removed_in_ledger: Vec<EntryId>,     // 要件 8.3
 }
-pub fn diff(current: &Catalog, next: &Catalog, ledgers: &[Ledger]) -> CatalogDiff;
+pub(crate) fn diff(current: &Catalog, next: &Catalog, ledgers: &[Ledger]) -> CatalogDiff;
 ```
 
-- 本文の変更判定はハッシュの比較だけで行う（要件 8.2）。テストからは呼ばない（要件 8.4）。
+- 本文の変更判定はハッシュの比較だけで行う（要件 8.2）。テストからは呼ばない（要件 8.4）——`pub(crate)` により統合テストからは型検査の段で届かない。
+- ハッシュだけで決めることは**両方向に檻が要る**。多めに出る向き（項目全体を比べる）だけでなく、少なく出る向き（「ハッシュが違い、かつ見出しが同じときだけ」）も守ること。後者は本文と見出しが同時に変わった改訂を黙って落とす。
+- 2 つのカタログの `hash_algorithm` が食い違う場合、`diff` はそれを申し立てられない（4 欄に凍結・`Result` を返さない）。判定は副手続き側（タスク 6.3）が印刷の前に行う。
 
 ### 入出力層
 
