@@ -283,7 +283,7 @@
   - 報告の扱いを書く: 手で編集しない・食い違いは再生成で解消する・全体報告の再生成は統合担当の仕事・束 id は人手の文書から引用する
   - 調査 spec と本 spec の着地順が前後する場合の合流の手順を、どちらが先でも成り立つ形で書く
   - 用語は平易な語に限り、プロジェクト内でしか通じない言い回しを持ち込まない
-  - 完了時: 上の 5 つの見出しが揃い、形式の変更には要件の改訂が要る旨と、要件の記入例にある id が実データに存在しない注意が書かれている
+  - 完了時: 上の 5 つの見出しが揃い、形式の変更には要件の改訂が要る旨と、id は符号化済みなのでカタログから写す注意が書かれている（着手時は「要件の記入例にある id が実データに存在しない」注意だったが、12.1 で記入例を実在 id へ訂正したので節を書き換えた）
   - _Depends: 7.4_
   - _Requirements: 2.5, 2.6, 4.1, 4.2, 4.7, 4.8, 4.9, 5.2, 7.7, 9.5_
 
@@ -301,6 +301,31 @@
   - 完了時: `merge_initial` へ `None` を渡す配線に変える摂動が赤になり、`cargo test --workspace` が緑のまま
   - _Depends: 10_
   - _Requirements: 3.3a, 1.8_
+
+- [ ] 12. 完了報告の残件を片付ける（開発者指示 2026-09-05「残件は対応が必要なら深掘りして対応せよ」）
+- [x] 12.1 要件 付録 A の記入例を実在 id へ訂正し、記入例がカタログに実在して読めることを常時テストで守る
+  - 親が要件 A.1／A.3 と設計 D-10 の注記を訂正済み（未コミット・この task の差分に含める）。実装役は ⑴ `doc/ukadoc-coverage/README.md` の「⚠ 要件の記入例にある id は実データに存在しない」節を訂正後の姿（記入例は実在 id・id は符号化済みなので写す・逆斜線を書くのは `note` の中だけ）に書き換える ⑵ `crates/ukadoc-survey/tests/consistency/examples.rs` を新設し、要件 A.1 の TOML ブロックと README の TOML ブロックに現れる `ukadoc:` 形の id が**すべて**カタログに実在すること、A.1 のブロックが道具の台帳読み手（`ledger::read::read`）で property の台帳として読めて前置きの pages が割り当て表と一致し項目が id 順であること、`alias_of` の指す先が実台帳で `alias` でないこと、を主張する。空振り防止に各文書の id 件数の下限（A.1 は 4）を釘付けする
+  - 読むだけ。ファイルも一時ディレクトリも作らない。`tests/consistency/checks.rs`（985 行）には触れない
+  - 要件文書のパスは定数 1 つに集め、`/kiro-complete` のアーカイブ移動（`.kiro/specs/completed/` へ）で書き換える対象であることをコメントに書く
+  - 完了時: A.1 の id を 1 文字壊す摂動・README の id を壊す摂動がそれぞれ赤、`cargo test -p ukadoc-survey` と `cargo test --workspace` が緑
+  - _Depends: 11_
+  - _Boundary: requirements.md（親）・design.md（親）・doc/ukadoc-coverage/README.md・crates/ukadoc-survey/tests/consistency/{mod.rs,examples.rs}_
+  - _Requirements: 2.1, 2.6, 6.3, 付録 A.1, 付録 A.3, 付録 B.5_
+- [ ] 12.2 `ledger_init` の書き出しを注入可能にし、実 repo に対する不動点と「4 本決めてから書く」を常時テストで守る
+  - `cli/generate.rs`: `ledger_init()` を 1 行の配線（実際の取り寄せ `read_if_present` と実際の書き手＝`ensure_parent`＋`files::write_lf`）にし、判断と順番は `pub(crate) fn ledger_init_with(read_existing, write)` へ移す。`write` は `&mut dyn FnMut(&Path, &str) -> Result<(), SurveyError>`。標準出力の 1 行（`announce`）は今までどおり
+  - `cli/generate_tests.rs`: ⑴ 実 repo のカタログ・実際の `read_if_present`・記録するだけの書き手で `ledger_init_with` を呼び、記録された `(パス, 本文)` が `Domain::ALL` 順の台帳 4 本で、本文が**コミット済みの台帳とバイト一致**すること（不動点＝`ledger-init` の再実行で台帳が 1 バイトも変わらない・要件 3.3a）⑵ 4 本目（property）の取り寄せで失敗する関数を渡すと書き手が 1 度も呼ばれないこと（全部決めてから書く）⑶ 書き手の失敗がそのまま返ること
+  - 読むだけ。ファイルも一時ディレクトリも作らない。`ledger_init()` 自身はテストから呼ばない（呼べば 4 本書く）
+  - `ledger_init` の doc コメント「常時テストが届かない 2 か所」を現状に合わせて書き直す（残るのは `ledger_init()` の 1 行の配線だけ、と明記）
+  - 完了時: 書き出す本文を空にする摂動・書き出す先を取り違える摂動・4 本決める前に書き始める摂動がそれぞれ赤、`cargo test --workspace` が緑
+  - _Depends: 11_
+  - _Boundary: crates/ukadoc-survey/src/cli/{generate.rs,generate_tests.rs}・design.md（親）_
+  - _Requirements: 3.3, 3.3a, 1.8_
+- [ ] 12.3 `tests/consistency/checks.rs` の摂動の道具を `consistency/perturb.rs` へ分け、行数上限の余白を取り戻す
+  - 写し `Perturbed` と補助関数（`anchor_id`・`id_of`・`fabricated_entry`・`seen`・`expect_exactly`・`evidence_with_source_line`・摂動用の綴り定数など）を `tests/consistency/perturb.rs` へ移し、`checks.rs` は `use super::perturb::…` で引く。テストの本体・名前・件数は 1 つも変えない（挙動不変の移動）。`checks.rs` 冒頭の doc コメントの「このファイルの後半」等の自己言及は移動後の姿に直す
+  - 完了時: `cargo test -p ukadoc-survey` の件数が移動前と同数、`checks.rs` が 800 行以下、新設ファイルも 1,000 行未満、`cargo test --workspace` が緑
+  - _Depends: 12.1_
+  - _Boundary: crates/ukadoc-survey/tests/consistency/{mod.rs,checks.rs,perturb.rs}・design.md（親）_
+  - _Requirements: 9.6, 6.1_
 
 ## Implementation Notes
 
@@ -460,3 +485,6 @@
   - 親が追加した檻: 読む先が**引数で決まる**ことを 2 本目の台帳で確かめる（レビュアーが「置き場の実在だけ見て本文はいつも property から読む」摂動の生存を報告したため。追加後に同じ摂動を打って赤 1 本を確認）。
 - **⚠ 11 の後に残る未検証 2 か所（どちらも `ledger_init` を実際に呼ばないと現れず、呼べば台帳 4 本を書く）**: ⑴ 取り寄せの引数そのもの——`&read_if_present` を「いつも `None`」へ差し替えても緑。**台帳が今すべて未分類なので実データの通し確認でも捕まらない**（実測）。調査 spec が手で記入を始めた日から通し確認が受け持つようになる。⑵ 書き出しの繰り返し——`files::write_lf` へ渡す本文を空にしても緑（`ledger_init` を呼ぶテストが 1 本も無いことによる、11 以前からある穴）。
 - 11: 設計文書の追随 6 件（親）。`cli/` の在中テスト 2 本を木へ・`values_md.rs` の注記を実体へ・D-5 の「NFKC」に**帯を限った実装である**旨・`tomlout` の事前条件と D-10 の食い違い・Components の依存欄に `io` の型のみ／`strip_cr` のみ・Testing Strategy 17a の後半が現状では成立しないこと。
+- 12.1: 要件 付録 A.1 の記入例を実在 id へ訂正（親）・A.3 の逆斜線の一文を id の符号化に合わせて書き直し（親）・README の「記入例の id は実在しない」節を「id は符号化済み——カタログから写す」へ書き換え・`tests/consistency/examples.rs`（6 本）で要件と README の TOML の囲みに現れる id が全部カタログに実在すること、A.1 の囲みが道具の台帳読み手で property の台帳として読めて id 順であること（並びは `Ledger::file_order` を使い自前で数えない）、`alias_of` の先が実台帳で `alias` でないこと、を主張。取り出しの空振りは件数の下限（要件 4・README 3）と較正テスト（囲みの中の id 2 件だけを拾い、囲みの外は拾わない）で塞ぐ。レビュアーが 4 id の実在・1,749／0／0／316 の数・alias 例の根拠（ukadoc 本文「index指定との互換用の記述であり、特に意味はない」）をスナップショットまで遡って独立に確かめ、摂動 3 本（id の 1 字違い・README の id・id 順の破壊）を自分でも打って赤を確認。
+  - ⚠ **差し戻し 1 件＝書き直した節に新しい誤りを混ぜた**。`validwidth` を「当たり判定の幅」と語釈していたが、正典は「現在のバルーンの文字描画に使える幅」（当たり判定は `mouse????list(当たり判定名)` 族で別物）。**偽の記述を消すために書き直した段落に偽の記述を足した**——id の実在は檻が守るが、語釈は檻が守らない。プロパティの説明を書くときは正典本文を引いてから書くこと。
+  - property ドメインには ukadoc が「旧称」と呼ぶ真の別名の対が無い（旧名は見出しとして残らないので、カタログの項目にならない。真の別名は assets の `overlayfast`→`overlay-fast` 等）。A.1 の alias 例は「index 指定との互換用の記述」と正典が注記する`mouse????list(当たり判定名).name` を使い、仕分けは見本である旨を TOML のコメントに書いた。要件のパスは `examples.rs` の定数 1 つ（`/kiro-complete` のステップ 5-2 がアーカイブ移動で書き換える対象・コメントに明記）。残る取り残し（範囲外）: `tests/consistency.rs:9` の文が兄弟ファイルを `checks.rs` しか挙げていない——12.3 で直す。

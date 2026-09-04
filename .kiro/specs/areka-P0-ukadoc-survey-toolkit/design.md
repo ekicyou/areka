@@ -253,12 +253,12 @@ graph TB
 
 実測（全 1,749 件）:
 
-- **id に逆斜線・引用符・非 ASCII は 1 件も無い**。さくらスクリプトのタグは id では符号化されている（例: `\![get,property,…]` の項目の id は `ukadoc:list_sakura_script:_5c_21_5bget_2cproperty_2c…:1`）。丸括弧も `_28`／`_29` に符号化される（例: `ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.width:1`）。
+- **id に逆斜線・引用符・非 ASCII は 1 件も無い**。さくらスクリプトのタグは id では符号化されている（例: `\![get,property,…]` の項目の id は `ukadoc:list_sakura_script:_5c_21_5bget_2cproperty_2c…:1`）。丸括弧も `_28`／`_29` に符号化される（例: `ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.validwidth:1`）。
 - 見出しには逆斜線を含むものが 316 件、単引用符を含むものが 3 件、二重引用符と改行は 0 件。最大 105 文字。
 
 規則: 書き出しはすべて TOML の二重引用符の文字列を使い、`\` は `\\`、`"` は `\"`、制御文字は `\u00XX` に逃がす。これで見出しも id も一様に書ける。付録 A.3 の「逆斜線は `\\` と書く」は**見出しや備考に対しては現に必要**で、id に対しては現データでは出番が無い。
 
-> **調査 spec 4 本への注意（設計時の実測から）**: 要件付録 A.1 の記入例に出てくる id 文字列（`ukadoc:list_sakura_script:\\![get,property,ID]:1`・`ukadoc:list_propertysystem:balloon.scope(ID).width:1`）は形を説明するための作り物で、スナップショット中に**その綴りの id は存在しない**。実物は上の符号化された形である。付録 B 手順 5 の「見た目で直さず、そのまま写す」に従うこと。付録 A の欄名・型・並び順の契約は変わらない。手で書いた id が実在しない場合は整合検査 6.3 が赤にして取りこぼしを防ぐ。
+> **調査 spec 4 本への注意（設計時の実測から・2026-09-05 訂正）**: 要件付録 A.1 の記入例は当初、形を説明するための作り物の id（`ukadoc:list_sakura_script:\\![get,property,ID]:1`・`ukadoc:list_propertysystem:balloon.scope(ID).width:1`）で書かれており、スナップショット中にその綴りは存在しなかった。**2026-09-05 に実在する id へ訂正済み**（付録 A の冒頭に訂正の記録がある）。記入例の id がカタログに実在し、台帳の読み手で読め、id 順に並んでいることは `tests/consistency/examples.rs` が常時確かめる（README の TOML ブロックも同じ検査の対象）。付録 B 手順 5 の「見た目で直さず、そのまま写す」に従うこと。付録 A の欄名・型・並び順の契約は変わらない。手で書いた id が実在しない場合は整合検査 6.3 が赤にして取りこぼしを防ぐ。
 
 ### D-11. ドメイン別報告の入力 — **その台帳 1 本とテーマ名だけ。証拠は `summary.md` 側へ**
 
@@ -369,11 +369,12 @@ crates/ukadoc-survey/
         ├── mod.rs                   # repo の実データを読み込む共通処理
         ├── checks.rs                # 6.3〜6.8 6.10 7.4 を実データで走らせる
         ├── non_vacuity.rs           # 6.13 の「検査対象が 0 件でない」
+        ├── examples.rs              # 要件付録 A.1 と README の記入例がカタログに実在し読める（2026-09-05・task 12.1）
         └── values_md.rs             # 自前の道具の較正 3 本（見出しと 8 テーマの一致・
                                      #   書き出しの往復 1,749 件・語彙表経路 159 件）
 
 doc/ukadoc-coverage/
-├── README.md                        # 台帳の形式・状態語彙・欄の意味・仕訳の規則・URL の書き方・報告の扱い・合流の手順・付録 A.1 の記入例 id が実在しない注意
+├── README.md                        # 台帳の形式・状態語彙・欄の意味・仕訳の規則・URL の書き方・報告の扱い・合流の手順・id は符号化済みなのでカタログから写す注意（付録 A.1 の記入例は 2026-09-05 に実在 id へ訂正済み）
 ├── values.md                        # 伺からしさのテーマ 8 つ（要件 4.4-4.6）
 ├── catalog.toml                     # 機械生成のみ。1,749 項目＋冒頭のスナップショット情報
 ├── ledger/

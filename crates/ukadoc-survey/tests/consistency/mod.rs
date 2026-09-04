@@ -46,12 +46,15 @@
 //! # テストの本体はこのディレクトリの兄弟に置く
 //!
 //! 実データへの主張は [`checks`]（`checks.rs`）に、検査の対象が 0 件でないことの主張は
-//! [`non_vacuity`]（`non_vacuity.rs`）にある。後続のタスク 8.4 が足すファイルも同じ兄弟
-//! （`values_md.rs`）で、宣言はこのファイルへ下の `mod checks;` と同じく素の `mod` で
-//! 置ける（`#[path]` で読み込まれたファイルの子モジュールは、そのファイル自身の
-//! ディレクトリを基準に解決される——`structure.md:141`）。
+//! [`non_vacuity`]（`non_vacuity.rs`）に、自前の道具の較正は [`values_md`]
+//! （`values_md.rs`）に、要件と README の記入例が実データに実在することの主張は
+//! [`examples`]（`examples.rs`）にある。どれも同じディレクトリの兄弟で、宣言は
+//! このファイルへ下の `mod checks;` と同じく素の `mod` で置ける（`#[path]` で
+//! 読み込まれたファイルの子モジュールは、そのファイル自身のディレクトリを基準に
+//! 解決される——`structure.md:141`）。
 
 mod checks;
+mod examples;
 mod non_vacuity;
 mod values_md;
 
