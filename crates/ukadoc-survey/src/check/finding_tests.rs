@@ -409,18 +409,6 @@ fn the_entry_point_keeps_every_judgement_in_the_table() {
     assert_eq!(outcome.stats.judgements_run, vec!["一", "二", "三"]);
 }
 
-/// 3 つの判定はまだ空の実装である（タスク 4.2〜4.4 が埋める）。
-///
-/// この主張は「いまの状態の記録」であって守りではない。埋まったら消してよい。
-#[test]
-fn the_three_judgements_are_still_empty() {
-    let world = World::normal();
-    let input = world.input();
-    assert_eq!(super::super::structure::check(&input).len(), 0);
-    assert_eq!(super::super::content::check(&input).len(), 0);
-    assert_eq!(super::super::freshness::check(&input).len(), 0);
-}
-
 // ---------------------------------------------------------------------------
 // 見本データ——まず「何を持っているか」を数える（否定の主張だけにしない）
 // ---------------------------------------------------------------------------
