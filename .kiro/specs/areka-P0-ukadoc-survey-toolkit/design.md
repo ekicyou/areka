@@ -347,14 +347,20 @@ crates/ukadoc-survey/
 │   ├── io/
 │   │   ├── mod.rs                   # 入出力層の束ね
 │   │   ├── paths.rs                 # ワークスペース根と doc/ukadoc-coverage/ 配下の場所
+│   │   ├── paths_tests.rs
 │   │   ├── files.rs                 # 復帰文字を落として読む／改行だけで書く
+│   │   ├── files_tests.rs
 │   │   ├── sources.rs               # crates/**/*.rs の列挙と読み込み（自クレートを除く）
-│   │   └── snapshot.rs              # スナップショット JSON → SnapshotDoc
+│   │   ├── sources_tests.rs
+│   │   ├── snapshot.rs              # スナップショット JSON → SnapshotDoc
+│   │   └── snapshot_tests.rs
 │   └── cli/
 │       ├── mod.rs                   # 副手続きの振り分けと使い方の表示
+│       ├── cli_tests.rs             # 在中テスト（mod.rs の stem は親ディレクトリ名）
 │       ├── generate.rs              # catalog / ledger-init / report / report-summary
 │       └── inspect.rs               # check / evidence / candidates / diff
 └── tests/
+    ├── cli_streams.rs               # 実行ファイルの出口（終了コードと標準出力／標準エラーの分け）
     ├── consistency.rs               # 常時走る整合検査の入口（要件 6.1）
     └── consistency/
         ├── mod.rs                   # repo の実データを読み込む共通処理

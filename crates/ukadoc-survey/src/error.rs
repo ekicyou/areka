@@ -49,6 +49,13 @@ pub enum SurveyError {
     /// TOML として読めなかった。パスと理由を必ず添える。
     #[error("TOML の読み取りに失敗: {path}（{reason}）")]
     TomlParse { path: String, reason: String },
+    /// 副手続きの名前は振り分けられたが、中身がまだ繋がっていない。
+    ///
+    /// タスク 6.2・6.3 が中身を入れたら消える足場である。`todo!` で止めると
+    /// 本文の無い panic になり、`Ok` を返すと黙って成功したことになる——どちらも
+    /// 設計 Error Handling が禁じているので、値としての失敗で告げる。
+    #[error("副手続き {name} はまだ中身が繋がっていない")]
+    NotWired { name: &'static str },
 }
 
 #[cfg(test)]
