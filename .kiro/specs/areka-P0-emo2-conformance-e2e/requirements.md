@@ -31,8 +31,16 @@ brief 本文の調査日は 2026-07-16 であり、着手時義務として全�
 6. **人間サインオフの先例と文言が既に在る。** 「マイルストーン完了は人間サインオフを経てのみ宣言される。AI 単独では宣言しない」（`crates/areka/tests/emo2_real_run.rs:77`）。同ファイルの環境変数の門は**完成判定の前提ではない**と明記されている（同 `:8-12`）。
 7. **実機記録の様式は 4 系統の先例がある。** 判定表＋根拠引用（`.kiro/specs/completed/areka-P0-ghost-window-zorder/verification/signoff.md`）、実測値中心（`.kiro/specs/completed/areka-P0-window-placement/acceptance-record.md`）、機械判定が合否を決める形（`.kiro/specs/completed/areka-P0-balloon-offset-dpi/signoff-2026-08-28.md`）、証跡の分類を先に決める形（`.kiro/specs/completed/areka-P0-collision-dpi-hittest/acceptance-record.md`）。最後の 1 つは「**結果を見る前に期待を宣言する**」規則を持つ（同 `:32-38`）。
 8. **決定論と実機が食い違うときの読み分け手順は既に確定している。** 決まった順に 3 問を問う 4 行の表（`.kiro/specs/completed/areka-P0-dpi-transition-atomicity/signoff-procedure.md:426-465`）と、7 行の合否ブロック（同 `:467-481`）。実機ログの機械判定は**決定論テストと同一の純関数**を回す走行として行う（同 `:348-360`・実行体は `crates/areka/src/placement/transition_signoff_tests.rs:34,:58`）。
-9. **完成判定を脅かす間欠的な赤は 3 系統あり、1 系統は本仕様の編集集合の中に居る。** ⑴ 記録が非空になるのを待つだけで**直後の呼出数を待たずに数える**形（`crates/areka-ghost/tests/ghost/spine_e2e_test_s3_helper_liveness_detected.rs:143-168` の待ちの後、`:174-185` に待ちが 1 つも無い。同じ確認を行う兄弟は待ちを伴う形で書かれている＝`crates/areka/src/emo2_boot/spine_boot_smoke_tests.rs:34-49`）。⑵ 実窓の重なり順を測るテストが他プロセスの可視窓に割り込まれる形（`crates/wintf/src/ecs/window/zorder_pair_maintain_always_on_top_tests.rs:411,:767`）。⑶ 壁時計の期限が負荷で飢える形（`crates/wintf/src/runtime/tick_bridge.rs:353-356`・`crates/areka/src/emo2_boot/spine_boot_smoke_tests.rs:46`・同 `spine_talk_close_tests.rs:306`）。**⑵⑶ の根治の引受先は既に実在する**（`.kiro/specs/areka-P0-zorder-chain-residue/brief.md` の A-1／A-2）。
+9. **完成判定を脅かす間欠的な赤は 3 系統あり、1 系統は本仕様の編集集合の中に居る。** ⑴ 記録が非空になるのを待つだけで**直後の呼出数を待たずに数える**形（`crates/areka-ghost/tests/ghost/spine_e2e_test_s3_helper_liveness_detected.rs:143-168` の待ちの後、`:174-185` に待ちが 1 つも無い。同じ確認を行う兄弟は待ちを伴う形で書かれている＝`crates/areka/src/emo2_boot/spine_boot_smoke_tests.rs:34-49`）。**同形の兄弟が `areka-ghost` にもう 1 本ある——S1**（`crates/areka-ghost/tests/ghost/spine_e2e_test_s1_boot_success.rs:145-156` の `spin_pumping_ticks` が表示記録の非空だけを待ち、その直後の `:185-196` が 5 呼出目の到達を待たずに起動系列 5 要素を等値照合する）。機構も根因も S3 と同一である——`crates/areka-kanade/src/schedule/boot.rs:241` が `Action::StartTalk` を basewareversion の要求より先に積むため、表示の発火が 5 呼出の完了を含意しない（**S1 の追記は 2026-09-04 の開発者裁定による**。下の「改訂」節）。⑵ 実窓の重なり順を測るテストが他プロセスの可視窓に割り込まれる形（`crates/wintf/src/ecs/window/zorder_pair_maintain_always_on_top_tests.rs:411,:767`）。⑶ 壁時計の期限が負荷で飢える形（`crates/wintf/src/runtime/tick_bridge.rs:353-356`・`crates/areka/src/emo2_boot/spine_boot_smoke_tests.rs:46`・同 `spine_talk_close_tests.rs:306`）。**⑵⑶ の根治の引受先は既に実在する**（`.kiro/specs/areka-P0-zorder-chain-residue/brief.md` の A-1／A-2）。
 10. **明示実行で隔離する既存の書き方が在る。** `#[ignore = "理由"]` と環境変数の併用（`crates/areka/src/placement/transition_signoff_tests.rs:59`・`crates/areka-emo-atlas/src/emo2_golden.rs:227` 他）。逆に「門を持たないこと」を自ら要件として固定しているテストもある（`crates/areka-emo-present/src/presenter/budget_tests.rs:50` 他）ため、隔離は無差別には行えない。
+
+### 改訂（2026-09-04・開発者裁定・実機走行の前）
+
+実機走行の手順を組む段で 3 つの裁定が下りた。要旨と、本書のどこを改めたかを記す。**要件の本文で改めたのは前節 9 の ⑴・9.2・12.1 の 3 か所だけであり、Requirement 6 と Requirement 7 の本文は 1 文字も変えていない。**
+
+1. **7 行の合否ブロックの当てはめ先を改める（本書の改訂は無し・design.md 側の改訂）。** ブロックは「ゴースト窓に一切触れず、2 つの拡大率水準を 3 往復以上切り替えるだけの専用採取」を前提に書かれた先行仕様の文法である（`.kiro/specs/completed/areka-P0-dpi-transition-atomicity/signoff-procedure.md:266` の充足条件・`:317` の無効化チェック・`:333-342` の採取手順）。20 項目を触りながら回る一周のログへそのまま当てるのは当てはめ違いになる。ゆえに拡大率遷移の証跡は専用の短い採取（**走行 D**）で採り、機械判定（6.4）はそのログへ当てる。ブロックは**項目 16 の証跡**として逐語で記録し、実機層の総合判定は 20 項目の実機サインオフ（10.1 ⑶・4.1）で行う。`ATOM-SIGNOFF: FAIL` は引受先の無い既知の未達（7.1）による想定どおりの結果であり——先行仕様自身がこの FAIL を抱えたまま完了している（同 `:465`）——**項目 16 の合否は `ATOM-QUOTA`・`ATOM-NO-DRAG`・`DETERMINISTIC` の 3 欄だけで決める**。3 欄がすべて `PASS` なら項目 16 は適合検証項目表 行 16 の条件で判定し、3 欄のどれかが `FAIL` なら不合格とする。`SIGNOFF-BOUNDS: FAIL`・`VISUAL: 跳ねあり`・`AGREEMENT: 食い違い` の 3 つは**症状 #1 が再現したときに先行仕様 §6.5 の 3 行目が必ず書かせる組**であり（3 つの問いは同 `:444-450`・3 行目は同 `:456`・その行の `AGREEMENT` を `食い違い` と書く裁定は同 `:463`）、しかも `AGREEMENT` は `PASS|FAIL` を採る欄ではなく分類の欄（`一致|食い違い`）である。ゆえにこの 3 つは項目 16 の不合格理由にしない——決定論系統の違反は `DETERMINISTIC` が捕まえるので見落としは生じない。6.7 の「全ての欄が満たされたときにのみ合格」は**7 つの欄がすべて記入され未記入が 1 つも無いこと**を指す読みのまま変えず、ブロックの文法へ語を 1 つも足さない（6.1）。反映先は design.md の D5・D7 と、`verification/lap-procedure.md`・同 `acceptance-record.md`。
+2. **9.2 の対象を S3 と S1 の 2 ファイルへ広げる。** 前節 9 の ⑴ に S1 を同形の兄弟として追記し、9.2 と 12.1 を改めた。S1 の直しは S3 に当てたものと同形（等値照合の前に有界に待つ）であり、照合そのものは変えないため被覆を 1 つも失わない。
+3. **本仕様が新設した檻の競走欠陥は本仕様が直す（本書の改訂は無し）。** 対象は `crates/areka/src/emo2_boot/spine_conformance_support_tests.rs` の `kanade_probe_raises_no_shiori_call_and_observes_the_close`（`:557`）。これは編集集合の内側（`crates/areka/src/emo2_boot/` の兄弟テストファイル）にあるため 12.1 の例外を要さず、外へ渡す引受先も要らない。9.1 の「既知の 3 系統」は**下限であって上限ではない**——実装中に実測された系統も同じ裁定表に載せる（`verification/isolation-decision.md` §2 の前置きが既にこの読みを採っている）。反映先は design.md の D11。
 
 ## Boundary Context
 
@@ -191,7 +199,7 @@ brief 本文の調査日は 2026-07-16 であり、着手時義務として全�
 #### Acceptance Criteria
 
 1. The 本仕様 shall 既知の 3 系統について、隔離するか更新するかの裁定を行い、選んだ理由を記録する。
-2. The 本仕様 shall 「記録が非空になるのを待つだけで、直後の呼出数を待たずに数える」形を、待ちを伴う形へ更新する（同じ確認を行う既存の書き方に揃える）。
+2. The 本仕様 shall 「記録が非空になるのを待つだけで、直後の呼出数を待たずに数える」形を、待ちを伴う形へ更新する（同じ確認を行う既存の書き方に揃える）。The 更新 shall `areka-ghost` の同形 2 本——S3（`crates/areka-ghost/tests/ghost/spine_e2e_test_s3_helper_liveness_detected.rs`）と S1（`crates/areka-ghost/tests/ghost/spine_e2e_test_s1_boot_success.rs`）——の両方に当て、等値照合そのものは変えない（S1 は 2026-09-04 の開発者裁定で追加。「改訂」節 2）。
 3. The 本仕様 shall 実窓の重なり順を他プロセスに割り込まれて赤くなる形（`crates/wintf/src/ecs/window/zorder_pair_maintain_always_on_top_tests.rs`）と、画面同期の通知の壁時計期限が負荷で飢える形（`crates/wintf/src/runtime/tick_bridge.rs:353-356`）を、既存の書き方（理由付きの `#[ignore]`＋環境変数）で明示実行の門へ隔離する（議題 3 裁定・2026-09-02）。The 本仕様 shall `emo2_boot` 側の同形 2 本（`spine_boot_smoke_tests.rs:46-49`・`spine_talk_close_tests.rs:306-309`）は「条件が揃うまで待つ」形で既に書かれ期限は打ち切りの上限にすぎないため、触らず残す。
 4. If 隔離を選んだ場合, the 記録 shall 失われる被覆と、根治の引受先（台帳仕様の該当項目）を明記する。
 5. The 本仕様 shall 根治を行わない。
@@ -232,7 +240,7 @@ brief 本文の調査日は 2026-07-16 であり、着手時義務として全�
 
 #### Acceptance Criteria
 
-1. The 本仕様 shall 編集集合を、新規の一周テスト（`crates/areka/src/emo2_boot/` の兄弟テストファイル＋テスト専用ファイル `spine.rs` への接続宣言 3 本と記録の追補 1 か所）・実物定義の文書・本仕様の記録に限る。The 本仕様 shall 例外として Requirement 9.2（`spine_e2e_test_s3_helper_liveness_detected.rs` の待ちの形への更新）と Requirement 9.8（`wintf` の 2 ファイルへの門の付与）のみを事前登記済みの範囲として認める。
+1. The 本仕様 shall 編集集合を、新規の一周テスト（`crates/areka/src/emo2_boot/` の兄弟テストファイル＋テスト専用ファイル `spine.rs` への接続宣言 3 本と記録の追補 1 か所）・実物定義の文書・本仕様の記録に限る。The 本仕様 shall 例外として Requirement 9.2（`spine_e2e_test_s3_helper_liveness_detected.rs` と `spine_e2e_test_s1_boot_success.rs` の **S3・S1 の 2 ファイル**の待ちの形への更新。S1 は 2026-09-04 の開発者裁定で追加＝「改訂」節 2）と Requirement 9.8（`wintf` の 2 ファイルへの門の付与）のみを事前登記済みの範囲として認める。
 2. The 本仕様 shall 既存の決定論テストの期待値を、本仕様の都合で緩めない。
 3. If 併走する仕様と共有するファイルが生じた場合, the 本仕様 shall 着手前に相互確認する。
 4. The 本仕様 shall 決定論層（Requirement 2・3）と実機層・完成判定（Requirement 5〜11）を独立した節に保ち、実装段階の相 1（決定論一周テスト）と相 2（実機一周走行と完成判定）の境界をこの節構造で表す（分割はしない＝議題 2 裁定）。
