@@ -207,23 +207,19 @@ fn the_usage_text_lists_every_name_in_the_dispatch_table() {
     }
 }
 
-/// 足場のテスト（タスク 6.2・6.3 が中身を入れたら役目を終える）。
+/// 足場のテスト（タスク 6.3 が中身を入れたら役目を終える）。
 ///
-/// 8 つの名前がそれぞれ**自分の**中身へ繋がっていることを、まだ中身が無い今のうちに
+/// 名前がそれぞれ**自分の**中身へ繋がっていることを、まだ中身が無い今のうちに
 /// 1 度だけ確かめる。部品を釘付けしても入口がその部品を呼んでいるかは別に守る必要が
 /// あるので、名前と中身の結び付きをここで見ておく。
+///
+/// 生成側の 4 つ（`catalog`・`ledger-init`・`report`・`report-summary`）はタスク 6.2 で
+/// 中身が繋がったので、この一覧から外した。**外したのは役目を終えたからだけではない**
+/// ——中身が繋がった副手続きをここで走らせると、在中テストがファイルを書き出して
+/// しまう（要件 6.2 が禁じる）。残る 4 つが繋がったら、このテストは丸ごと役目を終える。
 #[test]
-fn every_name_reaches_its_own_not_wired_body() {
-    for name in [
-        "catalog",
-        "ledger-init",
-        "report",
-        "report-summary",
-        "check",
-        "evidence",
-        "candidates",
-        "diff",
-    ] {
+fn every_unwired_name_reaches_its_own_not_wired_body() {
+    for name in ["check", "evidence", "candidates", "diff"] {
         let (outcome, _notices) = run_and_read(&[name]);
         let err = outcome.expect_err("中身がまだ無いのに成功した（黙って成功したことにしている）");
         let body = err.to_string();
