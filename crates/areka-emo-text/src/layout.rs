@@ -856,6 +856,9 @@ fn resolve_cursor_component(
 }
 
 #[cfg(test)]
+#[path = "layout_cursor_center_origin_tests.rs"]
+mod cursor_center_origin_tests;
+#[cfg(test)]
 #[path = "layout_cursor_order_tests.rs"]
 mod cursor_order_tests;
 #[cfg(test)]
