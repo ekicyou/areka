@@ -48,6 +48,12 @@
 //! 単に捨てられる＝R5.2/5.3）。この規則は 3 方向（横書き／縦書き rl・lr）で同一
 //! （前進量が軸読み替え式に乗るだけ・アルゴリズム分岐なし）。
 //!
+//! 例外は **`\_l` が保留中のときだけ**である——改行の到着で、それより前に書かれた保留の
+//! 実体化（現在行の確定 → **保留改行の適用** → カーソル位置の適用の 3 段）が先に走る
+//! （書かれた順の適用・DD-11）。到着した改行そのものはやはり保留へ積まれるだけ（累算送りが
+//! 効くのは次の可視グリフの直前）で、`\_l` を挟まない改行列は 1 ビットも変わらない
+//! ＝上の規則は不変である。
+//!
 //! ## 行矩形の規約（R9.4 の再利用シーム）
 //!
 //! [`PositionedLine::rect`] は image px の絶対矩形。行内軸範囲＝行内開始〜最終グリフ
@@ -352,30 +358,30 @@ impl LayoutEngine {
                     //       current 空ゆえ空行を作らない・DD-2）。
                     //   (2) 保留改行 Σratio を block へ適用し行内を先頭へ戻す（newline-defer 既存規則）。
                     //   (3) pending-cursor の指定軸で inline/block を上書き（絶対 image px・不動軸は
-                    //       据え置き）。②' が (2) の改行送り/行内リセットに後勝ち＝カーソル明示位置が最終値。
+                    //       据え置き）。
+                    // ②' が (2) の改行送り/行内リセットに後勝ちするのは **`\n` → `\_l` の順で
+                    // 書かれたときだけ**である（書かれた順の適用・DD-11）。逆順 `\_l` → `\n` では
+                    // 改行の到着時点で 3 段が走り済みで、ここへ来る `pending_cursor` は空だから
+                    // 改行が後勝ちする（`LineBreak` 腕を参照）。
                     if pending.is_some() || pending_cursor.is_some() {
-                        if !current.is_empty() {
-                            lines.push(finish_line(
-                                std::mem::take(&mut current),
-                                mode,
-                                inline_start,
-                                inline_pos,
-                                block_pos,
-                                font_height,
-                            ));
-                        }
-                        if let Some(sum) = pending.take() {
-                            block_pos += block_dir * pitch * sum;
-                            inline_pos = inline_start;
-                        }
-                        if let Some((inline_val, block_val)) = pending_cursor.take() {
-                            if let Some(iv) = inline_val {
-                                inline_pos = iv;
-                            }
-                            if let Some(bv) = block_val {
-                                block_pos = bv;
-                            }
-                        }
+                        finish_pending_line(
+                            &mut lines,
+                            &mut current,
+                            mode,
+                            inline_start,
+                            inline_pos,
+                            block_pos,
+                            font_height,
+                        );
+                        apply_pending_newline(
+                            &mut pending,
+                            &mut inline_pos,
+                            &mut block_pos,
+                            inline_start,
+                            block_dir,
+                            pitch,
+                        );
+                        apply_pending_cursor(&mut pending_cursor, &mut inline_pos, &mut block_pos);
                     }
                     // ③ 折返し判定（WrapPlan で分岐・design System Flows「ゲート③」）。
                     // feed＝この可視グリフの配置前に行送りするか。ゲート①②④・行頭 1 グリフ
@@ -448,6 +454,46 @@ impl LayoutEngine {
                     placed += 1;
                 }
                 TextItem::LineBreak { ratio } => {
+                    // 書かれた順の適用（DD-11）: 到着時点でカーソルが保留中なら、**この改行を
+                    // 保留へ積む前に、それより前に書かれた保留を完全に実体化する**——保留フラッシュ
+                    // （ゲート②）と同じ (1) 現在行の確定 →(2) 保留改行 →(3) カーソル適用の **3 段**を、
+                    // フラッシュ本体と**同じ実装**（[`finish_pending_line`]／[`apply_pending_newline`]／
+                    // [`apply_pending_cursor`]）で走らせる。
+                    //
+                    // **(2) を省いて (1)(3) の 2 段にしてはならない。** `\_l` より前に書かれた保留改行の
+                    // Σ が (3) を**追い越して**保留に残り、この直後に積む改行と合流して二重に効くからで
+                    // ある——`[あ, \n, \_l[,100], \n, あ]` が 100 + 2×13 = 126 になり、書かれた順の 113
+                    // にも旧正典の 100 にも一致しない（前に書かれた改行がカーソルの後に効いてしまう）。
+                    //
+                    // 分岐の門を `pending_cursor` の有無に置いているのは、カーソルが絡まない純粋な
+                    // 改行列の意味論（連続改行は単一累算 Σratio・モジュール doc「改行の遅延」）を
+                    // 1 ビットも動かさないため。門を `pending` にも広げると Σ が分割適用され、
+                    // `pitch × Σ` と `Σ(pitch × ratio)` の丸めが分かれうる。
+                    //
+                    // これで `\_l` → `\n` の順では改行が後勝ちし（次行の先頭へ着地）、
+                    // `\n` → `\_l` の順では従来どおりカーソルが後勝ちする（到着時に保留カーソルが
+                    // 無いので本分岐は不発火）——順序で結果が分かれるのが正典の振舞いである。
+                    // 末尾規則は不変: 実体化は位置の更新と現在行の確定だけで、内容の無い行は作らない。
+                    if pending_cursor.is_some() {
+                        finish_pending_line(
+                            &mut lines,
+                            &mut current,
+                            mode,
+                            inline_start,
+                            inline_pos,
+                            block_pos,
+                            font_height,
+                        );
+                        apply_pending_newline(
+                            &mut pending,
+                            &mut inline_pos,
+                            &mut block_pos,
+                            inline_start,
+                            block_dir,
+                            pitch,
+                        );
+                        apply_pending_cursor(&mut pending_cursor, &mut inline_pos, &mut block_pos);
+                    }
                     // 遅延（deferred newline・R1.1/1.3）: 行を閉じず・block も前進させず、
                     // 保留へ ratio を累算する（連続改行は単一累算 Σratio）。可視構造・
                     // 内容ビューボックスはここでは一切変化しない（R1.2/1.5）。
@@ -664,6 +710,71 @@ fn segment_advance_sum(
     sum
 }
 
+/// 保留の実体化のうち **(1) 現在行の確定**（改行・`\_l` とも行区切り＝RN-3）。
+///
+/// 保留フラッシュ（ゲート②）と `LineBreak` 到着時の先行実体化（DD-11）が**共有する唯一の
+/// 実装**である——複製すると 2 つの経路で「行区切り」の意味が黙って分かれうる。現在行が空なら
+/// 何もしない（先頭フラッシュが空行を作らない・DD-2。末尾規則もこの 1 行で保たれる）。
+fn finish_pending_line(
+    lines: &mut Vec<PositionedLine>,
+    current: &mut Vec<PositionedGlyph>,
+    mode: WritingMode,
+    inline_start: f32,
+    inline_pos: f32,
+    block_pos: f32,
+    font_height: f32,
+) {
+    if current.is_empty() {
+        return;
+    }
+    lines.push(finish_line(
+        std::mem::take(current),
+        mode,
+        inline_start,
+        inline_pos,
+        block_pos,
+        font_height,
+    ));
+}
+
+/// 保留の実体化のうち **(2) 保留改行の適用**（累算送り `pitch × Σratio` を行送り軸へ載せ、
+/// 行内軸を行頭へ戻す・newline-defer の既存規則）。適用した保留は消費する。
+///
+/// [`finish_pending_line`]／[`apply_pending_cursor`] と同じく、フラッシュ本体と
+/// `LineBreak` 到着時の先行実体化（DD-11）が共有する唯一の実装である。
+fn apply_pending_newline(
+    pending: &mut Option<f32>,
+    inline_pos: &mut f32,
+    block_pos: &mut f32,
+    inline_start: f32,
+    block_dir: f32,
+    pitch: f32,
+) {
+    if let Some(sum) = pending.take() {
+        *block_pos += block_dir * pitch * sum;
+        *inline_pos = inline_start;
+    }
+}
+
+/// 保留の実体化のうち **(3) 保留カーソルの適用**（指定軸だけを絶対 image px で上書きし、
+/// 不動軸は据え置く・R1.6/5.5）。適用した保留は消費する。
+///
+/// [`finish_pending_line`] と同じく、フラッシュ本体と先行実体化（DD-11）が共有する唯一の実装。
+fn apply_pending_cursor(
+    pending_cursor: &mut Option<(Option<f32>, Option<f32>)>,
+    inline_pos: &mut f32,
+    block_pos: &mut f32,
+) {
+    if let Some((inline_val, block_val)) = pending_cursor.take() {
+        if let Some(iv) = inline_val {
+            *inline_pos = iv;
+        }
+        if let Some(bv) = block_val {
+            *block_pos = bv;
+        }
+    }
+}
+
 /// 行の確定: 行内範囲（開始〜送り終端）と行送り軸位置から行矩形を組む
 /// （行送り軸の厚み方向は行送り方向と同符号——モジュール doc「行矩形の規約」）。
 fn finish_line(
@@ -744,6 +855,9 @@ fn resolve_cursor_component(
     }
 }
 
+#[cfg(test)]
+#[path = "layout_cursor_order_tests.rs"]
+mod cursor_order_tests;
 #[cfg(test)]
 #[path = "layout_cursor_tests.rs"]
 mod cursor_tests;

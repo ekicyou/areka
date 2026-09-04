@@ -202,6 +202,10 @@ mod tests {
             ("segment.rs", include_str!("segment.rs")),
             ("layout.rs", include_str!("layout.rs")),
             (
+                "layout_cursor_order_tests.rs",
+                include_str!("layout_cursor_order_tests.rs"),
+            ),
+            (
                 "layout_cursor_tests.rs",
                 include_str!("layout_cursor_tests.rs"),
             ),
