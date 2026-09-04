@@ -1050,6 +1050,11 @@ pub enum SurveyError {
     Io { path: String, reason: String },
     #[error("TOML の読み取りに失敗: {path}（{reason}）")]
     TomlParse { path: String, reason: String },
+    // 整合検査の副手続きが所見ありで終わるための変種。件数だけを持ち、本文は
+    // 持たない——本文は既に標準出力へ出ているので、持たせると読み手が同じ一覧を
+    // 標準出力と標準エラーで 2 度読むことになる（終了コード 1・要件 6.12）。
+    #[error("整合検査で食い違いが {count} 件見つかった（本文は標準出力）")]
+    CheckFindings { count: usize },
 }
 ```
 
