@@ -146,7 +146,7 @@
   - _Requirements: 2.10, 9.1, 9.4, 10.7, 12.6_
   - _Depends: 5.3_
   - _Boundary: `crates/areka/src/emo2_boot/spine_conformance_support_tests.rs`（1,000 行の見張りを超えない）・`.kiro/specs/areka-P0-emo2-conformance-e2e/verification/isolation-decision.md`_
-- [ ] 5.6 S1 の「待たずに数える」形を待つ形へ更新する（間欠赤 ⑸）
+- [x] 5.6 S1 の「待たずに数える」形を待つ形へ更新する（間欠赤 ⑸）
   - タスク 4.1（`3e7414fc`）と同じ直しを S1 へ当てる: 等値照合の前に Status を除く呼出が 5 件揃うのを `E2E_BOUND` で有界に待つ。照合そのもの（5 要素の等値）は 1 文字も変えない
   - 系統 ⑴ と同じ根因（`crates/areka-kanade/src/schedule/boot.rs:241` が `StartTalk` を basewareversion より先に積む）を doc コメントで引き、被覆を 1 つも失わないことを確かめる
   - isolation-decision.md の §2 行 ⑸・§3.3.1 を「更新した（R12.1 改訂・2026-09-04）」へ改める
