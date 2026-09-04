@@ -108,7 +108,7 @@ fn cursor_flush_orders_after_pending_newline_and_overrides_it() {
     );
 }
 
-/// 後続可視グリフの無い末尾 `\_l` は保留のまま蒸発する（newline-defer と同一規則・2.5）。
+/// 後続可視グリフの無い末尾 `\_l` は保留のまま蒸発する（完了仕様 `areka-P0-newline-defer` R5.2／5.3 と同一規則）。
 /// `[あ, \_l[100,50]]` → 1 行 [あ@0]（`\_l` は行を開かず・位置も動かさない）。
 #[test]
 fn trailing_cursor_move_evaporates() {

@@ -351,34 +351,36 @@ fn backward_arrangement_splits_a_line_only_when_a_move_succeeds() {
     );
 }
 
-// ── DD-9: 拡張の口の確認（本仕様では付けない） ──
+// ── DD-9: 行構造の観測（配置層は内容の無い行を出さない） ──
 
-/// **DD-9 の確認**（拡張を**実装しない**ことの確認であって、拡張の実装ではない）。
+/// **DD-9 の確認**（`\c[line]` を**実装しない**ことの確認であって、その実装ではない）。
 ///
-/// design.md `:425` は「`PositionedLine { rect, glyphs }` に『分割の由来』『内容の有無』を
-/// 持たせる拡張は、`finish_line` に引数を 1 つ足すだけで付けられる」と主張する。本檻は
-/// その主張のうち**機械で確かめられる 2 つ**を固定する。
+/// design.md `:440` は、行が生まれるのは文字が置かれたときだけで `\_l`／`\n` のどちらの
+/// 保留も**内容の無い行を作らない**こと・`PositionedLine` にフィールドは足さないこと・
+/// `\c[line]` の行数は**配置層から取らず** item 列の分割タグを数えることを定める
+/// （開発者裁定 2026-09-04：`\_l` も `\n` と同じく「実体が発行されるまで確定しない座標
+/// 指定」）。本テストはそのうち**機械で確かめられる 2 つ**を固定する。
 ///
-/// ⑴ **内容の有無は今日すでに観測できる**: `PositionedLine::glyphs` がそれ自体で内容の有無を
+/// ⑴ **内容の無い行は 1 本も出ない**: `PositionedLine::glyphs` がそれ自体で内容の有無を
 ///    表しており、`Vec<PositionedLine>` に**内容の無い行は 1 本も現れない**（行の確定は
 ///    `finish_pending_line` の `if current.is_empty() { return; }` を通るため）。よって
 ///    Requirement 6.3 が言う「`\_l` 以外で分割された内容の無いものは行と見なさない」は、
-///    現状の行境界がそのまま満たしている——`\c[line]` の実装者が足すのは「`\_l` で分割された
-///    **内容の無い行**を出す」側だけになる。後戻りの `\_l` で分割された行も例外ではない。
+///    現状の行境界がそのまま満たしている——`\c[line]` の所有者が行を数えるのは
+///    **item 列の上**であり（分割タグを数え、自動折返しは分割に含めない）、配置層の行境界は
+///    **内容のある行だけ**を供給する。後戻りの `\_l` で分割された行も例外ではない。
 ///
-/// ⑵ **由来を渡す口は有限で局所である**: `finish_line` は `layout.rs` の私有関数で、
+/// ⑵ **行を閉じる場所は有限で局所である**: `finish_line` は `layout.rs` の私有関数で、
 ///    呼び出しは **3 箇所**（折返しの行送り・最終行の確定・`finish_pending_line` の内側）、
 ///    `finish_pending_line` の呼び出しは **2 箇所**（保留フラッシュ・`LineBreak` 腕の
-///    先行実体化）。引数を 1 つ足すときに触るのはこの 5 箇所と 2 つのシグネチャだけで、
-///    どちらの呼び出し側にも「由来」を決めるのに要る `pending`／`pending_cursor` が
-///    **すでにスコープに在る**（どちらも `take()` されるのは行の確定より後である）。
+///    先行実体化）。⑴ の「内容の無い行は出ない」が成り立つのは、この 5 箇所の入口が
+///    `finish_pending_line` の `if current.is_empty() { return; }` という**一つの門に集まっている**
+///    からである。
 ///
-/// 件数を逐語で持つのは、**この見積りが黙って陳腐化する経路を塞ぐ**ためである（呼び出しが
-/// 増えれば DD-9 の「引数を 1 つ足すだけ」は成り立たなくなる）。走査する語 `finish_line(`／
-/// `finish_pending_line(` は関数定義と呼び出しにしか現れない（`layout.rs` の説明文は
-/// 括弧を伴わない `[finish_pending_line]` の形で書かれている）。
+/// 件数を逐語で持つのは、**行を閉じる入口が黙って増える経路を塞ぐ**ためである。走査する語
+/// `finish_line(`／`finish_pending_line(` は関数定義と呼び出しにしか現れない（`layout.rs` の
+/// 説明文は括弧を伴わない `[finish_pending_line]` の形で書かれている）。
 #[test]
-fn line_split_origin_hook_is_one_argument_away_and_content_presence_is_already_observable() {
+fn no_content_less_line_is_ever_emitted_and_line_closing_sites_are_pinned() {
     // ⑴ 内容の無い行は 1 本も出ない（後戻りの `\_l` で分割された行を含む）。
     let region = region_overflow();
     let mut items = broken_lines(4);
@@ -414,13 +416,13 @@ fn line_split_origin_hook_is_one_argument_away_and_content_presence_is_already_o
         "空行が作られうる並びでも内容の無い行は 1 本も出ない（R6.3）"
     );
 
-    // ⑵ 由来を渡す口の数（DD-9 の見積りの母集合）。
+    // ⑵ 行を閉じる場所の数（⑴ を支える門の母集団）。
     const LAYOUT_SRC: &str = include_str!("layout.rs");
     // 定義 1 つ＋呼び出し 3 つ。
     assert_eq!(
         LAYOUT_SRC.matches("finish_line(").count(),
         4,
-        "`finish_line` は定義 1・呼び出し 3——増えたら DD-9 の「引数 1 つ」の見積りを引き直すこと"
+        "`finish_line` は定義 1・呼び出し 3——増えたら「行を閉じる入口」の母集団を数え直すこと"
     );
     // 定義 1 つ＋呼び出し 2 つ。
     assert_eq!(
@@ -428,7 +430,7 @@ fn line_split_origin_hook_is_one_argument_away_and_content_presence_is_already_o
         3,
         "`finish_pending_line` は定義 1・呼び出し 2——同上"
     );
-    // 由来の判定材料が呼び出し側のスコープに在ること（`take()` は行の確定より後）。
+    // 門が同一ファイル内の私有関数に閉じていること（外から別経路で行を開かれない）。
     assert!(
         LAYOUT_SRC.contains("fn finish_pending_line("),
         "`finish_pending_line` は `layout.rs` の私有関数（呼び出し元は同ファイルに閉じている）"

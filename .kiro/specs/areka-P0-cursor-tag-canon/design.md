@@ -30,7 +30,7 @@
 - `\f[align]`／`\f[valign]`／`\c[line]`／`\_q` の実装（7.5）。`\_l` との関係は登記のみ（7.1〜7.4）。
 - `areka-parsers` の改修（7.6）。3 個目以降の引数が捨てられる件は登記のみ。
 - あふれ判定（`visible_window`）の式の変更（2.8＝式を変えない）。
-- 行に「分割の由来」を記録する拡張（6.4＝`\c[line]` を実装しないため、拡張の口を確認・登記するにとどめる）。
+- 行に「分割の由来」を記録する拡張（6.4 は**開発者裁定 2026-09-04 で取り下げ**＝`PositionedLine` にフィールドは足さず、配置層は内容の無い行を出さない。`\c[line]` の「行」は台本の構造として同タグの所有者が item 列で数える＝DD-9）。
 - バルーン縦書きの受口・`origin`／`validrect` の意味論（完了仕様 `areka-P0-balloon-vertical-canon` 所有）。表示倍率と単位空間（完了仕様 `areka-P0-balloon-offset-dpi` 所有）。
 
 ## Boundary Commitments
@@ -134,10 +134,10 @@ graph LR
 | DD-5 | 5. `centerx` を Y に・`centery` を X に書いたとき | 挙動は要件 1.5（当該軸不動）。記録は専用の分類 `CenterAxisMismatch` で警告一回化する | 書き手に「軸を取り違えた」と伝わる。分類が 1 つ増えるだけで式は変わらない |
 | DD-6 | 6. `%` の係数 | `値 × 文字高さ / 100` | 正典「100%＝タグを書いた時点での文字高さ」＝`em` の 100 分の 1 刻み。係数表に 1 行 |
 | DD-7 | 7. 縮退の分類 | 列挙型 `CursorDegrade` は残し、バリアントを **`Unparsable`（解釈不能）・`CenterAxisMismatch`（軸取り違え）の 2 つ**にする。範囲外（2.6）と完全無効果（5.4）は縮退ではなく DEBUG 記録（一回化しない） | 要件 5.3 が「分岐ごとに初回 1 回」と定めるため、分岐の鍵となる型が要る。負値・`%`・`@` は実導出へ移るので分類から消える（5.2） |
-| DD-8 | 8. ファイルの置き場所 | 新設 `cursor_tag.rs`（意味論）＋ `cursor_tag_tests.rs`（純関数の全網羅）。配線のテストは `layout.rs` 配下に残し、縦書き用に `layout_cursor_vertical_tests.rs` を新設。`draw.rs` には足さない | 上の「Architecture Pattern」参照。`layout.rs` は約 120 行減る |
+| DD-8 | 8. ファイルの置き場所 | 新設 `cursor_tag.rs`（意味論）＋ `cursor_tag_tests.rs`（純関数の全網羅）。配線のテストは `layout.rs` 配下に残し、縦書き用に `layout_cursor_vertical_tests.rs` を新設。`draw.rs` には足さない | 上の「Architecture Pattern」参照。**予測「`layout.rs` は約 120 行減る」は外れた**——着地実測は `main` 764 行 → HEAD 890 行（**＋126 行**）。旧換算 4 項目の撤去分より、配線側に足した分（3 段フラッシュ・軸ごと合成・実効位置の逆写像とその説明）のほうが大きかった。予測は記録として残し、実測で訂正する |
 | DD-9 | 9. 行構造の観測 | **配置層は内容の無い行を出さない**（開発者裁定 2026-09-04：`\_l` は `\n` と同じく「実体が発行されるまで確定しない座標指定」）。`\_l` は実体化時に現在行を閉じる（行の分割点）が、行が生まれるのは文字が置かれたときだけ。`PositionedLine` にフィールドは足さない。`\c[line]` の「行」は**台本の構造**（タグ列を分割点で区切って数える）であり、その数え方（`\_l` が開いた内容の無い区間は数え、`\n` 系が開いたものは数えない・自動折返しは分割でない）は `\c[line]` の実装者が item 列の上で適用する | 正典 `\c[line,数値]` の記述例 `この行は削除されない。\_l[0,0]\c[line,1]` で `\_l` の区間が行に見えるのは **`\c` が発行されて保留が確定したから**であり、配置層が空行を持つ根拠ではない。また正典は自動折返しを分割に含めないので、配置層の行数（折返しを含む）は `\c[line]` に使えない。同日先に出た裁定「今回、空行が出るよう直す」（タスク 6.4）は誤った枠づけ（配置層が空行を出さないと要件 6.3 が満たせない）の上の選択で、これを覆して 6.4 を取り下げた（旧版の「フィールドを足せば付けられる」も、内容の無い行が出ない点と折返しを含む点の 2 つで不正確だった） |
 | DD-10 | 12. ロードマップの編集集合 | **着地時**（文書タスク）に `roadmap.md:89` の編集集合と所有台帳を実態へ更新する | 要件 8.5。設計段階で先に直すと実装の差分と食い違う |
-| DD-11 | 検証指摘 3: `\_l` の直後に `\n` が来たとき | **書かれた順に適用**。`LineBreak` 到着時に保留カーソルがあれば、その改行を保留する**前に**保留を**完全に**実体化する（(1) 現在行の確定 →(2) 保留改行 →(3) カーソル適用の **3 段**・`layout.rs` の `LineBreak` 腕）。**(1)(3) の 2 段では不足**——`\_l` より前に書かれた保留改行の Σ が (3) を追い越して残り、後から積む改行と合流して二重に効く（`あ\n\_l[,100]\nあ` が 100 + 2×13 = 126 になり、書かれた順の 113 にも旧正典の 100 にも一致しない）。完了仕様 `areka-P0-choice-render` が定めた「保留カーソルが改行に後勝ち＝カーソル明示位置が最終値」（`layout.rs:341-348` の②'）を上書きし、COMPAT §8 に上書き行を足す | SSP はタグを書かれた順に適用する。`あ\_l[@10,]\nあ` は SSP で (0, 13)・現行 areka で (20, 13)、`\_l[,100]\nあ` は SSP で y = 113・現行で y = 100。本仕様が所有するタグに順序依存の非互換を残さない（設計ディスカッション裁定 2026-09-02・開発者「書かれた順に適用が当然」） |
+| DD-11 | 検証指摘 3: `\_l` の直後に `\n` が来たとき | **書かれた順に適用**。`LineBreak` 到着時に保留カーソルがあれば、その改行を保留する**前に**保留を**完全に**実体化する（(1) 現在行の確定 →(2) 保留改行 →(3) カーソル適用の **3 段**・`layout.rs` の `LineBreak` 腕）。**(1)(3) の 2 段では不足**——`\_l` より前に書かれた保留改行の Σ が (3) を追い越して残り、後から積む改行と合流して二重に効く（`あ\n\_l[,100]\nあ` が 100 + 2×13 = 126 になり、書かれた順の 113 にも旧正典の 100 にも一致しない）。完了仕様 `areka-P0-choice-render` が定めた「保留カーソルが改行に後勝ち＝カーソル明示位置が最終値」（設計時の `layout.rs:341-348`＝`main` の位置の②'。着地後は同じ説明が `:354-365` へ移り、本行の「書かれた順」 3 段へ書き換わっている）を上書きし、COMPAT §8 に上書き行を足す | SSP はタグを書かれた順に適用する。`あ\_l[@10,]\nあ` は SSP で (0, 13)・現行 areka で (20, 13)、`\_l[,100]\nあ` は SSP で y = 113・現行で y = 100。本仕様が所有するタグに順序依存の非互換を残さない（設計ディスカッション裁定 2026-09-02・開発者「書かれた順に適用が当然」） |
 
 ## File Structure Plan
 
@@ -149,12 +149,19 @@ crates/areka-emo-text/src/
 ├── state_cursor_coord_parse_tests.rs  # 語彙テスト（centerx/centery・@centerx は Invalid・説明文の更新）
 ├── cursor_tag.rs                   # 新設: `\_l` の解決意味論（基点・係数・軸・縮退分類・警告一回化・範囲外記録）
 ├── cursor_tag_tests.rs             # 新設: 解決の純関数テスト（全語彙 × 軸 × 基点・境界値・縮退・ログ）
+├── cursor_tag_resolve_tests.rs      # 新設（着地時に追加）: 解決の全網羅 12 本（上限回避の分割・3.3）
+├── cursor_tag_test_support.rs       # 新設（着地時に追加）: 解決テストの共通前提と補助（3.3）
 ├── region.rs                       # TextRegion に image_size を保持・image_size() 追加
 ├── layout.rs                       # 配線: 原点を start() へ・実効位置の供給・保留の軸ごと合成・旧換算 4 項目の撤去
 ├── layout_cursor_tests.rs          # 既存 13 本（横書きの非回帰）＋期待値の正典追随
+├── layout_cursor_order_tests.rs     # 新設（着地時に追加）: 書かれた順の適用 H3b／H3c・末尾規則（4.3）
+├── layout_cursor_wiring_tests.rs    # 新設（着地時に追加）: 横書き配線 H1／H4／H5／H6・範囲外記録の肯定側（4.4）
 ├── layout_cursor_vertical_tests.rs # 新設: 3 書字方向の着地（縦書き 2 方向・宣言 origin・あふれ判定の不変）
-├── actor.rs                        # `use crate::layout::CursorWarnGuard` → `use crate::cursor_tag::CursorWarnGuard`（1 行）
-└── lib.rs                          # `pub mod cursor_tag;`＋層規律テストの PURE_SOURCES へ 5 件登録
+├── layout_cursor_vertical_canon_tests.rs # 新設（着地時に追加）: 縦書き正典記述例を性質として固定（5.1）
+├── layout_cursor_center_origin_tests.rs  # 新設（着地時に追加）: 中央指定の基準＝バルーン画像原寸（5.2）
+├── layout_cursor_overflow_tests.rs       # 新設（着地時に追加）: あふれ判定の現状値の固定＋行構造 DD-9（5.3）
+├── actor.rs                        # `use crate::layout::CursorWarnGuard` → `use crate::cursor_tag::CursorWarnGuard`（import 1 行）＋旧番号を称す説明 2 行の改訂（7.1）
+└── lib.rs                          # `pub mod cursor_tag;`＋層規律テストの PURE_SOURCES へ 12 件登録（初版の「5 件」を着地実測で訂正）
 ```
 
 ### Modified / Created Files
@@ -165,15 +172,23 @@ crates/areka-emo-text/src/
 | `crates/areka-emo-text/src/state_cursor_coord_parse_tests.rs` | 変更 | `centerx`／`centery`／`@centerx`（Invalid）／`CENTERX`（Invalid）の 4 件を追加。冒頭の説明文（`:1-9`）を改訂後の正典へ | 1.1・9.4・8.6 |
 | `crates/areka-emo-text/src/cursor_tag.rs` | **新設** | `CursorAxis`・`CursorBasis`・`CursorDegrade`・`resolve_cursor_axis`・`unit_coefficient`・`CursorWarnGuard`・`warn_cursor_degrade`・`note_out_of_range` | 1.2〜1.5・2.1〜2.6・3.1〜3.4・3.6・4.1〜4.5・5.1〜5.3・5.5 |
 | `crates/areka-emo-text/src/cursor_tag_tests.rs` | **新設** | 解決の全網羅（後述 Testing Strategy） | 9.1・9.3・9.4 |
+| `crates/areka-emo-text/src/cursor_tag_resolve_tests.rs` | **新設**（着地時に追加） | 解決の全網羅 12 本（871 行）。`cursor_tag_tests.rs` に入れると 1,000 行の上限を超えるため兄弟へ分けた（タスク 3.3） | 9.1・9.3・9.4 |
+| `crates/areka-emo-text/src/cursor_tag_test_support.rs` | **新設**（着地時に追加） | 解決テスト 2 本の共通前提と補助（`basis()`／`discriminating_basis()`／`out_of_range_region()`。タスク 3.3） | 9.1・9.3 |
 | `crates/areka-emo-text/src/region.rs` | 変更 | `TextRegion { image_size: (f32, f32) }` と `image_size()`。doc に「`\_l` の `centerx`／`centery` の基準」を明記 | 4.3・8.6 |
 | `crates/areka-emo-text/src/layout.rs` | 変更 | `CursorMove` 腕（`:449-478`）＝実効位置の算出 → `cursor_tag::resolve_cursor_axis` を軸ごとに呼ぶ → 警告・範囲外記録 → 保留の軸ごと合成。`cursor_to_image_px`／`CursorDegrade`／`CursorWarnGuard`／`warn_cursor_degrade`（`:634-748`）を撤去。モジュール doc・`:260-266`・`:449-457` の説明を改訂後の正典へ。`visible_window` は非接触 | 2.1〜2.5・2.8・3.5・5.4・6.1・6.2・8.6 |
 | `crates/areka-emo-text/src/layout_cursor_tests.rs` | 変更 | 縮退 4 分岐 → 2 分岐（負値・`%`・`@` は実導出）。`cursor_to_image_px_*` 3 本は `cursor_tag_tests.rs` へ移して式で置換。軸ごと合成のテストを追加 | 2.7・5.3・9.6 |
+| `crates/areka-emo-text/src/layout_cursor_order_tests.rs` | **新設**（着地時に追加） | 書かれた順の適用（検証表 H3b・H3c の混在順・末尾規則の保存）。DD-11 を受けて 4.3 で新設 | 3.5・9.6 |
+| `crates/areka-emo-text/src/layout_cursor_wiring_tests.rs` | **新設**（着地時に追加） | 横書き配線の検証表 H1／H4／H5／H6 と範囲外記録の肯定側（547 行）。`layout_cursor_tests.rs` が 842 行で 1,000 行の上限に迫ったため兄弟へ分けた（タスク 4.4） | 1.5・5.3・5.4・6.1・6.2・9.6 |
 | `crates/areka-emo-text/src/layout_cursor_vertical_tests.rs` | **新設** | `vertical_rl`／`vertical_lr` の着地・正典記述例・宣言 `origin` の 3 方向・あふれ判定の不変 | 2.2〜2.9・3.6・9.2・9.3・9.6 |
-| `crates/areka-emo-text/src/actor.rs` | 変更 | import 1 行（`CursorWarnGuard` の住処が移る） | — |
-| `crates/areka-emo-text/src/lib.rs` | 変更 | `pub mod cursor_tag;`。層規律の構造テスト `pure_layer_modules_have_no_windows_imports`（`:170-190`）の `PURE_SOURCES` に、新設 `cursor_tag.rs`・`cursor_tag_tests.rs`・`layout_cursor_vertical_tests.rs` と、従来未登録だった `layout_cursor_tests.rs`・`state_cursor_coord_parse_tests.rs` の 5 件を追加する（`structure.md:181`＝兄弟テストファイルも走査対象）。名前列挙型の検査は新設ファイルを黙って素通しするため、登録漏れは設計上の欠落として扱う | 8.6・9.1 |
+| `crates/areka-emo-text/src/layout_cursor_vertical_canon_tests.rs` | **新設**（着地時に追加） | 縦書きの正典記述例を**性質**として固定する（695 行・11 本。自動列送りとの同値・範囲外記録 0 件とその対照・Y は 3 方向とも上から下。タスク 5.1） | 2.2・2.5・9.2・9.3 |
+| `crates/areka-emo-text/src/layout_cursor_center_origin_tests.rs` | **新設**（着地時に追加） | 中央指定の基準が**バルーン画像原寸**であることの単独検証（649 行・5 本。`layout.rs` の `image_size` を他の 3 通りに差し替えると本ファイルだけが赤になる。タスク 5.2） | 4.3・9.3 |
+| `crates/areka-emo-text/src/layout_cursor_overflow_tests.rs` | **新設**（着地時に追加） | あふれ判定の式を変えないまま**今日の値を固定**する（438 行・5 本）。合わせて DD-9（内容の無い行は 1 本も出ない・行を閉じる場所の件数）を確認する（タスク 5.3） | 2.8・6.3 |
+| `crates/areka-emo-text/src/actor.rs` | 変更 | import 1 行の付替え（`CursorWarnGuard` の住処が `layout` → `cursor_tag` へ移る）。**加えて、旧番号「6.5」・旧名「換算縮退」を称す説明 2 行（`:238` 付近の `cursor_warn` フィールド doc と `:762` 付近の `present_actor` 内コメント）を改訂後の正典へ書き換えた**（タスク 7.1。初版の「import 1 行」は説明行を数え入れていなかった） | 8.6 |
+| `crates/areka-emo-text/src/lib.rs` | 変更 | `pub mod cursor_tag;`。層規律の構造テスト `pure_layer_modules_have_no_windows_imports`（`:170-190`）の `PURE_SOURCES` に、着地時点で**計 12 件**を追加する（`main` の 11 件 → 23 件）——`cursor_tag.rs`・`cursor_tag_tests.rs`・`cursor_tag_resolve_tests.rs`・`cursor_tag_test_support.rs`・`state_cursor_coord_parse_tests.rs`・`layout_cursor_tests.rs`・`layout_cursor_order_tests.rs`・`layout_cursor_wiring_tests.rs`・`layout_cursor_vertical_tests.rs`・`layout_cursor_vertical_canon_tests.rs`・`layout_cursor_center_origin_tests.rs`・`layout_cursor_overflow_tests.rs`。**初版の「5 件」は兄弟テストを分割する前の見積り**で、着地時の実測で訂正した（`structure.md:181`＝兄弟テストファイルも走査対象）。名前列挙型の検査は新設ファイルを黙って素通しするため、登録漏れは設計上の欠落として扱う | 8.6・9.1 |
 | `doc/COMPAT_ARCHITECTURE.md` | 変更 | §8 `\_l` 行（`:183`）を実装済みへ改め既知非互換を取り下げ・逐語引用は維持。所有移管と誤登記是正の上書き行を `:153` を雛形に追加 | 8.1・8.2・8.4 |
 | `.kiro/steering/roadmap.md` | 変更 | `:89`（編集集合・「完了 spec `emo-text-layer` 縮退表」の是正）・`:143` 追記(85) の所有者注記 | 8.2・8.5 |
 | `.kiro/specs/areka-P0-cursor-tag-canon/brief.md` | 変更 | `:27`・`:44`・`:54`・`:75`・`:84` の「`emo-text-layer`」を「`choice-render`」へ是正（是正である旨と根拠を添える） | 8.2・8.3 |
+| `.kiro/specs/areka-P0-text-decoration-canon/brief.md` | 変更（着地時に追加） | 末尾に「`areka-P0-cursor-tag-canon` からの追加登記」節を新設し、実装しない副作用 3 件（行揃えリセット・移動後の中央揃えのインデント・SC8）と、引受先不在の所見 1 件（あふれ判定に後戻り行が漏れる）を追跡先つきで送る（タスク 6.3） | 7.1・7.2・2.8 |
 
 各ファイルの責務は 1 つ。`cursor_tag.rs` は「解決の意味論」、`layout.rs` は「配線」、`state.rs` は「語彙」、`region.rs` は「解決済み領域の供給」に閉じる。
 
@@ -528,7 +543,7 @@ impl TextRegion {
 | H4 | `\_l[30,5em]`／`\_l[@-1650%,100]`／`\_l[,@-100]` | `horizontal_tb` | `(30, 50)`・`(current.x − 165, 100)`・`(現状維持, current.y − 100)` | 9.3 |
 | H5 | `\_l[centery,centerx]あ` | `horizontal_tb` | 両軸不動・`warn` 1 件（分岐 `CenterAxisMismatch` は軸が違っても同一キャラクターで 1 回＝鍵は `(actor, degrade)`）・行を分割しない・`debug` 1 件（完全無効果） | 1.5・5.3・5.4 |
 | H6 | 行構造: `あ\_l[10,]あ` は 2 行・`あ\_l[,]あ` は 1 行 | `horizontal_tb` | `Vec<PositionedLine>` の行数 | 6.1・6.2・6.3 |
-| H6b | `あ\_l[,100]`（末尾）／`あ\n\_l[,100]\n` | `horizontal_tb` | どちらも **1 行**——内容の無い行は出ない（DD-9・既存檀 `layout_cursor_order_tests.rs::trailing_cursor_then_newline_creates_no_extra_line`／`layout_cursor_overflow_tests.rs` の ⑴） | 6.3 |
+| H6b | `あ\_l[,100]`（末尾）／`あ\n\_l[,100]\n` | `horizontal_tb` | どちらも **1 行**——内容の無い行は出ない（DD-9・既存の `layout_cursor_order_tests.rs::trailing_cursor_then_newline_creates_no_extra_line`／`layout_cursor_overflow_tests.rs` の ⑴） | 6.3 |
 
 ### E2E（既存・非改変で緑）
 
@@ -572,7 +587,7 @@ impl TextRegion {
 | `design.md:124`（縮退の要約） | 「`%`・`@`（相対）・負値絶対＝語彙保持＋warn-once＋状態不変スキップ」 | いずれも実導出へ |
 | `design.md:607-625`（縮退表の `\_l` 5 行） | 軸省略／両軸省略・全縮退／負値絶対／`%`・`@`／パース不能 | 本書 Error Handling の表が正本 |
 | `design.md:632`（検査計画） | `parse_cursor_coord`＋`cursor_to_image_px` の全網羅 | `cursor_to_image_px` は `cursor_tag::resolve_cursor_axis` へ |
-| 保留フラッシュ規則②'（`layout.rs:341-348` が正典と称する行） | 「②' が (2) の改行送り/行内リセットに後勝ち＝カーソル明示位置が最終値」 | `\_l` → `\n` の順では改行が後勝ち（書かれた順・DD-11）。`\n` → `\_l` の順は不変 |
+| 保留フラッシュ規則②'（設計時の `layout.rs:341-348`＝`main` の位置が正典と称する行。着地後は `:354-365`） | 「②' が (2) の改行送り/行内リセットに後勝ち＝カーソル明示位置が最終値」 | `\_l` → `\n` の順では改行が後勝ち（書かれた順・DD-11）。`\n` → `\_l` の順は不変 |
 
 記録先: `doc/COMPAT_ARCHITECTURE.md` §8 に上書き行を 1 行追加（雛形 `:153`。項目＝「`\_l` の座標解決の正典所有と、原点定義の版差」、裁量＝上の表の要約、根拠＝正典 2.8.83 の逐語と出所 file:line、出典 spec＝本仕様）。
 
