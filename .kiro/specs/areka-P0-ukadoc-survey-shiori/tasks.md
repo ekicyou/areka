@@ -191,7 +191,7 @@
   - _Depends: 6.1, 6.2, 6.3_
 
 - [ ] 7. 検証と完了条件の確定
-- [ ] 7.1 道具の検査を確定した台帳に対して完走させる
+- [x] 7.1 道具の検査を確定した台帳に対して完走させる
   - `cargo run -p ukadoc-survey -- check` と `cargo test -p ukadoc-survey` を走らせ、15 所見のいずれも出ないことを確かめる
   - 証拠の突き合わせ（ソースの正典 URL ⇄ `implemented` の行）は `SourceUrlNotInCatalog` と `ImplementedWithoutEvidence` が担う。手掛かりが要るときは `evidence`／`candidates` を使う
   - ページ別の件数が合わないときは台帳を確定させず、食い違ったページ名と件数を示して原因を先に解消する。数を合わせるために行を足したり消したりしない
@@ -338,3 +338,10 @@
 - 6.5: **コメントは検査を壊すどころか改善している。** 22 行を一時的に剥がすと `check` の食い違いが 1 件 → **22 件**（`ImplementedWithoutEvidence` 21 ＋ `DomainReportStale` 1）に増え、`a_misspelled_theme_turns_red`・`an_alias_chain_turns_red`・`an_introduced_version_outside_the_catalog_turns_red` の 3 本が赤に転じる。**この 3 本はコメントがあるからこそ緑。**
 - 6.5: 較正 2 本を実証済み（`///` を関数本体に置くと `unused doc comment` が出る／1,024 行にすると見張りが名指しで赤になる）。どちらも恒真ではない。
 - 6.5 → **要件 9.6 の引用行番号が本 spec のコメント追加で 1 行ずれた**（`resources.rs:113-121` → 114-122・`shiori_resource.rs:222` → 223）。定義名は不変。開発規律「引用は行番号でなく何の定義行かで指す」の実例がもう 1 件。
+- 7.1: 上流の道具の引き継ぎ **5 件**を是正した（`checks.rs`・`values_md.rs` の 2 ファイルのみ・道具の `src/` と `perturb.rs` は非接触）。⑴ census の `Subjects::Zero` — **6 行ではなく 7 行**だった。実測は ソースの正典 URL **22**／`implemented` **21**／関連・別名・後継の相手 **131**／`alias` **3**／登場版 **98**／テーマ名 **348**／証拠の付いた項目 **179**。⑵⑶ `values_md.rs` の 2 本（空振りの主張を裏返して 2 段の非空主張へ・`with_marker` の較正を全件を見る形へ）。⑷ `implemented_without_evidence_...`。⑸ **`an_introduced_version_outside_the_catalog_turns_red`（レビューが発掘した 5 件目）**。
+- 7.1: **「偶然の緑」を 2 本発掘した。** ⑷⑸ はどちらも「repo の報告がたまたま古い」ことに寄りかかって緑だった — 錨 `OnBoot` は台帳で既に `implemented`・`property.get` の `introduced` は既にカタログの先頭版なので、**摂動が実質的な変化を起こさず報告も古くならない**のに `expect_exactly` が `DomainReportStale` を期待し続けていた。期待値を 7.2 後の正しい終着点へ合わせ、恒真化を防ぐ主張（「錨が既に `implemented` であること」「戻し先が台帳の元の値と同値であること」）を足した。
+- 7.1: **到達点を実測で確かめた。** 現状は `check` が `DomainReportStale` 1 件・consistency **24 passed / 14 failed**（14 本すべてがその 1 件だけで説明でき欠けは 0）。**報告を一時的に作り直すと consistency 38 passed / 0 failed・パッケージ全体 596 passed / 0 failed・`check` は所見 0 件（終了コード 0）**。これをレビュアも独立に再現している。失敗が 12 → 14 に増えたのは、上の 2 本を偶然の緑から本来の期待値へ直したため。
+- 7.1: 選び方を絞る案（B）は**実測して棄却**した。「台帳の `introduced` がカタログの `versions[0]` と異なる」項目は 677 行中 **3 行だけ**（すべて `2.7.26` vs `2.7.25`）で、`introduced` が報告へ届く唯一の道は**世代**（`report/tally.rs` の `generation_of` ＝ 先頭 2 節）なので、世代 `2.7` のまま動かず B でも報告は古くならない。
+- 7.1 → **タスク 7.2 への申し送り（報告の改行コード）**: 道具の `report` は **LF** で書き出すが作業ツリーの報告は **CRLF**（`core.autocrlf=true` なので index は LF で git の差分には出ない）。⑴ **変更の有無は `git diff --stat` で判定し、実行前の控えとの `md5sum`／`fc` では判定しないこと**（再生成後 `git status` は 4 本を M にするが、中身が変わったのは `shiori.md` だけ）。⑵ **改行を手で直さない・CRLF に直して commit しない。** ⑶ 冪等性（要件 1.5）を確かめるなら `report` を 2 回走らせて**出力どうし**を比べる。⑷ `check` は `strip_cr` してから比べるので **CR 非依存**。再生成後の緑は改行に関わらず信用してよい。⑸ 復元はバイトコピーか `git checkout -- <明示パス>`。
+- 7.1 → **タスク 7.2 への申し送り（`summary.md` の穴）**: `report` は `summary.md` を触らず、**整合検査に `summary.md` の古さを見る所見の種別が無い**（`DomainReportStale` はドメイン別報告だけ）。誰も見張っていないので、**`report-summary` の要否を明示的に判断すること**（タスク 7.2 の本文は「`report/summary.md` は統合担当に残す」としている）。
+- 7.1 → **上流へ送る材料（非阻却）**: `implemented_without_evidence_...` の緑側は `evidence_with_source_line` が索引を実データから丸ごと組み直すため、錨の証拠は「足した行」が無くても実データから復活する。緑側は空虚ではない（`assert_the_added_line_became_evidence` が足した行の索引入りを主張している）が、「足した行のおかげで消えた」という因果の切り分けまではしていない。剥がした状態から**足した行だけ**を索引へ加える形が正確。
