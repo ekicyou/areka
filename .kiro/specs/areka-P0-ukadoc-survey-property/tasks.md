@@ -4,13 +4,13 @@
 > 着手前に **`git submodule update --init --recursive` を済ませておく**（未初期化だと `cargo` 自体が `pasta_core` を見つけられずに転ぶ）。
 
 - [ ] 1. 骨組みと受け入れ確認の土台を用意する
-- [ ] 1.1 着地済みの骨組みを確かめ、版番号を埋める
+- [x] 1.1 着地済みの骨組みを確かめ、版番号を埋める
   - 上流が着地させた `doc/ukadoc-coverage/ledger/property.toml` を読み、骨組みが期待どおりであることを確かめる（先頭に `[ledger]` 表・`domain = "property"`・`pages = ["list_propertysystem"]`・`[entry."..."]` が 188 件・必須キー 7 つが空値で置かれ・全件 `status = "unclassified"`・`introduced` は全件空）。**骨組みを自分で生成しない**（上流 `ledger-init` の持ち物）
   - `cargo run -p ukadoc-survey -- check` を回して起点が緑であることを確かめる。merge 直後の実測は「食い違い 0 件／証拠のある項目 0 件」
   - スナップショットが読めることを確かめる（既定は `%APPDATA%\npm\node_modules\ukagaka-doc-mcp\data\index.json`。環境変数 `AREKA_UKADOC_SNAPSHOT` があればそちらを優先）。読めなければここで止める
   - 各 id の本文から `x.y.z` 形の版番号を拾って `introduced` に入れる。集合が空なら空文字にする（最古と決めつけない）。`system.os.(キー)` は本文が例示する OS の版 `5.19.0` を採らず、残る 2 つの古い方 `2.6.26` を採る。id は上流が写したものをそのまま使い、符号化された部分（`_28_30ad_30fc_29` の形・実測 67 件）と `_3f_3f_3f_3f` に手を入れない
   - 版番号を拾う手順は使い捨てとし、`doc/ukadoc-coverage/` の外の一時領域に置いてコミットしない。正典の本文そのものは repo に写さない
-  - 完了状態: 版番号を持つ項目が 98 件・番号の種類が 21 種になり、`check` が引き続き食い違い 0 件で通る。編集したファイルは `property.toml` 1 本だけで、カタログ・他ドメインの台帳・テーマ定義には触れていない
+  - 完了状態: 版番号を持つ項目が 99 件・番号の種類が 21 種になり（**2026-09-05 訂正**: 当初は 98 件と書いていたが、カタログを数え直すと `versions` が空でない項目は 99 件〔188 − 空の 89〕。98 は版番号を 1 つだけ持つ束の数で、3 つ持つ `system.os.(キー)` を数え落としていた。規則 2 は同項目にも `2.6.26` を与えるので非空は 99 件になる）、`check` が引き続き食い違い 0 件で通る。編集したファイルは `property.toml` 1 本だけで、カタログ・他ドメインの台帳・テーマ定義には触れていない
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.7, 1.8, 3.1, 3.2, 10.6, 10.7_
 
 - [ ] 1.2 道具が持たない 4 検査だけを使い捨てで用意する
@@ -151,3 +151,9 @@
   - 完了状態: 本 spec がコミットするファイルが `doc/ukadoc-coverage/ledger/property.toml`・`doc/ukadoc-coverage/report/property.md`・`doc/ukadoc-coverage/briefing-property.md`・`crates/areka-ghost/src/sylphya_wiring.rs` の 4 本だけであることを差分で確かめられ、一時領域の使い捨て手順がコミットに含まれていない
   - _Requirements: 8.3, 8.4, 8.5, 10.2, 10.3, 10.5_
   - _Depends: 5, 6.1_
+
+## Implementation Notes
+
+- **上流の「空振り検査の国勢調査」は、データを埋めた側が主張を書き換える** — `crates/ukadoc-survey/tests/consistency/checks.rs` の `census()` は、実データが 0 件である要件の面を `Subjects::Zero` として固定している。台帳に初めて中身を入れるとこのテストが赤になり、失敗文と doc コメント（`:249-253`）が「その行を `Subjects::NonEmpty` へ移し、doc コメントの 2 つの列挙を追随させよ」と指示する。これは設計された受け渡しであって迂回ではない。**まだ `Zero` のまま残っている行と、それを裏返す担当タスク**: `6.5 ソースの正典 URL`・`6.11 証拠の付いた項目`＝1.3／`6.6 状態が implemented の行`＝2.1／`6.7 関連・別名・後継の相手`（および `6.7 状態が alias の行`・本ドメインは別名 0 件の見込みなので裏返らない可能性が高い）＝3.2／`6.8 台帳に書かれたテーマ名`＝3.3。データが着地していない行を先に裏返すと逆向きに赤になるので、必ず自分のデータを入れてから触ること。
+- **台帳を書き換えたら報告を作り直してから commit する** — `report/property.md` の「SSP 世代別の対応表」などは台帳を鍵にしている（`crates/ukadoc-survey/src/report/domain.rs:81-83`）ので、台帳だけを commit すると上流の `check` が `DomainReportStale` で赤になる。design.md の File Structure Plan が「台帳と同じコミットに載せる」と定めているとおり、`cargo run -p ukadoc-survey -- report` を回してから同じコミットに載せる（親が commit 時に行う）。なお `report` は 4 本すべてを書き出すが、他 3 本は内容差分ゼロ（改行コードの揺れだけ）なので `git diff` には現れず、staging しなければ要件 10.2 に触れない。
+- **設計・タスクの実測値は疑ってかかる** — 1.1 で「版番号を持つ項目 98 件」が実測 99 件と食い違った。原因は複数版を持つ 1 件（`system.os.(キー)`）の数え落とし。数を合わせに行かず、カタログ（`doc/ukadoc-coverage/catalog.toml` の `versions`）を正として実測を報告し、spec 文書の側を訂正すること。
