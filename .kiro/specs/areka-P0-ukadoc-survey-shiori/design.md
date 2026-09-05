@@ -339,11 +339,12 @@ Rust 側に新しいクレート・モジュール・テストは足さない。
 | 2 | `crates/areka-kanade/src/schedule/resources.rs` | `ALLOWED_RESOURCE_IDS` の doc コメントの末尾 | `///` | 1 |
 | 3 | `crates/areka-sylphya/src/vocab/shiori_resource.rs` | `SHIORI_RESOURCE_IDS` の doc コメントの末尾（ページの URL 1 つ・要素ごとには置かない） | `///` | 1 |
 | 4 | `crates/shiori-host32-host/src/shiori3.rs` | `build_request` の中で、要求行・`Sender`・`Status`・`ID`・`Reference` を書き出す文の直前 | `//` | 5 |
-| 5 | 同上 | `parse_response` の中で、ステータスコードを取り出す文の直前と、`Value`／`ErrorLevel`／`ErrorDescription` の 3 つの分岐の腕の直前 | `//` | 4 |
+| 5 | 同上 | `parse_response` の中で、ステータスコードを取り出す文の直前と、`Value`／`ErrorLevel`／`ErrorDescription` の 3 つの分岐の**腕の本体の先頭**（訂正 2026-09-05・下記） | `//` | 4 |
 |  |  |  | **合計** | **22** |
 
 - #2 は要素が 1 件だけで 1 行に収まっているため、要素ごとの `//` を置く場所が無い。この 1 件では「定義そのもの」と「要素」が一致するので `///` を定義に置く（配列の書き方は変えない）。
 - #4 に `Charset` と `SecurityLevel` を書き出す文が含まれないのは、この 2 項目の状態が `degraded`（固定値でしか送れない）であり、実装済みでない項目にはソース側へ何も書かないと決めているためである（要件 9.4）。`areka-P0-charset-canon` が着地して `Charset` が任意になった時点で、その spec が行を `implemented` へ更新しコメントを足す（向こうの brief に下流として明記されている）。台帳の該当行の `owner` には `areka-P0-charset-canon` を書く。
+- **訂正（2026-09-05・実装時）**: #5 の初版は「3 つの分岐の**腕の直前**」としていたが、`parse_response` の連鎖は `} else if name.eq_ignore_ascii_case("ErrorLevel") {` のように**閉じ括弧と腕が同じ行に載っている**ため、腕の直前に行を挿すには当該行を割るしかなく、必ず削除行が出る。これは要件 9.5（説明文を伴わない 1 行だけを追加し、実行時に評価される記述を 1 行も追加・変更・削除しない）と両立しない。したがって 3 つとも**腕の本体の先頭**（値を受け取る文の直前）に置く。`Value` だけを `if` 行の前に置く形は純粋な追加として可能だが、連鎖の直前のコメントは 3 つの腕すべてに掛かると読めてどの項目の証拠か曖昧になるため採らない。
 - 定義箇所が特定できない項目は `implemented` とせず、`vocabulary-only` または `degraded` として理由を `note` に書く（要件 9.9）。
 - 同じページの URL が 2 か所に現れる（`shiori_resource.rs` の表の先頭と `resources.rs` の `username`）。重複した証拠の扱いは上流が未決なので、本 spec は最初の実例を作る側として `research.md` に材料を残す。
 
