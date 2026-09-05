@@ -23,7 +23,7 @@
 | `crates/areka-sylphya/src/ledger_key_determinism_tests.rs:201-204` が件数を固定 | 201-204 に flat 26・ルート枝 10・汎用名 17・Resource 159 の 4 本 | 一致 |
 | ログ 3 型: `reader.rs:137-142`／`actor.rs:302-307`／`actor.rs:345-350` | 3 か所とも行番号・target・文言が逐語一致（`"dotted resolution not found"` は `debug!`、他 2 つは `warn!`） | 一致 |
 | `doc/COMPAT_ARCHITECTURE.md:136`（SET 無効への書込は受理＋警告＋非反映）／`:184`（`.vertical`）／`:185`（`validwidth`／`validheight`／`lines` の 2.8.83 意味論と 2.8.80 の罠） | 3 行とも記載内容が設計の説明どおり | 一致 |
-| `.kiro/steering/roadmap.md:106` の推奨＝切り出し | 「推奨＝切り出し: 値の導出は `zorder-property` 単独・tree は `seriko.*` から `zorder` を除外・台帳行 1 本は channels⑶ が持つ」を逐語で確認 | 一致 |
+| `.kiro/steering/roadmap.md:106` の推奨＝切り出し *(2026-09-05 訂正: 行番号が誤り。`:106` は「e2e ⇄ toolkit」の行で推奨は載っていない。引用の文言が実在するのは `:111`〔⚠ 三重所有の行〕。**当時の「逐語で確認・一致」という検証の主張はこの行では成り立たない**が、`:111` に対しては成り立つ)* | 「推奨＝切り出し: 値の導出は `zorder-property` 単独・tree は `seriko.*` から `zorder` を除外・台帳行 1 本は channels⑶ が持つ」を逐語で確認 | 一致 |
 | `list_propertysystem` は 188 件・id 重複なし | 付録 B の手順で 188 件・重複 0 | 一致 |
 | 見出しの異なり数 186・重複は `name` と `path` | 186 種。`name:1`「対象の名前。」／`name:2`「対象のメディアの要素名。」（2.8.72）、`path:1`／`path:2` も同形 | 一致（設計の書き分けの根拠がそのまま成立） |
 | 版番号を持つ項目 98 件・種類 21 種・複数持ちは `system.os.(キー)` 1 件（`2.6.26`／`2.8.17`／`5.19.0`） | 98／21／該当 1 件で完全一致 | 一致 |

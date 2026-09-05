@@ -56,7 +56,7 @@
 | `crates/areka-ghost/src/sylphya_wiring.rs:126-127` | 実装済み 2 件の値の定義行 | コメント 2 行の追加のみ |
 | `doc/COMPAT_ARCHITECTURE.md:136`／`:184`／`:185`／`:207` | 縮退・書込応答の転記元 | 読むだけ |
 | 4 本の brief（`areka-P0-property-query-channels`／`areka-P0-currentghost-property-tree`／`areka-P0-property-catalog-lists`／`areka-P0-zorder-property`） | 所有宣言の突合元 | 読むだけ（4.10） |
-| `.kiro/steering/roadmap.md:106`（棚卸⑫の三重所有の推奨） | 裁定案の下敷き | 読むだけ（10.5） |
+| `.kiro/steering/roadmap.md:111`（棚卸⑫の三重所有の推奨） | 裁定案の下敷き | 読むだけ（10.5） |
 | `crates/ukadoc-survey`（上流の道具・8 副手続き）*(2026-09-05 追記)* | `check` で整合を確かめ、`report` で `doc/ukadoc-coverage/report/property.md` を作り直す | 走らせるだけ。道具のコードを 1 行も変えない |
 
 ### Revalidation Triggers
@@ -350,7 +350,7 @@ doc/
 
 **推す案（案 甲）**: 値の導出は `areka-P0-zorder-property` が単独で持ち、`areka-P0-currentghost-property-tree` は `seriko.*` から `zorder` を外す。sylphya の SET 有効群の 1 行は `areka-P0-property-query-channels` が持つ。
 
-- **選んだ理由**: `.kiro/steering/roadmap.md:106`（棚卸⑫）の推奨と一致する — 「**推奨＝切り出し**: 値の導出は `zorder-property` 単独・tree は `seriko.*` から `zorder` を除外・台帳行 1 本は channels⑶ が持つ」。本 spec が独自の案を立てて統合担当の会に別の軸を持ち込むより、既にある推奨に対して「採る／採らない」の影響を測る方が裁定を 1 度で終えられる。
+- **選んだ理由**: `.kiro/steering/roadmap.md:111`（棚卸⑫）の推奨と一致する *(2026-09-05 訂正: 当初は `:106` と書いていたが、実際に読むと `:106` は「e2e ⇄ toolkit」の行で推奨は書かれていない。三重所有の推奨が載っているのは `:111`。引用の中身は当初のとおりで、案 甲の理由付けは成立する)* — 「**推奨＝切り出し**: 値の導出は `zorder-property` 単独・tree は `seriko.*` から `zorder` を除外・台帳行 1 本は channels⑶ が持つ」。本 spec が独自の案を立てて統合担当の会に別の軸を持ち込むより、既にある推奨に対して「採る／採らない」の影響を測る方が裁定を 1 度で終えられる。
 - **採ったときの影響**: 3 本の食い違いが消える。tree の範囲が `seriko.*` 14 から 13 へ減る。`zorder-property` brief の本文（「`dotted.rs` の 21 項に入れない・本 brief が語彙の正本」）は ⑸ 節の是正候補の対象になる（語彙表の行は channels が持つため）。
 - **採らなかったときの影響**: 完了済み spec `areka-P0-scope-zorder-pinning` の追跡先が宙に浮く（同 spec は `zorder-property` を単独の追跡先として記録済み）。所有者なしの一覧に 2 件が残り、統合担当が同じ議論を再度開く。
 - **退けた代案**: 案 乙（tree が `seriko.*` を一括で持ち `zorder-property` を畳む）＝ `zorder-property` に書かれた完全な語彙（読みの書式・完全置換・要素 2 個未満は無視）の移し替えが要り、棚卸⑫の推奨とも逆になる。案 丙（保留）＝要件 5.4 の既定であって案ではない。
