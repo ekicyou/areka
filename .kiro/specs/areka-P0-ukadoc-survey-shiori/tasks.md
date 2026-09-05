@@ -2,7 +2,7 @@
 
 > **前提の変更（2026-09-05・上流 `areka-P0-ukadoc-survey-toolkit` が着地したため）**: 道具（`crates/ukadoc-survey`）と `doc/ukadoc-coverage/` 一式が既に main にある。担当分の台帳 `ledger/shiori.toml` は **677 項目すべてが `unclassified` の状態で建っており**、カタログ `catalog.toml`（全 1,749 件）・テーマの正本 `values.md`・手引き `README.md`・報告 `report/shiori.md` も揃っている。したがって設計 DD-1（骨組みを作る使い捨て台本）と DD-9（検証の使い捨て台本）は前提が消え、道具の CLI と常時検査に置き換わる。要件 10.1（道具が着地済みなら本 spec が報告を再生成する）の側が確定した。
 
-- [ ] 1. 基盤: 着地した台帳と道具を受け取り、検査が赤を出せることを確かめる
+- [x] 1. 基盤: 着地した台帳と道具を受け取り、検査が赤を出せることを確かめる
 - [x] 1.1 担当 12 ページ 677 項目の集合と版番号の候補をカタログで確かめる
   - `doc/ukadoc-coverage/catalog.toml` を読み、ページ部分が担当 12 ページの項目が 677 件であること、ページ別の件数が要件 1.1 の内訳（イベント 290・拡張 168・リソース 159・SHIORI/3.0 26・PLUGIN 19・外部連携 6 ページ 14・補足 1）と 1 件ずつ一致することを確かめる
   - 食い違ったページがあれば仕分けに進まず、ページ名と件数を書き出して原因を先に解消する
@@ -35,7 +35,7 @@
   - 完了条件: 18 行すべての共通 `note` 文面が索引に確定して書かれ、以後の仕分けはこの文面を写すだけで済む状態になっている
   - _Requirements: 2.9, 7.6_
 
-- [ ] 2. 送る側（SHIORI イベント 290）の仕分け
+- [x] 2. 送る側（SHIORI イベント 290）の仕分け
 - [x] 2.1 実装済み 11・別名 3・意図的非発火 3 を確定する
   - 送出許可表（`areka-kanade` の `schedule/events.rs` の `ALLOWED_EVENT_IDS`）の 11 要素に対応する項目を `implemented` とする。`basewareversion` はこの 11 要素の 1 つであり、正典での所在に従ってイベント側の行に置き、送信の向き（ベースウェアからの通知）を `note` に書く
   - 正典本文が旧仕様と明記する `OnFileDrop`・`OnFileDropped`・`OnFileDropEx` を `OnFileDrop2` の別名として `alias` とし、`alias_of` に正典側の id を書く。`OnFileDropping` は別の機能なので含めない
@@ -64,7 +64,7 @@
   - 完了条件: 26 行のテーマ・優先度・状態が揃い、小群の別が `note` から一意に読み取れる
   - _Requirements: 2.7_
 
-- [ ] 3. 引く側（リソース 159）と外部が送る拡張（168）の仕分け
+- [x] 3. 引く側（リソース 159）と外部が送る拡張（168）の仕分け
 - [x] 3.1 リソース 159 を実装済み 1・画面の材料 131・その他 27 に仕分ける
   - 照会許可表（`areka-kanade` の `schedule/resources.rs` の `ALLOWED_RESOURCE_IDS`）に対応する 1 件を `implemented` とし、値が無いときに既定値へ縮退する旨と転記元を `note` に書く
   - 語彙表（`areka-sylphya` の `vocab/shiori_resource.rs` の `SHIORI_RESOURCE_IDS`）に載るが実際には引かれていない項目を `vocabulary-only` とする。名前の突き合わせでは空白の全角・半角の違いを同一とみなす（該当は 1 件）
@@ -80,7 +80,7 @@
   - 完了条件: 168 行すべてが同じ状態と共通 `note` を持ち、`values` と `introduced` が全件空になっている
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5_
 
-- [ ] 4. ヘッダ・PLUGIN の受け口・外部連携の仕分け
+- [x] 4. ヘッダ・PLUGIN の受け口・外部連携の仕分け
 - [x] 4.1 SHIORI/3.0 の 26 項目をリクエスト 11・レスポンス 15 に分けて仕分ける
   - 送っているヘッダ 5 を `implemented`、固定値でしか送れない 2（`Charset`・`SecurityLevel`）を `degraded` とし、固定値である旨を `note` に書く。`Charset` の行の `owner` に `areka-P0-charset-canon` を書く
   - 送らない 4（`SenderType`・`SecurityOrigin`・`BaseID`・リクエスト側の `X-SSTP-PassThru-`）を `absent` とし、`build_request` の説明に `BaseID` が挙がっていないことを `note` に書く
@@ -104,7 +104,7 @@
   - 完了条件: 15 行すべてに状態が入り、受け口の有無以外の判断（実装の可否）を書いていない
   - _Requirements: 2.10, 5.7, 5.8, 5.9_
 
-- [ ] 5. テーマ・優先度・繋がり・版番号の総仕上げ
+- [x] 5. テーマ・優先度・繋がり・版番号の総仕上げ
 - [x] 5.1 テーマを 8 語彙の中から付け、付けた理由と付けない理由を書く
   - 名前の頭による既定（設計「テーマの付け方」の表）を出発点とし、最後は 1 項目ずつ正典本文を読んで上流の付与規則（「無いと利用者はゴーストの何を失うか」に答えられるテーマだけを付ける）に当てはめる
   - 既定が本文と合わない項目は個別に直し、直した理由を `note` に書く。テーマを付けた行には「無いと利用者が失うもの」を 1 文で書く
@@ -142,7 +142,7 @@
   - 完了条件: 名指しの行の一覧が設計の表と一致し（または増えた分が台帳に反映され）、名指しされた行すべてに転記元がある
   - _Requirements: 3.6_
 
-- [ ] 6. 証拠のコメントとブリーフィング文書
+- [x] 6. 証拠のコメントとブリーフィング文書
 - [x] 6.1 (P) 送出・照会の許可表に正典 URL のコメント 12 行を置く
   - 送出許可表の 11 要素それぞれの直前に `//` で `ukadoc: <正典 URL>` を 1 行ずつ置く（要素には `///` を使わない）
   - 照会許可表の doc コメントの末尾に `///` で 1 行置く（要素が 1 件で 1 行に収まるため定義そのものに置く）
@@ -190,7 +190,7 @@
   - _Requirements: 9.6, 9.7, 12.1_
   - _Depends: 6.1, 6.2, 6.3_
 
-- [ ] 7. 検証と完了条件の確定
+- [x] 7. 検証と完了条件の確定
 - [x] 7.1 道具の検査を確定した台帳に対して完走させる
   - `cargo run -p ukadoc-survey -- check` と `cargo test -p ukadoc-survey` を走らせ、15 所見のいずれも出ないことを確かめる
   - 証拠の突き合わせ（ソースの正典 URL ⇄ `implemented` の行）は `SourceUrlNotInCatalog` と `ImplementedWithoutEvidence` が担う。手掛かりが要るときは `evidence`／`candidates` を使う
@@ -210,7 +210,7 @@
   - _Requirements: 10.1, 10.2, 10.3_
   - _Depends: 7.1_
 
-- [ ] 7.3 非接触の境界を最終確認する
+- [x] 7.3 非接触の境界を最終確認する
   - 変更したファイルの一覧を取り、台帳 1 本・報告 1 本・ブリーフィング 1 本・ソースのコメント 22 行・本 spec の `.kiro/specs/areka-P0-ukadoc-survey-shiori/` 配下の文書のほかに何も変わっていないことを確かめる
   - 他ドメインの台帳 3 本・全体の報告 `report/summary.md`・束の文書・語彙の文書 `values.md`・カタログ `catalog.toml`・手引き `README.md`・**道具の crate の `src/`**・`.kiro/steering/roadmap.md`・`doc/shiori/fragments/`・語彙表の中身・隣接 spec の brief のいずれも変わっていないことを確かめる
   - **例外（本 spec が上流の欠陥を是正した分）**: `crates/ukadoc-survey/tests/consistency/` の **`checks.rs` と `values_md.rs`** は変わってよい。理由は 2 つで、⑴ 上流の常時テストが `OnBoot` の正典 URL を「ソースのどこにも無い」前提の錨に使っており、本 spec が要件 9.1・9.2 どおりに URL を置いた時点で恒久的に赤になった（製品側 `EvidenceIndex::by_id` の doc は「同じ URL が複数のファイルに現れても赤にしない」と定めており、旧主張は契約と矛盾していた）。⑵ `the_subject_census_...` の引き継ぎの仕掛けが設計どおり発火し、書き換えを促している。上流 spec は `completed/` に封書済みで開き直せないため、発見した本 spec が最小限で是正した。**道具の `src/` は 1 行も変えないこと。**
@@ -245,7 +245,7 @@
 - 2.1: 別名の向きは**上流 要件 4.1 の第 1 段（正典本文の注記）**で決着。`OnFileDrop`／`OnFileDropped`／`OnFileDropEx` は本文が逐語で `[旧仕様]` 始まり、`OnFileDrop2` は「現時点での最新仕様」。第 2 段（版番号）は 4 件とも `2.7.98` で決め手にならない。`OnFileDropping` はドラッグ中の別機能で `[旧仕様]` の注記が無い。
 - 2.1: `basewareversion` はカタログ全体で 1 件のみ（`list_shiori_event` の `[NOTIFY]`）、リソース側に同名は無い。要件 2.4 の「26 件」＝群 4 の 25 件＋本件 1 件。
 - 2.1 → **タスク 5.1／5.2 への申し送り（埋め忘れの隙）**: 索引は群 2a に具体値（テーマ「装い」・優先度 `B4`）を定めているが、5.1 の完了条件（「8 語彙以外が現れないこと」）も 5.2 の完了条件（「**空でない行**が表の値と一致すること」）も**空欄を通してしまう**。機械検査にもテーマ未設定を赤にする種別は無い。**5.1／5.2 では群 2a の 3 行を明示的に確認すること。**
-- 2.2: 群 2 は 248 行ちょうど（`list_shiori_event` 290 の分布は `absent` 248／`unclassified` 25＝群 4／`implemented` 11／`vocabulary-only` 3／`alias` 3）。共通 `note` は索引から一字一句写した（短縮しない — 1.4 の裁定どおり）。個別追記はちょうど 6 行。
+- 2.2: 群 2 は 248 行ちょうど（`list_shiori_event` 290 の分布は `absent` 248／`unclassified` 25＝群 4／`implemented` 11／`vocabulary-only` 3／`alias` 3）。共通 `note` は索引から一字一句写した（短縮しない — 1.4 の裁定どおり）。個別追記は 2.2 の時点でちょうど 6 行だったが、**5.1 以降の着地で 248 行すべてが個別追記を持つ**（2026-09-06・タスク 7.3 で数え直し）。内訳は、要件 7.3 の「無いと失うもの」の 1 文が 181 行、テーマを付けない理由の 1 文が 65 行、テーマの直しだけを書いた行が 2 行。テーマに関わる 1 文を除く追記を持つ行は 56 行（小群 26・版番号 24・数の訂正 5・既存カタログとの差 3・繋がり 3、重複あり）。
 - 2.2: 正典 290 と `doc/shiori/fragments/events/` 287 の差は **3 件・向きは一方向**（正典にあって断片に無い＝`OnArchiveViewerOpen`・`OnMediaPlayerOpen`・`OnPictureViewerOpen`。逆向きは 0 件）。
 - 2.2: 内部名 3 つはカタログ全 1,749 件に完全一致 0 なので行を作っていない。`OnTalk` → `OnAITalk`、`OnHour` → `OnHourTimeSignal` の `note` へ。**`OnMenuBack` は恒久禁止の名前ではない** — `ALLOWED_EVENT_IDS` の doc コメントが恒久禁止とするのは `OnTalk`／`OnHour` の 2 つだけで、`OnMenuBack` は `msg.rs` の単体テストに「任意名が `EventId::Choice` に逐語で載る」見本として現れるだけ。要件 2.6 がこれを内部名に数えているのは要件側の不正確さ。
 - 2.2 → **タスク 4.2（PLUGIN 19）への申し送り**: `OnMenuBack` は暫定的に `OnChoiceEnter` の `note` に置いたが、**より近い正典項目が `list_plugin_event` にある** — 「`\q` 等に指定された任意名イベント」を表題にした唯一の項目（現在 `unclassified`）。その行に相互参照を置くか、明示的に置かないと決めること。
@@ -351,3 +351,13 @@
 - 7.2 → **統合担当（`areka-P0-ukadoc-coverage-roadmap`・`brief.md` のみで実在・未着手）への引き継ぎ 5 点**: ⒜ **`summary.md` は現に古い** — shiori 欄が未分類 677 と読めるが実体は 0（実装済み 21／語彙のみ 161／縮退 3／未対応 320／別名 3／対象外 169）。⒝ 是正は `cargo run -p ukadoc-survey -- report-summary` 1 本で、**手書きは禁止**。⒞ **実行の時機は 4 spec すべてが main に合流した後**（1 本でも未合流だとその枝の断面が焼き付き、共有ファイルなので衝突も招く。実測でこの枝では `assets 542/542`・`property 188/188`・`sakura-script 342/342` が初期状態のまま）。⒟ **この古さは常時検査では永久に赤にならない** — `CheckInput` に欄が無く構造的に届かないので所見の種別自体が無い。人手のチェックリストに載せない限り誰も気づかない。⒠ `report-summary` は 4 本のドメイン報告も LF で上書きするので、実行後の扱いを決めておくこと。
 - 7.2 → **タスク 7.3 への申し送り（実在する罠）**: `report` 実行後、**`git status --porcelain` は兄弟 3 本を ` M` と報告するのに `git diff --stat` は内容変化 0 と報告する**（`core.autocrlf=true`・`.gitattributes` 無しで blob が両者 LF に正規化されるため）。**7.3 では内容の判定に `git diff --stat` を使うこと。`git status` だけで数え上げると兄弟 3 本を境界違反と誤検出する。**
 - 7.2 → **是正の候補（brief は書き換えない）**: `areka-P0-ukadoc-coverage-roadmap/brief.md` が統合台帳を `doc/ukadoc-coverage/report.md` と書いているが、実体は `doc/ukadoc-coverage/report/summary.md`。要件 12.4 に従い**修正せず記録のみ**。
+- 7.3 → **2.2 の申し送りの決着（要件 12.3 の `owner`）**: 要件 12.3 は「**Where 既存の spec が同じ項目を所有している**」という条件節付きなので、所有者の居ない行に `owner` を要求していない。空欄 670 行は違反ではない。所有者の居る **7 行**にはすべて入っており、`OnBalloonBreak`・`OnBalloonClose`・`OnBalloonTimeout` の 3 行が `areka-P0-balloon-canon-residue`、`property.get`・`property.set` の 2 行が `areka-P0-property-query-channels`、`Charset` が `areka-P0-charset-canon`、`Status` が `areka-P0-status-execution-states` である。**4 つの spec 名はいずれも `.kiro/specs/` に実在する現役の spec**（`completed/` ではない）で、7.3 の時点でディレクトリの実在を確かめた。以上で 2.2 の申し送りは決着とする。
+- 7.3 → **4.1 の申し送りの決着（DD-10 と `absent` の根拠の場所）**: 1.4 の裁定を `design.md` の DD-10 へ書き込んで決着させた。趣旨は「**群の共通 `note` は根拠の場所を含み、群に属する全行へ逐語で写す。`absent` の行について禁じるのは、行ごとに固有の根拠を書き足すことである**」。要件 2.9 は既に「群の共通の `note`」を許可の対象に挙げているので**要件側は改訂不要**。実測の裏付けは `absent` 320 行のうち 288 行が共通 `note` 由来の `.rs` を含み、群 11（`spec_shiori3` の `absent` 15 行）が「根拠の場所:」の段落を持つこと。以上で 4.1 の申し送りも決着とする。
+- 7.3 → **台帳 `ukadoc:spec_dll` の `note` を直した**: 冒頭が「DLL の入口の決まり（load・unload・request の 3 つ）」と書いており、正典が定める入口の数を 3 つと述べる形になっていて、同じ `note` の「内容:」の段落（`loadu`・`load`・`unload` を挙げる）と矛盾していた。正典 `ukadoc:spec_dll` を引き直し（「ライフサイクル関数」の節に `loadu`（SSP 2.6.92 以降・UTF-8・優先して使われる）・`load`（従来版・既定の OEM コードページ・フォールバック）・`unload`、別に「request関数」の節）、**正典の入口は `loadu`・`load`・`unload`（＋ `request`）で、areka の助け手が名前で引くのは `load`・`unload`・`request` の 3 つ**という形へ書き直した。ブリーフィングの是正の候補 4 番は「直した」に書き換えた（この台帳は本 spec の持ち物で、送り先の担当が居ないため候補に残さない）。書き直し後に `report` と `check` を回し、所見 0 件・終了コード 0 と 596 全緑を再確認した（`note` は集計の材料ではないので分布は不変）。
+- 7.3 → **優先度の記入率を実測へ直した**: ブリーフィングと台帳冒頭の写しが「`priority` 欄に 677 行すべて記入済み」と書いていたのは**偽**で、実測は **484 行に記入済み・193 行は意図的に空**（`implemented` 21・`alias` 3・`not-applicable` 169 のちょうど 3 状態）。同じ文書が 7 か所で「**優先度**: `""`」と書いており自己矛盾していた。正本を先に直し、台帳冒頭の写しは節の全体を貼り直し、`# ` を剥がした写しと正本が行単位で一致することを機械で確かめた。
+
+## 完了時の申し送り（タスク 7.3 の最終レビューが発掘）
+
+- **上流 `areka-P0-ukadoc-survey-toolkit` は `.kiro/specs/completed/` に封書済みで、先送りの引受先にできない。** 本 spec が「上流へ送る材料」と書いた 5 件（版番号の抽出規則が 2 桁版を落とす／`implemented_without_evidence_...` の因果の切り分け／`ledger-init` の 2 つの罠／証拠の重複の扱い）の**宛先は、実在する統合担当 `areka-P0-ukadoc-coverage-roadmap` に読み替えること**（同 spec の brief が toolkit の報告・束の文書の再生成を自分の上流として明記している）。内容そのものは `doc/ukadoc-coverage/briefing-shiori.md` の申し送りと台帳の `note` に永続記録してあるので消えない。
+- **`report/summary.md` は古いまま残っている**（shiori 欄が未分類 677 と読めるが実体は 0）。要件 10.4 が本 spec による編集を禁じているので触っていない。**この古さを見る所見の種別が道具に無い**ので、統合担当が忘れると全体報告は誤ったまま残る。是正は `cargo run -p ukadoc-survey -- report-summary` 1 本で、**4 spec すべてが main に合流した後**に行うこと。
+- **`doc/ukadoc-coverage/linkage.md` は未作成**（上流の設計が「調査 spec は空ファイルも置かない」と定めている）。統合担当がこれを作る時点で、本 spec の非接触の主張は再確認が要る。
