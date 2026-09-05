@@ -5,8 +5,32 @@
 「利用者に何が起きるか」で読めることを目指している。機械が読む側の正本は台帳
 `doc/ukadoc-coverage/ledger/shiori.toml` にある。
 
-本文（群ごとに、利用者に何が起きるか・その群を成立させる最小の基盤・台帳の項目 id）は、この
-索引に続けて置く。
+**結論**: 677 項目のうち、areka が正典どおりに動かしているのは **21 件**（3.1%）である。一部だけ
+できているものが 3 件あり、**未対応が 481 件**（送り先・受け口が無いもの 320 件と、名前だけ登記して
+あって実際には引かないもの 161 件）、判定の対象にならないものが 172 件ある。**この文書が対応の
+順序の対象として扱う群はすべて未対応であり、対応の予定を述べるものではない。** 既にできている
+21 件と判定の対象にならない 172 件も、群を漏れなく並べるために章を持つ（前者は第 4 部、後者は
+168 件が第 3 部・4 件が第 4 部）。
+
+**段階と優先度は仮置きである。最終決定は統合担当の `ukadoc-coverage-roadmap` が行う。** 台帳の
+`priority` 欄と、この文書に出てくる `A1`〜`E1` の値は、群の中と群どうしの並びを揃えるための
+出発点であって、着手の順番の約束ではない。
+
+**この文書の構成**: まず群の索引（この文書が正本・機械で読む側の写しが台帳の冒頭にある）を置き、
+その後ろに群ごとの本文を置く。本文は「黙って壊れるもの」→「テーマは付いているが現れ方が見た目の
+差にとどまるもの」→「受け口が無い外部との連携」→「判定の対象にならない群と、既にできている群」
+の順に並ぶ。末尾に、次に読む人への申し送りと、是正の候補を置く。
+
+**状態ごとの件数**（台帳の `status` 欄の実測・合計 677）
+
+| 状態 | 件数 | 意味 |
+|---|---|---|
+| `implemented` | 21 | 実際に送っている・引いている・読み取っている |
+| `degraded` | 3 | 一部だけできている |
+| `absent` | 320 | 送る場所・引く場所・受ける口がコードに無い |
+| `vocabulary-only` | 161 | 名前は登記してあるが実際には引かない |
+| `alias` | 3 | 旧仕様の別名（判定は写像先が持つ） |
+| `not-applicable` | 169 | areka が送る・引く・受ける対象ではない |
 
 ---
 
@@ -27,9 +51,11 @@
 そのまま写す文面である。仕分けの作業は、この文面を写したうえで、その項目にだけ当てはまることを
 必要な分だけ書き足す形で進める。
 
-**まだ確定していないもの**: 項目ごとのテーマ（群 1・2・6・7・8 の「項目ごと」と書いてある欄）と、
-優先度の具体的な値は、この索引に後から書き足す。段階（A〜E）と数値はいずれも**仮置き**であり、
-最終的な順序を決めるのは統合担当の `ukadoc-coverage-roadmap` である。
+**テーマと優先度がどこに書いてあるか**: 群の欄に「項目ごと」と書いてあるもの（群 1・2・6・7・8）は、
+テーマを群で 1 つに決めず 1 項目ずつ判断するという意味である。**決まった値の正本は台帳の各行の
+`values` 欄**であり、この索引の欄はその出発点にすぎない。優先度も同じく台帳の `priority` 欄に
+677 行すべて記入済みで、この索引に書いてあるのは群ごとの既定値である。段階（A〜E）と数値は
+いずれも**仮置き**であり、最終的な順序を決めるのは統合担当の `ukadoc-coverage-roadmap` である。
 
 **優先度はいずれも仮置きである**: 台帳の `priority` 欄には、下の各群が定める値を置いてある。
 段階の 1 文字（A〜E）と、その後ろの数値の**どちらも仮置き**であり、最終的にどの順で
@@ -242,14 +268,33 @@ areka の送出の口は 1 か所（`crates/areka-kanade/src/actor.rs` の `roun
   版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
   ```
 
-  他のゴーストが送る 7 件（`OnRequestValues`・`OnGetValues`・可変名の返信イベント・
-  `Send60stair_GetStatus`・`OnKanadeTeaPartyInfomationRequest`・`OnPoker`・`OnMahjong`）には、
-  上の文面に次の 1 文を足す。
+  ゴースト同士のやり取りが本文に書いてある 7 件（`OnRequestValues`・`OnGetValues`・可変名の返信
+  イベント・`Send60stair_GetStatus`・`OnKanadeTeaPartyInfomationRequest`・`OnPoker`・`OnMahjong`）
+  には、上の文面に次の 1 文を足す。
 
   ```
   この項目の送信元は外部のアプリではなく他のゴーストで、ベースウェアがその伝達を運ぶ。areka には
   ゴースト間の伝達そのものが無いため、運ぶ側としても成立しない。
   ```
+
+  さらに、この 7 件には次の「根拠の場所」の段落も足す。7 行とも同一の文面であり、実質この
+  小さな群の共通の文面である。
+
+  ```
+  根拠の場所: crates/ 以下に raiseother・notifyother・raiseplugin・notifyplugin のいずれかを受ける
+  場所も送る場所も 1 件も無く、他のゴーストを名指しで指す先を引く表（起動中のゴーストの登記）も
+  無い。SHIORI へ渡す口は crates/areka-kanade/src/actor.rs の round_trip_request の 1 か所だけで、
+  そこへ渡る呼び出しの出所は索引の前置きの⑴と⑵の 2 系統しかなく、どちらも他のゴーストからの
+  依頼を入口としない。
+  ```
+
+  **上の 1 文についての補足（2026-09-05・実装時に正典で確認）**: 「送信元は外部のアプリではなく
+  他のゴースト」という言い切りは正確ではない。`OnMahjong` の正典本文は、要求元がゴーストのときの
+  返し方と並べて、**要求元が外部アプリで SSTP による通知であった場合の返し方**（`X-SSTP-PassThru-*`
+  ヘッダを使う）も述べている。この 7 件は「ゴースト同士でやり取りすることが本文に書いてある」
+  ものであって、送信元が他のゴーストに限られるという意味ではない。**7 という数も確定値として
+  扱わないこと**——返信の相手側（`OnMahjongResponse`）まで同じ性質と見るなら 7 では足りない。
+  台帳の 7 行は上の文面のまま凍結してあり、この補足はそれを読むときの注意である。
 
 ---
 
@@ -285,7 +330,7 @@ areka の送出の口は 1 か所（`crates/areka-kanade/src/actor.rs` の `roun
   `popupmenu.*` 9・`*.recommendsites` と `*.portalsites` 4・`vanishbuttonvisible` 1）。
 - **件数**: 131
 - **状態**: `vocabulary-only`
-- **テーマ**: 項目ごと（装い・記憶が中心）
+- **テーマ**: 装い（台帳の実測では 131 行すべてこの 1 つ）
 - **優先度**: `C1`（仮置き。テーマの上では B に当たるが、壊れ方が見た目の差なので 1 段下げる）
 - **判断の根拠の場所**: `crates/areka-sylphya/src/vocab/shiori_resource.rs` の
   `SHIORI_RESOURCE_IDS`（名前は登記済み。この表を参照しているのはテストだけ）と
@@ -512,14 +557,18 @@ areka の送出の口は 1 か所（`crates/areka-kanade/src/actor.rs` の `roun
 
 ### 群 14c — DLL 共通仕様
 
-- **対象**: `ukadoc:spec_dll`（`load`・`unload`・`request` という DLL の入口の決まり。SHIORI・
-  SAORI・MAKOTO・PLUGIN が共有する）。
+- **対象**: `ukadoc:spec_dll`（DLL の入口の決まり。SHIORI・SAORI・MAKOTO・PLUGIN が共有する）。
+  正典が定める入口は **4 つ**——初期化の `loadu`（SSP 2.6.92 で加わった側。置き場所のパスを UTF-8 で
+  受け取り、ベースウェアはこちらを優先して使う）と `load`（従来版。同じパスを既定の各国語の
+  コードページで受け取り、`loadu` が無いときのフォールバックになる）、終了処理の `unload`、
+  要求の `request` である。
 - **件数**: 1
 - **状態**: `degraded`
 - **テーマ**: 空（`[]`）
 - **優先度**: `E1`（仮置き）
-- **判断の根拠の場所**: `crates/shiori-host32-helper/src/shiori_proxy.rs` の `ShioriProxy::load`
-  （絶対パスで読み込み、3 つの入口を名前で引く）と `ShioriProxy::request`。SAORI・MAKOTO の語は
+- **判断の根拠の場所**: `crates/shiori-host32-helper/src/shiori_proxy.rs` の `ShioriByteProxy::load`
+  （絶対パスで読み込み、`load`・`unload`・`request` の 3 つを名前で引く。正典の 4 つのうち `loadu`
+  は引かない）と `ShioriByteProxy::request`。SAORI・MAKOTO の語は
   `crates/` 以下のソースに 1 件も無い。MAKOTO の担当は `areka-P0-makoto-dll-host`。
 - **共通 `note`**:
 
@@ -537,9 +586,16 @@ areka の送出の口は 1 か所（`crates/areka-kanade/src/actor.rs` の `roun
   縮退の転記元: doc/emo2-conformance-scope.md の旧ロードマップ spec への影響の表の行
   「areka-P0-shiori-host-32 ＝ SAORI 同居を M1 から削除（emo2 未使用）。32bit SHIORI 往復に集中」。
   粒度: このページ全体で 1 項目であり、他のページの 1 項目より粗い。
-  根拠の場所: crates/shiori-host32-helper/src/shiori_proxy.rs の ShioriProxy::load と
-  ShioriProxy::request。
+  根拠の場所: crates/shiori-host32-helper/src/shiori_proxy.rs の ShioriByteProxy::load と
+  ShioriByteProxy::request。
   ```
+
+  **上の共通 `note` にある「3 つ」についての補足（2026-09-05・実装時に正典で確認）**: この「3 つ」は
+  **areka の助け手が名前で引いている入口の数**であって、正典が定める入口の数ではない。正典の入口は
+  上の「対象」に書いたとおり 4 つあり、初期化の側が `loadu`（優先・パスは UTF-8）と `load`
+  （フォールバック・パスは既定の各国語コードページ）に分かれている。台帳の該当行の `note` は上の
+  文面のまま凍結してあるが、同じ行の別の段落（「内容:」で始まる段落）に 4 つの入口と両者の違いが
+  書いてあるので、行だけを読んでも取り違えは起きない。
 
 ---
 
@@ -571,3 +627,769 @@ areka の送出の口は 1 か所（`crates/areka-kanade/src/actor.rs` の `roun
 1＋131＋27 ＝ 159（`list_shiori_resource`）／5＋2＋15＋4 ＝ 26（`spec_shiori3`）／
 19（`list_plugin_event`）／8＋5＋1 ＝ 14（外部連携の 6 ページ）／1（`memo_shiorievent`）
 ＝ **677**。
+
+---
+
+## 本文の読み方
+
+ここから先が群ごとの本文である。章は台帳の群にそのまま対応し、18 の群がすべて 1 章ずつ現れる。
+各章に書くのは次の 3 つで、順序は章ごとに同じである。
+
+1. **利用者に何が起きるか（何を失うか）** — 画面の前の人から見える結果で書く。
+2. **その群を成立させる最小の基盤** — 「今ある物」と「足りない物」を分けて書く。どう作るか
+   （設計・工程・見積り）は書かない。
+3. **台帳の項目 id** — その群に属する行の id。数が多い群は id の形と名前の並びで示す。
+
+**章に共通する「今ある物」**（章ごとに繰り返さないため、ここに一度だけ置く）
+
+- SHIORI との往復の口が 1 か所ある: `crates/areka-kanade/src/actor.rs` の `round_trip_request`。
+- 送るイベントの名前を決める固定の表と、呼び出しを組み立てる構築関数が
+  `crates/areka-kanade/src/schedule/events.rs` にある（表に載る名前は 11）。
+- 引くリソースの名前を決める固定の表が `crates/areka-kanade/src/schedule/resources.rs` にある
+  （載っている名前は `username` の 1 つ）。
+- 正典のリソース 159 件の名前は `crates/areka-sylphya/src/vocab/shiori_resource.rs` に登記済み。
+  ただしこの表を読んでいるのはテストだけである。
+- リクエストのヘッダを組み立てる場所と、応答を読む場所が
+  `crates/shiori-host32-host/src/shiori3.rs` にある（`build_request`・`parse_response`）。
+- 32bit の SHIORI DLL を読み込んで呼ぶ助け手が
+  `crates/shiori-host32-helper/src/shiori_proxy.rs` にある（`ShioriByteProxy`）。
+- ゴーストが `\q` の選択肢 ID に `On` で始まる名前を書けば、その名前は逐語のまま送出される
+  （索引の前置きの⑵）。ベースウェアが場面を見て自分から発火するのとは別の経路である。
+
+---
+
+## 第 1 部 — 黙って壊れるもの
+
+例外にもログにも現れず、「その場面で何も起きない」という形でだけ現れる群を先に置く。利用者からは
+不具合に見えず、開発者からも欠けていることが見えない。この部の 6 章で 320 項目を占める。
+
+### 群 2 — 送出していないイベント 248 件
+
+**利用者に何が起きるか**
+
+既存ゴーストの辞書は「SSP がこの場面でこのイベントを送ってくる」ことを前提に書かれている。areka は
+その 248 件を送らないので、辞書に用意された返事は 1 度も呼ばれない。画面の上では、次のような形で
+現れる。
+
+- **時刻と起動終了まわり（8 件・仮の値 `A1`・テーマ「気配」）** — 時報や分の変わり目で何も言わない。
+  画面の外へ出た・他の窓に重なったといった状況にも反応しない。
+- **触れ合い（35 件・`A2`・テーマ「触れ合い」）** — 押す・離す・掴んで動かす・撫でる向きを変える・
+  ホイールを回す・ファイルや文字列や URL を落とす、といった働きかけのほとんどが伝わらない。
+  areka が送っているのは動かしたときと 2 度押したときの 2 つだけである。
+- **掛け合い（13 件・`A3`・テーマ「掛け合い」「記憶」）** — 選択肢に触れただけの反応・アンカーを
+  押した反応・入力欄への記入・教え込みの一連が伝わらない。選択肢を「選んだ」ことは伝わるので、
+  会話は成り立つが、その周りの間や仕込みが失われる。
+- **更新（26 件・`B1`・テーマ「更新」）** — ネットワーク越しの更新の一部始終（始まり・照合・完了・
+  失敗・ゴースト以外の更新）が伝わらない。ゴーストが更新の進み具合を喋る仕掛けは何も動かない。
+- **ファイルの受け渡し（2 件・`B2`）** — ドラッグ中の通知と、現行仕様の受け取りの通知。
+  旧仕様の別名 3 件（群 3）の写像先もここに含まれる。
+- **消滅（6 件・`B3`・テーマ「記憶」）** — 消す前の確認・取り消し・見送りが成立しない。
+- **見た目の変化（13 件・`B4`・テーマ「装い」）** — シェルやバルーンや着せ替えを替えたことを
+  ゴースト自身が知らないので、着替えたときの台詞が出ない。
+- **導入と配布（9 件・`B5`・テーマ「記憶」）** — 導入の始まり・完了・失敗・断りが伝わらない。
+- **察し（46 件・`C2`・テーマ「気配り」）** — 電池・ネットワーク・画面の切り替え・全画面のアプリ・
+  スリープと復帰・画面の鍵・音楽の再生といった周囲の様子を一切知らない。常駐させておく値打ちを
+  作っている部分がまるごと欠ける。
+- **交わり（23 件・`D1`・テーマ「交わり」「記憶」）** — 他のゴーストの起動・終了・着替え、呼び出し、
+  伝達の受け渡しが成立しない。ゴーストを取り替えたことも伝わらない。
+- **テーマの付かない配管（67 件・`D2`）** — 通信（HTTP・RSS・WebSocket・名前解決・時刻合わせ）、
+  書庫の展開、予定表、音の再生、範囲選択の開始と終了、システムの問い合わせなど。単体では利用者に
+  見えないが、これらを使う辞書は返事を受け取れないまま止まる。
+
+**その群を成立させる最小の基盤**
+
+- **今ある物**: 送る口・許可の表・構築関数を置く場所・参照値を積んで渡す仕組み（既に 11 件が
+  同じ道を通っている）。イベントを 1 件足すのに新しい伝送路は要らない。
+- **足りない物**: **発火の条件を観測する場所**である。許可の表に名前を書き足しても送出は 1 件も
+  増えない——呼び出しを組み立てる場所が無いからで、送出を止める判定にすら到達しない。観測の元手は
+  小群ごとに違い、入力の通知・電源や画面やセッションの通知・更新の進行・起動中のゴーストの一覧
+  （群 14a）・プラグインの受け口（群 13）などがそれぞれ要る。つまりこの 248 件は 1 つの土台では
+  埋まらず、小群ごとに別々の観測元を持つ。
+
+**台帳の項目 id**
+
+id は `ukadoc:list_shiori_event:<名前>:1` の形。名前は次の 248 件（優先度の仮置きの値とテーマで
+まとめた。値は台帳の `priority`・`values` と一致する）。
+
+- `A1`／気配（8）: OnAITalk, OnCacheRestore, OnCacheSuspend, OnCloseAll, OnHourTimeSignal,
+  OnMinuteChange, OnOffscreen, OnOverlap
+- `A2`／触れ合い（35）: OnArchiveViewerOpen, OnDirectoryDrop, OnGamepadAxisMove,
+  OnGamepadButtonDown, OnGamepadButtonUp, OnKeyPress, OnMediaPlayerOpen, OnMouseClick,
+  OnMouseClickEx, OnMouseDoubleClickEx, OnMouseDown, OnMouseDownEx, OnMouseDragEnd,
+  OnMouseDragStart, OnMouseEnter, OnMouseEnterAll, OnMouseGesture, OnMouseHover, OnMouseLeave,
+  OnMouseLeaveAll, OnMouseMultipleClick, OnMouseMultipleClickEx, OnMouseUp, OnMouseUpEx,
+  OnMouseWheel, OnOtherObjectDropped, OnOtherObjectDropping, OnPictureViewerOpen, OnTextDrop,
+  OnURLDragDropping, OnURLDropFailure, OnURLDropped, OnURLDropping, OnURLQuery, OnWallpaperChange
+- `A3`／掛け合い（12）: OnAnchorEnter, OnAnchorHover, OnAnchorSelect, OnAnchorSelectEx,
+  OnChoiceEnter, OnChoiceHover, OnTeach, OnTeachInputCancel, OnTeachStart, OnTranslate,
+  OnUserInput, OnUserInputCancel
+- `A3`／記憶（1）: OnNotifyUserInfo
+- `B1`／更新（26）: OnUpdate.OnDownloadBegin, OnUpdate.OnMD5CompareBegin,
+  OnUpdate.OnMD5CompareComplete, OnUpdate.OnMD5CompareFailure, OnUpdateBegin,
+  OnUpdateCheckComplete, OnUpdateCheckFailure, OnUpdateCheckResult, OnUpdateCheckResultEx,
+  OnUpdateComplete, OnUpdateFailure, OnUpdateOther.OnDownloadBegin,
+  OnUpdateOther.OnMD5CompareBegin, OnUpdateOther.OnMD5CompareComplete,
+  OnUpdateOther.OnMD5CompareFailure, OnUpdateOtherBegin, OnUpdateOtherComplete,
+  OnUpdateOtherFailure, OnUpdateOtherReady, OnUpdateProcessExec, OnUpdateReady, OnUpdateResult,
+  OnUpdateResultEx, OnUpdateResultExplorer, OnUpdatedataCreated, OnUpdatedataCreating
+- `B2`／触れ合い（2）: OnFileDrop2, OnFileDropping
+- `B3`／記憶（6）: OnDestroy, OnVanishButtonHold, OnVanishCancel, OnVanishSelected,
+  OnVanishSelecting, OnVanished
+- `B4`／装い（13）: OnBalloonChange, OnBalloonScaling, OnDressupChanged, OnNotifyBalloonInfo,
+  OnNotifyDressupInfo, OnNotifyFontInfo, OnNotifySelfInfo, OnNotifyShellInfo, OnShellChanged,
+  OnShellChanging, OnShellScaling, OnSurfaceChange, OnSurfaceRestore
+- `B5`／記憶（9）: OnInstallBegin, OnInstallComplete, OnInstallCompleteAll, OnInstallCompleteEx,
+  OnInstallFailure, OnInstallRefuse, OnInstallReroute, OnNarCreated, OnNarCreating
+- `C2`／気配り（46）: OnBatteryChargingStart, OnBatteryChargingStop, OnBatteryCritical,
+  OnBatteryLow, OnBatteryNotify, OnCPULoadHigh, OnCPULoadLow, OnDarkTheme, OnDeviceArrival,
+  OnDeviceRemove, OnDisplayChange, OnDisplayChangeEx, OnDisplayHandover, OnDisplayPowerStatus,
+  OnFullScreenAppMinimize, OnFullScreenAppRestore, OnGamepadConnected, OnGamepadDisconnected,
+  OnLanguageChange, OnMemoryLoadHigh, OnMemoryLoadLow, OnMusicPlay, OnMusicPlayEx, OnNetworkHeavy,
+  OnNetworkStatusChange, OnNotifyInternationalInfo, OnNotifyOSInfo, OnOSUpdateInfo,
+  OnRecycleBinEmpty, OnRecycleBinEmptyFromOther, OnRecycleBinStatusUpdate, OnScreenSaverEnd,
+  OnScreenSaverStart, OnSessionDisconnect, OnSessionLock, OnSessionReconnect, OnSessionUnlock,
+  OnSysResume, OnSysSuspend, OnTabletMode, OnTrayBalloonClick, OnTrayBalloonTimeout, OnVideoPlayEx,
+  OnVirtualDesktopChanged, OnWindowStateMinimize, OnWindowStateRestore
+- `D1`／交わり（21）: OnCommunicate, OnCommunicateInputCancel, OnEmbryoExist, OnGhostCallComplete,
+  OnGhostCalled, OnGhostCalling, OnNekodorifExist, OnNotifyOtherFailure, OnOtherGhostBooted,
+  OnOtherGhostChanged, OnOtherGhostClosed, OnOtherGhostTalk, OnOtherGhostVanished,
+  OnOtherOffscreen, OnOtherOverlap, OnOtherSurfaceChange, OnRaiseOtherFailure, OnSSTPBlacklisting,
+  OnSSTPBreak, OnVoiceRecognitionWord, OnXUkagakaLinkOpen
+- `D1`／記憶（2）: OnGhostChanged, OnGhostChanging
+- `D2`／テーマなし（67）: OnBIFF2Complete, OnBIFFBegin, OnBIFFComplete, OnBIFFFailure,
+  OnBasewareUpdated, OnBasewareUpdating, OnCompressArchiveComplete, OnCompressArchiveFailure,
+  OnConfigurationDialogHelp, OnExecuteHTTPComplete, OnExecuteHTTPFailure, OnExecuteHTTPProgress,
+  OnExecuteHTTPSSLInfo, OnExecuteHTTPStreaming, OnExecuteRSSComplete, OnExecuteRSSFailure,
+  OnExecuteRSS_SSLInfo, OnExecuteWebSocketClose, OnExecuteWebSocketFailure, OnExecuteWebSocketOpen,
+  OnExecuteWebSocketReceive, OnExecuteWebSocketReconnect, OnExecuteWebSocket_SSLInfo,
+  OnExtractArchiveComplete, OnExtractArchiveFailure, OnGhostTermsAccept, OnGhostTermsDecline,
+  OnHeadlinesense.OnFind, OnHeadlinesenseBegin, OnHeadlinesenseComplete, OnHeadlinesenseFailure,
+  OnNSLookupComplete, OnNSLookupFailure, OnNotifyPluginFailure, OnPingComplete, OnPingProgress,
+  OnRSSBegin, OnRSSComplete, OnRSSFailure, OnRaisePluginFailure, OnRecommendsiteChoice,
+  OnResetWindowPos, OnSNTPBegin, OnSNTPCompare, OnSNTPCompareEx, OnSNTPCorrect, OnSNTPCorrectEx,
+  OnSNTPFailure, OnSchedule5MinutesToGo, OnScheduleRead, OnSchedulepostBegin,
+  OnSchedulepostComplete, OnSchedulesenseBegin, OnSchedulesenseComplete, OnSchedulesenseFailure,
+  OnSelectModeBegin, OnSelectModeCancel, OnSelectModeComplete, OnSelectModeMouseDown,
+  OnSelectModeMouseUp, OnSoundError, OnSoundLoop, OnSoundStop, OnSpeechSynthesisStatus,
+  OnSystemDialog, OnSystemDialogCancel, OnVoiceRecognitionStatus
+
+---
+
+### 群 2a — バルーンの開閉を知らせない 3 件
+
+**利用者に何が起きるか**
+
+吹き出しが閉じた・読まれないまま時間切れになった・途中で中断された、という出来事が SHIORI に
+伝わらない。読み飛ばされたことに気づいて話し方を変える、といった気配りがまるごと働かない。
+
+**その群を成立させる最小の基盤**
+
+- **今ある物**: 表示側から会話進行側へ渡すための受け皿の型が
+  `crates/areka/src/emo2_boot/talk_lifecycle.rs` に用意してある（`BalloonLifecycleNotice`）。
+  イベントの名前と参照値の割り当ても決まっている。
+- **足りない物**: その受け皿を作る側（吹き出しの開閉を見て通知を起こす側）と、受け取って SHIORI へ
+  渡す側の両方。どちらも存在しないので、経路そのものが動かない。
+- この 3 件は **M1 では意図的に発火させない**という記録があり（転記元は `doc/COMPAT_ARCHITECTURE.md`
+  の沈黙ルール対応表）、追跡先は `areka-P0-balloon-canon-residue` である。他の群と違い、
+  「気づいていない欠落」ではなく「先送りと記録されている欠落」である。
+
+**台帳の項目 id**
+
+`ukadoc:list_shiori_event:OnBalloonBreak:1`・`ukadoc:list_shiori_event:OnBalloonClose:1`・
+`ukadoc:list_shiori_event:OnBalloonTimeout:1`
+
+---
+
+### 群 4 — イベント一覧に同居する `On` 以外の 25 件
+
+**利用者に何が起きるか**
+
+この群は 2 種類の混在である。ベースウェアからゴーストへ**知らせる**もの（導入済みのゴースト・
+バルーン・シェルの名前、置き場所の一覧、窓の取っ手、固有の識別子など）と、ベースウェアが
+ゴーストから**引く**もの（ゴーストが対応している機能の申告、記録の可否、入力欄の補完の設定、
+プロパティの照会）である。どちらも届かないので、「他のゴーストを呼ぶ一覧を作る」「導入済みかどうかで
+台詞を変える」「自分の窓を指して何かをする」といった仕掛けが成立しない。利用者からは、その機能が
+最初から無いようにしか見えない。
+
+**その群を成立させる最小の基盤**
+
+- **今ある物**: 知らせる側には送る口と構築関数の置き場所があり、引く側には照会の口と固定の表がある
+  （表に載る名前は `username` の 1 つ）。
+- **足りない物**: 知らせる中身そのもの——導入済みのものを登記した一覧、置き場所の一覧、窓の取っ手を
+  外へ渡す経路。引く側は、引ける名前を決める表に名前が無いこと。`property.get`／`property.set` の
+  受け口は別の spec（`areka-P0-property-query-channels`）が担当する。
+
+**台帳の項目 id**
+
+id は `ukadoc:list_shiori_event:<名前>:1` の形。名前は次の 25 件（すべて `absent`・仮の値 `D2`）。
+
+balloonpathlist, calendarpluginpathlist, calendarskinpathlist, capability, configuredbiffname,
+enable_debug, enable_log, ghostpathlist, headlinepathlist, hwnd, inputbox.autocomplete,
+installedballoonname, installedghostname, installedheadlinename, installedkeroname,
+installedplugin, installedsakuraname, installedshellname, otherghostname, ownerghostname,
+pluginpathlist, property.get, property.set, rateofusegraph, uniqueid
+
+---
+
+### 群 8 — 語彙だけあるリソース・その他 27 件
+
+**利用者に何が起きるか**
+
+ゴーストが用意した値を areka が引きに行かないので、その値を前提にした動きが何も起きない。立ち位置の
+既定値（本体側・相方側・2 人目以降）、ゴーストの名前・版・作者名、ホームページの所在、機嫌の値、
+吹き出しの補助表示などである。群 7 と違って既定の見た目に置き換わるわけでもないため、利用者からは
+何も起きていないようにしか見えない。
+
+**その群を成立させる最小の基盤**
+
+- **今ある物**: 正典 159 件の名前は `crates/areka-sylphya/src/vocab/shiori_resource.rs` に登記済みで、
+  照会の往復そのものも `username` で実際に動いている。
+- **足りない物**: 引ける名前を決める表に名前が無いこと（載っているのは `username` だけ）と、引いた値を
+  受け取る先——立ち位置なら窓の配置、名前や版なら管理の画面、機嫌なら会話の進行——との繋がり。
+  `sakura.*`／`kero.*`／`char*.*` は新旧の関係ではなく相手の違い（本体側・相方側・2 人目以降または
+  `\p[*]` 側）なので、別名として片付けることはできない。
+
+**台帳の項目 id**
+
+id は `ukadoc:list_shiori_resource:<名前>:1` の形。名前は次の 27 件。
+
+- `A2`／触れ合い（1）: tooltip
+- `A3`／掛け合い（1）: balloon_tooltip
+- `B1`／更新（3）: homeurl, other_homeurl_override, useorigin1
+- `B3`／記憶（2）: getaistate, getaistateex
+- `D2`／テーマなし（20）: -,
+  `_28_5165_529b_30dc_30c3_30af_30b9_7a2e_985e_29.defaultleft_20_28_5165_529b_30dc_30c3_30af_30b9_7a2e_985e_29.defaulttop`,
+  char_2a.defaultleft, char_2a.defaulttop, char_2a.defaultx, char_2a.defaulty, craftman, craftmanw,
+  kero.defaultleft, kero.defaulttop, kero.defaultx, kero.defaulty, legacyinterface, log_path, name,
+  sakura.defaultleft, sakura.defaulttop, sakura.defaultx, sakura.defaulty, version
+
+（`-` と、長い符号化された名前の 1 件は、正典の見出しがそのまま id になったものである。`char_2a` の
+`_2a` は `*` を符号化した綴りで、`char*.` を指す。）
+
+---
+
+### 群 10 — 固定値で送っているヘッダ 2 件
+
+**利用者に何が起きるか**
+
+Shift_JIS で書かれた既存ゴーストと噛み合わない。areka は文字コードの申告を UTF-8 の 1 値でしか
+送らないので、従来の文字コードで書かれた辞書は文字化けするか、応答を読み取れずに終わる。既存資産を
+そのまま動かしたい利用者にとっては、最初の 1 歩で止まる種類の欠けである。もう 1 つの
+`SecurityLevel` は `local` に固定してあり、外から来た呼び出しかどうかをゴーストが区別できない。
+
+**その群を成立させる最小の基盤**
+
+- **今ある物**: ヘッダを組み立てる場所と応答を読む場所が 1 か所ずつあり、値は実際に送られている。
+- **足りない物**: 値を選ぶ余地そのもの。文字コードは 1 つの値しか持てない型から書き出しており、
+  `SecurityLevel` は文字列を直接書き出している。選んだ結果を実際の文字の変換へ渡す繋がりも要る。
+  文字コードの担当は `areka-P0-charset-canon` である。
+
+**台帳の項目 id**
+
+`ukadoc:spec_shiori3:Charset:1`・`ukadoc:spec_shiori3:SecurityLevel:1`（いずれも `degraded`・
+仮の値 `D2`。末尾が `:1` なのはリクエスト側の見出しであることを表し、レスポンス側の同名の見出しは
+`:2` として別の行になっている）
+
+---
+
+### 群 11 — 送らない／読み飛ばすヘッダ 15 件
+
+**利用者に何が起きるか**
+
+ゴーストが返事に添えた指示が無かったことになる。読み終わりの通知、目印、吹き出しの位置ずらし、
+追加の参照値、返事の寿命、外部への返信のための転送——いずれも届いても読まずに捨てるので、
+ゴースト作者が意図した細かい制御が効かない。リクエスト側の 4 つは相手に届かないので、ゴースト側が
+呼び出しの素性を見て振る舞いを変えることもできない。
+
+**その群を成立させる最小の基盤**
+
+- **今ある物**: 応答のヘッダを 1 行ずつ読む繰り返しがあり、そこで 3 つの名前だけを拾っている。
+  リクエスト側も、ヘッダを書き足す場所そのものはある。
+- **足りない物**: 残りのヘッダ名を拾う枝と、拾った値の行き先（位置ずらしなら吹き出しの配置、
+  目印なら会話の進行、寿命なら再生の制御）。名前を読むだけでは何も変わらないので、受け取り先の側が
+  同時に要る。
+
+**台帳の項目 id**（`ukadoc:spec_shiori3:` に続く綴り。長い綴りは正典の見出しをそのまま符号化したもの）
+
+`Age_20_5bSSP_62e1_5f35_5d:1`, `BalloonOffset_20_5bSSP_62e1_5f35_5d:1`,
+`BaseID_20_5bSSP_62e1_5f35_5d:1`, `Charset:2`, `MarkerSend_20_5bSSP_62e1_5f35_5d:1`,
+`Marker_20_5bSSP_62e1_5f35_5d:1`, `Reference0:1`, `Reference1_7e:1`,
+`SecurityLevel_20_5bSSP_62e1_5f35_5d:1`, `SecurityOrigin_20_5bSSP_62e1_5f35_5d:1`, `Sender:2`,
+`SenderType_20_5bSSP_202.5.05_7e_62e1_5f35_5d:1`, `ValueNotify_20_5bSSP_62e1_5f35_202.5.35_5d:1`,
+`X-SSTP-PassThru-_28_4efb_610f_306e_6587_5b57_5217_29_20_5bSSP_202.5.03_7e_62e1_5f35_5d:1`,
+`X-SSTP-PassThru-_28_4efb_610f_306e_6587_5b57_5217_29_20_5bSSP_202.5.05_7e_62e1_5f35_5d:1`
+
+---
+
+## 第 2 部 — テーマは付いているが、現れ方が見た目の差にとどまるもの
+
+この部は 1 章である。動かなくなるのではなく、そのゴーストらしい見え方が出ない、という形で現れる。
+
+### 群 7 — 画面の材料 131 件
+
+**利用者に何が起きるか**
+
+メニューやゴースト管理の画面が、ゴーストの用意した文言・色・背景ではなく areka の既定のままになる。
+作者が付けた各ボタンの呼び名、メニューの前景・背景・枠・区切りの色や画像、推奨サイトとポータルの
+並び、消去のボタンを出すかどうか——これらが反映されない。台帳ではこの 131 行すべてにテーマ「装い」が
+付いている。壊れ方が見た目の差にとどまるため、仮の値は他の「装い」の群より 1 段低い `C1` である。
+
+**その群を成立させる最小の基盤**
+
+- **今ある物**: 131 件を含む正典 159 件の名前はすべて登記済みで、照会の往復も `username` で動く。
+- **足りない物**: 引ける名前を決める表に名前が無いことと、これらの値を読んで画面を組み立てる側との
+  繋がり。なお、その画面そのものが areka にどこまであるかは本調査の担当範囲の外である。
+
+**台帳の項目 id**
+
+id は `ukadoc:list_shiori_resource:<名前>:1` の形。名前は次の 131 件（すべて `vocabulary-only`・
+テーマ「装い」・仮の値 `C1`）。
+
+activaterootbutton.caption, addressbarbutton.caption, aistatebutton.caption,
+alignrootbutton.caption, alwaysstayontopbutton.caption, alwaystrayiconvisiblebutton.caption,
+balloonhistorybutton.caption, balloonrootbutton.caption, biffallbutton.caption, biffbutton.caption,
+calendarbutton.caption, callghosthistorybutton.caption, callghostrootbutton.caption,
+callsstpsendboxbutton.caption, char_2a.popupmenu.applybindtoself, char_2a.popupmenu.type,
+char_2a.popupmenu.visible, char_2a.recommendbuttoncaption, char_2a.recommendsites.caption,
+char_2a.recommendsites, charsetbutton.caption, closeballoonbutton.caption, closebutton.caption,
+collisionvisiblebutton.caption, configurationbutton.caption, configurationrootbutton.caption,
+debugballoonbutton.caption, definedsurfaceonlybutton.caption, dictationbutton.caption,
+dressuprootbutton.caption, duibutton.caption, enableballoonmovebutton.caption,
+firststaffbutton.caption, ghostexplorerbutton.caption, ghosthistorybutton.caption,
+ghostinstallbutton.caption, ghostrootbutton.caption, headlinesensehistorybutton.caption,
+headlinesenserootbutton.caption, helpbutton.caption, hidebutton.caption, historyrootbutton.caption,
+inforootbutton.caption, kero.popupmenu.applybindtoself, kero.popupmenu.type,
+kero.popupmenu.visible, kero.recommendbuttoncaption, kero.recommendsites,
+leavepassivebutton.caption, menu.background.bitmap.filename, menu.background.font.color.b,
+menu.background.font.color.g, menu.background.font.color.r, menu.disable.font.color.b,
+menu.disable.font.color.g, menu.disable.font.color.r, menu.foreground.bitmap.filename,
+menu.foreground.font.color.b, menu.foreground.font.color.g, menu.foreground.font.color.r,
+menu.frame.color.b, menu.frame.color.g, menu.frame.color.r, menu.separator.color.b,
+menu.separator.color.g, menu.separator.color.r, menu.sidebar.bitmap.filename,
+messengerbutton.caption, pluginhistorybutton.caption, pluginrootbutton.caption,
+portalrootbutton.caption, purgeghostcachebutton.caption, quitbutton.caption,
+rateofuseballoonbutton.caption, rateofusebutton.caption, rateofuserootbutton.caption,
+rateofusetotalbutton.caption, readmebutton.caption, readmebuttoncaption,
+recommendrootbutton.caption, regionenabledbutton.caption, reloadinfobutton.caption,
+resetballoonpositionbutton.caption, resettodefaultbutton.caption,
+sakura.popupmenu.applybindtoself, sakura.popupmenu.type, sakura.popupmenu.visible,
+sakura.portalbuttoncaption, sakura.portalsites, sakura.recommendbuttoncaption,
+sakura.recommendsites, scriptlogbutton.caption, shellrootbutton.caption,
+shellscaleotherbutton.caption, shellscalerootbutton.caption, sntpbutton.caption,
+switchactivatewhentalkbutton.caption, switchactivatewhentalkexceptupdatebutton.caption,
+switchautobiffbutton.caption, switchautoheadlinesensebutton.caption,
+switchblacklistingbutton.caption, switchcompatiblemodebutton.caption,
+switchconsolealwaysvisiblebutton.caption, switchconsolevisiblebutton.caption,
+switchdeactivatebutton.caption, switchdontactivatebutton.caption,
+switchdontforcealignbutton.caption, switchduivisiblebutton.caption,
+switchforcealignfreebutton.caption, switchforcealignlimitbutton.caption,
+switchignoreserikomovebutton.caption, switchlocalsstpbutton.caption,
+switchmovetodefaultpositionbutton.caption, switchproxybutton.caption, switchquietbutton.caption,
+switchreloadbutton.caption, switchreloadtempghostbutton.caption, switchremotesstpbutton.caption,
+switchrootbutton.caption, switchtalkghostbutton.caption, systeminfobutton.caption,
+termsbutton.caption, texttospeechbutton.caption, updatebutton.caption, updatebuttoncaption,
+updatefmobutton.caption, updateplatformbutton.caption, utilityrootbutton.caption,
+vanishbutton.caption, vanishbuttoncaption, vanishbuttonvisible
+
+---
+
+## 第 3 部 — 受け口が無い外部との連携
+
+ここから先は、送る側の欠落ではなく**外から来るものを受け取る口が 1 つも無い**群である。前の 2 部と
+違い、名前を足す・値を読む、という話ではなく、待ち受ける仕組みそのものが存在しない。この部の 5 章で
+201 項目を占める。判定の対象にならない群 5（168 件）もこの部に置いてある。areka の側では起きないと
+判定した理由が「外から受け取る口が無い」ことであり、この部の他の章とまったく同じだからである。
+
+### 群 14a — ゴースト同士の交わり 8 件
+
+**利用者に何が起きるか**
+
+うちのゴーストたちが互いに気づかない。2 体以上を並べても黙ってすれ違い、話しかけ箱から声を掛けても
+返らない。1 体ずつ立ち上げるのと変わらなくなる。
+
+**その群を成立させる最小の基盤**
+
+- **今ある物**: この群については無い。SSTP の待ち受けも、起動中のゴーストの一覧を共有する仕組みも
+  `crates/` 以下に 1 か所も無い（バルーンの `sstpmessage` で始まる設定キーは、未知のキーとして
+  読み飛ばされているだけで、SSTP の実装ではない）。
+- **足りない物**: 待ち受ける口、一覧を共有する領域の読み書き、そこから受けた要求を SHIORI へ渡す
+  経路の 3 つ。群 2 の「交わり」23 件と群 5 の一部は、この土台の上でしか成立しない。
+
+**台帳の項目 id**
+
+`ukadoc:spec_sstp:request:1`, `ukadoc:spec_sstp:response:1`,
+`ukadoc:spec_fmo_mutex:32_30d0_30a4_30c8_306e_8b58_5225ID:1`,
+`ukadoc:spec_fmo_mutex:FMO_306e_30b5_30a4_30ba:1`,
+`ukadoc:spec_fmo_mutex:FMO_306e_540d_524d_3068_6587_5b57_30b3_30fc_30c9:1`,
+`ukadoc:spec_fmo_mutex:_30ad_30fc_540d_30fb_5024:1`,
+`ukadoc:spec_fmo_mutex:_30c7_30fc_30bf_672c_4f53:1`,
+`ukadoc:spec_fmo_mutex:_30c7_30fc_30bf_7d42_7aef:1`
+
+---
+
+### 群 13 — PLUGIN の受け口 19 件
+
+**利用者に何が起きるか**
+
+プラグインを入れても何も起こらない。プラグイン向けのイベントを送る先も、プラグインからの照会を
+受ける口も無いので、配布されているプラグインは areka の上では単に無視される。
+
+**その群を成立させる最小の基盤**
+
+- **今ある物**: この群については無い。プラグインを読み込む仕組みが `crates/` 以下に 1 件も無く、
+  `\![raiseplugin]`・`\![notifyplugin]` を受ける場所も 0 件である。
+- **足りない物**: 読み込む仕組み、プラグインへ送る側、プラグインからの照会を受ける側。19 件のうち
+  12 件は SHIORI 側にも同じ名前があり、台帳では `same-feature` で結んである。
+
+**台帳の項目 id**
+
+id は `ukadoc:list_plugin_event:<名前>:1` の形。名前は次の 19 件。
+
+`OnChoiceSelect_28Ex_29_2fOnAnchorSelect_28Ex_29_2f_5cq_7b49_306b_6307_5b9a_3055_308c_305f_4efb_610f_540d_30a4_30d9_30f3_`,
+OnGhostBoot, OnGhostExit, OnGhostInfoUpdate, OnInstallComplete, OnMenuExec, OnOtherGhostTalk,
+OnSecondChange,
+`_5c_21_5braiseplugin_5d_304a_3088_3073_5c_21_5bnotifyplugin_5d_306b_6307_5b9a_3055_308c_305f_4efb_610f_540d_30a4_30d9_30`,
+balloonpathlist, ghostpathlist, headlinepathlist, installedballoonname, installedghostname,
+installedplugin, pluginpathlist, property.get, property.set, version
+
+（長い 2 件は、正典の見出しがそのまま項目の名前になったものである。それぞれ「選択肢やアンカーに
+書かれた任意名のイベント」と「`\![raiseplugin]`／`\![notifyplugin]` に書かれた任意名のイベント」の
+枠を指す。）
+
+---
+
+### 群 14b — ブラウザ・プラグイン・ヘッドライン 5 件
+
+**利用者に何が起きるか**
+
+配布サイトの導入用のリンクを押しても areka には何も届かない。ゴーストの配布ページから 1 押しで
+入れる、という導線がまるごと成立しない。ヘッドラインの取得も無いので、更新情報を読み上げる類の
+仕掛けも動かない。
+
+**その群を成立させる最小の基盤**
+
+- **今ある物**: sylphya の設定の根の名前（`crates/areka-sylphya/src/vocab/dotted.rs`）と、
+  ヘッドライン・プラグイン関連のボタンの文言の語彙だけ。どちらも名前があるだけである。
+- **足りない物**: ブラウザからの受け口、プラグインの決まりに沿った読み込み、ヘッドラインの取得。
+  いずれも `crates/` 以下に無い。
+
+**台帳の項目 id**
+
+`ukadoc:spec_headline`, `ukadoc:spec_plugin`,
+`ukadoc:spec_web:x-ukagaka-link_3atype_3devent_26ghost_3d_28_30b4_30fc_30b9_30c8_540d_29_26info_3d_28_8ffd_52a0_60c5_5831_29:1`,
+`ukadoc:spec_web:x-ukagaka-link_3atype_3dhomeurl_26url_3d_28_30a8_30f3_30b3_30fc_30c9_6e08URL_29:1`,
+`ukadoc:spec_web:x-ukagaka-link_3atype_3dinstall_26url_3d_28_30a8_30f3_30b3_30fc_30c9_6e08URL_29:1`
+
+（`ukadoc:spec_headline` と `ukadoc:spec_plugin` は、見出しの無いページ全体で 1 項目という粗い
+粒度の id である。）
+
+---
+
+### 群 14c — DLL 共通仕様 1 件
+
+**利用者に何が起きるか**
+
+SHIORI の DLL は読み込めるので、ゴーストは動く。一方、同じ入口の決まりを共有する SAORI・MAKOTO・
+PLUGIN の DLL は読み込む呼び出しそのものが無いので同居できない。SAORI を前提に書かれた既存ゴースト
+（外部の部品に計算や読み上げを任せているもの）は、その部分だけが動かない。
+
+**その群を成立させる最小の基盤**
+
+- **今ある物**: 32bit の助け手が絶対パスで DLL を読み込み、`load`・`unload`・`request` の 3 つを
+  名前で引いてから呼んでいる。読み込みに失敗したときは黙って先へ進まず、失敗として呼び出し元へ
+  返る。
+- **足りない物**: ⑴ 正典が定める 4 つ目の入口 `loadu` を名前で引く枝（正典はこちらを優先して使う
+  ことにしており、`load` との違いは置き場所のパスの文字コードである——`loadu` は UTF-8、`load` は
+  既定の各国語コードページ）、⑵ SAORI・MAKOTO・PLUGIN の DLL を読み込む側。MAKOTO の担当は
+  `areka-P0-makoto-dll-host` である。SAORI については areka がプロトコルを実装するのではなく、
+  32bit の同じプロセスに同居できること・作業ディレクトリ・DLL の探索パスの 3 つが条件になる。
+
+**台帳の項目 id**
+
+`ukadoc:spec_dll`（ページ全体で 1 項目・`degraded`・仮の値 `E1`）
+
+---
+
+### 群 5 — 外部が送る拡張イベント 168 件
+
+**利用者に何が起きるか**
+
+対応アプリやゲームとの連携が何も動かない。この 168 件は areka が送るものではなく、外部のアプリ・
+プラグイン・他のゴーストが「このゲームでこういう出来事があった」とゴーストへ知らせるための名前で
+あり、areka に問われるのは受け取る口があるかどうかだけである。その口が無いので、連携を前提に
+書かれた辞書は 1 度も呼ばれない。台帳ではこの 168 件を `not-applicable`（areka が実装の主体では
+ない）として扱っており、テーマも付けていない——送信元が areka でない以上、「これが無いと利用者は
+ゴーストの何を失うか」に areka の側から答えられないからである。
+
+**その群を成立させる最小の基盤**
+
+- **今ある物**: 受け取った要求を SHIORI へ渡す口は 1 つある（往復の口）。
+- **足りない物**: 外から任意の名前のイベントを受け取る経路。具体的には群 14a の SSTP の待ち受けと
+  群 13 のプラグインの受け口が土台であり、この 168 件はその上に乗る。土台が無い間は、名前を 1 つ
+  ずつ扱っても意味がない。
+
+**台帳の項目 id**
+
+id は `ukadoc:list_shiori_event_ex:<名前>:1` の形。168 件すべてが `not-applicable`・テーマ空・
+優先度は空文字である。名前は次のとおり。
+
+OnApplicationBoot, OnApplicationClose, OnApplicationExist, OnApplicationFileOpen,
+OnApplicationOperationFinish, OnApplicationVersion, OnBatteryCritical, OnBatteryLow, OnBeerShower,
+OnCrystalDiskInfoClear, OnCrystalDiskInfoEvent, OnDive, OnElinAllyCondition, OnElinAllyDead,
+OnElinCatchFish, OnElinMapCharaGenerate, OnElinMapEnter, OnElinMapItemGenerate, OnElinPCCondition,
+OnElinPCDead, OnElinTarget, OnElonaOmakeMMAEventAbandonPet, OnElonaOmakeMMAEventAddNewsTopic,
+OnElonaOmakeMMAEventAdventGod, OnElonaOmakeMMAEventAreaChanged, OnElonaOmakeMMAEventAreaChanged_2a,
+OnElonaOmakeMMAEventAtonement, OnElonaOmakeMMAEventAwake, OnElonaOmakeMMAEventBecomeCriminal,
+OnElonaOmakeMMAEventBelieveGod, OnElonaOmakeMMAEventBuyNuke, OnElonaOmakeMMAEventClothOut,
+OnElonaOmakeMMAEventConqueredLesimas, OnElonaOmakeMMAEventCooking, OnElonaOmakeMMAEventDead,
+OnElonaOmakeMMAEventEtherDisease, OnElonaOmakeMMAEventEtherDiseaseCured,
+OnElonaOmakeMMAEventGameLoad, OnElonaOmakeMMAEventGameQuit, OnElonaOmakeMMAEventGrandmapocalypse,
+OnElonaOmakeMMAEventHour, OnElonaOmakeMMAEventHourPlayed, OnElonaOmakeMMAEventInvestNPC,
+OnElonaOmakeMMAEventJoinGuild, OnElonaOmakeMMAEventJoinParty, OnElonaOmakeMMAEventLastword,
+OnElonaOmakeMMAEventLevelUp, OnElonaOmakeMMAEventLomiasInTheParty, OnElonaOmakeMMAEventLomiasKilled,
+OnElonaOmakeMMAEventMapChanged, OnElonaOmakeMMAEventMarriage, OnElonaOmakeMMAEventMewmewmew,
+OnElonaOmakeMMAEventMutation, OnElonaOmakeMMAEventMutationCured, OnElonaOmakeMMAEventNewGame,
+OnElonaOmakeMMAEventNukeExploded, OnElonaOmakeMMAEventOffer, OnElonaOmakeMMAEventPayTax,
+OnElonaOmakeMMAEventPerformance, OnElonaOmakeMMAEventPetDead, OnElonaOmakeMMAEventPray,
+OnElonaOmakeMMAEventPrayEyth, OnElonaOmakeMMAEventPrayFailed, OnElonaOmakeMMAEventRagnarok,
+OnElonaOmakeMMAEventRandomEvent, OnElonaOmakeMMAEventReadTreasureMap,
+OnElonaOmakeMMAEventRefuseMarriage, OnElonaOmakeMMAEventSaleSlave, OnElonaOmakeMMAEventSaleWife,
+OnElonaOmakeMMAEventSetNuke, OnElonaOmakeMMAEventSisterRagnarok, OnElonaOmakeMMAEventSkillDown,
+OnElonaOmakeMMAEventSkillLearned, OnElonaOmakeMMAEventSkillUp, OnElonaOmakeMMAEventSleep,
+OnElonaOmakeMMAEventStealItem, OnElonaOmakeMMAEventTravelGuide,
+OnElonaOmakeMMAEventTreasureDigging, OnElonaOmakeMMAEventWeatherChanged, OnElonaOmakeMMAEventWish,
+OnElonaOmakeMMAEventWished, OnElonaOmakeMMAEventZeomeKilled, OnFleetClockComplete, OnGetValues,
+OnHandActivate, OnHitThunder, OnHttpcNotify, OnHydrateStatsNotify, OnJitenBattle, OnJitenTagBattle,
+OnKanadeTeaParty, OnKanadeTeaPartyEnd, OnKanadeTeaPartyInfomationRequest, OnKinokoObjectChanged,
+OnKinokoObjectChanging, OnKinokoObjectCreate, OnKinokoObjectDestroy, OnKinokoObjectInstalled,
+OnMahjong, OnMahjongResponse, OnMglBattle, OnMopClear, OnMusicPlay, OnMusicPlayer.SongInfo,
+OnNeedlePoke, OnNekodorifObjectDodge, OnNekodorifObjectDrop, OnNekodorifObjectEmerge,
+OnNekodorifObjectHit, OnNekodorifObjectVanish, OnNostr, OnPoker, OnPokerNotify, OnPotatoError,
+OnPotatoFileNotFound, OnPotatoReturn, OnRequestValues, OnSatolistBoot, OnSatolistClosed,
+OnSatolistDictionaryFolderChanged, OnSatolistEventAdded, OnSatolistGhostOpened, OnSatolistSaved,
+OnSpectrePlugin.ConfirmCalibration, OnSpectrePlugin.Possession, OnSpectrePlugin.Surface,
+OnStampAdd, OnStampInfo, OnStampInfoCall, OnSysResourceCritical, OnSysResourceLow, OnTalkRequest,
+OnTourabuConquestEnd, OnTourabuConquestStart, OnTourabuDutyEnd, OnTourabuDutyStart,
+OnUkadocScriptExample, OnWeatherStation.Alerts, OnWeatherStation.Astro, OnWeatherStation.Error,
+OnWeatherStation.Forecast.Day, OnWeatherStation.Forecast.Hourly, OnWeatherStation.Weather,
+OnWebsiteUpdateNotify, Send60stair_Call, Send60stair_DiceRoll, Send60stair_Dobon,
+Send60stair_GameEnd, Send60stair_GetStatus, Send60stair_Goal, Send60stair_Marking,
+Send60stair_Start, Send60stair_YourTurnEnd, Send60stair_YourTurnStart, ShioriEcho.Begin,
+ShioriEcho.CommandComplete, ShioriEcho.CommandHistory.ForwardIndex, ShioriEcho.CommandHistory.Get,
+ShioriEcho.CommandHistory.New, ShioriEcho.CommandHistory.Update, ShioriEcho.CommandPrompt,
+ShioriEcho.CommandUpdate, ShioriEcho.End, ShioriEcho.GetName, ShioriEcho.GetResult,
+ShioriEcho.TabPress, ShioriEcho, `_53ef_5909_540d_306e_8fd4_4fe1_30a4_30d9_30f3_30c8`
+
+（最後の 1 件は「可変名の返信イベント」という見出しがそのまま項目になったもので、決まった 1 つの
+名前ではなく、依頼の側が指定した名前で返す枠を指す。）
+
+---
+
+## 第 4 部 — 判定の対象にならない群と、既にできている群
+
+未対応の話はここで終わりである。以下の 6 章は、対応の順序を考える対象ではないが、18 の群を
+漏れなく並べるために置く。
+
+### 群 3 — 旧仕様の別名 3 件
+
+**利用者に何が起きるか**
+
+この 3 行そのものでは何も起きない。正典本文がいずれも「旧仕様」と述べており、実際に何が起きるかは
+写像先の `OnFileDrop2` の行に従う。その行は群 2 に属し、状態は `absent` である——つまり、
+落としたファイルは新旧どちらの名前でも伝わらない。
+
+**その群を成立させる最小の基盤**
+
+- **今ある物**: 別名の向きが正典本文の記述から決まっており、台帳では `alias_of` で写像先を指して
+  ある。別名の連鎖は作っていない。
+- **足りない物**: この行としては無い。写像先の行が必要とするもの（群 2 と同じ）がそのまま当たる。
+  なお `OnFileDropping` はドラッグ中の通知であって旧仕様ではないので、この 3 件には含めない。
+
+**台帳の項目 id**
+
+`ukadoc:list_shiori_event:OnFileDrop:1`・`ukadoc:list_shiori_event:OnFileDropEx:1`・
+`ukadoc:list_shiori_event:OnFileDropped:1`
+
+---
+
+### 群 15 — イベント一覧の補足 1 件
+
+**利用者に何が起きるか**
+
+何も起きない。この項目は正典のイベント一覧のページに添えられた読み方の補足であって、areka が送る・
+引く・受けるものではない。実装の対象にならないので、利用者から見える壊れ方も無い。
+
+**その群を成立させる最小の基盤**
+
+- **今ある物**: 該当なし（実行時の経路を持たない項目である）。
+- **足りない物**: 該当なし。ページ全体で 1 項目という粗い粒度なので、他のページの 1 項目と同列に
+  数えないこと。
+
+**台帳の項目 id**
+
+`ukadoc:memo_shiorievent`
+
+---
+
+### 群 1 — 送出しているイベント 11 件
+
+**利用者に何が起きるか**
+
+失うものは無い。areka はこの 11 件を実際に SHIORI へ送っており、起動から終了まで、押す・動かす・
+選ぶ、という最小限の会話は成立する。
+
+**その群を成立させる最小の基盤**
+
+- **今ある物**: 許可の表と構築関数と送る口が揃っている。送出の直前には記録が 1 行残り、送出に
+  失敗すれば失敗として扱われるので、黙って消えることはない。この 11 件の名前は逐語一致のテストで
+  固定してあり、静かに増減しない。
+- **足りない物**: この群としては無い。
+
+**台帳の項目 id**
+
+id は `ukadoc:list_shiori_event:<名前>:1` の形。OnBoot, OnChoiceSelect, OnChoiceSelectEx,
+OnChoiceTimeout, OnClose, OnFirstBoot, OnInitialize, OnMouseDoubleClick, OnMouseMove,
+OnSecondChange, basewareversion
+
+（`basewareversion` は `On` で始まらないが、ベースウェアの版を知らせる通知として実際に送っている
+ため、群 4 ではなくこの群に属する。）
+
+---
+
+### 群 6 — 実際に引いているリソース 1 件
+
+**利用者に何が起きるか**
+
+失うものは無い。areka は起動の途中で利用者の呼び名を実際に引いている。応答が空だったり照会に
+失敗したりしても起動は止まらず、既定の呼び名で先へ進む。
+
+**その群を成立させる最小の基盤**
+
+- **今ある物**: 引く名前を決める表・照会を組み立てる関数・往復の口が揃っている。値が無いときの
+  既定値は 1 か所だけで定義してある。
+- **足りない物**: この群としては無い。ただし、同じ仕組みの上に載るはずの 158 件が群 7・群 8 で
+  待っている。
+
+**台帳の項目 id**
+
+`ukadoc:list_shiori_resource:username:1`
+
+---
+
+### 群 9 — 送っているヘッダ 5 件
+
+**利用者に何が起きるか**
+
+失うものは無い。要求の 1 行目と、送り主・実行状態・イベント名・参照値は毎回組み立てて送っている。
+
+**その群を成立させる最小の基盤**
+
+- **今ある物**: ヘッダを組み立てる場所が 1 つあり、値をそのまま書き出す形なので途中で失敗する
+  経路が無い。
+- **足りない物**: この群としては無い。実行状態の語彙そのものは別の spec
+  （`areka-P0-status-execution-states`）が持つ。
+
+**台帳の項目 id**
+
+`ukadoc:spec_shiori3:_30e1_30bd_30c3_30c9:1`（メソッド）・`ukadoc:spec_shiori3:Sender:1`・
+`ukadoc:spec_shiori3:Status_20_5bSSP_62e1_5f35_5d:1`・`ukadoc:spec_shiori3:ID:1`・
+`ukadoc:spec_shiori3:Reference_2a:1`
+
+---
+
+### 群 12 — 解釈している応答 4 件
+
+**利用者に何が起きるか**
+
+失うものは無い。応答の状態番号と、返ってきた本文・エラーの重さ・エラーの説明を読み取って使って
+いる。相手が失敗を返したときは黙って捨てず、記録が残る形で呼び出し元へ返る。
+
+**その群を成立させる最小の基盤**
+
+- **今ある物**: 応答を読み解く場所と、その結果を呼び出し元の型へ写す場所が揃っている。
+- **足りない物**: この群としては無い。読み飛ばしている残りのヘッダは群 11 が持つ。
+
+**台帳の項目 id**
+
+`ukadoc:spec_shiori3:_30b9_30c6_30fc_30bf_30b9_30b3_30fc_30c9:1`（ステータスコード）・
+`ukadoc:spec_shiori3:Value:1`・`ukadoc:spec_shiori3:ErrorLevel_20_5bSSP_62e1_5f35_5d:1`・
+`ukadoc:spec_shiori3:ErrorDescription_20_5bSSP_62e1_5f35_5d:1`
+
+---
+
+## 次に読む人への申し送り
+
+**⑴ 繋がりを書く向きは「イベントの行に書く」で統一してある。** タグや設定キーとの関わりは、
+**イベントの行に `triggers`／`configures` を書き、相手としてタグ・設定キーの id を指す**向きで
+そろえてある。逆向き（タグの行にイベントを書く）にしていないのは、要件 8.3 が他ドメインの項目の
+行を本台帳に作ることを禁じているためで、書ける側が片方しかない。統合担当が 4 つの台帳を突き合わせる
+ときは、この向きを前提に読むこと。向きを取り違えると、同じ 1 本の繋がりを二重に数えるか、逆向きに
+探して見つからないことになる。
+
+**⑵ 正典の側に綴りの誤りが 1 件ある。** `OnSelectModeBegin`・`OnSelectModeCancel`・
+`OnSelectModeComplete` の本文は、対になるタグの名前を `\![enter,selectrect]`／`\![leave,selectrect]`
+と書いている。しかし `selectrect` という綴りの項目はカタログに 1 件も無く、さくらスクリプト一覧の
+側の綴りは `selectmode` である。台帳ではさくらスクリプト一覧の側の綴りを繋がりの相手にし、
+この食い違いを該当 3 行の `note` に記録した。ukadoc 本体へ知らせる価値のある誤りである。
+
+**⑶ 台帳に対して `ledger-init` を走らせないこと。** 道具の読み書きは行末を LF にそろえる作りに
+なっており（`read_normalized` が復帰文字を落とし、`write_lf` が LF で書く）、**1 度走らせるだけで
+台帳の全行（この時点で 16,134 行）の行末が書き換わる**。この書き換えは `git diff` の既定の表示には出ないが、
+バイト単位で照合する検査は必ず割れる。台帳を触るときは行末を保つ手で編集し、`check` だけを走らせる
+こと。
+
+**⑷ 索引を直したときの手順**を守ること。索引の正本はこの文書で、台帳の冒頭にあるのはその写しである。
+直すときは正本を先に直し、写しは節の全体を貼り直す（部分的に直さない）。写しと正本の食い違いは
+機械の検査に出ないので、貼り直した後に `#` を外した写しと正本が行単位で一致することを自分で
+確かめること。
+
+---
+
+## 是正の候補（この文書では直さず、担当のところへ送るもの）
+
+隣接する spec の brief に正典と食い違う記述を見つけても、この調査では相手の brief を書き換えない。
+候補として次に挙げる。
+
+1. **本 spec の brief の記載 26 行**は、着手時に正典と本ワークツリーで引き直した結果が
+   `requirements.md` の付録の表に記録してある。実害の大きいものを 3 つだけ再掲する——
+   ⑴ `OnTeachInput` という名前の項目は正典に存在しない（実在は `OnTeach`・`OnTeachStart`・
+   `OnTeachInputCancel`）、⑵ `basewareversion` は引く側のリソースではなく知らせる側のイベントで
+   ある、⑶ `OnMenuExec` は SHIORI のイベント一覧には無く、PLUGIN 向けの一覧にだけある。
+2. **設計の「7 件」を確定値として扱わないこと。** 設計 DD-3 は、ゴースト同士のやり取りが本文に
+   書いてある拡張イベントを 7 件と数えている。しかし同じ論法で見るなら、返信の相手側である
+   `OnMahjongResponse` も同じ性質を持つ。台帳の登記（7 行に共通の文面を写す）は変えていないが、
+   統合担当はこの 7 を件数の根拠に使わないこと。
+3. **`\![enter,selectrect]`／`\![leave,selectrect]` の綴り**（申し送り⑵）は正典側の誤りなので、
+   ukadoc へのフィードバックの候補である。
+4. **台帳の `ukadoc:spec_dll` の行の 1 段落**は、DLL の入口を「load・unload・request の 3 つ」と
+   書いている。これは**事実として誤りである**。この 1 文は areka が名前で引いている数ではなく、
+   正典が定める入口の決まりそのものを 3 つと述べており、正典が定める入口は `loadu` を含めて 4 つ
+   である。同じ行の別の段落に 4 つの入口と両者の違いが書いてあるため読み違えは起きにくいが、
+   台帳の値を次に改めるときに必ず直すこと。
+
+---
+
+## この文書と台帳の対応
+
+| 群 | 章のある部 | 件数 | 状態 |
+|---|---|---|---|
+| 2 | 第 1 部 | 248 | `absent` |
+| 2a | 第 1 部 | 3 | `vocabulary-only` |
+| 4 | 第 1 部 | 25 | `absent` |
+| 8 | 第 1 部 | 27 | `vocabulary-only` |
+| 10 | 第 1 部 | 2 | `degraded` |
+| 11 | 第 1 部 | 15 | `absent` |
+| 7 | 第 2 部 | 131 | `vocabulary-only` |
+| 14a | 第 3 部 | 8 | `absent` |
+| 13 | 第 3 部 | 19 | `absent` |
+| 14b | 第 3 部 | 5 | `absent` |
+| 14c | 第 3 部 | 1 | `degraded` |
+| 5 | 第 3 部 | 168 | `not-applicable` |
+| 3 | 第 4 部 | 3 | `alias` |
+| 15 | 第 4 部 | 1 | `not-applicable` |
+| 1 | 第 4 部 | 11 | `implemented` |
+| 6 | 第 4 部 | 1 | `implemented` |
+| 9 | 第 4 部 | 5 | `implemented` |
+| 12 | 第 4 部 | 4 | `implemented` |
+
+合計 677。第 1 部 320・第 2 部 131・第 3 部 201・第 4 部 25。

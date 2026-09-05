@@ -22,9 +22,11 @@
 # そのまま写す文面である。仕分けの作業は、この文面を写したうえで、その項目にだけ当てはまることを
 # 必要な分だけ書き足す形で進める。
 #
-# **まだ確定していないもの**: 項目ごとのテーマ（群 1・2・6・7・8 の「項目ごと」と書いてある欄）と、
-# 優先度の具体的な値は、この索引に後から書き足す。段階（A〜E）と数値はいずれも**仮置き**であり、
-# 最終的な順序を決めるのは統合担当の `ukadoc-coverage-roadmap` である。
+# **テーマと優先度がどこに書いてあるか**: 群の欄に「項目ごと」と書いてあるもの（群 1・2・6・7・8）は、
+# テーマを群で 1 つに決めず 1 項目ずつ判断するという意味である。**決まった値の正本は台帳の各行の
+# `values` 欄**であり、この索引の欄はその出発点にすぎない。優先度も同じく台帳の `priority` 欄に
+# 677 行すべて記入済みで、この索引に書いてあるのは群ごとの既定値である。段階（A〜E）と数値は
+# いずれも**仮置き**であり、最終的な順序を決めるのは統合担当の `ukadoc-coverage-roadmap` である。
 #
 # **優先度はいずれも仮置きである**: 台帳の `priority` 欄には、下の各群が定める値を置いてある。
 # 段階の 1 文字（A〜E）と、その後ろの数値の**どちらも仮置き**であり、最終的にどの順で
@@ -237,14 +239,33 @@
 #   版番号: このページの項目は本文に版番号を含まないので introduced は空にする。
 #   ```
 #
-#   他のゴーストが送る 7 件（`OnRequestValues`・`OnGetValues`・可変名の返信イベント・
-#   `Send60stair_GetStatus`・`OnKanadeTeaPartyInfomationRequest`・`OnPoker`・`OnMahjong`）には、
-#   上の文面に次の 1 文を足す。
+#   ゴースト同士のやり取りが本文に書いてある 7 件（`OnRequestValues`・`OnGetValues`・可変名の返信
+#   イベント・`Send60stair_GetStatus`・`OnKanadeTeaPartyInfomationRequest`・`OnPoker`・`OnMahjong`）
+#   には、上の文面に次の 1 文を足す。
 #
 #   ```
 #   この項目の送信元は外部のアプリではなく他のゴーストで、ベースウェアがその伝達を運ぶ。areka には
 #   ゴースト間の伝達そのものが無いため、運ぶ側としても成立しない。
 #   ```
+#
+#   さらに、この 7 件には次の「根拠の場所」の段落も足す。7 行とも同一の文面であり、実質この
+#   小さな群の共通の文面である。
+#
+#   ```
+#   根拠の場所: crates/ 以下に raiseother・notifyother・raiseplugin・notifyplugin のいずれかを受ける
+#   場所も送る場所も 1 件も無く、他のゴーストを名指しで指す先を引く表（起動中のゴーストの登記）も
+#   無い。SHIORI へ渡す口は crates/areka-kanade/src/actor.rs の round_trip_request の 1 か所だけで、
+#   そこへ渡る呼び出しの出所は索引の前置きの⑴と⑵の 2 系統しかなく、どちらも他のゴーストからの
+#   依頼を入口としない。
+#   ```
+#
+#   **上の 1 文についての補足（2026-09-05・実装時に正典で確認）**: 「送信元は外部のアプリではなく
+#   他のゴースト」という言い切りは正確ではない。`OnMahjong` の正典本文は、要求元がゴーストのときの
+#   返し方と並べて、**要求元が外部アプリで SSTP による通知であった場合の返し方**（`X-SSTP-PassThru-*`
+#   ヘッダを使う）も述べている。この 7 件は「ゴースト同士でやり取りすることが本文に書いてある」
+#   ものであって、送信元が他のゴーストに限られるという意味ではない。**7 という数も確定値として
+#   扱わないこと**——返信の相手側（`OnMahjongResponse`）まで同じ性質と見るなら 7 では足りない。
+#   台帳の 7 行は上の文面のまま凍結してあり、この補足はそれを読むときの注意である。
 #
 # ---
 #
@@ -280,7 +301,7 @@
 #   `popupmenu.*` 9・`*.recommendsites` と `*.portalsites` 4・`vanishbuttonvisible` 1）。
 # - **件数**: 131
 # - **状態**: `vocabulary-only`
-# - **テーマ**: 項目ごと（装い・記憶が中心）
+# - **テーマ**: 装い（台帳の実測では 131 行すべてこの 1 つ）
 # - **優先度**: `C1`（仮置き。テーマの上では B に当たるが、壊れ方が見た目の差なので 1 段下げる）
 # - **判断の根拠の場所**: `crates/areka-sylphya/src/vocab/shiori_resource.rs` の
 #   `SHIORI_RESOURCE_IDS`（名前は登記済み。この表を参照しているのはテストだけ）と
@@ -507,14 +528,18 @@
 #
 # ### 群 14c — DLL 共通仕様
 #
-# - **対象**: `ukadoc:spec_dll`（`load`・`unload`・`request` という DLL の入口の決まり。SHIORI・
-#   SAORI・MAKOTO・PLUGIN が共有する）。
+# - **対象**: `ukadoc:spec_dll`（DLL の入口の決まり。SHIORI・SAORI・MAKOTO・PLUGIN が共有する）。
+#   正典が定める入口は **4 つ**——初期化の `loadu`（SSP 2.6.92 で加わった側。置き場所のパスを UTF-8 で
+#   受け取り、ベースウェアはこちらを優先して使う）と `load`（従来版。同じパスを既定の各国語の
+#   コードページで受け取り、`loadu` が無いときのフォールバックになる）、終了処理の `unload`、
+#   要求の `request` である。
 # - **件数**: 1
 # - **状態**: `degraded`
 # - **テーマ**: 空（`[]`）
 # - **優先度**: `E1`（仮置き）
-# - **判断の根拠の場所**: `crates/shiori-host32-helper/src/shiori_proxy.rs` の `ShioriProxy::load`
-#   （絶対パスで読み込み、3 つの入口を名前で引く）と `ShioriProxy::request`。SAORI・MAKOTO の語は
+# - **判断の根拠の場所**: `crates/shiori-host32-helper/src/shiori_proxy.rs` の `ShioriByteProxy::load`
+#   （絶対パスで読み込み、`load`・`unload`・`request` の 3 つを名前で引く。正典の 4 つのうち `loadu`
+#   は引かない）と `ShioriByteProxy::request`。SAORI・MAKOTO の語は
 #   `crates/` 以下のソースに 1 件も無い。MAKOTO の担当は `areka-P0-makoto-dll-host`。
 # - **共通 `note`**:
 #
@@ -532,9 +557,16 @@
 #   縮退の転記元: doc/emo2-conformance-scope.md の旧ロードマップ spec への影響の表の行
 #   「areka-P0-shiori-host-32 ＝ SAORI 同居を M1 から削除（emo2 未使用）。32bit SHIORI 往復に集中」。
 #   粒度: このページ全体で 1 項目であり、他のページの 1 項目より粗い。
-#   根拠の場所: crates/shiori-host32-helper/src/shiori_proxy.rs の ShioriProxy::load と
-#   ShioriProxy::request。
+#   根拠の場所: crates/shiori-host32-helper/src/shiori_proxy.rs の ShioriByteProxy::load と
+#   ShioriByteProxy::request。
 #   ```
+#
+#   **上の共通 `note` にある「3 つ」についての補足（2026-09-05・実装時に正典で確認）**: この「3 つ」は
+#   **areka の助け手が名前で引いている入口の数**であって、正典が定める入口の数ではない。正典の入口は
+#   上の「対象」に書いたとおり 4 つあり、初期化の側が `loadu`（優先・パスは UTF-8）と `load`
+#   （フォールバック・パスは既定の各国語コードページ）に分かれている。台帳の該当行の `note` は上の
+#   文面のまま凍結してあるが、同じ行の別の段落（「内容:」で始まる段落）に 4 つの入口と両者の違いが
+#   書いてあるので、行だけを読んでも取り違えは起きない。
 #
 # ---
 #
