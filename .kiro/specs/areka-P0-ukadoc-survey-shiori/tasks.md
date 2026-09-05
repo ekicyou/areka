@@ -10,7 +10,7 @@
   - 完了条件: 12 ページの内訳と合計 677 がカタログと完全一致し、版番号を持つ 98 件と複数持つ 11 件の一覧が作業用の一時置き場に残っている
   - _Requirements: 1.1, 1.5, 1.6_
 
-- [ ] 1.2 着地している台帳を土台として受け取り、前置きと並びを確かめる
+- [x] 1.2 着地している台帳を土台として受け取り、前置きと並びを確かめる
   - `doc/ukadoc-coverage/ledger/shiori.toml` が 677 個の `[entry."<id>"]` を持ち、すべて `unclassified` であること、`[ledger]` の `domain` と `pages` が担当と一致することを確かめる
   - 以後は id・並び順・`[ledger]` の前置き・冒頭の `#` コメントに触らず、値だけをその場で書き換える。独自の欄・独自の状態語彙・独自の関連の種別を足さない
   - id は見た目で直さずカタログから写す（符号化済みのため）。正典の見出しや本文を台帳に取り込まない
@@ -221,3 +221,7 @@
 - 1.1: 「12 件」の記載は **4 か所**ある — `design.md:311`・`design.md:420`（要件対応表）・`requirements.md:164`（要件 6.10 本文）・`requirements.md:246`（付録の再検証表）。タスク 5.4 はこの 4 か所すべてを対象にする。
 - 1.1: scratchpad の `shiori-catalog-ids.txt` は CRLF。LF 出力と `diff` で突き合わせる際は CR を落とすこと。
 - 1.1: worktree では `git submodule update --init --recursive`（`vendors/pasta`）を先に済ませないと `cargo` が一切動かない。
+- 1.2: 台帳は付録 A（`.kiro/specs/completed/areka-P0-ukadoc-survey-toolkit/requirements.md` A.1:184 / A.2:224 / A.3:241）どおり。欄の並びは全 677 項目で 1 通り（`status`→`introduced`→`owner`→`priority`→`values`→`links`→`note`）。`alias_of` 0 件・`supersedes` 0 件は**欠落ではなく正しい初期状態**（A.2 が「`alias` のとき必須・それ以外は書かない」「任意」と定め、A.2 末尾が初期値を逐語で列挙している）。
+- 1.2: 台帳は CRLF・6,101 行・BOM 無し。**値を書き換える際も CRLF を保つこと。**
+- 1.2: 触ってはいけない部分の SHA-256 を scratchpad `shiori-ledger-frozen.md` に控えた（冒頭コメント `a5ccc6a1…` / `[ledger]` 節 `4c9cc888…` / id 行 677 本 `b68abbbc…`）。別セッションでも台帳から数行で再計算できる。
+- 1.2: 1.1 が残した `shiori-catalog-ids.txt` はカタログ全 1,749 件。担当 677 件に絞った `cat-shiori-ids.txt`（LF・677 行）を新設済み。繋がりの相手の実在照合には全件側を使うこと。
