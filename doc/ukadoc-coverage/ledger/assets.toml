@@ -1,6 +1,9 @@
 # doc/ukadoc-coverage/ledger/assets.toml
 # 人手で記入・機械で検査する台帳。形式の正本は
 # .kiro/specs/completed/areka-P0-ukadoc-survey-toolkit/requirements.md 付録 A。
+# id の読み替え規則: ukadoc の見出しにある `*` は areka の照合では 1 個以上の数字にあたる。例: `sakura.bindgroup*.default` ↔ `sakura.bindgroup0.default`。
+# 段階 A〜E の最終順序は決めない。決定は `areka-P0-ukadoc-coverage-roadmap` に委ねる。
+# 登場した版は `doc/ukadoc-coverage/catalog.toml` の `versions` から選ぶ。2 つ以上あるときは最も古い版を採る。
 
 [ledger]
 domain = "assets"
