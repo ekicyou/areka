@@ -66,7 +66,7 @@
   - _Depends: 2.3_
 
 - [ ] 3. 担当・関連・優先度を埋める
-- [ ] 3.1 規則 4 で担当 spec を決める
+- [x] 3.1 規則 4 で担当 spec を決める
   - 4 本の brief が枝と概数で書いている範囲を実測の id 群へ広げる（brief は id を 1 つも列挙していない）
   - 規則 4 の表を上から先勝ちで当てる。裁定待ちの 2 件（`currentghost.seriko.zorder`・`currentghost.seriko.sticky-window`）は 4.7 の行より先に当たるので担当欄が空文字になる
   - 裁定待ちの 2 件の備考に「裁定待ち: 争っている spec 名と争点」の行を足す
@@ -164,3 +164,6 @@
 - **4.1 への申し送り**: ブリーフィングで `rateofuselist` の備考の重複を説明するときは「呼び出し形の対」ではなく **「3 つの別の量（起動時間・分／起動回数／起動時間割合）× 2 つの呼び出し形（`.index(順位)` と `(名前)`）」** と書くこと。1 周目の報告は前者と書いていたが実測は後者。
 - **3.2 への申し送り: 規則 7 の関連の表に載っていない「値の源」が 2 件ある（レビューが実測）** — ⑴ `currentghost.scope(ID).x`／`.y` は本文が `sakura(kero,char*).defaultx`／`.defaulty` を名指しし、相手はカタログに実在する（`descript_ghost` 側 6・`descript_shell` 側 6 の計 12 id）。⑵ `currentghost.status` は本文が SHIORI Status ヘッダを名指しし、相手 `ukadoc:spec_shiori3:Status_20_5bSSP_62e1_5f35_5d:1` が実在する。どちらも規則 7 の `configures` の行が `menu` 群と `scope(ID).name` しか挙げていないため、**3.2 が足さないと値の源がどちらの仕掛けでも登記されない**（2.4 は「相手にカタログ id がある」ことを理由に備考の「値の源」行を意図的に付けていない＝要件 6.5 と規則 7 の分担どおり）。⑶ 弱い候補として `currentghost.seriko.surfacelist.all`／`.defined` があるが、相手は `descript_shell_surfaces` ページ全体であって単一のキーではないので 3.2 の判断に委ねる。
 - **備考の欄の分担**: 相手にカタログ id が**ある**なら 3.2 の `links`、**無い**なら 2.4 の「値の源:」行。二重登記しない。2.4 が書いた 32 件（`system.*` 25・`currentghost.scope(ID).currentmonitor.*` 5・`scaling` 2）はいずれも規則 7 の表に現れない。
+- **報告は担当欄を消費しない** — `crates/ukadoc-survey/src/report/domain.rs` は `owner` を 1 度も読まない（節は状態分布・ページ別・世代別・別名・テーマ・関連の束の 6 つ）。担当欄を埋めても `report/property.md` は動かず、陳腐化検査も鳴らない。報告が動くのは `status`・`introduced`・`values`・`links` を触ったときだけ。`summary.rs` の `owner` は「どのドメインの台帳が id を持つか」で台帳の担当欄とは別物。
+- **4.4 へ渡す件数の差は 6 つ（要件 4.3 が挙げているのは 4 つ）** — 実測でカタログが正: tree `currentghost.*` 約 65 対 **69**（差は `currentghost.balloon.mousecursor`／`.arrow`／`.text`／`.wait` の 4 件）／lists `history` 8 対 **12**・`headlinelist` 2 対 **3**・`pluginlist` 4 対 **5**（いずれも `.count` の葉の数え落とし）。要件 4.3 が挙げていない 5 つ目と 6 つ目 — ⑸ lists の「`ghostlist` 5・`activeghostlist` 5＋`.ext`」＝ 12 は **10**（`.ext` 2 件は `activeghostlist` の 5 件に既に含まれるので二重に数えている）／⑹ lists の「汎用プロパティ名 17」は ukadoc 上では **13**（17 は sylphya の `GENERIC_PROP_NAMES` の件数で、13＋`menu` 群 4）。
+- **4.4 へ渡す判断 2 件（記録を残すこと）** — ⑴ `menu` 群 4 件を lists に付けたのは規則 4 第 3 行（唯一の主張者）による。lists の brief が「汎用 17 葉」を `GENERIC_PROP_NAMES` と名指しで同定しており、その列挙に 4 件が実在するため憶測ではない。ただし正典はこの 4 件を `currentghost` の下だけに置き（本文が「currentghost.shelllist のみ有効」「currentghost のみ有効」と書く）、lists が挙げる理由（各根の下で乗算される）は成り立たない＝件数の差 ⑹ と同じ 4.3 級の食い違いなので是正候補に並べる。⑵ `currentghost.sound.*` の頭 3 件には「語彙表だけを触る spec」の行を付けていない。channels の記述が「サウンド語彙 ≈18 葉」＝葉を指しており、頭まで広げるのは要件 4.2 が戒める推測に当たるため。担当欄はどちらの読みでも lists で変わらないので、判断が見えるよう ⑸ 節に 1 行残す。

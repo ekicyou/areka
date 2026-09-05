@@ -9,7 +9,7 @@ pages = ["list_propertysystem"]
 [entry."ukadoc:list_propertysystem:activeghostlist.current._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -22,7 +22,7 @@ note = """
 [entry."ukadoc:list_propertysystem:activeghostlist.index_28ID_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -35,7 +35,7 @@ note = """
 [entry."ukadoc:list_propertysystem:activeghostlist.index_28ID_29.ext._62e1_5f35_30d7_30ed_30d1_30c6_30a3_540d:1"]
 status = "vocabulary-only"
 introduced = "2.7.85"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -43,12 +43,13 @@ note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 本文が property.set を起こして設定すると述べる（印は無い・ext 亜枝の中継形のため 26 件には数えない） / areka ext 亜枝のイベント名を予約するのみで M1 では発火しない / 不一致（正典は設定経路を定めるが areka は未配線）
+語彙表だけを触る spec: areka-P0-property-query-channels
 """
 
 [entry."ukadoc:list_propertysystem:activeghostlist_28_30b4_30fc_30b9_30c8_540d_2f_672c_4f53_5074_540d_2f_30d1_30b9_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_5:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -61,7 +62,7 @@ note = """
 [entry."ukadoc:list_propertysystem:activeghostlist_28_30b4_30fc_30b9_30c8_540d_2f_672c_4f53_5074_540d_2f_30d1_30b9_29.ext._62e1_5f35_30d7_30ed_30d1_30c6_30:1"]
 status = "vocabulary-only"
 introduced = "2.7.85"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -69,12 +70,13 @@ note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 本文が property.set を起こして設定すると述べる（印は無い・ext 亜枝の中継形のため 26 件には数えない） / areka ext 亜枝のイベント名を予約するのみで M1 では発火しない / 不一致（正典は設定経路を定めるが areka は未配線）
+語彙表だけを触る spec: areka-P0-property-query-channels
 """
 
 [entry."ukadoc:list_propertysystem:balloonlist.count:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -87,7 +89,7 @@ note = """
 [entry."ukadoc:list_propertysystem:balloonlist.index_28ID_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -100,7 +102,7 @@ note = """
 [entry."ukadoc:list_propertysystem:balloonlist_28_30d0_30eb_30fc_30f3_540d_2f_30d1_30b9_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -113,7 +115,7 @@ note = """
 [entry."ukadoc:list_propertysystem:baseware.name:1"]
 status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-sylphya"
 priority = ""
 values = []
 links = []
@@ -126,7 +128,7 @@ note = """
 [entry."ukadoc:list_propertysystem:baseware.version:1"]
 status = "implemented"
 introduced = ""
-owner = ""
+owner = "areka-P0-sylphya"
 priority = ""
 values = []
 links = []
@@ -139,7 +141,7 @@ note = """
 [entry."ukadoc:list_propertysystem:char_2a.bind.menu:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -153,7 +155,7 @@ note = """
 [entry."ukadoc:list_propertysystem:craftmanurl:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -167,7 +169,7 @@ note = """
 [entry."ukadoc:list_propertysystem:craftmanw:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -181,7 +183,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -194,7 +196,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.balloon._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -207,7 +209,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.balloon.count:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -220,7 +222,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.balloon.mousecursor.arrow:1"]
 status = "vocabulary-only"
 introduced = "2.6.11"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -233,7 +235,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.balloon.mousecursor.text:1"]
 status = "vocabulary-only"
 introduced = "2.6.11"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -246,7 +248,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.balloon.mousecursor.wait:1"]
 status = "vocabulary-only"
 introduced = "2.6.11"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -259,7 +261,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.balloon.mousecursor:1"]
 status = "vocabulary-only"
 introduced = "2.6.11"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -272,7 +274,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.background.color:1"]
 status = "vocabulary-only"
 introduced = "2.7.81"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -285,7 +287,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.basepos.x:1"]
 status = "vocabulary-only"
 introduced = "2.3.72"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -298,7 +300,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.basepos.y:1"]
 status = "vocabulary-only"
 introduced = "2.3.72"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -311,7 +313,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.char_width:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -324,7 +326,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.count:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -337,7 +339,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.lines.initial:1"]
 status = "degraded"
 introduced = "2.3.72"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -351,7 +353,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.lines:1"]
 status = "degraded"
 introduced = ""
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -365,7 +367,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.num:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -378,7 +380,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.rect:1"]
 status = "vocabulary-only"
 introduced = "2.8.39"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -391,7 +393,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.scaling:1"]
 status = "vocabulary-only"
 introduced = "2.7.89"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -405,7 +407,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.validheight.initial:1"]
 status = "degraded"
 introduced = "2.3.72"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -419,7 +421,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.validheight:1"]
 status = "degraded"
 introduced = ""
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -433,7 +435,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.validwidth.initial:1"]
 status = "degraded"
 introduced = "2.3.72"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -447,7 +449,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.validwidth:1"]
 status = "degraded"
 introduced = ""
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -461,7 +463,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.vertical:1"]
 status = "degraded"
 introduced = "2.8.80"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -475,7 +477,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.x:1"]
 status = "vocabulary-only"
 introduced = "2.8.39"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -488,7 +490,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.y:1"]
 status = "vocabulary-only"
 introduced = "2.8.39"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -501,7 +503,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.mousecursor.arrow:1"]
 status = "vocabulary-only"
 introduced = "2.6.11"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -514,7 +516,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.mousecursor.grip:1"]
 status = "vocabulary-only"
 introduced = "2.6.11"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -527,7 +529,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.mousecursor.hand:1"]
 status = "vocabulary-only"
 introduced = "2.6.11"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -540,7 +542,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.mousecursor.text:1"]
 status = "vocabulary-only"
 introduced = "2.6.11"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -553,7 +555,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.mousecursor.wait:1"]
 status = "vocabulary-only"
 introduced = "2.6.11"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -566,7 +568,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.mousecursor:1"]
 status = "vocabulary-only"
 introduced = "2.6.11"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -579,7 +581,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.scope.count:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -592,7 +594,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.animation.num:1"]
 status = "vocabulary-only"
 introduced = "2.8.28"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -605,7 +607,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.currentmonitor.bpp:1"]
 status = "vocabulary-only"
 introduced = "2.8.16"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -619,7 +621,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.currentmonitor.dpi:1"]
 status = "vocabulary-only"
 introduced = "2.8.16"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -633,7 +635,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.currentmonitor.primary:1"]
 status = "vocabulary-only"
 introduced = "2.8.16"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -647,7 +649,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.currentmonitor.rect:1"]
 status = "vocabulary-only"
 introduced = "2.8.16"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -661,7 +663,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.currentmonitor.work:1"]
 status = "vocabulary-only"
 introduced = "2.8.16"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -675,7 +677,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.name:1"]
 status = "vocabulary-only"
 introduced = "2.6.67"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -688,7 +690,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.rect:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -701,7 +703,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.scaling:1"]
 status = "vocabulary-only"
 introduced = "2.7.89"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -715,7 +717,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.seriko.defaultsurface:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -728,7 +730,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.surface.num:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -741,7 +743,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.surface.x:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -754,7 +756,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.surface.y:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -767,7 +769,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.surface_28ID_29.rect:1"]
 status = "vocabulary-only"
 introduced = "2.8.57"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -780,7 +782,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.x:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -793,7 +795,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.scope_28ID_29.y:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -806,7 +808,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.seriko.cursor.scope_28ID_29.mouse_3f_3f_3f_3flist.count:1"]
 status = "vocabulary-only"
 introduced = "2.3.83"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -819,7 +821,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.seriko.cursor.scope_28ID_29.mouse_3f_3f_3f_3flist.index_28ID2_29.name:1"]
 status = "vocabulary-only"
 introduced = "2.3.83"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -832,7 +834,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.seriko.cursor.scope_28ID_29.mouse_3f_3f_3f_3flist.index_28ID2_29.path:1"]
 status = "vocabulary-only"
 introduced = "2.3.83"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -845,7 +847,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.seriko.cursor.scope_28ID_29.mouse_3f_3f_3f_3flist_28_5f53_305f_308a_5224_5b9a_540d_29.name:1"]
 status = "vocabulary-only"
 introduced = "2.3.83"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -858,7 +860,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.seriko.cursor.scope_28ID_29.mouse_3f_3f_3f_3flist_28_5f53_305f_308a_5224_5b9a_540d_29.path:1"]
 status = "vocabulary-only"
 introduced = "2.3.83"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -879,12 +881,13 @@ note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET有効（⒜印） / areka 受理＋警告＋非反映 / 不一致（正典は設定が効くと定めるが areka は受理して捨てる）
+裁定待ち: areka-P0-currentghost-property-tree が seriko.* 14 項の一括所有に含め、areka-P0-property-query-channels は sylphya の SET 語彙表の追随（21→26）に含める。争点は値の導出の担い手と、語彙表の 1 行の持ち主。
 """
 
 [entry."ukadoc:list_propertysystem:currentghost.seriko.surfacelist.all:1"]
 status = "vocabulary-only"
 introduced = "2.5.98"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -897,7 +900,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.seriko.surfacelist.defined:1"]
 status = "vocabulary-only"
 introduced = "2.5.98"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -910,7 +913,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.seriko.tooltip.scope_28ID_29.textlist.count:1"]
 status = "vocabulary-only"
 introduced = "2.3.83"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -923,7 +926,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.seriko.tooltip.scope_28ID_29.textlist.index_28ID2_29.name:1"]
 status = "vocabulary-only"
 introduced = "2.3.83"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -936,7 +939,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.seriko.tooltip.scope_28ID_29.textlist.index_28ID2_29.text:1"]
 status = "vocabulary-only"
 introduced = "2.3.83"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -949,7 +952,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.seriko.tooltip.scope_28ID_29.textlist_28_5f53_305f_308a_5224_5b9a_540d_29.name:1"]
 status = "vocabulary-only"
 introduced = "2.3.83"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -962,7 +965,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.seriko.tooltip.scope_28ID_29.textlist_28_5f53_305f_308a_5224_5b9a_540d_29.text:1"]
 status = "vocabulary-only"
 introduced = "2.3.83"
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -984,12 +987,13 @@ note = """
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET有効（⒜印） / areka 受理＋警告＋非反映 / 不一致（正典は設定が効くと定めるが areka は受理して捨てる）
 転記元: doc/COMPAT_ARCHITECTURE.md:207
+裁定待ち: areka-P0-zorder-property が値の導出を単独で持つと主張し、areka-P0-currentghost-property-tree は seriko.* 14 項の一括所有に含め、areka-P0-property-query-channels は sylphya の SET 語彙表の追随（21→26）に含める。争点は値の導出の担い手と、語彙表の 1 行の持ち主。
 """
 
 [entry."ukadoc:list_propertysystem:currentghost.shelllist.count:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -1002,7 +1006,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.shelllist.current._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -1015,7 +1019,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.shelllist.index_28ID_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -1028,7 +1032,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.shelllist_28_30b7_30a7_30eb_540d_2f_30d1_30b9_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -1041,7 +1045,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.sound.count:1"]
 status = "vocabulary-only"
 introduced = "2.8.72"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1054,7 +1058,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.sound.index_28ID_29._30b5_30a6_30f3_30c9_30d7_30ed_30d1_30c6_30a3_540d:1"]
 status = "vocabulary-only"
 introduced = "2.8.72"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1067,7 +1071,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.sound_28_8981_7d20_540d_29._30b5_30a6_30f3_30c9_30d7_30ed_30d1_30c6_30a3_540d:1"]
 status = "vocabulary-only"
 introduced = "2.8.72"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1080,7 +1084,7 @@ note = """
 [entry."ukadoc:list_propertysystem:currentghost.status:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-currentghost-property-tree"
 priority = ""
 values = []
 links = []
@@ -1093,7 +1097,7 @@ note = """
 [entry."ukadoc:list_propertysystem:duration:1"]
 status = "vocabulary-only"
 introduced = "2.8.72"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1102,12 +1106,13 @@ note = """
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
+語彙表だけを触る spec: areka-P0-property-query-channels
 """
 
 [entry."ukadoc:list_propertysystem:error:1"]
 status = "vocabulary-only"
 introduced = "2.8.72"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1116,12 +1121,13 @@ note = """
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
+語彙表だけを触る spec: areka-P0-property-query-channels
 """
 
 [entry."ukadoc:list_propertysystem:ghostlist.count:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1134,7 +1140,7 @@ note = """
 [entry."ukadoc:list_propertysystem:ghostlist.current._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1147,7 +1153,7 @@ note = """
 [entry."ukadoc:list_propertysystem:ghostlist.index_28ID_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1160,7 +1166,7 @@ note = """
 [entry."ukadoc:list_propertysystem:ghostlist_28_30b4_30fc_30b9_30c8_540d_2f_672c_4f53_5074_540d_2f_30d1_30b9_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1173,7 +1179,7 @@ note = """
 [entry."ukadoc:list_propertysystem:ghostlist_28_30b4_30fc_30b9_30c8_540d_2f_672c_4f53_5074_540d_2f_30d1_30b9_29.icon:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1186,7 +1192,7 @@ note = """
 [entry."ukadoc:list_propertysystem:headlinelist.count:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1199,7 +1205,7 @@ note = """
 [entry."ukadoc:list_propertysystem:headlinelist.index_28ID_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1212,7 +1218,7 @@ note = """
 [entry."ukadoc:list_propertysystem:headlinelist_28_30d8_30c3_30c9_30e9_30a4_30f3_540d_2f_30d1_30b9_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1225,7 +1231,7 @@ note = """
 [entry."ukadoc:list_propertysystem:history.balloon.count:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1238,7 +1244,7 @@ note = """
 [entry."ukadoc:list_propertysystem:history.balloon.index_28ID_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1251,7 +1257,7 @@ note = """
 [entry."ukadoc:list_propertysystem:history.balloon_28_30d0_30eb_30fc_30f3_540d_2f_30d1_30b9_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1264,7 +1270,7 @@ note = """
 [entry."ukadoc:list_propertysystem:history.ghost.count:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1277,7 +1283,7 @@ note = """
 [entry."ukadoc:list_propertysystem:history.ghost.index_28ID_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1290,7 +1296,7 @@ note = """
 [entry."ukadoc:list_propertysystem:history.ghost_28_30b4_30fc_30b9_30c8_540d_2f_30d1_30b9_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1303,7 +1309,7 @@ note = """
 [entry."ukadoc:list_propertysystem:history.headline.count:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1316,7 +1322,7 @@ note = """
 [entry."ukadoc:list_propertysystem:history.headline.index_28ID_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1329,7 +1335,7 @@ note = """
 [entry."ukadoc:list_propertysystem:history.headline_28_30d8_30c3_30c9_30e9_30a4_30f3_540d_2f_30d1_30b9_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1342,7 +1348,7 @@ note = """
 [entry."ukadoc:list_propertysystem:history.plugin.count:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1355,7 +1361,7 @@ note = """
 [entry."ukadoc:list_propertysystem:history.plugin.index_28ID_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1368,7 +1374,7 @@ note = """
 [entry."ukadoc:list_propertysystem:history.plugin_28_30d7_30e9_30b0_30a4_30f3_540d_2f_30d1_30b9_2fID_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1381,7 +1387,7 @@ note = """
 [entry."ukadoc:list_propertysystem:homeurl:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1395,7 +1401,7 @@ note = """
 [entry."ukadoc:list_propertysystem:id:1"]
 status = "vocabulary-only"
 introduced = "2.8.72"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1404,12 +1410,13 @@ note = """
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
+語彙表だけを触る spec: areka-P0-property-query-channels
 """
 
 [entry."ukadoc:list_propertysystem:index:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1423,7 +1430,7 @@ note = """
 [entry."ukadoc:list_propertysystem:kero.bind.menu:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1437,7 +1444,7 @@ note = """
 [entry."ukadoc:list_propertysystem:keroname:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1451,7 +1458,7 @@ note = """
 [entry."ukadoc:list_propertysystem:loop:1"]
 status = "vocabulary-only"
 introduced = "2.8.72"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1460,12 +1467,13 @@ note = """
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
+語彙表だけを触る spec: areka-P0-property-query-channels
 """
 
 [entry."ukadoc:list_propertysystem:menu:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1479,7 +1487,7 @@ note = """
 [entry."ukadoc:list_propertysystem:meta.album:1"]
 status = "vocabulary-only"
 introduced = "2.8.73"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1488,12 +1496,13 @@ note = """
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
+語彙表だけを触る spec: areka-P0-property-query-channels
 """
 
 [entry."ukadoc:list_propertysystem:meta.albumartist:1"]
 status = "vocabulary-only"
 introduced = "2.8.73"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1502,12 +1511,13 @@ note = """
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
+語彙表だけを触る spec: areka-P0-property-query-channels
 """
 
 [entry."ukadoc:list_propertysystem:meta.artist:1"]
 status = "vocabulary-only"
 introduced = "2.8.73"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1516,12 +1526,13 @@ note = """
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
+語彙表だけを触る spec: areka-P0-property-query-channels
 """
 
 [entry."ukadoc:list_propertysystem:meta.artwork:1"]
 status = "vocabulary-only"
 introduced = "2.8.73"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1530,12 +1541,13 @@ note = """
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
+語彙表だけを触る spec: areka-P0-property-query-channels
 """
 
 [entry."ukadoc:list_propertysystem:meta.genre:1"]
 status = "vocabulary-only"
 introduced = "2.8.73"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1544,12 +1556,13 @@ note = """
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
+語彙表だけを触る spec: areka-P0-property-query-channels
 """
 
 [entry."ukadoc:list_propertysystem:meta.title:1"]
 status = "vocabulary-only"
 introduced = "2.8.73"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1558,12 +1571,13 @@ note = """
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
+語彙表だけを触る spec: areka-P0-property-query-channels
 """
 
 [entry."ukadoc:list_propertysystem:meta.track:1"]
 status = "vocabulary-only"
 introduced = "2.8.73"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1572,12 +1586,13 @@ note = """
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
+語彙表だけを触る spec: areka-P0-property-query-channels
 """
 
 [entry."ukadoc:list_propertysystem:meta.year:1"]
 status = "vocabulary-only"
 introduced = "2.8.73"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1586,12 +1601,13 @@ note = """
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
+語彙表だけを触る spec: areka-P0-property-query-channels
 """
 
 [entry."ukadoc:list_propertysystem:name:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1606,7 +1622,7 @@ note = """
 [entry."ukadoc:list_propertysystem:name:2"]
 status = "vocabulary-only"
 introduced = "2.8.72"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1616,12 +1632,13 @@ note = """
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
 見出しの重複: 見出し name は 2 つの id を持つ。この id はサウンドの要素葉の側で、本文が再生の対象をどう書いて指定したかを返すと述べ、2.8.72 で加わり、文書の並びでも char*.bind.menu の直後＝サウンドの葉の群の先頭に置かれている。もう 1 つは前置きを付けて使う汎用プロパティ名の葉。
+語彙表だけを触る spec: areka-P0-property-query-channels
 """
 
 [entry."ukadoc:list_propertysystem:path:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1636,7 +1653,7 @@ note = """
 [entry."ukadoc:list_propertysystem:path:2"]
 status = "vocabulary-only"
 introduced = "2.8.72"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1646,12 +1663,13 @@ note = """
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
 見出しの重複: 見出し path は 2 つの id を持つ。この id はサウンドの要素葉の側で、本文が再生の対象の解決後の置き場所を返すと述べ、2.8.72 で加わり、文書の並びでもサウンドの葉の群の 2 番目に置かれている。もう 1 つは前置きを付けて使う汎用プロパティ名の葉。
+語彙表だけを触る spec: areka-P0-property-query-channels
 """
 
 [entry."ukadoc:list_propertysystem:pause:1"]
 status = "vocabulary-only"
 introduced = "2.8.72"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1660,12 +1678,13 @@ note = """
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET有効（⒜印） / areka 受理＋警告＋非反映 / 不一致（正典は設定が効くと定めるが areka は受理して捨てる）
 前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
+語彙表だけを触る spec: areka-P0-property-query-channels
 """
 
 [entry."ukadoc:list_propertysystem:playing:1"]
 status = "vocabulary-only"
 introduced = "2.8.72"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1674,12 +1693,13 @@ note = """
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET有効（⒜印） / areka 受理＋警告＋非反映 / 不一致（正典は設定が効くと定めるが areka は受理して捨てる）
 前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
+語彙表だけを触る spec: areka-P0-property-query-channels
 """
 
 [entry."ukadoc:list_propertysystem:pluginlist.count:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1692,7 +1712,7 @@ note = """
 [entry."ukadoc:list_propertysystem:pluginlist.index_28ID_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1705,7 +1725,7 @@ note = """
 [entry."ukadoc:list_propertysystem:pluginlist.index_28ID_29.ext._62e1_5f35_30d7_30ed_30d1_30c6_30a3_540d:1"]
 status = "vocabulary-only"
 introduced = "2.7.85"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1713,12 +1733,13 @@ note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 本文が property.set を起こして設定すると述べる（印は無い・ext 亜枝の中継形のため 26 件には数えない） / areka ext 亜枝のイベント名を予約するのみで M1 では発火しない / 不一致（正典は設定経路を定めるが areka は未配線）
+語彙表だけを触る spec: areka-P0-property-query-channels
 """
 
 [entry."ukadoc:list_propertysystem:pluginlist_28_30d7_30e9_30b0_30a4_30f3_540d_2f_30d1_30b9_2fID_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1731,7 +1752,7 @@ note = """
 [entry."ukadoc:list_propertysystem:pluginlist_28_30d7_30e9_30b0_30a4_30f3_540d_2f_30d1_30b9_2fID_29.ext._62e1_5f35_30d7_30ed_30d1_30c6_30a3_540d:1"]
 status = "vocabulary-only"
 introduced = "2.7.85"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1739,12 +1760,13 @@ note = """
 壊れ方: 黙って壊れる — 辞書は空文字を前提に進み、利用者にも作者にも何も見えない。
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 本文が property.set を起こして設定すると述べる（印は無い・ext 亜枝の中継形のため 26 件には数えない） / areka ext 亜枝のイベント名を予約するのみで M1 では発火しない / 不一致（正典は設定経路を定めるが areka は未配線）
+語彙表だけを触る spec: areka-P0-property-query-channels
 """
 
 [entry."ukadoc:list_propertysystem:position:1"]
 status = "vocabulary-only"
 introduced = "2.8.72"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1753,12 +1775,13 @@ note = """
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET有効（⒜印） / areka 受理＋警告＋非反映 / 不一致（正典は設定が効くと定めるが areka は受理して捨てる）
 前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
+語彙表だけを触る spec: areka-P0-property-query-channels
 """
 
 [entry."ukadoc:list_propertysystem:preload:1"]
 status = "vocabulary-only"
 introduced = "2.8.72"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1767,12 +1790,13 @@ note = """
 ログ: 読み取りが外れたときに出るのは crates/areka-sylphya/src/reader.rs:137-142 の "dotted resolution not found"〔target areka_sylphya::reader〕だけで、debug 段なので既定の実行では見えない。書き込みでは crates/areka-sylphya/src/actor.rs:345-350 の警告 "SET on non-settable canonical vocab: warn and drop (call still Ok, no write)"〔target areka_sylphya::actor〕が出る。
 書き込み: 正典 SET の定めなし / areka 受理＋警告＋非反映 / 一致（正典が設定を定めず areka も受理するだけで値を変えない）
 前置き: currentghost.sound の族の頭 2 本（index(ID) で位置を指す形・要素名で指す形）の下で使う。ルート枝は currentghost の 1 本で、要素ごとに項目を増やさない。
+語彙表だけを触る spec: areka-P0-property-query-channels
 """
 
 [entry."ukadoc:list_propertysystem:rateofuselist.index_28_9806_4f4d_29.bootminute:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1785,7 +1809,7 @@ note = """
 [entry."ukadoc:list_propertysystem:rateofuselist.index_28_9806_4f4d_29.bootminutemonthly:1"]
 status = "vocabulary-only"
 introduced = "2.8.54"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1798,7 +1822,7 @@ note = """
 [entry."ukadoc:list_propertysystem:rateofuselist.index_28_9806_4f4d_29.bootminuteweekly:1"]
 status = "vocabulary-only"
 introduced = "2.8.54"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1811,7 +1835,7 @@ note = """
 [entry."ukadoc:list_propertysystem:rateofuselist.index_28_9806_4f4d_29.boottime:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1824,7 +1848,7 @@ note = """
 [entry."ukadoc:list_propertysystem:rateofuselist.index_28_9806_4f4d_29.boottimemonthly:1"]
 status = "vocabulary-only"
 introduced = "2.8.54"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1837,7 +1861,7 @@ note = """
 [entry."ukadoc:list_propertysystem:rateofuselist.index_28_9806_4f4d_29.boottimeweekly:1"]
 status = "vocabulary-only"
 introduced = "2.8.54"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1850,7 +1874,7 @@ note = """
 [entry."ukadoc:list_propertysystem:rateofuselist.index_28_9806_4f4d_29.keroname:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1863,7 +1887,7 @@ note = """
 [entry."ukadoc:list_propertysystem:rateofuselist.index_28_9806_4f4d_29.name:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1876,7 +1900,7 @@ note = """
 [entry."ukadoc:list_propertysystem:rateofuselist.index_28_9806_4f4d_29.percent:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1889,7 +1913,7 @@ note = """
 [entry."ukadoc:list_propertysystem:rateofuselist.index_28_9806_4f4d_29.percentmonthly:1"]
 status = "vocabulary-only"
 introduced = "2.8.54"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1902,7 +1926,7 @@ note = """
 [entry."ukadoc:list_propertysystem:rateofuselist.index_28_9806_4f4d_29.percentweekly:1"]
 status = "vocabulary-only"
 introduced = "2.8.54"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1915,7 +1939,7 @@ note = """
 [entry."ukadoc:list_propertysystem:rateofuselist.index_28_9806_4f4d_29.sakuraname:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1928,7 +1952,7 @@ note = """
 [entry."ukadoc:list_propertysystem:rateofuselist_28_540d_524d_29.bootminute:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1941,7 +1965,7 @@ note = """
 [entry."ukadoc:list_propertysystem:rateofuselist_28_540d_524d_29.bootminutemonthly:1"]
 status = "vocabulary-only"
 introduced = "2.8.54"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1954,7 +1978,7 @@ note = """
 [entry."ukadoc:list_propertysystem:rateofuselist_28_540d_524d_29.bootminuteweekly:1"]
 status = "vocabulary-only"
 introduced = "2.8.54"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1967,7 +1991,7 @@ note = """
 [entry."ukadoc:list_propertysystem:rateofuselist_28_540d_524d_29.boottime:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1980,7 +2004,7 @@ note = """
 [entry."ukadoc:list_propertysystem:rateofuselist_28_540d_524d_29.boottimemonthly:1"]
 status = "vocabulary-only"
 introduced = "2.8.54"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -1993,7 +2017,7 @@ note = """
 [entry."ukadoc:list_propertysystem:rateofuselist_28_540d_524d_29.boottimeweekly:1"]
 status = "vocabulary-only"
 introduced = "2.8.54"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -2006,7 +2030,7 @@ note = """
 [entry."ukadoc:list_propertysystem:rateofuselist_28_540d_524d_29.keroname:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -2019,7 +2043,7 @@ note = """
 [entry."ukadoc:list_propertysystem:rateofuselist_28_540d_524d_29.name:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -2032,7 +2056,7 @@ note = """
 [entry."ukadoc:list_propertysystem:rateofuselist_28_540d_524d_29.percent:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -2045,7 +2069,7 @@ note = """
 [entry."ukadoc:list_propertysystem:rateofuselist_28_540d_524d_29.percentmonthly:1"]
 status = "vocabulary-only"
 introduced = "2.8.54"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -2058,7 +2082,7 @@ note = """
 [entry."ukadoc:list_propertysystem:rateofuselist_28_540d_524d_29.percentweekly:1"]
 status = "vocabulary-only"
 introduced = "2.8.54"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -2071,7 +2095,7 @@ note = """
 [entry."ukadoc:list_propertysystem:rateofuselist_28_540d_524d_29.sakuraname:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -2084,7 +2108,7 @@ note = """
 [entry."ukadoc:list_propertysystem:sakura.bind.menu:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -2098,7 +2122,7 @@ note = """
 [entry."ukadoc:list_propertysystem:sakuraname:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -2112,7 +2136,7 @@ note = """
 [entry."ukadoc:list_propertysystem:shiori._5909_6570_540d:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -2126,7 +2150,7 @@ note = """
 [entry."ukadoc:list_propertysystem:system.cpu._28_30ad_30fc_29:1"]
 status = "vocabulary-only"
 introduced = "2.6.26"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -2140,7 +2164,7 @@ note = """
 [entry."ukadoc:list_propertysystem:system.cursor.pos:1"]
 status = "vocabulary-only"
 introduced = "2.5.43"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -2154,7 +2178,7 @@ note = """
 [entry."ukadoc:list_propertysystem:system.day:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -2168,7 +2192,7 @@ note = """
 [entry."ukadoc:list_propertysystem:system.dayofweek:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -2182,7 +2206,7 @@ note = """
 [entry."ukadoc:list_propertysystem:system.disk.count:1"]
 status = "vocabulary-only"
 introduced = "2.8.17"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -2196,7 +2220,7 @@ note = """
 [entry."ukadoc:list_propertysystem:system.disk.index_28ID_29._28_30ad_30fc_29:1"]
 status = "vocabulary-only"
 introduced = "2.8.17"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -2210,7 +2234,7 @@ note = """
 [entry."ukadoc:list_propertysystem:system.dnd.mode:1"]
 status = "vocabulary-only"
 introduced = "2.8.17"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -2224,7 +2248,7 @@ note = """
 [entry."ukadoc:list_propertysystem:system.hour:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -2238,7 +2262,7 @@ note = """
 [entry."ukadoc:list_propertysystem:system.memory._28_30ad_30fc_29:1"]
 status = "vocabulary-only"
 introduced = "2.6.26"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -2252,7 +2276,7 @@ note = """
 [entry."ukadoc:list_propertysystem:system.millisecond:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -2266,7 +2290,7 @@ note = """
 [entry."ukadoc:list_propertysystem:system.minute:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -2280,7 +2304,7 @@ note = """
 [entry."ukadoc:list_propertysystem:system.monitor.count:1"]
 status = "vocabulary-only"
 introduced = "2.8.16"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -2294,7 +2318,7 @@ note = """
 [entry."ukadoc:list_propertysystem:system.monitor.index_28ID_29.bpp:1"]
 status = "vocabulary-only"
 introduced = "2.8.16"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -2308,7 +2332,7 @@ note = """
 [entry."ukadoc:list_propertysystem:system.monitor.index_28ID_29.dpi:1"]
 status = "vocabulary-only"
 introduced = "2.8.16"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -2322,7 +2346,7 @@ note = """
 [entry."ukadoc:list_propertysystem:system.monitor.index_28ID_29.primary:1"]
 status = "vocabulary-only"
 introduced = "2.8.16"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -2336,7 +2360,7 @@ note = """
 [entry."ukadoc:list_propertysystem:system.monitor.index_28ID_29.rect:1"]
 status = "vocabulary-only"
 introduced = "2.8.16"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -2350,7 +2374,7 @@ note = """
 [entry."ukadoc:list_propertysystem:system.monitor.index_28ID_29.work:1"]
 status = "vocabulary-only"
 introduced = "2.8.16"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -2364,7 +2388,7 @@ note = """
 [entry."ukadoc:list_propertysystem:system.month:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -2378,7 +2402,7 @@ note = """
 [entry."ukadoc:list_propertysystem:system.network._28_30ad_30fc_29:1"]
 status = "vocabulary-only"
 introduced = "2.8.17"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -2392,7 +2416,7 @@ note = """
 [entry."ukadoc:list_propertysystem:system.os._28_30ad_30fc_29:1"]
 status = "vocabulary-only"
 introduced = "2.6.26"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -2407,7 +2431,7 @@ note = """
 [entry."ukadoc:list_propertysystem:system.power._28_30ad_30fc_29:1"]
 status = "vocabulary-only"
 introduced = "2.8.17"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -2421,7 +2445,7 @@ note = """
 [entry."ukadoc:list_propertysystem:system.second:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -2435,7 +2459,7 @@ note = """
 [entry."ukadoc:list_propertysystem:system.theme.app.mode:1"]
 status = "vocabulary-only"
 introduced = "2.8.17"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -2449,7 +2473,7 @@ note = """
 [entry."ukadoc:list_propertysystem:system.theme.os.mode:1"]
 status = "vocabulary-only"
 introduced = "2.8.17"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -2463,7 +2487,7 @@ note = """
 [entry."ukadoc:list_propertysystem:system.year:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -2477,7 +2501,7 @@ note = """
 [entry."ukadoc:list_propertysystem:thumbnail:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -2491,7 +2515,7 @@ note = """
 [entry."ukadoc:list_propertysystem:update_result:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -2505,7 +2529,7 @@ note = """
 [entry."ukadoc:list_propertysystem:update_time:1"]
 status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
@@ -2519,7 +2543,7 @@ note = """
 [entry."ukadoc:list_propertysystem:username:1"]
 status = "vocabulary-only"
 introduced = "2.3.51"
-owner = ""
+owner = "areka-P0-property-catalog-lists"
 priority = ""
 values = []
 links = []
