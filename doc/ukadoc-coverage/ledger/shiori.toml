@@ -827,13 +827,29 @@ links = []
 note = ""
 
 [entry."ukadoc:list_shiori_event:OnBalloonBreak:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-balloon-canon-residue"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。バルーンが閉じた・時間切れになった・中断されたことは SHIORI へ伝わらず、
+それに応じて喋る辞書はその場面で呼ばれない。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。理由は群 2 と同じ（この名前を
+組み立てる構築関数が無い。ゴーストが \\q の選択肢 ID に書いた場合だけ選択起源の経路で送出され得る
+のも群 2 と同じで、そのときも状態は変わらない）。加えてこの群には第 2 の理由がある——表示側から
+会話進行側へ渡す受け皿の型は用意してあるが、それを作る側も受け取る側もまだ存在しないため、
+バルーンの開閉を起点とする経路そのものが動かない。
+縮退の転記元: doc/COMPAT_ARCHITECTURE.md の沈黙ルール対応表の行「OnBalloonClose ／
+OnBalloonTimeout ／ OnBalloonBreak の SHIORI 発火」。そこには M1 は発火させず、語彙・Reference の
+割り当て・受け渡し口の型だけを残すと記録されている。解禁の条件は M2 で互換の範囲を広げるときで、
+追跡先は areka-P0-balloon-canon-residue。
+根拠の場所: crates/areka/src/emo2_boot/talk_lifecycle.rs の BalloonLifecycleNotice。
+Reference 割当（転記元の記録の写し）: Ref0＝中断の操作が起きたスクリプト・Ref1＝中断が
+起きたバルーンの scope 番号（本体側 0・相方側 1・以降も）・Ref2＝中断位置（スクリプト
+先頭からの文字数・さくらスクリプトのタグを含む）。
+"""
 
 [entry."ukadoc:list_shiori_event:OnBalloonChange:1"]
 status = "unclassified"
@@ -845,13 +861,27 @@ links = []
 note = ""
 
 [entry."ukadoc:list_shiori_event:OnBalloonClose:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-balloon-canon-residue"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。バルーンが閉じた・時間切れになった・中断されたことは SHIORI へ伝わらず、
+それに応じて喋る辞書はその場面で呼ばれない。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。理由は群 2 と同じ（この名前を
+組み立てる構築関数が無い。ゴーストが \\q の選択肢 ID に書いた場合だけ選択起源の経路で送出され得る
+のも群 2 と同じで、そのときも状態は変わらない）。加えてこの群には第 2 の理由がある——表示側から
+会話進行側へ渡す受け皿の型は用意してあるが、それを作る側も受け取る側もまだ存在しないため、
+バルーンの開閉を起点とする経路そのものが動かない。
+縮退の転記元: doc/COMPAT_ARCHITECTURE.md の沈黙ルール対応表の行「OnBalloonClose ／
+OnBalloonTimeout ／ OnBalloonBreak の SHIORI 発火」。そこには M1 は発火させず、語彙・Reference の
+割り当て・受け渡し口の型だけを残すと記録されている。解禁の条件は M2 で互換の範囲を広げるときで、
+追跡先は areka-P0-balloon-canon-residue。
+根拠の場所: crates/areka/src/emo2_boot/talk_lifecycle.rs の BalloonLifecycleNotice。
+Reference 割当（転記元の記録の写し）: Ref0＝閉じる際に表示されていたスクリプト。
+"""
 
 [entry."ukadoc:list_shiori_event:OnBalloonScaling:1"]
 status = "unclassified"
@@ -863,13 +893,28 @@ links = []
 note = ""
 
 [entry."ukadoc:list_shiori_event:OnBalloonTimeout:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
-owner = ""
+owner = "areka-P0-balloon-canon-residue"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。バルーンが閉じた・時間切れになった・中断されたことは SHIORI へ伝わらず、
+それに応じて喋る辞書はその場面で呼ばれない。
+ログ: ベースウェアが場面に応じて発火する系統では 1 行も出ない。理由は群 2 と同じ（この名前を
+組み立てる構築関数が無い。ゴーストが \\q の選択肢 ID に書いた場合だけ選択起源の経路で送出され得る
+のも群 2 と同じで、そのときも状態は変わらない）。加えてこの群には第 2 の理由がある——表示側から
+会話進行側へ渡す受け皿の型は用意してあるが、それを作る側も受け取る側もまだ存在しないため、
+バルーンの開閉を起点とする経路そのものが動かない。
+縮退の転記元: doc/COMPAT_ARCHITECTURE.md の沈黙ルール対応表の行「OnBalloonClose ／
+OnBalloonTimeout ／ OnBalloonBreak の SHIORI 発火」。そこには M1 は発火させず、語彙・Reference の
+割り当て・受け渡し口の型だけを残すと記録されている。解禁の条件は M2 で互換の範囲を広げるときで、
+追跡先は areka-P0-balloon-canon-residue。
+根拠の場所: crates/areka/src/emo2_boot/talk_lifecycle.rs の BalloonLifecycleNotice。
+Reference 割当（転記元の記録の写し）: Ref0＝タイムアウトした際に表示されていた
+スクリプト・Ref1＝残り時間。
+"""
 
 [entry."ukadoc:list_shiori_event:OnBasewareUpdated:1"]
 status = "unclassified"
@@ -935,13 +980,22 @@ links = []
 note = ""
 
 [entry."ukadoc:list_shiori_event:OnBoot:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出て、Method・ID・参照値・実行状態が
+残る。送出そのものが失敗したときは error のログ（shiori_send_failed）が出て終了の系列へ倒れる
+ので、黙って消えることはない。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載って
+おり、同じファイルの構築関数がこの呼び出しを組み立てる。送出は
+crates/areka-kanade/src/actor.rs の round_trip_request。
+構築関数: crates/areka-kanade/src/schedule/events.rs の on_boot。
+"""
 
 [entry."ukadoc:list_shiori_event:OnCPULoadHigh:1"]
 status = "unclassified"
@@ -998,40 +1052,76 @@ links = []
 note = ""
 
 [entry."ukadoc:list_shiori_event:OnChoiceSelect:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出て、Method・ID・参照値・実行状態が
+残る。送出そのものが失敗したときは error のログ（shiori_send_failed）が出て終了の系列へ倒れる
+ので、黙って消えることはない。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載って
+おり、同じファイルの構築関数がこの呼び出しを組み立てる。送出は
+crates/areka-kanade/src/actor.rs の round_trip_request。
+構築関数: crates/areka-kanade/src/schedule/events.rs の on_choice_select。
+"""
 
 [entry."ukadoc:list_shiori_event:OnChoiceSelectEx:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出て、Method・ID・参照値・実行状態が
+残る。送出そのものが失敗したときは error のログ（shiori_send_failed）が出て終了の系列へ倒れる
+ので、黙って消えることはない。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載って
+おり、同じファイルの構築関数がこの呼び出しを組み立てる。送出は
+crates/areka-kanade/src/actor.rs の round_trip_request。
+構築関数: crates/areka-kanade/src/schedule/events.rs の on_choice_select_ex。
+"""
 
 [entry."ukadoc:list_shiori_event:OnChoiceTimeout:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出て、Method・ID・参照値・実行状態が
+残る。送出そのものが失敗したときは error のログ（shiori_send_failed）が出て終了の系列へ倒れる
+ので、黙って消えることはない。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載って
+おり、同じファイルの構築関数がこの呼び出しを組み立てる。送出は
+crates/areka-kanade/src/actor.rs の round_trip_request。
+構築関数: crates/areka-kanade/src/schedule/events.rs の on_choice_timeout。
+"""
 
 [entry."ukadoc:list_shiori_event:OnClose:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出て、Method・ID・参照値・実行状態が
+残る。送出そのものが失敗したときは error のログ（shiori_send_failed）が出て終了の系列へ倒れる
+ので、黙って消えることはない。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載って
+おり、同じファイルの構築関数がこの呼び出しを組み立てる。送出は
+crates/areka-kanade/src/actor.rs の round_trip_request。
+構築関数: crates/areka-kanade/src/schedule/events.rs の on_close（通常の握手・GET）と on_close_notify（強制終了時の通知・NOTIFY）。
+"""
 
 [entry."ukadoc:list_shiori_event:OnCloseAll:1"]
 status = "unclassified"
@@ -1340,31 +1430,79 @@ links = []
 note = ""
 
 [entry."ukadoc:list_shiori_event:OnFileDrop:1"]
-status = "unclassified"
+status = "alias"
 introduced = ""
+alias_of = "ukadoc:list_shiori_event:OnFileDrop2:1"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: この行では判定しない。別名の行が持つのは正典側の項目への写像だけで、実装しているか
+どうかは写像先（OnFileDrop2）の行に書く。実際の壊れ方は写像先の行に従う。
+ログ: この行に固有のログは無い。
+向き: 正典本文がこの 3 つを「旧仕様」で始めて説明しているため、OnFileDrop2 を正典側とする。
+OnFileDropping はドラッグ中の通知であって別の機能なので、この一群に含めない。
+ログの但し書き: この 3 つの名前はいずれも On で始まるので、ゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは、選択起源の経路（crates/areka-kanade/src/schedule/steady.rs の
+CascadePlan::Named の枝が crates/areka-kanade/src/schedule/events.rs の on_choice_named を通す。
+受理規則 is_allowed_choice_event の条件は「On で始まること」ただ 1 つ）でこの名前が逐語のまま
+送出され、そのときは trace のログ shiori_request がこの別名の名前で 1 行出る（写像先の
+OnFileDrop2 の名前では出ない）。この行は判定をしないので、状態は alias のまま変わらない。
+向きを決めた段: 上流 要件 4.1 の順序の第 1 段（正典本文の注記）で決まった。正典本文はこの項目の
+説明を「[旧仕様]」で始め、OnFileDrop2 の説明を「このイベントが現時点での最新仕様となる」と書く。
+第 2 段（版番号）は 4 件とも 2.7.98 で並ぶため決め手にならず、第 3 段（人手の判断）には降りない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnFileDropEx:1"]
-status = "unclassified"
+status = "alias"
 introduced = ""
+alias_of = "ukadoc:list_shiori_event:OnFileDrop2:1"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: この行では判定しない。別名の行が持つのは正典側の項目への写像だけで、実装しているか
+どうかは写像先（OnFileDrop2）の行に書く。実際の壊れ方は写像先の行に従う。
+ログ: この行に固有のログは無い。
+向き: 正典本文がこの 3 つを「旧仕様」で始めて説明しているため、OnFileDrop2 を正典側とする。
+OnFileDropping はドラッグ中の通知であって別の機能なので、この一群に含めない。
+ログの但し書き: この 3 つの名前はいずれも On で始まるので、ゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは、選択起源の経路（crates/areka-kanade/src/schedule/steady.rs の
+CascadePlan::Named の枝が crates/areka-kanade/src/schedule/events.rs の on_choice_named を通す。
+受理規則 is_allowed_choice_event の条件は「On で始まること」ただ 1 つ）でこの名前が逐語のまま
+送出され、そのときは trace のログ shiori_request がこの別名の名前で 1 行出る（写像先の
+OnFileDrop2 の名前では出ない）。この行は判定をしないので、状態は alias のまま変わらない。
+向きを決めた段: 上流 要件 4.1 の順序の第 1 段（正典本文の注記）で決まった。正典本文はこの項目の
+説明を「[旧仕様]」で始め、OnFileDrop2 の説明を「このイベントが現時点での最新仕様となる」と書く。
+第 2 段（版番号）は 4 件とも 2.7.98 で並ぶため決め手にならず、第 3 段（人手の判断）には降りない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnFileDropped:1"]
-status = "unclassified"
+status = "alias"
 introduced = ""
+alias_of = "ukadoc:list_shiori_event:OnFileDrop2:1"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: この行では判定しない。別名の行が持つのは正典側の項目への写像だけで、実装しているか
+どうかは写像先（OnFileDrop2）の行に書く。実際の壊れ方は写像先の行に従う。
+ログ: この行に固有のログは無い。
+向き: 正典本文がこの 3 つを「旧仕様」で始めて説明しているため、OnFileDrop2 を正典側とする。
+OnFileDropping はドラッグ中の通知であって別の機能なので、この一群に含めない。
+ログの但し書き: この 3 つの名前はいずれも On で始まるので、ゴーストが \\q の選択肢 ID にこの
+名前を書いた場合だけは、選択起源の経路（crates/areka-kanade/src/schedule/steady.rs の
+CascadePlan::Named の枝が crates/areka-kanade/src/schedule/events.rs の on_choice_named を通す。
+受理規則 is_allowed_choice_event の条件は「On で始まること」ただ 1 つ）でこの名前が逐語のまま
+送出され、そのときは trace のログ shiori_request がこの別名の名前で 1 行出る（写像先の
+OnFileDrop2 の名前では出ない）。この行は判定をしないので、状態は alias のまま変わらない。
+向きを決めた段: 上流 要件 4.1 の順序の第 1 段（正典本文の注記）で決まった。正典本文はこの項目の
+説明を「[旧仕様]」で始め、OnFileDrop2 の説明を「このイベントが現時点での最新仕様となる」と書く。
+第 2 段（版番号）は 4 件とも 2.7.98 で並ぶため決め手にならず、第 3 段（人手の判断）には降りない。
+"""
 
 [entry."ukadoc:list_shiori_event:OnFileDropping:1"]
 status = "unclassified"
@@ -1376,13 +1514,22 @@ links = []
 note = ""
 
 [entry."ukadoc:list_shiori_event:OnFirstBoot:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出て、Method・ID・参照値・実行状態が
+残る。送出そのものが失敗したときは error のログ（shiori_send_failed）が出て終了の系列へ倒れる
+ので、黙って消えることはない。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載って
+おり、同じファイルの構築関数がこの呼び出しを組み立てる。送出は
+crates/areka-kanade/src/actor.rs の round_trip_request。
+構築関数: crates/areka-kanade/src/schedule/events.rs の on_first_boot。
+"""
 
 [entry."ukadoc:list_shiori_event:OnFullScreenAppMinimize:1"]
 status = "unclassified"
@@ -1556,13 +1703,22 @@ links = []
 note = ""
 
 [entry."ukadoc:list_shiori_event:OnInitialize:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出て、Method・ID・参照値・実行状態が
+残る。送出そのものが失敗したときは error のログ（shiori_send_failed）が出て終了の系列へ倒れる
+ので、黙って消えることはない。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載って
+おり、同じファイルの構築関数がこの呼び出しを組み立てる。送出は
+crates/areka-kanade/src/actor.rs の round_trip_request。
+構築関数: crates/areka-kanade/src/schedule/events.rs の on_initialize。
+"""
 
 [entry."ukadoc:list_shiori_event:OnInstallBegin:1"]
 status = "unclassified"
@@ -1700,13 +1856,22 @@ links = []
 note = ""
 
 [entry."ukadoc:list_shiori_event:OnMouseDoubleClick:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出て、Method・ID・参照値・実行状態が
+残る。送出そのものが失敗したときは error のログ（shiori_send_failed）が出て終了の系列へ倒れる
+ので、黙って消えることはない。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載って
+おり、同じファイルの構築関数がこの呼び出しを組み立てる。送出は
+crates/areka-kanade/src/actor.rs の round_trip_request。
+構築関数: crates/areka-kanade/src/schedule/events.rs の on_mouse_double_click。
+"""
 
 [entry."ukadoc:list_shiori_event:OnMouseDoubleClickEx:1"]
 status = "unclassified"
@@ -1808,13 +1973,22 @@ links = []
 note = ""
 
 [entry."ukadoc:list_shiori_event:OnMouseMove:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出て、Method・ID・参照値・実行状態が
+残る。送出そのものが失敗したときは error のログ（shiori_send_failed）が出て終了の系列へ倒れる
+ので、黙って消えることはない。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載って
+おり、同じファイルの構築関数がこの呼び出しを組み立てる。送出は
+crates/areka-kanade/src/actor.rs の round_trip_request。
+構築関数: crates/areka-kanade/src/schedule/events.rs の on_mouse_move。
+"""
 
 [entry."ukadoc:list_shiori_event:OnMouseMultipleClick:1"]
 status = "unclassified"
@@ -2420,13 +2594,22 @@ links = []
 note = ""
 
 [entry."ukadoc:list_shiori_event:OnSecondChange:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出て、Method・ID・参照値・実行状態が
+残る。送出そのものが失敗したときは error のログ（shiori_send_failed）が出て終了の系列へ倒れる
+ので、黙って消えることはない。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載って
+おり、同じファイルの構築関数がこの呼び出しを組み立てる。送出は
+crates/areka-kanade/src/actor.rs の round_trip_request。
+構築関数: crates/areka-kanade/src/schedule/events.rs の on_second_change。
+"""
 
 [entry."ukadoc:list_shiori_event:OnSelectModeBegin:1"]
 status = "unclassified"
@@ -3122,13 +3305,27 @@ links = []
 note = ""
 
 [entry."ukadoc:list_shiori_event:basewareversion:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 該当なし。areka はこのイベントを実際に SHIORI へ送っている。
+ログ: 送出の直前に trace のログ（shiori_request）が 1 行出て、Method・ID・参照値・実行状態が
+残る。送出そのものが失敗したときは error のログ（shiori_send_failed）が出て終了の系列へ倒れる
+ので、黙って消えることはない。
+根拠の場所: crates/areka-kanade/src/schedule/events.rs の ALLOWED_EVENT_IDS にこの名前が載って
+おり、同じファイルの構築関数がこの呼び出しを組み立てる。送出は
+crates/areka-kanade/src/actor.rs の round_trip_request。
+構築関数: crates/areka-kanade/src/schedule/events.rs の baseware_version。
+向き: ベースウェアから SHIORI へ知らせる側の通知（NOTIFY）である。ベースウェアが自分の版番号と
+本体の識別を SHIORI へ伝えるだけで、SHIORI から値を引く項目ではない。
+正典での所在: list_shiori_event ページの basewareversion（通知イベント）。カタログに同名の項目は
+この 1 件しか無く、リソース側（list_shiori_resource）には存在しないため、この行はイベント側に
+置き、リソース側には行を作らない。
+"""
 
 [entry."ukadoc:list_shiori_event:calendarpluginpathlist:1"]
 status = "unclassified"
