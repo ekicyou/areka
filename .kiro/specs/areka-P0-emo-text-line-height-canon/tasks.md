@@ -162,3 +162,9 @@
   - 完了状態: 引き渡し文書が実在し、登記先 4 箇所すべてに本仕様への参照が入っていること
   - _Requirements: 6.7, 6.9, 9.4, 10.1, 10.2, 10.3, 5.5_
   - _Depends: 6.2_
+
+## Implementation Notes
+
+- 1.1: 再導出の参照先は **`verification/derivation-ledger.md` 1 本**。design の再導出台帳は実測で 7 箇所ずれていた（一覧の実数えは 32 でなく 37・`canvas.rs` は不変ではない・4 ファイル欠落・警告 1 件の影響が過大・`choice_fixture_test.rs` と `emo2_fixture_e2e_test.rs` は帯の数値定数を持たず実行時導出）。以降のタスクは design の表ではなく台帳を読むこと。
+- 1.1: 台帳の行は design から写さず、必ず当該ファイルを開いて定数の実在を確かめてから書く（写しで 1 度差し戻された）。
+- 1.1: 改名追随（`line_pitch_factor` → 行間）で**コンパイルが壊れるのは 1 箇所だけ**（`draw_format_metrics_tests.rs` の構造体リテラル）。`crates/areka` 側 12 ファイルは `TextLayerConfig::default()` 経由なので影響を受けない。
