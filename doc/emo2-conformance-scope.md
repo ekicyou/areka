@@ -21,7 +21,7 @@
   - `OnBoot`（初回 `OnFirstBoot`）— 起動挨拶
   - `OnSecondChange` — **最重要・心臓部**。毎秒。これが OnTalk/OnHour/コールバック/kick を内部駆動する
   - `OnMouseDoubleClick` — メニュー
-  - `OnChoiceSelectEx` — メニュー選択肢確定（Reference0=選択肢ラベル・Reference1=`\q[title,id]` の id・Reference2 以降=拡張引数）
+  - **選択肢 ID と同名のイベント** — メニュー選択肢確定。適合対象の選択肢 ID は**すべて `On` 始まり**であり（`crates/pilot/examples/shiori-host-32/fixtures/emo2/ghost/master/dic/menu.pasta:15`／`:33`／`:62` の計 9 か所・重複を除き 8 種）、確定時に発火するのは**同名イベント 1 段のみ**である（`crates/areka-kanade/src/schedule/choice.rs:57-65` が `On` 始まりを同名 1 段へ写す。適合走行の交信列も選択起源は同名の照会 4 件だけで固定＝`crates/areka/src/emo2_boot/spine_conformance_script.rs:589`／`:591`／`:592`／`:594`）。正典もこの直接発火を明記する——ukadoc さくらスクリプト一覧（`list_sakura_script.html`）の `\q[タイトル,OnID,r0,r1,...]` の項が「ID が `"On"` で始まっている場合は、選択後、SHIORI イベント `OnID` が開始される」と書き、付随引数 r0 以降が Reference0 以降へ入るとする。一方 `OnChoiceSelectEx`／`OnChoiceSelect` は `On` で始まらない ID の形（同 `\q[タイトル,ID,r2,r3...]` の項）で発火する正典イベントであり、**適合対象では使われない**（辞書 `crates/pilot/examples/shiori-host-32/fixtures/emo2/ghost/master/dic/` に受け口 0 件）。なお同名イベントの**前に**正典イベントを出すか否かについて、正典は沈黙している（`OnID` の項は先行段に触れない）
   - `OnMouseMove` — 撫で反応（areka が collision 解決して actor/region を Reference に載せる）
   - `OnClose` — 終了挨拶＋`\-`
 - **送ってはいけない**: `OnTalk`/`OnHour`（emo2 が OnSecondChange 内で内部生成。二重発火になる）。

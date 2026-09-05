@@ -65,6 +65,44 @@ const SKIP_TAG: &str = "[zorder-pair] skip";
 const VERIFY_FAILED_TAG: &str = "[zorder-pair] verify-failed";
 
 // -------------------------------------------------------------------------
+// 明示実行の門（実窓の重なり順を直に測る 2 本のみ）
+// -------------------------------------------------------------------------
+
+/// 実窓の重なり順を直に測る 2 本を明示実行へ限る門の環境変数。
+///
+/// 本ワークスペースの実行時環境変数は `AREKA_` 名前空間である（同じ流儀の先例:
+/// `crates/log-capture-kit/tests/capture_calibration_test.rs` の `MODE_ENV`）。
+const REAL_WINDOW_ZORDER_ENV: &str = "AREKA_WINTF_REAL_WINDOW_ZORDER";
+
+/// 門が開いていなければ、判定を 1 行も実行せずに落とす。
+///
+/// # なぜ門を付けたか
+///
+/// この 2 本は実窓の位置関係を直に測るため、他プロセスの可視窓が owner 一組の間へ
+/// 割り込むと崩れる。既定の `cargo test` に置いたままだと間欠的な赤が出て、「全通過」
+/// という記録が全通過を意味しなくなる。よって既定の走行からは外し、狙って走らせる
+/// ときだけ走る形にした。
+///
+/// **判定そのものは 1 行も変えていない**——閾値も期待値も隔離前のままである。根治
+/// （判定の作り直し）の引受先は `.kiro/specs/areka-P0-zorder-chain-residue/brief.md`
+/// の A-1 で、そちらが「実窓の重なり順を割り込みに強い形で測る」を持つ。
+///
+/// # 門が閉じたまま呼ばれたら緑にしない
+///
+/// `--ignored` で無差別に呼ばれたときに素通りで緑を返すと、「実窓で測った」という
+/// 記録に化ける。既存の手本（`crates/areka/src/placement/transition_signoff_tests.rs`
+/// の実機ログ判定）と同じく、条件が揃っていない呼び出しは失敗として落とす。
+fn require_explicit_real_window_run() {
+    assert!(
+        std::env::var_os(REAL_WINDOW_ZORDER_ENV).is_some(),
+        "{REAL_WINDOW_ZORDER_ENV} が未設定である。実窓の重なり順は他プロセスの可視窓に\
+         割り込まれて間欠的に赤くなるため明示実行へ隔離してある（判定は 1 行も走っていない）。\
+         走らせるには環境変数を与えて `cargo test -p wintf --lib <テスト名> -- --ignored --exact` \
+         とすること"
+    );
+}
+
+// -------------------------------------------------------------------------
 // 実窓・World・巡回のヘルパ（兄弟の維持系テストと同じレシピ）
 // -------------------------------------------------------------------------
 
@@ -367,7 +405,10 @@ fn pair_adjacency_converges_identically_inside_and_outside_the_always_on_top_ban
 /// [`a_fix_whose_insert_position_is_always_on_top_keeps_the_balloon_out_of_the_band`] が
 /// 持つ。対照②はその危険が実在する（＝是正が要る）ことを実測で確定させるために置いてある。
 #[test]
+#[ignore = "実窓の重なり順は他プロセスの可視窓に割り込まれて間欠的に赤くなる（AREKA_WINTF_REAL_WINDOW_ZORDER を与えて明示実行する）"]
 fn pair_fix_commands_keep_a_pair_inside_the_band_it_already_shares() {
+    require_explicit_real_window_run();
+
     let character = create_always_on_top_toplevel(w!("wintf-zorder-band-cmd-character"));
     let balloon = create_always_on_top_toplevel(w!("wintf-zorder-band-cmd-balloon"));
     assert!(
@@ -738,7 +779,10 @@ fn measuring_band_membership_answers_both_ways_and_falls_back_into_the_band_on_f
 /// [`the_top_of_normal_band_fix_still_lands_the_balloon_directly_above_the_character`] が
 /// 子窓で受け持つ（あちらは写像先を変えると赤くなる）。
 #[test]
+#[ignore = "実窓の重なり順は他プロセスの可視窓に割り込まれて間欠的に赤くなる（AREKA_WINTF_REAL_WINDOW_ZORDER を与えて明示実行する）"]
 fn the_top_of_normal_band_fix_keeps_a_real_owned_pair_adjacent_and_out_of_the_band() {
+    require_explicit_real_window_run();
+
     let character = create_ghost_shaped_toplevel(w!("wintf-zorder-owned-lift-character"));
     let balloon = create_ghost_shaped_toplevel(w!("wintf-zorder-owned-lift-balloon"));
     for hwnd in [character, balloon] {

@@ -127,7 +127,9 @@ fn s1_boot_success_plays_greeting_and_records_expected_cue_sequence() {
 
     // boot() は内部で KanadeMsg::Boot を既に送出済み——boot 系列は kanade アクタースレッド
     // 上で同期往復（oneshot round trip）のみで完走するため、この時点で OnInitialize〜
-    // basewareversion の 4 呼出はスケジューリング次第で既に発火し終えている。しかし
+    // basewareversion の 5 呼出はスケジューリング次第で既に発火し終えて**いることもある**
+    // （⚠ 発火し終えている保証は無い。cue の発火はこの 5 呼出の完了を含意しない——理由と
+    // 対処は下の有界待ちの注記を読むこと。task 5.6・要件 9.2）。しかし
     // StartTalk は start_tx→start-relay→dispatcher_tx の 2 hop（別スレッド）を経るため、
     // dispatcher の active slot に talk が実際に載るタイミングはスレッドスケジューリング
     // 依存であり、単一の Tick 送出が必ず間に合う保証はない。sleep は使わず、Tick を送る
@@ -182,7 +184,51 @@ fn s1_boot_success_plays_greeting_and_records_expected_cue_sequence() {
             &areka_kanade::ExecutionSnapshot::INACTIVE,
         )),
     ];
+
+    // **数える前に 5 呼出の到達そのものを有界に待つ**（task 5.6・要件 9.2〔2026-09-04 の
+    // 開発者裁定で S1 まで対象を広げた改訂版〕・R12.1 の事前登記済み例外も同裁定で S1 を含む）。
+    // 上の `spin_pumping_ticks`（:147-158）が抜ける条件は「surface cue が 1 件でも載ったこと」
+    // だけであり、これは boot 系列 5 呼出の完了を**含意しない**——`to_baseware_version`
+    // （`crates/areka-kanade/src/schedule/boot.rs:229-282`）は `Action::StartTalk` を同 `:241`
+    // で積み、`basewareversion` の `Action::ShioriRequest` を同 `:277-279` で**その後に**積む。
+    // ゆえに StartTalk が start-relay→dispatcher の 2 hop を渡って cue を発火させるのと、
+    // basewareversion NOTIFY が shiori アクタースレッド（1 hop）で記録されるのとは、別スレッド
+    // の競走であり順序は保証されていない。待たずに数えると 5 本目がまだ届かず `left: 4` の
+    // Vec 不一致で落ちる瞬間があり、これが負荷時にだけ現れる間欠的な赤の正体である
+    // （`verification/isolation-decision.md` §2 の系統 ⑸）。
+    //
+    // 形は S3 に当てた直し（task 4.1・`3e7414fc`）と同一である——手本は
+    // `crates/areka-ghost/tests/ghost/spine_e2e_test_s3_helper_liveness_detected.rs:189-203`
+    // の有界待ちで、そのさらに手本は「条件が満たされるまで待つ」形で同じ 5 呼出を確認する
+    // `crates/areka/src/emo2_boot/spine_boot_smoke_tests.rs:32-36`（`spin_wait_until`）。
+    // 判定そのもの（Status を除いた列が `expected_boot_prefix` と**等値**）は 1 文字も変えず、
+    // 数える前に待ちを置くだけなので被覆を 1 つも失わない——待ちの脱出条件は「5 件以上」だが
+    // 直後の等値照合が上限も保つため、6 件来れば依然として赤になる。上限は本ファイルの他の
+    // 有界待ちと同じ `E2E_BOUND`（`spine_e2e_test.rs:22`＝60 秒の壁時計安全弁）を再利用する。
     let calls = handle.calls();
+    let non_status_len = || {
+        calls
+            .lock()
+            .expect("calls mutex poisoned")
+            .iter()
+            .filter(|c| !matches!(c, RecordedCall::Status))
+            .count()
+    };
+    let mut boot_prefix_len = non_status_len();
+    let boot_deadline = std::time::Instant::now() + super::E2E_BOUND;
+    while boot_prefix_len < expected_boot_prefix.len() && std::time::Instant::now() < boot_deadline
+    {
+        std::thread::yield_now();
+        boot_prefix_len = non_status_len();
+    }
+    assert!(
+        boot_prefix_len >= expected_boot_prefix.len(),
+        "S1: boot 系列 {} 呼出（OnInitialize/username/OnFirstBoot/OnBoot/basewareversion）が \
+         {:?} 以内に揃わなかった——Status を除く観測件数は {} 件",
+        expected_boot_prefix.len(),
+        super::E2E_BOUND,
+        boot_prefix_len
+    );
     let calls_without_status: Vec<RecordedCall> = calls
         .lock()
         .expect("calls mutex poisoned")
