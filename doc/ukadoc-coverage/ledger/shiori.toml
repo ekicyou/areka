@@ -15830,6 +15830,15 @@ note = """
 壊れ方: 該当なし。areka はこのヘッダを毎回組み立てて送っている。
 ログ: 送出の直前に kanade が trace のログ（shiori_request）で送る内容を残す。組み立てが途中で
 失敗する経路は無い（値をそのまま文字列へ書き出すだけである）。
+縮退の転記元 その 1: doc/COMPAT_ARCHITECTURE.md の沈黙ルール対応表の行「選択確定カスケードの
+正典沈黙分岐一式」。そこには、選択待ちの間に送る複合の値 talking,choosing を含む分岐一式は
+1 行に畳めないので詳細台帳 doc/choice-cascade-compat.md へ委ねる、と記録されている。裁定の
+本体はその台帳にあり、出典 spec は areka-P0-choice-select-events。
+縮退の転記元 その 2: 同じ表の行「ukadoc Status [SSP拡張] の balloon（表示中のバルーン ID 群）の
+実導出・報告」。そこには M1 では導出せず、語彙だけを保ったまま使わない状態に置く、と記録されて
+いる。実際に導出するときの唯一の情報源はバルーンの表示状態の読み口とし、見えているかどうかの
+帳簿を第 2 に作らない。解禁の条件は残る状態の源が着地した時点で、追跡先は
+areka-P0-status-execution-states。
 根拠の場所: crates/shiori-host32-host/src/shiori3.rs の build_request。
 build_request は値を解釈せずそのまま書き出し、値が無いときは行ごと省く。実行状態の語彙は
 owner の areka-P0-status-execution-states が所有するので、本 spec は語彙の可否を判定しない。
