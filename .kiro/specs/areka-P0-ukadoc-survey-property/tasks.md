@@ -3,7 +3,7 @@
 > **2026-09-05 更新**: 上流 `areka-P0-ukadoc-survey-toolkit` の実装が main に着地し（PR#136）、本ブランチへ merge 済み。初期台帳・カタログ・常設整合検査・`ukadoc-survey` の 8 副手続き（`catalog`／`ledger-init`／`report`／`report-summary`／`check`／`evidence`／`candidates`／`diff`）が揃った。これに伴いタスク 1.1・1.2・6.1・6.2 を書き換え、証拠のコメント 2 行を 1.3 へ前送りし（上流の `check` が証拠の無い `implemented` を赤にするため）、残った回帰確認 1 本を群 5 に畳んである。判断の中身（規則 0〜8）は 1 つも変わっていない。
 > 着手前に **`git submodule update --init --recursive` を済ませておく**（未初期化だと `cargo` 自体が `pasta_core` を見つけられずに転ぶ）。
 
-- [ ] 1. 骨組みと受け入れ確認の土台を用意する
+- [x] 1. 骨組みと受け入れ確認の土台を用意する
 - [x] 1.1 着地済みの骨組みを確かめ、版番号を埋める
   - 上流が着地させた `doc/ukadoc-coverage/ledger/property.toml` を読み、骨組みが期待どおりであることを確かめる（先頭に `[ledger]` 表・`domain = "property"`・`pages = ["list_propertysystem"]`・`[entry."..."]` が 188 件・必須キー 7 つが空値で置かれ・全件 `status = "unclassified"`・`introduced` は全件空）。**骨組みを自分で生成しない**（上流 `ledger-init` の持ち物）
   - `cargo run -p ukadoc-survey -- check` を回して起点が緑であることを確かめる。merge 直後の実測は「食い違い 0 件／証拠のある項目 0 件」
@@ -29,7 +29,7 @@
   - _Requirements: 2.10, 9.1, 9.2, 9.7_
   - _Boundary: areka-ghost の sylphya 配線_
 
-- [ ] 2. 台帳の状態と備考を埋める
+- [x] 2. 台帳の状態と備考を埋める
 - [x] 2.1 規則 0・1・3 で全 188 件の状態と別名を決める
   - 規則 0 に従い、見出しが葉の名前だけの 35 件は族の頭が定める前置きを補った完全な名前で判定する。id そのものは逐語のまま変えない
   - 規則 1 の決定表を上から先勝ちで当てる。`doc/COMPAT_ARCHITECTURE.md:136` は書き込み側の一般規則なので縮退の引き金にせず、縮退は同 `:184`／`:185`／`:207` に個別に登記された 8 件だけとする
@@ -65,7 +65,7 @@
   - _Requirements: 3.3, 6.3, 6.6, 6.7, 9.4, 10.4_
   - _Depends: 2.3_
 
-- [ ] 3. 担当・関連・優先度を埋める
+- [x] 3. 担当・関連・優先度を埋める
 - [x] 3.1 規則 4 で担当 spec を決める
   - 4 本の brief が枝と概数で書いている範囲を実測の id 群へ広げる（brief は id を 1 つも列挙していない）
   - 規則 4 の表を上から先勝ちで当てる。裁定待ちの 2 件（`currentghost.seriko.zorder`・`currentghost.seriko.sticky-window`）は 4.7 の行より先に当たるので担当欄が空文字になる
@@ -94,7 +94,7 @@
   - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5_
   - _Depends: 2.2, 3.1_
 
-- [ ] 4. ブリーフィングを書く
+- [x] 4. ブリーフィングを書く
 - [x] 4.1 前置きと所有の突合表を書く
   - `doc/ukadoc-coverage/briefing-property.md` を新設し、前置きに ⓐ 全項目に共通の読み取り経路 2 本 ⓑ `????` が正典の表記そのもので写しの過程で失われた記号ではないこと ⓒ 縮退 8 件と語彙のみ 178 件の実質差は登記の有無だけであること、を書く
   - ⑴ 節に 4 本の brief の記述を 1 行ずつ並べ、対応する id 群を接頭辞と件数で示す。id を全列挙するのは食い違いのある行だけにする。id に対応が付かない記述は表記の揺れとして残し、近い id へ憶測で結び付けない
@@ -136,7 +136,7 @@
   - _Requirements: 9.3, 9.3a, 9.5, 9.6, 9.8_
   - _Depends: 1.3_
 
-- [ ] 6. 受け入れ確認を回して結果を残す
+- [x] 6. 受け入れ確認を回して結果を残す
 - [x] 6.1 報告を作り直し、道具の検査と自前の 4 検査を回す
   - `cargo run -p ukadoc-survey -- report` で `doc/ukadoc-coverage/report/property.md` を作り直す。手で編集しない。作り直した報告は台帳と同じコミットに載せる（`report-summary` は統合担当の持ち物なので走らせない）
   - `cargo run -p ukadoc-survey -- check` を回して食い違い 0 件を確かめる。出力の 2 つの数（食い違いの件数・証拠のある項目の件数）を控える
