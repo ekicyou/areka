@@ -506,67 +506,104 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5banim_2cadd_2coverlay_2cID_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、重ね合わせのアニメーションが足されず、指定した ID の動きが 1 つも増えない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: サーフェスアニメーション]
+[根が 2 つ: 根は 2 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_21_5banim_2cadd_2ctext_2cx_2cy_2c_6a2a_5e45_2c_7e26_5e45_2c_6587_5b57_5217_2c_8868_793a_6642_9593_2cr_2cg_2cb_2c_658:1]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5banim_2cadd_2ctext_2cx_2cy_2c_6a2a_5e45_2c_7e26_5e45_2c_6587_5b57_5217_2c_8868_793a_6642_9593_2cr_2cg_2cb_2c_658:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、立ち絵の上へ文字を重ねるアニメーションが作られず、書いた文字は画面のどこにも出ない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: サーフェスアニメーション]
+[根が 2 つ: 根は 2 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_21_5banim_2cadd_2coverlay_2cID_5d:1]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5banim_2cclear_2cID_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、走っているアニメーションを消せず、動きが残ったままになる）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: サーフェスアニメーション]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5banim_2coffset_2cID_2cx_5ea7_6a19_2cy_5ea7_6a19_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、アニメーションの表示位置をずらせず、元の場所に描かれ続ける）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: サーフェスアニメーション]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5banim_2cpause_2cID_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、アニメーションを一時停止できず、動きがそのまま続く）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: サーフェスアニメーション]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5banim_2cresume_2cID_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、一時停止からの再開を指示できない。止める側も効かないので、対になる 2 つが揃って無効になる）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: サーフェスアニメーション]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5banim_2cstop_2cID_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、アニメーションを止められず、動きが続いたままになる）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: サーフェスアニメーション]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bbiff_28_2c_30a2_30ab_30a6_30f3_30c8_540d_29_5d:1"]
 status = "absent"
@@ -612,94 +649,144 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bcall_2cghost_2c_30b4_30fc_30b9_30c8_540d_28_2c--option_3draise-event_29_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.4.74"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、別のゴーストを呼び出せず、相方が現れないまま会話が進む）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: ゴーストの切り替え]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bcancel_2chttp_2cURL_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.8.04"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、走っている HTTP のやりとりを取り消せず、応答が返るまで止まらない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: WebSocket と通信の中止]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bcancel_2cwebsocket_2cURL_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.8.05"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、WebSocket の接続の取り消しを指示できず、繋ぎっぱなしのままになる）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: WebSocket と通信の中止]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bchange_2cballoon_2c_30d0_30eb_30fc_30f3_540d_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、バルーンを別の意匠へ替えられず、今のバルーンのまま話し続ける）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: バルーンの見た目と切り替え]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bchange_2cghost_2c_30b4_30fc_30b9_30c8_540d_28_2c--option_3draise-event_29_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.4.74"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、別のゴーストへ交代できず、今のゴーストが立ったままになる）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: ゴーストの切り替え]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bchange_2cshell_2c_30b7_30a7_30eb_540d_28_2c--option_3draise-event_29_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.4.74"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、シェル（見た目一式）を着替えられず、今の見た目のまま変わらない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: ゴーストの切り替え]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bclose_2ccommunicatebox_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、話しかけ用の入力窓を台本から閉じられない。開く側も効かないので閉じる相手が居ない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 通信箱と教え込み箱]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bclose_2cdialog_2cID_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、開いた窓を台本の側から閉じられない。開く側も効かないので、閉じる相手がそもそも居ない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 入力窓とダイアログ]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bclose_2cinputbox_2cID_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、入力窓を台本の側から閉じられない。開く側も効かないので、閉じる相手がそもそも居ない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 入力窓とダイアログ]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bclose_2cteachbox_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、教え込み用の入力窓を台本から閉じられない。開く側も効かないので閉じる相手が居ない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 通信箱と教え込み箱]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bclose_2cwebsocket_2cURL_5d:1"]
 status = "absent"
@@ -717,31 +804,46 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bcreate_2cshortcut_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.5.86"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、起動用の近道が作られない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: OS まわりの操作]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5beffect2_2c_8ffd_52a0_30b5_30fc_30d5_30a7_30b9ID_2c_30d7_30e9_30b0_30a4_30f3_540d_2c_901f_5ea6_500d_7387_2c_30d1:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、追加の立ち絵に対する効果も掛からず、そのまま切り替わる）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 画面効果のプラグイン]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5beffect_2c_30d7_30e9_30b0_30a4_30f3_540d_2c_901f_5ea6_500d_7387_2c_30d1_30e9_30e1_30fc_30bf_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、立ち絵の切り替えに効果を掛けられず、そのまま切り替わる）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 画面効果のプラグイン]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bembed_2c_30a4_30d9_30f3_30c8_540d_2cr0_2cr1_2cr2..._5d:1"]
 status = "vocabulary-only"
@@ -757,148 +859,230 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5benter_2ccollisionmode_5d_5c_21_5benter_2ccollisionmode_2crect_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、当たり判定を目で確かめる状態へ入れず、判定の枠が画面に出ない。見出しは引数なしと rect の 2 綴りを並べるが、正典の項目は 1 つである）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 動作モードの出入り]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5benter_2cinductionmode_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、利用者を導く状態へ入れず、案内が始まらない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 動作モードの出入り]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5benter_2cnouserbreakmode_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、利用者の割り込みを禁じる状態へ入れず、会話は途中で止められるままになる）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 動作モードの出入り]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5benter_2conlinemode_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、通信中であることを示す状態へ入れず、通信中の見た目にならない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 動作モードの出入り]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5benter_2cpassivemode_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、受け身の状態へ入れず、自発的な話しかけが止まらない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 動作モードの出入り]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5benter_2cselectmode_2c_30e2_30fc_30c9_28rect_29_2c_5de6_2c_4e0a_2c_53f3_2c_4e0b_5d_5c_21_5benter_2cselectmode_2c:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、画面の範囲を選ばせる状態へ入れず、選んだ範囲を返すイベントも起きない。見出しは 3 つの綴りを並べるが、正典の項目は 1 つである）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 動作モードの出入り]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bexecute_2ccompressarchive_2c_30d5_30a1_30a4_30eb_540d_2c_30c7_30a3_30ec_30af_30c8_30ea_540d_2c_30aa_30d7_30b7_3:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.7.23"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、書庫が作られず、指定した場所には何も出来ない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 書庫と配布物の作成]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bexecute_2ccreatenar_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.5.08"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、配布用の nar が作られない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 書庫と配布物の作成]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bexecute_2ccreateupdatedata_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.5.08"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、更新用のデータ一式が作られない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 書庫と配布物の作成]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bexecute_2cdumpsurface_2c_30c7_30a3_30ec_30af_30c8_30ea_2c_30b9_30b3_30fc_30d7ID_2c_30b5_30fc_30d5_30a7_30b9_30e:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.5.98"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、立ち絵を画像として書き出せず、指定した場所に何も残らない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 開発と診断の窓]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bexecute_2cemptyrecyclebin_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.6.04"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、ごみ箱が空にならない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: OS まわりの操作]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bexecute_2cextractarchive_2c_30d5_30a1_30a4_30eb_540d_2c_30c7_30a3_30ec_30af_30c8_30ea_540d_2c_30aa_30d7_30b7_30:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.7.23"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、書庫が展開されず、中身を取り出せない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 書庫と配布物の作成]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bexecute_2cheadline_2c_30d8_30c3_30c9_30e9_30a4_30f3_540d_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、見出しの取得が走らず、読み上げるはずの記事が来ない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: ヘッドラインセンサ]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bexecute_2chttp-delete_2cURL_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.6.40"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、DELETE の要求が送られず、結果を知らせるイベントも返らない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: HTTP と RSS の通信]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bexecute_2chttp-get_2cURL_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3...:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、オプション付きの GET が送られず、取ってくるはずの本文が返らない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: HTTP と RSS の通信]
+[根が 2 つ: 根は 2 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_21_5bexecute_2chttp-get_2cURL_2c_30d1_30e9_30e1_30fc_30bf_5d:1]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bexecute_2chttp-get_2cURL_2c_30d1_30e9_30e1_30fc_30bf_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、パラメータを 1 つだけ取る書き方の GET も送られず、取ってくるはずの本文が返らない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: HTTP と RSS の通信]
+[根が 2 つ: 根は 2 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_21_5bexecute_2chttp-get_2cURL_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3...:1]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bexecute_2chttp-get_2cURL_5d:1"]
 status = "alias"
@@ -915,103 +1099,162 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bexecute_2chttp-head_2cURL_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.6.40"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、見出しだけを問い合わせる HEAD が送られず、更新の有無を確かめられない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: HTTP と RSS の通信]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bexecute_2chttp-options_2cURL_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.7.34"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、相手が受け付ける操作を尋ねる OPTIONS が送られない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: HTTP と RSS の通信]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bexecute_2chttp-patch_2cURL_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3.:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.7.34"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、部分更新の PATCH が送られず、相手側は書き換わらない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: HTTP と RSS の通信]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bexecute_2chttp-post_2cURL_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、オプション付きの POST が送られず、送ったはずの内容が相手に届かない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: HTTP と RSS の通信]
+[根が 2 つ: 根は 2 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_21_5bexecute_2chttp-post_2cURL_2c_30d1_30e9_30e1_30fc_30bf_5d:1]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bexecute_2chttp-post_2cURL_2c_30d1_30e9_30e1_30fc_30bf_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、パラメータを 1 つだけ取る書き方の POST も送られず、送ったはずの内容が相手に届かない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: HTTP と RSS の通信]
+[根が 2 つ: 根は 2 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_21_5bexecute_2chttp-post_2cURL_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..:1]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bexecute_2chttp-put_2cURL_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3...:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.6.40"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、PUT による書き込みが送られず、相手側に何も残らない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: HTTP と RSS の通信]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bexecute_2cinstall_2cpath_2c_30d5_30a1_30a4_30eb_540d_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、手元のファイルからの導入が始まらない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: インストールと更新]
+[根が 2 つ: 根は 2 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_21_5bexecute_2cinstall_2curl_2cURL_2c_28feed_7cnar_7chomeurl_306e_3044_305a_308c_304b_29_5d:1]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bexecute_2cinstall_2curl_2cURL_2c_28feed_7cnar_7chomeurl_306e_3044_305a_308c_304b_29_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、網の先を指しての導入が始まらない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: インストールと更新]
+[根が 2 つ: 根は 2 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_21_5bexecute_2cinstall_2cpath_2c_30d5_30a1_30a4_30eb_540d_5d:1]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bexecute_2cnslookup_2c_30d1_30e9_30e1_30fc_30bf1_2c_30d1_30e9_30e1_30fc_30bf2_2c..._5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、名前解決の問い合わせが走らず、結果を知らせるイベントも返らない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: ネットワークの調べもの]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bexecute_2cping_2c_30d1_30e9_30e1_30fc_30bf1_2c_30d1_30e9_30e1_30fc_30bf2_2c..._5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、疎通の確認が走らず、結果を知らせるイベントも返らない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: ネットワークの調べもの]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bexecute_2cresetballoonpos_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.7.41"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、バルーンの位置を既定へ戻せず、ずらしたままになる）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 窓の位置の初期化]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bexecute_2cresetwindowpos_5d:1"]
 status = "absent"
@@ -1029,166 +1272,256 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bexecute_2crss-get_2cURL_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..._:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、RSS の取得が走らず、読み上げるはずの記事が来ない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: HTTP と RSS の通信]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bexecute_2crss-post_2cURL_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3...:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、RSS への投稿が走らず、書き込みが相手に届かない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: HTTP と RSS の通信]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bexecute_2cwebsocket_2cURL_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.8.05"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、WebSocket の接続そのものが張られず、この後の送受信も一切起きない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: WebSocket と通信の中止]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bexecutesntp_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、時刻合わせの問い合わせが走らず、時計のずれが直らない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 時計合わせ]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bfilter_2c_30d7_30e9_30b0_30a4_30f3_540d_2c_8d77_52d5_6642_9593_2c_30d1_30e9_30e1_30fc_30bf_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、画面全体に掛ける効果が始まらない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 画面効果のプラグイン]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bfilter_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、掛かっている効果を解く指定も届かない。掛ける側も効かないので、解く相手がそもそも無い）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 画面効果のプラグイン]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bget_2cproperty_2c_30a4_30d9_30f3_30c8_540d_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_30d7_30ed_30d1_30c6_30a3_540d_2c:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、プロパティの値を尋ねる要求が届かず、名指ししたイベントで値が返ってこない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: プロパティの照会と設定]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bleave_2ccollisionmode_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、当たり判定を確かめる状態から抜ける指定も届かない。入る側も効かないので、対になる 2 つが揃って無効になる）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 動作モードの出入り]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bleave_2cinductionmode_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、導く状態から抜ける指定も届かない。入る側も効かないので、抜ける相手がそもそも無い）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 動作モードの出入り]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bleave_2cnouserbreakmode_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、割り込みを禁じる状態から抜ける指定も届かない。入る側も効かないので、抜ける相手がそもそも無い）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 動作モードの出入り]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bleave_2conlinemode_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、通信中の状態から抜ける指定も届かない。入る側も効かないので、抜ける相手がそもそも無い）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 動作モードの出入り]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bleave_2cpassivemode_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、受け身の状態から抜ける指定も届かない。入る側も効かないので、抜ける相手がそもそも無い）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 動作モードの出入り]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bleave_2cselectmode_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、範囲を選ばせる状態から抜ける指定も届かない。入る側も効かないので、抜ける相手がそもそも無い）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 動作モードの出入り]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bload_2cmakoto_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.5.58"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、言い換えの仕組みを読み込めず、無いままの状態が続く）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 読み込み直しと差し替え]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bload_2cshiori_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.5.58"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、SHIORI を後から読み込ませられない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 読み込み直しと差し替え]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5block_2cballoonmove_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.4.96"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、バルーンの追随を止められず、キャラを動かすとバルーンも付いてくる）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 描き直しと移動の凍結]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5block_2cballoonrepaint_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.5.16"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、バルーンの描き直しを止められず、書き換えの途中の絵が見えることがある）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 描き直しと移動の凍結]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5block_2crepaint_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.5.16"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、画面全体の描き直しを止められず、まとめて描き替えたい場面でちらつきが残る）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 描き直しと移動の凍結]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bmove_5d:1"]
 status = "degraded"
@@ -1220,400 +1553,624 @@ MoveCueSink::emit は名前の完全一致で move だけを選ぶので、こ�
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bnotify_2c_30a4_30d9_30f3_30c8_540d_2cr0_2cr1_2cr2..._5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、返事を受け取らない形のイベントも起こせず、知らせが SHIORI へ届かない。相手のイベント名は引数で決まるので 1 つに定まらない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: イベントを他所へ起こす]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bnotifyother_2c_30b4_30fc_30b9_30c8_540d_2c_30a4_30d9_30f3_30c8_540d_2cr0_2cr1_2cr2..._5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、別のゴーストへ返事不要の知らせを送れない。相手のイベント名は引数で決まるので 1 つに定まらない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: イベントを他所へ起こす]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bnotifyplugin_2c_30d7_30e9_30b0_30a4_30f3_306eID_307e_305f_306f_540d_524d_2c_30a4_30d9_30f3_30c8_540d_2cr0_2cr1_:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、プラグインへ返事不要の知らせを送れない。相手のイベント名は引数で決まるので 1 つに定まらない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: イベントを他所へ起こす]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2caddressbar_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、URL を打ち込む欄が開かず、そこから先の読み込みも起きない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: SSP の管理窓とビューア]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2caigraph_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、話しかけの頻度を示すグラフの窓が開かない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: SSP の管理窓とビューア]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2carchiveviewer_2c_28_30d5_30a1_30a4_30eb_540d_29_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.8.66"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、書庫の中身を見る窓が開かない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: SSP の管理窓とビューア]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2cbacklogviewer_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.8.52"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、過去の会話をさかのぼる窓が開かない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: SSP の管理窓とビューア]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2cballoonexplorer_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、バルーンの一覧窓が開かず、そこからの取り替えも起きない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: SSP の管理窓とビューア]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2cbrowser_2c_30d1_30e9_30e1_30fc_30bf_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、既定の閲覧ソフトが開かず、見せたかった頁が出ない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 外部のアプリに渡す]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2ccalendar_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、暦の窓が開かない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: SSP の管理窓とビューア]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2ccommunicatebox_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、他のゴーストへ話しかけるための入力窓が開かない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 通信箱と教え込み箱]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2cconfigurationdialog_2c_30c0_30a4_30a2_30ed_30b0ID_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、設定の窓が開かず、名指しした頁も出ない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: SSP の管理窓とビューア]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2cdateinput_2cID_2c_8868_793a_6642_9593_2c_5e74_2c_6708_2c_65e5_2c_30aa_30d7_30b7_30e7_30f3_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、日付を選ぶ窓が開かず、選んだ日付が返らない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 入力窓とダイアログ]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2cdeveloper_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.5.78"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、開発者向けの窓が開かない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 開発と診断の窓]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2cdialog_2ccolor_2c_30d1_30e9_30e1_30fc_30bf_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、色を選ぶ窓が開かず、選んだ色を返すイベントも起きない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 入力窓とダイアログ]
+[根が 2 つ: 根は 4 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_21_5bopen_2cdialog_2cfolder_2c_30d1_30e9_30e1_30fc_30bf_5d:1・ukadoc:list_sakura_script:_5c_21_5bopen_2cdialog_2copen_2c_30d1_30e9_30e1_30fc_30bf_5d:1・ukadoc:list_sakura_script:_5c_21_5bopen_2cdialog_2csave_2c_30d1_30e9_30e1_30fc_30bf_5d:1]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2cdialog_2cfolder_2c_30d1_30e9_30e1_30fc_30bf_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、フォルダを選ぶ窓が開かず、選んだ場所を返すイベントも起きない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 入力窓とダイアログ]
+[根が 2 つ: 根は 4 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_21_5bopen_2cdialog_2ccolor_2c_30d1_30e9_30e1_30fc_30bf_5d:1・ukadoc:list_sakura_script:_5c_21_5bopen_2cdialog_2copen_2c_30d1_30e9_30e1_30fc_30bf_5d:1・ukadoc:list_sakura_script:_5c_21_5bopen_2cdialog_2csave_2c_30d1_30e9_30e1_30fc_30bf_5d:1]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2cdialog_2copen_2c_30d1_30e9_30e1_30fc_30bf_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、ファイルを開く窓が開かず、選んだファイル名を返すイベントも起きない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 入力窓とダイアログ]
+[根が 2 つ: 根は 4 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_21_5bopen_2cdialog_2ccolor_2c_30d1_30e9_30e1_30fc_30bf_5d:1・ukadoc:list_sakura_script:_5c_21_5bopen_2cdialog_2cfolder_2c_30d1_30e9_30e1_30fc_30bf_5d:1・ukadoc:list_sakura_script:_5c_21_5bopen_2cdialog_2csave_2c_30d1_30e9_30e1_30fc_30bf_5d:1]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2cdialog_2csave_2c_30d1_30e9_30e1_30fc_30bf_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、保存先を選ぶ窓が開かず、選んだファイル名を返すイベントも起きない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 入力窓とダイアログ]
+[根が 2 つ: 根は 4 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_21_5bopen_2cdialog_2ccolor_2c_30d1_30e9_30e1_30fc_30bf_5d:1・ukadoc:list_sakura_script:_5c_21_5bopen_2cdialog_2cfolder_2c_30d1_30e9_30e1_30fc_30bf_5d:1・ukadoc:list_sakura_script:_5c_21_5bopen_2cdialog_2copen_2c_30d1_30e9_30e1_30fc_30bf_5d:1]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2cdressupexplorer_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.7.00"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、着せ替えの一覧窓が開かず、利用者は着せ替えを選べない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: SSP の管理窓とビューア]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2ceditor_2c_30d5_30a1_30a4_30eb_2c_8868_793a_884c_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.5.16"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、文字編集のソフトが開かず、名指しした行も示せない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 外部のアプリに渡す]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2cerrorlog_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、誤りの記録を見る窓が開かず、不具合の様子を見せられない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 開発と診断の窓]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2cexplorer_2c_30d5_30a1_30a4_30eb_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.5.12"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、ファイル管理の窓が開かず、置き場所を示せない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 外部のアプリに渡す]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2cfile_2c_30d5_30a1_30a4_30eb_540d_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、関連付けられたソフトが開かず、渡したかったファイルが出ない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 外部のアプリに渡す]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2cghostexplorer_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、ゴーストの一覧窓が開かず、そこからの交代も起きない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: SSP の管理窓とビューア]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2cheadlinesensorexplorer_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、見出しの取得先を並べた窓が開かず、利用者は設定を見られない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: ヘッドラインセンサ]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2chelp_2c_30c0_30a4_30a2_30ed_30b0ID_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、手引きの窓が開かず、名指しした頁も出ない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: SSP の管理窓とビューア]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2cinputbox_2cID_2c_8868_793a_6642_9593_2c_30c6_30ad_30b9_30c8_2c_30aa_30d7_30b7_30e7_30f3_2c..._5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、文字を打ち込む窓が開かず、利用者の入力を受け取れない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 入力窓とダイアログ]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2cipinput_2cID_2c_8868_793a_6642_9593_2cIP1_6841_76ee_2cIP2_6841_76ee_2cIP3_6841_76ee_2cIP4_6841_76ee_2c_3:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、IP アドレスを打ち込む窓が開かず、入力が返らない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 入力窓とダイアログ]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2cmailer_2c_30d1_30e9_30e1_30fc_30bf_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、既定のメールソフトが開かず、宛先を渡せない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 外部のアプリに渡す]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2cmessenger_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、連絡用の窓が開かない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: SSP の管理窓とビューア]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2cpasswordinput_2cID_2c_8868_793a_6642_9593_2c_30c6_30ad_30b9_30c8_2c_30aa_30d7_30b7_30e7_30f3_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、伏せ字で打ち込む窓が開かず、合言葉を受け取れない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 入力窓とダイアログ]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2cpictureviewer_2c_28_30d5_30a1_30a4_30eb_540d_29_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.8.33"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、画像を見る窓が開かない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: SSP の管理窓とビューア]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2cpluginexplorer_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、プラグインの一覧窓が開かない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: SSP の管理窓とビューア]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2crateofusegraph_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、ゴーストごとの起動時間の割合を示すグラフの窓が開かない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: SSP の管理窓とビューア]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2crateofusegraphballoon_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.3.77"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、バルーンごとの利用の割合を示すグラフの窓が開かない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: SSP の管理窓とビューア]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2crateofusegraphtotal_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、全体を通した利用の割合を示すグラフの窓が開かない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: SSP の管理窓とビューア]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2creadme_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、ゴーストに添えられた説明書が開かない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: SSP の管理窓とビューア]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2cshellexplorer_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、シェルの一覧窓が開かず、そこからの着替えも起きない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: SSP の管理窓とビューア]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2cshiorirequest_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.5.78"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、SHIORI とのやりとりを覗く窓が開かない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 開発と診断の窓]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2csliderinput_2cID_2c_8868_793a_6642_9593_2c_73fe_5728_5024_2c_6700_5c0f_2c_6700_5927_2c_30aa_30d7_30b7_30:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、つまみで数を選ぶ窓が開かず、選んだ値が返らない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 入力窓とダイアログ]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2csurfacetest_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、立ち絵を並べて確かめる窓が開かない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: SSP の管理窓とビューア]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2cteachbox_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、言葉を教え込むための入力窓が開かない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 通信箱と教え込み箱]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2cterms_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.5.33"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、利用条件の文面が開かず、同意を求める場面が成立しない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: SSP の管理窓とビューア]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2ctimeinput_2cID_2c_8868_793a_6642_9593_2c_6642_2c_5206_2c_79d2_2c_30aa_30d7_30b7_30e7_30f3_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、時刻を選ぶ窓が開かず、選んだ時刻が返らない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 入力窓とダイアログ]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bquicksection_2cfalse_5d:1"]
 status = "vocabulary-only"
@@ -1642,58 +2199,88 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5braise_2c_30a4_30d9_30f3_30c8_540d_2cr0_2cr1_2cr2..._5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、自分の SHIORI へイベントを起こせず、その先の台本が始まらない。相手のイベント名は引数で決まるので 1 つに定まらない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: イベントを他所へ起こす]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5braiseother_2c_30b4_30fc_30b9_30c8_540d_2c_30a4_30d9_30f3_30c8_540d_2cr0_2cr1_2cr2..._5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、別のゴーストへイベントを起こせず、掛け合いが成立しない。相手のイベント名は引数で決まるので 1 つに定まらない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: イベントを他所へ起こす]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5braiseplugin_2c_30d7_30e9_30b0_30a4_30f3_306eID_307e_305f_306f_540d_524d_2c_30a4_30d9_30f3_30c8_540d_2cr0_2cr1_2:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、プラグインへイベントを起こせず、プラグイン側の処理が始まらない。相手のイベント名は引数で決まるので 1 つに定まらない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: イベントを他所へ起こす]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5breload_2caigraph_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.6.89"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、話しかけの頻度の集計を取り直せず、古い集計のままになる）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 開発と診断の窓]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5breload_2cballoon_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、バルーンの定義を読み直せず、書き換えた設定が会話の途中で反映されない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: バルーンの見た目と切り替え]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5breload_2cdescript_2c_30d1_30e9_30e1_30fc_30bf_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、descript の設定を読み直せず、書き換えた設定が会話の途中で反映されない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 読み込み直しと差し替え]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5breload_2cdescript_5d:1"]
 status = "alias"
@@ -1709,40 +2296,60 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5breload_2cghost_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、ゴースト一式を読み直せず、差し替えたファイルが反映されない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 読み込み直しと差し替え]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5breload_2cmakoto_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、言い換えの辞書を読み直せず、書き換えた語がそのまま使われない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 読み込み直しと差し替え]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5breload_2cshell_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、シェルの定義を読み直せず、差し替えた画像が反映されない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 読み込み直しと差し替え]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5breload_2cshiori_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、SHIORI を読み直せず、書き換えた辞書が反映されない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 読み込み直しと差し替え]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5breloadsurface_5d:1"]
 status = "alias"
@@ -1758,31 +2365,46 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5breset_2cposition_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、窓の位置を既定へ戻せず、動かした場所に居座る）。
+ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 窓の位置と見え方]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5breset_2csticky-window_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.3.77"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、くっつけた関係を解く指定も届かない。付ける側も効かないので、解く相手がそもそも無い）。
+ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 窓の位置と見え方]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5breset_2csyncobject_2c_540c_671f_30aa_30d6_30b8_30a7_30af_30c8_540d_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.8.28"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、立てた印を下ろす指定も届かない。立てる側も効かないので、下ろす相手がそもそも無い）。
+ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 同期オブジェクト]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5breset_2czorder_5d:1"]
 status = "implemented"
@@ -1797,130 +2419,204 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5brestore_2cwallpaper_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.8.11"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、控えた壁紙へ戻せない。控える側も効かないので、戻す先がそもそも無い）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: OS まわりの操作]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bsave_2cwallpaper_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.8.11"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、今の壁紙が控えとして残らない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: OS まわりの操作]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bsend_2cwebsocket-binary_2cURL_2cbase64data_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.8.05"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、バイナリの送信が行われず、相手には何も届かない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: WebSocket と通信の中止]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bsend_2cwebsocket_2cURL_2cdata1_2cdata2_2c..._5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.8.05"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、文字列の送信が行われず、相手には何も届かない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: WebSocket と通信の中止]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2calignmentondesktop_2cbottom_307e_305f_306ftop_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、画面の上端と下端のどちらへ立たせるかを選べず、既定のままになる）。
+ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 窓の位置と見え方]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2calignmenttodesktop_2c_65b9_5411_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、画面の縁へ吸い付かせる向きを指定できず、吸い付かない）。
+ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 窓の位置と見え方]
+[根が 2 つ: 根は 2 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_21_5bset_2calignmenttodesktop_2cfree_5d:1]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2calignmenttodesktop_2cfree_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、吸い付きを解いて自由に置く指定も届かない。吸い付かせる側も効かないので、解く相手がそもそも無い）。
+ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 窓の位置と見え方]
+[根が 2 つ: 根は 2 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_21_5bset_2calignmenttodesktop_2c_65b9_5411_5d:1]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2calpha_2c_6570_5024_2c_30aa_30d7_30b7_30e7_30f3_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.7.52"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、窓の透け具合を変えられず、名指しした薄さにならない）。
+ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 窓の位置と見え方]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cautoscroll_2cdisable_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、自動送りを切にできない。入にする側も効かないので、入切のどちらの指定も届かない）。
+ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: バルーンの見た目と切り替え]
+[根が 2 つ: 根は 2 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_21_5bset_2cautoscroll_2cenable_5d:1]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cautoscroll_2cenable_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、自動送りを入にできず、長い台詞が自分では流れない）。
+ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: バルーンの見た目と切り替え]
+[根が 2 つ: 根は 2 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_21_5bset_2cautoscroll_2cdisable_5d:1]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cballoonalign_2cID_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、バルーンをキャラのどちら側へ付けるかを選べず、既定の側に出たままになる）。
+ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: バルーンの見た目と切り替え]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cballoonmarker_2c_30de_30fc_30ab_30fc_8868_793a_6587_5b57_5217_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.6.67"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、続きがあることを示す印の文字を差し替えられず、既定の印のままになる）。
+ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: バルーンの見た目と切り替え]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cballoonnum_2c_30d5_30a1_30a4_30eb_540d_2c_73fe_5728_306e_6570_2c_6700_5927_6570_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.6.67"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、何枚目かを示す表示を出せず、読み手に残りが伝わらない）。
+ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: バルーンの見た目と切り替え]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cballoonoffset_2cx_2cy_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、バルーンの取り付け位置をずらせず、既定の位置に出たままになる）。
+ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: バルーンの見た目と切り替え]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cballoontimeout_2c_6642_9593_5d:1"]
 status = "vocabulary-only"
@@ -1963,49 +2659,75 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cotherghosttalk_2ctrue_7cfalse_7cbefore_7cafter_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、他のゴーストの発話を受け取るかどうかを切り替えられず、既定のままになる）。
+ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 他のゴーストとの付き合い方]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cothersurfacechange_2ctrue_304bfalse_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、他のゴーストの立ち絵の変化を受け取るかどうかを切り替えられず、既定のままになる）。
+ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 他のゴーストとの付き合い方]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cposition_2cx_2cy_2c_30b9_30b3_30fc_30d7ID_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、窓を名指しした座標へ置けず、今の場所から動かない）。
+ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 窓の位置と見え方]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cproperty_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_5024_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、プロパティへ値を書き込めず、書いたつもりの値がどこにも残らない）。
+ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: プロパティの照会と設定]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cscaling_2c_500d_7387_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、縦横をまとめて 1 つの倍率で拡大縮小する指定が効かず、大きさが変わらない）。
+ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: サーフェスの拡大縮小]
+[根が 2 つ: 根は 2 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_21_5bset_2cscaling_2c_6a2a_500d_7387_2c_7e26_500d_7387_2c_30aa_30d7_30b7_30e7_30f3_5d:1]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cscaling_2c_6a2a_500d_7387_2c_7e26_500d_7387_2c_30aa_30d7_30b7_30e7_30f3_5d:1"]
 status = "absent"
@@ -2037,40 +2759,60 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cserikotalk_2ctrue_2ffalse_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.6.87"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、口の動きを台詞に合わせるかどうかを切り替えられず、既定のままになる）。
+ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 他のゴーストとの付き合い方]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cshioridebugmode_2c_28true_2ffalse_29_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.5.78"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、SHIORI の診断表示の入切を切り替えられず、記録の細かさが変わらない）。
+ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 開発と診断の窓]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2csticky-window_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c..._5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.3.77"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、窓どうしをくっつけて一緒に動かす指定が効かず、別々に動く）。
+ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 窓の位置と見え方]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2csyncobject_2c_540c_671f_30aa_30d6_30b8_30a7_30af_30c8_540d_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.8.28"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、2 体の足並みを揃えるための印を立てられない）。
+ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 同期オブジェクト]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2ctasktrayicon_2c_30d5_30a1_30a4_30eb_540d.ico_2c_30c6_30ad_30b9_30c8_28_2c--duration_3d_5f85_6a5f_6642_959:1"]
 status = "absent"
@@ -2088,49 +2830,77 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2ctrayballoon_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..._5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、通知領域の吹き出しが出ず、知らせが利用者に届かない）。
+ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 通知領域とデスクトップ]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cwallpaper_2c_30d5_30a1_30a4_30eb_540d_2c_30aa_30d7_30b7_30e7_30f3_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、壁紙が差し替わらず、机の上の絵は変わらない）。
+ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: OS まわりの操作]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cwindowstate_2c_21stayontop_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、手前への固定を解く指定も届かない。固定する側も効かないので、解く相手がそもそも無い）。
+ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 窓の位置と見え方]
+[根が 2 つ: 根は 3 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_21_5bset_2cwindowstate_2cminimize_5d:1・ukadoc:list_sakura_script:_5c_21_5bset_2cwindowstate_2cstayontop_5d:1]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cwindowstate_2cminimize_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、窓を最小化できず、画面に出たままになる）。
+ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 窓の位置と見え方]
+[根が 2 つ: 根は 3 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_21_5bset_2cwindowstate_2c_21stayontop_5d:1・ukadoc:list_sakura_script:_5c_21_5bset_2cwindowstate_2cstayontop_5d:1]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cwindowstate_2cstayontop_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、窓を常に手前へ固定できず、他の窓の下へ隠れる）。
+ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 窓の位置と見え方]
+[根が 2 つ: 根は 3 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5c_21_5bset_2cwindowstate_2c_21stayontop_5d:1・ukadoc:list_sakura_script:_5c_21_5bset_2cwindowstate_2cminimize_5d:1]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2czorder_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c..._5d:1"]
 status = "implemented"
@@ -2147,13 +2917,18 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bsound_2ccdplay_2c_30c8_30e9_30c3_30afNo._5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、CD の再生が始まらず、音が鳴らない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 音の再生]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bsound_2cload_2c_30d5_30a1_30a4_30eb_540d_2c_30aa_30d7_30b7_30e7_30f3..._5d:1"]
 status = "absent"
@@ -2171,13 +2946,18 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bsound_2cloop_2c_30d5_30a1_30a4_30eb_540d_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、繰り返しの再生が始まらず、音が鳴らない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 音の再生]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bsound_2coption_2c_30d5_30a1_30a4_30eb_540d_2c_30aa_30d7_30b7_30e7_30f3..._5d:1"]
 status = "absent"
@@ -2195,13 +2975,18 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bsound_2cpause_2c_30d5_30a1_30a4_30eb_540d_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、鳴っている音を一時停止できない。鳴らす側も効かないので、止める相手がそもそも無い）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 音の再生]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bsound_2cplay_2c_30d5_30a1_30a4_30eb_540d_2c_30aa_30d7_30b7_30e7_30f3..._5d:1"]
 status = "absent"
@@ -2219,22 +3004,32 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bsound_2cresume_2c_30d5_30a1_30a4_30eb_540d_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、一時停止した音を再開できない。止める側も効かないので、再開する相手がそもそも無い）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 音の再生]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bsound_2cstop_2c_30d5_30a1_30a4_30eb_540d_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、鳴っている音を止められない。鳴らす側も効かないので、止める相手がそもそも無い）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 音の再生]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bsound_2cwait_5d:1"]
 status = "vocabulary-only"
@@ -2250,148 +3045,228 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5btimernotify_2c_6642_9593_2c_7e70_308a_8fd4_3059_304b_5426_304b_2c_30a4_30d9_30f3_30c8_540d_2cr0_2cr1_2cr2..._5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、返事を受け取らない形の時間差の知らせが予約されない。相手のイベント名は引数で決まるので 1 つに定まらない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 時間差で起こすイベント]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5btimernotifyother_2c_6642_9593_2c_7e70_308a_8fd4_3059_304b_5426_304b_2c_30b4_30fc_30b9_30c8_540d_2c_30a4_30d9_30:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、別のゴーストへの、返事不要の時間差の知らせが予約されない。相手のイベント名は引数で決まるので 1 つに定まらない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 時間差で起こすイベント]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5btimernotifyplugin_2c_6642_9593_2c_7e70_308a_8fd4_3059_304b_5426_304b_2c_30d7_30e9_30b0_30a4_30f3_306eID_307e_30:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、プラグインへの、返事不要の時間差の知らせが予約されない。相手のイベント名は引数で決まるので 1 つに定まらない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 時間差で起こすイベント]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5btimerraise_2c_6642_9593_2c_7e70_308a_8fd4_3059_304b_5426_304b_2c_30a4_30d9_30f3_30c8_540d_2cr0_2cr1_2cr2..._5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、時間をおいてイベントを起こす予約が積まれず、待っても何も起きない。相手のイベント名は引数で決まるので 1 つに定まらない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 時間差で起こすイベント]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5btimerraiseother_2c_6642_9593_2c_7e70_308a_8fd4_3059_304b_5426_304b_2c_30b4_30fc_30b9_30c8_540d_2c_30a4_30d9_30f:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、別のゴーストへの時間差のイベントが予約されない。相手のイベント名は引数で決まるので 1 つに定まらない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 時間差で起こすイベント]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5btimerraiseplugin_2c_6642_9593_2c_7e70_308a_8fd4_3059_304b_5426_304b_2c_30d7_30e9_30b0_30a4_30f3_306eID_307e_305:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、プラグインへの時間差のイベントが予約されない。相手のイベント名は引数で決まるので 1 つに定まらない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 時間差で起こすイベント]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bunload_2cmakoto_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.5.58"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、読み込んだ言い換えの仕組みを外せない。読み込む側も効かないので、外す相手がそもそも無い）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 読み込み直しと差し替え]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bunload_2cshiori_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.5.58"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、読み込んだ SHIORI を外せない。読み込む側も効かないので、外す相手がそもそも無い）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 読み込み直しと差し替え]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bunlock_2cballoonmove_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.4.96"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、止めたはずの追随を戻す指定も届かない。止める側も効かないので、対になる 2 つが揃って無効になる）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 描き直しと移動の凍結]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bunlock_2cballoonrepaint_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、バルーンの描き直しの再開を指示できない。止める側も効かないので、そもそも止まっていない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 描き直しと移動の凍結]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bunlock_2crepaint_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、画面全体の描き直しの再開を指示できない。止める側も効かないので、そもそも止まっていない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 描き直しと移動の凍結]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bupdate_2c_66f4_65b0_5bfe_8c61_28_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..._29_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、名指しした対象の更新が始まらず、新しい版が入らない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: インストールと更新]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bupdate_2cplatform_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、SSP 本体の更新が始まらない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: インストールと更新]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bupdatebymyself_28_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..._29_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、ゴースト自身の更新が始まらない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: インストールと更新]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bupdateother_2c_66f4_65b0_5bfe_8c61_2f_30aa_30d7_30b7_30e7_30f3_7fa4_2c..._5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、別のゴーストの更新を促せない）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: インストールと更新]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bvanishbymyself_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.5.82"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、自分から消える処理が始まらず、ゴーストは立ったままになる）。
+ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: ゴーストの終了]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bwait_2csyncobject_2c_540c_671f_30aa_30d6_30b8_30a7_30af_30c8_540d_2c_30aa_30d7_30b7_30e7_30f3_5d:1"]
 status = "vocabulary-only"
