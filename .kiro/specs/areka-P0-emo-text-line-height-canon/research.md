@@ -246,3 +246,108 @@ Research Needed（設計フェーズで消化）:
 
 - C-1（§9-7）: Requirement 6 の裁定＝案 3「供給面を折返し閾値まで広げる（上限は画像の辺）」の採否。SSP が同条件で右端を欠かせていても案 3 を採るか。縦書きへの同形適用。→ **解決（2026-09-05）**: 開発者裁定「折返し基準＝超えたら折り返す／描画範囲＝超えてはならない上限・無条件折返し」。案 3 却下・Requirement 6 全面改訂（コミット `resolve discussion #1`）。
 - C-2（§9-9）: 完了 spec `emo-text-layer` の design／research を注記つきで直接改訂する（brief の Desired Outcome 1・R2.1／2.2）か、`doc/COMPAT_ARCHITECTURE.md` §8 の先例（アーカイブ非改変・上書きの事実を §8 と本 spec に記録）に揃えるか。→ **解決（2026-09-05）**: 折衷（案 3）。アーカイブは 1 行注記のみ・正典表は本仕様 design.md・上書き記録は §8（コミット `resolve discussion #2`）。
+
+## 11. 設計フェーズの調査記録と設計判断（2026-09-05・`kiro-spec-design`）
+
+> 発見の種別: **Extension**（既存 crate `areka-emo-text` の意味論改訂＋計測部の切り出し）→ 軽量発見（`design-discovery-light.md`）。外部ライブラリの新規導入は無し。以下は §1〜§10 を本ブランチで再確認したうえでの追加の事実と、`design.md` §9 に要約した設計判断の詳細である。
+
+### 11.1 Research Log（追加の事実・すべて 2026-09-05 実読）
+
+- **SSP の版**: `(Get-Item C:\wintools\ssp\ssp.exe).VersionInfo`＝FileVersion **2.8.83.3000**（ProductVersion 2.7.0.0）。
+- **SSP 側 ghost `emo`**: `C:\wintools\ssp\ghost\emo\ghost\master\descript.txt` は `shiori,emo.dll`（emo-gs の配布版）。`dic/menu.pasta` は**存在しない**（`Test-Path` False）。→ 実測の台本は SSP の SSTP 受信（TCP 9801・`SEND SSTP/1.1`）で逐語を送る（DD-14）。ukadoc MCP のスナップショットに SSTP の項目は無い（`search_docs("SSTP/1.1")` not_found）ため、書式は SSTP 仕様の一般形（`Sender`／`Script`／`Charset` ヘッダ＋空行）で組み、SSP 側で受信が無効なら設定で有効化した事実を証跡に残す。
+- **SSP 側バルーン `emo2-kakukaku` の descript**: repo fixture と `Compare-Object` で 2 点差——SSP 側だけ `origin.x,0`／`origin.y,0` を宣言（bvc 要件 10.9 の是正前の姿）・repo 側だけ `budoux_newline,1`。同一定義で測るため repo fixture を複製バルーン（`emo2-kakukaku-lh`・`name` を一意化）として SSP へ置き `\![change,balloon,…]`（ukadoc で確認）で切り替える（DD-13）。
+- **`BalloonModel::name()`**: `crates/areka-parsers/src/balloon/model.rs:379` に存在 → 折返し基準が描画範囲の外のときの警告（R6.7）にバルーン名を載せられる。
+- **`ResolvedBalloonText::resolve` の呼び出し点**: `actor.rs:313`（装着）・`:383`（k 再追従・判定前に 1 回）と `examples/emo-text-layer/drive.rs:172` のみ。フレームごとには呼ばれない → `TextRegion::resolve` で警告すれば「読込 1 回につき 1 回」が構造で成り立つ（DD-9）。
+- **`FixedMetrics` の仮想行間の算術的一致**: `font_height + 3` は `10 → 13`・`12 → 15` で旧式 `ceil(h × 1.25)` と同値（`28 → 31 ≠ 35`・`40 → 43 ≠ 50`）。純粋層の既存テストの多くは font 10／12 で書かれているため、仮想行間 3 を採ると期待値が変わらず、`em`（10）と `lh`（13）の弁別（`cursor_tag_test_support.rs:48`）も保たれる（DD-7）。
+- **`line_box_height` の消費点**: 製品コードでは `actor.rs:787` の 1 箇所（帯の入力）だけ。`expand_overhang_for_band`（`viewbox_draw.rs:731-745`）は `band_extent − font_height` の超過分を足すだけで、帯＝`font_height` なら恒等（DD-5／DD-6）。
+- **ukadoc（MCP）**: `font.height`「使用するフォントの高さ方向の大きさ（単位はピクセル：ポイントではない）」既定 12／`wordwrappoint.x`「自動改行で折り返すX座標…未指定の場合はvalidrect.rightまで書けるものとして扱う」／`wordwrappoint.y`（2.8.80）／`validrect.*`「テキスト描画範囲」／`\_l` の `XXlh`「1lh＝1em＋行間」。行間の既定値・SSTP・SSP の行間設定はスナップショットに無い（Research Needed #4 は実測時に SSP の設定画面で確認し証跡へ残す）。
+- **既存テストの土台の流用可否**: 2 層マージの読み込みは `tests/shipped_fixture_region_test.rs:189-230`（`read_layer`／`merged_model`）、`menu.pasta` 本文抽出は `tests/emo2_fixture_e2e_test.rs:105-118`、読み戻しの二値化は `draw_oracle_tests.rs:149-160`（`opaque_count`／`ink_min`）、診断 PNG 出力は `viewbox_draw_png_dump_tests.rs:148-151`（`AREKA_DIAG_OUT`）——いずれも新規テストへ流用できる。
+- **wintf の DirectWrite ラッパ**（`crates/wintf/src/com/dwrite.rs`）: `create_text_format`／`create_text_layout`／`get_cluster_metrics`／`get_overhang_metrics` のみ。`SetLineSpacing` は無く、本設計（DD-4）では追加しない。
+
+### 11.2 Architecture Pattern Evaluation
+
+| Option | Description | Strengths | Risks / Limitations | 判断 |
+|---|---|---|---|---|
+| A 既存拡張のみ | `draw.rs` 内で em 導出・式差替え | 新ファイル無し | `draw.rs` 980/1,000 で収まらない・R3.5 の源が散ったまま | 不採用 |
+| B 計測部の切り出し | `metrics.rs`（COM 層）へ `DWriteMetrics`／セル比／format 束縛を集約 | 源が 1 ファイル・残量問題を解く・decoration の分割前提と継ぎ目が合う | `#[path]` テストの付け替え・decoration brief への登記が要る | **採用**（C の相 2） |
+| C ハイブリッド（3 相） | 意味論確定 → 実装（B）→ テスト再導出を同じコミット列で | 正典表と実装がずれた中間コミットを残さない（R9.6） | 実測が α 以外なら相 2 以降を再設計 | **採用** |
+| A2 `SetLineSpacing` | DirectWrite の行高を明示 | lineGap ≠ 0 のフォントで保険 | 行 TextLayout は 1 行ずつ箱 `font_height` で組むため不要・wintf ラッパ拡張が要る | 不採用（DD-4） |
+
+### 11.3 Design Decisions（`design.md` §9 の詳細）
+
+#### Decision: 第一仮説 α（セル丈）と決定手順（DD-1）
+- **Context**: R1.2／1.3／1.5。ukadoc は em とセル丈を区別しない。
+- **Alternatives**: α セル丈／β em（現行）／γ em＋ピッチ縮小／δ 固定比（§4.1）。
+- **Selected**: α を第一仮説とし、`design.md` §4.2 の機械的な決定手順（インク丈で α／β を弁別・`pitch ÷ k − 28` で行間の源 α0／α1／α2 を弁別・決まらなければ R1.5）で確定する。
+- **Rationale**: GDI `lfHeight` 正値の慣習・相方側 3 行が式から収まる・インク丈の差が 25%（許容幅 ±1〜2px ≫）で弁別容易。
+- **Trade-offs**: 文字の見た目が現行より小さくなる（em 28 → 21.05）。β なら R3.2 の裁定と両立せず裁定へ戻る。
+- **Follow-up**: 実測後に §4.1 の【実測】欄・COMPAT §8・`ssp_metrics_parity_test.rs` の定数を埋める。
+
+#### Decision: 行送りの式と `TextLayerConfig`（DD-2）
+- **Context**: R1.3／3.5／§9-2（`ceil` を残すか・係数→行間）。
+- **Selected**: `line_pitch = font_height + line_gap`（`ceil` なし）。`TextLayerConfig { line_gap }`（既定＝実測・仮説 0）。`line_pitch_factor` は撤去。α1（フォント外部レディング）が選ばれた場合は `DWriteMetrics` が `binding.external_leading` を足す（式の定義点は 1 つのまま）。
+- **Rationale**: 両項とも整数 px で丸めの余地が無い。`\n[ratio]` の端数は従来どおり。製品コードに旧式の口を残さない（R8.7 はテスト専用実装）。
+
+#### Decision: 「2 つの em」の型分離と `metrics.rs`（DD-3／DD-12）
+- **Context**: §9-3／§9-8。ukadoc の `1em`＝`font.height`、DirectWrite の em＝導出値。`draw.rs` 残 20 行。
+- **Selected**: `FontBinding { font_height, dwrite_em, cell_ratio, external_leading, ratio_source, format }` を `metrics.rs` に置き、`bind_font` が既定フォント再試行込みで束縛する。`DWriteMetrics` と `ViewboxExecutor::ensure_format`／オラクルが同じ `bind_font` を呼ぶ（probe と描画の同一 format 規約を保つ）。`draw.rs` は `try_create_format`・`DirectionRecipe`・`LineLayoutStore`・オラクルに痩せる（≈ 800 行）。
+- **Trade-offs**: セル比の実測が actor ごと 2 回（metrics と executor）走る——初回のみで決定論・無視できる。
+- **Follow-up**: decoration brief へ「計測部だけを先取り分割した」旨を登記（残りの `draw.rs` 分割は decoration の前提のまま）。
+
+#### Decision: `line_box_height`・帯の防御式・`FIXED_LINE_BOX_RATIO` の撤去（DD-5／DD-6・§9-5）
+- **Context**: セル丈解釈では行ボックス丈 ≡ `font_height`・帯 ≡ 行矩形。
+- **Alternatives**: (a) trait 口と clamp を残し `FixedMetrics` に比 ≠ 1 を残して式の頑健性を検証し続ける／(b) 撤去して帯＝`font_height`。
+- **Selected**: (b)。`ChoiceLineContent.band_extent` と `derive_hit_rows`／`decorate_canvas` の引数は据え置き（下流の形を変えない）。
+- **Rationale**: Simplification（実装が 2 つとも定数関数になる口は残さない）。descent の包含は R5.6 の実フォント読み戻しで固定する。退役するテストは R7.2 の個別記録（`design.md` 再導出台帳 D）。
+
+#### Decision: `FixedMetrics` の仮想行間 3（DD-7）
+- **Context**: `em`／`lh` の係数の弁別（`\_l` テスト）と再導出の摩擦。
+- **Selected**: `FIXED_LINE_GAP = 3.0`（正典値ではない・doc に明記）。
+- **Rationale**: §11.1 の算術的一致。正典値の検証は実フォントのテスト（`metrics_tests`／`kero_menu_capacity_test`／`ssp_metrics_parity_test`）が担う。
+
+#### Decision: 二段判定の実装形（DD-8・§9-7 残件）
+- **Context**: R6.2〜6.4／6.8。`layout.rs:393,426,431` は soft のみ。
+- **Alternatives**: `min(soft, hard)` へ畳む／2 値・2 判定。
+- **Selected**: `TextRegion.inline_limit`（hard）を別フィールドで持ち、ゲート③で `must_wrap(hard)` を配置直前に必ず評価する。Segmented の `cap` は `min(soft, hard)` 基準。
+- **Rationale**: 6.8 ⑶ の却下理由（絶対上限の意味論と禁則遅延の余地）。soft ≤ hard では出力がビット一致（6.4）。
+
+#### Decision: 警告 1 回の置き場（DD-9・§9-12）
+- **Selected**: `TextRegion::resolve` の末尾（`model.name()` 付き）。持続 guard は持たない（呼び出しが読込時のみ）。研究 §5 注意点 ⑶ の「結線層の初回装着ブロック」案はバルーン名を持たないため不採用。
+
+#### Decision: 縮退比 1.0＋警告（DD-10・§9-4／§8-6）
+- **Selected**: face metrics 不取得時は `cell_ratio = 1.0`（`dwrite_em = font_height`）・`RatioSource::Fallback`・`warn!`（フォント名・縮退値・「Yu Gothic UI なら再びあふれる」）。`FixedMetrics` は比を持たない（撤去）。
+
+#### Decision: R8.7 の対照（DD-11・§9-6）
+- **Selected**: テスト専用 `LegacyPitchMetrics`（`ceil(h × 1.25)`）を `kero_menu_capacity_test.rs` に置き、`menu.pasta:15` で `first_visible_line == 1` になることを示す。
+
+#### Decision: 禁則遅延の引受先（DD-15・R6.9）
+- **Context**: 要件の候補は `text-decoration-canon` brief（`layout.rs` の行の置き場所を扱う）。
+- **Selected**: `areka-P0-balloon-canon-residue` の brief へ登記（bvc 残件 11〜12 と同じく emo-text 帰属の正典残件の台帳として実在・番号は末尾採番）。decoration brief には相互参照のみ。
+- **Rationale**: 禁則は折返し規則であって `\f` 装飾ではない。residue は「語彙とシームはあるが追跡 spec が無い」項目の受け皿として定義されている。
+
+### 11.4 Synthesis（設計統合の 3 つの観点）
+
+- **Generalization**: 「行送り・行ボックス・帯・`lh`」の 4 寸法は同じ 1 つの量（セル丈と行間）の別名である——`TextLayerConfig::line_pitch` と `font_height` の 2 値から全部を導く形に一般化し、個別の係数を持たせない。二段折返し（soft／hard）は禁則遅延を将来足せる形（2 値・2 判定）にしたが、遅延そのものは実装しない。
+- **Build vs Adopt**: DirectWrite の `SetLineSpacing`（プラットフォーム機能）は不採用（行 TextLayout が 1 行単位のため不要）。画素読み取りは `System.Drawing.CopyFromScreen`（.NET 標準）を採用し、`PrintWindow`／D3D 複製の自作を避ける。GDI 較正は P/Invoke 最小 3 関数。
+- **Simplification**: `GlyphMetrics::line_box_height`・`highlight_band_extent`・`expand_overhang_for_band`・`FIXED_LINE_BOX_RATIO`・`line_pitch_factor`・`create_text_format` の 6 点を撤去／吸収。新設は `metrics.rs`（1 ファイル）と `inline_limit`（1 フィールド）だけ。
+
+### 11.5 Risks & Mitigations（設計時点）
+
+- 実測が α 以外を示す → R1.5 の手順で裁定へ（実装へ進まない）。
+- DirectWrite の ascent/descent（win か typo か）が GDI と食い違う → §5.2 の GDI 較正で事前に検出し、食い違えば R1.5 の材料にする。
+- k 2 と k 1.5 の実測が整数の行間で整合しない → 決定手順 2 の規則（k 1.5 優先・1 以内）で処理し、超えれば裁定へ。
+- `FixedMetrics` の仮想行間 3 が旧式の隠れ蓑と読まれる → doc と R8.7 の対照（実 fixture 経路）で切り分ける。
+- Yu Gothic UI が無い環境で新規テストが縮退のまま緑になる → `ratio_source == Measured` を先頭で assert し赤で止める。
+- 既存テスト 30 ファイルの再導出で許容幅を緩めてしまう → 再導出台帳 A〜D の分類ごとに「何が変わるか」を先に書き、`assert_eq` のまま更新する。
+
+### 11.6 Research Needed（§8）の消化状況
+
+| # | 項目 | 状況 |
+|---|---|---|
+| 1 | 画素読み取り道具 | 設計済み（`measure-ssp-text-metrics.ps1`・`design.md` §5.2） |
+| 2 | 実測台本 | 設計済み（S1〜S7・SSTP 送信・`design.md` §5.3） |
+| 3 | Yu Gothic UI の lineGap／DirectWrite と GDI のセル丈一致 | 実測時に `gdi-text-metrics.ps1`＋`metrics_tests.rs` の診断出力で確認（決定手順 α1 の材料） |
+| 4 | SSP の既定「行間」設定の所在 | ukadoc に無し。実測時に設定画面を撮って証跡へ |
+| 5 | k 2 の SSP 描画方式 | 実測で k 2／k 1.5 の両方を読み、決定手順 2 で整合を検査 |
+| 6 | 縮退既定値 | 決定（DD-10・比 1.0＋警告） |
+| 7 | `\f[height]` の継承 | decoration brief への登記で引き渡す（`design.md` §11.3） |
