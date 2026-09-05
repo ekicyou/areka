@@ -97,7 +97,7 @@
   - _Requirements: 2.1, 2.5, 2.8, 7.1, 7.2_
   - _Depends: 3.1_
 
-- [ ] 3.6 シェルの descript の残りを仕訳する
+- [x] 3.6 シェルの descript の残りを仕訳する
   - 残りのシェルの項目に状態・登場した版・備考を入れる
   - 3.5 で拾い漏れた担当付きの項目が無いことを確かめ、あればその場で担当の欄を埋める
   - 縮退と判定した項目は `degraded-sources.md` から転記元を項目名で示す（自前で転記元を探さない）
@@ -308,3 +308,9 @@
 - 3.5: **3.6 への申し送り（必須）**——シェルの `{sakura,kero,char*}.{defaultx,defaulty,defaultleft,defaulttop}` 12 件と `{sakura,kero}.balloon.offset{x,y}` 4 件の計 **16 件は状態から当たり直す**こと。現状は `absent`・担当空だが、`areka-P0-window-placement` の brief が名指しし、`placement::config` の `resolve_scope` が実際に引いている。担当だけ埋めて `absent` を残すのは不十分。
 - 3.5: **7.1 への申し送り（必須）**——設計 §8 の担当表に `areka-P0-window-placement` と `areka-P0-mayuna-compose` の 2 行が足りない。完了前に文書を追随させること。`mayuna-compose` の `char*.` への担当は brief ではなく**設計 D7** が根拠である旨も添える。
 - 3.5: 担当が決まらなかった 3 件——`seriko.sticky-window`（**引受先が存在しない**。`window-placement` は「シームのみ・実挙動を実装しない」と自ら宣言）・シェルの `charset`（`areka-P0-charset-canon` の brief が沈黙。バルーン側と同型）・`readme.charset`（同 brief が対象外と**明記**なので是正候補ではない）。
+- 3.6: 申し送りの 16 件（`{sakura,kero,char*}.{defaultx,defaulty,defaultleft,defaulttop}` 12＋`{sakura,kero}.balloon.offset{x,y}` 4）を当たり直した結果、**状態は `absent` 据え置き・担当を新規記入・既存の備考の偽を 1 つ訂正**。⚠**「画面上の座標として解く枝が無い」は誤り**——揃えが `free` のとき `placement::resolver` が作業領域左上を原点に加算しており、それがまさに `defaultleft` の正典の意味。それでも `implemented` にはならない（⑴ `defaultx` が `defaultleft` を同じ欄で食う ⑵ 既定の揃えでは横がずらし量・縦は破棄 ⑶ 原点が画面でなく作業領域＋クランプ）。引き受ける行も無いので裁定の 2 つ目の枝。
+- 3.6: 設計 §8 の担当表に足りない行は**計 4 本**（3.5 の `areka-P0-window-placement`・`areka-P0-mayuna-compose` に加えて `areka-P0-emo-atlas`・`areka-P0-ghost-setup`）。**7.1 で追随させること。**
+- 3.6: 6.4 の是正候補が 1 件増えた——`areka-P0-emo-atlas` の brief は「透過の設定はシェルの descript 由来で注ぎ込む」と書くが、着地した経路は `emo2_boot::assets` と `placement::measure` がともに決め打ちを渡しており、`paint_transparent_region_black` は `crates/` に 1 件も無い。該当 2 件の備考に記入済み。
+- 3.6: 引き受け先の無い沈黙が 2 件（作業用 `corrections-for-9-8.md` §12）——⑴ **バルーン側の `use_self_alpha`／`paint_transparent_region_black` は同じ brief が名指ししているのに担当が空**（バルーンのページは 3.2 の範囲だったので未着手。**3.9 か 7.1 で埋めること**）、⑵ `sakura.balloon.alignment`／`kero.balloon.alignment` は実装済みだが `window-placement` が「記録のみ・後続ユニット向け」と書いて後続を名指ししていない。
+- 3.6: **3.7 への申し送り（必須）**——`descript_shell_surfaces` の **8 件はカタログの `versions` が非空なのに `introduced` が空**。上流検査はこの型を捕まえられないので 3.7 で必ず埋めること。
+- 3.6: 掃き出しの緩和に注意——`sweep_absent_claims.py` の要判断が 11→1 に落ちたのは規則の緩和ではなく「当たった行を名前で引いたうえで非該当と論じた備考」を判定済みへ移した結果（レビューが 10 件の論証実体を全文確認）。**検査を書き換えたら必ず自前の摂動で較正すること**——自分のデータを通すために検査を緩める型が最も見つけにくい。
