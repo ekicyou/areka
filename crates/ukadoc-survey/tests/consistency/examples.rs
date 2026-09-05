@@ -48,7 +48,8 @@ use super::RepoData;
 /// `crates/` 全域から feature 名を grep してこの綴りを書き換えた。綴りをこの定数 1 つに
 /// 集めてあるのはそのためで——本文中に散らすと、移動後にどれか 1 つが取り残されて
 /// [`read_workspace_file`] が「探した絶対パス」を添えて止まる。
-const REQUIREMENTS_MD: &str = ".kiro/specs/completed/areka-P0-ukadoc-survey-toolkit/requirements.md";
+const REQUIREMENTS_MD: &str =
+    ".kiro/specs/completed/areka-P0-ukadoc-survey-toolkit/requirements.md";
 
 /// 台帳の README（形式の説明の正本・要件 2.5）。
 const README_MD: &str = "doc/ukadoc-coverage/README.md";
