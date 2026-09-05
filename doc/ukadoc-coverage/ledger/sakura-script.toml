@@ -491,13 +491,19 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5b_2a_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、選択肢のマーカーが描かれない）。
+ログ: 出る（配送先の 3 つの受け口が担当外の名前として debug! を残す。compile の catch-all は通らない）。
+単独形は fold_choice_marker が直後に現行の選択肢タグを見つけたときだけ畳むので、畳まれない単独形は名前が * の汎用コマンドになる。名前 * を選ぶ受け手は無く、areka-emo-present の face_id_of が読む吹き出し族の接頭辞にも marker 系は入らない。畳まれた場合もマーカーそのものは描かれない。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 選択肢マーカーの表示]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5banim_2cadd_2coverlay_2cID_5d:1"]
 status = "unclassified"
@@ -563,31 +569,47 @@ links = []
 note = ""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bbiff_28_2c_30a2_30ab_30a6_30f3_30c8_540d_29_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、メールチェックが始まらず、届いた知らせを受け取れない）。
+ログ: 出る（配送先の 3 つの受け口が担当外の名前として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: メールチェック]
+[版: 本文は（名前指定 2.5）と書くがカタログの規則で拾えない（3 桁の番号だけを拾うため）。この 2 桁はアカウント名の指定が足された時点を指す。単なる世代不明と区別するためにここへ写す]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bbind-noevent_2c_30ab_30c6_30b4_30ea_540d_2c_30d1_30fc_30c4_540d_2c_6570_5024_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.8.23"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、イベントを起こさない着せ替えの着脱ができない）。
+ログ: 出る（配送先の 3 つの受け口が担当外の名前として debug! を残す。compile の catch-all は通らない）。
+areka-seriko の handle_message は名前の完全一致で bind だけを選ぶので、この綴りは着せ替えの経路へ入らない。crates 全体でこの綴りに当たるのはその分岐の説明文 1 行だけである。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 着せ替え]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bbind_2c_30ab_30c6_30b4_30ea_540d_2c_30d1_30fc_30c4_540d_2c_6570_5024_5d:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差 — areka-seriko の handle_message がキャリアを開いて名前の完全一致で自分を選び、parse_bind_directive の適用形（カテゴリ名・パーツ名・0 か 1 の数値がそろう形）を着せ替えの着脱として実際に反映する。
+ログ: 出る（トグル形とカテゴリ単位形は M1 未実導出として warn!、カテゴリ欠落や on/off 値の破損は error!、担当外の名前は debug!）。
+[未登記の食い違い: 正典は「パーツ名を空欄にするとカテゴリ単位の動作」「数値欄を空欄または省略すると ON/OFF の繰り返し」と定めるが、handle_message はどちらも正当構文のまま warn! で読み飛ばす。doc/COMPAT_ARCHITECTURE.md にこの縮退を登記した行が無いので、DD-8 により状態を動かさず是正候補として出す]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bcall_2cghost_2c_30b4_30fc_30b9_30c8_540d_28_2c--option_3draise-event_29_5d:1"]
 status = "unclassified"
@@ -680,13 +702,19 @@ links = []
 note = ""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bclose_2cwebsocket_2cURL_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.8.05"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、WebSocket の正常な切断が行われず、切断後のイベントも起きない）。
+ログ: 出る（配送先の 3 つの受け口が担当外の名前として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: ネットワーク通信]
+[版: 本文から拾えた番号は 2.8.05 と 7.4.1 の 2 つだが、7.4.1 は status_code の説明が引く RFC 6455 の節番号であって SSP の版ではないので候補から除いた。除いた結果 2.8.05 の 1 つだけが残る]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bcreate_2cshortcut_5d:1"]
 status = "unclassified"
@@ -716,13 +744,17 @@ links = []
 note = ""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bembed_2c_30a4_30d9_30f3_30c8_540d_2cr0_2cr1_2cr2..._5d:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、別のイベントの返す台詞がその場に埋め込まれず、書いたつもりの本文が丸ごと現れない）。
+ログ: 出る（配送先の 3 つの受け口が担当外の名前として debug! を残す。compile の catch-all は通らない）。
+語彙の登記: doc/COMPAT_ARCHITECTURE.md の「compile 側時間指令 allowlist」の行が、M1 は非実導出で語彙保持＋縮退のみと明記し、この綴りを逐語で名指ししている。
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5benter_2ccollisionmode_5d_5c_21_5benter_2ccollisionmode_2crect_5d:1"]
 status = "unclassified"
@@ -869,13 +901,18 @@ links = []
 note = ""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bexecute_2chttp-get_2cURL_5d:1"]
-status = "unclassified"
+status = "alias"
 introduced = ""
+alias_of = "ukadoc:list_sakura_script:_5c_21_5bexecute_2chttp-get_2cURL_2c_30d1_30e9_30e1_30fc_30bf_5d:1"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+[別名の根拠: 人手の判断（DD-2 の接頭辞の検査）。引数の並び URL が、長い側の URL,パラメータ の先頭と 1 語ずつ一致する。同点の処理 ⑴ により、引数が 1 つだけ多い相手を採った]
+[狭さ: パラメータを取らない 1 引数形。areka はこの綴りもキャリアへ載せるだけで、写像先と同じく誰も消費しないので扱いは根と変わらない]
+[根が 2 つ: この名前の群は根が 2 つに割れた。兄弟の id は ukadoc:list_sakura_script:_5c_21_5bexecute_2chttp-get_2cURL_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3...:1]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bexecute_2chttp-head_2cURL_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..:1"]
 status = "unclassified"
@@ -977,13 +1014,19 @@ links = []
 note = ""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bexecute_2cresetwindowpos_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、窓の位置が初期位置へ戻らない）。
+ログ: 出る（配送先の 3 つの受け口が担当外の名前として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 窓の位置の初期化]
+[版: 本文は 2.7 RC1 と書くがカタログの規則で拾えない（3 桁の番号だけを拾うため）。単なる世代不明と区別するためにここへ写す]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bexecute_2crss-get_2cURL_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..._:1"]
 status = "unclassified"
@@ -1148,22 +1191,33 @@ links = []
 note = ""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bmove_5d:1"]
-status = "unclassified"
+status = "degraded"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差 — MoveCueSink::emit が名前の完全一致で自分を選び、parse_move_directive が位置引数の形を解いて実窓を動かす。動く用法＝位置引数で書き、基準に数値スコープを使い、時間を省くか 0 にする形。動かない用法＝⑴ 名前付きの --key=value 形（正典の記述例そのものの書き方）は解釈が Err になり記録付きで読み飛ばされて窓が動かない ⑵ 基準 screen・primaryscreen・me・global は縮退として記録され、数値スコープ基準しか解かれない ⑶ 時間指定が 0 より大きいときも補間せず最終位置へ即時に飛ぶ。
+ログ: 出る（名前付き形は emit の Err の腕が warn!、非スコープ基準と座標算出不能は適用側が warn!、担当外の名前は debug!）。
+[転記元: doc/COMPAT_ARCHITECTURE.md の「\\![move] の名前付き --key=value 形」「\\![move] の基準 screen／primaryscreen／me／global」「\\![move] の時間指定 time>0（アニメーション付き移動）」の 3 行]
+[版: カタログの規則で拾える版番号は無い。本文に現れる 2.5 は記述例の「2.5 秒かけて移動する」という所要時間であって版番号ではないので、本文が 2 桁の版を書いている項目には数えない]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bmoveasync_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、非同期の移動が始まらず、キャラはその場から動かない）。
+ログ: 出る（配送先の 3 つの受け口が担当外の名前として debug! を残す。compile の catch-all は通らない）。
+MoveCueSink::emit は名前の完全一致で move だけを選ぶので、この綴りは移動の経路へ入らない。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: キャラの移動と重なり]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bnotify_2c_30a4_30d9_30f3_30c8_540d_2cr0_2cr1_2cr2..._5d:1"]
 status = "unclassified"
@@ -1562,22 +1616,30 @@ links = []
 note = ""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bquicksection_2cfalse_5d:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、文字を一気に表示する区間が終わらず、開始側も効かないので見た目は変わらない）。
+ログ: 出る（配送先の 3 つの受け口が担当外の名前として debug! を残す。compile の catch-all は通らない）。
+語彙の登記: doc/COMPAT_ARCHITECTURE.md の「compile 側時間指令 allowlist」の行が、M1 は非実導出で語彙保持＋縮退のみと明記し、この綴りを逐語で名指ししている。
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bquicksection_2ctrue_5d:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、文字を一気に表示する区間が始まらず、台詞は 1 文字ずつのままになる）。
+ログ: 出る（配送先の 3 つの受け口が担当外の名前として debug! を残す。compile の catch-all は通らない）。
+語彙の登記: doc/COMPAT_ARCHITECTURE.md の「compile 側時間指令 allowlist」の行が、M1 は非実導出で語彙保持＋縮退のみと明記し、この綴りを逐語で名指ししている。
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5braise_2c_30a4_30d9_30f3_30c8_540d_2cr0_2cr1_2cr2..._5d:1"]
 status = "unclassified"
@@ -1634,13 +1696,17 @@ links = []
 note = ""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5breload_2cdescript_5d:1"]
-status = "unclassified"
+status = "alias"
 introduced = ""
+alias_of = "ukadoc:list_sakura_script:_5c_21_5breload_2cdescript_2c_30d1_30e9_30e1_30fc_30bf_5d:1"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+[別名の根拠: 人手の判断（DD-2 の接頭辞の検査）。引数の並び descript が、長い側の descript,パラメータ の先頭と 1 語ずつ一致する]
+[狭さ: パラメータを取らない 1 引数形。areka はこの綴りもキャリアへ載せるだけで、写像先と同じく誰も消費しないので扱いは根と変わらない]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5breload_2cghost_5d:1"]
 status = "unclassified"
@@ -1679,13 +1745,17 @@ links = []
 note = ""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5breloadsurface_5d:1"]
-status = "unclassified"
+status = "alias"
 introduced = ""
+alias_of = "ukadoc:list_sakura_script:_5c_21_5breload_2cshell_5d:1"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+[別名の根拠: 正典本文の注記の逐語「[旧仕様]サーフェスをリロードする。SSPでは\\![reload,shell]と同じ。」。置き換え先が本文に名指しされているので規則 4 の順 1 で決まる]
+[狭さ: 引数を取らない旧い綴り。areka はこの綴りもキャリアへ載せるだけで、写像先と同じく誰も消費しないので扱いは根と変わらない]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5breset_2cposition_5d:1"]
 status = "unclassified"
@@ -1715,13 +1785,16 @@ links = []
 note = ""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5breset_2czorder_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "implemented"
+introduced = "2.3.77"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差 — ZOrderCueSink::emit が名前と第 1 引数の組（NAME_RESET と SELECTOR_ZORDER）で自分を選び、タグ由来の組を落として shell 設定の基底へ戻す。正典の解除は引数を取らないが、余分なトークンが書かれていても解除として受理し、その分を下流へ運ばない（正典が黙っている所の areka の裁量として doc/COMPAT_ARCHITECTURE.md に登記済み）。
+ログ: 出る（余分なトークンを運ばなかったことを emit が debug! に残す。担当外の名前も同じ腕が debug! を残す）。
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5brestore_2cwallpaper_5d:1"]
 status = "unclassified"
@@ -1850,31 +1923,44 @@ links = []
 note = ""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cballoontimeout_2c_6642_9593_5d:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、バルーンが閉じるまでの時間が変わらず、既定の待ち時間のままになる）。
+ログ: 出る（配送先の 3 つの受け口が担当外の名前として debug! を残す。compile の catch-all は通らない）。
+語彙の登記: doc/COMPAT_ARCHITECTURE.md の「compile 側時間指令 allowlist」の行が、M1 は非実導出で語彙保持＋縮退のみと明記し、この綴りを逐語で名指ししている。
+語彙の登記（2 つ目）: doc/COMPAT_ARCHITECTURE.md の「\\![set,balloontimeout,時間]（バルーン表示のタイムアウト時間指定）のバルーン寿命側の実導出」の行が、M1 非受理で完全な語彙と意味論の記録のみと明記している。同じ綴りを compile 側の行とバルーン寿命側の行が別の側面から扱っている。
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cballoonwait_2c_500d_7387_5d:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、文字が流れる速さの倍率が変わらず、ゆっくり読ませる／急がせる演出が効かない）。
+ログ: 出る（配送先の 3 つの受け口が担当外の名前として debug! を残す。compile の catch-all は通らない）。
+語彙の登記: doc/COMPAT_ARCHITECTURE.md の「compile 側時間指令 allowlist」の行が、M1 は非実導出で語彙保持＋縮退のみと明記し、この綴りを逐語で名指ししている。
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cchoicetimeout_2c_6642_9593_5d:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、選択肢の制限時間が変わらず、早押しのような時間仕掛けが成立しない）。
+ログ: 出る（配送先の 3 つの受け口が担当外の名前として debug! を残す。compile の catch-all は通らない）。
+語彙の登記: doc/COMPAT_ARCHITECTURE.md の「compile 側時間指令 allowlist」の行が、M1 は非実導出で語彙保持＋縮退のみと明記し、この綴りを逐語で名指ししている。
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cotherghosttalk_2ctrue_7cfalse_7cbefore_7cafter_5d:1"]
 status = "unclassified"
@@ -1922,22 +2008,33 @@ links = []
 note = ""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cscaling_2c_6a2a_500d_7387_2c_7e26_500d_7387_2c_30aa_30d7_30b7_30e7_30f3_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.7.31"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、倍率の変化にアニメーション時間や完了待ちを指定できない）。
+ログ: 出る（配送先の 3 つの受け口が担当外の名前として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: サーフェスの拡大縮小]
+[版: 採らなかったのは 2.7.52。本文のオプションの説明で --wait（アニメーション完了までスクリプト実行を待機する）に付いた追記に当たる。最小の 2.7.31 を採った]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cscaling_2c_6a2a_500d_7387_2c_7e26_500d_7387_5d:1"]
-status = "unclassified"
+status = "alias"
 introduced = ""
+alias_of = "ukadoc:list_sakura_script:_5c_21_5bset_2cscaling_2c_6a2a_500d_7387_2c_7e26_500d_7387_2c_30aa_30d7_30b7_30e7_30f3_5d:1"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+[別名の根拠: 人手の判断（DD-2 の接頭辞の検査）。引数の並び 横倍率,縦倍率 が、長い側の 横倍率,縦倍率,オプション の先頭と 1 語ずつ一致する]
+[狭さ: オプション（--time／--wait）を取らない 2 引数形。areka はこの綴りもキャリアへ載せるだけで、写像先と同じく誰も消費しないので扱いは根と変わらない]
+[根が 2 つ: この名前の群は根が 2 つに割れた。兄弟の id は ukadoc:list_sakura_script:_5c_21_5bset_2cscaling_2c_500d_7387_5d:1]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cserikotalk_2ctrue_2ffalse_5d:1"]
 status = "unclassified"
@@ -1976,13 +2073,19 @@ links = []
 note = ""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2ctasktrayicon_2c_30d5_30a1_30a4_30eb_540d.ico_2c_30c6_30ad_30b9_30c8_28_2c--duration_3d_5f85_6a5f_6642_959:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.5.58"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、通知領域のアイコンが差し替わらず、マウスを重ねたときの文言も変わらない）。
+ログ: 出る（配送先の 3 つの受け口が担当外の名前として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 通知領域とデスクトップ]
+[版: 採らなかったのは 2.5.59。本文で --runcount（アニメーションの繰り返し回数）に付いた追記に当たる。採った 2.5.58 は --duration（アニメーション）に付いた追記で、2 つのうち最小である]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2ctrayballoon_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..._5d:1"]
 status = "unclassified"
@@ -2030,13 +2133,18 @@ links = []
 note = ""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2czorder_2c_30b9_30b3_30fc_30d7ID_2c_30b9_30b3_30fc_30d7ID_2c..._5d:1"]
-status = "unclassified"
-introduced = ""
+status = "implemented"
+introduced = "2.3.77"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差 — ZOrderCueSink::emit がキャリアを開いて名前と第 1 引数の組（NAME_SET と SELECTOR_ZORDER）で自分を選び、選別子より後ろを解釈せずに取り出しの相へ運ぶ。窓の重なりは正典どおり左ほど手前で固定される。受け付けられない指定（解釈できないトークン・数値モードと明示モードの混在・要素 2 個未満・同じ窓の重複）はタグ全体を採らず、既存の重なりを 1 つも変えない。既にどれかの組に属するスコープを含むタグを受け付けないときの扱いは、正典が黙っている所の areka の裁量として doc/COMPAT_ARCHITECTURE.md に登記済み。
+ログ: 出る（採れない指定は parse_zorder_tokens の拒否として記録され、担当外の名前は emit の自己選別が debug! を残す）。
+[引数の語彙: parse_zorder_tokens の interpret_token が balloon・surface と省略形 b・s の 4 語を解釈する。正典では本文の「バルーンもあわせた Z 順制御をしたい場合」の段（例 \\![set,zorder,balloon1,surface1,balloon0,surface0] と省略記法 \\![set,zorder,b1,s1,b0,s0]）に当たり、本文の版表記「2.3.77/2.7.34(s,b記法)」の後半が示すとおり 2.7.34 で足された記法である]
+[版: 採らなかったのは 2.7.34。本文の「2.3.77/2.7.34(s,b記法)」の後半に当たり、balloonN／surfaceN と省略形 bN／sN の記法を足した追記である。最小の 2.3.77 を採った]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bsound_2ccdplay_2c_30c8_30e9_30c3_30afNo._5d:1"]
 status = "unclassified"
@@ -2048,13 +2156,19 @@ links = []
 note = ""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bsound_2cload_2c_30d5_30a1_30a4_30eb_540d_2c_30aa_30d7_30b7_30e7_30f3..._5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、再生前の先読みが行われず、鳴り出しがそろわない）。
+ログ: 出る（配送先の 3 つの受け口が担当外の名前として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 音の再生]
+[版: 本文は 2.4 と書くがカタログの規則で拾えない（3 桁の番号だけを拾うため）。単なる世代不明と区別するためにここへ写す]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bsound_2cloop_2c_30d5_30a1_30a4_30eb_540d_5d:1"]
 status = "unclassified"
@@ -2066,13 +2180,19 @@ links = []
 note = ""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bsound_2coption_2c_30d5_30a1_30a4_30eb_540d_2c_30aa_30d7_30b7_30e7_30f3..._5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、再生中のオプション変更が効かない）。
+ログ: 出る（配送先の 3 つの受け口が担当外の名前として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 音の再生]
+[版: 本文は 2.4 と書くがカタログの規則で拾えない（3 桁の番号だけを拾うため）。単なる世代不明と区別するためにここへ写す]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bsound_2cpause_2c_30d5_30a1_30a4_30eb_540d_5d:1"]
 status = "unclassified"
@@ -2084,13 +2204,19 @@ links = []
 note = ""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bsound_2cplay_2c_30d5_30a1_30a4_30eb_540d_2c_30aa_30d7_30b7_30e7_30f3..._5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、音や動画の再生が始まらず、オプションを付けた再生もできない）。
+ログ: 出る（配送先の 3 つの受け口が担当外の名前として debug! を残す。compile の catch-all は通らない）。
+[運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
+[群: 音の再生]
+[版: 本文は 2.4 と書くがカタログの規則で拾えない（3 桁の番号だけを拾うため）。単なる世代不明と区別するためにここへ写す]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bsound_2cresume_2c_30d5_30a1_30a4_30eb_540d_5d:1"]
 status = "unclassified"
@@ -2111,13 +2237,17 @@ links = []
 note = ""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bsound_2cwait_5d:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、音の再生終了を待たずに台詞が進み、音と台詞の間合いが崩れる）。
+ログ: 出る（配送先の 3 つの受け口が担当外の名前として debug! を残す。compile の catch-all は通らない）。
+語彙の登記: doc/COMPAT_ARCHITECTURE.md の「compile 側時間指令 allowlist」の行が、M1 は非実導出で語彙保持＋縮退のみと明記し、この綴りを逐語で名指ししている。
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5btimernotify_2c_6642_9593_2c_7e70_308a_8fd4_3059_304b_5426_304b_2c_30a4_30d9_30f3_30c8_540d_2cr0_2cr1_2cr2..._5d:1"]
 status = "unclassified"
@@ -2264,13 +2394,18 @@ links = []
 note = ""
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bwait_2csyncobject_2c_540c_671f_30aa_30d6_30b8_30a7_30af_30c8_540d_2c_30aa_30d7_30b7_30e7_30f3_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.28"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、名前つき同期オブジェクトの待ち合わせが起きず、外部の処理と歩調が合わない）。
+ログ: 出る（配送先の 3 つの受け口が担当外の名前として debug! を残す。compile の catch-all は通らない）。
+語彙の登記: doc/COMPAT_ARCHITECTURE.md の「compile 側時間指令 allowlist」の行が、M1 は非実導出で語彙保持＋縮退のみと明記し、この綴りを逐語で名指ししている。
+[版: 拾えた版番号は 2.8.28 の 1 つだけなので規則 3 のとおりそれを採った。本文ではこの番号は WaitableTimer を待てるようになった時点として書かれている]
+"""
 
 [entry."ukadoc:list_sakura_script:_5c_26_5bID_5d:1"]
 status = "absent"

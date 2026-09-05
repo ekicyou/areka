@@ -6,13 +6,13 @@
 
 | 状態 | 件数 |
 | --- | ---: |
-| 実装済み | 19 |
-| 語彙のみ | 28 |
-| 縮退 | 3 |
-| 未対応 | 80 |
-| 別名 | 13 |
+| 実装済み | 22 |
+| 語彙のみ | 36 |
+| 縮退 | 4 |
+| 未対応 | 91 |
+| 別名 | 17 |
 | 対象外 | 1 |
-| 未分類 | 198 |
+| 未分類 | 171 |
 | 合計 | 342 |
 
 ## ページ別の状態の分布
@@ -21,21 +21,27 @@
 
 | ページ | 実装済み | 語彙のみ | 縮退 | 未対応 | 別名 | 対象外 | 未分類 | 合計 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| list_sakura_script | 19 | 28 | 3 | 80 | 13 | 1 | 198 | 342 |
+| list_sakura_script | 22 | 36 | 4 | 91 | 17 | 1 | 171 | 342 |
 
 ## SSP 世代別の対応表
 
 | 世代 | 実装済み | 語彙のみ | 縮退 | 未対応 | 別名 | 対象外 | 未分類 | 合計 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 2.3 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 1 |
-| 2.5 | 0 | 1 | 0 | 2 | 0 | 0 | 0 | 3 |
+| 2.3 | 3 | 0 | 0 | 0 | 0 | 0 | 0 | 3 |
+| 2.5 | 0 | 1 | 0 | 3 | 0 | 0 | 0 | 4 |
 | 2.6 | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 2 |
-| 世代不明 | 17 | 26 | 3 | 78 | 13 | 1 | 198 | 336 |
+| 2.7 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 1 |
+| 2.8 | 0 | 1 | 0 | 2 | 0 | 0 | 0 | 3 |
+| 世代不明 | 18 | 33 | 4 | 85 | 17 | 1 | 171 | 329 |
 
 ## 別名の一覧
 
 | 別名の id | 指す先の id |
 | --- | --- |
+| ukadoc:list_sakura_script:_5c_21_5bexecute_2chttp-get_2cURL_5d:1 | ukadoc:list_sakura_script:_5c_21_5bexecute_2chttp-get_2cURL_2c_30d1_30e9_30e1_30fc_30bf_5d:1 |
+| ukadoc:list_sakura_script:_5c_21_5breload_2cdescript_5d:1 | ukadoc:list_sakura_script:_5c_21_5breload_2cdescript_2c_30d1_30e9_30e1_30fc_30bf_5d:1 |
+| ukadoc:list_sakura_script:_5c_21_5breloadsurface_5d:1 | ukadoc:list_sakura_script:_5c_21_5breload_2cshell_5d:1 |
+| ukadoc:list_sakura_script:_5c_21_5bset_2cscaling_2c_6a2a_500d_7387_2c_7e26_500d_7387_5d:1 | ukadoc:list_sakura_script:_5c_21_5bset_2cscaling_2c_6a2a_500d_7387_2c_7e26_500d_7387_2c_30aa_30d7_30b7_30e7_30f3_5d:1 |
 | ukadoc:list_sakura_script:_5c_a_5bID_5d:1 | ukadoc:list_sakura_script:_5c_a_5bID_2cr2_2cr3..._5d:1 |
 | ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cinline_5d:1 | ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cinline_2copaque_5d:1 |
 | ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cx_2cy_5d:1 | ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cx_2cy_2copaque_5d:1 |
