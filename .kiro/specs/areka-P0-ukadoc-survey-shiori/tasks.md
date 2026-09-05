@@ -91,7 +91,7 @@
   - 完了条件: 26 行の内訳が 5＋2＋4＋11＋4 になり、リクエスト側とレスポンス側の別が `note` から読み取れる
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.4a, 5.5, 5.8, 6.6, 9.9, 12.3_
 
-- [ ] 4.2 PLUGIN の受け口 19 項目を種別で書き分ける
+- [x] 4.2 PLUGIN の受け口 19 項目を種別で書き分ける
   - イベント・PLUGIN 向けのリソース・プロパティの照会・任意名イベントの枠という種別の違いを `note` に書き分ける
   - 完了条件: 19 行すべてに状態と種別の記述が入り、未分類が 0 件になる
   - _Requirements: 5.6_
@@ -274,3 +274,8 @@
 - 4.1: `BaseID` は `crates` 配下のソースに 0 件（ヒットはバイナリ fixture `pasta.dll` の文字列一致のみ）。索引が「ソースに 1 件も無い」と限定しているので主張は真。`build_request` の doc コメントが挙げる未送出は `SenderType`／`SecurityOrigin`／`X-SSTP-PassThru` の 3 つで、`BaseID` は確かに挙がっていない。
 - 4.1: **`Reference0` に「粗さ」を書かないのが正しい**（正典本文は「ゴーストの ` ` 側の名前」で単一ヘッダ。粗さを書けば嘘になる）。粗いのは `Reference*`・`Reference1〜`・`X-SSTP-PassThru-` の 2 件。なお粗さを求めるのは要件 5.8 ではなく**設計 DD-7 の 3**（5.8 はアンカーの無い 4 ページ限定＝タスク 4.3 の担当）。tasks.md の 4.1 が 5.8 を挙げているのは引用の取り違えだが成果物には影響しない。
 - 4.1 → **タスク 7.3 への申し送り**: 設計 DD-10／要件 2.9 の「`absent` の各行に根拠の場所を繰り返さない」と、索引の共通 `note` の全文が根拠の場所を含むことの緊張は、群 2（273 行）・群 4・群 11（15 行）に一様に現れている。1.4 で「正確さを削らない」と裁定済みだが、**7.3 で一度決着させて記録すること。**
+- 4.2: PLUGIN 19 行の種別は **イベント 8**（`OnGhostBoot`・`OnGhostExit`・`OnGhostInfoUpdate`・`OnInstallComplete`・`OnMenuExec`・`OnOtherGhostTalk`・`OnSecondChange`・`version`）／**PLUGIN 向けのリソース 7**（`balloonpathlist`・`ghostpathlist`・`headlinepathlist`・`installedballoonname`・`installedghostname`・`installedplugin`・`pluginpathlist`）／**プロパティの照会 2**／**任意名イベントの枠 2**。要件 5.6 は件数を定めていない。
+- 4.2: `version` は**イベント**。正典が「他のイベントとレスポンス形式が異なる事に注意」と書いてイベントの集合の内側に置いており、リソース 7 件は全件 `[NOTIFY]`（ベースウェアからプラグインへ押し出す側）なのに対し `version` は逆向き（プラグインに問う）。
+- 4.2: `OnMenuBack` の相互参照は**置かない**と決めた（任意名の枠は受け手がプラグイン、`OnMenuBack` は SHIORI 側へ出る名前で相手が違う）。扱いの本体は `list_shiori_event:OnChoiceEnter:1` の `note` に残し、枠の行には行き先の案内だけを置いた。
+- 4.2 → **タスク 5.3 への申し送り（DD-6 の同名 12 組の id を確定）**: 書く側は `list_plugin_event` 側、相手は各 `ukadoc:list_shiori_event:<同名>:1`。12 件は `ukadoc:list_plugin_event:` の `OnInstallComplete:1`・`OnOtherGhostTalk:1`・`OnSecondChange:1`・`balloonpathlist:1`・`ghostpathlist:1`・`headlinepathlist:1`・`installedballoonname:1`・`installedghostname:1`・`installedplugin:1`・`pluginpathlist:1`・`property.get:1`・`property.set:1`。**`version` は 12 組に入らない**（同名の相手は `list_shiori_resource:version:1` で、DD-6 の対＝plugin_event × shiori_event に当たらない）。
+- 4.2 → **タスク 5.4 への申し送り**: `list_plugin_event` の `property.get`／`property.set` はカタログの `versions` に `2.7.85` を持つ（`introduced` の候補 2 件）。
