@@ -62,7 +62,7 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 | W11 | 08-28〜09-02 | `present-write-coherence`（PR#123・**見送り＋登記＝是正 0 行・未達 40 件は引受先なし**）・`balloon-vertical-canon`（PR#124・`vertical,0/1`・origin クランプ撤去）・`balloon-offset-dpi`（PR#125・単位空間 1 つ・実機合格）・`scope-zorder-pinning`（PR#126・改訂第 2 版＝所有の鎖・目視合格・**残件 9 件→`zorder-chain-residue`**） | 4/4 完走・**M1 残＝e2e のみ** |
 
 - **実機サインオフ発見 7 件中 #1〜#6 解決済み**。#7（冒頭空行）のみ pasta 上流（`ekicyou/pasta` 起票済み）＝areka スコープ外。
-- 完了 spec 直下エントリ＝**167**（`.kiro/specs/completed/` 直下・2026-09-05 実測＝`ukadoc-survey-toolkit` 完了を反映）。計数は**直下エントリ数**で行うこと。
+- 完了 spec 直下エントリ＝**168**（`.kiro/specs/completed/` 直下・2026-09-05 実測＝`sakura-bare-tag-lexer`〔PR#134・計数未更新のまま合流〕と `ukadoc-survey-toolkit` の 2 本を反映）。計数は**直下エントリ数**で行うこと。
 - 主な申し送りの生存先: W7 ⑴ **`ReassertZOrder` 未消費**（再表示直後のバルーン隣接は実機未確認）→ **e2e 着手時義務**。⑵ 配置系 spec は `window-placement` R2.9 を正典として引用しない（正典は COMPAT §8 経由で scg へ）。W9 atom→bod 等の追記(70)〜(78) は各 brief が正本。
 
 ## M1 残工程ゴール表（2026-09-02 棚卸⑫）
