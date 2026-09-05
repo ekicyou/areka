@@ -89,15 +89,15 @@ fn empty_bracket_yields_no_args() {
 
 #[test]
 fn bare_tags_e_c_minus() {
-    assert_eq!(lex(r"\e"), vec![Token::Bare('e')]);
-    assert_eq!(lex(r"\c"), vec![Token::Bare('c')]);
-    assert_eq!(lex(r"\-"), vec![Token::Bare('-')]);
+    assert_eq!(lex(r"\e"), vec![Token::Bare("e".to_string())]);
+    assert_eq!(lex(r"\c"), vec![Token::Bare("c".to_string())]);
+    assert_eq!(lex(r"\-"), vec![Token::Bare("-".to_string())]);
 }
 
 #[test]
 fn bare_n_without_bracket() {
     // 引数なしの `\n` は bare（`\n[...]` は Tag）。
-    assert_eq!(lex(r"\n"), vec![Token::Bare('n')]);
+    assert_eq!(lex(r"\n"), vec![Token::Bare("n".to_string())]);
 }
 
 #[test]
@@ -158,9 +158,9 @@ fn text_between_tags_preserves_order_and_chars() {
         tokens,
         vec![
             Token::Text("あ".to_string()),
-            Token::Bare('e'),
+            Token::Bare("e".to_string()),
             Token::Text("いう".to_string()),
-            Token::Bare('c'),
+            Token::Bare("c".to_string()),
             Token::Text("え".to_string()),
         ],
     );
@@ -171,7 +171,10 @@ fn sysvar_terminates_at_backslash() {
     // `%username` の直後にタグが来たら sysvar はそこで終端する。
     assert_eq!(
         lex(r"%username\e"),
-        vec![Token::SysVar("username".to_string()), Token::Bare('e')],
+        vec![
+            Token::SysVar("username".to_string()),
+            Token::Bare("e".to_string())
+        ],
     );
 }
 
@@ -226,7 +229,7 @@ fn escape_backslash_alone() {
 fn escape_backslash_then_real_tag() {
     assert_eq!(
         lex(r"\\\e"),
-        vec![Token::Text(r"\".to_string()), Token::Bare('e')],
+        vec![Token::Text(r"\".to_string()), Token::Bare("e".to_string())],
     );
 }
 
@@ -320,7 +323,10 @@ fn quoted_and_unquoted_args_mixed() {
 fn unclosed_bracket_absorbed_as_raw_preserving_prior() {
     assert_eq!(
         lex(r"\e\s[1000"),
-        vec![Token::Bare('e'), Token::Raw(r"\s[1000".to_string())],
+        vec![
+            Token::Bare("e".to_string()),
+            Token::Raw(r"\s[1000".to_string())
+        ],
     );
 }
 
@@ -433,7 +439,7 @@ fn wait_digit_then_bracket_is_tag_not_shorthand() {
 /// bare タグとして処理される（passthrough 維持）。
 #[test]
 fn balloon_bare_without_digit_is_bare_tag() {
-    assert_eq!(lex(r"\b"), vec![Token::Bare('b')]);
+    assert_eq!(lex(r"\b"), vec![Token::Bare("b".to_string())]);
 }
 
 /// 要件 1.6（境界）: 未閉じ `\b1[` は shorthand 判定を経ず（数字直後が `[`）、
@@ -451,7 +457,7 @@ fn balloon_bare_shorthand_preserves_neighbors() {
         vec![
             Token::Text("あ".to_string()),
             Token::Shorthand { word: 'b', n: 3 },
-            Token::Bare('e'),
+            Token::Bare("e".to_string()),
             Token::Text("い".to_string()),
         ],
     );

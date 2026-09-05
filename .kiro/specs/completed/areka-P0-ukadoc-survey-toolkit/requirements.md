@@ -179,6 +179,8 @@ ukadoc（SSP 公式仕様書）1,749 項目を網羅的に分類するための�
 
 調査 spec 4 本は本 spec の実装を待たず、この形式で `doc/ukadoc-coverage/ledger/<ドメイン>.toml` を書き始めてよい。本 spec の道具は**この形式に従う側**であり、形式の変更には要件 2 の改訂を要する。
 
+> **訂正（2026-09-05）**: A.1 の記入例の id 4 件のうち 3 件が実カタログに存在しない綴り（`balloon.scope(ID).width` など）だったため、実在する id へ差し替え、A.3 の逆斜線の一文を id の符号化に合わせて書き直した。欄名・型・並び順の契約（要件 2.6 の凍結対象）は変えていない。記入例の id がカタログに実在し道具の読み手で読めることは `crates/ukadoc-survey/tests/consistency/examples.rs` が常時確かめる。
+
 ### A.1 ファイルの構造
 
 ```toml
@@ -190,6 +192,20 @@ ukadoc（SSP 公式仕様書）1,749 項目を網羅的に分類するための�
 domain = "property"                     # ファイル名と同じドメイン名
 pages = ["list_propertysystem"]         # 要件 3.1 の担当ページ（ここに無いページの id は置けない）
 
+# id はすべて実物のカタログから写してある（付録 B.5。長くても見た目で直さない）。
+# 仕分けの中身（status・owner・priority・values・note）は書き方の見本で、実際の判定は台帳の持ち主がする。
+# 項目は id の文字順（byte 順）に並べる——`currentghost.…` は `system.…` より前。
+
+[entry."ukadoc:list_propertysystem:currentghost.seriko.cursor.scope_28ID_29.mouse_3f_3f_3f_3flist_28_5f53_305f_308a_5224_5b9a_540d_29.name:1"]
+status = "alias"
+alias_of = "ukadoc:list_propertysystem:currentghost.seriko.cursor.scope_28ID_29.mouse_3f_3f_3f_3flist.index_28ID2_29.name:1"
+introduced = "2.3.83"
+owner = ""
+priority = ""
+values = []
+links = []
+note = "当たり判定名で引く形。正典本文が「index 指定との互換用の記述」と注記しているので、index 指定側を正典とする。"
+
 [entry."ukadoc:list_propertysystem:system.year:1"]
 status = "implemented"
 introduced = ""
@@ -197,22 +213,12 @@ owner = "areka-P0-property-catalog-lists"
 priority = "C1"
 values = []
 links = [
-  { kind = "queries", to = "ukadoc:list_sakura_script:\\![get,property,ID]:1" },
+  { kind = "queries", to = "ukadoc:list_sakura_script:_5c_21_5bget_2cproperty_2c_30a4_30d9_30f3_30c8_540d_2c_30d7_30ed_30d1_30c6_30a3_540d_2c_30d7_30ed_30d1_30c6_30a3_540d_2c:1" },
 ]
 note = """
 壊れ方: 値を返せないと辞書が空文字を前提に進み、黙って壊れる。
 areka では sylphya の `system.*` が NotFound 縮退（縮退の登記は COMPAT_ARCHITECTURE の沈黙ルール表を参照）。
 """
-
-[entry."ukadoc:list_propertysystem:balloon.scope(ID).width:1"]
-status = "alias"
-alias_of = "ukadoc:list_propertysystem:currentghost.balloon.scope(ID).width:1"
-introduced = "2.3.53"
-owner = ""
-priority = ""
-values = []
-links = []
-note = "旧名。本文注記により currentghost.* 側が正典。"
 ```
 
 ### A.2 キーと値（項目ごと）
@@ -235,7 +241,7 @@ note = "旧名。本文注記により currentghost.* 側が正典。"
 ### A.3 書き方の決まり
 
 - 台帳に**証拠の欄は無い**（要件 2.3）。実装済みの根拠はソース側の doc コメント `/// ukadoc: <正典 URL>`（要件 5）。
-- 文字列は二重引用符。id や見出しに逆斜線（さくらスクリプトのタグ）が含まれるときは `\` と書く（上の例の `\\![get,property,ID]`）。
+- 文字列は二重引用符。**id には逆斜線・丸括弧・日本語は現れない**——正典の見出しに含まれる記号や日本語は id では `_5c`（`\`）・`_28`（`(`）・`_30a4`（`イ`）のように符号化済みなので、カタログの綴りをそのまま写す（付録 B.5。上の例の `_5c_21_5bget_2cproperty_2c…` が `\![get,property,…]` の項目）。見出しは台帳に写さない（付録 B.6）。逆斜線を書く場面があるのは `note` の中だけで、そこでは TOML の規則どおり `\\` と書く。
 - 台帳ファイルはドメインの持ち主だけが編集する。他ドメインの id を書かない（要件 3.2）。
 - 報告（`doc/ukadoc-coverage/report/<ドメイン>.md`）は本 spec の道具が着地するまで存在しなくてよい。着地後は持ち主が再生成して一緒にコミットする（要件 7.4）。
 
