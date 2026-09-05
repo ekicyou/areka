@@ -114,38 +114,51 @@ pub(crate) fn plan_ledger_init(
 
 /// 初期の台帳を作って既存の台帳へ差し込む（要件 3.3・3.3a）。
 ///
-/// カタログを読み、[`plan_ledger_init`] に 4 本の本文を決めさせ、そのとおりに書く。
-/// 台帳が既にあれば既存の塊は 1 バイトも変わらない。
+/// 実際の取り寄せ（[`read_if_present`]）と実際の書き手（置き場を作って
+/// [`files::write_lf`] を呼ぶ）を [`ledger_init_with`] へ渡すだけの 1 行である。
+///
+/// # 常時テストが届かない 1 か所
+///
+/// 残るのは**この 1 行が何を渡すか**だけである。判断も順番も [`ledger_init_with`] に
+/// あり、そちらは取り寄せも書き手も引数で受けるので、ファイルを 1 つも作らずに
+/// 確かめてある（`generate_tests.rs`）。
+///
+/// ここが渡す `&read_if_present` を「いつも `None`」を返す関数へ差し替えても、
+/// クレート全体は**今は**緑のままである。台帳が今はすべて未分類なので、既存を渡し
+/// 忘れても生成物は 1 バイトも変わらず（実測）、再実行で本文が変わらないという主張も
+/// そのまま通る。調査 spec が台帳へ手で 1 件でも記入した日から、その主張と実データでの
+/// 通し確認——`ledger-init` を走らせて 4 本が 1 バイトも変わらないことを見る——の双方が、
+/// この差し替えを赤にする。
+pub fn ledger_init() -> Result<(), SurveyError> {
+    ledger_init_with(&read_if_present, &mut |target: &Path, body: &str| {
+        ensure_parent(target)?;
+        files::write_lf(target, body)
+    })
+}
+
+/// 台帳 4 本の本文を決めてから、渡された書き手でそのとおりに書く（要件 3.3・3.3a・1.8）。
+///
+/// カタログを読み、[`plan_ledger_init`] に 4 本の本文を決めさせ、`write` へ「書き出す先」
+/// と「本文」をそのまま渡す。台帳が既にあれば既存の塊は 1 バイトも変わらない。
 ///
 /// 判断は計画側に全部あるので、ここに残るのは**順番**だけである——4 本ぶんの本文が
 /// 全部決まってから書き始める。途中の 1 本で落ちたときに、その前の台帳だけが
-/// 書き換わって残ることが無い。
+/// 書き換わって残ることが無い（要件 1.8）。
 ///
-/// # 常時テストが届かない 2 か所
-///
-/// - **取り寄せの引数そのもの**。ここが渡す `&read_if_present` を「いつも `None`」を
-///   返す関数へ差し替えても、クレート全体は緑のままである（[`plan_ledger_init`] の
-///   主張は呼び手が渡した関数を確かめるので、呼び手が何を渡すかまでは押さえない）。
-/// - **下の書き出しの繰り返し**。`files::write_lf` へ渡す本文を空にしても緑のままで
-///   ある。`ledger_init` を呼ぶテストが 1 本も無いことによる、以前からある穴である。
-///
-/// どちらも `ledger_init` を実際に呼ばなければ現れず、呼べば台帳 4 本を書く。新しい
-/// クレートのテストはファイルを 1 つも作らない（設計 File Structure Plan）ので、どちらも
-/// 常時テストでは塞げない。
-///
-/// 実データでの通し確認——`ledger-init` を走らせて 4 本の台帳が 1 バイトも変わらない
-/// ことを見る——が受け持つのは**下の書き出しだけ**である。取り寄せの引数の側は今は
-/// 受け持てない: 台帳が今はすべて未分類なので、「いつも `None`」に差し替えても
-/// 生成物は 1 バイトも変わらない（実測）。調査 spec が手で記入を始めた日から、
-/// この通し確認がそちらも受け持つようになる。
-pub fn ledger_init() -> Result<(), SurveyError> {
+/// 取り寄せと書き手を引数で受けるのは、この順番をファイルを 1 つも作らずに確かめる
+/// ためである（設計 File Structure Plan）。書き手を「控えるだけ」に差し替えれば、
+/// repo の台帳を 1 本も書かずに走らせられる。
+pub(crate) fn ledger_init_with(
+    read_existing: &dyn Fn(&Path) -> Result<Option<String>, SurveyError>,
+    write: &mut dyn FnMut(&Path, &str) -> Result<(), SurveyError>,
+) -> Result<(), SurveyError> {
+    // 読む段が全部済むまで、書き出しに進まない。
     let assignment = PageAssignment::canonical();
     let catalog = read_catalog(&files::read_normalized(&paths::catalog_path())?)?;
-    let plans = plan_ledger_init(&catalog, &assignment, &read_if_present)?;
+    let plans = plan_ledger_init(&catalog, &assignment, read_existing)?;
 
     for plan in &plans {
-        ensure_parent(&plan.target)?;
-        files::write_lf(&plan.target, &plan.body)?;
+        write(&plan.target, &plan.body)?;
         announce(&plan.target, &format!("{} 項目", plan.count));
     }
     Ok(())

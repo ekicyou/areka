@@ -1,13 +1,17 @@
-//! 生成の副手続きが持つ「判断」だけを釘付けする（設計「入口 / cli」・要件 3.1・3.2・3.5）。
+//! 生成の副手続きが持つ「判断」と「順番」を釘付けする（設計「入口 / cli」・
+//! 要件 3.1・3.2・3.5・3.3・3.3a・1.8）。
 //!
-//! 4 つの副手続き本体はスナップショットと repo の木が要るので、ここでは走らせない
-//! （完了条件は実データでの通し確認の側にある）。このファイルが確かめるのは 4 つで、
-//! はじめの 3 つは入出力に 1 度も触れずに決まる。
+//! カタログ再生成はスナップショットが要るので、ここでは走らせない（完了条件は
+//! 実データでの通し確認の側にある）。台帳の初期化は取り寄せと書き手を引数で受けるので、
+//! 書き手を「控えるだけ」に差し替えればファイルを 1 つも作らずに走らせられる。
+//! このファイルが確かめるのは 6 つで、はじめの 3 つは入出力に 1 度も触れずに決まる。
 //!
 //! - どの id をどの台帳へ入れるか（[`select_ids_by_domain`]）
 //! - 台帳の前置きに担当ページをどの順で並べるか（[`prologue_pages`]）
 //! - 既存の台帳の本文を差し込みへ渡しているか（[`plan_ledger_init`]・要件 3.3a）
 //! - 既存の台帳を実際に取り寄せられるか（[`read_if_present`]・要件 3.3a）
+//! - repo の台帳 4 本が再実行で 1 バイトも変わらないか（[`ledger_init_with`]・要件 3.3a）
+//! - 4 本の本文が全部決まるまで 1 本も書き始めないか（[`ledger_init_with`]・要件 1.8）
 //!
 //! 2 つ目は一度書けば以後バイト列のまま写される（要件 3.3a）ので、順序の取り決めは
 //! ここで逐語に固定しておく。3 つ目と 4 つ目は生成物を見比べても分からない——理由は
@@ -26,13 +30,16 @@
 
 use std::cell::RefCell;
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-use super::{LedgerPlan, plan_ledger_init, prologue_pages, read_if_present, select_ids_by_domain};
+use super::{
+    LedgerPlan, ledger_init_with, plan_ledger_init, prologue_pages, read_if_present,
+    select_ids_by_domain,
+};
 use crate::assignment::PageAssignment;
 use crate::catalog::{Catalog, CatalogEntry};
 use crate::error::SurveyError;
-use crate::io::paths;
+use crate::io::{files, paths};
 use crate::ledger::write::render_initial_entry;
 use crate::lib_test_support;
 use crate::model::{Domain, EntryId, PageName};
@@ -527,4 +534,146 @@ fn read_if_present_returns_the_committed_ledger_and_none_for_a_missing_sibling()
         None,
         "実在しない置き場に本文が返った"
     );
+}
+
+// ---------------------------------------------------------------------------
+// 4 本を決めてから書く（要件 3.3・3.3a・1.8）
+// ---------------------------------------------------------------------------
+//
+// ここまでの一群が見るのは計画の中身だけである。残るのは [`ledger_init_with`] が持つ
+// **順番**——4 本ぶんの本文が全部決まってから書き始める——と、決めた本文をそのまま
+// 書き手へ渡していることである。
+//
+// 書き手を引数で受けるので、ファイルを 1 つも作らずに走らせられる。書き出しの実物
+// （置き場を作って `files::write_lf` を呼ぶ）を渡すのは `ledger_init()` の 1 行だけで、
+// そちらはここから呼ばない——呼べば repo の台帳 4 本を実際に書く。
+
+#[test]
+fn re_running_the_init_writes_the_committed_ledgers_with_the_very_same_bytes() {
+    // 不動点（要件 3.3a）。`ledger-init` を今もう一度走らせても、repo にある台帳は
+    // 1 バイトも変わらない。実際のカタログと実際の取り寄せを使い、書き手だけを
+    // 「控えるだけ」に差し替える。ファイルは 1 つも作らない。
+    //
+    // 空振りしていない理由: カタログの id が 1 つでも台帳に欠けていれば、計画は
+    // その塊を差し込むので本文が食い違う。逆にここが押さえないのは `ledger_init()`
+    // の 1 行——どの取り寄せとどの書き手を渡すか——である。
+    let mut written: Vec<(PathBuf, String)> = Vec::new();
+    {
+        let mut record = |target: &Path, body: &str| -> Result<(), SurveyError> {
+            written.push((target.to_path_buf(), body.to_owned()));
+            Ok(())
+        };
+        ledger_init_with(&read_if_present, &mut record)
+            .expect("repo のカタログと台帳なら計画も書き出しも通るはず");
+    }
+
+    assert_eq!(written.len(), 4, "書き出した本数が台帳 4 本でない");
+    let places: Vec<String> = written
+        .iter()
+        .map(|(target, _)| under_coverage(target))
+        .collect();
+    assert_eq!(places, LEDGER_FILES, "書き出す先が台帳 4 本と違う");
+
+    for (index, domain) in Domain::ALL.into_iter().enumerate() {
+        let (target, body) = &written[index];
+        assert_eq!(
+            target,
+            &paths::ledger_path(domain),
+            "{} の書き出し先が違う",
+            domain.as_key()
+        );
+
+        // 空の本文どうしを比べて緑になる形を先に潰す。
+        let head = format!("# doc/ukadoc-coverage/ledger/{}.toml\n", domain.as_key());
+        assert!(
+            body.starts_with(&head),
+            "{} の本文の 1 行目が台帳のものでない: {}",
+            domain.as_key(),
+            body.lines().next().unwrap_or_default()
+        );
+
+        let committed =
+            files::read_normalized(target).expect("repo に追跡されている台帳は読めるはず");
+        assert_eq!(
+            body,
+            &committed,
+            "{} の台帳が書き換わる（再実行で不動でない）",
+            domain.as_key()
+        );
+    }
+}
+
+#[test]
+fn a_failure_on_the_fourth_ledger_leaves_the_first_three_unwritten() {
+    // 4 本目（property）の取り寄せで落ちたとき、先に本文が決まっている 3 本を
+    // 書いてしまうと、走行は失敗したのに repo の台帳だけが書き換わって残る
+    // （要件 1.8）。取り寄せに聞かれた場所を控えて、「3 本ぶんは決まっていた」と
+    // 「それでも 1 本も書いていない」を対で書く。
+    let asked: RefCell<Vec<String>> = RefCell::new(Vec::new());
+    let read = |path: &Path| -> Result<Option<String>, SurveyError> {
+        asked.borrow_mut().push(under_coverage(path));
+        if spelled_path(path).ends_with("property.toml") {
+            return Err(SurveyError::Io {
+                path: path.display().to_string(),
+                reason: "4 本目の取り寄せをここで落とした".to_owned(),
+            });
+        }
+        read_if_present(path)
+    };
+
+    let mut writes = 0_usize;
+    let err = {
+        let mut count = |_: &Path, _: &str| -> Result<(), SurveyError> {
+            writes += 1;
+            Ok(())
+        };
+        ledger_init_with(&read, &mut count).expect_err("4 本目が読めないのに成功した")
+    };
+
+    assert_eq!(
+        asked.into_inner(),
+        LEDGER_FILES,
+        "4 本目の取り寄せまで進んでいない（3 本ぶんは決まっていたはず）"
+    );
+    assert_eq!(writes, 0, "4 本が決まる前に書き始めている");
+    let body = err.to_string();
+    assert!(
+        body.contains("property.toml"),
+        "どの台帳で落ちたかが本文に無い: {body}"
+    );
+}
+
+#[test]
+fn a_failure_from_the_writer_comes_back_unchanged() {
+    // 書き手の失敗を握り潰して次の台帳へ進むと、書けなかった台帳があることを
+    // 誰も知らないまま終了コード 0 で終わる（設計 Error Handling）。
+    const MARKER: &str = "書き手をここで落とした";
+
+    let mut attempts: Vec<String> = Vec::new();
+    let err = {
+        let mut refuse = |target: &Path, _: &str| -> Result<(), SurveyError> {
+            attempts.push(under_coverage(target));
+            Err(SurveyError::Io {
+                path: target.display().to_string(),
+                reason: MARKER.to_owned(),
+            })
+        };
+        ledger_init_with(&read_if_present, &mut refuse).expect_err("書き手が落ちたのに成功した")
+    };
+
+    assert_eq!(
+        attempts,
+        vec![LEDGER_FILES[0]],
+        "書き手を 1 本目で止めていない"
+    );
+    match err {
+        SurveyError::Io { path, reason } => {
+            assert_eq!(reason, MARKER, "書き手の理由が別の本文へ差し替わっている");
+            assert!(
+                spelled_path(Path::new(&path)).ends_with(LEDGER_FILES[0]),
+                "書き手へ渡した場所が失敗に載っていない: {path}"
+            );
+        }
+        other => panic!("書き手の失敗が別の失敗に化けている: {other}"),
+    }
 }

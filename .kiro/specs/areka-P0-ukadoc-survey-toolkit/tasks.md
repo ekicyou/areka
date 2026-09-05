@@ -311,7 +311,7 @@
   - _Depends: 11_
   - _Boundary: requirements.md（親）・design.md（親）・doc/ukadoc-coverage/README.md・crates/ukadoc-survey/tests/consistency/{mod.rs,examples.rs}_
   - _Requirements: 2.1, 2.6, 6.3, 付録 A.1, 付録 A.3, 付録 B.5_
-- [ ] 12.2 `ledger_init` の書き出しを注入可能にし、実 repo に対する不動点と「4 本決めてから書く」を常時テストで守る
+- [x] 12.2 `ledger_init` の書き出しを注入可能にし、実 repo に対する不動点と「4 本決めてから書く」を常時テストで守る
   - `cli/generate.rs`: `ledger_init()` を 1 行の配線（実際の取り寄せ `read_if_present` と実際の書き手＝`ensure_parent`＋`files::write_lf`）にし、判断と順番は `pub(crate) fn ledger_init_with(read_existing, write)` へ移す。`write` は `&mut dyn FnMut(&Path, &str) -> Result<(), SurveyError>`。標準出力の 1 行（`announce`）は今までどおり
   - `cli/generate_tests.rs`: ⑴ 実 repo のカタログ・実際の `read_if_present`・記録するだけの書き手で `ledger_init_with` を呼び、記録された `(パス, 本文)` が `Domain::ALL` 順の台帳 4 本で、本文が**コミット済みの台帳とバイト一致**すること（不動点＝`ledger-init` の再実行で台帳が 1 バイトも変わらない・要件 3.3a）⑵ 4 本目（property）の取り寄せで失敗する関数を渡すと書き手が 1 度も呼ばれないこと（全部決めてから書く）⑶ 書き手の失敗がそのまま返ること
   - 読むだけ。ファイルも一時ディレクトリも作らない。`ledger_init()` 自身はテストから呼ばない（呼べば 4 本書く）
@@ -488,3 +488,5 @@
 - 12.1: 要件 付録 A.1 の記入例を実在 id へ訂正（親）・A.3 の逆斜線の一文を id の符号化に合わせて書き直し（親）・README の「記入例の id は実在しない」節を「id は符号化済み——カタログから写す」へ書き換え・`tests/consistency/examples.rs`（6 本）で要件と README の TOML の囲みに現れる id が全部カタログに実在すること、A.1 の囲みが道具の台帳読み手で property の台帳として読めて id 順であること（並びは `Ledger::file_order` を使い自前で数えない）、`alias_of` の先が実台帳で `alias` でないこと、を主張。取り出しの空振りは件数の下限（要件 4・README 3）と較正テスト（囲みの中の id 2 件だけを拾い、囲みの外は拾わない）で塞ぐ。レビュアーが 4 id の実在・1,749／0／0／316 の数・alias 例の根拠（ukadoc 本文「index指定との互換用の記述であり、特に意味はない」）をスナップショットまで遡って独立に確かめ、摂動 3 本（id の 1 字違い・README の id・id 順の破壊）を自分でも打って赤を確認。
   - ⚠ **差し戻し 1 件＝書き直した節に新しい誤りを混ぜた**。`validwidth` を「当たり判定の幅」と語釈していたが、正典は「現在のバルーンの文字描画に使える幅」（当たり判定は `mouse????list(当たり判定名)` 族で別物）。**偽の記述を消すために書き直した段落に偽の記述を足した**——id の実在は檻が守るが、語釈は檻が守らない。プロパティの説明を書くときは正典本文を引いてから書くこと。
   - property ドメインには ukadoc が「旧称」と呼ぶ真の別名の対が無い（旧名は見出しとして残らないので、カタログの項目にならない。真の別名は assets の `overlayfast`→`overlay-fast` 等）。A.1 の alias 例は「index 指定との互換用の記述」と正典が注記する`mouse????list(当たり判定名).name` を使い、仕分けは見本である旨を TOML のコメントに書いた。要件のパスは `examples.rs` の定数 1 つ（`/kiro-complete` のステップ 5-2 がアーカイブ移動で書き換える対象・コメントに明記）。残る取り残し（範囲外）: `tests/consistency.rs:9` の文が兄弟ファイルを `checks.rs` しか挙げていない——12.3 で直す。
+- 12.2: `ledger_init()` を 1 行の配線にし、判断と順番を `ledger_init_with(read_existing, write)` へ移した。在中テスト 3 本（実 repo のカタログ＋実際の取り寄せ＋記録するだけの書き手で呼び、書き出される 4 組がコミット済み台帳とバイト一致＝不動点／4 本目の取り寄せで失敗すると書き手が 0 回かつ 3 本目までの取り寄せは起きている／書き手の失敗が変わらず返り書き出しは 1 回）。摂動 3 本（本文を空に・書き先を取り違え・計画せずにドメインごとに読んで即書く直列ループへ置換）をレビュアーも自分で打ち、それぞれ意図したテストだけが赤（直列ループは `left: 3 / right: 0`）。実データ通し確認は台帳 4 本の sha256 が前後で不変。常時テストが届かないのは `ledger_init()` の 1 行（どの取り寄せ・どの書き手を渡すか）だけになった。11 の「残る未検証 2 か所」のうち⑵は解消、⑴は 1 行の配線に縮んだ。
+  - 不動点テストが比べるのは復帰文字を落とした本文どうし（設計 D-6 の正規化・`io/files.rs`）で、生バイトではない。この repo は `core.autocrlf=true` で `.gitattributes` が無いので新しい clone では台帳が CRLF で取り出され `ledger-init` が LF で書き直す。要件 3.3a の「既存の塊を変えない」は正規化後の本文で語られており、欠陥ではない（レビュアー所見）。
