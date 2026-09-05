@@ -215,13 +215,15 @@ Rust 側に新しいクレート・モジュール・テストは足さない。
 | 更新（`OnUpdate*` 26） | 更新 | 黙って | B | `B1` | brief 裁定「新旧両軸で高い唯一の群・B 先頭」 |
 | ファイルの受け渡し（`OnFileDrop2`・`OnFileDropping`） | 触れ合い＋更新 | 黙って | B | `B2` | brief 裁定（テーマ 2 つで B） |
 | 消滅（`OnVanish*` 5） | 記憶 | 黙って | B | `B3` | brief 裁定 |
-| 見た目の変化（`OnShell*`・`OnBalloon*`・`OnDressup*`・`OnSurface*`・群 2a） | 装い | 黙って | B | `B4` | brief に名指し無し・B「迎えて」に**仮置き** |
+| 見た目の変化（`OnShell*`・`OnBalloon*`・`OnDressup*`・`OnSurface*`） | 装い | 黙って | B | `B4` | brief に名指し無し・B「迎えて」に**仮置き** |
 | 導入と配布（`OnInstall*`・`OnNar*`・`OnDownload*`・`OnArchive*`） | 記憶 | 黙って | B | `B5` | 「育てる」側の記憶・**仮置き** |
 | 画面の材料（群 7・ボタンの文言・`menu.*`・`popupmenu.*`） | 装い／記憶 | **見た目の差** | C | `C1` | テーマは B だが見た目の差で 1 段下げ |
-| 察し（`OnBattery*`・`OnNetwork*`・`OnDisplay*`・`OnSysResume`／`OnSysSuspend`・`OnScreenSaver*`・`OnFullScreenApp*`・`OnWindowState*`） | 気配り | 黙って | C | `C2` | brief 裁定 |
+| 察し（`OnBattery*`・`OnNetwork*`・`OnDisplay*`・`OnSysResume`／`OnSysSuspend`・`OnScreenSaver*`・`OnFullScreenApp*`・`OnWindowState*`・群 2a） | 気配り | 黙って | C | `C2` | brief 裁定。群 2a は `values.md` が `OnBalloonTimeout` を気配りの代表として名指ししているため（訂正 2026-09-05） |
 | 交わり（`OnOtherGhost*`・`OnGhostCalled`・`OnGhostChanged`・`OnCommunicate*`・群 14a の SSTP／FMO） | 交わり | 黙って | D | `D1` | brief 裁定（基盤の重さはテーマ側で下げない） |
 | テーマの無い配管（群 4 の `On` 以外・群 10／11 のヘッダ・群 8 のその他のリソース） | — | 黙って | D | `D2` | 単体では利用者に見えない |
 | 受け口そのものが無い周辺（群 13 PLUGIN・群 14b の WEB／PLUGIN／HEADLINE・群 14c の DLL 共通仕様） | — | 黙って | E | `E1` | roadmap 追記(90)④（ヘッドラインは E・PLUGIN は M2 予約）。群 14c は `degraded` で E のまま（SAORI 等の同居は M2 以降の周辺・開発者裁定 2026-09-03 議題 1） |
+
+**訂正（2026-09-05・実装時にテーマの正本と照合）**: 群 2a（`OnBalloonClose`・`OnBalloonTimeout`・`OnBalloonBreak`）のテーマを**装い → 気配り**に、優先度を **`B4` → `C2`** に改めた。テーマの正本 `doc/ukadoc-coverage/values.md` が `OnBalloonTimeout` を**気配りの代表項目として id・URL つきで名指し**しており、気配りの「無いと失うもの」に「読まれないまま消えた吹き出しに気付けず」と書いてあるため。装いの定義は「見た目（シェル・着せ替え・バルーン）を**選び替えられる**こと」で、吹き出しが閉じた・時間切れになった・中断されたという出来事はこれに当たらない。索引（`briefing-shiori.md`）のテーマ欄は本設計が「出発点であって根拠ではない」と定めた既定であり、正本は `values.md` の側である。
 
 上の表に当たらない項目（テーマの付け方の表で「上のどれにも当たらない `On` 始まり」122 件の一部）は、1 項目ずつ規則 4.6 でテーマを決めたあと、同じテーマの群の値を写す。数値は段階の中の通し番号であり、段階と数値のどちらも**仮置き**である。最終決定は `ukadoc-coverage-roadmap` が行う（要件 7.5）。
 
@@ -233,7 +235,7 @@ Rust 側に新しいクレート・モジュール・テストは足さない。
 |---|---|---|---|---|---|
 | 1 | 送出しているイベント | 11 | `implemented` | 項目ごと | `""` |
 | 2 | 送出していないイベント（`On` 始まり） | 248 | `absent` | 項目ごと（8 語彙） | 群→段階の表（DD-11） |
-| 2a | M1 で意図的に発火させていないバルーンのイベント（`OnBalloonClose`・`OnBalloonTimeout`・`OnBalloonBreak`） | 3 | `vocabulary-only` | 装い | 群→段階の表（DD-11） |
+| 2a | M1 で意図的に発火させていないバルーンのイベント（`OnBalloonClose`・`OnBalloonTimeout`・`OnBalloonBreak`） | 3 | `vocabulary-only` | 気配り | 群→段階の表（DD-11） |
 | 3 | 旧仕様の別名（`OnFileDrop`・`OnFileDropped`・`OnFileDropEx`） | 3 | `alias` | `[]` | `""` |
 | 4 | `list_shiori_event` に同居する `On` 以外（通知と照会が混在） | 25 | `absent` | 原則 `[]` | `D2` |
 | 5 | 外部が送る拡張イベント | 168 | `not-applicable` | `[]` | `""` |

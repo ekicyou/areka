@@ -129,8 +129,8 @@ areka の送出の口は 1 か所（`crates/areka-kanade/src/actor.rs` の `roun
 - **対象**: `OnBalloonClose`・`OnBalloonTimeout`・`OnBalloonBreak`。
 - **件数**: 3
 - **状態**: `vocabulary-only`
-- **テーマ**: 装い
-- **優先度**: `B4`（仮置き）
+- **テーマ**: 気配り
+- **優先度**: `C2`（仮置き）
 - **判断の根拠の場所**: `crates/areka/src/emo2_boot/talk_lifecycle.rs` の
   `BalloonLifecycleNotice`（予約してある受け渡し口の型）。転記元は
   `doc/COMPAT_ARCHITECTURE.md` の沈黙ルール対応表の行「`OnBalloonClose` ／ `OnBalloonTimeout` ／
