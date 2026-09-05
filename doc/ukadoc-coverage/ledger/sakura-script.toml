@@ -492,19 +492,20 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c7:1"]
-status = "absent"
+status = "alias"
 introduced = ""
+alias_of = "ukadoc:list_sakura_script:_5c_21_5bexecutesntp_5d:1"
 owner = ""
-priority = "C90"
+priority = ""
 values = []
 links = [
+  { kind = "alias_of", to = "ukadoc:list_sakura_script:_5c_21_5bexecutesntp_5d:1" },
   { kind = "triggers", to = "ukadoc:list_shiori_event:OnSNTPBegin:1" },
   { kind = "triggers", to = "ukadoc:list_shiori_event:OnSNTPCompare:1" },
 ]
 note = """
-壊れ方: 黙って壊れる（タグが消える）— decode_bare の既定の腕から decode_passthrough_bare へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。時計合わせが始まらず、時刻サーバへの問い合わせもその結果の通知も起きない。
-ログ: 出る（compile の catch-all の debug! 記録）。
-[群: 時計合わせ]
+[別名の根拠: 正典本文の注記の逐語「\\7と同じ。」（\\![executesntp] の本文）。同等を言い切っていて「〜しない」の減算が無いので規則 4 の順 6 に当たる。向きは人手の判断——本文に [旧仕様] の札は無く、カタログの版番号も両側とも空で決め手にならないので、角括弧なしの短い綴りを旧い側・\\![...] の命令書式を新しい側とした（規則 4 の順 4 が版番号の無い \\s・\\p に同じ向きを当てたのと同じ形の判断）。裏付けは ⑴ 正典の並びで角括弧なしの綴りが \\![...] の族より前に置かれていること ⑵ この対では \\6・\\7 が隣り合って並び、その直後に \\![executesntp] が置かれていること（並びが 1 文字綴りの側を先に置いている）]
+[狭さ: 1 文字の旧い綴り。areka はこの綴りを decode_bare の既定の腕で受け、decode_passthrough_bare から Raw へ落として compile の catch-all で捨てる。写像先も名前をキャリアへ載せるだけで誰も消費しないので、起きること（何も起きない）は根と変わらない]
 [語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\7。綴りが短く別の語の一部にも当たるぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 """
@@ -667,6 +668,7 @@ note = """
 [運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
 [群: サーフェスアニメーション]
 [テーマ: 動きを止められず、終わったはずの仕草が続いたままになる]
+[別名の根拠: 本文の注記の逐語「ID番号のサーフェスアニメーションの再生を終了する(clearと同じ)。」は同等を言い切っており規則 4 の順 6 に当たるが、向きが決まらないので別名にしない——本文に [旧仕様] の札が無く、カタログの版番号は両側とも空で、どちらも \\![anim,...] の同じ書式なので規則 4 の順 4 のような形の手掛かりも無い。憶測で旧い側を決めず、関連は same-feature のまま残す（要件 4.1 の順序を尽くしても決まらなかった）]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![anim。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 """
 
@@ -1493,13 +1495,15 @@ owner = ""
 priority = "C90"
 values = []
 links = [
-  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c7:1" },
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnSNTPBegin:1" },
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnSNTPCompare:1" },
 ]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、時刻合わせの問い合わせが走らず、時計のずれが直らない）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
 [運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
 [群: 時計合わせ]
+[起こすイベント: 正典本文が「\\7と同じ。」と言い切るので、\\7 と同じ 2 つのイベント（OnSNTPBegin・OnSNTPCompare）を起こす]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![executesntp。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 """
 
@@ -3382,9 +3386,7 @@ introduced = ""
 owner = ""
 priority = "C90"
 values = []
-links = [
-  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_v_5b_30d5_30a1_30a4_30eb_540d_5d:1" },
-]
+links = []
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、音や動画の再生が始まらず、オプションを付けた再生もできない）。
 ログ: 出る（配送先の 3 つの受け口が担当外の名前として debug! を残す。compile の catch-all は通らない）。
@@ -3430,9 +3432,7 @@ introduced = ""
 owner = "areka-P0-sakura-time-directives"
 priority = "C50"
 values = []
-links = [
-  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_V:1" },
-]
+links = []
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、音の再生終了を待たずに台詞が進み、音と台詞の間合いが崩れる）。
 ログ: 出る（配送先の 3 つの受け口が担当外の名前として debug! を残す。compile の catch-all は通らない）。
@@ -3775,16 +3775,19 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_V:1"]
-status = "absent"
+status = "alias"
 introduced = ""
-owner = "areka-P0-sakura-time-directives"
-priority = "C90"
+alias_of = "ukadoc:list_sakura_script:_5c_21_5bsound_2cwait_5d:1"
+owner = ""
+priority = ""
 values = []
-links = []
+links = [
+  { kind = "alias_of", to = "ukadoc:list_sakura_script:_5c_21_5bsound_2cwait_5d:1" },
+]
 note = """
-壊れ方: 黙って壊れる（タグが消える）— decode_bare の既定の腕から decode_passthrough_bare へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。再生の終わりを待たずに次の台詞へ進む。
-ログ: 出る（compile の catch-all の debug! 記録）。
-[群: 音の再生]
+[別名の根拠: 正典本文の注記の逐語「\\_Vと同じ機能。」（\\![sound,wait] の本文）。同等を言い切っていて「〜しない」の減算が無いので規則 4 の順 6 に当たる。向きは人手の判断——本文に [旧仕様] の札は無く、カタログの版番号も両側とも空で決め手にならないので、角括弧なしの短い綴りを旧い側・\\![...] の命令書式を新しい側とした（規則 4 の順 4 が版番号の無い \\s・\\p に同じ向きを当てたのと同じ形の判断）。裏付けは ⑴ 正典の並びで角括弧なしの綴りが \\![...] の族より前に置かれていること ⑵ \\![sound,play,...] の本文が 2.4 の版区画を持つのに対し角括弧なしの側の本文には版区画が無いこと]
+[狭さ: 引数を取らない旧い綴り。areka はこの綴りを decode_bare の既定の腕で受け、decode_passthrough_bare から Raw へ落として compile の catch-all で捨てる。写像先も名前をキャリアへ載せるだけで誰も消費しないので、起きること（何も起きない）は根と変わらない]
+[所有の主張: areka-P0-sakura-time-directives がこの綴りを主張しているが、この行は別名なので owner は根の \\![sound,wait] に付く]
 [語境界の欠陥: 本文の半角 [ で直前のタグと本文が消える。areka-P0-sakura-tag-word-boundary 所有]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\_V。検索が大小文字を区別しないので \\_v と同じ数になり、両者を分けられない。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 """
@@ -4200,16 +4203,18 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5c_v_5b_30d5_30a1_30a4_30eb_540d_5d:1"]
-status = "absent"
+status = "alias"
 introduced = ""
+alias_of = "ukadoc:list_sakura_script:_5c_21_5bsound_2cplay_2c_30d5_30a1_30a4_30eb_540d_2c_30aa_30d7_30b7_30e7_30f3..._5d:1"
 owner = ""
-priority = "C90"
+priority = ""
 values = []
-links = []
+links = [
+  { kind = "alias_of", to = "ukadoc:list_sakura_script:_5c_21_5bsound_2cplay_2c_30d5_30a1_30a4_30eb_540d_2c_30aa_30d7_30b7_30e7_30f3..._5d:1" },
+]
 note = """
-壊れ方: 黙って壊れる（タグが消える）— decode_tag の既定の腕から decode_passthrough_tag へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。音や曲が鳴らず、無音のまま台詞が進む。
-ログ: 出る（compile の catch-all の debug! 記録）。
-[群: 音の再生]
+[別名の根拠: 正典本文の注記の逐語「\\_vと同じ機能。ただしオプションを指定可能。」（\\![sound,play,ファイル名,オプション...] の本文）。「ただし〜可能」は機能の加算なので要件 4.4 の除外（「〜と同じだが〜しない」の減算）に当たらず、規則 4 の順 6 に当たる。向きは人手の判断——本文に [旧仕様] の札は無く、カタログの版番号も両側とも空で決め手にならないので、角括弧なしの短い綴りを旧い側・\\![...] の命令書式を新しい側とした（規則 4 の順 4 が版番号の無い \\s・\\p に同じ向きを当てたのと同じ形の判断）。裏付けは ⑴ 正典の並びで角括弧なしの綴りが \\![...] の族より前に置かれていること ⑵ \\![sound,play,...] の本文が 2.4 の版区画を持つのに対し角括弧なしの側の本文には版区画が無いこと]
+[狭さ: オプションを書けないファイル名だけの形。areka はこの綴りを decode_tag の既定の腕で受け、decode_passthrough_tag から Raw へ落として compile の catch-all で捨てる。写像先も名前をキャリアへ載せるだけで誰も消費しないので、起きること（何も起きない）は根と変わらない]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\_v。検索が大小文字を区別しないので \\_V と同じ数になり、両者を分けられない。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
 """
 

@@ -9,8 +9,8 @@
 | 実装済み | 22 |
 | 語彙のみ | 36 |
 | 縮退 | 4 |
-| 未対応 | 262 |
-| 別名 | 17 |
+| 未対応 | 259 |
+| 別名 | 20 |
 | 対象外 | 1 |
 | 未分類 | 0 |
 | 合計 | 342 |
@@ -21,7 +21,7 @@
 
 | ページ | 実装済み | 語彙のみ | 縮退 | 未対応 | 別名 | 対象外 | 未分類 | 合計 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| list_sakura_script | 22 | 36 | 4 | 262 | 17 | 1 | 0 | 342 |
+| list_sakura_script | 22 | 36 | 4 | 259 | 20 | 1 | 0 | 342 |
 
 ## SSP 世代別の対応表
 
@@ -33,20 +33,23 @@
 | 2.6 | 1 | 1 | 0 | 8 | 0 | 0 | 0 | 10 |
 | 2.7 | 0 | 0 | 0 | 8 | 0 | 0 | 0 | 8 |
 | 2.8 | 0 | 1 | 0 | 14 | 0 | 0 | 0 | 15 |
-| 世代不明 | 18 | 33 | 4 | 204 | 17 | 1 | 0 | 277 |
+| 世代不明 | 18 | 33 | 4 | 201 | 20 | 1 | 0 | 277 |
 
 ## 別名の一覧
 
 | 別名の id | 指す先の id |
 | --- | --- |
+| ukadoc:list_sakura_script:_5c7:1 | ukadoc:list_sakura_script:_5c_21_5bexecutesntp_5d:1 |
 | ukadoc:list_sakura_script:_5c_21_5bexecute_2chttp-get_2cURL_5d:1 | ukadoc:list_sakura_script:_5c_21_5bexecute_2chttp-get_2cURL_2c_30d1_30e9_30e1_30fc_30bf_5d:1 |
 | ukadoc:list_sakura_script:_5c_21_5breload_2cdescript_5d:1 | ukadoc:list_sakura_script:_5c_21_5breload_2cdescript_2c_30d1_30e9_30e1_30fc_30bf_5d:1 |
 | ukadoc:list_sakura_script:_5c_21_5breloadsurface_5d:1 | ukadoc:list_sakura_script:_5c_21_5breload_2cshell_5d:1 |
 | ukadoc:list_sakura_script:_5c_21_5bset_2cscaling_2c_6a2a_500d_7387_2c_7e26_500d_7387_5d:1 | ukadoc:list_sakura_script:_5c_21_5bset_2cscaling_2c_6a2a_500d_7387_2c_7e26_500d_7387_2c_30aa_30d7_30b7_30e7_30f3_5d:1 |
+| ukadoc:list_sakura_script:_5c_V:1 | ukadoc:list_sakura_script:_5c_21_5bsound_2cwait_5d:1 |
 | ukadoc:list_sakura_script:_5c_a_5bID_5d:1 | ukadoc:list_sakura_script:_5c_a_5bID_2cr2_2cr3..._5d:1 |
 | ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cinline_5d:1 | ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cinline_2copaque_5d:1 |
 | ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cx_2cy_5d:1 | ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cx_2cy_2copaque_5d:1 |
 | ukadoc:list_sakura_script:_5c_s:1 | ukadoc:list_sakura_script:_5c_s_5bID1_2cID2_2cID3..._5d:1 |
+| ukadoc:list_sakura_script:_5c_v_5b_30d5_30a1_30a4_30eb_540d_5d:1 | ukadoc:list_sakura_script:_5c_21_5bsound_2cplay_2c_30d5_30a1_30a4_30eb_540d_2c_30aa_30d7_30b7_30e7_30f3..._5d:1 |
 | ukadoc:list_sakura_script:_5cbID_756a_53f7:1 | ukadoc:list_sakura_script:_5cb_5bID_756a_53f7_5d:1 |
 | ukadoc:list_sakura_script:_5cc_5bchar_2c_6570_5024_5d:1 | ukadoc:list_sakura_script:_5cc_5bchar_2c_6570_5024_2c_958b_59cb_4f4d_7f6e_5d:1 |
 | ukadoc:list_sakura_script:_5cc_5bline_2c_6570_5024_5d:1 | ukadoc:list_sakura_script:_5cc_5bline_2c_6570_5024_2c_958b_59cb_4f4d_7f6e_5d:1 |
