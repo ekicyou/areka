@@ -96,7 +96,7 @@
   - 完了条件: 19 行すべてに状態と種別の記述が入り、未分類が 0 件になる
   - _Requirements: 5.6_
 
-- [ ] 4.3 外部連携 14 項目と補足 1 項目を「受け口の有無」で判定する
+- [x] 4.3 外部連携 14 項目と補足 1 項目を「受け口の有無」で判定する
   - SSTP 2・FMO 6 を交わりの群として、WEB 3・PLUGIN 1・HEADLINE 1 を周辺の群として `absent` にする
   - DLL 共通仕様 1 件を `degraded` とし、`note` に SHIORI 用の入口が host-32 に実装済みであること・SAORI／MAKOTO／PLUGIN の同居が無いこと・SAORI の成立条件（32bit の同じプロセスに同居・作業ディレクトリ・DLL の探索パス）・MAKOTO の担当 spec を書く。SAORI の独立した行は作らない
   - アンカーの無いページ全体で 1 項目である 4 件（DLL 共通仕様・PLUGIN・HEADLINE・イベント一覧の補足）について、他ページの 1 項目より粒度が粗い旨を `note` に書く
@@ -279,3 +279,9 @@
 - 4.2: `OnMenuBack` の相互参照は**置かない**と決めた（任意名の枠は受け手がプラグイン、`OnMenuBack` は SHIORI 側へ出る名前で相手が違う）。扱いの本体は `list_shiori_event:OnChoiceEnter:1` の `note` に残し、枠の行には行き先の案内だけを置いた。
 - 4.2 → **タスク 5.3 への申し送り（DD-6 の同名 12 組の id を確定）**: 書く側は `list_plugin_event` 側、相手は各 `ukadoc:list_shiori_event:<同名>:1`。12 件は `ukadoc:list_plugin_event:` の `OnInstallComplete:1`・`OnOtherGhostTalk:1`・`OnSecondChange:1`・`balloonpathlist:1`・`ghostpathlist:1`・`headlinepathlist:1`・`installedballoonname:1`・`installedghostname:1`・`installedplugin:1`・`pluginpathlist:1`・`property.get:1`・`property.set:1`。**`version` は 12 組に入らない**（同名の相手は `list_shiori_resource:version:1` で、DD-6 の対＝plugin_event × shiori_event に当たらない）。
 - 4.2 → **タスク 5.4 への申し送り**: `list_plugin_event` の `property.get`／`property.set` はカタログの `versions` に `2.7.85` を持つ（`introduced` の候補 2 件）。
+- 4.3: **台帳 677 行の未分類が 0 になった。** 状態分布は `absent` 320／`not-applicable` 169／`vocabulary-only` 161／`implemented` 21／`alias` 3／`degraded` 3 ＝ 677。
+- 4.3 → **タスク 6.4（ブリーフィング）と design 追随への申し送り（訂正 3 ファイル 9 行）**: 索引と設計が書く型名 **`ShioriProxy` は実在しない**。実型名は `ShioriByteProxy`（`crates/shiori-host32-helper/src/shiori_proxy.rs` の struct／`load`／`request`）で、`ShioriProxy` は `crates/` 全域に 0 件。訂正先は `doc/ukadoc-coverage/briefing-shiori.md` の群 14c（判断の根拠の場所 2 行＋共通 `note` 2 行）・台帳冒頭の索引の写し 4 行・`design.md` の群 14c の段落 1 行。**訂正の順は 正本（briefing）→ 写し（台帳冒頭）→ design.md。**
+- 4.3 → **同じ訂正の束**: 索引と設計は DLL の入口を「`load`／`unload`／`request` の 3 つ」と書くが、**正典は SSP 2.6.92 で `loadu` を加えた 4 つ**（`loadu` が優先・`load` がフォールバック・パスの文字コードが違う）。台帳の `note` は正典どおりに書けているので、遅れているのは索引と設計の側。
+- 4.3: `spec_dll` は `degraded`（受け口が無いでも実装済みでもない）。SHIORI 用の 3 入口は host-32 が `GetProcAddress` で解決しているが、同じ入口を使う SAORI・MAKOTO・PLUGIN の DLL は読み込めない（`saori`／`makoto` は `crates/**/*.rs` に 0 件）。
+- 4.3: 群 15（`memo_shiorievent`）には内部名 3 つの**行き先の案内だけ**を置いた（本体はタスク 2.2 が `OnAITalk`・`OnHourTimeSignal`・`OnChoiceEnter` に書いており、二重にしない）。
+- 4.3 → **タスク 5.1 への申し送り**: 索引 群 14b の共通 `note` の「テーマ:」行が逐語ではなく言い換えで写されている（「付与規則に照らして」が落ちている）。総仕上げで文言を確定させること。

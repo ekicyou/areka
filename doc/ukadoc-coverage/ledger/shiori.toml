@@ -13916,94 +13916,210 @@ SHIORI のやり取りの版でもない）。
 """
 
 [entry."ukadoc:memo_shiorievent"]
-status = "unclassified"
+status = "not-applicable"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 該当なし。この項目はイベント一覧のページに添えられた読み方の補足であって、areka が送る・
+引く・受けるものではない。実装の対象にならないので、利用者から見える壊れ方も無い。
+ログ: 実行時の経路を持たないので、出るログも出ないログも無い。
+粒度: このページ全体で 1 項目であり、他のページの 1 項目より粗い。
+内容: SHIORI Event の考え方の手引きであり、ページ自身が正式な仕様書ではないと断っている。
+ベースウェアが時間やマウスなどの変化をきっかけに知らせを出し、SHIORI がそれを受けて辞書から
+さくらスクリプトを組んで返す、という往復の説明に始まり、Reference の通し番号（数が不定になる場合を
+含む）、GET と NOTIFY という 2 つの発行の形（NOTIFY への返事はベースウェアが無視する・コマンドの
+種類と ID の種類は独立している）までを扱う。
+areka の内部名: この補足のページには対応する送出も照会も無いので、内部名の扱いはこの行には
+置かない。OnTalk・OnHour・OnMenuBack の扱いは list_shiori_event の OnAITalk・OnHourTimeSignal・
+OnChoiceEnter の各行に書いてあり、そこから動かさない。
+"""
 
 [entry."ukadoc:spec_dll"]
-status = "unclassified"
+status = "degraded"
 introduced = ""
 owner = ""
-priority = ""
+priority = "E1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: できている範囲は明示的なエラーで守られており、できていない範囲は黙って壊れる。DLL の入口の
+決まり（load・unload・request の 3 つ）のうち、SHIORI の DLL については areka の 32bit の助け手が
+絶対パスで読み込み、3 つの入口をすべて名前で引いてから呼んでいる。同じ決まりを共有する SAORI・
+MAKOTO・PLUGIN の DLL は、読み込む呼び出しそのものが無いので同居できない。
+ログ: DLL が開けない・3 つの入口のいずれかが引けない・load が偽を返したときは、いずれも失敗として
+呼び出し元へ返り、起動が黙って先へ進むことはない。一方 SAORI・MAKOTO・PLUGIN については、読み込もう
+とする場所が無いのでログは 1 行も出ない。
+SAORI: areka はプロトコルを実装せず、実装の主体は SHIORI 側である。成立の条件は 32bit の同じ
+プロセスに同居すること・作業ディレクトリ・DLL の探索パスの 3 つ。ukadoc に SAORI の独立したページは
+無いので、SAORI 用の行は作らない。MAKOTO は areka-P0-makoto-dll-host が担う。
+縮退の転記元: doc/emo2-conformance-scope.md の旧ロードマップ spec への影響の表の行
+「areka-P0-shiori-host-32 ＝ SAORI 同居を M1 から削除（emo2 未使用）。32bit SHIORI 往復に集中」。
+粒度: このページ全体で 1 項目であり、他のページの 1 項目より粗い。
+根拠の場所: crates/shiori-host32-helper/src/shiori_proxy.rs の ShioriByteProxy::load（絶対パスで
+読み込み、3 つの入口を名前で引く）と ShioriByteProxy::request。
+内容: SHIORI・SAORI ほかの伺かの DLL が共有する入口の決まり。受け渡しは Windows のグローバル
+メモリ（GMEM_FIXED で確保・長さは len で受け取る・終端は保証されない）で行う。要求は request の
+1 つの関数に集約され、その中身は HTTP や SSTP に倣った行とヘッダの形をとる。生存期間の関数は
+loadu（SSP 2.6.92 以降・パスは UTF-8）・load（従来版・パスは既定のコードページ）・unload である。
+areka の助け手が名前で引くのは load・unload・request の 3 つで、loadu は引かない。この 1 つの
+項目が、その全体を抱える。
+"""
 
 [entry."ukadoc:spec_fmo_mutex:32_30d0_30a4_30c8_306e_8b58_5225ID:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
-priority = ""
-values = []
+priority = "D1"
+values = ["交わり"]
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。SSTP の受け付け口も、起動中のゴーストの一覧を共有する仕組みも areka に
+無いので、他のゴーストや外部のアプリから話しかけることができず、他のゴーストが居ることも分からない。
+利用者からは「うちのゴーストたちが互いに気づかない」という形でだけ現れる。
+ログ: 1 行も出ない。待ち受ける口が開いていないので接続そのものが成立せず、断ったことを書き留める
+場所が無い。共有の仕組みについても、それを読み書きする場所がコードのどこにも無い。
+内容: 起動中のゴーストの一覧を共有する領域で、ゴースト 1 組を指す重複しない識別子。少なくとも
+その共有領域の中で他と重ならない文字列を選ぶ。Materia の規格では長さの定めが無いが、互換のため
+32 バイトの固定長とすべきとされる。
+"""
 
 [entry."ukadoc:spec_fmo_mutex:FMO_306e_30b5_30a4_30ba:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
-priority = ""
-values = []
+priority = "D1"
+values = ["交わり"]
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。SSTP の受け付け口も、起動中のゴーストの一覧を共有する仕組みも areka に
+無いので、他のゴーストや外部のアプリから話しかけることができず、他のゴーストが居ることも分からない。
+利用者からは「うちのゴーストたちが互いに気づかない」という形でだけ現れる。
+ログ: 1 行も出ない。待ち受ける口が開いていないので接続そのものが成立せず、断ったことを書き留める
+場所が無い。共有の仕組みについても、それを読み書きする場所がコードのどこにも無い。
+内容: 共有領域の先頭 4 バイトが、確保されている領域の大きさを表す。書き込まれた情報の長さでは
+なく確保量そのものを示す固定値で、リトルエンディアンの 0x00010000（64KB）固定である。他のプログラム
+との互換のため大きさの変更は考慮されていない。
+"""
 
 [entry."ukadoc:spec_fmo_mutex:FMO_306e_540d_524d_3068_6587_5b57_30b3_30fc_30c9:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
-priority = ""
-values = []
+priority = "D1"
+values = ["交わり"]
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。SSTP の受け付け口も、起動中のゴーストの一覧を共有する仕組みも areka に
+無いので、他のゴーストや外部のアプリから話しかけることができず、他のゴーストが居ることも分からない。
+利用者からは「うちのゴーストたちが互いに気づかない」という形でだけ現れる。
+ログ: 1 行も出ない。待ち受ける口が開いていないので接続そのものが成立せず、断ったことを書き留める
+場所が無い。共有の仕組みについても、それを読み書きする場所がコードのどこにも無い。
+内容: 共有領域の名前と、その中身の文字コード。Sakura は OS 依存（日本語 OS 上は Shift_JIS）、
+SakuraUnicode は UTF-8 固定（SSP 2.5.26 以降）である。
+"""
 
 [entry."ukadoc:spec_fmo_mutex:_30ad_30fc_540d_30fb_5024:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
-priority = ""
-values = []
+priority = "D1"
+values = ["交わり"]
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。SSTP の受け付け口も、起動中のゴーストの一覧を共有する仕組みも areka に
+無いので、他のゴーストや外部のアプリから話しかけることができず、他のゴーストが居ることも分からない。
+利用者からは「うちのゴーストたちが互いに気づかない」という形でだけ現れる。
+ログ: 1 行も出ない。待ち受ける口が開いていないので接続そのものが成立せず、断ったことを書き留める
+場所が無い。共有の仕組みについても、それを読み書きする場所がコードのどこにも無い。
+内容: 共有領域に載せる情報の種類を示すキーと、その値。path（ベースウェアの根のフルパス）・
+hwnd（主となる窓のハンドル・10 進）・name・keroname（descript.txt の sakura.name／kero.name と
+同じもの）・sakura.surface／kero.surface（現在表示している面の ID・10 進）・kerohwnd・hwndlist
+（使用中の窓ハンドルをカンマ区切りで列挙・SSP のみ）・ghostpath ほかが並ぶ。この 1 項目が可変個の
+キーをまとめて表す。
+"""
 
 [entry."ukadoc:spec_fmo_mutex:_30c7_30fc_30bf_672c_4f53:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
-priority = ""
-values = []
+priority = "D1"
+values = ["交わり"]
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。SSTP の受け付け口も、起動中のゴーストの一覧を共有する仕組みも areka に
+無いので、他のゴーストや外部のアプリから話しかけることができず、他のゴーストが居ることも分からない。
+利用者からは「うちのゴーストたちが互いに気づかない」という形でだけ現れる。
+ログ: 1 行も出ない。待ち受ける口が開いていないので接続そのものが成立せず、断ったことを書き留める
+場所が無い。共有の仕組みについても、それを読み書きする場所がコードのどこにも無い。
+内容: 共有領域の 4 バイト目以降の書式。「(32 バイトの識別 ID).(キー名)[バイト値 1]値[CR+LF]」を
+1 行とし、これを必要な数だけ繰り返す形になる。
+"""
 
 [entry."ukadoc:spec_fmo_mutex:_30c7_30fc_30bf_7d42_7aef:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
-priority = ""
-values = []
+priority = "D1"
+values = ["交わり"]
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。SSTP の受け付け口も、起動中のゴーストの一覧を共有する仕組みも areka に
+無いので、他のゴーストや外部のアプリから話しかけることができず、他のゴーストが居ることも分からない。
+利用者からは「うちのゴーストたちが互いに気づかない」という形でだけ現れる。
+ログ: 1 行も出ない。待ち受ける口が開いていないので接続そのものが成立せず、断ったことを書き留める
+場所が無い。共有の仕組みについても、それを読み書きする場所がコードのどこにも無い。
+内容: 共有領域のデータの終わりは、C 言語の文字列と同じくバイト値 0 で示す。ゆえに本体で使える
+最大は 65531 バイト（65536 - 4 - 1）である。上限を超えそうなときは 1 組分のデータを丸ごと書かない
+のが望ましく、それが無理でも 1 行の途中で終わらせないこととされる。
+"""
 
 [entry."ukadoc:spec_headline"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "E1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ブラウザから渡される導入やイベントの依頼を受け取る口も、プラグインの決まりに
+沿った読み込みも、ヘッドラインの取得も areka に無い。配布サイトの導入用のリンクを押しても areka には
+何も届かない。
+ログ: 1 行も出ない。受け口が無いということは要求を読む場所が無いということなので、断ったことを
+書き留める場所も無い。
+粒度: このページ全体で 1 項目であり、他のページの 1 項目より粗い。
+テーマ: 付けない。「この項目が無いと利用者はゴーストの何を失うか」に答えられる段階に無いため。
+内容: HEADLINE/2.0 の決まり全体。実体は設定ファイル descript.txt と execute を提供する DLL の
+2 つで、DLL の入口の決まりは DLL 共通仕様のページに従う。やり取りは 2 種類あり、版の取得
+（GET Version HEADLINE/2.0）と見出しの取得（GET Headline HEADLINE/2.0・Option・Path）である。
+応答の Headline ヘッダは平文で、Option に url を指定した場合はバイト値 1 で区切って内容と URL を
+返せる。対応する SHIORI イベントとして OnHeadlinesenseBegin・OnHeadlinesense.OnFind・
+OnHeadlinesenseComplete・OnHeadlinesenseFailure の 4 つが挙げられている。この 1 つの項目が、その
+全体を抱える。
+"""
 
 [entry."ukadoc:spec_plugin"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "E1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ブラウザから渡される導入やイベントの依頼を受け取る口も、プラグインの決まりに
+沿った読み込みも、ヘッドラインの取得も areka に無い。配布サイトの導入用のリンクを押しても areka には
+何も届かない。
+ログ: 1 行も出ない。受け口が無いということは要求を読む場所が無いということなので、断ったことを
+書き留める場所も無い。
+粒度: このページ全体で 1 項目であり、他のページの 1 項目より粗い。
+内容: PLUGIN/2.0 の決まり全体。実体は設定ファイル descript.txt と DLL の 2 つで、DLL の入口の
+決まりは DLL 共通仕様のページに従う。要求は GET／NOTIFY PLUGIN/2.0 の 1 行目に ID・Charset・
+Sender・Reference のヘッダが続く形、応答は Target・Event・EventOption・Reference・Script・
+ScriptOption のヘッダを持つ形である。ゴースト側の拡張として raiseplugin・notifyplugin の 2 つの
+タグと、SHIORI イベントの installedplugin が挙げられている。この 1 つの項目が、その全体を抱える。
+"""
 
 [entry."ukadoc:spec_shiori3:Age_20_5bSSP_62e1_5f35_5d:1"]
 status = "absent"
@@ -14540,47 +14656,96 @@ NOTIFY SHIORI/3.0 のどちらかを 1 行目として書き出す。
 """
 
 [entry."ukadoc:spec_sstp:request:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
-priority = ""
-values = []
+priority = "D1"
+values = ["交わり"]
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。SSTP の受け付け口も、起動中のゴーストの一覧を共有する仕組みも areka に
+無いので、他のゴーストや外部のアプリから話しかけることができず、他のゴーストが居ることも分からない。
+利用者からは「うちのゴーストたちが互いに気づかない」という形でだけ現れる。
+ログ: 1 行も出ない。待ち受ける口が開いていないので接続そのものが成立せず、断ったことを書き留める
+場所が無い。共有の仕組みについても、それを読み書きする場所がコードのどこにも無い。
+内容: SSTP/1.x の要求の側。外部のツールや他のゴーストがベースウェアへ送る書式で、1 行目に
+メソッドとプロトコルの版、2 行目以降にヘッダが並ぶ。共通のヘッダは Charset・Sender・SecurityLevel・
+SecurityOrigin（SSP 2.6.59 以降）・Option・ID・X-SSTP-PassThru-（任意の文字列）・HWnd・
+ReceiverGhostHWnd（SSP 2.5.57 以降）・ReceiverGhostName（SSP 2.5.57 以降）である。この 1 項目が
+可変個のヘッダをまとめて表す。
+"""
 
 [entry."ukadoc:spec_sstp:response:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
-priority = ""
-values = []
+priority = "D1"
+values = ["交わり"]
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。SSTP の受け付け口も、起動中のゴーストの一覧を共有する仕組みも areka に
+無いので、他のゴーストや外部のアプリから話しかけることができず、他のゴーストが居ることも分からない。
+利用者からは「うちのゴーストたちが互いに気づかない」という形でだけ現れる。
+ログ: 1 行も出ない。待ち受ける口が開いていないので接続そのものが成立せず、断ったことを書き留める
+場所が無い。共有の仕組みについても、それを読み書きする場所がコードのどこにも無い。
+内容: SSTP/1.x の応答の側。ベースウェアが送り主へ返す書式で、共通のヘッダは Charset と
+X-SSTP-PassThru-（任意の文字列）である。状態コードは HTTP に倣い、200 OK・204 No Content・
+210 Break・400 Bad Request・404 Not Found・408 Request Timeout・409 Conflict・
+413 Payload Too Large・420 Refuse・500 Internal Server Error・501 Not Implemented・
+503 Service Unavailable・505 Version Not Supported・512 Invisible が定義される。この 1 項目が
+可変個のヘッダと状態コードの一覧をまとめて表す。
+"""
 
 [entry."ukadoc:spec_web:x-ukagaka-link_3atype_3devent_26ghost_3d_28_30b4_30fc_30b9_30c8_540d_29_26info_3d_28_8ffd_52a0_60c5_5831_29:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "E1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ブラウザから渡される導入やイベントの依頼を受け取る口も、プラグインの決まりに
+沿った読み込みも、ヘッドラインの取得も areka に無い。配布サイトの導入用のリンクを押しても areka には
+何も届かない。
+ログ: 1 行も出ない。受け口が無いということは要求を読む場所が無いということなので、断ったことを
+書き留める場所も無い。
+内容: ブラウザで x-ukagaka-link:type=event&ghost=(ゴースト名)&info=(追加情報) という書式の
+URL を開くと、OnXUkagakaLinkOpen のイベントが起きる。ゴースト名は descript.txt の name か
+sakura.name と同じもので、追加情報の中は任意の文字列である。
+"""
 
 [entry."ukadoc:spec_web:x-ukagaka-link_3atype_3dhomeurl_26url_3d_28_30a8_30f3_30b3_30fc_30c9_6e08URL_29:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "E1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ブラウザから渡される導入やイベントの依頼を受け取る口も、プラグインの決まりに
+沿った読み込みも、ヘッドラインの取得も areka に無い。配布サイトの導入用のリンクを押しても areka には
+何も届かない。
+ログ: 1 行も出ない。受け口が無いということは要求を読む場所が無いということなので、断ったことを
+書き留める場所も無い。
+内容: ブラウザで x-ukagaka-link:type=homeurl&url=(エンコード済 URL) という書式の URL を開くと、
+指定された URL を更新先として認め、ネットワーク更新と同じ方法でファイル群を取り寄せてから導入する
+（SSP 2.5.76 以降）。URL の部分は符号化した配布物の置き場所である。
+"""
 
 [entry."ukadoc:spec_web:x-ukagaka-link_3atype_3dinstall_26url_3d_28_30a8_30f3_30b3_30fc_30c9_6e08URL_29:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
-priority = ""
+priority = "E1"
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。ブラウザから渡される導入やイベントの依頼を受け取る口も、プラグインの決まりに
+沿った読み込みも、ヘッドラインの取得も areka に無い。配布サイトの導入用のリンクを押しても areka には
+何も届かない。
+ログ: 1 行も出ない。受け口が無いということは要求を読む場所が無いということなので、断ったことを
+書き留める場所も無い。
+内容: ブラウザで x-ukagaka-link:type=install&url=(エンコード済 URL) という書式の URL を開くと、
+その URL にある配布物（NAR）を導入する。URL の部分は符号化した配布物の置き場所である。
+"""
 
