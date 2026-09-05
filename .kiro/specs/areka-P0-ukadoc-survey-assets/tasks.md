@@ -106,7 +106,7 @@
   - _Requirements: 2.1, 2.8, 7.1, 7.2, 7.5_
   - _Depends: 3.1_
 
-- [ ] 3.7 surfaces.txt の残りを仕訳する
+- [x] 3.7 surfaces.txt の残りを仕訳する
   - 合成メソッド以外の残りの項目に状態・登場した版・備考を入れる
   - 当たり判定が矩形のみであることを反映し、円・楕円・多角形の項目を未対応として登記する。読み飛ばしが何も記録を残さないことを備考に file:line 付きで書く
   - 間隔語のうち駆動するのは 2 語だけである旨を反映し、正典に項目が無い語は既存項目の備考に書く（新しい行を作らない）
@@ -127,6 +127,7 @@
 - [ ] 3.9 残りを仕訳し、未分類を 0 件にする
   - surfacetable の項目と、まだ状態の入っていない項目をすべて埋める
   - 扱いが「黙って捨てる」に当たる項目について、壊れ方の判定と「どの記録が出るか・出ないか」を備考に書く
+  - **担当の欄の取り残しを埋める**——`descript_shell_surfaces` の `element*`・`collision*`・`animation*.interval`・`animation*.pattern*` の 4 件は `areka-P0-shell-parse` の brief が範囲の In に挙げているのに担当が空（3.7 は「残り」の担当ではないので触らなかった）。バルーン側の `use_self_alpha`／`paint_transparent_region_black` も `areka-P0-emo-atlas` の brief が名指ししているのに空。いずれも brief を実読して確かめてから埋め、要件 7.1 を全数で成立させる
   - 記録が控えめな段だけの項目は、分類は事実どおりにしたまま壊れ方の判定を「黙って壊れる」とし、段と既定では見えない旨を備考に書く
   - 読む経路が無い種別はファイル全体として扱い、記述単位の分類は行わない
   - `degraded-sources.md` の転記元の行すべてについて、対応する台帳の項目が登記されている（状態が入り、備考でその行を項目名で名指ししている）ことを突き合わせる。**縮退として登記されていることは求めない**——要件 2.9 の文言は「登記する」であり、areka に受ける経路そのものが無い項目は README の語彙どおり未対応になる。行数は 16 ではなく 3.1 が数え直した数を使う
@@ -314,3 +315,9 @@
 - 3.6: 引き受け先の無い沈黙が 2 件（作業用 `corrections-for-9-8.md` §12）——⑴ **バルーン側の `use_self_alpha`／`paint_transparent_region_black` は同じ brief が名指ししているのに担当が空**（バルーンのページは 3.2 の範囲だったので未着手。**3.9 か 7.1 で埋めること**）、⑵ `sakura.balloon.alignment`／`kero.balloon.alignment` は実装済みだが `window-placement` が「記録のみ・後続ユニット向け」と書いて後続を名指ししていない。
 - 3.6: **3.7 への申し送り（必須）**——`descript_shell_surfaces` の **8 件はカタログの `versions` が非空なのに `introduced` が空**。上流検査はこの型を捕まえられないので 3.7 で必ず埋めること。
 - 3.6: 掃き出しの緩和に注意——`sweep_absent_claims.py` の要判断が 11→1 に落ちたのは規則の緩和ではなく「当たった行を名前で引いたうえで非該当と論じた備考」を判定済みへ移した結果（レビューが 10 件の論証実体を全文確認）。**検査を書き換えたら必ず自前の摂動で較正すること**——自分のデータを通すために検査を緩める型が最も見つけにくい。
+- 3.7: ⚠**引用の番人が 3 タスク分（3.5・3.6・3.7）回されていなかった**。回したらクレート名の取り違えが 3 件出た。**備考を触ったタスクは必ず `verify_citations.py` を通すこと**。とくにクレート名を省いた引用は直前の文のクレートに吸われる——`shell::normalize_interval` は `areka-parsers` だが直前が `areka-seriko の table` だと反転する。
+- 3.7: ⚠**担当 spec の brief の「挙動の主張」を裏取りせずに台帳へ写さない**。是正の途中で `areka-P0-charset-canon` の brief の症状 3（「起動失敗」）をそのまま写して新しい偽を作った。実際は `emo2_boot::wire_emo2_boot` が `error!` を出して `wired=false` を返すだけで、`main` は縮退起動を続ける（**窓は開くがシェルが出ない**）。**brief の「範囲」を引くのは可・「挙動の主張」を台帳の主張として採るのは不可**（レビュー裁定）。
+- 3.7: **実害のある発見**——**surfaces.txt の `charset` 宣言は一切読まれない**。descript 3 種は `areka-parsers` の `charset::prescan` を通るのに、surfaces.txt だけ `areka` の `emo2_boot::assets` と `placement::measure` が `read_to_string`（UTF-8 決め打ち）で読む。Shift_JIS の既存シェルは読み取りの段で弾かれる。担当は `areka-P0-charset-canon`（未着手 spec・brief の In に「surfaces.txt 読取 2 箇所」）。
+- 3.7: 未登記の縮退候補が他に 2 件（引き受ける行が無いので裁定どおり `absent`）——⑴ 別名の複数指定を毎回抽選せず**先頭固定**（`areka-seriko` の `resolve::SurfaceResolver`）、⑵ 別名の塊は**相方側の綴りだけ**受理（`sakura.surface.alias`・`char*.surface.alias`・`alias.txt` は `crates/` に 0 件で、本体側に別名を書いたゴーストは丸ごと落ちる）。
+- 3.7: 間隔語 10 件は `degraded` ではなく `vocabulary-only`（レビュー裁定で支持）。転記元の行はあるが、`areka-parsers` の `shell::normalize_interval` が綴りを保ったまま `Interval::Other` に載せ、`areka-seriko` の `table` が `debug!` を出して非採録にするので**コマは 1 枚も進まない**。行の名前は備考に残して要件 2.9 の登記を満たす。
+- 3.7: ⚠要件 3.4 の「備考に **file:line 付きで**書く」は設計 D4（行番号を書かない）と食い違う。台帳の流儀（クレート＋モジュール＋定義名）を採り、食い違いは 6.4 の是正候補へ。

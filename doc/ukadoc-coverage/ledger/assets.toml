@@ -5491,22 +5491,34 @@ areka がシェルだと決めるのは置き場所だけで、起点の descrip
 """
 
 [entry."ukadoc:descript_shell_surfaces:_2a_2c_5b_2a_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-shell-parse"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::decode_alias_block と shell::parse_alias_ids がこの形の行を名前と順序付きの番号の並びとして値にし、areka-emo-compose の world が別名の表として持ち、areka-seriko の resolve が `\\s[名前]` の名前を面の番号へ写す。受け取る道はある。
+正典どおりでないところが 3 つある。⑴ 番号を複数書いたとき、正典はその中から毎回どれかを選ぶと定めるが、areka-seriko の resolve::SurfaceResolver は並びの先頭を固定で返す（決定論を優先した作りである）。同じ名前を書いても、いつも同じ 1 枚しか出ない。⑵ 塊の名前として areka が振り分けるのは相方側の綴りだけで、本体側の綴り（`sakura.surface.alias`）とキャラクタ番号で指す綴りは crates のどの Rust ファイルにも出てこない——本体側に別名を書いたゴーストは、その別名が丸ごと落ちる。⑶ 正典は別名を専用のファイル（`alias.txt`）に分けて書くこともできると定めるが、その綴りも crates のどこにも無く、読む道が無い。
+⑵ と ⑶ はどちらも記録を残さない。⑵ は areka-parsers の shell::dispatch_block が未知の塊として吸収するだけである。areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
+2 つの表を当たったが、この食い違いを引き受ける行はどちらにも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。適合の対象としたゴーストが相方側の綴りしか使わないので、いままで表に出ていない。
+担当 spec は areka-P0-shell-parse。同 spec の brief は範囲の In に別名の透過（名前は解釈せず不透明に扱う）を挙げている。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:_5f53_305f_308a_5224_5b9a_540d_2c_8868_793a_5185_5bb9:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::dispatch_block が名前で振り分ける塊に、ツールチップの塊は入っていない。塊ごと吸収され、中の行は 1 つも残らない。
+areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
+当たり判定の上に来たときに短い説明を出す道が無い。
+なお、実行時にツールチップの文字を差し替えるためのプロパティ（`seriko.tooltip.text`／`seriko.tooltip.name`）は areka-sylphya の語彙表にあるが、それは SHIORI が実行時に設定する別の仕組みであって、surfaces.txt に書くこの項目とは別である。
+この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:add:1"]
 status = "implemented"
@@ -5542,13 +5554,18 @@ note = """
 """
 
 [entry."ukadoc:descript_shell_surfaces:always:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: debug!。areka-parsers の shell::normalize_interval が名前として認めるのは駆動する 3 つの語（`bind`・`random`・`bind+random`）だけで、それ以外の語は元の綴りのまま持ち上げられ、areka-seriko の table まで届いたところで非駆動として落とされる。
+実際にアニメーションを駆動するのは `random` と `bind+random` の 2 語だけである（`bind` は静的な着せ替えゆえ非駆動）。この語を書いてもコマは 1 枚も進まない。
+落とすときに元の綴りを添えた記録が出るが、その段は控えめで、areka の main が既定とする記録の水準では見えない。作者から見ると「書いたのに何も動かないし、何も言われない」という形になる。
+この縮小を引き受ける行が見直し表にある——`wintf-P0-animation-system`（再生をまばたきの 2 語だけにした）。ただし受け取る経路はあっても駆動する経路が無いので、状態は縮退ではなく語彙のみとした。同じページの間隔語 `bind` も同じ理由で語彙のみである（合成のしかたの側にある同じ綴りの項目とは別である）。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:animation-sort_2c_30bd_30fc_30c8_9806_5e8f:1"]
 status = "implemented"
@@ -5562,13 +5579,19 @@ areka-parsers の shell::decode_sort_key が `ascend`／`descend` を値にし�
 """
 
 [entry."ukadoc:descript_shell_surfaces:animation_2a.collision_2a_2c_5f53_305f_308a_5224_5b9a_5b9a_7fa9animation_2a.collisionex_2a_2c_5f53_305f_308a_5224_5b9a_5:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::decode_animations が値にするのは、接尾辞が `interval` の行と `pattern` で始まる行だけで、当たり判定を接尾辞に持つ行は拾われない。当たり判定を集める shell::decode_collisions のほうは行の先頭が `collision` で始まる行しか見ないので、`animation` で始まるこの綴りは両方の走査から外れる。
+areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
+アニメーションのコマに連れて動く当たり判定が立ち上がらない。止まっている絵の当たり判定だけが効き、動いた先は触れないままになる。
+この縮小を引き受ける行が見直し表にある——`areka-P0-seriko-runtime`（当たり判定を矩形へ縮めた）。ただし受け取る経路そのものが無いので、状態は縮退ではなく未対応とした。行の名前は登記のために残す。
+見出しの 2 つの `*` はそれぞれ 1 個以上の数字。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:animation_2a.interval_2c_30a4_30f3_30bf_30fc_30d0_30eb:1"]
 status = "degraded"
@@ -5582,49 +5605,79 @@ note = """
 """
 
 [entry."ukadoc:descript_shell_surfaces:animation_2a.name_2c_5b9a_7fa9_540d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.8.24"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::decode_animations が値にするのは、接尾辞が `interval` の行と `pattern` で始まる行だけで、それ以外の接尾辞の行はどの走査にも拾われない。
+areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
+アニメーションに付けた定義名は保持されないので、名前で名指しして動かす道が無い。
+この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+見出しの `*` は 1 個以上の数字。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:animation_2a.option_2c_30aa_30d7_30b7_30e7_30f3:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::decode_animations が値にするのは、接尾辞が `interval` の行と `pattern` で始まる行だけで、それ以外の接尾辞の行はどの走査にも拾われない。
+areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
+この見出しは選択肢の欄の総論であり、どの選択肢を書いても、値にならないまま捨てられる。アニメーションどうしの重なり方や進み方を作者が指図する道が無い。
+この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+見出しの `*` は 1 個以上の数字。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:animation_2a.option_2cbackground:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::decode_animations が値にするのは、接尾辞が `interval` の行と `pattern` で始まる行だけで、それ以外の接尾辞の行はどの走査にも拾われない。
+areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
+背景として扱う選択肢を書いても、値にならないまま捨てられる。アニメーションどうしの重なり方や進み方を作者が指図する道が無い。
+この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+見出しの `*` は 1 個以上の数字。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:animation_2a.option_2cexclusive:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::decode_animations が値にするのは、接尾辞が `interval` の行と `pattern` で始まる行だけで、それ以外の接尾辞の行はどの走査にも拾われない。
+areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
+他と同時に動かさない選択肢を書いても、値にならないまま捨てられる。アニメーションどうしの重なり方や進み方を作者が指図する道が無い。
+この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+見出しの `*` は 1 個以上の数字。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:animation_2a.option_2cshared-index:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.6.02"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::decode_animations が値にするのは、接尾辞が `interval` の行と `pattern` で始まる行だけで、それ以外の接尾辞の行はどの走査にも拾われない。
+areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
+コマの番号を共有する選択肢を書いても、値にならないまま捨てられる。アニメーションどうしの重なり方や進み方を作者が指図する道が無い。
+この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+見出しの `*` は 1 個以上の数字。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:animation_2a.pattern_2a_2c_63cf_753b_30e1_30bd_30c3_30c9_2c_30b5_30fc_30d5_30a7_30b9_756a_53f7_2c_30a6_30a7_30a4_30c8_2c:1"]
 status = "degraded"
@@ -5660,22 +5713,34 @@ note = """
 """
 
 [entry."ukadoc:descript_shell_surfaces:balloon.offsetx_2c_5ea7_6a19:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell モジュールは surfaces.txt の中に書かれたバルーンのずらし量を、どの走査でも見ない。サーフェスごとにバルーンの出る位置をずらす仕掛けが丸ごと無い。
+areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
+全体のずらし量を面ごとに変える道が無く、バルーンは面が替わっても同じ位置に出る。
+接頭辞の無いこの綴りを見出しに持つのは surfaces.txt だけで、シェルの descript には無い（あちらは本体側・相方側の接頭辞が付いた形だけである）。
+2 つの表を当たったが、この食い違いを引き受ける行はどちらにも無い——沈黙ルール対応表の「キーワード指定時に `windowposition.y` などの調整量をどう扱うか」と「バルーン位置オフセットの単位空間契約」は、どちらもずらし量をどの座標系・どの拡大率で持つかに答えているだけで、サーフェスごとの宣言が読まれないことには答えていない（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:balloon.offsety_2c_5ea7_6a19:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell モジュールは surfaces.txt の中に書かれたバルーンのずらし量を、どの走査でも見ない。サーフェスごとにバルーンの出る位置をずらす仕掛けが丸ごと無い。
+areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
+全体のずらし量を面ごとに変える道が無く、バルーンは面が替わっても同じ位置に出る。
+接頭辞の無いこの綴りを見出しに持つのは surfaces.txt だけで、シェルの descript には無い（あちらは本体側・相方側の接頭辞が付いた形だけである）。
+2 つの表を当たったが、この食い違いを引き受ける行はどちらにも無い——沈黙ルール対応表の「キーワード指定時に `windowposition.y` などの調整量をどう扱うか」と「バルーン位置オフセットの単位空間契約」は、どちらもずらし量をどの座標系・どの拡大率で持つかに答えているだけで、サーフェスごとの宣言が読まれないことには答えていない（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:base:1"]
 status = "vocabulary-only"
@@ -6317,13 +6382,19 @@ note = """
 """
 
 [entry."ukadoc:descript_shell_surfaces:charset_2c_6587_5b57_30b3_30fc_30c9:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-charset-canon"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。黙って落ちるのは charset の宣言そのものである。surfaces.txt を本番で読むのは areka の emo2_boot::assets（起動）と placement::measure（採寸）で、どちらも std の read_to_string で UTF-8 として読む（examples の下にも同じ読み方をする場所があるが、本番の経路ではない）。宣言された文字コードを見る手前を通らないので、この宣言はどこにも届かない。
+ゴースト・シェル・バルーンの descript は areka-parsers の charset::prescan が冒頭の宣言を拾ってから読むのに対し、surfaces.txt だけがその経路の外にある。UTF-8 以外で書かれた surfaces.txt は読み取り自体が失敗し、シェルが出ない（Shift_JIS で書かれた既存シェルはこの読み取りで弾かれる）。黙って消えるのは宣言そのものだけで、続く読み取りの失敗のほうは記録される——areka の emo2_boot::BootWiringError::ShellRead が返り、areka の emo2_boot::classify_wiring_error が error として記録する。ただしそこで起動が止まるわけではない。areka の emo2_boot::wire_emo2_boot は記録したうえで結線しないまま戻り、areka の main は縮退した起動を続ける（窓を開くのは結線を試みるより前なので、窓は開いたままになる）。採寸側も同じで、areka の placement::measure は surfaces.txt の読取失敗を error として記録して採寸をあきらめ、areka の main は既定の DPI へ倒して先へ進む。作者に見えるのは「宣言が効かない」ではなく、記録に失敗を残したまま、シェルの出ない窓のまま起動が進む、である。採寸側の doc は、適合の対象としたゴーストの surfaces.txt が UTF-8 の宣言だから UTF-8 で読む、と決め打ちの理由を書いている。
+同じ綴りの項目がゴースト・バルーン・シェル・プラグイン・ヘッドライン・インストール指示・surfacetable.txt にもあるが、いずれも別の項目である（読むファイルが違うので状態も割れる）。
+この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+担当 spec は areka-P0-charset-canon。同 spec の brief は範囲の In に surfaces.txt の読取 2 か所を挙げ、境界の候補の 1 つ目をその閉鎖としている。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:collision-sort_2c_30bd_30fc_30c8_9806_5e8f:1"]
 status = "vocabulary-only"
@@ -6348,13 +6419,19 @@ note = """
 """
 
 [entry."ukadoc:descript_shell_surfaces:collisionex_2a_2cID_2c_30bf_30a4_30d7_2c_5ea7_6a191_2c_5ea7_6a192...:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.5.19"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::decode_collisions が値にするのは番号が数字だけの行に限られ、円・楕円・多角形を書くこの綴りは何も記録を残さずに読み飛ばされる。
+areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。そのため、作者は書いた領域が生きていないことに気づけない。
+当たり判定は矩形だけで、円・楕円・多角形の領域はどこからも触れない。矩形を書く `collision*` は同じページの別の項目で、そちらは縮退として登記してある。
+この縮小を引き受ける行が見直し表にある——`areka-P0-seriko-runtime`（当たり判定を矩形へ縮めた）。ただし受け取る経路そのものが無いので、状態は縮退ではなく未対応とした。行の名前は登記のために残す。
+見出しの `*` は 1 個以上の数字。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:element_2a_2c_63cf_753b_30e1_30bd_30c3_30c9_2c_30d5_30a1_30a4_30eb_540d_2cX_5ea7_6a19_2cY_5ea7_6a19_28_2c_30aa_30d7_30b7:1"]
 status = "degraded"
@@ -6368,22 +6445,32 @@ note = """
 """
 
 [entry."ukadoc:descript_shell_surfaces:endtalk:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.7.26"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: debug!。areka-parsers の shell::normalize_interval が名前として認めるのは駆動する 3 つの語（`bind`・`random`・`bind+random`）だけで、それ以外の語は元の綴りのまま持ち上げられ、areka-seriko の table まで届いたところで非駆動として落とされる。
+実際にアニメーションを駆動するのは `random` と `bind+random` の 2 語だけである（`bind` は静的な着せ替えゆえ非駆動）。この語を書いてもコマは 1 枚も進まない。
+落とすときに元の綴りを添えた記録が出るが、その段は控えめで、areka の main が既定とする記録の水準では見えない。作者から見ると「書いたのに何も動かないし、何も言われない」という形になる。
+この縮小を引き受ける行が見直し表にある——`wintf-P0-animation-system`（再生をまばたきの 2 語だけにした）。ただし受け取る経路はあっても駆動する経路が無いので、状態は縮退ではなく語彙のみとした。同じページの間隔語 `bind` も同じ理由で語彙のみである（合成のしかたの側にある同じ綴りの項目とは別である）。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:icon.rect_2c_59cb_70b9X_2c_59cb_70b9Y_2c_7d42_70b9X_2c_7d42_70b9Y:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.8.52"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::decode_surface_body が値にするのは重ね合わせ・当たり判定・アニメーションの行だけで、この行はどの走査にも拾われない。
+areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
+この綴りは crates のどの Rust ファイルにも出てこない。サーフェスの一部を切り出して小さな絵として使い回す道が無い。
+この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:import_2c_30d5_30a1_30a4_30eb_540d_2c_30a6_30a8_30a4_30c8msec_2cX_2cY:1"]
 status = "absent"
@@ -6419,76 +6506,128 @@ note = """
 """
 
 [entry."ukadoc:descript_shell_surfaces:kero.balloon.offsetx_2c_5ea7_6a19:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell モジュールは surfaces.txt の中に書かれたバルーンのずらし量を、どの走査でも見ない。サーフェスごとにバルーンの出る位置をずらす仕掛けが丸ごと無い。
+areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
+相方側のずらし量を面ごとに変える道が無く、バルーンは面が替わっても同じ位置に出る。
+同じ綴りの項目がシェルの descript にもあるが、別の項目である——シェルの descript のほうはスコープごとに 1 つ決める定数で、areka の placement::config::resolve_scope が実際に引く。こちらはサーフェスごとに宣言する形で、どこからも引かれない。
+2 つの表を当たったが、この食い違いを引き受ける行はどちらにも無い——沈黙ルール対応表の「キーワード指定時に `windowposition.y` などの調整量をどう扱うか」と「バルーン位置オフセットの単位空間契約」は、どちらもずらし量をどの座標系・どの拡大率で持つかに答えているだけで、サーフェスごとの宣言が読まれないことには答えていない（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:kero.balloon.offsety_2c_5ea7_6a19:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell モジュールは surfaces.txt の中に書かれたバルーンのずらし量を、どの走査でも見ない。サーフェスごとにバルーンの出る位置をずらす仕掛けが丸ごと無い。
+areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
+相方側のずらし量を面ごとに変える道が無く、バルーンは面が替わっても同じ位置に出る。
+同じ綴りの項目がシェルの descript にもあるが、別の項目である——シェルの descript のほうはスコープごとに 1 つ決める定数で、areka の placement::config::resolve_scope が実際に引く。こちらはサーフェスごとに宣言する形で、どこからも引かれない。
+2 つの表を当たったが、この食い違いを引き受ける行はどちらにも無い——沈黙ルール対応表の「キーワード指定時に `windowposition.y` などの調整量をどう扱うか」と「バルーン位置オフセットの単位空間契約」は、どちらもずらし量をどの座標系・どの拡大率で持つかに答えているだけで、サーフェスごとの宣言が読まれないことには答えていない（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:maxwidth_2c_30d4_30af_30bb_30eb:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: なし。areka-parsers の shell::dispatch_block は先頭が descript の塊をヘッダごと読み飛ばすので、この宣言はどこにも届かない。この綴りは crates のどの Rust ファイルにも出てこない。
+ただし利用者から見える差は出ない見込みである——正典自身が、参照実装はこの値を使わず実際のサーフェス定義から最大の横幅を求めると注記している。areka も宣言ではなく絵から寸法を採る（areka の placement::measure が surfaces.txt から組み立てた面を採寸する）ので、宣言を読まないこと自体が振る舞いを変えない。壊れ方を「黙って壊れる」ではなく「見た目の差」にしたのはこのためで、実際にはその差も出ない見込みである。
+実装済みとしなかったのは、この宣言を受ける定義箇所が areka に 1 つも無く、正典 URL を置く先が無いためである。
+この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:mousedown_2a_2c_5f53_305f_308a_5224_5b9aID_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::dispatch_block が名前で振り分ける塊は descript・別名・追記・サーフェスの 4 つだけで、カーソルの塊はそのどれにも当たらず、中身ごと吸収されて何も残らない。
+areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
+この綴りは crates のどの Rust ファイルにも出てこない。
+当たり判定の上に来たときにカーソルの絵を替える仕掛けが areka に無い。作者が指定しても、カーソルは既定のままになる。
+この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+見出しの `*` は 1 個以上の数字。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:mousehover_2a_2c_5f53_305f_308a_5224_5b9aID_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::dispatch_block が名前で振り分ける塊は descript・別名・追記・サーフェスの 4 つだけで、カーソルの塊はそのどれにも当たらず、中身ごと吸収されて何も残らない。
+areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
+この綴りは crates のどの Rust ファイルにも出てこない。
+当たり判定の上に来たときにカーソルの絵を替える仕掛けが areka に無い。作者が指定しても、カーソルは既定のままになる。
+この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+見出しの `*` は 1 個以上の数字。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:mouserightdown_2a_2c_5f53_305f_308a_5224_5b9aID_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.6.14"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::dispatch_block が名前で振り分ける塊は descript・別名・追記・サーフェスの 4 つだけで、カーソルの塊はそのどれにも当たらず、中身ごと吸収されて何も残らない。
+areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
+この綴りは crates のどの Rust ファイルにも出てこない。
+当たり判定の上に来たときにカーソルの絵を替える仕掛けが areka に無い。作者が指定しても、カーソルは既定のままになる。
+この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+見出しの `*` は 1 個以上の数字。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:mouseup_2a_2c_5f53_305f_308a_5224_5b9aID_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::dispatch_block が名前で振り分ける塊は descript・別名・追記・サーフェスの 4 つだけで、カーソルの塊はそのどれにも当たらず、中身ごと吸収されて何も残らない。
+areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
+この綴りは crates のどの Rust ファイルにも出てこない。
+当たり判定の上に来たときにカーソルの絵を替える仕掛けが areka に無い。作者が指定しても、カーソルは既定のままになる。
+この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+見出しの `*` は 1 個以上の数字。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:mousewheel_2a_2c_5f53_305f_308a_5224_5b9aID_2c_30d5_30a1_30a4_30eb_540d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::dispatch_block が名前で振り分ける塊は descript・別名・追記・サーフェスの 4 つだけで、カーソルの塊はそのどれにも当たらず、中身ごと吸収されて何も残らない。
+areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
+この綴りは crates のどの Rust ファイルにも出てこない。
+当たり判定の上に来たときにカーソルの絵を替える仕掛けが areka に無い。作者が指定しても、カーソルは既定のままになる。
+この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+見出しの `*` は 1 個以上の数字。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:move:1"]
 status = "absent"
@@ -6502,22 +6641,33 @@ note = """
 """
 
 [entry."ukadoc:descript_shell_surfaces:name_2c_5b9a_7fa9_540d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.8.24"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::decode_surface_body が値にするのは重ね合わせ・当たり判定・アニメーションの行だけで、この行はどの走査にも拾われない。
+areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
+サーフェスを番号ではなく定義名で名指しする道が無い。名前で面を選ぶ仕掛け（別名の表）は同じページの別の項目が受け持つが、そちらも正典どおりではない。
+同じ綴りの項目がゴースト・バルーン・シェル・ヘッドライン・インストール指示・プラグイン・プロパティ・SHIORI の資源にもあるが、いずれも別の項目である。
+この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:never:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: debug!。areka-parsers の shell::normalize_interval が名前として認めるのは駆動する 3 つの語（`bind`・`random`・`bind+random`）だけで、それ以外の語は元の綴りのまま持ち上げられ、areka-seriko の table まで届いたところで非駆動として落とされる。
+実際にアニメーションを駆動するのは `random` と `bind+random` の 2 語だけである（`bind` は静的な着せ替えゆえ非駆動）。この語を書いてもコマは 1 枚も進まない。
+落とすときに元の綴りを添えた記録が出るが、その段は控えめで、areka の main が既定とする記録の水準では見えない。作者から見ると「書いたのに何も動かないし、何も言われない」という形になる。
+この縮小を引き受ける行が見直し表にある——`wintf-P0-animation-system`（再生をまばたきの 2 語だけにした）。ただし受け取る経路はあっても駆動する経路が無いので、状態は縮退ではなく語彙のみとした。同じページの間隔語 `bind` も同じ理由で語彙のみである（合成のしかたの側にある同じ綴りの項目とは別である）。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:overlay-fast:1"]
 status = "vocabulary-only"
@@ -6600,67 +6750,105 @@ note = """
 """
 
 [entry."ukadoc:descript_shell_surfaces:periodic_2c_6570_5024:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: debug!。areka-parsers の shell::normalize_interval が名前として認めるのは駆動する 3 つの語（`bind`・`random`・`bind+random`）だけで、それ以外の語は元の綴りのまま持ち上げられ、areka-seriko の table まで届いたところで非駆動として落とされる。
+この語は数値を添える形だが、areka-parsers の shell::normalize_interval が第 2 欄を数値にするのは駆動する 2 語のときだけなので、添えた数値も値にならない。
+実際にアニメーションを駆動するのは `random` と `bind+random` の 2 語だけである（`bind` は静的な着せ替えゆえ非駆動）。この語を書いてもコマは 1 枚も進まない。
+落とすときに元の綴りを添えた記録が出るが、その段は控えめで、areka の main が既定とする記録の水準では見えない。作者から見ると「書いたのに何も動かないし、何も言われない」という形になる。
+この縮小を引き受ける行が見直し表にある——`wintf-P0-animation-system`（再生をまばたきの 2 語だけにした）。ただし受け取る経路はあっても駆動する経路が無いので、状態は縮退ではなく語彙のみとした。同じページの間隔語 `bind` も同じ理由で語彙のみである（合成のしかたの側にある同じ綴りの項目とは別である）。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:point.basepos.x_2c_5ea7_6a19:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-surfaces-basepos"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell モジュールは `point` で始まる行をどの走査でも見ないので、サーフェスごとに宣言した基準となる点は転記されない。
+areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
+areka が使うのは正典の既定だけである——`\\![move]` の着地点を出す areka の move_cue::CanonDefaultBasepos が、横はサーフェス幅の半分・縦は下端を返す。宣言を差し込むための受け口（同じファイルの move_cue::BaseposResolver）は型として用意されているが、宣言を読む実装はまだ無い。したがって横位置の宣言を書いても、二体の並べ方は既定のままになる。
+この食い違いを引き受ける行が沈黙ルール対応表にある——「宣言 `point.basepos` の実導出（サーフェス個別 basepos）」。ただし受け取る経路そのものが無いので、状態は縮退ではなく未対応とした。行の名前は登記のために残す。
+担当 spec は areka-P0-surfaces-basepos。同 spec の brief は範囲の In にこの宣言の転記と、宣言値を正典の既定に優先させることを挙げている。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:point.basepos.y_2c_5ea7_6a19:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
-owner = ""
+owner = "areka-P0-surfaces-basepos"
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell モジュールは `point` で始まる行をどの走査でも見ないので、サーフェスごとに宣言した基準となる点は転記されない。
+areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
+areka が使うのは正典の既定だけである——`\\![move]` の着地点を出す areka の move_cue::CanonDefaultBasepos が、横はサーフェス幅の半分・縦は下端を返す。宣言を差し込むための受け口（同じファイルの move_cue::BaseposResolver）は型として用意されているが、宣言を読む実装はまだ無い。したがって縦位置の宣言を書いても、二体の並べ方は既定のままになる。
+この食い違いを引き受ける行が沈黙ルール対応表にある——「宣言 `point.basepos` の実導出（サーフェス個別 basepos）」。ただし受け取る経路そのものが無いので、状態は縮退ではなく未対応とした。行の名前は登記のために残す。
+担当 spec は areka-P0-surfaces-basepos。同 spec の brief は範囲の In にこの宣言の転記と、宣言値を正典の既定に優先させることを挙げている。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:point.centerx_2c_5ea7_6a19:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell モジュールは `point` で始まる行をどの走査でも見ないので、サーフェスの中心の横位置の宣言は転記されない。この綴りは crates のどの Rust ファイルにも出てこない。
+areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
+中心の点を作者が指図する道が無い。areka が位置を出すのに使うのは宣言ではなく窓の実寸だけで、その一例が areka の move_cue::CanonDefaultBasepos（横はサーフェス幅の半分・縦は下端を返す）である。
+この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:point.centery_2c_5ea7_6a19:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell モジュールは `point` で始まる行をどの走査でも見ないので、サーフェスの中心の縦位置の宣言は転記されない。この綴りは crates のどの Rust ファイルにも出てこない。
+areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
+中心の点を作者が指図する道が無い。areka が位置を出すのに使うのは宣言ではなく窓の実寸だけで、その一例が areka の move_cue::CanonDefaultBasepos（横はサーフェス幅の半分・縦は下端を返す）である。
+この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:point.kinoko.centerx_2c_5ea7_6a19:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell モジュールは `point` で始まる行をどの走査でも見ないので、きのこの中心の横位置の宣言は転記されない。この綴りは crates のどの Rust ファイルにも出てこない。
+areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
+中心の点を作者が指図する道が無い。areka が位置を出すのに使うのは宣言ではなく窓の実寸だけで、その一例が areka の move_cue::CanonDefaultBasepos（横はサーフェス幅の半分・縦は下端を返す）である。
+この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:point.kinoko.centery_2c_5ea7_6a19:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell モジュールは `point` で始まる行をどの走査でも見ないので、きのこの中心の縦位置の宣言は転記されない。この綴りは crates のどの Rust ファイルにも出てこない。
+areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
+中心の点を作者が指図する道が無い。areka が位置を出すのに使うのは宣言ではなく窓の実寸だけで、その一例が areka の move_cue::CanonDefaultBasepos（横はサーフェス幅の半分・縦は下端を返す）である。
+この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:random_2c_6570_5024:1"]
 status = "implemented"
@@ -6671,16 +6859,22 @@ values = []
 links = []
 note = """
 areka-parsers の shell::normalize_interval が値にし、areka-seriko の table が実際に再生を駆動する 2 つの間隔語の 1 つ。
+`bind+random` に対応する正典の項目はカタログに無い（見出しにも本文にも出てこない）ので、新しい行は作らず、駆動するもう 1 つの語としてここに書く。areka-parsers の shell::normalize_interval がこの綴りを値にし、areka-seriko の table が `random` と同じく再生を駆動する。間隔語の `bind` と、それ以外の間隔語は駆動しない。
 """
 
 [entry."ukadoc:descript_shell_surfaces:rarely:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: debug!。areka-parsers の shell::normalize_interval が名前として認めるのは駆動する 3 つの語（`bind`・`random`・`bind+random`）だけで、それ以外の語は元の綴りのまま持ち上げられ、areka-seriko の table まで届いたところで非駆動として落とされる。
+実際にアニメーションを駆動するのは `random` と `bind+random` の 2 語だけである（`bind` は静的な着せ替えゆえ非駆動）。この語を書いてもコマは 1 枚も進まない。
+落とすときに元の綴りを添えた記録が出るが、その段は控えめで、areka の main が既定とする記録の水準では見えない。作者から見ると「書いたのに何も動かないし、何も言われない」という形になる。
+この縮小を引き受ける行が見直し表にある——`wintf-P0-animation-system`（再生をまばたきの 2 語だけにした）。ただし受け取る経路はあっても駆動する経路が無いので、状態は縮退ではなく語彙のみとした。同じページの間隔語 `bind` も同じ理由で語彙のみである（合成のしかたの側にある同じ綴りの項目とは別である）。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:reduce:1"]
 status = "vocabulary-only"
@@ -6705,31 +6899,48 @@ note = """
 """
 
 [entry."ukadoc:descript_shell_surfaces:runonce:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: debug!。areka-parsers の shell::normalize_interval が名前として認めるのは駆動する 3 つの語（`bind`・`random`・`bind+random`）だけで、それ以外の語は元の綴りのまま持ち上げられ、areka-seriko の table まで届いたところで非駆動として落とされる。
+実際にアニメーションを駆動するのは `random` と `bind+random` の 2 語だけである（`bind` は静的な着せ替えゆえ非駆動）。この語を書いてもコマは 1 枚も進まない。
+落とすときに元の綴りを添えた記録が出るが、その段は控えめで、areka の main が既定とする記録の水準では見えない。作者から見ると「書いたのに何も動かないし、何も言われない」という形になる。
+この縮小を引き受ける行が見直し表にある——`wintf-P0-animation-system`（再生をまばたきの 2 語だけにした）。ただし受け取る経路はあっても駆動する経路が無いので、状態は縮退ではなく語彙のみとした。同じページの間隔語 `bind` も同じ理由で語彙のみである（合成のしかたの側にある同じ綴りの項目とは別である）。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:sakura.balloon.offsetx_2c_5ea7_6a19:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell モジュールは surfaces.txt の中に書かれたバルーンのずらし量を、どの走査でも見ない。サーフェスごとにバルーンの出る位置をずらす仕掛けが丸ごと無い。
+areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
+本体側のずらし量を面ごとに変える道が無く、バルーンは面が替わっても同じ位置に出る。
+同じ綴りの項目がシェルの descript にもあるが、別の項目である——シェルの descript のほうはスコープごとに 1 つ決める定数で、areka の placement::config::resolve_scope が実際に引く。こちらはサーフェスごとに宣言する形で、どこからも引かれない。
+2 つの表を当たったが、この食い違いを引き受ける行はどちらにも無い——沈黙ルール対応表の「キーワード指定時に `windowposition.y` などの調整量をどう扱うか」と「バルーン位置オフセットの単位空間契約」は、どちらもずらし量をどの座標系・どの拡大率で持つかに答えているだけで、サーフェスごとの宣言が読まれないことには答えていない（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:sakura.balloon.offsety_2c_5ea7_6a19:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell モジュールは surfaces.txt の中に書かれたバルーンのずらし量を、どの走査でも見ない。サーフェスごとにバルーンの出る位置をずらす仕掛けが丸ごと無い。
+areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
+本体側のずらし量を面ごとに変える道が無く、バルーンは面が替わっても同じ位置に出る。
+同じ綴りの項目がシェルの descript にもあるが、別の項目である——シェルの descript のほうはスコープごとに 1 つ決める定数で、areka の placement::config::resolve_scope が実際に引く。こちらはサーフェスごとに宣言する形で、どこからも引かれない。
+2 つの表を当たったが、この食い違いを引き受ける行はどちらにも無い——沈黙ルール対応表の「キーワード指定時に `windowposition.y` などの調整量をどう扱うか」と「バルーン位置オフセットの単位空間契約」は、どちらもずらし量をどの座標系・どの拡大率で持つかに答えているだけで、サーフェスごとの宣言が読まれないことには答えていない（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:scaling:1"]
 status = "absent"
@@ -6743,13 +6954,18 @@ note = """
 """
 
 [entry."ukadoc:descript_shell_surfaces:sometimes:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: debug!。areka-parsers の shell::normalize_interval が名前として認めるのは駆動する 3 つの語（`bind`・`random`・`bind+random`）だけで、それ以外の語は元の綴りのまま持ち上げられ、areka-seriko の table まで届いたところで非駆動として落とされる。
+実際にアニメーションを駆動するのは `random` と `bind+random` の 2 語だけである（`bind` は静的な着せ替えゆえ非駆動）。この語を書いてもコマは 1 枚も進まない。
+落とすときに元の綴りを添えた記録が出るが、その段は控えめで、areka の main が既定とする記録の水準では見えない。作者から見ると「書いたのに何も動かないし、何も言われない」という形になる。
+この縮小を引き受ける行が見直し表にある——`wintf-P0-animation-system`（再生をまばたきの 2 語だけにした）。ただし受け取る経路はあっても駆動する経路が無いので、状態は縮退ではなく語彙のみとした。同じページの間隔語 `bind` も同じ理由で語彙のみである（合成のしかたの側にある同じ綴りの項目とは別である）。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:start_2cID:1"]
 status = "absent"
@@ -6763,13 +6979,18 @@ note = """
 """
 
 [entry."ukadoc:descript_shell_surfaces:starttalk:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.7.26"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: debug!。areka-parsers の shell::normalize_interval が名前として認めるのは駆動する 3 つの語（`bind`・`random`・`bind+random`）だけで、それ以外の語は元の綴りのまま持ち上げられ、areka-seriko の table まで届いたところで非駆動として落とされる。
+実際にアニメーションを駆動するのは `random` と `bind+random` の 2 語だけである（`bind` は静的な着せ替えゆえ非駆動）。この語を書いてもコマは 1 枚も進まない。
+落とすときに元の綴りを添えた記録が出るが、その段は控えめで、areka の main が既定とする記録の水準では見えない。作者から見ると「書いたのに何も動かないし、何も言われない」という形になる。
+この縮小を引き受ける行が見直し表にある——`wintf-P0-animation-system`（再生をまばたきの 2 語だけにした）。ただし受け取る経路はあっても駆動する経路が無いので、状態は縮退ではなく語彙のみとした。同じページの間隔語 `bind` も同じ理由で語彙のみである（合成のしかたの側にある同じ綴りの項目とは別である）。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:stop_2cID:1"]
 status = "absent"
@@ -6783,121 +7004,198 @@ note = """
 """
 
 [entry."ukadoc:descript_shell_surfaces:system_3aarrow:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::dispatch_block が名前で振り分ける塊は descript・別名・追記・サーフェスの 4 つだけで、カーソルの塊はそのどれにも当たらず、中身ごと吸収されて何も残らない。
+areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
+この見出しはカーソルの欄に絵のファイル名の代わりに書ける環境備え付けの名前で、その欄ごと落ちるので出番が無い。`system:` で始まるこれらの名前は crates のどの Rust ファイルにも出てこない。
+当たり判定の上に来たときにカーソルの絵を替える仕掛けが areka に無い。作者が指定しても、カーソルは既定のままになる。
+この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:system_3across:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::dispatch_block が名前で振り分ける塊は descript・別名・追記・サーフェスの 4 つだけで、カーソルの塊はそのどれにも当たらず、中身ごと吸収されて何も残らない。
+areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
+この見出しはカーソルの欄に絵のファイル名の代わりに書ける環境備え付けの名前で、その欄ごと落ちるので出番が無い。`system:` で始まるこれらの名前は crates のどの Rust ファイルにも出てこない。
+当たり判定の上に来たときにカーソルの絵を替える仕掛けが areka に無い。作者が指定しても、カーソルは既定のままになる。
+この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:system_3afinger:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::dispatch_block が名前で振り分ける塊は descript・別名・追記・サーフェスの 4 つだけで、カーソルの塊はそのどれにも当たらず、中身ごと吸収されて何も残らない。
+areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
+この見出しはカーソルの欄に絵のファイル名の代わりに書ける環境備え付けの名前で、その欄ごと落ちるので出番が無い。`system:` で始まるこれらの名前は crates のどの Rust ファイルにも出てこない。
+当たり判定の上に来たときにカーソルの絵を替える仕掛けが areka に無い。作者が指定しても、カーソルは既定のままになる。
+この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:system_3agrip:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::dispatch_block が名前で振り分ける塊は descript・別名・追記・サーフェスの 4 つだけで、カーソルの塊はそのどれにも当たらず、中身ごと吸収されて何も残らない。
+areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
+この見出しはカーソルの欄に絵のファイル名の代わりに書ける環境備え付けの名前で、その欄ごと落ちるので出番が無い。`system:` で始まるこれらの名前は crates のどの Rust ファイルにも出てこない。
+当たり判定の上に来たときにカーソルの絵を替える仕掛けが areka に無い。作者が指定しても、カーソルは既定のままになる。
+この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:system_3ahand:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::dispatch_block が名前で振り分ける塊は descript・別名・追記・サーフェスの 4 つだけで、カーソルの塊はそのどれにも当たらず、中身ごと吸収されて何も残らない。
+areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
+この見出しはカーソルの欄に絵のファイル名の代わりに書ける環境備え付けの名前で、その欄ごと落ちるので出番が無い。`system:` で始まるこれらの名前は crates のどの Rust ファイルにも出てこない。
+当たり判定の上に来たときにカーソルの絵を替える仕掛けが areka に無い。作者が指定しても、カーソルは既定のままになる。
+この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:system_3ahelp:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::dispatch_block が名前で振り分ける塊は descript・別名・追記・サーフェスの 4 つだけで、カーソルの塊はそのどれにも当たらず、中身ごと吸収されて何も残らない。
+areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
+この見出しはカーソルの欄に絵のファイル名の代わりに書ける環境備え付けの名前で、その欄ごと落ちるので出番が無い。`system:` で始まるこれらの名前は crates のどの Rust ファイルにも出てこない。
+当たり判定の上に来たときにカーソルの絵を替える仕掛けが areka に無い。作者が指定しても、カーソルは既定のままになる。
+この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:system_3amove:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::dispatch_block が名前で振り分ける塊は descript・別名・追記・サーフェスの 4 つだけで、カーソルの塊はそのどれにも当たらず、中身ごと吸収されて何も残らない。
+areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
+この見出しはカーソルの欄に絵のファイル名の代わりに書ける環境備え付けの名前で、その欄ごと落ちるので出番が無い。`system:` で始まるこれらの名前は crates のどの Rust ファイルにも出てこない。
+当たり判定の上に来たときにカーソルの絵を替える仕掛けが areka に無い。作者が指定しても、カーソルは既定のままになる。
+この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:system_3ano:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::dispatch_block が名前で振り分ける塊は descript・別名・追記・サーフェスの 4 つだけで、カーソルの塊はそのどれにも当たらず、中身ごと吸収されて何も残らない。
+areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
+この見出しはカーソルの欄に絵のファイル名の代わりに書ける環境備え付けの名前で、その欄ごと落ちるので出番が無い。`system:` で始まるこれらの名前は crates のどの Rust ファイルにも出てこない。
+当たり判定の上に来たときにカーソルの絵を替える仕掛けが areka に無い。作者が指定しても、カーソルは既定のままになる。
+この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:system_3atext:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::dispatch_block が名前で振り分ける塊は descript・別名・追記・サーフェスの 4 つだけで、カーソルの塊はそのどれにも当たらず、中身ごと吸収されて何も残らない。
+areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
+この見出しはカーソルの欄に絵のファイル名の代わりに書ける環境備え付けの名前で、その欄ごと落ちるので出番が無い。`system:` で始まるこれらの名前は crates のどの Rust ファイルにも出てこない。
+当たり判定の上に来たときにカーソルの絵を替える仕掛けが areka に無い。作者が指定しても、カーソルは既定のままになる。
+この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:system_3await:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::dispatch_block が名前で振り分ける塊は descript・別名・追記・サーフェスの 4 つだけで、カーソルの塊はそのどれにも当たらず、中身ごと吸収されて何も残らない。
+areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
+この見出しはカーソルの欄に絵のファイル名の代わりに書ける環境備え付けの名前で、その欄ごと落ちるので出番が無い。`system:` で始まるこれらの名前は crates のどの Rust ファイルにも出てこない。
+当たり判定の上に来たときにカーソルの絵を替える仕掛けが areka に無い。作者が指定しても、カーソルは既定のままになる。
+この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:talk_2c_6570_5024:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: debug!。areka-parsers の shell::normalize_interval が名前として認めるのは駆動する 3 つの語（`bind`・`random`・`bind+random`）だけで、それ以外の語は元の綴りのまま持ち上げられ、areka-seriko の table まで届いたところで非駆動として落とされる。
+この語は数値を添える形だが、areka-parsers の shell::normalize_interval が第 2 欄を数値にするのは駆動する 2 語のときだけなので、添えた数値も値にならない。
+実際にアニメーションを駆動するのは `random` と `bind+random` の 2 語だけである（`bind` は静的な着せ替えゆえ非駆動）。この語を書いてもコマは 1 枚も進まない。
+落とすときに元の綴りを添えた記録が出るが、その段は控えめで、areka の main が既定とする記録の水準では見えない。作者から見ると「書いたのに何も動かないし、何も言われない」という形になる。
+この縮小を引き受ける行が見直し表にある——`wintf-P0-animation-system`（再生をまばたきの 2 語だけにした）。ただし受け取る経路はあっても駆動する経路が無いので、状態は縮退ではなく語彙のみとした。同じページの間隔語 `bind` も同じ理由で語彙のみである（合成のしかたの側にある同じ綴りの項目とは別である）。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:version_2c_2a:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: なし。areka-parsers の shell::dispatch_block は先頭が descript の塊をヘッダごと読み飛ばし、中の行を 1 つも保持しない。この宣言はその塊の中に書くものなので、どこにも届かない。
+areka-parsers の shell モジュールには記録の呼び出しが 1 つも無いので、落としたことはどこにも残らない。
+areka はこの宣言を読まないので、どちらの書式を指定しても読み方は変わらない。旧い書式で書かれたシェルに合わせて読み方を切り替える道が無い。
+同じ綴りの項目が surfacetable.txt・プラグインのイベント・SHIORI の資源にもあるが、いずれも別の項目である。
+この食い違いを引き受ける行は沈黙ルール対応表にも見直し表にも無い（開発者裁定 2026-09-05 の 2 つ目の枝＝未対応）。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:yen-e:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる。記録: debug!。areka-parsers の shell::normalize_interval が名前として認めるのは駆動する 3 つの語（`bind`・`random`・`bind+random`）だけで、それ以外の語は元の綴りのまま持ち上げられ、areka-seriko の table まで届いたところで非駆動として落とされる。
+実際にアニメーションを駆動するのは `random` と `bind+random` の 2 語だけである（`bind` は静的な着せ替えゆえ非駆動）。この語を書いてもコマは 1 枚も進まない。
+落とすときに元の綴りを添えた記録が出るが、その段は控えめで、areka の main が既定とする記録の水準では見えない。作者から見ると「書いたのに何も動かないし、何も言われない」という形になる。
+この縮小を引き受ける行が見直し表にある——`wintf-P0-animation-system`（再生をまばたきの 2 語だけにした）。ただし受け取る経路はあっても駆動する経路が無いので、状態は縮退ではなく語彙のみとした。同じページの間隔語 `bind` も同じ理由で語彙のみである（合成のしかたの側にある同じ綴りの項目とは別である）。
+"""
 
 [entry."ukadoc:descript_shell_surfacetable:_30b5_30fc_30d5_30a7_30b9ID_2c_540d_524d:1"]
 status = "unclassified"
