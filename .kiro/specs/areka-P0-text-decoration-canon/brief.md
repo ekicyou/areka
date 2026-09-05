@@ -64,3 +64,12 @@
 > **前提の逼迫**: `draw.rs` **974→980 行（残 20）**・番人の例外表に不在＝**分割が着手前提**（brief どおり・ただし余裕は減った）。`doc/emo2-conformance-scope.md:60` は bvc R11.9 で既に本 spec 群を所有者として明記済み（brief の「どの spec も未所有」は spec 上は真・doc は先行）。
 > **分割の継ぎ目（開発者裁定）**: ⑴ 基盤相＝`draw.rs` 分割＋decode 腕＋CueCommand＋per-run 3 層配管（`TextItem::Glyph`→`PositionedGlyph`→`GlyphRunContent`）／⑵ 語彙相＝17 項目（font 10／影 3／寄せ 2／全体 2）／⑶ **descript `font.*` 基底 13 キー＝完全独立スライス**（`areka-parsers/balloon` に閉じ・共有ファイル 0）。`balloon-canon-residue` 項目 9 との相互登記＝単独着地不可（不変）。cursor-tag と `layout.rs`／`state.rs` を共有＝**W12 の cursor-tag 完走後**（W13）。⓪ の lexer 修正が `decode.rs` を先に触る＝rebase 吸収。**design 段階は Fable 推奨**。
 
+
+### `areka-P0-cursor-tag-canon` からの追加登記（2026-09-04・同 spec Requirement 7.1／7.2 と tasks 6.3）
+
+`\_l`（カーソル位置移動）を実装した `areka-P0-cursor-tag-canon` から、本 spec の所有範囲に属する未実装の副作用 3 件と、本 spec が触ると自ら宣言しているファイルで見つかった引受先不在の所見 1 件を送る。正典逐語の正本は同 spec `requirements.md` 付録 A（`:185-207`）。
+
+- **追加登記 1: `\_l` 直後の行揃えリセット**（正典逐語: 「`\_l`実行直後には、トラブル防止のため行揃えが左揃えにリセットされる点に注意」「`\_l`タグが来た場合は左寄せに戻る」）。`\_l` 側は実装済みで、リセットされる側の `align` が未実装のため現状は観測できない。**リセットされるのは `align` だけ**——正典 `\f[valign,寄せる側]` は「alignと異なり、`\n`や`\_l`ではリセットされない」と明記する（2026-09-04 に ukadoc 本文で確認）。
+- **追加登記 2: `\_l` 移動後の中央揃えのインデント**（正典逐語: 「`\_l`タグで移動後に`\f[align]`タグで中央揃えを設定した場合、`\_l`タグのX座標分インデント処理されたと仮定して中央揃え処理される」）。`\_l` の着地位置は `crates/areka-emo-text/src/cursor_tag.rs` が解決済みなので、その X 座標を寄せの計算へ渡す口だけが欠けている。
+- **追加登記 3: 疑義 SC8（縦書きでのインデント軸）＝未解決**。上の追加登記 1・2 の正典文は X 軸で書かれたままで、縦書きへの更新がない。縦書きでは行内軸が Y なのでインデント量も Y から来るはずだが、正典に記述がない。`cursor-tag-canon` は裁定せず登記だけを行った（同 spec `requirements.md:139`＝Requirement 7.2・付録 B の SC8 行 `:217`）。**本 spec が裁定する**——同 spec `design.md` の「語彙登記と申し送り」節が本 spec を追跡先として名指している。
+- **追加登記 4: `layout.rs` のあふれ判定で、行送り方向へ後戻りした行が境界の外に置き去りになる**（引受先が無いまま残っている所見）。`LayoutEngine::visible_window`（`crates/areka-emo-text/src/layout.rs:634`）は可視範囲を**最新行の遠端だけ**で判定する（`:653-654`）ため、`\_l` で行送り方向へ戻ると、境界の外にある前の行がそのまま残る。実測（横書き・境界 36）: 4 行目の下端 49 が外に残るのに、最新行の下端が 23 なのであふれは発火しない。最小スキップの探索（`:665`）も、行が行送り方向へ単調に並ぶことを暗黙の前提にしている。`cursor-tag-canon` は式の変更を自らの要件（Requirement 2.8）で禁じているため、**今日の値を固定するだけ**にとどめた（`crates/areka-emo-text/src/layout_cursor_overflow_tests.rs:113-166`＝値が変わると赤になる）。本 spec へ送る根拠は、本 spec が `\f[align]`／`\f[valign]` の寄せ（＝行の置き場所）を実装し、`layout.rs` を `cursor-tag` と共有すると自ら宣言していること（上記 `:33`・`:65`）。**寄せは行矩形を行送り軸の方向へも動かす**（正典により縦書きの `valign` は左寄せ／右寄せ＝行送り軸）ので、同じ前提に触れる。**本 spec が要件フェーズで引き受けないと判断した場合は、`areka-P0-ukadoc-survey-sakura-script` の台帳（342 語彙の担当割当）へ差し戻すこと。**

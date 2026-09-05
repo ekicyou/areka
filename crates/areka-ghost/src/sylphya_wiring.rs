@@ -123,7 +123,9 @@ pub fn publish_ghost_statics(
 ) {
     let flat = derive_flat_statics(names);
     let dotted = vec![
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#baseware.name:1
         ("baseware.name".to_string(), BASEWARE_NAME.to_string()),
+        // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#baseware.version:1
         ("baseware.version".to_string(), baseware_version.to_string()),
     ];
     publisher.publish_static(asker, flat, dotted);
