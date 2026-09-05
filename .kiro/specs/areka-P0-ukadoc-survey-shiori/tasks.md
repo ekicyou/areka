@@ -181,7 +181,7 @@
   - _Boundary: briefing-shiori.md_
   - _Depends: 1.4, 5.4_
 
-- [ ] 6.5 コメントを足しても既存のテストが緑のままであることを確かめる
+- [x] 6.5 コメントを足しても既存のテストが緑のままであることを確かめる
   - 逐語一致のテスト 4 本（送出許可 ID・照会許可リソース・語彙表の件数・台帳キーの決定性）が緑であることを、対象クレートのテストを走らせて確かめる
   - 触れた 4 ファイルが 1 ファイル 1,000 行の上限を超えないことを、上限の見張りのテストで確かめる
   - コメントを足した 4 ファイルの属するクレートをビルドし、`unused_doc_comments` の警告が 1 件も出ないことを確かめる（`///` と `//` の使い分けが正しいことの確認）
@@ -195,8 +195,9 @@
   - `cargo run -p ukadoc-survey -- check` と `cargo test -p ukadoc-survey` を走らせ、15 所見のいずれも出ないことを確かめる
   - 証拠の突き合わせ（ソースの正典 URL ⇄ `implemented` の行）は `SourceUrlNotInCatalog` と `ImplementedWithoutEvidence` が担う。手掛かりが要るときは `evidence`／`candidates` を使う
   - ページ別の件数が合わないときは台帳を確定させず、食い違ったページ名と件数を示して原因を先に解消する。数を合わせるために行を足したり消したりしない
+  - **上流の道具の引き継ぎを受け取る（その 3・タスク 6.1 で発火・タスク 6.5 が発掘）**: `crates/ukadoc-survey/tests/consistency/checks.rs` の `implemented_without_evidence_turns_red_and_evidence_clears_it` は錨 `ukadoc:list_shiori_event:OnBoot:1` を `implemented` にして `ImplementedWithoutEvidence` が出ることを見るが、**6.1 が `events.rs` に `OnBoot` の URL を置いたので錨には既に証拠が付いており**、所見が生まれず**証拠を足す前の側の `expect_exactly`** が落ちる。6.1 の是正は `assert_eq!` 2 か所（証拠索引の主張）を直しただけで、この `expect_exactly`（所見の顔ぶれの主張）には届いていない。**直し方は「錨を選び直す」ではなく「摂動の中で錨の証拠を剥がす」**こと — `copy.entry_mut(...).status = Status::Implemented` の直後に「錨 id の証拠を索引から取り除いた `EvidenceIndex`」を `copy.evidence` に入れてから 1 本目の `expect_exactly` を行い、後半は今どおり `evidence_with_source_line` で足し直す。錨の選び直しを採らない理由は 3 つ: ⑴ 調査 spec 4 本の仕事はまさに「実装済みの項目にソースの正典 URL を置く」ことなので、今日たまたま証拠の無い項目を選んでも同じ理由で必ず腐る ⑵ `shiori_resource.rs` のページ URL 1 行だけで**リソース 159 件全部**に証拠が付いた（証拠の合計は 179 件＝イベント 11＋リソース 159＋SHIORI/3.0 9）ので証拠の無い錨は今後さらに枯れる ⑶ `ANCHOR_ID`／`ANCHOR_URL`／`anchor_id()` は他の多数のテストが共有しており、この 1 本だけ別の錨にすると錨が 2 つになって読みにくい。**同テストの doc の「今日の実データにこの判定の対象は 1 件も無い（台帳は全行が未分類）」も偽になっている**ので、census の散文と同じ回で書き換えること
   - **上流の道具の引き継ぎを受け取る（その 2・タスク 6.2 で発火）**: `crates/ukadoc-survey/tests/consistency/values_md.rs` の 2 本を直す。⑴ `the_vocabulary_route_is_vacuous_on_todays_real_data` は「ページ URL の証拠が 0 件」という空振りの主張で、6.2 が語彙表にページ URL を置いた時点で設計どおり発火した。**赤の本文は上流タスク 8.4 へ書き換えを促すが、その 8.4 は `completed/` に封書済みで引受先が実在しない。** ⑵ `the_vocabulary_route_maps_all_159_resource_ids_to_titles` は**想定外の巻き添え** — `with_marker` が実ソースを読んだうえで同じページ URL を自分で挿し込むので、6.2 の 1 行と合わせて取り出しが 2 件になる（`left: 2 / right: 1`）。⑵ は `checks.rs` の錨と同じ性質（実ソースの走査に自前の 1 行を足す作りが、下流が契約どおり置いた行を勘定に入れていない）なので、同じ形で「足す前は無い／足した後は含む」へ寄せること
-  - **上流の道具の引き継ぎを受け取る**（タスク 6.1 で発火）: `crates/ukadoc-survey/tests/consistency/checks.rs` の `the_subject_census_says_which_requirements_are_vacuous` は「対象が 1 件でも生まれたら赤にして書き換えを促す」仕掛けで、本 spec が正典 URL を置いた時点で設計どおり発火した。`census()` の **`Subjects::Zero` の 6 行すべて**を `NonEmpty` へ移す（6.5 ソースの正典 URL・6.6 `implemented` の行・6.7 の 3 面〔関連／別名の相手・`alias` の行・登場版の記入がある行〕・6.8 テーマ名・6.11 証拠の付いた項目。**実測でいずれも既に非 0**。ループ内 assert なので最初の 6.5 で止まっているだけ）。あわせて `checks.rs` 冒頭の目次コメントと census テスト自身の doc の「対象が 0 件である」という散文も直す。**タスク 6.3 の着地後に行うこと**（6.5 が 12→21・6.11 が 12→21 に動く）
+  - **上流の道具の引き継ぎを受け取る**（タスク 6.1 で発火）: `crates/ukadoc-survey/tests/consistency/checks.rs` の `the_subject_census_says_which_requirements_are_vacuous` は「対象が 1 件でも生まれたら赤にして書き換えを促す」仕掛けで、本 spec が正典 URL を置いた時点で設計どおり発火した。`census()` の **`Subjects::Zero` の 6 行すべて**を `NonEmpty` へ移す（6.5 ソースの正典 URL・6.6 `implemented` の行・6.7 の 3 面〔関連／別名の相手・`alias` の行・登場版の記入がある行〕・6.8 テーマ名・6.11 証拠の付いた項目。**実測でいずれも既に非 0**。ループ内 assert なので最初の 6.5 で止まっているだけ）。**⚠ 件数は 7.1 で実測し直すこと** — 6.1 時点で控えた数値は既に陳腐化している（6.5 の census 行は 22＝コメント 22 行と一致・6.11 の証拠の付いた項目は **179**・6.7 の相手は 131〔`alias_of` 3＋`links` 128〕・`alias` 3・`introduced` 98）。「6 行すべてが既に非 0」という結論は変わらないが、数値をそのまま転記すると誤りが混入する。あわせて `checks.rs` 冒頭の目次コメントと census テスト自身の doc の「対象が 0 件である」という散文も直す。**タスク 6.3 の着地後に行うこと**（6.5 が 12→21・6.11 が 12→21 に動く）
   - 完了条件: 検査が所見 0 件で通り、報告の「未分類」列が全ページ 0 件
   - _Requirements: 1.4, 10.5_
   - _Depends: 6.1, 6.2, 6.3_
@@ -332,3 +333,8 @@
 - 6.4: 索引の誤りと陳腐化を **6 件**直した（`ShioriProxy` → `ShioriByteProxy`／DLL の入口は 3 つでなく **4 つ**〔`loadu` は SSP 2.6.92・UTF-8・優先〕／群 5 の「根拠の場所」段落を索引へ取り込み／群 5 の「送信元は他のゴースト」の断定を緩和／前置きの「まだ確定していないもの」を現況へ／**群 7 のテーマ欄「装い・記憶が中心」→「装い」**〔台帳の実測は 131 行すべて装い・記憶は 0 件〕）。`design.md` の群 14c も追随済み。
 - 6.4: **台帳の `spec_dll` の `note` に残る「入口は 3 つ」は事実として誤り**（正典は `loadu` を含めて 4 つ）。値は凍結なので触らず、ブリーフィングの是正の候補に「事実として誤りである・次に改めるときに必ず直すこと」と記録した。
 - 6.4: 申し送り 4 件（`triggers`／`configures` の向きの規約・`OnSelectMode*` の正典側の綴りの誤り・**`ledger-init` を走らせない**・索引の貼り直し手順）と是正の候補 4 件を末尾に置いた。隣接 spec の brief は 1 バイトも変えていない。
+- 6.5: **コメント 22 行は既存のテストを 1 本も壊していない。** 逐語一致 4 本（`allowed_event_ids_are_exactly_the_eleven_and_exclude_ontalk_onhour`・`allowed_resource_ids_are_exactly_username`・`shiori_resource_ids_has_159_entries`・`criterion_ledger_counts_exact`）は名指しで緑。触れた 4 ファイルは 424／224／291／598 行で 1,000 行の上限内。`unused_doc_comments` 0 件。`areka-kanade`・`areka-sylphya`・`log-capture-kit`・`shiori-host32-host` はすべて緑。
+- 6.5: **差分の基準は `main` ではなく `git merge-base HEAD main`（`2350e68a`）。** main は分岐後 2 コミット進んでいるので `git diff main` は無関係な 18 ファイル・約 5,900 行を巻き込む。merge-base 基準で `crates/` の差分は **5 ファイル 57 insertions / 10 deletions** ＝ コメント 22 行 ＋ `checks.rs` の是正（承認済み例外）だけ。**4 ファイルからコメント行を落とすと merge-base 版とバイト一致**（要件 12.1 の機械的な裏取り）。
+- 6.5: **コメントは検査を壊すどころか改善している。** 22 行を一時的に剥がすと `check` の食い違いが 1 件 → **22 件**（`ImplementedWithoutEvidence` 21 ＋ `DomainReportStale` 1）に増え、`a_misspelled_theme_turns_red`・`an_alias_chain_turns_red`・`an_introduced_version_outside_the_catalog_turns_red` の 3 本が赤に転じる。**この 3 本はコメントがあるからこそ緑。**
+- 6.5: 較正 2 本を実証済み（`///` を関数本体に置くと `unused doc comment` が出る／1,024 行にすると見張りが名指しで赤になる）。どちらも恒真ではない。
+- 6.5 → **要件 9.6 の引用行番号が本 spec のコメント追加で 1 行ずれた**（`resources.rs:113-121` → 114-122・`shiori_resource.rs:222` → 223）。定義名は不変。開発規律「引用は行番号でなく何の定義行かで指す」の実例がもう 1 件。
