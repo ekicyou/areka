@@ -55,7 +55,7 @@
 ### Allowed Dependencies
 
 - 正典スナップショット `%APPDATA%\npm\node_modules\ukagaka-doc-mcp\data\index.json`（`generatedAt` = `2026-08-24T04:08:57.881Z`・環境変数 `AREKA_UKADOC_SNAPSHOT` があればその場所）。**読むだけ**。
-- 上流 `areka-P0-ukadoc-survey-toolkit/requirements.md` 付録 A（台帳の形）・付録 B（id の取り出し手順）・要件 2.2／4.3／4.4／4.7。**唯一の正本**であり、`doc/ukadoc-coverage/values.md` はまだ存在しない。
+- 上流 `.kiro/specs/completed/areka-P0-ukadoc-survey-toolkit/requirements.md` 付録 A（台帳の形）・要件 2.2／4.3／4.4／4.7。**形式と仕訳の規則の正本**（上流の完了に伴い `completed/` へ移動済み）。付録 B（道具無しで id を得る手順）は道具が着地したため不要になった。テーマ 8 つの定義の正本は `doc/ukadoc-coverage/values.md`、優先度の 4 根拠とその序列の正本は `doc/ukadoc-coverage/README.md`（いずれも 2026-09-05 に着地）。
 - 本ワークツリーのソース（判定の根拠として**読む**）。書き込みは上記 4 ファイルのコメント行だけ。
 - `doc/COMPAT_ARCHITECTURE.md` §8（沈黙ルール対応表）と `doc/emo2-conformance-scope.md` §6（縮退の転記元・読むだけ）。
 

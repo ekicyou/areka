@@ -40,11 +40,11 @@ areka が SHIORI へ送るイベントは 11 種類しかない。既存ゴー�
 - 既にある正典側のカタログ: `doc/shiori/fragments/events/` が **287 項目**（うち名前が `On` で始まるもの 261）・`doc/shiori/fragments/resources/` が **159 項目**・`doc/shiori/fragments/_shared.toml:37-39` の予約ヘッダがリクエスト 10・レスポンス 13。`list_shiori_event_ex` に対応する断片は 1 件も無い（`doc/` 全体で 0 件）。
 - 外部との連携はどれも未着手: SSTP の実装は無い（バルーンの `sstpmessage.*` を未知のキーとして無視するテストと、`shiori3.rs:86` の「送らない」の記載だけ）・FMO は `crates/` のソースに 0 件・SAORI も 0 件（M1 から明示的に外した経緯が `doc/emo2-conformance-scope.md:11` と `:83`）・HEADLINE と PLUGIN は sylphya の根の名前（`crates/areka-sylphya/src/vocab/dotted.rs:24-25`）とボタン文言の語彙だけ。
 - `OnMenuExec` は `crates/` に 1 件も無い。`\![raise]` は 9 件すべてテストの中の文字列で、本番の受け手は無い（`crates/areka/src/emo2_boot/consumer_ledger.rs:221-236` が登録するのは `move`／`bind`／`set,zorder`／`reset,zorder` の 4 つ）。
-- `doc/ukadoc-coverage/` はまだ存在しない。ソースに正典 URL を書いた行も 0 件（「ukadoc」の語だけを含む行は 156 件ある）。
+- `doc/ukadoc-coverage/` はまだ存在しない。ソースに正典 URL を書いた行も 0 件（「ukadoc」の語だけを含む行は 156 件ある）。※ 2026-09-05 に上流の道具が着地し、`doc/ukadoc-coverage/` 一式（カタログ・4 ドメインの台帳・報告・`values.md`・`README.md`）と担当分の台帳 677 項目（全件 `unclassified`）が揃った。以後この節は着手時の記録として読む。
 
 ### 上流から継承する契約（本 spec は再定義しない）
 
-| 契約 | 出典（`.kiro/specs/areka-P0-ukadoc-survey-toolkit/requirements.md`） |
+| 契約 | 出典（`.kiro/specs/completed/areka-P0-ukadoc-survey-toolkit/requirements.md`・上流の完了に伴い `completed/` へ移動済み） |
 |---|---|
 | 台帳の 1 項目＝`[entry."<項目 id>"]` のキー付きテーブル。欄は `status`・`introduced`・`alias_of`（任意）・`supersedes`（任意）・`owner`・`priority`・`values`・`links`・`note` | 要件 2.1／付録 A |
 | 状態語彙 7 つ（`implemented`／`vocabulary-only`／`degraded`／`absent`／`alias`／`not-applicable`／`unclassified`） | 要件 2.2 |

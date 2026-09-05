@@ -1,7 +1,7 @@
 # ギャップ分析: areka-P0-ukadoc-survey-shiori
 
 > 実施日 2026-09-02。対象＝確定済みの `requirements.md`（12 要件・付録の食い違い表 26 行）と、本ワークツリーの現物。
-> 上流の契約は `.kiro/specs/areka-P0-ukadoc-survey-toolkit/requirements.md`（承認済み・付録 A＝台帳の形・付録 B＝道具無しで id を得る手順）と同 `research.md` §8（開発者裁定 4 件）。
+> 上流の契約は `.kiro/specs/completed/areka-P0-ukadoc-survey-toolkit/requirements.md`（付録 A＝台帳の形・付録 B＝道具無しで id を得る手順）と同 `research.md` §8（開発者裁定 4 件）。上流は 2026-09-05 に完了し `completed/` へ移動、道具と `doc/ukadoc-coverage/` 一式が着地した（付録 B の手順は以後不要）。
 > 本書は判断材料と選択肢を並べるもので、決定はしない。決定は要件ディスカッションで行う。
 
 ---
