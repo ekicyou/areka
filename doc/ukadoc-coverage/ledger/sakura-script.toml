@@ -12,7 +12,9 @@ introduced = ""
 owner = ""
 priority = "C30"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5b_2a_5d:1" },
+]
 note = """
 壊れ方: 黙って壊れる（%* が台詞にそのまま出る）。字句の scan_sysvar は英数字と下線しか名前に取らないので、名前は空になり * は本文へ回る。画面に出る綴りは %* のまま変わらない。
 ログ: 出る（resolve_system_var の未対応名の腕の debug! 記録）。
@@ -298,6 +300,7 @@ note = """
 [群: 構文記録]
 [テーマ無し: プロパティの値を台詞へ差し込む配管で、利用者が失うのは差し込んだ先の中身であってこの綴りそのものではない]
 [頻度: 里々 1 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは %property。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
+[読み書き: 読み（指定したプロパティシステムの値をその場に展開する）。相手のプロパティ名は引数で決まり、正典本文が具体の名前を 1 つも挙げないので links に相手を書かない]
 """
 
 [entry."ukadoc:list_sakura_script:_25screenheight:1"]
@@ -494,7 +497,10 @@ introduced = ""
 owner = ""
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnSNTPBegin:1" },
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnSNTPCompare:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— decode_bare の既定の腕から decode_passthrough_bare へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。時計合わせが始まらず、時刻サーバへの問い合わせもその結果の通知も起きない。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -652,7 +658,9 @@ introduced = ""
 owner = ""
 priority = "C20"
 values = ["気配"]
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5banim_2cclear_2cID_5d:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、アニメーションを止められず、動きが続いたままになる）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
@@ -701,7 +709,10 @@ introduced = ""
 owner = ""
 priority = ""
 values = ["装い"]
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnDressupChanged:1" },
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnNotifyDressupInfo:1" },
+]
 note = """
 壊れ方: 見た目の差 — areka-seriko の handle_message がキャリアを開いて名前の完全一致で自分を選び、parse_bind_directive の適用形（カテゴリ名・パーツ名・0 か 1 の数値がそろう形）を着せ替えの着脱として実際に反映する。
 ログ: 出る（トグル形とカテゴリ単位形は M1 未実導出として warn!、カテゴリ欠落や on/off 値の破損は error!、担当外の名前は debug!）。
@@ -716,7 +727,9 @@ introduced = "2.4.74"
 owner = ""
 priority = "C20"
 values = ["交わり"]
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnGhostCalling:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、別のゴーストを呼び出せず、相方が現れないまま会話が進む）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
@@ -724,6 +737,7 @@ note = """
 [群: ゴーストの切り替え]
 [テーマ: 別のゴーストを呼べず、相方が現れないまま会話が進む]
 [頻度: 里々 2 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![call。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
+[条件: OnGhostCalling が通知されるのは --option=raise-event を付けたときだけ]
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bcancel_2chttp_2cURL_5d:1"]
@@ -747,7 +761,9 @@ introduced = "2.8.05"
 owner = ""
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnExecuteWebSocketClose:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、WebSocket の接続の取り消しを指示できず、繋ぎっぱなしのままになる）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
@@ -762,7 +778,9 @@ introduced = ""
 owner = ""
 priority = "C20"
 values = ["装い"]
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnBalloonChange:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、バルーンを別の意匠へ替えられず、今のバルーンのまま話し続ける）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
@@ -778,13 +796,18 @@ introduced = "2.4.74"
 owner = ""
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnGhostChanging:1" },
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_2b:1" },
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c__2b:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、別のゴーストへ交代できず、今のゴーストが立ったままになる）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
 [運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
 [群: ゴーストの切り替え]
 [頻度: 里々 4 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![change。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
+[条件: OnGhostChanging が通知されるのは --option=raise-event を付けたときだけ]
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bchange_2cshell_2c_30b7_30a7_30eb_540d_28_2c--option_3draise-event_29_5d:1"]
@@ -793,7 +816,10 @@ introduced = "2.4.74"
 owner = ""
 priority = "C20"
 values = ["装い"]
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnShellChanged:1" },
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnShellChanging:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、シェル（見た目一式）を着替えられず、今の見た目のまま変わらない）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
@@ -801,6 +827,7 @@ note = """
 [群: ゴーストの切り替え]
 [テーマ: 絵の一式を替えられず、作者が用意した二着目から先を利用者は見られない]
 [頻度: 里々 4 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![change。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
+[条件: OnShellChanged は無条件、OnShellChanging は --option=raise-event を付けたときだけ]
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bclose_2ccommunicatebox_5d:1"]
@@ -825,7 +852,9 @@ introduced = ""
 owner = ""
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnSystemDialogCancel:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、開いた窓を台本の側から閉じられない。開く側も効かないので、閉じる相手がそもそも居ない）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
@@ -871,7 +900,9 @@ introduced = "2.8.05"
 owner = ""
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnExecuteWebSocketClose:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、WebSocket の正常な切断が行われず、切断後のイベントも起きない）。
 ログ: 出る（配送先の 3 つの受け口が担当外の名前として debug! を残す。compile の catch-all は通らない）。
@@ -940,6 +971,7 @@ note = """
 [裁定待ち: areka-P0-property-query-channels と areka-P0-sakura-time-directives が主張。名指しは channels から time-directives への一方向だけで、その名指しは層違いで非衝突と述べるだけで分担を決めていない。裁定案は「compile 側の allowlist は time-directives・Result 置換の実行時経路は property-query-channels」——案であって決定ではなく、決めるのは統合担当]
 [テーマ無し: 別のイベントの台詞をその場へ差し込む配管で、失われるのは差し込まれる中身の側であり、テーマは差し込む先の項目が持つ]
 [頻度: 里々 1 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![embed。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
+[任意のイベント: 第 1 引数のイベント名がそのまま相手になり、その結果でタグ自身が置き換わる ので 1 つに定まらない]
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5benter_2ccollisionmode_5d_5c_21_5benter_2ccollisionmode_2crect_5d:1"]
@@ -1023,7 +1055,9 @@ introduced = ""
 owner = ""
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnSelectModeBegin:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、画面の範囲を選ばせる状態へ入れず、選んだ範囲を返すイベントも起きない。見出しは 3 つの綴りを並べるが、正典の項目は 1 つである）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
@@ -1038,7 +1072,10 @@ introduced = "2.7.23"
 owner = ""
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnCompressArchiveComplete:1" },
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnCompressArchiveFailure:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、書庫が作られず、指定した場所には何も出来ない）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
@@ -1102,7 +1139,9 @@ introduced = "2.6.04"
 owner = ""
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnRecycleBinEmpty:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、ごみ箱が空にならない）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
@@ -1117,7 +1156,10 @@ introduced = "2.7.23"
 owner = ""
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnExtractArchiveComplete:1" },
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnExtractArchiveFailure:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、書庫が展開されず、中身を取り出せない）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
@@ -1196,7 +1238,9 @@ alias_of = "ukadoc:list_sakura_script:_5c_21_5bexecute_2chttp-get_2cURL_2c_30d1_
 owner = ""
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "alias_of", to = "ukadoc:list_sakura_script:_5c_21_5bexecute_2chttp-get_2cURL_2c_30d1_30e9_30e1_30fc_30bf_5d:1" },
+]
 note = """
 [別名の根拠: 人手の判断（DD-2 の接頭辞の検査）。引数の並び URL が、長い側の URL,パラメータ の先頭と 1 語ずつ一致する。同点の処理 ⑴ により、引数が 1 つだけ多い相手を採った]
 [狭さ: パラメータを取らない 1 引数形。areka はこの綴りもキャリアへ載せるだけで、写像先と同じく誰も消費しないので扱いは根と変わらない]
@@ -1336,7 +1380,10 @@ introduced = ""
 owner = ""
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnNSLookupComplete:1" },
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnNSLookupFailure:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、名前解決の問い合わせが走らず、結果を知らせるイベントも返らない）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
@@ -1351,7 +1398,10 @@ introduced = ""
 owner = ""
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnPingComplete:1" },
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnPingProgress:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、疎通の確認が走らず、結果を知らせるイベントも返らない）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
@@ -1442,7 +1492,9 @@ introduced = ""
 owner = ""
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c7:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、時刻合わせの問い合わせが走らず、時計のずれが直らない）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
@@ -1487,7 +1539,10 @@ introduced = ""
 owner = "areka-P0-property-query-channels"
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "queries", to = "ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.validheight.initial:1" },
+  { kind = "queries", to = "ukadoc:list_propertysystem:currentghost.balloon.scope_28ID_29.validwidth.initial:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、プロパティの値を尋ねる要求が届かず、名指ししたイベントで値が返ってこない）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
@@ -1495,6 +1550,7 @@ note = """
 [群: プロパティの照会と設定]
 [テーマ無し: 値を尋ねるための配管で、利用者に見える手応えは返事を受け取った台本の側に現れる]
 [頻度: 里々 6 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![get。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
+[読み書き: 読み（プロパティシステムの値を取り出し、指定したイベントの Reference へ入れる）。相手のプロパティ名は引数で決まるので 188 件のどれにでも向く。links に載せたのは正典本文の記述例が名指しする 2 件だけ]
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bleave_2ccollisionmode_5d:1"]
@@ -1578,7 +1634,10 @@ introduced = ""
 owner = ""
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnSelectModeCancel:1" },
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnSelectModeComplete:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、範囲を選ばせる状態から抜ける指定も届かない。入る側も効かないので、抜ける相手がそもそも無い）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
@@ -1703,7 +1762,9 @@ introduced = ""
 owner = ""
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5braise_2c_30a4_30d9_30f3_30c8_540d_2cr0_2cr1_2cr2..._5d:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、返事を受け取らない形のイベントも起こせず、知らせが SHIORI へ届かない。相手のイベント名は引数で決まるので 1 つに定まらない）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
@@ -1711,6 +1772,7 @@ note = """
 [群: イベントを他所へ起こす]
 [テーマ無し: 返事を待たずに自分の SHIORI へ知らせる配管で、利用者に見える差は受け取った側の台本に現れる]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![notify。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。この前置きは \\![notifyother・\\![notifyplugin の前置きでもあるためさらに過大。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
+[任意のイベント: 第 1 引数のイベント名がそのまま相手になる（返した値が反映されない点だけが raise と違う） ので 1 つに定まらない]
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bnotifyother_2c_30b4_30fc_30b9_30c8_540d_2c_30a4_30d9_30f3_30c8_540d_2cr0_2cr1_2cr2..._5d:1"]
@@ -1719,7 +1781,9 @@ introduced = ""
 owner = ""
 priority = "C20"
 values = ["交わり"]
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5braiseother_2c_30b4_30fc_30b9_30c8_540d_2c_30a4_30d9_30f3_30c8_540d_2cr0_2cr1_2cr2..._5d:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、別のゴーストへ返事不要の知らせを送れない。相手のイベント名は引数で決まるので 1 つに定まらない）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
@@ -1727,6 +1791,7 @@ note = """
 [群: イベントを他所へ起こす]
 [テーマ: 返事を待たない知らせを相手へ渡せず、同居しているゴーストが此方の様子を知れない]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![notifyother。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
+[任意のイベント: 第 2 引数のイベント名が相手になり、宛先も第 1 引数のゴースト名で決まる（返した値が反映されない） ので 1 つに定まらない]
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bnotifyplugin_2c_30d7_30e9_30b0_30a4_30f3_306eID_307e_305f_306f_540d_524d_2c_30a4_30d9_30f3_30c8_540d_2cr0_2cr1_:1"]
@@ -1735,13 +1800,16 @@ introduced = ""
 owner = ""
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5braiseplugin_2c_30d7_30e9_30b0_30a4_30f3_306eID_307e_305f_306f_540d_524d_2c_30a4_30d9_30f3_30c8_540d_2cr0_2cr1_2:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、プラグインへ返事不要の知らせを送れない。相手のイベント名は引数で決まるので 1 つに定まらない）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
 [運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
 [群: イベントを他所へ起こす]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![notifyplugin。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
+[任意のイベント: 第 2 引数のイベント名が相手になり、宛先も第 1 引数のプラグインで決まる（返した値が反映されない） ので 1 つに定まらない]
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bopen_2caddressbar_5d:1"]
@@ -1857,7 +1925,10 @@ introduced = ""
 owner = ""
 priority = "C20"
 values = ["交わり"]
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnCommunicate:1" },
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnCommunicateInputCancel:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、他のゴーストへ話しかけるための入力窓が開かない）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
@@ -1888,7 +1959,10 @@ introduced = ""
 owner = ""
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnUserInput:1" },
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnUserInputCancel:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、日付を選ぶ窓が開かず、選んだ日付が返らない）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
@@ -1919,7 +1993,10 @@ introduced = ""
 owner = ""
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnSystemDialog:1" },
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnSystemDialogCancel:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、色を選ぶ窓が開かず、選んだ色を返すイベントも起きない）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
@@ -1935,7 +2012,10 @@ introduced = ""
 owner = ""
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnSystemDialog:1" },
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnSystemDialogCancel:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、フォルダを選ぶ窓が開かず、選んだ場所を返すイベントも起きない）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
@@ -1951,7 +2031,10 @@ introduced = ""
 owner = ""
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnSystemDialog:1" },
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnSystemDialogCancel:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、ファイルを開く窓が開かず、選んだファイル名を返すイベントも起きない）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
@@ -1967,7 +2050,10 @@ introduced = ""
 owner = ""
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnSystemDialog:1" },
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnSystemDialogCancel:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、保存先を選ぶ窓が開かず、選んだファイル名を返すイベントも起きない）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
@@ -2105,7 +2191,10 @@ introduced = ""
 owner = ""
 priority = "C20"
 values = ["交わり"]
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnUserInput:1" },
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnUserInputCancel:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、文字を打ち込む窓が開かず、利用者の入力を受け取れない）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
@@ -2304,7 +2393,9 @@ introduced = ""
 owner = ""
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnUserInput:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、つまみで数を選ぶ窓が開かず、選んだ値が返らない）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
@@ -2335,7 +2426,11 @@ introduced = ""
 owner = ""
 priority = "C20"
 values = ["交わり"]
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnTeach:1" },
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnTeachInputCancel:1" },
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnTeachStart:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、言葉を教え込むための入力窓が開かない）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
@@ -2366,7 +2461,9 @@ introduced = ""
 owner = ""
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnUserInput:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、時刻を選ぶ窓が開かず、選んだ時刻が返らない）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
@@ -2419,6 +2516,7 @@ note = """
 [群: イベントを他所へ起こす]
 [テーマ無し: 自分の SHIORI へ話を渡すための配管で、利用者が見るのは渡した先の台本の中身になる]
 [頻度: 里々 8 / YAYA 2（wiki の作例の文書数＝弱い代理。数えた綴りは \\![raise。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。この前置きは \\![raiseother・\\![raiseplugin の前置きでもあるためさらに過大）]
+[任意のイベント: 第 1 引数のイベント名がそのまま相手になる ので 1 つに定まらない]
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5braiseother_2c_30b4_30fc_30b9_30c8_540d_2c_30a4_30d9_30f3_30c8_540d_2cr0_2cr1_2cr2..._5d:1"]
@@ -2435,6 +2533,7 @@ note = """
 [群: イベントを他所へ起こす]
 [テーマ: 名指しした相手へ出来事を渡せず、二人以上を並べても互いに黙ったまますれ違う]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![raiseother。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
+[任意のイベント: 第 2 引数のイベント名が相手になり、宛先も第 1 引数のゴースト名で決まる ので 1 つに定まらない]
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5braiseplugin_2c_30d7_30e9_30b0_30a4_30f3_306eID_307e_305f_306f_540d_524d_2c_30a4_30d9_30f3_30c8_540d_2cr0_2cr1_2:1"]
@@ -2450,6 +2549,7 @@ note = """
 [運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
 [群: イベントを他所へ起こす]
 [頻度: 里々 0 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\![raiseplugin。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
+[任意のイベント: 第 2 引数のイベント名が相手になり、宛先も第 1 引数のプラグインで決まる ので 1 つに定まらない]
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5breload_2caigraph_5d:1"]
@@ -2505,7 +2605,9 @@ alias_of = "ukadoc:list_sakura_script:_5c_21_5breload_2cdescript_2c_30d1_30e9_30
 owner = ""
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "alias_of", to = "ukadoc:list_sakura_script:_5c_21_5breload_2cdescript_2c_30d1_30e9_30e1_30fc_30bf_5d:1" },
+]
 note = """
 [別名の根拠: 人手の判断（DD-2 の接頭辞の検査）。引数の並び descript が、長い側の descript,パラメータ の先頭と 1 語ずつ一致する]
 [狭さ: パラメータを取らない 1 引数形。areka はこの綴りもキャリアへ載せるだけで、写像先と同じく誰も消費しないので扱いは根と変わらない]
@@ -2579,7 +2681,9 @@ alias_of = "ukadoc:list_sakura_script:_5c_21_5breload_2cshell_5d:1"
 owner = ""
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "alias_of", to = "ukadoc:list_sakura_script:_5c_21_5breload_2cshell_5d:1" },
+]
 note = """
 [別名の根拠: 正典本文の注記の逐語「[旧仕様]サーフェスをリロードする。SSPでは\\![reload,shell]と同じ。」。置き換え先が本文に名指しされているので規則 4 の順 1 で決まる]
 [狭さ: 引数を取らない旧い綴り。areka はこの綴りもキャリアへ載せるだけで、写像先と同じく誰も消費しないので扱いは根と変わらない]
@@ -2958,7 +3062,9 @@ introduced = ""
 owner = "areka-P0-property-query-channels"
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "queries", to = "ukadoc:list_propertysystem:currentghost.shelllist_28_30b7_30a7_30eb_540d_2f_30d1_30b9_29._6c4e_7528_30d7_30ed_30d1_30c6_30a3_540d:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、プロパティへ値を書き込めず、書いたつもりの値がどこにも残らない）。
 ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
@@ -2966,6 +3072,7 @@ note = """
 [群: プロパティの照会と設定]
 [テーマ無し: 値を書き込むための配管で、利用者に見える差は書いた値を使う側に現れる]
 [頻度: 里々 2 / YAYA 1（wiki の作例の文書数＝弱い代理。数えた綴りは \\![set。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る）]
+[読み書き: 書き（プロパティシステムへ値を入れる）。相手のプロパティ名は引数で決まるので 188 件のどれにでも向く。links に載せたのは正典本文の記述例が名指しする 1 件だけ]
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bset_2cscaling_2c_500d_7387_5d:1"]
@@ -3007,7 +3114,9 @@ alias_of = "ukadoc:list_sakura_script:_5c_21_5bset_2cscaling_2c_6a2a_500d_7387_2
 owner = ""
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "alias_of", to = "ukadoc:list_sakura_script:_5c_21_5bset_2cscaling_2c_6a2a_500d_7387_2c_7e26_500d_7387_2c_30aa_30d7_30b7_30e7_30f3_5d:1" },
+]
 note = """
 [別名の根拠: 人手の判断（DD-2 の接頭辞の検査）。引数の並び 横倍率,縦倍率 が、長い側の 横倍率,縦倍率,オプション の先頭と 1 語ずつ一致する]
 [狭さ: オプション（--time／--wait）を取らない 2 引数形。areka はこの綴りもキャリアへ載せるだけで、写像先と同じく誰も消費しないので扱いは根と変わらない]
@@ -3099,7 +3208,10 @@ introduced = ""
 owner = ""
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnTrayBalloonClick:1" },
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnTrayBalloonTimeout:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、通知領域の吹き出しが出ず、知らせが利用者に届かない）。
 ログ: 出る（重なりの受け口が名前と選択子の組まで見て担当外と判じ、他の受け口も名前だけで担当外に落として debug! を残す。compile の catch-all は通らない）。
@@ -3270,7 +3382,9 @@ introduced = ""
 owner = ""
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_v_5b_30d5_30a1_30a4_30eb_540d_5d:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、音や動画の再生が始まらず、オプションを付けた再生もできない）。
 ログ: 出る（配送先の 3 つの受け口が担当外の名前として debug! を残す。compile の catch-all は通らない）。
@@ -3316,7 +3430,9 @@ introduced = ""
 owner = "areka-P0-sakura-time-directives"
 priority = "C50"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_V:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、音の再生終了を待たずに台詞が進み、音と台詞の間合いが崩れる）。
 ログ: 出る（配送先の 3 つの受け口が担当外の名前として debug! を残す。compile の catch-all は通らない）。
@@ -3330,7 +3446,9 @@ introduced = ""
 owner = ""
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5btimerraise_2c_6642_9593_2c_7e70_308a_8fd4_3059_304b_5426_304b_2c_30a4_30d9_30f3_30c8_540d_2cr0_2cr1_2cr2..._5d:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、返事を受け取らない形の時間差の知らせが予約されない。相手のイベント名は引数で決まるので 1 つに定まらない）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
@@ -3338,6 +3456,7 @@ note = """
 [群: 時間差で起こすイベント]
 [テーマ無し: 時間をおいて自分へ知らせるだけの配管で、利用者に見える差は受け取った側に現れる]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![timernotify。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。この前置きは \\![timernotifyother・\\![timernotifyplugin の前置きでもあるためさらに過大。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
+[任意のイベント: 第 3 引数のイベント名が相手になり、発火は指定した時間の後になる（返した値が反映されない） ので 1 つに定まらない]
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5btimernotifyother_2c_6642_9593_2c_7e70_308a_8fd4_3059_304b_5426_304b_2c_30b4_30fc_30b9_30c8_540d_2c_30a4_30d9_30:1"]
@@ -3346,7 +3465,9 @@ introduced = ""
 owner = ""
 priority = "C20"
 values = ["交わり"]
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5btimerraiseother_2c_6642_9593_2c_7e70_308a_8fd4_3059_304b_5426_304b_2c_30b4_30fc_30b9_30c8_540d_2c_30a4_30d9_30f:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、別のゴーストへの、返事不要の時間差の知らせが予約されない。相手のイベント名は引数で決まるので 1 つに定まらない）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
@@ -3354,6 +3475,7 @@ note = """
 [群: 時間差で起こすイベント]
 [テーマ: 時間をおいた知らせを相手へ渡せず、後から様子を伝える段取りが作れない]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![timernotifyother。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
+[任意のイベント: 第 4 引数のイベント名が相手になり、宛先も第 3 引数のゴースト名で決まる（返した値が反映されない） ので 1 つに定まらない]
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5btimernotifyplugin_2c_6642_9593_2c_7e70_308a_8fd4_3059_304b_5426_304b_2c_30d7_30e9_30b0_30a4_30f3_306eID_307e_30:1"]
@@ -3362,13 +3484,16 @@ introduced = ""
 owner = ""
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5c_21_5btimerraiseplugin_2c_6642_9593_2c_7e70_308a_8fd4_3059_304b_5426_304b_2c_30d7_30e9_30b0_30a4_30f3_306eID_307e_305:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、プラグインへの、返事不要の時間差の知らせが予約されない。相手のイベント名は引数で決まるので 1 つに定まらない）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
 [運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
 [群: 時間差で起こすイベント]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![timernotifyplugin。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
+[任意のイベント: 第 4 引数のイベント名が相手になり、宛先も第 3 引数のプラグインで決まる（返した値が反映されない） ので 1 つに定まらない]
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5btimerraise_2c_6642_9593_2c_7e70_308a_8fd4_3059_304b_5426_304b_2c_30a4_30d9_30f3_30c8_540d_2cr0_2cr1_2cr2..._5d:1"]
@@ -3385,6 +3510,7 @@ note = """
 [群: 時間差で起こすイベント]
 [テーマ無し: 時間をおいて自分へ話を渡す配管で、利用者が見るのは呼び出された先の台本になる]
 [頻度: 里々 1 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![timerraise。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。この前置きは \\![timerraiseother・\\![timerraiseplugin の前置きでもあるためさらに過大。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
+[任意のイベント: 第 3 引数のイベント名が相手になり、発火は指定した時間の後になる ので 1 つに定まらない]
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5btimerraiseother_2c_6642_9593_2c_7e70_308a_8fd4_3059_304b_5426_304b_2c_30b4_30fc_30b9_30c8_540d_2c_30a4_30d9_30f:1"]
@@ -3401,6 +3527,7 @@ note = """
 [群: 時間差で起こすイベント]
 [テーマ: 時間をおいて相手へ声を掛けられず、間を置いた掛け合いを仕込めない]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![timerraiseother。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
+[任意のイベント: 第 4 引数のイベント名が相手になり、宛先も第 3 引数のゴースト名で決まる ので 1 つに定まらない]
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5btimerraiseplugin_2c_6642_9593_2c_7e70_308a_8fd4_3059_304b_5426_304b_2c_30d7_30e9_30b0_30a4_30f3_306eID_307e_305:1"]
@@ -3416,6 +3543,7 @@ note = """
 [運搬: 名前はキャリアに載って最後まで運ばれるが、名前として登記した表が無い]
 [群: 時間差で起こすイベント]
 [頻度: 里々 0 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\![timerraiseplugin。族の閉じ角括弧は名寄せの合成物なので前置きで数えており、同じ前置きで始まる別の命令も巻き込むぶん過大に出る。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
+[任意のイベント: 第 4 引数のイベント名が相手になり、宛先も第 3 引数のプラグインで決まる ので 1 つに定まらない]
 """
 
 [entry."ukadoc:list_sakura_script:_5c_21_5bunload_2cmakoto_5d:1"]
@@ -3502,7 +3630,10 @@ introduced = ""
 owner = ""
 priority = "C20"
 values = ["更新"]
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnUpdateOtherReady:1" },
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnUpdateResult:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、名指しした対象の更新が始まらず、新しい版が入らない）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
@@ -3518,7 +3649,12 @@ introduced = ""
 owner = ""
 priority = "C20"
 values = ["更新"]
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnBasewareUpdated:1" },
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnBasewareUpdating:1" },
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnBoot:1" },
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnClose:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、SSP 本体の更新が始まらない）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
@@ -3550,7 +3686,10 @@ introduced = ""
 owner = ""
 priority = "C20"
 values = ["更新"]
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnUpdateOtherReady:1" },
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnUpdateResultEx:1" },
+]
 note = """
 壊れ方: 黙って壊れる（利用者から見ればタグが消えたのと同じで、別のゴーストの更新を促せない）。
 ログ: 出る（キャリアを開ける受け口がそれぞれ名前で自己選別し、担当外として debug! を残す。compile の catch-all は通らない）。
@@ -3723,7 +3862,10 @@ introduced = ""
 owner = ""
 priority = "C20"
 values = ["交わり"]
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnChoiceTimeout:1" },
+  { kind = "same-feature", to = "ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cID_2cr2_2cr3..._5d:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— decode_tag の既定の腕から decode_passthrough_tag へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。区間が選択肢にならず、囲んだ文がふつうの台詞として流れる（自動改行も付かない）。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -3731,6 +3873,7 @@ note = """
 [所有先未定: doc/COMPAT_ARCHITECTURE.md の角括弧なし \\_ タグの行が、字句の切れ目と素通しだけを完了済みの areka-P0-sakura-bare-tag-lexer が定め、意味づけの所有先は未定で areka-P0-ukadoc-coverage-roadmap の無所有一覧で裁定すると登記している]
 [テーマ: 区間をまとめて選択肢にできず、長い文で返事を受ける書き方が使えない]
 [頻度: 里々 8 / YAYA 0（wiki の作例の文書数＝弱い代理。数えた綴りは \\__q。0 は使われていないという意味ではなく、この検索に当たらないという意味）]
+[任意のイベント: 第 1 引数が On で始まる名前のときは、その名前のイベントが選択時の相手になる（タイムアウトの相手だけは固定なので links に載せた） ので 1 つに定まらない]
 """
 
 [entry."ukadoc:list_sakura_script:_5c__t:1"]
@@ -3805,7 +3948,10 @@ introduced = ""
 owner = "areka-P0-anchor-tag-canon"
 priority = "C20"
 values = ["交わり"]
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnAnchorSelect:1" },
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnAnchorSelectEx:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— decode_tag の既定の腕から decode_passthrough_tag へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。文がアンカーにならず、押しても何も起きない。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -3822,7 +3968,11 @@ alias_of = "ukadoc:list_sakura_script:_5c_a_5bID_2cr2_2cr3..._5d:1"
 owner = ""
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "alias_of", to = "ukadoc:list_sakura_script:_5c_a_5bID_2cr2_2cr3..._5d:1" },
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnAnchorSelect:1" },
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnAnchorSelectEx:1" },
+]
 note = """
 [別名の根拠: 人手の判断（DD-2 の接頭辞の検査）。引数の並び ID が、長い側の ID,r2,r3... の先頭と 1 語ずつ一致する]
 [狭さ: 付随参照を取らない 1 引数形。areka はこの綴りを decode_tag の既定の腕で受け、写像先と同じく Raw へ落とすので扱いは根と変わらない]
@@ -3844,6 +3994,7 @@ note = """
 [群: アンカー]
 [テーマ: 押したときに好きな名前で受ける道が無く、返事を任意の話へ繋げられない]
 [頻度: 里々 2 / YAYA 3（wiki の作例の文書数＝弱い代理。数えた綴りは \\_a）]
+[任意のイベント: 第 1 引数が On で始まる名前のときは、その名前のイベントがそのまま相手になる ので 1 つに定まらない]
 """
 
 [entry."ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cinline_2c_30aa_30d7_30b7_30e7_30f3_2c_30aa_30d7_30b7_30e7_30f3..._5d:1"]
@@ -3883,7 +4034,9 @@ alias_of = "ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2ci
 owner = ""
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "alias_of", to = "ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cinline_2copaque_5d:1" },
+]
 note = """
 [別名の根拠: 人手の判断（DD-2 の接頭辞の検査）。同点の処理 ⑴ により、引数が 1 つだけ多い相手を採った]
 [狭さ: オプションを取らない 2 引数形。areka はこの綴りを decode_tag の既定の腕で受け、写像先と同じく Raw へ落とすので扱いは根と変わらない]
@@ -3927,7 +4080,9 @@ alias_of = "ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cx
 owner = ""
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "alias_of", to = "ukadoc:list_sakura_script:_5c_b_5b_30d5_30a1_30a4_30eb_30d1_30b9_2cx_2cy_2copaque_5d:1" },
+]
 note = """
 [別名の根拠: 人手の判断（DD-2 の接頭辞の検査）。同点の処理 ⑴ により、引数が 1 つだけ多い相手を採った]
 [狭さ: オプションを取らない 3 引数形。areka はこの綴りを decode_tag の既定の腕で受け、写像先と同じく Raw へ落とすので扱いは根と変わらない]
@@ -3940,7 +4095,10 @@ introduced = ""
 owner = "areka-P0-cursor-tag-canon"
 priority = "C40"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:descript_balloon:origin.x_2c_5ea7_6a19_20_2a1:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:origin.y_2c_5ea7_6a19_20_2a1:1" },
+]
 note = """
 壊れ方: 見た目の差 — decode_tag の \"_l\" の腕が x・y を文字列のまま Cursor にし、compile が cue を出して emo-text の cursor_to_image_px が px・em・lh の非負絶対だけを解く。動く用法＝横書きの絶対座標指定。動かない用法＝縦書き（vertical_rl）では原点と符号が正典と食い違い 1 列目ではなく描画範囲の外側左方へ着地すること、および % 指定・@ 相対・負値が軸不変へ落ちて座標が動かないこと。
 ログ: 出る（% 指定・@ 相対・負値・解けない綴りのときだけ layout の warn_cursor_degrade がスコープごとに 1 度 warn! を出す。横書きの正常な絶対指定では出ない）。
@@ -4002,7 +4160,9 @@ alias_of = "ukadoc:list_sakura_script:_5c_s_5bID1_2cID2_2cID3..._5d:1"
 owner = ""
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "alias_of", to = "ukadoc:list_sakura_script:_5c_s_5bID1_2cID2_2cID3..._5d:1" },
+]
 note = """
 [別名の根拠: 人手の判断（DD-2 の接頭辞の検査）。引数なしの形が、スコープ ID を並べる形の先頭と一致する]
 [狭さ: スコープを選べない引数なし形。areka はこの綴りを decode_bare の既定の腕で受け、写像先と同じく Raw へ落とすので扱いは根と変わらない]
@@ -4073,7 +4233,9 @@ introduced = ""
 owner = ""
 priority = "C20"
 values = ["交わり"]
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnAITalk:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— decode_bare の既定の腕から decode_passthrough_bare へ落ちて Raw になり、compile の catch-all が cue を作らずに捨てる。ランダムトークを促すイベントが起きず、押しても喋り出さない。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -4091,7 +4253,9 @@ alias_of = "ukadoc:list_sakura_script:_5cb_5bID_756a_53f7_5d:1"
 owner = ""
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "alias_of", to = "ukadoc:list_sakura_script:_5cb_5bID_756a_53f7_5d:1" },
+]
 note = """
 [別名の根拠: 版番号。3 対のうち版番号が付くのは括弧形の 2.6.34 だけで、括弧形が新しいと決まる]
 [狭さ: 0〜9 の 1 桁だけ。areka は短縮形の語 'b' としてこの綴りを受け、decode_token の Token::Shorthand{ word: 'b' } の腕が写像先と同じ BalloonSurface を作る]
@@ -4104,7 +4268,9 @@ introduced = "2.6.34"
 owner = "areka-P0-kero-balloon"
 priority = ""
 values = ["装い"]
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:descript_balloon:name_2c_30d0_30eb_30fc_30f3_540d:1" },
+]
 note = """
 壊れ方: 見た目の差 — decode_tag の \"b\" の腕が第 1 引数だけを不透明文字列として BalloonSurface にし、compile が cue を出す。-1 は非表示として解ける。候補を並べる形は第 1 引数だけが残り、後ろの候補は落ちる。
 ログ: 出る（面の綴りが数として解けなかったときだけ消費側の warn! 記録）。
@@ -4149,7 +4315,9 @@ alias_of = "ukadoc:list_sakura_script:_5cc_5bchar_2c_6570_5024_2c_958b_59cb_4f4d
 owner = ""
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "alias_of", to = "ukadoc:list_sakura_script:_5cc_5bchar_2c_6570_5024_2c_958b_59cb_4f4d_7f6e_5d:1" },
+]
 note = """
 [別名の根拠: 人手の判断（DD-2 の接頭辞の検査）。引数の並び char,数値 が、長い側の char,数値,開始位置 の先頭と 1 語ずつ一致する]
 [狭さ: 開始位置を指定できない 2 引数形。areka はこの綴りを decode_tag の既定の腕で受け、写像先と同じく Raw へ落とすので扱いは根と変わらない]
@@ -4178,7 +4346,9 @@ alias_of = "ukadoc:list_sakura_script:_5cc_5bline_2c_6570_5024_2c_958b_59cb_4f4d
 owner = ""
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "alias_of", to = "ukadoc:list_sakura_script:_5cc_5bline_2c_6570_5024_2c_958b_59cb_4f4d_7f6e_5d:1" },
+]
 note = """
 [別名の根拠: 人手の判断（DD-2 の接頭辞の検査）。引数の並び line,数値 が、長い側の line,数値,開始位置 の先頭と 1 語ずつ一致する]
 [狭さ: 開始位置を指定できない 2 引数形。areka はこの綴りを decode_tag の既定の腕で受け、写像先と同じく Raw へ落とすので扱いは根と変わらない]
@@ -4221,7 +4391,11 @@ introduced = ""
 owner = "areka-P0-anchor-tag-canon"
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:descript_balloon:anchor.font.color.b_2c_6570_5024:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:anchor.font.color.g_2c_6570_5024:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:anchor.font.color.r_2c_6570_5024:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— アンカーの文字色の指定が失われ、アンカーはバルーン設定の色のまま出る。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -4235,7 +4409,11 @@ introduced = ""
 owner = "areka-P0-anchor-tag-canon"
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:descript_balloon:anchor.brush.color.b_2c_6570_5024:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:anchor.brush.color.g_2c_6570_5024:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:anchor.brush.color.r_2c_6570_5024:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— 選択中のアンカーの矩形の中の色の指定が失われる。2 つの綴りは同じ受け皿へ落ちるので扱いが分かれない。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -4250,7 +4428,11 @@ introduced = ""
 owner = "areka-P0-anchor-tag-canon"
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:descript_balloon:anchor.font.color.b_2c_6570_5024:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:anchor.font.color.g_2c_6570_5024:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:anchor.font.color.r_2c_6570_5024:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— 選択中のアンカーの文字色の指定が失われる。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -4264,7 +4446,9 @@ introduced = ""
 owner = "areka-P0-anchor-tag-canon"
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:descript_balloon:anchor.blendmethod_2c_30b3_30de_30f3_30c9:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— 選択中のアンカーの矩形の塗り方の指定が失われる。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -4278,7 +4462,11 @@ introduced = ""
 owner = "areka-P0-anchor-tag-canon"
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:descript_balloon:anchor.notselect.brush.color.b_2c_6570_5024:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:anchor.notselect.brush.color.g_2c_6570_5024:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:anchor.notselect.brush.color.r_2c_6570_5024:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— 非選択のアンカーの矩形の中の色の指定が失われる。2 つの綴りは同じ受け皿へ落ちるので扱いが分かれない。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -4293,7 +4481,11 @@ introduced = ""
 owner = "areka-P0-anchor-tag-canon"
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:descript_balloon:anchor.notselect.font.color.b_2c_6570_5024:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:anchor.notselect.font.color.g_2c_6570_5024:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:anchor.notselect.font.color.r_2c_6570_5024:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— 非選択のアンカーの文字色の指定が失われる。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -4321,7 +4513,11 @@ introduced = ""
 owner = "areka-P0-anchor-tag-canon"
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:descript_balloon:anchor.notselect.pen.color.b_2c_6570_5024:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:anchor.notselect.pen.color.g_2c_6570_5024:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:anchor.notselect.pen.color.r_2c_6570_5024:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— 非選択のアンカーの枠線と下線の色の指定が失われる。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -4335,7 +4531,9 @@ introduced = ""
 owner = "areka-P0-anchor-tag-canon"
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:descript_balloon:anchor.notselect.style_2c_5f62_72b6:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— 非選択のアンカーの形（枠・下線・無し）の指定が失われる。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -4349,7 +4547,11 @@ introduced = ""
 owner = "areka-P0-anchor-tag-canon"
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:descript_balloon:anchor.pen.color.b_2c_6570_5024:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:anchor.pen.color.g_2c_6570_5024:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:anchor.pen.color.r_2c_6570_5024:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— 選択中のアンカーの枠線と下線の色の指定が失われる。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -4363,7 +4565,9 @@ introduced = ""
 owner = "areka-P0-anchor-tag-canon"
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:descript_balloon:anchor.style_2c_5f62_72b6:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— 選択中のアンカーの形（枠・下線・無し）の指定が失われる。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -4377,7 +4581,11 @@ introduced = ""
 owner = "areka-P0-anchor-tag-canon"
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:descript_balloon:anchor.visited.brush.color.b_2c_6570_5024:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:anchor.visited.brush.color.g_2c_6570_5024:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:anchor.visited.brush.color.r_2c_6570_5024:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— 訪問済みのアンカーの矩形の中の色の指定が失われる。2 つの綴りは同じ受け皿へ落ちるので扱いが分かれない。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -4392,7 +4600,11 @@ introduced = ""
 owner = "areka-P0-anchor-tag-canon"
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:descript_balloon:anchor.visited.font.color.b_2c_6570_5024:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:anchor.visited.font.color.g_2c_6570_5024:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:anchor.visited.font.color.r_2c_6570_5024:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— 訪問済みのアンカーの文字色の指定が失われる。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -4420,7 +4632,11 @@ introduced = ""
 owner = "areka-P0-anchor-tag-canon"
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:descript_balloon:anchor.visited.pen.color.b_2c_6570_5024:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:anchor.visited.pen.color.g_2c_6570_5024:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:anchor.visited.pen.color.r_2c_6570_5024:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— 訪問済みのアンカーの枠線と下線の色の指定が失われる。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -4434,7 +4650,9 @@ introduced = ""
 owner = "areka-P0-anchor-tag-canon"
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:descript_balloon:anchor.visited.style_2c_5f62_72b6:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— 訪問済みのアンカーの形（枠・下線・無し）の指定が失われる。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -4448,7 +4666,9 @@ introduced = ""
 owner = "areka-P0-text-decoration-canon"
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:descript_balloon:font.bold_2c0_2f1:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— 太字にする指定が失われ、地の太さのまま出る。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -4462,7 +4682,11 @@ introduced = ""
 owner = "areka-P0-text-decoration-canon"
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:descript_balloon:font.color.b_2c_6570_5024:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:font.color.g_2c_6570_5024:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:font.color.r_2c_6570_5024:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— 文字色の指定が失われ、バルーン設定の色のまま出る。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -4476,7 +4700,11 @@ introduced = ""
 owner = "areka-P0-choice-marker-styling"
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:descript_balloon:cursor.brush.color.b_2c_6570_5024:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:cursor.brush.color.g_2c_6570_5024:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:cursor.brush.color.r_2c_6570_5024:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— 選択中の選択肢マーカーの矩形の中の色の指定が失われる。2 つの綴りは同じ受け皿へ落ちるので扱いが分かれない。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -4491,7 +4719,11 @@ introduced = ""
 owner = "areka-P0-choice-marker-styling"
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:descript_balloon:cursor.font.color.b_2c_6570_5024:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:cursor.font.color.g_2c_6570_5024:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:cursor.font.color.r_2c_6570_5024:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— 選択中の選択肢マーカーの文字色の指定が失われる。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -4505,7 +4737,9 @@ introduced = ""
 owner = "areka-P0-choice-marker-styling"
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:descript_balloon:cursor.blendmethod_2c_30b3_30de_30f3_30c9:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— 選択中の選択肢マーカーの矩形の塗り方の指定が失われる。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -4519,7 +4753,11 @@ introduced = ""
 owner = "areka-P0-choice-marker-styling"
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:descript_balloon:cursor.notselect.brush.color.b_2c_6570_5024:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:cursor.notselect.brush.color.g_2c_6570_5024:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:cursor.notselect.brush.color.r_2c_6570_5024:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— 非選択の選択肢マーカーの矩形の中の色の指定が失われる。2 つの綴りは同じ受け皿へ落ちるので扱いが分かれない。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -4534,7 +4772,11 @@ introduced = ""
 owner = "areka-P0-choice-marker-styling"
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:descript_balloon:cursor.notselect.font.color.b_2c_6570_5024:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:cursor.notselect.font.color.g_2c_6570_5024:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:cursor.notselect.font.color.r_2c_6570_5024:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— 非選択の選択肢マーカーの文字色の指定が失われる。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -4562,7 +4804,11 @@ introduced = ""
 owner = "areka-P0-choice-marker-styling"
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:descript_balloon:cursor.notselect.pen.color.b_2c_6570_5024:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:cursor.notselect.pen.color.g_2c_6570_5024:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:cursor.notselect.pen.color.r_2c_6570_5024:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— 非選択の選択肢マーカーの枠線と下線の色の指定が失われる。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -4576,7 +4822,9 @@ introduced = ""
 owner = "areka-P0-choice-marker-styling"
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:descript_balloon:cursor.notselect.style_2c_5f62_72b6:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— 非選択の選択肢マーカーの形（枠・下線・無し）の指定が失われる。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -4590,7 +4838,11 @@ introduced = ""
 owner = "areka-P0-choice-marker-styling"
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:descript_balloon:cursor.pen.color.b_2c_6570_5024:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:cursor.pen.color.g_2c_6570_5024:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:cursor.pen.color.r_2c_6570_5024:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— 選択中の選択肢マーカーの枠線と下線の色の指定が失われる。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -4604,7 +4856,9 @@ introduced = ""
 owner = "areka-P0-choice-marker-styling"
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:descript_balloon:cursor.style_2c_5f62_72b6:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— 選択中の選択肢マーカーの形（枠・下線・無し）の指定が失われる。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -4632,7 +4886,9 @@ introduced = "2.5.51"
 owner = "areka-P0-text-decoration-canon"
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:descript_balloon:disable.font._28_30d5_30a9_30f3_30c8_5b9a_7fa9_29_2c_28_6307_5b9a_29:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— すべての文字装飾を無効表示へ切り替える指定が失われる。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -4646,7 +4902,9 @@ introduced = ""
 owner = "areka-P0-text-decoration-canon"
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:descript_balloon:font.height_2c_6570_5024:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— 文字の大きさの指定が失われ、バルーン設定の大きさのまま出る。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -4660,7 +4918,9 @@ introduced = ""
 owner = "areka-P0-text-decoration-canon"
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:descript_balloon:font.italic_2c0_2f1:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— 斜体にする指定が失われる。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -4674,7 +4934,9 @@ introduced = ""
 owner = "areka-P0-text-decoration-canon"
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:descript_balloon:font.name_2c_30d5_30a9_30f3_30c8_540d:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— フォントの指定が失われ、バルーン設定のフォントのまま出る。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -4688,7 +4950,9 @@ introduced = ""
 owner = "areka-P0-text-decoration-canon"
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:descript_balloon:font.outline_2c0_2f1:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— 白抜きにする指定が失われる。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -4702,7 +4966,11 @@ introduced = ""
 owner = "areka-P0-text-decoration-canon"
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:descript_balloon:font.shadowcolor.b_2c_6570_5024:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:font.shadowcolor.g_2c_6570_5024:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:font.shadowcolor.r_2c_6570_5024:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— 文字の影の色の指定が失われる。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -4716,7 +4984,11 @@ introduced = ""
 owner = "areka-P0-text-decoration-canon"
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:descript_balloon:font.shadowcolor.b_2c_6570_5024:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:font.shadowcolor.g_2c_6570_5024:1" },
+  { kind = "same-feature", to = "ukadoc:descript_balloon:font.shadowcolor.r_2c_6570_5024:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— 文字の影を無くす指定が失われる。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -4730,7 +5002,9 @@ introduced = "2.5.27"
 owner = "areka-P0-text-decoration-canon"
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:descript_balloon:font.shadowstyle_2c_5f62_614b_6307_5b9a:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— 影の形（右下へずらす・縁取り）の指定が失われる。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -4744,7 +5018,9 @@ introduced = ""
 owner = "areka-P0-text-decoration-canon"
 priority = "C90"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:descript_balloon:font.strike_2c0_2f1:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— 打ち消し線を引く指定が失われる。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -4786,7 +5062,9 @@ introduced = ""
 owner = "areka-P0-text-decoration-canon"
 priority = "C50"
 values = []
-links = []
+links = [
+  { kind = "same-feature", to = "ukadoc:descript_balloon:font.underline_2c0_2f1:1" },
+]
 note = """
 壊れ方: 黙って壊れる（タグが消える）— 下線を引く指定が失われる。
 ログ: 出る（compile の catch-all の debug! 記録）。
@@ -4920,7 +5198,9 @@ alias_of = "ukadoc:list_sakura_script:_5cp_5bID_756a_53f7_5d:1"
 owner = ""
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "alias_of", to = "ukadoc:list_sakura_script:_5cp_5bID_756a_53f7_5d:1" },
+]
 note = """
 [別名の根拠: 人手の判断。3 対のうち版番号が向きを決めるのはバルーン面の対だけなので、版番号の無いこの対には同じ向き（括弧形が正典）を人手で当てた]
 [狭さ: 0〜9 の 1 桁だけ。areka は短縮形の語 'p' としてこの綴りを受け、decode_token の Token::Shorthand{ word: 'p' } の腕が写像先と同じ SpeakerScope を作る]
@@ -4948,13 +5228,17 @@ alias_of = "ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cID_2cr2_2cr3
 owner = ""
 priority = "C20"
 values = ["交わり"]
-links = []
+links = [
+  { kind = "alias_of", to = "ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cID_2cr2_2cr3..._5d:1" },
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnChoiceTimeout:1" },
+]
 note = """
 [別名の根拠: 本文の注記。[旧仕様] と述べたうえで「上記のものとは違い」と現行の書式群を参照しており、置き換え先が 1 つに定まる（規則 4 の順 1）。指す先は連鎖を避けて鎖の根にした]
 [並べられた綴り: \\q*[ID][タイトル]。正典に独立した id を持たない。2 つの綴りは is_legacy_q_head が同じ判定で受けるので旧書式としての扱いは分かれないが、直後の浮いた [タイトル] が無いときだけ差が出る——星の付かない綴りは現行形として decode_tag の \"q\" の腕で Choice になり、星の付く綴りは既定の腕から Raw へ落ちる]
 [狭さ: areka はこの綴りを受けない。fold_legacy_q が先頭のタグと直後に浮いた [タイトル] を 1 つの Raw へ畳み、わざと選択肢にしない。compile の catch-all が捨てるので選択肢も台詞も出ない]
 [テーマ: 古い書式で書かれた選択肢が出ず、その書き方の辞書では利用者が返事をする道が丸ごと消える]
 [頻度: 里々 27 / YAYA 9（wiki の作例の文書数＝弱い代理。数えた綴りは \\q。綴りが短く別の語の一部にも当たるぶん過大に出る）]
+[任意のイベント: 通し番号形は選択後に ID 番号のイベントが始まると本文が書くだけで、名前が引数で決まるため相手が定まらない（タイムアウトの相手だけは固定なので links に載せた） ので 1 つに定まらない]
 """
 
 [entry."ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cID1_2cID2_2cID3..._5d:1"]
@@ -4963,7 +5247,10 @@ introduced = ""
 owner = ""
 priority = "C40"
 values = ["交わり"]
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnChoiceSelect:1" },
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnChoiceTimeout:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 本ドメインの 3 通り（タグが消える／%名前が出る／引数が漏れる）のいずれでもない第 4 の形で、選択肢は正典どおり出て選べるのに、2 番目以降の ID だけが落ちる。動く用法＝選択肢の表示と、選択後の先行イベントで 2 番目以降の ID が付随参照として渡ること。動かない用法＝先行イベントが応答を返さなかったときに続く無印のイベントで、areka の on_choice_select が 1 つ目の ID だけを渡し、正典が言う「ID それぞれが順に格納される」にならないこと。areka の運搬形が ID の並びと付随参照の並びを区別できないための構造的な縮退である。
 ログ: 出ない（構造的な縮退で、警告を出す腕が無い）。
@@ -4979,7 +5266,11 @@ introduced = ""
 owner = ""
 priority = ""
 values = ["交わり"]
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnChoiceSelect:1" },
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnChoiceSelectEx:1" },
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnChoiceTimeout:1" },
+]
 note = """
 壊れ方: 見た目の差 — decode_tag の \"q\" の腕が第 1 引数を表示ラベル・第 2 引数を選択 ID・第 3 引数以降を付随参照として Choice にし、compile が選択待ちの barrier を 1 つ置く。選ぶと plan_cascade が正典形を返し、先行のイベントが出て、応答が無ければ無印のイベントが続く。
 ログ: 出ない（正常経路）。
@@ -4995,7 +5286,12 @@ alias_of = "ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cID_2cr2_2cr3
 owner = ""
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "alias_of", to = "ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cID_2cr2_2cr3..._5d:1" },
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnChoiceSelect:1" },
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnChoiceSelectEx:1" },
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnChoiceTimeout:1" },
+]
 note = """
 [別名の根拠: 人手の判断（DD-2 の接頭辞の検査）。引数の並び タイトル,ID が、長い側の タイトル,ID,r2,r3... の先頭と 1 語ずつ一致する]
 [狭さ: 付随参照を取らない 2 引数形。areka はこの綴りを decode_tag の \"q\" の腕で受け、写像先と同じ Choice を作る]
@@ -5008,13 +5304,16 @@ introduced = ""
 owner = ""
 priority = ""
 values = ["交わり"]
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnChoiceTimeout:1" },
+]
 note = """
 壊れ方: 見た目の差 — decode_tag の \"q\" の腕が Choice を作り、選ぶと plan_cascade が On で始まる ID を見て、書いたとおりの名前のイベントを 1 段だけ起こす。続く引数は順に付随参照として渡る。先行して固定名のイベントを出さないことは、正典が黙っている所の areka の裁量として登記済みで、縮退ではない。
 ログ: 出ない（正常経路）。
 [根が 2 つ: 根は 4 個に割れた。兄弟の id は ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cID1_2cID2_2cID3..._5d:1・ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cID_2cr2_2cr3..._5d:1・ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cscript_3a_5b9f_884c_5185_5bb9_5d:1]
 [テーマ: 任意の名前で受ける選択肢が出ず、利用者の返事を好きな話へ繋げられない]
 [頻度: 里々 27 / YAYA 9（wiki の作例の文書数＝弱い代理。数えた綴りは \\q。綴りが短く別の語の一部にも当たるぶん過大に出る）]
+[任意のイベント: 第 2 引数が On で始まる名前のときは、その名前のイベントが選択時の相手になる（タイムアウトの相手だけは固定なので links に載せた） ので 1 つに定まらない]
 """
 
 [entry."ukadoc:list_sakura_script:_5cq_5b_30bf_30a4_30c8_30eb_2cscript_3a_5b9f_884c_5185_5bb9_5d:1"]
@@ -5023,7 +5322,9 @@ introduced = ""
 owner = ""
 priority = "C40"
 values = ["交わり"]
-links = []
+links = [
+  { kind = "triggers", to = "ukadoc:list_shiori_event:OnChoiceTimeout:1" },
+]
 note = """
 壊れ方: 黙って壊れる — 本ドメインの 3 通りのいずれでもない第 4 の形で、選択肢は正典どおり出て選べるのに、選んだ後の実行内容だけが走らない。動く用法＝選択肢の表示と、選んだときに選択待ちが解けて会話が止まらないこと。動かない用法＝script: に書いたさくらスクリプトの実行で、plan_cascade が script: を最初に見て未対応と判定し、SHIORI イベントを 1 つも出さない。
 ログ: 出る（steady の choice_unsupported_category の warn! 記録）。
@@ -5040,7 +5341,9 @@ alias_of = "ukadoc:list_sakura_script:_5cs_5bID_756a_53f7_5d:1"
 owner = ""
 priority = "C10"
 values = ["気配"]
-links = []
+links = [
+  { kind = "alias_of", to = "ukadoc:list_sakura_script:_5cs_5bID_756a_53f7_5d:1" },
+]
 note = """
 [別名の根拠: 人手の判断。3 対のうち版番号が向きを決めるのはバルーン面の対だけなので、版番号の無いこの対には同じ向き（括弧形が正典）を人手で当てた]
 [狭さ: 0〜9 の 1 桁だけ。さらに areka はこの綴りを受けない——短縮形の語は 'w'・'b'・'p' の 3 つで 's' を含まないため、綴りだけが 1 単位として切り出され、続く数字は本文へ回る。面は変わらず数字が台詞へ漏れる（壊れ方 ⑶）。写像先の括弧形は正典どおり動く]
@@ -5116,7 +5419,9 @@ alias_of = "ukadoc:list_sakura_script:_5cx_5bnoclear_5d:1"
 owner = ""
 priority = ""
 values = []
-links = []
+links = [
+  { kind = "alias_of", to = "ukadoc:list_sakura_script:_5cx_5bnoclear_5d:1" },
+]
 note = """
 [別名の根拠: 人手の判断（DD-2 の接頭辞の検査）。引数なしの形が、長い側の 1 引数形の先頭と一致する]
 [狭さ: 内容を残す指定を書けない引数なし形。areka はこの綴りを decode_bare の既定の腕で受け、写像先と同じく Raw へ落とすので扱いは根と変わらない]
@@ -5148,7 +5453,9 @@ alias_of = "ukadoc:list_sakura_script:_5ce:1"
 owner = ""
 priority = "C20"
 values = ["気配"]
-links = []
+links = [
+  { kind = "alias_of", to = "ukadoc:list_sakura_script:_5ce:1" },
+]
 note = """
 [別名の根拠: 本文の注記。[旧仕様] と述べたうえで置き換え先を名指ししている（規則 4 の順 1）]
 [狭さ: areka はこの綴りを受けない。decode_bare の既定の腕から Raw へ落ちて compile の catch-all に捨てられるので、トークが終わらない。写像先は decode_bare の \"e\" の腕で正典どおり終端する]
