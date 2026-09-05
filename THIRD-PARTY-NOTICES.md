@@ -7,7 +7,7 @@ areka はバイナリ配布時に、以下の第三者パッケージのライ�
 areka 自身のライセンスは MIT です（ルートの `LICENSE-MIT` を参照）。
 
 使用ライセンス一覧:
-- MIT License (202 crate)
+- MIT License (203 crate)
 - BSD 3-Clause "New" or "Revised" License (2 crate)
 - zlib License (2 crate)
 - Apache License 2.0 (1 crate)
@@ -569,7 +569,7 @@ DEALINGS IN THE SOFTWARE.
 
 対象 crate:
 - bitflags 2.13.1
-- log 0.4.33
+- log 0.4.34
 - regex-automata 0.4.18
 - regex-syntax 0.8.11
 
@@ -606,7 +606,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 対象 crate:
-- uuid 1.24.0
+- uuid 1.26.0
 
 ```
 Copyright (c) 2014 The Rust Project Developers
@@ -642,7 +642,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 対象 crate:
-- either 1.17.0
+- either 1.18.0
 - itertools 0.10.5
 
 ```
@@ -961,7 +961,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 対象 crate:
-- indexmap 2.14.0
+- indexmap 2.14.1
 
 ```
 Copyright (c) 2016--2017
@@ -1205,7 +1205,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 対象 crate:
-- smallvec 1.15.2
+- smallvec 1.16.0
 
 ```
 Copyright (c) 2018 The Servo Project Developers
@@ -1478,7 +1478,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 対象 crate:
-- chacha20 0.10.1
+- chacha20 0.10.2
 
 ```
 Copyright (c) 2019-2026 The RustCrypto Project Developers
@@ -1576,10 +1576,10 @@ SOFTWARE.
 ## MIT License
 
 対象 crate:
-- cpufeatures 0.3.0
+- cpufeatures 0.3.1
 
 ```
-Copyright (c) 2020-2025 The RustCrypto Project Developers
+Copyright (c) 2020-2026 The RustCrypto Project Developers
 
 Permission is hereby granted, free of charge, to any
 person obtaining a copy of this software and associated
@@ -1656,7 +1656,7 @@ DEALINGS IN THE SOFTWARE.
 - is_terminal_polyfill 1.70.2
 - once_cell_polyfill 1.70.2
 - serde_spanned 1.1.1
-- toml 1.1.4+spec-1.1.0
+- toml 1.1.5+spec-1.1.0
 - toml_datetime 1.1.1+spec-1.1.0
 - toml_edit 0.25.13+spec-1.1.0
 - toml_parser 1.1.3+spec-1.1.0
@@ -1933,6 +1933,7 @@ SOFTWARE.
 - shiori-host32-testdll 0.0.1
 - shiori4-testdll 0.0.1
 - temp-path-kit 0.0.1
+- ukadoc-survey 0.0.1
 - wintf 0.0.1
 - ambassador 0.5.1
 - block2 0.6.2
@@ -2169,7 +2170,7 @@ SOFTWARE.
 - event-listener 5.4.2
 - fastrand 2.5.0
 - futures-lite 2.6.1
-- hermit-abi 0.5.2
+- hermit-abi 0.5.3
 - itoa 1.0.18
 - linux-raw-sys 0.12.1
 - once_cell 1.21.4
@@ -2188,7 +2189,7 @@ SOFTWARE.
 - serde_derive 1.0.229
 - serde_json 1.0.151
 - syn 2.0.119
-- syn 3.0.3
+- syn 3.0.4
 - thiserror-impl 2.0.20
 - thiserror 2.0.20
 - typeid 1.0.3
