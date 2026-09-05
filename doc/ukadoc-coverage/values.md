@@ -10,7 +10,7 @@
 `doc/ukadoc-coverage/README.md` が正本）。
 
 8 つの名前と、その並び順は凍結されている。増やす・減らす・言い換えるには要件の改訂が要る
-（`.kiro/specs/areka-P0-ukadoc-survey-toolkit/requirements.md` 要件 4.4・2.6）。同じ 8 つは
+（`.kiro/specs/completed/areka-P0-ukadoc-survey-toolkit/requirements.md` 要件 4.4・2.6）。同じ 8 つは
 `crates/ukadoc-survey/src/model.rs` の `THEMES` にも同じ順で置いてあり、両者が食い違うと
 標準のテスト実行が赤になる。
 

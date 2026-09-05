@@ -22,7 +22,7 @@ use crate::model::{EntryId, PageName};
 /// 逆斜線を含む見出し（設計 D-10 の実測 316 件の形）・単引用符・日本語・版番号 2 つ・
 /// 版番号 0 個・アンカー無しの id・アンカー付きの id をすべて 1 つの本文に入れてある。
 const SAMPLE: &str = r##"# 機械生成。手で編集しない。再生成: cargo run -p ukadoc-survey -- catalog
-# 形式の正本: .kiro/specs/areka-P0-ukadoc-survey-toolkit/design.md
+# 形式の正本: .kiro/specs/completed/areka-P0-ukadoc-survey-toolkit/design.md
 
 [snapshot]
 package = "ukagaka-doc-mcp"

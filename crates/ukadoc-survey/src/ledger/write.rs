@@ -59,7 +59,7 @@ const ENTRY_TABLE: &str = "entry";
 /// 1 行目はファイル名を書くのでドメインごとに変わり、[`render_prologue`] が組み立てる。
 const HEADER_LINES: [&str; 2] = [
     "# 人手で記入・機械で検査する台帳。形式の正本は",
-    "# .kiro/specs/areka-P0-ukadoc-survey-toolkit/requirements.md 付録 A。",
+    "# .kiro/specs/completed/areka-P0-ukadoc-survey-toolkit/requirements.md 付録 A。",
 ];
 
 /// 初期値を書く欄の並び（要件付録 A.1 の見本・A.2 の 1 文）。

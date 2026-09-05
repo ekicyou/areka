@@ -16,7 +16,7 @@
 5. [調査 spec と道具の合流](#5-調査-spec-と道具の合流)
 
 **形式そのものは凍結されている。** 台帳の項目形式・状態の語彙・ドメインの分割を変えるには、
-要件（`.kiro/specs/areka-P0-ukadoc-survey-toolkit/requirements.md`）の改訂が要る。
+要件（`.kiro/specs/completed/areka-P0-ukadoc-survey-toolkit/requirements.md`）の改訂が要る。
 思い付きで欄を足したり語を言い換えたりはできない。この文書は凍結された取り決めの案内であって、
 取り決めそのものではない（正本は要件 2.1・2.2・2.6 と付録 A）。
 
@@ -92,7 +92,7 @@ note = ""
 ```toml
 # doc/ukadoc-coverage/ledger/property.toml
 # 人手で記入・機械で検査する台帳。形式の正本は
-# .kiro/specs/areka-P0-ukadoc-survey-toolkit/requirements.md 付録 A。
+# .kiro/specs/completed/areka-P0-ukadoc-survey-toolkit/requirements.md 付録 A。
 
 [ledger]
 domain = "property"
@@ -563,8 +563,8 @@ cargo run -p ukadoc-survey -- report          # ドメイン別 4 本
 ## この文書と正本の関係
 
 * 台帳の形式・状態の語彙・ドメインの分割・仕訳の規則の**正本は要件**
-  （`.kiro/specs/areka-P0-ukadoc-survey-toolkit/requirements.md`。とくに要件 2・3・4 と付録 A）。
+  （`.kiro/specs/completed/areka-P0-ukadoc-survey-toolkit/requirements.md`。とくに要件 2・3・4 と付録 A）。
   **変更には要件の改訂が要る。**
 * テーマ 8 つの定義の正本は `doc/ukadoc-coverage/values.md`。
 * 優先度の根拠 4 つとその序列の正本は、この文書（要件 4.7 が README に置くと定めている）。
-* 道具の作りの正本は `.kiro/specs/areka-P0-ukadoc-survey-toolkit/design.md`。
+* 道具の作りの正本は `.kiro/specs/completed/areka-P0-ukadoc-survey-toolkit/design.md`。

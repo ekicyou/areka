@@ -1,6 +1,6 @@
 # doc/ukadoc-coverage/ledger/sakura-script.toml
 # 人手で記入・機械で検査する台帳。形式の正本は
-# .kiro/specs/areka-P0-ukadoc-survey-toolkit/requirements.md 付録 A。
+# .kiro/specs/completed/areka-P0-ukadoc-survey-toolkit/requirements.md 付録 A。
 
 [ledger]
 domain = "sakura-script"

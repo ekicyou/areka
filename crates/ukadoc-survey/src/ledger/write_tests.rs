@@ -114,7 +114,7 @@ fn a_missing_body_is_rendered_in_the_appendix_a_shape() {
         text,
         r#"# doc/ukadoc-coverage/ledger/property.toml
 # 人手で記入・機械で検査する台帳。形式の正本は
-# .kiro/specs/areka-P0-ukadoc-survey-toolkit/requirements.md 付録 A。
+# .kiro/specs/completed/areka-P0-ukadoc-survey-toolkit/requirements.md 付録 A。
 
 [ledger]
 domain = "property"
@@ -152,7 +152,7 @@ fn an_empty_id_list_renders_the_prologue_alone() {
         text,
         r#"# doc/ukadoc-coverage/ledger/property.toml
 # 人手で記入・機械で検査する台帳。形式の正本は
-# .kiro/specs/areka-P0-ukadoc-survey-toolkit/requirements.md 付録 A。
+# .kiro/specs/completed/areka-P0-ukadoc-survey-toolkit/requirements.md 付録 A。
 
 [ledger]
 domain = "property"
@@ -177,7 +177,7 @@ fn the_prologue_names_the_domain_and_its_pages() {
         text,
         r#"# doc/ukadoc-coverage/ledger/sakura-script.toml
 # 人手で記入・機械で検査する台帳。形式の正本は
-# .kiro/specs/areka-P0-ukadoc-survey-toolkit/requirements.md 付録 A。
+# .kiro/specs/completed/areka-P0-ukadoc-survey-toolkit/requirements.md 付録 A。
 
 [ledger]
 domain = "sakura-script"
@@ -212,7 +212,7 @@ fn a_multi_page_prologue_keeps_the_given_page_order() {
         text,
         r#"# doc/ukadoc-coverage/ledger/shiori.toml
 # 人手で記入・機械で検査する台帳。形式の正本は
-# .kiro/specs/areka-P0-ukadoc-survey-toolkit/requirements.md 付録 A。
+# .kiro/specs/completed/areka-P0-ukadoc-survey-toolkit/requirements.md 付録 A。
 
 [ledger]
 domain = "shiori"

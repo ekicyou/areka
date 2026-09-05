@@ -21,7 +21,7 @@ use crate::model::{Domain, EntryId, Link, LinkKind, PageName, Status};
 /// 関連の相手には逆斜線を含む id を置いてある（付録 A.3 の逆斜線 2 つ重ね）。
 const SAMPLE: &str = r#"# doc/ukadoc-coverage/ledger/property.toml
 # 人手で記入・機械で検査する台帳。形式の正本は
-# .kiro/specs/areka-P0-ukadoc-survey-toolkit/requirements.md 付録 A。
+# .kiro/specs/completed/areka-P0-ukadoc-survey-toolkit/requirements.md 付録 A。
 
 [ledger]
 domain = "property"

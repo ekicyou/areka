@@ -31,7 +31,7 @@ use crate::tomlout::{basic_string, inline_table, string_array};
 /// 冒頭の注意書き（設計「Data Models」の逐語）。
 const HEADER_LINES: [&str; 2] = [
     "# 機械生成。手で編集しない。再生成: cargo run -p ukadoc-survey -- catalog",
-    "# 形式の正本: .kiro/specs/areka-P0-ukadoc-survey-toolkit/design.md",
+    "# 形式の正本: .kiro/specs/completed/areka-P0-ukadoc-survey-toolkit/design.md",
 ];
 
 /// 冒頭の情報を置く表の見出し。

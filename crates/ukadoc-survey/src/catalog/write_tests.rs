@@ -25,7 +25,7 @@ use crate::model::{EntryId, PageName};
 /// 見出しとハッシュは見本の当て字（`...`・`0000000000000000`）なので、下の
 /// [`design_sample_catalog`] もその綴りをそのまま持つ。
 const DESIGN_SAMPLE: &str = r#"# 機械生成。手で編集しない。再生成: cargo run -p ukadoc-survey -- catalog
-# 形式の正本: .kiro/specs/areka-P0-ukadoc-survey-toolkit/design.md
+# 形式の正本: .kiro/specs/completed/areka-P0-ukadoc-survey-toolkit/design.md
 
 [snapshot]
 package = "ukagaka-doc-mcp"
@@ -278,7 +278,7 @@ fn snapshot_block_is_verbatim() {
         head,
         vec![
             "# 機械生成。手で編集しない。再生成: cargo run -p ukadoc-survey -- catalog",
-            "# 形式の正本: .kiro/specs/areka-P0-ukadoc-survey-toolkit/design.md",
+            "# 形式の正本: .kiro/specs/completed/areka-P0-ukadoc-survey-toolkit/design.md",
             "",
             "[snapshot]",
             "package = \"ukagaka-doc-mcp\"",

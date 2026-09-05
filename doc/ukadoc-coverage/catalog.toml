@@ -1,5 +1,5 @@
 # 機械生成。手で編集しない。再生成: cargo run -p ukadoc-survey -- catalog
-# 形式の正本: .kiro/specs/areka-P0-ukadoc-survey-toolkit/design.md
+# 形式の正本: .kiro/specs/completed/areka-P0-ukadoc-survey-toolkit/design.md
 
 [snapshot]
 package = "ukagaka-doc-mcp"

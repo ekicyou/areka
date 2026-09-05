@@ -43,12 +43,12 @@ use super::RepoData;
 
 /// 要件文書の置き場（ワークスペース根からの相対）。
 ///
-/// **`/kiro-complete` の書き換え対象**である。完了処理は spec 一式を
-/// `.kiro/specs/completed/areka-P0-ukadoc-survey-toolkit/` へ移し、その手順 5-2 が
-/// `crates/` 全域から feature 名を grep して参照を直す。だから綴りをこの定数 1 つに
-/// 集めてある——本文中に散らすと、移動後にどれか 1 つが取り残されて
+/// **`/kiro-complete` の書き換え対象**である。2026-09-05 の完了処理で spec 一式は
+/// `.kiro/specs/completed/areka-P0-ukadoc-survey-toolkit/` へ移り、その手順 5-2 が
+/// `crates/` 全域から feature 名を grep してこの綴りを書き換えた。綴りをこの定数 1 つに
+/// 集めてあるのはそのためで——本文中に散らすと、移動後にどれか 1 つが取り残されて
 /// [`read_workspace_file`] が「探した絶対パス」を添えて止まる。
-const REQUIREMENTS_MD: &str = ".kiro/specs/areka-P0-ukadoc-survey-toolkit/requirements.md";
+const REQUIREMENTS_MD: &str = ".kiro/specs/completed/areka-P0-ukadoc-survey-toolkit/requirements.md";
 
 /// 台帳の README（形式の説明の正本・要件 2.5）。
 const README_MD: &str = "doc/ukadoc-coverage/README.md";
