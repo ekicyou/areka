@@ -2819,391 +2819,571 @@ note = """
 """
 
 [entry."ukadoc:list_sakura_script:_5cf_5balign_2c_5bc4_305b_308b_5074_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.5.31"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 行の寄せ（右寄せ・中央揃え・左寄せ）の指定が失われ、文字はバルーン設定の寄せのまま出る。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[転記元: doc/COMPAT_ARCHITECTURE.md の「\\f[align]／\\f[valign]／下線の縦書き写像」の行]
+[群: 文字の寄せ]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5banchor.font.color_2c_8272_6307_5b9a_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— アンカーの文字色の指定が失われ、アンカーはバルーン設定の色のまま出る。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: アンカーの見た目]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5banchorcolor_2c_8272_6307_5b9a_5d_3082_3057_304f_306f_5cf_5banchorbrushcolor_2c_8272_6307_5b9a_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 選択中のアンカーの矩形の中の色の指定が失われる。2 つの綴りは同じ受け皿へ落ちるので扱いが分かれない。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: アンカーの見た目]
+[並べられた綴り: \\f[anchorbrushcolor,色指定]。正典に独立した id を持たない]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5banchorfontcolor_2c_8272_6307_5b9a_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 選択中のアンカーの文字色の指定が失われる。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: アンカーの見た目]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5banchormethod_2c_63cf_753b_65b9_6cd5_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 選択中のアンカーの矩形の塗り方の指定が失われる。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: アンカーの見た目]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5banchornotselectcolor_2c_8272_6307_5b9a_5d_3082_3057_304f_306f_5cf_5banchornotselectbrushcolor_2c_8272_6307_5b9a_5:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 非選択のアンカーの矩形の中の色の指定が失われる。2 つの綴りは同じ受け皿へ落ちるので扱いが分かれない。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: アンカーの見た目]
+[並べられた綴り: \\f[anchornotselectbrushcolor,色指定]。正典に独立した id を持たない]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5banchornotselectfontcolor_2c_8272_6307_5b9a_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 非選択のアンカーの文字色の指定が失われる。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: アンカーの見た目]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5banchornotselectmethod_2c_63cf_753b_65b9_6cd5_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 非選択のアンカーの矩形の塗り方の指定が失われる。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: アンカーの見た目]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5banchornotselectpencolor_2c_8272_6307_5b9a_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 非選択のアンカーの枠線と下線の色の指定が失われる。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: アンカーの見た目]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5banchornotselectstyle_2c_5f62_72b6_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 非選択のアンカーの形（枠・下線・無し）の指定が失われる。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: アンカーの見た目]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5banchorpencolor_2c_8272_6307_5b9a_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 選択中のアンカーの枠線と下線の色の指定が失われる。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: アンカーの見た目]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5banchorstyle_2c_5f62_72b6_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 選択中のアンカーの形（枠・下線・無し）の指定が失われる。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: アンカーの見た目]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5banchorvisitedcolor_2c_8272_6307_5b9a_5d_3082_3057_304f_306f_5cf_5banchorvisitedbrushcolor_2c_8272_6307_5b9a_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 訪問済みのアンカーの矩形の中の色の指定が失われる。2 つの綴りは同じ受け皿へ落ちるので扱いが分かれない。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: アンカーの見た目]
+[並べられた綴り: \\f[anchorvisitedbrushcolor,色指定]。正典に独立した id を持たない]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5banchorvisitedfontcolor_2c_8272_6307_5b9a_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 訪問済みのアンカーの文字色の指定が失われる。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: アンカーの見た目]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5banchorvisitedmethod_2c_63cf_753b_65b9_6cd5_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 訪問済みのアンカーの矩形の塗り方の指定が失われる。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: アンカーの見た目]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5banchorvisitedpencolor_2c_8272_6307_5b9a_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 訪問済みのアンカーの枠線と下線の色の指定が失われる。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: アンカーの見た目]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5banchorvisitedstyle_2c_5f62_72b6_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 訪問済みのアンカーの形（枠・下線・無し）の指定が失われる。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: アンカーの見た目]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5bbold_2c_30d1_30e9_30e1_30fc_30bf_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 太字にする指定が失われ、地の太さのまま出る。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 太字・斜体・上下付き]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5bcolor_2c_8272_6307_5b9a_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 文字色の指定が失われ、バルーン設定の色のまま出る。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 文字の色と縁取りと影]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5bcursorcolor_2c_8272_6307_5b9a_5d_3082_3057_304f_306f_5cf_5bcursorbrushcolor_2c_8272_6307_5b9a_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 選択中の選択肢マーカーの矩形の中の色の指定が失われる。2 つの綴りは同じ受け皿へ落ちるので扱いが分かれない。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 選択肢マーカーの見た目]
+[並べられた綴り: \\f[cursorbrushcolor,色指定]。正典に独立した id を持たない]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5bcursorfontcolor_2c_8272_6307_5b9a_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 選択中の選択肢マーカーの文字色の指定が失われる。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 選択肢マーカーの見た目]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5bcursormethod_2c_63cf_753b_65b9_6cd5_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 選択中の選択肢マーカーの矩形の塗り方の指定が失われる。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 選択肢マーカーの見た目]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5bcursornotselectcolor_2c_8272_6307_5b9a_5d_3082_3057_304f_306f_5cf_5bcursornotselectbrushcolor_2c_8272_6307_5b9a_5:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 非選択の選択肢マーカーの矩形の中の色の指定が失われる。2 つの綴りは同じ受け皿へ落ちるので扱いが分かれない。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 選択肢マーカーの見た目]
+[並べられた綴り: \\f[cursornotselectbrushcolor,色指定]。正典に独立した id を持たない]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5bcursornotselectfontcolor_2c_8272_6307_5b9a_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 非選択の選択肢マーカーの文字色の指定が失われる。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 選択肢マーカーの見た目]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5bcursornotselectmethod_2c_63cf_753b_65b9_6cd5_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 非選択の選択肢マーカーの矩形の塗り方の指定が失われる。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 選択肢マーカーの見た目]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5bcursornotselectpencolor_2c_8272_6307_5b9a_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 非選択の選択肢マーカーの枠線と下線の色の指定が失われる。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 選択肢マーカーの見た目]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5bcursornotselectstyle_2c_5f62_72b6_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 非選択の選択肢マーカーの形（枠・下線・無し）の指定が失われる。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 選択肢マーカーの見た目]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5bcursorpencolor_2c_8272_6307_5b9a_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 選択中の選択肢マーカーの枠線と下線の色の指定が失われる。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 選択肢マーカーの見た目]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5bcursorstyle_2c_5f62_72b6_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 選択中の選択肢マーカーの形（枠・下線・無し）の指定が失われる。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 選択肢マーカーの見た目]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5bdefault_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— すべての文字装飾をバルーン設定の標準へ戻す指定が失われる。装飾そのものが 1 つも効いていないので画面は変わらない。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 装飾の一括の戻し]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5bdisable_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.5.51"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— すべての文字装飾を無効表示へ切り替える指定が失われる。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 装飾の一括の戻し]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5bheight_2c_6570_5024_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 文字の大きさの指定が失われ、バルーン設定の大きさのまま出る。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 文字の書体と大きさ]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5bitalic_2c_30d1_30e9_30e1_30fc_30bf_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 斜体にする指定が失われる。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 太字・斜体・上下付き]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5bname_2c_30d5_30a9_30f3_30c8_540d_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— フォントの指定が失われ、バルーン設定のフォントのまま出る。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 文字の書体と大きさ]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5boutline_2c_30d1_30e9_30e1_30fc_30bf_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 白抜きにする指定が失われる。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 文字の色と縁取りと影]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5bshadowcolor_2c_8272_6307_5b9a_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 文字の影の色の指定が失われる。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 文字の色と縁取りと影]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5bshadowcolor_2cnone_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 文字の影を無くす指定が失われる。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 文字の色と縁取りと影]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5bshadowstyle_2c_5f62_614b_6307_5b9a_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.5.27"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 影の形（右下へずらす・縁取り）の指定が失われる。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 文字の色と縁取りと影]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5bstrike_2c_30d1_30e9_30e1_30fc_30bf_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 打ち消し線を引く指定が失われる。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 下線と打ち消し線]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5bsub_2c_30d1_30e9_30e1_30fc_30bf_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 下付き文字にする指定が失われる。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 太字・斜体・上下付き]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5bsup_2c_30d1_30e9_30e1_30fc_30bf_5d:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 上付き文字にする指定が失われる。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[群: 太字・斜体・上下付き]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5bunderline_2c_30d1_30e9_30e1_30fc_30bf_5d:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 下線を引く指定が失われる。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[転記元: doc/COMPAT_ARCHITECTURE.md の「\\f[align]／\\f[valign]／下線の縦書き写像」の行]
+[群: 下線と打ち消し線]
+"""
 
 [entry."ukadoc:list_sakura_script:_5cf_5bvalign_2c_5bc4_305b_308b_5074_5d:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.6.19"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 黙って壊れる（タグが消える）— 行の縦の寄せ（下揃え・縦中央揃え・上揃え）の指定が失われ、文字はバルーン設定の寄せのまま出る。
+ログ: 出る（compile の catch-all の debug! 記録）。
+[転記元: doc/COMPAT_ARCHITECTURE.md の「\\f[align]／\\f[valign]／下線の縦書き写像」の行]
+[群: 文字の寄せ]
+"""
 
 [entry."ukadoc:list_sakura_script:_5ci_5bID_2cwait_5d:1"]
 status = "absent"
