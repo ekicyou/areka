@@ -42,9 +42,11 @@ const NAME_SUFFIX: &str = ".name";
 const DEFAULT_AUTHOR_DPI: u16 = 96;
 
 /// shell descript の作者基準 DPI キー（ukadoc `seriko.dpi`・SSP 2.7.21+）。
+/// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_shell.html#seriko.dpi_2c_63a8_5968DPI:1
 const SHELL_DPI_KEY: &str = "seriko.dpi";
 
 /// balloon descript の作者基準 DPI キー（ukadoc `dpi`・SSP 2.7.21+）。
+/// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_balloon.html#dpi_2c_63a8_5968DPI:1
 const BALLOON_DPI_KEY: &str = "dpi";
 
 /// 窓タイトルの正本（Win32 識別／デバッグ観測用）。
@@ -271,6 +273,7 @@ fn build_titles(names: &GhostNames, ghost_kv: &BTreeMap<String, String>) -> Ghos
 
 /// `char{n}.name` 形のキーからスコープ番号を抽出する。`charset` 等の非該当キー・
 /// 数値化不能（空・巨大値含む）は None（panic しない）。
+/// ukadoc: https://ssp.shillest.net/ukadoc/manual/descript_ghost.html#char_2a.name_2c_540d_524d:1
 fn char_name_scope_of(key: &str) -> Option<usize> {
     let digits = key.strip_prefix(CHAR_PREFIX)?.strip_suffix(NAME_SUFFIX)?;
     if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
