@@ -3577,31 +3577,37 @@ links = []
 note = ""
 
 [entry."ukadoc:descript_shell_surfaces:add:1"]
-status = "unclassified"
+status = "implemented"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+正典が振る舞いを定めているのは着せ替えでの扱いだけで、処理の内容は `overlay` と同義だと書いている。areka はそれを正典どおりに導く——areka-emo-compose の method::from_name が `add` を `overlay` と同じ受け口へ解決し、着せ替えの静的な経路である areka-emo-compose の plan::flatten_surface がその受け口を通し、areka-emo-compose の blit::execute が実際に画素を重ねる。正典は着せ替えでないアニメーションと element での使用を未定義としているので、areka がその場面で element の行を areka-parsers の shell::decode_elements で落とすことも、コマを単に重ねることも、正典が定めた振る舞いから外れたことにはならない。正典の見出しに旧い書き方の印は無く、`bind` の説明が `add` を現在の側に置いているので、別名にはしない。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:alternativestart_2c_28ID1_2cID2..._29:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name の照合表にこの名前が無く、原文を抱えた未知の受け口へ吸収して warn! を出す。その先も描かれず、areka-emo-compose の plan::flatten_surface と blit::execute が重ねて warn! を出して飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記そのものが無い。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:alternativestop_2c_28ID1_2cID2..._29:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name の照合表にこの名前が無く、原文を抱えた未知の受け口へ吸収して warn! を出す。その先も描かれず、areka-emo-compose の plan::flatten_surface と blit::execute が重ねて warn! を出して飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記そのものが無い。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:always:1"]
 status = "unclassified"
@@ -3700,22 +3706,26 @@ note = """
 """
 
 [entry."ukadoc:descript_shell_surfaces:asis:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:auto:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.41"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:balloon.offsetx_2c_5ea7_6a19:1"]
 status = "unclassified"
@@ -3736,13 +3746,15 @@ links = []
 note = ""
 
 [entry."ukadoc:descript_shell_surfaces:base:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:bind:1"]
 status = "vocabulary-only"
@@ -3756,508 +3768,621 @@ note = """
 """
 
 [entry."ukadoc:descript_shell_surfaces:bind:2"]
-status = "unclassified"
+status = "alias"
 introduced = ""
+alias_of = "ukadoc:descript_shell_surfaces:overlay:1"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+向きは正典本文の注記（手掛かり⑴）で決めた。正典が、処理の内容は `overlay` と同義だと自分で書いている。areka も areka-emo-compose の method::from_name が `bind` を `overlay` と同じ受け口へ束ねており、向きが一致する。手掛かり⑴で決まったので、⑵の版番号と⑶の人の判断は見ていない。指す先は別名ではない。同じページに見出しが `bind` の項目がもう 1 つあるが、そちらはアニメーションの間隔語であって別の項目である。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-add-fast:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.36"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-add-glow-fast:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.8.46"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::parse_blend はこの種別を持たず、method::from_name が名前を解けないまま原文を抱えた未知の受け口へ吸収して warn! を出す。その先も描かれず、areka-emo-compose の plan::flatten_surface と blit::execute が重ねて warn! を出して飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記そのものが無い。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-add-glow:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.8.46"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::parse_blend はこの種別を持たず、method::from_name が名前を解けないまま原文を抱えた未知の受け口へ吸収して warn! を出す。その先も描かれず、areka-emo-compose の plan::flatten_surface と blit::execute が重ねて warn! を出して飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記そのものが無い。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-add:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.36"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-color-burn-fast:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.40"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-color-burn:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.40"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-color-dodge-fast:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.39"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-color-dodge-glow-fast:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.8.46"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::parse_blend はこの種別を持たず、method::from_name が名前を解けないまま原文を抱えた未知の受け口へ吸収して warn! を出す。その先も描かれず、areka-emo-compose の plan::flatten_surface と blit::execute が重ねて warn! を出して飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記そのものが無い。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-color-dodge-glow:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.8.46"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::parse_blend はこの種別を持たず、method::from_name が名前を解けないまま原文を抱えた未知の受け口へ吸収して warn! を出す。その先も描かれず、areka-emo-compose の plan::flatten_surface と blit::execute が重ねて warn! を出して飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記そのものが無い。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-color-dodge:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.39"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-color-fast:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.39"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-color:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.39"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-darken-fast:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.40"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-darken:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.40"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-darker-color-fast:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.40"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-darker-color:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.40"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-difference-fast:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.40"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-difference:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.40"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-dither:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.8.44"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::parse_blend はこの種別を持たず、method::from_name が名前を解けないまま原文を抱えた未知の受け口へ吸収して warn! を出す。その先も描かれず、areka-emo-compose の plan::flatten_surface と blit::execute が重ねて warn! を出して飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記そのものが無い。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-divide-fast:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.40"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-divide:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.40"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-exclusion-fast:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.40"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-exclusion:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.40"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-hard-light-fast:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.39"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-hard-light:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.39"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-hard-mix-fast:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.40"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-hard-mix:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.40"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-hue-fast:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.39"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-hue:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.39"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-lighten-fast:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.40"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-lighten:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.40"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-lighter-color-fast:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.40"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-lighter-color:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.40"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-linear-burn-fast:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.8.40"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::parse_blend はこの種別を持たず、method::from_name が名前を解けないまま原文を抱えた未知の受け口へ吸収して warn! を出す。その先も描かれず、areka-emo-compose の plan::flatten_surface と blit::execute が重ねて warn! を出して飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記そのものが無い。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-linear-burn:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.8.40"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::parse_blend はこの種別を持たず、method::from_name が名前を解けないまま原文を抱えた未知の受け口へ吸収して warn! を出す。その先も描かれず、areka-emo-compose の plan::flatten_surface と blit::execute が重ねて warn! を出して飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記そのものが無い。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-linear-light-fast:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.8.40"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::parse_blend はこの種別を持たず、method::from_name が名前を解けないまま原文を抱えた未知の受け口へ吸収して warn! を出す。その先も描かれず、areka-emo-compose の plan::flatten_surface と blit::execute が重ねて warn! を出して飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記そのものが無い。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-linear-light:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.8.40"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::parse_blend はこの種別を持たず、method::from_name が名前を解けないまま原文を抱えた未知の受け口へ吸収して warn! を出す。その先も描かれず、areka-emo-compose の plan::flatten_surface と blit::execute が重ねて warn! を出して飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記そのものが無い。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-luminosity-fast:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.39"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-luminosity:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.39"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-multiply-fast:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.36"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-multiply:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.36"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-overlay-fast:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.36"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-overlay:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.36"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-pin-light-fast:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.8.40"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::parse_blend はこの種別を持たず、method::from_name が名前を解けないまま原文を抱えた未知の受け口へ吸収して warn! を出す。その先も描かれず、areka-emo-compose の plan::flatten_surface と blit::execute が重ねて warn! を出して飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記そのものが無い。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-pin-light:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.8.40"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::parse_blend はこの種別を持たず、method::from_name が名前を解けないまま原文を抱えた未知の受け口へ吸収して warn! を出す。その先も描かれず、areka-emo-compose の plan::flatten_surface と blit::execute が重ねて warn! を出して飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記そのものが無い。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-saturation-fast:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.39"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-saturation:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.39"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-screen-fast:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.36"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-screen:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.36"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-soft-light-fast:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.8.39"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::parse_blend はこの種別を持たず、method::from_name が名前を解けないまま原文を抱えた未知の受け口へ吸収して warn! を出す。その先も描かれず、areka-emo-compose の plan::flatten_surface と blit::execute が重ねて warn! を出して飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記そのものが無い。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-soft-light:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.8.39"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::parse_blend はこの種別を持たず、method::from_name が名前を解けないまま原文を抱えた未知の受け口へ吸収して warn! を出す。その先も描かれず、areka-emo-compose の plan::flatten_surface と blit::execute が重ねて warn! を出して飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記そのものが無い。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-subtract-fast:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.8.40"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::parse_blend はこの種別を持たず、method::from_name が名前を解けないまま原文を抱えた未知の受け口へ吸収して warn! を出す。その先も描かれず、areka-emo-compose の plan::flatten_surface と blit::execute が重ねて warn! を出して飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記そのものが無い。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-subtract:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.8.40"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::parse_blend はこの種別を持たず、method::from_name が名前を解けないまま原文を抱えた未知の受け口へ吸収して warn! を出す。その先も描かれず、areka-emo-compose の plan::flatten_surface と blit::execute が重ねて warn! を出して飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記そのものが無い。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-vivid-light-fast:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.8.40"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::parse_blend はこの種別を持たず、method::from_name が名前を解けないまま原文を抱えた未知の受け口へ吸収して warn! を出す。その先も描かれず、areka-emo-compose の plan::flatten_surface と blit::execute が重ねて warn! を出して飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記そのものが無い。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:blend-vivid-light:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.8.40"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::parse_blend はこの種別を持たず、method::from_name が名前を解けないまま原文を抱えた未知の受け口へ吸収して warn! を出す。その先も描かれず、areka-emo-compose の plan::flatten_surface と blit::execute が重ねて warn! を出して飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記そのものが無い。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:charset_2c_6587_5b57_30b3_30fc_30c9:1"]
 status = "unclassified"
@@ -4329,31 +4454,37 @@ links = []
 note = ""
 
 [entry."ukadoc:descript_shell_surfaces:import_2c_30d5_30a1_30a4_30eb_540d_2c_30a6_30a8_30a4_30c8msec_2cX_2cY:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.7.50"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name の照合表にこの名前が無く、原文を抱えた未知の受け口へ吸収して warn! を出す。その先も描かれず、areka-emo-compose の plan::flatten_surface と blit::execute が重ねて warn! を出して飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記そのものが無い。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:insert_2cID:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name の照合表にこの名前が無く、原文を抱えた未知の受け口へ吸収して warn! を出す。その先も描かれず、areka-emo-compose の plan::flatten_surface と blit::execute が重ねて warn! を出して飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記そのものが無い。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:interpolate:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:kero.balloon.offsetx_2c_5ea7_6a19:1"]
 status = "unclassified"
@@ -4428,13 +4559,15 @@ links = []
 note = ""
 
 [entry."ukadoc:descript_shell_surfaces:move:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name の照合表にこの名前が無く、原文を抱えた未知の受け口へ吸収して warn! を出す。その先も描かれず、areka-emo-compose の plan::flatten_surface と blit::execute が重ねて warn! を出して飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記そのものが無い。同じ綴りの `move` はさくらスクリプトの命令にもあり areka はそちらを扱うが、それは別のドメインの命令であって、ここの描画メソッドではない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:name_2c_5b9a_7fa9_540d:1"]
 status = "unclassified"
@@ -4455,13 +4588,15 @@ links = []
 note = ""
 
 [entry."ukadoc:descript_shell_surfaces:overlay-fast:1"]
-status = "unclassified"
-introduced = ""
+status = "vocabulary-only"
+introduced = "2.8.36"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:overlay:1"]
 status = "implemented"
@@ -4475,49 +4610,62 @@ areka-parsers の shell::decode_elements が element の行の合成のしかた
 """
 
 [entry."ukadoc:descript_shell_surfaces:overlayfast:1"]
-status = "unclassified"
+status = "alias"
 introduced = ""
+alias_of = "ukadoc:descript_shell_surfaces:overlay-fast:1"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+向きは正典本文の注記（手掛かり⑴）で決めた。正典が `overlay-fast` の旧い呼び名であり互換のために残していると書き、見出しにも旧い書き方の印が付いている。areka も areka-emo-compose の method::from_name が区切り記号を落としてから照合するので、両方の綴りが同じ受け口へ着く。手掛かり⑴で決まったので、⑵の版番号と⑶の人の判断は見ていない。指す先は別名ではない。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:overlaymultiply:1"]
-status = "unclassified"
-introduced = ""
+status = "alias"
+introduced = "2.5.91"
+alias_of = "ukadoc:descript_shell_surfaces:blend-multiply-fast:1"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+向きは正典本文の注記（手掛かり⑴）で決めた。正典が `blend-multiply-fast` の旧い呼び名であり互換のために残していると書き、見出しにも旧い書き方の印が付いている。areka も areka-emo-compose の method::parse_blend がこの綴りを `blend-multiply-fast` と同じ値へ明示的に写している。手掛かり⑴で決まったので、⑵の版番号と⑶の人の判断は見ていない。指す先は別名ではない。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:overlayscreen:1"]
-status = "unclassified"
-introduced = ""
+status = "alias"
+introduced = "2.8.35"
+alias_of = "ukadoc:descript_shell_surfaces:blend-screen-fast:1"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+向きは正典本文の注記（手掛かり⑴）で決めた。正典が `blend-screen-fast` の旧い呼び名であり互換のために残していると書き、見出しにも旧い書き方の印が付いている。areka も areka-emo-compose の method::parse_blend がこの綴りを `blend-screen-fast` と同じ値へ明示的に写している。手掛かり⑴で決まったので、⑵の版番号と⑶の人の判断は見ていない。指す先は別名ではない。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:parallelstart_2c_28ID1_2cID2..._29:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name の照合表にこの名前が無く、原文を抱えた未知の受け口へ吸収して warn! を出す。その先も描かれず、areka-emo-compose の plan::flatten_surface と blit::execute が重ねて warn! を出して飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記そのものが無い。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:parallelstop_2c_28ID1_2cID2..._29:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name の照合表にこの名前が無く、原文を抱えた未知の受け口へ吸収して warn! を出す。その先も描かれず、areka-emo-compose の plan::flatten_surface と blit::execute が重ねて warn! を出して飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記そのものが無い。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:periodic_2c_6570_5024:1"]
 status = "unclassified"
@@ -4603,22 +4751,26 @@ links = []
 note = ""
 
 [entry."ukadoc:descript_shell_surfaces:reduce:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:replace:1"]
-status = "unclassified"
+status = "vocabulary-only"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name はこの名前を専用の種別へ解決するが、実際に画素を重ねるのは `overlay` だけで（method::ComposeMethod::is_implemented）、コマ（`animation*.pattern*`）の側は areka-emo-compose の plan::flatten_surface と blit::execute が名前を添えた warn! を出して描かずに飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記だけがあって重ね方は導かれない。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が名前だけの登記にとどまることを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:runonce:1"]
 status = "unclassified"
@@ -4648,13 +4800,15 @@ links = []
 note = ""
 
 [entry."ukadoc:descript_shell_surfaces:scaling:1"]
-status = "unclassified"
-introduced = ""
+status = "absent"
+introduced = "2.7.28"
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name の照合表にこの名前が無く、原文を抱えた未知の受け口へ吸収して warn! を出す。その先も描かれず、areka-emo-compose の plan::flatten_surface と blit::execute が重ねて warn! を出して飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記そのものが無い。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:sometimes:1"]
 status = "unclassified"
@@ -4666,13 +4820,15 @@ links = []
 note = ""
 
 [entry."ukadoc:descript_shell_surfaces:start_2cID:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name の照合表にこの名前が無く、原文を抱えた未知の受け口へ吸収して warn! を出す。その先も描かれず、areka-emo-compose の plan::flatten_surface と blit::execute が重ねて warn! を出して飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記そのものが無い。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:starttalk:1"]
 status = "unclassified"
@@ -4684,13 +4840,15 @@ links = []
 note = ""
 
 [entry."ukadoc:descript_shell_surfaces:stop_2cID:1"]
-status = "unclassified"
+status = "absent"
 introduced = ""
 owner = ""
 priority = ""
 values = []
 links = []
-note = ""
+note = """
+壊れ方: 見た目の差。記録: warn!。areka-emo-compose の method::from_name の照合表にこの名前が無く、原文を抱えた未知の受け口へ吸収して warn! を出す。その先も描かれず、areka-emo-compose の plan::flatten_surface と blit::execute が重ねて warn! を出して飛ばす。element の行の側は areka-parsers の shell::decode_elements が第 2 欄の `overlay` 以外を何も記録せずに落とすので、そちらでは記録が出ない。名前の登記そのものが無い。沈黙ルール対応表と見直し表のすべての行を当たった。合成のしかた全体を `overlay` 1 つへ縮める決めごとは見直し表の `areka-P0-seriko-runtime` にあるが、この名前が登記そのものを持たないことを個別に引き受ける行は無い。
+"""
 
 [entry."ukadoc:descript_shell_surfaces:system_3aarrow:1"]
 status = "unclassified"
