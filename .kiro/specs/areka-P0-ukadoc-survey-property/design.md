@@ -33,7 +33,7 @@
 
 - `doc/ukadoc-coverage/ledger/property.toml` — `list_propertysystem` の 188 id だけを収める台帳 1 本。編集権は本 spec が単独で持つ（1.7・10.2）。
 - `doc/ukadoc-coverage/briefing-property.md` — 6 節のブリーフィング 1 本（8.1）。
-- `crates/areka-ghost/src/sylphya_wiring.rs:126-127` の 2 行に置く id 付きの正典 URL のコメント（9.2）。ソースへの接触はこの 2 行だけ。
+- `crates/areka-ghost/src/sylphya_wiring.rs` の `baseware.name`／`baseware.version` の値を定義している 2 行に置く id 付きの正典 URL のコメント（9.2）。ソースへの接触はこの 2 行だけ。*(2026-09-05 訂正: 当初は `:126-127` と行番号で書いていたが、本 spec が足したコメント 2 行そのものが定義行を `:127` と `:129` へ押し下げた。以後は行番号ではなく「どの値の定義行か」で指す。設計の他の箇所も同じ書き方に揃えた)*
 - 本ドメインの判断そのもの（各 id の状態・世代・担当・優先度・テーマ・関連・備考）。
 
 ### Out of Boundary
@@ -43,7 +43,7 @@
 - 他 3 ドメインの台帳と報告（10.2）・カタログ・テーマ定義 `values.md`（1.7）。
 - 既存 4 brief の本文と優先順位（4.10・10.3）・`.kiro/steering/roadmap.md`（10.5）。
 - 二重所有の**裁定そのもの**（`areka-P0-ukadoc-coverage-roadmap` の会で行う・5.6）。
-- 常設の整合検査（上流 toolkit 要件 6 が唯一の持ち主）。
+- 常設の整合検査（上流 toolkit 要件 6 が唯一の持ち主）。上流の本番コード `crates/ukadoc-survey/src/` も同じく境界の外で、1 バイトも動かさない。*(2026-09-05 訂正: ここに**認められた例外が 1 つだけ**ある。上流の「空振り検査の国勢調査」`crates/ukadoc-survey/tests/consistency/checks.rs` は、今日の実データで対象が 0 件である要件の面を `Subjects::Zero` として固定し、その失敗文と doc コメント〔`:254-267`〕が「対象が 1 件でも生まれたら、その行を `Subjects::NonEmpty` へ移し、doc コメントの 2 つの列挙を追随させよ」と、次に本物の対象を作る者へ向けて指示している。本 spec が台帳に初めて中身を入れると、この受け渡しが必ず起きてテストが赤になる——避ける道は無い。**このファイルで変えてよいのは 2 つだけ**: 行 1 本の `expected` を `Zero` から `NonEmpty` へ移すことと、doc コメントの 2 つの列挙をそれに合わせること。**変えてはならない**: 判定を弱めない・消さない・`#[ignore]` を付けない・条件付きにしない。実測でも `#[test]` の本数・`#[ignore]` の有無・表明の本数はどれも動いていない〔差分は +23/−15〕。裏返った行は 6 本で、裏返した担当タスクは——`6.7 登場版の記入がある行`＝1.1／`6.5 ソースの正典 URL` と `6.11 証拠の付いた項目`＝1.3／`6.6 状態が implemented の行`＝2.1／`6.7 関連・別名・後継の相手`＝3.2／`6.8 台帳に書かれたテーマ名`＝3.3。6 本とも `Zero → NonEmpty` の**強め方向**である。`6.7 状態が alias の行` だけは `Zero` のまま残る〔4 台帳を通しても別名の行は 1 件も無い〕)*
 - 語彙表 `crates/areka-sylphya/src/vocab/*.rs` への URL 記入と件数変更（9.3・9.5）。
 
 ### Allowed Dependencies
@@ -52,12 +52,12 @@
 |---|---|---|
 | 上流 toolkit 要件 2・4・付録 A／B | 形式・語彙・仕訳規則・id の取り方 | 読むだけ。再定義しない |
 | ukadoc スナップショット（既定は `%APPDATA%\npm\node_modules\ukagaka-doc-mcp\data\index.json`。環境変数 `AREKA_UKADOC_SNAPSHOT` があればそちらを優先） | id・見出し・本文・版番号の取得元 | 本文を repo に写さない（10.6） |
-| `crates/areka-sylphya/src/actor.rs:136-166`・`crates/areka-sylphya/src/vocab/dotted.rs` | 状態判定の規則と語彙表の中身 | 読むだけ。1 行も変えない |
-| `crates/areka-ghost/src/sylphya_wiring.rs:126-127` | 実装済み 2 件の値の定義行 | コメント 2 行の追加のみ |
+| `crates/areka-sylphya/src/actor.rs:150-166`（`is_canonical_vocab`）・`crates/areka-sylphya/src/vocab/dotted.rs` | 状態判定の規則と語彙表の中身 | 読むだけ。1 行も変えない |
+| `crates/areka-ghost/src/sylphya_wiring.rs`（`baseware.name`／`baseware.version` の定義行。コメント追加後は `:127`／`:129`） | 実装済み 2 件の値の定義行 | コメント 2 行の追加のみ |
 | `doc/COMPAT_ARCHITECTURE.md:136`／`:184`／`:185`／`:207` | 縮退・書込応答の転記元 | 読むだけ |
 | 4 本の brief（`areka-P0-property-query-channels`／`areka-P0-currentghost-property-tree`／`areka-P0-property-catalog-lists`／`areka-P0-zorder-property`） | 所有宣言の突合元 | 読むだけ（4.10） |
 | `.kiro/steering/roadmap.md:111`（棚卸⑫の三重所有の推奨） | 裁定案の下敷き | 読むだけ（10.5） |
-| `crates/ukadoc-survey`（上流の道具・8 副手続き）*(2026-09-05 追記)* | `check` で整合を確かめ、`report` で `doc/ukadoc-coverage/report/property.md` を作り直す | 走らせるだけ。道具のコードを 1 行も変えない |
+| `crates/ukadoc-survey`（上流の道具・8 副手続き）*(2026-09-05 追記)* | `check` で整合を確かめ、`report` で `doc/ukadoc-coverage/report/property.md` を作り直す | 走らせるだけ。本番コード `crates/ukadoc-survey/src/` は 1 行も変えない。例外は 1 本だけで、空振り検査の国勢調査 `crates/ukadoc-survey/tests/consistency/checks.rs` の行の主張を `Subjects::Zero` から `NonEmpty` へ移す *(2026-09-05 訂正: 当初は「道具のコードを 1 行も変えない」と書いていたが、台帳に中身を入れると上流のこのテストは必ず赤になる。認められる範囲は Out of Boundary の同日の訂正注記が定める)* |
 
 ### Revalidation Triggers
 
@@ -78,10 +78,10 @@ graph TB
     Snapshot[ukadoc スナップショット index.json]
     Vocab[sylphya 語彙表 dotted.rs]
     Rule[sylphya 実行時規則 actor.rs]
-    Wiring[sylphya_wiring.rs の 126-127 行]
+    Wiring[sylphya_wiring.rs の baseware 2 行]
     Compat[COMPAT_ARCHITECTURE.md の 136 184 185 207 行]
     Briefs[4 本の brief]
-    Roadmap[roadmap.md 106 行 棚卸12 の推奨]
+    Roadmap[roadmap.md 111 行 棚卸12 の推奨]
 
     Ledger[property.toml 188 項目]
     Briefing[briefing-property.md 6 節]
@@ -127,7 +127,7 @@ doc/
 
 ### Modified Files
 
-- `crates/areka-ghost/src/sylphya_wiring.rs` — 126 行目（`("baseware.name".to_string(), BASEWARE_NAME.to_string()),`）と 127 行目（`("baseware.version".to_string(), baseware_version.to_string()),`）の**各要素の直前行**に、id 付きの正典 URL のコメントを 1 行ずつ足す。足すのは次の 2 行だけで、説明文を伴わない（上流 5.1〜5.3・9.2・9.7）。
+- `crates/areka-ghost/src/sylphya_wiring.rs` — `("baseware.name".to_string(), BASEWARE_NAME.to_string()),` の要素と `("baseware.version".to_string(), baseware_version.to_string()),` の要素の**各直前行**に、id 付きの正典 URL のコメントを 1 行ずつ足す。足すのは次の 2 行だけで、説明文を伴わない（上流 5.1〜5.3・9.2・9.7）。*(2026-09-05 訂正: 当初は「126 行目と 127 行目」と行番号で書いていた。コメント 2 行を足した後の定義行は `:127` と `:129` である)*
 
   ```
   // ukadoc: https://ssp.shillest.net/ukadoc/manual/list_propertysystem.html#baseware.name:1
@@ -163,7 +163,7 @@ doc/
 
 | 順 | 条件 | status | 実測見込み |
 |---|---|---|---|
-| 1 | areka が実際に値へ導出する（`crates/areka-ghost/src/sylphya_wiring.rs:126-127` が実値を publish する 2 名） | `implemented` | **2** |
+| 1 | areka が実際に値へ導出する（`crates/areka-ghost/src/sylphya_wiring.rs` の `baseware.name`／`baseware.version` が実値を publish する 2 名） | `implemented` | **2** |
 | 2 | 正典本文が旧名・廃止・統合と述べ、同じ値へ到達する新しい書式がある | `alias` | **0** |
 | 3 | 正典が他の実装主体の持ち物として定めており areka の担当範囲の外 | `not-applicable` | **0** |
 | 4 | `doc/COMPAT_ARCHITECTURE.md` に、その項目の応答が正典と違うことが**既に登記されている** | `degraded` | **8** |
@@ -171,7 +171,7 @@ doc/
 | 6 | 上のいずれにも当たらない | `absent` | **0** |
 | — | 判断が付かない | `unclassified` | **0（納品時）** |
 
-合計 2 + 8 + 178 = 188。*(2026-09-05 訂正: 当初は縮退 7 件・語彙のみ 179 件と書いていたが、`doc/COMPAT_ARCHITECTURE.md` を全行読み直すと、`:184`／`:185` のほかに `:207` が `currentghost.seriko.zorder` **1 項目の読み取り応答**を個別に登記していた〔正典は SSP 2.8.78 でこのプロパティを定め SET も有効とするのに、areka は「本リリースでは提供しない」と決めて未提供のプロパティに対する現行どおりの応答を返す〕。第 4 行の条件「その項目の応答が正典と違うことが既に登記されている」に当たるので縮退へ移し、語彙のみを 1 件減らした。`:136` を引き金にしない理由〔後述〕は `:207` には当てはまらない——`:136` は 188 件のほぼ全部に掛かる書き込み側の一般規則であるのに対し、`:207` は 1 項目の読み取り応答の登記だからである)* 第 5 行の規則は sylphya が実行時に正準語彙かどうかを判定する規則そのもの（`crates/areka-sylphya/src/actor.rs:136-166` の `is_canonical_vocab`）である。第 6 行と第 3 行が 0 件だった場合は、その旨をブリーフィングに書く（2.5）。
+合計 2 + 8 + 178 = 188。*(2026-09-05 訂正: 当初は縮退 7 件・語彙のみ 179 件と書いていたが、`doc/COMPAT_ARCHITECTURE.md` を全行読み直すと、`:184`／`:185` のほかに `:207` が `currentghost.seriko.zorder` **1 項目の読み取り応答**を個別に登記していた〔正典は SSP 2.8.78 でこのプロパティを定め SET も有効とするのに、areka は「本リリースでは提供しない」と決めて未提供のプロパティに対する現行どおりの応答を返す〕。第 4 行の条件「その項目の応答が正典と違うことが既に登記されている」に当たるので縮退へ移し、語彙のみを 1 件減らした。`:136` を引き金にしない理由〔後述〕は `:207` には当てはまらない——`:136` は 188 件のほぼ全部に掛かる書き込み側の一般規則であるのに対し、`:207` は 1 項目の読み取り応答の登記だからである)* 第 5 行の規則は sylphya が実行時に正準語彙かどうかを判定する規則そのもの（`crates/areka-sylphya/src/actor.rs:150-166` の `is_canonical_vocab`）である *(2026-09-05 訂正: 当初は `:136-166` と書いていた。`:136` から始まるのは呼び手の `classify_set` で、`is_canonical_vocab` の本体は `:150-166`。引用範囲が本体を含んでいたので理由付けは成り立つが、範囲を締めた)*。第 6 行と第 3 行が 0 件だった場合は、その旨をブリーフィングに書く（2.5）。
 
 **第 4 行の対象 8 件**（スナップショットで id を確認済み）:
 
@@ -296,7 +296,10 @@ doc/
 [候補: <起票前の引受先の名前>]                                （4.6）
 [裁定待ち: <争っている spec 名と争点>]                        （5.4）
 [見出しの重複: <この id がどちらの群か・本文の根拠>]          （9.4）
+[語彙表: <見出しそのもの|葉>が汎用プロパティ名 17 に載っている]  （2.3 の第 2 文）
 ```
+
+*(2026-09-05 訂正: ひな型に 13 行目 `[語彙表: ...]` を足した。要件 2.3 の第 2 文は「葉の名前が語彙表に文字どおり載っているか否か（汎用 17・SET 有効群 21）は備考で区別する」と**1 項目ずつの**区別を求めているのに、当初のひな型はこの行を持たず、区別の書きどころが無かった。台帳は既にこの行を持っているので、追随するのはひな型の側である。当たり方は 2 通りあり、書き出しで分ける——⑴ **見出しそのもの**が areka 側の汎用プロパティ名 17（`crates/areka-sylphya/src/vocab/dotted.rs:37` の `GENERIC_PROP_NAMES`）の 1 つと綴りまで一致するときは「見出しそのものが…」、⑵ 見出しは載っていないが**末尾のひと区切り（葉）**だけが一致するときは「葉（見出しの末尾のひと区切り）が…」。実測は**異なり見出しで 17 種・⑴ が 19 id・⑵ が 14 id・合わせて 33 id**〔見出し `name` と `path` はそれぞれ 2 id を持ち、載るか否かは綴りの一致で決まるのでどちらの id にも付く〕。角括弧は他の行と同じ意味で、当てはまる項目にだけ書く条件付きの行であることを表す。同じ内訳の表をブリーフィングの前置きにも置いた。あわせてひな型と台帳の行の種類を両方向で突き合わせた——**台帳に在ってひな型に無かったのはこの 1 種だけ**、**ひな型に在って台帳の実測が 0 件なのは `[候補: ...]` の 1 種だけ**である〔このドメインは引受先の決まっていない項目が 0 件で、その旨は ⑶ 節に書いてある。条件付きの行なので 0 件でよい〕。残る 11 種の実測件数は 壊れ方・ログ・書き込みが各 188、前置き 35、値の源 32、語彙表だけを触る spec 22、転記元 8、見出しの重複 4、テーマ 3、裁定待ち 2、版 1)*
 
 **「壊れ方」と「ログ」の型**（2.8）。本ドメインは 3 型に収束する。ログ行は実測した（下表の file:line は 2026-09-03 に確認）。
 
@@ -366,7 +369,7 @@ doc/
 | 段 | やること | 出るもの |
 |---|---|---|
 | 1 | 上流が着地させた `property.toml` の骨組み（188 件・`[ledger]` 表つき・全件 `unclassified`・`introduced` は全件空）を実在確認し、各 id の本文から版番号を拾って `introduced` を埋める（`5.19.0` を除く） | `introduced` だけ埋まった台帳 |
-| 2 | `crates/areka-ghost/src/sylphya_wiring.rs` の 126・127 行目の各直前行にコメント 1 行ずつを足す | コメント 2 行 |
+| 2 | `crates/areka-ghost/src/sylphya_wiring.rs` の `baseware.name`／`baseware.version` の各要素の直前行にコメント 1 行ずつを足す | コメント 2 行 |
 | 3 | 規則 0〜8 を 1 件ずつ当てて `status`・`owner`・`priority`・`values`・`links`・`note` を埋める | 台帳の本体 |
 | 4 | 4 本の brief を読み直し、記述を id 群へ展開して突合表を作る。件数の差の原因を特定する | ブリーフィング ⑴⑹ 節 |
 | 5 | 別名の仕訳・所有者なし／裁定待ちの一覧・裁定案・是正候補を書く | ブリーフィング ⑵⑶⑷⑸ 節 |
@@ -406,7 +409,7 @@ doc/
 | 12 | `values` の要素が `values.md` の凍結 8 語のいずれか | 違反 0 件 | 道具（`content.rs:246`・上流 6.8） | 7.3・上流 4.4 |
 | 13 | 実装済み 2 件に証拠がある。ソース中の正典 URL がすべてカタログに実在する | 違反 0 件 | 道具（`content.rs:94`・`:77`・上流 6.5・6.6） | 2.10・9.7 |
 | 14 | `report/property.md` が台帳から作り直した本文と一致する | 違反 0 件 | 道具（`freshness.rs`・上流 7.4） | 8.3 |
-| 15 | `crates/areka-ghost/src/sylphya_wiring.rs` の変更がコメント 2 行だけ（`git diff` が追加 2 行・削除 0 行）。他のソースに差分が無い | 追加 2・削除 0 | **自前**（`git diff`） | 9.1・9.3・9.5 |
+| 15 | `crates/areka-ghost/src/sylphya_wiring.rs` の変更がコメント 2 行だけ（`git diff` が追加 2 行・削除 0 行）。名指しの 2 ファイル——同ファイルと上流の国勢調査 `crates/ukadoc-survey/tests/consistency/checks.rs`——の**外**はソースの差分が 0（`crates/ukadoc-survey/src/` を含む） *(2026-09-05 訂正: 当初は「他のソースに差分が無い」と書いていたが、国勢調査の受け渡しで同テストには +23/−15 の差分が残る〔Out of Boundary の同日の訂正注記が認めた 1 本の例外〕。この検査が実際に主張できるのは「名指しの 2 ファイルの外が 0」である)* | 追加 2・削除 0／名指しの 2 ファイルの外は 0 | **自前**（`git diff`） | 9.1・9.3・9.5 |
 | 16 | `cargo test --workspace` が通る（x64 の標準実行を緑にするには host-32 の i686 成果物を先にビルドしておく。未ビルドだと helper 系のテストが黙って飛ばずに明示的に失敗する。この worktree は submodule が未初期化だと `cargo` 自体が転ぶので `git submodule update --init --recursive` を先に済ませる） | 成功 | **自前** | 9.6 |
 
 **空振りの記録** *(2026-09-05 更新)*: 検査 9 は本ドメインの別名群が 0 件の見込みなので、対象 0 件で緑になる可能性が高い。**対象が 0 件だったことも合否と一緒に記録する**（0 件で緑になったのか、実際に検査が働いて緑になったのかを読者が区別できるようにするため）。同じ理由で、検査 6a〜8・11・12 も「検査した件数」を合否と並べて書く。道具の側は `check` が食い違いの件数と証拠のある項目の件数を出すので、その数字を書き写す。
@@ -424,8 +427,8 @@ doc/
 | 1.7 | 台帳 1 本に限り他を編集しない | File Structure Plan／Boundary Commitments |
 | 1.8 | 道具の完成を待たない | 作業手順 段 1。*(2026-09-05: 道具は着地したので条件節が空振りになる。付録 B の手順は使わず、上流の初期台帳の上に書き足す)* |
 | 2.1 | `unclassified` 0 件 | 規則 1／検証計画 6a・6b |
-| 2.2 | 実導出は「実装済み」 | 規則 1 第 1 行（2 件・`crates/areka-ghost/src/sylphya_wiring.rs:126-127`） |
-| 2.3 | 名前は登記済みだが値を返さない＝「語彙のみ」（塊単位の裁定） | 規則 0／規則 1 第 5 行（`crates/areka-sylphya/src/actor.rs:136-166`） |
+| 2.2 | 実導出は「実装済み」 | 規則 1 第 1 行（2 件・`crates/areka-ghost/src/sylphya_wiring.rs` の `baseware.name`／`baseware.version`） |
+| 2.3 | 名前は登記済みだが値を返さない＝「語彙のみ」（塊単位の裁定） | 規則 0／規則 1 第 5 行（`crates/areka-sylphya/src/actor.rs:150-166`） |
 | 2.4 | 登記済みの食い違いは「縮退」・転記元を備考へ | 規則 1 第 4 行（8 件・`doc/COMPAT_ARCHITECTURE.md:184`／`:185`／`:207`。*2026-09-05 訂正: 7 件→8 件*）／規則 8 |
 | 2.5 | 語彙にも無く応答も無い＝「未対応」 | 規則 1 第 6 行（0 件見込み。0 ならブリーフィングへ） |
 | 2.5a | 備考に書き込みの準拠を 1 件ずつ | 規則 8 の「書き込み:」行／規則 1 の `:136` の扱い |
